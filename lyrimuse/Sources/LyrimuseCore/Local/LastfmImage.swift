@@ -16,7 +16,7 @@ public enum LastfmImage {
 
     /// `image` 字段 `[{size: small/medium/large/extralarge, "#text": url}]` 里挑一张:
     /// 依次取 large、extralarge、数组最后一项里第一个非空的 URL,挑中的是占位图返回 nil。
-    /// 跟 collector `parseLastfmRecent` 的取档规则一致(那边写进 feed 的图,App 按原样用),
+    /// 跟引擎 `parseLastfmRecent` 的取档规则一致(那边写进 feed 的图,App 按原样用),
     /// 改一处必须同步改另一处。
     public static func pick(_ value: Any?) -> String? {
         guard let arr = value as? [[String: Any]] else { return nil }

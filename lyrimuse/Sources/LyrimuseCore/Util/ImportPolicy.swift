@@ -8,13 +8,13 @@ import Foundation
 /// Dropbox / 团队盘,那个目录里的文件就成了导入源,而它未必只有用户自己能写。
 ///
 /// 这里刻意**不做全字段白名单**:ConfigStore 是整字典读写的,就为了保住 `api_root` 这类
-/// 当前 UI 不管、但 collector 要用的字段(见 ConfigStore 文件头)。白名单会把它们连坐删掉,
+/// 当前 UI 不管、但引擎要用的字段(见 ConfigStore 文件头)。白名单会把它们连坐删掉,
 /// 把一个安全措施变成数据损坏。
 /// 只挑真正危险的那一类管:**能让数据发到别处去的地址**。
 public enum ImportPolicy {
     /// `state_relay_url` 能不能用。
     ///
-    /// 这个字段决定收听状态往哪台服务器推,而 collector 侧(relay.go)是拿到什么用什么、
+    /// 这个字段决定收听状态往哪台服务器推,而引擎侧(relay.go)是拿到什么用什么、
     /// 不校验 scheme,并且会把 `state_relay_token` 放进请求头一起发出去。一份被人改过的
     /// 配置只要把它换成自己的地址,就能持续收走你的播放记录和那把 token。
     ///

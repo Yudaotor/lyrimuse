@@ -5,9 +5,9 @@ import SwiftUI
 /// 进度圆环(点开是 `FillSweepProgressDetail`)共用这一份文字 —— 两处说的是同一轮扫描,各写一遍迟早说成两样。
 ///
 /// 每一句都要先看 `isFullScan`:「全量重新扫库」复用补搜那条通道(状态文件、单轮互斥、取消都共用,
-/// 见 collector/lyricsfullscan.go 头注),全量跑着时说「正在补搜」,说的跟做的就不是一回事。
+/// 见 lyrimuse-engine/lyricsfullscan.go 头注),全量跑着时说「正在补搜」,说的跟做的就不是一回事。
 enum FillSweepProgressText {
-    /// 此刻在做什么。上一首一个歌词源都没连上时 collector 在原地等网络,那时说这个,不说「正在搜索」。
+    /// 此刻在做什么。上一首一个歌词源都没连上时引擎在原地等网络,那时说这个,不说「正在搜索」。
     /// 两首之间(补搜隔几秒才搜下一首)没有「当前这首」:搜过至少一首就说在等下一首,一首都没搜就还在准备。
     /// 全量那一轮的兜底走现成的「全量重新扫库」,不另起一句只露脸一瞬的翻译串。
     static func title(_ status: LyricsFillSweep.Info) -> String {
@@ -52,7 +52,7 @@ enum FillSweepProgressText {
     }
 
     /// 「大约还要」的时长,按这一轮实测速度外推;还没跑完一首时按 `fallbackSecondsPerTrack` 估
-    /// (补搜约 20 秒:两首之间的间隔加上一首的搜索;全量取 collector 发布的每首耗时)。
+    /// (补搜约 20 秒:两首之间的间隔加上一首的搜索;全量取引擎发布的每首耗时)。
     private static func remainingText(_ status: LyricsFillSweep.Info, fallbackSecondsPerTrack: Double) -> String {
         let seconds = LyricsFillSweep.remainingSeconds(status, now: Date(), fallbackSecondsPerTrack: fallbackSecondsPerTrack)
         let minutes = Int((seconds / 60).rounded(.up))
@@ -61,7 +61,7 @@ enum FillSweepProgressText {
         return String(format: L10n.t("%1$@ 小时 %2$@ 分钟"), "\(minutes / 60)", "\(minutes % 60)")
     }
 
-    /// 补搜那一轮估剩余时长用的每首秒数,见 `remainingText`。全量那一轮用 collector 发布的值
+    /// 补搜那一轮估剩余时长用的每首秒数,见 `remainingText`。全量那一轮用引擎发布的值
     /// (`LyricsLibraryStatsPanel.fullScanSecondsPerTrack`)。
     static let fillFallbackSecondsPerTrack = 20.0
 }

@@ -562,7 +562,7 @@ struct SettingsView: View {
             .safeAreaInset(edge: .top, spacing: 0) { ConfigFileDamageBanner() }
             // 应用到后台服务的状态条:重启进行中 / 失败 + 重试 / 服务停用提示。浮在 detail 列
             // 底部(overlay 不是 inset:它随每次拨开关出现又消失,inset 会让整页内容跳),一处覆盖 20 多个保存调用点。
-            .overlay(alignment: .bottom) { CollectorApplyStatusBar() }
+            .overlay(alignment: .bottom) { EngineApplyStatusBar() }
             // 窗口**标题**钉死成「设置」,当前分类用副标题。别改回"标题=当前面板名"那套(系统
             // 「系统设置」的做法):那套设计假设这扇窗口有自己独占的 Dock 图标,而这个 App 的
             // Dock/Window 菜单是"设置"/"歌词管理"/"歌词窗口"四扇窗共用的**同一个**图标,右键菜单里
@@ -597,7 +597,7 @@ struct SettingsView: View {
         .environment(\.settingsSearchHighlightedTitles, searchRouter.highlightedTitles)
         .environment(\.settingsSearchPendingDrawer, searchRouter.pendingDrawer)
         .environment(\.previewHostVisible, windowSurface.isVisible)
-        // 播放器页那张 collector 状态卡直接用它发布的状态,不再自己每 2 秒起一次 launchctl。
+        // 播放器页那张引擎状态卡直接用它发布的状态,不再自己每 2 秒起一次 launchctl。
         .environmentObject(playerHealth)
         .background(SettingsWindowConfigurator(surface: windowSurface))
         // 见 AppActions.pendingSettingsSelection 注释——Onboarding 的 Last.fm 步骤
@@ -783,7 +783,7 @@ private struct LyricsSettingsTab: View {
     @State private var manualPickLockNotice: String?
     /// 回执的世代号,只为了让旧的自动收回计时器别抹掉新回执(见 showManualPickLockNotice)。
     @State private var manualPickLockNoticeToken = 0
-    /// 扫描/落盘/重启 collector 期间为真 —— 这一段是秒级的(要读整份缓存再写回),
+    /// 扫描/落盘/重启引擎期间为真 —— 这一段是秒级的(要读整份缓存再写回),
     /// 没有进行中状态的话开关翻完到回执出现之间就是一段"点了没反应"的空窗。
     @State private var manualPickLockBusy = false
     /// 关掉开关时,可以一并解开的歌数(确认框要显示它)。
@@ -797,12 +797,12 @@ private struct LyricsSettingsTab: View {
     /// 复选框+空白+测试图标整行,专门只用来决定"这一行的测试图标要不要露出来";复选框的
     /// 高底色/`.help` 提示仍由 hoveredSource 驱动,两者不合并。
     @State private var hoveredRow: LyricsSource?
-    // collector 发布的「哪几家的客户端缓存被系统挡住了」。 只认它的结论,别在 App 里
+    // 引擎发布的「哪几家的客户端缓存被系统挡住了」。 只认它的结论,别在 App 里
     // 自己探一遍 —— 授权在每个进程里各自生效,理由见 LocalCacheAccess 头注。
     @State private var localCacheAccess: LocalCacheAccess.State?
     /// 哪一格的「客户端缓存读不到」说明正开着(`LocalCacheAccessHelp`)。同时最多一个。
     @State private var localCacheHelpSource: LyricsSource?
-    /// collector 统计的各歌词源近况。只认它的判定,理由同 localCacheAccess(见 `LyricSourceHealth`)。
+    /// 引擎统计的各歌词源近况。只认它的判定,理由同 localCacheAccess(见 `LyricSourceHealth`)。
     @State private var lyricSourceHealth: LyricSourceHealth.State?
     /// 哪一格的「这个源最近不太正常」说明正开着(`LyricSourceHealthHelp`)。同时最多一个。
     @State private var sourceHealthHelpSource: LyricsSource?
@@ -816,7 +816,7 @@ private struct LyricsSettingsTab: View {
         case result(status: LyricSourceTestService.Status, detail: String)
     }
     @State private var sourceTestStates: [LyricsSource: LyricSourceTestState] = [:]
-    /// 「全部测试」和任意一个单独的「测试」按钮共用同一个 collector 子进程槽位
+    /// 「全部测试」和任意一个单独的「测试」按钮共用同一个引擎子进程槽位
     /// (LyricSourceTestService 是单例,新一轮会 `cancelRunning()` 杀掉上一轮)。
     ///
     /// 标题行的「测试」(全部)**不能**被单个来源的测试锁住 —— 不管有没有单个测试在跑,
@@ -825,7 +825,7 @@ private struct LyricsSettingsTab: View {
     /// 排队(靠 isTestingLyricSources 置灰),避免连点几个不同来源时几轮互相杀来杀去、满屏"失败"。
     ///
     /// `lyricSourceTestGeneration` 是为了正确处理"取代"这件事:testAllSources 取代一个
-    /// 正在跑的单个测试时,被取代那一轮的 collector 子进程会被杀掉、它的 `await` 会抛错,
+    /// 正在跑的单个测试时,被取代那一轮的引擎子进程会被杀掉、它的 `await` 会抛错,
     /// 它自己的收尾逻辑(把 isTestingLyricSources 置回 false)如果无条件执行,会踩在
     /// **新**这一轮刚设成 true 的状态上——每次发起测试先把这个代数加一,只有自己仍是
     /// "当前最新一轮"时,收尾才会真的改 isTestingLyricSources/写入"失败"结果;被取代的
@@ -1053,13 +1053,13 @@ private struct LyricsSettingsTab: View {
     /// 原先两者都只有图标那么大,指针要压准才出得来提示 —— 这颗锁是唯一能解释"这个源为什么没在用
     /// 本地缓存"的地方,它不该难点。
     ///
-    /// **只在 collector 报了被拒时出现**:能读是常态,常态不该占版面(同旁边那个测试图标
-    /// "没测过就悬停才出现"的取向)。而且状态只认 collector 的 —— App 自己探一遍得到的是
+    /// **只在引擎报了被拒时出现**:能读是常态,常态不该占版面(同旁边那个测试图标
+    /// "没测过就悬停才出现"的取向)。而且状态只认引擎的 —— App 自己探一遍得到的是
     /// 另一个进程的授权结果,摆给用户就是个与事实无关的结论,理由见 `LocalCacheAccess` 头注。
     ///
     /// 别按来源名硬编码"哪三家需要授权":需不需要由**缓存路径在不在 `~/Library/Containers/`
     /// 下**决定(汽水在 `Application Support/`、Apple Music 在 `Caches/`,都不需要),那个判断
-    /// 在 collector 侧,这里只负责显示它报上来的名单。
+    /// 在引擎侧,这里只负责显示它报上来的名单。
     @ViewBuilder
     private func localCacheAccessory(_ source: LyricsSource) -> some View {
         if LocalCacheAccess.isDenied(source.rawValue, state: localCacheAccess) {
@@ -1082,7 +1082,7 @@ private struct LyricsSettingsTab: View {
                 arrowEdge: .bottom
             ) {
                 LocalCacheAccessHelp(source: source) {
-                    // 只有 collector 真的重新发布了状态(这个源不在名单里了)才会走到这里,
+                    // 只有引擎真的重新发布了状态(这个源不在名单里了)才会走到这里,
                     // 所以这一下关闭是"事情办成了",不是"指令发出去了"。界面不自己改
                     // localCacheAccess —— 那等于替另一个进程宣布结果。
                     localCacheHelpSource = nil
@@ -1091,7 +1091,7 @@ private struct LyricsSettingsTab: View {
         }
     }
 
-    /// 那一格右侧的「这个源最近不太正常」提示,点开是 `LyricSourceHealthHelp`。只在这个源开着、collector
+    /// 那一格右侧的「这个源最近不太正常」提示,点开是 `LyricSourceHealthHelp`。只在这个源开着、引擎
     /// 的统计报了异常时出现;命中区与 popover 的做法同 localCacheAccessory。
     @ViewBuilder
     private func sourceHealthAccessory(_ source: LyricsSource) -> some View {
@@ -1217,7 +1217,7 @@ private struct LyricsSettingsTab: View {
         if expiresAt.timeIntervalSinceNow <= 0 {
             return L10n.t("登录已过期，需要重新连接")
         }
-        // storefront 可能还是空的(登录时没等到 itua cookie),collector 首次取词时会问
+        // storefront 可能还是空的(登录时没等到 itua cookie),引擎首次取词时会问
         // Apple 补上。这里显示成「—」而不是猜一个区,免得用户看到一个错的区域码。
         let region = storefront.isEmpty ? "—" : storefront.uppercased()
         if appleMusic.needsRenewal {
@@ -1295,7 +1295,7 @@ private struct LyricsSettingsTab: View {
             // 这一段来关。
             //
             // 它**只管"换掉已经选定的那份"**:首次填充(一条歌词都没有)、封面/译文回填、
-            // 用户自己点「重新自动匹配」都不受它影响。闸门落在 collector 的
+            // 用户自己点「重新自动匹配」都不受它影响。闸门落在引擎的
             // needsLyricsRescore / needsLyricsRetry 两处(见 features.go LyricsAutoUpgrade),
             // 这行 help 的两句就是照那两处的真实行为写的,改那边记得回来改这里。
             SettingsRow(
@@ -1316,7 +1316,7 @@ private struct LyricsSettingsTab: View {
                 // 开关做什么,为它常驻一个 ? 是拿噪声换不了任何决策。
                 //
                 // 标题只说"待播",不说具体从哪来:能读到播放器队列时就是队列里的下几首,读不到
-                // 退回同一张专辑里的其它曲目(见 collector/upcoming.go)。哪条路走得通取决于用的是
+                // 退回同一张专辑里的其它曲目(见 lyrimuse-engine/upcoming.go)。哪条路走得通取决于用的是
                 // 哪个播放器、此刻在播什么,摆进标题只会让用户以为自己能选。
                 //
                 // 「待播」取自系统音乐 App 的 Up Next(繁中/英文界面也照这个词对齐),不是自造词;
@@ -1332,7 +1332,7 @@ private struct LyricsSettingsTab: View {
             // 「采纳候选要不要顺带锁定这首歌」的开关 —— 见 LyricsManagerView /
             // LyricsQuickSearchWindow / LyricsWindowView **三处**「采纳候选」调用点的 markManual
             // 参数注释(grep `LyricsSearchSheet(` 数得到,改一处就要三处一起改)。默认关,纯本地
-            // UI 偏好,不需要 collector 知道,存进 AppSettings 而不是 FeatureSettingsStore。
+            // UI 偏好,不需要引擎知道,存进 AppSettings 而不是 FeatureSettingsStore。
             //
             // 这是整个设置页唯一一个**会去改歌词缓存**的开关(其余全是显示偏好):翻面时
             // 要追溯处理存量(见下面 Toggle 的 setter)。追溯逻辑刻意留在这里而不是
@@ -1363,7 +1363,7 @@ private struct LyricsSettingsTab: View {
                         runManualPickLockSweep(locking: on)
                     }
                 ))
-                // 追溯处理(读缓存 + collector 批量写,秒级)期间不让再拨:连点会并发跑两轮,关掉那一轮可能在
+                // 追溯处理(读缓存 + 引擎批量写,秒级)期间不让再拨:连点会并发跑两轮,关掉那一轮可能在
                 // 上锁之前就算完目标集,最后开关是关的、歌却被锁了。
                 .disabled(manualPickLockBusy)
             }
@@ -1559,7 +1559,7 @@ private struct LyricsSettingsTab: View {
     private func setSource(_ source: LyricsSource, enabled: Bool) {
         // 关掉最后一个来源是不允许的(下面那句 count > 1 的守卫),这时集合没有任何变化 ——
         // 只在真的变了才 save():无条件保存会让一次被拒绝的点击照样写一遍 features.json 并
-        // kickstart 一次 collector,后台服务被杀掉重启、期间歌词整片空掉(launchd 对连续
+        // kickstart 一次引擎,后台服务被杀掉重启、期间歌词整片空掉(launchd 对连续
         // kickstart 还有约 10s 的节流),而配置压根没变。
         let before = features.lyricsSources
         if enabled {
@@ -1574,7 +1574,7 @@ private struct LyricsSettingsTab: View {
         Task { await features.save() }
     }
 
-    /// 卡片标题行右侧的「测试」按钮,只测**已启用**的源(跟 collector 侧不传 -source 时默认
+    /// 卡片标题行右侧的「测试」按钮,只测**已启用**的源(跟引擎侧不传 -source 时默认
     /// 测全部已启用源的口径一致)。
     ///
     /// **故意不 `.disabled(isTestingLyricSources)`** —— 任何时候都能点、都会触发全部检测,
@@ -1724,7 +1724,7 @@ private struct LyricsSettingsTab: View {
     ///
     /// 不再守卫 `isTestingLyricSources`——「全部测试」现在随时可以点、
     /// 随时会取代正在跑的任意一轮(哪怕是这个函数发起的)。这里靠 generation 编号辨认
-    /// "我是不是被取代了":被取代那一轮的 collector 子进程会被 `cancelRunning()` 杀掉、
+    /// "我是不是被取代了":被取代那一轮的引擎子进程会被 `cancelRunning()` 杀掉、
     /// `await` 因此抛错,如果这时候 generation 已经变了(说明"全部测试"或另一次单独测试
     /// 抢先了),这次的收尾整段放弃——不写"失败"结果(会误导用户以为这个源真的测试
     /// 失败),也不去动 `isTestingLyricSources`(新那一轮还在跑,不该被这里踩成 false)。
@@ -1749,7 +1749,7 @@ private struct LyricsSettingsTab: View {
                 }
             }
             if generation == lyricSourceTestGeneration {
-                // 跑完了却没报回这个源(collector 这一轮没测它):别让它一直转圈。
+                // 跑完了却没报回这个源(引擎这一轮没测它):别让它一直转圈。
                 if sourceTestStates[source] == .testing { sourceTestStates[source] = nil }
                 isTestingLyricSources = false
             }
@@ -1776,7 +1776,7 @@ private struct LyricsSettingsTab: View {
                         detail: LyricSourceFailureReason.text(forCode: result.reasonCode))
                 }
             } catch {
-                // 子进程整个没跑起来(比如 collector 二进制缺失)——已经标成"测试中"的
+                // 子进程整个没跑起来(比如引擎二进制缺失)——已经标成"测试中"的
                 // 那些格子要有个交代,不能永远转圈,统一改成失败并带上原因。仅在自己仍是
                 // 最新一轮时才写,理由同 testSource 的 catch 分支。
                 if generation == lyricSourceTestGeneration {
@@ -2103,7 +2103,7 @@ private struct LyricsSettingsTab: View {
                     .accessibilityLabel(L10n.t("歌词文件夹"))
                     .accessibilityValue(url.path)
                 Button(L10n.t("在访达中显示")) {
-                    // collector 那边(见 collector/lyricsexport.go)只在真正解析/导出过
+                    // 引擎那边(见 lyrimuse-engine/lyricsexport.go)只在真正解析/导出过
                     // 至少一首歌之后才会建这个目录,这里先兜底建一下。建不成(自选目录在一块没挂载的外置盘上、
                     // 没有写权限)或者打不开时要说一句,不能点了没反应。
                     do {
@@ -4110,7 +4110,7 @@ private struct YouTubeMusicAutoSkipRow: View {
 
 private struct PlayerSettingsTab: View {
     @StateObject private var stores = PlayerTabStores()
-    /// SettingsView 根上注入的那一份,collector 服务状态从它这里拿(见 collector 卡片的 onReceive)。
+    /// SettingsView 根上注入的那一份,引擎服务状态从它这里拿(见引擎卡片的 onReceive)。
     @EnvironmentObject private var playerHealth: PlayerHealthMonitor
     // 「自动化」权限的状态/请求全在这个共享模型里,引导页那一步用的是同一个实例 ——
     // 需要这份权限的播放器不止一个,每家一套状态机分散在两个界面里必然漂。
@@ -4121,25 +4121,25 @@ private struct PlayerSettingsTab: View {
     @ObservedObject private var fullDiskAccess = FullDiskAccessPermission.shared
     // 「辅助功能」同理(替要读界面的播放器要,目前是 Amazon Music)。
     @ObservedObject private var accessibility = AccessibilityPermission.shared
-    // collector 常驻服务是否真的在跑——跟自动化权限同样的道理,只在 .onAppear
+    // 引擎常驻服务是否真的在跑——跟自动化权限同样的道理,只在 .onAppear
     // 和每次操作后重新查一次,不是 @Published:这个状态由 launchd 管,App 自己不会主动
     // 收到"进程挂了"这类通知,只能被动查。
     // 三态而不是 Bool —— 要展示"装了但没跑起来"这个中间态(见 LaunchdJobState)。
-    @State private var collectorState: LaunchdJobState = .notRegistered
-    @State private var isTogglingCollectorService = false
+    @State private var engineState: LaunchdJobState = .notRegistered
+    @State private var isTogglingEngineService = false
     // 只在"这次点了启用、结果没启动起来"时才为真,切走这个 tab 就清掉,不会把上一次失败的
     // 提示留着误导下一次操作。没有它的话,点"启用"失败后前台只会看到红叉+"未运行",跟从没
     // 点过一模一样,没有任何具体原因或下一步指引。
-    @State private var collectorEnableFailed = false
-    // App 本体版本 vs 打包进这份 App 的 collector 版本是否一致(见
-    // CollectorServiceManager.bundledCollectorVersion 头注)。nil = 一致或没法判断(两种
-    // 都不该报警,见 refreshCollectorVersionCheck);非 nil 才代表真的查到了不一致,存的是
-    // (App 版本, collector 版本)这一对,卡片直接把两个号都摊出来给用户看。
+    @State private var engineEnableFailed = false
+    // App 本体版本 vs 打包进这份 App 的引擎版本是否一致(见
+    // EngineServiceManager.bundledEngineVersion 头注)。nil = 一致或没法判断(两种
+    // 都不该报警,见 refreshEngineVersionCheck);非 nil 才代表真的查到了不一致,存的是
+    // (App 版本, 引擎版本)这一对,卡片直接把两个号都摊出来给用户看。
     //
-    // 只在 .onAppear 查一次,不放进每 2 秒一拍的 refreshCollectorState——那条路径要跑得
-    // 够轻(只是解析 `launchctl print` 的文本输出),而这里要真的 spawn 一次 collector
+    // 只在 .onAppear 查一次,不放进每 2 秒一拍的 refreshEngineState——那条路径要跑得
+    // 够轻(只是解析 `launchctl print` 的文本输出),而这里要真的 spawn 一次引擎
     // 子进程,版本号在一次设置页停留期间不会变,没必要反复起进程。
-    @State private var collectorVersionMismatch: (appVersion: String, collectorVersion: String)?
+    @State private var engineVersionMismatch: (appVersion: String, engineVersion: String)?
     // 「检测到未知播放器」那张卡的数据源。MediaControlClient 那份观察是普通静态变量、
     // 不是 @Published(它在 LyrimuseCore、每 2 秒轮询里顺手记的一笔,不该为了一张设置卡
     // 背上发布语义),所以这里自己按拍取一次。
@@ -4161,7 +4161,7 @@ private struct PlayerSettingsTab: View {
             permissionCard
             fullDiskAccessCard
             accessibilityCard
-            collectorCard
+            engineCard
         }
         .id(L10n.current)
         .onAppear {
@@ -4235,7 +4235,7 @@ private struct PlayerSettingsTab: View {
     // 「检测到未知播放器」——「自动识别」不再限死内置那几个 App 的入口。
     //
     // 为什么是"发现 + 一键信任"而不是"一律接受":那道白名单不只挡显示,**也挡打卡**
-    // (collector 只记 App 认下的播放)。一律接受等于让 YouTube 视频、播客、网课被当成
+    // (引擎只记 App 认下的播放)。一律接受等于让 YouTube 视频、播客、网课被当成
     // 收听写进 Last.fm / ListenBrainz 的**永久历史**,还会往"设计上永不清理"的歌词缓存里
     // 灌垃圾条目。而靠内容形状分辨也不可靠 —— 浏览器里的网页播放器能用 MediaSession API
     // 自己填 title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样。所以口径是
@@ -4520,7 +4520,7 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    /// 已信任项的显示名:优先用当初存下来的那份(collector 也用它当 ListenBrainz 标签),
+    /// 已信任项的显示名:优先用当初存下来的那份(引擎也用它当 ListenBrainz 标签),
     /// 空串(当初反查不到)时现查一次,还是查不到就退回 bundle id。
     private func displayNameForTrusted(_ bundleID: String) -> String {
         if let stored = stores.trustedPlayers[bundleID], !stored.isEmpty { return stored }
@@ -5384,7 +5384,7 @@ private struct PlayerSettingsTab: View {
     /// 「完全磁盘访问」—— 勾了读私有容器的播放器(QQ 音乐 / 网易云音乐 / 酷狗音乐)且装了才出现。
     ///
     /// 列表来自 `Set<PlaybackPlayer>.playersNeedingFullDiskAccess`(含 auto 时按超集算)再按装没装过滤,
-    /// 结论只认 collector 发布的状态,见 `FullDiskAccessPermission`。授权是整个 App 一份、几家共用,
+    /// 结论只认引擎发布的状态,见 `FullDiskAccessPermission`。授权是整个 App 一份、几家共用,
     /// 所以只有一行,行标题就是这项权限本身;替哪几家要写在「?」里。
     @ViewBuilder
     private var fullDiskAccessCard: some View {
@@ -5409,7 +5409,7 @@ private struct PlayerSettingsTab: View {
                 }
             }
             .onAppear { fullDiskAccess.refresh() }
-            // 状态文件由 collector 写,不会推通知过来;按 mtime 读很便宜,跟这一页的主轮询同频。
+            // 状态文件由引擎写,不会推通知过来;按 mtime 读很便宜,跟这一页的主轮询同频。
             .settingsPolling(every: 2) {
                 fullDiskAccess.refresh()
             }
@@ -5449,30 +5449,30 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    // collector(读播放状态、抓歌词/封面写本地缓存的后台服务)用"状态图标 + 状态文字 +
+    // 引擎(读播放状态、抓歌词/封面写本地缓存的后台服务)用"状态图标 + 状态文字 +
     // 动作按钮"而不是简单 Toggle——需要展示"装了但没跑起来"这种中间态,纯 Toggle 表达不了。
-    private var collectorCard: some View {
+    private var engineCard: some View {
         SettingsCard {
             SettingsRow(
-                icon: collectorStatusIconName,
-                iconTint: collectorStatusIconColor,
+                icon: engineStatusIconName,
+                iconTint: engineStatusIconColor,
                 title: L10n.t("歌词引擎"),
                 // 同 permissionCard:副标题只留状态,职责说明进「?」。
-                subtitle: collectorStatusCaption,
+                subtitle: engineStatusCaption,
                 help: L10n.t("读取播放状态、抓歌词和封面")
             ) {
                 // 只有「启用」,没有「停用」:这个服务停掉之后 App 就是个空壳(读不到播放状态、
                 // 不解析歌词、不写缓存),界面上每一处都不再更新,而用户很难把"什么都不动了"跟
                 // 自己在设置里点过的一个按钮联系起来。它没有"用户可能想关掉它"的正当场景。
-                if isTogglingCollectorService {
+                if isTogglingEngineService {
                     ProgressView().controlSize(.small)
-                } else if !collectorState.isRunning {
-                    Button(L10n.t("启用")) { enableCollectorService() }
+                } else if !engineState.isRunning {
+                    Button(L10n.t("启用")) { enableEngineService() }
                 }
             }
             // 启用失败时给具体指引,不是只把红叉留在原地——这里能提供的具体行动是导出
             // 诊断信息(汇总 App/采集器日志),不是空泛地说"启用失败"。
-            if collectorEnableFailed {
+            if engineEnableFailed {
                 CardDivider()
                 SettingsNote {
                     Text(L10n.t("启用失败，可能是权限或系统限制导致歌词引擎没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
@@ -5498,18 +5498,18 @@ private struct PlayerSettingsTab: View {
                         .textSelection(.enabled)
                 }
             }
-            // App 本体版本跟打包的 collector 版本对不上(见
-            // CollectorServiceManager.bundledCollectorVersion 头注)。只在真查到不一致时才显示这条,
+            // App 本体版本跟打包的引擎版本对不上(见
+            // EngineServiceManager.bundledEngineVersion 头注)。只在真查到不一致时才显示这条,
             // 查不出来(nil)时保持沉默,不把"没法判断"说成"有问题"。
             //
             // 文案**不要**写成"建议重新安装 App" —— 版本号是编译期烧进二进制的,重装同一个安装包
             // 一万次也还是同一个版本号,用户照做只会白费力气还更困惑。如实说明:这是打包时的疏漏、
             // 不影响功能、不需要用户做任何事。
-            if let mismatch = collectorVersionMismatch {
+            if let mismatch = engineVersionMismatch {
                 CardDivider()
                 SettingsNote {
                     Text(L10n.t("这个版本打包时漏了同步歌词引擎的版本号。不影响功能，歌词引擎的实际代码跟 App 是同一个版本，不需要你做任何处理"))
-                    Text("App \(mismatch.appVersion) · \(L10n.t("歌词引擎")) \(mismatch.collectorVersion)")
+                    Text("App \(mismatch.appVersion) · \(L10n.t("歌词引擎")) \(mismatch.engineVersion)")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .textSelection(.enabled)
@@ -5518,10 +5518,10 @@ private struct PlayerSettingsTab: View {
         }
         // 不能只在 onAppear 读一次。
         //
-        // collector 的 job 在 bootout→bootstrap 中途,`launchctl print` 会退出码 0 但输出里
+        // 引擎的 job 在 bootout→bootstrap 中途,`launchctl print` 会退出码 0 但输出里
         // 认不出 state 字段 → 解析成 .unknown(见 LaunchdPrintParser:"我读不懂"跟"我知道它
         // 没跑"刻意分开两档)。而 build.sh 的重装顺序恰好制造这个窗口:**先** kickstart App
-        // (设置窗口恢复、onAppear 读一次状态)、**再** reload collector 的 job。于是这一次读
+        // (设置窗口恢复、onAppear 读一次状态)、**再** reload 引擎的 job。于是这一次读
         // 正好落在中间态上,之后再没人重读,卡片就永久挂着一个橙色警告和一颗本不该出现的
         // 「启用」按钮 —— 而服务其实一直在跑。
         //
@@ -5529,11 +5529,11 @@ private struct PlayerSettingsTab: View {
         // (`PlayerHealthMonitor`,设置窗口看得见时每 2 秒一拍、切回 App 也补查)做,这里只接它发布的
         // 状态 —— 原来页面自己也每 2 秒起一次 `launchctl print`,跟它查的是同一件事。
         .onAppear {
-            refreshCollectorState()
-            refreshCollectorVersionCheck()
+            refreshEngineState()
+            refreshEngineVersionCheck()
         }
-        .onReceive(playerHealth.$collectorState.compactMap { $0 }) { latest in
-            if latest != collectorState { collectorState = latest }
+        .onReceive(playerHealth.$engineState.compactMap { $0 }) { latest in
+            if latest != engineState { engineState = latest }
         }
     }
 
@@ -5581,8 +5581,8 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    private var collectorStatusCaption: String {
-        switch collectorState {
+    private var engineStatusCaption: String {
+        switch engineState {
         case .running:
             return L10n.t("运行中")
         case .registeredNotRunning(let code):
@@ -5599,63 +5599,63 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    private var collectorStatusIconName: String {
-        switch collectorState {
+    private var engineStatusIconName: String {
+        switch engineState {
         case .running: return "checkmark.circle.fill"
         case .registeredNotRunning, .unknown: return "exclamationmark.triangle.fill"
         case .notRegistered: return "xmark.circle.fill"
         }
     }
 
-    private var collectorStatusIconColor: Color {
-        switch collectorState {
+    private var engineStatusIconColor: Color {
+        switch engineState {
         case .running: return .green
         case .registeredNotRunning, .unknown: return .orange
         case .notRegistered: return .red
         }
     }
 
-    /// 同一时刻最多一次 launchctl 在飞(见 refreshCollectorState)。
+    /// 同一时刻最多一次 launchctl 在飞(见 refreshEngineState)。
 
-    /// 请侧栏那条健康检查立刻重读一次后台采集服务的状态(结果经 `playerHealth.$collectorState` 回来)。
+    /// 请侧栏那条健康检查立刻重读一次后台采集服务的状态(结果经 `playerHealth.$engineState` 回来)。
     ///
-    /// `CollectorServiceManager.state` 要起一个 `launchctl print` 子进程并 `waitUntilExit`,那边在后台
-    /// 线程跑、同一时刻最多一次在飞;结果只在真的变了时才赋给 collectorState(它驱动整张卡片)。
-    private func refreshCollectorState() {
+    /// `EngineServiceManager.state` 要起一个 `launchctl print` 子进程并 `waitUntilExit`,那边在后台
+    /// 线程跑、同一时刻最多一次在飞;结果只在真的变了时才赋给 engineState(它驱动整张卡片)。
+    private func refreshEngineState() {
         playerHealth.refresh()
     }
-    /// 查一次"App 本体版本"跟"打包进这份 App 的 collector 版本"是否一致(见
-    /// CollectorServiceManager.bundledCollectorVersion 头注)。只在 .onAppear 调一次
+    /// 查一次"App 本体版本"跟"打包进这份 App 的引擎版本"是否一致(见
+    /// EngineServiceManager.bundledEngineVersion 头注)。只在 .onAppear 调一次
     /// (不放进每 2 秒那条心跳),而且真的 spawn 一次子进程,丢到后台线程跑,不阻塞
     /// 设置页打开这一下的主线程。
-    private func refreshCollectorVersionCheck() {
+    private func refreshEngineVersionCheck() {
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         Task.detached(priority: .utility) {
-            guard let collectorVersion = CollectorServiceManager.bundledCollectorVersion(),
-                  collectorVersion != appVersion else {
+            guard let engineVersion = EngineServiceManager.bundledEngineVersion(),
+                  engineVersion != appVersion else {
                 // nil(拿不到)或版本一致,都不该报警——见调用点注释,"没法判断"不等于
                 // "有问题"。已经报过警的情况下重新查到一致(比如刚重新安装完),也要
                 // 把旧警告收回去,不能一直挂着。
-                await MainActor.run { collectorVersionMismatch = nil }
+                await MainActor.run { engineVersionMismatch = nil }
                 return
             }
             await MainActor.run {
-                collectorVersionMismatch = (appVersion: appVersion, collectorVersion: collectorVersion)
+                engineVersionMismatch = (appVersion: appVersion, engineVersion: engineVersion)
             }
         }
     }
 
-    private func enableCollectorService() {
-        isTogglingCollectorService = true
-        collectorEnableFailed = false
+    private func enableEngineService() {
+        isTogglingEngineService = true
+        engineEnableFailed = false
         Task {
-            // 先写开关(didSet 派发那唯一一次 install),再等它跑完拿状态,见 CollectorServiceManager.operationQueue。
-            AppSettings.shared.collectorServiceEnabled = true
-            let state = await CollectorServiceManager.waitForPendingOperations()
-            collectorState = state
-            isTogglingCollectorService = false
+            // 先写开关(didSet 派发那唯一一次 install),再等它跑完拿状态,见 EngineServiceManager.operationQueue。
+            AppSettings.shared.engineServiceEnabled = true
+            let state = await EngineServiceManager.waitForPendingOperations()
+            engineState = state
+            isTogglingEngineService = false
             // 只有这一个方向了(见上面按钮处的注释),没跑起来就是失败,直接标红给指引。
-            collectorEnableFailed = !state.isRunning
+            engineEnableFailed = !state.isRunning
         }
     }
 
@@ -5835,7 +5835,7 @@ private struct GeneralSettingsTab: View {
                 }
             }
 
-            // 导入/导出打包 collector 的 config.json(账号 token 原文都在里面)+ features.json +
+            // 导入/导出打包引擎的 config.json(账号 token 原文都在里面)+ features.json +
             // App 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断信息"反着来:那个绝不能带任何
             // token(设计给贴进公开 issue),这个就是要把 token 原样带走(设计给换新机器用)——
             // 两处的用户提示因此也刻意写成相反的语气。
@@ -6077,7 +6077,7 @@ private struct GeneralSettingsTab: View {
             }
             .alert(L10n.t("确定要导入这份设置吗？"), isPresented: $showImportConfigConfirm) {
                 Button(L10n.t("取消"), role: .cancel) {}
-                // Task 包一层:importData 现在要等 collector 重新读到新配置才返回(见那边
+                // Task 包一层:importData 现在要等引擎重新读到新配置才返回(见那边
                 // 的注释),而 restartApp() 必须排在它后面 —— 一旦 terminate,没跑完的
                 // launchctl 操作就跟着进程一起没了。
                 Button(L10n.t("导入并重启"), role: .destructive) {
@@ -6787,7 +6787,7 @@ private struct AboutSettingsTab: View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("诊断与数据"))
             CardDivider()
-            // collector 日志一直写得比较完整,但 App 自己的日志全在系统统一日志里,普通人不会用
+            // 引擎日志一直写得比较完整,但 App 自己的日志全在系统统一日志里,普通人不会用
             // Console.app 去查。这里一键把两边日志+关键状态(权限/常驻服务/各功能是否已配置,不含任何
             // token 原始值)汇总成一份文本存到桌面,方便贴进 issue 或者发给开发者。
             // 导出只去掉账号凭据,曲目名和本机路径照样在里面(家目录只在崩溃报告那段改写成 ~),
@@ -6812,7 +6812,7 @@ private struct AboutSettingsTab: View {
                 help: L10n.t("歌词引擎的原始日志，文件较大时会自动归档为 .old；App 界面的日志写入系统日志，可在「控制台」中按 me.yudaotor.lyrimuse 筛选")
             ) {
                 Button(L10n.t("在访达中显示")) {
-                    let url = LogFiles.collector
+                    let url = LogFiles.engine
                     if FileManager.default.fileExists(atPath: url.path) {
                         NSWorkspace.shared.activateFileViewerSelecting([url])
                     } else {

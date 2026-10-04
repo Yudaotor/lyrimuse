@@ -11,8 +11,8 @@ import NaturalLanguage
     import Translation
 #endif
 
-// 端上歌词翻译小助手。collector(Go)没法调 Apple 的 Translation 框架,所以把这一步拆成
-// 一个独立的 Swift 可执行文件打包进 Contents/Resources/,由 collector 按相对路径调用 ——
+// 端上歌词翻译小助手。引擎(Go)没法调 Apple 的 Translation 框架,所以把这一步拆成
+// 一个独立的 Swift 可执行文件打包进 Contents/Resources/,由引擎按相对路径调用 ——
 // 跟 App 包里的 media-control 同一个形态。
 //
 // 为什么值得这么绕:系统翻译是**端上**的,不联网、无配额、歌词根本不出这台机器。相比之下
@@ -20,7 +20,7 @@ import NaturalLanguage
 // 正文发给第三方。
 //
 // 拆成独立进程还顺带兜住一个风险:Translation.framework 要 macOS 15+,真在更老的系统上
-// 加载失败,也只是这个 helper 起不来、collector 退回 MyMemory,不会影响主程序。
+// 加载失败,也只是这个 helper 起不来、引擎退回 MyMemory,不会影响主程序。
 //
 // 按系统分三档,**三档都必须吐一行合法 JSON**(调用方只认这个):
 //   macOS 26+   `TranslationSession(installedSource:target:)` 直接构造,不碰 AppKit。

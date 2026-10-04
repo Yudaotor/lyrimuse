@@ -145,7 +145,7 @@ public enum PlayCountVariants {
     ///    《K歌之王》这类同名國/粵两版是真的两份录音,通则会错合。已知 7 条,
     ///    要合只能逐一手工核对。
     ///
-    /// collector `lastfmcatalogkey.go` 的 `isCatalogNoiseSubtitle` 按同一口径决定收听记到 Last.fm 的哪一条:两边漂开,
+    /// 引擎 `lastfmcatalogkey.go` 的 `isCatalogNoiseSubtitle` 按同一口径决定收听记到 Last.fm 的哪一条:两边漂开,
     /// 这边数出来的「第 N 次听」就跟那边实际记的对不上。共用样例 shared/testdata/catalog-noise-subtitles.json 两边一起跑。
     public static func isCatalogNoiseSubtitle(_ sub: String) -> Bool {
         let normalized = sub.precomposedStringWithCompatibilityMapping
@@ -192,7 +192,7 @@ public enum PlayCountVariants {
     /// Horace Silver / Paul Desmond / Johnny Griffin / Nancy Wilson 这批爵士,
     /// 「with strings」正是该品类的标准写法,哪天进库就是错合。
     /// 代价:`with The Weeknd` 会被 `the` 漏掉 —— 符合本文件一贯的「宁可漏合,不错合」。
-    /// collector lastfmcatalogkey.go 的 catalogNonCreditHeadWords 是同一张表(Go 测试读这里逐词对账)。
+    /// 引擎 lastfmcatalogkey.go 的 catalogNonCreditHeadWords 是同一张表(Go 测试读这里逐词对账)。
     static let nonCreditHeadWords: Set<String> = [
         "the", "a", "an", "no", "or", "out", "my", "your", "all",
         "strings", "string", "orchestra", "orchestral", "choir", "chorus", "band",
@@ -409,7 +409,7 @@ public enum PlayCountFold {
     /// **没有手写表**:此前这里查的是编译进二进制的 `romanizedArtistAliases`(28 条,
     /// `davidtao → 陶喆` 这种),「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」——现在
     /// 查的是 App 启动/enrich 缓存变化时由 `LocalArtistAliases.derive` 从本机数据推出来、经
-    /// `setLocalArtistAliases` 灌进来的表(证据:collector 的 MusicBrainz 缓存 + 两种写法名下曲目共享
+    /// `setLocalArtistAliases` 灌进来的表(证据:引擎的 MusicBrainz 缓存 + 两种写法名下曲目共享
     /// ≥ 2 个歌曲 id,详见那个文件的头注)。实测这台机器上历史里真有两种写法并存的歌手
     /// (Khalil Fong / David Tao / Jay Chou / Wang Leehom / Dean Ting / Crowd Lu / Leah Dou)全部
     /// 被推出来了;旧表里其余那些(Eason Chan / Sodagreen / Utada …)历史里压根没有罗马字写法的
@@ -481,7 +481,7 @@ public enum PlayCountFold {
     /// 11 条是错的——「Mojito→红模仿」「Melody→中國姑娘」这种),而且它的扫描门(前台安静 60 s
     /// + 40 个请求的预算)在这台机器上从没让它跑完过一轮。
     ///
-    /// 而 collector 早就替我们做过一件更可靠的事:两种写法各自播放时,歌词解析各自独立地把
+    /// 而引擎早就替我们做过一件更可靠的事:两种写法各自播放时,歌词解析各自独立地把
     /// 它们匹配到了**同一个网易云 / QQ 的歌曲 id**(`netease_url` / `qq_music_url` 落在 enrich
     /// 缓存里)。两次独立检索落到同一个 id,比"时长整秒相等"硬得多,而且零网络、零新请求 ——
     /// 判定在 EnrichTitleAliases.derive(纯函数,selftest 钉住),App 侧 enrich 缓存一变就重算。

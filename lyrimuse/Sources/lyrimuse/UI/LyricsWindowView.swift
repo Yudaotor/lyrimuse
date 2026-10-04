@@ -62,7 +62,7 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var currentTrackPlainLyrics = ""
     // 列表末尾「创作者：…」的名单,见 LocalPlaybackSource.currentTrackSongwriters。
     @Published private(set) var songwriters: [String] = []
-    @Published private(set) var collectorNetworkDown = false
+    @Published private(set) var engineNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
     // ---- 来自 AppSettings(只挑本窗口实读的几项) ----
     @Published private(set) var showRomanization = true
@@ -155,7 +155,7 @@ private final class WindowPlayback: ObservableObject {
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
             p.$currentTrackPlainLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackPlainLyrics = $0 },
             p.$currentTrackSongwriters.removeDuplicates().sink { [weak self] in self?.songwriters = $0 },
-            p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
+            p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             s.$showRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
             s.$showTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
@@ -1218,7 +1218,7 @@ struct LyricsWindowView: View {
     /// 核对自己出发时的代际,不同代际=过期结果直接丢弃 —— 防止上一首歌的在途结果
     /// 贴到新曲的菜单上(审阅抓的跨曲竞态)。
     @State private var moreMenuStateGeneration = 0
-    /// 这首歌在各平台的跳转目标。零网络,全是 collector 早就存进 enrich 缓存的
+    /// 这首歌在各平台的跳转目标。零网络,全是引擎早就存进 enrich 缓存的
     /// 字段;开菜单/换曲时后台读一次(首次要解析整份缓存 JSON,不能在主线程)。
     @State private var platformLinks: PlatformLinks?
     /// 本次菜单会话内用户是否已手动切过「减少推荐」:切过之后,后到的回查结果不许再
@@ -2555,7 +2555,7 @@ struct LyricsWindowView: View {
                     currentSource: ctx.currentSource, currentFingerprint: ctx.currentFingerprint,
                     durationSecs: ctx.durationSecs
                 ) { candidate in
-                    // 保存前不用先把整份缓存读进 store:写入由 collector 执行(EnrichEditChannel),不经 store 的内存副本。
+                    // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本。
                     // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能
                     // 跟带时间戳的候选共用 saveEdit,那会把纯文本当成一份"没有任何一行
                     // 能同步显示"的坏 LRC 写进 lyrics,反而让这首歌在别的展示面上从
@@ -3318,8 +3318,8 @@ struct LyricsWindowView: View {
             if let u = links.qqAlbum { out.append(.init(id: "qq-album", title: L10n.t("QQ 音乐专辑页"), url: u)) }
             if let u = links.qqArtist { out.append(.init(id: "qq-artist", title: L10n.t("QQ 音乐歌手页"), url: u)) }
         } else if bundleID == PlaybackPlayer.netease.bundleIdentifier {
-            // 网易云只白捡歌曲页:collector 解出过专辑 ID,但它只活在内存里给同专辑预取用,
-            // 没有落进 enrich 缓存(要加得动 collector,与 QQ 那两个 mid 同一条路)。
+            // 网易云只白捡歌曲页:引擎解出过专辑 ID,但它只活在内存里给同专辑预取用,
+            // 没有落进 enrich 缓存(要加得动引擎,与 QQ 那两个 mid 同一条路)。
             if let u = links.neteaseSong { out.append(.init(id: "ne-song", title: L10n.t("网易云音乐歌曲页"), url: u)) }
         } else if bundleID == PlaybackPlayer.kkbox.bundleIdentifier {
             // KKBOX 的是进 App 的深链(见 PlatformLinks.kkboxSong),文案跟上面几条浏览器页不同。
@@ -3477,7 +3477,7 @@ struct LyricsWindowView: View {
     /// 任意 (歌名, 歌手) 的目录页跳转 —— 停播页那几块要跳的不是「当前播放」而是历史行,
     /// 所以曲目字段必须由调用方传进来,不能像上面那样从 playback 现读(停播时它是空的)。
     ///
-    /// 专辑页先用缓存里这首的 Apple Music 链接(collector 按目录锚点 / 时长核对过的那一条)换算,不联网;
+    /// 专辑页先用缓存里这首的 Apple Music 链接(引擎按目录锚点 / 时长核对过的那一条)换算,不联网;
     /// 缓存里没有(调用方没给专辑名、这首没解析出 Apple Music 链接)才按歌名搜。艺人页、曲目页照旧搜。
     private func openCatalogPage(title: String, artist: String, album: String = "", target: CatalogTarget) {
         guard !title.isEmpty || !artist.isEmpty else { return }
@@ -3538,7 +3538,7 @@ struct LyricsWindowView: View {
     /// 「搜索歌词…」:点击瞬间快照曲目字段、后台解析 写回 key + 当前来源,齐了再弹面板。
     /// key 用缓存里**实际命中**的那条(EnrichCacheReader.resolvedKey,含宽松匹配)——
     /// 播放器报法与缓存写法有空格/繁简出入时,写回必须落在读取路径同一条上;缓存里还
-    /// 没有条目(collector 未解析)就退回 normalizedKey 新建。
+    /// 没有条目(引擎未解析)就退回 normalizedKey 新建。
     ///
     /// 直接读 PlaybackCoordinator.shared,不经本窗口的 WindowPlayback 代理(那份代理对
     /// title/artist/album/currentDurationMs 各开一条独立的 Combine 订阅转发,见
@@ -3558,7 +3558,7 @@ struct LyricsWindowView: View {
         Task.detached(priority: .userInitiated) {
             let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
             await MainActor.run {
-                // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题:collector
+                // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题:引擎
                 // 算缓存 key 时会把标题结尾那种非版本标记的括号剥掉(林潔心《想逃避(22)》→「想逃避」),
                 // 这里传原始标题的话,手动搜索会重蹈自动解析"八个源全搜不到"的覆辙。
                 // key/source 两个查找仍然传原始 title——它们各自内部会归一化,契约不变。
@@ -3643,7 +3643,7 @@ struct LyricsWindowView: View {
     /// [歌词|播放记录] 双钮胶囊(AM 同款:71.5×35.5pt 胶囊,激活的一半是白圆+深字形)。
     /// 歌词钮=歌词栏显隐(仅双列模式显示,单列关了剩空白);播放记录钮=右侧栏内容在"歌词"
     /// 与"播放记录"之间切换(不做「播放队列」:AppleScript 读不到目录内容的播放上下文,见
-    /// showsListenHistory 声明处注释)。播放记录不挑播放器(数据来自 collector 本地记录/
+    /// showsListenHistory 声明处注释)。播放记录不挑播放器(数据来自引擎本地记录/
     /// Last.fm,不靠 AppleScript)。两颗都没有就整颗胶囊不摆(理论上不会发生:播放记录钮恒真)。
     ///
     /// **两颗钮互斥**,不是两个独立布尔量各管各的(`showsLyricsPane.toggle()` /
@@ -4385,7 +4385,7 @@ struct LyricsWindowView: View {
         }
     }
 
-    // 完全没有歌词内容 vs "这首歌还没解析完、collector 后台正在搜"共用同一个
+    // 完全没有歌词内容 vs "这首歌还没解析完、引擎后台正在搜"共用同一个
     // allLines.isEmpty,含义不一样,判断条件跟 LyricsOverlayView.mainLine 里的同一个
     // 分支保持一致(playback.hasLyricsContent 的注释详见 LocalPlaybackSource)。文案复用
     // 已有的本地化字符串,不新造。
@@ -4494,7 +4494,7 @@ struct LyricsWindowView: View {
             isRadioTalkBreak: playback.isRadioTalkBreak,
             isInstrumental: playback.isCurrentTrackInstrumental,
             hasNoLyrics: playback.currentTrackHasNoLyrics,
-            collectorNetworkDown: playback.collectorNetworkDown,
+            engineNetworkDown: playback.engineNetworkDown,
             hasLyricsContent: playback.hasLyricsContent,
             isPlaying: playback.isPlayingNow))
         let text: String
@@ -6657,7 +6657,7 @@ private struct IdleLastfmSection: View {
 
     /// 「本周」跟设置页 / 待机页那个「近 7 天」**同一个口径**(自然日对齐的日桶,见
     /// IdleListeningStats.lastSevenDays)。之前这里直接读 API 的 `overview.week`
-    /// (滚动 168 小时)——三个面里唯一一处口径不同;而且最近记录改走 collector
+    /// (滚动 168 小时)——三个面里唯一一处口径不同;而且最近记录改走引擎
     /// feed 之后,`overview.week` 只在 feed 不在、退回轮询时才会被刷新,读它就是读一个陈值。
     /// 首次全量同步期间退回 API 值(那时桶本身残缺)。
     private var weekValue: Int? {

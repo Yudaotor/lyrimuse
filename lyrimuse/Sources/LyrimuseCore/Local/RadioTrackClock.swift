@@ -27,7 +27,7 @@ import Foundation
 /// "偏慢一点"而不是"快了一分钟",所以切换点确实靠近歌曲起点,残差是秒级。那几秒需要耳朵核,
 /// 真是恒定偏移就走时间轴偏移那套设置,不在这里硬编常量。
 public enum RadioTrackClock {
-    /// 单次推进的上限。正常轮询是 2s(App)/ 5s(collector);超过这个量说明中间发生了休眠、
+    /// 单次推进的上限。正常轮询是 2s(App)/ 5s(引擎);超过这个量说明中间发生了休眠、
     /// 长时间卡顿或进程被挂起,这时"墙钟差"不再等于"播了多久",宁可少算也不要凭空跳一大截。
     public static let maxAdvancePerTick: TimeInterval = 30
 

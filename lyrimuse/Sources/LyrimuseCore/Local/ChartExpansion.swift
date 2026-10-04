@@ -13,7 +13,7 @@ public enum ChartVisibleRows {
     }
 }
 
-/// 歌手榜展开行:一位歌手在这个时段里听得最多的歌。来自 collector `artist-tracks`(见 artisttracks.go),
+/// 歌手榜展开行:一位歌手在这个时段里听得最多的歌。来自引擎 `artist-tracks`(见 artisttracks.go),
 /// 那边按歌手榜同一套合并规则把歌曲署名归到榜上显示的名字下。
 public struct ArtistTopTracks: Equatable, Codable, Sendable {
     public struct Track: Equatable, Codable, Sendable {
@@ -66,7 +66,7 @@ public struct ArtistTracksBatch: Equatable, Sendable {
     }
 }
 
-/// 歌手展开行取数的排队规则:同一时间只跑一个 artist-tracks 进程(collector 各进程的出站限速互不相干,并发几个
+/// 歌手展开行取数的排队规则:同一时间只跑一个 artist-tracks 进程(引擎各进程的出站限速互不相干,并发几个
 /// 会一起打到 Last.fm 按 IP 的限速上);跑着的时候再来的请求只留最后一个。
 public struct ArtistTracksQueue: Equatable, Sendable {
     public struct Job: Equatable, Sendable {

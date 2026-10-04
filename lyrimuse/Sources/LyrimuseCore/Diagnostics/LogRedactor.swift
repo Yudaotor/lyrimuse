@@ -3,7 +3,7 @@ import Foundation
 /// 诊断包里日志正文的脱敏。诊断导出设计给贴进**公开** GitHub issue,任何 token / secret 的原文都不能进去。
 ///
 /// 日志正文里会出现凭据:Go `*url.Error` 的 `Error()` 带完整 URL,Last.fm 的 api_key 就在 query string 里。
-/// collector 写日志时已经脱敏过一道(logscrub.go),这里是导出出口上的第二道,两道都要留。
+/// 引擎写日志时已经脱敏过一道(logscrub.go),这里是导出出口上的第二道,两道都要留。
 ///
 /// 修在**出口**而不是逐个 `log.Printf` 调用点:出口只有这一个,调用点会一直新增,新写的日志行自动被这里兜住。
 ///
@@ -27,7 +27,7 @@ public enum LogRedactor {
     /// 按值的长度**降序**替换:两个凭据互为前缀/子串时(例如 relay token 恰好以某个 key
     /// 开头),先替换短的会把长的切碎、留下一截原文在外面。
     ///
-    /// 值先去首尾空白:用户粘贴的 token 常带尾随空格 / 换行,collector 用的(也就是日志里出现的)是去掉之后的那串。
+    /// 值先去首尾空白:用户粘贴的 token 常带尾随空格 / 换行,引擎用的(也就是日志里出现的)是去掉之后的那串。
     public static func redact(_ text: String, secrets: [String: String]) -> String {
         var out = text
         let usable = secrets
@@ -40,7 +40,7 @@ public enum LogRedactor {
         return out
     }
 
-    /// URL 查询参数(前面是 `?` 或 `&`)按**词根**认,跟 collector logscrub.go 的 sensitiveQueryRe 同一条:
+    /// URL 查询参数(前面是 `?` 或 `&`)按**词根**认,跟引擎 logscrub.go 的 sensitiveQueryRe 同一条:
     /// 参数名里含 key / token / secret / sig / sign / password / passwd / pwd / auth 的都算
     /// (client_secret、refresh_token、api_sig 都在内),`sk` 不含任何词根,单列 —— 它是 Last.fm session key。
     private static let sensitiveQueryParamPattern =
@@ -66,7 +66,7 @@ public enum LogRedactor {
         ("api.day.app", #"(api\.day\.app/)(?!<redacted)[^/\s"']+"#),
         ("sctapi.ftqq.com", #"(sctapi\.ftqq\.com/)(?!<redacted)[^/\s"'.]+"#),
         ("open.feishu.cn", #"(open\.feishu\.cn/open-apis/bot/v2/hook/)(?!<redacted)[^/\s"']+"#),
-        // Telegram:`/bot<机器人 token>/sendMessage`(collector notify.go 的 telegramSendURL)。
+        // Telegram:`/bot<机器人 token>/sendMessage`(引擎 notify.go 的 telegramSendURL)。
         ("api.telegram.org", #"(api\.telegram\.org/bot)(?!<redacted)[^/\s"']+"#),
         // Discord:`/api/webhooks/<id>/<token>`,id 不是凭据,token 是。
         ("discord.com", #"(discord(?:app)?\.com/api/webhooks/[0-9]+/)(?!<redacted)[^/\s"'?]+"#),

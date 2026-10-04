@@ -210,7 +210,7 @@ Lyrimuse 不会把它们提交给 Last.fm，那些记录是经 Apple 自己的�
 
 ---
 
-*实现位置：[`lyrimuse-collector/lastfm.go`](../lyrimuse-collector/lastfm.go)
+*实现位置：[`lyrimuse-engine/lastfm.go`](../lyrimuse-engine/lastfm.go)
 （`resolveScrobbleArtist`、`scrobble`、`updateNowPlaying`）、
-[`lyrimuse-collector/poller.go`](../lyrimuse-collector/poller.go)
+[`lyrimuse-engine/poller.go`](../lyrimuse-engine/poller.go)
 （`listenThreshold`、`recordFailedMirror`）。*

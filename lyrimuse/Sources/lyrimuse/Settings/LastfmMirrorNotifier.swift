@@ -4,9 +4,9 @@ import LyrimuseCore
 import OSLog
 import UserNotifications
 
-/// Last.fm 授权失效(collector 熔断、停止打卡)时的系统通知。
+/// Last.fm 授权失效(引擎熔断、停止打卡)时的系统通知。
 ///
-/// 红标只在菜单栏面板和设置里,不打开就不知道从哪天起没在打卡了。collector 没有通知权限,它只写状态文件
+/// 红标只在菜单栏面板和设置里,不打开就不知道从哪天起没在打卡了。引擎没有通知权限,它只写状态文件
 /// (`LastfmMirrorStatus`);这里从 App 启动起盯着 `LastfmMirrorStatusWatcher`,看到一次新的熔断就投递。
 /// 同一次熔断(按状态文件里的 `at`)只弹一次,重启也不重弹;恢复后撤掉通知中心里那条。
 @MainActor

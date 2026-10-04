@@ -47,7 +47,7 @@ import Foundation
 /// "任一命中即广告"只用于 `gate`(拿不准就丢这一轮,下一轮自愈);**界面上写「广告中」**只认强信号
 /// (ad-showing / 徽章),见 `badgeVerdict` / `cachedBadgeVerdict`。
 ///
-/// 判据只有 App 这一份:collector 认的是 App 播放状态里的 ad 标记。selftest 里有断言钉住 JS 里那几个标志串。
+/// 判据只有 App 这一份:引擎认的是 App 播放状态里的 ad 标记。selftest 里有断言钉住 JS 里那几个标志串。
 ///
 /// ## 为什么是「异步 kick + 读缓存」,不是同步问一次
 ///
@@ -81,9 +81,9 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         /// 塌成"没有在播放",广告完了再弹回来,而不是像 Spotify 那样安静地显示「广告中」。
         ///
         /// **放行不等于会被记录**:Swift 侧一行 scrobble 都不发(`track.scrobble` /
-        /// `submit-listens` 全在 collector 的 lastfm.go / lb.go)。判定写进播放状态的 ad 标记,
-        /// collector 据此不打卡(appReportedAd)。这也正是 Spotify 广告一直以来的形态:快照照常流进来、由
-        /// `LocalPlaybackSource.isCurrentTrackAdBreak` 标成广告驱动 UI,打卡在 collector 那边拦。
+        /// `submit-listens` 全在引擎的 lastfm.go / lb.go)。判定写进播放状态的 ad 标记,
+        /// 引擎据此不打卡(appReportedAd)。这也正是 Spotify 广告一直以来的形态:快照照常流进来、由
+        /// `LocalPlaybackSource.isCurrentTrackAdBreak` 标成广告驱动 UI,打卡在引擎那边拦。
         case acceptAsAd
         /// 丢掉。
         case reject
@@ -200,7 +200,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 播很久"的情况,不需要很短。
     ///
     /// 但**音乐视频(MV)的前贴片广告不是独立条目**:前贴片在
-    /// `#movie_player` 里放、MediaSession 元数据却一直是**这首歌自己的** —— collector 日志
+    /// `#movie_player` 里放、MediaSession 元数据却一直是**这首歌自己的** —— 引擎日志
     /// 08:30:22～08:30:37 三轮 `rejected as advertisement (王子 - Why You Wanna…)`,08:31:27 才
     /// `now playing`(正好是这 60 秒缓存到期后的第一轮)。也就是说同一个 key 下判定会从 ad 翻成
     /// song,"按曲目身份缓存是安全的"这条前提对 MV 不成立。**可读有效期仍是 60 秒**(读到一个
@@ -415,7 +415,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// album,`trustedPlaybackRejected` 会踢探针),弱 `.ad` 就缓存到了**下一首歌的 key** 下;下一拍换曲按
     /// 当下判定定初值,整首真歌被贴上「广告中」。真广告期间三个信号 22/22 同时命中(见头注),裸标题从没
     /// 单独撑过一条真广告,所以只在**贴标签**这一路把它降成「拿不准」;`gate`(要不要采纳这条播放,
-    /// collector 侧同款判据)仍按任一命中即广告 —— 那边误判成广告只是这一轮没采纳,下一轮就好。
+    /// 引擎侧同款判据)仍按任一命中即广告 —— 那边误判成广告只是这一轮没采纳,下一轮就好。
     public static func badgeVerdict(_ reading: Reading?) -> Verdict? {
         guard let reading else { return nil }
         if reading.verdict == .ad, !reading.strongAd { return nil }
@@ -485,7 +485,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         else { return }
         // 没在「网页播放器」里配对 YouTube Music 的浏览器不探:多半没开 JavaScript 开关,探了也必然失败,
         // 受信任浏览器里没有专辑名的普通视频却每首都会踢到这里。判定缺失,gate 照旧按拒处理;同 SpotifyWebAdProbe 入口
-        // 和 collector 的 browserpairs.go。
+        // 和引擎的 browserpairs.go。
         guard BrowserPositionProbe.shared.isPaired(bundleID: hostBundleID, platformID: "youtubeMusic") else { return }
         lock.lock()
         if inFlightKey == key {

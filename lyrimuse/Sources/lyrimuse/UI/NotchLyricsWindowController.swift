@@ -792,7 +792,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         if next {
             // 展开头部本来就有歌名,掉出来的那条收掉。
             clearTrackDrop()
-            // 展开是「要看了」的时刻:换歌时还没对上专辑的曲目,collector 补上之后靠这一下变可点。
+            // 展开是「要看了」的时刻:换歌时还没对上专辑的曲目,引擎补上之后靠这一下变可点。
             if holdsEditorialDemand { EditorialNotesStore.shared.refreshCurrent() }
         } else {
             NotchEditorialPanel.shared.close(ifOwner: window)

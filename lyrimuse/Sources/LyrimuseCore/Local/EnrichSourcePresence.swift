@@ -2,11 +2,11 @@ import Foundation
 
 /// "歌词源的曲库里有这首歌"的判据(见 EnrichCacheStore.Summary.knownOnSources)。
 ///
-/// 两个字段的形状来自 collector:
+/// 两个字段的形状来自引擎:
 ///   - `netease_url` 只在网易云真的匹配到曲目时才写(`https://music.163.com/song?id=<id>`),
 ///     没匹配到就是空——非空即命中。
 ///   - `qq_music_url` 有两档:smartbox 查到时是 `https://y.qq.com/n/ryqq/songDetail/<mid>`;
-///     查不到时 collector 拼一个**纯本地的搜索页**兜底(`…/search?w=…`,见 qq.go),
+///     查不到时引擎拼一个**纯本地的搜索页**兜底(`…/search?w=…`,见 qq.go),
 ///     那一档不需要网络就能得到、不构成"有这首歌"的证据——enrich.go 里"全空不写入"那道
 ///     守卫排除它的理由一样(isQQSearchFallbackURL)。这里按路径段 `/songDetail/` 判。
 public enum EnrichSourcePresence {
@@ -25,7 +25,7 @@ public enum EnrichSourcePresence {
     /// 一条更早那轮的证据,去替这一轮下"不用管"的结论(09 章决策 48 修的就是同一类口径问题)。
     ///
     /// **判据必须用「决策存档在不在」而不是顶层 `lyrics_sources_responded` 是不是空**:
-    /// 那个字段在 collector 侧带 `omitempty`(enrich.go),空数组根本不会被序列化出来,于是
+    /// 那个字段在引擎侧带 `omitempty`(enrich.go),空数组根本不会被序列化出来,于是
     /// 「老条目压根没有这个字段」和「真的零个源应答」在顶层字段上**完全不可区分**。
     /// 决策存档则是只要评估过就一定写,所以「有存档 + 存档里 sources_responded 为空」才是准的。
     ///

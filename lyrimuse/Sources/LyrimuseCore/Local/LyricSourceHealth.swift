@@ -1,11 +1,11 @@
 import Foundation
 
-/// collector 发布的各歌词源近况:`lyrimuse-lyric-source-stats.json` 的 `summary` 段。写入方和判定规则都在
-/// collector/lyricsourcestats.go(见 09 章决策 147),计数只有常驻进程手里有,App 不自己重算。
+/// 引擎发布的各歌词源近况:`lyrimuse-lyric-source-stats.json` 的 `summary` 段。写入方和判定规则都在
+/// lyrimuse-engine/lyricsourcestats.go(见 09 章决策 147),计数只有常驻进程手里有,App 不自己重算。
 ///
 /// 只读通道:App 从不写这份文件。
 public enum LyricSourceHealth {
-    /// 取值与 collector 的 lyricSourceAlert* 同一套。
+    /// 取值与引擎的 lyricSourceAlert* 同一套。
     public enum Alert: String, Sendable {
         /// 同类曲库至少两家找得到的歌,它几乎一首都没给。
         case barely
@@ -24,7 +24,7 @@ public enum LyricSourceHealth {
         public let rounds: Int
         public let responded: Int
         public let won: Int
-        /// 认不得的取值(更新版 collector 加的判定)解成 nil,按没有异常处理。
+        /// 认不得的取值(更新版引擎加的判定)解成 nil,按没有异常处理。
         public let alert: Alert?
         public let peerRate: Double
         public let peerRounds: Int
@@ -93,12 +93,12 @@ public enum LyricSourceHealth {
         }
     }
 
-    /// 摘要超过这么久没更新就不再提醒:collector 没在跑时判定停在最后一次,可能早已不成立。
-    /// collector 有新数据时每分钟、没有时每小时重写一次。与 collector 的 lyricSourceStatsStaleAfter 同一个数,两处一起改。
+    /// 摘要超过这么久没更新就不再提醒:引擎没在跑时判定停在最后一次,可能早已不成立。
+    /// 引擎有新数据时每分钟、没有时每小时重写一次。与引擎的 lyricSourceStatsStaleAfter 同一个数,两处一起改。
     public static let staleAfter: TimeInterval = 2 * 24 * 3600
 
     /// 这个源该不该亮提醒;该亮就返回它的摘要。没有文件、文件太旧、没有判定一律 nil ——
-    /// 拿不准就不说。源开没开由调用方按当前设置判(摘要里的 `enabled` 是 collector 上次落盘时的)。
+    /// 拿不准就不说。源开没开由调用方按当前设置判(摘要里的 `enabled` 是引擎上次落盘时的)。
     public static func attention(for source: String, state: State?, now: Date = Date()) -> Summary? {
         guard let state, now.timeIntervalSince1970 - TimeInterval(state.updatedAt) <= staleAfter,
               let summary = state.summary.first(where: { $0.source == source }), summary.alert != nil
@@ -106,7 +106,7 @@ public enum LyricSourceHealth {
         return summary
     }
 
-    /// 比例换成整数百分比,四舍五入口径与 collector 的 math.Round 一致。
+    /// 比例换成整数百分比,四舍五入口径与引擎的 math.Round 一致。
     public static func percent(_ rate: Double) -> Int { Int((rate * 100).rounded()) }
 
     public static func percent(_ part: Int, of total: Int) -> Int {

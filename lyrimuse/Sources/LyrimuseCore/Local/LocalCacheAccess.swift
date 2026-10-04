@@ -1,22 +1,22 @@
 import Foundation
 
-/// App 与 collector 的「客户端缓存被系统挡住了」状态通道(见 collector/localcachefs.go 头注)。
+/// App 与引擎的「客户端缓存被系统挡住了」状态通道(见 lyrimuse-engine/localcachefs.go 头注)。
 ///
 /// ## 为什么需要这条通道
 ///
 /// 酷狗 / QQ 音乐 / 网易云三家的歌词缓存住在各自的 `~/Library/Containers/<bundle id>/Data`
-/// 下,那是 macOS 给每个 App 的私有容器,读它必须有「完全磁盘访问」。collector 拿不到授权时
+/// 下,那是 macOS 给每个 App 的私有容器,读它必须有「完全磁盘访问」。引擎拿不到授权时
 /// 这三条本地快速路径**整条哑掉**,而它们全程 fail-soft —— 表现与"用户压根没装那个播放器"
 /// 逐字节相同,界面上没有任何迹象。这条通道就是为了让设置页能把这件事说出来。
 ///
-/// **这个状态只能由 collector 发布,App 绝不能自己去探测**。授权只有一份(系统把 App 包里的
-/// collector 算在 Lyrimuse 名下,两个进程共用),但在每个进程里各自生效:授权之后正在跑的 collector
-/// 要重启才拿到,App 探得到不代表 collector 探得到(反之亦然)。真正走这条快速路径的是
-/// collector,所以只有它的结论算数。App 自测一遍再显示,等于把一个与事实无关的结论摆给用户。
+/// **这个状态只能由引擎发布,App 绝不能自己去探测**。授权只有一份(系统把 App 包里的
+/// 引擎算在 Lyrimuse 名下,两个进程共用),但在每个进程里各自生效:授权之后正在跑的引擎
+/// 要重启才拿到,App 探得到不代表引擎探得到(反之亦然)。真正走这条快速路径的是
+/// 引擎,所以只有它的结论算数。App 自测一遍再显示,等于把一个与事实无关的结论摆给用户。
 /// 同 `LyricsFullScan.scoringVersion` 不能在 Swift 侧硬编码是一个道理。
 ///
 /// `denied` 只有**尝试过且被拒的**来源,`readable` 只有**确认读得到的**,两者互斥;都不在 =
-/// 还没试过。collector 每次启动先清掉这份文件、再把装了的那几家容器探一遍重新发布
+/// 还没试过。引擎每次启动先清掉这份文件、再把装了的那几家容器探一遍重新发布
 /// (localcacheprobe.go),授权状态可能在两次运行之间被改过,留着旧结论会让界面显示一个
 /// 已经不成立的提示。
 ///
@@ -26,7 +26,7 @@ public enum LocalCacheAccess {
         public let updatedAt: Int64
         /// 被系统挡住的来源名,取值与 `LyricsSource` 的 rawValue 同一套(kugou / qq / netease …)。
         public let denied: [String]
-        /// 确认读得到的来源名,同一套取值。旧版 collector 不写这个字段,解出来是空。
+        /// 确认读得到的来源名,同一套取值。旧版引擎不写这个字段,解出来是空。
         public let readable: [String]
 
         enum CodingKeys: String, CodingKey {
@@ -53,7 +53,7 @@ public enum LocalCacheAccess {
         case granted
         /// 至少一个来源被系统挡住。
         case denied
-        /// 没有被拒的,但也没有全部确认读到(collector 没在跑、还没探到、或旧版 collector)。
+        /// 没有被拒的,但也没有全部确认读到(引擎没在跑、还没探到、或旧版引擎)。
         case unknown
     }
 

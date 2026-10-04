@@ -1,6 +1,6 @@
 import Foundation
 
-// Lyrimuse 读取"本地正在播放"状态的目标 App——rawValue 跟 collector 侧的 playerXxx 常量
+// Lyrimuse 读取"本地正在播放"状态的目标 App——rawValue 跟引擎侧的 playerXxx 常量
 // 逐字对应(两侧现在都由 shared/players.json 生成,不再靠人守),这是两侧通过共享 json
 // 文件("player" 字段)交换的字符串。四个
 // 具体 App 对应两条完全不同的读取路径(见 MediaControlClient.swift
@@ -70,11 +70,11 @@ extension Set where Element == PlaybackPlayer {
     /// 上面那份列表空不空 —— 设置页那张卡、引导页那一步要不要出现。
     public var needsAnyAutomation: Bool { !playersNeedingAutomation.isEmpty }
 
-    /// 这个配置下,collector 要读**哪几个播放器的私有容器** —— 也就是「完全磁盘访问」那一行要替
+    /// 这个配置下,引擎要读**哪几个播放器的私有容器** —— 也就是「完全磁盘访问」那一行要替
     /// 哪几家说话。设置页那张卡和引导页那一步列的就是这个列表,顺序固定(`allCases`)。
     ///
     /// 判据同 `playersNeedingAutomation`:播放器本身要不要(`needsFullDiskAccess`,源头
-    /// shared/players.json,collector 侧按真实路径对账)+ 含 `auto` 时按超集全部都算。
+    /// shared/players.json,引擎侧按真实路径对账)+ 含 `auto` 时按超集全部都算。
     /// 同样**不**在这里按「装没装」过滤,那一层留在视图层。
     public var playersNeedingFullDiskAccess: [PlaybackPlayer] {
         let all = PlaybackPlayer.allCases.filter(\.needsFullDiskAccess)
@@ -94,7 +94,7 @@ extension Set where Element == PlaybackPlayer {
     }
 
     /// 在选中集合里点一下 `player` 之后的集合。选中的取消、没选中的勾上,但**不能取消到空集**:
-    /// 选中集合永远至少留一个,跟 `PlaybackPlayerPreference.selected` / collector
+    /// 选中集合永远至少留一个,跟 `PlaybackPlayerPreference.selected` / 引擎
     /// `resolvePlayers` 的非空保证对称。「自动识别」跟具体播放器不互斥,可以一起勾。
     public func toggling(_ player: PlaybackPlayer) -> Set<PlaybackPlayer> {
         var next = self
@@ -164,7 +164,7 @@ public enum PlaybackPlayerPreference {
     /// 空白的界面。
     ///
     /// 保证非空——调用方可以放心用 `selected.contains(.appleMusic)` 之类的成员判断,
-    /// 不需要再处理"选中集合是空的"这种状态(那不是一个合法状态,跟 collector 侧
+    /// 不需要再处理"选中集合是空的"这种状态(那不是一个合法状态,跟引擎侧
     /// resolvePlayers 的保证对称)。
     public static var selected: Set<PlaybackPlayer> {
         guard let data = try? Data(contentsOf: featuresURL),

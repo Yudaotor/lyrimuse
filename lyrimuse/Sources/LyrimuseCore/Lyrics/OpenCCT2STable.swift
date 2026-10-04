@@ -1,7 +1,7 @@
 // 由 scripts/gen-opencc-t2s.py 生成 —— **不要手改这个文件**。
 //
-// 数据是 lyrimuse-collector/dictionary 下的 OpenCC TSCharacters / TSPhrases(Apache-2.0),
-// 每个 key 只留第一个候选,规则同 collector t2s.go 的 loadT2SDict。selftest 有一条断言按那两份
+// 数据是 lyrimuse-engine/dictionary 下的 OpenCC TSCharacters / TSPhrases(Apache-2.0),
+// 每个 key 只留第一个候选,规则同引擎 t2s.go 的 loadT2SDict。selftest 有一条断言按那两份
 // .txt 逐条核对这里的表(漏跑生成器会当场红)。
 //
 // 表用两条「key<TAB>value」逐行拼接的字符串存、首次使用时解析:几千条的字典字面量会让

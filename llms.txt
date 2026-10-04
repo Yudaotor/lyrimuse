@@ -17,7 +17,7 @@ Lyrimuse is a free, open-source (GPL-3.0) macOS menu-bar app. It shows word-by-w
 ## Code
 
 - [lyrimuse/](https://github.com/Yudaotor/lyrimuse/tree/main/lyrimuse): the macOS app (Swift, SwiftUI + AppKit)
-- [lyrimuse-collector/](https://github.com/Yudaotor/lyrimuse/tree/main/lyrimuse-collector): the background engine that resolves lyrics and artwork (Go), bundled into the app automatically
+- [lyrimuse-engine/](https://github.com/Yudaotor/lyrimuse/tree/main/lyrimuse-engine): the background engine that resolves lyrics and artwork (Go), bundled into the app automatically
 
 ## Related projects
 

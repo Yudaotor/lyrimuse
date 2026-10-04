@@ -4,7 +4,7 @@ import Foundation
 /// `romanizedArtistAliases` 静态表 —— 「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」。
 ///
 /// 证据全部来自本机、零网络:
-///  1. collector 的 MusicBrainz 缓存(它解析歌词时已经替每个新歌手查过一次 MusicBrainz):
+///  1. 引擎的 MusicBrainz 缓存(它解析歌词时已经替每个新歌手查过一次 MusicBrainz):
 ///     - `lyrimuse-artist-alias-cache.json`:原始标签 → 中文别名(`Crowd Lu → 卢广仲`);
 ///     - `lyrimuse-artist-identity-cache.json`:名字 → {mbid, zh}(`Soft Lipa → 蛋堡`);
 ///     - `lyrimuse-artist-primary-cache.json`:名字 → MusicBrainz 上的全部别名
@@ -65,7 +65,7 @@ public enum LocalArtistAliases {
             uf.add(key)
             return key
         }
-        /// MusicBrainz 缓存的键/别名是不是**单个**歌手写法。缓存按 collector 收到的原始标签存,里面
+        /// MusicBrainz 缓存的键/别名是不是**单个**歌手写法。缓存按引擎收到的原始标签存,里面
         /// 有合唱串和带逗号的乐队名(`Earth, Wind & Fire`),归首位会把它们切成 `Earth` 这种碎片,再拿
         /// 碎片去连边就是乱连(实测推出 `earth → アース`)。碎片不当边的端点;共现那条路不受影响
         /// (它按 enrich 条目自己的写法归首位,两侧都是同一套切法)。
@@ -160,7 +160,7 @@ public enum LocalArtistAliases {
     }
 }
 
-/// 读 collector 的三份 MusicBrainz 歌手缓存(纯读盘、解 JSON,失败给空表)。放在 Core 是因为
+/// 读引擎的三份 MusicBrainz 歌手缓存(纯读盘、解 JSON,失败给空表)。放在 Core 是因为
 /// EnrichCacheReader 同样在 Core 读盘;selftest 不碰它,只测 LocalArtistAliases.derive 的纯函数部分。
 public enum ArtistIdentityCaches {
     public static func load(configDir: URL = LyrimusePaths.configDir) -> LocalArtistAliases.MusicBrainzCaches {

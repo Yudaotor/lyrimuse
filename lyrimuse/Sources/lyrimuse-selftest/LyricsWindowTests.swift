@@ -54,7 +54,7 @@ func runLyricsWindowTests() {
     do {
         typealias E = LyricsWindowEmptyState
         let everything = E.Inputs(hasTitle: true, isAdBreak: true, isRadioTalkBreak: true,
-                                  isInstrumental: true, hasNoLyrics: true, collectorNetworkDown: true,
+                                  isInstrumental: true, hasNoLyrics: true, engineNetworkDown: true,
                                   hasLyricsContent: false, isPlaying: true)
         expectEqual(E.resolve(E.Inputs(hasTitle: false, isAdBreak: true, isPlaying: true)), .notPlaying,
                     "空状态: 曲名为空时一律「没有在播放」,哪怕别的标志还挂着")
@@ -68,11 +68,11 @@ func runLyricsWindowTests() {
         expectEqual(E.resolve(i), .noLyrics, "空状态: 暂无歌词(明确结论)排在网络失败之前")
         i.hasNoLyrics = false
         expectEqual(E.resolve(i), .networkDown, "空状态: 断网且没有歌词内容 → 网络连接失败,不是一直「搜索中」")
-        i.collectorNetworkDown = false
+        i.engineNetworkDown = false
         expectEqual(E.resolve(i), .searching, "空状态: 在放、没有内容、没有定论 → 搜索中")
         i.isPlaying = false
         expectEqual(E.resolve(i), .none, "空状态: 暂停且没有内容 → 兜底「无歌词」")
-        expectEqual(E.resolve(E.Inputs(hasTitle: true, collectorNetworkDown: true, hasLyricsContent: true,
+        expectEqual(E.resolve(E.Inputs(hasTitle: true, engineNetworkDown: true, hasLyricsContent: true,
                                        isPlaying: true)), .none,
                     "空状态: 有歌词内容时断网不算失败(内容已经在手里)")
         expectEqual([E.notPlaying, .adBreak, .radioTalk, .instrumental, .noLyrics, .networkDown, .searching, .none]

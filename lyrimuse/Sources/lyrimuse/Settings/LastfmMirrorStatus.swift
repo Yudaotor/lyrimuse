@@ -1,10 +1,10 @@
 import Foundation
 import LyrimuseCore
 
-/// 读 collector 落盘的 Last.fm 镜像状态文件(lyrimuse-lastfm-status.json)。
+/// 读引擎落盘的 Last.fm 镜像状态文件(lyrimuse-lastfm-status.json)。
 ///
 /// 只有一种内容:凭据级致命错误(session key 被撤销/API key 失效,error 4/9/10/26)。
-/// collector 遇到它会熔断停止提交并写这个文件(见 collector/lastfm.go 的
+/// 引擎遇到它会熔断停止提交并写这个文件(见 lyrimuse-engine/lastfm.go 的
 /// writeLastfmMirrorStatus),之后第一次提交成功会把它删掉。App 侧读到它就把账号卡
 /// 渲染成"授权已失效"红标 —— 没有这条通道的话,scrobble 全停时界面照样一片绿
 /// ("已连接"只看本地 session key 非空,信息页走只读 API 照常出数据),用户从任何
@@ -37,7 +37,7 @@ enum LastfmMirrorStatus {
     }
 
     /// 重新连接成功/主动断开时清掉 —— 旧错误描述的是上一把钥匙,留着会让新连接顶着
-    /// 一个不属于它的红标(collector 侧也会在下次成功提交时删,这里是即时反馈)。
+    /// 一个不属于它的红标(引擎侧也会在下次成功提交时删,这里是即时反馈)。
     static func clear() {
         try? FileManager.default.removeItem(at: url)
         cachedMTime = nil
@@ -48,11 +48,11 @@ enum LastfmMirrorStatus {
     }
 }
 
-/// 让"授权已失效"红标能**自愈**的观察器。collector 恢复后(重启进程 + 首次提交成功)
+/// 让"授权已失效"红标能**自愈**的观察器。引擎恢复后(重启进程 + 首次提交成功)
 /// 会把状态文件删掉,但"文件被删"不在 SwiftUI 的观察体系里 —— 徽标所在的行没有任何
 /// 被观察对象变化就不重渲染,红标滞留(实测:Last.fm 误报 error 4 → 熔断
-/// 落文件 → collector 重启自愈删了文件,侧边栏红标继续挂着)。反方向同样成立:App
-/// 开着设置页时 collector 熔断落了文件,红标也该自己冒出来,不用重开窗口。
+/// 落文件 → 引擎重启自愈删了文件,侧边栏红标继续挂着)。反方向同样成立:App
+/// 开着设置页时引擎熔断落了文件,红标也该自己冒出来,不用重开窗口。
 ///
 /// 每 5 秒重读一次(LastfmMirrorStatus.current 按 mtime 缓存,常态代价是一次 stat),
 /// 值真变了才发布 —— 订阅的视图只在红标该出现/消失的那一刻各重算一次,其余时间

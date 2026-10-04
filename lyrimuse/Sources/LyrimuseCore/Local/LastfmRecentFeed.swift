@@ -1,11 +1,11 @@
 import Foundation
 
-/// collector 落盘的 Last.fm「最近记录」feed(`lyrimuse-lastfm-recent-feed.json`)。
+/// 引擎落盘的 Last.fm「最近记录」feed(`lyrimuse-lastfm-recent-feed.json`)。
 ///
-/// 写入方是 collector 的桥接拉取(lyrimuse-collector/lastfmfeed.go):它本来就每 15 s
+/// 写入方是引擎的桥接拉取(lyrimuse-engine/lastfmfeed.go):它本来就每 15 s
 /// (空闲 60 s)拉一次 `user.getrecenttracks limit=50`,现在把结果原样落盘。App 侧读它代替
 /// 自己直连轮询同一个接口——本机实测 App 那条链路(URLSession 走系统代理)p50 1.2 s、16%
-/// 超时,collector 的 Go 直连 p50 0.4 s、~1% 失败;而且同一份数据两个进程各拉一遍本来就没有
+/// 超时,引擎的 Go 直连 p50 0.4 s、~1% 失败;而且同一份数据两个进程各拉一遍本来就没有
 /// 道理。字段名跟 Go 侧 `lastfmFeedFile` 逐字对应,改一边必须改另一边。
 ///
 /// 这里只放**纯数据 + 纯算术**(解码、新鲜度判断、"今天听了几首"的派生),按本仓惯例好被
@@ -30,7 +30,7 @@ public struct LastfmRecentFeed: Equatable, Decodable, Sendable {
     }
 
     public let username: String
-    /// collector 发起那次拉取的时刻(unix 秒)。
+    /// 引擎发起那次拉取的时刻(unix 秒)。
     public let fetchedAt: TimeInterval
     /// `@attr.total`:账号总 scrobble 数。
     public let total: Int
@@ -46,8 +46,8 @@ public struct LastfmRecentFeed: Equatable, Decodable, Sendable {
         self.tracks = tracks
     }
 
-    /// feed 多旧算"活着"。collector 内容没变时也至少每 60 s 心跳重写一次、空闲拉取周期 60 s,
-    /// 两者相加再留余量:3 分钟内有过写入就认为 collector 在、数据可信;超过就当它不在,
+    /// feed 多旧算"活着"。引擎内容没变时也至少每 60 s 心跳重写一次、空闲拉取周期 60 s,
+    /// 两者相加再留余量:3 分钟内有过写入就认为引擎在、数据可信;超过就当它不在,
     /// App 退回自己轮询(旧行为)。
     public static let freshWindow: TimeInterval = 180
 

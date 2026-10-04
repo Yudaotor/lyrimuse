@@ -8,11 +8,11 @@ QQ音乐桌面客户端的"桌面歌词"。另外还有一个"歌词管理"窗�
 
 数据完全本地读取，零网络：直接读这台 Mac 上播放器的当前状态（Apple Music 走 AppleScript，
 需要一次「自动化」权限授权；QQ 音乐/网易云音乐/Spotify 都没有可用的 AppleScript 支持，
-统一改走系统级 MediaRemote，不需要任何权限，见下面"依赖"）+ `../lyrimuse-collector/` 采集器
+统一改走系统级 MediaRemote，不需要任何权限，见下面"依赖"）+ `../lyrimuse-engine/` 引擎
 写在磁盘上的歌词/封面缓存。用哪个播放器是首次启动引导（或随时在设置里）的一个显式选择，
-默认 Apple Music。这个采集器现在
-打包进 `.app` 里（`build.sh` 会一并 `go build` 一份塞进 `Contents/Resources/collector`），
-常驻运行靠 `CollectorServiceManager.swift` 管理的 LaunchAgent——同样在首次启动引导时开启，
+默认 Apple Music。这个引擎现在
+打包进 `.app` 里（`build.sh` 会一并 `go build` 一份塞进 `Contents/Resources/lyrimuse-engine`），
+常驻运行靠 `EngineServiceManager.swift` 管理的 LaunchAgent——同样在首次启动引导时开启，
 或随时去设置的"通用"tab 里装/卸。它负责联网查歌词/封面并写进这份本地缓存，Lyrimuse 自己
 不联网找歌词。没有缓存时会正常显示"暂无歌词"，不会报错。
 
@@ -25,10 +25,10 @@ QQ音乐桌面客户端的"桌面歌词"。另外还有一个"歌词管理"窗�
 
 - Swift 工具链（Command Line Tools 自带即可，不需要装完整 Xcode——已实测确认，
   `Package.swift` 用的是纯 SwiftPM 可执行 target，不是 `.xcodeproj`）。
-- 2026-07-21 起 `build.sh` 还会额外 `go build` 一份 `../lyrimuse-collector`（`GOTOOLCHAIN=
-  go1.24.4`，原因见 `lyrimuse-collector/build.sh` 顶部注释）塞进 `.app` 包里，所以也需要
-  本机装了 Go 工具链——这样 collector 不再要求用户单独构建/手动装 LaunchAgent，App 自己
-  的 `CollectorServiceManager.swift` 就能装/卸它（见首次启动引导，或设置的"通用"tab）。
+- 2026-07-21 起 `build.sh` 还会额外 `go build` 一份 `../lyrimuse-engine`（`GOTOOLCHAIN=
+  go1.24.4`，原因见 `lyrimuse-engine/build.sh` 顶部注释）塞进 `.app` 包里，所以也需要
+  本机装了 Go 工具链——这样引擎不再要求用户单独构建/手动装 LaunchAgent，App 自己
+  的 `EngineServiceManager.swift` 就能装/卸它（见首次启动引导，或设置的"通用"tab）。
 - 2026-07-24 起，构建 QQ 音乐/网易云音乐/Spotify/自动识别这几个播放源的支持需要
   [ungive/media-control](https://github.com/ungive/media-control)（BSD-3-Clause，这几个
   播放源统一走它读取系统级 MediaRemote，不是各自独立集成）——`build.sh` 会把这份二进制
@@ -38,7 +38,7 @@ QQ音乐桌面客户端的"桌面歌词"。另外还有一个"歌词管理"窗�
   安装失败（没网/没装 Homebrew 本身），会打个警告继续构建，只是这次构建出来的 App
   不支持切换到这几个播放源（Apple Music 不受影响）。
 - 打包成正经的 `.app`（2026-07-18 起）：`build.sh` 把 release 构建的可执行文件+图标+
-  `Info.plist`+collector 二进制组装安装到 `/Applications/Lyrimuse.app`，可以拖进 Dock 当
+  `Info.plist`+引擎二进制组装安装到 `/Applications/Lyrimuse.app`，可以拖进 Dock 当
   启动器双击打开。`Info.plist` 里仍然设 `LSUIElement`，运行期间照旧不占 Dock/Cmd-Tab（跟
   改造前的 `NSApp.setActivationPolicy(.accessory)` 运行时调用双保险）。SwiftPM 给每个
   声明了 `resources` 的 target 生成的 `Bundle.module` 资源包（本地化文案等）按访问器的

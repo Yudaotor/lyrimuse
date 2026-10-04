@@ -1,10 +1,10 @@
 import Foundation
 
-/// App 与 collector 共享的限流窗口,collector 侧 `sharedcooldown.go` 的镜像。
+/// App 与引擎共享的限流窗口,引擎侧 `sharedcooldown.go` 的镜像。
 ///
 /// 两个进程共用一个出口 IP,都会打 iTunes 和 Last.fm 的读接口。一边撞到限流,另一边接着打只会
 /// 被一起限,所以这几个接口的停手窗口写进一个共享文件,两边发请求前都看一眼。文件名、键的写法
-/// (主机 + 路径,同 collector 出站闸的端点键)、JSON 形状三处必须两边一起改,selftest contracts
+/// (主机 + 路径,同引擎出站闸的端点键)、JSON 形状三处必须两边一起改,selftest contracts
 /// 组守着。
 ///
 /// 文件形状:`{"endpoints":{"itunes.apple.com/search":1790253000.5}}`,值是窗口截止的 Unix 秒。
@@ -14,16 +14,16 @@ public enum OutboundCooldowns {
     public static let itunesSearchKey = "itunes.apple.com/search"
     public static let lastfmKey = "ws.audioscrobbler.com/2.0/"
     /// 整个 MusicBrainz 接口共用一个键(按 IP 限速,不分端点)。窗口截止时刻 = 下一个请求最早什么时候能发,
-    /// 同 collector `sharedCooldownMusicBrainz`。
+    /// 同引擎 `sharedCooldownMusicBrainz`。
     public static let musicBrainzKey = "musicbrainz.org/ws/2/"
-    /// 两个 MusicBrainz 请求之间至少隔多久,同 collector `musicbrainzMinIntervalBetweenCalls`。
+    /// 两个 MusicBrainz 请求之间至少隔多久,同引擎 `musicbrainzMinIntervalBetweenCalls`。
     public static let musicBrainzInterval: TimeInterval = 1.1
 
     private struct File: Codable {
         var endpoints: [String: Double]
     }
 
-    /// 去掉过期的,key 取两者较晚的截止时刻。同 collector `mergeSharedCooldown`。
+    /// 去掉过期的,key 取两者较晚的截止时刻。同引擎 `mergeSharedCooldown`。
     public static func merge(_ existing: [String: Double], key: String, until: Date, now: Date) -> [String: Double] {
         let nowSecs = now.timeIntervalSince1970
         var out = existing.filter { $0.value > nowSecs }

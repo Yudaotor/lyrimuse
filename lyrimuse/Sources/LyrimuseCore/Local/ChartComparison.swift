@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 上一期 = 紧挨着本期之前、同样长的窗口,用 `user.getWeekly*Chart` 带起止时间取。按这三个长度取出的
 /// 本期榜跟滚动榜(`user.getTop*` 的 7day / 1month / 12month)逐条一致,两期同口径。
-/// collector `topartistscli.go` 的 `topArtistsPeriodSpan` 用同一组长度,两处必须同步改(selftest contracts 组读它对账)。
+/// 引擎 `topartistscli.go` 的 `topArtistsPeriodSpan` 用同一组长度,两处必须同步改(selftest contracts 组读它对账)。
 public enum ChartComparison {
     /// 时段(Last.fm 的 period 参数)对应的窗口长度;overall 没有上一期,返回 nil。
     public static func span(forPeriod period: String) -> TimeInterval? {

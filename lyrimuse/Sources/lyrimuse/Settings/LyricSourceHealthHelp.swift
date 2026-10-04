@@ -2,7 +2,7 @@ import LyrimuseCore
 import SwiftUI
 
 /// 「歌词来源」卡里那颗橙色三角点开后的说明:这个源最近哪里不正常、依据的数字是多少。判定和数字都是
-/// collector 统计的(`LyricSourceHealth`),这里只负责说成人话。
+/// 引擎统计的(`LyricSourceHealth`),这里只负责说成人话。
 struct LyricSourceHealthHelp: View {
     let source: LyricsSource
     let summary: LyricSourceHealth.Summary

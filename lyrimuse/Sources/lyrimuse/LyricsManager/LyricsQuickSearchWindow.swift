@@ -14,9 +14,9 @@ import LyrimuseCore
 // 它是"边听边换词"的入口:换一个源听两句不对再换,原来得关窗→重开→再等九个源重搜一遍
 // (最坏 20 秒);现在同一批候选留在原地,点即切,「当前使用」徽标跟着挪,标题栏给一条
 // "已采用 X 的歌词"的回声。另外两个入口(歌词管理的编辑器模态、歌词窗口的 sheet)维持关窗:
-// 前者留着会挡住刚回填的编辑器,后者关了才看得到背后的歌词。collector 重启照旧每次采纳排一次
-// (`scheduleCollectorRestart` 已合并:在飞最多一个、补一次),**刻意不**延后到关窗那一刻 ——
-// 重启存在的理由正是 collector 内存里还留着旧条目、它下一次落盘会把 App 刚写的盖回去。
+// 前者留着会挡住刚回填的编辑器,后者关了才看得到背后的歌词。引擎重启照旧每次采纳排一次
+// (`scheduleEngineRestart` 已合并:在飞最多一个、补一次),**刻意不**延后到关窗那一刻 ——
+// 重启存在的理由正是引擎内存里还留着旧条目、它下一次落盘会把 App 刚写的盖回去。
 //
 // 曲目快照逻辑跟 `LyricsWindowView.openLyricsSearch()` 是同一套算法(resolvedKey 精确→
 // 宽松两级,缺条目退 normalizedKey),没有抽成公用类型共享——那边多一层"sheet(item:) 的
@@ -70,7 +70,7 @@ struct LyricsQuickSearchWindow: View {
                     durationSecs: context.durationSecs, keepsOpenAfterApply: true
                 ) { candidate in
                     // 同 LyricsWindowView 的 onApply:saveEdit → 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
-                    // 保存前不用先把整份缓存读进 store:写入由 collector 执行(EnrichEditChannel),不经 store 的内存副本;
+                    // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本;
                     // 歌词管理没开着时先读一遍就是白解析一整份缓存,commit 收尾还会再读一遍。
                     // 不再自己套 Task:面板要等这里回报"落盘成败"再决定挪徽标/回声。
                     let saved: Bool

@@ -202,7 +202,7 @@ final class AppSettings: ObservableObject {
         static let launchMusicOnLyrimuseOpen = "np:launchMusicOnLyrimuseOpen"
         static let launchPlayersOnLyrimuseOpen = "np:launchPlayersOnLyrimuseOpen"
         static let quitWithPlayers = "np:quitWithPlayers"
-        static let collectorServiceEnabled = "np:collectorServiceEnabled"
+        static let engineServiceEnabled = "np:collectorServiceEnabled"
         static let showInDock = "np:showInDock"
         // 换歌时弹一条系统通知(NowPlayingNotifier)。
         static let nowPlayingNotifications = "np:nowPlayingNotifications"
@@ -669,13 +669,13 @@ final class AppSettings: ObservableObject {
     @Published var quitWithPlayers: Set<PlaybackPlayer> {
         didSet { defaults.set(quitWithPlayers.map(\.rawValue).sorted(), forKey: Keys.quitWithPlayers) }
     }
-    // collector 常驻服务的装/卸开关——跟 launchAtLoginEnabled 同样的写法，但默认值不能
+    // 引擎常驻服务的装/卸开关——跟 launchAtLoginEnabled 同样的写法，但默认值不能
     // 照抄成 true:不能在 init() 阶段就静默装一个 LaunchAgent。首次安装发生在引导走到
     // 「让它跑起来」那一页时(自动开始、页面上显示真实的安装与结果，见 OnboardingFlow.autoStartsBackgroundService)。
-    @Published var collectorServiceEnabled: Bool {
+    @Published var engineServiceEnabled: Bool {
         didSet {
-            defaults.set(collectorServiceEnabled, forKey: Keys.collectorServiceEnabled)
-            CollectorServiceManager.setEnabled(collectorServiceEnabled)
+            defaults.set(engineServiceEnabled, forKey: Keys.engineServiceEnabled)
+            EngineServiceManager.setEnabled(engineServiceEnabled)
         }
     }
     // 是否在 Dock 里显示图标(以及连带出现在 Cmd-Tab 里),默认 true(见下面 init() 的
@@ -993,7 +993,7 @@ final class AppSettings: ObservableObject {
     //   false → 采纳只是"当下换上这份",缓存里一个约束标记都不写(saveEdit 收到
     //           `sourceChoice: ""`,把可能残留的 lyrics_source_choice 显式清掉),之后
     //           打分改进/升级重试照常调整这首歌,**也可以换成别的源**;
-    //   true  → 置 manual_lyrics,collector 三条自愈路径(firstFill/rescore/retry)第一行
+    //   true  → 置 manual_lyrics,引擎三条自愈路径(firstFill/rescore/retry)第一行
     //           就否决,这首歌定死在这份内容上。
     //
     // **不要**再引入"关 = 只限制在所选源内"这种中间态(记 lyrics_source_choice、自愈照跑但被
@@ -1782,7 +1782,7 @@ final class AppSettings: ObservableObject {
         }
         quitWithPlayers = Set(((defaults.array(forKey: Keys.quitWithPlayers) as? [String]) ?? [])
             .compactMap(PlaybackPlayer.init(rawValue:)))
-        collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
+        engineServiceEnabled = (defaults.object(forKey: Keys.engineServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
         nowPlayingNotifications = (defaults.object(forKey: Keys.nowPlayingNotifications) as? Bool)
             ?? Self.defaultNowPlayingNotifications

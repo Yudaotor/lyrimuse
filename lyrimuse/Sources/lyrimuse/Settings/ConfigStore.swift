@@ -5,9 +5,9 @@ import os
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config-store")
 
 // 推送提醒目前支持的平台——绝大多数都是"群机器人 webhook"这个模子,一个 URL、POST
-// 一份 JSON 就能收到消息(Server酱是个例外,走表单编码,见 collector/notify.go 顶部
+// 一份 JSON 就能收到消息(Server酱是个例外,走表单编码,见 lyrimuse-engine/notify.go 顶部
 // 注释),Lyrimuse 这边只管选平台+填 webhook 地址,不关心具体协议。rawValue
-// 必须跟 collector 侧的平台字符串常量(platformBark/platformDingtalk/platformWecom/
+// 必须跟引擎侧的平台字符串常量(platformBark/platformDingtalk/platformWecom/
 // platformDiscord/platformFeishu/platformServerChan/platformTelegram)逐字对应——这是两侧通过同一份
 // config.json 交换的字符串,不是各自随便定义的展示文案。
 public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
@@ -92,14 +92,14 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-// "推送账号"tab 管理 collector 推送目的地凭据的数据层——读写 collector 自己的
-// ~/.config/lyrimuse/config.json(见 collector/config.go 的 `config`
+// "推送账号"tab 管理引擎推送目的地凭据的数据层——读写引擎自己的
+// ~/.config/lyrimuse/config.json(见 lyrimuse-engine/config.go 的 `config`
 // struct)。照抄 EnrichCacheStore.swift 的模式:用 JSONSerialization 读写整份原始
 // 字典而不是用 Codable 精确建模——这份文件里还有 api_root 这类 UI 不管的字段,整字典读写
 // 才能保证保存时原样保留它们,不会被这里没声明的字段悄悄丢掉。
 //
 // 文本字段不走 Toggle 那种"改了立刻存盘+重启"的即时保存——不能每敲一个字符就重启一次
-// collector,所以持久化是一个显式调用点。
+// 引擎,所以持久化是一个显式调用点。
 //
 // 触发者**不再是**"底部保存栏"(那个 UI 已经不存在了):现在是
 // AccountLinkingTab 的 1.2 秒输入防抖自动保存(`performAutoSave` → `save()`),
@@ -142,17 +142,17 @@ public final class ConfigStore: ObservableObject {
             )
         }
     }
-    /// 当前平台的地址,即 config.json 的 `bark_url`(collector 只读这一份)。
+    /// 当前平台的地址,即 config.json 的 `bark_url`(引擎只读这一份)。
     @Published public var notificationWebhookURL = ""
     /// 其余平台各自存下的地址(`notification_webhook_urls`),只有 App 侧用。
     private var webhookSlots = NotificationWebhookSlots(stored: [:], activePlatform: "bark", activeURL: "")
     private var isLoading = false
     // 只有对应平台的机器人开了"加签"安全设置时才需要填,留空则按未加签处理——钉钉/
-    // 飞书两个平台的签名算法不同(见 collector/notify.go),分开两个字段存,切换平台
+    // 飞书两个平台的签名算法不同(见 lyrimuse-engine/notify.go),分开两个字段存,切换平台
     // 不会互相污染。
     @Published public var dingtalkSignSecret = ""
     @Published public var feishuSignSecret = ""
-    // Telegram 平台必填:推送发到哪个会话。地址栏可以只填机器人 Token,见 collector/notify.go telegramSendURL。
+    // Telegram 平台必填:推送发到哪个会话。地址栏可以只填机器人 Token,见 lyrimuse-engine/notify.go telegramSendURL。
     @Published public var telegramChatID = ""
 
     @Published public private(set) var lastError: String?
@@ -214,7 +214,7 @@ public final class ConfigStore: ObservableObject {
     /// `<redacted:lastfmScrobbleAPIKey>` 的形式留在报告里,方便排查时知道那里原本是哪一项。
     ///
     /// 刻意读 `currentSnapshot` 而不是 `savedSnapshot`:用户可能刚在界面上粘了一把新
-    /// 密钥还没点保存,而 collector 侧的日志里已经可能有它 —— 脱敏要按"可能出现过的值"
+    /// 密钥还没点保存,而引擎侧的日志里已经可能有它 —— 脱敏要按"可能出现过的值"
     /// 取全集,宁可多抹一个。
     ///
     /// 不收进来的两类,都是有意的:
@@ -254,7 +254,7 @@ public final class ConfigStore: ObservableObject {
 
     /// 能不能**从** ListenBrainz 读回统计(听歌报告的数据源、Last.fm 桥接的去重比对)。
     ///
-    /// 读统计必须带用户名 —— collector 侧 daily.go / weekly.go 是把它当 API 参数传进
+    /// 读统计必须带用户名 —— 引擎侧 daily.go / weekly.go 是把它当 API 参数传进
     /// `listenbrainzDigestStats(…, p.cfg.User, …)` 的,没有用户名根本无从查起。所以它跟
     /// "能提交"是两个不同的条件,不能共用 isListenBrainzConfigured。
     ///
@@ -289,7 +289,7 @@ public final class ConfigStore: ObservableObject {
     // 故意只判断 Last.fm 侧凭据,不管 ListenBrainz——这个函数同时被两处调用:
     // ①AccountLinkingTab 判断"桥接读取"是否真的在跑(那边额外自己叠一层
     // isListenBrainzConfigured,见 destinationStatus 的 bridgeOK 注释);②听歌报告的
-    // resolvedDigestSource/collector 侧 weekly.go 判断"Last.fm 能不能当数据源",这个
+    // resolvedDigestSource/引擎侧 weekly.go 判断"Last.fm 能不能当数据源",这个
     // 场景完全不需要 ListenBrainz。两个用途混进同一个判断会互相伤害,所以这里保持
     // 语义狭窄,"要不要额外查 ListenBrainz"交给各自调用点自己决定。
     public func lastfmBridgeMissingHint() -> String? {
@@ -324,7 +324,7 @@ public final class ConfigStore: ObservableObject {
         document = JSONConfigDocument.load(url: Self.fileURL)
         switch document.state {
         case .loaded, .missing:
-            // 不存在 = 全新机器 / collector 还没跑过:字段留空,首次保存会创建文件。
+            // 不存在 = 全新机器 / 引擎还没跑过:字段留空,首次保存会创建文件。
             loadFailure = nil
         case .corrupt(let reason):
             // 文件在但读不懂。字段照样留空只是为了界面不崩;**保存被拒**(见 persistFile),直到用户修好
@@ -349,7 +349,7 @@ public final class ConfigStore: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         notificationPlatform = (raw["notification_platform"] as? String).flatMap(NotificationPlatform.init) ?? .bark
-        // JSON key 还是历史上的 bark_url——见 collector/config.go 里 NotificationWebhookURL
+        // JSON key 还是历史上的 bark_url——见 lyrimuse-engine/config.go 里 NotificationWebhookURL
         // 字段上的注释,两边保持一致,不单独给 Lyrimuse 这边改名。
         notificationWebhookURL = raw["bark_url"] as? String ?? ""
         webhookSlots = NotificationWebhookSlots(
@@ -362,16 +362,16 @@ public final class ConfigStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
-    // 只把当前字段写回磁盘,不重启 collector。抛出的错误里带具体原因,调用方决定怎么
+    // 只把当前字段写回磁盘,不重启引擎。抛出的错误里带具体原因,调用方决定怎么
     // 呈现给用户。
     //
     // 原注释说"底部保存栏会先把两个 store 都写完盘、再统一重启一次" —— **那个保存栏
     // 已经不存在了**,而且全仓 grep 确认本方法**只被自己的 save() 调用**,没有任何外部
-    // 协调者。"只重启一次"这件事现在由 CollectorRestartCoordinator
+    // 协调者。"只重启一次"这件事现在由 EngineRestartCoordinator
     // 负责——两个 store 的 save() 都走它,它去抖合并。
     public func persistFile() throws {
         // 凭据和地址落盘前去掉首尾空白:粘贴进来的 token 常带尾随空格 / 换行,界面上的校验去掉了空白所以显示
-        // 「已连接」,collector 却原样拼进请求头。collector 读配置时也会再去一次(config.go trimCredentials)。
+        // 「已连接」,引擎却原样拼进请求头。引擎读配置时也会再去一次(config.go trimCredentials)。
         func t(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
         let fields: [String: Any] = [
             "listenbrainz_token": t(listenbrainzToken),
@@ -431,7 +431,7 @@ public final class ConfigStore: ObservableObject {
         pendingUntilServiceEnabled = false
     }
 
-    // 保存入口:持久化 + 重启 collector + 提交快照,一步到位。
+    // 保存入口:持久化 + 重启引擎 + 提交快照,一步到位。
     //
     // 原注释说这是"给不经过底部保存栏的场景用"、"目前只有连接 Last.fm 会调用" ——
     // 两句都已过时。保存栏没了,本方法现在是**唯一**的保存路径,
@@ -452,11 +452,11 @@ public final class ConfigStore: ObservableObject {
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
-        // 不重启 collector:它按 mtime 自己热重读 config.json(configreload.go)。见 CollectorRestartPolicy 头注。
+        // 不重启引擎:它按 mtime 自己热重读 config.json(configreload.go)。见 EngineRestartPolicy 头注。
         lastError = nil
         // 同 FeatureSettingsStore.save():后台服务被停用时下次启用读盘生效,状态条提示「服务已停用」。
         // 看开关、不问 launchctl,理由见那边。
-        pendingUntilServiceEnabled = !AppSettings.shared.collectorServiceEnabled
+        pendingUntilServiceEnabled = !AppSettings.shared.engineServiceEnabled
         commitSnapshot()
         return true
     }

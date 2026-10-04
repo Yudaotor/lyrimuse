@@ -8,7 +8,7 @@ import Foundation
 ///
 /// 根因不是 ICU 有 bug,而是「妳」压根不在繁简转换的范畴里:它是大陆《第一批异体字整理表》
 /// 淘汰、港台仍在用的**异体字**,不是「你」的繁体。所以 ICU 的 Traditional-Simplified 不
-/// 处理它 —— OpenCC 也一样(collector 侧同一天实测:三张字典里都没有「妳」「祂」「牠」的
+/// 处理它 —— OpenCC 也一样(引擎侧同一天实测:三张字典里都没有「妳」「祂」「牠」的
 /// 任何条目)。这一层专门补这个缺口。
 ///
 /// ═══ 表从哪来(换掉了原来的手工表)═══
@@ -23,7 +23,7 @@ import Foundation
 ///    没有关系、或者上游唯一候选明显错的字);
 ///  - 推导规则和"为什么不手工维护"写在 `scripts/gen-han-variants.py` 的头注里;
 ///  - 产物两份、同一次生成:`HanVariantsTable.swift`(本文件读的这张表)和
-///    `lyrimuse-collector/dictionary/HanVariants.txt`(collector 侧 `//go:embed` 读的那份)。
+///    `lyrimuse-engine/dictionary/HanVariants.txt`(引擎侧 `//go:embed` 读的那份)。
 ///    **两侧是同一份数据**,selftest 有一条断言逐字核对(漏跑生成器会当场红)。
 ///
 /// 换完之后原来那 6 个字里有 4 个是**推出来的**(妳→你 / 牠→它 / 濛→蒙 / 痺→痹),只有
@@ -43,7 +43,7 @@ public enum HanVariants {
 
     /// 表里"ICU 的 Traditional-Simplified **确实不转**"的那批变体字 —— 生成时实测出来的
     /// (`scripts/han-icu-probe.swift`)。只有它们在 App 这一侧真的会生效:其余条目 ICU 自己
-    /// 就转掉了,留在表里是为 collector 侧的 OpenCC 缺口服务。
+    /// 就转掉了,留在表里是为引擎侧的 OpenCC 缺口服务。
     ///
     /// 开放出来只有一个用途:selftest 里"整条链路的产物必须等于表里的规范字"那条强断言只
     /// 对这一批成立,拿全表去断言等于在断言"ICU 和 OpenCC 逐字一致"——那是另一件事,而且

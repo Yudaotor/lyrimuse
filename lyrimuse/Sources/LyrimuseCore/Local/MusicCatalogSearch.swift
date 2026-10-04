@@ -68,7 +68,7 @@ public enum MusicCatalogSearch {
         } catch {
             NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
-            // 网络层失败按 0 记退避(口径同 collector);调用方自己取消的不算。
+            // 网络层失败按 0 记退避(口径同引擎);调用方自己取消的不算。
             if (error as? URLError)?.code != .cancelled { gate.note(status: 0, retryAfter: nil) }
             return nil
         }
@@ -237,7 +237,7 @@ public enum MusicCatalogSearch {
         return URL(string: "music" + httpsURL.dropFirst("https".count))
     }
 
-    /// collector 存的曲目链接(`apple_music_url`,`…/album/<名>/<专辑 id>?i=<曲目 id>`,https 或 music:// 都认)
+    /// 引擎存的曲目链接(`apple_music_url`,`…/album/<名>/<专辑 id>?i=<曲目 id>`,https 或 music:// 都认)
     /// 所在专辑的页面,已改写成 `music://`,店面照链接。不是专辑形状(MV 等)返回 nil,调用方退回按歌名搜。
     public static func albumPage(fromTrackURL raw: String?) -> URL? {
         guard let ref = AlbumEditorialNotes.albumRef(fromAppleMusicURL: raw),

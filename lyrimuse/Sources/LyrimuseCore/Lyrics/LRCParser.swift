@@ -50,8 +50,8 @@ public enum LRCParser {
     public static let maxOffsetMs = 10_000
 
     /// Apple 歌词给空间音频(杜比全景声)版的偏移。Apple 的时间轴按立体声母带打,全景声混音跟它对不齐时,
-    /// collector 把 TTML 里 `<audio lyricOffset role="spatial">` 的值连同立体声版时长写成正文里的一行
-    /// `[am-spatial:<偏移毫秒>/<立体声时长毫秒>]`(collector `applemusicspatial.go`)。
+    /// 引擎把 TTML 里 `<audio lyricOffset role="spatial">` 的值连同立体声版时长写成正文里的一行
+    /// `[am-spatial:<偏移毫秒>/<立体声时长毫秒>]`(引擎 `applemusicspatial.go`)。
     ///
     /// `lyricOffsetMs` 按 Apple 的口径:**正数 = 放空间音频版时歌词要晚**,跟 `[offset:]` / 引擎的 `offsetMs`
     /// 符号相反;用不用、怎么换算见 `LocalPlaybackSource.spatialAudioOffsetMs`。

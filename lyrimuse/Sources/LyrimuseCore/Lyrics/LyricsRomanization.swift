@@ -9,7 +9,7 @@ import Foundation
 ///  ② 统计口径对不上:本机 3566 条里只有 114 条带 `lyrics_roma`(3.2%),而实际显示罗马音的
 ///     远多于此,面板上那个数字怎么写都别扭。
 ///
-/// 这个函数是给 `lyrics-romanize` helper 用的(collector 是 Go,调不了 CFStringTokenizer /
+/// 这个函数是给 `lyrics-romanize` helper 用的(引擎是 Go,调不了 CFStringTokenizer /
 /// ICU,只能起一个 Swift 子进程 —— 跟 `lyrics-translate` 完全同一个形态)。
 ///
 /// **逐行读音走 `Romanizer.lineReading`,跟播放引擎的客户端兜底是同一个函数**。这一点是
@@ -55,7 +55,7 @@ public enum LyricsRomanization {
     }
 
     /// `roma` 是不是旧版韩文读音(ICU `Any-Latin` 逐字母转写)给这份正文算出来的。启动迁移靠它只换掉
-    /// collector 早先预生成的那份,歌词源给的对不上、不动(用户手改过的条目 collector 那边整条跳过,不送来判)。
+    /// 引擎早先预生成的那份,歌词源给的对不上、不动(用户手改过的条目引擎那边整条跳过,不送来判)。
     /// 按含谚文的正文行逐行比:`roma` 里同一串时间标签的那一行跟这一行的 ICU 转写一字不差算一致,比得上的行里
     /// 一致的占八成以上才算。
     public static func isLegacyKoreanRomanization(_ roma: String, lyrics: String) -> Bool {

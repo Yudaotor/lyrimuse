@@ -1,14 +1,14 @@
 import Foundation
 
-/// 「重新自动匹配」的 App ↔ collector 通道(见 collector/lyricsrematch.go 头注)。
+/// 「重新自动匹配」的 App ↔ 引擎通道(见 lyrimuse-engine/lyricsrematch.go 头注)。
 ///
-/// App 只发请求、等结论:冠军怎么选、换不换、写哪些字段全在 collector 那边,跑的就是后台重评 / 补空那两个函数,
+/// App 只发请求、等结论:冠军怎么选、换不换、写哪些字段全在引擎那边,跑的就是后台重评 / 补空那两个函数,
 /// 只是几处按手动放宽(人工修正过的照跑、用户选定的源不管、校准过时间轴的照跑)。
 ///   - 请求 `lyrimuse-lyrics-rematch-request.json`:`{"id","key"}` 开一轮,`{"id","cancel":true}` 停掉那一轮。
 ///   - 状态 `lyrimuse-lyrics-rematch-status.json`:带着请求的 id;跑着时 `done` / `total` 是几个歌词源回了话,
 ///     跑完 `result` 是结论。
 public enum LyricsRematch {
-    /// collector 写的状态,字段跟 lyricsRematchStatus 一一对应。
+    /// 引擎写的状态,字段跟 lyricsRematchStatus 一一对应。
     public struct Status: Decodable, Equatable, Sendable {
         public let id: String
         public let key: String
@@ -61,7 +61,7 @@ public enum LyricsRematch {
         }
     }
 
-    /// 结论码,跟 collector 的 lyricsRematch* 常量一一对应。
+    /// 结论码,跟引擎的 lyricsRematch* 常量一一对应。
     public enum Outcome: String, Sendable {
         case changed, unchanged
         case notDecidable = "not_decidable"
@@ -102,7 +102,7 @@ public enum LyricsRematch {
         }
     }
 
-    /// 纯函数,selftest 覆盖。认不出的结论码(新 collector 加了码、App 还是旧的)按「没拿到结论」说。
+    /// 纯函数,selftest 覆盖。认不出的结论码(新引擎加了码、App 还是旧的)按「没拿到结论」说。
     public static func line(for c: Conclusion) -> Line {
         let source = c.winner ?? "", score = c.winnerScore ?? 0, previous = c.previous ?? ""
         switch Outcome(rawValue: c.outcome) {
@@ -128,16 +128,16 @@ public enum LyricsRematch {
 
     /// 等的这一轮走到哪一步。
     public enum Phase: Equatable, Sendable {
-        /// 请求写下了,collector 还没接手。
+        /// 请求写下了,引擎还没接手。
         case waiting
-        /// collector 在跑,见 `Status.done` / `total`(还没有源回话时都是 0)。
+        /// 引擎在跑,见 `Status.done` / `total`(还没有源回话时都是 0)。
         case running(done: Int, total: Int)
         case finished(Conclusion)
-        /// 等不到了:collector 一直没接手,或跑着跑着没了动静(进程退出 / 重启)。
+        /// 等不到了:引擎一直没接手,或跑着跑着没了动静(进程退出 / 重启)。
         case lost
     }
 
-    /// collector 每 0.5 秒看一次请求;过了这么久状态文件里还没有这一轮,就当它没在跑。
+    /// 引擎每 0.5 秒看一次请求;过了这么久状态文件里还没有这一轮,就当它没在跑。
     public static let pickupTimeout: TimeInterval = 10
     /// 跑着时每个歌词源回话都会写一次状态;这么久一次都没写,就当这一轮没了。
     public static let stallTimeout: TimeInterval = 90
@@ -157,7 +157,7 @@ public enum LyricsRematch {
     static let requestURL = LyrimusePaths.configFile("lyrimuse-lyrics-rematch-request.json")
     static let statusURL = LyrimusePaths.configFile("lyrimuse-lyrics-rematch-status.json")
 
-    /// 请求文件的内容。纯函数,selftest 覆盖(collector 侧 parseLyricsRematchRequest 是它的读方)。
+    /// 请求文件的内容。纯函数,selftest 覆盖(引擎侧 parseLyricsRematchRequest 是它的读方)。
     public static func requestBody(id: String, key: String) -> Data {
         (try? JSONSerialization.data(withJSONObject: ["id": id, "key": key], options: [.sortedKeys])) ?? Data()
     }
@@ -167,13 +167,13 @@ public enum LyricsRematch {
         return (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data()
     }
 
-    /// 请 collector 对 key 跑一轮。返回写文件是否成功。
+    /// 请引擎对 key 跑一轮。返回写文件是否成功。
     @discardableResult
     public static func request(id: String, key: String) -> Bool {
         (try? requestBody(id: id, key: key).write(to: requestURL, options: .atomic)) != nil
     }
 
-    /// 停掉 id 那一轮(详情页换了一首)。那一轮已经跑完时 collector 什么都不做。
+    /// 停掉 id 那一轮(详情页换了一首)。那一轮已经跑完时引擎什么都不做。
     public static func cancel(id: String) {
         try? cancelBody(id: id).write(to: requestURL, options: .atomic)
     }

@@ -4,12 +4,12 @@
 
 2026-09-03 加。BSD/MIT 的二进制分发条款要求随附版权声明与许可证文本,仓库靠根目录的
 THIRD_PARTY_LICENSES 一个文件满足它(build.sh 拷进 Contents/Resources/,设置「关于 → 第三方许可」
-打开的就是这份)。漂移的典型形态是"加了第三个 SPM 包 / collector 引入第一个 Go 模块,忘了补声明",
+打开的就是这份)。漂移的典型形态是"加了第三个 SPM 包 / 引擎引入第一个 Go 模块,忘了补声明",
 等发出去才被人指出来。这里把三处依赖来源机械对一遍:
   1. lyrimuse/Package.resolved 每个 pin 的 identity(SPM 包:静态链接或嵌入 framework);
   2. lyrimuse/build.sh 里 `brew install <名字>`(拷进包的外部二进制,现为 media-control);
-  3. lyrimuse-collector/go.mod 的 require(直接 + 间接都算,编进二进制的都要声明;现为空,
-     collector 零外部依赖、go.sum 是空文件)。
+  3. lyrimuse-engine/go.mod 的 require(直接 + 间接都算,编进二进制的都要声明;现为空,
+     引擎零外部依赖、go.sum 是空文件)。
 名字在 THIRD_PARTY_LICENSES 里出现一次(不区分大小写)就算声明过;只查"提到没提到",许可证文本
 对不对仍靠人。反向(声明了但已经不用)不查:多一条声明没有合规风险。
 顺带确认 build.sh 还在拷这个文件 —— 不拷的话上面全部白查。
@@ -46,7 +46,7 @@ def brew_installs():
 
 def go_requires():
     found, in_block = [], False
-    for line in (ROOT / "lyrimuse-collector/go.mod").read_text(encoding="utf-8").splitlines():
+    for line in (ROOT / "lyrimuse-engine/go.mod").read_text(encoding="utf-8").splitlines():
         code = line.split("//", 1)[0].strip()
         if not code:
             continue
@@ -58,7 +58,7 @@ def go_requires():
             continue
         m = re.match(r"^(?:require\s+)?(\S+)\s+v\S+$", code)
         if m and (in_block or code.startswith("require ")):
-            found.append((m.group(1), "lyrimuse-collector/go.mod"))
+            found.append((m.group(1), "lyrimuse-engine/go.mod"))
     return found
 
 

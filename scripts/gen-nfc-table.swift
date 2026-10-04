@@ -1,13 +1,13 @@
 // 从 Foundation(App 侧 precomposedStringWithCanonicalMapping 用的同一套 Unicode 数据)导出 NFC 所需的
-// 数据表,给 collector 的 composeNFC(nfc.go)读。
+// 数据表,给引擎的 composeNFC(nfc.go)读。
 //
 // 用法:
-//     swift scripts/gen-nfc-table.swift            # 重新生成 lyrimuse-collector/dictionary/NFC.txt
+//     swift scripts/gen-nfc-table.swift            # 重新生成 lyrimuse-engine/dictionary/NFC.txt
 //     swift scripts/gen-nfc-table.swift --check    # 只校验产物是不是最新
 //
 // 为什么用 Swift 导出而不是 Python 的 unicodedata:cleanMediaTag / cleanTag 两侧逐码点对拍
 // (keyparitysweep_test.go ↔ CacheKeyTests),Go 侧的 NFC 必须跟 App 侧 Foundation 的结果逐码点一致;
-// 系统自带的 Python 跟 macOS 的 Unicode 版本不是同一个。collector 零依赖(见 fold.go 头注),不引
+// 系统自带的 Python 跟 macOS 的 Unicode 版本不是同一个。引擎零依赖(见 fold.go 头注),不引
 // golang.org/x/text,所以表由这里生成、跟着仓库提交。
 //
 // 产物每行一条,十六进制码点:
@@ -17,7 +17,7 @@
 //     q <lo> <hi>             NFC 快速检查要进慢路径的码点区间:组合类非零、NFC 后会变、或能跟前一个字组合
 import Foundation
 
-let outPath = "lyrimuse-collector/dictionary/NFC.txt"
+let outPath = "lyrimuse-engine/dictionary/NFC.txt"
 
 func hex(_ v: UInt32) -> String { String(v, radix: 16, uppercase: true) }
 

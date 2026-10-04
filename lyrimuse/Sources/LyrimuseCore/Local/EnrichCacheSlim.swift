@@ -2,8 +2,8 @@ import Foundation
 import zlib
 
 /// 「歌词管理」内存里的**精简条目**:主缓存的一条去掉四块大正文(`lyrics_yrc` / `lyrics_tr` /
-/// `lyrics_roma` / `plain_lyrics`),记上校验值和「有哪几块正文」。形状跟 collector 给播放那一侧写的
-/// 精简索引(`lyrimuse-enrich-index.json`,见 collector enrichindex.go)逐字段一致,所以索引可以直接当
+/// `lyrics_roma` / `plain_lyrics`),记上校验值和「有哪几块正文」。形状跟引擎给播放那一侧写的
+/// 精简索引(`lyrimuse-enrich-index.json`,见引擎 enrichindex.go)逐字段一致,所以索引可以直接当
 /// 精简快照用;主歌词 `lyrics` 留着(批量锁定 / 解锁、时间轴偏移的内容指纹都要它)。
 ///
 /// ## 为什么
@@ -22,10 +22,10 @@ public enum EnrichCacheSlim {
     public static let crcKey = "body_crc"
     public static let fieldsKey = "body_fields"
     public static let bodiesDirectoryName = "lyrimuse-lyrics-bodies"
-    /// 精简时去掉的几块正文。改这张表要跟 collector `leanForIndex` 同步。
+    /// 精简时去掉的几块正文。改这张表要跟引擎 `leanForIndex` 同步。
     public static let strippedFields = ["lyrics_yrc", "lyrics_tr", "lyrics_roma", "plain_lyrics", "lyrics_bg"]
 
-    /// `body_fields` 位图,跟 collector `enrichBodyFields` 一致。`known` 恒置位:老版本索引没有这个字段,
+    /// `body_fields` 位图,跟引擎 `enrichBodyFields` 一致。`known` 恒置位:老版本索引没有这个字段,
     /// 「有校验值却没有位图」就认出是老索引、不拿它当精简快照(它的四个布尔全是假的)。
     public struct Fields: OptionSet, Sendable {
         public let rawValue: Int
@@ -44,7 +44,7 @@ public enum EnrichCacheSlim {
         (entry[crcKey] as? NSNumber)?.uint32Value
     }
 
-    /// 正文字段的校验值,跟 collector `enrichBodyCRC` 逐位一致(字段之间 0x00 隔开、全空为 0、
+    /// 正文字段的校验值,跟引擎 `enrichBodyCRC` 逐位一致(字段之间 0x00 隔开、全空为 0、
     /// 算出 0 记成 1;背景人声 `lyrics_bg` 只在非空时接在五个字段后面)。只对完整条目有意义。
     public static func bodyCRC(_ entry: [String: Any]) -> UInt32 {
         var parts = ["lyrics", "lyrics_tr", "lyrics_roma", "lyrics_yrc", "plain_lyrics"]
@@ -91,7 +91,7 @@ public enum EnrichCacheSlim {
 
     /// 拿正文小文件把精简条目补成完整条目;校验值对不上是 nil(调用方回主缓存取)。补回的是正文小文件里的原样内容。
     ///
-    /// 校验值认两种口径:collector 写的(`body.crc`,跟索引那条一致),以及「每块正文去掉开头一个 U+FEFF」之后
+    /// 校验值认两种口径:引擎写的(`body.crc`,跟索引那条一致),以及「每块正文去掉开头一个 U+FEFF」之后
     /// 算的 —— `JSONSerialization` 解字符串时会吞掉开头的一个 U+FEFF(JSONDecoder 与 Go 都保留),而酷狗歌词
     /// 常以它开头(本机 8102 条里 1167 条),所以从主缓存解出来再 `slim` 的条目,校验值是后一种。
     public static func hydrate(_ entry: [String: Any], body: EnrichCacheBody) -> [String: Any]? {
@@ -108,18 +108,18 @@ public enum EnrichCacheSlim {
     }
 
     /// 正文小文件本身自洽:按内容重算的校验值 = 文件里记的。JSONDecoder 解出来的是原样内容(开头的 U+FEFF
-    /// 也在),跟 collector 写文件时算的是同一份字节。
+    /// 也在),跟引擎写文件时算的是同一份字节。
     public static func isSelfConsistent(_ body: EnrichCacheBody) -> Bool {
         body.crc != 0 && bodyCRC(["lyrics": body.lyrics ?? "", "lyrics_tr": body.lyricsTr ?? "",
                                   "lyrics_roma": body.lyricsRoma ?? "", "lyrics_yrc": body.lyricsYRC ?? "",
                                   "plain_lyrics": body.plainLyrics ?? "", "lyrics_bg": body.lyricsBG ?? ""]) == body.crc
     }
 
-    /// 正文小文件跟精简条目记的校验值对不上、但文件自洽:条目那一版比小文件旧 —— collector 先写小文件、再写
+    /// 正文小文件跟精简条目记的校验值对不上、但文件自洽:条目那一版比小文件旧 —— 引擎先写小文件、再写
     /// 主缓存,手上这份快照正好是中间那一刻之前的。小文件是新的那份,拿它补,主歌词也换成小文件里的。
     /// 不自洽(没写完 / 坏了)是 nil。
     ///
-    /// 主缓存现在也是精简格式(见 collector enrichindex.go),「对不上就回主缓存取完整那条」这条退路已经取不到
+    /// 主缓存现在也是精简格式(见引擎 enrichindex.go),「对不上就回主缓存取完整那条」这条退路已经取不到
     /// 正文了,所以这一步要在它前面。
     public static func adoptNewerBody(_ entry: [String: Any], body: EnrichCacheBody) -> [String: Any]? {
         guard isSlim(entry), isSelfConsistent(body) else { return nil }
@@ -163,7 +163,7 @@ public enum EnrichCacheSlim {
         return out
     }
 
-    /// 一整份索引能不能直接当精简快照:每一条有校验值的都带着位图(老版本 collector 写的没有)。
+    /// 一整份索引能不能直接当精简快照:每一条有校验值的都带着位图(老版本引擎写的没有)。
     public static func indexHasFields(_ index: [String: [String: Any]]) -> Bool {
         !index.values.contains { $0[crcKey] != nil && $0[fieldsKey] == nil }
     }

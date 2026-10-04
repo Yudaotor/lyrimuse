@@ -54,7 +54,7 @@ private func playbackStateTests() {
     expectEqual(M.isFocusHeldElsewhere(.targetNotPlayingMusic), false,
                 "焦点宽限: 选中的播放器自己在放播客,不是焦点被占,不给 300 秒宽限")
     expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 2, failure: .targetNotPlayingMusic, nilStreakSeconds: 4), true,
-                "焦点宽限: 播放器在放非音乐 → 按短宽限清(跟 collector 约 3 拍清一致)")
+                "焦点宽限: 播放器在放非音乐 → 按短宽限清(跟引擎约 3 拍清一致)")
     expectEqual(M.isFocusHeldElsewhere(.notASong), true, "焦点宽限: 别的 App(浏览器)在放非歌曲内容仍算焦点被占")
     expectEqual(M.failureWithoutFallbackTarget(targetConfirmedGone: true), .appleScriptUnavailable,
                 "焦点宽限: 回退已确认目标播放器不在 → 之后几拍记成问不到,不停在焦点被占那一档")
@@ -62,7 +62,7 @@ private func playbackStateTests() {
                 "焦点宽限: 从没有过回退目标时不改失败原因")
 
     expectEqual(P.lyricsLookupDuration(isRadio: false, isMusicVideo: true, duration: 245), nil,
-                "查歌词时长: MV 当未知(collector 只用基条目,不建时长变体)")
+                "查歌词时长: MV 当未知(引擎只用基条目,不建时长变体)")
     expectEqual(P.lyricsLookupDuration(isRadio: true, isMusicVideo: false, duration: 3390), nil, "查歌词时长: 电台当未知")
     expectEqual(P.lyricsLookupDuration(isRadio: false, isMusicVideo: false, duration: 200), 200, "查歌词时长: 普通曲目照报")
 
@@ -215,7 +215,7 @@ private func libraryAndCacheTests() {
 
     let now = Date(timeIntervalSince1970: 1_790_700_000)
     expectEqual(ITunesSearchBackoff.until(status: 0, retryAfter: nil, now: now, current: nil),
-                now.addingTimeInterval(ITunesSearchBackoff.forbiddenCooldown), "iTunes 退避: 网络层失败(0)按 30 秒,同 collector")
+                now.addingTimeInterval(ITunesSearchBackoff.forbiddenCooldown), "iTunes 退避: 网络层失败(0)按 30 秒,同引擎")
     expectEqual(MusicCatalogSearch.searchURL(title: "1+1", artist: "Beyoncé", storefront: "us")?.absoluteString.contains("1%2B1"), true,
                 "iTunes 搜索: `+` 要编码,不然被当成空格")
 
@@ -364,13 +364,13 @@ private func wiringContracts() {
     expectEqual(TrustedPlayers.isAccepted(PlaybackPlayer.spotify.bundleIdentifier), true, "信任名单: 内置播放器直接认")
     expectEqual(TrustedPlayers.isAccepted(PlaybackPlayer.auto.bundleIdentifier, trusted: [:]), false, "信任名单: 自动识别那一项不是播放器")
 
-    // 网页平台探针只对配对过的浏览器跑:App 侧 YouTube Music 广告探针的入口 + 配对关系镜像给 collector。
+    // 网页平台探针只对配对过的浏览器跑:App 侧 YouTube Music 广告探针的入口 + 配对关系镜像给引擎。
     let ytAd = code("LyrimuseCore/Local/YouTubeMusicAdProbe.swift")
     let kick = body("public func kickIfNeeded(bundleIdentifier: String?, key: String) {", in: ytAd)
     expectEqual(before("BrowserPositionProbe.shared.isPaired(bundleID: hostBundleID, platformID: \"youtubeMusic\")", "inFlightKey = key", in: kick), true,
                 "网页探针配对: YouTube Music 广告探针没配对就不发起")
     let store = code("lyrimuse/Settings/FeatureSettingsStore.swift")
-    expectEqual(store.contains("case browserPlatformPairs = \"browser_platform_pairs\""), true, "网页探针配对: features.json 键名跟 collector 一致")
+    expectEqual(store.contains("case browserPlatformPairs = \"browser_platform_pairs\""), true, "网页探针配对: features.json 键名跟引擎一致")
     expectEqual(store.contains("browserPlatformPairs: browserPlatformPairs\n"), true, "网页探针配对: 写盘快照带上配对镜像")
     expectEqual(store.contains("browserPlatformPairs = f.browserPlatformPairs"), true, "网页探针配对: 读盘时认回已写的镜像(没变就不重写)")
     let sync = body("public func syncBrowserPlatformPairs(_ pairs: [String: Set<String>]) async {", in: store)
@@ -383,9 +383,9 @@ private func wiringContracts() {
     } else {
         expectEqual(true, false, "网页探针配对(契约): AppDelegate 里读不到对 browserPlatformPairs 的订阅")
     }
-    let goPairs = code("../../lyrimuse-collector/browserpairs.go")
+    let goPairs = code("../../lyrimuse-engine/browserpairs.go")
     for (goName, id) in [("browserPlatformYouTubeMusic", "youtubeMusic"), ("browserPlatformSpotifyWeb", "spotifyWeb")] {
-        expectEqual(goPairs.range(of: goName + #" += "\#(id)""#, options: .regularExpression) != nil, true, "网页探针配对: collector 的 \(goName) 跟 App 的平台 id \(id) 一致")
+        expectEqual(goPairs.range(of: goName + #" += "\#(id)""#, options: .regularExpression) != nil, true, "网页探针配对: 引擎的 \(goName) 跟 App 的平台 id \(id) 一致")
         expectEqual(BrowserPositionProbe.supportedPlatforms.contains { $0.id == id }, true, "网页探针配对: \(id) 是 App 支持的平台")
     }
 
@@ -412,9 +412,9 @@ private func wiringContracts() {
 
     // 歌词引擎的 launchd 任务按 Interactive 跑:后台档(调度优先级 4、磁盘读写限流)在机器忙时把切歌晚认好几秒、
     // 写一次缓存拖到几十秒。
-    let collectorService = code("lyrimuse/Settings/CollectorServiceManager.swift")
-    expectEqual(collectorService.contains("\"ProcessType\": \"Interactive\","), true, "歌词引擎调度: launchd 任务按 Interactive 跑")
-    expectEqual(collectorService.contains("\"ProcessType\": \"Background\""), false, "歌词引擎调度: 别退回后台档")
+    let engineService = code("lyrimuse/Settings/EngineServiceManager.swift")
+    expectEqual(engineService.contains("\"ProcessType\": \"Interactive\","), true, "歌词引擎调度: launchd 任务按 Interactive 跑")
+    expectEqual(engineService.contains("\"ProcessType\": \"Background\""), false, "歌词引擎调度: 别退回后台档")
 
     // 桌面版 Spotify 的 Connect 镜像:两条取快照的入口都先过它;先问 CoreAudio,不该问时一个子进程都不起。
     let autoDetected = body("private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {", in: client)

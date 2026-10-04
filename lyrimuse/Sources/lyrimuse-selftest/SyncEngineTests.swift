@@ -208,7 +208,7 @@ func runSyncEngineTests() {
         expectEqual(engine2.tickQuery(atMs: 3000).index, 0, "提前滚动(LRC): 两个下标一致")
     }
 
-    // ---- 背景人声(collector lyrics_bg):按行头挂到主句下面,这一行唱到背景人声唱完 ----
+    // ---- 背景人声(引擎 lyrics_bg):按行头挂到主句下面,这一行唱到背景人声唱完 ----
     do {
         // 照《Leave The Door Open》的形状:主句 13719~14301 唱完,背景人声 14457~15143 才开口,
         // 下一句 15253 开始。第三行的背景人声行头对不上任何主句,不挂。
@@ -1154,7 +1154,7 @@ func runSyncEngineTests() {
         // Parade》网易云的逐字(YRC)和整行(LRC)时间戳系统性漂移 0.7~3.2 秒——机器翻译
         // (lyrics_tr)忠实继承的是整行 LRC 的时间戳,播放时却拿逐字算出来的(漂移过的)
         // 时间去查译文,超过 nearestText 700ms 容差,大部分句子查不到译文。这里用等价的
-        // 最小复现:主歌词行标在 1000ms,译文/罗马音精确复制同一个时间戳(collector 的
+        // 最小复现:主歌词行标在 1000ms,译文/罗马音精确复制同一个时间戳(引擎的
         // assembleTranslationLRC 保证这个性质——写出来的时间戳直接从源行抄,不是"接近"),
         // 逐字数据把同一句词标在 3000ms(漂移 2000ms,远超 700ms 容差)。旧逻辑会因为超容差
         // 返回 nil(前面 engine5 那组已经钉死这个行为不能变),内容匹配不看时间,只要
@@ -1214,7 +1214,7 @@ func runSyncEngineTests() {
         // Monologue)》里带括号和声的句子全都没有译文)。真实缓存坐实:网易云整行 LRC 写
         // "U're so fine (U're so fine)"(ASCII 括号),YRC 逐字数据同一句写 "U're so fine （U're so
         // fine）"(全角括号),两边可读内容一样;而这首歌 YRC 行起点比 LRC 系统性早 1.4~1.6 秒
-        // (LRC 53 行 / YRC 49 行,行结构对不上,collector 那边的 rehang 依前提放弃),700ms 的
+        // (LRC 53 行 / YRC 49 行,行结构对不上,引擎那边的 rehang 依前提放弃),700ms 的
         // 时间兜底也够不着——所以恰好只有带括号和声的句子没译文。这里按真实数据的形状复现:
         // LRC/译文在 175600ms,YRC 同一句在 174240ms(早 1360ms),括号一边半角一边全角。
         let engineParenStyle = LyricsSyncEngine()

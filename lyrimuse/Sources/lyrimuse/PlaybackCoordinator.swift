@@ -116,9 +116,9 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var currentTrackPlainLyrics: String = ""
     // 完整歌词窗口末尾「创作者：…」的名单,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentTrackSongwriters: [String] = []
-    /// collector 报"网络不通,这一轮查不了"(见 CollectorStatus)。只有本地源有这个信号
+    /// 引擎报"网络不通,这一轮查不了"(见 EngineStatus)。只有本地源有这个信号
     /// —— relay 模式下歌词是别的机器解析好推过来的,本机通不通网跟它无关。
-    @Published private(set) var collectorNetworkDown: Bool = false
+    @Published private(set) var engineNetworkDown: Bool = false
     // Spotify 广告插播,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackAdBreak: Bool = false
     /// 电台口白:当前这首歌已经放完、台里在说话。语义与 `isCurrentTrackAdBreak`
@@ -181,13 +181,13 @@ final class PlaybackCoordinator: ObservableObject {
     /// **QQ 音乐客户端给 300×300**(实测:27202 字节的 JPEG)—— 同一个毛病的
     /// 另一档,恰好卡在阈值边界上,见 lowResArtworkThreshold 里那条 提醒。
     ///
-    /// 替代图来自 collector 已经存在缓存里的 `cover_url`(网易云/Apple/QQ 解析歌词时顺手
+    /// 替代图来自引擎已经存在缓存里的 `cover_url`(网易云/Apple/QQ 解析歌词时顺手
     /// 记下的),实测同两首歌能拿到 495×495 和 800×800;取用前还会过一遍
     /// `EnrichCacheReader.nativeSizedCoverURL` 把图源自己的尺寸档顶到最大(网易云摘 param、
     /// QQ 提到 800、Apple 提到 1200),否则 QQ 源那张存的也只有 300、白替一趟。
     ///
     /// 只在系统那份 ≤ lowResArtworkThreshold、或者**不是方形**时才替(判定收在
-    /// `CoverArtReplacementGate`,交给 collector 的设备封面也按它判)。系统那份才是"正在播的这一项"的
+    /// `CoverArtReplacementGate`,交给引擎的设备封面也按它判)。系统那份才是"正在播的这一项"的
     /// 权威图;缓存里那张是按歌手/歌名/专辑匹配出来的,同名不同版本时可能是另一张封面。
     /// 播放器本来就给大图时(Apple Music)完全不碰这条路。
     ///
@@ -828,7 +828,7 @@ final class PlaybackCoordinator: ObservableObject {
                 },
             s.$artist.assign(to: \.artist, on: self),
             // 除了 artist / title 变化,还要每秒重读一次纠正文件:署名本来就干净的歌,纠正落地时
-            // artist / title 一个字都不变(App 2 秒一拍、collector 5 秒一拍,App 先看到新歌那一拍
+            // artist / title 一个字都不变(App 2 秒一拍、引擎 5 秒一拍,App 先看到新歌那一拍
             // 文件里还是上一首),只靠 combineLatest 会把这首歌的歌手位整首钉在空串上。
             // PlayerArtistFix.current 按 mtime 缓存,文件没变时只多一次 stat。
             // 每秒那一拍只在播放时打:暂停 / 停播时纠正文件不会变,常驻的 1Hz 定时器就是每秒白唤醒一次主线程
@@ -876,7 +876,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$currentTrackHasNoLyrics.assign(to: \.currentTrackHasNoLyrics, on: self),
             s.$currentTrackPlainLyrics.assign(to: \.currentTrackPlainLyrics, on: self),
             s.$currentTrackSongwriters.assign(to: \.currentTrackSongwriters, on: self),
-            s.$collectorNetworkDown.assign(to: \.collectorNetworkDown, on: self),
+            s.$engineNetworkDown.assign(to: \.engineNetworkDown, on: self),
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$isRadioTalkBreak.assign(to: \.isRadioTalkBreak, on: self),
             s.$radioStationName.assign(to: \.radioStationName, on: self),
@@ -926,7 +926,7 @@ final class PlaybackCoordinator: ObservableObject {
                 },
             // 第二个触发点:**缓存里多了东西**也要补查一次。
             //
-            // 上面那条只在 曲目/封面字节 变化时跑,而 collector 解析一首没听过的歌要好几秒
+            // 上面那条只在 曲目/封面字节 变化时跑,而引擎解析一首没听过的歌要好几秒
             // (实测「七月上」13:52:52 开播、13:53:00 才写进 cover_url,晚 8 秒)—— 换歌后
             // 300ms 那一次必然查空,然后**永不重试**,整首歌都停在系统那张 100×100 上。
             // 表现就是「网易云这个封面依然很糊」(跟 QQ 恰好卡在 300px 阈值边界那个
@@ -935,13 +935,13 @@ final class PlaybackCoordinator: ObservableObject {
             //
             // 必须 onlyIfMissing —— refreshHighResCover 开头会 clearHighRes(),已经拿到
             // 高清图时再跑一遍就是"清空→重设",而 highResArtworkImage 挂着 0.5s 交叉淡入,
-            // 表现成封面每隔几秒闪一下。而 collector 写缓存是常态(每解析一首歌都写)。
+            // 表现成封面每隔几秒闪一下。而引擎写缓存是常态(每解析一首歌都写)。
             s.$enrichContentVersion
                 .dropFirst() // 启动时那一次不是"新解析出来的",换歌那条路已经覆盖
                 .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
                 .sink { [weak self] _ in
                     self?.refreshHighResCover(onlyIfMissing: true)
-                    // 动态封面同样需要这条补查路 —— 它读的是 collector 写的同一份 enrich 缓存,
+                    // 动态封面同样需要这条补查路 —— 它读的是引擎写的同一份 enrich 缓存,
                     // 第一次听的歌在换歌后 300ms 那一次必然查空(解析要好几秒)。
                     self?.refreshMotionCover(onlyIfMissing: true)
                 },
@@ -1610,7 +1610,7 @@ final class PlaybackCoordinator: ObservableObject {
         // 选错版本的封面会被下面 enrichContentVersion 补查路的 onlyIfMissing 焊死到
         // 换歌之前,详见 albumMatchedCoverURL 的注释。
         guard let cached = EnrichCacheReader.albumMatchedCoverURL(artist: artist, title: title, album: album) else {
-            // 这条分支就是「第一次听的歌封面一直糊」的现场:collector 还没解析完。
+            // 这条分支就是「第一次听的歌封面一直糊」的现场:引擎还没解析完。
             // 现在缓存写入会再触发一次补查(见订阅处),所以这里不再是终点。
             logger.debug("highres: no cached cover yet for \(title, privacy: .public) (system=\(systemSize.width, privacy: .public)x\(systemSize.height, privacy: .public)px, reason=\(String(describing: reason), privacy: .public))")
             clearHighRes()
@@ -1706,8 +1706,8 @@ final class PlaybackCoordinator: ObservableObject {
         // (highResArtworkImage 优先,没有才退系统那份)。这里拿不到(比如刚换歌那一瞬
         // 封面还没到)就传 nil,MotionCoverStore 会跳过终审,不因为一时缺参照白白拒了。
         //
-        // collector 靠**专辑身份核验**放行的,这里**必须**传 nil 跳过终审。那道终审比的是
-        // "动画画面像不像封面",跟 collector 的首帧比对是同一个代理判据;身份核验之所以存在,
+        // 引擎靠**专辑身份核验**放行的,这里**必须**传 nil 跳过终审。那道终审比的是
+        // "动画画面像不像封面",跟引擎的首帧比对是同一个代理判据;身份核验之所以存在,
         // 正是因为这个判据对"Apple 把同一张封面做成另一种呈现"必然判错(满幅原图 vs 带标题的
         // 方版、上色版 vs 压银浮雕版)。再拿它终审一次,就是把刚确认的身份原样否掉。
         let reference: CoverFingerprint.Reference?

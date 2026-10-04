@@ -1,16 +1,16 @@
 import CryptoKit
 import Foundation
 
-/// Apple Music 用户令牌文件(`lyrimuse-applemusic-token.json`):App 的登录窗口写、连接卡片读,collector 只读
-/// (`applemusicUserTokenFile`,applemusic.go)。collector 对这份令牌的观察(问到的店面、被 Apple 拒过)记在它自己的
+/// Apple Music 用户令牌文件(`lyrimuse-applemusic-token.json`):App 的登录窗口写、连接卡片读,引擎只读
+/// (`applemusicUserTokenFile`,applemusic.go)。引擎对这份令牌的观察(问到的店面、被 Apple 拒过)记在它自己的
 /// `lyrimuse-applemusic-status.json`,按令牌指纹认,`parse` 把两份合起来。字段两边同步改。
 public enum AppleMusicTokenFile {
     /// Apple 的硬上限:令牌 6 个月,没有续期接口。cookie 没带过期时刻时按保存时间推算。
     public static let tokenLifetime: TimeInterval = 180 * 24 * 3600
-    /// collector 的观察记在这份文件里(applemusic.go `applemusicStatusPath`)。
+    /// 引擎的观察记在这份文件里(applemusic.go `applemusicStatusPath`)。
     public static let engineStatusFileName = "lyrimuse-applemusic-status.json"
 
-    /// 令牌 SHA-256 的前 8 字节,16 位小写十六进制;只用来认「是不是同一份令牌」。跟 collector
+    /// 令牌 SHA-256 的前 8 字节,16 位小写十六进制;只用来认「是不是同一份令牌」。跟引擎
     /// `applemusicTokenFingerprint` 逐字一致(两侧单测钉同一个值)。
     public static func fingerprint(_ token: String) -> String {
         let digest = SHA256.hash(data: Data(token.trimmingCharacters(in: .whitespacesAndNewlines).utf8))
@@ -19,10 +19,10 @@ public enum AppleMusicTokenFile {
 
     public struct Info: Equatable, Sendable {
         public let savedAt: Date
-        /// 可能是空串:登录时没等到 itua cookie,collector 首次取词时问 Apple 补上。
+        /// 可能是空串:登录时没等到 itua cookie,引擎首次取词时问 Apple 补上。
         public let storefront: String
         public let expiresAt: Date
-        /// collector 带着这份令牌被 Apple 拒过(401/403):过期或被吊销,要重连。
+        /// 引擎带着这份令牌被 Apple 拒过(401/403):过期或被吊销,要重连。
         public let rejected: Bool
 
         public init(savedAt: Date, storefront: String, expiresAt: Date, rejected: Bool) {
@@ -34,7 +34,7 @@ public enum AppleMusicTokenFile {
     }
 
     /// 没有令牌 / 读不出返回 nil。`fileDate` 是文件修改时间:老格式没有 `saved_at` 时拿它兜底,
-    /// 不能按「现在」算 —— 那样每次读都重新起算,永远不会提示续期。`engineStatus` 是 collector 那份状态文件,
+    /// 不能按「现在」算 —— 那样每次读都重新起算,永远不会提示续期。`engineStatus` 是引擎那份状态文件,
     /// 指纹对得上才算:令牌文件没记店面时用它问到的店面;被拒时刻不早于这次保存,就是失效。
     public static func parse(_ data: Data, fileDate: Date, engineStatus: Data? = nil) -> Info? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

@@ -5,13 +5,13 @@
 # 为什么需要它
 
 歌词源塞进歌词里的声明行(「TME享有本翻译作品的著作权」「未经著作权人许可不得翻录翻唱或使用」
-「本字幕由AI语音对齐技术生成」…)两边都要认:collector 清洗译文轨,App 过滤正文显示。两边各写
+「本字幕由AI语音对齐技术生成」…)两边都要认:引擎清洗译文轨,App 过滤正文显示。两边各写
 一份,同一句声明就会只有一边认得。规则本体放在那份 JSON 里,这里生成四个文件:
 
 - lyrimuse/Sources/LyrimuseCore/Lyrics/LyricNotices+Generated.swift   规则表(App)
 - lyrimuse/Sources/lyrimuse-selftest/LyricNoticeExamples+Generated.swift  例句(selftest)
-- lyrimuse-collector/lyricnotices_generated.go        规则表(collector)
-- lyrimuse-collector/lyricnotices_generated_test.go   例句(go test)
+- lyrimuse-engine/lyricnotices_generated.go        规则表(引擎)
+- lyrimuse-engine/lyricnotices_generated_test.go   例句(go test)
 
 两侧的匹配逻辑手写在 LyricNotices.swift / lyricnotices.go 里,这里只生成数据。
 
@@ -28,7 +28,7 @@ Go 用 RE2,App 用 NSRegularExpression(ICU),两者只在一个公共子集上语
 - note        一句话说明这条认的是什么
 - pattern     正则
 - ignoreCase  拉丁字母忽略大小写
-- scopes      translation(collector 清洗译文轨)/ body(App 正文署名过滤),至少一个
+- scopes      translation(引擎清洗译文轨)/ body(App 正文署名过滤),至少一个
 - drop        本条必须命中的例句,至少一句
 - keep        任何一条规则都不许命中的例句
 """
@@ -44,8 +44,8 @@ SPEC = ROOT / "shared" / "lyric-notices.json"
 
 CORE_SWIFT = "lyrimuse/Sources/LyrimuseCore/Lyrics/LyricNotices+Generated.swift"
 TEST_SWIFT = "lyrimuse/Sources/lyrimuse-selftest/LyricNoticeExamples+Generated.swift"
-GO_FILE = "lyrimuse-collector/lyricnotices_generated.go"
-GO_TEST = "lyrimuse-collector/lyricnotices_generated_test.go"
+GO_FILE = "lyrimuse-engine/lyricnotices_generated.go"
+GO_TEST = "lyrimuse-engine/lyricnotices_generated_test.go"
 
 BANNER_SWIFT = (
     "// 由 scripts/gen-lyric-notices.py 从 shared/lyric-notices.json 生成,请勿手改。\n"

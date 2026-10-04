@@ -186,7 +186,7 @@ func runSettingsInteractionTests() {
     }
 
     // 「通知平台」下拉菜单的排列:中文用户国内平台在前,其余国外平台在前。两组合起来必须正好是 App 侧
-    // NotificationPlatform 的全部 rawValue(跟 collector notify.go 的平台常量逐字对应),漏一个就从菜单里消失。
+    // NotificationPlatform 的全部 rawValue(跟引擎 notify.go 的平台常量逐字对应),漏一个就从菜单里消失。
     do {
         typealias N = NotificationPlatformRegion
         expectEqual(N.displayOrder(chineseFirst: true),
@@ -209,9 +209,9 @@ func runSettingsInteractionTests() {
         expectEqual(cases, all, "通知平台排列: NotificationPlatform 的 case 跟两组对得上(加了平台要同步进 NotificationPlatformRegion)")
     }
 
-    // ---- 保存时的键差分(CollectorRestartPolicy.changedKeys,只给日志用)----
+    // ---- 保存时的键差分(EngineRestartPolicy.changedKeys,只给日志用)----
     do {
-        typealias P = CollectorRestartPolicy
+        typealias P = EngineRestartPolicy
         // 键差分:值变了 / 键被删 / 键新增都算变,值没变不算。
         expectEqual(P.changedKeys(from: ["a": 1, "b": "x"], to: ["a": 1, "b": "x"]), [], "键差分: 完全相同 → 空")
         expectEqual(P.changedKeys(from: ["a": 1], to: ["a": 2]), ["a"], "键差分: 值变了")
@@ -425,24 +425,24 @@ func runSettingsInteractionTests() {
         expectEqual(parse(#"{"media_user_token":"t","saved_at":1800000000,"rejected_at":1799999000}"#)?.rejected, false,
                     "Apple Music 令牌: 被拒早于这次保存(重连之前的事)不算")
         expectEqual(parse(#"{"media_user_token":"  "}"#) == nil && parse("oops") == nil, true, "Apple Music 令牌: 没有令牌 = 未连接")
-        // collector 的观察记在它自己的状态文件里,按令牌指纹认;令牌文件只由 App 写。
+        // 引擎的观察记在它自己的状态文件里,按令牌指纹认;令牌文件只由 App 写。
         expectEqual(T.fingerprint(" test-token\n"), "4c5dc9b7708905f7",
-                    "Apple Music 令牌: 指纹跟 collector applemusicTokenFingerprint 一致")
-        expectEqual(T.engineStatusFileName, "lyrimuse-applemusic-status.json", "Apple Music 令牌: 状态文件名跟 collector 一致")
+                    "Apple Music 令牌: 指纹跟引擎 applemusicTokenFingerprint 一致")
+        expectEqual(T.engineStatusFileName, "lyrimuse-applemusic-status.json", "Apple Music 令牌: 状态文件名跟引擎一致")
         let fp = T.fingerprint("t")
         let noSF = #"{"media_user_token":"t","storefront":"","saved_at":1800000000}"#
         func merged(_ token: String, _ status: String) -> T.Info? {
             T.parse(Data(token.utf8), fileDate: fileDate, engineStatus: Data(status.utf8))
         }
         expectEqual(merged(noSF, #"{"token_fp":"\#(fp)","storefront":"jp"}"#)?.storefront, "jp",
-                    "Apple Music 令牌: 令牌文件没记店面时用 collector 问到的")
+                    "Apple Music 令牌: 令牌文件没记店面时用引擎问到的")
         expectEqual(merged(noSF, #"{"token_fp":"0000000000000000","storefront":"jp"}"#)?.storefront, "",
                     "Apple Music 令牌: 别的令牌的观察不算")
         expectEqual(merged(#"{"media_user_token":"t","storefront":"cn","saved_at":1800000000}"#,
                            #"{"token_fp":"\#(fp)","storefront":"jp"}"#)?.storefront, "cn",
                     "Apple Music 令牌: 令牌文件里有店面以它为准")
         expectEqual(merged(noSF, #"{"token_fp":"\#(fp)","rejected_at":1800000500}"#)?.rejected, true,
-                    "Apple Music 令牌: collector 在这次登录之后被拒 = 失效")
+                    "Apple Music 令牌: 引擎在这次登录之后被拒 = 失效")
         expectEqual(merged(noSF, #"{"token_fp":"\#(fp)","rejected_at":1799999000}"#)?.rejected, false,
                     "Apple Music 令牌: 被拒早于这次登录(同一份令牌重新登录过)不算")
         expectEqual(merged(noSF, #"{"token_fp":"0000000000000000","rejected_at":1800000500}"#)?.rejected, false,
@@ -463,7 +463,7 @@ func runSettingsInteractionTests() {
                     "Apple Music 连接(契约): 凭据文件从创建起就是 0600")
         expectEqual(conn.contains("expiresAt: tokenCookie.expiresDate"), true, "Apple Music 连接(契约): 记下 cookie 自带的过期时刻")
         expectEqual(conn.contains("engineStatus: try? Data(contentsOf: Self.engineStatusURL)"), true,
-                    "Apple Music 连接(契约): 读令牌时把 collector 的状态文件一起读进来")
+                    "Apple Music 连接(契约): 读令牌时把引擎的状态文件一起读进来")
     }
 
     // ---- Last.fm 响应在后台线程解析(源码契约) ----
@@ -501,7 +501,7 @@ func runSettingsInteractionTests() {
         expectEqual(M.read(Data(#"["exportedAt"]"#.utf8)).deviceName, nil, "配置包信息: 顶层不是对象读成空")
     }
 
-    // ---- 系统语言(SystemLanguage):AppleLocale 取法与 collector 共用样例 / 退路 / 配置包进出 / 接线 ----
+    // ---- 系统语言(SystemLanguage):AppleLocale 取法与引擎共用样例 / 退路 / 配置包进出 / 接线 ----
     do {
         typealias L = SystemLanguage
         let samplesURL = URL(fileURLWithPath: #filePath)
@@ -512,9 +512,9 @@ func runSettingsInteractionTests() {
         expectEqual(samples.count >= 8, true, "系统语言: 读得到 shared/testdata/system-language.json")
         for s in samples {
             let raw = s["apple_locale"] ?? "", want = s["want"] ?? ""
-            expectEqual(L.appleLocaleLanguage(raw), want, "系统语言(与 collector 共用样例): \(raw.debugDescription) → \(want)")
+            expectEqual(L.appleLocaleLanguage(raw), want, "系统语言(与引擎共用样例): \(raw.debugDescription) → \(want)")
         }
-        expectEqual(L.featuresKey, "system_language", "系统语言: 键名与 collector features.go 的 json 标签一致")
+        expectEqual(L.featuresKey, "system_language", "系统语言: 键名与引擎 features.go 的 json 标签一致")
         expectEqual(L.code(appleLocale: "zh_CN", preferredLanguages: ["en-US"]), "zh", "系统语言: AppleLocale 优先于首选语言")
         expectEqual(L.code(appleLocale: nil, preferredLanguages: ["ja-JP", "en"]), "ja", "系统语言: 没有 AppleLocale 退回首选语言第一项")
         expectEqual(L.code(appleLocale: " ", preferredLanguages: ["zh-Hans-CN"]), "zh", "系统语言: AppleLocale 是空白同样退回首选语言")
@@ -542,7 +542,7 @@ func runSettingsInteractionTests() {
         expectEqual(store.contains("systemLanguage = SystemLanguage.current()")
                     && store.contains("systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage"), true,
                     "系统语言(契约): 每次加载读本机,随整份快照写回")
-        // collector 只认文件、不再自己补默认值和跑迁移:加载完跟盘上不一样就当场整份写回,文件不存在也写。
+        // 引擎只认文件、不再自己补默认值和跑迁移:加载完跟盘上不一样就当场整份写回,文件不存在也写。
         expectEqual(store.contains("if currentSnapshot != f { writeBack("), true,
                     "功能开关(契约): 加载时缺项 / 旧写法当场整份写回")
         expectEqual(store.contains("if case .missing = document.state {")

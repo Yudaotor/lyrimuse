@@ -12,7 +12,7 @@ import Foundation
 /// - 广告、口白、纯音乐必须排在"搜索中"前面:这几种情况下也没有歌词内容,排在后面的话会一直显示
 ///   「搜索歌词中…」而且永远没有下文;口白期间元数据还停在上一首,不先拦住就会接着报上一首的状态。
 /// - 「暂无歌词」排在「网络连接失败」前面:前者是搜完的明确结论,比"此刻没网"更有信息量。断网
-///   那一档必须有:collector 什么都查不到、全空又不写缓存,hasLyricsContent 永远是 false,不插
+///   那一档必须有:引擎什么都查不到、全空又不写缓存,hasLyricsContent 永远是 false,不插
 ///   这一档就会一直停在「搜索歌词中…」。
 public enum LyricsWindowEmptyState: Equatable, Sendable {
     case notPlaying
@@ -30,20 +30,20 @@ public enum LyricsWindowEmptyState: Equatable, Sendable {
         public var isRadioTalkBreak: Bool
         public var isInstrumental: Bool
         public var hasNoLyrics: Bool
-        public var collectorNetworkDown: Bool
+        public var engineNetworkDown: Bool
         public var hasLyricsContent: Bool
         public var isPlaying: Bool
 
         public init(hasTitle: Bool, isAdBreak: Bool = false, isRadioTalkBreak: Bool = false,
                     isInstrumental: Bool = false, hasNoLyrics: Bool = false,
-                    collectorNetworkDown: Bool = false, hasLyricsContent: Bool = false,
+                    engineNetworkDown: Bool = false, hasLyricsContent: Bool = false,
                     isPlaying: Bool = false) {
             self.hasTitle = hasTitle
             self.isAdBreak = isAdBreak
             self.isRadioTalkBreak = isRadioTalkBreak
             self.isInstrumental = isInstrumental
             self.hasNoLyrics = hasNoLyrics
-            self.collectorNetworkDown = collectorNetworkDown
+            self.engineNetworkDown = engineNetworkDown
             self.hasLyricsContent = hasLyricsContent
             self.isPlaying = isPlaying
         }
@@ -55,7 +55,7 @@ public enum LyricsWindowEmptyState: Equatable, Sendable {
         if i.isRadioTalkBreak { return .radioTalk }
         if i.isInstrumental { return .instrumental }
         if i.hasNoLyrics { return .noLyrics }
-        if i.collectorNetworkDown && !i.hasLyricsContent { return .networkDown }
+        if i.engineNetworkDown && !i.hasLyricsContent { return .networkDown }
         if i.isPlaying && !i.hasLyricsContent { return .searching }
         return .none
     }

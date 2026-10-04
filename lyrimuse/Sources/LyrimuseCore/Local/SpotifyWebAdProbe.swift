@@ -50,9 +50,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotif
 // 进缓存;`cachedVerdict` 只读缓存。代价是新曲目的第一轮拿不到判定 —— 那一轮按 fail-closed
 // 丢掉(也就是维持改动前的行为),下一轮就好。
 //
-// ---- collector(Go)侧 ----
+// ---- 引擎(Go)侧 ----
 //
-// collector 不读播放器,只认 App 播放状态里的 ad 标记(isAdBreak 只看 appReportedAd),广告不打卡。
+// 引擎不读播放器,只认 App 播放状态里的 ad 标记(isAdBreak 只看 appReportedAd),广告不打卡。
 public final class SpotifyWebAdProbe: @unchecked Sendable {
     public static let shared = SpotifyWebAdProbe()
 

@@ -167,7 +167,7 @@ public struct CrashReportSummary: Equatable {
 
     // MARK: - 归属与挑选
 
-    /// 是不是本 App 家族(App 本体或它包里的 collector)的报告。
+    /// 是不是本 App 家族(App 本体或它包里的引擎)的报告。
     ///
     /// 文件名前缀只能粗筛(别的 App 也可能有叫 collector 的进程),这里按正文再确认:进程名是 App 可执行名或
     /// 引擎的名字(`LyrimuseIdentity.engineProcessNames`,新旧两个);正文带 bundle id 的(App 本体)必须等于本变体;正文带 procPath 的,路径必须落在
@@ -181,7 +181,7 @@ public struct CrashReportSummary: Equatable {
         return true
     }
 
-    /// 每个进程各取最近 N 份:collector 走 KeepAlive 崩溃循环时会刷出一串报告,总共取 N 会把 App 那一份挤掉。
+    /// 每个进程各取最近 N 份:引擎走 KeepAlive 崩溃循环时会刷出一串报告,总共取 N 会把 App 那一份挤掉。
     /// 同一进程内按时间戳倒序(同格式字符串,字典序即时间序;没有时间戳退到文件名,它也带时间);进程按名字排,
     /// 结果稳定。
     public static func select(_ reports: [CrashReportSummary], perProcessLimit: Int) -> [CrashReportSummary] {

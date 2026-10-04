@@ -65,7 +65,7 @@ struct LyricsSearchSheet: View {
     // 拖任何滑杆/色轮都会打醒这个 sheet 的整个 body,含候选列表和预览面板)。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
     // candidates/isSearching 分开存,而不是揉进一个"loading/loaded/failed"三态 enum——
-    // 现在结果是陆续到达的(collector 那边改成 NDJSON 流式输出,谁先查完谁先展示,见
+    // 现在结果是陆续到达的(引擎那边改成 NDJSON 流式输出,谁先查完谁先展示,见
     // LyricsSearchService.search 的 onUpdate),搜索"进行中"和"目前已经有哪些候选"是
     // 两个独立维度:可能已经有几条候选摆在那了、但后面的源还没回来。用一个三态 enum
     // 表达不了"进行中 + 已经有部分结果"这个中间状态。
@@ -96,7 +96,7 @@ struct LyricsSearchSheet: View {
     }
     /// 给"还在搜索"那两处提示缀的进度,形如 "（2/5）"。还没收到任何一行时是空串。
     ///
-    /// 轮次标识:collector 的兜底轮(首歌手变体/标题反查,见
+    /// 轮次标识:引擎的兜底轮(首歌手变体/标题反查,见
     /// 第 09 章)每轮都重新扫全部源,进度"到 8/8 又回到 1/8"——数字回跳没有任何标注,
     /// 读起来像出了错。第 2 轮起在进度后面缀"［2］"标出轮次(放后面是刻意的);
     /// 第 1 轮不缀——绝大多数搜索只有一轮,常驻一个"［1］"是噪音,而标识恰好在数字
@@ -113,7 +113,7 @@ struct LyricsSearchSheet: View {
     }
 
     // 歌词源的完整名单——直接读 LyricsSource.allCases(FeatureSettingsStore.swift),App 侧只有这一份。
-    // 前这里是手抄的第三份名单(另两份:collector 侧 enrich.go 的 lyricSourceNames、
+    // 前这里是手抄的第三份名单(另两份:引擎侧 enrich.go 的 lyricSourceNames、
     // App 侧的 LyricsSource),注释写着"跟那两份手工保持一致";加咪咕时那两份都改了、
     // 这份漏了,头部徽标写「0/8」、底下空状态却说「九个源都没找到」,用户当场看出来。
     // Go/Swift 两份名单逐个相等、这个文件里不再出现手抄名单、空状态那句的数字等于源数,三件事
@@ -121,7 +121,7 @@ struct LyricsSearchSheet: View {
     private static let allLyricSourceNames = LyricsSource.allCases.map(\.rawValue)
 
     // 这一轮里哪些源真的给出过候选(哪怕候选被判-1分),哪些一条
-    // 候选都没给——直接从已经收到的 candidates 里反推,跟 collector 侧
+    // 候选都没给——直接从已经收到的 candidates 里反推,跟引擎侧
     // lyricSourcesResponded(enrich.go)同一个判据("给没给"不看分数),不需要额外的
     // 网络请求或后端改动:candidates 本来就包含被拒绝的候选(比如"无时间戳"那些),
     // 每一行 stdout 都会带着目前收到的全部候选重新发一遍。
@@ -129,7 +129,7 @@ struct LyricsSearchSheet: View {
         Set(candidates.map(\.source))
     }
 
-    // 传输层就没打通的源:collector 对"这一轮一个 HTTP 响应都没拿到"的源报
+    // 传输层就没打通的源:引擎对"这一轮一个 HTTP 响应都没拿到"的源报
     // dns_failed / connect_failed / server_error(sourcebreaker.go 最后一节的传输层分类),对"上游
     // 死了、根本没法查"的 AMLL 报 upstream_unreachable(searchcli.go 派生),经 sourceFailureReasonCodes
     // 传到这里。空状态据此把「连不上」和「未返回候选」分开说 —— 现象:
@@ -143,7 +143,7 @@ struct LyricsSearchSheet: View {
     private static let transportFailureCodes = ["dns_failed", "connect_failed", "server_error", "upstream_unreachable"]
 
     /// 按失败代码分组的没连上的源;组内源的顺序跟名单一致。给过候选的源无论代码如何都不算
-    /// (collector 那边本来就不会给它们代码,这里再守一道)。
+    /// (引擎那边本来就不会给它们代码,这里再守一道)。
     private var unreachableSourcesByCode: [(code: String, sources: [String])] {
         Self.transportFailureCodes.compactMap { code in
             let sources = Self.allLyricSourceNames.filter {
@@ -185,24 +185,24 @@ struct LyricsSearchSheet: View {
 
     @State private var showSourceAvailability = false
 
-    /// 这一轮**开着**的源(rawValue)。开搜那一刻从 FeatureSettingsStore 快照——collector 子进程
+    /// 这一轮**开着**的源(rawValue)。开搜那一刻从 FeatureSettingsStore 快照——引擎子进程
     /// 起跑时读的是同一份 features.json,所以这份集合就是它这一轮**采用结果**的那几个;搜索中途在
     /// 设置里开关源不改这一轮的标注(下次「重新搜索」才生效),跟候选一样是"这一轮"的事实。
-    /// 也就是 collector 这一轮**真正发了请求**的那几个:fetchScoredLyricCandidatesStreaming
+    /// 也就是引擎这一轮**真正发了请求**的那几个:fetchScoredLyricCandidatesStreaming
     /// 的 skipSource 对关掉的源直接回空结果、不发请求(enrich.go,口径是「没启用肯定就不查」)。
-    /// 改 collector 那边的行为时,这条注释和 .help 的措辞要跟着走 —— 「没有查它」和
-    /// 「不采用它的结果」之间来回改过一次——以后再改 collector 那边的行为,记得这里的措辞跟着走。
+    /// 改引擎那边的行为时,这条注释和 .help 的措辞要跟着走 —— 「没有查它」和
+    /// 「不采用它的结果」之间来回改过一次——以后再改引擎那边的行为,记得这里的措辞跟着走。
     /// 用途只有一个:「歌词源可用情况」把没开的源标成「未启用」而不是「未返回候选」(
-    /// "加一档,不藏掉")。徽标的分母**不**用它,用 collector 报的 sourcesTotal,见下。
+    /// "加一档,不藏掉")。徽标的分母**不**用它,用引擎报的 sourcesTotal,见下。
     /// 空集 = 还没开搜(徽标那时也不显示);行列表把空集当"全开"处理,别把九行全标成未启用。
     @State private var enabledSources: Set<String> = []
 
     // 头部"(x/y)"标记 + 点开的可用情况列表。sourcesTotal 为 0(还没收到任何一行)时不
     // 显示——那不是"零个可用",是"还没开始",跟 searchProgressSuffix 同一条准则。
     //
-    // 分母是 collector 报的 sourcesTotal(它只数用户开着的源,见 enrich.go lyricSearchUpdateFunc
+    // 分母是引擎报的 sourcesTotal(它只数用户开着的源,见 enrich.go lyricSearchUpdateFunc
     // 的注释),跟进度那对「(x/y)」同一个数——前这里写的是全部源数,用户关掉一个源
-    // 就会出现进度「x/8」、徽标「y/9」两个分母对不上。分子照旧数"给过候选的源":collector 的
+    // 就会出现进度「x/8」、徽标「y/9」两个分母对不上。分子照旧数"给过候选的源":引擎的
     // filterEnabledLyricSources 保证候选里没有关掉的源,不用再交集一次。
     @ViewBuilder
     private var sourceAvailabilityBadge: some View {
@@ -254,7 +254,7 @@ struct LyricsSearchSheet: View {
     private func sourceAvailabilityRow(_ source: String) -> some View {
         // "曲库里有这首歌、但平台没有歌词"是第四档,排在最前面判:它比下面
         // 「已返回候选 / 未返回候选」那对二分**更确定**——那两档只说了"给没给候选",而这一档
-        // 说的是"为什么没给"。这个源不会同时出现在 respondedSources 里(collector 侧的搭车
+        // 说的是"为什么没给"。这个源不会同时出现在 respondedSources 里(引擎侧的搭车
         // 标记被 filterEnabledLyricSources 过滤掉了,不算候选),所以两者不会打架。
         if let found = tracksFoundNoLyrics.first(where: { $0.source == source }) {
             return AnyView(noLyricsSourceRow(source, found: found))
@@ -336,10 +336,10 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 用户在设置里关掉的源:collector 这一轮根本没查它(enrich.go skipSource,见
+    /// 用户在设置里关掉的源:引擎这一轮根本没查它(enrich.go skipSource,见
     /// enabledSources 的注释),既不是「已返回候选」也不是「未返回候选」——之前它跟真没应答的源
     /// 一样显示「未返回候选」,是把"没参与"报成了"没结果"。
-    /// 空心减号 + 第三级灰,比「未返回候选」的叉再退一级:它不是结果。不给失败原因(collector 的
+    /// 空心减号 + 第三级灰,比「未返回候选」的叉再退一级:它不是结果。不给失败原因(引擎的
     /// lyricSourceFailureReasons 对没开的源不发代码)。文案复用账号页那条「未启用」;悬停说明在哪开。
     private func disabledSourceRow(_ source: String) -> some View {
         HStack(spacing: 6) {
@@ -364,7 +364,7 @@ struct LyricsSearchSheet: View {
     // 知道进度在动。总数为 0(还没收到任何一行)时不显示,不写成 (0/0)。
     @State private var sourcesDone = 0
     @State private var sourcesTotal = 0
-    // 第几轮全源检索(collector 兜底轮每轮重扫 9 个源),给 searchProgressSuffix 的
+    // 第几轮全源检索(引擎兜底轮每轮重扫 9 个源),给 searchProgressSuffix 的
     // 轮次前缀用,语义见 LyricsSearchService.SearchUpdate.round。
     @State private var searchRound = 1
     // searchGeneration:第几轮搜索。load() 有三个入口(.task 首次进入、"重新搜索"按钮、
@@ -377,7 +377,7 @@ struct LyricsSearchSheet: View {
     @State private var searchGeneration = 0
     @State private var loadError: String?
     // 补上——所有源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
-    // 这首歌真的没有网络歌词还是网络整体不通。collector 侧统计"这一轮请求是否全部
+    // 这首歌真的没有网络歌词还是网络整体不通。引擎侧统计"这一轮请求是否全部
     // 失败"算出这个信号,见 LyricsSearchService.SearchUpdate 的注释。
     @State private var networkLooksDown = false
     // 补上——SearchUpdate.instrumental 这个信号早就算出来、也早就传到这里了
@@ -490,7 +490,7 @@ struct LyricsSearchSheet: View {
         //
         // 修在面板这一层,而不是让宿主加 `.id(context.key)` 整棵重建:离屏 NSHostingView 探针
         // 实测重建时**新面板的 .task 先起、旧面板的任务取消与 onDisappear 后到**,而两者都调
-        // 取消(当时是全局的、杀"当前在跑的那个",现在按发起方分开),新起的 collector 子进程会被旧面板
+        // 取消(当时是全局的、杀"当前在跑的那个",现在按发起方分开),新起的引擎子进程会被旧面板
         // 的收尾杀掉,3/3 复现。`.task(id:)` 的语义是先取消旧任务再起新任务,顺序由 SwiftUI
         // 保证,同一探针下新搜索每次都能跑完。`.onChange` 在更新阶段同步触发、`.task(id:)` 的
         // 任务体在其后异步起跑,所以 load() 起跑时查询词已经是新曲目的。
@@ -513,7 +513,7 @@ struct LyricsSearchSheet: View {
             appliedFingerprint = nil
         }
         .task(id: searchSubject) { await load() }
-        // 关闭/采纳/Esc 任何一条退出路径都把还在跑的 collector 子进程停掉 —— 不停的话
+        // 关闭/采纳/Esc 任何一条退出路径都把还在跑的引擎子进程停掉 —— 不停的话
         // 它会继续对九个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
         // (search 内的 withTaskCancellationHandler 是第二层,取消幂等,两层谁先到都行)。
         // 只停这个面板自己发起的那一轮,另一扇窗里的搜索、详情页在跑的自动匹配不受影响。
@@ -621,7 +621,7 @@ struct LyricsSearchSheet: View {
                 // 同一口径,不在这里替它们下结论。具体到每个源的整句解释在头部徽标点开的明细里。
                 let groups = unreachableSourcesByCode
                 let unreachableCount = groups.reduce(0) { $0 + $1.sources.count }
-                // sourcesTotal 是 collector 报的启用源数(未启用的源不会有代码),一个不剩才算"全都"。
+                // sourcesTotal 是引擎报的启用源数(未启用的源不会有代码),一个不剩才算"全都"。
                 let allUnreachable = sourcesTotal > 0 && unreachableCount >= sourcesTotal
                 let otherCount = max(0, sourcesTotal - unreachableCount)
                 ContentUnavailableView {
@@ -824,7 +824,7 @@ struct LyricsSearchSheet: View {
 
     /// 「采用此候选」的整条流程(等调用方写完再收尾,而不是 `onApply(c); dismiss`
     /// 一把关掉——那样写盘在背后跑、面板上什么反馈都没有):
-    /// ① 防重入 —— 写盘 + 排 collector 重启在飞时不再叠一笔,按钮禁用、文案变「正在采用…」;
+    /// ① 防重入 —— 写盘 + 排引擎重启在飞时不再叠一笔,按钮禁用、文案变「正在采用…」;
     /// ② 等待期间换了歌(小窗再按一次热键会换 context)这一笔写的是上一首,不挪徽标、不回声;
     /// ③ 成功 → `appliedSource` 挪「当前使用」徽标;关窗模式到此关窗(失败也关,调用方那边
     ///    的 lastError 红字负责说明),留着的模式给标题栏一条回声、不重搜 —— 候选本来就在。
@@ -1130,7 +1130,7 @@ struct LyricsSearchSheet: View {
     private func load() async {
         searchGeneration += 1
         let generation = searchGeneration
-        // 没有歌名就不搜(没在播放时打开、或者用户把歌名清空了):空歌名交给 collector 只会回一串英文报错。
+        // 没有歌名就不搜(没在播放时打开、或者用户把歌名清空了):空歌名交给引擎只会回一串英文报错。
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
             isSearching = false
             return
@@ -1146,7 +1146,7 @@ struct LyricsSearchSheet: View {
         sourcesTotal = 0
         searchRound = 1
         sourceFailureReasonCodes = [:]
-        // 这一轮开着的源,跟 collector 子进程读同一份 features.json;语义见 enabledSources 的注释。
+        // 这一轮开着的源,跟引擎子进程读同一份 features.json;语义见 enabledSources 的注释。
         enabledSources = Set(FeatureSettingsStore.shared.lyricsSources.map(\.rawValue))
         isSearching = true
         do {

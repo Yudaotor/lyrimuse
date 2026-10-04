@@ -13,8 +13,8 @@ Contents/Resources/。
 
 以源码/数据形式内嵌的组件:
 
-  4. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于 collector 与 App,见 t2s.go / OpenCCT2STable.swift)
-  5. rime-cantonese 粤拼词典数据(单字+词级) — CC-BY-4.0     (内嵌于 collector,见 jyutping.go)
+  4. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于引擎与 App,见 t2s.go / OpenCCT2STable.swift)
+  5. rime-cantonese 粤拼词典数据(单字+词级) — CC-BY-4.0     (内嵌于引擎,见 jyutping.go)
   6. koroman 韩文罗马字规则(移植成 Swift)   — MIT           (内嵌于 App 与 lyrics-romanize,见 KoreanRomanization.swift)
 
 运行时联网取用、不随包分发的数据:
@@ -218,13 +218,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ================================================================================
 4. OpenCC 繁简转换词典
    https://github.com/BYVoid/OpenCC
-   繁→简词典数据(单字 + 多字词组两级)内嵌在 collector 里,用于统一搜索关键词的
+   繁→简词典数据(单字 + 多字词组两级)内嵌在引擎里,用于统一搜索关键词的
    书写形式;2026-08-27 追加同一项目的简→繁单字词典(方向相反),给下面第 5 条粤拼
    查表当兜底用。繁→简那两份同时生成进 App(LyrimuseCore/Lyrics/OpenCCT2STable.swift,
    由 scripts/gen-opencc-t2s.py 从同一份文件生成),给歌词缓存的宽松匹配用,好让两侧折法一致。
    ⚠️ 只用了它的**词典数据**,没有链接 OpenCC 代码,也没有引入 Go
    移植版 github.com/liuzl/gocc —— 后者间接依赖 GPL-2.0-only 的 cedar-go,与本项目的
-   GPL-3.0 不兼容(见 lyrimuse-collector/t2s.go 顶部注释)。
+   GPL-3.0 不兼容(见 lyrimuse-engine/t2s.go 顶部注释)。
 ================================================================================
 
 Apache License
@@ -289,7 +289,7 @@ END OF TERMS AND CONDITIONS
    单字级(jyut6ping3.chars.dict.yaml)+ 词级(jyut6ping3.words.dict.yaml,2026-08-30
    加,用于多音字消歧——同一个字在不同词里读音可能不同,如"重要"zung6 jiu3 vs
    "重量"cung5 loeng6,单字表选不出这种词义相关的读音)两份粤拼(Jyutping)读音词典
-   数据内嵌在 collector 里,用于粤语歌词的罗马音生成(见 lyrimuse-collector/jyutping.go)。
+   数据内嵌在引擎里,用于粤语歌词的罗马音生成(见 lyrimuse-engine/jyutping.go)。
    ⚠️ 只用了它的**词典数据**(单字表取每个字权重最高的一个读音;词表原始数据没有
    权重标注,同一个词出现多个候选读音时取文件原始出现顺序的第一个,不逐字/逐词保留
    全部候选),没有链接 Rime 输入法引擎代码或本项目未用到的其余组件(jyut6ping3.maps

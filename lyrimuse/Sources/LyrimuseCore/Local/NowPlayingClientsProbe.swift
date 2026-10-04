@@ -75,7 +75,7 @@ public enum NowPlayingClientsProbe {
     }
 
     /// 问某个 bundle id 的待播队列(当前这首 + 之后 `count` 首),原样返回加载器的输出:`{"items":[…]}`,那个 App
-    /// 没在系统里注册时是 `null`。没装 helper、跑失败、超时返回 nil。解析在 collector(`parseAppleMusicSystemQueue`);
+    /// 没在系统里注册时是 `null`。没装 helper、跑失败、超时返回 nil。解析在引擎(`parseAppleMusicSystemQueue`);
     /// 实测只有 Apple Music 在这个接口上给出真的待播队列,Spotify / 酷狗只给当前这一首。
     public static func queue(forBundleID bundleID: String, count: Int, timeout: TimeInterval) -> String? {
         guard !bundleID.isEmpty, count > 0, let paths = helperPaths() else { return nil }

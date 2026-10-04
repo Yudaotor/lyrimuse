@@ -4,7 +4,7 @@ import Foundation
 /// Spotify(`spotify:track:`)、KKBOX(`kkbox://song/…#view`)、Kaset(`kaset://play?v=`,打开就从这首开始放,菜单写成
 /// 「播放」)、QQ 音乐(同样只能播放,见 `QQSongPlayLink`);网易云(`orpheus://` 只在它开着时生效)、Spotify 网页这类不收,
 /// 见 12 章决策 21。
-/// 数据全来自本机歌词缓存(collector 解析歌词时存的链接),零网络。
+/// 数据全来自本机歌词缓存(引擎解析歌词时存的链接),零网络。
 public struct ChartAppLinks: Sendable, Equatable {
     /// 歌曲:曲目链接(Music 打开专辑页并定位到这首);专辑:专辑页。
     public var appleMusic: URL?
@@ -22,7 +22,7 @@ public struct ChartAppLinks: Sendable, Equatable {
     /// 歌手:本机 MusicBrainz 身份缓存里这位歌手的 mbid。点击时查一次它在 MusicBrainz 上登记的平台主页
     /// (`ArtistPlatformPages`),拿到 Spotify / Apple Music 歌手页。
     public var artistMBID: String?
-    /// 歌手:collector 后台预取好的平台主页(PlatformPagesCache)。有就直接打开;没有才在点击时按 mbid 现查。
+    /// 歌手:引擎后台预取好的平台主页(PlatformPagesCache)。有就直接打开;没有才在点击时按 mbid 现查。
     public var artistPages: ArtistPlatformPages.Pages?
 
     public init(appleMusic: URL? = nil, spotify: URL? = nil, kkbox: URL? = nil, kaset: URL? = nil, qqSongMID: String? = nil,
@@ -74,7 +74,7 @@ public struct ChartLinkIndex: Sendable {
 
     var tracks: [String: ChartAppLinks] = [:]
     /// 歌曲的宽松键表:`looseKey(歌手) + "|" + looseKey(normalizedTitle(歌名))`。榜单行是 Last.fm 上的写法(常是繁体),
-    /// 缓存键是 collector 写的(多是简体),原样对不上。不并进 `tracks`:同一首歌两种写法都在缓存里时,原样那条优先。
+    /// 缓存键是引擎写的(多是简体),原样对不上。不并进 `tracks`:同一首歌两种写法都在缓存里时,原样那条优先。
     var looseTracks: [String: ChartAppLinks] = [:]
     var albums: [String: URL] = [:]
     var artists: [String: AlbumEditorialNotes.AlbumRef] = [:]
@@ -185,7 +185,7 @@ public enum ChartSummary {
 
 /// 榜单右键「在 QQ 音乐中播放」的链接。QQ 音乐对外只有「播放这一首」一种入口:`qqmusicmac://` 的 playsong 命令,
 /// 拼法照 y.qq.com 网页「用客户端播放」,分隔符是 `==` 和 `&&`(写成普通 `=` / `&` 它不认),要的是数字歌曲 ID。
-/// 缓存里只有 songmid,点击时按 mid 查一次 `fcg_play_single_song`(collector 取 QQ 歌曲详情用的同一个接口)。
+/// 缓存里只有 songmid,点击时按 mid 查一次 `fcg_play_single_song`(引擎取 QQ 歌曲详情用的同一个接口)。
 /// 纯函数部分 selftest 直接覆盖。
 public enum QQSongPlayLink {
     public struct Song: Sendable, Equatable {
@@ -282,7 +282,7 @@ public enum ArtistPlatformPages {
     }
 }
 
-/// collector 后台预取的平台主页缓存(`lyrimuse-platform-pages-cache.json`,collector platformpages.go 写):
+/// 引擎后台预取的平台主页缓存(`lyrimuse-platform-pages-cache.json`,引擎 platformpages.go 写):
 /// 歌手按 mbid 存 Spotify 歌手 ID 与 Apple Music 歌手页,专辑、歌曲按 `albumKey`(歌手 + 专辑名 / 歌名)存 Spotify ID。
 /// 只读,不联网。
 public struct PlatformPagesCache: Sendable {
@@ -321,7 +321,7 @@ public struct PlatformPagesCache: Sendable {
         return parse(data)
     }
 
-    /// 专辑 / 歌曲条目的键:歌手名与专辑名(歌名)去首尾空白、转小写。collector platformAlbumKey 必须同一个算法。
+    /// 专辑 / 歌曲条目的键:歌手名与专辑名(歌名)去首尾空白、转小写。引擎 platformAlbumKey 必须同一个算法。
     public static func albumKey(artist: String, album: String) -> String {
         artist.trimmingCharacters(in: .whitespaces).lowercased() + "|"
             + album.trimmingCharacters(in: .whitespaces).lowercased()

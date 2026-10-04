@@ -9,7 +9,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 /// 此前 stderr 只在**退出码非 0** 时才被打进日志(见 terminationHandler
 /// 里那句 `logger.error`),正常退出时整段丢掉 —— 而手动搜索这条路径上所有的"网易云被限流
 /// 了/某个源在退避"都只写在那段 stderr 里,于是 `~/Library/Logs/lyrimuse.log`(常驻
-/// collector 那半边)里**一条都查不到**:实测 `grep -c "code 405"` = 0,而同一时刻界面上
+/// 引擎那半边)里**一条都查不到**:实测 `grep -c "code 405"` = 0,而同一时刻界面上
 /// 正显示着「网易云接口限流」。事后复盘"到底有没有被限流过"这件事,在这条路径上做不到。
 ///
 /// 只捞这几行、不整段转录:一次搜索的 stderr 有几十行(每个源每一轮的 `api call:`),整段
@@ -20,9 +20,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 private let searchLyricsHealthMarkers = ["rejected (code", "backing off", "cooling down"]
 
 // "联网搜索候选歌词"——形态是这类工具常见的双栏候选面板,但**不**在 Swift 这边
-// 重新实现网易云/QQ/酷狗/Musixmatch/LRCLIB 的检索逻辑(那会是第二份、迟早会跟 Go collector 那份
-// 走样的实现)。改用一次性子进程调用 `collector search-lyrics`(collector/searchcli.go),
-// 复用 scoredLyricCandidates(collector/enrich.go)——跟自动解析路径完全同一份取分/排序
+// 重新实现网易云/QQ/酷狗/Musixmatch/LRCLIB 的检索逻辑(那会是第二份、迟早会跟 Go 引擎那份
+// 走样的实现)。改用一次性子进程调用 `lyrimuse-engine search-lyrics`(lyrimuse-engine/searchcli.go),
+// 复用 scoredLyricCandidates(lyrimuse-engine/enrich.go)——跟自动解析路径完全同一份取分/排序
 // 代码,只是把"取最高分那个"换成"把全部候选连分数一起交给用户挑"。不新增常驻服务:
 // 跟 EnrichCacheStore 的 launchctl kickstart 是同一种"偶尔手动操作,一次性子进程开销
 // 可以接受"的取舍。
@@ -102,7 +102,7 @@ final class LyricsSearchService {
         let kind: String
         let points: Int
 
-        /// 界面上显示的名字。认不出来的类型原样显示 kind —— collector 以后加了新项目
+        /// 界面上显示的名字。认不出来的类型原样显示 kind —— 引擎以后加了新项目
         /// 也不会在这里显示成空白。
         var label: String {
             switch kind {
@@ -119,17 +119,17 @@ final class LyricsSearchService {
             // 那个是「歌词铺到哪儿 vs 曲长」,这个是「源自己说这首歌多长 vs 本地多长」。
             case "sourceDurationOff": return L10n.t("源自报曲长不符")
             // v5:这是全批候选打完分之后才补的一项负分,只在"逐字加分是唯一
-            // 让这个候选赢的理由,而另一个候选标题更吻合"时出现,见 collector 侧
+            // 让这个候选赢的理由,而另一个候选标题更吻合"时出现,见引擎侧
             // applyWordTimingTitleOverride 的注释。
             case "wordTimingOverride": return L10n.t("标题吻合度更高的候选存在，撤销逐字加分")
-            // v7:「两场不同演唱会」判据,见 collector 侧
+            // v7:「两场不同演唱会」判据,见引擎侧
             // liveAlbumIdentityConflict 的注释(陈奕迅 The Easy Ride vs Get A Life 案)。
             case "liveAlbumConflict": return L10n.t("现场版场次不符")
-            // v23:见 collector 侧 lyrictimelineoffset.go。
+            // v23:见引擎侧 lyrictimelineoffset.go。
             case "timelineOffset": return L10n.t("时间轴整体偏移")
-            // v24:见 collector 侧 lyrictimelineintrusion.go。
+            // v24:见引擎侧 lyrictimelineintrusion.go。
             case "timelineIntrusion": return L10n.t("间奏里多出一段歌词")
-            // v3新维度,与 collector match.go 的 scoreTerm kind 一一对应。
+            // v3新维度,与引擎 match.go 的 scoreTerm kind 一一对应。
             // 旧 "source" case 已删:来源先验分从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
             case "durationOvershoot": return L10n.t("歌词超出曲长")
@@ -145,9 +145,9 @@ final class LyricsSearchService {
             case "rejectDurationMismatch": return L10n.t("时长明显不符，且无其他源印证")
             // 加:跟 rejectNotTimed 是同一类症状(没有时间戳)、不同的原因——
             // 那个是"疑似解析失败",这个是"这个源明确说了只有纯文本,压根没有带时间戳的版本"
-            // (见 collector match.go 的 scoreRejectPlainTextOnly 头注)。
+            // (见引擎 match.go 的 scoreRejectPlainTextOnly 头注)。
             case "rejectPlainTextOnly": return L10n.t("仅有纯文本，没有时间戳")
-            // 加,见 collector match.go 的 scoreRejectContinuousMix 头注。
+            // 加,见引擎 match.go 的 scoreRejectContinuousMix 头注。
             case "rejectContinuousMix": return L10n.t("连续混音版，与原版编排不同")
             default: return kind
             }
@@ -227,7 +227,7 @@ final class LyricsSearchService {
         let lyricsYRC: String
         let hasWordTiming: Bool
         let score: Int
-        /// 这个分数的构成明细;被判 -1 时只有一项,内容是原因。collector 只给机器可读的
+        /// 这个分数的构成明细;被判 -1 时只有一项,内容是原因。引擎只给机器可读的
         /// 类型 + 分值,文案在这边本地化(见 ScoreTerm.label)——App 有中英两套界面。
         let scoreTerms: [ScoreTerm]
         // 这个源实际匹配到的歌名/歌手/专辑/封面——不同源可能匹配到同一首歌的不同版本
@@ -237,14 +237,14 @@ final class LyricsSearchService {
         let artist: String
         let album: String
         let coverURL: URL?
-        // 加——true 时 lyrics 装的是没有时间戳的纯文本(见 collector
+        // 加——true 时 lyrics 装的是没有时间戳的纯文本(见引擎
         // scoredLyricCandidateResult.PlainTextOnly 头注)。跟别的候选不同,这条**不能**
         // 用来做逐字/逐行同步展示,只能当静态文字读——「搜索候选歌词」弹窗要用它决定
         // 要不要挂"无时间戳"警示标签,「歌词窗口」采纳后要用它决定走哪条渲染路径。
         let isPlainTextOnly: Bool
 
-        // 给候选选择界面展示的补充特性——是否逐字这一项 collector 已经算好(hasWordTiming),
-        // 译文/罗马音/行数纯粹是本地字段是否非空/切行数,不需要 collector 额外计算。
+        // 给候选选择界面展示的补充特性——是否逐字这一项引擎已经算好(hasWordTiming),
+        // 译文/罗马音/行数纯粹是本地字段是否非空/切行数,不需要引擎额外计算。
         var hasTranslation: Bool { !lyricsTr.isEmpty }
         var hasRomanization: Bool { !lyricsRoma.isEmpty }
         // CRLF 换行(酷狗候选常见)会让 split(separator:"\n") 按 Character 比较时把整份
@@ -269,22 +269,22 @@ final class LyricsSearchService {
 
     // 补上——之前 onUpdate 只传候选数组,九个源都没查到候选时,弹窗只能显示
     // 一句笼统的"都没找到",分不清是这首歌真的没有网络歌词,还是网络整体不通导致九个源
-    // 的请求全部发不出去。networkLooksDown 由 collector 侧统计"这一轮联网搜索期间发出
+    // 的请求全部发不出去。networkLooksDown 由引擎侧统计"这一轮联网搜索期间发出
     // 的请求有没有全部失败"算出来(见 networkobs.go 的 networkLooksDown()),这里原样
     // 转发给调用方决定展示哪种空状态文案。
     struct SearchUpdate {
         let candidates: [Candidate]
         let networkLooksDown: Bool
         /// 已经回来的歌词源 / 一共要等几个。语义(为什么分母只数开着的源、为什么
-        /// applecover 不算)见 collector/enrich.go 的 lyricSearchUpdateFunc 注释。
+        /// applecover 不算)见 lyrimuse-engine/enrich.go 的 lyricSearchUpdateFunc 注释。
         let sourcesDone: Int
         let sourcesTotal: Int
         /// 第几轮全源检索,从 1 开始。兜底轮(首歌手变体/标题反查等,见
-        /// collector/enrich.go)每轮都重新扫全部源,sourcesDone 每轮从 0 重数——没有这个
-        /// 字段时进度显示成"8/8 之后又回到 1/8",读起来像出了错。旧 collector 不发这个
+        /// lyrimuse-engine/enrich.go)每轮都重新扫全部源,sourcesDone 每轮从 0 重数——没有这个
+        /// 字段时进度显示成"8/8 之后又回到 1/8",读起来像出了错。旧引擎不发这个
         /// 字段时解码成 1(单轮语义,跟没有兜底轮的观感一致)。
         let round: Int
-        /// 这一轮里没给出候选的源,查得到原因的那几个——collector 侧
+        /// 这一轮里没给出候选的源,查得到原因的那几个——引擎侧
         /// lyricSourceFailureReasons(searchcli.go)算出来,分两层:源特有的具体原因只覆盖
         /// netease/musixmatch/lyricfind 三个已经接了诊断旁路的源;传输层通用原因(
         /// dns_failed / connect_failed / server_error,以及 AMLL 的 upstream_unreachable)任何
@@ -305,7 +305,7 @@ final class LyricsSearchService {
         /// 改改再搜",另一个是"等平台补词,或者自己往 lyrics/ 放一份"。
         ///
         /// 别跟 `sourceFailureReasonCodes` 混为一谈:那个是"源坏了",这个是**查成功了**
-        /// 的结论,所以 collector 侧特意走了独立字段(见 searchcli.go 的 TracksFoundNoLyrics)。
+        /// 的结论,所以引擎侧特意走了独立字段(见 searchcli.go 的 TracksFoundNoLyrics)。
         let tracksFoundNoLyrics: [TrackFoundNoLyrics]
     }
 
@@ -320,12 +320,12 @@ final class LyricsSearchService {
         let durationSecs: Double
 
         // 手写 init(from:) 之后编译器不再合成 CodingKeys,得自己声明。字段名两边一致
-        // (collector 侧是 lowerCamelCase 的 json tag),不需要做名字转换。
+        // (引擎侧是 lowerCamelCase 的 json tag),不需要做名字转换。
         private enum CodingKeys: String, CodingKey {
             case source, title, artist, album, durationSecs
         }
 
-        // collector 侧除 source 外都带 omitempty,缺字段是常态 —— 逐个 decodeIfPresent,
+        // 引擎侧除 source 外都带 omitempty,缺字段是常态 —— 逐个 decodeIfPresent,
         // 一个字段没给不该让整行解码失败、把这一批更新整批丢掉(跟 SearchUpdate 那边同一条纪律)。
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -356,18 +356,18 @@ final class LyricsSearchService {
     }
 
     // 用包里那份引擎(LyrimusePaths.bundledEnginePath),每次 build.sh 重新打包都会跟着更新。
-    private static let collectorPath = LyrimusePaths.bundledEnginePath
+    private static let enginePath = LyrimusePaths.bundledEnginePath
 
     private init() {}
 
     // durationSecs 传 0 表示"没有可靠的真实时长"——歌词管理窗口浏览的是任意历史缓存
-    // 条目,enrichEntry 本来就不持久化时长;collector 侧 scoreLyricCandidate 对
+    // 条目,enrichEntry 本来就不持久化时长;引擎侧 scoreLyricCandidate 对
     // durationSecs<=0 有专门处理,直接跳过时长匹配这档评分(不会除零/不会被误判成
     // "时长对不上"),只退化成语言/署名行过滤+逐字加分+来源优先级+行数。
     //
     // onUpdate 每收到子进程一整行 stdout 就调用一次(不是等进程退出才调一次)——
-    // collector 那边(searchcli.go)改成了 NDJSON:谁先查完谁先打印一行,后面每一行是
-    // 目前为止已知全部候选重新排序过的完整列表,不是只有新到的这一条(collector 侧
+    // 引擎那边(searchcli.go)改成了 NDJSON:谁先查完谁先打印一行,后面每一行是
+    // 目前为止已知全部候选重新排序过的完整列表,不是只有新到的这一条(引擎侧
     // corroboratedEndings 是跨候选互相印证的信号,后到的源可能改变已经展示出来的某条
     // 候选的分数,所以每次都要整份重新展示,不能只追加新的那一条)。调用方(desktop-
     // lyrics 的"搜索候选歌词"弹窗)因此能做到"谁先搜到就先展示谁,列表随后续源陆续
@@ -381,7 +381,7 @@ final class LyricsSearchService {
     ) async throws {
         // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或
         // searchGeneration 换代)时顺手终结子进程 —— 原来没有任何取消接线,sheet 关掉/
-        // 采纳候选后 collector 子进程照跑满(九个源、20 秒兜底),NDJSON 还在往已消失的
+        // 采纳候选后引擎子进程照跑满(九个源、20 秒兜底),NDJSON 还在往已消失的
         // 视图里灌,全是无人消费的废工(性能审计;sheet 侧另有 onDisappear
         // 兜底,两层都在,谁先到谁生效——取消幂等)。取消只停**这一轮**的子进程:同一发起方
         // 紧接着起的新一轮不会被旧任务迟到的取消误杀。
@@ -396,7 +396,7 @@ final class LyricsSearchService {
         }
     }
 
-    /// 子进程失败时给界面看的一句:stderr 是 collector 的整段日志(可能几十行英文,还带时间戳),原样塞进弹窗
+    /// 子进程失败时给界面看的一句:stderr 是引擎的整段日志(可能几十行英文,还带时间戳),原样塞进弹窗
     /// 会把「重试」挤出窗口。只取最后一行非空的(出错原因通常在最后)、剥掉 Go log 的时间戳前缀、截到 160 字;
     /// 全文已经进了日志。
     static func failureSummary(_ stderr: String) -> String {
@@ -416,9 +416,9 @@ final class LyricsSearchService {
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: Self.collectorPath)
-            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
-            process.environment = LyrimusePaths.collectorProcessEnvironment()
+            process.executableURL = URL(fileURLWithPath: Self.enginePath)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+            process.environment = LyrimusePaths.engineProcessEnvironment()
             process.arguments = [
                 "search-lyrics",
                 "-artist", artist,
@@ -430,14 +430,14 @@ final class LyricsSearchService {
             // 播放器** —— 它的立论是"时间轴对着同一份音频母版",那是正在播的那个播放器的
             // 属性。这条 CLI 是独立进程,拿不到播放状态,只能由这边传。
             //
-            // 在此之前 collector 那边是按 `features.Players`(**设置里勾了
+            // 在此之前引擎那边是按 `features.Players`(**设置里勾了
             // 哪些播放器**)算的,六个全勾的用户会让酷狗/网易云/QQ 三个源同时拿到 +250 ——
             // 「解析决策」面板上"这个源就是你正在用的播放器"对三个都是假话,而且这一项的
-            // 区分力被自己抵消掉了。详见 collector 侧 match.go 里 nativeLyricSources 的注释。
+            // 区分力被自己抵消掉了。详见引擎侧 match.go 里 nativeLyricSources 的注释。
             //
             // 取值沿用 `LyricsWindowView.idlePlayer` 那条既有先例:LocalPlaybackSource 把
             // 当前播放器 bundle id 落在这个键上(停播时快照清空、只有它还记得)。 取不到
-            // 就**不传**,collector 那边认不出会让这一项不加分 —— 宁可少加一项也不要加错。
+            // 就**不传**,引擎那边认不出会让这一项不加分 —— 宁可少加一项也不要加错。
             if let playerBundleID = UserDefaults.standard.string(forKey: "np:lastPlayerBundleID"),
                !playerBundleID.isEmpty
             {
@@ -491,10 +491,10 @@ final class LyricsSearchService {
                         // 可选 + 兜底 0:字段缺失不该让整行解码失败、把这一批候选整批丢掉。
                         sourcesDone: raw.sourcesDone ?? 0,
                         sourcesTotal: raw.sourcesTotal ?? 0,
-                        round: raw.round ?? 1, // 旧 collector 不发,按单轮兜底,见 SearchUpdate.round
+                        round: raw.round ?? 1, // 旧引擎不发,按单轮兜底,见 SearchUpdate.round
                         sourceFailureReasonCodes: raw.sourceFailureReasonCodes ?? [:],
                         instrumental: raw.instrumental ?? false,
-                        // collector 带 omitempty,没有时不出现 —— 解码成空数组,界面退回那句笼统的"没找到候选"。
+                        // 引擎带 omitempty,没有时不出现 —— 解码成空数组,界面退回那句笼统的"没找到候选"。
                         tracksFoundNoLyrics: raw.tracksFoundNoLyrics ?? [])
                     // 走主队列而不是各起一个 MainActor Task:收尾的 continuation 也从主队列恢复(见 terminationHandler),
                     // 同一条串行队列先进先出,最后那行一定先于 search() 返回送到;各起 Task 的顺序语言层面不保证。
@@ -559,9 +559,9 @@ final class LyricsSearchService {
             do {
                 try process.run()
             } catch {
-                // process.run() 失败(collector 二进制不存在/不可执行——比如没跑过
+                // process.run() 失败(引擎二进制不存在/不可执行——比如没跑过
                 // build.sh 就直接 swift run/.build/debug 调试,或者 Contents/Resources/
-                // collector 被误删/损坏)——实测排查坐实:早先这里只
+                // 引擎被误删/损坏)——实测排查坐实:早先这里只
                 // resume 了 continuation,完全没有清理上面已经派发到 readQueue 的两个
                 // 读取闭包。这两个闭包在 process.run() 之前就已经提交(为了不错过子
                 // 进程刚起来就开始写的早期输出),它们各自阻塞在 fileHandleForReading
@@ -579,20 +579,20 @@ final class LyricsSearchService {
     }
 }
 
-// 对应 collector 侧 searchcli.go 的 searchLyricsUpdate——字段名两边都是 lowerCamelCase,
+// 对应引擎侧 searchcli.go 的 searchLyricsUpdate——字段名两边都是 lowerCamelCase,
 // 不需要像下面 RawCandidate 那样额外声明 CodingKeys 做 snake_case 转换。
 private struct RawSearchUpdate: Decodable {
     let candidates: [RawCandidate]
     let networkLooksDown: Bool
     let sourcesDone: Int?
     let sourcesTotal: Int?
-    /// 第几轮全源检索,旧 collector 不发(解码方兜底成 1),见 SearchUpdate.round。
+    /// 第几轮全源检索,旧引擎不发(解码方兜底成 1),见 SearchUpdate.round。
     let round: Int?
     let sourceFailureReasonCodes: [String: String]?
-    /// 有源明确说这首是纯音乐(collector 带 omitempty,不是时不出现)。搜索面板据此把"一个候选都没有"
+    /// 有源明确说这首是纯音乐(引擎带 omitempty,不是时不出现)。搜索面板据此把"一个候选都没有"
     /// 分成"这首歌本来就没词"和"真的谁都没搜到"两种。
     let instrumental: Bool?
-    /// "曲库里有这首歌、但平台上没有歌词文本"的那几个源。旧 collector 不发,
+    /// "曲库里有这首歌、但平台上没有歌词文本"的那几个源。旧引擎不发,
     /// 可选 + 解码方兜底成空数组,见 SearchUpdate.tracksFoundNoLyrics。
     let tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics]?
 }

@@ -18,11 +18,11 @@ enum LyricsBackupStore {
     /// 三处必须一致;真要收拢,该收进 Core 的一个 public 常量里,那是另一件事。
     private static let enrichCacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
 
-    /// 恢复时把 `meta` 落成这份**待采纳**文件,由 collector 合并进缓存(`lyrimuse-collector/enrichrestore.go`
-    /// 的 `adoptEnrichRestore`,采纳成功后自己删掉):restore 收尾时发 adopt_restore 当场合并,collector
+    /// 恢复时把 `meta` 落成这份**待采纳**文件,由引擎合并进缓存(`lyrimuse-engine/enrichrestore.go`
+    /// 的 `adoptEnrichRestore`,采纳成功后自己删掉):restore 收尾时发 adopt_restore 当场合并,引擎
     /// 没收到的话下次启动也会合并。
     ///
-    /// 别在这里直接盖 `lyrimuse-enrich-cache.json`:collector 是它唯一的写入方(见 EnrichEditChannel)。
+    /// 别在这里直接盖 `lyrimuse-enrich-cache.json`:引擎是它唯一的写入方(见 EnrichEditChannel)。
     private static let enrichRestoreURL = LyrimusePaths.configFile("lyrimuse-enrich-restore.json")
 
     /// 当前这台机器上歌词库的规模,给设置页那句"约 N MB"用。**不读文件内容**(只 stat),
@@ -123,10 +123,10 @@ enum LyricsBackupStore {
         var failed = 0
         var pinsAdded = 0
         /// `meta` 那份待采纳文件的字节数;0 = 这份备份不带(v1 老包)或写盘失败。
-        /// restore 收尾时交给 collector 采纳(见 restore(from:) 末尾)。
+        /// restore 收尾时交给引擎采纳(见 restore(from:) 末尾)。
         var metaBytes = 0
-        /// collector 有没有把铺好的文件收进缓存(adopt_restore)。false 时文件已经在歌词目录里,
-        /// 要等 collector 下次启动导入 —— 界面得如实说,不能只报「已恢复 N 个」。
+        /// 引擎有没有把铺好的文件收进缓存(adopt_restore)。false 时文件已经在歌词目录里,
+        /// 要等引擎下次启动导入 —— 界面得如实说,不能只报「已恢复 N 个」。
         var adopted = true
         var total: Int { added + overwritten }
     }
@@ -192,12 +192,12 @@ enum LyricsBackupStore {
         guard var result = outcome?.0, let pins = outcome?.1 else { return nil }
         // pins 走 @MainActor 的 store(它有 @Published,不能在后台改)。
         result.pinsAdded = LyricsPinStore.shared.merge(pins)
-        // 铺好的歌词文件和待采纳文件交给 collector 收进缓存(它是缓存唯一的写入方,见 EnrichEditChannel)。
-        // 失败只记日志:文件已经在歌词目录里了,collector 下次启动也会导入它们。
+        // 铺好的歌词文件和待采纳文件交给引擎收进缓存(它是缓存唯一的写入方,见 EnrichEditChannel)。
+        // 失败只记日志:文件已经在歌词目录里了,引擎下次启动也会导入它们。
         let adopt = await EnrichEditChannel.send("adopt_restore")
         result.adopted = adopt.ok
         if !adopt.ok {
-            logger.error("restore: collector did not adopt the restored files: \(adopt.error ?? "", privacy: .public)")
+            logger.error("restore: engine did not adopt the restored files: \(adopt.error ?? "", privacy: .public)")
         }
         logger.notice("restore: +\(result.added) ~\(result.overwritten) !\(result.failed) x\(result.rejected) pins+\(result.pinsAdded) meta=\(result.metaBytes)B")
         return result

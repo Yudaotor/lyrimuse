@@ -14,7 +14,7 @@ A play is submitted once **all** of these hold:
 
 Playback is sampled every 5 seconds and elapsed time accrues from the wall clock, so pausing stops
 the count and seeking does not inflate it. If two samples end up more than 60 seconds apart — the
-machine slept, or the collector was restarted — that gap is discarded rather than credited.
+machine slept, or the engine was restarted — that gap is discarded rather than credited.
 
 These thresholds match [Last.fm's scrobbling guidelines](https://www.last.fm/api/scrobbling).
 
@@ -241,7 +241,7 @@ Last.fm connected and working it stays empty.
 
 ---
 
-*Implementation: [`lyrimuse-collector/lastfm.go`](../lyrimuse-collector/lastfm.go)
+*Implementation: [`lyrimuse-engine/lastfm.go`](../lyrimuse-engine/lastfm.go)
 (`resolveScrobbleArtist`, `scrobble`, `updateNowPlaying`),
-[`lyrimuse-collector/poller.go`](../lyrimuse-collector/poller.go)
+[`lyrimuse-engine/poller.go`](../lyrimuse-engine/poller.go)
 (`listenThreshold`, `recordFailedMirror`).*

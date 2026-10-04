@@ -3,7 +3,7 @@
 
 归并规则(2026-08-18 与用户逐对核定,口径与 export-lastfm-albums.py 一致):
   基础: 简繁折叠(外部 t2s 映射)+字形变体折叠表(日文兼容字,如 晩→晚)/NFKC/大小写/标点、
-        歌手别名统一(与 collector artistAliasTable 同步)。
+        歌手别名统一(与引擎 artistAliasTable 同步)。
   T1 (feat. …)/(with …) 客串标记剥除——客串不改变是哪首歌。
   T2 再版标签: 括号内 Remaster/Explicit/Bonus Track 剥除;无括号尾缀 "- <年份> Remaster(ed)"
       同剥(重制=同一录音;Bad - 2012 Remaster = Bad)。

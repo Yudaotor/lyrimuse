@@ -33,7 +33,7 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
-    @Published private(set) var collectorNetworkDown = false
+    @Published private(set) var engineNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
     /// 电台口白 / 台卡:这一刻在放的不是歌。语义与 isCurrentTrackAdBreak 平行。
     @Published private(set) var isRadioTalkBreak = false
@@ -47,7 +47,7 @@ private final class PanelPlayback: ObservableObject {
     /// 口径(灵动岛、歌词窗口、悬浮歌词三处都照它写)。漏订阅 `highResArtworkImage`、只订阅
     /// `artworkImage` 的消费面会显示系统原图而不是缓存里的专辑封面——系统经 MediaSession
     /// 给的封面有时是一帧偏离正方形长宽比的 MV 画面(超过 `deviceArtworkMaxAspectSkew`
-    /// 的 0.15,collector 侧那道守卫因此没把它当封面收下),两者显示的会不一样。
+    /// 的 0.15,引擎侧那道守卫因此没把它当封面收下),两者显示的会不一样。
     ///
     /// 面板**画的不是它本尊**,是它的预缩小图 `highResArtworkThumbnail`:
     /// 这张是懒解码的原图档(1400~3000px),面板 44pt 那格首帧直接画它 = 主线程整张解码再缩,
@@ -95,7 +95,7 @@ private final class PanelPlayback: ObservableObject {
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
-            p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
+            p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$radioStationName.removeDuplicates().sink { [weak self] in self?.radioStationName = $0 },
@@ -341,7 +341,7 @@ private struct MenuBarPanelView: View {
                 config: .shared,
                 lastfmConnect: .shared,
                 // 这里直接读那个带 mtime 缓存的静态量,不走 LastfmMirrorStatusWatcher:
-                // 那个观察器是给**常驻**视图用的(文件被 collector 自愈删掉时要能推一次
+                // 那个观察器是给**常驻**视图用的(文件被引擎自愈删掉时要能推一次
                 // 更新);这张面板活不过一次开合,读一次当下的状态正好。
                 mirrorInfo: LastfmMirrorStatus.current)
         }
@@ -707,7 +707,7 @@ private struct MenuBarPanelView: View {
             isRadioTalk: playback.isRadioTalkBreak,
             isInstrumental: playback.isCurrentTrackInstrumental,
             hasNoLyrics: playback.currentTrackHasNoLyrics,
-            networkDown: playback.collectorNetworkDown,
+            networkDown: playback.engineNetworkDown,
             hasLyricsContent: playback.hasLyricsContent,
             isPlaying: playback.isPlayingNow
         ) {

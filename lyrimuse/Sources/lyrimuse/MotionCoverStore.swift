@@ -8,7 +8,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "motion
 
 /// Apple Music 动态封面的**下载与落盘**。
 ///
-/// 分工:发现在 collector(`motioncover.go`,把 master m3u8 记进 enrich 缓存)、清单推导在 Core
+/// 分工:发现在引擎(`motioncover.go`,把 master m3u8 记进 enrich 缓存)、清单推导在 Core
 /// (`MotionCoverManifest`,纯函数、selftest 钉着)、播放在 `MotionCoverLayer`,这一层只干三件事:
 /// 拼出该下哪个文件、把它下下来、按 LRU 管住磁盘。
 ///
@@ -231,11 +231,11 @@ final class MotionCoverStore {
 
     /// **终审**:视频**中段**(时长过半)的真实一帧,跟当前显示的封面是不是同一张。
     ///
-    /// 为什么不能只信 collector 那边(`motioncover.go` 的 `motionCoverMatchesCover`):它比的
+    /// 为什么不能只信引擎那边(`motioncover.go` 的 `motionCoverMatchesCover`):它比的
     /// 是 Apple 给的 `previewFrame`,而那常常就是视频**最开头**一帧。有些专辑的动态封面开场
     /// 是"揭幕"特效——实测 Ariana Grande《Positions (Deluxe)》,首帧是逐渐聚拢的九宫格拼贴,
     /// 跟静态封面的感知距离高达 41(阈值 12 的好几倍),播到视频过半时才收拢成跟静态封面
-    /// 逐位相同的画面(距离 0)。collector 拿不到解码后的视频帧,只能在 previewFrame 上打转;
+    /// 逐位相同的画面(距离 0)。引擎拿不到解码后的视频帧,只能在 previewFrame 上打转;
     /// 这里能拿到刚下载下来的完整视频,能挑一个更可能"已经稳定下来"的时刻。
     ///
     /// 中段(`duration * 0.5`)是经验取值,不是精确计算出的"揭幕结束点"——不同专辑的揭幕

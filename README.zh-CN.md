@@ -318,7 +318,7 @@ me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent
 本仓库就是 App 本身：
 
 - [`lyrimuse/`](lyrimuse) —— App 本体（Swift，SwiftUI + AppKit）
-- [`lyrimuse-collector/`](lyrimuse-collector) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）；构建时自动打包进 App
+- [`lyrimuse-engine/`](lyrimuse-engine) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）；构建时自动打包进 App
 
 <details>
 <summary>可选的网页体验：两个兄弟仓库</summary>

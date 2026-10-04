@@ -11,7 +11,7 @@ import Foundation
 ///   | 已注册 + 进程已退出   | **0**       | `state = not running` |
 ///   | 未注册               | 113         | (无输出)           |
 ///
-/// 原来 `CollectorServiceManager.isRunning` 就是拿这个退出码当"在跑"用的,于是 collector
+/// 原来 `EngineServiceManager.isRunning` 就是拿这个退出码当"在跑"用的,于是引擎
 /// 在 KeepAlive 下崩溃重启循环时,设置页照样显示绿勾"运行中" —— 用户看到一切正常、歌词
 /// 却一直不出来,没有任何线索。
 public enum LaunchdJobState: Equatable, Sendable {

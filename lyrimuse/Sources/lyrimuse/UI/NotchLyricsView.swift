@@ -53,7 +53,7 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
-    @Published private(set) var collectorNetworkDown = false
+    @Published private(set) var engineNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
     /// 电台口白:这一刻在放的不是歌,台里在说话。语义与 `isCurrentTrackAdBreak` 平行。
     @Published private(set) var isRadioTalkBreak = false
@@ -264,7 +264,7 @@ private final class NotchPlayback: ObservableObject {
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
-            p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
+            p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             YouTubeMusicAdSkipCenter.shared.$adSkipAvailable.removeDuplicates().sink { [weak self] in self?.adSkipAvailable = $0 },
             YouTubeMusicAdSkipCenter.shared.$skipInFlight.removeDuplicates().sink { [weak self] in self?.skipAdInFlight = $0 },
@@ -1043,7 +1043,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     // 尺寸(GeometryReader 的 proxy.size,从 body 传进来),`.clipShape` 才会在正确的
     // 边界上计算圆角。
     //
-    // 没有封面数据(这首歌还没解析出封面/collector 还没查到/本来就没有)时退回纯黑
+    // 没有封面数据(这首歌还没解析出封面/引擎还没查到/本来就没有)时退回纯黑
     // (`NotchCardStyle.coverArt.fill`),跟机器刘海融成一块。
     //
     // 模糊半径比"歌词窗口"artworkBackground 的 60 小得多——那边画布常年好几百 pt 高,
@@ -2121,7 +2121,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 Text(L10n.t("暂无歌词"))
                     .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
-            } else if playback.collectorNetworkDown && !playback.hasLyricsContent {
+            } else if playback.engineNetworkDown && !playback.hasLyricsContent {
                 // 顺序理由同 LyricsOverlayView.mainLine 里那段:必须排在"搜索歌词中…"
                 // 之前、"暂无歌词"之后。
                 Text(L10n.t("网络连接失败"))
@@ -2129,7 +2129,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if playback.isPlayingNow && !playback.hasLyricsContent {
                 // 同 LyricsOverlayView.mainLine 的区分:currentLine==nil 可能是"还没解析
-                // 出这首歌的歌词"(collector 后台搜索中,见 PlaybackCoordinator.hasLyricsContent 注释),
+                // 出这首歌的歌词"(引擎后台搜索中,见 PlaybackCoordinator.hasLyricsContent 注释),
                 // 不能跟"这首歌真没歌词/正在间奏"共用同一个♪占位符。
                 Text(L10n.t("搜索歌词中…"))
                     .foregroundStyle(accentOrWhite.opacity(0.7))

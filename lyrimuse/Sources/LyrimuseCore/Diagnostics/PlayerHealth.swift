@@ -15,8 +15,8 @@ public enum PlayerHealth {
         case automationDenied
         /// 「后台采集服务」开关开着,launchd 里却没有活着的进程(没注册 / 崩溃循环)。
         /// 用户自己关掉服务不算故障。
-        case collectorNotRunning
-        /// 需要完全磁盘访问的播放器里,collector 上报读它的容器被系统挡住了(只认明确被拒,还没探到不算)。
+        case engineNotRunning
+        /// 需要完全磁盘访问的播放器里,引擎上报读它的容器被系统挡住了(只认明确被拒,还没探到不算)。
         case fullDiskAccessDenied
         /// 需要辅助功能权限的播放器(读它界面上的播放时间校准进度)在,App 却没有这项授权。系统分不出
         /// 「没问过」和「拒绝了」,两种都报。
@@ -26,19 +26,19 @@ public enum PlayerHealth {
     public struct Inputs: Equatable, Sendable {
         /// 自动化权限被拒的播放器(`automationDeniedPlayers` 算出来的)。
         public var automationDeniedPlayers: [PlaybackPlayer]
-        public var collectorServiceEnabled: Bool
-        public var collectorRunning: Bool
+        public var engineServiceEnabled: Bool
+        public var engineRunning: Bool
         /// 完全磁盘访问被拒、读不到本机数据的播放器(`fullDiskAccessDeniedPlayers` 算出来的)。
         public var fullDiskAccessDeniedPlayers: [PlaybackPlayer]
         /// 缺辅助功能权限、没法校准进度的播放器(`accessibilityMissingPlayers` 算出来的)。
         public var accessibilityMissingPlayers: [PlaybackPlayer]
 
         public init(automationDeniedPlayers: [PlaybackPlayer],
-                    collectorServiceEnabled: Bool, collectorRunning: Bool,
+                    engineServiceEnabled: Bool, engineRunning: Bool,
                     fullDiskAccessDeniedPlayers: [PlaybackPlayer] = [], accessibilityMissingPlayers: [PlaybackPlayer] = []) {
             self.automationDeniedPlayers = automationDeniedPlayers
-            self.collectorServiceEnabled = collectorServiceEnabled
-            self.collectorRunning = collectorRunning
+            self.engineServiceEnabled = engineServiceEnabled
+            self.engineRunning = engineRunning
             self.fullDiskAccessDeniedPlayers = fullDiskAccessDeniedPlayers
             self.accessibilityMissingPlayers = accessibilityMissingPlayers
         }
@@ -48,7 +48,7 @@ public enum PlayerHealth {
     /// 完全磁盘访问被拒少了本机歌词;缺辅助功能只是进度差一两秒,排最后。
     public static func warnings(_ inputs: Inputs) -> [Warning] {
         var out: [Warning] = []
-        if inputs.collectorServiceEnabled && !inputs.collectorRunning { out.append(.collectorNotRunning) }
+        if inputs.engineServiceEnabled && !inputs.engineRunning { out.append(.engineNotRunning) }
         if !inputs.automationDeniedPlayers.isEmpty { out.append(.automationDenied) }
         if !inputs.fullDiskAccessDeniedPlayers.isEmpty { out.append(.fullDiskAccessDenied) }
         if !inputs.accessibilityMissingPlayers.isEmpty { out.append(.accessibilityMissing) }
@@ -56,7 +56,7 @@ public enum PlayerHealth {
     }
 
     /// 完全磁盘访问要报哪几家:设置页那张卡摆出来的那几家(`visible` = 需要 ∩ 装了,见 `FullDiskAccessPermission`),
-    /// collector 上报的结论是明确被拒时才报;还没探到(`.unknown`)不报。
+    /// 引擎上报的结论是明确被拒时才报;还没探到(`.unknown`)不报。
     public static func fullDiskAccessDeniedPlayers(visible: [PlaybackPlayer], grant: LocalCacheAccess.Grant) -> [PlaybackPlayer] {
         grant == .denied ? visible : []
     }

@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lastfm
 /// 当前曲目在 Last.fm 上的「喜欢」(love)。读写都走 Last.fm,跟在哪个播放器里放无关 —— 酷狗 /
 /// QQ 音乐 / 网易云这类没有脚本接口的播放器,歌词窗口里能用的「喜欢」只有这一个(12 章 §8)。
 ///
-/// **打在哪一首上**:collector 上送时可能改写歌手 / 歌名(合唱串收拢、「智能」档编目匹配,见
+/// **打在哪一首上**:引擎上送时可能改写歌手 / 歌名(合唱串收拢、「智能」档编目匹配,见
 /// lastfm.go `resolveScrobbleTags`),喜欢必须打在**上送的那个写法**上,否则 Last.fm 上喜欢的是
 /// 另一个实体、跟收听记录对不上。Last.fm 回报的 nowplaying 条目就是上送写法本身:它新鲜、且标题
 /// 对得上本机这首时用它的歌手和歌名;对不上(还没确认收到、镜像关着、「智能」档连歌名都改了)
@@ -218,7 +218,7 @@ enum LastfmLoveAPI {
             "api_key": creds.apiKey,
             "sk": creds.sessionKey,
         ]
-        // 签名用原值、不含 format(同 collector lastfm.go sign())。
+        // 签名用原值、不含 format(同引擎 lastfm.go sign())。
         params["api_sig"] = LastfmAuthFlow.signParams(params, secret: creds.secret)
         params["format"] = "json"
         var req = URLRequest(url: apiRoot)

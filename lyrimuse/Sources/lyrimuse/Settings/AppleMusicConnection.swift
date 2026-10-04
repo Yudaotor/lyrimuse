@@ -3,7 +3,7 @@ import Foundation
 import LyrimuseCore
 import WebKit
 
-/// Apple Music 官方歌词源(collector/applemusic.go)的连接状态与登录流程。
+/// Apple Music 官方歌词源(lyrimuse-engine/applemusic.go)的连接状态与登录流程。
 ///
 /// Apple 的歌词端点(`/songs/{id}/lyrics`、`/syllable-lyrics`)只认订阅用户的 `media-user-token`,没有它
 /// 一律回 404。这个令牌没有第二条路可拿:MusicKit 框架要付费开发者证书才能签的 entitlement(自签名强签会被
@@ -13,14 +13,14 @@ import WebKit
 /// 取舍的完整依据见 09 章「Apple Music 连接」。
 ///
 /// 令牌寿命:Apple 固定 6 个月且**不发可续期令牌**,到期只能重登一次。所以除了"连没连"还要记住到期时刻,
-/// 接近到期时提前提示;collector 带着令牌被拒过(`rejected_at`)时同样提示,不等用户发现歌词悄悄少了一源。
+/// 接近到期时提前提示;引擎带着令牌被拒过(`rejected_at`)时同样提示,不等用户发现歌词悄悄少了一源。
 @MainActor
 public final class AppleMusicConnection: ObservableObject {
     public static let shared = AppleMusicConnection()
 
-    /// 跟 collector 侧 applemusicUserTokenPath() 指的是同一个文件,两边都写死这个名字。
+    /// 跟引擎侧 applemusicUserTokenPath() 指的是同一个文件,两边都写死这个名字。
     private static let tokenURL = LyrimusePaths.configFile("lyrimuse-applemusic-token.json")
-    /// collector 对这份令牌的观察(问到的店面、被拒),只读;见 AppleMusicTokenFile.parse。
+    /// 引擎对这份令牌的观察(问到的店面、被拒),只读;见 AppleMusicTokenFile.parse。
     private static let engineStatusURL = LyrimusePaths.configFile(AppleMusicTokenFile.engineStatusFileName)
 
     /// 剩这么多时间就开始提示"该重连了"。
@@ -29,13 +29,13 @@ public final class AppleMusicConnection: ObservableObject {
     public enum State: Equatable {
         case disconnected
         /// savedAt 是拿到令牌的时刻。storefront 可能是空串 —— 登录时没等到 itua cookie。这**不是**未连接:
-        /// collector 首次取词时会问 /v1/me/storefront 拿权威值,记在它的状态文件里,`refresh` 合起来读。别在这里退 "us":猜一个区会让取词
+        /// 引擎首次取词时会问 /v1/me/storefront 拿权威值,记在它的状态文件里,`refresh` 合起来读。别在这里退 "us":猜一个区会让取词
         /// 端点全线 404,见 applemusic.go 的注释。
         case connected(savedAt: Date, storefront: String)
     }
 
     @Published public private(set) var state: State = .disconnected
-    /// collector 带着当前这份令牌被 Apple 拒过(过期或被吊销)。
+    /// 引擎带着当前这份令牌被 Apple 拒过(过期或被吊销)。
     @Published public private(set) var isRejected = false
     /// 登录窗口开着(或正在清理旧登录态、准备打开)时为 true —— 按钮据此显示"登录中…"并禁用,避免开出两个窗口。
     @Published public private(set) var isConnecting = false
@@ -144,7 +144,7 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
     /// 先看到 media-user-token、但 itua 还没写上的时刻。用来给 itua 一段宽限期。
     private var tokenFirstSeenAt: Date?
 
-    /// 看到令牌后,最多再等这么久让 itua cookie 落地。等不到就留空交给 collector 去问。
+    /// 看到令牌后,最多再等这么久让 itua cookie 落地。等不到就留空交给引擎去问。
     /// 轮询 1 秒一次,8 秒给足 Apple 登录流程收尾的余量,又不至于让用户盯着已经登录成功的窗口干等。
     private static let storefrontGrace: TimeInterval = 8
 
@@ -191,7 +191,7 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
                 // storefront 取 Apple 标记账号所在区的 itua cookie。它和 media-user-token 由登录流程分别写入、
                 // 不保证同时就位。别在这里退回 "us":猜错区会让取词端点全线 404、整个 Apple Music 源静默失效
                 // (见 applemusic.go 的 applemusicLoadUserToken)。先给 itua 一段宽限期,实在等不到就**留空**,
-                // 由 collector 用 /v1/me/storefront 问权威答案(那个端点要 developer token,App 侧没有)。
+                // 由引擎用 /v1/me/storefront 问权威答案(那个端点要 developer token,App 侧没有)。
                 let itua = (cookies.first(where: { $0.name == "itua" })?.value ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !itua.isEmpty {
@@ -228,7 +228,7 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
     }
 
     /// 凭据文件从创建那一刻起就是 0o600(先建同目录临时文件再改名),不存在「先按默认权限写好、再 chmod」
-    /// 之间同机其它用户读得到的窗口。collector 侧写 musixmatch token 同一档权限。
+    /// 之间同机其它用户读得到的窗口。引擎侧写 musixmatch token 同一档权限。
     private static func writeCredentialFile(_ data: Data, to url: URL) throws {
         let dir = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

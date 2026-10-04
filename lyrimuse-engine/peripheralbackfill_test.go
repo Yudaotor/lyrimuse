@@ -1,0 +1,176 @@
+package main
+
+import (
+	"testing"
+	"time"
+)
+
+// needsPeripheralBackfill 的回归测试。
+//
+// 两条都是补上的:
+//   - canonical_artist 之前不在触发条件里,而它在 backfillPeripheralFields 里本来就有补全
+//     分支 —— 于是那四个字段一旦齐了,缺 canonical 的记录就再也没机会补。实测撞到过:同一张
+//     专辑里一半曲目报 "Leah Dou"、一半报"窦靖童",后者其中两条 canonical 是空的。
+//   - 以前只有 10 分钟节流、没有次数上限,真的补不上的字段会让这条记录只要还在被播放就
+//     每 10 分钟重发一轮网络请求,永远停不下来。
+func TestNeedsPeripheralBackfill(t *testing.T) {
+	// 主色是纯网页字段,"缺主色要不要补"整条判据都挂在中继有没有配上(见
+	// needsPeripheralBackfill 里 missingAccent 那段)。默认按"配了"跑,好让下面那批
+	// 既有用例保持原来的语义;没配的那一档单独在最后跑一遍。
+	savedRelay := webRelayURL
+	defer func() { webRelayURL = savedRelay }()
+	webRelayURL = "https://np.example.test"
+
+	long := time.Now().Unix() - int64(enrichPeripheralRetryInterval/time.Second) - 1
+	full := enrichEntry{
+		AccentColor: "#fff", AppleURL: "a", QQURL: "q", NeteaseURL: "n",
+		CanonicalArtist: "窦靖童", TS: long,
+	}
+
+	cases := []struct {
+		name   string
+		e      enrichEntry
+		artist string
+		want   bool
+	}{
+		{"什么都不缺:不补", full, "窦靖童", false},
+		{"缺主色:补", func() enrichEntry { e := full; e.AccentColor = ""; return e }(), "窦靖童", true},
+		{"缺网易云链接:补", func() enrichEntry { e := full; e.NeteaseURL = ""; return e }(), "窦靖童", true},
+		{
+			name:   "单一歌手缺 canonical:补(这条以前会被漏掉)",
+			e:      func() enrichEntry { e := full; e.CanonicalArtist = ""; return e }(),
+			artist: "窦靖童", want: true,
+		},
+		{
+			name:   "合唱曲目缺 canonical:不补 —— 引擎只在单一歌手时才给值,空是正常的",
+			e:      func() enrichEntry { e := full; e.CanonicalArtist = ""; return e }(),
+			artist: "窦靖童 & Lionman", want: false,
+		},
+		{
+			name:   "还没到节流窗口:不补",
+			e:      func() enrichEntry { e := full; e.AccentColor = ""; e.TS = time.Now().Unix(); return e }(),
+			artist: "窦靖童", want: false,
+		},
+		{
+			name: "重试次数用尽:不补(以前没有这道闸,会无限重试)",
+			e: func() enrichEntry {
+				e := full
+				e.AccentColor = ""
+				e.PeripheralRetryCount = peripheralBackfillMaxAttempts
+				return e
+			}(),
+			artist: "窦靖童", want: false,
+		},
+		// 以下三条补:QQ 的专辑/歌手 mid 进了触发条件,而"搜索兜底链接"
+		// 以前压根不算缺(判据只有 QQURL == "")—— 本机实测 565 条里 40 条卡在那一档、
+		// 永远不会再被补一次,「前往专辑/前往艺人」对它们也就永远做不了。
+		{
+			name: "QQ 链接还是搜索兜底:补(以前永远不补)",
+			e: func() enrichEntry {
+				e := full
+				e.QQURL = qqSearchFallbackPrefix + "w=x"
+				return e
+			}(),
+			artist: "窦靖童", want: true,
+		},
+		{
+			name: "有真·歌曲页但缺专辑 mid:补",
+			e: func() enrichEntry {
+				e := full
+				e.QQURL = "https://y.qq.com/n/ryqq/songDetail/000FTx4w1obE49"
+				e.QQSingerMid = "s"
+				return e
+			}(),
+			artist: "窦靖童", want: true,
+		},
+		{
+			name: "真·歌曲页且两个 mid 都在:不补",
+			e: func() enrichEntry {
+				e := full
+				e.QQURL = "https://y.qq.com/n/ryqq/songDetail/000FTx4w1obE49"
+				e.QQAlbumMid, e.QQSingerMid = "a", "s"
+				return e
+			}(),
+			artist: "窦靖童", want: false,
+		},
+		{
+			name: "差一次到上限:还补",
+			e: func() enrichEntry {
+				e := full
+				e.AccentColor = ""
+				e.PeripheralRetryCount = peripheralBackfillMaxAttempts - 1
+				return e
+			}(),
+			artist: "窦靖童", want: true,
+		},
+		// 以下两条补:仿冒号名单上的艺人(周杰伦)网易云链接是 withholdImpersonatorRiddenIdentity
+		// 故意扣掉的,补多少轮都不会有 —— 以前照样算缺,本机 42 条只缺这一项的条目每条白补 5 轮。
+		{
+			name:   "周杰伦只缺网易云链接:不补(那个链接是故意不给的)",
+			e:      func() enrichEntry { e := full; e.NeteaseURL = ""; return e }(),
+			artist: "周杰伦", want: false,
+		},
+		{
+			name:   "周杰伦缺网易云链接又缺主色:补(名单只免掉网易云这一项)",
+			e:      func() enrichEntry { e := full; e.NeteaseURL = ""; e.AccentColor = ""; return e }(),
+			artist: "周杰伦", want: true,
+		},
+	}
+	for _, c := range cases {
+		if got := needsPeripheralBackfill(c.e, c.artist, ""); got != c.want {
+			t.Errorf("%s: needsPeripheralBackfill = %v, want %v", c.name, got, c.want)
+		}
+	}
+
+	// 没配状态中继:主色压根不会被算出来(resolveTrackEnrichment 那处直接跳过),所以它为空
+	// 是**正常态**、不能算缺 —— 否则每条记录都白补满 peripheralBackfillMaxAttempts 轮、每轮
+	// 把开着的歌词源全部重查一遍。跟 QQURL 兜底链接、NeteaseURL 仿冒号名单是同一个坑的第三次。
+	webRelayURL = ""
+	noRelay := []struct {
+		name string
+		e    enrichEntry
+		want bool
+	}{
+		{"没配中继,只缺主色:不补", func() enrichEntry { e := full; e.AccentColor = ""; return e }(), false},
+		{"没配中继,缺主色又缺别的:照补", func() enrichEntry { e := full; e.AccentColor = ""; e.AppleURL = ""; return e }(), true},
+		{"没配中继,什么都不缺:不补", full, false},
+	}
+	for _, c := range noRelay {
+		if got := needsPeripheralBackfill(c.e, "窦靖童", ""); got != c.want {
+			t.Errorf("%s: needsPeripheralBackfill = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// 外围补全的节流时间戳必须**跟条目的解析时刻分开**。
+//
+// 拆分之前两者共用 e.TS:backfillPeripheralFields 每跑一次就把它推到当下
+// (最多 5 次、每次隔 10 分钟),而 needsLyricsRetry 的 6 小时起算点正是 e.TS —— 于是
+// 补个封面主色就能把"去别的源再搜一遍歌词"整体往后拖近一小时。两件事本来毫无关系。
+func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {
+	saved := features()
+	defer func() { setFeatures(saved) }()
+	featuresRef().LyricsSources = map[string]bool{"netease": true, "kugou": true}
+
+	// 一条 6 小时前解析出来的记录,当时只有网易云给了候选 —— 酷狗没出现过,该重搜。
+	longAgo := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
+	e := enrichEntry{
+		Lyrics:            "[00:01.00]hello",
+		LyricsSourcesSeen: []string{"netease"},
+		TS:                longAgo,
+	}
+	if !needsLyricsRetry(e, false, false, true) {
+		t.Fatal("间隔已过、又确实缺源,本来就该重搜")
+	}
+
+	// 外围补全刚跑过一次(只推它自己的时间戳)。歌词重搜不该因此被推迟。
+	e.PeripheralTS = time.Now().Unix()
+	e.PeripheralRetryCount++
+	if !needsLyricsRetry(e, false, false, true) {
+		t.Error("补了一次外围字段就把歌词重搜挡掉了 —— 两个节流又耦合回去了")
+	}
+	// 而外围补全自己的节流要照常生效。
+	if needsPeripheralBackfill(e, "someone", "") {
+		t.Error("外围补全刚跑过,10 分钟内不该再来")
+	}
+}

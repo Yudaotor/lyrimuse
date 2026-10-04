@@ -1,16 +1,16 @@
 import Foundation
 
-/// collector `toSimplifiedT2S`(t2s.go)的 Swift 移植:OpenCC 词组表最长匹配,词组没命中查单字表,
+/// 引擎 `toSimplifiedT2S`(t2s.go)的 Swift 移植:OpenCC 词组表最长匹配,词组没命中查单字表,
 /// 单字表也没有再查异体字表(HanVariants),都没有原样保留。
 ///
 /// 只给「两侧必须算出同一个结果」的匹配用(`EnrichCacheKeys.looseKey`)。界面显示的简繁转换仍走
-/// ICU(`ChineseVariant`),两者不要混用:ICU 按上下文取舍,跟 collector 的结果对不上。
+/// ICU(`ChineseVariant`),两者不要混用:ICU 按上下文取舍,跟引擎的结果对不上。
 ///
 /// 两侧必须同步改的约束:
 ///   - 按 Unicode 标量(Go 的 rune)走,词组表的 key 用 `[Unicode.Scalar]` 比较,不用 `String`:
 ///     Swift 的 `String ==` 按规范等价比较(CJK 兼容表意字符与统一汉字判成相等),Go 按字节;
 ///   - 词组从最长往下试到 2 个字,先词组后单字、单字表没有才查异体字表;
-///   - 表由 scripts/gen-opencc-t2s.py 从 collector 那两份 .txt 生成,每个 key 只取第一候选。
+///   - 表由 scripts/gen-opencc-t2s.py 从引擎那两份 .txt 生成,每个 key 只取第一候选。
 public enum OpenCCT2S {
     private struct Tables {
         let characters: [Unicode.Scalar: [Unicode.Scalar]]
@@ -54,7 +54,7 @@ public enum OpenCCT2S {
     /// 词组表条目(selftest 对账用)。
     public static var phraseEntries: [[Unicode.Scalar]: [Unicode.Scalar]] { tables.phrases }
 
-    /// collector 的 toSimplified 的 Swift 版:先转 NFC 再繁转简(Go 侧 toSimplified 同一顺序,见 nfc.go)。
+    /// 引擎的 toSimplified 的 Swift 版:先转 NFC 再繁转简(Go 侧 toSimplified 同一顺序,见 nfc.go)。
     public static func toSimplified(_ s: String) -> String {
         let t = tables
         let scalars = Array(s.precomposedStringWithCanonicalMapping.unicodeScalars)

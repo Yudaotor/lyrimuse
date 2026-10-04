@@ -218,7 +218,7 @@ func runIdlePageTests() {
     // MARK: - 各平台跳转链接的纯判据(PlatformLinks)
     do {
         typealias P = PlatformLinks
-        // 搜索兜底 vs 真·歌曲页。判据与 collector 的 isQQSearchFallbackURL 同源(qq.go:49-54)——
+        // 搜索兜底 vs 真·歌曲页。判据与引擎的 isQQSearchFallbackURL 同源(qq.go:49-54)——
         // 把兜底链接当"这首歌的页面"给出去,用户点了会被丢到搜索结果页还得再点一次。
         expectEqual(P.isQQSearchFallback("https://y.qq.com/n/ryqq/search?w=%E7%A8%BB%E9%A6%99"), true,
                     "QQ 链接:搜索兜底认得出来")
@@ -247,7 +247,7 @@ func runIdlePageTests() {
                                   spotifySong: URL(string: "https://open.spotify.com/track/1")).isEmpty, false,
                     "只有 Spotify 曲目页也不算 isEmpty(2026-09-10 新字段要进判据)")
 
-        // Spotify 曲目 ID 形状闸(与 collector 的 spotifyTrackIDFromURI 同源:22 位 base62)。
+        // Spotify 曲目 ID 形状闸(与引擎的 spotifyTrackIDFromURI 同源:22 位 base62)。
         expectEqual(P.spotifyTrackURL(id: "1Xyo4u8uXC1ZmMpatF05PJ")?.absoluteString,
                     "https://open.spotify.com/track/1Xyo4u8uXC1ZmMpatF05PJ", "Spotify 曲目页 URL")
         expectEqual(P.spotifyTrackURL(id: "") == nil, true, "Spotify ID:空串不给链接")
@@ -278,7 +278,7 @@ func runIdlePageTests() {
         expectEqual(all.songLink(forPlayerBundleID: "com.google.Chrome") == nil, true,
                     "网页行:认不出在放哪个网页平台的浏览器 → nil")
         expectEqual(all.songLink(forPlayerBundleID: PlaybackPlayer.kugou.bundleIdentifier) == nil, true,
-                    "网页行:酷狗播放 → nil(collector 没存酷狗歌曲页;用户那张截图的场景)")
+                    "网页行:酷狗播放 → nil(引擎没存酷狗歌曲页;用户那张截图的场景)")
         let kkApp = P.kkboxAppURL(songPage: "https://www.kkbox.com/tw/tc/song/4s7gyziTOGRFhEcFQf")
         expectEqual(kkApp?.absoluteString, "kkbox://song/4s7gyziTOGRFhEcFQf#view", "KKBOX 歌曲页 → 进 App 的深链")
         expectEqual(P.kkboxAppURL(songPage: "https://www.kkbox.com/tw/tc/album/X") == nil, true, "KKBOX:不是 song 页挡掉")

@@ -78,7 +78,7 @@ func runCreditLineTests() {
                     "罗马音过滤(反向): 真歌词那行的罗马音照旧")
     }
 
-    // ---- 行首标签:标签跟冒号之间允许空白(跟 collector lyricSplitLabel 同一条规则) ----
+    // ---- 行首标签:标签跟冒号之间允许空白(跟引擎 lyricSplitLabel 同一条规则) ----
     do {
         expectEqual(LyricDuet.splitLabel("男 : 第一句")?.label, "男", "对唱标签: 冒号前带空格照样认")
         expectEqual(LyricDuet.splitLabel("男 : 第一句")?.rest, "第一句", "对唱标签: 冒号后正文不含空白")
@@ -86,7 +86,7 @@ func runCreditLineTests() {
         expectEqual(LyricDuet.splitLabel("男：第一句")?.label, "男", "对唱标签: 原来的写法不受影响")
     }
 
-    // ---- 单独一行的拉丁字母名字标签(跟 collector TestLyricSplitLabel / TestLyricSpeakerLabels 同一批用例) ----
+    // ---- 单独一行的拉丁字母名字标签(跟引擎 TestLyricSplitLabel / TestLyricSpeakerLabels 同一批用例) ----
     do {
         for (text, label) in [("Demi Lovato：", "Demi Lovato"), ("  Joe Jonas/Nick Jonas: ", "Joe Jonas/Nick Jonas"),
                               ("Anderson .Paak：", "Anderson .Paak"), ("Lily-Rose Depp:", "Lily-Rose Depp"),
@@ -270,7 +270,7 @@ func runCreditLineTests() {
     }
 
     do {
-        // 声明行规则跟 collector 共用 shared/lyric-notices.json,例句也共用(go test 跑同一批):
+        // 声明行规则跟引擎共用 shared/lyric-notices.json,例句也共用(go test 跑同一批):
         // drop 必须被那一条命中,keep 任何一条都不许命中;规则在 ICU 下必须全部编得过。
         expectEqual(LyricNotices.compiledCount, LyricNotices.ruleCount, "声明行规则: 每一条在 ICU 下都编得过")
         for ex in lyricNoticeExamples {
@@ -297,7 +297,7 @@ func runCreditLineTests() {
                     "版权声明(反向): 只有「未经」的真歌词不算")
         expectEqual(LyricNotices.matchesBody("我不得不承认"), false,
                     "版权声明(反向): 只有「不得」的真歌词不算")
-        // 腾讯系译文版权声明:酷我把它混进正文,collector 的译文轨清洗够不着。
+        // 腾讯系译文版权声明:酷我把它混进正文,引擎的译文轨清洗够不着。
         expectEqual(LyricNotices.matchesBody("TME享有本翻译作品的著作权"), true,
                     "译文版权声明: 酷我正文里的 TME 写法")
         expectEqual(LyricNotices.matchesBody("本翻译作品的著作权归QQ音乐所有"), true,
@@ -597,7 +597,7 @@ func runCreditLineTests() {
     //
     // 上面那张关键词表已经补过至少两轮(两字全称 → 单字缩写 → "Arranged by:" 这种夹 by 的
     // 写法),每次都是被漏判的真实数据打回来才加的,说明枚举法在这件事上收敛不了。补一条认
-    // "短汉字标签 + 冒号 + 内容"这个形状的规则,跟 collector 侧 genericHanCreditLineRe 对齐。
+    // "短汉字标签 + 冒号 + 内容"这个形状的规则,跟引擎侧 genericHanCreditLineRe 对齐。
     // 关键是**不能误杀真歌词**,所以下面正反两个方向都要覆盖。
 
     do {
@@ -1358,16 +1358,16 @@ func runCreditLineTests() {
         engine.load(lyrics: "[00:01.00]周杰伦：一句词\n[00:26.74]la la la\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.creditSongwriters, [], "创作者: 换一份没有署名的歌词清空")
 
-        // collector 写的键、App 解码的键、名单接到窗口那一路,三处对上(键没对上就恒为空、功能静默失效)。
+        // 引擎写的键、App 解码的键、名单接到窗口那一路,三处对上(键没对上就恒为空、功能静默失效)。
         let packageDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         func read(_ path: String) -> String { (try? String(contentsOfFile: path, encoding: .utf8)) ?? "" }
-        let enrichGo = read(packageDir.deletingLastPathComponent().appendingPathComponent("lyrimuse-collector/enrich.go").path)
+        let enrichGo = read(packageDir.deletingLastPathComponent().appendingPathComponent("lyrimuse-engine/enrich.go").path)
         let reader = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/EnrichCacheReader.swift").path)
         let source = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/LocalPlaybackSource.swift").path)
         let window = read(packageDir.appendingPathComponent("Sources/lyrimuse/UI/LyricsWindowView.swift").path)
         expectEqual(sourceBytes(enrichGo, contain: "`json:\"lyrics_songwriters,omitempty\"`"), true,
-                    "创作者: collector 的 lyrics_songwriters struct tag")
+                    "创作者: 引擎的 lyrics_songwriters struct tag")
         expectEqual(sourceBytes(reader, contain: "case lyricsSongwriters = \"lyrics_songwriters\""), true,
                     "创作者: App 解码 lyrics_songwriters")
         expectEqual(sourceBytes(source, contain: "LyricSongwriters.shown("), true, "创作者: 播放源按 Apple 优先拼名单")

@@ -21,7 +21,7 @@ final class NowPlayingNotifier {
     /// 只在放稳那一刻看一眼会把这条通知丢掉;超过还没放就不发。见 14 章决策 48。
     static let playWait: Duration = .seconds(60)
     /// 开始放之后这首的封面最多再等多久。附的是界面上显示的那张(`NowPlayingNotice.coverPick`),高清替代要等
-    /// collector 查到封面地址再下载,比系统那份慢。换歌后一小段时间里两份都可能还是上一首的,所以只认换歌之后
+    /// 引擎查到封面地址再下载,比系统那份慢。换歌后一小段时间里两份都可能还是上一首的,所以只认换歌之后
     /// 到货的;等不到就不附图,不拿上一首的封面顶。
     static let artworkWait: Duration = .seconds(5)
 

@@ -1,12 +1,12 @@
 import Foundation
 
-/// App 代 collector 跑的播放器查询里,交回「一串曲目」的那几种 —— Music.app 的系统待播队列、当前列表往后几首、资料库里
+/// App 代引擎跑的播放器查询里,交回「一串曲目」的那几种 —— Music.app 的系统待播队列、当前列表往后几首、资料库里
 /// 一张专辑的曲目,浏览器里 YouTube Music / Spotify 网页版的待播队列 —— 统一整理成这一份,`PlayerQueryServer` 把它的
-/// JSON 放进应答的 `output`。加载器、AppleScript、网页 JS 的原始输出都在这里解析;collector 只解这份 JSON
+/// JSON 放进应答的 `output`。加载器、AppleScript、网页 JS 的原始输出都在这里解析;引擎只解这份 JSON
 /// (appquery.go 的 appQueryTracks),只做「当前这首对不对得上、往后取几首」。键名两边一起改,样例在
 /// shared/testdata/player-query/。Kaset 的队列另有一份(`KasetPlayerInfo.QueueReply`)。
 ///
-/// 这里只认形状:格式不对的记录丢掉,其余原样交出去(没有歌手的、MV 也交)—— 哪些能拿去预取由 collector 判。
+/// 这里只认形状:格式不对的记录丢掉,其余原样交出去(没有歌手的、MV 也交)—— 哪些能拿去预取由引擎判。
 public struct PlayerQueryTracks: Codable, Equatable, Sendable {
     public struct Track: Codable, Equatable, Sendable {
         public var title: String
@@ -42,7 +42,7 @@ public struct PlayerQueryTracks: Codable, Equatable, Sendable {
         }
     }
 
-    /// 播放器认为正在播的那首,collector 拿它跟手上那首核对;这一种查询不报(专辑曲目表;YouTube Music 看 `selected`)是 nil。
+    /// 播放器认为正在播的那首,引擎拿它跟手上那首核对;这一种查询不报(专辑曲目表;YouTube Music 看 `selected`)是 nil。
     public var current: Track?
     public var tracks: [Track]
 

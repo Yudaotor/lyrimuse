@@ -2,7 +2,7 @@ import Foundation
 
 /// 完整歌词窗口末尾那行「创作者：…」的名单。
 ///
-/// collector 存的 Apple 名单(`EnrichCacheLyrics.songwriters`,取自 Apple TTML 的 `<songwriters>`)优先,
+/// 引擎存的 Apple 名单(`EnrichCacheLyrics.songwriters`,取自 Apple TTML 的 `<songwriters>`)优先,
 /// 跟 Music.app 显示的一致;没有时用歌词正文里被判成署名、标签是作词 / 作曲的那几行(`names(fromCreditLines:)`)。
 public enum LyricSongwriters {
     /// 显示用的名单。

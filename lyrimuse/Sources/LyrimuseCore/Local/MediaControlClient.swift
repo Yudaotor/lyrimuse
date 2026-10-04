@@ -67,8 +67,8 @@ public enum MediaControlClient {
         fetchSnapshotWithProvenance(players: players).snapshot
     }
 
-    /// 快照是怎么来的:播放器原样报的标签(清洗后、套用 collector 结论之前)、套用的是哪一版署名纠正、
-    /// 以及系统信息里的三个原始标识。写播放状态文件用(见 `PlaybackStateFile`),collector 靠它们做署名纠正、
+    /// 快照是怎么来的:播放器原样报的标签(清洗后、套用引擎结论之前)、套用的是哪一版署名纠正、
+    /// 以及系统信息里的三个原始标识。写播放状态文件用(见 `PlaybackStateFile`),引擎靠它们做署名纠正、
     /// 目录锚点这类判定。
     public struct SnapshotProvenance: Equatable, Sendable {
         public let bundleID: String
@@ -88,10 +88,10 @@ public enum MediaControlClient {
         kasetLock.unlock()
         let raw = rawSnapshot(players: players)
         // 三条路都要过一遍署名纠正:酷狗 3.3.2 把当前这句歌词发布成 artist,而
-        // collector 那边已经换成真署名了 —— 两边不一致的话,歌词缓存的 key 就对不上。
+        // 引擎那边已经换成真署名了 —— 两边不一致的话,歌词缓存的 key 就对不上。
         // 套在这个唯一的公开出口上,下游(trackKey、缓存查询、界面)一处都不用改。
         // 见 PlayerArtistFix。
-        // 汽水非会员试听换回原曲口径(见 PlayerPreviewFix);排在署名纠正之后,比对用的署名与 collector 发布时一致。
+        // 汽水非会员试听换回原曲口径(见 PlayerPreviewFix);排在署名纠正之后,比对用的署名与引擎发布时一致。
         let fixState = PlayerArtistFix.current
         let snapshot = PlayerPreviewFix.applied(to: PlayerArtistFix.applied(to: raw, state: fixState))
         guard let raw else { return (snapshot, nil) }
@@ -665,7 +665,7 @@ public enum MediaControlClient {
         let radioStationHash: String?
         /// 发布这份 Now Playing 的进程号。Amazon Music 的界面校准要它(见 AmazonMusicUIProbe)。
         let processIdentifier: Int?
-        /// 放 Apple Music 目录曲目时是 Apple 的目录曲目 ID;本地文件是任意持久 ID。只原样转交 collector,
+        /// 放 Apple Music 目录曲目时是 Apple 的目录曲目 ID;本地文件是任意持久 ID。只原样转交引擎,
         /// 由它过目录锚点的守卫再用(见 `NowPlayingIdentifiers`)。
         let uniqueIdentifier: Int64?
         let trackNumber: Int?
@@ -810,7 +810,7 @@ public enum MediaControlClient {
         case playerNotSelected = "the reporting app is not among the players the user selected"
         /// 报的就是我们要的播放器,但它此刻放的不是歌(KKBOX / Amazon 的播客单集、Amazon 上一次会话留下的陈旧元数据)。
         /// 跟 `notASong`(别的 App 在放非歌曲内容)不同:这里焦点没被别人占,是这个播放器确实没在放音乐,按短宽限清
-        /// (collector 那边同样交回空状态,约 3 拍清掉)。
+        /// (引擎那边同样交回空状态,约 3 拍清掉)。
         case targetNotPlayingMusic = "the selected player is reporting something that is not a song"
     }
 
@@ -1185,7 +1185,7 @@ public enum MediaControlClient {
 
     private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {
         // 闸门 = 内置播放器 + 用户显式信任的未知播放器(见 TrustedPlayers)。准入只在这里判:
-        // collector 不复核,只记这里认下、写进播放状态的播放器。
+        // 引擎不复核,只记这里认下、写进播放状态的播放器。
         //
         // 三条 nil 出口都先过一次 `appleMusicSnapshotAfterFocusLost`:
         // 「系统 Now Playing 焦点被别的 App 占走」跟「真的没人在放歌」在这里长得一模一样,
@@ -1235,7 +1235,7 @@ public enum MediaControlClient {
     /// `TrustedPlayers.notASong` 的"带 YouTube Music 广告复核"版本,也是这两条取快照的
     /// 路径该用的那一个。
     ///
-    /// 基础判据(artist 或 album 为空就丢)原样不动 —— 它跟 collector 侧
+    /// 基础判据(artist 或 album 为空就丢)原样不动 —— 它跟引擎侧
     /// `trustedPlaybackNotASong` 是逐字对应的一套语义。复核作为**外面一层**加上去,
     /// 只在一种情况下发生:基础判据要拒、而且唯一的理由是 album 为空(artist 非空)。
     ///
@@ -2282,8 +2282,8 @@ public enum MediaControlClient {
         // duration 置成 nil,想让它别被当成曲长用 —— 结果整档歌词停摆:`LocalPlaybackSource.apply` 里
         // 建进度锚点那一整支的闸是 `if playing, let duration = snapshot.duration, duration > 0`,
         // duration 一 nil 锚点就再也建不起来,歌词引擎没有钟可走,表现成"电台放到歌了却没有歌词"。
-        // 这一侧的 duration 只影响进度条分母(电台上本来就不准),**不会**写进歌词缓存(那是 collector 的
-        // 事,见 lyrimuse-collector/snapshot.go),所以留着它是纯粹的止损,没有副作用。
+        // 这一侧的 duration 只影响进度条分母(电台上本来就不准),**不会**写进歌词缓存(那是引擎的
+        // 事,见 lyrimuse-engine/snapshot.go),所以留着它是纯粹的止损,没有副作用。
         let isRadio = !(raw.radioStationHash ?? "").isEmpty
         Self.setRadioStationHash(isRadio ? raw.radioStationHash : nil)
         let radioClock = isRadio

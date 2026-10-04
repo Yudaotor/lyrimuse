@@ -36,7 +36,7 @@ enum LastfmAuthError: Error, LocalizedError {
 enum LastfmAuthFlow {
     private static let apiRoot = "https://ws.audioscrobbler.com/2.0/"
 
-    // 算法在 LyrimuseCore.LastfmSignature(selftest 覆盖,跟 collector lastfm.go 的 sign() 用同一组向量)。
+    // 算法在 LyrimuseCore.LastfmSignature(selftest 覆盖,跟引擎 lastfm.go 的 sign() 用同一组向量)。
     static func signParams(_ params: [String: String], secret: String) -> String {
         LastfmSignature.sign(params, secret: secret)
     }
@@ -114,7 +114,7 @@ enum LastfmAuthFlow {
 
 // 驱动"连接 Last.fm"这一步 UI 的控制器——独立于 View 持有 async Task,避免 View 结构体
 // 被 SwiftUI 重建时丢失正在进行中的请求状态。成功后直接把 session key 写进
-// ConfigStore.shared 并保存(会顺带触发 collector 重启)。
+// ConfigStore.shared 并保存(会顺带触发引擎重启)。
 //
 // 改成单例(跟 ConfigStore.shared 同款):账号连接的侧边栏行(显示"连接中/已连接/失败"
 // 状态徽标)和详情页(实际驱动授权流程的按钮)现在是两个独立的 View,却要认同一份连接
@@ -198,7 +198,7 @@ final class LastfmConnectController: ObservableObject {
                 ConfigStore.shared.lastfmScrobbleSessionKey = result.sessionKey
                 ConfigStore.shared.lastfmScrobbleUsername = result.username
                 // 换到了新 session key,上一把钥匙的"授权失效"红标(如果有)立刻作废 ——
-                // 不等 collector 下一次成功提交再删,界面反馈要即时。
+                // 不等引擎下一次成功提交再删,界面反馈要即时。
                 LastfmMirrorStatus.clear()
                 // 连的是另一个账号:上一个账号的统计/头像/榜单全部作废,让信息页按新身份重拉(否则旧账号
                 // 数据会一直挂着)。重新授权同一个账号(session 失效、重点「连接」)不清:清了要删掉热力图、

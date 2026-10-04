@@ -14,9 +14,9 @@ public enum LyricsKind: String, CaseIterable, Sendable {
     case wordByWord
     /// 有带时间戳的 LRC(但没有逐字):能跟着播放滚动。
     case lineByLine
-    /// 只有 `plain_lyrics`(collector 侧的纯文本兜底):有词可读,但没有任何时间戳。
+    /// 只有 `plain_lyrics`(引擎侧的纯文本兜底):有词可读,但没有任何时间戳。
     case plainText
-    /// collector 联网确证过"这首本来就没有词"(lrclib 的 instrumental / 网易云的 pureMusic)。
+    /// 引擎联网确证过"这首本来就没有词"(lrclib 的 instrumental / 网易云的 pureMusic)。
     ///
     /// 它排在 `.none` **前面**是有意的:确证过的纯音乐跟"没搜到"是两回事,混为一谈正是
     /// 在歌词管理列表里修过的那个错(一整批 LoL 原声带被显示成刺眼的红色

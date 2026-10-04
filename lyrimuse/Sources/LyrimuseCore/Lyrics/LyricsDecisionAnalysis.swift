@@ -5,7 +5,7 @@ import Foundation
 //
 // 起因(同一天第三次改这个面板):前两次是把「这一轮实际问过」的查询词
 // 从逐条平铺压成分组摘要(见 LyricQueryDigest),这一次是候选表本身。对全库 5200 条
-// 缓存做的只读统计说明问题出在**界面镜像了数据结构**——collector 存的是「候选数组,
+// 缓存做的只读统计说明问题出在**界面镜像了数据结构**——引擎存的是「候选数组,
 // 每条带一个打分项数组」,界面就画成「候选块,每块一串打分项」:
 //
 //   · 摊开后的打分明细 **中位 27 行**、最长 49 行,其中 **32%** 的行在每条候选上一模一样;
@@ -24,7 +24,7 @@ import Foundation
 /// 一个打分项的「kind + 分值」。绝对分解里 points 是原始分值,差值分解里是**差值**。
 public struct LyricsScoreTermValue: Sendable, Equatable, Identifiable {
     public var id: String { kind }
-    /// 跟 collector match.go 的 scoreTerm kind 一一对应;中文译名在 App 侧
+    /// 跟引擎 match.go 的 scoreTerm kind 一一对应;中文译名在 App 侧
     /// `LyricsSearchService.ScoreTerm.label`(Core 不做本地化)。
     public let kind: String
     public let points: Int
@@ -56,7 +56,7 @@ public struct LyricsScoredCandidate: Sendable, Equatable {
         self.consensusPeers = consensusPeers
     }
 
-    /// collector 塞的「这首本来就没有词」信号 —— 不是候选,见 `LyricsDecisionRow` 头注。
+    /// 引擎塞的「这首本来就没有词」信号 —— 不是候选,见 `LyricsDecisionRow` 头注。
     public var isInstrumentalMarker: Bool {
         LyricsDecisionRow.isInstrumentalMarker(instrumental: instrumental, score: score)
     }
@@ -73,7 +73,7 @@ public struct LyricsScoredCandidate: Sendable, Equatable {
 
     /// 分项之和跟总分对不上时给出那个和,对得上是 nil。
     ///
-    /// collector 在 `match.go` 里把负分**统一夹到 1**(注释原话:重扣表达「差」不是「不能用」)。
+    /// 引擎在 `match.go` 里把负分**统一夹到 1**(注释原话:重扣表达「差」不是「不能用」)。
     /// 于是全库 **644 行(3.74%)、443 份存档(10%)** 的分项之和 ≠ 总分 —— 面板会印出
     /// 「总分 1」后面跟一串加起来是 −353 的项,谁真去加一遍都会以为界面算错了。
     /// 差值分解必须显式交代这一条,否则逐项差值加起来对不上总分差。
@@ -84,7 +84,7 @@ public struct LyricsScoredCandidate: Sendable, Equatable {
 
 /// 冠亚之间「差在哪」的形状。只在**能一句话说清**时才细分,说不清就是 `.multiple`。
 public enum LyricsVerdictSeparator: Sendable, Equatable {
-    /// 冠亚的打分项**完全相同**(kind 与分值都一样)—— 真平局,先后由 collector 的
+    /// 冠亚的打分项**完全相同**(kind 与分值都一样)—— 真平局,先后由引擎的
     /// 稳定排序按构造顺序决定。全库 134 场。
     case identical
     /// 只差在这一项上。`points` = 冠军 − 亚军(正数 = 冠军在这一项上多拿)。
@@ -122,7 +122,7 @@ public enum LyricsVerdict: Sendable, Equatable {
 public enum LyricsVerdictBuilder {
     /// 「否决性负分」认哪几个 kind —— 它们表达的是「这个候选**配错了**」(版本不符、
     /// 时长对不上、挂在另一场演出上),不是「它稍微差一点」。`reject*` 不在此列:
-    /// 那些候选压根不参赛(isContender == false)。跟 collector match.go 的负分项对齐,
+    /// 那些候选压根不参赛(isContender == false)。跟引擎 match.go 的负分项对齐,
     /// 那边新增负分项时这里要跟着补 —— 漏补只是少一类判词,不会出错。
     public static let vetoKinds: Set<String> = [
         "versionTags", "durationOff", "durationOvershoot",
@@ -146,7 +146,7 @@ public enum LyricsVerdictBuilder {
     /// 酷狗在前)——列表第一行不是胜者,读起来像出了错。
     public static func ranked(_ candidates: [LyricsScoredCandidate],
                               winner: String? = nil) -> [LyricsScoredCandidate] {
-        // 同分时按 source 定序 —— 存档里的数组顺序是 collector 的构造顺序,稳定,
+        // 同分时按 source 定序 —— 存档里的数组顺序是引擎的构造顺序,稳定,
         // 但这里再排一次必须自己保证稳定,否则同分的两条在界面上的先后会飘。
         let order = candidates.filter(\.isContender)
             .sorted { $0.score != $1.score ? $0.score > $1.score : $0.source < $1.source }
@@ -160,7 +160,7 @@ public enum LyricsVerdictBuilder {
     }
 
     /// 谁是冠军。存档里的 `winner` **是**当时真正被采用的那一条,所以优先认它 ——
-    /// 但只在它确实是并列最高分时(真平局那 134 场里 collector 挑的就是其中之一),
+    /// 但只在它确实是并列最高分时(真平局那 134 场里引擎挑的就是其中之一),
     /// 否则退回分数最高的那条,保证分差不会是负数。
     ///
     /// 判词和候选表**必须**用同一个判据,所以抽成公共函数:两处各写一份迟早漂开,
@@ -292,7 +292,7 @@ extension LyricsVerdictBuilder {
     /// 每条参赛候选上 **kind 与分值都相同** 的项 —— 它们在差值分解里全是 0,
     /// 折成一行说一次就够(实测:打分项种类的共有率中位 71%,完全相同的行占 32%)。
     ///
-    /// 顺序沿用**第一条**候选里的出现顺序:那是 collector 的打分顺序,本身有含义
+    /// 顺序沿用**第一条**候选里的出现顺序:那是引擎的打分顺序,本身有含义
     /// (先算时长、再算逐字、最后算增值内容),按分值重排反而读着乱。
     public static func sharedTerms(among candidates: [LyricsScoredCandidate]) -> [LyricsScoreTermValue] {
         let contenders = candidates.filter(\.isContender)

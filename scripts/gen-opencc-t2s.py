@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""把 collector 内嵌的 OpenCC 繁转简词典生成成 App 侧的 Swift 表。
+"""把引擎内嵌的 OpenCC 繁转简词典生成成 App 侧的 Swift 表。
 
 用法:
     python3 scripts/gen-opencc-t2s.py            # 重新生成产物
     python3 scripts/gen-opencc-t2s.py --check    # 只校验产物是不是最新
 
-输入(collector 用 //go:embed 读的同一份,见 lyrimuse-collector/t2s.go):
-    lyrimuse-collector/dictionary/TSCharacters.txt
-    lyrimuse-collector/dictionary/TSPhrases.txt
+输入(引擎用 //go:embed 读的同一份,见 lyrimuse-engine/t2s.go):
+    lyrimuse-engine/dictionary/TSCharacters.txt
+    lyrimuse-engine/dictionary/TSPhrases.txt
 产物(连同本脚本一起提交):
     lyrimuse/Sources/LyrimuseCore/Lyrics/OpenCCT2STable.swift
 
@@ -22,7 +22,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DICT_DIR = os.path.join(ROOT, "lyrimuse-collector", "dictionary")
+DICT_DIR = os.path.join(ROOT, "lyrimuse-engine", "dictionary")
 OUT = os.path.join(ROOT, "lyrimuse", "Sources", "LyrimuseCore", "Lyrics", "OpenCCT2STable.swift")
 
 
@@ -57,8 +57,8 @@ def render():
     return (
         "// 由 scripts/gen-opencc-t2s.py 生成 —— **不要手改这个文件**。\n"
         "//\n"
-        "// 数据是 lyrimuse-collector/dictionary 下的 OpenCC TSCharacters / TSPhrases(Apache-2.0),\n"
-        "// 每个 key 只留第一个候选,规则同 collector t2s.go 的 loadT2SDict。selftest 有一条断言按那两份\n"
+        "// 数据是 lyrimuse-engine/dictionary 下的 OpenCC TSCharacters / TSPhrases(Apache-2.0),\n"
+        "// 每个 key 只留第一个候选,规则同引擎 t2s.go 的 loadT2SDict。selftest 有一条断言按那两份\n"
         "// .txt 逐条核对这里的表(漏跑生成器会当场红)。\n"
         "//\n"
         "// 表用两条「key<TAB>value」逐行拼接的字符串存、首次使用时解析:几千条的字典字面量会让\n"

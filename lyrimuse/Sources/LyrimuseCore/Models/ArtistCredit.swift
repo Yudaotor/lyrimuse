@@ -15,7 +15,7 @@ import Foundation
 /// 这里的"取第一位"**只用于列表口径的归并**,绝不能回写展示名/canonical_artist ——
 /// 把 "A & B" 缩窄成 "A" 正是那次回归的形态。
 public enum ArtistCredit {
-    /// 合 credit 的分隔符。跟 collector 侧 `isArtistCreditSep`(match.go)同一份,
+    /// 合 credit 的分隔符。跟引擎侧 `isArtistCreditSep`(match.go)同一份,
     /// **但 `/` 单独处理**(见 slashHeadIsPlausible)。
     private static let separators: Set<Character> = ["、", "&", ",", "，"]
 
@@ -68,7 +68,7 @@ public enum ArtistCredit {
         return head
     }
 
-    /// 当分隔符用的中文「和」换成 `&`,跟 collector `normalizeArtistCreditHanAnd`(match.go)同一条判据:
+    /// 当分隔符用的中文「和」换成 `&`,跟引擎 `normalizeArtistCreditHanAnd`(match.go)同一条判据:
     /// 两侧都是 ASCII 字母(`Tom和Jerry`),或者两侧紧邻的连续汉字段都至少两个字(`陶喆和盧廣仲`);
     /// `李和平` 两侧各一个字,是人名,不动。逐字判断,不用正则整串替换:连续几个「和」时正则会漏掉一半。
     static func normalizedHanAnd(_ s: String) -> String {

@@ -27,7 +27,7 @@ struct PlayerChoiceCard: View {
     let player: PlaybackPlayer
     let isSelected: Bool
     /// 没勾这一颗,但**勾着「自动识别」**,所以它照样会被识别。`MediaControlClient.fetchSnapshot`
-    /// / collector `getState` 第一行都是「集合里含 auto 就走自动识别那条路」,auto 按超集处理,
+    /// / 引擎 `getState` 第一行都是「集合里含 auto 就走自动识别那条路」,auto 按超集处理,
     /// 具体勾选此时不参与"认哪几个"(见 docs 02)。这里只负责让界面把这件事说出来;卡片照样能勾。
     var isCoveredByAuto: Bool = false
     /// 这台 Mac 上没装这个 App:图标压暗,提示里说出来。只有勾着但没装的、以及「更多播放器」
@@ -244,7 +244,7 @@ extension View {
 /// case,它是浏览器里的网页播放器(`BrowserPositionProbe.supportedPlatforms`),对应的不是
 /// 一个本地 App、也不写进 `features.players`,而是"配对哪个浏览器"这套完全不同的状态
 /// (见 `BrowserPairing`)。硬塞成一个 `PlaybackPlayer` case 会让 bundleIdentifier /
-/// collector 侧的 playerXxx 常量 / `soleExplicitPlayer` 那一串全都要为它开特例。
+/// 引擎侧的 playerXxx 常量 / `soleExplicitPlayer` 那一串全都要为它开特例。
 ///
 /// 卡片外壳走 `choiceCardChrome`,跟播放器卡同一份 —— 它们在同一个网格里并排,长得
 /// 不一样就会被当成两种不同的控件。

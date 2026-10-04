@@ -13,7 +13,7 @@ set -u
 SCRIPT_DIR="${0:A:h}"
 UNINSTALL="$SCRIPT_DIR/uninstall.sh"
 UID_="$(id -u)"
-PROBE_A="me.yudaotor.lyrimuse.probe-uninstall-collector"
+PROBE_A="me.yudaotor.lyrimuse.probe-uninstall-engine"
 PROBE_B="me.yudaotor.lyrimuse.probe-uninstall-app"
 FAKE_HOME="$(/usr/bin/mktemp -d /tmp/lyrimuse-uninstall-test.XXXXXX)"
 FAILURES=0
@@ -33,7 +33,7 @@ fail() { echo "  FAIL - $1"; FAILURES=$((FAILURES + 1)) }
 
 # 真实的东西在测试前后都必须原样不动。
 REAL_CONFIG_BEFORE=$(/usr/bin/find "$HOME/.config/lyrimuse" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')
-REAL_COLLECTOR_BEFORE=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
+REAL_ENGINE_BEFORE=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
 # 加：--purge 开始真的 `defaults delete` 之后，这条对账就不再是形式主义 ——
 # 脚本删的 domain 取自 $APP_LABEL，测试把它覆盖成一次性 probe label；万一哪天有人把
 # domain 写死成真实 bundle id，这一行会当场把"测试把我自己的全部设置删了"抓出来。
@@ -77,7 +77,7 @@ setup_fake_home() {
 
 run_uninstall() {
   LYRIMUSE_UNINSTALL_PREFIX="$FAKE_HOME" \
-  LYRIMUSE_UNINSTALL_COLLECTOR_LABEL="$PROBE_A" \
+  LYRIMUSE_UNINSTALL_ENGINE_LABEL="$PROBE_A" \
   LYRIMUSE_UNINSTALL_APP_LABEL="$PROBE_B" \
     "$UNINSTALL" "$@"
 }
@@ -129,13 +129,13 @@ probe_defaults_left=$(/usr/bin/defaults read "$PROBE_B" 2>/dev/null | /usr/bin/t
 echo
 echo "=== 6. 全程没碰真实环境 ==="
 REAL_CONFIG_AFTER=$(/usr/bin/find "$HOME/.config/lyrimuse" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')
-REAL_COLLECTOR_AFTER=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
+REAL_ENGINE_AFTER=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
 [[ "$REAL_CONFIG_BEFORE" == "$REAL_CONFIG_AFTER" ]] \
   && ok "真实配置文件数不变（$REAL_CONFIG_BEFORE）" \
   || fail "真实配置被动了：$REAL_CONFIG_BEFORE -> $REAL_CONFIG_AFTER"
-[[ "$REAL_COLLECTOR_BEFORE" == "$REAL_COLLECTOR_AFTER" ]] \
-  && ok "真实 collector 服务状态不变（$REAL_COLLECTOR_BEFORE）" \
-  || fail "真实 collector 被动了：$REAL_COLLECTOR_BEFORE -> $REAL_COLLECTOR_AFTER"
+[[ "$REAL_ENGINE_BEFORE" == "$REAL_ENGINE_AFTER" ]] \
+  && ok "真实引擎服务状态不变（$REAL_ENGINE_BEFORE）" \
+  || fail "真实引擎被动了：$REAL_ENGINE_BEFORE -> $REAL_ENGINE_AFTER"
 REAL_DEFAULTS_AFTER=$(real_defaults_count)
 [[ "$REAL_DEFAULTS_BEFORE" == "$REAL_DEFAULTS_AFTER" ]] \
   && ok "真实偏好设置项不变（$REAL_DEFAULTS_BEFORE 行）" \

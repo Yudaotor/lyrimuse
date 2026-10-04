@@ -482,7 +482,7 @@ func runSourceContractTests() {
     // ---- Spotify 走 AppleScript 整份顶替:接线 + 毫秒换算 ----
     //
     // 接线漏了不编译失败:悬浮歌词还在走 media-control;毫秒换算漏了 → duration 大 1000 倍,
-    // 进度条分母、口白判据、歌词时长匹配全废。collector 的位置取自 App 的播放状态,没有自己的一份。
+    // 进度条分母、口白判据、歌词时长匹配全废。引擎的位置取自 App 的播放状态,没有自己的一份。
     do {
         let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         func code(_ url: URL) -> String? {
@@ -505,8 +505,8 @@ func runSourceContractTests() {
 
     // ---- Last.fm 按播放器排除的接线(「只控制 lastfm 的上送」)----
     //
-    // 一份 features.json 键、两侧各一套读写、collector 两处 Last.fm 出口:任何一处漏接都不会编译失败 —— App 存了、
-    // collector 不读,或读了却只挡一处,表现都是"设置里关了、Last.fm 照记"。反向守卫:这项只属于 Last.fm 页,
+    // 一份 features.json 键、两侧各一套读写、引擎两处 Last.fm 出口:任何一处漏接都不会编译失败 —— App 存了、
+    // 引擎不读,或读了却只挡一处,表现都是"设置里关了、Last.fm 照记"。反向守卫:这项只属于 Last.fm 页,
     // 播放器页与 ListenBrainz 那条漏斗不该出现它(它不是全局「收听历史」)。
     do {
         let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -517,20 +517,20 @@ func runSourceContractTests() {
                 .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
         }
         func count(_ text: String, _ needle: String) -> Int { text.components(separatedBy: needle).count - 1 }
-        if let poller = code(repo.appendingPathComponent("lyrimuse-collector/poller.go")) {
+        if let poller = code(repo.appendingPathComponent("lyrimuse-engine/poller.go")) {
             expectEqual(count(poller, "= lastfmExcluded(p.cur.Bundle)"), 2, "Last.fm 播放器排除: 换曲与单曲循环重开两处开会话都要算一次标记")
             expectEqual(count(poller, "s.lastfmExcluded") >= 1, true, "Last.fm 播放器排除: recordLastfmListen 要按标记跳过镜像与本地日志")
             expectEqual(count(poller, "!lastfmSkip") >= 1, true, "Last.fm 播放器排除: announce 的 now-playing 镜像要按标记跳过")
             expectEqual(count(poller, "!p.sess.lastfmExcluded") >= 1, true, "Last.fm 播放器排除: 退出兜底那条也不挂 Last.fm 收听")
             expectEqual(count(poller, "historyExcluded"), 0, "Last.fm 播放器排除: 全局「收听历史」那版的标记不该残留(ListenBrainz 那条漏斗不受此设置影响)")
         } else {
-            expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse-collector/poller.go(路径挪了?)")
+            expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse-engine/poller.go(路径挪了?)")
         }
-        if let features = code(repo.appendingPathComponent("lyrimuse-collector/features.go")) {
+        if let features = code(repo.appendingPathComponent("lyrimuse-engine/features.go")) {
             expectEqual(features.contains("json:\"lastfm_excluded_bundles,omitempty\""), true, "Last.fm 播放器排除: features.go 的 json 键要叫 lastfm_excluded_bundles")
             expectEqual(features.contains("resolveLastfmExcludedBundles(f.LastfmExcludedBundles)"), true, "Last.fm 播放器排除: loadFeatureFlags 要把它清洗进 featureFlags")
         } else {
-            expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse-collector/features.go(路径挪了?)")
+            expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse-engine/features.go(路径挪了?)")
         }
         if let store = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/FeatureSettingsStore.swift")) {
             expectEqual(store.contains("case lastfmExcludedBundles = \"lastfm_excluded_bundles\""), true, "Last.fm 播放器排除: Swift 侧 CodingKey 要跟 Go 的 json 键逐字相同")
@@ -607,24 +607,24 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/MediaControlSnapshot.swift(路径挪了?)")
             }
-            // 被歌词顶掉的署名:collector 发布、App 读。两个进程靠一个**约定的文件名**
+            // 被歌词顶掉的署名:引擎发布、App 读。两个进程靠一个**约定的文件名**
             // 通信,改一边不改另一边不会编译失败,只会安静地失效 —— 而失效的后果比不修
-            // 更糟(collector 按真署名写歌词缓存,App 按脏署名查,一条都查不到)。
+            // 更糟(引擎按真署名写歌词缓存,App 按脏署名查,一条都查不到)。
             let artistFixFile = "lyrimuse-player-artist-fix.json"
             if let paf = text("lyrimuse/Sources/LyrimuseCore/Local/PlayerArtistFix.swift") {
                 expectEqual(paf.contains(artistFixFile), true,
-                            "署名纠正: App 读的文件名要跟 collector 写的那个一致")
+                            "署名纠正: App 读的文件名要跟引擎写的那个一致")
             } else {
                 expectEqual(true, false, "署名纠正: 读不到 LyrimuseCore/Local/PlayerArtistFix.swift(路径挪了?)")
             }
-            if let sweep = text("lyrimuse-collector/lyricsfillsweep.go") {
+            if let sweep = text("lyrimuse-engine/lyricsfillsweep.go") {
                 expectEqual(sweep.contains("\"-player-artist-fix.json\""), true,
-                            "署名纠正: collector 那边要把这条通道的路径注册上,否则永远不发布")
+                            "署名纠正: 引擎那边要把这条通道的路径注册上,否则永远不发布")
             } else {
-                expectEqual(true, false, "署名纠正: 读不到 lyrimuse-collector/lyricsfillsweep.go(路径挪了?)")
+                expectEqual(true, false, "署名纠正: 读不到 lyrimuse-engine/lyricsfillsweep.go(路径挪了?)")
             }
             // 共享限流窗口:同样靠约定的文件名和键通信,改一边不改另一边只会安静失效。
-            if let shared = text("lyrimuse-collector/sharedcooldown.go") {
+            if let shared = text("lyrimuse-engine/sharedcooldown.go") {
                 expectEqual(shared.contains("\"\(OutboundCooldowns.itunesSearchKey)\""), true,
                             "共享限流窗口: iTunes 搜索的键两边写法一致")
                 expectEqual(shared.contains("\"\(OutboundCooldowns.musicBrainzKey)\""), true,
@@ -634,13 +634,13 @@ func runSourceContractTests() {
                 expectEqual(shared.contains("`json:\"endpoints\"`"), true,
                             "共享限流窗口: JSON 形状两边一致")
             } else {
-                expectEqual(true, false, "共享限流窗口: 读不到 lyrimuse-collector/sharedcooldown.go(路径挪了?)")
+                expectEqual(true, false, "共享限流窗口: 读不到 lyrimuse-engine/sharedcooldown.go(路径挪了?)")
             }
-            if let sweep2 = text("lyrimuse-collector/lyricsfillsweep.go") {
+            if let sweep2 = text("lyrimuse-engine/lyricsfillsweep.go") {
                 expectEqual(OutboundCooldowns.fileName, "lyrimuse-outbound-cooldowns.json",
                             "共享限流窗口: App 读写的文件名")
                 expectEqual(sweep2.contains("\"-outbound-cooldowns.json\""), true,
-                            "共享限流窗口: collector 那边要把同名文件注册上")
+                            "共享限流窗口: 引擎那边要把同名文件注册上")
             }
             if let mcc2 = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift") {
                 expectEqual(mcc2.contains("let raw = rawSnapshot(players: players)")
@@ -675,17 +675,17 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "署名纠正: 读不到 LyrimuseCore/Local/NowPlayingClientsProbe.swift(路径挪了?)")
             }
-            if let src = text("lyrimuse-collector/appsource.go") {
+            if let src = text("lyrimuse-engine/appsource.go") {
                 expectEqual(src.contains("j.fixedTrack(rec.Player, t.Raw.Title, t.Raw.Artist"), true,
-                            "署名纠正: collector 要拿 App 状态里的原始标签判,纠正后的署名看不见署名在变")
+                            "署名纠正: 引擎要拿 App 状态里的原始标签判,纠正后的署名看不见署名在变")
             } else {
-                expectEqual(true, false, "署名纠正: 读不到 lyrimuse-collector/appsource.go(路径挪了?)")
+                expectEqual(true, false, "署名纠正: 读不到 lyrimuse-engine/appsource.go(路径挪了?)")
             }
             // ---- 播放器先推占位图、真封面晚几秒才推 ----
             //
             // 酷狗 3.3.2 换歌后头 8 秒推的是它内置的那张蓝底黑胶唱片。那是一张合法的
             // 600×600 JPEG,取图路上没有任何一道判据识破得了它 —— 只确认一次的话整首歌都挂着
-            // 它,而 collector 那边还会把它永久写成 cover_source=device(之后一律不再换源)。
+            // 它,而引擎那边还会把它永久写成 cover_source=device(之后一律不再换源)。
             if let lps3 = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
                 expectEqual(lps3.contains("artworkConfirmDelays: [TimeInterval] = ["), true,
                             "封面沉降: 二次确认要是一张间隔表,只确认一次会整首歌卡在占位图上")
@@ -735,11 +735,11 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "封面沉降: 读不到 PlaybackCoordinator.swift(路径挪了?)")
             }
-            // 交给 collector 的设备封面像不像封面只在 App 判:发布当前封面先过 artworkForCollector,collector 拿到就用。
+            // 交给引擎的设备封面像不像封面只在 App 判:发布当前封面先过 artworkForEngine,引擎拿到就用。
             if let psf = text("lyrimuse/Sources/LyrimuseCore/Local/PlaybackStateFile.swift"),
                let r = psf.range(of: "public func noteArtwork(_ data: Data?) {") {
-                expectEqual(psf[r.upperBound...].prefix(160).contains("guard let data = Self.artworkForCollector(data) else {"), true,
-                            "设备封面: 发布当前封面要先过 artworkForCollector")
+                expectEqual(psf[r.upperBound...].prefix(160).contains("guard let data = Self.artworkForEngine(data) else {"), true,
+                            "设备封面: 发布当前封面要先过 artworkForEngine")
             } else {
                 expectEqual(true, false, "设备封面: 读不到 PlaybackStatePublisher.noteArtwork(改名了?)")
             }
@@ -796,11 +796,11 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "缓存直读: 读不到 EnrichCacheReader / LocalPlaybackSource(路径挪了?)")
             }
-            if let enrich = text("lyrimuse-collector/enrich.go") {
+            if let enrich = text("lyrimuse-engine/enrich.go") {
                 expectEqual(enrich.components(separatedBy: "go settleDeviceCover(").count - 1, 2,
                             "封面沉降: 首次解析和已有条目升级是两条路都要盯后面那几秒,少挂一条那条路上的占位图就永久留下")
             } else {
-                expectEqual(true, false, "封面沉降: 读不到 lyrimuse-collector/enrich.go(路径挪了?)")
+                expectEqual(true, false, "封面沉降: 读不到 lyrimuse-engine/enrich.go(路径挪了?)")
             }
             if let lps = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
                 // 主持人说话那一段收歌词。判定必须用**快照里没被夹过的**位置:
@@ -817,7 +817,7 @@ func runSourceContractTests() {
                 expectEqual(lps.contains("RadioStationCardFile.stationName("), true,
                             "电台: 开台那一刻要把台名记下来(口白期间系统什么都不给)")
                 // 台卡也算「不是歌」:不收的话开台那几十秒会走到「搜索歌词中…」再到
-                // 「暂无歌词」——现象是过一次。判据要跟 collector 那侧的 radioStationCard 同义。
+                // 「暂无歌词」——现象是过一次。判据要跟引擎那侧的 radioStationCard 同义。
                 expectEqual(lps.contains("let finished = stationCardName != nil || RadioTrackClock.passedTrackEnd("), true,
                             "电台: 台卡期间要跟口白一样收歌词,不能当成一首歌去搜")
                 expectEqual(lps.contains("noteRadioStationArtwork(data, forKey: expectedKey)"), true,
@@ -867,15 +867,15 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/MediaControlStreamWatcher.swift(路径挪了?)")
             }
-            if let enrich = text("lyrimuse-collector/enrich.go") {
-                // collector 那侧的对称守卫:台卡不能拿去搜歌词,否则每开一次台就往歌词缓存里
+            if let enrich = text("lyrimuse-engine/enrich.go") {
+                // 引擎那侧的对称守卫:台卡不能拿去搜歌词,否则每开一次台就往歌词缓存里
                 // 写一条 `|台名|` 空壳(发现时已攒了 6 条)。判据在 radiostationcard.go,Go 单测钉住。
                 expectEqual(enrich.contains("if radioStationCard(radio, artist, title) {"), true,
-                            "电台: collector 不能把台卡写进歌词缓存")
+                            "电台: 引擎不能把台卡写进歌词缓存")
             } else {
-                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/enrich.go(路径挪了?)")
+                expectEqual(true, false, "电台: 读不到 lyrimuse-engine/enrich.go(路径挪了?)")
             }
-            // 分母:位置换成单曲口径之后,时长也得换,否则显示成「2:29 / 56:30」。真曲长由 collector
+            // 分母:位置换成单曲口径之后,时长也得换,否则显示成「2:29 / 56:30」。真曲长由引擎
             // 从 Apple 目录查到写进歌词缓存,App 在 apply 里读出来替换 —— 读不到时**保留**快照那份,
             // 绝不置 0(进度锚点按 durationMs 夹位置,0 会把位置钉死在开头、整档没歌词)。
             if let lps = text("lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift") {
@@ -886,13 +886,13 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
             }
-            if let src = text("lyrimuse-collector/appsource.go") {
+            if let src = text("lyrimuse-engine/appsource.go") {
                 expectEqual(src.contains("if s.Radio || catalogDuration > 0 {"), true,
-                            "电台: collector 侧电台的曲长只认目录查到的真曲长(查不到是 0 = 未知),绝不留整档节目那个数")
+                            "电台: 引擎侧电台的曲长只认目录查到的真曲长(查不到是 0 = 未知),绝不留整档节目那个数")
             } else {
-                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/appsource.go(路径挪了?)")
+                expectEqual(true, false, "电台: 读不到 lyrimuse-engine/appsource.go(路径挪了?)")
             }
-            if let poller = text("lyrimuse-collector/poller.go") {
+            if let poller = text("lyrimuse-engine/poller.go") {
                 expectEqual(poller.contains("if p.cur.Artist == \"\" {"), true,
                             "电台台标: 没有歌手不宣布正在播放(两个平台都把 artist 当必填,发过去只会 400)")
                 expectEqual(poller.contains("if lm.ArtistName == \"\" {"), true, "电台台标: 没有歌手不提交收听")
@@ -902,12 +902,12 @@ func runSourceContractTests() {
                 expectEqual(poller.contains("needsRadioDurationBackfill("), true,
                             "电台: 真曲长晚到时要补进会话元数据,否则打卡阈值退回 240s、电台一条都记不上")
             } else {
-                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/poller.go(路径挪了?)")
+                expectEqual(true, false, "电台: 读不到 lyrimuse-engine/poller.go(路径挪了?)")
             }
-            if let st = text("lyrimuse-collector/appstate.go") {
-                expectEqual(st.contains("Radio: t.Radio != nil"), true, "电台: collector 的电台判据取 App 状态里的 track.radio")
+            if let st = text("lyrimuse-engine/appstate.go") {
+                expectEqual(st.contains("Radio: t.Radio != nil"), true, "电台: 引擎的电台判据取 App 状态里的 track.radio")
             } else {
-                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/appstate.go(路径挪了?)")
+                expectEqual(true, false, "电台: 读不到 lyrimuse-engine/appstate.go(路径挪了?)")
             }
         }
 
@@ -946,7 +946,7 @@ func runSourceContractTests() {
         // ---- Spotify 自然切歌(gapless)锚点偏置:公式与可信区间钉住 ----
         //
         // LocalPlaybackSource.naturalAdvanceCorrection 的偏置公式与可信区间上下限。位置只有 App 这一份,
-        // collector 推给网页的进度也取自 App 的播放状态。
+        // 引擎推给网页的进度也取自 App 的播放状态。
         do {
             let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
                 .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -967,9 +967,9 @@ func runSourceContractTests() {
             }
         }
 
-        // ---- 配置热重读:改设置不再需要重启 collector ----
+        // ---- 配置热重读:改设置不再需要重启引擎 ----
         //
-        // collector 侧 features.json(featuresreload.go)与 config.json(configreload.go)都按 mtime 热重读,
+        // 引擎侧 features.json(featuresreload.go)与 config.json(configreload.go)都按 mtime 热重读,
         // lyrics_dir 也在运行中切换(lyricsdirswitch.go),所以 App 侧保存路径一律不重启。
         // 这套契约横跨 App / Go 两处,任何一处脱节的表现都是"改了没反应、重启才生效"
         // 或者反过来"白白停摆 40 秒",两种都不报错,只能靠源码扫描钉。
@@ -977,7 +977,7 @@ func runSourceContractTests() {
             let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
                 .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             func goFile(_ name: String) -> String? {
-                try? String(contentsOfFile: repoRoot.appendingPathComponent("lyrimuse-collector/\(name)").path, encoding: .utf8)
+                try? String(contentsOfFile: repoRoot.appendingPathComponent("lyrimuse-engine/\(name)").path, encoding: .utf8)
             }
             func appFile(_ rel: String) -> String? {
                 try? String(contentsOfFile: repoRoot.appendingPathComponent("lyrimuse/Sources/lyrimuse/\(rel)").path, encoding: .utf8)
@@ -988,12 +988,12 @@ func runSourceContractTests() {
             let excludeGo = goFile("lastfmexclude.go")
             let sourcesGo = goFile("lyricsourcesreload.go")
 
-            // ① 两个设置 store 保存时都不重启 collector。
+            // ① 两个设置 store 保存时都不重启引擎。
             for rel in ["Settings/FeatureSettingsStore.swift", "Settings/ConfigStore.swift"] {
                 let src = appFile(rel)
                 expectEqual(src == nil, false, "配置热重读: 读得到 \(rel)")
-                expectEqual(src?.contains("CollectorRestartCoordinator.shared.requestRestart()") ?? true, false,
-                            "配置热重读: \(rel) 保存时不该再重启 collector(两份配置文件都已热重读)")
+                expectEqual(src?.contains("EngineRestartCoordinator.shared.requestRestart()") ?? true, false,
+                            "配置热重读: \(rel) 保存时不该再重启引擎(两份配置文件都已热重读)")
             }
 
             // ② Go 侧热重读不许在快照里保留任何字段的旧值(那样改它永远不生效);lyrics_dir 改由换快照后
@@ -1648,7 +1648,7 @@ func runSourceContractTests() {
             expectEqual(lwv.contains(".buttonStyle(WindowActionButtonStyle(onArtwork: onArtwork, inset: 4))"), true,
                         "音量胶囊: 喇叭键有悬停 / 按下态")
             if let love = read("Settings/LastfmLoveModel.swift") {
-                // 喜欢必须打在 collector 上送的写法上:Last.fm 回报的 nowplaying 对得上本机这首时用它。
+                // 喜欢必须打在引擎上送的写法上:Last.fm 回报的 nowplaying 对得上本机这首时用它。
                 expectEqual(love.contains("stats.apiNowPlayingIsFresh"), true,
                             "Last.fm 喜欢: 优先用 Last.fm 回报的 nowplaying 写法")
                 expectEqual(love.contains("\"track.love\" : \"track.unlove\""), true,
@@ -1931,7 +1931,7 @@ func runSourceContractTests() {
     //
     // 这一轮做了三件事:引导页播放器从单选改多选、加一格 YouTube Music、后面新增「配对浏览器」
     // 一步。三件事都天然诱使人在引导页**照抄**一份设置页已有的逻辑,而那三份逻辑里都带着
-    // 实测结论:①"选中集合不能清空"(清空会让 collector 读到非法状态);②`trustAndPair` 的
+    // 实测结论:①"选中集合不能清空"(清空会让引擎读到非法状态);②`trustAndPair` 的
     // 四步顺序(配对先写、信任后跑、引擎族先落盘、气泡让出一拍);③"信任是候选的来源不是前提"。
     // 抄一份就等于给这些约束开了第二个漂移点。
     //
@@ -2232,12 +2232,12 @@ func runSourceContractTests() {
                         "引导页不硬锁权限: automation 不该回到 nextIsLocked 里(没有它歌词照样显示,病根在 doneStep 撒谎、不在按钮不够严)")
 
             // ⑩ **后台服务没起来就不算走完引导**。`hasCompletedOnboarding` 一置真这扇窗口
-            //    再也不会自动出现,而它是把 collector 装起来的主要入口(15 章记的那条不可
+            //    再也不会自动出现,而它是把引擎装起来的主要入口(15 章记的那条不可
             //    自愈死路)。判据本身的行为断言在 onboarding 组(`OnboardingFlow.marksCompleted`),
             //    这里钉住 finish() 走的是它。
             let onboardingCode = onboarding.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
                 .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            let completionGuard = onboardingCode.firstIndex { $0.contains("OnboardingFlow.marksCompleted(collectorRunning:") }
+            let completionGuard = onboardingCode.firstIndex { $0.contains("OnboardingFlow.marksCompleted(engineRunning:") }
             let setsCompleted = onboardingCode.firstIndex { $0.contains("settings.hasCompletedOnboarding = true") }
             expectEqual(completionGuard != nil && setsCompleted != nil && completionGuard! + 1 == setsCompleted!, true,
                         "引导页不留死路: finish() 里 hasCompletedOnboarding 必须紧跟在 OnboardingFlow.marksCompleted 的判断里(服务没装+引导标记完成=桌面永久停在「搜索歌词中…」)")
@@ -2282,19 +2282,19 @@ func runSourceContractTests() {
             expectEqual(true, false, "菜单栏位置提示不抢引导: 读不到 MenuBarStatusItem.swift(路径挪了?)")
         }
 
-        // ⑭ **`lyrics_tr_source` 的哨兵字符串必须跟 collector 逐字节一致**。
+        // ⑭ **`lyrics_tr_source` 的哨兵字符串必须跟引擎逐字节一致**。
         //
         // Swift 侧 `LyricsTranslationSource.machineSentinel` 和 Go 侧 translate.go 的
         // `lyricsTrSourceMachine` 之间**没有任何编译期耦合**。哪天 Go 那边把它改成
         // "auto"/"mt"/别的,Swift 这边不会报错,只会**静默**把所有机翻译文重新算成社区译文:
         // 设置页统计面板的两个数字对调、歌词管理里那枚紫色徽章集体变绿,没有任何东西会红。
-        // 这条闸直接去扫 Go 源码对账 —— 跟「缓存 key 与 collector 逐字节一致」那组同源。
+        // 这条闸直接去扫 Go 源码对账 —— 跟「缓存 key 与引擎逐字节一致」那组同源。
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Sources/lyrimuse-selftest
             .deletingLastPathComponent()   // Sources
             .deletingLastPathComponent()   // lyrimuse
             .deletingLastPathComponent()   // 仓库根
-        let translateGoPath = repoRoot.appendingPathComponent("lyrimuse-collector/translate.go").path
+        let translateGoPath = repoRoot.appendingPathComponent("lyrimuse-engine/translate.go").path
         if let goSource = try? String(contentsOfFile: translateGoPath, encoding: .utf8) {
             // 形如:  const lyricsTrSourceMachine = "machine"
             let goSentinel = goSource
@@ -2307,14 +2307,14 @@ func runSourceContractTests() {
                     return String(line[line.index(after: open)..<close])
                 }
             expectEqual(goSentinel, LyricsTranslationSource.machineSentinel,
-                        "译文来源哨兵: collector translate.go 的 lyricsTrSourceMachine 必须逐字节等于 Swift 的 LyricsTranslationSource.machineSentinel(改一边不改另一边会静默把机翻全算成社区译文)")
+                        "译文来源哨兵: 引擎 translate.go 的 lyricsTrSourceMachine 必须逐字节等于 Swift 的 LyricsTranslationSource.machineSentinel(改一边不改另一边会静默把机翻全算成社区译文)")
         } else {
-            expectEqual(true, false, "译文来源哨兵: 读不到 lyrimuse-collector/translate.go(路径挪了?)")
+            expectEqual(true, false, "译文来源哨兵: 读不到 lyrimuse-engine/translate.go(路径挪了?)")
         }
 
         // ⑮ **整行罗马音的判定阶梯只允许有一份**。
         //
-        // 播放引擎的客户端兜底和 collector 的 `lyrics-romanize` 预生成都要决定"这一行走
+        // 播放引擎的客户端兜底和引擎的 `lyrics-romanize` 预生成都要决定"这一行走
         // 日语形态分析还是 ICU 音译",两边必须**同一个函数**(`Romanizer.lineReading`)。
         // 各写一份的话,同一首歌"装了缓存"和"现算"读音可能不一样 —— 而这种不一致**不报错**,
         // 只表现成用户偶尔觉得"某句罗马音怎么变了"。
@@ -2517,7 +2517,7 @@ func runSourceContractTests() {
     // 真机 `sample` 抓栈坐实的卡顿(现象是「设置页切分页有延迟、不跟手」):「播放器」页的
     // body 里直接调了 `MusicAutomationPermission.check`(底下是 AEDeterminePermissionToAutomateTarget
     // → semaphore_wait_trap,跨进程问 tccd,独立脚本实测单次 3–48ms)、`BrowserAutomationPermission
-    // .status`(读 Chromium Preferences 文件)、`CollectorServiceManager.state`(起 launchctl 子进程
+    // .status`(读 Chromium Preferences 文件)、`EngineServiceManager.state`(起 launchctl 子进程
     // 并 waitUntilExit)。4 个浏览器 × 每次 body 重算 → 主线程一次阻塞 20–380ms;60 秒切分页采样
     // 主线程 70% 在忙、其中 `browserAvatarButton` 一条路径 524 个采样。PlayerHealthMonitor 同款。
     //
@@ -2531,9 +2531,9 @@ func runSourceContractTests() {
             .deletingLastPathComponent()   // Sources/lyrimuse-selftest
             .deletingLastPathComponent()   // Sources
         let ipcCalls = ["MusicAutomationPermission.check(", "BrowserAutomationPermission.status(",
-                        "CollectorServiceManager.state", "CollectorServiceManager.isRunning"]
+                        "EngineServiceManager.state", "EngineServiceManager.isRunning"]
         let allow: [(file: String, funcs: Set<String>)] = [
-            ("lyrimuse/SettingsView.swift", ["refreshBrowserLiveStatus", "refreshAutomationStatus", "refreshCollectorState"]),
+            ("lyrimuse/SettingsView.swift", ["refreshBrowserLiveStatus", "refreshAutomationStatus", "refreshEngineState"]),
             ("lyrimuse/Settings/PlayerHealthMonitor.swift", ["refresh"]),
         ]
         for entry in allow {
@@ -2876,7 +2876,7 @@ func runSourceContractTests() {
     // ---- 退出原因日志(AGENTS.md「容易踩的具体坑 → 退出路径」)----
     //
     // 两侧的退出路径都要打 `exiting reason=<code>`:App 侧所有主动 terminate 只准经 AppExit.request
-    // (applicationShouldTerminate 兜底、SIGTERM 由 AppExit 接住),collector 常驻路径(main.go)不准再出现裸
+    // (applicationShouldTerminate 兜底、SIGTERM 由 AppExit 接住),引擎常驻路径(main.go)不准再出现裸
     // os.Exit / log.Fatalf,一律走 exitreason.go 的 logExit / fatalExit。纯文本扫描:它拦的是"新加一条退出
     // 路径忘了打日志"这种最常见的漏法。
     do {
@@ -2909,7 +2909,7 @@ func runSourceContractTests() {
         expectEqual(scanned > 50, true, "退出原因: 扫到了 App target 的源文件(守卫自身没跑空)")
         expectEqual(offenders.sorted(), [], "退出原因: App 里主动 terminate 只准经 AppExit.request,别处直接 terminate 不会留下 exiting reason= 日志")
         if let appExit = try? String(contentsOf: appSources.appendingPathComponent("AppExit.swift"), encoding: .utf8) {
-            expectEqual(appExit.contains("exiting reason="), true, "退出原因: AppExit 打的是 `exiting reason=` 前缀(collector 同款,grep 契约)")
+            expectEqual(appExit.contains("exiting reason="), true, "退出原因: AppExit 打的是 `exiting reason=` 前缀(引擎同款,grep 契约)")
             expectEqual(appExit.contains("category: \"lifecycle\""), true, "退出原因: 走 lifecycle 分类的 Logger,不走 NSLog")
         } else {
             expectEqual(true, false, "退出原因: 读不到 AppExit.swift(路径挪了?)")
@@ -2922,35 +2922,35 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "退出原因: 读不到 AppDelegate.swift(路径挪了?)")
         }
-        // ② collector:main.go 的常驻路径不准裸 os.Exit / log.Fatalf。
-        if let mainGo = try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-collector/main.go"), encoding: .utf8) {
+        // ② 引擎:main.go 的常驻路径不准裸 os.Exit / log.Fatalf。
+        if let mainGo = try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-engine/main.go"), encoding: .utf8) {
             let bare = codeLines(mainGo).filter { $0.1.contains("log.Fatal") }.map { "main.go:\($0.0)" }
-            expectEqual(bare, [], "退出原因: collector main.go 不准再用 log.Fatal*,走 exitreason.go 的 fatalExit(reason:)")
+            expectEqual(bare, [], "退出原因: 引擎 main.go 不准再用 log.Fatal*,走 exitreason.go 的 fatalExit(reason:)")
             let exits = codeLines(mainGo).filter { $0.1.contains("os.Exit(") }
             expectEqual(exits.count, 1, "退出原因: main.go 里唯一一处 os.Exit 是拿不到单实例锁那条(前面一行 logExit(already_running))")
         } else {
-            expectEqual(true, false, "退出原因: 读不到 lyrimuse-collector/main.go(路径挪了?)")
+            expectEqual(true, false, "退出原因: 读不到 lyrimuse-engine/main.go(路径挪了?)")
         }
-        if let exitReason = try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-collector/exitreason.go"), encoding: .utf8) {
-            expectEqual(exitReason.contains("\"exiting reason=%s\""), true, "退出原因: collector 前缀与 App 一致")
+        if let exitReason = try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-engine/exitreason.go"), encoding: .utf8) {
+            expectEqual(exitReason.contains("\"exiting reason=%s\""), true, "退出原因: 引擎前缀与 App 一致")
         } else {
-            expectEqual(true, false, "退出原因: 读不到 lyrimuse-collector/exitreason.go(路径挪了?)")
+            expectEqual(true, false, "退出原因: 读不到 lyrimuse-engine/exitreason.go(路径挪了?)")
         }
     }
 
     // ---- features.json 键两侧镜像----
     //
-    // Swift `FeatureFlagsFile.CodingKeys` 里 App 写给 collector 的每个键,collector features.go 都得有同名 json tag ——
-    // App 写了、collector 不认的键会**静默无效**(「跟随播放器启动」改逐播放器那次加的 launch_lyrimuse_on_players 就是
-    // 这种键,漏了 Go 侧就是"设置里勾了、collector 照旧盯全部")。只 App 读的键反过来不许出现在 Go 侧:四个遗留键
-    // (加载时迁成新写法后删掉)和 xxx_lyrics 迁移标记,迁移只在 App 做,collector 只认文件(14 章决策 47)。
-    // collector 自己的诊断键(lyrics_decision_trace)App 不管,靠 unknownFileKeys 原样保留。
+    // Swift `FeatureFlagsFile.CodingKeys` 里 App 写给引擎的每个键,引擎 features.go 都得有同名 json tag ——
+    // App 写了、引擎不认的键会**静默无效**(「跟随播放器启动」改逐播放器那次加的 launch_lyrimuse_on_players 就是
+    // 这种键,漏了 Go 侧就是"设置里勾了、引擎照旧盯全部")。只 App 读的键反过来不许出现在 Go 侧:四个遗留键
+    // (加载时迁成新写法后删掉)和 xxx_lyrics 迁移标记,迁移只在 App 做,引擎只认文件(14 章决策 47)。
+    // 引擎自己的诊断键(lyrics_decision_trace)App 不管,靠 unknownFileKeys 原样保留。
     do {
         let packageDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let repoRoot = packageDir.deletingLastPathComponent()
         let swiftPath = packageDir.appendingPathComponent("Sources/lyrimuse/Settings/FeatureSettingsStore.swift").path
-        let goPath = repoRoot.appendingPathComponent("lyrimuse-collector/features.go").path
+        let goPath = repoRoot.appendingPathComponent("lyrimuse-engine/features.go").path
         if let swift = try? String(contentsOfFile: swiftPath, encoding: .utf8),
            let go = try? String(contentsOfFile: goPath, encoding: .utf8) {
             var keys: [String] = []
@@ -2975,8 +2975,8 @@ func runSourceContractTests() {
             let appOnly = keys.filter { appOnlyLegacy.contains($0) || $0.hasSuffix("_lyrics") }
             let tagged = { (key: String) in go.contains("json:\"\(key),omitempty\"") || go.contains("json:\"\(key)\"") }
             let missing = keys.filter { !appOnly.contains($0) && !tagged($0) }
-            expectEqual(missing, [], "features 键镜像: collector features.go 缺这些键的 json tag,App 写了 collector 不认")
-            expectEqual(appOnly.filter(tagged), [], "features 键镜像: 只 App 读的键(遗留键 / 迁移标记)collector 不该再认")
+            expectEqual(missing, [], "features 键镜像: 引擎 features.go 缺这些键的 json tag,App 写了引擎不认")
+            expectEqual(appOnly.filter(tagged), [], "features 键镜像: 只 App 读的键(遗留键 / 迁移标记)引擎不该再认")
         } else {
             expectEqual(true, false, "features 键镜像: 读不到 FeatureSettingsStore.swift 或 features.go(路径挪了?)")
         }
@@ -2989,7 +2989,7 @@ func runSourceContractTests() {
     // 照常拿到了 —— 于是条目照常落盘带上 ts,而 App 侧判"搜完了没有"的唯一依据就是 ts,
     // 一次网络事故就这样被读成了这首歌的属性。
     //
-    // 修法是两侧各多认一位:collector 的 needsLyricsFirstFill 欠这类条目一次快速补搜,
+    // 修法是两侧各多认一位:引擎的 needsLyricsFirstFill 欠这类条目一次快速补搜,
     // App 的 EnrichCacheLyrics.searchIncomplete 在那次补搜跑完之前不下"暂无歌词"的结论。
     // 两边闸口必须**同一套**:App 严了就提前认输(回到这个 bug),松了就在补搜跑完之后继续
     // 转圈(那是同一天早些时候《1999 (Edit)》那个"没有时间上限"的老问题)。字段名同样是
@@ -3000,27 +3000,27 @@ func runSourceContractTests() {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let repoRoot = packageDir.deletingLastPathComponent()
         func read(_ url: URL) -> String? { try? String(contentsOfFile: url.path, encoding: .utf8) }
-        let enrichGo = read(repoRoot.appendingPathComponent("lyrimuse-collector/enrich.go"))
-        let breakerGo = read(repoRoot.appendingPathComponent("lyrimuse-collector/sourcebreaker.go"))
+        let enrichGo = read(repoRoot.appendingPathComponent("lyrimuse-engine/enrich.go"))
+        let breakerGo = read(repoRoot.appendingPathComponent("lyrimuse-engine/sourcebreaker.go"))
         let reader = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/EnrichCacheReader.swift"))
         let source = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/LocalPlaybackSource.swift"))
         if let enrichGo, let breakerGo, let reader, let source {
-            // ① collector 侧闸口:三个条件 + 冷却与否分两档。
+            // ① 引擎侧闸口:三个条件 + 冷却与否分两档。
             expectEqual(enrichGo.contains("if len(e.LyricsSourcesSkipped) > 0 && e.LyricsFillCount == 0 {"), true,
-                        "没跑完整: collector 快速补搜的闸口仍是「有源被跳过 + 还没补过」")
+                        "没跑完整: 引擎快速补搜的闸口仍是「有源被跳过 + 还没补过」")
             expectEqual(enrichGo.contains("if !anyLyricSourceCooling(e.LyricsSourcesSkipped) {"), true,
                         "没跑完整: 快速补搜要先问熔断器那些源还冷不冷却")
             // ② 两个 JSON 键:Go 的 struct tag 与 Swift 的 CodingKeys 一一对上。
             for (tag, codingKey) in [("lyrics_sources_skipped", "case lyricsSourcesSkipped = \"lyrics_sources_skipped\""),
                                      ("lyrics_fill_count", "case lyricsFillCount = \"lyrics_fill_count\"")] {
                 expectEqual(enrichGo.contains("json:\"\(tag),omitempty\""), true,
-                            "没跑完整: collector 的 \(tag) struct tag")
+                            "没跑完整: 引擎的 \(tag) struct tag")
                 expectEqual(reader.contains(codingKey), true,
                             "没跑完整: Swift 侧解码 \(tag)(键没对上就恒为 nil,功能静默失效)")
             }
             // ③ App 侧判据本体,以及它真的被 currentTrackHasNoLyrics 读到。
             expectEqual(reader.contains("lyrics.isEmpty && !sourcesSkipped.isEmpty && fillCount == 0"), true,
-                        "没跑完整: App 侧判据跟 collector 闸口逐条对上")
+                        "没跑完整: App 侧判据跟引擎闸口逐条对上")
             expectEqual(source.contains("&& !(found?.searchIncomplete ?? false)"), true,
                         "没跑完整: currentTrackHasNoLyrics 要把这一位算进去")
             // ④ 熔断阶梯按「熔断了几轮」升档,不是按「失败了几个请求」——后者正是这次事故里
@@ -3047,15 +3047,15 @@ func runSourceContractTests() {
                     "没跑完整: 快速补搜跑过一次就落定,不许无限转圈")
     }
 
-    // ---- 动态封面「专辑身份核验」这一位:collector 写、App 读,两侧的接线----
+    // ---- 动态封面「专辑身份核验」这一位:引擎写、App 读,两侧的接线----
     //
-    // collector 靠专辑身份核验放行一段动画时(首帧跟封面对不上,但这条的封面就是 Apple 那张
+    // 引擎靠专辑身份核验放行一段动画时(首帧跟封面对不上,但这条的封面就是 Apple 那张
     // 专辑的官方封面),在 enrich 上记 `motion_cover_identity_verified`;App 见到它就跳过中段帧
     // 终审 —— 那道终审跟首帧比对是同一个代理判据,不跳过就会把刚确认的身份原样否掉
     // (Taylor Swift《Midnights》、XLOV《I,God》那一类)。这条链上有三处一改就会静默失效、
     // 其它守卫还全绿的地方,钉在这里:
     // ① JSON 键:Go 的 struct tag 与 Swift 的 CodingKeys 一字不差(对不上就恒为 nil);
-    // ② collector 里每一处**逐字段**拷 motion 字段的地方都带上这一位(按"拷 MotionPreviewURL 的
+    // ② 引擎里每一处**逐字段**拷 motion 字段的地方都带上这一位(按"拷 MotionPreviewURL 的
     //    行数 == 写这一位的行数"数 —— 漏一处就是地址落下了、这一位没落,App 照常终审);
     // ③ App 侧真的据它把终审的参照图置空。
     do {
@@ -3066,13 +3066,13 @@ func runSourceContractTests() {
         func code(_ text: String) -> [Substring] {
             text.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
         }
-        let enrichGo = read(repoRoot.appendingPathComponent("lyrimuse-collector/enrich.go"))
-        let recheckGo = read(repoRoot.appendingPathComponent("lyrimuse-collector/motionrecheckcli.go"))
+        let enrichGo = read(repoRoot.appendingPathComponent("lyrimuse-engine/enrich.go"))
+        let recheckGo = read(repoRoot.appendingPathComponent("lyrimuse-engine/motionrecheckcli.go"))
         let reader = read(packageDir.appendingPathComponent("Sources/LyrimuseCore/Local/EnrichCacheReader.swift"))
         let coordinator = read(packageDir.appendingPathComponent("Sources/lyrimuse/PlaybackCoordinator.swift"))
         if let enrichGo, let recheckGo, let reader, let coordinator {
             expectEqual(enrichGo.contains("json:\"motion_cover_identity_verified,omitempty\""), true,
-                        "动态封面身份核验: collector 的 struct tag")
+                        "动态封面身份核验: 引擎的 struct tag")
             expectEqual(reader.contains("case motionCoverIdentityVerified = \"motion_cover_identity_verified\""), true,
                         "动态封面身份核验: Swift 侧 CodingKeys(键没对上就恒为 nil,Midnights 那一类又会被终审否掉)")
             for (name, text) in [("enrich.go", enrichGo), ("motionrecheckcli.go", recheckGo)] {
@@ -3092,7 +3092,7 @@ func runSourceContractTests() {
 
     // ---- 歌词源名单:Go/Swift 两份逐个相等,App 侧只准有一份----
     //
-    // 名单在 collector 侧是 enrich.go 的 `lyricSourceNames`(进度分母、断路器轮次、合并序都数它),
+    // 名单在引擎侧是 enrich.go 的 `lyricSourceNames`(进度分母、断路器轮次、合并序都数它),
     // App 侧是 `LyricsSource.allCases`(FeatureSettingsStore.swift,设置页「歌词源」列表)。「搜索
     // 候选歌词」弹窗原来还手抄了第三份,给头部「x/y」徽标的分母和「歌词源可用情况」列表用,注释
     // 写着"手工保持一致"——加咪咕时前两份都改了、第三份漏了,弹窗头部「0/8」、空状态
@@ -3108,7 +3108,7 @@ func runSourceContractTests() {
         let repoRoot = packageDir.deletingLastPathComponent()
         func read(_ url: URL) -> String? { try? String(contentsOfFile: url.path, encoding: .utf8) }
         let swiftEnum = read(packageDir.appendingPathComponent("Sources/lyrimuse/Settings/FeatureSettingsStore.swift"))
-        let go = read(repoRoot.appendingPathComponent("lyrimuse-collector/enrich.go"))
+        let go = read(repoRoot.appendingPathComponent("lyrimuse-engine/enrich.go"))
         let sheet = read(packageDir.appendingPathComponent("Sources/lyrimuse/LyricsManager/LyricsSearchSheet.swift"))
         if let swiftEnum, let go, let sheet {
             // Swift:`public enum LyricsSource: String, …{` 到它的收尾 `}` 之间的 case 行(一行多个 case 用逗号分开)。
@@ -3134,7 +3134,7 @@ func runSourceContractTests() {
             expectEqual(goNames.count >= 9, true, "歌词源名单: 解析到了 enrich.go 的 lyricSourceNames(守卫自身没跑空)")
             expectEqual(Set(swiftNames).count, swiftNames.count, "歌词源名单: Swift 侧没有重复 case")
             expectEqual(Set(swiftNames), Set(goNames),
-                        "歌词源名单: collector lyricSourceNames 与 App LyricsSource.allCases 逐个相等(加源两侧都要改)")
+                        "歌词源名单: 引擎 lyricSourceNames 与 App LyricsSource.allCases 逐个相等(加源两侧都要改)")
             // ② 弹窗只准读 LyricsSource.allCases,不准再抄一份。
             expectEqual(sheet.contains("LyricsSource.allCases"), true, "歌词源名单: LyricsSearchSheet 读的是 LyricsSource.allCases")
             expectEqual(sheet.contains("[\"netease\""), false, "歌词源名单: LyricsSearchSheet 里没有手抄的源名数组")
@@ -3404,7 +3404,7 @@ func runSourceContractTests() {
 
     // ---- 后台服务应用状态可见----
     //
-    // 功能开关 / 账号凭据保存后的 collector 重启结果,原来只写进两个 Store 的 lastError、全仓没人读。现在由设置窗口
+    // 功能开关 / 账号凭据保存后的引擎重启结果,原来只写进两个 Store 的 lastError、全仓没人读。现在由设置窗口
     // 底部一条状态条统一显示。钉住:状态条挂上了并读三种态;协调器暴露进行中态;两个 Store 在重启失败后先看服务
     // 是否被主动停用再定性,并给状态条关闭出口;失败文案换成说清后果的那句。文案键由本地化 parity 守卫管。
     do {
@@ -3414,24 +3414,24 @@ func runSourceContractTests() {
         func code(_ rel: String) -> String {
             (try? String(contentsOfFile: appDir.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
         }
-        expectEqual(code("SettingsView.swift").contains("CollectorApplyStatusBar()"), true, "应用状态: 状态条挂在设置窗口 detail 列")
-        let bar = code("Settings/CollectorApplyStatusBar.swift")
-        expectEqual(bar.isEmpty, false, "应用状态: 读得到 CollectorApplyStatusBar.swift")
+        expectEqual(code("SettingsView.swift").contains("EngineApplyStatusBar()"), true, "应用状态: 状态条挂在设置窗口 detail 列")
+        let bar = code("Settings/EngineApplyStatusBar.swift")
+        expectEqual(bar.isEmpty, false, "应用状态: 读得到 EngineApplyStatusBar.swift")
         expectEqual(bar.contains(".isRestarting"), true, "应用状态: 状态条读协调器的进行中态")
         expectEqual(bar.contains(".pendingUntilServiceEnabled"), true, "应用状态: 状态条读「服务已停用」态")
         expectEqual(bar.contains(".lastError"), true, "应用状态: 状态条读 lastError(它终于有人读了)")
         expectEqual(bar.contains("L10n.t(\"重试\")"), true, "应用状态: 失败态带「重试」")
         expectEqual(bar.contains("clearApplyStatus()"), true, "应用状态: 状态条接了关闭出口")
-        let coordinator = code("Settings/CollectorRestartCoordinator.swift")
+        let coordinator = code("Settings/EngineRestartCoordinator.swift")
         expectEqual(coordinator.contains("@Published public private(set) var isRestarting"), true, "应用状态: 协调器暴露进行中态")
         expectEqual(coordinator.contains("isRestarting = !waiters.isEmpty"), true, "应用状态: 重启完成后按还有没有排队者收工")
         for f in ["Settings/ConfigStore.swift", "Settings/FeatureSettingsStore.swift"] {
             let s = code(f)
             expectEqual(s.contains("var pendingUntilServiceEnabled"), true, "应用状态: \(f) 区分「服务已停用」与「重启失败」")
             // 看开关、不问 launchctl:每次保存都走这里,isRunning 会在主线程同步起子进程;状态条本来也只在开关关着时提示。
-            expectEqual(s.contains("pendingUntilServiceEnabled = !AppSettings.shared.collectorServiceEnabled"), true,
+            expectEqual(s.contains("pendingUntilServiceEnabled = !AppSettings.shared.engineServiceEnabled"), true,
                         "应用状态: \(f) 保存后按后台服务开关定性,关着才提示「服务已停用」")
-            expectEqual(s.contains("pendingUntilServiceEnabled = !CollectorServiceManager.isRunning"), false,
+            expectEqual(s.contains("pendingUntilServiceEnabled = !EngineServiceManager.isRunning"), false,
                         "应用状态: \(f) 保存路径不在主线程同步问 launchctl")
             expectEqual(s.contains("func clearApplyStatus()"), true, "应用状态: \(f) 给状态条一个关闭出口")
             expectEqual(s.contains("L10n.t(\"后台采集服务重启失败\")"), false, "应用状态: \(f) 的失败文案换成说清后果的那句")
@@ -3461,7 +3461,7 @@ func runSourceContractTests() {
         expectEqual(found, expected, "项目级 skill: 登记的都在、没有多出来的(多一份要来这里登记)")
         let linkPattern = try? NSRegularExpression(pattern: #"\]\(([^)\s]+)\)"#)
         let codePattern = try? NSRegularExpression(pattern: #"`([^`\n]+)`"#)
-        let pathPrefixes = ["lyrimuse/", "lyrimuse-collector/", "docs/", ".github/", ".claude/"]
+        let pathPrefixes = ["lyrimuse/", "lyrimuse-engine/", "docs/", ".github/", ".claude/"]
         for name in expected {
             let file = skillsDir.appendingPathComponent("\(name)/SKILL.md")
             guard let src = try? String(contentsOfFile: file.path, encoding: .utf8) else {
@@ -3609,8 +3609,8 @@ func runSourceContractTests() {
     // 配置目录 `~/.config/lyrimuse`、两个 launchd label、两份日志文件名,在 Swift 侧只许出现在 Core
     // LyrimuseIdentity.swift 一处(App / Core 其余文件一律经 LyrimusePaths / LogFiles / LyrimuseIdentity 取);
     // Go 侧只许出现在 paths.go(其余文件经 configDir() / configFilePath() / logFilePath())。路径只有一处来源,
-    // 任何漏网的字面量都是将来改目录 / 改名时会漏改的地方。App spawn 的每个 collector
-    // 子命令都必须带 LyrimusePaths.collectorProcessEnvironment(),否则子命令落回默认目录、跟本 App 不是同一份数据。
+    // 任何漏网的字面量都是将来改目录 / 改名时会漏改的地方。App spawn 的每个引擎
+    // 子命令都必须带 LyrimusePaths.engineProcessEnvironment(),否则子命令落回默认目录、跟本 App 不是同一份数据。
     do {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -3645,7 +3645,7 @@ func runSourceContractTests() {
                 if code.contains("L10n.t(") { continue }   // 面向用户的文案里写路径是给人看的,不是取值
                 if code.contains(".config/lyrimuse") { offenders.append("\(name):\(n) .config/lyrimuse") }
                 if code.contains("Library/Logs/lyrimuse") { offenders.append("\(name):\(n) Library/Logs/lyrimuse") }
-                if code.contains("\"com.lyrimuse.collector") { offenders.append("\(name):\(n) collector label 字面量") }
+                if code.contains("\"com.lyrimuse.collector") { offenders.append("\(name):\(n) 引擎 label 字面量") }
                 if code.contains("\"me.yudaotor.lyrimuse\""), !code.contains("subsystem"), !code.contains("DispatchQueue(label:") {
                     offenders.append("\(name):\(n) bundle id 字面量(只许 Logger subsystem / 队列名用)")
                 }
@@ -3658,7 +3658,7 @@ func runSourceContractTests() {
         expectEqual(offenders, [], "身份收口(Swift): 配置目录 / 日志 / label / 安装路径 / 引擎路径只许在 LyrimuseIdentity.swift 里写字面量")
 
         var goOffenders: [String] = []
-        let goDir = repoRoot.appendingPathComponent("lyrimuse-collector").path
+        let goDir = repoRoot.appendingPathComponent("lyrimuse-engine").path
         // `os.UserHomeDir()` 本身**不是**违规:读外部 App 的缓存(Music.app / 酷狗 / 网易云 /
         // QQ 音乐 / 汽水音乐 / Spotify 的容器目录)只能从家目录拼,`configDir()` 表达不了别人家的
         // 路径,那些函数头上也都写着"外部 App 的路径,不走 paths.go 那套身份口径"。这条守的是
@@ -3697,11 +3697,11 @@ func runSourceContractTests() {
                     "身份收口(Go): 外部 App 路径这条豁免仍在真实使用中,实际 \(externalHomeUses) 处")
         let pathsGo = (try? String(contentsOfFile: goDir + "/paths.go", encoding: .utf8)) ?? ""
         expectEqual(pathsGo.contains("LYRIMUSE_CONFIG_DIR") && pathsGo.contains("LYRIMUSE_LOG_FILE") && pathsGo.contains("LYRIMUSE_APP_BUNDLE_ID"), true,
-                    "身份收口(Go): paths.go 读的三个环境变量名与 Swift LyrimusePaths.collectorEnvironment 一致")
+                    "身份收口(Go): paths.go 读的三个环境变量名与 Swift LyrimusePaths.engineEnvironment 一致")
         let companion = (try? String(contentsOfFile: goDir + "/companionlaunch.go", encoding: .utf8)) ?? ""
         expectEqual(companion.contains("\"-b\", appBundleID()"), true, "身份收口(Go): companion launch 用 appBundleID() 而不是写死 id(bundle id 由 App 经环境变量下发)")
 
-        // App spawn collector 子命令的每一处都带环境变量
+        // App spawn 引擎子命令的每一处都带环境变量
         var spawnOffenders: [String] = []
         var spawnFiles = 0
         for path in swiftFiles(under: "lyrimuse/Sources/lyrimuse") {
@@ -3710,35 +3710,35 @@ func runSourceContractTests() {
             spawnFiles += 1
             // spawn 有两种形状:自己 new Process 设 executableURL,以及走 ProcessRunner.run
             // (补上后一种 —— 「待补提交」清单的删除叉就是漏在那条路上:它是唯一
-            // 一个用 ProcessRunner 的 collector 子命令,而那个函数当时连环境参数都没有,于是
+            // 一个用 ProcessRunner 的引擎子命令,而那个函数当时连环境参数都没有,于是
             // 这道守卫按 executableURL 数根本数不到它。配置目录一旦不是默认值,App 读的是一处、
             // delete-listen 删的却是默认目录,deleted:0,界面上就是"点了没反应")。
             // 两处都在收紧,起因是这道守卫**两次**都靠巧合成立:
             //
             // 一、匹配**不带**变量名前缀。原来数的是 `process.executableURL = …`,于是
-            //    `CollectorServiceManager.runCapturing` 里那句 `p.executableURL = …` 数不到 ——
-            //    它是**真的在 spawn collector**(bundledCollectorVersion → collector version)、
+            //    `EngineServiceManager.runCapturing` 里那句 `p.executableURL = …` 数不到 ——
+            //    它是**真的在 spawn 引擎**(bundledEngineVersion → lyrimuse-engine version)、
             //    且当时不带环境,却因为 execs=0/envs=0 恰好"配平"蒙混过关:守卫当时成立靠的是
             //    "那个文件的变量恰好叫 p 不叫 process"。放宽后它红了,已给那处补上环境。
             //
             // 二、**只数代码、不数注释**。这段原来在原始文本上数,注释里但凡提到
-            //    `.executableURL = …` 或 `collectorProcessEnvironment()` 都会被算进去 ——
-            //    修完第一条后,CollectorServiceManager 那份解释性注释恰好把两个串各提了一次,
+            //    `.executableURL = …` 或 `engineProcessEnvironment()` 都会被算进去 ——
+            //    修完第一条后,EngineServiceManager 那份解释性注释恰好把两个串各提了一次,
             //    计数变成 2=2 仍然"平",可那 2 里各有 1 个是注释。判据又一次靠巧合成立。
             //    用 codeLines 剥掉注释再数,计数只反映真实 spawn。
             let code = codeLines(path).map(\.1).joined(separator: "\n")
             let execs = code.components(separatedBy: ".executableURL = URL(fileURLWithPath:").count - 1
             let runners = code.components(separatedBy: "ProcessRunner.run(").count - 1
-            let envs = code.components(separatedBy: "LyrimusePaths.collectorProcessEnvironment()").count - 1
+            let envs = code.components(separatedBy: "LyrimusePaths.engineProcessEnvironment()").count - 1
             if execs + runners != envs {
                 spawnOffenders.append("\(path.split(separator: "/").last ?? ""): spawn \(execs + runners) 处(executableURL \(execs) + ProcessRunner \(runners)), environment \(envs) 处")
             }
         }
-        expectEqual(spawnOffenders, [], "身份收口: App spawn 的 collector 子命令每一处都传 collectorProcessEnvironment()")
+        expectEqual(spawnOffenders, [], "身份收口: App spawn 的引擎子命令每一处都传 engineProcessEnvironment()")
         expectEqual(spawnFiles >= 7, true,
                     "身份收口: 用 LyrimusePaths.bundledEnginePath 的文件至少 7 个(少了 = 有人绕开它自己拼路径,上面那条就数不到),实际 \(spawnFiles)")
-        let csm = (try? String(contentsOfFile: repoRoot.appendingPathComponent("lyrimuse/Sources/lyrimuse/Settings/CollectorServiceManager.swift").path, encoding: .utf8)) ?? ""
-        expectEqual(csm.contains("\"EnvironmentVariables\": LyrimusePaths.collectorEnvironment"), true, "身份收口: collector 的 launchd plist 带 EnvironmentVariables")
+        let csm = (try? String(contentsOfFile: repoRoot.appendingPathComponent("lyrimuse/Sources/lyrimuse/Settings/EngineServiceManager.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(csm.contains("\"EnvironmentVariables\": LyrimusePaths.engineEnvironment"), true, "身份收口: 引擎的 launchd plist 带 EnvironmentVariables")
     }
 
     // ---- 「主题」预览卡与主题里的未唱色----
@@ -3902,20 +3902,20 @@ func runSourceContractTests() {
         expectEqual(exporter.contains(").zip\""), true, "诊断包: 产物是 zip,不是单个 txt")
         expectEqual(exporter.contains("writeDiagnosticsBundle("), true, "诊断包: 有打包入口")
         expectEqual(exporter.contains("(\"report.txt\", report)"), true, "诊断包: 报告单独成文件")
-        expectEqual(exporter.contains("LogFiles.collector.lastPathComponent, fullCollectorLogText(secrets: secrets)"),
-                    true, "诊断包: collector 完整日志单独成文件")
+        expectEqual(exporter.contains("LogFiles.engine.lastPathComponent, fullEngineLogText(secrets: secrets)"),
+                    true, "诊断包: 引擎完整日志单独成文件")
         // 刚轮转完就导出时历史全在 .old 里:最近一份归档也要进包,同样过脱敏。
-        expectEqual(exporter.contains("files.append((LogFiles.collector.lastPathComponent + \".old\", archived))"),
-                    true, "诊断包: collector 最近一份轮转归档也进包")
+        expectEqual(exporter.contains("files.append((LogFiles.engine.lastPathComponent + \".old\", archived))"),
+                    true, "诊断包: 引擎最近一份轮转归档也进包")
         expectEqual(exporter.contains("(\"app-log.txt\", fullAppLogText(secrets: secrets))"),
                     true, "诊断包: App 完整日志单独成文件")
         // 这两个函数各自是完整日志的唯一出口,漏掉任何一处 redactAll 就是把原始日志发出去。
         expectEqual(exporter.contains("return LogRedactor.redactAll(content, secrets: secrets)"),
-                    true, "诊断包: collector 完整日志过脱敏")
+                    true, "诊断包: 引擎完整日志过脱敏")
         expectEqual(exporter.contains("LogRedactor.redactAll(recentAppLogLines()"),
                     true, "诊断包: App 完整日志过脱敏")
-        // 按时间窗口 / 行数上限截 collector 日志那条路已经废掉,别让它复活。
-        expectEqual(exporter.contains("recentCollectorLogLines"), false, "诊断包: 不再按时间窗口截断")
+        // 按时间窗口 / 行数上限截引擎日志那条路已经废掉,别让它复活。
+        expectEqual(exporter.contains("recentEngineLogLines"), false, "诊断包: 不再按时间窗口截断")
         expectEqual(exporter.contains("hardLineCap"), false, "诊断包: 不再有行数硬上限")
     }
 
@@ -3974,7 +3974,7 @@ func runSourceContractTests() {
     // 解不出来,调用方那句 try? 再把 DecodingError 吞成 nil —— 表现是功能静默失效、日志干净。
     //
     // 两次事故,同一条 Go→Swift 边界:
-    //  ① 「重新自动匹配」的结论:decidable==false 这条完全正常的分支里 collector 不写 decisionJSON,
+    //  ① 「重新自动匹配」的结论:decidable==false 这条完全正常的分支里引擎不写 decisionJSON,
     //     于是那一行解码失败、结论恒为 nil,好几种该有专属文案的正常结局被吞成兜底那一句;
     //  ② backfillOutcome → ScrobbleBackfillService.Outcome:Go 的 Items 只在
     //     dry-run 分支填,于是**每一次真跑**的输出都没有 items 键、都被读成失败。它从 da7d5d2
@@ -4036,13 +4036,13 @@ func runSourceContractTests() {
             return false
         }
         let boundaries: [(go: String, goStruct: String, swift: String, swiftStruct: String)] = [
-            ("lyrimuse-collector/backfill.go", "backfillOutcome",
+            ("lyrimuse-engine/backfill.go", "backfillOutcome",
              "lyrimuse/Sources/lyrimuse/Settings/ScrobbleBackfillService.swift", "Outcome"),
-            ("lyrimuse-collector/backfill.go", "backfillItem",
+            ("lyrimuse-engine/backfill.go", "backfillItem",
              "lyrimuse/Sources/lyrimuse/Settings/ScrobbleBackfillService.swift", "Item"),
-            ("lyrimuse-collector/lyricsrematch.go", "lyricsRematchStatus",
+            ("lyrimuse-engine/lyricsrematch.go", "lyricsRematchStatus",
              "lyrimuse/Sources/LyrimuseCore/Local/LyricsRematch.swift", "Status"),
-            ("lyrimuse-collector/lyricsrematch.go", "lyricsRematchResult",
+            ("lyrimuse-engine/lyricsrematch.go", "lyricsRematchResult",
              "lyrimuse/Sources/LyrimuseCore/Local/LyricsRematch.swift", "Conclusion"),
         ]
         for b in boundaries {
@@ -4064,7 +4064,7 @@ func runSourceContractTests() {
     //
     // 业界通用范式,规则写在 AGENTS.md「容易踩的具体坑 → 日志」:正文一律英文、`component: message key=value`;
     // App/Core 侧只用统一 subsystem 的 os.Logger,禁 NSLog / 裸 print(诊断导出按 subsystem 查 OSLogStore,
-    // 绕开 Logger 的日志进不了导出);collector 走 stdlib log.Printf。这里只守机器能查的三件事:两侧日志
+    // 绕开 Logger 的日志进不了导出);引擎走 stdlib log.Printf。这里只守机器能查的三件事:两侧日志
     // 字面量不含 CJK、App/Core 里没有 NSLog( / 裸 print(、Logger 的 subsystem 只有一个。
     // 确需例外在那一行行尾写 `// log-style: allow`。只看字面量本身,不看行尾注释(注释可以是中文)。
     do {
@@ -4121,9 +4121,9 @@ func runSourceContractTests() {
                 }
             }
         }
-        // collector 新写的日志走 slog.Debug/Info/Warn/Error(logsink.go),一并扫。
+        // 引擎新写的日志走 slog.Debug/Info/Warn/Error(logsink.go),一并扫。
         let goLogCall = try? NSRegularExpression(pattern: #"\b(?:log|slog)\.(Printf|Println|Print|Fatalf|Fatal|Debug|Info|Warn|Error)\(""#)
-        for (rel, text) in files(under: repoRoot.appendingPathComponent("lyrimuse-collector"), suffix: ".go")
+        for (rel, text) in files(under: repoRoot.appendingPathComponent("lyrimuse-engine"), suffix: ".go")
         where !rel.hasSuffix("_test.go") && !rel.contains("/") {
             for (n, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
                 let line = String(raw)
@@ -4132,7 +4132,7 @@ func runSourceContractTests() {
                 if let re = goLogCall,
                    re.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil,
                    let lit = firstLiteral(line), hasCJK(lit) {
-                    offenders.append("lyrimuse-collector/\(rel):\(n + 1) CJK in log literal")
+                    offenders.append("lyrimuse-engine/\(rel):\(n + 1) CJK in log literal")
                 }
             }
         }
@@ -4227,24 +4227,24 @@ func runSourceContractTests() {
             expectEqual(false, true, "Last.fm 榜单: 找不到 refreshChart / 补头像 / 新鲜判断")
         }
         expectEqual(stats.contains("!avatarRequested.contains($0)"), true,
-                    "Last.fm 榜单: 同一次运行里问过的歌手名不再起 collector 查头像")
+                    "Last.fm 榜单: 同一次运行里问过的歌手名不再起引擎查头像")
         // 显示更多:榜单一次取 50 条(合并榜和直连同一个数),头像一个进程最多查 10 个名字(看门狗按 10 个定的)。
         expectEqual(stats.contains("\"-limit\", String(ChartVisibleRows.fetchLimit)")
                     && stats.contains("\"limit\": String(ChartVisibleRows.fetchLimit)"), true,
                     "Last.fm 榜单: 合并榜与直连都取 fetchLimit 条")
-        // collector 给榜单右键菜单预取各平台页面(platformpages.go),要在 App 打开榜单之前就跑,「取几条、哪几档」两边
+        // 引擎给榜单右键菜单预取各平台页面(platformpages.go),要在 App 打开榜单之前就跑,「取几条、哪几档」两边
         // 各写一份,在这里对账。
         let platformPages = (try? String(contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appendingPathComponent("lyrimuse-collector/platformpages.go"), encoding: .utf8)) ?? ""
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse-engine/platformpages.go"), encoding: .utf8)) ?? ""
         expectEqual(platformPages.contains("platformPagesChartLimit = \(ChartVisibleRows.fetchLimit)\n"), true,
-                    "Last.fm 榜单: collector 预取平台页面取的条数跟 App 榜单一样(ChartVisibleRows.fetchLimit)")
+                    "Last.fm 榜单: 引擎预取平台页面取的条数跟 App 榜单一样(ChartVisibleRows.fetchLimit)")
         expectEqual(platformPages.contains("platformPagesPeriods = []string{\"7day\", \"1month\", \"12month\", \"overall\"}")
                     && stats.contains("case week = \"7day\", month = \"1month\", year = \"12month\", overall = \"overall\""), true,
-                    "Last.fm 榜单: collector 预取的时段跟 App 榜单的四档一样")
-        // 「听得最多」的环比:歌手榜的上一期由 collector 算(topartistscli.go 的 topArtistsPeriodSpan,要合并同一歌手的不同写法),
+                    "Last.fm 榜单: 引擎预取的时段跟 App 榜单的四档一样")
+        // 「听得最多」的环比:歌手榜的上一期由引擎算(topartistscli.go 的 topArtistsPeriodSpan,要合并同一歌手的不同写法),
         // 专辑 / 歌曲榜由 App 算(ChartComparison.span),窗口长度两边各写一份,在这里对账。
         let topArtistsCLI = (try? String(contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appendingPathComponent("lyrimuse-collector/topartistscli.go"), encoding: .utf8)) ?? ""
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse-engine/topartistscli.go"), encoding: .utf8)) ?? ""
         let spanTable = topArtistsCLI.range(of: "var topArtistsPeriodSpan = map\\[string\\]time\\.Duration\\{[^}]*\\}",
                                             options: .regularExpression).map { String(topArtistsCLI[$0]) } ?? ""
         for period in ["7day", "1month", "12month"] {
@@ -4256,8 +4256,8 @@ func runSourceContractTests() {
         expectEqual(ChartComparison.span(forPeriod: "overall") == nil && !spanTable.isEmpty && !spanTable.contains("overall"),
                     true, "Last.fm 榜单: 全部时间没有上一期,两边都不算")
         expectEqual(stats.contains("stride(from: 0, to: missing.count, by: 10)")
-                    && stats.contains("for batch in batches { await Self.runAvatarLookup(batch, collectorPath: collectorPath) }"), true,
-                    "Last.fm 榜单: 头像按 10 个名字一批、几批依次交给 collector")
+                    && stats.contains("for batch in batches { await Self.runAvatarLookup(batch, enginePath: enginePath) }"), true,
+                    "Last.fm 榜单: 头像按 10 个名字一批、几批依次交给引擎")
         expectEqual(stats.contains("resolveTrackCovers(visible, cred: cred, priority: .background)"), true,
                     "Last.fm 榜单: 显示更多补封面走后台档")
         // 榜单封面:Last.fm 没图时退到本机缓存;缓存变了跟着重算。

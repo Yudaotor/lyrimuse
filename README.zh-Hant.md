@@ -316,7 +316,7 @@ me.yudaotor.lyrimuse`）。留著它會把重裝引向一條死路：LaunchAgent
 本儲存庫就是 App 本身：
 
 - [`lyrimuse/`](lyrimuse) —— App 本體（Swift，SwiftUI + AppKit）
-- [`lyrimuse-collector/`](lyrimuse-collector) —— 背景引擎，負責解析歌詞／封面並餵給 App（Go）；建置時自動打包進 App
+- [`lyrimuse-engine/`](lyrimuse-engine) —— 背景引擎，負責解析歌詞／封面並餵給 App（Go）；建置時自動打包進 App
 
 <details>
 <summary>可選的網頁體驗：兩個兄弟儲存庫</summary>

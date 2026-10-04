@@ -5,8 +5,8 @@ import os
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-source-test")
 
 // "歌词来源可用性测试"(设置页「歌词来源」卡片的每行测试按钮 + 右上角
-// 「全部测试」用)。子进程调用 collector 侧新增的 `test-lyric-sources`
-// (lyrimuse-collector/testlyricsourcescli.go)——跟诊断导出用的 `healthcheck` 同一套
+// 「全部测试」用)。子进程调用引擎侧新增的 `test-lyric-sources`
+// (lyrimuse-engine/testlyricsourcescli.go)——跟诊断导出用的 `healthcheck` 同一套
 // 探测思路(两首固定探测曲,一首华语一首英文,取并集,理由见该文件顶部注释),但输出
 // 形状不一样:healthcheck 是"一次性整份报告"(给诊断导出的文本转储用),这里要的是
 // "一个源一行、边测边出结果"的 NDJSON,好让设置页每一行独立从"测试中"变成"可用/疑似
@@ -33,7 +33,7 @@ final class LyricSourceTestService {
         if let process, process.isRunning { process.terminate() }
     }
 
-    /// 跟 collector 侧 healthStatus 三档一一对应,语义见 testlyricsourcescli.go 的
+    /// 跟引擎侧 healthStatus 三档一一对应,语义见 testlyricsourcescli.go 的
     /// lyricSourceTestResult.Status 注释。
     enum Status: String, Decodable {
         case ok, warn, fail
@@ -60,12 +60,12 @@ final class LyricSourceTestService {
         }
     }
 
-    private static let collectorPath = LyrimusePaths.bundledEnginePath
+    private static let enginePath = LyrimusePaths.bundledEnginePath
 
     private init() {}
 
     /// - source: nil = 测试所有已启用的源;非 nil = 只测这一个源。 即便只测一个源,
-    ///   底层探测仍然会把全部已启用的源一起并发打一遍(collector 侧 scoredLyricCandidates
+    ///   底层探测仍然会把全部已启用的源一起并发打一遍(引擎侧 scoredLyricCandidates
     ///   本来就是这么设计的——AMLL 需要先从网易云/QQ 拿到平台 ID,拆开单独测反而更复杂),
     ///   所以"测一个"和"测全部"的实际等待时间没有区别,只是显示上只关心那一行——跟这个
     ///   仓库里"联网搜索候选歌词"弹窗同样是等最慢的那个源,是这一类交互共同的取舍。
@@ -88,9 +88,9 @@ final class LyricSourceTestService {
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: Self.collectorPath)
-            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
-            process.environment = LyrimusePaths.collectorProcessEnvironment()
+            process.executableURL = URL(fileURLWithPath: Self.enginePath)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+            process.environment = LyrimusePaths.engineProcessEnvironment()
             var arguments = ["test-lyric-sources"]
             if let source {
                 arguments.append(contentsOf: ["-source", source.rawValue])
@@ -145,7 +145,7 @@ final class LyricSourceTestService {
                 readGroup.leave()
             }
             // stderr 在独立队列读(同 LyricsSearchService 的理由——两条管道要并行排空,
-            // 不能让 stdout 的 EOF 循环挡在前面)。这里的 stderr 是 collector 的网络审计
+            // 不能让 stdout 的 EOF 循环挡在前面)。这里的 stderr 是引擎的网络审计
             // 日志(每次 HTTP 调用一行),量不小,更不能省这一层。
             let stderrQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.test-lyric-sources.stderr", qos: .utility)
             readGroup.enter()
@@ -180,7 +180,7 @@ final class LyricSourceTestService {
     }
 }
 
-// 对应 collector 侧 testlyricsourcescli.go 的 lyricSourceTestResult——字段名两边都是
+// 对应引擎侧 testlyricsourcescli.go 的 lyricSourceTestResult——字段名两边都是
 // lowerCamelCase,不需要额外 CodingKeys。
 private struct RawTestResult: Decodable {
     let source: String

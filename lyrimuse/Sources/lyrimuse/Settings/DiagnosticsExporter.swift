@@ -5,7 +5,7 @@ import AppKit
 import Darwin
 import SwiftUI
 
-// 诊断导出:collector 日志(~/Library/Logs/lyrimuse.log)+ App 侧 os.Logger 日志 + 关键状态(权限 / 常驻服务 /
+// 诊断导出:引擎日志(~/Library/Logs/lyrimuse.log)+ App 侧 os.Logger 日志 + 关键状态(权限 / 常驻服务 /
 // 各功能是否已配置)打成一个 zip,给用户附到 issue 里。它是用户遇到问题时唯一会发过来的东西,要覆盖网络 / 逻辑 /
 // UI / 交互 / 系统兼容几个层面。
 //
@@ -15,7 +15,7 @@ import SwiftUI
 //  1. 结构化那一段(== State ==)只复用 ConfigStore 已有的 isXConfigured / xMissingHint() 这批只读布尔判断,
 //     不直接触碰 savedSnapshot 里的字段本身。
 //  2. 所有日志正文统一过 redacted() → LogRedactor。往导出里加任何新的日志段落,都必须一并套上 redacted();
-//     日志正文里可能带完整 URL(collector 打印 Go *url.Error 时 api_key 就在 query string 里),见 LogRedactor。
+//     日志正文里可能带完整 URL(引擎打印 Go *url.Error 时 api_key 就在 query string 里),见 LogRedactor。
 enum DiagnosticsExporter {
     static func suggestedFilename() -> String {
         let formatter = DateFormatter()
@@ -31,7 +31,7 @@ enum DiagnosticsExporter {
     ///
     /// **顺序是刻意的**:面板先弹,内容后生成。buildReport 里的 OSLogStore 查询要
     /// **4.4 秒**(扫 24 小时、拉回一万多行),又整个跑在主线程上 —— 面板先弹能让界面立刻
-    /// 有反应,重活挪到用户挑完位置之后于后台线程跑,不会看起来像卡死。新加的 collector
+    /// 有反应,重活挪到用户挑完位置之后于后台线程跑,不会看起来像卡死。新加的引擎
     /// healthcheck 子进程(带真实网络探测)和收听记录解析也都挂在这同一段后台任务里——
     /// 导出整体可能因此再多等几秒,但用户此时已经看不到主界面被卡住,跟原有取舍一致。
     ///
@@ -62,7 +62,7 @@ enum DiagnosticsExporter {
             defer { status.isExporting = false }
             // 状态段要读 @MainActor 的单例,在主线程取;自动化权限先 await 出来传进去,
             // 不能在主线程上同步查(见 `automationLine`)。日志段(慢的那部分)扔后台。
-            let head = stateLines(automation: await automationLine(), collectorState: await collectorStateOffMain())
+            let head = stateLines(automation: await automationLine(), engineState: await engineStateOffMain())
             await Task.detached(priority: .userInitiated) {
                 writeDiagnosticsBundle(to: url, bundleName: bundleName, head: head,
                                        secrets: secrets, currentTrackLines: currentTrackLines)
@@ -84,7 +84,7 @@ enum DiagnosticsExporter {
     /// 交互式导出请用 `exportInteractively()`,别在主线程上等这个。
     @MainActor
     static func buildReport() async -> String {
-        return (stateLines(automation: await automationLine(), collectorState: await collectorStateOffMain()) + logLines(secrets: ConfigStore.shared.secretsForRedaction,
+        return (stateLines(automation: await automationLine(), engineState: await engineStateOffMain()) + logLines(secrets: ConfigStore.shared.secretsForRedaction,
                                         currentTrackLines: currentTrackLyricsLines()))
             .joined(separator: "\n")
     }
@@ -106,15 +106,15 @@ enum DiagnosticsExporter {
         return "Automation permission: " + (status.map { "\($0)" } ?? "timed out")
     }
 
-    /// launchd 里那条服务的状态。`CollectorServiceManager.state` 会起 `launchctl print` 子进程并同步等它退出,
+    /// launchd 里那条服务的状态。`EngineServiceManager.state` 会起 `launchctl print` 子进程并同步等它退出,
     /// 而 stateLines 在主线程上跑 —— 在后台取好再传进去。
-    private static func collectorStateOffMain() async -> LaunchdJobState {
-        await Task.detached(priority: .userInitiated) { CollectorServiceManager.state }.value
+    private static func engineStateOffMain() async -> LaunchdJobState {
+        await Task.detached(priority: .userInitiated) { EngineServiceManager.state }.value
     }
 
     /// 报告的状态段 —— 全部来自 @MainActor 隔离的单例,但都是内存读,很便宜(launchd 状态由调用方在后台取好传进来)。
     @MainActor
-    private static func stateLines(automation: String, collectorState: LaunchdJobState) -> [String] {
+    private static func stateLines(automation: String, engineState: LaunchdJobState) -> [String] {
         var lines: [String] = []
 
         lines.append("Lyrimuse Diagnostics")
@@ -164,10 +164,10 @@ enum DiagnosticsExporter {
         // 检测失效时不会被清掉,所以停播之后它仍然报最后一次识别到的播放器。读报告的人得
         // 知道这一点,否则会把陈旧值当成当下状态。
         lines.append("Player (last detected): \(PlaybackCoordinator.shared.resolvedPlayerDescription)")
-        lines.append("Collector service enabled (setting): \(settings.collectorServiceEnabled)")
+        lines.append("Engine service enabled (setting): \(settings.engineServiceEnabled)")
         // 报完整三态而不是 true/false —— "注册了但起不来"正是最需要出现在诊断报告里的那
         // 一档(带上次退出码),以前它跟"在跑"一样报 true,报告等于把最关键的线索抹掉了。
-        lines.append("Collector service state: \(collectorState)")
+        lines.append("Engine service state: \(engineState)")
         // 两份共享配置文件的三态:损坏时所有保存被拒,「设置保存不上 / 账号全空」第一个该看的原因。
         // reason 只含解析位置、键名与期望类型,不含文件内容(config.json 是凭据)。
         lines.append("config.json: \(describe(config.fileState))")
@@ -240,7 +240,7 @@ enum DiagnosticsExporter {
         //
         // 「歌词慢半拍」这类问题至少有四种成因、修法完全不同:帧率掉了 / positionSourceTier
         // 判错 / 伺服在反复 snap / 自然切歌偏置估歪。这里把四种从数据上区分开,不用靠猜或
-        // 翻 collector 日志。
+        // 翻引擎日志。
         //
         // 全是内存里已有的字段(LocalPlaybackSource.clockSnapshot),读一次的成本可以忽略;
         // 不含任何用户内容(没有曲名/歌手/歌词),天然不需要过 LogRedactor。
@@ -271,7 +271,7 @@ enum DiagnosticsExporter {
         return lines
     }
 
-    /// 报告的日志段 —— 慢的那一半(OSLogStore 查询实测 4.4 秒,collector healthcheck 的
+    /// 报告的日志段 —— 慢的那一半(OSLogStore 查询实测 4.4 秒,lyrimuse-engine healthcheck 的
     /// 网络探测另加几秒),刻意不标 @MainActor,好让 exportInteractively 把它整段丢到
     /// 后台线程去跑。
     ///
@@ -284,13 +284,13 @@ enum DiagnosticsExporter {
         // 指路。报告因此保持在十几 KB —— 还能直接贴进 issue,而那正是它的用途。
         lines.append("== Logs ==")
         lines.append("完整日志在同一个压缩包里,都已脱敏:")
-        lines.append("  lyrimuse.log  — collector,整份,不按时间截断、不折叠重复行")
+        lines.append("  lyrimuse.log  — 引擎,整份,不按时间截断、不折叠重复行")
         lines.append("  app-log.txt   — App 侧 os.Logger,最近 24 小时(OSLogStore 只留得住这么多)")
         lines.append("")
         // ---- App 进程的 stderr----
         //
         // App 进程的 stdout / stderr 由 StandardStreamRedirect 在启动第一步就重定向到 LogFiles.appStderr
-        // (进程内自己做;此前靠 LaunchAgent plist 的 StandardErrorPath,再往前跟 collector
+        // (进程内自己做;此前靠 LaunchAgent plist 的 StandardErrorPath,再往前跟引擎
         // 共用 lyrimuse.log)。正常情况下这份文件几乎是空的 —— App 的日志走
         // os.Logger;能落进来的只有 Swift 运行时的 fatal 信息、子进程漏出的 stderr 这类"本不该有"
         // 的东西,正因为如此排查崩溃时它最有用。只取最后 100 行,同样过一遍脱敏。
@@ -300,7 +300,7 @@ enum DiagnosticsExporter {
 
         // ---- 最近崩溃报告----
         //
-        // App 崩了 os.Logger 留不下现场;collector 走 KeepAlive 崩溃循环时 lyrimuse.log 里只见反复 starting;
+        // App 崩了 os.Logger 留不下现场;引擎走 KeepAlive 崩溃循环时 lyrimuse.log 里只见反复 starting;
         // Intel / Rosetta「打不开」、缺库、Launch Constraint 这类启动期事故日志里一行都没有 —— 而 macOS 早把
         // .ips 写在 ~/Library/Logs/DiagnosticReports/ 了,缺的只是收进导出。摘要以 termination 为主、帧只在有的
         // 时候附(本机 7 份真实报告 6 份 DYLD 缺库、1 份签名约束,故障线程一帧都没有);解析在 Core
@@ -312,9 +312,9 @@ enum DiagnosticsExporter {
         // ---- 引擎 healthcheck----
         //
         // 引擎的 `healthcheck`(healthcheckcli.go):配置、歌词来源开关、缓存、导出目录、提交后端,再拿两首探测曲
-        // 实测各歌词源。取文本输出,不用 -json;不传 -local-only,联网探测有自己的时限(见 collectorHealthCheckLines)。
+        // 实测各歌词源。取文本输出,不用 -json;不传 -local-only,联网探测有自己的时限(见 engineHealthCheckLines)。
         lines.append("== Engine Health Check (`\(LyrimuseIdentity.current.engineExecutableName) healthcheck`) ==")
-        lines.append(contentsOf: collectorHealthCheckLines().map { LogRedactor.redactAll($0, secrets: secrets) })
+        lines.append(contentsOf: engineHealthCheckLines().map { LogRedactor.redactAll($0, secrets: secrets) })
         lines.append("")
 
         // ---- 当前播放曲目的歌词解析状态----
@@ -356,7 +356,7 @@ enum DiagnosticsExporter {
         return lines.isEmpty ? ["(no entries in the last \(hours)h)"] : lines
     }
 
-    /// 最近 `days` 天内本 App 家族(App 本体 + 包内 collector)的崩溃报告摘要,每个进程最多 `perProcessLimit` 份
+    /// 最近 `days` 天内本 App 家族(App 本体 + 包内引擎)的崩溃报告摘要,每个进程最多 `perProcessLimit` 份
     ///。文件名前缀粗筛(`<可执行名>-*.ips` / 引擎的新旧两个名字 `-*.ips`),正文再按 bundle id /
     /// 包路径确认是本变体的(别的 App 也可能有叫 collector 的进程;Dev 与正式版互不混入)。目录列不出、单个文件
     /// 读不到或解不开都只留一行,不抛、不让整份导出失败;「没有匹配」也写出来。家目录改写成 ~。
@@ -393,7 +393,7 @@ enum DiagnosticsExporter {
         }
         var lines: [String] = []
         if matched.isEmpty {
-            lines.append("(no crash reports for \(LyrimuseIdentity.displayName) / collector in the last \(days) days; \(scanned) candidate file(s) scanned)")
+            lines.append("(no crash reports for \(LyrimuseIdentity.displayName) / engine in the last \(days) days; \(scanned) candidate file(s) scanned)")
         } else {
             let shown = CrashReportSummary.select(matched, perProcessLimit: perProcessLimit)
             lines.append("\(matched.count) report(s) in the last \(days) days; showing up to \(perProcessLimit) per process (\(shown.count) shown)")
@@ -413,12 +413,12 @@ enum DiagnosticsExporter {
 
     /// 把报告和两份完整日志打成一个 zip。
     ///
-    /// 为什么日志不再截断塞进报告:原来 collector 那段取"最近 4 小时"、还压着 5000 行硬
+    /// 为什么日志不再截断塞进报告:原来引擎那段取"最近 4 小时"、还压着 5000 行硬
     /// 上限,而这台机器 4 小时就有 9476 行 —— 实际连 4 小时都给不全。更要紧的是"窗口"这个
     /// 抽象本身就不对症:一首歌的歌词是哪一次解析定下来的,可能是几周前的事,而缓存永久
     /// 保留、日志会轮转。实测本机 first-resolve 决策的年龄 p90 是 7.2 天。
     ///
-    /// 为什么导出时还要再脱敏一遍,而不是让用户直接把 ~/Library/Logs/lyrimuse.log 发出来:collector
+    /// 为什么导出时还要再脱敏一遍,而不是让用户直接把 ~/Library/Logs/lyrimuse.log 发出来:引擎
     /// 写日志时已经过一道凭据脱敏(logscrub.go 的 secretScrubber),这里再用 LogRedactor 按当前配置里的
     /// 凭据原文和正则兜一遍,两道是纵深关系,别因为源头有了就删掉这一道。导出还带上 App 侧日志和运行状态,
     /// 原始文件里没有这些。包里每个文件最后再把本机家目录换成 `~`(用户名是个人信息);曲名原样保留。
@@ -439,12 +439,12 @@ enum DiagnosticsExporter {
             .joined(separator: "\n")
         var files: [(String, String)] = [
             ("report.txt", report),
-            (LogFiles.collector.lastPathComponent, fullCollectorLogText(secrets: secrets)),
+            (LogFiles.engine.lastPathComponent, fullEngineLogText(secrets: secrets)),
             ("app-log.txt", fullAppLogText(secrets: secrets)),
         ]
-        // 最近一份轮转归档也带上:collector 两三天轮转一次,刚轮转完就导出的话当前那份只有几分钟,历史全在归档里。
-        if let archived = archivedCollectorLogText(secrets: secrets) {
-            files.append((LogFiles.collector.lastPathComponent + ".old", archived))
+        // 最近一份轮转归档也带上:引擎两三天轮转一次,刚轮转完就导出的话当前那份只有几分钟,历史全在归档里。
+        if let archived = archivedEngineLogText(secrets: secrets) {
+            files.append((LogFiles.engine.lastPathComponent + ".old", archived))
         }
         // App 主线程最近一次卡住时采的调用栈(MainThreadWatchdog),7 天内的才带。
         if let stall = recentMainThreadStallSample() {
@@ -458,22 +458,22 @@ enum DiagnosticsExporter {
         zipDirectory(staging, to: destination)
     }
 
-    /// 整份 collector 日志,脱敏后原样保留 —— 不按时间截、不压行数上限、不折叠重复行。
+    /// 整份引擎日志,脱敏后原样保留 —— 不按时间截、不压行数上限、不折叠重复行。
     /// 折叠那套留给 report.txt 里几段小的;这一份是拿来 grep 的,少一行都可能正是那一行。
     ///
     /// 整块脱敏而不是逐行:实测 3MB / 18594 行,整块 258ms、逐行 754ms,产出一模一样。
-    private static func fullCollectorLogText(secrets: [String: String]) -> String {
-        guard let content = try? String(contentsOf: LogFiles.collector, encoding: .utf8) else {
-            return "(could not read \(LogFiles.collector.path))"
+    private static func fullEngineLogText(secrets: [String: String]) -> String {
+        guard let content = try? String(contentsOf: LogFiles.engine, encoding: .utf8) else {
+            return "(could not read \(LogFiles.engine.path))"
         }
         return LogRedactor.redactAll(content, secrets: secrets)
     }
 
-    /// collector 最近一份轮转归档(`<日志>.old`,名字由 collector 的 logrotate.go 定),同样整份脱敏。
+    /// 引擎最近一份轮转归档(`<日志>.old`,名字由引擎的 logrotate.go 定),同样整份脱敏。
     /// 还没轮转过(没有这个文件)返回 nil,诊断包里就不出现这一份。
-    private static func archivedCollectorLogText(secrets: [String: String]) -> String? {
-        let url = LogFiles.collector.deletingLastPathComponent()
-            .appendingPathComponent(LogFiles.collector.lastPathComponent + ".old")
+    private static func archivedEngineLogText(secrets: [String: String]) -> String? {
+        let url = LogFiles.engine.deletingLastPathComponent()
+            .appendingPathComponent(LogFiles.engine.lastPathComponent + ".old")
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         return LogRedactor.redactAll(content, secrets: secrets)
     }
@@ -510,19 +510,19 @@ enum DiagnosticsExporter {
     /// 跑一次引擎的 `healthcheck`,写进报告的那几行。参数、超时和输出格式见 Core `DiagnosticsHealthCheck`;
     /// 二进制取包里那份(LyrimusePaths.bundledEnginePath)。启动失败、超时、空输出都写成报告里的一行,
     /// 不让导出因此失败。
-    private static func collectorHealthCheckLines() -> [String] {
-        let collectorPath = LyrimusePaths.bundledEnginePath
-        guard FileManager.default.isExecutableFile(atPath: collectorPath) else {
-            return ["(engine binary not found at \(collectorPath))"]
+    private static func engineHealthCheckLines() -> [String] {
+        let enginePath = LyrimusePaths.bundledEnginePath
+        guard FileManager.default.isExecutableFile(atPath: enginePath) else {
+            return ["(engine binary not found at \(enginePath))"]
         }
 
         // stdout / stderr 分两路:报告本体走 stdout,探测曲触发的网络审计行走 stderr,合成一路会交叉穿插。
         // ProcessRunner 并发读空两根管子、到点先 SIGTERM 再 SIGKILL;是不是被它杀的看 `timedOut`,
         // 别用 terminationReason == .uncaughtSignal 去猜(任何信号杀死的进程都会命中)。
-        // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
+        // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
         guard let result = ProcessRunner.run(
-            collectorPath, DiagnosticsHealthCheck.arguments, timeout: DiagnosticsHealthCheck.timeoutSeconds,
-            environment: LyrimusePaths.collectorProcessEnvironment(), captureStderr: true)
+            enginePath, DiagnosticsHealthCheck.arguments, timeout: DiagnosticsHealthCheck.timeoutSeconds,
+            environment: LyrimusePaths.engineProcessEnvironment(), captureStderr: true)
         else {
             return ["(failed to launch engine healthcheck)"]
         }

@@ -8,7 +8,7 @@ public enum OnboardingStep: Equatable, Hashable, Sendable {
 /// 首启引导的流程判断:走哪几步、翻页怎么夹下标、哪一步锁「下一步」、收尾页列什么。
 ///
 /// `OnboardingView` 只负责调用和排版,判断都收在这里,selftest onboarding 组逐条钉着。
-/// 运行期事实(装没装、授权状态、collector 在不在跑)由视图层读好传进来,这里不碰
+/// 运行期事实(装没装、授权状态、引擎在不在跑)由视图层读好传进来,这里不碰
 /// NSWorkspace / launchctl。
 public enum OnboardingFlow {
 
@@ -30,7 +30,7 @@ public enum OnboardingFlow {
     /// 这一轮的步骤序列。唯一的条件步 `.browserPairing` 紧跟选播放器、只出现在它后面 ——
     /// 能让序列变长变短的控件都在选播放器那一步,条件步排在它前面会让用户脚下的下标跟着变。
     /// 自动化权限、完全磁盘访问不是单独的步骤,是 `.background`(「让它跑起来」)页里按需出现的
-    /// 小节:完全磁盘访问的状态由 collector 发布,授权完还要重启它,所以放在装歌词引擎的同一页、
+    /// 小节:完全磁盘访问的状态由引擎发布,授权完还要重启它,所以放在装歌词引擎的同一页、
     /// 排在它下面。
     public static func steps(_ conditions: Conditions) -> [OnboardingStep] {
         var list: [OnboardingStep] = [.welcome, .playerChoice]
@@ -94,15 +94,15 @@ public enum OnboardingFlow {
 
     /// 「下一步」锁没锁。只有后台服务那一步、且服务没在跑时才锁。
     /// 自动化权限不进这把锁:没有它歌词照样显示,缺了什么由收尾页的体检清单如实报告。
-    public static func nextIsLocked(at step: OnboardingStep, collectorRunning: Bool) -> Bool {
-        step == .background && !collectorRunning
+    public static func nextIsLocked(at step: OnboardingStep, engineRunning: Bool) -> Bool {
+        step == .background && !engineRunning
     }
 
     /// 走到后台服务那一步时要不要自动开始启用。服务已在跑、正在装、或上一次装失败了都不自动
     /// 再来:失败之后由用户点「重试」,不在每次翻回这一步时反复重试。
-    public static func autoStartsBackgroundService(at step: OnboardingStep, collectorRunning: Bool,
+    public static func autoStartsBackgroundService(at step: OnboardingStep, engineRunning: Bool,
                                                    installing: Bool, lastAttemptFailed: Bool) -> Bool {
-        step == .background && !collectorRunning && !installing && !lastAttemptFailed
+        step == .background && !engineRunning && !installing && !lastAttemptFailed
     }
 
     /// 用户在系统设置里授权完、引导窗口此刻不在前台时,要不要把它带回来。只在「这一页已授权的
@@ -112,16 +112,16 @@ public enum OnboardingFlow {
     }
 
     /// 点「开始使用」时要不要把引导记成走完。服务没在跑就不记:标记一旦置真这扇窗口不会再自动
-    /// 出现,而它是装 collector 的主要入口(服务没装 + 引导标记完成 = 桌面永久停在「搜索歌词中…」)。
-    public static func marksCompleted(collectorRunning: Bool) -> Bool {
-        collectorRunning
+    /// 出现,而它是装引擎的主要入口(服务没装 + 引导标记完成 = 桌面永久停在「搜索歌词中…」)。
+    public static func marksCompleted(engineRunning: Bool) -> Bool {
+        engineRunning
     }
 
     // MARK: - 收尾页体检清单
 
     /// 清单里的一项是什么。标题文案由视图层按它取。
     public enum ReadinessKind: Equatable, Hashable {
-        case collector
+        case engine
         case automation(PlaybackPlayer)
         case fullDiskAccess
         case accessibility
@@ -137,7 +137,7 @@ public enum OnboardingFlow {
 
         public var id: String {
             switch kind {
-            case .collector: return "collector"
+            case .engine: return "engine"
             case .automation(let player): return "automation-\(player.rawValue)"
             case .fullDiskAccess: return "full-disk-access"
             case .accessibility: return "accessibility"
@@ -157,7 +157,7 @@ public enum OnboardingFlow {
         public var isOptional: Bool {
             switch kind {
             case .automation, .fullDiskAccess, .accessibility: return true
-            case .collector, .browser, .displayMode: return false
+            case .engine, .browser, .displayMode: return false
             }
         }
     }
@@ -169,7 +169,7 @@ public enum OnboardingFlow {
 
     /// 生成清单要的运行期事实。可选项为 nil = 本轮没有那一步,清单里也不列。
     public struct ReadinessInput: Equatable {
-        public var collectorRunning: Bool
+        public var engineRunning: Bool
         /// 自动化权限那一步列的播放器,顺序即清单顺序。
         public var automationTargets: [PlaybackPlayer]
         /// 其中已授权的。
@@ -181,10 +181,10 @@ public enum OnboardingFlow {
         /// 至少开着一种歌词显示方式。
         public var displayModeEnabled: Bool
 
-        public init(collectorRunning: Bool, automationTargets: [PlaybackPlayer],
+        public init(engineRunning: Bool, automationTargets: [PlaybackPlayer],
                     authorized: Set<PlaybackPlayer>, fullDiskAccessGranted: Bool?,
                     browserPaired: Bool?, displayModeEnabled: Bool, accessibilityGranted: Bool? = nil) {
-            self.collectorRunning = collectorRunning
+            self.engineRunning = engineRunning
             self.automationTargets = automationTargets
             self.authorized = authorized
             self.fullDiskAccessGranted = fullDiskAccessGranted
@@ -197,7 +197,7 @@ public enum OnboardingFlow {
     /// 收尾页要核对的几件事。只列这一轮真的走过的步骤:没问自动化权限的人不该看到一条
     /// 「未完成」的权限。
     public static func readinessItems(_ input: ReadinessInput) -> [ReadinessItem] {
-        var items = [ReadinessItem(kind: .collector, ok: input.collectorRunning, target: .background)]
+        var items = [ReadinessItem(kind: .engine, ok: input.engineRunning, target: .background)]
         for player in input.automationTargets {
             items.append(ReadinessItem(kind: .automation(player),
                                        ok: input.authorized.contains(player), target: .background))

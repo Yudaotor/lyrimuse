@@ -51,7 +51,7 @@ public struct LastfmRequestGate {
         if until > cooldownUntil { cooldownUntil = until }
     }
 
-    /// 并入跟 collector 共享的限流窗口(OutboundCooldownStore);nil = 共享窗口里没有有效期限。
+    /// 并入跟引擎共享的限流窗口(OutboundCooldownStore);nil = 共享窗口里没有有效期限。
     public mutating func adoptSharedCooldown(_ until: Date?) {
         if let until { extendCooldown(until: until) }
     }

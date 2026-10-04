@@ -193,21 +193,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settings = AppSettings.shared
 
-        // ConfigStore/FeatureSettingsStore 写配置文件、collector 自己写歌词/封面缓存都
+        // ConfigStore/FeatureSettingsStore 写配置文件、引擎自己写歌词/封面缓存都
         // 假设这个目录已经存在，但谁都不会在写之前 createDirectory——这里无条件、幂等
         // 地建一次，不依赖引导流程是否跑完，第一次启动就先把这个目录建好。
         try? FileManager.default.createDirectory(
             at: LyrimusePaths.configDir,
             withIntermediateDirectories: true)
 
-        // collector 的 launchd job 对账。必须在启动路径上跑,这是 Sparkle 自动更新 /
+        // 引擎的 launchd job 对账。必须在启动路径上跑,这是 Sparkle 自动更新 /
         // Homebrew cask upgrade / 手动拖 .app 覆盖这三条路唯一的兜底 —— 它们都不经过
-        // build.sh,而换掉 collector 二进制会让 launchd 缓存的 LWCR 失效、KeepAlive 一直
-        // 拉不起来(完整机理见 CollectorServiceManager.reconcileAfterLaunch 的注释)。
+        // build.sh,而换掉引擎二进制会让 launchd 缓存的 LWCR 失效、KeepAlive 一直
+        // 拉不起来(完整机理见 EngineServiceManager.reconcileAfterLaunch 的注释)。
         // 内部自己判断该不该动、并且整段跑在后台串行队列上,这里不会阻塞启动。
-        CollectorServiceManager.reconcileAfterLaunch()
-        // collector 预解析要问播放器的那几样(Music 的队列与专辑曲目、Spotify 随机、网页版队列)由 App 代跑,
-        // collector 自己不发 AppleEvent(见 PlayerQueryServer)。
+        EngineServiceManager.reconcileAfterLaunch()
+        // 引擎预解析要问播放器的那几样(Music 的队列与专辑曲目、Spotify 随机、网页版队列)由 App 代跑,
+        // 引擎自己不发 AppleEvent(见 PlayerQueryServer)。
         PlayerQueryServer.shared.start()
         // 主线程卡住几秒就记一行、卡久了采一次调用栈(见 MainThreadWatchdog)。
         MainThreadWatchdog.shared.start()
@@ -254,7 +254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 启动时不推一次的话"浏览器歌词同步"卡片里配好的配对要等用户重新打开设置页
         // 才会生效。
         BrowserPositionProbe.shared.platformBrowserPairs = settings.browserPlatformPairs
-        // collector 那几路网页平台探针也只对配对过的浏览器跑(collector browserpairs.go),配对关系得镜像进
+        // 引擎那几路网页平台探针也只对配对过的浏览器跑(引擎 browserpairs.go),配对关系得镜像进
         // features.json。用订阅:写配对的地方有好几处(设置页、配对 / 取消配对),订阅那一刻先发的当前值顺带把
         // 启动时那一次也写了(没变就不落盘)。闭包里用参数,理由同上面 showTranslation。
         settings.$browserPlatformPairs
@@ -274,7 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 的一个 MenuBarExtra 场景,现在是自建的 NSStatusItem,得在这里显式启动。
         // 生命周期自持(靠 Combine 订阅设置/播放状态),这里只需要点一次。
         //
-        // 从原来排在 collector 对账、悬浮歌词/灵动岛窗口创建、通知中心注册、
+        // 从原来排在引擎对账、悬浮歌词/灵动岛窗口创建、通知中心注册、
         // NotchMirrorManager 等一堆重活之后,挪到了这里——"把图标挪到贴近系统
         // 图标的位置",调研结论(见 MenuBarPositionHint.swift 头注 / docs/features/
         // 06-menubar.md):macOS 没有公开 API 能保证第三方状态栏图标的位置,唯一站得住脚、
@@ -547,13 +547,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // App":SwiftUI 的 .onDisappear 不保证在进程被终止时对每个视图都执行一遍,尤其是
     // Settings 这类按需构造的 Scene。这里在真正退出前先同步检查 ConfigStore 是否还有
     // 没保存的改动:没有就直接放行,不拖慢正常退出;有就用 .terminateLater 暂缓退出,
-    // 异步存盘(顺带重启 collector)完成后再 reply(toApplicationShouldTerminate:) 放行
+    // 异步存盘(顺带重启引擎)完成后再 reply(toApplicationShouldTerminate:) 放行
     // ——不管存盘成功与否都放行,避免磁盘写入异常时把 Cmd+Q 卡死。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // 退出原因日志:所有退出路径的汇合点,在这里打、只打一次。原因由 AppExit.request
         // 登记,没登记的按信号推断(Sparkle 正在装更新 → sparkle_install,否则 external_request)。
         AppExit.logTermination(sparkleInstalling: SparkleUpdaterManager.shared.isInstallingUpdate)
-        // 告诉 collector App 要走了:它据此不再按这份播放状态计时、推送(见 PlaybackStatePublisher)。
+        // 告诉引擎 App 要走了:它据此不再按这份播放状态计时、推送(见 PlaybackStatePublisher)。
         PlaybackStatePublisher.shared.markExiting()
         // 镜像写盘有 2 秒防抖,退出前这 2 秒里改的设置还没进镜像;引导没走完的机器每次启动都会从镜像恢复
         // (restoreIfPristine),不补这一次就会把那几项改动回滚成旧值。

@@ -60,7 +60,7 @@ public struct MediaControlSnapshot: Decodable {
     /// 曲目身份——判「换歌了没有」和「这份封面属于哪一首」都用它，两处必须同一把尺子。
     ///
     /// 通常就等于 `trackKey`。但**署名不可信的播放器**（酷狗 3.3.2 拿当前这句歌词冒充
-    /// artist）要把署名整个剔出去：真署名由 collector 单向发布，而它 5 秒一拍、还要读
+    /// artist）要把署名整个剔出去：真署名由引擎单向发布，而它 5 秒一拍、还要读
     /// 播放器自己的 plist 才出得来，比 App 的轮询慢一截 —— 换歌头几秒 App 只拿得到脏署名。
     /// 让它参与身份，一首歌里身份就会抖三四次（实测「锁 (R&B版)」一首歌内
     /// `track changed` 触发 4 次：正确 → 版权声明行 → 歌词行 → 正确），而封面取图的完成
@@ -122,7 +122,7 @@ public struct MediaControlSnapshot: Decodable {
     }
 
     /// 换掉署名的副本。唯一的用处是酷狗 3.3.2 把**当前这一句歌词**发布成 artist —— 真署名
-    /// 由 collector 从播放器自己的容器里读出来发布,App 读那条通道换回去,见 `PlayerArtistFix`。
+    /// 由引擎从播放器自己的容器里读出来发布,App 读那条通道换回去,见 `PlayerArtistFix`。
     /// 两边必须换成同一个值,否则歌词缓存的 key 对不上。
     /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
     public func withArtist(_ newArtist: String) -> MediaControlSnapshot {
@@ -134,7 +134,7 @@ public struct MediaControlSnapshot: Decodable {
     }
 
     /// 换掉曲名的副本。唯一的用处是信任进来的其他播放器把歌词写进 artist、把「歌名 - 歌手」
-    /// 整串写进 title —— collector 拆出真曲名发布,App 读 `PlayerArtistFix` 换成同一个。
+    /// 整串写进 title —— 引擎拆出真曲名发布,App 读 `PlayerArtistFix` 换成同一个。
     /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
     public func withTitle(_ newTitle: String) -> MediaControlSnapshot {
         MediaControlSnapshot(
@@ -146,7 +146,7 @@ public struct MediaControlSnapshot: Decodable {
 
     /// 换掉时长的副本。唯一的用处是电台:系统报的 `duration` 是**整档节目**的
     /// (实测 3390.122s),而位置已经换成单曲口径,分母不跟着换就会显示成「2:29 / 56:30」。
-    /// 真曲长由 collector 从 Apple 目录查到、写进歌词缓存,App 在 `LocalPlaybackSource.apply`
+    /// 真曲长由引擎从 Apple 目录查到、写进歌词缓存,App 在 `LocalPlaybackSource.apply`
     /// 里读出来替换。写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
     public func withDuration(_ newDuration: Double) -> MediaControlSnapshot {
         MediaControlSnapshot(
@@ -175,7 +175,7 @@ public struct MediaControlSnapshot: Decodable {
     ///
     /// `duration` **原样不动**:系统那份报的是整档节目(实测 3390.122s),但置 nil 会让
     /// `LocalPlaybackSource.apply` 建不起进度锚点、整档节目都没有歌词(真踩过)。
-    /// 真曲长由 collector 从 Apple 目录查到写进歌词缓存,App 在 apply 里读出来替换。
+    /// 真曲长由引擎从 Apple 目录查到写进歌词缓存,App 在 apply 里读出来替换。
     /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
     /// 标成电台、位置和锚点原样保留。给「系统报单曲位置」的那种台用(RadioTrackClock.State.perTrack),
     /// 那种台的位置以系统 / AppleScript 读数为准,不换成单曲表。

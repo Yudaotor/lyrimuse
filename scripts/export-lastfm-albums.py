@@ -3,7 +3,7 @@
 
 归并规则(2026-08-18 与用户逐对核定):
   基础: 简繁折叠(需外部 t2s 映射)/NFKC/大小写/标点、Deluxe/Explicit/Remastered 等
-        同内容再版标签剥除、歌手别名统一(与 collector artistAliasTable 同步)。
+        同内容再版标签剥除、歌手别名统一(与引擎 artistAliasTable 同步)。
   R1 双语拼接名: 标题恰由一段CJK+一段拉丁拼成时,两段各自都算这张专辑的名字
       (Timeless 可啦思刻 = Timeless = 可啦思刻;神經誌 The Journal = 神经志)。
   R2 单曲后缀: 尾部 "- Single"/"- EP" 是商店标记,剥除后参与比较(玩樂 = 玩乐 - Single)。
@@ -124,7 +124,7 @@ def main(t2s_in, t2s_out, raw_json, out_md):
       '- Live 与录音室: 15/15 (Live in Hong Kong 2011)、Timeless/Khalil Timeless Concert Live 2009',
       '- 纪念版: Thriller/Thriller 40', '',
       '## 附录 C · 归并规则', '',
-      '1. 简繁/大小写/空白/标点折叠;歌手别名统一(与 collector artistAliasTable 同步)',
+      '1. 简繁/大小写/空白/标点折叠;歌手别名统一(与引擎 artistAliasTable 同步)',
       '2. 同内容再版标签剥除: Deluxe/Explicit/Remastered/Gold/Black/Bonus Track',
       '3. R1 双语拼接名: 一段中文+一段拉丁拼成的标题,两段各自等价(Timeless 可啦思刻)',
       '4. R2 尾部 "- Single"/"- EP" 商店标记剥除(玩樂 = 玩乐 - Single)',

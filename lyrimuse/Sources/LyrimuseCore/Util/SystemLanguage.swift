@@ -1,11 +1,11 @@
 import Foundation
 
 /// 译文语言「跟随系统语言」认的那门语言。App 读本机全局偏好写进 features.json 的 `system_language`,
-/// collector 解析 auto 时用它(features.go `resolveLyricsTranslationLanguage`);「翻译语言包」那一行按同一个值算目标。
+/// 引擎解析 auto 时用它(features.go `resolveLyricsTranslationLanguage`);「翻译语言包」那一行按同一个值算目标。
 ///
 /// 取法:全局偏好 AppleLocale(`zh_CN` / `en_US` / `ja_JP`)下划线前那段转小写,跟 `defaults read -g AppleLocale`
-/// 是同一个值,文字子标签原样留着(`zh-Hans_CN` 得 `zh-hans`)。必须跟 collector 的 `appleLocaleLanguage` 逐字一致
-/// (两侧共用样例 `shared/testdata/system-language.json`):文件里还没有这个键时 collector 自己查一次,两边对同一台
+/// 是同一个值,文字子标签原样留着(`zh-Hans_CN` 得 `zh-hans`)。必须跟引擎的 `appleLocaleLanguage` 逐字一致
+/// (两侧共用样例 `shared/testdata/system-language.json`):文件里还没有这个键时引擎自己查一次,两边对同一台
 /// 机器得出不同语言,会被当成译文语言换了、整库机翻清一遍。
 ///
 /// 这个键描述的是这台机器,不随配置包走:导出时去掉,导入时换成本机的值。

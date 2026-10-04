@@ -157,7 +157,7 @@ func runPlayerIdentityTests() {
 
     // ---- 信任列表:「自动识别」放开到任意 App ----
     //
-    // 白名单不只挡显示,**也挡打卡**(collector 的 poller.isTracked),所以口径是"用户显式
+    // 白名单不只挡显示,**也挡打卡**(引擎的 poller.isTracked),所以口径是"用户显式
     // 同意"而不是"一律接受"—— 一律接受等于让 YouTube/播客写进永久收听历史。这里守的是
     // 那道闸的语义:内置的永远认、信任过的认、其它一律不认。
     do {
@@ -266,12 +266,12 @@ func runPlayerIdentityTests() {
                     "非歌守卫: 宿主 Safari 不在信任表时代理进程照旧不归这条守卫管")
     }
 
-    // ---- 播放器身份契约:rawValue / bundle id 必须跟 collector 逐字对应 ----
+    // ---- 播放器身份契约:rawValue / bundle id 必须跟引擎逐字对应 ----
     //
     // rawValue 是两侧通过共享 features.json 的 "player" 字段交换的字符串(Go 侧 players_generated.go 的
     // playerXxx 常量);bundle id 是核对"系统级 Now Playing 是谁在报"的唯一依据(同一个文件里的
     // xxxBundleID 常量)。这两组字符串任一侧改了名而另一侧没跟上,表现都是**静默失效**:
-    // 用户在设置里选了某个播放器,collector 认不出这个值就默默兜底成"自动识别",界面一切正常、
+    // 用户在设置里选了某个播放器,引擎认不出这个值就默默兜底成"自动识别",界面一切正常、
     // 只是选择没生效 —— 所以这里把它们钉成断言,而不是靠"记得两边一起改"。
     do {
         let expected: [PlaybackPlayer: (raw: String, bundle: String)] = [
@@ -383,7 +383,7 @@ func runPlayerIdentityTests() {
     // companionCard("打开 Lyrimuse 时启动 X")、LyricsWindowView 的 idlePlayer、
     // AppDelegate 的"打开 Lyrimuse 时唤起播放器"都靠它决定"有没有一个唯一答案可以显示/
     // 动作"。只测这份不碰磁盘的纯逻辑,不测 PlaybackPlayerPreference.selected 本身
-    // (那个读的是真实共享文件,写测试数据进去会干扰这台机器上真的在跑的 collector/App)。
+    // (那个读的是真实共享文件,写测试数据进去会干扰这台机器上真的在跑的引擎/App)。
     do {
         expectEqual(Set<PlaybackPlayer>([.auto]).soleExplicitPlayer, nil,
                     "多选.soleExplicitPlayer: 纯自动识别没有唯一具体播放器")
@@ -453,7 +453,7 @@ func runPlayerIdentityTests() {
     // ---- 「完全磁盘访问权限」该替哪几家要 ----
     //
     // `Set<PlaybackPlayer>.playersNeedingFullDiskAccess` 决定设置页那张卡、引导页那一步、体检清单
-    // 那一项出不出现。每家要不要来自生成字段(shared/players.json,collector 侧
+    // 那一项出不出现。每家要不要来自生成字段(shared/players.json,引擎侧
     // TestPlayersNeedFullDiskAccessMatchesClientPaths 按真实路径对账),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
@@ -468,7 +468,7 @@ func runPlayerIdentityTests() {
         // 状态文件里的来源名就是各家的 nativeLyricSource —— 对不上的话结论永远是「还没确认」。
         expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess).map(\.nativeLyricSource),
                     ["qq", "netease", "kugou"],
-                    "完全磁盘访问判据: 要授权的每家都有 nativeLyricSource,且就是 collector 状态文件里的来源名")
+                    "完全磁盘访问判据: 要授权的每家都有 nativeLyricSource,且就是引擎状态文件里的来源名")
     }
 
     // `Set<PlaybackPlayer>.playersNeedingAccessibility` 决定设置页那张卡、引导页那一行、体检清单那一项
@@ -543,16 +543,16 @@ func runPlayerIdentityTests() {
                     "权限失效提示: 查询超时不提示(拿不到结论就不下结论)")
     }
 
-    // ---- collector 发布的可读性状态 到 一个结论 ----
+    // ---- 引擎发布的可读性状态 到 一个结论 ----
     do {
         typealias A = LocalCacheAccess
         let mixed = A.State(denied: ["kugou"], readable: ["qq", "netease"])
         expectEqual(A.grant(for: ["qq", "kugou"], state: mixed), .denied, "授权结论: 有一家被拒就是被拒")
         expectEqual(A.grant(for: ["qq", "netease"], state: mixed), .granted, "授权结论: 全部读得到才算已授权")
         expectEqual(A.grant(for: ["qq", "soda"], state: mixed), .unknown, "授权结论: 有一家还没探到就是还没确认")
-        expectEqual(A.grant(for: ["qq"], state: nil), .unknown, "授权结论: 没有状态文件(collector 没在跑)是还没确认")
+        expectEqual(A.grant(for: ["qq"], state: nil), .unknown, "授权结论: 没有状态文件(引擎没在跑)是还没确认")
         expectEqual(A.grant(for: [], state: mixed), .unknown, "授权结论: 空列表没东西可判")
-        // 旧版 collector 只写 denied,不写 readable:解得出来,readable 为空。
+        // 旧版引擎只写 denied,不写 readable:解得出来,readable 为空。
         let legacy = try? JSONDecoder().decode(A.State.self, from: Data(#"{"updatedAt":1,"denied":["kugou"]}"#.utf8))
         expectEqual(legacy?.readable, [], "授权结论: 旧版状态文件没有 readable 字段也能解")
         expectEqual(A.grant(for: ["kugou"], state: legacy), .denied, "授权结论: 旧版状态文件照样报得出被拒")
@@ -574,7 +574,7 @@ func runPlayerIdentityTests() {
         //    YT Music 的广告也像 Spotify 那样显示「广告中」)。丢弃的话 UI 拿不到任何东西,
         //    30 秒广告期间灵动岛/悬浮窗会整个塌成"没有在播放"再弹回来。
         // 放行**不等于**会被记录:Swift 侧一行 scrobble 都不发,提交 listen 全在
-        //    collector(lastfm.go / lb.go),它按 App 播放状态里的 ad 标记(appReportedAd)拦。
+        //    引擎(lastfm.go / lb.go),它按 App 播放状态里的 ad 标记(appReportedAd)拦。
         expectEqual(P.gate(artist: "Michael Jackson", verdict: .song), .acceptAsSong,
                     "广告闸: 判定是歌 → 放行当歌")
         expectEqual(P.gate(artist: "KAO Hong Kong", verdict: .ad), .acceptAsAd,
@@ -596,7 +596,7 @@ func runPlayerIdentityTests() {
 
         // ⓪-b 再探间隔按判定分档(现象是「有视频的歌识别错了,变成广告了」)。
         //    MV 的前贴片广告跟正片共用同一份 MediaSession 元数据 —— 同一个 key 下判定会先 ad 后
-        //    song,"按曲目身份缓存 60 秒是安全的"这条前提对 MV 不成立(collector 日志三轮
+        //    song,"按曲目身份缓存 60 秒是安全的"这条前提对 MV 不成立(引擎日志三轮
         //    rejected 之后整整 60 秒才 now playing)。歌仍 60 秒不动;广告 5 秒一探。
         //    可读有效期(cachedReading)仍是 60 秒,窄窗里读到旧的 ad 判定而不是 nil ——
         //    nil 会让 gate fail-closed 把快照整条丢掉,广告中途 UI 塌成"没有在播放"。
@@ -708,7 +708,7 @@ func runPlayerIdentityTests() {
         //    「YouTube Music」(18:07:19 抓到的边界样本:上一首刚结束、<video> 停在 0.0),而 YT Music 首次发布
         //    元数据常常不带 album、会被 MediaControlClient 那道闸踢一次探针 —— 弱 ad 就缓存到了下一首的 key 下,
         //    下一拍换曲按当下判定定初值。所以**贴标签**只认强信号(ad-showing / 徽章),裸标题单独命中 = 拿不准
-        //    (nil);gate 那一路不变(拿不准就不采纳这一轮,下一轮自愈,collector 同款)。
+        //    (nil);gate 那一路不变(拿不准就不采纳这一轮,下一轮自愈,引擎同款)。
         expectEqual(P.badgeVerdict(P.parse("1|1|1|")), .ad, "广告标签口径: 真广告(三条全中)→ 广告")
         expectEqual(P.badgeVerdict(P.parse("1|0|0|")), .ad, "广告标签口径: 只有 ad-showing → 强信号,广告")
         expectEqual(P.badgeVerdict(P.parse("0|1|0|")), .ad, "广告标签口径: 只有广告徽章 → 强信号,广告")
@@ -716,7 +716,7 @@ func runPlayerIdentityTests() {
                     "广告标签口径: **只有裸标题** → 拿不准(nil),不点亮「广告中」(用户报的 bug:换歌边界的裸标题被缓存到下一首)")
         expectEqual(P.badgeVerdict(P.parse("0|0|0||Prince")), .song, "广告标签口径: 歌 → 歌(能解开棘轮)")
         expectEqual(P.badgeVerdict(nil), nil, "广告标签口径: 还没探到 → nil")
-        expectEqual(P.parse("0|0|1|")?.verdict, .ad, "广告闸口径: 裸标题单独命中仍是广告(gate / collector 同款,不变)")
+        expectEqual(P.parse("0|0|1|")?.verdict, .ad, "广告闸口径: 裸标题单独命中仍是广告(gate / 引擎同款,不变)")
         expectEqual(P.parse("0|0|1|")?.strongAd, false, "读数强弱: 裸标题单独命中 → 弱")
         expectEqual(P.parse("1|0|1|")?.strongAd, true, "读数强弱: ad-showing + 裸标题 → 强")
         expectEqual(P.parse("0|1|1|")?.strongAd, true, "读数强弱: 徽章 + 裸标题 → 强")
@@ -1240,20 +1240,20 @@ func runPlayerIdentityTests() {
     do {
         typealias PH = PlayerHealth
         expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
-                                      collectorServiceEnabled: true, collectorRunning: true)),
+                                      engineServiceEnabled: true, engineRunning: true)),
                     [], "PlayerHealth: 一切正常不报")
         expectEqual(PH.warnings(.init(automationDeniedPlayers: [.appleMusic],
-                                      collectorServiceEnabled: true, collectorRunning: true)),
+                                      engineServiceEnabled: true, engineRunning: true)),
                     [.automationDenied], "PlayerHealth: 有播放器权限被拒 → 报自动化")
         expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
-                                      collectorServiceEnabled: true, collectorRunning: false)),
-                    [.collectorNotRunning], "PlayerHealth: 服务开着却没在跑 → 报采集服务")
+                                      engineServiceEnabled: true, engineRunning: false)),
+                    [.engineNotRunning], "PlayerHealth: 服务开着却没在跑 → 报采集服务")
         expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
-                                      collectorServiceEnabled: false, collectorRunning: false)),
+                                      engineServiceEnabled: false, engineRunning: false)),
                     [], "PlayerHealth: 用户自己关掉服务不算故障")
         expectEqual(PH.warnings(.init(automationDeniedPlayers: [.spotify],
-                                      collectorServiceEnabled: true, collectorRunning: false)),
-                    [.collectorNotRunning, .automationDenied], "PlayerHealth: 两条都中时采集服务排前面")
+                                      engineServiceEnabled: true, engineRunning: false)),
+                    [.engineNotRunning, .automationDenied], "PlayerHealth: 两条都中时采集服务排前面")
 
         let allInstalled: (PlaybackPlayer) -> Bool = { _ in true }
         let deniedAll: (PlaybackPlayer) -> Bool = { _ in true }
@@ -1279,11 +1279,11 @@ func runPlayerIdentityTests() {
         expectEqual(PH.accessibilityMissingPlayers(visible: [.amazonMusic], trusted: true), [], "PlayerHealth: 有辅助功能权限不报")
         expectEqual(PH.accessibilityMissingPlayers(visible: [], trusted: false), [],
                     "PlayerHealth: 没有要读界面的播放器,缺辅助功能也不报")
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [.spotify], collectorServiceEnabled: true, collectorRunning: false,
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [.spotify], engineServiceEnabled: true, engineRunning: false,
                                       fullDiskAccessDeniedPlayers: [.qqMusic], accessibilityMissingPlayers: [.amazonMusic])),
-                    [.collectorNotRunning, .automationDenied, .fullDiskAccessDenied, .accessibilityMissing],
+                    [.engineNotRunning, .automationDenied, .fullDiskAccessDenied, .accessibilityMissing],
                     "PlayerHealth: 四条都中时按严重程度排")
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [], collectorServiceEnabled: true, collectorRunning: true,
+        expectEqual(PH.warnings(.init(automationDeniedPlayers: [], engineServiceEnabled: true, engineRunning: true,
                                       accessibilityMissingPlayers: [.amazonMusic])),
                     [.accessibilityMissing], "PlayerHealth: 只缺辅助功能时也亮徽标")
         expectEqual([PlaybackPlayer.qqMusic, .netease, .kugou].allSatisfy(\.needsFullDiskAccess)
@@ -1295,7 +1295,7 @@ func runPlayerIdentityTests() {
     // ---- 与播放器联动:逐播放器多选----
     //
     // 三项联动(打开 Lyrimuse 时启动 / 跟随启动 / 跟随退出)的候选、生效集、退出判定、老配置迁移全是
-    // LyrimuseCore.PlayerLinkage 的纯函数;collector 侧 companionLaunchProcessNames 有同一条规则的 Go 测试。
+    // LyrimuseCore.PlayerLinkage 的纯函数;引擎侧 companionLaunchProcessNames 有同一条规则的 Go 测试。
     do {
         typealias PL = PlayerLinkage
         let explicitAll = Set(PlaybackPlayer.allCases).subtracting([.auto])
@@ -1329,7 +1329,7 @@ func runPlayerIdentityTests() {
         expectEqual(PL.migratedLaunchSet(legacyEnabled: true, selectedPlayers: [.qqMusic, .spotify], requiresSole: true), [],
                     "联动迁移: 当年含糊(两个具体播放器)开关本来就藏着 → 迁成空")
         expectEqual(PL.migratedLaunchSet(legacyEnabled: true, selectedPlayers: [.auto], requiresSole: false), explicitAll,
-                    "联动迁移: 布尔年代「跟随播放器启动」true + 自动识别 → 全部五个(collector 当年盯的范围)")
+                    "联动迁移: 布尔年代「跟随播放器启动」true + 自动识别 → 全部五个(引擎当年盯的范围)")
         expectEqual(PL.migratedLaunchSet(legacyEnabled: false, selectedPlayers: [.auto], requiresSole: false), [],
                     "联动迁移: 布尔 false → 空")
 
@@ -1367,14 +1367,14 @@ func runPlayerIdentityTests() {
     // ---- 被歌词顶掉的署名(酷狗 3.3.2) ----
     //
     // 那一版把当前这一句歌词发布成 MediaRemote 的 artist,每唱一句换一次,曲名和时长
-    // 纹丝不动。真署名由 collector 从播放器自己的容器里读出来发布,App 读那条通道换回去
+    // 纹丝不动。真署名由引擎从播放器自己的容器里读出来发布,App 读那条通道换回去
     // —— 两边必须换成同一个值,否则歌词缓存的 key(artist|title|album)对不上。
     do {
         typealias F = PlayerArtistFix
         let fix = F.State(bundle: "com.kugou.mac.Music", title: "爱情慢慢来", artist: "Stake", unreliable: true)
 
         expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "爱情慢慢来", state: fix), "Stake",
-                    "署名纠正: bundle 与曲名都对得上 → 用 collector 发布的真署名")
+                    "署名纠正: bundle 与曲名都对得上 → 用引擎发布的真署名")
         expectEqual(F.artist(forBundle: "com.tencent.QQMusicMac", title: "爱情慢慢来", state: fix), nil,
                     "署名纠正: 换了个播放器就不适用")
         expectEqual(F.artist(forBundle: "com.kugou.mac.Music", title: "我不难过", state: fix), nil,
@@ -1415,7 +1415,7 @@ func runPlayerIdentityTests() {
         // 封面是**另一次**独立的 media-control 调用，载荷里是播放器原样报的署名。那道
         // 「这份封面属于哪首歌」的核对要跟当前快照用同一把尺子，否则恒不相等——封面被
         // 无声无息地全部丢掉，歌名歌词进度全对，唯独没有图。
-        // 曲目身份：**署名不可信的播放器整个把署名剔出去**。真署名由 collector 单向发布、
+        // 曲目身份：**署名不可信的播放器整个把署名剔出去**。真署名由引擎单向发布、
         // 比 App 的轮询慢一截，换歌头几秒 App 只拿得到脏署名——让它参与身份，一首歌里身份
         // 会抖三四次，而封面取图的完成回调正是拿身份核对的，每次都被丢掉（实测现象：这个
         // 播放器永远没有封面，日志里一个字都没有）。
@@ -1477,7 +1477,7 @@ func runPlayerIdentityTests() {
     }
 
     // ---- 曲名也换:信任进来的其他播放器 ----
-    // 那类播放器把当前这句歌词写进 artist、把「歌名 - 歌手」整串写进 title。collector 拆出真
+    // 那类播放器把当前这句歌词写进 artist、把「歌名 - 歌手」整串写进 title。引擎拆出真
     // 曲名与真署名一起发布(fixedTitle),App 要换成同一对,否则歌词缓存 key 对不上。
     do {
         typealias F = PlayerArtistFix

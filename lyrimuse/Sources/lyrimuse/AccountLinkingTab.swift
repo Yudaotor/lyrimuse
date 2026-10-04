@@ -283,8 +283,8 @@ func lastfmDisplayName(config: ConfigStore) -> String {
 }
 
 @MainActor
-/// mirrorInfo 是 collector 落盘的"授权已失效"状态,调用方从 LastfmMirrorStatusWatcher
-/// 取 —— 必须经由观察器而不是在这里直接读文件:文件被删(collector 自愈)不触发任何
+/// mirrorInfo 是引擎落盘的"授权已失效"状态,调用方从 LastfmMirrorStatusWatcher
+/// 取 —— 必须经由观察器而不是在这里直接读文件:文件被删(引擎自愈)不触发任何
 /// SwiftUI 观察,直接读的话红标会滞留到下一次无关的重渲染。
 func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController, mirrorInfo: LastfmMirrorStatus.Info?) -> DestinationStatus {
     switch destination {
@@ -310,7 +310,7 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // 徽标只报"连没连",不展开读/写两条链路各自的配置状态——那是内部架构,
         // 不是用户需要理解的东西,见 lastfmFields 顶部注释。
         if config.lastfmScrobbleSessionKey.isEmpty { return .notConfigured(L10n.t("未配置（可选）")) }
-        // collector 报告凭据已死(用户在网站上撤销了授权等)——必须压过"已连接":
+        // 引擎报告凭据已死(用户在网站上撤销了授权等)——必须压过"已连接":
         // 本地攥着的 session key 是废的,绿标就是在撒谎。
         if mirrorInfo != nil { return .error(L10n.t("授权已失效")) }
         let name = lastfmDisplayName(config: config)
@@ -340,7 +340,7 @@ struct AccountSidebarRow: View {
     @ObservedObject private var config = ConfigStore.shared
     @ObservedObject private var lastfmConnect = LastfmConnectController.shared
     // "授权已失效"红标的数据源。订阅观察器(而不是渲染时直接读文件)才能让红标在
-    // collector 自愈删掉状态文件后自己消失,见 LastfmMirrorStatusWatcher 注释。
+    // 引擎自愈删掉状态文件后自己消失,见 LastfmMirrorStatusWatcher 注释。
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     // 只为了让这一行在手动切换语言时重新渲染——这个 View 本身已经嵌在 SettingsView
     // 的 List 里,父视图理论上会因为语言变化重新构造子行,这里独立再观察一份是保险,
@@ -398,7 +398,7 @@ struct AccountLinkingTab: View {
     @ObservedObject private var lastfmConnect = LastfmConnectController.shared
     @ObservedObject private var backfill = ScrobbleBackfillService.shared
     // "Last.fm 拒绝了写入"红条的数据源,订阅理由见 LastfmMirrorStatusWatcher 注释
-    // (collector 自愈删文件后红条要自己消失,熔断落文件后开着的窗口也要自己冒出来)。
+    // (引擎自愈删文件后红条要自己消失,熔断落文件后开着的窗口也要自己冒出来)。
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     // 改成默认展开——原来默认收起是为了"攒到几十首时不该把整页
     // 顶开",但用户更想一进页面就直接看到清单,想收起自己点一下就好,不做成偏好持久化
@@ -479,7 +479,7 @@ struct AccountLinkingTab: View {
         // 不用 .onChange(of:)逐字符/失焦触发,而是监听 config.objectWillChange(任何
         // @Published 字段变化都会发一次信号,包括 Last.fm 连接成功后自动写入的
         // lastfmScrobbleSessionKey/lastfmScrobbleUsername)做 1.2 秒防抖,避免每敲一个
-        // 字符/每次切换字段就重启一次 collector,也不需要给每个字段分别写 onChange。
+        // 字符/每次切换字段就重启一次引擎,也不需要给每个字段分别写 onChange。
         // performAutoSave() 内部会先判断 isDirty,不会被 lastError 这类非表单内容变化
         // 误触发做无意义的写盘+重启。
         .onReceive(config.objectWillChange.debounce(for: .milliseconds(1200), scheduler: DispatchQueue.main)) {
@@ -536,7 +536,7 @@ struct AccountLinkingTab: View {
         apply(true)
     }
 
-    // 这两个 helper 按 collector/digest.go 的 resolveDigestSource 同一套规则在 Swift 侧
+    // 这两个 helper 按 lyrimuse-engine/digest.go 的 resolveDigestSource 同一套规则在 Swift 侧
     // 算一遍——两边各自独立实现(跑在不同进程/语言里),规则必须保持一致,改一处务必同步
     // 改另一处。
     //
@@ -546,7 +546,7 @@ struct AccountLinkingTab: View {
         let lastfmOK = config.lastfmBridgeMissingHint() == nil
         // 数据源是要去**读**统计的,所以看 isListenBrainzReadable(token+用户名),
         // 不是 isListenBrainzConfigured(只有 token)—— 后者会让只填 token 的用户
-        // 在这里看到 ListenBrainz 可选,而 collector 那边永远跳过。
+        // 在这里看到 ListenBrainz 可选,而引擎那边永远跳过。
         let lbOK = config.isListenBrainzReadable
         switch preference {
         case "lastfm": if lastfmOK { return "lastfm" }
@@ -575,11 +575,11 @@ struct AccountLinkingTab: View {
     // 原来这里是无条件 `features.xxxDigestSource = $0; save()`,而 get 读的是
     // resolvedDigestSource(**解析后**的值)——两边口径不一致。选一个还没配好的源(比如
     // ListenBrainz 一个字段都没填)会同时发生两件事:偏好被静默写盘并触发 save()(重写
-    // 配置文件、重启 collector),而 Picker 因为 get 把它解析回 Last.fm 立刻弹回去。用户
+    // 配置文件、重启引擎),而 Picker 因为 get 把它解析回 Last.fm 立刻弹回去。用户
     // 看到的是"点了没反应",但一个看不见的偏好已经落盘,等哪天真把那个账号配好,数据源
     // 会自己悄悄换过去。
     //
-    // 现在:没配好就不写偏好、也不重启 collector,复用开关那套 missingPrereqAlert
+    // 现在:没配好就不写偏好、也不重启引擎,复用开关那套 missingPrereqAlert
     // ("需要先配置「X」"+跳转到对应账号卡片)给出跟 toggleGuarded 一致的反馈。
     // digestCrossCard 本来就是按 source 返回 (hint, target) 的,直接拿它判断配好了没。
     // 反过来,如果之前已经落过一个用不了的偏好,用户改选一个配好的源就能把它治回来。
@@ -848,7 +848,7 @@ struct AccountLinkingTab: View {
     /// 折起来只占一行(显示条数),展开才是清单 —— 攒到几十首时不该把整页顶开。
     ///
     /// 出现条件是「有待补内容」,不是「未连接」:**数据层**攒不攒歌看的是另一个谓词
-    /// ——collector 侧 lastfmScrobblerIfEnabled 一见 `!features.LastfmMirrorScrobble`
+    /// ——引擎侧 lastfmScrobblerIfEnabled 一见 `!features.LastfmMirrorScrobble`
     /// 就返回 nil,于是 `p.lfm == nil` 到 appendListen 开始写(lastfm.go:67 /
     /// poller.go:545)。「已连接、但 Scrobble 开关关掉」同样在攒歌,两个谓词必须对齐,
     /// 否则这条路径下用户只能看到另一行干巴巴的条数、点不开清单。
@@ -1043,7 +1043,7 @@ struct AccountLinkingTab: View {
     ///
     /// 目前两项:匹配模式(三档:智能 / 自定义 / 原始,自定义再展开三个维度,绑
     /// `features.lastfmMatchMode`)、短于 30 秒的曲目(绑
-    /// `features.scrobbleShortTracks`,默认关)。前一项就在 collector 侧做完了
+    /// `features.scrobbleShortTracks`,默认关)。前一项就在引擎侧做完了
     /// (`resolveScrobbleArtist` + `features.lastfm_scrobble_first_artist_only`,带单测和 JSON
     /// 往返测试,文档也写了),但**一直没有任何界面入口** —— 只能手改
     /// `~/.config/lyrimuse/lyrimuse-features.json`。用户来问"我怎么找不到这个配置项呢,是
@@ -1077,13 +1077,13 @@ struct AccountLinkingTab: View {
                     //
                     // 我为那半句争过两次(理由:这是**写侧**不可逆的操作,跟读侧算错了刷新一下
                     // 就好不是一回事),所以明确去掉 —— 记在这儿是为了留住判断依据、不是留个
-                    // 翻案的口子。依据本身没丢:默认「原始」的完整论证在 collector 侧
+                    // 翻案的口子。依据本身没丢:默认「原始」的完整论证在引擎侧
                     // resolveScrobbleTags 的头注(ListenBrainz 文档要求 include them all、
                     // 截断不可逆且会丢人、Navidrome 同名开关默认也是关),以及 docs/features/12 §4
                     // 和公开文档 docs/scrobbling.md。
                     //
                     // 「智能」那一档同样只写效果 —— 机制(候选只来自哪几处、时长闸、每首歌只判
-                    // 一次、失败维持原样)在 collector lastfmcatalog.go 头注,不在这行字里展开。
+                    // 一次、失败维持原样)在引擎 lastfmcatalog.go 头注,不在这行字里展开。
                     help: L10n.t("上送给 Last.fm 的歌手名和歌名。\n智能：改用 Last.fm 上听的人最多的那种写法，找不到就原样发；专辑名去掉「 - Single」「 - EP」后缀。\n自定义：歌名、歌手分开选。\n原始：原样发播放器报的标签。")
                 ) {
                     SettingsSegmentedControl(
@@ -1121,7 +1121,7 @@ struct AccountLinkingTab: View {
                     }
                     // 「只发第一位」不查编目、纯字符串截断,而且**只在没匹配到编目条目时**才
                     // 落地(匹配到的写法已经是编目认的那条,再截一刀就把它变成一个不存在的
-                    // 条目)。判据在 collector resolveScrobbleTags,说明气泡里照实写了这一句。
+                    // 条目)。判据在引擎 resolveScrobbleTags,说明气泡里照实写了这一句。
                     SettingsSubRow(
                         title: L10n.t("歌手"),
                         help: L10n.t("匹配条目：改用 Last.fm 编目里这首歌的歌手写法，例如「Wang Leehom」发成「王力宏」；编目里查不到就原样发。\n只发第一位：合唱串只取第一位，「陶喆, 卢广仲」发成「陶喆」，不查编目；Last.fm 上确实收录了这个合唱条目时不截。\n原始：原样发播放器报的歌手。")
@@ -1139,7 +1139,7 @@ struct AccountLinkingTab: View {
                 CardDivider()
                 // Scrobble 时机(原话「只考虑 lastfm 的」):一次收听听到哪里才记到
                 // Last.fm。官方规则(曲长一半或 4 分钟)是下限,所以只给更严的档:75% / 90% / 曲终。
-                // **只管 Last.fm**:collector 侧 ListenBrainz 那一路仍在官方阈值那一刻提交,Last.fm 那一路
+                // **只管 Last.fm**:引擎侧 ListenBrainz 那一路仍在官方阈值那一刻提交,Last.fm 那一路
                 // 挂在会话上到点再发(poller.go recordLastfmListen / settleLastfmPending;「曲终」的判据
                 // sessionEndedNaturally 容忍 crossfade 提前接歌)。文案照这张卡的惯例只写各档的效果。
                 SettingsRow(
@@ -1160,7 +1160,7 @@ struct AccountLinkingTab: View {
                 CardDivider()
                 // 短曲目(加的开关,默认关)。Last.fm 官方规则 "The track must be
                 // longer than 30 seconds" 是给客户端的,服务端不拒收;这里默认照规则办,用户显式打开
-                // 才放行。**只管 Last.fm**:collector 侧短曲目进了漏斗之后由 shortTrackLastfmOnly 挡住
+                // 才放行。**只管 Last.fm**:引擎侧短曲目进了漏斗之后由 shortTrackLastfmOnly 挡住
                 // ListenBrainz 那一路("这个配置项是 lastfm 的,和 listenbrainz 没有一点关系");
                 // 本地收听日志/回填照记,它们本来就是给 Last.fm 兜底的。文案照这张卡的惯例只写效果,
                 // 同一天再简化过一次。
@@ -1177,11 +1177,11 @@ struct AccountLinkingTab: View {
                 CardDivider()
                 // Scrobble 的播放器(「只控制 lastfm 的上送」):按播放器决定放的歌
                 // 要不要 scrobble 到 Last.fm(含它的 now-playing),默认全勾。取消的写进 features.json 的
-                // lastfm_excluded_bundles,collector 开会话那一拍算一次标记,只挡 Last.fm 那一路(poller.go
+                // lastfm_excluded_bundles,引擎开会话那一拍算一次标记,只挡 Last.fm 那一路(poller.go
                 // recordLastfmListen / announce 的 now-playing 镜像,机制在 lastfmexclude.go 头注),ListenBrainz /
                 // 网页 / 歌词不动 —— 跟这张卡上面三项同一口径。内置播放器复用「播放器联动」卡那排图标芯片
                 // (候选同那边:选中集合,auto 时五个),信任列表里的 App / 浏览器各一行开关 —— 它们没有
-                // PlaybackPlayer 枚举值。浏览器按整个浏览器算:collector 侧不知道里面放的是 YouTube Music 还是
+                // PlaybackPlayer 枚举值。浏览器按整个浏览器算:引擎侧不知道里面放的是 YouTube Music 还是
                 // Spotify 网页版。文案照这张卡的惯例只写效果。
                 PlayerBundleChipsRow(
                     icon: "music.note.list",
@@ -1298,16 +1298,16 @@ struct AccountLinkingTab: View {
         // 连接状态一变就重算:刚断开的那一刻要立刻列出本地已记的歌,刚连上的那一刻要立刻
         // 露出补提交那一行。只靠 .onAppear 的话,用户不离开这一页就什么都不会变。
         .onChange(of: lastfmConnected) { _, _ in backfill.refreshPending() }
-        // Scrobble 开关一变也要重算 —— 关掉它就是"开始往本地攒"的那一刻(collector 侧
+        // Scrobble 开关一变也要重算 —— 关掉它就是"开始往本地攒"的那一刻(引擎侧
         // p.lfm 变 nil),这一页却完全不知道,得等用户离开再回来才刷新。
         .onChange(of: features.lastfmMirrorScrobble) { _, _ in backfill.refreshPending() }
         // 页面开着的这段时间里盯住收听日志:每攒进一首,待补数就该跟着涨。
         //
         // 实测:关掉开关后停在这一页干等,数字一直是旧的,重新进 tab 才刷新
         // 出来 —— 因为上面两个 onChange 都只在"状态翻转那一瞬"触发,而后续每首歌播完是
-        // collector 单方面往磁盘追加,界面这边没有任何信号。
+        // 引擎单方面往磁盘追加,界面这边没有任何信号。
         //
-        // 只 stat mtime、不无脑重跑:算待补数要 spawn 一个 collector 子进程(dry-run),
+        // 只 stat mtime、不无脑重跑:算待补数要 spawn 一个引擎子进程(dry-run),
         // 按秒轮询它太重;stat 一个文件几乎免费,变了才真去算。busy 时不推进 seen,
         // 下一拍还会再来一次(refreshPending 自己会因 busy 早退)。
         .task(id: windowVisible) {
@@ -1336,7 +1336,7 @@ struct AccountLinkingTab: View {
     }
 
     /// 页头右边一行:连接状态 + 对应动作。
-    ///  - 熔断(collector 落了 lyrimuse-lastfm-status.json):红点「授权已失效」+「重新连接…」,悬停看原因;
+    ///  - 熔断(引擎落了 lyrimuse-lastfm-status.json):红点「授权已失效」+「重新连接…」,悬停看原因;
     ///  - 已连接:绿点「已连接」+「断开…」(断开走确认框,理由见 showLastfmDisconnectConfirm);
     ///  - 未连接:灰字「未连接」+「连接账号…」(跟拨开关同一个入口:向导 sheet)。
     @ViewBuilder
@@ -1446,7 +1446,7 @@ struct AccountLinkingTab: View {
     /// 完整可用的**只读**凭据(Last.fm 的读接口只要用户名 + key、不需要 session)。
     /// 于是 `LastfmStatsService.credentials` 逐字段回退时拼出 (lastfmUser, scrobbleAPIKey),
     /// `isConnected` 仍为真 —— 下面 resetAll() 刚把统计清空,轮询下一拍就原样拉回来了。
-    /// 顺带这对凭据也是 collector 那条桥接(手机播放镜像进 LB / 每日小结 / 艺人名归并)的
+    /// 顺带这对凭据也是引擎那条桥接(手机播放镜像进 LB / 每日小结 / 艺人名归并)的
     /// 唯一开关,不清等于「断开了 Last.fm,后台还在读你的 Last.fm」。
     /// 只清用户名、不动 api key:key 是应用级的,清了重连要重新配;没有用户名它已经拉不到任何东西。
     private func performLastfmDisconnect() {
@@ -1696,7 +1696,7 @@ struct AccountLinkingTab: View {
     // MARK: - 推送提醒
 
     // 绝大多数平台都是"群机器人 webhook"这个模子(一个 URL,POST 一份 JSON),具体 payload
-    // 长什么样在 collector/notify.go 里,这边只管选平台+填地址;Server酱是个例外,走表单
+    // 长什么样在 lyrimuse-engine/notify.go 里,这边只管选平台+填地址;Server酱是个例外,走表单
     // 编码不是 JSON,但那是纯后端的事,这边 UI 完全不用关心。钉钉/飞书这两个平台的机器人
     // 如果开了"加签"安全设置就还需要额外一个签名密钥(两边算法不同,分开存,见 ConfigStore
     // 的字段注释),用 SecretFieldRow 收起来;其余平台(Bark/企业微信/Discord/Server酱)
@@ -1704,7 +1704,7 @@ struct AccountLinkingTab: View {
     //
     // 两个听歌报告开关放在这里(而不是单独的"功能开关"tab),是因为开关跟着它依赖的账号
     // 模块走,不用去别处猜"这个开关归哪个账号管";还依赖 Last.fm 桥接(数据来源),缺了给
-    // 一个跳转提示。实际推送的是 Top 歌手+Top 歌曲各三条+总播放次数(见 collector/weekly.go
+    // 一个跳转提示。实际推送的是 Top 歌手+Top 歌曲各三条+总播放次数(见 lyrimuse-engine/weekly.go
     // 的 weeklyDigestPush),别跟另一个不相关的功能"历史 Top10 歌手统计"搞混——那是网页上
     // 的常驻榜单,数据来源不同。
     @ViewBuilder

@@ -42,8 +42,8 @@ public enum ProcessRunner {
     /// 是两回事,后者由 Result.status 表达。
     ///
     /// - Parameter environment: 传 nil = 继承本进程环境(osascript / media-control 这类
-    ///   不认配置目录的命令用这个)。**spawn collector 的一次性子命令必须显式传
-    ///   `LyrimusePaths.collectorProcessEnvironment()`** —— 不传的话子命令会按自己的默认
+    ///   不认配置目录的命令用这个)。**spawn 引擎的一次性子命令必须显式传
+    ///   `LyrimusePaths.engineProcessEnvironment()`** —— 不传的话子命令会按自己的默认
     ///   规则找配置目录,Dev 变体下就跟 App 不是同一份数据(真实 bug:待补提交
     ///   清单的删除按钮点了没反应,见 ScrobbleBackfillService.runDelete)。
     /// - Parameter captureStderr: 把 stderr 也接出来(默认不接,见类型头注)。

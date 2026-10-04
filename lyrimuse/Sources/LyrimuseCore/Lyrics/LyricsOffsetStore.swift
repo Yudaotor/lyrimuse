@@ -205,7 +205,7 @@ public final class LyricsOffsetStore: ObservableObject {
     }
 
     /// 在现有值上累加。**不碰 LyricsPinStore** —— 钉住的语义是"这份歌词内容是用户认过的",
-    /// 而这一层调的是钟、不是歌词内容,钉它会让 collector 不再自动更新这首歌的歌词源,
+    /// 而这一层调的是钟、不是歌词内容,钉它会让引擎不再自动更新这首歌的歌词源,
     /// 那是另一件事的副作用。
     @discardableResult
     public func nudgeRadio(by deltaMs: Int, forKey key: String) -> Int {
@@ -348,7 +348,7 @@ public final class LyricsOffsetStore: ObservableObject {
     public var offsetsSnapshot: [String: Int] { offsets }
 
     // 三个写入口都要求传 pinKey(归一化的 enrich key),不给默认值:调过时间轴的歌要
-    // 顺手钉进 LyricsPinStore、让 collector 不再自动换歌词源(理由见那个类型的注释)。
+    // 顺手钉进 LyricsPinStore、让引擎不再自动换歌词源(理由见那个类型的注释)。
     // 给默认值等于允许某条路径静默漏掉这件事,而漏掉的表现是"用户校准过的歌过一阵自己
     // 又不准了",极难归因 —— 这个仓库在 offset key 上已经栽过一次同类的坑(见
     // currentLyricsOffsetMs 的注释)。拿不到 enrich key 时显式传空串,setPinned 会跳过。
@@ -385,7 +385,7 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 播放上下文根本算不出对应的 pinKey(得先知道这首歌当下那份歌词内容是什么)。
     ///
     /// 解钉之前先试一次**接管**:这首歌钉着、当前内容下查不到校正值,而同一首歌(歌手|歌名相同)恰好只有另一条
-    /// 内容下的校正值 —— 钉住期间 collector 不自动换源,内容还是变了只可能是它自己的无损改写(清洗 YRC 空白、
+    /// 内容下的校正值 —— 钉住期间引擎不自动换源,内容还是变了只可能是它自己的无损改写(清洗 YRC 空白、
     /// 修 QRC 残留、重挂时间轴),时间轴跟着没变,那条校正值照样对得上。挪过来,pin 也就保住了;不挪的话这里读到
     /// 0 会顺手解钉,pin 本来要保护的东西反倒被拆掉。用户亲手归零时那条记录已经删掉,没有可挪的,照常解钉;
     /// 同一首歌有两条以上候选时猜不出是哪一份,不动。
@@ -461,7 +461,7 @@ public final class LyricsOffsetStore: ObservableObject {
         trackOffsetCount = offsets.count
         persist()
         logger.notice("offset set to \(ms, privacy: .public)ms key=\(key, privacy: .public)")
-        // 校正值非零 = 用户已经亲手把这首歌调准了 → 钉住它,collector 不再自动重选歌词源
+        // 校正值非零 = 用户已经亲手把这首歌调准了 → 钉住它,引擎不再自动重选歌词源
         // (换一份内容就等于让这个校正值静默作废,见 LyricsPinStore)。归零就解钉。
         //
         // 注意 pinKey 跟上面那个 key 是**两套身份**:key 含歌词内容指纹(内容一换就查不到,

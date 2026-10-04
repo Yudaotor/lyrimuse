@@ -1,6 +1,6 @@
 import Foundation
 
-/// 「歌手来自哪里」卡的数据:collector 后台汇总好的缓存(`lyrimuse-artist-regions.json`,collector artistregions.go 写)。
+/// 「歌手来自哪里」卡的数据:引擎后台汇总好的缓存(`lyrimuse-artist-regions.json`,引擎 artistregions.go 写)。
 /// 每个时段是歌手榜前若干位按 MusicBrainz 登记的所属国家或地区(不是出生地)加权汇总的结果。只读,不联网。
 public enum ArtistRegions {
     public static let fileName = "lyrimuse-artist-regions.json"
@@ -23,11 +23,11 @@ public enum ArtistRegions {
     }
 
     public struct Period: Decodable, Equatable, Sendable {
-        /// 按歌手榜前多少位统计(collector artistRegionsTopArtists 写进文件的);老文件没写是 0。
+        /// 按歌手榜前多少位统计(引擎 artistRegionsTopArtists 写进文件的);老文件没写是 0。
         public let topArtists: Int
         /// 统计到的歌手合计播放次数(各地区 + pending + unresolved)。
         public let covered: Int
-        /// 有 mbid、collector 还没查到的(「还在查」);查完会归进某个地区或 unresolved。
+        /// 有 mbid、引擎还没查到的(「还在查」);查完会归进某个地区或 unresolved。
         public let pending: Int
         public let pendingArtists: [String]
         /// 没有 mbid、或查过但 MusicBrainz 没登记国家的(「未查到」)。
@@ -59,7 +59,7 @@ public enum ArtistRegions {
         var periods: [String: Period]?
     }
 
-    /// 键是 Last.fm 时段名(`1month` / `12month` / `overall`)。解析失败、或文件属于别的账号(换账号后 collector
+    /// 键是 Last.fm 时段名(`1month` / `12month` / `overall`)。解析失败、或文件属于别的账号(换账号后引擎
     /// 还没重算)时返回空表。账号名不分大小写比较(Last.fm 用户名不分大小写)。
     public static func parse(_ data: Data, user: String) -> [String: Period] {
         guard let f = try? JSONDecoder().decode(File.self, from: data),
@@ -68,7 +68,7 @@ public enum ArtistRegions {
         return f.periods ?? [:]
     }
 
-    /// 收听时段卡的范围跟这张卡共用一套;对应的 Last.fm 时段名。collector artistRegionsPeriods 必须是同三档。
+    /// 收听时段卡的范围跟这张卡共用一套;对应的 Last.fm 时段名。引擎 artistRegionsPeriods 必须是同三档。
     public static func period(for span: ListeningHours.Span) -> String {
         switch span {
         case .month: return "1month"
@@ -82,7 +82,7 @@ public enum ArtistRegions {
             case region(String)
             /// 排在 `maxRegions` 之后的地区合在一起。
             case other
-            /// collector 还没查到的那部分;全部查完这一行就不出。
+            /// 引擎还没查到的那部分;全部查完这一行就不出。
             case pending
             /// 没有 mbid、或查过没登记国家的那部分。
             case unresolved

@@ -2,8 +2,8 @@ import CryptoKit
 import Foundation
 import LyrimuseCore
 
-// 逐码点跨语言对拍:读 collector 生成的 lyrimuse-collector/testdata/keyparity/sweep.txt,用 Swift 实现
-// 重算每个窗口的哈希逐窗比对。文件格式、七段输出、上下文字符串必须跟 collector
+// 逐码点跨语言对拍:读引擎生成的 lyrimuse-engine/testdata/keyparity/sweep.txt,用 Swift 实现
+// 重算每个窗口的哈希逐窗比对。文件格式、七段输出、上下文字符串必须跟引擎
 // keyparitysweep_test.go 逐字一致,改一边必须改另一边。
 
 @MainActor
@@ -13,9 +13,9 @@ func runKeyParitySweepTests() {
         .deletingLastPathComponent()   // …/Sources
         .deletingLastPathComponent()   // …/lyrimuse
         .deletingLastPathComponent()   // 仓库根
-        .appendingPathComponent("lyrimuse-collector/testdata/keyparity/sweep.txt")
+        .appendingPathComponent("lyrimuse-engine/testdata/keyparity/sweep.txt")
     guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-        expectEqual(false, true, "逐码点对拍: 读不到 lyrimuse-collector/testdata/keyparity/sweep.txt")
+        expectEqual(false, true, "逐码点对拍: 读不到 lyrimuse-engine/testdata/keyparity/sweep.txt")
         return
     }
     struct Window { let start: UInt32; let bitmap: [UInt8]; let want: String }
@@ -53,7 +53,7 @@ func runKeyParitySweepTests() {
     expectEqual(windows > 500 && scalars > 100_000, true,
                 "逐码点对拍: 真的核过了(\(windows) 个窗口、\(scalars) 个码点)")
     expectEqual(mismatched, [],
-                "逐码点对拍: 与 collector 不一致的窗口(起点十六进制)。定位单个码点:两边各跑 keyParitySweepRecord 逐个比")
+                "逐码点对拍: 与引擎不一致的窗口(起点十六进制)。定位单个码点:两边各跑 keyParitySweepRecord 逐个比")
 }
 
 /// 并行写结果用:每个下标只由一个工作线程写一次,读发生在 concurrentPerform 返回之后。
@@ -69,7 +69,7 @@ private final class KeyParitySweepResults: @unchecked Sendable {
     }
 }
 
-/// 一个码点的七段输出,段之间 0x1F、记录末尾 0x1E。与 collector keyParitySweepRecord 逐字一致。
+/// 一个码点的七段输出,段之间 0x1F、记录末尾 0x1E。与引擎 keyParitySweepRecord 逐字一致。
 private func keyParitySweepRecord(_ scalar: Unicode.Scalar) -> Data {
     let u = String(scalar)
     let parts = [

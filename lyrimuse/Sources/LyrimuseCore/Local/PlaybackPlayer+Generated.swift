@@ -83,7 +83,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
 
     /// 向这个播放器发 Apple Event 要不要 macOS 的「自动化」权限。
     /// = 它有 AppleScript 字典、且本仓真的在用(读播放头 / 播放控制 / 取图床地址)。
-    /// 只覆盖 Lyrimuse 自己这一份身份;collector 不向播放器发 Apple Event(预解析那几样由 App 代跑)。
+    /// 只覆盖 Lyrimuse 自己这一份身份;引擎不向播放器发 Apple Event(预解析那几样由 App 代跑)。
     /// 消费点见 `Set<PlaybackPlayer>.playersNeedingAutomation`。
     public var needsAutomationPermission: Bool {
         switch self {
@@ -94,8 +94,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         }
     }
 
-    /// collector 读这个播放器的客户端文件(歌词缓存 / 播放队列)要不要「完全磁盘访问」。
-    /// = 那些文件在 `~/Library/Containers/` 下;collector 侧有测试按真实路径对账。
+    /// 引擎读这个播放器的客户端文件(歌词缓存 / 播放队列)要不要「完全磁盘访问」。
+    /// = 那些文件在 `~/Library/Containers/` 下;引擎侧有测试按真实路径对账。
     /// 消费点见 `Set<PlaybackPlayer>.playersNeedingFullDiskAccess`。
     public var needsFullDiskAccess: Bool {
         switch self {
@@ -106,7 +106,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         }
     }
 
-    /// Lyrimuse 要不要「辅助功能」权限来读这个播放器的界面(读的是 App,不是 collector)。
+    /// Lyrimuse 要不要「辅助功能」权限来读这个播放器的界面(读的是 App,不是引擎)。
     /// = 本仓真的在读它的辅助功能树。消费点见 `Set<PlaybackPlayer>.playersNeedingAccessibility`。
     public var needsAccessibilityPermission: Bool {
         switch self {

@@ -1,7 +1,8 @@
 /web/
 /feishu-bot/
 /bin/
-/lyrimuse-collector/collector
+/lyrimuse-engine/collector
+/lyrimuse-engine/lyrimuse-engine
 .wrangler/
 node_modules/
 .DS_Store

@@ -53,14 +53,14 @@ enum BrowserPairing {
     /// **配对先写,信任后跑,两件事互不等待**。
     ///
     /// 头像那一行铺的是 `settings.browserPlatformPairs`,写它是纯本地、瞬时的。而
-    /// `features.trust` 里那句 `save()` 会走一整套 **collector 重启**:
-    /// `CollectorRestartCoordinator` 0.5 秒去抖 → `launchctl kickstart -k` → 轮询到一个
-    /// **新 pid** 才返回,确认超时 3 秒(`CollectorControl.restartConfirmTimeout`)。也就是说
+    /// `features.trust` 里那句 `save()` 会走一整套 **引擎重启**:
+    /// `EngineRestartCoordinator` 0.5 秒去抖 → `launchctl kickstart -k` → 轮询到一个
+    /// **新 pid** 才返回,确认超时 3 秒(`EngineControl.restartConfirmTimeout`)。也就是说
     /// 最坏情况要 3.5 秒以上,重启失败还会把这 3.5 秒整个耗满。 别把这套重启**夹在**
     /// "用户在菜单里点了那个浏览器"和"头像出现"之间去等——那会连带把自动展开的气泡也
     /// 推后,表现成"点完什么都没发生,过一会儿才蹦出来"。
     ///
-    /// 两者之间没有依赖:信任写的是 features.json(给 collector 看,决定它采不采纳这个
+    /// 两者之间没有依赖:信任写的是 features.json(给引擎看,决定它采不采纳这个
     /// App 上报的播放),配对写的是 AppSettings(给这张卡和探针看)。谁先谁后都不改变最终
     /// 状态;失败处理也一样 —— `trust` 的返回值本来就没人接,重启失败时配对照样成立。
     ///

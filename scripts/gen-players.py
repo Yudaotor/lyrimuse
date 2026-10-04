@@ -34,7 +34,7 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - nativeLyricSource  它自家的歌词源(同源加权 +250);没有就 null
 - positionTier  precise / cleanExtrapolated / noisyFloored;auto 为 null
 - republishesZeroAnchor  开播那个 elapsed=0 锚点会不会被这个播放器原样重发一次;auto 为 null
-                只给**实测见过**的播放器置 true:判反的代价是整首歌恒定偏移。只生成 Swift 侧(collector 不推算位置)
+                只给**实测见过**的播放器置 true:判反的代价是整首歌恒定偏移。只生成 Swift 侧(引擎不推算位置)
 - playingFromRate  这个播放器报的 `playing:false` 不可信、要按 `playbackRate > 0` 判在不在播;auto 为 null
                 只给**实测见过**的播放器置 true(酷狗单曲循环回到开头时报 playing:false、rate 仍是 1,
                 真暂停时 rate 归 0)。判定在 MediaControlClient.effectivePlaying。只生成 Swift 侧
@@ -47,18 +47,18 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - dropsSessionBetweenTracks  切歌时先撤掉 Now Playing、隔几秒才发下一首;auto 为 null
                 只给**实测见过**的播放器置 true(KKBOX 约 4 秒)。上一首来自它时,这几秒里别的播放器暂停着的
                 旧会话不当成「换播放器了」,判定在 PlayerGapHold。只生成 Swift 侧
-- ignoresSeekCommand  外部的跳转指令(media-control `seek`)它不响应;auto 为 null。只生成 Swift 侧(collector 不发跳转)。
+- ignoresSeekCommand  外部的跳转指令(media-control `seek`)它不响应;auto 为 null。只生成 Swift 侧(引擎不发跳转)。
                 只给**实测见过**的播放器置 true(Amazon Music:界面上也没有可设值的进度条)。这类播放器上
                 进度条只显示不能拖、点歌词不跳,`LocalPlaybackSource.seek` 直接不动
 - needsAutomationPermission  这个播放器要不要 macOS 的「自动化」权限(我们向它发 Apple Event);auto 为 null
                 = 它有 AppleScript 字典、且本仓真的在用。只生成 Swift 侧:Apple Event 都由 App 发,
-                collector 预解析要问播放器的那几样也由 App 代跑(PlayerQueryServer)
-- needsFullDiskAccess  collector 读它的客户端文件要不要「完全磁盘访问」;auto 为 null
-                = 那些文件在 `~/Library/Containers/` 下(App 带沙盒)。collector 侧
+                引擎预解析要问播放器的那几样也由 App 代跑(PlayerQueryServer)
+- needsFullDiskAccess  引擎读它的客户端文件要不要「完全磁盘访问」;auto 为 null
+                = 那些文件在 `~/Library/Containers/` 下(App 带沙盒)。引擎侧
                 TestPlayersNeedFullDiskAccessMatchesClientPaths 按真实路径对账,填错会红
 - needsAccessibilityPermission  Lyrimuse 要不要「辅助功能」权限来读它的界面;auto 为 null
                 = 本仓真的在读它的辅助功能树(Amazon Music:读界面上的播放时间校准进度)。只生成 Swift 侧:
-                读界面的是 App,collector 不碰
+                读界面的是 App,引擎不碰
 - tint          {"rgb": [r,g,b]} / {"source": "…"}(复用歌词来源配色) / {"secondary": true}
 - fallbackSymbol      没装这个 App、也没有随包图标时的 SF Symbol
 - bundledIcon   随包打包的品牌图资源名;没有就 null
@@ -81,7 +81,7 @@ SPEC = ROOT / "shared" / "players.json"
 
 CORE_SWIFT = "lyrimuse/Sources/LyrimuseCore/Local/PlaybackPlayer+Generated.swift"
 APP_SWIFT = "lyrimuse/Sources/lyrimuse/Settings/PlaybackPlayerMeta+Generated.swift"
-GO_FILE = "lyrimuse-collector/players_generated.go"
+GO_FILE = "lyrimuse-engine/players_generated.go"
 
 BANNER_SWIFT = (
     "// 由 scripts/gen-players.py 从 shared/players.json 生成,请勿手改。\n"
@@ -213,7 +213,7 @@ def render_go(spec, players):
             out.append("\t%s: %s,\n" % (p["goConst"], go_quote(p["nativeLyricSource"])))
     out.append("}\n")
 
-    out.append("\n// playerNeedsFullDiskAccess 是「播放器标识 → collector 读它的客户端文件要不要\n"
+    out.append("\n// playerNeedsFullDiskAccess 是「播放器标识 → 引擎读它的客户端文件要不要\n"
                "// 「完全磁盘访问」」。只供 TestPlayersNeedFullDiskAccessMatchesClientPaths 对账:\n"
                "// 运行期判据是路径本身(localcacheprobe.go),不查这张表。\n"
                "var playerNeedsFullDiskAccess = map[string]bool{\n")
@@ -281,7 +281,7 @@ def render_core_swift(spec, players):
 
     out.append("\n    /// 向这个播放器发 Apple Event 要不要 macOS 的「自动化」权限。\n"
                "    /// = 它有 AppleScript 字典、且本仓真的在用(读播放头 / 播放控制 / 取图床地址)。\n"
-               "    /// 只覆盖 Lyrimuse 自己这一份身份;collector 不向播放器发 Apple Event(预解析那几样由 App 代跑)。\n"
+               "    /// 只覆盖 Lyrimuse 自己这一份身份;引擎不向播放器发 Apple Event(预解析那几样由 App 代跑)。\n"
                "    /// 消费点见 `Set<PlaybackPlayer>.playersNeedingAutomation`。\n"
                "    public var needsAutomationPermission: Bool {\n        switch self {\n")
     for p in concrete:
@@ -289,8 +289,8 @@ def render_core_swift(spec, players):
             out.append("        case .%s: return true\n" % p["swiftCase"])
     out.append("        default: return false\n        }\n    }\n")
 
-    out.append("\n    /// collector 读这个播放器的客户端文件(歌词缓存 / 播放队列)要不要「完全磁盘访问」。\n"
-               "    /// = 那些文件在 `~/Library/Containers/` 下;collector 侧有测试按真实路径对账。\n"
+    out.append("\n    /// 引擎读这个播放器的客户端文件(歌词缓存 / 播放队列)要不要「完全磁盘访问」。\n"
+               "    /// = 那些文件在 `~/Library/Containers/` 下;引擎侧有测试按真实路径对账。\n"
                "    /// 消费点见 `Set<PlaybackPlayer>.playersNeedingFullDiskAccess`。\n"
                "    public var needsFullDiskAccess: Bool {\n        switch self {\n")
     for p in concrete:
@@ -298,7 +298,7 @@ def render_core_swift(spec, players):
             out.append("        case .%s: return true\n" % p["swiftCase"])
     out.append("        default: return false\n        }\n    }\n")
 
-    out.append("\n    /// Lyrimuse 要不要「辅助功能」权限来读这个播放器的界面(读的是 App,不是 collector)。\n"
+    out.append("\n    /// Lyrimuse 要不要「辅助功能」权限来读这个播放器的界面(读的是 App,不是引擎)。\n"
                "    /// = 本仓真的在读它的辅助功能树。消费点见 `Set<PlaybackPlayer>.playersNeedingAccessibility`。\n"
                "    public var needsAccessibilityPermission: Bool {\n        switch self {\n")
     for p in concrete:

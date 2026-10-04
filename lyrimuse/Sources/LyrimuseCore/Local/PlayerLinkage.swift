@@ -6,7 +6,7 @@ import Foundation
 /// 启动 X」只敢在恰好选了一个具体播放器时显示,「跟随播放器启动」在多选 / 自动识别下盯的是整个集合。
 /// 所以三件事全部改成**逐播放器勾选**,设置里是一排播放器图标芯片。
 /// 这里只放不碰 UI、不碰磁盘的判定,selftest 钉着;存储在 AppSettings / FeatureSettingsStore,监听在
-/// App 侧 PlayerQuitWatcher,collector 侧对称的候选逻辑在 companionlaunch.go。
+/// App 侧 PlayerQuitWatcher,引擎侧对称的候选逻辑在 companionlaunch.go。
 public enum PlayerLinkage {
     /// 可供勾选的候选:选中集合里的具体播放器;选了「自动识别」时是全部五个已知播放器(自动识别可能跟着
     /// 任何一个走,auto 是超集)。YouTube Music 不在其中 —— 它是浏览器里的网页,浏览器退出不等于播放器退出,
@@ -46,7 +46,7 @@ public enum PlayerLinkage {
     /// 老配置迁移(布尔年代 → 集合):
     /// - 「打开 Lyrimuse 时启动 X」(`requiresSole`):当年只在唯一具体播放器时才显示开关,true 就迁成那一个;
     ///   当年含糊(纯 auto / 两个以上)开关本来就隐藏着,迁成空。
-    /// - 「跟随播放器启动」:true 迁成当时的全部候选(collector 当年盯的就是这个范围)。
+    /// - 「跟随播放器启动」:true 迁成当时的全部候选(引擎当年盯的就是这个范围)。
     public static func migratedLaunchSet(legacyEnabled: Bool, selectedPlayers: Set<PlaybackPlayer>, requiresSole: Bool) -> Set<PlaybackPlayer> {
         guard legacyEnabled else { return [] }
         if requiresSole {

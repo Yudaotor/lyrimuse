@@ -1,8 +1,8 @@
 import Foundation
 import LyrimuseCore
 
-/// collector 预解析要的播放器查询由 App 代跑(`PlayerQueryServer`):请求怎么判、几段固定脚本长什么样、输出怎么整理成
-/// 结构(`PlayerQueryTracks` / `PlayerQueryShuffle`)、契约键名。整理好的 JSON 交给 collector,键名两边一起钉
+/// 引擎预解析要的播放器查询由 App 代跑(`PlayerQueryServer`):请求怎么判、几段固定脚本长什么样、输出怎么整理成
+/// 结构(`PlayerQueryTracks` / `PlayerQueryShuffle`)、契约键名。整理好的 JSON 交给引擎,键名两边一起钉
 /// (样例 shared/testdata/player-query/,Go 侧 appquery_test.go 读源码对账)。
 func runPlayerQueryTests() {
     typealias S = PlayerQueryServer
@@ -54,7 +54,7 @@ func runPlayerQueryTests() {
     expectEqual(S.decide(request("spotify_shuffle", schema: S.schema + 1), now: now), .ignore, "查询: 契约版本不认识不答")
     expectEqual(S.decide(request("spotify_shuffle", id: ""), now: now), .ignore, "查询: 没有 id 不答")
     expectEqual(S.decide(request("spotify_shuffle", ageSecs: S.requestMaxAge + 1), now: now), .ignore,
-                "查询: 过期的请求不答(collector 早不等了)")
+                "查询: 过期的请求不答(引擎早不等了)")
     expectEqual(S.decide(request("spotify_shuffle", ageSecs: S.requestMaxAge - 1), now: now), .run(.spotifyShuffle),
                 "查询: 还在等的请求照答")
 
@@ -97,7 +97,7 @@ func runPlayerQueryTests() {
                        "output.map(site.parse)", "KasetPlayerInfo.queueReply(fromScriptOutput:"] {
             expectEqual(server.contains(needle), true, "查询(契约): 输出整理成结构再交(\(needle))")
         }
-        expectEqual(S.Kind.allCases.count, 6, "查询: 六种,跟 collector 的 appQuery 常量一一对应")
+        expectEqual(S.Kind.allCases.count, 6, "查询: 六种,跟引擎的 appQuery 常量一一对应")
     }
 
     // ---- 网页队列 JS:能嵌进 AppleScript,输出形状跟 PlayerQueryTracks 的解析对得上 ----
@@ -112,7 +112,7 @@ func runPlayerQueryTests() {
     expectEqual(S.browserQueueSite(platformID: "youtubeMusic")?.hostMarker, YouTubeMusicAdProbe.hostMarker, "YouTube Music: 标签页域名")
     expectEqual(S.browserQueueSite(platformID: "spotifyWeb")?.hostMarker, SpotifyWebAdProbe.hostMarker, "Spotify 网页版: 标签页域名")
 
-    // ---- 输出整理成结构再交(PlayerQueryTracks / PlayerQueryShuffle):样例两侧共用,collector 只解 reply 那份 JSON ----
+    // ---- 输出整理成结构再交(PlayerQueryTracks / PlayerQueryShuffle):样例两侧共用,引擎只解 reply 那份 JSON ----
     do {
         typealias T = PlayerQueryTracks
         let dir = URL(fileURLWithPath: #filePath)
@@ -152,7 +152,7 @@ func runPlayerQueryTests() {
         expectEqual(S.browserQueueSite(platformID: "spotifyWeb")?.parse(spRaw) == T.spotifyWebQueue(spRaw), true,
                     "整理输出: Spotify 网页版平台配的是它自己的解析")
 
-        // 键名:collector 按这些解(appquery.go 的 appQueryTrack / appQueryTracks)。
+        // 键名:引擎按这些解(appquery.go 的 appQueryTrack / appQueryTracks)。
         let full = T(current: T.Track(title: "a", artist: "b", album: "c", duration: 1, selected: true, videoID: "v",
                                       musicVideo: true, uri: "u"))
         let keys = S.encodedReply(full).flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
@@ -199,22 +199,22 @@ func runPlayerQueryTests() {
         expectEqual(PlayerQueryShuffle.parse("false"), PlayerQueryShuffle(shuffling: false), "Spotify 随机: 关着")
         expectEqual(PlayerQueryShuffle.parse(""), nil, "Spotify 随机: 没在跑(空输出)问不到")
         expectEqual(S.encodedReply(PlayerQueryShuffle(shuffling: true)), "{" + quote + "shuffling" + quote + ":true}",
-                    "Spotify 随机: 交给 collector 的 JSON")
+                    "Spotify 随机: 交给引擎的 JSON")
     }
 
-    // ---- 契约:文件名与 JSON 键名跟 collector 的 json tag 一致 ----
+    // ---- 契约:文件名与 JSON 键名跟引擎的 json tag 一致 ----
     expectEqual(S.requestFileName, "lyrimuse-player-query-request.json", "契约: 请求文件名")
     expectEqual(S.replyFileName, "lyrimuse-player-query-reply.json", "契约: 应答文件名")
-    let collectorShaped: [String: Any] = ["schema": S.schema, "id": "123-1", "kind": "browser_queue", "bundle_id": "com.apple.Safari",
+    let engineShaped: [String: Any] = ["schema": S.schema, "id": "123-1", "kind": "browser_queue", "bundle_id": "com.apple.Safari",
                                           "platform": "youtubeMusic", "written_at_ms": nowMs]
-    let decoded = (try? JSONSerialization.data(withJSONObject: collectorShaped))
+    let decoded = (try? JSONSerialization.data(withJSONObject: engineShaped))
         .flatMap { try? JSONDecoder().decode(S.Request.self, from: $0) }
     expectEqual(decoded, request("browser_queue", bundle: "com.apple.Safari", platform: "youtubeMusic", id: "123-1"),
-                "契约: 按 collector 写的键名解得开请求")
+                "契约: 按引擎写的键名解得开请求")
     let reply = S.Reply(schema: 1, id: "123-1", ok: true, output: "NOTFOUND", error: nil, writtenAtMs: nowMs)
     let replyKeys = (try? JSONEncoder().encode(reply))
         .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         .map { Set($0.keys) } ?? []
     expectEqual(replyKeys.isSuperset(of: ["schema", "id", "ok", "output", "written_at_ms"]), true,
-                "契约: 应答的键名是 collector 认的那几个(实际 \(replyKeys.sorted()))")
+                "契约: 应答的键名是引擎认的那几个(实际 \(replyKeys.sorted()))")
 }

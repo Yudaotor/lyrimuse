@@ -5,7 +5,7 @@ import Foundation
 /// 来源是专辑的**公开网页** `music.apple.com/{店面}/album/x/{专辑 ID}`:页面内嵌的
 /// `serialized-server-data` JSON 里,专辑头部那一项的 `modalPresentationDescriptor` 就是「更多」弹窗的
 /// 数据(`headerTitle` / `headerSubtitle` / `paragraphText`),正文与 Apple Music API 的
-/// `editorialNotes.standard` 逐字相同,不需要 developer token。collector 抓动态封面走的是同一个页面
+/// `editorialNotes.standard` 逐字相同,不需要 developer token。引擎抓动态封面走的是同一个页面
 /// (`motioncover.go` 的 `fetchAlbumPage`),请求头照抄它:这一页对 UA 敏感,要桌面 Safari 的串。
 ///
 /// 文案按店面各写一份(cn 与 tw 不是简繁转换,是两段不同的文字),有的店面没有;专辑 ID 各店面通用,但不是每个
@@ -243,7 +243,7 @@ public enum AlbumEditorialNotes {
         return ArtistFacts(bornOrFormed: born, genres: genres, isGroup: attrs["isGroup"] as? Bool ?? false)
     }
 
-    /// 要 developer token(collector 从 music.apple.com 取来缓存在 `AppleMusicDeveloperToken`)。
+    /// 要 developer token(引擎从 music.apple.com 取来缓存在 `AppleMusicDeveloperToken`)。
     /// 没有 token / 请求失败都返回 nil,调用方只是少显示两行。
     public static func fetchArtistFacts(artistID: Int64, storefront: String, token: String,
                                         session: URLSession = .shared) async -> ArtistFacts? {
@@ -251,7 +251,7 @@ public enum AlbumEditorialNotes {
         var req = URLRequest(url: url)
         req.timeoutInterval = 8
         req.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
-        // amp-api 校验 Origin,不带就 403。同 collector 的 applemusicWebOrigin。
+        // amp-api 校验 Origin,不带就 403。同引擎的 applemusicWebOrigin。
         req.setValue("https://music.apple.com", forHTTPHeaderField: "Origin")
         let start = Date()
         do {
@@ -347,7 +347,7 @@ public enum AlbumEditorialNotes {
     }
 }
 
-/// collector 从 music.apple.com 取来、落盘缓存的 Apple Music developer token(`applemusic.go` 的
+/// 引擎从 music.apple.com 取来、落盘缓存的 Apple Music developer token(`applemusic.go` 的
 /// `applemusicDevTokenPath`,文件 `{"token", "expiry"}`)。App 只读,不自己去取:拿不到就当没有。
 public enum AppleMusicDeveloperToken {
     public static var fileURL: URL { LyrimusePaths.configFile("lyrimuse-applemusic-devtoken.json") }

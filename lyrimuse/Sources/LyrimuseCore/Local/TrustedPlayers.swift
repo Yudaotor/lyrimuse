@@ -5,7 +5,7 @@ import Foundation
 /// ## 为什么是"信任列表"而不是"一律接受"
 ///
 /// 「自动识别」原来只认写死的内置播放器。那道白名单不只挡显示,**也挡打卡**
-/// (collector 只记 App 认下的播放):一律接受等于让 YouTube 视频、播客、网课被当成
+/// (引擎只记 App 认下的播放):一律接受等于让 YouTube 视频、播客、网课被当成
 /// 收听写进用户的 Last.fm / ListenBrainz **永久历史**,还会往"设计上永不清理"的歌词
 /// 缓存里灌垃圾条目、白烧全部歌词源的查询。
 ///
@@ -48,7 +48,7 @@ public enum TrustedPlayers {
     /// 在"选中了具体播放器但没勾自动识别"这条路径上也会被查(见
     /// `MediaControlClient.fetchMultiSelectedSnapshot`)——最典型场景是「网页播放器」卡
     /// "配对浏览器"这个动作(一步自动信任+配对),用户没有理由因为没勾自动识别就让配对
-    /// 形同虚设。collector 侧对应的是 `isTrustedPlayerBundleID`(署名纠正、上报标签用),判法要一致;
+    /// 形同虚设。引擎侧对应的是 `isTrustedPlayerBundleID`(署名纠正、上报标签用),判法要一致;
     /// 别名表两侧都由 shared/players.json 生成。
     public static func isTrusted(_ bundleID: String?) -> Bool {
         isTrusted(bundleID, trusted: current)
@@ -63,7 +63,7 @@ public enum TrustedPlayers {
         return false
     }
 
-    /// 「自动识别」下真正的成员判断:内置播放器 + 用户信任的。准入只在 App 判:collector 不复核,
+    /// 「自动识别」下真正的成员判断:内置播放器 + 用户信任的。准入只在 App 判:引擎不复核,
     /// 只记 App 写进播放状态的播放器。
     public static func isAccepted(_ bundleID: String?) -> Bool {
         // 内置播放器是编译期常量,先判掉:`current` 每次都读盘解码 features.json,这条在轮询热路径上。
@@ -167,9 +167,9 @@ public enum TrustedPlayers {
     /// 信任列表里有 App 后来成了内置播放器(KKBOX 就是先被用户加进信任列表、后来才内置的):把它从信任列表
     /// 挪进播放器选择。
     ///
-    /// 不挪的后果:内置播放器会被剔出信任列表(collector `resolveTrustedPlayers`),而没勾「自动识别」的人
+    /// 不挪的后果:内置播放器会被剔出信任列表(引擎 `resolveTrustedPlayers`),而没勾「自动识别」的人
     /// 又没勾它 —— 升级之后这个播放器悄无声息地不再被认。勾着「自动识别」的不用补勾,自动识别本来就认全部
-    /// 内置播放器。collector 侧 `promoteTrustedBuiltins` 同一条规则,两侧读同一份文件、得出同一个结果。
+    /// 内置播放器。引擎侧 `promoteTrustedBuiltins` 同一条规则,两侧读同一份文件、得出同一个结果。
     public static func promotingBuiltins(trusted: [String: String], players: Set<PlaybackPlayer>)
         -> (trusted: [String: String], players: Set<PlaybackPlayer>) {
         var trusted = trusted
@@ -206,7 +206,7 @@ public enum TrustedPlayers {
     /// selftest 直接覆盖。
     ///
     /// 顺序有讲究:`builtin` 排在 `alreadyTrusted` 前面 —— 内置播放器本来就不该出现在信任
-    /// 列表里(`trust` 挡着、collector 的 `resolveTrustedPlayers` 也会剔掉),真撞上了(手改过
+    /// 列表里(`trust` 挡着、引擎的 `resolveTrustedPlayers` 也会剔掉),真撞上了(手改过
     /// 共享文件)该说的是"它是内置的",而不是"它已经在列表里了"。
     public static func manualTrustOutcome(
         bundleID: String, trusted: [String: String], selfBundleID: String?

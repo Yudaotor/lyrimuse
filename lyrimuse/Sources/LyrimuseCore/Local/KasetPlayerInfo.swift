@@ -230,9 +230,9 @@ public enum KasetPlayerInfo {
 
     // MARK: - 待播队列
 
-    /// 预解析要的待播队列(`PlayerQueryServer` 代 collector 跑 `get play queue`)。曲目身份按这一侧的口径整理好再交出去
-    /// (署名清理同 `cleanedArtist`、歌名去首尾空白、不给专辑):collector 拿它预取歌词,缓存键得跟这首真播到时 App 写进
-    /// 播放状态的一字不差,整理只在这一侧做一份。字段名两边一起改(collector `kasetQueueReply`,样例
+    /// 预解析要的待播队列(`PlayerQueryServer` 代引擎跑 `get play queue`)。曲目身份按这一侧的口径整理好再交出去
+    /// (署名清理同 `cleanedArtist`、歌名去首尾空白、不给专辑):引擎拿它预取歌词,缓存键得跟这首真播到时 App 写进
+    /// 播放状态的一字不差,整理只在这一侧做一份。字段名两边一起改(引擎 `kasetQueueReply`,样例
     /// `shared/testdata/kaset-queue/`)。
     public struct QueueReply: Codable, Equatable, Sendable {
         public struct Track: Codable, Equatable, Sendable {

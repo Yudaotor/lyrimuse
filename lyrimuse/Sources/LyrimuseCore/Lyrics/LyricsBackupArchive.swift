@@ -21,14 +21,14 @@ import Foundation
 ///
 /// ## 歌词正文走 `lyrics/` 文件族,其余字段走 `meta`
 ///
-///  - `lyrics/` 是歌词六字段(正文/译文/罗马音/逐字/来源/人工标记)的**权威源**:collector 每次
+///  - `lyrics/` 是歌词六字段(正文/译文/罗马音/逐字/来源/人工标记)的**权威源**:引擎每次
 ///    启动都跑 `importLyricsFromFiles`(文件赢、只增不删),缓存里没有那个 key 也会**新建条目**。
 ///    也就是说只要把文件铺回去,歌词自己会长回缓存里 —— 不需要碰缓存 JSON。
-///  - 反过来直接盖写 `lyrimuse-enrich-cache.json` 会撞上一个实测过的竞态:collector 内存里握着
+///  - 反过来直接盖写 `lyrimuse-enrich-cache.json` 会撞上一个实测过的竞态:引擎内存里握着
 ///    整份缓存、有七处会整份写回磁盘,在 kickstart 生效之前它可能把刚恢复的内容整份盖回去
 ///    (「清空了又回来」就是这个,见 EnrichCacheStore.clearAll 的注释)。**这条约束
 ///    到今天依然成立**,所以下面那个 `meta` 也不是"恢复时直接盖缓存",而是落一份待采纳文件、
-///    由 collector 在自己的启动路径里合并(跟 `importLyricsFromFiles` 同一个时机、同一把锁)。
+///    由引擎在自己的启动路径里合并(跟 `importLyricsFromFiles` 同一个时机、同一把锁)。
 /// - 修正一条**错了的旧判断**:这里原来写「缓存里其余字段(封面/链接/mbid/打分/
 ///    决策存档)都是可重新解析的派生数据,不值得为它们多背 17 MB 和一个竞态」——"可重新解析"
 ///    对其中几类**不成立**,实测撞上(原话「在另外电脑导入了配置,但是并没有把歌曲的决策
@@ -56,11 +56,11 @@ public enum LyricsBackupArchive {
     /// `meta` 作为未知字段被 JSONDecoder 忽略,歌词部分照样恢复。
     public static let payloadVersion = 2
 
-    /// `meta` 里**不带**的字段 —— 它们的权威源是 `lyrics/` 文件族,由 collector 的
+    /// `meta` 里**不带**的字段 —— 它们的权威源是 `lyrics/` 文件族,由引擎的
     /// `importLyricsFromFiles` 负责灌回缓存(见类型头注)。
     ///
-    /// 这六个字符串必须跟 collector 侧 `enrichEntry` 的 json tag 一字不差
-    /// (`lyrimuse-collector/enrich.go`),对不上的后果是**静默**的:多带的字段会在恢复时
+    /// 这六个字符串必须跟引擎侧 `enrichEntry` 的 json tag 一字不差
+    /// (`lyrimuse-engine/enrich.go`),对不上的后果是**静默**的:多带的字段会在恢复时
     /// 盖掉刚从文件导进去的正文,少带的字段则永远不会被搬走。selftest 钉住这份清单。
     public static let lyricFieldKeys = [
         "lyrics", "lyrics_tr", "lyrics_roma", "lyrics_yrc", "lyrics_source", "manual_lyrics",
@@ -77,7 +77,7 @@ public enum LyricsBackupArchive {
     /// 调用方据此把 `meta` 留空 —— 备份少一部分远好过整份打不出来。
     ///
     /// `decisionDirectory`:判决记录的候选明细旁路目录(`DecisionSidecar`)。给了就把两槽判决按指纹补齐再
-    /// 打包 —— 备份要自带完整证据,恢复到别的机器上由那边的 collector 保存时再拆出去;不给(老调用方 /
+    /// 打包 —— 备份要自带完整证据,恢复到别的机器上由那边的引擎保存时再拆出去;不给(老调用方 /
     /// selftest)就原样打包主缓存里的判决。
     ///
     /// `bodiesDirectory`:正文小文件目录(`EnrichCacheSlim.bodiesDirectoryName`)。主缓存现在是精简格式,
@@ -144,7 +144,7 @@ public enum LyricsBackupArchive {
         /// 从哪台机器导出的。
         public var device: String
         /// 文件名 → 全文。**含 `[ar:]/[ti:]/[al:]/[source:]/[manual:1]` 那几行头部** ——
-        /// 头部就是 collector 认身份的依据(`importLyricsFromFiles` 按头部标签而不是文件名
+        /// 头部就是引擎认身份的依据(`importLyricsFromFiles` 按头部标签而不是文件名
         /// 定身份),剥掉就全成孤儿了。
         public var files: [String: String]
         /// 「已校准」名单:归一化 enrich key → 钉住时的 unix 秒。
@@ -154,8 +154,8 @@ public enum LyricsBackupArchive {
         ///
         /// 为什么是 `Data`(在 JSON 里落成 base64)而不是嵌套的 JSON 对象:Swift 这一侧**完全
         /// 不需要看懂**里面的字段,它只负责原样搬运——打包时从缓存文件读出来剥一遍,恢复时
-        /// 原样写成一份待采纳文件交给 collector。用 `Data` 就不必为了 `Codable` 造一套
-        /// 任意-JSON 的胶水类型,也不会因为将来 collector 加了新字段而需要动这边一行代码。
+        /// 原样写成一份待采纳文件交给引擎。用 `Data` 就不必为了 `Codable` 造一套
+        /// 任意-JSON 的胶水类型,也不会因为将来引擎加了新字段而需要动这边一行代码。
         /// 代价是 base64 的 33% 膨胀(9.7 MB → 12.9 MB),但压缩后只差 0.65 MB
         /// (0.60 → 1.25 MB),换这份"字段无关、永不需要跟着改"的解耦是划算的。
         public var meta: Data?

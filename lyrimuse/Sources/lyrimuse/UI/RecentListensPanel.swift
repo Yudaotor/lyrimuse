@@ -313,7 +313,7 @@ enum RelativeDayFormat {
 // MARK: - 没连 Last.fm 时的替代内容:本地待补提交
 
 /// 没连 Last.fm 时,「播放记录」类面板显示的内容:本地静默记的、还没提交的收听
-/// (collector 不管连没连账号都在往本地记,见 ScrobbleBackfillService 类头注释)。
+/// (引擎不管连没连账号都在往本地记,见 ScrobbleBackfillService 类头注释)。
 /// 跟设置页「账号 → Last.fm」标签的 pendingListensRow 共用同一个数据源、同一套
 /// "多久算太旧"的规则,不在这里另起一份判定;比那边多了一段 5 秒 mtime 轮询——那边
 /// 挂在整张设置卡上跟着卡的生命周期走,这里没有更外层的卡可挂,自己管自己的。
@@ -376,7 +376,7 @@ struct PendingListensPanel: View {
         .onAppear { backfill.refreshPending() }
         .onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates()) { enrichVersion = $0 }
         // 面板开着的这段时间里盯住收听日志:同 AccountLinkingTab.pendingListensRow
-        // 那份 5 秒 mtime 轮询(理由同它的注释:按秒轮询 collector 子进程太重,
+        // 那份 5 秒 mtime 轮询(理由同它的注释:按秒轮询引擎子进程太重,
         // stat 一个文件几乎免费,变了才真去重算)。
         .task {
             var seen = ScrobbleBackfillService.listenLogModifiedAt()
@@ -451,9 +451,9 @@ struct PendingListensPanel: View {
     private func row(_ item: ScrobbleBackfillService.Item) -> some View {
         let hovering = hoveredID == "r:\(item.uts)"
         return HStack(spacing: 10) {
-            // 这份数据本身没有封面字段(collector 记录待补收听时不取图,只记
+            // 这份数据本身没有封面字段(引擎记录待补收听时不取图,只记
             // 歌手/歌名/专辑),但这几首歌**本机确实播过**——不然不会进这份待补清单。
-            // 播放当时 collector 解析歌词早就顺手把封面存进本机 enrich 缓存了,直接照
+            // 播放当时引擎解析歌词早就顺手把封面存进本机 enrich 缓存了,直接照
             // RecentListensPanel「本机命中」那一级(LastfmStatsService.coverURL 的
             // localCovers 分支)查一次同一份缓存即可,不需要等提交成功、也不需要
             // Last.fm 那几级(scrobble 自带图/getinfo/同专辑兄弟)——待补条目压根不在

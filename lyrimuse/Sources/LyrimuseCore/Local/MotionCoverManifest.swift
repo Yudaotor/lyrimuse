@@ -4,7 +4,7 @@ import Foundation
 /// 封面搞成 applemusic 里面的那种会动的效果」)。
 ///
 /// 这一层只做**纯字符串 → 该下载哪个文件**的推导,不发请求、不碰磁盘,所以能被 selftest 钉死。
-/// 发现资源在 collector(`motioncover.go`),下载与播放在 App(`MotionCoverStore` / `MotionCoverLayer`)。
+/// 发现资源在引擎(`motioncover.go`),下载与播放在 App(`MotionCoverStore` / `MotionCoverLayer`)。
 ///
 /// 全部结论都是在 Prince《Timeless》(collectionId 6773830957)上实测出来的:
 ///

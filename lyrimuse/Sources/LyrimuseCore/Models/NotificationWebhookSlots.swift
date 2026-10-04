@@ -3,7 +3,7 @@ import Foundation
 /// 推送提醒各平台各自的 webhook 地址(键是 NotificationPlatform 的 rawValue)。
 ///
 /// 设置页只有一个地址输入框,切换平台时要换成那个平台自己的地址:不换的话,切到 Telegram 还显示着
-/// Bark 的地址;切换时直接清空的话,手滑切一下原来的地址就丢了。collector 只读 `bark_url`(当前平台
+/// Bark 的地址;切换时直接清空的话,手滑切一下原来的地址就丢了。引擎只读 `bark_url`(当前平台
 /// 那一份),其余平台的地址只由 App 侧另存(config.json 的 `notification_webhook_urls`)。
 public struct NotificationWebhookSlots: Equatable, Sendable {
     public private(set) var urls: [String: String]

@@ -4,7 +4,7 @@ import AppKit
 /// 画法在 App 侧的 `PlayerPicker`,这里只放纯判断。
 ///
 /// 「自动识别」是网格里的一张卡,勾没勾就看集合里有没有 `.auto` —— 跟
-/// `MediaControlClient.fetchSnapshot` / collector `getState` 读的是同一份 `players`。见 docs 02「播放器选择」。
+/// `MediaControlClient.fetchSnapshot` / 引擎 `getState` 读的是同一份 `players`。见 docs 02「播放器选择」。
 public enum PlayerPickerLayout {
     public struct Tiles: Equatable {
         /// 网格里直接摆出来的播放器,按传进来的顺序。

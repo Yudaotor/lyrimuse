@@ -352,7 +352,7 @@ public enum MusicPlaybackController {
     ///
     /// `tell application "Spotify" to …` 只要发出任何命令就会**启动** Spotify —— 一个只用
     /// Apple Music 的用户会被莫名其妙拉起一个播放器。本仓另外两处 Spotify 脚本
-    /// (MediaControlClient.spotifyPlayerPosition、collector 的 spotifyPositionScript)开头
+    /// (MediaControlClient.spotifyPlayerPosition、引擎的 spotifyPositionScript)开头
     /// 都有同样的守卫,同一个理由。读不到时返回空串,上层解析不出来自然就是 nil。
     private static let spotifyRunningGuard = #"""
         if application "Spotify" is not running then

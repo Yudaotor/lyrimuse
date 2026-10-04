@@ -6,10 +6,10 @@ import SwiftUI
 
 /// 「完全磁盘访问」的**唯一状态源**,设置页「播放器」那张卡和引导页那一步共用。
 ///
-/// 结论只认 collector 发布的 `LocalCacheAccess`:授权两个进程共用一份,却在每个进程里各自生效,
-/// 真正去读客户端容器的是 collector(见 `LocalCacheAccess` 头注)。这里只做三件事:
+/// 结论只认引擎发布的 `LocalCacheAccess`:授权两个进程共用一份,却在每个进程里各自生效,
+/// 真正去读客户端容器的是引擎(见 `LocalCacheAccess` 头注)。这里只做三件事:
 /// 哪几家要摆出来(`visiblePlayers`)、把这几家合成一个结论(`grant`)、「重启后台服务」之后
-/// 一直等到 collector 发布了新结论才算完(`restartCollector`)。
+/// 一直等到引擎发布了新结论才算完(`restartEngine`)。
 ///
 /// 授权是整个 App 一份,不是每个播放器一份 —— 所以两个界面都只摆**一行**,标题是这项权限本身,
 /// 替哪几家要只出现在「为什么要这项授权」那句里(`FullDiskAccessGuide.reason`)。
@@ -19,9 +19,9 @@ final class FullDiskAccessPermission: ObservableObject {
 
     enum RestartPhase: Equatable {
         case idle
-        /// 已经发起重启,正在等 collector 发布新结论。
+        /// 已经发起重启,正在等引擎发布新结论。
         case waiting
-        /// collector 重启后发布的结论仍然是被拒。
+        /// 引擎重启后发布的结论仍然是被拒。
         case stillDenied
     }
 
@@ -30,8 +30,8 @@ final class FullDiskAccessPermission: ObservableObject {
     /// 上一次「重启后台服务」替哪几家等的结论 —— `.stillDenied` 要在它们不再被拒时自己撤掉。
     private var restartTargets: [PlaybackPlayer] = []
 
-    /// collector 启动时先探容器再跑耗时的启动迁移(localcacheprobe.go),新结论通常几秒内就到;
-    /// 这个上限只兜 collector 起不来的情况。
+    /// 引擎启动时先探容器再跑耗时的启动迁移(localcacheprobe.go),新结论通常几秒内就到;
+    /// 这个上限只兜引擎起不来的情况。
     private static let settleTimeout: TimeInterval = 90
     private static let pollInterval: TimeInterval = 1
 
@@ -39,7 +39,7 @@ final class FullDiskAccessPermission: ObservableObject {
         state = LocalCacheAccess.current
     }
 
-    /// 这套选择下要替哪几家说话:需要授权 ∩ 装了。没装的播放器没有容器,collector 不会探它,
+    /// 这套选择下要替哪几家说话:需要授权 ∩ 装了。没装的播放器没有容器,引擎不会探它,
     /// 摆出来就是一行永远确认不了的状态。
     func visiblePlayers(for selection: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
         selection.playersNeedingFullDiskAccess.filter { player in
@@ -53,7 +53,7 @@ final class FullDiskAccessPermission: ObservableObject {
         LocalCacheAccess.grant(for: players.compactMap(\.nativeLyricSource), state: state)
     }
 
-    /// 重读 collector 发布的状态(按 mtime 缓存,很便宜,可以定时调)。
+    /// 重读引擎发布的状态(按 mtime 缓存,很便宜,可以定时调)。
     func refresh() {
         let latest = LocalCacheAccess.current
         if latest != state { state = latest }
@@ -68,16 +68,16 @@ final class FullDiskAccessPermission: ObservableObject {
         }
     }
 
-    /// 重启 collector,然后**一直等到它发布了这次启动之后的结论**才算完。
+    /// 重启引擎,然后**一直等到它发布了这次启动之后的结论**才算完。
     ///
     /// `requestRestart()` 返回只代表 launchd 报出了新 pid;状态文件在那之后才被新进程删掉重写,
     /// 所以判据是「文件里的 updatedAt 不早于发起重启那一刻」。
-    func restartCollector(for players: [PlaybackPlayer]) async {
+    func restartEngine(for players: [PlaybackPlayer]) async {
         guard restartPhase != .waiting else { return }
         restartPhase = .waiting
         restartTargets = players
         let startedAt = Int64(Date().timeIntervalSince1970)
-        _ = await CollectorRestartCoordinator.shared.requestRestart()
+        _ = await EngineRestartCoordinator.shared.requestRestart()
         let deadline = Date().addingTimeInterval(Self.settleTimeout)
         while Date() < deadline {
             try? await Task.sleep(for: .seconds(Self.pollInterval))
@@ -133,13 +133,13 @@ final class FullDiskAccessPermission: ObservableObject {
 /// 没授权时那段说明 + 两个动作。设置页塞进 `SettingsNote`,引导页直接摆,措辞一份。
 ///
 /// 「打开系统设置」和「重启后台服务」必须并排:TCC 的权限在进程启动那一刻定下,运行中授权
-/// 不会补发给已经在跑的 collector(见第 09 章「kugou 的本地快速路径」)。
+/// 不会补发给已经在跑的引擎(见第 09 章「kugou 的本地快速路径」)。
 struct FullDiskAccessGuide: View {
     let players: [PlaybackPlayer]
     /// 要不要先讲一句「为什么要这项授权」。引导页那一步的正文已经讲过,传 false。
     var showsReason = true
     @ObservedObject private var model = FullDiskAccessPermission.shared
-    @ObservedObject private var coordinator = CollectorRestartCoordinator.shared
+    @ObservedObject private var coordinator = EngineRestartCoordinator.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -177,7 +177,7 @@ struct FullDiskAccessGuide: View {
         HStack(spacing: 8) {
             Button(L10n.t("打开系统设置")) { model.openSystemSettings() }
             Button(L10n.t("重启歌词引擎")) {
-                Task { await model.restartCollector(for: players) }
+                Task { await model.restartEngine(for: players) }
             }
             .disabled(coordinator.isRestarting)
         }

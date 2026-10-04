@@ -117,7 +117,7 @@ struct LastfmStatsSection: View {
         // 快照文件不生成)。
         .onAppear {
             stats.refreshBaseline()
-            // 榜单收起时不查(那是一次 collector 进程+网络请求);展开那一下由
+            // 榜单收起时不查(那是一次引擎进程+网络请求);展开那一下由
             // onChange 补上。「那年今日」照常查:它的那句概述留在表头,收起来也要显示。
             if !chartCollapsed { stats.refreshChart(kind: kind, period: period) }
             stats.refreshOnThisDay()
@@ -164,7 +164,7 @@ struct LastfmStatsSection: View {
                 // 平时的开销是一次字典查找:服务侧同时判 TTL 和日历天,没跨天就直接
                 // 早退,不会每 2 分钟真发一轮请求(那是三年 ×最多三页的量)。
                 stats.refreshOnThisDay()
-                // 本机封面兜底表:enrich 缓存自己变了(collector 解析出封面 / 同专辑
+                // 本机封面兜底表:enrich 缓存自己变了(引擎解析出封面 / 同专辑
                 // 预取)不伴随任何 Last.fm 响应,得单独在这里过一遍,否则那些行会一直
                 // 灰着(见 refreshLocalCoversIfCacheChanged)。mtime 没变就是一次 stat。
                 stats.refreshLocalCoversIfCacheChanged()
@@ -321,7 +321,7 @@ struct LastfmStatsSection: View {
             }
             }
         }
-        // 收起时不查榜:那是一次 collector 进程 + 一轮网络请求,收起来了就别花
+        // 收起时不查榜:那是一次引擎进程 + 一轮网络请求,收起来了就别花
         // (展开时补上,见下面的 onChange)
         .onChange(of: chartCollapsed) { _, nowCollapsed in
             if nowCollapsed { resetChartExpansion() }
@@ -779,7 +779,7 @@ struct LastfmStatsSection: View {
     /// 的注释),画首字母色块 —— 色相由名字哈希决定,同一个名字永远同一个颜色。
     @ViewBuilder
     private func thumb(for e: LastfmStatsService.ChartEntry) -> some View {
-        // 歌手榜(detail 为空的就是歌手行)优先用 collector 解析的真头像,圆形;
+        // 歌手榜(detail 为空的就是歌手行)优先用引擎解析的真头像,圆形;
         // 还没解析出来/查不到时落回首字母色块 —— 头像是异步补上的,先字母后照片。
         // 歌曲榜(detail 非空、imageURL 为 nil 的行):用 track.getInfo 补出来的专辑封面;Last.fm 那边没有时
         // (歌曲没挂专辑、专辑页没图),歌曲 / 专辑都退到本机缓存的封面
@@ -1519,7 +1519,7 @@ struct LastfmStatsSection: View {
 
     // MARK: - 歌手来自哪里
 
-    /// collector 后台汇总(artistregions.go),这里只读。首轮还没算出来时 LastfmArtistRegionsView 自己显示一句说明。
+    /// 引擎后台汇总(artistregions.go),这里只读。首轮还没算出来时 LastfmArtistRegionsView 自己显示一句说明。
     private var artistRegionsCard: some View {
         SettingsCard {
             collapsibleHeader(icon: "globe.asia.australia", title: L10n.t("歌手来自哪里"),
@@ -1701,7 +1701,7 @@ private struct LiveScrobbleRow: View {
     private var live: LiveSource? {
         // ① 本机在放、且我们确实在往 Last.fm 记录(开关关着=这首没人在记,不该显示)。
         // 广告不显示(两次对拍的"广告正在播放行"都是**这一行**渲染的
-        // 本机实时行,不是 Last.fm 数据 —— 空心圆=服务器从未确认,collector 侧其实拦住了):
+        // 本机实时行,不是 Last.fm 数据 —— 空心圆=服务器从未确认,引擎侧其实拦住了):
         // 广告不会被记录,这一行的语义是"正在被 Last.fm 记录的歌",广告不配出现。
         // 判定来自 LocalPlaybackSource(字段启发式+棘轮+AppleScript 权威),SwiftUI 观察
         // 该标记,异步确认晚到几百毫秒也会即时把行收掉。
@@ -1737,7 +1737,7 @@ private struct LiveScrobbleRow: View {
     }
 
     /// 本机这首是否已被 Last.fm 确认收到:recenttracks 里出现了同名的 nowplaying 条目,
-    /// 说明 collector 发的 updateNowPlaying 已经到了服务器 —— 红点只看本地状态的话,
+    /// 说明引擎发的 updateNowPlaying 已经到了服务器 —— 红点只看本地状态的话,
     /// 网络断了/提交失败它照样红着(发散采纳,改为服务器确认制)。
     /// 标题宽松比对:大小写/首尾空白不算差异;艺人不参与(合唱串会被 collapse 改写)。
     private func serverConfirms(_ localTitle: String) -> Bool {
@@ -1921,16 +1921,16 @@ private struct LiveScrobbleRow: View {
             if stats.liveAbsorbedRecentID != id { stats.liveAbsorbedRecentID = id }
         }
         .onChange(of: playback.title) { _, _ in
-            // 本机换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视缓存
+            // 本机换歌 = 上一首刚被 scrobble。给引擎十秒把记录提交出去,然后无视缓存
             // 强刷一次 —— 刚唱完的歌马上出现在列表顶上,顺带把 apiNowPlaying 换成新歌
             // (红点的服务器确认就是靠这次刷新到位的)。
             pendingForceRefresh?.cancel()
             pendingForceRefresh = Task {
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
                 guard !Task.isCancelled, stats.recentPage == 1 else { return }
-                // collector 的 feed 活着时不发:它在镜像 scrobble 成功后 5 s 就会提前拉一次、
+                // 引擎的 feed 活着时不发:它在镜像 scrobble 成功后 5 s 就会提前拉一次、
                 // 落盘,这边 ≤5 s 内读到——同样 ~10 s 见到上一首,却是 0 个 App 请求
-                // (见 LastfmStatsService 的 collector feed 一节)。
+                // (见 LastfmStatsService 的引擎 feed 一节)。
                 guard !stats.feedIsFresh else { return }
                 stats.refreshBaseline(force: true)
             }
@@ -1944,7 +1944,7 @@ private struct LiveScrobbleRow: View {
                 guard !Task.isCancelled else { break }
                 // 跟父视图那条 2 分钟轮询同一条守卫:翻到历史页时别把用户正看的那屏
                 // 换掉(强刷会无视 TTL,原来这两条路径都漏了这个判断)。
-                // feed 活着时也不发:远端会话正是 collector 15 s 一拍在盯的东西,这里再拉是重复。
+                // feed 活着时也不发:远端会话正是引擎 15 s 一拍在盯的东西,这里再拉是重复。
                 guard stats.recentPage == 1, !playback.isPlayingNow, remoteSessionLikelyActive,
                       !stats.feedIsFresh else { continue }
                 stats.refreshBaseline(force: true)
@@ -2082,7 +2082,7 @@ private enum ArtistPageCache {
     static func pages(mbid: String) async -> ArtistPlatformPages.Pages? {
         if let hit = pages[mbid] { return hit }
         guard let url = ArtistPlatformPages.lookupURL(mbid: mbid) else { return nil }
-        // 跟 collector 共用 MusicBrainz 的跨进程窗口(同一个出口 IP 合起来算限额):没到就等一会儿,等太久(被 503
+        // 跟引擎共用 MusicBrainz 的跨进程窗口(同一个出口 IP 合起来算限额):没到就等一会儿,等太久(被 503
         // 停手)这次不查;发之前把窗口往后推一个间隔。
         let store = OutboundCooldownStore.shared
         if let until = store.freshUntil(OutboundCooldowns.musicBrainzKey) {
@@ -2093,7 +2093,7 @@ private enum ArtistPageCache {
         store.publish(OutboundCooldowns.musicBrainzKey, until: Date().addingTimeInterval(OutboundCooldowns.musicBrainzInterval))
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
-        // MusicBrainz 要求调用方在 User-Agent 里标明应用名、版本和联系方式,跟 collector 同一个写法。
+        // MusicBrainz 要求调用方在 User-Agent 里标明应用名、版本和联系方式,跟引擎同一个写法。
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
         request.setValue("lyrimuse/\(version) (+https://github.com/Yudaotor/lyrimuse)", forHTTPHeaderField: "User-Agent")
         let start = Date()

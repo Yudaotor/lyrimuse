@@ -44,7 +44,7 @@ public enum ManualPickLock {
     /// # 只对"词"取指纹,不含时间戳、不含 YRC
     ///
     /// 指纹**不能**取 `SHA256(lyrics + "\x01" + yrc)` 这种整份原始字节 —— 用真实
-    /// 使用数据抓到它**根本不成立**:采纳完 saveEdit 会立刻重启 collector,而 collector 启动
+    /// 使用数据抓到它**根本不成立**:采纳完 saveEdit 会立刻重启引擎,而引擎启动
     /// 时那几道规范化会重写内容 ——
     ///   - `migrateYRCWhitespaceTokens` 重排逐字词条,**没有 ManualLyrics 闸**,锁没锁都跑;
     ///   - `migrateLyricTimelines` 把行时间戳重挂到逐字轴上,会改 `lyrics` 本身(它跳过
@@ -60,7 +60,7 @@ public enum ManualPickLock {
     /// 代价(接受):另一个源恰好给出**逐字相同**的词时也会算匹配 —— 但那种情况下当前内容
     /// 跟他选的那份逐字一样,锁住它没有任何坏处。
     ///
-    /// 对行时间轴重挂的免疫是**结构性**的,不是碰巧:collector 那边重挂时走的是
+    /// 对行时间轴重挂的免疫是**结构性**的,不是碰巧:引擎那边重挂时走的是
     /// `out[i] = formatLRCStamp(...) + texts[k]`(lyricstimeline.go 里 rehangLRCOnYRC 的
     /// 收尾),`texts[k]` 就是"剥掉时间戳再 trim 的原文" —— 跟这里的归一化逐字一致,它换的
     /// 只有时间戳前缀。金标准里的 A/B 两份输入就是这个形态(同一份词、时间戳全变)。

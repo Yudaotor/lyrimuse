@@ -4,7 +4,7 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "backfill")
 
-/// 「待补提交的历史收听」那一行的状态机 —— 驱动 collector 的 `backfill-lastfm` 子命令。
+/// 「待补提交的历史收听」那一行的状态机 —— 驱动引擎的 `backfill-lastfm` 子命令。
 /// (之前界面上确实有个标题叫「补提交历史收听」的独立行,已合并掉,见下。)
 ///
 /// ## 界面上只有一行
@@ -100,16 +100,16 @@ final class ScrobbleBackfillService: ObservableObject {
 
     private init() {}
 
-    private static var collectorPath: String {
+    private static var enginePath: String {
         // 用包里那份引擎(LyrimusePaths.bundledEnginePath),每次 build.sh 重新打包都会跟着更新。
         LyrimusePaths.bundledEnginePath
     }
 
-    /// collector 那份本地收听日志被写过的时刻。nil = 文件还不存在(从来没攒过)。
+    /// 引擎那份本地收听日志被写过的时刻。nil = 文件还不存在(从来没攒过)。
     ///
     /// 给界面当**廉价的变更信号**用:待补数只能靠 dry-run 算出来,而那要 spawn 一个子进程,
     /// 按秒轮询它是不像话的;stat 一个文件几乎免费,所以页面开着时盯 mtime,只在真的又攒进
-    /// 一首那一刻才重跑 dry-run。路径跟 collector 那边 initListenLog 传进去的一致
+    /// 一首那一刻才重跑 dry-run。路径跟引擎那边 initListenLog 传进去的一致
     /// (main.go:178,配置目录 + clientName + "-listens.jsonl")。
     static func listenLogModifiedAt() -> Date? {
         let url = LyrimusePaths.configFile("lyrimuse-listens.jsonl")
@@ -155,17 +155,17 @@ final class ScrobbleBackfillService: ObservableObject {
                 LastfmStatsService.shared.refreshBaseline(force: true)
                 // 补,更正。Last.fm 把刚收到的 scrobble 并进 recenttracks 要
                 // 一两秒,紧接着上面那一发强刷多半还看不到刚补的记录;而 feed 时代最近记录的主来源
-                // 是 collector 落盘的 feed(每 15 s/60 s 一拉)—— 现象是「补提交之后最近记录没刷新」。
+                // 是引擎落盘的 feed(每 15 s/60 s 一拉)—— 现象是「补提交之后最近记录没刷新」。
                 //
-                // 主路径在 collector 那边:回填子命令 touch 一个信号文件(lastfmFeedNudgePath),
+                // 主路径在引擎那边:回填子命令 touch 一个信号文件(lastfmFeedNudgePath),
                 // 常驻进程消费掉它并排一个 backfillFeedNudgeDelay(5 s)之后的拉取 —— **必须带这个
                 // 延迟**,当场拉回来的是旧内容。App 靠 5 s 一次的 mtime 轮询几秒内拿到。
                 //
-                // 下面这发延迟强刷**只兜 collector 不在的情况**,别把它当成主路径:判据
-                // `feedIsFresh` 看的是 feed 里的 fetchedAt 落没落在 180 s 窗口内,而 collector 只要
+                // 下面这发延迟强刷**只兜引擎不在的情况**,别把它当成主路径:判据
+                // `feedIsFresh` 看的是 feed 里的 fetchedAt 落没落在 180 s 窗口内,而引擎只要
                 // 活着就每 feedHeartbeat(60 s)重写一次 feed —— 跟内容有没有变、有没有包含刚补
-                // 的那几条毫无关系。也就是说 collector 在跑时这一发**永远不会触发**。
-                // 之前它被当成"兜底 8 秒后会补刷"来依赖,而那时 collector 侧又是当场拉(拉到旧内容
+                // 的那几条毫无关系。也就是说引擎在跑时这一发**永远不会触发**。
+                // 之前它被当成"兜底 8 秒后会补刷"来依赖,而那时引擎侧又是当场拉(拉到旧内容
                 // 却把 fetchedAt 刷新了),两头一叠就是同一个问题反复出现的成因。
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 8_000_000_000)
@@ -185,8 +185,8 @@ final class ScrobbleBackfillService: ObservableObject {
 
     /// 从本地收听日志里删掉一条(按 uts)。删完顺手刷新清单。
     ///
-    /// 走 collector 的 `delete-listen` 子命令,不在这边直接改那个 jsonl:那份文件是
-    /// collector 的,它一边还在往里追加(每首播完写一行),格式和折叠语义也都在那边。
+    /// 走引擎的 `delete-listen` 子命令,不在这边直接改那个 jsonl:那份文件是
+    /// 引擎的,它一边还在往里追加(每首播完写一行),格式和折叠语义也都在那边。
     /// 让 App 去读-改-写一个正在被追加的文件是在自找竞态。
     func deleteListen(uts: Int64) {
         guard !busy else { return }
@@ -202,21 +202,21 @@ final class ScrobbleBackfillService: ObservableObject {
     }
 
     private static func runDelete(uts: Int64) async -> Bool {
-        let path = collectorPath
+        let path = enginePath
         return await Task.detached(priority: .userInitiated) { () -> Bool in
             // 用 ProcessRunner:带超时,而且 stdout 会被先读空再等退出(见它的注释)。
             //
             // **environment 必须显式传**(修的真 bug:点删除没反应)。这条是
-            // 唯一一个漏了它的 collector 子命令调用点 —— 因为它走 ProcessRunner,而那个函数
+            // 唯一一个漏了它的引擎子命令调用点 —— 因为它走 ProcessRunner,而那个函数
             // 当时压根没有环境参数,另外五处(search-lyrics / 源自检 / Last.fm 统计 ×2 /
-            // 诊断导出)都是自己 new Process、顺手就把 collectorProcessEnvironment 设上了。
-            // 不传的后果:delete-listen 按 collector 自己的默认规则找配置目录,**Dev 变体**
+            // 诊断导出)都是自己 new Process、顺手就把 engineProcessEnvironment 设上了。
+            // 不传的后果:delete-listen 按引擎自己的默认规则找配置目录,**Dev 变体**
             // 下 App 读的是 ~/.config/lyrimuse-dev、删的却是 ~/.config/lyrimuse,那几条 uts
             // 在正式版日志里根本不存在 → deleted:0 → ok=false → 列表原样重拉一遍 → 界面上
             // 就是"点了没反应"。正式版两个目录同名,所以这个 bug 只在 Dev 上现形。
             guard let r = ProcessRunner.run(
                 path, ["delete-listen", "-uts", String(uts)], timeout: 15,
-                environment: LyrimusePaths.collectorProcessEnvironment()), r.succeeded
+                environment: LyrimusePaths.engineProcessEnvironment()), r.succeeded
             else { return false }
             struct Result: Decodable { let deleted: Int }
             return (try? JSONDecoder().decode(Result.self, from: r.stdout))?.deleted ?? 0 > 0
@@ -224,7 +224,7 @@ final class ScrobbleBackfillService: ObservableObject {
     }
 
     private static func run(dryRun: Bool) async -> Outcome? {
-        let path = collectorPath
+        let path = enginePath
         return await Task.detached(priority: .userInitiated) { () -> Outcome? in
             // 走 ProcessRunner 并接 stderr:它把两根管子并发读空。原来先读空 stdout、等退出之后才读 stderr,
             // 子命令往 stderr 写满管道缓冲(64KB,每条被忽略的记录一行日志就能写满)时会阻塞在 write 上不退出,
@@ -236,8 +236,8 @@ final class ScrobbleBackfillService: ObservableObject {
             let timeout: TimeInterval = dryRun ? 20 : 15 * 60
             guard let result = ProcessRunner.run(
                 path, dryRun ? ["backfill-lastfm", "-dry-run"] : ["backfill-lastfm"], timeout: timeout,
-                // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
-                environment: LyrimusePaths.collectorProcessEnvironment(), captureStderr: true)
+                // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+                environment: LyrimusePaths.engineProcessEnvironment(), captureStderr: true)
             else {
                 logger.error("backfill spawn failed: \(path, privacy: .public)")
                 return nil

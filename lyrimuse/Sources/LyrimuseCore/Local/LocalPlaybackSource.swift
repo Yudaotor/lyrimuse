@@ -8,7 +8,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "local"
 
 // 本地播放数据源:音乐本来就在这台 Mac 上放,没道理还要绕一圈公网——播放位置/进度靠
 // AppleScript 本地轮询问 Music.app 本身要(零网络、零延迟,见 MediaControlClient.swift),
-// 歌词靠读 collector 已经解析好、写在磁盘上的那份缓存(同样零网络)。
+// 歌词靠读引擎已经解析好、写在磁盘上的那份缓存(同样零网络)。
 @MainActor
 public final class LocalPlaybackSource: ObservableObject {
     public static let shared = LocalPlaybackSource()
@@ -19,7 +19,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 这首是 MV。Apple Music 看 JXA 快照的 `isMusicVideo`,网页播放器看探针交出的视频类型(`noteBrowserVideo`)。
     /// 只给界面在专辑位写「MV」用,不进任何缓存 key。判据见 `musicVideoTrackKey(...)`。
     @Published public private(set) var isMusicVideo: Bool = false
-    /// 播放器没报专辑时,这首在 YouTube Music 上登记的专辑(用 Kaset 放的歌,collector 存进缓存的,见
+    /// 播放器没报专辑时,这首在 YouTube Music 上登记的专辑(用 Kaset 放的歌,引擎存进缓存的,见
     /// `EnrichCacheReader.youtubeMusicAlbum`)。只给界面专辑位用(`displayAlbum`),不进任何缓存 key。
     @Published public private(set) var youtubeMusicAlbum: String = ""
     @Published public private(set) var isPlayingNow: Bool = false
@@ -86,7 +86,7 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var currentLineFillSettled: Bool = true
     // 当前曲目是否已经解析出任何歌词内容(syncEngine.hasContent 的转发)——只用来跟
     // "currentLine 恰好是 nil"这种正常情况(整曲还没到第一句歌词、两句歌词间的空档)
-    // 区分开。collector 对一首没见过的歌是异步解析的(见 collector/enrich.go
+    // 区分开。引擎对一首没见过的歌是异步解析的(见 lyrimuse-engine/enrich.go
     // trackEnrichment),没解析完之前磁盘缓存里根本没有这个 key,reloadCurrentLyrics()
     // 只能拿到空字符串——这时 hasLyricsContent 为 false,UI 据此判断"这是还没解析出来"
     // 而不是"这首歌就是没歌词/正在间奏"。
@@ -112,28 +112,28 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 没有时间戳的纯文本歌词兜底——加,只在"这首歌真的没有能同步显示的版本,
     /// 但用户在「搜索候选歌词」弹窗里采纳过一条明确标了 PlainTextOnly 的候选"时非空(见
-    /// EnrichCacheReader.EnrichCacheLyrics.plainLyrics / collector 侧
+    /// EnrichCacheReader.EnrichCacheLyrics.plainLyrics / 引擎侧
     /// enrichEntry.PlainLyrics 头注)。桌面悬浮歌词/灵动岛这些依赖时间戳逐字/逐行高亮的
     /// 展示面**不读**这个字段,继续如实显示"无歌词"——只有「歌词窗口」认它,当静态文字
     /// 展示。恒为空串时代表"没有这份兜底",不是"还没加载完",跟 currentTrackHasNoLyrics
     /// 一样以 EnrichCacheLyrics.resolved 为准。
     @Published public private(set) var currentTrackPlainLyrics: String = ""
 
-    /// 完整歌词窗口末尾「创作者：…」的名单(`LyricSongwriters.shown`):collector 存的 Apple 名单优先,没有时取
+    /// 完整歌词窗口末尾「创作者：…」的名单(`LyricSongwriters.shown`):引擎存的 Apple 名单优先,没有时取
     /// 歌词正文署名行里的作词 / 作曲者(`LyricsSyncEngine.creditSongwriters`)。没有能同步显示的歌词时为空。
     @Published public private(set) var currentTrackSongwriters: [String] = []
 
-    /// collector 报告"这一轮什么都没查到,是因为网络不通"(见 CollectorStatus)。
+    /// 引擎报告"这一轮什么都没查到,是因为网络不通"(见 EngineStatus)。
     ///
     /// 跟 currentTrackHasNoLyrics 是互补的两半:那个是"查过了,这首歌没有",这个是
     /// "根本没查成"。没有它的话,断网时界面会一直停在"搜索歌词中…" —— 而那句话在
     /// 断网状态下永远不会有下文。
-    @Published public private(set) var collectorNetworkDown: Bool = false
+    @Published public private(set) var engineNetworkDown: Bool = false
     // Spotify 广告插播——补上:media-control 自己的文档确认广告播放时 album
     // 字段恒为空字符串,靠"当前是 Spotify 在报告 + album 为空"这个信号判断(见
     // apply() 里的计算);跟 isCurrentTrackInstrumental 同一个优先级问题,必须排在
     // "还在搜索中"分支前面——否则一段广告会在整段广告期间一直卡在"搜索歌词中…"
-    // (广告的标题/歌手压根不会被写进歌词缓存,见 collector/enrich.go trackEnrichment
+    // (广告的标题/歌手压根不会被写进歌词缓存,见 lyrimuse-engine/enrich.go trackEnrichment
     // 的对应守卫,hasLyricsContent 永远拿不到内容)。
     @Published public private(set) var isCurrentTrackAdBreak: Bool = false
     /// 这条广告在这次插播里是第几条、一共几条(灵动岛显示出来)。
@@ -169,7 +169,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // LyrimuseCore 这一层刻意不引入 AppKit/SwiftUI(见 Package.swift 的单向依赖注释),
     // 解码成 NSImage/Image 交给 lyrimuse 主 App target 的 View 自己做。只在换歌那一刻
     // 异步取一次(见 apply()/fetchArtworkForCurrentTrack()),不是每 2 秒轮询的一部分。
-    // 换上 / 清掉都交给播放状态文件(collector 用它定封面,不再自己取),同一张图不重复落盘。
+    // 换上 / 清掉都交给播放状态文件(引擎用它定封面,不再自己取),同一张图不重复落盘。
     @Published public private(set) var artworkData: Data? {
         didSet { PlaybackStatePublisher.shared.noteArtwork(artworkData) }
     }
@@ -1285,7 +1285,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 为什么需要它:「歌词慢半拍」是这个 App 最难复现、也最常被报的一类问题,而它至少有
     /// 四种成因,修法完全不同 —— 帧率掉了 / `positionSourceTier` 判错(把精确源当成外推源)/
     /// 伺服在反复 snap(位置读数抖)/ 自然切歌偏置估歪。在此之前诊断报告里**一行播放时钟
-    /// 状态都没有**,这四种在报障里长得一模一样,只能靠猜加翻 collector 日志。
+    /// 状态都没有**,这四种在报障里长得一模一样,只能靠猜加翻引擎日志。
     ///
     /// 这些全是本来就在内存里的字段,这里只是把它们读出来 —— 零热路径成本,不新增任何计算。
     /// 刻意做成一次性快照而不是 @Published:诊断导出是"点一下读一次"的动作,做成发布属性
@@ -1380,7 +1380,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 这个播放器的广告跟正片共用同一首歌的身份(Kaset:前贴片广告期间报的就是接下来那首)。它的广告只在界面上亮
-    /// 「广告中」,不写进播放状态的 `ad`:collector 按身份认广告,开播时看到一次就整首不记收听、不搜歌词。纯函数,
+    /// 「广告中」,不写进播放状态的 `ad`:引擎按身份认广告,开播时看到一次就整首不记收听、不搜歌词。纯函数,
     /// selftest 覆盖。
     public nonisolated static func adSharesTrackIdentity(bundleID: String?) -> Bool {
         bundleID == PlaybackPlayer.kaset.bundleIdentifier
@@ -1462,7 +1462,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 上一次查 MV 时间轴时用的视频身份与当时显示的歌词来源。歌曲版时长取自「显示的那份歌词」的判决,
-    /// 同一首歌的歌词换了来源(collector 播放中重选,见 02 章决策 49 追加)就要按新判决重查一次,见 recheckMusicVideoTimelineIfLyricsChanged。
+    /// 同一首歌的歌词换了来源(引擎播放中重选,见 02 章决策 49 追加)就要按新判决重查一次,见 recheckMusicVideoTimelineIfLyricsChanged。
     private var musicVideoLookupBasis: (key: String, video: BrowserPositionProbe.VideoIdentity, lyricsSource: String?)?
 
     /// 同一首歌的歌词缓存变了之后调:显示的歌词换了来源才重查,其余情况什么都不做。
@@ -1543,7 +1543,7 @@ public final class LocalPlaybackSource: ObservableObject {
             isMusicVideo: musicVideoKey != nil && musicVideoKey == snapshot?.trackKey)
     }
 
-    /// 挑同名不同录音变体(`~durN`)用的时长,口径跟 collector 的 `lyricsDurationSecs` 一致:电台(整档节目的时长)、
+    /// 挑同名不同录音变体(`~durN`)用的时长,口径跟引擎的 `lyricsDurationSecs` 一致:电台(整档节目的时长)、
     /// MV(视频比录音室版长)都当未知。纯函数,selftest 覆盖。
     public nonisolated static func lyricsLookupDuration(isRadio: Bool, isMusicVideo: Bool, duration: Double?) -> Double? {
         isRadio || isMusicVideo ? nil : duration
@@ -2559,9 +2559,9 @@ public final class LocalPlaybackSource: ObservableObject {
         isPlaying || !title.isEmpty || !lastKey.isEmpty || pausedPositionMs != nil || hasAnchor
     }
 
-    /// 把这一拍认定的播放状态交给 `PlaybackStatePublisher`(写 `lyrimuse-playback-state.json`,collector 读)。
+    /// 把这一拍认定的播放状态交给 `PlaybackStatePublisher`(写 `lyrimuse-playback-state.json`,引擎读)。
     /// 每拍轮询的出口与拖动之后各调一次;保活由发布方自己的计时器做,不走这里。
-    /// 身份按 collector 的口径清洗(`EnrichCacheKeys.cleanTag`),位置不含歌词偏移。
+    /// 身份按引擎的口径清洗(`EnrichCacheKeys.cleanTag`),位置不含歌词偏移。
     private func publishPlaybackState(now: Date = Date()) {
         guard !title.isEmpty, let snapshot = lastSnapshot else {
             PlaybackStatePublisher.shared.publish(.idle(), now: now)
@@ -2872,7 +2872,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 电台的分母:系统报的 `duration` 是**整档节目**的(实测 3390.122s = 56 分半),
         // 而位置已经在 MediaControlClient 里换成了单曲口径(见 RadioTrackClock)。分母不跟着换,
         // 灵动岛和歌词窗口就会显示成「2:29 / 56:30」—— 这是明显的自相矛盾。
-        // 真曲长由 collector 从 Apple 目录查到(实测把 3390.122 纠成 226.283)并写进歌词缓存,这里读出来替换。
+        // 真曲长由引擎从 Apple 目录查到(实测把 3390.122 纠成 226.283)并写进歌词缓存,这里读出来替换。
         //
         // 缓存里还没有这首歌时(刚换曲、歌词还在解析)**保留快照自己那份**,绝不置 0:
         // 进度锚点按 durationMs 夹位置(ProgressClock),0 会把位置钉死在开头、整档没有歌词
@@ -2881,9 +2881,9 @@ public final class LocalPlaybackSource: ObservableObject {
         // 放在 apply 最前面而不是 MediaControlClient 里:EnrichCacheReader 是 @MainActor 隔离的,
         // 快照那条路是 nonisolated,够不着。
         // 这一拍之后所有针对这首的缓存查询都按它的时长挑同名不同录音的变体(见 EnrichCacheReader.matchedKey)。
-        // 电台的系统时长是整档节目,不给。MV 也不给:collector 对 MV 按「时长未知」解析(snapshot.lyricsDurationSecs),
+        // 电台的系统时长是整档节目,不给。MV 也不给:引擎对 MV 按「时长未知」解析(snapshot.lyricsDurationSecs),
         // 只用基条目、从不建时长变体;这边照传视频时长的话,听过音频版的歌再看 MV,视频时长跟基条目差出 12% 以上,
-        // 就去找一个 collector 永远不会建的 `~durN`,整首一直在转圈。是不是 MV 按下面同一套判据(这一拍还没更新 musicVideoKey)。
+        // 就去找一个引擎永远不会建的 `~durN`,整首一直在转圈。是不是 MV 按下面同一套判据(这一拍还没更新 musicVideoKey)。
         let playingMusicVideo = Self.musicVideoTrackKey(previous: musicVideoKey, currentKey: rawSnapshot.trackKey,
                                                         markedMusicVideo: rawSnapshot.isMusicVideo == true) == rawSnapshot.trackKey
         EnrichCacheReader.notePlayingDuration(
@@ -2918,7 +2918,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 从那边永远看不到"越过曲长"。时长拿不到时 passedTrackEnd 返回 false,不会误收。
         // 台卡期间同样「不是歌」。开台那几十秒系统把台名当一首歌推过来(实测 33.4 秒),
         // 不拦的话歌词那一格会一路走到「搜索歌词中…」再到「暂无歌词」。收进同一个标记 = 三个展示面
-        // 一起显示「口白」+ 台名台标,不用各自再判一次。collector 那侧有同判据的对应守卫
+        // 一起显示「口白」+ 台名台标,不用各自再判一次。引擎那侧有同判据的对应守卫
         // (`radioStationCard`,不把台卡写进歌词缓存)。
         let finished = stationCardName != nil || RadioTrackClock.passedTrackEnd(
             position: snapshot.isRadio == true ? (snapshot.elapsedTime ?? 0) : 0,
@@ -3033,7 +3033,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 换曲那一拍按加宽的启发式(album 空/artist 空/标题「—」)定初值,同曲期间只往 true
         // 棘轮、不回落;是 Spotify 就再异步问一次本尊
         // (`spotify url` 前缀是权威分类,广告可以带全 artist/title/album 骗过启发式),
-        // 结果回来仍是这首才采纳。结论写进播放状态的 ad,collector 不另判、只认它(上报、搜歌词都按它挡)。
+        // 结果回来仍是这首才采纳。结论写进播放状态的 ad,引擎不另判、只认它(上报、搜歌词都按它挡)。
         //
         // **网页版 Spotify 也要认**(对拍坐实:Last.fm 那张卡的
         // "正在记录"行原样显示了一条"广告"——`!playback.isAdBreak` 那道闸没拦住,因为下面
@@ -3064,7 +3064,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 独立的 now-playing 条目,它在 `#movie_player` 里放、MediaSession 元数据却一直是这首歌
         // 自己的 —— 于是页面判定会在**同一个 key** 下先 ad 后 song。只往 true 棘轮的话,前贴片
         // 一过、整首 MV 都挂着「广告中」(现象是的就是这个,Safari 播王子《Why You Wanna Treat
-        // Me So Bad?》当场坐实,collector 日志里三轮 rejected 之后才 now playing)。所以页面**明确**
+        // Me So Bad?》当场坐实,引擎日志里三轮 rejected 之后才 now playing)。所以页面**明确**
         // 说是歌(`.song`,不是 nil)时允许回落;Spotify 那套字段启发式 + AppleScript 复核不受
         // 影响(它们的 verdict 恒为 nil)。状态机收在 nextAdBreakState 里,selftest 钉着。
         // pageVerdict 只在**原生 Spotify** 上置 nil(它有自己的 AppleScript 复核语义);浏览器播放一律
@@ -3121,8 +3121,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // 见上面 `lastKey = ""` 一带)。加:真机上实测到同一首歌连续播放期间
         // 探针额度被重开了 4 次(同一个 pid,排除了重启),但当时的日志分辨不出是哪一种。
         let previousKey = lastKey
-        // 同一首歌播到中途,collector 还可能给它补出译文、或者换上一份更好的歌词(见
-        // collector 的 backfillTranslation / retryLyricsUpgrade / rescoreLyrics)。原来这里
+        // 同一首歌播到中途,引擎还可能给它补出译文、或者换上一份更好的歌词(见
+        // 引擎的 backfillTranslation / retryLyricsUpgrade / rescoreLyrics)。原来这里
         // 只在换歌或"完全没歌词"时才重读,于是这类中途补上的东西要等下一次换歌才看得到 ——
         // 表现是"为什么当前这歌没有英文译文",而译文其实早在 19 秒前就翻好并落盘了。
         //
@@ -3134,9 +3134,9 @@ public final class LocalPlaybackSource: ObservableObject {
         // 代价是可控的:mtime 只是一次 stat,而重新解析只在文件真的被改写时发生 —— 那时候
         // 下一次 lookup() 本来也要重新解析(EnrichCacheReader 自己就是按 mtime 缓存的)。
         // 跟下面读 enrich cache 的 mtime 挂在同一个节拍上(每次快照,约 2s 一次)。
-        // 成本是一次 stat —— CollectorStatus 自己按 mtime 缓存,文件没变就不会重新解码。
-        let networkDown = CollectorStatus.networkLooksDown
-        if networkDown != collectorNetworkDown { collectorNetworkDown = networkDown }
+        // 成本是一次 stat —— EngineStatus 自己按 mtime 缓存,文件没变就不会重新解码。
+        let networkDown = EngineStatus.networkLooksDown
+        if networkDown != engineNetworkDown { engineNetworkDown = networkDown }
 
         // 每拍先让 Reader 推进内容(mtime 变了在后台解码,见 refreshIfNeeded 注释),触发
         // 键用**已解码代**的版本而不是文件即时 mtime——stale 返回窗口里拿文件 mtime 触发
@@ -3223,7 +3223,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 在播、但引擎里没有任何歌词内容(纯音乐/广告/还没解析出来):每一拍 fastTick
             // 的四个查询都扫空数组、四个守卫全不触发,20Hz 定时器整首歌空转纯属浪费 ——
             // 暂停(上面)和锁屏(setScreenLocked)都已特判掉这种空转,这里补上"在播但
-            // 没词"这一档。先补最后一拍把可能残留的行状态清掉再停表;collector 中途解析
+            // 没词"这一档。先补最后一拍把可能残留的行状态清掉再停表;引擎中途解析
             // 出歌词会改 enrich 文件 mtime,上面 reloadCurrentLyrics 那个分支会让下一轮
             // apply(≤2s)重新走到 hasContent 分支拉起定时器。
             fastTick()
@@ -3319,7 +3319,7 @@ public final class LocalPlaybackSource: ObservableObject {
         posBiasRestoreChecked = true
         if playing, let duration = snapshot.duration, duration > 0 {
             // 切歌/加载瞬间 Spotify 会短暂报 rate=0(playing 仍 true),按 1 计——与
-            // collector 的 reconcile 规则一致。不归一的话 predicted 停走,下一拍正常
+            // 引擎的 reconcile 规则一致。不归一的话 predicted 停走,下一拍正常
             // 前进的读数会被误判成 seek 跳变,顺手把自然切歌偏置也清了(
             // 对抗审查抓出)。真暂停走的是下面的 else 分支,不经过这里。
             var rate = snapshot.playbackRate ?? 1
@@ -3561,7 +3561,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // 供外部(EnrichCacheStore 保存/删除歌词后)强制重新读取当前曲目的歌词——正常情况
     // apply() 只在换歌那一刻才 reloadCurrentLyrics(),同一首歌播放中途改了缓存内容
     // 不会自动重新读。本地模式的 EnrichCacheReader 每次都是直接读磁盘文件,写完盘立刻
-    // 调用这个就能拿到最新内容,不需要等 collector 重启。
+    // 调用这个就能拿到最新内容,不需要等引擎重启。
     public func forceReloadLyricsForCurrentTrack() {
         // 刚写的内容在后台解(EnrichCacheReader.reloadSoon;同步解 32MB 的索引要 125~200ms,主线程上
         // 四个展示面一起卡)。解完经 onContentAdopted 捅一次 poll:apply() 见 decodedContentVersion 变了
@@ -3793,13 +3793,13 @@ public final class LocalPlaybackSource: ObservableObject {
         return LyricsOffsetStore.radioKey(stationHash: hash, trackKey: currentOffsetKey)
     }
 
-    /// 上一次读缓存时那个文件的 mtime。变了就说明 collector 又写过,当前这首歌的内容可能
+    /// 上一次读缓存时那个文件的 mtime。变了就说明引擎又写过,当前这首歌的内容可能
     /// 已经不是手上这一份了(见 apply() 里那段注释)。
     private var lastEnrichMTime: Date?
 
     /// enrich 缓存**已解码那一代**的版本(= `EnrichCacheReader.decodedContentVersion`)。
     ///
-    /// 为什么要把它 @Published 出去:collector 解析一首没听过的歌要**好几秒**
+    /// 为什么要把它 @Published 出去:引擎解析一首没听过的歌要**好几秒**
     /// (实测「七月上」13:52:52 开播、13:53:00 才把 cover_url 写进缓存,晚 8 秒),而
     /// `PlaybackCoordinator.refreshHighResCover()` 原来**只**由 曲目/封面字节 的变化触发、
     /// 换歌后 300ms 查一次就完 —— 那一刻缓存里还没有这首歌,于是 clearHighRes() 之后
@@ -3856,7 +3856,7 @@ public final class LocalPlaybackSource: ObservableObject {
             lyrics: raw,
             translation: found?.lyricsTr ?? "",
             translationVisible: showsTranslation)
-        // 内容等值闸:失效键是整个 enrich 缓存文件的 mtime,collector
+        // 内容等值闸:失效键是整个 enrich 缓存文件的 mtime,引擎
         // 给**别的歌**写盘(专辑预取最多 30 首逐个落盘/译文回填/重打分)都会带着一字未变的
         // found 走到这里 —— 原来每次都白跑简繁转换×3 + 全套解析过滤 + 整曲罗马音/分词重算
         // + allLines/gapMarkers 重建,单次 10-50ms 主线程,正撞上 30Hz 填色渲染。快照含
@@ -3895,7 +3895,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 译文是中文、罗马音是拉丁字母,都不进修回。
         // 同形异码字(康熙部首等)最先换回标准字,署名过滤、日文汉字修复、简繁转换、罗马音都按标准字认。
         // 只换送进引擎的文本;下面算校正值 key 的仍用缓存原文。
-        // Musixmatch 的演唱者标注(collector lyrics_speakers):指纹对得上才把 v1：/合： 补进正文,交给对唱分栏。
+        // Musixmatch 的演唱者标注(引擎 lyrics_speakers):指纹对得上才把 v1：/合： 补进正文,交给对唱分栏。
         let tagged = found?.speakers?.applied(lyrics: raw, lyricsYRC: found?.lyricsYRC ?? "")
             ?? (lyrics: raw, lyricsYRC: found?.lyricsYRC ?? "")
         let text = HanCompatibility.normalized(tagged.lyrics)
@@ -3955,7 +3955,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 解析跑完了、又不是纯音乐、还是一句都没有 —— 那就是真的没有,别再说"搜索中"。
         // 但"跑完了"不等于"问过了":那一轮要是有源因为熔断冷却被整个跳过(直连 DNS 抽风
         // 之类),下这个结论就是把一次网络事故说成了这首歌的属性。searchIncomplete 就是
-        // 那种情况,collector 那边还欠一次快速补搜,界面继续说"搜索中"才是实话——它不会
+        // 那种情况,引擎那边还欠一次快速补搜,界面继续说"搜索中"才是实话——它不会
         // 无限转圈,补搜一跑完这个标记就没了,详见 EnrichCacheLyrics.searchIncomplete。
         let newNoLyrics = (found?.resolved ?? false) && !newHasContent && !newInstrumental
             && !(found?.searchIncomplete ?? false)

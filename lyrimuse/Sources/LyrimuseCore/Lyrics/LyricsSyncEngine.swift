@@ -178,7 +178,7 @@ public final class LyricsSyncEngine {
     private var wordSides: [LyricDuet.Side?] = []
     private var romaLines: [LyricLine] = []
     private var trLines: [LyricLine] = []
-    /// 背景人声轨(collector `lyrics_bg`),每行的 timeMs 是它所属主句的行头,见 backgroundWords(forLineAt:)。
+    /// 背景人声轨(引擎 `lyrics_bg`),每行的 timeMs 是它所属主句的行头,见 backgroundWords(forLineAt:)。
     private var bgLines: [LyricLineWords] = []
     /// 行头声明的行长盖住了越过下一行的词、归一化照原样保留的那些行的行头时间(见 LyricTimelineNormalizer)。
     /// 只有一行位置的展示面换行时对这些行再套一次规则 3(buildLine)。
@@ -226,7 +226,7 @@ public final class LyricsSyncEngine {
     /// 排版习惯,不是内容的一部分。
     ///
     /// 再放宽到**只留字母和数字、统一小写**:标点符号(全角/半角括号等)同样是各家源的
-    /// 排版细节,跟空白一样不该参与内容比对——collector 侧配对 LRC与YRC 行的
+    /// 排版细节,跟空白一样不该参与内容比对——引擎侧配对 LRC与YRC 行的
     /// normTimelineText 同样只留字母数字,这里跟它同一口径。大小写也折掉(同一句词一边
     /// "U're" 一边 "u're" 不该算两句)。只留字母数字后两句本来只差标点的词会撞同一个
     /// 键——那两句的译文本来就该一样,`uniquingKeysWith` 取后者,不是问题。
@@ -259,7 +259,7 @@ public final class LyricsSyncEngine {
     public private(set) var spatialAudioCue: LRCParser.SpatialAudioCue?
 
     /// 被署名过滤判掉的那些行里取出的作词 / 作曲者(`LyricSongwriters.names`),load() 时算好。完整歌词窗口
-    /// 末尾的「创作者：…」在 collector 没存 Apple 名单时用它。
+    /// 末尾的「创作者：…」在引擎没存 Apple 名单时用它。
     public private(set) var creditSongwriters: [String] = []
 
     // 署名/制作人员这类噪声行(作词/作曲/编曲/制作人等,常见于 LRC 开头几秒)在喂进
@@ -288,7 +288,7 @@ public final class LyricsSyncEngine {
         options: [.caseInsensitive]
     )
 
-    // genericHanCreditLinePattern 是上面那张关键词表的**结构化**补充,跟 collector 侧的
+    // genericHanCreditLinePattern 是上面那张关键词表的**结构化**补充,跟引擎侧的
     // genericHanCreditLineRe(match.go)是同一条规则、同一个理由——角色名的取值空间
     // (指挥/混音师/贝斯/中提琴/大提琴/母带工程师/和声编写……)枚举法堵不完,这条规则
     // 认的是"短汉字标签+冒号+内容"这个形状,不逐词维护。
@@ -876,7 +876,7 @@ public final class LyricsSyncEngine {
     /// 先试**带空格的** " - "(抬头最常见的写法,另有 " – " " — " " － " 和「——」),这样
     /// 「W-H-Y - 王力宏」这种歌名自带连字符的也能正确切开;出现多处时每个分隔处各切一次。
     /// 带空格的都没有时,退回"整行只有一个裸连字符"的情形(「陳柏宇-最後的擁抱」)。
-    /// collector `lyricheader.go` 有逐条镜像,改一边必须同步改另一边。
+    /// 引擎 `lyricheader.go` 有逐条镜像,改一边必须同步改另一边。
     private static func headerSplitCandidates(_ text: String) -> [(String, String)] {
         for sep in [" - ", " – ", " — ", " － ", "——"] {
             let parts = text.components(separatedBy: sep)
@@ -1240,7 +1240,7 @@ public final class LyricsSyncEngine {
 
     /// 结构化规则该不该对**这一整份**歌词生效。
     ///
-    /// 这道整份判定是必须的,不是保险起见。collector 侧同一条结构正则(match.go 的
+    /// 这道整份判定是必须的,不是保险起见。引擎侧同一条结构正则(match.go 的
     /// genericHanCreditLineRe)用在"整份候选要不要拒收"的**计数**上,误判一行无害;这边用在
     /// "这一行删不删"的**展示过滤**上,误判一行就是静默吞掉一句真歌词——同一条规则,爆炸
     /// 半径完全不同,不能原样搬。补这条规则时,selftest 的反向用例当场抓到
@@ -1437,7 +1437,7 @@ public final class LyricsSyncEngine {
             // 开头且紧跟 by/at,误杀面很小。
             if matchesEnglishCredit(text) { return true }
             // 源塞进来的声明行:版权 / 授权 / 译文版权 / 来源说明(「未经著作权人许可不得翻录翻唱或使用」
-            // 「本字幕由AI语音对齐技术生成」)。规则跟 collector 共用 shared/lyric-notices.json,见 LyricNotices。
+            // 「本字幕由AI语音对齐技术生成」)。规则跟引擎共用 shared/lyric-notices.json,见 LyricNotices。
             if LyricNotices.matchesBody(text) { return true }
             // 带版权标记的著作权行(「著作权人：+© 2019、赋音乐」「℗ 2016 北京享耳音乐」)。
             // 跟上面那条"成句的法务声明"不是一回事:那条认法务词,这条认版权标记 + 年份,
@@ -1514,7 +1514,7 @@ public final class LyricsSyncEngine {
         }
         // 兜底闸门:展示过滤**永远不把整份删空**。走到这一步说明判据出了我没预料到的偏差
         // (某种全篇都长成职员表形状、但其实是真歌词的写法),此时"整片空白/一直显示♪"对用户
-        // 来说比"多显示几行职员表"糟糕得多——宁可漏治,不可删空。跟 collector 侧
+        // 来说比"多显示几行职员表"糟糕得多——宁可漏治,不可删空。跟引擎侧
         // isCreditOnlyLRC 的"整份拒收"是两回事:那边拒收之后还有别的源可以顶上,这边删空了
         // 就真的什么都没有了。
         //
@@ -1523,7 +1523,7 @@ public final class LyricsSyncEngine {
         // 测试原样打回来——这道闸就是设计成"不管靠哪条规则,100% 就是不删",不是结构化
         // 规则的专属保险。丁世光《背面是我》专辑的纯配乐 Interlude(《Presentness》
         // 《Bygone》)整首歌就是清一色职员表,踩到这道闸走的正是"这份候选压根不该被
-        // 当成有效歌词收下"这条路——那是 collector 侧 isCreditOnlyLRC(整份拒收,拒了
+        // 当成有效歌词收下"这条路——那是引擎侧 isCreditOnlyLRC(整份拒收,拒了
         // 还有别的源/标记纯音乐兜底)该管的事,不该在展示层为了这一种情况反过来削弱这道
         // 保护全库的安全阀。
         if drop.allSatisfy({ $0 }) && !texts.isEmpty {
@@ -1561,7 +1561,7 @@ public final class LyricsSyncEngine {
 
     /// 返回值:内容真的变了吗(false = 入参与上次完全一致,整段跳过)。
     ///
-    /// 早退闸:enrich 缓存是全库单文件,collector 给**别的歌**写盘
+    /// 早退闸:enrich 缓存是全库单文件,引擎给**别的歌**写盘
     /// (专辑预取/译文回填/重打分)也会 bump mtime,调用方(reloadCurrentLyrics)按 mtime
     /// 失效就会带着一字未变的入参反复调进来 —— 原来每次都全量重跑解析+署名过滤,还把
     /// romanizer/wordGroup/segments 三个按行缓存无条件清空,让 20Hz 路径和 allLines 再
@@ -1678,7 +1678,7 @@ public final class LyricsSyncEngine {
         // 是独立于正文的路径,`plan`/`planWords` 剥标签那一步它们走不到,不在这儿剥就没人剥。
         //
         // 署名行这两条也要跟着丢,但判据**不是重跑一遍署名过滤,而是认正文已经判掉的那些
-        // 时间戳** —— collector 的 assembleTranslationLRC 把每条译文/罗马音的时间戳原样从
+        // 时间戳** —— 引擎的 assembleTranslationLRC 把每条译文/罗马音的时间戳原样从
         // 正文那一行抄过来(见下面 trTextByPlainText 的注释),所以"正文这一行是署名"直接就是
         // "它的译文/罗马音也是署名",不需要再判一次。
         //
@@ -1712,7 +1712,7 @@ public final class LyricsSyncEngine {
         // 清空(供非逐字模式展示用,这里只是借它的"整行 LRC 解析结果"这份数据,跟
         // usingWords 无关,两者刻意不共用同一个数组)。
         //
-        // 配对靠**精确** timeMs 相等,不是 nearestText 那种带容差的最近邻——collector 的
+        // 配对靠**精确** timeMs 相等,不是 nearestText 那种带容差的最近邻——引擎的
         // assembleTranslationLRC 生成译文/罗马音时,每一条写出来的时间戳都是原样从
         // filteredBase 对应那一行的 timeMs 抄过去的,不是"接近",是同一个数字。所以能
         // 100% 精确配对,不需要猜。
@@ -1788,7 +1788,7 @@ public final class LyricsSyncEngine {
         // 粒度/样本跟上面完全一致。
         songScript = Romanizer.songScript(of: scriptSample)
         // 粤语汉字跟普通话汉字长得一模一样,songScript(of:) 纯靠文字分析永远只会判成
-        // .chinese——粤语这一档必须由调用方喂进来的外部信号(collector 的 SongLanguage
+        // .chinese——粤语这一档必须由调用方喂进来的外部信号(引擎的 SongLanguage
         // 真值)覆盖,不能指望从歌词文字里分析出来。只在判成 .chinese 时才覆盖:已经因为
         // 假名/谚文判成日文/韩文的行(比如粤语歌里引用了一句日文)不该被这个信号打断。
         if songScript == .chinese, songIsCantonese {
@@ -1824,8 +1824,8 @@ public final class LyricsSyncEngine {
     private var songLooksJapanese = false
     private var songScript: LyricScript = .other
     /// 台语(闽南语)歌:汉字行不标罗马音。汉字罗马音只有普通话拼音和粤拼两套,按普通话读台语是错的读音
-    /// (「袂」台语读 bē,拼音是 mèi);台罗要带文白异读的台语词典,没有接。collector 那边同样不生成、
-    /// 不留(见 collector/hokkien.go),这里管的是客户端现算那一路。日文 / 韩文行照常。
+    /// (「袂」台语读 bē,拼音是 mèi);台罗要带文白异读的台语词典,没有接。引擎那边同样不生成、
+    /// 不留(见 lyrimuse-engine/hokkien.go),这里管的是客户端现算那一路。日文 / 韩文行照常。
     private var songIsHokkien = false
     private var romanizationScripts: RomanizationScripts = .default
 
@@ -2077,7 +2077,7 @@ public final class LyricsSyncEngine {
         // 两者一致的断言。派生不出读音(整行拉丁/读音等于原文)时照 romanize 的原语义退到
         // ICU 音译。
         // 判定阶梯本体在 `Romanizer.lineReading`(从这里提出去),**不准在这里
-        // 再写一份**:collector 侧的 `lyrics-romanize` helper 预生成 `lyrics_roma` 时走的
+        // 再写一份**:引擎侧的 `lyrics-romanize` helper 预生成 `lyrics_roma` 时走的
         // 是同一个函数,两份实现一旦漂开,同一首歌"装了缓存"和"现算"的读音就会不一样,而且
         // 不报错、只表现成用户偶尔觉得"某句罗马音怎么变了"。selftest 有闸。
         //
@@ -2174,7 +2174,7 @@ public final class LyricsSyncEngine {
     //   (见 mergeSegmentsIntoWordGroups)——「いつか」分词器眼里是一个词,逐字数据却
     //   常常一字一词。
     // - 中文/粤语(hanRomanization):汉字没有"一个字对应半个词"的歧义,
-    //   collector 生成拼音/粤拼时就是**严格一字一音节、空格分隔**(见 jyutping.go
+    //   引擎生成拼音/粤拼时就是**严格一字一音节、空格分隔**(见 jyutping.go
     //   toJyutpingLine 的注释),不需要分词,直接按下标一一配对(空白词不算字、
     //   不占音节,见下面那段);字数与音节数对不上
     //   (标点/多字词等边界情形)时保守放弃,让视图退回整行罗马音,不猜、不硬凑。

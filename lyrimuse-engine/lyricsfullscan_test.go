@@ -1,0 +1,377 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+)
+
+// 见 lyricsfullscan.go 头注:分层规则 + 四道硬闸。这是这个功能唯一"改错了不报错、只是数字
+// 悄悄变形"的地方 —— 层分错了扫描照样跑完,只是把该修的歌漏掉、或者把不该碰的歌重搜一遍。
+func TestLyricsFullScanTier(t *testing.T) {
+	cur := lyricsScoringVersion
+	cases := []struct {
+		name     string
+		entry    enrichEntry
+		pinned   bool
+		inflight bool
+		want     int
+	}{
+		{"空条目 → 第 0 层", enrichEntry{}, false, false, 0},
+		{"只有纯文本兜底 → 仍算没词,第 0 层", enrichEntry{PlainLyrics: "text"}, false, false, 0},
+		{"有词没逐字 → 第 1 层", enrichEntry{Lyrics: "[00:01.00]x", LyricsScoringVersion: cur}, false, false, 1},
+		{"有逐字但版本落后 → 第 2 层", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1}, false, false, 2},
+		{"老条目没写过版本号(读成 0)→ 第 2 层", enrichEntry{Lyrics: "x", LyricsYRC: "y"}, false, false, 2},
+		{"有逐字且版本已追平 → 不碰", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur}, false, false, -1},
+		{"版本号比当前还高(降级过)→ 不碰", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur + 1}, false, false, -1},
+		{"人工修正过 → 一票否决,哪怕是空条目", enrichEntry{ManualLyrics: true}, false, false, -1},
+		{"确证纯音乐 → 一票否决", enrichEntry{Instrumental: true}, false, false, -1},
+		{"校准过时间轴 → 一票否决(补空扫描没有这道闸)", enrichEntry{Lyrics: "x", LyricsScoringVersion: cur - 1}, true, false, -1},
+		{"正在飞 → 这一轮跳过", enrichEntry{Lyrics: "x", LyricsScoringVersion: cur - 1}, false, true, -1},
+	}
+	for _, c := range cases {
+		if got := lyricsFullScanTier(c.entry, c.pinned, c.inflight, 0); got != c.want {
+			t.Errorf("%s: got %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
+// 候选按层拼接、层内字典序 —— 中途停掉时留下的必须是收益最高的那部分,所以顺序本身是契约。
+func TestLyricsFullScanCandidatesOrder(t *testing.T) {
+	cur := lyricsScoringVersion
+	savedCache, savedInflight := enrichCache, enrichInflight
+	savedPins := lyricsPinsPath
+	t.Cleanup(func() {
+		enrichCache, enrichInflight, lyricsPinsPath = savedCache, savedInflight, savedPins
+		lyricsPins, lyricsPinsRead = nil, false
+	})
+	lyricsPinsPath = ""
+	lyricsPins, lyricsPinsRead = nil, false
+	enrichCache = map[string]enrichEntry{
+		"z|stale yrc|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 3},
+		"a|stale yrc|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
+		"m|line only|":   {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur},
+		"b|line only|":   {Lyrics: "[00:01.00]x"},
+		"q|empty|":       {},
+		"c|empty|":       {PlainLyrics: "text"},
+		"k|caught up|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur},
+		"p|manual|":      {Lyrics: "x", ManualLyrics: true},
+		"i|instrumental": {Instrumental: true},
+	}
+	enrichInflight = map[string]bool{}
+
+	got := lyricsFullScanCandidates()
+	want := []string{
+		// 第 0 层:没词的(含只有纯文本兜底的)
+		"c|empty|", "q|empty|",
+		// 第 1 层:有词没逐字
+		"b|line only|", "m|line only|",
+		// 第 2 层:有逐字但版本落后
+		"a|stale yrc|", "z|stale yrc|",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v\nwant %v", got, want)
+	}
+}
+
+// pin 必须真的挡住 —— 这道闸是全量扫库相对补空扫描多出来的那一道,走的是文件快照
+// (lyricsPinnedKeys),跟 lyricsPinned 逐条查同一份数据,这里连着文件一起钉。
+func TestLyricsFullScanCandidatesSkipsPinned(t *testing.T) {
+	cur := lyricsScoringVersion
+	savedCache, savedInflight, savedPins := enrichCache, enrichInflight, lyricsPinsPath
+	t.Cleanup(func() {
+		enrichCache, enrichInflight, lyricsPinsPath = savedCache, savedInflight, savedPins
+		lyricsPins, lyricsPinsRead = nil, false
+	})
+	dir := t.TempDir()
+	lyricsPinsPath = filepath.Join(dir, "pins.json")
+	if err := os.WriteFile(lyricsPinsPath,
+		[]byte(`{"version":1,"pins":{"a|pinned|":1787650854}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lyricsPins, lyricsPinsRead = nil, false
+	enrichCache = map[string]enrichEntry{
+		"a|pinned|": {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
+		"b|plain|":  {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
+	}
+	enrichInflight = map[string]bool{}
+
+	if got, want := lyricsFullScanCandidates(), []string{"b|plain|"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if !lyricsPinned("a|pinned|") {
+		t.Error("lyricsPinned 和 lyricsPinnedKeys 对同一份文件给出了不同答案")
+	}
+}
+
+// 界面上「N 首待跟进」由这边数好写进状态文件(Pending),App 不另按规则数。缓存文件、校准名单、这一场的
+// 起点都没变就不重数;任一样变了,下一次调用跟上;打分版本换了,旧的数作废。
+func TestLyricsFullScanPendingPublished(t *testing.T) {
+	cur := lyricsScoringVersion
+	savedCache, savedInflight, savedPins := enrichCache, enrichInflight, lyricsPinsPath
+	enrichMu.Lock()
+	savedEnrichPath := enrichPath
+	enrichMu.Unlock()
+	lyricsFullScanMu.Lock()
+	savedState := lyricsFullScanStatePath
+	lyricsFullScanMu.Unlock()
+	resetSeen := func() {
+		lyricsFullScanPendingMu.Lock()
+		lyricsFullScanPendingSeen = nil
+		lyricsFullScanPendingMu.Unlock()
+	}
+	t.Cleanup(func() {
+		enrichCache, enrichInflight, lyricsPinsPath = savedCache, savedInflight, savedPins
+		lyricsPins, lyricsPinsRead = nil, false
+		enrichMu.Lock()
+		enrichPath = savedEnrichPath
+		enrichMu.Unlock()
+		lyricsFullScanMu.Lock()
+		lyricsFullScanStatePath = savedState
+		lyricsFullScanMu.Unlock()
+		resetSeen()
+	})
+	dir := t.TempDir()
+	write := func(path, text string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pending := func() int {
+		t.Helper()
+		p := readLyricsFullScanState().Pending
+		if p == nil {
+			t.Fatal("状态文件里没有 pending")
+		}
+		return *p
+	}
+	enrichMu.Lock()
+	enrichPath = filepath.Join(dir, "cache.json")
+	enrichMu.Unlock()
+	lyricsPinsPath = filepath.Join(dir, "pins.json")
+	lyricsPins, lyricsPinsRead = nil, false
+	resetSeen()
+	statePath := filepath.Join(dir, "fullscan.json")
+	setLyricsFullScanStatePath(statePath)
+	if readLyricsFullScanState().Pending != nil {
+		t.Fatal("还没数过时不写 pending(App 据此不显示数字)")
+	}
+	enrichCache = map[string]enrichEntry{
+		"a|empty|":     {},
+		"b|line only|": {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur},
+		"c|stale|":     {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
+		"d|caught up|": {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur},
+		"e|manual|":    {ManualLyrics: true},
+	}
+	enrichInflight = map[string]bool{}
+	write(enrichPath, "v1")
+	publishLyricsFullScanPending()
+	if got := pending(); got != 3 {
+		t.Fatalf("pending = %d, want 3(没词、只有逐行、版本落后各一条)", got)
+	}
+
+	// 输入都没变就不重数:内存里多了一条也不算,界面列表读的是缓存文件。
+	enrichCache["f|empty|"] = enrichEntry{}
+	publishLyricsFullScanPending()
+	if got := pending(); got != 3 {
+		t.Fatalf("输入没变不该重数: %d", got)
+	}
+	write(enrichPath, "v2 saved")
+	publishLyricsFullScanPending()
+	if got := pending(); got != 4 {
+		t.Fatalf("缓存文件变了要重数: %d, want 4", got)
+	}
+	write(lyricsPinsPath, `{"version":1,"pins":{"c|stale|":1787650854}}`)
+	publishLyricsFullScanPending()
+	if got := pending(); got != 3 {
+		t.Fatalf("校准名单变了要重数(校准过的不算): %d, want 3", got)
+	}
+	enrichCache["a|empty|"] = enrichEntry{LyricsFillTS: time.Now().Unix() + 3600}
+	setLyricsFullScanActive(true)
+	publishLyricsFullScanPending()
+	if got := pending(); got != 2 {
+		t.Fatalf("开了一场要重数(这一场补空过的不算): %d, want 2", got)
+	}
+
+	// 打分版本换了(新版本第一次启动):旧的数作废,等这个进程重新数。
+	nine := 9
+	data, err := json.Marshal(lyricsFullScanState{ScoringVersion: cur - 1, Pending: &nine})
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(statePath, string(data))
+	setLyricsFullScanStatePath(statePath)
+	if readLyricsFullScanState().Pending != nil {
+		t.Fatal("打分版本换了,旧的 pending 要清掉")
+	}
+}
+
+// 请求文件多认一个动词。旧引擎把 "full" 当成普通 key 那条降级路径也一并钉住 ——
+// 它是"新 App + 旧引擎"时唯一会发生的事,不能变成"误扫了一批别的东西"。
+func TestParseLyricsFillRequestFull(t *testing.T) {
+	req := parseLyricsFillRequest("full\n")
+	if !req.full || !req.manual || req.all || req.cancel || len(req.keys) != 0 {
+		t.Errorf("full: %+v", req)
+	}
+	if req := parseLyricsFillRequest("all\n"); req.full {
+		t.Error(`"all" 不该被解成全量扫库`)
+	}
+	// 降级语义:把 full 当普通 key 时,它只会去匹配一个不存在的缓存条目。
+	savedCache, savedInflight := enrichCache, enrichInflight
+	t.Cleanup(func() { enrichCache, enrichInflight = savedCache, savedInflight })
+	enrichCache = map[string]enrichEntry{"a|x|": {}}
+	enrichInflight = map[string]bool{}
+	legacy := lyricsFillRequest{manual: true, keys: map[string]bool{"full": true}}
+	if got := lyricsFillSweepCandidates(legacy); len(got) != 0 {
+		t.Errorf("旧引擎应当空跑一轮,却挑出了 %v", got)
+	}
+}
+
+// 「待续」标记的读写与清除。跑完/用户停止都清,进程被杀(两者都不走)才留着。
+func TestLyricsFullScanActiveMarker(t *testing.T) {
+	saved := lyricsFullScanStatePath
+	t.Cleanup(func() {
+		lyricsFullScanMu.Lock()
+		lyricsFullScanStatePath = saved
+		lyricsFullScanMu.Unlock()
+	})
+	path := filepath.Join(t.TempDir(), "fullscan.json")
+	setLyricsFullScanStatePath(path)
+
+	// setLyricsFullScanStatePath 必须**建**出文件(App 要从这里读打分版本号),而且不能
+	// 顺手把 Active 清掉。
+	state := readLyricsFullScanState()
+	if state.ScoringVersion != lyricsScoringVersion {
+		t.Errorf("scoringVersion: got %d, want %d", state.ScoringVersion, lyricsScoringVersion)
+	}
+	if lyricsFullScanActive() {
+		t.Error("全新的状态文件不该带着待续标记")
+	}
+
+	setLyricsFullScanActive(true)
+	if !lyricsFullScanActive() {
+		t.Fatal("置位之后应当为 true")
+	}
+	started := readLyricsFullScanState().StartedAt
+	if started == 0 {
+		t.Error("置位应当记下起始时刻")
+	}
+	// 重新走一遍启动路径(模拟引擎重启):标记必须活下来,这正是续跑的全部依据。
+	setLyricsFullScanStatePath(path)
+	if !lyricsFullScanActive() {
+		t.Error("重启后待续标记丢了 —— 续跑机制失效")
+	}
+	if got := readLyricsFullScanState().StartedAt; got != started {
+		t.Errorf("续跑不该刷新起始时刻: got %d, want %d", got, started)
+	}
+
+	cancelLyricsFillSweep()
+	if lyricsFullScanActive() {
+		t.Error("用户按停止之后待续标记应当被清掉")
+	}
+
+	// 文件坏了一律当"没有待续的一轮" —— 反过来会让每次启动都自动开一轮几十小时的全库扫描。
+	if err := os.WriteFile(path, []byte("{ not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if lyricsFullScanActive() {
+		t.Error("坏掉的状态文件不该被读成 active")
+	}
+}
+
+// 第一发定时器的档位。续跑是用户点出来的那一轮被重启打断,不该陪自动补空一起等 10 分钟 ——
+// 选错常量完全不报错(扫描照跑、日志照写,只是晚十分钟),表现成「续跑怎么没自动开始」。
+func TestLyricsFillSweepFirstDelay(t *testing.T) {
+	if got := lyricsFillSweepFirstDelay(false); got != lyricsFillSweepInitialDelay {
+		t.Errorf("没有待续的一轮时应当用自动扫描那档: got %v, want %v", got, lyricsFillSweepInitialDelay)
+	}
+	if got := lyricsFillSweepFirstDelay(true); got != lyricsFullScanResumeDelay {
+		t.Errorf("续跑应当用短的那档: got %v, want %v", got, lyricsFullScanResumeDelay)
+	}
+	if lyricsFullScanResumeDelay >= lyricsFillSweepInitialDelay {
+		t.Errorf("续跑的延迟必须明显短于自动扫描的礼貌窗口: resume=%v initial=%v",
+			lyricsFullScanResumeDelay, lyricsFillSweepInitialDelay)
+	}
+	// 界面上那句「稍后会自动接着跑」得撑得住这个数 —— 十分钟的「稍后」用户会当成坏了。
+	if lyricsFullScanResumeDelay > 2*time.Minute {
+		t.Errorf("续跑延迟 %v 太长,界面那句「稍后」就名不副实了", lyricsFullScanResumeDelay)
+	}
+}
+
+// 两首之间的间隔分两档:自动补空慢、用户点出来的(手动补搜 / 全量扫库)快。跟上面那条同一个
+// 理由 —— 选错常量不报错,只是多花几十分钟到十几个小时,而那要等跑完才看得出来。
+func TestLyricsFillSweepPace(t *testing.T) {
+	if got := lyricsFillSweepPace(false); got != lyricsFillSweepGap {
+		t.Errorf("自动补空应当用 lyricsFillSweepGap: got %v, want %v", got, lyricsFillSweepGap)
+	}
+	if got := lyricsFillSweepPace(true); got != lyricsManualSweepGap {
+		t.Errorf("用户点出来的那一轮应当用 lyricsManualSweepGap: got %v, want %v", got, lyricsManualSweepGap)
+	}
+	if lyricsManualSweepGap >= lyricsFillSweepGap {
+		t.Errorf("手动那一档必须比自动补空短,否则分两档没有意义: manual=%v auto=%v",
+			lyricsManualSweepGap, lyricsFillSweepGap)
+	}
+	// 下限守卫:一首歌会打出 100+ 个请求散到十几个主机,而整个采集器没有 per-host 限流器。
+	// gap 是这些突发之间唯一的喘息 —— 真要压到 2 秒以下,得先补限流,不能只改这个数。
+	if lyricsManualSweepGap < 2*time.Second {
+		t.Errorf("gap %v 太短:没有 per-host 限流器兜底时这是唯一的喘息,先补限流再压",
+			lyricsManualSweepGap)
+	}
+	// 5300 首的全库一轮别超过一天 —— 超了「全量重新扫库」这个功能就没人用得下去。
+	const libraryTracks = 5300
+	const searchSecondsPerTrack = 3 // 实测:18 秒/首 - 15 秒 gap
+	total := time.Duration(libraryTracks) * (lyricsManualSweepGap + searchSecondsPerTrack*time.Second)
+	if total > 24*time.Hour {
+		t.Errorf("按 %d 首估算全库要 %v,超过一天了", libraryTracks, total)
+	}
+}
+
+// 全量扫库的累计分母/分子。这几条全是"选错完全不报错"的那类:扫描照跑、进度照涨,
+// 只是用户看到的数字对不上,而那要等第二次续跑才看得出来。
+func TestLyricsFullScanProgressBase(t *testing.T) {
+	cases := []struct {
+		name                string
+		stored              lyricsFullScanState
+		remaining           int
+		total, done, filled int
+	}{
+		{
+			name:      "新的一场:分母就是这一轮的候选数,分子归零",
+			stored:    lyricsFullScanState{},
+			remaining: 5122,
+			total:     5122, done: 0, filled: 0,
+		},
+		{
+			name:      "续跑:分母原样保留,分子接着累加",
+			stored:    lyricsFullScanState{Total: 5122, Done: 1200, Filled: 340},
+			remaining: 3922,
+			total:     5122, done: 1200, filled: 340,
+		},
+		{
+			name:      "候选比当初少了(被自然播放追平):分母不缩,仍是一开始那个数",
+			stored:    lyricsFullScanState{Total: 5122, Done: 1200, Filled: 340},
+			remaining: 100,
+			total:     5122, done: 1200, filled: 340,
+		},
+		{
+			name:      "库里新增了条目:已跑+还剩超过当初的总数,分母按真实值抬上去",
+			stored:    lyricsFullScanState{Total: 5122, Done: 1200, Filled: 340},
+			remaining: 4000,
+			total:     5200, done: 1200, filled: 340,
+		},
+	}
+	for _, c := range cases {
+		total, done, filled := lyricsFullScanProgressBase(c.stored, c.remaining)
+		if total != c.total || done != c.done || filled != c.filled {
+			t.Errorf("%s: got (%d,%d,%d), want (%d,%d,%d)",
+				c.name, total, done, filled, c.total, c.done, c.filled)
+		}
+		if done > total {
+			t.Errorf("%s: 分子 %d 超过分母 %d —— 界面会显示成倒着走", c.name, done, total)
+		}
+	}
+}

@@ -1,0 +1,160 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+// `lyrimuse-engine artist-avatars <歌手名>...`:给一批歌手名解析头像图 URL,stdout 输出一个
+// JSON 对象 {"歌手名": "url", ...}(查不到的名字值为空串)。
+//
+// 给 Lyrimuse 的 Last.fm 信息页(LastfmStatsSection)用 —— Last.fm API 的歌手图 2019 年
+// 起全是同一张白星占位图,真头像走这里:复用网页版"历史播放 Top 歌手"已经在用的
+// resolveArtistAvatar(QQ 音乐优先、Deezer 兜底,见 topartists.go),不在 Swift 里把
+// 两个服务的搜索逻辑重抄一遍。
+//
+// ## 磁盘缓存
+//
+// 结果按歌手名落盘(lyrimuse-artist-avatar-cache.json),命中直接返回,不再打网络请求。
+// 头像不是会频繁变的东西,TTL 给 14 天;**查不到也缓存**(空串)——查不到的歌手(小众/
+// 纯本地标签)每次打开页面都重查一遍,是对 QQ/Deezer 无意义的连打。
+type avatarCacheEntry struct {
+	URL string `json:"url"`
+	TS  int64  `json:"ts"`
+	// Transient:这是一次"暂时故障"下的空结果(网络挂了/服务抽风),不是确定性的
+	// 查无此人 —— 只配 30 分钟的短负缓存(防抖动期连打),不配 14 天。老缓存文件没有
+	// 这个字段,读出来是 false = 按确定性结论处理,正确。
+	Transient bool `json:"transient,omitempty"`
+}
+
+const avatarCacheTTL = 14 * 24 * time.Hour
+const avatarTransientTTL = 30 * time.Minute
+
+func runArtistAvatarsCLI(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "artist-avatars: at least one artist name is required")
+		os.Exit(2)
+	}
+	if configDir() == "" {
+		log.Fatalf("artist-avatars: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
+	}
+	cachePath := filepath.Join(configDir(), clientName+"-artist-avatar-cache.json")
+
+	cache := map[string]avatarCacheEntry{}
+	if data, err := os.ReadFile(cachePath); err == nil {
+		// 解析失败就当没有缓存,重查一遍然后覆盖写 —— 缓存文件坏了不该让功能失效
+		_ = json.Unmarshal(data, &cache)
+	}
+
+	out := map[string]string{}
+	// 本进程这次写进缓存的条目。落盘时只拿这些覆盖磁盘上的最新版本 —— App 可能同时起好几个 artist-avatars
+	// 进程,各自整份写回会互相抹掉对方刚查到的头像。
+	updated := map[string]avatarCacheEntry{}
+	now := time.Now()
+	// 先把缓存命中的收掉,剩下的才要打网络
+	var misses []string
+	for _, name := range args {
+		if name == "" {
+			continue
+		}
+		if old, ok := cache[name]; ok {
+			ttl := avatarCacheTTL
+			if old.Transient {
+				ttl = avatarTransientTTL
+			}
+			if now.Sub(time.Unix(old.TS, 0)) < ttl {
+				out[name] = old.URL
+				continue
+			}
+		}
+		misses = append(misses, name)
+	}
+	// 冷缓存并发解析:串行时每名最坏 6 秒,一次冷打开(10 个新歌手)能卡到一分钟 ——
+	// daemon 侧 topArtistsDigest 早为同样的理由用了 4 路并发(见那边注释),这里对齐。
+	// 顺序无关(输出是 map),cache/out 的写入用锁护住。
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	for _, name := range misses {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+			url, definitive := resolveArtistAvatar(ctx, name)
+			cancel()
+			mu.Lock()
+			defer mu.Unlock()
+			old, hasOld := cache[name]
+			switch {
+			case url != "" || definitive:
+				// 拿到了图,或者两条腿都正常应答说"确实没有" —— 都可以放心存 14 天
+				out[name] = url
+				updated[name] = avatarCacheEntry{URL: url, TS: now.Unix()}
+			case hasOld && old.URL != "":
+				// 暂时故障 + 手上有过期的旧头像:继续用旧的,**不覆盖**(serve-stale,
+				// 过期的真图永远好过一个空位;不这么做会抹掉好头像)。
+				out[name] = old.URL
+			default:
+				// 暂时故障且没有旧值:输出空,落 30 分钟短负缓存防抖动期连打。
+				out[name] = ""
+				updated[name] = avatarCacheEntry{URL: "", TS: now.Unix(), Transient: true}
+			}
+		}(name)
+	}
+	wg.Wait()
+
+	if len(updated) > 0 {
+		// 「重读 → 合并 → 写回」整段拿跨进程文件锁:App 连切榜单时会同时起几个 artist-avatars,各自重读完再各自写回的话,
+		// 后写的那个会盖掉前一个刚写进去的条目。
+		unlock := exclusiveFileLock(cachePath)
+		defer unlock()
+		merged := mergeAvatarCache(cachePath, updated)
+		pruneAvatarCache(merged, now)
+		if data, err := json.MarshalIndent(merged, "", "  "); err == nil {
+			if err := writeFileAtomic(cachePath, data); err != nil {
+				slog.Error("artist-avatars: write cache failed", "err", err)
+			}
+		}
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	if err := enc.Encode(out); err != nil {
+		log.Fatalf("artist-avatars: encode: %v", err)
+	}
+}
+
+// pruneAvatarCache 丢掉早就过期的条目(比 TTL 再多放一倍的宽限:过期的真图还会被 serve-stale 用上),不然这份文件
+// 跟着榜单上出现过的歌手只涨不落。
+func pruneAvatarCache(m map[string]avatarCacheEntry, now time.Time) {
+	for name, e := range m {
+		ttl := avatarCacheTTL
+		if e.Transient {
+			ttl = avatarTransientTTL
+		}
+		if now.Sub(time.Unix(e.TS, 0)) > 2*ttl {
+			delete(m, name)
+		}
+	}
+}
+
+// mergeAvatarCache 重读磁盘上此刻的缓存,再用本进程这次查到的条目覆盖。读不出来就只写这次的结果之外的
+// 空底 —— 与启动时「缓存坏了当没有」同一个口径。
+func mergeAvatarCache(cachePath string, updated map[string]avatarCacheEntry) map[string]avatarCacheEntry {
+	merged := map[string]avatarCacheEntry{}
+	if data, err := os.ReadFile(cachePath); err == nil {
+		_ = json.Unmarshal(data, &merged)
+	}
+	for name, entry := range updated {
+		merged[name] = entry
+	}
+	return merged
+}

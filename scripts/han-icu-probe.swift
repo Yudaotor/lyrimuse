@@ -2,7 +2,7 @@
 // 的一个步骤,不是独立工具。
 //
 // 为什么必须真的跑一次 ICU:异体字表要回答的是"两个转换引擎各自漏了哪些字"。Go 侧用
-// OpenCC 词库(lyrimuse-collector/t2s.go,词典数据能离线枚举),Swift 侧用 ICU
+// OpenCC 词库(lyrimuse-engine/t2s.go,词典数据能离线枚举),Swift 侧用 ICU
 // (Romanizer.converted 里的 `applyingTransform(StringTransform("Traditional-Simplified"))`,
 // 覆盖面**没有**可离线枚举的数据文件)。生成器只能实测:把候选字逐个喂给 ICU,看它转不转、
 // 转成什么。生成表里"这一条填的是谁的缺口"那一列就是这么来的。

@@ -31,7 +31,7 @@ struct EditorialCard: Equatable {
 ///     系统地区的店面,404 再问链接自带的店面(`AlbumEditorialNotes.storefronts`);
 ///   - 歌手:从署名里挑出这首歌的歌手(`AlbumEditorialNotes.pickArtist`);这首自己的专辑页给不出时,从同歌手在
 ///     缓存里的别的专辑页找,按专辑 ID 升序最多试 3 张,对上一张就停。再按给出专辑页的那个店面请求歌手公开页
-///     拿简介;出生日期 / 类型只有 Apple Music API 给,collector 缓存的 developer token 有效时顺带取,没有就不显示那两行。
+///     拿简介;出生日期 / 类型只有 Apple Music API 给,引擎缓存的 developer token 有效时顺带取,没有就不显示那两行。
 /// **Apple Music 明确没有时退到 Last.fm**(`album.getInfo` 的 wiki / `artist.getInfo` 的 bio,见 `LastfmEditorialInfo`):
 /// 只在 Apple 那条路**确定**没有(没有专辑链接 / 公开页没有简介 / 歌手页没有简介 / 同歌手的专辑都对不上)时才问,
 /// Apple 请求失败或 enrich 缓存还没加载好不算;要连着 Last.fm 账号(用它的 API key)。按「歌手|专辑」「歌手」记结论。
@@ -97,7 +97,7 @@ final class EditorialNotesStore: ObservableObject {
             .debounce(for: .milliseconds(600), scheduler: RunLoop.main)
             .sink { [weak self] t in self?.refresh(t) }
             .store(in: &cancellables)
-        // enrich 缓存换了内容(启动后第一次加载完、collector 给这首补上了 apple_music_url):按新内容重查一次,
+        // enrich 缓存换了内容(启动后第一次加载完、引擎给这首补上了 apple_music_url):按新内容重查一次,
         // 之前因为「还没有」记下的找不到作废。
         LocalPlaybackSource.shared.$enrichContentVersion
             .dropFirst()
@@ -122,7 +122,7 @@ final class EditorialNotesStore: ObservableObject {
     }
 
     /// 按此刻在放的曲目重查一次(缓存命中是 µs 级)。消费方在「要用了」的时刻叫:灵动岛展开、「⋯」菜单打开 ——
-    /// 换歌时 enrich 里还没有 `apple_music_url` 的曲目,collector 补上之后靠这一下变可点。
+    /// 换歌时 enrich 里还没有 `apple_music_url` 的曲目,引擎补上之后靠这一下变可点。
     func refreshCurrent() {
         let p = PlaybackCoordinator.shared
         refresh(Track(artist: p.artist, title: p.title, album: p.album))

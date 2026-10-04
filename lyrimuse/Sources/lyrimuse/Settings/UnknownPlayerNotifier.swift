@@ -48,8 +48,8 @@ final class UnknownPlayerNotifier: NSObject {
     /// 结果信任了 QuickTime」。
     static let bundleIDKey = "bundleID"
 
-    /// 已提醒记录。存 UserDefaults 而不是 features.json:那份是 collector 也在读的共享文件,
-    /// 把高频后台时间戳塞进去会污染 isDirty / 底部保存栏的语义(而且 collector 侧只读不写,
+    /// 已提醒记录。存 UserDefaults 而不是 features.json:那份是引擎也在读的共享文件,
+    /// 把高频后台时间戳塞进去会污染 isDirty / 底部保存栏的语义(而且引擎侧只读不写,
     /// 别自己造出第二个写者)。
     ///
     /// 这个键**必须**在 ConfigPortability.machineLocalDefaultsKeys 里 —— 它跟

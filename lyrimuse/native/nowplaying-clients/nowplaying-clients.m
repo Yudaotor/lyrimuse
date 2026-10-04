@@ -59,7 +59,7 @@ typedef CFStringRef (*ItemGetIdentifierFn)(void *);
 /// Apple Music 113KB),但 Spotify **放广告时不给** —— 一开始据此误判成"Spotify 不给封面",
 /// 换成真歌再测就有了。浏览器里的视频也不给。拿不到就是拿不到,调用方照旧退回既有来源。
 /// 状态查询那两段等待(取播放器列表、取单个播放器的信息)各等多久。两个调用方(App 的 NowPlayingClientsProbe、
-/// collector 的 focusfallback.go)都在 2 秒整体超时后杀掉这个进程,原来每段 3 秒,MediaRemote 一慢这条路就永远拿不到
+/// 引擎的 focusfallback.go)都在 2 秒整体超时后杀掉这个进程,原来每段 3 秒,MediaRemote 一慢这条路就永远拿不到
 /// 结果;两段加起来要留在 2 秒以内。正常一次约 120ms。
 static const int64_t kStateWaitMs = 900;
 static const long kIncludeArtwork = 1;

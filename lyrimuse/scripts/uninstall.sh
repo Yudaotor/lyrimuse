@@ -27,14 +27,14 @@ UID_="$(id -u)"
 
 # label 也可覆盖，纯粹为了让 uninstall_test.sh 能对着一次性 probe job 走**完全相同的
 # 代码路径**（而不是给测试开一条"跳过 launchctl"的旁路，那样测的就不是真东西了）。
-COLLECTOR_LABEL="${LYRIMUSE_UNINSTALL_COLLECTOR_LABEL:-com.lyrimuse.collector}"
+ENGINE_LABEL="${LYRIMUSE_UNINSTALL_ENGINE_LABEL:-com.lyrimuse.collector}"
 APP_LABEL="${LYRIMUSE_UNINSTALL_APP_LABEL:-me.yudaotor.lyrimuse}"
 
-COLLECTOR_PLIST="$PREFIX/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
+ENGINE_PLIST="$PREFIX/Library/LaunchAgents/$ENGINE_LABEL.plist"
 APP_PLIST="$PREFIX/Library/LaunchAgents/$APP_LABEL.plist"
 CONFIG_DIR="$PREFIX/.config/lyrimuse"
 LOG_FILE="$PREFIX/Library/Logs/lyrimuse.log"
-# 引擎日志的轮转归档:名字与份数同 lyrimuse-collector/logrotate.go(logArchiveName / logRotateKeepArchives),
+# 引擎日志的轮转归档:名字与份数同 lyrimuse-engine/logrotate.go(logArchiveName / logRotateKeepArchives),
 # 改那边的份数要一起改这里(uninstallarchives_test.go 对账)。
 LOG_ARCHIVES=("$LOG_FILE.old" "$LOG_FILE.old.1" "$LOG_FILE.old.2")
 # App 进程的 launchd stdout/stderr(单独一份,见 LyrimuseCore LogFiles.appStderr)。
@@ -74,7 +74,7 @@ has_defaults() {
 }
 
 echo "=== 当前状态 ==="
-for label in "$COLLECTOR_LABEL" "$APP_LABEL"; do
+for label in "$ENGINE_LABEL" "$APP_LABEL"; do
   if is_registered "$label"; then
     state=$(/bin/launchctl print "gui/$UID_/$label" 2>/dev/null | /usr/bin/grep -E "^	state = " | /usr/bin/sed 's/^	state = //')
     echo "  launchd job  $label  [$state]"
@@ -82,7 +82,7 @@ for label in "$COLLECTOR_LABEL" "$APP_LABEL"; do
     echo "  launchd job  $label  [未注册]"
   fi
 done
-for p in "$COLLECTOR_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$STALL_SAMPLE_FILE"; do
+for p in "$ENGINE_PLIST" "$APP_PLIST" "$CONFIG_DIR" "$LOG_FILE" "${LOG_ARCHIVES[@]}" "$APP_LOG_FILE" "$STALL_SAMPLE_FILE"; do
   if [[ -e "$p" ]]; then
     echo "  存在  $p  ($(human_size "$p"))"
   else
@@ -121,7 +121,7 @@ stop_services() {
   echo
   echo "=== 注销 launchd job ==="
   unregister_login_item
-  for label in "$COLLECTOR_LABEL" "$APP_LABEL"; do
+  for label in "$ENGINE_LABEL" "$APP_LABEL"; do
     if is_registered "$label"; then
       # KeepAlive 的 job 必须 bootout，光 kill 会被 launchd 立刻拉起来。
       /bin/launchctl bootout "gui/$UID_/$label" >/dev/null 2>&1
@@ -134,7 +134,7 @@ stop_services() {
       echo "  —  $label 本来就没注册"
     fi
   done
-  for p in "$COLLECTOR_PLIST" "$APP_PLIST"; do
+  for p in "$ENGINE_PLIST" "$APP_PLIST"; do
     if [[ -f "$p" ]]; then
       /bin/rm -f "$p" && echo "  ✅ 已删除 $p"
     fi
@@ -205,8 +205,8 @@ done
 # 偏好设置项必须一起删，不能像以前那样只打一行"需要的话手动执行"。
 #
 # 留着它会把重装引向一条**不可自愈的死路**：purge 删掉了 LaunchAgent
-# (collector 没装)，而 np:hasCompletedOnboarding 还是 true —— 重装之后首启引导永不出现，
-# 而那扇引导页是把 collector 服务装回去的主要入口。用户看到的是桌面永久停在
+# (引擎没装)，而 np:hasCompletedOnboarding 还是 true —— 重装之后首启引导永不出现，
+# 而那扇引导页是把引擎服务装回去的主要入口。用户看到的是桌面永久停在
 # 「搜索歌词中…」，界面上没有任何线索指向"后台服务没装"。OnboardingView 顶部注释记的
 # 就是这条死路(为此改过 onDisappear 的置位时机)，只是这次从卸载路径绕了回来。
 #

@@ -185,7 +185,7 @@ func runKasetTests() {
         expectEqual(stalled.playing == false && stalled.isWaitingToPlay == true, true, "Kaset 快照: 卡住 = 停着、等着恢复")
     }
 
-    // ---- 待播队列:整理成 collector 那份(样例两侧共用)----
+    // ---- 待播队列:整理成引擎那份(样例两侧共用)----
     do {
         let dir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -320,7 +320,7 @@ func runKasetTests() {
         expectEqual(playback.contains("if !youtubeMusicAlbum.isEmpty { youtubeMusicAlbum = \"\" }"), true,
                     "Kaset 契约: 停播时一起清掉")
         expectEqual(src("LyrimuseCore/Local/EnrichCacheReader.swift").contains(#"case youtubeMusicAlbum = "youtube_music_album""#),
-                    true, "Kaset 契约: 缓存条目的键名跟 collector 一致")
+                    true, "Kaset 契约: 缓存条目的键名跟引擎一致")
         expectEqual(src("lyrimuse/PlaybackCoordinator.swift").contains(
             "LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo,"),
                     true, "Kaset 契约: 界面专辑位按 displayAlbum 取")
@@ -343,7 +343,7 @@ func runKasetTests() {
         expectEqual(source.contains("if isPlayingNow || lastSnapshot?.isWaitingToPlay == true { return PollInterval.playing }"), true,
                     "Kaset 契约: 等着开始时轮询留在播放中的节拍")
         expectEqual(source.contains("ad: isCurrentTrackAdBreak && !Self.adSharesTrackIdentity(bundleID: bundleID), positionSecs: positionSecs,"),
-                    true, "Kaset 契约: 前贴片广告不写进播放状态(collector 会把整首当广告)")
+                    true, "Kaset 契约: 前贴片广告不写进播放状态(引擎会把整首当广告)")
         expectEqual(source.contains("playerSaysAd: snapshot.isAd)") && source.contains(
             "pageVerdict: isSpotifyNative ? nil : Self.playerAdVerdict(snapshot.isAd) ?? youTubeMusicVerdict)"), true,
                     "Kaset 契约: 广告结论接进「广告中」状态机,正片在走时能回落")

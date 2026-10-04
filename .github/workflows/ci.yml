@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 env:
-  # 跟 lyrimuse/build.sh、lyrimuse-collector/build.sh 里硬编码的 GOTOOLCHAIN 保持一致。
+  # 跟 lyrimuse/build.sh、lyrimuse-engine/build.sh 里硬编码的 GOTOOLCHAIN 保持一致。
   # 更老的工具链产出的二进制缺 LC_UUID，AMFI 会拒签（详见 AGENTS.md）。
   GO_VERSION: "1.24.4"
 
@@ -38,11 +38,11 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          # go.sum 在 lyrimuse-collector/ 而不是仓库根。不写这一行 setup-go 会找不到
+          # go.sum 在 lyrimuse-engine/ 而不是仓库根。不写这一行 setup-go 会找不到
           # 可以做 cache key 的文件（release.yml 里记着那次 "Supported file pattern:
-          # go.mod" 的告警）。collector 目前零外部依赖、go.sum 是空文件，所以这里缓存
+          # go.mod" 的告警）。引擎目前零外部依赖、go.sum 是空文件，所以这里缓存
           # 到的东西也是空的 —— 保留它是为了跟 release.yml 一致，将来真加了依赖不用再想起来补。
-          cache-dependency-path: lyrimuse-collector/go.sum
+          cache-dependency-path: lyrimuse-engine/go.sum
 
       # 顺序按"最快、最容易暴露问题的先跑"排：生成物对账 → 格式 → 静态检查 → 单测 → 编译。
       - name: 内置播放器表与 shared/players.json 一致
@@ -56,7 +56,7 @@ jobs:
 
       - name: gofmt
         run: |
-          cd lyrimuse-collector
+          cd lyrimuse-engine
           unformatted="$(gofmt -l .)"
           if [ -n "$unformatted" ]; then
             echo "以下文件没有格式化，跑 gofmt -w 修一下："
@@ -65,19 +65,19 @@ jobs:
           fi
 
       - name: go vet
-        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet ./...
+        run: cd lyrimuse-engine && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet ./...
 
-      # 开发者手动跑的维护子命令只在带 devtools 构建标签时编进来（见 lyrimuse-collector/devtools.go），
+      # 开发者手动跑的维护子命令只在带 devtools 构建标签时编进来（见 lyrimuse-engine/devtools.go），
       # 正式版不带。这里带上标签再查一遍，免得它们编不过也没人知道。
       - name: go vet（devtools）
-        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet -tags devtools ./...
+        run: cd lyrimuse-engine && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet -tags devtools ./...
 
       # 挡住新长出来的死代码。不是"零死代码"——允许清单在
-      # lyrimuse-collector/deadcode-baseline.txt，文件头写了往里加之前该问什么。
+      # lyrimuse-engine/deadcode-baseline.txt，文件头写了往里加之前该问什么。
       # deadcode 的版本必须钉住：v0.50.0 起要求 go >= 1.26，装不上本仓的工具链。
       - name: 死代码（不得新增）
         run: |
-          cd lyrimuse-collector
+          cd lyrimuse-engine
           GOTOOLCHAIN="go${{ env.GO_VERSION }}" go run golang.org/x/tools/cmd/deadcode@v0.30.0 \
             -test ./... | sed 's/.*unreachable func: //' | sort -u > /tmp/deadcode.now
           /usr/bin/grep -vE '^\s*(#|$)' deadcode-baseline.txt | sort -u > /tmp/deadcode.base
@@ -96,7 +96,7 @@ jobs:
 
       # 带 devtools 标签跑：正式版的测试一条不少，维护子命令的测试也在里面。
       - name: go test
-        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test -tags devtools ./...
+        run: cd lyrimuse-engine && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test -tags devtools ./...
 
       - name: Localizable.strings 一致性
         # 两份手写 .strings 漏改一边不会编译报错,只会在运行时静默 fallback 到 key 本身

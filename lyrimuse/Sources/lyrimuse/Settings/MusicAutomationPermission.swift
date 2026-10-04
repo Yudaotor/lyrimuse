@@ -8,9 +8,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "automa
 
 // 查/请求"自动化"权限(允许这个 App 用 Apple Event 控制 Music.app)——只覆盖
 // Lyrimuse 自己这一份身份,给 AppleMusicPositionClient 读精确播放进度用。
-// collector 采集器是完全独立的系统进程/独立签名身份,自己也会发同类 Apple Event
+// 引擎采集器是完全独立的系统进程/独立签名身份,自己也会发同类 Apple Event
 // (专辑预取、它自己的精确进度),但那是 TCC 数据库里单独一条记录——这里没有任何
-// API 能查到或触发它,设置页面对 collector 那份只给一句说明文字+跳系统设置的按钮。
+// API 能查到或触发它,设置页面对引擎那份只给一句说明文字+跳系统设置的按钮。
 //
 // 用到的 AEDeterminePermissionToAutomateTarget/AECreateDesc 是老的 Apple Event
 // Manager API:noErr(0)=已授权、errAEEventNotPermitted(-1743)=已拒绝、
@@ -104,7 +104,7 @@ enum MusicAutomationPermission {
     }
 
     // 系统设置里"隐私与安全性 → 自动化"面板——被拒绝后官方没有 API 能再触发一次
-    // 系统弹窗,只能引导用户自己去这里手动打开;跟 collector 那份权限共用同一个
+    // 系统弹窗,只能引导用户自己去这里手动打开;跟引擎那份权限共用同一个
     // 面板,一个跳转按钮足够覆盖两边的"去看看"需求。
     static var systemSettingsURL: URL {
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!

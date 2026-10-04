@@ -1,16 +1,16 @@
 import SwiftUI
 import LyrimuseCore
 
-// 「解析决策」只读弹窗(吸收自对比审阅 C2)——把 collector 在
+// 「解析决策」只读弹窗(吸收自对比审阅 C2)——把引擎在
 // **真正做决定那一刻**固化下来的候选表摊开:哪些源应答了、各自得了多少分、为什么被拒、
 // 最后为什么是它赢。跟「联网搜索候选歌词」的本质区别:那个是**现在**重新抽一轮签
 // (候选集受 20 秒期限影响,跟当初不一定一样),这个是当初那一轮的**存档**,离线、
 // 零网络、几个月后照样一字不差。
 //
 // 刻意只读:这里不提供"改用某条候选"按钮 —— 想换歌词走「联网搜索候选歌词」那条路,
-// 它拿的是新鲜正文;决策记录里根本没有正文(collector 侧三条铁律之一,见 decision.go),
+// 它拿的是新鲜正文;决策记录里根本没有正文(引擎侧三条铁律之一,见 decision.go),
 // 也就不存在"从存档采纳"这种操作。
-/// 这份存档是不是用旧版打分规则跑的。当前版本号读 collector 发布在全量扫库状态文件里的那个
+/// 这份存档是不是用旧版打分规则跑的。当前版本号读引擎发布在全量扫库状态文件里的那个
 /// (`LyricsFullScan.State.scoringVersion`),读不到就不判:宁可不提示,也不拿一个猜来的版本号去比。
 /// 版本号只用来比新旧,不展示给用户(裸编号没有对照、看不出新旧)。
 private func scoredWithOlderRules(_ decision: LyricsResolutionDecision) -> Bool {
@@ -36,7 +36,7 @@ struct LyricsDecisionSheet: View {
 
     /// - latest: lyrics_decision(最近一次评估 —— 可能维持原状,甚至输入本身是脏的,比如
     ///   换曲窗口串扰进来的错误时长那轮);
-    /// - applied: lyrics_decision_applied(当前歌词的出处)。collector 分槽,
+    /// - applied: lyrics_decision_applied(当前歌词的出处)。引擎分槽,
     ///   老条目没有后者:退回"最近评估恰好 applied"那份 —— 单槽时代它就是出处。
     /// 两份是同一轮(decidedAt+path 一致)就只展示一份,免得多出一个内容相同的页签。
     init(summary: EnrichCacheStore.Summary,
@@ -69,29 +69,29 @@ struct LyricsDecisionSheet: View {
         case "first-resolve": return L10n.t("首次解析")
         case "upgrade": return L10n.t("升级重试")
         case "rescore": return L10n.t("评分规则更新后重选")
-        // 「当初一条歌词都没搜到、后来又试了一次」那条路径(collector 的
+        // 「当初一条歌词都没搜到、后来又试了一次」那条路径(引擎的
         // needsLyricsFirstFill)。跟「升级重试」分开显示:那个是"本来有、想换更好的",
         // 这个是"本来没有、这次才填上"。
         case "refill": return L10n.t("补搜缺失歌词")
-        // 用户在详情页点「重新自动匹配」那一次(collector search-lyrics -pick 写下的存档)。
+        // 用户在详情页点「重新自动匹配」那一次(lyrimuse-engine search-lyrics -pick 写下的存档)。
         // 跟上面三条自动路径分开显示:它是手动触发的,但用的是**同一套**自动决策规则。
         case "manual-rematch": return L10n.t("手动重新匹配")
-        // 补全封面 / 链接 / 主色那一轮(collector 的 backfillPeripheralFields):条目原本没词时收下这一轮的歌词,
+        // 补全封面 / 链接 / 主色那一轮(引擎的 backfillPeripheralFields):条目原本没词时收下这一轮的歌词,
         // 否则只是一份评估存档。
         case "peripheral-backfill": return L10n.t("补全曲目信息")
         // 这条的歌词不是自己检索的,是从另一条搬来的(reused_from 记着来源 key):同一段录音在另一张专辑下,
-        // 或 KKBOX 同一首歌的另一种歌手写法(collector 的 kkboxalias.go)。
+        // 或 KKBOX 同一首歌的另一种歌手写法(引擎的 kkboxalias.go)。
         case "cross-album-reuse": return L10n.t("复用其他专辑的同一首")
         case "artist-alias-reuse": return L10n.t("复用同一首的另一种歌手写法")
-        // 兜底显示原始值:collector 那边新增一条路径、这边忘了补译名时,至少还看得出是哪条
-        // (而不是空白)。但那就是漏了 —— 这张表跟 collector 里 buildLyricsDecision 的 path
+        // 兜底显示原始值:引擎那边新增一条路径、这边忘了补译名时,至少还看得出是哪条
+        // (而不是空白)。但那就是漏了 —— 这张表跟引擎里 buildLyricsDecision 的 path
         // 取值必须成对改,的 manual-rematch 就是这么漏出来一个英文串的。
         default: return decision.path
         }
     }
 
 
-    /// 查询词那一组是哪一轮问的。取值全集在 collector 的 querylog.go
+    /// 查询词那一组是哪一轮问的。取值全集在引擎的 querylog.go
     /// `lyricQueryReason*`,那边的 lyricQueryReasons() 与本 switch 由
     /// `TestLyricQueryReasonsHaveChineseLabels` 双向对账 —— 跟 pathLabel 同一套约定:
     /// **default 是"原样显示原始值"**,漏补译名就是界面上直接印一个英文串给用户看。
@@ -103,7 +103,7 @@ struct LyricsDecisionSheet: View {
         case "alias-rescue": return L10n.t("别名轮：无可用候选")
         // 「缺罗马音」三个字有歧义(「这里说的缺罗马音是什么意思？」)——
         // 它像在描述一个结果状态,其实说的是**触发原因**,而且省掉了主语(谁缺)。
-        // 真实判据在 collector `enrich.go` 的 needsRomanizationRetry:这一轮拿回来的歌词
+        // 真实判据在引擎 `enrich.go` 的 needsRomanizationRetry:这一轮拿回来的歌词
         // 是中日韩文字(dominantScript 判 Han/Kana/Hangul),而**没有任何一个源**给出
         // 罗马音字段、也没有源标出语种(标了的话本地能自己注音,不用再查)。
         case "alias-roma": return L10n.t("别名轮：补读音")
@@ -220,8 +220,8 @@ struct LyricsDecisionSheet: View {
                 Text(L10n.t("解析决策")).font(.headline)
                 // 手动改过歌词的条目,这份存档描述的是人工覆盖**之前**那次自动评估。
                 //
-                // 不能写内部组件名 "collector" —— 它在界面上的正式称呼是「后台采集
-                // 服务」(见设置页「播放器」那一栏)。但这句话压根不需要点名是谁干的:用户要知道的是
+                // 不能写内部组件名 "lyrimuse-engine" —— 它在界面上的正式称呼是「歌词引擎」
+                // (见设置页「播放器」那一栏)。但这句话压根不需要点名是谁干的:用户要知道的是
                 // "这是当初自动挑歌词那一刻的快照,不是现在重新搜的结果",主语换成动作本身
                 // 就够了,还省掉一个要解释的名词。
                 Text(summary.isManual
@@ -251,7 +251,7 @@ struct LyricsDecisionSheet: View {
     ///
     /// 刻意跟界面上显示的东西一一对应(同一批字段、同样的顺序、同样的来源名翻译),而不是
     /// 直接把 JSON 倒出来:JSON 里是 netease/kugou 这类内部源名和一堆下划线字段名,贴进
-    /// issue 之后还得有人翻译一遍。歌词正文本来就不在决策记录里(collector 侧三条铁律之一),
+    /// issue 之后还得有人翻译一遍。歌词正文本来就不在决策记录里(引擎侧三条铁律之一),
     /// 所以这份文本不含任何歌词内容。
     private var plainTextDump: String {
         var lines: [String] = []
@@ -766,7 +766,7 @@ struct LyricsDecisionSheet: View {
 
     /// 分项之和被夹过时的说明。
     ///
-    /// collector 在 match.go 里把负分**统一夹到 1**(注释原话:重扣表达「差」不是「不能用」)。
+    /// 引擎在 match.go 里把负分**统一夹到 1**(注释原话:重扣表达「差」不是「不能用」)。
     /// 全库 644 行(3.74%)、443 份存档(10%)因此"分项加起来对不上总分" —— 不说这一句的话,
     /// 谁真去加一遍都会以为界面算错了(现状就是不说,藏得住只是因为没人去加)。
     private func clampNote(rawSum: Int, score: Int) -> String {
@@ -1159,9 +1159,9 @@ struct LyricsDecisionSheet: View {
         .padding(.top, 2)
     }
 
-    /// 不参赛的那两类:collector 塞的「纯音乐」信号,和被判不可用的候选。
+    /// 不参赛的那两类:引擎塞的「纯音乐」信号,和被判不可用的候选。
     ///
-    /// 两类**都刻意不显示分数**。存档里它们的 score 恒为 -1,那个 -1 是 collector 用来让
+    /// 两类**都刻意不显示分数**。存档里它们的 score 恒为 -1,那个 -1 是引擎用来让
     /// 选词函数跳过这条的**手段**,不是对这份"歌词"的评价 —— 印给用户看只会让人以为
     /// 某个源给了份很烂的词。对拍问过「它怎么是空的,并且是 -1?」,当时
     /// 只把纯音乐标记那一支改掉了;被拒这一支还印着红色 -1,而它**常见 4 倍**

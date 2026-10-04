@@ -5,11 +5,11 @@ import OSLog
 /// 请求全部都给我记录下日志"。App 侧真正发起网络请求的地方只有 7 处、分布在 6 个
 /// 文件(`LastfmStatsService.request`/`LastfmAuthFlow` 的两处/`ListenBrainzTokenCheck.
 /// validate`/`CachedImage.load`/`MusicCatalogSearch` 的两处/`GitHubStarsService.fetch`
-/// ——最后这处加,是「关于」页那个 star 数),规模远小于 collector
+/// ——最后这处加,是「关于」页那个 star 数),规模远小于引擎
 /// (Go 侧),不需要一个像 `doHTTPTracked` 那样的运行期包装层——每个调用点各自在发起
 /// 请求前后调一次 `record(...)` 就够了。
 ///
-/// 安全设计跟 collector 侧 `networkobs.go` 的 `doHTTPTracked` 同一个原则:**日志行
+/// 安全设计跟引擎侧 `networkobs.go` 的 `doHTTPTracked` 同一个原则:**日志行
 /// 从源头就不含敏感参数**,不是"记完整 URL 再指望脱敏兜底"。调用方只传 `host`(不含
 /// query string/path 的域名部分)和一个语义化的 `operation` 标签(调用方自己早就知道
 /// 这次是要做什么——比如 Last.fm 的 `method` 参数名、或者"validate-token"这种自造的
@@ -91,7 +91,7 @@ public struct AuditSummaryWindow: Equatable {
         return flushed
     }
 
-    /// 「count=N p50_ms=… max_ms=… span_s=…」,口径跟 collector 的 api call summary 一致。
+    /// 「count=N p50_ms=… max_ms=… span_s=…」,口径跟引擎的 api call summary 一致。
     public static func summary(_ durations: [Double], span: TimeInterval) -> String {
         let sorted = durations.sorted()
         let p50 = sorted[sorted.count / 2]

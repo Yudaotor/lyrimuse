@@ -1,8 +1,8 @@
 {
   "$doc": [
-    "歌词源塞进歌词里的声明行(版权 / 授权 / 译文版权 / 来源说明)的判据,Swift 与 collector 共用这一份。",
+    "歌词源塞进歌词里的声明行(版权 / 授权 / 译文版权 / 来源说明)的判据,Swift 与引擎共用这一份。",
     "改完跑 python3 scripts/gen-lyric-notices.py 重新生成两侧代码;CI 与提交前检查跑 --check 对账。",
-    "scopes: translation = collector 清洗译文轨(isTranslationNotice);body = App 显示正文时的署名过滤(LyricNotices.matchesBody)。",
+    "scopes: translation = 引擎清洗译文轨(isTranslationNotice);body = App 显示正文时的署名过滤(LyricNotices.matchesBody)。",
     "比较前去掉首尾空白;ignoreCase 只影响拉丁字母。",
     "正则只能用 Go RE2 与 NSRegularExpression(ICU) 语义一致的写法:不许 \\b \\B、前后查看、反向引用、原子组、占有量词、命名组、内联标志,生成脚本会拒收。",
     "drop 里的每一句必须被本条命中;keep 里的每一句任何一条规则都不许命中。两侧测试跑同一批例句。"

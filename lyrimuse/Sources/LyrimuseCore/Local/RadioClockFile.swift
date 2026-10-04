@@ -22,7 +22,7 @@ import os
 ///
 /// # 只有 App 读写这份文件
 ///
-/// collector 不推算电台位置,它用的是 App 播放状态里已经换成单曲口径的位置。
+/// 引擎不推算电台位置,它用的是 App 播放状态里已经换成单曲口径的位置。
 public struct RadioClockRecord: Codable, Equatable, Sendable {
     public var trackKey: String
     public var position: Double

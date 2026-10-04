@@ -2,9 +2,9 @@ import Foundation
 import ImageIO
 
 /// 系统 Now Playing 那份封面「像不像一张封面」的判定,两处用它,判据只在这里:
-/// - 展示:要不要换成 collector 缓存里的高清替代(`reason` / `accepts`,`PlaybackCoordinator.refreshHighResCover`);
-/// - 交给 collector:能不能当这首歌的设备封面(`isUsableDeviceArtwork`,`PlaybackStatePublisher.artworkForCollector`)。
-///   collector 拿到就用、不再自己判。
+/// - 展示:要不要换成引擎缓存里的高清替代(`reason` / `accepts`,`PlaybackCoordinator.refreshHighResCover`);
+/// - 交给引擎:能不能当这首歌的设备封面(`isUsableDeviceArtwork`,`PlaybackStatePublisher.artworkForEngine`)。
+///   引擎拿到就用、不再自己判。
 ///
 /// 形状判据针对播放器上报的根本不是专辑图的情形:YouTube Music 的 MV 经 MediaSession 上报的是 320×180 的
 /// 视频缩略图,竖屏短视频、横幅 banner 同理;正经封面自带的小幅不规则(带留白边框)落在 15% 容差之内。
@@ -29,7 +29,7 @@ public enum CoverArtReplacementGate {
     /// 长宽比偏离正方形的容差。
     public static let maxAspectSkew = 0.15
 
-    /// 交给 collector 当设备封面的最短边下限。64 挡的是没有封面时的 1×1 / 几像素占位图,放行浏览器
+    /// 交给引擎当设备封面的最短边下限。64 挡的是没有封面时的 1×1 / 几像素占位图,放行浏览器
     /// MediaSession 常见的 120×120(Arc / Edge 播 Apple Music 网页版实测就是这一档,是真封面)。
     public static let deviceArtworkMinEdge = 64
 
@@ -40,8 +40,8 @@ public enum CoverArtReplacementGate {
         return Double(abs(width - height)) / longer <= maxAspectSkew
     }
 
-    /// 这份系统封面能不能交给 collector 当设备封面:最短边够 `deviceArtworkMinEdge`,且是封面的形状。
-    /// collector 拿到设备封面就用、之后不再换源,不像封面的图交过去会一直挂在那首歌上。
+    /// 这份系统封面能不能交给引擎当设备封面:最短边够 `deviceArtworkMinEdge`,且是封面的形状。
+    /// 引擎拿到设备封面就用、之后不再换源,不像封面的图交过去会一直挂在那首歌上。
     public static func isUsableDeviceArtwork(width: Int, height: Int) -> Bool {
         min(width, height) >= deviceArtworkMinEdge && isCoverShaped(width: width, height: height)
     }

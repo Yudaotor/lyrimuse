@@ -7,8 +7,8 @@
 #
 # 为什么要有这个脚本:
 #
-# CollectorServiceManager.isRunning 曾经拿 `launchctl print` 的**退出码**当"进程在跑"用，
-# 而那个退出码的真实含义是"这个 job 注册过"。后果是 collector 在 KeepAlive 下崩溃重启
+# EngineServiceManager.isRunning 曾经拿 `launchctl print` 的**退出码**当"进程在跑"用，
+# 而那个退出码的真实含义是"这个 job 注册过"。后果是引擎在 KeepAlive 下崩溃重启
 # 循环时，设置页照样显示绿勾"运行中"。这类问题没法靠读代码发现 —— 只能真的造出那个状态
 # 问一句 launchd。
 #

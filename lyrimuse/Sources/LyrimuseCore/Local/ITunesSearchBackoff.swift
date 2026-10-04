@@ -1,6 +1,6 @@
 import Foundation
 
-/// App 侧 iTunes Search(`itunes.apple.com/search`)的限流退避,口径同 collector `apple.go` 的
+/// App 侧 iTunes Search(`itunes.apple.com/search`)的限流退避,口径同引擎 `apple.go` 的
 /// `noteITunesSearchStatus`:429 按 Retry-After(没给默认 60 秒、封顶 300 秒),403 与网络层失败(状态码记 0:连接被掐、
 /// 超时 —— iTunes 限流时常直接断连接)固定 30 秒且不缩短已有的更长窗口,其余状态码清掉窗口。两边的数字要一起改。
 ///
@@ -34,7 +34,7 @@ public enum ITunesSearchBackoff {
 /// 退避状态。后台批量查询(「最近记录」封面兜底)在窗口内不发请求;用户点「前往专辑/艺人」
 /// 这类单次操作照发,但结果同样记进来。
 ///
-/// 带 `store` 时跟 collector 共享窗口(`OutboundCooldowns`):自己撞到的限流写进去,collector 写的
+/// 带 `store` 时跟引擎共享窗口(`OutboundCooldowns`):自己撞到的限流写进去,引擎写的
 /// 窗口也算冷却中。
 public final class ITunesSearchGate: @unchecked Sendable {
     public static let shared = ITunesSearchGate(store: .shared)

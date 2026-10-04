@@ -260,11 +260,11 @@ func runLyricsManagerTests() {
         // (manual_pick_sha)、打分版本(lyrics_scoring_version)全在 enrich 缓存里、不在任何备份里。
         // 见 LyricsBackupArchive 头注。
 
-        // 这六个名字必须跟 collector 侧 enrichEntry 的 json tag 一字不差。对不上的失效方式是
+        // 这六个名字必须跟引擎侧 enrichEntry 的 json tag 一字不差。对不上的失效方式是
         // **静默**的:多带的字段会在恢复时盖掉刚从文件导进去的正文,少带的永远不会被搬走。
         expectEqual(A.lyricFieldKeys,
                     ["lyrics", "lyrics_tr", "lyrics_roma", "lyrics_yrc", "lyrics_source", "manual_lyrics"],
-                    "歌词备份 meta: 剥掉的六个字段名跟 collector 的 json tag 对齐")
+                    "歌词备份 meta: 剥掉的六个字段名跟引擎的 json tag 对齐")
 
         // 剥离:六个歌词字段一个不留,其余原样保留(含嵌套对象)。
         let cacheJSON = """
@@ -331,9 +331,9 @@ func runLyricsManagerTests() {
         expectEqual(v1Decoded?.meta == nil, true, "歌词备份 meta: v1 老包解出来 meta 为空")
     }
 
-    // ---- 判决记录的候选明细旁路文件(DecisionSidecar,collector decisionstore.go 同一套约定)----
+    // ---- 判决记录的候选明细旁路文件(DecisionSidecar,引擎 decisionstore.go 同一套约定)----
     do {
-        // 文件名逐字节跟 collector 一致:sha256(key) 前 16 字节小写十六进制(期望值由 Python hashlib 独立算出)。
+        // 文件名逐字节跟引擎一致:sha256(key) 前 16 字节小写十六进制(期望值由 Python hashlib 独立算出)。
         expectEqual(DecisionSidecar.fileName(forKey: "王子|Purple Rain|"), "55248cfcc659699af70190eca1ba1e17.json",
                     "判决旁路: 文件名 = sha256(key) 前 32 位十六进制 + .json")
         let slot: [String: Any] = ["path": "first-resolve", "decided_at": NSNumber(value: 100),
@@ -362,7 +362,7 @@ func runLyricsManagerTests() {
         expectEqual((DecisionSidecar.hydrate(slot, record: splitRecord)["candidates"] as? [[String: Any]])?.count, 1,
                     "判决旁路: 两槽分开存时按指纹找到对应那份")
 
-        // 本来就带候选(老条目 / 还没被拆过)原样返回;winner 缺失按空串比(collector omitempty)。
+        // 本来就带候选(老条目 / 还没被拆过)原样返回;winner 缺失按空串比(引擎 omitempty)。
         var inline = slot
         inline["candidates"] = [["source": "qq", "score": 1]]
         expectEqual((DecisionSidecar.hydrate(inline, record: sameRecord)["candidates"] as? [[String: Any]])?.first?["source"] as? String,
@@ -374,12 +374,12 @@ func runLyricsManagerTests() {
 
     // ---- 「重新自动匹配」的通道与结论(LyricsRematch)----
     //
-    // 换不换、写什么都在 collector(lyricsrematch.go,Go 单测覆盖);这里钉 App 这一侧:请求的格式、等结论的
+    // 换不换、写什么都在引擎(lyricsrematch.go,Go 单测覆盖);这里钉 App 这一侧:请求的格式、等结论的
     // 几个阶段、结论码到那一句的映射,以及两边的结论码对得上。
     do {
         typealias M = LyricsRematch
         typealias C = LyricsRematch.Conclusion
-        // 请求:collector 的 parseLyricsRematchRequest 认 id / key / cancel 三个键。
+        // 请求:引擎的 parseLyricsRematchRequest 认 id / key / cancel 三个键。
         let start = (try? JSONSerialization.jsonObject(with: M.requestBody(id: "r1", key: "周杰伦|晴天|叶惠美"))) as? [String: Any] ?? [:]
         expectEqual(start["id"] as? String, "r1", "重新匹配: 请求带 id")
         expectEqual(start["key"] as? String, "周杰伦|晴天|叶惠美", "重新匹配: 请求里的缓存 key 原样")
@@ -390,7 +390,7 @@ func runLyricsManagerTests() {
         // 等结论的几个阶段。
         let t0 = Date(timeIntervalSince1970: 1_000)
         expectEqual(M.phase(id: "r1", status: nil, requestedAt: t0, now: t0.addingTimeInterval(3)), .waiting,
-                    "重新匹配: 还没有状态文件 = collector 还没接手")
+                    "重新匹配: 还没有状态文件 = 引擎还没接手")
         expectEqual(M.phase(id: "r1", status: nil, requestedAt: t0, now: t0.addingTimeInterval(M.pickupTimeout + 1)), .lost,
                     "重新匹配: 一直没接手就别干等")
         let previousRound = M.Status(id: "r0", key: "k", running: false, startedAt: 900, updatedAt: 900, finishedAt: 900,
@@ -402,14 +402,14 @@ func runLyricsManagerTests() {
                     .running(done: 3, total: 9), "重新匹配: 跑着时报几个源回了话")
         expectEqual(M.phase(id: "r1", status: running, requestedAt: t0,
                             now: Date(timeIntervalSince1970: 1_002 + M.stallTimeout + 1)), .lost,
-                    "重新匹配: 跑着跑着没了动静(collector 退出)就别干等")
+                    "重新匹配: 跑着跑着没了动静(引擎退出)就别干等")
         let unchanged = C(outcome: "unchanged", winner: "qq", winnerScore: 900)
         let finished = M.Status(id: "r1", key: "k", running: false, startedAt: 1_001, updatedAt: 1_010, finishedAt: 1_010,
                                 result: unchanged)
         expectEqual(M.phase(id: "r1", status: finished, requestedAt: t0, now: t0.addingTimeInterval(12)),
                     .finished(unchanged), "重新匹配: 跑完带结论")
 
-        // collector 写状态带 omitempty:还没有源回话时没有 done / total,跑完前没有 result —— 照样解得开。
+        // 引擎写状态带 omitempty:还没有源回话时没有 done / total,跑完前没有 result —— 照样解得开。
         let bare = #"{"id":"r1","key":"k","running":true,"startedAt":1,"updatedAt":2}"#
         expectEqual((try? JSONDecoder().decode(M.Status.self, from: Data(bare.utf8)))?.running, true,
                     "重新匹配: 缺 omitempty 字段的状态照样解得开")
@@ -439,17 +439,17 @@ func runLyricsManagerTests() {
         expectEqual(M.line(for: C(outcome: "cancelled")), .failed, "重新匹配: 被停掉 = 没拿到结论")
         expectEqual(M.line(for: C(outcome: "something_new")), .failed, "重新匹配: 认不出的结论码按没拿到结论说")
 
-        // collector 能写出的每个结论码 App 都认得(lyricsrematch.go 里 lyricsRematch* = "..." 那一组)。
+        // 引擎能写出的每个结论码 App 都认得(lyricsrematch.go 里 lyricsRematch* = "..." 那一组)。
         let goSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("lyrimuse-collector/lyricsrematch.go"), encoding: .utf8)) ?? ""
+            .appendingPathComponent("lyrimuse-engine/lyricsrematch.go"), encoding: .utf8)) ?? ""
         let codePattern = try? NSRegularExpression(pattern: #"\n\tlyricsRematch\w+\s*=\s*"([a-z_]+)""#)
         let codes = (codePattern?.matches(in: goSource, range: NSRange(goSource.startIndex..., in: goSource)) ?? [])
             .compactMap { Range($0.range(at: 1), in: goSource).map { String(goSource[$0]) } }
         expectEqual(codes.count, 12, "重新匹配: 从 lyricsrematch.go 读出全部结论码(守卫自身没跑空)")
-        expectEqual(codes.filter { M.Outcome(rawValue: $0) == nil }, [], "重新匹配: collector 的结论码 App 都认得")
+        expectEqual(codes.filter { M.Outcome(rawValue: $0) == nil }, [], "重新匹配: 引擎的结论码 App 都认得")
 
-        // 补搜 / 全量扫库跑着时按钮置灰:collector 那时不接。
+        // 补搜 / 全量扫库跑着时按钮置灰:引擎那时不接。
         let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"),
             encoding: .utf8)) ?? ""
@@ -473,7 +473,7 @@ func runLyricsManagerTests() {
 
         // ---- 跨语言金标准:Go 侧 manualPickFingerprint 必须算出**一模一样**的值 ----
         //
-        // collector 的存量迁移(manualpickmigrate.go)负责把老用户的 lyrics_source_choice 转成
+        // 引擎的存量迁移(manualpickmigrate.go)负责把老用户的 lyrics_source_choice 转成
         // manual_pick_sha,而拿这个指纹去比对的是这边的 shouldFlip。两边漂开的后果是**静默**的:
         // 老用户打开开关一首都锁不上,缓存里的指纹看上去还完全正常。Go 侧
         // TestManualPickFingerprintMatchesSwift 钉着同样的输入和期望值。值由独立的第三方实现
@@ -481,14 +481,14 @@ func runLyricsManagerTests() {
         expectEqual(sha, "13ec24ce7207", "手动选定锁: 指纹与 Go 侧金标准一致")
 
         // 这条是**核心不变量**。指纹**不能**对 lyrics+YRC 的原始字节取,
-        // 而 collector 启动时的规范化(migrateYRCWhitespaceTokens 重排逐字词条、
+        // 而引擎启动时的规范化(migrateYRCWhitespaceTokens 重排逐字词条、
         // migrateLyricTimelines 重挂行时间轴)会在采纳后**几秒内**改写内容 —— 指纹当场失配,
         // 开关一首都锁不上,而且完全静默。实测抓到的那条:阿肆《浮光掠影》,lyrics 一字节没变、
         // YRC 被重排,留痕 3c4fe3efb6e8 vs 当前 6625fc9d1d36。
         // 根因是把问题定义错了:要回答的是"自动路径有没有把用户选的那份**换掉**",不是"字节有
         // 没有变" —— 规范化不是替换。
         expectEqual(ManualPickLock.fingerprint(lyrics: lyricsB), sha,
-                    "手动选定锁: 重排时间轴/换行/空白/元数据都不改变指纹(否则 collector 启动时的规范化会让开关静默失效)")
+                    "手动选定锁: 重排时间轴/换行/空白/元数据都不改变指纹(否则引擎启动时的规范化会让开关静默失效)")
         expectEqual(ManualPickLock.fingerprint(lyrics: lyricsC) == sha, false,
                     "手动选定锁: 词变了要判成『已被换掉』")
         expectEqual(ManualPickLock.canonicalLyrics(lyricsA), "第一句\n第二句",
@@ -505,7 +505,7 @@ func runLyricsManagerTests() {
         // 排版被规范化过的同一份词,同样要能锁上 —— 这才是真机上的常态。
         expectEqual(ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsB,
                                               isLocked: false, locking: true), true,
-                    "手动选定锁: collector 规范化过排版之后仍然锁得上")
+                    "手动选定锁: 引擎规范化过排版之后仍然锁得上")
         // 已经是目标状态的不重复计数(否则"已锁定 N 首"会虚高)。
         expectEqual(ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsA,
                                               isLocked: true, locking: true), false,
@@ -767,7 +767,7 @@ func runLyricsManagerTests() {
             "歌词库统计: 确证过的纯音乐不该被算进「暂无」")
     }
 
-    // ---- 歌词库统计:译文是"源自带社区翻译"还是"collector 机翻" ----
+    // ---- 歌词库统计:译文是"源自带社区翻译"还是"引擎机翻" ----
     do {
         func source(_ has: Bool, _ raw: String) -> LyricsTranslationSource {
             LyricsTranslationSource.classify(hasTranslation: has, trSource: raw)
@@ -778,7 +778,7 @@ func runLyricsManagerTests() {
         expectEqual(source(false, ""), .none, "译文来源: 没有译文时不该算成社区译文")
         expectEqual(source(false, "machine"), .none, "译文来源: 没有译文时哪怕字段是 machine 也算没有")
         expectEqual(source(true, ""), .community, "译文来源: 空字段 = 歌词源自带的社区翻译(老条目正是这样)")
-        expectEqual(source(true, "machine"), .machine, "译文来源: machine = collector 机翻补的")
+        expectEqual(source(true, "machine"), .machine, "译文来源: machine = 引擎机翻补的")
         // 认不出的值退回"社区":宁可把一份机翻显示成社区译文,也别把三千条源自带译文
         // 误报成机翻 —— 两个方向的错代价不对等。
         expectEqual(source(true, "mt"), .community, "译文来源: 不认识的值退回社区,不当机翻")
@@ -897,7 +897,7 @@ func runLyricsManagerTests() {
         expectEqual(LyricQueryDigestBuilder.build(diffSrc).groups.count, 2,
                     "查询摘要: 来路相同但源名单不同要分开 —— 问了哪几个源是关键差异")
 
-        // 组内去重(collector 侧只挡得住相邻重复,跨轮撞上的挡不住)。
+        // 组内去重(引擎侧只挡得住相邻重复,跨轮撞上的挡不住)。
         let dup = [
             LyricQueryRound(artist: "A", title: "T", reason: "primary-artist-variant", sources: []),
             LyricQueryRound(artist: "B", title: "T", reason: "primary-artist-variant", sources: []),
@@ -1003,7 +1003,7 @@ func runLyricsManagerTests() {
         expectEqual(V.sharedTerms(among: sampleC), [],
                     "共有项C: 四条各匹配到不同的东西,没有一项是全员共有的")
 
-        // 夹分兜底:分项合计 −353,存档里的总分是 1(collector match.go 把负分统一夹到 1)。
+        // 夹分兜底:分项合计 −353,存档里的总分是 1(引擎 match.go 把负分统一夹到 1)。
         // 全库 644 行(3.74%)、443 份存档(10%)是这个形状 —— 不交代的话,逐项差值加起来
         // 对不上总分差,谁真去加一遍都会以为界面算错了。
         expectEqual(sampleC[3].rawTermSum, -353, "夹分: 分项之和")
@@ -1015,7 +1015,7 @@ func runLyricsManagerTests() {
                     "差值C: 最大的那一项排第一 —— 用户在问的是「它凭什么输」")
 
         // ---- 判词的其余分档与边界 ----
-        // 真平局:打分项完全相同(全库 134 场)。存档里的 winner 是 collector 挑的那条,
+        // 真平局:打分项完全相同(全库 134 场)。存档里的 winner 是引擎挑的那条,
         // 优先认它 —— 界面上戴皇冠的必须跟判词说的"胜者"是同一个。
         let tie = [cand("qq", 500, [("duration", 250), ("consensus", 250)]),
                    cand("kugou", 500, [("duration", 250), ("consensus", 250)])]
@@ -1090,7 +1090,7 @@ func runLyricsManagerTests() {
     // ---- 「源里有歌、无词」判据(EnrichSourcePresence)----
     //
     // 网易云 url 只在真的匹配到曲目时才写;QQ 那条有"搜索页兜底"这一档,不需要网络就能拼出来,
-    // 不构成"平台上有这首歌"的证据(跟 collector 侧 isQQSearchFallbackURL 同一个理由)。
+    // 不构成"平台上有这首歌"的证据(跟引擎侧 isQQSearchFallbackURL 同一个理由)。
     do {
         typealias P = EnrichSourcePresence
         expectEqual(P.knownOnSources(neteaseURL: "https://music.163.com/song?id=3421955553", qqMusicURL: nil), true,
@@ -1117,8 +1117,8 @@ func runLyricsManagerTests() {
 
     // ---- 补空扫描通道(LyricsFillSweep)----
     //
-    // 请求文件的形状是 collector 侧 parseLyricsFillRequest 的契约:一行 "all" 或每行一个 key;
-    // 进度文件是 collector 的 lyricsFillStatus 逐字段 JSON。两侧各自有测试,这里钉 Swift 这半。
+    // 请求文件的形状是引擎侧 parseLyricsFillRequest 的契约:一行 "all" 或每行一个 key;
+    // 进度文件是引擎的 lyricsFillStatus 逐字段 JSON。两侧各自有测试,这里钉 Swift 这半。
     do {
         typealias S = LyricsFillSweep
         expectEqual(S.requestBody(keys: []), "all\n", "补空请求: 空 keys = 全部")
@@ -1169,7 +1169,7 @@ func runLyricsManagerTests() {
         expectEqual(S.remainingSeconds(fresh, now: Date(timeIntervalSince1970: 1_005), fallbackSecondsPerTrack: 20), 600,
                     "补空剩余: 一首都没跑完时按估计值")
 
-        // 请求写下、collector 还没接手:按钮置灰的那几秒。
+        // 请求写下、引擎还没接手:按钮置灰的那几秒。
         func sweepInfo(running: Bool, startedAt: Int64, filled: Int = 0) -> S.Info {
             S.Info(running: running, manual: true, total: 10, done: 0, filled: filled, current: nil,
                    startedAt: startedAt, updatedAt: startedAt, finishedAt: running ? nil : startedAt, cancelled: nil)
@@ -1177,7 +1177,7 @@ func runLyricsManagerTests() {
         let asked = Date(timeIntervalSince1970: 1_788_700_000.6)
         expectEqual(S.isPending(requestedAt: nil, status: nil, now: asked), false, "补空等待: 没点过就不在等")
         expectEqual(S.isPending(requestedAt: asked, status: nil, now: asked.addingTimeInterval(1)), true,
-                    "补空等待: 状态文件还没有(collector 这个进程没跑过)时在等")
+                    "补空等待: 状态文件还没有(引擎这个进程没跑过)时在等")
         expectEqual(S.isPending(requestedAt: asked, status: sweepInfo(running: false, startedAt: 1_788_600_000),
                                 now: asked.addingTimeInterval(2)), true,
                     "补空等待: 状态文件还是上一轮的就接着等")
@@ -1188,7 +1188,7 @@ func runLyricsManagerTests() {
                                 now: asked.addingTimeInterval(2)), false,
                     "补空等待: 一条候选都没有、一开工就收尾的那一轮也算接手(按整秒比)")
         expectEqual(S.isPending(requestedAt: asked, status: nil, now: asked.addingTimeInterval(S.pendingTimeout + 1)), false,
-                    "补空等待: collector 没在跑,等超时就放弃、按钮恢复")
+                    "补空等待: 引擎没在跑,等超时就放弃、按钮恢复")
 
         // 扫描期间什么时候值得整份重读缓存。
         let r1 = sweepInfo(running: true, startedAt: 100)
@@ -1234,11 +1234,11 @@ func runLyricsManagerTests() {
 
     // ---- 全量重新扫库(LyricsFullScan)的状态文件 ----
     //
-    // 待跟进的条数由 collector 按它的分层规则数好发布(`pending`),App 只显示;这里钉状态文件里各个键
+    // 待跟进的条数由引擎按它的分层规则数好发布(`pending`),App 只显示;这里钉状态文件里各个键
     // 缺席时怎么读、两个入口确实只读这个数。
     do {
         typealias F = LyricsFullScan
-        // 状态文件:collector 用 omitempty,没有待续的一轮时 active/startedAt 整个键都不出现。
+        // 状态文件:引擎用 omitempty,没有待续的一轮时 active/startedAt 整个键都不出现。
         // 声明成非可选会让这份文件整个解不开,连打分版本号也一起读不到 —— 那才是真正的故障。
         let idle = try? JSONDecoder().decode(F.State.self, from: Data("""
         {"scoringVersion":19,"updatedAt":1789500000}
@@ -1251,27 +1251,27 @@ func runLyricsManagerTests() {
         expectEqual(resuming?.active, true, "全量状态: 待续标记解出来")
         expectEqual(resuming?.startedAt, 1789500000, "全量状态: 起始时刻解出来")
 
-        // 每首耗时估计由 collector 发布。界面此前写死 25 秒,collector 把全量
+        // 每首耗时估计由引擎发布。界面此前写死 25 秒,引擎把全量
         // 那一档 gap 从 15 秒改成 5 秒时那个数当场就错了、还没有任何东西会报错 —— 跟
         // scoringVersion 不能硬编码同一条理由,所以走同一份状态文件。
         let paced = try? JSONDecoder().decode(F.State.self, from: Data("""
         {"scoringVersion":19,"updatedAt":1789500000,"secondsPerTrack":10}
         """.utf8))
         expectEqual(paced?.secondsPerTrack, 10, "全量状态: 每首耗时估计解出来")
-        // 老 collector 的文件里没有这个键(omitempty),必须读成 0 让调用方退回兜底,
+        // 老引擎的文件里没有这个键(omitempty),必须读成 0 让调用方退回兜底,
         // 而不是让整份文件解不开 —— 那会连版本号一起丢掉,整行界面消失。
-        expectEqual(idle?.secondsPerTrack, 0, "全量状态: 老 collector 没这个键时读成 0,不是解码失败")
+        expectEqual(idle?.secondsPerTrack, 0, "全量状态: 老引擎没这个键时读成 0,不是解码失败")
         // 待跟进的条数:0 是「已全部跟进」,键不在是「还没数过」(界面不显示数字),两者要分得开。
         let counted = try? JSONDecoder().decode(F.State.self, from: Data("""
         {"scoringVersion":19,"updatedAt":1789500000,"pending":5472}
         """.utf8))
-        expectEqual(counted?.pending, 5472, "全量状态: collector 数好的待跟进条数解出来")
+        expectEqual(counted?.pending, 5472, "全量状态: 引擎数好的待跟进条数解出来")
         let caughtUp = try? JSONDecoder().decode(F.State.self, from: Data("""
         {"scoringVersion":19,"updatedAt":1789500000,"pending":0}
         """.utf8))
         expectEqual(caughtUp?.pending, 0, "全量状态: 0 = 已全部跟进")
         expectEqual(idle != nil && idle?.pending == nil, true, "全量状态: 没有这个键读成 nil(还没数过),不是解码失败")
-        // 两个入口只显示 collector 发布的数,App 不再留分层规则的镜像(源码契约)。
+        // 两个入口只显示引擎发布的数,App 不再留分层规则的镜像(源码契约)。
         let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse")
         func appSource(_ path: String) -> String {
@@ -1282,20 +1282,20 @@ func runLyricsManagerTests() {
         let cacheStore = appSource("LyricsManager/EnrichCacheStore.swift")
         expectEqual(statsPanel.contains("if let state = fullScanState, let pending = state.pending {")
                     && managerView.contains("pending: state.pending ?? 0"), true,
-                    "全量待跟进: 设置页与歌词管理都读 collector 发布的数")
+                    "全量待跟进: 设置页与歌词管理都读引擎发布的数")
         expectEqual(cacheStore.contains("fullScanTier") || cacheStore.contains("pollutedKeys")
                     || statsPanel.contains("fullScanPendingCount"), false,
                     "全量待跟进: App 不再按分层规则自己数")
-        // 决策面板的「旧版评分规则」按 collector 发布的打分版本号判,App 不写死一份(源码契约)。
+        // 决策面板的「旧版评分规则」按引擎发布的打分版本号判,App 不写死一份(源码契约)。
         let decisionSheet = appSource("LyricsManager/LyricsDecisionSheet.swift")
         expectEqual(decisionSheet.contains("LyricsFullScan.current?.scoringVersion")
                     && !decisionSheet.contains("currentLyricsScoringVersion"), true,
-                    "旧版评分规则: 按 collector 发布的打分版本号判,不写死")
+                    "旧版评分规则: 按引擎发布的打分版本号判,不写死")
 
-        // 请求动词。collector 侧 parseLyricsFillRequest 认的是这一个词,写错一个字母就会被
+        // 请求动词。引擎侧 parseLyricsFillRequest 认的是这一个词,写错一个字母就会被
         // 当成一个不存在的缓存 key、空跑一轮,而且**不报错**。
         expectEqual(LyricsFillSweep.requestBody(keys: ["full"]), "full\n",
-                    "全量请求: 动词就是 full,跟 collector 的 parseLyricsFillRequest 对齐")
+                    "全量请求: 动词就是 full,跟引擎的 parseLyricsFillRequest 对齐")
         // 进度文件多一个 full 字段,而补空那一轮不写它(omitempty)——两边都要解得动。
         let fullRunning = try? JSONDecoder().decode(LyricsFillSweep.Info.self, from: Data("""
         {"running":true,"manual":true,"full":true,"total":5472,"done":12,"filled":3,"startedAt":1,"updatedAt":2}
@@ -1313,12 +1313,12 @@ func runLyricsManagerTests() {
     // ---- 「解析决策」面板里的纯音乐标记----
     //
     // 对拍问「它怎么是空的,并且是 -1?」:面板最后一行只有一个 LRCLIB 徽章和一个红色
-    // -1,标题/歌手/专辑/打分明细全空。那不是候选,是 collector 借候选列表搭车传出来的
+    // -1,标题/歌手/专辑/打分明细全空。那不是候选,是引擎借候选列表搭车传出来的
     // 「这首是纯音乐」信号(见 LyricsDecisionRow 头注)。
     do {
         typealias R = LyricsDecisionRow
         expectEqual(R.isInstrumentalMarker(instrumental: true, score: -1), true,
-                    "纯音乐标记: collector 塞的那条就是 instrumental=true + 负分")
+                    "纯音乐标记: 引擎塞的那条就是 instrumental=true + 负分")
         expectEqual(R.isInstrumentalMarker(instrumental: nil, score: -1), false,
                     "纯音乐标记: 老存档没有 instrumental 字段(nil),只能继续按普通候选显示 —— 存档不能事后补")
         expectEqual(R.isInstrumentalMarker(instrumental: false, score: -1), false,
@@ -1532,8 +1532,8 @@ func runLyricsManagerTests() {
                     "补搜收据: 工具栏菜单不拿全量扫库那一轮的累计数当补搜收据")
         let sweepGo = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("lyrimuse-collector/lyricsfillsweep.go"), encoding: .utf8)) ?? ""
+            .appendingPathComponent("lyrimuse-engine/lyricsfillsweep.go"), encoding: .utf8)) ?? ""
         expectEqual(sweepGo.contains("`json:\"offline,omitempty\"`"), true,
-                    "补搜进度: collector 写的 offline 键跟 LyricsFillSweep.Info.offline 同名")
+                    "补搜进度: 引擎写的 offline 键跟 LyricsFillSweep.Info.offline 同名")
     }
 }

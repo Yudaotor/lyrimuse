@@ -5,7 +5,7 @@ import LyrimuseCore
 /// 收听里程碑:开播几秒后看一眼这首歌是第几次、账号累计第几次,碰上一档就让灵动岛报一次喜。
 ///
 /// 次数都来自 `LastfmStatsService`:单曲用「第 N 次听」那个数(`nowPlayingCount`,写法族合并、已把正在放的这一次
-/// 算进去),累计用 collector 每 15 秒落盘的总数(`overview.total`,+1 = 正在放的这一次)。没连 Last.fm 不报。
+/// 算进去),累计用引擎每 15 秒落盘的总数(`overview.total`,+1 = 正在放的这一次)。没连 Last.fm 不报。
 /// 报不报还要过 `ListenMilestoneLedger` 那几道:一档只报一次、单曲每天最多两次、跨过太久的累计档不补。
 ///
 /// 只由灵动岛控制器订阅(`NotchLyricsWindowController.milestoneObserver`),灵动岛没开过就不会被建出来;

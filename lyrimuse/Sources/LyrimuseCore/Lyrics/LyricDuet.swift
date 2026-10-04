@@ -131,7 +131,7 @@ public enum LyricDuet {
     /// 不能拿 trim 过的串去算。
     ///
     /// 短标签(splitShortLabel)认不出时,整行只有一个名字标签加冒号的单独一行另走 standaloneNameLabel,
-    /// 这时整行都是标签,prefixCount 是整行的字符数。跟 collector lyricSplitLabel 同一套口径。
+    /// 这时整行都是标签,prefixCount 是整行的字符数。跟引擎 lyricSplitLabel 同一套口径。
     public static func splitLabel(_ text: String) -> (label: String, rest: String, prefixCount: Int)? {
         if let short = splitShortLabel(text) { return short }
         if let name = standaloneNameLabel(text) { return (name, "", text.count) }
@@ -147,8 +147,8 @@ public enum LyricDuet {
         var labelEnd = idx
         var count = 0
         // 标签跟冒号之间允许有空白(`男 : 第一句` 跟 `男：第一句` 是同一种东西),标签**内部**不允许 ——
-        // 空白后面又来了别的字,这行就是带冒号的歌词句子。跟 collector lyricSplitLabel 同一条规则:不认的话
-        // collector 那边算演唱者、拿署名过滤豁免,这边既不剥前缀也不分左右,两侧对同一行给出两种结论。
+        // 空白后面又来了别的字,这行就是带冒号的歌词句子。跟引擎 lyricSplitLabel 同一条规则:不认的话
+        // 引擎那边算演唱者、拿署名过滤豁免,这边既不剥前缀也不分左右,两侧对同一行给出两种结论。
         var sawSpace = false
         while idx < text.endIndex {
             let ch = text[idx]
@@ -176,7 +176,7 @@ public enum LyricDuet {
 
     /// 单独一行的拉丁字母名字标签:短标签不许空白和标点,带空格的全名(「Demi Lovato」)、「Anderson .Paak」
     /// 「Lily-Rose Depp」这类认不出来;整行只有「名字 + 冒号」的单独一行另走这一条。行内的「Name Surname: 歌词」
-    /// 照旧不认 —— 它跟「Baby, I told you: …」这类带冒号的歌词句子分不开。跟 collector lyricStandaloneNameLabel
+    /// 照旧不认 —— 它跟「Baby, I told you: …」这类带冒号的歌词句子分不开。跟引擎 lyricStandaloneNameLabel
     /// 同一套口径,改一边必须改另一边。
     static func standaloneNameLabel(_ text: String) -> String? {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -198,7 +198,7 @@ public enum LyricDuet {
 
     /// 像一个或几个人名的拉丁字母标签 —— 几个名字之间用「/」「&」「,」连起来,每个名字 1~4 个词,每个词首字母大写
     /// 或是数字(词前可以带「.」),词里只有拉丁字母(isLatinLetter)、数字和「.」「-」「'」;整个标签最多 40 个字;
-    /// 不含段落名,也不像署名角色(`LyricsSyncEngine.matchesEnglishRoleNoun`)。按 Unicode 标量数,跟 collector 一致。
+    /// 不含段落名,也不像署名角色(`LyricsSyncEngine.matchesEnglishRoleNoun`)。按 Unicode 标量数,跟引擎一致。
     static func nameShapedLabel(_ label: String) -> Bool {
         guard !label.isEmpty, label.unicodeScalars.count <= maxNameLabelCount,
               !LyricsSyncEngine.matchesEnglishRoleNoun(label) else { return false }
@@ -229,7 +229,7 @@ public enum LyricDuet {
         nameParts(label).count >= 2 && nameShapedLabel(label)
     }
 
-    /// 基本拉丁、Latin-1 增补、扩展 A / B、扩展附加区里的字母。跟 collector lyricLatinLetter 同一张范围表。
+    /// 基本拉丁、Latin-1 增补、扩展 A / B、扩展附加区里的字母。跟引擎 lyricLatinLetter 同一张范围表。
     private static func isLatinLetter(_ s: Unicode.Scalar) -> Bool {
         switch s.value {
         case 0x41...0x5A, 0x61...0x7A: return true
@@ -293,7 +293,7 @@ public enum LyricDuet {
     /// 审查发现的活回归,靠这里的角色词否决堵住。
     private static func plausibleSpeakerName(_ label: String) -> Bool {
         if label.isEmpty || (label.count > maxLabelCount && !nameShapedLabel(label)) { return false }
-        // 不分大小写(「op」「Op」「OP」都是署名),跟 collector 那边统一转小写再比同一口径。
+        // 不分大小写(「op」「Op」「OP」都是署名),跟引擎那边统一转小写再比同一口径。
         if exactCreditLabelsLowered.contains(label.lowercased()) { return false }
         // 复用署名过滤那张角色词表(和声/监制/母带/翻译…),不再自己重复枚举。
         // 它天然放过真人名:「曲婉婷：」里「曲」虽是角色词,但正则要求它后面紧跟冒号或

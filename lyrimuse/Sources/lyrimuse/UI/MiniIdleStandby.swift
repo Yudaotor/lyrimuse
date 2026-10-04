@@ -137,7 +137,7 @@ struct MiniIdleStandby: View {
             cover = track.coverURL()
             quote = await track.loadQuotes().randomElement()
         }
-        // 取数那一刻缓存还没解码完(App 刚启动)、或 collector 还没写上封面时 cover 是空的:
+        // 取数那一刻缓存还没解码完(App 刚启动)、或引擎还没写上封面时 cover 是空的:
         // 缓存换了内容就再补一次封面。只补封面,不重选句子。
         .onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates()) { _ in
             if cover == nil, !track.title.isEmpty { cover = track.coverURL() }

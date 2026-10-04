@@ -4,17 +4,17 @@ import Foundation
 //
 // 为什么单独放在 LyrimuseCore 而不是留在 EnrichCacheStore 里:EnrichCacheStore 在 app
 // target(lyrimuse)里、是 @MainActor 单例、构造函数 private,还依赖 FeatureSettingsStore/
-// CollectorControl/PlaybackCoordinator/L10n,lyrimuse-selftest 只依赖 LyrimuseCore、跨
-// target 一行都测不到它。把确定性的纯换算下沉到这里,才能在 selftest 里对着 collector 的
+// EngineControl/PlaybackCoordinator/L10n,lyrimuse-selftest 只依赖 LyrimuseCore、跨
+// target 一行都测不到它。把确定性的纯换算下沉到这里,才能在 selftest 里对着引擎的
 // 真实行为写断言(见 main.swift 里对应分节)。
 
 public enum EnrichCacheKeys {
-    // 跟 collector/lyricsexport.go 的同名变量逐一对应。
+    // 跟 lyrimuse-engine/lyricsexport.go 的同名变量逐一对应。
     public static let lyricsFileSuffixes = [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"]
 
-    // ---- 缓存 key 的归一化:跟 collector/enrichkey.go 逐条对应 ----
+    // ---- 缓存 key 的归一化:跟 lyrimuse-engine/enrichkey.go 逐条对应 ----
     //
-    // 两边必须给出**逐字节相同**的 key,否则 collector 按归一化 key 写、这边按原样拼的 key
+    // 两边必须给出**逐字节相同**的 key,否则引擎按归一化 key 写、这边按原样拼的 key
     // 查,悬浮窗会直接查不到歌词(而不是显示旧的那份 —— 更难发现)。lyrimuse-selftest 里
     // 用跟 Go 表驱动测试同一组用例锁死这份对应关系。
     //
@@ -43,7 +43,7 @@ public enum EnrichCacheKeys {
     // 下面几个镜像 Go 的函数一律按 Unicode 标量处理,空白/大小写用 GoStringSemantics,理由见那边头注。
     // 两侧必须逐字节一致,lyrimuse-selftest 与 docs 08 章「宽松匹配兜底」那条有对拍方法。
 
-    /// collector 的 cleanMediaTag 的 Swift 版:各种不换行/全角空格折成普通空格,零宽字符
+    /// 引擎的 cleanMediaTag 的 Swift 版:各种不换行/全角空格折成普通空格,零宽字符
     /// 删掉,连续空白(Go `unicode.IsSpace` 口径)折成一个并去掉首尾,最后转 NFC(顺序跟 Go 一致,
     /// Go 侧的 NFC 数据表由 scripts/gen-nfc-table.swift 从 Foundation 导出)。
     public static func cleanTag(_ s: String) -> String {
@@ -94,12 +94,12 @@ public enum EnrichCacheKeys {
         }
     }
 
-    /// 歌词缓存 key 的唯一构造点(Swift 侧)。跟 collector 的 enrichKey 逐字节一致。
+    /// 歌词缓存 key 的唯一构造点(Swift 侧)。跟引擎的 enrichKey 逐字节一致。
     public static func normalizedKey(artist: String, title: String, album: String) -> String {
         cleanTag(artist) + "|" + normalizedTitle(title) + "|" + cleanTag(album)
     }
 
-    // 跟 collector/lyricsexport.go 的 sanitizeLyricsFilename 逐字对应的 Swift 版本:
+    // 跟 lyrimuse-engine/lyricsexport.go 的 sanitizeLyricsFilename 逐字对应的 Swift 版本:
     // "|" 换成 " - ",再把文件系统不安全的字符转成下划线。两边各自维护而不是让 Swift 调
     // Go 子进程,是因为这纯粹是确定性的字符替换,没有会随时间演进的业务判断。
     public static func sanitizeFilename(_ key: String) -> String {
@@ -122,10 +122,10 @@ public enum EnrichCacheKeys {
 
     /// 文件名 base(不含 .lrc 等后缀)的字节上限。
     ///
-    /// 必须跟 collector/lyricsexport.go 的 `lyricsFilenameMaxBytes` 同值,两边同时改。
+    /// 必须跟 lyrimuse-engine/lyricsexport.go 的 `lyricsFilenameMaxBytes` 同值,两边同时改。
     /// 推导在 Go 那边的注释里(255 字节硬上限,减去原子写临时文件的 14 字节和最长后缀
     /// .roma.lrc 的 9 字节,再减去碰撞消歧的 7 字节,取余量到 200)。算不一致的后果是
-    /// 删除条目时漏删导出文件,collector 重启跑 importLyricsFromFiles 会按文件头部标签
+    /// 删除条目时漏删导出文件,引擎重启跑 importLyricsFromFiles 会按文件头部标签
     /// 把它重新导回缓存,表现为"删掉的条目自己回来了"。
     public static let filenameMaxBytes = 200
 
@@ -144,7 +144,7 @@ public enum EnrichCacheKeys {
     }
 
     // CRC-32(IEEE 802.3,反射多项式 0xEDB88320)——必须跟 Go 的 hash/crc32.ChecksumIEEE
-    // 逐位一致,因为下面 disambiguatedName 要拿它算出 collector 实际会用的文件名。
+    // 逐位一致,因为下面 disambiguatedName 要拿它算出引擎实际会用的文件名。
     // 标准库没有现成的,查表实现十几行,selftest 里用公认的标准向量(""、"123456789")
     // 加两个从真实磁盘文件反推出来的用例锁死。
     private static let crcTable: [UInt32] = (0..<256).map { i -> UInt32 in
@@ -163,11 +163,11 @@ public enum EnrichCacheKeys {
         return c ^ 0xFFFF_FFFF
     }
 
-    // collector 给"文件名撞车"的 key 用的消歧文件名 base:`<sanitize(key)>~<crc32 低 24 位,6 位小写十六进制>`。
+    // 引擎给"文件名撞车"的 key 用的消歧文件名 base:`<sanitize(key)>~<crc32 低 24 位,6 位小写十六进制>`。
     //
     // 为什么 Swift 侧必须知道这个:macOS 的 APFS 大小写不敏感,同一首歌因为 media-control
     // 偶尔读到的大小写不一致而长出两条 key 时,它们 sanitize 出来的文件名只差大小写、在这台
-    // 文件系统上其实是同一个文件。collector(lyricsexport.go:105-141)因此按
+    // 文件系统上其实是同一个文件。引擎(lyricsexport.go:105-141)因此按
     // "sanitize 结果统一转小写"分组,组内 ≥2 个不同 key 的,给**组内每一个** key 都换成这个
     // 带哈希后缀的名字,并主动删掉普通名下的残留文件。也就是说这类条目在磁盘上**只有**
     // 带后缀的那份,普通名根本不存在。
@@ -189,20 +189,20 @@ public enum EnrichCacheKeys {
         selected.intersection(existing).sorted()
     }
 
-    /// 把 key 压成"用来判断是不是同一首歌"的宽松形态。跟 collector 的 loosenEnrichKey 对应。
+    /// 把 key 压成"用来判断是不是同一首歌"的宽松形态。跟引擎的 loosenEnrichKey 对应。
     ///
     /// 结果**只用于查询兜底**,绝不用来构造 key、绝不用于显示、绝不用于文件名。
     ///
     /// 这条边界是整套设计的关键。归一化如果写进 **key**,Go 和 Swift 两侧就必须逐字节算出
-    /// 同一个结果,否则 collector 按一个 key 写盘、这边按另一个 key 查,表现是「悬浮窗整首歌
+    /// 同一个结果,否则引擎按一个 key 写盘、这边按另一个 key 查,表现是「悬浮窗整首歌
     /// 没词」(lookup 是纯精确命中)。
     ///
-    /// 兜底这一层同样必须与 collector 逐字节一致:collector 按它的宽松 key 复用已有条目、不另建
+    /// 兜底这一层同样必须与引擎逐字节一致:引擎按它的宽松 key 复用已有条目、不另建
     /// 新条目(日志 `reusing existing entry … (loose match)`),这边折不到同一个结果就是整首歌查不到
-    /// 歌词。所以繁简走 `OpenCCT2S`(collector toSimplifiedT2S 的移植,同一份词典),不走 ICU:
+    /// 歌词。所以繁简走 `OpenCCT2S`(引擎 toSimplifiedT2S 的移植,同一份词典),不走 ICU:
     /// ICU 按上下文取舍,单字层面跟 OpenCC 有上千个字结果不同。步骤同 loosenEnrichKey:繁转简、
     /// 分隔符折成 `&`、去掉 ASCII 空格、逐标量转小写。
-    /// 合 credit 的分隔符,跟 collector 的 `isArtistCreditSep`(match.go)同一份。
+    /// 合 credit 的分隔符,跟引擎的 `isArtistCreditSep`(match.go)同一份。
     /// 全部折成同一个字符,让 `A/B/C` 和 `A & B & C` 判成同一首歌 —— 实测:
     /// 播放器报斜杠式、专辑预取从 Apple Music 曲目表拿到 & 式,缓存里长出 12 组重复。
     private static let creditSeparators: Set<Unicode.Scalar> = ["/", "、", "&", ",", "，"]
@@ -216,9 +216,9 @@ public enum EnrichCacheKeys {
         return String(out)
     }
 
-    // ---- 同名不同录音的时长变体(collector enrichkey.go 的 enrichKeyDurationVariant 一族) ----
+    // ---- 同名不同录音的时长变体(引擎 enrichkey.go 的 enrichKeyDurationVariant 一族) ----
 
-    /// collector `maxEnrichKeyDurationVariants`。
+    /// 引擎 `maxEnrichKeyDurationVariants`。
     public static let maxDurationVariants = 8
 
     /// 第 n 个时长变体:后缀加在**标题段**上(`歌手|歌名~dur2|专辑`),按前两个 `|` 切,同 splitEnrichKey。
@@ -237,7 +237,7 @@ public enum EnrichCacheKeys {
         return "\(parts[0])|\(parts[1][..<r.lowerBound])|\(parts[2])"
     }
 
-    /// collector `durationMismatch`:任一方未知(≤0 / nil)不算冲突,差超过较长者的 12% 才算。
+    /// 引擎 `durationMismatch`:任一方未知(≤0 / nil)不算冲突,差超过较长者的 12% 才算。
     public static func durationMismatch(_ a: Double?, _ b: Double?) -> Bool {
         guard let a, let b, a > 0, b > 0 else { return false }
         return abs(a - b) / max(a, b) > 0.12

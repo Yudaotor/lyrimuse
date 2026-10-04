@@ -57,7 +57,7 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
 
 
 // 罗马音兜底——LyricsSyncEngine 现有的罗马音字段完全依赖网易云服务端"恰好给这首歌算好了
-// lyrics_roma"(见 enrich.go/collector 那边),源没给就是空,中文歌曲的拼音、日文歌曲的
+// lyrics_roma"(见 enrich.go/引擎那边),源没给就是空,中文歌曲的拼音、日文歌曲的
 // 罗马字完全没有客户端兜底。补上:在服务端没给这个字段时现算一份兜底(日文走系统分词器,
 // 韩文按读音规则,其余走系统音译)——真正的专业标注仍然优先用服务端字段(见调用点)。
 public enum Romanizer {
@@ -203,7 +203,7 @@ public enum Romanizer {
     /// 性能审计)。返回 nil 的口径也对齐 romanize:片段为空(=分不出词)或读音跟原文
     /// 一模一样(没有信息增量)都算"没有读音",调用方照 romanize 的原语义退 ICU 音译。
     /// **整行罗马音的判定阶梯** —— 播放引擎的客户端兜底和 `lyrics-romanize` helper
-    /// (collector 预生成那条路)**共用这一份**。
+    /// (引擎预生成那条路)**共用这一份**。
     ///
     /// 从 `LyricsSyncEngine.romanizationText` 里提出来。提的理由不是"整理代码":
     /// 预生成写进 `lyrics_roma` 之后,那份产物必须跟播放时现算的结果**逐字一致** ——
@@ -588,7 +588,7 @@ public enum Romanizer {
 public enum LyricScript: String, Sendable, CaseIterable {
     case japanese, korean, chinese
     /// 粤语歌的汉字行。文字本身(汉字)跟 .chinese 没有任何差异,分不出普通话还是
-    /// 粤语——这一档只能靠外部信号(collector 判定的 SongLanguage 真值,见
+    /// 粤语——这一档只能靠外部信号(引擎判定的 SongLanguage 真值,见
     /// EnrichCacheLyrics.isCantonese)分派,不能像日语假名/韩语谚文那样靠文字本身
     /// 判定。加,拼音/粤拼两个开关分开之后才需要区分。
     case cantonese
@@ -730,7 +730,7 @@ extension Romanizer {
     /// **一行**的文字种类。行内有假名/谚文就按行自己算(确证);只有纯汉字行才有
     /// 中文/日文/粤语的歧义,那种行退回整首歌的判断——粤语和普通话的汉字长得
     /// 一模一样,光看这一行的文字本身分不出来,只能信 song 这个整首歌级别的判定
-    /// (它来自 collector 的 SongLanguage 真值,不是文字分析,见 isCantonese 的注释)。
+    /// (它来自引擎的 SongLanguage 真值,不是文字分析,见 isCantonese 的注释)。
     public static func script(ofLine line: String, song: LyricScript) -> LyricScript {
         if looksJapanese(line) { return .japanese }
         if containsHangul(line) { return .korean }

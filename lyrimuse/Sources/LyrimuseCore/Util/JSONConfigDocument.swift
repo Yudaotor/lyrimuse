@@ -9,7 +9,7 @@ import Foundation
 /// **整个写回去**。config.json 只要被手改 / 搬家 / 导入弄出一个 JSON 语法错误,启动后各账号显示为空,
 /// 用户随手在任意一栏输入、点一次「断开 Last.fm」、或 Last.fm 授权成功,就用一整套空串覆盖原文件 ——
 /// Last.fm session key / ListenBrainz token / relay token,连带 `api_root` / `log_level` 这些 App 不管
-/// 的字段一起丢。collector 侧(Go)逐字段容错且从不写回这两个文件,风险只在 Swift 写入方。
+/// 的字段一起丢。引擎侧(Go)逐字段容错且从不写回这两个文件,风险只在 Swift 写入方。
 ///
 /// 所以读盘分**三态**,而不是「读到了 / 没读到」两态:
 ///   - `missing`:文件不存在。首次保存允许直接创建(全新机器走的就是这条)。

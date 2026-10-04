@@ -5,7 +5,7 @@ import LyrimuseCore
 /// 图片「先直连,连不上再走系统代理」。只给 Spotify 图床原图替代用(见 PlaybackCoordinator.refreshSpotifyOriginalCover)。
 ///
 /// `URLSession.shared` 一律走系统代理:同一张 Spotify 原图,直连 1.7 秒,经系统代理 40 秒超时(640 档也要
-/// 八秒到七十秒不等)。直连用短超时,失败就按主机记下,10 分钟内这台主机直接走代理 —— 跟 collector 对
+/// 八秒到七十秒不等)。直连用短超时,失败就按主机记下,10 分钟内这台主机直接走代理 —— 跟引擎对
 /// 自己请求的做法同一个思路(proxyfallback.go)。直连拿到的图写进 ImageMemoryCache,跟代理那条路共用缓存。
 @MainActor
 enum DirectFirstImageLoad {

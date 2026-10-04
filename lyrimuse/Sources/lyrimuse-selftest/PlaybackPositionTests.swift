@@ -12,7 +12,7 @@ func runPlaybackPositionTests() {
     // media-control 的 --now 外推是 elapsed + (now-ts)*rate —— rate 缺失时增量为 0,
     // elapsedTimeNow 15 秒纹丝不动。那个恒定值喂进伺服会把位置一路拽回去、歌词冻在一行。)
 
-    // ---- 汽水非会员试听:换回原曲口径(collector 发布、App 换算) ----
+    // ---- 汽水非会员试听:换回原曲口径(引擎发布、App 换算) ----
     // 真机:《一分之二》整首 282.801s,试听段 240.000 起、长 30.001;播放器报 duration 30、位置 6。
     do {
         let state = PlayerPreviewFix.State(bundle: "com.soda.music", title: "一分之二", artist: "HUSH, 孙盛希",
@@ -37,7 +37,7 @@ func runPlaybackPositionTests() {
         expectEqual(PlayerPreviewFix.applied(to: snap(30, title: " 一分之二\u{200b} "), state: state)?.elapsedTime, 246,
                     "试听换算: 播放器报的曲名带首尾空白 / 零宽字符,清洗后与发布的那份相同 → 照样换算")
         expectEqual(PlayerPreviewFix.stateURL.lastPathComponent, "lyrimuse-player-preview.json",
-                    "试听换算: 文件名与 collector 的 clientName+\"-player-preview.json\" 一致")
+                    "试听换算: 文件名与引擎的 clientName+\"-player-preview.json\" 一致")
     }
 
     // ---- 暂停中发布的锚点(网易云换歌):从真正起播那一刻算 ----
@@ -508,7 +508,7 @@ func runPlaybackPositionTests() {
             expectEqual(r3(LocalPlaybackSource.learnedAnchorLag(current: 1.4, residual: 0.9, hasPrior: false)), 1.5,
                         "锚点滞后: 夹在上限,别把别的毛病当滞后补成偏快")
         }
-        // ---- App → collector 的位置偏置文件:JSON 形状与 Go 侧 positionbias_test.go 的 fixture 逐字节一致 ----
+        // ---- App → 引擎的位置偏置文件:JSON 形状与 Go 侧 positionbias_test.go 的 fixture 逐字节一致 ----
         do {
             let rec = PositionBiasRecord(artist: "Olivia Rodrigo", title: "vampire", bundleID: "com.spotify.client",
                                          anchorElapsed: 0, biasSecs: -1.957, writtenAtMs: 1_789_002_067_341)

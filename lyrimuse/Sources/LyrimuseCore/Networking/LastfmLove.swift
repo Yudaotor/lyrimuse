@@ -15,7 +15,7 @@ public enum LastfmLove {
 
     /// 喜欢要打在哪个写法上。
     ///
-    /// collector 上送时可能改写歌手 / 歌名(合唱串收拢、「智能」档编目匹配),喜欢必须打在**上送的
+    /// 引擎上送时可能改写歌手 / 歌名(合唱串收拢、「智能」档编目匹配),喜欢必须打在**上送的
     /// 那个写法**上,否则 Last.fm 上喜欢的是另一个实体。Last.fm 回报的 nowplaying 就是上送写法本身:
     /// 它新鲜、歌手非空、且歌名宽松对得上本机这首时用它;否则退回本机显示的写法。本机歌名或歌手为空
     /// (没在放 / 元数据不全)返回 nil。
@@ -37,7 +37,7 @@ public enum LastfmLove {
     }
 
     /// 写请求的表单体:按 RFC 3986 unreserved 严格转义(`+` → `%2B`、空格 → `%20`),键按字母序。
-    /// POST 表单不像读接口的 query 那样被多解一次码,不走 `LastfmQuery` 的双重转义 —— 跟 collector
+    /// POST 表单不像读接口的 query 那样被多解一次码,不走 `LastfmQuery` 的双重转义 —— 跟引擎
     /// 用 Go `url.Values.Encode` 发写请求同一个口径。
     public static func formBody(_ params: [String: String]) -> String {
         var allowed = CharacterSet.alphanumerics

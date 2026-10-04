@@ -10,7 +10,7 @@ func runOpsDiagnosticsTests() {
     // ---- LogRedactor(诊断包脱敏) ----
     //
     // 这一组断言守的是一条会被贴进公开 GitHub issue 的输出:实测坐实,诊断报告
-    // 末尾附的 collector 日志里带着 Last.fm API Key 原文。用例全部是合成的假密钥。
+    // 末尾附的引擎日志里带着 Last.fm API Key 原文。用例全部是合成的假密钥。
     do {
         print("\n== 诊断日志脱敏 ==")
         typealias R = LogRedactor
@@ -61,7 +61,7 @@ func runOpsDiagnosticsTests() {
         let discord = "Post \"https://discord.com/api/webhooks/1234567890/FakeWebhookToken_abc\": 404"
         expectEqual(R.redactAll(discord, secrets: [:]).contains("FakeWebhookToken"), false, "路径型凭据: Discord webhook token 打掉")
         expectEqual(R.redactAll(discord, secrets: [:]).contains("webhooks/1234567890/"), true, "路径型凭据: Discord 的 id 保留")
-        // 查询参数按词根认(跟 collector logscrub.go 同一条):固定名单里没有的 client_secret、refresh_token。
+        // 查询参数按词根认(跟引擎 logscrub.go 同一条):固定名单里没有的 client_secret、refresh_token。
         let oauth = "Get \"https://example.com/cb?client_secret=CS123456&refresh_token=RT123456&state=ok\""
         let oauthOut = R.redactAll(oauth, secrets: [:])
         expectEqual(oauthOut.contains("CS123456") || oauthOut.contains("RT123456"), false, "查询参数: 按词根认 client_secret / refresh_token")
@@ -87,9 +87,9 @@ func runOpsDiagnosticsTests() {
         expectEqual(R.redactHomePath("x", home: "/"), "x", "家目录: 拿不到正经的家目录时不动")
     }
 
-    // 真机端到端校验:拿**这台机器上真实的** config.json + 真实的 collector 日志跑一遍,
+    // 真机端到端校验:拿**这台机器上真实的** config.json + 真实的引擎日志跑一遍,
     // 断言脱敏后没有任何一个真实凭据残留。默认不跑 —— 它要读用户的真实密钥,跟
-    // lyrimuse-collector 的 simeval_test.go 用 SIMEVAL_DATA 把真实曲库 gate 住是同一个模式。
+    // lyrimuse-engine 的 simeval_test.go 用 SIMEVAL_DATA 把真实曲库 gate 住是同一个模式。
     // 跑法:LYRIMUSE_REDACT_CHECK=1 swift run lyrimuse-selftest
     // 全程只做比对,绝不打印任何密钥值(连长度以外的信息都不打)。
 
@@ -371,7 +371,7 @@ func runOpsDiagnosticsTests() {
             exit(1)
         }
 
-        // 导出的是**整份**日志(DiagnosticsExporter.fullCollectorLogText),所以这里也拿整份验。
+        // 导出的是**整份**日志(DiagnosticsExporter.fullEngineLogText),所以这里也拿整份验。
         // 原来只验最后 200 行 —— 那是当年那个导出窗口的形状,而凭据可能出现在任何一行:
         // 泄漏过的那几处 Last.fm API Key 来自 Go *url.Error 打印完整 URL,随便哪次请求失败都会写一行。
         let window = logText
@@ -394,7 +394,7 @@ func runOpsDiagnosticsTests() {
         print("  脱敏前出现在导出窗口里的: \(before.count) 项 -> \(before.keys.sorted())")
         expectEqual(after.count, 0, "脱敏后不得有任何真实凭据残留(残留项: \(after.keys.sorted()))")
 
-        // 上面那条如今多半是**空转**的:collector 侧的 logscrub 已经把凭据挡在日志之外,
+        // 上面那条如今多半是**空转**的:引擎侧的 logscrub 已经把凭据挡在日志之外,
         // 实测整份 3MB 日志里 0 项真实凭据。输入里本来就没有,它答不了"脱敏到底生没生效"。
         //
         // 所以再注入一次。LogRedactor 是纵深的第二道(见它的头注),不能因为第一道目前有效
@@ -718,10 +718,10 @@ func runOpsDiagnosticsTests() {
     // ---- LogFiles(两侧日志文件的落点)----
     do {
         expectEqual(LogFiles.appStderr.lastPathComponent, "lyrimuse-app.log", "日志文件: App stderr 单独一份")
-        expectEqual(LogFiles.collector.lastPathComponent, "lyrimuse.log", "日志文件: collector 日志路径不变")
+        expectEqual(LogFiles.engine.lastPathComponent, "lyrimuse.log", "日志文件: 引擎日志路径不变")
     }
 
-    // ---- 歌词源近况(collector 统计的 summary 段) ----
+    // ---- 歌词源近况(引擎统计的 summary 段) ----
     do {
         print("\n== 歌词源近况 ==")
         typealias H = LyricSourceHealth
@@ -751,30 +751,30 @@ func runOpsDiagnosticsTests() {
                     "歌词源近况: 刚好两天还提醒")
         expectEqual(H.attention(for: "kuwo", state: state, now: Date(timeIntervalSince1970: 1000 + H.staleAfter + 1)) == nil, true,
                     "歌词源近况: 统计停了两天以上不提醒")
-        expectEqual(H.percent(0.125), 13, "歌词源近况: 百分比逢半进位(同 collector 的 math.Round)")
+        expectEqual(H.percent(0.125), 13, "歌词源近况: 百分比逢半进位(同引擎的 math.Round)")
         expectEqual(H.percent(4, of: 90), 4, "歌词源近况: 次数换成百分比")
         expectEqual(H.percent(1, of: 0), 0, "歌词源近况: 分母为 0 时是 0")
 
         let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let engine = (try? String(contentsOfFile: repoRoot.appendingPathComponent(
-            "lyrimuse-collector/lyricsourcestats.go").path, encoding: .utf8)) ?? ""
+            "lyrimuse-engine/lyricsourcestats.go").path, encoding: .utf8)) ?? ""
         expectEqual(sourceBytes(engine, contain: "lyricSourceStatsFileName = \"\(H.stateURL.lastPathComponent)\""), true,
                     "歌词源近况: 两侧认的是同一个文件")
         expectEqual(H.staleAfter, 48 * 3600, "歌词源近况: App 侧过期阈值是两天")
         expectEqual(sourceBytes(engine, contain: "lyricSourceStatsStaleAfter = 48 * time.Hour"), true,
-                    "歌词源近况: collector 侧过期阈值也是两天")
+                    "歌词源近况: 引擎侧过期阈值也是两天")
         for alert in [H.Alert.barely, .belowUsual, .cooling, .network] {
             expectEqual(sourceBytes(engine, contain: "= \"\(alert.rawValue)\""), true,
-                        "歌词源近况: collector 写的判定取值里有 \(alert.rawValue)")
+                        "歌词源近况: 引擎写的判定取值里有 \(alert.rawValue)")
         }
     }
 
     // ---- CrashReportSummary(诊断导出的崩溃报告段)----
     //
     // .ips = 摘要行 JSON + 正文 JSON。三种样本照本机真实报告的形状写:启动期 DYLD 缺库(零帧,信息全在
-    // termination)、另一个同名包里 collector 的签名约束、带 20 帧的 EXC_BAD_ACCESS(截成 15)。再钉宽容解析、归属判定
-    // (本 App / 另一个同名包 / 别家 collector)与每进程限量挑选。bundle id 与包名一律从 LyrimuseIdentity 取,不写字面量。
+    // termination)、另一个同名包里引擎的签名约束、带 20 帧的 EXC_BAD_ACCESS(截成 15)。再钉宽容解析、归属判定
+    // (本 App / 另一个同名包 / 别家引擎)与每进程限量挑选。bundle id 与包名一律从 LyrimuseIdentity 取,不写字面量。
     do {
         print("\n== 崩溃报告摘要 ==")
         let prod = LyrimuseIdentity.current
@@ -853,9 +853,9 @@ func runOpsDiagnosticsTests() {
         let devCollector = CrashReportSummary.parse(fileName: "collector-2026-09-06-010000.ips", data: ips(collectorHeader, collectorBody))
         expectEqual(devCollector?.bundleIdentifier == nil, true, "崩溃报告: collector 没有 bundle id")
         expectEqual(devCollector?.belongsToApp(executableName: "lyrimuse", bundleIdentifier: otherID, appDisplayName: otherName), true,
-                    "崩溃报告归属: 另一个同名包里的 collector 属于那个包(按包名判,家目录已被 macOS 改写)")
+                    "崩溃报告归属: 另一个同名包里的引擎属于那个包(按包名判,家目录已被 macOS 改写)")
         expectEqual(devCollector?.belongsToApp(executableName: "lyrimuse", bundleIdentifier: prod.bundleIdentifier, appDisplayName: prod.displayName), false,
-                    "崩溃报告归属: 别的包的 collector 不混进本 App")
+                    "崩溃报告归属: 别的包的引擎不混进本 App")
         let foreignBody = """
         {"procName":"collector","procPath":"/Applications/Other.app/Contents/MacOS/collector","termination":{"namespace":"SIGNAL","indicator":"Abort trap: 6"}}
         """
@@ -889,7 +889,7 @@ func runOpsDiagnosticsTests() {
         let many = (1...5).map { stub("lyrimuse", "2026-09-0\($0) 00:00:00") } + (1...4).map { stub("collector", "2026-09-1\($0) 00:00:00") }
         let picked = CrashReportSummary.select(many, perProcessLimit: 3)
         expectEqual(picked.count, 6, "崩溃报告挑选: 两个进程各 3 份")
-        expectEqual(picked.filter { $0.processName == "lyrimuse" }.count, 3, "崩溃报告挑选: App 那 3 份没被 collector 挤掉")
+        expectEqual(picked.filter { $0.processName == "lyrimuse" }.count, 3, "崩溃报告挑选: App 那 3 份没被引擎挤掉")
         expectEqual(picked.first { $0.processName == "lyrimuse" }?.timestamp, "2026-09-05 00:00:00", "崩溃报告挑选: 同进程按时间倒序,最新的在前")
         expectEqual(picked.first { $0.processName == "collector" }?.timestamp, "2026-09-14 00:00:00", "崩溃报告挑选: collector 同理")
         expectEqual(CrashReportSummary.select([], perProcessLimit: 3).isEmpty, true, "崩溃报告挑选: 空输入空输出")
@@ -927,7 +927,7 @@ func runOpsDiagnosticsTests() {
         let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let engineSource = (try? String(contentsOfFile: repoRoot.appendingPathComponent(
-            "lyrimuse-collector/healthcheckcli.go").path, encoding: .utf8)) ?? ""
+            "lyrimuse-engine/healthcheckcli.go").path, encoding: .utf8)) ?? ""
         expectEqual(sourceBytes(engineSource, contain: "fs.Duration(\"probe-timeout\""), true,
                     "健康检查: 引擎认 -probe-timeout 这个参数")
         expectEqual(sourceBytes(engineSource, contain: "healthProbeGrace  = 2 * time.Second"), true,
@@ -961,7 +961,7 @@ func runOpsDiagnosticsTests() {
     do {
         print("\n== 主线程卡顿探针 ==")
         typealias W = MainThreadWatchdog
-        // collector 判 App 状态过期是 15 秒(appstate.go appStateFreshness):探针要在那之前留下记录。
+        // 引擎判 App 状态过期是 15 秒(appstate.go appStateFreshness):探针要在那之前留下记录。
         expectEqual(W.stallThreshold < W.sampleAfter && W.sampleAfter < 15, true, "卡顿探针: 先记卡顿、再采样,都早于引擎判过期")
         expectEqual(PlaybackStatePublisher.lateHeartbeatSeconds < 15, true, "卡顿探针: 保活晚到的记录早于引擎判过期")
 
@@ -1037,13 +1037,13 @@ func runOpsDiagnosticsTests() {
             let signCalls = codeLines.filter { $0.contains("codesign") && $0.contains("$SIGN_ID") }.count
             expectEqual(signCalls >= 8, true,
                         "构建签名: 走 $SIGN_ID 的签名调用点至少 8 处(嵌套二进制 + 框架 + 最外层 .app),实际 \(signCalls)")
-            // collector 是裸可执行文件,TCC 按路径认它:换包之后老进程落在带 pid 的暂存路径里还会问 Spotify,
-            // 每次构建都弹一次「collector 想要控制 Spotify」。卸 job 必须排在 renamex_np 之前(02 章决策 63)。
+            // 引擎是裸可执行文件,TCC 按路径认它:换包之后老进程落在带 pid 的暂存路径里还会问 Spotify,
+            // 每次构建都弹一次「lyrimuse-engine 想要控制 Spotify」。卸 job 必须排在 renamex_np 之前(02 章决策 63)。
             let code = codeLines.joined(separator: "\n")
-            let bootout = code.range(of: "launchctl bootout \"gui/$(id -u)/$COLLECTOR_LABEL\"")
+            let bootout = code.range(of: "launchctl bootout \"gui/$(id -u)/$ENGINE_LABEL\"")
             let swap = code.range(of: "libc.renamex_np(sys.argv[1]")
             expectEqual(bootout != nil && swap != nil && bootout!.lowerBound < swap!.lowerBound, true,
-                        "构建换包: collector 的 job 要在换包(renamex_np)之前卸掉,不然老进程在暂存路径里触发授权弹窗")
+                        "构建换包: 引擎的 job 要在换包(renamex_np)之前卸掉,不然老进程在暂存路径里触发授权弹窗")
             // 装过旧版本的机器上 launchd 的 plist 还写着 …/Resources/collector:更新装好、App 还没重新打开的那段时间
             // 靠这个符号链接拉起引擎(15 章「歌词引擎的可执行文件改名」)。
             let link = code.range(of: "ln -s \"$ENGINE_NAME\" \"$APP_DIR/Contents/Resources/collector\"")
@@ -1155,28 +1155,28 @@ func runOpsDiagnosticsTests() {
             } else {
                 expectEqual(true, false, "装机校验: 找不到 pid 比对或成功提示(改写法了?)")
             }
-            // collector 那段:开着后台服务时交给 App 的启动对账重装,脚本不再同时动同一个 label;
+            // 引擎那段:开着后台服务时交给 App 的启动对账重装,脚本不再同时动同一个 label;
             // 任何一条路都不跟 kickstart -k(它杀的正是 bootstrap 刚拉起的进程)。确认「新起来了」
             // 要比对 open 之前记下的旧 pid,并且要等够久。
-            if let sectionStart = code.range(of: "COLLECTOR_PLIST=") {
+            if let sectionStart = code.range(of: "ENGINE_PLIST=") {
                 let section = code[sectionStart.lowerBound...]
                 expectEqual(section.contains("kickstart"), false,
-                            "装机校验: collector 那段不准再 kickstart -k(会杀掉刚 bootstrap 起来的进程)")
+                            "装机校验: 引擎那段不准再 kickstart -k(会杀掉刚 bootstrap 起来的进程)")
                 expectEqual(section.contains("np:collectorServiceEnabled"), true,
-                            "装机校验: 开着后台服务时要交给 App 重装 collector,不跟它同时动 launchd")
-                expectEqual(section.contains("$OLD_COLLECTOR_PIDS"), true,
-                            "装机校验: 确认 collector 起来要比对旧 pid")
+                            "装机校验: 开着后台服务时要交给 App 重装引擎,不跟它同时动 launchd")
+                expectEqual(section.contains("$OLD_ENGINE_PIDS"), true,
+                            "装机校验: 确认引擎起来要比对旧 pid")
                 expectEqual(section.contains("seq 1 60"), true,
-                            "装机校验: 等 collector 要等够 60 秒(App 对账 + 加载缓存),固定 sleep 会误报没起来")
+                            "装机校验: 等引擎要等够 60 秒(App 对账 + 加载缓存),固定 sleep 会误报没起来")
             } else {
-                expectEqual(true, false, "装机校验: 找不到 collector 那段(COLLECTOR_PLIST=)")
+                expectEqual(true, false, "装机校验: 找不到引擎那段(ENGINE_PLIST=)")
             }
-            if let recordRange = code.range(of: "OLD_COLLECTOR_PIDS="),
+            if let recordRange = code.range(of: "OLD_ENGINE_PIDS="),
                let openRange = code.range(of: "open -g \"$APP_DIR\"") {
                 expectEqual(recordRange.lowerBound < openRange.lowerBound, true,
-                            "装机校验: 旧 collector pid 要在 open 之前记(App 一起来就会重装它)")
+                            "装机校验: 旧引擎 pid 要在 open 之前记(App 一起来就会重装它)")
             } else {
-                expectEqual(true, false, "装机校验: 找不到旧 collector pid 的记录或 open -g")
+                expectEqual(true, false, "装机校验: 找不到旧引擎 pid 的记录或 open -g")
             }
         } else {
             expectEqual(true, false, "装机校验: 读不到 build.sh(路径挪了?)")

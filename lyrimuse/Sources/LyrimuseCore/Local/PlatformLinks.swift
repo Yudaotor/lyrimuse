@@ -2,7 +2,7 @@ import Foundation
 
 /// 一首歌在各平台的跳转目标。
 ///
-/// 数据**全部早就在本机**:collector 解析歌词那一轮顺手把 `apple_music_url` / `qq_music_url` /
+/// 数据**全部早就在本机**:引擎解析歌词那一轮顺手把 `apple_music_url` / `qq_music_url` /
 /// `netease_url` 落进了 enrich 缓存(本机实测覆盖率 95% / 100% / 85%),QQ 的专辑/歌手 mid
 /// 一起补上 —— 而 Swift 侧此前**一个都没解码**(`EnrichCacheEntry.CodingKeys` 只有
 /// 歌词和封面那几个)。所以这一族入口是**零网络**的,不像「前往专辑」老那条要先打一次
@@ -35,15 +35,15 @@ public struct PlatformLinks: Sendable, Equatable {
     /// 网易云音乐歌曲页(浏览器)。
     public let neteaseSong: URL?
     /// Spotify 曲目页 `open.spotify.com/track/<id>`(浏览器;解码)。**只认真曲目 ID**
-    /// (collector 的 `spotify_track_id`,Spotify 原生播放换曲那一拍从 `spotify url` 留下的),
+    /// (引擎的 `spotify_track_id`,Spotify 原生播放换曲那一拍从 `spotify url` 留下的),
     /// 缓存里另一个 `spotify_url` 是本地拼的**搜索页**兜底,跟 QQ 的搜索兜底同一个理由不当歌曲页给出去。
     public let spotifySong: URL?
-    /// KKBOX 曲目页 `kkbox://song/<id>#view`(进 App,不播放)。由 collector 存的歌曲页换算,见 `kkboxAppURL`。
+    /// KKBOX 曲目页 `kkbox://song/<id>#view`(进 App,不播放)。由引擎存的歌曲页换算,见 `kkboxAppURL`。
     public let kkboxSong: URL?
-    /// Amazon Music 曲目页 `https://music.amazon.com/tracks/<ASIN>`(浏览器)。collector 用它放这首时从日志里记下的 ASIN,
+    /// Amazon Music 曲目页 `https://music.amazon.com/tracks/<ASIN>`(浏览器)。引擎用它放这首时从日志里记下的 ASIN,
     /// 形状闸见 `amazonTrackURL`。
     public let amazonSong: URL?
-    /// YouTube Music 歌曲页 `https://music.youtube.com/watch?v=<id>`(浏览器)。collector 用 Kaset 放这首时按它报的 videoId
+    /// YouTube Music 歌曲页 `https://music.youtube.com/watch?v=<id>`(浏览器)。引擎用 Kaset 放这首时按它报的 videoId
     /// 拼的,形状闸见 `youtubeMusicWatchURL`。
     public let youtubeMusicSong: URL?
 
@@ -75,8 +75,8 @@ public struct PlatformLinks: Sendable, Equatable {
     ///
     /// - Apple Music 播放 → Apple Music 曲目页(`music://`,进 App);QQ 音乐 → QQ 歌曲页;网易云 →
     ///   网易云歌曲页;Spotify(原生客户端,或浏览器里配对成 `spotifyWeb` 的网页版)→ Spotify 曲目页。
-    /// - Kaset → YouTube Music 歌曲页(用它放的时候 collector 才存)。
-    /// - 酷狗 / 浏览器里的 YouTube Music / 认不出来的播放器 → nil:collector 没存酷狗歌曲页(酷狗网页版能开的只有
+    /// - Kaset → YouTube Music 歌曲页(用它放的时候引擎才存)。
+    /// - 酷狗 / 浏览器里的 YouTube Music / 认不出来的播放器 → nil:引擎没存酷狗歌曲页(酷狗网页版能开的只有
     ///   `kugou.com/mixsong/<EMixSongID>.html`,那个编码 ID 只有带签名的网页版搜索接口才给),浏览器里放的
     ///   YouTube Music 没存链接。调用方据 nil 整行隐藏,不拿别的平台顶上。
     /// - 播放器认得出但这首歌在它那个平台上没链接(网易云版权下架的周杰伦、QQ 只有搜索兜底)→ 同样 nil。
@@ -102,7 +102,7 @@ public struct PlatformLinks: Sendable, Equatable {
 
     // MARK: - 纯函数(selftest 钉住)
 
-    /// collector 存的 Amazon Music 曲目页。形状闸与 collector 的 `amazonTrackURL` 同源:ASIN 是 10 位大写字母数字,
+    /// 引擎存的 Amazon Music 曲目页。形状闸与引擎的 `amazonTrackURL` 同源:ASIN 是 10 位大写字母数字,
     /// 别的一律不认。
     public static func amazonTrackURL(_ raw: String) -> URL? {
         let prefix = "https://music.amazon.com/tracks/"
@@ -112,7 +112,7 @@ public struct PlatformLinks: Sendable, Equatable {
         return URL(string: raw)
     }
 
-    /// collector 存的 YouTube Music 歌曲页。形状闸与 collector 的 `youtubeMusicWatchURL` 同源:videoId 是 11 位字母数字加
+    /// 引擎存的 YouTube Music 歌曲页。形状闸与引擎的 `youtubeMusicWatchURL` 同源:videoId 是 11 位字母数字加
     /// `-` `_`,别的一律不认。
     public static func youtubeMusicWatchURL(_ raw: String) -> URL? {
         let prefix = "https://music.youtube.com/watch?v="
@@ -129,8 +129,8 @@ public struct PlatformLinks: Sendable, Equatable {
         return URL(string: "kaset://play?v=" + raw.dropFirst("https://music.youtube.com/watch?v=".count))
     }
 
-    /// collector 存的 KKBOX 歌曲页(`https://www.kkbox.com/<地区>/<语言>/song/<id>`)换成在 KKBOX 里打开这首的深链
-    /// `kkbox://song/<id>#view`。形状闸与 collector 的 `kkboxSongPageURL` 同源,别的一律不认。
+    /// 引擎存的 KKBOX 歌曲页(`https://www.kkbox.com/<地区>/<语言>/song/<id>`)换成在 KKBOX 里打开这首的深链
+    /// `kkbox://song/<id>#view`。形状闸与引擎的 `kkboxSongPageURL` 同源,别的一律不认。
     public static func kkboxAppURL(songPage raw: String) -> URL? {
         guard let url = URL(string: raw), url.scheme == "https", url.host == "www.kkbox.com" else { return nil }
         let parts = url.path.split(separator: "/").map(String.init)
@@ -139,15 +139,15 @@ public struct PlatformLinks: Sendable, Equatable {
         return URL(string: "kkbox://song/" + parts[3] + "#view")
     }
 
-    /// Spotify 曲目页。ID 的形状闸与 collector 的 `spotifyTrackIDFromURI` 同源:22 位 base62,别的一律不认
-    /// (缓存里这个字段只由 collector 写,形状闸是防手改 / 防把 `missing value` 这类脚本回声当 ID)。
+    /// Spotify 曲目页。ID 的形状闸与引擎的 `spotifyTrackIDFromURI` 同源:22 位 base62,别的一律不认
+    /// (缓存里这个字段只由引擎写,形状闸是防手改 / 防把 `missing value` 这类脚本回声当 ID)。
     public static func spotifyTrackURL(id: String) -> URL? {
         guard id.count == 22, id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
         return URL(string: "https://open.spotify.com/track/" + id)
     }
 
     /// `qq_music_url` 有两档:真·歌曲页 `…/n/ryqq/songDetail/<mid>`,和 smartbox 查不到
-    /// 时拼的**搜索页兜底**。判据与 collector 的 `isQQSearchFallbackURL` 同源(qq.go:49-54)。
+    /// 时拼的**搜索页兜底**。判据与引擎的 `isQQSearchFallbackURL` 同源(qq.go:49-54)。
     ///
     /// 必须区分:把兜底链接当"这首歌的页面"给出去,用户点了会被丢到一个搜索结果页,
     /// 还得自己再点一次 —— 那不该叫「歌曲页」。本机实测 565 条里有 40 条是这一档。
@@ -170,7 +170,7 @@ public struct PlatformLinks: Sendable, Equatable {
         return URL(string: "https://y.qq.com/n/ryqq/albumDetail/" + mid)
     }
 
-    /// QQ 音乐歌手页。多歌手时 collector 只存首位 —— QQ 的歌手页是一人一页,
+    /// QQ 音乐歌手页。多歌手时引擎只存首位 —— QQ 的歌手页是一人一页,
     /// 合唱曲目没有"这首歌的歌手页"这种东西。
     public static func qqArtistURL(mid: String) -> URL? {
         guard isPlausibleQQMid(mid) else { return nil }

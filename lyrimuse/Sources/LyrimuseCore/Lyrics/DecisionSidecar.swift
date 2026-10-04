@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// 歌词判决记录的**候选明细旁路文件**(collector 侧 `decisionstore.go`,两边逐字节同一套约定)。
+/// 歌词判决记录的**候选明细旁路文件**(引擎侧 `decisionstore.go`,两边逐字节同一套约定)。
 ///
 /// 主缓存 `lyrimuse-enrich-cache.json` 里的两槽判决(`lyrics_decision` / `lyrics_decision_applied`)只留
 /// 顶层字段(路径 / 时间 / 打分版本 / 胜者 …);最占地方的 `candidates` + `queries_tried` 单独存在
@@ -18,7 +18,7 @@ import Foundation
 public enum DecisionSidecar {
     public static let directoryName = "lyrimuse-decisions"
 
-    /// 旁路文件名:key 的 SHA-256 前 16 字节,小写十六进制,加 `.json`(collector `decisionSidecarName`)。
+    /// 旁路文件名:key 的 SHA-256 前 16 字节,小写十六进制,加 `.json`(引擎 `decisionSidecarName`)。
     public static func fileName(forKey key: String) -> String {
         let digest = SHA256.hash(data: Data(key.utf8))
         return digest.prefix(16).map { String(format: "%02x", $0) }.joined() + ".json"
@@ -32,7 +32,7 @@ public enum DecisionSidecar {
         return obj
     }
 
-    /// 给主缓存里某一槽的判决字典补上明细。已经带着 candidates(老条目 / 还没被 collector 拆过)、
+    /// 给主缓存里某一槽的判决字典补上明细。已经带着 candidates(老条目 / 还没被引擎拆过)、
     /// 没有旁路记录、或指纹对不上时原样返回。
     public static func hydrate(_ decision: [String: Any], record: [String: Any]?) -> [String: Any] {
         guard decision["candidates"] == nil, decision["queries_tried"] == nil, let record else {
@@ -51,7 +51,7 @@ public enum DecisionSidecar {
     }
 
     /// 两边的指纹字段是否一致。数字按 Int64 比(JSONSerialization 解出来是 NSNumber),缺失的字符串
-    /// 按空串比(collector 侧 winner / reused_from 带 omitempty)。
+    /// 按空串比(引擎侧 winner / reused_from 带 omitempty)。
     public static func sameFingerprint(_ a: [String: Any], _ b: [String: Any]) -> Bool {
         func str(_ d: [String: Any], _ k: String) -> String { d[k] as? String ?? "" }
         func num(_ d: [String: Any], _ k: String) -> Int64 { (d[k] as? NSNumber)?.int64Value ?? 0 }
@@ -63,7 +63,7 @@ public enum DecisionSidecar {
     }
 
     /// 缓存条目里两槽都按旁路文件补齐(备份打包用:备份要自带完整证据,恢复到别的机器上再由那边的
-    /// collector 拆出去)。
+    /// 引擎拆出去)。
     public static func hydrateEntry(_ entry: [String: Any], key: String, directory: URL) -> [String: Any] {
         let slots = ["lyrics_decision", "lyrics_decision_applied"]
         let needs = slots.contains { slot in

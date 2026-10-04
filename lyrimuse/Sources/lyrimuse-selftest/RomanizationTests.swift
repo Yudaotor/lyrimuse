@@ -1143,7 +1143,7 @@ func runRomanizationTests() {
 
         // ⑨ 逐字替换的前提:ICU 对**它确实不转的那批 key**,整条链路的产物必须等于表里的
         //    规范字。只对这一批断言,不是对全表 —— 其余条目 ICU 自己就转掉了(它们留在表里
-        //    是为 collector 侧的 OpenCC 缺口服务),拿它们断言等于在断言"ICU 和 OpenCC 对
+        //    是为引擎侧的 OpenCC 缺口服务),拿它们断言等于在断言"ICU 和 OpenCC 对
         //    每个字的选择完全一致",那是另一件事、也不成立(实测有 5 个字 ICU 会转成更生僻
         //    的字形,见 09 章)。哪些 key 属于这一批是**生成时实测**出来的(han-icu-probe.swift)。
         var icuGapChecked = 0
@@ -1158,7 +1158,7 @@ func runRomanizationTests() {
         expectEqual(icuGapChecked > 50, true,
                     "异体字表: ICU 缺口那一批有被真的核过(\(icuGapChecked) 条)")
 
-        // ⑩ 跨语言防漂:collector(Go)侧 `//go:embed` 读的是同一次生成写出的
+        // ⑩ 跨语言防漂:引擎(Go)侧 `//go:embed` 读的是同一次生成写出的
         //    dictionary/HanVariants.txt。这里直接读那份产物逐字对账 —— 两侧数据不一致的后果
         //    很隐蔽:搜索词按一套折、界面显示按另一套折,同一首歌"搜得到但显示还是繁体"
         //    (或反过来),而两边代码各自看着都对。漏跑生成器同样会在这里露馅。
@@ -1167,7 +1167,7 @@ func runRomanizationTests() {
             .deletingLastPathComponent()   // …/Sources
             .deletingLastPathComponent()   // …/lyrimuse
             .deletingLastPathComponent()   // 仓库根
-            .appendingPathComponent("lyrimuse-collector/dictionary/HanVariants.txt")
+            .appendingPathComponent("lyrimuse-engine/dictionary/HanVariants.txt")
         if let txt = try? String(contentsOf: txtURL, encoding: .utf8) {
             var fromFile: [Character: Character] = [:]
             for line in txt.split(separator: "\n") {
@@ -1181,7 +1181,7 @@ func runRomanizationTests() {
             expectEqual(fromFile == HanVariants.toSimplified, true,
                         "异体字表/跨语言: .txt 与编译进 App 的表逐字一致")
         } else {
-            expectEqual(false, true, "异体字表/跨语言: 读不到 lyrimuse-collector/dictionary/HanVariants.txt")
+            expectEqual(false, true, "异体字表/跨语言: 读不到 lyrimuse-engine/dictionary/HanVariants.txt")
         }
     }
 
@@ -1285,7 +1285,7 @@ func runRomanizationTests() {
                         .map(\.latin), ["naneun", "neoreul", "saranghae"],
                     "Romanizer: 按读音的转写词数不变,逐词对齐照旧对得上")
 
-        // 整份 LRC(collector 预生成那条)与启动迁移用的「是不是旧版」判定。
+        // 整份 LRC(引擎预生成那条)与启动迁移用的「是不是旧版」判定。
         let lyrics = "[00:01.00]사랑해\n[00:02.00]같이 가자\n[00:03.00]Yeah yeah"
         let fresh = LyricsRomanization.romanizeLRC(lyrics)
         expectEqual(fresh, "[00:01.00]saranghae\n[00:02.00]gachi gaja", "整份罗马音: 韩文行按读音、英文行不出")
@@ -1443,13 +1443,13 @@ func runRomanizationTests() {
             if nfkc != String(Character(scalars[i + 1])) { nfkcMismatch.append(String(format: "U+%04X", scalars[i].value)) }
         }
         expectEqual(nfkcMismatch, [], "同形异码字表: 康熙部首 / 兼容表意两段跟 NFKC 一致")
-        // 契约:collector 的署名判定用同一份表
+        // 契约:引擎的署名判定用同一份表
         let goSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("lyrimuse-collector/hancompat.go"), encoding: .utf8)) ?? ""
+            .appendingPathComponent("lyrimuse-engine/hancompat.go"), encoding: .utf8)) ?? ""
         let goPairs = goSource.components(separatedBy: "const hanCompatPairs = `").dropFirst().first?
             .components(separatedBy: "`").first
-        expectEqual(goPairs == HanCompatibility.pairs, true, "同形异码字表(契约): collector hancompat.go 与 App 逐字相同")
+        expectEqual(goPairs == HanCompatibility.pairs, true, "同形异码字表(契约): 引擎 hancompat.go 与 App 逐字相同")
         let source = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
         let normalizeAt = source.range(of: "let text = HanCompatibility.normalized(tagged.lyrics)")?.lowerBound

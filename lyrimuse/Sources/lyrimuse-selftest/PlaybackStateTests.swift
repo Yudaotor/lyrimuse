@@ -1,8 +1,8 @@
 import Foundation
 import LyrimuseCore
 
-/// 播放状态文件(App 写、collector 读):契约样例 / 序号与位置状态机 / 撕裂快照守卫 / 封面标识。
-/// 样例 `shared/testdata/playback-state/` 与 collector 的 appstate_test.go 共用。
+/// 播放状态文件(App 写、引擎读):契约样例 / 序号与位置状态机 / 撕裂快照守卫 / 封面标识。
+/// 样例 `shared/testdata/playback-state/` 与引擎的 appstate_test.go 共用。
 func runPlaybackStateTests() {
     typealias F = PlaybackStateFile
 
@@ -66,7 +66,7 @@ func runPlaybackStateTests() {
     let idle = tracker.advance(.idle(), now: t0.addingTimeInterval(8))
     expectEqual(idle, .idle, "播放状态: 没有曲目写 idle")
     let c6 = tracker.advance(input(pos: 7.5), now: t0.addingTimeInterval(20))
-    expectEqual(c6.track?.playSeq, 1, "播放状态: 停播后回到同一首,play_seq 不加(会话续接交给 collector)")
+    expectEqual(c6.track?.playSeq, 1, "播放状态: 停播后回到同一首,play_seq 不加(会话续接交给引擎)")
     expectEqual(c6.position?.anchorSeq, 4, "播放状态: 停播后回来重新写位置")
     let c7 = tracker.advance(input("stupid song", pos: 0.2), now: t0.addingTimeInterval(30))
     expectEqual(c7.track?.playSeq, 2, "播放状态: 换歌 play_seq 加一")

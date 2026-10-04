@@ -53,7 +53,7 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
-    @Published private(set) var collectorNetworkDown = false
+    @Published private(set) var engineNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
     /// 电台口白:这一刻在放的不是歌,台里在说话。语义与 `isCurrentTrackAdBreak` 平行。
     @Published private(set) var isRadioTalkBreak = false
@@ -186,7 +186,7 @@ private final class OverlayPlayback: ObservableObject {
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
-            p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
+            p.$engineNetworkDown.removeDuplicates().sink { [weak self] in self?.engineNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             p.$isRadioTalkBreak.removeDuplicates().sink { [weak self] in self?.isRadioTalkBreak = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
@@ -1770,7 +1770,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             //
             // 排在几条状态文案**前面**而不是并列在「♪」旁边:停播时 `clearIfWasPlaying` 已经把
             // 广告/纯音乐/无歌词/hasLyricsContent 一起清掉、isPlayingNow 也是 false,理论上那几条
-            // 都不会命中,唯独 `collectorNetworkDown` 是 collector 的全局健康位、跟有没有曲目无关
+            // 都不会命中,唯独 `engineNetworkDown` 是引擎的全局健康位、跟有没有曲目无关
             // —— 没有曲目就没有要搜的东西,断网这时候对用户没有信息量,不该把首屏变成一句
             // 「网络连接失败」。有曲目之后的状态机(广告/纯音乐/无歌词/断网/搜索中/间奏 ♪)一个字不变;
             // 设置页编辑台永远带示例行(`previewLine`),走不到这里。
@@ -1780,7 +1780,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
         } else if playback.isCurrentTrackAdBreak {
             // 补上——Spotify 广告插播,同样要排在"还在搜索中"分支前面:广告
-            // 的标题/歌手永远不会被写进歌词缓存(见 collector/enrich.go
+            // 的标题/歌手永远不会被写进歌词缓存(见 lyrimuse-engine/enrich.go
             // trackEnrichment 的对应守卫),hasLyricsContent 永远拿不到内容,不排在
             // 前面的话会在整段广告期间一直显示"搜索歌词中…",见
             // PlaybackCoordinator.isCurrentTrackAdBreak 定义处的注释。
@@ -1811,10 +1811,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
-        } else if playback.collectorNetworkDown && !playback.hasLyricsContent {
+        } else if playback.engineNetworkDown && !playback.hasLyricsContent {
             // 补上——必须排在下面"搜索歌词中…"**前面**,否则永远到不了这里。
             //
-            // 断网时 collector 查不到任何东西,而"全空不写缓存"的守卫(见 collector 的
+            // 断网时引擎查不到任何东西,而"全空不写缓存"的守卫(见引擎的
             // enrich.go)让 hasLyricsContent 永远是 false,于是界面一直显示"搜索歌词中…"
             // —— 那句话在断网状态下永远不会有下文,是彻头彻尾的误导。
             //
@@ -1825,7 +1825,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
         } else if playback.isPlayingNow && !playback.hasLyricsContent {
-            // 换到一首还没解析过的新歌,collector 后台搜索通常要几秒——这段空窗期跟"这首
+            // 换到一首还没解析过的新歌,引擎后台搜索通常要几秒——这段空窗期跟"这首
             // 歌确实没有歌词/正在间奏"共用同一个 currentLine==nil,但含义完全不同,不能
             // 都糊成一个♪符号,容易让人以为"这首歌就是没词",见 PlaybackCoordinator.hasLyricsContent
             // 注释。

@@ -206,7 +206,7 @@ func runCoverArtTests() {
         expectEqual(index.values.contains("https://cover/no-album"), false, "专辑封面兜底: 没有专辑名的条目不进索引")
     }
 
-    // ---- iTunes Search 限流退避(口径同 collector apple.go noteITunesSearchStatus) ----
+    // ---- iTunes Search 限流退避(口径同引擎 apple.go noteITunesSearchStatus) ----
     do {
         typealias B = ITunesSearchBackoff
         let t0 = Date(timeIntervalSince1970: 1_000_000)
@@ -232,7 +232,7 @@ func runCoverArtTests() {
         expectEqual(gate.coolingDown(now: t0.addingTimeInterval(2)), false, "iTunes 退避: 拿到正常响应立即恢复")
     }
 
-    // ---- App 与 collector 共享的限流窗口(口径同 collector sharedcooldown.go) ----
+    // ---- App 与引擎共享的限流窗口(口径同引擎 sharedcooldown.go) ----
     do {
         typealias O = OutboundCooldowns
         let t0 = Date(timeIntervalSince1970: 1_000_000)
@@ -246,9 +246,9 @@ func runCoverArtTests() {
         expectEqual(O.until(["k": 1_000_100], key: "k", now: t0), Date(timeIntervalSince1970: 1_000_100),
                     "共享窗口: 没过期读得到")
         expectEqual(O.until(["k": 999_999], key: "k", now: t0) == nil, true, "共享窗口: 过期读不到")
-        // collector 写的 JSON(Go 的 map[string]float64)要解得开。
+        // 引擎写的 JSON(Go 的 map[string]float64)要解得开。
         let goJSON = Data(#"{"endpoints":{"itunes.apple.com/search":1790253000.5}}"#.utf8)
-        expectEqual(O.decode(goJSON)[O.itunesSearchKey], 1790253000.5, "共享窗口: 解得开 collector 写的文件")
+        expectEqual(O.decode(goJSON)[O.itunesSearchKey], 1790253000.5, "共享窗口: 解得开引擎写的文件")
         expectEqual(O.decode(Data("garbage".utf8)).isEmpty, true, "共享窗口: 坏文件当空")
 
         let dir = FileManager.default.temporaryDirectory
@@ -259,7 +259,7 @@ func runCoverArtTests() {
         let now = Date()
         let gate = ITunesSearchGate(store: store)
         expectEqual(gate.coolingDown(now: now), false, "共享窗口: 文件不存在时不算冷却")
-        // collector 写进来的窗口:App 的 gate 也要认。
+        // 引擎写进来的窗口:App 的 gate 也要认。
         let other = OutboundCooldownStore(url: dir.appendingPathComponent(O.fileName))
         other.publish(O.itunesSearchKey, until: now.addingTimeInterval(60), now: now)
         let fresh = ITunesSearchGate(store: OutboundCooldownStore(url: dir.appendingPathComponent(O.fileName)))
@@ -590,7 +590,7 @@ func runCoverArtTests() {
     // ---- 封面 URL:三个图源各自顶到最大那一档(网易云 / QQ+Apple) ----
     //
     // 现象是「歌词窗口里封面非常模糊」。根因是系统 Now Playing 给的封面只有
-    // 100×100(网易云客户端的限制),而那张卡最大 920px。替代图取自 collector 缓存的
+    // 100×100(网易云客户端的限制),而那张卡最大 920px。替代图取自引擎缓存的
     // cover_url,但那个 URL 尾巴上带着给小图用的 `?param=600y600` —— 网易云那个参数
     // **只降不升**,实测原生 800×800 的封面带上它就变 600×600。所以要原图必须把它摘掉。
     //
@@ -754,9 +754,9 @@ func runCoverArtTests() {
                     "高清替代: 形状→替代图自己也不是方形不换")
     }
 
-    // ---- 交给 collector 的设备封面:像不像封面只在 App 判 ----
+    // ---- 交给引擎的设备封面:像不像封面只在 App 判 ----
     //
-    // collector 拿到当前封面文件里的图就用、之后不再换源。太小(没有封面时的几像素占位)、不是方形(视频缩略图)
+    // 引擎拿到当前封面文件里的图就用、之后不再换源。太小(没有封面时的几像素占位)、不是方形(视频缩略图)
     // 的按没有封面发;下限 64 放行浏览器 MediaSession 常见的 120×120。
     do {
         typealias G = CoverArtReplacementGate
@@ -785,10 +785,10 @@ func runCoverArtTests() {
         expectEqual(G.pixelSize(of: frame).width, 320, "设备封面: 图头读宽")
         expectEqual(G.pixelSize(of: frame).height, 180, "设备封面: 图头读高")
         expectEqual(G.pixelSize(of: Data("not an image".utf8)).width, 0, "设备封面: 读不出来是 0")
-        expectEqual(PlaybackStatePublisher.artworkForCollector(square), square, "设备封面: 方形 120 原样交")
-        expectEqual(PlaybackStatePublisher.artworkForCollector(small), nil, "设备封面: 16×16 按没有封面发")
-        expectEqual(PlaybackStatePublisher.artworkForCollector(frame), nil, "设备封面: 视频缩略图按没有封面发")
-        expectEqual(PlaybackStatePublisher.artworkForCollector(nil), nil, "设备封面: 没有图还是没有")
+        expectEqual(PlaybackStatePublisher.artworkForEngine(square), square, "设备封面: 方形 120 原样交")
+        expectEqual(PlaybackStatePublisher.artworkForEngine(small), nil, "设备封面: 16×16 按没有封面发")
+        expectEqual(PlaybackStatePublisher.artworkForEngine(frame), nil, "设备封面: 视频缩略图按没有封面发")
+        expectEqual(PlaybackStatePublisher.artworkForEngine(nil), nil, "设备封面: 没有图还是没有")
     }
 
     // ---- 小封面预先重采样:半调网点缩小不能变成摩尔纹黑斑 ----
@@ -1227,7 +1227,7 @@ func runCoverArtTests() {
                     N.ArtistFacts(bornOrFormed: nil, genres: [], isGroup: true), "歌手简介: 缺字段时对应行不出现")
         expectEqual(N.parseArtistFacts(Data("oops".utf8)), nil, "歌手简介: 返回不是 JSON = nil")
 
-        // collector 缓存的 developer token
+        // 引擎缓存的 developer token
         let now = Date(timeIntervalSince1970: 2_000_000_000)
         expectEqual(AppleMusicDeveloperToken.parse(Data("{\"token\":\"abc\",\"expiry\":2000003600}".utf8), now: now), "abc",
                     "token: 没过期就用")
@@ -1339,7 +1339,7 @@ func runCoverArtTests() {
 
     // ---- 缩略图下载:用到多大就向图床要多大、哪种失败马上再试 ----
     //
-    // 「搜索候选歌词」里网易云那条一直是占位图:缩略档照着 collector 给的 3000px 地址去下(约 3MB),
+    // 「搜索候选歌词」里网易云那条一直是占位图:缩略档照着引擎给的 3000px 地址去下(约 3MB),
     // 撞上图床一次 503,失败被记 10 分钟,整段时间都不再请求。一次搜索十来条候选原来要下约 10MB 封面,
     // 按缩略档要图之后约 0.4MB。每家的档位是同一张图逐档实测出来的(见 CoverThumbnailFetch 头注)。
     do {

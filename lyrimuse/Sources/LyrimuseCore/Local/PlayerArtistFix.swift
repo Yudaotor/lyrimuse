@@ -1,24 +1,24 @@
 import Foundation
 
-/// collector 发布的「这个播放器报的署名不可信,真署名是这个」通道
-/// (见 collector/playerartistfix.go 与 kugoulyricartist.go 的头注)。
+/// 引擎发布的「这个播放器报的署名不可信,真署名是这个」通道
+/// (见 lyrimuse-engine/playerartistfix.go 与 kugoulyricartist.go 的头注)。
 ///
 /// ## 为什么 App 要跟着换
 ///
 /// 酷狗 3.3.2 把**当前这一句歌词**发布成 MediaRemote 的 artist,每唱一句换
-/// 一次。collector 会把它换回真署名,而 App 从播放器读到的是原样的署名 —— 两边用的必须是
-/// **同一个**署名:歌词缓存的 key 是 `artist|title|album`,collector 按纠正后的署名写进去,
+/// 一次。引擎会把它换回真署名,而 App 从播放器读到的是原样的署名 —— 两边用的必须是
+/// **同一个**署名:歌词缓存的 key 是 `artist|title|album`,引擎按纠正后的署名写进去,
 /// App 按播放器报的脏署名去查,`EnrichCacheReader.looseMatch` 只折平空格 / 大小写 / 繁简,
 /// 折不平两个完全不同的署名,于是一条也查不到。
 ///
-/// 换句话说这件事**不能只做一半**:collector 改了、App 不改,歌词会从"能显示但歌手名
+/// 换句话说这件事**不能只做一半**:引擎改了、App 不改,歌词会从"能显示但歌手名
 /// 是一句歌词"变成"压根不显示"。
 ///
-/// ## 为什么由 collector 说了算
+/// ## 为什么由引擎说了算
 ///
-/// 真署名要从播放器自己的私有容器里读,而**读播放器容器是 collector 的活** —— App 侧一
+/// 真署名要从播放器自己的私有容器里读,而**读播放器容器是引擎的活** —— App 侧一
 /// 处都没有,那是一条既有的分层边界;授权虽然两个进程共用一份,却在每个进程里各自生效,
-/// 各读各的可能得出不同结论,而"两边一致"正是这条通道存在的全部理由。同 `LocalCacheAccess` 只能由 collector
+/// 各读各的可能得出不同结论,而"两边一致"正是这条通道存在的全部理由。同 `LocalCacheAccess` 只能由引擎
 /// 发布是一个道理。
 ///
 /// 只读通道:App 从不写这份文件。
@@ -31,17 +31,17 @@ public enum PlayerArtistFix {
         public let title: String
         public let artist: String
         /// 曲名也要换时的真曲名,空串 = 曲名不动。`title` 仍是播放器原样报的那个(适用范围)。
-        /// 只有 collector 认定为「信任进来的其他播放器把歌词写进 artist 或 title」时才有
-        /// (见 collector/trustedlyricartist.go)。
+        /// 只有引擎认定为「信任进来的其他播放器把歌词写进 artist 或 title」时才有
+        /// (见 lyrimuse-engine/trustedlyricartist.go)。
         public let fixedTitle: String
         /// 这个播放器哪个字段装着身份、不跟歌词变。空串 = title(酷狗与多数情形);"artist" = 歌词在
         /// title 里 —— 这时适用范围按 `rawArtist` 比、`title` 为空(title 每句都变,拿它比只对得上一拍),
-        /// 曲目身份也改成剔掉曲名、留原样的 artist。播放器级,collector 重启时跟 `unreliable` 一起留下。
+        /// 曲目身份也改成剔掉曲名、留原样的 artist。播放器级,引擎重启时跟 `unreliable` 一起留下。
         public let stableField: String
         /// `stableField` 为 "artist" 时的适用范围:播放器原样报的 artist。
         public let rawArtist: String
         /// 这个播放器**被实际观测到**拿别的东西冒充署名。跟上面三项不同，它是播放器级的，
-        /// collector 重启时会特意把它留下（曲目那两项会被清掉），所以重启后的第一首歌也不会
+        /// 引擎重启时会特意把它留下（曲目那两项会被清掉），所以重启后的第一首歌也不会
         /// 因为「还不知道这播放器不可信」而让身份抖起来。
         public let unreliable: Bool
 
@@ -124,7 +124,7 @@ public enum PlayerArtistFix {
         return state.fixedTitle
     }
 
-    /// 曲名 / 歌手按 `EnrichCacheKeys.cleanTag` 清洗后比:collector 发布的是清洗过的标签,快照里是播放器原样报的。
+    /// 曲名 / 歌手按 `EnrichCacheKeys.cleanTag` 清洗后比:引擎发布的是清洗过的标签,快照里是播放器原样报的。
     private static func matches(_ state: State, bundle: String?, title: String?, artist: String?) -> Bool {
         guard let bundle, !bundle.isEmpty, bundle == state.bundle else { return false }
         let clean = EnrichCacheKeys.cleanTag
@@ -140,7 +140,7 @@ public enum PlayerArtistFix {
 
     /// 这个播放器报的署名可不可信。
     ///
-    /// 判据是「collector 为它发布过纠正」——只有判定成立才会写这个文件，所以文件里记着
+    /// 判据是「引擎为它发布过纠正」——只有判定成立才会写这个文件，所以文件里记着
     /// 哪个 bundle，就说明那个播放器**被实际观测到**拿歌词冒充过署名。曲名不参与：换歌那
     /// 一刻文件里还是上一首，而这里要问的是「这个播放器」而不是「这一首歌」。
     public static func artistIsUnreliable(bundle: String?, state: State? = current) -> Bool {
@@ -150,9 +150,9 @@ public enum PlayerArtistFix {
 
     /// 界面上该显示的署名 —— 纠正还没到的时候**宁可空着**。
     ///
-    /// 署名不可信的播放器(酷狗 3.3.2 把当前这一句歌词发布成 artist)在 collector 的纠正
+    /// 署名不可信的播放器(酷狗 3.3.2 把当前这一句歌词发布成 artist)在引擎的纠正
     /// 落地之前,`artist` 里装的是一句歌词、或者 LRC 头部的一行制作信息(`原唱：谈柒柒`
-    /// `作曲：廖伟志` `【版权所有 未经许可 不得翻`)。collector 要等 App 状态里换成这一首、再读播放器
+    /// `作曲：廖伟志` `【版权所有 未经许可 不得翻`)。引擎要等 App 状态里换成这一首、再读播放器
     /// 自己的 plist 才出得来结论,总比 App 自己读到这一首晚一截 —— 不空着的话,换歌之后有一段时间
     /// 界面上的歌手位一直在跳词,最后才落到真署名上。
     ///

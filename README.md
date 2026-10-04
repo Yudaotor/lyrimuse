@@ -322,7 +322,7 @@ install it never appears, and the desktop just sits at "searching for lyrics".
 This repo is the app:
 
 - [`lyrimuse/`](lyrimuse) — the app itself (Swift, SwiftUI + AppKit)
-- [`lyrimuse-collector/`](lyrimuse-collector) — the background engine that resolves lyrics/artwork and feeds them to the app (Go); built and bundled into the app automatically
+- [`lyrimuse-engine/`](lyrimuse-engine) — the background engine that resolves lyrics/artwork and feeds them to the app (Go); built and bundled into the app automatically
 
 <details>
 <summary>The optional web page: two sibling repos</summary>
@@ -335,7 +335,7 @@ The optional web experience lives in two sibling repos, so you can fork either w
 | [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) | The Cloudflare Worker relay + live README badge behind it, with a complete from-scratch setup guide |
 
 ```
-this repo (app + collector)  ──push──▶  nowplaying-workers (relay)  ◀──read──  nowplaying (web page)
+this repo (app + engine)  ──push──▶  nowplaying-workers (relay)  ◀──read──  nowplaying (web page)
 ```
 
 </details>

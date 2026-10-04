@@ -1,15 +1,15 @@
 import Foundation
 import LyrimuseCore
 
-// 歌词罗马音预生成小助手。collector(Go)算不了这一步 —— 日文**必须**走 CFStringTokenizer
+// 歌词罗马音预生成小助手。引擎(Go)算不了这一步 —— 日文**必须**走 CFStringTokenizer
 // 形态分析(不能用 ICU 通用音译:汉字是中日共用的,Any-Latin 会一律按普通话读,
 // 「火曜日の朝は」→"huǒ yào rìno cháoha"),中文走 ICU `applyingTransform(.toLatin)`,这两样是 Apple 的
 // 系统能力,Go 里没有对应物;韩文按读音规则(`KoreanRomanization`),跟 App 现算共用同一份 Swift 实现,
 // 也不在 Go 里另写一份。所以拆成一个独立的 Swift 可执行文件打包进
-// Contents/Resources/,由 collector 按相对路径调用 —— 跟 lyrics-translate / media-control
+// Contents/Resources/,由引擎按相对路径调用 —— 跟 lyrics-translate / media-control
 // 完全同一个形态。
 //
-// 对照:**粤拼**不走这里。它是纯查表(rime-cantonese 词典 go:embed 进二进制),collector
+// 对照:**粤拼**不走这里。它是纯查表(rime-cantonese 词典 go:embed 进二进制),引擎
 // 自己就算得出来,见 jyutping.go。差异从来不是"要不要缓存",是"谁算得出来"。
 //
 // 为什么值得预生成(而不是继续只靠 App 播放时现算):
@@ -28,7 +28,7 @@ import LyrimuseCore
 //   入:  {"lyrics":"[00:12.34]君の名は\n..."}
 //        启动迁移时多带 "legacy_korean_roma"(缓存里现有的罗马音):它不是旧版韩文读音给这份正文算出来的,
 //        就回 not-legacy、不产出(见 LyricsRomanization.isLegacyKoreanRomanization);是旧版就照常产出,
-//        另带 "legacy_checked":true。collector 只认带了这个标记的回包(不认这个入参的旧 helper 会照常回一份)。
+//        另带 "legacy_checked":true。引擎只认带了这个标记的回包(不认这个入参的旧 helper 会照常回一份)。
 //   出:  {"ok":true,"roma":"[00:12.34]kimi no na wa\n..."}
 //        {"ok":true,"roma":"...","legacy_checked":true}
 //        {"ok":false,"reason":"no-romanization"}

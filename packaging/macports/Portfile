@@ -42,7 +42,7 @@ current Command Line Tools) to build."
 
 # media-control reads playback state of the MediaRemote-backed players (QQ
 # Music, NetEase Cloud Music, Kugou, Spotify) — it is a runtime dependency,
-# spawned as a helper process. Go builds the bundled collector daemon; the
+# spawned as a helper process. Go builds the bundled engine daemon; the
 # Swift toolchain comes from the Command Line Tools.
 depends_build-append \
                     port:go

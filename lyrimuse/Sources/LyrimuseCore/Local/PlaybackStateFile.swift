@@ -2,9 +2,9 @@ import CryptoKit
 import Foundation
 import os
 
-/// App → collector 的播放状态文件:「此刻在放什么、放到哪」由 App 整份写出,collector 只读、从不删改。
+/// App → 引擎的播放状态文件:「此刻在放什么、放到哪」由 App 整份写出,引擎只读、从不删改。
 ///
-/// 契约(字段含义、序号语义、新鲜度)与 collector 侧 `appstate.go` 一致,样例在
+/// 契约(字段含义、序号语义、新鲜度)与引擎侧 `appstate.go` 一致,样例在
 /// `shared/testdata/playback-state/`,两侧测试各跑一遍;改字段两边一起改。
 ///
 /// - 位置是播放器的真实播放时间(已含各播放器的修正),**不含**任何歌词偏移。
@@ -85,7 +85,7 @@ public enum PlaybackStateFile {
         public var spotifyTrackID: String? = nil
         /// Amazon Music 时这首在它日志里的曲目标识(`asin://…`),位置是按日志算出来的那一拍才有。
         public var amazonTrackID: String? = nil
-        /// Kaset 放这首时它报的 YouTube Music videoId(collector 拼成歌曲页存进缓存);别的播放器为 nil。
+        /// Kaset 放这首时它报的 YouTube Music videoId(引擎拼成歌曲页存进缓存);别的播放器为 nil。
         public var youtubeMusicVideoID: String? = nil
 
         enum CodingKeys: String, CodingKey {
@@ -243,7 +243,7 @@ public enum PlaybackStateFile {
                   appliedFixRev: 0, playing: false, durationSecs: nil, positionSecs: nil)
         }
 
-        /// 身份比较用的 key,与 collector 会话 key(`Title|Artist|Album`)同形。
+        /// 身份比较用的 key,与引擎会话 key(`Title|Artist|Album`)同形。
         var identityKey: String { "\(title)|\(artist)|\(album)" }
     }
 
@@ -261,7 +261,7 @@ public enum PlaybackStateFile {
 
         public mutating func advance(_ input: Input, now: Date) -> Content {
             guard !input.title.isEmpty else {
-                // 停播不清身份:回到同一首时 play_seq 不加,会话续接由 collector 自己的宽限决定。
+                // 停播不清身份:回到同一首时 play_seq 不加,会话续接由引擎自己的宽限决定。
                 lastObservedSecs = nil
                 published = nil
                 return .idle
@@ -341,12 +341,12 @@ public enum PlaybackStateFile {
 
 /// 播放状态文件的写方:内容变了就写,没变时每 `heartbeatInterval` 秒保活一次;退出时写 `exiting`。
 ///
-/// 保活计时器跑在主线程上:主线程卡住时保活也停,collector 据此判 App 不可用,而不是按一份冻住的「在播」继续计时。
-/// 保活离上一次写出晚到 `lateHeartbeatSeconds` 以上记一行 notice(collector 15 秒判过期);对照 MainThreadWatchdog
+/// 保活计时器跑在主线程上:主线程卡住时保活也停,引擎据此判 App 不可用,而不是按一份冻住的「在播」继续计时。
+/// 保活离上一次写出晚到 `lateHeartbeatSeconds` 以上记一行 notice(引擎 15 秒判过期);对照 MainThreadWatchdog
 /// 的记录,分得清是主线程卡住了还是计时器被系统推迟了。间隔按不含睡眠的系统运行时长算。
 ///
 /// 只在以 Lyrimuse.app 身份运行时落盘:selftest 与 `swift run` 起的进程共用同一个配置目录,
-/// 让它们写会盖掉正在运行的 App 那份,collector 就会读到测试数据。
+/// 让它们写会盖掉正在运行的 App 那份,引擎就会读到测试数据。
 @MainActor
 public final class PlaybackStatePublisher {
     public static let shared = PlaybackStatePublisher()
@@ -378,19 +378,19 @@ public final class PlaybackStatePublisher {
         write(content, now: now)
     }
 
-    /// 交给 collector 的设备封面:不像封面的图(太小、不是方形,见 `CoverArtReplacementGate.isUsableDeviceArtwork`)
-    /// 按没有封面发,collector 退回按歌名找封面。播放器的内置占位图走不到这里:`LocalPlaybackSource` 认出来就不采纳。
-    public nonisolated static func artworkForCollector(_ data: Data?) -> Data? {
+    /// 交给引擎的设备封面:不像封面的图(太小、不是方形,见 `CoverArtReplacementGate.isUsableDeviceArtwork`)
+    /// 按没有封面发,引擎退回按歌名找封面。播放器的内置占位图走不到这里:`LocalPlaybackSource` 认出来就不采纳。
+    public nonisolated static func artworkForEngine(_ data: Data?) -> Data? {
         guard let data, !data.isEmpty else { return nil }
         let size = CoverArtReplacementGate.pixelSize(of: data)
         return CoverArtReplacementGate.isUsableDeviceArtwork(width: size.width, height: size.height) ? data : nil
     }
 
-    /// 这一首换上了新封面(nil = 确认没有封面)。交给 collector 的那份(`artworkForCollector`)落到
+    /// 这一首换上了新封面(nil = 确认没有封面)。交给引擎的那份(`artworkForEngine`)落到
     /// `lyrimuse-now-playing-artwork`,状态里记校验和。
     public func noteArtwork(_ data: Data?) {
         guard !exiting else { return }
-        guard let data = Self.artworkForCollector(data) else {
+        guard let data = Self.artworkForEngine(data) else {
             tracker.noteArtwork(sha256: nil, mime: "", bytes: 0)
             republishArtwork()
             return

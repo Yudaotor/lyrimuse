@@ -51,7 +51,7 @@ final class LyricsManagerNowPlayingObserver: ObservableObject {
 // "歌词源有哪些"的唯一真源(设置页勾选框、顺序优先排序、搜索弹窗徽章都读它),
 // 派生之后以后加源这里自动跟上,不存在"忘了补"这种可能。顺序也跟着枚举走 —— 那个顺序
 // 本身有语义(按实测采用率排),两处保持一致比各排各的好。
-// 守卫见 collector 侧 lyricsourceregistry_test.go 的 TestSwiftSourceFilterDerivesFromEnum。
+// 守卫见引擎侧 lyricsourceregistry_test.go 的 TestSwiftSourceFilterDerivesFromEnum。
 private enum SourceFilter: Hashable, Identifiable {
     case all
     case named(String)
@@ -106,7 +106,7 @@ private enum TimingFilter: String, CaseIterable, Identifiable {
 /// 字段(实测覆盖率 decided_at 73% / translation_ts 25% / peripheral_ts 9% /
 /// lyrics_rescore_ts 7%,全是偏科的局部时间戳,而 decided_at 还只反映"自动决策",手改
 /// 歌词根本不动它),但**不需要扩缓存格式** —— 导出的歌词文件 mtime 就是这个信号,而且
-/// 覆盖率 3169/3210。见 `Summary.lyricsUpdatedAt` 的头注(含"为什么它不会被 collector
+/// 覆盖率 3169/3210。见 `Summary.lyricsUpdatedAt` 的头注(含"为什么它不会被引擎
 /// 每次启动重写冲掉"这个关键前提)。
 private enum LyricsSortOption: String, CaseIterable, Identifiable {
     case defaultOrder = "默认排序"
@@ -185,7 +185,7 @@ extension EnrichCacheStore.Summary {
 
 // 歌手筛选下拉按"主歌手"合并——同一位歌手的合唱曲目(如"宇多田ヒカル & Skrillex")
 // 不应该在下拉里单独占一行,应该并进"宇多田ヒカル"那一项里;选中某位歌手后,连同他/她
-// 参与的合唱曲目也一起展示出来,不是只看完全同名的条目。分隔符跟 collector/match.go 的
+// 参与的合唱曲目也一起展示出来,不是只看完全同名的条目。分隔符跟 lyrimuse-engine/match.go 的
 // artistCreditParts 用同一套(/、&,，),取分割后的第一段作为归并键,大小写/首尾空白
 // 不影响判定,但下拉里展示、真正拿去比较分组的是原始未分割的 artist 全文里截出来的
 // 第一段(保留原始大小写/写法,不额外转小写)。
@@ -196,7 +196,7 @@ func primaryArtist(_ full: String) -> String {
 }
 
 // 繁体折成简体,只用来算"是不是同一个人/同一张专辑"的归并键,不改动任何展示文案——
-// 跟 collector 那边 match.go/t2s.go 的 toSimplified 是同一个目的,但这边是 Swift 代码,
+// 跟引擎那边 match.go/t2s.go 的 toSimplified 是同一个目的,但这边是 Swift 代码,
 // 没有引入 gocc 那类第三方库,直接用 Foundation/ICU 内置的 "Traditional-Simplified"
 // transform 就能做,不需要额外依赖(例如:"100種生活"/"100种生活" 这类
 // 繁简差一个字的专辑名,之前的归并键只转小写、不管繁简,被当成两张不同专辑,在筛选下拉
@@ -239,32 +239,32 @@ func sourceColor(_ source: String) -> Color {
     case "lrclib": return .purple
     case "amll": return .orange
     // LyricFind(加,检索走 YouTube Music 但只在数据真是 LyricFind 时才
-    // 接受候选,见 collector/ytmusic.go 头注)。红色已经被网易云占了,选粉色作为下一个
+    // 接受候选,见 lyrimuse-engine/ytmusic.go 头注)。红色已经被网易云占了,选粉色作为下一个
     // 未占用色。
     case "lyricfind": return .pink
-    // 酷我音乐(加,见 collector/kuwo.go 头注)。红/绿/蓝/紫/橙/粉都被占了,
+    // 酷我音乐(加,见 lyrimuse-engine/kuwo.go 头注)。红/绿/蓝/紫/橙/粉都被占了,
     // 选棕色作为下一个未占用色。
     case "kuwo": return .brown
-    // 咪咕音乐(加,见 collector/migu.go 头注)。红/绿/青/靛/紫/橙/粉/棕都被占了,
+    // 咪咕音乐(加,见 lyrimuse-engine/migu.go 头注)。红/绿/青/靛/紫/橙/粉/棕都被占了,
     // 选薄荷绿作为下一个未占用色。
     case "migu": return .mint
-    // Deezer(加,见 collector/deezer.go 头注)。红/绿/青/靛/紫/橙/粉/棕/薄荷
+    // Deezer(加,见 lyrimuse-engine/deezer.go 头注)。红/绿/青/靛/紫/橙/粉/棕/薄荷
     // 都被占了,选蓝绿(teal)作为下一个未占用色。
     case "deezer": return .teal
-    // Apple Music(加,见 collector/applemusic.go 头注)。红/绿/青/靛/紫/橙/粉/
+    // Apple Music(加,见 lyrimuse-engine/applemusic.go 头注)。红/绿/青/靛/紫/橙/粉/
     // 棕/薄荷/蓝绿都被占了,选蓝色作为下一个未占用色(品牌色那系的红/粉早被网易云和
     // LyricFind 占了,不硬凑)。
     case "applemusic": return .blue
-    // 汽水音乐(见 collector/soda.go 头注)。品牌色是青绿一系,可 .teal / .cyan / .mint 都被占了(.cyan 是酷狗),
+    // 汽水音乐(见 lyrimuse-engine/soda.go 头注)。品牌色是青绿一系,可 .teal / .cyan / .mint 都被占了(.cyan 是酷狗),
     // 系统色里没有空位,取黄绿之间那段没人用的色相。
     case "soda": return Color(hue: 0.25, saturation: 0.7, brightness: 0.72)
-    // KKBOX 本地歌词(不是歌词源:用 KKBOX 放歌时读它自己缓存里的那份,见 collector/kkboxlyrics.go 头注)。
+    // KKBOX 本地歌词(不是歌词源:用 KKBOX 放歌时读它自己缓存里的那份,见 lyrimuse-engine/kkboxlyrics.go 头注)。
     // 品牌色是青蓝一系,.cyan / .teal / .blue 都被占了,取最后一个未占用色 .yellow。
     case "kkbox": return .yellow
-    // Spotify 本地歌词(不是歌词源:Spotify 自己拉过的那份,多是 Musixmatch 供词,见 collector/spotifylyrics.go)。
+    // Spotify 本地歌词(不是歌词源:Spotify 自己拉过的那份,多是 Musixmatch 供词,见 lyrimuse-engine/spotifylyrics.go)。
     // 系统色都被占了,品牌绿跟 QQ 音乐的 .green 分不开,用 .gray。
     case "spotify": return .gray
-    // Amazon Music 本地歌词(不是歌词源:用它放歌时读它自己缓存里的那份,见 collector/amazonlibrary.go)。
+    // Amazon Music 本地歌词(不是歌词源:用它放歌时读它自己缓存里的那份,见 lyrimuse-engine/amazonlibrary.go)。
     // 品牌青色跟酷狗的 .cyan 分不开,系统色也没有空位,取偏蓝的浅天蓝。
     case "amazon": return Color(hue: 0.56, saturation: 0.55, brightness: 0.95)
     default: return .secondary
@@ -286,7 +286,7 @@ func sourceDisplayName(_ source: String) -> String {
     case "amll": return "AMLL"
     // LyricFind——国际品牌名,没有约定俗成的中文译名,同上保留原名。
     // 检索机制上走的是 YouTube Music,但候选过滤只留真正的 LyricFind 数据(见
-    // collector/ytmusic.go 头注),所以展示名如实叫 LyricFind、不叫 YouTube Music。
+    // lyrimuse-engine/ytmusic.go 头注),所以展示名如实叫 LyricFind、不叫 YouTube Music。
     case "lyricfind": return "LyricFind"
     // 酷我音乐——国内用户认得出的中文写法,同网易云/QQ/酷狗。
     case "kuwo": return L10n.t("酷我音乐")
@@ -295,10 +295,10 @@ func sourceDisplayName(_ source: String) -> String {
     // Deezer——国际品牌名,没有约定俗成的中文译名,同 LyricFind/Musixmatch
     // 保留原名。它跟 lyricfind 数据同源(都是 LyricFind 供词),但**展示成两个源**是对的:
     // 用户看到的是"哪条管道给出了这份候选",两条管道的接口与可用性都不一样(实测这台机器上
-    // lyricfind 整源不可用、deezer 正常出词),见 collector/deezer.go。
+    // lyricfind 整源不可用、deezer 正常出词),见 lyrimuse-engine/deezer.go。
     case "deezer": return "Deezer"
     // Apple Music——官方中文名就是「Apple Music」,Apple 自己在简中界面里
-    // 也不译,保留原名。它是全部源里唯一给**官方逐字**时间轴的一家(见 collector/applemusic.go)。
+    // 也不译,保留原名。它是全部源里唯一给**官方逐字**时间轴的一家(见 lyrimuse-engine/applemusic.go)。
     case "applemusic": return "Apple Music"
     // 汽水音乐——官方中文名,跟网易云/QQ/酷狗同一档写法。
     case "soda": return L10n.t("汽水音乐")
@@ -319,7 +319,7 @@ func sourceDisplayName(_ source: String) -> String {
 // 同一个词重复一遍、那个槽位是空着的。
 //
 // lyricfind 是唯一一个"展示名 ≠ 检索对象"的源:数据是 LyricFind 的(候选过滤只留真正的
-// LyricFind 数据,见 collector/ytmusic.go 头注),但取数走的是 YouTube Music 这条管道。
+// LyricFind 数据,见 lyrimuse-engine/ytmusic.go 头注),但取数走的是 YouTube Music 这条管道。
 // 界面上这两个名字此前是分开出现的——平时的展示名按**数据来源**叫 LyricFind,出事时的失败
 // 文案按**管道**叫 "YouTube Music 在这个网络所在地区不可用"(LyricSourceFailureReason.swift)——
 // 这个分工本身是对的(平时关心拿到谁的词,出事关心该动哪条链路),但两个名字之间的关系
@@ -528,10 +528,10 @@ private struct LyricsManagerWindowCapture: NSViewRepresentable {
     }
 }
 
-// 歌词管理窗口:浏览目前 collector 缓存了哪些歌的歌词、来源是什么,支持手动纠正内容、
+// 歌词管理窗口:浏览目前引擎缓存了哪些歌的歌词、来源是什么,支持手动纠正内容、
 // 联网重新搜索候选歌词(见 LyricsSearchSheet/LyricsSearchService)、
 // 或整条删除(强制下次播放重新解析)。改动通过 EnrichCacheStore 落盘+踢一脚重启
-// collector 生效(见该文件顶部注释,解释为什么必须这么做而不是直接改内存)。
+// 引擎生效(见该文件顶部注释,解释为什么必须这么做而不是直接改内存)。
 struct LyricsManagerView: View {
     @ObservedObject private var store = EnrichCacheStore.shared
     // 窗口位置/尺寸/所在屏幕的持久化,见 LyricsManagerWindowFramePersistence 类头注。
@@ -623,7 +623,7 @@ struct LyricsManagerView: View {
 
     // MARK: - 「重新自动匹配」
     //
-    // 跟隔壁「联网搜索候选歌词」的区别:那个是把候选摆出来让人挑,这个是**请 collector 对这一首跑一轮重评**
+    // 跟隔壁「联网搜索候选歌词」的区别:那个是把候选摆出来让人挑,这个是**请引擎对这一首跑一轮重评**
     // (LyricsRematch):冠军按设置里的「匹配算法」选,换不换、写哪些字段跟后台重评是同一个函数,这里只发请求、
     // 报进度、按结论说一句话。
     //
@@ -676,16 +676,16 @@ struct LyricsManagerView: View {
     @State private var manualOnly = false
     @State private var missingLyricsOnly = false
     @State private var instrumentalOnly = false
-    // collector 侧「补空扫描」的进度快照(LyricsFillSweep,进度文件按 mtime 读),由列表那个
-    // 轮询 .task 刷新;nil = 这个 collector 进程还没跑过任何一轮。工具栏「补搜歌词」按钮和
+    // 引擎侧「补空扫描」的进度快照(LyricsFillSweep,进度文件按 mtime 读),由列表那个
+    // 轮询 .task 刷新;nil = 这个引擎进程还没跑过任何一轮。工具栏「补搜歌词」按钮和
     // 多选面板的「重试选中的…」都按它判"正在跑"来置灰/显示进度。
     @State private var fillSweepStatus: LyricsFillSweep.Info?
-    // 点了补搜、collector 还没接手的那几秒(LyricsFillSweep.isPending):按钮置灰、工具栏先转起来,
+    // 点了补搜、引擎还没接手的那几秒(LyricsFillSweep.isPending):按钮置灰、工具栏先转起来,
     // 免得用户以为没点上再点一次。由点击处置 true,轮询按 isPending 清掉。
     @State private var fillSweepPending = false
     /// 点下去的是不是「全量重新扫库」:接手前那几秒按钮上说哪一句。
     @State private var fillSweepPendingIsFull = false
-    /// collector 公布的全量扫库状态(打分版本号、有没有一轮没跑完);nil = collector 还没起来过或版本太老,
+    /// 引擎公布的全量扫库状态(打分版本号、有没有一轮没跑完);nil = 引擎还没起来过或版本太老,
     /// 那时「全量重新扫库」入口不出现(同设置页那一行)。跟补搜进度同一个轮询节拍读,开销是一次 stat。
     @State private var fullScanState: LyricsFullScan.State?
     @State private var confirmFullScan = false
@@ -724,7 +724,7 @@ struct LyricsManagerView: View {
     // 当前选中项抢走这种误伤。
     @State private var pendingAutoFocus = true
 
-    /// "这首歌正在联网搜歌词、collector 还没写出任何结论"这段窗口期的占位行(
+    /// "这首歌正在联网搜歌词、引擎还没写出任何结论"这段窗口期的占位行(
     /// 现象是"首次搜索期间歌词管理完全看不到这条记录")。nil = 当前没有需要补的占位——
     /// 可能是没在播、也可能是缓存里已经有真实条目了。见 `refreshPlaceholder()`。
     @State private var placeholderSummary: EnrichCacheStore.Summary?
@@ -1497,7 +1497,7 @@ struct LyricsManagerView: View {
 
                     // store.lastError 原来只在右侧详情页里渲染(见 detailView)——批量删完
                     // selectedKeys 清空、右侧变回空占位,「写入本地记录文件失败」和「重启
-                    // collector 失败」两条就都没有宿主视图了。后者尤其要命:collector 没重启
+                    // 引擎失败」两条就都没有宿主视图了。后者尤其要命:引擎没重启
                     // 成功时它内存里还持有整份旧缓存,下次它自己存盘就会把刚删的条目整体写回
                     // 磁盘(见 EnrichCacheStore 顶部注释),用户看到的是"删了一批、过一会儿又
                     // 全回来了",而全程零提示。这条横幅挂在列表下面,跟选中状态无关、永远在。
@@ -1712,7 +1712,7 @@ struct LyricsManagerView: View {
                     guard !isEditorDirty, selectedKeys.count <= 1 else { return }
                     focusCurrentlyPlaying(scrollProxy: scrollProxy)
                 }
-                // 窗口开着期间 collector 一直在写缓存:占位行等它写完才能「顶替」成真实条目,补空扫描每条
+                // 窗口开着期间引擎一直在写缓存:占位行等它写完才能「顶替」成真实条目,补空扫描每条
                 // 搜完都会改文件,平时也会给已有的歌补译文、加新歌。换歌 / reload 都不会在这些时刻自动
                 // 发生,得有个人主动再问一次磁盘。占位行在等、或扫描刚补出一首 / 一轮开始或结束时每拍都问,
                 // 其余时候放慢到 LyricsManagerRefresh.idleInterval 一次;reload(onlyIfChanged: true) 在文件没变时
@@ -1727,7 +1727,7 @@ struct LyricsManagerView: View {
                     refreshPlaceholder()
                     while !Task.isCancelled {
                         // 扫描跑着时 2 秒一次(进度文件每条都推进,工具栏那颗按钮要跟着动),刚点了补搜、
-                        // 等 collector 接手那几秒 1 秒一次,没在跑就 5 秒。
+                        // 等引擎接手那几秒 1 秒一次,没在跑就 5 秒。
                         let interval: Double = fillSweepPending ? 1 : (fillSweepStatus?.running == true ? 2 : 5)
                         try? await Task.sleep(for: .seconds(interval))
                         guard !Task.isCancelled else { continue }
@@ -1759,7 +1759,7 @@ struct LyricsManagerView: View {
                 } else if let placeholder = placeholderSummary, singleSelectedKey == placeholder.key {
                     // 占位行没有对应的 raw 条目,不能走 detailView 那整套编辑/删除/重新自动匹配——
                     // 那些操作全部直接读写 raw[key],喂一个不存在的 key 进去没有意义。给一个
-                    // 干净的只读说明就够了,等 collector 写完缓存,下一次 reload 会让这一行自然
+                    // 干净的只读说明就够了,等引擎写完缓存,下一次 reload 会让这一行自然
                     // 变成真的一行,到时候点开就是正常的 detailView。
                     placeholderDetailView(placeholder)
                 } else if selectedKeys.count > 1 {
@@ -1867,7 +1867,7 @@ struct LyricsManagerView: View {
         }
         // 切回 App 时重新读一次盘。
         //
-        // 列表是**开窗那一刻的快照**,而 collector 在窗口开着期间会持续往同一个文件写:新歌
+        // 列表是**开窗那一刻的快照**,而引擎在窗口开着期间会持续往同一个文件写:新歌
         // 是新增条目,给已有歌补机翻译文/逐字时间轴则是原地更新。不刷新的话,一首刚补上译文
         // 的歌在列表里始终不亮绿色的译文标记,而歌词本身在悬浮窗里是正常显示的
         // (那条路径读的是实时数据)。
@@ -1903,9 +1903,9 @@ struct LyricsManagerView: View {
     private func refreshWithFeedback() {
         Task {
             await store.reload()
-            // 占位行跟着磁盘核对一次:collector 刚写完那首的话,不刷新会跟真实行在列表里各占一行。
+            // 占位行跟着磁盘核对一次:引擎刚写完那首的话,不刷新会跟真实行在列表里各占一行。
             refreshPlaceholder()
-            // 重新读盘之后缓存内容可能已经变了(collector 自己写过、或别处删过),选中集合里
+            // 重新读盘之后缓存内容可能已经变了(引擎自己写过、或别处删过),选中集合里
             // 可能残留已经不存在的 key——跟筛选变化那条 onChange 同一个道理,收敛一次。占位行不在 summaries 里,
             // 还在的话别把它的选中收掉。
             var valid = Set(store.summaries.map(\.key))
@@ -1981,7 +1981,7 @@ struct LyricsManagerView: View {
         let noResponder = noLyrics.filter(\.lastRoundHadNoResponder).count
         let indexed = noLyrics.filter { !$0.lastRoundHadNoResponder && $0.knownOnSources }.count
         let missing = noLyrics.count - indexed - noResponder
-        // 「重试选中的无歌词条目」喂给 collector 的 key,口径见 EnrichCacheStore.isFillSweepRetryable。
+        // 「重试选中的无歌词条目」喂给引擎的 key,口径见 EnrichCacheStore.isFillSweepRetryable。
         let retryable = picked.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
         return VStack(spacing: 14) {
             Image(systemName: "checklist")
@@ -2016,7 +2016,7 @@ struct LyricsManagerView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            // 多选的另一条动线:筛出「仅无歌词」→ 全选 → 让 collector 现在就把这批
+            // 多选的另一条动线:筛出「仅无歌词」→ 全选 → 让引擎现在就把这批
             // 重搜一遍,不用等每首歌各自再被播到。走 LyricsFillSweep 请求文件,进度在工具栏那颗
             // 「补搜歌词」上显示。一次只允许一轮在跑,跑着的时候置灰。
             if !retryable.isEmpty {
@@ -2043,8 +2043,8 @@ struct LyricsManagerView: View {
         .padding(24)
     }
 
-    /// 工具栏「补搜歌词」:让 collector 现在就把没歌词的存量条目重搜一遍,不用等
-    /// 每首歌各自再被播到(补空路径设计上只在重播时触发,见 collector/lyricsfillsweep.go 头注)。
+    /// 工具栏「补搜歌词」:让引擎现在就把没歌词的存量条目重搜一遍,不用等
+    /// 每首歌各自再被播到(补空路径设计上只在重播时触发,见 lyrimuse-engine/lyricsfillsweep.go 头注)。
     /// 两个入口:全库、或当前筛选出来的那批(只在筛选真的缩小了范围时才出现,免得两个数字一样
     /// 的按钮并排)。跑着的时候**图标本身**换成一个确定进度的圆环 + 「3/82」——macOS 工具栏
     /// 对 Label 只画图标、把标题整个丢掉(隔壁「占用」那颗的注释记着同一件事),进度
@@ -2060,7 +2060,7 @@ struct LyricsManagerView: View {
             // 各一两行灰字(Time Machine 那种「最近备份：…」),规则说明放进悬停提示和确认框,不占菜单行。
             if let status, running {
                 // 这一轮**不一定**是补空重试:「全量重新扫库」复用同一条通道(状态文件、
-                // 单轮互斥、取消都共用,见 collector/lyricsfullscan.go 头注),所以文案都得
+                // 单轮互斥、取消都共用,见 lyrimuse-engine/lyricsfullscan.go 头注),所以文案都得
                 // 按 isFullScan 分流 —— 全量跑着的时候说「停止补搜」「正在补搜」,说的跟做的就不是一回事。
                 let isFull = status.isFullScan
                 // 顶上是此刻在做什么(标题)+ 进度与结果分布 + 大约还要多久;文字跟设置页那两行的进度详情共用
@@ -2094,7 +2094,7 @@ struct LyricsManagerView: View {
             } else {
                 // 窄档:只搜没词的。数量写进动作里(「补搜 165 首缺失的歌词」),不另起标题 —— 工具栏按钮
                 // 本身就叫「补搜歌词」。筛选那一项只在筛选真的缩小了范围时出现,免得两个数字一样的项并排。
-                // 规则(逐首、间隔、跳过哪些)放悬停提示;这里点出来的是手动那一轮,间隔是 collector 的
+                // 规则(逐首、间隔、跳过哪些)放悬停提示;这里点出来的是手动那一轮,间隔是引擎的
                 // lyricsManualSweepGap,改那边记得改提示。
                 Section {
                     Button {
@@ -2118,7 +2118,7 @@ struct LyricsManagerView: View {
                     }
                 }
                 // 宽档:连已有歌词的也重新选一遍(设置页「歌词库」那一行的同一个入口)。弹确认框,所以带「…」;
-                // 范围说明、待扫首数和预计时长都在确认框里。collector 还没数过待扫首数时不给这个入口(同设置页那一行)。
+                // 范围说明、待扫首数和预计时长都在确认框里。引擎还没数过待扫首数时不给这个入口(同设置页那一行)。
                 if fullScanState?.pending != nil {
                     Section {
                         Button {
@@ -2165,7 +2165,7 @@ struct LyricsManagerView: View {
                     format: status.isFullScan ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("补搜中 %1$@/%2$@"),
                     "\(status.done)", "\(status.total)"))
             } else if fillSweepPending {
-                // 点了、collector 还没接手:先转起来,别让人以为没点上。
+                // 点了、引擎还没接手:先转起来,别让人以为没点上。
                 HStack(spacing: 4) {
                     ProgressView()
                         .controlSize(.small)
@@ -2186,12 +2186,12 @@ struct LyricsManagerView: View {
               : L10n.t("立即联网补搜缺失的歌词，不必等歌曲再次播放"))
     }
 
-    /// 全量扫库还没跑完一首时估剩余时长用的每首秒数(collector 发布的值,没有时是设置页同一个兜底)。
+    /// 全量扫库还没跑完一首时估剩余时长用的每首秒数(引擎发布的值,没有时是设置页同一个兜底)。
     private var fullScanFallbackSecondsPerTrack: Double {
         LyricsLibraryStatsPanel.fullScanSecondsPerTrack(fullScanState)
     }
 
-    /// 「全量重新扫库？」确认框正文。首数是 collector 数好发布的(`LyricsFullScan.State.pending`)。
+    /// 「全量重新扫库？」确认框正文。首数是引擎数好发布的(`LyricsFullScan.State.pending`)。
     private var fullScanConfirmMessage: String {
         guard let state = fullScanState else { return "" }
         return LyricsLibraryStatsPanel.fullScanConfirmMessage(
@@ -2223,14 +2223,14 @@ struct LyricsManagerView: View {
     }
 
     // 补/收「正在搜索歌词」占位行。根因是这个列表的数据源(EnrichCacheStore.summaries)
-    // 完全来自 collector 写的缓存文件——collector 联网搜索期间什么都不往文件里写(只保留
-    // "搜到结果"的那次落盘,见 collector/enrich.go 的守卫),所以搜索还没出结论这段窗口期,
+    // 完全来自引擎写的缓存文件——引擎联网搜索期间什么都不往文件里写(只保留
+    // "搜到结果"的那次落盘,见 lyrimuse-engine/enrich.go 的守卫),所以搜索还没出结论这段窗口期,
     // 这首歌在缓存文件里压根不存在,不是"存在但没显示"。
     //
     // 修法是在 Swift 侧合成一条**不落盘、不进 raw**的临时行,只在这个视图内部存在,展示层
     // 尽量复用现有的 Summary/筛选/排序管线(而不是另起一套"占位行专用渲染"),这样它天然
     // 能被搜索框/筛选/排序接住,也天然会被"回到当前播放"定位到——见下面几处对
-    // `placeholderSummary` 的接线点。**不**在 collector 侧提前写占位:那会把"只保留有结果
+    // `placeholderSummary` 的接线点。**不**在引擎侧提前写占位:那会把"只保留有结果
     // 的解析"这条数据完整性设计复杂化,还要处理"占位条目 vs 真实条目"两套生命周期同时存在
     // 于同一份持久化文件里的一致性问题,风险明显更高,收益(仅仅是省下这个 Swift 侧的合成
     // 步骤)配不上。
@@ -2242,7 +2242,7 @@ struct LyricsManagerView: View {
         }
         let key = EnrichCacheKeys.normalizedKey(
             artist: playback.artist, title: playback.title, album: playback.album)
-        // 缓存里已经有真实条目了(collector 搜完了,不管搜到没搜到)——占位行让位,
+        // 缓存里已经有真实条目了(引擎搜完了,不管搜到没搜到)——占位行让位,
         // 真实那一行会随下一次 summaries 重建自然出现在列表里。
         guard !store.hasEntry(forKey: key) else {
             if placeholderSummary?.key == key { placeholderSummary = nil }
@@ -2292,7 +2292,7 @@ struct LyricsManagerView: View {
     // 选中并滚动到当前正在播放的这首歌(如果它已经被缓存过)——开窗时自动跑一次
     // (见 pendingAutoFocus),工具栏"回到当前播放"按钮手动跑。key 跟
     // EnrichCacheStore.splitKey 用的是同一套 "歌手|歌名|专辑" 拼法,PlaybackCoordinator
-    // 转发的 artist/title/album 本来就来自 media-control/relay,跟 collector 当初写入
+    // 转发的 artist/title/album 本来就来自 media-control/relay,跟引擎当初写入
     // 缓存时用的是同一份数据,能精确对上。找不到对应缓存条目时静默不做任何事,不弹提示——
     // 开窗自动定位场景本来就不该弹,手动点按钮那次真找不到时用户自己也看得出列表没跳。
     //
@@ -2304,7 +2304,7 @@ struct LyricsManagerView: View {
     private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, animated: Bool = true) {
         let playback = PlaybackCoordinator.shared
         // key 必须走 EnrichCacheKeys.normalizedKey —— 那是缓存 key 在 Swift 侧的**唯一
-        // 构造点**(逐字节镜像 collector 的 enrichKey)。手拼 "artist|title|album" 会漏掉
+        // 构造点**(逐字节镜像引擎的 enrichKey)。手拼 "artist|title|album" 会漏掉
         // 两道清洗:cleanTag(各类空格/零宽字符)和 normalizedTitle(循环剥结尾括号里的副题)。
         //
         // Apple Music 报的是「Dynasties and Dystopia (from the series Arcane League of
@@ -2321,7 +2321,7 @@ struct LyricsManagerView: View {
         //
         // 缓存里的 key 是**当初写进去那一刻**播放器报的原样,而播放器报的大小写/空格
         // 会漂(如 `Prince` 可能今天报成 `PRINCE`)。精确比较落空,而且这个函数**找不到就
-        // 静默返回**,看起来就像这首歌根本没被缓存过——悬浮窗和 collector 都有同一道兜底,
+        // 静默返回**,看起来就像这首歌根本没被缓存过——悬浮窗和引擎都有同一道兜底,
         // 这里缺了只影响歌词管理这一处。
         let candidates = normalizedKey == rawKey ? [normalizedKey] : [normalizedKey, rawKey]
         let key: String
@@ -2372,7 +2372,7 @@ struct LyricsManagerView: View {
     }
 
     // 「正在搜索」占位行的详情——只读,不带任何编辑/删除/重新自动匹配按钮:这些操作全部
-    // 直接读写 raw[key],喂一个不存在的 key 进去没有意义。等 collector 写完缓存、下一次
+    // 直接读写 raw[key],喂一个不存在的 key 进去没有意义。等引擎写完缓存、下一次
     // reload 把这一行换成真实条目之后,点开就是正常的 detailView,不需要用户做任何事。
     //
     // 「停止搜索」按钮:这段等待没有上限(见 cancelPlaceholderSearch 的注释),没有这颗
@@ -2393,19 +2393,19 @@ struct LyricsManagerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// 通知 collector"别再等这首歌的搜索结果了"。
+    /// 通知引擎"别再等这首歌的搜索结果了"。
     ///
     /// "搜索歌词中…"的等待**没有总上限**——
     /// `resolveTrackEnrichment` 内部歌词那一步有 20s 兜底,但整个函数(还跟着
     /// MusicBrainz/Apple Music/QQ 兜底封面这几步顺序网络请求)没有总超时,某一步卡住时
     /// 占位行会一直挂着,用户没有任何退出方式。
     ///
-    /// 机制:写一个纯文本文件到 collector 的配置目录,里面就是这首歌的缓存 key——collector
+    /// 机制:写一个纯文本文件到引擎的配置目录,里面就是这首歌的缓存 key——引擎
     /// 有一个专门的后台 ticker(见 enrichcancel.go)按固定间隔检查这个文件,读到 key 就去
     /// `context.CancelFunc` 登记表里找,找到就调用,真正让还在飞的网络请求中断(不是"隔着
     /// 进程装个样子")。检查间隔意味着**不是瞬时生效**,但比完全没有退出方式好得多。
     ///
-    /// App 侧不主动清空占位行,等 collector 真正写完再让位:collector 现在的取消分支
+    /// App 侧不主动清空占位行,等引擎真正写完再让位:引擎现在的取消分支
     /// (`resolveEnrichAsync` 里 `ctx.Err() != nil` 那支)不再是"什么都不写",而是跟"自然
     /// 查无"走同一条落盘路径,把这一轮标记成"暂无歌词"永久写回缓存(要求:点了停止搜索,
     /// 记录不该直接消失,应该保留、标成无歌词,灵动岛/悬浮歌词也
@@ -2413,11 +2413,11 @@ struct LyricsManagerView: View {
     /// `placeholderSummary` 清空——那样只会让这一行凭空消失,而下面 `.task` 里那个 5 秒
     /// 轮询是靠 `placeholderSummary != nil` 才会继续去问磁盘的(见那段注释),清空之后反而
     /// 没人再检查,除非用户碰巧做了别的触发 reload 的操作(换歌/重开窗口)。写完取消信号
-    /// 什么都不做就够了:collector 落盘之后,现成的 5 秒轮询会自然探测到
+    /// 什么都不做就够了:引擎落盘之后,现成的 5 秒轮询会自然探测到
     /// `store.hasEntry(forKey:)` 变 true,`refreshPlaceholder()` 里已有的"真实条目出现就
     /// 让位"逻辑会把这一行接手过去,变成一条正常的、标着"无歌词"的记录——不需要在这里
     /// 加任何新状态。灵动岛/桌面悬浮歌词走的是完全独立的一套刷新节奏(`LocalPlaybackSource`
-    /// 的 2 秒轮询,靠 enrich 缓存文件 mtime 变化触发重读),不依赖这个窗口开不开,collector
+    /// 的 2 秒轮询,靠 enrich 缓存文件 mtime 变化触发重读),不依赖这个窗口开不开,引擎
     /// 落盘之后它们会各自在下一拍自动从"搜索歌词中…"切到"暂无歌词",不需要额外接线。
     private func cancelPlaceholderSearch() {
         guard let key = placeholderSummary?.key else { return }
@@ -2493,7 +2493,7 @@ struct LyricsManagerView: View {
             .padding(20)
         }
         .onAppear { loadDetail(key: key) }
-        // collector 期间改了这首(补了机翻、重新打分换了词、别处采纳了候选):用户没动过编辑框就跟着换成盘上的新内容,
+        // 引擎期间改了这首(补了机翻、重新打分换了词、别处采纳了候选):用户没动过编辑框就跟着换成盘上的新内容,
         // 免得看着旧的、存的时候又拿旧的比。动过就不碰,保存时再按格合并(见保存按钮)。
         // 正文读不回来的那首不跟:每次重读都要在主线程上把整份主缓存再解一遍去碰运气,重新选中它再试。
         .onChange(of: store.summariesGeneration) { _, _ in
@@ -2502,7 +2502,7 @@ struct LyricsManagerView: View {
         .onChange(of: key) { _, newKey in
             store.dismissEditError()
             loadDetail(key: newKey)
-            // 换歌就把上一首的进行中/结果状态收掉,并叫 collector 停掉那一轮(它的结果已经没人要了)。
+            // 换歌就把上一首的进行中/结果状态收掉,并叫引擎停掉那一轮(它的结果已经没人要了)。
             // rematchGeneration 换代顺带让在飞的那一轮的轮询和收尾全部失效。
             if rematchRunningKey != nil {
                 rematchGeneration += 1
@@ -2515,7 +2515,7 @@ struct LyricsManagerView: View {
             // 按钮只在 hasDecision 时出现;完整结构懒解码 —— 只在打开弹窗这一刻按 key
             // 解(原来 rebuild 时全量急算,见 Summary.hasDecision 注释)。
             // 两槽都解:latest=最近一次评估,applied=当前歌词的出处(分槽语义见
-            // collector/decision.go;老条目只有前者,弹窗 init 里自己退化)。
+            // lyrimuse-engine/decision.go;老条目只有前者,弹窗 init 里自己退化)。
             let latest = store.decodedDecision(for: key)
             let applied = store.decodedAppliedDecision(for: key)
             if latest != nil || applied != nil {
@@ -2555,7 +2555,7 @@ struct LyricsManagerView: View {
                 // 而**两种状态都不写** lyrics_source_choice(空串 = 显式清掉)。
                 //
                 // 这里曾有第三态:开关关着时记下"选了哪个源",自愈路径照常跑
-                // 但被约束在该源内(collector 侧 pickLyricCandidatePreferring)。当时的想法
+                // 但被约束在该源内(引擎侧 pickLyricCandidatePreferring)。当时的想法
                 // 是把"我手改过正文"和"我不同意这次选源"拆成强弱两级约束。
                 //
                 // 用户看到设置里写出来的说明后当场否掉了这个中间态:他要的
@@ -2581,7 +2581,7 @@ struct LyricsManagerView: View {
                 // 偏移值"。按盘上刚落下的那份重载(不再算未保存);这期间切到了别的歌就不动。
                 if editingKey == key { loadDetail(key: key) }
                 // 补上——采纳候选之前点了就直接关闭弹窗,真正的保存+重启
-                // collector 在后台异步跑,用户看不到任何进度,失败时只能在下面
+                // 引擎在后台异步跑,用户看不到任何进度,失败时只能在下面
                 // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
                 // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
                 // 叠加两套反馈互相矛盾)。
@@ -2654,16 +2654,16 @@ struct LyricsManagerView: View {
                     showDecisionSheet = true
                 }
             }
-            // 「重新自动匹配」——请 collector 按自动解析那套规则重跑一轮、直接采用算法选出的那一份。
+            // 「重新自动匹配」——请引擎按自动解析那套规则重跑一轮、直接采用算法选出的那一份。
             // 文案刻意不写「智能」:「智能算法」在这个产品里是设置页「匹配算法」的一个具体
             // 档位(另一档是「顺序优先」),写上去对选了顺序优先的用户就是在说谎(真正的
-            // 冠军由 collector 按用户选的那一档算)。补搜 / 全量扫库跑着时置灰:collector 那时不接。
+            // 冠军由引擎按用户选的那一档算)。补搜 / 全量扫库跑着时置灰:引擎那时不接。
             ActionTile(icon: "wand.and.stars", title: L10n.t("重新自动匹配"),
                        help: L10n.t("重新联网跑一遍匹配，直接采用算法选出的那一份，不用自己挑；跟设置里的「匹配算法」一致"),
                        disabled: rematchRunningKey != nil || fillSweepStatus?.running == true || fillSweepPending) {
                 Task { await runRematch(key: summary.key) }
             }
-            // 自动匹配飞行途中不开这个弹窗:在弹窗里采纳的那份会让这一轮作废(collector 见到期间改过就不写),
+            // 自动匹配飞行途中不开这个弹窗:在弹窗里采纳的那份会让这一轮作废(引擎见到期间改过就不写),
             // 结论那一句跟弹窗里的回声说的不是同一件事。
             ActionTile(icon: "magnifyingglass", title: L10n.t("联网搜索候选歌词"),
                        help: L10n.t("联网搜索候选歌词"), disabled: rematchRunningKey != nil) {
@@ -2671,7 +2671,7 @@ struct LyricsManagerView: View {
             }
             // 「标为纯音乐」/「取消纯音乐标记」只对没歌词的条目出现:口白 intro、
             // 访谈、几十秒的过场,九个源里没有任何一个会替它们给出 instrumental 结论,
-            // 这个判断只有人能下。标上之后列表从红色「无歌词」变成中性「纯音乐」,collector
+            // 这个判断只有人能下。标上之后列表从红色「无歌词」变成中性「纯音乐」,引擎
             // 也不再每隔一天白搜一轮(needsLyricsFirstFill 见到这个标记直接 return)。
             // 可撤销:标错了点一下就回来,没有别的副作用(见 EnrichCacheStore.setInstrumental)。
             if !summary.hasLyrics {
@@ -2723,11 +2723,11 @@ struct LyricsManagerView: View {
             // 之所以也必须标出来,理由跟「已校准」一样:它同样是一个看不见的约束,不说清楚
             // 的话"为什么这首歌一直是这个源"查不出来。解除办法是那颗「重新自动匹配」。
             //
-            // 这枚徽章**永远不会亮**:这个字段没有写入方了,而且 collector
+            // 这枚徽章**永远不会亮**:这个字段没有写入方了,而且引擎
             // 每次启动都会把存量清空并转成 manual_pick_sha(见 manualpickmigrate.go)。
             // 留着纯粹是因为"删掉这套机制"是一次独立的清理(字段 + preferring 函数 + 单测 +
             // 详情面板和列表两枚徽章),不该混进改开关语义那次改动;留着也不产生任何行为
-            // 差异。要删就跟 collector 侧一起整套删。
+            // 差异。要删就跟引擎侧一起整套删。
             if !summary.sourceChoice.isEmpty {
                 InfoChip(icon: "pin.circle.fill",
                          text: String(format: L10n.t("来源已选定：%@"),
@@ -2735,7 +2735,7 @@ struct LyricsManagerView: View {
                          tint: .indigo)
             }
             // 「已校准」= 用户手动调过这首歌的时间轴偏移。必须显式标出来,因为它带一个
-            // **看不见的副作用**:collector 从此不再自动给这首歌重选歌词源(见
+            // **看不见的副作用**:引擎从此不再自动给这首歌重选歌词源(见
             // LyricsPinStore)。不说清楚的话,"为什么这首歌不跟着升级了"是个查不出来的状态。
             if pins.isPinned(summary.key) {
                 InfoChip(icon: "timer", text: L10n.t("已校准"), tint: .teal)
@@ -2885,7 +2885,7 @@ struct LyricsManagerView: View {
             Button {
                 Task {
                     // 用户没动的那几格交**盘上此刻**的值,不交编辑框里的:编辑框是打开这一页时载入的,这期间
-                    // collector 可能补了机翻、重新打分换了更好的词;三格原样交回去会把那些新内容盖掉(连同译文记录)。
+                    // 引擎可能补了机翻、重新打分换了更好的词;三格原样交回去会把那些新内容盖掉(连同译文记录)。
                     let disk = store.detail(for: key)
                     guard disk.complete, editingKey == key else { return }
                     let lyrics = editedLyrics != loadedLyrics ? editedLyrics : disk.lyrics
@@ -2940,7 +2940,7 @@ struct LyricsManagerView: View {
         }
     }
 
-    /// 请 collector 对这一首跑一轮「重新自动匹配」(见 LyricsRematch),等它的结论。
+    /// 请引擎对这一首跑一轮「重新自动匹配」(见 LyricsRematch),等它的结论。
     private func runRematch(key: String) async {
         rematchGeneration += 1
         let generation = rematchGeneration
@@ -3280,7 +3280,7 @@ private struct LyricsManagerRow: View {
                     Text(L10n.t("搜索歌词中…")).font(.caption2).foregroundStyle(.secondary)
                 } else if !summary.hasLyrics {
                     // 确证过的纯音乐不算"缺东西":同一格换成中性色的「纯音乐」,别用红色
-                    // 报警——它没什么要修的。判据是 collector 联网拿到的明确结论,不是猜的。
+                    // 报警——它没什么要修的。判据是引擎联网拿到的明确结论,不是猜的。
                     if summary.isInstrumental {
                         Text(L10n.t("纯音乐")).font(.caption2).foregroundStyle(.secondary)
                     } else if summary.hasPlainTextFallback {

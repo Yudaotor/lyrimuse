@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 「足迹」段的「歌手来自哪里」卡内容:每个国家或地区一行横条(占比 + 次数),下面一行是这个地区播放最多的几位。
 ///
-/// 数据是 collector 后台汇总的 `LastfmStatsService.artistRegions`(歌手榜前若干位,位数随文件给,按 MusicBrainz 登记的
+/// 数据是引擎后台汇总的 `LastfmStatsService.artistRegions`(歌手榜前若干位,位数随文件给,按 MusicBrainz 登记的
 /// 所属国家或地区加权),这里只画。范围选择器在卡头,由宿主持有(理由同 LastfmListeningHoursView)。
 struct LastfmArtistRegionsView: View {
     @ObservedObject private var stats = LastfmStatsService.shared
@@ -99,7 +99,7 @@ struct LastfmArtistRegionsView: View {
         return r.formatted(.percent.precision(.fractionLength(r >= 0.1 ? 0 : 1)).locale(L10n.locale))
     }
 
-    /// 「按前 N 位歌手统计」(N 是 collector 写进文件的位数,老文件没写就不显示这一句);日桶同步好了再补「占这段时间
+    /// 「按前 N 位歌手统计」(N 是引擎写进文件的位数,老文件没写就不显示这一句);日桶同步好了再补「占这段时间
     /// X% 的收听」(日桶按本地天算,跟 Last.fm 的滚动窗口差不到一天,只作说明用)。
     private func footnote(_ p: ArtistRegions.Period) -> String? {
         guard p.topArtists > 0 else { return nil }

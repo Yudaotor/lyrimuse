@@ -32,7 +32,7 @@ struct LyricsWindowPreviewStage: View {
     static let showsMiniStorageKey = "settings:lyricsWindowPreviewMini"
 
     /// 看的是哪个形态。存进 AppStorage 而不是 @State:切过去看迷你、下次回到这一页还在迷你,
-    /// 不用每次重选。纯 UI 偏好,不进 AppSettings(collector 不需要知道)。
+    /// 不用每次重选。纯 UI 偏好,不进 AppSettings(引擎不需要知道)。
     @AppStorage(showsMiniStorageKey) private var showsMini = false
 
     /// 画完整尺寸还是迷你尺寸(由上面那个偏好驱动,留参数是为了将来能从别处指定)。

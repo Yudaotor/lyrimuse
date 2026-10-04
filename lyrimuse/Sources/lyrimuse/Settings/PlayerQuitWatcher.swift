@@ -6,7 +6,7 @@ import LyrimuseCore
 ///
 /// - 退出经 `AppExit.request(.followedPlayerQuit)`:走正常终止流程,未保存的账号配置有机会落盘,日志
 ///   `exiting reason=followed_player_quit`。
-/// - collector 不退:它是常驻服务,也是「跟随播放器启动」的执行者 —— 播放器再打开时正是它把 Lyrimuse 拉回来。
+/// - 引擎不退:它是常驻服务,也是「跟随播放器启动」的执行者 —— 播放器再打开时正是它把 Lyrimuse 拉回来。
 /// - 宽限内任一个绑定的播放器又启动就取消(播放器崩溃自动重启 / 手动重启 / Spotify 更新后重启);到点再核一遍
 ///   进程表,不信排队那一刻的结论。
 /// - 设置 / 歌词管理 / 歌词窗口这类能成为 key 的窗口开着时先不退:用户正在用 Lyrimuse 本身,不在他手上把 App

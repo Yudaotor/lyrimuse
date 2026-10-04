@@ -1,18 +1,18 @@
 import Foundation
 
-/// App 与 collector 的「补空扫描」通道(见 collector/lyricsfillsweep.go 头注)。
+/// App 与引擎的「补空扫描」通道(见 lyrimuse-engine/lyricsfillsweep.go 头注)。
 ///
-/// 背景:collector 给空歌词条目再搜一轮的补空路径,设计上只在这首歌**再次被播放**时触发;
+/// 背景:引擎给空歌词条目再搜一轮的补空路径,设计上只在这首歌**再次被播放**时触发;
 /// 「歌词管理」里躺着的存量空条目用户不重播就永远不会动。这条通道让用户在窗口里主动要一轮:
 ///   - 请求:往 `lyrimuse-lyrics-fill-request.txt` 写一份纯文本(一行 `all` / 一行 `full` /
-///     一行 `cancel` / 每行一个缓存 key),collector 2 秒内读到就消费掉(删文件)并开一轮——
+///     一行 `cancel` / 每行一个缓存 key),引擎 2 秒内读到就消费掉(删文件)并开一轮——
 ///     形制同「停止搜索」那份 `lyrimuse-enrich-cancel-request.txt`
 ///     (LyricsManagerView.cancelPlaceholderSearch)。`full` 是「全量重新扫库」,范围比 `all`
-///     大得多,见 `LyricsFullScan` 与 collector 的 lyricsfullscan.go。
-///   - 进度:collector 把这一轮的进度写到 `lyrimuse-lyrics-fill-status.json`,这里按 mtime 读
-///     (同 CollectorStatus)。文件不存在 = 这个进程还没跑过任何一轮。
+///     大得多,见 `LyricsFullScan` 与引擎的 lyricsfullscan.go。
+///   - 进度:引擎把这一轮的进度写到 `lyrimuse-lyrics-fill-status.json`,这里按 mtime 读
+///     (同 EngineStatus)。文件不存在 = 这个进程还没跑过任何一轮。
 ///
-/// collector 没在跑时请求文件会一直留着,下次它起来先清掉(setLyricsFillPaths)——不会把
+/// 引擎没在跑时请求文件会一直留着,下次它起来先清掉(setLyricsFillPaths)——不会把
 /// 上一次进程的请求当成新请求执行。
 public enum LyricsFillSweep {
     public struct Info: Decodable, Equatable, Sendable {
@@ -20,11 +20,11 @@ public enum LyricsFillSweep {
         public let manual: Bool
         /// 这一轮是「全量重新扫库」而不是补空。
         ///
-        /// 可选而不是 `Bool`:collector 那边带 `omitempty`,补空那一轮压根不会写这个键 ——
+        /// 可选而不是 `Bool`:引擎那边带 `omitempty`,补空那一轮压根不会写这个键 ——
         /// 声明成非可选会让**所有**补空进度解码失败(整个进度条哑掉),而不是读成 false。
         public let full: Bool?
         /// 全量扫库时是**整场**的分母/分子/已更新数(跨进程重启、跨"停一下再点"累计,
-        /// 见 collector 的 lyricsFullScanProgressBase);补空那一轮就是这一轮自己的数。
+        /// 见引擎的 lyricsFullScanProgressBase);补空那一轮就是这一轮自己的数。
         public let total: Int
         public let done: Int
         public let filled: Int
@@ -32,22 +32,22 @@ public enum LyricsFillSweep {
         ///
         /// 算速度只能用它,不能用 `done`:全量的 `done` 是累计值,而 `startedAt` 是**这一轮**
         /// 开工的时刻,两者相除会得出"一开工就跑完了三千首"这种荒唐速度,「大约还要」当场变成
-        /// 「就快好了」。字段缺席(补空那一轮、以及旧版 collector)时退回 `done`,那时两者相等。
+        /// 「就快好了」。字段缺席(补空那一轮、以及旧版引擎)时退回 `done`,那时两者相等。
         public let roundDone: Int?
         public let current: String?
         public let startedAt: Int64
         public let updatedAt: Int64
         public let finishedAt: Int64?
         public let cancelled: Bool?
-        /// 跑着时 = 上一首一个歌词源都没连上、collector 正在等网络回来再搜它;停下时 = 因为一直连不上
-        /// 而停下(见 collector 的 runLyricsFillSweepKeys)。可选:collector 带 `omitempty`,旧版也不写。
+        /// 跑着时 = 上一首一个歌词源都没连上、引擎正在等网络回来再搜它;停下时 = 因为一直连不上
+        /// 而停下(见引擎的 runLyricsFillSweepKeys)。可选:引擎带 `omitempty`,旧版也不写。
         public let offline: Bool?
-        /// `done` 里轮到时已经不需要搜(被删 / 被手改 / 已有词)、没发请求的条数。可选:collector 带 `omitempty`,旧版也不写。
+        /// `done` 里轮到时已经不需要搜(被删 / 被手改 / 已有词)、没发请求的条数。可选:引擎带 `omitempty`,旧版也不写。
         public let skipped: Int?
         /// 全量扫库里「当前歌词的来源那一轮没应答、没法判断」、等整份候选跑完后再试一次的条数
-        /// (见 collector 的 runLyricsFullScanDeferredKeys)。可选:collector 带 `omitempty`,旧版也不写。
+        /// (见引擎的 runLyricsFullScanDeferredKeys)。可选:引擎带 `omitempty`,旧版也不写。
         public let deferred: Int?
-        /// 最近跑完的几条,新的在前(collector 最多留 3 条)。可选,理由同上。
+        /// 最近跑完的几条,新的在前(引擎最多留 3 条)。可选,理由同上。
         public let recent: [Recent]?
 
         /// 最近跑完的一条:缓存 key 与结果。
@@ -112,7 +112,7 @@ public enum LyricsFillSweep {
         case fillOffline(done: Int, filled: Int)
         /// 全量重新扫库整场跑完:`done` / `filled` 是整场累计的数。
         case fullDone(done: Int, filled: Int)
-        /// 全量重新扫库因为断网暂停;collector 过一会儿会自己接着跑。
+        /// 全量重新扫库因为断网暂停;引擎过一会儿会自己接着跑。
         case fullOffline
     }
 
@@ -176,7 +176,7 @@ public enum LyricsFillSweep {
         return cached
     }
 
-    /// 请求文件的内容——纯函数,selftest 覆盖(collector 侧 parseLyricsFillRequest 是它的读方)。
+    /// 请求文件的内容——纯函数,selftest 覆盖(引擎侧 parseLyricsFillRequest 是它的读方)。
     /// keys 为空 = 全部;非空 = 只这些。key 原样写,一行一个;含换行的 key 不存在
     /// (EnrichCacheKeys 由 media tag 拼成,tag 里不会有换行)。
     public static func requestBody(keys: [String]) -> String {
@@ -190,7 +190,7 @@ public enum LyricsFillSweep {
         write(requestBody(keys: keys), startsRound: true)
     }
 
-    /// 要一轮「全量重新扫库」。范围、分层与跨重启续跑全在 collector 侧(lyricsfullscan.go),
+    /// 要一轮「全量重新扫库」。范围、分层与跨重启续跑全在引擎侧(lyricsfullscan.go),
     /// 这里只负责写下那个动词 —— 候选是**跑的那一刻**现算的,App 不预先把几千个 key 列进
     /// 请求文件:那份列表在一两天的扫描期间会不断过时(歌被播到就自己升级了)。
     @discardableResult
@@ -212,16 +212,16 @@ public enum LyricsFillSweep {
         return ok
     }
 
-    // MARK: - 请求写下、collector 还没接手的那几秒
+    // MARK: - 请求写下、引擎还没接手的那几秒
 
-    /// collector 每 2 秒读一次请求文件,读到后先挑候选、再写状态文件;点下「开始」到界面上出现进度
+    /// 引擎每 2 秒读一次请求文件,读到后先挑候选、再写状态文件;点下「开始」到界面上出现进度
     /// 之间有几秒空档。这段时间按钮要置灰、给个在忙的样子,否则用户会再点一次(第二份请求被
-    /// collector 静默丢掉)。等太久(collector 没在跑)就放弃,按钮恢复可点。
+    /// 引擎静默丢掉)。等太久(引擎没在跑)就放弃,按钮恢复可点。
     public static let pendingTimeout: TimeInterval = 10
 
     nonisolated(unsafe) private static var requestedAt: Date?
 
-    /// 此刻是不是「请求写下了、collector 还没接手」。两个入口(歌词管理工具栏、设置页歌词库)共用。
+    /// 此刻是不是「请求写下了、引擎还没接手」。两个入口(歌词管理工具栏、设置页歌词库)共用。
     public static var isPending: Bool {
         lock.lock()
         let at = requestedAt
@@ -230,7 +230,7 @@ public enum LyricsFillSweep {
     }
 
     /// 判据本体,纯函数,selftest 覆盖。状态文件里出现了开工时刻不早于请求的一轮(含一条候选都没有、
-    /// 一开工就收尾的那种)就算接手了。比较按整秒:collector 写的 startedAt 是 Unix 秒。
+    /// 一开工就收尾的那种)就算接手了。比较按整秒:引擎写的 startedAt 是 Unix 秒。
     public static func isPending(requestedAt: Date?, status: Info?, now: Date) -> Bool {
         guard let requestedAt, now.timeIntervalSince(requestedAt) < pendingTimeout else { return false }
         guard let status else { return true }

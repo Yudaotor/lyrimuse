@@ -1,17 +1,17 @@
 import LyrimuseCore
 import Foundation
 
-// 缓存 key 归一化(与 collector 逐字节一致)/ 合唱 credit 归并。
+// 缓存 key 归一化(与引擎逐字节一致)/ 合唱 credit 归并。
 // 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计
 // 数不中断)。要开新的一组见 main.swift 顶部说明。
 
 @MainActor
 func runCacheKeyTests() {
-    // ---- 正文小文件(collector enrichindex.go 的 enrichBody)解码:两边字段名逐字一致 ----
+    // ---- 正文小文件(引擎 enrichindex.go 的 enrichBody)解码:两边字段名逐字一致 ----
     do {
         let json = #"{"crc":3735928559,"lyrics":"[00:01.00]hi","lyrics_tr":"[00:01.00]你好","lyrics_roma":"[00:01.00]ni hao","lyrics_yrc":"[0,100](0,100,0)hi","plain_lyrics":"hi"}"#
         let body = try? JSONDecoder().decode(EnrichCacheBody.self, from: Data(json.utf8))
-        expectEqual(body?.crc, 3735928559, "正文小文件: crc 按 UInt32 解(collector 写的是 uint32)")
+        expectEqual(body?.crc, 3735928559, "正文小文件: crc 按 UInt32 解(引擎写的是 uint32)")
         expectEqual(body?.lyricsYRC, "[0,100](0,100,0)hi", "正文小文件: lyrics_yrc")
         expectEqual(body?.lyricsTr, "[00:01.00]你好", "正文小文件: lyrics_tr")
         expectEqual(body?.lyricsRoma, "[00:01.00]ni hao", "正文小文件: lyrics_roma")
@@ -20,20 +20,20 @@ func runCacheKeyTests() {
         expectEqual(sparse?.lyricsYRC == nil && sparse?.lyrics == "x", true, "正文小文件: 空字段省略(omitempty)也能解")
     }
 
-    // ---- 「歌词管理」精简条目(EnrichCacheSlim):校验值跟 collector 逐位一致、补回 / 写回不丢正文 ----
+    // ---- 「歌词管理」精简条目(EnrichCacheSlim):校验值跟引擎逐位一致、补回 / 写回不丢正文 ----
     do {
-        // 这两个值是 collector enrichindex_test.go TestEnrichBodyCRCMatchesApp 钉住的同一组输入。
+        // 这两个值是引擎 enrichindex_test.go TestEnrichBodyCRCMatchesApp 钉住的同一组输入。
         let full: [String: Any] = ["lyrics": "[00:01.00]你好", "lyrics_tr": "[00:01.00]hello",
                                    "lyrics_roma": "[00:01.00]ni hao", "lyrics_yrc": "[1000,500](1000,500,0)你好",
                                    "plain_lyrics": "你好", "cover_url": "https://x/c.jpg", "ts": 5]
-        expectEqual(EnrichCacheSlim.bodyCRC(full), 857489496, "精简条目: 五段正文的校验值跟 collector 一致")
-        expectEqual(EnrichCacheSlim.bodyCRC(["lyrics": "[00:01.00]x"]), 2260255535, "精简条目: 只有主歌词的校验值跟 collector 一致")
+        expectEqual(EnrichCacheSlim.bodyCRC(full), 857489496, "精简条目: 五段正文的校验值跟引擎一致")
+        expectEqual(EnrichCacheSlim.bodyCRC(["lyrics": "[00:01.00]x"]), 2260255535, "精简条目: 只有主歌词的校验值跟引擎一致")
         expectEqual(EnrichCacheSlim.bodyCRC(["cover_url": "x"]), 0, "精简条目: 没有正文校验值为 0")
 
-        // 背景人声只在非空时接在五段后面算(collector 用同一组输入钉着同一个值)。
+        // 背景人声只在非空时接在五段后面算(引擎用同一组输入钉着同一个值)。
         var withBG = full
         withBG["lyrics_bg"] = "[1000,500](1600,300,0)(oh)"
-        expectEqual(EnrichCacheSlim.bodyCRC(withBG), 2392567654, "精简条目: 带背景人声的校验值跟 collector 一致")
+        expectEqual(EnrichCacheSlim.bodyCRC(withBG), 2392567654, "精简条目: 带背景人声的校验值跟引擎一致")
         let bgSlim = EnrichCacheSlim.slim(withBG)
         expectEqual(bgSlim["lyrics_bg"] == nil && EnrichCacheSlim.presentFields(bgSlim).contains(.bg), true,
                     "精简条目: 背景人声跟别的正文一样去掉,位图记下")
@@ -62,8 +62,8 @@ func runCacheKeyTests() {
         let stale = try! JSONDecoder().decode(EnrichCacheBody.self, from: Data(#"{"crc":1,"lyrics_tr":"旧"}"#.utf8))
         expectEqual(EnrichCacheSlim.hydrate(slim, body: stale) == nil, true, "精简条目: 校验值对不上不补")
 
-        // 小文件比条目新(collector 先写小文件、再写主缓存):自洽就用它,主歌词一起换;不自洽不用。
-        expectEqual(EnrichCacheSlim.isSelfConsistent(body), true, "精简条目: collector 写的小文件自洽")
+        // 小文件比条目新(引擎先写小文件、再写主缓存):自洽就用它,主歌词一起换;不自洽不用。
+        expectEqual(EnrichCacheSlim.isSelfConsistent(body), true, "精简条目: 引擎写的小文件自洽")
         expectEqual(EnrichCacheSlim.isSelfConsistent(stale), false, "精简条目: 校验值对不上内容的小文件不自洽")
         let newerJSON = #"{"crc":2260255535,"lyrics":"[00:01.00]x"}"#
         let newer = try! JSONDecoder().decode(EnrichCacheBody.self, from: Data(newerJSON.utf8))
@@ -159,9 +159,9 @@ func runCacheKeyTests() {
 
     // ---- EnrichCacheKeys: 缓存 key 与 lyrics/ 导出文件名 ----
     //
-    // 实测排查坐实的真实 bug 的回归测试:collector 会给"sanitize 出来的文件名只差
+    // 实测排查坐实的真实 bug 的回归测试:引擎会给"sanitize 出来的文件名只差
     // 大小写"的碰撞组成员改用带 crc32 后缀的文件名(lyricsexport.go:105-141),而 Swift 侧原来
-    // 一律只认普通名——删除时漏删 → collector 重启后 importLyricsFromFiles 从残留文件把条目
+    // 一律只认普通名——删除时漏删 → 引擎重启后 importLyricsFromFiles 从残留文件把条目
     // 复活(本机 852 条里 219 条命中,占 25.7%);保存修改时写出普通名 → 同一个 key 对应两组
     // 文件、导入时各写一次、生效哪份取决于 Go map 的随机遍历顺序。
     // crc32 必须跟 Go 的 hash/crc32.ChecksumIEEE 逐位一致,否则算出来的文件名对不上。
@@ -174,7 +174,7 @@ func runCacheKeyTests() {
 
         // 从本机磁盘上真实存在的两个碰撞文件反推出来的用例(同一首歌只差 feat./Feat. 一个
         // 字母大小写,两条 key 都真的在缓存里)——这两条锁死的是"Swift 算出来的文件名跟
-        // collector 实际写在磁盘上的那个一模一样"。
+        // 引擎实际写在磁盘上的那个一模一样"。
         expectEqual(
             EnrichCacheKeys.disambiguatedName(forKey: "方大同|张永成 (feat. Ghost Style)|15"),
             "方大同 - 张永成 (feat. Ghost Style) - 15~00fad0",
@@ -188,7 +188,7 @@ func runCacheKeyTests() {
     }
 
     do {
-        // "|" 换成 " - ",文件系统不安全字符转下划线,跟 collector/lyricsexport.go 的
+        // "|" 换成 " - ",文件系统不安全字符转下划线,跟 lyrimuse-engine/lyricsexport.go 的
         // sanitizeLyricsFilename 对齐。
         expectEqual(EnrichCacheKeys.sanitizeFilename("Artist|Song|Album"), "Artist - Song - Album", "EnrichCacheKeys: 「|」换成「 - 」")
         expectEqual(EnrichCacheKeys.sanitizeFilename("A/B|C:D|E*F?"), "A_B - C_D - E_F_", "EnrichCacheKeys: 不安全字符转下划线")
@@ -196,7 +196,7 @@ func runCacheKeyTests() {
     }
 
     do {
-        // 文件名字节上限。 必须跟 collector/lyricsexport.go 的 lyricsFilenameMaxBytes
+        // 文件名字节上限。 必须跟 lyrimuse-engine/lyricsexport.go 的 lyricsFilenameMaxBytes
         // 同值、同截断规则,否则删除时算出的文件名对不上 → 漏删 → 条目复活。
         expectEqual(EnrichCacheKeys.filenameMaxBytes, 200, "EnrichCacheKeys: 文件名字节上限跟 Go 侧同值")
 
@@ -243,10 +243,10 @@ func runCacheKeyTests() {
         )
     }
 
-    // ---- EnrichCacheKeys: 缓存 key 归一化,必须跟 collector 逐字节一致 ----
+    // ---- EnrichCacheKeys: 缓存 key 归一化,必须跟引擎逐字节一致 ----
     //
-    // 这组用例跟 collector/enrichkey_test.go 的 TestNormEnrichTitle 是**同一张表**。两边只要
-    // 有一处对不上,collector 按归一化 key 写盘、悬浮窗按另一种拼法查,结果不是"显示了旧歌词"
+    // 这组用例跟 lyrimuse-engine/enrichkey_test.go 的 TestNormEnrichTitle 是**同一张表**。两边只要
+    // 有一处对不上,引擎按归一化 key 写盘、悬浮窗按另一种拼法查,结果不是"显示了旧歌词"
     // 而是**整首歌查不到词**,且只在某些播放器上复现 —— 这种失败最难从现象倒推回来,所以钉死。
     do {
         let K = EnrichCacheKeys.self
@@ -263,7 +263,7 @@ func runCacheKeyTests() {
             ("instrumental 保留", "Song (Instrumental)", "Song (Instrumental)"),
             ("interlude 保留", "The Girl In Red (Interlude)", "The Girl In Red (Interlude)"),
             ("中文版本标记保留", "月亮代表我的心 (现场版)", "月亮代表我的心 (现场版)"),
-            // "慢板"/"快板"是录音版本标记,不是译名噪音,见 collector 侧
+            // "慢板"/"快板"是录音版本标记,不是译名噪音,见引擎侧
             // enrichkey.go 的 enrichKeyVersionWords 头注。
             ("慢板保留", "Secret (慢板)", "Secret (慢板)"),
             ("快板保留", "第二圆舞曲 (快板)", "第二圆舞曲 (快板)"),
@@ -289,23 +289,23 @@ func runCacheKeyTests() {
             "PRINCE|The Girl In Red (Interlude)|神經志 The Journal",
             "缓存key: 不转小写也不折繁简"
         )
-        // 幂等:迁移每次 collector 启动都会跑一遍
+        // 幂等:迁移每次引擎启动都会跑一遍
         let once = K.normalizedKey(artist: "丁世光", title: "不散的筵席（I Miss You）", album: "神經志 The Journal")
         expectEqual(once, "丁世光|不散的筵席|神經志 The Journal", "缓存key: 三段拼接")
         expectEqual(K.normalizedTitle("不散的筵席"), "不散的筵席", "缓存key: 归一化过的再算一次不变")
 
         // ---- looseKey:只用于查询兜底的宽松形态 ----
         //
-        // collector 把"其实是同一首歌"的重复条目合并成一条后,缓存里只剩最适合显示的那个写法;
+        // 引擎把"其实是同一首歌"的重复条目合并成一条后,缓存里只剩最适合显示的那个写法;
         // 播放器报的可能是另一个写法,靠这一层才查得到。 它**只能**用于兜底,绝不能拿去构造
-        // key —— 繁简这一档两侧本来就不一致(collector 用 OpenCC 词典、这边用 ICU),写进 key
+        // key —— 繁简这一档两侧本来就不一致(引擎用 OpenCC 词典、这边用 ICU),写进 key
         // 就是「悬浮窗整首歌没词」。理由完整版见 EnrichCacheKeys.looseKey 的注释。
         let loosePairs: [(String, String, String)] = [
             ("半角空格", "陶喆|Susan 说|太平盛世", "陶喆|Susan说|太平盛世"),
             ("中英之间空格", "陶喆|Sula 与 Lampa 的寓言|太平盛世", "陶喆|Sula 与 Lampa的寓言|太平盛世"),
             ("歌名繁简", "方大同|千纸鹤|回到未來", "方大同|千紙鶴|回到未來"),
             ("歌手名繁简", "孙燕姿|我懷念的|逆光", "孫燕姿|我懷念的|逆光"),
-            // ICU 对「嶽」按上下文取舍、单独出现时不转;collector 的 OpenCC 转。靠异体字表拉齐。
+            // ICU 对「嶽」按上下文取舍、单独出现时不转;引擎的 OpenCC 转。靠异体字表拉齐。
             ("ICU 不转的异体字", "张震岳|路口|OK", "張震嶽|路口|OK"),
             ("大小写", "PRINCE|Kiss|Parade", "Prince|Kiss|Parade"),
         ]
@@ -322,9 +322,9 @@ func runCacheKeyTests() {
             expectNotEqual(K.looseKey(a), K.looseKey(b), "looseKey 不同组: \(name)")
         }
 
-        // ---- 跨语言对拍:跟 collector keyparity_test.go 逐条同样的输入和期望值 ----
+        // ---- 跨语言对拍:跟引擎 keyparity_test.go 逐条同样的输入和期望值 ----
         //
-        // 宽松 key、cleanTag、歌名剥括号、手动选词指纹都要跟 Go 逐字节一致:collector 按宽松 key 复用
+        // 宽松 key、cleanTag、歌名剥括号、手动选词指纹都要跟 Go 逐字节一致:引擎按宽松 key 复用
         // 缓存时这边兜不到就是整首没词,指纹对不上就是手动锁悄悄失效。改向量必须两边一起改。
         // 一律按标量数组比:String == 按规范等价比较,兼容表意字符与统一汉字会被判成相等。
         let parityLoose: [(String, String)] = [
@@ -378,13 +378,13 @@ func runCacheKeyTests() {
             expectEqual(ManualPickLock.fingerprint(lyrics: input), sha, "跨语言对拍 fingerprint")
         }
 
-        // OpenCC 表与 collector 内嵌的那两份 .txt 逐条一致(漏跑 scripts/gen-opencc-t2s.py 会在这里红)。
-        // 解析规则同 collector t2s.go 的 loadT2SDict。
+        // OpenCC 表与引擎内嵌的那两份 .txt 逐条一致(漏跑 scripts/gen-opencc-t2s.py 会在这里红)。
+        // 解析规则同引擎 t2s.go 的 loadT2SDict。
         do {
             let dictDir = URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent().deletingLastPathComponent()
                 .deletingLastPathComponent().deletingLastPathComponent()
-                .appendingPathComponent("lyrimuse-collector/dictionary")
+                .appendingPathComponent("lyrimuse-engine/dictionary")
             func load(_ name: String) -> [[Unicode.Scalar]: [Unicode.Scalar]]? {
                 guard let text = try? String(contentsOf: dictDir.appendingPathComponent(name), encoding: .utf8) else { return nil }
                 var m: [[Unicode.Scalar]: [Unicode.Scalar]] = [:]
@@ -401,10 +401,10 @@ func runCacheKeyTests() {
             if let chars = load("TSCharacters.txt"), let phrases = load("TSPhrases.txt") {
                 var fileChars: [Unicode.Scalar: [Unicode.Scalar]] = [:]
                 for (k, v) in chars where k.count == 1 { fileChars[k[0]] = v }
-                expectEqual(fileChars == OpenCCT2S.characterEntries, true, "OpenCC 单字表与 collector 的 TSCharacters.txt 逐条一致")
-                expectEqual(phrases == OpenCCT2S.phraseEntries, true, "OpenCC 词组表与 collector 的 TSPhrases.txt 逐条一致")
+                expectEqual(fileChars == OpenCCT2S.characterEntries, true, "OpenCC 单字表与引擎的 TSCharacters.txt 逐条一致")
+                expectEqual(phrases == OpenCCT2S.phraseEntries, true, "OpenCC 词组表与引擎的 TSPhrases.txt 逐条一致")
             } else {
-                expectEqual(false, true, "OpenCC 对账: 读不到 lyrimuse-collector/dictionary 下的 TS*.txt")
+                expectEqual(false, true, "OpenCC 对账: 读不到 lyrimuse-engine/dictionary 下的 TS*.txt")
             }
         }
         // looseKey 绝不能影响 normalizedKey —— 后者是真正落盘/显示用的那个。
@@ -501,7 +501,7 @@ func runCacheKeyTests() {
         expectEqual(ArtistCredit.primary("Daniel Caesar & Mustafa"), "Daniel Caesar",
                     "合唱 credit: & 分隔取第一位")
         expectEqual(ArtistCredit.primary("陶喆、卢广仲"), "陶喆", "合唱 credit: 顿号分隔")
-        // 中文「和」跟 collector normalizeArtistCreditHanAnd 同一条判据。
+        // 中文「和」跟引擎 normalizeArtistCreditHanAnd 同一条判据。
         expectEqual(ArtistCredit.primary("陶喆和盧廣仲"), "陶喆", "合唱 credit: 两侧各 ≥2 个汉字的「和」是分隔符")
         expectEqual(ArtistCredit.primary("Tom和Jerry"), "Tom", "合唱 credit: 两侧是字母的「和」是分隔符")
         expectEqual(ArtistCredit.primary("李和平"), nil, "合唱 credit: 「李和平」是人名,不切")
@@ -583,7 +583,7 @@ func runCacheKeyTests() {
     // MARK: - 缓存 key:结尾副题必须被剥掉(「歌词管理不自动定位」的根因)
     //
     // 副题形态举例:Apple Music 报的曲名带完整副题(如「Dynasties and Dystopia (from
-    // the series Arcane League of Legends)」),而缓存里的 key 是剥掉副题的写法(collector
+    // the series Arcane League of Legends)」),而缓存里的 key 是剥掉副题的写法(引擎
     // 的 enrichKey 剥的)。定位函数必须同样剥掉副题再拼 "artist|title|album" 比对;
     // looseKey 只折大小写/空格/繁简,**折不掉**副题,兜底也接不住 —— 于是静默返回。
     // 这两条断言把"镜像函数必须剥、looseKey 必须剥不掉"钉住。
@@ -606,11 +606,11 @@ func runCacheKeyTests() {
                     "缓存 key: 版本限定词不剥")
     }
 
-    // MARK: - looseKey 必须折平合 credit 分隔符(跟 collector 的 loosenEnrichKey 同步)
+    // MARK: - looseKey 必须折平合 credit 分隔符(跟引擎的 loosenEnrichKey 同步)
     //
     // 同一次播放里两条路径对多歌手串的写法可能系统性不同 —— 播放器报 `A/B/C`,
     // 专辑预取从 Apple Music 曲目表拿到 `A & B & C`。
-    // 两侧的宽松键都得折平这一档,否则 collector 那边不再长重复条目,而这边(EnrichCacheReader
+    // 两侧的宽松键都得折平这一档,否则引擎那边不再长重复条目,而这边(EnrichCacheReader
     // 的兜底、歌词管理的定位)仍然对不上存量里的另一种写法。
     do {
         expectEqual(
@@ -633,7 +633,7 @@ func runCacheKeyTests() {
             false, "looseKey: 不同歌名仍然分开")
     }
 
-    // ---- 同名不同录音的时长变体(collector enrichKeyDurationVariant / durationMismatch) ----
+    // ---- 同名不同录音的时长变体(引擎 enrichKeyDurationVariant / durationMismatch) ----
     do {
         let base = "李宗盛|山丘|山丘"
         expectEqual(EnrichCacheKeys.durationVariant(base, n: 2), "李宗盛|山丘~dur2|山丘", "时长变体: 后缀加在标题段")
@@ -646,7 +646,7 @@ func runCacheKeyTests() {
         expectEqual(EnrichCacheKeys.durationMismatch(nil, 280), false, "时长变体: 一方未知不算冲突")
     }
 
-    // ---- 宽松匹配的胜者规则(collector betterEnrichEntry 同序) ----
+    // ---- 宽松匹配的胜者规则(引擎 betterEnrichEntry 同序) ----
     do {
         func entry(_ json: String) -> EnrichCacheEntry {
             try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8))

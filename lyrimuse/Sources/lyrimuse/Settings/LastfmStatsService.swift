@@ -5,7 +5,7 @@ import OSLog
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lastfm-stats")
 
 /// Last.fm 信息页(AccountLinkingTab 的 Last.fm 卡)的数据层:档案数字、最近 scrobble、
-/// 三种 Top 榜。全部走只读接口,用桥接那把 API Key,不需要签名、不经 collector ——
+/// 三种 Top 榜。全部走只读接口,用桥接那把 API Key,不需要签名、不经引擎 ——
 /// 设计方案(artifact)里"技术落点"一节定的就是 Swift 直连。
 ///
 /// ## 请求节奏
@@ -30,24 +30,24 @@ final class LastfmStatsService: ObservableObject {
         // 等到 goToPage 被调用才去读盘,首次翻页依然会有一次同步 IO 的空档,不如跟
         // loadSnapshot 一样在启动时就做掉。
         loadRecentPageCache()
-        // collector 落盘的最近记录 feed:启动先读一次(通常比快照新),之后按 mtime 盯着。
+        // 引擎落盘的最近记录 feed:启动先读一次(通常比快照新),之后按 mtime 盯着。
         startFeedWatcher()
     }
 
-    // MARK: - collector feed
+    // MARK: - engine feed
     //
     // 最近记录 / 正在播放 / 总 scrobble 数的**主来源**从"App 自己每 110 s 直连拉一次"改成
-    // "读 collector 落盘的 lyrimuse-lastfm-recent-feed.json"(它为了 iPhone 桥接本来就每 15 s
-    // 拉一次同一个接口,见 lyrimuse-collector/lastfmfeed.go)。为什么值得:本机实测 App 这条
-    // 链路 p50 1.2 s、p90 6 s、16% 超时(走系统代理),collector 那条 p50 0.4 s、1% 失败;
-    // 而且"上一首刚 scrobble"这件事 collector 当场就知道、会提前拉一次 feed,App 那边
+    // "读引擎落盘的 lyrimuse-lastfm-recent-feed.json"(它为了 iPhone 桥接本来就每 15 s
+    // 拉一次同一个接口,见 lyrimuse-engine/lastfmfeed.go)。为什么值得:本机实测 App 这条
+    // 链路 p50 1.2 s、p90 6 s、16% 超时(走系统代理),引擎那条 p50 0.4 s、1% 失败;
+    // 而且"上一首刚 scrobble"这件事引擎当场就知道、会提前拉一次 feed,App 那边
     // 10 s 内看到,不用再"换歌后等 10 秒强刷 3 个请求"。
     //
     // 数据流:pollFeedFile(5 s 一次 stat,mtime 变了才解码)→ ingestFeed → 跟网络响应
     // **完全同一条** applyRecent 路径落地(作废判据/封面/次数解析/写法收割全都照旧),再把
     // fetchedAt["baseline"] 盖上戳——于是既有的 refreshBaseline 轮询在 feed 健康期间自然早退,
-    // feed 一旦陈旧(collector 不在了)轮询就自动接管,不需要一个显式的"模式切换"。
-    // 换账号:feed 头部带 username,不符即忽略;collector 在配置变化时会重启重写。
+    // feed 一旦陈旧(引擎不在了)轮询就自动接管,不需要一个显式的"模式切换"。
+    // 换账号:feed 头部带 username,不符即忽略;引擎在配置变化时会重启重写。
 
     private static let feedURL = LyrimusePaths.configFile("lyrimuse-lastfm-recent-feed.json")
     private var feedTimer: Timer?
@@ -56,7 +56,7 @@ final class LastfmStatsService: ObservableObject {
     /// feed 里已完成的 50 行(RecentTrack 形态,新→旧),composeExactPage 的位置 0 起那份来源。
     private var feedCompletedRows: [RecentTrack] = []
 
-    /// collector 的 feed 此刻是否"活着"(3 分钟内有写入)。几处**自动**强刷(换歌后 10 s、
+    /// 引擎的 feed 此刻是否"活着"(3 分钟内有写入)。几处**自动**强刷(换歌后 10 s、
     /// 远端会话 45 s)先问它:feed 在的话那些刷新纯属重复,新内容会自己到。手动刷新不问。
     var feedIsFresh: Bool { lastFeed?.isFresh() ?? false }
 
@@ -130,7 +130,7 @@ final class LastfmStatsService: ObservableObject {
     private func ingestFeed(_ feed: LastfmRecentFeed) {
         guard let cred = credentials, feed.username == cred.user else { return }
         let fresh = feed.isFresh()
-        // 心跳重写(内容没变、只有 fetchedAt 变了,collector 每 60 s 一次)只当"collector 还活着"
+        // 心跳重写(内容没变、只有 fetchedAt 变了,引擎每 60 s 一次)只当"引擎还活着"
         // 的信号:盖 baseline 的戳就够,不必再把 50 行重新收割/重新 applyRecent 一遍——那会让
         // 列表每分钟白重排一次、还把正在飞的手动刷新响应作废掉。
         // "今天"要在这里算一遍(心跳路径也算):跨零点时没有任何新内容,但今天该归零。
@@ -202,7 +202,7 @@ final class LastfmStatsService: ObservableObject {
             baselineGen += 1
             applyRecent(page1)
         }
-        // feed 活着 → 给轮询那道 TTL 闸盖戳,它就不会再为同一份数据发请求;feed 陈旧(collector
+        // feed 活着 → 给轮询那道 TTL 闸盖戳,它就不会再为同一份数据发请求;feed 陈旧(引擎
         // 不在)→ 不盖,轮询在 110 s 内自然接管。`overview` 还是 nil(新账号第一次、或刚
         // resetAll)时也不盖:mergeOverview 在那种情况下要三个数都到齐才建,而 feed 给不出
         // 近 7 天——让轮询发一轮把 overview 建起来,之后 total/today 就由 feed 持续更新。
@@ -727,7 +727,7 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var chartItemTotals: [String: Int] = [:]
     @Published private(set) var artistTracksLoading: Set<String> = []
     @Published private(set) var artistTracksFailed: Set<String> = []
-    /// 每个时段上次取完的时间、当时传给 collector 的名字(榜上换了人要重取)、是不是取了全部分页。
+    /// 每个时段上次取完的时间、当时传给引擎的名字(榜上换了人要重取)、是不是取了全部分页。
     private var artistTracksFetched: [String: (at: Date, names: Set<String>, full: Bool)] = [:]
     /// 正在跑的那个 artist-tracks 进程和排在它后面的一个请求,见 loadArtistTracks。
     private var artistTracksQueue = ArtistTracksQueue()
@@ -752,12 +752,12 @@ final class LastfmStatsService: ObservableObject {
     /// 确认,窗口就是一个网络 RTT)。规则:发起时自增并捕获,写回前核对,旧代直接丢弃。
     /// 所有读写都在 MainActor 上,check-then-write 天然原子。
     private var baselineGen = 0
-    /// 歌手名 → 真头像 URL。由 collector 的 artist-avatars 子命令解析(QQ 音乐优先、
+    /// 歌手名 → 真头像 URL。由引擎的 artist-avatars 子命令解析(QQ 音乐优先、
     /// Deezer 兜底,14 天磁盘缓存,见 avatarcli.go)——Last.fm API 的歌手图是占位星。
     /// 查不到的名字**不会**出现在这里,UI 自然回落到首字母色块。
     @Published private(set) var artistAvatars: [String: URL] = [:]
-    /// 这次运行里已经交给 collector 查过头像的歌手名(查到没查到都算,失败会撤回)。查不到的名字
-    /// 不进 artistAvatars,不记一下的话每切一次时段都要再起一个 collector 进程。
+    /// 这次运行里已经交给引擎查过头像的歌手名(查到没查到都算,失败会撤回)。查不到的名字
+    /// 不进 artistAvatars,不记一下的话每切一次时段都要再起一个引擎进程。
     private var avatarRequested: Set<String> = []
     /// "歌手|歌名" → 这首歌所属专辑的封面。歌曲榜的 API 图也是占位星,真封面得按首
     /// 调 track.getInfo 拿它的专辑图 —— 榜单到手后并发补一轮,查不到的(无专辑的单曲)
@@ -818,7 +818,7 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var baselineFailed = false
     @Published private(set) var chartFailed = false
     /// Last.fm 侧当前回报的 nowplaying 条目(recenttracks 里 date 缺失的那行)。
-    /// 「正在记录」红点的**真值来源**:collector 发出的 updateNowPlaying 被 Last.fm 收到
+    /// 「正在记录」红点的**真值来源**:引擎发出的 updateNowPlaying 被 Last.fm 收到
     /// 后才会出现在这里 —— 本地开始播放只能算「正在播放」,服务器确认过才算「正在记录」
     /// (发散采纳,红点不再本地猜)。
     @Published private(set) var apiNowPlaying: RecentTrack?
@@ -842,7 +842,7 @@ final class LastfmStatsService: ObservableObject {
     private var nowPlayingCountPlayCountKey = ""
     /// 当前曲目的收听跨度(首次/上次听),歌词窗口「显示简介」的收听档案用。
     /// 数据来自 user.getTrackScrobbles(这首歌在这个账号下的全部 scrobble,带时间、可分页;
-    /// 本地 listens.jsonl 靠不住 —— 它只在没连账号时才记,见 collector/listenlog.go)。
+    /// 本地 listens.jsonl 靠不住 —— 它只在没连账号时才记,见 lyrimuse-engine/listenlog.go)。
     /// total 是**未合并孪生写法**的原始计数,可能略低于 nowPlayingCount 的合并口径,
     /// 两个数字刻意不混用:徽章说"第 N 次"用合并数,档案的首次/上次是时间点、不受影响。
     @Published private(set) var nowPlayingSpan: TrackScrobbleSpan?
@@ -1085,7 +1085,7 @@ final class LastfmStatsService: ObservableObject {
         recentPageCacheSaveTask?.cancel()
         try? FileManager.default.removeItem(at: Self.recentPageCacheURL)
         fetchedAt = [:]
-        // feed 是 collector 的文件、这里不删(它会在配置变化后重启重写);只把"上次读到哪"
+        // feed 是引擎的文件、这里不删(它会在配置变化后重启重写);只把"上次读到哪"
         // 清掉,新账号的第一份 feed 到了要能立刻吃进去(username 校验在 ingestFeed)。
         lastFeed = nil
         feedMTime = nil
@@ -2371,7 +2371,7 @@ final class LastfmStatsService: ObservableObject {
     // MARK: 本机推断的别名表 —— 歌手 + 歌名
 
     /// 上一次灌进 PlayCountFold 的那两张本机别名表,用来判"有没有变"。不持久化:它们是 enrich 缓存 +
-    /// collector 三份 MusicBrainz 缓存的派生物,那些本身就在盘上,每次启动后台重算一次(几十毫秒)。
+    /// 引擎三份 MusicBrainz 缓存的派生物,那些本身就在盘上,每次启动后台重算一次(几十毫秒)。
     ///
     /// 两张表取代了此前编译进二进制的手写表(`romanizedArtistAliases` 28 条、`titleAliasesByArtist`
     /// 方大同 7 条)—— 目标是「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」。
@@ -2580,7 +2580,7 @@ final class LastfmStatsService: ObservableObject {
         var onThisDayUpdatedAt: Date?
         /// 各刷新键的上次拉取时刻(加,只存白名单里的键:12 组榜单、baseline、
         /// onthisday)。此前 `fetchedAt` 纯内存、重启即归零,于是**每次启动**都把榜单(含歌手榜
-        /// 那次 spawn collector 进程)、那年今日、baseline 全部重拉一遍——数据明明刚从快照端上桌,
+        /// 那次 spawn 引擎进程)、那年今日、baseline 全部重拉一遍——数据明明刚从快照端上桌,
         /// 后面跟着一整轮白发的请求。落盘之后 TTL 跨重启仍然成立;`fresh()` 对"落在未来"的
         /// 时间戳判过期(时钟回拨),这里正好靠它兜底。 白名单**不含**任何播放次数相关的键:
         /// `playCountFetchedAt` 刻意不落盘(见其注释),别顺手把它塞进来。
@@ -2762,7 +2762,7 @@ final class LastfmStatsService: ObservableObject {
     /// 用户名以**授权返回的**为准(scrobbleUsername),空了才退回手填时代的 lastfmUser
     /// —— 跟卡片头部"已连接:X"的展示优先级一致。原来这里反着排(lastfmUser 优先),
     /// 两个字段都有值且不同时,头部显示 A、下面统计的却是 B 的账号。
-    /// Key 优先账号卡那把,退回老的只读 Key,同 collector 侧 lastfmBridgeAPIKey()。
+    /// Key 优先账号卡那把,退回老的只读 Key,同引擎侧 lastfmBridgeAPIKey()。
     private var credentials: (user: String, key: String)? {
         let c = ConfigStore.shared
         let user = c.lastfmScrobbleUsername.isEmpty ? c.lastfmUser : c.lastfmScrobbleUsername
@@ -2896,11 +2896,11 @@ final class LastfmStatsService: ObservableObject {
         return artist.trimmingCharacters(in: .whitespaces).lowercased() + "|" + a.lowercased()
     }
 
-    /// 一行最近记录该用哪张封面:自带的(scrobble 记录里的真图)→ **本机缓存里 collector
+    /// 一行最近记录该用哪张封面:自带的(scrobble 记录里的真图)→ **本机缓存里引擎
     /// 解析出的那张** → getinfo 纠正后的曲目封面 → 同专辑兄弟曲目的封面。四级都没有才留空位。
     ///
     /// 第二级(本地)的价值:Last.fm 对中文曲库缺图非常常见(只给全部缺图实体共用的
-    /// 白星占位图,被 imageURL() 正确滤掉),而同一张专辑网易云往往是有图的,collector
+    /// 白星占位图,被 imageURL() 正确滤掉),而同一张专辑网易云往往是有图的,引擎
     /// 播放时早就解析并存进 enrich 缓存了。
     ///
     /// 放在第二级而不是第一级:scrobble 自带图能用的行就别换了(换了只是徒增变化,26pt
@@ -2916,7 +2916,7 @@ final class LastfmStatsService: ObservableObject {
             // 于是列表里孤零零混着两张错场次的黑图。下面那道"同专辑 ≥2 行自带图共识"对
             // 这种形态无能为力 —— 兄弟行都没有自带图,共识表是空的。注意门槛:普通
             // localCovers(只按歌手+歌名命中、没核实过封面归属)**没有**这个资格,不然
-            // collector 当年解析错版本存下的图反而会把 Last.fm 对的图顶掉。
+            // 引擎当年解析错版本存下的图反而会把 Last.fm 对的图顶掉。
             if let verified = localAlbumVerifiedCovers[Self.playCountKey(artist: track.artist, title: track.title)],
                verified != own {
                 return verified
@@ -2956,7 +2956,7 @@ final class LastfmStatsService: ObservableObject {
     /// 第⑤级:Apple Music 目录查回来的封面(键跟 playCountKey 同口径)。
     ///
     /// 跟前四级的分工:①行自带图、③getinfo、④同专辑兄弟 都来自 Last.fm,②来自本机
-    /// collector 解析。这一级是唯一「Last.fm 没有、本机也没播过」时还能出图的来源。
+    /// 引擎解析。这一级是唯一「Last.fm 没有、本机也没播过」时还能出图的来源。
     /// 进快照持久化 —— 查一次要一个 iTunes 请求,翻页来回不该重查。
     @Published private(set) var catalogCovers: [String: URL] = [:]
     /// 问过 Apple Music、那边也匹配不上的行。**匹配不上就留空位**,不退回搜索结果第一条
@@ -2975,7 +2975,7 @@ final class LastfmStatsService: ObservableObject {
     /// stat 一次缓存文件判 mtime,而这个列表一页 100 行、每 45 秒重绘一轮。
     private(set) var localCovers: [String: URL] = [:]
 
-    /// localCovers 的严格子集:这张图的 cover_album 也对得上这一行的专辑(collector 核实
+    /// localCovers 的严格子集:这张图的 cover_album 也对得上这一行的专辑(引擎核实
     /// 过封面归属)。只有这一档有资格排到 Last.fm 自带图**前面**,见 coverURL(for:) 的注释。
     private(set) var localAlbumVerifiedCovers: [String: URL] = [:]
 
@@ -2996,7 +2996,7 @@ final class LastfmStatsService: ObservableObject {
 
     /// 缓存文件变了就重算本机封面兜底表。
     ///
-    /// 为什么需要单独一条路:本机 enrich 缓存会**自己**变——collector 解析出封面、
+    /// 为什么需要单独一条路:本机 enrich 缓存会**自己**变——引擎解析出封面、
     /// 或者同专辑预取一次灌进来一整张专辑,都不伴随任何 Last.fm 响应。只在应用了一次
     /// Last.fm 响应时才重算(applyRecent / 那年今日 / 读盘缓存三处)的话,列表上那些行
     /// 会一直是灰块,直到下一次真的有响应被应用。
@@ -3004,10 +3004,10 @@ final class LastfmStatsService: ObservableObject {
     /// 只 stat 一次文件,内容没变就直接返回,所以可以挂在定时轮上。
     /// stamp 必须用**已解码代**的版本(decodedContentVersion),不能用文件即时 mtime
     /// (对抗核实):Reader 改后台解码后,拿文件 mtime 当 stamp 会在"写盘了但
-    /// 还没解码采纳"的窗口里把这次变化盖章烧掉——空闲态(没有 poll 在推进解码)collector
+    /// 还没解码采纳"的窗口里把这次变化盖章烧掉——空闲态(没有 poll 在推进解码)引擎
     /// 的落盘在统计页就永远看不到了。先 refreshIfNeeded() 让 Reader 自己推进(空闲态这里
     /// 就是唯一的推进者),再按已解码版本判变化。
-    /// 本机缓存的已解码版本推进了(App 刚启动那一轮解码完、collector 补上了封面)就重算本机封面兜底。挂在 5 秒的
+    /// 本机缓存的已解码版本推进了(App 刚启动那一轮解码完、引擎补上了封面)就重算本机封面兜底。挂在 5 秒的
     /// feed 定时器上:设置页统计卡那一拍是 2 分钟一次,歌词窗口的停播页、榜单单独开着、又停着播时 feed 不再变化,
     /// 没有别的入口推动重算,本机补的封面会一直灰着。版本没变只是一次比较。
     private func refreshLocalCoversOnCacheAdvance() {
@@ -3018,14 +3018,14 @@ final class LastfmStatsService: ObservableObject {
     func refreshLocalCoversIfCacheChanged() {
         EnrichCacheReader.refreshIfNeeded()
         refreshArtistRegionsIfChanged()
-        // 右键链接另外还跟着 collector 的平台主页缓存走,放在下面那道判断前面(它自己按输入早退)
+        // 右键链接另外还跟着引擎的平台主页缓存走,放在下面那道判断前面(它自己按输入早退)
         refreshChartAppLinks()
         let stamp = EnrichCacheReader.decodedContentVersion
         guard stamp != localCoversStamp else { return }
         localCoversStamp = stamp
         refreshLocalCovers()
         refreshChartLocalCovers()
-        // 同一份缓存还派生第三层歌名别名:collector 刚给某首英文名的歌解析出跟
+        // 同一份缓存还派生第三层歌名别名:引擎刚给某首英文名的歌解析出跟
         // 中文名同一个网易云 id,这一拍就该并族、次数标过期,不等下次启动。写法索引没加载时
         // 不动 —— loadTitleForms 自己会在建族前灌一次。
         if titleFormsLoaded { scheduleLocalAliasRefreshAfterCacheChange() }
@@ -3061,7 +3061,7 @@ final class LastfmStatsService: ObservableObject {
     private var lastLocalAliasRefreshAt: Date?
     private var pendingLocalAliasRefresh: Task<Void, Never>?
 
-    /// 「歌手来自哪里」卡的数据(collector artistregions.go 写,`ArtistRegions`),键是 Last.fm 时段名。只读。
+    /// 「歌手来自哪里」卡的数据(引擎 artistregions.go 写,`ArtistRegions`),键是 Last.fm 时段名。只读。
     @Published private(set) var artistRegions: [String: ArtistRegions.Period] = [:]
     private var artistRegionsVersion: Date?
 
@@ -3069,7 +3069,7 @@ final class LastfmStatsService: ObservableObject {
     func refreshArtistRegionsIfChanged() {
         let url = LyrimusePaths.configFile(ArtistRegions.fileName)
         let version = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
-        // 跟 collector 用同一个账号名比(它按 lastfm_user 取榜单),不是 credentials 优先取的打卡账号。
+        // 跟引擎用同一个账号名比(它按 lastfm_user 取榜单),不是 credentials 优先取的打卡账号。
         let user = ConfigStore.shared.lastfmUser
         guard version != artistRegionsVersion, !user.isEmpty else { return }
         artistRegionsVersion = version
@@ -3079,7 +3079,7 @@ final class LastfmStatsService: ObservableObject {
 
     /// 上一次算出 `localCovers` 用的输入:行的身份序列 + enrich 缓存的版本。
     ///
-    /// 这条路径由 feed 文件轮询驱动(collector 每 15 秒重写一次那份文件),而行和缓存
+    /// 这条路径由 feed 文件轮询驱动(引擎每 15 秒重写一次那份文件),而行和缓存
     /// 绝大多数时候都没动。不判重就是每 15 秒把 recent 加"那年今日"的**每一行**重做两次
     /// 模糊匹配查封面 —— 全在主线程上,实测一轮约 200ms;悬浮歌词/灵动岛/菜单栏/歌词窗口
     /// 共用这条主线程,一停就是四个面一起停。
@@ -3117,7 +3117,7 @@ final class LastfmStatsService: ObservableObject {
     }
 
     /// 重算榜单的本机封面兜底。Last.fm 对中文曲库缺图很常见(歌曲没挂专辑、专辑页一张图都没有),而榜单上的歌
-    /// 大多在本机播过,本机缓存里有 collector 解析出来的封面。只查 Last.fm 没给图的行:专辑榜里没有图的、
+    /// 大多在本机播过,本机缓存里有引擎解析出来的封面。只查 Last.fm 没给图的行:专辑榜里没有图的、
     /// 歌曲榜里 track.getInfo 还没补到封面的。每行一次 EnrichCacheReader 查询,所以按输入判重,行和缓存都没变
     /// 就不重算(同 localCoversInputs)。
     private func refreshChartLocalCovers() {
@@ -3146,7 +3146,7 @@ final class LastfmStatsService: ObservableObject {
         if out != chartLocalCovers { chartLocalCovers = out }
     }
 
-    /// 给所有榜单行、当前这页最近记录和实时行那首算一遍能直接进 App 打开的目标(本机歌词缓存里存的链接、歌手的 MusicBrainz mbid、collector
+    /// 给所有榜单行、当前这页最近记录和实时行那首算一遍能直接进 App 打开的目标(本机歌词缓存里存的链接、歌手的 MusicBrainz mbid、引擎
     /// 预取的平台主页,零网络)。统计区不在屏上时不算(见 chartAppLinksOnScreen);行没变、两份缓存版本都没变就不重算;
     /// 缓存还没加载好时这一轮什么都查不到,等缓存版本推进(refreshLocalCoversIfCacheChanged)再算。
     private func refreshChartAppLinks() {
@@ -3321,7 +3321,7 @@ final class LastfmStatsService: ObservableObject {
         // Last.fm 侧漏进来的广告 nowplaying 行不展示(两轮:「—」行 + 带全
         // 字段的 Blinds.com 行)。三个判据:歌手为空/标题是占位符「—」(真实 scrobble 必带
         // 歌手);以及**本机此刻正播着广告且同名** —— 广告可以带全 artist/title,只有本机
-        // (AppleScript 权威判据,见 LocalPlaybackSource)知道它是广告。collector 侧已经
+        // (AppleScript 权威判据,见 LocalPlaybackSource)知道它是广告。引擎侧已经
         // 不再上报,这里是显示端兜底:已发到 Last.fm 的 nowplaying 收不回,过渡期不能原样
         // 端给用户。
         let localAdKey: String? = {
@@ -3936,7 +3936,7 @@ final class LastfmStatsService: ObservableObject {
                 return
             }
         } else if let cached = recentPageCache[target] {
-            // ② 没有 feed(collector 不在):维持旧办法——先端上缓存,过了新鲜期背后重拉。
+            // ② 没有 feed(引擎不在):维持旧办法——先端上缓存,过了新鲜期背后重拉。
             recentPage = target
             applyRecent(cached)
             if !fresh(Self.recentPageCacheKey(target), ttl: Self.recentPageCacheTTL) {
@@ -4019,7 +4019,7 @@ final class LastfmStatsService: ObservableObject {
         fetchedAt[key] = Date()
         // 歌手榜不直连 API:Last.fm 的原始记录会把同一个真人拆成多条(中英文艺名
         // "Dean Ting"/"丁世光"、繁简"周杰倫"/"周杰伦"、合唱 credit "Prince & The
-        // Revolution"),走 collector 的 top-artists 子命令拿**合并后**的榜 —— 那边复用
+        // Revolution"),走引擎的 top-artists 子命令拿**合并后**的榜 —— 那边复用
         // 网页版 Top 歌手已经在用的并查集(名字键+mbid,见 topartists.go),不在 Swift
         // 里重抄繁简表/别名表。专辑/歌曲榜没有这个问题,照旧直连。
         if kind == .artists {
@@ -4038,7 +4038,7 @@ final class LastfmStatsService: ObservableObject {
     }
 
     /// 直连 `user.gettop*` 拉一档榜单并落进 `charts[key]`。专辑/歌曲榜的正常路径;歌手榜只在
-    /// collector 子命令失败时当兜底(拿到的是**未合并**的原始榜——同一个人可能拆成几条,但比
+    /// 引擎子命令失败时当兜底(拿到的是**未合并**的原始榜——同一个人可能拆成几条,但比
     /// 一行「重试」强得多,见 refreshMergedArtistChart)。返回 false = 请求失败。
     private func fetchChartDirect(kind: ChartKind, period: Period, key: String,
                                   cred: (user: String, key: String)) async -> Bool {
@@ -4137,17 +4137,17 @@ final class LastfmStatsService: ObservableObject {
     }
 
     private func refreshMergedArtistChart(cacheKey: String, period: Period) {
-        let collectorPath = LyrimusePaths.bundledEnginePath
+        let enginePath = LyrimusePaths.bundledEnginePath
         chartLoadingKeys.insert(cacheKey)
         chartFailedKeys.remove(cacheKey)
         Task.detached(priority: .userInitiated) {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: collectorPath)
-            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
-            process.environment = LyrimusePaths.collectorProcessEnvironment()
+            process.executableURL = URL(fileURLWithPath: enginePath)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+            process.environment = LyrimusePaths.engineProcessEnvironment()
             // -all-periods:四个时段一次进程拿全(Go 侧四路并发取数),切时段零等待、
             // 也免了每档各一次 spawn + 磁盘加载(发散采纳)。
-            // -with-previous:每档再带上一期(同一套合并对齐名次),输出形状见 collector topArtistsPeriodOutput。
+            // -with-previous:每档再带上一期(同一套合并对齐名次),输出形状见引擎 topArtistsPeriodOutput。
             process.arguments = ["top-artists", "-all-periods", "-with-previous",
                                  "-limit", String(ChartVisibleRows.fetchLimit)]
             let pipe = Pipe()
@@ -4172,7 +4172,7 @@ final class LastfmStatsService: ObservableObject {
                 guard process.terminationStatus == 0,
                       let arr = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]]
                 else {
-                    // 失败时把子命令的 stderr 带进日志 —— 原来丢 nullDevice,collector 侧
+                    // 失败时把子命令的 stderr 带进日志 —— 原来丢 nullDevice,引擎侧
                     // log.Fatal 的死因(配置缺失/网络全挂)从这边完全看不见。
                     let err = String(data: stderrDrain.wait(), encoding: .utf8)?.prefix(300) ?? ""
                     logger.notice("top-artists failed (exit \(process.terminationStatus)): \(String(err), privacy: .public)")
@@ -4180,11 +4180,11 @@ final class LastfmStatsService: ObservableObject {
                 }
                 rows = arr
             } catch {
-                // collector 子命令失败(超时被看门狗杀掉 / 配置缺失):退回直连 API 拿**未合并**
+                // 引擎子命令失败(超时被看门狗杀掉 / 配置缺失):退回直连 API 拿**未合并**
                 // 的原始榜。此前这里直接标失败,用户看到的是一行「重试」——而
                 // 实测那个子命令因为在 CLI 里对每个歌手名真查 MusicBrainz 跑了 1 分 49 秒,
                 // 25 s 看门狗必然杀它,歌手榜于是**永远**是失败态。子命令那边已经修成只读缓存
-                // (见 collector topartistscli.go),这里是第二道保险:有榜可看永远好过没有。
+                // (见引擎 topartistscli.go),这里是第二道保险:有榜可看永远好过没有。
                 await MainActor.run {
                     let svc = LastfmStatsService.shared
                     Task {
@@ -4248,7 +4248,7 @@ final class LastfmStatsService: ObservableObject {
     }
 
     /// 「显示更多」露出新的行时补这些行的头像 / 封面。榜单到手时只补前 10 行:50 个名字一次交给
-    /// collector 查头像,冷缓存要好几分钟,而多数时候没人点开。
+    /// 引擎查头像,冷缓存要好几分钟,而多数时候没人点开。
     /// 只补 from..<rows 这几行(之前露出的行已经补过;没有专辑的歌查不到封面,不这样的话每点一次都重问);
     /// 封面请求走后台档,不跟页面上的点击抢限速队列。
     func ensureChartImages(kind: ChartKind, period: Period, from: Int, rows: Int) {
@@ -4261,12 +4261,12 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    /// 取歌手榜展开行要的歌:collector `artist-tracks` 把这个时段 `user.getTopTracks` 的分页按歌手榜同一套合并
+    /// 取歌手榜展开行要的歌:引擎 `artist-tracks` 把这个时段 `user.getTopTracks` 的分页按歌手榜同一套合并
     /// 规则归到榜上显示的名字下(见 artisttracks.go)。
     ///
     /// full = false 是看歌手榜时的预取,只取歌曲榜第 1 页(一个请求):歌曲榜按次数降序,第 1 页里每位歌手的歌就是
     /// 完整结果的前几首,前 10 位的前 5 首实测都在里面,点开即出;共几首要取完才知道。full = true 是点开一行时,
-    /// 取全部分页(子命令先吐第 1 页那行再吐最终那行)。同一时间只跑一个进程:collector 各进程的出站限速互不相干,
+    /// 取全部分页(子命令先吐第 1 页那行再吐最终那行)。同一时间只跑一个进程:引擎各进程的出站限速互不相干,
     /// 并发几个会一起打到 Last.fm 按 IP 的限速上;跑着的时候再来的请求只留最后一个,跑完接着跑。
     /// 15 分钟内、榜上的人没变、上次取的范围够用就不重取。
     func loadArtistTracks(period: Period, full: Bool, force: Bool = false) {
@@ -4289,11 +4289,11 @@ final class LastfmStatsService: ObservableObject {
 
     private func startArtistTracks(period p: String, names: [String], full: Bool) {
         let gen = artistTracksGen
-        let collectorPath = LyrimusePaths.bundledEnginePath
+        let enginePath = LyrimusePaths.bundledEnginePath
         Task.detached(priority: .utility) {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: collectorPath)
-            process.environment = LyrimusePaths.collectorProcessEnvironment()
+            process.executableURL = URL(fileURLWithPath: enginePath)
+            process.environment = LyrimusePaths.engineProcessEnvironment()
             // "--" 之后全是歌手名:名字以 "-" 开头时不会被当成参数。
             process.arguments = ["artist-tracks", "-period", p, "-tracks", "10"]
                 + (full ? ["-progress"] : ["-max-pages", "1"]) + ["--"] + names
@@ -4353,7 +4353,7 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    /// 让 collector 去查一批歌手头像。失败静默 —— 头像是锦上添花,查不到就显示首字母,
+    /// 让引擎去查一批歌手头像。失败静默 —— 头像是锦上添花,查不到就显示首字母,
     /// 不值得占一条错误提示。
     private func resolveAvatars(names: [String]) {
         let missing = names.filter { artistAvatars[$0] == nil && !avatarRequested.contains($0) }
@@ -4364,18 +4364,18 @@ final class LastfmStatsService: ObservableObject {
         let batches = stride(from: 0, to: missing.count, by: 10).map {
             Array(missing[$0..<min($0 + 10, missing.count)])
         }
-        let collectorPath = LyrimusePaths.bundledEnginePath
+        let enginePath = LyrimusePaths.bundledEnginePath
         Task.detached(priority: .utility) {
-            for batch in batches { await Self.runAvatarLookup(batch, collectorPath: collectorPath) }
+            for batch in batches { await Self.runAvatarLookup(batch, enginePath: enginePath) }
         }
     }
 
-    private nonisolated static func runAvatarLookup(_ missing: [String], collectorPath: String) async {
+    private nonisolated static func runAvatarLookup(_ missing: [String], enginePath: String) async {
         do {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: collectorPath)
-            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
-            process.environment = LyrimusePaths.collectorProcessEnvironment()
+            process.executableURL = URL(fileURLWithPath: enginePath)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.engineEnvironment。
+            process.environment = LyrimusePaths.engineProcessEnvironment()
             process.arguments = ["artist-avatars"] + missing
             let pipe = Pipe()
             let errPipe = Pipe()

@@ -89,7 +89,7 @@ func runLyricsParsingTests() {
 
     // --- Apple 歌词带的空间音频版偏移 [am-spatial:<偏移毫秒>/<立体声时长毫秒>] ---
     //
-    // collector 从 TTML 的 <audio lyricOffset role="spatial"> 写进正文(数据取自 Dean Lewis《Be Alright》:
+    // 引擎从 TTML 的 <audio lyricOffset role="spatial"> 写进正文(数据取自 Dean Lewis《Be Alright》:
     // 立体声版 196.373s、空间音频版歌词晚 1.672s)。要不要用由 LocalPlaybackSource 定,解析层只负责读出来。
     let beAlrightCue = LRCParser.SpatialAudioCue(lyricOffsetMs: 1672, stereoDurationMs: 196373)
     expectEqual(LRCParser.parseSpatialAudioCue("[am-spatial:1672/196373]\n[00:04.10]I look up\n"), beAlrightCue,
@@ -463,18 +463,18 @@ func runLyricsParsingTests() {
         )
     }
 
-    // ---- 演唱者标注(collector lyrics_speakers,LyricSpeakerTags) ----
+    // ---- 演唱者标注(引擎 lyrics_speakers,LyricSpeakerTags) ----
     do {
         let lrc = "[00:01.00]hello\n[00:05.00]world"
         let yrc = "[1000,500](1000,500,0)hello"
         expectEqual(LyricSpeakerTags.fingerprint(lyrics: lrc, lyricsYRC: yrc), "8bef5a361f6e",
-                    "演唱者标注: 指纹跟 collector lyricSpeakersFingerprint 同一组输入同一个输出")
+                    "演唱者标注: 指纹跟引擎 lyricSpeakersFingerprint 同一组输入同一个输出")
         expectEqual(LyricSpeakerTags.fingerprint(lyrics: "\u{FEFF}" + lrc, lyricsYRC: "\u{FEFF}\u{FEFF}" + yrc), "8bef5a361f6e",
                     "演唱者标注: 开头的 BOM 不算内容")
         expectEqual(LyricSpeakerTags.fingerprint(lyrics: lrc, lyricsYRC: ""), "aaf35c2bbdc7",
                     "演唱者标注: 只有整行歌词")
         expectEqual(LyricSpeakerTags.lines(of: "a\r\nb\rc\n\nd"), ["a", "b", "c", "", "d"],
-                    "演唱者标注: 切行跟 collector splitLyricLines 一致(CRLF 不当成一个字)")
+                    "演唱者标注: 切行跟引擎 splitLyricLines 一致(CRLF 不当成一个字)")
 
         let body = "[ti:Song]\n[00:01.00]one\n[00:02.00][00:09.00]two\n[00:03.00]three\n"
         let words = "[1000,500](1000,500,0)one\n[2000,500](2000,500,0)two"

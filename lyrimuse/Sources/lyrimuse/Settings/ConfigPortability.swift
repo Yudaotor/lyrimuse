@@ -9,7 +9,7 @@ import SystemConfiguration
 // 文件写失败"。日志里绝不记文件内容本身(config.json 里就是原始 token)。
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config-portability")
 
-// 导入/导出配置——方便换电脑:导出打包 collector 的 config.json(账号 token/密钥原文都在
+// 导入/导出配置——方便换电脑:导出打包引擎的 config.json(账号 token/密钥原文都在
 // 里面)+ features.json(功能开关/歌词源排序等)+ App 自己的 UserDefaults(np: 前缀 +
 // KeyboardShortcuts 库自己的 KeyboardShortcuts_ 前缀,后者是热键绑定,不归 AppSettings
 // 管但同样是"这台机器的个人设置"的一部分)三部分,合并成一份 JSON。
@@ -108,7 +108,7 @@ enum ConfigPortability {
         "np:lyricsWindowMiniMode",
         "np:launchAtLoginEnabled",
         // launchAtLoginEnabled 的同类,补上 —— 判据(见本组注释末尾"装没装
-        // LaunchAgent 是机器状态")对它一字不差地成立:它记的是"这台机器上装没装 collector
+        // LaunchAgent 是机器状态")对它一字不差地成立:它记的是"这台机器上装没装引擎
         // 的 LaunchAgent",而不是用户的偏好。带过去的话,新机器上服务其实还没装,界面却
         // 显示"已启用",用户找不到那个能把它真正装上的开关。
         "np:collectorServiceEnabled",
@@ -124,11 +124,11 @@ enum ConfigPortability {
         // 「这台机器上哪个浏览器的 JS 自检通过过、在什么时候」。是这台机器上那几个浏览器的状态,不是偏好:
         // 带去新机器的话,那边从没开过 JS 开关的浏览器也会显示「上次检测已生效」。
         "np:browserJSVerifiedAtJSON",
-        // 「这台机器上现在装进 launchd 的是哪个 collector 二进制」(路径+大小+mtime,见
-        // CollectorServiceManager.installedFingerprintKey)。跟上面那条同类,而且带过去更糟:
+        // 「这台机器上现在装进 launchd 的是哪个引擎二进制」(路径+大小+mtime,见
+        // EngineServiceManager.installedFingerprintKey)。跟上面那条同类,而且带过去更糟:
         // 新机器上的二进制必然是另一个文件,却因为指纹"对得上"而跳过启动时那次本该做的重装,
         // 正好把这条兜底关掉。
-        CollectorServiceManager.installedFingerprintKey,
+        EngineServiceManager.installedFingerprintKey,
         // 备份文件夹的路径(见 ICloudConfigStore.customFolderKey)。同样是"这台机器上的一个
         // 路径"——新机器上那个目录多半不存在,带过去只会让备份这一块指向一个不存在的地方。
         ICloudConfigStore.customFolderKey,
@@ -137,13 +137,13 @@ enum ConfigPortability {
     /// 已经没有任何代码在读的旧键 —— 功能改名或删掉之后,值还留在 UserDefaults 里。
     ///
     /// 对本机全部 44 个 `np:` 键做了一次全仓扫描(源码里既搜 `"np:xxx"` 字面量、
-    /// 又搜短名标识符),这五个在 **lyrimuse / LyrimuseCore / collector / desktop-lyrics /
+    /// 又搜短名标识符),这五个在 **lyrimuse / LyrimuseCore / 引擎 / desktop-lyrics /
     /// web 全部代码里零命中**,并逐个确认过去向:
     ///
     /// - `useSystemTranslationFallback`:"系统兜底翻译"这个开关还在,但早就改绑到
     ///   `features.lyricsMachineTranslation`(features.json)了,不再走 UserDefaults。
     /// - `textShadowEnabled` / `textShadowColorHex`:文字阴影这个功能整个已经不存在。
-    /// - `relayBaseURL`:中继地址现在由 collector 的 config.json (`state_relay_url`) 管。
+    /// - `relayBaseURL`:中继地址现在由引擎的 config.json (`state_relay_url`) 管。
     /// - `dataSourceMode`:旧版本的数据源开关,早已没有对应 UI 和读取方。
     ///
     /// **跟上面那份机器专属名单不是一回事**:那些键是活的、只是不该跨机器带;这些是死的,
@@ -279,7 +279,7 @@ enum ConfigPortability {
     }
 
     // 导入不做任何"活的"reload——config.json/features.json 各自的 Store 都有 load()
-    // 能立刻刷新内存态,但真正读 config.json 的是 collector 那个独立进程,不会因为
+    // 能立刻刷新内存态,但真正读 config.json 的是引擎那个独立进程,不会因为
     // Swift 侧调用 load() 就跟着重读;AppSettings 每个属性各自 didSet 里都会触发真实
     // 副作用(装/卸 LaunchAgent、注册热键……),导入时一次性把二十几个属性全部重新赋值
     // 会级联触发一整串这些副作用,风险和复杂度都远高于收益。改成写完盘之后统一提示重启
@@ -288,12 +288,12 @@ enum ConfigPortability {
     // "热重载"逻辑。
     //
     // 补:上面那句"统一提示重启整个 App"只对 **App 自己**成立,漏了
-    // collector —— 它是独立的 launchd 进程,重启 App 完全不碰它,而它的配置是**启动时读
-    // 进内存的那一份**(main.go 里没有任何文件监听)。所以在一台已经装过 collector 的
+    // 引擎 —— 它是独立的 launchd 进程,重启 App 完全不碰它,而它的配置是**启动时读
+    // 进内存的那一份**(main.go 里没有任何文件监听)。所以在一台已经装过引擎的
     // Mac 上导入(= 第二台机器保持同步、或本机从 iCloud 恢复),盘上和界面都换成新配置了,
     // 后台却还在拿旧凭据 scrobble、往旧地址推状态,直到用户碰巧改了别的设置、或者重启机器。
     //
-    // 为什么一直没被发现:全新 Mac 上 collector 还没装,而 hasCompletedOnboarding 又被
+    // 为什么一直没被发现:全新 Mac 上引擎还没装,而 hasCompletedOnboarding 又被
     // 刻意排除在导入之外(见 excludedDefaultsKeys),引导会在导入之后把服务装上 —— 主路径
     // 恰好绕开了这个洞。
     //
@@ -345,7 +345,7 @@ enum ConfigPortability {
             logger.notice("importData: import bundle has no 'config' section")
         }
         if let importedFeatures = bundle["features"] {
-            // 系统语言换成本机的再写盘:collector 看到文件变了就热重读,读到别的机器的语言会按它清机翻。
+            // 系统语言换成本机的再写盘:引擎看到文件变了就热重读,读到别的机器的语言会按它清机翻。
             let featuresObj = SystemLanguage.localizingForImport(importedFeatures, local: SystemLanguage.current())
             if let featuresData = try? JSONSerialization.data(withJSONObject: featuresObj, options: [.prettyPrinted]) {
                 do {
@@ -374,8 +374,8 @@ enum ConfigPortability {
             logger.notice("importData: import bundle has no 'appSettings' section")
         }
 
-        // 不重启 collector:config.json / features.json 它都按 mtime 自己热重读(lyrics_dir 也在运行中切换),
-        // 见 docs/features/14 章「改设置不再重启 collector」。
+        // 不重启引擎:config.json / features.json 它都按 mtime 自己热重读(lyrics_dir 也在运行中切换),
+        // 见 docs/features/14 章「改设置不再重启引擎」。
         return true
     }
 
@@ -388,7 +388,7 @@ enum ConfigPortability {
     // App 自己的状态清完交给调用方紧接着的 restartApp() 复位,原因跟 importData 那条
     // 注释一样。但**常驻服务必须在这里显式停掉**。
     //
-    // 这里原本写着一段推理:"collectorServiceEnabled 清空后读回来是 false,它的 didSet
+    // 这里原本写着一段推理:"engineServiceEnabled 清空后读回来是 false,它的 didSet
     // 会调 setEnabled(false)→uninstall(),而 Swift 对 init() 内部显式赋值一样会触发
     // didSet,于是清除配置+重启 App 顺带就把 LaunchAgent 卸载了"。用 swiftc
     // 实测,这段推理的前提是**错的**:
@@ -396,12 +396,12 @@ enum ConfigPortability {
     //     声明时无默认值 + init 里首次赋值 → didSet 不触发
     //     声明时有默认值 + init 里重新赋值 → didSet 触发
     //
-    // 而 AppSettings.collectorServiceEnabled / launchAtLoginEnabled 都是**无默认值**声明
+    // 而 AppSettings.engineServiceEnabled / launchAtLoginEnabled 都是**无默认值**声明
     // (`@Published var x: Bool {` 直接跟 didSet),走的是不触发那一档。本文件 :60-64 解释
     // 排除 launchAtLoginEnabled 时给出的正是正确结论 —— 同一个文件里两条注释互相矛盾,
     // 而这一条是错的那条。
     //
-    // 后果不是"少卸了个 LaunchAgent"这么轻:collector 是 KeepAlive=true 的 launchd 进程,
+    // 后果不是"少卸了个 LaunchAgent"这么轻:引擎是 KeepAlive=true 的 launchd 进程,
     // 配置在启动时读进内存(无文件监听)。删掉 config.json 并不会让它闭嘴 —— 用户点了
     // "清除所有设置"、界面告诉他"恢复到刚装完时的样子",后台却**继续拿着刚被清除的
     // Last.fm session key 往那个账号 scrobble**,直到机器重启。承诺没兑现,而且是隐私性质的。
@@ -456,7 +456,7 @@ enum ConfigPortability {
         AppSettingsMirror.remove()
         // 「已校准」名单跟着一起清。上面那轮把三个偏移键(全局/按播放器/
         // 单曲)都清了,而这份名单是**独立文件**、不在 np: 前缀里 —— 不一起清就会留下一份
-        // 孤儿名单:collector 继续拒绝给这些歌自动升级歌词,而它保护的校正值早已不存在,
+        // 孤儿名单:引擎继续拒绝给这些歌自动升级歌词,而它保护的校正值早已不存在,
         // 用户在界面上完全看不到原因。它跟校正值是成对的东西(LyricsOffsetStore
         // .clearAllTrackOffsets 也是这么配对的)。
         await LyricsPinStore.shared.removeAll()
@@ -464,8 +464,8 @@ enum ConfigPortability {
 
         // 卸 LaunchAgent 并停掉进程。放在清 UserDefaults **之后**:uninstall 只做 launchctl
         // 操作,不回写偏好,顺序上不会把刚清掉的键又写回来。
-        let state = await CollectorServiceManager.setEnabledAndWait(false)
-        logger.notice("clearAllConfig: collector service stopped — stillRunning=\(state.isRunning)")
+        let state = await EngineServiceManager.setEnabledAndWait(false)
+        logger.notice("clearAllConfig: engine service stopped — stillRunning=\(state.isRunning)")
         return ok
     }
 

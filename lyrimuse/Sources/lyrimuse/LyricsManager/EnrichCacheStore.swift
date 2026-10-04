@@ -7,11 +7,11 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 // 歌词管理窗口的数据层。跟 EnrichCacheReader(单条只读查询)不同,这里要读整个缓存做列表。
 //
 // **只读**:改动(保存编辑、采纳候选、批量锁定、标纯音乐、删除、清空、从快照恢复)一律经
-// EnrichEditChannel 交给 collector 执行,这里不写 enrich-cache.json、也不写 lyrics/ 歌词文件。
-// collector 把整份缓存握在内存里、每次存盘整份写回,是这份缓存唯一的写入方;App 在它背后改文件的话,
-// 下一次存盘就会把改动盖掉。改完 collector 已经存好盘,这里 reload 一次拿回它的结果。
+// EnrichEditChannel 交给引擎执行,这里不写 enrich-cache.json、也不写 lyrics/ 歌词文件。
+// 引擎把整份缓存握在内存里、每次存盘整份写回,是这份缓存唯一的写入方;App 在它背后改文件的话,
+// 下一次存盘就会把改动盖掉。改完引擎已经存好盘,这里 reload 一次拿回它的结果。
 //
-// 用 JSONSerialization 而不是 Codable 读整个文件:enrichEntry(collector/enrich.go)有几十个字段,
+// 用 JSONSerialization 而不是 Codable 读整个文件:enrichEntry(lyrimuse-engine/enrich.go)有几十个字段,
 // 用一个只声明"我关心的几个字段"的 Codable 结构体去解,字段一多一改就对不上;原始字典只取要用的键。
 @MainActor
 public final class EnrichCacheStore: ObservableObject {
@@ -21,7 +21,7 @@ public final class EnrichCacheStore: ObservableObject {
         public var id: String { key }
         public let key: String
         public let artist: String
-        // collector 解析出的"官方歌手名"(网易云/QQ/MusicBrainz 核实过),没有则为空。
+        // 引擎解析出的"官方歌手名"(网易云/QQ/MusicBrainz 核实过),没有则为空。
         //
         // 为什么列表要用它:同一位歌手在不同曲目上可能被播放器报成完全不同的写法 ——
         // 实测,一张专辑里一半曲目报 "Leah Dou"、另一半报"窦靖童"
@@ -29,9 +29,9 @@ public final class EnrichCacheStore: ObservableObject {
         // 大小写,救不了跨文字的别名;canonical_artist 正是为此存在的,只是一直没接到这个
         // 界面上来 —— 值早就算好、存进缓存了,列表却仍在显示原始写法。
         //
-        // 合唱曲目上它是空的(collector 只在单一歌手时才给值),所以消费方要回退到 artist。
+        // 合唱曲目上它是空的(引擎只在单一歌手时才给值),所以消费方要回退到 artist。
         public let canonicalArtist: String
-        // 解析这条时的曲目真实时长(秒),collector 存进缓存的。手动搜索要用它 ——
+        // 解析这条时的曲目真实时长(秒),引擎存进缓存的。手动搜索要用它 ——
         // 打分里时长匹配那一档权重很重,传 0 的话弹窗里的排名跟当初真正做决定用的那组
         // 分数不是一回事(见 LyricsSearchSheet 的用法)。老条目没有这个字段,为 0。
         public let durationSecs: Double
@@ -40,7 +40,7 @@ public final class EnrichCacheStore: ObservableObject {
         public let lyricsSource: String
         public let hasWordTiming: Bool
         public let isManual: Bool
-        /// 用户在「联网搜索候选歌词」里选定的源(collector 侧 `lyrics_source_choice`)。
+        /// 用户在「联网搜索候选歌词」里选定的源(引擎侧 `lyrics_source_choice`)。
         /// 空 = 没选过,由算法自由选。跟 `isManual` 是两件独立的事,详情页各显示各的徽章。
         public let sourceChoice: String
         /// 这份歌词当前的时间轴校正值(毫秒),权威源是 LyricsOffsetStore——这里存的是
@@ -48,7 +48,7 @@ public final class EnrichCacheStore: ObservableObject {
         /// offsetsSnapshot 参数注释)。内容一换查出来的指纹就变,自然会变回 0,不需要
         /// 显式失效。
         public let offsetMs: Int
-        // 译文是机翻补的(见 collector 的 translate.go)还是歌词源自带的社区翻译。
+        // 译文是机翻补的(见引擎的 translate.go)还是歌词源自带的社区翻译。
         // 空 = 社区翻译(老条目没有这个字段,读成空正是事实)。
         public let lyricsTrSource: String
         public let hasTranslation: Bool
@@ -56,15 +56,15 @@ public final class EnrichCacheStore: ObservableObject {
         // 详情页有这一栏、"搜索候选歌词"弹窗也有对应徽章,唯独列表看不出来。
         public let hasRomanization: Bool
         public let hasLyrics: Bool
-        /// collector 联网确证过"这首本来就没有词"(lrclib 的 instrumental 或网易云的
-        /// pureMusic,见 collector 侧 enrichEntry.Instrumental)。
+        /// 引擎联网确证过"这首本来就没有词"(lrclib 的 instrumental 或网易云的
+        /// pureMusic,见引擎侧 enrichEntry.Instrumental)。
         ///
         /// 接到这个界面上来:值早就存在缓存里(这个类型一直在解码它,见下面
         /// `instrumental` 那个字段),但列表和详情页都只看 hasLyrics —— 于是一整批
         /// 确证过的纯音乐(LoL 原声带那些)显示成刺眼的红色「无歌词」,跟"没搜到"混为一谈。
         /// 悬浮窗/灵动岛/歌词窗口三处一直分得清,唯独这里没有。
         public let isInstrumental: Bool
-        /// 有没有 plain_lyrics(没有时间戳的纯文本兜底,见 collector 侧 enrichEntry.PlainLyrics
+        /// 有没有 plain_lyrics(没有时间戳的纯文本兜底,见引擎侧 enrichEntry.PlainLyrics
         /// 头注)——加,理由跟 isInstrumental 那次接入一样:值早就存在缓存里
         /// (「歌词窗口」已经在读它做静态展示),但列表和详情页都只看 hasLyrics,于是这批
         /// "至少有纯文字可读"的条目显示成刺眼的红色「无歌词」,跟"什么都没有"混为一谈。
@@ -75,7 +75,7 @@ public final class EnrichCacheStore: ObservableObject {
         /// Japanese City Pop),网易云和 QQ 都收录了歌、只是发行方没挂歌词、社区也没人写;
         /// 它们跟"九个源一条都没搜到、可能是我们匹配失败"是两种不同的"无歌词",前者不是
         /// 该修的,只能等。列表/详情据此把红色「无歌词」换成中性的「源里有歌、无词」——
-        /// 判据是 collector 解析时确实定位到了那首歌(拿到了平台 id),不是猜的。
+        /// 判据是引擎解析时确实定位到了那首歌(拿到了平台 id),不是猜的。
         public let knownOnSources: Bool
         /// 最近一轮解析**一个源都没应答**。判据本体在
         /// `LyrimuseCore.EnrichSourcePresence.lastRoundHadNoResponder`(selftest 覆盖),
@@ -101,13 +101,13 @@ public final class EnrichCacheStore: ObservableObject {
         /// 这里只做"可见 + 可筛",挑不挑由用户定。
         public let sourcesRespondedCount: Int
 
-        /// true = 这一行不是缓存里真实存在的条目,是"这首歌正在联网搜歌词、collector
+        /// true = 这一行不是缓存里真实存在的条目,是"这首歌正在联网搜歌词、引擎
         /// 还没写出任何结论"这段窗口期的占位行(见 `LyricsManagerView.refreshPlaceholder`)。
-        /// 这个列表**只**读 collector 写的缓存文件,搜索还没出结论那段
+        /// 这个列表**只**读引擎写的缓存文件,搜索还没出结论那段
         /// 时间文件里压根没有这个 key,不是"有但没显示"。这一行不对应 `raw` 里任何 key,
         /// 编辑/删除/重新自动匹配这些操作对它都没有意义,消费方必须先判断这个字段。
         public let isSearching: Bool
-        // 这条有没有 collector 固化的解析决策记录(候选表+得分明细,见 collector/decision.go)。
+        // 这条有没有引擎固化的解析决策记录(候选表+得分明细,见 lyrimuse-engine/decision.go)。
         // 只作按钮显隐用 —— 完整结构改**懒解码**(decodedDecision(for)):
         // 原来 rebuild 时对每条带该字段的条目都做一轮 JSONSerialization.data + JSONDecoder
         // 双重编解码,而结果只有打开「解析决策」弹窗那一刻才被消费,全量急算纯属浪费。
@@ -121,16 +121,16 @@ public final class EnrichCacheStore: ObservableObject {
         ///   `lyrics_decision.decided_at` 73%(而且它是"上次自动决策",手改歌词不会动它)
         ///   `translation_ts` 25% / `peripheral_ts` 9% / `lyrics_rescore_ts` 7%
         /// 全是偏科的局部时间戳。而 `lyrics/` 是六字段的权威源,**所有**写入路径都经过它
-        /// (都是 collector 的导出,App 的改动也经它),覆盖率
+        /// (都是引擎的导出,App 的改动也经它),覆盖率
         /// 3169/3210、缺的 41 条正好是没歌词的。
         ///
         /// 关键前提:`exportLyricsFiles` 写盘前会比对全文、逐字节相同就 `continue`
-        /// (lyricsexport.go),所以 mtime 不会被"每次 collector 启动都重写一遍"冲掉。
+        /// (lyricsexport.go),所以 mtime 不会被"每次引擎启动都重写一遍"冲掉。
         /// 实测本机 mtime 散布在 08-22～09-01 而不是全挤在最近一次重启,坐实了这一点。
         /// 哪天那个跳过逻辑被去掉,这个字段就会集体失真(全变成最后一次启动时间),
         /// 而且**表现是静默的** —— 排序看着还在工作,只是结果全错。
         let lyricsUpdatedAt: Date?
-        /// 这条记录**上次被解析出来**的时刻,取自缓存里的 `ts`(collector 侧
+        /// 这条记录**上次被解析出来**的时刻,取自缓存里的 `ts`(引擎侧
         /// `enrichEntry.TS`,写入点 enrich.go 的 `e.TS = time.Now().Unix()`)。
         /// nil = 老条目没有这个字段。
         ///
@@ -229,13 +229,13 @@ public final class EnrichCacheStore: ObservableObject {
 
     private static let cacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
     // 读 FeatureSettingsStore 的计算属性,而不是编译期定死的 static let——用户可在
-    // "歌词"设置分类里自定义文件夹位置,这里必须跟 collector 那边(main.go 读
-    // features.LyricsDir)认的是同一个位置,否则存/删歌词文件的目录跟 collector 实际
+    // "歌词"设置分类里自定义文件夹位置,这里必须跟引擎那边(main.go 读
+    // features.LyricsDir)认的是同一个位置,否则存/删歌词文件的目录跟引擎实际
     // 读取的目录对不上。
     private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
     private var raw: [String: [String: Any]] = [:]
-    // true = 内存里没有可用的快照:从没读过、上次读盘失败,或被 `dropSnapshotIfIdle` 清掉了。改动交给 collector
+    // true = 内存里没有可用的快照:从没读过、上次读盘失败,或被 `dropSnapshotIfIdle` 清掉了。改动交给引擎
     // 之后据此决定要不要 reload(没人在看就不读)。
     private var isReleased = true
     // 正在看这份快照的界面(「歌词管理」窗口、设置页「歌词库统计」)。都不看了 `releaseDelay` 之后清掉快照:
@@ -243,7 +243,7 @@ public final class EnrichCacheStore: ObservableObject {
     private var snapshotHolders: Set<String> = []
     private var releaseTask: Task<Void, Never>?
     private static let releaseDelay: Duration = .seconds(5)
-    // 交给 collector、还没回结果的改动数(见 commit)。不为 0 时不清快照:改完要 reload 刷新列表。
+    // 交给引擎、还没回结果的改动数(见 commit)。不为 0 时不清快照:改完要 reload 刷新列表。
     private var editsInFlight = 0
 
     private init() {}
@@ -381,7 +381,7 @@ public final class EnrichCacheStore: ObservableObject {
         } else {
             raw = [:]
             lastLoadedFingerprint = nil
-            // 内存里没有可用快照(见 isReleased 的注释):删除按传入的 key 交给 collector,不按空的 raw 算成「没有可删的」。
+            // 内存里没有可用快照(见 isReleased 的注释):删除按传入的 key 交给引擎,不按空的 raw 算成「没有可删的」。
             isReleased = true
             loadError = box.parseFailed ? L10n.t("解析本地记录文件失败") : L10n.t("读取本地记录文件失败")
             // raw 是空的,不用为了建一份空列表去列举整个歌词目录。
@@ -407,7 +407,7 @@ public final class EnrichCacheStore: ObservableObject {
         }
     }
 
-    // key 的拼法是 collector 那边的 "歌手|歌名|专辑"(见 collector/enrich.go:93)。
+    // key 的拼法是引擎那边的 "歌手|歌名|专辑"(见 lyrimuse-engine/enrich.go:93)。
     // 只按前两个 "|" 分,专辑名里偶尔出现的 "|" 不会把切分打乱(艺人/歌名本身含 "|"
     // 这种更罕见的情况不额外处理)。
     /// 把缓存条目里的 lyrics_decision 子字典解回结构体。整个文件是 JSONSerialization
@@ -477,7 +477,7 @@ public final class EnrichCacheStore: ObservableObject {
         }
     }
 
-    /// 等在飞的读盘跑完再清;有人重新握住、或还有交给 collector 还没回来的改动就不清。清完把列表一起清空(没人在看),
+    /// 等在飞的读盘跑完再清;有人重新握住、或还有交给引擎还没回来的改动就不清。清完把列表一起清空(没人在看),
     /// 并把 `lastLoadedFingerprint` 置空 —— 否则下一次 `reload(onlyIfChanged:)` 会以为快照还在、直接跳过。
     ///
     /// 等读盘要等到**没有**在飞的为止,再清 releaseTask:等的时候又起了一次读盘的话,那次读盘收尾时的
@@ -511,10 +511,10 @@ public final class EnrichCacheStore: ObservableObject {
         var parseMS = 0.0
     }
 
-    /// 「歌词管理」的内存快照是**精简条目**(见 `EnrichCacheSlim`):优先直接解 collector 写好的精简索引
+    /// 「歌词管理」的内存快照是**精简条目**(见 `EnrichCacheSlim`):优先直接解引擎写好的精简索引
     /// (约 32 MB;主缓存 107 MB,整份解开常驻 500 MB 以上);索引不在 / 比主缓存旧 / 老格式,就解主缓存再逐条精简。
     ///
-    /// 索引必须**不比主缓存旧**:collector 每次保存先写主缓存、再写索引,中间约半秒。正赶上这半秒
+    /// 索引必须**不比主缓存旧**:引擎每次保存先写主缓存、再写索引,中间约半秒。正赶上这半秒
     /// (主缓存 3 秒内刚写过、旧索引还在)就等一等索引,不急着去解整份主缓存。
     private nonisolated static func loadSlimSnapshot(cacheURL: URL) -> SlimSnapshot {
         var out = SlimSnapshot()
@@ -539,7 +539,7 @@ public final class EnrichCacheStore: ObservableObject {
             guard attempt < 7, Date().timeIntervalSince(main) < 3 else { break }
             Thread.sleep(forTimeInterval: 0.4)
         }
-        // 全新安装、collector 还没写过缓存:库是空的,不是读失败,别亮红字。
+        // 全新安装、引擎还没写过缓存:库是空的,不是读失败,别亮红字。
         guard FileManager.default.fileExists(atPath: cacheURL.path) else {
             out.obj = [:]
             return out
@@ -575,7 +575,7 @@ public final class EnrichCacheStore: ObservableObject {
         return full[field] as? String ?? ""
     }
 
-    /// 用到这一条的正文之前把它补成完整条目(见 `EnrichCacheSlim`)。先读正文小文件;对不上(collector 还没
+    /// 用到这一条的正文之前把它补成完整条目(见 `EnrichCacheSlim`)。先读正文小文件;对不上(引擎还没
     /// 重写 / 文件缺了)就回主缓存取这一条 —— 那要解一遍整份主缓存,只在这种少见情况下付。
     /// - Returns: false = 补不回来(主缓存也读不了),调用方别拿缺正文的条目去改、去写。
     /// 在哪一版主缓存里确认过「这几条也是精简的,正文补不回来」,见 hydrate。
@@ -591,7 +591,7 @@ public final class EnrichCacheStore: ObservableObject {
         }
         guard fallbackToMainCache else { return false }
         // 这份主缓存(按文件指纹认)已经解过一遍、确认这一条在里面也是精简的:再解一遍结果一样,
-        // 白在主线程上付一次整份(几十到一百多 MB)解析。主缓存一换(collector 重写了)就重新试。
+        // 白在主线程上付一次整份(几十到一百多 MB)解析。主缓存一换(引擎重写了)就重新试。
         let mainFingerprint = Self.fileFingerprint(Self.cacheURL)
         if mainFingerprint != nil, mainFingerprint == leanInMainCache.fingerprint, leanInMainCache.keys.contains(key) {
             return false
@@ -602,7 +602,7 @@ public final class EnrichCacheStore: ObservableObject {
             loadError = L10n.t("读取本地记录文件失败")
             return false
         }
-        // 主缓存里这一条也是精简的(新版 collector 就这么写):正文只在那个读不到的小文件里,补不回来。
+        // 主缓存里这一条也是精简的(新版引擎就这么写):正文只在那个读不到的小文件里,补不回来。
         // 如实返回 false,别让调用方拿缺正文的条目当完整的用。
         if let fromMain = obj[key], EnrichCacheSlim.isSlim(fromMain) {
             logger.notice("hydrate: main cache entry is lean too, lyrics body unavailable")
@@ -669,7 +669,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// 取四个后缀里**最新**的那个,而不是只看主 `.lrc`:译文/罗马音/逐字时间轴后来补上
     /// 也是这条记录真的变了,用户按「更新时间」找的就是"最近动过什么"。
     ///
-    /// 键要**折叠成小写**:同一个 key 可能对应普通名或带哈希后缀的消歧名(见 collector 的
+    /// 键要**折叠成小写**:同一个 key 可能对应普通名或带哈希后缀的消歧名(见引擎的
     /// exportLyricsFilesMatching),而这台文件系统大小写不敏感 —— 折叠后两种形态都能被调用方用
     /// 两次 O(1) 查找命中,不必在这里反推是哪一种。
     private nonisolated static func lyricsFileModificationDates(in dir: URL) -> [String: Date] {
@@ -747,7 +747,7 @@ public final class EnrichCacheStore: ObservableObject {
                 artist: parts.artist,
                 canonicalArtist: canonical,
                 // 从「优先 duration_secs」改成「优先 resolved_duration_secs」——
-                // 真实 bug 坐实(海龟先生《男孩别哭》):duration_secs 是 collector 那边
+                // 真实 bug 坐实(海龟先生《男孩别哭》):duration_secs 是引擎那边
                 // "只在当前为 0 才写"的粘性字段(enrich.go:1428 `if e.DurationSecs <= 0`),
                 // 一旦第一次解析时凑巧读到一个错的时长(这首歌是 210.86s,真实时长
                 // 306.94s),就永远冻结在那个错值上,后续任何一次成功的自动重新匹配都不会
@@ -778,7 +778,7 @@ public final class EnrichCacheStore: ObservableObject {
                 sourcesRespondedCount: (entry["lyrics_sources_responded"] as? [Any])?.count ?? 0,
                 isSearching: false, // 这一条来自 raw,真实存在;占位行的构造点在 LyricsManagerView
                 hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
-                // 两次 O(1) 查找:普通名、以及带哈希后缀的消歧名(collector 导出时 —— 到底
+                // 两次 O(1) 查找:普通名、以及带哈希后缀的消歧名(引擎导出时 —— 到底
                 // 用哪个取决于有没有别的 key 折叠后同名,那个判断本身是 O(n),不能在这个
                 // 逐条循环里做)。都查不到 = 磁盘上没有这条的歌词文件。
                 lyricsUpdatedAt: lyricsFileDates[EnrichCacheKeys.sanitizeFilename(key).lowercased()]
@@ -836,14 +836,14 @@ public final class EnrichCacheStore: ObservableObject {
         raw[key]?["resolved_duration_secs"] as? Double ?? 0
     }
 
-    /// 缓存里有没有这个 key——给"正在搜索"占位行判断"collector 是不是已经写出结论了"用
+    /// 缓存里有没有这个 key——给"正在搜索"占位行判断"引擎是不是已经写出结论了"用
     /// (`LyricsManagerView.refreshPlaceholder`):有就说明真实那一行已经存在于 `summaries`
     /// 里,占位行该让位了;没有就说明还在搜。只暴露"存不存在"这一个布尔,不直接开放 `raw`
     /// 本身——那份原始字典的字典级读写是这个类型自己的事,消费方不该绕过 Summary 这层接口。
     ///
     /// 只做精确字典查找会漏掉繁简写法不一致的情况:占位行的 key 是**当下这一刻**
     /// 播放器实时上报的 artist/title/album 拼出来的(EnrichCacheKeys.normalizedKey,
-    /// 不含繁简折算)——collector 那条 enrichKey 同样不折算(必须跟 Apple Music/播放器
+    /// 不含繁简折算)——引擎那条 enrichKey 同样不折算(必须跟 Apple Music/播放器
     /// 原始标签逐字节一致,见 enrich.go 那段注释),同一首歌只要播放器这次上报的专辑名
     /// 繁简写法(如"收斂水"/"收敛水")跟当初解析那次不一样,拼出来的 key 就会对不上已经
     /// 写盘的那一条——即便磁盘里其实早就有真实的、
@@ -866,7 +866,7 @@ public final class EnrichCacheStore: ObservableObject {
         Self.decodeDecision(Self.hydratedDecision(raw[key]?["lyrics_decision"], key: key))
     }
 
-    /// 判决的候选明细(candidates / queries_tried)在旁路目录里(`DecisionSidecar`,collector 保存时拆出去),
+    /// 判决的候选明细(candidates / queries_tried)在旁路目录里(`DecisionSidecar`,引擎保存时拆出去),
     /// 按指纹补回来再解;指纹对不上就不补,弹窗那边显示「候选明细缺失」。老条目 / 还没被拆过的原样用。
     private static func hydratedDecision(_ value: Any?, key: String) -> Any? {
         guard let dict = value as? [String: Any] else { return value }
@@ -874,7 +874,7 @@ public final class EnrichCacheStore: ObservableObject {
         return DecisionSidecar.hydrate(dict, record: DecisionSidecar.loadRecord(key: key, directory: dir))
     }
 
-    /// 「当前歌词的出处」那一槽(lyrics_decision_applied,collector 分槽写入)。
+    /// 「当前歌词的出处」那一槽(lyrics_decision_applied,引擎分槽写入)。
     /// 跟上面的 lyrics_decision(最近一次评估,可能维持原状、甚至输入是脏的)是两份记录:
     /// 一轮没采纳的评估会盖掉 lyrics_decision,但不动这一槽 ——「解析决策」弹窗靠它才能
     /// 永远解释"现在这份词是谁、凭什么选的"。老条目(分槽前写入)没有这一槽,弹窗侧有
@@ -920,27 +920,27 @@ public final class EnrichCacheStore: ObservableObject {
     // 则清空这个字段——手改之后已经不再是任何平台的原文,继续挂着旧的平台徽章比"无
     // 来源"更容易误导人,跟"人工修正"徽章(isManual)搭配显示才诚实。
     /// - markManual: 默认 true(手动编辑是人工修正)。采纳候选按「手动选定歌词后锁定」开关传:`manual_lyrics` 是
-    ///   collector 侧所有自愈路径的一票否决闸(补空 / 重评 / 升级重试三条的第一行都看它),置真就等于把这首歌
+    ///   引擎侧所有自愈路径的一票否决闸(补空 / 重评 / 升级重试三条的第一行都看它),置真就等于把这首歌
     ///   冻结在这一份上。传 false 时**主动清掉**这个标记(连带导出的 .lrc 头里那行 `[manual:1]`,
-    ///   否则 collector 下次启动 importLyricsFromFiles 会拿文件头把它改回来)。
+    ///   否则引擎下次启动 importLyricsFromFiles 会拿文件头把它改回来)。
     /// - Parameter sourceChoice: 「用户选定了哪个源」。传非空字符串 = 记下这个选择;传空
     ///   字符串 = **显式清掉**(交回算法自由选源);传 nil = 不动这个字段。
-    ///   语义见 collector 侧 `enrichEntry.LyricsSourceChoice` 的注释:它跟 `markManual`
+    ///   语义见引擎侧 `enrichEntry.LyricsSourceChoice` 的注释:它跟 `markManual`
     ///   是两件事 —— 那个说"我改过正文,别碰",这个只说"我要这个源的词"。
     /// - Parameter fromManualPick: 这一笔是不是「采纳一条候选」(三个入口:歌词管理、悬浮窗
     ///   ⚙「搜索歌词…」小窗、歌词窗口内的搜索)。传 true 会写下内容指纹 `manual_pick_sha`,
     ///   供「手动选定歌词后锁定」开关**追溯**用;传 false(默认)会把它清掉。详见写入处的
     ///   注释与 `applyManualPickLock`。它跟 `markManual` 正交:markManual 决定"现在锁不锁",
     ///   这个只决定"以后开关打开时要不要把这首歌算进去"。
-    /// - Returns: collector 有没有执行成功。「采纳候选」的面板等着它
+    /// - Returns: 引擎有没有执行成功。「采纳候选」的面板等着它
     ///   决定挪不挪「当前使用」徽标、给成功还是失败的回声;失败原因照旧写在 `lastError`。
     ///   老调用点不关心结果,所以 `@discardableResult`。
     @discardableResult
     public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
                          source: String? = nil, markManual: Bool = true,
                          sourceChoice: String? = nil, fromManualPick: Bool = false) async -> Bool {
-        // 字段规则(译文换了清译文记录、罗马音描述旧正文就清掉、采纳留内容指纹……)都在 collector 的
-        // applySaveEdit,这里只把参数原样交过去。nil 的参数不传 = collector 那边不动这个字段。
+        // 字段规则(译文换了清译文记录、罗马音描述旧正文就清掉、采纳留内容指纹……)都在引擎的
+        // applySaveEdit,这里只把参数原样交过去。nil 的参数不传 = 引擎那边不动这个字段。
         var fields: [String: Any] = [
             "key": key, "lyrics": lyrics, "tr": tr, "roma": roma,
             "mark_manual": markManual, "from_manual_pick": fromManualPick,
@@ -994,8 +994,8 @@ public final class EnrichCacheStore: ObservableObject {
     }
 
     /// 把上面那批 key 的 `manual_lyrics` 批量翻成 `locking`。挑哪几首、连 .lrc 文件头一起重写,
-    /// 都由 collector 按同一判据做(见 collector 侧 set_manual_lock)。
-    /// - Returns: `ok` = collector 那边真的写成了(失败原因在 `lastError`);`changed` = 改了几首。
+    /// 都由引擎按同一判据做(见引擎侧 set_manual_lock)。
+    /// - Returns: `ok` = 引擎那边真的写成了(失败原因在 `lastError`);`changed` = 改了几首。
     ///   调用方必须先看 `ok`:写失败时 `changed` 也是 0,只看它会把失败说成「已经都是锁定状态」。
     @discardableResult
     public func applyManualPickLock(_ locking: Bool) async -> (ok: Bool, changed: Int) {
@@ -1007,7 +1007,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// 歌词」弹窗里点"采纳为静态文本")——加,刻意**不走** saveEdit:
     ///
     /// - 不写 lyrics/lyrics_tr/lyrics_roma/lyrics_yrc 这几个"带时间戳"专用字段,改写
-    ///   独立的 plain_lyrics(collector 侧 enrichEntry.PlainLyrics 头注解释了为什么必须
+    ///   独立的 plain_lyrics(引擎侧 enrichEntry.PlainLyrics 头注解释了为什么必须
     ///   分开存,不能塞进 lyrics 冒充一份)——桌面悬浮歌词/灵动岛这些依赖时间戳的展示面
     ///   因此会继续如实显示"无歌词",只有「歌词窗口」会认这个新字段、走静态展示。
     /// - 不置 manual_lyrics:跟 saveEdit 里"采纳候选不算手动编辑"是同一个理由,这样以后
@@ -1024,17 +1024,17 @@ public final class EnrichCacheStore: ObservableObject {
     /// 用户在详情页手动标/撤「纯音乐」。起因:MJ《Off the Wall》的 Quincy Jones
     /// 访谈口白、《Raise!》26 秒的 Kalimba Tree 这类曲目,九个源里没有任何一个会给出
     /// instrumental 标记(lrclib 的 instrumental 字段和网易云的 pureMusic 都只覆盖它们自己
-    /// 收录且标了的曲目),collector 永远拿不到"这首本来就没词"的结论,列表就永远红着「无歌词」、
+    /// 收录且标了的曲目),引擎永远拿不到"这首本来就没词"的结论,列表就永远红着「无歌词」、
     /// 补空扫描也会每隔一天(退避后翻倍)白搜一轮——这个结论只有人能下。
     /// 只置一个字段、不碰 lyrics/manual_lyrics/source;撤销时把键
-    /// 整个删掉(collector 侧 omitempty,false 与缺失等价)。标上之后 collector 的
+    /// 整个删掉(引擎侧 omitempty,false 与缺失等价)。标上之后引擎的
     /// needsLyricsFirstFill 会直接 return——这也是这个动作真正的效果:告诉自动逻辑"别再搜了"。
     public func setInstrumental(key: String, _ value: Bool) async {
         await commit("set_instrumental", ["key": key, "value": value])
     }
 
-    /// 一条记录会不会被 collector 的补空扫描真的拿去搜:没词、没确证纯音乐、没人工
-    /// 修正(有纯文本兜底的也算——那仍不是带时间轴的词),跟 collector 侧 lyricsFillSweepCandidates
+    /// 一条记录会不会被引擎的补空扫描真的拿去搜:没词、没确证纯音乐、没人工
+    /// 修正(有纯文本兜底的也算——那仍不是带时间轴的词),跟引擎侧 lyricsFillSweepCandidates
     /// 的三道硬闸同一口径;占位行不算(它此刻正在被搜)。「歌词管理」工具栏/多选面板和设置页
     /// 「歌词库」面板三处按钮上的数字都从这里来,按钮上的数就是真会被搜的条数。
     nonisolated static func isFillSweepRetryable(_ s: Summary) -> Bool {
@@ -1062,7 +1062,7 @@ public final class EnrichCacheStore: ObservableObject {
             respondedCount: (last?["sources_responded"] as? [Any])?.count ?? 0)
     }
 
-    /// 「歌词管理」里删除(单条 / 多选批量)。删缓存条目的同时,collector 把这几首导出过的歌词文件挪进废纸篓、
+    /// 「歌词管理」里删除(单条 / 多选批量)。删缓存条目的同时,引擎把这几首导出过的歌词文件挪进废纸篓、
     /// 删掉判决旁路文件 —— "删除"在两边都是真删除,不留一份用户自己都不知道还在的归档。
     public func delete(key: String) async {
         await delete(keys: [key])
@@ -1070,13 +1070,13 @@ public final class EnrichCacheStore: ObservableObject {
 
     public func delete(keys: Set<String>) async {
         // 只删真的还在缓存里的 key —— 选中集合里可能残留已失效的 key(筛选变了 / 点过刷新 / 别处删过),
-        // 混进来不会删错东西(collector 那边也只删在的),但会让"删了 N 条"和要不要打快照的判断虚高。
+        // 混进来不会删错东西(引擎那边也只删在的),但会让"删了 N 条"和要不要打快照的判断虚高。
         let victims = isReleased
             ? keys.sorted()
             : EnrichCacheKeys.deletionPlan(selected: keys, existing: Set(raw.keys))
         guard !victims.isEmpty else { return }
         // 阈值以上才先打快照:打一份要读几千个小文件、压缩十几 MB,删一条付不起;删一条也够不上"手滑毁一片",
-        // 它的兜底是 collector 把文件挪进废纸篓。
+        // 它的兜底是引擎把文件挪进废纸篓。
         if victims.count >= Self.autoSnapshotDeleteThreshold {
             guard await takeAutoSnapshot(reason: "delete") else { return }
         } else {
@@ -1109,7 +1109,7 @@ public final class EnrichCacheStore: ObservableObject {
             """)
         let result = await commit("clear_all")
         guard result.ok else { return }
-        // 「已校准」名单跟着一起清:名单里那些 key 对应的条目都不在了,留着就是一份孤儿名单,collector 会继续
+        // 「已校准」名单跟着一起清:名单里那些 key 对应的条目都不在了,留着就是一份孤儿名单,引擎会继续
         // 一票否决这些歌的自动重选。(这跟「清空全部时间轴校正」是两个入口:那个清校正值,这个清内容。)
         LyricsPinStore.shared.removeAll()
     }
@@ -1129,7 +1129,7 @@ public final class EnrichCacheStore: ObservableObject {
     }
 
     /// 从一份自动快照把歌词库铺回去:`LyricsBackupStore.restoreAutoSnapshot` 铺文件、留待采纳的非歌词字段,
-    /// 再由它交给 collector 收进缓存(adopt_restore),最后刷新列表。返回给用户看的一句结果;nil = 读不出这份快照。
+    /// 再由它交给引擎收进缓存(adopt_restore),最后刷新列表。返回给用户看的一句结果;nil = 读不出这份快照。
     func restoreFromAutoSnapshot(_ snapshot: LyricsBackupStore.Snapshot) async -> String? {
         guard let result = await LyricsBackupStore.restoreAutoSnapshot(snapshot) else { return nil }
         if !isReleased { await reload() }
@@ -1145,8 +1145,8 @@ public final class EnrichCacheStore: ObservableObject {
         return lines.joined(separator: "\n")
     }
 
-    /// 把一次改动交给 collector(见 EnrichEditChannel),完了按 collector 写好的盘上内容刷新列表,并让正在放的
-    /// 那首重读歌词。快照没人在看(isReleased)时不读盘:改动已在 collector 那边落定,下次打开时再读。
+    /// 把一次改动交给引擎(见 EnrichEditChannel),完了按引擎写好的盘上内容刷新列表,并让正在放的
+    /// 那首重读歌词。快照没人在看(isReleased)时不读盘:改动已在引擎那边落定,下次打开时再读。
     @discardableResult
     private func commit(_ op: String, _ fields: [String: Any] = [:]) async -> EnrichEditChannel.Result {
         editsInFlight += 1
@@ -1161,7 +1161,7 @@ public final class EnrichCacheStore: ObservableObject {
         } else if let error = result.error, result.errorIsLocalized {
             editError = String(format: L10n.t("写入本地记录文件失败：%@"), error)
         } else {
-            // collector 回的是英文的内部错误(「save_edit: empty key」这类),原样拼进界面没有意义;原文进日志。
+            // 引擎回的是英文的内部错误(「save_edit: empty key」这类),原样拼进界面没有意义;原文进日志。
             editError = L10n.t("写入本地记录文件失败，后台服务没能执行这次修改")
             logger.error("enrich edit \(op, privacy: .public) failed: \(result.error ?? "", privacy: .public)")
         }
@@ -1191,9 +1191,9 @@ public final class EnrichCacheStore: ObservableObject {
 
 }
 
-// collector 固化的解析决策记录 —— 跟 collector/decision.go 的 lyricsDecision 逐字段对应
+// 引擎固化的解析决策记录 —— 跟 lyrimuse-engine/decision.go 的 lyricsDecision 逐字段对应
 // (snake_case 由 JSONDecoder 的 convertFromSnakeCase 兜),只读展示,永远不写回。
-// 得分明细直接复用 LyricsSearchService.ScoreTerm:collector 两条路径吐的是同一套
+// 得分明细直接复用 LyricsSearchService.ScoreTerm:引擎两条路径吐的是同一套
 // scoreTerm(kind/points),这边的本地化文案(label/detail)天然通用。
 struct LyricsResolutionDecision: Decodable {
     let path: String
@@ -1207,7 +1207,7 @@ struct LyricsResolutionDecision: Decodable {
     let winner: String?
     let applied: Bool?
     let candidates: [Candidate]?
-    /// 这一轮走到过哪条**标题反查**(collector 的 retry_method:`title-from-album` /
+    /// 这一轮走到过哪条**标题反查**(引擎的 retry_method:`title-from-album` /
     /// `title-from-artist-search`),以及反查出来的曲名。两个字段成对出现,
     /// **全库只有 13 份存档(0.3%)有它们** —— 罕见,但发生时它是关于这次解析最重要的
     /// 一个事实:这份词是用**另一个曲名**找回来的,本地那个曲名压根搜不到。
@@ -1218,19 +1218,19 @@ struct LyricsResolutionDecision: Decodable {
     /// 候选明细挪到了旁路文件、却按指纹补不回来(`DecisionSidecar`)。true 时候选表显示「明细缺失」,
     /// 而不是误报成「本轮没有源返回候选」。
     let detailsExternal: Bool?
-    /// 这一轮**实际问出去的每一组查询词**(collector 侧见 querylog.go)。
+    /// 这一轮**实际问出去的每一组查询词**(引擎侧见 querylog.go)。
     /// 上面 queryArtist/queryTitle/queryAlbum 记的只是**首轮**那一组;一轮解析最多会换五种
     /// 问法(拆分重入 / 别名轮 / 首歌手变体轮 / 两种标题反查)。**老存档里没有这个字段**,
     /// 恒为 nil —— 跟 coverUrl 同一个道理,存档是当时那一刻的固化,不能事后补。
     let queriesTried: [TriedQuery]?
 
-    /// 一组真正发出去的查询词。字段名对着 collector 的 lyricQueryRecord;这个类型走
+    /// 一组真正发出去的查询词。字段名对着引擎的 lyricQueryRecord;这个类型走
     /// `.convertFromSnakeCase`,而这几个键都是单词、没有下划线,所以不用手写 CodingKeys。
     struct TriedQuery: Decodable, Identifiable {
         var id: String { "\(reason ?? "")|\(artist)|\(title ?? "")|\((sources ?? []).joined(separator: ","))" }
         let artist: String
         let title: String?
-        /// 这一组是哪一轮问的。空 / nil = 首轮。取值全集见 collector 的 lyricQueryReason*,
+        /// 这一组是哪一轮问的。空 / nil = 首轮。取值全集见引擎的 lyricQueryReason*,
         /// 中文译名在 LyricsDecisionSheet.queryReasonLabel(漏补就会在界面上印英文串)。
         let reason: String?
         /// 这一轮**只**问了这几个源(别名轮的定向重查)。空 = 没有限制。

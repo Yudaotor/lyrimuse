@@ -27,10 +27,10 @@ struct OnboardingView: View {
     @ObservedObject private var fullDiskAccess = FullDiskAccessPermission.shared
     // 「辅助功能」同理。
     @ObservedObject private var accessibility = AccessibilityPermission.shared
-    // collector 常驻服务是否真的在跑——这一步是"软强制"的必经步骤:锁住下一步按钮,
+    // 引擎常驻服务是否真的在跑——这一步是"软强制"的必经步骤:锁住下一步按钮,
     // 但仍然可以直接关掉整个引导窗口跳过,不禁用/隐藏关闭按钮。
-    @State private var collectorRunning = false
-    @State private var isTogglingCollectorService = false
+    @State private var engineRunning = false
+    @State private var isTogglingEngineService = false
     /// 收尾页「放一首歌试试」那一行的输入,只订阅用得到的几个属性(理由同 `isPlayingNow`)。
     @State private var liveInput = OnboardingFlow.LiveInput(
         title: "", artist: "", hasLyrics: false, instrumental: false,
@@ -50,7 +50,7 @@ struct OnboardingView: View {
     /// 只会多一个跟"这次走到哪"对不上的字段。
     @State private var furthestStep = 0
     /// 常驻服务点了「启用」却没起来时,给用户的一句交代。nil = 没有待报告的失败。
-    @State private var collectorFailure: String?
+    @State private var engineFailure: String?
     /// 「从应用程序中选择…」挑到一个驱不动的 App 时的错误文案(本体在
     /// `BrowserPairing.chooseFromApplications`,那边只返回文案、不碰视图状态)。
     @State private var browserPickerError: String?
@@ -125,7 +125,7 @@ struct OnboardingView: View {
         let c = PlaybackCoordinator.shared
         return Publishers.CombineLatest4(c.$title, c.$displayArtist, c.$hasLyricsContent, c.$isCurrentTrackInstrumental)
             .combineLatest(Publishers.CombineLatest3(c.$currentTrackHasNoLyrics, c.$isCurrentTrackAdBreak,
-                                                     c.$collectorNetworkDown))
+                                                     c.$engineNetworkDown))
             .map { track, flags in
                 OnboardingFlow.LiveInput(title: track.0, artist: track.1, hasLyrics: track.2,
                                          instrumental: track.3, noLyrics: flags.0,
@@ -179,7 +179,7 @@ struct OnboardingView: View {
     /// doneStep 却说一切就绪"。那个病根现在由 `doneStep` 的体检清单如实报告(见那边),
     /// 不需要再靠锁死按钮来兜。
     private var nextIsLocked: Bool {
-        OnboardingFlow.nextIsLocked(at: currentStep, collectorRunning: collectorRunning)
+        OnboardingFlow.nextIsLocked(at: currentStep, engineRunning: engineRunning)
     }
 
     var body: some View {
@@ -272,7 +272,7 @@ struct OnboardingView: View {
         }
         // 走到"体检"和"后台服务"这两步时重新读一次真实状态 —— 用户可能刚在系统设置里
         // 给了权限、或者从别处把服务装上了,清单必须反映此刻的事实而不是进门时的快照。
-        // 只在这两步做,不是每步都做:`CollectorServiceManager.isRunning` 要起一次
+        // 只在这两步做,不是每步都做:`EngineServiceManager.isRunning` 要起一次
         // `launchctl print` 子进程,没必要在每次翻页都付这个钱。
         .onChange(of: step) { _, _ in
             guard currentStep == .done || currentStep == .background else { return }
@@ -280,14 +280,14 @@ struct OnboardingView: View {
             accessibility.refresh()
             let arrivedAt = currentStep
             Task {
-                await refreshCollectorRunning()
+                await refreshEngineRunning()
                 // 查状态的这一会儿又翻走了:别在别的页面上起安装。
                 guard currentStep == arrivedAt else { return }
                 // 走到这一步就开始装,页面照样显示安装过程和结果(不在 App 启动时静默装)。
                 if OnboardingFlow.autoStartsBackgroundService(
-                    at: currentStep, collectorRunning: collectorRunning,
-                    installing: isTogglingCollectorService, lastAttemptFailed: collectorFailure != nil) {
-                    enableCollectorService()
+                    at: currentStep, engineRunning: engineRunning,
+                    installing: isTogglingEngineService, lastAttemptFailed: engineFailure != nil) {
+                    enableEngineService()
                 }
             }
         }
@@ -299,13 +299,13 @@ struct OnboardingView: View {
             if new == .done { confettiBurst += 1 }
             if new == .done || new == .background { fullDiskAccess.refresh() }
         }
-        // 「完全磁盘访问」的状态文件由 collector 写,不会推通知过来;只在用得到它的两步轮询
+        // 「完全磁盘访问」的状态文件由引擎写,不会推通知过来;只在用得到它的两步轮询
         // (按 mtime 读,很便宜)。
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             // 服务没跑起来的时候,用户多半正照着失败文案去设置里「播放器 → 歌词引擎」修:修好了这里要跟着变绿、
             // 放开「下一步」,收尾页点「开始使用」也要能记成走完。跑起来之后就不用再问了。
-            if (currentStep == .background || currentStep == .done), !collectorRunning, !isTogglingCollectorService {
-                Task { await refreshCollectorRunning() }
+            if (currentStep == .background || currentStep == .done), !engineRunning, !isTogglingEngineService {
+                Task { await refreshEngineRunning() }
             }
             switch currentStep {
             case .done:
@@ -329,7 +329,7 @@ struct OnboardingView: View {
         .onReceive(Self.liveInputs) { liveInput = $0 }
         .onAppear {
             automation.refresh(automationTargets)
-            Task { await refreshCollectorRunning() }
+            Task { await refreshEngineRunning() }
             // 「YouTube Music」那一格的选中态按**当前真实配置**播种:已经配过
             // 浏览器的人重跑引导时,那一格该是亮的、后面那一步也该在,而不是让他重新勾一遍。
             // 这也是这个布尔不需要自己持久化的原因(见它的声明处)。
@@ -344,7 +344,7 @@ struct OnboardingView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             automation.refresh(automationTargets, clearRequestUI: true)
             accessibility.refresh()
-            Task { await refreshCollectorRunning() }
+            Task { await refreshEngineRunning() }
         }
         .onReceive(PlaybackCoordinator.shared.$isPlayingNow.removeDuplicates()) { playing in
             isPlayingNow = playing
@@ -352,7 +352,7 @@ struct OnboardingView: View {
         // 这里原来挂着 `.onDisappear { settings.hasCompletedOnboarding = true }`,
         // 也就是"不管走没走完(包括直接点红绿灯关窗)都算引导过了"。去掉。
         //
-        // 那个行为会造成一条不可自愈的死路:常驻服务默认不装,而歌词全部来自 collector
+        // 那个行为会造成一条不可自愈的死路:常驻服务默认不装,而歌词全部来自引擎
         // 写在磁盘上的缓存(见 LocalPlaybackSource 顶部注释)—— 第一步就关窗的用户,
         // 服务没装、引导又被标记成"已完成"再也不会出现,于是桌面上留着一个永远停在
         // "搜索歌词中…"的悬浮窗,而他没有任何入口把服务装起来。
@@ -619,7 +619,7 @@ struct OnboardingView: View {
     /// 以及按需出现的每家播放器自动化权限、完全磁盘访问、辅助功能。每行只写名称和状态,需要处理时才出现
     /// 按钮;两项权限各有什么用收在卡片下面。开机启动是偏好不是要核对的状态,放在欢迎页。
     ///
-    /// 歌词引擎和开机启动**不是同一件事**:collector 是独立的 launchd job(KeepAlive,装上
+    /// 歌词引擎和开机启动**不是同一件事**:引擎是独立的 launchd job(KeepAlive,装上
     /// 之后本来就开机自启),开机启动开关管的是 Lyrimuse 这个 App 自己(`LoginItemManager`)。
     /// 这条区别不写进界面文案。
     ///
@@ -639,8 +639,8 @@ struct OnboardingView: View {
                     engineTrailing
                 }
                 // 自动启用没起来时的交代:原因 + 出路(按钮已经变成「重试」)。
-                if let collectorFailure {
-                    rowNote(collectorFailure, tint: .orange)
+                if let engineFailure {
+                    rowNote(engineFailure, tint: .orange)
                 }
                 ForEach(automationTargets, id: \.self) { player in
                     setupDivider
@@ -684,29 +684,29 @@ struct OnboardingView: View {
     }
 
     private var engineIcon: String {
-        if collectorRunning { return "checkmark.circle.fill" }
-        return isTogglingCollectorService ? "circle.dotted" : "xmark.circle.fill"
+        if engineRunning { return "checkmark.circle.fill" }
+        return isTogglingEngineService ? "circle.dotted" : "xmark.circle.fill"
     }
 
     private var engineTint: Color {
-        if collectorRunning { return .green }
-        return isTogglingCollectorService ? .secondary : .red
+        if engineRunning { return .green }
+        return isTogglingEngineService ? .secondary : .red
     }
 
     /// 歌词引擎那一行的尾部:在跑只写状态;正在装转圈;没起来才给按钮(自动启用失败后是「重试」)。
     @ViewBuilder
     private var engineTrailing: some View {
-        if collectorRunning {
+        if engineRunning {
             Text(L10n.t("运行中"))
                 .foregroundStyle(.secondary)
-        } else if isTogglingCollectorService {
+        } else if isTogglingEngineService {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
                 Text(L10n.t("正在启用…"))
                     .foregroundStyle(.secondary)
             }
         } else {
-            Button(collectorFailure == nil ? L10n.t("启用") : L10n.t("重试")) { enableCollectorService() }
+            Button(engineFailure == nil ? L10n.t("启用") : L10n.t("重试")) { enableEngineService() }
                 .controlSize(.small)
         }
     }
@@ -738,9 +738,9 @@ struct OnboardingView: View {
                 }
                 // 歌词引擎没在跑(没装上、被跳过)或者正在装的时候不给这颗按钮:重启一个不存在的服务只会白转圈,
                 // 跟正在进行的安装撞在一起还可能互相杀掉对方刚拉起的进程。
-                if fullDiskAccess.restartPhase != .waiting, collectorRunning, !isTogglingCollectorService {
+                if fullDiskAccess.restartPhase != .waiting, engineRunning, !isTogglingEngineService {
                     Button(L10n.t("重启歌词引擎")) {
-                        Task { await fullDiskAccess.restartCollector(for: targets) }
+                        Task { await fullDiskAccess.restartEngine(for: targets) }
                     }
                     .buttonStyle(.link)
                 }
@@ -774,7 +774,7 @@ struct OnboardingView: View {
         }
     }
 
-    /// 卡片下面那几句:只讲这一轮真的出现了的权限各有什么用。完全磁盘访问那句按 collector 实际读的
+    /// 卡片下面那几句:只讲这一轮真的出现了的权限各有什么用。完全磁盘访问那句按引擎实际读的
     /// 路径写(只读这几家在 ~/Library/Containers 下的歌词缓存与播放队列,localcachefs.go 头注);
     /// 别写「不上传」:开了网页中继时当前歌词会推到用户自己的服务器。
     private func permissionBenefitNote(_ fdaTargets: [PlaybackPlayer], _ axTargets: [PlaybackPlayer]) -> String? {
@@ -1077,7 +1077,7 @@ struct OnboardingView: View {
         let fdaTargets = fullDiskAccessTargets
         let axTargets = accessibilityTargets
         return OnboardingFlow.readinessItems(.init(
-            collectorRunning: collectorRunning,
+            engineRunning: engineRunning,
             automationTargets: targets,
             authorized: Set(targets.filter { automation.status($0) == .authorized }),
             fullDiskAccessGranted: fdaTargets.isEmpty ? nil : fullDiskAccess.grant(fdaTargets) == .granted,
@@ -1089,7 +1089,7 @@ struct OnboardingView: View {
 
     private func readinessTitle(_ kind: OnboardingFlow.ReadinessKind) -> String {
         switch kind {
-        case .collector: return L10n.t("歌词引擎")
+        case .engine: return L10n.t("歌词引擎")
         case .automation(let player): return String(format: L10n.t("%@ 自动化权限"), player.displayName)
         case .fullDiskAccess: return L10n.t("完全磁盘访问权限")
         case .accessibility: return L10n.t("辅助功能权限")
@@ -1129,7 +1129,7 @@ struct OnboardingView: View {
                 lastfmTile
             }
             // 见 finish():歌词引擎没起来时这次不算走完引导,下次启动还会再问。写在脸上,不做无声惩罚。
-            if !collectorRunning {
+            if !engineRunning {
                 Text(L10n.t("歌词引擎还没启用，所以这次不算走完引导——下次启动会再问一次"))
                     .font(.caption)
                     .foregroundStyle(.orange)
@@ -1432,27 +1432,27 @@ struct OnboardingView: View {
     ///
     /// 在这里要、而不是等到后面那一步:后面那一步只在**列表非空**时才存在,而列表正是由
     /// 这一下决定的;等翻过去再问,用户已经离开"我刚说我用它"那个语境了。
-    /// 重新读一次后台服务在不在跑。`CollectorServiceManager.isRunning` 会起 `launchctl print` 子进程同步等它退出,
+    /// 重新读一次后台服务在不在跑。`EngineServiceManager.isRunning` 会起 `launchctl print` 子进程同步等它退出,
     /// 放到后台线程上查,不卡引导窗口。
-    private func refreshCollectorRunning() async {
-        let running = await Task.detached(priority: .userInitiated) { CollectorServiceManager.isRunning }.value
-        if collectorRunning != running { collectorRunning = running }
+    private func refreshEngineRunning() async {
+        let running = await Task.detached(priority: .userInitiated) { EngineServiceManager.isRunning }.value
+        if engineRunning != running { engineRunning = running }
     }
 
-    private func enableCollectorService() {
-        isTogglingCollectorService = true
-        collectorFailure = nil
+    private func enableEngineService() {
+        isTogglingEngineService = true
+        engineFailure = nil
         Task {
             // 引导页只关心"起来了没",不铺开三态——那是设置页排查问题时才需要的粒度。
-            // 先写开关(didSet 派发那唯一一次 install),再等它跑完拿状态,见 CollectorServiceManager.operationQueue。
-            settings.collectorServiceEnabled = true
-            let state = await CollectorServiceManager.waitForPendingOperations()
-            collectorRunning = state.isRunning
-            isTogglingCollectorService = false
+            // 先写开关(didSet 派发那唯一一次 install),再等它跑完拿状态,见 EngineServiceManager.operationQueue。
+            settings.engineServiceEnabled = true
+            let state = await EngineServiceManager.waitForPendingOperations()
+            engineRunning = state.isRunning
+            isTogglingEngineService = false
             // 起不来时给一句交代 + 一条出路。`LaunchdJobState.description`
             // 是固定英文的诊断串(见那边头注:它本来就是拿来贴给别人看的),所以只放进括号里
             // 当线索,不承担正文的表达。
-            collectorFailure = state.isRunning ? nil : String(
+            engineFailure = state.isRunning ? nil : String(
                 format: L10n.t("没能启动（%@）。可以先「暂时跳过」，之后到设置的「播放器 → 歌词引擎」里重试，那一页会给出更细的状态。"),
                 state.description)
         }
@@ -1477,7 +1477,7 @@ struct OnboardingView: View {
     private func finish() {
         // **后台服务没起来就不算"引导过了"**(跟同日新增的「暂时跳过」配套)。
         //
-        // `hasCompletedOnboarding` 一旦置真,这扇窗口再也不会自动出现,而它是把 collector
+        // `hasCompletedOnboarding` 一旦置真,这扇窗口再也不会自动出现,而它是把引擎
         // 服务装起来的主要入口 —— 15 章记着的那条不可自愈的死路正是这么形成的:服务没装、
         // 引导又被标记成已完成,用户看到的是桌面永久停在「搜索歌词中…」,界面上没有任何
         // 线索指向"后台服务没装"。加了「暂时跳过」之后,那条死路就又有了一条新的到达方式,
@@ -1485,7 +1485,7 @@ struct OnboardingView: View {
         //
         // 跳过的人代价只是"下次启动会再问一次"(跟直接关窗完全同一档待遇),而 doneStep 的
         // 体检清单已经把这件事写在脸上了,不是无声惩罚。
-        if OnboardingFlow.marksCompleted(collectorRunning: collectorRunning) {
+        if OnboardingFlow.marksCompleted(engineRunning: engineRunning) {
             settings.hasCompletedOnboarding = true
         }
         dismissWindow(id: "onboarding")

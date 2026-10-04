@@ -1,17 +1,17 @@
 import Foundation
 import os
 
-/// collector 预解析要的那几样播放器查询,由 App 代跑。collector 自己不发 AppleEvent,系统设置「自动化」里只剩
+/// 引擎预解析要的那几样播放器查询,由 App 代跑。引擎自己不发 AppleEvent,系统设置「自动化」里只剩
 /// Lyrimuse 一条,授权框也只可能来自 App。
 ///
-/// collector 写一份带类型的请求(`lyrimuse-player-query-request.json`:种类 + 参数,不带脚本),这里只跑自己内置的
+/// 引擎写一份带类型的请求(`lyrimuse-player-query-request.json`:种类 + 参数,不带脚本),这里只跑自己内置的
 /// 几段只读脚本和系统待播队列那次查询(`NowPlayingClientsProbe.queue`),把输出整理成结构、以 JSON 写回
 /// `lyrimuse-player-query-reply.json`:一串曲目的那几种是 `PlayerQueryTracks`,Spotify 随机状态是 `PlayerQueryShuffle`,
-/// Kaset 的队列是 `KasetPlayerInfo.QueueReply`。collector 只解 JSON(`appquery.go`);契约两边各钉一份:selftest
+/// Kaset 的队列是 `KasetPlayerInfo.QueueReply`。引擎只解 JSON(`appquery.go`);契约两边各钉一份:selftest
 /// 「player-query」组、Go `appquery_test.go`(读这个文件对账),样例在 shared/testdata/player-query/。
 ///
 /// 只认这六种查询,参数逐项校验;网页队列那种只对用户把这个平台配对给了的浏览器跑。请求写出超过 `requestMaxAge`
-/// 才看到就不答(collector 那边早不等了)。一次只处理一份请求,collector 那边也一次只发一份。
+/// 才看到就不答(引擎那边早不等了)。一次只处理一份请求,引擎那边也一次只发一份。
 /// 只在以 Lyrimuse.app 身份运行时启动:selftest 与 `swift run` 共用配置目录,同 `PlaybackStatePublisher`。
 ///
 /// 状态(定时器、上次读到的请求)只在 `queue` 上读写。
@@ -26,11 +26,11 @@ public final class PlayerQueryServer: @unchecked Sendable {
     public static let schema = 2
     /// 多久看一次请求文件(一次 stat,变了才读)。
     public static let pollInterval: TimeInterval = 0.5
-    /// 请求写出之后超过这么久才看到就不答。collector 那边最多等 8 秒(`appQueryScriptTimeout`)。
+    /// 请求写出之后超过这么久才看到就不答。引擎那边最多等 8 秒(`appQueryScriptTimeout`)。
     public static let requestMaxAge: TimeInterval = 10
-    /// 跑 Music / 浏览器脚本、读系统待播队列的进程级超时。collector 那边的等待按它留了余量,两边一起改。
+    /// 跑 Music / 浏览器脚本、读系统待播队列的进程级超时。引擎那边的等待按它留了余量,两边一起改。
     public static let scriptTimeout: TimeInterval = 6
-    /// 问 Spotify 随机状态的进程级超时(collector 那边等 4 秒)。
+    /// 问 Spotify 随机状态的进程级超时(引擎那边等 4 秒)。
     public static let shuffleTimeout: TimeInterval = 2
     /// 浏览器脚本里单条 AppleEvent 的 `with timeout` 秒数。
     public static let browserEventTimeoutSeconds = 4
@@ -201,14 +201,14 @@ public final class PlayerQueryServer: @unchecked Sendable {
     }
 
     /// Music.app 当前列表里当前曲目往后 `count` 首。第一行是它认为正在播的那首(名、歌手),其余每行 名、歌手、专辑、
-    /// 时长(秒),用 tab 分隔。这不是真正的播放队列(脚本字典里没有 Up Next),collector 先问 `apple_music_queue`
+    /// 时长(秒),用 tab 分隔。这不是真正的播放队列(脚本字典里没有 Up Next),引擎先问 `apple_music_queue`
     /// (系统待播队列),读不到才问这一段。
     ///
     /// 三道守卫,少一道都会出事:
     /// - `is not running`:同 `appleMusicAlbumTracksScript`,不能把没开的 Music.app 拉起来。
     /// - `player state is stopped`:停着时 current track 还留着上一次的值,照着它预取等于拿一批过期的歌去占解析带宽。
     /// - `shuffle enabled`:开着随机时 Music.app **不暴露乱序后的顺序**,index+1 指的是资料库里的下一首、不是接下来
-    ///   会播的那首。直接放弃,collector 退回同专辑预取。
+    ///   会播的那首。直接放弃,引擎退回同专辑预取。
     ///
     /// 守不住、只能靠 `try` 兜的一种:播 **Apple Music 目录**的内容(云端歌单 / 电台 / 推荐)时 `current playlist`
     /// 直接报 -1728,那个歌单也不在 `playlists` 列表里 —— 脚本接口看不见云端内容。
@@ -413,12 +413,12 @@ public final class PlayerQueryServer: @unchecked Sendable {
         }
     }
 
-    /// `QueueReply` 的 JSON(键排好序,collector 那边按键名解)。
+    /// `QueueReply` 的 JSON(键排好序,引擎那边按键名解)。
     public static func encodedQueueReply(_ reply: KasetPlayerInfo.QueueReply) -> String? {
         encodedReply(reply)
     }
 
-    /// 应答 `output` 里的 JSON(键排好序,collector 那边按键名解)。
+    /// 应答 `output` 里的 JSON(键排好序,引擎那边按键名解)。
     public static func encodedReply<T: Encodable>(_ value: T) -> String? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

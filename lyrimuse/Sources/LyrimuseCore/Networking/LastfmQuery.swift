@@ -13,7 +13,7 @@ import Foundation
 /// 这是**端点级**行为,不是某一首歌的问题:拿真实存在的乐队 `+44`(733,475 听众)单测过
 /// —— `artist=%2B44` 同样报 error 6,`artist=%252B44` 才命中。
 ///
-/// 只有 GET query 这样。scrobble 那条走 POST form body(collector 的 lastfm.go),
+/// 只有 GET query 这样。scrobble 那条走 POST form body(引擎的 lastfm.go),
 /// 只解一遍,**不能**套这里的规则——套了会把字面 `%2B` 写进 Last.fm 的曲名。
 /// 「记得对、却查不到」这个不对称正是本坑的表征:《夜曲+窃爱 (Live)》
 /// 在最近记录里永远不显示「第 N 次听」,而它的 scrobble 本身记得好好的。

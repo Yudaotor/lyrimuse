@@ -5,7 +5,7 @@ import UserNotifications
 
 /// 「补搜歌词」与「全量重新扫库」跑完时的系统通知,说一句结果。
 ///
-/// collector 是 launchd 常驻的命令行进程,没有通知权限;它只把进度写进状态文件
+/// 引擎是 launchd 常驻的命令行进程,没有通知权限;它只把进度写进状态文件
 /// (`LyricsFillSweep`),这里常驻盯着那份文件,看到一轮收尾就投递。弹不弹、弹哪一种由
 /// `LyricsFillSweep.finishNotice` 决定(纯函数,selftest 覆盖),这里只管轮询、去重和投递。
 ///
@@ -27,7 +27,7 @@ final class LyricsSweepNotifier {
     private var runningStartedAt: Int64?
     /// 已经弹过的那一轮,同一份收据不弹第二次。
     private var notifiedStartedAt: Int64?
-    /// 全量扫库断网期间 collector 每 10 分钟重试一次、每次都是新的一轮;连着的几次暂停只弹第一次。
+    /// 全量扫库断网期间引擎每 10 分钟重试一次、每次都是新的一轮;连着的几次暂停只弹第一次。
     private var lastWasFullOffline = false
 
     private var timer: Timer?

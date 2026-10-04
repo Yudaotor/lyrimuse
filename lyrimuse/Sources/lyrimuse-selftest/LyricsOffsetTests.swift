@@ -299,8 +299,8 @@ func runLyricsOffsetTests() {
 
     // ---- 「已校准」名单:调过时间轴的歌不再被后台换歌词源 ----
     //
-    // 这个名单是 collector 侧 needsLyricsRescore/needsLyricsRetry 的第一道闸(见
-    // collector/lyricspins.go)。要守三件事:
+    // 这个名单是引擎侧 needsLyricsRescore/needsLyricsRetry 的第一道闸(见
+    // lyrimuse-engine/lyricspins.go)。要守三件事:
     //  ① 校正值非零就自动钉住、归零就自动解钉 —— 没有任何"记得手动打开开关"的步骤;
     //  ② pin 的身份是**归一化 enrich key**、不含歌词内容指纹 —— 拿含指纹的 key 当身份等于
     //     "内容一换 pin 也失效",正好把这条闸要防的事情放过去;
@@ -369,7 +369,7 @@ func runLyricsOffsetTests() {
         expectEqual(store.trackOffsetCount, 1, "清空: 计数跟着写入走")
         expectEqual(pins.isPinned(pinKey), true, "清空: 前提——这首已经钉住了")
 
-        // 跨语言契约:这份文件由 Swift 写、由 collector(Go)读(lyricsPinsFile 的
+        // 跨语言契约:这份文件由 Swift 写、由引擎(Go)读(lyricsPinsFile 的
         // `json:"version"` / `json:"pins"`)。字段名在 Swift 侧一改,Go 那边就静默读到空名单、
         // 整条闸失效而且没有任何报错 —— 所以这里对**磁盘上的原文**断言,不是对内存态。
         let onDisk = (try? String(contentsOf: tmp, encoding: .utf8)) ?? ""

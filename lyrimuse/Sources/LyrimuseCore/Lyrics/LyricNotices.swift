@@ -1,11 +1,11 @@
 import Foundation
 
 /// 歌词源塞进歌词里的声明行(版权 / 授权 / 译文版权 / 来源说明)。规则本体在 shared/lyric-notices.json,
-/// 由 scripts/gen-lyric-notices.py 生成 `LyricNotices+Generated.swift`,collector 读同一份
+/// 由 scripts/gen-lyric-notices.py 生成 `LyricNotices+Generated.swift`,引擎读同一份
 /// (lyricnotices_generated.go)。改规则改那份 JSON,别在这里或 Go 那边单独加。
 ///
 /// 两个作用面:`body` 是 App 显示正文时的署名过滤(`LyricsSyncEngine.strippingCreditLines` 调 `matchesBody`),
-/// `translation` 是 collector 清洗译文轨(Go 侧 isTranslationNotice)。这里两面都编译,selftest 与 go test
+/// `translation` 是引擎清洗译文轨(Go 侧 isTranslationNotice)。这里两面都编译,selftest 与 go test
 /// 跑同一批例句。
 public enum LyricNotices {
     struct Rule {
@@ -35,7 +35,7 @@ public enum LyricNotices {
         matches(text) { $0.body }
     }
 
-    /// 译文里这一行是不是源塞进来的声明(collector 侧 isTranslationNotice 的同一面)。
+    /// 译文里这一行是不是源塞进来的声明(引擎侧 isTranslationNotice 的同一面)。
     public static func matchesTranslation(_ text: String) -> Bool {
         matches(text) { $0.translation }
     }

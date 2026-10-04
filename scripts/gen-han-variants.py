@@ -7,7 +7,7 @@
     python3 scripts/gen-han-variants.py --unihan-dir <目录>   # 用本地已解压的 Unihan 数据
 
 产物(都要连同本脚本一起提交):
-    lyrimuse-collector/dictionary/HanVariants.txt              ← collector 用 //go:embed 读
+    lyrimuse-engine/dictionary/HanVariants.txt              ← 引擎用 //go:embed 读
     lyrimuse/Sources/LyrimuseCore/Lyrics/HanVariantsTable.swift ← App 侧编译进去
 
 ═══ 为什么要有这一层 ═══
@@ -22,7 +22,7 @@
 ═══ 为什么不手工维护字表 ═══
 
 用户 2026-09-03 的原话:「你要做成通用逻辑,后续遇到这种字的问题都要可以解决,不要通过手动
-维护一个表的方式,而且 swift 和 go 都使用同一套逻辑尽量」。手工表的毛病 collector 里
+维护一个表的方式,而且 swift 和 go 都使用同一套逻辑尽量」。手工表的毛病引擎里
 `toSimplified` 的注释早就写过:"覆盖面依赖'撞见一个字才补一个字'的被动积累"。所以这里的表
 是**推出来的**:
 
@@ -60,10 +60,10 @@ import urllib.request
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TS_CHARACTERS = os.path.join(ROOT, "lyrimuse-collector", "dictionary", "TSCharacters.txt")
+TS_CHARACTERS = os.path.join(ROOT, "lyrimuse-engine", "dictionary", "TSCharacters.txt")
 OVERRIDES = os.path.join(ROOT, "scripts", "han-variant-overrides.txt")
 ICU_PROBE = os.path.join(ROOT, "scripts", "han-icu-probe.swift")
-OUT_TXT = os.path.join(ROOT, "lyrimuse-collector", "dictionary", "HanVariants.txt")
+OUT_TXT = os.path.join(ROOT, "lyrimuse-engine", "dictionary", "HanVariants.txt")
 OUT_SWIFT = os.path.join(ROOT, "lyrimuse", "Sources", "LyrimuseCore", "Lyrics", "HanVariantsTable.swift")
 
 # Unihan 整包(约 8.5MB)。只取其中两份文本,用完不留在仓库里——它是上游数据,不是我们的资产;
@@ -214,7 +214,7 @@ def derive():
         picked[src] = (dst, "override")
 
     # 目标字再过一遍 OpenCC 单字表,直到它自己也不会被繁简转换改动为止。
-    # 这一步是 collector 侧 hanvariants_test.go 的不变量逼出来的:推导会给出
+    # 这一步是引擎侧 hanvariants_test.go 的不变量逼出来的:推导会给出
     # 「寗→甯」「尅→剋」「亁→乾」这种目标——甯/剋/乾 自己还会被 OpenCC 转成 宁/克/干,于是
     # 这一层的产物不是最终形态。而它挂在**单字兜底分支**上、每个位置只跑一遍,不会再转第二次,
     # 结果就停在半路。所以在生成时就把目标推到不动点,别指望运行时多转一轮。
@@ -273,7 +273,7 @@ def render_swift(rows, version):
 //
 // 数据来源:Unicode Unihan {version}(kUnihanCore2020 / kGradeLevel / k*Variant)+ OpenCC
 // TSCharacters + scripts/han-variant-overrides.txt。推导规则和"为什么不手工维护字表"写在
-// 生成器头注里;同一次生成还写了 lyrimuse-collector/dictionary/HanVariants.txt(collector 侧
+// 生成器头注里;同一次生成还写了 lyrimuse-engine/dictionary/HanVariants.txt(引擎侧
 // 读那一份),两边**是同一份数据**,selftest 有一条断言按那个 .txt 逐字核对这里的表。
 //
 // 表用两条等长字符串存、加载时 zip 成字典:{count} 条的字典字面量会让 Swift 的类型检查
@@ -286,7 +286,7 @@ enum HanVariantsTable {{
     /// 其中"ICU 的 Traditional-Simplified 确实不转"的那些变体字 —— 生成时实测出来的
     /// (见 scripts/han-icu-probe.swift)。只有这一批在 App 侧真的会生效,selftest 里那条
     /// "整条转换链的产物必须等于表里的目标字"的强断言只对它们成立:其余条目 ICU 自己就
-    /// 转掉了(它们留在表里是为 collector 侧的 OpenCC 缺口服务)。
+    /// 转掉了(它们留在表里是为引擎侧的 OpenCC 缺口服务)。
     static let icuGapVariants = "{icu_gap}"
 
     static let toSimplified: [Character: Character] = {{

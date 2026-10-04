@@ -24,7 +24,7 @@ import Foundation
 public struct LyricQueryRound: Sendable, Equatable {
     public let artist: String
     public let title: String
-    /// 来路,空 = 首轮。取值全集见 collector 的 `lyricQueryReason*`(querylog.go)。
+    /// 来路,空 = 首轮。取值全集见引擎的 `lyricQueryReason*`(querylog.go)。
     public let reason: String
     /// 这一轮只问了这几个源;空 = 没有限制。
     public let sources: [String]
@@ -102,7 +102,7 @@ public enum LyricQueryDigestBuilder {
             // 曲名全程没变时组内不带曲名(顶上已经说过一次);变过就每条都带上,不丢信息。
             let pair = LyricQueryPair(artist: r.artist, title: shared == nil ? r.title : "")
             if var g = byKey[key] {
-                // 组内去重:同一组里同一条查询词重复出现没有信息量(collector 侧的相邻去重
+                // 组内去重:同一组里同一条查询词重复出现没有信息量(引擎侧的相邻去重
                 // 只挡得住**相邻**的重复,跨轮撞上的挡不住)。
                 guard !g.queries.contains(pair) else { continue }
                 g = LyricQueryGroup(reason: g.reason, sources: g.sources, queries: g.queries + [pair])

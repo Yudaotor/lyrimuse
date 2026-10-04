@@ -26,7 +26,7 @@ enum LyricsLibraryStats {
         var byKind: [String: Int] = [:]
         /// 歌词源自带的社区译文(网易云 / Musixmatch)。
         var communityTranslation = 0
-        /// collector 机翻补的译文(端上 Apple 翻译 helper,或网络兜底 Google / MyMemory)。
+        /// 引擎机翻补的译文(端上 Apple 翻译 helper,或网络兜底 Google / MyMemory)。
         var machineTranslation = 0
         /// **缓存里带 `lyrics_roma` 字段**的条目数。
         ///
@@ -34,8 +34,8 @@ enum LyricsLibraryStats {
         /// (日文形态分析 / 中文拼音 / 韩文,见第 10 章),缓存里没有的照样会在渲染时现算。
         /// 所以文案必须是「N 首**已缓存**罗马音」并挂 help 说明,不能写成「N 首有罗马音」。
         ///
-        /// 这个数会明显长起来:collector 新增了预生成(`lyrics-romanize`
-        /// helper,日/韩/中),而存量条目要跑一次 `collector backfill-roma -apply` 才会补上
+        /// 这个数会明显长起来:引擎新增了预生成(`lyrics-romanize`
+        /// helper,日/韩/中),而存量条目要跑一次 `lyrimuse-engine backfill-roma -apply` 才会补上
         /// —— 在那之前它仍然只反映"源自带 + 粤拼"那一小撮(实测某台机器 114/3566 = 3.2%)。
         var bundledRomanization = 0
 
@@ -46,7 +46,7 @@ enum LyricsLibraryStats {
         var counts = Counts()
         for summary in summaries {
             // 占位行不是缓存里真实存在的条目(见 Summary.isSearching 头注:那是"正在联网搜、
-            // collector 还没写出任何结论"那段窗口期的一行),把它算进库存会让总数无端多一。
+            // 引擎还没写出任何结论"那段窗口期的一行),把它算进库存会让总数无端多一。
             guard !summary.isSearching else { continue }
             counts.total += 1
             let kind = kind(
@@ -55,7 +55,7 @@ enum LyricsLibraryStats {
                 hasPlainTextFallback: summary.hasPlainTextFallback,
                 isInstrumental: summary.isInstrumental)
             counts.byKind[kind.rawValue, default: 0] += 1
-            // 译文分两档:源自带的社区翻译 vs collector 机翻(判据和那个哨兵字符串的
+            // 译文分两档:源自带的社区翻译 vs 引擎机翻(判据和那个哨兵字符串的
             // 跨语言契约见 LyricsTranslationSource)。本机实测 1135 首有译文里 723 社区 /
             // 412 机翻,六四开 —— 不是那种"分了也全落一边"的伪区分,而且两者质量差得远。
             switch LyricsTranslationSource.classify(
@@ -163,21 +163,21 @@ struct LyricsLibraryStatsPanel: View {
     @State private var memo = LibraryStatsMemo()
     /// 设置窗口看不见时不轮询:补搜 / 全量扫库期间每写一首缓存就变,这一页会跟着反复解析整份缓存。
     @Environment(\.previewHostVisible) private var windowVisible
-    // collector 侧补空扫描的进度快照(LyricsFillSweep,进度文件按 mtime 读),由下面那个 .task 轮询。
+    // 引擎侧补空扫描的进度快照(LyricsFillSweep,进度文件按 mtime 读),由下面那个 .task 轮询。
     // 「歌词管理」窗口里同一份状态另有自己的一份 @State,两处各自轮询同一个文件,不共享——
     // 两扇窗口生命周期独立,共享一个 ObservableObject 只会多一个单例订阅面。
     @State private var fillSweepStatus: LyricsFillSweep.Info?
-    // collector 公布的「全量重新扫库」状态(待跟进的条数 + 有没有一轮没跑完),同一个
-    // .task 一起轮询。nil、或者 collector 还没数过待跟进的条数(`pending` 为 nil)时
+    // 引擎公布的「全量重新扫库」状态(待跟进的条数 + 有没有一轮没跑完),同一个
+    // .task 一起轮询。nil、或者引擎还没数过待跟进的条数(`pending` 为 nil)时
     // 「N 首待跟进」给不出来,整行藏掉(同 LyricsLibrarySizeLabel 那条"算不出来就什么都
     // 不显示"的规矩,摆一个猜出来的数字比不摆更糟)。
     @State private var fullScanState: LyricsFullScan.State?
     @State private var confirmFullScan = false
-    /// 补空扫描"开始"按钮点击后、collector 接手前的过渡状态(显示 loading 动画)。
+    /// 补空扫描"开始"按钮点击后、引擎接手前的过渡状态(显示 loading 动画)。
     /// 点击「开始」时置 true,轮询按 `LyricsFillSweep.isPending` 清掉 —— 那道判据也管「一条候选都
-    /// 没有、一开工就收尾」和「collector 没在跑、等超时」两种情形,只认 running 的话两种都会一直转下去。
+    /// 没有、一开工就收尾」和「引擎没在跑、等超时」两种情形,只认 running 的话两种都会一直转下去。
     @State private var fillSweepStarting = false
-    /// 全量扫描确认开始后、collector 接手前的过渡状态,清法同上。
+    /// 全量扫描确认开始后、引擎接手前的过渡状态,清法同上。
     @State private var fullScanStarting = false
     /// 进度圆环点开的详情(`FillSweepProgressDetail`)。两行一次只有一行在跑,共用这一个。
     @State private var progressDetailShown = false
@@ -224,7 +224,7 @@ struct LyricsLibraryStatsPanel: View {
                 CardDivider()
                 // 「补搜缺失歌词」「全量重新扫库」是同一条通道的窄档和宽档,排在一起、长得一样。
                 fillSweepRow()
-                // 分隔线画在这一族的里面 —— 整行在 collector 还没公布过打分版本号时会整个
+                // 分隔线画在这一族的里面 —— 整行在引擎还没公布过打分版本号时会整个
                 // 消失,分隔线留在外面就会变成两条紧挨着的线。
                 fullScanRow()
             }
@@ -259,12 +259,12 @@ struct LyricsLibraryStatsPanel: View {
                 let previous = fillSweepStatus
                 let sweep = LyricsFillSweep.current
                 if sweep != fillSweepStatus { fillSweepStatus = sweep }
-                // collector 接手了(或者等超时了),清掉"正在启动"(loading 动画消失、切换到进度条)。
+                // 引擎接手了(或者等超时了),清掉"正在启动"(loading 动画消失、切换到进度条)。
                 if starting && !LyricsFillSweep.isPending {
                     fillSweepStarting = false
                     fullScanStarting = false
                 }
-                // 这份文件一轮里只在开头/结尾各写一次(外加 collector 每次启动),按 mtime
+                // 这份文件一轮里只在开头/结尾各写一次(外加引擎每次启动),按 mtime
                 // 读的开销就是一次 stat,跟着同一个节拍走即可。
                 let full = LyricsFullScan.current
                 if full != fullScanState { fullScanState = full }
@@ -408,7 +408,7 @@ struct LyricsLibraryStatsPanel: View {
 
     // MARK: 补搜缺失歌词
 
-    /// 让 collector 现在就把没有歌词的条目重搜一遍 —— 跟「歌词管理」工具栏那颗「补搜歌词」
+    /// 让引擎现在就把没有歌词的条目重搜一遍 —— 跟「歌词管理」工具栏那颗「补搜歌词」
     /// 是同一条通道(`LyricsFillSweep`,见第 09 章「补空扫描」)。
     ///
     /// 跟下面「全量重新扫库」**逐项对称**(标题 + ⓘ + 待办数 + 「开始」)。两者是同一件事的窄档
@@ -421,11 +421,11 @@ struct LyricsLibraryStatsPanel: View {
     /// 按钮上的口径是"真会被搜的条数",这一点别为了让两个数一致去改。
     ///
     /// 进度和收据都必须先判 `isFullScan`:「全量重新扫库」为了跨重启续跑复用了这条通道
-    /// (见 collector/lyricsfullscan.go 头注),两轮共用**同一份** `lyrimuse-lyrics-fill-status.json`。
+    /// (见 lyrimuse-engine/lyricsfullscan.go 头注),两轮共用**同一份** `lyrimuse-lyrics-fill-status.json`。
     /// 不判的话,全量在跑时这一行会照着那份状态画出跟下面那行逐字重复的「扫描中 42/5318 + 停止」。
     private func fillSweepRow() -> some View {
         let status = fillSweepStatus
-        // running = 任意一轮(collector 一次只准跑一轮);sweepRunning = 跑的是补空这一轮。
+        // running = 任意一轮(引擎一次只准跑一轮);sweepRunning = 跑的是补空这一轮。
         // 两个量分开,正是因为这一行只该画补空那一轮,而按钮要对**任意**一轮置灰。
         let running = status?.running == true
         let sweepRunning = running && status?.isFullScan != true
@@ -463,7 +463,7 @@ struct LyricsLibraryStatsPanel: View {
                     }
                         .controlSize(.small)
                         .fixedSize()
-                        // 全量那一轮跑着的时候也置灰,跟「全量重新扫库」那颗「开始」对称:collector
+                        // 全量那一轮跑着的时候也置灰,跟「全量重新扫库」那颗「开始」对称:引擎
                         // 一次只允许一轮在跑(runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
                         .disabled(retryable == 0 || running || fillSweepStarting)
                         .help(running
@@ -521,7 +521,7 @@ struct LyricsLibraryStatsPanel: View {
         .onDisappear { progressDetailShown = false }
     }
 
-    /// 两行跑着时行尾那段文字。上一首一个歌词源都没连上时 collector 在原地等网络,说这个,
+    /// 两行跑着时行尾那段文字。上一首一个歌词源都没连上时引擎在原地等网络,说这个,
     /// 不说「扫描中」—— 分子停着不动,不解释的话看起来像卡住了。
     private static func runningText(_ status: LyricsFillSweep.Info) -> String {
         if status.isOffline { return L10n.t("网络不通，稍后重试…") }
@@ -530,19 +530,19 @@ struct LyricsLibraryStatsPanel: View {
 
     // MARK: 全量重新扫库
 
-    /// 每首的平均耗时**由 collector 发布**(`LyricsFullScan.State.secondsPerTrack`,
-    /// = lyricsManualSweepGap + 一轮全源搜索的估计)。这里只留一个兜底值,给老 collector
+    /// 每首的平均耗时**由引擎发布**(`LyricsFullScan.State.secondsPerTrack`,
+    /// = lyricsManualSweepGap + 一轮全源搜索的估计)。这里只留一个兜底值,给老引擎
     /// 或状态文件还没写出来的那一拍用。
     ///
     /// 别把它改回写死一份:之前这里是 `25.0`、注释还写着「15 秒固定间隔
-    /// (lyricsFillSweepGap)」,而 collector 把全量那一档换成 5 秒(lyricsManualSweepGap),
+    /// (lyricsFillSweepGap)」,而引擎把全量那一档换成 5 秒(lyricsManualSweepGap),
     /// 这个数和那句话当场都成了错的 —— 界面凭空多报一倍时长,没有任何东西会报错。
     /// 这跟 `scoringVersion` 不能硬编码是同一条理由,走的也是同一份状态文件。
     ///
     /// 只用来在确认框和 tooltip 里说一句"大概多久",不参与任何判断。
     private static let fallbackSecondsPerTrack = 10.0
 
-    /// collector 发布的值;没有(老版本 / 文件还没写出来)就退回兜底。
+    /// 引擎发布的值;没有(老版本 / 文件还没写出来)就退回兜底。
     private var secondsPerTrack: Double {
         Self.fullScanSecondsPerTrack(fullScanState)
     }
@@ -570,8 +570,8 @@ struct LyricsLibraryStatsPanel: View {
             format(pending), hoursText(pending, secondsPerTrack: secondsPerTrack))
     }
 
-    /// 「全量重新扫库」这一行。collector 没公布过待跟进的条数(还没起来过 / 还没数完第一遍)时整行
-    /// 不出现 —— 摆一个猜出来的数字比不摆更糟。「N 首」是 collector 按它的分层规则数的,跟隔壁
+    /// 「全量重新扫库」这一行。引擎没公布过待跟进的条数(还没起来过 / 还没数完第一遍)时整行
+    /// 不出现 —— 摆一个猜出来的数字比不摆更糟。「N 首」是引擎按它的分层规则数的,跟隔壁
     /// 「补搜缺失歌词」的数是包含关系:全量的第 0 层是那一批的子集。
     ///
     /// 跟上面「补搜缺失歌词」**逐项对称**(前导图标 + 标题 + ⓘ + 待办数 + 「开始」):两者是同一条
@@ -616,7 +616,7 @@ struct LyricsLibraryStatsPanel: View {
                         }
                             .controlSize(.small)
                             .fixedSize()
-                            // 补空那一轮跑着的时候也置灰:collector 一次只允许一轮在跑
+                            // 补空那一轮跑着的时候也置灰:引擎一次只允许一轮在跑
                             // (runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
                             .disabled(pending == 0 || running || fullScanStarting)
                             .help(running
@@ -627,11 +627,11 @@ struct LyricsLibraryStatsPanel: View {
                 }
                 .settingsGlassButtons()
             }
-            // collector 记着有一轮没跑完、但此刻并没有在跑 —— 它还在启动后的那 10 分钟等待
+            // 引擎记着有一轮没跑完、但此刻并没有在跑 —— 它还在启动后的那 10 分钟等待
             // 期里(或者刚被 launchd 拉起来)。不说一句的话,界面看起来就是"我明明点过了,
             // 怎么什么都没发生"。
             if state.active && !fullRunning {
-                // 断网停下的那一轮同样留着「待续」,collector 10 分钟后自己再试(lyricsFullScanOfflineResumeDelay)。
+                // 断网停下的那一轮同样留着「待续」,引擎 10 分钟后自己再试(lyricsFullScanOfflineResumeDelay)。
                 if status?.isFullScan == true && status?.isOffline == true {
                     SettingsSubRow(title: nil, subtitle: L10n.t("网络不通，已暂停，稍后会自动接着跑")) {
                         EmptyView()

@@ -2,7 +2,7 @@ import Foundation
 import LyrimuseCore
 
 /// Amazon Music 的位置:日志重放 / 自记时 / 开播校准 / 陈旧元数据。样例 `shared/testdata/amazonmusic.log`
-/// 跟 collector 的 amazonmusic_test.go 共用,两侧断言的数必须一致。
+/// 跟引擎的 amazonmusic_test.go 共用,两侧断言的数必须一致。
 func runAmazonMusicTests() {
     typealias P = AmazonMusicPlayhead
     func at(_ hhmmss: String, _ frac: Double = 0) -> Date {

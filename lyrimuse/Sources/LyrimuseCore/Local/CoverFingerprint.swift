@@ -4,19 +4,19 @@ import Foundation
 
 /// 封面「感知指纹」(aHash):判断两张图像感知上是不是同一张封面。
 ///
-/// 跟 collector 侧 `coverquality.go` 的 `coverFingerprint` 同一套算法(8×8 灰度网格、
+/// 跟引擎侧 `coverquality.go` 的 `coverFingerprint` 同一套算法(8×8 灰度网格、
 /// 每格跟全图均值比,大于均值置 1)——两边各自独立实现,不要求逐位输出相同,只要求各自
 /// 都能可靠判断"是不是同一张"(两边用各自的渲染管线取灰度值,数值域本来就不一样,没必要
 /// 也没办法对齐位模式)。
 ///
 /// 用途:动态封面下载完成之后,拿视频**中段**的真实一帧跟当前显示的封面比一次(见
-/// `MotionCoverStore`)。这一步补的是 collector 那边够不到的坑——它只能比 Apple 给的
+/// `MotionCoverStore`)。这一步补的是引擎那边够不到的坑——它只能比 Apple 给的
 /// `previewFrame`,而那常常是视频最开头一帧;有些专辑的动态封面开场是"揭幕"特效(逐渐
 /// 聚拢的九宫格拼贴一类),首帧跟静态封面天差地别,播到中段才收拢成跟封面一致的画面
-/// (实测 Ariana Grande《Positions (Deluxe)》:首帧距离 41,视频中段距离 0)。collector
+/// (实测 Ariana Grande《Positions (Deluxe)》:首帧距离 41,视频中段距离 0)。引擎
 /// 拿不到解码后的视频帧,这一步只能放在能拿到本地视频文件的 App 侧做。
 public enum CoverFingerprint {
-    /// 判"同一张图"的汉明距离上限(满分 64)。跟 collector 侧
+    /// 判"同一张图"的汉明距离上限(满分 64)。跟引擎侧
     /// `motionCoverFingerprintMaxDistance` 沿用同一个数值——算法同源(都是 8×8 Rec.601
     /// 亮度 aHash),校准依据(0～8 正例、17 起才是真反例)见那边注释的完整实测数据,这里
     /// 不重复。
@@ -59,7 +59,7 @@ public enum CoverFingerprint {
                     output, toBitmap: &bitmap, rowBytes: 4,
                     bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
                     format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
-                // Rec.601 亮度,跟 collector coverFingerprint 同一套系数,理由同源(不是要
+                // Rec.601 亮度,跟引擎 coverFingerprint 同一套系数,理由同源(不是要
                 // 对齐位模式,只是没必要另挑一套灰度公式)。
                 cells[cy * side + cx] =
                     0.299 * Double(bitmap[0]) + 0.587 * Double(bitmap[1]) + 0.114 * Double(bitmap[2])
@@ -80,7 +80,7 @@ public enum CoverFingerprint {
 
     // MARK: - 去边第二次机会
 
-    /// 第二次机会里四边各去掉多少,以及它自己那道**更严**的门槛。两个数都跟 collector 侧
+    /// 第二次机会里四边各去掉多少,以及它自己那道**更严**的门槛。两个数都跟引擎侧
     /// `motionCoverBorderCrop` / `motionCoverCroppedMaxDistance` 取同一个值,校准依据见那边
     /// (同一次实测:Apple 给一部分专辑的动画四周压了一圈暗角,而静态封面没有)。
     public static let borderCropFraction: CGFloat = 0.08
@@ -105,7 +105,7 @@ public enum CoverFingerprint {
         Reference(full: hash(of: image), cropped: hash(of: cropBorder(image) ?? image))
     }
 
-    /// 这一帧跟那张封面是不是同一张。返回判定用的那个距离和结论,口径与 collector 侧
+    /// 这一帧跟那张封面是不是同一张。返回判定用的那个距离和结论,口径与引擎侧
     /// `motionCoverSameArtwork` 逐条对齐:先整图比 ≤12,过不了再去边比 ≤8。
     public static func matches(_ frame: CGImage, reference: Reference) -> (distance: Int, same: Bool) {
         let d = distance(hash(of: frame), reference.full)

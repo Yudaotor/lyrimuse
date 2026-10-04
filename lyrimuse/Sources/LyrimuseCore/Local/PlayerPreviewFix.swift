@@ -1,13 +1,13 @@
 import Foundation
 
-/// 汽水音乐非会员「试听」的换算通道(collector 发布、App 只读)。
+/// 汽水音乐非会员「试听」的换算通道(引擎发布、App 只读)。
 ///
 /// 试听时 MediaRemote 报的是**试听段自己的时间轴**:duration 是试听段长度(30 / 60s),elapsedTime
 /// 从 0 起;而试听段是从整首歌中间截的一段(`preview.start`)。不换算的话进度条只有试听段那么长、
 /// 歌词时间轴整段对不上。试听段信息要从汽水自己的缓存或搜索接口里拿 —— 读外部播放器数据是
-/// collector 的活(见 `lyrimuse-collector/sodapreview.go`),这里只按它发布的结论换算。
+/// 引擎的活(见 `lyrimuse-engine/sodapreview.go`),这里只按它发布的结论换算。
 ///
-/// 两边必须同时换:collector 已经用原曲口径去匹配歌词、写缓存,App 这边还按试听段显示的话,
+/// 两边必须同时换:引擎已经用原曲口径去匹配歌词、写缓存,App 这边还按试听段显示的话,
 /// 歌词时间轴和位置各说各话。
 public enum PlayerPreviewFix {
     public struct State: Decodable, Equatable, Sendable {
@@ -29,9 +29,9 @@ public enum PlayerPreviewFix {
         }
     }
 
-    /// 与 collector 的 `clientName+"-player-preview.json"` 逐字节一致。
+    /// 与引擎的 `clientName+"-player-preview.json"` 逐字节一致。
     public static let stateURL = LyrimusePaths.configFile("lyrimuse-player-preview.json")
-    /// 快照报的时长与试听段长度最多差多少还算同一段(与 collector 的 sodaPreviewDurationTolerance 一致)。
+    /// 快照报的时长与试听段长度最多差多少还算同一段(与引擎的 sodaPreviewDurationTolerance 一致)。
     public static let durationTolerance: Double = 1.5
 
     private static let lock = NSLock()
@@ -56,7 +56,7 @@ public enum PlayerPreviewFix {
 
     /// 这份快照能不能套这条换算。纯函数,selftest 直接覆盖。
     ///
-    /// 同一个播放器、同一首(曲名 + 歌手按 `EnrichCacheKeys.cleanTag` 清洗后相等:collector 发布时用的
+    /// 同一个播放器、同一首(曲名 + 歌手按 `EnrichCacheKeys.cleanTag` 清洗后相等:引擎发布时用的
     /// 可能是原样的标签,也可能是播放状态里清洗过的那份),并且这一拍报的时长**还是**
     /// 试听段长度 —— 换歌、转成整首播放(开了会员 / 限免)都自然失效。
     public static func applies(_ state: State, to snapshot: MediaControlSnapshot) -> Bool {

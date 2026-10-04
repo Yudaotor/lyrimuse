@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// collector 的 `lyrics_speakers`(lyricspeakers.go):Musixmatch 的演唱者标注换算到当前正文上,每一行是谁唱的。
+/// 引擎的 `lyrics_speakers`(lyricspeakers.go):Musixmatch 的演唱者标注换算到当前正文上,每一行是谁唱的。
 /// 指纹对得上时,把 `v1：` / `v2：` / `合：` 补到对应行开头,交给现成的对唱分栏(`LyricDuet`);正文变了指纹就对不上,
 /// 整份不用。标记只补在送进引擎的那份正文上,缓存原文不动。
 public struct LyricSpeakerTags: Decodable, Equatable, Sendable {
@@ -31,7 +31,7 @@ public struct LyricSpeakerTags: Decodable, Equatable, Sendable {
         yrc = (try? c?.decodeIfPresent([String].self, forKey: .yrc)) ?? []
     }
 
-    /// 去掉开头 BOM 的 lyrics + "\u{1}" + 去掉开头 BOM 的 yrc 的 SHA256,取前 12 位十六进制。必须跟 collector 的
+    /// 去掉开头 BOM 的 lyrics + "\u{1}" + 去掉开头 BOM 的 yrc 的 SHA256,取前 12 位十六进制。必须跟引擎的
     /// `lyricSpeakersFingerprint` 逐字节同一算法(两边各有一条同输入同输出的测试)。
     public static func fingerprint(lyrics: String, lyricsYRC: String) -> String {
         let combined = strippingLeadingBOM(lyrics) + "\u{1}" + strippingLeadingBOM(lyricsYRC)
@@ -48,7 +48,7 @@ public struct LyricSpeakerTags: Decodable, Equatable, Sendable {
     }
 
     /// 按原文行补标记。行数跟标注对不上、或一行都不用补时原样返回。LRC 补在行首那几个时间戳之后;YRC 在行头之后
-    /// 补一个零时长的词 `(行始,0,0)v1：`,跟 collector 解析 TTML 时写对唱前缀是同一个形状(buildYRCLine)。
+    /// 补一个零时长的词 `(行始,0,0)v1：`,跟引擎解析 TTML 时写对唱前缀是同一个形状(buildYRCLine)。
     static func tagging(_ text: String, with labels: [String], yrc: Bool) -> String {
         let lines = Self.lines(of: text)
         guard lines.count == labels.count, labels.contains(where: { !$0.isEmpty }) else { return text }
@@ -79,7 +79,7 @@ public struct LyricSpeakerTags: Decodable, Equatable, Sendable {
         return out.joined(separator: "\n")
     }
 
-    /// 跟 collector `splitLyricLines` 同一种切法:CRLF、CR 都当换行,空行也算一行。按 Unicode 标量切 ——
+    /// 跟引擎 `splitLyricLines` 同一种切法:CRLF、CR 都当换行,空行也算一行。按 Unicode 标量切 ——
     /// Swift 默认把 CRLF 当成一个字素簇,按 Character 切会跟 Go 切出不同的行数。
     public static func lines(of text: String) -> [String] {
         var lines: [String] = []
@@ -110,8 +110,8 @@ public struct LyricSpeakerTags: Decodable, Equatable, Sendable {
         return String(String.UnicodeScalarView(s.unicodeScalars.drop(while: { $0 == "\u{FEFF}" })))
     }
 
-    /// 行首连续的 LRC 时间戳,跟 collector 的 `lrcTimestampRe` 同一形状。
+    /// 行首连续的 LRC 时间戳,跟引擎的 `lrcTimestampRe` 同一形状。
     private static let lrcStamps = try! NSRegularExpression(pattern: #"^(?:\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\])+"#)
-    /// YRC 的行头 `[行始,行长]`,跟 collector 的 `yrcLineTimeRegex` 同一形状。
+    /// YRC 的行头 `[行始,行长]`,跟引擎的 `yrcLineTimeRegex` 同一形状。
     private static let yrcHead = try! NSRegularExpression(pattern: #"^\[(\d+),(\d+)\]"#)
 }

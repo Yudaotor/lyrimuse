@@ -47,7 +47,7 @@ import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-SCAN_DIRS = ['lyrimuse/Sources', 'lyrimuse/scripts', 'lyrimuse-collector', 'web', 'scripts', 'feishu-bot', '.githooks']
+SCAN_DIRS = ['lyrimuse/Sources', 'lyrimuse/scripts', 'lyrimuse-engine', 'web', 'scripts', 'feishu-bot', '.githooks']
 SKIP_DIRS = {'.build', '.git', 'node_modules', '__pycache__', 'vendor', 'DerivedData'}
 # 本脚本自己必然写着每一类的**样例**,扫自己就是稳定误报(.githooks/commit-msg 同理,
 # 它的说明里写着 `#123` 样例 —— selftest 里那条守卫也为此先剥注释再判)。

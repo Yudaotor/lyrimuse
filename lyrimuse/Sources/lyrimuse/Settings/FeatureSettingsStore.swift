@@ -5,7 +5,7 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 十二个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
+// 十二个歌词源——rawValue 必须跟 lyrimuse-engine/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
@@ -15,7 +15,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 //   ② 「顺序优先」模式下 `lyricsSourceOrder` 的**默认值**(见下面 @Published 的初值)——
 //      也就是新装机器上"按顺序取第一个有结果的源"真正的取用顺序。用户拖拽排过之后
 //      以自己那份为准,改这里只影响没排过的人。
-// 所以它必须跟 collector `features.go` 的 `lyricsSourceDefaultOrder` **逐字同序**,
+// 所以它必须跟引擎 `features.go` 的 `lyricsSourceDefaultOrder` **逐字同序**,
 // 否则同一台机器在首次写盘前后表现不同(那边注释也钉着这条)。
 //
 // 排序依据(按实测调整):前五个按真实采用率排 —— 用户本机 3744 条 enrich 缓存里
@@ -25,7 +25,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // 08-31 / 08-31 / 09-04 / 09-13 才接入的,那 3744 条缓存绝大多数早于它们存在,采用数 0~16 是
 // 样本偏差、不是覆盖率结论。等各自跑满一段时间再拿数据说话,别用"没赶上考试"当"考砸了"。
 // deezer 跟 lyricfind 数据同源(都是 LyricFind 供词),但两条管道各走各的接口:接它既是
-// 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 collector/deezer.go 头注。
+// 给那家版权方补条后路,也因为 Deezer 的法语曲库覆盖更好,见 lyrimuse-engine/deezer.go 头注。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
     case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu, deezer, applemusic, soda
     public var id: Self { self }
@@ -42,10 +42,10 @@ public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable 
     }
 }
 
-// Musixmatch 译文(collector/musixmatch.go 的 crowd.track.translations.get)目标语言——
+// Musixmatch 译文(lyrimuse-engine/musixmatch.go 的 crowd.track.translations.get)目标语言——
 // 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源能指定任意语言,rawValue 必须是
 // Musixmatch 认的 ISO 639-1 两位小写代码(已用真实接口核实过这个格式,见开发时的调研)。
-// .auto 的字面值原样写进共享 json,由 collector 侧 resolveLyricsTranslationLanguage
+// .auto 的字面值原样写进共享 json,由引擎侧 resolveLyricsTranslationLanguage
 // (features.go)按同一份文件里的 system_language 解析成具体代码;system_language 是这个 store
 // 加载时读本机写进去的(`SystemLanguage`,见 FeatureFlagsFile.systemLanguage)。
 // 跟随的是 macOS 系统语言而不是 App 界面语言:App 界面本身只做了中英两版翻译,母语是
@@ -105,7 +105,7 @@ extension PlaybackPlayer {
     }
 }
 
-// "智能算法"=四源全查+打分取最高分(现有行为,见 collector/enrich.go 的
+// "智能算法"=四源全查+打分取最高分(现有行为,见 lyrimuse-engine/enrich.go 的
 // scoredLyricCandidates/pickLyricCandidate);"顺序优先"=按用户手排的顺序,取第一个
 // 通过质量校验的源,不比较分数。
 public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
@@ -119,11 +119,11 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-// 上送 Last.fm 前怎么对待播放器报的标签(三档)。rawValue 必须跟 collector features.go 的
-// lastfmMatchSmart/Custom/Raw 常量逐字相同——两侧通过同一份 features.json 交换,collector
+// 上送 Last.fm 前怎么对待播放器报的标签(三档)。rawValue 必须跟引擎 features.go 的
+// lastfmMatchSmart/Custom/Raw 常量逐字相同——两侧通过同一份 features.json 交换,引擎
 // 只认这三个串,拼错就静默退回 raw。
 //
-// - smart:在 Last.fm 编目里找这首歌对应的条目,歌手和曲名都按那条发(collector
+// - smart:在 Last.fm 编目里找这首歌对应的条目,歌手和曲名都按那条发(引擎
 //   lastfmcatalog.go)。等价于「自定义」下把改歌手、改曲名都打开。全新装机的默认档。
 // - custom:曲名、歌手两个维度各自选,见 `LastfmTrackRule` / `LastfmArtistRule`(它们是
 //   `lastfmMatchArtist` / `lastfmMatchTrack` / `lastfmMatchFirstArtistOnly` 三个落盘布尔的界面形状)。
@@ -132,7 +132,7 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 //
 // **case 的声明顺序就是分段控件上从左到右的顺序** —— 唯一的消费点是
 // `AccountLinkingTab.lastfmScrobbleSettingsCard` 里那个 `ForEach(allCases)`,所以「智能」写在最前。
-// rawValue 才是跟 collector 的契约,与顺序无关:重排不动已存的值,也不动两侧的默认档。
+// rawValue 才是跟引擎的契约,与顺序无关:重排不动已存的值,也不动两侧的默认档。
 public enum LastfmMatchMode: String, CaseIterable, Identifiable, Codable {
     case smart, custom, raw
     public var id: Self { self }
@@ -146,7 +146,7 @@ public enum LastfmMatchMode: String, CaseIterable, Identifiable, Codable {
 }
 
 // 「自定义」档下曲名怎么发。**不是新的落盘契约** —— 它是 `lastfm_match_track` 那个布尔的
-// 界面形状(catalog = true、raw = false),features.json 的字段一个没动,collector 侧
+// 界面形状(catalog = true、raw = false),features.json 的字段一个没动,引擎侧
 // resolveScrobbleTags 也不用跟着改。
 //
 // 做成选项而不是继续用开关:「改写曲名」四个字没说出**改成什么**,开关只表达得了开/关,
@@ -180,14 +180,14 @@ public enum LastfmArtistRule: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-// Last.fm scrobble 时点:一次收听听到哪里才记到 Last.fm。rawValue 必须跟 collector
+// Last.fm scrobble 时点:一次收听听到哪里才记到 Last.fm。rawValue 必须跟引擎
 // features.go 的 scrobblePointHalf/75/90/End 常量逐字相同——两侧通过同一份 features.json 交换,
-// collector 只认这四个串,拼错就静默退回官方规则。
+// 引擎只认这四个串,拼错就静默退回官方规则。
 //
 // - half("50"):官方规则,曲长一半或 4 分钟,先到为准(默认)。这也是 ListenBrainz 那一路提交的时刻,
 //   所以这一档下 Last.fm 跟加这个设置之前一样当场发。
 // - threeQuarters("75") / ninety("90"):听满曲长的 75% / 90%,纯按已播时长算,不套 4 分钟上限。
-// - end("end"):一直放到结尾才记,中途切歌不记(判据见 collector poller.go sessionEndedNaturally)。
+// - end("end"):一直放到结尾才记,中途切歌不记(判据见引擎 poller.go sessionEndedNaturally)。
 //
 // **只管 Last.fm**(「只考虑 lastfm 的」):ListenBrainz、网页中继照旧在官方阈值那一刻提交,
 // Last.fm 那一路(含给它兜底的本地收听日志)挂起到点再发。官方规则是下限,所以没有低于一半的档;
@@ -205,17 +205,17 @@ public enum LastfmScrobblePoint: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-// lyrimuse-features.json 的形状(collector 侧 features.go 的 featureFlagsFile 读同一份文件)。所有字段可选:
+// lyrimuse-features.json 的形状(引擎侧 features.go 的 featureFlagsFile 读同一份文件)。所有字段可选:
 // nil = 文件里没写。这份文件只有 App 写:load() 每次把缺项补上默认值、把旧写法(下面标了遗留字段 / 迁移标记的
-// 那几个键)改成新写法,跟盘上不一样就当场整份写回;collector 只认文件,不再自己补默认值、跑迁移。
+// 那几个键)改成新写法,跟盘上不一样就当场整份写回;引擎只认文件,不再自己补默认值、跑迁移。
 // 这个版本不认识的键原样保留(见 FeatureSettingsStore.document)。
 struct FeatureFlagsFile: Codable, Equatable {
     // player:**遗留字段**(被下面的 players 取代)。旧版本只能选一个播放器时写的就是这个键;players 缺失时
-    // load() 把它当迁移前的选择读一次,整份写回时这个键随之删掉。collector 不认它。
+    // load() 把它当迁移前的选择读一次,整份写回时这个键随之删掉。引擎不认它。
     var player: String?
     // players:可多选的播放器集合,PlaybackPlayer 的 rawValue 数组(见 PlaybackPlayer 注释,LyrimuseCore)。
     // LyrimuseCore 的 PlaybackPlayerPreference.selected 每次轮询直接读这个键(它在 LyrimuseCore,没法订阅这个
-    // store 的 @Published);collector 侧对应 featureFlagsFile.Players,按 mtime 热重读。
+    // store 的 @Published);引擎侧对应 featureFlagsFile.Players,按 mtime 热重读。
     var players: [String]?
     var albumPrefetch: Bool?
     /// 歌词定下来之后要不要跟着算法/打分升级在后台自动换掉。缺失 = true(现状)。
@@ -233,27 +233,27 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// `smart` 与 智能、`all` 与 原始、`first` 与 自定义且只开「合唱只发第一位」。
     var lastfmScrobbleArtistMode: String?
     /// **更早的遗留字段**(二态开关,被 lastfmScrobbleArtistMode 取代):true 与 旧的 `first`。
-    /// 迁移链因此是两级:这个 → ArtistMode → MatchMode。这两个键整份写回时删掉,collector 不认。
+    /// 迁移链因此是两级:这个 → ArtistMode → MatchMode。这两个键整份写回时删掉,引擎不认。
     var lastfmScrobbleFirstArtistOnly: Bool?
     /// 短于 30 秒的曲目也 scrobble 到 Last.fm。**默认 false = 现状**(Last.fm 官方规则要求曲目长于
     /// 30 秒)。只管 Last.fm(含给它兜底的本地收听日志/回填),ListenBrainz 不受影响 —— 见
-    /// collector poller.go tooShortToScrobble / shortTrackLastfmOnly。
+    /// 引擎 poller.go tooShortToScrobble / shortTrackLastfmOnly。
     var scrobbleShortTracks: Bool?
     /// Last.fm scrobble 时点,LastfmScrobblePoint 的 rawValue("50"/"75"/"90"/"end")。缺失 = 官方规则。
     /// 只管 Last.fm,见枚举注释。
     var lastfmScrobblePoint: String?
     var weeklyDigest: Bool?
-    // 见 collector/daily.go——独立于 weeklyDigest 的开关,两个可以同时开、只开一个、
+    // 见 lyrimuse-engine/daily.go——独立于 weeklyDigest 的开关,两个可以同时开、只开一个、
     // 或都不开。
     var dailyDigest: Bool?
     // "lastfm"/"listenbrainz"/缺省(空字符串)——两个 cadence 各自用哪个账号的数据源,
-    // 缺省时按 collector/digest.go 的 resolveDigestSource 规则(两个都配了→lastfm,
+    // 缺省时按 lyrimuse-engine/digest.go 的 resolveDigestSource 规则(两个都配了→lastfm,
     // 只配了一个→用那个,都没配→这个功能没法跑)自动判定,不是"缺省当 lastfm 处理"
     // 这么简单,所以特意不给非空默认值。两个 cadence 都能自己选数据源,是因为
     // Last.fm 的周榜接口其实接受任意 from/to,不是只认它自己的官方周边界。
     var weeklyDigestSource: String?
     var dailyDigestSource: String?
-    // 见 collector/calendardigest.go——每月 / 年度听歌小结,跟周报、日报都是独立开关;数据源
+    // 见 lyrimuse-engine/calendardigest.go——每月 / 年度听歌小结,跟周报、日报都是独立开关;数据源
     // 字段同上,缺省交给 resolveDigestSource。
     var monthlyDigest: Bool?
     var yearlyDigest: Bool?
@@ -265,7 +265,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     ///
     /// 所以:标记缺失 = 那个源加进来之前的老配置,load() 把它补进启用集合,随整份写回落盘;保存时每个标记都按
     /// 集合如实写(见 currentSnapshot),之后完全以 lyricsSources 为准,用户取消勾选才不会被补回来。每个源各自
-    /// 一个标记、各自判断:一份配置可能在 amll 之后、lyricfind 之前保存过。collector 只认 lyrics_sources。
+    /// 一个标记、各自判断:一份配置可能在 amll 之后、lyricfind 之前保存过。引擎只认 lyrics_sources。
     var amllLyrics: Bool?
     var lyricFindLyrics: Bool?
     var kuwoLyrics: Bool?
@@ -277,28 +277,28 @@ struct FeatureFlagsFile: Codable, Equatable {
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
     // "auto"(跟随系统语言,默认)或具体 ISO 639-1 代码("en"/"zh"/"ja"...)——见
-    // MusixmatchTranslationLanguage 注释,collector 侧负责把 "auto" 解析成具体代码。
+    // MusixmatchTranslationLanguage 注释,引擎侧负责把 "auto" 解析成具体代码。
     var lyricsTranslationLanguage: String?
-    /// 本机系统语言(`SystemLanguage.current()`),collector 解析上面的 "auto" 用。描述的是这台机器而不是偏好:
+    /// 本机系统语言(`SystemLanguage.current()`),引擎解析上面的 "auto" 用。描述的是这台机器而不是偏好:
     /// 加载时跟本机对不上就单独改写这一个键(见 `writeSystemLanguage`),配置包导出时去掉、导入时换成本机的值。
     var systemLanguage: String?
     /// **遗留字段**:「跟随播放器启动」还是一个总开关时写的布尔。只有它、没有下面的列表时,load() 按它迁移成列表
-    /// (PlayerLinkage.migratedLaunchSet),整份写回时这个键随之删掉。collector 不认它。
+    /// (PlayerLinkage.migratedLaunchSet),整份写回时这个键随之删掉。引擎不认它。
     var launchLyrimuseOnMusicOpen: Bool?
-    /// 「跟随播放器启动」逐播放器勾选(PlaybackPlayer.rawValue 列表),空列表 = 不跟随。collector 照它盯播放器进程
-    /// (collector/companionlaunch.go)。反方向("打开 Lyrimuse 时启动播放器")是 AppSettings 自己的设置,不在这份文件里。
+    /// 「跟随播放器启动」逐播放器勾选(PlaybackPlayer.rawValue 列表),空列表 = 不跟随。引擎照它盯播放器进程
+    /// (lyrimuse-engine/companionlaunch.go)。反方向("打开 Lyrimuse 时启动播放器")是 AppSettings 自己的设置,不在这份文件里。
     var launchLyrimuseOnPlayers: [String]?
     /// 用户显式信任的「未知播放器」:bundle id → 界面显示名(反查不到 App 名时是空串)。
     /// 语义见 LyrimuseCore 的 TrustedPlayers —— 为什么是"信任列表"而不是"一律接受",
     /// 那份注释里写了(白名单同时挡着打卡,一律接受会把视频/播客写进永久收听历史)。
     var trustedPlayers: [String: String]?
     /// **不** scrobble 到 Last.fm 的播放器(bundle id 列表)。缺失 / 空 = 全部上送。
-    /// 只管 Last.fm(含给它兜底的本地收听日志与 now-playing),ListenBrainz 不受影响。与 collector 的
+    /// 只管 Last.fm(含给它兜底的本地收听日志与 now-playing),ListenBrainz 不受影响。与引擎的
     /// featureFlagsFile.LastfmExcludedBundles 一一对应,语义见那边 lastfmexclude.go 头注。
     var lastfmExcludedBundles: [String]?
     /// 「网页播放器」配对关系的镜像:平台 id → 浏览器 bundle id(已排序)。真源是 AppSettings.browserPlatformPairs,
-    /// 这里只为让 collector 知道 —— 它那几路网页平台探针只对配对过的浏览器跑(collector browserpairs.go)。
-    /// 缺失 = 还没写过,collector 沿用所有浏览器都探;空对象 = 一个都没配。
+    /// 这里只为让引擎知道 —— 它那几路网页平台探针只对配对过的浏览器跑(引擎 browserpairs.go)。
+    /// 缺失 = 还没写过,引擎沿用所有浏览器都探;空对象 = 一个都没配。
     var browserPlatformPairs: [String: [String]]?
 
     /// CaseIterable 是为了让 `knownFileKeys` 能自动跟着字段增删走 —— 手工维护第二份
@@ -353,15 +353,15 @@ struct FeatureFlagsFile: Codable, Equatable {
 // "歌词"tab 的纯行为开关(lyrics/albumPrefetch 等)和"账号连接"tab 里各张
 // 账号卡片的开关(lastfmMirrorScrobble/weeklyDigest)共用同一份数据层——读写
 // ~/.config/lyrimuse/lyrimuse-features.json,跟
-// collector/features.go 是同一份共享文件的两侧独立实现。Last.fm 桥接
+// lyrimuse-engine/features.go 是同一份共享文件的两侧独立实现。Last.fm 桥接
 // (读 Last.fm 转发进 ListenBrainz + 喂网页"正在播放")不再是这里的一个独立开关——
-// Last.fm 桥接凭据 + ListenBrainz 账号都配好就自动生效,跟 collector 侧
+// Last.fm 桥接凭据 + ListenBrainz 账号都配好就自动生效,跟引擎侧
 // poller.go 的 bridge() 判断条件一致,见那边的注释。
 //
 // 这个 store 里的每一个开关都是"改了立刻保存"——Binding 的 set 里包一层
 // `Task { await features.save() }`,持久化+重启挪到后台执行,但从用户视角"点开关
 // 立刻生效"这个体验不变(不需要等;设置窗口底部有一条**不阻塞**的状态条
-// CollectorApplyStatusBar:重启进行中一行小字、重启失败给原因和「重试」、后台服务被主动停用给
+// EngineApplyStatusBar:重启进行中一行小字、重启失败给原因和「重试」、后台服务被主动停用给
 // 中性提示——lastError 从此有人读)。"账号连接"tab 底部那条
 // 批量保存栏(isDirty/saveBar)管的是 ConfigStore 的文本/密钥字段,跟这个 store 的开关
 // 无关,不要混为一谈。
@@ -371,10 +371,10 @@ public final class FeatureSettingsStore: ObservableObject {
 
     // 本地播放状态读取哪个 App(集合,可多选)——默认**{自动识别}**。
     //
-    // features.json 还不存在时(全新安装)load() 把各项初值整份写进文件,collector 照文件走。
+    // features.json 还不存在时(全新安装)load() 把各项初值整份写进文件,引擎照文件走。
     //
     // 保证非空——UI 层(播放器卡片网格)负责不让用户把最后一个选项也取消勾选,跟
-    // LyrimuseCore 的 PlaybackPlayerPreference.selected/collector 的 resolvePlayers
+    // LyrimuseCore 的 PlaybackPlayerPreference.selected/引擎的 resolvePlayers
     // 同一份"选中集合永远至少有一个成员"的不变量。
     @Published public var players: Set<PlaybackPlayer> = [.auto]
 
@@ -386,8 +386,8 @@ public final class FeatureSettingsStore: ObservableObject {
     /// 的注释,勾了自动识别之后它按超集处理,不会因为同时也勾了具体播放器就退化。
     ///
     /// **不能取消到空集**:选中集合永远至少留一个,跟上面那条"保证非空"的不变量以及
-    /// LyrimuseCore `PlaybackPlayerPreference.selected` / collector `resolvePlayers` 对称
-    /// —— 真放任清空,下一次 collector 重启读到的会是"什么都没选"这个非法状态(两侧都会
+    /// LyrimuseCore `PlaybackPlayerPreference.selected` / 引擎 `resolvePlayers` 对称
+    /// —— 真放任清空,下一次引擎重启读到的会是"什么都没选"这个非法状态(两侧都会
     /// 各自兜底成 auto,但界面会有一瞬间显示"什么都没选中",观感是错的)。
     /// 判断本体在 `Set<PlaybackPlayer>.toggling`(selftest players 组钉着)。
     @MainActor
@@ -400,7 +400,7 @@ public final class FeatureSettingsStore: ObservableObject {
 
     /// 预解析待播曲目。字段名和 json 键(`album_prefetch`)是这个功能只预取
     /// 「同一张专辑里其它曲目」那阵子留下的,语义**已经扩到整条播放队列**(见
-    /// collector/upcoming.go)。不改名是刻意的:改了就要多一个迁移标记,而迁移标记漏写一边
+    /// lyrimuse-engine/upcoming.go)。不改名是刻意的:改了就要多一个迁移标记,而迁移标记漏写一边
     /// 的坑刚踩过(`applemusic_lyrics`),为一个纯内部的名字不值得。
     @Published public var albumPrefetch = true
     /// 「自动跟进算法升级」——关掉之后,已经选定的歌词不再被后台的重打分/升级重搜换掉。
@@ -411,7 +411,7 @@ public final class FeatureSettingsStore: ObservableObject {
     // 该由用户显式同意 —— 现有的九个歌词源只发歌手/歌名。
     @Published public var lyricsMachineTranslation = false
     @Published public var lastfmMirrorScrobble = false
-    /// 初值 .raw(原样发)是老机器的默认。语义与取舍见 collector lastfm.go 的 resolveScrobbleTags:ListenBrainz
+    /// 初值 .raw(原样发)是老机器的默认。语义与取舍见引擎 lastfm.go 的 resolveScrobbleTags:ListenBrainz
     /// 文档要求合唱 credit "include them all";折叠会丢信息且不可逆,不折叠最坏只是 Last.fm 上多一个听众很少的
     /// 合唱条目 —— 代价不对称。
     ///
@@ -427,7 +427,7 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lastfmMatchFirstArtistOnly = false
 
     /// 上面那三个布尔的界面形状:曲名一维、歌手一维。界面只绑这两个,布尔本身仍是
-    /// 落盘契约、也仍是 `effectiveMatch*` 的输入 —— 所以 collector 那侧一个字都不用改。
+    /// 落盘契约、也仍是 `effectiveMatch*` 的输入 —— 所以引擎那侧一个字都不用改。
     ///
     /// 歌手那一维把「改写歌手」和「合唱只发第一位」合成了互斥的三档(理由见
     /// `LastfmArtistRule`)。setter 每次都把两个布尔一起写,不会留下半旧半新的组合。
@@ -448,7 +448,7 @@ public final class FeatureSettingsStore: ObservableObject {
 
     /// 三个维度**按档位算出来的有效值** —— 落盘、以及任何"实际会怎么发"的判断都用它们,
     /// 别直接读上面那三个 @Published(那三个只是「自定义」档的界面状态)。
-    /// 跟 collector `resolveLastfmMatch` 是同一份规则,两侧要一起改。
+    /// 跟引擎 `resolveLastfmMatch` 是同一份规则,两侧要一起改。
     public var effectiveMatchArtist: Bool {
         switch lastfmMatchMode {
         case .smart: return true
@@ -493,23 +493,23 @@ public final class FeatureSettingsStore: ObservableObject {
     // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。
     @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
     /// 本机系统语言,每次 load() 读一遍(见 FeatureFlagsFile.systemLanguage)。「翻译语言包」那一行按它算
-    /// 「跟随系统语言」的目标,跟 collector 认的是同一个值。
+    /// 「跟随系统语言」的目标,跟引擎认的是同一个值。
     @Published public private(set) var systemLanguage = ""
-    // 「跟随播放器启动」:打开勾了的播放器时,collector 顺带唤起 Lyrimuse(collector/companionlaunch.go,语义见
+    // 「跟随播放器启动」:打开勾了的播放器时,引擎顺带唤起 Lyrimuse(lyrimuse-engine/companionlaunch.go,语义见
     // LyrimuseCore.PlayerLinkage 头注)。全新安装为空(不跟随);只有布尔的老配置在 load() 里迁移成列表。
     @Published public var launchLyrimuseOnPlayers: Set<PlaybackPlayer> = []
     /// 见 FeatureFlagsFile.trustedPlayers。改它一律走 trust/untrust 两个方法,别直接赋值
-    /// —— 那两个方法负责反查 App 名并立刻落盘(collector 按 mtime 重读,不需要重启)。
+    /// —— 那两个方法负责反查 App 名并立刻落盘(引擎按 mtime 重读,不需要重启)。
     @Published public private(set) var trustedPlayers: [String: String] = [:]
-    /// 见 FeatureFlagsFile.lastfmExcludedBundles。改它一律走 updateLastfmExclusion(立刻落盘 + 重启 collector,
-    /// 跟 trust/untrust 同一条路 —— collector 只在启动时读一次这份文件)。
+    /// 见 FeatureFlagsFile.lastfmExcludedBundles。改它一律走 updateLastfmExclusion(立刻落盘 + 重启引擎,
+    /// 跟 trust/untrust 同一条路 —— 引擎只在启动时读一次这份文件)。
     @Published public private(set) var lastfmExcludedBundles: Set<String> = []
     /// 见 FeatureFlagsFile.browserPlatformPairs。只经 syncBrowserPlatformPairs 改。
     public private(set) var browserPlatformPairs: [String: [String]]?
 
     @Published public private(set) var lastError: String?
-    /// 上一次保存落盘成功、但 collector 没重启——因为用户在「播放器」页主动停用了后台服务(kickstart 对没加载的
-    /// job 必然失败)。不是错误:collector 下次启动时读盘就拿到新值。设置窗口底部状态条据此显示一句中性提示
+    /// 上一次保存落盘成功、但引擎没重启——因为用户在「播放器」页主动停用了后台服务(kickstart 对没加载的
+    /// job 必然失败)。不是错误:引擎下次启动时读盘就拿到新值。设置窗口底部状态条据此显示一句中性提示
     ///;下一次成功重启清掉。
     @Published public private(set) var pendingUntilServiceEnabled = false
     /// 启动时 features.json 判定为**损坏**(文件在、但不是 JSON 对象,或字段按类型解不出来)的原因;
@@ -571,7 +571,7 @@ public final class FeatureSettingsStore: ObservableObject {
             //
             // 三个布尔落盘的是**按档位算出来的有效值**,不是 UI 上那三个 @Published ——
             // 智能档恒为 true/true/false、原始档恒为全 false。这样盘上永远不会出现
-            // 「mode=smart 但 match_artist=false」这种自相矛盾的组合,collector 那边也就
+            // 「mode=smart 但 match_artist=false」这种自相矛盾的组合,引擎那边也就
             // 不必再判一次档位优先级(它确实不判,直接读布尔)。
             lastfmMatchMode: lastfmMatchMode.rawValue,
             lastfmMatchArtist: effectiveMatchArtist,
@@ -597,9 +597,9 @@ public final class FeatureSettingsStore: ObservableObject {
             miguLyrics: lyricsSources.contains(.migu),
             // 同上,deezer 的迁移标记独立生效一次。
             deezerLyrics: lyricsSources.contains(.deezer),
-            // 同上,applemusic 的迁移标记独立生效一次。不写它,collector 会一直把这个源补回来。
+            // 同上,applemusic 的迁移标记独立生效一次。不写它,引擎会一直把这个源补回来。
             appleMusicLyrics: lyricsSources.contains(.applemusic),
-            // 同上,soda 的迁移标记独立生效一次。不写它,collector 会一直把这个源补回来。
+            // 同上,soda 的迁移标记独立生效一次。不写它,引擎会一直把这个源补回来。
             sodaLyrics: lyricsSources.contains(.soda),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
@@ -624,14 +624,14 @@ public final class FeatureSettingsStore: ObservableObject {
 
     /// 把一个未知播放器加进信任列表。
     ///
-    /// 显示名在这里就地反查并一起存下来,不是每次显示时现查:collector(Go)也要用它当
+    /// 显示名在这里就地反查并一起存下来,不是每次显示时现查:引擎(Go)也要用它当
     /// ListenBrainz 的 media_player 标签,而 Go 那边没有 NSWorkspace 可用 —— 名字必须由
     /// Swift 侧写进共享文件。反查不到就存空串,标签退回 bundle id(总比谎报成
     /// "Apple Music"好,那会让来源统计彻底失真)。
     public func trust(bundleID: String) async {
         let id = bundleID.trimmingCharacters(in: .whitespaces)
         guard !id.isEmpty, trustedPlayers[id] == nil else { return }
-        // 内置播放器本来就认,加进来只会让"已信任"列表看起来莫名多几条(collector 侧
+        // 内置播放器本来就认,加进来只会让"已信任"列表看起来莫名多几条(引擎侧
         // resolveTrustedPlayers 也会把它们剔掉,这里提前挡住,别让界面先显示后消失)。
         guard !PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == id }) else { return }
         trustedPlayers[id] = Self.appDisplayName(forBundleID: id) ?? ""
@@ -645,7 +645,7 @@ public final class FeatureSettingsStore: ObservableObject {
 
     /// 「Scrobble 的播放器」按播放器开关(「只控制 lastfm 的上送」)。存的是
     /// **排除**集合:缺失 / 空 = 全部上送,跟其余"缺字段 = 沿用现有行为"的键同一口径,新装机、老配置都不会突然
-    /// 少记。一次调用可以同时改多个(那排芯片一次交回整组勾选),只落一次盘、只重启一次 collector;没变化就什么
+    /// 少记。一次调用可以同时改多个(那排芯片一次交回整组勾选),只落一次盘、只重启一次引擎;没变化就什么
     /// 都不做。
     public func updateLastfmExclusion(scrobbled: [String], excluded: [String]) async {
         var next = lastfmExcludedBundles
@@ -741,7 +741,7 @@ public final class FeatureSettingsStore: ObservableObject {
             }
         }
         guard let f = decoded else {
-            // 文件不存在:各属性停在初值上,整份写出去 —— collector 只认文件。全新装机先把「上送的写法」抬成
+            // 文件不存在:各属性停在初值上,整份写出去 —— 引擎只认文件。全新装机先把「上送的写法」抬成
             // 「智能」:只能在这里判(要看 UserDefaults,见 isFreshInstall),也只能在这条路径上判 —— 走到
             // `decoded != nil` 说明文件在、能解析,这台机器必是老的。
             // 文件损坏:维持初值、不写(persistFile 也会拒绝),等用户在横幅里修或放弃。
@@ -864,7 +864,7 @@ public final class FeatureSettingsStore: ObservableObject {
             launchLyrimuseOnPlayers = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
         } else {
             // 布尔年代的一次性迁移:true(默认)→ 当时的全部候选(选中集合的具体播放器,auto 时五个全上),
-            // 这正是 collector 当年盯的范围;false → 空。迁移结果随整份写回,布尔键随之删掉。
+            // 这正是引擎当年盯的范围;false → 空。迁移结果随整份写回,布尔键随之删掉。
             launchLyrimuseOnPlayers = PlayerLinkage.migratedLaunchSet(
                 legacyEnabled: f.launchLyrimuseOnMusicOpen ?? true, selectedPlayers: players, requiresSole: false)
         }
@@ -873,7 +873,7 @@ public final class FeatureSettingsStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
-    /// load() 把整份当前值写回文件:collector 只认文件,缺项、旧写法、系统语言都靠这一次落盘。不走 save():那条路是
+    /// load() 把整份当前值写回文件:引擎只认文件,缺项、旧写法、系统语言都靠这一次落盘。不走 save():那条路是
     /// 给用户改设置用的,带着设置窗口状态条的提示。写失败只记日志,下一次保存照样写全。
     private func writeBack(reason: String) {
         do {
@@ -888,7 +888,7 @@ public final class FeatureSettingsStore: ObservableObject {
     //
     // 原注释说"底部保存栏会把这个和 ConfigStore.persistFile() 一起调用后统一重启
     // 一次" —— 那个保存栏已经不存在了,且本方法只被自己的 save 调用(
-    // 核实)。"只重启一次"现在由 CollectorRestartCoordinator 保证。
+    // 核实)。"只重启一次"现在由 EngineRestartCoordinator 保证。
     public func persistFile() throws {
         // 当前快照编码成字典。JSONEncoder 这一步只会因为编程错误失败,不会因为用户数据失败。
         let encoded = try JSONEncoder().encode(currentSnapshot)
@@ -949,11 +949,11 @@ public final class FeatureSettingsStore: ObservableObject {
     }
 
     // 重启去抖的状态原来在这里,整体挪进了共享的
-    // CollectorRestartCoordinator —— 原因不是嫌它写得不好,而是它只能是**私有**的:
+    // EngineRestartCoordinator —— 原因不是嫌它写得不好,而是它只能是**私有**的:
     // 看不见 ConfigStore 也在重启,于是"改一个凭据 + 改一个开关"照样两次重启,正好是
     // 它当初想消灭的那个场景。别在这里重新加一份局部去抖。
     // 独立保存入口(持久化+重启+提交快照一步到位)——给本文件里每一个即时保存的开关用。
-    /// 这次保存改了哪些顶层键(json 键名)。拿它问 `CollectorRestartPolicy` 要不要重启 collector。
+    /// 这次保存改了哪些顶层键(json 键名)。拿它问 `EngineRestartPolicy` 要不要重启引擎。
     /// 编码失败(只会是编程错误)时返回空集合 —— 空集合按"不知道改了什么"处理,照旧重启。
     private var changedFileKeysSinceLastSave: Set<String> {
         Self.changedKeys(from: savedSnapshot, to: currentSnapshot)
@@ -967,7 +967,7 @@ public final class FeatureSettingsStore: ObservableObject {
             else { return [:] }
             return dict
         }
-        return CollectorRestartPolicy.changedKeys(from: fields(old), to: fields(new))
+        return EngineRestartPolicy.changedKeys(from: fields(old), to: fields(new))
     }
 
     @discardableResult
@@ -986,15 +986,15 @@ public final class FeatureSettingsStore: ObservableObject {
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
-        // 不重启 collector:它按 mtime 自己热重读这份文件(featuresreload.go),lyrics_dir 也在运行中
-        // 切换(lyricsdirswitch.go)。见 CollectorRestartPolicy 头注。
-        logger.notice("saved, collector hot-reloads it (\(changedKeys.sorted().joined(separator: ","), privacy: .public))")
+        // 不重启引擎:它按 mtime 自己热重读这份文件(featuresreload.go),lyrics_dir 也在运行中
+        // 切换(lyricsdirswitch.go)。见 EngineRestartPolicy 头注。
+        logger.notice("saved, engine hot-reloads it (\(changedKeys.sorted().joined(separator: ","), privacy: .public))")
         lastError = nil
         // 后台服务被用户停用时,文件已是新值、下次启用读盘生效;状态条据此提示「服务已停用」。
         // 看的是开关、不问 launchctl:每次保存(每拨一个开关、退出时的兜底保存)都会走到这里,
-        // `CollectorServiceManager.isRunning` 会在主线程同步起一个子进程等它退出;而状态条本来也只在
-        // 开关关着时才显示这条提示(CollectorApplyStatusBar)。
-        pendingUntilServiceEnabled = !AppSettings.shared.collectorServiceEnabled
+        // `EngineServiceManager.isRunning` 会在主线程同步起一个子进程等它退出;而状态条本来也只在
+        // 开关关着时才显示这条提示(EngineApplyStatusBar)。
+        pendingUntilServiceEnabled = !AppSettings.shared.engineServiceEnabled
         commitSnapshot()
         return true
     }

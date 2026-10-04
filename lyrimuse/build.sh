@@ -163,10 +163,10 @@ merge_slices() {
 }
 
 APP_NAME="Lyrimuse"
-# bundle id(同时是 App 自己那个 LaunchAgent 的 label)与 collector 的 job label。三个名字跟
+# bundle id(同时是 App 自己那个 LaunchAgent 的 label)与引擎的 job label。三个名字跟
 # LyrimuseCore/Util/LyrimuseIdentity.swift 里那一套逐字一致。
 LABEL="me.yudaotor.lyrimuse"
-COLLECTOR_LABEL="com.lyrimuse.collector"
+ENGINE_LABEL="com.lyrimuse.collector"
 # 歌词引擎在包里的可执行文件名(= 进程名),跟 LyrimuseIdentity.engineExecutableName 逐字一致。换包时正在跑的
 # 旧进程可能还叫 collector:等旧进程退出、记旧 pid 这两处按 ENGINE_PATH_PATTERN 两个名字都认。
 ENGINE_NAME="lyrimuse-engine"
@@ -180,7 +180,7 @@ LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
 # 之前这里的默认值硬编码成 "1.0.0"——本地构建本来就不是要发布的正式
 # 版本,当时觉得不需要精确。实测坐实这个假设是错的:这台机器上唯一会用到的构建方式
 # 就是本地 `./build.sh`(见 repo CLAUDE.md),诊断导出的「App version」这一行因此
-# 永远报 1.0.0,即便实际代码已经是 v1.4.0 之后好几轮迭代——同一份诊断报告里 collector
+# 永远报 1.0.0,即便实际代码已经是 v1.4.0 之后好几轮迭代——同一份诊断报告里引擎
 # 侧日志正确打出 `lyrimuse 1.4.0 starting`,App 侧却报 1.0.0,两个版本号当场打架,
 # 排查时反而添乱。改成取最近一个 git tag(去掉 v 前缀)当默认值——不追新 commit 也
 # 不带 hash 后缀,保持"干净三段数字"这条硬约束,但至少不会常年停在一个早就过时的
@@ -208,7 +208,7 @@ BUILD_VERSION="$(./scripts/build-version.sh "$APP_VERSION")" || {
 #   * `install_name_tool: cannot rename .../Contents/MacOS/lyrimuse (No such file or directory)`
 #     (文件在 rename 之前被对方删掉了)
 #   * `Bootstrap failed: 5: Input/output error`(launchd 拿到一个写到一半的 bundle,
-#     App 起来了、collector 没起来)
+#     App 起来了、引擎没起来)
 # 根因不是"安装那一步"没做互斥,而是从这一行往下近 340 行**全部**在原地增删改签同一个包
 # (mkdir/cp/rm -rf/lipo+mv/codesign --force),整段都是不安全窗口。
 #
@@ -278,9 +278,9 @@ if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ] && [ -z "${LYRIMUSE_SPM_SCRATCH_PAT
     && [ -z "${LYRIMUSE_SPM_CACHE_PATH:-}" ]; then
   SNAPSHOT_ROOT="$PWD/.build/source-snapshot"
   echo "==> snapshotting sources into $SNAPSHOT_ROOT"
-  mkdir -p "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-collector"
+  mkdir -p "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-engine"
   rsync -a --delete --exclude=/.build/ --exclude=/dist/ --exclude=.DS_Store ./ "$SNAPSHOT_ROOT/lyrimuse/"
-  rsync -a --delete --exclude=/collector --exclude=.DS_Store ../lyrimuse-collector/ "$SNAPSHOT_ROOT/lyrimuse-collector/"
+  rsync -a --delete --exclude=/collector --exclude=/lyrimuse-engine --exclude=.DS_Store ../lyrimuse-engine/ "$SNAPSHOT_ROOT/lyrimuse-engine/"
   cp -p ../THIRD_PARTY_LICENSES "$SNAPSHOT_ROOT/THIRD_PARTY_LICENSES"
   if [ ! -d "$SNAPSHOT_ROOT/lyrimuse/.build" ]; then
     mkdir -p "$SNAPSHOT_ROOT/lyrimuse/.build"
@@ -339,33 +339,33 @@ merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-translate" "${TRANSLATE_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-romanize" "${ROMANIZE_SLICES[@]}"
 
-# collector 打包进 .app 里(Contents/Resources/$ENGINE_NAME),不要求
-# 用户手动单独构建它——CollectorServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
-# 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-collector/build.sh 同款
+# 引擎打包进 .app 里(Contents/Resources/$ENGINE_NAME),不要求
+# 用户手动单独构建它——EngineServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
+# 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-engine/build.sh 同款
 # GOTOOLCHAIN=go1.24.4(系统 Go 1.21 产出的二进制缺 LC_UUID，AMFI 拒签，见那份脚本的
 # 注释)。
 echo "==> building $ENGINE_NAME [$ARCHES]"
-# collector 是纯 Go(没有 import "C",核实过),所以 GOARCH 交叉编译不需要交叉
+# 引擎是纯 Go(没有 import "C",核实过),所以 GOARCH 交叉编译不需要交叉
 # 工具链,直接编两份再 lipo 合并即可。GOARCH 的写法跟 uname -m 不一样:x86_64 在 Go 里
 # 叫 amd64。
-COLLECTOR_SLICES=()
+ENGINE_SLICES=()
 for arch in $ARCHES; do
   case "$arch" in
     arm64) goarch=arm64 ;;
     x86_64) goarch=amd64 ;;
     *) echo "!! 不认识的架构:$arch" >&2; exit 2 ;;
   esac
-  # 这里**不能**再加 "$PWD/" 前缀。下一行进了子 shell(`cd ../lyrimuse-collector`),
+  # 这里**不能**再加 "$PWD/" 前缀。下一行进了子 shell(`cd ../lyrimuse-engine`),
   # 所以 -o 的落点必须是绝对路径 —— 当 FAT_DIR 还是相对的 ".build/fat" 时,靠 "$PWD/"
   # 补齐正是必需的。把 FAT_DIR 改成 `mktemp -d`(绝对路径,理由见它声明处)
   # 之后,这个前缀就变成了拼接错误:"$PWD" + "/var/folders/…" 造出
-  # `lyrimuse/var/folders/…/collector-arm64`,每次构建往仓库里丢一份产物 —— 提交前
+  # `lyrimuse/var/folders/…/lyrimuse-engine-arm64`,每次构建往仓库里丢一份产物 —— 提交前
   # 发现时已经攒了 330MB、183 个未跟踪条目里就有它。FAT_DIR 现在自己就是绝对路径,直接用。
   out="$FAT_DIR/$ENGINE_NAME-$arch"
-  # -ldflags -X:把版本号注入 collector,让它跟 App 的 CFBundleShortVersionString
+  # -ldflags -X:把版本号注入引擎,让它跟 App 的 CFBundleShortVersionString
   # **同源**($APP_VERSION 就是上面写进 Info.plist 的那个值)。
   #
-  # 在此之前 collector 的版本号是 main.go 里一个手写字面量,靠人在
+  # 在此之前引擎的版本号是 main.go 里一个手写字面量,靠人在
   # 发版时记得改那一行来跟 App 对齐——v1.3.0 漏过一次,v1.5.0 又漏一次(用户装了
   # 1.5.0 的 dmg,设置页报「App 1.5.0 · 采集服务 1.4.0」)。注入之后这两个版本号
   # 由构造保证一致,不再依赖任何人的记性。
@@ -373,15 +373,15 @@ for arch in $ARCHES; do
   # 注入的目标必须是 **var**(main.go 里 clientVersion 就是 var,那里有详细注释)。
   # -X 对 const **静默失败**:构建照样成功、不报错,值原封不动——所以这条注入
   # "看起来生效了"是靠不住的,真正的把关在 versioninjection_test.go 和下面装配完
-  # 之后那道 collector/App 版本一致性校验。
+  # 之后那道引擎/App 版本一致性校验。
   # LYRIMUSE_GOTOOLCHAIN(包管理器构建用):MacPorts 沙箱禁网,钉住的
   # go1.24.4 若非本机版本会触发工具链下载而失败——port 传 local 用它自带的 go
   # (依赖声明保证 ≥1.24)。默认仍是 go1.24.4(系统 1.21 产物缺 LC_UUID,AMFI 拒签)。
-  (cd ../lyrimuse-collector && GOTOOLCHAIN="${LYRIMUSE_GOTOOLCHAIN:-go1.24.4}" GOOS=darwin GOARCH="$goarch" \
+  (cd ../lyrimuse-engine && GOTOOLCHAIN="${LYRIMUSE_GOTOOLCHAIN:-go1.24.4}" GOOS=darwin GOARCH="$goarch" \
     go build -ldflags "-X main.clientVersion=$APP_VERSION" -o "$out" .)
-  COLLECTOR_SLICES+=("$out")
+  ENGINE_SLICES+=("$out")
 done
-merge_slices "$FAT_DIR/$ENGINE_NAME" "${COLLECTOR_SLICES[@]}"
+merge_slices "$FAT_DIR/$ENGINE_NAME" "${ENGINE_SLICES[@]}"
 
 echo "==> assembling .app bundle"
 # CFBundleIdentifier 这次(改名 Lyrimuse)跟上面的 $LABEL 统一成同一个
@@ -393,17 +393,17 @@ echo "==> assembling .app bundle"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$FAT_DIR/lyrimuse" "$BIN"
 cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
-# collector 装在 Resources/ 而不是 MacOS/——那里是 CFBundleExecutable 指向的主执行文件，
-# collector 是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
+# 引擎装在 Resources/ 而不是 MacOS/——那里是 CFBundleExecutable 指向的主执行文件，
+# 引擎是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
 #
 # 实测坐实一个严重问题：反复在同一路径上 `cp`(不删旧文件、复用同一个
 # inode)覆盖这个可执行文件很多次之后，内核的代码签名信任判定会失效——表现是这个
 # 二进制不管谁来起(不只是 launchd 管的常驻服务，"歌词管理"窗口"搜索候选歌词"那种
 # 一次性子进程调用同样中招)全部被 SIGKILL，诊断报告(~/Library/Logs/
-# DiagnosticReports/collector-*.ips)里能看到明确原因："SIGKILL (Code Signature
+# DiagnosticReports/lyrimuse-engine-*.ips)里能看到明确原因："SIGKILL (Code Signature
 # Invalid)" / namespace CODESIGNING / indicator "Taskgated Invalid Signature"——
 # 即使当时用 `codesign -v` 单独验证这个文件本身完全通过。跟主执行文件($BIN)的处境
-# 不同:那个在下面会被 `codesign --force` 显式重新签名一次，这里 collector 从
+# 不同:那个在下面会被 `codesign --force` 显式重新签名一次，这里引擎从
 # `go build` 产物原样拷过来，从没有在 build.sh 里被重新签过，长期反复覆盖同一个
 # inode 更容易踩中这个内核侧缓存陈旧的坑。先删再拷，让每次构建都是一个全新的
 # inode，从根源避开这个问题(跟上面这次会话另外给 media-control 加的 rm -f 是
@@ -412,7 +412,7 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # 一起封进包里。
 rm -f "$APP_DIR/Contents/Resources/collector" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 cp "$FAT_DIR/$ENGINE_NAME" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
-# collector 现在必须在这里显式补签。以前这份是 `go build` 的产物原样拷进来、
+# 引擎现在必须在这里显式补签。以前这份是 `go build` 的产物原样拷进来、
 # 自带工具链盖的 ad-hoc 签名,所以下面只做 `codesign -v` 验证;改成 universal 之后中间多了
 # 一步 lipo,而 lipo 会让原有签名失效(实测:合并后的文件 `codesign -v` 直接不通过),
 # 只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
@@ -422,16 +422,16 @@ codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/$ENGINE_NAME"
 # 拉起引擎。删掉它之前要确认已经没人停在旧 plist 上(见 docs/features 15 章「歌词引擎的可执行文件改名」)。
 ln -s "$ENGINE_NAME" "$APP_DIR/Contents/Resources/collector"
 
-# 端上歌词翻译小助手。collector(Go)调不了 Apple 的 Translation 框架,所以拆成这个独立的
-# Swift 可执行文件,由 collector 按自身可执行文件的相对路径调起 —— 跟 media-control 同一
-# 个形态。先删再拷再补签的三步跟上面 collector 一模一样,理由见那段注释(lipo 会让签名
+# 端上歌词翻译小助手。引擎(Go)调不了 Apple 的 Translation 框架,所以拆成这个独立的
+# Swift 可执行文件,由引擎按自身可执行文件的相对路径调起 —— 跟 media-control 同一
+# 个形态。先删再拷再补签的三步跟上面引擎一模一样,理由见那段注释(lipo 会让签名
 # 失效 + 覆盖同 inode 容易踩内核签名缓存)。
 rm -f "$APP_DIR/Contents/Resources/lyrics-translate"
 cp "$FAT_DIR/lyrics-translate" "$APP_DIR/Contents/Resources/lyrics-translate"
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-translate"
 
-# 罗马音预生成小助手。同上:collector 算不了 CFStringTokenizer/ICU 那一步。
-# 三步(先删再拷再补签)与上面逐字对称,理由见 collector 那段注释。
+# 罗马音预生成小助手。同上:引擎算不了 CFStringTokenizer/ICU 那一步。
+# 三步(先删再拷再补签)与上面逐字对称,理由见引擎那段注释。
 rm -f "$APP_DIR/Contents/Resources/lyrics-romanize"
 cp "$FAT_DIR/lyrics-romanize" "$APP_DIR/Contents/Resources/lyrics-romanize"
 codesign --force --sign "$SIGN_ID" "$APP_DIR/Contents/Resources/lyrics-romanize"
@@ -455,7 +455,7 @@ for arch in $ARCHES; do
     -o "$npc_out" "$NPC_SRC/nowplaying-clients.m"
   NPC_SLICES+=("$npc_out")
 done
-# lipo 之后再签,顺序不能反(理由同 collector 那段)。
+# lipo 之后再签,顺序不能反(理由同引擎那段)。
 merge_slices "$NPC_DST/libnowplaying-clients.dylib" "${NPC_SLICES[@]}"
 cp "$NPC_SRC/nowplaying-clients.pl" "$NPC_DST/nowplaying-clients.pl"
 codesign --force --sign "$SIGN_ID" "$NPC_DST/libnowplaying-clients.dylib"
@@ -491,7 +491,7 @@ else
   fi
 fi
 if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
-  # 先删再拷贝(跟 collector/.lproj 同款先例):Homebrew Cellar 里这些文件很多是只读的
+  # 先删再拷贝(跟引擎/.lproj 同款先例):Homebrew Cellar 里这些文件很多是只读的
   # (-r-xr-xr-x),`cp -R` 会原样带过来只读位——第二次往后重新构建时,已存在的只读文件/
   # 目录会让 `cp`/`codesign` 直接 "Permission denied"(实测坐实)。
   # 只拷 media-control 自己的那几件,不是整个 bin//lib//Frameworks/ 目录:Homebrew 的
@@ -516,7 +516,7 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   /usr/bin/sed -i '' "s|'\.\.', 'Library', 'Frameworks', 'MediaRemoteAdapter.framework'|'..', 'Frameworks', 'MediaRemoteAdapter.framework'|" \
     "$APP_DIR/Contents/Resources/media-control/bin/media-control"
   # media-control 这个可执行文件本身完全没签名(实测 `codesign -dv` 报 "code object is
-  # not signed at all")——跟 collector(go build 的产物自带签名)不一样,这里需要主动
+  # not signed at all")——跟引擎(go build 的产物自带签名)不一样,这里需要主动
   # 补签,不然可能被 Gatekeeper 拦下来。MediaRemoteAdapter.framework 内部那个 Mach-O
   # 已经带着 Homebrew 自己的 ad-hoc 签名,不需要(也不应该)重复处理;
   # mediaremote-adapter.pl 是纯文本 Perl 脚本,同样不需要签名。
@@ -829,7 +829,7 @@ PLIST
 # 迁移唯一一次性的代价，同意一次之后往后重新构建/重启都不会再弹。
 codesign -s "$SIGN_ID" --force --identifier "$LABEL" "$APP_DIR"
 codesign -v "$APP_DIR" && echo "    signature valid"
-# collector 已经在上面 lipo 之后显式 ad-hoc 签过一次(见那一步的注释:lipo 会让 go build
+# 引擎已经在上面 lipo 之后显式 ad-hoc 签过一次(见那一步的注释:lipo 会让 go build
 # 产物自带的那份签名失效,所以不能再像以前那样只验证不签)——最外层这行 codesign 没加
 # --deep，只签 .app 这一个代码对象，不会动内层这个独立二进制自己的签名；这里显式验证
 # 一遍，而不是假设。
@@ -861,18 +861,18 @@ if [ -n "$ARCH_BAD" ]; then
   echo "!! 要发布的构建先解决上面这些(package.sh 会硬拦)" >&2
 fi
 
-# ==> collector / App 版本一致性。
+# ==> 引擎 / App 版本一致性。
 #
-# 这道闸验的是**真实产物**,不是源码推断:直接运行刚打进包里的那个 collector 问它
+# 这道闸验的是**真实产物**,不是源码推断:直接运行刚打进包里的那个引擎问它
 # `version`,跟写进 Info.plist 的 $APP_VERSION 比。放在 swap **之前** —— 不一致就
 # 别把这个包换进 /Applications。
 #
-# 起因:collector 的版本号长期是 main.go 里的手写字面量,靠人在发版时记得改。v1.3.0
+# 起因:引擎的版本号长期是 main.go 里的手写字面量,靠人在发版时记得改。v1.3.0
 # 漏过一次,v1.5.0 又漏一次——用户在另一台机器装了 1.5.0 的 dmg,设置页报「App 1.5.0 ·
 # 采集服务 1.4.0」。同上面 -ldflags 注入那段注释:注入本身**不会**在失败时报错
 # (-X 对 const 静默失效),所以光有注入不够,必须有一道验产物的闸。
 #
-# 这道闸和 App 内设置页那张卡(CollectorServiceManager.bundledCollectorVersion)
+# 这道闸和 App 内设置页那张卡(EngineServiceManager.bundledEngineVersion)
 # 问的是同一个问题,区别只在时机:那张卡是装到用户机器上之后才告警——它确实抓到了
 # v1.5.0 这次,但那时 dmg 已经发出去了。这道闸把同一个检查提前到构建期。
 VERSION_CHECK_BIN="$APP_DIR/Contents/Resources/$ENGINE_NAME"
@@ -880,17 +880,17 @@ VERSION_CHECK_BIN="$APP_DIR/Contents/Resources/$ENGINE_NAME"
 # 只能跳过 —— 但要说清楚是"没验",不能让人误以为验过了。
 HOST_ARCH="$(uname -m)"
 if ! lipo -archs "$VERSION_CHECK_BIN" 2>/dev/null | grep -qw "$HOST_ARCH"; then
-  echo "    ⚠️ collector 不含本机架构($HOST_ARCH),跳过版本一致性校验" >&2
+  echo "    ⚠️ 引擎不含本机架构($HOST_ARCH),跳过版本一致性校验" >&2
 elif ! BUNDLED_VER="$("$VERSION_CHECK_BIN" version 2>/dev/null)"; then
-  echo "!! collector 跑不起来,无法校验版本(这本身就不正常)" >&2
+  echo "!! 引擎跑不起来,无法校验版本(这本身就不正常)" >&2
   exit 1
 elif [ "$BUNDLED_VER" != "$APP_VERSION" ]; then
-  echo "!! App 与 collector 版本不一致:App=$APP_VERSION collector=$BUNDLED_VER" >&2
-  echo "!! 版本号由 -ldflags 注入(见上面 go build collector 那段);若 collector 报 'dev'," >&2
+  echo "!! App 与引擎版本不一致:App=$APP_VERSION 引擎=$BUNDLED_VER" >&2
+  echo "!! 版本号由 -ldflags 注入(见上面 go build 引擎那段);若引擎报 'dev'," >&2
   echo "!! 多半是 main.go 里 clientVersion 被改回 const 了——-X 对 const 静默失效。" >&2
   exit 1
 else
-  echo "    版本一致 App=$APP_VERSION collector=$BUNDLED_VER"
+  echo "    版本一致 App=$APP_VERSION 引擎=$BUNDLED_VER"
 fi
 
 # ==> 把暂存包一次性换进 /Applications(见文件上方 FINAL_APP_DIR 那段注释)。
@@ -907,14 +907,14 @@ fi
 # 老进程在被重启之前一直有完整的一份可用。
 # 首装(目标还不存在)时 renamex_np 返回 ENOENT,回退 mv;那条路径上目标不存在,没有嵌套风险。
 if [ -n "$STAGE" ]; then
-  # 换包之前先卸掉 collector 的 job,等老进程退出。collector 是裸可执行文件,TCC 按**路径**认它;
+  # 换包之前先卸掉引擎的 job,等老进程退出。引擎是裸可执行文件,TCC 按**路径**认它;
   # 换完之后老进程的可执行文件落在 $STAGE(带 pid 的临时路径)里,在被重装之前它还会照常问 Spotify,
-  # TCC 当它是个新程序、弹「"collector"想要控制"Spotify"」,每次构建都弹一次,点了也白点;弹窗挂着时
+  # TCC 当它是个新程序、弹「"lyrimuse-engine"想要控制"Spotify"」,每次构建都弹一次,点了也白点;弹窗挂着时
   # App 发给 Spotify 的 AppleEvent 也跟着卡住(见 02 章决策 63)。卸掉之后由下面的重装段或 App 的
   # reconcileAfterLaunch(看到没在跑就重装)拉起,那两条路本来就会 bootout 一次,这里提前不冲突。
   # 不重启(--no-restart)时没人拉起它,不卸。
-  if [ "$NO_RESTART" != 1 ] && [ -e "$FINAL_APP_DIR" ] && launchctl list "$COLLECTOR_LABEL" >/dev/null 2>&1; then
-    launchctl bootout "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
+  if [ "$NO_RESTART" != 1 ] && [ -e "$FINAL_APP_DIR" ] && launchctl list "$ENGINE_LABEL" >/dev/null 2>&1; then
+    launchctl bootout "gui/$(id -u)/$ENGINE_LABEL" 2>/dev/null || true
     for _ in $(seq 1 20); do
       pgrep -f "$FINAL_APP_DIR/$ENGINE_PATH_PATTERN" >/dev/null 2>&1 || break
       sleep 0.5
@@ -979,10 +979,10 @@ if [ -n "$OLD_PIDS" ]; then
     sleep 1
   done
 fi
-# 记下旧 collector 的 pid,给末尾「新 collector 起来了没有」那道确认用。必须在 open 之前取:
-# App 一起来就会自己重装 collector(见末尾那段)。
-COLLECTOR_BIN="$APP_DIR/Contents/Resources/$ENGINE_NAME"
-OLD_COLLECTOR_PIDS="$(pgrep -f "$APP_DIR/$ENGINE_PATH_PATTERN" 2>/dev/null | tr '\n' ' ' || true)"
+# 记下旧引擎的 pid,给末尾「新引擎起来了没有」那道确认用。必须在 open 之前取:
+# App 一起来就会自己重装引擎(见末尾那段)。
+ENGINE_BIN="$APP_DIR/Contents/Resources/$ENGINE_NAME"
+OLD_ENGINE_PIDS="$(pgrep -f "$APP_DIR/$ENGINE_PATH_PATTERN" 2>/dev/null | tr '\n' ' ' || true)"
 echo "==> launching via LaunchServices (open -g)"
 open -g "$APP_DIR"
 # 最多等 10 秒而不是固定 sleep 2:首次 open 一个新 bundle(换过 bundle id、或刚装到新路径)LaunchServices 要先注册,
@@ -1018,48 +1018,48 @@ if [ -n "$OLD_PIDS" ] && [ "$pid" = "$OLD_PIDS" ]; then
 fi
 echo "==> $APP_NAME running, pid ${pid% }"
 
-# collector 是独立的一份 launchd job(com.lyrimuse.collector),上面那一整套 kickstart/
+# 引擎是独立的一份 launchd job(com.lyrimuse.collector),上面那一整套 kickstart/
 # bootout 只管 $LABEL 这个 App job，从来没管过它 —— 而这个脚本每跑一次，都会把
 # 包里的引擎删掉重拷、再 `codesign --force --sign -` 重签一遍(见上面那一步)，
 # cdhash 必然变。于是:
 #
-#   1. 正在跑的老 collector 因为二进制被换掉，下次缺页时被 SIGKILL;
+#   1. 正在跑的老引擎因为二进制被换掉，下次缺页时被 SIGKILL;
 #   2. launchd(KeepAlive=true)想拉起新的，但它给这个 job 缓存的 LWCR
 #      (Lightweight Code Requirement)还绑在旧 cdhash 上 —— 新二进制被内核直接拒绝，
 #      崩溃报告里写得很明白:CODESIGNING / "Launch Constraint Violation" +
 #      SIGKILL (Code Signature Invalid)，launchctl 那边则是 exit 78 EX_CONFIG、
 #      job state = spawn failed;
 #   3. KeepAlive 会一直重试一直失败(实测抓到时 runs 已经 127 次)，
-#      collector 就此永久躺平 —— 歌词解析、scrobble、relay 全停，而 App 本身活得好好的，
+#      引擎就此永久躺平 —— 歌词解析、scrobble、relay 全停，而 App 本身活得好好的，
 #      表现成"这首歌一直没歌词、歌词管理也没条目"，极难联想到是构建脚本干的。
 #
-# 所以 collector 的 job 每次构建都必须完整卸载重装(bootout + bootstrap)。
+# 所以引擎的 job 每次构建都必须完整卸载重装(bootout + bootstrap)。
 #
 # 谁来做:用户开着后台服务(np:collectorServiceEnabled = 1)时,**交给 App**。App 一启动就跑
-# CollectorServiceManager.reconcileAfterLaunch,看到 collector 二进制的指纹变了,会自己
+# EngineServiceManager.reconcileAfterLaunch,看到引擎二进制的指纹变了,会自己
 # bootout → 写 plist → bootstrap,并记下新指纹。这里再动一遍就是两边同时对同一个 label
-# 停止 / 装回,互相把对方刚拉起的进程杀掉(刚起的 collector 还在加载缓存、没装信号处理,
+# 停止 / 装回,互相把对方刚拉起的进程杀掉(刚起的引擎还在加载缓存、没装信号处理,
 # 被杀连退出日志都没有),脚本这边 sleep 两秒再看自然常常是「没在跑」。
 # 服务开关不是 1(plist 是手动装的)时 App 不管它,才由这里重装。两条路都**不**跟
 # `kickstart -k`:bootstrap 按 RunAtLoad 已经拉起了进程,-k 杀的正是它,还要白等 10 秒宽限。
 #
-# 最后确认新 collector 起来了:pid 不在 open 之前记下的那组里。等 60 秒:App 的对账排在它启动
-# 流程之后,collector 自己加载缓存也要十几秒。
-# COLLECTOR_LABEL 在上面跟 APP_NAME 一起定义。
-COLLECTOR_PLIST="$HOME/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
-if [ -f "$COLLECTOR_PLIST" ]; then
+# 最后确认新引擎起来了:pid 不在 open 之前记下的那组里。等 60 秒:App 的对账排在它启动
+# 流程之后,引擎自己加载缓存也要十几秒。
+# ENGINE_LABEL 在上面跟 APP_NAME 一起定义。
+ENGINE_PLIST="$HOME/Library/LaunchAgents/$ENGINE_LABEL.plist"
+if [ -f "$ENGINE_PLIST" ]; then
   if [ "$(defaults read "$LABEL" np:collectorServiceEnabled 2>/dev/null || true)" = 1 ]; then
-    echo "==> waiting for the app to reinstall the collector job"
+    echo "==> waiting for the app to reinstall the engine job"
   else
-    echo "==> reloading collector job (refreshing its launch constraint)"
-    launchctl bootout "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
+    echo "==> reloading engine job (refreshing its launch constraint)"
+    launchctl bootout "gui/$(id -u)/$ENGINE_LABEL" 2>/dev/null || true
     sleep 1
-    launchctl bootstrap "gui/$(id -u)" "$COLLECTOR_PLIST" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$ENGINE_PLIST" 2>/dev/null || true
   fi
   cpid=""
   for _ in $(seq 1 60); do
-    for p in $(pgrep -f "$COLLECTOR_BIN" 2>/dev/null || true); do
-      case " $OLD_COLLECTOR_PIDS " in
+    for p in $(pgrep -f "$ENGINE_BIN" 2>/dev/null || true); do
+      case " $OLD_ENGINE_PIDS " in
         *" $p "*) ;;
         *) cpid="$p" ;;
       esac
@@ -1070,8 +1070,8 @@ if [ -f "$COLLECTOR_PLIST" ]; then
   if [ -n "$cpid" ]; then
     echo "==> $ENGINE_NAME running, pid $cpid"
   else
-    # 不 exit 1:App 本身已经起来了，collector 没起来是个独立故障，值得刺眼但不该让
+    # 不 exit 1:App 本身已经起来了，引擎没起来是个独立故障，值得刺眼但不该让
     # 整个构建被判失败(而且这条分支真出现时，多半要人去看崩溃报告)。
-    echo "!! $ENGINE_NAME not running (no new process within 60s) — launchctl print gui/$(id -u)/$COLLECTOR_LABEL" >&2
+    echo "!! $ENGINE_NAME not running (no new process within 60s) — launchctl print gui/$(id -u)/$ENGINE_LABEL" >&2
   fi
 fi

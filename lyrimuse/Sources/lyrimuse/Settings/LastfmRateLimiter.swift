@@ -71,11 +71,11 @@ actor LastfmRateLimiter {
         gate.noteResponse()
     }
 
-    /// 连续重试仍被限流时整体冷却的时长,同 collector 出站闸 429 窗口的默认值。
+    /// 连续重试仍被限流时整体冷却的时长,同引擎出站闸 429 窗口的默认值。
     static let exhaustedCooldown: TimeInterval = 60
 
-    /// request() 重试用完仍被限流时调用:全局冷却 `exhaustedCooldown`,并写进跟 collector 共享的
-    /// 限流窗口(`OutboundCooldowns`)——同一个出口 IP,collector 接着打只会被一起限。
+    /// request() 重试用完仍被限流时调用:全局冷却 `exhaustedCooldown`,并写进跟引擎共享的
+    /// 限流窗口(`OutboundCooldowns`)——同一个出口 IP,引擎接着打只会被一起限。
     func reportRateLimitExhausted() {
         let until = Date().addingTimeInterval(Self.exhaustedCooldown)
         gate.extendCooldown(until: until)
@@ -87,7 +87,7 @@ actor LastfmRateLimiter {
         pumpTask = Task { [weak self] in await self?.pump() }
     }
 
-    /// 单循环、单点放行。每轮:先睡完冷却期(如果有,含 collector 写进共享文件的 Last.fm 窗口),
+    /// 单循环、单点放行。每轮:先睡完冷却期(如果有,含引擎写进共享文件的 Last.fm 窗口),
     /// 前台队列优先,取不到前台再取后台,两条队列都空就退出循环(下次 acquire 重新拉起,没有常驻
     /// 空转的任务)。
     private func pump() async {
@@ -97,7 +97,7 @@ actor LastfmRateLimiter {
             let wait = gate.waitBeforeRelease(now: now)
             if wait > 0 {
                 try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
-                // 睡着的时候冷却可能被推后了(别处报了限流、collector 写了共享窗口):回到开头重新算,
+                // 睡着的时候冷却可能被推后了(别处报了限流、引擎写了共享窗口):回到开头重新算,
                 // 不然醒来照样放一个出去,再撞一次 429。
                 continue
             }

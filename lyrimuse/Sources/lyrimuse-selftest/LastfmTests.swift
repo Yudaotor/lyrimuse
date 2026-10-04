@@ -305,7 +305,7 @@ func runLastfmTests() {
 
     // ---- LastfmSignature:授权 / 喜欢用的 api_sig ----
     //
-    // 跟 collector lastfmsign_test.go 是同一组向量:两边各算各的签名,任一处的排序或编码分叉,
+    // 跟引擎 lastfmsign_test.go 是同一组向量:两边各算各的签名,任一处的排序或编码分叉,
     // 对应那一侧就红。签错的表现是 Last.fm 报 error 13(Invalid method signature),连不上账号。
     do {
         typealias S = LastfmSignature
@@ -333,7 +333,7 @@ func runLastfmTests() {
         expectEqual(I.pick([img("small", "s"), img("medium", "M")]), "M", "lastfm 图: 都没有退最后一项")
         expectEqual(I.pick([img("large", star)]), nil, "lastfm 图: 占位星当没有图")
         expectEqual(I.pick([img("large", ""), img("extralarge", "XL")]), "XL",
-                    "lastfm 图: large 是空串退 extralarge(跟 collector 同规则)")
+                    "lastfm 图: large 是空串退 extralarge(跟引擎同规则)")
         expectEqual(I.pick([img("large", ""), img("extralarge", ""), img("mega", "MG")]), "MG",
                     "lastfm 图: 前两档都是空串退最后一项")
         expectEqual(I.pick([img("small", ""), img("large", ""), img("extralarge", "")]), nil,
@@ -457,7 +457,7 @@ func runLastfmTests() {
 
     // ---- ChartComparison / ChartMovement:「听得最多」榜单跟上一期比的名次升降 ----
     //
-    // 上一期是紧挨着本期之前、同样长的窗口;三个长度跟 collector topArtistsPeriodSpan 同一组。
+    // 上一期是紧挨着本期之前、同样长的窗口;三个长度跟引擎 topArtistsPeriodSpan 同一组。
     do {
         typealias C = ChartComparison
         typealias M = ChartMovement
@@ -585,7 +585,7 @@ func runLastfmTests() {
                     "榜单进 App: 合唱署名按主歌手也能查到")
         expectEqual(idx.links(kind: .artist, artist: "陶喆", name: "") == nil, true, "榜单进 App: 缓存里没有的歌手不给")
 
-        // 榜单行是 Last.fm 上的写法(常是繁体),缓存键是 collector 写的(多是简体)。
+        // 榜单行是 Last.fm 上的写法(常是繁体),缓存键是引擎写的(多是简体)。
         let han = ChartLinkIndex.build([
             .init(key: "方大同|因为你|15", appleMusicURL: "https://music.apple.com/cn/album/x/11?i=12",
                   spotifyTrackID: nil, kkboxURL: nil),
@@ -682,7 +682,7 @@ func runLastfmTests() {
 
         typealias C = PlatformPagesCache
         expectEqual(C.albumKey(artist: " Michael Jackson ", album: "Xscape (Deluxe)"), "michael jackson|xscape (deluxe)",
-                    "平台页缓存: 专辑键跟 collector platformAlbumKey 同一个算法")
+                    "平台页缓存: 专辑键跟引擎 platformAlbumKey 同一个算法")
         let file = #"{"updated":1,"artists":{"mb-mj":{"spotify":"3fMbdgg4jU18AjLCKBhRSm","apple":"https://music.apple.com/us/artist/michael-jackson/32940","checked":1},"mb-none":{"checked":1}},"albums":{"michael jackson|dangerous":{"spotify":"0oX4SealMgNXrvRDhqqOKg","checked":1},"方大同|15":{"checked":1}},"tracks":{"prince|sexy dancer":{"spotify":"3KgByVmDzMkOXwtbqbqjBn","checked":1},"prince|nowhere":{"checked":1}}}"#
         let cache = C.parse(Data(file.utf8))
         expectEqual(cache.artistPages(mbid: "mb-mj")?.spotify?.absoluteString, "spotify:artist:3fMbdgg4jU18AjLCKBhRSm",
@@ -1096,7 +1096,7 @@ func runLastfmTests() {
                     "别名查找: 本机推断表与发现表撞键时本机表优先")
     }
 
-    // MARK: - LastfmRecentFeed(collector 落盘的最近记录 feed)
+    // MARK: - LastfmRecentFeed(引擎落盘的最近记录 feed)
     //
     // 字段名是跟 Go 侧 lastfmfeed.go 的契约;样本 JSON 照 Go 那边 TestWriteLastfmRecentFeedShape
     // 写出来的形状手抄(歌名合成)。
@@ -1267,15 +1267,15 @@ func runLastfmTests() {
         expectEqual(ArtistRegions.parse(json, user: "someone").isEmpty, true, "歌手地区: 别的账号的文件不认")
         expectEqual(ArtistRegions.parse(Data("{}".utf8), user: "x").isEmpty, true, "歌手地区: 没记账号的文件不认")
         expectEqual(parsed["overall"]?.regions.isEmpty, true, "歌手地区: 缺字段按空")
-        expectEqual(parsed["1month"]?.topArtists, 200, "歌手地区: 按歌手榜前多少位统计,照 collector 写进文件的")
+        expectEqual(parsed["1month"]?.topArtists, 200, "歌手地区: 按歌手榜前多少位统计,照引擎写进文件的")
         expectEqual(parsed["overall"]?.topArtists, 0, "歌手地区: 文件里没写位数按 0(卡底那句说明不显示)")
         let rows = ArtistRegions.rows(parsed["1month"]!)
         expectEqual(rows.map(\.kind), [.region("US"), .region("TW"), .region("HK"), .region("CN"), .region("JP"),
                                        .region("KR"), .other, .pending, .unresolved], "歌手地区: 前 6 个地区 + 其他 + 还在查 + 未查到")
-        expectEqual(rows[7].artists, ["林宥嘉"], "歌手地区: 还在查列 collector 给的名字")
+        expectEqual(rows[7].artists, ["林宥嘉"], "歌手地区: 还在查列引擎给的名字")
         expectEqual(rows[6].plays, 6, "歌手地区: 其他 = 第 7 名起的合计(次数 0 的不算)")
         expectEqual(rows[6].artists, ["Adele", "Daniel Caesar"], "歌手地区: 其他列各地区第一位")
-        expectEqual(rows[8].artists, ["Valorant"], "歌手地区: 未查到列 collector 给的名字")
+        expectEqual(rows[8].artists, ["Valorant"], "歌手地区: 未查到列引擎给的名字")
         expectEqual(ArtistRegions.period(for: .year), "12month", "歌手地区: 范围对到 Last.fm 时段名")
         let nullNames = Data(#"{"user":"u","periods":{"1month":{"covered":3,"regions":[{"code":"US","plays":3,"artists":null}]}}}"#.utf8)
         expectEqual(ArtistRegions.parse(nullNames, user: "u")["1month"]?.regions.first?.plays, 3,
@@ -1284,7 +1284,7 @@ func runLastfmTests() {
                     "歌手地区: 全部查完(没有 pending)就不出「还在查」")
     }
 
-    // MARK: - 目录学噪音副题(共用样例:collector 按同一口径决定收听记到 Last.fm 的哪一条)
+    // MARK: - 目录学噪音副题(共用样例:引擎按同一口径决定收听记到 Last.fm 的哪一条)
     do {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

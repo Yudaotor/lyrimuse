@@ -4,7 +4,7 @@ import Foundation
 public enum LastfmAccountSuggestion: Equatable, Sendable, Identifiable {
     /// 连接 Last.fm 那一趟没成功,带失败原因。
     case connectFailed(String)
-    /// 授权失效(collector 熔断落了状态文件),Scrobble 已暂停。
+    /// 授权失效(引擎熔断落了状态文件),Scrobble 已暂停。
     case authRevoked
     /// Last.fm 跟 Spotify 的连接让 Spotify 重复记或漏记。
     case spotify(LastfmSpotifyLink.PlayersRowHint)

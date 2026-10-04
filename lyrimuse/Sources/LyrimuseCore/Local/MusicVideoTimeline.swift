@@ -42,7 +42,7 @@ public struct MusicVideoTimeline: Equatable, Sendable {
     public static let edgeSlackSecs: Double = 1
 
     /// 哪些 `musicVideoType` 算 MV。OMV = 官方 MV,UGC = 用户上传;ATV(歌曲版)与读不到的都不算。
-    /// 与 collector 的 `ytmusicIsMusicVideoType` 同一份白名单,两边一起改。
+    /// 与引擎的 `ytmusicIsMusicVideoType` 同一份白名单,两边一起改。
     public static func isMusicVideoType(_ type: String?) -> Bool {
         type == "MUSIC_VIDEO_TYPE_OMV" || type == "MUSIC_VIDEO_TYPE_UGC"
     }
