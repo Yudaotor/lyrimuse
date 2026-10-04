@@ -127,7 +127,11 @@ struct MarqueeText<Content: View>: View {
             // 这跟 `NotchLyricsView` 里那条治「封面遮挡歌词」的 `.animation(nil, value:)` 是
             // 同一类问题的同一个解,只是那条按单个判据挡、这里把整个子树一次挡掉 —— 跑马灯的
             // 内容本来就只该靠下面这个 offset 移动,内部不需要任何补间。
+            //
+            // 紧跟着的 `.geometryGroup()` 别删:没有它,位置变化会一路推到最底层的字上、套用那里已经被摘掉
+            // 动画的事务,offset 的滚动动画也一起没了,偏移一步跳到终点、看上去不滚(07 章决策 97)。
             .transaction { $0.animation = nil }
+            .geometryGroup()
             .offset(x: -offset)
             // 归零那一下必须**瞬时**,不能被任何补间接管(理由见 restart())。
             //

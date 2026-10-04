@@ -153,6 +153,16 @@ func runLyricsWindowTests() {
                     "错开: settleMs 时最晚起步的那行也落定")
     }
 
+    // MARK: - 跑马灯的滚动动画(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let marquee = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/MarqueeText.swift"),
+                                   encoding: .utf8)) ?? ""
+        expectEqual(marquee.isEmpty, false, "跑马灯(契约): 读到源码")
+        expectEqual(sourceBytes(marquee, contain: ".transaction { $0.animation = nil }\n            .geometryGroup()\n            .offset(x: -offset)"),
+                    true, "跑马灯(契约): 内容摘掉动画之后先 geometryGroup 再 offset —— 少了它 offset 的滚动动画一起被摘掉,一步跳到终点")
+    }
+
     // MARK: - 迷你两行选取
     do {
         typealias M = MiniLyricsSelection
