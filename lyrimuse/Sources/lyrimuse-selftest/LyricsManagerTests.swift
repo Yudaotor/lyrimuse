@@ -897,6 +897,27 @@ func runLyricsManagerTests() {
         expectEqual(LyricQueryDigestBuilder.build(diffSrc).groups.count, 2,
                     "查询摘要: 来路相同但源名单不同要分开 —— 问了哪几个源是关键差异")
 
+        // 出处跟着每一条查询词走:同一组里的几个名字各带各的出处,首轮那条没有出处。
+        let withOrigin = LyricQueryDigestBuilder.build([
+            LyricQueryRound(artist: "角色甲(CV:声优甲)", title: "T", reason: "", sources: []),
+            LyricQueryRound(artist: "声优甲", title: "T", reason: "alias-rescue", sources: [], origin: "cv-actor"),
+            LyricQueryRound(artist: "Seiyuu A", title: "T", reason: "alias-rescue", sources: [], origin: "musicbrainz-alias"),
+        ])
+        expectEqual(withOrigin.groups.map(\.queries), [
+            [LyricQueryPair(artist: "角色甲(CV:声优甲)", title: "")],
+            [LyricQueryPair(artist: "声优甲", title: "", origin: "cv-actor"),
+             LyricQueryPair(artist: "Seiyuu A", title: "", origin: "musicbrainz-alias")],
+        ], "查询摘要: 出处跟着每一条走,同组的名字各带各的出处")
+        let sameNameTwoOrigins = LyricQueryDigestBuilder.build([
+            LyricQueryRound(artist: "声优甲", title: "T", reason: "alias-missing", sources: [], origin: "cv-actor"),
+            LyricQueryRound(artist: "Seiyuu A", title: "T", reason: "alias-missing", sources: [], origin: "musicbrainz-alias"),
+            LyricQueryRound(artist: "声优甲", title: "T", reason: "alias-missing", sources: [], origin: "musicbrainz-chinese"),
+        ])
+        expectEqual(sameNameTwoOrigins.groups.map(\.queries), [
+            [LyricQueryPair(artist: "声优甲", title: "", origin: "cv-actor"),
+             LyricQueryPair(artist: "Seiyuu A", title: "", origin: "musicbrainz-alias")],
+        ], "查询摘要: 组内去重不看出处,同一个名字只留第一次出现的那条")
+
         // 组内去重(引擎侧只挡得住相邻重复,跨轮撞上的挡不住)。
         let dup = [
             LyricQueryRound(artist: "A", title: "T", reason: "primary-artist-variant", sources: []),

@@ -1224,17 +1224,19 @@ func containsCJKScript(s string) bool {
 // 列表,保留各组内部的原有顺序。给 scoredLyricCandidatesStreaming 用:Apple 目录锚点那
 // 一组和 retryArtistIdentities 那一组完全可能给出同一个名字(比如手工别名表里恰好登记过
 // 同一位歌手),不去重就是同一个查询词白跑一整轮全源抓取(每轮 20 秒兜底)。
-func dedupeArtistIdentities(groups ...[]string) []string {
+//
+// 同一个名字出现在几组里时留第一次出现的那个,出处跟着它走。
+func dedupeArtistIdentities(groups ...[]artistIdentity) []artistIdentity {
 	seen := map[string]bool{}
-	var out []string
+	var out []artistIdentity
 	for _, g := range groups {
-		for _, name := range g {
-			n := normLoose(name)
-			if name == "" || n == "" || seen[n] {
+		for _, id := range g {
+			n := normLoose(id.name)
+			if id.name == "" || n == "" || seen[n] {
 				continue
 			}
 			seen[n] = true
-			out = append(out, name)
+			out = append(out, id)
 		}
 	}
 	return out

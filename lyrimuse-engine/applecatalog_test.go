@@ -275,12 +275,14 @@ func TestAppleStorefrontArtistCachePersistsOnlyHits(t *testing.T) {
 
 func TestDedupeArtistIdentities(t *testing.T) {
 	got := dedupeArtistIdentities(
-		[]string{"周杰伦", ""},
-		[]string{"Jay Chou", "周杰伦", "  周杰伦  "}, // 后两个 normLoose 后与第一组重复
+		identitiesFrom([]string{"周杰伦", ""}, lyricQueryOriginAppleCatalog),
+		identitiesFrom([]string{"Jay Chou", "周杰伦", "  周杰伦  "}, lyricQueryOriginMBAlias), // 后两个 normLoose 后与第一组重复
 		nil,
 	)
-	if !reflect.DeepEqual(got, []string{"周杰伦", "Jay Chou"}) {
-		t.Errorf("dedupeArtistIdentities = %#v, want [周杰伦 Jay Chou]", got)
+	// 重复的名字留第一次出现的那个,出处跟着它走。
+	want := []artistIdentity{{name: "周杰伦", origin: lyricQueryOriginAppleCatalog}, {name: "Jay Chou", origin: lyricQueryOriginMBAlias}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("dedupeArtistIdentities = %#v, want %#v", got, want)
 	}
 	if got := dedupeArtistIdentities(nil, nil); got != nil {
 		t.Errorf("全空应返回 nil,得到 %#v", got)

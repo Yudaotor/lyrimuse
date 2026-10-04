@@ -1245,12 +1245,15 @@ struct LyricsResolutionDecision: Decodable {
     /// 一组真正发出去的查询词。字段名对着引擎的 lyricQueryRecord;这个类型走
     /// `.convertFromSnakeCase`,而这几个键都是单词、没有下划线,所以不用手写 CodingKeys。
     struct TriedQuery: Decodable, Identifiable {
-        var id: String { "\(reason ?? "")|\(artist)|\(title ?? "")|\((sources ?? []).joined(separator: ","))" }
+        var id: String { "\(reason ?? "")|\(origin ?? "")|\(artist)|\(title ?? "")|\((sources ?? []).joined(separator: ","))" }
         let artist: String
         let title: String?
         /// 这一组是哪一轮问的。空 / nil = 首轮。取值全集见引擎的 lyricQueryReason*,
         /// 中文译名在 LyricsDecisionSheet.queryReasonLabel(漏补就会在界面上印英文串)。
         let reason: String?
+        /// 换名重查时这个名字从哪来。空 / nil = 不是换名重查。取值全集见引擎的 lyricQueryOrigin*,
+        /// 译名在 LyricsDecisionSheet.queryOriginLabel。
+        let origin: String?
         /// 这一轮**只**问了这几个源(别名轮的定向重查)。空 = 没有限制。
         let sources: [String]?
     }

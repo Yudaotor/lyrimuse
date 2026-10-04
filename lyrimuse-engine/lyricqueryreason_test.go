@@ -83,7 +83,7 @@ func TestLyricQueryLogIsWiredIntoEveryRound(t *testing.T) {
 	src := string(data)
 	for _, needle := range []string{
 		// 唯一的记录点 —— 所有轮次都经过 fetchScoredLyricCandidatesStreaming。
-		"lyricQueryLogFrom(ctx).record(artist, title, lyricQueryReasonFrom(ctx), sortedLyricSourceOnly(ctx))",
+		"lyricQueryLogFrom(ctx).record(artist, title, lyricQueryReasonFrom(ctx), lyricQueryOriginFrom(ctx), sortedLyricSourceOnly(ctx))",
 		// 五个轮次各自的标注。
 		"withLyricQueryReason(ctx, lyricQueryReasonTitleSplit)",
 		"coverRescue(ctx, artist, title, album, durationSecs, onUpdate)",

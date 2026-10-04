@@ -80,6 +80,11 @@
 "Apple Music 自动化权限" = "Apple Music automation permission";
 "Apple Music 自动化权限（推荐）" = "Apple Music Automation Permission (recommended)";
 "Apple Music 账号连接" = "Apple Music Account Connection";
+"Apple 各地商店署名" = "Apple storefront credit";
+"Apple 按曲名反查" = "Apple lookup by title";
+"Apple 目录署名" = "Apple catalog credit";
+"CV 声优" = "CV voice actor";
+"CV 署名里的团体" = "Unit in the CV credit";
 "Chat ID" = "Chat ID";
 "Chat ID，个人是一串数字，群组以 -100 开头" = "Chat ID: a number for a person, starting with -100 for a group";
 "Deezer 换取匿名访问令牌失败（不是这首歌没有歌词，稍后重试通常会恢复）" = "Could not get an anonymous access token from Deezer (this is not about the song having no lyrics; retrying later usually works)";
@@ -102,10 +107,13 @@
 "Lyrimuse 会跟着正在播放的 App 显示歌词，之后随时能在设置里改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
 "Lyrimuse 启动时把勾选的播放器一起打开，已经在跑的不动，也不抢焦点" = "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus";
 "MV" = "Music Video";
+"MusicBrainz 中文名" = "Chinese name on MusicBrainz";
+"MusicBrainz 别名" = "Alias on MusicBrainz";
 "Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复" = "Musixmatch rejected the anonymous token request (anti-bot rate limiting, hint=captcha) — not a network fault, this usually recovers after a while";
 "Musixmatch 的接口地址在当前网络下直连不通（TCP/TLS 都没有响应），系统代理也不可用——开启代理后通常会恢复" = "Musixmatch's API host is unreachable over a direct connection on this network (no TCP/TLS response), and no working system proxy is available — turning on a proxy usually fixes it";
 "QQ 音乐" = "QQ Music";
 "QQ 音乐专辑页" = "QQ Music album page";
+"QQ 音乐歌手建议" = "QQ Music artist suggestion";
 "QQ 音乐歌手页" = "QQ Music artist page";
 "QQ 音乐歌曲页" = "QQ Music song page";
 "Remaster/feat. 等标注" = "Remaster/feat. tags";
@@ -119,6 +127,7 @@
 "Spotify 每首会记两次" = "Each Spotify song is scrobbled twice";
 "Token 无效，请重新拷贝一次" = "Invalid token — copy it again";
 "Webhook 地址" = "Webhook URL";
+"YouTube Music 原名" = "Original name on YouTube Music";
 "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）" = "YouTube Music is not available in this network's region (a regional restriction, not a network fault)";
 "YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选你平时用来听歌的（可以多选）——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改" = "YouTube Music plays in a browser, so Lyrimuse needs to know which one to read the playback position from. Pick the ones you listen in (you can choose more than one) — macOS will ask you to authorise them, just allow. You can change this later under Web Players in Settings";
 "YouTube Music 歌曲页" = "YouTube Music song page";
@@ -973,6 +982,7 @@
 "本地已记录 %@ 首待补提交" = "%@ listens saved locally, waiting to be submitted";
 "本地歌名无检索结果，经「%@」查得正式曲名。" = "The local title returned nothing; the official title was found via “%@”.";
 "本地还没有待推送的收听" = "No scrobbles are waiting locally";
+"本机学到的署名" = "Credit learned on this Mac";
 "本机设置，无法撤销" = "This Mac only; can't be undone";
 "本条" = "This entry";
 "本轮候选明细已不可用" = "This round's candidate details are no longer available";
@@ -1320,6 +1330,7 @@
 "网页播放器" = "Web Players";
 "网页播放器不会主动汇报精确进度，切歌后需要这个开关才能立刻校准。" = "Web players don't report precise position; this switch lets Lyrimuse recalibrate right after a track change.";
 "置于最顶层" = "Always on Top";
+"署名里的汉字段" = "Han characters in the credit";
 "翻译语言包" = "Translation Languages";
 "耳机" = "Headphones";
 "联网搜索候选歌词" = "Search Online for Lyrics";
@@ -1702,6 +1713,7 @@
 "默认排序" = "Default Order";
 "默认跟随系统菜单栏，可在 10～16pt 间调，16pt 仍在菜单栏项高度内。拖回系统字号那一格即恢复跟随。" = "Follows the system menu bar by default; adjustable from 10 to 16pt, and 16pt still fits the menu bar item. Drag back to the system size to follow it again.";
 "鼠标移到菜单栏歌词上换成「上一曲 / 播放暂停 / 下一曲」三个键，移开变回。暂停后歌词收回成图标、或那一格太窄装不下三个键时不接管。点键以外的地方仍是打开面板。" = "Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel.";
+"（%@）" = " (%@)";
 "（已调）" = " (adjusted)";
 "（未信任，选择后自动信任）" = " (not trusted — choosing it trusts it)";
 "（正在播放）" = " (now playing)";

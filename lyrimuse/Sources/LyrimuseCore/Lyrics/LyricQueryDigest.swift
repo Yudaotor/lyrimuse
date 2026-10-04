@@ -28,12 +28,15 @@ public struct LyricQueryRound: Sendable, Equatable {
     public let reason: String
     /// 这一轮只问了这几个源;空 = 没有限制。
     public let sources: [String]
+    /// 换名重查时这个名字从哪来,空 = 不是换名重查。取值全集见引擎的 `lyricQueryOrigin*`(querylog.go)。
+    public let origin: String
 
-    public init(artist: String, title: String, reason: String, sources: [String]) {
+    public init(artist: String, title: String, reason: String, sources: [String], origin: String = "") {
         self.artist = artist
         self.title = title
         self.reason = reason
         self.sources = sources
+        self.origin = origin
     }
 }
 
@@ -46,10 +49,13 @@ public struct LyricQueryPair: Sendable, Equatable {
     /// 曲名。`LyricQueryDigest.sharedTitle` 非空(曲名全程没变、已提到顶上说过一次)时
     /// 为空串;曲名变过、或这一轮压根没有曲名时才有值。
     public let title: String
+    /// 这个名字从哪来(同 `LyricQueryRound.origin`)。同一组里的几个名字各有各的出处,所以跟着每一条走。
+    public let origin: String
 
-    public init(artist: String, title: String) {
+    public init(artist: String, title: String, origin: String = "") {
         self.artist = artist
         self.title = title
+        self.origin = origin
     }
 }
 
@@ -100,11 +106,11 @@ public enum LyricQueryDigestBuilder {
         for r in rounds {
             let key = r.reason + "\u{1F}" + r.sources.joined(separator: ",")
             // 曲名全程没变时组内不带曲名(顶上已经说过一次);变过就每条都带上,不丢信息。
-            let pair = LyricQueryPair(artist: r.artist, title: shared == nil ? r.title : "")
+            let pair = LyricQueryPair(artist: r.artist, title: shared == nil ? r.title : "", origin: r.origin)
             if var g = byKey[key] {
                 // 组内去重:同一组里同一条查询词重复出现没有信息量(引擎侧的相邻去重
-                // 只挡得住**相邻**的重复,跨轮撞上的挡不住)。
-                guard !g.queries.contains(pair) else { continue }
+                // 只挡得住**相邻**的重复,跨轮撞上的挡不住)。跟引擎一样不看出处,留第一次出现的那条。
+                guard !g.queries.contains(where: { $0.artist == pair.artist && $0.title == pair.title }) else { continue }
                 g = LyricQueryGroup(reason: g.reason, sources: g.sources, queries: g.queries + [pair])
                 byKey[key] = g
             } else {

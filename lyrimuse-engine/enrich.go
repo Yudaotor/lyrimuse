@@ -3477,12 +3477,12 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 				}()
 			}
 		}
-		retryIdentities := retryArtistIdentities(ctx, artist)
+		retryIdentities := retryArtistIdentitiesWithOrigin(ctx, artist)
 		identityWG.Wait()
 		altIdentities := dedupeArtistIdentities(
-			catalogIdentities,
-			storefrontIdentities,
-			titleSearchIdentities,
+			identitiesFrom(catalogIdentities, lyricQueryOriginAppleCatalog),
+			identitiesFrom(storefrontIdentities, lyricQueryOriginAppleStorefront),
+			identitiesFrom(titleSearchIdentities, lyricQueryOriginAppleTitle),
 			retryIdentities)
 		if rescue {
 			titleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),
@@ -3504,8 +3504,8 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		fan := newAliasFanout(ctx)
 		rescueBase, rescueOnly := results, lyricSourcesWorthAliasRetry(ctx, results)
 		rescueBranch := func(bctx context.Context, j int) (neteaseInfo, []scoredLyricCandidateResult) {
-			bctx = withLyricQueryReason(withLyricSourceOnly(bctx, rescueOnly), lyricQueryReasonAliasRescue)
-			bNe, bRes := fetchScoredLyricCandidatesStreaming(bctx, altIdentities[j], title, album, durationSecs, nil)
+			bctx = withLyricQueryOrigin(withLyricQueryReason(withLyricSourceOnly(bctx, rescueOnly), lyricQueryReasonAliasRescue), altIdentities[j].origin)
+			bNe, bRes := fetchScoredLyricCandidatesStreaming(bctx, altIdentities[j].name, title, album, durationSecs, nil)
 			if hasUsableLyricCandidate(bRes) {
 				notifyProvisionalLyrics(ctx, bNe, mergeLyricCandidateRounds(artist, title, album, durationSecs, rescueBase, bRes))
 			}
@@ -3516,8 +3516,8 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		missingParallel := manualLyricSearch(ctx)
 		missingBranch := func(only []string) func(bctx context.Context, j int) (neteaseInfo, []scoredLyricCandidateResult) {
 			return func(bctx context.Context, j int) (neteaseInfo, []scoredLyricCandidateResult) {
-				bctx = withLyricQueryReason(withLyricSourceOnly(bctx, only), lyricQueryReasonAliasMissing)
-				return fetchScoredLyricCandidatesStreaming(bctx, altIdentities[j], title, album, durationSecs, nil)
+				bctx = withLyricQueryOrigin(withLyricQueryReason(withLyricSourceOnly(bctx, only), lyricQueryReasonAliasMissing), altIdentities[j].origin)
+				return fetchScoredLyricCandidatesStreaming(bctx, altIdentities[j].name, title, album, durationSecs, nil)
 			}
 		}
 		for i, alt := range altIdentities {
@@ -3543,7 +3543,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			case romaRetry:
 				aliasReason = lyricQueryReasonAliasRoma
 			}
-			altCtx := withLyricQueryReason(withLyricSourceOnly(ctx, only), aliasReason)
+			altCtx := withLyricQueryOrigin(withLyricQueryReason(withLyricSourceOnly(ctx, only), aliasReason), alt.origin)
 			// onUpdate 包一层,理由跟下面"首歌手变体轮"的 mergedUpdate 一样(见那边注释):
 			// 别名轮裸透传 onUpdate 的话,"搜索候选歌词"弹窗会先缩水成这一轮别名自己的部分结果
 			// (从空开始,这一轮的源一个个陆续应答)、直到这一轮彻底跑完才恢复,中间态闪变 ——
@@ -3570,7 +3570,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 					aliasUpdate(altNe, altResults, n, n)
 				}
 			} else {
-				altNe, altResults = fetchScoredLyricCandidatesStreaming(altCtx, alt, title, album, durationSecs, aliasUpdate)
+				altNe, altResults = fetchScoredLyricCandidatesStreaming(altCtx, alt.name, title, album, durationSecs, aliasUpdate)
 			}
 			// 这里必须用 `mergeLyricCandidateRounds(results, altResults)` 的**只增不减**合并语义,
 			// 不能写成 `results = altResults` 整体覆盖(下面"首歌手变体轮"/"标题反查轮"两处同理)。
@@ -3581,8 +3581,8 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			// 合并之后:只有别名轮真的重新证明某个源可用时才顶替原名轮那一条,其余原样保留。
 			merged := mergeLyricCandidateRounds(artist, title, album, durationSecs, results, altResults)
 			if hasUsableLyricCandidate(altResults) {
-				log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d sources=%v",
-					artist, alt, title, len(altResults), lyricSourcesWithCandidates(altResults))
+				log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q origin=%q title=%q candidates=%d sources=%v",
+					artist, alt.name, alt.origin, title, len(altResults), lyricSourcesWithCandidates(altResults))
 				// 封面/链接一并采用这一轮的结果。原名查空时 ne 里的封面和跳转链接本来就是空的,
 				// 别名轮的 neteaseInfo 不能丢掉(丢掉的结果是"歌词有了、封面没了")。只在原来那份
 				// 确实没有时才覆盖,不动已经拿到的东西。身份类别名是"同一个人换个写法",整份 ne
@@ -3631,7 +3631,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	}
 	if primary := lyricPrimaryQueryArtist(artist); primary != "" && usableLyricSourceCount(results) < targetSources {
 		notifyProvisionalLyrics(ctx, ne, results)
-		tryVariant := func(alt string) {
+		tryVariant := func(alt artistIdentity) {
 			// onUpdate 包一层:变体轮期间把每次流式更新先与已有结果合并再上报。裸透传的话
 			// "搜索候选歌词"弹窗(整行替换列表,见 searchcli.go 顶注)会先缩水成变体轮自己
 			// 的部分结果、直到最终 emit 才恢复——中间态闪变,且闪出来的分数还是按变体串
@@ -3644,14 +3644,14 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			// 的都是单人名,多人合credit整串登不进去),且采纳门槛要求可用源数净增,重打分变差
 			// 只会导致"不采纳",不会污染已有结果。
 			mergedUpdate := mergedRoundUpdate(onUpdate, artist, title, album, durationSecs, results)
-			variantCtx := withLyricQueryReason(ctx, lyricQueryReasonPrimaryVar)
-			altNe, altResults := fetchScoredLyricCandidatesStreaming(variantCtx, alt, title, album, durationSecs, mergedUpdate)
+			variantCtx := withLyricQueryOrigin(withLyricQueryReason(ctx, lyricQueryReasonPrimaryVar), alt.origin)
+			altNe, altResults := fetchScoredLyricCandidatesStreaming(variantCtx, alt.name, title, album, durationSecs, mergedUpdate)
 			merged := mergeLyricCandidateRounds(artist, title, album, durationSecs, results, altResults)
 			if usableLyricSourceCount(merged) <= usableLyricSourceCount(results) {
 				return
 			}
-			log.Printf("lyrics: primary-artist variant added candidates: original_artist=%q variant=%q title=%q usable_sources=%d->%d",
-				artist, alt, title, usableLyricSourceCount(results), usableLyricSourceCount(merged))
+			log.Printf("lyrics: primary-artist variant added candidates: original_artist=%q variant=%q origin=%q title=%q usable_sources=%d->%d",
+				artist, alt.name, alt.origin, title, usableLyricSourceCount(results), usableLyricSourceCount(merged))
 			results = merged
 			// 只许补封面/跳转链接,**绝不**整份采用 altNe:变体串是把合credit截成首歌手
 			// 查出来的,altNe.Artist 是按"单人查询"放行的单人名,顺手带回去会经
@@ -3669,12 +3669,12 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 				ne.SongURL = altNe.SongURL
 			}
 		}
-		tryVariant(primary)
+		tryVariant(artistIdentity{name: primary})
 		if usableLyricSourceCount(results) < targetSources {
 			// 首歌手本身没救回来时,再试首歌手的已知别名/MusicBrainz 中文名(比如本地
 			// 标签 "Leah Dou & 别人" 截出 "Leah Dou" 还是查不到,换 "窦靖童" 再试)。
 			// retryArtistIdentities 自带去重,最多两个变体,每轮 20s 兜底,上限可控。
-			for _, alt := range retryArtistIdentities(ctx, primary) {
+			for _, alt := range retryArtistIdentitiesWithOrigin(ctx, primary) {
 				tryVariant(alt)
 				if usableLyricSourceCount(results) >= targetSources {
 					break
@@ -4728,7 +4728,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 记下"这一组词真的问出去了"(见 querylog.go)。放在这里而不是五个重试轮各写一遍:
 	// 这里是所有轮次唯一的实际发起点,漏不掉也不会重复。来路与"只问这几个源"的名单都从
 	// ctx 上取(withLyricQueryReason / withLyricSourceOnly),没挂收集器时是空操作。
-	lyricQueryLogFrom(ctx).record(artist, title, lyricQueryReasonFrom(ctx), sortedLyricSourceOnly(ctx))
+	lyricQueryLogFrom(ctx).record(artist, title, lyricQueryReasonFrom(ctx), lyricQueryOriginFrom(ctx), sortedLyricSourceOnly(ctx))
 
 	// 源级熔断(sourcebreaker.go):起跑前算一次"谁在冷却中",冷却中的源不发请求、立刻回一个
 	// 空结果——省掉的正是那 20 秒截止里白等的部分。被跳过的源记进 ctx 上的 round(没挂就

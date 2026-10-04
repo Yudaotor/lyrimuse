@@ -130,8 +130,35 @@ struct LyricsDecisionSheet: View {
         guard tried.count > 1 || tried.first?.reason?.isEmpty == false else { return nil }
         return LyricQueryDigestBuilder.build(tried.map {
             LyricQueryRound(artist: $0.artist, title: $0.title ?? "",
-                            reason: $0.reason ?? "", sources: $0.sources ?? [])
+                            reason: $0.reason ?? "", sources: $0.sources ?? [], origin: $0.origin ?? "")
         })
+    }
+
+    /// 换名重查的名字从哪来(引擎的 `lyricQueryOrigin*`,querylog.go)。空 = 不是换名重查,不标。
+    /// 跟 queryReasonLabel 同一套约定:default 原样显示原始值;引擎的 `TestLyricQueryOriginsHaveLabels`
+    /// 双向对账这份 switch 和那边的 lyricQueryOrigins()。
+    private func queryOriginLabel(_ origin: String) -> String? {
+        switch origin {
+        case "": return nil
+        case "cv-actor": return L10n.t("CV 声优")
+        case "cv-unit": return L10n.t("CV 署名里的团体")
+        case "han-portion": return L10n.t("署名里的汉字段")
+        case "learned-credit": return L10n.t("本机学到的署名")
+        case "ytmusic-credit": return L10n.t("YouTube Music 原名")
+        case "musicbrainz-chinese": return L10n.t("MusicBrainz 中文名")
+        case "musicbrainz-alias": return L10n.t("MusicBrainz 别名")
+        case "qq-artist": return L10n.t("QQ 音乐歌手建议")
+        case "apple-catalog": return L10n.t("Apple 目录署名")
+        case "apple-storefront": return L10n.t("Apple 各地商店署名")
+        case "apple-title-search": return L10n.t("Apple 按曲名反查")
+        default: return origin
+        }
+    }
+
+    /// 名字后面的出处:「（CV 声优）」;不是换名重查时为空串。
+    private func originSuffix(_ origin: String) -> String {
+        guard let label = queryOriginLabel(origin) else { return "" }
+        return String(format: L10n.t("（%@）"), label)
     }
 
     /// 一组的组头:「别名轮：补查未应答的源 · 仅查询 X、Y」。
@@ -363,10 +390,10 @@ struct LyricsDecisionSheet: View {
     /// 于是变成 `歌手「米津玄師」「米津玄師、宇多田ヒカル」`,一眼看得出是两个名字。
     private func groupQueriesText(_ g: LyricQueryGroup) -> String {
         if g.queries.allSatisfy({ $0.title.isEmpty }) {
-            return L10n.t("歌手") + g.queries.map { "「\($0.artist)」" }.joined()
+            return L10n.t("歌手") + g.queries.map { "「\($0.artist)」" + originSuffix($0.origin) }.joined()
         }
         return g.queries
-            .map { labeledFields([(L10n.t("歌手"), $0.artist), (L10n.t("歌名"), $0.title)]) }
+            .map { labeledFields([(L10n.t("歌手"), $0.artist), (L10n.t("歌名"), $0.title)]) + originSuffix($0.origin) }
             .joined(separator: "  ")
     }
 
@@ -390,7 +417,10 @@ struct LyricsDecisionSheet: View {
         // 后面一串「」框住的名字 —— 八个别名时不会把「歌手」重复八遍。
         if g.queries.allSatisfy({ $0.title.isEmpty }) {
             var out = dimmed(L10n.t("歌手"))
-            for query in g.queries { out += AttributedString("「\(query.artist)」") }
+            for query in g.queries {
+                out += AttributedString("「\(query.artist)」")
+                out += dimmed(originSuffix(query.origin))
+            }
             return Text(out)
         }
         var out = AttributedString()
@@ -398,6 +428,7 @@ struct LyricsDecisionSheet: View {
             if index > 0 { out += AttributedString("  ") }
             if !query.artist.isEmpty { out += labeled(L10n.t("歌手"), query.artist) }
             if !query.title.isEmpty { out += labeled(L10n.t("歌名"), query.title) }
+            out += dimmed(originSuffix(query.origin))
         }
         return Text(out)
     }

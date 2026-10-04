@@ -86,7 +86,7 @@ func TestCVRetryIdentities(t *testing.T) {
 		{"歌手甲 & 歌手乙", nil},
 	}
 	for _, c := range cases {
-		if got := cvRetryIdentities(c.in); !reflect.DeepEqual(got, c.want) {
+		if got := identityNames(cvRetryIdentities(c.in)); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("cvRetryIdentities(%q) = %q, 要 %q", c.in, got, c.want)
 		}
 	}

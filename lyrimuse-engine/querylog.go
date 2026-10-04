@@ -53,6 +53,41 @@ const (
 	lyricQueryReasonISRC = "isrc-from-applemusic"
 )
 
+// lyricQueryOrigin* 是别名轮 / 首歌手变体轮里**这个名字从哪来**,跟 lyricQueryReason(这一轮为什么跑)是两回事:
+// 同一轮别名里的几个名字各有各的出处。空串 = 不是换名重查(首轮、拆分重入、翻唱重入、标题反查),
+// 或者首歌手变体轮里的首歌手本身。新增一条**必须同时**在 App 侧 LyricsDecisionSheet.queryOriginLabel 里补
+// 译名,lyricQueryOrigins 那个测试守着这份清单。见 09 章决策 179。
+const (
+	lyricQueryOriginCVActor         = "cv-actor"            // CV 署名里的声优(cvRetryIdentities)
+	lyricQueryOriginCVUnit          = "cv-unit"             // CV 署名里一起署名的团体 / 组合
+	lyricQueryOriginHanPortion      = "han-portion"         // 「英文名 + 中文名」署名里的汉字段(hanOnlyPortion)
+	lyricQueryOriginLearned         = "learned-credit"      // 本机同一歌手别的歌采纳过的源侧署名(learnedSourceArtistAlias)
+	lyricQueryOriginYTMusic         = "ytmusic-credit"      // YouTube Music 登记的原名(ytmusicEnglishCredit)
+	lyricQueryOriginMBChinese       = "musicbrainz-chinese" // MusicBrainz 的中文名(canonicalArtistViaMusicBrainz)
+	lyricQueryOriginMBAlias         = "musicbrainz-alias"   // MusicBrainz 登记的别的写法(musicBrainzArtistAliases)
+	lyricQueryOriginQQArtist        = "qq-artist"           // QQ 音乐的歌手搜索建议(cachedQQArtistCanonicalName)
+	lyricQueryOriginAppleCatalog    = "apple-catalog"       // Apple 目录锚点的署名(appleCatalogSearchIdentities)
+	lyricQueryOriginAppleStorefront = "apple-storefront"    // Apple 各地商店的署名(appleStorefrontArtistIdentities)
+	lyricQueryOriginAppleTitle      = "apple-title-search"  // Apple 按曲名 + 时长反查的署名(appleTitleSearchIdentities)
+)
+
+// lyricQueryOrigins 是上面全部出处的清单,给测试用。
+func lyricQueryOrigins() []string {
+	return []string{
+		lyricQueryOriginCVActor,
+		lyricQueryOriginCVUnit,
+		lyricQueryOriginHanPortion,
+		lyricQueryOriginLearned,
+		lyricQueryOriginYTMusic,
+		lyricQueryOriginMBChinese,
+		lyricQueryOriginMBAlias,
+		lyricQueryOriginQQArtist,
+		lyricQueryOriginAppleCatalog,
+		lyricQueryOriginAppleStorefront,
+		lyricQueryOriginAppleTitle,
+	}
+}
+
 // lyricQueryReasons 是上面那九条(不含首轮的空串)的清单,给测试用。
 func lyricQueryReasons() []string {
 	return []string{
@@ -81,6 +116,8 @@ type lyricQueryRecord struct {
 	Title  string `json:"title,omitempty"`
 	// Reason:这一组是哪一轮问的,取值见上面 lyricQueryReason* 常量;空 = 首轮。
 	Reason string `json:"reason,omitempty"`
+	// Origin:换名重查时这个名字从哪来,取值见 lyricQueryOrigin* 常量;空 = 不是换名重查。
+	Origin string `json:"origin,omitempty"`
 	// Sources:这一轮**只**问了这几个源(别名轮的 withLyricSourceOnly 定向重查)。
 	// 空 = 没有限制,问的是当时所有启用且不在冷却里的源。
 	Sources []string `json:"sources,omitempty"`
@@ -93,6 +130,7 @@ type lyricQueryLog struct {
 
 type lyricQueryLogKey struct{}
 type lyricQueryReasonKey struct{}
+type lyricQueryOriginKey struct{}
 
 // withLyricQueryLog 挂一个收集器到 ctx 上。三处写缓存点 + 手动搜索 CLI 各自挂一个,
 // 跟 withLyricSourceRound 同一个位置、同一个生命周期(一轮解析)。
@@ -123,10 +161,24 @@ func lyricQueryReasonFrom(ctx context.Context) string {
 	return r
 }
 
+// withLyricQueryOrigin 给"接下来这一次抓取"标注查询用的名字从哪来,取值见 lyricQueryOrigin*。
+// 只有别名轮和首歌手变体轮设它;只挂在那一次抓取的 ctx 上,不往外层带。
+func withLyricQueryOrigin(ctx context.Context, origin string) context.Context {
+	return context.WithValue(ctx, lyricQueryOriginKey{}, origin)
+}
+
+func lyricQueryOriginFrom(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	o, _ := ctx.Value(lyricQueryOriginKey{}).(string)
+	return o
+}
+
 // record 由 fetchScoredLyricCandidatesStreaming 在入口调一次 —— 那里是**所有**轮次唯一的
 // 实际发起点(首轮 / 拆分重入 / 别名轮 / 变体轮 / 反查轮全都经过它),所以不会漏记,
 // 也不用在五个调用点各写一遍。sources 会拷一份:调用方传进来的是 ctx 上那个共享名单。
-func (l *lyricQueryLog) record(artist, title, reason string, sources []string) {
+func (l *lyricQueryLog) record(artist, title, reason, origin string, sources []string) {
 	if l == nil {
 		return
 	}
@@ -135,11 +187,11 @@ func (l *lyricQueryLog) record(artist, title, reason string, sources []string) {
 	if len(l.records) >= lyricQueryLogMax {
 		return
 	}
-	rec := lyricQueryRecord{Artist: artist, Title: title, Reason: reason}
+	rec := lyricQueryRecord{Artist: artist, Title: title, Reason: reason, Origin: origin}
 	if len(sources) > 0 {
 		rec.Sources = append([]string(nil), sources...)
 	}
-	// 同一组(词 + 来路 + 源名单)问两遍是没有意义的记录 —— 变体轮里"首歌手"和
+	// 同一组(词 + 来路 + 源名单,不看出处)问两遍是没有意义的记录 —— 变体轮里"首歌手"和
 	// retryArtistIdentities 给出的第一个别名可能恰好相同,dedupeArtistIdentities 管不到
 	// 跨轮的重复。相邻去重就够,不必全表扫。
 	if n := len(l.records); n > 0 && sameLyricQueryRecord(l.records[n-1], rec) {

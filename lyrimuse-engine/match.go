@@ -1894,9 +1894,16 @@ func hanOnlyPortion(s string) string {
 // 这个代价只在**每台机器第一次**真正撞上这位歌手时付一次,此后是零网络请求——包括
 // "歌词管理"手动搜索这种每次都是全新进程的场景。
 func retryArtistIdentities(ctx context.Context, artist string) []string {
+	return identityNames(retryArtistIdentitiesWithOrigin(ctx, artist))
+}
+
+// retryArtistIdentitiesWithOrigin 跟 retryArtistIdentities 给出同样的名字、同样的顺序,每个名字另带出处
+// (lyricQueryOrigin*):别名轮把它记进查询记录,「解析决策」里能看出这个名字是 CV 解析、MusicBrainz 还是别的
+// 哪一路给的。
+func retryArtistIdentitiesWithOrigin(ctx context.Context, artist string) []artistIdentity {
 	seen := map[string]bool{normLoose(artist): true} // 原名不必再搜一遍
-	var out []string
-	add := func(s string) {
+	var out []artistIdentity
+	add := func(s, origin string) {
 		s = strings.TrimSpace(s)
 		if s == "" {
 			return
@@ -1906,7 +1913,7 @@ func retryArtistIdentities(ctx context.Context, artist string) []string {
 			return
 		}
 		seen[k] = true
-		out = append(out, s)
+		out = append(out, artistIdentity{name: s, origin: origin})
 	}
 	// 第零条(纯本地字符串操作、不发网络请求,排最前面):"英文名+中文名"
 	// 拼接的混合标签(如 Apple Music 常见的"Gary 曹格")——举例:曹格《Superman》专辑
@@ -1918,23 +1925,23 @@ func retryArtistIdentities(ctx context.Context, artist string) []string {
 		// CV 署名(「角色(CV:声优)」)换成写明的声优、一起署名的团体,不跑 hanOnlyPortion:「CV」两个拉丁字母会让它
 		// 当成「英文名+中文名」,取出来的是半截角色名或姓氏。见 cvRetryIdentities。
 		for _, id := range cv {
-			add(id)
+			add(id.name, id.origin)
 		}
 	} else {
-		add(hanOnlyPortion(artist))
+		add(hanOnlyPortion(artist), lyricQueryOriginHanPortion)
 	}
 	// 第零点五条(同样是纯本地、零请求,所以跟上一条一起排在所有网络
 	// 查询前面):这台机器上同一个歌手的**别的**歌成功解析时,源那边把他署成什么名——
 	// 覆盖"这位歌手在线上全部落空,但本机缓存里同一个人的另一首歌已经采纳过候选"的场景
 	// (如王子(=Prince)《1999 (Edit)》,答案就躺在同一个「王子」另外两首歌的候选署名
 	// "Prince" 里)。判据从严、结果定序,完整理由见 learnedSourceArtistAlias 头注。
-	add(learnedSourceArtistAlias(artist))
+	add(learnedSourceArtistAlias(artist), lyricQueryOriginLearned)
 	// YouTube Music 登记的原名(ctx 上挂着这首的 videoId 时,Kaset 放的歌):界面是中文时一部分西方歌手报成本地化
 	// 译名(「菲尔·科林斯」),各源都按原名收录。署名里有非拉丁文字才问,见 ytmusiccredit.go。
 	if id := youTubeMusicVideoIDFrom(ctx); id != "" && hasNonLatinLetter(artist) {
-		add(ytmusicEnglishCredit(ctx, kasetAudioVideoIDFor(id)).artist)
+		add(ytmusicEnglishCredit(ctx, kasetAudioVideoIDFor(id)).artist, lyricQueryOriginYTMusic)
 	}
-	add(canonicalArtistViaMusicBrainz(ctx, artist))
+	add(canonicalArtistViaMusicBrainz(ctx, artist), lyricQueryOriginMBChinese)
 	// 第二条:MB 上这位歌手的其它已登记写法(不只给一个主名)。第一条是"中文名"取向
 	// —— 只在中文圈艺人身上出结果 —— 而"本名 与 艺名"(Abel Tesfaye 与 The Weeknd)、
 	// "国际艺名 与 中文常用名反过来查"(方大同 与 Khalil Fong)跟中文与否无关,靠这条
@@ -1944,12 +1951,46 @@ func retryArtistIdentities(ctx context.Context, artist string) []string {
 	// 顺序与取舍见 orderMBAliasesForRetry:主名打头,换了文字的写法在前、同文字的变体拼法在后,
 	// 歌词源认不得的文字系统不收。
 	for _, alt := range orderMBAliasesForRetry(musicBrainzArtistAliases(ctx, artist), artist) {
-		add(alt)
+		add(alt, lyricQueryOriginMBAlias)
 	}
 	// 第三条:QQ 音乐自己的歌手搜索建议(cachedQQArtistCanonicalName,
 	// 见其头注)——覆盖前两条 MusicBrainz 路径查不到、或者查错成另一个同名艺人的场景
 	// (david tao/lexie liu 实测案例)。
-	add(cachedQQArtistCanonicalName(artist))
+	add(cachedQQArtistCanonicalName(artist), lyricQueryOriginQQArtist)
+	return out
+}
+
+// artistIdentity:换名重查用的一个名字和它的出处(lyricQueryOrigin*)。
+type artistIdentity struct {
+	name, origin string
+}
+
+// String 给日志用:「名字(出处)」,没有出处时只有名字。
+func (id artistIdentity) String() string {
+	if id.origin == "" {
+		return id.name
+	}
+	return id.name + "(" + id.origin + ")"
+}
+
+// identitiesFrom:一组同一个出处的名字。
+func identitiesFrom(names []string, origin string) []artistIdentity {
+	out := make([]artistIdentity, 0, len(names))
+	for _, n := range names {
+		out = append(out, artistIdentity{name: n, origin: origin})
+	}
+	return out
+}
+
+// identityNames:只要名字;没有名字时为 nil。
+func identityNames(ids []artistIdentity) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = id.name
+	}
 	return out
 }
 

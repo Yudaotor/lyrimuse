@@ -255,17 +255,17 @@ func splitOnWithWord(s string, sep func(rune) bool) []string {
 	return out
 }
 
-// cvRetryIdentities:换名重查时从 CV 署名里拿的名字,依次是第一位声优、第一个不带 CV 的名字(团体 / 组合)。
+// cvRetryIdentities:换名重查时从 CV 署名里拿的名字,依次是第一位声优、第一个不带 CV 的名字(团体 / 组合),各带出处。
 // 多人署名也只拿这两个:源里多半署全体声优,任意一位都过得了歌手闸。角色名不拿:按角色名再查一轮不改变选中的歌词,
 // 见 09 章决策 173。不是 CV 署名时为空。
-func cvRetryIdentities(artist string) []string {
+func cvRetryIdentities(artist string) []artistIdentity {
 	c, ok := parseCVCredit(artist)
 	if !ok {
 		return nil
 	}
-	out := []string{c.actors[0]}
+	out := []artistIdentity{{name: c.actors[0], origin: lyricQueryOriginCVActor}}
 	if len(c.others) > 0 {
-		out = append(out, c.others[0])
+		out = append(out, artistIdentity{name: c.others[0], origin: lyricQueryOriginCVUnit})
 	}
 	return out
 }

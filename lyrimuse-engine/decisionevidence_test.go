@@ -71,14 +71,14 @@ func TestQueriesTriedReachDecisionJSON(t *testing.T) {
 	ctx, log := withLyricQueryLog(context.Background())
 
 	// ① 首轮:没标来路、没有源名单。
-	log.record("音樂頑童", "Musiq Soulchild - Buddy", lyricQueryReasonFrom(ctx), sortedLyricSourceOnly(ctx))
+	log.record("音樂頑童", "Musiq Soulchild - Buddy", lyricQueryReasonFrom(ctx), "", sortedLyricSourceOnly(ctx))
 	// ② 拆分重入。
 	splitCtx := withLyricQueryReason(ctx, lyricQueryReasonTitleSplit)
-	log.record("Musiq Soulchild", "Buddy", lyricQueryReasonFrom(splitCtx), sortedLyricSourceOnly(splitCtx))
+	log.record("Musiq Soulchild", "Buddy", lyricQueryReasonFrom(splitCtx), "", sortedLyricSourceOnly(splitCtx))
 	// ③ 别名轮 + 定向重查:源名单必须**按 lyricSourceNames 的规范顺序**落盘,不能是 map 随机序。
 	aliasCtx := withLyricQueryReason(withLyricSourceOnly(ctx, []string{"musixmatch", "qq", "kugou"}),
 		lyricQueryReasonAliasMissing)
-	log.record("JW", "NOT YOUR FAULT", lyricQueryReasonFrom(aliasCtx), sortedLyricSourceOnly(aliasCtx))
+	log.record("JW", "NOT YOUR FAULT", lyricQueryReasonFrom(aliasCtx), "", sortedLyricSourceOnly(aliasCtx))
 
 	got := log.queries()
 	if len(got) != 3 {
@@ -119,24 +119,24 @@ func TestQueriesTriedReachDecisionJSON(t *testing.T) {
 // retryArtistIdentities 的第一个别名撞上,dedupeArtistIdentities 管不到跨轮重复)。
 func TestQueryLogDedupesAdjacentDuplicates(t *testing.T) {
 	_, log := withLyricQueryLog(context.Background())
-	log.record("A", "T", lyricQueryReasonPrimaryVar, nil)
-	log.record("A", "T", lyricQueryReasonPrimaryVar, nil)
-	log.record("B", "T", lyricQueryReasonPrimaryVar, nil)
-	log.record("A", "T", lyricQueryReasonPrimaryVar, nil) // 不相邻,保留
+	log.record("A", "T", lyricQueryReasonPrimaryVar, "", nil)
+	log.record("A", "T", lyricQueryReasonPrimaryVar, "", nil)
+	log.record("B", "T", lyricQueryReasonPrimaryVar, "", nil)
+	log.record("A", "T", lyricQueryReasonPrimaryVar, "", nil) // 不相邻,保留
 	if got := log.queries(); len(got) != 3 {
 		t.Errorf("相邻去重后应剩 3 组,实际 %d: %+v", len(got), got)
 	}
 	// 上限护栏。
 	_, capped := withLyricQueryLog(context.Background())
 	for i := 0; i < lyricQueryLogMax+10; i++ {
-		capped.record("A", string(rune('a'+i%26))+string(rune('0'+i/26)), lyricQueryReasonAliasRescue, nil)
+		capped.record("A", string(rune('a'+i%26))+string(rune('0'+i/26)), lyricQueryReasonAliasRescue, "", nil)
 	}
 	if got := capped.queries(); len(got) != lyricQueryLogMax {
 		t.Errorf("上限没生效: %d 组, want %d", len(got), lyricQueryLogMax)
 	}
 	// 没挂收集器时是空操作,不 panic。
 	var nilLog *lyricQueryLog
-	nilLog.record("A", "T", "", nil)
+	nilLog.record("A", "T", "", "", nil)
 	if got := nilLog.queries(); got != nil {
 		t.Errorf("nil 收集器应返回 nil,实际 %v", got)
 	}
