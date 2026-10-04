@@ -36,6 +36,57 @@ public enum LyricsRomanization {
     /// 少任何一步,有预生成结果的歌在播放时就跟现算的对不上(引擎优先用预生成的)。
     public static func romanizeLRC(_ lyrics: String) -> String? {
         guard !lyrics.isEmpty else { return nil }
+        let prepared = readingRows(lyrics)
+        var out: [String] = []
+        for (tags, body) in prepared.rows {
+            guard let reading = Romanizer.lineReading(
+                body,
+                songLooksJapanese: prepared.songLooksJapanese,
+                segments: Romanizer.japaneseSegments(
+                    body, marks: prepared.annotation?.marks(forLine: body) ?? [],
+                    songLooksJapanese: prepared.songLooksJapanese)),
+                !reading.isEmpty, reading != body
+            else { continue }
+            out.append(tags + reading)
+        }
+        // 只产出了个别几行时也照样交出去:`LyricsSyncEngine` 对 `romaLines` 是按行就近匹配的
+        // (700ms 容差),缺行本来就是源自带罗马音的常态。
+        return out.isEmpty ? nil : out.joined(separator: "\n")
+    }
+
+    /// `roma` 是不是旧版韩文读音(ICU `Any-Latin` 逐字母转写)给这份正文算出来的。启动迁移靠它只换掉
+    /// collector 早先预生成的那份,歌词源给的对不上、不动(用户手改过的条目 collector 那边整条跳过,不送来判)。
+    /// 按含谚文的正文行逐行比:`roma` 里同一串时间标签的那一行跟这一行的 ICU 转写一字不差算一致,比得上的行里
+    /// 一致的占八成以上才算。
+    public static func isLegacyKoreanRomanization(_ roma: String, lyrics: String) -> Bool {
+        guard !roma.isEmpty, !lyrics.isEmpty else { return false }
+        var stored: [String: String] = [:]
+        for raw in roma.replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n") {
+            let line = String(raw)
+            let ns = line as NSString
+            guard let tagMatch = leadingTagsRegex.firstMatch(
+                in: line, range: NSRange(location: 0, length: ns.length))
+            else { continue }
+            stored[ns.substring(with: tagMatch.range(at: 1))] = ns.substring(from: tagMatch.range.length)
+        }
+        var compared = 0
+        var same = 0
+        for (tags, body) in readingRows(lyrics).rows where Romanizer.containsHangul(body) {
+            guard let line = stored[tags] else { continue }
+            compared += 1
+            if line == body.applyingTransform(.toLatin, reverse: false) { same += 1 }
+        }
+        return compared > 0 && same * 5 >= compared * 4
+    }
+
+    /// 要算读音的正文行(时间标签串 + 剥掉演唱者标签后的正文)和整首的判定,预处理见 `romanizeLRC` 的说明。
+    private struct ReadingRows {
+        var rows: [(tags: String, body: String)]
+        var songLooksJapanese: Bool
+        var annotation: KanaAnnotation?
+    }
+
+    private static func readingRows(_ lyrics: String) -> ReadingRows {
         let repaired = JapaneseKanjiRepair.repair(lyrics, japaneseSong: Romanizer.looksJapaneseSong(lyrics))
         // 酷狗那类把假名标注写进同一份 LRC 的源,读音优先用标注 —— 播放引擎也是从同一份
         // 歌词里 `KanaAnnotation.parse(lrc:)` 出来的,这里照做才能保证两条路读音一致。
@@ -68,23 +119,10 @@ public enum LyricsRomanization {
         let dropped = LyricsSyncEngine.strippingCreditLines(bodies, speakerExemptions: speakers)
         let kept = zip(rows, dropped).filter { !$0.1 }.map(\.0)
         let songLooksJapanese = Romanizer.looksJapaneseSong(kept.map(\.body).joined(separator: "\n"))
-
-        var out: [String] = []
-        for (tags, rawBody) in kept {
+        let readable = kept.compactMap { tags, rawBody -> (tags: String, body: String)? in
             let body = LyricDuet.strippingKnownLabel(rawBody, speakers: speakers)
-            guard !body.isEmpty else { continue }
-            guard let reading = Romanizer.lineReading(
-                body,
-                songLooksJapanese: songLooksJapanese,
-                segments: Romanizer.japaneseSegments(
-                    body, marks: annotation?.marks(forLine: body) ?? [],
-                    songLooksJapanese: songLooksJapanese)),
-                !reading.isEmpty, reading != body
-            else { continue }
-            out.append(tags + reading)
+            return body.isEmpty ? nil : (tags, body)
         }
-        // 只产出了个别几行时也照样交出去:`LyricsSyncEngine` 对 `romaLines` 是按行就近匹配的
-        // (700ms 容差),缺行本来就是源自带罗马音的常态。
-        return out.isEmpty ? nil : out.joined(separator: "\n")
+        return ReadingRows(rows: readable, songLooksJapanese: songLooksJapanese, annotation: annotation)
     }
 }

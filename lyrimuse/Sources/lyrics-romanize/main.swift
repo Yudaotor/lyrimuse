@@ -3,8 +3,9 @@ import LyrimuseCore
 
 // 歌词罗马音预生成小助手。collector(Go)算不了这一步 —— 日文**必须**走 CFStringTokenizer
 // 形态分析(不能用 ICU 通用音译:汉字是中日共用的,Any-Latin 会一律按普通话读,
-// 「火曜日の朝は」→"huǒ yào rìno cháoha"),中文/韩文走 ICU `applyingTransform(.toLatin)`,
-// 两者都是 Apple 的系统能力,Go 里没有对应物。所以拆成一个独立的 Swift 可执行文件打包进
+// 「火曜日の朝は」→"huǒ yào rìno cháoha"),中文走 ICU `applyingTransform(.toLatin)`,这两样是 Apple 的
+// 系统能力,Go 里没有对应物;韩文按读音规则(`KoreanRomanization`),跟 App 现算共用同一份 Swift 实现,
+// 也不在 Go 里另写一份。所以拆成一个独立的 Swift 可执行文件打包进
 // Contents/Resources/,由 collector 按相对路径调用 —— 跟 lyrics-translate / media-control
 // 完全同一个形态。
 //
@@ -25,17 +26,34 @@ import LyrimuseCore
 //
 // 协议(stdin/stdout 各一行 JSON):
 //   入:  {"lyrics":"[00:12.34]君の名は\n..."}
+//        启动迁移时多带 "legacy_korean_roma"(缓存里现有的罗马音):它不是旧版韩文读音给这份正文算出来的,
+//        就回 not-legacy、不产出(见 LyricsRomanization.isLegacyKoreanRomanization);是旧版就照常产出,
+//        另带 "legacy_checked":true。collector 只认带了这个标记的回包(不认这个入参的旧 helper 会照常回一份)。
 //   出:  {"ok":true,"roma":"[00:12.34]kimi no na wa\n..."}
+//        {"ok":true,"roma":"...","legacy_checked":true}
 //        {"ok":false,"reason":"no-romanization"}
+//        {"ok":false,"reason":"not-legacy"}
 
 struct Input: Decodable {
     let lyrics: String
+    let legacyKoreanRoma: String?
+
+    enum CodingKeys: String, CodingKey {
+        case lyrics
+        case legacyKoreanRoma = "legacy_korean_roma"
+    }
 }
 
 struct Output: Encodable {
     var ok: Bool
     var roma: String?
     var reason: String?
+    var legacyChecked: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case ok, roma, reason
+        case legacyChecked = "legacy_checked"
+    }
 }
 
 func emit(_ out: Output) -> Never {
@@ -54,7 +72,14 @@ guard let input = try? JSONDecoder().decode(Input.self, from: data) else {
 guard !input.lyrics.isEmpty else {
     emit(Output(ok: false, reason: "empty-input"))
 }
+var legacyChecked: Bool?
+if let stored = input.legacyKoreanRoma {
+    guard LyricsRomanization.isLegacyKoreanRomanization(stored, lyrics: input.lyrics) else {
+        emit(Output(ok: false, reason: "not-legacy"))
+    }
+    legacyChecked = true
+}
 guard let roma = LyricsRomanization.romanizeLRC(input.lyrics) else {
     emit(Output(ok: false, reason: "no-romanization"))
 }
-emit(Output(ok: true, roma: roma))
+emit(Output(ok: true, roma: roma, legacyChecked: legacyChecked))

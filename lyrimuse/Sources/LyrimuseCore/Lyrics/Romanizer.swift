@@ -58,8 +58,8 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
 
 // 罗马音兜底——LyricsSyncEngine 现有的罗马音字段完全依赖网易云服务端"恰好给这首歌算好了
 // lyrics_roma"(见 enrich.go/collector 那边),源没给就是空,中文歌曲的拼音、日文歌曲的
-// 罗马字完全没有客户端兜底。补上:用系统自带的音译在服务端没给这个字段时现算
-// 一份兜底——真正的专业标注仍然优先用服务端字段(见调用点)。
+// 罗马字完全没有客户端兜底。补上:在服务端没给这个字段时现算一份兜底(日文走系统分词器,
+// 韩文按读音规则,其余走系统音译)——真正的专业标注仍然优先用服务端字段(见调用点)。
 public enum Romanizer {
     /// 现算一份罗马音。`japanese` 由调用方按**整首歌**判定后传进来(见 looksJapanese)。
     ///
@@ -74,8 +74,9 @@ public enum Romanizer {
     /// 那次只解决了"别给纯中文歌加拼音"(靠 songLooksJapanese 整首拦掉),
     /// 但日文行里夹着的汉字照样走 Any-Latin,于是假名出罗马字、汉字出拼音,混在一行里。
     ///
-    /// 非日文(韩文谚文/泰文/西里尔字母等)跟汉字毫无交集,Any-Latin 对它们本来就是正确、
-    /// 无歧义的罗马化,继续用。
+    /// 韩文同样不能直接交给 Any-Latin:它是逐字母转写,不按读音(사랑해 → salanghae、없어 → eobs-eo),
+    /// 所以谚文先由 `KoreanRomanization` 按读音转(saranghae、eopseo),剩下的字符再走 Any-Latin。
+    /// 泰文、西里尔字母这类跟汉字没有交集的文字照旧只走 Any-Latin。见 10 章决策 33。
     public static func romanize(
         _ text: String, japanese: Bool = false,
         marks: [KanaAnnotation.Mark] = []
@@ -90,7 +91,8 @@ public enum Romanizer {
         }
         // 输出等于输入(原文本来就是拉丁字母,音译是无操作)时返回 nil——不展示一份跟原文
         // 一模一样的"读音",那对用户没有任何信息增量,徒增一行重复文字。
-        guard let transformed = text.applyingTransform(.toLatin, reverse: false),
+        let korean = containsHangul(text) ? KoreanRomanization.romanize(text) : text
+        guard let transformed = korean.applyingTransform(.toLatin, reverse: false),
             transformed != text
         else { return nil }
         return transformed

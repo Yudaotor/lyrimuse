@@ -92,6 +92,10 @@ const (
 	// 就不收,运行期不再产生。改了 lineTranslated 的判据就 +1。
 	migrationUntranslatedMachineLines        = "untranslated_machine_lines"
 	migrationUntranslatedMachineLinesVersion = 1
+	// migrationLegacyKoreanRoma:存量里早先预生成的韩文罗马音(ICU 逐字母转写)换成按读音的(koreanroma.go)。
+	// 运行期新生成的已经是按读音的,运行期不再产生。改了「是不是旧版」的判据就 +1。
+	migrationLegacyKoreanRoma        = "legacy_korean_roma"
+	migrationLegacyKoreanRomaVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

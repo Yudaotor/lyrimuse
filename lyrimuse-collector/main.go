@@ -449,6 +449,8 @@ func main() {
 	startAppleSingleLinkRecheck(ctx)
 	// 存量 Apple 链接换成已校验目录锚点的页面(applecataloglink.go),要联网,同样放后台。
 	startAppleCatalogLinkMigration(ctx)
+	// 存量里早先预生成的韩文罗马音换成按读音的(koreanroma.go),要起 helper 子进程,同样放后台。
+	startLegacyKoreanRomaMigration(ctx)
 	// 常驻进程里播放热路径的保存走 2 秒节流(见 enrichsave.go);退出前把排着的那次补写当场做掉。
 	enableEnrichSaveThrottle()
 	err = run(ctx, cfg, lb)

@@ -15,10 +15,11 @@ Contents/Resources/。
 
   4. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于 collector 与 App,见 t2s.go / OpenCCT2STable.swift)
   5. rime-cantonese 粤拼词典数据(单字+词级) — CC-BY-4.0     (内嵌于 collector,见 jyutping.go)
+  6. koroman 韩文罗马字规则(移植成 Swift)   — MIT           (内嵌于 App 与 lyrics-romanize,见 KoreanRomanization.swift)
 
 运行时联网取用、不随包分发的数据:
 
-  6. SponsorBlock 片段数据                  — CC-BY-NC-SA-4.0 (App 运行时按需查询,只在本机使用)
+  7. SponsorBlock 片段数据                  — CC-BY-NC-SA-4.0 (App 运行时按需查询,只在本机使用)
 
 ================================================================================
 1. media-control / mediaremote-adapter
@@ -311,7 +312,36 @@ CC BY 4.0 的合规要求是署名 + 注明许可证 + 提供许可证链接(不
 在分发物里逐字重印完整法律文本),上面这段属名声明连同许可证链接即满足该要求。
 
 ================================================================================
-6. SponsorBlock
+6. koroman
+   https://github.com/gerosyab/koroman
+   韩文罗马字的读音规则与字母对照表(js/src/koroman.core.js,1.0.16)移植成 Swift,
+   编进 App 与 lyrics-romanize(LyrimuseCore/Lyrics/KoreanRomanization.swift)。
+================================================================================
+
+MIT License
+
+Copyright (c) 2025 Donghe Youn
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+7. SponsorBlock
    https://sponsor.ajay.app/
    Uses SponsorBlock data licensed used under CC BY-NC-SA 4.0 from https://sponsor.ajay.app/.
    (署名文字照 SponsorBlock 作者提供的模板。)

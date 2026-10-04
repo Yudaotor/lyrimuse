@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,8 +25,9 @@ import (
 // 为什么必须起子进程,而粤拼不用:**差异从来不是"要不要缓存",是"谁算得出来"**。
 // 粤拼是纯查表(rime-cantonese 词典 go:embed 进本二进制,见 jyutping.go),Go 自己就算得出。
 // 而日文读音**必须**走 CFStringTokenizer 形态分析(不能用 ICU 通用音译:汉字是中日共用的,
-// Any-Latin 会一律按普通话读,「火曜日の朝は」→"huǒ yào rìno cháoha"),中文/韩文走 ICU
-// applyingTransform(.toLatin) —— 两者都是 Apple 的系统能力,Go 里没有对应物。所以拆成
+// Any-Latin 会一律按普通话读,「火曜日の朝は」→"huǒ yào rìno cháoha"),中文走 ICU
+// applyingTransform(.toLatin) —— 这两样是 Apple 的系统能力,Go 里没有对应物;韩文按读音规则
+// (KoreanRomanization),跟 App 现算共用同一份 Swift 实现,不在这里另写一份。所以拆成
 // lyrics-romanize 这个 Swift 子进程,跟 lyrics-translate 同一个形态。
 //
 // helper 内部走的是 `Romanizer.lineReading`,跟 App 播放时的客户端兜底**是同一个函数**。
@@ -37,27 +39,54 @@ import (
 // 下一轮解析会自然再试一次。
 const romanizeHelperTimeout = 20 * time.Second
 
+// romanizeRequest 是 lyrics-romanize 的入参。LegacyKoreanRoma 只在启动迁移里带(见 koreanroma.go)。
+type romanizeRequest struct {
+	Lyrics           string `json:"lyrics"`
+	LegacyKoreanRoma string `json:"legacy_korean_roma,omitempty"`
+}
+
+// romanizeReply 是 lyrics-romanize 的回包。ok:false 时原因在 Reason(no-romanization / empty-input / not-legacy
+// 都是正常结论,不是故障);LegacyChecked 只在带了 legacy_korean_roma、判过是旧版时为真。
+type romanizeReply struct {
+	OK            bool   `json:"ok"`
+	Roma          string `json:"roma"`
+	Reason        string `json:"reason"`
+	LegacyChecked bool   `json:"legacy_checked"`
+}
+
+// errRomanizeHelperMissing:没走 build.sh 打包(直接 go build 跑 collector)时找不到 helper。
+var errRomanizeHelperMissing = errors.New("lyrics-romanize helper not found")
+
 // onDeviceRomanize 调 lyrics-romanize 把整份逐行 LRC 转成罗马音 LRC。
 // 返回空串 = 这首歌本来就没什么可注音的(纯拉丁歌词等),不是错误。
 func onDeviceRomanize(lyrics string) (string, error) {
 	if lyrics == "" {
 		return "", nil
 	}
+	reply, err := runLyricsRomanize(romanizeRequest{Lyrics: lyrics})
+	if errors.Is(err, errRomanizeHelperMissing) {
+		// 静默降级成"这首没有预生成罗马音",App 侧的客户端兜底照常工作,不该因此报错刷日志。
+		return "", nil
+	}
+	if err != nil || !reply.OK {
+		return "", err
+	}
+	return reply.Roma, nil
+}
+
+// runLyricsRomanize 起一次 lyrics-romanize,交回解出来的回包。
+func runLyricsRomanize(req romanizeRequest) (romanizeReply, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return "", err
+		return romanizeReply{}, err
 	}
 	bin := filepath.Join(filepath.Dir(exe), "lyrics-romanize")
 	if _, err := os.Stat(bin); err != nil {
-		// 没走 build.sh 打包(直接 go build 跑 collector)时找不到 helper —— 静默降级成
-		// "这首没有预生成罗马音",App 侧的客户端兜底照常工作,不该因此报错刷日志。
-		return "", nil
+		return romanizeReply{}, errRomanizeHelperMissing
 	}
-	payload, err := json.Marshal(struct {
-		Lyrics string `json:"lyrics"`
-	}{Lyrics: lyrics})
+	payload, err := json.Marshal(req)
 	if err != nil {
-		return "", fmt.Errorf("marshal romanize request: %w", err)
+		return romanizeReply{}, fmt.Errorf("marshal romanize request: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), romanizeHelperTimeout)
@@ -67,22 +96,14 @@ func onDeviceRomanize(lyrics string) (string, error) {
 	out, err := cmd.Output()
 	// helper 用退出码非 0 表示"没产出",但原因写在 stdout 的 JSON 里 —— 先解析再判错,
 	// 别把"这首本来就是拉丁字母"报成执行失败。同 onDeviceTranslate 的处理。
-	var res struct {
-		OK     bool   `json:"ok"`
-		Roma   string `json:"roma"`
-		Reason string `json:"reason"`
-	}
-	if jsonErr := json.Unmarshal(out, &res); jsonErr != nil {
+	var reply romanizeReply
+	if jsonErr := json.Unmarshal(out, &reply); jsonErr != nil {
 		if err != nil {
-			return "", fmt.Errorf("run lyrics-romanize: %w", err)
+			return romanizeReply{}, fmt.Errorf("run lyrics-romanize: %w", err)
 		}
-		return "", fmt.Errorf("parse lyrics-romanize output: %w", jsonErr)
+		return romanizeReply{}, fmt.Errorf("parse lyrics-romanize output: %w", jsonErr)
 	}
-	if !res.OK {
-		// no-romanization / empty-input 都是正常结论,不是故障。
-		return "", nil
-	}
-	return res.Roma, nil
+	return reply, nil
 }
 
 // onDeviceRomanizer 是 maybeGenerateHelperRoma 实际调用的 helper;测试换成计数的假实现。

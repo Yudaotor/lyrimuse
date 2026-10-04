@@ -149,9 +149,9 @@ func runRomanizationTests() {
     expectEqual(
         Romanizer.romanize("取った", japanese: true), "totta",
         "Romanizer: 促音合并成双写辅音")
-    // 非日文仍然走 Any-Latin —— 谚文/泰文/西里尔跟汉字没有交集,音译对它们本来就是对的。
+    // 非日文:韩文按读音(见下面 KoreanRomanization 那组),泰文、西里尔字母走 Any-Latin。
     expectEqual(
-        Romanizer.romanize("사랑해") != nil, true, "Romanizer: 韩文仍然照常音译")
+        Romanizer.romanize("사랑해"), "saranghae", "Romanizer: 韩文按读音转写")
     // 日文歌里夹的纯英文行不该被分词器加一堆空格当成"读音"
     expectEqual(
         Romanizer.romanize("Baby I love you", japanese: true), nil,
@@ -1233,6 +1233,72 @@ func runRomanizationTests() {
                     "整份罗马音: CRLF 输入的产物里不该残留 \\r")
         expectEqual(crlf?.split(separator: "\n").count, 2,
                     "整份罗马音: CRLF 两行要切得开(不然整份被当成一行)")
+    }
+
+    // ---- 韩文按读音的罗马字(KoreanRomanization,移植自 koroman;见 10 章决策 33) ----
+    do {
+        let kr = KoreanRomanization.romanize
+        // 上游测试里的国立国语院表记法例词(去掉那两条规则后结果不变的部分)。
+        let upstream: [(String, String)] = [
+            ("한글", "hangeul"), ("굳이", "guji"), ("문래", "mullae"), ("해돋이", "haedoji"),
+            ("안녕하세요", "annyeonghaseyo"), ("선릉역", "seolleungyeok"), ("역량", "yeongnyang"),
+            ("좋고", "joko"), ("놓다", "nota"), ("잡혀", "japyeo"), ("낳지", "nachi"), ("맞히다", "machida"),
+            ("같이", "gachi"), ("흙", "heuk"), ("값", "gap"), ("잃어", "ireo"), ("않아", "ana"),
+            ("닭이", "dalgi"), ("값이", "gapsi"), ("앉아", "anja"), ("밟다", "bapda"), ("밟는", "bamneun"),
+            ("굳히다", "guchida"), ("꽃잎", "kkonnip"), ("많이", "mani"), ("벚꽃", "beotkkot"),
+            ("백마", "baengma"), ("종로", "jongno"), ("왕십리", "wangsimni"), ("별내", "byeollae"),
+            ("신라", "silla"), ("대관령", "daegwallyeong"), ("신문로", "sinmunno"), ("울릉", "ulleung"),
+            ("압구정", "apgujeong"), ("광희문", "gwanghuimun"),
+        ]
+        for (hangul, latin) in upstream {
+            expectEqual(kr(hangul), latin, "韩文读音: \(hangul) → \(latin)")
+        }
+        // 歌词里的高频词:鼻音化、ㄹㄹ、腭化、送气、连读、ㅎ 不发音。
+        let lyricWords: [(String, String)] = [
+            ("없는", "eomneun"), ("있는", "inneun"), ("멀리", "meolli"), ("끝이", "kkeuchi"),
+            ("시작해", "sijakae"), ("행복합니다", "haengbokamnida"), ("사랑해", "saranghae"), ("없어", "eopseo"),
+            ("걸음걸이", "georeumgeori"), ("좋으니", "joeuni"),
+        ]
+        for (hangul, latin) in lyricWords {
+            expectEqual(kr(hangul), latin, "韩文读音(歌词高频词): \(hangul) → \(latin)")
+        }
+        // 原版「ㄱ / ㄹ 收音 + ㅇ + y 元音 → 补 ㄴ」两条不收:词尾变化不能多出 ㄴ。代价是 열여섯、알약、학여울 也不补。
+        let noNieun: [(String, String)] = [
+            ("필요해", "piryohae"), ("움직여", "umjigyeo"), ("죽여", "jugyeo"), ("녹여", "nogyeo"),
+            ("말야", "marya"), ("석양", "seogyang"),
+            ("열여섯", "yeoryeoseot"), ("알약", "aryak"), ("학여울", "hagyeoul"),
+        ]
+        for (hangul, latin) in noNieun {
+            expectEqual(kr(hangul), latin, "韩文读音(不补 ㄴ): \(hangul) → \(latin)")
+        }
+        // 只换谚文:英文保留大小写,空格、标点、换行原样(逐词对齐靠词数不变)。
+        expectEqual(kr("Oh, oh 다 같이 불러봐"), "Oh, oh da gachi bulleobwa", "韩文读音: 英文保留大小写")
+        expectEqual(kr("나는 너를 사랑해"), "naneun neoreul saranghae", "韩文读音: 词间空格原样")
+        expectEqual(kr("여기는 선릉역 입니다.\n해돋이와 문래역"), "yeogineun seolleungyeok imnida.\nhaedojiwa mullaeyeok",
+                    "韩文读音: 换行与标点原样")
+        expectEqual(kr("君の名は hello"), "君の名は hello", "韩文读音: 没有谚文原样返回")
+        expectEqual(kr("ㅋㅋㅋ"), "ㅋㅋㅋ", "韩文读音: 兼容字母不换,留给 ICU")
+        // 接进 Romanizer:谚文先按读音,剩下的(韩文行里的汉字等)再走 ICU。
+        expectEqual(Romanizer.romanize("사랑 愛"), "sarang ài", "Romanizer: 韩文行里的汉字照旧走 ICU")
+        expectEqual(Romanizer.romanize("Привет"), "Privet", "Romanizer: 西里尔字母照旧走 ICU")
+        expectEqual(Romanizer.koreanSegments("나는 너를 사랑해", romanization: Romanizer.romanize("나는 너를 사랑해") ?? "")?
+                        .map(\.latin), ["naneun", "neoreul", "saranghae"],
+                    "Romanizer: 按读音的转写词数不变,逐词对齐照旧对得上")
+
+        // 整份 LRC(collector 预生成那条)与启动迁移用的「是不是旧版」判定。
+        let lyrics = "[00:01.00]사랑해\n[00:02.00]같이 가자\n[00:03.00]Yeah yeah"
+        let fresh = LyricsRomanization.romanizeLRC(lyrics)
+        expectEqual(fresh, "[00:01.00]saranghae\n[00:02.00]gachi gaja", "整份罗马音: 韩文行按读音、英文行不出")
+        let isLegacy = LyricsRomanization.isLegacyKoreanRomanization
+        expectEqual(isLegacy("[00:01.00]salanghae\n[00:02.00]gat-i gaja", lyrics), true,
+                    "旧版判定: ICU 逐字母转写(旧版预生成写进缓存的样子)算旧版")
+        expectEqual(isLegacy("[00:01.00]sa rang hae\n[00:02.00]ga chi  ga ja", lyrics), false,
+                    "旧版判定: 歌词源给的(按音节空格)不算")
+        expectEqual(isLegacy(fresh ?? "", lyrics), false, "旧版判定: 新版产出的不算,迁移跑第二遍不会再动它")
+        expectEqual(isLegacy("[00:01.00]salanghae\n[00:02.00]ga chi ga ja", lyrics), false,
+                    "旧版判定: 一致的不到八成不算")
+        expectEqual(isLegacy("[00:09.00]salanghae", lyrics), false, "旧版判定: 时间标签对不上不算")
+        expectEqual(isLegacy("", lyrics), false, "旧版判定: 空的不算")
     }
 
     // 日文汉字修回(JapaneseKanjiRepair)。不维护任何表:「不能用 JIS X 0208 编码的汉字 →
