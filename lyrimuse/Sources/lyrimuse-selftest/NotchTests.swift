@@ -696,6 +696,37 @@ func runNotchTests() {
         var steady = FP(shown: .artwork(100))
         expectEqual(steady.update(target: .artwork(110), now: t0, samePicture: samePicture), .cut,
                     "翻牌: 没换歌时换图原地换")
+        // 前贴片广告报的就是接下来那首(Kaset):广告结束回到的还是这首,广告期间到的封面不算旧图。
+        var preRoll = FP(shown: .artwork(120))
+        preRoll.trackChanged(staleArtwork: [120], now: t0)
+        expectEqual(preRoll.update(target: .adIcon, now: t0 + 2, samePicture: samePicture), .cut,
+                    "翻牌: 前贴片广告开始换成喇叭")
+        preRoll.adBreakEnded(now: t0 + 8)
+        expectEqual(preRoll.update(target: .artwork(121), now: t0 + 8, samePicture: samePicture), .flip,
+                    "翻牌: 前贴片广告结束、这首的封面广告期间就到了,当场翻成封面")
+        var preRollEarly = FP(shown: .artwork(140))
+        preRollEarly.trackChanged(staleArtwork: [140], now: t0)
+        _ = preRollEarly.update(target: .artwork(141), now: t0 + 0.5, samePicture: samePicture)
+        _ = preRollEarly.update(target: .adIcon, now: t0 + 2, samePicture: samePicture)
+        preRollEarly.adBreakEnded(now: t0 + 20)
+        expectEqual(preRollEarly.update(target: .artwork(141), now: t0 + 20, samePicture: samePicture), .flip,
+                    "翻牌: 封面进广告前就换好了,广告结束当场翻回来")
+        var preRollLate = FP(shown: .artwork(130))
+        preRollLate.trackChanged(staleArtwork: [130], now: t0)
+        _ = preRollLate.update(target: .adIcon, now: t0 + 2, samePicture: samePicture)
+        preRollLate.adBreakEnded(now: t0 + 8)
+        expectEqual(preRollLate.update(target: .artwork(130), now: t0 + 8, samePicture: samePicture), nil,
+                    "翻牌: 前贴片广告结束、手上还是上一首的封面,先留着喇叭")
+        expectEqual(preRollLate.recheckAt, t0.addingTimeInterval(8 + FP.shortHold), "翻牌: 广告结束后从结束那一刻重新计时")
+        expectEqual(preRollLate.update(target: .artwork(131), now: t0 + 9, samePicture: samePicture), .flip,
+                    "翻牌: 广告结束后新封面到了翻成封面")
+        let flipViewSrc = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/NotchTrackChangeViews.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(flipViewSrc.contains("if !old.isAdBreak, new.isAdBreak { trackBeforeAd = old.track }")
+                    && flipViewSrc.contains("new.track == trackBeforeAd {")
+                    && flipViewSrc.contains("planner.adBreakEnded(now: now)"), true,
+                    "翻牌契约: 广告结束回到进广告前那首,走「广告结束」不走「换歌」")
         // 换歌翻牌:同一张图的两种分辨率算同一张,不同封面不算。
         func syntheticCover(side: Int, paint: (CGContext, CGFloat) -> Void) -> CGImage? {
             guard let space = CGColorSpace(name: CGColorSpace.sRGB),

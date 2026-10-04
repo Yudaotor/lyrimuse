@@ -1407,8 +1407,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     private func flippingEarArtwork(alignment: Alignment, showsAdIcon: Bool) -> some View {
         let side = NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset)
         return NotchEarArtworkFlip(
-            trackKey: NotchTrackDropRules.key(title: playback.title, artist: playback.artist,
-                                              isAdBreak: playback.isCurrentTrackAdBreak),
+            title: playback.title, artist: playback.artist,
             artworkImage: playback.artworkImage, highResImage: playback.highResArtworkImage,
             overrideImage: radioTalkStation?.image, isAdBreak: showsAdIcon, alignment: alignment,
             animated: !reduceMotion,

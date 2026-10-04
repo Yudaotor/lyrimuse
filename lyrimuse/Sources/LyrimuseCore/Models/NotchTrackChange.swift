@@ -111,6 +111,14 @@ public struct NotchArtworkFlipPlanner<Token: Equatable> {
         recheckAt = nil
     }
 
+    /// 广告结束、回到的还是进广告前那首(前贴片广告报的就是这首的身份)。不算换歌:广告期间到的图就是这首的,不记成旧图,
+    /// 手上有就当场翻;等新封面的计时从这一刻重新算,手上还只有旧图或没图时喇叭照样最多再留 `shortHold`。
+    public mutating func adBreakEnded(now: Date) {
+        if !isAwaiting(now: now) { stale = [] }
+        changedAt = now
+        recheckAt = nil
+    }
+
     /// 这一刻该显示 `target`。`samePicture` 判两张图是不是同一张封面,只在要翻的时候调。
     public mutating func update(target: Face, now: Date, samePicture: (Token, Token) -> Bool) -> Transition? {
         recheckAt = nil
