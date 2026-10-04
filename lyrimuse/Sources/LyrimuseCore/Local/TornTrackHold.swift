@@ -48,7 +48,14 @@ public struct TornTrackHold: Sendable {
 
     public init() {}
 
+    /// 这个播放器的快照是整份读来的,不会撕裂:Kaset 走 AppleScript `get player info`,歌名中途换了没有、换了算不算
+    /// 另一段录音,`KasetPlayerInfo.steadyIdentity` 已经判过。按住只会让界面停在上一拍(02 章决策 84)。
+    public static func arrivesWhole(bundle: String) -> Bool {
+        bundle == PlaybackPlayer.kaset.bundleIdentifier
+    }
+
     public static func isTorn(current: Fields, next: Fields) -> Bool {
+        if arrivesWhole(bundle: next.bundle) { return false }
         if current.isRadio || next.isRadio || current.title.isEmpty || next.title.isEmpty || current.title == next.title {
             return false
         }

@@ -334,6 +334,10 @@ func runPlayerIdentityTests() {
         let untouched = TrustedPlayers.promotingBuiltins(trusted: ["com.apple.Safari": "Safari"], players: [.spotify])
         expectEqual(untouched.trusted, ["com.apple.Safari": "Safari"], "信任→内置: 没有内置播放器就原样")
         expectEqual(untouched.players, [.spotify], "信任→内置: 没有内置播放器就原样(选择)")
+        let trustedKaset = [PlaybackPlayer.kaset.bundleIdentifier: "Kaset", "com.apple.Safari": "Safari"]
+        let kasetPromoted = TrustedPlayers.promotingBuiltins(trusted: trustedKaset, players: [.appleMusic])
+        expectEqual(kasetPromoted.trusted, ["com.apple.Safari": "Safari"], "信任→内置: Kaset 从信任列表里拿掉")
+        expectEqual(kasetPromoted.players, [.appleMusic, .kaset], "信任→内置: 没勾自动识别的补勾 Kaset")
 
         // Amazon Music:放播客时歌手、专辑空,时长 > 0,在放 —— 非歌曲内容;歌手不晚到,不当成开播那一帧。
         let amz = PlaybackPlayer.amazonMusic.bundleIdentifier

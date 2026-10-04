@@ -212,11 +212,41 @@ public enum KasetPlayerInfo {
     }
 
     /// 两个歌名是不是同一首的两种写法。网页播放器报的常是视频在 YouTube 上的标题:开头多一段「歌手 - 」,结尾多一串
-    /// `(Official Audio)` 这类括号。各自去掉开头那段(破折号前得是这首的第一位歌手)和结尾的括号,剩下的忽略大小写、
-    /// 不分弯直引号相等才算。
+    /// `(Official Audio)` 这类括号,或者前后多一段别的语言的歌名(《太陽之子》→《Children of the Sun 太陽之子》)。各自去掉
+    /// 开头那段(破折号前得是这首的第一位歌手)和结尾的括号,剩下的忽略大小写、不分弯直引号:相等,或者短的那个按词完整
+    /// 出现在长的里面(`containsAsWords`;短的至少 `minContainedTitleWeight`,一个汉字算 2、别的字母数字算 1,免得「Sun」
+    /// 这种短名误配)才算。
     public static func sameSongTitle(_ a: String, _ b: String, artist: String) -> Bool {
         let x = titleCore(a, artist: artist), y = titleCore(b, artist: artist)
-        return !x.isEmpty && x == y
+        guard !x.isEmpty, !y.isEmpty else { return false }
+        if x == y { return true }
+        let (short, long) = x.count < y.count ? (x, y) : (y, x)
+        return titleWeight(short) >= minContainedTitleWeight && containsAsWords(long, short)
+    }
+
+    /// 按词包含时短的那个至少多重(见 `titleWeight`)。
+    static let minContainedTitleWeight = 4
+
+    /// 按空白和括号切开后,短的那串词连续出现在长的里面。长的里有单独的破折号就不算:那多半是「另一位歌手 - 歌名」
+    /// (破折号前不是这首的歌手,`titleCore` 没去掉)。
+    private static func containsAsWords(_ long: String, _ short: String) -> Bool {
+        let l = titleWords(long), s = titleWords(short)
+        guard !s.isEmpty, s.count < l.count, !l.contains(where: { dashWords.contains($0) }) else { return false }
+        return (0...(l.count - s.count)).contains { Array(l[$0..<($0 + s.count)]) == s }
+    }
+
+    private static let titleWordSeparators = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "()[]（）【】「」『』《》"))
+    private static let dashWords: Set<String> = ["-", "\u{2013}", "\u{2014}"]
+
+    private static func titleWords(_ s: String) -> [String] {
+        s.components(separatedBy: titleWordSeparators).filter { !$0.isEmpty }
+    }
+
+    /// 一个汉字算 2,别的字母数字算 1,标点空白不算。
+    private static func titleWeight(_ s: String) -> Int {
+        s.unicodeScalars.reduce(0) { sum, u in
+            sum + (u.properties.isIdeographic ? 2 : (CharacterSet.alphanumerics.contains(u) ? 1 : 0))
+        }
     }
 
     private static func titleCore(_ raw: String, artist: String) -> String {

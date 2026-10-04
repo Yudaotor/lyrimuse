@@ -146,6 +146,14 @@ func runPlaybackStateTests() {
     noArtistNext.title = "Song B"
     expectEqual(T.isTorn(current: noArtist, next: noArtistNext), false, "撕裂快照: 上一首没有歌手不判")
     expectEqual(T.isTorn(current: cur, next: cur), false, "撕裂快照: 标题没变不判")
+    // 真机:Kaset 广告放完、正片开始那一拍把歌名改成网页写法,时长、署名都没变(放的是 418 秒的 MV)。
+    let kasetBefore = T.Fields(title: "太陽之子", artist: "周杰伦", album: "", bundle: PlaybackPlayer.kaset.bundleIdentifier,
+                               duration: 418.14, isRadio: false)
+    var kasetAfter = kasetBefore
+    kasetAfter.title = "Children of the Sun 太陽之子"
+    expectEqual(T.isTorn(current: kasetBefore, next: kasetAfter), false, "撕裂快照: Kaset 的快照整份读来,改名不按住")
+    var kasetHold = T()
+    expectEqual(kasetHold.decide(current: kasetBefore, next: kasetAfter, now: t0), .accept, "撕裂快照: Kaset 改名当场采纳")
     var hold = T()
     expectEqual(hold.decide(current: cur, next: torn, now: t0), .holdStarted, "撕裂快照: 第一拍开始按住")
     expectEqual(hold.decide(current: cur, next: torn, now: t0.addingTimeInterval(5)), .holding, "撕裂快照: 12 秒内继续按住")

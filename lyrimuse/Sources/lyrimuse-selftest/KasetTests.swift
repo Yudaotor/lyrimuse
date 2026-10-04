@@ -228,6 +228,18 @@ func runKasetTests() {
                     "Kaset 歌名: 破折号前不是这位歌手,不当前缀去")
         expectEqual(K.sameSongTitle("Jhené Aiko - Ark to Agartha", "Break", artist: "Jhené Aiko"), false, "Kaset 歌名: 换了一首不算")
         expectEqual(K.sameSongTitle("(Interlude)", "Interlude", artist: "A"), false, "Kaset 歌名: 整个歌名都在括号里的不去")
+        expectEqual(K.sameSongTitle("Children of the Sun 太陽之子", "太陽之子", artist: "周杰伦"), true,
+                    "Kaset 歌名: 前面多一段别的语言的歌名,原名按词完整出现在里面")
+        expectEqual(K.sameSongTitle("太陽之子", "Children of the Sun 太陽之子", artist: "周杰伦"), true, "Kaset 歌名: 两边顺序不论")
+        expectEqual(K.sameSongTitle("晴天 Sunny Day", "晴天", artist: "周杰伦"), true, "Kaset 歌名: 两个汉字的原名也算")
+        expectEqual(K.sameSongTitle("Children of the Sun", "Sun", artist: "周杰伦"), false, "Kaset 歌名: 太短的不按包含认")
+        expectEqual(K.sameSongTitle("Sunshine Days", "Sunshine Day", artist: "A"), false, "Kaset 歌名: 词不完整不算包含")
+        // 真机:《太陽之子》广告放完、正片一开始改成网页写法,网页放的是 418 秒的 MV,队列元数据是 298 秒。
+        let sunQueued = K.steadyIdentity(credit("太陽之子", "周杰伦", vid: "9N9MEXaXSDk", player: nil, track: 298), first: nil)
+        let sunWeb = K.steadyIdentity(credit("Children of the Sun 太陽之子", "周杰伦", vid: "9N9MEXaXSDk", player: 418.14, track: 298),
+                                      first: sunQueued.first)
+        expectEqual(sunWeb.title == "太陽之子" && sunWeb.first == sunQueued.first, true,
+                    "Kaset 身份: 时长对不上,但歌名是原名加一段别的语言,还是同一首,沿用开播那份")
     }
 
     // ---- 快照 ----
