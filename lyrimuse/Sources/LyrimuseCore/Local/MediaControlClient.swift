@@ -419,6 +419,10 @@ public enum MediaControlClient {
     /// 内嵌网页在放别的(广告)时打过日志的那首(videoId),同一首只打一条:某一拍没问到网页那份会话时
     /// 判定会说不上来,按「翻成 true 才打」的话一段广告会打好几遍。
     private static var kasetWebAdLoggedVideoID: String?
+    /// 最近一次读到的那首(曲目身份同快照的 `identityKey`)能当封面用的地址(`KasetPlayerInfo.coverArtworkURL`)。
+    private static var kasetLastArtwork: (trackKey: String, url: URL)?
+    /// 最近下载的那张封面,同一个地址不重下(换歌后的取图会重试、复核好几次)。
+    private static var kasetArtworkCache: (url: URL, data: Data)?
     /// 此刻正顶替系统那边、改用 Kaset 的读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
     /// 播放控制据此直接发给 Kaset(`focusControlTarget`),日志在它变化时打一条。
     private static var kasetPreferredOver: String?
@@ -454,11 +458,59 @@ public enum MediaControlClient {
             ? nil : kasetWebMedia()
         noteKasetWebMedia(web, reading: reading)
         let snapshot = KasetPlayerInfo.snapshot(reading, lastMove: lastMove, capturedAt: readAt, webMedia: web)
+        // 封面先用队列里这一格入队时那张(专辑图),没有才用读数里的;视频截图不当封面。
+        let artwork = KasetPlayerInfo.coverArtworkURL(steady.first?.artworkURL) ?? KasetPlayerInfo.coverArtworkURL(reading.artworkURL)
         kasetLock.lock()
+        kasetLastArtwork = artwork.map { (snapshot.identityKey, $0) }
         kasetLastMove = KasetPlayerInfo.nextMove(after: kasetLastMove, reading: reading, at: readAt)
         kasetLastVideo = reading.videoID.map { (snapshot.trackKey, $0) }
         kasetLock.unlock()
         return snapshot
+    }
+
+    /// Kaset 这首的封面:系统会话里它从不带图,这张当播放器自己的封面用(`LocalPlaybackSource.fetchArtworkForCurrentTrack`)。
+    /// 最近一次读到的不是这首、这首没有能当封面的地址、下载失败返回 nil;同一个地址只下载一次。会阻塞到下载结束,
+    /// 不要在主线程调用。
+    public static func kasetArtwork(forTrackKey key: String) -> (data: Data, mimeType: String, trackKey: String)? {
+        kasetLock.lock()
+        let last = kasetLastArtwork
+        let cached = kasetArtworkCache
+        kasetLock.unlock()
+        guard let last, last.trackKey.compare(key, options: [.caseInsensitive]) == .orderedSame else { return nil }
+        if let cached, cached.url == last.url {
+            return (cached.data, PlaybackStateFile.artworkMime(cached.data), last.trackKey)
+        }
+        guard let data = downloadKasetArtwork(last.url) else { return nil }
+        kasetLock.lock()
+        kasetArtworkCache = (last.url, data)
+        kasetLock.unlock()
+        return (data, PlaybackStateFile.artworkMime(data), last.trackKey)
+    }
+
+    /// 下载一次封面的上限。走系统代理(YouTube Music 的图床在这台机器上要经代理,实测 1.6 秒左右)。
+    private static let kasetArtworkTimeout: TimeInterval = 10
+
+    private final class DownloadResult: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: (data: Data?, status: Int?, error: Error?) = (nil, nil, nil)
+        func set(_ data: Data?, _ status: Int?, _ error: Error?) { lock.lock(); value = (data, status, error); lock.unlock() }
+        func get() -> (data: Data?, status: Int?, error: Error?) { lock.lock(); defer { lock.unlock() }; return value }
+    }
+
+    private static func downloadKasetArtwork(_ url: URL) -> Data? {
+        let started = Date()
+        let result = DownloadResult()
+        let done = DispatchSemaphore(value: 0)
+        URLSession.shared.dataTask(with: URLRequest(url: url, timeoutInterval: kasetArtworkTimeout)) { data, response, error in
+            result.set(data, (response as? HTTPURLResponse)?.statusCode, error)
+            done.signal()
+        }.resume()
+        _ = done.wait(timeout: .now() + kasetArtworkTimeout + 1)
+        let got = result.get()
+        NetworkAuditLog.record(service: "image", operation: "kaset.artwork", host: url.host ?? "googleusercontent.com",
+                               statusCode: got.status, durationMs: Date().timeIntervalSince(started) * 1000, error: got.error)
+        guard got.status == 200, let data = got.data, !data.isEmpty else { return nil }
+        return data
     }
 
     /// Kaset 内嵌网页此刻在放的那段媒体(`KasetPlayerInfo.webMedia`)。Kaset 没在跑、helper 不可用返回 nil。

@@ -26,9 +26,12 @@ public enum KasetPlayerInfo {
         /// 播放器那一层报的时长(`duration`)与曲目元数据里的(`currentTrack.duration`),认广告用,见 `isAd`。
         public let playerDuration: Double?
         public let trackDuration: Double?
+        /// 当前曲目的封面地址(原样)。网页播放器加载好之后可能换成视频截图,能不能当封面见 `coverArtworkURL`。
+        public let artworkURL: String?
 
         public init(title: String, artist: String, videoID: String?, duration: Double?, position: Double,
-                    isPlaying: Bool, isPaused: Bool, playerDuration: Double? = nil, trackDuration: Double? = nil) {
+                    isPlaying: Bool, isPaused: Bool, playerDuration: Double? = nil, trackDuration: Double? = nil,
+                    artworkURL: String? = nil) {
             self.title = title
             self.artist = artist
             self.videoID = videoID
@@ -38,12 +41,14 @@ public enum KasetPlayerInfo {
             self.isPaused = isPaused
             self.playerDuration = playerDuration
             self.trackDuration = trackDuration
+            self.artworkURL = artworkURL
         }
 
         /// 只换歌名和署名的同一份读数。
         public func withIdentity(title: String, artist: String) -> Reading {
             Reading(title: title, artist: artist, videoID: videoID, duration: duration, position: position,
-                    isPlaying: isPlaying, isPaused: isPaused, playerDuration: playerDuration, trackDuration: trackDuration)
+                    isPlaying: isPlaying, isPaused: isPaused, playerDuration: playerDuration, trackDuration: trackDuration,
+                    artworkURL: artworkURL)
         }
     }
 
@@ -53,6 +58,7 @@ public enum KasetPlayerInfo {
             let artist: String?
             let duration: Double?
             let videoId: String?
+            let artworkURL: String?
         }
         let currentTrack: Track?
         let position: Double?
@@ -74,7 +80,7 @@ public enum KasetPlayerInfo {
         return Reading(title: title, artist: track.artist ?? "", videoID: track.videoId,
                        duration: playerDuration ?? trackDuration, position: position,
                        isPlaying: payload.isPlaying == true, isPaused: payload.isPaused == true,
-                       playerDuration: playerDuration, trackDuration: trackDuration)
+                       playerDuration: playerDuration, trackDuration: trackDuration, artworkURL: track.artworkURL)
     }
 
     private struct ScriptOutput: Decodable {
@@ -160,16 +166,19 @@ public enum KasetPlayerInfo {
 
     // MARK: - 同一首的身份
 
-    /// 这首最先报的歌名与署名,连同报它时的 videoId。
+    /// 这首最先报的歌名与署名,连同报它时的 videoId。按队列补的那份另带队列里这一格的封面地址(入队时那份,是这首的
+    /// 专辑图;网页播放器加载好之后读数里的那份可能换成视频截图)。
     public struct FirstReport: Equatable, Sendable {
         public let videoID: String
         public let title: String
         public let artist: String
+        public let artworkURL: String?
 
-        public init(videoID: String, title: String, artist: String) {
+        public init(videoID: String, title: String, artist: String, artworkURL: String? = nil) {
             self.videoID = videoID
             self.title = title
             self.artist = artist
+            self.artworkURL = artworkURL
         }
     }
 
@@ -198,7 +207,7 @@ public enum KasetPlayerInfo {
               let title = track.name?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty,
               let artist = track.artist, !artist.isEmpty
         else { return nil }
-        return FirstReport(videoID: videoID, title: title, artist: artist)
+        return FirstReport(videoID: videoID, title: title, artist: artist, artworkURL: track.artworkURL)
     }
 
     /// 网页 video 的时长跟元数据时长差不超过这么多秒,就是同一段录音(元数据是整数秒)。
@@ -326,6 +335,7 @@ public enum KasetPlayerInfo {
             let duration: Double?
             let videoId: String?
             let audioVideoId: String?
+            let artworkURL: String?
         }
         let currentIndex: Int?
         let tracks: [Track]?
@@ -393,6 +403,21 @@ public enum KasetPlayerInfo {
             return false
         }
         return duration < shortest / 2 ? true : nil
+    }
+
+    /// 封面地址换成这么大见方的那一档。
+    public static let coverArtworkEdge = 1200
+
+    /// 能当封面用的封面地址,换成 `coverArtworkEdge` 见方的那一档:YouTube Music 曲库给音轨版本的方形专辑图在
+    /// `*.googleusercontent.com`,地址结尾 `=w544-h544-l90-rj` 这样一段是尺寸参数,换成别的边长就给那个尺寸(实测 1200 档
+    /// 1200×1200、3000 档 3000×3000)。视频截图(`i.ytimg.com`,16:9 或带黑边)不是封面,不要;没有尺寸参数的也不要。
+    public static func coverArtworkURL(_ raw: String?) -> URL? {
+        guard let raw, var components = URLComponents(string: raw), components.scheme == "https",
+              let host = components.host, host.hasSuffix(".googleusercontent.com") else { return nil }
+        let path = components.path
+        guard let sizeStart = path.lastIndex(of: "="), path[path.index(after: sizeStart)...].hasPrefix("w") else { return nil }
+        components.path = String(path[..<sizeStart]) + "=w\(coverArtworkEdge)-h\(coverArtworkEdge)-l90-rj"
+        return components.url
     }
 
     /// 换成下游用的快照。专辑一栏不用:放歌单时 Kaset 在这里填的是歌单名,不是这首的专辑。

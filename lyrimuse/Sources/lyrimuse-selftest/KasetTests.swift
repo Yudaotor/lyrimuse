@@ -99,6 +99,25 @@ func runKasetTests() {
                     "Kaset 广告: 别的播放器的广告照旧写进播放状态")
     }
 
+    // ---- 封面:Kaset 报的地址,只要方形专辑图,换成大图那一档 ----
+    do {
+        expectEqual(K.coverArtworkURL("https://yt3.googleusercontent.com/D10mQ1XvIKZo-fV3N-MCa8O=w544-h544-l90-rj")?.absoluteString,
+                    "https://yt3.googleusercontent.com/D10mQ1XvIKZo-fV3N-MCa8O=w1200-h1200-l90-rj", "Kaset 封面: 专辑图换成 1200 那一档")
+        expectEqual(K.coverArtworkURL("https://lh3.googleusercontent.com/abc=w60-h60-s-l90-rj")?.absoluteString,
+                    "https://lh3.googleusercontent.com/abc=w1200-h1200-l90-rj", "Kaset 封面: 小图的参数一样换")
+        expectEqual(K.coverArtworkURL("https://i.ytimg.com/vi/ZLldhJXp7iw/hq720.jpg?sqp=-oaymwEKCNUGEN8DIABIWg") == nil, true,
+                    "Kaset 封面: 视频截图不当封面")
+        expectEqual(K.coverArtworkURL("https://yt3.googleusercontent.com/abc") == nil, true, "Kaset 封面: 没有尺寸参数的不要")
+        expectEqual(K.coverArtworkURL("https://example.com/abc=w544-h544-l90-rj") == nil, true, "Kaset 封面: 别的域名带同样的参数也不认")
+        expectEqual(K.coverArtworkURL("http://yt3.googleusercontent.com/abc=w544-h544") == nil, true, "Kaset 封面: 只认 https")
+        expectEqual(K.coverArtworkURL(nil) == nil, true, "Kaset 封面: 没有地址")
+        let withArt = #"{"currentTrack":{"artist":"周杰倫","duration":254,"name":"愛琴海","videoId":"ZLldhJXp7iw","artworkURL":"https:\/\/i.ytimg.com\/vi\/ZLldhJXp7iw\/hq720.jpg"},"duration":254,"isPaused":false,"isPlaying":true,"position":12}"#
+        expectEqual(K.reading(fromJSON: Data(withArt.utf8))?.artworkURL, "https://i.ytimg.com/vi/ZLldhJXp7iw/hq720.jpg",
+                    "Kaset 读数: 封面地址原样解出")
+        expectEqual(K.reading(fromJSON: Data(withArt.utf8))?.withIdentity(title: "x", artist: "y").artworkURL,
+                    "https://i.ytimg.com/vi/ZLldhJXp7iw/hq720.jpg", "Kaset 读数: 换身份时封面地址带着")
+    }
+
     // ---- 广告:看内嵌网页此刻在放什么(前贴片时 Kaset 还报加载;两首之间的广告期间它还报着上一首、停在结尾)----
     do {
         // 系统里各 App 报的会话(helper 输出的形状):Kaset 自己那份、Safari 的 WebKit 媒体进程那份、Kaset 的那份。
@@ -201,6 +220,10 @@ func runKasetTests() {
         let seeded = K.queueFirstReport(fromQueueJSON: Data(queue.utf8), videoID: "7VKSdwYke9o")
         expectEqual(seeded, K.FirstReport(videoID: "7VKSdwYke9o", title: "黑白 [Timeless Live 2009]", artist: "方大同"),
                     "Kaset 开播那份: 按队列里这一格补,歌名去首尾空白")
+        let artQueue = #"{"currentIndex":1,"tracks":[{"name":"西西里","artist":"周杰倫","videoId":"QuGHsAP8yG0","duration":234,"# +
+            #""artworkURL":"https://yt3.googleusercontent.com/D10mQ1XvIKZo-fV3N-MCa8O=w544-h544-l90-rj"}]}"#
+        expectEqual(K.queueFirstReport(fromQueueJSON: Data(artQueue.utf8), videoID: "QuGHsAP8yG0")?.artworkURL,
+                    "https://yt3.googleusercontent.com/D10mQ1XvIKZo-fV3N-MCa8O=w544-h544-l90-rj", "Kaset 开播那份: 带上队列里这一格的封面")
         expectEqual(K.queueFirstReport(fromQueueJSON: Data(queue.utf8), videoID: "qUUBDOL-09k") == nil, true,
                     "Kaset 开播那份: 队列里没有这首不补")
         expectEqual(K.queueFirstReport(fromQueueJSON: Data(), videoID: "7VKSdwYke9o") == nil, true, "Kaset 开播那份: 读不到队列不补")
@@ -399,6 +422,12 @@ func runKasetTests() {
                         && src("LyrimuseCore/Local/NowPlayingClientsProbe.swift").contains("[paths.script, paths.library], timeout: timeout)")
                         && src("../native/nowplaying-clients/nowplaying-clients.m").contains("if (one) [all addObject:withProcess(one, c)];"),
                     true, "Kaset 契约: 报在放(或加载)、位置没动时才问内嵌网页在放什么;helper 给每份会话带上负责进程")
+        expectEqual(client.contains("KasetPlayerInfo.coverArtworkURL(steady.first?.artworkURL) ?? KasetPlayerInfo.coverArtworkURL(reading.artworkURL)")
+                        && client.contains("kasetLastArtwork = artwork.map { (snapshot.identityKey, $0) }")
+                        && client.contains(#"NetworkAuditLog.record(service: "image", operation: "kaset.artwork""#)
+                        && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
+                            "? MediaControlClient.kasetArtwork(forTrackKey: expectedKey) : MediaControlClient.fetchArtwork()"),
+                    true, "Kaset 契约: 封面用它自己报的那张(队列那张优先),下载记对外请求,取图时按播放器分流")
         expectEqual(client.contains("if let id = raw.videoID, !id.isEmpty, first?.videoID != id {")
                         && client.contains("first = queuedFirstReport(videoID: id) ?? first"), true,
                     "Kaset 契约: 新歌第一拍按队列补开播那份")

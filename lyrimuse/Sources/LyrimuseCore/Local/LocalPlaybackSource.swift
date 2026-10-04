@@ -4105,9 +4105,13 @@ public final class LocalPlaybackSource: ObservableObject {
             // 取图不再顺手预算均值色:重试打满 key 不匹配、confirm
             // 拿到相同字节这些**注定丢弃**的路径上,预算的取色纯属白烧;改成确定采纳那一刻
             // 再算一次(仍在后台,见 hexFor)。
+            // Kaset 的系统会话里从不带图,封面是它自己报的那张(`MediaControlClient.kasetArtwork`)。
+            let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier
             func attempt() async -> (data: Data?, payloadKey: String?) {
                 await Self.runOffPool(Self.artworkQueue) { () -> (Data?, String?) in
-                    guard let result = MediaControlClient.fetchArtwork() else { return (nil, nil) }
+                    let result = fromKaset
+                        ? MediaControlClient.kasetArtwork(forTrackKey: expectedKey) : MediaControlClient.fetchArtwork()
+                    guard let result else { return (nil, nil) }
                     return (result.data, result.trackKey)
                 }
             }
