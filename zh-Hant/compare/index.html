@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyrimuse、LyricsX、Lyric Fever 比較（2026）：Mac 桌面歌詞軟體逐項查證</title>
+<meta name="description" content="LyricsX 還有在更新嗎？Lyrimuse、LyricsX、Lyric Fever 逐項比較：支援的播放器、歌詞來源、逐字同步、翻譯與讀音、歌詞顯示在哪、系統需求。2026 年 10 月 4 日依各專案自己的儲存庫查證。">
+<link rel="canonical" href="https://yudaotor.github.io/lyrimuse/zh-Hant/compare/">
+<link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/compare/">
+<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/compare/">
+<link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/compare/">
+<link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/compare/">
+<link rel="icon" type="image/png" sizes="64x64" href="../../assets/img/favicon.png">
+<link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="../../assets/lp.css?v=202610041737">
+<link rel="stylesheet" href="../../assets/sub.css?v=202610041737">
+<script src="../../assets/sub.js?v=202610041737" defer fetchpriority="high"></script>
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh-Hant/compare/">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="Lyrimuse、LyricsX、Lyric Fever 比較（2026）：Mac 桌面歌詞軟體逐項查證">
+<meta property="og:description" content="三款開源的 Mac 歌詞軟體，依各自儲存庫寫明的功能逐項比較。">
+<meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh-Hant.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script>document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[lang]');if(a)try{localStorage.setItem('lyrimuse.lang',a.getAttribute('lang'))}catch(x){}})</script>
+</head>
+<body class="sub sub-compare">
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="../"><img src="../../assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
+    <nav class="links">
+      <a href="../#display">功能</a>
+      <a href="./" aria-current="page">對比 LyricsX</a>
+      <a href="../#faq">常見問題</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub</a>
+    </nav>
+    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="語言"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>繁體</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="dl-menu" role="menu">
+      <a class="dl-item" role="menuitem" lang="en" href="../../compare/">English</a>
+      <a class="dl-item" role="menuitem" lang="zh-Hans" href="../../zh/compare/">简体中文</a>
+      <a class="dl-item" role="menuitem" lang="zh-Hant" href="./" aria-current="page">繁體中文</a>
+    </div></div>
+    <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">下載<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <div class="dl-menu" role="menu">
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推薦</span></b><em>M1 及更新的晶片 · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推薦</span></b><em>Intel 晶片的 Mac · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下載</b><em>所有版本、ZIP 與校驗檔</em></span></a>
+    </div></div>
+  </div>
+</header>
+
+<main id="top">
+<section class="sub-head">
+  <p class="k">對比</p>
+  <h1 class="sub-h1"><span>Lyrimuse、LyricsX、Lyric Fever，</span><span>逐項對比。</span></h1>
+  <p class="sub-lede">三款開源的 Mac 歌詞軟體，依各自的儲存庫、README 和發布說明逐項列出。</p>
+  <p class="sub-meta">查證日期：2026 年 10 月 4 日</p>
+</section>
+<section class="app-cards"><article class="app-card me"><h2>Lyrimuse</h2><p class="app-sub">GPL-3.0 · v1.9.0 · macOS 14 起</p><p>九款播放器，含 KKBOX、Amazon Music、QQ 音樂、網易雲音樂，YouTube Music 和 Spotify 網頁版也能用。十二個歌詞來源一起評分。歌詞能放在螢幕上四個地方。</p></article><article class="app-card"><h2>LyricsX</h2><p class="app-sub">MPL-2.0 · v1.6.3 · macOS 10.11 起</p><p>老牌的 Mac 歌詞軟體，支援 Apple Music、Spotify 和幾款本機播放器。最後一個發布版本在 2022 年 4 月。</p></article><article class="app-card"><h2>Lyric Fever</h2><p class="app-sub">MIT · v3.3 · macOS 15 起</p><p>圍繞 Spotify 和 Apple Music 打造，有全螢幕歌詞和卡拉 OK 彈出視窗。歌詞主要來自 Spotify。</p></article></section>
+<p class="callout cmp-callout"><strong>利益揭露：</strong>本頁由 Lyrimuse 的作者維護。表中每一格都來自該專案自己的儲存庫、README 或發布說明；「—」表示它的公開資料沒有寫到這項功能，不代表一定沒有。發現寫錯了，歡迎<a href="https://github.com/Yudaotor/lyrimuse/issues">提 issue</a>。</p>
+<section class="cmp-sec" id="table">
+  <h2 class="sec-h">逐項對比</h2>
+  <div class="tbl-wrap"><table class="tbl cmp"><thead><tr><th scope="col"><span class="vh">項目</span></th><th scope="col" class="me">Lyrimuse</th><th scope="col">LyricsX</th><th scope="col">Lyric Fever</th></tr></thead><tbody><tr><th scope="row">授權</th><td data-label="Lyrimuse" class="me">GPL-3.0</td><td data-label="LyricsX">MPL-2.0</td><td data-label="Lyric Fever">MIT</td></tr><tr><th scope="row">最新版本</th><td data-label="Lyrimuse" class="me">v1.9.0（2026 年 9 月）</td><td data-label="LyricsX">v1.6.3（2022 年 4 月）</td><td data-label="Lyric Fever">v3.3（2025 年 11 月）</td></tr><tr><th scope="row">系統需求</th><td data-label="Lyrimuse" class="me">macOS 14 起，Apple Silicon 與 Intel</td><td data-label="LyricsX">macOS 10.11 起</td><td data-label="Lyric Fever">macOS 15 起</td></tr><tr><th scope="row">播放器</th><td data-label="Lyrimuse" class="me">Apple Music、Spotify、Amazon Music、KKBOX、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂。可以複選，也可以交給自動偵測</td><td data-label="LyricsX">Apple Music、Spotify、Vox、Audirvana、Swinsian</td><td data-label="Lyric Fever">Spotify、Apple Music</td></tr><tr><th scope="row">網頁播放器</th><td data-label="Lyrimuse" class="me">YouTube Music、Spotify 網頁版，跟著網頁的實際進度走</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">歌詞來源</th><td data-label="Lyrimuse" class="me">十二個：網易雲、QQ 音樂、酷狗、酷我、咪咕、汽水音樂、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL，連線帳號後還有 Apple Music</td><td data-label="LyricsX">多個（透過它的 LyricsKit 元件）</td><td data-label="Lyric Fever">Spotify、LRCLIB、網易雲</td></tr><tr><th scope="row">怎麼挑歌詞</th><td data-label="Lyrimuse" class="me">所有來源的候選放在一起，依同一套標準評分（歌名、歌手、專輯、長度、逐字時間軸等）。每首歌的評分都能點開來看，手動選定的歌詞會一直沿用</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever">先用 Spotify 的，沒有再找 LRCLIB，再沒有就找網易雲</td></tr><tr><th scope="row">逐字同步</th><td data-label="Lyrimuse" class="me">支援，跨來源都有，包含 Apple Music 官方逐字和人工整理的 AMLL 逐字</td><td data-label="LyricsX">支援，取決於歌詞來源有沒有</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">翻譯</th><td data-label="Lyrimuse" class="me">優先用歌詞來源自帶的翻譯，沒有就用 Mac 本機的 Apple 翻譯（17 種語言），可選擇線上備用</td><td data-label="LyricsX">顯示歌詞來源自帶的翻譯</td><td data-label="Lyric Fever">Mac 本機的 Apple 翻譯，可以按歌設定原文語言</td></tr><tr><th scope="row">讀音</th><td data-label="Lyrimuse" class="me">日文標羅馬拼音（部分歌詞另有假名），韓文標羅馬拼音，國語標漢語拼音，粵語標粵拼。逐行判斷，每種語言可以分別開關</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever">日文羅馬拼音</td></tr><tr><th scope="row">簡繁轉換</th><td data-label="Lyrimuse" class="me">簡體、繁體互轉，和介面語言分開設定</td><td data-label="LyricsX">支援</td><td data-label="Lyric Fever">支援，另有香港、台灣兩種繁體</td></tr><tr><th scope="row">對唱</th><td data-label="Lyrimuse" class="me">歌詞來源標了是誰唱的，就按歌手分開顯示</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">聆聽記錄</th><td data-label="Lyrimuse" class="me">Last.fm 記錄、本機聆聽歷史、排行榜和全年熱力圖</td><td data-label="LyricsX" data-none="1">—</td><td data-label="Lyric Fever" data-none="1">—</td></tr><tr><th scope="row">歌詞顯示在哪</th><td data-label="Lyrimuse" class="me">桌面浮動、瀏海下的動態島、選單列、歌詞視窗（還能縮成迷你視窗）</td><td data-label="LyricsX">桌面、選單列</td><td data-label="Lyric Fever">選單列、全螢幕、卡拉 OK 彈出視窗</td></tr><tr><th scope="row">介面語言</th><td data-label="Lyrimuse" class="me">英文、簡體中文、繁體中文</td><td data-label="LyricsX">多種（社群在 Crowdin 上翻譯）</td><td data-label="Lyric Fever">英文、簡體中文、繁體中文</td></tr></tbody></table></div>
+  <p class="tbl-note">「—」表示該專案的公開資料沒有寫到這項功能。</p>
+</section>
+<section class="cmp-sec cmp-panel">
+  <div class="cmp-panel-txt">
+    <p class="k">Lyrimuse 怎麼挑歌詞</p>
+    <h2 class="sec-h2"><span>所有候選，</span><span>放在一起評分。</span></h2>
+    <p>每首歌都會去問所有歌詞來源，把候選依同一套標準評分，並留下這次的決定。點開就能看到每個來源的分數，以及勝出的那份為什麼勝出。</p>
+  </div>
+  <div class="cmp-stage"><div class="view on go"><div class="pn pn-dp" role="img" aria-label="解析決策面板：每份候選的分數和勝出的理由"><div class="pn-in dp">
+        <header class="dp-head"><b>解析決策</b><span class="dp-btns"><i>拷貝</i><i class="pri">完成</i></span></header>
+        <div class="dp-info"><b>5 個來源的歌詞正文相同</b><span>分差只有 11 分（0.9%）。</span></div>
+        <div class="dp-chips"><span class="ok"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m7 10.2 2.1 2.1L13 8.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>已採用</span><span><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8.5h14M7 3v3M13 3v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>2026年9月30日 23:14</span></div>
+        <ul class="dp-list"><li class="dp-row win" style="--i:0"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#1fa34a">QQ音樂</span><span class="dp-win"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5 6.5 9.5 10 4l3.5 5.5L17 6.5 15.5 15h-11z" fill="currentColor"/></svg>勝者</span><span class="dp-wt">逐字</span><b>1,254</b><i class="dp-bar" style="--c:#1fa34a;--w:100.0%"><s></s></i></div>
+            <p>逐字時間軸 +400 · 時長吻合 +268 · 內容獲印證 +250 · 專輯吻合 +150 · 標題吻合 +120 · 行數 +66</p></li><li class="dp-row" style="--i:1"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#1593e0">酷狗音樂</span><span class="dp-wt">逐字</span><b>1,243</b><em>-11</em><i class="dp-bar" style="--c:#1593e0;--w:99.1%"><s></s></i></div>
+            <p>時長吻合 -15 · 行數 +4</p></li><li class="dp-row" style="--i:2"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#e0393e">網易雲音樂</span><span class="dp-wt">逐字</span><b>1,200</b><em>-54</em><i class="dp-bar" style="--c:#e0393e;--w:95.7%"><s></s></i></div>
+            <p>時長吻合 -62 · 行數 +8</p></li><li class="dp-row" style="--i:3"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#6b55e0">Musixmatch</span><span class="dp-wt">逐字</span><b>1,111</b><em>-143</em><i class="dp-bar" style="--c:#6b55e0;--w:88.6%"><s></s></i></div>
+            <p>時長吻合 -108 · 專輯吻合 -75 · 內附譯文 +50 · 行數 -10</p></li><li class="dp-row" style="--i:4"><span class="dp-chev"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="dp-top"><span class="src" style="--c:#c23bb4">LRCLIB</span><b>876</b><em>-378</em><i class="dp-bar" style="--c:#c23bb4;--w:69.9%"><s></s></i></div>
+            <p>逐字時間軸 -400 · 時長吻合 +12 · 行數 +10</p></li></ul>
+        <p class="dp-tie">5 個候選在這些項目上完全相同：標題吻合 +120 · 內容獲印證 +250</p>
+        <p class="dp-foot"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>5/12 個來源有回應</p>
+      </div></div></div></div>
+</section>
+<section class="cmp-sec cmp-qa"><div class="qa-item"><h3>LyricsX 還有在維護嗎？</h3><p>它最後一個發布版本是 2022 年 4 月 29 日的 v1.6.3。主分支最後一次變動在 2022 年 5 月，之後只有同步社群翻譯的分支還在更新。它現在仍然能安裝，也是三款裡唯一能在 macOS 13 或更早系統上執行的。</p></div><div class="qa-item"><h3>哪一款適合你？</h3><ul><li>主要用 Spotify 或 Apple Music 聽歌、系統是 macOS 15 以上、喜歡全螢幕看歌詞：Lyric Fever 很適合。</li><li>用 KKBOX、Amazon Music、QQ 音樂、網易雲音樂、酷狗、汽水音樂聽歌，或在瀏覽器裡聽 YouTube Music：三款裡只有 Lyrimuse 支援。</li><li>Mac 還是 macOS 13 或更早的系統：LyricsX 仍然能安裝，只是它從 2022 年起沒有新版本。</li></ul></div></section>
+
+<section class="final">
+  <div class="final-card">
+    <div class="final-fx" aria-hidden="true"><i class="spot"></i></div>
+    <span class="final-ico"><img class="final-icon" src="../../assets/img/app-icon.webp" alt="" width="72" height="72"></span>
+    <h2>下一首歌，<br>就讓歌詞亮起來。</h2>
+    <div class="cta">
+      <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">下載 Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <div class="dl-menu" role="menu">
+      <p class="dl-head">最新版本 <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推薦</span></b><em>M1 及更新的晶片 · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推薦</span></b><em>Intel 晶片的 Mac · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下載</b><em>所有版本、ZIP 與校驗檔</em></span></a>
+    </div></div>
+      <a class="btn btn-ghost mag" href="https://github.com/Yudaotor/lyrimuse">在 GitHub 上查看</a>
+    </div>
+    <p class="final-fine"><span class="nw">macOS 14 以上</span> · <span class="nw">Apple Silicon 與 Intel</span> · <span class="nw">GPL-3.0 開源</span></p>
+  </div>
+</section>
+
+
+</main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <div class="foot-brand"><img src="../../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
+    <nav class="foot-links">
+      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub（繁體中文說明）</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
+      <a href="./">與 LyricsX、Lyric Fever 對比</a>
+      <a href="../privacy/">隱私政策</a>
+      <a href="../terms/">使用條款</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
+      <a href="../../compare/" lang="en">English</a> <a href="../../zh/compare/" lang="zh-Hans">简体中文</a>
+    </nav>
+    <p class="foot-note">Apple Music、Spotify、KKBOX 等名稱和圖示歸各自的所有者，Lyrimuse 是獨立的開源專案，與它們沒有隸屬或合作關係。</p>
+  </div>
+</footer>
+
+</body>
+</html>

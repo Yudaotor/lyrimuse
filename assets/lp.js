@@ -224,8 +224,9 @@
   const track = document.querySelector('.track');
   if (track) [...track.children].forEach((n) => { const c = n.cloneNode(true); c.setAttribute('aria-hidden', 'true'); track.appendChild(c); });
 
-  // Reveal on scroll; the hero plays at once. If the observer is late, whatever is already on screen (or
-  // above it) shows anyway; what is further down still plays its entrance when it is scrolled to.
+  // Reveal on scroll. The first screen (the headline block and the players strip) comes in by itself from lp.css,
+  // so it is left out here. If the observer is late, whatever is already on screen (or above it) shows anyway;
+  // what is further down still plays its entrance when it is scrolled to.
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
@@ -233,15 +234,8 @@
       io.unobserve(e.target);
     }
   }, { threshold: 0.12 });
-  const reveals = [...document.querySelectorAll('.reveal')];
-  reveals.forEach((el, i) => {
-    if (el.closest('.hero')) {
-      el.style.transitionDelay = (i * 70) + 'ms';
-      requestAnimationFrame(() => el.classList.add('in'));
-    } else {
-      io.observe(el);
-    }
-  });
+  const reveals = [...document.querySelectorAll('.reveal')].filter((el) => !el.closest('.hero') && !el.classList.contains('players'));
+  reveals.forEach((el) => io.observe(el));
   setTimeout(() => reveals.forEach((el) => { if (el.getBoundingClientRect().top < innerHeight) el.classList.add('in'); }), 1500);
   // the page's inline script shows everything if this flag never appears (the script failed before here)
   window.lpReady = true;
@@ -599,8 +593,14 @@
     return { parts, total: k };
   }
   // The hero headline and the final card light up once, when they come into view. On the first screen the
-  // headline starts once it has faded in (about 0.45s after the page starts).
+  // headline starts once it has faded in (about 0.45s after the page starts). The headline's fade comes from
+  // lp.css; if this script arrives after the headline already shows in full ink, it stays as it is, since dimming
+  // it to light it up again would read as a flicker.
   document.querySelectorAll('.sing').forEach((el) => {
+    if (el.closest('.hero') && !reduce) {
+      const fade = el.getAnimations().find((a) => a.animationName === 'enter');
+      if (!fade || fade.currentTime > 120) return;
+    }
     lightable(el);
     if (reduce) return;
     const singIO = new IntersectionObserver(([e]) => {
@@ -848,11 +848,23 @@
   document.addEventListener('click', (e) => { if (!e.target.closest('.dl')) closeAll(); });
 
   /* ---------- the 30-second video ---------- */
+  // The page carries a tiny blurred poster; the real one (data-poster) loads once the video comes near, so it
+  // doesn't take bandwidth from the first screen.
+  document.querySelectorAll('video[data-poster]').forEach((video) => {
+    const load = () => { video.poster = video.dataset.poster; video.removeAttribute('data-poster'); };
+    if (!('IntersectionObserver' in window)) { load(); return; }
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { io.disconnect(); load(); }
+    }, { rootMargin: '400px 0px' });
+    io.observe(video);
+  });
   // Without this script the video keeps its native controls. With it, the cover carries a play button, the
   // controls appear once it plays, and the cover comes back when it ends (preload is none, so nothing loads early).
+  // The play button is styled under .js only, so when the page's safety net has already dropped .js (this script
+  // came late) the native controls stay as well.
   document.querySelectorAll('.watch-frame').forEach((frame) => {
     const video = frame.querySelector('video'), btn = frame.querySelector('.watch-play');
-    if (!video || !btn) return;
+    if (!video || !btn || !document.documentElement.classList.contains('js')) return;
     video.controls = false;
     btn.addEventListener('click', () => {
       frame.classList.add('playing');

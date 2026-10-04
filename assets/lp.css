@@ -19,7 +19,7 @@
   --ease-out: cubic-bezier(.22, 1, .36, 1);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
   --mono: "SF Mono", ui-monospace, Menlo, monospace;
-  --wallpaper: url("img/demo/wall-lyrimuse.svg");
+  --wallpaper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='g0' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23FEF2EC'/%3E%3Cstop offset='1' stop-color='%23F4D1C2'/%3E%3C/linearGradient%3E%3ClinearGradient id='g1' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23FBE0D3'/%3E%3Cstop offset='.55' stop-color='%23F9CBB6'/%3E%3Cstop offset='1' stop-color='%23D7ACA1'/%3E%3C/linearGradient%3E%3ClinearGradient id='g2' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23F7CCD0'/%3E%3Cstop offset='.55' stop-color='%23F2AAB0'/%3E%3Cstop offset='1' stop-color='%23D1919C'/%3E%3C/linearGradient%3E%3ClinearGradient id='g3' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23EFBBCC'/%3E%3Cstop offset='.55' stop-color='%23E48DAA'/%3E%3Cstop offset='1' stop-color='%23C57997'/%3E%3C/linearGradient%3E%3ClinearGradient id='g4' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23DCA9C5'/%3E%3Cstop offset='.55' stop-color='%23C4709F'/%3E%3Cstop offset='1' stop-color='%23AB618E'/%3E%3C/linearGradient%3E%3ClinearGradient id='g5' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23B99BBD'/%3E%3Cstop offset='.55' stop-color='%238A5891'/%3E%3Cstop offset='1' stop-color='%237C4E82'/%3E%3C/linearGradient%3E%3Cfilter id='sh' x='-30%25' y='-10%25' width='160%25' height='120%25'%3E%3CfeDropShadow dx='-22' dy='8' stdDeviation='30' flood-color='%235A2A48' flood-opacity='.30'/%3E%3C/filter%3E%3Cfilter id='soft' x='-10%25' y='-10%25' width='120%25' height='120%25'%3E%3CfeGaussianBlur stdDeviation='10'/%3E%3C/filter%3E%3CradialGradient id='glow' cx='.85' cy='.04' r='.6'%3E%3Cstop offset='0' stop-color='%23FFFFFF' stop-opacity='.42'/%3E%3Cstop offset='1' stop-color='%23FFFFFF' stop-opacity='0'/%3E%3C/radialGradient%3E%3ClinearGradient id='vig' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='.55' stop-color='%232A1030' stop-opacity='0'/%3E%3Cstop offset='1' stop-color='%232A1030' stop-opacity='.2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='1000' fill='url(%23g0)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120 L1800,1120 L1800,-120 Z' fill='url(%23g1)' filter='url(%23sh)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120 L1800,1120 L1800,-120 Z' fill='url(%23g2)' filter='url(%23sh)'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120 L1800,1120 L1800,-120 Z' fill='url(%23g3)' filter='url(%23sh)'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120 L1800,1120 L1800,-120 Z' fill='url(%23g4)' filter='url(%23sh)'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120 L1800,1120 L1800,-120 Z' fill='url(%23g5)' filter='url(%23sh)'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Crect width='1600' height='1000' fill='url(%23glow)'/%3E%3Crect width='1600' height='1000' fill='url(%23vig)'/%3E%3C/svg%3E");
   color-scheme: light dark;
 }
 
@@ -1033,7 +1033,7 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 /* a glint crosses the icon now and then; the icon's own alpha is the mask */
 .final-ico::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  -webkit-mask: url("img/app-icon.png") center / contain no-repeat; mask: url("img/app-icon.png") center / contain no-repeat;
+  -webkit-mask: url("img/app-icon.webp") center / contain no-repeat; mask: url("img/app-icon.webp") center / contain no-repeat;
   background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, .85) 50%, transparent 62%) 120% 0 / 250% 100% no-repeat;
   animation: glint 5.5s ease-in-out 1.6s infinite;
 }
@@ -1067,6 +1067,16 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 .js .ch-head.reveal > :nth-child(2) { transition-delay: .08s; }
 .js .ch-head.reveal > :nth-child(3) { transition-delay: .16s; }
 .js .ch-head.reveal.in > * { opacity: 1; transform: none; filter: none; }
+/* The first screen (the headline block, and the players strip under it) comes in by itself as soon as it is drawn,
+   so a late lp.js never leaves it blank; lp.js leaves these out of the reveal above. */
+@keyframes enter { from { opacity: 0; transform: translateY(18px); filter: blur(6px); } }
+.hero .reveal, .players.reveal { animation: enter .9s var(--ease-out) backwards; }
+.hero h1.reveal { animation-delay: .07s; }
+.hero .lede.reveal { animation-delay: .14s; }
+.hero .cta.reveal { animation-delay: .21s; }
+.hero .fine.reveal { animation-delay: .28s; }
+.players.reveal { animation-delay: .35s; }
+.js .hero .reveal, .js .players.reveal { opacity: 1; transform: none; filter: none; transition: none; }
 
 /* ---------- the 30-second video ---------- */
 /* Under the players strip, headed like a chapter. The play button sits under the name and tagline of the cover;
@@ -1200,7 +1210,7 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .js .reveal, .js .ch-head.reveal > * { opacity: 1; transform: none; filter: none; transition: none; }
-  .wall, .fl, .track, .try-hint, .pill, .hero-rise, .lid, .mac, .stage::before, .eyebrow::before, .eyebrow .dot,
+  .wall, .fl, .track, .try-hint, .pill, .hero-rise, .hero .reveal, .players.reveal, .lid, .mac, .stage::before, .eyebrow::before, .eyebrow .dot,
   .final-fx::before, .final-ico, .final-ico::after, .ch-stage.sweep::after, .pill:hover .pill-ico svg { animation: none !important; }
   .island, .is-steady, .is-exp, .view, .rd-lines, .seg-thumb, .lw-track, .lw-row, .lwx > .lw, .mw, .qa-ico { transition: none !important; }
   .lf-now i { animation: none !important; }

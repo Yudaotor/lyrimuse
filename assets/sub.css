@@ -1,0 +1,153 @@
+/* Lyrimuse landing site: the subpages (comparison, privacy, terms). Loaded after lp.css, whose tokens, nav, footer,
+   buttons, menus, final card and the app window models (.view, .pn) it reuses. */
+
+/* ---------- page head ---------- */
+.sub-head { max-width: 1040px; margin: 0 auto; padding: 96px 24px 8px; text-align: center; }
+.sub .k {
+  width: fit-content; margin: 0 auto 14px; font-size: 15px; font-weight: 600; color: var(--brand); letter-spacing: .01em;
+  background: linear-gradient(90deg, #e5486f, #b0479f 60%, #8d4fc7); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.sub-h1 { margin: 0; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.06; letter-spacing: -.04em; font-weight: 700; text-wrap: balance; word-break: keep-all; }
+.sub-h1 > span { display: block; }
+.sub-h1 > span + span { color: var(--ink-3); }
+:lang(zh) .sub-h1, :lang(zh) .sec-h2 { letter-spacing: -.015em; line-height: 1.14; }
+.sub-lede { margin: 22px auto 0; max-width: 36em; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.6; color: var(--ink-2); text-wrap: balance; }
+.sub-meta { margin: 16px 0 0; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.callout {
+  width: calc(100% - 48px); max-width: 1072px; margin: 28px auto 0; padding: 14px 18px; border-radius: 16px;
+  background: var(--brand-soft); color: var(--ink-2); font-size: 14.5px; line-height: 1.7;
+}
+.callout strong { color: var(--ink); }
+.callout a, .doc-sec a, .qa-item a { color: var(--brand); }
+.callout a:hover, .doc-sec a:hover, .qa-item a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- comparison: the three apps ---------- */
+.app-cards { max-width: 1120px; margin: 44px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.app-card {
+  position: relative; padding: 24px 24px 22px; border-radius: var(--radius); background: var(--card);
+  box-shadow: 0 0 0 1px var(--line), 0 24px 50px -38px rgba(60, 20, 60, .35);
+}
+.app-card h2 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -.02em; }
+.app-card.me { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--brand) 55%, transparent), 0 30px 60px -36px rgba(229, 72, 111, .45); }
+.app-card.me h2 {
+  width: fit-content; background: linear-gradient(90deg, var(--g1), var(--g2) 60%, var(--g3));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.app-sub { margin: 6px 0 12px; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.app-card p:last-child { margin: 0; font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+
+/* ---------- sections ---------- */
+.cmp-sec { max-width: 1120px; margin: 0 auto; padding: 80px 24px 0; }
+.sec-h { margin: 0 0 22px; font-size: clamp(26px, 3vw, 36px); line-height: 1.15; letter-spacing: -.03em; }
+.sec-h2 { margin: 0; font-size: clamp(30px, 4vw, 48px); line-height: 1.08; letter-spacing: -.035em; font-weight: 700; text-wrap: balance; word-break: keep-all; }
+.sec-h2 > span { display: block; }
+.sec-h2 > span + span { color: var(--ink-3); }
+
+/* ---------- tables: rows on a wide screen, one card per row on a phone ---------- */
+.tbl-wrap { border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--line), 0 30px 60px -40px rgba(60, 20, 60, .35); overflow: hidden; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 15px; line-height: 1.55; }
+.tbl th, .tbl td { padding: 15px 18px; text-align: left; vertical-align: top; }
+.tbl thead th { background: var(--bg-alt); font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.tbl tbody tr + tr > * { border-top: 1px solid var(--line); }
+.tbl tbody th { font-weight: 600; color: var(--ink); }
+.tbl td { color: var(--ink-2); }
+.cmp tbody th { width: 16%; }
+.cmp td { width: 28%; }
+.cmp .me { background: color-mix(in srgb, var(--brand) 5%, transparent); color: var(--ink); }
+.cmp thead .me { color: var(--brand); }
+.cmp td[data-none] { color: var(--ink-3); }
+.tbl-note { margin: 12px 4px 0; font-size: 13px; color: var(--ink-3); }
+.tbl-svc { font-size: 14.5px; }
+.tbl-svc tbody th { width: 24%; }
+.tbl-svc td:nth-of-type(1) { width: 42%; }
+
+@media (max-width: 760px) {
+  .tbl-wrap { background: none; box-shadow: none; border-radius: 0; overflow: visible; }
+  .tbl, .tbl tbody, .tbl tr, .tbl th, .tbl td { display: block; width: auto !important; }
+  .tbl thead { display: none; }
+  .tbl tbody tr { margin: 0 0 12px; border-radius: 18px; background: var(--card); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+  .tbl tbody tr + tr > * { border-top: 0; }
+  .tbl tbody th { padding: 15px 16px 4px; font-size: 16px; }
+  .tbl td { padding: 9px 16px; }
+  .tbl td::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+  .tbl td:last-child { padding-bottom: 15px; }
+  .cmp .me { margin: 6px 8px 2px; padding: 9px 10px; border-radius: 12px; }
+  .cmp .me::before { color: var(--brand); }
+}
+
+/* ---------- comparison: how lyrics are picked (the app's own resolution panel, as on the home page) ---------- */
+.cmp-panel { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 56px; align-items: center; }
+.cmp-panel-txt .k { margin: 0 0 14px; }
+.cmp-panel-txt p:last-child { margin: 20px 0 0; font-size: 18px; line-height: 1.65; color: var(--ink-2); }
+.cmp-stage {
+  position: relative; aspect-ratio: 1 / 1.04; border-radius: 30px; overflow: hidden; isolation: isolate;
+  background: radial-gradient(120% 60% at 50% 4%, rgba(255, 255, 255, .28), transparent 60%), var(--wallpaper) 86% 62% / 240% auto no-repeat;
+  box-shadow: 0 0 0 1px var(--line), 0 40px 80px -50px rgba(60, 20, 60, .55);
+}
+.cmp-stage .view { padding: 8%; }
+
+/* ---------- comparison: questions ---------- */
+.cmp-qa { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.qa-item { padding: 24px 24px 22px; border-radius: var(--radius); background: var(--card); box-shadow: 0 0 0 1px var(--line), 0 24px 50px -40px rgba(60, 20, 60, .3); }
+.qa-item h3 { margin: 0 0 10px; font-size: 18px; line-height: 1.35; letter-spacing: -.01em; }
+.qa-item p, .qa-item li { margin: 0; font-size: 15px; line-height: 1.7; color: var(--ink-2); }
+.qa-item ul { margin: 0; padding-left: 1.15em; }
+.qa-item li + li { margin-top: 8px; }
+.sub .final { padding-top: 110px; }
+
+@media (max-width: 980px) {
+  .app-cards, .cmp-qa { grid-template-columns: minmax(0, 1fr); }
+  .cmp-panel { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .cmp-stage { max-width: 560px; width: 100%; margin: 0 auto; }
+}
+
+/* ---------- documents: privacy and terms ---------- */
+.doc { max-width: 1120px; margin: 0 auto; padding: 88px 24px 110px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 64px; align-items: start; }
+.doc-head { margin: 0 0 28px; }
+.doc-h1 { margin: 0; font-size: clamp(36px, 4.6vw, 56px); line-height: 1.08; letter-spacing: -.035em; font-weight: 700; }
+:lang(zh) .doc-h1 { letter-spacing: -.01em; }
+.doc-head .sub-meta { margin-top: 12px; }
+.doc-toc { position: sticky; top: 84px; padding-top: 14px; font-size: 14px; }
+.doc-toc p { margin: 0 0 10px 10px; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink-3); }
+.doc-toc ol { margin: 0; padding: 0; list-style: none; counter-reset: toc; }
+.doc-toc li { counter-increment: toc; }
+.doc-toc a { display: flex; gap: 10px; padding: 6px 10px; border-radius: 10px; line-height: 1.4; color: var(--ink-2); transition: background .2s, color .2s; }
+.doc-toc a::before { content: counter(toc); min-width: 1.3em; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.doc-toc a:hover { background: var(--wash-2); color: var(--ink); }
+.doc-toc a.on { background: var(--brand-soft); color: var(--brand); }
+.doc-toc a.on::before { color: var(--brand); }
+.doc-body { min-width: 0; max-width: 780px; }
+.doc-body > .callout { width: auto; max-width: none; margin: 0; }
+.doc-sec { padding-top: 44px; scroll-margin-top: 72px; }
+.doc-sec h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 0 14px; font-size: clamp(22px, 2.4vw, 28px); line-height: 1.25; letter-spacing: -.02em; }
+.doc-n { font-size: .68em; color: var(--brand); font-variant-numeric: tabular-nums; }
+.doc-sec h3 { margin: 28px 0 12px; font-size: 18px; letter-spacing: -.01em; }
+.doc-sec p, .doc-sec li { font-size: 16px; line-height: 1.78; color: var(--ink-2); }
+.doc-sec p { margin: 0 0 12px; }
+.doc-sec ul { margin: 0 0 12px; padding-left: 1.2em; }
+.doc-sec li + li { margin-top: 8px; }
+.doc-sec strong { color: var(--ink); }
+.doc-sec code, .callout code { padding: 1px 6px; border-radius: 5px; background: var(--bg-alt); color: var(--ink); font: .88em var(--mono); }
+.doc-sec .tbl-wrap { margin: 4px 0 18px; border-radius: 18px; }
+
+@media (max-width: 900px) {
+  .doc { grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 56px; }
+  .doc-toc { display: none; }
+}
+@media (max-width: 600px) {
+  .sub-head { padding-top: 64px; }
+  .cmp-sec { padding-top: 60px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .cmp-stage { color-scheme: light; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 60px 110px -60px rgba(0, 0, 0, .9); }
+  .app-card, .qa-item { box-shadow: 0 0 0 1px var(--line), 0 24px 50px -38px rgba(0, 0, 0, .9); }
+  .app-card.me { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--brand) 60%, transparent), 0 30px 60px -36px rgba(255, 92, 134, .35); }
+  .tbl-wrap { box-shadow: 0 0 0 1px var(--line), 0 30px 60px -40px rgba(0, 0, 0, .9); }
+  .cmp .me { background: color-mix(in srgb, var(--brand) 9%, transparent); }
+}
+@media (max-width: 760px) and (prefers-color-scheme: dark) {
+  .tbl-wrap { box-shadow: none; }
+}
