@@ -323,12 +323,56 @@ public enum KasetPlayerInfo {
         return QueueReply(currentIndex: tracks.indices.contains(index) ? index : nil, repeating: repeating, tracks: tracks)
     }
 
+    /// Kaset 内嵌网页此刻在放的那段媒体:WebKit 的媒体进程替 Kaset 报的那份系统会话。没有歌名歌手,只有时长和在不在放。
+    /// 广告就在这里放:前贴片时 Kaset 自己还报加载,两首之间那段广告期间它还报着上一首、停在结尾,网页这边报的是广告自己
+    /// 的时长、进度在走。
+    public struct WebMedia: Equatable, Sendable {
+        public let duration: Double?
+        public let isPlaying: Bool
+
+        public init(duration: Double?, isPlaying: Bool) {
+            self.duration = duration
+            self.isPlaying = isPlaying
+        }
+    }
+
+    /// WebKit 媒体进程的 bundle id。每个用到网页的 App 各有一个,同一个 bundle id,按负责进程分。
+    public static let webMediaBundleID = "com.apple.WebKit.GPU"
+
+    /// 从系统里各 App 报的会话里挑出 Kaset 内嵌网页的那一份:WebKit 媒体进程、负责进程是 Kaset(Safari 等别的 App 放视频
+    /// 时也有一份,不拿)。挑不到返回 nil。
+    public static func webMedia(in sessions: [NowPlayingClientsProbe.ClientSession], kasetPID: Int32) -> WebMedia? {
+        let mine = sessions.filter { $0.bundleIdentifier == webMediaBundleID && $0.responsibleProcessIdentifier == kasetPID }
+        guard let session = mine.first(where: { $0.playing == true }) ?? mine.first else { return nil }
+        return WebMedia(duration: session.duration, isPlaying: session.playing == true)
+    }
+
+    /// 网页那段跟这首的时长差不超过这么多秒,或者不超过这首时长的 `webMediaRelativeTolerance`,算同一段:网页 video 的
+    /// 时长跟元数据的整数秒常差不到 1 秒,开播那一拍元数据还没更新时差几秒(《西西里》230 对 234)。
+    public static let webMediaDurationTolerance: TimeInterval = 2
+    public static let webMediaRelativeTolerance = 0.03
+
+    /// 网页那边在放的是不是这首:跟这首的(网页那层或元数据里的)对得上 = 正片(false,还在缓冲);不到这首的一半 =
+    /// 广告(true;广告 6~30 秒,歌是几分钟);别的(网页那段更长,放的是比元数据长的 MV 之类)、网页没在放、时长还没出来
+    /// = 说不上来(nil)。
+    public static func adByWebMedia(_ reading: Reading, web: WebMedia?) -> Bool? {
+        guard let web, web.isPlaying, let duration = web.duration, duration > 0 else { return nil }
+        let own = [reading.playerDuration, reading.trackDuration].compactMap { $0 }
+        guard let shortest = own.min() else { return nil }
+        if own.contains(where: { abs($0 - duration) <= max(webMediaDurationTolerance, $0 * webMediaRelativeTolerance) }) {
+            return false
+        }
+        return duration < shortest / 2 ? true : nil
+    }
+
     /// 换成下游用的快照。专辑一栏不用:放歌单时 Kaset 在这里填的是歌单名,不是这首的专辑。
     /// 没在走、又不是暂停(加载、广告、卡住)时标 `isWaitingToPlay`:轮询照播放中的节拍走,声音一走起来就接上。
-    /// 广告结论(`isAd`):在放广告为 true,正片在走为 false,别的时候(加载、暂停、卡住)说不上来,为 nil。
-    public static func snapshot(_ reading: Reading, lastMove: LastMove?, capturedAt: Date) -> MediaControlSnapshot {
+    /// 广告结论(`isAd`):在放广告为 true,正片在走为 false,别的时候(加载、暂停、卡住)说不上来,为 nil。没在走时先看
+    /// 内嵌网页在放什么(`adByWebMedia`,`webMedia` 是调用方这一拍问到的),说不上来再按读数自己认(`isAd`)。
+    public static func snapshot(_ reading: Reading, lastMove: LastMove?, capturedAt: Date,
+                                webMedia: WebMedia? = nil) -> MediaControlSnapshot {
         let advancing = isAdvancing(reading, lastMove: lastMove, now: capturedAt)
-        let ad: Bool? = isAd(reading) ? true : (advancing ? false : nil)
+        let ad: Bool? = advancing ? false : (adByWebMedia(reading, web: webMedia) ?? (isAd(reading) ? true : nil))
         return MediaControlSnapshot(
             title: reading.title, artist: cleanedArtist(reading.artist), album: nil, duration: reading.duration,
             elapsedTime: reading.position, playing: advancing, playbackRate: advancing ? 1 : 0,

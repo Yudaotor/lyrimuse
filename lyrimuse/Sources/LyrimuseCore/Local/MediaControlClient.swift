@@ -416,6 +416,9 @@ public enum MediaControlClient {
     private static var kasetLastVideo: (trackKey: String, videoID: String)?
     /// 这首最先报的歌名与署名(`KasetPlayerInfo.steadyIdentity`)。
     private static var kasetFirstReport: KasetPlayerInfo.FirstReport?
+    /// 内嵌网页在放别的(广告)时打过日志的那首(videoId),同一首只打一条:某一拍没问到网页那份会话时
+    /// 判定会说不上来,按「翻成 true 才打」的话一段广告会打好几遍。
+    private static var kasetWebAdLoggedVideoID: String?
     /// 此刻正顶替系统那边、改用 Kaset 的读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
     /// 播放控制据此直接发给 Kaset(`focusControlTarget`),日志在它变化时打一条。
     private static var kasetPreferredOver: String?
@@ -444,12 +447,38 @@ public enum MediaControlClient {
         kasetFirstReport = steady.first
         kasetLock.unlock()
         let reading = raw.withIdentity(title: steady.title, artist: steady.artist)
-        let snapshot = KasetPlayerInfo.snapshot(reading, lastMove: kasetLastMoveSnapshot(), capturedAt: readAt)
+        let lastMove = kasetLastMoveSnapshot()
+        // 报在放(或在加载)、位置却没动:Kaset 自己的读数分不出是在等还是在放广告,问一次内嵌网页此刻在放什么。
+        // 正在走、暂停着都不问(每拍多一次子进程)。
+        let web = reading.isPaused || KasetPlayerInfo.isAdvancing(reading, lastMove: lastMove, now: readAt)
+            ? nil : kasetWebMedia()
+        noteKasetWebMedia(web, reading: reading)
+        let snapshot = KasetPlayerInfo.snapshot(reading, lastMove: lastMove, capturedAt: readAt, webMedia: web)
         kasetLock.lock()
         kasetLastMove = KasetPlayerInfo.nextMove(after: kasetLastMove, reading: reading, at: readAt)
         kasetLastVideo = reading.videoID.map { (snapshot.trackKey, $0) }
         kasetLock.unlock()
         return snapshot
+    }
+
+    /// Kaset 内嵌网页此刻在放的那段媒体(`KasetPlayerInfo.webMedia`)。Kaset 没在跑、helper 不可用返回 nil。
+    private static func kasetWebMedia() -> KasetPlayerInfo.WebMedia? {
+        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier)
+                .first?.processIdentifier,
+              let sessions = NowPlayingClientsProbe.allSessions()
+        else { return nil }
+        return KasetPlayerInfo.webMedia(in: sessions, kasetPID: pid)
+    }
+
+    private static func noteKasetWebMedia(_ web: KasetPlayerInfo.WebMedia?, reading: KasetPlayerInfo.Reading) {
+        guard KasetPlayerInfo.adByWebMedia(reading, web: web) == true else { return }
+        let id = reading.videoID ?? reading.title
+        kasetLock.lock()
+        let first = kasetWebAdLoggedVideoID != id
+        kasetWebAdLoggedVideoID = id
+        kasetLock.unlock()
+        guard first else { return }
+        logger.notice("kaset: web view is playing other media, treating it as an ad web_duration=\(web?.duration ?? 0, format: .fixed(precision: 1)) track=\(reading.title, privacy: .public) position=\(reading.position, format: .fixed(precision: 1)) playing=\(reading.isPlaying)")
     }
 
     private static func queuedFirstReport(videoID: String) -> KasetPlayerInfo.FirstReport? {

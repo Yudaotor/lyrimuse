@@ -24,7 +24,10 @@
 // 返回 0(函数能调、拿不到数据),同样的调用放进 `/usr/bin/perl`(Apple 平台二进制)用 DynaLoader
 // 加载的 dylib 里就拿到真值。这跟 media-control 自己要绕一层 perl 是同一个原因。
 //
-// 输出:一行 JSON。给了 bundle id 就只输出那一个(拿不到则 `null`),没给就输出全部,便于诊断。
+// 输出:一行 JSON。给了 bundle id 就只输出那一个(拿不到则 `null`),没给就输出全部(诊断、App 认 Kaset 内嵌网页的那份会话
+// 用,见 `NowPlayingClientsProbe.allSessions`)。每一份带报它的进程号 `processIdentifier`,和替谁干活的
+// `responsibleProcessIdentifier`:WebKit 的媒体进程(`com.apple.WebKit.GPU`)每个用到网页的 App 各有一个,bundle id 都一样,
+// 只有负责进程分得出是哪个 App 的(`responsibility_get_pid_responsible_for_pid`,活动监视器把 GPU 进程算到宿主头上用的也是它)。
 //
 // ## 待播队列(`LYRIMUSE_NOWPLAYING_QUEUE=N`,必须同时给 bundle id)
 //
@@ -104,6 +107,21 @@ static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID) {
         NSString *mime = raw[K("ArtworkMIMEType")];
         out[@"artworkMimeType"] = [mime isKindOfClass:NSString.class] ? mime : @"image/jpeg";
     }
+    return out;
+}
+
+/// 给整理好的一份带上进程号与负责进程(见头注)。拿不到就原样返回。
+static NSDictionary *withProcess(NSDictionary *one, id client) {
+    SEL pidSel = sel_getUid("processIdentifier");
+    if (![client respondsToSelector:pidSel]) return one;
+    int pid = ((int (*)(id, SEL))objc_msgSend)(client, pidSel);
+    if (pid <= 0) return one;
+    NSMutableDictionary *out = [one mutableCopy];
+    out[@"processIdentifier"] = @(pid);
+    typedef int (*ResponsibleFn)(int);
+    ResponsibleFn responsible = (ResponsibleFn)dlsym(RTLD_DEFAULT, "responsibility_get_pid_responsible_for_pid");
+    int owner = responsible ? responsible(pid) : 0;
+    if (owner > 0) out[@"responsibleProcessIdentifier"] = @(owner);
     return out;
 }
 
@@ -197,7 +215,7 @@ void nowplaying_clients(void *my_perl, void *cv) {
             });
             if (dispatch_semaphore_wait(s2, dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC)) != 0) continue;
             NSDictionary *one = normalize(info, bid);
-            if (one) [all addObject:one];
+            if (one) [all addObject:withProcess(one, c)];
         }
         emit(want ? (all.firstObject ?: (id)nil) : all);
     }

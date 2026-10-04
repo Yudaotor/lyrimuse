@@ -99,6 +99,57 @@ func runKasetTests() {
                     "Kaset 广告: 别的播放器的广告照旧写进播放状态")
     }
 
+    // ---- 广告:看内嵌网页此刻在放什么(前贴片时 Kaset 还报加载;两首之间的广告期间它还报着上一首、停在结尾)----
+    do {
+        // 系统里各 App 报的会话(helper 输出的形状):Kaset 自己那份、Safari 的 WebKit 媒体进程那份、Kaset 的那份。
+        let sessionsJSON = #"[{"bundleIdentifier":"com.sertacozercan.Kaset","processIdentifier":692,"responsibleProcessIdentifier":692,"playing":true,"title":"給我ㄧ首歌的時間","isMusicApp":true},{"bundleIdentifier":"com.apple.WebKit.GPU","processIdentifier":10556,"responsibleProcessIdentifier":693,"duration":596.2,"elapsedTime":12,"playing":true,"title":""},{"bundleIdentifier":"com.apple.WebKit.GPU","processIdentifier":7685,"responsibleProcessIdentifier":692,"duration":6,"elapsedTime":0.3,"playing":true,"title":""}]"#
+        let sessions = (try? JSONDecoder().decode([NowPlayingClientsProbe.ClientSession].self, from: Data(sessionsJSON.utf8))) ?? []
+        expectEqual(sessions.count, 3, "Kaset 网页媒体: 各 App 的会话解出来")
+        expectEqual(K.webMedia(in: sessions, kasetPID: 692), K.WebMedia(duration: 6, isPlaying: true),
+                    "Kaset 网页媒体: 按负责进程认 Kaset 的那份,不拿 Safari 的")
+        expectEqual(K.webMedia(in: sessions, kasetPID: 999) == nil, true, "Kaset 网页媒体: 没有 Kaset 的那份")
+        // 真机录音(《給我ㄧ首歌的時間》前面一段 6 秒的广告):Kaset 先报加载、再报在放,位置都是 0,两层时长都是 254;
+        // 网页那边先放 6 秒那段,再换成 254 秒的正片。
+        func r(pos: Double, playing: Bool, player: Double? = 254, track: Double? = 254) -> K.Reading {
+            K.Reading(title: "給我ㄧ首歌的時間", artist: "周杰倫", videoID: "v", duration: player ?? track, position: pos,
+                      isPlaying: playing, isPaused: false, playerDuration: player, trackDuration: track)
+        }
+        let adMedia = K.WebMedia(duration: 6, isPlaying: true), songMedia = K.WebMedia(duration: 254, isPlaying: true)
+        expectEqual(K.adByWebMedia(r(pos: 0, playing: false), web: adMedia), true, "Kaset 网页媒体: 还在加载,网页已经在放 6 秒那段 = 广告")
+        expectEqual(K.adByWebMedia(r(pos: 0, playing: true), web: songMedia), false, "Kaset 网页媒体: 网页换成这首了 = 正片在缓冲")
+        expectEqual(K.adByWebMedia(r(pos: 0, playing: true), web: K.WebMedia(duration: 6, isPlaying: false)) == nil, true,
+                    "Kaset 网页媒体: 网页没在放,说不上来")
+        expectEqual(K.adByWebMedia(r(pos: 0, playing: true), web: K.WebMedia(duration: nil, isPlaying: true)) == nil, true,
+                    "Kaset 网页媒体: 网页那段时长还没出来,说不上来")
+        expectEqual(K.adByWebMedia(r(pos: 0, playing: true, player: 392, track: 196), web: K.WebMedia(duration: 392.4, isPlaying: true)),
+                    false, "Kaset 网页媒体: 元数据时长对不上、网页那层对得上(放的是 MV)也算这首")
+        // 两首之间的广告:Kaset 还报着上一首、停在结尾、报在放。
+        let ended = K.Reading(title: "晴天", artist: "周杰倫", videoID: "q", duration: 269.65, position: 269.6, isPlaying: true,
+                              isPaused: false, playerDuration: 269.65, trackDuration: 270)
+        let stuck = K.LastMove(videoID: "q", position: 269.6, seenAt: t0)
+        let between = K.snapshot(ended, lastMove: stuck, capturedAt: t0 + 2, webMedia: K.WebMedia(duration: 30, isPlaying: true))
+        expectEqual(between.isAd, true, "Kaset 广告: 还报着上一首、停在结尾,网页在放别的 = 两首之间的广告")
+        expectEqual(between.isWaitingToPlay, true, "Kaset 广告: 两首之间的广告期间也算在等")
+        expectEqual(K.snapshot(ended, lastMove: stuck, capturedAt: t0 + 2,
+                               webMedia: K.WebMedia(duration: 269.65, isPlaying: false)).isAd == nil, true,
+                    "Kaset 广告: 停在结尾、网页也停了,说不上来(不当广告)")
+        expectEqual(K.snapshot(r(pos: 0, playing: false), lastMove: nil, capturedAt: t0, webMedia: adMedia).isAd, true,
+                    "Kaset 广告: 前贴片时 Kaset 还报加载,网页已经在放广告")
+        expectEqual(K.snapshot(r(pos: 0, playing: true), lastMove: nil, capturedAt: t0, webMedia: songMedia).isAd, false,
+                    "Kaset 广告: 正片缓冲那一拍两层时长恰好相等,看网页不误判成广告")
+        expectEqual(K.snapshot(r(pos: 0, playing: true), lastMove: nil, capturedAt: t0).isAd, true,
+                    "Kaset 广告: 网页那边问不到时照旧按读数自己认")
+        expectEqual(K.snapshot(r(pos: 12.5, playing: true), lastMove: nil, capturedAt: t0, webMedia: adMedia).isAd, false,
+                    "Kaset 广告: 位置在走就是正片")
+        // 真机录音:《西西里》开播那一拍元数据还是 230 秒,网页放的正片 234 秒;MV 比元数据长一倍。
+        expectEqual(K.adByWebMedia(r(pos: 0, playing: false, player: 230, track: 230), web: K.WebMedia(duration: 234, isPlaying: true)),
+                    false, "Kaset 网页媒体: 元数据还没更新、差几秒,算这首")
+        expectEqual(K.adByWebMedia(r(pos: 0, playing: false, player: 196, track: 196), web: K.WebMedia(duration: 392.4, isPlaying: true))
+                        == nil, true, "Kaset 网页媒体: 网页那段比这首长(放的是更长的 MV),说不上来,不当广告")
+        expectEqual(K.adByWebMedia(r(pos: 0, playing: false, player: 100, track: 100), web: K.WebMedia(duration: 60, isPlaying: true))
+                        == nil, true, "Kaset 网页媒体: 没短到一半,说不上来")
+    }
+
     // ---- 署名 ----
     do {
         expectEqual(K.cleanedArtist("Eurythmics, 、, Annie Lennox, 和, Dave Stewart"), "Eurythmics, Annie Lennox, Dave Stewart",
@@ -330,6 +381,12 @@ func runKasetTests() {
         expectEqual(client.contains("let steady = KasetPlayerInfo.steadyIdentity(raw, first: first)")
                         && client.contains("let reading = raw.withIdentity(title: steady.title, artist: steady.artist)"), true,
                     "Kaset 契约: 出快照之前先过 steadyIdentity")
+        expectEqual(client.contains("let web = reading.isPaused || KasetPlayerInfo.isAdvancing(reading, lastMove: lastMove, now: readAt)")
+                        && client.contains("? nil : kasetWebMedia()")
+                        && client.contains("capturedAt: readAt, webMedia: web)")
+                        && src("LyrimuseCore/Local/NowPlayingClientsProbe.swift").contains("[paths.script, paths.library], timeout: timeout)")
+                        && src("../native/nowplaying-clients/nowplaying-clients.m").contains("if (one) [all addObject:withProcess(one, c)];"),
+                    true, "Kaset 契约: 报在放(或加载)、位置没动时才问内嵌网页在放什么;helper 给每份会话带上负责进程")
         expectEqual(client.contains("if let id = raw.videoID, !id.isEmpty, first?.videoID != id {")
                         && client.contains("first = queuedFirstReport(videoID: id) ?? first"), true,
                     "Kaset 契约: 新歌第一拍按队列补开播那份")

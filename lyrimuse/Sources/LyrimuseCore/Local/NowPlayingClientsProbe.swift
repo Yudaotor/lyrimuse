@@ -91,6 +91,26 @@ public enum NowPlayingClientsProbe {
     /// 位置已经在 helper 里按锚点外推过(`elapsed + (now - timestamp) * rate`)—— 载荷里的
     /// `ElapsedTime` 是**锚点**不是此刻的位置,同一首歌里连查几次它一动不动。锚点原值经
     /// `anchorElapsedTime` 一并带回,上层判"这是不是开播锚点"的既有逻辑照旧可用。
+    /// 系统里每个注册过 now playing 的 App 各自报的一份里,认人用得上的几个字段。
+    public struct ClientSession: Decodable, Equatable, Sendable {
+        public let bundleIdentifier: String?
+        /// 报这一份的进程;`responsibleProcessIdentifier` 是它替谁干活:WebKit 的媒体进程(`com.apple.WebKit.GPU`)替内嵌
+        /// 网页的那个 App 干活,负责进程就是那个 App;普通 App 两者相同。
+        public let processIdentifier: Int32?
+        public let responsibleProcessIdentifier: Int32?
+        public let duration: Double?
+        public let playing: Bool?
+    }
+
+    /// 系统里每个注册过 now playing 的 App 各自报的一份,不按 bundle id 挑(同一个 bundle id 可能有好几份,比如每个用到网页的
+    /// App 各有一个 WebKit 媒体进程)。没装 helper、跑失败、超时返回 nil。
+    public static func allSessions() -> [ClientSession]? {
+        guard let paths = helperPaths(),
+              let r = ProcessRunner.run("/usr/bin/perl", [paths.script, paths.library], timeout: timeout), r.succeeded
+        else { return nil }
+        return try? JSONDecoder().decode([ClientSession].self, from: r.stdout)
+    }
+
     public static func snapshot(forBundleID bundleID: String) -> MediaControlSnapshot? {
         guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
         guard let r = ProcessRunner.run(
