@@ -30,7 +30,7 @@ var bgBackfillTried = map[string]bool{}
 // needsBackgroundVocalsBackfill:胜出源是 amll / applemusic、还没按当前 TTML 附属内容解析器取过的有词条目。
 // 手改过的不动(背景人声对不上用户改过的正文)。
 func needsBackgroundVocalsBackfill(e enrichEntry) bool {
-	return e.LyricsBGChecked < lyricsBGParserVersion && e.Lyrics != "" && !e.ManualLyrics &&
+	return e.LyricsBGChecked < lyricsBGParserVersion && e.Lyrics != "" && !e.lyricsHandEdited() &&
 		(e.LyricsSource == "amll" || e.LyricsSource == "applemusic")
 }
 

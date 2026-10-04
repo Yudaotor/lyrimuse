@@ -112,10 +112,10 @@ func (e *enrichEntry) maybeGenerateJyutpingRoma() {
 }
 
 // dropMandarinRomaForCantonese:粤语歌的罗马音只要粤拼。源自带的罗马音是普通话拼音(looksMandarinPinyin)
-// 时清掉,交给粤拼补上;源给的粤拼(网易云的不带声调数字)照留。用户手改过的不动。必须排在
+// 时清掉,交给粤拼补上;源给的粤拼(网易云的不带声调数字)照留。用户手改过的不动(lyricsHandEdited)。必须排在
 // maybeGenerateJyutpingRoma / applyPregeneratedRoma 之前 —— 那两处只在罗马音为空时才填。
 func (e *enrichEntry) dropMandarinRomaForCantonese() {
-	if e.SongLanguage == songLanguageCantonese && !e.ManualLyrics && e.LyricsRoma != "" && looksMandarinPinyin(e.LyricsRoma) {
+	if e.SongLanguage == songLanguageCantonese && !e.lyricsHandEdited() && e.LyricsRoma != "" && looksMandarinPinyin(e.LyricsRoma) {
 		e.LyricsRoma = ""
 	}
 }
@@ -352,8 +352,8 @@ type enrichEntry struct {
 	// 别只删一半;删的时候连这一段注释、以及 migrateManualPickMarks 里读它的那几行一起处理
 	// (迁移本身还得留够久,直到确信线上没有人还停在 v1.4.0)。
 	LyricsSourceChoice string `json:"lyrics_source_choice,omitempty"`
-	// ManualPickSHA 是**纯直通字段**:引擎一个字节都不读它,声明在这里只为了让它
-	// 在缓存往返里活下来。
+	// ManualPickSHA 由 App 侧写、引擎只读:跨专辑复用不覆盖有它的条目,lyricsHandEdited 拿它分辨
+	// 「原样采纳的候选」与「手改过的正文」。成员必须声明在这里,它才能在缓存往返里活下来。
 	//
 	// 这不是可选的。loadEnrichCache 把整个文件解进 map[string]enrichEntry,
 	// saveEnrichCache 再整个 marshal 回去,而 encoding/json 会**直接丢弃未声明字段** ——

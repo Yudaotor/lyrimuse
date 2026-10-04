@@ -102,7 +102,7 @@ func entrySongLanguage(lyrics string, scored []scoredLyricCandidateResult) strin
 
 // dropHokkienRoma:台语歌不留罗马音(理由见文件头)。用户手改过的歌词不动。
 func (e *enrichEntry) dropHokkienRoma() {
-	if e.SongLanguage == songLanguageHokkien && !e.ManualLyrics {
+	if e.SongLanguage == songLanguageHokkien && !e.lyricsHandEdited() {
 		e.LyricsRoma = ""
 	}
 }
@@ -123,7 +123,7 @@ func migrateHokkienSongLanguage() {
 			continue
 		}
 		e.SongLanguage = songLanguageHokkien
-		if e.LyricsRoma != "" && !e.ManualLyrics {
+		if e.LyricsRoma != "" && !e.lyricsHandEdited() {
 			cleared++
 		}
 		e.dropHokkienRoma()

@@ -2570,7 +2570,7 @@ struct LyricsManagerView: View {
                 let saved = await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                                                  roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
                                                  source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
-                                                 sourceChoice: "", fromManualPick: true)
+                                                 sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
                 guard saved else {
                     // 没存上:编辑框和偏移退回盘上那份。留着候选的话,下一次 ⌘S 会把它当手改存进去并锁定。
                     // 这期间切到了别的歌就不动 —— 编辑框已经是那一首的了。

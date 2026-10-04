@@ -3200,7 +3200,7 @@ func runSourceContractTests() {
                     "采纳候选入口: LyricsSearchSheet 的调用点就这三处(多了/少了都要来这条守卫登记)")
         for rel in callSites.sorted() {
             guard let text = read(rel) else { continue }
-            for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "currentFingerprint:"] {
+            for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "bg: candidate.lyricsBG", "trLang: candidate.lyricsTrLang", "currentFingerprint:"] {
                 expectEqual(text.contains(marker), true, "采纳候选入口: \(rel) 缺 \(marker)")
             }
         }

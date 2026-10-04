@@ -96,7 +96,7 @@ struct LyricsQuickSearchWindow: View {
                             lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                             roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
                             source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
-                            sourceChoice: "", fromManualPick: true)
+                            sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
                     }
                     PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
                     return saved

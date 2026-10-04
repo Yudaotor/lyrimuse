@@ -2577,7 +2577,7 @@ struct LyricsWindowView: View {
                             roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
                             source: candidate.source,
                             markManual: AppSettings.shared.manualPickLocksLyrics,
-                            sourceChoice: "", fromManualPick: true)
+                            sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
                     }
                     // 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
                     PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()

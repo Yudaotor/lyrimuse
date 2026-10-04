@@ -225,6 +225,10 @@ final class LyricsSearchService {
         let lyricsTr: String
         let lyricsRoma: String
         let lyricsYRC: String
+        /// 背景人声轨(引擎的 lyrics_bg,只有 amll / applemusic 给)与译文语言(lyrics_tr_lang)。不展示,
+        /// 采纳时原样交给 saveEdit,条目跟自动选中这条候选时写的一样。
+        let lyricsBG: String
+        let lyricsTrLang: String
         let hasWordTiming: Bool
         let score: Int
         /// 这个分数的构成明细;被判 -1 时只有一项,内容是原因。引擎只给机器可读的
@@ -603,6 +607,8 @@ private struct RawCandidate: Decodable {
     let lyricsTr: String?
     let lyricsRoma: String?
     let lyricsYRC: String?
+    let lyricsBG: String?
+    let lyricsTrLang: String?
     let hasWordTiming: Bool
     let score: Int
     let scoreTerms: [LyricsSearchService.ScoreTerm]?
@@ -617,6 +623,8 @@ private struct RawCandidate: Decodable {
         case lyricsTr = "lyrics_tr"
         case lyricsRoma = "lyrics_roma"
         case lyricsYRC = "lyrics_yrc"
+        case lyricsBG = "lyrics_bg"
+        case lyricsTrLang = "lyrics_tr_lang"
         case hasWordTiming = "has_word_timing"
         case scoreTerms = "score_terms"
         case coverURL = "cover_url"
@@ -632,6 +640,8 @@ private extension LyricsSearchService.Candidate {
             lyricsTr: raw.lyricsTr ?? "",
             lyricsRoma: raw.lyricsRoma ?? "",
             lyricsYRC: raw.lyricsYRC ?? "",
+            lyricsBG: raw.lyricsBG ?? "",
+            lyricsTrLang: raw.lyricsTrLang ?? "",
             hasWordTiming: raw.hasWordTiming,
             score: raw.score,
             scoreTerms: raw.scoreTerms ?? [],

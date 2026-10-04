@@ -29,6 +29,13 @@ func manualPickFingerprint(lyrics string) string {
 	return hex.EncodeToString(sum[:])[:12]
 }
 
+// lyricsHandEdited:正文是用户手改过的 —— 锁定着(manual_lyrics),而且已经不是原样采纳的那份候选
+// (manual_pick_sha 跟正文对不上)。原样采纳的候选按源给的内容处理:罗马音规则、背景人声与演唱者标注的补齐
+// 照常做;正文、译文、逐字轴照旧不动。
+func (e enrichEntry) lyricsHandEdited() bool {
+	return e.ManualLyrics && e.ManualPickSHA != manualPickFingerprint(e.Lyrics)
+}
+
 // manualPickCanonicalLyrics 逐行剥掉开头所有 `[...]` 方括号组(行时间戳,以及
 // [ti:]/[ar:]/[al:]/[by:]/[offset:] 这些元数据标签)、去掉首尾空白、丢掉空行。
 //

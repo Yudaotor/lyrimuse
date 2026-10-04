@@ -89,6 +89,9 @@ type enrichEditRequest struct {
 	MarkManual     bool    `json:"mark_manual,omitempty"`
 	SourceChoice   *string `json:"source_choice,omitempty"`
 	FromManualPick bool    `json:"from_manual_pick,omitempty"`
+	// BG / TrLang:采纳候选时这条候选自己的背景人声轨与译文语言(nil = 不是采纳候选,不动)。
+	BG     *string `json:"bg,omitempty"`
+	TrLang *string `json:"tr_lang,omitempty"`
 
 	// save_plain_text
 	PlainLyrics       string `json:"plain_lyrics,omitempty"`
@@ -268,11 +271,17 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 	if roma != "" && req.Lyrics != e.Lyrics && roma == e.LyricsRoma {
 		roma = ""
 	}
-	// 背景人声挂在旧正文的行头上,正文或逐字一换就清掉。采纳候选也不带它(候选接口没有这个字段)。
-	if req.Lyrics != e.Lyrics || (req.YRC != nil && *req.YRC != e.LyricsYRC) {
+	// 背景人声挂在旧正文的行头上:采纳候选时换成候选自己那一份(取的就是当前的 TTML 附属内容解析器);
+	// 别的保存,正文或逐字一换就清掉。
+	if req.BG != nil {
+		e.LyricsBG, e.LyricsBGChecked = *req.BG, lyricsBGParserVersion
+	} else if req.Lyrics != e.Lyrics || (req.YRC != nil && *req.YRC != e.LyricsYRC) {
 		e.LyricsBG = ""
 	}
 	e.Lyrics, e.LyricsTr, e.LyricsRoma = req.Lyrics, req.Tr, roma
+	if req.TrLang != nil {
+		e.LyricsTrLang = *req.TrLang
+	}
 	e.ManualLyrics = req.MarkManual
 	// nil = 不动;空串 = 显式清掉(交回算法自由选源)。
 	if req.SourceChoice != nil {
@@ -287,6 +296,12 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 	e.ManualPickSHA = ""
 	if req.FromManualPick {
 		e.ManualPickSHA = manualPickFingerprint(req.Lyrics)
+		// 原样采纳的候选按源给的内容处理(lyricsHandEdited):罗马音过一遍跟自动选中时同样的规则,
+		// 演唱者标注按新正文重新问一次。
+		e.dropHokkienRoma()
+		e.dropMandarinRomaForCantonese()
+		e.maybeGenerateJyutpingRoma()
+		e.LyricsSpeakersChecked = 0
 	}
 	return nil
 }
