@@ -508,6 +508,31 @@ func runLastfmTests() {
         expectEqual(M.new.stepText, nil, "榜单升降: 新没有数字")
     }
 
+    // ---- EnrichCacheReader.deriveLocalAliasTables:歌名表按新推出的歌手表分桶,比对的是歌词正文 ----
+    do {
+        typealias E = EnrichTitleAliases.Entry
+        PlayCountFold.setLocalArtistAliases([:])
+        // 英文写法署罗马字艺名、中文写法署中文名,两条落到同一个网易云歌曲 id:要按新推出的歌手表分到同一桶
+        let caches = LocalArtistAliases.MusicBrainzCaches(aliasCache: ["Khalil Fong": "方大同"])
+        let byID = EnrichCacheReader.deriveLocalAliasTables(entries: [
+            E(artist: "Khalil Fong", title: "Love Love Love", neteaseURL: "https://music.163.com/song?id=111", qqMusicURL: nil, durationSecs: 200),
+            E(artist: "方大同", title: "爱爱爱", neteaseURL: "https://music.163.com/song?id=111", qqMusicURL: nil, durationSecs: 200),
+        ], caches: caches)
+        expectEqual(byID.titles[LocalArtistAliases.canonicalArtistKey("方大同", table: byID.artists)]?[PlayCountFold.foldTitle("Love Love Love")],
+                    "爱爱爱", "别名表推导: 歌名表按刚推出的歌手表分桶(罗马字艺名与中文名同一桶)")
+        // 同专辑两首不同的歌:时长几乎一样、开头的署名一样,歌词正文不同 —— 不是同一首
+        let header = "[00:00.00] 作词 : 某人\n[00:01.00] 作曲 : 方大同\n[00:02.00] 编曲 : 方大同\n[00:03.00] 制作人 : 方大同/某某\n"
+        let bodyA = (0..<12).map { "[00:\(10 + $0).00]第一首歌的第\($0)句歌词内容" }.joined(separator: "\n")
+        let bodyB = (0..<12).map { "[00:\(10 + $0).00]另一首完全不同的第\($0)行" }.joined(separator: "\n")
+        let byLyrics = EnrichCacheReader.deriveLocalAliasTables(entries: [
+            E(artist: "方大同", title: "I Want You Back", neteaseURL: nil, qqMusicURL: nil, durationSecs: 259.613,
+              resolvedDurationSecs: 259.613, lyrics: header + bodyA),
+            E(artist: "方大同", title: "爱立刻", neteaseURL: nil, qqMusicURL: nil, durationSecs: 259.64,
+              resolvedDurationSecs: 259.64, lyrics: header + bodyB),
+        ], caches: .init())
+        expectEqual(byLyrics.titles, [:], "别名表推导: 比的是歌词正文,开头署名相同的两首歌不算同一首")
+    }
+
     // ---- ChartVisibleRows / ArtistTopTracks:「听得最多」显示更多与歌手展开行 ----
     do {
         typealias R = ChartVisibleRows

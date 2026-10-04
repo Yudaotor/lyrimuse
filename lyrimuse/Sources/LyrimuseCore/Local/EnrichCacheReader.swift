@@ -1084,12 +1084,20 @@ public enum EnrichCacheReader {
                                     resolvedDurationSecs: entry.resolvedDurationSecs,
                                     lyrics: entry.lyrics))
             }
-            let artists = LocalArtistAliases.derive(caches: caches, entries: inputs)
-            let titles = EnrichTitleAliases.derive(inputs) { LocalArtistAliases.canonicalArtistKey($0, table: artists) }
-            return LocalAliasTables(artists: artists, titles: titles)
+            return deriveLocalAliasTables(entries: inputs, caches: caches)
         }.value
         if gen == aliasTablesGeneration, cachedEntries != nil { cachedAliasTables = tables }
         return tables
+    }
+
+    /// 两张别名表的推导本体(纯函数,selftest 覆盖):歌手表先推,歌名表按新推出的歌手表分桶。
+    public nonisolated static func deriveLocalAliasTables(entries: [EnrichTitleAliases.Entry],
+                                                         caches: LocalArtistAliases.MusicBrainzCaches) -> LocalAliasTables {
+        let artists = LocalArtistAliases.derive(caches: caches, entries: entries)
+        // derive 的两个函数参数都是 (String) -> String:必须写 `artistKey:` 标签,别写成尾随闭包(会绑到最后一个参数
+        // lyricsBody 上)。见 12 章决策 27。
+        let titles = EnrichTitleAliases.derive(entries, artistKey: { LocalArtistAliases.canonicalArtistKey($0, table: artists) })
+        return LocalAliasTables(artists: artists, titles: titles)
     }
 
     /// 缓存文件的 mtime。给"要不要重算派生表"这类判断用 —— 调用方自己存一份上次的值,

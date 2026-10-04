@@ -2595,6 +2595,9 @@ final class LastfmStatsService: ObservableObject {
         var chartItemTotals: [String: Int]?
     }
 
+    /// 次数表的口径版本,读写快照两处都用它,见 StatsSnapshot.mergedCountsVersion。
+    private static let mergedCountsVersion = 16
+
     /// 快照里允许持久化的 `fetchedAt` 键。榜单键是 `"\(kind)|\(period)"`,跟 `refreshChart`
     /// 拼法一致。
     private static let persistedFetchedAtKeys: Set<String> = {
@@ -2632,7 +2635,7 @@ final class LastfmStatsService: ObservableObject {
         trackCovers = snap.trackCovers
         // 旧口径的次数不端上桌 —— 见 mergedCountsVersion 字段注释。 改动合并口径必须
         // +1,否则存量缓存里按旧口径算出来的数会一直端上桌、永远显示错误的次数。
-        trackPlayCounts = snap.mergedCountsVersion == 15 ? (snap.trackPlayCounts ?? [:]) : [:]
+        trackPlayCounts = snap.mergedCountsVersion == Self.mergedCountsVersion ? (snap.trackPlayCounts ?? [:]) : [:]
         // 老快照没有这个字段,或者上面那行因为口径版本不对已经把 trackPlayCounts 整表
         // 作废——两种情况都不该留着旧的"验证时刻",否则判据④会误以为刚验证过、放过
         // 本该重新拉取的 key(见 playCountVerifiedAt 声明处注释)。
@@ -2737,7 +2740,7 @@ final class LastfmStatsService: ObservableObject {
                 recentTrackCovers: keptCovers, recentAlbumCovers: keptAlbumCovers,
                 catalogCovers: keptCatalogCovers,
                 playCountVerifiedAt: keptVerifiedAt,
-                mergedCountsVersion: 15,
+                mergedCountsVersion: Self.mergedCountsVersion,
                 recentTotalPages: recentTotalPages,
                 onThisDay: onThisDayOutcome == .loaded ? onThisDay : nil,
                 onThisDayDay: onThisDayOutcome == .loaded ? onThisDayDay : nil,
