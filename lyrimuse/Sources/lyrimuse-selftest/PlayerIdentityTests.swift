@@ -112,6 +112,11 @@ func runPlayerIdentityTests() {
         expectEqual(MusicPlaybackController.supportsExtendedControls(.netease), false, "能力: 网易云不支持")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.kugou), false, "能力: 酷狗不支持(无 .sdef)")
         expectEqual(MusicPlaybackController.supportsRepeatOne(.kugou), false, "能力: 酷狗没有单曲循环")
+        expectEqual(MusicPlaybackController.supportsExtendedControls(.kaset), true, "能力: Kaset 支持音量/模式")
+        expectEqual(MusicPlaybackController.supportsRepeatOne(.kaset), true, "能力: Kaset 有单曲循环")
+        expectEqual(MusicPlaybackController.supportsFavorite(.appleMusic) && MusicPlaybackController.supportsFavorite(.kaset),
+                    true, "能力: Apple Music、Kaset 有喜欢")
+        expectEqual(MusicPlaybackController.supportsFavorite(.spotify), false, "能力: Spotify 没有喜欢")
 
         // 播放控制发给谁:media-control 的指令作用于系统焦点,焦点被别的 App 占着、屏上这首靠 AppleScript
         // 回退问到时,要直接发给那个播放器,否则网页视频被暂停 / 被切走。

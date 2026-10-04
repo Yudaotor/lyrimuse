@@ -3114,7 +3114,7 @@ struct LyricsWindowView: View {
 
     /// 标题右侧的 收藏(星)+ 更多(…)圆钮 —— Apple Music 歌词页同款位置与形态
     /// (完全对齐:收藏从播放控制排挪上来;AM 现在的收藏就是星形,
-    /// 心形是它的旧设计)。星只有 Apple Music 有(isFavorited 为 nil 不显示),
+    /// 心形是它的旧设计)。星只有 Apple Music 和 Kaset 有(isFavorited 为 nil 不显示),
     /// 「…」始终在 —— 它装的是这扇窗自己的动作,与播放器无关。
     private var titleSideButtons: some View {
         HStack(spacing: 8) {

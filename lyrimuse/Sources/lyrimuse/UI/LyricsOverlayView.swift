@@ -1515,7 +1515,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             iconButton(.previous, "backward.fill")
             iconButton(.playPause, playback.isPlayingNow ? "pause.fill" : "play.fill", primary: true)
             iconButton(.next, "forward.fill")
-            // 「喜欢」——对应 Apple Music 里那颗心(脚本字典里的 favorited)。只有 Apple Music
+            // 「喜欢」——对应 Apple Music 里那颗心(脚本字典里的 favorited)、Kaset 里的赞。只有这两个播放器
             // 有这个概念,所以 playback.isFavorited 为 nil(别的播放器/没拿到自动化权限)时整个
             // 按钮不出现,而不是显示一颗永远点不亮的心。跟前面三个播放按钮同属"对当前这首歌
             // 的操作",放在同一组里、竖线之前。

@@ -474,7 +474,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// LocalPlaybackSource.lastResolvedBundleID):设置页本来就有 2 秒的轮询在跑。
     var resolvedPlayerBundleID: String? { LocalPlaybackSource.shared.lastResolvedBundleID }
 
-    // 「喜欢」(Apple Music 的 favorited)只有 Apple Music 有:QQ 音乐/网易云音乐没有
+    // 「喜欢」只有 Apple Music(favorited)和 Kaset(YouTube Music 的赞)有:QQ 音乐/网易云音乐没有
     // AppleScript 支持,media-control 走的系统级 MediaRemote 也只有播放控制、没有收藏这个
     // 概念。所以 nil 有明确含义 ——"这个播放器根本没有这回事",悬浮窗据此整个不显示那个
     // 按钮,而不是显示一个永远点不亮的心。
@@ -485,13 +485,14 @@ final class PlaybackCoordinator: ObservableObject {
     // 覆盖了"用户在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
     @Published private(set) var isFavorited: Bool?
 
-    /// 播放模式(列表/随机/单曲循环)。跟"喜欢"一样只有 Apple Music 有 —— media-control 走的
+    /// 播放模式(列表/随机/单曲循环)。只有 Apple Music、Spotify(只有随机)、Kaset 有 —— media-control 走的
     /// 系统级 MediaRemote 没有这个概念 —— 所以 nil 同样表示"这个播放器根本没有这回事",
     /// 按钮据此整个不显示。刷新时机也跟"喜欢"共用(换歌 / 窗口出现 / App 回到前台):
     /// 用户可能在 Music.app 里自己改了模式,我们没有任何事件能收到,只能在这几个时机回读。
     @Published private(set) var playbackMode: MusicPlaybackController.MusicPlaybackMode?
-    /// `playbackMode` 读自 / 写给哪个播放器(模式为 nil 时也是 nil)。灵动岛的随机 / 循环键只认
-    /// Apple Music,靠它区分。两者只经 `applyPlaybackMode` 一起赋值,别单独改其中一个。
+    /// `playbackMode` 读自 / 写给哪个播放器(模式为 nil 时也是 nil)。灵动岛的随机 / 循环键只认随机、循环都齐的播放器
+    /// (Apple Music、Kaset,`MusicPlaybackController.supportsRepeatOne`),靠它区分。两者只经 `applyPlaybackMode` 一起赋值,
+    /// 别单独改其中一个。
     @Published private(set) var playbackModePlayer: PlaybackPlayer?
 
     /// 用户动作序号,"喜欢"和"播放模式"各一份。
@@ -548,12 +549,17 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 能接受「播放模式 / 音量」这两组扩展控制的当前播放器,不能就是 nil(按钮据此不显示)。
     ///
-    /// 从"只认 Apple Music"放开到"Apple Music + Spotify":Spotify 的 AppleScript
-    /// 字典里 `sound volume` 和 `shuffling` 都是可写属性,能力是有的,只是当初接 Spotify 时
-    /// 没有把这两处一并接上。QQ 音乐/网易云音乐仍然不行 —— 它们的 .app 里根本没有 .sdef。
+    /// Apple Music、Spotify、Kaset:Spotify 的 AppleScript 字典里 `sound volume` 和 `shuffling` 是可写属性,Kaset 有切换
+    /// 随机 / 循环、设音量的命令。QQ 音乐/网易云音乐不行 —— 它们的 .app 里根本没有 .sdef。
     private var extendedControlPlayer: PlaybackPlayer? {
         guard let player = currentPlayer,
               MusicPlaybackController.supportsExtendedControls(player) else { return nil }
+        return player
+    }
+
+    /// 有「喜欢」的当前播放器(Apple Music、Kaset),没有就是 nil(按钮据此不显示)。
+    private var favoritePlayer: PlaybackPlayer? {
+        guard let player = currentPlayer, MusicPlaybackController.supportsFavorite(player) else { return nil }
         return player
     }
 
@@ -583,7 +589,7 @@ final class PlaybackCoordinator: ObservableObject {
             clearExtendedControls()
             return
         }
-        let includeFavorited = isAppleMusicPlayingNow && player == .appleMusic
+        let includeFavorited = MusicPlaybackController.supportsFavorite(player)
         let favSeq = favoritedActionSeq
         let modeSeq = playbackModeActionSeq
         let volSeq = volumeActionSeq
@@ -610,19 +616,19 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
-    /// 重新读一次当前曲目的"喜欢"状态。当前在播的不是 Apple Music、或自动化权限还没拿到时
+    /// 重新读一次当前曲目的"喜欢"状态。当前在播的播放器没有「喜欢」、或 Apple Music 的自动化权限还没拿到时
     /// 置 nil(按钮据此整个不显示)。
     ///
     /// 权限用 askIfNeeded: false 检查 —— 这是个后台刷新,绝不能因为它弹出系统授权对话框。
     func refreshFavorited() {
-        guard isAppleMusicPlayingNow else {
+        guard let player = favoritePlayer else {
             if isFavorited != nil { isFavorited = nil }
             return
         }
         let seq = favoritedActionSeq
         Task.detached(priority: .utility) {
-            let value = await Self.backgroundRefreshAllowed(for: .appleMusic)
-                ? MusicPlaybackController.favoritedState() : nil
+            let value = await Self.backgroundRefreshAllowed(for: player)
+                ? MusicPlaybackController.favoritedState(for: player) : nil
             await MainActor.run { [weak self] in
                 guard let self, self.favoritedActionSeq == seq else { return }
                 guard self.isFavorited != value else { return }
@@ -787,20 +793,22 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     func toggleFavorited() {
-        guard isAppleMusicPlayingNow else { return }
+        guard let player = favoritePlayer else { return }
         let target = !(isFavorited ?? false)
         isFavorited = target
         favoritedActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
-            // 用 checkAppleMusicSafely 而不是 checkForCurrentPlayerSafely:后者在设置为
+            // Apple Music 用 checkAppleMusicSafely 而不是 checkForCurrentPlayerSafely:后者在设置为
             // "自动识别"时会直接返回 true(它假定别的播放器不需要这个权限),而这里已经确认
             // 实际在播的就是 Apple Music,必须真的查一次权限,否则下面的 AppleScript 会静默失败。
-            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
+            if player == .appleMusic,
+               await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
                 await MainActor.run { [weak self] in self?.refreshFavorited() }
                 return
             }
-            // 跟播放模式同一个道理:写被接受了就别回读,Music.app 的 getter 会滞后。
-            guard !MusicPlaybackController.setFavorited(target) else { return }
+            // 跟播放模式同一个道理:写被接受了就别回读,Music.app 的 getter 会滞后。Kaset 没登录时不理这条命令,
+            // 那时 setFavorited 回 false,照样回读纠正。
+            guard !MusicPlaybackController.setFavorited(target, for: player) else { return }
             await MainActor.run { [weak self] in self?.refreshFavorited() }
         }
     }

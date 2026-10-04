@@ -144,6 +144,39 @@ public enum KasetPlayerInfo {
         return player == reading.trackDuration
     }
 
+    /// 播放器状态里喜欢 / 随机 / 循环 / 音量这几项(`get player info` 的 `likeStatus` / `shuffling` / `repeating` /
+    /// `volume`)。某一项没有就是 nil。
+    public struct Controls: Equatable, Sendable {
+        /// 赞过(`liked`)为 true,没评价(`none`)、点了踩(`disliked`)为 false。
+        public let liked: Bool?
+        public let shuffling: Bool?
+        /// `off` / `all` / `one`。
+        public let repeating: String?
+        /// 0~100。
+        public let volume: Int?
+
+        public init(liked: Bool?, shuffling: Bool?, repeating: String?, volume: Int?) {
+            self.liked = liked
+            self.shuffling = shuffling
+            self.repeating = repeating
+            self.volume = volume
+        }
+    }
+
+    private struct ControlsPayload: Decodable {
+        let likeStatus: String?
+        let shuffling: Bool?
+        let repeating: String?
+        let volume: Int?
+    }
+
+    /// 解析 `get player info` 里那几项。不是 JSON 返回 nil。
+    public static func controls(fromJSON data: Data) -> Controls? {
+        guard let p = try? JSONDecoder().decode(ControlsPayload.self, from: data) else { return nil }
+        return Controls(liked: p.likeStatus.map { $0 == "liked" }, shuffling: p.shuffling, repeating: p.repeating,
+                        volume: p.volume)
+    }
+
     /// 夹在两个艺人中间、其实是连接词的那几项。Kaset 只认英文的 `,` `&`,界面是别的语言时连接词会被当成一个艺人。
     /// 比较前转小写。
     static let artistJoinWords: Set<String> = [

@@ -1839,10 +1839,10 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "悬浮调宽: 读不到 UI/LyricsOverlayWindowController.swift")
         }
-        // 灵动岛展开区的随机 / 循环键只在 Apple Music 在播时出现;模式与它的来源播放器必须一起赋值。
+        // 灵动岛展开区的随机 / 循环键只在随机、循环都齐的播放器(Apple Music、Kaset)在播时出现;模式与它的来源播放器必须一起赋值。
         if let notch = read("UI/NotchLyricsView.swift"), let coordinator = read("PlaybackCoordinator.swift") {
-            expectEqual(notch.contains(".map { mode, player in player == .appleMusic ? mode : nil }"), true,
-                        "灵动岛模式键: 只认读自 Apple Music 的播放模式")
+            expectEqual(notch.contains(".map { mode, player in player.map(MusicPlaybackController.supportsRepeatOne) == true ? mode : nil }"),
+                        true, "灵动岛模式键: 只认读自随机、循环都齐的播放器(Apple Music、Kaset)的播放模式")
             expectEqual(coordinator.components(separatedBy: "playbackMode = ").count - 1, 1,
                         "灵动岛模式键: playbackMode 只在 applyPlaybackMode 里赋值(跟 playbackModePlayer 一起)")
             expectEqual(coordinator.components(separatedBy: "playbackModePlayer = ").count - 1, 1,

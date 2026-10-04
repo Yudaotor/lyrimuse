@@ -99,6 +99,34 @@ func runKasetTests() {
                     "Kaset 广告: 别的播放器的广告照旧写进播放状态")
     }
 
+    // ---- 喜欢 / 随机 / 循环 / 音量 ----
+    do {
+        // 真机读数的形状(《說了再見》那一拍)。
+        let info = #"{"currentTrack":{"name":"說了再見","videoId":"Wlwk9osZ9Mc"},"duration":283,"isPaused":false,"isPlaying":true,"likeStatus":"none","muted":false,"position":120.7,"repeating":"off","shuffling":false,"volume":100}"#
+        expectEqual(K.controls(fromJSON: Data(info.utf8)), K.Controls(liked: false, shuffling: false, repeating: "off", volume: 100),
+                    "Kaset 控件: 喜欢 / 随机 / 循环 / 音量解出来")
+        expectEqual(K.controls(fromJSON: Data(#"{"likeStatus":"liked","shuffling":true,"repeating":"one","volume":35}"#.utf8)),
+                    K.Controls(liked: true, shuffling: true, repeating: "one", volume: 35), "Kaset 控件: 赞过")
+        expectEqual(K.controls(fromJSON: Data(#"{"likeStatus":"disliked"}"#.utf8))?.liked, false, "Kaset 控件: 点了踩不算喜欢")
+        expectEqual(K.controls(fromJSON: Data("not json".utf8)) == nil, true, "Kaset 控件: 不是 JSON")
+        typealias MPC = MusicPlaybackController
+        expectEqual(MPC.kasetPlaybackMode(shuffling: false, repeating: "off"), .list, "Kaset 模式: 都关是列表")
+        expectEqual(MPC.kasetPlaybackMode(shuffling: true, repeating: "off"), .shuffle, "Kaset 模式: 随机")
+        expectEqual(MPC.kasetPlaybackMode(shuffling: false, repeating: "all"), .repeatAll, "Kaset 模式: 列表循环")
+        expectEqual(MPC.kasetPlaybackMode(shuffling: true, repeating: "one"), .repeatOne, "Kaset 模式: 单曲循环优先于随机")
+        expectEqual(MPC.kasetPlaybackMode(shuffling: true, repeating: "all"), .shuffle, "Kaset 模式: 随机优先于列表循环(同 Apple Music)")
+        expectEqual(MPC.kasetPlaybackMode(shuffling: nil, repeating: "off") == nil, true, "Kaset 模式: 读不到就不显示")
+        let toOne = MPC.kasetPlaybackModeScript(for: .repeatOne)
+        expectEqual(toOne.contains("if (Boolean(info.shuffling) !== false) K.toggleShuffle();")
+                        && toOne.contains(#"const target = "one";"#) && toOne.contains("K.cycleRepeat();"), true,
+                    "Kaset 模式脚本: 单曲循环 = 关随机、循环按到 one")
+        let toShuffle = MPC.kasetPlaybackModeScript(for: .shuffle)
+        expectEqual(toShuffle.contains("if (Boolean(info.shuffling) !== true) K.toggleShuffle();")
+                        && toShuffle.contains(#"const target = info.repeating === "one" ? "off" : info.repeating;"#), true,
+                    "Kaset 模式脚本: 随机 = 开随机、只关单曲循环(列表循环留着)")
+        expectEqual(MPC.kasetPlaybackModeScript(for: .repeatAll).contains(#"const target = "all";"#), true, "Kaset 模式脚本: 列表循环")
+    }
+
     // ---- 封面:Kaset 报的地址,只要方形专辑图,换成大图那一档 ----
     do {
         expectEqual(K.coverArtworkURL("https://yt3.googleusercontent.com/D10mQ1XvIKZo-fV3N-MCa8O=w544-h544-l90-rj")?.absoluteString,
@@ -428,6 +456,11 @@ func runKasetTests() {
                         && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
                             "? MediaControlClient.kasetArtwork(forTrackKey: expectedKey) : MediaControlClient.fetchArtwork()"),
                     true, "Kaset 契约: 封面用它自己报的那张(队列那张优先),下载记对外请求,取图时按播放器分流")
+        let controller = src("LyrimuseCore/Local/MusicPlaybackController.swift")
+        expectEqual(controller.contains(#"if (liked() !== \(value)) K.likeTrack();"#)
+                        && controller.contains(#"return runKasetJXACapturing(kasetPlaybackModeScript(for: mode)) == "ok""#)
+                        && controller.contains(#"K.setVolume(\(v));"#), true,
+                    "Kaset 契约: 喜欢先看再按、模式按脚本切、音量走 set volume")
         expectEqual(client.contains("if let id = raw.videoID, !id.isEmpty, first?.videoID != id {")
                         && client.contains("first = queuedFirstReport(videoID: id) ?? first"), true,
                     "Kaset 契约: 新歌第一拍按队列补开播那份")

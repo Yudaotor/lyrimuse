@@ -336,16 +336,102 @@ public enum MusicPlaybackController {
 
     /// 这个播放器支不支持「播放模式 / 音量」这两组扩展控制。
     ///
-    /// Apple Music 和 Spotify 都有可写的 AppleScript 属性;QQ 音乐/网易云音乐两个 .app 里
-    /// 根本没有 .sdef(不可脚本化),而 media-control 走的系统级 MediaRemote 只有播放控制、
+    /// Apple Music 和 Spotify 有可写的 AppleScript 属性,Kaset 有切换随机 / 循环、设音量的命令;QQ 音乐/网易云音乐两个
+    /// .app 里根本没有 .sdef(不可脚本化),而 media-control 走的系统级 MediaRemote 只有播放控制、
     /// 没有音量和模式的概念 —— 对它们只能不显示这些控件。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .spotify
+        player == .appleMusic || player == .spotify || player == .kaset
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.next(allowsRepeatOne:)。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic
+        player == .appleMusic || player == .kaset
+    }
+
+    /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)。
+    public static func supportsFavorite(_ player: PlaybackPlayer) -> Bool {
+        player == .appleMusic || player == .kaset
+    }
+
+    /// 按播放器读当前曲目的「喜欢」状态;不支持、读不到返回 nil。会阻塞到子进程结束,不要在主线程调用。
+    public static func favoritedState(for player: PlaybackPlayer) -> Bool? {
+        switch player {
+        case .appleMusic: return favoritedState()
+        case .kaset: return kasetControls()?.liked
+        default: return nil
+        }
+    }
+
+    /// 按播放器设「喜欢」,返回写成没有。Kaset 的 `like track` 是切换(赞过再按就取消,点了踩的按了变成赞),先看现在
+    /// 是不是赞过再决定按不按;它没登录时不理这条命令,所以按完再读一次,不是要的样子就算没写成(调用方据此回读纠正)。
+    @discardableResult
+    public static func setFavorited(_ value: Bool, for player: PlaybackPlayer) -> Bool {
+        switch player {
+        case .appleMusic:
+            return setFavorited(value)
+        case .kaset:
+            let body = """
+                    const liked = () => JSON.parse(K.getPlayerInfo()).likeStatus === "liked";
+                    if (liked() !== \(value)) K.likeTrack();
+                    return liked() === \(value) ? "ok" : "no";
+                """
+            return runKasetJXACapturing(body) == "ok"
+        default:
+            return false
+        }
+    }
+
+    /// Kaset 的读写走 JXA(`osascript -l JavaScript`):它的状态是 `get player info` 回的一段 JSON,AppleScript 里解析不了。
+    /// `body` 是函数体,里面 `K` 就是 Kaset;没在跑时回空串,不会把它拉起来。失败(非零退出)返回 nil。会阻塞到子进程结束。
+    private static func runKasetJXACapturing(_ body: String) -> String? {
+        let script = """
+            (() => {
+                const K = Application("Kaset");
+                if (!K.running()) return "";
+            \(body)
+            })()
+            """
+        guard let r = ProcessRunner.run("/usr/bin/osascript", ["-l", "JavaScript", "-e", script], timeout: appleScriptTimeout),
+              r.succeeded
+        else { return nil }
+        return r.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Kaset 此刻的喜欢 / 随机 / 循环 / 音量(`KasetPlayerInfo.controls`)。读不出来返回 nil。
+    private static func kasetControls() -> KasetPlayerInfo.Controls? {
+        guard let out = runKasetJXACapturing("        return K.getPlayerInfo();"), !out.isEmpty else { return nil }
+        return KasetPlayerInfo.controls(fromJSON: Data(out.utf8))
+    }
+
+    /// Kaset 的随机 + 循环换成档位,跟 Apple Music 同一套优先级:单曲循环 > 随机 > 列表循环 > 列表。纯函数,selftest 覆盖。
+    public static func kasetPlaybackMode(shuffling: Bool?, repeating: String?) -> MusicPlaybackMode? {
+        guard let shuffling, let repeating else { return nil }
+        if repeating == "one" { return .repeatOne }
+        if shuffling { return .shuffle }
+        if repeating == "all" { return .repeatAll }
+        return .list
+    }
+
+    /// 切到某一档的 JXA 函数体。Kaset 只有「切换随机」和「循环换下一档(关 → 全部 → 单曲 → 关)」两条命令,先读现在是
+    /// 什么、再按需要的次数按。语义跟 Apple Music 那一支一样:随机和循环互斥,「列表」「随机」只把单曲循环关掉,列表
+    /// 循环开着就留着。按完再读一次,到了要的那一档才回 "ok"。纯函数,selftest 核对生成的脚本。
+    public static func kasetPlaybackModeScript(for mode: MusicPlaybackMode) -> String {
+        let shuffle = mode == .shuffle
+        let repeatTarget: String
+        switch mode {
+        case .list, .shuffle: repeatTarget = #"info.repeating === "one" ? "off" : info.repeating"#
+        case .repeatOne: repeatTarget = #""one""#
+        case .repeatAll: repeatTarget = #""all""#
+        }
+        return """
+                const read = () => JSON.parse(K.getPlayerInfo());
+                let info = read();
+                if (Boolean(info.shuffling) !== \(shuffle)) K.toggleShuffle();
+                const target = \(repeatTarget);
+                for (let i = 0; i < 3 && read().repeating !== target; i++) K.cycleRepeat();
+                info = read();
+                return Boolean(info.shuffling) === \(shuffle) && info.repeating === target ? "ok" : "no";
+            """
     }
 
     /// Spotify 的脚本前面都要垫这一句。
@@ -448,11 +534,16 @@ public enum MusicPlaybackController {
                     return "nil|" & modePart & ";" & gatePart & "|" & volPart
                 end tell
                 """#
+        case .kaset:
+            guard let c = kasetControls() else { return .empty }
+            return ExtendedControlsState(favorited: includeFavorited ? c.liked : nil,
+                                         mode: kasetPlaybackMode(shuffling: c.shuffling, repeating: c.repeating),
+                                         volume: c.volume)
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
         // 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
         // shared/players.json:新播放器默认落到这里,跟 supportsExtendedControls 的口径
-        // 一致(`== .appleMusic || == .spotify`)。真要给某个新播放器支持,在上面显式加一个 case。
+        // 一致(Apple Music、Spotify、Kaset)。真要给某个新播放器支持,在上面显式加一个 case。
         default:
             return .empty
         }
@@ -535,6 +626,9 @@ public enum MusicPlaybackController {
             // 不能对同一状态给出不同答案。空串(Spotify 没在跑)第一截是 "" → nil。
             guard let out = runAppleScriptCapturing(spotifyRunningGuard + spotifyModePartScript) else { return nil }
             return spotifyPlaybackMode(fromModePart: out.trimmingCharacters(in: .whitespacesAndNewlines))
+        case .kaset:
+            guard let c = kasetControls() else { return nil }
+            return kasetPlaybackMode(shuffling: c.shuffling, repeating: c.repeating)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -606,6 +700,8 @@ public enum MusicPlaybackController {
                     + #"tell application "Spotify" to set shuffling to "#
                     + (mode == .shuffle ? "true" : "false")
             ) != nil
+        case .kaset:
+            return runKasetJXACapturing(kasetPlaybackModeScript(for: mode)) == "ok"
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
@@ -627,6 +723,8 @@ public enum MusicPlaybackController {
             // Spotify 的 `sound volume` 也是 0~100 的整数,跟 Music.app 同一个量纲,
             // 上层的滑杆不需要换算。
             script = spotifyRunningGuard + #"tell application "Spotify" to get sound volume"#
+        case .kaset:
+            return kasetControls()?.volume
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -646,6 +744,8 @@ public enum MusicPlaybackController {
         case .spotify:
             return runAppleScriptCapturing(
                 spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
+        case .kaset:
+            return runKasetJXACapturing("        K.setVolume(\(v));\n        return \"ok\";") == "ok"
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
