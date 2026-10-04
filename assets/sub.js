@@ -94,6 +94,14 @@
     document.querySelectorAll('.doc-sec').forEach((s) => io.observe(s));
   }
 
+  // A link to one version (#v1.8.0) opens that version on the changelog page.
+  const openFromHash = () => {
+    const el = location.hash.length > 1 && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (el && el.tagName === 'DETAILS' && !el.open) { el.open = true; el.scrollIntoView(); }
+  };
+  addEventListener('hashchange', openFromHash);
+  openFromHash();
+
   // A rim of light on the final card that follows the pointer.
   document.querySelectorAll('.final-card').forEach((card) => {
     card.addEventListener('pointermove', (e) => {

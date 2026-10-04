@@ -3,7 +3,7 @@
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/"/>
@@ -11,7 +11,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/zh/</loc>
-    <lastmod>2026-10-01</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/"/>
@@ -19,15 +19,39 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/zh-Hant/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/"/>
   </url>
   <url>
+    <loc>https://yudaotor.github.io/lyrimuse/changelog/</loc>
+    <lastmod>2026-10-05</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/changelog/"/>
+  </url>
+  <url>
+    <loc>https://yudaotor.github.io/lyrimuse/zh/changelog/</loc>
+    <lastmod>2026-10-05</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/changelog/"/>
+  </url>
+  <url>
+    <loc>https://yudaotor.github.io/lyrimuse/zh-Hant/changelog/</loc>
+    <lastmod>2026-10-05</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/changelog/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/changelog/"/>
+  </url>
+  <url>
     <loc>https://yudaotor.github.io/lyrimuse/compare/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/compare/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/compare/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/compare/"/>
@@ -35,7 +59,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/zh/compare/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/compare/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/compare/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/compare/"/>
@@ -43,7 +67,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/zh-Hant/compare/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/compare/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/compare/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/compare/"/>
@@ -51,7 +75,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/privacy/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/privacy/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/privacy/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/privacy/"/>
@@ -59,7 +83,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/zh/privacy/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/privacy/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/privacy/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/privacy/"/>
@@ -67,7 +91,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/zh-Hant/privacy/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/privacy/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/privacy/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/privacy/"/>
@@ -75,7 +99,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/terms/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/terms/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/terms/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/terms/"/>
@@ -83,7 +107,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/zh/terms/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/terms/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/terms/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/terms/"/>
@@ -91,7 +115,7 @@
   </url>
   <url>
     <loc>https://yudaotor.github.io/lyrimuse/zh-Hant/terms/</loc>
-    <lastmod>2026-10-04</lastmod>
+    <lastmod>2026-10-05</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/terms/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/terms/"/>
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/terms/"/>

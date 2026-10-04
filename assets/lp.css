@@ -981,6 +981,33 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 
 /* ---------- faq ---------- */
 /* a way to ask on the left (it stays put while the list scrolls), the questions on the right */
+/* ---------- latest update, before the FAQ (generated from CHANGELOG.md) ---------- */
+.news { max-width: 1168px; margin: 0 auto; padding: 130px 24px 0; }
+.news-in {
+  display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr) auto; gap: 18px 40px; align-items: center;
+  padding: 28px 32px; border-radius: var(--radius); background: var(--card);
+  box-shadow: 0 0 0 1px var(--line), 0 30px 60px -44px rgba(60, 20, 60, .35);
+}
+.news-k {
+  width: fit-content; margin: 0 0 6px; font-size: 14px; font-weight: 600; letter-spacing: .01em;
+  background: linear-gradient(90deg, #e5486f, #b0479f 60%, #8d4fc7); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.news-meta h2 { margin: 0; font-size: 34px; line-height: 1.1; letter-spacing: -.03em; font-weight: 700; font-variant-numeric: tabular-nums; }
+.news-meta h2 a:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+.news-meta time { display: block; margin-top: 6px; font-size: 13.5px; color: var(--ink-3); }
+.news-list { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; font-size: 15.5px; line-height: 1.6; color: var(--ink-2); }
+.news-all { justify-self: end; white-space: nowrap; font-size: 15px; font-weight: 600; color: var(--brand); }
+.news-all:hover { text-decoration: underline; text-underline-offset: 3px; }
+.news + .faq-sec { padding-top: 110px; }
+@media (max-width: 900px) {
+  .news { padding-top: 96px; }
+  .news-in { grid-template-columns: minmax(0, 1fr); padding: 24px 22px; }
+  .news-all { justify-self: start; }
+}
+@media (prefers-color-scheme: dark) {
+  .news-k { background-image: linear-gradient(90deg, var(--g1), var(--g2) 60%, var(--g3)); }
+  .news-in { box-shadow: 0 0 0 1px var(--line), 0 30px 60px -40px rgba(0, 0, 0, .9); }
+}
 .faq-sec { padding: 150px 24px 40px; }
 .faq-wrap { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 56px; align-items: start; }
 .faq-side { position: sticky; top: 112px; }
