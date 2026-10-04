@@ -1784,6 +1784,27 @@ func runLastfmTests() {
         expectEqual(A.derive([e("Michael Jackson", "Thriller", dur: 357.75, lyrics: eng1),
                               e("Michael Jackson", "驚悚", dur: 357.75, lyrics: eng2)]), [:],
                     "E2: 时长相同但歌词是两首歌 → 不采纳(实测 Keep the Faith / Thriller 都是 5:57)")
+        // 正文只在真要比对时才剥:没有可比写法对的条目一份都不剥,混进不相干的条目结果不变
+        var stripped = 0
+        let countingBody: (String) -> String = { stripped += 1; return A.lyricsBody($0) }
+        let lonely = (0..<40).map { e("歌手\($0)", "Song \($0)", dur: 200 + Double($0), lyrics: lrcHans) }
+        expectEqual(A.derive(lonely, lyricsBody: countingBody), [:], "E2: 每个歌手只有一种写法 → 不推")
+        expectEqual(stripped, 0, "E2: 没有可比的写法对 → 一份正文都不剥")
+        stripped = 0
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586666, lyrics: lrcHans),
+                              e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant),
+                              e("方大同", "公园", dur: 300, lyrics: other)] + lonely, lyricsBody: countingBody),
+                    ["方大同": ["blackhole": "黑洞里"]], "E2: 混进不相干的条目,结果不变")
+        expectEqual(stripped, 2, "E2: 只剥进入比对的那两条(时长对不上的「公园」、别的歌手都不剥)")
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, lyrics: "[00:01.00]作曲 : 方大同\n[00:02.00]啦啦"),
+                              e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant)]), [:],
+                    "E2: 一侧正文剥完不够长 → 不采纳")
+        // 正文不够长的那条不进分类:半角「ｱｲ」不算中文名、折叠后却跟全角「アイ」同一个键,两者共用并查集里的一个点。
+        // 不剔掉的话,正文太短的「アイ」会被并进「ｱｲ ↔ 爱」那一类、按字典序当上代表
+        expectEqual(A.derive([e("某歌手", "ｱｲ", dur: 213.586, lyrics: lrcHans),
+                              e("某歌手", "爱", dur: 213.586, lyrics: lrcHant),
+                              e("某歌手", "アイ", dur: 213.586, lyrics: "[00:01.00]啦啦")]),
+                    ["某歌手": ["アイ": "爱"]], "E2: 跟别人共用折叠键、正文不够长的写法不参与选代表")
     }
 
     // ---- 歌手写法归并的通用推断(LocalArtistAliases，取代手写表 romanizedArtistAliases) ----

@@ -206,6 +206,81 @@ func runCoverArtTests() {
         expectEqual(index.values.contains("https://cover/no-album"), false, "专辑封面兜底: 没有专辑名的条目不进索引")
     }
 
+    // ---- 两份封面索引的查找键:只跟缓存 key 有关,App 跨缓存版本记住 ----
+    do {
+        typealias R = EnrichCacheReader
+        expectEqual(R.titleCoverKeys("英雄联盟/Sara Skinner|Bring Home The Glory|Bring Home The Glory"),
+                    R.CoverIndexKeys(exact: R.artistTitleKey(artist: "英雄联盟/Sara Skinner", title: "Bring Home The Glory"),
+                                     alias: R.artistTitleKey(artist: "英雄联盟", title: "Bring Home The Glory")),
+                    "封面索引键: 合唱写法另带一个主歌手别名键")
+        expectEqual(R.titleCoverKeys("Imagine Dragons|Warriors|Warriors")?.alias == nil, true, "封面索引键: 单人写法没有别名键")
+        expectEqual(R.titleCoverKeys("不是三段") == nil, true, "封面索引键: 不是三段的 key 不进索引")
+        expectEqual(R.albumCoverKeys("蔡徐坤 & 某某|Jasmine|KUN"),
+                    R.CoverIndexKeys(exact: R.albumCoverKey(artist: "蔡徐坤 & 某某", album: "KUN"),
+                                     alias: R.albumCoverKey(artist: "蔡徐坤", album: "KUN")),
+                    "专辑封面索引键: 合唱写法另带一个主歌手别名键")
+        expectEqual(R.albumCoverKeys("方大同|昙花|") == nil, true, "专辑封面索引键: 没有专辑名的不进索引")
+
+        let covers = [
+            "英雄联盟|RISE|The Music of League of Legends": "https://cover/exact",
+            "英雄联盟 & Mako|RISE|RISE": "https://cover/collab",
+            "Edouard Brenneisen & 英雄联盟|Jhin, the Virtuoso|Jhin, the Virtuoso": "https://cover/jhin",
+            "K/DA|POP/STARS|POP/STARS": "https://cover/kda",
+        ]
+        var titleMemo: [String: R.CoverIndexKeys] = [:]
+        var derived = 0
+        let memoTitleKeys: (String) -> R.CoverIndexKeys? = { key in
+            if let v = titleMemo[key] { return v }
+            derived += 1
+            guard let v = R.titleCoverKeys(key) else { return nil }
+            titleMemo[key] = v
+            return v
+        }
+        expectEqual(R.coverIndexByArtistTitle(covers, keys: memoTitleKeys), R.coverIndexByArtistTitle(covers),
+                    "封面索引: 带记忆建出来跟现算一样")
+        let afterFirst = derived
+        expectEqual(afterFirst, covers.count, "封面索引: 第一次建时每条 key 都经传进来的函数算一次")
+        _ = R.coverIndexByArtistTitle(covers, keys: memoTitleKeys)
+        expectEqual(derived, afterFirst, "封面索引: 再建一次全部命中记忆,不再现算")
+
+        let rows: [(key: String, cover: String, coverAlbum: String?)] = [
+            (key: "陈柏宇|你瞒我瞒|Quinquennium (新曲+精选)", cover: "https://cover/unverified", coverAlbum: nil),
+            (key: "陈柏宇|一事无成|Quinquennium (新曲+精选)", cover: "https://cover/verified", coverAlbum: "Quinquennium (新曲+精选)"),
+            (key: "蔡徐坤 & 某某|Jasmine|KUN", cover: "https://cover/kun", coverAlbum: "KUN"),
+        ]
+        var albumMemo: [String: R.CoverIndexKeys] = [:]
+        var looseMemo: [String: String] = [:]
+        var looseDerived = 0
+        let memoAlbumKeys: (String) -> R.CoverIndexKeys? = { key in
+            if let v = albumMemo[key] { return v }
+            guard let v = R.albumCoverKeys(key) else { return nil }
+            albumMemo[key] = v
+            return v
+        }
+        let memoLoose: (String) -> String = { s in
+            if let v = looseMemo[s] { return v }
+            looseDerived += 1
+            let v = EnrichCacheKeys.looseKey(s)
+            looseMemo[s] = v
+            return v
+        }
+        expectEqual(R.albumCoverIndex(rows, keys: memoAlbumKeys, looseKey: memoLoose), R.albumCoverIndex(rows),
+                    "专辑封面索引: 带记忆建出来跟现算一样(含核实归属那一条)")
+        let looseAfterFirst = looseDerived
+        expectEqual(looseAfterFirst > 0, true, "专辑封面索引: 核实归属用的是传进来的 looseKey")
+        _ = R.albumCoverIndex(rows, keys: memoAlbumKeys, looseKey: memoLoose)
+        expectEqual(looseDerived, looseAfterFirst, "专辑封面索引: 再建一次核实归属也全部命中记忆")
+
+        // 契约:App 建这两份索引时传的是带记忆的那几份(每写一次盘就整份重建,现算要在主线程上做一遍繁简转换)
+        let reader = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(reader.contains("Self.coverIndexByArtistTitle(covers, keys: memoizedTitleCoverKeys)"), true,
+                    "封面索引(契约): 歌名索引带记忆建")
+        expectEqual(reader.contains("Self.albumCoverIndex(rows, keys: memoizedAlbumCoverKeys, looseKey: memoizedNameLooseKey)"), true,
+                    "封面索引(契约): 专辑索引带记忆建")
+    }
+
     // ---- iTunes Search 限流退避(口径同引擎 apple.go noteITunesSearchStatus) ----
     do {
         typealias B = ITunesSearchBackoff

@@ -601,6 +601,31 @@ public enum EnrichCacheReader {
         return v
     }
 
+    /// 两份封面索引(coverByArtistTitle / albumCoverURL)里每条缓存 key 派生的查找键,跨缓存版本记住:派生要做
+    /// 繁简转换和合唱 credit 归并,而缓存每写一次盘两份索引就整份重建一次,全在主线程。修剪口径同 looseKeyMemo。
+    private static var titleCoverKeyMemo: [String: CoverIndexKeys] = [:]
+    private static var albumCoverKeyMemo: [String: CoverIndexKeys] = [:]
+
+    private static func memoizedTitleCoverKeys(_ key: String) -> CoverIndexKeys? {
+        if let v = titleCoverKeyMemo[key] { return v }
+        guard let v = titleCoverKeys(key) else { return nil }
+        titleCoverKeyMemo[key] = v
+        return v
+    }
+
+    private static func memoizedAlbumCoverKeys(_ key: String) -> CoverIndexKeys? {
+        if let v = albumCoverKeyMemo[key] { return v }
+        guard let v = albumCoverKeys(key) else { return nil }
+        albumCoverKeyMemo[key] = v
+        return v
+    }
+
+    /// 缓存里已经没有的 key 留在记忆表里只占内存:涨到两倍多就按这一版重建一次(同 looseIndex)。
+    private static func pruneCoverKeyMemos(_ all: [String: EnrichCacheEntry]) {
+        if titleCoverKeyMemo.count > all.count * 2 + 64 { titleCoverKeyMemo = titleCoverKeyMemo.filter { all[$0.key] != nil } }
+        if albumCoverKeyMemo.count > all.count * 2 + 64 { albumCoverKeyMemo = albumCoverKeyMemo.filter { all[$0.key] != nil } }
+    }
+
     /// 引擎 `betterEnrichEntry` 的镜像,两边必须同序:a 是否比 b 更该当这一组的代表。
     public static func betterEntry(_ a: EnrichCacheEntry, _ b: EnrichCacheEntry, _ aKey: String, _ bKey: String) -> Bool {
         let aManual = a.manualLyrics ?? false, bManual = b.manualLyrics ?? false
@@ -696,11 +721,13 @@ public enum EnrichCacheReader {
     /// cover_album 与请求的专辑是否算同一张。宽松口径与 looseKey 同源(忽略空格/大小写/
     /// 繁简/合credit分隔符)——两侧字符串一个来自引擎落盘、一个来自 Last.fm 行数据,
     /// 繁简/空格写法系统性不一致(实测行侧「陳奕迅」缓存侧「陈奕迅」)。纯函数,selftest 覆盖。
-    public nonisolated static func coverAlbumVerified(coverAlbum: String?, requestedAlbum: String) -> Bool {
+    /// `looseKey` 默认就是 EnrichCacheKeys.looseKey;建专辑封面索引时传带记忆的那份(见 albumCoverURL)。
+    public nonisolated static func coverAlbumVerified(coverAlbum: String?, requestedAlbum: String,
+                                                     looseKey: (String) -> String = { EnrichCacheKeys.looseKey($0) }) -> Bool {
         guard let ca = coverAlbum?.trimmingCharacters(in: .whitespaces), !ca.isEmpty else { return false }
         let ra = requestedAlbum.trimmingCharacters(in: .whitespaces)
         guard !ra.isEmpty else { return false }
-        return EnrichCacheKeys.looseKey(ca) == EnrichCacheKeys.looseKey(ra)
+        return looseKey(ca) == looseKey(ra)
     }
 
     /// 这首歌在本机缓存里有没有封面(引擎从网易云/QQ/Apple 解析出来的那张)。
@@ -865,7 +892,8 @@ public enum EnrichCacheReader {
             guard let cover = entry.coverURL, !cover.isEmpty else { continue }
             covers[key] = cover
         }
-        let index = Self.coverIndexByArtistTitle(covers)
+        let index = Self.coverIndexByArtistTitle(covers, keys: memoizedTitleCoverKeys)
+        pruneCoverKeyMemos(cachedEntries ?? [:])
         cachedCoverIndex = index
         return index
     }
@@ -882,7 +910,8 @@ public enum EnrichCacheReader {
                 guard let cover = entry.coverURL, !cover.isEmpty else { return nil }
                 return (key, cover, entry.coverAlbum)
             }
-            index = Self.albumCoverIndex(rows)
+            index = Self.albumCoverIndex(rows, keys: memoizedAlbumCoverKeys, looseKey: memoizedNameLooseKey)
+            pruneCoverKeyMemos(cachedEntries ?? [:])
             cachedAlbumCoverIndex = index
         }
         let hit = index[albumCoverKey(artist: artist, album: album)]
@@ -931,22 +960,23 @@ public enum EnrichCacheReader {
     /// 同一张专辑有好几首歌时,优先 cover_album 也对得上这张专辑的那条(引擎核实过这张图就是这张专辑的,
     /// 见 albumVerifiedCoverURL);都没核实过才取 key 排序最前的那条,不随字典遍历顺序变。合唱 credit 另外
     /// 按主歌手进一个别名键,只填精确键没占的位置。
-    public nonisolated static func albumCoverIndex(_ rows: [(key: String, cover: String, coverAlbum: String?)]) -> [String: String] {
+    ///
+    /// `keys` / `looseKey` 默认现算;App 里传带记忆的那两份(见 albumCoverURL),结果一样。
+    public nonisolated static func albumCoverIndex(_ rows: [(key: String, cover: String, coverAlbum: String?)],
+                                                   keys: (String) -> CoverIndexKeys? = { albumCoverKeys($0) },
+                                                   looseKey: (String) -> String = { EnrichCacheKeys.looseKey($0) }) -> [String: String] {
         var verified: [String: String] = [:]
         var loose: [String: String] = [:]
         var aliases: [String: String] = [:]
         for row in rows.sorted(by: { $0.key < $1.key }) {
             let parts = row.key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
-            guard parts.count == 3, !parts[2].isEmpty else { continue }
-            let artist = String(parts[0]), album = String(parts[2])
-            let exact = albumCoverKey(artist: artist, album: album)
-            if coverAlbumVerified(coverAlbum: row.coverAlbum, requestedAlbum: album) {
-                if verified[exact] == nil { verified[exact] = row.cover }
-            } else if loose[exact] == nil {
-                loose[exact] = row.cover
+            guard parts.count == 3, !parts[2].isEmpty, let k = keys(row.key) else { continue }
+            if coverAlbumVerified(coverAlbum: row.coverAlbum, requestedAlbum: String(parts[2]), looseKey: looseKey) {
+                if verified[k.exact] == nil { verified[k.exact] = row.cover }
+            } else if loose[k.exact] == nil {
+                loose[k.exact] = row.cover
             }
-            let alias = albumCoverKey(artist: ArtistCredit.mergeArtist(artist), album: album)
-            if alias != exact, aliases[alias] == nil { aliases[alias] = row.cover }
+            if let alias = k.alias, aliases[alias] == nil { aliases[alias] = row.cover }
         }
         var index = loose.merging(verified) { _, v in v }
         for (key, cover) in aliases where index[key] == nil { index[key] = cover }
@@ -962,21 +992,51 @@ public enum EnrichCacheReader {
     /// 按 key 排序遍历:同一首歌出现在多张专辑里时"先到先得"(都是这首歌的封面,选哪张都不
     /// 算错),但 Dictionary 的遍历顺序每次进程启动都不一样 —— 不定序的话同一份缓存在两次
     /// 启动里可能给出不同的图,是个查起来很费劲的"偶发不一致"。
-    public nonisolated static func coverIndexByArtistTitle(_ covers: [String: String]) -> [String: String] {
+    ///
+    /// `keys` 默认现算;App 里传带记忆的那份(见 coverByArtistTitle),结果一样。
+    public nonisolated static func coverIndexByArtistTitle(_ covers: [String: String],
+                                                          keys: (String) -> CoverIndexKeys? = { titleCoverKeys($0) }) -> [String: String] {
         var index: [String: String] = [:]
         var aliases: [String: String] = [:]
         for key in covers.keys.sorted() {
-            guard let cover = covers[key], !cover.isEmpty else { continue }
-            let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
-            guard parts.count == 3 else { continue }
-            let artist = String(parts[0]), title = String(parts[1])
-            let exact = artistTitleKey(artist: artist, title: title)
-            if index[exact] == nil { index[exact] = cover }
-            let alias = artistTitleKey(artist: ArtistCredit.mergeArtist(artist), title: title)
-            if alias != exact, aliases[alias] == nil { aliases[alias] = cover }
+            guard let cover = covers[key], !cover.isEmpty, let k = keys(key) else { continue }
+            if index[k.exact] == nil { index[k.exact] = cover }
+            if let alias = k.alias, aliases[alias] == nil { aliases[alias] = cover }
         }
         for (key, cover) in aliases where index[key] == nil { index[key] = cover }
         return index
+    }
+
+    /// 一条缓存 key 在封面索引里的查找键:歌手原样写法的精确键,以及合唱 credit 归并到主歌手之后的别名键
+    /// (跟精确键相同时为 nil)。只跟 key 本身有关。
+    public struct CoverIndexKeys: Equatable, Sendable {
+        public let exact: String
+        public let alias: String?
+
+        public init(exact: String, alias: String?) {
+            self.exact = exact
+            self.alias = alias
+        }
+    }
+
+    /// 「歌手 + 歌名」封面索引里一条缓存 key 的查找键;key 不是三段时为 nil。纯函数,selftest 覆盖。
+    public nonisolated static func titleCoverKeys(_ cacheKey: String) -> CoverIndexKeys? {
+        let parts = cacheKey.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3 else { return nil }
+        let artist = String(parts[0]), title = String(parts[1])
+        let exact = artistTitleKey(artist: artist, title: title)
+        let alias = artistTitleKey(artist: ArtistCredit.mergeArtist(artist), title: title)
+        return CoverIndexKeys(exact: exact, alias: alias == exact ? nil : alias)
+    }
+
+    /// 「歌手 + 专辑」封面索引里一条缓存 key 的查找键;key 不是三段、或专辑为空时为 nil。纯函数,selftest 覆盖。
+    public nonisolated static func albumCoverKeys(_ cacheKey: String) -> CoverIndexKeys? {
+        let parts = cacheKey.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3, !parts[2].isEmpty else { return nil }
+        let artist = String(parts[0]), album = String(parts[2])
+        let exact = albumCoverKey(artist: artist, album: album)
+        let alias = albumCoverKey(artist: ArtistCredit.mergeArtist(artist), album: album)
+        return CoverIndexKeys(exact: exact, alias: alias == exact ? nil : alias)
     }
 
     /// 本机推断的两张别名表:歌手写法归并(LocalArtistAliases.derive,证据 = 引擎的

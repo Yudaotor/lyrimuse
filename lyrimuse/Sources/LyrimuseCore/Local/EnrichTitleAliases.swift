@@ -249,14 +249,19 @@ public enum EnrichTitleAliases {
     /// 推别名表。结构同旧静态表:`canonicalArtistKey → foldTitle(英文歌名) → 中文歌名原始写法`。
     /// - Parameter artistKey: 歌手分桶用的键函数。默认走 `PlayCountFold.canonicalArtistKey`(读全局的本机
     ///   歌手别名表);EnrichCacheReader 同一轮刚推完歌手表、还没灌进全局时,把基于新表的键函数传进来。
+    /// - Parameter lyricsBody: 剥歌词正文的函数,默认 `lyricsBody(_:)`;selftest 传计数版,核对只给真要比对的那几条剥。
+    ///
+    /// 歌词正文只在 E2 真要比一对写法时才剥(同一歌手、跨脚本或单字差异、时长接近):每剥一份要逐行正则 + 繁简
+    /// 转换,全库九千多条都剥一遍是几秒 CPU,而真正进入比对的只有极少数。别改回收集条目时就剥。
     public static func derive(_ entries: [Entry],
-                              artistKey: (String) -> String = { PlayCountFold.canonicalArtistKey($0) }) -> [String: [String: String]] {
+                              artistKey: (String) -> String = { PlayCountFold.canonicalArtistKey($0) },
+                              lyricsBody: (String) -> String = { EnrichTitleAliases.lyricsBody($0) }) -> [String: [String: String]] {
         // 同一歌手名下,按折叠键去重的条目(原始写法取字典序最小),两侧分开放
         struct Item {
             var title: String
             var count = 0                     // 本机条目数(E2 选代表用)
             var durations: [Double] = []
-            var lyricsBodies: [String] = []   // 可信的歌词正文(同一写法在几张专辑下的条目都收)
+            var trustedLyrics: [String] = []  // 可信的歌词原文(同一写法在几张专辑下的条目都收),正文到比对时才剥
         }
         struct Bucket { var han: [String: Item] = [:]; var nonHan: [String: Item] = [:] }
         var buckets: [String: Bucket] = [:]
@@ -264,9 +269,10 @@ public enum EnrichTitleAliases {
         struct IDGroup { var han: [String: String] = [:]; var nonHan: [String: String] = [:]
                          var hanDur: [Double] = []; var nonHanDur: [Double] = [] }
         var idGroups: [String: [String: IDGroup]] = [:]
-        // E2 的参与条件:有时长、有可信歌词、折叠后不带版本尾缀
+        // E2 的参与条件:有时长、有可信歌词、折叠后不带版本尾缀。歌词正文够不够长(lyricsMinTokens)到比对时才知道,
+        // 不够长的那条照样排进来,但它连不上边,分类时也剔掉(见下)。
         func eligibleForE2(_ folded: String, _ item: Item) -> Bool {
-            !item.durations.isEmpty && !item.lyricsBodies.isEmpty
+            !item.durations.isEmpty && !item.trustedLyrics.isEmpty
                 && PlayCountFold.foldTitle(coreTitle(item.title)) == folded
         }
 
@@ -283,10 +289,7 @@ public enum EnrichTitleAliases {
             item.count += 1
             if title < item.title { item.title = title }
             if let d = e.durationSecs, d > 0 { item.durations.append(d) }
-            if let l = e.lyrics, lyricsTrusted(e) {
-                let body = lyricsBody(l)
-                if lyricsTokens(body).count >= lyricsMinTokens { item.lyricsBodies.append(body) }
-            }
+            if let l = e.lyrics, lyricsTrusted(e) { item.trustedLyrics.append(l) }
             side[folded] = item
             if isHan { bucket.han = side } else { bucket.nonHan = side }
             buckets[artistKey] = bucket
@@ -339,6 +342,14 @@ public enum EnrichTitleAliases {
             for (folded, item) in bucket.nonHan where eligibleForE2(folded, item) { members.append((folded, item, false)) }
             guard members.count >= 2 else { continue }
             members.sort { $0.folded < $1.folded }
+            // 每个成员的可比正文(剥过、够 lyricsMinTokens 的那几份),第一次用到时才剥
+            var bodies = [[String]?](repeating: nil, count: members.count)
+            func bodiesOf(_ i: Int) -> [String] {
+                if let b = bodies[i] { return b }
+                let b = members[i].item.trustedLyrics.map(lyricsBody).filter { lyricsTokens($0).count >= lyricsMinTokens }
+                bodies[i] = b
+                return b
+            }
             var uf = LocalArtistAliases.UnionFind()
             for i in 0..<members.count {
                 uf.add(members[i].folded)
@@ -348,12 +359,18 @@ public enum EnrichTitleAliases {
                     guard x.han != y.han || oneCharVariant(x.folded, y.folded) else { continue }
                     guard durationsClose(x.item.durations, y.item.durations, tolerance: e2DurationTolerance) else { continue }
                     var best = 0.0
-                    for p in x.item.lyricsBodies { for q in y.item.lyricsBodies { best = max(best, lyricsSimilarity(p, q)) } }
+                    for p in bodiesOf(i) { for q in bodiesOf(j) { best = max(best, lyricsSimilarity(p, q)) } }
                     if best >= lyricsSimilarityMin { uf.union(x.folded, y.folded) }
                 }
             }
+            // 分类只收正文够长的成员:没有可比正文的那条连不上边,但它的折叠键可能跟另一侧某个成员相同、
+            // 共用并查集里的同一个点,不剔掉就会被并进那一类、参与选代表。
+            var byRoot: [String: [Int]] = [:]
+            for i in members.indices { byRoot[uf.find(members[i].folded), default: []].append(i) }
             var classes: [String: [(folded: String, item: Item, han: Bool)]] = [:]
-            for m in members { classes[uf.find(m.folded), default: []].append(m) }
+            for (root, idxs) in byRoot where idxs.count >= 2 {
+                classes[root] = idxs.filter { !bodiesOf($0).isEmpty }.map { members[$0] }
+            }
             for (_, group) in classes where group.count >= 2 {
                 let rep = group.min { a, b in
                     if a.han != b.han { return a.han }
