@@ -1183,6 +1183,47 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    // ---- build.sh 只编装进包的产品、排队合并 ----
+    //
+    // release 的 swift build 不带 --product 会把 lyrimuse-selftest 也整模块编一遍,包里用不到它。
+    // 排队合并的次序不能乱:请求时刻在排队之前记;先判能不能复用、再删记录,都在拍快照之前;记录只在装完、
+    // 等过引擎之后写。乱了就会把一次失败的、或者没包含这次请求之前写好的改动的装机当成这次的(15 章决策 17)。
+    do {
+        let buildScript = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse
+            .appendingPathComponent("build.sh")
+        if let text = try? String(contentsOfFile: buildScript.path, encoding: .utf8) {
+            let codeLines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.hasPrefix("#") }
+            let code = codeLines.joined(separator: "\n")
+            expectEqual(code.contains("for product in lyrimuse lyrics-translate lyrics-romanize; do"), true,
+                        "构建产品: 只编装进包的三个产品")
+            let bareBuilds = codeLines.filter { $0.hasPrefix("swift build -c release") && !$0.contains("--product") }
+            expectEqual(bareBuilds, [], "构建产品: release 的 swift build 都要带 --product(不带会连 selftest 一起编)")
+            if let requested = code.range(of: "BUILD_REQUESTED_AT="),
+               let queue = code.range(of: "while ! mkdir \"$BUILD_LOCK\""),
+               let reuse = code.range(of: "BEGIN { exit !(a > b) }"),
+               let drop = code.range(of: "rm -f \"$LAST_INSTALL\""),
+               let snapshot = code.range(of: "SNAPSHOT_AT=\"$("),
+               let engine = code.range(of: "ENGINE_PLIST="),
+               let record = code.range(of: "mv \"$LAST_INSTALL.$$\" \"$LAST_INSTALL\"") {
+                expectEqual(requested.lowerBound < queue.lowerBound, true, "排队合并: 请求时刻要在排队之前记")
+                expectEqual(reuse.lowerBound < drop.lowerBound && drop.lowerBound < snapshot.lowerBound, true,
+                            "排队合并: 先判能不能复用、再删记录,都排在拍快照之前")
+                expectEqual(engine.lowerBound < record.lowerBound, true, "排队合并: 记录只在装完、等过引擎之后写")
+            } else {
+                expectEqual(true, false, "排队合并: 找不到请求时刻 / 排队 / 判定 / 删记录 / 快照时刻 / 写记录那几行(改写法了?)")
+            }
+            expectEqual(code.contains("awk -v a=\"$last_snapshot_at\" -v b=\"$BUILD_REQUESTED_AT\""), true,
+                        "排队合并: 比的是上一次的快照时刻(a)晚于这次的请求时刻(b)")
+        } else {
+            expectEqual(true, false, "构建产品: 读不到 build.sh(路径挪了?)")
+        }
+    }
+
     // ---- 提交信息不许引用 issue ----
     //
     // 「以后提交都不允许引用任何 issue」。为什么是 git hook 而不是写进文档:这个仓的

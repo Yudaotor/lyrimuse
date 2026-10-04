@@ -37,11 +37,22 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
 
+# 这次请求的时刻、是不是一次不带参数的普通装机:排队合并要用(见下面拍源码快照之前那段),必须在排队之前记。
+BUILD_REQUESTED_AT="$(/usr/bin/python3 -c 'import time; print("%.3f" % time.time())')"
+PLAIN_INSTALL=1
+if [ "$#" -gt 0 ]; then PLAIN_INSTALL=0; fi
+for v in LYRIMUSE_SIGN_ID LYRIMUSE_VERSION LYRIMUSE_NO_SOURCE_SNAPSHOT LYRIMUSE_SPM_SCRATCH_PATH \
+    LYRIMUSE_SPM_CACHE_PATH LYRIMUSE_NO_SPARKLE LYRIMUSE_GOTOOLCHAIN LYRIMUSE_MEDIA_CONTROL_PREFIX; do
+  if [ -n "${!v:-}" ]; then PLAIN_INSTALL=0; fi
+done
+
 # 同一时刻只跑一个 build.sh。多个会话共用这棵工作树,每次都会装进 /Applications 并重启 App;两次同时跑
 # 会互相拆掉对方的暂存包、或者重启到对方装了一半的版本。后到的一次在这里原地排队,会话之间不用互相询问
 # 「能不能装 / 装好没有」。mkdir 是原子的;锁里记着持有者 pid,持有者已经不在了(被 SIGKILL,EXIT trap
 # 没跑)就接管。
 BUILD_LOCK="$PWD/.build/build.sh.lock"
+# 上一次全部成功的普通装机:源码快照拍下的时刻、装进 /Applications 的那个包(inode)。排队合并用。
+LAST_INSTALL="$PWD/.build/build.sh.last-install"
 mkdir -p "$PWD/.build"
 build_lock_waited=0
 while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
@@ -266,6 +277,24 @@ cleanup_build() {
 }
 trap cleanup_build EXIT
 
+# 排队合并:几个会话排着队装机时,排在后面的多半不用再编。上一次装机的源码快照如果拍在这次请求之后,这次请求
+# 之前写好的改动它都编进去了;那个包还在 /Applications、App 也在跑,就直接用它,不再编一遍。只认两边都是不带参数的
+# 普通装机;往下真开编之前先删掉记录,中途失败就不会留下记录,后面排队的照常自己编。LYRIMUSE_BUILD_NO_COALESCE=1 关掉。
+if [ "$PLAIN_INSTALL" = 1 ] && [ -z "${LYRIMUSE_BUILD_NO_COALESCE:-}" ] && [ -f "$LAST_INSTALL" ]; then
+  last_snapshot_at="$(sed -n 's/^snapshot_at=//p' "$LAST_INSTALL")"
+  last_pid="$(sed -n 's/^pid=//p' "$LAST_INSTALL")"
+  last_bundle_ino="$(sed -n 's/^bundle_ino=//p' "$LAST_INSTALL")"
+  current_bundle_ino="$(stat -f %i "$FINAL_APP_DIR" 2>/dev/null || true)"
+  running_pid="$(pgrep -f "$FINAL_APP_DIR/Contents/MacOS/lyrimuse" 2>/dev/null | tr '\n' ' ' || true)"
+  if [ -n "$last_snapshot_at" ] && [ -n "$running_pid" ] && [ "$last_bundle_ino" = "$current_bundle_ino" ] \
+      && awk -v a="$last_snapshot_at" -v b="$BUILD_REQUESTED_AT" 'BEGIN { exit !(a > b) }'; then
+    echo "==> 不再编:排队期间 build.sh(pid ${last_pid:-?})已经装好一版,它的源码快照拍在这次请求之后,这次请求之前写好的改动都在里面"
+    echo "==> 正在跑的 $APP_NAME 就是那一版,pid ${running_pid% }"
+    exit 0
+  fi
+fi
+rm -f "$LAST_INSTALL"
+
 # 编译读的是 .build/source-snapshot 里的源码副本,不是工作树。多个会话共用这棵工作树,一次构建
 # 要十几分钟,期间别的会话写源码会被编进这次构建(半截改动,或者 App 和引擎取到不同时刻的源码)。
 # 快照在拿到上面的排队锁之后一次拍完(rsync,几秒),之后工作树怎么改都不影响这次构建。
@@ -274,8 +303,11 @@ trap cleanup_build EXIT
 #   artifacts),不用联网重拉。workspace-state.json 不复制:它记着工作树 .build 的绝对路径。
 # - 包管理器构建(设了 LYRIMUSE_SPM_SCRATCH_PATH / LYRIMUSE_SPM_CACHE_PATH)只许写自己那棵树、
 #   也没有别的写入者,直接编工作树;LYRIMUSE_NO_SOURCE_SNAPSHOT=1 同样直接编工作树(排查用)。
+SNAPSHOT_AT=""
 if [ -z "${LYRIMUSE_NO_SOURCE_SNAPSHOT:-}" ] && [ -z "${LYRIMUSE_SPM_SCRATCH_PATH:-}" ] \
     && [ -z "${LYRIMUSE_SPM_CACHE_PATH:-}" ]; then
+  # 拍快照之前记时刻:排队合并拿它跟后面那几次的请求时刻比。
+  SNAPSHOT_AT="$(/usr/bin/python3 -c 'import time; print("%.3f" % time.time())')"
   SNAPSHOT_ROOT="$PWD/.build/source-snapshot"
   echo "==> snapshotting sources into $SNAPSHOT_ROOT"
   mkdir -p "$SNAPSHOT_ROOT/lyrimuse" "$SNAPSHOT_ROOT/lyrimuse-engine"
@@ -313,7 +345,10 @@ SPM_PATH_ARGS=()
 # 反过来)。只在设了这个变量时关掉清单缓存,默认路径的构建速度一点不受影响。
 [ -n "${LYRIMUSE_NO_SPARKLE:-}" ] && SPM_PATH_ARGS+=(--manifest-cache none)
 for arch in $ARCHES; do
-  swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"}
+  # 只编装进包的三个产品。不带 --product 会把 lyrimuse-selftest 也按 release 整模块编一遍,包里用不到它。
+  for product in lyrimuse lyrics-translate lyrics-romanize; do
+    swift build -c release --arch "$arch" --product "$product" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"}
+  done
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
   # 这里必须带上同一组路径参数,否则问到的是默认 .build 而不是上面真正用的那棵。
   BIN_PATH="$(swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} --show-bin-path)"
@@ -1074,4 +1109,10 @@ if [ -f "$ENGINE_PLIST" ]; then
     # 整个构建被判失败(而且这条分支真出现时，多半要人去看崩溃报告)。
     echo "!! $ENGINE_NAME not running (no new process within 60s) — launchctl print gui/$(id -u)/$ENGINE_LABEL" >&2
   fi
+fi
+
+# 普通装机全部成功(App 起来了、要等的引擎也起来了)才记下来,给排队在后面的合并用,见拍源码快照之前那段。
+if [ "$PLAIN_INSTALL" = 1 ] && [ -n "$SNAPSHOT_AT" ] && { [ ! -f "$ENGINE_PLIST" ] || [ -n "${cpid:-}" ]; }; then
+  printf 'snapshot_at=%s\npid=%s\nbundle_ino=%s\n' "$SNAPSHOT_AT" "$$" "$(stat -f %i "$FINAL_APP_DIR")" > "$LAST_INSTALL.$$"
+  mv "$LAST_INSTALL.$$" "$LAST_INSTALL"
 fi
