@@ -41,9 +41,10 @@ public struct MediaControlSnapshot: Decodable {
     /// 读数在后台读到、`LocalPlaybackSource.apply` 在主线程处理,主线程卡半秒多时读数会被记成"半秒前的位置",
     /// 精确档伺服一拍就往回拽。apply 按它把读数补到处理那一刻。nil = 按处理时刻算(其它来源)。
     public var capturedAt: Date? = nil
-    /// Music.app 把这一条归为 MV(JXA 读 `media kind` == "music video")。只有 Apple Music 的 JXA 快照填;
-    /// media-control 的 `mediaType` 对 MV 也报 Music,认不出来(见 02 章决策 33)。只用来显示,见
-    /// `LocalPlaybackSource.isMusicVideo`。`with…` 系列副本不带它:那几条路(署名 / 专辑 / 试听段 / 电台)都不经过 Apple Music 的 MV。
+    /// 这一条是 MV。Apple Music 的 JXA 快照按 Music.app 的 `media kind` == "music video" 填,Kaset 的快照按它报的封面与
+    /// 两份时长填(`KasetPlayerInfo.isMusicVideo`);media-control 的 `mediaType` 对 MV 也报 Music,认不出来(见 02 章决策 33)。
+    /// 用法见 `LocalPlaybackSource.isMusicVideo`。`with…` 系列副本不带它:那几条路(署名 / 专辑 / 试听段 / 电台 / 空档保持)
+    /// 都不经过 Apple Music 的 MV 和 Kaset。
     public var isMusicVideo: Bool? = nil
     /// 播放器说在放(或正要放),声音却还没走起来:加载、广告、缓冲卡住。这时 `playing` 是 false、位置停着,
     /// `LocalPlaybackSource` 据此把轮询留在播放中的节拍,声音一走起来就接上(这几种时候播放器不一定发系统通知,

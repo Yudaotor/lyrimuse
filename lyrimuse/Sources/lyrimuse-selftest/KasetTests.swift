@@ -207,6 +207,36 @@ func runKasetTests() {
                     "https://i.ytimg.com/vi/ZLldhJXp7iw/hq720.jpg", "Kaset 读数: 换身份时封面地址带着")
     }
 
+    // ---- 视频版(MV):按封面与两份时长认,快照标 isMusicVideo ----
+    do {
+        func reading(_ id: String, art: String?, player: Double?, track: Double?) -> K.Reading {
+            K.Reading(title: "淘金小鎮", artist: "周杰伦", videoID: id, duration: player ?? track, position: 30,
+                      isPlaying: true, isPaused: false, playerDuration: player, trackDuration: track, artworkURL: art)
+        }
+        let shot = "https://i.ytimg.com/vi/aGsrg1NO1cM/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3k6wVi4d4gzIGzkptzBdIfQjTFSLg"
+        let square = "https://yt3.googleusercontent.com/g7PNXxOeBil__8Mh6tsgR0KdtqLjUdWMJu8qv5LhbDQmjQZtLgtIDyzr0D10mQ1XvIKZo-fV3N-MCa8O=w60-h60-l90-rj"
+        expectEqual(K.isMusicVideo(reading("aGsrg1NO1cM", art: shot, player: 224.6535, track: 225)), true,
+                    "Kaset MV: 封面是这首的视频截图,一样长也算")
+        expectEqual(K.isMusicVideo(reading("SW3OQ0ijUCI", art: square, player: 266.661, track: 251)), true,
+                    "Kaset MV: 网页 video 比登记的长十几秒,封面还是方形专辑图也算")
+        expectEqual(K.isMusicVideo(reading("GQTVP0kAOk8", art: square, player: 251.2, track: 251)), false,
+                    "Kaset MV: 方形专辑图、一样长,是音轨版本")
+        expectEqual(K.isMusicVideo(reading("GQTVP0kAOk8", art: shot, player: 251, track: 251)), false,
+                    "Kaset MV: 播放条上还是上一首的视频截图,不算")
+        expectEqual(K.isMusicVideo(reading("yCWTHQ3_O-I", art: square, player: 234, track: 230)), true,
+                    "Kaset MV: 差 4 秒算另一个长度")
+        expectEqual(K.isMusicVideo(reading("yCWTHQ3_O-I", art: square, player: 233, track: 230)), false,
+                    "Kaset MV: 差 3 秒以内算一样长")
+        expectEqual(K.isMusicVideo(reading("yCWTHQ3_O-I", art: nil, player: nil, track: 230)), false,
+                    "Kaset MV: 网页 video 的时长还没有,不下结论")
+        expectEqual(K.isMusicVideo(reading("aGsrg1NO1cM", art: "http://i.ytimg.com/vi/aGsrg1NO1cM/hqdefault.jpg", player: 225, track: 225)),
+                    false, "Kaset MV: 只认 https 的视频截图")
+        let mv = K.snapshot(reading("SW3OQ0ijUCI", art: square, player: 266.661, track: 251), lastMove: nil, capturedAt: t0)
+        let song = K.snapshot(reading("GQTVP0kAOk8", art: square, player: 251.2, track: 251), lastMove: nil, capturedAt: t0)
+        expectEqual(mv.isMusicVideo == true && song.isMusicVideo == nil && mv.duration == 266.661, true,
+                    "Kaset MV: 快照标 isMusicVideo、时长照报网页 video 的")
+    }
+
     // ---- 广告:看内嵌网页此刻在放什么(前贴片时 Kaset 还报加载;两首之间的广告期间它还报着上一首、停在结尾)----
     do {
         // 系统里各 App 报的会话(helper 输出的形状):Kaset 自己那份、Safari 的 WebKit 媒体进程那份、Kaset 的那份。
@@ -531,6 +561,15 @@ func runKasetTests() {
                         && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
                             "if snapshot.positionIsPrecise == true {\n                    usedBrowserProbe = true\n                    browserProbePrecise = true"), true,
                     "Kaset 契约: 在走时位置用网页时钟,播放源当精确真值采信")
+        let playbackSource = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(playbackSource.contains("if isMusicVideo, snapshot.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier,")
+                        && playbackSource.contains("noteMusicVideo(videoID: videoID, forKey: snapshot.trackKey)")
+                        && playbackSource.contains("noteMusicVideo(videoID: video.videoID, forKey: key)"), true,
+                    "Kaset 契约: 放的是视频版时跟网页播放器走同一套 MV 时间轴")
+        let clearOnTrackChange = playbackSource.range(of: "                clearMusicVideoTimeline()\n            }\n            lastKey = key")
+        let kasetLookup = playbackSource.range(of: "noteMusicVideo(videoID: videoID, forKey: snapshot.trackKey)")
+        expectEqual(clearOnTrackChange != nil && kasetLookup != nil && clearOnTrackChange!.upperBound < kasetLookup!.lowerBound, true,
+                    "Kaset 契约: 查 MV 时间轴排在换歌清时间轴之后(换歌那一拍只查一次)")
         expectEqual(client.contains("if let id = raw.videoID, !id.isEmpty, first?.videoID != id {")
                         && client.contains("first = queuedFirstReport(videoID: id) ?? first"), true,
                     "Kaset 契约: 新歌第一拍按队列补开播那份")

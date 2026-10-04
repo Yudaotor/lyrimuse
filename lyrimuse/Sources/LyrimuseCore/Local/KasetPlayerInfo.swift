@@ -481,12 +481,31 @@ public enum KasetPlayerInfo {
         return components.url
     }
 
+    /// 两份时长(网页 video 的、队列里登记的)差出这么多秒以上,放的就不是登记的那一版(元数据是整数秒)。
+    public static let musicVideoLengthTolerance: TimeInterval = 3
+
+    /// 这一拍放的是不是视频版(MV、用户上传的视频),跟网页播放器那边按视频类型认的是同一回事
+    /// (`MusicVideoTimeline.isMusicVideoType`)。Kaset 不交视频类型,按它报的两样认,有一样就算:
+    /// - 封面是这个 videoId 的视频截图(`i.ytimg.com/vi/<videoId>/…`):Kaset 的封面取自网页播放条,视频版是视频截图,
+    ///   音轨版本是 googleusercontent 的方形专辑图。只认这一首的 videoId,换歌那一拍播放条上还是上一首的截图。
+    /// - 网页 video 的时长跟队列里登记的差出 `musicVideoLengthTolerance` 以上:专辑页那一格链到 MV 时,登记的是歌曲版的
+    ///   时长,放出来的是另一个长度的 MV。Kaset 换歌时先把时长设成新这首登记的,网页 video 加载好才换成它自己的。
+    /// 纯函数,selftest 覆盖。
+    public static func isMusicVideo(_ reading: Reading) -> Bool {
+        if let id = reading.videoID, !id.isEmpty, let raw = reading.artworkURL, let url = URL(string: raw),
+           url.scheme == "https", url.host?.lowercased() == "i.ytimg.com", url.path.hasPrefix("/vi/\(id)/") {
+            return true
+        }
+        guard let player = reading.playerDuration, let track = reading.trackDuration else { return false }
+        return abs(player - track) > musicVideoLengthTolerance
+    }
+
     /// 换成下游用的快照。专辑一栏不用:放歌单时 Kaset 在这里填的是歌单名,不是这首的专辑。
     /// 没在走、又不是暂停(加载、广告、卡住)时标 `isWaitingToPlay`:轮询照播放中的节拍走,声音一走起来就接上。
     /// 广告结论(`isAd`):在放广告为 true,正片在走为 false,别的时候(加载、暂停、卡住)说不上来,为 nil。没在走时先看
     /// 内嵌网页在放什么(`adByWebMedia`,`webMedia` 是调用方这一拍问到的),说不上来再按读数自己认(`isAd`)。看网页判成广告时
     /// 快照另带广告自己的时长与进度(`adDuration` / `adElapsed`),倒计时用。在走、又有网页时钟算出的位置(`clockPosition`,
-    /// 见 `webClockPosition`)时,位置用它,快照标精确(`positionIsPrecise`)。
+    /// 见 `webClockPosition`)时,位置用它,快照标精确(`positionIsPrecise`)。放的是视频版(`isMusicVideo`)时标 `isMusicVideo`。
     public static func snapshot(_ reading: Reading, lastMove: LastMove?, capturedAt: Date,
                                 webMedia: WebMedia? = nil, clockPosition: Double? = nil) -> MediaControlSnapshot {
         let advancing = isAdvancing(reading, lastMove: lastMove, now: capturedAt)
@@ -498,6 +517,7 @@ public enum KasetPlayerInfo {
             elapsedTime: precisePosition ?? reading.position, playing: advancing, playbackRate: advancing ? 1 : 0,
             isMusicApp: true, bundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier,
             anchorElapsedTime: nil, isRadio: nil, capturedAt: capturedAt,
+            isMusicVideo: isMusicVideo(reading) ? true : nil,
             isWaitingToPlay: !advancing && !reading.isPaused, isAd: ad,
             adDuration: webSaysAd == true ? webMedia?.duration : nil, adElapsed: webSaysAd == true ? webMedia?.elapsed : nil,
             positionIsPrecise: precisePosition == nil ? nil : true)

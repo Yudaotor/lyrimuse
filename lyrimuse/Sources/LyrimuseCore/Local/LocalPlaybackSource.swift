@@ -16,14 +16,16 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var title: String = ""
     @Published public private(set) var artist: String = ""
     @Published public private(set) var album: String = ""
-    /// 这首是 MV。Apple Music 看 JXA 快照的 `isMusicVideo`,网页播放器看探针交出的视频类型(`noteBrowserVideo`)。
-    /// 只给界面在专辑位写「MV」用,不进任何缓存 key。判据见 `musicVideoTrackKey(...)`。
+    /// 这首是 MV。Apple Music 与 Kaset 看快照的 `isMusicVideo`(Kaset 的判据见 `KasetPlayerInfo.isMusicVideo`),网页播放器
+    /// 看探针交出的视频类型(`noteBrowserVideo`)。界面专辑位写「MV」、播放状态的 `music_video`(引擎按时长未知解析歌词)、
+    /// MV 时间轴都看它,不进任何缓存 key。判据见 `musicVideoTrackKey(...)`。
     @Published public private(set) var isMusicVideo: Bool = false
     /// 播放器没报专辑时,这首在 YouTube Music 上登记的专辑(用 Kaset 放的歌,引擎存进缓存的,见
     /// `EnrichCacheReader.youtubeMusicAlbum`)。只给界面专辑位用(`displayAlbum`),不进任何缓存 key。
     @Published public private(set) var youtubeMusicAlbum: String = ""
     /// 播放器没报专辑、YouTube Music 上也没有专辑时,这一版是不是 MV 版本(用 Kaset 放的歌,引擎判的,见
-    /// `EnrichCacheReader.youtubeMusicIsMV`)。只给界面专辑位写「MV」,不碰 `isMusicVideo` 那一套(歌词时长、MV 时间轴)。
+    /// `EnrichCacheReader.youtubeMusicIsMV`)。只给界面专辑位写「MV」,不碰 `isMusicVideo` 那一套(歌词时长、MV 时间轴);
+    /// Kaset 这一拍放的是不是视频版另按它的读数认(`KasetPlayerInfo.isMusicVideo`),进的是 `isMusicVideo`。
     @Published public private(set) var youtubeMusicIsMV: Bool = false
     @Published public private(set) var isPlayingNow: Bool = false
     /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、前贴片广告、卡住;目前只有 Kaset 报)。
@@ -1421,22 +1423,26 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    /// 网页播放器交出的视频身份。是 MV(`MusicVideoTimeline.isMusicVideoType`)时查 SponsorBlock 标注的
+    /// 网页播放器交出的视频身份:是 MV(`MusicVideoTimeline.isMusicVideoType`)时按 `noteMusicVideo` 换算时间轴。
+    public func noteBrowserVideo(_ video: BrowserPositionProbe.VideoIdentity, forKey key: String) {
+        guard MusicVideoTimeline.isMusicVideoType(video.musicVideoType) else { return }
+        noteMusicVideo(videoID: video.videoID, forKey: key)
+    }
+
+    /// 这首放的是 MV(网页播放器看探针交出的视频类型,Kaset 看 `KasetPlayerInfo.isMusicVideo`):查 SponsorBlock 标注的
     /// 非音乐片段,按「这份歌词的来源自报的歌曲版时长」建时间轴;检查不过就什么都不做。同一首只查一次。
     ///
     /// 片段一到先只扣片头(不需要歌曲版时长,见 MusicVideoTimeline 头注),再等歌词判决拿歌曲版时长升级成全部片段。
     /// 第一次放的歌,判决要等全部歌词源应答(实测半分钟上下):每 `musicVideoSongDurationRetrySecs` 秒重读一次
     /// 缓存键与判决明细,最多 `musicVideoSongDurationAttempts` 次,换歌即停。片段有缓存,重试不再联网。
-    public func noteBrowserVideo(_ video: BrowserPositionProbe.VideoIdentity, forKey key: String) {
+    private func noteMusicVideo(videoID: String, forKey key: String) {
         guard let snapshot = lastSnapshot, snapshot.trackKey == key else { return }
-        guard MusicVideoTimeline.isMusicVideoType(video.musicVideoType) else { return }
         musicVideoKey = key
         if !isMusicVideo { isMusicVideo = true }
         guard musicVideoLookupKey != key else { return }
         musicVideoLookupKey = key
-        musicVideoLookupBasis = (key, video, musicVideoLyricsContext(forKey: key)?.lyricsSource)
+        musicVideoLookupBasis = (key, videoID, musicVideoLyricsContext(forKey: key)?.lyricsSource)
         let videoDuration = currentDurationMs.map { Double($0) / 1000 }
-        let videoID = video.videoID
         let attempts = Self.musicVideoSongDurationAttempts
         let retryNanos = UInt64(Self.musicVideoSongDurationRetrySecs * 1_000_000_000)
         Task.detached(priority: .utility) { [weak self] in
@@ -1469,9 +1475,9 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
-    /// 上一次查 MV 时间轴时用的视频身份与当时显示的歌词来源。歌曲版时长取自「显示的那份歌词」的判决,
+    /// 上一次查 MV 时间轴时用的 videoId 与当时显示的歌词来源。歌曲版时长取自「显示的那份歌词」的判决,
     /// 同一首歌的歌词换了来源(引擎播放中重选,见 02 章决策 49 追加)就要按新判决重查一次,见 recheckMusicVideoTimelineIfLyricsChanged。
-    private var musicVideoLookupBasis: (key: String, video: BrowserPositionProbe.VideoIdentity, lyricsSource: String?)?
+    private var musicVideoLookupBasis: (key: String, videoID: String, lyricsSource: String?)?
 
     /// 同一首歌的歌词缓存变了之后调:显示的歌词换了来源才重查,其余情况什么都不做。
     private func recheckMusicVideoTimelineIfLyricsChanged(forKey key: String) {
@@ -1479,7 +1485,7 @@ public final class LocalPlaybackSource: ObservableObject {
               let source = musicVideoLyricsContext(forKey: key)?.lyricsSource, source != basis.lyricsSource else { return }
         logger.notice("music video timeline: lyrics source changed \(basis.lyricsSource ?? "-", privacy: .public) -> \(source, privacy: .public), rechecking song duration")
         musicVideoLookupKey = nil
-        noteBrowserVideo(basis.video, forKey: key)
+        noteMusicVideo(videoID: basis.videoID, forKey: key)
     }
 
     static let musicVideoSongDurationAttempts = 10
@@ -3187,6 +3193,12 @@ public final class LocalPlaybackSource: ObservableObject {
             lastEnrichMTime = enrichMTime
             reloadCurrentLyrics()
             if !trackChanged { recheckMusicVideoTimelineIfLyricsChanged(forKey: snapshot.trackKey) }
+        }
+        // Kaset 放的是视频版:跟网页播放器一样按 SponsorBlock 片段换算时间轴(同一首只查一次,见 noteMusicVideo)。
+        // 要排在上面换歌清时间轴之后,不然换歌那一拍记下的「查过了」被清掉,下一拍再查一次。
+        if isMusicVideo, snapshot.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier,
+           let videoID = MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) {
+            noteMusicVideo(videoID: videoID, forKey: snapshot.trackKey)
         }
         // 换了播放器也要重算偏移 —— 上面那个 reload 的触发条件是「换歌 / 没内容 / 缓存变了」,
         // **不含**"播放器变了"。而 trackKey 只由 歌手|歌名 决定:.auto 档下焦点在两个 App 之间
