@@ -269,7 +269,7 @@ macOS 14 Sonoma 及以上（Sequoia、Tahoe 以及更新的版本都行），App
 本来就存着。每首找到歌词的歌都有一份逐行时间的 `.lrc`；有译文、读音的，另外还有 `.tr.lrc` 和 `.roma.lrc`。逐字时间轴单独存成 `.yrc`，用的是网易云的 YRC 格式，大多数别的播放器读不了。文件放在 `~/.config/lyrimuse/lyrics/`，位置可以在设置里改。
 
 ### LyricsX 还在维护吗？Lyrimuse 和 LyricsX、Lyric Fever 有什么区别？
-LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及以上，能配合 Apple Music、Spotify 和几个老牌播放器用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 及以上。Lyrimuse 需要 macOS 14 及以上，另外支持 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、Kaset 和浏览器里的播放器，能逐行标拼音、粤拼和日文假名，还能打卡到 Last.fm / ListenBrainz，并在本地统计你的听歌数据。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
+LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及以上，能配合 Apple Music、Spotify 和几个老牌播放器用。Lyric Fever 主要做 Spotify 和 Apple Music，需要 macOS 15 及以上。Lyrimuse 需要 macOS 14 及以上，另外支持 QQ 音乐、网易云音乐、酷狗、汽水音乐、KKBOX、Amazon Music、Kaset 和浏览器里的播放器，能逐行标拼音、粤拼和日文、韩文的罗马音，还能打卡到 Last.fm / ListenBrainz，并在本地统计你的听歌数据。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
 ## 许可与版权说明
 
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授权。** 随 App 一起分发的开源组件与词典数据（media-control、Sparkle、KeyboardShortcuts、OpenCC 与 rime-cantonese 词典）各自保留原许可证，全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；这个文件也打进了 App 包里，**设置 → 关于 → 第三方许可**能直接打开。

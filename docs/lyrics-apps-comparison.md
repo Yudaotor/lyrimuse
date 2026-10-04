@@ -36,7 +36,7 @@ of the actively maintained open-source options:
 | Match selection | every candidate from every source scored on one scale (title / artist / album / reported-duration fit + quality signals like word-level timing); a per-track decision panel shows each candidate's score and why the winner won; manual picks are locked and never overridden | — | — |
 | Word-by-word sync | yes, across sources (incl. Apple Music's official timing and the hand-curated AMLL database) | via LRCX word time tags, when the source provides them | — |
 | Translation | source community translation when available, else on-device Apple translation (17 target languages) with online fallback | displays source-provided translations | Apple on-device translation, with a per-song source language |
-| Readings | Japanese romaji (kana for some lyrics), Korean romanization, Mandarin pinyin, **Cantonese Jyutping**; decided line by line, each language switched separately | — | Japanese romanization |
+| Readings | Japanese romaji, Korean romanization, Mandarin pinyin, **Cantonese Jyutping**; decided line by line, each language switched separately | — | Japanese romanization |
 | Simplified ⇄ Traditional Chinese | yes, independent of UI language | yes | yes, including the Hong Kong and Taiwan variants |
 | Duet / multi-singer line splitting | yes, when the source marks parts | — | — |
 | Scrobbling & listening stats | Last.fm + ListenBrainz scrobbling, backfill, local history, charts, listening heatmap | — | — |
