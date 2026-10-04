@@ -223,12 +223,10 @@ func isProcessRunning(name string) bool {
 	return exec.CommandContext(ctx, "pgrep", "-x", name).Run() == nil
 }
 
-// companionLaunchProcessNames 是这一轮要盯的可执行文件名列表——手动选定播放器时盯
-// features().Players 里的每一个(可多选;单选年代只有一个 key,行为跟合并
-// 前完全一致,不会因为多了 playerAuto 而误报别的播放器启动);「自动识别」在选中集合里
-// (不管是否同时还勾了别的具体播放器,都按超集处理)时没有唯一确定的目标,同时盯着
-// 全部五个已知播放器,任意一个启动都算数,这也是自动识别模式下这个方向反而更有用的
-// 地方——用户不需要事先告诉 Lyrimuse 自己接下来要开哪个播放器。
+// companionLaunchProcessNames 是这一轮要盯的可执行文件名列表。选中集合里有「自动识别」时(不管
+// 是否同时还勾了别的具体播放器,都按超集处理)没有唯一确定的目标,盯全部内置播放器
+// (knownPlayerProcessNames),任意一个启动都算数,用户不需要事先告诉 Lyrimuse 接下来要开哪个播放器;
+// 否则只盯 features().Players 里选定的那几个,别的播放器启动不算。
 func companionLaunchProcessNames() []string {
 	var candidates []string
 	if features().Players[playerAuto] {
@@ -255,27 +253,19 @@ func companionLaunchProcessNames() []string {
 	return names
 }
 
-// knownPlayerProcessNames 是全部五个已知播放器的可执行文件名——QQ音乐.app 是
-// QQMusic、网易云音乐.app 是 NeteaseMusic、Spotify.app 是 Spotify、酷狗音乐.app 是
-// **中文的**「酷狗音乐」(都用 PlistBuddy 读 CFBundleExecutable 核实过),Music.app 是
-// Music。playerProcessNameFor() 给 features().Players 里手动选定的每个成员各查一个出来;
-// playerAuto 在选中集合里时直接用整份列表。
+// knownPlayerProcessNames 是全部内置播放器的可执行文件名,跟逐播放器的进程名(playerProcessNames)
+// 一起在 players_generated.go,生成自 shared/players.json。可执行文件名常跟 App 名不同(QQ音乐.app 是
+// QQMusic,酷狗音乐.app 是中文的「酷狗音乐」),一律取 CFBundleExecutable。playerProcessNameFor 给
+// features().Players 里选定的每个成员各查一个;playerAuto 在选中集合里时直接用整份列表。
 //
-// 酷狗那一项是非 ASCII 的,实测确认两件事都成立才敢这么写:
-//  1. `pgrep -x 酷狗音乐` 能匹配到 comm 为中文的进程(拿一个中文名符号链接起进程验过);
-//  2. UTF-8 下「酷狗音乐」是 12 字节,没超过内核 p_comm 的 16 字节上限(pgrep 比的就是
-//     这个被截断过的名字)——再长两个汉字就会被截断、`-x` 精确匹配当场失效。往这份列表
-//     里加新播放器时这条限制要一起核。
-// knownPlayerProcessNames 与逐播放器的进程名都在 players_generated.go
-// (生成自 shared/players.json)——上面那两条限制(p_comm 16 字节、-x 精确匹配)在那份
-// JSON 的 processName 字段旁边也记着一份。
+// 这些名字交给 `pgrep -x` 精确匹配,比的是内核 p_comm:非 ASCII 名字照样能匹配,但 p_comm 只留
+// 16 字节,UTF-8 下中文每字 3 字节,超出的部分被截断、`-x` 就匹配不上(「酷狗音乐」「汽水音乐」都是
+// 12 字节)。往表里加播放器时这条要一起核;players.json 的 processName 字段旁边也记着。
 
-// playerProcessNameFor 是某个具体播放器常量的可执行文件名,给手动选定的场景用,见
-// knownPlayerProcessNames 注释。从读包级 features().Player 的 playerProcessName
-// 改成纯函数——多选之后 companionLaunchProcessNames 要对 features().Players 里的每个
-// 成员分别求进程名,不能再读一个包级单值。
+// playerProcessNameFor 是某个具体播放器常量的可执行文件名,companionLaunchProcessNames 对
+// features().Players 的每个成员各求一次,见 knownPlayerProcessNames 注释。
 func playerProcessNameFor(player string) string {
-	// 查不到(auto / 认不出来)退回 Music,跟 playerBundleID 的兜底方向一致。
+	// 查不到(auto / 认不出来)退回 Music。
 	if name, ok := playerProcessNames[player]; ok {
 		return name
 	}
@@ -284,7 +274,7 @@ func playerProcessNameFor(player string) string {
 
 // launchLyrimuseApp 用 bundle id(不是路径)启动 Lyrimuse.app——不依赖它具体装在哪个
 // 路径下,LaunchServices 自己按已注册的 bundle id 找。用 --background 避免把它带到前台
-// 抢用户当前的焦点(跟 AppDelegate.swift 里 launchMusicOnLyrimuseOpen 那半用
+// 抢用户当前的焦点(跟 AppDelegate.swift 里「打开 Lyrimuse 时启动播放器」那半用
 // config.activates=false 的用意一致)。
 //
 // 调用方必须先确认 Lyrimuse.app 没在跑(见 shouldCompanionLaunch 的注释)。这里再自查

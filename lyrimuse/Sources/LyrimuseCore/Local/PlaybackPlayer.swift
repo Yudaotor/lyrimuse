@@ -21,9 +21,9 @@ import Foundation
 // 猜。.auto 因此不对应任何单一固定的 bundle id(bundleIdentifier 返回空字符串,调用方
 // 按"没有唯一确定的目标 App"处理,比如"打开 Lyrimuse 时唤起播放器"这类需要一个具体
 // App 才有意义的联动直接跳过),真正的检测逻辑在 MediaControlClient.fetchSnapshot
-// 里:问 media-control 当前是谁在报告 Now Playing,核对是不是
-// 这五个已知播放器之一,是 Apple Music 的话还会额外走一次 AppleScript 拿更精确的播放
-// 位置(拿不到权限就退回 media-control 本身的读数,不会整个放弃)。
+// 里:问 media-control 当前是谁在报告 Now Playing,核对是不是内置播放器或信任列表里的
+// 播放器;认出的播放器有自己的读法(Apple Music / Spotify / Kaset)就换那条读,拿不到
+// (没权限 / 不可达)就退回 media-control 本身的读数,不会整个放弃。
 //
 // 枚举本体(case、bundleIdentifier、nativeLyricSource、positionTierID、
 // builtin(forBundleID:))现在由 scripts/gen-players.py 从 shared/players.json 生成,

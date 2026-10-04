@@ -95,9 +95,8 @@ func TestPlayerForBundleID(t *testing.T) {
 		// 汽水曾经漏在这张映射里(内置化时那份手写 case 清单没跟上),表现是"用汽水
 		// 听歌拿不到同源加权",不报错。现在函数改成反查生成表,这条用例是它的回归守卫。
 		sodaMusicBundleID: playerSoda,
-		// 认不出必须是"不知道"(空串),不能是"就当是 Apple Music"—— playerBundleID
-		// 那个反方向的函数 default 分支返回 appleMusicBundleID,照抄过来就会把任何浏览器/
-		// 第三方 App 都认成 Apple Music。
+		// 认不出必须是"不知道"(空串),不能是"就当是 Apple Music"——那样任何浏览器 /
+		// 第三方 App 都会被认成 Apple Music。
 		"com.google.Chrome": "",
 		"":                  "",
 	}

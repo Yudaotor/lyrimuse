@@ -8,7 +8,7 @@ import Foundation
 /// 这里只放不碰 UI、不碰磁盘的判定,selftest 钉着;存储在 AppSettings / FeatureSettingsStore,监听在
 /// App 侧 PlayerQuitWatcher,引擎侧对称的候选逻辑在 companionlaunch.go。
 public enum PlayerLinkage {
-    /// 可供勾选的候选:选中集合里的具体播放器;选了「自动识别」时是全部五个已知播放器(自动识别可能跟着
+    /// 可供勾选的候选:选中集合里的具体播放器;选了「自动识别」时是全部内置播放器(自动识别可能跟着
     /// 任何一个走,auto 是超集)。YouTube Music 不在其中 —— 它是浏览器里的网页,浏览器退出不等于播放器退出,
     /// 也没有一个可以"启动"的 App。
     public static func candidates(selectedPlayers: Set<PlaybackPlayer>) -> Set<PlaybackPlayer> {

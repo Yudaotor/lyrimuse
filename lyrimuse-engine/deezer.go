@@ -33,7 +33,7 @@ import (
 //	   「Rice Field / Jay Chou」),中文 / 日文歌几乎过不了名称闸(09 章决策 136 的实测)。
 //	② 取词也走 GraphQL,认证用 auth.deezer.com/login/anonymous 换来的**匿名 JWT**(不需要账号、不需要
 //	   ARL、不碰用户登录态)。JWT 自带 exp,实测 iat 到 exp 只有 6 分钟,过期后回 HTTP 200 +
-//	   JwtTokenExpiredError(不是 401);进程级缓存 + 单飞锁(同 musixmatch token / ytmusic visitor id)。
+//	   JwtTokenExpiredError(不是 401);进程级缓存 + 单飞锁(同 musixmatch token)。
 //	   响应 data.track.lyrics 里 synchronizedLines[] 是逐行(lrcTimestamp 形如
 //	   "[00:01.41]" + line,lineTranslated 是这一行的译文),synchronizedWordByWordLines[]
 //	   是逐字({start,end,words:[{start,end,word}]},毫秒),text 是整份纯文本。
@@ -155,9 +155,8 @@ var (
 	deezerCache = map[string]deezerResult{}
 
 	// deezerJWTMu 保护下面两个值本身;deezerJWTFetchMu 是单飞锁,同一时刻只允许一个
-	// goroutine 真的去换票。理由跟 musixmatch.go 的 musixmatchTokenFetchMu /
-	// ytmusic.go 的 ytmusicVisitorFetchMu 一字不差:相册预取一次能触发十几首歌并发解析,
-	// 各自"没有就自己去拿一个"会同时打十几个请求。
+	// goroutine 真的去换票。理由跟 musixmatch.go 的 musixmatchTokenFetchMu 一样:相册预取一次能触发
+	// 十几首歌并发解析,各自"没有就自己去拿一个"会同时打十几个请求。
 	deezerJWTMu       sync.Mutex
 	deezerJWT         string
 	deezerJWTExpires  time.Time

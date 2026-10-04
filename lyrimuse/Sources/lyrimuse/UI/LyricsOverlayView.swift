@@ -1029,7 +1029,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             spec: .init(
                 lineKey: line?.plainText ?? "",
                 words: words,
-                // 开了逐词罗马音才按词组排;否则只画一行字(同 karaokeWordRun 的两条分支)。
+                // 开了逐词罗马音才按词组排(字在上、读音在下,见 OverlayRowLayout);否则只画一行字。
+                // layerWrappedKaraokeRows 是同一条判据。
                 groups: usesPerWordRomanization ? line?.wordGroups : nil,
                 font: playback.overlayNSFonts.main,
                 romaFont: playback.overlayNSFonts.romanization,
@@ -1159,8 +1160,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         .frame(height: height)
     }
 
-    /// 主行在滚动模式下占多高。开了**逐词罗马音**时这一行是「字 + 它的读音」上下两行的
-    /// VStack(见 `karaokeWordRun`),高度要把读音那一行一起算进去,否则读音会被裁掉。
+    /// 主行在滚动模式下占多高。开了**逐词罗马音**时这一行是「字 + 它的读音」上下两行
+    /// (图层行按 `OverlayRowLayout.layOut` 排),高度要把读音那一行一起算进去,否则读音会被裁掉。
     private var mainScrollRowHeight: CGFloat {
         let main = playback.scrollTextHeight(playback.overlayNSFonts.main)
         let roma = usesPerWordRomanization ? playback.scrollTextHeight(playback.overlayNSFonts.romanization) : 0
@@ -1402,8 +1403,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         return groups
     }
 
-    /// 下一句预览的内容。有逐词分组时按「一组一列:字在上、读音在下」排,跟这句变成当前行之后
-    /// (`karaokeWordRun`)同一种版式,开唱那一刻只换颜色、不挪位置;整行罗马音那一行随之让位。
+    /// 下一句预览的内容。有逐词分组时按「一组一列:字在上、读音在下」排,跟这句变成当前行之后的
+    /// 图层行(`OverlayRowLayout.layOut`)同一种版式,开唱那一刻只换颜色、不挪位置;整行罗马音那一行随之让位。
     @ViewBuilder
     private func nextLinePreviewContent(_ next: String) -> some View {
         let color = playback.displayForegroundColor.opacity(0.4)
@@ -1435,7 +1436,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     /// 逐词列本体。换行模式走 WrapLayout(长句折行,同当前行);滚动模式排成一整条(不滚,见
     /// `OverlayRowPlan.Motion.still`)。
-    /// 没有读音的组也占住读音那一行的高度(透明空格),理由同 `karaokeWordRun`。
+    /// 没有读音的组也占住读音那一行的高度(透明空格),跟图层行按一个空格占位是同一条规则
+    /// (`OverlayRowLayout.layOut`):开唱那一刻各列高度、位置都不变。
     @ViewBuilder
     private func upcomingGroupColumns(_ groups: [SyncedLyricWordGroup], key: String, color: Color) -> some View {
         let columns = ForEach(groups) { g in
