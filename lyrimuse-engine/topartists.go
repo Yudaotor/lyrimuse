@@ -276,6 +276,7 @@ func artistMergeGroups(entries []lastfmChartEntry, resolve artistIdentityFn, nam
 	n := len(entries)
 	nameKeys := make([]string, n)
 	ids := make([]mbArtistIdentity, n)
+	alts := make([][]string, n)
 	for i, e := range entries {
 		nameKeys[i] = nameKey(e.Name)
 		first := artistCreditPrimary(e.Name)
@@ -284,6 +285,7 @@ func artistMergeGroups(entries []lastfmChartEntry, resolve artistIdentityFn, nam
 			mbid = e.Mbid // 理由见 warmArtistIdentityCache 里同款判断
 		}
 		ids[i] = resolve(first, mbid)
+		alts[i] = artistAlternateNames(first)
 	}
 
 	parent := make([]int, n)
@@ -303,10 +305,11 @@ func artistMergeGroups(entries []lastfmChartEntry, resolve artistIdentityFn, nam
 			parent[ra] = rb
 		}
 	}
-	// 三个信号,任一相同即并(链式传递):①名字键(合唱取第一位+别名表+繁简+大小写);
+	// 四个信号,任一相同即并(链式传递):①名字键(合唱取第一位+别名表+繁简+大小写);
 	// ②mbid——Last.fm 自带的,或身份解析补上的("Leah Dou"和"窦靖童"名字键连不上、
 	// Last.fm 只给了一边 mbid,只有两边都解析到同一个 MusicBrainz 艺人才并得上);
-	// ③解析出的中文名的名字键——兜"A 解析出中文名、B 本来就用中文名"的组合。
+	// ③解析出的中文名的名字键——兜"A 解析出中文名、B 本来就用中文名"的组合;
+	// ④另一种文字的名字(双语写法的两半、歌词源署名学到的别名)的名字键,见 artistsourcealias.go。
 	groups := map[string][]int{}
 	addKey := func(k string, i int) {
 		if k != "" {
@@ -324,6 +327,9 @@ func artistMergeGroups(entries []lastfmChartEntry, resolve artistIdentityFn, nam
 		}
 		if ids[i].Zh != "" {
 			addKey("n:"+artistMergeFold(ids[i].Zh), i)
+		}
+		for _, alt := range alts[i] {
+			addKey("n:"+nameKey(alt), i)
 		}
 	}
 	for _, idxs := range groups {
@@ -392,7 +398,8 @@ func mergeAliasedArtistBuckets(entries []lastfmChartEntry, resolve artistIdentit
 		// 限制,"Michael Jackson"会被桶里一条 2 次播放的"Michael Jackson & 克里夫兰
 		// 管弦乐团"顶掉——含汉字的合唱串说明不了这个人常用中文名,只说明某张发行的
 		// 合作方是中文写法(实测翻车过)。平手先到者(=播放多的写法)优先。
-		if parts == 1 && containsHan(display) && b.hanName == "" {
+		// 双语写法和译名标签不参加这条轨,见 artistNameIsTranslation。
+		if parts == 1 && containsHan(display) && b.hanName == "" && !artistNameIsTranslation(e.Name) {
 			b.hanName = display
 		}
 		if b.zh == "" && ids[i].Zh != "" {

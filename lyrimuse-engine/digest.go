@@ -78,6 +78,7 @@ func (p *poller) runDigestsAsync(now time.Time) {
 }
 
 func (p *poller) runDigests(now time.Time, env digestEnv) {
+	refreshArtistSourceAliases(now) // 下面几份报告的歌手归并要用,见 artistsourcealias.go
 	p.weeklyDigest(now, env)
 	p.dailyDigest(now, env)
 	p.monthlyDigest(now, env)
