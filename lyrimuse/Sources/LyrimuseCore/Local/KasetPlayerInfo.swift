@@ -83,6 +83,12 @@ public enum KasetPlayerInfo {
                        playerDuration: playerDuration, trackDuration: trackDuration, artworkURL: track.artworkURL)
     }
 
+    /// Kaset 起一条新的播放(`play video`、`kaset://` 链接)时先放进去的占位:歌名「Loading...」、没有歌手,拿到元数据才换成
+    /// 真的。不是一首歌。纯函数,selftest 覆盖。
+    public static func isPlaceholder(_ reading: Reading) -> Bool {
+        reading.title == "Loading..." && reading.artist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private struct ScriptOutput: Decodable {
         let readAtMs: Double
         let info: String

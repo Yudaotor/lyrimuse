@@ -431,9 +431,21 @@ public final class PlayerQueryServer: @unchecked Sendable {
         case .kasetQueue:
             let reply = Self.osascript(Self.kasetQueueScript, timeout: Self.scriptTimeout, javaScript: true)
                 .flatMap { KasetPlayerInfo.queueReply(fromScriptOutput: Data($0.utf8)) }
+            // 接下来几条是不是播客单集先问好,放到时不用按住等(见 KasetVideoKind)。
+            if let reply {
+                KasetVideoKind.prefetch(Self.kasetKindPrefetchIDs(currentIndex: reply.currentIndex, videoIDs: reply.tracks.map(\.videoID)))
+            }
             return makeReply(id: id, output: reply.flatMap(Self.encodedQueueReply), error: "queue unavailable")
         }
     }
+
+    /// 队列里当前这一条起往后 `kasetKindPrefetchCount` 条的 videoId(队列没标当前这一条时从头取)。纯函数,selftest 覆盖。
+    public static func kasetKindPrefetchIDs(currentIndex: Int?, videoIDs: [String?]) -> [String] {
+        Array(videoIDs.dropFirst(currentIndex ?? 0).prefix(kasetKindPrefetchCount).compactMap { $0 })
+    }
+
+    /// 读队列时先问好类型的条数。
+    public static let kasetKindPrefetchCount = 6
 
     /// `QueueReply` 的 JSON(键排好序,引擎那边按键名解)。
     public static func encodedQueueReply(_ reply: KasetPlayerInfo.QueueReply) -> String? {

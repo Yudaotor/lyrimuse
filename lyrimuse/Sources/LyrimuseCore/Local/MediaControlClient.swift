@@ -85,6 +85,7 @@ public enum MediaControlClient {
         setSnapshotFailure(nil)
         kasetLock.lock()
         kasetAskedThisRound = false
+        kasetNotSongThisRound = false
         kasetLock.unlock()
         let raw = rawSnapshot(players: players)
         // 三条路都要过一遍署名纠正:酷狗 3.3.2 把当前这句歌词发布成 artist,而
@@ -412,6 +413,11 @@ public enum MediaControlClient {
     private static var kasetLastMove: KasetPlayerInfo.LastMove?
     /// 这一拍已经问过 Kaset 了(`fetchSnapshotWithProvenance` 入口清零),同一拍不问第二次。
     private static var kasetAskedThisRound = false
+    /// 这一拍问过 Kaset,它在放的不是一首歌(开播时的占位、播客单集,见 `readKasetSnapshot`;入口清零):这一拍别报它,也别退回去
+    /// 报系统那份或别家暂停着的会话。
+    private static var kasetNotSongThisRound = false
+    /// 认成播客单集时打过日志的那一条(videoId),同一条只打一条。
+    private static var kasetPodcastLoggedVideoID: String?
     /// 最近一次读到的那首(曲目身份同快照的 `trackKey`)和它的 videoId,写播放状态用(`kasetVideoID`)。
     private static var kasetLastVideo: (trackKey: String, videoID: String)?
     /// 这首最先报的歌名与署名(`KasetPlayerInfo.steadyIdentity`)。
@@ -452,6 +458,19 @@ public enum MediaControlClient {
             r.succeeded,
             let (raw, readAt) = KasetPlayerInfo.parseScriptOutput(r.stdout, now: Date())
         else { return nil }
+        // 不是一首歌:开播时的占位、播客单集(还没问到类型的这一条先按住,见 KasetVideoKind)。这一拍不报它。
+        let kind = KasetPlayerInfo.isPlaceholder(raw) ? nil : KasetVideoKind.verdict(for: raw.videoID ?? "")
+        if kind != .notPodcast {
+            kasetLock.lock()
+            kasetNotSongThisRound = true
+            let logPodcast = kind == .podcastEpisode && kasetPodcastLoggedVideoID != raw.videoID
+            if logPodcast { kasetPodcastLoggedVideoID = raw.videoID }
+            kasetLock.unlock()
+            if logPodcast {
+                logger.notice("kaset: podcast episode, not reported as a song track=\(raw.title, privacy: .public)")
+            }
+            return nil
+        }
         kasetLock.lock()
         var first = kasetFirstReport
         kasetLock.unlock()
@@ -621,10 +640,16 @@ public enum MediaControlClient {
 
     private static func fetchKasetSnapshot() -> MediaControlSnapshot? {
         guard let snapshot = readKasetSnapshot() else {
-            setSnapshotFailure(.appleScriptUnavailable)
+            setSnapshotFailure(kasetNotSongThisRoundValue() ? .targetNotPlayingMusic : .appleScriptUnavailable)
             return nil
         }
         return snapshot
+    }
+
+    private static func kasetNotSongThisRoundValue() -> Bool {
+        kasetLock.lock()
+        defer { kasetLock.unlock() }
+        return kasetNotSongThisRound
     }
 
     /// 这一拍别的来源没给出在放的歌、Kaset 又开着,就直接问它一次。
@@ -639,6 +664,8 @@ public enum MediaControlClient {
     /// 只在 Kaset 开着时才发 Apple Event,不用它的人一次都碰不到,不会凭空多弹「自动化」权限框。
     private static func preferringPlayingKaset(_ found: MediaControlSnapshot?) -> MediaControlSnapshot? {
         let kaset = kasetToPrefer(over: found)
+        // Kaset 在放的不是一首歌(播客单集、开播占位)时什么都不报,别报别家暂停着的会话(同 KKBOX 的播客)。
+        if kaset == nil, kasetNotSongThisRoundValue() { return nil }
         let other = kaset == nil ? nil : (found?.bundleIdentifier ?? "nothing")
         kasetLock.lock()
         let changed = kasetPreferredOver != other
@@ -1510,7 +1537,7 @@ public enum MediaControlClient {
     /// 不用这个播放器的人一次都碰不到,不会凭空多弹「自动化」权限框。
     private static func adaptedSnapshot(
         bundleID: String, mediaControl: MediaControlSnapshot
-    ) -> MediaControlSnapshot {
+    ) -> MediaControlSnapshot? {
         // 电台的适配方式**就是** media-control 的台标识 + RadioTrackClock 单曲表:
         // `player position` 在电台上报的同样是整档节目的位置,借过来会把
         // fetchRawMediaControlSnapshot 刚换好的那块单曲表覆盖回错的值。见 RadioTrackClock 头注。
@@ -1540,8 +1567,10 @@ public enum MediaControlClient {
             }
             return spotifyFallbackCaughtUp(mediaControl, waited: now.timeIntervalSince(asked), now: now)
         case PlaybackPlayer.kaset.bundleIdentifier:
-            // 跟 Spotify 一样暂停态也问:系统那份连歌名都可能是上一首的(见 KasetPlayerInfo 头注)。
-            return fetchKasetSnapshot() ?? mediaControl
+            // 跟 Spotify 一样暂停态也问:系统那份连歌名都可能是上一首的(见 KasetPlayerInfo 头注)。它此刻放的不是一首歌
+            // (占位、播客单集)时也不退回去报系统那份,那份就是它自己发的同一条。
+            if let kaset = fetchKasetSnapshot() { return kaset }
+            return kasetNotSongThisRoundValue() ? nil : mediaControl
         default:
             return mediaControl
         }

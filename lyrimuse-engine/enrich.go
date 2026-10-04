@@ -627,6 +627,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	if artist == "" && playerArtistlessNotMusic[bundleID] {
 		return nil
 	}
+	// Kaset 放的是播客单集(YouTube Music 登记的类型)也不是歌,同上。App 那边认出来就不报它(KasetVideoKind),
+	// 这里挡的是它还没认出来、照常报过来的那几拍。
+	if bundleID == kasetBundleID && kasetPodcastEpisodeCached(kasetVideoIDFor(bundleID, artist, title)) {
+		return nil
+	}
 	// 广告不能拿去搜歌词:qqMusicURL()/e.SpotifyURL 这两路兜底链接只要 title!="" 就会给出
 	// 非空值,导致 resolveEnrichAsync 的"全空不写入"判断永远不成立,广告标题会被当成一首
 	// "歌"永久写进磁盘缓存、污染"歌词管理"列表,还白跑一轮网络搜索。判据见 isAdBreak。

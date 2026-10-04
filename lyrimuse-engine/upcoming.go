@@ -244,6 +244,10 @@ func queueUpcomingEnrich(tracks []upcomingTrack, gen uint64) {
 		if !eligible(false) {
 			continue
 		}
+		// 播客单集不是歌,不预取(App 那边也不报它,见 LyrimuseCore 的 KasetVideoKind)。
+		if t.videoID != "" && kasetPodcastEpisode(t.videoID) {
+			continue
+		}
 		if prevKey != "" {
 			// 只在真要起下一个之前才等 —— 跳过的(已解析/在途)不用等。
 			waitPrefetchResolved(prevKey)

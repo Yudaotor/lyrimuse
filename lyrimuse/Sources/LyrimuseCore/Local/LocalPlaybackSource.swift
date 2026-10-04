@@ -2159,6 +2159,10 @@ public final class LocalPlaybackSource: ObservableObject {
         SpotifyWebAdProbe.shared.setResultSink { [weak self] _ in
             Task { @MainActor [weak self] in self?.poll() }
         }
+        // Kaset 这一条是不是播客单集问出结论了:马上补查一次,开播被按住的这一条不用等下一拍(见 KasetVideoKind)。
+        KasetVideoKind.setResultSink { [weak self] in
+            Task { @MainActor [weak self] in self?.poll() }
+        }
         // 默认输出设备一换,探针领先量跟着换(见 probeLeadByDevice 一带注释)。
         AudioOutputRoute.startObserving { [weak self] in
             Task { @MainActor [weak self] in self?.outputRouteChanged() }

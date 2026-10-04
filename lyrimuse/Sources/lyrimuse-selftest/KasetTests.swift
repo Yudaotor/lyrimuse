@@ -573,6 +573,51 @@ func runKasetTests() {
                     "Kaset 网页会话监听: 没在放 ↔ 没有会话、状态没变,不交")
     }
 
+    // ---- 播客单集与开播占位(KasetVideoKind / isPlaceholder)----
+    do {
+        typealias V = KasetVideoKind
+        let next = #"{"contents":{"panel":{"contents":[{"playlistPanelVideoRenderer":{"videoId":"pod00000001","navigationEndpoint":{"watchEndpoint":{"videoId":"pod00000001","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_PODCAST_EPISODE"}}}}}},{"playlistPanelVideoRenderer":{"videoId":"song0000001","navigationEndpoint":{"watchEndpoint":{"videoId":"song0000001","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_ATV"}}}}}}]}}}"#
+        expectEqual(V.videoType(fromNext: Data(next.utf8), videoID: "pod00000001"), V.podcastEpisodeType,
+                    "Kaset 播客: 取这一条登记的视频类型")
+        expectEqual(V.videoType(fromNext: Data(next.utf8), videoID: "song0000001"), "MUSIC_VIDEO_TYPE_ATV",
+                    "Kaset 播客: 按 videoId 认是哪一条")
+        expectEqual(V.videoType(fromNext: Data(next.utf8), videoID: "other000001") == nil
+                        && V.videoType(fromNext: Data("x".utf8), videoID: "pod00000001") == nil, true,
+                    "Kaset 播客: 应答里没有这一条、解析不出都是 nil")
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        func d(_ known: Bool? = nil, failed: Double? = nil, asking: Double? = nil) -> (V.Verdict, Bool) {
+            let r = V.decide(knownPodcast: known, failedAt: failed.map { t0 - $0 }, askingSince: asking.map { t0 - $0 }, now: t0)
+            return (r.verdict, r.ask)
+        }
+        expectEqual(d(true) == (.podcastEpisode, false) && d(false) == (.notPodcast, false), true,
+                    "Kaset 播客: 问成了的照结论,不再问")
+        expectEqual(d() == (.pending, true), true, "Kaset 播客: 没问过的去问,这一回先按住")
+        expectEqual(d(asking: 1) == (.pending, false) && d(asking: 2.5) == (.notPodcast, false), true,
+                    "Kaset 播客: 正在问的按住两秒,过了照常报")
+        expectEqual(d(failed: 10) == (.notPodcast, false) && d(failed: 61) == (.notPodcast, true)
+                        && d(failed: 61, asking: 1) == (.notPodcast, false), true,
+                    "Kaset 播客: 没问成过的不再按住,隔一分钟再问")
+        let body = V.requestBody(videoID: "pod00000001", now: t0)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let client = (body?["context"] as? [String: Any])?["client"] as? [String: Any]
+        expectEqual(body?["videoId"] as? String == "pod00000001" && client?["clientName"] as? String == "WEB_REMIX"
+                        && client?["clientVersion"] as? String == "1.20270115.01.00", true,
+                    "Kaset 播客: 只带 videoId,网页客户端身份、版本号按 UTC 日期")
+        func r(_ title: String, _ artist: String) -> K.Reading {
+            K.Reading(title: title, artist: artist, videoID: "pod00000001", duration: nil, position: 0, isPlaying: false, isPaused: false)
+        }
+        expectEqual(K.isPlaceholder(r("Loading...", "")) && K.isPlaceholder(r("Loading...", "  ")), true,
+                    "Kaset 占位: 歌名「Loading...」、没有歌手是开播占位")
+        expectEqual(K.isPlaceholder(r("Loading...", "Some Band")) || K.isPlaceholder(r("T", "")), false,
+                    "Kaset 占位: 有歌手的、歌名不是占位的都不算")
+        let ids: [String?] = (0..<10).map { $0 == 4 ? nil : "vid0000000\($0)" }
+        expectEqual(PlayerQueryServer.kasetKindPrefetchIDs(currentIndex: 2, videoIDs: ids),
+                    ["vid00000002", "vid00000003", "vid00000005", "vid00000006", "vid00000007"],
+                    "Kaset 播客: 读队列时从当前这一条起先问好接下来几条")
+        expectEqual(PlayerQueryServer.kasetKindPrefetchIDs(currentIndex: nil, videoIDs: ids).first, "vid00000000",
+                    "Kaset 播客: 队列没标当前这一条时从头取")
+    }
+
     // ---- 接线契约(扫源码)----
     do {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -581,8 +626,9 @@ func runKasetTests() {
         }
         let client = src("LyrimuseCore/Local/MediaControlClient.swift")
         let adapted = ["        case PlaybackPlayer.kaset.bundleIdentifier:",
-                       "            // 跟 Spotify 一样暂停态也问:系统那份连歌名都可能是上一首的(见 KasetPlayerInfo 头注)。",
-                       "            return fetchKasetSnapshot() ?? mediaControl"].joined(separator: "\n")
+                       "            // 跟 Spotify 一样暂停态也问:系统那份连歌名都可能是上一首的(见 KasetPlayerInfo 头注)。它此刻放的不是一首歌",
+                       "            // (占位、播客单集)时也不退回去报系统那份,那份就是它自己发的同一条。",
+                       "            if let kaset = fetchKasetSnapshot() { return kaset }"].joined(separator: "\n")
         expectEqual(client.contains(adapted), true, "Kaset 契约: 认出是它之后整份换成 AppleScript 那份,暂停态也换")
         expectEqual(client.contains("case .kaset: snapshot = fetchKasetSnapshot()"), true, "Kaset 契约: 焦点回退问它自己")
         expectEqual(client.contains("let steady = KasetPlayerInfo.steadyIdentity(raw, first: first)")
@@ -691,6 +737,24 @@ func runKasetTests() {
                         && helper.contains("if (![text isEqualToString:last]) {")
                         && helper.contains("options:NSJSONWritingSortedKeys"), true,
                     "Kaset 契约: helper 常驻按 bundle id 自己认进程号,变了才输出(键排好序),父进程没了自己退出")
+        expectEqual(client.contains("let kind = KasetPlayerInfo.isPlaceholder(raw) ? nil : KasetVideoKind.verdict(for: raw.videoID ?? \"\")")
+                        && client.contains("if kind != .notPodcast {")
+                        && client.contains("if let kaset = fetchKasetSnapshot() { return kaset }\n            return kasetNotSongThisRoundValue() ? nil : mediaControl")
+                        && client.contains("if kaset == nil, kasetNotSongThisRoundValue() { return nil }")
+                        && client.contains("setSnapshotFailure(kasetNotSongThisRoundValue() ? .targetNotPlayingMusic : .appleScriptUnavailable)"),
+                    true, "Kaset 契约: 开播占位、播客单集这一拍不报,也不退回去报系统那份或别家暂停着的")
+        expectEqual(src("LyrimuseCore/Local/PlayerQueryServer.swift").contains(
+                        "KasetVideoKind.prefetch(Self.kasetKindPrefetchIDs(currentIndex: reply.currentIndex, videoIDs: reply.tracks.map(\\.videoID)))")
+                        && playbackSource.contains("KasetVideoKind.setResultSink { [weak self] in"), true,
+                    "Kaset 契约: 读队列时把接下来几条的类型先问好;问出结论马上补查一次")
+        let videoKind = src("LyrimuseCore/Local/KasetVideoKind.swift")
+        expectEqual(videoKind.contains("if askingSince[videoID] != nil { waiting.insert(videoID) }")
+                        && videoKind.contains("let sink = waiting.remove(videoID) != nil ? resultSink : nil"), true,
+                    "Kaset 契约: 只为轮询问到时结论还没出来的那一条补查,只被预问过的结果出来不补查")
+        expectEqual(videoKind.contains("lastAsked = videoID")
+                        && videoKind.contains("if known.count >= cacheLimit { known = known.filter { $0.key == lastAsked } }")
+                        && videoKind.contains("if failedAt.count >= cacheLimit { failedAt = failedAt.filter { $0.key == lastAsked } }"), true,
+                    "Kaset 契约: 结论表满了清表时留下正在放那一条的,它不会被重新按住")
         expectEqual(client.contains("if snapshot == nil, player != .kaset {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
         expectEqual(client.contains("if players.contains(.auto) { return heldAcrossPlayerGap(preferringPlayingKaset(fetchAutoDetectedSnapshot())) }"), true,

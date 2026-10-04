@@ -255,6 +255,43 @@ func ytmusicListedTrackSettled(ctx context.Context, videoID, hl string) (ytmusic
 	return c, ok
 }
 
+// ytmusicVideoTypePodcastEpisode:YouTube Music 给播客单集标的视频类型。
+const ytmusicVideoTypePodcastEpisode = "MUSIC_VIDEO_TYPE_PODCAST_EPISODE"
+
+// kasetPodcastEpisodePoll:kasetPodcastEpisode 等后台那一次问完时,隔多久看一眼。
+const kasetPodcastEpisodePoll = 50 * time.Millisecond
+
+// kasetPodcastEpisode:这个 videoId 在 YouTube Music 上登记成播客单集。按界面语言取登记,跟轮询判专辑共用同一份记录和
+// 同一套规矩(ytmusicListedCachedOrFetch:同一条同时只问一次,没问成隔 ytmusicCreditRetryAfter 再问);后台正在问的
+// 等它问完,最多等 ytmusicCreditFetchTimeout。问不成当不是。会阻塞,别在轮询路径上调。
+func kasetPodcastEpisode(videoID string) bool {
+	hl := ytmusicDisplayLanguage()
+	deadline := time.Now().Add(ytmusicCreditFetchTimeout)
+	for {
+		c, ok := ytmusicListedCachedOrFetch(videoID, hl)
+		if ok {
+			return c.videoType == ytmusicVideoTypePodcastEpisode
+		}
+		if !ytmusicCreditAsking(hl, videoID) || time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(kasetPodcastEpisodePoll)
+	}
+}
+
+// ytmusicCreditAsking:这一种界面语言、这个 videoId 的登记正在后台问。
+func ytmusicCreditAsking(hl, videoID string) bool {
+	ytmusicCreditMu.Lock()
+	defer ytmusicCreditMu.Unlock()
+	return ytmusicCreditPending[ytmusicCreditKey(hl, videoID)]
+}
+
+// kasetPodcastEpisodeCached:同 kasetPodcastEpisode,只看记下的(没记过就后台去问,这一回当不是)。轮询路径用。
+func kasetPodcastEpisodeCached(videoID string) bool {
+	c, ok := ytmusicListedCachedOrFetch(videoID, ytmusicDisplayLanguage())
+	return ok && c.videoType == ytmusicVideoTypePodcastEpisode
+}
+
 // ytmusicCreditRunsText:一段 InnerTube 文字({"runs":[{"text":…},…]})拼成一串;firstField 时到第一个 ` • ` 为止。
 func ytmusicCreditRunsText(node any, firstField bool) string {
 	m, _ := node.(map[string]any)
