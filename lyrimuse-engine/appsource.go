@@ -46,6 +46,29 @@ var liveAppPlaybackJudge = appPlaybackJudge{
 	catalog:     liveAppCatalog,
 }
 
+// searchAppPlaybackJudge:search-lyrics 用的判定。同 liveAppPlaybackJudge,只是不查汽水试听段 —— 那一步会联网、
+// 还会向 App 发布修正,一次性的搜索进程不该做。
+func searchAppPlaybackJudge() appPlaybackJudge {
+	j := liveAppPlaybackJudge
+	j.sodaPreview = func(string, string, string, string, float64) (float64, float64, bool, bool) {
+		return 0, 0, false, false
+	}
+	return j
+}
+
+// notePlaybackIDsFromAppState 读一次 App 写的播放状态,把正在放的那首的 Apple 目录 ID(j.catalog 核对目录锚点时记下)
+// 与 Spotify 曲目 ID 记成播放提示(platformtrackid.go)。search-lyrics 是独立进程,常驻进程记下的提示它看不到;
+// 搜的正是在放的这首时,按 ID 直取的几条路(amll、Music.app 本地歌词缓存、在播 ISRC)才跟自动解析走得一样。
+// 状态不可用(App 没在跑、过期、读不出)或没在放时什么都不记。
+func notePlaybackIDsFromAppState(path string, now time.Time, j appPlaybackJudge) {
+	rec, avail := newAppStateReader(path).read(now)
+	if avail != appStateAvailable {
+		return
+	}
+	tick, _ := appPlaybackTickFor(rec, appPlaybackMarks{}, now, j)
+	notePlayingSpotifyTrackID(tick.snap.Artist, tick.snap.Title, tick.snap.Album, tick.spotifyTrackID)
+}
+
 // liveAppFixedTrack:署名纠正,酷狗与信任播放器两套按 bundle 互斥。
 func liveAppFixedTrack(bundle, title, artist, album string, duration float64) (string, string, bool) {
 	if fixed, ok := kugouFixedArtist(bundle, title, artist, duration); ok {

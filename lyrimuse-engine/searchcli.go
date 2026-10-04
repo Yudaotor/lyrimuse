@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // runSearchLyricsCLI implements `lyrimuse-engine search-lyrics -artist ... -title ...
@@ -109,6 +110,8 @@ func runSearchLyricsCLI(args []string) {
 		// nativeLyricSources 那次要修的是"手动搜索的名次跟自动决策对不上",而**加错**同样
 		// 会造成对不上,还多一层"错得理直气壮"。
 		setNativeLyricSourcesForPlayer(*player)
+		// 搜的是正在放的这首时,播放器给的身份照常驻进程那样记下,见 notePlaybackIDsFromAppState。
+		notePlaybackIDsFromAppState(filepath.Join(filepath.Dir(cfgPath), clientName+"-playback-state.json"), time.Now(), searchAppPlaybackJudge())
 	}
 
 	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由:NetEase/QQ/酷狗/LRCLIB 的
