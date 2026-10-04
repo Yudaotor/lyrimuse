@@ -22,8 +22,8 @@ struct OverlayNSFonts: Equatable {
 /// 剪影,试探会把它们一起按"不换行"的尺寸走一遍,实测会让主歌词行真的按不换行摆出来、
 /// 冲出卡片右边缘被窗口裁掉。测文字宽度不需要布局参与,`NSAttributedString` 直接量就是了。
 ///
-/// 量的是**整串一行**的宽度,跟 `WrapLayout` 那边"逐词量宽再相加"会差一点点(词间 kerning),
-/// 对这个用途够了 —— 它只决定留白让多少,差几 pt 不会让人看出来。
+/// 量的是**整串一行**的宽度。卡片的主行不直接用它,而是按断句同一个量法逐词相加(`LyricsSegmenter.mainWidth`,
+/// 见 `LyricsOverlayView.cardNaturalWidth`):留白按量出来的宽度让,少量几 pt 就会把贴满一行的句子末尾挤到下一行。
 @MainActor
 enum OverlayNaturalWidth {
     /// 量过的结果存住:同一句歌词在同一份字体下的宽度是常量,而调用点在 body 里,

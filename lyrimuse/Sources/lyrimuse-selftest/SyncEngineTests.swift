@@ -410,6 +410,43 @@ func runSyncEngineTests() {
         expectEqual(LyricsSegmenter.segments(duetLine(.center), budget: sidedBudget).count, 2,
                     "按宽度断句: 合唱行居中、不画标记")
 
+        // 主行宽(断句判「放不放得下」和悬浮歌词算对唱留白共用):逐词相加与整串取大,逐词读音按组量。
+        let kerned: (String) -> CGFloat = { CGFloat($0.count) * 10 - ($0.count >= 6 ? 6 : 0) }
+        let twoWords = [SyncedLyricWord(text: "abc", startMs: 0, durationMs: 100),
+                        SyncedLyricWord(text: "def", startMs: 100, durationMs: 100)]
+        expectEqual(LyricsSegmenter.mainWidth(words: twoWords, groups: nil, text: "abcdef", measure: kerned,
+                                              wordRomanization: nil), 60,
+                    "主行宽: 逐词相加比整串宽时取逐词")
+        expectEqual(LyricsSegmenter.mainWidth(words: nil, groups: nil, text: "abcdef", measure: kerned,
+                                              wordRomanization: nil), 54,
+                    "主行宽: 没有逐词时按整串")
+        let readingGroups = [SyncedLyricWordGroup(id: 0, words: [twoWords[0]], romanization: "xxxxxxxx"),
+                             SyncedLyricWordGroup(id: 1, words: [twoWords[1]], romanization: nil)]
+        expectEqual(LyricsSegmenter.mainWidth(words: twoWords, groups: readingGroups, text: "abcdef", measure: kerned,
+                                              wordRomanization: .init(measure: { CGFloat($0.count) * 5 }, sidePadding: 3)),
+                    76, "主行宽: 逐词读音按组量,一组取词宽与读音宽 + 两侧留白的较大者")
+
+        // 悬浮歌词对唱的合唱行贴满一行时,弹性留白算富余要用「主行宽 + 两侧描边预留」(跟排版占的一样)。
+        let overlayCardWidth: CGFloat = 402 - 40
+        let chorusInset = LyricDuetLayout.insets(for: .leading, availableWidth: overlayCardWidth, fontSize: 34).trailing * 2
+        let overlayStroke: CGFloat = 2.4
+        let packedLine = overlayCardWidth - overlayStroke * 2 - 1
+        func chorusWrapWidth(natural: CGFloat) -> CGFloat {
+            let scale = OverlayCardGeometry.elasticInsetScale(totalInset: chorusInset, availableWidth: overlayCardWidth,
+                                                             naturalContentWidth: natural)
+            return overlayCardWidth - chorusInset * scale - overlayStroke * 2
+        }
+        expectEqual(chorusWrapWidth(natural: packedLine + overlayStroke * 2) >= packedLine, true,
+                    "对唱留白: 合唱行贴满一行时,让完留白还放得下")
+        expectEqual(chorusWrapWidth(natural: packedLine) < packedLine, true,
+                    "对唱留白: 富余漏算描边预留时留白会挤掉末尾的字(上一条防的就是这个)")
+        let overlayViewSrc = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/LyricsOverlayView.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(overlayViewSrc.contains("widest = max(widest, LyricsSegmenter.mainWidth(")
+                    && overlayViewSrc.contains("return widest + strokeInset * 2 + indicator.leading + indicator.trailing"),
+                    true, "对唱留白契约: 卡片「不换行要多宽」按断句同一个主行量法,并加上描边预留")
+
         // 主行一个字切不开、译文放不下:主行整句一段,译文截断到放得下。
         let oneChar = LyricsSyncEngine()
         oneChar.load(lyrics: "[00:01.00]5\n[00:05.00]end\n", lyricsTr: "[00:01.00]这是一句特别特别长的译文\n",

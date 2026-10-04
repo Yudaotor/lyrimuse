@@ -78,9 +78,8 @@ public enum OverlayCardGeometry {
     /// 留白都要折成两行,但让开之后第一行能多装一个词、右边那截空白才填得上 —— 按行数判
     /// 会在这种句子上判成"留白不花钱",而那正是用户看到的"左侧都没满就换行了"。
     ///
-    /// `naturalContentWidth` 由调用方量(SwiftUI 的 `sizeThatFits(.unspecified)`:逐字那层
-    /// `WrapLayout` 在无宽度提案下走 `WrapLayoutMath.unconstrainedSize`,如实给出铺成一行
-    /// 要多宽),这里只管算,所以 selftest 能直接喂数字问它。
+    /// `naturalContentWidth` 由调用方量,必须跟排版占的宽度同一个口径(主行逐词相加、四周描边预留都算上):
+    /// 量少了,留白就把差的那几个点吃掉,贴满一行的句子末尾折到下一行。这里只管算,所以 selftest 能直接喂数字问它。
     public static func elasticInsetScale(
         totalInset: CGFloat, availableWidth: CGFloat, naturalContentWidth: CGFloat
     ) -> CGFloat {

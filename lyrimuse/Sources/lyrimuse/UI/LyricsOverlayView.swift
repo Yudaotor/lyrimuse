@@ -763,11 +763,16 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private var cardNaturalWidth: CGFloat {
         let fonts = playback.overlayNSFonts
         let indicator = speakerIndicatorInset(side: duetDecorationSide)
+        let strokeInset = playback.textStrokeEnabled ? LyricsTextStrokeMetrics.inset : 0
         var widest: CGFloat = 0
-        widest = max(widest, OverlayNaturalWidth.width(line?.plainText, font: fonts.main))
-        // 逐词标注时罗马音没有独立的一行(标在每个词正下方),但它照样会把那一行撑宽,
-        // 所以整行的罗马音也要参与取最大 —— 这是个近似:真实宽度是逐词 max(词, 读音)
-        // 相加,量不到,差的那一点只会让留白多让一点,不会反过来害得提前折行。
+        // 主行跟断句判「放不放得下」同一个量法(`LyricsSegmenter.mainWidth`:逐词相加与整串取大,逐词读音按组量,
+        // 组两侧的留白跟排版同一个式子)。
+        widest = max(widest, LyricsSegmenter.mainWidth(
+            words: line?.words, groups: usesPerWordRomanization ? line?.wordGroups : nil,
+            text: line?.plainText ?? "", measure: { OverlayNaturalWidth.width($0, font: fonts.main) },
+            wordRomanization: .init(measure: { OverlayNaturalWidth.width($0, font: fonts.romanization) },
+                                    sidePadding: OverlayRowLayout.romaSidePadding(strokeInset: strokeInset))))
+        // 整行的罗马音也参与取最大;逐词标注时读音已经算进上面的主行宽,这里再按整行量一遍只会更宽、不会更窄。
         widest = max(widest, OverlayNaturalWidth.width(
             romanizationRowText ?? (usesPerWordRomanization ? line?.romanization : nil)
                 ?? (upcomingWordGroups != nil ? playback.nextLineRomanization : nil),
@@ -779,7 +784,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             widest = max(widest, OverlayNaturalWidth.width(nextLineText, font: previewFont))
         }
         guard widest > 0 else { return 0 }
-        return widest + indicator.leading + indicator.trailing
+        // 每一行四周都留着描边那圈(开着时各 `LyricsTextStrokeMetrics.inset`),排版要占这么宽:漏算的话留白正好把这一截
+        // 吃掉,贴满一行的句子末尾一个字折到下一行。
+        return widest + strokeInset * 2 + indicator.leading + indicator.trailing
     }
 
     /// 两侧留白**这一行实际用上了多少**,0…1。判据与取舍见

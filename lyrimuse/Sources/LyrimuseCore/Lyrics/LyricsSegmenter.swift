@@ -253,19 +253,28 @@ public enum LyricsSegmenter {
         row.maxWidth - (isSided(side) ? budget.sidedInset : 0)
     }
 
-    /// 主行宽:逐词相加(图层行这样排)和整串量(菜单栏、行级歌词这样排)取较大者;逐词读音按组量。
-    private static func mainWidth(words: [SyncedLyricWord]?, groups: [SyncedLyricWordGroup]?, text: String,
-                                  budget: LineLayoutBudget) -> CGFloat {
-        let whole = budget.main.measure(text)
+    /// 主行宽:逐词相加(图层行这样排)和整串量(菜单栏、行级歌词这样排)取较大者;逐词读音按组量(组宽 = 词宽
+    /// 与读音宽 + 两侧留白的较大者)。断句判「放不放得下」和悬浮歌词算对唱留白(`LyricsOverlayView.cardNaturalWidth`)
+    /// 用的是这同一个量法,两处不一致的话,留白会把贴满一行的句子末尾挤到下一行。
+    public static func mainWidth(words: [SyncedLyricWord]?, groups: [SyncedLyricWordGroup]?, text: String,
+                                 measure: (String) -> CGFloat,
+                                 wordRomanization: LineLayoutBudget.WordRomanization?) -> CGFloat {
+        let whole = measure(text)
         guard let words, !words.isEmpty else { return whole }
-        if let groups, let wr = budget.wordRomanization {
+        if let groups, let wr = wordRomanization {
             let sum = groups.reduce(CGFloat(0)) { acc, g in
-                let w = g.words.reduce(CGFloat(0)) { $0 + budget.main.measure($1.text) }
+                let w = g.words.reduce(CGFloat(0)) { $0 + measure($1.text) }
                 return acc + max(w, wr.measure(g.romanization ?? " ") + wr.sidePadding * 2)
             }
             return max(sum, whole)
         }
-        return max(words.reduce(CGFloat(0)) { $0 + budget.main.measure($1.text) }, whole)
+        return max(words.reduce(CGFloat(0)) { $0 + measure($1.text) }, whole)
+    }
+
+    private static func mainWidth(words: [SyncedLyricWord]?, groups: [SyncedLyricWordGroup]?, text: String,
+                                  budget: LineLayoutBudget) -> CGFloat {
+        mainWidth(words: words, groups: groups, text: text, measure: budget.main.measure,
+                  wordRomanization: budget.wordRomanization)
     }
 
     static func joinedWords(_ lines: [Line]) -> [SyncedLyricWord]? {
