@@ -2725,6 +2725,20 @@ struct LyricsWindowView: View {
                     scrollToActiveLine(scrollProxy: scrollProxy, animated: false)
                 }
             }
+            // 右栏从「播放记录」切回歌词、歌词栏收起再打开:滚动列表是新建的,从顶上开始。外层这块没有重新出现,
+            // 下面那条 onAppear 不会再来,不拉这一把要等下一次换句才回到当前行(07 章决策 96)。延一拍等新列表布局。
+            .onChange(of: showsListenHistory) { _, showing in
+                guard !showing else { return }
+                DispatchQueue.main.async {
+                    scrollToActiveLine(scrollProxy: scrollProxy, animated: false)
+                }
+            }
+            .onChange(of: showsLyricsPane) { _, showing in
+                guard showing else { return }
+                DispatchQueue.main.async {
+                    scrollToActiveLine(scrollProxy: scrollProxy, animated: false)
+                }
+            }
             .onChange(of: defersLyricsPaneResize) { _, deferring in
                 // 松手 / 切完形态后字号可能一次跳到新尺寸,当前行会偏离锚位;等新字号排完(延一拍)
                 // 无动画拉回来。
