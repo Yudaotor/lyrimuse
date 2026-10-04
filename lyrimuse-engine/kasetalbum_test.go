@@ -45,31 +45,35 @@ func TestKasetAudioVideoIDFor(t *testing.T) {
 	}
 }
 
-// 用 Kaset 放的歌:界面专辑位和上送都用 YouTube Music 给音轨版本登记的专辑。
+// 用 Kaset 放的歌:界面专辑位和上送都用判出来的专辑(判法见 kasetalbum.go)。
 func TestKasetListedAlbum(t *testing.T) {
 	withKasetAudioVideoIDs(t)
-	withYTMusicCredits(t, map[string]ytmusicCredit{"ot0WzesOp6I": {artist: "Jhené Aiko", title: "Break", album: "Westside Whimsy"}})
-	noteKasetAudioVideoIDs(map[string]string{"AJ--JpOmlog": "ot0WzesOp6I"})
-	if got := kasetListedAlbumFor("AJ--JpOmlog"); got != "Westside Whimsy" {
-		t.Errorf("按音轨版本取专辑: %q", got)
+	hl := ytmusicDisplayLanguage()
+	withYTMusicCredits(t, map[string]ytmusicCredit{
+		ytmusicCreditKey(hl, "mQLzR5V2Z9c"): {artist: "Jhené Aiko & Ab-Soul", title: "Love Bomb", videoType: ytmusicVideoTypeOMV, durationSecs: 153},
+		ytmusicCreditKey(hl, "iKWPxiflnyg"): {artist: "Jhené Aiko & Ab-Soul", title: "Love Bomb", album: "Westside Whimsy", durationSecs: 152},
+	})
+	noteKasetAudioVideoIDs(map[string]string{"mQLzR5V2Z9c": "iKWPxiflnyg"})
+	if got := kasetListedAlbumFor("mQLzR5V2Z9c", 152.4, "Jhené Aiko, Ab-Soul", "Love Bomb"); got != "Westside Whimsy" {
+		t.Errorf("放的视频跟音轨版本一样长,用音轨版本的专辑: %q", got)
 	}
-	if got := kasetListedAlbumFor(""); got != "" {
+	if got := kasetListedAlbumFor("", 152, "Jhené Aiko", "Love Bomb"); got != "" {
 		t.Errorf("没有 videoId 不给: %q", got)
 	}
-	noteKasetCurrentTrack(kasetBundleID, "Jhené Aiko", "Break", "AJ--JpOmlog")
+	noteKasetCurrentTrack(kasetBundleID, "Jhené Aiko, Ab-Soul", "Love Bomb", "mQLzR5V2Z9c")
 	t.Cleanup(func() { noteKasetCurrentTrack("", "", "", "") })
 	p := &poller{ctx: context.Background()}
-	if got := p.albumHintFor(snapshot{Artist: "Jhené Aiko", Title: "Break", Bundle: kasetBundleID, Duration: 196}); got != "Westside Whimsy" {
+	if got := p.albumHintFor(snapshot{Artist: "Jhené Aiko, Ab-Soul", Title: "Love Bomb", Bundle: kasetBundleID, Duration: 152}); got != "Westside Whimsy" {
 		t.Errorf("上送的专辑跟界面一致: %q", got)
 	}
 	src, err := os.ReadFile("enrich.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"youtubeMusicAlbum := kasetListedAlbumFor(kasetVideoID)",
-		"if youtubeMusicAlbum != \"\" && e.YouTubeMusicAlbum != youtubeMusicAlbum {"} {
+	for _, want := range []string{"ytmVerdict, ytmSettled := kasetAlbumVerdictFor(kasetVideoID, durationSecs, artist, title)",
+		"if ytmSettled && applyKasetAlbumVerdict(&e, ytmVerdict, ytmusicDisplayLanguage()) {"} {
 		if !strings.Contains(string(src), want) {
-			t.Errorf("enrich.go 缺 %q:正在放的这首要把登记的专辑写进条目(App 从缓存读)", want)
+			t.Errorf("enrich.go 缺 %q:正在放的这首要把判出来的专辑写进条目(App 从缓存读)", want)
 		}
 	}
 }
@@ -98,34 +102,46 @@ func TestYTMusicCreditCachedOrFetch(t *testing.T) {
 		}
 		return n
 	}
+	key := ytmusicCreditKey("zh-Hans", "ot0WzesOp6I")
 	pending := func() bool {
 		ytmusicCreditMu.Lock()
 		defer ytmusicCreditMu.Unlock()
-		return ytmusicCreditPending["ot0WzesOp6I"]
+		return ytmusicCreditPending[key]
 	}
-	if c := ytmusicCreditCachedOrFetch("ot0WzesOp6I"); c != (ytmusicCredit{}) {
-		t.Fatalf("还没问过,这一回先给空: %+v", c)
+	if c, ok := ytmusicListedCachedOrFetch("ot0WzesOp6I", "zh-Hans"); c != (ytmusicCredit{}) || ok {
+		t.Fatalf("还没问过,这一回先给空: %+v ok=%v", c, ok)
 	}
 	waitFor(t, "后台问完", func() bool { return !pending() })
 	calls := nextCalls()
 	if calls == 0 {
 		t.Fatal("应该后台问过一次")
 	}
-	if c := ytmusicCreditCachedOrFetch("ot0WzesOp6I"); c != (ytmusicCredit{}) || pending() || nextCalls() != calls {
+	if c, ok := ytmusicListedCachedOrFetch("ot0WzesOp6I", "zh-Hans"); c != (ytmusicCredit{}) || ok || pending() || nextCalls() != calls {
 		t.Errorf("没问成之后隔一阵再问,不是每拍都问")
 	}
 	mu.Lock()
 	failing = false
 	mu.Unlock()
 	ytmusicCreditMu.Lock()
-	ytmusicCreditFailedAt["ot0WzesOp6I"] = time.Now().Add(-2 * ytmusicCreditRetryAfter)
+	ytmusicCreditFailedAt[key] = time.Now().Add(-2 * ytmusicCreditRetryAfter)
 	ytmusicCreditMu.Unlock()
-	ytmusicCreditCachedOrFetch("ot0WzesOp6I")
+	ytmusicListedCachedOrFetch("ot0WzesOp6I", "zh-Hans")
 	waitFor(t, "重试问完", func() bool { return !pending() })
-	if c := ytmusicCreditCachedOrFetch("ot0WzesOp6I"); c.album != "Westside Whimsy" {
-		t.Errorf("问成之后记下: %+v", c)
+	if c, ok := ytmusicListedCachedOrFetch("ot0WzesOp6I", "zh-Hans"); c.album != "Westside Whimsy" || !ok {
+		t.Errorf("问成之后记下: %+v ok=%v", c, ok)
 	}
-	if c := ytmusicCreditCachedOrFetch("bad id"); c != (ytmusicCredit{}) {
+	for _, r := range reqs() {
+		if r.target != ytmNextURL {
+			continue
+		}
+		if client, _ := r.body["context"].(map[string]any)["client"].(map[string]any); client["hl"] != "zh-Hans" {
+			t.Errorf("按给的界面语言问: %+v", r.body["context"])
+		}
+	}
+	if c, ok := ytmusicListedCachedOrFetch("ot0WzesOp6I", "en"); c != (ytmusicCredit{}) || ok {
+		t.Error("另一种界面语言没问过,先给空")
+	}
+	if c, ok := ytmusicListedCachedOrFetch("bad id", "zh-Hans"); c != (ytmusicCredit{}) || !ok {
 		t.Error("不是 videoId 的形状不问")
 	}
 }

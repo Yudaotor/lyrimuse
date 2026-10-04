@@ -64,6 +64,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 纠正落地之前是空串。拿它画界面,别拿它当 key(查缓存 / 拼链接 / 打卡仍用 `artist`)。
     @Published private(set) var displayArtist: String = ""
     @Published private(set) var album: String = ""
+    /// 播放器没报专辑时 YouTube Music 上登记的那张(见 `LocalPlaybackSource.youtubeMusicAlbum`)。只给界面用。
+    @Published private(set) var youtubeMusicAlbum: String = ""
     /// 界面上专辑位显示的字,判据见 `LocalPlaybackSource.displayAlbum`(播放器报的 → YouTube Music 上登记的 →「MV」)。
     /// 只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
     @Published private(set) var displayAlbum: String = ""
@@ -852,9 +854,10 @@ final class PlaybackCoordinator: ObservableObject {
                 .removeDuplicates()
                 .assign(to: \.displayArtist, on: self),
             s.$album.assign(to: \.album, on: self),
-            s.$album.combineLatest(s.$youtubeMusicAlbum, s.$isMusicVideo)
-                .map { album, listed, isMusicVideo in
-                    LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo,
+            s.$youtubeMusicAlbum.assign(to: \.youtubeMusicAlbum, on: self),
+            s.$album.combineLatest(s.$youtubeMusicAlbum, s.$isMusicVideo, s.$youtubeMusicIsMV)
+                .map { album, listed, isMusicVideo, listedMV in
+                    LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo || listedMV,
                                                      musicVideoLabel: L10n.t("MV"))
                 }
                 .removeDuplicates()

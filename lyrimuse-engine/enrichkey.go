@@ -186,7 +186,11 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 	if winner.YouTubeMusicURL == "" {
 		winner.YouTubeMusicURL = loser.YouTubeMusicURL
 	}
-	if winner.YouTubeMusicAlbum == "" {
+	if winner.YouTubeMusicAlbumLang == "" && loser.YouTubeMusicAlbumLang != "" {
+		winner.YouTubeMusicAlbum, winner.YouTubeMusicMV, winner.YouTubeMusicAlbumLang, winner.YouTubeMusicAlbumRev =
+			loser.YouTubeMusicAlbum, loser.YouTubeMusicMV, loser.YouTubeMusicAlbumLang, loser.YouTubeMusicAlbumRev
+	}
+	if winner.YouTubeMusicAlbum == "" && !winner.YouTubeMusicMV && winner.YouTubeMusicAlbumLang == "" {
 		winner.YouTubeMusicAlbum = loser.YouTubeMusicAlbum
 	}
 	if winner.CanonicalArtist == "" {

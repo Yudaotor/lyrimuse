@@ -22,6 +22,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 播放器没报专辑时,这首在 YouTube Music 上登记的专辑(用 Kaset 放的歌,引擎存进缓存的,见
     /// `EnrichCacheReader.youtubeMusicAlbum`)。只给界面专辑位用(`displayAlbum`),不进任何缓存 key。
     @Published public private(set) var youtubeMusicAlbum: String = ""
+    /// 播放器没报专辑、YouTube Music 上也没有专辑时,这一版是不是 MV 版本(用 Kaset 放的歌,引擎判的,见
+    /// `EnrichCacheReader.youtubeMusicIsMV`)。只给界面专辑位写「MV」,不碰 `isMusicVideo` 那一套(歌词时长、MV 时间轴)。
+    @Published public private(set) var youtubeMusicIsMV: Bool = false
     @Published public private(set) var isPlayingNow: Bool = false
     @Published public private(set) var currentLine: SyncedLyricLine?
     @Published public private(set) var nextLineText: String?
@@ -1559,6 +1562,12 @@ public final class LocalPlaybackSource: ObservableObject {
         return isMusicVideo ? musicVideoLabel : ""
     }
 
+    /// 给人看的专辑名(列表、筛选、详情、搜歌词预填……):播放器报的(键里那一段);没报时 YouTube Music 上登记的那张
+    /// (用 Kaset 放的歌)。两样都没有才是空。查缓存、写回一律仍按键里的专辑,不能换成它。纯函数,selftest 覆盖。
+    public nonisolated static func albumOrListed(album: String, youtubeMusicAlbum: String) -> String {
+        album.isEmpty ? youtubeMusicAlbum : album
+    }
+
     /// 这一拍之后「认成 MV 的那首」是哪首。按曲目记住、换歌作废:Apple Music 暂停时不走 JXA
     /// (`MediaControlClient.adaptedSnapshot`),快照里没有这一位;网页那一位要等探针,也不是每拍都有。纯函数,selftest 覆盖。
     public nonisolated static func musicVideoTrackKey(previous: String?, currentKey: String, markedMusicVideo: Bool) -> String? {
@@ -2666,6 +2675,7 @@ public final class LocalPlaybackSource: ObservableObject {
             if !artist.isEmpty { artist = "" }
             if !album.isEmpty { album = "" }
             if !youtubeMusicAlbum.isEmpty { youtubeMusicAlbum = "" }
+            if youtubeMusicIsMV { youtubeMusicIsMV = false }
             musicVideoKey = nil
             if isMusicVideo { isMusicVideo = false }
             if hasLyricsContent { hasLyricsContent = false }
@@ -2954,6 +2964,9 @@ public final class LocalPlaybackSource: ObservableObject {
         let newListedAlbum = newAlbum.isEmpty && !newTitle.isEmpty
             ? EnrichCacheReader.youtubeMusicAlbum(artist: newArtist, title: newTitle, album: newAlbum) ?? "" : ""
         if newListedAlbum != youtubeMusicAlbum { youtubeMusicAlbum = newListedAlbum }
+        let newListedMV = newAlbum.isEmpty && newListedAlbum.isEmpty && !newTitle.isEmpty
+            && EnrichCacheReader.youtubeMusicIsMV(artist: newArtist, title: newTitle, album: newAlbum)
+        if newListedMV != youtubeMusicIsMV { youtubeMusicIsMV = newListedMV }
         musicVideoKey = Self.musicVideoTrackKey(previous: musicVideoKey, currentKey: snapshot.trackKey,
                                                 markedMusicVideo: snapshot.isMusicVideo == true)
         let newIsMusicVideo = musicVideoKey == snapshot.trackKey

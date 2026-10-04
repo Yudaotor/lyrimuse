@@ -8,10 +8,14 @@ import (
 	"time"
 )
 
-// YouTube Music 按 videoId 登记的原名(英文界面)。Kaset 跟着用户的界面语言请求 YouTube Music,中文界面下一部分西方歌手
-// 报成本地化译名(「菲尔·科林斯」),各歌词源都按原名(Phil Collins)收录,第一轮一个候选都拿不到。有 videoId 时(Kaset
-// 经播放状态 / 待播队列带来,不在播放现场的重搜从缓存里存过的歌曲页取,挂在 ctx 上)按英文界面问一次 next,拿它登记的署名当换名重搜的一个候选(retryArtistIdentities)。
-// 同一个 videoId 的结论记在内存里,问成了就不再问;没问成(网络、地区限制)不记,下次再问。
+// YouTube Music 按 videoId 登记的署名、歌名与专辑,两种用法、按两种界面语言问:
+//   - 英文界面下的原名:Kaset 跟着用户的界面语言请求 YouTube Music,中文界面下一部分西方歌手报成本地化译名
+//     (「菲尔·科林斯」),各歌词源都按原名(Phil Collins)收录,第一轮一个候选都拿不到。有 videoId 时(Kaset 经播放状态 /
+//     待播队列带来,不在播放现场的重搜从缓存里存过的歌曲页取,挂在 ctx 上)按英文界面问一次 next,拿它登记的署名当换名
+//     重搜的一个候选(retryArtistIdentities)。
+//   - 界面语言下的专辑(ytmusicDisplayLanguage):专辑名也会本地化(同一张专辑中文界面是「未来」、英文界面是
+//     「Wonderland」),界面专辑位、上送、选封面都按 Kaset 自己显示的那种语言取。
+// 每种语言、每个 videoId 的结论记在内存里,问成了就不再问;没问成(网络、地区限制)不记,下次再问。
 
 type youTubeMusicVideoIDKey struct{}
 
@@ -46,27 +50,45 @@ func youtubeMusicVideoIDOfURL(u string) string {
 	return id
 }
 
-type ytmusicCredit struct{ artist, title, album string }
+type ytmusicCredit struct {
+	artist, title, album string
+	// videoType:YouTube Music 给这一版标的类型(MUSIC_VIDEO_TYPE_ATV 音轨 / _OMV 官方 MV / _UGC 用户上传……)。
+	videoType string
+	// durationSecs:这一版的时长(lengthText),没有为 0。
+	durationSecs float64
+}
 
 var (
-	ytmusicCreditMu    sync.Mutex
+	ytmusicCreditMu sync.Mutex
+	// ytmusicCreditCache:按 ytmusicCreditKey(界面语言, videoId) 记下的登记信息。
 	ytmusicCreditCache = map[string]ytmusicCredit{}
 )
 
+// ytmusicCreditKey:同一个 videoId 在不同界面语言下登记的写法不一样(署名、专辑名都会本地化),分开记。
+func ytmusicCreditKey(hl, videoID string) string {
+	return hl + "|" + videoID
+}
+
 // ytmusicEnglishCredit:这个 videoId 在 YouTube Music 英文界面下登记的署名、歌名与专辑。问不到返回空。
 func ytmusicEnglishCredit(ctx context.Context, videoID string) ytmusicCredit {
+	return ytmusicListedTrack(ctx, videoID, "en")
+}
+
+// ytmusicListedTrack:这个 videoId 在 YouTube Music 上按 hl 那种界面语言登记的署名、歌名与专辑。问不到返回空。
+func ytmusicListedTrack(ctx context.Context, videoID, hl string) ytmusicCredit {
 	if youtubeMusicWatchURL(videoID) == "" {
 		return ytmusicCredit{}
 	}
+	key := ytmusicCreditKey(hl, videoID)
 	ytmusicCreditMu.Lock()
-	c, ok := ytmusicCreditCache[videoID]
+	c, ok := ytmusicCreditCache[key]
 	ytmusicCreditMu.Unlock()
 	if ok {
 		return c
 	}
 	body := ytmusicContext(ytmusicWebClientName, ytmusicWebClientVersion())
 	if client, ok := body["context"].(map[string]any)["client"].(map[string]any); ok {
-		client["hl"] = "en"
+		client["hl"] = hl
 	}
 	body["videoId"] = videoID
 	body["isAudioOnly"] = true
@@ -76,9 +98,32 @@ func ytmusicEnglishCredit(ctx context.Context, videoID string) ytmusicCredit {
 	}
 	c = ytmusicCreditFromNext(raw, videoID)
 	ytmusicCreditMu.Lock()
-	ytmusicCreditCache[videoID] = c
+	ytmusicCreditCache[key] = c
 	ytmusicCreditMu.Unlock()
 	return c
+}
+
+// ytmusicDisplayLanguage:按界面语言问 YouTube Music 时的 hl(见 ytmusicLanguageFor)。
+func ytmusicDisplayLanguage() string {
+	return ytmusicLanguageFor(features().SystemLanguage)
+}
+
+// ytmusicLanguageFor:系统语言(AppleLocale 下划线前那段转小写)换成 YouTube Music 的 hl,跟 Kaset 默认跟随系统时同一套:
+// 中文按书写系统分 zh-Hans / zh-Hant(只有 zh 时按简体),别的取语言代码,读不到是 en。纯函数,单测覆盖。
+func ytmusicLanguageFor(system string) string {
+	s := strings.ToLower(strings.TrimSpace(system))
+	switch {
+	case s == "":
+		return "en"
+	case strings.HasPrefix(s, "zh-hant"):
+		return "zh-Hant"
+	case s == "zh" || strings.HasPrefix(s, "zh-"):
+		return "zh-Hans"
+	}
+	if i := strings.IndexAny(s, "-_"); i > 0 {
+		s = s[:i]
+	}
+	return s
 }
 
 // ytmusicCreditFromNext 从 next 的应答里摘出这个 videoId 那一条(playlistPanelVideoRenderer)的歌名、署名行
@@ -98,8 +143,20 @@ func ytmusicCreditFromNext(raw []byte, videoID string) ytmusicCredit {
 		out.title = strings.TrimSpace(ytmusicCreditRunsText(r["title"], false))
 		out.artist = strings.TrimSpace(ytmusicCreditRunsText(r["longBylineText"], true))
 		out.album = strings.TrimSpace(ytmusicCreditAlbumRun(r["longBylineText"]))
+		out.videoType = ytmusicCreditVideoType(r["navigationEndpoint"])
+		out.durationSecs = ytmusicParseDurationText(ytmusicCreditRunsText(r["lengthText"], false))
 	})
 	return out
+}
+
+// ytmusicCreditVideoType:播放入口(watchEndpoint)上标的视频类型。
+func ytmusicCreditVideoType(node any) string {
+	nav, _ := node.(map[string]any)
+	watch, _ := nav["watchEndpoint"].(map[string]any)
+	configs, _ := watch["watchEndpointMusicSupportedConfigs"].(map[string]any)
+	music, _ := configs["watchEndpointMusicConfig"].(map[string]any)
+	t, _ := music["musicVideoType"].(string)
+	return t
 }
 
 // ytmusicCreditAlbumRun:署名行里链到专辑页(MUSIC_PAGE_TYPE_ALBUM)的那一段。音轨版本才有,MV / 视频那一段是播放量。
@@ -127,38 +184,53 @@ const ytmusicCreditRetryAfter = time.Minute
 const ytmusicCreditFetchTimeout = 15 * time.Second
 
 var (
-	// ytmusicCreditPending:正在后台问的 videoId;ytmusicCreditFailedAt:后台没问成的时刻。都在 ytmusicCreditMu 里读写。
+	// ytmusicCreditPending:正在后台问的(按 ytmusicCreditKey);ytmusicCreditFailedAt:后台没问成的时刻。都在
+	// ytmusicCreditMu 里读写。
 	ytmusicCreditPending  = map[string]bool{}
 	ytmusicCreditFailedAt = map[string]time.Time{}
 )
 
-// ytmusicCreditCachedOrFetch:记下的结论有就给;没有就后台问一次(同一个 videoId 同时只问一次,没问成隔
-// ytmusicCreditRetryAfter 再问),这一回先给空。轮询每拍都来问,不能在这里同步联网。
-func ytmusicCreditCachedOrFetch(videoID string) ytmusicCredit {
+// ytmusicListedCachedOrFetch:按 hl 那种界面语言记下的结论有就给(ok=true);没有就后台问一次(同一种语言、同一个
+// videoId 同时只问一次,没问成隔 ytmusicCreditRetryAfter 再问),这一回 ok=false。不是 videoId 形状的直接给空(ok=true)。
+// 轮询每拍都来问,不能在这里同步联网。
+func ytmusicListedCachedOrFetch(videoID, hl string) (ytmusicCredit, bool) {
 	if youtubeMusicWatchURL(videoID) == "" {
-		return ytmusicCredit{}
+		return ytmusicCredit{}, true
 	}
+	key := ytmusicCreditKey(hl, videoID)
 	ytmusicCreditMu.Lock()
 	defer ytmusicCreditMu.Unlock()
-	if c, ok := ytmusicCreditCache[videoID]; ok {
-		return c
+	if c, ok := ytmusicCreditCache[key]; ok {
+		return c, true
 	}
-	if ytmusicCreditPending[videoID] || time.Since(ytmusicCreditFailedAt[videoID]) < ytmusicCreditRetryAfter {
-		return ytmusicCredit{}
+	if ytmusicCreditPending[key] || time.Since(ytmusicCreditFailedAt[key]) < ytmusicCreditRetryAfter {
+		return ytmusicCredit{}, false
 	}
-	ytmusicCreditPending[videoID] = true
+	ytmusicCreditPending[key] = true
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), ytmusicCreditFetchTimeout)
 		defer cancel()
-		ytmusicEnglishCredit(ctx, videoID)
+		ytmusicListedTrack(ctx, videoID, hl)
 		ytmusicCreditMu.Lock()
 		defer ytmusicCreditMu.Unlock()
-		delete(ytmusicCreditPending, videoID)
-		if _, ok := ytmusicCreditCache[videoID]; !ok {
-			ytmusicCreditFailedAt[videoID] = time.Now()
+		delete(ytmusicCreditPending, key)
+		if _, ok := ytmusicCreditCache[key]; !ok {
+			ytmusicCreditFailedAt[key] = time.Now()
 		}
 	}()
-	return ytmusicCredit{}
+	return ytmusicCredit{}, false
+}
+
+// ytmusicListedTrackSettled:同 ytmusicListedTrack(会联网),另外告诉调用方问成没有。不是 videoId 形状的给空(ok=true)。
+func ytmusicListedTrackSettled(ctx context.Context, videoID, hl string) (ytmusicCredit, bool) {
+	if youtubeMusicWatchURL(videoID) == "" {
+		return ytmusicCredit{}, true
+	}
+	c := ytmusicListedTrack(ctx, videoID, hl)
+	ytmusicCreditMu.Lock()
+	_, ok := ytmusicCreditCache[ytmusicCreditKey(hl, videoID)]
+	ytmusicCreditMu.Unlock()
+	return c, ok
 }
 
 // ytmusicCreditRunsText:一段 InnerTube 文字({"runs":[{"text":…},…]})拼成一串;firstField 时到第一个 ` • ` 为止。

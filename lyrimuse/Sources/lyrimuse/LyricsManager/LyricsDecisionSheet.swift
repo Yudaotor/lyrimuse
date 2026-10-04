@@ -256,7 +256,7 @@ struct LyricsDecisionSheet: View {
     private var plainTextDump: String {
         var lines: [String] = []
         lines.append("\(summary.title) — \(summary.artist)")
-        if !summary.album.isEmpty { lines.append(summary.album) }
+        if !summary.displayAlbum.isEmpty { lines.append(summary.displayAlbum) }
         // 两槽都有就都拷 —— 这份文本的用途是复盘,"出处"和"最近评估"对不上号本身往往就是
         // 要复盘的问题,只拷当前页签会丢掉另一半证据。
         for (i, item) in records.enumerated() {

@@ -190,6 +190,17 @@ public enum KasetPlayerInfo {
         return (reading.title, reading.artist, FirstReport(videoID: id, title: reading.title, artist: reading.artist))
     }
 
+    /// Kaset 队列里这个 videoId 那一格入队时的歌名与署名(原样),当作这首最先报的那份。换歌后第一拍读到、或者 App 在一首
+    /// 歌中途起来时,Kaset 可能已经换成网页上的写法了,不按队列补的话开播那份就丢了。队列里没有这首、解析不出返回 nil。
+    public static func queueFirstReport(fromQueueJSON data: Data, videoID: String) -> FirstReport? {
+        guard let queue = try? JSONDecoder().decode(QueuePayload.self, from: data),
+              let track = queue.tracks?.first(where: { $0.videoId == videoID }),
+              let title = track.name?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty,
+              let artist = track.artist, !artist.isEmpty
+        else { return nil }
+        return FirstReport(videoID: videoID, title: title, artist: artist)
+    }
+
     /// 网页 video 的时长跟元数据时长差不超过这么多秒,就是同一段录音(元数据是整数秒)。
     static let sameRecordingTolerance: Double = 3
 

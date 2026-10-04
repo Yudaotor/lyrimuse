@@ -405,9 +405,16 @@ type enrichEntry struct {
 	// (`https://music.youtube.com/watch?v=<id>`,见 kasetlink.go youtubeMusicTrackURLFor)。App 和网页都原样用。
 	YouTubeMusicURL string `json:"youtube_music_url,omitempty"`
 
-	// YouTubeMusicAlbum:用 Kaset 放这首歌时,YouTube Music 给它的音轨版本登记的专辑(见 kasetlink.go kasetListedAlbumFor)。
-	// 只给 App 界面的专辑位用(Kaset 报的专辑那一栏放歌单时是歌单名,不用),不进缓存 key。
+	// YouTubeMusicAlbum:用 Kaset 放这首歌时,按 YouTube Music 的登记判出来的专辑(见 kasetalbum.go)。只给 App 界面和
+	// 上送用(Kaset 报的专辑那一栏放歌单时是歌单名,不用),不进缓存 key。
 	YouTubeMusicAlbum string `json:"youtube_music_album,omitempty"`
+	// YouTubeMusicMV:用 Kaset 放的这一版是 MV 版本(没有专辑,界面写「MV」),见 kasetalbum.go。
+	YouTubeMusicMV bool `json:"youtube_music_mv,omitempty"`
+	// YouTubeMusicAlbumLang:上面两个是按哪种界面语言判的(YouTube Music 的 hl)。界面语言换了要重判,补判扫描按它挑
+	// (startKasetAlbumSweep)。
+	YouTubeMusicAlbumLang string `json:"youtube_music_album_lang,omitempty"`
+	// YouTubeMusicAlbumRev:上面三个是按哪一版判法判的(kasetAlbumVerdictRev)。
+	YouTubeMusicAlbumRev int `json:"youtube_music_album_rev,omitempty"`
 
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
 	// (enrichjson.go)。
@@ -650,7 +657,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// 封面复查用的专辑名(albumhint.go 的 coverAlbumForTrack):播放器报了就是 album,没报就是 Apple 目录回填的
 	// 那个。 必须在取 enrichMu **之前**算 —— 它内部经 lyricResolvedArtists 取同一把锁(不可重入,09-07 那次
 	// poll 循环冻死 11 分钟就是持锁期间又加锁来的)。
-	coverAlbum := coverAlbumForTrack(context.Background(), artist, title, album, durationSecs)
+	kasetVideoID := kasetVideoIDFor(bundleID, artist, title)
+	coverAlbum := coverAlbumForTrack(withYouTubeMusicVideoID(context.Background(), kasetVideoID), artist, title, album, durationSecs)
 	// KKBOX 的缓存里现在有没有这首的词:要扫它的缓存目录,放在锁外(记忆 30 秒,见 kkboxLyricsAvailable)。
 	var kkboxInfo kkboxPlayingInfo
 	if bundleID == kkboxBundleID {
@@ -661,9 +669,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// Amazon Music 曲目页:它的时钟那一拍记下的 ASIN,另一把锁,同样放在锁外取。
 	amazonURL := amazonTrackURLFor(bundleID, artist, title)
 	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title)
-	kasetVideoID := kasetVideoIDFor(bundleID, artist, title)
 	youtubeMusicURL := youtubeMusicWatchURL(kasetVideoID)
-	youtubeMusicAlbum := kasetListedAlbumFor(kasetVideoID)
+	ytmVerdict, ytmSettled := kasetAlbumVerdictFor(kasetVideoID, durationSecs, artist, title)
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if !ok {
@@ -710,8 +717,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			e.YouTubeMusicURL = youtubeMusicURL
 			spotifyHintDirty = true
 		}
-		if youtubeMusicAlbum != "" && e.YouTubeMusicAlbum != youtubeMusicAlbum {
-			e.YouTubeMusicAlbum = youtubeMusicAlbum
+		if ytmSettled && applyKasetAlbumVerdict(&e, ytmVerdict, ytmusicDisplayLanguage()) {
 			spotifyHintDirty = true
 		}
 		// 目录锚点跟电台真曲长一样是异步到位的,条目常常先带着按歌名搜出来的链接写下,锚点到了换成它的页面。
@@ -2611,6 +2617,10 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	if skipLyrics {
 		ctx = withPeripheralOnly(ctx)
 	}
+	// Kaset 放过的这首:挑封面要用 YouTube Music 给它登记的专辑(coverAlbumForTrack),videoId 从缓存里存过的歌曲页取。
+	enrichMu.Lock()
+	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
+	enrichMu.Unlock()
 	// deviceCoverURL 传空串,理由见 resolveTrackEnrichment 参数注释:补的是已存在条目的
 	// 外围字段,补的这一刻播的多半已经是别的歌,不能假装这是"正在播的这首"。设备封面的
 	// 升级另有专门路径(applyDeviceCoverUpgrade),不走这里。
@@ -2910,6 +2920,9 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 		}
 	}
 	coverAlbum := album
+	if coverAlbum == "" {
+		coverAlbum = kasetListedAlbumFor(youTubeMusicVideoIDFrom(ctx), durationSecs, artist, title)
+	}
 	if coverAlbum == "" {
 		coverAlbum = appleAlbumHintSync(ctx, coverArtist, coverTitle, coverDuration,
 			coverAlbumCorroboration(coverArtist, coverTitle, album, e.CanonicalArtist, pickLyricCandidate(scored)))

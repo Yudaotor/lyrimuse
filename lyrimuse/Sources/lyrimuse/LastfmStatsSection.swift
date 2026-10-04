@@ -1624,6 +1624,8 @@ private final class LiveRowPlayback: ObservableObject {
     @Published private(set) var title = ""
     @Published private(set) var artist = ""
     @Published private(set) var album = ""
+    /// 播放器没报专辑时 YouTube Music 上登记的那张(见 `PlaybackCoordinator.youtubeMusicAlbum`),配封面用。
+    @Published private(set) var youtubeMusicAlbum = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var isAdBreak = false
     @Published private(set) var artworkImage: NSImage?
@@ -1642,6 +1644,7 @@ private final class LiveRowPlayback: ObservableObject {
             p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
+            p.$youtubeMusicAlbum.removeDuplicates().sink { [weak self] in self?.youtubeMusicAlbum = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isAdBreak = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
@@ -1717,7 +1720,8 @@ private struct LiveScrobbleRow: View {
             // "变回来"。实测这两张不是同一个文件:Prince《1999》,Apple 那版
             // 偏暗紫、Last.fm 那版偏亮蓝,缩到 26pt 一眼能看出色调不同,不是清晰度差别。
             let listCover = stats.liveCoverURL(artist: playback.artist, title: playback.title,
-                                               album: playback.album)
+                                               album: LocalPlaybackSource.albumOrListed(
+                                                   album: playback.album, youtubeMusicAlbum: playback.youtubeMusicAlbum))
             return LiveSource(title: playback.title,
                               artist: canonicalLiveArtist(localArtist: playback.artist),
                               artwork: playback.displayArtworkImage, imageURL: listCover,

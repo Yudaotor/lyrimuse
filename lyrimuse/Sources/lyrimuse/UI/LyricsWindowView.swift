@@ -3547,6 +3547,7 @@ struct LyricsWindowView: View {
     private func openLyricsSearch() {
         let p = PlaybackCoordinator.shared
         let artist = p.artist, title = p.title, album = p.album
+        let listedAlbum = LocalPlaybackSource.shared.youtubeMusicAlbum
         let durationSecs = Double(p.currentDurationMs ?? 0) / 1000
         // 三次缓存读取在主线程做(EnrichCacheReader 只许在主线程用,缓存已加载时 µs 级),
         // 只有正文指纹(SHA-256)放后台。
@@ -3563,7 +3564,8 @@ struct LyricsWindowView: View {
                 // 这里传原始标题的话,手动搜索会重蹈自动解析"八个源全搜不到"的覆辙。
                 // key/source 两个查找仍然传原始 title——它们各自内部会归一化,契约不变。
                 lyricsSearchContext = LyricsSearchContext(
-                    artist: artist, title: EnrichCacheKeys.normalizedTitle(title), album: album,
+                    artist: artist, title: EnrichCacheKeys.normalizedTitle(title),
+                    album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: listedAlbum),
                     key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs)
             }
         }

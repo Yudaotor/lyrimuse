@@ -275,6 +275,9 @@ type featureFlags struct {
 	// appleLangCode / myMemoryLangCode(translate.go)把它转成端上翻译和网络兜底
 	// 各自的语言代码。网易云/QQ 不在此列——它们自带的社区译文只有中文,给不了别的语言。
 	LyricsTranslationLanguage string
+	// SystemLanguage:App 写进来的本机系统语言(AppleLocale 下划线前那段转小写,见 featureFlagsFile.SystemLanguage),
+	// App 还没写过时是空串。按界面语言问 YouTube Music 时用(ytmusicDisplayLanguage)。
+	SystemLanguage string
 	// 见上面同名字段的注释。只被 needsTranslationBackfill/backfillTranslation 读取。
 	LyricsMachineTranslation bool
 	// LaunchLyrimuseOnPlayers 是逐播放器勾选的集合(键是 player* 常量),空 = 不跟随。只被 companionlaunch.go 读取。
@@ -395,6 +398,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage, f.SystemLanguage),
+		SystemLanguage:            strings.ToLower(strings.TrimSpace(f.SystemLanguage)),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
 		LaunchLyrimuseOnPlayers:   resolveLaunchLyrimuseOnPlayers(f.LaunchLyrimuseOnPlayers),
 		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),

@@ -73,6 +73,8 @@ public struct EnrichCacheEntry: Decodable, Sendable {
     // YouTube Music 给这首的音轨版本登记的专辑(引擎的 enrichEntry.YouTubeMusicAlbum,用 Kaset 放这首时存的)。
     // 只喂界面专辑位(LocalPlaybackSource.youtubeMusicAlbum)。
     let youtubeMusicAlbum: String?
+    // 用 Kaset 放的这一版是 MV 版本(引擎的 enrichEntry.YouTubeMusicMV),界面专辑位写「MV」。
+    let youtubeMusicMV: Bool?
     // 这首歌的语种真值(lyrimuse-engine/enrich.go 的 enrichEntry.SongLanguage,取值
     // "yue"=粤语/"cmn"=普通话/空=没判出来),给粤拼罗马音开关用——光看歌词文字认不出
     // 粤语和普通话(汉字一样),得靠引擎那边已经判出来的这个字段。
@@ -131,6 +133,7 @@ public struct EnrichCacheEntry: Decodable, Sendable {
         case amazonURL = "amazon_url"
         case youtubeMusicURL = "youtube_music_url"
         case youtubeMusicAlbum = "youtube_music_album"
+        case youtubeMusicMV = "youtube_music_mv"
         case songLanguage = "song_language"
         case plainLyrics = "plain_lyrics"
         case durationSecs = "duration_secs"
@@ -359,6 +362,13 @@ public enum EnrichCacheReader {
         guard let listed = matchedEntry(key, in: all)?.youtubeMusicAlbum?.trimmingCharacters(in: .whitespaces),
               !listed.isEmpty else { return nil }
         return listed
+    }
+
+    /// 用 Kaset 放的这一版是不是 MV 版本(引擎按 YouTube Music 的登记判的)。零网络,两级匹配同上;查不到是 false。
+    public static func youtubeMusicIsMV(artist: String, title: String, album: String) -> Bool {
+        guard let all = loadEntries() else { return false }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        return matchedEntry(key, in: all)?.youtubeMusicMV == true
     }
 
     /// 这首歌的**真实曲长**(秒),来自引擎写进缓存的那份。零网络,沿用 lookup/sourceInfo

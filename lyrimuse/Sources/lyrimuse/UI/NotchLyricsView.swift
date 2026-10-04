@@ -28,6 +28,8 @@ private final class NotchPlayback: ObservableObject {
     /// 真的有人读,不是"顺手都订上"。
     @Published private(set) var album = ""
     @Published private(set) var displayAlbum = ""
+    /// 专辑行可不可点(`trackInfoAlbumLine`):键里没专辑、但有 YouTube Music 登记的那张时也算有专辑。
+    @Published private(set) var youtubeMusicAlbum = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var currentLine: SyncedLyricLine?
     /// 歌词行**主行**画哪一句(是合成值,不再直接等于 PlaybackCoordinator 的
@@ -227,6 +229,7 @@ private final class NotchPlayback: ObservableObject {
             p.$displayArtist.removeDuplicates().sink { [weak self] in self?.displayArtist = $0 },
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
             p.$displayAlbum.removeDuplicates().sink { [weak self] in self?.displayAlbum = $0 },
+            p.$youtubeMusicAlbum.removeDuplicates().sink { [weak self] in self?.youtubeMusicAlbum = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             // 当前句、要显示的那一句、下一句都取灵动岛自己那一份(按这一面的宽度断句,见
             // LocalPlaybackSource.notchLyrics),别混用逐行的 currentLine / compactLine / nextLine*。
@@ -2407,7 +2410,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     private var trackInfoAlbumLine: some View {
         NotchEditorialLine(kind: .album, text: metadataText(.album), tint: accentOrWhite,
                            font: .system(size: 9), restingOpacity: 0.4, hoverOpacity: 0.75,
-                           tappable: !playback.album.isEmpty) { controller.toggleEditorial(.album) }
+                           tappable: !playback.album.isEmpty || !playback.youtubeMusicAlbum.isEmpty) { controller.toggleEditorial(.album) }
     }
 
     private var trackInfoTextStack: some View {

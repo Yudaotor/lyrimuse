@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -544,9 +545,25 @@ func ytmusicSearchHL(artist, title, album string) string {
 	return hl
 }
 
-// ytmusicSearchSong 搜「歌手 歌名」(只看歌曲,界面语言见 ytmusicSearchHL),挑一条(ytmusicPickSearchItem)。
+// ytmusicSearchSong 搜「歌手 歌名」(见 ytmusicSearchSongItems),挑一条(ytmusicPickSearchItem)。
 // noItems:问成了、但一条结果都没有(地区受限时搜什么都是这样,见 ytmusicCheckRegion);没问成时为 false。
 func ytmusicSearchSong(ctx context.Context, artist, title, album string, durationSecs float64) (item ytmusicParsedSearchItem, ok, noItems bool) {
+	parsed, err := ytmusicSearchSongItems(ctx, artist, title, album)
+	if err != nil {
+		return ytmusicParsedSearchItem{}, false, false
+	}
+	if len(parsed) == 0 {
+		return ytmusicParsedSearchItem{}, false, true
+	}
+	item, ok = ytmusicPickSearchItem(parsed, artist, title, album, durationSecs)
+	return item, ok, false
+}
+
+// errYtmusicEmptyResponse:search 问成了、应答却是空的,按没问成处理。
+var errYtmusicEmptyResponse = errors.New("ytmusic: empty response")
+
+// ytmusicSearchSongItems 搜「歌手 歌名」(只看歌曲,界面语言见 ytmusicSearchHL),解析出每一条。没问成返回 err。
+func ytmusicSearchSongItems(ctx context.Context, artist, title, album string) ([]ytmusicParsedSearchItem, error) {
 	body := ytmusicContext(ytmusicWebClientName, ytmusicWebClientVersion())
 	if hl := ytmusicSearchHL(artist, title, album); hl != "" {
 		if c, ok := body["context"].(map[string]any)["client"].(map[string]any); ok {
@@ -556,8 +573,11 @@ func ytmusicSearchSong(ctx context.Context, artist, title, album string, duratio
 	body["query"] = strings.TrimSpace(artist + " " + title)
 	body["params"] = ytmusicSongsFilterParams
 	raw, err := ytmusicPost(ctx, "search", body, ytmusicCachedVisitorID())
-	if err != nil || len(raw) == 0 {
-		return ytmusicParsedSearchItem{}, false, false
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return nil, errYtmusicEmptyResponse
 	}
 	var parsed []ytmusicParsedSearchItem
 	for _, it := range ytmusicExtractSearchItems(raw) {
@@ -565,11 +585,7 @@ func ytmusicSearchSong(ctx context.Context, artist, title, album string, duratio
 			parsed = append(parsed, p)
 		}
 	}
-	if len(parsed) == 0 {
-		return ytmusicParsedSearchItem{}, false, true
-	}
-	item, ok = ytmusicPickSearchItem(parsed, artist, title, album, durationSecs)
-	return item, ok, false
+	return parsed, nil
 }
 
 // ytmusicExtractSearchItems 从整份 search 响应里摘出 musicResponsiveListItemRenderer

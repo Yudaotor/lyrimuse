@@ -1400,7 +1400,7 @@ struct LyricsManagerView: View {
                         // 的注释:筛选/排序继续按统一名归并不变,只是这一列如实展示每条记录
                         // 自己的原始歌手名,好让"同一首歌因原始标签不同被拆成两条记录"这种
                         // 情况在列表里能被用户一眼看出区别,而不是显示成一模一样。
-                        LyricsManagerRow(summary: summary, artistDisplayName: summary.artist, albumDisplayName: albumDisplay(summary.album), widths: shownWidths, offsetColumnWidth: Self.offsetColumnWidth)
+                        LyricsManagerRow(summary: summary, artistDisplayName: summary.artist, albumDisplayName: summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum), widths: shownWidths, offsetColumnWidth: Self.offsetColumnWidth)
                     }
                     .listStyle(.inset(alternatesRowBackgrounds: true))
                     // 首次开窗、summaries 还没任何内容时叠一个"正在加载"提示,不让空 List
@@ -2251,6 +2251,7 @@ struct LyricsManagerView: View {
         // 已经是同一首歌的占位行,不用重新构造一份新实例(纯避免无意义的 diff)。
         guard placeholderSummary?.key != key else { return }
         let display = playback.artist
+        let displayAlbum = LocalPlaybackSource.albumOrListed(album: playback.album, youtubeMusicAlbum: playback.youtubeMusicAlbum)
         placeholderSummary = EnrichCacheStore.Summary(
             key: key,
             artist: playback.artist,
@@ -2258,6 +2259,8 @@ struct LyricsManagerView: View {
             durationSecs: Double(playback.currentDurationMs ?? 0) / 1000,
             title: playback.title,
             album: playback.album,
+            displayAlbum: displayAlbum,
+            isListedMV: false,
             lyricsSource: "",
             hasWordTiming: false,
             isManual: false,
@@ -2281,11 +2284,11 @@ struct LyricsManagerView: View {
             lyricsUpdatedAt: nil,
             resolvedAt: nil,
             normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
-            normAlbum: toSimplified(playback.album).lowercased(),
+            normAlbum: toSimplified(displayAlbum).lowercased(),
             searchArtistLower: playback.artist.lowercased(),
             searchDisplayArtistLower: display.lowercased(),
             searchTitleLower: playback.title.lowercased(),
-            searchAlbumLower: playback.album.lowercased()
+            searchAlbumLower: displayAlbum.lowercased()
         )
     }
 
@@ -2526,7 +2529,7 @@ struct LyricsManagerView: View {
             // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
             // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
             LyricsSearchSheet(
-                artist: summary.artist, title: summary.title, album: summary.album,
+                artist: summary.artist, title: summary.title, album: summary.displayAlbum,
                 currentSource: summary.lyricsSource,
                 // 「当前使用」双判据要的正文指纹。store.raw 是私有的,跟另外两个入口一样走
                 // EnrichCacheReader.lookup(store 刚 persist 过的就是这份文件),三处口径一致。
@@ -2632,8 +2635,8 @@ struct LyricsManagerView: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(summary.title).font(.title2.weight(.bold)).lineLimit(3)
             Text(summary.artist).font(.title3).foregroundStyle(.secondary).lineLimit(2)
-            if !summary.album.isEmpty {
-                Text(albumDisplay(summary.album)).font(.callout).foregroundStyle(.tertiary)
+            if !summary.displayAlbum.isEmpty || summary.isListedMV {
+                Text(summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum)).font(.callout).foregroundStyle(.tertiary)
                     .lineLimit(2)
             }
         }

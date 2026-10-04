@@ -49,13 +49,14 @@ func kasetVideoIDFor(bundleID, artist, title string) string {
 	return kasetCurrentTrack.videoID
 }
 
-// kasetListedAlbumFor:Kaset 这首(videoId)在 YouTube Music 上登记的专辑。专辑只登记在音轨版本上,按队列里记下的音轨
-// videoId 问;还没问过就后台去问,这一回先给空(见 ytmusicCreditCachedOrFetch)。
-func kasetListedAlbumFor(videoID string) string {
-	if videoID == "" {
+// kasetListedAlbumFor:Kaset 放的这一版(videoId)判出来的专辑(判法见 kasetalbum.go);MV 版本、没有专辑、还没问齐
+// 都是空。playedSecs / artist / title 是这一拍的时长和身份。
+func kasetListedAlbumFor(videoID string, playedSecs float64, artist, title string) string {
+	v, settled := kasetAlbumVerdictFor(videoID, playedSecs, artist, title)
+	if !settled {
 		return ""
 	}
-	return ytmusicCreditCachedOrFetch(kasetAudioVideoIDFor(videoID)).album
+	return v.album
 }
 
 // youtubeMusicTrackURLFor:正用 Kaset 放的这首的 YouTube Music 歌曲页(认这一首的规则见 kasetVideoIDFor)。

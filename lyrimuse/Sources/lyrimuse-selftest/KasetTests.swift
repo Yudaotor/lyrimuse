@@ -143,6 +143,20 @@ func runKasetTests() {
         expectEqual(K.sameRecording(credit("x", "y", player: 245.3, track: 246)), true, "Kaset 录音: 网页时长跟元数据整数秒对得上")
         expectEqual(K.sameRecording(credit("x", "y", player: 392.4, track: 196)), false, "Kaset 录音: 差太多不是同一段")
         expectEqual(K.sameRecording(credit("x", "y", player: nil, track: 196)) == nil, true, "Kaset 录音: 网页时长还没出来说不上来")
+
+        // 开播那份按队列补:App 在一首歌中途起来时第一拍已经是网页上的写法。
+        let queue = #"{"currentIndex":2,"tracks":[{"name":"才二十三","artist":"方大同","videoId":"Cr1VjUDSp_0"},"# +
+            #"{"name":" 黑白 [Timeless Live 2009] ","artist":"方大同","videoId":"7VKSdwYke9o","duration":246}]}"#
+        let seeded = K.queueFirstReport(fromQueueJSON: Data(queue.utf8), videoID: "7VKSdwYke9o")
+        expectEqual(seeded, K.FirstReport(videoID: "7VKSdwYke9o", title: "黑白 [Timeless Live 2009]", artist: "方大同"),
+                    "Kaset 开播那份: 按队列里这一格补,歌名去首尾空白")
+        expectEqual(K.queueFirstReport(fromQueueJSON: Data(queue.utf8), videoID: "qUUBDOL-09k") == nil, true,
+                    "Kaset 开播那份: 队列里没有这首不补")
+        expectEqual(K.queueFirstReport(fromQueueJSON: Data(), videoID: "7VKSdwYke9o") == nil, true, "Kaset 开播那份: 读不到队列不补")
+        let restarted = K.steadyIdentity(credit("Black And White [Timeless Live 2009]", "Khalil Fong", vid: "7VKSdwYke9o",
+                                                player: 245.03, track: 246), first: seeded)
+        expectEqual(restarted.title == "黑白 [Timeless Live 2009]" && restarted.artist == "方大同", true,
+                    "Kaset 开播那份: 中途起来时按队列那份,不跟网页上的写法")
         let next = K.steadyIdentity(credit("Love Bomb", "Jhené Aiko和Ab-Soul", vid: "AJ--JpOmlog"), first: opening.first)
         expectEqual(next.artist, "Jhené Aiko和Ab-Soul", "Kaset 身份: 换了 videoId 是另一首")
         let blank = K.steadyIdentity(credit("Love Bomb", "Jhené Aiko和Ab-Soul"),
@@ -223,6 +237,9 @@ func runKasetTests() {
                     "专辑位: 都没有、是 MV 写「MV」")
         expectEqual(L.displayAlbum(album: "", youtubeMusicAlbum: "", isMusicVideo: false, musicVideoLabel: "MV"), "",
                     "专辑位: 都没有留空")
+        expectEqual(L.albumOrListed(album: "未来", youtubeMusicAlbum: "Wonderland"), "未来", "给人看的专辑: 播放器报了就用它")
+        expectEqual(L.albumOrListed(album: "", youtubeMusicAlbum: "未来"), "未来", "给人看的专辑: 没报时用 YouTube Music 登记的")
+        expectEqual(L.albumOrListed(album: "", youtubeMusicAlbum: ""), "", "给人看的专辑: 两样都没有才空")
     }
 
     // ---- 歌曲页:YouTube Music 网页 ----
@@ -310,9 +327,45 @@ func runKasetTests() {
                        "            return fetchKasetSnapshot() ?? mediaControl"].joined(separator: "\n")
         expectEqual(client.contains(adapted), true, "Kaset 契约: 认出是它之后整份换成 AppleScript 那份,暂停态也换")
         expectEqual(client.contains("case .kaset: snapshot = fetchKasetSnapshot()"), true, "Kaset 契约: 焦点回退问它自己")
-        expectEqual(client.contains("let steady = KasetPlayerInfo.steadyIdentity(raw, first: kasetFirstReport)")
+        expectEqual(client.contains("let steady = KasetPlayerInfo.steadyIdentity(raw, first: first)")
                         && client.contains("let reading = raw.withIdentity(title: steady.title, artist: steady.artist)"), true,
                     "Kaset 契约: 出快照之前先过 steadyIdentity")
+        expectEqual(client.contains("if let id = raw.videoID, !id.isEmpty, first?.videoID != id {")
+                        && client.contains("first = queuedFirstReport(videoID: id) ?? first"), true,
+                    "Kaset 契约: 新歌第一拍按队列补开播那份")
+        expectEqual(src("lyrimuse/UI/LyricsWindowView.swift").contains(
+            "album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: listedAlbum),")
+                        && src("lyrimuse/LyricsManager/LyricsQuickSearchWindow.swift").contains(
+            "album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: LocalPlaybackSource.shared.youtubeMusicAlbum),"),
+                    true, "Kaset 契约: 两个搜歌词入口没报专辑时预填登记的专辑")
+        let store = src("lyrimuse/LyricsManager/EnrichCacheStore.swift")
+        expectEqual(store.contains(#"youtubeMusicAlbum: (entry["youtube_music_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "")"#)
+                        && store.contains("normAlbum: toSimplified(displayAlbum).lowercased(),")
+                        && store.contains("searchAlbumLower: displayAlbum.lowercased()")
+                        && store.contains("albumMap[s.normAlbum] = s.displayAlbum"), true,
+                    "Kaset 契约: 歌词管理的列表、筛选、排序、搜索按给人看的专辑")
+        let manager = src("lyrimuse/LyricsManager/LyricsManagerView.swift")
+        expectEqual(manager.contains(": albumDisplay(summary.displayAlbum),")
+                        && manager.contains("album: summary.displayAlbum,")
+                        && manager.contains(": albumDisplay(summary.displayAlbum))")
+                        && manager.contains("displayAlbum: displayAlbum,"), true,
+                    "Kaset 契约: 歌词管理的列表行、详情、搜歌词预填、占位行用给人看的专辑")
+        expectEqual(src("lyrimuse/LyricsManager/LyricsDecisionSheet.swift").contains(
+            "if !summary.displayAlbum.isEmpty { lines.append(summary.displayAlbum) }"), true, "Kaset 契约: 决策面板表头用给人看的专辑")
+        expectEqual(src("lyrimuse/UI/NotchLyricsView.swift").contains(
+            "tappable: !playback.album.isEmpty || !playback.youtubeMusicAlbum.isEmpty"), true,
+                    "Kaset 契约: 灵动岛专辑行有登记的专辑时也可点开简介")
+        expectEqual(src("LyrimuseCore/Local/EnrichCacheReader.swift").contains(#"case youtubeMusicMV = "youtube_music_mv""#)
+                        && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
+                            "&& EnrichCacheReader.youtubeMusicIsMV(artist: newArtist, title: newTitle, album: newAlbum)")
+                        && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains("if youtubeMusicIsMV { youtubeMusicIsMV = false }"), true,
+                    "Kaset 契约: 条目里判成 MV 版本的,播放源每拍读出来、停播清掉")
+        expectEqual(src("lyrimuse/PlaybackCoordinator.swift").contains("isMusicVideo: isMusicVideo || listedMV,"), true,
+                    "Kaset 契约: 判成 MV 版本的专辑位写「MV」")
+        expectEqual(store.contains(#"isListedMV: displayAlbum.isEmpty && (entry["youtube_music_mv"] as? Bool ?? false),"#)
+                        && manager.contains(#"albumDisplayName: summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum),"#)
+                        && manager.contains(#"Text(summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum))"#), true,
+                    "Kaset 契约: 歌词管理的列表和详情给 MV 版本写「MV」")
         let playback = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual(playback.contains("? EnrichCacheReader.youtubeMusicAlbum(artist: newArtist, title: newTitle, album: newAlbum) ?? \"\" : \"\"")
                         && playback.contains("if newListedAlbum != youtubeMusicAlbum { youtubeMusicAlbum = newListedAlbum }"),
@@ -322,7 +375,7 @@ func runKasetTests() {
         expectEqual(src("LyrimuseCore/Local/EnrichCacheReader.swift").contains(#"case youtubeMusicAlbum = "youtube_music_album""#),
                     true, "Kaset 契约: 缓存条目的键名跟引擎一致")
         expectEqual(src("lyrimuse/PlaybackCoordinator.swift").contains(
-            "LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo,"),
+            "LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo || listedMV,"),
                     true, "Kaset 契约: 界面专辑位按 displayAlbum 取")
         expectEqual(client.contains("if snapshot == nil, player != .kaset {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")

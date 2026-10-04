@@ -36,7 +36,14 @@ public final class EnrichCacheStore: ObservableObject {
         // 分数不是一回事(见 LyricsSearchSheet 的用法)。老条目没有这个字段,为 0。
         public let durationSecs: Double
         public let title: String
+        /// 键里的专辑那一段。按「歌手 + 歌名 + 专辑」查缓存、写回用它。
         public let album: String
+        /// 给人看的专辑(列表那一列、筛选、排序、搜索、详情、搜歌词预填):键里有就是它,没有时用 YouTube Music 给这首
+        /// 登记的(用 Kaset 放过的歌,引擎存的 `youtube_music_album`),见 `LocalPlaybackSource.albumOrListed`。
+        public let displayAlbum: String
+        /// 用 Kaset 放的这一版是 MV 版本(引擎的 `youtube_music_mv`):没有专辑,列表和详情里写「MV」;筛选、排序、
+        /// 搜索、搜歌词预填都不把「MV」当专辑名。
+        public let isListedMV: Bool
         public let lyricsSource: String
         public let hasWordTiming: Bool
         public let isManual: Bool
@@ -742,6 +749,9 @@ public final class EnrichCacheStore: ObservableObject {
             } else {
                 offsetMs = 0
             }
+            let displayAlbum = LocalPlaybackSource.albumOrListed(
+                album: parts.album,
+                youtubeMusicAlbum: (entry["youtube_music_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "")
             return Summary(
                 key: key,
                 artist: parts.artist,
@@ -762,6 +772,8 @@ public final class EnrichCacheStore: ObservableObject {
                     ?? entry["duration_secs"] as? Double ?? 0,
                 title: parts.title,
                 album: parts.album,
+                displayAlbum: displayAlbum,
+                isListedMV: displayAlbum.isEmpty && (entry["youtube_music_mv"] as? Bool ?? false),
                 lyricsSource: entry["lyrics_source"] as? String ?? "",
                 hasWordTiming: bodyFields.contains(.yrc),
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
@@ -790,11 +802,11 @@ public final class EnrichCacheStore: ObservableObject {
                     return ts > 0 ? Date(timeIntervalSince1970: ts) : nil
                 }(),
                 normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
-                normAlbum: toSimplified(parts.album).lowercased(),
+                normAlbum: toSimplified(displayAlbum).lowercased(),
                 searchArtistLower: parts.artist.lowercased(),
                 searchDisplayArtistLower: display.lowercased(),
                 searchTitleLower: parts.title.lowercased(),
-                searchAlbumLower: parts.album.lowercased()
+                searchAlbumLower: displayAlbum.lowercased()
             )
         }
         items.sort {
@@ -811,7 +823,7 @@ public final class EnrichCacheStore: ObservableObject {
             if !s.lyricsSource.isEmpty, !knownSources.contains(s.lyricsSource) { extraSources.insert(s.lyricsSource) }
             let loose = EnrichCacheKeys.looseKey(s.key)
             if looseIndex[loose] == nil { looseIndex[loose] = s.key }
-            if !s.album.isEmpty, albumMap[s.normAlbum] == nil { albumMap[s.normAlbum] = s.album }
+            if !s.displayAlbum.isEmpty, albumMap[s.normAlbum] == nil { albumMap[s.normAlbum] = s.displayAlbum }
             let rawArtist = primaryArtist(s.displayArtist)
             if !rawArtist.isEmpty, artistMap[s.normPrimaryArtist] == nil {
                 artistMap[s.normPrimaryArtist] = rawArtist

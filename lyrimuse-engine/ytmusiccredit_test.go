@@ -9,11 +9,13 @@ import (
 
 // 照真实 next 应答的形状造(只留用得到的那几层):英文界面下署名是原名,第一段之后是播放量这类统计。
 const ytmCreditNext = `{"contents":{"singleColumnMusicWatchNextResultsRenderer":{"tabbedRenderer":{"watchNextTabbedResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"musicQueueRenderer":{"content":{"playlistPanelRenderer":{"contents":[` +
-	`{"playlistPanelVideoRenderer":{"videoId":"Qt2mbGP6vFI","title":{"runs":[{"text":"Another Day In Paradise (Live)"}]},` +
+	`{"playlistPanelVideoRenderer":{"videoId":"Qt2mbGP6vFI","title":{"runs":[{"text":"Another Day In Paradise (Live)"}]},"lengthText":{"runs":[{"text":"5:42"}]},` +
+	`"navigationEndpoint":{"watchEndpoint":{"videoId":"Qt2mbGP6vFI","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_OMV"}}}},` +
 	`"longBylineText":{"runs":[{"text":"Phil Collins","navigationEndpoint":{"browseEndpoint":{"browseId":"UC1"}}},{"text":" • "},{"text":"716M views"},{"text":" • "},{"text":"3.5M likes"}]}}},` +
 	`{"playlistPanelVideoRenderer":{"videoId":"qeMFqkcPYcg","title":{"runs":[{"text":"Sweet Dreams (Are Made Of This)"}]},` +
 	`"longBylineText":{"runs":[{"text":"Eurythmics","navigationEndpoint":{}},{"text":", "},{"text":"Annie Lennox","navigationEndpoint":{}},{"text":" & "},{"text":"Dave Stewart","navigationEndpoint":{}},{"text":" • "},{"text":"Sweet Dreams"}]}}},` +
-	`{"playlistPanelVideoRenderer":{"videoId":"ot0WzesOp6I","title":{"runs":[{"text":"Break"}]},` +
+	`{"playlistPanelVideoRenderer":{"videoId":"ot0WzesOp6I","title":{"runs":[{"text":"Break"}]},"lengthText":{"runs":[{"text":"3:16"}]},` +
+	`"navigationEndpoint":{"watchEndpoint":{"videoId":"ot0WzesOp6I","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_ATV"}}}},` +
 	`"longBylineText":{"runs":[{"text":"Jhené Aiko","navigationEndpoint":{"browseEndpoint":{"browseId":"UCZONOh3FvcD","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_ARTIST"}}}}},` +
 	`{"text":" • "},{"text":"Westside Whimsy","navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_OUh6Wf","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_ALBUM"}}}}},{"text":" • "},{"text":"2026"}]}}}` +
 	`]}}}}}}]}}}}}`
@@ -41,8 +43,12 @@ func TestYTMusicCreditFromNext(t *testing.T) {
 	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "qeMFqkcPYcg"); c.artist != "Eurythmics, Annie Lennox & Dave Stewart" {
 		t.Errorf("多位歌手连同连接词原样拼: %+v", c)
 	}
-	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "ot0WzesOp6I"); c.album != "Westside Whimsy" || c.artist != "Jhené Aiko" {
-		t.Errorf("音轨版本的署名行里链到专辑页的那一段是专辑: %+v", c)
+	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "ot0WzesOp6I"); c.album != "Westside Whimsy" || c.artist != "Jhené Aiko" ||
+		c.videoType != "MUSIC_VIDEO_TYPE_ATV" || c.durationSecs != 196 {
+		t.Errorf("音轨版本的署名行里链到专辑页的那一段是专辑,另带类型与时长: %+v", c)
+	}
+	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "Qt2mbGP6vFI"); c.videoType != ytmusicVideoTypeOMV || c.durationSecs != 342 {
+		t.Errorf("官方 MV 的类型与时长: %+v", c)
 	}
 	for _, id := range []string{"Qt2mbGP6vFI", "qeMFqkcPYcg"} {
 		if c := ytmusicCreditFromNext([]byte(ytmCreditNext), id); c.album != "" {
@@ -86,7 +92,7 @@ func TestYTMusicEnglishCreditAsksOnceInEnglish(t *testing.T) {
 
 func TestRetryArtistIdentitiesUsesYouTubeMusicCredit(t *testing.T) {
 	withEnrichCache(t, nil)
-	withYTMusicCredits(t, map[string]ytmusicCredit{"Qt2mbGP6vFI": {artist: "Phil Collins", title: "Another Day In Paradise (Live)"}})
+	withYTMusicCredits(t, map[string]ytmusicCredit{ytmusicCreditKey("en", "Qt2mbGP6vFI"): {artist: "Phil Collins", title: "Another Day In Paradise (Live)"}})
 	withCachedAliases(t, map[string]string{"菲尔·科林斯": "", "Phil Collins": ""})
 	withCachedMBAliases(t, map[string][]string{"菲尔·科林斯": nil, "Phil Collins": nil})
 	withCachedQQArtistNames(t, map[string]string{"菲尔·科林斯": "", "Phil Collins": ""})
@@ -97,7 +103,7 @@ func TestRetryArtistIdentitiesUsesYouTubeMusicCredit(t *testing.T) {
 	if got := retryArtistIdentities(context.Background(), "菲尔·科林斯"); len(got) != 0 {
 		t.Errorf("没有 videoId 时不问, got %v", got)
 	}
-	withYTMusicCredits(t, map[string]ytmusicCredit{"Qt2mbGP6vFI": {artist: "Someone Else"}})
+	withYTMusicCredits(t, map[string]ytmusicCredit{ytmusicCreditKey("en", "Qt2mbGP6vFI"): {artist: "Someone Else"}})
 	if got := retryArtistIdentities(ctx, "Phil Collins"); len(got) != 0 {
 		t.Errorf("署名本来就是拉丁字母的不问, got %v", got)
 	}

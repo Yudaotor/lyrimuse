@@ -389,6 +389,24 @@ public enum MediaControlClient {
     })()
     """
 
+    /// Kaset 的待播队列原样(`get play queue`)。读到一首没见过的歌时问一次,补它入队时的写法
+    /// (`KasetPlayerInfo.queueFirstReport`)。没在跑时回空串,不会把它拉起来。
+    private static let kasetPlayQueueScript = """
+    (() => {
+        const K = Application("Kaset");
+        try {
+            if (!K.running()) return "";
+        } catch (e) {
+            return "";
+        }
+        try {
+            return K.getPlayQueue();
+        } catch (e) {
+            return "";
+        }
+    })()
+    """
+
     private static let kasetLock = NSLock()
     /// 位置最近一次变化,认卡顿用(见 `KasetPlayerInfo.isAdvancing`)。
     private static var kasetLastMove: KasetPlayerInfo.LastMove?
@@ -415,7 +433,14 @@ public enum MediaControlClient {
             let (raw, readAt) = KasetPlayerInfo.parseScriptOutput(r.stdout, now: Date())
         else { return nil }
         kasetLock.lock()
-        let steady = KasetPlayerInfo.steadyIdentity(raw, first: kasetFirstReport)
+        var first = kasetFirstReport
+        kasetLock.unlock()
+        if let id = raw.videoID, !id.isEmpty, first?.videoID != id {
+            // 这首第一次读到(换了歌,或者 App 刚起来):开播那份按队列里入队时的写法补上。
+            first = queuedFirstReport(videoID: id) ?? first
+        }
+        kasetLock.lock()
+        let steady = KasetPlayerInfo.steadyIdentity(raw, first: first)
         kasetFirstReport = steady.first
         kasetLock.unlock()
         let reading = raw.withIdentity(title: steady.title, artist: steady.artist)
@@ -425,6 +450,14 @@ public enum MediaControlClient {
         kasetLastVideo = reading.videoID.map { (snapshot.trackKey, $0) }
         kasetLock.unlock()
         return snapshot
+    }
+
+    private static func queuedFirstReport(videoID: String) -> KasetPlayerInfo.FirstReport? {
+        guard let r = ProcessRunner.run(
+            "/usr/bin/osascript", ["-l", "JavaScript", "-e", kasetPlayQueueScript],
+            timeout: MusicPlaybackController.appleScriptTimeout), r.succeeded
+        else { return nil }
+        return KasetPlayerInfo.queueFirstReport(fromQueueJSON: r.stdout, videoID: videoID)
     }
 
     private static func kasetLastMoveSnapshot() -> KasetPlayerInfo.LastMove? {

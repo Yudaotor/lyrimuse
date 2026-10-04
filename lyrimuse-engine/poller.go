@@ -773,7 +773,7 @@ func (p *poller) albumHintFor(s snapshot) string {
 		return ""
 	}
 	// 用 Kaset 放的歌先用 YouTube Music 给它登记的专辑:App 界面专辑位显示的就是它,上送跟界面一致。
-	if album := kasetListedAlbumFor(kasetVideoIDFor(s.Bundle, s.Artist, s.Title)); album != "" {
+	if album := kasetListedAlbumFor(kasetVideoIDFor(s.Bundle, s.Artist, s.Title), s.Duration, s.Artist, s.Title); album != "" {
 		return album
 	}
 	return appleAlbumHint(p.ctx, s.Artist, s.Title, albumHintDurationSecs(s), lyricResolvedArtists(s.Artist, s.Title, s.Album))
@@ -1679,6 +1679,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startCompanionLaunchWatcher(ctx, appAvailable) // App 可用时不读进程表,见 companionlaunch.go 顶部注释
 	go startEnrichCancelWatcher(ctx)                  // 独立节奏,见 enrichcancel.go 顶部注释
 	go startEnrichEditWatcher(ctx)                    // App 侧改歌词缓存的请求,见 enrichedit.go 顶部注释
+	go startKasetAlbumSweep(ctx)                      // 用 Kaset 放过、还没按当前界面语言判过专辑的条目补判一次,见 kasetalbum.go
 	go startLyricsFillSweeper(ctx)                    // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
 	go startLyricsRematchWatcher(ctx)                 // 「重新自动匹配」,见 lyricsrematch.go 顶部注释
 

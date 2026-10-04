@@ -1582,7 +1582,8 @@ func runNotchTests() {
         }
         expectEqual(view.contains("if fields && controller.expandedTrackInfoShowsAlbum {\n                trackInfoAlbumLine"), true,
                     "专辑简介契约: 灵动岛只在开了「显示专辑」时画那一行")
-        expectEqual(view.contains("tappable: !playback.album.isEmpty) { controller.toggleEditorial(.album) }"), true,
+        expectEqual(view.contains("tappable: !playback.album.isEmpty || !playback.youtubeMusicAlbum.isEmpty) { controller.toggleEditorial(.album) }"),
+                    true,
                     "专辑简介契约: 灵动岛展开态点专辑名开 / 关浮框")
         expectEqual(view.contains("tappable: !playback.artist.isEmpty) { controller.toggleEditorial(.artist) }"), true,
                     "歌手简介契约: 灵动岛展开态点歌手名开 / 关浮框")

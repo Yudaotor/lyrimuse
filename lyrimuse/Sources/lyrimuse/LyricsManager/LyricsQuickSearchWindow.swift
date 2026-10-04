@@ -148,7 +148,8 @@ struct LyricsQuickSearchWindow: View {
         // title 传归一化后的,理由跟 LyricsWindowView.openLyricsSearch 同一处注释——两处
         // 曲目快照算法本来就是"同一套"(见本文件头注),这条也要保持一致。
         context = Context(
-            artist: artist, title: EnrichCacheKeys.normalizedTitle(title), album: album,
+            artist: artist, title: EnrichCacheKeys.normalizedTitle(title),
+            album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: LocalPlaybackSource.shared.youtubeMusicAlbum),
             key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs)
     }
 }

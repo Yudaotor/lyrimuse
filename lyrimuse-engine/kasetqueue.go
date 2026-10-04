@@ -80,8 +80,12 @@ func kasetUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 	noteKasetAudioVideoIDs(kasetQueueAudioVideoIDs(out))
 	res, ok := parseKasetQueue(out, artist, title, n)
 	// 接下来这几首在 YouTube Music 上的登记(专辑、原名)后台先问好,播到时界面上的专辑不用等。
+	hl := ytmusicDisplayLanguage()
 	for _, t := range res {
-		ytmusicCreditCachedOrFetch(kasetAudioVideoIDFor(t.videoID))
+		ytmusicListedCachedOrFetch(t.videoID, hl)
+		if audio := kasetAudioVideoIDFor(t.videoID); audio != t.videoID {
+			ytmusicListedCachedOrFetch(audio, hl)
+		}
 	}
 	return res, ok
 }
