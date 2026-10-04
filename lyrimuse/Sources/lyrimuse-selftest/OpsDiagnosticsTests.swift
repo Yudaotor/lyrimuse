@@ -1232,15 +1232,17 @@ func runOpsDiagnosticsTests() {
     // issue timeline 上,而 GitHub 那条事件记录**删不掉**(force push 也未必能让它消失)。
     //
     // 这一组盯的是 hook 本身别被删掉或掏空。 只查文件,**不查 core.hooksPath** ——
-    // 那是本机 git config、不在仓里,CI 上必然没配,查了就是稳定红。新克隆要启用得自己跑
-    // 一次 `git config core.hooksPath .githooks`。
-    do {
+    // 那是本机 git config、不在仓里,CI 上必然没配,查了就是稳定红。
+    // .githooks/ 在 .gitignore 里、不进版本库,别人的 clone 和 CI 上整个目录都不存在:那时这一组和
+    // 下面 pre-commit 那组整段跳过,不是失败;本地有就照旧全查。别把这两处 guard 改成 expectEqual。
+    commitMsgGuard: do {
         let hook = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // lyrimuse-selftest
             .deletingLastPathComponent()   // Sources
             .deletingLastPathComponent()   // lyrimuse
             .deletingLastPathComponent()   // 仓库根
             .appendingPathComponent(".githooks/commit-msg")
+        guard FileManager.default.fileExists(atPath: hook.deletingLastPathComponent().path) else { break commitMsgGuard }
         if let text = try? String(contentsOfFile: hook.path, encoding: .utf8) {
             expectEqual(FileManager.default.isExecutableFile(atPath: hook.path), true,
                         "提交闸: .githooks/commit-msg 必须是可执行的(丢了执行位 = hook 静默失效)")
@@ -1270,12 +1272,13 @@ func runOpsDiagnosticsTests() {
     // 内容(日期戳 / 迭代编号 / 人物归因 / 工单引用 / 排查叙述)归 git 和 docs/。
     // 失效是静默的:丢了执行位、检查器被挪走、或者哪一道闸被删掉,hook 直接放行,
     // 谁都看不出来 —— 所以这里逐条钉住每道闸的存在。
-    do {
+    preCommitGuard: do {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // lyrimuse-selftest
             .deletingLastPathComponent()   // Sources
             .deletingLastPathComponent()   // lyrimuse
             .deletingLastPathComponent()   // 仓库根
+        guard FileManager.default.fileExists(atPath: root.appendingPathComponent(".githooks").path) else { break preCommitGuard }
         let hook = root.appendingPathComponent(".githooks/pre-commit")
         let checker = root.appendingPathComponent("scripts/check-comment-hygiene.py")
         expectEqual(FileManager.default.isExecutableFile(atPath: hook.path), true,
