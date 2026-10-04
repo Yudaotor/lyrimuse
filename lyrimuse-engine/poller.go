@@ -322,6 +322,9 @@ type poller struct {
 	topArtistsState         topArtistsState
 	topArtistsLastCheckedAt time.Time
 
+	// 身份缓存旧条目下一轮补核的时刻(见 identityrecheck.go)。
+	identityRecheckAt time.Time
+
 	// 上面四档报告与 Top 歌手榜在后台 goroutine 里跑,有一轮在跑时为 true(见 runDigestsAsync)。
 	// 这几组 *State / *LastCheckedAt / *Run 字段只由那个 goroutine 读写。
 	digestBusy atomic.Bool

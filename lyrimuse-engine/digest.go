@@ -85,6 +85,7 @@ func (p *poller) runDigests(now time.Time, env digestEnv) {
 	p.yearlyDigest(now, env)
 	p.topArtistsDigest(now, env)
 	p.platformPagesDigest(now, env)
+	p.artistIdentityRecheckDigest(now, env)
 	p.artistRegionsDigest(now, env)
 }
 

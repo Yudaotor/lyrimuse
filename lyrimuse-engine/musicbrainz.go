@@ -100,8 +100,8 @@ func saveArtistAliasCache() {
 // (约 1 请求/秒,见 https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting)——这个
 // 查询极少发生(只在第一次见到一个原始标签不含中文字符、且这个标签之前没查过的歌手时
 // 才会触发一次,查过之后不管成不成功都永久缓存,不会重复查),用一把全局互斥锁串行化+
-// 必要时 sleep 补足间隔就够了,不需要更复杂的令牌桶实现。
-const musicbrainzMinIntervalBetweenCalls = 1100 * time.Millisecond
+// 必要时 sleep 补足间隔就够了,不需要更复杂的令牌桶实现。单测用假应答时置 0(withoutMBThrottle)。
+var musicbrainzMinIntervalBetweenCalls = 1100 * time.Millisecond
 
 // musicbrainzSharedMaxWait:跨进程窗口还要等超过这么久,就说明是被 503 停手了,这次不发。
 const musicbrainzSharedMaxWait = 3 * time.Second
@@ -247,11 +247,14 @@ func containsHan(s string) bool {
 // (用户核对 Top100 导出,坐实 8 对这类漏合并)。中文名(Zh)顺手一起存:
 // 榜单里只有罗马名的中文歌手("Ronghao Li")靠它显示成中文。
 //
-// 缓存语义与 artistAliasCache 一致:查一次永久生效,零值也是合法缓存("查过,没结果"),
-// 想重查只能手动删缓存文件里的 key。
+// 缓存语义与 artistAliasCache 一致:查一次永久生效,没有 mbid 也是合法缓存("查过,没结果"),
+// 想重查只能手动删缓存文件里的 key。Checked 为假的条目是早先的判据写下的,由 recheckArtistIdentities
+// (identityrecheck.go)按现行判据补核。
 type mbArtistIdentity struct {
 	Mbid string `json:"mbid,omitempty"`
 	Zh   string `json:"zh,omitempty"`
+	// Checked:这条是按现行判据得出的(resolveArtistIdentityMB 写的,或补核时留下的)。
+	Checked bool `json:"checked,omitempty"`
 }
 
 var (
@@ -312,6 +315,13 @@ func cachedArtistIdentity(name string) (mbArtistIdentity, bool) {
 	return id, ok
 }
 
+func storeArtistIdentity(name string, id mbArtistIdentity) {
+	artistIdentityMu.Lock()
+	artistIdentityCache[name] = id
+	artistIdentityDirty = true
+	artistIdentityMu.Unlock()
+}
+
 // resolveArtistIdentityMB 联网解析一个歌手名的身份并写缓存。knownMbid 非空时(Last.fm
 // 已给出 mbid)跳过搜索、只在需要中文名时补一次别名查询;否则先搜(置信度门槛与
 // canonical_artist 那条链同一个 musicbrainzMinScore)。中文名只对"名字本身不含汉字"的
@@ -333,11 +343,8 @@ func resolveArtistIdentityMB(name, knownMbid string) mbArtistIdentity {
 	// 手工表里的名字不去搜:那几条正是 MB 把人认错的(见 artistAliasTable 头注),搜出来的 mbid 属于别人,
 	// 永久落盘之后「歌手来自哪里」、App 歌手页的跳转都会指到那个人。中文名直接用表里的;Last.fm 给了 mbid 就留着。
 	if v := knownArtistAlias(name); v != "" {
-		id.Zh = v
-		artistIdentityMu.Lock()
-		artistIdentityCache[name] = id
-		artistIdentityDirty = true
-		artistIdentityMu.Unlock()
+		id.Zh, id.Checked = v, true
+		storeArtistIdentity(name, id)
 		return id
 	}
 	// 任何一步没问成(限速被拒、网络失败、共享窗口停手)就只返回、不写缓存:缓存查一次永久生效,
@@ -353,7 +360,7 @@ func resolveArtistIdentityMB(name, knownMbid string) mbArtistIdentity {
 		}
 		if len(search.Artists) > 0 && search.Artists[0].Score >= musicbrainzMinScore {
 			top := search.Artists[0]
-			aliasURL := "https://musicbrainz.org/ws/2/artist/" + neturl.PathEscape(top.ID) + "?inc=aliases&fmt=json"
+			aliasURL := mbArtistAliasesURL(top.ID)
 			if err := mbGetJSONShared(ctx, aliasURL, &withAliases); err != nil {
 				return id
 			}
@@ -367,17 +374,15 @@ func resolveArtistIdentityMB(name, knownMbid string) mbArtistIdentity {
 	}
 	if verified && id.Mbid != "" && !containsHan(name) {
 		if aliasesFor != id.Mbid {
-			aliasURL := "https://musicbrainz.org/ws/2/artist/" + neturl.PathEscape(id.Mbid) + "?inc=aliases&fmt=json"
+			aliasURL := mbArtistAliasesURL(id.Mbid)
 			if err := mbGetJSONShared(ctx, aliasURL, &withAliases); err != nil {
 				return id
 			}
 		}
 		id.Zh = pickChineseAlias(withAliases.Aliases, withAliases.Country)
 	}
-	artistIdentityMu.Lock()
-	artistIdentityCache[name] = id
-	artistIdentityDirty = true
-	artistIdentityMu.Unlock()
+	id.Checked = true
+	storeArtistIdentity(name, id)
 	return id
 }
 
@@ -496,7 +501,7 @@ func lookupMusicBrainzChineseAlias(ctx context.Context, rawArtist string) (strin
 	}
 
 	var withAliases mbArtistWithAliases
-	aliasURL := "https://musicbrainz.org/ws/2/artist/" + neturl.PathEscape(top.ID) + "?inc=aliases&fmt=json"
+	aliasURL := mbArtistAliasesURL(top.ID)
 	if err := mbGetJSONShared(ctx, aliasURL, &withAliases); err != nil {
 		return "", err
 	}
@@ -509,6 +514,11 @@ func lookupMusicBrainzChineseAlias(ctx context.Context, rawArtist string) (strin
 // 也可能首条命中别人。
 func mbArtistSearchURL(name string) string {
 	return "https://musicbrainz.org/ws/2/artist/?query=" + neturl.QueryEscape(mbLuceneEscape(name)) + "&fmt=json&limit=5"
+}
+
+// mbArtistAliasesURL:按 mbid 取主名、地区和别名的地址。几处都经这里拼,理由同 mbArtistSearchURL。
+func mbArtistAliasesURL(mbid string) string {
+	return "https://musicbrainz.org/ws/2/artist/" + neturl.PathEscape(mbid) + "?inc=aliases&fmt=json"
 }
 
 // mbLuceneEscape 在 Lucene 查询语法的特殊字符前加反斜杠。
@@ -873,7 +883,7 @@ func lookupMusicBrainzArtistAliases(ctx context.Context, raw string) ([]string, 
 	// 不再在这里因为"主名==本地标签"就提前返回,理由见函数头注——那个短路会让
 	// 方大同这类"MB 主名本身就是本地标签"的歌手永远够不到下面的别名列表。
 	var withAliases mbArtistWithAliases
-	aliasURL := "https://musicbrainz.org/ws/2/artist/" + neturl.PathEscape(top.ID) + "?inc=aliases&fmt=json"
+	aliasURL := mbArtistAliasesURL(top.ID)
 	if err := mbGetJSONShared(ctx, aliasURL, &withAliases); err != nil {
 		return nil, err
 	}
