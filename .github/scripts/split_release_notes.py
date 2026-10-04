@@ -12,6 +12,8 @@
 行归属靠 CJK 字符占比判断（>0.25 算中文行）。英文行里夹着的少量中文词
 （"The One演唱会"、演唱会/现场/音乐会 这类例子）占比远低于阈值，不会误判——
 这是对本仓行文习惯的经验阈值，不是通用断言；改了行文风格要回来核这个阈值。
+bullet 里只判到第一行中文为止，从那行起余下的续行都归中文：中文折行后的末行可能只剩
+英文专名加几个字，单看占比到不了阈值。所以同一条里中文行之后不能再写英文行（见 15 章决策 18）。
 
 渲染：Sparkle 的说明 WebView 渲染 HTML 但**不渲染 markdown**，而 notes 源文件是 76 列硬换行的
 markdown——直接塞 <pre> 会得到"句子中间断行 + 裸 **粗体** [链接]()"的观感。
@@ -34,7 +36,7 @@ def cjk_ratio(line: str) -> float:
     chars = [c for c in line if not c.isspace()]
     if not chars:
         return 0.0
-    cjk = sum(1 for c in chars if "一" <= c <= "鿿" or "　" <= c <= "〿" or "＀" <= c <= "￯")
+    cjk = sum(1 for c in chars if "\u4e00" <= c <= "\u9fff" or "\u3000" <= c <= "\u303f" or "\uff00" <= c <= "\uffef")
     return cjk / len(chars)
 
 
@@ -128,7 +130,8 @@ def split_notes(text: str):
             continue
 
         if in_bullet:
-            if is_zh(line):
+            # 这一条已经出现过中文行，余下的续行不再按占比判（见文件头）。
+            if bullet_zh_pending or is_zh(line):
                 bullet_zh_pending.append(line)
             else:
                 en_lines.append(line)
