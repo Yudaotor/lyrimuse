@@ -1,0 +1,106 @@
+{
+  "id": "cv-one-step-qq",
+  "source": "qq",
+  "note": "角色歌 CV 署名:源里按声优署名,首轮靠歌手闸认得 CV 括号才收下",
+  "track": {
+    "artist": "玉木マリ(CV:水瀬いのり)、小淵沢報瀬(CV:花澤香菜)、三宅日向(CV:井口裕香)、白石結月(CV:早見沙織)",
+    "title": "One Step",
+    "album": "TVアニメ「宇宙よりも遠い場所」エンディングテーマ「ここから、ここから」 - EP"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "玉木マリ(CV:水瀬いのり)、小渊沢报瀬(CV:花泽香菜)、三宅日向(CV:井口裕香)、白石结月(CV:早见沙织)",
+    "title": "One Step",
+    "album": "TVアニメ「宇宙よりも远い场所」エンディングテーマ「ここから、ここから」 - EP",
+    "duration_secs": 242.3
+  },
+  "local_duration_secs": 242.3,
+  "items": [
+    {
+      "id": "0013oGyF0aYaoU",
+      "title": "ここから、ここから (从这开始，从这开始)",
+      "artist": "水濑祈 (水瀬いのり)/花澤香菜/井口裕香/早見沙織",
+      "album": "TVアニメ「宇宙よりも遠い場所」エンディングテーマ「ここから、ここから」歌:玉木マリ (CV:水瀬いのり)、小淵沢報瀬 (CV:花澤香菜)、三宅日向 (CV:井口裕香)、白石結月 (CV:早見沙織)",
+      "duration_secs": 272
+    },
+    {
+      "id": "003cWgp543dnWx",
+      "title": "One Step",
+      "artist": "水濑祈 (水瀬いのり)/花澤香菜/井口裕香/早見沙織",
+      "album": "TVアニメ「宇宙よりも遠い場所」エンディングテーマ「ここから、ここから」歌:玉木マリ (CV:水瀬いのり)、小淵沢報瀬 (CV:花澤香菜)、三宅日向 (CV:井口裕香)、白石結月 (CV:早見沙織)",
+      "duration_secs": 238
+    },
+    {
+      "id": "000rQr7A2fHKPQ",
+      "title": "マリ (feat. 重音テト \u0026 初音ミク)",
+      "artist": "佐藤 ちなみに/重音テト/初音未来",
+      "album": "マリ (feat. 重音テト \u0026 初音ミク)",
+      "duration_secs": 179
+    },
+    {
+      "id": "002HxCiA4YNywG",
+      "title": "One Step (instrumental)",
+      "artist": "水濑祈 (水瀬いのり)/花澤香菜/井口裕香/早見沙織",
+      "album": "TVアニメ「宇宙よりも遠い場所」エンディングテーマ「ここから、ここから」歌:玉木マリ (CV:水瀬いのり)、小淵沢報瀬 (CV:花澤香菜)、三宅日向 (CV:井口裕香)、白石結月 (CV:早見沙織)",
+      "duration_secs": 238
+    },
+    {
+      "id": "004PoTF22s58Ab",
+      "title": "マリッジソング (Marriage Song)",
+      "artist": "THE BEAT GARDEN",
+      "album": "マリッジソング",
+      "duration_secs": 224
+    },
+    {
+      "id": "001Ro9AL1hfY0i",
+      "title": "アヴェ・マリア (圣母颂)",
+      "artist": "日本群星",
+      "album": "金色のコルダ~primo passo~クラシック・コレクション 最終セレクション編",
+      "duration_secs": 404
+    },
+    {
+      "id": "000aVd0z2mCvij",
+      "title": "マリンブルー・マジック♡",
+      "artist": "伊藤彩沙",
+      "album": "『ウマ娘 プリティーダービー』WINNING LIVE 22",
+      "duration_secs": 212
+    },
+    {
+      "id": "000X5NBI0PCyJO",
+      "title": "1986年のマリリン",
+      "artist": "本田美奈子",
+      "album": "GOLDEN DAYS",
+      "duration_secs": 239
+    },
+    {
+      "id": "001qBKpu3L7WMq",
+      "title": "ココロソマリ (渲染的心) (Single Version)",
+      "artist": "水濑祈 (水瀬いのり)",
+      "album": "ココロソマリ",
+      "duration_secs": 289
+    },
+    {
+      "id": "001agB5v03VAMk",
+      "title": "アマリリス (孤挺花)",
+      "artist": "BLUE ENCOUNT",
+      "album": "アマリリス",
+      "duration_secs": 233
+    }
+  ],
+  "expect": {
+    "picked_id": "003cWgp543dnWx",
+    "accepted_strict": [
+      "003cWgp543dnWx",
+      "002HxCiA4YNywG"
+    ],
+    "picked_no_album": "003cWgp543dnWx"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 1.7746595130004172,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "id": "cv-flyme-11-lrclib",
+  "source": "lrclib",
+  "note": "角色歌 CV 署名(issue #28 的真实样本):按完整署名查不到,别名轮按声优名查;同一首有 #3～#11 好几个演唱版本、时长几乎一样,只能按曲名编号挑",
+  "track": {
+    "artist": "天堂真矢(CV:富田麻帆)、星見純那(CV:佐藤日向)、露崎まひる(CV:岩田陽葵)、大場なな(CV:小泉萌香)、西條クロディーヌ(CV:相羽あいな)、石動双葉(CV:生田輝)、花柳香子(CV:伊藤彩沙)",
+    "title": "Fly Me to the Star (#11)",
+    "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.2「ラ レヴュー ド ソワレ」"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "富田麻帆",
+    "title": "Fly Me to the Star (#11)",
+    "album": "「少女☆歌剧 レヴュースタァライト」剧中歌アルバムVol.2「ラ レヴュー ド ソワレ」",
+    "duration_secs": 95.8
+  },
+  "local_duration_secs": 95.8,
+  "items": [
+    {
+      "id": "#0",
+      "title": "Fly Me to the Star #7",
+      "artist": "スタァライト九九組 (小山百代, 三森すずこ, 富田麻帆, 佐藤日向, 岩田陽葵, 小泉萌香, 相羽あいな, 生田輝, 伊藤彩沙)",
+      "album": "少女☆歌劇 レヴュースタァライト 劇中歌アルバム Vol. 1 ラ レヴュー ド マチネ",
+      "duration_secs": 93.855057,
+      "plain_lyrics": "䧊 ほつぜるぱむよ䖰りむ\n㷭䤽よ㕉ゅりべむびむゅ\n㫁㟢 㦲げ䒡ゅさざぼ んつによ㕞ゅり\n\nxn, wrm ov zx znv ezpi\n\n䗺䎧に 䁜みぼんぜ ばべぱぁり\nゅらぞぱ㸟㻊よ䝲され\n㟕どりびぼあ るぱむあ䗺よ㐛べむゅさぺ\nxn, wrm ov zx znv ezpi\n\n䡇㸟あ䂟䯉 㜜だ䈾すゃり\n\nむしせ 㖴䯭せぱぼ づつり\nるぱむふゅぱぁぱぅゎめば\n䟖ぁ㻜せ䧊䁀㽽 䘜もぱゅば\nxn, wrm ov zx znv ezpi\n\n䃤ざぼ㡺よ 㰂まむ㓺ょ\n䄘䃙あ㨑よ㫁 㴩ちり\n㲃ぉ䒪ふゎつぜ 㗤よ䉻つりゅぁ 䊃ぉ䌀にり\nxn, wrm ov zx znv ezpi\n\n䠭ぉりつり\nxn, wrm ov zx znv ezpi"
+    }
+  ],
+  "expect": {
+    "picked_id": ""
+  },
+  "judge": {
+    "title_accepted": false,
+    "artist_matches": false,
+    "source_duration_delta_pct": -1,
+    "version_tags_ok": false,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

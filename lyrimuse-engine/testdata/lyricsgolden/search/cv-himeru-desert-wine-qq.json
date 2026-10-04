@@ -1,0 +1,50 @@
+{
+  "id": "cv-himeru-desert-wine-qq",
+  "source": "qq",
+  "note": "角色歌 CV 署名:源里按声优署名,首轮靠歌手闸认得 CV 括号才收下",
+  "track": {
+    "artist": "HiMERU (CV.笠間 淳) \u0026 あんさんぶるスターズ!!",
+    "title": "夢想のDesert Wine",
+    "album": "HiMERU「夢想のDesert Wine」あんさんぶるスターズ!! ESアイドルソング Solo -Bright me up!!- - Single"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "HiMERU (CV.笠间 淳) \u0026 あんさんぶるスターズ!!",
+    "title": "梦想のDesert Wine",
+    "album": "HiMERU「梦想のDesert Wine」あんさんぶるスターズ!! ESアイドルソング Solo -Bright me up!!- - Single",
+    "duration_secs": 178.3
+  },
+  "local_duration_secs": 178.3,
+  "items": [
+    {
+      "id": "0009ndnr36rqZU",
+      "title": "夢想のDesert Wine",
+      "artist": "笠間淳/ENSEMBLE STARS!!",
+      "album": "HiMERU「夢想のDesert Wine」あんさんぶるスターズ！！ ESアイドルソング Solo -Bright me up!!-",
+      "duration_secs": 178
+    },
+    {
+      "id": "0007b77P2YAmpR",
+      "title": "夢想のDesert Wine (Instrumental)",
+      "artist": "笠間淳/ENSEMBLE STARS!!",
+      "album": "HiMERU「夢想のDesert Wine」あんさんぶるスターズ！！ ESアイドルソング Solo -Bright me up!!-",
+      "duration_secs": 178
+    }
+  ],
+  "expect": {
+    "picked_id": "0009ndnr36rqZU",
+    "accepted_strict": [
+      "0009ndnr36rqZU",
+      "0007b77P2YAmpR"
+    ],
+    "picked_no_album": "0009ndnr36rqZU"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.16825574873808824,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

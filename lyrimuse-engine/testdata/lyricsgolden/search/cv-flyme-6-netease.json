@@ -1,0 +1,362 @@
+{
+  "id": "cv-flyme-6-netease",
+  "source": "netease",
+  "note": "角色歌 CV 署名(issue #28 的真实样本):按完整署名查不到,别名轮按声优名查;同一首有 #3～#11 好几个演唱版本、时长几乎一样,只能按曲名编号挑",
+  "track": {
+    "artist": "花柳香子(CV:伊藤彩沙)、石動双葉(CV:生田輝)",
+    "title": "Fly Me to the Star (#6)",
+    "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "花柳香子(CV:伊藤彩沙)、石动双叶(CV:生田辉)",
+    "title": "Fly Me to the Star (#6)",
+    "album": "「少女☆歌剧 レヴュースタァライト」剧中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+    "duration_secs": 93.8
+  },
+  "local_duration_secs": 93.8,
+  "items": [
+    {
+      "id": "1303028280",
+      "title": "Fly Me to the Star #5",
+      "artists": [
+        "岩田陽葵"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 93.786
+    },
+    {
+      "id": "1317457741",
+      "title": "Fly Me to the Star #9",
+      "artists": [
+        "佐藤日向",
+        "小泉萌香"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 93.786
+    },
+    {
+      "id": "1303026286",
+      "title": "Fly Me to the Star #6",
+      "artists": [
+        "伊藤彩沙",
+        "生田輝"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 93.8
+    },
+    {
+      "id": "1303019312",
+      "title": "Fly Me to the Star #7",
+      "artists": [
+        "尋木ヒロ",
+        "小高光太郎"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 93.8
+    },
+    {
+      "id": "1318284114",
+      "title": "Fly Me to the Star #10",
+      "artists": [
+        "富田麻帆",
+        "相羽あいな"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 93.8
+    },
+    {
+      "id": "1303026284",
+      "title": "The Star Knows",
+      "artists": [
+        "佐藤日向",
+        "小山百代"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 374.746
+    },
+    {
+      "id": "1303019309",
+      "title": "世界を灰にするまで",
+      "artists": [
+        "佐藤日向",
+        "三森すずこ",
+        "小山百代"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 235.906
+    },
+    {
+      "id": "1303026285",
+      "title": "恋の魔球",
+      "artists": [
+        "岩田陽葵",
+        "小山百代"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 409.413
+    },
+    {
+      "id": "1303028279",
+      "title": "花咲か唄",
+      "artists": [
+        "生田輝",
+        "伊藤彩沙"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 304.426
+    },
+    {
+      "id": "1303019311",
+      "title": "誇りと驕り",
+      "artists": [
+        "小山百代",
+        "富田麻帆"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 346.84
+    },
+    {
+      "id": "1318284111",
+      "title": "-Star Divine- フィナーレ",
+      "artists": [
+        "小山百代",
+        "三森すずこ",
+        "富田麻帆",
+        "相羽あいな"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 248.186
+    },
+    {
+      "id": "1965073518",
+      "title": "美しき人 或いは其れは",
+      "artists": [
+        "富田麻帆",
+        "相羽あいな"
+      ],
+      "album": "劇場版 少女☆歌劇 レヴュースタァライト 劇中歌アルバムVol.1",
+      "album_id": "148288871",
+      "duration_secs": 651.773
+    },
+    {
+      "id": "1832154734",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "スタァライト九九組"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」ベストアルバム",
+      "album_id": "125089485",
+      "duration_secs": 193.8
+    },
+    {
+      "id": "1317420703",
+      "title": "RE:CREATE",
+      "artists": [
+        "三森すずこ",
+        "小泉萌香"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 400.653
+    },
+    {
+      "id": "1317410846",
+      "title": "星摘みの歌",
+      "artists": [
+        "富田麻帆",
+        "相羽あいな"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 253.386
+    },
+    {
+      "id": "1317420704",
+      "title": "星々の絆",
+      "artists": [
+        "小泉萌香",
+        "小山百代"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 196.84
+    },
+    {
+      "id": "1317457738",
+      "title": "舞台少女心得 幕間",
+      "artists": [
+        "小山百代",
+        "佐藤日向",
+        "岩田陽葵",
+        "生田輝",
+        "伊藤彩沙",
+        "小泉萌香",
+        "相羽あいな",
+        "富田麻帆"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 225.386
+    },
+    {
+      "id": "1966374292",
+      "title": "wi(l)d-screen baroque",
+      "artists": [
+        "小泉萌香"
+      ],
+      "album": "劇場版 少女☆歌劇 レヴュースタァライト 劇中歌アルバムVol.2",
+      "album_id": "148566763",
+      "duration_secs": 260.813
+    },
+    {
+      "id": "1966373291",
+      "title": "スーパー スタァ スペクタクル",
+      "artists": [
+        "小山百代",
+        "三森すずこ"
+      ],
+      "album": "劇場版 少女☆歌劇 レヴュースタァライト 劇中歌アルバムVol.2",
+      "album_id": "148566763",
+      "duration_secs": 531.16
+    },
+    {
+      "id": "1965076323",
+      "title": "わがままハイウェイ",
+      "artists": [
+        "生田輝",
+        "伊藤彩沙"
+      ],
+      "album": "劇場版 少女☆歌劇 レヴュースタァライト 劇中歌アルバムVol.1",
+      "album_id": "148288871",
+      "duration_secs": 486.2
+    },
+    {
+      "id": "1965073517",
+      "title": "MEDAL SUZDAL PANIC◎○●",
+      "artists": [
+        "三森すずこ",
+        "岩田陽葵"
+      ],
+      "album": "劇場版 少女☆歌劇 レヴュースタァライト 劇中歌アルバムVol.1",
+      "album_id": "148288871",
+      "duration_secs": 510.2
+    },
+    {
+      "id": "1297747109",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "小山百代",
+        "三森すずこ"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "72071655",
+      "duration_secs": 193.8
+    },
+    {
+      "id": "1966373290",
+      "title": "ペン:力:刀",
+      "artists": [
+        "佐藤日向",
+        "小泉萌香"
+      ],
+      "album": "劇場版 少女☆歌劇 レヴュースタァライト 劇中歌アルバムVol.2",
+      "album_id": "148566763",
+      "duration_secs": 596.746
+    },
+    {
+      "id": "1965073521",
+      "title": "ki-ringtrain",
+      "artists": [
+        "藤澤慶昌"
+      ],
+      "album": "劇場版 少女☆歌劇 レヴュースタァライト 劇中歌アルバムVol.1",
+      "album_id": "148288871",
+      "duration_secs": 31.066
+    },
+    {
+      "id": "1965076324",
+      "title": "キリンのためのレクイエム",
+      "artists": [
+        "藤澤慶昌"
+      ],
+      "album": "劇場版 少女☆歌劇 レヴュースタァライト 劇中歌アルバムVol.1",
+      "album_id": "148288871",
+      "duration_secs": 85.186
+    },
+    {
+      "id": "1293951615",
+      "title": "星のダイアローグ",
+      "artists": [
+        "スタァライト九九組"
+      ],
+      "album": "星のダイアローグ",
+      "album_id": "71852730",
+      "duration_secs": 282.066
+    },
+    {
+      "id": "1318284112",
+      "title": "スタァライト",
+      "artists": [
+        "小山百代",
+        "三森すずこ"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 483.213
+    },
+    {
+      "id": "1297747111",
+      "title": "Fly Me to the Star (Instrumental)",
+      "artists": [
+        "尋木ヒロ",
+        "小高光太郎"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "72071655",
+      "duration_secs": 194.346
+    },
+    {
+      "id": "1297747110",
+      "title": "よろしく九九組",
+      "artists": [
+        "スタァライト九九組"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "72071655",
+      "duration_secs": 259.333
+    },
+    {
+      "id": "2624187444",
+      "title": "PRIDE",
+      "artists": [
+        "スタァライト九九組"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト 舞台奏像劇 遙かなるエルドラド」劇中歌EP",
+      "album_id": "247016995",
+      "duration_secs": 317.373
+    }
+  ],
+  "expect": {
+    "picked_id": "1303026286"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

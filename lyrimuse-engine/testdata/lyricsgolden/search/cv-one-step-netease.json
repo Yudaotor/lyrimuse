@@ -1,0 +1,54 @@
+{
+  "id": "cv-one-step-netease",
+  "source": "netease",
+  "note": "角色歌 CV 署名:源里按声优署名,首轮靠歌手闸认得 CV 括号才收下",
+  "track": {
+    "artist": "玉木マリ(CV:水瀬いのり)、小淵沢報瀬(CV:花澤香菜)、三宅日向(CV:井口裕香)、白石結月(CV:早見沙織)",
+    "title": "One Step",
+    "album": "TVアニメ「宇宙よりも遠い場所」エンディングテーマ「ここから、ここから」 - EP"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "玉木マリ(CV:水瀬いのり)、小渊沢报瀬(CV:花泽香菜)、三宅日向(CV:井口裕香)、白石结月(CV:早见沙织)",
+    "title": "One Step",
+    "album": "TVアニメ「宇宙よりも远い场所」エンディングテーマ「ここから、ここから」 - EP",
+    "duration_secs": 242.3
+  },
+  "local_duration_secs": 242.3,
+  "items": [
+    {
+      "id": "536623509",
+      "title": "One Step",
+      "artists": [
+        "水瀬いのり",
+        "花澤香菜",
+        "井口裕香",
+        "早見沙織"
+      ],
+      "album": "TVアニメ「宇宙よりも遠い場所」エンディングテーマ「ここから、ここから」 歌：玉木マリ（CV:水瀬いのり）、小淵沢報瀬（CV:花澤香菜）、三宅日向（CV:井口裕香）、白石結月（CV:早見沙織）",
+      "album_id": "37577116",
+      "duration_secs": 238.322
+    },
+    {
+      "id": "536570515",
+      "title": "One Step（instrumental）",
+      "artists": [
+        "やいり"
+      ],
+      "album": "TVアニメ「宇宙よりも遠い場所」エンディングテーマ「ここから、ここから」 歌：玉木マリ（CV:水瀬いのり）、小淵沢報瀬（CV:花澤香菜）、三宅日向（CV:井口裕香）、白石結月（CV:早見沙織）",
+      "album_id": "37577116",
+      "duration_secs": 238.322
+    }
+  ],
+  "expect": {
+    "picked_id": "536623509"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 1.6417664052827108,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

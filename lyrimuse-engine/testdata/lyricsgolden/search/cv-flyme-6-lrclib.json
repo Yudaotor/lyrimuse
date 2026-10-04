@@ -1,0 +1,39 @@
+{
+  "id": "cv-flyme-6-lrclib",
+  "source": "lrclib",
+  "note": "角色歌 CV 署名(issue #28 的真实样本):按完整署名查不到,别名轮按声优名查;同一首有 #3～#11 好几个演唱版本、时长几乎一样,只能按曲名编号挑",
+  "track": {
+    "artist": "花柳香子(CV:伊藤彩沙)、石動双葉(CV:生田輝)",
+    "title": "Fly Me to the Star (#6)",
+    "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "伊藤彩沙",
+    "title": "Fly Me to the Star (#6)",
+    "album": "「少女☆歌剧 レヴュースタァライト」剧中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+    "duration_secs": 93.8
+  },
+  "local_duration_secs": 93.8,
+  "items": [
+    {
+      "id": "#0",
+      "title": "Fly Me to the Star #7",
+      "artist": "スタァライト九九組 (小山百代, 三森すずこ, 富田麻帆, 佐藤日向, 岩田陽葵, 小泉萌香, 相羽あいな, 生田輝, 伊藤彩沙)",
+      "album": "少女☆歌劇 レヴュースタァライト 劇中歌アルバム Vol. 1 ラ レヴュー ド マチネ",
+      "duration_secs": 93.855057,
+      "plain_lyrics": "㩁 むぉわだはひき㗜ぐひ\n㴕䃵き䂞ずぐほひれひず\n䡣㛼 㺥ご㓚ずせざや いぉまき䎧ずぐ\n\nre, zlf xo pr peo gpwy\n\n㖪㭇ま 䥴ばやいわ るほはゃぐ\nずぞふは䄓㟍き㸗せゅ\n㠪みぐれやり だはひり㖪き䗸ほひずせぜ\nre, zlf xo pr peo gpwy\n\n㞰䄓り㟱䬙 䇽く䘶つえぐ\n\nひぼち 䯙䕆ちはや づぉぐ\nだはひのずはゃはぽさかる\n㰐ゃ㴮ち㩁㩞䉣 䁺ゔはずる\nre, zlf xo pr peo gpwy\n\n䒍ざや䖢き 䪵ゐひ㡣し\n㽁㲈り㦵き䡣 䛏ろぐ\n䌌て䩈のさぉわ 㘴き㖅ぉぐずゃ 㕻て㑭まぐ\nre, zlf xo pr peo gpwy\n\n䎀てぐぉぐ\nre, zlf xo pr peo gpwy"
+    }
+  ],
+  "expect": {
+    "picked_id": ""
+  },
+  "judge": {
+    "title_accepted": false,
+    "artist_matches": false,
+    "source_duration_delta_pct": -1,
+    "version_tags_ok": false,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,357 @@
+{
+  "id": "cv-flyme-11-netease",
+  "source": "netease",
+  "note": "角色歌 CV 署名(issue #28 的真实样本):按完整署名查不到,别名轮按声优名查;同一首有 #3～#11 好几个演唱版本、时长几乎一样,只能按曲名编号挑",
+  "track": {
+    "artist": "天堂真矢(CV:富田麻帆)、星見純那(CV:佐藤日向)、露崎まひる(CV:岩田陽葵)、大場なな(CV:小泉萌香)、西條クロディーヌ(CV:相羽あいな)、石動双葉(CV:生田輝)、花柳香子(CV:伊藤彩沙)",
+    "title": "Fly Me to the Star (#11)",
+    "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.2「ラ レヴュー ド ソワレ」"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "天堂真矢(CV:富田麻帆)、星见纯那(CV:佐藤日向)、露崎まひる(CV:岩田阳葵)、大场なな(CV:小泉萌香)、西条クロディーヌ(CV:相羽あいな)、石动双叶(CV:生田辉)、花柳香子(CV:伊藤彩沙)",
+    "title": "Fly Me to the Star (#11)",
+    "album": "「少女☆歌剧 レヴュースタァライト」剧中歌アルバムVol.2「ラ レヴュー ド ソワレ」",
+    "duration_secs": 95.8
+  },
+  "local_duration_secs": 95.8,
+  "items": [
+    {
+      "id": "1297747111",
+      "title": "Fly Me to the Star (Instrumental)",
+      "artists": [
+        "尋木ヒロ",
+        "小高光太郎"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "72071655",
+      "duration_secs": 194.346
+    },
+    {
+      "id": "1318284114",
+      "title": "Fly Me to the Star #10",
+      "artists": [
+        "富田麻帆",
+        "相羽あいな"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 93.8
+    },
+    {
+      "id": "1949089927",
+      "title": "Fly Me to the Star (0ddr3114 \"5+8\" Remix)",
+      "artists": [
+        "0ddr3114"
+      ],
+      "duration_secs": 221.257
+    },
+    {
+      "id": "1297747109",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "小山百代",
+        "三森すずこ"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "72071655",
+      "duration_secs": 193.8
+    },
+    {
+      "id": "496523455",
+      "title": "Fly me to the Stars",
+      "artists": [
+        "Marcel Kaiser",
+        "Feedb4ck",
+        "Kevin Zaremba"
+      ],
+      "album": "Fly me to the stars",
+      "album_id": "35898809",
+      "duration_secs": 352.783
+    },
+    {
+      "id": "1317457741",
+      "title": "Fly Me to the Star #9",
+      "artists": [
+        "佐藤日向",
+        "小泉萌香"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 93.786
+    },
+    {
+      "id": "1324538259",
+      "title": "Fly Me to the Star 中文填词版（翻自 愛城華恋）",
+      "artists": [
+        "桃子在发芽"
+      ],
+      "album": "少女歌剧ED填翻",
+      "album_id": "74310509",
+      "duration_secs": 194.529
+    },
+    {
+      "id": "1833019761",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "绿溪_soka"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "125088937",
+      "duration_secs": 93.648
+    },
+    {
+      "id": "1297750122",
+      "title": "よろしく九九組 (Instrumental)",
+      "artists": [
+        "塚田耕平"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "72071655",
+      "duration_secs": 258.6
+    },
+    {
+      "id": "1816815998",
+      "title": "Fly Me to the Star（粤语版）",
+      "artists": [
+        "祈椋sama",
+        "梨香rika",
+        "西洋菜煲猪骨"
+      ],
+      "album": "【少女歌剧ed】Fly Me to the Star (粤语版)",
+      "album_id": "122088394",
+      "duration_secs": 191.781
+    },
+    {
+      "id": "1297743130",
+      "title": "ロマンティッククルージン",
+      "artists": [
+        "スタァライト九九組"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "72071655",
+      "duration_secs": 272.773
+    },
+    {
+      "id": "1322619309",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "Mokona",
+        "冥月"
+      ],
+      "album": "MOKONA010(aka阿黄)的日语翻唱",
+      "album_id": "36568547",
+      "duration_secs": 194.343
+    },
+    {
+      "id": "1312317926",
+      "title": "Fly Me to the Star（少女 歌剧Revue Starlight ED）（Cover Starlight九九组）",
+      "artists": [
+        "Kyle Xian"
+      ],
+      "album": "2018七月动漫新番歌曲合集Vol.2",
+      "album_id": "71739099",
+      "duration_secs": 96.313
+    },
+    {
+      "id": "1315583868",
+      "title": "Fly Me To The Star（翻自 伊藤彩沙、生田輝）",
+      "artists": [
+        "MEON",
+        "Rea",
+        "Rea"
+      ],
+      "album": "少女歌剧翻唱本",
+      "album_id": "73772800",
+      "duration_secs": 93.884
+    },
+    {
+      "id": "1303028280",
+      "title": "Fly Me to the Star #5",
+      "artists": [
+        "岩田陽葵"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 93.786
+    },
+    {
+      "id": "1340651674",
+      "title": "fly me to the star",
+      "artists": [
+        "傻莓酱",
+        "花音"
+      ],
+      "album": "Fly me to the star 粤语版",
+      "album_id": "75244723",
+      "duration_secs": 95.425
+    },
+    {
+      "id": "2724765223",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "Elira Pendora"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "278009610",
+      "duration_secs": 192.339
+    },
+    {
+      "id": "1928267944",
+      "title": "Fly Me To The Star",
+      "artists": [
+        "Sakitin",
+        "花宮夏紀_"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "141813059",
+      "duration_secs": 190.676
+    },
+    {
+      "id": "1890714551",
+      "title": "Fly Me to the Star（cover 少女歌剧ED）",
+      "artists": [
+        "綾奈nana",
+        "步玎Pudding"
+      ],
+      "album": "☆* ☽ ——Fly Me to the Star——☾＊☆",
+      "album_id": "135435033",
+      "duration_secs": 190.066
+    },
+    {
+      "id": "1322361476",
+      "title": "Fly Me to the Star（翻自 スタァライト九九組）",
+      "artists": [
+        "冥月",
+        "mokona010"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "74169503",
+      "duration_secs": 194.343
+    },
+    {
+      "id": "1303026286",
+      "title": "Fly Me to the Star #6",
+      "artists": [
+        "伊藤彩沙",
+        "生田輝"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "72383717",
+      "duration_secs": 93.8
+    },
+    {
+      "id": "1832154734",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "スタァライト九九組"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」ベストアルバム",
+      "album_id": "125089485",
+      "duration_secs": 193.8
+    },
+    {
+      "id": "1297747112",
+      "title": "ロマンティッククルージン (Instrumental)",
+      "artists": [
+        "佐々木裕"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "72071655",
+      "duration_secs": 271.58
+    },
+    {
+      "id": "1431115037",
+      "title": "Fly me to star（南北）（翻自 小山百代）",
+      "artists": [
+        "溱绫西陌",
+        "洛天依",
+        "乐正绫",
+        "星葵77"
+      ],
+      "album": "Fly me to the star",
+      "album_id": "86512867",
+      "duration_secs": 191.085
+    },
+    {
+      "id": "1317457744",
+      "title": "Fly Me to the Star #11",
+      "artists": [
+        "岩田陽葵",
+        "小泉萌香",
+        "生田輝",
+        "伊藤彩沙",
+        "富田麻帆",
+        "佐藤日向",
+        "相羽あいな"
+      ],
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバム Vol.2「ラ レヴュー ド ソワレ」",
+      "album_id": "73837093",
+      "duration_secs": 95.8
+    },
+    {
+      "id": "2696558706",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "维涅斯"
+      ],
+      "album": "howaito",
+      "album_id": "255799271",
+      "duration_secs": 192
+    },
+    {
+      "id": "3443049479",
+      "title": "Fly me to the star",
+      "artists": [
+        "夏璐璐Ruby_Channel",
+        "太儿"
+      ],
+      "album": "シャルルの秘密の音楽マジック",
+      "album_id": "384068118",
+      "duration_secs": 194.346
+    },
+    {
+      "id": "3438994911",
+      "title": "Fly me to the star",
+      "artists": [
+        "语希尔Yshira",
+        "茶嘉Chaga"
+      ],
+      "album": "Fly me to the star⭐",
+      "album_id": "399518301",
+      "duration_secs": 194.366
+    },
+    {
+      "id": "1916735230",
+      "title": "Fly me to the star",
+      "artists": [
+        "白理",
+        "弦染"
+      ],
+      "album": "哇卡立马斯",
+      "album_id": "139717884",
+      "duration_secs": 195.483
+    },
+    {
+      "id": "1489783109",
+      "title": "Fly Me to the Star",
+      "artists": [
+        "晴斗Nick"
+      ],
+      "album": "Fly Me to the Star",
+      "album_id": "97294657",
+      "duration_secs": 190.213
+    }
+  ],
+  "expect": {
+    "picked_id": "1317457744"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

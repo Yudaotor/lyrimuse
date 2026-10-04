@@ -1360,6 +1360,13 @@ func artistMatches(a, b string) bool {
 	if na == nb {
 		return true
 	}
+	// 两边都是「角色(CV:声优)」署名时只看 cvCreditsShareSinger:同一位声优唱的另一个角色、同一个角色换了声优、
+	// 同一团体的另几位成员都不算同一组演唱者,下面去括号只比角色名那一档会把后两种对上。见 09 章决策 173。
+	if ca, ok := parseCVCredit(na); ok {
+		if cb, ok := parseCVCredit(nb); ok {
+			return cvCreditsShareSinger(ca, cb)
+		}
+	}
 	if pa := artistCreditParts(na); len(pa) >= 2 {
 		for _, part := range pa {
 			if part == nb {
@@ -1402,6 +1409,17 @@ func artistMatches(a, b string) bool {
 	}
 	if sb := stripHalfWidthParens(nb); sb != nb && sb != "" && artistMatches(na, sb) {
 		return true
+	}
+	// 「角色(CV:声优)」写明了谁在唱:拆出来的每一位声优、每一个角色再各比一次(全角括号也认),见 cvCreditNames。
+	for _, n := range cvCreditNames(na) {
+		if artistMatches(n, nb) {
+			return true
+		}
+	}
+	for _, n := range cvCreditNames(nb) {
+		if artistMatches(na, n) {
+			return true
+		}
 	}
 	return false
 }
@@ -1504,6 +1522,10 @@ func lyricArtistWithoutThe(s string) string {
 func lyricSourceArtistMatches(candidate, query string) bool {
 	if artistMatches(candidate, query) {
 		return true
+	}
+	// 两边都是 CV 署名时 artistMatches 的判决就是结论,下面按段求交集会让同一团体的另几位成员对上。
+	if isCVCredit(candidate) && isCVCredit(query) {
+		return false
 	}
 	// 冠词「The」一侧有、一侧没有(本地「Jackson 5」对源里「The Jackson 5」),见 lyricArtistWithoutThe。
 	if c, q := lyricArtistWithoutThe(candidate), lyricArtistWithoutThe(query); (c != candidate || q != query) && artistMatches(c, q) {
@@ -1884,7 +1906,15 @@ func retryArtistIdentities(ctx context.Context, artist string) []string {
 	// 分数都在 1100+。这类标签是"一个人的英文名+中文名拼在一起",不是"和/、/&这类合唱
 	// 连接词"(那些已经由 normalizeArtistCreditHanAnd 处理),歌词源通常只按纯中文名或
 	// 纯英文艺名索引,两种都不认这种拼接写法。见 hanOnlyPortion 头注。
-	add(hanOnlyPortion(artist))
+	if cv := cvRetryIdentities(artist); len(cv) > 0 {
+		// CV 署名(「角色(CV:声优)」)换成写明的声优、一起署名的团体,不跑 hanOnlyPortion:「CV」两个拉丁字母会让它
+		// 当成「英文名+中文名」,取出来的是半截角色名或姓氏。见 cvRetryIdentities。
+		for _, id := range cv {
+			add(id)
+		}
+	} else {
+		add(hanOnlyPortion(artist))
+	}
 	// 第零点五条(同样是纯本地、零请求,所以跟上一条一起排在所有网络
 	// 查询前面):这台机器上同一个歌手的**别的**歌成功解析时,源那边把他署成什么名——
 	// 覆盖"这位歌手在线上全部落空,但本机缓存里同一个人的另一首歌已经采纳过候选"的场景

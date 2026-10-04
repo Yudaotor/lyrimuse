@@ -1,0 +1,149 @@
+{
+  "id": "cv-flyme-6-qq",
+  "source": "qq",
+  "note": "角色歌 CV 署名(issue #28 的真实样本):按完整署名查不到,别名轮按声优名查;同一首有 #3～#11 好几个演唱版本、时长几乎一样,只能按曲名编号挑",
+  "track": {
+    "artist": "花柳香子(CV:伊藤彩沙)、石動双葉(CV:生田輝)",
+    "title": "Fly Me to the Star (#6)",
+    "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "伊藤彩沙",
+    "title": "Fly Me to the Star (#6)",
+    "album": "「少女☆歌剧 レヴュースタァライト」剧中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+    "duration_secs": 93.8
+  },
+  "local_duration_secs": 93.8,
+  "items": [
+    {
+      "id": "0032APsC1bk81g",
+      "title": "Fly Me to the Star (#6)",
+      "artist": "伊藤彩沙/生田輝",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "duration_secs": 93
+    },
+    {
+      "id": "0040e5AK2o2uTN",
+      "title": "Fly Me to the Star #11",
+      "artist": "富田麻帆/佐藤日向/岩田陽葵/小泉萌香/相羽あいな/生田輝/伊藤彩沙",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.2「ラ レヴュー ド ソワレ」",
+      "duration_secs": 95
+    },
+    {
+      "id": "000DFm3b22lX0G",
+      "title": "す、好きなんかじゃない！ (才、才不是喜欢呢！)",
+      "artist": "伊藤彩沙",
+      "album": "す、好きなんかじゃない！",
+      "duration_secs": 235
+    },
+    {
+      "id": "000e0Yy73ozLr7",
+      "title": "戀の歌 (恋之歌)",
+      "artist": "伊藤彩沙",
+      "album": "戀の歌",
+      "duration_secs": 277
+    },
+    {
+      "id": "002md4vM2c5S6t",
+      "title": "Fly Me to the Star",
+      "artist": "スタァライト九九組",
+      "album": "「少女☆歌劇 レヴュースタァライト」ベストアルバム",
+      "duration_secs": 193
+    },
+    {
+      "id": "003eTnYN2Uu4mA",
+      "title": "Still, I Go",
+      "artist": "佐藤日向/岩田陽葵/小山百代/生田輝/相羽あいな/小泉萌香/伊藤彩沙/富田麻帆",
+      "album": "Gilded Dreams (Sal ver.)",
+      "duration_secs": 238
+    },
+    {
+      "id": "001W81Ia4EWhmW",
+      "title": "花咲か唄",
+      "artist": "伊藤彩沙/生田輝",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "duration_secs": 304
+    },
+    {
+      "id": "003PgCHl3sSHv7",
+      "title": "よろしく九九組",
+      "artist": "スタァライト九九組",
+      "album": "Fly Me to the Star",
+      "duration_secs": 258
+    },
+    {
+      "id": "003Uk7qV4a1HD8",
+      "title": "Umapyoi Legend (English ver.)",
+      "artist": "前田玲奈/髙橋ミナミ/夏吉ゆうこ/伊藤彩沙",
+      "album": "Umapyoi Legend (English ver.)",
+      "duration_secs": 137
+    },
+    {
+      "id": "000euPzB1yh92j",
+      "title": "信じる者に門は開かれる (门扉将为相信之人敞开)",
+      "artist": "佐藤日向/伊藤彩沙/紡木吏佐/佐伯伊織",
+      "album": "「少女☆歌劇 レヴュースタァライト」レヴューアルバム「アルカナ・アルカディア」",
+      "duration_secs": 265
+    },
+    {
+      "id": "004GlPHC4FCQxE",
+      "title": "Fly Me to the Star #6 (伴奏)",
+      "artist": "伊藤彩沙",
+      "duration_secs": 93
+    },
+    {
+      "id": "004Q3enC0J2WYQ",
+      "title": "ロマンティッククルージン (Romantic Cruisin')",
+      "artist": "スタァライト九九組",
+      "album": "Fly Me to the Star",
+      "duration_secs": 273
+    },
+    {
+      "id": "0021cI4L18kgtc",
+      "title": "Fly Me to the Star (#4)",
+      "artist": "三森铃子/小山百代",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "duration_secs": 93
+    },
+    {
+      "id": "000BkXO40s0mek",
+      "title": "Fly Me to the Star (#5)",
+      "artist": "岩田陽葵",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "duration_secs": 93
+    },
+    {
+      "id": "003VcEvw3kid4B",
+      "title": "Fly Me to the Star (#3)",
+      "artist": "三森铃子",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "duration_secs": 93
+    },
+    {
+      "id": "0014FuYe4PDerA",
+      "title": "fly me to the star",
+      "artist": "≠consciousness",
+      "album": "アインツ・ツヴァイ・ドライ・スター",
+      "duration_secs": 274
+    }
+  ],
+  "expect": {
+    "picked_id": "0032APsC1bk81g",
+    "accepted_strict": [
+      "0032APsC1bk81g"
+    ],
+    "accepted_loose": [
+      "0032APsC1bk81g"
+    ],
+    "picked_no_album": "0032APsC1bk81g"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.8528784648187603,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

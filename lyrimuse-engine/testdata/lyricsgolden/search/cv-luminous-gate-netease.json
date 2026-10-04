@@ -1,0 +1,41 @@
+{
+  "id": "cv-luminous-gate-netease",
+  "source": "netease",
+  "note": "角色歌 CV 署名:源里按声优署名,首轮靠歌手闸认得 CV 括号才收下",
+  "track": {
+    "artist": "風鳴翼(CV:水樹奈々)",
+    "title": "ルミナスゲイト",
+    "album": "戦姫絶唱シンフォギアAXZ キャラクターソングアルバム"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "风鸣翼(CV:水树奈々)",
+    "title": "ルミナスゲイト",
+    "album": "戦姫绝唱シンフォギアAXZ キャラクターソングアルバム",
+    "duration_secs": 261.3
+  },
+  "local_duration_secs": 261.3,
+  "items": [
+    {
+      "id": "491295336",
+      "title": "ルミナスゲイト",
+      "artists": [
+        "水樹奈々"
+      ],
+      "album": "戦姫絶唱シンフォギアAXZ キャラクターソング3",
+      "album_id": "35758405",
+      "duration_secs": 262.28
+    }
+  ],
+  "expect": {
+    "picked_id": "491295336"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.3750478377343901,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,336 @@
+{
+  "id": "cv-himeru-desert-wine-netease",
+  "source": "netease",
+  "note": "角色歌 CV 署名:源里按声优署名,首轮靠歌手闸认得 CV 括号才收下",
+  "track": {
+    "artist": "HiMERU (CV.笠間 淳) \u0026 あんさんぶるスターズ!!",
+    "title": "夢想のDesert Wine",
+    "album": "HiMERU「夢想のDesert Wine」あんさんぶるスターズ!! ESアイドルソング Solo -Bright me up!!- - Single"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "笠间淳",
+    "title": "梦想のDesert Wine",
+    "album": "HiMERU「梦想のDesert Wine」あんさんぶるスターズ!! ESアイドルソング Solo -Bright me up!!- - Single",
+    "duration_secs": 178.3
+  },
+  "local_duration_secs": 178.3,
+  "items": [
+    {
+      "id": "3431638058",
+      "title": "夢想のDesert Wine",
+      "artists": [
+        "HiMERU (CV.笠間 淳)",
+        "あんさんぶるスターズ！！"
+      ],
+      "album": "HiMERU「夢想のDesert Wine」あんさんぶるスターズ！！ ESアイドルソング Solo -Bright me up!!-",
+      "album_id": "396630763",
+      "duration_secs": 178.323
+    },
+    {
+      "id": "3431637395",
+      "title": "夢想のDesert Wine (Instrumental)",
+      "artists": [
+        "HiMERU (CV.笠間 淳)",
+        "あんさんぶるスターズ！！"
+      ],
+      "album": "HiMERU「夢想のDesert Wine」あんさんぶるスターズ！！ ESアイドルソング Solo -Bright me up!!-",
+      "album_id": "396630763",
+      "duration_secs": 178.323
+    },
+    {
+      "id": "3384199947",
+      "title": "完整版无损梦想之地",
+      "artists": [
+        "谁便了"
+      ],
+      "album": "开心超人",
+      "album_id": "377372625",
+      "duration_secs": 223.738
+    },
+    {
+      "id": "440207932",
+      "title": "关键词 (Live)",
+      "artists": [
+        "叶炫清"
+      ],
+      "album": "梦想的声音 第2期",
+      "album_id": "34984133",
+      "duration_secs": 234.523
+    },
+    {
+      "id": "1336789771",
+      "title": "晚婚 (Live)",
+      "artists": [
+        "谭维维"
+      ],
+      "album": "梦想的声音第三季 第11期",
+      "album_id": "74992183",
+      "duration_secs": 308.529
+    },
+    {
+      "id": "3346862252",
+      "title": "星光下の梦想(纯音乐)",
+      "artists": [
+        "天逸"
+      ],
+      "album": "星光下的梦想",
+      "album_id": "361020469",
+      "duration_secs": 142.036
+    },
+    {
+      "id": "3357057740",
+      "title": "人间共鸣_cover：李健",
+      "artists": [
+        "热爱色泽"
+      ],
+      "album": "梦想成真",
+      "album_id": "365256429",
+      "duration_secs": 259.146
+    },
+    {
+      "id": "1336789775",
+      "title": "你要的全拿走 (Live)",
+      "artists": [
+        "李嘉格"
+      ],
+      "album": "梦想的声音第三季 第11期",
+      "album_id": "74992183",
+      "duration_secs": 281.319
+    },
+    {
+      "id": "1462342189",
+      "title": "我想我不一样",
+      "artists": [
+        "张紫宁"
+      ],
+      "album": "莫尔MORE",
+      "album_id": "92333365",
+      "duration_secs": 223.285
+    },
+    {
+      "id": "3444167495",
+      "title": "梦想就是",
+      "artists": [
+        "林昊杰"
+      ],
+      "album": "冰冰冰进行曲",
+      "album_id": "401853834",
+      "duration_secs": 127.771
+    },
+    {
+      "id": "1320649101",
+      "title": "该死的温柔 (Live)",
+      "artists": [
+        "王嘉尔"
+      ],
+      "album": "梦想的声音第三季 第1期",
+      "album_id": "74099862",
+      "duration_secs": 153.466
+    },
+    {
+      "id": "404465600",
+      "title": "十二",
+      "artists": [
+        "留声玩具"
+      ],
+      "album": "曾以为梦想遥不可及",
+      "album_id": "3432267",
+      "duration_secs": 275.413
+    },
+    {
+      "id": "440207933",
+      "title": "我怀念的 (Live)",
+      "artists": [
+        "林俊杰"
+      ],
+      "album": "梦想的声音 第2期",
+      "album_id": "34984133",
+      "duration_secs": 312.57
+    },
+    {
+      "id": "1825971805",
+      "title": "理想三旬 (DJ版)",
+      "artists": [
+        "陈安排"
+      ],
+      "album": "梦想",
+      "album_id": "124082914",
+      "duration_secs": 247.571
+    },
+    {
+      "id": "2619125556",
+      "title": "才二十三",
+      "artists": [
+        "方大同"
+      ],
+      "album": "梦想家 The Dreamer",
+      "album_id": "250300440",
+      "duration_secs": 224.498
+    },
+    {
+      "id": "2147752157",
+      "title": "我们之间的回忆(热播版)",
+      "artists": [
+        "Djdoomsday"
+      ],
+      "album": "梦想方舟",
+      "album_id": "192903162",
+      "duration_secs": 54.658
+    },
+    {
+      "id": "450222687",
+      "title": "爱要怎么说出口 (Live)",
+      "artists": [
+        "林俊杰"
+      ],
+      "album": "梦想的声音 第10期",
+      "album_id": "35105126",
+      "duration_secs": 237.546
+    },
+    {
+      "id": "491987001",
+      "title": "极速梦想",
+      "artists": [
+        "丹戈尔"
+      ],
+      "album": "极速梦想",
+      "album_id": "35788693",
+      "duration_secs": 168.294
+    },
+    {
+      "id": "34690692",
+      "title": "颠倒梦想",
+      "artists": [
+        "梁博"
+      ],
+      "album": "迷藏",
+      "album_id": "3398023",
+      "duration_secs": 270.816
+    },
+    {
+      "id": "316165",
+      "title": "梦想纪念日",
+      "artists": [
+        "郁可唯"
+      ],
+      "album": "蓝短裤",
+      "album_id": "31328",
+      "duration_secs": 277.866
+    },
+    {
+      "id": "2635125903",
+      "title": "回留",
+      "artists": [
+        "方大同"
+      ],
+      "album": "梦想家 The Dreamer",
+      "album_id": "250300440",
+      "duration_secs": 236.343
+    },
+    {
+      "id": "1892557527",
+      "title": "小小的梦想 (合唱版)",
+      "artists": [
+        "叶泳沺"
+      ],
+      "album": "小小的梦想",
+      "album_id": "133895815",
+      "duration_secs": 237.738
+    },
+    {
+      "id": "516358304",
+      "title": "爱你 (Live)",
+      "artists": [
+        "林俊杰"
+      ],
+      "album": "梦想的声音第二季 第2期",
+      "album_id": "36525976",
+      "duration_secs": 222.88
+    },
+    {
+      "id": "189236",
+      "title": "断点",
+      "artists": [
+        "张敬轩"
+      ],
+      "album": "我的梦想我的路",
+      "album_id": "19139",
+      "duration_secs": 268.236
+    },
+    {
+      "id": "520464260",
+      "title": "输了你赢了世界又如何 (Live)",
+      "artists": [
+        "林俊杰"
+      ],
+      "album": "梦想的声音第二季 第4期",
+      "album_id": "36842178",
+      "duration_secs": 283.221
+    },
+    {
+      "id": "2683498121",
+      "title": "梦想之地",
+      "artists": [
+        "LLL1"
+      ],
+      "album": "开心超人",
+      "album_id": "156104935",
+      "duration_secs": 225.859
+    },
+    {
+      "id": "445844727",
+      "title": "爱 (Live)",
+      "artists": [
+        "林俊杰"
+      ],
+      "album": "梦想的声音 第6期",
+      "album_id": "35044165",
+      "duration_secs": 247.8
+    },
+    {
+      "id": "530057158",
+      "title": "我们的爱 (Live)",
+      "artists": [
+        "林俊杰"
+      ],
+      "album": "梦想的声音第二季 第11期",
+      "album_id": "37099774",
+      "duration_secs": 350.987
+    },
+    {
+      "id": "2635125902",
+      "title": "那沙漠里的水",
+      "artists": [
+        "方大同"
+      ],
+      "album": "梦想家 The Dreamer",
+      "album_id": "250300440",
+      "duration_secs": 161
+    },
+    {
+      "id": "479422062",
+      "title": "最初的梦想",
+      "artists": [
+        "范玮琪",
+        "张云凌",
+        "杨超毅",
+        "顾艺璇"
+      ],
+      "album": "我想和你唱 第二季 第4期",
+      "album_id": "35543068",
+      "duration_secs": 255.748
+    }
+  ],
+  "expect": {
+    "picked_id": "3431638058"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.012899607403250775,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

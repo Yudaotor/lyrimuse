@@ -1,0 +1,108 @@
+{
+  "id": "cv-flyme-11-qq",
+  "source": "qq",
+  "note": "角色歌 CV 署名(issue #28 的真实样本):按完整署名查不到,别名轮按声优名查;同一首有 #3～#11 好几个演唱版本、时长几乎一样,只能按曲名编号挑",
+  "track": {
+    "artist": "天堂真矢(CV:富田麻帆)、星見純那(CV:佐藤日向)、露崎まひる(CV:岩田陽葵)、大場なな(CV:小泉萌香)、西條クロディーヌ(CV:相羽あいな)、石動双葉(CV:生田輝)、花柳香子(CV:伊藤彩沙)",
+    "title": "Fly Me to the Star (#11)",
+    "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.2「ラ レヴュー ド ソワレ」"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "富田麻帆",
+    "title": "Fly Me to the Star (#11)",
+    "album": "「少女☆歌剧 レヴュースタァライト」剧中歌アルバムVol.2「ラ レヴュー ド ソワレ」",
+    "duration_secs": 95.8
+  },
+  "local_duration_secs": 95.8,
+  "items": [
+    {
+      "id": "0040e5AK2o2uTN",
+      "title": "Fly Me to the Star #11",
+      "artist": "富田麻帆/佐藤日向/岩田陽葵/小泉萌香/相羽あいな/生田輝/伊藤彩沙",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.2「ラ レヴュー ド ソワレ」",
+      "duration_secs": 95
+    },
+    {
+      "id": "001N6d7V3vRrJe",
+      "title": "Fly Me to the Star #10",
+      "artist": "富田麻帆/相羽あいな",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.2「ラ レヴュー ド ソワレ」",
+      "duration_secs": 93
+    },
+    {
+      "id": "000zu2To3LcKOO",
+      "title": "-Star Divine- フィナーレ",
+      "artist": "小山百代/三森铃子/富田麻帆/相羽あいな",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.2「ラ レヴュー ド ソワレ」",
+      "duration_secs": 248
+    },
+    {
+      "id": "002md4vM2c5S6t",
+      "title": "Fly Me to the Star",
+      "artist": "スタァライト九九組",
+      "album": "「少女☆歌劇 レヴュースタァライト」ベストアルバム",
+      "duration_secs": 193
+    },
+    {
+      "id": "000lwn7n0Gkugj",
+      "title": "Unfinished Song",
+      "artist": "富田麻帆/相羽あいな",
+      "album": "Acte Zéro",
+      "duration_secs": 292
+    },
+    {
+      "id": "003eTnYN2Uu4mA",
+      "title": "Still, I Go",
+      "artist": "佐藤日向/岩田陽葵/小山百代/生田輝/相羽あいな/小泉萌香/伊藤彩沙/富田麻帆",
+      "album": "Gilded Dreams (Sal ver.)",
+      "duration_secs": 238
+    },
+    {
+      "id": "0041AJoY2R7iOd",
+      "title": "誇りと驕り",
+      "artist": "小山百代/富田麻帆",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "duration_secs": 346
+    },
+    {
+      "id": "0032APsC1bk81g",
+      "title": "Fly Me to the Star (#6)",
+      "artist": "伊藤彩沙/生田輝",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "duration_secs": 93
+    },
+    {
+      "id": "003PgCHl3sSHv7",
+      "title": "よろしく九九組",
+      "artist": "スタァライト九九組",
+      "album": "Fly Me to the Star",
+      "duration_secs": 258
+    },
+    {
+      "id": "000kYvrM3iv9MZ",
+      "title": "舞台少女心得 幕間",
+      "artist": "小山百代/佐藤日向/岩田陽葵/生田輝/伊藤彩沙/小泉萌香/相羽あいな/富田麻帆",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.2「ラ レヴュー ド ソワレ」",
+      "duration_secs": 225
+    }
+  ],
+  "expect": {
+    "picked_id": "0040e5AK2o2uTN",
+    "accepted_strict": [
+      "0040e5AK2o2uTN"
+    ],
+    "accepted_loose": [
+      "0040e5AK2o2uTN"
+    ],
+    "picked_no_album": "0040e5AK2o2uTN"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.8350730688935253,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

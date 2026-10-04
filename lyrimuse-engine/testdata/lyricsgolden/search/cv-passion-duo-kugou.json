@@ -1,0 +1,121 @@
+{
+  "id": "cv-passion-duo-kugou",
+  "source": "kugou",
+  "note": "角色歌 CV 署名:源里按声优署名,首轮靠歌手闸认得 CV 括号才收下",
+  "track": {
+    "artist": "ルシファー(CV:山下 和也) \u0026 サタン(CV:角 真也)",
+    "title": "Passion",
+    "album": "Passion - Single"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "ルシファー(CV:山下 和也) \u0026 サタン(CV:角 真也)",
+    "title": "Passion",
+    "album": "Passion - Single",
+    "duration_secs": 248.4
+  },
+  "local_duration_secs": 248.4,
+  "items": [
+    {
+      "id": "dbb19b339d0787ee5cf39165e7d65fe0",
+      "title": "passion (Speed Up)",
+      "artist": "silent anthem、heart embrace",
+      "album": "passion",
+      "album_id": "107508992",
+      "duration_secs": 126,
+      "language": "英语"
+    },
+    {
+      "id": "ea86103355506dfcf2185549e1cc04aa",
+      "title": "Passion",
+      "artist": "Sloaney",
+      "album": "我的爱一直都在",
+      "album_id": "185950160",
+      "duration_secs": 132,
+      "language": "英语"
+    },
+    {
+      "id": "d3827141b5f8fd8340fbc5437c910451",
+      "title": "passion",
+      "artist": "silent anthem、heart embrace",
+      "album": "passion",
+      "album_id": "107508992",
+      "duration_secs": 156,
+      "language": "英语"
+    },
+    {
+      "id": "242ec01e9dbe34f64e301343d9ddb2a4",
+      "title": "passion",
+      "artist": "silent anthem、heart embrace",
+      "album": "passion",
+      "album_id": "107508992",
+      "duration_secs": 132,
+      "language": "纯音乐"
+    },
+    {
+      "id": "14b63ef70af279b97a5eeb01322e6767",
+      "title": "passion (动感高燃版)",
+      "artist": "La Mer、Ameriie、拖鞋pd",
+      "album": "Sinos De Natal (动感高燃版)",
+      "album_id": "197114253",
+      "duration_secs": 181,
+      "language": "英语"
+    },
+    {
+      "id": "f4c368c08cc983d8f76b3f5fb2fb4cbc",
+      "title": "Everlasting Truth",
+      "artist": "流行电台司令",
+      "album": "Passion (0.8X Slow)",
+      "album_id": "198900675",
+      "duration_secs": 141,
+      "language": "纯音乐"
+    },
+    {
+      "id": "97521748fff73fe15b3308ed32f481bf",
+      "title": "Passion",
+      "artist": "Fanni",
+      "album": "第二回合",
+      "album_id": "189708128",
+      "duration_secs": 137,
+      "language": "英语"
+    },
+    {
+      "id": "292ab3fa64e491171f3f03be03df1b14",
+      "title": "毁灭 Destroy",
+      "artist": "DJ星落",
+      "album": "Passion（感觉至上）",
+      "album_id": "189906419",
+      "duration_secs": 129,
+      "language": "国语"
+    },
+    {
+      "id": "4ba8a74ef1488f76b5281339081037f3",
+      "title": "Passion",
+      "artist": "音律姬、Funky Phonk",
+      "album": "Passion (第二回合)",
+      "album_id": "189584102",
+      "duration_secs": 129,
+      "language": "英语"
+    },
+    {
+      "id": "40e5c0431769ec6b781d1c24b02cba83",
+      "title": "Rule",
+      "artist": "星野音律",
+      "album": "Passion (迷茫的小曲)",
+      "album_id": "207705149",
+      "duration_secs": 130,
+      "language": "英语"
+    }
+  ],
+  "expect": {
+    "picked_id": ""
+  },
+  "judge": {
+    "title_accepted": false,
+    "artist_matches": false,
+    "source_duration_delta_pct": -1,
+    "version_tags_ok": false,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

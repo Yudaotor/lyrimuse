@@ -1,0 +1,121 @@
+{
+  "id": "cv-flyme-6-kugou",
+  "source": "kugou",
+  "note": "角色歌 CV 署名(issue #28 的真实样本):按完整署名查不到,别名轮按声优名查;同一首有 #3～#11 好几个演唱版本、时长几乎一样,只能按曲名编号挑",
+  "track": {
+    "artist": "花柳香子(CV:伊藤彩沙)、石動双葉(CV:生田輝)",
+    "title": "Fly Me to the Star (#6)",
+    "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "花柳香子(CV:伊藤彩沙)、石动双叶(CV:生田辉)",
+    "title": "Fly Me to the Star (#6)",
+    "album": "「少女☆歌剧 レヴュースタァライト」剧中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+    "duration_secs": 93.8
+  },
+  "local_duration_secs": 93.8,
+  "items": [
+    {
+      "id": "71384536f746b2f639c73c7b1579fd8a",
+      "title": "Fly Me to the Star",
+      "artist": "スタァライト九九組",
+      "album": "「少女☆歌劇 レヴュースタァライト」ベストアルバム",
+      "album_id": "43285292",
+      "duration_secs": 193,
+      "language": "日语"
+    },
+    {
+      "id": "4058463136b89c2cd20e1935250f4b9c",
+      "title": "よろしく九九組",
+      "artist": "スタァライト九九組",
+      "album": "Fly Me to the Star",
+      "album_id": "9483083",
+      "duration_secs": 258,
+      "language": "日语"
+    },
+    {
+      "id": "4e8c546d0056b8514cab3614dc463dfe",
+      "title": "ロマンティッククルージン",
+      "artist": "スタァライト九九組",
+      "album": "Fly Me to the Star",
+      "album_id": "9483083",
+      "duration_secs": 272,
+      "language": "日语"
+    },
+    {
+      "id": "f1c1410f9a86e351519a39a99b08b945",
+      "title": "Fly Me to the Star (#6)",
+      "artist": "伊藤彩沙、生田輝",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "9554668",
+      "duration_secs": 93,
+      "language": "日语"
+    },
+    {
+      "id": "52880caa8d7df0110845874723ecfff6",
+      "title": "Fly Me to the Star (#3)",
+      "artist": "三森すずこ",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "9554668",
+      "duration_secs": 93,
+      "language": "日语"
+    },
+    {
+      "id": "bdacb2536bc94e9c99aebdf072036814",
+      "title": "Fly Me to the Star (#7)",
+      "artist": "スタァライト九九組",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "9554668",
+      "duration_secs": 93,
+      "language": "日语"
+    },
+    {
+      "id": "edb07adaf0fa08a55b5fc3533c6edc9d",
+      "title": "Fly Me to the Star (#4)",
+      "artist": "小山百代、三森すずこ",
+      "album": "「少女☆歌劇 レヴュースタァライト」劇中歌アルバムVol.1「ラ レヴュー ド マチネ」",
+      "album_id": "9554668",
+      "duration_secs": 93,
+      "language": "日语"
+    },
+    {
+      "id": "ffaf8b07aa4e5212e6ad161b90c5c706",
+      "title": "Fly me to the Star (LIVE)",
+      "artist": "スタァライト九九組",
+      "album": "少女☆歌劇 レヴュースタァライト Live CD 2ndスタァライブ ”Starry Desert”",
+      "album_id": "20584592",
+      "duration_secs": 199,
+      "language": "日语"
+    },
+    {
+      "id": "0971b8a17e5a308b6db022c8460c6866",
+      "title": "fly me to the star",
+      "artist": "≠consciousness",
+      "album": "アインツ・ツヴァイ・ドライ・スター",
+      "album_id": "209713667",
+      "duration_secs": 274,
+      "language": "日语"
+    },
+    {
+      "id": "49b5ea32df906df4635bdb1f6c75750e",
+      "title": "Fly Me to the Stars",
+      "artist": "VERN WOOD",
+      "album": "아늑한 시간을 위한 재즈",
+      "album_id": "206384991",
+      "duration_secs": 196,
+      "language": "韩语"
+    }
+  ],
+  "expect": {
+    "picked_id": "f1c1410f9a86e351519a39a99b08b945"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.8528784648187603,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}
