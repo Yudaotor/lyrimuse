@@ -404,11 +404,19 @@ public enum KasetPlayerInfo {
         public let isPlaying: Bool
         /// 查询那一刻的进度,广告倒计时用(`MediaControlSnapshot.adElapsed`)。
         public let elapsed: Double?
+        /// 锚点(那份会话最近一次发布时的进度、时刻、速率):正片在走时拿它当位置的时钟(`webClockPosition`)。
+        public let anchorElapsed: Double?
+        public let anchorAt: Date?
+        public let rate: Double?
 
-        public init(duration: Double?, isPlaying: Bool, elapsed: Double? = nil) {
+        public init(duration: Double?, isPlaying: Bool, elapsed: Double? = nil,
+                    anchorElapsed: Double? = nil, anchorAt: Date? = nil, rate: Double? = nil) {
             self.duration = duration
             self.isPlaying = isPlaying
             self.elapsed = elapsed
+            self.anchorElapsed = anchorElapsed
+            self.anchorAt = anchorAt
+            self.rate = rate
         }
     }
 
@@ -420,7 +428,9 @@ public enum KasetPlayerInfo {
     public static func webMedia(in sessions: [NowPlayingClientsProbe.ClientSession], kasetPID: Int32) -> WebMedia? {
         let mine = sessions.filter { $0.bundleIdentifier == webMediaBundleID && $0.responsibleProcessIdentifier == kasetPID }
         guard let session = mine.first(where: { $0.playing == true }) ?? mine.first else { return nil }
-        return WebMedia(duration: session.duration, isPlaying: session.playing == true, elapsed: session.elapsedTime)
+        return WebMedia(duration: session.duration, isPlaying: session.playing == true, elapsed: session.elapsedTime,
+                        anchorElapsed: session.anchorElapsedTime,
+                        anchorAt: session.timestamp.map { Date(timeIntervalSince1970: $0) }, rate: session.playbackRate)
     }
 
     /// 网页那段跟这首的时长差不超过这么多秒,或者不超过这首时长的 `webMediaRelativeTolerance`,算同一段:网页 video 的
@@ -439,6 +449,21 @@ public enum KasetPlayerInfo {
             return false
         }
         return duration < shortest / 2 ? true : nil
+    }
+
+    /// 网页时钟比 Kaset 自己的读数超前多少算对得上(秒):Kaset 的读数是网页每 0.5 秒推一次的 `video.currentTime`,只会
+    /// 比真值晚 0~0.5 秒,再加一段消息往返;超出这个范围多半是那份锚点没跟上拖动 / 暂停,这一拍不用。
+    public static let webClockLeadRange: ClosedRange<Double> = -0.3...1.0
+
+    /// 这一拍按内嵌网页那份会话的播放时钟算位置(连续、精确;Kaset 自己的读数每 0.5 秒才变一次):网页在放的就是这首
+    /// (`adByWebMedia` 判成正片)、速率大于 0、外推到 t 那一刻跟 Kaset 自己的读数对得上(`webClockLeadRange`)。
+    /// 用得上返回 t 那一刻的位置,否则 nil。纯函数,selftest 覆盖。
+    public static func webClockPosition(_ reading: Reading, web: WebMedia?, at t: Date) -> Double? {
+        guard let web, web.isPlaying, adByWebMedia(reading, web: web) == false,
+              let anchor = web.anchorElapsed, let anchorAt = web.anchorAt, let rate = web.rate, rate > 0 else { return nil }
+        let position = anchor + t.timeIntervalSince(anchorAt) * rate
+        guard webClockLeadRange.contains(position - reading.position) else { return nil }
+        return position
     }
 
     /// 封面地址换成这么大见方的那一档。
@@ -460,18 +485,21 @@ public enum KasetPlayerInfo {
     /// 没在走、又不是暂停(加载、广告、卡住)时标 `isWaitingToPlay`:轮询照播放中的节拍走,声音一走起来就接上。
     /// 广告结论(`isAd`):在放广告为 true,正片在走为 false,别的时候(加载、暂停、卡住)说不上来,为 nil。没在走时先看
     /// 内嵌网页在放什么(`adByWebMedia`,`webMedia` 是调用方这一拍问到的),说不上来再按读数自己认(`isAd`)。看网页判成广告时
-    /// 快照另带广告自己的时长与进度(`adDuration` / `adElapsed`),倒计时用。
+    /// 快照另带广告自己的时长与进度(`adDuration` / `adElapsed`),倒计时用。在走、又有网页时钟算出的位置(`clockPosition`,
+    /// 见 `webClockPosition`)时,位置用它,快照标精确(`positionIsPrecise`)。
     public static func snapshot(_ reading: Reading, lastMove: LastMove?, capturedAt: Date,
-                                webMedia: WebMedia? = nil) -> MediaControlSnapshot {
+                                webMedia: WebMedia? = nil, clockPosition: Double? = nil) -> MediaControlSnapshot {
         let advancing = isAdvancing(reading, lastMove: lastMove, now: capturedAt)
+        let precisePosition = advancing ? clockPosition : nil
         let webSaysAd = advancing ? nil : adByWebMedia(reading, web: webMedia)
         let ad: Bool? = advancing ? false : (webSaysAd ?? (isAd(reading) ? true : nil))
         return MediaControlSnapshot(
             title: reading.title, artist: cleanedArtist(reading.artist), album: nil, duration: reading.duration,
-            elapsedTime: reading.position, playing: advancing, playbackRate: advancing ? 1 : 0,
+            elapsedTime: precisePosition ?? reading.position, playing: advancing, playbackRate: advancing ? 1 : 0,
             isMusicApp: true, bundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier,
             anchorElapsedTime: nil, isRadio: nil, capturedAt: capturedAt,
             isWaitingToPlay: !advancing && !reading.isPaused, isAd: ad,
-            adDuration: webSaysAd == true ? webMedia?.duration : nil, adElapsed: webSaysAd == true ? webMedia?.elapsed : nil)
+            adDuration: webSaysAd == true ? webMedia?.duration : nil, adElapsed: webSaysAd == true ? webMedia?.elapsed : nil,
+            positionIsPrecise: precisePosition == nil ? nil : true)
     }
 }

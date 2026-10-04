@@ -131,6 +131,35 @@ func runKasetTests() {
         expectEqual(K.webMedia(in: sessions, kasetPID: 692)?.elapsed, 3.3, "广告倒计时: 网页那份带着此刻的进度")
     }
 
+    // ---- 位置:在走时用内嵌网页那份会话的播放时钟 ----
+    do {
+        // Kaset 读数 120.70(晚一点),网页那份会话的锚点 100.0 @ t0−20.9、速率 1。
+        let reading = K.Reading(title: "說了再見", artist: "周杰倫", videoID: "Wlwk9osZ9Mc", duration: 282.73, position: 120.70,
+                                isPlaying: true, isPaused: false, playerDuration: 282.7335, trackDuration: 283)
+        func web(anchor: Double? = 100, ago: Double = 20.9, rate: Double? = 1, duration: Double = 282.7335, playing: Bool = true) -> K.WebMedia {
+            K.WebMedia(duration: duration, isPlaying: playing, elapsed: nil, anchorElapsed: anchor, anchorAt: t0 - ago, rate: rate)
+        }
+        expectEqual(K.webClockPosition(reading, web: web(), at: t0).map { abs($0 - 120.9) < 0.0001 }, true,
+                    "Kaset 网页时钟: 锚点外推到这一拍,比 Kaset 的读数超前 0.2 秒,用它")
+        expectEqual(K.webClockPosition(reading, web: web(ago: 60), at: t0) == nil, true, "Kaset 网页时钟: 锚点没跟上(超前几十秒),不用")
+        expectEqual(K.webClockPosition(reading, web: web(ago: 20.2), at: t0) == nil, true, "Kaset 网页时钟: 落后读数半秒,不用")
+        expectEqual(K.webClockPosition(reading, web: web(anchor: 120.8, ago: 3, rate: 0), at: t0) == nil, true, "Kaset 网页时钟: 速率 0(停着),不用")
+        expectEqual(K.webClockPosition(reading, web: web(anchor: nil), at: t0) == nil, true, "Kaset 网页时钟: 没有锚点,不用")
+        expectEqual(K.webClockPosition(reading, web: web(duration: 15.04), at: t0) == nil, true, "Kaset 网页时钟: 网页在放广告,不用")
+        expectEqual(K.webClockPosition(reading, web: web(playing: false), at: t0) == nil, true, "Kaset 网页时钟: 网页没在放,不用")
+        let moving = K.LastMove(videoID: "Wlwk9osZ9Mc", position: 119.70, seenAt: t0 - 2)
+        let precise = K.snapshot(reading, lastMove: moving, capturedAt: t0, clockPosition: 120.9)
+        expectEqual(precise.elapsedTime == 120.9 && precise.positionIsPrecise == true, true, "Kaset 网页时钟: 在走时快照用它、标精确")
+        let stuck = K.LastMove(videoID: "Wlwk9osZ9Mc", position: 120.70, seenAt: t0 - 2)
+        let stalled = K.snapshot(reading, lastMove: stuck, capturedAt: t0, clockPosition: 120.9)
+        expectEqual(stalled.elapsedTime == 120.70 && stalled.positionIsPrecise == nil, true, "Kaset 网页时钟: 没在走不用")
+        let session = #"[{"bundleIdentifier":"com.apple.WebKit.GPU","processIdentifier":7685,"responsibleProcessIdentifier":692,"duration":282.7335,"elapsedTime":120.9,"anchorElapsedTime":100,"timestamp":1800000000,"playbackRate":1,"playing":true}]"#
+        let parsed = K.webMedia(in: (try? JSONDecoder().decode([NowPlayingClientsProbe.ClientSession].self, from: Data(session.utf8))) ?? [],
+                                kasetPID: 692)
+        expectEqual(parsed?.anchorElapsed == 100 && parsed?.anchorAt == Date(timeIntervalSince1970: 1_800_000_000) && parsed?.rate == 1, true,
+                    "Kaset 网页时钟: 会话的锚点三项解出来")
+    }
+
     // ---- 喜欢 / 随机 / 循环 / 音量 ----
     do {
         // 真机读数的形状(《說了再見》那一拍)。
@@ -478,7 +507,7 @@ func runKasetTests() {
                     "Kaset 契约: 出快照之前先过 steadyIdentity")
         expectEqual(client.contains("let web = reading.isPaused || KasetPlayerInfo.isAdvancing(reading, lastMove: lastMove, now: readAt)")
                         && client.contains("? nil : kasetWebMedia()")
-                        && client.contains("capturedAt: readAt, webMedia: web)")
+                        && client.contains("capturedAt: readAt, webMedia: web,")
                         && src("LyrimuseCore/Local/NowPlayingClientsProbe.swift").contains("[paths.script, paths.library], timeout: timeout)")
                         && src("../native/nowplaying-clients/nowplaying-clients.m").contains("if (one) [all addObject:withProcess(one, c)];"),
                     true, "Kaset 契约: 报在放(或加载)、位置没动时才问内嵌网页在放什么;helper 给每份会话带上负责进程")
@@ -498,6 +527,10 @@ func runKasetTests() {
                         && src("lyrimuse/PlaybackCoordinator.swift").contains(#"s.$adCountdown.assign(to: \.adCountdown, on: self),"#)
                         && src("lyrimuse/UI/NotchLyricsView.swift").contains("switch playback.adCountdown {"), true,
                     "Kaset 契约: 广告倒计时按播放源给的来源画(Kaset 用广告自己的表)")
+        expectEqual(client.contains("? kasetWebClockPosition(reading, at: readAt) : nil")
+                        && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
+                            "if snapshot.positionIsPrecise == true {\n                    usedBrowserProbe = true\n                    browserProbePrecise = true"), true,
+                    "Kaset 契约: 在走时位置用网页时钟,播放源当精确真值采信")
         expectEqual(client.contains("if let id = raw.videoID, !id.isEmpty, first?.videoID != id {")
                         && client.contains("first = queuedFirstReport(videoID: id) ?? first"), true,
                     "Kaset 契约: 新歌第一拍按队列补开播那份")

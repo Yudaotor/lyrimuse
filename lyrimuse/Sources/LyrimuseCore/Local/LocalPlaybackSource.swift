@@ -3425,6 +3425,12 @@ public final class LocalPlaybackSource: ObservableObject {
                 let lagFix = captureLag > 0 && captureLag <= 2 ? captureLag * rate : 0
                 rawReportedForResolve = (snapshot.elapsedTime ?? 0) + lagFix
                 effectiveTier = tier
+                // 位置来自精确播放时钟的那一拍(Kaset 内嵌网页那份会话,`MediaControlSnapshot.positionIsPrecise`)跟网页探针的
+                // 精确读数走同一条真值通道:差过 `BrowserPositionProbe.preciseSnapToleranceSecs` 就重锚,差在门槛内照常进伺服。
+                if snapshot.positionIsPrecise == true {
+                    usedBrowserProbe = true
+                    browserProbePrecise = true
+                }
             }
             // Spotify 这一拍读的是哪个钟:AppleScript 那份没有锚点信息(anchorElapsedTime == nil)。
             // 换歌 / 首次观察 / 恢复播放那一拍按这一拍定,之后同曲换钟走 spotifyClockAction。

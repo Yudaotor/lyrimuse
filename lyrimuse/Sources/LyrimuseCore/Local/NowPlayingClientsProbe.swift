@@ -102,6 +102,11 @@ public enum NowPlayingClientsProbe {
         /// 查询那一刻的进度(helper 已按锚点外推)。
         public let elapsedTime: Double?
         public let playing: Bool?
+        /// 锚点:那份会话最近一次发布时的进度、发布时刻(1970 年起的秒数)、速率。按它能外推出任意时刻的位置
+        /// (`KasetPlayerInfo.webClockPosition`)。
+        public let anchorElapsedTime: Double?
+        public let timestamp: Double?
+        public let playbackRate: Double?
     }
 
     /// 系统里每个注册过 now playing 的 App 各自报的一份,不按 bundle id 挑(同一个 bundle id 可能有好几份,比如每个用到网页的

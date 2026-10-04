@@ -99,6 +99,40 @@ func runPositionReplayTests() {
     replayBrowserProbeReopensOnEveryTrackChange()
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
+    replayKasetFollowsWebClock()
+}
+
+private let kasetID = PlaybackPlayer.kaset.bundleIdentifier
+
+/// Kaset:头两拍只有它自己的读数(比真值晚 0.165 秒);之后在走的拍位置来自内嵌网页那份会话的播放时钟(精确),第一拍
+/// 就对齐真值;中间夹一拍那份时钟用不上、退回 Kaset 自己的读数(晚 0.4 秒),屏上不被拽回去;网页时钟比屏上晚不到
+/// 0.1 秒时不重锚;某一拍 Kaset 的读数记早了、屏上跟着快了 0.25 秒,下一拍网页时钟把它拉回真值(前向棘轮只往前追,
+/// 往回拉只有精确真值那条通道做得到)。真值 = 开播后的秒数。
+@MainActor
+private func replayKasetFollowsWebClock() {
+    let rig = ReplayRig("kaset-web-clock")
+    defer { rig.tearDown() }
+    func kaset(_ elapsed: Double, precise: Bool, _ t: Double) -> MediaControlSnapshot {
+        .forReplay(title: "太陽之子", artist: "周杰伦", duration: 418.14, elapsedTime: elapsed, playing: true,
+                   bundleIdentifier: kasetID, anchorElapsedTime: nil, capturedAt: at(t), positionIsPrecise: precise ? true : nil)
+    }
+    func shown(_ t: Double) -> String { rig.shown(at: at(t)).map { String(format: "%.3f", $0) } ?? "nil" }
+    rig.tick(kaset(1 - 0.165, precise: false, 1), at: at(1))
+    rig.tick(kaset(3 - 0.165, precise: false, 3), at: at(3))
+    expectEqual(near(rig.shown(at: at(3)), 2.835), true, "回放·Kaset: 只有它自己的读数时晚 0.165 秒(\(shown(3)))")
+    rig.tick(kaset(5, precise: true, 5), at: at(5))
+    expectEqual(near(rig.shown(at: at(5)), 5), true, "回放·Kaset: 换成网页时钟第一拍就对齐真值(\(shown(5)))")
+    rig.tick(kaset(7, precise: true, 7), at: at(7))
+    rig.tick(kaset(9 - 0.4, precise: false, 9), at: at(9))
+    expectEqual(near(rig.shown(at: at(9.5)), 9.5), true, "回放·Kaset: 夹一拍退回它自己的读数(晚 0.4 秒)不被拽回去(\(shown(9.5)))")
+    rig.tick(kaset(11 - 0.05, precise: true, 11), at: at(11))
+    expectEqual(near(rig.shown(at: at(11)), 11), true, "回放·Kaset: 网页时钟只晚 0.05 秒不重锚(\(shown(11)))")
+    rig.tick(kaset(13, precise: true, 13), at: at(13))
+    expectEqual(near(rig.shown(at: at(13)), 13), true, "回放·Kaset: 之后照旧跟着网页时钟(\(shown(13)))")
+    rig.tick(kaset(15 + 0.25, precise: false, 15), at: at(15))
+    expectEqual(near(rig.shown(at: at(15)), 15.25), true, "回放·Kaset: 某一拍它自己的读数记早了,棘轮跟上去、屏上快 0.25 秒(\(shown(15)))")
+    rig.tick(kaset(17, precise: true, 17), at: at(17))
+    expectEqual(near(rig.shown(at: at(17)), 17), true, "回放·Kaset: 网页时钟把屏上拉回真值(\(shown(17)))")
 }
 
 private let kkboxID = PlaybackPlayer.kkbox.bundleIdentifier

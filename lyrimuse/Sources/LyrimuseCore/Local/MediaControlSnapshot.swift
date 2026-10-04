@@ -59,6 +59,9 @@ public struct MediaControlSnapshot: Decodable {
     /// 理由同 `isWaitingToPlay`。
     public var adDuration: Double? = nil
     public var adElapsed: Double? = nil
+    /// 这一拍的位置来自精确的播放时钟:`LocalPlaybackSource` 把它跟网页探针的精确读数一样当真值,差过门槛就重锚。只有
+    /// Kaset 的快照在用内嵌网页那份会话的时钟时填(`KasetPlayerInfo.snapshot`)。`with…` 系列副本不带它,理由同 `isWaitingToPlay`。
+    public var positionIsPrecise: Bool? = nil
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 
@@ -93,13 +96,14 @@ public struct MediaControlSnapshot: Decodable {
     public static func forReplay(
         title: String?, artist: String?, album: String? = nil, duration: Double?, elapsedTime: Double?,
         playing: Bool?, playbackRate: Double? = 1, bundleIdentifier: String?, anchorElapsedTime: Double?,
-        isRadio: Bool? = nil, capturedAt: Date? = nil
+        isRadio: Bool? = nil, capturedAt: Date? = nil, positionIsPrecise: Bool? = nil
     ) -> MediaControlSnapshot {
         MediaControlSnapshot(
             title: title, artist: artist, album: album, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: true, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt,
+            positionIsPrecise: positionIsPrecise)
     }
 
     /// 换掉专辑名的副本。唯一的用处是给 YouTube Music **每条队列第一首**
