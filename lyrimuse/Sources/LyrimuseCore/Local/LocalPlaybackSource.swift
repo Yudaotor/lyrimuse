@@ -152,6 +152,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 跟着 `isCurrentTrackAdBreak` 一起收:广告一结束必须清掉,否则下一首歌的卡片上会
     /// 挂着上一次插播的「1/2」。
     @Published public private(set) var currentAdSlot: YouTubeMusicAdProbe.AdSlot? = nil
+    /// 「广告中」那一行的倒计时从哪来(`AdCountdown`)。跟着 `isCurrentTrackAdBreak` 一起收:不在广告里恒为 `.track`。
+    @Published public private(set) var adCountdown: AdCountdown = .track
     // 当前曲目已生效的歌词时间轴校正值(毫秒)——跟 syncEngine.offsetMs 保持一致,供菜单栏
     // "歌词时间轴"菜单展示累计校准值/决定"重置"按钮是否显示用。实测排查坐实:
     // 这里之前没有这个属性,PlaybackCoordinator 自己用 "\(artist)|\(title)" 现拼了一个跟
@@ -2686,6 +2688,7 @@ public final class LocalPlaybackSource: ObservableObject {
             if isCurrentTrackInstrumental { isCurrentTrackInstrumental = false }
             if currentTrackHasNoLyrics { currentTrackHasNoLyrics = false }
             if isCurrentTrackAdBreak { isCurrentTrackAdBreak = false }
+            if adCountdown != .track { adCountdown = .track }
             // 等值闸快照必须一起失效:上面把 allLines 等发布状态清空了,而引擎/缓存文件
             // 里的内容还是原样 —— 不失效的话,同一首歌再次播放时 reloadCurrentLyrics 会被
             // 内容等值闸吞掉,allLines 永远回不来(闸只保证"引擎状态不用重算",保证不了
@@ -3105,6 +3108,11 @@ public final class LocalPlaybackSource: ObservableObject {
             ? YouTubeMusicAdProbe.shared.cachedReading(forKey: youTubeMusicAdKey)?.adSlot
             : nil
         if currentAdSlot != nextAdSlot { currentAdSlot = nextAdSlot }
+        let nextCountdown = AdCountdown.next(
+            isAdBreak: nextAd, sharesIdentity: Self.adSharesTrackIdentity(bundleID: snapshot.bundleIdentifier),
+            adDuration: snapshot.adDuration, adElapsed: snapshot.adElapsed, capturedAt: snapshot.capturedAt ?? Date(),
+            previous: adCountdown, sameTrack: snapshot.identityKey == lastKey)
+        if adCountdown != nextCountdown { adCountdown = nextCountdown }
         // 只要「广告中」还亮着、而且是浏览器播放,就**每拍**再踢一次 YT Music 探针(决策 #26)。
         // 原来探针只在 MediaControlClient 那道闸"album 为空"时才被踢:YT Music 首次发布元数据常常不带
         // album、几百毫秒后重发才带上 —— 重发之后基础守卫直接放行,**再没有任何地方去问页面**,状态机等的

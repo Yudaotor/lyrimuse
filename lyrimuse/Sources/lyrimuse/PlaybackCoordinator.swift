@@ -135,6 +135,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 这条广告是插播里的第几条 / 一共几条。只有 YT Music 网页广告给得出,
     /// 拿不到是 nil、界面上那一段不画。语义与生命周期见 `LocalPlaybackSource.currentAdSlot`。
     @Published private(set) var currentAdSlot: YouTubeMusicAdProbe.AdSlot? = nil
+    /// 「广告中」那一行的倒计时从哪来,见 `LocalPlaybackSource.adCountdown`。
+    @Published private(set) var adCountdown: AdCountdown = .track
     @Published private(set) var anchor: ProgressAnchor?
     // "歌词窗口"(完整可滚动歌词列表)用,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentLineIndex: Int?
@@ -899,6 +901,7 @@ final class PlaybackCoordinator: ObservableObject {
                 .map { $0.flatMap { NSImage(data: $0) } }
                 .assign(to: \.radioStationImage, on: self),
             s.$currentAdSlot.assign(to: \.currentAdSlot, on: self),
+            s.$adCountdown.assign(to: \.adCountdown, on: self),
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
             s.$scrollLineIndex.assign(to: \.scrollLineIndex, on: self),
             s.$overlappingLineIndices.assign(to: \.overlappingLineIndices, on: self),

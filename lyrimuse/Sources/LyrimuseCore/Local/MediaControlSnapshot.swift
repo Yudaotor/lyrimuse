@@ -54,6 +54,11 @@ public struct MediaControlSnapshot: Decodable {
     /// 只有 Kaset 的快照填(`KasetPlayerInfo.snapshot`),喂给 `LocalPlaybackSource` 的「广告中」状态机。`with…` 系列副本不带它,
     /// 理由同 `isWaitingToPlay`。
     public var isAd: Bool? = nil
+    /// 在放的广告自己的时长与这一拍的进度(秒)。只有 Kaset 的快照在看内嵌网页判成广告时填(`KasetPlayerInfo.snapshot`):
+    /// 它的广告跟接下来那首歌共用身份,`duration` 是那首歌的,倒计时要用这一份(`AdCountdown`)。`with…` 系列副本不带它,
+    /// 理由同 `isWaitingToPlay`。
+    public var adDuration: Double? = nil
+    public var adElapsed: Double? = nil
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 

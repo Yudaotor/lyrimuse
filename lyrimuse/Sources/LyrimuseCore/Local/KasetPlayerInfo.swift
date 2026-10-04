@@ -402,10 +402,13 @@ public enum KasetPlayerInfo {
     public struct WebMedia: Equatable, Sendable {
         public let duration: Double?
         public let isPlaying: Bool
+        /// 查询那一刻的进度,广告倒计时用(`MediaControlSnapshot.adElapsed`)。
+        public let elapsed: Double?
 
-        public init(duration: Double?, isPlaying: Bool) {
+        public init(duration: Double?, isPlaying: Bool, elapsed: Double? = nil) {
             self.duration = duration
             self.isPlaying = isPlaying
+            self.elapsed = elapsed
         }
     }
 
@@ -417,7 +420,7 @@ public enum KasetPlayerInfo {
     public static func webMedia(in sessions: [NowPlayingClientsProbe.ClientSession], kasetPID: Int32) -> WebMedia? {
         let mine = sessions.filter { $0.bundleIdentifier == webMediaBundleID && $0.responsibleProcessIdentifier == kasetPID }
         guard let session = mine.first(where: { $0.playing == true }) ?? mine.first else { return nil }
-        return WebMedia(duration: session.duration, isPlaying: session.playing == true)
+        return WebMedia(duration: session.duration, isPlaying: session.playing == true, elapsed: session.elapsedTime)
     }
 
     /// 网页那段跟这首的时长差不超过这么多秒,或者不超过这首时长的 `webMediaRelativeTolerance`,算同一段:网页 video 的
@@ -456,16 +459,19 @@ public enum KasetPlayerInfo {
     /// 换成下游用的快照。专辑一栏不用:放歌单时 Kaset 在这里填的是歌单名,不是这首的专辑。
     /// 没在走、又不是暂停(加载、广告、卡住)时标 `isWaitingToPlay`:轮询照播放中的节拍走,声音一走起来就接上。
     /// 广告结论(`isAd`):在放广告为 true,正片在走为 false,别的时候(加载、暂停、卡住)说不上来,为 nil。没在走时先看
-    /// 内嵌网页在放什么(`adByWebMedia`,`webMedia` 是调用方这一拍问到的),说不上来再按读数自己认(`isAd`)。
+    /// 内嵌网页在放什么(`adByWebMedia`,`webMedia` 是调用方这一拍问到的),说不上来再按读数自己认(`isAd`)。看网页判成广告时
+    /// 快照另带广告自己的时长与进度(`adDuration` / `adElapsed`),倒计时用。
     public static func snapshot(_ reading: Reading, lastMove: LastMove?, capturedAt: Date,
                                 webMedia: WebMedia? = nil) -> MediaControlSnapshot {
         let advancing = isAdvancing(reading, lastMove: lastMove, now: capturedAt)
-        let ad: Bool? = advancing ? false : (adByWebMedia(reading, web: webMedia) ?? (isAd(reading) ? true : nil))
+        let webSaysAd = advancing ? nil : adByWebMedia(reading, web: webMedia)
+        let ad: Bool? = advancing ? false : (webSaysAd ?? (isAd(reading) ? true : nil))
         return MediaControlSnapshot(
             title: reading.title, artist: cleanedArtist(reading.artist), album: nil, duration: reading.duration,
             elapsedTime: reading.position, playing: advancing, playbackRate: advancing ? 1 : 0,
             isMusicApp: true, bundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier,
             anchorElapsedTime: nil, isRadio: nil, capturedAt: capturedAt,
-            isWaitingToPlay: !advancing && !reading.isPaused, isAd: ad)
+            isWaitingToPlay: !advancing && !reading.isPaused, isAd: ad,
+            adDuration: webSaysAd == true ? webMedia?.duration : nil, adElapsed: webSaysAd == true ? webMedia?.elapsed : nil)
     }
 }

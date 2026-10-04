@@ -99,6 +99,8 @@ public enum NowPlayingClientsProbe {
         public let processIdentifier: Int32?
         public let responsibleProcessIdentifier: Int32?
         public let duration: Double?
+        /// 查询那一刻的进度(helper 已按锚点外推)。
+        public let elapsedTime: Double?
         public let playing: Bool?
     }
 

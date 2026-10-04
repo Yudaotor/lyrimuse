@@ -71,6 +71,8 @@ private final class NotchPlayback: ObservableObject {
     /// 显示出来)。只有 YT Music 网页广告给得出;拿不到是 nil,那一段整个不画 —— 同
     /// 「时长未知不画倒计时」那条纪律,不编数字。语义见 `LocalPlaybackSource.currentAdSlot`。
     @Published private(set) var currentAdSlot: YouTubeMusicAdProbe.AdSlot? = nil
+    /// 「广告中」那一行的倒计时从哪来,见 `LocalPlaybackSource.adCountdown`。
+    @Published private(set) var adCountdown: AdCountdown = .track
     @Published private(set) var currentLineFillSettled = true
     @Published private(set) var artworkImage: NSImage?
     @Published private(set) var highResArtworkImage: NSImage?
@@ -280,6 +282,7 @@ private final class NotchPlayback: ObservableObject {
             p.$notchLyrics.map(\.compactPlaceholder).removeDuplicates()
                 .sink { [weak self] in self?.compactShowsPlaceholder = $0 },
             p.$currentAdSlot.removeDuplicates().sink { [weak self] in self?.currentAdSlot = $0 },
+            p.$adCountdown.removeDuplicates().sink { [weak self] in self?.adCountdown = $0 },
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
@@ -1887,19 +1890,34 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
     }
 
-    /// 「· 还剩 0:21」。位置口径同 `clockText`:锚点外推 ?? 暂停冻结位置;时长未知就整个不画(不为拿不到的
-    /// 数据编占位)。TimelineView 只在这一层可见(层内读的 `notchCardLayerActive`)且有锚点时才排表 —— 收起态 / 编辑台预览
-    /// 都不该有一张每秒空转的表(理由同 `earContent` 时间模块那条 提醒)。采样用 `Date()` 而不是
-    /// `context.date`,理由见 `earContent` 头注第 ③ 条。
+    /// 「· 还剩 0:21」。来源见 `playback.adCountdown`:广告本身就是一首曲目的(Spotify、YouTube Music 网页版)按曲目算,
+    /// 位置口径同 `clockText`(锚点外推 ?? 暂停冻结位置);Kaset 的广告跟接下来那首歌共用身份,曲目时长是那首歌的,按广告
+    /// 自己的那只表(`AdBreakClock`,内嵌网页报的时长与进度)算;拿不到时长就整个不画(不为拿不到的数据编占位)。
+    /// TimelineView 只在这一层可见(层内读的 `notchCardLayerActive`)时才排表 —— 收起态 / 编辑台预览都不该有一张每秒空转的表
+    /// (理由同 `earContent` 时间模块那条 提醒)。采样用 `Date()` 而不是 `context.date`,理由见 `earContent` 头注第 ③ 条。
     private var adCountdown: some View {
         NotchLayerActiveReader { active in
-            if let total = playback.currentDurationMs, total > 0 {
-                if let anchor = playback.anchor, active {
-                    TimelineView(NotchTimeFormat.clockSchedule(for: anchor)) { _ in
-                        Text(adRemainingText(total: total, position: anchor.extrapolatedPositionMs(now: Date())))
+            switch playback.adCountdown {
+            case .own(let clock):
+                if active {
+                    TimelineView(.periodic(from: clock.capturedAt.addingTimeInterval(-Double(clock.positionMs % 1000) / 1000),
+                                           by: 1)) { _ in
+                        Text(adRemainingText(total: clock.durationMs, position: clock.positionMs(now: Date())))
                     }
-                } else if let position = playback.anchor?.extrapolatedPositionMs(now: Date()) ?? playback.pausedPositionMs {
-                    Text(adRemainingText(total: total, position: position))
+                } else {
+                    Text(adRemainingText(total: clock.durationMs, position: clock.positionMs(now: Date())))
+                }
+            case .unknown:
+                EmptyView()
+            case .track:
+                if let total = playback.currentDurationMs, total > 0 {
+                    if let anchor = playback.anchor, active {
+                        TimelineView(NotchTimeFormat.clockSchedule(for: anchor)) { _ in
+                            Text(adRemainingText(total: total, position: anchor.extrapolatedPositionMs(now: Date())))
+                        }
+                    } else if let position = playback.anchor?.extrapolatedPositionMs(now: Date()) ?? playback.pausedPositionMs {
+                        Text(adRemainingText(total: total, position: position))
+                    }
                 }
             }
         }

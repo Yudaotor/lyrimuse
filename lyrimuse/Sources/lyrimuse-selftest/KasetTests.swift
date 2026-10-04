@@ -99,6 +99,38 @@ func runKasetTests() {
                     "Kaset 广告: 别的播放器的广告照旧写进播放状态")
     }
 
+    // ---- 广告倒计时:Kaset 的广告跟接下来那首歌共用身份,按广告自己的时长算 ----
+    do {
+        let at = t0
+        let own = AdCountdown.next(isAdBreak: true, sharesIdentity: true, adDuration: 15.04, adElapsed: 2.3, capturedAt: at,
+                                   previous: .track, sameTrack: false)
+        expectEqual(own, .own(AdBreakClock(durationMs: 15040, positionMs: 2300, capturedAt: at)), "广告倒计时: Kaset 按广告自己的时长与进度")
+        expectEqual(AdCountdown.next(isAdBreak: true, sharesIdentity: true, adDuration: nil, adElapsed: nil, capturedAt: at + 2,
+                                     previous: own, sameTrack: true), own, "广告倒计时: 同一首这一拍没读到,沿用上一拍那只表")
+        expectEqual(AdCountdown.next(isAdBreak: true, sharesIdentity: true, adDuration: nil, adElapsed: nil, capturedAt: at,
+                                     previous: own, sameTrack: false), .unknown, "广告倒计时: 换了一首又读不到,不画")
+        expectEqual(AdCountdown.next(isAdBreak: true, sharesIdentity: true, adDuration: nil, adElapsed: nil, capturedAt: at,
+                                     previous: .track, sameTrack: true), .unknown, "广告倒计时: Kaset 拿不到广告时长,不拿歌的时长凑数")
+        expectEqual(AdCountdown.next(isAdBreak: true, sharesIdentity: false, adDuration: nil, adElapsed: nil, capturedAt: at,
+                                     previous: .track, sameTrack: true), .track, "广告倒计时: 广告本身是一首曲目的播放器照旧按曲目算")
+        expectEqual(AdCountdown.next(isAdBreak: false, sharesIdentity: true, adDuration: 15, adElapsed: 1, capturedAt: at,
+                                     previous: own, sameTrack: true), .track, "广告倒计时: 不在广告里恢复成按曲目")
+        let clock = AdBreakClock(durationMs: 15040, positionMs: 2300, capturedAt: at)
+        expectEqual(clock.positionMs(now: at + 1.5), 3800, "广告倒计时: 按墙钟往后推")
+        expectEqual(clock.positionMs(now: at + 60), 15040, "广告倒计时: 不超过时长")
+        expectEqual(clock.positionMs(now: at - 1), 2300, "广告倒计时: 墙钟往回不倒退")
+        // 快照:看网页判成广告才带广告自己的时长与进度。
+        let preroll = K.Reading(title: "給我ㄧ首歌的時間", artist: "周杰倫", videoID: "v", duration: 254, position: 0, isPlaying: true,
+                                isPaused: false, playerDuration: 254, trackDuration: 254)
+        let fromWeb = K.snapshot(preroll, lastMove: nil, capturedAt: t0, webMedia: K.WebMedia(duration: 6.02, isPlaying: true, elapsed: 2.4))
+        expectEqual(fromWeb.adDuration == 6.02 && fromWeb.adElapsed == 2.4, true, "广告倒计时: 看网页判成广告时快照带上广告时长与进度")
+        let fromReading = K.snapshot(preroll, lastMove: nil, capturedAt: t0)
+        expectEqual(fromReading.isAd == true && fromReading.adDuration == nil, true, "广告倒计时: 按读数自己认的广告没有广告时长")
+        let sessionsJSON = #"[{"bundleIdentifier":"com.apple.WebKit.GPU","processIdentifier":7685,"responsibleProcessIdentifier":692,"duration":15.04,"elapsedTime":3.3,"playing":true}]"#
+        let sessions = (try? JSONDecoder().decode([NowPlayingClientsProbe.ClientSession].self, from: Data(sessionsJSON.utf8))) ?? []
+        expectEqual(K.webMedia(in: sessions, kasetPID: 692)?.elapsed, 3.3, "广告倒计时: 网页那份带着此刻的进度")
+    }
+
     // ---- 喜欢 / 随机 / 循环 / 音量 ----
     do {
         // 真机读数的形状(《說了再見》那一拍)。
@@ -152,7 +184,7 @@ func runKasetTests() {
         let sessionsJSON = #"[{"bundleIdentifier":"com.sertacozercan.Kaset","processIdentifier":692,"responsibleProcessIdentifier":692,"playing":true,"title":"給我ㄧ首歌的時間","isMusicApp":true},{"bundleIdentifier":"com.apple.WebKit.GPU","processIdentifier":10556,"responsibleProcessIdentifier":693,"duration":596.2,"elapsedTime":12,"playing":true,"title":""},{"bundleIdentifier":"com.apple.WebKit.GPU","processIdentifier":7685,"responsibleProcessIdentifier":692,"duration":6,"elapsedTime":0.3,"playing":true,"title":""}]"#
         let sessions = (try? JSONDecoder().decode([NowPlayingClientsProbe.ClientSession].self, from: Data(sessionsJSON.utf8))) ?? []
         expectEqual(sessions.count, 3, "Kaset 网页媒体: 各 App 的会话解出来")
-        expectEqual(K.webMedia(in: sessions, kasetPID: 692), K.WebMedia(duration: 6, isPlaying: true),
+        expectEqual(K.webMedia(in: sessions, kasetPID: 692), K.WebMedia(duration: 6, isPlaying: true, elapsed: 0.3),
                     "Kaset 网页媒体: 按负责进程认 Kaset 的那份,不拿 Safari 的")
         expectEqual(K.webMedia(in: sessions, kasetPID: 999) == nil, true, "Kaset 网页媒体: 没有 Kaset 的那份")
         // 真机录音(《給我ㄧ首歌的時間》前面一段 6 秒的广告):Kaset 先报加载、再报在放,位置都是 0,两层时长都是 254;
@@ -461,6 +493,11 @@ func runKasetTests() {
                         && controller.contains(#"return runKasetJXACapturing(kasetPlaybackModeScript(for: mode)) == "ok""#)
                         && controller.contains(#"K.setVolume(\(v));"#), true,
                     "Kaset 契约: 喜欢先看再按、模式按脚本切、音量走 set volume")
+        expectEqual(src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
+                        "isAdBreak: nextAd, sharesIdentity: Self.adSharesTrackIdentity(bundleID: snapshot.bundleIdentifier),")
+                        && src("lyrimuse/PlaybackCoordinator.swift").contains(#"s.$adCountdown.assign(to: \.adCountdown, on: self),"#)
+                        && src("lyrimuse/UI/NotchLyricsView.swift").contains("switch playback.adCountdown {"), true,
+                    "Kaset 契约: 广告倒计时按播放源给的来源画(Kaset 用广告自己的表)")
         expectEqual(client.contains("if let id = raw.videoID, !id.isEmpty, first?.videoID != id {")
                         && client.contains("first = queuedFirstReport(videoID: id) ?? first"), true,
                     "Kaset 契约: 新歌第一拍按队列补开播那份")
