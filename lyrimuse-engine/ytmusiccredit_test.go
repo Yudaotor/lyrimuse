@@ -44,7 +44,7 @@ func TestYTMusicCreditFromNext(t *testing.T) {
 		t.Errorf("多位歌手连同连接词原样拼: %+v", c)
 	}
 	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "ot0WzesOp6I"); c.album != "Westside Whimsy" || c.artist != "Jhené Aiko" ||
-		c.videoType != "MUSIC_VIDEO_TYPE_ATV" || c.durationSecs != 196 {
+		c.videoType != "MUSIC_VIDEO_TYPE_ATV" || c.durationSecs != 196 || c.albumBrowseID != "MPREb_OUh6Wf" {
 		t.Errorf("音轨版本的署名行里链到专辑页的那一段是专辑,另带类型与时长: %+v", c)
 	}
 	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "Qt2mbGP6vFI"); c.videoType != ytmusicVideoTypeOMV || c.durationSecs != 342 {

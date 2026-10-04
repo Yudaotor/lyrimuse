@@ -74,6 +74,10 @@ var (
 // prefetchAlbumSiblings 在真正换到一首新歌时调用(不含单曲循环重新起播那种"同一首歌"
 // 的场景)。整个函数体在独立 goroutine 里跑,不阻塞 poller 的正常处理。
 func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) {
+	if bundleID == kasetBundleID {
+		go prefetchKasetAlbumSiblings(currentArtist, currentTitle)
+		return
+	}
 	if album == "" {
 		return
 	}
@@ -90,80 +94,86 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 		if !ok {
 			return
 		}
-		if len(tracks) > albumPrefetchMaxTracks {
-			log.Printf("album prefetch: skipping %q (%d tracks, over the %d-track safety cap)", album, len(tracks), albumPrefetchMaxTracks)
-			return
-		}
-		queued := 0
-		var prevKey string // 上一首起了解析的预取曲目,起下一首前等它跑完
-		// 当前正在播的这首的宽松键 —— 用来把它从预取名单里剔掉。
-		//
-		// 从"两个字段逐字节相等"改成这个:曲目表跟播放器对同一首歌的拼法
-		// 系统性不同(专辑名括号、中英文空格、繁简,以及多歌手串的分隔符 `A/B` vs
-		// `A & B`),逐字节比几乎必然漏 —— 于是正在播的这首被当成"另一首"又预取一遍,
-		// 在缓存里留下一条只差写法的重复条目(实测 Ticking Away 就是这么来的:那张专辑
-		// 只有 1 首,预取队列里那一首正是它自己)。
-		currentLoose := loosenEnrichKey(enrichKey(currentArtist, currentTitle, album))
-		for _, t := range tracks {
-			if t.title == "" || loosenEnrichKey(enrichKey(t.artist, t.title, album)) == currentLoose {
-				continue // 当前正在播的这首已经走正常路径解析,不用重复触发
-			}
-			// 走 enrichKey 而不是自己拼:这条路径的曲目名来自**歌词平台**(网易云的曲目
-			// 表),跟播放器报的拼法天然不一致 —— 播放器给 `不散的筵席（I Miss You）`、
-			// 网易云给 `不散的筵席`,自己拼就等于每张专辑都预取出一批重复条目。
-			key := enrichKey(t.artist, t.title, album)
-			// claim=false 只看,claim=true 看完顺手占位。先只看一遍再等上一首(跳过的曲目不用等),等完在同一把锁里
-			// 重查一遍才占位:等的这段(最长 prefetchResolveMaxWait)里用户可能已经切到这首,由正常路径接手解析 ——
-			// 先占位的话正常路径看到「在途」就不起,正在播的这首要空等预取排到它,还拿不到设备封面、停不下来。
-			eligible := func(claim bool) bool {
-				enrichMu.Lock()
-				_, exists := enrichCache[key]
-				if !exists {
-					// 补上:预取是重复条目最大的产生源 —— 曲目名来自**网易云曲库**,
-					// 跟播放器报的拼法在"中英文之间加不加空格""繁体还是简体"上系统性不一致。
-					// 上面那句"走 enrichKey 而不是自己拼"只挡住了译名括号这一档,挡不住这两档。
-					// 精确没命中时再宽松找一次,已经有等价条目就不预取了(实测那 14 组重复里,
-					// 丁世光/方大同/孙燕姿那批繁简对就是这么来的)。
-					if _, found := canonicalEnrichKey(key); found {
-						exists = true
-					}
-				}
-				// 在途的也要宽松查:专辑预取一次会排一整批曲目,跟"正在播的那首"几乎同时
-				// 发起,而那首的解析这时还没写进 enrichCache —— 只查精确键会漏。
-				_, inflight := looseInflightKey(key)
-				ok := !exists && !inflight
-				if ok && claim {
-					enrichInflight[key] = true
-				}
-				enrichMu.Unlock()
-				return ok
-			}
-			if !eligible(false) {
-				continue // 已经解析过、或者已经有别的 goroutine 在解析,不重复起
-			}
-			if prevKey != "" {
-				// 只在真正要起下一个解析前才等——跳过的曲目(已解析/在途)不用等,
-				// 不然一张大半已经解析过的专辑,光是跳过那些曲目就会被拖慢一路。
-				waitPrefetchResolved(prevKey)
-			}
-			if !eligible(true) {
-				continue
-			}
-			queued++
-			prevKey = key
-			// 专辑预取没有对应的"停止"入口(不是首次搜索占位行,没有 UI 可以取消它),
-			// 见 backfillPeripheralFields 同款注释。
-			// isNewTrack 传 false:预取的是同专辑里**没在播**的其它曲目,这一刻的设备
-			// Now Playing 数据对应的是当前正在播的那首,不能拿来当这些曲目的封面——见
-			// trackEnrichment 参数注释。
-			// 曲名先过 normEnrichTitle,理由同 upcoming.go 的调用点。
-			go resolveEnrichAsync(withBackgroundOutbound(context.Background()), key, t.artist, normEnrichTitle(t.title), album, "", t.duration, false)
-		}
-		// 成功也打一条。原来这个函数**只在超上限被跳过时**才打日志,正常路径一行不打 ——
-		// 于是"预取到底跑没跑"完全不可观测:日志里没记录,既可能是没跑、也可能是跑得好好的,
-		// 分不开。这次排查就卡在这一点上。
-		log.Printf("album prefetch: %q → %d tracks, %d queued", album, len(tracks), queued)
+		prefetchAlbumTracks(album, tracks, currentArtist, currentTitle, album)
 	}()
+}
+
+// prefetchAlbumTracks 把同一张专辑里还没解析过的曲目一首首丢进后台解析。label 只进日志;album 是缓存键里的专辑
+// (播放器报什么就是什么,Kaset 不报专辑,为空)。
+func prefetchAlbumTracks(label string, tracks []albumTrack, currentArtist, currentTitle, album string) {
+	if len(tracks) > albumPrefetchMaxTracks {
+		log.Printf("album prefetch: skipping %q (%d tracks, over the %d-track safety cap)", label, len(tracks), albumPrefetchMaxTracks)
+		return
+	}
+	queued := 0
+	var prevKey string // 上一首起了解析的预取曲目,起下一首前等它跑完
+	// 当前正在播的这首的宽松键 —— 用来把它从预取名单里剔掉。
+	//
+	// 从"两个字段逐字节相等"改成这个:曲目表跟播放器对同一首歌的拼法
+	// 系统性不同(专辑名括号、中英文空格、繁简,以及多歌手串的分隔符 `A/B` vs
+	// `A & B`),逐字节比几乎必然漏 —— 于是正在播的这首被当成"另一首"又预取一遍,
+	// 在缓存里留下一条只差写法的重复条目(实测 Ticking Away 就是这么来的:那张专辑
+	// 只有 1 首,预取队列里那一首正是它自己)。
+	currentLoose := loosenEnrichKey(enrichKey(currentArtist, currentTitle, album))
+	for _, t := range tracks {
+		if t.title == "" || loosenEnrichKey(enrichKey(t.artist, t.title, album)) == currentLoose {
+			continue // 当前正在播的这首已经走正常路径解析,不用重复触发
+		}
+		// 走 enrichKey 而不是自己拼:这条路径的曲目名来自**歌词平台**(网易云的曲目
+		// 表),跟播放器报的拼法天然不一致 —— 播放器给 `不散的筵席（I Miss You）`、
+		// 网易云给 `不散的筵席`,自己拼就等于每张专辑都预取出一批重复条目。
+		key := enrichKey(t.artist, t.title, album)
+		// claim=false 只看,claim=true 看完顺手占位。先只看一遍再等上一首(跳过的曲目不用等),等完在同一把锁里
+		// 重查一遍才占位:等的这段(最长 prefetchResolveMaxWait)里用户可能已经切到这首,由正常路径接手解析 ——
+		// 先占位的话正常路径看到「在途」就不起,正在播的这首要空等预取排到它,还拿不到设备封面、停不下来。
+		eligible := func(claim bool) bool {
+			enrichMu.Lock()
+			_, exists := enrichCache[key]
+			if !exists {
+				// 补上:预取是重复条目最大的产生源 —— 曲目名来自**网易云曲库**,
+				// 跟播放器报的拼法在"中英文之间加不加空格""繁体还是简体"上系统性不一致。
+				// 上面那句"走 enrichKey 而不是自己拼"只挡住了译名括号这一档,挡不住这两档。
+				// 精确没命中时再宽松找一次,已经有等价条目就不预取了(实测那 14 组重复里,
+				// 丁世光/方大同/孙燕姿那批繁简对就是这么来的)。
+				if _, found := canonicalEnrichKey(key); found {
+					exists = true
+				}
+			}
+			// 在途的也要宽松查:专辑预取一次会排一整批曲目,跟"正在播的那首"几乎同时
+			// 发起,而那首的解析这时还没写进 enrichCache —— 只查精确键会漏。
+			_, inflight := looseInflightKey(key)
+			ok := !exists && !inflight
+			if ok && claim {
+				enrichInflight[key] = true
+			}
+			enrichMu.Unlock()
+			return ok
+		}
+		if !eligible(false) {
+			continue // 已经解析过、或者已经有别的 goroutine 在解析,不重复起
+		}
+		if prevKey != "" {
+			// 只在真正要起下一个解析前才等——跳过的曲目(已解析/在途)不用等,
+			// 不然一张大半已经解析过的专辑,光是跳过那些曲目就会被拖慢一路。
+			waitPrefetchResolved(prevKey)
+		}
+		if !eligible(true) {
+			continue
+		}
+		queued++
+		prevKey = key
+		// 专辑预取没有对应的"停止"入口(不是首次搜索占位行,没有 UI 可以取消它),
+		// 见 backfillPeripheralFields 同款注释。
+		// isNewTrack 传 false:预取的是同专辑里**没在播**的其它曲目,这一刻的设备
+		// Now Playing 数据对应的是当前正在播的那首,不能拿来当这些曲目的封面——见
+		// trackEnrichment 参数注释。
+		// 曲名先过 normEnrichTitle,理由同 upcoming.go 的调用点。
+		go resolveEnrichAsync(withBackgroundOutbound(context.Background()), key, t.artist, normEnrichTitle(t.title), album, "", t.duration, false)
+	}
+	// 成功也打一条。原来这个函数**只在超上限被跳过时**才打日志,正常路径一行不打 ——
+	// 于是"预取到底跑没跑"完全不可观测:日志里没记录,既可能是没跑、也可能是跑得好好的,
+	// 分不开。这次排查就卡在这一点上。
+	log.Printf("album prefetch: %q → %d tracks, %d queued", label, len(tracks), queued)
 }
 
 type albumTrack struct {

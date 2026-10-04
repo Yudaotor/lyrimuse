@@ -56,6 +56,8 @@ type ytmusicCredit struct {
 	videoType string
 	// durationSecs:这一版的时长(lengthText),没有为 0。
 	durationSecs float64
+	// albumBrowseID:专辑页的 id(browseId),同专辑预取拉曲目表用(kasetalbumprefetch.go)。
+	albumBrowseID string
 }
 
 var (
@@ -142,7 +144,8 @@ func ytmusicCreditFromNext(raw []byte, videoID string) ytmusicCredit {
 		}
 		out.title = strings.TrimSpace(ytmusicCreditRunsText(r["title"], false))
 		out.artist = strings.TrimSpace(ytmusicCreditRunsText(r["longBylineText"], true))
-		out.album = strings.TrimSpace(ytmusicCreditAlbumRun(r["longBylineText"]))
+		album, albumBrowseID := ytmusicCreditAlbumRun(r["longBylineText"])
+		out.album, out.albumBrowseID = strings.TrimSpace(album), albumBrowseID
 		out.videoType = ytmusicCreditVideoType(r["navigationEndpoint"])
 		out.durationSecs = ytmusicParseDurationText(ytmusicCreditRunsText(r["lengthText"], false))
 	})
@@ -159,8 +162,9 @@ func ytmusicCreditVideoType(node any) string {
 	return t
 }
 
-// ytmusicCreditAlbumRun:署名行里链到专辑页(MUSIC_PAGE_TYPE_ALBUM)的那一段。音轨版本才有,MV / 视频那一段是播放量。
-func ytmusicCreditAlbumRun(node any) string {
+// ytmusicCreditAlbumRun:署名行里链到专辑页(MUSIC_PAGE_TYPE_ALBUM)的那一段,连同专辑页的 id。音轨版本才有,MV / 视频
+// 那一段是播放量。
+func ytmusicCreditAlbumRun(node any) (string, string) {
 	m, _ := node.(map[string]any)
 	runs, _ := m["runs"].([]any)
 	for _, run := range runs {
@@ -171,10 +175,11 @@ func ytmusicCreditAlbumRun(node any) string {
 		music, _ := configs["browseEndpointContextMusicConfig"].(map[string]any)
 		if music["pageType"] == "MUSIC_PAGE_TYPE_ALBUM" {
 			text, _ := r["text"].(string)
-			return text
+			id, _ := browse["browseId"].(string)
+			return text, id
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // ytmusicCreditRetryAfter:后台没问成(网络、地区限制)之后,同一个 videoId 隔多久再问。

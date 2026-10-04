@@ -35,6 +35,8 @@ const kasetAlbumVerdictRev = 1
 type kasetAlbumVerdict struct {
 	album string
 	mv    bool
+	// albumBrowseID:那张专辑的专辑页 id(同专辑预取用,kasetalbumprefetch.go)。
+	albumBrowseID string
 }
 
 // kasetAlbumLookups:判专辑要问的三样。listed / catalog 的 ok=false 是还没问到,这一回不下结论。
@@ -60,7 +62,7 @@ func kasetAlbumVerdictWith(l kasetAlbumLookups, videoID string, playedSecs float
 		return kasetAlbumVerdict{}, false
 	}
 	if played.album != "" {
-		return kasetAlbumVerdict{album: played.album}, true
+		return kasetAlbumVerdict{album: played.album, albumBrowseID: played.albumBrowseID}, true
 	}
 	length := played.durationSecs
 	if length <= 0 {
@@ -76,7 +78,7 @@ func kasetAlbumVerdictWith(l kasetAlbumLookups, videoID string, playedSecs float
 			if length > 0 && a.durationSecs > 0 && !kasetSameLength(length, a.durationSecs) {
 				return kasetAlbumVerdict{mv: isMV}, true
 			}
-			return kasetAlbumVerdict{album: a.album}, true
+			return kasetAlbumVerdict{album: a.album, albumBrowseID: a.albumBrowseID}, true
 		}
 	}
 	found, ok := l.catalog(artist, kasetCatalogTitle(artist, title), length)
@@ -89,7 +91,7 @@ func kasetAlbumVerdictWith(l kasetAlbumLookups, videoID string, playedSecs float
 			return kasetAlbumVerdict{}, false
 		}
 		if a.album != "" {
-			return kasetAlbumVerdict{album: a.album}, true
+			return kasetAlbumVerdict{album: a.album, albumBrowseID: a.albumBrowseID}, true
 		}
 	}
 	return kasetAlbumVerdict{mv: isMV}, true
