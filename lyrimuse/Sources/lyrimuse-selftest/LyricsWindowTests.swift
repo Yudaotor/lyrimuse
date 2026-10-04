@@ -107,19 +107,50 @@ func runLyricsWindowTests() {
     do {
         typealias D = LyricsWindowDepth
         expectEqual(D.distance(index: 5, anchorIndex: 5, inGap: false), 0, "景深: 当前行距离 0")
-        expectEqual(D.distance(index: 3, anchorIndex: 5, inGap: false), 2, "景深: 上下对称按行数")
-        expectEqual(D.distance(index: 5, anchorIndex: 5, inGap: true), 1, "景深: 间奏中当前行也退一档")
-        expectEqual(D.distance(index: 0, anchorIndex: 40, inGap: false), D.maxDistance, "景深: 封顶 4")
+        expectEqual(D.distance(index: 3, anchorIndex: 5, inGap: false), -2, "景深: 上面唱过的行距离为负")
+        expectEqual(D.distance(index: 7, anchorIndex: 5, inGap: false), 2, "景深: 下面没唱到的行距离为正")
+        expectEqual(D.distance(index: 5, anchorIndex: 5, inGap: true), -1, "景深: 间奏中刚唱完那行在「•••」上面第 1 行")
+        expectEqual(D.distance(index: 6, anchorIndex: 5, inGap: true), 1, "景深: 间奏中下一句在「•••」下面第 1 行")
+        expectEqual(D.distance(index: 3, anchorIndex: 5, inGap: true), -3, "景深: 间奏中更早的行从「•••」往上数")
+        expectEqual(D.distance(index: 0, anchorIndex: 40, inGap: false), -D.maxDistance, "景深: 往上封顶 4")
+        expectEqual(D.distance(index: 40, anchorIndex: 0, inGap: false), D.maxDistance, "景深: 往下封顶 4")
         expectEqual(D.distance(index: 3, anchorIndex: nil, inGap: false), nil, "景深: 没有锚点 → nil")
         expectEqual(D.opacity(distance: 0), 1, "景深: 当前行不透明度 1")
-        expectEqual(r3(D.opacity(distance: 1)), 0.42, "景深: d1 0.42")
-        expectEqual(r3(D.opacity(distance: 2)), 0.42, "景深: d2 仍 0.42")
-        expectEqual(r3(D.opacity(distance: 3)), 0.32, "景深: d3 每行再降 0.10")
-        expectEqual(r3(D.opacity(distance: 4)), 0.22, "景深: d4 到底 0.22")
+        expectEqual(r3(D.opacity(distance: 1)), 0.56, "景深: 下面第 1 行 0.56")
+        expectEqual(r3(D.opacity(distance: -1)), 0.36, "景深: 上面第 1 行 0.36")
+        expectEqual(r3(D.opacity(distance: 2)), 0.54, "景深: 下面第 2 行 0.54")
+        expectEqual(r3(D.opacity(distance: -4)), 0.22, "景深: 上面第 4 行到底 0.22")
+        expectEqual((1...D.maxDistance).allSatisfy { D.opacity(distance: $0) > D.opacity(distance: -$0) }, true,
+                    "景深: 一样远时下面没唱到的比上面唱过的亮")
+        expectEqual((1..<D.maxDistance).allSatisfy {
+            D.opacity(distance: $0 + 1) <= D.opacity(distance: $0)
+                && D.opacity(distance: -$0 - 1) <= D.opacity(distance: -$0)
+        }, true, "景深: 越远越暗")
         expectEqual(D.opacity(distance: nil), 0.45, "景深: 没有锚点 0.45")
         expectEqual(D.blurRadius(distance: 0, fontSize: 50), 0, "景深: 当前行不糊")
-        expectEqual(r3(D.blurRadius(distance: 1, fontSize: 100)), r3(100 * 0.0148 * 2), "景深: σ=0.0148×(d+1)×字号")
+        expectEqual(r3(D.blurRadius(distance: 1, fontSize: 100)), 4.2, "景深: 下面第 1 行 0.042×字号")
+        expectEqual(r3(D.blurRadius(distance: -1, fontSize: 100)), 5.5, "景深: 上面第 1 行 0.055×字号,比下面糊")
+        expectEqual(r3(D.blurRadius(distance: 3, fontSize: 100) - D.blurRadius(distance: 2, fontSize: 100)), 1.9,
+                    "景深: 每远一行加 0.019×字号")
         expectEqual(r3(D.blurRadius(distance: nil, fontSize: 100)), 3, "景深: 没有锚点 0.03×字号")
+    }
+
+    // MARK: - 换句逐行错开
+    do {
+        typealias S = LyricsLineStagger
+        expectEqual(S.progress(elapsedMs: 0), 0, "错开: 起步那一刻不动")
+        expectEqual(S.progress(elapsedMs: -30), 0, "错开: 没到起步时刻不动")
+        let half = (1...400).first { S.progress(elapsedMs: Double($0)) >= 0.5 } ?? 0
+        expectEqual((90...120).contains(half), true, "错开: 约 0.1 秒走到一半(Apple 录屏拟合)")
+        let peak = (1...1500).map { S.progress(elapsedMs: Double($0)) }.max() ?? 0
+        expectEqual(peak > 1.08 && peak < 1.2, true, "错开: 有过冲,不过分")
+        expectEqual(abs(S.progress(elapsedMs: S.springSettleMs) - 1) <= 0.005, true, "错开: 落定时刻剩余不到千分之五")
+        expectEqual(S.delayMs(distanceFromTop: -100, fontSize: 50), 0, "错开: 视口顶上面的行不等")
+        expectEqual(r3(S.delayMs(distanceFromTop: 150, fontSize: 50)), 50, "错开: 往下 3 倍字号晚 50ms")
+        expectEqual(S.delayMs(distanceFromTop: 100_000, fontSize: 50), S.maxDelayMs, "错开: 起步延迟封顶")
+        expectEqual(S.remaining(elapsedMs: 30, delayMs: 50), 1, "错开: 起步前整段垫着")
+        expectEqual(abs(S.remaining(elapsedMs: S.settleMs, delayMs: S.maxDelayMs)) <= 0.005, true,
+                    "错开: settleMs 时最晚起步的那行也落定")
     }
 
     // MARK: - 迷你两行选取

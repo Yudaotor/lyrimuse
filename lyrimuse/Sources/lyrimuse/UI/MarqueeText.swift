@@ -27,10 +27,14 @@ struct MarqueeText<Content: View>: View {
     ///
     /// 为什么需要它、为什么只在"停在开头"时给、为什么传宽度而不是
     /// gradient 的 stop —— 三条理由都写在 `MarqueeMath.trailingFadeWidth` 上,不重复。
-    /// 目前只有灵动岛的**歌词行**传非 0:那一行右边紧挨一枚 32pt 封面,只隔 10pt,硬切口
+    /// 灵动岛的**歌词行**传非 0:那一行右边紧挨一枚 32pt 封面,只隔 10pt,硬切口
     /// 落在那里肉眼分不清"被裁掉"和"被封面盖住"。顶行的歌名/歌手同样是硬切,但它们旁边
     /// 是刘海/音浪而不是封面,没有同样的误读风险,保持原样(要开就在调用点传值即可)。
+    /// 歌词窗口左栏的歌名 / 副标题也传(照 Apple Music,07 章决策 93)。
     var edgeFadeWidth: CGFloat = 0
+    /// 左端常驻渐隐带的宽度(0 = 不渐隐,默认)。给"容器往左多伸出一截、内容垫回同样宽"的调用点用:
+    /// 停着时文字落在渐隐带右边,不受影响;滚起来文字滑进这一截淡出,而不是在原来的左缘被硬切。
+    var leadingFadeWidth: CGFloat = 0
     /// 滚到底之后要不要回到开头再来一遍。true(默认)= 循环,给常驻的标签用(歌名 / 歌手);
     /// false = 滚一遍就停在末尾,直到 `id` 变(换句)才归零,给歌词行用 —— 那一句还没换走时回到开头
     /// 等于把刚读完的结尾又藏起来。
@@ -158,10 +162,13 @@ struct MarqueeText<Content: View>: View {
                                       offset: offset)
     }
 
-    /// 遮罩:左边一整块不透明 + 右端一条 black→clear 的渐隐带。渐隐带是 `.frame(width:)`
-    /// 而不是 gradient 的 stop 位置,这样宽度变化可动画(理由见 MarqueeMath)。
+    /// 遮罩:左端一条 clear→black 的常驻渐隐带(`leadingFadeWidth`,默认零宽)+ 中间一整块不透明 +
+    /// 右端一条 black→clear 的渐隐带。渐隐带是 `.frame(width:)` 而不是 gradient 的 stop 位置,
+    /// 这样宽度变化可动画(理由见 MarqueeMath)。
     private var fadeMask: some View {
         HStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: leadingFadeWidth)
             Rectangle().fill(Color.black)
             LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
                 .frame(width: fadeWidth)

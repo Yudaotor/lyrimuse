@@ -17,6 +17,8 @@ import LyrimuseCore
 ///     每颗点 4 个关键帧就是精确的,不用采样;
 ///   - 呼吸:`breathe(atMs:)` 以 `breathePeriodMs` 为周期,排一个周期(30 点/秒)无限循环,按此刻的
 ///     位置对齐相位。三颗点同步放大缩小(AM 的样子),各绕自己的中心。
+/// 歌词窗口那一份(`.window`)亮度恒满;倍率曲线不循环(出现、结束前那两段只走一次),从此刻到间奏
+/// 结束整段采样成一条关键帧,每颗点绕自己的中心放大、再横挪让间隙不变。
 /// 重装时机:起止时间 / 在播 / 可见 / 减弱动态效果变了,以及每 3 秒对一次表(拖动进度 / 锚点重发会让
 /// 位置跳一下,偏差超过 250ms 就按新位置重排)。暂停 / 看不见时摘掉动画、定格在此刻的样子。
 ///
@@ -33,18 +35,27 @@ struct LyricsGapDotsView: View {
     /// 非 nil = 三颗点各投一层阴影(灵动岛那条 `.shadow(color: .black.opacity(0.45), radius: 2, y: 1)`
     /// 的图层版 —— SwiftUI 的 `.shadow` 罩不到原生图层上)。
     var shadow: GapDotsShadow? = nil
+    var style: GapDotsStyle = .standard
     /// 某一刻的播放位置(歌词时间轴毫秒)。入参是求值那一刻的 `Date`。
     let currentPositionMs: (Date) -> Int
 
     var body: some View {
         GapDotsLayer(startMs: startMs, endMs: endMs, dotSize: dotSize, spacing: spacing,
                      color: NSColor(color), running: isPlaying && isVisible,
-                     reduceMotion: reduceMotion, shadow: shadow, currentPositionMs: currentPositionMs)
+                     reduceMotion: reduceMotion, shadow: shadow, style: style,
+                     currentPositionMs: currentPositionMs)
             .frame(width: CGFloat(GapDotsCurve.dotCount) * dotSize
                        + CGFloat(GapDotsCurve.dotCount - 1) * spacing,
                    height: dotSize)
             .accessibilityHidden(true)
     }
+}
+
+/// 三颗点的画法。`standard`:悬浮歌词 / 灵动岛(菜单栏同一条曲线),逐颗点亮、各绕中心周期呼吸。
+/// `window`:歌词窗口,一直全亮、只靠大小变化、间隙不变(`GapDotsCurve.windowScale`)。
+enum GapDotsStyle: Equatable {
+    case standard
+    case window
 }
 
 struct GapDotsShadow: Equatable {
@@ -63,6 +74,7 @@ private struct GapDotsLayer: NSViewRepresentable {
     let running: Bool
     let reduceMotion: Bool
     let shadow: GapDotsShadow?
+    let style: GapDotsStyle
     let currentPositionMs: (Date) -> Int
 
     func makeNSView(context: Context) -> GapDotsNSView { GapDotsNSView() }
@@ -70,7 +82,7 @@ private struct GapDotsLayer: NSViewRepresentable {
     func updateNSView(_ view: GapDotsNSView, context: Context) {
         view.positionProvider = currentPositionMs
         view.apply(.init(startMs: startMs, endMs: endMs, dotSize: dotSize, spacing: spacing, color: color,
-                         running: running, reduceMotion: reduceMotion, shadow: shadow))
+                         running: running, reduceMotion: reduceMotion, shadow: shadow, style: style))
     }
 }
 
@@ -85,6 +97,7 @@ final class GapDotsNSView: NSView {
         var running: Bool
         var reduceMotion: Bool
         var shadow: GapDotsShadow?
+        var style: GapDotsStyle
     }
 
     private static let opacityKey = "lyrimuse.gapdots-opacity"
@@ -94,6 +107,8 @@ final class GapDotsNSView: NSView {
     private static let resyncToleranceMs = 250.0
     /// 呼吸那一个周期的采样密度。
     private static let breatheSamplesPerSecond = 30.0
+    /// 歌词窗口那条整段曲线的采样密度:变化最快的结束前那一段,线性插值的误差也在 0.1pt 以内。
+    private static let windowSamplesPerSecond = 20.0
 
     var positionProvider: ((Date) -> Int)?
     private var config: Config?
@@ -169,15 +184,13 @@ final class GapDotsNSView: NSView {
         resyncTimer = nil
         guard let c = config else { return }
         let pos = currentPos()
-        let progress = GapDotsCurve.progress(posMs: Int(pos), startMs: c.startMs, endMs: c.endMs)
-        let breathe = GapDotsCurve.breathe(atMs: Int(pos), reduceMotion: c.reduceMotion)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for (i, dot) in dots.enumerated() {
             dot.removeAnimation(forKey: Self.opacityKey)
             dot.removeAnimation(forKey: Self.breatheKey)
-            dot.opacity = Float(GapDotsCurve.opacity(dot: i, progress: progress))
-            dot.transform = CATransform3DMakeScale(CGFloat(breathe), CGFloat(breathe), 1)
+            dot.opacity = Float(Self.restingOpacity(c, dot: i, atMs: pos))
+            dot.transform = Self.restingTransform(c, dot: i, atMs: pos)
         }
         CATransaction.commit()
         installedAt = nil
@@ -185,6 +198,50 @@ final class GapDotsNSView: NSView {
 
         let media = CACurrentMediaTime()
         installedAt = (pos, media)
+        switch c.style {
+        case .standard: installStandard(c, pos: pos, media: media)
+        case .window: installWindow(c, pos: pos, media: media)
+        }
+        let t = Timer(timeInterval: Self.resyncInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resyncIfDrifted() }
+        }
+        t.tolerance = 0.5
+        RunLoop.main.add(t, forMode: .common)
+        resyncTimer = t
+    }
+
+    /// 某颗点在 `ms` 这一刻的亮度(定格用)。
+    private static func restingOpacity(_ c: Config, dot: Int, atMs ms: Double) -> Double {
+        switch c.style {
+        case .standard:
+            return GapDotsCurve.opacity(dot: dot, progress: GapDotsCurve.progress(posMs: Int(ms), startMs: c.startMs,
+                                                                                   endMs: c.endMs))
+        case .window:
+            return 1
+        }
+    }
+
+    /// 某颗点在 `ms` 这一刻的变换(定格用)。
+    private static func restingTransform(_ c: Config, dot: Int, atMs ms: Double) -> CATransform3D {
+        switch c.style {
+        case .standard:
+            let s = CGFloat(GapDotsCurve.breathe(atMs: Int(ms), reduceMotion: c.reduceMotion))
+            return CATransform3DMakeScale(s, s, 1)
+        case .window:
+            return windowTransform(dot: dot, dotSize: c.dotSize,
+                                   scale: GapDotsCurve.windowScale(atMs: ms, startMs: c.startMs, endMs: c.endMs,
+                                                                   reduceMotion: c.reduceMotion))
+        }
+    }
+
+    /// 歌词窗口那一份的变换:绕自己的中心放大,再横挪 `windowOffset` 让间隙不变。
+    private static func windowTransform(dot: Int, dotSize: CGFloat, scale: Double) -> CATransform3D {
+        let dx = CGFloat(GapDotsCurve.windowOffset(dot: dot, scale: scale, dotSize: Double(dotSize)))
+        return CATransform3DScale(CATransform3DMakeTranslation(dx, 0, 0), CGFloat(scale), CGFloat(scale), 1)
+    }
+
+    /// 悬浮歌词 / 灵动岛那一份:逐颗点亮 + 周期呼吸。
+    private func installStandard(_ c: Config, pos: Double, media: CFTimeInterval) {
         let remainingMs = max(0, Double(c.endMs) - pos)
         for (i, dot) in dots.enumerated() {
             let begin = dot.convertTime(media, from: nil)
@@ -221,12 +278,31 @@ final class GapDotsNSView: NSView {
                 dot.add(breathe, forKey: Self.breatheKey)
             }
         }
-        let t = Timer(timeInterval: Self.resyncInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.resyncIfDrifted() }
+    }
+
+    /// 歌词窗口那一份:亮度恒满,只排大小。曲线不循环,从此刻到间奏结束整段采样成一条关键帧。
+    private func installWindow(_ c: Config, pos: Double, media: CFTimeInterval) {
+        let remainingMs = Double(c.endMs) - pos
+        guard !c.reduceMotion, remainingMs > 0 else { return }
+        let count = max(1, Int((remainingMs / 1000 * Self.windowSamplesPerSecond).rounded(.up)))
+        let scales = (0...count).map { k in
+            GapDotsCurve.windowScale(atMs: pos + remainingMs * Double(k) / Double(count),
+                                     startMs: c.startMs, endMs: c.endMs)
         }
-        t.tolerance = 0.5
-        RunLoop.main.add(t, forMode: .common)
-        resyncTimer = t
+        for (i, dot) in dots.enumerated() {
+            let size = CAKeyframeAnimation(keyPath: "transform")
+            size.values = scales.map { NSValue(caTransform3D: Self.windowTransform(dot: i, dotSize: c.dotSize, scale: $0)) }
+            size.calculationMode = .linear
+            size.duration = remainingMs / 1000
+            size.beginTime = dot.convertTime(media, from: nil)
+            size.fillMode = .forwards
+            size.isRemovedOnCompletion = false
+            size.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: 30, preferred: 30)
+            dot.add(size, forKey: Self.breatheKey)
+            if let last = scales.last {
+                dot.transform = Self.windowTransform(dot: i, dotSize: c.dotSize, scale: last)
+            }
+        }
     }
 
     private func resyncIfDrifted() {

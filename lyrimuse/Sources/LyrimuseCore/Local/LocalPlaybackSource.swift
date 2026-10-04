@@ -2552,6 +2552,9 @@ public final class LocalPlaybackSource: ObservableObject {
                 let windowWords = index.flatMap { syncEngine.windowLineWords(at: $0) } ?? words
                 var threshold = KaraokeFill.lineFillSettledMs(
                     words: windowWords + (line?.backgroundWords ?? []), groups: nil)
+                // 歌词窗口里唱过的词还要再浮一段(KaraokeLift),浮到顶之前不算定格 —— 定格那一刻
+                // 窗口按终态画,还在半路的词会一下跳到顶。背景人声不上浮,不算。
+                threshold = max(threshold, KaraokeLift.lineSettledMs(words: windowWords))
                 for shown in lines {
                     guard let shown, let shownWords = shown.words else { continue }
                     threshold = max(threshold, KaraokeFill.lineFillSettledMs(

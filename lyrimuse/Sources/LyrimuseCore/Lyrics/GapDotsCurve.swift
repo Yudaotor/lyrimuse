@@ -1,11 +1,11 @@
 import Foundation
 
-/// 前奏/间奏「•••」三颗呼吸圆点的曲线。四个展示面(悬浮歌词 / 歌词窗口 / 灵动岛 / 菜单栏)
-/// 共用这一份 —— 前三面走 SwiftUI 的 `LyricsGapDotsView`,菜单栏那一面是 CALayer 手排
-/// (状态栏项里没有活的 SwiftUI 视图可挂,见 `MenuBarScrollingLabel` 头注),**视图搬不过去,
-/// 曲线必须搬**,否则两套渲染的呼吸节奏迟早各漂各的。
+/// 前奏/间奏「•••」三颗呼吸圆点的曲线。悬浮歌词 / 灵动岛 / 菜单栏共用上半部分 —— 前两面走
+/// SwiftUI 的 `LyricsGapDotsView`,菜单栏那一面是 CALayer 手排(状态栏项里没有活的 SwiftUI 视图
+/// 可挂,见 `MenuBarScrollingLabel` 头注),**视图搬不过去,曲线必须搬**,否则两套渲染的呼吸节奏
+/// 迟早各漂各的。歌词窗口走下半部分 `window*` 那一份(同一个视图,`.window` 样式)。
 ///
-/// 常数都是拿真机跟 Apple Music 歌词页对拍量出来的:整体同步放大缩小(不是错峰的打字提示器
+/// 上半部分的常数拿真机跟 Apple Music 歌词页对拍量出来:整体同步放大缩小(不是错峰的打字提示器
 /// 波浪)、周期 7s、raised-cosine 平方逼近"停留久、鼓得快"的心跳感。
 ///
 /// **相位与进度都从播放位置算,不从 wall clock 算**:暂停时位置冻住,三颗点就跟着冻住;
@@ -63,5 +63,46 @@ public enum GapDotsCurve {
         return times.map { t in
             (t, opacity(dot: dot, progress: progress(posMs: Int(t.rounded()), startMs: startMs, endMs: endMs)))
         }
+    }
+
+    // MARK: - 歌词窗口
+
+    /// 歌词窗口的三颗点照 Apple Music 歌词页同窗口录屏(07 章决策 91):一直全亮,只靠大小变化。
+    /// 排版尺寸是最小那一档,倍率在 1…`windowPeakScale` 之间:出现时 `windowAppearScale`,
+    /// `windowAppearMs` 内涨到顶;之后以 `windowBreathePeriodMs` 为周期从顶上缓缓缩到 1 再涨回;
+    /// 离结束 `windowSwellMs` 起涨回顶,停在顶上等收起。
+    public static let windowPeakScale = 1.35
+    public static let windowAppearScale = 1.19
+    public static let windowAppearMs = 1500.0
+    public static let windowBreathePeriodMs = 8000.0
+    public static let windowSwellMs = 1000.0
+    /// 涨回顶在 `windowSwellMs` 这一段的哪个比例处到位。
+    private static let windowSwellReach = 0.85
+
+    /// 歌词窗口三颗点此刻的倍率。`reduceMotion` 为真时恒 1。
+    public static func windowScale(atMs posMs: Double, startMs: Int, endMs: Int, reduceMotion: Bool = false) -> Double {
+        guard !reduceMotion else { return 1 }
+        let peak = windowPeakScale
+        let t = max(0, posMs - Double(startMs))
+        var scale: Double
+        if t < windowAppearMs {
+            let k = t / windowAppearMs
+            scale = windowAppearScale + (peak - windowAppearScale) * (1 - (1 - k) * (1 - k))
+        } else {
+            let phase = (t - windowAppearMs) / windowBreathePeriodMs
+            scale = 1 + (peak - 1) * (0.5 + 0.5 * cos(2 * .pi * phase))
+        }
+        let remaining = Double(endMs) - posMs
+        if remaining < windowSwellMs {
+            let k = min(1, max(0, (1 - remaining / windowSwellMs) / windowSwellReach))
+            scale += (peak - scale) * k * k * (3 - 2 * k)
+        }
+        return scale
+    }
+
+    /// 第 `dot` 颗点在倍率 `scale` 下横向要挪多少(跟 `dotSize` 同单位):每颗绕自己的中心放大,
+    /// 两侧的再往外挪,点与点的间隙不变,整组绕中间那颗张开。
+    public static func windowOffset(dot: Int, scale: Double, dotSize: Double) -> Double {
+        (Double(dot) - Double(dotCount - 1) / 2) * (scale - 1) * dotSize
     }
 }

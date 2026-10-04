@@ -112,26 +112,35 @@ public enum LyricsWindowDepth {
     /// 距离封顶:再远的行都按这一档画。
     public static let maxDistance = 4
 
-    /// 第 `index` 行离"当前"几行。锚点用**滚动锚**(空档里提前指向下一句),没有锚点返回 nil。
-    /// 间奏进行中整体退一档 —— 此刻的"当前"是那排「•••」,唱完的那行不该再保持全亮。
+    /// 第 `index` 行离"当前"几行,带方向:负 = 在上面(唱过的),正 = 在下面(还没唱到),0 = 当前行,
+    /// 封顶 ±`maxDistance`。锚点用**滚动锚**(空档里提前指向下一句),没有锚点返回 nil。
+    /// 间奏进行中"当前"是那排「•••」,它排在锚点那一行后面:锚点那一行算上面第 1 行,下一句算下面第 1 行。
     public static func distance(index: Int, anchorIndex: Int?, inGap: Bool) -> Int? {
         guard let anchorIndex else { return nil }
-        return min(abs(index - anchorIndex) + (inGap ? 1 : 0), maxDistance)
+        let d = inGap && index <= anchorIndex ? index - anchorIndex - 1 : index - anchorIndex
+        return min(max(d, -maxDistance), maxDistance)
     }
 
-    /// 不透明度:当前行 1;d1/d2 0.42,之后每行再降 0.10,最低 0.22。没有锚点 0.45。
+    /// 不透明度:当前行 1;下面(没唱到的)比上面(唱过的)亮,按 Apple Music 同窗口截图拟合
+    /// (07 章决策 90)。没有锚点 0.45。
     public static func opacity(distance: Int?) -> Double {
         guard let d = distance else { return 0.45 }
         if d == 0 { return 1 }
-        return max(0.22, 0.42 - 0.10 * Double(max(0, d - 2)))
+        let rows = min(abs(d), maxDistance)
+        return (d > 0 ? upcomingOpacity : pastOpacity)[rows - 1]
     }
 
-    /// 模糊半径:σ = 0.0148 × (d+1) × 字号(从 AM 截图解出的严格线性关系);当前行不糊,
-    /// 没有锚点按 0.03 × 字号。
+    /// 下面 / 上面第 1…4 行的不透明度。
+    private static let upcomingOpacity: [Double] = [0.56, 0.54, 0.44, 0.34]
+    private static let pastOpacity: [Double] = [0.36, 0.31, 0.26, 0.22]
+
+    /// 模糊半径:每远一行加 0.019 × 字号,下面第 1 行 0.042 × 字号、上面第 1 行 0.055 × 字号;
+    /// 当前行不糊,没有锚点按 0.03 × 字号。
     public static func blurRadius(distance: Int?, fontSize: CGFloat) -> CGFloat {
         guard let d = distance else { return fontSize * 0.03 }
         if d == 0 { return 0 }
-        return fontSize * 0.0148 * CGFloat(d + 1)
+        let rows = CGFloat(min(abs(d), maxDistance))
+        return fontSize * ((d > 0 ? 0.023 : 0.036) + 0.019 * rows)
     }
 }
 

@@ -1074,8 +1074,15 @@ final class PlaybackCoordinator: ObservableObject {
         blurBakeTask = nil
         guard let source,
               let cg = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            if blurredArtworkImage != nil { blurredArtworkImage = nil }
-            if windowBackgroundLayers != nil { windowBackgroundLayers = nil }
+            // 换歌时旧封面先清空、新封面要过零点几秒才到:这段空档里先别撤背景。撤了歌词窗口就露出
+            // 窗口底色(浅色外观下是白的),每次换歌闪一下白(07 章决策 84)。新封面在等待期内到了,
+            // 这个任务被下一次烘焙取消、背景直接交叉淡入接上;真没封面才撤。
+            blurBakeTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: Self.artworkGapGraceNanos)
+                guard let self, !Task.isCancelled else { return }
+                if self.blurredArtworkImage != nil { self.blurredArtworkImage = nil }
+                if self.windowBackgroundLayers != nil { self.windowBackgroundLayers = nil }
+            }
             return
         }
         // 光斑取区/姿态的种子:同一首歌每次烘出同一布局(烘焙里不允许真随机——换歌
@@ -1097,6 +1104,10 @@ final class PlaybackCoordinator: ObservableObject {
             self.windowBackgroundLayers = baked.window
         }
     }
+
+    /// 封面清空后等多久才撤背景(见 rebakeBlurredArtwork)。要盖住换歌时新封面到货的延迟(实测零点几秒),
+    /// 又不能长到「真没封面」时上一首的背景挂得让人看出来。
+    private static let artworkGapGraceNanos: UInt64 = 1_500_000_000
 
     nonisolated private static func stableSeed(_ s: String) -> UInt64 {
         var h: UInt64 = 0xcbf2_9ce4_8422_2325

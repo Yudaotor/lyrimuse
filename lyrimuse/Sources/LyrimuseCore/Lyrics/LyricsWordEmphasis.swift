@@ -5,6 +5,9 @@ import Foundation
 ///
 /// 一个「词」是连续没有空白隔开的逐字 token 拼起来的(英文按音节拆成几个 token 时要合回一个词);
 /// 中日韩文字每个 token 自成一个词,反正也不会触发。
+///
+/// 三样效果有两种画法:`frame(for:atMs:)` 整词一起动;`glyphFrame(for:glyph:of:atMs:)` 逐字形错开,
+/// 一个字形接一个字形浮起来(Apple 的画法,见 07 章决策 81)。
 public enum LyricsWordEmphasis {
     /// 触发门槛:这个词从开唱到唱完不短于这么多毫秒。
     public static let minDurationMs = 1000
@@ -71,6 +74,65 @@ public enum LyricsWordEmphasis {
         }
     }
 
+    /// 一个被强调的 token 在它那个词里的字形位置:从整词第 `offset` 个字形开始,整词一共 `count` 个。
+    public struct GlyphSlot: Equatable, Sendable {
+        public let offset: Int
+        public let count: Int
+
+        public init(offset: Int, count: Int) {
+            self.offset = offset
+            self.count = count
+        }
+    }
+
+    /// 跟 `spans` 一一对应:被强调的 token 给出它在整词里的字形位置,其余是 nil。
+    /// 相邻且区间相同的 token 算同一个词(`spans(for:)` 给同一个词的每个 token 同一个区间)。
+    public static func glyphSlots(for words: [SyncedLyricWord], spans: [Span?]) -> [GlyphSlot?] {
+        var out = [GlyphSlot?](repeating: nil, count: words.count)
+        var i = 0
+        while i < words.count {
+            guard i < spans.count, let span = spans[i] else { i += 1; continue }
+            var end = i + 1
+            while end < words.count, end < spans.count, spans[end] == span { end += 1 }
+            let counts = (i..<end).map { glyphCount(words[$0].text) }
+            let total = counts.reduce(0, +)
+            var offset = 0
+            for (k, n) in counts.enumerated() {
+                out[i + k] = GlyphSlot(offset: offset, count: total)
+                offset += n
+            }
+            i = end
+        }
+        return out
+    }
+
+    /// 字形数:不是空白的字符都算,标点也算(句尾的问号跟字母一样排队浮起来)。
+    public static func glyphCount(_ text: String) -> Int {
+        text.reduce(0) { $1.isWhitespace ? $0 : $0 + 1 }
+    }
+
+    /// 逐字形错开时,第 `index` 个字形(整词共 `count` 个)的效果窗口(毫秒,跟逐字填色同一个时间基准)。
+    ///
+    /// 第 i 个字形比整词晚 i 步起动,每个字形的窗口一样长,最后一个字形正好在词尾收完 —— 跟整词那版
+    /// 一样不能拖到词后(见 `frame(for:atMs:)`)。一步 = 词长 × min(12.5%, 50% ÷ (字形数 − 1)):
+    /// 1.5 秒左右、四五个字形的词一步约 190ms;字形多时整排错开封顶半个词长,给最后一个字形留够时间。
+    public static func glyphWindow(for span: Span, glyph index: Int, of count: Int) -> (startMs: Double, lengthMs: Double) {
+        let duration = Double(span.durationMs)
+        let steps = Double(max(0, count - 1))
+        let step = steps > 0 ? duration * min(0.125, 0.5 / steps) : 0
+        let position = Double(min(max(0, index), max(0, count - 1)))
+        return (Double(span.startMs) + position * step, duration - step * steps)
+    }
+
+    /// 逐字形的强调量:三条曲线跟 `frame(for:atMs:)` 同一套,进度按这个字形自己的窗口算,
+    /// 放大的峰值仍按整词时长定。窗口之外没有效果。
+    public static func glyphFrame(for span: Span, glyph index: Int, of count: Int, atMs ms: Int) -> Frame {
+        let window = glyphWindow(for: span, glyph: index, of: count)
+        let t = Double(ms) - window.startMs
+        guard t > 0, t < window.lengthMs else { return .none }
+        return curves(progress: t / window.lengthMs, durationMs: span.durationMs)
+    }
+
     /// 这个词够不够格:时长够长、没有中日韩文字、字母数在 `letterRange` 内。
     public static func isEligible(text: String, durationMs: Int) -> Bool {
         guard durationMs >= minDurationMs, !containsCJK(text) else { return false }
@@ -86,9 +148,12 @@ public enum LyricsWordEmphasis {
     /// * 额外上浮:`sin(π·进度)`,词的一半处最高,唱完回到普通上浮的高度。
     public static func frame(for span: Span, atMs ms: Int) -> Frame {
         guard ms > span.startMs, ms < span.endMs else { return .none }
-        let duration = Double(span.durationMs)
-        let x = Double(ms - span.startMs) / duration
-        let peak = min(0.07, 0.02 + 0.011 * duration / 1000)
+        return curves(progress: Double(ms - span.startMs) / Double(span.durationMs), durationMs: span.durationMs)
+    }
+
+    /// 三条曲线本身:`x` 是 0…1 的进度,放大的峰值按整词时长(毫秒)定。
+    private static func curves(progress x: Double, durationMs: Int) -> Frame {
+        let peak = min(0.07, 0.02 + 0.011 * Double(durationMs) / 1000)
         return Frame(
             scale: 1 + peak * smoothstep(0, 0.55, x) * (1 - smoothstep(0.7, 1, x)),
             glow: 0.55 * smoothstep(0.05, 0.8, x) * (1 - smoothstep(0.85, 1, x)),

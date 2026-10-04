@@ -43,13 +43,15 @@ enum WordKaraokeGradient {
     /// 受控、实测准点,所以窗口回到逐帧重算,只是档位开到面板满刷新率。
     static let windowRefreshInterval: Double = 1.0 / 60.0
 
-    // 已唱过的部分是 fg 全强度,未唱到的部分是同一个 fg 的 35% 透明度,没有单独的
+    // 已唱过的部分是 fg 全强度,未唱到的部分是同一个 fg 调到这个透明度,没有单独的
     // "进度色"参数。用渐变整体当文字颜色,而不是叠两层 Text + GeometryReader 手算裁剪
     // 宽度——渐变的 stop 位置直接由调用方每帧算出的真实进度决定,不需要额外插值。
-    // 非 private:歌词窗口的排程式填色(两层 Text + mask,见
-    // LyricsWindowView.KaraokeWordText)不再用这里的渐变,但暗色档必须跟这三处保持
-    // 同一个数,直接引用同一份常量。
+    // 悬浮歌词 / 灵动岛 / 菜单栏面板用这一档,歌词窗口用 `windowDimOpacity`。
     static let dimOpacity: Double = 0.35
+
+    /// 歌词窗口的未唱档,照 Apple Music 歌词页同窗口对拍(07 章决策 89)。别拿它替换上面那档:
+    /// 那三处叠在任意桌面上,未唱端要压得更暗才分得清唱到哪。
+    static let windowDimOpacity: Double = 0.62
 
     /// unsungColor 传 nil(默认)就是上面这条"同一个 fg 调暗"的老路,零行为变化。传了
     /// 具体颜色("已唱/未唱"分开配色),未唱端
@@ -60,7 +62,8 @@ enum WordKaraokeGradient {
     /// 直接命中缓存的纯色实例,根本不调 gradient()),一行里同一时刻最多一个词在过渡带、
     /// 每次最多 4 个 stop,30~60Hz 下这几次 NSColor 转换可以忽略,不影响之前审计过的
     /// 性能预算。
-    static func gradient(fg: Color, unsungColor: Color? = nil, left: Double, right: Double) -> LinearGradient {
+    static func gradient(fg: Color, unsungColor: Color? = nil, dimOpacity: Double = WordKaraokeGradient.dimOpacity,
+                         left: Double, right: Double) -> LinearGradient {
         let stops = KaraokeFill.stops(left: left, right: right).map { stop -> Gradient.Stop in
             let color: Color
             if let unsungColor {
@@ -98,15 +101,17 @@ enum WordKaraokeGradient {
     /// 只有真在过渡带里的那个词才现算渐变。
     struct Palette {
         let fg: Color
-        /// nil = 老行为(未唱端是 fg 调暗);非 nil = 未唱端换成这个独立颜色。
+        /// nil = 未唱端是 fg 调到 `dimOpacity`;非 nil = 未唱端换成这个独立颜色。
         let unsungColor: Color?
+        let dimOpacity: Double
         let dimStyle: AnyShapeStyle
         let fullStyle: AnyShapeStyle
 
-        init(fg: Color, unsungColor: Color? = nil) {
+        init(fg: Color, unsungColor: Color? = nil, dimOpacity: Double = WordKaraokeGradient.dimOpacity) {
             self.fg = fg
             self.unsungColor = unsungColor
-            let dim = unsungColor ?? fg.opacity(WordKaraokeGradient.dimOpacity)
+            self.dimOpacity = dimOpacity
+            let dim = unsungColor ?? fg.opacity(dimOpacity)
             dimStyle = AnyShapeStyle(LinearGradient(
                 colors: [dim, dim], startPoint: .leading, endPoint: .trailing))
             fullStyle = AnyShapeStyle(LinearGradient(
@@ -117,18 +122,22 @@ enum WordKaraokeGradient {
         func style(left: Double, right: Double) -> AnyShapeStyle {
             if right <= 0 { return dimStyle }
             if left >= 1 { return fullStyle }
-            return AnyShapeStyle(WordKaraokeGradient.gradient(fg: fg, unsungColor: unsungColor, left: left, right: right))
+            return AnyShapeStyle(WordKaraokeGradient.gradient(fg: fg, unsungColor: unsungColor, dimOpacity: dimOpacity,
+                                                              left: left, right: right))
         }
     }
 
-    // 小容量线性缓存,按 (fg, unsungColor) 相等命中(Color 不 Hashable,条目也就三五个:
-    // 悬浮窗前景色、其 75% 罗马音色、灵动岛 accent、面板 .primary,加上开了未唱色覆盖的
-    // 悬浮窗那一到两份)。主线程专用(所有调用点都在视图 body/TimelineView 闭包里)。
+    // 小容量线性缓存,按 (fg, unsungColor, dimOpacity) 相等命中(Color 不 Hashable,条目也就三五个:
+    // 悬浮窗前景色、其 75% 罗马音色、灵动岛 accent、面板 .primary、歌词窗口正文色与罗马音色,
+    // 加上开了未唱色覆盖的悬浮窗那一到两份)。主线程专用(所有调用点都在视图 body/TimelineView 闭包里)。
     @MainActor private static var paletteCache: [Palette] = []
 
-    @MainActor static func palette(fg: Color, unsungColor: Color? = nil) -> Palette {
-        if let hit = paletteCache.first(where: { $0.fg == fg && $0.unsungColor == unsungColor }) { return hit }
-        let p = Palette(fg: fg, unsungColor: unsungColor)
+    @MainActor static func palette(fg: Color, unsungColor: Color? = nil,
+                                   dimOpacity: Double = WordKaraokeGradient.dimOpacity) -> Palette {
+        if let hit = paletteCache.first(where: {
+            $0.fg == fg && $0.unsungColor == unsungColor && $0.dimOpacity == dimOpacity
+        }) { return hit }
+        let p = Palette(fg: fg, unsungColor: unsungColor, dimOpacity: dimOpacity)
         paletteCache.append(p)
         // 换色场景(封面取色逐曲变)会让旧条目失去引用价值,别让它无限长。
         if paletteCache.count > 8 { paletteCache.removeFirst() }

@@ -269,6 +269,13 @@ enum LyricsWindowSession {
     }
 }
 
+/// 垫在标题栏视图里的一块占位:`mouseDownCanMoveWindow` 为 false,系统就不在这块起拖窗;`hitTest` 返回 nil,
+/// 点按和拖动照常落到下面的内容。命中测试不能拦:拦下来的事件顺着响应链交回标题栏,照样拖窗(07 章决策 92)。
+private final class TitlebarDragHole: NSView {
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 // 全屏:macOS 15+ 走**真原生全屏**,老系统用下面那套伪全屏兜底。
 //
 // 根因是 **SwiftUI Window 默认禁全屏**,不是这扇窗自己的代码问题:同一进程里开一扇纯
@@ -644,9 +651,9 @@ private final class LyricsWindowController: ObservableObject {
     ///      477 时三颗按钮被摆到距顶 8pt(正确是 18),就是这么来的。
     /// 直接钉一个常量,无论父视图是谁、多高,按钮永远贴着它的顶边这么远。
     private var trafficLightDefaultXs: [NSWindow.ButtonType.RawValue: CGFloat] = [:]
-    /// 红绿灯下移量(按 Apple Music 整窗参考图逐像素量出:红点中心 y=25.75pt):默认中心
-    /// 窗内 16pt,下移 10 → 26pt,与右上胶囊行(offset −safeTop+10)同心。
-    private static let trafficLightTopMargin: CGFloat = 18
+    /// 红绿灯离标题栏顶的距离:按钮中心(无障碍读数)落在窗内 26pt,跟 Apple Music 同一处,也跟左上、
+    /// 右上两颗胶囊(顶 8pt、高 36pt)同一行(07 章决策 92)。
+    private static let trafficLightTopMargin: CGFloat = 19
     /// 红点(close)目标中心 x(按 Apple Music 整窗截图量出:红点中心 x=25.8pt);
     /// 整组随 close 平移,保留系统自己的按钮间距。
     private static let trafficLightCloseCenterX: CGFloat = 26
@@ -700,6 +707,65 @@ private final class LyricsWindowController: ObservableObject {
                 button.setFrameOrigin(NSPoint(x: targetX, y: targetY))
             }
         }
+    }
+
+    /// 音量胶囊此刻在窗口里的矩形(SwiftUI 全局坐标,左上原点),nil = 没摆。
+    private var volumeCapsuleRect: CGRect?
+    private var volumeDragHole: TitlebarDragHole?
+    /// 找到过的标题栏视图,别每次 didUpdate 都遍历一遍。
+    private weak var titlebarView: NSView?
+
+    /// 音量胶囊报位置(nil = 没画),见 `placeVolumeDragHole`。
+    func setVolumeCapsuleRect(_ rect: CGRect?) {
+        guard rect != volumeCapsuleRect else { return }
+        volumeCapsuleRect = rect
+        if let window { placeVolumeDragHole(window) }
+    }
+
+    /// 标题栏视图(`NSTitlebarView`)。别拿红绿灯的父视图当它:那个父视图有时是整扇窗的框架视图,挂在那里的占位
+    /// 不进拖窗区的计算。只在窗口框架视图里、内容视图以外的那几支里找。
+    private func resolveTitlebarView(_ window: NSWindow) -> NSView? {
+        if let cached = titlebarView, cached.window === window { return cached }
+        guard let content = window.contentView, let frameView = content.superview else { return nil }
+        var stack = frameView.subviews.filter { $0 !== content }
+        while let view = stack.popLast() {
+            if String(describing: type(of: view)) == "NSTitlebarView" {
+                titlebarView = view
+                return view
+            }
+            stack.append(contentsOf: view.subviews)
+        }
+        return nil
+    }
+
+    /// 标题栏那一段由系统直接认领拖窗(07 章决策 14),落在里面的音量滑杆一拖就连窗口一起拖走。在标题栏
+    /// 视图里跟胶囊重叠的那一块垫一个 `TitlebarDragHole`:这块不起拖窗,点按和拖动照常落到胶囊,标题栏
+    /// 别处照旧能拖窗(07 章决策 92)。系统会重排标题栏,跟红绿灯一样挂在 didUpdate 上持续核对,
+    /// 位置没变就不写。胶囊不在、原生全屏时撤掉。
+    private func placeVolumeDragHole(_ window: NSWindow) {
+        guard let rect = volumeCapsuleRect, !isNativeFullScreen, !isMini,
+              let titlebar = resolveTitlebarView(window),
+              let content = window.contentView else {
+            removeVolumeDragHole()
+            return
+        }
+        let local = content.isFlipped
+            ? rect
+            : CGRect(x: rect.minX, y: content.bounds.height - rect.maxY, width: rect.width, height: rect.height)
+        let frame = titlebar.convert(content.convert(local, to: nil), from: nil).intersection(titlebar.bounds)
+        guard !frame.isNull, !frame.isEmpty else {
+            removeVolumeDragHole()
+            return
+        }
+        let hole = volumeDragHole ?? TitlebarDragHole()
+        if hole.superview !== titlebar { titlebar.addSubview(hole) }
+        if hole.frame != frame { hole.frame = frame }
+        volumeDragHole = hole
+    }
+
+    private func removeVolumeDragHole() {
+        volumeDragHole?.removeFromSuperview()
+        volumeDragHole = nil
     }
 
     // 只在窗口第一次挂上来时调一次,拿到真实 NSWindow 存住弱引用,同时挂两个兜底:
@@ -831,6 +897,7 @@ private final class LyricsWindowController: ObservableObject {
             MainActor.assumeIsolated {
                 Self.enforceFullScreenCapability(win)
                 self?.enforceTrafficLightPosition(win)
+                self?.placeVolumeDragHole(win)
             }
         }
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
@@ -1193,9 +1260,11 @@ struct LyricsWindowView: View {
     /// 不是弹出面板——见 body 里 `if showsListenHistory` 那处切换。
     @State private var showsListenHistory = false
     /// 自绘滚动指示条的数据(offset/内容高):收在小 model 里、只有指示条子视图订阅 ——
-    /// 滚动期间逐帧的 preference 更新不能拖着整窗 body 陪跑(性能纪律同 WindowVolumeCapsule)。
+    /// 滚动期间逐帧的滚动几何更新不能拖着整窗 body 陪跑(性能纪律同 WindowVolumeCapsule)。
     /// 用 @State 持有而不是 @StateObject:后者会让整窗 body 也订阅它,滚动时每帧跟着重算。
     @State private var scrollMetrics = LyricsScrollMetricsModel()
+    /// 换句逐行错开的状态(见 LineStagger)。同上用 @State 持有、不订阅:变化只失效各行那层修饰,不失效整窗。
+    @State private var lineStagger = LyricsLineStaggerModel()
     /// 窗口面不可见期间是否发生过需要滚动的换行/间奏切换(见 isSurfaceVisible 的 onChange)。
     @State private var scrollPendingWhileHidden = false
     /// 简介面板里的歌词来源(EnrichCacheReader 异步查,面板打开时取一次)。
@@ -1415,12 +1484,13 @@ struct LyricsWindowView: View {
 
     /// 译文 / 罗马音那两行的色。三个钉死档一律按正文色降透明度,不走 AM 那套 vibrancy 派生 ——
     /// 用户明确指定了颜色,再拿封面去调一个"相近但不同"的色出来只会显得没听话。
+    /// 白字降到 0.73:Apple 同窗口实测译文的亮度(07 章决策 87)。
     private var lyricSecondaryTextColor: Color {
         switch activeTextColorMode.tone(hasArtworkBackground: hasArtworkBackground) {
-        case .white: return .white.opacity(0.6)
+        case .white: return .white.opacity(0.73)
         case .systemPrimary: return .secondary
         case .dark: return .black.opacity(0.5)
-        case .custom: return activeCustomTextColor.opacity(0.6)
+        case .custom: return activeCustomTextColor.opacity(0.73)
         }
     }
 
@@ -1818,14 +1888,15 @@ struct LyricsWindowView: View {
         VStack(spacing: fontSize * 0.34) {
             if let gap = miniCurrentGap, !lyricsOnHold {
                 // 间奏:三颗呼吸点**顶替**当前行的位置(完整布局是把它插在滚动列表里对应那一行
-                // 之后,迷你只有"当前"这一格,所以是顶替不是插入)。点亮算法/呼吸曲线走跟悬浮歌词、
-                // 完整布局同一个 LyricsGapDotsView,比例也照完整那份(点 0.32 字号、间距 0.3)。
+                // 之后,迷你只有"当前"这一格,所以是顶替不是插入)。样式和比例照完整布局那份
+                // (`.window`,点 0.32 字号、间隙 0.23 字号,07 章决策 91)。
                 LyricsGapDotsView(
                     startMs: gap.startMs, endMs: gap.endMs,
-                    dotSize: fontSize * 0.32, spacing: fontSize * 0.3,
+                    dotSize: fontSize * 0.32, spacing: fontSize * 0.23,
                     color: miniPrimaryColor,
                     isPlaying: playback.isPlayingNow, isVisible: windowController.isSurfaceVisible,
-                    reduceMotion: reduceMotion
+                    reduceMotion: reduceMotion,
+                    style: .window
                 ) { _ in
                     // 时间基准跟逐字填色同一套:外推位置 + 当前歌词偏移(间奏窗口是歌词原始
                     // 时间轴)。暂停时 anchor 为 nil,退回冻结位置,点定格在当下的亮度。
@@ -2176,7 +2247,7 @@ struct LyricsWindowView: View {
     /// 跟歌词是同一块视觉,跟完整布局里那些贴边的 chrome 不是一回事,所以它们跟着文字色走是对的。
     private var miniPrimaryColor: Color { lyricTextColor }
     private var miniSecondaryColor: Color {
-        // 副行比完整布局再淡一档(0.55 对 0.6)是迷你原有的口径,只在 `.auto` 档保留;
+        // 副行比完整布局淡(0.55 对 0.73)是迷你原有的口径,只在 `.auto` 档保留;
         // 其余三档一律走共用那份,免得同一颗设置在两个尺寸下深浅不一样。
         guard activeTextColorMode == .auto else { return lyricSecondaryTextColor }
         return hasArtworkBackground ? .white.opacity(0.55) : .secondary
@@ -2313,26 +2384,15 @@ struct LyricsWindowView: View {
                     if !isIdle, !previewMode {
                         WindowVolumeCapsule(onArtwork: hasArtworkBackground,
                                             showsOutputMenu: $showsOutputMenu)
+                        // 胶囊的位置交给窗口层报给控制器,在标题栏里垫占位用(见 VolumeCapsuleBoundsKey):
+                        // 窗口宽窄、AirPlay 键出没都会挪它。锚点挂在 offset 里面,取到的才是挪过之后的位置。
+                        .anchorPreference(key: VolumeCapsuleBoundsKey.self, value: .bounds) { $0 }
                         // 贴右缘 5pt(AM 胶囊亮缘离窗缘 8px@2x,布局缘取 5 让亮缘落到同位)。
                         .padding(.trailing, 5)
-                        // 胶囊**不能**落进窗口顶部那一段 safe-area 高度(geo.safeAreaInsets.top,与真实
-                        // NSTitlebarContainerView 等高):hiddenTitleBar 窗口的这段区间在系统层面**无条件**
-                        // 认领拖动,起手点落在里面就会被 WindowServer 直接接管去挪窗口,表现是"拖音量键把
-                        // 窗口一起拖走"。
-                        //
-                        // 这不是 isMovableByWindowBackground、也不是"谁的 mouseDownCanMoveWindow 返回什么"
-                        // 能改的:挂 NSViewRepresentable 覆写 mouseDownCanMoveWindow、直接 addSubview 到
-                        // contentView 绕开 SwiftUI 树、自定义 NSWindow 子类覆写 sendEvent 整段吞掉再手动转发、
-                        // 同步 nextEvent tracking loop(仿 NSControl 内部机制)—— 五种方案在独立 harness 里
-                        // 逐一验证过,应用进程收到的 NSEvent 序列完全不受影响,没有任何应用层介入点。唯一
-                        // 有效的办法是**不落在这段区间里**:y 越过这段高度的那一刻,挪窗口行为精确消失。
-                        // 旁边的置顶/全屏/静音/AirPlay 键不受影响,因为它们是**点按**、没有拖动位移。
-                        //
-                        // 因此**不要**做"减去 safeAreaInsets.top 再加 8 去对齐红绿灯"那套 —— 那正是把胶囊往
-                        // 危险区间里怼。让胶囊留在 safe-area 自然让出的位置(= 危险区间正下方)之后只再下移
-                        // 8pt 留个观感缓冲,牺牲"与红绿灯同一行"的对齐(AM 参考图是那样,但那条约束与"拖动
-                        // 不能挪窗口"这条硬约束冲突,后者优先)。
-                        .offset(y: 8)
+                        // 跟红绿灯、左上那颗胶囊同一行(顶 8pt、中心约 26pt)。这一行落在标题栏那一段里,
+                        // 系统在那里直接认领拖窗(07 章决策 14),滑杆不连窗口一起拖靠的是标题栏里跟胶囊
+                        // 重叠那一块垫的占位(07 章决策 92)。
+                        .offset(y: -geo.safeAreaInsets.top + 8)
                     }
                 }
                 .overlay(alignment: .topLeading) {
@@ -2357,6 +2417,19 @@ struct LyricsWindowView: View {
                 // 在这个闭包里 —— 直接消费 geo[anchor] 会把整块玻璃面板焊在几何依赖链上,抓到过一次
                 // 开着菜单时主线程 2472/2485 采样全忙的整窗逐帧重排。矩形取整后经 onChange 落进
                 // @State,没动就一个字节都不写,面板在下面的普通 .overlay 里只随真实状态重建。
+                // 音量胶囊的全局矩形报给控制器(见 LyricsWindowController.placeVolumeDragHole)。没画时锚点为 nil,
+                // 一路跟着 onChange 走;别改回在胶囊上挂 onAppear / onDisappear:胶囊拿到音量前是空视图,
+                // 同一个视图重挂时出现回调先于消失回调,占位会被撤掉。
+                .overlayPreferenceValue(VolumeCapsuleBoundsKey.self) { anchor in
+                    GeometryReader { proxy in
+                        let rect = anchor.map { proxy[$0].offsetBy(dx: proxy.frame(in: .global).minX,
+                                                                   dy: proxy.frame(in: .global).minY).integral }
+                        Color.clear
+                            .allowsHitTesting(false)
+                            .onAppear { windowController.setVolumeCapsuleRect(rect) }
+                            .onChange(of: rect) { _, r in windowController.setVolumeCapsuleRect(r) }
+                    }
+                }
                 .overlayPreferenceValue(MoreMenuButtonBoundsKey.self) { anchor in
                     if let anchor {
                         let r = geo[anchor].integral
@@ -2622,6 +2695,7 @@ struct LyricsWindowView: View {
                             scrollToActiveLine(scrollProxy: scrollProxy, animated: visible)
                         }
                     } else if let id = gapRowID(g) {
+                        lineStagger.freeze()
                         if visible {
                             withAnimation(Self.lineTransition) {
                                 scrollProxy.scrollTo(id, anchor: Self.activeLineAnchor)
@@ -2676,17 +2750,14 @@ struct LyricsWindowView: View {
         return playback.allLines[idx].id
     }
 
-    // Apple Music 歌词页把当前行定位在窗口偏上约 1/3 处(不是正中)——上面留少量已经
-    // 唱过的行,下面留更多即将到来的行,从 .center 改过来。
-    // 0.41:AM 整窗截图里当前行中心在窗高 691/1690 = 40.9% 处(量,原 0.35)。
-    private static let activeLineAnchor = UnitPoint(x: 0.5, y: 0.41)
+    // Apple Music 歌词页把当前行定位在窗口偏上处(不是正中)——上面留少量已经唱过的行,
+    // 下面留更多即将到来的行。AM 整窗截图里当前行(正文 + 译文)的视觉中心在窗高约 41% 处。
+    // scrollTo 对齐的是这一行高度的同一比例点、不是视觉中心,所以锚值要比 41% 小:0.37 时整块
+    // 视觉中心落在约 41%(同窗口对拍,07 章决策 87)。
+    private static let activeLineAnchor = UnitPoint(x: 0.5, y: 0.37)
 
-    /// 换行时整页滚动 + 每行虚化/亮度/缩放变化,用**同一条**曲线、同一个时长 —— 原来滚动
-    /// 用 withAnimation 的默认曲线、行样式用 easeInOut(0.3),两套动画各走各的,同一次换行
-    /// 里页面和文字的节奏对不上,看起来就是"一顿一顿"。
-    ///
-    /// 用 .smooth(无回弹的弹簧)而不是 easeInOut:Apple Music 的歌词滚动是减速停下、末尾
-    /// 不回弹,easeInOut 起步太"推"、收尾太硬。
+    /// 每行虚化 / 亮度的变化、进出间奏那次滚动用这一条曲线。换句的滚动不走它:页面一次跳到位,各行
+    /// 错开着弹回(`LineStagger`,07 章决策 94)。
     static let lineTransition: Animation = .smooth(duration: 0.45)
 
     private func scrollToActiveLine(scrollProxy: ScrollViewProxy, animated: Bool) {
@@ -2706,11 +2777,16 @@ struct LyricsWindowView: View {
             target = nil
         }
         guard let target else { return }
-        if animated {
+        if animated, activeID != nil, !reduceMotion, lineStagger.begin() {
+            // 换句:无动画一次到位,各行在 LineStagger 里先垫回原处、再错开着弹回(07 章决策 94)。
+            scrollProxy.scrollTo(target.id, anchor: target.anchor)
+        } else if animated {
+            lineStagger.freeze()
             withAnimation(Self.lineTransition) {
                 scrollProxy.scrollTo(target.id, anchor: target.anchor)
             }
         } else {
+            lineStagger.reset()
             scrollProxy.scrollTo(target.id, anchor: target.anchor)
         }
     }
@@ -2729,7 +2805,7 @@ struct LyricsWindowView: View {
             columnWidth: lyricsColumnWidth, viewportHeight: lyricsViewportHeight,
             cap: showsMiniLayout ? CGFloat(playback.miniFontSizeCap) : nil)
     }
-    // 罗马音/译文跟正文保持原来的比例(15/28、17/28)。
+    // 罗马音跟正文保持原来的比例(15/28);译文照 Apple 同窗口实测 0.57(07 章决策 87)。
     /// 对唱行两侧留白的基准量(见 LyricDuetLayout)。在父视图算一次传下去 —— 每一行
     /// 自己去算的话,窗口拖动时整表行都要重跑同一个式子。
     private var duetInsetUnit: CGFloat {
@@ -2741,7 +2817,7 @@ struct LyricsWindowView: View {
     }
 
     private var romaFontSize: CGFloat { lyricFontSize * 0.54 }
-    private var translationFontSize: CGFloat { lyricFontSize * 0.61 }
+    private var translationFontSize: CGFloat { lyricFontSize * 0.57 }
     /// 行间距:AM 行距(基线到基线)218px / 字号 101px = 2.156em;单行 Text 视图高
     /// 1.175em(同一次 ImageRenderer 标定),VStack spacing = 2.156 − 1.175 ≈ 0.98em。
     /// 旧值 1.14em 比 AM 松 8%,是"一屏 7 行"差一口气的原因之一。
@@ -2827,6 +2903,8 @@ struct LyricsWindowView: View {
                             duetInsetUnit: duetInsetUnit,
                             centered: centered,
                             wordRise: wordRise,
+                            // 唱过的行变成非当前行时字保持上浮的高度,换句那一刻不落回(07 章决策 83)。
+                            wordsSung: playback.currentLineIndex.map { index <= $0 } ?? false,
                             onArtwork: rowOnArtwork,
                             // 行自己不再从 onArtwork 推文字色 —— 那等于把「文字颜色」那颗设置绕过去。
                             // 颜色在窗口层解析好再传进来(`.auto` 档解析出来的就是老的那两个值)。
@@ -2849,6 +2927,7 @@ struct LyricsWindowView: View {
                             }
                         )
                         .equatable()
+                        .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize))
                         .id(item.id)
                         // 这一行之后有间奏 → 插「•••」(不活跃时零高度不占位,见 gapDotsRow)。
                         if let g = gapMarker(index) {
@@ -2867,6 +2946,7 @@ struct LyricsWindowView: View {
                             suspendsBlur: windowController.isLiveResizing
                         )
                         .equatable()
+                        .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize))
                     }
                 }
                 // 间奏点的插入/移除(以及各行随之退暗一档)跟换行滚动同一条曲线。
@@ -2885,26 +2965,16 @@ struct LyricsWindowView: View {
                 .padding(.leading, leading)
                 .padding(.trailing, trailing)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // 自绘滚动指示条的数据源:内容在滚动坐标系里的 minY(=负的滚动量)与
-                // 总高。写进 scrollMetrics 小 model,只失效指示条子视图(见声明处注释)。
-                .background(
-                    GeometryReader { g in
-                        Color.clear.preference(
-                            key: LyricsScrollMetricsKey.self,
-                            value: LyricsScrollMetricsValue(
-                                offsetY: -g.frame(in: .named("lyricsScroll")).minY,
-                                contentHeight: g.size.height))
-                    }
-                )
+                // 各行在 LineStagger 里拿它跟 lyricsScroll 一比,量出此刻滚了多少。
+                .coordinateSpace(name: lyricsContentSpace)
             }
             // 系统滚动条藏掉,换自绘常显指示条(AM 的指示条**不贴窗缘**——暗轨道 6pt+白滑块
             // 12pt,中心距窗右缘 59pt,且常显;系统 overlay 滚动条只能贴 ScrollView 右缘,挪不动,
             // 只能自绘)。
             .scrollIndicators(.hidden)
             .coordinateSpace(name: "lyricsScroll")
-            .onPreferenceChange(LyricsScrollMetricsKey.self) { [weak scrollMetrics] v in
-                scrollMetrics?.update(offsetY: v.offsetY, contentHeight: v.contentHeight)
-            }
+            // 自绘滚动指示条的数据源,写进 scrollMetrics 小 model,只失效指示条子视图(见声明处注释)。
+            .modifier(LyricsScrollMetricsReporter(metrics: scrollMetrics, stagger: lineStagger))
             .background(
                 GeometryReader { g in
                     Color.clear
@@ -3095,22 +3165,38 @@ struct LyricsWindowView: View {
             // MarqueeText 的 id 必须用**显示串**而不是 playback.title:切进/切出广告时要重置
             // 跑马灯,用原标题的话 id 不变、滚动位置会带着上一条的进度(灵动岛那边同一个理由,
             // 见 NotchLyricsView 那段注释)。
-            MarqueeText(id: displayTitle) {
+            //
+            // 两行都往左多伸出一截、内容垫回同样宽:停着时跟封面左缘齐,滚起来文字滑进这一截淡出,
+            // 不在左缘硬切;右端溢出时渐隐(07 章决策 93)。
+            MarqueeText(id: displayTitle,
+                        edgeFadeWidth: Self.trackInfoTrailingFade,
+                        leadingFadeWidth: Self.trackInfoLeadingFade) {
                 Text(displayTitle)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(primaryTextColor)
+                    .padding(.leading, Self.trackInfoOverhang)
             }
             .frame(height: 22)
-            MarqueeText(id: displayArtistAlbum) {
+            .padding(.leading, -Self.trackInfoOverhang)
+            MarqueeText(id: displayArtistAlbum,
+                        edgeFadeWidth: Self.trackInfoTrailingFade,
+                        leadingFadeWidth: Self.trackInfoLeadingFade) {
                 artistAlbumLine
                     // 15.5:同一对拍量出 AM 副行墨高 28px、我们(17pt 时)31px,副行比
                     // 歌名小一号;歌名的 17pt 与 AM 完全一致(32px vs 32px)不动。
                     .font(.system(size: 15.5))
                     .foregroundStyle(secondaryTextColor)
+                    .padding(.leading, Self.trackInfoOverhang)
             }
             .frame(height: 22)
+            .padding(.leading, -Self.trackInfoOverhang)
         }
     }
+
+    /// 歌名 / 副标题跑马灯往左多伸出的宽度、其中的渐隐带、右端渐隐带(07 章决策 93)。
+    private static let trackInfoOverhang: CGFloat = 30
+    private static let trackInfoLeadingFade: CGFloat = 24
+    private static let trackInfoTrailingFade: CGFloat = 32
 
     /// 标题右侧的 收藏(星)+ 更多(…)圆钮 —— Apple Music 歌词页同款位置与形态
     /// (完全对齐:收藏从播放控制排挪上来;AM 现在的收藏就是星形,
@@ -3970,6 +4056,11 @@ struct LyricsWindowView: View {
         min(hi, max(lo, controlScale * ratio))
     }
 
+    /// 主三键的不透明度,照 Apple Music 同窗口截图(07 章决策 93):播放键 0.85、上 / 下一首 0.72,
+    /// 不是纯白。随机 / 循环熄灭态见 modeToggleButton。
+    private static let playButtonOpacity: Double = 0.85
+    private static let skipButtonOpacity: Double = 0.72
+
     private var playbackControls: some View {
         // 布局对照 AM:五键**不是等间距**——随机贴列左缘、循环贴右缘(AM 里 shuffle 中心离
         // 进度条左缘仅 ~13pt),主三键按原间距居中成组。图标档位也是对拍量的:AM 上/下一首
@@ -3983,6 +4074,7 @@ struct LyricsWindowView: View {
                 MusicPlaybackController.previousTrack()
             } label: {
                 Image(systemName: "backward.fill").font(.system(size: ctrl(0.060, 13, 25)))
+                    .opacity(Self.skipButtonOpacity)
             }
             .help(L10n.t("上一首"))
             Button {
@@ -3996,12 +4088,14 @@ struct LyricsWindowView: View {
                     .font(.system(size: ctrl(0.079, 17, 33)))
                     // 播放/暂停两个图标宽度不同,固定住避免两侧按钮跟着跳动
                     .frame(width: ctrl(0.10, 22, 38))
+                    .opacity(Self.playButtonOpacity)
             }
             .help(L10n.t("播放/暂停"))
             Button {
                 MusicPlaybackController.nextTrack()
             } label: {
                 Image(systemName: "forward.fill").font(.system(size: ctrl(0.060, 13, 25)))
+                    .opacity(Self.skipButtonOpacity)
             }
             .help(L10n.t("下一首"))
             }
@@ -4198,17 +4292,13 @@ struct LyricsWindowView: View {
                               minContrastToBackground: 0.25)
     }
 
-    // 距当前行的行数差——按下标算,不按内容(副歌重复句内容相同但下标不同,详见
-    // LyricsSyncEngine.activeLineIndex 的注释)。nil(还没播到第一句)统一按"远"处理。
-    /// 视觉上真正有区别的最大行距。
+    // 距当前行的行数差,带方向(负 = 上面唱过的,正 = 下面没唱到的)——按下标算,不按内容(副歌重复句
+    // 内容相同但下标不同,详见 LyricsSyncEngine.activeLineIndex 的注释)。nil(还没播到第一句)统一按"远"处理。
     ///
-    /// 不透明度 `max(0.35, 0.55 - d*0.05)` 到 d=4 就压到下限 0.35,模糊 `min(d×6%字号, 15%字号)`
-    /// 到 d≈3.64 就封顶 —— 也就是说 d≥4 的行,**画出来一模一样**。
-    ///
-    /// 夹在这里的收益不是省几次乘法,而是让远处那几十行的 distance **不再变化**:
-    /// LyricsLineRow 是 Equatable 的,输入没变就整行跳过重算,也不会去跑那条
-    /// `.animation(value: distance)`。换行时真正需要重画/重跑动画的从"整表"缩到当前行
-    /// 上下各 4 行。这一步是像素级等价的,不是拿观感换性能。
+    /// 距离封顶 ±4(`LyricsWindowDepth.maxDistance`),更远的行按第 4 行画。收益不是省几次乘法,
+    /// 而是让远处那几十行的 distance **不再变化**:LyricsLineRow 是 Equatable 的,输入没变就整行
+    /// 跳过重算,也不会去跑那条 `.animation(value: distance)`。换行时真正需要重画/重跑动画的从
+    /// "整表"缩到当前行上下各 4 行。
 
     private func distance(for index: Int) -> Int? {
         // 景深(不透明度/模糊)跟**滚动锚**走,不跟染色下标:滚动落位的那一刻下一句就该已经
@@ -4238,31 +4328,24 @@ struct LyricsWindowView: View {
     }
 
     /// 三颗呼吸圆点。不活跃时**整行不渲染**(零高度零开销,VStack 也不会为它多出一段
-    /// 行距);间奏进行中在原位展开,三颗点随间奏进度依次点亮 —— 活跃判定在数据层
-    /// (LocalPlaybackSource 20Hz 发布 currentGapIndex,进出间奏才变)。
-    ///
-    /// 帧率:用 `.animation(paused:)` 不设 minimumInterval——跟着显示器刷新率走,每帧直接
-    /// 算真值,**不要**退回"粗时钟采样 + `.animation(value:)` 补间"。0.5s 一档的采样点之间
-    /// pos 一跳就是 500ms,对应呼吸周期里 ~7% 的相位跳变,而 cos² 曲线鼓起来最快的那一段
-    /// (相位变化率最大)恰恰最需要密集采样,补间出来就是一格一格跳、"鼓起来的时候卡顿"。
-    /// 这跟本文件"逐字时钟两级化"那条已知坑是同一个病根:采样再补间只在被采样的量本身接近
-    /// 匀速/线性时才顺滑。补间修饰符也一并去掉(值本身逐帧连续,不需要动画引擎再插值)。
-    /// 三颗点加起来就是几次三角函数+几个 Circle,帧预算跟逐字填色那种要做整行 WrapLayout
-    /// 重排的场景完全不是一个量级,全速率不算浪费。
+    /// 行距);间奏进行中在原位展开,三颗一直全亮、整组慢慢变大变小(07 章决策 91)—— 活跃判定在
+    /// 数据层(LocalPlaybackSource 20Hz 发布 currentGapIndex,进出间奏才变)。动画交给 Core Animation,
+    /// 见 `GapDotsNSView`。
     @ViewBuilder
     private func gapDotsRow(_ marker: LyricsGapMarker, id: String, centered: Bool) -> some View {
         if playback.currentGapIndex == marker.index {
-            // 呼吸曲线/点亮算法抽到 LyricsGapDotsView(悬浮歌词共用,见该文件头注)。
-            // 暂停时把表停掉——暂停在间奏中时圆点亮度/大小本来就该定格(闭包里的
-            // pausedPositionMs 兜底),表继续走只是白跑。窗口面不可见也停(已知坑 #17):
-            // 这是这扇窗里唯一一个满帧率、且整段间奏都在跑的时钟,最小化时白烧得最多。
+            // 视图跟悬浮歌词共用 LyricsGapDotsView,窗口走 `.window` 那条曲线(见该文件头注)。
+            // 暂停时把动画停掉——暂停在间奏中时圆点大小本来就该定格(闭包里的
+            // pausedPositionMs 兜底)。窗口面不可见也停(已知坑 #17)。
             LyricsGapDotsView(
                 startMs: marker.startMs, endMs: marker.endMs,
-                dotSize: lyricFontSize * 0.32, spacing: lyricFontSize * 0.3,
+                // 排版尺寸是变化范围里最小那一档,倍率往上走(07 章决策 91)。
+                dotSize: lyricFontSize * 0.32, spacing: lyricFontSize * 0.23,
                 // 三点是**歌词内容**(它顶替的是一行词),跟着「文字颜色」走,不跟 chrome。
                 color: lyricTextColor,
                 isPlaying: playback.isPlayingNow, isVisible: windowController.isSurfaceVisible,
-                reduceMotion: reduceMotion
+                reduceMotion: reduceMotion,
+                style: .window
             ) { _ in
                 // 跟逐字填色同一套时间基准:外推位置 + 当前歌词偏移(间奏窗口是歌词
                 // 原始时间轴,见 LyricsGapMarker 注释)。暂停时 anchor 为 nil,退回
@@ -4272,18 +4355,14 @@ struct LyricsWindowView: View {
                     + PlaybackCoordinator.shared.currentLyricsOffsetMs
             }
             .frame(height: lyricFontSize * 0.5)
+            .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize))
             .id(id)
-            .transition(.opacity.combined(with: .scale(scale: 0.4, anchor: centered ? .center : .leading)))
+            // 出现只淡入(Apple 出现时没有放大那一下),收起时缩小淡出。
+            .transition(.asymmetric(
+                insertion: .opacity,
+                removal: .opacity.combined(with: .scale(scale: 0.4, anchor: centered ? .center : .leading))))
         }
     }
-
-    // Apple Music 歌词页的景深:当前行完全清晰,其余行统一压到低不透明度、并随距离
-    // 加重高斯模糊——非当前行之间的不透明度差异很小(0.50 → 0.35 缓降),远近感主要靠
-    // 模糊量区分。nil(还没播到第一句)整页轻虚化,保持可读。
-
-    // 距离越远、高斯模糊越重——1.1pt/行、封顶 4pt。别调回 1.6pt/行封顶 6pt:AM 最远的
-    // 可见行仍然认得出字形(模糊半径约为字号的 12~14%,而 6pt/28pt 是 21%,整屏都糊了)。
-    // SwiftUI 的 .blur() 本身就是可动画属性,复用调用点已有的 .animation(value: distance)。
 
     /// 自定义背景色里有没有"没填满"的部分 —— 有就让窗口本体透出去。
     ///
@@ -4321,8 +4400,10 @@ struct LyricsWindowView: View {
             // 封面背景必然是暗的(烘焙压过 EV −1.9 + 0.15 黑遮罩);拿不到封面时什么都不画、退回系统
             // 窗口底色,那就该跟随系统深浅色。两份封面都要看:背景按「高清替代 ?? 系统那份」烘焙,
             // 而 Spotify 在系统那份还没有时会先挂原图档(见 PlaybackCoordinator.refreshSpotifyOriginalCover),
-            // 只看系统那份的话暗背景上会配深色字。
+            // 只看系统那份的话暗背景上会配深色字。背景图层也要看:换歌的空档里封面先清空、上一首的
+            // 背景还挂着(见 PlaybackCoordinator.rebakeBlurredArtwork),这时字要跟着背景保持浅色。
             return playback.artworkData != nil || playback.highResArtworkImage != nil
+                || playback.windowBackgroundLayers != nil
         case .solid:
             return LyricsWindowBackgroundLuma.prefersLightText(
                 hexes: [activeBackgroundColorHex], darkAppearance: colorScheme == .dark,
@@ -4622,6 +4703,8 @@ private struct LyricsLineRow: View, Equatable {
     var centered: Bool = false
     /// 正在唱的字要不要上浮(迷你「多行」关、完整布局开)。
     var wordRise: Bool = true
+    /// 这一行已经唱过(或正在唱):不是当前行时字也保持上浮的高度(见 KaraokeLineText.raisedWhenInactive)。
+    var wordsSung: Bool = false
     let onArtwork: Bool
     /// 正文色 / 副行(译文·罗马音)色。由窗口层解析好传进来,这里**不再**自己从 `onArtwork` 推 ——
     /// 推的话就把「文字颜色」那颗设置绕过去了。`onArtwork` 留着管别的(阴影、vibrancy 那类跟
@@ -4660,6 +4743,7 @@ private struct LyricsLineRow: View, Equatable {
             && a.duetInsetUnit == b.duetInsetUnit
             && a.centered == b.centered
             && a.wordRise == b.wordRise
+            && a.wordsSung == b.wordsSung
             && a.onArtwork == b.onArtwork
             // 漏掉这两个 = 改了「文字颜色」整表行不重画(全表行都挂着 Equatable 跳过重绘),
             // 表现同上面字体那条:"改了没反应,要滚一下或换首歌才生效"。
@@ -4675,6 +4759,11 @@ private struct LyricsLineRow: View, Equatable {
 
     /// 背景人声整行的不透明度,叠在逐字填色之上:唱到的字也不会跟主句一样亮。
     static let backgroundVocalsOpacity: Double = 0.6
+    /// 背景人声的字号(正文的倍数,决策 62)。
+    static let backgroundVocalsScale: CGFloat = 0.61
+    /// 译文跟正文之间多留的距离(正文字号的倍数):照 Apple 同窗口实测,正文基线到译文字顶约 0.58 个
+    /// 正文字号,行里那条 6pt 的间距不够(07 章决策 87)。
+    static let translationExtraGap: CGFloat = 0.12
 
     /// 对唱歌词的左右分栏(见 LyricDuet)。
     ///
@@ -4726,18 +4815,10 @@ private struct LyricsLineRow: View, Equatable {
             && item.line.words != nil
     }
 
-    // Apple Music 歌词页的景深(不再目测,直接从 AM 截图**拟合**)。
-    // 方法:AM 整窗截图里同一句「无敌铁金刚」出现在 d0/d1/d2/d3 多个距离上,同文行的
-    // 墨量总和(∑亮度-背景)是高斯模糊的不变量,比值就是不透明度;特写图里再拿 d0 行
-    // 人工加 σ 扫描去逐像素拟合各距离行,解出每档的 σ。
-    // 量出:α d1≈0.42、d2≈0.41、d3≈0.28、d4≈0.23 —— 近两档几乎不衰减,d3 起掉得快。
+    // Apple Music 歌词页的景深:上面唱过的行比下面没唱到的暗、也更糊,数值从同窗口截图拟合
+    // (07 章决策 90,算式在 LyricsWindowDepth)。
     private var lineOpacity: Double { LyricsWindowDepth.opacity(distance: distance) }
 
-    // 模糊量:同一次拟合解出 σ(d1)=3.0px、σ(d2)=4.5px、σ(d4)=7.5px —— 严格线性
-    // σ = 1.5×(d+1)px,除以字号 101px 得 **0.0148×(d+1) 字号**(d1≈3%、d4≈7.4%,
-    // distance 本身封顶 4,不需要另设上限)。历史:08-04 固定 1.6pt/行"远行失真"→
-    // 1.1pt/行"不够糊"→ 08-21 按特写目测 9%/22%"太糊"→ 回收 6%/15%"还是有点糊"
-    // ——前四版都在猜,这版是从截图解出来的,d1 比 6% 那版整整轻一半。
     // SwiftUI 的 .blur() 本身是可动画属性,复用调用点已有的 .animation(value: distance)。
     private var lineBlur: CGFloat { LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize) }
 
@@ -4771,7 +4852,7 @@ private struct LyricsLineRow: View, Equatable {
                     isActive: isActive,
                     isPlaying: isPlaying,
                     fillSettled: fillSettled,
-                    fontSize: translationFontSize,
+                    fontSize: fontSize * Self.backgroundVocalsScale,
                     romaFontSize: romaFontSize,
                     fontFamily: fontFamily,
                     reduceMotion: reduceMotion,
@@ -4795,6 +4876,7 @@ private struct LyricsLineRow: View, Equatable {
                     .font(.overlayFont(familyName: fontFamily, size: translationFontSize, weight: .semibold))
                     .lyricTypesetting(tr, translation: true)
                     .foregroundStyle(secondaryTextColor)
+                    .padding(.top, fontSize * Self.translationExtraGap)
             }
         }
         // Apple Music 歌词是左对齐排版,从居中改过来。对唱歌词按演唱者分左右
@@ -4847,7 +4929,7 @@ private struct LyricsLineRow: View, Equatable {
     @ViewBuilder
     private var mainText: some View {
         // Apple Music 歌词页所有行同一字号同一字重(远近靠透明度+模糊区分,不靠字号),
-        // 当前行的逐字填色也是"同色 35% → 全强度"的同色系渐变,不引入另一个强调色。
+        // 当前行的逐字填色也是"同色调暗 → 全强度"的同色系渐变,不引入另一个强调色。
         // 这个"同色"由窗口层给(`.auto` 档解析出来就是老的"有封面白、没封面 .primary";
         // 用户钉死了颜色就是那个颜色),远近区分交给 lineOpacity。
         let base: Color = textColor
@@ -4855,7 +4937,7 @@ private struct LyricsLineRow: View, Equatable {
         // 整棵子树换成 WrapLayout+逐词结构的话,SwiftUI 对结构替换只能淡出淡入,叠上行级
         // blur/opacity 动画,观感就是"新行有一个虚化重新构建的过程"(纯行级歌词两个状态都是
         // Text,没这问题——正好解释"有时候")。统一结构后只有参数在变,无替换。非活跃行:
-        // 词强制全填色(视觉=原来的全色 Text)、粗/细时钟全停、字不上浮 —— 静态成本只是
+        // 词强制全填色(视觉=原来的全色 Text)、粗/细时钟全停、字不按时间浮(唱过的行停在上浮高度) —— 静态成本只是
         // "多几个 Text + 一次 WrapLayout 布局",没有逐帧失效(性能红线见 KaraokeLineText.body
         // 的实测记录)。
         // 逐词读音(groups)也**不论活跃与否**都挂(决策 #21):别再给非活跃行开例外("渲染读音
@@ -4877,6 +4959,7 @@ private struct LyricsLineRow: View, Equatable {
                 displayScale: displayScale,
                 rowAlignment: rowAlignment,
                 rises: wordRise,
+                raisedWhenInactive: wordsSung,
                 pausedMs: pausedMs
             )
         } else {
@@ -4961,8 +5044,8 @@ private struct MiniHeaderMetrics {
 //   (静态词不再每 tick 重建 AnyShapeStyle)。
 // 排程式那轮留下的三个修复也都保留:①激活瞬间取值跳变被行级 .animation(value:) 插值成
 // "全亮再褪色"→ 叶子挂 .transaction 禁掉外来动画;②forceFilled 用 fraction=1.0 走不到
-// 纯色快路径、右缘 band 段被淡到半强度 → 定格值 1+band;③上浮参数(幅度 0.05em、时长
-// min(词长,1000ms) —— 两头的取舍见 riseWindowMs 注释)。
+// 纯色快路径、右缘 band 段被淡到半强度 → 定格值 1+band;③上浮的曲线和高度照 Apple 实测
+// (见 KaraokeLift)。
 /// 迷你窗中间那两行(当前行 + 下一行)。换句**不做动画**,新的一句直接替上来(见 07 章决策 42)。
 ///
 /// 1. **每一行按歌词 id 保持同一个视图**(ForEach 按 id)。换句时下一行那个视图原地升格成当前行,
@@ -5106,7 +5189,7 @@ private struct MiniLyricsReel: View, Equatable {
         let font = NSFont.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold)
         let height = Self.scrollLineHeight(font)
         if row.role == .current, let words = row.line.line.words {
-            let unsung = NSColor(color.opacity(WordKaraokeGradient.dimOpacity))
+            let unsung = NSColor(color.opacity(WordKaraokeGradient.windowDimOpacity))
             OverlayScrollingLyricRow(
                 spec: .init(
                     lineKey: row.line.id,
@@ -5203,7 +5286,7 @@ private struct KaraokeLineText: View {
     let groups: [SyncedLyricWordGroup]?
     let base: Color
     /// 是不是当前行。非活跃行也渲染这套 WrapLayout+逐词结构(消灭激活瞬间的整树替换),
-    /// 但词强制全填色、粗/细时钟全停、字不上浮。
+    /// 但词强制全填色、粗/细时钟全停、字不按时间浮(唱过的行停在上浮高度,见 raisedWhenInactive)。
     let isActive: Bool
     let isPlaying: Bool
     /// 整行填色已定格(所有词/组越过过渡带)。true 时粗时钟停表、isLive 全灭,行尾/间奏/
@@ -5220,6 +5303,9 @@ private struct KaraokeLineText: View {
     var rowAlignment: WrapLayout.RowAlignment = .leading
     /// 正在唱的字要不要上浮(完整布局要、迷你不要)。
     var rises: Bool = true
+    /// 唱过的行:不是当前行时字也停在上浮的高度。Apple 换句时字保持浮着跟这一行一起滚走;
+    /// 一变成非当前行就落回原位的话,每次换句这一行都先往下一顿再滚(07 章决策 83)。
+    var raisedWhenInactive: Bool = false
     /// 暂停时的时间基准,原样交给每个字(见 KaraokeWordText.pausedMs)。
     var pausedMs: Int? = nil
 
@@ -5278,8 +5364,12 @@ private struct KaraokeLineText: View {
     private func isLive(_ w: SyncedLyricWord, atMs ms: Int, emphasis: LyricsWordEmphasis.Span? = nil) -> Bool {
         guard isActive, !fillSettled else { return false }
         let margin = Int(Self.coarseInterval * 1000) + 80
-        var end = w.startMs + max(1, w.durationMs) + (rises ? Int(KaraokeWordText.riseWindowMs(for: w)) : 0)
-        if let emphasis { end = max(end, emphasis.endMs) }
+        var end = w.startMs + max(1, w.durationMs)
+        if rises { end = max(end, w.startMs + KaraokeLift.durationMs) }
+        if let emphasis {
+            // 逐字形错开时最后一个字形在词尾之前才起浮,上浮还要再走一整段。
+            end = max(end, emphasis.endMs + (rises ? KaraokeLift.durationMs : 0))
+        }
         let start = min(w.startMs, emphasis?.startMs ?? w.startMs)
         return ms >= start - margin && ms <= end + margin
     }
@@ -5332,9 +5422,10 @@ private struct KaraokeLineText: View {
                                                 reduceMotion: reduceMotion,
                                                 displayScale: displayScale,
                                                 rises: rises,
-                                                // 非活跃行定格全填色、不上浮,跟下面无词组那条分支一致(非活跃行也走这条
+                                                // 非活跃行定格全填色,跟下面无词组那条分支一致(非活跃行也走这条
                                                 // 分支,见 LyricsLineRow.mainText)。
                                                 forceFilled: !isActive,
+                                                raisedAtRest: !isActive && raisedWhenInactive,
                                                 lineSettled: fillSettled,
                                                 pausedMs: pausedMs)
                             }
@@ -5370,6 +5461,7 @@ private struct KaraokeLineText: View {
             } else {
                 let spans = emphasisSpans
                 let anchors = emphasisAnchors(spans)
+                let slots = LyricsWordEmphasis.glyphSlots(for: words, spans: spans)
                 ForEach(words.indices, id: \.self) { i in
                     KaraokeWordText(word: words[i], base: base, isPlaying: isPlaying,
                                     isLive: isLive(words[i], atMs: coarseMs, emphasis: spans[i]), staticDate: coarseDate,
@@ -5380,9 +5472,11 @@ private struct KaraokeLineText: View {
                                     // 非活跃行定格全填色:视觉上就是全色 Text,
                                     // 外层 lineOpacity 负责压暗。
                                     forceFilled: !isActive,
+                                    raisedAtRest: !isActive && raisedWhenInactive,
                                     lineSettled: fillSettled,
                                     emphasis: spans[i],
                                     emphasisAnchor: anchors[i],
+                                    emphasisSlot: slots[i],
                                     pausedMs: pausedMs)
                 }
             }
@@ -5422,21 +5516,25 @@ private struct KaraokeWordText: View {
     let reduceMotion: Bool
     let displayScale: CGFloat
     var rises: Bool = true
-    /// 非活跃行(结构统一,见已知坑 #11):不按时间算填色,恒为全色;不上浮。时钟由上游的
+    /// 非活跃行(结构统一,见已知坑 #11):不按时间算填色,恒为全色。时钟由上游的
     /// isLive=false 停掉,这里只管画面。
     var forceFilled: Bool = false
+    /// 非活跃行里唱过的字:停在上浮的高度(见 KaraokeLineText.raisedWhenInactive),没唱到的行不浮。
+    var raisedAtRest: Bool = false
     /// 整行已定格:停表后 staticDate 冻结在最后一次粗 tick(最多陈旧 250ms),若恰好早于
     /// 末字的完成时刻,末字的渐变会被算回"没填完"的位置 —— 表现是"行尾最后一两个字染完
     /// 又退去染色","有时候"= 停表与粗 tick 的相位差。定格的语义本来就是"所有词都已填满、
-    /// 所有字都已浮定"(settled 阈值≥每个词的完成点、rise 窗口 min(词长,1000) 必然早于
-    /// 1.08×词长的定格点),所以 settled 时直接渲染终态,不再依赖任何时间基准。
-    /// 与 forceFilled 的区别:行还是当前行,浮起要**保持**不落回。
+    /// 所有字都已浮定"(引擎的定格阈值同时等填色定格和上浮到顶,见 KaraokeLift.lineSettledMs),
+    /// 所以 settled 时直接渲染终态,不再依赖任何时间基准。
+    /// 与 forceFilled 的区别:行还是当前行,浮起保持满幅。
     var lineSettled: Bool = false
     /// 这个 token 所属的长音强调词(LyricsWordEmphasis),nil = 不强调。强调在词唱完时归零,
     /// 早于整行定格,所以定格和非当前行都直接不画强调。
     var emphasis: LyricsWordEmphasis.Span? = nil
     /// 强调放大的锚点(见 KaraokeLineText.emphasisAnchors),不强调时用不上。
     var emphasisAnchor: UnitPoint = .center
+    /// 这个 token 在强调词里的字形位置(`LyricsWordEmphasis.glyphSlots`),逐字形错开时用。
+    var emphasisSlot: LyricsWordEmphasis.GlyphSlot? = nil
     /// 暂停时的时间基准(冻结位置 + 歌词偏移),播放中 nil。画面不直接用它(下面照样读协调器),
     /// 它只是让这个字"输入变了":暂停时两级时钟都停着,暂停中拖进度 / 调偏移若不改任何输入,
     /// 这个字就不重算,填色停在拖之前的位置。
@@ -5449,30 +5547,54 @@ private struct KaraokeWordText: View {
     /// 取 1.0 的话 left=1−band<1,右缘 band 段会被淡到半强度(排程式那轮修掉的隐藏 bug)。
     private static let settledFraction = 1 + KaraokeFill.wordEdgeSoftenBand
 
-    /// 抬升时长 = min(词长, 1000ms),两头都有实测背书:
-    /// * 上界 1000ms 防长词亚像素颤抖 —— 3s 的字按词长爬完整词=每帧 ~0.05 物理像素,
-    ///   字形抗锯齿被持续重采样,肉眼上下颤;到顶后钉在整数设备像素上不动。
-    /// * 跟词长对齐防"人都走了还在浮" —— 上浮不得晚于这个字自己的染色结束,短词随染色
-    ///   一起利落收尾。
-    /// KaraokeLineText.isLive 用它决定细时钟要活到多晚,所以是 internal。
-    static func riseWindowMs(for w: SyncedLyricWord) -> Double {
-        min(max(1, Double(w.durationMs)), 1000)
+    /// 未唱端用歌词窗口那一档(07 章决策 89)。
+    private var palette: WordKaraokeGradient.Palette {
+        WordKaraokeGradient.palette(fg: base, dimOpacity: WordKaraokeGradient.windowDimOpacity)
     }
 
-    /// 上浮幅度 0.05em,收到整数个设备像素防 1x 屏重采样发糊。
+    /// 上浮高度(`KaraokeLift.amplitudeEm` 个字号),收到整数个设备像素防 1x 屏重采样发糊。
     private var riseAmplitude: CGFloat {
         let scale = max(1, displayScale)
-        return (fontSize * 0.05 * scale).rounded() / scale
+        return (fontSize * CGFloat(KaraokeLift.amplitudeEm) * scale).rounded() / scale
     }
 
-    /// 上浮:sin(p·π/2) 平滑升到 1、终点斜率 0,抬起后**保持**,行退场落回(「点头式」被
-    /// 过)。
+    /// 上浮:开唱起按 `KaraokeLift` 的曲线浮起(不管这个词唱多长都是同一条),抬起后**保持**;
+    /// 这一句唱完变成非当前行也不落回(见 raisedAtRest)。「点头式」被否掉过。
     private func rise(atMs currentMs: Int) -> CGFloat {
+        rise(atMs: currentMs, startMs: Double(word.startMs))
+    }
+
+    /// 同一条上浮曲线,起点另给(逐字形错开时每个字形有自己的起点)。
+    private func rise(atMs currentMs: Int, startMs: Double) -> CGFloat {
         guard rises, !reduceMotion else { return 0 }
-        let elapsed = Double(currentMs - word.startMs)
-        guard elapsed > 0 else { return 0 } // 还没唱到这个字
-        let p = min(1, elapsed / Self.riseWindowMs(for: word))
-        return -sin(p * .pi / 2) * riseAmplitude
+        return -CGFloat(KaraokeLift.progress(elapsedMs: Double(currentMs) - startMs)) * riseAmplitude
+    }
+
+    /// 逐字形画法要 `TextRenderer`(macOS 15 起);更早的系统长音词整词一起动。
+    private static let drawsGlyphsSeparately: Bool = {
+        if #available(macOS 15.0, *) { return true }
+        return false
+    }()
+
+    /// 长音强调词逐字形错开(07 章决策 81):每个字形此刻的上浮、放大、辉光,每个字形画一份(见 `SingleGlyphRenderer`)。
+    /// nil = 整个 token 一起动(不强调、系统早于 macOS 15、不上浮、减弱动态效果)。同一个字从头到尾只走
+    /// 一支:定格之后也给一份整齐的终态,不切回整词画法。
+    private func glyphFrames(atMs ms: Int) -> [EmphasisGlyph]? {
+        guard Self.drawsGlyphsSeparately, rises, !reduceMotion,
+              let emphasis, let slot = emphasisSlot else { return nil }
+        let count = LyricsWordEmphasis.glyphCount(word.text)
+        guard count > 0 else { return nil }
+        if lineSettled {
+            return Array(repeating: EmphasisGlyph(lift: -riseAmplitude, scale: 1, glow: 0), count: count)
+        }
+        return (0..<count).map { k in
+            let index = slot.offset + k
+            let window = LyricsWordEmphasis.glyphWindow(for: emphasis, glyph: index, of: slot.count)
+            let f = LyricsWordEmphasis.glyphFrame(for: emphasis, glyph: index, of: slot.count, atMs: ms)
+            // 额外上浮跟普通上浮同一个幅度。
+            return EmphasisGlyph(lift: rise(atMs: ms, startMs: window.startMs) - CGFloat(f.extraLift) * riseAmplitude,
+                                 scale: CGFloat(f.scale), glow: f.glow)
+        }
     }
 
     var body: some View {
@@ -5490,8 +5612,10 @@ private struct KaraokeWordText: View {
         if forceFilled {
             Text(word.text)
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
-                .foregroundStyle(WordKaraokeGradient.palette(fg: base).fullStyle)
+                .foregroundStyle(palette.fullStyle)
                 .lyricTypesetting(word.text)
+                .transformEffect(CGAffineTransform(
+                    translationX: 0, y: raisedAtRest && rises && !reduceMotion ? -riseAmplitude : 0))
         } else {
             Text(word.text)
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
@@ -5518,40 +5642,108 @@ private struct KaraokeWordText: View {
                 ? Self.settledFraction
                 : WordKaraokeGradient.fillFraction(for: word, atMs: currentMs)
             let band = WordKaraokeGradient.wordEdgeSoftenBand
-            // 定格后浮起保持满幅(定格时每个字必然已过自己的 rise 窗口,见 lineSettled 注释)。
-            let lift: CGFloat = forceFilled ? 0
-                : (lineSettled ? ((rises && !reduceMotion) ? -riseAmplitude : 0)
-                               : rise(atMs: currentMs))
-            let emp: LyricsWordEmphasis.Frame = (forceFilled || lineSettled || !rises || reduceMotion)
-                ? .none
-                : (emphasis.map { LyricsWordEmphasis.frame(for: $0, atMs: currentMs) } ?? .none)
-            // 额外上浮跟普通上浮同一个幅度,同样收到整数个设备像素(慢速移动时不收会让字形发颤)。
-            let pixel = max(1, displayScale)
-            let extraLift = (CGFloat(emp.extraLift) * riseAmplitude * pixel).rounded() / pixel
-            Text(word.text)
-                .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
-                // Palette:纯色两端(没唱到/唱过了)复用跨帧同一实例,只有真在过渡带里的
-                // 词才现算渐变 —— 否则静态词每个粗 tick 都被迫重走样式失效。
-                .foregroundStyle(WordKaraokeGradient.palette(fg: base)
-                    .style(left: fraction - band, right: fraction + band))
-                // 长音强调的放大与辉光都是渲染期效果,不参与布局。
-                .scaleEffect(emp.scale, anchor: emphasisAnchor)
-                .shadow(color: base.opacity(emp.glow), radius: emp.glow > 0 ? fontSize * Self.emphasisGlowRadiusEm : 0)
-                // .offset 是渲染期位移,不参与布局 —— 字抬起来不会把整行的排版推歪。
-                .offset(y: lift - extraLift)
-                // 禁掉一切外来动画事务:填色/上浮由本时钟逐帧给真值,任何插值都是错的。
-                // 行激活瞬间 forceFilled→按时间 的取值跳变会落在行级
-                // .animation(value: distance) 的作用域里,渐变 stop 被从 1 插值回 0,
-                // 就是"下一行先全部亮一下、再从头逐字"那个 bug 的机制;未唱到的字时钟
-                // 停着,没有下一帧掰正,褪色动画会播完整。
-                .transaction { t in
-                    if t.animation != nil { t.animation = nil }
+            // Palette:纯色两端(没唱到/唱过了)复用跨帧同一实例,只有真在过渡带里的
+            // 词才现算渐变 —— 否则静态词每个粗 tick 都被迫重走样式失效。
+            let style = palette.style(left: fraction - band, right: fraction + band)
+            let glowRadius = fontSize * Self.emphasisGlowRadiusEm
+            // 位移、放大、辉光都是渲染期效果,不参与布局 —— 字抬起来不会把整行的排版推歪。
+            // 位移一律用 transformEffect,能停在半个像素上;别换回 .offset:它按整像素一格一格挪,
+            // 慢慢浮起时一顿一顿(07 章决策 82)。
+            Group {
+                if let glyphs = glyphFrames(atMs: currentMs) {
+                    // 长音强调词逐字形错开:每个字形画一份整个 token,只显示自己那个字形,各自动。
+                    let leading = word.text.prefix(while: \.isWhitespace).count
+                    ZStack {
+                        ForEach(glyphs.indices, id: \.self) { k in
+                            Text(word.text)
+                                .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
+                                .foregroundStyle(style)
+                                .modifier(SingleGlyph(glyph: leading + k))
+                                .scaleEffect(glyphs[k].scale, anchor: emphasisAnchor)
+                                .shadow(color: base.opacity(glyphs[k].glow), radius: glyphs[k].glow > 0 ? glowRadius : 0)
+                                .transformEffect(CGAffineTransform(translationX: 0, y: glyphs[k].lift))
+                        }
+                    }
+                } else {
+                    // 定格后浮起保持满幅(定格时每个字必然已过自己的 rise 窗口,见 lineSettled 注释)。
+                    let lift: CGFloat = forceFilled ? 0
+                        : (lineSettled ? ((rises && !reduceMotion) ? -riseAmplitude : 0)
+                                       : rise(atMs: currentMs))
+                    // 长音强调整词一起动(系统早于 macOS 15 时),额外上浮跟普通上浮同一个幅度。
+                    let emp: LyricsWordEmphasis.Frame = (forceFilled || lineSettled || !rises || reduceMotion)
+                        ? .none
+                        : (emphasis.map { LyricsWordEmphasis.frame(for: $0, atMs: currentMs) } ?? .none)
+                    Text(word.text)
+                        .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
+                        .foregroundStyle(style)
+                        .scaleEffect(emp.scale, anchor: emphasisAnchor)
+                        .shadow(color: base.opacity(emp.glow), radius: emp.glow > 0 ? glowRadius : 0)
+                        .transformEffect(CGAffineTransform(translationX: 0,
+                                                           y: lift - CGFloat(emp.extraLift) * riseAmplitude))
                 }
-                // 必须跟底下那层同尺寸同位置:同一段字、同一个字体,不裁、不折。
-                .fixedSize()
+            }
+            // 禁掉一切外来动画事务:填色/上浮由本时钟逐帧给真值,任何插值都是错的。
+            // 行激活瞬间 forceFilled→按时间 的取值跳变会落在行级
+            // .animation(value: distance) 的作用域里,渐变 stop 被从 1 插值回 0,
+            // 就是"下一行先全部亮一下、再从头逐字"那个 bug 的机制;未唱到的字时钟
+            // 停着,没有下一帧掰正,褪色动画会播完整。
+            .transaction { t in
+                if t.animation != nil { t.animation = nil }
+            }
+            // 必须跟底下那层同尺寸同位置:同一段字、同一个字体,不裁、不折。
+            .fixedSize()
         }
         // 底下那层透明字已经被读屏读到了,这一层再进无障碍树就是同一个字读两遍。
         .accessibilityHidden(true)
+    }
+}
+
+/// 长音强调词逐字形错开里的一个字形(见 KaraokeWordText.glyphFrames)。
+private struct EmphasisGlyph: Equatable {
+    /// 竖直位移(点,向上为负):普通上浮加额外上浮。
+    var lift: CGFloat
+    /// 绕整词中心的放大倍数。
+    var scale: CGFloat
+    /// 辉光不透明度 0…1。
+    var glow: Double
+}
+
+/// 系统支持时给 token 挂上 `SingleGlyphRenderer`,只显示第 `glyph` 个字形;更早的系统不会走到这里
+/// (见 KaraokeWordText.drawsGlyphsSeparately)。
+private struct SingleGlyph: ViewModifier {
+    let glyph: Int
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.textRenderer(SingleGlyphRenderer(glyph: glyph))
+        } else {
+            content
+        }
+    }
+}
+
+/// 长音强调词逐字形错开时,每个字形画一份整个 token,这一份只显示第 `glyph` 个字形(零宽的组合附加符号
+/// 跟着前一个字形走)。字形位置、字距都是排好的原样;位移、放大、辉光都在外面按字形各自做(07 章决策 82):
+/// * 别的字形照画、透明度 0,不能不画 —— 填色渐变按画出来的字的范围铺,只画一个字形的话,每个字形会各自
+///   从白到暗铺一遍。
+/// * 别在这里面平移字形 —— 在 TextRenderer 里平移,字按整像素一格一格跳,还隔一会儿错位一帧。
+@available(macOS 15.0, *)
+private struct SingleGlyphRenderer: TextRenderer {
+    let glyph: Int
+
+    func draw(layout: Text.Layout, in ctx: inout GraphicsContext) {
+        var index = -1
+        for line in layout {
+            for run in line {
+                for slice in run {
+                    if index < 0 || slice.typographicBounds.width > 0.01 { index += 1 }
+                    var c = ctx
+                    if index != glyph { c.opacity = 0 }
+                    c.draw(slice)
+                }
+            }
+        }
     }
 }
 
@@ -5981,6 +6173,14 @@ private struct WindowVolumeCapsule: View {
 }
 
 /// 「…」按钮的窗内坐标,自绘菜单据此定位(anchorPreference → overlayPreferenceValue)。
+/// 右上音量胶囊的边框(见 fullBody 里读它的那个 overlayPreferenceValue)。
+private struct VolumeCapsuleBoundsKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
 private struct MoreMenuButtonBoundsKey: PreferenceKey {
     static let defaultValue: Anchor<CGRect>? = nil
     static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
@@ -6004,25 +6204,170 @@ private struct TranslationMenuButtonBoundsKey: PreferenceKey {
     }
 }
 
-/// 歌词滚动几何(自绘指示条用):内容在滚动坐标系里的偏移与总高。
-private struct LyricsScrollMetricsValue: Equatable {
-    var offsetY: CGFloat = 0
-    var contentHeight: CGFloat = 0
-}
-private struct LyricsScrollMetricsKey: PreferenceKey {
-    static let defaultValue = LyricsScrollMetricsValue()
-    static func reduce(value: inout LyricsScrollMetricsValue, nextValue: () -> LyricsScrollMetricsValue) {
-        value = nextValue()
+/// 歌词列表内容(上下留白之内那一层)的坐标空间名,LineStagger 拿它跟 `lyricsScroll` 一比量出滚动量。
+private let lyricsContentSpace = "lyricsContent"
+
+/// 歌词列表此刻的滚动量,由各行在 `LineStagger` 的 `visualEffect` 里现量写进来(行在内容坐标与滚动坐标里的差)。
+/// 别改用 `scrollMetrics`:它只在 macOS 15 起有数据,而且是滚动视图的内容偏移(含边距),跟这里的差值不是同一个口径。
+/// `visualEffect` 的闭包不在主 actor 上,读写加锁。
+final class LyricsScrollProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: CGFloat?
+
+    var value: CGFloat? {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+
+    func record(_ value: CGFloat) {
+        lock.lock()
+        stored = value
+        lock.unlock()
     }
 }
 
-/// 滚动指示条的数据小 model:滚动期间 preference 逐帧更新,只有指示条订阅它,
-/// 整窗 body 不陪跑(性能纪律同 WindowVolumeCapsule.Model)。
+/// 换句逐行错开的状态(07 章决策 94)。每次换句记一笔:开始时刻、开始前的滚动量。这一笔滚了多少不在换句时量 ——
+/// `scrollTo` 要等下一次 SwiftUI 更新才生效 —— 而是由各行在同一次布局里自己量(见 `LineStagger`),生效之后
+/// 再定下来,之后用户自己滚不算进去。
+@MainActor final class LyricsLineStaggerModel: ObservableObject {
+    struct Shift: Sendable {
+        let start: Date
+        let scrollBefore: CGFloat
+        /// 这一笔滚了多少。nil = 还没定下,各行按此刻的滚动量现算。
+        var amount: CGFloat?
+    }
+
+    @Published private(set) var shifts: [Shift] = []
+    let scrollProbe = LyricsScrollProbe()
+    private var clearWork: DispatchWorkItem?
+
+    /// 换句开始。还没有哪一行量过滚动量(列表还没画出来)时返回 false,调用方照旧带动画滚。
+    /// 上一笔还没定下的,滚动量定在此刻。
+    func begin(now: Date = Date()) -> Bool {
+        guard let before = scrollProbe.value else { return false }
+        var next = shifts.filter { now.timeIntervalSince($0.start) * 1000 < LyricsLineStagger.settleMs }
+        if let last = next.indices.last, next[last].amount == nil {
+            next[last].amount = before - next[last].scrollBefore
+        }
+        next.append(Shift(start: now, scrollBefore: before, amount: nil))
+        shifts = next
+        // scrollTo 在下一次更新生效,之后把这一笔的量定下来;隔一会儿再补一次,防那一次更新来得晚。
+        for delay in [0.1, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.settleLatest() }
+        }
+        clearWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.reset() }
+        clearWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + LyricsLineStagger.settleMs / 1000, execute: work)
+        return true
+    }
+
+    /// 最新那一笔换句的滚动量还没定下:此刻滚动量的变化就是那一下跳动(滚动指示条据此补间)。
+    var awaitingJump: Bool { shifts.last.map { $0.amount == nil } ?? false }
+
+    /// 最新那一笔还没定下、滚动量已经变了:定在这个值。
+    private func settleLatest() {
+        guard let last = shifts.indices.last, shifts[last].amount == nil, let now = scrollProbe.value,
+              abs(now - shifts[last].scrollBefore) > 0.5 else { return }
+        shifts[last].amount = now - shifts[last].scrollBefore
+    }
+
+    /// 别的滚动(进间奏)开始前把最新那一笔定下,免得各行把那次滚动也当成换句往回垫。
+    func freeze() {
+        guard let last = shifts.indices.last, shifts[last].amount == nil, let now = scrollProbe.value else { return }
+        shifts[last].amount = now - shifts[last].scrollBefore
+    }
+
+    /// 无动画定位(换歌、窗口恢复可见、改尺寸):不再错开,各行直接落位。
+    func reset() {
+        clearWork?.cancel()
+        clearWork = nil
+        if !shifts.isEmpty { shifts = [] }
+    }
+}
+
+/// 换句时这一行先垫回原处、再按 `LyricsLineStagger` 晚一点弹回(07 章决策 94)。滚动量在 `visualEffect` 里
+/// 现量:行在内容坐标与滚动坐标里的差就是此刻的滚动量,跟这一帧的布局同一份 —— `scrollTo` 还没生效时量出来
+/// 没变、不垫;生效那一帧量出整段、整段垫上,不会有错位的一帧。位移只在渲染时生效,不动布局。
+private struct LineStagger: ViewModifier {
+    @ObservedObject var model: LyricsLineStaggerModel
+    let fontSize: CGFloat
+
+    func body(content: Content) -> some View {
+        let shifts = model.shifts
+        let probe = model.scrollProbe
+        TimelineView(.animation(paused: shifts.isEmpty)) { context in
+            content.visualEffect { [now = context.date, fontSize = fontSize] effect, proxy in
+                effect.offset(y: Self.offset(shifts: shifts, now: now, proxy: proxy, fontSize: fontSize, probe: probe))
+            }
+        }
+    }
+
+    /// 顺手把此刻的滚动量记进 `probe`:没有换句时也记,换句开始那一刻要读它。
+    nonisolated private static func offset(shifts: [LyricsLineStaggerModel.Shift], now: Date,
+                                           proxy: GeometryProxy, fontSize: CGFloat,
+                                           probe: LyricsScrollProbe) -> CGFloat {
+        let inScroll = proxy.frame(in: .named("lyricsScroll")).minY
+        let scrollNow = proxy.frame(in: .named(lyricsContentSpace)).minY - inScroll
+        probe.record(scrollNow)
+        guard !shifts.isEmpty else { return 0 }
+        var total: CGFloat = 0
+        for shift in shifts {
+            let amount = shift.amount ?? (scrollNow - shift.scrollBefore)
+            guard abs(amount) > 0.5 else { continue }
+            // 这一行在这一笔开始前离视口顶多远。
+            let before = inScroll + scrollNow - shift.scrollBefore
+            let delay = LyricsLineStagger.delayMs(distanceFromTop: Double(before), fontSize: Double(fontSize))
+            let elapsed = now.timeIntervalSince(shift.start) * 1000
+            total += amount * CGFloat(LyricsLineStagger.remaining(elapsedMs: elapsed, delayMs: delay))
+        }
+        return total
+    }
+}
+
+/// 给滚动指示条喂滚动几何(07 章决策 95)。macOS 15 起用 `onScrollGeometryChange`,程序滚动和用户滚动都会回调;
+/// macOS 14 没有可靠的来源,指示条不画。别换回在内容上挂 GeometryReader 报 preference:那条在这里只送到一次默认值,
+/// 滚动时也不再更新。
+private struct LyricsScrollMetricsReporter: ViewModifier {
+    let metrics: LyricsScrollMetricsModel
+    let stagger: LyricsLineStaggerModel
+
+    private struct Extent: Equatable {
+        var offsetY: CGFloat
+        var contentHeight: CGFloat
+    }
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.onScrollGeometryChange(for: Extent.self) { geometry in
+                // 滚动量从 0 起;总高连上下边距,跟指示条自己量的视口高(滚动视图整高)同一口径。
+                Extent(offsetY: geometry.contentOffset.y + geometry.contentInsets.top,
+                       contentHeight: geometry.contentSize.height + geometry.contentInsets.top
+                           + geometry.contentInsets.bottom)
+            } action: { _, extent in
+                metrics.update(offsetY: extent.offsetY, contentHeight: extent.contentHeight,
+                               glides: stagger.awaitingJump)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// 滚动指示条的数据小 model:滚动期间逐帧更新,只有指示条订阅它,整窗 body 不陪跑(性能纪律同 WindowVolumeCapsule.Model)。
 @MainActor final class LyricsScrollMetricsModel: ObservableObject {
     @Published private(set) var offsetY: CGFloat = 0
     @Published private(set) var contentHeight: CGFloat = 0
-    func update(offsetY: CGFloat, contentHeight: CGFloat) {
-        if abs(offsetY - self.offsetY) > 0.5 { self.offsetY = offsetY }
+    /// 最近这次滚动量的变化要不要补间:换句是一次跳到位的(07 章决策 94),滑块跟着跳会一顿一顿,补间过去;
+    /// 用户自己滚时逐帧跟手。跟 offsetY 同一次更新里写,指示条重算时读到的是配套的值。
+    private(set) var glides = false
+
+    func update(offsetY: CGFloat, contentHeight: CGFloat, glides: Bool) {
+        if abs(offsetY - self.offsetY) > 0.5 {
+            self.glides = glides
+            self.offsetY = offsetY
+        }
         if abs(contentHeight - self.contentHeight) > 0.5 { self.contentHeight = contentHeight }
     }
 }
@@ -6032,6 +6377,9 @@ private struct LyricsScrollMetricsKey: PreferenceKey {
 private struct LyricsScrollIndicator: View {
     @ObservedObject var metrics: LyricsScrollMetricsModel
     let onArtwork: Bool
+
+    /// 换句那一下滑块的补间。
+    private static let glide: Animation = .smooth(duration: 0.45)
 
     var body: some View {
         GeometryReader { g in
@@ -6054,6 +6402,7 @@ private struct LyricsScrollIndicator: View {
                         .fill(ink.opacity(onArtwork ? 0.30 : 0.35))
                         .frame(width: 12, height: thumbH)
                         .offset(y: (trackH - thumbH) * f)
+                        .animation(metrics.glides ? Self.glide : nil, value: f)
                 }
                 .frame(width: 12)
                 .padding(.top, topInset)

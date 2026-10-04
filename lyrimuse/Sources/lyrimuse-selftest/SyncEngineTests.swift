@@ -580,6 +580,23 @@ func runSyncEngineTests() {
                     "lineFillSettledMs: 长音强调不延后定格")
     }
 
+    // ---- KaraokeLift: 歌词窗口里正在唱的词往上浮(Apple Music 实测拟合的阻尼弹簧) ----
+    do {
+        expectEqual(KaraokeLift.progress(elapsedMs: 0), 0, "lift: 开唱那一刻还没浮")
+        expectEqual(KaraokeLift.progress(elapsedMs: 120) < 0.12, true, "lift: 起步慢慢加速")
+        expectEqual(abs(KaraokeLift.progress(elapsedMs: 436) - 0.5) < 0.02, true, "lift: 约 0.44 秒浮到一半")
+        expectEqual(abs(KaraokeLift.progress(elapsedMs: 934) - 0.9) < 0.02, true, "lift: 约 0.93 秒浮到九成")
+        expectEqual(KaraokeLift.progress(elapsedMs: Double(KaraokeLift.durationMs)), 1, "lift: 到时长正好到顶")
+        let samples = stride(from: 0.0, through: Double(KaraokeLift.durationMs), by: 10)
+            .map { KaraokeLift.progress(elapsedMs: $0) }
+        expectEqual(zip(samples, samples.dropFirst()).allSatisfy { $0 <= $1 }, true, "lift: 一路往上、不回落")
+        // 短词跟长词同一条曲线:定格要等最后一个词唱完再浮一整段。
+        let line = [SyncedLyricWord(text: "has ", startMs: 1000, durationMs: 250),
+                    SyncedLyricWord(text: "gone", startMs: 1250, durationMs: 900)]
+        expectEqual(KaraokeLift.lineSettledMs(words: line), 2150 + KaraokeLift.durationMs,
+                    "lift: 一行等最后一个词唱完、再浮到顶才定格")
+    }
+
     // ---- LyricsWordEmphasis: 歌词窗口的长音强调(Apple Music 实测参数,只对拉丁字母的词) ----
     do {
         let why = SyncedLyricWord(text: "Why, ", startMs: 0, durationMs: 800)
@@ -617,6 +634,31 @@ func runSyncEngineTests() {
         expectEqual(tail.scale < 1.001 && tail.glow < 0.01 && tail.extraLift < 0.01, true,
                     "emphasis: 唱完前三样都已收回")
         expectEqual(LyricsWordEmphasis.frame(for: span, atMs: 5110), .none, "emphasis: 唱完之后没有效果")
+
+        // 逐字形错开:音节拆开的词按整词数字形,标点也算一个。
+        let slots = LyricsWordEmphasis.glyphSlots(for: [why, a, rest], spans: [nil, merged[0], merged[1]])
+        expectEqual(slots, [nil, .init(offset: 0, count: 5), .init(offset: 1, count: 5)],
+                    "emphasis: 每个 token 知道自己从整词第几个字形开始")
+        expectEqual(LyricsWordEmphasis.glyphCount("be? "), 3, "emphasis: 问号算一个字形,空格不算")
+
+        // 1.5 秒、4 个字形:一步 187.5ms(Apple 实测约 190ms),最后一个字形正好在词尾收完。
+        let held = LyricsWordEmphasis.Span(startMs: 1000, endMs: 2500)
+        let first = LyricsWordEmphasis.glyphWindow(for: held, glyph: 0, of: 4)
+        let last = LyricsWordEmphasis.glyphWindow(for: held, glyph: 3, of: 4)
+        expectEqual(first.startMs, 1000, "emphasis: 第一个字形跟词一起起动")
+        expectEqual(abs(last.startMs - 1562.5) < 1e-9, true, "emphasis: 每个字形晚一步(词长的 12.5%)")
+        expectEqual(abs(last.startMs + last.lengthMs - 2500) < 1e-9 && first.lengthMs == last.lengthMs, true,
+                    "emphasis: 每个字形窗口一样长,最后一个字形在词尾收完")
+        let seventh = LyricsWordEmphasis.glyphWindow(for: held, glyph: 6, of: 7)
+        expectEqual(abs(seventh.startMs - 1750) < 1e-9, true, "emphasis: 字形多时整排错开封顶半个词长")
+
+        // 第一个字形已经在抬、最后一个还没动;唱完时每个字形都收回。
+        expectEqual(LyricsWordEmphasis.glyphFrame(for: held, glyph: 0, of: 4, atMs: 1400).extraLift > 0.5, true,
+                    "emphasis: 第一个字形先抬")
+        expectEqual(LyricsWordEmphasis.glyphFrame(for: held, glyph: 3, of: 4, atMs: 1400), .none,
+                    "emphasis: 最后一个字形还没轮到")
+        expectEqual((0..<4).allSatisfy { LyricsWordEmphasis.glyphFrame(for: held, glyph: $0, of: 4, atMs: 2500) == .none },
+                    true, "emphasis: 逐字形三样也在词尾全部收回")
     }
 
     // ---- LyricDuet: 对唱歌词的左右分栏 ----
@@ -1759,9 +1801,10 @@ func runSyncEngineTests() {
 
     // ---- GapDotsCurve:前奏/间奏「•••」三颗呼吸圆点的曲线 ----
     //
-    // 四个展示面共用这一份:悬浮歌词 / 歌词窗口 / 灵动岛走 SwiftUI 的 LyricsGapDotsView,
+    // 悬浮歌词 / 灵动岛 / 菜单栏共用上半部分:前两面走 SwiftUI 的 LyricsGapDotsView,
     // 菜单栏那一面是 CALayer 手排、把这条曲线采样成 CAKeyframeAnimation。视图搬不过去,
     // 曲线必须是同一份,否则两套渲染的节奏迟早各漂各的 —— 下面这些断言就是钉这件事。
+    // 歌词窗口走 window 那一份,断言在最后。
     do {
         typealias G = GapDotsCurve
 
@@ -1816,5 +1859,28 @@ func runSyncEngineTests() {
                     "三点点亮: 点亮进度跟 reduceMotion 无关(它是信息不是装饰)")
 
         expectEqual(G.dotCount, 3, "三点: 就是三颗 —— 四个展示面与菜单栏的槽宽算式都按它算")
+
+        // 歌词窗口那一份(07 章决策 91):出现、周期变大变小、结束前涨回顶
+        let ws: (Double) -> Double = { G.windowScale(atMs: $0, startMs: 10_000, endMs: 30_000) }
+        expectEqual(abs(ws(10_000) - G.windowAppearScale) < 1e-9, true, "窗口三点: 出现那一刻是出现倍率")
+        expectEqual(abs(ws(9_000) - G.windowAppearScale) < 1e-9, true, "窗口三点: 间奏开始之前按出现那一刻画")
+        expectEqual(abs(ws(10_000 + G.windowAppearMs) - G.windowPeakScale) < 1e-9, true, "窗口三点: 出现之后涨到顶")
+        expectEqual(abs(ws(10_000 + G.windowAppearMs + G.windowBreathePeriodMs / 2) - 1) < 1e-9, true,
+                    "窗口三点: 半个周期缩到排版尺寸")
+        let wcurve = stride(from: 9_000.0, through: 31_000.0, by: 50).map(ws)
+        expectEqual(wcurve.allSatisfy { $0 >= 1 - 1e-9 && $0 <= G.windowPeakScale + 1e-9 }, true,
+                    "窗口三点: 倍率恒在 1…顶")
+        expectEqual(zip(wcurve, wcurve.dropFirst()).allSatisfy { abs($1 - $0) < 0.05 }, true,
+                    "窗口三点: 每 50ms 变化不到 0.05,没有跳变")
+        expectEqual(ws(30_000 - G.windowSwellMs - 500) < G.windowPeakScale - 0.01, true,
+                    "窗口三点: 离结束还远时不提前涨")
+        expectEqual(abs(ws(30_000 - G.windowSwellMs * 0.1) - G.windowPeakScale) < 1e-9, true, "窗口三点: 结束前涨回顶")
+        expectEqual(abs(ws(30_500) - G.windowPeakScale) < 1e-9, true, "窗口三点: 过了结束停在顶上")
+        expectEqual(G.windowScale(atMs: 12_345, startMs: 10_000, endMs: 30_000, reduceMotion: true), 1,
+                    "窗口三点: 减弱动态效果时不变大小")
+        expectEqual(G.windowOffset(dot: 1, scale: 1.3, dotSize: 10), 0, "窗口三点: 中间那颗不挪")
+        expectEqual(abs(G.windowOffset(dot: 0, scale: 1.3, dotSize: 10) + 3) < 1e-9
+                        && abs(G.windowOffset(dot: 2, scale: 1.3, dotSize: 10) - 3) < 1e-9, true,
+                    "窗口三点: 两侧各往外挪一个放大量,间隙不变")
     }
 }
