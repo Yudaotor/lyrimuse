@@ -100,10 +100,11 @@ public enum LyricSongwriters {
             }
             return false
         }
-        let words = s.lowercased()
+        // 标明 [String]、别写成 .map(String.init):String.init 重载多,这一串的类型检查会到将近一秒。
+        let words: [String] = s.lowercased()
             .replacingOccurrences(of: "&", with: " ").replacingOccurrences(of: "＆", with: " ")
             .split(whereSeparator: { !$0.isLetter })
-            .map(String.init)
+            .map { String($0) }
             .filter { $0 != "by" && $0 != "and" && $0 != "original" }
         return !words.isEmpty && words.allSatisfy(latinRoleWords.contains)
     }

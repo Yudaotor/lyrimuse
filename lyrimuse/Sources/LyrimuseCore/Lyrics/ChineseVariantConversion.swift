@@ -171,7 +171,7 @@ enum ChineseVariantConversion {
 
     /// 原文（简体）→ 繁体，等长，命中处逐字覆盖 ICU 的结果。每一条都在全库里看过实际命中的上下文；
     /// 加一条之前先看它在全库里的所有命中，会跨词误配的不收（「关系紧密」里的「系紧」、「一笔划算」里的「笔划」）。
-    private static let phrases: [Phrase] = [
+    private static let phrasePairs: [(String, String)] = [
         ("想象", "想像"), ("重复", "重複"), ("复眼", "複眼"), ("反复", "反覆"), ("答复", "答覆"), ("奇迹", "奇蹟"),
         ("事迹", "事蹟"), ("神迹", "神蹟"), ("苏醒", "甦醒"), ("复苏", "復甦"), ("尽量", "儘量"), ("尽快", "儘快"),
         ("尽早", "儘早"), ("尽可", "儘可"), ("尽速", "儘速"), ("愈合", "癒合"), ("痊愈", "痊癒"), ("裙摆", "裙襬"),
@@ -207,7 +207,10 @@ enum ChineseVariantConversion {
         ("后羿", "后羿"), ("游刃", "遊刃"), ("吟游", "吟遊"), ("唱游", "唱遊"), ("园游会", "園遊會"), ("重游", "重遊"),
         ("漫游", "漫遊"), ("周游", "周遊"), ("神游", "神遊"), ("游历", "遊歷"), ("游子", "遊子"), ("游客", "遊客"),
         ("游乐", "遊樂"), ("游行", "遊行"), ("云游", "雲遊"),
-    ].map { pair in
+    ]
+
+    // 表先标成 [(String, String)] 再 map:直接在字面量上 .map 时编译器要反推每个字面量的类型,类型检查一秒多。
+    private static let phrases: [Phrase] = phrasePairs.map { pair in
         Phrase(from: Array(pair.0.unicodeScalars), to: Array(pair.1.unicodeScalars), notBefore: notBefore[pair.0])
     }
 
