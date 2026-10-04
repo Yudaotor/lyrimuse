@@ -1,0 +1,105 @@
+{
+  "id": "cv-luminous-gate-qq",
+  "source": "qq",
+  "note": "声优名带「々」:QQ 把「水樹奈々」写成「水树奈奈」,歌手闸先把「々」按前一个字展开才对得上(按声优名查的那一批)",
+  "track": {
+    "artist": "風鳴翼(CV:水樹奈々)",
+    "title": "ルミナスゲイト",
+    "album": "戦姫絶唱シンフォギアAXZ キャラクターソングアルバム"
+  },
+  "captured_at": "2026-10-04",
+  "query": {
+    "artist": "水树奈々",
+    "title": "ルミナスゲイト",
+    "album": "戦姫绝唱シンフォギアAXZ キャラクターソングアルバム",
+    "duration_secs": 261.3
+  },
+  "local_duration_secs": 261.3,
+  "items": [
+    {
+      "id": "0039Nkaz2cJYR2",
+      "title": "ルミナスゲイト",
+      "artist": "水树奈奈",
+      "album": "戦姫絶唱シンフォギアAXZ キャラクターソングアルバム",
+      "duration_secs": 261
+    },
+    {
+      "id": "004MYmbZ2ijioI",
+      "title": "迷宮バタフライ (迷宫蝴蝶)",
+      "artist": "水树奈奈",
+      "album": "迷宮バタフライ",
+      "duration_secs": 301
+    },
+    {
+      "id": "002KwCNW1Adr0H",
+      "title": "Preserved Roses",
+      "artist": "水树奈奈/T.M.Revolution",
+      "album": "THE MUSEUM III",
+      "duration_secs": 211
+    },
+    {
+      "id": "0043rlqx3uTtBu",
+      "title": "BLACK DIAMOND(メジャー・バージョン)",
+      "artist": "水树奈奈",
+      "album": "BLACK DIAMOND",
+      "duration_secs": 225
+    },
+    {
+      "id": "002gZu6y0ju2Pr",
+      "title": "Heartful Song",
+      "artist": "水树奈奈",
+      "album": "しゅごキャラ! キャラクターソングコレクション",
+      "duration_secs": 285
+    },
+    {
+      "id": "0033TYHR49n33x",
+      "title": "深愛",
+      "artist": "水树奈奈",
+      "album": "THE MUSEUM",
+      "duration_secs": 296
+    },
+    {
+      "id": "001W49QY0OqM3s",
+      "title": "太陽が似合うよ (与太阳相称)",
+      "artist": "水树奈奈",
+      "album": "しゅごキャラ! キャラクターソングコレクション 2",
+      "duration_secs": 196
+    },
+    {
+      "id": "003HyBjw3czpN0",
+      "title": "永遠語り～El Ragna～ (永世语～El Ragna～)",
+      "artist": "水树奈奈/堀江由衣",
+      "album": "クロスアンジュ 天使と竜の輪舞(ロンド) オリジナルサウンドトラック3",
+      "duration_secs": 264
+    },
+    {
+      "id": "003eV0kL3e4JrL",
+      "title": "SOUND OF DESTINY",
+      "artist": "水树奈奈",
+      "album": "WHITE ALBUM ～綴られる冬の想い出～ ORIGINAL SOUNDTRACK",
+      "duration_secs": 300
+    },
+    {
+      "id": "001G209E01v1Mc",
+      "title": "ガラスの華 (玻璃般的虚荣)",
+      "artist": "水树奈奈",
+      "album": "WHITE ALBUM キャラクターソング 緒方理奈 (CV.水樹奈々)",
+      "duration_secs": 264
+    }
+  ],
+  "expect": {
+    "picked_id": "0039Nkaz2cJYR2",
+    "accepted_strict": [
+      "0039Nkaz2cJYR2"
+    ],
+    "picked_no_album": "0039Nkaz2cJYR2"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.11481056257176095,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

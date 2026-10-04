@@ -1078,9 +1078,10 @@ func looseContains(a, b string) bool {
 // 这个函数本身而不是在每个调用点各自补,是因为 artistCreditParts 本来就已经在这里做了
 // 一次 ToLower——同一个理由、同一个下沉位置。只转字符形式,不做 normLoose 那样的标点
 // 剥离,不影响下面的防仿冒判定(尾随分隔符等仍然原样保留)。
+// 「々」同样先展开(foldIterationMark),跟 artistMatches 同一个口径。
 func artistCreditParts(s string) []string {
 	var parts []string
-	for _, p := range strings.FieldsFunc(strings.TrimSpace(strings.ToLower(toSimplified(normalizeArtistCreditHanAnd(s)))), isArtistCreditSep) {
+	for _, p := range strings.FieldsFunc(strings.TrimSpace(strings.ToLower(toSimplified(normalizeArtistCreditHanAnd(foldIterationMark(s))))), isArtistCreditSep) {
 		if p = strings.TrimSpace(p); p != "" {
 			parts = append(parts, p)
 		}
@@ -1350,10 +1351,10 @@ func expectsCanonicalArtist(artist string) bool {
 // 跟"周杰伦"依旧不相等。
 //
 // 变音也折叠(foldDiacritics,同 normLoose):「Beyoncé」对「Beyonce」、「Elley Duhé」对「Elley Duhe」是同一个人。
-// 折完仍然逐字节比,不碰标点,防仿冒的精度不变。
+// 折完仍然逐字节比,不碰标点,防仿冒的精度不变。「々」按前一个字展开(foldIterationMark):中文曲库把「水樹奈々」写成「水树奈奈」。
 func artistMatches(a, b string) bool {
-	na := strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(a))))
-	nb := strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(b))))
+	na := strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(foldIterationMark(a)))))
+	nb := strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(foldIterationMark(b)))))
 	if na == "" || nb == "" {
 		return false
 	}
@@ -1420,6 +1421,13 @@ func artistMatches(a, b string) bool {
 		if artistMatches(na, n) {
 			return true
 		}
+	}
+	// 「译名 (原名)」「角色 (声优)」:括号里的名字也各比一次,见 parenAliasNames。
+	if ia := parenAliasNames(na); ia != "" && artistMatches(ia, nb) {
+		return true
+	}
+	if ib := parenAliasNames(nb); ib != "" && artistMatches(na, ib) {
+		return true
 	}
 	return false
 }

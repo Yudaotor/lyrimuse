@@ -110,7 +110,8 @@ func TestRetryArtistIdentitiesCVCredit(t *testing.T) {
 
 // 歌手比对:CV 署名对得上它写明的声优、角色(全角括号也算),对得上源里按声优列的合唱名单;反过来源里是 CV 署名、
 // 本地只写声优也对得上。两边都是 CV 署名时要有一对角色和声优都相同:同一位声优唱的另一个角色、同一个角色换了声优、
-// 同一团体的另几位成员都对不上。别的人、仿冒写法、不带 CV 的括号仍然对不上。
+// 同一团体的另几位成员都对不上。别的人、仿冒写法仍然对不上;不带 CV 的括号里的名字按同一位演唱者的另一个名字算
+// (见 artistnameform.go)。
 func TestArtistMatchesCVCredit(t *testing.T) {
 	cases := []struct {
 		a, b string
@@ -132,7 +133,8 @@ func TestArtistMatchesCVCredit(t *testing.T) {
 		{"(CV:声优甲)", "角色甲(CV:声优甲)", true},
 		{"角色甲(CV:声优甲)", "声优乙", false},
 		{"角色甲(CV:声优甲)", "声优甲-", false},
-		{"角色甲 (声优甲)", "声优甲", false},
+		{"角色甲 (声优甲)", "声优甲", true},
+		{"角色甲 (声优甲)", "声优乙", false},
 	}
 	for _, c := range cases {
 		if got := artistMatches(c.a, c.b); got != c.want {

@@ -1,0 +1,114 @@
+{
+  "id": "cv-zentenkou-irasshaimase-qq",
+  "source": "qq",
+  "note": "日文名写成「译名 (原名)」(「水濑祈 (水瀬いのり)」):括号里的名字也拿来比,歌手闸才对得上",
+  "track": {
+    "artist": "ココア(佐倉綾音) \u0026 チノ(CV.水瀬いのり)",
+    "title": "全天候型いらっしゃいませ",
+    "album": "ココア\u0026チノ TVアニメ「ご注文はうさぎですか?」キャラクターソング1 - EP"
+  },
+  "captured_at": "2026-10-05",
+  "query": {
+    "artist": "水瀬いのり",
+    "title": "全天候型いらっしゃいませ",
+    "album": "ココア\u0026チノ TVアニメ「ご注文はうさぎですか?」キャラクターソング1 - EP",
+    "duration_secs": 225.7
+  },
+  "local_duration_secs": 225.7,
+  "items": [
+    {
+      "id": "002ppHjn2CVTJP",
+      "title": "全天候型いらっしゃいませ (全天候欢迎光临)",
+      "artist": "佐仓绫音/水濑祈 (水瀬いのり)",
+      "album": "ココア\u0026チノ　TVアニメ｢ご注文はうさぎですか？｣キャラクターソング1",
+      "duration_secs": 225
+    },
+    {
+      "id": "004dCkDm0L3Uha",
+      "title": "全天候型いらっしゃいませ (全天候欢迎光临) (Inst.)",
+      "artist": "佐仓绫音/水濑祈 (水瀬いのり)",
+      "album": "ココア\u0026チノ　TVアニメ｢ご注文はうさぎですか？｣キャラクターソング1",
+      "duration_secs": 225
+    },
+    {
+      "id": "003pHUNb3CI20l",
+      "title": "全天候型いらっしゃいませ (Instrumental)",
+      "artist": "佐倉綾音/水瀬いのり",
+      "duration_secs": 18
+    },
+    {
+      "id": "002iaR4N2iJVxr",
+      "title": "不可思議のカルテ (不可思议的病历)",
+      "artist": "瀬戸麻沙美/东山奈央/种崎敦美/内田真礼/久保由利香/水濑祈 (水瀬いのり)",
+      "album": "【青春ブタ野郎はバニーガール先輩の夢を見ない】不可思議のカルテ",
+      "duration_secs": 239
+    },
+    {
+      "id": "004fFNh42KUIJp",
+      "title": "Wishing",
+      "artist": "水濑祈 (水瀬いのり)",
+      "album": "TVアニメ「Re:ゼロから始める異世界生活」後期エンディングテーマ「Stay Alive」歌:エミリア (CV:高橋李依)",
+      "duration_secs": 360
+    },
+    {
+      "id": "002bUSwM27B5dF",
+      "title": "動く、動く",
+      "artist": "水濑祈 (水瀬いのり)/久保由利香",
+      "album": "TVアニメ「少女終末旅行」オープニングテーマ「動く、動く」歌:チト (CV:水瀬いのり)、ユーリ (CV:久保ユリカ)",
+      "duration_secs": 274
+    },
+    {
+      "id": "001c6wj90WBbHL",
+      "title": "アイマイモコ (暧昧模糊)",
+      "artist": "水濑祈 (水瀬いのり)",
+      "album": "BLUE COMPASS",
+      "duration_secs": 261
+    },
+    {
+      "id": "000TwG9u4RK6Mb",
+      "title": "雨だれの歌",
+      "artist": "水濑祈 (水瀬いのり)/久保由利香",
+      "album": "TVアニメ「少女終末旅行」エンディングテーマ「More One Night」歌:チト (CV:水瀬いのり)、ユーリ (CV:久保ユリカ)",
+      "duration_secs": 262
+    },
+    {
+      "id": "003yZJO534uhb3",
+      "title": "More One Night (试听版)",
+      "artist": "水濑祈 (水瀬いのり)/久保由利香",
+      "album": "TVアニメ「少女終末旅行」エンディングテーマ「More One Night」歌:チト (CV:水瀬いのり)、ユーリ (CV:久保ユリカ)",
+      "duration_secs": 217
+    },
+    {
+      "id": "0013oGyF0aYaoU",
+      "title": "ここから、ここから (从这开始，从这开始)",
+      "artist": "水濑祈 (水瀬いのり)/花澤香菜/井口裕香/早見沙織",
+      "album": "TVアニメ「宇宙よりも遠い場所」エンディングテーマ「ここから、ここから」歌:玉木マリ (CV:水瀬いのり)、小淵沢報瀬 (CV:花澤香菜)、三宅日向 (CV:井口裕香)、白石結月 (CV:早見沙織)",
+      "duration_secs": 272
+    }
+  ],
+  "album_lookup": {
+    "003pHUNb3CI20l": ""
+  },
+  "expect": {
+    "picked_id": "002ppHjn2CVTJP",
+    "accepted_strict": [
+      "002ppHjn2CVTJP",
+      "004dCkDm0L3Uha",
+      "003pHUNb3CI20l"
+    ],
+    "accepted_loose": [
+      "002ppHjn2CVTJP",
+      "004dCkDm0L3Uha",
+      "003pHUNb3CI20l"
+    ],
+    "picked_no_album": "002ppHjn2CVTJP"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.310146211785551,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}
