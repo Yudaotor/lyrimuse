@@ -172,7 +172,7 @@ enum MusicAutomationPermission {
     // 超时分支赢了也出不来。
     // launchMusicAppIfNeeded 默认 true(SettingsView/OnboardingView 这两个"用户显式点
     // 请求权限按钮"的场景需要——不然 Music.app 没在运行时权限弹窗根本不出现,见下面
-    // ensureMusicAppRunning 调用点的注释);checkForCurrentPlayerSafely(播放控制快捷键/
+    // ensureAppRunning 调用点的注释);checkForCurrentPlayerSafely(播放控制快捷键/
     // 按钮专用)传 false,理由见那边的注释。
     static func requestWithTimeout(seconds: Double = 8, launchMusicAppIfNeeded: Bool = true) async -> MusicAutomationPermissionStatus? {
         await requestWithTimeout(bundleID: musicBundleID, seconds: seconds,
@@ -188,9 +188,9 @@ enum MusicAutomationPermission {
         // procNotFound(-600)分支,被当成"还没问过"静默返回,从来没有真正触发过
         // TCC 的系统弹窗。AEDeterminePermissionToAutomateTarget 的文档说它不需要
         // 目标在运行,但这台机器上的实际行为对不上文档——所以在真正发起检查之前,
-        // 先确保 Music.app 处于运行状态,让 bundle ID 一定能解析到一个真实进程。
+        // 先确保目标 App 处于运行状态,让 bundle ID 一定能解析到一个真实进程。
         // 用 activates=false 后台启动,不抢用户当前焦点,跟 AppDelegate.swift 里
-        // launchMusicOnLyrimuseOpen 那半用的是同一个"后台起、别抢前台"的做法。
+        // 「打开 Lyrimuse 时启动播放器」那半用的是同一个"后台起、别抢前台"的做法。
         if launchIfNeeded {
             await ensureAppRunning(bundleID: bundleID)
         }
