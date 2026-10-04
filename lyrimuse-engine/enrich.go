@@ -860,7 +860,7 @@ func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
 	// 补全分支,但触发条件不看它的话,只要那四个字段都齐了,一条缺 canonical 的记录就再也
 	// 没机会补上(同一张专辑里一半曲目报 "Leah Dou"、一半报"窦靖童",后者靠 canonical
 	// 归一,缺了就归不成)。
-	missingCanonical := e.CanonicalArtist == "" && len(artistCreditParts(artist)) <= 1
+	missingCanonical := e.CanonicalArtist == "" && expectsCanonicalArtist(artist)
 	// QQ 的专辑/歌手 mid 是后加的字段,存量条目一个都没有 —— 靠这一条把它们纳进自愈。
 	// 只在**已经拿到真·歌曲页链接**时才算缺:搜索兜底链接里没有 songmid、压根查不出 mid,
 	// 把它算成缺只会让那批条目白重试 5 次。

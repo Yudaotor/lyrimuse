@@ -1306,6 +1306,29 @@ func firstSlashCredit(s string) (string, bool) {
 	return "", false
 }
 
+// artistCreditPrimary 是认 feat. 的「第一位」:先在 feat 类分隔处截断,再交给 firstCreditedArtist。截断点在开头时
+// 不截(挡 `FT Island` 这类以 FT 开头的名字)。口径同 App 侧 ArtistCredit.primary,那边也认 feat.。
+// 只给读侧的「是不是同一个人」「是不是合唱串」用;往 Last.fm 写的歌手名仍走 firstCreditedArtist(resolveScrobbleTags),
+// 别换成这个。
+func artistCreditPrimary(s string) string {
+	base := strings.TrimSpace(s)
+	if loc := featCreditSepRe.FindStringIndex(base); loc != nil && loc[0] > 0 {
+		base = strings.TrimSpace(base[:loc[0]])
+	}
+	return firstCreditedArtist(base)
+}
+
+// isMultiArtistCredit:原始歌手串是不是多人合唱 / feat. credit。
+func isMultiArtistCredit(s string) bool {
+	return artistCreditPrimary(s) != strings.TrimSpace(s)
+}
+
+// expectsCanonicalArtist:这个歌手串该不该有 canonical_artist。只有单一歌手才给,合唱串为空是正常的。
+// artistCreditParts 那一档连 `/` 一起切(K/DA 也算合唱,维持原判),isMultiArtistCredit 补上 feat.。
+func expectsCanonicalArtist(artist string) bool {
+	return len(artistCreditParts(artist)) <= 1 && !isMultiArtistCredit(artist)
+}
+
 // artistMatches reports whether two artist names refer to the same person/act.
 // Unlike looseContains (fine for titles/albums, where stripping punctuation and
 // loose containment is desirable), artist IDENTITY must not be checked with

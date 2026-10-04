@@ -109,7 +109,7 @@ func lastfmTopArtistsPeriod(ctx context.Context, user, apiKey, period string, li
 
 // artistMergeNameKey 算"归并判定用"的归一化字符串——简繁、中英文艺名、多人合唱都要
 // 能判定成同一个人:
-//  1. firstCreditedArtist:多人合credit(如"Prince & The Revolution")先取第一位,
+//  1. artistCreditPrimary:多人合credit(如"Prince & The Revolution"、"A feat. B")先取第一位,
 //     不单独占一个歌手名额;
 //  2. resolveGenericArtistCanonicalName(musicbrainz.go):已知的英文/罗马化艺名换成
 //     本库常用中文名(比如"Dean Ting"→"丁世光")——从只查
@@ -124,7 +124,7 @@ func lastfmTopArtistsPeriod(ctx context.Context, user, apiKey, period string, li
 // resolveGenericArtistCanonicalName 在缓存不命中时发起真实网络请求——不像
 // isProbablyWrongLanguageLyrics 那样需要 resolvedArtistCJKHint 的纯读缓存约束。
 func artistMergeNameKey(name string) string {
-	first := firstCreditedArtist(name)
+	first := artistCreditPrimary(name)
 	if alias := resolveGenericArtistCanonicalName(context.Background(), first); alias != "" {
 		first = alias
 	}
@@ -152,7 +152,7 @@ func artistMergeFold(name string) string {
 // artistMergeDisplayName 的只读缓存版，步骤逐条相同，只是别名那一步查不到缓存就当没有。
 // 两对函数必须同步改。
 func artistMergeNameKeyCached(name string) string {
-	first := firstCreditedArtist(name)
+	first := artistCreditPrimary(name)
 	if alias := cachedGenericArtistCanonicalName(first); alias != "" {
 		first = alias
 	}
@@ -246,7 +246,7 @@ func warmArtistIdentityCache(entries []lastfmChartEntry, budget int) {
 	for _, e := range entries {
 		artistMergeNameKey(e.Name)
 		artistMergeDisplayName(e.Name)
-		first := firstCreditedArtist(e.Name)
+		first := artistCreditPrimary(e.Name)
 		mbid := ""
 		if strings.EqualFold(strings.TrimSpace(first), strings.TrimSpace(e.Name)) {
 			// Last.fm 的 mbid 属于整条 credit 串;只有单人条目才能把它当作
@@ -278,7 +278,7 @@ func artistMergeGroups(entries []lastfmChartEntry, resolve artistIdentityFn, nam
 	ids := make([]mbArtistIdentity, n)
 	for i, e := range entries {
 		nameKeys[i] = nameKey(e.Name)
-		first := firstCreditedArtist(e.Name)
+		first := artistCreditPrimary(e.Name)
 		mbid := ""
 		if strings.EqualFold(strings.TrimSpace(first), strings.TrimSpace(e.Name)) {
 			mbid = e.Mbid // 理由见 warmArtistIdentityCache 里同款判断

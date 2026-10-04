@@ -329,6 +329,8 @@ func main() {
 	startupStep("migrateKnownPlaceholderCovers", migrateKnownPlaceholderCovers)
 	// 决策存档里汽水候选封面缺 `~模板-处理参数` 后缀的,补上(见 sodacovermigrate.go)。
 	startupStep("migrateSodaCoverURLs", migrateSodaCoverURLs)
+	// 合唱串存下的 canonical_artist 清掉(见 multicreditcanonical.go),约束同上面几条。
+	startupStep("migrateMultiCreditCanonicalArtists", migrateMultiCreditCanonicalArtists)
 	// 用户手改 lyrics/ 里的文件同样是外来数据入口,但只进了改过的那几条:跑过的迁移这一轮只补扫它们,
 	// 不为一个文件把全库重扫一遍(见 recheckMigrationsFor)。
 	startupStep("importLyricsFromFiles", func() {

@@ -173,6 +173,10 @@ func canonicalArtistViaMusicBrainz(ctx context.Context, rawArtist string) string
 	if rawArtist == "" || containsHan(rawArtist) {
 		return ""
 	}
+	// 合唱串不查:整串拿去搜,搜到其中哪一位就记成哪一位,会把合唱缩成一个人。缓存里早年按整串存下的条目也不读。
+	if !expectsCanonicalArtist(rawArtist) {
+		return ""
+	}
 
 	// 手工表排在 MusicBrainz 前面:表里那几条恰恰是 MB 查错人的(「Lexie Liu」MB 给的是另一个人「刘昱妤」),
 	// 让 MB 先答就拦不住。命中时把缓存里的值也纠正过来 —— App 的歌手归并(LocalArtistAliases)直接读这份缓存,
@@ -809,6 +813,10 @@ func resolvedArtistCJKHint(rawArtist string) string {
 // 调用方各自还有更强的信号排在这整条通用兜底前面(比如 enrich.go 那边会先试网易云/QQ
 // 曲库对**这一首具体曲目**的匹配结果,那是比这里更强的证据)。
 func resolveGenericArtistCanonicalName(ctx context.Context, rawArtist string) string {
+	// 合唱串没有统一歌手名(理由同 canonicalArtistViaMusicBrainz),QQ 歌手搜索那一步也不问。
+	if !expectsCanonicalArtist(rawArtist) {
+		return ""
+	}
 	if v := knownArtistAlias(rawArtist); v != "" {
 		return v
 	}
@@ -821,6 +829,9 @@ func resolveGenericArtistCanonicalName(ctx context.Context, rawArtist string) st
 // cachedGenericArtistCanonicalName 是 resolveGenericArtistCanonicalName 的只读缓存版：三步的
 // 顺序与判据逐条相同，缓存不命中就当没有，不联网、不写缓存。两边改动必须同步。
 func cachedGenericArtistCanonicalName(rawArtist string) string {
+	if !expectsCanonicalArtist(rawArtist) {
+		return ""
+	}
 	if v := knownArtistAlias(rawArtist); v != "" {
 		return v
 	}
