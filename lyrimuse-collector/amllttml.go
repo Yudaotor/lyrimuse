@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -71,8 +72,11 @@ type amllResult struct {
 	// 背景人声挂到主句下面),词带背景人声自己的时间。一行主句里的几段背景人声并成一行。
 	bg string
 	// platform:按调用方给的 ID 取到时,是那个 ID 的平台目录(am-lyrics / spotify-lyrics / ncm-lyrics / qq-lyrics)。
-	// 候选借封面用,见 enrich.go 组装 amll 候选那段。按 ISRC / 歌名在索引里找到的为空。
+	// 候选借封面用(amllCandidateCover)。按 ISRC / 歌名在索引里找到的为空。
 	platform string
+	// ncmIDs / qqIDs / isrcs:head 里 <amll:meta> 登记的这份歌词那条录音的网易云 ID、QQ ID(songmid 与数字 ID
+	// 两种写法都有)、ISRC(normalizeAMLLISRC 归一过)。只有 parseAMLLTTMLFor 填,借封面用(amllCandidateCover)。
+	ncmIDs, qqIDs, isrcs []string
 	// matchTitle / matchArtist / matchAlbum:按 ISRC / 歌名在索引里找到时,索引里这一份的歌名 / 歌手 / 专辑(候选拿它们
 	// 去打分);按 ID 取到的为空。
 	matchTitle, matchArtist, matchAlbum string
@@ -95,6 +99,31 @@ func (r amllResult) translationLang(target string) string {
 	return target
 }
 
+// amllCandidateCover:amll 候选的封面。TTML 里没有图,借同一条录音的候选的,取下面第一张有的:
+//   - 取回这份 TTML 的 ID 是网易云 / QQ 那一路递过来的(platform 为 ncm-lyrics / qq-lyrics),借那一家;
+//   - head 登记的网易云 / QQ ID 里有那一路匹配到的曲目(QQ 的 songmid、数字 ID 两种写法都认),借那一家;
+//   - head 登记的 ISRC 跟 Apple Music / Deezer 报的对得上,借那一家。
+//
+// 都对不上就空着:按歌名搜来的候选未必是同一条录音,别拿它的封面兜底(见 rankLyricSourceResults 里候选封面那段)。
+func amllCandidateCover(r amllResult, ne neteaseInfo, qq, am, dz lyricSourceResult) string {
+	switch {
+	case r.platform == "ncm-lyrics" && ne.Cover != "":
+		return ne.Cover
+	case r.platform == "qq-lyrics" && qq.matchCover != "":
+		return qq.matchCover
+	case ne.Cover != "" && ne.SongID > 0 && slices.Contains(r.ncmIDs, strconv.FormatInt(ne.SongID, 10)):
+		return ne.Cover
+	case qq.matchCover != "" && slices.ContainsFunc(qq.trackIDs, func(id string) bool { return slices.Contains(r.qqIDs, id) }):
+		return qq.matchCover
+	}
+	for _, s := range []lyricSourceResult{am, dz} {
+		if s.matchCover != "" && slices.Contains(r.isrcs, normalizeAMLLISRC(s.isrc)) {
+			return s.matchCover
+		}
+	}
+	return ""
+}
+
 // ---- TTML 结构 ----
 //
 // 命名空间:ttm = http://www.w3.org/ns/ttml#metadata, xml = XML 内建。
@@ -103,8 +132,37 @@ func (r amllResult) translationLang(target string) string {
 type ttmlDoc struct {
 	XMLName xml.Name           `xml:"tt"`
 	Agents  []ttmlAgent        `xml:"head>metadata>agent"`
+	Meta    []ttmlMeta         `xml:"head>metadata>meta"`
 	ITunes  ttmlITunesMetadata `xml:"head>metadata>iTunesMetadata"`
 	Divs    []ttmlDiv          `xml:"body>div"`
+}
+
+// ttmlMeta:AMLL 写在 head 里的 <amll:meta key="…" value="…"/>。
+type ttmlMeta struct {
+	Key   string `xml:"key,attr"`
+	Value string `xml:"value,attr"`
+}
+
+// amllHeadIDs:head 登记的网易云 ID、QQ ID、ISRC,去掉首尾空白与空值(ISRC 按归一之后判空),保留文档顺序。
+func amllHeadIDs(meta []ttmlMeta) (ncm, qq, isrc []string) {
+	for _, m := range meta {
+		v := strings.TrimSpace(m.Value)
+		if m.Key == "isrc" {
+			v = normalizeAMLLISRC(v)
+		}
+		if v == "" {
+			continue
+		}
+		switch m.Key {
+		case "ncmMusicId":
+			ncm = append(ncm, v)
+		case "qqMusicId":
+			qq = append(qq, v)
+		case "isrc":
+			isrc = append(isrc, v)
+		}
+	}
+	return ncm, qq, isrc
 }
 
 // ttmlITunesMetadata:head 里 Apple 写法的译文与音译,每行一个 <text for="L1">,按 key 指回正文 <p itunes:key="L1">;
@@ -699,6 +757,7 @@ func parseTTMLLyrics(raw, target string, amll bool) (amllResult, bool) {
 	if !amll {
 		return r, true
 	}
+	r.ncmIDs, r.qqIDs, r.isrcs = amllHeadIDs(doc.Meta)
 	if r.tr != "" {
 		r.trLang = amllTrLangTag(trLang)
 	} else if t, lang := amllHeadTranslation(doc.ITunes, lines, target); t != "" {

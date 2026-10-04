@@ -1986,6 +1986,18 @@ func qqSongMetaByMid(ctx context.Context, mid string) qqSongMeta {
 	return qqSongMeta{id: d.id, interval: d.interval, language: d.language}
 }
 
+// qqTrackIDs:这首在 QQ 音乐上的两种 ID 写法 —— songmid,以及单曲详情里的数字 ID。数字 ID 只读缓存
+// (qqSongMetaCachedOnly):取逐字歌词、取封面都读过同一份单曲详情,不为它单独发请求;没缓存时只给 songmid。
+func qqTrackIDs(mid string) []string {
+	if mid == "" {
+		return nil
+	}
+	if id := qqSongMetaCachedOnly(mid).id; id != 0 {
+		return []string{mid, strconv.FormatInt(id, 10)}
+	}
+	return []string{mid}
+}
+
 // qqCanonicalLanguage 把 fcg_play_single_song.fcg 的 language 数字字段折算成
 // lyricCandidate.language 的取值(songLanguageMandarin/songLanguageCantonese),
 // 未识别的取值(含未实测过的枚举值)一律返回空串,不外推。

@@ -4095,6 +4095,9 @@ type lyricSourceResult struct {
 	matchAlbum, matchCover  string
 	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
 	isrc                    string  // 源报的这条录音的 ISRC,applemusic 与 deezer 填,见 isrcretry.go
+	// trackIDs:这一路匹配到的曲目在该平台上的 ID。只有 qq 走这里(songmid 与数字 ID,见 qqTrackIDs),amll 借封面时
+	// 跟 TTML 登记的 ID 比(amllCandidateCover);网易云的在 ne.SongID。
+	trackIDs []string
 	// language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
 	// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
 	language string
@@ -4183,7 +4186,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	amz := raw[amazonLocalLyricsSource]
 	sodaLyr, sodaYRC, sodaTr, sodaTitle, sodaArtist, sodaAlbum, sodaCover, sodaDur := soda.lyr, soda.yrc, soda.tr, soda.matchTitle, soda.matchArtist, soda.matchAlbum, soda.matchCover, soda.srcDur
 	amll := raw["amll"].amll
-	// 候选的封面只用它自己那个源给的,没有就空着(「搜索候选歌词」弹窗显示占位图,「解析决策」全空时整列不出现)。
+	// 候选的封面只用它自己那个源给的,没有就空着(「搜索候选歌词」弹窗显示占位图,「解析决策」全空时整列不出现);
+	// amll 自己没有封面,借能认定是同一条录音的那几家的(amllCandidateCover)。
 	// 别拿按本地歌名搜来的 Apple 封面给它兜底:那是"本地这首"的封面、不是这条候选的出处,候选缩略图本来是帮人
 	// 分辨"这条是哪个版本"的,套上一张别人的图反而像是对上了;所有没带封面的候选还会套成同一张,毫无区分度。
 	// 烘进正文的逐行中文译文(bakedtranslation.go):候选装配**之前**摘出来——共识、行数、
@@ -4334,19 +4338,12 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 所以 title/artist/album 直接沿用本地曲目信息,不会在标题/歌手/专辑那几项上
 		// 被扣分。按 ISRC / 歌名在索引里找到的(matchTitle 非空)报索引里的歌名 / 歌手 / 专辑,跟搜出来的源一样打分。
 		// 它没有自报时长,sourceReportedDurationSecs 留 0(= 该项不参与打分)。
-		// 它自己没有封面:按网易云 / QQ 的 ID 命中时,借那一家同一首歌的封面(ID 就是那一路递过来的);
-		// 按 Apple / Spotify 的 ID 命中、在索引里找到时不借 —— 手上那几家的封面是搜出来的,未必是同一条录音。
+		// 它自己没有封面,只借能认定是同一条录音的那几家的(amllCandidateCover)。
 		amllTitle, amllArtist, amllAlbum := title, artist, album
 		if amll.matchTitle != "" {
 			amllTitle, amllArtist, amllAlbum = amll.matchTitle, amll.matchArtist, amll.matchAlbum
 		}
-		amllCover := ""
-		switch amll.platform {
-		case "ncm-lyrics":
-			amllCover = ne.Cover
-		case "qq-lyrics":
-			amllCover = qqCover
-		}
+		amllCover := amllCandidateCover(amll, ne, qq, am, dz)
 		target := features().LyricsTranslationLanguage
 		amllTr, amllRoma := usableValueAdd(amll.lrc, amll.tr, amll.translationLang(target), amll.roma, target)
 		candidates = append(candidates, lyricCandidate{
@@ -4804,7 +4801,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// trackFoundNoLyrics 还要再过一道 `yrc == ""`:整行接口空、逐字(QRC)接口却拿到了词
 		// 的话,平台**是有歌词的**,只是这两条接口不同步 —— 那时报"平台没有歌词"是错的。
 		// 两套接口完全独立(见 qq.go 顶部注释),不假设它们一定同进同出。交出了纯文本时同样不报。
-		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, trackFoundNoLyrics: qqNoLyrics && yrc == "" && !qqPlainOnly, identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly}
+		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, trackFoundNoLyrics: qqNoLyrics && yrc == "" && !qqPlainOnly, identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
 	}()
 	go func() {
 		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时
