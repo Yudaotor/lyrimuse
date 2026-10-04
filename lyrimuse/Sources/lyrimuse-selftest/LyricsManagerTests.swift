@@ -1536,4 +1536,33 @@ func runLyricsManagerTests() {
         expectEqual(sweepGo.contains("`json:\"offline,omitempty\"`"), true,
                     "补搜进度: 引擎写的 offline 键跟 LyricsFillSweep.Info.offline 同名")
     }
+
+    // ---- 搜索框:首尾空白不算关键词(LyricsManagerSearch)/「重新匹配」撑到收尾 ----
+    do {
+        typealias Q = LyricsManagerSearch
+        expectEqual(Q.query("  周杰伦  "), "周杰伦", "搜索框: 去掉首尾半角空格")
+        expectEqual(Q.query("\u{3000}晴天\u{3000}"), "晴天", "搜索框: 全角空格同样去掉")
+        expectEqual(Q.query("\tBe Alright\n"), "Be Alright", "搜索框: 粘贴带进来的制表符和换行去掉")
+        expectEqual(Q.query("周 杰伦"), "周 杰伦", "搜索框: 中间的空格照留")
+        expectEqual(Q.query("   "), "", "搜索框: 只有空格等于没搜")
+        let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(view.contains("let query = LyricsManagerSearch.query(searchText)") && view.contains("committedSearchText = query"),
+                    true, "搜索框: 提交时用去掉首尾空白的关键词")
+        expectEqual(view.contains("searchText = query"), false, "搜索框: 框里打的内容不改,只是搜的时候不带首尾空白")
+        let sheet = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsSearchSheet.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(sheet.contains("artist: LyricsManagerSearch.query(artist),")
+                    && sheet.contains("title: LyricsManagerSearch.query(title),")
+                    && sheet.contains("album: LyricsManagerSearch.query(album),"),
+                    true, "搜索候选歌词: 歌名 / 歌手 / 专辑去掉首尾空白再交出去搜")
+        expectEqual(view.contains(".disabled(LyricsManagerSearch.query(searchText) == committedSearchText)"), true,
+                    "搜索框: 只多了首尾空格时搜索按钮仍是禁用(没有新东西要查)")
+        expectEqual(view.contains("if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {"), true,
+                    "搜索框: 删到只剩空格就回到全量列表")
+        expectEqual(view.contains("await store.reload(onlyIfChanged: true)\n                guard generation == rematchGeneration else { return }"),
+                    true, "重新匹配: 「正在重新匹配」撑到列表重读完再清,中间不空一下、按钮不提前解禁")
+    }
 }

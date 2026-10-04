@@ -1131,7 +1131,7 @@ struct LyricsSearchSheet: View {
         searchGeneration += 1
         let generation = searchGeneration
         // 没有歌名就不搜(没在播放时打开、或者用户把歌名清空了):空歌名交给引擎只会回一串英文报错。
-        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !LyricsManagerSearch.query(title).isEmpty else {
             isSearching = false
             return
         }
@@ -1150,7 +1150,10 @@ struct LyricsSearchSheet: View {
         enabledSources = Set(FeatureSettingsStore.shared.lyricsSources.map(\.rawValue))
         isSearching = true
         do {
-            try await LyricsSearchService.shared.search(owner: searchOwner, artist: artist, title: title, album: album,
+            // 交出去搜的三项去掉首尾空白(框里打的内容不动):多出来的空格会原样进各个源的查询。
+            try await LyricsSearchService.shared.search(owner: searchOwner, artist: LyricsManagerSearch.query(artist),
+                                                        title: LyricsManagerSearch.query(title),
+                                                        album: LyricsManagerSearch.query(album),
                                                         durationSecs: durationSecs) { update in
                 guard generation == searchGeneration else { return } // 已经有更新的一轮在跑,这批结果作废
                 candidates = update.candidates

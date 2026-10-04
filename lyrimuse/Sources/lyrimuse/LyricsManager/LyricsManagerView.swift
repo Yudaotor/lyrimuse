@@ -934,7 +934,9 @@ struct LyricsManagerView: View {
     }
 
     private func commitSearch() {
-        committedSearchText = searchText
+        // 只有拿去过滤的那份去掉首尾空白,框里打的内容不动。
+        let query = LyricsManagerSearch.query(searchText)
+        committedSearchText = query
     }
 
     /// 列表一行都没有时:筛选 / 关键词把全部条目滤掉了,就说清楚并给出清除的入口;真的一条记录都没有,说一句从哪来。
@@ -1048,13 +1050,13 @@ struct LyricsManagerView: View {
                 Image(systemName: "magnifyingglass")
             }
             .help(L10n.t("搜索（或在搜索框按回车）"))
-            .disabled(searchText == committedSearchText)
+            .disabled(LyricsManagerSearch.query(searchText) == committedSearchText)
         }
         .font(.callout)
         // 搜索词一清空就立刻回到全量列表,不需要等按钮/回车——这个方向零过滤开销,
         // 理由见 committedSearchText 声明处的注释。
         .onChange(of: searchText) { _, newValue in
-            if newValue.isEmpty && !committedSearchText.isEmpty {
+            if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {
                 committedSearchText = ""
             }
         }
