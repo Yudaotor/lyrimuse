@@ -204,6 +204,10 @@ func runSearchLyricsCLI(args []string) {
 	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。
 	searchCtx := withManualLyricSearch(context.Background())
 	searchCtx = withSearchQueryOriginal(searchCtx, *artist, *title, *album)
+	// 用 Kaset 放过的歌,lyricfind 按缓存里存的 YouTube Music 歌曲页取(ytmusicVideoLyric),跟自动解析同一个口径。
+	enrichMu.Lock()
+	searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, enrichKey(*artist, *title, *album))
+	enrichMu.Unlock()
 	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在

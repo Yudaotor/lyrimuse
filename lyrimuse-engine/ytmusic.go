@@ -55,11 +55,14 @@ import (
 // 没有带时间戳的、只有纯文本时交成 plainOnly(见 resolveYTMusicLyric)。
 type ytmusicResult struct {
 	lyrics, title, artist, album, cover string
-	// durationSecs:搜索阶段从匹配到的曲目自己解析出的时长(秒),来自 flexColumn 里的
-	// "m:ss" 文本(InnerTube 不直接给秒数,只给人类可读时长字符串,见 ytmusicParseDuration)。
+	// durationSecs:取到的那一版自己登记的时长(秒),来自 "m:ss" 文本(InnerTube 不直接给秒数,只给人类可读
+	// 时长字符串,见 ytmusicParseDurationText)。
 	durationSecs float64
 	// plainOnly:lyrics 是不带时间戳的纯文本(Android 身份拿不到带时间戳的、Web 身份那份有),语义同 lrclibResult.plainOnly。
 	plainOnly bool
+	// fromLocalClient:按播放器报的 videoId 取的(ytmusicVideoLyric),不是按名字搜的。同源加权的准入条件,见
+	// lyricCandidate.identityFromLocalClient。
+	fromLocalClient bool
 }
 
 const (
@@ -93,8 +96,9 @@ const (
 )
 
 var (
-	ytmusicMu    sync.Mutex
-	ytmusicCache = map[string]ytmusicResult{} // artist|title|album -> result
+	ytmusicMu sync.Mutex
+	// ytmusicCache:按名字搜到的按 artist|title|album 记,按 videoId 取到的按 ytmusicVideoCacheKey 记。只记取到了的。
+	ytmusicCache = map[string]ytmusicResult{}
 
 	// ytmusicVisitorMu 保护下面三个值,不跨 I/O 持有。
 	ytmusicVisitorMu sync.Mutex
@@ -395,6 +399,9 @@ type ytmusicSearchItem struct {
 	} `json:"musicResponsiveListItemRenderer"`
 }
 
+// ytmusicVideoTypeATV:InnerTube 给音轨版本(录音室曲目)标的视频类型。
+const ytmusicVideoTypeATV = "MUSIC_VIDEO_TYPE_ATV"
+
 // ytmusicParsedSearchItem 是 ytmusicSearchItem 抽完字段之后的干净形状,给挑选逻辑用。
 type ytmusicParsedSearchItem struct {
 	videoID              string
@@ -450,7 +457,7 @@ func ytmusicParseSearchItem(item ytmusicSearchItem) (ytmusicParsedSearchItem, bo
 		album:        album,
 		durationSecs: ytmusicParseDurationText(durationText),
 		cover:        cover,
-		isATV:        watch.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig.MusicVideoType == "MUSIC_VIDEO_TYPE_ATV",
+		isATV:        watch.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig.MusicVideoType == ytmusicVideoTypeATV,
 	}, true
 }
 
@@ -810,9 +817,15 @@ func ytmusicFetchPlainLyrics(ctx context.Context, browseID string) (string, stri
 
 // ---- 对外入口 ----
 
+// ytmusicLyric:ctx 上有这首的 videoId 时先按它取(ytmusicVideoLyric),取不到再按名字搜(resolveYTMusicLyric)。
 func ytmusicLyric(ctx context.Context, artist, title, album string, durationSecs float64) ytmusicResult {
 	if title == "" {
 		return ytmusicResult{}
+	}
+	if videoID := youTubeMusicVideoIDFrom(ctx); videoID != "" {
+		if r := ytmusicVideoLyric(ctx, videoID, ytmusicSearchHL(artist, title, album)); r.lyrics != "" {
+			return r
+		}
 	}
 	key := artist + "|" + title + "|" + album
 	ytmusicMu.Lock()
@@ -831,12 +844,61 @@ func ytmusicLyric(ctx context.Context, artist, title, album string, durationSecs
 	return r
 }
 
-// resolveYTMusicLyric 三跳:① search 拿 videoId(带 songs 过滤器,见 ytmusicSongsFilterParams),一条结果都没有时查一次
-// 地区限制(ytmusicCheckRegion),查出受限的那段时间里整源不发请求;② next 拿这首歌"歌词" tab 的 browseId(没有歌词
-// tab 就放弃);③ browse(切到 Android 客户端身份)拿带时间戳的逐行歌词,没有时用 Web 身份再 browse 一次取纯文本,
-// 交成 plainOnly。两种都**只在来源标注 LyricFind 时才接受**(ytmusicIsLyricFindSource,理由见文件头注):是 Musixmatch
-// 换个管道重发的,跟 musixmatch 源查到的是同一份数据,当成两个源会让跨源正文共识(contentConsensusPeers)虚高,当
-// "这一源没查到"。收下逐行歌词时连同 browseId 记一笔(ytmusicRememberTranslatable),机翻链第 0 级凭它取译文。
+// ytmusicVideoLyric:有这首的 videoId 时(Kaset 报的,见 youTubeMusicVideoIDFrom)直接取那一版的歌词,不按名字搜 —— 搜到的
+// 未必是正在放的那一版。取的是它的音轨版本(kasetAudioVideoIDFor:Kaset 待播队列里给它配的,没配就是它自己):MV / 视频
+// 版本的歌词页没有带时间戳的那份。next 按 hl 那种界面语言问(跟搜歌同一种,见 ytmusicSearchHL),一次拿到这一版的登记
+// 信息和歌词页。不是音轨版本(放的是 MV、队列里又没配)、没有歌词页、没问成、歌词不是 LyricFind 供的,都返回空,调用方
+// 照旧按名字搜。取到的标 fromLocalClient,按 ytmusicVideoCacheKey 记下。
+func ytmusicVideoLyric(ctx context.Context, videoID, hl string) ytmusicResult {
+	target := kasetAudioVideoIDFor(videoID)
+	if youtubeMusicWatchURL(target) == "" || ytmusicRegionBlockedNow(time.Now()) {
+		return ytmusicResult{}
+	}
+	key := ytmusicVideoCacheKey(hl, target)
+	ytmusicMu.Lock()
+	if v, ok := ytmusicCache[key]; ok {
+		ytmusicMu.Unlock()
+		return v
+	}
+	ytmusicMu.Unlock()
+	body := ytmusicContext(ytmusicWebClientName, ytmusicWebClientVersion())
+	if hl != "" {
+		if c, ok := body["context"].(map[string]any)["client"].(map[string]any); ok {
+			c["hl"] = hl
+		}
+	}
+	body["videoId"] = target
+	body["isAudioOnly"] = true
+	raw, err := ytmusicPost(ctx, "next", body, ytmusicCachedVisitorID())
+	if err != nil || len(raw) == 0 {
+		return ytmusicResult{}
+	}
+	credit, browseID := ytmusicCreditFromNext(raw, target), ytmusicLyricsBrowseID(raw)
+	if credit.videoType != ytmusicVideoTypeATV || browseID == "" {
+		return ytmusicResult{}
+	}
+	lyrics, plainOnly := ytmusicLyricsOf(ctx, browseID)
+	if lyrics == "" {
+		return ytmusicResult{}
+	}
+	r := ytmusicResult{
+		lyrics: lyrics, plainOnly: plainOnly, fromLocalClient: true,
+		title: credit.title, artist: credit.artist, album: credit.album, durationSecs: credit.durationSecs, cover: credit.cover,
+	}
+	ytmusicMu.Lock()
+	ytmusicCache[key] = r
+	ytmusicMu.Unlock()
+	return r
+}
+
+// ytmusicVideoCacheKey:按 videoId 取到的那份在 ytmusicCache 里的键。登记的歌名、署名随界面语言本地化,按 hl 分开记。
+func ytmusicVideoCacheKey(hl, videoID string) string {
+	return "video|" + hl + "|" + videoID
+}
+
+// resolveYTMusicLyric 按名字三跳:① search 拿 videoId(带 songs 过滤器,见 ytmusicSongsFilterParams),一条结果都没有时
+// 查一次地区限制(ytmusicCheckRegion),查出受限的那段时间里整源不发请求;② next 拿这首歌"歌词" tab 的 browseId(没有
+// 歌词 tab 就放弃);③ browse 取歌词(ytmusicLyricsOf)。
 //
 // 超时预算:search / next / browse 各 6s,没有带时间戳的歌词时多一次 browse;查地区限制那一次首页 8s,只在搜不到时、
 // ytmusicRegionRecheck 一次。
@@ -855,25 +917,34 @@ func resolveYTMusicLyric(ctx context.Context, artist, title, album string, durat
 	if browseID == "" {
 		return ytmusicResult{}
 	}
-	out := ytmusicResult{title: item.title, artist: item.artist, album: item.album, durationSecs: item.durationSecs, cover: item.cover}
+	lyrics, plainOnly := ytmusicLyricsOf(ctx, browseID)
+	if lyrics == "" {
+		return ytmusicResult{}
+	}
+	return ytmusicResult{lyrics: lyrics, plainOnly: plainOnly, title: item.title, artist: item.artist, album: item.album, durationSecs: item.durationSecs, cover: item.cover}
+}
+
+// ytmusicLyricsOf:browseId 那一页的歌词。先切到 Android 客户端身份取带时间戳的逐行歌词,没有时用 Web 身份再 browse 一次
+// 取纯文本(plainOnly)。两种都**只在来源标注 LyricFind 时才接受**(ytmusicIsLyricFindSource,理由见文件头注):是
+// Musixmatch 换个管道重发的,跟 musixmatch 源查到的是同一份数据,当成两个源会让跨源正文共识(contentConsensusPeers)
+// 虚高,当"这一源没查到"。收下逐行歌词时连同 browseId 记一笔(ytmusicRememberTranslatable),机翻链第 0 级凭它取译文。
+func ytmusicLyricsOf(ctx context.Context, browseID string) (lyrics string, plainOnly bool) {
 	lrc, source := ytmusicFetchTimedLyrics(ctx, browseID)
 	if isTimedLRC(lrc) {
 		if !ytmusicIsLyricFindSource(source) {
-			return ytmusicResult{}
+			return "", false
 		}
 		ytmusicRememberTranslatable(lrc, browseID)
-		out.lyrics = lrc
-		return out
+		return lrc, false
 	}
 	if source != "" && !ytmusicIsLyricFindSource(source) {
-		return ytmusicResult{}
+		return "", false
 	}
 	plain, plainSource := ytmusicFetchPlainLyrics(ctx, browseID)
 	if plain == "" || !ytmusicIsLyricFindSource(plainSource) {
-		return ytmusicResult{}
+		return "", false
 	}
-	out.lyrics, out.plainOnly = plain, true
-	return out
+	return plain, true
 }
 
 // ytmusicIsLyricFindSource 判断 timedLyricsData 的 sourceMessage 是不是标注了

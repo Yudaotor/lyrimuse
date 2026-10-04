@@ -4162,7 +4162,8 @@ type lyricSourceResult struct {
 	// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
 	amll amllResult
 	// identityFromLocalClient:这一份的身份由播放器客户端自己的本地数据给定,不是搜出来的。
-	// 五条本地路径会置位(kugou/applemusic 连正文都在本地,qq/netease/soda 只给权威 id)。
+	// 本地路径会置位(kugou/applemusic 连正文都在本地,qq/netease/soda 只给权威 id);lyricfind 按 Kaset 报的 videoId
+	// 取到时也置位(ytmusicVideoLyric)。
 	// 语义与唯一用途见 lyricCandidate.identityFromLocalClient —— 同源加权的准入条件。
 	// netease 那一路不走这个字段,它的事实在 ne.FromLocalClient 上(neteaseInfo 整个
 	// 结构本来就随 lyricSourceResult.ne 传过来,不必再抄一份)。
@@ -4284,7 +4285,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	if lfLyr != "" {
 		// 只有逐行,没有逐字/译文/罗马音——跟 lrclib 同一个形状(见 ytmusic.go 头注)。只有纯文本时 plainOnly 直通打分层那道
 		// 恒 -1 的闸,口径同 deezer/lrclib 的纯文本回退。
-		candidates = append(candidates, lyricCandidate{source: "lyricfind", lyrics: lfLyr, sourceReportedDurationSecs: lfDur, title: lfTitle, artist: lfArtist, album: lfAlbum, cover: lfCover, plainTextOnly: lfPlainOnly})
+		candidates = append(candidates, lyricCandidate{source: "lyricfind", lyrics: lfLyr, sourceReportedDurationSecs: lfDur, title: lfTitle, artist: lfArtist, album: lfAlbum, cover: lfCover, plainTextOnly: lfPlainOnly, identityFromLocalClient: lf.identityFromLocalClient})
 	}
 	if kuwoLyr != "" {
 		// 逐行正文 + 可选的逐字轨(kuwolrcx.go),译文只有从正文摘出来的烘入译文,没有罗马音
@@ -4925,7 +4926,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// ytmusicLyric 检索机制上是"查 YouTube Music",但对外只暴露真正是 LyricFind 的
 		// 那部分(见 ytmusic.go 头注的过滤理由)——source 因此标 "lyricfind" 不是 "ytmusic"。
 		r := ytmusicLyric(ctx, artist, title, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "lyricfind", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+		resultsCh <- lyricSourceResult{source: "lyricfind", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {
 		if skipSource("kuwo") {

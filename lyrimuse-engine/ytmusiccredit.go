@@ -58,6 +58,8 @@ type ytmusicCredit struct {
 	durationSecs float64
 	// albumBrowseID:专辑页的 id(browseId),同专辑预取拉曲目表用(kasetalbumprefetch.go)。
 	albumBrowseID string
+	// cover:这一版的缩略图(最大的那张换成原图地址,见 ytmusicOriginalThumbnail),音轨版本的是专辑封面。
+	cover string
 }
 
 var (
@@ -148,6 +150,7 @@ func ytmusicCreditFromNext(raw []byte, videoID string) ytmusicCredit {
 		out.album, out.albumBrowseID = strings.TrimSpace(album), albumBrowseID
 		out.videoType = ytmusicCreditVideoType(r["navigationEndpoint"])
 		out.durationSecs = ytmusicParseDurationText(ytmusicCreditRunsText(r["lengthText"], false))
+		out.cover = ytmusicCreditThumbnail(r["thumbnail"])
 	})
 	return out
 }
@@ -160,6 +163,20 @@ func ytmusicCreditVideoType(node any) string {
 	music, _ := configs["watchEndpointMusicConfig"].(map[string]any)
 	t, _ := music["musicVideoType"].(string)
 	return t
+}
+
+// ytmusicCreditThumbnail:缩略图列表(从小到大排)里最后一张,换成原图地址。
+func ytmusicCreditThumbnail(node any) string {
+	m, _ := node.(map[string]any)
+	list, _ := m["thumbnails"].([]any)
+	var u string
+	for _, t := range list {
+		th, _ := t.(map[string]any)
+		if s, _ := th["url"].(string); s != "" {
+			u = s
+		}
+	}
+	return ytmusicOriginalThumbnail(u)
 }
 
 // ytmusicCreditAlbumRun:署名行里链到专辑页(MUSIC_PAGE_TYPE_ALBUM)的那一段,连同专辑页的 id。音轨版本才有,MV / 视频

@@ -90,3 +90,17 @@ func TestSearchLyricsNotesPlaybackIDs(t *testing.T) {
 		t.Error("search-lyrics 要在开搜之前用 searchAppPlaybackJudge 读一次播放状态")
 	}
 }
+
+// search-lyrics 开搜之前按缓存里存的 YouTube Music 歌曲页给 ctx 挂上 videoId,lyricfind 跟自动解析一样按它取。
+func TestSearchLyricsAttachesCachedVideoID(t *testing.T) {
+	src, err := os.ReadFile("searchcli.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	attach := strings.Index(s, "searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, enrichKey(*artist, *title, *album))")
+	search := strings.Index(s, "scoredLyricCandidatesStreaming(searchCtx")
+	if attach < 0 || search < 0 || attach > search {
+		t.Error("search-lyrics 要在开搜之前按缓存给 ctx 挂上 videoId")
+	}
+}

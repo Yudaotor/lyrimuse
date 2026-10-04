@@ -15,6 +15,7 @@ const ytmCreditNext = `{"contents":{"singleColumnMusicWatchNextResultsRenderer":
 	`{"playlistPanelVideoRenderer":{"videoId":"qeMFqkcPYcg","title":{"runs":[{"text":"Sweet Dreams (Are Made Of This)"}]},` +
 	`"longBylineText":{"runs":[{"text":"Eurythmics","navigationEndpoint":{}},{"text":", "},{"text":"Annie Lennox","navigationEndpoint":{}},{"text":" & "},{"text":"Dave Stewart","navigationEndpoint":{}},{"text":" • "},{"text":"Sweet Dreams"}]}}},` +
 	`{"playlistPanelVideoRenderer":{"videoId":"ot0WzesOp6I","title":{"runs":[{"text":"Break"}]},"lengthText":{"runs":[{"text":"3:16"}]},` +
+	`"thumbnail":{"thumbnails":[{"url":"https://lh3.googleusercontent.com/brk=w60-h60-l90-rj","width":60,"height":60},{"url":"https://lh3.googleusercontent.com/brk=w544-h544-l90-rj","width":544,"height":544}]},` +
 	`"navigationEndpoint":{"watchEndpoint":{"videoId":"ot0WzesOp6I","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_ATV"}}}},` +
 	`"longBylineText":{"runs":[{"text":"Jhené Aiko","navigationEndpoint":{"browseEndpoint":{"browseId":"UCZONOh3FvcD","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_ARTIST"}}}}},` +
 	`{"text":" • "},{"text":"Westside Whimsy","navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_OUh6Wf","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_ALBUM"}}}}},{"text":" • "},{"text":"2026"}]}}}` +
@@ -44,10 +45,11 @@ func TestYTMusicCreditFromNext(t *testing.T) {
 		t.Errorf("多位歌手连同连接词原样拼: %+v", c)
 	}
 	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "ot0WzesOp6I"); c.album != "Westside Whimsy" || c.artist != "Jhené Aiko" ||
-		c.videoType != "MUSIC_VIDEO_TYPE_ATV" || c.durationSecs != 196 || c.albumBrowseID != "MPREb_OUh6Wf" {
-		t.Errorf("音轨版本的署名行里链到专辑页的那一段是专辑,另带类型与时长: %+v", c)
+		c.videoType != "MUSIC_VIDEO_TYPE_ATV" || c.durationSecs != 196 || c.albumBrowseID != "MPREb_OUh6Wf" ||
+		c.cover != "https://lh3.googleusercontent.com/brk=s0" {
+		t.Errorf("音轨版本的署名行里链到专辑页的那一段是专辑,另带类型、时长与最大那张缩略图的原图: %+v", c)
 	}
-	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "Qt2mbGP6vFI"); c.videoType != ytmusicVideoTypeOMV || c.durationSecs != 342 {
+	if c := ytmusicCreditFromNext([]byte(ytmCreditNext), "Qt2mbGP6vFI"); c.videoType != ytmusicVideoTypeOMV || c.durationSecs != 342 || c.cover != "" {
 		t.Errorf("官方 MV 的类型与时长: %+v", c)
 	}
 	for _, id := range []string{"Qt2mbGP6vFI", "qeMFqkcPYcg"} {

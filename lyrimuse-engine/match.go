@@ -323,10 +323,12 @@ type lyricCandidate struct {
 	// 的理由——但分数依旧钉死在 -1,不会被 pickLyricCandidate/自动路径当成可用候选。
 	plainTextOnly bool
 	// identityFromLocalClient:这条候选的**身份**(是哪首歌)由播放器客户端自己的本地数据
-	// 给定,不是拿歌名去搜索猜出来的。五条本地路径都置位,各自给的东西不同:
+	// 给定,不是拿歌名去搜索猜出来的。这几条路径置位,各自给的东西不同:
 	//   - kugou / applemusic:歌词正文就在本地(KRC / TTML),零网络;
 	//   - qq / netease / soda:本地只给权威曲目 id(songmid / songID / track id),正文照旧
-	//     联网取 —— 但"是哪首歌"这一步已经不经搜索、没有挑错版本的余地。
+	//     联网取 —— 但"是哪首歌"这一步已经不经搜索、没有挑错版本的余地;
+	//   - lyricfind:Kaset 报的 videoId(或它待播队列里给这首配的音轨版本),直接取那一版的歌词页
+	//     (ytmusicVideoLyric)。
 	// 唯一的用途是同源加权的准入(见 scoreLyricCandidateDetailed 里那一段):v21 起
 	// "跟当前播放器同源"不再单独成立,必须同时是本地给定身份的那一份。
 	//
