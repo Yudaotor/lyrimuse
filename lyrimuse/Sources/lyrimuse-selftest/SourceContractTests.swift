@@ -4298,6 +4298,17 @@ func runSourceContractTests() {
         expectEqual(stats.components(separatedBy: "links = ChartAppLinks.merged(artist: row.artist, name: row.name, variants: row.variants)")
                         .count - 1, 2,
                     "Last.fm 榜单: 专辑行、歌曲行的右键链接都按字段拼几种写法查到的(ChartAppLinks.merged)")
+        // 取数一开始就盖新鲜戳:正在取的榜单存快照时不带戳,标「正在取」要跟盖戳同步(不能等后台任务开跑)
+        expectEqual(stats.contains("fetchedAt: fetchedAt.filter { Self.persistedFetchedAtKeys.contains($0.key) && !chartLoadingKeys.contains($0.key) }"),
+                    true, "Last.fm 榜单: 存快照时正在取的榜单不带新鲜戳(旧内容不会借着新戳被当成刚取的)")
+        if let fn = stats.range(of: "func refreshChart(kind: ChartKind, period: Period) {"),
+           let insert = stats.range(of: "        chartLoadingKeys.insert(key)\n        chartFailedKeys.remove(key)\n        Task {",
+                                    range: fn.upperBound..<stats.endIndex),
+           let stamp = stats.range(of: "fetchedAt[key] = Date()", range: fn.upperBound..<stats.endIndex) {
+            expectEqual(stamp.lowerBound < insert.lowerBound, true, "Last.fm 榜单: 直连取数在开后台任务之前就标成正在取")
+        } else {
+            expectEqual(false, true, "Last.fm 榜单: 找不到 refreshChart 里的盖戳 / 标正在取")
+        }
         // 封面、右键链接、预取清单都靠 spellings 拿到并进来的写法
         expectEqual(stats.contains("[(detail, name)] + (variants ?? []).map { ($0.artist, $0.name) }")
                     && stats.contains("let image = spellings.lazy.compactMap { pool.images[ChartPool.imageKey(artist: $0.0, name: $0.1)] }.first"),

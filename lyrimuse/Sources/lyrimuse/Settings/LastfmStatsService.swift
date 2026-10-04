@@ -2796,7 +2796,9 @@ final class LastfmStatsService: ObservableObject {
                 onThisDay: onThisDayOutcome == .loaded ? onThisDay : nil,
                 onThisDayDay: onThisDayOutcome == .loaded ? onThisDayDay : nil,
                 onThisDayUpdatedAt: onThisDayOutcome == .loaded ? onThisDayUpdatedAt : nil,
-                fetchedAt: fetchedAt.filter { Self.persistedFetchedAtKeys.contains($0.key) },
+                // 正在取的榜单不带新鲜戳:戳是发请求前盖的,结果回来之前退出的话,戳会跟手上的旧内容一起落盘。
+                // 见 12 章决策 28。
+                fetchedAt: fetchedAt.filter { Self.persistedFetchedAtKeys.contains($0.key) && !chartLoadingKeys.contains($0.key) },
                 chartWindows: chartWindows,
                 chartLimit: ChartVisibleRows.fetchLimit,
                 periodListens: periodListens,
@@ -4090,9 +4092,10 @@ final class LastfmStatsService: ObservableObject {
             refreshMergedArtistChart(cacheKey: key, period: period)
             return
         }
+        // 跟盖戳同步标成正在取:存快照时正在取的榜单不带新鲜戳(见 scheduleSnapshotSave)。
+        chartLoadingKeys.insert(key)
+        chartFailedKeys.remove(key)
         Task {
-            chartLoadingKeys.insert(key)
-            chartFailedKeys.remove(key)
             defer { chartLoadingKeys.remove(key) }
             if !(await fetchChartDirect(kind: kind, period: period, key: key, cred: cred)) {
                 chartFailedKeys.insert(key)
