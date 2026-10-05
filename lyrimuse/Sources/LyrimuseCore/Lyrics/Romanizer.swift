@@ -135,6 +135,106 @@ public enum Romanizer {
         }
     }
 
+    /// 阿拉伯数字后面紧跟「人」「つ」的词(「2人」「３人」「3つ」)的读音:数字换成汉字数字再转写(二人 → futari、
+    /// 三つ → mittsu)。这两个量词前面的数字读法不规则,分词器读不对:半角数字加「人」整个出拼音(2rén),别的是
+    /// 数字单独切开、量词逐字硬读(2 nin、3 tsu)。别的量词(3時、100年)照用分词器的读音 —— 换成汉字数字反而会
+    /// 读错(三本 → mimoto),见 10 章决策 35。不是这个形状、带小数点或千分位、数字换不成汉字数字的返回 nil。
+    static func numeralReading(_ piece: String) -> String? {
+        guard let first = piece.unicodeScalars.first, asciiDigit(first) != nil,
+              let counter = piece.unicodeScalars.first(where: { asciiDigit($0) == nil }),
+              counter == "人" || counter == "つ"
+        else { return nil }
+        var converted = ""
+        var digits = ""
+        func flushDigits() -> Bool {
+            guard !digits.isEmpty else { return true }
+            guard !(digits.count > 1 && digits.hasPrefix("0")), let value = Int(digits),
+                  let kanji = kanjiNumeral(value)
+            else { return false }
+            converted += kanji
+            digits = ""
+            return true
+        }
+        for scalar in piece.unicodeScalars {
+            if let digit = asciiDigit(scalar) {
+                digits.unicodeScalars.append(digit)
+                continue
+            }
+            if [".", ",", "．", "，"].contains(Character(scalar)) { return nil }
+            guard flushDigits() else { return nil }
+            converted.unicodeScalars.append(scalar)
+        }
+        guard flushDigits() else { return nil }
+        let cf = converted as CFString
+        let tokenizer = CFStringTokenizerCreate(
+            nil, cf, CFRangeMake(0, CFStringGetLength(cf)), kCFStringTokenizerUnitWordBoundary, japaneseLocale)
+        var tokens: [String] = []
+        while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+            guard let reading = CFStringTokenizerCopyCurrentTokenAttribute(
+                tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String, !reading.isEmpty
+            else { return nil }
+            tokens.append(reading)
+        }
+        guard !tokens.isEmpty else { return nil }
+        return mergeSokuon(tokens).joined(separator: " ")
+    }
+
+    /// 半角或全角数字换成半角,其余返回 nil。
+    private static func asciiDigit(_ scalar: Unicode.Scalar) -> Unicode.Scalar? {
+        switch scalar.value {
+        case 0x30...0x39: return scalar
+        case 0xFF10...0xFF19: return Unicode.Scalar(scalar.value - 0xFF10 + 0x30)
+        default: return nil
+        }
+    }
+
+    /// 1 到 99999999 的汉字数字(2026 → 二千二十六),其余返回 nil。
+    private static func kanjiNumeral(_ value: Int) -> String? {
+        guard (1..<100_000_000).contains(value) else { return nil }
+        let names = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
+        func belowTenThousand(_ v: Int) -> String {
+            var out = ""
+            var rest = v
+            for (unit, name) in [(1000, "千"), (100, "百"), (10, "十")] {
+                let d = rest / unit
+                if d > 0 { out += (d == 1 ? "" : names[d]) + name }
+                rest %= unit
+            }
+            return out + names[rest]
+        }
+        let man = value / 10_000
+        return (man > 0 ? belowTenThousand(man) + "万" : "") + belowTenThousand(value % 10_000)
+    }
+
+    /// 分词器把数字单独切成一段、后面紧挨着「人」或「つ」开头的一段时(「２」「人」、「3」「つ」),两段并成一段、
+    /// 按 `numeralReading` 读。
+    private static func mergingNumeralCounters(_ segments: [JapaneseSegment], in text: String) -> [JapaneseSegment] {
+        guard segments.count > 1 else { return segments }
+        let units = Array(text.utf16)
+        func piece(_ seg: JapaneseSegment) -> String? {
+            guard seg.utf16End <= units.count else { return nil }
+            return String(utf16CodeUnits: Array(units[seg.utf16Start..<seg.utf16End]), count: seg.utf16Length)
+        }
+        var out: [JapaneseSegment] = []
+        var i = 0
+        while i < segments.count {
+            let seg = segments[i]
+            if i + 1 < segments.count, segments[i + 1].utf16Start == seg.utf16End,
+               let head = piece(seg), !head.isEmpty, head.unicodeScalars.allSatisfy({ asciiDigit($0) != nil }),
+               let tail = piece(segments[i + 1]), let first = tail.first, first == "人" || first == "つ",
+               let reading = numeralReading(head + tail)
+            {
+                out.append(JapaneseSegment(
+                    utf16Start: seg.utf16Start, utf16Length: seg.utf16Length + segments[i + 1].utf16Length, latin: reading))
+                i += 2
+                continue
+            }
+            out.append(seg)
+            i += 1
+        }
+        return out
+    }
+
     /// 一段日文按分词器切出来的片段:每片带它在原文里的 UTF-16 范围和拉丁读音。
     ///
     /// `japaneseReading` 把这些片段拼成一整行就丢掉了位置信息;要做 Apple Music 那种
@@ -495,6 +595,7 @@ public enum Romanizer {
             let piece = CFStringCreateWithSubstring(nil, cf, r) as String? ?? ""
             var latin = CFStringTokenizerCopyCurrentTokenAttribute(
                 tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String ?? ""
+            if let numeral = numeralReading(piece) { latin = numeral }
             // 歌词源自带的假名标注优先于分词器 —— 多音词该念哪个,标注说了算。
             if let annotated = annotatedReading(
                 in: text, utf16Start: r.location, utf16Length: r.length, marks: marks,
@@ -513,6 +614,7 @@ public enum Romanizer {
             out.append(JapaneseSegment(
                 utf16Start: r.location, utf16Length: r.length, latin: latin))
         }
+        out = mergingNumeralCounters(out, in: text)
         guard !songLooksJapanese else { return out }
         return applyCodeSwitchFallback(to: out, in: text, reading: hanRuns)
     }

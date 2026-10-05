@@ -797,6 +797,19 @@ func runRomanizationTests() {
             + Array(repeating: "你对我笑一次", count: 4) + ["サヨナラ"]).joined(separator: "\n")
         expectEqual(Romanizer.looksJapaneseSong(englishChineseWithJa), false, "整首: 中英混唱夹一行日文仍不算日文歌")
 
+        // 阿拉伯数字连着汉字的词按汉字数字读:分词器对「2人」给拼音、对「２人」逐字硬读。
+        expectEqual(Romanizer.japaneseSegments("2人だけの世界").first?.latin, "futari", "数字+汉字: 2人 读 futari")
+        expectEqual(Romanizer.japaneseSegments("２人は一つに").first?.latin, "futari", "数字+汉字: 全角 ２人 也读 futari")
+        let oneAlone = Romanizer.lineReading(
+            "私は1人泣く", songLooksJapanese: true, segments: Romanizer.japaneseSegments("私は1人泣く")) ?? ""
+        expectEqual(oneAlone.contains("hitori") && !oneAlone.contains("rén"), true, "数字+汉字: 整行读音里 1人 读 hitori")
+        let threeCount = Romanizer.lineReading(
+            "3つ数えて Honey", songLooksJapanese: true, segments: Romanizer.japaneseSegments("3つ数えて Honey")) ?? ""
+        expectEqual(threeCount.contains("mittsu"), true, "数字+つ: 3つ 读 mittsu")
+        expectEqual(Romanizer.japaneseSegments("10人の夢").first?.latin, "juu nin", "数字+人: 多位数按汉字数字读")
+        expectEqual(Romanizer.japaneseSegments("3本の矢").map(\.latin).joined(separator: " ").contains("mimoto"), false,
+                    "数字+汉字: 人 / つ 以外的量词照用分词器的读音(三本 会被读成人名)")
+
         // 真实形状:《这样吧》75 行里 3 行含假名(4.0%)→ 不是日文歌。
         let zhWithJa = (Array(repeating: "就从明天开始吧", count: 72) + Array(repeating: "サヨナラ", count: 3))
             .joined(separator: "\n")
