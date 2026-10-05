@@ -660,16 +660,19 @@ func runNotchTests() {
                     "翻牌: 换歌后退回上一首的系统封面(旧图),先不换")
         expectEqual(flipper.shown, .artwork(10), "翻牌: 等新封面期间接着显示原来那张")
         expectEqual(flipper.recheckAt, t0.addingTimeInterval(FP.awaitWindow), "翻牌: 等不来就到点再看一眼")
+        flipper.reveal()
         expectEqual(flipper.update(target: .artwork(20), now: t0 + 0.5, samePicture: samePicture), .flip,
                     "翻牌: 新封面到了翻")
         expectEqual(flipper.update(target: .artwork(21), now: t0 + 1, samePicture: samePicture), .cut,
                     "翻牌: 之后换上的高清版原地换,不再翻")
         var sameAlbum = FP(shown: .artwork(30))
         sameAlbum.trackChanged(staleArtwork: [30], now: t0)
+        sameAlbum.reveal()
         expectEqual(sameAlbum.update(target: .artwork(31), now: t0 + 0.4, samePicture: samePicture), .cut,
                     "翻牌: 同一张专辑的下一首(同一张画面)不翻")
         var noArtwork = FP(shown: .artwork(40))
         noArtwork.trackChanged(staleArtwork: [40], now: t0)
+        noArtwork.reveal()
         expectEqual(noArtwork.update(target: .empty, now: t0 + 1, samePicture: samePicture), nil,
                     "翻牌: 刚换歌就没图了,先留几秒等新封面")
         expectEqual(noArtwork.update(target: .empty, now: t0 + FP.shortHold, samePicture: samePicture), .fade,
@@ -681,12 +684,14 @@ func runNotchTests() {
         expectEqual(adBreak.update(target: .adIcon, now: t0, samePicture: samePicture), .cut,
                     "翻牌: 进广告直接换成喇叭")
         adBreak.trackChanged(staleArtwork: [61], now: t0 + 30)
+        adBreak.reveal()
         expectEqual(adBreak.update(target: .artwork(61), now: t0 + 30, samePicture: samePicture), nil,
                     "翻牌: 广告刚结束、封面还是旧图,先留着喇叭")
         expectEqual(adBreak.update(target: .artwork(70), now: t0 + 31, samePicture: samePicture), .flip,
                     "翻牌: 新封面到了,喇叭翻成封面")
         var adLate = FP(shown: .adIcon)
         adLate.trackChanged(staleArtwork: [61], now: t0)
+        adLate.reveal()
         expectEqual(adLate.update(target: .artwork(61), now: t0 + FP.shortHold, samePicture: samePicture), .flip,
                     "翻牌: 新封面迟迟不来,喇叭最多留几秒")
         var expired = FP(shown: .artwork(80))
@@ -702,15 +707,20 @@ func runNotchTests() {
         expectEqual(preRoll.update(target: .adIcon, now: t0 + 2, samePicture: samePicture), .cut,
                     "翻牌: 前贴片广告开始换成喇叭")
         preRoll.adBreakEnded(now: t0 + 8)
-        expectEqual(preRoll.update(target: .artwork(121), now: t0 + 8, samePicture: samePicture), .flip,
-                    "翻牌: 前贴片广告结束、这首的封面广告期间就到了,当场翻成封面")
+        expectEqual(preRoll.update(target: .artwork(121), now: t0 + 8, samePicture: samePicture), nil,
+                    "翻牌: 前贴片广告结束,喇叭等正片揭晓")
+        preRoll.reveal()
+        expectEqual(preRoll.update(target: .artwork(121), now: t0 + 8.3, samePicture: samePicture), .flip,
+                    "翻牌: 前贴片广告结束、这首的封面广告期间就到了,正片揭晓那一拍翻成封面")
         var preRollEarly = FP(shown: .artwork(140))
         preRollEarly.trackChanged(staleArtwork: [140], now: t0)
-        _ = preRollEarly.update(target: .artwork(141), now: t0 + 0.5, samePicture: samePicture)
+        expectEqual(preRollEarly.update(target: .artwork(141), now: t0 + 0.5, samePicture: samePicture), nil,
+                    "翻牌: 加载时这首的封面先到了,还没揭晓先不翻")
         _ = preRollEarly.update(target: .adIcon, now: t0 + 2, samePicture: samePicture)
         preRollEarly.adBreakEnded(now: t0 + 20)
-        expectEqual(preRollEarly.update(target: .artwork(141), now: t0 + 20, samePicture: samePicture), .flip,
-                    "翻牌: 封面进广告前就换好了,广告结束当场翻回来")
+        preRollEarly.reveal()
+        expectEqual(preRollEarly.update(target: .artwork(141), now: t0 + 20.3, samePicture: samePicture), .flip,
+                    "翻牌: 封面进广告前就到了,正片揭晓那一拍翻回来")
         var preRollLate = FP(shown: .artwork(130))
         preRollLate.trackChanged(staleArtwork: [130], now: t0)
         _ = preRollLate.update(target: .adIcon, now: t0 + 2, samePicture: samePicture)
@@ -718,8 +728,72 @@ func runNotchTests() {
         expectEqual(preRollLate.update(target: .artwork(130), now: t0 + 8, samePicture: samePicture), nil,
                     "翻牌: 前贴片广告结束、手上还是上一首的封面,先留着喇叭")
         expectEqual(preRollLate.recheckAt, t0.addingTimeInterval(8 + FP.shortHold), "翻牌: 广告结束后从结束那一刻重新计时")
+        preRollLate.reveal()
         expectEqual(preRollLate.update(target: .artwork(131), now: t0 + 9, samePicture: samePicture), .flip,
                     "翻牌: 广告结束后新封面到了翻成封面")
+        // 换歌翻牌的揭晓:换歌后封面等控制器揭晓(歌名掉下来的那一拍)才换;换成喇叭不等;揭晓等满 awaitWindow 还没来就原地换。
+        var revealLater = FP(shown: .artwork(150))
+        revealLater.trackChanged(staleArtwork: [150], now: t0)
+        expectEqual(revealLater.update(target: .artwork(160), now: t0 + 0.2, samePicture: samePicture), nil,
+                    "揭晓: 新封面比揭晓先到,先不翻")
+        expectEqual(revealLater.shown, .artwork(150), "揭晓: 揭晓之前接着显示原来那张")
+        revealLater.reveal()
+        expectEqual(revealLater.update(target: .artwork(160), now: t0 + 0.3, samePicture: samePicture), .flip,
+                    "揭晓: 揭晓那一拍翻")
+        var revealFirst = FP(shown: .artwork(170))
+        revealFirst.trackChanged(staleArtwork: [170], now: t0)
+        revealFirst.reveal()
+        expectEqual(revealFirst.update(target: .artwork(180), now: t0 + 1.2, samePicture: samePicture), .flip,
+                    "揭晓: 先揭晓的,新封面一到就翻")
+        var adNotGated = FP(shown: .artwork(190))
+        adNotGated.trackChanged(staleArtwork: [190], now: t0)
+        expectEqual(adNotGated.update(target: .adIcon, now: t0 + 0.1, samePicture: samePicture), .cut,
+                    "揭晓: 换成喇叭不等揭晓")
+        var fadeIn = FP(shown: .empty)
+        fadeIn.trackChanged(staleArtwork: [], now: t0)
+        expectEqual(fadeIn.update(target: .artwork(200), now: t0 + 0.2, samePicture: samePicture), nil,
+                    "揭晓: 上一首没封面,这首的封面也等揭晓再淡入")
+        fadeIn.reveal()
+        expectEqual(fadeIn.update(target: .artwork(200), now: t0 + 0.3, samePicture: samePicture), .fade,
+                    "揭晓: 揭晓那一拍淡入")
+        var neverRevealed = FP(shown: .artwork(210))
+        neverRevealed.trackChanged(staleArtwork: [210], now: t0)
+        expectEqual(neverRevealed.update(target: .artwork(220), now: t0 + 1, samePicture: samePicture), nil,
+                    "揭晓: 迟迟不揭晓,先不翻")
+        expectEqual(neverRevealed.recheckAt, t0.addingTimeInterval(FP.awaitWindow), "揭晓: 等不来揭晓,到点再看一眼")
+        expectEqual(neverRevealed.update(target: .artwork(220), now: t0 + FP.awaitWindow, samePicture: samePicture), .cut,
+                    "揭晓: 等满 awaitWindow 还没揭晓,原地换")
+        // 控制器那一侧:判成要掉时等这首的封面,封面到了跟掉歌名同一拍;最多等 artworkWait;判成不掉当场揭晓。
+        typealias RG = NotchTrackRevealGate
+        var gate = RG()
+        gate.trackChanged()
+        expectEqual(gate.decided(key: "B", wantsDrop: true, now: t0), nil, "揭晓: 判成要掉、封面还没到,先等")
+        expectEqual(gate.deadline, t0.addingTimeInterval(RG.artworkWait), "揭晓: 最多等 artworkWait")
+        expectEqual(gate.artworkArrived(), RG.Reveal(key: "B", drops: true), "揭晓: 封面到了,掉歌名跟翻封面同一拍")
+        expectEqual(gate.artworkArrived(), nil, "揭晓: 揭晓过了,之后再换图不再揭晓")
+        gate.trackChanged()
+        _ = gate.artworkArrived()
+        expectEqual(gate.decided(key: "C", wantsDrop: true, now: t0 + 5), RG.Reveal(key: "C", drops: true),
+                    "揭晓: 封面比判定先到,判定那一拍就揭晓")
+        gate.trackChanged()
+        _ = gate.decided(key: "D", wantsDrop: true, now: t0 + 10)
+        expectEqual(gate.artworkWaitExpired(), RG.Reveal(key: "D", drops: true), "揭晓: 封面等不来,到点先掉歌名")
+        expectEqual(gate.deadline, nil, "揭晓: 到点揭晓之后不再等")
+        gate.trackChanged()
+        expectEqual(gate.decided(key: "E", wantsDrop: false, now: t0 + 20), RG.Reveal(key: "E", drops: false),
+                    "揭晓: 判成不掉(第一首、广告、开关关着、卡片看不见),当场揭晓")
+        gate.trackChanged()
+        _ = gate.decided(key: "F", wantsDrop: true, now: t0 + 30)
+        gate.trackChanged()
+        expectEqual(gate.artworkArrived(), nil, "揭晓: 等封面时又换了一首,上一次判定作废")
+        expectEqual(gate.artworkWaitExpired(), nil, "揭晓: 作废的判定到点也不揭晓")
+        var preRollGate = RG()
+        preRollGate.trackChanged()
+        _ = preRollGate.artworkArrived()
+        expectEqual(preRollGate.decided(key: "ad:G", wantsDrop: false, now: t0), RG.Reveal(key: "ad:G", drops: false),
+                    "揭晓: 前贴片广告那一拍判成不掉,当场揭晓")
+        expectEqual(preRollGate.decided(key: "G", wantsDrop: true, now: t0 + 20), RG.Reveal(key: "G", drops: true),
+                    "揭晓: 前贴片广告结束、歌名没变,封面广告期间就到了,正片那一拍就掉歌名")
         let flipViewSrc = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/NotchTrackChangeViews.swift"),
             encoding: .utf8)) ?? ""
@@ -985,6 +1059,20 @@ func runNotchTests() {
                         && playbackSrc.contains("let newIsWaitingToPlay = snapshot.isWaitingToPlay == true")
                         && playbackSrc.contains("if isWaitingToPlay { isWaitingToPlay = false }"), true,
                         "换歌翻牌契约: 声音还没走起来时先不判(播放源发布、协调器转出、控制器接进判定),停播清掉")
+            expectEqual(ctrlSrc.contains("PlaybackCoordinator.shared.$artworkImage.dropFirst().map { _ in () }")
+                        && ctrlSrc.contains("PlaybackCoordinator.shared.$highResArtworkImage.dropFirst().compactMap { $0 }")
+                        && ctrlSrc.contains(".sink { [weak self] _ in self?.trackIdentityChanged() }")
+                        && ctrlSrc.contains(".sink { [weak self] in self?.artworkArrived() }")
+                        && ctrlSrc.contains("revealGate.decided(key: key, wantsDrop: wantsDrop, now: now)")
+                        && ctrlSrc.contains("if revealedTrackKey != reveal.key { revealedTrackKey = reveal.key }")
+                        && ctrlSrc.contains("func revealsTrack(_ key: String) -> Bool { revealedTrackKey == key }")
+                        && ctrlSrc.contains("artworkArrivalObserver?.cancel()"), true,
+                        "换歌翻牌契约: 揭晓接线(歌名一变当封面没到、封面到了、去抖后的判定),收尾取消订阅")
+            expectEqual(stageSrc.contains("func revealsTrack(_ key: String) -> Bool { true }"), true,
+                        "换歌翻牌契约: 预览不等揭晓")
+            expectEqual(v.contains("isRevealed: controller.revealsTrack(NotchTrackDropRules.key(")
+                        && dropSrc.contains("if new.isRevealed { planner.reveal() }"), true,
+                        "换歌翻牌契约: 耳朵里的封面按揭晓翻")
         }
 
         // 自动跳过:只在页面确认能跳时按,一条广告最多两次,跳过了 / 缺权限就不再试。

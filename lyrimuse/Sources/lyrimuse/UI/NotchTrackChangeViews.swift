@@ -111,7 +111,8 @@ enum NotchArtworkFingerprints {
 
 /// 换歌翻牌:耳朵里那枚封面,一直开着、不看设置。左耳这一枚连广告时的喇叭一起画,
 /// 广告结束、新封面到了,喇叭才能翻成封面。什么时候翻、什么时候原地换、什么时候先留着原来那一面,
-/// 规则都在 Core `NotchArtworkFlipPlanner`;这里只执行。
+/// 规则都在 Core `NotchArtworkFlipPlanner`;这里只执行。换歌后等灵动岛控制器揭晓了这一首(`isRevealed`)才翻,
+/// 跟歌名掉下来同一拍。
 ///
 /// 歌名或歌手变了才算换歌。广告结束、回到的还是进广告前那首(Kaset 的前贴片广告报的就是这首)不算换歌,广告期间到的
 /// 封面当场就能翻上来(`NotchArtworkFlipPlanner.adBreakEnded`);别的进出广告照换歌算。
@@ -125,6 +126,7 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
     private let highResImage: NSImage?
     private let overrideImage: NSImage?
     private let isAdBreak: Bool
+    private let isRevealed: Bool
     private let alignment: Alignment
     /// false = 「减弱动态效果」开着:该翻的时候原地淡入。
     private let animated: Bool
@@ -144,8 +146,9 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
     /// - Parameters:
     ///   - overrideImage: 盖过封面的那张(电台口白时的台标)。
     ///   - isAdBreak: 这一格此刻该画喇叭(只有左耳传 true)。
+    ///   - isRevealed: 灵动岛控制器揭晓了此刻这一首(`NotchChromeSource.revealsTrack`)。
     init(title: String, artist: String, artworkImage: NSImage?, highResImage: NSImage?, overrideImage: NSImage?,
-         isAdBreak: Bool, alignment: Alignment, animated: Bool,
+         isAdBreak: Bool, isRevealed: Bool, alignment: Alignment, animated: Bool,
          @ViewBuilder artwork: @escaping (NSImage) -> Artwork,
          @ViewBuilder adIcon: @escaping () -> AdIcon) {
         self.track = Track(title: title, artist: artist)
@@ -153,6 +156,7 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
         self.highResImage = highResImage
         self.overrideImage = overrideImage
         self.isAdBreak = isAdBreak
+        self.isRevealed = isRevealed
         self.alignment = alignment
         self.animated = animated
         self.artwork = artwork
@@ -171,6 +175,7 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
     private struct Input: Equatable {
         let track: Track
         let isAdBreak: Bool
+        let isRevealed: Bool
         let artwork: ObjectIdentifier?
         let highRes: ObjectIdentifier?
         let override: ObjectIdentifier?
@@ -181,7 +186,7 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
     }
 
     private var input: Input {
-        Input(track: track, isAdBreak: isAdBreak, artwork: artworkImage.map(ObjectIdentifier.init),
+        Input(track: track, isAdBreak: isAdBreak, isRevealed: isRevealed, artwork: artworkImage.map(ObjectIdentifier.init),
               highRes: highResImage.map(ObjectIdentifier.init), override: overrideImage.map(ObjectIdentifier.init))
     }
 
@@ -244,6 +249,7 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
         } else if old.track != new.track || old.isAdBreak != new.isAdBreak {
             planner.trackChanged(staleArtwork: previousImages.map { NotchArtworkRef(image: $0) }, now: now)
         }
+        if new.isRevealed { planner.reveal() }
         previousImages = [artworkImage, highResImage, overrideImage].compactMap { $0 }
         apply(planner.update(target: currentTarget, now: now, samePicture: { NotchArtworkFingerprints.same($0, $1) }))
     }

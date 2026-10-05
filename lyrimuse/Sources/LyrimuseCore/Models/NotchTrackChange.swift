@@ -71,6 +71,9 @@ public struct NotchTrackDropTracker: Sendable {
 /// 换歌那一刻耳朵用得上的图(包括马上会被撤掉的高清图、退回来的上一首系统封面)都记成旧图。旧图不算新封面:
 /// 新图到之前接着显示原来那一面,到了才翻;翻之前比一眼是不是同一张(同一张专辑),是就原地换、不翻。
 /// 等新封面最多等 `awaitWindow`,过了之后的换图一律原地换(跟没有这个功能时一样)。
+///
+/// 换歌(含广告结束)之后,换成封面或空还要等灵动岛控制器揭晓这一首(`reveal`,歌名掉下来的那一拍,见
+/// `NotchTrackRevealGate`),歌名和封面同一拍出来;换成喇叭不等。揭晓等满 `awaitWindow` 还没来就不再等。
 public struct NotchArtworkFlipPlanner<Token: Equatable> {
     public enum Face: Equatable {
         case empty
@@ -97,6 +100,8 @@ public struct NotchArtworkFlipPlanner<Token: Equatable> {
     public private(set) var recheckAt: Date?
     private var stale: [Token] = []
     private var changedAt: Date?
+    /// 这一次换歌揭晓了没有;没换歌时恒为 true。
+    private var revealed = true
 
     public init(shown: Face) {
         self.shown = shown
@@ -109,14 +114,21 @@ public struct NotchArtworkFlipPlanner<Token: Equatable> {
         if case .artwork(let token) = shown, !stale.contains(token) { stale.append(token) }
         changedAt = now
         recheckAt = nil
+        revealed = false
     }
 
     /// 广告结束、回到的还是进广告前那首(前贴片广告报的就是这首的身份)。不算换歌:广告期间到的图就是这首的,不记成旧图,
-    /// 手上有就当场翻;等新封面的计时从这一刻重新算,手上还只有旧图或没图时喇叭照样最多再留 `shortHold`。
+    /// 手上有就在揭晓那一拍翻;等新封面的计时从这一刻重新算,手上还只有旧图或没图时喇叭照样最多再留 `shortHold`。
     public mutating func adBreakEnded(now: Date) {
         if !isAwaiting(now: now) { stale = [] }
         changedAt = now
         recheckAt = nil
+        revealed = false
+    }
+
+    /// 灵动岛控制器揭晓了这一首(歌名掉下来的那一拍,或判成不掉的那一拍)。
+    public mutating func reveal() {
+        revealed = true
     }
 
     /// 这一刻该显示 `target`。`samePicture` 判两张图是不是同一张封面,只在要翻的时候调。
@@ -131,6 +143,8 @@ public struct NotchArtworkFlipPlanner<Token: Equatable> {
         let elapsed = changedAt.map { now.timeIntervalSince($0) } ?? .infinity
         let targetIsStale: Bool
         if case .artwork(let token) = target { targetIsStale = stale.contains(token) } else { targetIsStale = false }
+        // 换成封面或空要等揭晓;换成喇叭不等(下面第一支)。
+        let waitsForReveal = awaiting && !revealed
 
         switch (shown, target) {
         case (_, .adIcon):
@@ -140,6 +154,7 @@ public struct NotchArtworkFlipPlanner<Token: Equatable> {
             if awaiting, targetIsStale || target == .empty, elapsed < Self.shortHold {
                 return hold(Self.shortHold)
             }
+            if waitsForReveal { return hold(Self.awaitWindow) }
             finish(target)
             return target == .empty ? .fade : .flip
         case (.artwork(let from), .artwork(let to)):
@@ -147,14 +162,16 @@ public struct NotchArtworkFlipPlanner<Token: Equatable> {
                 shown = target
                 return .cut
             }
-            if targetIsStale { return hold(Self.awaitWindow) }
+            if targetIsStale || waitsForReveal { return hold(Self.awaitWindow) }
             finish(target)
             return samePicture(from, to) ? .cut : .flip
         case (.artwork, .empty):
             if awaiting, elapsed < Self.shortHold { return hold(Self.shortHold) }
+            if waitsForReveal { return hold(Self.awaitWindow) }
             finish(target)
             return .fade
         case (.empty, _):
+            if waitsForReveal { return hold(Self.awaitWindow) }
             finish(target)
             return .fade
         }
@@ -175,6 +192,76 @@ public struct NotchArtworkFlipPlanner<Token: Equatable> {
         changedAt = nil
         stale = []
         recheckAt = nil
+    }
+}
+
+/// 换歌翻牌:歌名掉下来和耳朵里的封面翻过来对到同一拍(揭晓)。灵动岛控制器喂三件事:歌名或歌手变了(不去抖)、换歌之后
+/// 封面到了、去抖之后掉不掉歌名的判定;拿回揭晓哪一首、这一拍掉不掉歌名。耳朵里的封面等揭晓了才翻
+/// (`NotchArtworkFlipPlanner.reveal`)。
+///
+/// 判成要掉、这首的封面还没到:先不揭晓,封面到了一起揭晓;最多等 `artworkWait`,等不来先掉歌名,封面到了再翻。
+/// 判成不掉(第一首、广告、开关关着、卡片此刻看不见):当场揭晓。见 05 章决策 63。
+public struct NotchTrackRevealGate: Sendable {
+    public struct Reveal: Equatable, Sendable {
+        /// 揭晓的曲目(`NotchTrackDropRules.key`)。
+        public let key: String
+        /// 这一拍掉歌名。
+        public let drops: Bool
+
+        public init(key: String, drops: Bool) {
+            self.key = key
+            self.drops = drops
+        }
+    }
+
+    /// 判成要掉、这首的封面还没到时,最多等多久。
+    public static var artworkWait: TimeInterval { 2 }
+
+    /// 正等着封面的那次判定(曲目键);nil = 没在等。
+    public private(set) var pendingKey: String?
+    /// 等到什么时候,到点调 `artworkWaitExpired`;没在等时 nil。
+    public private(set) var deadline: Date?
+    /// 上次歌名或歌手变了之后,封面到过没有。
+    private var hasArtwork = true
+
+    public init() {}
+
+    /// 歌名或歌手变了:这首的封面还没到,还在等的那次判定作废。
+    public mutating func trackChanged() {
+        hasArtwork = false
+        cancel()
+    }
+
+    /// 还在等的那次判定作废(曲目又变了、还没判)。
+    public mutating func cancel() {
+        pendingKey = nil
+        deadline = nil
+    }
+
+    /// 换歌之后封面到了(系统封面换了一张或定案没有,高清替代到了)。正等着的那次判定这一拍揭晓、掉歌名。
+    public mutating func artworkArrived() -> Reveal? {
+        hasArtwork = true
+        guard let key = pendingKey else { return nil }
+        cancel()
+        return Reveal(key: key, drops: true)
+    }
+
+    /// 去抖之后判定了 `key` 这一首,`wantsDrop` = 要掉歌名。返回 nil = 先等封面,等到 `deadline`。
+    public mutating func decided(key: String, wantsDrop: Bool, now: Date) -> Reveal? {
+        guard wantsDrop, !hasArtwork else {
+            cancel()
+            return Reveal(key: key, drops: wantsDrop)
+        }
+        pendingKey = key
+        deadline = now.addingTimeInterval(Self.artworkWait)
+        return nil
+    }
+
+    /// 等封面等到点了:先掉歌名,封面到了再翻。
+    public mutating func artworkWaitExpired() -> Reveal? {
+        guard let key = pendingKey else { return nil }
+        cancel()
+        return Reveal(key: key, drops: true)
     }
 }
 

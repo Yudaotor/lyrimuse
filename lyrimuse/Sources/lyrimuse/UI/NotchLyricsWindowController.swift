@@ -78,8 +78,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     @Published private(set) var isExpanded: Bool = false
     /// 此刻在报的收听里程碑(`ListenMilestoneCenter.current` 的镜像,见 setMilestone);nil = 没有。
     @Published private(set) var milestone: ListenMilestone?
-    /// 换歌翻牌:此刻从刘海里掉出来的那条歌名(见 trackChanged);nil = 没有。
+    /// 换歌翻牌:此刻从刘海里掉出来的那条歌名(见 applyReveal);nil = 没有。
     @Published private(set) var trackDrop: NotchTrackDrop?
+    /// 换歌翻牌:最近一次揭晓的曲目(`NotchTrackDropRules.key`,见 applyReveal)。耳朵里的封面换歌后等揭晓了同一首才翻。
+    @Published private(set) var revealedTrackKey: String?
     /// `isExpanded` 的两个输入(拆开):hover 那一路的兑现结果,和「发现新播放器」主动提醒的
     /// 撑开(`NotchUnknownPlayerPrompt.isAlerting` 的镜像)。任一为 true 卡片就是展开的,见 refreshExpanded ——
     /// 提醒期间光标进出卡片改的是 hoverExpanded,不会把提醒撑开的卡片提前收掉;提醒到点时光标还停在上面,
@@ -337,6 +339,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var trackDropTracker = NotchTrackDropTracker()
     private var trackDropGeneration = 0
     private var trackDropClearTask: Task<Void, Never>?
+    /// 歌名掉下来和耳朵里的封面翻过来对到同一拍(`NotchTrackRevealGate`)。
+    private var revealGate = NotchTrackRevealGate()
+    private var revealWaitTask: Task<Void, Never>?
+    /// 判成要掉、正等着封面的那一首;揭晓时掉它。
+    private var pendingDrop: (title: String, artist: String, since: Date)?
+    private var trackIdentityObserver: AnyCancellable?
+    private var artworkArrivalObserver: AnyCancellable?
     /// 掉歌名的判定日志:换了一首、判成要掉时写一行(掉了,或卡片此刻不显示没掉)。
     private static let trackDropLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "notch-track-drop")
     private var unknownPlayerAlertObserver: AnyCancellable?
@@ -486,6 +495,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         .sink { [weak self] title, artist, isAd, isWaiting in
             self?.trackChanged(title: title, artist: artist, isAdBreak: isAd, isWaitingToPlay: isWaiting)
         }
+
+        // 换歌翻牌的揭晓:歌名或歌手一变(不去抖)就当这首的封面还没到;之后协调器发一张新的系统封面(每次赋值都发一张新图,
+        // 定案没有封面时发 nil),或者高清替代到了,就是到了。
+        trackIdentityObserver = Publishers.CombineLatest(PlaybackCoordinator.shared.$title, PlaybackCoordinator.shared.$artist)
+            .removeDuplicates { $0 == $1 }
+            .dropFirst()
+            .sink { [weak self] _ in self?.trackIdentityChanged() }
+        artworkArrivalObserver = Publishers.Merge(
+            PlaybackCoordinator.shared.$artworkImage.dropFirst().map { _ in () },
+            PlaybackCoordinator.shared.$highResArtworkImage.dropFirst().compactMap { $0 }.map { _ in () }
+        )
+        .sink { [weak self] in self?.artworkArrived() }
 
         // 「发现新播放器」的主动提醒(NotchUnknownPlayerPrompt):提醒期间卡片自己撑开、隐藏着的
         // 窗口叫回来,到点收回。同一个 willSet 坑同一个修法:存 sink 参数值。每个实例(含「所有屏幕」的副本)
@@ -822,33 +843,104 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     /// 换歌翻牌的「掉歌名」(`trackDropObserver` 去抖后调):换了一首(判法见 `NotchTrackDropTracker`:不是这个实例看到的
-    /// 第一首、不是广告,声音还没走起来时先不判),「换歌时显示歌名」开着,卡片此刻看得见、不在收起 / 展开 / 报喜 / 提醒里,就让新歌名
-    /// 掉出来停 `NotchTrackDropRules.holdDuration`;停的时候又换歌就原地换成新的、重新计时。封面那一翻在视图里
-    /// (`NotchEarArtworkFlip`),不经这里。
+    /// 第一首、不是广告,声音还没走起来时先不判),「换歌时显示歌名」开着,卡片此刻放得下(`trackDropFits`),就判成要掉。
+    /// 什么时候真掉由 `NotchTrackRevealGate` 定:这首的封面到了才揭晓,歌名掉下来和耳朵里的封面翻过来同一拍,
+    /// 封面最多等 `NotchTrackRevealGate.artworkWait`;判成不掉当场揭晓。
     private func trackChanged(title: String, artist: String, isAdBreak: Bool, isWaitingToPlay: Bool) {
         let outcome = trackDropTracker.observe(title: title, artist: artist, isAdBreak: isAdBreak,
                                                isWaitingToPlay: isWaitingToPlay)
         guard outcome != .none else { return }
-        let drops = outcome == .drop
+        // 声音还没走起来:还没判,不揭晓,耳朵里的封面接着等;正停着的那条收掉。
+        guard !isWaitingToPlay else {
+            revealGate.cancel()
+            stopRevealWait()
+            clearTrackDrop()
+            return
+        }
+        let wantsDrop = outcome == .drop
             && AppSettings.shared.notchShowsTrackDrop
-            && lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
+            && trackDropFits
+        if outcome == .drop, !wantsDrop, AppSettings.shared.notchShowsTrackDrop {
+            Self.trackDropLog.notice("track drop: skipped, card not showing for \(artist, privacy: .public) - \(title, privacy: .public)")
+        }
+        let now = Date()
+        pendingDrop = wantsDrop ? (title, artist, now) : nil
+        let key = NotchTrackDropRules.key(title: title, artist: artist, isAdBreak: isAdBreak)
+        if let reveal = revealGate.decided(key: key, wantsDrop: wantsDrop, now: now) {
+            applyReveal(reveal)
+            return
+        }
+        // 等这首的封面:正停着的上一首那条先收掉。
+        clearTrackDrop()
+        scheduleRevealWait()
+    }
+
+    /// 卡片此刻放得下掉出来的歌名:窗口在屏、没缩进刘海、没被挡,不在收起 / 展开 / 报喜 / 「发现新播放器」提醒里。
+    private var trackDropFits: Bool {
+        lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
             && !isCollapsed && !isExpanded && milestone == nil && !alertHold
-        guard drops else {
-            if outcome == .drop, AppSettings.shared.notchShowsTrackDrop {
-                Self.trackDropLog.notice("track drop: skipped, card not showing for \(artist, privacy: .public) - \(title, privacy: .public)")
+    }
+
+    /// 揭晓(`NotchTrackRevealGate`):耳朵里的封面这一拍可以翻了;判成要掉的,卡片还放得下就让新歌名掉出来停
+    /// `NotchTrackDropRules.holdDuration`,停的时候又换歌就原地换成新的、重新计时。
+    private func applyReveal(_ reveal: NotchTrackRevealGate.Reveal) {
+        let track = pendingDrop
+        stopRevealWait()
+        if revealedTrackKey != reveal.key { revealedTrackKey = reveal.key }
+        guard reveal.drops, let track else {
+            clearTrackDrop()
+            return
+        }
+        // 等封面的那一会儿卡片可能被收起、展开或挡住了。
+        guard AppSettings.shared.notchShowsTrackDrop, trackDropFits else {
+            if AppSettings.shared.notchShowsTrackDrop {
+                Self.trackDropLog.notice("track drop: skipped, card not showing for \(track.artist, privacy: .public) - \(track.title, privacy: .public)")
             }
             clearTrackDrop()
             return
         }
-        Self.trackDropLog.notice("track drop: shown for \(artist, privacy: .public) - \(title, privacy: .public)")
+        let waitedMs = Int(Date().timeIntervalSince(track.since) * 1000)
+        Self.trackDropLog.notice("track drop: shown for \(track.artist, privacy: .public) - \(track.title, privacy: .public), waited \(waitedMs)ms for the cover")
         trackDropGeneration &+= 1
-        trackDrop = NotchTrackDrop(id: trackDropGeneration, title: title, artist: PlaybackCoordinator.shared.displayArtist)
+        trackDrop = NotchTrackDrop(id: trackDropGeneration, title: track.title, artist: PlaybackCoordinator.shared.displayArtist)
         trackDropClearTask?.cancel()
         trackDropClearTask = Task { [weak self] in
             try? await Task.sleep(for: NotchTrackDropRules.holdDuration)
             guard !Task.isCancelled else { return }
             self?.clearTrackDrop()
         }
+    }
+
+    func revealsTrack(_ key: String) -> Bool { revealedTrackKey == key }
+
+    /// 判成要掉、封面还没到:等到 `NotchTrackRevealGate.deadline` 还没到就先掉歌名。
+    private func scheduleRevealWait() {
+        revealWaitTask?.cancel()
+        revealWaitTask = nil
+        guard let deadline = revealGate.deadline else { return }
+        revealWaitTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
+            guard !Task.isCancelled, let self, let reveal = self.revealGate.artworkWaitExpired() else { return }
+            self.applyReveal(reveal)
+        }
+    }
+
+    private func stopRevealWait() {
+        revealWaitTask?.cancel()
+        revealWaitTask = nil
+        pendingDrop = nil
+    }
+
+    /// 歌名或歌手变了(不去抖,见 `trackIdentityObserver`):这首的封面还没到,还在等的那次判定作废。
+    private func trackIdentityChanged() {
+        revealGate.trackChanged()
+        stopRevealWait()
+    }
+
+    /// 封面到了(见 `artworkArrivalObserver`):正等着封面的那次判定这一拍揭晓。
+    private func artworkArrived() {
+        guard let reveal = revealGate.artworkArrived() else { return }
+        applyReveal(reveal)
     }
 
     private func clearTrackDrop() {
@@ -1225,6 +1317,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         milestoneObserver = nil
         trackDropObserver?.cancel()
         trackDropObserver = nil
+        trackIdentityObserver?.cancel()
+        trackIdentityObserver = nil
+        artworkArrivalObserver?.cancel()
+        artworkArrivalObserver = nil
+        revealGate.cancel()
+        stopRevealWait()
         clearTrackDrop()
         unknownPlayerAlertObserver?.cancel()
         unknownPlayerAlertObserver = nil

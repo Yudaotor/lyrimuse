@@ -666,6 +666,9 @@ protocol NotchChromeSource: ObservableObject {
     /// 换歌翻牌里此刻掉出来的那条歌名(真窗口 = 控制器的 `trackDrop`;预览恒 nil)。关着歌词行时卡片为它多长
     /// `NotchMetrics.trackDropHeight`(`cardHeight(expanded:)`),开着时盖在歌词行上。
     var trackDrop: NotchTrackDrop? { get }
+    /// 换歌翻牌:`key`(`NotchTrackDropRules.key`)这一首揭晓了没有(真窗口 = 控制器最近一次揭晓的那首;预览恒 true)。
+    /// 耳朵里的封面换歌后等它为 true 才翻,跟歌名掉下来同一拍。
+    func revealsTrack(_ key: String) -> Bool
     /// 用户要不要看歌词行(`AppSettings.notchShowLyrics`)。关掉时卡片只剩顶行那一条,
     /// 退化成贴着刘海的状态栏。
     ///
@@ -1378,8 +1381,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
     }
 
-    /// 耳朵里那枚封面(`NotchEarArtworkFlip`):换歌后新封面到了翻一下,一直开着、不看设置。`showsAdIcon` 只有左耳会传
-    /// true —— 喇叭也画在这枚翻牌里,广告结束才能翻成封面。
+    /// 耳朵里那枚封面(`NotchEarArtworkFlip`):换歌后新封面到了、控制器揭晓了这一首(歌名掉下来的那一拍)翻一下,
+    /// 一直开着、不看设置。`showsAdIcon` 只有左耳会传 true —— 喇叭也画在这枚翻牌里,广告结束才能翻成封面。
     ///
     /// 尺寸走**收起态那一枚**的公式(`contentTopInset − 10`,约 23pt),**不是**歌词行末尾
     /// 那枚 32pt 的:耳朵只有 `contentTopInset` 那么高,32pt 塞进来上下一点余量都不剩。当年
@@ -1391,8 +1394,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         return NotchEarArtworkFlip(
             title: playback.title, artist: playback.artist,
             artworkImage: playback.artworkImage, highResImage: playback.highResArtworkImage,
-            overrideImage: radioTalkStation?.image, isAdBreak: showsAdIcon, alignment: alignment,
-            animated: !reduceMotion,
+            overrideImage: radioTalkStation?.image, isAdBreak: showsAdIcon,
+            isRevealed: controller.revealsTrack(NotchTrackDropRules.key(
+                title: playback.title, artist: playback.artist, isAdBreak: playback.isCurrentTrackAdBreak)),
+            alignment: alignment, animated: !reduceMotion,
             artwork: { artworkThumbnail($0, side: side) },
             adIcon: { adBreakEarIconContent })
     }

@@ -101,6 +101,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 预览不报收听里程碑:那是一次性的真事件,预览里凭空撑开只会让人以为设置把它弄坏了。
     var milestone: ListenMilestone? { nil }
     var trackDrop: NotchTrackDrop? { nil }
+    /// 预览不掉歌名,耳朵里的封面也不等揭晓。
+    func revealsTrack(_ key: String) -> Bool { true }
 
     /// 「显示歌词」现读设置 —— 这一项**必须**反映真实配置(它决定卡片还剩不剩歌词行,
     /// 正是用户在这块画布上要看的东西),不能像上面几项那样为了"看样式"钉成常量。
