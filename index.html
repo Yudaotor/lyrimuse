@@ -16,8 +16,8 @@ if(l==='zh'||l.indexOf('zh-')===0){want=/-hant\b|-(tw|hk|mo)\b/.test(l)&&!/-hans
 if(want==='zh-Hans')location.replace('zh/'+location.search+location.hash);
 else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.hash);
 }catch(e){}})()</script>
-<title>Lyrimuse | Word-synced desktop lyrics for macOS</title>
-<meta name="description" content="Open-source desktop lyrics for Mac. Word-by-word lyrics for Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music and YouTube Music, with scored lyric matching, translation, readings and Last.fm stats. macOS 14 or later, Apple Silicon and Intel.">
+<title>Lyrimuse: desktop lyrics for Apple Music and Spotify on Mac</title>
+<meta name="description" content="Open-source Mac desktop lyrics, word by word, for Apple Music, Spotify, YouTube Music and six more players: on your desktop, in the notch or the menu bar.">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
@@ -28,12 +28,12 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="assets/lp.css?v=202610051541">
-<script src="assets/lp.js?v=202610051541" defer fetchpriority="high"></script>
+<link rel="stylesheet" href="assets/lp.css?v=202610052139">
+<script src="assets/lp.js?v=202610052139" defer fetchpriority="high"></script>
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/">
 <meta property="og:locale" content="en_US">
-<meta property="og:title" content="Lyrimuse | Word-synced desktop lyrics for macOS">
+<meta property="og:title" content="Lyrimuse: desktop lyrics for Apple Music and Spotify on Mac">
 <meta property="og:description" content="Desktop lyrics, reimagined for the Mac. Word-synced lyrics for Apple Music, Spotify, KKBOX, Amazon Music and more, floating on your desktop, in the notch and in the menu bar.">
 <meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/og-banner-en.jpg">
 <meta property="og:image:width" content="1200">
@@ -59,7 +59,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
   "url": "https://yudaotor.github.io/lyrimuse/",
   "inLanguage": "en",
   "image": "https://yudaotor.github.io/lyrimuse/assets/img/og-banner-en.jpg",
-  "description": "Open-source desktop lyrics for Mac. Word-by-word lyrics for Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou, Soda Music and YouTube Music, with scored lyric matching, translation, readings and Last.fm stats. macOS 14 or later, Apple Silicon and Intel.",
+  "description": "Open-source Mac desktop lyrics, word by word, for Apple Music, Spotify, YouTube Music and six more players: on your desktop, in the notch or the menu bar.",
   "author": {
     "@type": "Person",
     "name": "Yudaotor",
@@ -164,14 +164,14 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <body>
 <header class="nav">
   <div class="nav-in">
-    <a class="brand" href="#top"><img src="assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
+    <a class="brand" href="#top" aria-label="Lyrimuse"><img src="assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
     <nav class="links" aria-label="Main">
       <a href="#display">Features</a>
-      <a href="compare/">vs LyricsX</a>
+      <a href="players/">Players</a>
       <a href="#faq">FAQ</a>
       <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
     </nav>
-    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Language"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>EN</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Language: EN"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>EN</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="dl-menu" role="menu">
       <a class="dl-item" role="menuitem" lang="en" href="./" aria-current="page">English</a>
       <a class="dl-item" role="menuitem" lang="zh-Hans" href="zh/">简体中文</a>
@@ -272,15 +272,15 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
   <p class="kicker">Works with the players you already use</p>
   <div class="marquee">
     <div class="track">
-      <span class="pl"><img src="assets/img/players/AppleMusic.webp" alt="">Apple Music</span>
-      <span class="pl"><img src="assets/img/players/Spotify.webp" alt="">Spotify</span>
-      <span class="pl"><img src="assets/img/players/KKBOX.webp" alt="">KKBOX</span>
-      <span class="pl"><img src="assets/img/players/AmazonMusic.webp" alt="">Amazon Music</span>
-      <span class="pl"><img src="assets/img/players/QQMusic.webp" alt="">QQ Music</span>
-      <span class="pl"><img src="assets/img/players/Netease.webp" alt="">NetEase Cloud Music</span>
-      <span class="pl"><img src="assets/img/players/Kugou.webp" alt="">Kugou Music</span>
-      <span class="pl"><img src="assets/img/players/SodaMusic.webp" alt="">Soda Music</span>
-      <span class="pl"><img src="assets/img/players/YouTubeMusic.webp" alt="">YouTube Music</span>
+      <a class="pl" href="players/apple-music/"><img src="assets/img/players/AppleMusic.webp" alt="">Apple Music</a>
+      <a class="pl" href="players/spotify/"><img src="assets/img/players/Spotify.webp" alt="">Spotify</a>
+      <a class="pl" href="players/kkbox/"><img src="assets/img/players/KKBOX.webp" alt="">KKBOX</a>
+      <a class="pl" href="players/amazon-music/"><img src="assets/img/players/AmazonMusic.webp" alt="">Amazon Music</a>
+      <a class="pl" href="players/qq-music/"><img src="assets/img/players/QQMusic.webp" alt="">QQ Music</a>
+      <a class="pl" href="players/netease-cloud-music/"><img src="assets/img/players/Netease.webp" alt="">NetEase Cloud Music</a>
+      <a class="pl" href="players/kugou/"><img src="assets/img/players/Kugou.webp" alt="">Kugou Music</a>
+      <a class="pl" href="players/soda-music/"><img src="assets/img/players/SodaMusic.webp" alt="">Soda Music</a>
+      <a class="pl" href="players/youtube-music/"><img src="assets/img/players/YouTubeMusic.webp" alt="">YouTube Music</a>
     </div>
   </div>
 </section>
@@ -680,7 +680,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
   <div class="final-card reveal">
     <div class="final-fx" aria-hidden="true"><i class="spot"></i></div>
     <span class="final-ico"><img class="final-icon" src="assets/img/app-icon.webp" alt="" width="72" height="72"></span>
-    <h2 class="sing"><span class="ln">Let the next song</span><span class="ln">light up.</span></h2>
+    <h2 class="sing"><span class="ln">Let the next song</span> <span class="ln">light up.</span></h2>
     <div class="cta">
       <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Download Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <div class="dl-menu" role="menu">
@@ -705,7 +705,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
       <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
       <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
       <a href="changelog/">Changelog</a>
-      <a href="compare/">Compare with LyricsX and Lyric Fever</a>
+      <a href="players/">Supported players</a>
       <a href="privacy/">Privacy</a>
       <a href="terms/">Terms</a>
       <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>

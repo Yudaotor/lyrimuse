@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lyrimuse vs LyricsX vs Lyric Fever (2026): Mac desktop lyrics apps compared</title>
-<meta name="description" content="Is LyricsX still maintained? Lyrimuse, LyricsX and Lyric Fever compared row by row: players, lyric sources, word-by-word sync, translation and readings, where the lyrics show and what each needs. Checked against each project&#x27;s own repository on 4 October 2026.">
+<meta name="description" content="Is LyricsX still maintained? Lyrimuse, LyricsX and Lyric Fever compared row by row: players, lyric sources, word sync, translation and system needs.">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/compare/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/compare/">
 <link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/compare/">
@@ -15,9 +15,9 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="../assets/lp.css?v=202610051541">
-<link rel="stylesheet" href="../assets/sub.css?v=202610051541">
-<script src="../assets/sub.js?v=202610051541" defer fetchpriority="high"></script>
+<link rel="stylesheet" href="../assets/lp.css?v=202610052139">
+<link rel="stylesheet" href="../assets/sub.css?v=202610052139">
+<script src="../assets/sub.js?v=202610052139" defer fetchpriority="high"></script>
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/compare/">
 <meta property="og:locale" content="en_US">
@@ -32,14 +32,14 @@
 <body class="sub sub-compare">
 <header class="nav">
   <div class="nav-in">
-    <a class="brand" href="../"><img src="../assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
+    <a class="brand" href="../" aria-label="Lyrimuse"><img src="../assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
     <nav class="links" aria-label="Main">
       <a href="../#display">Features</a>
-      <a href="./" aria-current="page">vs LyricsX</a>
+      <a href="../players/">Players</a>
       <a href="../#faq">FAQ</a>
       <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
     </nav>
-    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Language"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>EN</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Language: EN"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>EN</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="dl-menu" role="menu">
       <a class="dl-item" role="menuitem" lang="en" href="./" aria-current="page">English</a>
       <a class="dl-item" role="menuitem" lang="zh-Hans" href="../zh/compare/">简体中文</a>
@@ -59,7 +59,7 @@
 <main id="top">
 <section class="sub-head">
   <p class="k">Compare</p>
-  <h1 class="sub-h1"><span>Lyrimuse, LyricsX and Lyric Fever,</span><span>side by side.</span></h1>
+  <h1 class="sub-h1"><span>Lyrimuse, LyricsX and Lyric Fever,</span> <span>side by side.</span></h1>
   <p class="sub-lede">Three open-source lyrics apps for the Mac, compared on what each project&#x27;s own repository, README and release notes say it does.</p>
   <p class="sub-meta">Checked on 4 October 2026</p>
 </section>
@@ -73,7 +73,7 @@
 <section class="cmp-sec cmp-panel">
   <div class="cmp-panel-txt">
     <p class="k">How Lyrimuse picks lyrics</p>
-    <h2 class="sec-h2"><span>Every candidate,</span><span>scored together.</span></h2>
+    <h2 class="sec-h2"><span>Every candidate,</span> <span>scored together.</span></h2>
     <p>For each track it asks all its sources, scores every candidate on the same scale and keeps the decision. Open it to see each source&#x27;s score and why the winner won.</p>
   </div>
   <div class="cmp-stage"><div class="view on go"><div class="pn pn-dp" role="img" aria-label="The resolution decision panel: every candidate&#x27;s score and why the winner won"><div class="pn-in dp">
@@ -101,7 +101,7 @@
   <div class="final-card">
     <div class="final-fx" aria-hidden="true"><i class="spot"></i></div>
     <span class="final-ico"><img class="final-icon" src="../assets/img/app-icon.webp" alt="" width="72" height="72"></span>
-    <h2><span class="ln">Let the next song</span><span class="ln">light up.</span></h2>
+    <h2><span class="ln">Let the next song</span> <span class="ln">light up.</span></h2>
     <div class="cta">
       <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Download Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <div class="dl-menu" role="menu">
@@ -127,7 +127,7 @@
       <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
       <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
       <a href="../changelog/">Changelog</a>
-      <a href="./">Compare with LyricsX and Lyric Fever</a>
+      <a href="../players/">Supported players</a>
       <a href="../privacy/">Privacy</a>
       <a href="../terms/">Terms</a>
       <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>

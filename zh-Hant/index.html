@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>Lyrimuse｜Mac 桌面歌詞，逐字同步</title>
-<meta name="description" content="開源的 Mac 桌面歌詞軟體，支援 Apple Music、Spotify、KKBOX、Amazon Music、QQ 音樂、網易雲音樂、酷狗、汽水音樂和 YouTube Music。逐字同步、評分挑選歌詞、翻譯與讀音、Last.fm 聆聽檔案。macOS 14 以上，Apple Silicon 與 Intel 皆可。">
+<title>Lyrimuse｜Mac 桌面歌詞：KKBOX、Apple Music、Spotify 逐字歌詞</title>
+<meta name="description" content="開源的 Mac 桌面歌詞：KKBOX、Apple Music、Spotify 等九款播放器的逐字歌詞，浮在桌面、收進瀏海、掛在選單列，附翻譯與讀音。">
 <link rel="canonical" href="https://yudaotor.github.io/lyrimuse/zh-Hant/">
 <link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/">
 <link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
@@ -16,12 +16,12 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="../assets/lp.css?v=202610051541">
-<script src="../assets/lp.js?v=202610051541" defer fetchpriority="high"></script>
+<link rel="stylesheet" href="../assets/lp.css?v=202610052139">
+<script src="../assets/lp.js?v=202610052139" defer fetchpriority="high"></script>
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh-Hant/">
 <meta property="og:locale" content="zh_TW">
-<meta property="og:title" content="Lyrimuse｜Mac 桌面歌詞，逐字同步">
+<meta property="og:title" content="Lyrimuse｜Mac 桌面歌詞：KKBOX、Apple Music、Spotify 逐字歌詞">
 <meta property="og:description" content="桌面歌詞，為 Mac 全新構想。KKBOX、Apple Music、Spotify 等九款播放器的逐字歌詞，浮在桌面、收進瀏海、掛在選單列。">
 <meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh-Hant.jpg">
 <meta property="og:image:width" content="1200">
@@ -47,7 +47,7 @@
   "url": "https://yudaotor.github.io/lyrimuse/zh-Hant/",
   "inLanguage": "zh-Hant",
   "image": "https://yudaotor.github.io/lyrimuse/assets/img/og-banner-zh-Hant.jpg",
-  "description": "開源的 Mac 桌面歌詞軟體，支援 Apple Music、Spotify、KKBOX、Amazon Music、QQ 音樂、網易雲音樂、酷狗、汽水音樂和 YouTube Music。逐字同步、評分挑選歌詞、翻譯與讀音、Last.fm 聆聽檔案。macOS 14 以上，Apple Silicon 與 Intel 皆可。",
+  "description": "開源的 Mac 桌面歌詞：KKBOX、Apple Music、Spotify 等九款播放器的逐字歌詞，浮在桌面、收進瀏海、掛在選單列，附翻譯與讀音。",
   "author": {
     "@type": "Person",
     "name": "Yudaotor",
@@ -152,14 +152,14 @@
 <body>
 <header class="nav">
   <div class="nav-in">
-    <a class="brand" href="#top"><img src="../assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
+    <a class="brand" href="#top" aria-label="Lyrimuse"><img src="../assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
     <nav class="links" aria-label="主要">
       <a href="#display">功能</a>
-      <a href="compare/">對比 LyricsX</a>
+      <a href="players/">播放器</a>
       <a href="#faq">常見問題</a>
       <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub</a>
     </nav>
-    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="語言"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>繁體</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="語言：繁體"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>繁體</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="dl-menu" role="menu">
       <a class="dl-item" role="menuitem" lang="en" href="../">English</a>
       <a class="dl-item" role="menuitem" lang="zh-Hans" href="../zh/">简体中文</a>
@@ -182,7 +182,7 @@
   <a class="eyebrow reveal" href="changelog/#v1.9.0"><span class="dot"></span>1.9.0 新增 KKBOX 與 Amazon Music <span class="arrow">›</span></a>
 
   <h1 class="reveal sing"><span class="pe">桌面歌詞，</span><span><span class="wu">為</span> <span class="wu">Mac</span> <span class="wu pe">全新構想。</span></span></h1>
-  <p class="lede reveal">Lyric 與 Muse，合而為一。<span>把歌詞交給繆思，你只管聽歌。</span></p>
+  <p class="lede reveal">Lyric 與 Muse，合而為一。<span>把歌詞交給音樂女神繆思，你只管聽歌。</span></p>
 
   <div class="cta reveal">
     <div class="dl dl-download"><a class="btn btn-dark dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v9m0 0-3.5-3.5M8 10.5l3.5-3.5M2.5 13.5h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>下載 Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
@@ -260,15 +260,15 @@
   <p class="kicker">這些播放器都能用</p>
   <div class="marquee">
     <div class="track">
-      <span class="pl"><img src="../assets/img/players/AppleMusic.webp" alt="">Apple Music</span>
-      <span class="pl"><img src="../assets/img/players/Spotify.webp" alt="">Spotify</span>
-      <span class="pl"><img src="../assets/img/players/KKBOX.webp" alt="">KKBOX</span>
-      <span class="pl"><img src="../assets/img/players/AmazonMusic.webp" alt="">Amazon Music</span>
-      <span class="pl"><img src="../assets/img/players/QQMusic.webp" alt="">QQ 音樂</span>
-      <span class="pl"><img src="../assets/img/players/Netease.webp" alt="">網易雲音樂</span>
-      <span class="pl"><img src="../assets/img/players/Kugou.webp" alt="">酷狗音樂</span>
-      <span class="pl"><img src="../assets/img/players/SodaMusic.webp" alt="">汽水音樂</span>
-      <span class="pl"><img src="../assets/img/players/YouTubeMusic.webp" alt="">YouTube Music</span>
+      <a class="pl" href="players/apple-music/"><img src="../assets/img/players/AppleMusic.webp" alt="">Apple Music</a>
+      <a class="pl" href="players/spotify/"><img src="../assets/img/players/Spotify.webp" alt="">Spotify</a>
+      <a class="pl" href="players/kkbox/"><img src="../assets/img/players/KKBOX.webp" alt="">KKBOX</a>
+      <a class="pl" href="players/amazon-music/"><img src="../assets/img/players/AmazonMusic.webp" alt="">Amazon Music</a>
+      <a class="pl" href="players/qq-music/"><img src="../assets/img/players/QQMusic.webp" alt="">QQ 音樂</a>
+      <a class="pl" href="players/netease-cloud-music/"><img src="../assets/img/players/Netease.webp" alt="">網易雲音樂</a>
+      <a class="pl" href="players/kugou/"><img src="../assets/img/players/Kugou.webp" alt="">酷狗音樂</a>
+      <a class="pl" href="players/soda-music/"><img src="../assets/img/players/SodaMusic.webp" alt="">汽水音樂</a>
+      <a class="pl" href="players/youtube-music/"><img src="../assets/img/players/YouTubeMusic.webp" alt="">YouTube Music</a>
     </div>
   </div>
 </section>
@@ -693,7 +693,7 @@
       <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub（繁體中文說明）</a>
       <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
       <a href="changelog/">更新記錄</a>
-      <a href="compare/">與 LyricsX、Lyric Fever 對比</a>
+      <a href="players/">支援的播放器</a>
       <a href="privacy/">隱私政策</a>
       <a href="terms/">使用條款</a>
       <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>

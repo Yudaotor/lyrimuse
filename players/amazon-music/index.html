@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amazon Music lyrics on your Mac desktop, menu bar and notch | Lyrimuse</title>
+<meta name="description" content="Amazon Music lyrics on your Mac desktop, under the notch and in the menu bar, with nothing to set up or sign in to. The lyrics it saved are used too.">
+<link rel="canonical" href="https://yudaotor.github.io/lyrimuse/players/amazon-music/">
+<link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/players/amazon-music/">
+<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/players/amazon-music/">
+<link rel="alternate" hreflang="zh-Hant" href="https://yudaotor.github.io/lyrimuse/zh-Hant/players/amazon-music/">
+<link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/players/amazon-music/">
+<link rel="icon" type="image/png" sizes="64x64" href="../../assets/img/favicon.png">
+<link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="../../assets/lp.css?v=202610052139">
+<link rel="stylesheet" href="../../assets/sub.css?v=202610052139">
+<script src="../../assets/sub.js?v=202610052139" defer fetchpriority="high"></script>
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/players/amazon-music/">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Amazon Music lyrics on your Mac desktop, menu bar and notch | Lyrimuse">
+<meta property="og:description" content="Amazon Music lyrics on your Mac desktop, under the notch and in the menu bar, with nothing to set up.">
+<meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/og-banner-en.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "BreadcrumbList",
+ "itemListElement": [
+  {
+   "@type": "ListItem",
+   "position": 1,
+   "name": "Lyrimuse",
+   "item": "https://yudaotor.github.io/lyrimuse/"
+  },
+  {
+   "@type": "ListItem",
+   "position": 2,
+   "name": "Supported players",
+   "item": "https://yudaotor.github.io/lyrimuse/players/"
+  },
+  {
+   "@type": "ListItem",
+   "position": 3,
+   "name": "Amazon Music",
+   "item": "https://yudaotor.github.io/lyrimuse/players/amazon-music/"
+  }
+ ]
+}
+</script>
+<script>document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[lang]');if(a)try{localStorage.setItem('lyrimuse.lang',a.getAttribute('lang'))}catch(x){}})</script>
+</head>
+<body class="sub sub-player">
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="../../" aria-label="Lyrimuse"><img src="../../assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
+    <nav class="links" aria-label="Main">
+      <a href="../../#display">Features</a>
+      <a href="../">Players</a>
+      <a href="../../#faq">FAQ</a>
+      <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+    </nav>
+    <div class="dl dl-end dl-lang"><button class="lang-btn dl-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Language: EN"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1.9 8h12.2M8 1.7c1.8 1.9 2.6 4 2.6 6.3S9.8 12.4 8 14.3C6.2 12.4 5.4 10.3 5.4 8S6.2 3.6 8 1.7z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>EN</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="dl-menu" role="menu">
+      <a class="dl-item" role="menuitem" lang="en" href="./" aria-current="page">English</a>
+      <a class="dl-item" role="menuitem" lang="zh-Hans" href="../../zh/players/amazon-music/">简体中文</a>
+      <a class="dl-item" role="menuitem" lang="zh-Hant" href="../../zh-Hant/players/amazon-music/">繁體中文</a>
+    </div></div>
+    <div class="dl dl-end dl-download"><a class="btn btn-dark btn-sm dl-trigger" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Download<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <div class="dl-menu" role="menu">
+      <p class="dl-head">Latest version <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
+      <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
+    </div></div>
+  </div>
+</header>
+
+<main id="top">
+<section class="sub-head">
+  <p class="k"><a href="../">Supported players</a></p>
+  <div class="pl-pair" aria-hidden="true"><img src="../../assets/img/players/AmazonMusic.webp" alt="" width="64" height="64" decoding="async"><span class="pl-plus">+</span><img src="../../assets/img/app-icon.webp" alt="" width="64" height="64"></div>
+  <h1 class="sub-h1"><span>Amazon Music lyrics,</span> <span>floating on your Mac.</span></h1>
+  <p class="sub-lede">Keep Amazon Music playing without its window in front, and the lyrics follow along on the desktop, under the notch and in the menu bar.</p>
+</section>
+<section class="cmp-sec pl-first">
+  <h2 class="sec-h">Made for Amazon Music</h2>
+  <div class="pl-feats n4"><article class="app-card"><h3>Its saved lyrics come first</h3><p>When Amazon Music has saved lyrics for the song, Lyrimuse can compare them with the other sources and give them priority.</p></article><article class="app-card"><h3>Keeps time</h3><p>Start, pause or drag the progress bar, and the lyrics catch up right away.</p></article><article class="app-card"><h3>The next song is ready</h3><p>The lyrics of the next two songs are prepared ahead, so there&#x27;s no wait when the song changes.</p></article><article class="app-card"><h3>No sign-in</h3><p>Lyrimuse never signs in to Amazon or sends Amazon anything.</p></article></div>
+  <p class="pl-more">Everything else works the same in all nine players: desktop lyrics, the capsule under the notch, the menu bar, the Lyrics Window, translations, pronunciations and Last.fm scrobbling. <a href="../../">Try it on the home page</a></p>
+</section>
+<section class="cmp-sec">
+  <h2 class="sec-h">Other players</h2>
+  <ul class="pl-grid"><li><a href="../apple-music/"><img src="../../assets/img/players/AppleMusic.webp" alt="" width="28" height="28" loading="lazy" decoding="async">Apple Music</a></li><li><a href="../spotify/"><img src="../../assets/img/players/Spotify.webp" alt="" width="28" height="28" loading="lazy" decoding="async">Spotify</a></li><li><a href="../youtube-music/"><img src="../../assets/img/players/YouTubeMusic.webp" alt="" width="28" height="28" loading="lazy" decoding="async">YouTube Music</a></li><li><a href="../kkbox/"><img src="../../assets/img/players/KKBOX.webp" alt="" width="28" height="28" loading="lazy" decoding="async">KKBOX</a></li><li><a href="../qq-music/"><img src="../../assets/img/players/QQMusic.webp" alt="" width="28" height="28" loading="lazy" decoding="async">QQ Music</a></li><li><a href="../netease-cloud-music/"><img src="../../assets/img/players/Netease.webp" alt="" width="28" height="28" loading="lazy" decoding="async">NetEase Cloud Music</a></li><li><a href="../kugou/"><img src="../../assets/img/players/Kugou.webp" alt="" width="28" height="28" loading="lazy" decoding="async">Kugou Music</a></li><li><a href="../soda-music/"><img src="../../assets/img/players/SodaMusic.webp" alt="" width="28" height="28" loading="lazy" decoding="async">Soda Music</a></li></ul>
+  <p class="pl-more"><a href="../">All players</a></p>
+</section>
+
+<section class="final">
+  <div class="final-card">
+    <div class="final-fx" aria-hidden="true"><i class="spot"></i></div>
+    <span class="final-ico"><img class="final-icon" src="../../assets/img/app-icon.webp" alt="" width="72" height="72"></span>
+    <h2><span class="ln">Let the next song</span> <span class="ln">light up.</span></h2>
+    <div class="cta">
+      <div class="dl dl-download"><a class="btn btn-white dl-trigger mag" href="https://github.com/Yudaotor/lyrimuse/releases/latest" aria-haspopup="menu" aria-expanded="false">Download Lyrimuse<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <div class="dl-menu" role="menu">
+      <p class="dl-head">Latest version <span class="dl-ver">v1.9.0</span></p>
+      <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">26 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">50 MB</span></em></span></a>
+      <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
+      <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
+    </div></div>
+      <a class="btn btn-ghost mag" href="https://github.com/Yudaotor/lyrimuse">View on GitHub</a>
+    </div>
+    <p class="final-fine"><span class="nw">macOS 14 or later</span> · <span class="nw">Apple Silicon and Intel</span> · <span class="nw">Open source, GPL-3.0</span></p>
+  </div>
+</section>
+
+
+</main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <div class="foot-brand"><img src="../../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
+      <a href="../../changelog/">Changelog</a>
+      <a href="../">Supported players</a>
+      <a href="../../privacy/">Privacy</a>
+      <a href="../../terms/">Terms</a>
+      <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
+      <a href="../../zh/players/amazon-music/" lang="zh-Hans">简体中文</a> <a href="../../zh-Hant/players/amazon-music/" lang="zh-Hant">繁體中文</a>
+    </nav>
+    <p class="foot-note">Apple Music, Spotify, KKBOX and other names and icons belong to their owners. Lyrimuse is an independent open-source project and isn&#x27;t affiliated with any of them.</p>
+  </div>
+</footer>
+
+</body>
+</html>

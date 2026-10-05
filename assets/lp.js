@@ -220,9 +220,10 @@
   notch.addEventListener('click', () => { if (notchHover) setOpen(true, 0); else island.classList.toggle('open'); });
 
   /* ---------- page ---------- */
-  // Seamless marquee: append one hidden copy of the players so the loop has no gap.
+  // Seamless marquee: append one hidden copy of the players so the loop has no gap. The copies are links too, so
+  // they leave the tab order along with the accessibility tree.
   const track = document.querySelector('.track');
-  if (track) [...track.children].forEach((n) => { const c = n.cloneNode(true); c.setAttribute('aria-hidden', 'true'); track.appendChild(c); });
+  if (track) [...track.children].forEach((n) => { const c = n.cloneNode(true); c.setAttribute('aria-hidden', 'true'); c.tabIndex = -1; track.appendChild(c); });
 
   // Reveal on scroll. The first screen (the headline block and the players strip) comes in by itself from lp.css,
   // so it is left out here. If the observer is late, whatever is already on screen (or above it) shows anyway;
