@@ -117,6 +117,16 @@ public enum OnboardingFlow {
         engineRunning
     }
 
+    // MARK: - 歌词显示方式
+
+    /// 「歌词怎么显示」那一步算不算开着至少一种(那一步的警告和收尾页体检的「歌词显示方式」都按它)。
+    /// 触控栏歌词只在这台 Mac 此刻有触控栏时算:没有触控栏时开关开着也不显示歌词,那一行在引导里也
+    /// 不出现(见 17 章决策 32)。
+    public static func anyDisplayModeEnabled(overlay: Bool, notch: Bool, menuBar: Bool,
+                                             touchBar: Bool, touchBarPresent: Bool) -> Bool {
+        overlay || notch || menuBar || (touchBar && touchBarPresent)
+    }
+
     // MARK: - 收尾页体检清单
 
     /// 清单里的一项是什么。标题文案由视图层按它取。
@@ -178,7 +188,7 @@ public enum OnboardingFlow {
         /// 辅助功能授权了没有;本轮没有要读界面的播放器为 nil。
         public var accessibilityGranted: Bool?
         public var browserPaired: Bool?
-        /// 至少开着一种歌词显示方式。
+        /// 至少开着一种歌词显示方式(按 `anyDisplayModeEnabled` 算)。
         public var displayModeEnabled: Bool
 
         public init(engineRunning: Bool, automationTargets: [PlaybackPlayer],

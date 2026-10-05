@@ -269,7 +269,25 @@ private func checkOnboardingFlow() {
         expectEqual(F.requiredReady(noEngine), false, "推荐项: 后台服务没跑是真没做完")
         let noDisplay = F.readinessItems(.init(engineRunning: true, automationTargets: [], authorized: [],
                                                fullDiskAccessGranted: nil, browserPaired: nil, displayModeEnabled: false))
-        expectEqual(F.requiredReady(noDisplay), false, "推荐项: 三种显示方式全关是真没做完")
+        expectEqual(F.requiredReady(noDisplay), false, "推荐项: 显示方式全关是真没做完")
+    }
+
+    // ---- 歌词显示方式(触控栏只在这台 Mac 有触控栏时算)----
+    do {
+        print("\n== 引导流程:歌词显示方式 ==")
+        func enabled(overlay: Bool = false, notch: Bool = false, menuBar: Bool = false,
+                     touchBar: Bool = false, present: Bool = false) -> Bool {
+            F.anyDisplayModeEnabled(overlay: overlay, notch: notch, menuBar: menuBar,
+                                    touchBar: touchBar, touchBarPresent: present)
+        }
+        expectEqual(enabled(), false, "显示方式: 一种都没开")
+        expectEqual(enabled(overlay: true), true, "显示方式: 只开悬浮歌词")
+        expectEqual(enabled(notch: true), true, "显示方式: 只开灵动岛")
+        expectEqual(enabled(menuBar: true), true, "显示方式: 只开菜单栏歌词")
+        expectEqual(enabled(touchBar: true, present: true), true, "显示方式: 只开触控栏歌词、这台 Mac 有触控栏,算开着")
+        expectEqual(enabled(touchBar: true), false, "显示方式: 触控栏歌词开着、这台 Mac 没有触控栏,不算(开着也不显示)")
+        expectEqual(enabled(present: true), false, "显示方式: 有触控栏但没开,不算")
+        expectEqual(enabled(menuBar: true, touchBar: true), true, "显示方式: 没有触控栏时别的照样算")
     }
 
     // ---- 后台服务自动启用 / 授权后带回前台 ----

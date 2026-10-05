@@ -27,6 +27,9 @@ struct OnboardingView: View {
     @ObservedObject private var fullDiskAccess = FullDiskAccessPermission.shared
     // 「辅助功能」同理。
     @ObservedObject private var accessibility = AccessibilityPermission.shared
+    // 这台 Mac 此刻有没有触控栏:决定「歌词怎么显示」那一步有没有触控栏那一行、几句文案带不带触控栏。
+    // 它只有 `isPresent` 一个 @Published、只在触控栏出现 / 消失时变,整个订阅不会带来高频重渲染。
+    @ObservedObject private var touchBar = TouchBarAvailability.shared
     // 引擎常驻服务是否真的在跑——这一步是"软强制"的必经步骤:锁住下一步按钮,
     // 但仍然可以直接关掉整个引导窗口跳过,不禁用/隐藏关闭按钮。
     @State private var engineRunning = false
@@ -35,7 +38,7 @@ struct OnboardingView: View {
     @State private var liveInput = OnboardingFlow.LiveInput(
         title: "", artist: "", hasLyrics: false, instrumental: false,
         noLyrics: false, adBreak: false, networkDown: false)
-    // 只用来决定要不要提醒"灵动岛/菜单栏歌词得等播起来才看得见"。
+    // 只用来决定要不要提醒"灵动岛 / 菜单栏 / 触控栏歌词得等播起来才看得见"。
     //
     // 刻意**不**写成 `@ObservedObject private var coordinator = PlaybackCoordinator.shared`:
     // 那会订阅整个单例,而它有二十来个 @Published(currentLine/anchor/artworkImage… 每个播放
@@ -422,7 +425,9 @@ struct OnboardingView: View {
                 .accessibilityHidden(true)
             Text(L10n.t("欢迎使用 Lyrimuse"))
                 .font(.title.bold())
-            Text(L10n.t("跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、歌词窗口都能放，还能对照译文、标注读音。接下来几步帮你调成合适的样子，以后随时能在设置里改"))
+            Text(touchBar.isPresent
+                 ? L10n.t("跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、触控栏、歌词窗口都能放，还能对照译文、标注读音。接下来几步帮你调成合适的样子，以后随时能在设置里改")
+                 : L10n.t("跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、歌词窗口都能放，还能对照译文、标注读音。接下来几步帮你调成合适的样子，以后随时能在设置里改"))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             // 两个跟「这台 Mac 上怎么用它」有关的偏好:界面语言、开机启动。
@@ -860,8 +865,8 @@ struct OnboardingView: View {
     /// 下一首才生效"这种错位 —— 引导页照抄一份等于给那条约束开第二个漂移点。默认值
     /// (`RomanizationScripts.defaultScripts(chineseUI:)`,跟界面语言走)对绝大多数人本来就是对的,细调留给设置页。
     ///
-    /// 两个总开关只管悬浮歌词和歌词窗口;灵动岛和菜单栏的译文 / 罗马音走各自的「副行」
-    /// (`LyricSecondaryLine`),不受这两个开关影响,页脚那句据此写。
+    /// 两个总开关只管悬浮歌词和歌词窗口;灵动岛、菜单栏和触控栏的译文 / 罗马音走各自的「副行」
+    /// (`LyricSecondaryLine`),不受这两个开关影响,页脚那句据此写(触控栏只在这台 Mac 有触控栏时提)。
     private var lyricsExtrasSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
@@ -878,17 +883,21 @@ struct OnboardingView: View {
                         : L10n.t("日文、韩文、粤语默认会标注，中文拼音可在设置里打开"),
                     isOn: $settings.showRomanization)
             }
-            Text(L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文或读音"))
+            Text(touchBar.isPresent
+                 ? L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏在各自的「副行」里选择译文或读音")
+                 : L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文或读音"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    // 三种显示形态在代码里完全正交(各自独立的开关 + 各自独立的窗口控制器,可以同时开、
-    // 也可以一个都不开),所以这里是三个独立开关,不是单选 Picker。第四种形态"歌词窗口"
-    // 刻意不放进来:它没有任何持久化开关,在向导里打开只会弹一扇窗盖住向导本身,而且下次
-    // 启动不保留 —— 在这里承诺它等于承诺一个不存在的偏好。
+    // 这几种显示形态在代码里完全正交(各自独立的开关 + 各自独立的控制器,可以同时开、
+    // 也可以一个都不开),所以这里是几个独立开关,不是单选 Picker。触控栏那一行只在这台 Mac
+    // 有触控栏时出现,开关直接绑设置:`TouchBarLyricsController` 自己订阅 `showLyricsInTouchBar`
+    // 启停,所以下面第 1、2 条(两个窗口控制器)管不到它,第 3 条(不替用户预选)同样适用。
+    // 见 17 章决策 32。"歌词窗口"刻意不放进来:它没有任何持久化开关,在向导里打开只会弹一扇窗
+    // 盖住向导本身,而且下次启动不保留 —— 在这里承诺它等于承诺一个不存在的偏好。
     //
     // 三条必须守住的写法约束:
     // 1) 关着的那个形态,渲染路径上连 `.shared` 都不能碰 —— 两个窗口控制器都是
@@ -945,6 +954,13 @@ struct OnboardingView: View {
                     title: L10n.t("菜单栏歌词"),
                     subtitle: L10n.t("菜单栏里的一行字"),
                     isOn: $settings.showLyricsInMenuBar)
+                if touchBar.isPresent {
+                    displayModeRow(
+                        kind: .touchBar,
+                        title: L10n.t("触控栏歌词"),
+                        subtitle: L10n.t("功能栏里的一枚图标，轻点展开成整条歌词"),
+                        isOn: $settings.showLyricsInTouchBar)
+                }
             }
 
             // 这两条提示**互斥**,任何时候最多出现一条 —— 整个向导没有 ScrollView、窗口
@@ -955,12 +971,14 @@ struct OnboardingView: View {
                 displayModeNote(
                     icon: "exclamationmark.triangle.fill",
                     tint: .orange,
-                    text: L10n.t("三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开"))
+                    text: L10n.t("这几种方式都关掉了，播放时不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开"))
             } else if !isPlayingNow {
                 displayModeNote(
                     icon: "info.circle.fill",
                     tint: .secondary,
-                    text: L10n.t("现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到"))
+                    text: touchBar.isPresent
+                        ? L10n.t("现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛、菜单栏和触控栏歌词要等开始播放才看得到")
+                        : L10n.t("现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到"))
             }
             Divider()
             lyricsExtrasSection
@@ -1064,9 +1082,10 @@ struct OnboardingView: View {
     private var hasNotchedScreen: Bool { ScreenIdentity.notched != nil }
 
     private var noDisplayModeEnabled: Bool {
-        !settings.classicOverlayEnabled
-            && !settings.notchOverlayEnabled
-            && !settings.showLyricsInMenuBar
+        !OnboardingFlow.anyDisplayModeEnabled(
+            overlay: settings.classicOverlayEnabled, notch: settings.notchOverlayEnabled,
+            menuBar: settings.showLyricsInMenuBar,
+            touchBar: settings.showLyricsInTouchBar, touchBarPresent: touchBar.isPresent)
     }
 
     /// 最后一步要核对的几件事。只列**这一轮真的走过**的步骤 —— 跟 `steps` 派生自同一批
@@ -1494,9 +1513,10 @@ struct OnboardingView: View {
 
 // MARK: - 显示形态小示意图
 //
-// 仓库里没有任何现成的形态缩略图资产(设置页"外观"整页零预览,只有 SF Symbol),所以这三张
-// 图用 SwiftUI 基本形状现画。三张共用同一个"屏幕外框 + 顶部菜单栏条"的底,差别只在歌词画
-// 在哪儿 —— 三行摆在一起才对照得出"灵动岛"到底跟另外两种差在哪。
+// 仓库里没有任何现成的形态缩略图资产(设置页"外观"整页零预览,只有 SF Symbol),所以这几张
+// 图用 SwiftUI 基本形状现画。悬浮歌词、灵动岛、菜单栏三张共用同一个"屏幕外框 + 顶部菜单栏条"的底,
+// 差别只在歌词画在哪儿 —— 三行摆在一起才对照得出"灵动岛"到底跟另外两种差在哪。触控栏那张画的是
+// 键盘(上沿一条深色触控栏),不画菜单栏条:它不在屏幕上。
 //
 // 尺寸全部写成固定常量、**不用 GeometryReader**:示意图必须是可预测的固定高度,不能跟着
 // 容器变(这一步没有 ScrollView,窗口固定 480×440,溢出是静默裁切)。
@@ -1506,7 +1526,7 @@ struct OnboardingView: View {
 // 两团灰斑,而这张图存在的唯一理由就是"让没见过的人看懂它会出现在屏幕哪儿"。开关状态由右
 // 边的 Toggle 表达,图只负责解释位置。
 private struct DisplayModeThumbnail: View {
-    enum Kind { case classic, notch, menuBar }
+    enum Kind { case classic, notch, menuBar, touchBar }
 
     let kind: Kind
 
@@ -1518,10 +1538,12 @@ private struct DisplayModeThumbnail: View {
     var body: some View {
         ZStack(alignment: .top) {
             Self.shape.fill(Color.primary.opacity(0.08))
-            // 顶部菜单栏条 —— 三张图共用的参照物,没有它就分不出"贴着顶部"和"在桌面上"。
-            Rectangle()
-                .fill(Color.primary.opacity(0.14))
-                .frame(height: Self.menuBarHeight)
+            // 顶部菜单栏条 —— 屏幕那三张图共用的参照物,没有它就分不出"贴着顶部"和"在桌面上"。
+            if kind != .touchBar {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.14))
+                    .frame(height: Self.menuBarHeight)
+            }
             sketch
         }
         .frame(width: Self.width, height: Self.height)
@@ -1566,6 +1588,30 @@ private struct DisplayModeThumbnail: View {
                     .padding(.trailing, 3)
             }
             .frame(width: Self.width, height: Self.menuBarHeight, alignment: .trailing)
+        case .touchBar:
+            // 键盘上沿那一条深色的触控栏,歌词是条里一行强调色的字;下面三排小格是按键。
+            VStack(spacing: 3) {
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(Color.primary.opacity(0.85))
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 22, height: 3)
+                        .padding(.leading, 8)
+                }
+                .frame(width: Self.width - 8, height: Self.menuBarHeight)
+                ForEach(0..<3, id: \.self) { _ in
+                    HStack(spacing: 2) {
+                        ForEach(0..<8, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                                .fill(Color.primary.opacity(0.2))
+                                .frame(width: 4.5, height: 4)
+                        }
+                    }
+                }
+            }
+            .padding(.top, 4)
+            .frame(width: Self.width, height: Self.height, alignment: .top)
         }
     }
 }

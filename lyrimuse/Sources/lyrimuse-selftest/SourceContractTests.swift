@@ -2250,7 +2250,8 @@ func runSourceContractTests() {
             //     步骤序列 / 夹取 / 锁 / 清单 / 收尾页顺序,那些断言就钉不到真正在跑的代码了。
             for call in ["OnboardingFlow.steps(", "OnboardingFlow.step(at:", "OnboardingFlow.nextIsLocked(",
                          "OnboardingFlow.clamped(", "OnboardingFlow.navigate(", "OnboardingFlow.canJump(",
-                         "OnboardingFlow.index(of:", "OnboardingFlow.readinessItems(", "OnboardingFlow.chosenEntries("] {
+                         "OnboardingFlow.index(of:", "OnboardingFlow.readinessItems(", "OnboardingFlow.chosenEntries(",
+                         "OnboardingFlow.anyDisplayModeEnabled("] {
                 expectEqual(onboardingCode.contains { $0.contains(call) }, true,
                             "引导页走共享流程: 少了 \(call) —— 判断被抄回视图里了?")
             }

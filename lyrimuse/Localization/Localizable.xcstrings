@@ -4009,25 +4009,25 @@
         }
       }
     },
-    "三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开" : {
+    "这几种方式都关掉了，播放时不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "All three are off, so no lyrics will show while music plays. The menu bar icon is always there — you can turn them back on from it"
+            "value" : "They’re all off, so no lyrics will show while music plays. The menu bar icon is always there — you can turn them back on from it"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开"
+            "value" : "这几种方式都关掉了，播放时不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "三種方式都關掉了，播放時螢幕上不會出現歌詞——選單列圖像一直都在，隨時可以從那裡重新開啟"
+            "value" : "這幾種方式都關掉了，播放時不會出現歌詞——選單列圖像一直都在，隨時可以從那裡重新開啟"
           }
         }
       }
@@ -17369,6 +17369,29 @@
         }
       }
     },
+    "现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛、菜单栏和触控栏歌词要等开始播放才看得到" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch, Menu Bar and Touch Bar Lyrics only show up once playback starts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛、菜单栏和触控栏歌词要等开始播放才看得到"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在沒有在播放——桌面浮動歌詞會立刻出現，動態島、選單列和觸控列歌詞要等開始播放才看得到"
+          }
+        }
+      }
+    },
     "用来把当前播放状态推送到网页小组件和状态徽章" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -19324,6 +19347,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選單列裡的一行字"
+          }
+        }
+      }
+    },
+    "功能栏里的一枚图标，轻点展开成整条歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An icon in the Control Strip — tap it to expand the lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能栏里的一枚图标，轻点展开成整条歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能列裡的一個圖像，按一下展開成整條歌詞"
           }
         }
       }
@@ -25408,6 +25454,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這兩個開關管浮動歌詞和歌詞視窗；動態島和選單列在各自的「副行」裡選擇譯文或讀音"
+          }
+        }
+      }
+    },
+    "这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏在各自的「副行」里选择译文或读音" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar pick translation or romanization in their own “Second Line” setting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏在各自的「副行」里选择译文或读音"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這兩個開關管浮動歌詞和歌詞視窗；動態島、選單列和觸控列在各自的「副行」裡選擇譯文或讀音"
           }
         }
       }
@@ -33116,6 +33185,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跟著正在播放的歌顯示歌詞：桌面、動態島、選單列、歌詞視窗都能放，還能對照譯文、標注讀音。接下來幾步幫你調成合適的樣子，之後隨時能在設定裡改"
+          }
+        }
+      }
+    },
+    "跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、触控栏、歌词窗口都能放，还能对照译文、标注读音。接下来几步帮你调成合适的样子，以后随时能在设置里改" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar, on the Touch Bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、触控栏、歌词窗口都能放，还能对照译文、标注读音。接下来几步帮你调成合适的样子，以后随时能在设置里改"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟著正在播放的歌顯示歌詞：桌面、動態島、選單列、觸控列、歌詞視窗都能放，還能對照譯文、標注讀音。接下來幾步幫你調成合適的樣子，之後隨時能在設定裡改"
           }
         }
       }
