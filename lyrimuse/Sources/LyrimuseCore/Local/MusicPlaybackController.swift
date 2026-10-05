@@ -19,7 +19,7 @@ import os
 // 控制指令天然作用在它们身上,不会误控到别的 App;焦点被别的 App 占着时例外,见 controlRoute)。发出去之后失败就静默失败(跟
 // AppleMusicPositionClient 一样宽松,不是核心路径)。
 public enum MusicPlaybackController {
-    private static let logger = Logger(subsystem: LyrimuseIdentity.bundleIdentifier, category: "playback-control")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-control")
 
     /// 控制因为焦点被别的 App 占着而没发时调(主线程)。App 在这里给一声提示音。
     public nonisolated(unsafe) static var onControlWithheld: (@Sendable () -> Void)?

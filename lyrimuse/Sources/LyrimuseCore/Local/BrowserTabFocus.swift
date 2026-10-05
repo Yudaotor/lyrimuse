@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "ytmusic-skip")
 
 /// 把正在放广告的 YT Music 标签页**临时**设成它那扇窗口的当前标签页,按完跳过键再切回去。
 ///

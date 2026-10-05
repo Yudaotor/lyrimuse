@@ -52,7 +52,7 @@ public struct RadioStationCard: Codable, Equatable, Sendable {
 public enum RadioStationCardFile {
     public static let fileName = "lyrimuse-radio-station.json"
     public static var url: URL { LyrimusePaths.configFile(fileName) }
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "radio-clock")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "radio-clock")
 
     /// 台名再长也是一行字;超过这个长度基本可以断定认错了(比如把一整段口播文案当台名)。
     public static let maxNameLength = 80

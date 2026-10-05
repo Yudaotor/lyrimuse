@@ -328,7 +328,7 @@ public final class PlayerQueryServer: @unchecked Sendable {
     ].joined()
 
     private let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.player-query", qos: .utility)
-    private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "player-query")
+    private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "player-query")
     private let writesEnabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
     private var timer: DispatchSourceTimer?
     private var watcher: DirectoryChangeWatcher?

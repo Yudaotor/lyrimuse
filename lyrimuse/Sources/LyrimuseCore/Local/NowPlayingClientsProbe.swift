@@ -23,7 +23,7 @@ import os
 /// 拿不到**时用。 私有接口 + 逆向出来的调用约定,系统升级可能变,所以**任何失败都必须静默退回**,
 /// 绝不能让它把主链路带崩。
 public enum NowPlayingClientsProbe {
-    private static let logger = Logger(subsystem: LyrimuseIdentity.bundleIdentifier, category: "nowplaying-clients")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "nowplaying-clients")
 
     /// 一次查询的超时。正常 ~120ms;卡住就放弃这一拍,下一拍再试。
     public static let timeout: TimeInterval = 2.0

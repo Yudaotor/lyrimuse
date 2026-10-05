@@ -100,7 +100,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 这个类**长期一行日志都没有**。代价是真实的:那道退化守卫把整首歌
     /// 的纠偏全废掉了,而日志里查不到任何探针活动 —— 这**不能**当"它没跑"的证据,只能靠读
     /// 代码 + 量 media-control 反推。所以采信和弃用**两边都记**,弃用要带原因。
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "browserprobe")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "browserprobe")
 
     private static let probeTimeout: TimeInterval = 3
 

@@ -3,7 +3,7 @@ import ApplicationServices
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "ytmusic-skip")
 
 /// 用 macOS **辅助功能 API** 按下浏览器网页里 YouTube 播放器的「跳过广告」键。
 ///

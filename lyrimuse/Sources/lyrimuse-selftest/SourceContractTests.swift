@@ -4087,8 +4087,9 @@ func runSourceContractTests() {
     //
     // 业界通用范式,规则写在 AGENTS.md「容易踩的具体坑 → 日志」:正文一律英文、`component: message key=value`;
     // App/Core 侧只用统一 subsystem 的 os.Logger,禁 NSLog / 裸 print(诊断导出按 subsystem 查 OSLogStore,
-    // 绕开 Logger 的日志进不了导出);引擎走 stdlib log.Printf。这里只守机器能查的三件事:两侧日志
-    // 字面量不含 CJK、App/Core 里没有 NSLog( / 裸 print(、Logger 的 subsystem 只有一个。
+    // 绕开 Logger 的日志进不了导出);引擎走 stdlib log.Printf。这里只守机器能查的四件事:两侧日志
+    // 字面量不含 CJK、App/Core 里没有 NSLog( / 裸 print(、App 的 Logger 字面量 subsystem 只有一个、
+    // Core 的 Logger 一律用 LyrimuseIdentity.logSubsystem(selftest 和命令行工具里落到另一个 subsystem)。
     // 确需例外在那一行行尾写 `// log-style: allow`。只看字面量本身,不看行尾注释(注释可以是中文)。
     do {
         let packageDir = URL(fileURLWithPath: #filePath)
@@ -4135,6 +4136,10 @@ func runSourceContractTests() {
                         let rest = line[r.upperBound...]
                         if let q = rest.firstIndex(of: "\"") { subsystems.insert(String(rest[..<q])) }
                     }
+                    if dir == "Sources/LyrimuseCore", line.contains("Logger(subsystem:"),
+                       !line.contains("Logger(subsystem: LyrimuseIdentity.logSubsystem,") {
+                        offenders.append("\(dir)/\(rel):\(n + 1) Core Logger not on LyrimuseIdentity.logSubsystem")
+                    }
                     if let re = swiftLogCall,
                        re.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil,
                        let open = line.range(of: "(\""), let close = line.range(of: "\")", options: .backwards),
@@ -4159,8 +4164,15 @@ func runSourceContractTests() {
                 }
             }
         }
-        expectEqual(offenders, [], "日志规范: 以下位置违反(日志字面量含 CJK / NSLog / 裸 print),规则见 AGENTS.md「日志」")
+        expectEqual(offenders, [], "日志规范: 以下位置违反(日志字面量含 CJK / NSLog / 裸 print / Core 的 Logger 没走 LyrimuseIdentity.logSubsystem),规则见 AGENTS.md「日志」")
         expectEqual(subsystems, ["me.yudaotor.lyrimuse"], "日志规范: Logger 的 subsystem 只允许 me.yudaotor.lyrimuse(诊断导出按它查 OSLogStore)")
+        expectEqual(LyrimuseIdentity.resolvedLogSubsystem(mainBundleIdentifier: "me.yudaotor.lyrimuse"), "me.yudaotor.lyrimuse",
+                    "日志规范: App 进程里 Core 的日志跟 App 同一个 subsystem")
+        expectEqual(LyrimuseIdentity.resolvedLogSubsystem(mainBundleIdentifier: nil), "me.yudaotor.lyrimuse.tools",
+                    "日志规范: 没有 bundle id 的命令行进程(selftest、临时工具)落到 tools")
+        expectEqual(LyrimuseIdentity.resolvedLogSubsystem(mainBundleIdentifier: "com.example.other"), "me.yudaotor.lyrimuse.tools",
+                    "日志规范: 别的 bundle 里也落到 tools")
+        expectEqual(LyrimuseIdentity.logSubsystem, "me.yudaotor.lyrimuse.tools", "日志规范: selftest 自己的日志不进 App 那个 subsystem")
     }
 
     // ---- reload 合并:清 in-flight 必须条件置空----

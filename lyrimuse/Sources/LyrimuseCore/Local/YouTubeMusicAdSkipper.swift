@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "ytmusic-skip")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "ytmusic-skip")
 
 /// 「替用户按下 YouTube Music 里**平台已经放出来**的那颗『跳过广告』键」(灵动岛广告态改版的一部分,
 /// 「选用可以跳过广告的方案」)。

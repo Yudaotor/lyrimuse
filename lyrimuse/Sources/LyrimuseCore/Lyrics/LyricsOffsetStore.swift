@@ -5,7 +5,7 @@ import OSLog
 
 // 用户亲手改动时间轴校正的留痕。歌词不同步类的报障里,第一个要排除的就是"这首歌被
 // 调过" —— 而校正值存在 UserDefaults 里,不看日志根本不知道它什么时候被谁改成了多少。
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-offset")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "lyrics-offset")
 
 // 单曲歌词时间轴微调——记住"这首歌的这份歌词该提前/延后多少毫秒",按 trackKey 持久化,
 // 下次播放同一首歌、同一份歌词内容时自动生效,不用每次重新调。

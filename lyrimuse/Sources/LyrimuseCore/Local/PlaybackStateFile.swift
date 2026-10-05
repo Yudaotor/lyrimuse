@@ -358,7 +358,7 @@ public final class PlaybackStatePublisher {
     private let writesEnabled: Bool
     /// 测试实例写出的去处(编码好的记录);正式实例为 nil,写配置目录里的状态文件。
     private let sink: ((Data) -> Void)?
-    private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "playback-state")
+    private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-state")
     private var lastWriteUptime: TimeInterval?
 
     private let appPID = getpid()

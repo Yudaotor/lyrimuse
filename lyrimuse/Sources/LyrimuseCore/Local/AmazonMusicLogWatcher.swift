@@ -19,7 +19,7 @@ import os
 public final class AmazonMusicLogWatcher: @unchecked Sendable {
     public static let shared = AmazonMusicLogWatcher()
 
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "amazon-music")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "amazon-music")
     /// 第一次读只看末尾这么多字节(一份日志一天能长到几 MB),但至少从最后一次开播读起,见 `AmazonMusicPlayhead.replayStart`。
     static let initialTailBytes = 256 << 10
     /// 日志不存在(没装 / 还没启动)时隔多久再看一眼。

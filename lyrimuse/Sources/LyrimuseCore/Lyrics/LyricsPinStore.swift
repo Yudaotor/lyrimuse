@@ -4,7 +4,7 @@ import OSLog
 
 // 「已校准」名单的变动留痕:钉住的歌引擎不再自动重选歌词源,所以"这首歌为什么
 // 一直不升级"和"我调好的怎么又被换了"两头都要靠它回答。
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-pin")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "lyrics-pin")
 
 /// 「已校准」名单:用户手动调过歌词时间轴的曲目,引擎不再自动给它们重选歌词源。
 ///

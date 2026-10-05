@@ -38,7 +38,7 @@ public final class MediaControlHealth: ObservableObject {
     /// "不可用"),光靠 `state` 那道 guard 挡不住第二个调用方进来,会多 fork 一个子进程。
     private var isChecking = false
 
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "mc-health")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "mc-health")
     /// 自检本身要跑一个子进程。给足超时但别无限等 —— 它卡住时最坏也只是标志停在 unknown,
     /// 不影响任何播放路径。
     private static let timeout: TimeInterval = 8

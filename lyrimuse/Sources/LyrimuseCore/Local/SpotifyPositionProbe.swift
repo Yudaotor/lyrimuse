@@ -52,7 +52,7 @@ import os
 ///   `spotifyRunningGuard` 同款守卫)。
 public final class SpotifyPositionProbe: @unchecked Sendable {
     public static let shared = SpotifyPositionProbe()
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotify-probe")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "spotify-probe")
 
     /// 换歌后等多久再问。09-07 定 2.5s(太早 Spotify 的钟可能还没起步 / gapless 时先超前后停顿),
     /// 收到 2.0s:现在两次采样验钟在走、不过关还会重试一次(retryAfterFailedLiveness),

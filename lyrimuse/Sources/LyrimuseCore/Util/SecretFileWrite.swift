@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "secret-file")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "secret-file")
 
 public extension Data {
     /// 原子写入,并把文件权限收紧到 `0600`(只有属主可读写)。**任何含凭据的文件都该走这个**,

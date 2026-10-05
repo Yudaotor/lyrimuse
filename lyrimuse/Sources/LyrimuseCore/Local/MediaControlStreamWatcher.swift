@@ -65,7 +65,7 @@ public struct MediaControlAnchorDigest {
 
 @MainActor
 public final class MediaControlStreamWatcher {
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "mc-stream")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "mc-stream")
 
     /// 退避重启的上下限。首次失败等 1 秒,之后翻倍,封顶 30 秒 —— 私有框架整个失效时
     /// 不该每秒重启一个必然失败的子进程刷屏。

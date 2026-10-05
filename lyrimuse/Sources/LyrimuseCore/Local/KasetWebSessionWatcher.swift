@@ -17,7 +17,7 @@ public final class KasetWebSessionWatcher {
     /// (开始放、在放的会话没了)。
     public enum Signal: Equatable, Sendable { case paused, changed }
 
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "kaset-web-watch")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "kaset-web-watch")
     /// 退避重启的上下限:helper 起不来时别每秒重起一个。
     private static let minRestartDelay: TimeInterval = 1
     private static let maxRestartDelay: TimeInterval = 30

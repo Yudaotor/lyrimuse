@@ -52,7 +52,7 @@ public struct RadioClockRecord: Codable, Equatable, Sendable {
 public enum RadioClockFile {
     public static let fileName = "lyrimuse-radio-clock.json"
     public static var url: URL { LyrimusePaths.configFile(fileName) }
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "radio-clock")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "radio-clock")
 
     /// 记录再老就不敢接了。给它比一次装机(实测 build.sh 从停到起 ~8 秒)宽裕得多的余量,
     /// 又远小于这个台的换歌间隔(实测 230~310 秒),免得跨了一首歌还在接。

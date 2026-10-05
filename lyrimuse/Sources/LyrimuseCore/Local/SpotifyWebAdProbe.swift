@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "spotifyad")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "spotifyad")
 
 // 「浏览器里的 Spotify 网页版此刻在放广告还是歌」——问页面本身。
 //

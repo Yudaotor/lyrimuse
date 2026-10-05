@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-timeline")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "lyrics-timeline")
 
 /// 逐字时间轴的**合法性归一化**:把各家歌词源给出的、跟行时间轴对不上的字级时间戳修成
 /// 引擎能正确显示的形态,修不了的整行退化成"均匀扫过",文字一个不动。纯数值,`lyrimuse-selftest`

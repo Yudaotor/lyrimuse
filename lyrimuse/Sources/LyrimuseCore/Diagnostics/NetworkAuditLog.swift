@@ -22,7 +22,7 @@ import OSLog
 /// 方便单独筛选;`DiagnosticsExporter.recentAppLogLines()` 按 subsystem(不按
 /// category)查询,这个新分类的日志会自动出现在导出的诊断报告里,不需要额外接线。
 public enum NetworkAuditLog {
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "network-audit")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "network-audit")
 
     /// 记一次对外请求的结果。
     ///

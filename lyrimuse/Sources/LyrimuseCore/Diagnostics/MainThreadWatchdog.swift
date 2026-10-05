@@ -67,7 +67,7 @@ public final class MainThreadWatchdog: @unchecked Sendable {
 
     private let queue = DispatchQueue(label: "me.yudaotor.lyrimuse.main-thread-watchdog", qos: .utility)
     private let sampleQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.main-thread-sample", qos: .utility)
-    private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "main-thread")
+    private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "main-thread")
     private let enabled: Bool
     private let interval: TimeInterval
     /// 单测把事件交给它:不记日志、不采样。nil = 正常记日志。

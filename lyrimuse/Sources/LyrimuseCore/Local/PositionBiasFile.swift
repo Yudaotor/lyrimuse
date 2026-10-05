@@ -48,7 +48,7 @@ public struct PositionBiasRecord: Codable, Equatable, Sendable {
 public enum PositionBiasFile {
     public static let fileName = "lyrimuse-position-bias.json"
     public static var url: URL { LyrimusePaths.configFile(fileName) }
-    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "position-bias")
+    private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "position-bias")
 
     /// 纯函数,selftest 直接覆盖:键按字母序、不带缩进,输出稳定可比。
     public static func encode(_ record: PositionBiasRecord) throws -> Data {

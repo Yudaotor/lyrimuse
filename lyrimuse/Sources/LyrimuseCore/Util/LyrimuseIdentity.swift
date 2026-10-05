@@ -58,6 +58,16 @@ public enum LyrimuseIdentity {
     public static var engineProcessNames: [String] { [current.engineExecutableName, "collector"] }
     public static var appLaunchdLabel: String { current.appLaunchdLabel }
     public static var urlScheme: String { current.urlScheme }
+
+    /// LyrimuseCore 里 os.Logger 的 subsystem。App 进程里就是 bundle id(诊断导出、排查都按它查);selftest 和拿 Core 编的
+    /// 命令行工具没有这个 bundle id,落到 `<bundle id>.tools`,不混进 App 那份。App 自己的 Logger 只在 App 进程里跑,照写
+    /// bundle id 字面量。见 15 章决策 19。
+    public static let logSubsystem = resolvedLogSubsystem(mainBundleIdentifier: Bundle.main.bundleIdentifier)
+
+    /// logSubsystem 的判法。纯函数,selftest 覆盖。
+    public static func resolvedLogSubsystem(mainBundleIdentifier: String?) -> String {
+        mainBundleIdentifier == bundleIdentifier ? bundleIdentifier : bundleIdentifier + ".tools"
+    }
 }
 
 /// 所有落盘位置的唯一口径。App 与 Core 里任何要碰 `~/.config/lyrimuse` / `~/Library/Logs` / `~/Library/LaunchAgents`

@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "media-control")
+private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "media-control")
 
 // 两条完全独立的读取路径,按 PlaybackPlayerPreference.selected(可多选)
 // 分派:
