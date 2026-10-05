@@ -3498,7 +3498,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		// appleTitleSearchIdentities排在 storefront 之后、MusicBrainz 之前:同样是
 		// "这一条录音自己的元数据",但它既不要锚点也不要专辑名,只靠曲名 + 时长对上 —— 浏览器里
 		// 播 YouTube Music 的 MV(没有专辑名、艺人名被界面本地化成「王子」)只有它救得了;证据比
-		// 前两条弱(没有专辑证据),所以门最严(曲名归一全等 + 时长 3%/4s 内),见其头注。
+		// 前两条弱,所以门最严(曲名归一全等,外加本地专辑名或时长对得上),见其头注。
 		// 这一条**只在救急(rescue)时**才问:原名一轮已经有源答出这首歌,说明本地署名本身没问题、
 		// 缺的那几个源多半是曲库里没有,再拿曲名去 iTunes 反查署名只会多两到四次请求、还可能把同名
 		// 同长的翻唱者带进来白查一轮;它要救的形状是"九个源全空"这种,别扩到"某个源缺"上。
@@ -3522,7 +3522,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 				identityWG.Add(1)
 				go func() {
 					defer identityWG.Done()
-					titleSearchIdentities = appleTitleSearchIdentities(ctx, artist, title, durationSecs)
+					titleSearchIdentities = appleTitleSearchIdentities(ctx, artist, title, album, durationSecs)
 				}()
 			}
 		}

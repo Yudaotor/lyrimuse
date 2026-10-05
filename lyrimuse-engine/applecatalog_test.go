@@ -338,7 +338,7 @@ func TestAppleCatalogAnchorRejectsSiblingTracks(t *testing.T) {
 
 // 按曲名 + 时长从 iTunes 全文搜索结果里挑署名(王子《Why You Wanna Treat Me So Bad?》案:
 // YT Music zh-HK 界面把 Prince 本地化成「王子」,九个源全空;iTunes 用「王子 Why You…」照样能搜到
-// Prince 那条)。这条没有专辑证据,所以三道门都要钉住:曲名归一全等、时长 3%/4s 内、最多两个。
+// Prince 那条)。门都要钉住:曲名归一全等、时长 3%/4s 内(没时长时看专辑)、最多两个,只拿曲名搜出来的那批更严。
 func TestPickAppleTitleSearchIdentities(t *testing.T) {
 	results := []itunesResult{
 		{TrackName: "Why You Wanna Treat Me So Bad?", ArtistName: "Prince", CollectionName: "The Hits/The B-Sides", TrackTimeMillis: 230121},
@@ -349,7 +349,7 @@ func TestPickAppleTitleSearchIdentities(t *testing.T) {
 		{TrackName: "Why You Wanna Treat Me So Bad?", ArtistName: "Prince & The Revolution", TrackTimeMillis: 231000},
 		{TrackName: "Why You Wanna Treat Me So Bad?", ArtistName: "Third Artist", TrackTimeMillis: 229000}, // 超出上限 2
 	}
-	got := pickAppleTitleSearchIdentities(results, "王子", "Why You Wanna Treat Me So Bad?", 230.121)
+	got := pickAppleTitleSearchIdentities(results, "王子", "Why You Wanna Treat Me So Bad?", "", 230.121, false)
 	want := []string{"Prince", "Prince & The Revolution"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("pick = %v, want %v", got, want)
@@ -360,21 +360,21 @@ func TestPickAppleTitleSearchIdentities(t *testing.T) {
 		{TrackName: "Outro", ArtistName: "Some Other Band", TrackTimeMillis: 184000},
 		{TrackName: "Outro", ArtistName: "尾奏乐队", TrackTimeMillis: 184500},
 	}
-	if got := pickAppleTitleSearchIdentities(sameScript, "deca joins", "Outro", 184.16); !reflect.DeepEqual(got, []string{"尾奏乐队"}) {
+	if got := pickAppleTitleSearchIdentities(sameScript, "deca joins", "Outro", "", 184.16, false); !reflect.DeepEqual(got, []string{"尾奏乐队"}) {
 		t.Errorf("同文字系统的同名艺人不该采、跨文字系统的才采, got %v", got)
 	}
 	if got := pickAppleTitleSearchIdentities([]itunesResult{{TrackName: "序曲", ArtistName: "某某", TrackTimeMillis: 94560}},
-		"刘若英", "序曲", 94.56); len(got) != 0 {
+		"刘若英", "序曲", "", 94.56, false); len(got) != 0 {
 		t.Errorf("中文本地署名对中文同名艺人不该采, got %v", got)
 	}
 	// 几十秒的器乐段不问(实测 陶喆《Doxology》47s 撞出拉丁名的 "A Covering",跨文字系统守卫挡不住它)。
 	if got := pickAppleTitleSearchIdentities([]itunesResult{{TrackName: "Doxology", ArtistName: "A Covering", TrackTimeMillis: 47400}},
-		"陶喆", "Doxology", 47.427); len(got) != 0 {
+		"陶喆", "Doxology", "", 47.427, false); len(got) != 0 {
 		t.Errorf("短于 %ds 的曲目不该采, got %v", appleTitleSearchMinDurationSecs, got)
 	}
 	// 时长未知(0)不受这条下限约束 —— 那时走"只信第一条同名"的老规矩。
 	if got := pickAppleTitleSearchIdentities([]itunesResult{{TrackName: "两只恋人", ArtistName: "Gary Chaw"}},
-		"曹格", "两只恋人", 0); !reflect.DeepEqual(got, []string{"Gary Chaw"}) {
+		"曹格", "两只恋人", "", 0, false); !reflect.DeepEqual(got, []string{"Gary Chaw"}) {
 		t.Errorf("无时长时不套下限, got %v", got)
 	}
 	if !artistScriptDiffers("王子", "Prince") || !artistScriptDiffers("Michael Jackson", "迈克尔·杰克逊") ||
@@ -383,20 +383,54 @@ func TestPickAppleTitleSearchIdentities(t *testing.T) {
 		t.Error("artistScriptDiffers 的 CJK/非 CJK 判定不对")
 	}
 	// 时长完全对不上的一律不采:同名不同歌是这条最大的风险。
-	if got := pickAppleTitleSearchIdentities(results, "王子", "Why You Wanna Treat Me So Bad?", 180); len(got) != 0 {
+	if got := pickAppleTitleSearchIdentities(results, "王子", "Why You Wanna Treat Me So Bad?", "", 180, false); len(got) != 0 {
 		t.Errorf("时长 180s 时不该采任何署名, got %v", got)
 	}
 	// 没有时长:只信第一条同名的。
-	if got := pickAppleTitleSearchIdentities(results, "王子", "Why You Wanna Treat Me So Bad?", 0); !reflect.DeepEqual(got, []string{"Prince"}) {
+	if got := pickAppleTitleSearchIdentities(results, "王子", "Why You Wanna Treat Me So Bad?", "", 0, false); !reflect.DeepEqual(got, []string{"Prince"}) {
 		t.Errorf("无时长时只信第一条, got %v", got)
+	}
+	// 没时长、本地有专辑名:只看专辑对得上的(翻唱合辑排在原唱前面时不被它带走)。
+	tribute := []itunesResult{
+		{TrackName: "小さな恋のうた", ArtistName: "WANIMA", CollectionName: "800TRIBUTE-champloo is the BEST!!2- - EP"},
+		{TrackName: "小さな恋のうた", ArtistName: "MONGOL800", CollectionName: "MESSAGE"},
+	}
+	if got := pickAppleTitleSearchIdentities(tribute, "モンゴル800", "小さな恋のうた", "Message", 0, false); !reflect.DeepEqual(got, []string{"MONGOL800"}) {
+		t.Errorf("无时长时只看专辑对得上的, got %v", got)
+	}
+	// 有时长时不看专辑:商店里的专辑名常是另一种语言(「沒有人在乎你在乎的事」在 iTunes 叫「Nobody Cares」)。
+	igu := []itunesResult{{TrackName: "Yes I’m in Love", ArtistName: "Igu Band", CollectionName: "Nobody Cares", TrackTimeMillis: 273449}}
+	if got := pickAppleTitleSearchIdentities(igu, "那我懂你意思了", "Yes I’m in Love", "沒有人在乎你在乎的事", 273.449, false); !reflect.DeepEqual(got, []string{"Igu Band"}) {
+		t.Errorf("有时长时专辑名对不上也照采, got %v", got)
+	}
+	// 只拿曲名搜出来的那批:专辑名和时长都没有就不采;有专辑名时专辑必须对得上,时长碰巧也对上照样不采。
+	wildflower := []itunesResult{{TrackName: "WILDFLOWER", ArtistName: "Billie Eilish", CollectionName: "HIT ME HARD AND SOFT"}}
+	if got := pickAppleTitleSearchIdentities(wildflower, "RM和조유진", "Wild Flower", "", 0, true); len(got) != 0 {
+		t.Errorf("只凭曲名不该采, got %v", got)
+	}
+	lastNight := []itunesResult{{TrackName: "Last Night", ArtistName: "Ricky Montgomery", CollectionName: "Montgomery Ricky", TrackTimeMillis: 243000}}
+	if got := pickAppleTitleSearchIdentities(lastNight, "王璟琪 Jingqi", "Last Night", "Last Night", 243, true); len(got) != 0 {
+		t.Errorf("只拿曲名搜出来、专辑对不上不该采, got %v", got)
+	}
+	teachme := []itunesResult{{TrackName: "teachme", ArtistName: "Musiq Soulchild", CollectionName: "Luvanmusiq"}}
+	if got := pickAppleTitleSearchIdentities(teachme, "音樂頑童", "teachme", "Luvanmusiq", 0, true); !reflect.DeepEqual(got, []string{"Musiq Soulchild"}) {
+		t.Errorf("只拿曲名搜出来、专辑对得上该采, got %v", got)
+	}
+	// 专辑名繁简不同、带「 - Single」尾巴都算对得上。
+	crowd := []itunesResult{{TrackName: "PAZ", ArtistName: "卢广仲", CollectionName: "100种生活"}}
+	if got := pickAppleTitleSearchIdentities(crowd, "Crowd Lu", "PAZ", "100種生活", 0, true); !reflect.DeepEqual(got, []string{"卢广仲"}) {
+		t.Errorf("专辑名繁简不同也该对得上, got %v", got)
+	}
+	if !appleTitleSearchAlbumMatches("Jasmine - Single", "Jasmine") || appleTitleSearchAlbumMatches("Already Gone", "君の笑顔") {
+		t.Error("appleTitleSearchAlbumMatches 的相等 / 包含判定不对")
 	}
 	// iTunes 那条没报时长而本地有时长 → 核不了,不采。
 	noDur := []itunesResult{{TrackName: "Hello", ArtistName: "Adele"}}
-	if got := pickAppleTitleSearchIdentities(noDur, "某人", "Hello", 295); len(got) != 0 {
+	if got := pickAppleTitleSearchIdentities(noDur, "某人", "Hello", "", 295, false); len(got) != 0 {
 		t.Errorf("iTunes 未报时长时不该采, got %v", got)
 	}
 	// 空曲名不干活。
-	if got := pickAppleTitleSearchIdentities(results, "王子", "", 230); len(got) != 0 {
+	if got := pickAppleTitleSearchIdentities(results, "王子", "", "", 230, false); len(got) != 0 {
 		t.Errorf("空曲名不该采, got %v", got)
 	}
 	// 容差:max(4s, 3%)。

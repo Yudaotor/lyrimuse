@@ -1080,8 +1080,10 @@ func lyricSamplesForStorefront(results []scoredLyricCandidateResult) []string {
 //
 // 怎么防"同名不同歌"把别人的署名塞进来(这条没有专辑证据,是三条里最弱的,所以门最严):
 //   - 曲名**归一后必须完全相等**(normLoose),不是 looseContains 那种包含关系;
-//   - 本地有时长时,iTunes 那条的 trackTimeMillis 必须在 appleTitleSearchDurationTolerance 之内
-//     —— 同名的另一首歌很难恰好也是这个长度;本地没时长时只信搜索结果里**第一条**同名的;
+//   - 本地有时长时,iTunes 那条的 trackTimeMillis 必须在 appleTitleSearchDurationTolerance 之内;本地没时长时
+//     只信第一条同名的,本地有专辑名时只看专辑对得上的(appleTitleSearchAlbumMatches)。
+//   - 只拿曲名搜出来的那批(没有艺人名作证据)更严:本地有专辑名时专辑必须对得上,专辑名和时长都没有就不采 ——
+//     只凭曲名,另一位艺人的同名歌照样过得去,见 09 章决策 183。
 //   - 最多两个署名(appleTitleSearchMaxIdentities),跟本地写法 normLoose 相同的剔掉;
 //   - **本地署名与 iTunes 署名必须一个含 CJK、一个不含**(artistScriptDiffers):这条来源要救的
 //     形状是"平台把艺人名翻译/本地化了"(王子 与 Prince),跨文字系统正是这种情形的签名;同一文字
@@ -1091,7 +1093,7 @@ func lyricSamplesForStorefront(results []scoredLyricCandidateResult) []string {
 // 查询词先用「艺人 + 曲名」(iTunes 对认不出的艺人 token 容忍度不错,实测「王子 Why You…」
 // 照样把 Prince 那条排在前面),一个都没挑出来再用裸曲名试一次。
 // 只当**检索身份**用、绝不回写 canonical_artist / 展示字段 —— 跟另两条同一条纪律。
-// 缓存只在内存(按 艺人|曲名|时长取整):它只在别名轮触发时才被调用,而 search-lyrics 是
+// 缓存只在内存(按 艺人|曲名|专辑|时长取整):它只在别名轮触发时才被调用,而 search-lyrics 是
 // 一次性进程,落盘收益不大;查空也缓存 —— 同一首歌同一进程里别名轮最多重进几次,不必每次
 // 都再打两次 iTunes。
 const (
@@ -1115,11 +1117,11 @@ var (
 	appleTitleSearchIdentityCache = map[string][]string{}
 )
 
-func appleTitleSearchIdentities(ctx context.Context, artist, title string, durationSecs float64) []string {
+func appleTitleSearchIdentities(ctx context.Context, artist, title, album string, durationSecs float64) []string {
 	if strings.TrimSpace(title) == "" {
 		return nil
 	}
-	key := normLoose(artist) + "|" + normLoose(title) + "|" + fmt.Sprintf("%.0f", durationSecs)
+	key := normLoose(artist) + "|" + normLoose(title) + "|" + normLoose(album) + "|" + fmt.Sprintf("%.0f", durationSecs)
 	appleTitleSearchIdentityMu.Lock()
 	if v, ok := appleTitleSearchIdentityCache[key]; ok {
 		appleTitleSearchIdentityMu.Unlock()
@@ -1130,7 +1132,7 @@ func appleTitleSearchIdentities(ctx context.Context, artist, title string, durat
 	var out []string
 	allReached := true
 	storefronts := appleStorefrontsFor(artist, title)
-	for _, q := range []string{strings.TrimSpace(artist + " " + title), title} {
+	for i, q := range []string{strings.TrimSpace(artist + " " + title), title} {
 		var results []itunesResult
 		for _, country := range storefronts {
 			rs, reached := itunesSearch(ctx, neturl.QueryEscape(q), country)
@@ -1139,7 +1141,7 @@ func appleTitleSearchIdentities(ctx context.Context, artist, title string, durat
 			}
 			results = append(results, rs...)
 		}
-		if out = pickAppleTitleSearchIdentities(results, artist, title, durationSecs); len(out) > 0 {
+		if out = pickAppleTitleSearchIdentities(results, artist, title, album, durationSecs, i == 1); len(out) > 0 {
 			break
 		}
 	}
@@ -1157,12 +1159,16 @@ func appleTitleSearchIdentities(ctx context.Context, artist, title string, durat
 }
 
 // pickAppleTitleSearchIdentities 是 appleTitleSearchIdentities 的挑选逻辑,纯函数、可单测:
-// 见那边头注里的三道门。
-func pickAppleTitleSearchIdentities(results []itunesResult, artist, title string, durationSecs float64) []string {
+// 见那边头注里的几道门。titleOnly:这批结果是只拿曲名搜出来的。
+func pickAppleTitleSearchIdentities(results []itunesResult, artist, title, album string, durationSecs float64, titleOnly bool) []string {
 	want := normLoose(title)
 	if want == "" {
 		return nil
 	}
+	if titleOnly && album == "" && durationSecs <= 0 {
+		return nil
+	}
+	needAlbum := album != "" && (titleOnly || durationSecs <= 0)
 	if durationSecs > 0 && durationSecs < appleTitleSearchMinDurationSecs {
 		return nil
 	}
@@ -1170,6 +1176,9 @@ func pickAppleTitleSearchIdentities(results []itunesResult, artist, title string
 	var out []string
 	for _, r := range results {
 		if normLoose(r.TrackName) != want {
+			continue
+		}
+		if needAlbum && !appleTitleSearchAlbumMatches(r.CollectionName, album) {
 			continue
 		}
 		if durationSecs > 0 {
@@ -1197,6 +1206,13 @@ func pickAppleTitleSearchIdentities(results []itunesResult, artist, title string
 		}
 	}
 	return out
+}
+
+// appleTitleSearchAlbumMatches:iTunes 那条的专辑名跟本地专辑名繁简归一后相等或互相包含(「Last Night」
+// 对「Last Night - Single」)。
+func appleTitleSearchAlbumMatches(collection, album string) bool {
+	a, c := normLoose(toSimplified(album)), normLoose(toSimplified(collection))
+	return a != "" && c != "" && (a == c || strings.Contains(c, a) || strings.Contains(a, c))
 }
 
 // artistScriptDiffers:两个署名是否一个含 CJK(汉字 / 假名 / 谚文)、一个完全不含。这是

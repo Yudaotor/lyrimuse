@@ -161,7 +161,7 @@ func TestAppleTitleSearchIdentitiesSkipsCacheWhenAStorefrontFailed(t *testing.T)
 		}
 		return http.StatusOK, storefrontNoResult
 	}, func(string) (int, string) { return http.StatusOK, storefrontNoResult })
-	key := normLoose("Some Band") + "|" + normLoose("Song") + "|200"
+	key := normLoose("Some Band") + "|" + normLoose("Song") + "||200"
 	isCached := func() bool {
 		appleTitleSearchIdentityMu.Lock()
 		defer appleTitleSearchIdentityMu.Unlock()
@@ -169,7 +169,7 @@ func TestAppleTitleSearchIdentitiesSkipsCacheWhenAStorefrontFailed(t *testing.T)
 		return ok
 	}
 
-	if got := appleTitleSearchIdentities(context.Background(), "Some Band", "Song", 200); len(got) != 0 {
+	if got := appleTitleSearchIdentities(context.Background(), "Some Band", "Song", "", 200); len(got) != 0 {
 		t.Fatalf("查空应返回空, got %v", got)
 	}
 	if isCached() {
@@ -177,12 +177,51 @@ func TestAppleTitleSearchIdentitiesSkipsCacheWhenAStorefrontFailed(t *testing.T)
 	}
 	usOK.Store(true)
 	before := usHits.Load()
-	appleTitleSearchIdentities(context.Background(), "Some Band", "Song", 200)
+	appleTitleSearchIdentities(context.Background(), "Some Band", "Song", "", 200)
 	if usHits.Load() == before {
 		t.Fatal("上一轮没记缓存,这一轮应该重新问")
 	}
 	if !isCached() {
 		t.Fatal("每个商店都问成了,查空应该记下")
+	}
+}
+
+// 两次查询分开挑:同一条同名结果,「艺人 + 曲名」那次就查到时照旧采(没时长、没专辑名时信第一条);只有裸曲名
+// 那次查到时,没有专辑名、也没有时长作证,不采。
+func TestAppleTitleSearchIdentitiesTitleOnlyQueryNeedsEvidence(t *testing.T) {
+	withStorefrontFake(t, func(string) (int, string) { return http.StatusOK, storefrontNoResult },
+		func(string) (int, string) { return http.StatusOK, storefrontNoResult })
+	var bareOnly atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if bareOnly.Load() && r.URL.Query().Get("term") != "Wild Flower" {
+			_, _ = io.WriteString(w, storefrontNoResult)
+			return
+		}
+		_, _ = io.WriteString(w, `{"results":[{"trackName":"WILDFLOWER","artistName":"Billie Eilish","collectionName":"HIT ME HARD AND SOFT"}]}`)
+	}))
+	saved := itunesSearchBaseURL
+	itunesSearchBaseURL = srv.URL
+	t.Cleanup(func() {
+		srv.Close()
+		itunesSearchBaseURL = saved
+	})
+	resetCache := func() {
+		appleTitleSearchIdentityMu.Lock()
+		appleTitleSearchIdentityCache = map[string][]string{}
+		appleTitleSearchIdentityMu.Unlock()
+	}
+
+	if got := appleTitleSearchIdentities(context.Background(), "RM和조유진", "Wild Flower", "", 0); !reflect.DeepEqual(got, []string{"Billie Eilish"}) {
+		t.Fatalf("「艺人 + 曲名」那次查到时照旧信第一条, got %v", got)
+	}
+	bareOnly.Store(true)
+	resetCache()
+	if got := appleTitleSearchIdentities(context.Background(), "RM和조유진", "Wild Flower", "", 0); len(got) != 0 {
+		t.Fatalf("只有裸曲名那次查到、没有专辑名也没有时长时不该采, got %v", got)
+	}
+	resetCache()
+	if got := appleTitleSearchIdentities(context.Background(), "RM和조유진", "Wild Flower", "HIT ME HARD AND SOFT", 0); !reflect.DeepEqual(got, []string{"Billie Eilish"}) {
+		t.Fatalf("只有裸曲名那次查到、专辑对得上时该采, got %v", got)
 	}
 }
 
