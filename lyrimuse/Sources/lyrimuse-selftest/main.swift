@@ -44,6 +44,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "key-parity-sweep", summary: "逐码点跨语言对拍:缓存 key / 宽松 key / 文件名 / 手动选词指纹与引擎生成的对照文件逐窗比对", run: runKeyParitySweepTests),
     TestGroup(name: "lyrics-offset", summary: "歌词时间轴偏移:基准 + 单曲微调 / 作用域 / 已校准名单", run: runLyricsOffsetTests),
     TestGroup(name: "lyrics-manager", summary: "歌词管理:列宽 / 写回合并 / 备份归档 / 重匹配 / 锁定 / 排序", run: runLyricsManagerTests),
+    TestGroup(name: "lyrics-edit", summary: "逐字歌词只改字 / 歌词窗口外部编辑器:摊开的文本 / 套回逐字 / 整行歌词跟着改 / 工作副本与存回来的判定", run: runLyricsEditTests),
     TestGroup(name: "playback-position", summary: "播放位置:外推伺服 / 锚点 / seek / 浏览器探针", run: runPlaybackPositionTests),
     TestGroup(name: "playback-source", summary: "播放源加固:轮询单飞 / 停播清理 / 焦点宽限归类 / 最近记录计次与拼页 / 广告探针与跳过复核 / 资料库删除 / 缓存读取与退避", run: runPlaybackSourceHardeningTests),
     TestGroup(name: "position-replay", summary: "位置状态机回放:一串快照 + 暂停 / 恢复通知 → 屏上位置 / 暂停残差 / 偏置 / 学习表", run: runPositionReplayTests),

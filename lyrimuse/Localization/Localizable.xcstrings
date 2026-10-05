@@ -12665,29 +12665,6 @@
         }
       }
     },
-    "播放用的是逐字时间轴，改「歌词（LRC）」不生效。要手改主歌词，先用「联网搜索候选歌词」换一份不带逐字的；译文/读音不受影响" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Playback uses the word-level timing, so editing Lyrics (LRC) has no effect. To hand-edit the main lyrics, use 「Search Online for Lyric Candidates」 to swap in a candidate without word-level timing; translation and romanization edits still apply."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放用的是逐字时间轴，改「歌词（LRC）」不生效。要手改主歌词，先用「联网搜索候选歌词」换一份不带逐字的；译文/读音不受影响"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "播放用的是逐字時間軸，改「歌詞(LRC)」不會生效。要手改主歌詞，先用「線上搜尋候選歌詞」換一份不帶逐字的；譯文/讀音不受影響"
-          }
-        }
-      }
-    },
     "播放记录" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -38699,6 +38676,75 @@
         }
       }
     },
+    "歌词（逐字）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics (Word-Timed)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词（逐字）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞（逐字）"
+          }
+        }
+      }
+    },
+    "逐字歌词只改字：每个字原来的时间不变；新加的句子、改了时间戳的句子按字数分配时间" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Word-timed lyrics: edit the text only. Every word keeps its timing; new lines and lines with a changed timestamp get their time split evenly by length"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "逐字歌词只改字：每个字原来的时间不变；新加的句子、改了时间戳的句子按字数分配时间"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "逐字歌詞只改字：每個字原來的時間不變；新加的句子、改了時間戳的句子按字數分配時間"
+          }
+        }
+      }
+    },
+    "%@ 句是新加的或改了时间戳，逐字时间按字数分配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ new or retimed lines got their word timing split evenly by length"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 句是新加的或改了时间戳，逐字时间按字数分配"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 句是新加的或改了時間戳，逐字時間按字數分配"
+          }
+        }
+      }
+    },
     "上一首、播放/暂停、下一首和设置键" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -38810,6 +38856,482 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隱藏功能列"
+          }
+        }
+      }
+    },
+    "用外部编辑器改歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Lyrics in External Editor"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用外部編輯器修改歌詞"
+          }
+        }
+      }
+    },
+    "停止重新匹配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Re-matching"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止重新比對"
+          }
+        }
+      }
+    },
+    "重新匹配《%@》的歌词？" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-match lyrics for “%@”?"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新比對《%@》的歌詞？"
+          }
+        }
+      }
+    },
+    "这首在歌词库里还没有记录，可以先用「搜索歌词」找一份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song isn't in the lyrics library yet. Try Search Lyrics to find some first."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首在歌詞庫裡還沒有記錄，可以先用「搜尋歌詞」找一份"
+          }
+        }
+      }
+    },
+    "这首的歌词是你手动改过或选定的，换上新的会盖掉它。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You edited or picked these lyrics by hand; new ones would replace them."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首的歌詞是你手動改過或選定的，換上新的會蓋掉它。"
+          }
+        }
+      }
+    },
+    "这首标了纯音乐，找到歌词就会撤掉这个标记。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song is marked as instrumental; finding lyrics will remove the mark."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首標了純音樂，找到歌詞就會撤掉這個標記。"
+          }
+        }
+      }
+    },
+    "这首调过歌词时间轴（%@），换了歌词这个校准可能就不准了。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You've adjusted this song's lyrics timing (%@); with new lyrics that adjustment may no longer fit."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首調過歌詞時間軸（%@），換了歌詞這個校正可能就不準了。"
+          }
+        }
+      }
+    },
+    "已停止重新匹配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-matching stopped"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已停止重新比對"
+          }
+        }
+      }
+    },
+    "《%1$@》：%2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”: %2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "《%1$@》：%2$@"
+          }
+        }
+      }
+    },
+    "歌词库正在刷新，过一两秒再点一次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics library is refreshing. Try again in a second or two."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞庫正在重新整理，過一兩秒再按一次"
+          }
+        }
+      }
+    },
+    "这首的歌词正文暂时读不回来，稍后再试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read this song's lyrics right now. Try again later."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首的歌詞內文暫時讀不回來，稍後再試"
+          }
+        }
+      }
+    },
+    "没有找到能打开文本文件的应用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No app was found that can open text files"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有找到能打開文字檔案的 App"
+          }
+        }
+      }
+    },
+    "没能打开「%1$@」：%2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't open %1$@: %2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能打開「%1$@」：%2$@"
+          }
+        }
+      }
+    },
+    "已在「%@」里打开。逐字歌词只改字，每行开头的时间别动，存盘后自动套用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opened in %@. For word-timed lyrics, change only the words and keep the time at the start of each line; saving applies the changes."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在「%@」裡打開。逐字歌詞只改字，每行開頭的時間別動，儲存後自動套用"
+          }
+        }
+      }
+    },
+    "已在「%@」里打开，存盘后自动套用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opened in %@; saving applies the changes."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在「%@」裡打開，儲存後自動套用"
+          }
+        }
+      }
+    },
+    "已在「%@」里打开。写好存盘后自动套用：带时间戳的存成同步歌词，不带的存成纯文本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opened in %@. Save when you're done: lines with timestamps become synced lyrics, text without them is saved as plain text."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在「%@」裡打開。寫好儲存後自動套用：帶時間戳記的存成同步歌詞，不帶的存成純文字"
+          }
+        }
+      }
+    },
+    "上次存了还没套用的那份另存成了「%@」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The earlier saved but unapplied copy was kept as “%@”."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次儲存了還沒套用的那份另存成了「%@」"
+          }
+        }
+      }
+    },
+    "文件太大，不像是歌词，没有保存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file is too large to be lyrics; not saved."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檔案太大，不像是歌詞，沒有儲存"
+          }
+        }
+      }
+    },
+    "读不出这份文件（要存成 UTF-8 文本），没有保存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read the file (save it as UTF-8 text); not saved."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "讀不出這份檔案（要存成 UTF-8 文字），沒有儲存"
+          }
+        }
+      }
+    },
+    "这首的歌词正文暂时读不回来，稍后再存一次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read this song's lyrics right now; save again later."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首的歌詞內文暫時讀不回來，稍後再儲存一次"
+          }
+        }
+      }
+    },
+    "这首的歌词在你编辑期间变过了，这次没有套用；再点一次编辑会打开最新的一份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song's lyrics changed while you were editing, so this save wasn't applied. Click Edit again to open the latest version."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首的歌詞在你編輯期間變過了，這次沒有套用；再按一次編輯會打開最新的一份"
+          }
+        }
+      }
+    },
+    "没有需要保存的改动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No changes to save"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有需要儲存的變更"
+          }
+        }
+      }
+    },
+    "文件里还没有歌词，没有保存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file has no lyrics yet; not saved."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檔案裡還沒有歌詞，沒有儲存"
+          }
+        }
+      }
+    },
+    "存回来的歌词一行时间戳都没有，没有保存（会丢掉原来的时间轴）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The saved lyrics have no timestamps at all; not saved (the existing timing would be lost)."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存回來的歌詞一行時間戳記都沒有，沒有儲存（會丟掉原來的時間軸）"
+          }
+        }
+      }
+    },
+    "已套用编辑器里的修改" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applied the changes from the editor"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已套用編輯器裡的修改"
+          }
+        }
+      }
+    },
+    "%@ 行没有时间戳，没有存进逐字歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ lines without timestamps weren't added to the word-timed lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 行沒有時間戳記，沒有存進逐字歌詞"
+          }
+        }
+      }
+    },
+    "已存成纯文本歌词，只在歌词窗口里显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved as plain-text lyrics, shown only in the Lyrics Window"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已存成純文字歌詞，只在歌詞視窗裡顯示"
+          }
+        }
+      }
+    },
+    "没能写出歌词文件：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't write the lyrics file: %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能寫出歌詞檔案：%@"
           }
         }
       }

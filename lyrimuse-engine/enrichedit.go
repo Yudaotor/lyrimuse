@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -207,14 +208,20 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		if req.Key == "" {
 			return enrichEditOutcome{err: fmt.Errorf("save_plain_text: empty key")}
 		}
-		e := enrichCache[req.Key]
+		e, existed := enrichCache[req.Key]
 		e.PlainLyrics = req.PlainLyrics
 		e.PlainLyricsSource = req.PlainLyricsSource
 		// 同 save_edit:存进来一份纯文本就撤掉纯音乐标记。
 		if strings.TrimSpace(req.PlainLyrics) != "" {
 			e.Instrumental = false
 		}
+		// 同 save_edit:缓存里没有这首时新建的条目记上解析时刻(TS 为 0 在 App 那边一直是「还在搜」),
+		// 在飞的那一轮停掉(11 章决策 54)。
+		if !existed {
+			e.TS = time.Now().Unix()
+		}
 		enrichCache[req.Key] = e
+		cancelInFlightEnrichLocked(req.Key)
 		return enrichEditOutcome{changed: 1}
 	case "set_instrumental":
 		if req.Key == "" {
@@ -273,6 +280,7 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 // applySaveEdit 是「保存编辑 / 采纳一条候选」对一条缓存记录的全部改动。规则逐条对应原先 App 侧的
 // EnrichCacheStore.saveEdit,各条的来由见 docs/features/11 章「编辑保存的字段规则」。
 func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
+	oldLyrics, oldYRC := e.Lyrics, e.LyricsYRC
 	// 译文换了内容:描述旧译文的语言、来源、机翻节流与重试计数一起清掉,别拿旧译文的记录给新内容背书。
 	if req.Tr != e.LyricsTr {
 		e.LyricsTrLang, e.LyricsTrSource = "", ""
@@ -284,10 +292,14 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 		roma = ""
 	}
 	// 背景人声挂在旧正文的行头上:采纳候选时换成候选自己那一份(取的就是当前的 TTML 附属内容解析器);
-	// 别的保存,正文或逐字一换就清掉。
+	// 别的保存,正文或逐字换了、背景人声的行头又挂不上新正文了才清掉 —— 只改字时行头都在,留着。
+	newYRC := e.LyricsYRC
+	if req.YRC != nil {
+		newYRC = *req.YRC
+	}
 	if req.BG != nil {
 		e.LyricsBG, e.LyricsBGChecked = *req.BG, lyricsBGParserVersion
-	} else if req.Lyrics != e.Lyrics || (req.YRC != nil && *req.YRC != e.LyricsYRC) {
+	} else if (req.Lyrics != e.Lyrics || newYRC != e.LyricsYRC) && !backgroundAlignsWithLyrics(e.LyricsBG, newYRC, req.Lyrics) {
 		e.LyricsBG = ""
 	}
 	e.Lyrics, e.LyricsTr, e.LyricsRoma = req.Lyrics, req.Tr, roma
@@ -307,6 +319,14 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 	if req.YRC != nil {
 		e.LyricsYRC = *req.YRC
 	}
+	// 只改了字(正文、逐字各自逐行比,行数一样、每行开头的时间戳一样):演唱者标注按行号挂在正文上,换成新正文的指纹
+	// 接着用。采纳候选另有一套(下面会重问)。
+	if !req.FromManualPick && e.LyricsSpeakers != nil && e.LyricsSpeakers.For == lyricSpeakersFingerprint(oldLyrics, oldYRC) &&
+		sameLineHeads(oldLyrics, e.Lyrics) && sameLineHeads(oldYRC, e.LyricsYRC) {
+		speakers := *e.LyricsSpeakers
+		speakers.For = lyricSpeakersFingerprint(e.Lyrics, e.LyricsYRC)
+		e.LyricsSpeakers = &speakers
+	}
 	e.LyricsSource = req.Source
 	// 「手动采纳的候选」留内容指纹,供「手动选定歌词后锁定」追溯;别的保存一律清掉(旧指纹已不描述新正文)。
 	e.ManualPickSHA = ""
@@ -320,6 +340,24 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 		e.LyricsSpeakersChecked = 0
 	}
 	return nil
+}
+
+// lyricLineHeadRe:一行开头的时间戳,YRC 的 [行始,行长] 或 LRC 连着的 [mm:ss.xx]。
+var lyricLineHeadRe = regexp.MustCompile(`^(?:\[\d+,\d+\]|(?:\[\d+:\d+(?:[.:]\d+)?\])+)`)
+
+// sameLineHeads:两份正文逐行比,行数一样、每行开头的时间戳一样(没有时间戳的行整行一样)—— 只改了字。
+func sameLineHeads(a, b string) bool {
+	la, lb := splitLyricLines(a), splitLyricLines(b)
+	if len(la) != len(lb) {
+		return false
+	}
+	for i := range la {
+		ha, hb := lyricLineHeadRe.FindString(la[i]), lyricLineHeadRe.FindString(lb[i])
+		if ha != hb || (ha == "" && la[i] != lb[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // manualPickShouldFlip:「手动选定歌词后锁定」开关翻到 locking 时,这条要不要跟着翻。用户采纳过、

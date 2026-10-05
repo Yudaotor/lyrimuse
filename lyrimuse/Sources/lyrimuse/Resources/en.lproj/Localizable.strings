@@ -30,6 +30,7 @@
 "%@ 个文件导入失败，其余已导入" = "%@ file(s) failed to import; the rest were imported";
 "%@ 分钟" = "%@ min";
 "%@ 分钟前更新" = "Updated %@ min ago";
+"%@ 句是新加的或改了时间戳，逐字时间按字数分配" = "%@ new or retimed lines got their word timing split evenly by length";
 "%@ 天" = "%@ days";
 "%@ 字" = "%@ characters";
 "%@ 导出的备份" = "Backup exported on %@";
@@ -56,6 +57,7 @@
 "%@ 秒" = "%@s";
 "%@ 秒后可跳过" = "Skippable in %@s";
 "%@ 自动化权限" = "%@ automation permission";
+"%@ 行没有时间戳，没有存进逐字歌词" = "%@ lines without timestamps weren't added to the word-timed lyrics";
 "%@ 首" = "%@ plays";
 "%@ 首保持锁定；从现在起手动选定的歌不再自动锁定" = "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically";
 "%@ 首待搜" = "%@ to search";
@@ -156,6 +158,7 @@
 "✓ 已生效——这个浏览器现在可以被驱动了" = "✓ Working — Lyrimuse can drive this browser now";
 "✓ 此刻驱动得动——但这是重启前的暂时状态：上面那个开关已经被关掉，重启后就会失效" = "Works right now — but only until this browser restarts: the switch above has been turned off, so it will stop working after a restart.";
 "、" = ", ";
+"《%1$@》：%2$@" = "“%1$@”: %2$@";
 "「%@」不能用来同步歌词进度。这项功能要靠浏览器执行一小段 JavaScript 来读播放进度，而这个应用没有提供对应的脚本命令。Firefox 至今没有提供，非浏览器的应用也一样。" = "“%@” can’t be used to sync lyric timing. This feature reads playback position by having the browser run a small piece of JavaScript, and this app provides no scripting command for that. Firefox has never added one, and non-browser apps don’t have one either.";
 "「%@」已经在这个列表里了。" = "“%@” is already in this list.";
 "「%@」已经是内置播放器了，在上面那张「播放器」卡里勾选它就行。" = "“%@” is already a built-in player — just tick it in the Players card above.";
@@ -184,6 +187,7 @@
 "上次刷新没有成功，显示的是 %@ 的内容" = "Last refresh failed; showing content from %@";
 "上次刷新：%@" = "Last refreshed: %@";
 "上次听" = "Last listened";
+"上次存了还没套用的那份另存成了「%@」" = "The earlier saved but unapplied copy was kept as “%@”.";
 "上次搜索 %1$@ 首，补全 %2$@ 首" = "Last run: searched %1$@, found %2$@";
 "上次检查：%@" = "Last checked: %@";
 "上次检测通过（%@）" = "Verified working (%@)";
@@ -303,6 +307,7 @@
 "停止扫库" = "Stop Rescan";
 "停止搜索" = "Stop Searching";
 "停止补搜" = "Stop Searching";
+"停止重新匹配" = "Stop Re-matching";
 "光盘" = "Disc";
 "全屏时隐藏" = "Hide in Full Screen";
 "全角/半角" = "Full-width/half-width";
@@ -574,6 +579,7 @@
 "存一份到 iCloud，换 Mac 时直接读回来" = "Save a copy to iCloud and pull it back on your next Mac";
 "存为新配色主题" = "Save as New Theme";
 "存到 iCloud" = "Save to iCloud";
+"存回来的歌词一行时间戳都没有，没有保存（会丢掉原来的时间轴）" = "The saved lyrics have no timestamps at all; not saved (the existing timing would be lost).";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Exact title 120 · parenthetical-only difference 60 · bilingual same name 30";
 "完全磁盘访问权限" = "Full Disk Access";
 "完全磁盘访问让%@直接用本机已有的歌词，只读它们自己的歌词缓存和播放队列" = "Full Disk Access lets %@ use lyrics already on this Mac — it only reads their own lyrics cache and play queue";
@@ -635,6 +641,7 @@
 "已中断：%@" = "Stopped: %@";
 "已保存" = "Saved";
 "已信任的播放器" = "Trusted Players";
+"已停止重新匹配" = "Re-matching stopped";
 "已全部跟进" = "All caught up";
 "已减少推荐" = "Suggested Less";
 "已删除" = "Deleted";
@@ -646,8 +653,13 @@
 "已唱到的颜色" = "Sung Color";
 "已唱到部分的颜色，也是歌词旁那枚图标上进度涨上来那一截的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮" = "The color of the sung part — and of the risen portion of the progress icon beside the lyrics. Follows the system accent color by default (brightened on a dark menu bar); a custom color is used as-is, with no brightening.";
 "已在 Last.fm 上喜欢" = "Loved on Last.fm";
+"已在「%@」里打开。写好存盘后自动套用：带时间戳的存成同步歌词，不带的存成纯文本" = "Opened in %@. Save when you're done: lines with timestamps become synced lyrics, text without them is saved as plain text.";
+"已在「%@」里打开。逐字歌词只改字，每行开头的时间别动，存盘后自动套用" = "Opened in %@. For word-timed lyrics, change only the words and keep the time at the start of each line; saving applies the changes.";
+"已在「%@」里打开，存盘后自动套用" = "Opened in %@; saving applies the changes.";
 "已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮" = "Last.fm's authorization page is open in your browser. Click “Yes, allow access” there to finish, and you'll be sent back to Lyrimuse automatically. If your browser doesn't come back on its own, use the button below";
 "已在资料库" = "In Library";
+"已套用编辑器里的修改" = "Applied the changes from the editor";
+"已存成纯文本歌词，只在歌词窗口里显示" = "Saved as plain-text lyrics, shown only in the Lyrics Window";
 "已安装" = "Installed";
 "已安装但未运行" = "Installed but not running";
 "已安装但未运行（上次退出码 %d）" = "Installed but not running (last exit code %d)";
@@ -880,7 +892,6 @@
 "播放控制位置" = "Controls Position";
 "播放时图标动起来，暂停即静止" = "Icons come alive while playing, still when paused";
 "播放热力图" = "Listening Heatmap";
-"播放用的是逐字时间轴，改「歌词（LRC）」不生效。要手改主歌词，先用「联网搜索候选歌词」换一份不带逐字的；译文/读音不受影响" = "Playback uses the word-level timing, so editing Lyrics (LRC) has no effect. To hand-edit the main lyrics, use 「Search Online for Lyric Candidates」 to swap in a candidate without word-level timing; translation and romanization edits still apply.";
 "播放记录" = "Play history";
 "播放过的歌会自动出现在这里" = "Songs you play will show up here automatically.";
 "收听时段" = "Listening Hours";
@@ -896,6 +907,8 @@
 "放弃坏文件并重建" = "Discard and Rebuild";
 "数据源" = "Data Source";
 "整行时间轴" = "Line timing";
+"文件太大，不像是歌词，没有保存" = "The file is too large to be lyrics; not saved.";
+"文件里还没有歌词，没有保存" = "The file has no lyrics yet; not saved.";
 "文字" = "Text";
 "文字描边" = "Text Outline";
 "文字颜色" = "Text Color";
@@ -1105,6 +1118,7 @@
 "歌词布局" = "Lyrics Layout";
 "歌词库" = "Lyrics library";
 "歌词库是同名的第二个文件，搬家时两个都要拷。\n凭证别发给别人；导入连已连接的账号、播放数据发往的地址一起覆盖" = "The lyrics library is a second file with a matching name — copy both when moving to a new Mac.\nDon't share the credentials; importing also overwrites connected accounts and where listening data is sent";
+"歌词库正在刷新，过一两秒再点一次" = "The lyrics library is refreshing. Try again in a second or two.";
 "歌词延后" = "Delay Lyrics";
 "歌词引擎" = "Lyrics Engine";
 "歌词引擎已停用，改动会在下次启用时生效" = "The lyrics engine is turned off. The change takes effect when it is turned on again.";
@@ -1145,6 +1159,7 @@
 "歌词进度" = "Lyrics Timing";
 "歌词预览" = "Lyrics";
 "歌词（LRC）" = "Lyrics (LRC)";
+"歌词（逐字）" = "Lyrics (Word-Timed)";
 "正在下载…" = "Downloading…";
 "正在从 iCloud 下载这份备份，下载完再点一次「恢复这份」" = "Downloading this backup from iCloud — click Restore This One again once it finishes";
 "正在准备安装…" = "Preparing to install…";
@@ -1216,13 +1231,17 @@
 "没有待处理的建议" = "No Suggestions";
 "没有找到匹配的设置" = "No matching settings";
 "没有找到带时间戳的版本，已自动采纳一份纯文本兜底（可在「歌词窗口」里查看）" = "No timed version found — automatically adopted a plain-text fallback (viewable in the Lyrics Window)";
+"没有找到能打开文本文件的应用" = "No app was found that can open text files";
 "没有授权" = "Not granted";
 "没有符合条件的歌" = "No Matching Songs";
 "没有缺失" = "Nothing missing";
 "没有辅助功能权限，%@ 的进度没法校准" = "No Accessibility permission; %@’s progress cannot be calibrated";
+"没有需要保存的改动" = "No changes to save";
 "没有需要补搜的歌" = "No songs needed searching";
+"没能写出歌词文件：%@" = "Couldn't write the lyrics file: %@";
 "没能取到那年今日——Last.fm 没有响应" = "Couldn't load this day in past years — Last.fm didn't respond";
 "没能启动（%@）。可以先「暂时跳过」，之后到设置的「播放器 → 歌词引擎」里重试，那一页会给出更细的状态。" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status.";
+"没能打开「%1$@」：%2$@" = "Couldn't open %1$@: %2$@";
 "没能添加" = "Couldn’t add it";
 "没能跳过这条广告" = "Couldn't skip this ad";
 "没能连接 Last.fm" = "Couldn't Connect to Last.fm";
@@ -1285,6 +1304,7 @@
 "现场版场次不符" = "Live recording from a different show";
 "玻璃浓淡" = "Glass Density";
 "生成一个 .zip 文件，其中会保留最近播放的曲目名与本机文件路径，公开发布前可以先解压查看" = "Creates a .zip file. It keeps recently played track names and local file paths, so review it before posting publicly";
+"用外部编辑器改歌词" = "Edit Lyrics in External Editor";
 "用当前配色覆盖" = "Overwrite with Current Colors";
 "用来把当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
 "由「自动识别」接管——取消「自动识别」后才只认你勾选的播放器" = "Covered by “Auto-detect” — turn it off to recognize only the players you tick";
@@ -1502,6 +1522,7 @@
 "请求权限" = "Request Access";
 "请求系统授权" = "Request Access";
 "读不出这个应用的标识，换一个试试。" = "Couldn’t read this app’s identifier. Try another one.";
+"读不出这份文件（要存成 UTF-8 文本），没有保存" = "Couldn't read the file (save it as UTF-8 text); not saved.";
 "读不到 %@ 的歌词缓存，点击看怎么处理" = "Can't read %@'s lyrics cache — click to see what to do";
 "读不到这份备份：可能没开 iCloud Drive，或者这个文件夹不在同步" = "Can’t read this backup — iCloud Drive may be off, or this folder isn’t syncing";
 "读取播放状态、抓歌词和封面" = "Reads playback state and fetches lyrics and artwork";
@@ -1629,13 +1650,20 @@
 "这里是译文示例" = "The translation looks like this";
 "这里是读音示例" = "Romanization looks like this";
 "这里能看到已创建应用的 API Key，但看不到 Secret；丢了就用「前往申请」再建一个。" = "Shows your existing apps and their API Key, but not the Secret; if it's lost, use Get One to create a new app.";
+"这首在歌词库里还没有记录，可以先用「搜索歌词」找一份" = "This song isn't in the lyrics library yet. Try Search Lyrics to find some first.";
 "这首是纯音乐" = "This one is instrumental";
+"这首标了纯音乐，找到歌词就会撤掉这个标记。" = "This song is marked as instrumental; finding lyrics will remove the mark.";
 "这首歌在你 Last.fm 上的第几次收听" = "Which play of this track this was in your Last.fm history";
 "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法" = "Which play of this track this was in your Last.fm history. Click to see which spellings were merged";
 "这首歌没有歌词或还在搜索时，用歌名占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
 "这首歌第一次播放，正在联网搜索歌词，完成后会自动显示，不需要手动刷新。" = "First time playing this track, so lyrics are being searched for online. They will appear on their own — no need to refresh.";
 "这首正在搜索，或者「补搜歌词」/「全量重新扫库」正在跑，稍后再试一次" = "This song is being searched right now, or “Find Missing Lyrics” / “Full library rescan” is running — try again later";
+"这首的歌词在你编辑期间变过了，这次没有套用；再点一次编辑会打开最新的一份" = "This song's lyrics changed while you were editing, so this save wasn't applied. Click Edit again to open the latest version.";
+"这首的歌词是你手动改过或选定的，换上新的会盖掉它。" = "You edited or picked these lyrics by hand; new ones would replace them.";
+"这首的歌词正文暂时读不回来，稍后再存一次" = "Couldn't read this song's lyrics right now; save again later.";
+"这首的歌词正文暂时读不回来，稍后再试" = "Couldn't read this song's lyrics right now. Try again later.";
 "这首的歌词正文读不回来（歌词文件缺失或损坏），为免覆盖盘上的内容，这里暂时不能保存修改。可以用「联网搜索候选歌词」重新采纳一份" = "This song's lyrics can't be read back (the lyrics file is missing or damaged), so saving is disabled here to avoid overwriting what's on disk. You can adopt a new copy with “Search Candidate Lyrics Online”.";
+"这首调过歌词时间轴（%@），换了歌词这个校准可能就不准了。" = "You've adjusted this song's lyrics timing (%@); with new lyrics that adjustment may no longer fit.";
 "进入全屏" = "Enter Full Screen";
 "进入迷你尺寸" = "Enter Mini Size";
 "连不上 ListenBrainz，稍后会自动重试" = "Can't reach ListenBrainz — will retry";
@@ -1681,6 +1709,7 @@
 "逐字时间轴 %@ 首" = "%@ with word timing";
 "逐字时间轴本来赢在这上面，但另一个候选的标题更吻合查询词——大概率是另一次录音（比如不同现场版）的逐字版本，时间轴细不代表轴对得上这次播放" = "Word timing was what put this candidate ahead, but another candidate matches the query title better — most likely this is the word-timed version of a different recording (a live take, say), and fine-grained timing does not mean the timing lines up with what is playing now";
 "逐字歌词" = "Word-by-word";
+"逐字歌词只改字：每个字原来的时间不变；新加的句子、改了时间戳的句子按字数分配时间" = "Word-timed lyrics: edit the text only. Every word keeps its timing; new lines and lines with a changed timestamp get their time split evenly by length";
 "逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮" = "Word-by-word lyrics: each word lights up as it is sung. Songs without word timings highlight the whole line";
 "逐行" = "Line-by-line";
 "逐行歌词" = "Line-by-line";
@@ -1702,6 +1731,7 @@
 "采用此候选" = "Use This Candidate";
 "采纳为静态文本" = "Adopt as Static Text";
 "重启歌词引擎" = "Restart Lyrics Engine";
+"重新匹配《%@》的歌词？" = "Re-match lyrics for “%@”?";
 "重新打开授权页面" = "Reopen Authorization Page";
 "重新扫描（%@ 首）" = "Rescan (%@)";
 "重新搜索" = "Search Again";

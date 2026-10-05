@@ -3374,6 +3374,11 @@ func runSourceContractTests() {
                     "歌词管理: 「仅逐字 / 仅整行 / 仅纯文本」跟设置页统计同一个阶梯(LyricsKind.classify)")
         expectEqual(manager.components(separatedBy: "!summary.hasLyrics || summary.isInstrumental").count - 1, 2,
                     "歌词管理: 标了纯音乐的条目存着歌词也显示「纯音乐」(列表行、详情页信息条)")
+        expectEqual(manager.contains("LyricsWordTimingEdit.editableText(yrc: loadedYRC)")
+                    && manager.contains("LyricsWordTimingEdit.apply(edited: editedWordText, yrc: loadedYRC, lrc: lyrics)")
+                    && manager.contains("store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc)")
+                    && manager.contains("carryOffset(summary, from: before, to: (after.lyrics, after.yrc))"), true,
+                    "歌词管理: 逐字歌词的编辑框只改字、套回逐字,只改字时单曲偏移跟着搬")
     }
 
     // ---- 设置页顶层分类记忆----

@@ -556,6 +556,58 @@ public enum EnrichCacheReader {
         )
     }
 
+    /// 条目里原样存着的内容:标了纯音乐也照给(那时 `lookup` 交出去的歌词是空的)。歌词窗口「重新自动匹配」的确认、
+    /// 「用外部编辑器改歌词」摊开工作副本和保存时补齐没改的几块读它(07 章决策 112);显示一律走 `lookup`。
+    public struct StoredEntry: Equatable, Sendable {
+        /// 缓存里实际那条 key(宽松命中、按时长挑了变体时是缓存里那一条),写回落在同一条上。
+        public let key: String
+        public let lyrics: String
+        public let lyricsTr: String
+        public let lyricsRoma: String
+        public let lyricsYRC: String
+        public let plainLyrics: String
+        public let instrumental: Bool
+        public let manualLyrics: Bool
+        /// false = 正文小文件读不回来,上面几块正文不全,别拿去存回去。
+        public let complete: Bool
+    }
+
+    /// 按播放器报的三段取(匹配同 `lookup`);缓存里没有,或者缓存此刻没加载(见 `isCurrent`)返回 nil。
+    public static func storedEntry(artist: String, title: String, album: String) -> StoredEntry? {
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        if let p = freshPlayingEntry(),
+           EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key) {
+            return storedEntry(p.entry, key: p.key)
+        }
+        guard let all = loadEntries(), let matched = matchedKey(key, in: all), let entry = all[matched] else { return nil }
+        return storedEntry(entry, key: matched)
+    }
+
+    /// 按缓存里的 key 原样取(外部编辑套回去之前核对用:一次编辑绑在打开时那一条上)。
+    public static func storedEntry(forKey key: String) -> StoredEntry? {
+        if let p = freshPlayingEntry(), p.key == key { return storedEntry(p.entry, key: key) }
+        guard let entry = loadEntries()?[key] else { return nil }
+        return storedEntry(entry, key: key)
+    }
+
+    private static func storedEntry(_ entry: EnrichCacheEntry, key: String) -> StoredEntry {
+        var lyrics = entry.lyrics ?? "", tr = entry.lyricsTr ?? "", roma = entry.lyricsRoma ?? ""
+        var yrc = entry.lyricsYRC ?? "", plain = entry.plainLyrics ?? ""
+        var complete = true
+        if let crc = entry.bodyCRC, crc != 0 {
+            if let b = body(forKey: key, crc: crc) {
+                lyrics = b.lyrics ?? ""; tr = b.lyricsTr ?? ""; roma = b.lyricsRoma ?? ""
+                yrc = b.lyricsYRC ?? ""; plain = b.plainLyrics ?? ""
+            } else {
+                complete = false
+                rejectCurrentIndex()
+            }
+        }
+        return StoredEntry(key: key, lyrics: lyrics, lyricsTr: tr, lyricsRoma: roma, lyricsYRC: yrc, plainLyrics: plain,
+                           instrumental: entry.instrumental ?? false, manualLyrics: entry.manualLyrics ?? false,
+                           complete: complete)
+    }
+
     /// 精确 key 没命中时,再按"忽略空格/大小写/繁简"找一次。
     ///
     /// 为什么必须有这一层:引擎那边把"其实是同一首歌"的重复条目合并成了一条,保留的是
@@ -1277,6 +1329,13 @@ public enum EnrichCacheReader {
     /// 「当前已解码内容」对应的文件 mtime。给 apply() 当重灌触发键(见上面那段注释)。
     /// 单条快照比它新时取快照的 mtime:快照一落盘就触发重灌,不等整份写完。
     public static var decodedContentVersion: Date? { freshPlayingEntry()?.mtime ?? cachedMTime }
+
+    /// 已解码的就是盘上此刻那一版(引擎刚写过、还没解完,或者内存压力让出之后还没重建时是 false)。读原样内容去改、
+    /// 再交回去之前等它为真,别拿旧的一版去比对、去补没改的几块。
+    public static var isCurrent: Bool {
+        guard cachedEntries != nil, let decoded = cachedMTime else { return false }
+        return decoded == fileModificationDate
+    }
 
     /// 比已解码内容新、而且就是 key 这一首的单条快照(判据同 lookup:去掉 `~durN` 之后按 looseKey 认)。
     /// 查封面的几个函数用它,主缓存还没解码完时封面跟歌词一样拿得到。

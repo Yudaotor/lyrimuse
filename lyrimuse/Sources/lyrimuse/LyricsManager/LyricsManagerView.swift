@@ -584,6 +584,16 @@ struct LyricsManagerView: View {
     @State private var editedRoma = ""
     @State private var editedRomaBody = ""
     @State private var romaBodyEdit = LyricsBodyEdit(lyrics: "")
+    // 逐字歌词的「歌词」编辑框改的不是 LRC,是逐字拼出来的每一行(只改字,见 LyricsWordTimingEdit):editedWordText 是完整的
+    // 摊开文本,编辑框显示摘掉署名行之后的正文,跟上面那几对同一套互拼。
+    @State private var editedWordText = ""
+    @State private var editedWordBody = ""
+    @State private var wordBodyEdit = LyricsBodyEdit(lyrics: "")
+    @State private var loadedWordText = ""
+    /// 编辑框载入时的逐字原文,「保存修改」以它为底套回改动;空 = 这首没有能摊开的逐字行,编辑框改的是 LRC。
+    @State private var loadedYRC = ""
+    /// 上一次保存里有几句的逐字时间是按字数估的,在保存按钮旁边说一声。
+    @State private var saveEditNote: String?
     // 编辑框里这份内容属于哪一首、载入时是什么。编辑状态挂在整个窗口上(不是详情页自己的),详情页卸载再装回来
     // (取消选中再选另一首)时 onChange(of: key) 不触发 —— 所以异步结果(重新匹配、采纳候选、保存完成)写回编辑框
     // 之前都要核对 editingKey;保存时据 loaded* 判断哪几格用户真的改过(没改的交盘上此刻的值,见保存按钮)。
@@ -597,7 +607,7 @@ struct LyricsManagerView: View {
 
     /// 编辑框里有没保存的改动。
     private var isEditorDirty: Bool {
-        editedLyrics != loadedLyrics || editedTr != loadedTr || editedRoma != loadedRoma
+        editedLyrics != loadedLyrics || editedTr != loadedTr || editedRoma != loadedRoma || editedWordText != loadedWordText
     }
     // 单曲歌词时间轴偏移——输入框显示/编辑的秒数字符串。跟下面两个"persisted"字段
     // 分开存,是因为算 LyricsOffsetStore 的 key 必须用磁盘上实际持久化的歌词内容,不能
@@ -2445,22 +2455,34 @@ struct LyricsManagerView: View {
                 infoStrip(summary)
                 offsetSection(summary)
 
-                if summary.hasWordTiming {
+                if loadedYRC.isEmpty {
+                    editorSection(title: L10n.t("歌词（LRC）"), icon: "text.alignleft", text: $editedLyricsBody, minHeight: 220, monospaced: true, showCopyButton: true)
+                        // 两条 onChange 互不打圈,理由见 LyricsBodyEdit 头注:外部写进来的 editedLyrics(换曲 / 采纳候选 /
+                        // 重新匹配)才重算正文;编辑框自己拼回去的那次(值恰好等于 reassembled)跳过,不然用户敲的回车会被归一化吃掉。
+                        .onChange(of: editedLyrics, initial: true) { _, raw in
+                            if raw == lyricsBodyEdit.reassembled(body: editedLyricsBody) { return }
+                            lyricsBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
+                            editedLyricsBody = lyricsBodyEdit.body
+                        }
+                        .onChange(of: editedLyricsBody) { _, newBody in
+                            let full = lyricsBodyEdit.reassembled(body: newBody)
+                            if full != editedLyrics { editedLyrics = full }
+                        }
+                } else {
+                    // 显示用的是逐字里的字,所以逐字歌词改的是逐字拼出来的每一行,保存时只改字、套回逐字(见 actionsRow)。
                     wordTimingHint
+                    editorSection(title: L10n.t("歌词（逐字）"), icon: "text.word.spacing", text: $editedWordBody, minHeight: 220, monospaced: true, showCopyButton: true)
+                        // 同上那对 onChange。
+                        .onChange(of: editedWordText, initial: true) { _, raw in
+                            if raw == wordBodyEdit.reassembled(body: editedWordBody) { return }
+                            wordBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
+                            editedWordBody = wordBodyEdit.body
+                        }
+                        .onChange(of: editedWordBody) { _, newBody in
+                            let full = wordBodyEdit.reassembled(body: newBody)
+                            if full != editedWordText { editedWordText = full }
+                        }
                 }
-
-                editorSection(title: L10n.t("歌词（LRC）"), icon: "text.alignleft", text: $editedLyricsBody, minHeight: 220, monospaced: true, disabled: summary.hasWordTiming, showCopyButton: true)
-                    // 两条 onChange 互不打圈,理由见 LyricsBodyEdit 头注:外部写进来的 editedLyrics(换曲 / 采纳候选 /
-                    // 重新匹配)才重算正文;编辑框自己拼回去的那次(值恰好等于 reassembled)跳过,不然用户敲的回车会被归一化吃掉。
-                    .onChange(of: editedLyrics, initial: true) { _, raw in
-                        if raw == lyricsBodyEdit.reassembled(body: editedLyricsBody) { return }
-                        lyricsBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
-                        editedLyricsBody = lyricsBodyEdit.body
-                    }
-                    .onChange(of: editedLyricsBody) { _, newBody in
-                        let full = lyricsBodyEdit.reassembled(body: newBody)
-                        if full != editedLyrics { editedLyrics = full }
-                    }
                 editorSection(title: L10n.t("译文"), icon: "character.book.closed", text: $editedTrBody, minHeight: 70, monospaced: false)
                     .onChange(of: editedTr, initial: true) { _, raw in
                         if raw == trBodyEdit.reassembled(body: editedTrBody) { return }
@@ -2820,9 +2842,7 @@ struct LyricsManagerView: View {
 
     private var wordTimingHint: some View {
         Label(
-            // 改文案:原来这句让"先点「移除逐字时间轴」",而那个按钮已经去掉
-            // 了(见 actionsRow 里的注释)。现在指向仍然存在的那条路——换一份不带逐字的候选。
-            L10n.t("播放用的是逐字时间轴，改「歌词（LRC）」不生效。要手改主歌词，先用「联网搜索候选歌词」换一份不带逐字的；译文/读音不受影响"),
+            L10n.t("逐字歌词只改字：每个字原来的时间不变；新加的句子、改了时间戳的句子按字数分配时间"),
             systemImage: "info.circle"
         )
         .font(.caption)
@@ -2836,7 +2856,7 @@ struct LyricsManagerView: View {
     }
 
     /// latinIcon:图标必须画成拉丁字母才说得通(「罗马音」),理由见 LatinIconLabel。
-    private func editorSection(title: String, icon: String, text: Binding<String>, minHeight: CGFloat, monospaced: Bool, disabled: Bool = false, latinIcon: Bool = false, showCopyButton: Bool = false) -> some View {
+    private func editorSection(title: String, icon: String, text: Binding<String>, minHeight: CGFloat, monospaced: Bool, latinIcon: Bool = false, showCopyButton: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Group {
@@ -2875,13 +2895,6 @@ struct LyricsManagerView: View {
                 .frame(minHeight: minHeight)
                 .padding(8)
                 .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-                // 补上——带逐字时间轴的歌曲,上面 wordTimingHint 已经用一段
-                // 蓝色提示文字警告"改这个文本框不会生效",但文本框本身依然完全可编辑,
-                // 容易被跳过阅读直接开始改,做一次看似成功、实际无效的修改。真正禁用
-                // 输入(而不是仅靠文字提示),配合降低不透明度给出"这里现在改不了"的
-                // 直观视觉反馈——想改主歌词得先换一份不带逐字的候选(跟 wordTimingHint 说的一致)。
-                .disabled(disabled)
-                .opacity(disabled ? 0.5 : 1)
         }
     }
 
@@ -2893,16 +2906,39 @@ struct LyricsManagerView: View {
                     // 引擎可能补了机翻、重新打分换了更好的词;三格原样交回去会把那些新内容盖掉(连同译文记录)。
                     let disk = store.detail(for: key)
                     guard disk.complete, editingKey == key else { return }
-                    let lyrics = editedLyrics != loadedLyrics ? editedLyrics : disk.lyrics
+                    var lyrics = editedLyrics != loadedLyrics ? editedLyrics : disk.lyrics
                     let tr = editedTr != loadedTr ? editedTr : disk.tr
                     let roma = editedRoma != loadedRoma ? editedRoma : disk.roma
+                    // 逐字歌词改了字:以载入时那份逐字为底套回去,整行歌词里对得上的行跟着换(LyricsWordTimingEdit)。
+                    var yrc: String?
+                    var word: LyricsWordTimingEdit.Result?
+                    if !loadedYRC.isEmpty, editedWordText != loadedWordText {
+                        let result = LyricsWordTimingEdit.apply(edited: editedWordText, yrc: loadedYRC, lrc: lyrics)
+                        yrc = result.yrc
+                        lyrics = result.lrc
+                        word = result
+                    }
+                    let before = (lyrics: persistedLyricsForOffset, yrc: persistedYRCForOffset)
                     // 没存上就到此为止:红字横幅已经在说,编辑框里用户敲的内容原样留着,别闪「已保存」。
-                    guard await store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma) else { return }
+                    guard await store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc) else { return }
                     // 存的过程中切到了别的歌:编辑框和偏移已经是那一首的了,别用这首的结果去改。
                     guard editingKey == key else { return }
+                    // 只改了字、时间轴没动:单曲偏移按正文指纹存,搬到新正文下,不然调好的偏移看着像没了。
+                    let after = store.detail(for: key)
+                    if word?.timingUnchanged ?? (yrc == nil && LyricsWordTimingEdit.sameLineTimes(before.lyrics, after.lyrics)) {
+                        carryOffset(summary, from: before, to: (after.lyrics, after.yrc))
+                    }
                     // 编辑框换成刚落盘的权威内容(不再算未保存);歌词内容可能改了,offset 的 key(内容指纹)也跟着
                     // 变,loadDetail 顺带按盘上那份重算偏移状态。
                     loadDetail(key: key)
+                    if let estimated = word?.estimatedLines, estimated > 0 {
+                        let note = String(format: L10n.t("%@ 句是新加的或改了时间戳，逐字时间按字数分配"), "\(estimated)")
+                        saveEditNote = note
+                        Task {
+                            try? await Task.sleep(for: .seconds(5))
+                            if saveEditNote == note { withAnimation { saveEditNote = nil } }
+                        }
+                    }
                     withAnimation { showSaveEditFeedback = true }
                     try? await Task.sleep(for: .seconds(1))
                     withAnimation { showSaveEditFeedback = false }
@@ -2914,6 +2950,12 @@ struct LyricsManagerView: View {
             .buttonStyle(.borderedProminent)
             .keyboardShortcut("s", modifiers: .command)
             .disabled(detailIncomplete)
+            if let saveEditNote {
+                Text(saveEditNote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
 
             // 去掉了「移除逐字时间轴」按钮。它做的事是把这条的逐字
             // 数据清空、好让主歌词文本框可编辑,但那个入口本身的收益很薄:逐字时间轴是这套
@@ -3048,6 +3090,10 @@ struct LyricsManagerView: View {
         editedLyrics = d.lyrics
         editedTr = d.tr
         editedRoma = d.roma
+        loadedYRC = LyricsWordTimingEdit.hasWordLines(d.yrc) ? d.yrc : ""
+        loadedWordText = loadedYRC.isEmpty ? "" : LyricsWordTimingEdit.editableText(yrc: loadedYRC)
+        editedWordText = loadedWordText
+        saveEditNote = nil
         if let summary = store.summaries.first(where: { $0.key == key }) {
             refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
         }
@@ -3062,6 +3108,17 @@ struct LyricsManagerView: View {
         persistedYRCForOffset = yrc
         let key = LyricsOffsetStore.trackKey(artist: artist, title: title, lyrics: lyrics, lyricsYRC: yrc)
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: key))
+    }
+
+    /// 只改了字的保存:这首的单曲偏移从旧正文的指纹搬到新正文下(新指纹下已经有值就不动)。
+    private func carryOffset(_ summary: EnrichCacheStore.Summary, from old: (lyrics: String, yrc: String),
+                             to new: (lyrics: String, yrc: String)) {
+        let oldKey = LyricsOffsetStore.trackKey(artist: summary.artist, title: summary.title, lyrics: old.lyrics, lyricsYRC: old.yrc)
+        let newKey = LyricsOffsetStore.trackKey(artist: summary.artist, title: summary.title, lyrics: new.lyrics, lyricsYRC: new.yrc)
+        let ms = LyricsOffsetStore.shared.offset(forKey: oldKey)
+        guard ms != 0, oldKey != newKey, LyricsOffsetStore.shared.offset(forKey: newKey) == 0 else { return }
+        LyricsOffsetStore.shared.setOffset(0, forKey: oldKey, pinKey: "")
+        LyricsOffsetStore.shared.setOffset(ms, forKey: newKey, pinKey: summary.key)
     }
 
     private func currentOffsetKey(_ summary: EnrichCacheStore.Summary) -> String {

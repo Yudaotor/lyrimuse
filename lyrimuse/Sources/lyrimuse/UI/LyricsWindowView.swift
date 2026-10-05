@@ -2565,6 +2565,11 @@ struct LyricsWindowView: View {
                     // (要不要显示歌词栏 / 换成播放记录 / 开翻译菜单),在预览里既点不动,切出来的
                     // 状态也只属于预览这一份实例,跟用户真打开的那扇窗没关系。
                     HStack(spacing: 8.5) {
+                        // 搜索歌词 / 重新自动匹配 / 用外部编辑器改歌词(07 章决策 112)。广告、电台串场时置灰。
+                        if !previewMode, !isIdle {
+                            LyricsWindowActionsCapsule(onArtwork: hasArtworkBackground, enabled: !lyricsOnHold,
+                                                       onSearch: { openLyricsSearch() })
+                        }
                         if !previewMode, !isIdle,
                             playback.hasLyricsContent && (trackHasTranslation || trackHasRomanization)
                             && lyricsPaneVisible {
@@ -2581,6 +2586,15 @@ struct LyricsWindowView: View {
                     }
                     .padding(.trailing, 10)
                     .padding(.bottom, 11)
+                }
+                // 那排按钮发起的动作说的那一句(重新匹配的进度和结论、外部编辑器的回执),悬在那排上方。
+                .overlay(alignment: .bottomTrailing) {
+                    if !previewMode, !isIdle {
+                        LyricsWindowActionCaption(currentTitle: playback.title, onArtwork: hasArtworkBackground)
+                            .frame(maxWidth: min(380, max(200, geo.size.width - 40)), alignment: .trailing)
+                            .padding(.trailing, 10)
+                            .padding(.bottom, 11 + 36 + 8)
+                    }
                 }
                 // 「翻译与发音」菜单:同「⋯」菜单的窗级自绘玻璃面板机制,悬在按钮上方、
                 // 右缘对齐(AM 同款)。
