@@ -57,9 +57,8 @@ func kugouLyric(ctx context.Context, artist, title, album string, durationSecs f
 	if title == "" {
 		return kugouResult{}
 	}
-	// album 进 key:它现在参与采纳判定(见 resolveKugouLyric 里的
-	// lyricRecordingTriangleMatches 档),同一个 (artist,title) 配不同专辑标签可能得出
-	// 不同结果,不能共用一份缓存。
+	// album 进 key:它参与采纳判定(见 kugouOriginalGate 里的三角判据),同一个 (artist,title) 配不同专辑标签
+	// 可能得出不同结果,不能共用一份缓存。
 	key := artist + "|" + title + "|" + album
 	kugouMu.Lock()
 	if v, ok := kugouCache[key]; ok {
@@ -569,8 +568,9 @@ func kugouOriginalGate(s *kugouSong, artist, title, album string, durationSecs f
 	// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
 	// = 同一次录音。修的是"艺名与本名 / 乐队名与成员名"这类连分隔符都没有、
 	// 段集交集档和别名轮都够不到的署名分歧(实测案例见
-	// lyricRecordingTriangleMatches 的注释)。
-	if lyricRecordingTriangleMatches(s.SongName, s.AlbumName, s.Duration, title, album, durationSecs) {
+	// lyricRecordingTriangleMatches 的注释)。候选专辑名就是歌名(单曲)时还要两边歌手名互相包含,同网易云 / 汽水 /
+	// Apple Music,见 lyricRecordingTriangleMatchesGuarded。
+	if lyricRecordingTriangleMatchesGuarded(s.SongName, s.AlbumName, s.SingerName, s.Duration, title, album, artist, durationSecs) {
 		return true, true
 	}
 	return false, false

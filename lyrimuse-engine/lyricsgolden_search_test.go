@@ -8,7 +8,7 @@
 // 四个源有自己的挑选逻辑,四个纯函数各接一份样本:
 //   - netease:neteasePickSong(从 resolveNeteaseInfo 的 pick 闭包提出)
 //   - qq:qqCollectCandidates(strict / loose 两档)→ qqPickCandidateWithAlbum(有本地专辑名)/ qqPickCandidate
-//   - kugou:pickKugouSearchCandidate(含 lyricRecordingTriangleMatches 第三档)
+//   - kugou:pickKugouSearchCandidate(含 lyricRecordingTriangleMatchesGuarded 第三档)
 //   - lrclib:pickLRCLIBSearchResultDetailed(先带时间戳、再纯文本兜底)
 //
 // 样本 = 真实搜索结果的**元数据**(id / 歌名 / 歌手 / 专辑 / 自报时长 / 语种)+ 本地查询词 + 期望的挑选

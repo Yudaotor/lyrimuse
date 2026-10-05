@@ -1646,7 +1646,7 @@ func lyricRecordingTriangleMatches(candTitle, candAlbum string, candDurationSecs
 // lyricRecordingTriangleMatchesGuarded 是 lyricRecordingTriangleMatches 外加一道:候选的专辑名就是歌名
 // (单曲;去掉「 - Single」「 - EP」后比)时,专辑对得上证明不了是同一张发行,同名翻唱单曲时长碰巧在
 // 1% 以内就会混进来;这时还要两边歌手名归一后一个包含另一个(「A B」对「AB」、「前缀A」对「A」)。
-// 汽水与 Apple Music 的歌手闸兜底用它,酷狗用不带这道的那个。见 09 章决策 141。
+// 网易云、汽水、Apple Music、酷狗的歌手闸兜底都用它。见 09 章决策 141、184。
 func lyricRecordingTriangleMatchesGuarded(candTitle, candAlbum, candArtist string, candDurationSecs float64,
 	localTitle, localAlbum, localArtist string, localDurationSecs float64) bool {
 	if !lyricRecordingTriangleMatches(candTitle, candAlbum, candDurationSecs, localTitle, localAlbum, localDurationSecs) {

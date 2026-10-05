@@ -120,6 +120,22 @@ func TestPickKugouSearchCandidate(t *testing.T) {
 		}
 	})
 
+	t.Run("候选专辑名就是歌名时三角判据还要歌手名互相包含", func(t *testing.T) {
+		// 同名翻唱单曲:歌名逐字同名,专辑「Yummy Yummy」对「Yummy Yummy - Single」,时长差 0.46%,歌手毫不相干。
+		cover := []kugouSong{{Hash: "A", SongName: "Yummy Yummy", SingerName: "曾琸庭、刘庭君、林晓蕙、张鈊贻", AlbumName: "Yummy Yummy", Duration: 168}}
+		if got := pickKugouSearchCandidate(cover, "Toni Lozano", "Yummy Yummy", "Yummy Yummy - Single", 167.234); got != nil {
+			t.Fatalf("同名翻唱单曲不该过闸,拿到 %+v", got)
+		}
+		same := kugouSong{Hash: "B", SongName: "Hello", SingerName: "Tank", AlbumName: "Hello", Duration: 200}
+		if ok, byTriangle := kugouOriginalGate(&same, "Tank Lu", "Hello", "Hello", 200.5); !ok || !byTriangle {
+			t.Errorf("专辑就是歌名、歌手名一个包含另一个:该由三角判据放行, ok=%v byTriangle=%v", ok, byTriangle)
+		}
+		other := kugouSong{Hash: "C", SongName: "Hello", SingerName: "Someone Else", AlbumName: "Real Album", Duration: 200}
+		if ok, byTriangle := kugouOriginalGate(&other, "Local Artist", "Hello", "Real Album", 200.5); !ok || !byTriangle {
+			t.Errorf("专辑名不是歌名时照旧不看歌手, ok=%v byTriangle=%v", ok, byTriangle)
+		}
+	})
+
 	t.Run("缺 hash 的条目照旧忽略", func(t *testing.T) {
 		songs := []kugouSong{
 			{Hash: "", SongName: "简单爱 (Live)", SingerName: "周杰伦", Duration: 273},
