@@ -4,6 +4,7 @@
 #
 # 引擎那两道 CI 同款检查(go vet、死代码不得新增)只在要提交的路径里有 lyrimuse-engine/ 时跑:
 # verify 把要提交的路径写进 $PRIVATE_COMMIT_CHANGED 指向的文件(每行一个);没有这份清单时两道都跑。
+# go test 碰到引擎测试会读的模块外文件时带 -count=1,见下面 go_test_count 那段。
 set -euo pipefail
 
 if [ ! -d lyrimuse ] || [ ! -d lyrimuse-engine ]; then
@@ -18,6 +19,29 @@ if [ -n "${PRIVATE_COMMIT_CHANGED:-}" ] && [ -f "$PRIVATE_COMMIT_CHANGED" ]; the
   fi
 fi
 
+# go 的测试缓存只核对模块目录(lyrimuse-engine/)里的文件:引擎测试还读 Swift 源码、README、docs/、shared/ 这些
+# 模块外的文件,它们变了 go test 照样拿上一次的结果报通过。所以要提交的路径里有引擎测试读得到的模块外文件时,
+# go test 带 -count=1 重跑;读哪些按测试源码里出现的 "../<第一段>" 现算,新测试多读一个目录不用回来改这里。
+# 没有改动清单时同样重跑。
+go_test_count=""
+go_test_why="没有改动清单"
+if [ -n "${PRIVATE_COMMIT_CHANGED:-}" ] && [ -f "$PRIVATE_COMMIT_CHANGED" ]; then
+  go_test_why=""
+  read_roots="$( { /usr/bin/grep -hoE '"\.\./[^"/]+' lyrimuse-engine/*_test.go || true; } | sed 's#^"\.\./##'
+                 { /usr/bin/grep -hoE 'filepath\.Join\("\.\.", *"[^"]+"' lyrimuse-engine/*_test.go || true; } \
+                   | sed -E 's#.*"\.\.", *"##; s#"$##' )"
+  while IFS= read -r changed; do
+    case "$changed" in lyrimuse-engine/*|"") continue ;; esac
+    if printf '%s\n' "$read_roots" | /usr/bin/grep -qxF "${changed%%/*}"; then
+      go_test_why="要提交的 $changed 是引擎测试会读的模块外文件"
+      break
+    fi
+  done < "$PRIVATE_COMMIT_CHANGED"
+fi
+if [ -n "$go_test_why" ]; then
+  go_test_count="-count=1"
+fi
+
 echo "==> swift build"
 (cd lyrimuse && swift build)
 
@@ -29,7 +53,10 @@ echo "==> Localizable.xcstrings 能解析"
   lyrimuse/Localization/Localizable.xcstrings
 
 echo "==> go test"
-(cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go test ./...)
+if [ -n "$go_test_count" ]; then
+  echo "    带 -count=1 重跑($go_test_why;go 的测试缓存认不出模块外的文件变了)"
+fi
+(cd lyrimuse-engine && GOTOOLCHAIN=go1.24.4 go test ${go_test_count:+"$go_test_count"} ./...)
 
 echo "==> gofmt"
 unformatted="$(cd lyrimuse-engine && gofmt -l .)"
