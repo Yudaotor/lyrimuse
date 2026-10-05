@@ -38721,6 +38721,29 @@
           }
         }
       }
+    },
+    "显示触控栏歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Touch Bar Lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示触控栏歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示觸控列歌詞"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

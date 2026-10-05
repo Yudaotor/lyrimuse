@@ -106,6 +106,13 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         quick.addItem(toggle(L10n.t("显示菜单栏歌词"), symbol: "menubar.rectangle",
                              on: settings.showLyricsInMenuBar,
                              action: #selector(toggleMenuBarLyrics)))
+        // 触控栏歌词:这台 Mac 此刻有触控栏时才有(`TouchBarAvailability`,App 启动时已经开始盯,读它没有副作用)。
+        // 跟菜单栏歌词一样只翻 AppSettings 那个布尔值,`TouchBarLyricsController` 盯着它启停,拨开的那一下顺手展开。
+        if TouchBarAvailability.shared.isPresent {
+            quick.addItem(toggle(L10n.t("显示触控栏歌词"), symbol: "rectangle.and.hand.point.up.left",
+                                 on: settings.showLyricsInTouchBar,
+                                 action: #selector(toggleTouchBarLyrics)))
+        }
         // 只有经典悬浮窗有"锁定位置"这个概念(灵动岛的位置是算出来的、贴死屏幕顶部)。
         // 这一项是全文件唯一允许碰 .shared 的构建路径,前提就是这个 if(见文件头)。
         if settings.classicOverlayEnabled {
@@ -243,6 +250,10 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
 
     @objc private func toggleMenuBarLyrics() {
         AppSettings.shared.showLyricsInMenuBar.toggle()
+    }
+
+    @objc private func toggleTouchBarLyrics() {
+        AppSettings.shared.showLyricsInTouchBar.toggle()
     }
 
     @objc private func toggleLockPosition() {
