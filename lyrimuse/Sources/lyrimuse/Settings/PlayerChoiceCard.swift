@@ -52,12 +52,17 @@ struct PlayerChoiceCard: View {
         // 旁白要能读出"选没选中" —— `Button` 自带 `.isButton`,但选中与否此前只存在于
         // 描边颜色里,VoiceOver 读到的永远是"Apple Music,按钮",听不出勾没勾。
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        // 虚线框、角标和压暗的图标都是视觉,旁白读不到 —— 用同一句提示补上,前面先说它是什么。
-        .accessibilityValue([Self.about(player), status].compactMap { $0 }.joined(separator: "\n"))
-        // 「它是什么」那句用自绘的悬停气泡:系统 tooltip 只在 lyrimuse 是前台 App 时才弹(见 `HoverNote`)。
-        // 别再并进下面的 `.help`,两种都弹时会出两个。
-        .hoverNote(Self.about(player))
-        .help(status ?? "")
+        // 虚线框、角标和压暗的图标都是视觉,旁白读不到 —— 读悬停说明那几句补上。
+        .accessibilityValue(note ?? "")
+        // 悬停说明用自绘的气泡:系统 tooltip 只在 lyrimuse 是前台 App 时才弹(见 `HoverNote`)。别再挂 `.help`,
+        // 两种都弹时会出两个。
+        .hoverNote(note)
+    }
+
+    /// 悬停说明:先说它是什么,再说它现在的状态,都没有时为 nil。旁白读同一份。
+    private var note: String? {
+        let lines = [Self.about(player), status].compactMap { $0 }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
     private var status: String? {

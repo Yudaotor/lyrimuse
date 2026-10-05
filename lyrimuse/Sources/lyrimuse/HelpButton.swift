@@ -121,38 +121,38 @@ struct QuickHelpLabel<Content: View>: View {
 ///
 /// 不用 `.help()`:系统 tooltip 只在前台 App 的窗口上弹,lyrimuse 是 LSUIElement,设置窗口开着而前台是别的 App
 /// 时悬停什么都不出(见 14 章「选择播放器」改版那条下的小条)。时序同 `QuickHelpLabel`。
+///
+/// text 为 nil 时不弹。悬停和气泡始终挂着:按 text 有无换成两套视图的话,text 一变控件就被当成新视图重建。
 private struct HoverNote: ViewModifier {
     let text: String?
-    @State private var isPresented = false
+    /// 鼠标停够了、还没移开。弹不弹每次刷新时按当下的 text 算,别在计时到点那一刻定:计时期间点一下卡片会改它的
+    /// 状态,说明可能随之变成没有,到点时手里那份 text 已经过期。
+    @State private var hovering = false
     @State private var hoverTask: Task<Void, Never>?
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if let text {
-            content
-                .onHover { inside in
-                    hoverTask?.cancel()
-                    hoverTask = Task {
-                        try? await Task.sleep(for: inside ? .milliseconds(500) : .milliseconds(150))
-                        guard !Task.isCancelled else { return }
-                        isPresented = inside
-                    }
+        content
+            .onHover { inside in
+                hoverTask?.cancel()
+                hoverTask = Task {
+                    try? await Task.sleep(for: inside ? .milliseconds(500) : .milliseconds(150))
+                    guard !Task.isCancelled else { return }
+                    hovering = inside
                 }
-                .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-                    Text(text)
-                        .font(.callout)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(10)
-                        .frame(maxWidth: 260, alignment: .leading)
-                }
-                .onDisappear { hoverTask?.cancel() }
-        } else {
-            content
-        }
+            }
+            .popover(isPresented: Binding(get: { hovering && text != nil }, set: { if !$0 { hovering = false } }),
+                     arrowEdge: .bottom) {
+                Text(text ?? "")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(10)
+                    .frame(maxWidth: 260, alignment: .leading)
+            }
+            .onDisappear { hoverTask?.cancel() }
     }
 }
 
 extension View {
-    /// 悬停一会儿弹一句说明(见 `HoverNote`);text 为 nil 时什么都不加。
+    /// 悬停一会儿弹一句说明(见 `HoverNote`);text 为 nil 时不弹。
     func hoverNote(_ text: String?) -> some View { modifier(HoverNote(text: text)) }
 }
