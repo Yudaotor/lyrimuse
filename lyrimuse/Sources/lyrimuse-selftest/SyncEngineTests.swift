@@ -627,6 +627,48 @@ func runSyncEngineTests() {
                                                  budget: romaBudget).compactMap(\.part)
         expectEqual(unmatched.map(\.romanization), [nil, nil], "按宽度断句(罗马音): 对不上又放得下时每段显示整句")
 
+        // 合并时补不补空格:日文后一句以助词 / 助动词或行首禁则字开头时连写,别的补空格。
+        expectEqual(LyricsSegmenter.mergeSeparator(after: "おのおの", before: "のスマイルで", script: .japanese), "",
+                    "按宽度断句(合并): 后一句以助词开头时连写")
+        expectEqual(LyricsSegmenter.mergeSeparator(after: "天候すら超える", before: "ようこそ", script: .japanese), " ",
+                    "按宽度断句(合并): 后一句是独立的词时补空格")
+        expectEqual(LyricsSegmenter.mergeSeparator(after: "あのビルの先", before: "手を伸ばして", script: .japanese), " ",
+                    "按宽度断句(合并): 只看后一句自己的第一个词,不把接缝两边拼起来分词")
+        expectEqual(LyricsSegmenter.mergeSeparator(after: "我爱你", before: "的心", script: .chinese), " ",
+                    "按宽度断句(合并): 中文照旧补空格")
+        expectEqual(LyricsSegmenter.mergeSeparator(after: "どこにも行けないんだと", before: "だからこそ", script: .japanese), " ",
+                    "按宽度断句(合并): 也能开新句子的词(だから / でも / なんて)开头时补空格")
+        let jaJoin = LyricsSyncEngine()
+        jaJoin.load(lyrics: "", lyricsTr: "", lyricsRoma: "",
+                    lyricsYRC: "[1000,1400](1000,1400,0)おのおの\n[2500,1400](2500,1400,0)のスマイルで\n"
+                        + "[4000,3000](4000,3000,0)長い長い一つの文がここに続いている\n", lineBreaks: .all)
+        jaJoin.setLayoutBudget(budget(400), for: .overlay)
+        expectEqual(jaJoin.surfaceTick(.overlay, atMs: 1200).line?.plainText, "おのおののスマイルで",
+                    "按宽度断句(合并): 合成句里接续的两句连写")
+        // 一长串片假名被分词器认成一个词时,连续重复的那几段之间能断。
+        let katakana = LyricsSegmenter.WordBreaks(text: "プリーズプリーズヘルプミー", script: .japanese)
+        expectEqual(katakana?.penalty(at: 8), 0.15, "按宽度断句(词界): 重复的片假名之间能断")
+        expectEqual(katakana?.penalty(at: 2), .some(nil), "按宽度断句(词界): 片假名词里别处照旧不断")
+        let rotated = LyricsSegmenter.WordBreaks(text: "アイタイアイタイアイシテ", script: .japanese)
+        expectEqual(rotated?.penalty(at: 4), 0.15, "按宽度断句(词界): 重复片假名断在每一遍之间")
+        expectEqual(rotated?.penalty(at: 6), .some(nil), "按宽度断句(词界): 重复片假名不断在错开一位的地方")
+        expectEqual(LyricsSegmenter.WordBreaks(text: "アイタイアイタイアイタイシテ", script: .japanese)?.penalty(at: 12), 0.15,
+                    "按宽度断句(词界): 重复三遍时第三遍后面也能断")
+        expectEqual(LyricsSegmenter.segments([lrcLine("プリーズプリーズヘルプミー")], budget: budget(90))
+                        .compactMap { $0.part?.text }, ["プリーズプリーズ", "ヘルプミー"],
+                    "按宽度断句(词界): 重复的片假名断在重复处")
+        // 只有逐行时间的日文按读音的拍数估每段几点开唱:汉字多的前半句唱得久,后半句开唱得晚。
+        let moraParts = LyricsSegmenter.segments([lrcLine("東京特許許可局ありがとう")], budget: budget(90)).compactMap(\.part)
+        if moraParts.count == 2 {
+            let byWidth = 1000 + 6000 * moraParts[0].text.count / 12
+            expectEqual(moraParts[1].startMs - byWidth > 250, true, "按宽度断句(估时): 日文按拍数估,汉字多的前半句唱得久")
+        } else {
+            expectEqual(moraParts.count, 2, "按宽度断句(估时): 测试句拆成两段")
+        }
+        expectEqual(Romanizer.moraCount("toukyou"), 4, "按宽度断句(估时): 拍数按元音数")
+        expectEqual(Romanizer.moraCount("motta"), 3, "按宽度断句(估时): 促音算一拍")
+        expectEqual(Romanizer.moraCount("shinjitsu"), 4, "按宽度断句(估时): 拨音算一拍")
+
         // 促音后面不断:断开的话前一段的读音少一个辅音。
         expectEqual(LyricsSegmenter.cutPenalty(after: "行っ", before: "たって"), nil, "按宽度断句: 促音后面不断")
         expectEqual(LyricsSegmenter.cutPenalty(after: "あっ ", before: "見て"), 0.05, "按宽度断句: 促音后面隔着空格照常能断")

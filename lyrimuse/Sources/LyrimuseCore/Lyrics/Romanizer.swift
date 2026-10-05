@@ -527,6 +527,24 @@ public enum Romanizer {
         return RomanizationAligner(text: text, romanization: romanization, script: script)?.cuts(at: cuts)
     }
 
+    /// 一段罗马字读音的拍数(估):元音个数(带长音符号的算两拍)+ 拨音 n + 促音(双写的辅音)。标点没有拍数。
+    public static func moraCount(_ latin: String) -> Int {
+        let s = Array(latin.lowercased())
+        var n = 0
+        for (i, c) in s.enumerated() {
+            if "aiueo".contains(c) {
+                n += 1
+            } else if "āīūēō".contains(c) {
+                n += 2
+            } else if c == "n", i + 1 >= s.count || !"aiueoy".contains(s[i + 1]) {
+                n += 1
+            } else if c.isLetter, i + 1 < s.count, s[i + 1] == c, !"aiueon".contains(c) {
+                n += 1
+            }
+        }
+        return n
+    }
+
     /// 罗马音里每个切口前面的读音,允许跟分词器的读音长度差这么多(按比例,至少 2 个字母):两边的写法不完全
     /// 一样(「wo / o」「ou / ō」),整句越长差得越多。
     static let japaneseRomanizationCutTolerance = 0.12

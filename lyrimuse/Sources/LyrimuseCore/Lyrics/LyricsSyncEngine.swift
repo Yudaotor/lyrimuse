@@ -3116,8 +3116,8 @@ public final class LyricsSyncEngine {
             side: displayLineSide(i), plainText: text, backgroundWords: partBackground)
     }
 
-    /// 第 f…l 行合成的一句:逐字词首尾相接(句与句之间补一个空格),末字按下一段的起点压;译文 / 罗马音
-    /// 各自用空格连起来;背景人声接在一起。
+    /// 第 f…l 行合成的一句:逐字词首尾相接(句与句之间按 `LyricsSegmenter.mergeSeparator` 补空格或连写,跟断句量宽同一口径),
+    /// 末字按下一段的起点压;译文 / 罗马音各自用空格连起来;背景人声接在一起。
     private func buildMergedLine(_ f: Int, _ l: Int) -> SyncedLyricLine {
         let nextStart = gapLineStartMs(at: l + 1)
         func joinedSecondary(_ pick: (Int, String) -> String?) -> String? {
@@ -3137,7 +3137,9 @@ public final class LyricsSyncEngine {
                 var ws = wordLines[k].words.map {
                     SyncedLyricWord(text: $0.text, startMs: $0.startMs, durationMs: $0.durationMs)
                 }
-                if k < l, let tail = ws.last, tail.text.last?.isWhitespace != true {
+                if k < l, let tail = ws.last, tail.text.last?.isWhitespace != true,
+                   !LyricsSegmenter.mergeSeparator(after: displayLineText(k), before: displayLineText(k + 1),
+                                                   script: Romanizer.script(ofLine: displayLineText(k + 1), song: songScript)).isEmpty {
                     ws[ws.count - 1] = SyncedLyricWord(text: tail.text + " ", startMs: tail.startMs, durationMs: tail.durationMs)
                 }
                 words += ws
@@ -3151,7 +3153,14 @@ public final class LyricsSyncEngine {
                 side: displayLineSide(f), plainText: joined,
                 backgroundWords: background.isEmpty ? nil : background)
         }
-        let text = (f...l).map { baseLines[$0].text }.joined(separator: " ")
+        var text = ""
+        for k in f...l {
+            if k > f {
+                text += LyricsSegmenter.mergeSeparator(after: baseLines[k - 1].text, before: baseLines[k].text,
+                                                       script: Romanizer.script(ofLine: baseLines[k].text, song: songScript))
+            }
+            text += baseLines[k].text
+        }
         return SyncedLyricLine(
             romanization: romanization, translation: translation, mainText: text,
             words: nil, wordGroups: nil, side: displayLineSide(f), plainText: text)

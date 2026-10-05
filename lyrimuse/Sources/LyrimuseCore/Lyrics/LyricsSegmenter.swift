@@ -290,7 +290,8 @@ public enum LyricsSegmenter {
         var out: [SyncedLyricWord] = []
         for k in lines.indices {
             guard var ws = lines[k].words else { return nil }
-            if k < lines.count - 1, let tail = ws.last, tail.text.last?.isWhitespace != true {
+            if k < lines.count - 1, let tail = ws.last, tail.text.last?.isWhitespace != true,
+               !mergeSeparator(after: lines[k].text, before: lines[k + 1].text, script: lines[k + 1].script).isEmpty {
                 ws[ws.count - 1] = SyncedLyricWord(text: tail.text + " ", startMs: tail.startMs, durationMs: tail.durationMs)
             }
             out += ws
@@ -298,14 +299,36 @@ public enum LyricsSegmenter {
         return out
     }
 
+    /// 相邻两句并成一句时中间接什么:日文后一句以只会接在别的词后面的助词 / 助动词(单独给它分词的第一个词,
+    /// `WordBreaks.japaneseContinuationStarts`)或行首禁则字开头时,它接着前一句(「おのおの」+「のスマイルで」),连写;
+    /// 别的一律补一个空格。断句量宽和引擎拼合成句都用它,两处必须一致。
+    public static func mergeSeparator(after previous: String, before next: String, script: LyricScript?) -> String {
+        let a = previous.trimmingCharacters(in: .whitespaces), b = next.trimmingCharacters(in: .whitespaces)
+        guard let last = a.unicodeScalars.last, let first = b.unicodeScalars.first,
+              isCJK(last), !isHangul(last) else { return " " }
+        if noLineStart.contains(first) || sentencePunctuation.contains(first) { return "" }
+        guard let head = b.first, WordBreaks.japaneseContinuationInitials.contains(head),
+              (script ?? Romanizer.script(ofLine: b, song: .other)) == .japanese,
+              let token = WordBreaks.firstJapaneseToken(b), WordBreaks.japaneseContinuationStarts.contains(token) else {
+            return " "
+        }
+        return ""
+    }
+
     static func joinedText(_ values: [String?]) -> String? {
         let parts = values.compactMap { $0 }.filter { !$0.isEmpty }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
-    /// 几行并成一句时的文字,跟引擎拼的一致:逐字句按词接(句间补的空格已在词里),行级句用空格连。
+    /// 几行并成一句时的文字,跟引擎拼的一致:逐字句按词接(句间补的空格已在词里),行级句按 `mergeSeparator` 接。
     static func mergedText(_ lines: [Line], words: [SyncedLyricWord]?) -> String {
-        words.map { $0.map(\.text).joined() } ?? lines.map(\.text).joined(separator: " ")
+        if let words { return words.map(\.text).joined() }
+        var out = ""
+        for (k, line) in lines.enumerated() {
+            if k > 0 { out += mergeSeparator(after: lines[k - 1].text, before: line.text, script: line.script) }
+            out += line.text
+        }
+        return out
     }
 
     /// 第 range 这几行并成一句(或就是一句)时,这个面上的每一行是不是都放得下。
@@ -620,15 +643,17 @@ public enum LyricsSegmenter {
         }
     }
 
-    /// 只有逐行时间的句子:按文字切成词(汉字 / 假名 / 谚文一个字一个),每个词几点开唱按它前面文字的宽度
-    /// 占整句的比例估。
+    /// 只有逐行时间的句子:按文字切成词(汉字 / 假名 / 谚文一个字一个),每个词几点开唱按它前面文字占整句的比例估:
+    /// 日文按读音的拍数(一个汉字常要唱两三拍),别的按宽度。
     static func estimatedWords(_ line: Line, measure: (String) -> CGFloat) -> [SyncedLyricWord] {
         let tokens = textTokens(line.text)
         guard !tokens.isEmpty else { return [] }
         var end = line.sungEndMs ?? line.nextStartMs ?? (line.startMs + estimatedMaxMsPerToken * tokens.count)
         end = min(end, line.startMs + estimatedMaxMsPerToken * tokens.count)
         let span = max(tokens.count, end - line.startMs)
-        let widths = tokens.map { max(measure($0), 0.01) }
+        let script = line.script ?? Romanizer.script(ofLine: line.text, song: .other)
+        let widths = (script == .japanese ? moraWeights(tokens, text: line.text) : nil)
+            ?? tokens.map { max(measure($0), 0.01) }
         let total = widths.reduce(0, +)
         var acc: CGFloat = 0
         var out: [SyncedLyricWord] = []
@@ -639,6 +664,23 @@ public enum LyricsSegmenter {
             out.append(SyncedLyricWord(text: t, startMs: start, durationMs: max(1, stop - start)))
         }
         return out
+    }
+
+    /// 日文一句里每个词的拍数(`Romanizer.moraCount`,一个分词片段的拍数按 UTF-16 长度摊到它的字上);标点、空白
+    /// 给一个极小值。分不出读音返回 nil。
+    static func moraWeights(_ tokens: [String], text: String) -> [CGFloat]? {
+        var perUnit = [CGFloat](repeating: 0, count: text.utf16.count)
+        for seg in Romanizer.japaneseSegments(text) where seg.utf16Length > 0 && seg.utf16End <= perUnit.count {
+            let each = CGFloat(Romanizer.moraCount(seg.latin)) / CGFloat(seg.utf16Length)
+            for u in seg.utf16Start..<seg.utf16End { perUnit[u] = each }
+        }
+        guard perUnit.contains(where: { $0 > 0 }) else { return nil }
+        var offset = 0
+        return tokens.map { t in
+            let n = t.utf16.count
+            defer { offset += n }
+            return max(perUnit[offset..<min(offset + n, perUnit.count)].reduce(0, +), 0.01)
+        }
     }
 
     /// 把一段文字切成词:连续的非空白、非中日韩字符是一个词(带上后面的空白),中日韩字一个字一个。
@@ -892,6 +934,16 @@ public enum LyricsSegmenter {
             "てる", "でる", "ちゃう", "ちゃっ", "じゃう", "じゃっ",
             "ん", "ぬ", "ず", "だろう", "でしょう", "らしい", "みたい",
         ]
+        /// 日文一句以这些词开头时,它是接着上一句的(合并时连写,见 `mergeSeparator`)。是 `japaneseAttached` 里
+        /// 不会出现在句首的那些:去掉了也能开一句新话的「だ(だから / だけど)」「で(でも)」「ない」「なんて」「けど」
+        /// 「よう(ようこそ)」「さ」「なら」「だっ(だって)」这类。
+        static let japaneseContinuationStarts: Set<String> = [
+            "の", "を", "が", "は", "に", "へ", "と", "も", "や", "か", "ね", "よ", "ぞ", "ぜ", "ば", "て", "って", "しか",
+            "た", "たい", "ます", "です", "れる", "られる", "せる", "させる", "ん", "ぬ", "ず", "まし", "でし", "ませ",
+            "なかっ", "たかっ", "てる", "でる", "ちゃう", "ちゃっ", "じゃう", "じゃっ", "らしい", "みたい", "たら", "だら",
+        ]
+        /// `japaneseContinuationStarts` 里各词的头一个字:后一句不以这些字开头就不用分词。
+        static let japaneseContinuationInitials: Set<Character> = Set(japaneseContinuationStarts.compactMap(\.first))
         /// 中文里跟着前一个词的虚字:不放到下一段开头。
         static let chineseAttached: Set<String> = [
             "的", "地", "得", "了", "着", "过", "吗", "呢", "吧", "啊", "呀", "们", "么", "嘛", "啦", "哦", "喔",
@@ -929,8 +981,50 @@ public enum LyricsSegmenter {
                     penalties[p.start] = Self.afterAttached
                 }
             }
+            if script == .japanese {
+                // 一长串片假名被分词器认成一个词时(「プリーズプリーズヘルプミー」),连续重复的那几段之间能断。
+                for p in pieces where p.end - p.start >= 4
+                    && p.text.unicodeScalars.allSatisfy({ (0x30A1...0x30FA).contains($0.value) || $0 == "ー" }) {
+                    for cut in Self.repeatBoundaries(p.text) { inside.remove(p.start + cut) }
+                }
+            }
             self.inside = inside
             self.penalties = penalties
+        }
+
+        /// 一段文字里连续重复的片段(至少 2 个字)每一遍前后的下标(UTF-16)。重复从它能往左延伸到的最早位置算起:
+        /// 错开一位的同一段重复不算,不然一段周期重复里每个位置都成了断点。
+        static func repeatBoundaries(_ text: String) -> Set<Int> {
+            let u = Array(text.utf16)
+            var out = Set<Int>()
+            guard u.count >= 4 else { return out }
+            for length in 2...(u.count / 2) {
+                for start in 0...(u.count - 2 * length)
+                where (start == 0 || u[start - 1] != u[start - 1 + length])
+                    && u[start..<(start + length)] == u[(start + length)..<(start + 2 * length)] {
+                    if start > 0 { out.insert(start) }
+                    var k = start + length
+                    while k + length <= u.count, u[(k - length)..<k] == u[k..<(k + length)] {
+                        out.insert(k)
+                        k += length
+                    }
+                    if k < u.count { out.insert(k) }
+                }
+            }
+            return out
+        }
+
+        /// 日文一段文字分词后的第一个词(跳过空白)。
+        static func firstJapaneseToken(_ text: String) -> String? {
+            let cf = text as CFString
+            guard let tokenizer = CFStringTokenizerCreate(nil, cf, CFRangeMake(0, CFStringGetLength(cf)),
+                                                          kCFStringTokenizerUnitWordBoundary, japaneseLocale) else { return nil }
+            while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+                let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                let piece = (text as NSString).substring(with: NSRange(location: r.location, length: r.length))
+                if !piece.trimmingCharacters(in: .whitespaces).isEmpty { return piece }
+            }
+            return nil
         }
 
         /// 在 UTF-16 下标 `offset` 处断开的代价;nil = 落在一个词中间。
