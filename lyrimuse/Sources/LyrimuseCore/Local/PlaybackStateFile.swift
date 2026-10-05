@@ -346,7 +346,7 @@ public enum PlaybackStateFile {
 /// 的记录,分得清是主线程卡住了还是计时器被系统推迟了。间隔按不含睡眠的系统运行时长算。
 ///
 /// 只在以 Lyrimuse.app 身份运行时落盘:selftest 与 `swift run` 起的进程共用同一个配置目录,
-/// 让它们写会盖掉正在运行的 App 那份,引擎就会读到测试数据。
+/// 让它们写会盖掉正在运行的 App 那份,引擎就会读到测试数据。测试另建实例(`init(sink:)`),写出的记录交给回调。
 ///
 /// 放歌时向系统持有一个活动(`holdsActivity(for:)`):没有可见窗口时 App Nap 会推迟计时器,保活一旦晚过引擎的
 /// 15 秒就被当成不可用。见 02 章决策 89。
@@ -355,7 +355,9 @@ public final class PlaybackStatePublisher {
     public static let shared = PlaybackStatePublisher()
     public static let lateHeartbeatSeconds: TimeInterval = 10
 
-    private let writesEnabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
+    private let writesEnabled: Bool
+    /// 测试实例写出的去处(编码好的记录);正式实例为 nil,写配置目录里的状态文件。
+    private let sink: ((Data) -> Void)?
     private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "playback-state")
     private var lastWriteUptime: TimeInterval?
 
@@ -372,7 +374,16 @@ public final class PlaybackStatePublisher {
     /// 放歌期间持有的系统活动,不放歌时为 nil。
     private var playbackActivity: NSObjectProtocol?
 
-    private init() {}
+    private init() {
+        writesEnabled = Bundle.main.bundleIdentifier == LyrimuseIdentity.bundleIdentifier
+        sink = nil
+    }
+
+    /// 测试用:每写出一份记录就交给 `sink`。不碰文件(状态文件、封面文件),不起保活计时器,不持有系统活动。
+    public init(sink: @escaping (Data) -> Void) {
+        writesEnabled = true
+        self.sink = sink
+    }
 
     public func publish(_ input: PlaybackStateFile.Input, now: Date = Date()) {
         guard !exiting else { return }
@@ -403,7 +414,7 @@ public final class PlaybackStatePublisher {
         }
         let sha = PlaybackStateFile.sha256Hex(data)
         tracker.noteArtwork(sha256: sha, mime: PlaybackStateFile.artworkMime(data), bytes: data.count)
-        if writesEnabled, sha != writtenArtworkSHA {
+        if writesEnabled, sink == nil, sha != writtenArtworkSHA {
             writtenArtworkSHA = sha
             let url = PlaybackStateFile.artworkURL
             artworkQueue.async { try? data.write(to: url, options: .atomic) }
@@ -436,7 +447,7 @@ public final class PlaybackStatePublisher {
 
     /// 选项只免 App Nap:别换成 `.userInitiated`,那个连系统空闲睡眠也拦。
     private func updateActivity(for state: PlaybackStateFile.State) {
-        guard writesEnabled else { return }
+        guard writesEnabled, sink == nil else { return }
         if Self.holdsActivity(for: state) {
             guard playbackActivity == nil else { return }
             playbackActivity = ProcessInfo.processInfo.beginActivity(
@@ -457,7 +468,7 @@ public final class PlaybackStatePublisher {
     }
 
     private func startHeartbeatIfNeeded() {
-        guard heartbeat == nil else { return }
+        guard sink == nil, heartbeat == nil else { return }
         let timer = Timer(timeInterval: PlaybackStateFile.heartbeatInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, !self.exiting, let content = self.lastContent else { return }
@@ -481,6 +492,10 @@ public final class PlaybackStatePublisher {
         let record = PlaybackStateFile.Record(content: content, appPID: appPID, appStartedAtMs: appStartedAtMs,
                                               seq: seq, writtenAtMs: PlaybackStateFile.millis(now))
         guard let data = PlaybackStateFile.encode(record) else { return }
-        try? data.write(to: PlaybackStateFile.url, options: .atomic)
+        if let sink {
+            sink(data)
+        } else {
+            try? data.write(to: PlaybackStateFile.url, options: .atomic)
+        }
     }
 }

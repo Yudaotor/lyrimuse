@@ -1420,6 +1420,20 @@ func runRomanizationTests() {
         expectEqual(lang("사랑해 Love you", ja: true, hant: true), nil, "排字语言: 没有汉字和假名 → 不标")
         let attrs = LyricTypesetting.attributes([:], for: "日本")
         expectEqual(attrs[LyricTypesetting.attributeKey] == nil, true, "排字语言: 不用标时属性原样返回")
+        let probe = NSAttributedString.Key("probe")
+        LyricTypesetting.setJapaneseSong(true)
+        let tagged = LyricTypesetting.attributes([probe: 1], for: "夢中")
+        expectEqual(tagged[LyricTypesetting.attributeKey] as? String, "ja", "排字语言: 当前是日文歌,标上 ja")
+        expectEqual(tagged[probe] as? Int, 1, "排字语言: 原有属性留着")
+        expectEqual(LyricTypesetting.attributes([:], for: "夢中", translation: true)[LyricTypesetting.attributeKey] == nil, true,
+                    "排字语言: 日文歌的译文行不标")
+        LyricTypesetting.setJapaneseSong(false)
+        LyricTypesetting.setTraditionalChinese(true)
+        expectEqual(LyricTypesetting.attributes([:], for: "夢中")[LyricTypesetting.attributeKey] as? String, "zh-Hant",
+                    "排字语言: 显示设成繁体,标上 zh-Hant")
+        LyricTypesetting.setTraditionalChinese(false)
+        expectEqual(LyricTypesetting.attributes([:], for: "夢中")[LyricTypesetting.attributeKey] == nil, true,
+                    "排字语言: 两个开关都关掉之后不标")
     }
 
     // ---- 同形异码字(康熙部首 / 部首补充 / 兼容表意文字)换回标准字 ----

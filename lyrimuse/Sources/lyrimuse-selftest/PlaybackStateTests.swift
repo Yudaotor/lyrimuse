@@ -1,8 +1,11 @@
+import CoreGraphics
 import Foundation
+import ImageIO
 import LyrimuseCore
 
 /// 播放状态文件(App 写、引擎读):契约样例 / 序号与位置状态机 / 撕裂快照守卫 / 封面标识。
 /// 样例 `shared/testdata/playback-state/` 与引擎的 appstate_test.go 共用。
+@MainActor
 func runPlaybackStateTests() {
     typealias F = PlaybackStateFile
 
@@ -182,4 +185,66 @@ func runPlaybackStateTests() {
     expectEqual(F.artworkMime(Data([0x00, 0x01])), "application/octet-stream", "封面类型: 认不出")
     expectEqual(F.sha256Hex(Data("abc".utf8)), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
                 "封面校验和: SHA-256 小写十六进制")
+
+    // ---- 写方:内容没变不重写,按住 / 只换封面 / 退出 ----
+    var written: [F.Record] = []
+    let publisher = PlaybackStatePublisher { data in
+        if let record = try? JSONDecoder().decode(F.Record.self, from: data) { written.append(record) }
+    }
+    publisher.publish(input(pos: 10), now: t0)
+    publisher.publish(input(pos: 11), now: t0.addingTimeInterval(1))
+    expectEqual(written.count, 1, "写方: 位置按外推走、内容没变不重写")
+    publisher.publish(input(pos: 40), now: t0.addingTimeInterval(2))
+    expectEqual(written.count, 2, "写方: 位置跳了重写")
+
+    publisher.setHolding(true)
+    expectEqual(written.last?.holding, true, "写方: 按住写出 holding")
+    let heldWrites = written.count
+    publisher.setHolding(true)
+    expectEqual(written.count, heldWrites, "写方: 已经按住不重写")
+    publisher.publish(input(pos: 41), now: t0.addingTimeInterval(3))
+    expectEqual(written.count == heldWrites + 1 && written.last?.holding == nil, true, "写方: 下一份新读数清掉 holding")
+
+    let cover = playbackStateTestPNG(300, 300), thumb = playbackStateTestPNG(320, 180)
+    expectNotEqual(cover, nil, "写方: 造得出测试封面")
+    publisher.noteArtwork(cover)
+    expectEqual(written.last?.artwork?.sha256, cover.map(F.sha256Hex), "写方: 换上封面只换封面那一项")
+    expectEqual(written.last?.artwork?.playSeq, written.last?.track?.playSeq, "写方: 封面带着这一首的 play_seq")
+    expectEqual(written.last?.position?.anchorSeq, written[written.count - 2].position?.anchorSeq, "写方: 只换封面不挪位置")
+    let covered = written.count
+    publisher.noteArtwork(cover)
+    expectEqual(written.count, covered, "写方: 同一张封面不重写")
+    publisher.noteArtwork(thumb)
+    expectEqual(written.count == covered + 1 && written.last?.artwork == nil, true, "写方: 不像封面的图按没有封面写")
+
+    publisher.publish(.idle(), now: t0.addingTimeInterval(4))
+    expectEqual(written.last?.state, .idle, "写方: 停播写 idle")
+    let idleWrites = written.count
+    publisher.setHolding(true)
+    publisher.noteArtwork(cover)
+    expectEqual(written.count, idleWrites, "写方: 停播时按住、换封面都不写")
+
+    publisher.publish(input(pos: 5), now: t0.addingTimeInterval(5))
+    publisher.markExiting()
+    expectEqual(written.last?.state, .exiting, "写方: 退出写 exiting")
+    let exited = written.count
+    publisher.publish(input("next song", pos: 6), now: t0.addingTimeInterval(6))
+    publisher.setHolding(true)
+    publisher.noteArtwork(playbackStateTestPNG(400, 400))
+    publisher.markExiting()
+    expectEqual(written.count, exited, "写方: 退出之后什么都不再写")
+    expectEqual(zip(written, written.dropFirst()).allSatisfy { $1.seq == $0.seq + 1 }, true, "写方: seq 每写一次加一")
+    expectEqual(Set(written.map(\.appPID)).count == 1 && Set(written.map(\.appStartedAtMs)).count == 1, true,
+                "写方: 进程号与启动时刻每份都一样")
+}
+
+/// 纯色 PNG,给写方测封面用。
+private func playbackStateTestPNG(_ width: Int, _ height: Int) -> Data? {
+    guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+          let image = ctx.makeImage() else { return nil }
+    let out = NSMutableData()
+    guard let dest = CGImageDestinationCreateWithData(out as CFMutableData, "public.png" as CFString, 1, nil) else { return nil }
+    CGImageDestinationAddImage(dest, image, nil)
+    return CGImageDestinationFinalize(dest) ? out as Data : nil
 }
