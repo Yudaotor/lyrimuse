@@ -2235,6 +2235,20 @@ func searchTitleVariants(title string) []string {
 	return append(stripped, title)
 }
 
+// titleFeatCreditRe 认歌名里合作署名的起点:featuring / feat. / feat / ft. / ft(大小写不敏感),前面是词边界,
+// 后面跟着名字(字母、数字或汉字打头;feat. 、ft. 后面可以不空格)。feat / ft 不带点时后面不能紧跟字母,「Feather」「Lift」不算。
+var titleFeatCreditRe = regexp.MustCompile(`(?i)\b(?:featuring|feat\.|feat\b|ft\.|ft\b)\s*[\p{L}\p{N}]`)
+
+// stripTitleFeatCredit 去掉歌名里合作署名起点之后的整段,返回前面那一截;找不到署名、或署名前面什么都没有
+// (歌名本身以这几个词开头)时 ok 为 false、原样返回。调用方先 stripParens:括号里的署名由它处理。
+func stripTitleFeatCredit(title string) (string, bool) {
+	loc := titleFeatCreditRe.FindStringIndex(title)
+	if loc == nil || strings.TrimSpace(title[:loc[0]]) == "" {
+		return title, false
+	}
+	return title[:loc[0]], true
+}
+
 // structuralTitlePrefixes 是曲目名前面那种**结构性标签**:Apple Music 这类平台会给串烧/
 // 间奏曲加上 "Medley: " / "Interlude: " 前缀,而歌词源的曲库里通常只有裸曲名。
 //
@@ -3288,7 +3302,7 @@ func liveAlbumIdentityConflict(localArtist, localTitle, localAlbum, candTitle, c
 }
 
 // lyricTitleAccepted 是**全部源共用**的唯一一条「这条候选的曲名算不算这首歌」判定。
-// 只认三种:
+// 只认下面几种(④ 结构性前缀写在函数体里):
 //
 //	① 归一化后完全相等;
 //	② 双方各自去掉括号段之后相等 —— 歌词源的曲名常常没有本地那串 "(Remastered 2014)"/
@@ -3296,6 +3310,8 @@ func liveAlbumIdentityConflict(localArtist, localTitle, localAlbum, candTitle, c
 //	③ 双语标题:一边是另一边的前缀,共同前缀含汉字、多出的尾巴全是拉丁字母 ——
 //	   QQ/酷狗给中文歌普遍缀英文别名("起源" vs "起源 Origin",实测这首歌
 //	   两个源都因此被拦,五源只剩两条候选)。见 bilingualTitleEqual。
+//	⑤ 本地歌名在括号外带合作署名(「X featuring Y」「X feat. Y」「X - ft. Y」):两边各自去掉括号段、
+//	   再去掉括号外那一段署名之后相等。只看本地歌名带不带:本地没带、候选带的照旧不认。见 stripTitleFeatCredit。
 //
 // **绝不认任意的双向子串包含**。那是之前 kugou/QQ/Musixmatch/netease 的
 // 做法,是个定时炸弹:"Real Love" 本来就是 "Real Love Baby" 的子串,查 "love" 能命中
@@ -3339,6 +3355,15 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 	fl := normLoose(stripStructuralTitlePrefix(stripParens(localTitle)))
 	if fc != "" && fl != "" && fc == fl {
 		return true
+	}
+	// ⑤ 本地歌名括号外的合作署名。只在本地带着这一段时才去掉两边的:本地是「X」、候选是「X feat. Y」时可能是
+	// 加了客串段落的另一次录音,别放宽成两边都去。去掉之后照旧是相等判定,版本差异照旧归 versionTagsMismatch。
+	// 见 09 章决策 187。
+	if xl, ok := stripTitleFeatCredit(stripParens(localTitle)); ok {
+		xc, _ := stripTitleFeatCredit(stripParens(candidateTitle))
+		if a, b := normLoose(xc), normLoose(xl); a != "" && b != "" && a == b {
+			return true
+		}
 	}
 	// ③ 双语标题(去括号后的形态上比,让「起源 Origin (Live)」这类叠加形态也能走到这里;
 	// live 之类的版本差异照旧由 versionTagsMismatch 那一层单独处理)
