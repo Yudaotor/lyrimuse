@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
@@ -110,7 +109,7 @@ func postRelay(ctx context.Context, cfg *config, path string, payload any) error
 	defer resp.Body.Close()
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("relay %s: status %d", path, resp.StatusCode)
+		return &relayHTTPError{path: path, status: resp.StatusCode}
 	}
 	return nil
 }

@@ -1024,7 +1024,7 @@ private struct MenuBarPanelView: View {
                 // 就是四个白点。
                 lastfmBadge(size: 11)
             }
-        case .error(let message), .missingCreds(let message):
+        case .error(let message), .missingCreds(let message), .warning(let message):
             // 出问题时换成警告图标 + 橙色,而不是只把文字染色 —— 颜色一个人扛不住"这里
             // 出事了"这件事(色弱、以及面板整体本来就是灰调)。具体哪儿出问题交给悬停提示,
             // 这一格宽度放不下一句完整的错误。

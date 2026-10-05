@@ -21,6 +21,7 @@ enum DestinationStatus {
     // 才是真需要被指出来的。
     case notConfigured(String)     // 无徽标:可选功能,从没配过
     case missingCreds(String)      // 橙:凭据不全(hint 点名具体缺哪个字段)
+    case warning(String)           // 橙:配全了,但最近一直没生效(网页推送一直连不上同步服务这类)
     case active(String? = nil)     // 绿:凭据齐全,可选带一句更具体的文案(如"已连接:xxx")
     case error(String)             // 红:硬性错误(ListenBrainz 缺 token / Last.fm 连接失败)
 
@@ -69,7 +70,7 @@ private struct DestinationStatusLabel: View {
                 // 详情页仍然如实说明状态(用户既然点进来了就是想知道),只是外观中性 ——
                 // 空心圆 + 次要色,跟"未启用"一个量级,不是警告。
                 Label(hint, systemImage: "circle").foregroundStyle(.secondary)
-            case .missingCreds(let hint):
+            case .missingCreds(let hint), .warning(let hint):
                 Label(hint, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(dimmed ? Color.primary : Color.orange)
             case .active(let detail):
@@ -99,7 +100,7 @@ private struct DestinationStatusIndicator: View {
         case .notConfigured:
             // 侧边栏这一档**什么都不画**。没配一个可选功能不是状态,不需要占一个位置。
             EmptyView()
-        case .missingCreds:
+        case .missingCreds, .warning:
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(dimmed ? Color.primary : Color.orange)
         case .active:
@@ -285,8 +286,10 @@ func lastfmDisplayName(config: ConfigStore) -> String {
 @MainActor
 /// mirrorInfo 是引擎落盘的"授权已失效"状态,调用方从 LastfmMirrorStatusWatcher
 /// 取 —— 必须经由观察器而不是在这里直接读文件:文件被删(引擎自愈)不触发任何
-/// SwiftUI 观察,直接读的话红标会滞留到下一次无关的重渲染。
-func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController, mirrorInfo: LastfmMirrorStatus.Info?) -> DestinationStatus {
+/// SwiftUI 观察,直接读的话红标会滞留到下一次无关的重渲染。relayVerdict 是引擎报的网页推送结果,
+/// 同理从 RelayPushStatusWatcher 取。
+func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController, mirrorInfo: LastfmMirrorStatus.Info?,
+                       relayVerdict: RelayPushStatus.Verdict = .ok) -> DestinationStatus {
     switch destination {
     case .listenBrainz:
         // ListenBrainz 是可选账号(只想用悬浮歌词可以完全不配),未配置不算硬性错误,
@@ -304,7 +307,9 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // 一个字段都没填 = 没碰过;填了地址没填令牌 = 真的缺东西,那个仍然报橙色。
         if config.isStateRelayUntouched { return .notConfigured(L10n.t("未配置（可选）")) }
         if let hint = config.stateRelayMissingHint() { return .missingCreds(hint) }
-        return .active()
+        // 填全了不等于推得出去:引擎报的推送结果压过「已配置」。
+        guard let problem = relayPushProblem(relayVerdict) else { return .active() }
+        return problem.isError ? .error(problem.text) : .warning(problem.text)
     case .lastfm:
         if case .failed(let msg) = lastfmConnect.state { return .error(msg) }
         // 徽标只报"连没连",不展开读/写两条链路各自的配置状态——那是内部架构,
@@ -319,6 +324,28 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // 只有一个字段,所以"没填"就等于"没碰过",没有中间态。
         if let hint = config.pushMissingHint() { return .notConfigured(hint) }
         return .active(config.notificationPlatform.displayName)
+    }
+}
+
+/// 网页推送推不出去时的那句话和轻重:配置错报红,一直连不上报橙;推送正常为 nil。侧边栏徽标和「网页推送」页
+/// 那行说明共用。
+@MainActor
+func relayPushProblem(_ verdict: RelayPushStatus.Verdict) -> (text: String, isError: Bool)? {
+    switch verdict {
+    case .ok: return nil
+    case .misconfigured(let problem): return (relayPushProblemText(problem), true)
+    case .unreachable(let problem): return (relayPushProblemText(problem), false)
+    }
+}
+
+@MainActor
+private func relayPushProblemText(_ problem: RelayPushStatus.Problem) -> String {
+    switch problem {
+    case .token: return L10n.t("访问令牌不对，同步服务拒绝了推送")
+    case .address: return L10n.t("同步服务地址不对")
+    case .rejected(let code): return String(format: L10n.t("同步服务拒绝了推送（%d）"), code)
+    case .server(let code): return String(format: L10n.t("同步服务一直出错（%d），网页上的状态没在更新"), code)
+    case .network: return L10n.t("连不上同步服务，网页上的状态没在更新")
     }
 }
 
@@ -342,6 +369,8 @@ struct AccountSidebarRow: View {
     // "授权已失效"红标的数据源。订阅观察器(而不是渲染时直接读文件)才能让红标在
     // 引擎自愈删掉状态文件后自己消失,见 LastfmMirrorStatusWatcher 注释。
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
+    // 「网页推送」推不出去时的红 / 橙徽标,订阅理由同上(见 RelayPushStatusWatcher)。
+    @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
     // 只为了让这一行在手动切换语言时重新渲染——这个 View 本身已经嵌在 SettingsView
     // 的 List 里,父视图理论上会因为语言变化重新构造子行,这里独立再观察一份是保险,
     // 不依赖 ForEach 复用行为的具体细节。
@@ -356,7 +385,7 @@ struct AccountSidebarRow: View {
             HStack(spacing: 6) {
                 Text(destination.title)
                 destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect,
-                                  mirrorInfo: mirrorStatus.info)
+                                  mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict)
                     .indicator
             }
         } icon: {
@@ -400,6 +429,8 @@ struct AccountLinkingTab: View {
     // "Last.fm 拒绝了写入"红条的数据源,订阅理由见 LastfmMirrorStatusWatcher 注释
     // (引擎自愈删文件后红条要自己消失,熔断落文件后开着的窗口也要自己冒出来)。
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
+    // 「网页推送」页那行推送状态说明的数据源(见 RelayPushStatusWatcher)。
+    @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
     // 改成默认展开——原来默认收起是为了"攒到几十首时不该把整页
     // 顶开",但用户更想一进页面就直接看到清单,想收起自己点一下就好,不做成偏好持久化
     // (只是这一次开窗的初始状态,不需要跨次记住)。
@@ -754,7 +785,20 @@ struct AccountLinkingTab: View {
             SecretFieldRow(L10n.t("访问令牌"), value: $config.stateRelayToken)
                 }
             }
+            if let note = relayPushNote {
+                CardDivider()
+                SettingsNote {
+                    Label(note.text, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(note.isError ? Color.red : Color.orange)
+                }
+            }
         }
+    }
+
+    /// 地址和令牌都填了、引擎却报推不出去时,「连接信息」卡底下那行说明;推送正常或还没填全时为 nil。
+    private var relayPushNote: (text: String, isError: Bool)? {
+        guard !config.isStateRelayUntouched, config.stateRelayMissingHint() == nil else { return nil }
+        return relayPushProblem(relayStatus.verdict)
     }
 
     // MARK: - Last.fm(合并 iPhone 桥接 + Mac 镜像——都是同一个 Last.fm 账号)

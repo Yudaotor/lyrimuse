@@ -464,7 +464,10 @@
 "同步你的收听记录" = "Sync your listening history";
 "同步失败" = "Sync failed";
 "同步收听记录" = "Scrobble your listens";
+"同步服务一直出错（%d），网页上的状态没在更新" = "The sync server keeps failing (%d), so the web page isn't updating";
 "同步服务地址" = "Sync Server URL";
+"同步服务地址不对" = "The sync server URL looks wrong";
+"同步服务拒绝了推送（%d）" = "The sync server rejected the push (%d)";
 "名次跟上一期一样" = "Same rank as the previous period";
 "后台服务这次没把它们收进缓存，列表里暂时看不到；文件已经在歌词文件夹里，后台服务下次启动时会自动导入" = "The background service didn't take them into the cache this time, so they won't show in the list yet. The files are already in the lyrics folder and will be imported the next time the background service starts.";
 "后台正在查歌手来自哪里，稍后会出现在这里" = "Looking up where your artists are from — this appears here shortly";
@@ -1412,6 +1415,7 @@
 "设置已导出；歌词库那份写盘失败，只有设置那一个文件" = "Settings exported; writing the lyrics archive failed, so only the settings file was written";
 "设置文件" = "Settings File";
 "访问令牌" = "Access Token";
+"访问令牌不对，同步服务拒绝了推送" = "The sync server rejected the access token";
 "评估后未更换" = "Evaluated, not replaced";
 "评分规则更新后重选" = "Re-picked after a scoring rule update";
 "诊断与数据" = "Diagnostics & Data";
@@ -1570,6 +1574,7 @@
 "进入全屏" = "Enter Full Screen";
 "进入迷你尺寸" = "Enter Mini Size";
 "连不上 ListenBrainz，稍后会自动重试" = "Can't reach ListenBrainz — will retry";
+"连不上同步服务，网页上的状态没在更新" = "Can't reach the sync server, so the web page isn't updating";
 "连已经有歌词的也重新过一遍；人工修正过的、校准过时间轴的、纯音乐的不动" = "Re-picks songs that already have lyrics too. Manual fixes, calibrated timing and instrumentals are left alone";
 "连接" = "Connection";
 "连接 Apple Music" = "Connect Apple Music";

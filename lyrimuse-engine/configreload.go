@@ -163,7 +163,8 @@ func changedConfigKeys(prev, next *config) []string {
 	return changed
 }
 
-// syncLiveConfig 在 poller 主循环上换上最新的 config.json 快照,并按需重建推送通道和 Last.fm 镜像写入。
+// syncLiveConfig 在 poller 主循环上换上最新的 config.json 快照,并按需重建推送通道和 Last.fm 镜像写入;
+// 中继地址或令牌变了就重置网页推送(resetRelayPush)。
 // 没登记热重读(测试、CLI)时什么都不做,poller 用构造时给的那份。
 func (p *poller) syncLiveConfig() {
 	next := liveConfig()
@@ -176,6 +177,9 @@ func (p *poller) syncLiveConfig() {
 		p.cfg = next
 		if p.lb != nil && (prev == nil || notifyTarget(prev) != notifyTarget(next)) {
 			p.lb.alerter = alerterFromConfig(next)
+		}
+		if prev == nil || prev.StateRelayURL != next.StateRelayURL || prev.StateRelayToken != next.StateRelayToken {
+			p.resetRelayPush()
 		}
 	}
 	// Last.fm 镜像写入还吃 features.json 的 lastfm_mirror_scrobble 开关,所以每拍都比一次,不只在

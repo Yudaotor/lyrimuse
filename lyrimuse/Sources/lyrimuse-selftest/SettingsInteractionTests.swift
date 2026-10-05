@@ -6,6 +6,35 @@ import Foundation
 
 @MainActor
 func runSettingsInteractionTests() {
+    // ---- RelayPushStatus:网页推送健康度(样例与引擎 relaystatus_test.go 共用) ----
+    do {
+        typealias R = RelayPushStatus
+        let start: Int64 = 1_800_000_000
+        let soon = Date(timeIntervalSince1970: TimeInterval(start) + 60)
+        let late = Date(timeIntervalSince1970: TimeInterval(start) + R.transientGrace)
+        func info(_ kind: String, _ status: Int? = nil) -> R.Info {
+            R.Info(schema: R.currentSchema, kind: kind, status: status, since: start)
+        }
+        expectEqual(R.verdict(nil, now: soon), .ok, "网页推送状态: 没有状态文件就是正常")
+        expectEqual(R.verdict(info("auth", 401), now: soon), .misconfigured(.token), "网页推送状态: 令牌被拒立刻报红")
+        expectEqual(R.verdict(info("not_found", 404), now: soon), .misconfigured(.address), "网页推送状态: 地址不对立刻报红")
+        expectEqual(R.verdict(info("rejected", 413), now: soon), .misconfigured(.rejected(413)), "网页推送状态: 其它被拒带上状态码")
+        expectEqual(R.verdict(info("network"), now: soon), .ok, "网页推送状态: 刚连不上先不报(引擎自己退避重试)")
+        expectEqual(R.verdict(info("server", 503), now: late.addingTimeInterval(-1)), .ok, "网页推送状态: 中继出错不到 10 分钟不报")
+        expectEqual(R.verdict(info("server", 503), now: late), .unreachable(.server(503)), "网页推送状态: 中继一直出错报橙")
+        expectEqual(R.verdict(info("network"), now: late), .unreachable(.network), "网页推送状态: 一直连不上报橙")
+        expectEqual(R.parse(Data(#"{"schema":2,"kind":"auth","status":401,"since":1}"#.utf8)) == nil, true,
+                    "网页推送状态: 版本不认识当作没有")
+        let samples = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("shared/testdata/relay-status")
+        func sample(_ name: String) -> R.Info? {
+            (try? Data(contentsOf: samples.appendingPathComponent(name))).flatMap(R.parse)
+        }
+        expectEqual(sample("auth.json"), info("auth", 401), "网页推送状态: 读得懂共用样例(令牌被拒)")
+        expectEqual(sample("network.json"), info("network"), "网页推送状态: 读得懂共用样例(连不上,没有状态码)")
+    }
+
     // ---- ReorderDrag----
     //
     // 数值都按真实的设置行来:行高约 35 + 分隔线 1 = 槛距 36;五行的静止中线 17.5 / 53.5 / 89.5 / 125.5 / 161.5。

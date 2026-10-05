@@ -36899,6 +36899,121 @@
           }
         }
       }
+    },
+    "访问令牌不对，同步服务拒绝了推送" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server rejected the access token"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "访问令牌不对，同步服务拒绝了推送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存取權杖不對，同步伺服器拒絕了推播"
+          }
+        }
+      }
+    },
+    "同步服务地址不对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server URL looks wrong"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务地址不对"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步伺服器網址不對"
+          }
+        }
+      }
+    },
+    "同步服务拒绝了推送（%d）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server rejected the push (%d)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务拒绝了推送（%d）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步伺服器拒絕了推播（%d）"
+          }
+        }
+      }
+    },
+    "同步服务一直出错（%d），网页上的状态没在更新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server keeps failing (%d), so the web page isn't updating"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务一直出错（%d），网页上的状态没在更新"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步伺服器一直出錯（%d），網頁上的狀態沒有在更新"
+          }
+        }
+      }
+    },
+    "连不上同步服务，网页上的状态没在更新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach the sync server, so the web page isn't updating"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连不上同步服务，网页上的状态没在更新"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連不上同步伺服器，網頁上的狀態沒有在更新"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

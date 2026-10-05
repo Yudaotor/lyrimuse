@@ -412,6 +412,8 @@ func main() {
 	// 引擎→App 的状态通道(眼下只报"网络不通",见 enginestatus.go)。设置这个
 	// 路径的同时会清掉上次运行留下的文件 —— 那份状态跟这次进程无关。
 	setEngineStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
+	// 引擎→App 的网页推送健康度(见 relaystatus.go),同样一登记就清掉上次运行留下的那份。
+	setRelayStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-relay-status.json"))
 	setParserDriftPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-parser-drift.json"))
 	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边
 	// LyricsManagerView.cancelPlaceholderSearch 写入的路径逐字节一致。

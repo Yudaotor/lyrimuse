@@ -290,6 +290,11 @@ type poller struct {
 	lastListenAt     int64
 	lastListenDev    string
 
+	// 推送健康度(见 relaystatus.go)。
+	relayGen          int       // 中继地址或令牌每改一次加一;在飞的推送带着它,回来时不是这一份就不记账
+	relayFailingSince time.Time // 这一串推送失败从什么时候开始;零 = 上一次推成功了或还没推过
+	relayStatusKey    string    // 上次写进状态文件的失败类别(kind|status),同一类不重写
+
 	// Last.fm bridge (iPhone via FastScrobbler→Last.fm) state.
 	forwardedSet    persistedTTLSet
 	lfmMirroredSet  persistedTTLSet
@@ -651,10 +656,10 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	// 推送放后台:中继一次往返中位约 0.9 秒、偶尔 6 秒超时,同步做会让主循环在换歌那一刻停住
 	// (暂停、拖进度、下一首都察觉不到)。记账在 applyRelayResult 里,仍只在主循环上改字段。
 	p.relayInflight = true
-	cfg := p.cfg
+	cfg, gen := p.cfg, p.relayGen
 	go func() {
 		err := postRelay(p.ctx, cfg, "/push", payload)
-		p.relayDoneCh <- relayPushResult{key: key, reason: reason, at: now, err: err}
+		p.relayDoneCh <- relayPushResult{key: key, reason: reason, at: now, err: err, gen: gen}
 	}()
 }
 
@@ -733,11 +738,15 @@ type relayPushResult struct {
 	key, reason string
 	at          time.Time
 	err         error
+	gen         int // 发出时的 relayGen
 }
 
 // applyRelayResult 在主循环上记账:成功更新去重锚点,失败进退避(去重锚点不动,按退避在后续 poll 重试)。
 func (p *poller) applyRelayResult(r relayPushResult) {
 	p.relayInflight = false
+	if r.gen != p.relayGen {
+		return // 中继地址或令牌在它飞着的时候改了:说的是旧配置,不记账
+	}
 	if r.err != nil {
 		warnf("relay push failed: %v", r.err)
 		p.relayFailKey, p.relayFailAt = r.key, r.at
@@ -746,9 +755,11 @@ func (p *poller) applyRelayResult(r relayPushResult) {
 		} else if p.relayBackoff < 10*time.Minute {
 			p.relayBackoff *= 2
 		}
+		p.noteRelayFailure(r.err, r.at)
 		return
 	}
 	p.relayFailAt, p.relayBackoff, p.relayFailKey = time.Time{}, 0, ""
+	p.noteRelaySuccess()
 	if r.key != p.relayLastState {
 		p.relayStateSince = r.at
 	}

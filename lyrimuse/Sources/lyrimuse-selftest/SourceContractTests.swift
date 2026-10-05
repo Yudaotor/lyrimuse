@@ -4273,6 +4273,25 @@ func runSourceContractTests() {
         }
         expectEqual(platformPages.contains("return readPlatformPagesWanted(configFilePath(platformPagesWantedFileName))"), true,
                     "Last.fm 榜单: 引擎每轮读 App 写的预取清单")
+        // 网页推送:引擎把推送结果写进状态文件(relaystatus.go),设置页据此报红 / 橙。
+        func relayEngineSource(_ name: String) -> String {
+            (try? String(contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("lyrimuse-engine/" + name), encoding: .utf8)) ?? ""
+        }
+        expectEqual(relayEngineSource("main.go").contains("clientName+\"-relay-status.json\"")
+                    && RelayPushStatus.fileName == "lyrimuse-relay-status.json"
+                    && relayEngineSource("relaystatus.go").contains("const relayStatusSchema = \(RelayPushStatus.currentSchema)\n"), true,
+                    "网页推送: 引擎写的状态文件名、版本跟 App 读的一样")
+        let accountTab = code("AccountLinkingTab.swift")
+        expectEqual(accountTab.contains("mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict)")
+                    && accountTab.contains("guard let problem = relayPushProblem(relayVerdict) else { return .active() }")
+                    && accountTab.contains("return problem.isError ? .error(problem.text) : .warning(problem.text)")
+                    && accountTab.contains("return relayPushProblem(relayStatus.verdict)")
+                    && accountTab.contains("if let note = relayPushNote {"), true,
+                    "网页推送: 侧边栏徽标和「网页推送」页都看引擎报的推送结果")
+        expectEqual(accountTab.contains("case .misconfigured(let problem): return (relayPushProblemText(problem), true)")
+                    && accountTab.contains("case .unreachable(let problem): return (relayPushProblemText(problem), false)"), true,
+                    "网页推送: 配置错报红、一直连不上报橙")
         if let fn = stats.range(of: "private func writePlatformPagesWanted() {"),
            let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
             let body = stats[fn.lowerBound..<end.lowerBound]
