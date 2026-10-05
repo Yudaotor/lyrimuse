@@ -52,16 +52,26 @@ struct PlayerChoiceCard: View {
         // 旁白要能读出"选没选中" —— `Button` 自带 `.isButton`,但选中与否此前只存在于
         // 描边颜色里,VoiceOver 读到的永远是"Apple Music,按钮",听不出勾没勾。
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        // 虚线框、角标和压暗的图标都是视觉,旁白读不到 —— 用同一句提示补上。
-        .accessibilityValue(hint)
-        // 设置页和引导页都是普通窗口,`.help()` 在这两处是真能弹出来的(悬浮窗那排按钮不行)。
-        .help(hint)
+        // 虚线框、角标和压暗的图标都是视觉,旁白读不到 —— 用同一句提示补上,前面先说它是什么。
+        .accessibilityValue([Self.about(player), status].compactMap { $0 }.joined(separator: "\n"))
+        // 「它是什么」那句用自绘的悬停气泡:系统 tooltip 只在 lyrimuse 是前台 App 时才弹(见 `HoverNote`)。
+        // 别再并进下面的 `.help`,两种都弹时会出两个。
+        .hoverNote(Self.about(player))
+        .help(status ?? "")
     }
 
-    private var hint: String {
+    private var status: String? {
         if isCoveredByAuto { return L10n.t("由「自动识别」接管——取消「自动识别」后才只认你勾选的播放器") }
         if !isInstalled { return L10n.t("这台 Mac 上没装这个播放器") }
-        return ""
+        return nil
+    }
+
+    /// 光看名字认不出是什么的播放器,悬停时先说一句它是什么。
+    static func about(_ player: PlaybackPlayer) -> String? {
+        switch player {
+        case .kaset: return L10n.t("YouTube Music 的第三方 Mac 客户端")
+        default: return nil
+        }
     }
 }
 

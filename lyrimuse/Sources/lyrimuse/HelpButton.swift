@@ -116,3 +116,43 @@ struct QuickHelpLabel<Content: View>: View {
         .onDisappear { hoverTask?.cancel() }
     }
 }
+
+/// 悬停一会儿在控件下面弹一句说明,移开就收。给点击另有用途、挂不了问号的控件用(选播放器的卡片:点一下是勾选)。
+///
+/// 不用 `.help()`:系统 tooltip 只在前台 App 的窗口上弹,lyrimuse 是 LSUIElement,设置窗口开着而前台是别的 App
+/// 时悬停什么都不出(见 14 章「选择播放器」改版那条下的小条)。时序同 `QuickHelpLabel`。
+private struct HoverNote: ViewModifier {
+    let text: String?
+    @State private var isPresented = false
+    @State private var hoverTask: Task<Void, Never>?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let text {
+            content
+                .onHover { inside in
+                    hoverTask?.cancel()
+                    hoverTask = Task {
+                        try? await Task.sleep(for: inside ? .milliseconds(500) : .milliseconds(150))
+                        guard !Task.isCancelled else { return }
+                        isPresented = inside
+                    }
+                }
+                .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+                    Text(text)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(10)
+                        .frame(maxWidth: 260, alignment: .leading)
+                }
+                .onDisappear { hoverTask?.cancel() }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// 悬停一会儿弹一句说明(见 `HoverNote`);text 为 nil 时什么都不加。
+    func hoverNote(_ text: String?) -> some View { modifier(HoverNote(text: text)) }
+}

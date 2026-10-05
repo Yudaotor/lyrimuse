@@ -37290,6 +37290,23 @@
           }
         }
       }
+    },
+    "YouTube Music 的第三方 Mac 客户端" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A third-party Mac client for YouTube Music"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube Music 的第三方 Mac 用戶端"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
