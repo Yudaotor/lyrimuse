@@ -41,8 +41,14 @@ func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
 		submitDoneCh: make(chan submitOutcome, 8),
 	}
 
+	// 提交前 lbMeta 要查歌词缓存:没命中就在后台起一次首次解析(真的联网),测试结束了它还在跑,读的全局状态正被后面的
+	// 测试改着,-race 时有时报。两首先标成「解析在途」,trackEnrichment 就不再起;带上专辑名也是这个理由:没有专辑名的
+	// 75 秒以上曲目还会在后台去 Apple 目录补查一次(appleAlbumHint)。这条测的是提交漏斗,用不着这两样。
+	const album = "专辑"
+	holdEnrichResolution(t, enrichKey("A", "过场", album), enrichKey("A", "正常歌", album))
+
 	// 短曲目:20 秒,听满一半。
-	short := &playSession{meta: snapshot{Title: "过场", Artist: "A", Duration: 20}, startedAt: time.Now().Add(-time.Minute), submitting: true}
+	short := &playSession{meta: snapshot{Title: "过场", Artist: "A", Album: album, Duration: 20}, startedAt: time.Now().Add(-time.Minute), submitting: true}
 	p.submitSingleAsync(short, short.meta, short.startedAt.Unix())
 	if !short.listenSent || short.submitting {
 		t.Fatalf("短曲目应同步收尾:listenSent=%v submitting=%v", short.listenSent, short.submitting)
@@ -61,7 +67,7 @@ func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
 	}
 
 	// 对照:普通曲目照常发 LB。
-	long := &playSession{meta: snapshot{Title: "正常歌", Artist: "A", Duration: 240}, startedAt: time.Now().Add(-5 * time.Minute), submitting: true}
+	long := &playSession{meta: snapshot{Title: "正常歌", Artist: "A", Album: album, Duration: 240}, startedAt: time.Now().Add(-5 * time.Minute), submitting: true}
 	p.submitSingleAsync(long, long.meta, long.startedAt.Unix())
 	select {
 	case r := <-p.submitDoneCh:
@@ -78,6 +84,23 @@ func TestSubmitSingleShortTrackSkipsListenBrainz(t *testing.T) {
 	if !long.listenSent {
 		t.Fatal("普通曲目应收尾 listenSent=true")
 	}
+}
+
+// holdEnrichResolution 把这几首标成「解析在途」、测试结束时清掉:trackEnrichment 见了就不再起首次解析。
+func holdEnrichResolution(t *testing.T, keys ...string) {
+	t.Helper()
+	enrichMu.Lock()
+	for _, k := range keys {
+		enrichInflight[k] = true
+	}
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		enrichMu.Lock()
+		for _, k := range keys {
+			delete(enrichInflight, k)
+		}
+		enrichMu.Unlock()
+	})
 }
 
 // shortTrackLastfmOnly 只在开关开着、且曲长在 (0, 30) 时为真——开关关着时短曲目根本进不了
