@@ -1231,6 +1231,10 @@ func runCreditLineTests() {
             // 这两条是**第十一轮跑全库语料当场抓到的新误杀**:放宽"英文名段最长 30 字"之后,
             // 单字说话人标签 + 英文短句(里面没有停用词)被当成署名删掉。护栏是"名字串规则
             // 要求标签至少两个汉字",见 matchesNameListCreditShape。
+            // 拉丁标签不是角色词的英文句子,扩了角色词表之后照样留下。
+            ("Love: Nobody know just how it was born", 2),
+            ("She says: We've got to hold on to what we've got", 1),
+            ("Step 1: Step off to the dance floor", 3),
             ("王：Hey hey ho ho", 2),
             ("靖：All yours baby", 2),
             // 下面 5 条同样来自第十一轮的全库 diff:它们在**第十轮**就已经被吃掉了
@@ -1295,6 +1299,22 @@ func runCreditLineTests() {
             ("制作⼈ Producer：米奇林MCKY/剃刀蒋RAZOR", "康熙部首「⼈」"),
             ("Bass：Cass Love", "白名单拉丁标签 + 全角冒号,人名里有停用词 Love"),
             ("Background Vocals by：원호/이난 (ENAN)/Sun Ahn", "白名单拉丁标签 + 全角冒号,韩文名带空格"),
+            ("Recorded by：YOO, YOUNG JIN @ SM BOOMINGSYSTEM/김광민 @ 개나리싸운드", "英文过去分词 + by,右边韩文名带空格"),
+            ("Engineered for Mix by：이민규 @ SM Big Shot Studio", "英文角色短语带 for"),
+            ("Mixed in Dolby Atmos by：구종필(Asst. P.O.D) @ KLANG Studio", "英文角色短语带 in / Dolby Atmos"),
+            ("Digital Edited by：정은경 at Ingrid Studio", "英文过去分词 + by"),
+            ("Recorded：안지균 @ YMC Studio", "英文过去分词单独做标签"),
+            ("Original Writers：Dwayne \"Dem Jointz\" Abernathy Jr./Mayila Jones", "英文角色名复数"),
+            ("Mastering Engineer: Dale Becker，", "白名单标签,名单行尾多带一个逗号"),
+            ("Drum Loop : Roger Taylor", "表外乐器"),
+            ("Handclaps : John Deacon", "表外乐器"),
+            ("Drum by：트리피 (Trippy)/방찬 (3RACHA)", "单数乐器名 + by"),
+            ("Computer programming by：트리피 (Trippy)/방찬 (3RACHA)", "修饰词 computer"),
+            ("Title: Seven Days", "元数据"),
+            ("Album: Ten Summoner's Tales", "元数据"),
+            ("Artist: Queen", "元数据"),
+            ("Singer:Maroon 5", "元数据"),
+            ("Songs Title：teach me", "元数据"),
         ]
         for (line, family) in mustDrop {
             expectEqual(verdict(line), true, "语料回归(必须删掉, \(family)): \(line)")

@@ -702,17 +702,21 @@ public final class LyricsSyncEngine {
     /// 这类单独做标签有歧义的只收在修饰词表里,不能单独成立。只判形状,右边像不像一句话由
     /// `matchesLatinCreditPattern` 统一否决。
     private static let latinRoleCoreWords: Set<String> = [
-        "vocal", "vocals", "vox", "guitar", "guitars", "bass", "drums", "keyboard", "keyboards", "keys",
+        "vocal", "vocals", "vox", "guitar", "guitars", "bass", "drum", "drums", "keyboard", "keyboards", "keys",
         "synth", "synths", "synthesizer", "synthesizers", "piano", "percussion", "programming",
         "strings", "horns", "brass", "organ", "engineer", "engineers", "mixing", "mastering",
         "recording", "editing", "production", "producer", "producers", "arrangement", "arranger",
         "arrangers", "cello", "violin", "violins", "viola", "flute", "trumpet", "trombone", "saxophone",
         "sax", "clarinet", "harp", "harmonica", "whistle", "glockenspiel", "ukulele", "banjo", "mandolin",
-        "accordion",
+        "accordion", "loop", "loops", "handclaps", "claps",
+        "recorded", "mixed", "mix", "mastered", "engineered", "edited", "produced", "written", "writer", "writers",
+        "composed", "arranged", "programmed", "performed",
+        "title", "album", "singer", "artist",
     ]
     private static let latinRoleModifierWords: Set<String> = [
         "lead", "background", "backing", "additional", "rhythm", "electric", "acoustic", "upright",
-        "digital", "audio", "drum", "solo", "fx", "noise", "assistant", "executive", "co", "by", "slide",
+        "digital", "audio", "computer", "solo", "fx", "noise", "assistant", "executive", "co", "by", "slide",
+        "for", "in", "dolby", "atmos", "original", "song", "songs",
     ]
 
     public static func matchesLatinRoleWordLabel(_ text: String) -> Bool {
@@ -741,11 +745,14 @@ public final class LyricsSyncEngine {
         guard shapeHit else { return false }
         // 形状命中之后再看右边像不像一句话 —— 见 latinCreditRestLooksLikeSentence。
         guard let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
-        let rest = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-        // 白名单角色标签(Bass / Background Vocals by)+ 全角冒号:全角冒号只出自中日文源的署名块,
+        var rest = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        let roleLabel = matchesLatinRoleWordLabel(text)
+        // 白名单角色标签后面是名单,行尾偶尔多带一个逗号(「Dale Becker，」),不算句子收尾。
+        if roleLabel { rest = rest.trimmingCharacters(in: CharacterSet(charactersIn: "，, ")) }
+        // 白名单角色标签(Bass / Background Vocals by / Recorded by)+ 全角冒号:全角冒号只出自中日文源的署名块,
         // 右边是名单。这时只按虚词和句末标点否决,不按英文停用词、韩文空格 —— 人名里的
-        // 「Cass Love」、韩文名字「원호/이난 (ENAN)」会被那两道闸当成句子。
-        if text[colon] == "：", matchesLatinRoleWordLabel(text) {
+        // 「Cass Love」、韩文名字「원호/이난 (ENAN)」、录音室「김광민 @ 개나리싸운드」会被那两道闸当成句子。
+        if text[colon] == "：", roleLabel {
             let sentenceEnd = rest.last.map { "，。！？!?…；;".contains($0) } ?? false
             return !rest.contains(where: { nonNameChars.contains($0) }) && !sentenceEnd
         }
