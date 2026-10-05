@@ -76,13 +76,17 @@ public enum NowPlayingClientsProbe {
 
     /// 问某个 bundle id 此刻在报什么。拿不到(没装 helper / 超时 / 那个 App 没在报)一律 nil。
     ///
-    /// 位置已经在 helper 里按锚点外推过(`elapsed + (now - timestamp) * rate`)—— 载荷里的
-    /// `ElapsedTime` 是**锚点**不是此刻的位置,同一首歌里连查几次它一动不动。锚点原值经
-    /// `anchorElapsedTime` 一并带回,上层判"这是不是开播锚点"的既有逻辑照旧可用。
+    /// helper 独立读取同一 client 的播放状态,只在确实播放时按锚点外推;暂停冻结在原始位置。
+    /// 状态未知或查询失败返回 nil,不能用暂停后残留的 PlaybackRate 猜成播放。
+    /// `anchorElapsedTime` 仍携带原始锚点,已知播放器的速率兼容由共享生成配置显式准入。
     public static func snapshot(forBundleID bundleID: String) -> MediaControlSnapshot? {
         guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
+        var arguments = [paths.script, paths.library, bundleID]
+        if PlaybackPlayer.builtin(forBundleID: bundleID)?.playingFromRate == true {
+            arguments.append("rate-playing")
+        }
         guard let r = ProcessRunner.run(
-            "/usr/bin/perl", [paths.script, paths.library, bundleID], timeout: timeout),
+            "/usr/bin/perl", arguments, timeout: timeout),
             r.succeeded
         else { return nil }
         // helper 对"那个 App 现在没在报"输出字面量 null,解码失败即视为没有。

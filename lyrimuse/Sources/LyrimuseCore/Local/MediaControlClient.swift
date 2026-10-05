@@ -667,12 +667,21 @@ public enum MediaControlClient {
         return channelFallbackPlayer
     }
 
-    /// 焦点被别的 App 占着,屏上这首是按 bundle id 直查回退问到的(没有 AppleScript 可发)。这时 media-control 的控制
-    /// 指令会落在占用者身上,播放控制不发(见 `MusicPlaybackController.controlRoute`)。
+    /// 回退查询失败只关闭读取开关,不证明焦点恢复。targetGone 由被接受的快照清零;
+    /// 在此前的显示宽限期里仍不能把全局控制发到网页视频。纯判据供状态转移测试复用。
+    public static func shouldWithholdFocusControls(
+        fallingBack: Bool, targetGone: Bool, viaAppleScript: Bool
+    ) -> Bool {
+        (fallingBack || targetGone) && !viaAppleScript
+    }
+
+    /// 焦点没有恢复可信快照、且没有 AppleScript 定向通路时,不发全局控制。
+    /// 回退失败停止查询之后同样保护,直到 noteAccepted 清掉 targetGone。
     public static func focusHeldByAnotherApp() -> Bool {
         appleMusicFocusLock.lock()
         defer { appleMusicFocusLock.unlock() }
-        return fallbackActive && !fallbackViaAppleScript
+        return shouldWithholdFocusControls(
+            fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript)
     }
 
     private static func setFocusFallbackPlayer(_ value: PlaybackPlayer?) {

@@ -5,13 +5,16 @@ use strict;
 use warnings;
 use DynaLoader;
 
-my $lib = shift @ARGV or die "usage: $0 /path/to/libnowplaying-clients.dylib [bundleID] [artwork|queue=N]\n";
+my $lib = shift @ARGV or die "usage: $0 /path/to/libnowplaying-clients.dylib [bundleID] [artwork|queue=N|rate-playing]\n";
 my $bundle = shift @ARGV;
 my $mode = shift @ARGV;      # 传 "artwork" 才带封面 —— 常规状态查询不该每拍背一张图;
                             # 传 "queue=N" 改为输出这个播放器的待播队列(当前这首 + 之后 N 首)
 $ENV{LYRIMUSE_NOWPLAYING_BUNDLE} = $bundle if defined $bundle && length $bundle;
 $ENV{LYRIMUSE_NOWPLAYING_ARTWORK} = 1 if defined $mode && $mode eq "artwork";
 $ENV{LYRIMUSE_NOWPLAYING_QUEUE} = $1 if defined $mode && $mode =~ /^queue=(\d+)$/;
+# 兼容名单由调用方的共享播放器配置决定;默认状态查询不能继承外部遗留的开关。
+delete $ENV{LYRIMUSE_NOWPLAYING_RATE_PLAYING};
+$ENV{LYRIMUSE_NOWPLAYING_RATE_PLAYING} = 1 if defined $mode && $mode eq "rate-playing";
 
 my $handle = DynaLoader::dl_load_file($lib, 0) or die "cannot load $lib\n";
 my $symbol = DynaLoader::dl_find_symbol($handle, "nowplaying_clients")

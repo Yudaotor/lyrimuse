@@ -51,7 +51,11 @@ var focusFallbackProbe = func(ctx context.Context, bundleID string) map[string]a
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "/usr/bin/perl", script, lib, bundleID).Output()
+	args := []string{script, lib, bundleID}
+	if playerPlayingFromRate[bundleID] {
+		args = append(args, "rate-playing")
+	}
+	out, err := exec.CommandContext(ctx, "/usr/bin/perl", args...).Output()
 	if err != nil {
 		return nil
 	}

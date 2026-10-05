@@ -45,6 +45,8 @@
 
 typedef void (*GetClientsFn)(dispatch_queue_t, void (^)(NSArray *));
 typedef void (*GetInfoForClientFn)(void *, void *, long, dispatch_queue_t, void (^)(CFDictionaryRef));
+// client、origin、queue、callback;播放状态与元数据速率是独立的系统读数。
+typedef void (*GetPlaybackStateForClientFn)(void *, void *, dispatch_queue_t, void (^)(uint32_t));
 typedef void *(*QueueRequestCreateFn)(long, long);
 typedef void (*QueueRequestSetBoolFn)(void *, int);
 typedef void (*RequestQueueFn)(void *, void *, void *, dispatch_queue_t, void (^)(void *, CFErrorRef));
@@ -69,10 +71,21 @@ static NSString *K(const char *suffix) {
     return [NSString stringWithFormat:@"kMRMediaRemoteNowPlayingInfo%s", suffix];
 }
 
-/// 把一份 MediaRemote 载荷整理成与 media-control 输出同构的字典。
-/// 位置按锚点外推:`elapsed + (now - timestamp) * rate` —— 载荷里的 ElapsedTime 是**锚点**,
-/// 不是此刻的位置(同一首歌里连查几次它一动不动)。锚点原值一并带出,供上层判"这是不是开播锚点"。
-static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID) {
+/// Unknown / Seeking 不代表暂停,也不能按可能残留的速率猜成播放。
+/// rate-playing 仅供共享播放器表明确准入的暂停态兼容;停止与中断不使用它。
+static NSNumber *playingForState(uint32_t state, NSNumber *rate, BOOL playingFromRate) {
+    switch (state) {
+        case 1: return @YES;
+        case 2: return playingFromRate && rate.doubleValue > 0 ? @YES : @NO;
+        case 3:
+        case 4: return @NO;
+        default: return nil;
+    }
+}
+
+/// 把同一 client 的元数据与可信状态整理成快照。暂停不外推,不能用残留 PlaybackRate 复活。
+/// playing 为 nil 只用于独立封面查询,不生成播放状态。now 可注入,让冻结与外推的测试不依赖墙钟。
+static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID, NSNumber *playing, NSDate *now) {
     if (raw.count == 0) return nil;
     NSNumber *elapsed = raw[K("ElapsedTime")];
     NSNumber *rate = raw[K("PlaybackRate")];
@@ -84,15 +97,16 @@ static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID) {
     if (raw[K("Album")]) out[@"album"] = raw[K("Album")];
     if (raw[K("Duration")]) out[@"duration"] = raw[K("Duration")];
     if (rate) out[@"playbackRate"] = rate;
-    // ⚠️ 必须是 JSON 的 true/false:`@(expr)` 出来的是数字 1/0,Swift 的 JSONDecoder 解 Bool 会当场失败。
-    out[@"playing"] = (rate.doubleValue > 0) ? @YES : @NO;
+    // 必须是 JSON 布尔值,Swift 的 JSONDecoder 不把数字 1/0 当 Bool。
+    if (playing) out[@"playing"] = playing.boolValue ? @YES : @NO;
     // 语义同 media-control 那条路:"这是当前选定播放器的一份有效快照",不是"这是 Apple Music"。
     out[@"isMusicApp"] = @YES;
     if (elapsed) {
         out[@"anchorElapsedTime"] = elapsed;
         double live = elapsed.doubleValue;
-        if (stamp && rate.doubleValue > 0) {
-            live += [[NSDate date] timeIntervalSinceDate:stamp] * rate.doubleValue;
+        double speed = rate ? rate.doubleValue : 1;
+        if (playing.boolValue && stamp && speed > 0) {
+            live += [now timeIntervalSinceDate:stamp] * speed;
         }
         out[@"elapsedTime"] = @(live);
     }
@@ -105,6 +119,35 @@ static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID) {
         out[@"artworkMimeType"] = [mime isKindOfClass:NSString.class] ? mime : @"image/jpeg";
     }
     return out;
+}
+
+/// 元数据与状态并发查询,共用同一个截止时间,避免把两段等待串成超过外层超时的请求。
+/// 封面查询不需要播放状态,不因状态接口缺失而失败。
+static NSDictionary *clientSnapshot(id client, NSString *bundleID, long artFlag, BOOL playingFromRate,
+                                    GetInfoForClientFn getInfo, GetPlaybackStateForClientFn getState,
+                                    dispatch_time_t deadline) {
+    BOOL needsState = artFlag == kNoArtwork;
+    if (needsState && !getState) return nil;
+    dispatch_queue_t queue = dispatch_get_global_queue(0, 0);
+    dispatch_group_t group = dispatch_group_create();
+    __block NSDictionary *info = nil;
+    __block uint32_t state = 0;
+    dispatch_group_enter(group);
+    getInfo((__bridge void *)client, NULL, artFlag, queue, ^(CFDictionaryRef raw) {
+        if (raw) info = [(__bridge NSDictionary *)raw copy];
+        dispatch_group_leave(group);
+    });
+    if (needsState) {
+        dispatch_group_enter(group);
+        getState((__bridge void *)client, NULL, queue, ^(uint32_t value) {
+            state = value;
+            dispatch_group_leave(group);
+        });
+    }
+    if (dispatch_group_wait(group, deadline) != 0) return nil;
+    NSNumber *playing = needsState ? playingForState(state, info[K("PlaybackRate")], playingFromRate) : nil;
+    if (needsState && !playing) return nil;
+    return normalize(info, bundleID, playing, [NSDate date]);
 }
 
 static void emit(id obj) {
@@ -161,12 +204,15 @@ void nowplaying_clients(void *my_perl, void *cv) {
         const char *want = getenv("LYRIMUSE_NOWPLAYING_BUNDLE");
         const char *artEnv = getenv("LYRIMUSE_NOWPLAYING_ARTWORK");
         const long artFlag = (artEnv && artEnv[0] == '1') ? kIncludeArtwork : kNoArtwork;
+        const char *rateEnv = getenv("LYRIMUSE_NOWPLAYING_RATE_PLAYING");
+        const BOOL playingFromRate = rateEnv && rateEnv[0] == '1';
         const char *queueEnv = getenv("LYRIMUSE_NOWPLAYING_QUEUE");
         const long queueCount = queueEnv ? atol(queueEnv) : 0;
         void *h = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW);
         if (!h) { emit(nil); return; }
         GetClientsFn getClients = (GetClientsFn)dlsym(h, "MRMediaRemoteGetNowPlayingClients");
         GetInfoForClientFn getInfo = (GetInfoForClientFn)dlsym(h, "MRMediaRemoteGetNowPlayingInfoForClient");
+        GetPlaybackStateForClientFn getState = (GetPlaybackStateForClientFn)dlsym(h, "MRMediaRemoteGetPlaybackStateForClient");
         if (!getClients || !getInfo) { emit(nil); return; }
 
         dispatch_semaphore_t s = dispatch_semaphore_create(0);
@@ -189,14 +235,8 @@ void nowplaying_clients(void *my_perl, void *cv) {
                 return;
             }
 
-            dispatch_semaphore_t s2 = dispatch_semaphore_create(0);
-            __block NSDictionary *info = nil;
-            getInfo((__bridge void *)c, NULL, artFlag, dispatch_get_global_queue(0, 0), ^(CFDictionaryRef raw) {
-                if (raw) info = (__bridge_transfer NSDictionary *)CFRetain(raw);
-                dispatch_semaphore_signal(s2);
-            });
-            if (dispatch_semaphore_wait(s2, dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC)) != 0) continue;
-            NSDictionary *one = normalize(info, bid);
+            NSDictionary *one = clientSnapshot(c, bid, artFlag, playingFromRate, getInfo, getState,
+                                              dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC));
             if (one) [all addObject:one];
         }
         emit(want ? (all.firstObject ?: (id)nil) : all);

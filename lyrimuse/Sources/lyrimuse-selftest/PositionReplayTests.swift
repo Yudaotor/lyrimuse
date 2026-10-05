@@ -100,6 +100,7 @@ func runPositionReplayTests() {
     replayBrowserProbeReopensOnEveryTrackChange()
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
+    replayPausedHelperWithResidualRate()
 }
 
 private let kkboxID = PlaybackPlayer.kkbox.bundleIdentifier
@@ -381,4 +382,25 @@ private func replaySafariPreciseReadingOverNaturalBias() {
     rig.tick(mediaControl(safariMediaID, "Miree", anchor: 0, elapsed: stream(32.4), duration: 242.61, capturedAt: at(32.4)), at: at(32.4))
     expectEqual(near(rig.shown(at: at(32.4)), page(32.4)), true,
                 "回放·Safari 精确读数叠自然切歌: 与页面的钟一致就不动(扣了旧偏置会被拉回 0.5s)")
+}
+
+/// helper 的暂停状态是权威值:元数据速率仍为 1 时,App 消费结果后也不能继续推进位置。
+@MainActor
+private func replayPausedHelperWithResidualRate() {
+    for bundle in [PlaybackPlayer.qqMusic, .netease, .soda, .kkbox, .amazonMusic, .spotify, .appleMusic].map(\.bundleIdentifier) {
+        let rig = ReplayRig("paused-helper-\(bundle)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(bundle, "Song", anchor: 0, elapsed: 18, duration: 232), at: at(0))
+        let payload: [String: Any] = ["title": "Song", "artist": "Fujii Kaze", "album": "Prema", "duration": 232,
+                                     "elapsedTime": 20, "anchorElapsedTime": 20, "playing": false,
+                                     "playbackRate": 1, "isMusicApp": true, "bundleIdentifier": bundle]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let paused = try? JSONDecoder().decode(MediaControlSnapshot.self, from: data) else {
+            expectEqual(false, true, "helper 暂停快照能解码(\(bundle))")
+            continue
+        }
+        rig.tick(paused, at: at(2))
+        expectEqual(near(rig.shown(at: at(62)), 20, 0.001), true,
+                    "helper 暂停且 rate=1: 一分钟后位置仍冻结在 20 秒(\(bundle))")
+    }
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -139,6 +141,35 @@ func TestParseNowPlayingClientState(t *testing.T) {
 	paused := parseNowPlayingClientState([]byte(`{"title":"T","artist":"A","anchorElapsedTime":33,"playing":false}`), qqMusicBundleID)
 	if paused == nil || paused["elapsedTime"] != 33.0 {
 		t.Fatalf("没有 elapsedTime 时按锚点值: %v", paused)
+	}
+}
+
+// 普通播放器不准入速率兼容;运行 probe 的子进程 seam,确认参数与暂停读数同时保留。
+func TestFocusFallbackProbeRateCompatibility(t *testing.T) {
+	old := nowPlayingClientsPathsOverride
+	t.Cleanup(func() { nowPlayingClientsPathsOverride = old })
+	script := filepath.Join(t.TempDir(), "probe.pl")
+	body := `use strict;
+use warnings;
+my ($lib, $bundle, $mode) = @ARGV;
+my $expected = $bundle eq "com.kugou.mac.Music" ? "rate-playing" : "";
+die "wrong compatibility mode" unless ($mode // "") eq $expected;
+my $playing = $expected eq "" ? "false" : "true";
+print qq({"title":"Song","artist":"Artist","duration":232,"playbackRate":1,"playing":$playing,"anchorElapsedTime":20,"elapsedTime":20});
+`
+	if err := os.WriteFile(script, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	nowPlayingClientsPathsOverride = func() (string, string) { return script, "/unused/library" }
+	for _, bundle := range []string{qqMusicBundleID, neteaseMusicBundleID, sodaMusicBundleID, kkboxBundleID,
+		amazonMusicBundleID, spotifyBundleID, appleMusicBundleID, kugouMusicBundleID} {
+		t.Run(bundle, func(t *testing.T) {
+			state := focusFallbackProbe(context.Background(), bundle)
+			if state == nil || state["playing"] != (bundle == kugouMusicBundleID) ||
+				state["elapsedTime"] != 20.0 || state["playbackRate"] != 1.0 {
+				t.Fatalf("helper 的状态是权威值,不能按残留速率复活: %v", state)
+			}
+		})
 	}
 }
 
