@@ -12,7 +12,7 @@ func resegmentBenchmark(bodiesDir: String, stride step: Int) {
     }
     func row(_ w: CGFloat, _ f: NSFont) -> LineLayoutBudget.Row { .init(maxWidth: w, measure: { width($0, f) }) }
     let ro = NSFont.systemFont(ofSize: 34 * 0.65, weight: .medium)
-    let budgets: [(LyricsSurface, LineLayoutBudget)] = [
+    let budgets: [(LineBreakSurface, LineLayoutBudget)] = [
         (.overlay, LineLayoutBudget(
             key: "o", main: row(606, .systemFont(ofSize: 34, weight: .bold)),
             preview: row(606, .systemFont(ofSize: 34 * 0.7, weight: .medium)),

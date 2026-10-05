@@ -11,7 +11,8 @@ import SwiftUI
 /// 右边那排不画,歌词那一格放宽到整条(`fullWidthModalWidth`),左端照画收起键 —— 本体那时用的是 App 自己那颗,样子
 /// 跟系统的一样。
 ///
-/// 歌词那一格就是触控栏本体那一格:同一个图层行、同一份规格(`TouchBarLyricsCell.spec` / `secondarySpec`),字号 /
+/// 歌词那一格就是触控栏本体那一格:同一个图层行、同一份规格(`TouchBarLyricsCell.spec` / `secondarySpec`),歌词也是
+/// 本体那一份(`touchBarLyrics`,按真触控栏那一格量到的宽度断句,不按这里的估算宽),字号 /
 /// 卡拉OK效果 / 跟随封面 / 副行改了这里当场跟着变;副行开着时两行的落点同本体(`TouchBarLyricsStyle` 的两行那一节)。
 /// 在放歌时演真实的这一句;没在放歌时是示例句(同悬浮歌词编辑台那组自我说明的句子,副行开着也有字看),只画最终
 /// 颜色、不演逐字染色(全仓预览的原则,见 `SectionPreviewBars` 头注)。设置窗口看不见时停表(`previewHostVisible`)。
@@ -325,7 +326,8 @@ final class TouchBarPreviewFeed: ObservableObject {
         let content = TouchBarLyricsCell.content(p, secondary: secondary)
         start.update(content: content, lineIndex: p.currentLineIndex, nowMs: p.lyricsTimelineMs())
         let next = Snapshot(
-            content: content, secondary: secondary, nextLineText: p.nextLineText, nextLineSide: p.nextLineSide,
+            content: content, secondary: secondary,
+            nextLineText: p.touchBarLyrics.nextText, nextLineSide: p.touchBarLyrics.nextSide,
             startMs: start.sinceMs, dwellMs: TouchBarLyricsCell.dwellMs(p, secondary: secondary),
             isPlaying: p.isPlayingNow,
             timingEpoch: LyricsTimingEpoch.of(anchor: p.anchor, pausedPositionMs: p.pausedPositionMs,

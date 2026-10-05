@@ -108,26 +108,28 @@ enum TouchBarLyricsCell {
     }
 
     /// 此刻显示哪一档(Core `TouchBarLyricsContent.resolve(secondary:…)`)。参数从播放状态的哪几项取,只在这里写一遍。
+    /// 歌词取触控栏自己那一份(`touchBarLyrics`):开了「长句拆开」「短句合并」时按这一格的宽度断过句
+    /// (`LineBreakSurface.touchBar`,宽度见 `LineLayoutBudgets.setTouchBarWidth`),都关着时就是逐行的那一份。
     static func content(_ p: PlaybackCoordinator, secondary: LyricSecondaryLine) -> TouchBarLyricsContent {
-        TouchBarLyricsContent.resolve(
+        let lyrics = p.touchBarLyrics
+        return TouchBarLyricsContent.resolve(
             secondary: secondary,
-            compactLine: p.compactLine, showsPlaceholder: p.compactShowsPlaceholder,
-            currentLine: p.currentLine,
+            compactLine: lyrics.compactLine, showsPlaceholder: lyrics.compactPlaceholder,
+            currentLine: lyrics.line,
             inMarkedInterlude: p.rawGapWindow?.isMarked(in: p.lyricsGapMarkers) ?? false,
             title: p.title, artist: p.artist, isAdBreak: p.isCurrentTrackAdBreak)
     }
 
-    /// 主行这一句会显示多久:单行时是提前亮出的那一句的(`compactDwellMs`),副行开着时是正在唱的这一句的。
+    /// 主行这一句会显示多久:单行时是提前亮出的那一句的(`compactDwellMs`,算不出来时退回这一段自己的),
+    /// 副行开着时是正在唱的这一段的。
     static func dwellMs(_ p: PlaybackCoordinator, secondary: LyricSecondaryLine) -> Int? {
-        secondary.showsSecondaryRow ? p.currentLineDwellMs : p.compactDwellMs
+        let lyrics = p.touchBarLyrics
+        return secondary.showsSecondaryRow ? lyrics.lineWindow?.dwellMs : (lyrics.compactDwellMs ?? lyrics.lineWindow?.dwellMs)
     }
 
     /// 歌词那一格跟着变的播放状态。本体和预览订同一批:漏一项不报错,只表现成那一项变了这一格不跟。
     static func playbackChanges(_ p: PlaybackCoordinator) -> [AnyPublisher<Void, Never>] {
-        [signal(p.$compactLine), signal(p.$compactShowsPlaceholder), signal(p.$compactDwellMs),
-         signal(p.$currentLine), signal(p.$nextLineText), signal(p.$nextLineSide),
-         signal(p.$rawGapWindow), signal(p.$lyricsGapMarkers),
-         signal(p.$allLines), signal(p.$currentDurationMs),
+        [signal(p.$touchBarLyrics), signal(p.$rawGapWindow), signal(p.$lyricsGapMarkers),
          signal(p.$currentLineIndex), signal(p.$title), signal(p.$artist), signal(p.$isCurrentTrackAdBreak),
          signal(p.$isPlayingNow), signal(p.$anchor), signal(p.$pausedPositionMs),
          signal(p.$currentLyricsOffsetMs), signal(p.$artworkImage), signal(p.$highResArtworkImage),

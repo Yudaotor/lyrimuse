@@ -144,10 +144,12 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var scrollLineIndex: Int?
     // 歌词窗口里跟当前行重叠着还在唱的前几行,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var overlappingLineIndices: [Int] = []
-    // 三个单行展示面各自按宽度断句后此刻该显示的内容,见 LocalPlaybackSource 同名属性的注释。
+    // 单行展示面(悬浮歌词 / 灵动岛 / 菜单栏 / 触控栏)各自按宽度断句后此刻该显示的内容,见 LocalPlaybackSource
+    // 同名属性的注释。
     @Published private(set) var overlayLyrics = LyricsSyncEngine.SurfaceLyrics.empty
     @Published private(set) var notchLyrics = LyricsSyncEngine.SurfaceLyrics.empty
     @Published private(set) var menuBarLyrics = LyricsSyncEngine.SurfaceLyrics.empty
+    @Published private(set) var touchBarLyrics = LyricsSyncEngine.SurfaceLyrics.empty
     @Published private(set) var menuBarSongRowWidth: CGFloat?
     // 单行展示面(灵动岛/菜单栏)专用的三个值,见 LocalPlaybackSource 同名属性与 CompactLyricLead。
     @Published private(set) var compactLine: SyncedLyricLine?
@@ -916,6 +918,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$overlayLyrics.assign(to: \.overlayLyrics, on: self),
             s.$notchLyrics.assign(to: \.notchLyrics, on: self),
             s.$menuBarLyrics.assign(to: \.menuBarLyrics, on: self),
+            s.$touchBarLyrics.assign(to: \.touchBarLyrics, on: self),
             s.$menuBarSongRowWidth.assign(to: \.menuBarSongRowWidth, on: self),
             s.$compactLine.assign(to: \.compactLine, on: self),
             s.$compactShowsPlaceholder.assign(to: \.compactShowsPlaceholder, on: self),

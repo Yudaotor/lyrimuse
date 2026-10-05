@@ -770,8 +770,8 @@
 "悬停显示播放控制" = "Show Controls on Hover";
 "悬浮歌词" = "Floating Lyrics";
 "悬浮歌词、灵动岛、菜单栏、触控栏可同时开，歌词窗口随用随开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
-"悬浮歌词、灵动岛和菜单栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行" = "On Desktop Floating Lyrics, the Notch and the Menu Bar, lines too wide for one row are split into parts shown one after another, so no line wraps or scrolls; the Lyrics Window still shows one line at a time";
-"悬浮歌词、灵动岛和菜单栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；歌词窗口仍然一句一行" = "On Desktop Floating Lyrics, the Notch and the Menu Bar, runs of very short lines are shown as one line, only when the result fits on one row; the Lyrics Window still shows one line at a time";
+"悬浮歌词、灵动岛、菜单栏和触控栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行" = "On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, lines too wide for one row are split into parts shown one after another, so no line wraps or scrolls; the Lyrics Window still shows one line at a time";
+"悬浮歌词、灵动岛、菜单栏和触控栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；触控栏比较宽，不要求很短，相邻几句放得下、合完不超过 5 秒就合；歌词窗口仍然一句一行" = "On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, runs of very short lines are shown as one line, only when the result fits on one row; the Touch Bar is wide, so there adjacent lines are joined whenever they fit and last 5 seconds or less in total; the Lyrics Window still shows one line at a time";
 "悬浮歌词宽度" = "Overlay lyrics width";
 "悬浮淡化" = "Fade on hover";
 "想法与建议" = "Ideas & Suggestions";

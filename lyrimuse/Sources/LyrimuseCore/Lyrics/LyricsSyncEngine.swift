@@ -188,8 +188,8 @@ public final class LyricsSyncEngine {
     /// 单行展示面按宽度重新断句(见 surfaceTick):每个展示面的宽度预算与断句进度。
     /// 拆长句、并短句都没开,或那个面还没报宽度时,它的断句就是一行一段。歌词窗口不受影响。
     private var lineBreaks = LineBreakOptions.off
-    private var layoutBudgets: [LyricsSurface: LineLayoutBudget] = [:]
-    private var surfaceBreaks: [LyricsSurface: SurfaceBreaks] = [:]
+    private var layoutBudgets: [LineBreakSurface: LineLayoutBudget] = [:]
+    private var surfaceBreaks: [LineBreakSurface: SurfaceBreaks] = [:]
 
     /// 一个展示面的断句:从头一组一组往后断,只断到播放位置后面两段(断好的不会因为后面的行变),
     /// 不在加载时整首断完 —— 逐词读音要给每一句分词,整首一起做会在换歌时卡一下。
@@ -1859,7 +1859,7 @@ public final class LyricsSyncEngine {
         cachedLeadIdx = Int.min
         cachedLeadLine = nil
         lastScanIdx = Int.min
-        for surface in LyricsSurface.allCases { rebuildSegments(for: surface) }
+        for surface in LineBreakSurface.allCases { rebuildSegments(for: surface) }
         return true
     }
 
@@ -2815,9 +2815,9 @@ public final class LyricsSyncEngine {
         return windowWords(at: index)
     }
 
-    // ---- 单行展示面按宽度重新断句(悬浮歌词 / 灵动岛 / 菜单栏,见 08 章决策 25) ----
+    // ---- 单行展示面按宽度重新断句(悬浮歌词 / 灵动岛 / 菜单栏 / 触控栏,见 08 章决策 25) ----
 
-    /// 一个展示面此刻要显示的内容。三个面各按自己的断句算,同一刻未必是同一句。字段语义跟 TickResolution
+    /// 一个展示面此刻要显示的内容。各面按自己的断句算,同一刻未必是同一句。字段语义跟 TickResolution
     /// 的同名项一致,只是按这个面的段而不是按歌词行算。
     public struct SurfaceLyrics: Equatable {
         public var line: SyncedLyricLine?
@@ -2852,7 +2852,7 @@ public final class LyricsSyncEngine {
 
     /// 设一个展示面的宽度预算;预算的 key 没变就什么都不做。返回断句是否要重来(要的话调用方立刻重发一拍)。
     @discardableResult
-    public func setLayoutBudget(_ budget: LineLayoutBudget?, for surface: LyricsSurface) -> Bool {
+    public func setLayoutBudget(_ budget: LineLayoutBudget?, for surface: LineBreakSurface) -> Bool {
         if budget?.key == layoutBudgets[surface]?.key, (budget == nil) == (layoutBudgets[surface] == nil) { return false }
         layoutBudgets[surface] = budget
         rebuildSegments(for: surface)
@@ -2880,7 +2880,7 @@ public final class LyricsSyncEngine {
         return ln.words.map { SyncedLyricWord(text: $0.text, startMs: $0.startMs, durationMs: $0.durationMs) }
     }
 
-    private func rebuildSegments(for surface: LyricsSurface) {
+    private func rebuildSegments(for surface: LineBreakSurface) {
         let n = displayLineCount
         var breaks = SurfaceBreaks()
         if lineBreaks.isActive, let budget = layoutBudgets[surface], budget.main.maxWidth > 0, n > 0 {
@@ -2894,7 +2894,7 @@ public final class LyricsSyncEngine {
     }
 
     /// 给断句用的第 i 行,按需构造、按展示面缓存。
-    private func segmenterLine(_ surface: LyricsSurface, _ i: Int, budget: LineLayoutBudget) -> LyricsSegmenter.Line? {
+    private func segmenterLine(_ surface: LineBreakSurface, _ i: Int, budget: LineLayoutBudget) -> LyricsSegmenter.Line? {
         guard i >= 0, i < displayLineCount else { return nil }
         if let cached = surfaceBreaks[surface]?.lines[i] { return cached }
         func holds(_ k: Int) -> Bool { overlapHoldEndMs.indices.contains(k) && overlapHoldEndMs[k] != nil }
@@ -2923,7 +2923,7 @@ public final class LyricsSyncEngine {
     }
 
     /// 往后断,直到播放位置后面至少还有两段(当前段的下一段、再下一段的起点都要用);`posMs` 为 nil 断完整首。
-    private func extendSegments(_ surface: LyricsSurface, coveringMs posMs: Int?) {
+    private func extendSegments(_ surface: LineBreakSurface, coveringMs posMs: Int?) {
         guard let budget = surfaceBreaks[surface]?.budget else { return }
         let n = displayLineCount
         // 每一步只读出要的几个数,不拿整份 SurfaceBreaks 的拷贝:拷贝活着时往里写(追加段、缓存行)会把整个
@@ -2947,7 +2947,7 @@ public final class LyricsSyncEngine {
 
     /// 一段唱完的时刻:逐字句拆开的前几段取它最后一个词的结束,行级句拆开的前几段不知道(nil),
     /// 其余同 gapLineEndMs(整行 / 合成句的末行)。
-    private func segmentSungEndMs(_ surface: LyricsSurface, _ k: Int) -> Int? {
+    private func segmentSungEndMs(_ surface: LineBreakSurface, _ k: Int) -> Int? {
         guard let segs = surfaceBreaks[surface]?.segments, segs.indices.contains(k) else { return nil }
         let seg = segs[k]
         if let part = seg.part, part.index + 1 < part.count {
@@ -2957,13 +2957,13 @@ public final class LyricsSyncEngine {
         return gapLineEndMs(at: seg.lastLine)
     }
 
-    private func segmentStart(_ surface: LyricsSurface, _ k: Int) -> Int? {
+    private func segmentStart(_ surface: LineBreakSurface, _ k: Int) -> Int? {
         guard let starts = surfaceBreaks[surface]?.starts, starts.indices.contains(k) else { return nil }
         return starts[k]
     }
 
     /// 第 k 段要显示的那一句(按展示面缓存)。
-    private func segmentLine(_ surface: LyricsSurface, _ k: Int) -> SyncedLyricLine? {
+    private func segmentLine(_ surface: LineBreakSurface, _ k: Int) -> SyncedLyricLine? {
         guard let segs = surfaceBreaks[surface]?.segments, segs.indices.contains(k) else { return nil }
         if let cached = surfaceBreaks[surface]?.displayed[k] { return cached }
         let seg = segs[k]
@@ -2980,7 +2980,7 @@ public final class LyricsSyncEngine {
     }
 
     /// 一个展示面断好的全部段,按顺序。全库回放核对「每一行都放得下」用。
-    public func surfaceLines(_ surface: LyricsSurface) -> [SyncedLyricLine] {
+    public func surfaceLines(_ surface: LineBreakSurface) -> [SyncedLyricLine] {
         extendSegments(surface, coveringMs: nil)
         return (surfaceBreaks[surface]?.segments ?? []).indices.compactMap { segmentLine(surface, $0) }
     }
@@ -2988,7 +2988,7 @@ public final class LyricsSyncEngine {
     /// 一个展示面整首里最宽的一行:每一段的主行,和这个面显示的下一句 / 译文 / 罗马音那一行,按它的预算量,
     /// 取最宽的。没开重新断句、那个面没报宽度、没有歌词时为 nil。菜单栏自适应宽度拿它给整首定一个槽宽。
     /// 只用断句时的那份文字、译文、罗马音量,不建显示行(建显示行要算读音和逐词分组)。
-    public func widestRow(_ surface: LyricsSurface) -> CGFloat? {
+    public func widestRow(_ surface: LineBreakSurface) -> CGFloat? {
         guard let budget = surfaceBreaks[surface]?.budget else { return nil }
         extendSegments(surface, coveringMs: nil)
         guard let segments = surfaceBreaks[surface]?.segments else { return nil }
@@ -3017,7 +3017,7 @@ public final class LyricsSyncEngine {
     /// 一个展示面按原句(不重新断句)量出的每一行的宽,从窄到宽排好后取第 `quantile` 处的那个。一行的宽是
     /// 主行和这个面显示的译文 / 罗马音那一行里宽的那个;「下一句」不算,同 `MenuBarSlotPolicy.naturalWidth`。
     /// 那个面没报宽度、没有歌词时为 nil。菜单栏自适应宽度在没开重新断句时拿它给整首定起步槽宽。
-    public func rowWidth(_ surface: LyricsSurface, atQuantile quantile: Double) -> CGFloat? {
+    public func rowWidth(_ surface: LineBreakSurface, atQuantile quantile: Double) -> CGFloat? {
         guard let budget = layoutBudgets[surface], budget.main.maxWidth > 0 else { return nil }
         var widths: [CGFloat] = []
         for i in 0..<displayLineCount {
@@ -3040,7 +3040,7 @@ public final class LyricsSyncEngine {
     }
 
     /// 一个展示面此刻该显示什么,规则跟 tickQuery 的单行几项相同,只是按这个面的段算。
-    public func surfaceTick(_ surface: LyricsSurface, atMs rawPosMs: Int, trackEndMs: Int? = nil) -> SurfaceLyrics {
+    public func surfaceTick(_ surface: LineBreakSurface, atMs rawPosMs: Int, trackEndMs: Int? = nil) -> SurfaceLyrics {
         let posMs = rawPosMs + effectiveOffsetMs
         extendSegments(surface, coveringMs: posMs)
         guard let starts = surfaceBreaks[surface]?.starts, !starts.isEmpty else { return .empty }

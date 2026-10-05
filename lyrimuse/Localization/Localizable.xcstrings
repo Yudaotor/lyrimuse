@@ -35797,52 +35797,6 @@
         }
       }
     },
-    "悬浮歌词、灵动岛和菜单栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On Desktop Floating Lyrics, the Notch and the Menu Bar, lines too wide for one row are split into parts shown one after another, so no line wraps or scrolls; the Lyrics Window still shows one line at a time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "悬浮歌词、灵动岛和菜单栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "浮動歌詞、動態島和選單列上放不下一行的句子，按各自的寬度拆成幾段先後顯示，每一行都不換行、不捲動；歌詞視窗仍然一句一行"
-          }
-        }
-      }
-    },
-    "悬浮歌词、灵动岛和菜单栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；歌词窗口仍然一句一行" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On Desktop Floating Lyrics, the Notch and the Menu Bar, runs of very short lines are shown as one line, only when the result fits on one row; the Lyrics Window still shows one line at a time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "悬浮歌词、灵动岛和菜单栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；歌词窗口仍然一句一行"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "浮動歌詞、動態島和選單列上連續幾句很短的歌詞合成一句顯示，合完放得下一行才合；歌詞視窗仍然一句一行"
-          }
-        }
-      }
-    },
     "点这里到设置里重新连接" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -38695,6 +38649,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "預覽 · 目前這首不會顯示到 Discord"
+          }
+        }
+      }
+    },
+    "悬浮歌词、灵动岛、菜单栏和触控栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, lines too wide for one row are split into parts shown one after another, so no line wraps or scrolls; the Lyrics Window still shows one line at a time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬浮歌词、灵动岛、菜单栏和触控栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浮動歌詞、動態島、選單列和觸控列上放不下一行的句子，按各自的寬度拆成幾段先後顯示，每一行都不換行、不捲動；歌詞視窗仍然一句一行"
+          }
+        }
+      }
+    },
+    "悬浮歌词、灵动岛、菜单栏和触控栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；触控栏比较宽，不要求很短，相邻几句放得下、合完不超过 5 秒就合；歌词窗口仍然一句一行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, runs of very short lines are shown as one line, only when the result fits on one row; the Touch Bar is wide, so there adjacent lines are joined whenever they fit and last 5 seconds or less in total; the Lyrics Window still shows one line at a time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬浮歌词、灵动岛、菜单栏和触控栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；触控栏比较宽，不要求很短，相邻几句放得下、合完不超过 5 秒就合；歌词窗口仍然一句一行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浮動歌詞、動態島、選單列和觸控列上連續幾句很短的歌詞合成一句顯示，合完放得下一行才合；觸控列比較寬，不要求很短，相鄰幾句放得下、合完不超過 5 秒就合；歌詞視窗仍然一句一行"
           }
         }
       }

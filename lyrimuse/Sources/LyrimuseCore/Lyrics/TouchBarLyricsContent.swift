@@ -2,9 +2,9 @@ import Foundation
 
 /// 触控栏歌词那一格此刻显示什么。判据只此一份:`TouchBarLyricsController` 照着摆,selftest 钉着。
 ///
-/// 取单行展示面那一份(`compactLine` / `compactShowsPlaceholder`,提前亮出下一句的规则见 `CompactLyricLead`),
-/// 不按宽度断句:这一格比菜单栏宽得多,放不下的整句交给图层滚动。副行开着时主行改取正在唱的那一句,见
-/// `resolve(secondary:…)`。
+/// 取触控栏自己那一份(`compactLine` / `compactPlaceholder`,提前亮出下一句的规则见 `CompactLyricLead`):开了「长句拆开」
+/// 「短句合并」时按这一格的宽度断过句(`LineBreakSurface.touchBar`),都关着时放不下的整句交给图层滚动。副行开着时主行
+/// 改取正在唱的那一句,见 `resolve(secondary:…)`。
 ///
 /// 跟菜单栏(`MenuBarSlotPolicy.displayText`)的两处不同:暂停时照样显示;歌名前不加 ♪(左边挨着封面)。
 /// 取舍见 17 章。

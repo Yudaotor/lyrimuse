@@ -4,7 +4,7 @@ import LyrimuseCore
 
 // 触控栏歌词:那一格显示哪一档(Core `TouchBarLyricsContent`)、字号区间(`TouchBarLyricsStyle`)、图层行的
 // 时间基准指纹(`LyricsTimingEpoch`)、副行开着时两行显示什么和怎么摆(两行的墨迹照图层行的画法量),加几条接线契约 ——
-// 展开态从左到右排哪几项(`TouchBarSlot.order`)、隐藏功能栏时的宽度、广告期间封面那一格贴喇叭;
+// 展开态从左到右排哪几项(`TouchBarSlot.order`)、隐藏功能栏时的宽度、广告期间封面那一格贴喇叭、按触控栏这一格的宽度断句;
 // 私有入口只在 `TouchBar/TouchBarPrivateAPI.swift` 一个文件里、App 启动时起控制器、开关和十项设置在「歌词显示」页
 // 自己那一段(「触控栏」)里、控制器都接上了;这台 Mac 有没有触控栏的判据(`TouchBarPresence`)和它在设置页 / 搜索 /
 // 控制器三处的接线。
@@ -247,6 +247,62 @@ func runTouchBarTests() {
                     "触控栏排列: rawValue 是存量配置的一部分,别动")
     }
 
+    // ---- 按宽度断句:触控栏是第四个断句的面,按它自己报的宽拆长句、并短句;没报宽度时一句一句换 ----
+    do {
+        expectEqual(LineBreakSurface.allCases.map(\.rawValue), ["overlay", "notch", "menuBar", "touchBar"],
+                    "触控栏断句: 断句的面是三个形态加触控栏")
+        expectEqual(LyricsSurface.allCases.map { LineBreakSurface($0).rawValue }, LyricsSurface.allCases.map(\.rawValue),
+                    "触控栏断句: 三个形态对得上同名的断句面")
+        // 量宽:每个字符 10pt(同 sync-engine 组那一段),期望值可以手算。
+        let measure: (String) -> CGFloat = { CGFloat($0.count) * 10 }
+        func budget(_ width: CGFloat) -> LineLayoutBudget {
+            LineLayoutBudget(key: width, maxWidth: width, measure: measure)
+        }
+        let yrc = "[69920,1900](69920,1900,0)You got to be startin' somethin'\n"
+            + "[71860,1400](71860,1400,0)It's too high to get over\n"
+            + "[73260,600](73260,600,0)Yeah yeah\n"
+            + "[73890,1300](73890,1300,0)Too low to get under\n"
+            + "[75160,600](75160,600,0)Yeah yeah\n"
+            + "[75780,3000](75780,1000,0)You're stuck, (76780,1000,0)in the middle (77780,1000,0)of it all\n"
+            + "[80000,2000](80000,2000,0)end\n"
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, lineBreaks: .all)
+        expectEqual(engine.surfaceTick(.touchBar, atMs: 76000).line?.plainText, "You're stuck, in the middle of it all",
+                    "触控栏断句: 还没报宽度时一句一行")
+        engine.setLayoutBudget(budget(300), for: .touchBar)
+        expectEqual(engine.surfaceTick(.touchBar, atMs: 76000).line?.plainText, "You're stuck,",
+                    "触控栏断句: 放不下的长句按触控栏的宽拆开")
+        engine.setLayoutBudget(budget(400), for: .touchBar)
+        expectEqual(engine.surfaceTick(.touchBar, atMs: 72000).line?.plainText, "It's too high to get over Yeah yeah",
+                    "触控栏断句: 很短的一句合进前一句")
+        expectEqual(engine.surfaceTick(.overlay, atMs: 72000).line?.plainText, "It's too high to get over",
+                    "触控栏断句: 别的面不受触控栏的宽度影响")
+        engine.setLayoutBudget(nil, for: .touchBar)
+        expectEqual(engine.surfaceTick(.touchBar, atMs: 76000).line?.plainText, "You're stuck, in the middle of it all",
+                    "触控栏断句: 撤掉宽度(没启用)回到一句一行")
+
+        // 合并规则:触控栏放得下就并(`MergeRule.whenFits`),别的面只并一闪而过的短句。《拖男带女》里这两句各停
+        // 2.9 / 2.0 秒、9 / 7 个字,不算「很短」;合完 4.9 秒,不超过 5 秒。前一句停 4.3 秒,跟它合就超了。
+        let lrc = "[00:36.12]每分每秒每天时时刻刻在延续\n[00:40.42]多少钱与多少名和利\n[00:43.34]换回来的是空虚\n"
+            + "[00:45.35]放开我们的怀抱\n[00:48.00]让我们的爱带动世界\n"
+        let lrcEngine = LyricsSyncEngine()
+        lrcEngine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", lineBreaks: .all)
+        lrcEngine.setLayoutBudget(LineLayoutBudget(key: "touchBar", main: .init(maxWidth: 400, measure: measure),
+                                                   mergeRule: .whenFits), for: .touchBar)
+        lrcEngine.setLayoutBudget(budget(400), for: .overlay)
+        let joined = lrcEngine.surfaceTick(.touchBar, atMs: 41000).line?.plainText ?? ""
+        expectEqual(joined.hasPrefix("多少钱与多少名和利") && joined.hasSuffix("换回来的是空虚"), true,
+                    "触控栏合并: 两句完整的句子放得下、合完不超过 5 秒就并成一屏(\(joined))")
+        expectEqual(lrcEngine.surfaceTick(.overlay, atMs: 41000).line?.plainText, "多少钱与多少名和利",
+                    "触控栏合并: 别的面照旧只并一闪而过的短句")
+        expectEqual(lrcEngine.surfaceTick(.touchBar, atMs: 37000).line?.plainText, "每分每秒每天时时刻刻在延续",
+                    "触控栏合并: 合完超过 5 秒不并")
+        lrcEngine.setLayoutBudget(LineLayoutBudget(key: "narrow", main: .init(maxWidth: 120, measure: measure),
+                                                   mergeRule: .whenFits), for: .touchBar)
+        expectEqual(lrcEngine.surfaceTick(.touchBar, atMs: 41000).line?.plainText, "多少钱与多少名和利",
+                    "触控栏合并: 放不下就不并")
+    }
+
     // ---- 时间基准指纹:锚点、暂停位置、偏移任一变了就变,全一样就不变 ----
     do {
         let at = Date(timeIntervalSince1970: 1_800_000_000)
@@ -417,6 +473,34 @@ func runTouchBarTests() {
             expectEqual(text.contains("TouchBarLyricsCell.artworkTile(p, content: content)"), true,
                         "触控栏广告态: \(name)封面那一格走 TouchBarLyricsCell.artworkTile")
         }
+        // 按宽度断句:触控栏读断好的那一份,控制器报这一格的宽,LineLayoutBudgets 按触控栏的字体报预算,
+        // LocalPlaybackSource 逐拍算这个面;设置里那两项的说明也写上触控栏。漏一处不报错,只表现成触控栏不断句。
+        expectEqual(cellSource.contains("let lyrics = p.touchBarLyrics") && !cellSource.contains("p.compactLine")
+                        && !cellSource.contains("p.currentLine,"), true,
+                    "触控栏断句: 显示哪一档读触控栏自己那一份断句")
+        for (name, text) in [("预览", preview), ("控制器", controller)] {
+            expectEqual(text.contains("p.touchBarLyrics.nextText") && text.contains("p.touchBarLyrics.nextSide"), true,
+                        "触控栏断句: \(name)副行的「下一句」也读断好的那一份")
+        }
+        expectEqual(controller.contains("LineLayoutBudgets.shared.setTouchBarWidth(measured)")
+                        && controller.contains("LineLayoutBudgets.shared.setTouchBarWidth(0)"), true,
+                    "触控栏断句: 控制器报这一格量到的宽,没启用时报 0")
+        let budgets = code(appDir.appendingPathComponent("UI/LineLayoutBudgets.swift")) ?? ""
+        expectEqual(budgets.contains("report(.touchBar, LineLayoutBudget(")
+                        && budgets.contains("TouchBarLyricsCell.mainFont(fontSize: fontSize, secondary: kind)")
+                        && budgets.contains("setLineLayoutBudget(nil, for: .touchBar)"), true,
+                    "触控栏断句: 按触控栏的字体报预算,宽为 0 时撤掉")
+        expectEqual(budgets.components(separatedBy: "mergeRule: .whenFits").count - 1, 1,
+                    "触控栏断句: 只有触控栏放得下就并,别的面照旧只并短句")
+        let coreDir = sourcesRoot.appendingPathComponent("LyrimuseCore")
+        let local = code(coreDir.appendingPathComponent("Local/LocalPlaybackSource.swift")) ?? ""
+        expectEqual(local.contains("syncEngine.surfaceTick(.touchBar, atMs: pos, trackEndMs: currentDurationMs)")
+                        && local.contains("if touchBar != touchBarLyrics { touchBarLyrics = touchBar }"), true,
+                    "触控栏断句: 逐拍算触控栏这个面并发布")
+        let settingsSource = code(appDir.appendingPathComponent("SettingsView.swift")) ?? ""
+        expectEqual(settingsSource.contains("悬浮歌词、灵动岛、菜单栏和触控栏上放不下一行的句子")
+                        && settingsSource.contains("悬浮歌词、灵动岛、菜单栏和触控栏上连续几句很短的歌词"), true,
+                    "触控栏断句: 「长句拆开」「短句合并」的说明写上触控栏")
         // 隐藏功能栏时系统不给 ✕:自己那颗收起键要接上「收起」,展开着的时候切换要按新的方式重新展开。
         expectEqual(controller.contains("TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
                     "触控栏: 自己那颗收起键收回成功能栏图标")

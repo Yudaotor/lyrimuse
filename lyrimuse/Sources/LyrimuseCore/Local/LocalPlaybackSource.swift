@@ -56,11 +56,13 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 歌词窗口:跟当前行重叠着、还没唱完的前几行(对唱 / 背景人声唱进下一句),升序,平时是空数组。
     /// 语义见 LyricsSyncEngine.TickResolution.overlappingIndices;同一套 tick、同一条"只在真的变化时才赋值"纪律。
     @Published public private(set) var overlappingLineIndices: [Int] = []
-    /// 三个单行展示面各自此刻该显示的内容(按各自宽度断句,见 LyricsSyncEngine.surfaceTick)。没开「按宽度
-    /// 重新断句」或那个面还没报宽度时,跟 currentLine / compactLine / nextLine* 那一套逐行结果相同。
+    /// 单行展示面(悬浮歌词 / 灵动岛 / 菜单栏 / 触控栏)各自此刻该显示的内容(按各自宽度断句,见
+    /// LyricsSyncEngine.surfaceTick)。没开「按宽度重新断句」或那个面还没报宽度时,跟 currentLine / compactLine /
+    /// nextLine* 那一套逐行结果相同。
     @Published public private(set) var overlayLyrics = LyricsSyncEngine.SurfaceLyrics.empty
     @Published public private(set) var notchLyrics = LyricsSyncEngine.SurfaceLyrics.empty
     @Published public private(set) var menuBarLyrics = LyricsSyncEngine.SurfaceLyrics.empty
+    @Published public private(set) var touchBarLyrics = LyricsSyncEngine.SurfaceLyrics.empty
     /// 菜单栏自适应宽度给整首定的起步槽宽(文字部分):开了按宽度断句是整首最宽的一行(LyricsSyncEngine.widestRow),
     /// 没开是按 `MenuBarSlotPolicy.songRowQuantile` 取的那一行(LyricsSyncEngine.rowWidth)。nil = 还不知道。
     @Published public private(set) var menuBarSongRowWidth: CGFloat?
@@ -244,7 +246,7 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public var chineseVariant: ChineseVariant = .off {
         didSet { reloadCurrentLyrics() }
     }
-    /// 悬浮歌词 / 灵动岛 / 菜单栏按各自的宽度断句的两件事(见 LyricsSyncEngine.surfaceTick、`LineBreakOptions`):
+    /// 悬浮歌词 / 灵动岛 / 菜单栏 / 触控栏按各自的宽度断句的两件事(见 LyricsSyncEngine.surfaceTick、`LineBreakOptions`):
     /// 放不下的长句拆开、很短的几句并成一句。改了立刻重新加载当前这首;歌词窗口不受影响。
     @Published public var splitsLongLyricLines = false {
         didSet { reloadCurrentLyrics() }
@@ -257,7 +259,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     /// 一个单行展示面报它的宽度预算(一行多宽 + 按它的字体量宽)。断句变了就立刻按当前位置重新发布。
-    public func setLineLayoutBudget(_ budget: LineLayoutBudget?, for surface: LyricsSurface) {
+    public func setLineLayoutBudget(_ budget: LineLayoutBudget?, for surface: LineBreakSurface) {
         guard syncEngine.setLayoutBudget(budget, for: surface) else { return }
         if surface == .menuBar { updateMenuBarSongRowWidth() }
         if !lyricLinesSuppressed, let pos = anchor?.extrapolatedPositionMs() ?? pausedPositionMs {
@@ -276,9 +278,11 @@ public final class LocalPlaybackSource: ObservableObject {
         let overlay = syncEngine.surfaceTick(.overlay, atMs: pos, trackEndMs: currentDurationMs)
         let notch = syncEngine.surfaceTick(.notch, atMs: pos, trackEndMs: currentDurationMs)
         let menuBar = syncEngine.surfaceTick(.menuBar, atMs: pos, trackEndMs: currentDurationMs)
+        let touchBar = syncEngine.surfaceTick(.touchBar, atMs: pos, trackEndMs: currentDurationMs)
         if overlay != overlayLyrics { overlayLyrics = overlay }
         if notch != notchLyrics { notchLyrics = notch }
         if menuBar != menuBarLyrics { menuBarLyrics = menuBar }
+        if touchBar != touchBarLyrics { touchBarLyrics = touchBar }
     }
     /// 这台机器上**见过**中文歌词没有。一旦见过就不再变回 false —— 设置项靠它决定要不要
     /// 露出简繁开关,而"这首歌不是中文"不该让一个已经露出来的设置消失。
@@ -2507,6 +2511,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if overlayLyrics != .empty { overlayLyrics = .empty }
         if notchLyrics != .empty { notchLyrics = .empty }
         if menuBarLyrics != .empty { menuBarLyrics = .empty }
+        if touchBarLyrics != .empty { touchBarLyrics = .empty }
         if compactLine != nil { compactLine = nil }
         if compactShowsPlaceholder { compactShowsPlaceholder = false }
         if compactDwellMs != nil { compactDwellMs = nil }
@@ -2730,6 +2735,7 @@ public final class LocalPlaybackSource: ObservableObject {
             overlayLyrics = .empty
             notchLyrics = .empty
             menuBarLyrics = .empty
+            touchBarLyrics = .empty
             compactLine = nil
             compactShowsPlaceholder = false
             compactDwellMs = nil

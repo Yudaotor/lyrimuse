@@ -3,9 +3,10 @@ import Combine
 import LyrimuseCore
 import SwiftUI
 
-/// 把三个单行展示面的宽度预算报给 LocalPlaybackSource(按宽度重新断句,见 08 章决策 25):每个面上会出现的
-/// 每一行(主行、译文、罗马音、下一句)各多宽、用什么字体量。悬浮歌词和菜单栏的宽度、字体都在设置里,这里订阅了报;
-/// 灵动岛歌词列的宽度跟刘海、耳朵模块、封面有关,由那个视图自己量了报(LineLayoutWidthReporter)。
+/// 把单行展示面(悬浮歌词 / 灵动岛 / 菜单栏 / 触控栏)的宽度预算报给 LocalPlaybackSource(按宽度重新断句,见 08 章
+/// 决策 25):每个面上会出现的每一行(主行、译文、罗马音、下一句)各多宽、用什么字体量。悬浮歌词和菜单栏的宽度、字体都在
+/// 设置里,这里订阅了报;灵动岛歌词列的宽度跟刘海、耳朵模块、封面有关,由那个视图自己量了报(LineLayoutWidthReporter);
+/// 触控栏歌词那一格的宽由系统按功能栏此刻占多宽来分,由 TouchBarLyricsController 量了报(`setTouchBarWidth`)。
 ///
 /// 这里的宽度和量法必须跟各面判「装不装得下」的那一处一致:悬浮歌词 / 灵动岛的图层行按词相加再加描边预留
 /// (OverlayRowLayout),菜单栏按整串量(MenuBarMarqueeRenderer.presentation)。那边改了,这里同步改。
@@ -14,6 +15,7 @@ final class LineLayoutBudgets {
     static let shared = LineLayoutBudgets()
     private var subs: [AnyCancellable] = []
     private let notchWidth = CurrentValueSubject<CGFloat, Never>(0)
+    private let touchBarWidth = CurrentValueSubject<CGFloat, Never>(0)
 
     /// 量出来的宽度再让出这么多,吸收 SwiftUI 排版取整。
     private static let safety: CGFloat = 1
@@ -47,7 +49,17 @@ final class LineLayoutBudgets {
                 .sink { width, main, secondary, kind in
                     Self.reportNotch(width: width, main: main, secondary: secondary, kind: kind)
                 },
+            Publishers.CombineLatest3(touchBarWidth.removeDuplicates(), s.$touchBarLyricsFontSize,
+                                      s.$touchBarSecondaryLine)
+                .sink { width, size, kind in
+                    Self.reportTouchBar(width: width, fontSize: size, kind: kind)
+                },
         ]
+    }
+
+    /// 触控栏歌词那一格此刻的宽(TouchBarLyricsController 报上来);0 = 没启用,不按这一格断句。
+    func setTouchBarWidth(_ width: CGFloat) {
+        touchBarWidth.send((width * 2).rounded() / 2)
     }
 
     /// 灵动岛歌词列此刻的宽度(LineLayoutWidthReporter 报上来)。
@@ -126,7 +138,31 @@ final class LineLayoutBudgets {
             romanization: kind == .romanization ? second : nil))
     }
 
-    private static func report(_ surface: LyricsSurface, _ budget: LineLayoutBudget) {
+    /// 触控栏:主行和副行都占歌词那一格的整宽。那一格是悬浮歌词的图层行、没有描边,量法同悬浮歌词;字体听「字号」,
+    /// 副行开着时是两行那两种(`TouchBarLyricsCell.mainFont` / `secondaryFont`)。「短句合并」按放得下就并(那一格很宽,
+    /// 见 `LineLayoutBudget.MergeRule.whenFits`)。宽是 0 时撤掉预算,回到一句一行。
+    private static func reportTouchBar(width: CGFloat, fontSize: Double, kind: LyricSecondaryLine) {
+        guard width > 0 else {
+            LocalPlaybackSource.shared.setLineLayoutBudget(nil, for: .touchBar)
+            return
+        }
+        let rowWidth = width - safety
+        let main = TouchBarLyricsCell.mainFont(fontSize: fontSize, secondary: kind)
+        let secondary = TouchBarLyricsCell.secondaryFont
+        let second = LineLayoutBudget.Row(maxWidth: rowWidth, measure: measurer(secondary))
+        let secondTranslation = LineLayoutBudget.Row(maxWidth: rowWidth, measure: measurer(secondary, translation: true))
+        let key: [AnyHashable] = [LineBreakSurface.touchBar, (rowWidth * 2).rounded(), fontKey(main),
+                                  fontKey(secondary), kind.rawValue, LineLayoutBudget.MergeRule.whenFits]
+        report(.touchBar, LineLayoutBudget(
+            key: key,
+            main: .init(maxWidth: rowWidth, measure: measurer(main)),
+            preview: kind == .nextLine ? second : nil,
+            translation: kind == .translation ? secondTranslation : nil,
+            romanization: kind == .romanization ? second : nil,
+            mergeRule: .whenFits))
+    }
+
+    private static func report(_ surface: LineBreakSurface, _ budget: LineLayoutBudget) {
         guard budget.main.maxWidth > 0 else { return }
         LocalPlaybackSource.shared.setLineLayoutBudget(budget, for: surface)
     }

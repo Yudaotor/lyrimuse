@@ -38,16 +38,29 @@ public struct LineLayoutBudget {
     public let romanization: Row?
     /// 逐词读音;nil = 这个面不画逐词读音。
     public let wordRomanization: WordRomanization?
+    /// 「短句合并」开着时,这个面上相邻几句按哪种规则并成一句。
+    public let mergeRule: MergeRule
+
+    /// 相邻几句什么时候并成一句。两种都要求同一声部、不跨间奏、都不是真重叠行、合完从第一句开始到最后一句唱完不超过
+    /// `LyricsSegmenter.mergeMaxSpanMs`,并且合完每一行都放得下。
+    public enum MergeRule: Hashable, Sendable {
+        /// 只并一闪而过的:这一句停不到 `mergeShortDwellMs`、并进来的那句不超过 `mergeNextMaxDwellMs`,两句里至少一句很短
+        /// (`mergeTinyMaxWidth`)。两句完整的句子只是唱得快,不往一起粘。悬浮歌词、灵动岛、菜单栏用这个。
+        case shortLines
+        /// 放得下就并:不看单句停多久、多长。触控栏用这个:那一格很宽,两句完整的句子也常常放得下,空着不如并成一屏。
+        case whenFits
+    }
 
     public init(key: AnyHashable, main: Row, preview: Row? = nil,
                 translation: Row? = nil, romanization: Row? = nil,
-                wordRomanization: WordRomanization? = nil) {
+                wordRomanization: WordRomanization? = nil, mergeRule: MergeRule = .shortLines) {
         self.key = key
         self.main = main
         self.preview = preview
         self.translation = translation
         self.romanization = romanization
         self.wordRomanization = wordRomanization
+        self.mergeRule = mergeRule
     }
 
     public init(key: AnyHashable, maxWidth: CGFloat, measure: @escaping (String) -> CGFloat) {
@@ -70,7 +83,8 @@ public struct LineLayoutBudget {
         return LineLayoutBudget(
             key: key, main: Row(maxWidth: main.maxWidth, measure: cached(main.measure)),
             preview: cachedRow(preview), translation: cachedRow(translation), romanization: cachedRow(romanization),
-            wordRomanization: wordRomanization.map { WordRomanization(measure: cached($0.measure), sidePadding: $0.sidePadding) })
+            wordRomanization: wordRomanization.map { WordRomanization(measure: cached($0.measure), sidePadding: $0.sidePadding) },
+            mergeRule: mergeRule)
     }
 }
 
@@ -78,7 +92,7 @@ public struct LineLayoutBudget {
 public struct LineBreakOptions: Equatable, Hashable, Sendable {
     /// 放不下一行的句子拆开。开着时各面的每一行都放得下,不折行、不滚动。
     public var splitsLongLines: Bool
-    /// 连续几句很短的并成一句,合完放得下一行才并。
+    /// 连续几句很短的并成一句,合完放得下一行才并(触控栏放得下就并,见 `LineLayoutBudget.MergeRule`)。
     public var mergesShortLines: Bool
 
     public init(splitsLongLines: Bool = false, mergesShortLines: Bool = false) {
@@ -324,16 +338,18 @@ public enum LyricsSegmenter {
         return true
     }
 
-    /// 组 [f, j] 能不能再并进第 j+1 句。第 j+1 句的停留按下一句的起点算;它是最后一句时按它唱完的时刻算,
-    /// 行级歌词的最后一句没有句末标记就不知道停多久,不并。
+    /// 组 [f, j] 能不能再并进第 j+1 句,规则看这个面的 `budget.mergeRule`。第 j+1 句的停留按下一句的起点算;它是最后一句时
+    /// 按它唱完的时刻算,行级歌词的最后一句没有句末标记就不知道停多久,不并。
     static func canMerge(_ line: LineProvider, from f: Int, through j: Int, budget: LineLayoutBudget) -> Bool {
         guard let a = line(j), let b = line(j + 1), let head = line(f),
               let bEnd = line(j + 2)?.startMs ?? b.sungEndMs else { return false }
-        let dwellA = b.startMs - a.startMs, dwellB = bEnd - b.startMs
-        guard dwellA < mergeShortDwellMs, dwellB < mergeNextMaxDwellMs else { return false }
-        let tinyA = displayWidth(a.text) <= mergeTinyMaxWidth
-        let tinyB = dwellB < mergeShortDwellMs && displayWidth(b.text) <= mergeTinyMaxWidth
-        guard tinyA || tinyB else { return false }
+        if budget.mergeRule == .shortLines {
+            let dwellA = b.startMs - a.startMs, dwellB = bEnd - b.startMs
+            guard dwellA < mergeShortDwellMs, dwellB < mergeNextMaxDwellMs else { return false }
+            let tinyA = displayWidth(a.text) <= mergeTinyMaxWidth
+            let tinyB = dwellB < mergeShortDwellMs && displayWidth(b.text) <= mergeTinyMaxWidth
+            guard tinyA || tinyB else { return false }
+        }
         guard a.side == b.side, !a.gapAfter, a.mergeable, b.mergeable else { return false }
         guard (a.words == nil) == (b.words == nil) else { return false }
         guard (b.sungEndMs ?? bEnd) - head.startMs <= mergeMaxSpanMs else { return false }

@@ -154,8 +154,8 @@ public enum SettingsSearchCatalog {
                             pathKeys: ["歌词显示", "歌词窗口"] + (group.map { [$0] } ?? []))
     }
 
-    /// 「歌词显示 › 触控栏」那一段。跟 `lyricsWindow` 同理不是一个 `LyricsSurface`:触控栏有常驻开关,但歌词
-    /// 取不按宽度断句的那一份,不进那个枚举的断句预算和菜单栏面板磁贴。这一段没有抽屉。
+    /// 「歌词显示 › 触控栏」那一段。跟 `lyricsWindow` 同理不是一个 `LyricsSurface`:触控栏有常驻开关、也按宽度断句
+    /// (`LineBreakSurface.touchBar`),但进不了菜单栏面板那排磁贴。这一段没有抽屉。
     private static func touchBar(_ title: String, sub: String? = nil, kw: [String] = [],
                                  group: String? = nil) -> SettingsSearchEntry {
         SettingsSearchEntry(destination: .tab("appearance"),
@@ -214,8 +214,8 @@ public enum SettingsSearchCatalog {
         lyrics("display", "繁简转换", kw: ["繁体", "简体", "OpenCC"]),
         lyrics("display", "显示读音", kw: ["罗马音", "罗马字", "注音", "拼音", "粤拼", "发音"]),
         lyrics("display", "标注的语言", kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音"]),
-        lyrics("display", "长句拆开", kw: ["长句", "拆分", "断句", "换行", "折行", "滚动", "跑马灯", "宽度", "悬浮歌词", "灵动岛", "菜单栏"]),
-        lyrics("display", "短句合并", kw: ["短句", "合并", "断句", "频繁", "闪", "宽度", "悬浮歌词", "灵动岛", "菜单栏"]),
+        lyrics("display", "长句拆开", kw: ["长句", "拆分", "断句", "换行", "折行", "滚动", "跑马灯", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
+        lyrics("display", "短句合并", kw: ["短句", "合并", "断句", "频繁", "闪", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
         lyrics("display", "时间轴偏移", kw: ["全局", "歌词偏移", "提前", "延后", "校准", "同步", "延迟"]),
         // ---- 歌词 › 管理 ----
         lyrics("manage", "歌词库", kw: ["歌词管理", "统计", "缓存"]),

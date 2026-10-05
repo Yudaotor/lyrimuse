@@ -16,7 +16,7 @@ func resegmentLibraryFailures(bodiesDir: String) -> Int {
     var failedNames = Set<String>()
     struct Config {
         let name: String
-        let surface: LyricsSurface
+        let surface: LineBreakSurface
         let main: NSFont
         let mainWidth: CGFloat
         let preview: (font: NSFont, width: CGFloat)?

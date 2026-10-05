@@ -1935,7 +1935,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "rectangle.split.2x1",
                 title: L10n.t("长句拆开"),
-                help: L10n.t("悬浮歌词、灵动岛和菜单栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行")
+                help: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.splitLongLyricLines },
@@ -1946,7 +1946,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "rectangle.compress.vertical",
                 title: L10n.t("短句合并"),
-                help: L10n.t("悬浮歌词、灵动岛和菜单栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；歌词窗口仍然一句一行")
+                help: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；触控栏比较宽，不要求很短，相邻几句放得下、合完不超过 5 秒就合；歌词窗口仍然一句一行")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.mergeShortLyricLines },
@@ -2394,8 +2394,8 @@ private struct AppearanceSettingsTab: View {
     /// (那扇窗没有常驻开关,也进不了菜单栏面板那排磁贴),`LyricsSurface(rawValue:)` 对它返回 nil,
     /// 设置搜索目录那边因此单列一个构造器。
     ///
-    /// **「触控栏」段同样不是一个 `LyricsSurface`**:它有常驻开关,但歌词取不按宽度断句的那一份
-    /// (`compactLine`),不进引擎的断句预算,也不进菜单栏面板那排磁贴。分段取值在
+    /// **「触控栏」段同样不是一个 `LyricsSurface`**:它有常驻开关、也按宽度断句(断句用的是另一个类型
+    /// `LineBreakSurface`),但不进菜单栏面板那排磁贴。分段取值在
     /// `SettingsSearchCatalog.touchBarSectionValue`,目录那边同样单列一个构造器。
     private enum Section: String, CaseIterable, Identifiable {
         case overlay, notch, menuBar, touchBar, lyricsWindow
