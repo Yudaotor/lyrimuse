@@ -91,13 +91,14 @@ brew install --cask lyrimuse
 ### 附加功能（可選）
 
 <details>
-<summary>ListenBrainz 同步、可分享的「正在聽什麼」網頁、日報 / 週報 / 月報 / 年度小結</summary>
+<summary>ListenBrainz 同步、Discord 狀態、可分享的「正在聽什麼」網頁、日報 / 週報 / 月報 / 年度小結</summary>
 
 下面這些預設都關著，想用哪個就在設定裡打開哪個：
 
 - **同時同步到 [ListenBrainz](https://listenbrainz.org)**。每次播放都用同一份讀到的播放狀態，分別送給 Last.fm 和 ListenBrainz，兩邊的記錄不會對不上。iPhone 上經 Last.fm 記下的播放也會自動轉進 ListenBrainz，Mac 和 iPhone 的記錄就合成了一份。
 - **一個能分享出去的「正在聽什麼」網頁**：即時播放、歷史記錄、留言牆、表情回應、訪客計數、Top10 歌手排行榜、黑膠唱片效果、深淺色主題，傳到聊天軟體裡還會展開成預覽卡片。效果展示和從零搭建的步驟見 **[網頁玩法教學](https://github.com/Yudaotor/nowplaying-workers#readme)**。
 - **日報、週報、月報和年度聆聽小結**，透過推播通知發給你（Bark、釘釘、企業微信、Discord、飛書、Server酱、Telegram 都支援）。
+- **在 Discord 上顯示你正在聽的歌**。個人檔案和好友列表裡顯示你在用的播放器、歌名、歌手、專輯封面和進度條，點歌名、歌手打開這個播放器網站上對應的頁面；封面角上可以帶 Lyrimuse 或播放器的小圖像，暫停時留著的話換成暫停圖像。哪些播放器算、暫停時留不留、角標放什麼，都可以自己選，還能從選單列一鍵暫時隱藏。
 
 這些都在設定的「附加功能」裡，每張卡片都附有分步說明：去哪申請 API Key 或權杖、怎麼連線帳號、怎麼拿到推播平台的 Webhook 位址。只有網頁那項單獨寫了一份教學，而且也不是非架不可：只設定好 ListenBrainz，網頁就已經能顯示即時播放和歷史記錄，不用部署 Cloudflare Worker。想要留言牆、表情回應、訪客計數、Top10 歌手排行榜和更快的更新，再照著教學部署一個。
 
@@ -273,7 +274,7 @@ LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3，支援 macOS 10.11 以�
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授權。** 隨 App 一起發佈的開源元件與詞典資料（media-control、Sparkle、KeyboardShortcuts、OpenCC 與 rime-cantonese 詞典）各自保留原授權條款，全文見 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；這個檔案也打進了 App 包裡，**設定 → 關於 → 第三方授權**能直接打開。
 - **歌詞、封面與曲目資訊的版權歸各自的權利人所有。** Lyrimuse 只做檢索、快取與顯示：公開歌詞介面回傳什麼，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 裡給你自己看，不代管、不轉發、不再散佈任何歌詞或封面；快取隨時可以在「歌詞管理」裡刪，或者直接刪掉那個檔案夾。
 - **Lyrimuse 是獨立的開源專案**，與 Apple、騰訊（QQ 音樂）、網易（網易雲音樂）、酷狗、酷我、抖音（汽水音樂）、KKBOX、Amazon（Amazon Music）、中國移動（咪咕音樂）、Spotify、Kaset、Google（YouTube Music、Google 翻譯）、Last.fm、ListenBrainz、MusicBrainz、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、SponsorBlock 均無隸屬、合作或背書關係。這些名稱和商標歸各自所有者，這裡提到它們只是為了說明支援哪些播放器、歌詞來源和用到的服務。
-- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十二個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名（Last.fm 智慧比對遇到沒見過的歌手時也會這樣查）；排行榜裡的歌手也會按 MusicBrainz ID 去那裡查國家／地區和相關連結。封面與閒置頁把歌手加歌名發給 iTunes Search;用 Kaset 放歌時,它報的封面從 YouTube Music 的圖床(googleusercontent.com)下載,每條新的影片 ID 還會發給 YouTube Music 問一次是不是 Podcast 單集(Podcast 不當成歌)。專輯介紹和歌手簡介按 Apple Music 的專輯 ID、歌手 ID 請求它們的公開頁面，不需要登入 Apple 帳號。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊先送給 Google 網頁翻譯，還沒翻出來的再送給 MyMemory；送給 MyMemory 的請求附一個隨機產生的電子郵件參數，不是你的。YouTube Music 播放 MV 時，會把影片 ID 的 SHA-256 雜湊前 4 碼送給 SponsorBlock，查出 MV 裡不是音樂的片段、讓歌詞對上畫面——SponsorBlock 憑這幾碼分辨不出是哪支影片。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
+- **會離開你 Mac 的只有這些。** 解析歌詞時把歌手、歌名、專輯（部分來源還帶時長）發給上面十二個歌詞來源；全部落空時還會把歌手名發給 MusicBrainz 查別名（Last.fm 智慧比對遇到沒見過的歌手時也會這樣查）；排行榜裡的歌手也會按 MusicBrainz ID 去那裡查國家／地區和相關連結。封面與閒置頁把歌手加歌名發給 iTunes Search;用 Kaset 放歌時,它報的封面從 YouTube Music 的圖床(googleusercontent.com)下載,每條新的影片 ID 還會發給 YouTube Music 問一次是不是 Podcast 單集(Podcast 不當成歌)。專輯介紹和歌手簡介按 Apple Music 的專輯 ID、歌手 ID 請求它們的公開頁面，不需要登入 Apple 帳號。機器翻譯備用（預設關，且只在裝置端 Apple 翻譯不可用時）會把**歌詞內文**分塊先送給 Google 網頁翻譯，還沒翻出來的再送給 MyMemory；送給 MyMemory 的請求附一個隨機產生的電子郵件參數，不是你的。YouTube Music 播放 MV 時，會把影片 ID 的 SHA-256 雜湊前 4 碼送給 SponsorBlock，查出 MV 裡不是音樂的片段、讓歌詞對上畫面——SponsorBlock 憑這幾碼分辨不出是哪支影片。Musixmatch 的網域走 DNS over HTTPS，解析請求發給 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「關於」頁最多每 6 小時向 GitHub API 查一次 Star 數，開啟「接收測試版更新」後最多每小時查一次 Release 列表；檢查更新只拉 GitHub Releases 上的 appcast，不上報系統資訊。除此之外只有你主動連線的 Last.fm、ListenBrainz、推播平台和網頁中繼（中繼的 Top10 歌手頁會向 Deezer 查歌手頭像）。開啟 Discord 設定裡的「顯示正在聽的歌」後，歌名、歌手、專輯、播放器名稱、播放進度、封面網址和這首歌、這位歌手的頁面連結會交給你 Mac 上的 Discord，由它顯示在你的個人檔案上；封面優先用播放器自己給的網址、或你自己網頁中繼上已有的那張；都沒有時按 Apple Music 曲目或專輯 ID（沒有就按歌手加歌名）向 iTunes 查一張；用 Apple Music 播放時，中繼上已有封面也照樣按曲目 ID 問一次，要的是歌手頁；連上之後，設定裡顯示的 Discord 頭像從 Discord 的圖片伺服器（cdn.discordapp.com）下載。每一筆對外請求都記進本機稽核記錄檔（只記網域和操作名，不記參數和憑證），「匯出診斷資訊」裡能看到。
 
 ## 疑難排解
 

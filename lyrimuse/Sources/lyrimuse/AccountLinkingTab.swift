@@ -177,9 +177,9 @@ private struct SecretFieldRow: View {
     }
 }
 
-// 4 个可连接的账号/目的地——只是 UI 层的路由标识,不涉及底层数据结构。
+// 可连接的账号/目的地——只是 UI 层的路由标识,不涉及底层数据结构。
 enum AccountDestination: Hashable, CaseIterable, Identifiable {
-    case listenBrainz, lastfm, stateRelay, bark
+    case listenBrainz, lastfm, stateRelay, bark, discord
     var id: Self { self }
 
     var title: String {
@@ -188,9 +188,17 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
         case .lastfm: return "Last.fm"
         case .stateRelay: return L10n.t("网页推送")
         case .bark: return L10n.t("推送提醒")
+        case .discord: return "Discord"
         }
     }
 
+    /// 住在侧栏默认折叠的「实验室功能」区里。Last.fm、Discord 在顶上的身份区,常驻可见。
+    var livesInLabs: Bool {
+        switch self {
+        case .listenBrainz, .stateRelay, .bark: return true
+        case .lastfm, .discord: return false
+        }
+    }
 }
 
 // 账号图标徽标——ListenBrainz/网页推送/推送提醒仍用 iconBadge(SF Symbol 白色剪影+纯色
@@ -212,8 +220,23 @@ func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 20, cor
         iconBadge("dot.radiowaves.left.and.right", tint: .blue, size: size, cornerRadius: cornerRadius)
     case .bark:
         iconBadge("bell.badge.fill", tint: .red, size: size, cornerRadius: cornerRadius)
+    case .discord:
+        Image(nsImage: discordBadgeImage)
+            .resizable()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }
+
+// Discord 品牌图(蓝紫底 + 白色标志),标志矢量取自 Simple Icons(CC0)。整张不透明,圆角由调用方裁。
+private let discordBadgeImage: NSImage = {
+    guard let path = Bundle.main.path(forResource: "DiscordIcon", ofType: "png"),
+          let image = NSImage(contentsOfFile: path) else {
+        // 没走 build.sh 打包(直接 swift build 跑)时找不到资源,退回 SF Symbol。
+        return NSImage(systemSymbolName: "bubble.left.and.bubble.right.fill", accessibilityDescription: nil) ?? NSImage()
+    }
+    return image
+}()
 
 // 真实的 Last.fm 品牌图标(红底+白色"scrobble"符号),取代之前拿 SF Symbol 循环箭头
 // 凑数的做法——素材取自 Simple Icons(CC0 授权、专门收录给第三方集成场景用的品牌图标
@@ -324,6 +347,37 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // 只有一个字段,所以"没填"就等于"没碰过",没有中间态。
         if let hint = config.pushMissingHint() { return .notConfigured(hint) }
         return .active(config.notificationPlatform.displayName)
+    case .discord:
+        return discordDestinationStatus()
+    }
+}
+
+/// Discord 卡的状态。连接状态在 `DiscordPresenceController`,调用方要观察它,徽标才跟着变。
+/// 没开 Discord 不算问题,跟没配的可选功能一样不给徽标。
+@MainActor
+private func discordDestinationStatus() -> DestinationStatus {
+    guard AppSettings.shared.discordPresenceEnabled else { return .notConfigured(L10n.t("未开启")) }
+    let status = DiscordPresenceController.shared.status
+    switch status {
+    case .connected: return .active(discordStatusText(status))
+    case .refused: return .error(discordStatusText(status))
+    case .off, .waiting: return .notConfigured(discordStatusText(status))
+    }
+}
+
+/// Discord 连没连上、卡在哪一步,一句话。Discord 页开关下面那行和账号状态共用。
+func discordStatusText(_ status: DiscordPresenceController.Status) -> String {
+    switch status {
+    case .connected(let user):
+        return user.map { String(format: L10n.t("已连接为 @%@"), $0.username) } ?? L10n.t("已连接")
+    case .refused:
+        return L10n.t("Discord 拒绝了连接")
+    case .waiting(.notInstalled):
+        return L10n.t("这台 Mac 上没有安装 Discord")
+    case .waiting(.notRunning):
+        return L10n.t("Discord 没有打开")
+    case .off, .waiting(.connecting):
+        return L10n.t("正在连接 Discord…")
     }
 }
 
@@ -375,7 +429,6 @@ struct AccountSidebarRow: View {
     // 的 List 里,父视图理论上会因为语言变化重新构造子行,这里独立再观察一份是保险,
     // 不依赖 ForEach 复用行为的具体细节。
     @ObservedObject private var languageSettings = AppSettings.shared
-
     // 只保留一个状态图标,不带文字——"读取+写入已配置"这类描述性文案在
     // 侧边栏这个只有 170~220pt 宽的位置本来就容易被挤断行,颜色/图标本身已经足够表达
     // "配好了没有";需要具体缺了哪个字段这种细节,详情页头部(AccountLinkingTab.
@@ -437,6 +490,8 @@ struct AccountLinkingTab: View {
     @State private var pendingListensExpanded = true
     // 只为了让手动切换语言时这块详情页重新渲染,同 AccountSidebarRow 的理由。
     @ObservedObject private var languageSettings = AppSettings.shared
+    @ObservedObject private var appSettings = AppSettings.shared
+    @ObservedObject private var discord = DiscordPresenceController.shared
 
     @State private var isSaving = false
     @State private var lastSavedAt: Date?
@@ -503,8 +558,11 @@ struct AccountLinkingTab: View {
             } content: {
                 fields
             }
-            Divider()
-            autosaveStatusBar
+            // Discord 卡的设置当场写进偏好,没有要保存的东西。
+            if destination != .discord {
+                Divider()
+                autosaveStatusBar
+            }
         }
         // 文本字段(Token/API Key/Secret/Webhook 地址等,由 ConfigStore 承载)自动保存:
         // 不用 .onChange(of:)逐字符/失焦触发,而是监听 config.objectWillChange(任何
@@ -684,6 +742,8 @@ struct AccountLinkingTab: View {
             return L10n.t("把你播放的歌记录到 Last.fm")
         case .bark:
             return L10n.t("接收 Lyrimuse 的推送通知")
+        case .discord:
+            return L10n.t("在 Discord 上显示你正在听的歌")
         }
     }
 
@@ -694,6 +754,7 @@ struct AccountLinkingTab: View {
         case .lastfm: lastfmFields
         case .stateRelay: stateRelayFields
         case .bark: barkFields
+        case .discord: discordFields
         }
     }
 
@@ -1231,7 +1292,9 @@ struct AccountLinkingTab: View {
                     icon: "music.note.list",
                     title: L10n.t("Scrobble 的播放器"),
                     help: L10n.t("只有勾选的播放器会 scrobble 到 Last.fm；默认全部勾选。"),
-                    choices: lastfmPlayerChoices,
+                    allOffSummary: L10n.t("全部不 scrobble"),
+                    offSummaryFormat: L10n.t("不 scrobble：%@"),
+                    choices: playerBundleChoices,
                     excluded: features.lastfmExcludedBundles
                 ) { bundleID, on in
                     Task { await features.updateLastfmExclusion(scrobbled: on ? [bundleID] : [], excluded: on ? [] : [bundleID]) }
@@ -1242,20 +1305,20 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 「Scrobble 的播放器」那一排芯片的候选:内置播放器跟「播放器联动」卡同一套(`PlayerLinkage.listed`:选中的,
+    /// 「Scrobble 的播放器」「显示的播放器」两排芯片的候选:内置播放器跟「播放器联动」卡同一套(`PlayerLinkage.listed`:选中的,
     /// 选了 auto 时再加上装了的),后面接上信任列表里的 App / 浏览器(按 bundle id 排序,别让顺序随 Dictionary 遍历乱跳)。
     /// 两类摆在同一排是 「收拢到一起」——此前信任项一人一行、四个浏览器吃掉五行。
-    private var lastfmPlayerChoices: [PlayerBundleChoice] {
+    private var playerBundleChoices: [PlayerBundleChoice] {
         let set = PlayerLinkage.listed(selectedPlayers: features.players, installed: InstalledPlayersCache.current())
         let builtIn = PlaybackPlayer.displayOrder.filter { set.contains($0) }
             .map { PlayerBundleChoice(id: $0.bundleIdentifier, name: $0.displayName, player: $0) }
         let trusted = features.trustedPlayers.keys.sorted()
-            .map { PlayerBundleChoice(id: $0, name: lastfmTrustedPlayerName($0), player: nil) }
+            .map { PlayerBundleChoice(id: $0, name: trustedPlayerName($0), player: nil) }
         return builtIn + trusted
     }
 
     /// 已信任播放器的显示名:优先当初存下的那份,空串时现查,还查不到退回 bundle id(跟播放器页那张卡同一口径)。
-    private func lastfmTrustedPlayerName(_ bundleID: String) -> String {
+    private func trustedPlayerName(_ bundleID: String) -> String {
         if let stored = features.trustedPlayers[bundleID], !stored.isEmpty { return stored }
         return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
     }
@@ -1846,6 +1909,144 @@ struct AccountLinkingTab: View {
                 title: L10n.t("年度听歌小结")
             ) {
                 digestControls(enabled: \.yearlyDigest, source: \.yearlyDigestSource)
+            }
+        }
+    }
+
+    // MARK: - Discord
+
+    /// 开关下面那行:连没连上 Discord。开关关着时不写。
+    private var discordStatusLine: String? {
+        guard appSettings.discordPresenceEnabled else { return nil }
+        return discordStatusText(discord.status)
+    }
+
+    /// 没装、没打开 Discord,或者开着却一直连不上时,开关下面多一行:说清楚要什么,带一颗按钮直接去做。
+    @ViewBuilder private var discordSetupRow: some View {
+        switch discord.status {
+        case .waiting(.notInstalled):
+            CardDivider()
+            SettingsRow(icon: "arrow.down.circle", title: L10n.t("需要 Discord 桌面版"),
+                        subtitle: L10n.t("装好并登录后会自动连上；网页版和手机版连不了")) {
+                Button(L10n.t("下载 Discord…")) {
+                    if let url = DiscordPresence.downloadURL { NSWorkspace.shared.open(url) }
+                }
+            }
+        case .waiting(.notRunning):
+            CardDivider()
+            SettingsRow(icon: "arrow.up.forward.app", title: L10n.t("需要打开 Discord"),
+                        subtitle: L10n.t("打开并登录后会自动连上")) {
+                Button(L10n.t("打开 Discord")) { discord.openDiscord() }
+            }
+        case .waiting(.connecting) where discord.connectingStalled:
+            CardDivider()
+            SettingsRow(icon: "exclamationmark.circle", title: L10n.t("Discord 还没就绪"),
+                        subtitle: L10n.t("确认已经在 Discord 里登录；还是连不上就退出 Discord 再打开")) {
+                Button(L10n.t("重新连接")) { discord.reconnectNow() }
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private var discordFields: some View {
+        VStack(spacing: 14) {
+            DiscordPresencePreview()
+            discordCard
+        }
+    }
+
+    private var discordCard: some View {
+        SettingsCard {
+            SettingsRow(icon: "headphones", title: L10n.t("显示正在听的歌"), subtitle: discordStatusLine,
+                        help: L10n.t("开了以后，你的 Discord 资料卡和好友列表里会显示正在听的歌。好友看不到的话，到 Discord 的「用户设置 › 活动隐私」里打开分享活动状态。")) {
+                Toggle("", isOn: $appSettings.discordPresenceEnabled)
+            }
+            if appSettings.discordPresenceEnabled {
+                discordSetupRow
+            }
+            CardDivider()
+            SettingsRow(icon: "person.2", title: L10n.t("状态里显示"), help: L10n.t("好友列表里「正在听」后面显示的内容")) {
+                Picker("", selection: $appSettings.discordStatusDisplay) {
+                    Text(L10n.t("歌名")).tag(DiscordPresence.StatusLine.title)
+                    Text(L10n.t("歌手")).tag(DiscordPresence.StatusLine.artist)
+                    Text(L10n.t("播放器")).tag(DiscordPresence.StatusLine.player)
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            .disabled(!appSettings.discordPresenceEnabled)
+            CardDivider()
+            SettingsRow(
+                icon: "pause.circle",
+                title: L10n.t("暂停时保留状态"),
+                help: String(format: L10n.t("开：暂停时状态还在，没有进度条。\n关：暂停 %d 秒后清掉。"),
+                             Int(DiscordPresence.pauseGrace))
+            ) {
+                Toggle("", isOn: $appSettings.discordKeepWhenPaused)
+            }
+            .disabled(!appSettings.discordPresenceEnabled)
+            CardDivider()
+            SettingsRow(
+                icon: "seal",
+                title: L10n.t("封面角标"),
+                help: L10n.t("封面右下角的小图标：Lyrimuse 的图标，或者正在用的播放器的图标（认不出的播放器不显示）。暂停后保留状态时，这个位置换成暂停图标。好友点它都会打开 Lyrimuse 官网；没有封面时不显示。")
+            ) {
+                Picker("", selection: $appSettings.discordBadge) {
+                    Text(L10n.t("Lyrimuse")).tag(DiscordPresence.Badge.lyrimuse)
+                    Text(L10n.t("播放器")).tag(DiscordPresence.Badge.player)
+                    Text(L10n.t("不显示")).tag(DiscordPresence.Badge.none)
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            .disabled(!appSettings.discordPresenceEnabled)
+            CardDivider()
+            discordHideRow
+                .disabled(!appSettings.discordPresenceEnabled)
+            CardDivider()
+            PlayerBundleChipsRow(
+                icon: "music.note.list",
+                title: L10n.t("显示的播放器"),
+                help: L10n.t("只有勾选的播放器会显示到 Discord；默认全部勾选。"),
+                allOffSummary: L10n.t("全部不显示"),
+                offSummaryFormat: L10n.t("不显示：%@"),
+                choices: playerBundleChoices,
+                excluded: appSettings.discordExcludedBundles
+            ) { bundleID, on in
+                if on {
+                    appSettings.discordExcludedBundles.remove(bundleID)
+                } else {
+                    appSettings.discordExcludedBundles.insert(bundleID)
+                }
+            }
+            .disabled(!appSettings.discordPresenceEnabled)
+        }
+    }
+
+    /// 「暂时隐藏」:选好时长点「隐藏」;隐藏着时写几点恢复,换成「恢复显示」。
+    private var discordHideRow: some View {
+        SettingsRow(
+            icon: "eye.slash",
+            title: L10n.t("暂时隐藏"),
+            subtitle: discord.hiddenUntil.map {
+                String(format: L10n.t("已隐藏，%@ 恢复"), DiscordPresenceController.restoreTimeText($0))
+            },
+            help: L10n.t("这段时间里 Discord 上不显示正在听的歌，到点自动恢复。菜单栏图标的「快速开关」里也能一键隐藏，时长用这里选的。")
+        ) {
+            if discord.hiddenUntil != nil {
+                Button(L10n.t("恢复显示")) { discord.unhide() }
+            } else {
+                HStack(spacing: 8) {
+                    Picker("", selection: $appSettings.discordHideMinutes) {
+                        ForEach(DiscordPresence.hideDurations, id: \.self) { minutes in
+                            Text(DiscordPresenceController.hideDurationText(minutes: minutes)).tag(minutes)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    Button(L10n.t("隐藏")) { discord.hide(minutes: appSettings.discordHideMinutes) }
+                }
             }
         }
     }

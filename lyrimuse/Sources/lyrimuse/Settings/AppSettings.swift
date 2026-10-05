@@ -206,6 +206,13 @@ final class AppSettings: ObservableObject {
         static let showInDock = "np:showInDock"
         // 换歌时弹一条系统通知(NowPlayingNotifier)。
         static let nowPlayingNotifications = "np:nowPlayingNotifications"
+        // Discord「正在听」(DiscordPresenceController)。
+        static let discordPresenceEnabled = "np:discordPresenceEnabled"
+        static let discordStatusDisplay = "np:discordStatusDisplay"
+        static let discordKeepWhenPaused = "np:discordKeepWhenPaused"
+        static let discordExcludedBundles = "np:discordExcludedBundles"
+        static let discordBadge = "np:discordBadge"
+        static let discordHideMinutes = "np:discordHideMinutes"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let overlayLineOverflow = "np:overlayLineOverflow"
@@ -703,6 +710,30 @@ final class AppSettings: ObservableObject {
     /// 换歌时弹一条系统通知(`NowPlayingNotifier`,投递时现读)。通知授权由设置页打开开关时请求。
     @Published var nowPlayingNotifications: Bool {
         didSet { defaults.set(nowPlayingNotifications, forKey: Keys.nowPlayingNotifications) }
+    }
+    /// Discord「正在听」(`DiscordPresenceController`)。默认关。
+    @Published var discordPresenceEnabled: Bool {
+        didSet { defaults.set(discordPresenceEnabled, forKey: Keys.discordPresenceEnabled) }
+    }
+    /// 好友列表里「正在听」后面写什么。
+    @Published var discordStatusDisplay: DiscordPresence.StatusLine {
+        didSet { defaults.set(discordStatusDisplay.rawValue, forKey: Keys.discordStatusDisplay) }
+    }
+    /// 暂停时保留状态(不带进度条);关着时暂停满 `DiscordPresence.pauseGrace` 就清掉。
+    @Published var discordKeepWhenPaused: Bool {
+        didSet { defaults.set(discordKeepWhenPaused, forKey: Keys.discordKeepWhenPaused) }
+    }
+    /// 不显示到 Discord 的播放器(bundle id,浏览器按宿主 App 算)。空 = 全部显示。
+    @Published var discordExcludedBundles: Set<String> {
+        didSet { defaults.set(discordExcludedBundles.sorted(), forKey: Keys.discordExcludedBundles) }
+    }
+    /// 在放时封面右下角的角标(`DiscordPresence.Badge`)。默认 Lyrimuse。
+    @Published var discordBadge: DiscordPresence.Badge {
+        didSet { defaults.set(discordBadge.rawValue, forKey: Keys.discordBadge) }
+    }
+    /// 「暂时隐藏」一次隐藏多久(分钟),取值在 `DiscordPresence.hideDurations` 里。
+    @Published var discordHideMinutes: Int {
+        didSet { defaults.set(discordHideMinutes, forKey: Keys.discordHideMinutes) }
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
@@ -1839,6 +1870,14 @@ final class AppSettings: ObservableObject {
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
         nowPlayingNotifications = (defaults.object(forKey: Keys.nowPlayingNotifications) as? Bool)
             ?? Self.defaultNowPlayingNotifications
+        discordPresenceEnabled = (defaults.object(forKey: Keys.discordPresenceEnabled) as? Bool) ?? false
+        discordStatusDisplay = defaults.string(forKey: Keys.discordStatusDisplay)
+            .flatMap(DiscordPresence.StatusLine.init(rawValue:)) ?? .title
+        discordKeepWhenPaused = (defaults.object(forKey: Keys.discordKeepWhenPaused) as? Bool) ?? false
+        discordExcludedBundles = Set((defaults.array(forKey: Keys.discordExcludedBundles) as? [String]) ?? [])
+        discordBadge = defaults.string(forKey: Keys.discordBadge).flatMap(DiscordPresence.Badge.init(rawValue:)) ?? .lyrimuse
+        discordHideMinutes = (defaults.object(forKey: Keys.discordHideMinutes) as? Int)
+            .flatMap { DiscordPresence.hideDurations.contains($0) ? $0 : nil } ?? 60
         // 默认开。多显示一句下文对跟读几乎总是有用的,而这一项本身不占额外窗口高度。
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true
         overlayDuetAlignmentOverride = defaults.string(forKey: Keys.overlayDuetAlignmentOverride)

@@ -527,6 +527,15 @@ public enum MediaControlClient {
         return (data, PlaybackStateFile.artworkMime(data), last.trackKey)
     }
 
+    /// Kaset 这首(按快照的 `identityKey` 认)能当封面用的地址,不下载。最近一次读到的不是这首、或这首没有为 nil。
+    public static func kasetArtworkURL(forTrackKey key: String) -> URL? {
+        kasetLock.lock()
+        defer { kasetLock.unlock() }
+        guard let last = kasetLastArtwork, last.trackKey.compare(key, options: [.caseInsensitive]) == .orderedSame
+        else { return nil }
+        return last.url
+    }
+
     /// 下载一次封面的上限。走系统代理(YouTube Music 的图床在这台机器上要经代理,实测 1.6 秒左右)。
     private static let kasetArtworkTimeout: TimeInterval = 10
 

@@ -62,7 +62,7 @@ struct PlayerBundleChoice: Identifiable, Equatable {
     let player: PlaybackPlayer?
 }
 
-/// 「按 bundle 勾选一组播放器」的一行(Last.fm 页的「Scrobble 的播放器」)。
+/// 「按 bundle 勾选一组播放器」的一行(Last.fm 页的「Scrobble 的播放器」、Discord 页的「显示的播放器」)。
 ///
 /// 跟 `PlayerLinkageRow` 是姐妹:同一套芯片视觉、同一种"图标即选项"的语言,区别只在候选的身份——那边是
 /// `PlaybackPlayer` 枚举,这边是 bundle id,好让内置播放器和信任列表里的浏览器摆进**同一排**。
@@ -70,12 +70,15 @@ struct PlayerBundleChoice: Identifiable, Equatable {
 /// (「这一块占用区域太大了…收拢到一起」),所以收成芯片。
 ///
 /// 存的是**排除**集合而不是勾选集合:缺省(空)= 全部勾选,新装机和老配置都不会因为少一个键而静默少记。
-/// 副标题按状态说人话——全勾「全部勾选」、全不勾「全部不 scrobble」、部分则只列**被排除**的那几个
+/// 副标题按状态说人话——全勾「全部勾选」,全不勾、部分不勾的说法由调用方给,部分时只列**被排除**的那几个
 /// (通常就一两个,比列出全部九个短得多,也正是用户改完想确认的那件事)。
 struct PlayerBundleChipsRow: View {
     let icon: String
     let title: String
     var help: String?
+    /// 全都没勾时的副标题,和部分没勾时的格式(参数是没勾的那几个名字)。
+    let allOffSummary: String
+    let offSummaryFormat: String
     let choices: [PlayerBundleChoice]
     /// 未勾选(被排除)的 bundle id。
     let excluded: Set<String>
@@ -85,8 +88,8 @@ struct PlayerBundleChipsRow: View {
     private var summary: String {
         let off = choices.filter { excluded.contains($0.id) }
         if off.isEmpty { return L10n.t("全部勾选") }
-        if off.count == choices.count { return L10n.t("全部不 scrobble") }
-        return String(format: L10n.t("不 scrobble：%@"), off.map(\.name).joined(separator: "、"))
+        if off.count == choices.count { return allOffSummary }
+        return String(format: offSummaryFormat, off.map(\.name).joined(separator: "、"))
     }
 
     var body: some View {

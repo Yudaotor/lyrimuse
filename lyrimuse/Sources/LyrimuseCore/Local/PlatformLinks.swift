@@ -27,7 +27,8 @@ import Foundation
 /// - 汽水音乐那条是网页分享页 `music.douyin.com/qishui/share/track?track_id=<id>`,写成「歌曲页」。
 /// - 专辑页 / 歌手页:QQ 音乐、汽水、Amazon Music、Spotify、YouTube Music 都是网页,写成「…专辑页 / 歌手页」;KKBOX 的是
 ///   `kkbox://album/<id>#view` / `kkbox://artist/<id>#view`,跟歌曲那条一样只在 KKBOX 里打开页面、不播放,写成
-///   「在 KKBOX 中显示专辑 / 歌手」。id 都是引擎用那个播放器放这首时从它本机数据里记下的(lyrimuse-engine/playercatalog.go,
+///   「在 KKBOX 中显示专辑 / 歌手」(给 App 外面用的另有一份网页歌手页 `kkboxArtistWeb`)。网易云没有这两样:它的专辑页、
+///   歌手页不登录看不到内容(07 章决策 107)。id 都是引擎用那个播放器放这首时从它本机数据里记下的(lyrimuse-engine/playercatalog.go,
 ///   YouTube Music 的见 kasetalbum.go)。
 public struct PlatformLinks: Sendable, Equatable {
     /// Apple Music 曲目页(已是 `music://`,进 App)。
@@ -66,6 +67,12 @@ public struct PlatformLinks: Sendable, Equatable {
     public let spotifyArtist: URL?
     public let youtubeMusicAlbum: URL?
     public let youtubeMusicArtist: URL?
+    /// Apple Music 曲目页的网页原址 `https://music.apple.com/…`(`appleMusic` 是改写成 `music://` 的那份)。
+    public let appleMusicWeb: URL?
+    /// KKBOX 歌曲页的网页原址(`kkboxSong` 是进 App 的深链)。
+    public let kkboxWeb: URL?
+    /// KKBOX 歌手页的网页地址(`kkboxArtist` 是进 App 的深链),见 `kkboxArtistWebURL`。
+    public let kkboxArtistWeb: URL?
 
     public var isEmpty: Bool {
         appleMusic == nil && qqSong == nil && qqAlbum == nil && qqArtist == nil && neteaseSong == nil && spotifySong == nil
@@ -73,6 +80,7 @@ public struct PlatformLinks: Sendable, Equatable {
             && sodaSong == nil && sodaAlbum == nil && sodaArtist == nil && kkboxAlbum == nil && kkboxArtist == nil
             && amazonAlbum == nil && amazonArtist == nil && spotifyAlbum == nil && spotifyArtist == nil
             && youtubeMusicAlbum == nil && youtubeMusicArtist == nil
+            && kkboxArtistWeb == nil
     }
 
     public init(appleMusic: URL?, qqSong: URL?, qqAlbum: URL?, qqArtist: URL?, neteaseSong: URL?, spotifySong: URL? = nil,
@@ -80,7 +88,9 @@ public struct PlatformLinks: Sendable, Equatable {
                 sodaSong: URL? = nil, sodaAlbum: URL? = nil, sodaArtist: URL? = nil,
                 kkboxAlbum: URL? = nil, kkboxArtist: URL? = nil, amazonAlbum: URL? = nil, amazonArtist: URL? = nil,
                 spotifyAlbum: URL? = nil, spotifyArtist: URL? = nil,
-                youtubeMusicAlbum: URL? = nil, youtubeMusicArtist: URL? = nil) {
+                youtubeMusicAlbum: URL? = nil, youtubeMusicArtist: URL? = nil,
+                appleMusicWeb: URL? = nil, kkboxWeb: URL? = nil,
+                kkboxArtistWeb: URL? = nil) {
         self.appleMusic = appleMusic
         self.qqSong = qqSong
         self.qqAlbum = qqAlbum
@@ -101,6 +111,9 @@ public struct PlatformLinks: Sendable, Equatable {
         self.spotifyArtist = spotifyArtist
         self.youtubeMusicAlbum = youtubeMusicAlbum
         self.youtubeMusicArtist = youtubeMusicArtist
+        self.appleMusicWeb = appleMusicWeb
+        self.kkboxWeb = kkboxWeb
+        self.kkboxArtistWeb = kkboxArtistWeb
     }
 
     /// 歌曲页所在的平台 —— 给「简介」面板那行选文案用(名字在 App 层本地化,这里只给身份)。
@@ -139,7 +152,44 @@ public struct PlatformLinks: Sendable, Equatable {
         }
     }
 
+    /// 同一套「当前播放器自己那个平台」的规则,只给网页地址(给 App 外面用,比如 Discord 状态里的链接):
+    /// Apple Music、KKBOX 换成网页原址,其余几家本来就是网页。
+    public func songWebLink(forPlayerBundleID bundleID: String?, webPlatformID: String? = nil) -> URL? {
+        guard let link = songLink(forPlayerBundleID: bundleID, webPlatformID: webPlatformID) else { return nil }
+        switch link.platform {
+        case .appleMusic: return appleMusicWeb
+        case .kkbox: return kkboxWeb
+        default: return link.url
+        }
+    }
+
+    /// 同一套「当前播放器自己那个平台」的规则取歌手页,只给网页地址(Discord 状态里歌手那一行的链接)。Apple Music 这里
+    /// 给不出:缓存里没有它的歌手 ID,调用方另查。网易云不给,理由见类型头注。见 12 章决策 41。
+    public func artistWebLink(forPlayerBundleID bundleID: String?, webPlatformID: String? = nil) -> URL? {
+        if webPlatformID == "spotifyWeb" { return spotifyArtist }
+        guard let bundleID, !bundleID.isEmpty else { return nil }
+        switch bundleID {
+        case PlaybackPlayer.qqMusic.bundleIdentifier: return qqArtist
+        case PlaybackPlayer.spotify.bundleIdentifier: return spotifyArtist
+        case PlaybackPlayer.kkbox.bundleIdentifier: return kkboxArtistWeb
+        case PlaybackPlayer.amazonMusic.bundleIdentifier: return amazonArtist
+        case PlaybackPlayer.kaset.bundleIdentifier: return youtubeMusicArtist
+        case PlaybackPlayer.soda.bundleIdentifier: return sodaArtist
+        default: return nil
+        }
+    }
+
     // MARK: - 纯函数(selftest 钉住)
+
+    /// KKBOX 歌手页的网页地址 `https://www.kkbox.com/<地区>/<语言>/artist/<id>`:地区、语言取引擎存的歌曲页那两段。歌曲页
+    /// 过不了 `kkboxAppURL` 的形状闸、那两段不像地区和语言、歌手 id 形状不对(同 `kkboxArtistAppURL`)都给 nil。
+    public static func kkboxArtistWebURL(songPage: String, artistID: String) -> URL? {
+        guard kkboxAppURL(songPage: songPage) != nil, isCatalogID(artistID[...], length: 1...32, extra: ["-", "_"]),
+              let page = URL(string: songPage) else { return nil }
+        let parts = page.path.split(separator: "/").map(String.init)
+        guard parts.prefix(2).allSatisfy({ isCatalogID($0[...], length: 1...8, extra: ["-"]) }) else { return nil }
+        return URL(string: "https://www.kkbox.com/" + parts[0] + "/" + parts[1] + "/artist/" + artistID)
+    }
 
     /// 引擎存的 Amazon Music 曲目页。形状闸与引擎的 `amazonTrackURL` 同源:ASIN 是 10 位大写字母数字,
     /// 别的一律不认。

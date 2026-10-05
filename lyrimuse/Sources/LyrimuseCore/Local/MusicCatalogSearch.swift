@@ -22,10 +22,14 @@ public enum MusicCatalogSearch {
         /// 100pt 的专辑封面。响应里本来就带,才开始解码它 —— 最近记录的
         /// 封面第⑤级兜底用(见 pickArtwork)。
         public let artworkUrl100: String?
+        /// 专辑 ID。按专辑 ID lookup 时核对拿回来的是不是这张(见 albumArtworkLookup)。
+        public let collectionId: Int64?
+        /// 曲目 ID。按曲目 ID lookup 时核对拿回来的是不是这首(见 trackArtworkLookup)。
+        public let trackId: Int64?
 
         public init(trackName: String?, artistName: String?, collectionName: String?,
                     trackViewUrl: String?, artistViewUrl: String?, collectionViewUrl: String?,
-                    artworkUrl100: String? = nil) {
+                    artworkUrl100: String? = nil, collectionId: Int64? = nil, trackId: Int64? = nil) {
             self.trackName = trackName
             self.artistName = artistName
             self.collectionName = collectionName
@@ -33,6 +37,8 @@ public enum MusicCatalogSearch {
             self.artistViewUrl = artistViewUrl
             self.collectionViewUrl = collectionViewUrl
             self.artworkUrl100 = artworkUrl100
+            self.collectionId = collectionId
+            self.trackId = trackId
         }
     }
 
@@ -57,7 +63,8 @@ public enum MusicCatalogSearch {
     }
 
     /// 发一次搜索请求并记审计日志、喂退避。没问成返回 nil。
-    private static func fetch(_ url: URL, gate: ITunesSearchGate) async -> (status: Int?, data: Data)? {
+    private static func fetch(_ url: URL, operation: String = "itunes.search",
+                              gate: ITunesSearchGate) async -> (status: Int?, data: Data)? {
         var req = URLRequest(url: url)
         req.timeoutInterval = 8
         let start = Date()
@@ -66,7 +73,7 @@ public enum MusicCatalogSearch {
         do {
             (data, resp) = try await URLSession.shared.data(for: req)
         } catch {
-            NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
+            NetworkAuditLog.record(service: "itunes", operation: operation, host: url.host ?? "itunes.apple.com",
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
             // 网络层失败按 0 记退避(口径同引擎);调用方自己取消的不算。
             if (error as? URLError)?.code != .cancelled { gate.note(status: 0, retryAfter: nil) }
@@ -74,7 +81,7 @@ public enum MusicCatalogSearch {
         }
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode
-        NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
+        NetworkAuditLog.record(service: "itunes", operation: operation, host: url.host ?? "itunes.apple.com",
                                statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
         if let status {
             gate.note(status: status, retryAfter: http?.value(forHTTPHeaderField: "Retry-After"))
@@ -142,6 +149,17 @@ public enum MusicCatalogSearch {
         public let url: URL
         public let confidence: ArtworkConfidence
         public let matchedAlbum: String?
+        /// 这一首的歌手在 Apple Music 上的网页(`artistPageURL`);只有按曲目 ID 查时才填。
+        public var artistPage: URL? = nil
+    }
+
+    /// iTunes 回包里的 `artistViewUrl` 换成歌手页:只认 https 的 music.apple.com 歌手页,查询串(`?uo=4` 这类)去掉。
+    public static func artistPageURL(_ raw: String?) -> URL? {
+        guard let raw, var parts = URLComponents(string: raw), parts.scheme == "https",
+              parts.host == "music.apple.com", parts.path.contains("/artist/") else { return nil }
+        parts.query = nil
+        parts.fragment = nil
+        return parts.url
     }
 
     /// 把 iTunes 的 100pt 图换成 600pt。URL 形如 `…/100x100bb.jpg`;认不出这个模式
@@ -227,6 +245,61 @@ public enum MusicCatalogSearch {
             return artworkLookup(status: status, data: data, title: title, artist: artist, album: album)
         }
         return .noMatch
+    }
+
+    /// 按专辑 ID 取这张专辑的封面(600 档)。缓存里 Apple Music 链接带着专辑 ID 时比按歌名搜准,中国区店面也查得到
+    /// (search 接口在中国区一条都不回)。店面依次问,这个店面没有这张专辑才换下一个;`ITunesSearchGate` 退避期间不发请求。
+    public static func albumArtwork(albumID: Int64, storefronts: [String],
+                                    gate: ITunesSearchGate = .shared) async -> ArtworkLookup {
+        for store in storefronts {
+            guard !gate.coolingDown(),
+                  let url = lookupURL(id: albumID, storefront: store),
+                  let (status, data) = await fetch(url, operation: "itunes.lookup", gate: gate)
+            else { return .unreached }
+            let lookup = albumArtworkLookup(status: status, data: data, albumID: albumID)
+            if case .noMatch = lookup { continue }
+            return lookup
+        }
+        return .noMatch
+    }
+
+    /// 按曲目 ID 取这首所在专辑的封面(600 档)。Apple Music 系统会话报的曲库曲目 ID 就是它,查到的就是这一首;店面依次问,
+    /// 这个店面没有才换下一个。
+    public static func trackArtwork(trackID: Int64, storefronts: [String],
+                                    gate: ITunesSearchGate = .shared) async -> ArtworkLookup {
+        for store in storefronts {
+            guard !gate.coolingDown(),
+                  let url = lookupURL(id: trackID, storefront: store),
+                  let (status, data) = await fetch(url, operation: "itunes.lookup", gate: gate)
+            else { return .unreached }
+            let lookup = trackArtworkLookup(status: status, data: data, trackID: trackID)
+            if case .noMatch = lookup { continue }
+            return lookup
+        }
+        return .noMatch
+    }
+
+    /// 一次 lookup 响应里这首的封面:只认曲目 ID 对得上的那一项。纯函数,selftest 钉住。
+    public static func trackArtworkLookup(status: Int?, data: Data, trackID: Int64) -> ArtworkLookup {
+        guard status == 200, let decoded = try? JSONDecoder().decode(Response.self, from: data) else { return .unreached }
+        guard let item = decoded.results.first(where: { $0.trackId == trackID }),
+              let url = upscaleArtwork(item.artworkUrl100) else { return .noMatch }
+        return .found(ArtworkMatch(url: url, confidence: .albumMatch, matchedAlbum: item.collectionName,
+                                   artistPage: artistPageURL(item.artistViewUrl)))
+    }
+
+    public static func lookupURL(id: Int64, storefront: String) -> URL? {
+        var c = URLComponents(string: "https://itunes.apple.com/lookup")
+        c?.queryItems = [URLQueryItem(name: "id", value: String(id)), URLQueryItem(name: "country", value: storefront)]
+        return c?.url
+    }
+
+    /// 一次 lookup 响应里这张专辑的封面:只认专辑 ID 对得上的那一项。纯函数,selftest 钉住。
+    public static func albumArtworkLookup(status: Int?, data: Data, albumID: Int64) -> ArtworkLookup {
+        guard status == 200, let decoded = try? JSONDecoder().decode(Response.self, from: data) else { return .unreached }
+        guard let item = decoded.results.first(where: { $0.collectionId == albumID }),
+              let url = upscaleArtwork(item.artworkUrl100) else { return .noMatch }
+        return .found(ArtworkMatch(url: url, confidence: .albumMatch, matchedAlbum: item.collectionName))
     }
 
     /// https://music.apple.com/… → music://…(注册给 Music.app 的 scheme,经

@@ -100,9 +100,9 @@ public enum SettingsSearchCatalog {
     /// 那一段总开关的标题。没有触控栏的 Mac 上设置搜索只留这一条(落到「这台 Mac 没有触控栏」那张说明卡)。
     public static let touchBarToggleTitleKey = "触控栏歌词"
 
-    /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这两个直接返回字面量)。守卫核
+    /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这几个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。
-    public static let brandPathComponents: Set<String> = ["ListenBrainz", "Last.fm"]
+    public static let brandPathComponents: Set<String> = ["ListenBrainz", "Last.fm", "Discord"]
 
     // MARK: - 构造小工具(只在本文件用)
 
@@ -445,6 +445,12 @@ public enum SettingsSearchCatalog {
         account("bark", path: ["推送提醒"], "每日听歌报告", kw: ["日报", "推送", "Bark"]),
         account("bark", path: ["推送提醒"], "每月听歌小结", kw: ["月报", "推送", "Bark", "专辑"]),
         account("bark", path: ["推送提醒"], "年度听歌小结", kw: ["年报", "年度", "推送", "Bark", "专辑"]),
+        account("discord", path: ["Discord"], "显示正在听的歌", kw: ["Discord", "正在听", "状态", "资料卡", "Rich Presence"]),
+        account("discord", path: ["Discord"], "状态里显示", kw: ["Discord", "好友列表", "歌名", "歌手", "播放器"]),
+        account("discord", path: ["Discord"], "暂停时保留状态", kw: ["Discord", "暂停", "进度条"]),
+        account("discord", path: ["Discord"], "封面角标", kw: ["Discord", "角标", "小图", "图标", "Lyrimuse", "播放器", "官网"]),
+        account("discord", path: ["Discord"], "暂时隐藏", kw: ["Discord", "隐藏", "暂时", "隐私", "不显示", "菜单栏"]),
+        account("discord", path: ["Discord"], "显示的播放器", kw: ["Discord", "播放器", "排除", "浏览器"]),
     ]
 }
 

@@ -188,6 +188,39 @@ func runCoverArtTests() {
         expectEqual(M.shouldTryNextStorefront(status: 200, data: hitBody), false, "店面兜底: 有结果就不换(挑不出也不换)")
         expectEqual(M.shouldTryNextStorefront(status: 403, data: emptyBody), false, "店面兜底: 没问成不换,交给退避")
         expectEqual(M.shouldTryNextStorefront(status: 200, data: Data("<html>".utf8)), false, "店面兜底: 解不开不换")
+
+        // 按专辑 ID lookup(Discord 状态缺公网封面时):只认 ID 对得上的那一项,升到 600 档。
+        expectEqual(M.lookupURL(id: 1633408719, storefront: "cn")?.absoluteString,
+                    "https://itunes.apple.com/lookup?id=1633408719&country=cn", "专辑封面 lookup: 请求地址")
+        let albumBody = Data(#"{"resultCount":1,"results":[{"wrapperType":"collection","collectionId":1633408719,"collectionName":"最伟大的作品","artworkUrl100":"https://is1-ssl.mzstatic.com/x/100x100bb.jpg"}]}"#.utf8)
+        let albumHit = M.albumArtworkLookup(status: 200, data: albumBody, albumID: 1633408719)
+        expectEqual(albumHit.match?.url.absoluteString, "https://is1-ssl.mzstatic.com/x/600x600bb.jpg",
+                    "专辑封面 lookup: ID 对得上,升到 600 档")
+        expectEqual(albumHit.match?.confidence, .albumMatch, "专辑封面 lookup: 按 ID 查到的就是这张专辑")
+        expectEqual(lookupKind(M.albumArtworkLookup(status: 200, data: albumBody, albumID: 1)), "noMatch",
+                    "专辑封面 lookup: ID 对不上不认")
+        expectEqual(lookupKind(M.albumArtworkLookup(status: 200, data: emptyBody, albumID: 1633408719)), "noMatch",
+                    "专辑封面 lookup: 这个店面没有这张")
+        expectEqual(lookupKind(M.albumArtworkLookup(status: 429, data: albumBody, albumID: 1633408719)), "unreached",
+                    "专辑封面 lookup: 429 是没问成")
+
+        // 按曲目 ID lookup(Apple Music 系统会话给的曲库曲目 ID):只认曲目 ID 对得上的那一项。
+        let trackBody = Data(#"{"resultCount":1,"results":[{"wrapperType":"track","trackId":1633408818,"collectionId":1633408719,"trackName":"等你下课","collectionName":"最伟大的作品","artworkUrl100":"https://is1-ssl.mzstatic.com/y/100x100bb.jpg"}]}"#.utf8)
+        expectEqual(M.trackArtworkLookup(status: 200, data: trackBody, trackID: 1633408818).match?.url.absoluteString,
+                    "https://is1-ssl.mzstatic.com/y/600x600bb.jpg", "曲目封面 lookup: ID 对得上,升到 600 档")
+        expectEqual(lookupKind(M.trackArtworkLookup(status: 200, data: trackBody, trackID: 1633408719)), "noMatch",
+                    "曲目封面 lookup: 专辑 ID 不当曲目 ID")
+        expectEqual(lookupKind(M.trackArtworkLookup(status: 503, data: trackBody, trackID: 1633408818)), "unreached",
+                    "曲目封面 lookup: 503 是没问成")
+        let trackWithArtist = Data(#"{"resultCount":1,"results":[{"wrapperType":"track","trackId":1633408818,"collectionName":"最伟大的作品","artistViewUrl":"https://music.apple.com/cn/artist/%E5%91%A8%E6%9D%B0%E4%BC%A6/300117743?uo=4","artworkUrl100":"https://is1-ssl.mzstatic.com/y/100x100bb.jpg"}]}"#.utf8)
+        expectEqual(M.trackArtworkLookup(status: 200, data: trackWithArtist, trackID: 1633408818).match?.artistPage?.absoluteString,
+                    "https://music.apple.com/cn/artist/%E5%91%A8%E6%9D%B0%E4%BC%A6/300117743",
+                    "曲目封面 lookup: 顺带拿到歌手页,去掉 uo 参数")
+        expectEqual(M.trackArtworkLookup(status: 200, data: trackBody, trackID: 1633408818).match?.artistPage, nil,
+                    "曲目封面 lookup: 回包没有歌手页就不给")
+        expectEqual(M.artistPageURL("http://music.apple.com/cn/artist/x/1"), nil, "歌手页: 只认 https")
+        expectEqual(M.artistPageURL("https://itunes.apple.com/cn/artist/x/1"), nil, "歌手页: 只认 music.apple.com")
+        expectEqual(M.artistPageURL("https://music.apple.com/cn/album/x/1"), nil, "歌手页: 不是歌手页不认")
     }
 
     // ---- 榜单专辑的本机封面兜底:「歌手 + 专辑」索引 ----

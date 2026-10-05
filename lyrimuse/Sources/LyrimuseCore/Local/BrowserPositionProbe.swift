@@ -291,7 +291,10 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// `r does not contain "|1"` 认暂停,不带前缀时 `||160.8…` 这种以 1 开头的读数会被当成暂停整条扔掉。`currentTime` 只有在跟整秒文字对得上
     /// (`0 ≤ currentTime − 文字秒数 < currentTimeSlackSecs`)时才交出 —— 电台 / 续播那种累计时间差着
     /// 整首歌长,落不进这个窗口,自动退回整秒读数。时间戳在 JS 里取,是读数那一刻的墙钟:osascript 的
-    /// 往返时间不再算进读数的年龄。第三段(封面)留空。
+    /// 往返时间不再算进读数的年龄。
+    ///
+    /// **第三段:封面地址**,取页面 `navigator.mediaSession.metadata.artwork` 的最后一张(最大的那张)。音轨版本是曲库的方形
+    /// 专辑图(`*.googleusercontent.com`),MV 是视频截图,解析时只认前者(`KasetPlayerInfo.coverArtworkURL`)。
     ///
     /// **第五段:视频身份 `#<videoId>,<musicVideoType>`**(读不到就空)。取自 `#movie_player.getPlayerResponse()`,
     /// 给 MV 时间轴换算用(`LocalPlaybackSource.noteBrowserVideo`)。前缀 `#` 同样是为了不让 AppleScript
@@ -326,6 +329,13 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         var lead = ct - cur;
         if (lead >= 0 && lead < __CT_SLACK__) precise = '@' + ct.toFixed(3) + ',' + Date.now();
       }
+      var art = '';
+      try {
+        var md = navigator.mediaSession && navigator.mediaSession.metadata;
+        var arts = md && md.artwork;
+        if (arts && arts.length) art = String(arts[arts.length - 1].src || '');
+        if (art.indexOf('|') >= 0) art = '';
+      } catch (e) {}
       var ident = '';
       try {
         var mp = document.querySelector('#movie_player');
@@ -333,7 +343,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         var vd = pr && pr.videoDetails;
         if (vd && vd.videoId) ident = '#' + vd.videoId + ',' + (vd.musicVideoType || '');
       } catch (e) {}
-      return cur + '|' + (paused ? '1' : '0') + '||' + precise + '|' + ident;
+      return cur + '|' + (paused ? '1' : '0') + '|' + art + '|' + precise + '|' + ident;
     })()
     """
 
@@ -387,7 +397,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// `SpotifyPositionProbe` 的 `artwork url` 走同一条下游(`LocalPlaybackSource.spotifyArtworkURL`)。
     /// 曲目 ID 页面上**拿不到**:`context-item-link` 指向 `/album/<id>`、`context-item-info-artist` 指向
     /// `/artist/<id>`,没有 `/track/` 链接,所以真曲目链接 / LB 字段那一路只覆盖原生客户端。
-    /// YouTube Music 的脚本不带第三段,解析按"有就用、没有就 nil"处理。
+    /// YouTube Music 的脚本第三段是页面 mediaSession 里的专辑图(见 youtubeMusicScript 头注),解析按"有就用、没有就 nil"处理。
     private static let spotifyWebScript = """
     (function(){
       function toSecs(s) {
@@ -481,6 +491,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     public func setArtworkSink(_ sink: @escaping @Sendable (_ key: String, _ url: URL) -> Void) {
         lock.lock()
         artworkSink = sink
+        lock.unlock()
+    }
+
+    /// YouTube Music 网页版页面上的专辑图的去向(见 youtubeMusicScript 第三段)。跟 Spotify 网页版那条分开:那张接的是原生
+    /// 客户端同一条下游(原图档替代),这张只给 App 外面用。同 artworkSink:LocalPlaybackSource 启动时挂上,同一把锁下读写。
+    private var pageArtworkSink: (@Sendable (_ key: String, _ url: URL) -> Void)?
+
+    public func setPageArtworkSink(_ sink: @escaping @Sendable (_ key: String, _ url: URL) -> Void) {
+        lock.lock()
+        pageArtworkSink = sink
         lock.unlock()
     }
 
@@ -920,7 +940,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         lastMatch = (bundleID: bundleID, platformID: hit.platformID, at: Date())
         // 封面地址只在这次读数被采信(同一首、页面的钟在走)时交出去 —— 跟位置那份读数同一道可信度门。
         // sink 自己只是派一个 Task,不阻塞,在锁下调无妨。
-        if let art = hit.artworkURL { artworkSink?(key, art) }
+        if let art = hit.artworkURL {
+            if hit.platformID == "youtubeMusic" { pageArtworkSink?(key, art) } else { artworkSink?(key, art) }
+        }
         if let video = hit.video { videoSink?(key, video) }
     }
 
@@ -1059,7 +1081,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     private struct ProbeHit {
         let seconds: Double
         let platformID: String
-        /// 页面顺带交出的封面地址(目前只有 Spotify 网页版规则给,见 spotifyWebScript 头注)。
+        /// 页面顺带交出的封面地址(Spotify 网页版、YouTube Music 网页版的规则给,见两份脚本头注)。
         let artworkURL: URL?
         let precise: PreciseReading?
         let video: VideoIdentity?
@@ -1352,7 +1374,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>[|@<currentTime>,<epochMs>[|#<videoId>,<type>]]]`。
     /// 第二段非 "0"(暂停 / "NOTFOUND")整条作废、不猜;第三段可选,只认 Spotify 图床形状的地址
-    /// (`SpotifyArtworkURL.parse`),别的一律 nil;第四段可选,是 YouTube Music 的精确读数,形状不对就当没有、
+    /// (`SpotifyArtworkURL.parse`)和 YouTube Music 曲库的方形专辑图(`KasetPlayerInfo.coverArtworkURL`),别的一律 nil;第四段可选,是 YouTube Music 的精确读数,形状不对就当没有、
     /// 整秒读数照旧成立。纯函数,selftest 直接覆盖。
     public static func parseReading(fromOsascriptOutput raw: String) -> Reading? {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1362,7 +1384,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         }
         let parts = text.split(separator: "|", omittingEmptySubsequences: false)
         guard parts.count >= 2, parts[1] == "0", let seconds = Double(parts[0]) else { return nil }
-        let artwork = parts.count >= 3 ? SpotifyArtworkURL.parse(String(parts[2])) : nil
+        let artwork = parts.count >= 3
+            ? SpotifyArtworkURL.parse(String(parts[2])) ?? KasetPlayerInfo.coverArtworkURL(String(parts[2])) : nil
         var precise: PreciseReading?
         if parts.count >= 4, parts[3].hasPrefix("@") {
             let fields = parts[3].dropFirst().split(separator: ",")

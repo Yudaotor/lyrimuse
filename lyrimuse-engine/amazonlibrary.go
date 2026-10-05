@@ -73,6 +73,7 @@ type amazonCatalogTrack struct {
 	Album struct {
 		Name  string `json:"name"`
 		Title string `json:"title"`
+		Image string `json:"image"`
 	} `json:"album"`
 }
 

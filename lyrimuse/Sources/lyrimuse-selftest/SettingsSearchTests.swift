@@ -57,7 +57,7 @@ func runSettingsSearchTests() {
     let tabCases = enumCaseNames(after: "enum SettingsTab:", in: settingsView)
     expectEqual(tabCases, ["lyrics", "player", "appearance", "shortcuts", "general", "about"], "设置搜索: 扫到了 SettingsTab 的六个 case")
     let accountCases = enumCaseNames(after: "enum AccountDestination:", in: accountTab)
-    expectEqual(accountCases, ["listenBrainz", "lastfm", "stateRelay", "bark"], "设置搜索: 扫到了 AccountDestination 的四个 case")
+    expectEqual(accountCases, ["listenBrainz", "lastfm", "stateRelay", "bark", "discord"], "设置搜索: 扫到了 AccountDestination 的五个 case")
     let lyricsSectionCases: [String] = {
         guard let structRange = settingsView.range(of: "struct LyricsSettingsTab") else { return [] }
         return enumCaseNames(after: "private enum Section:", in: String(settingsView[structRange.upperBound...]))
@@ -174,6 +174,7 @@ func runSettingsSearchTests() {
         // (同「已改用自定义位置」)。
         "上一轮还没跑完，稍后会自动接着跑",
         "网络不通，已暂停，稍后会自动接着跑",
+        "需要 Discord 桌面版", "需要打开 Discord", "Discord 还没就绪",   // Discord 页的引导行(没装 / 没开 / 连不上时才有)
     ]
     let scannedFiles = [
         "SettingsView.swift", "AccountLinkingTab.swift",

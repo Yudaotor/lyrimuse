@@ -203,6 +203,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// `PlaybackCoordinator.refreshSpotifyOriginalCover`:系统那份封面(实测 600×600)本来就身份精确,
     /// 这条只为把歌词窗口那张 920px 卡换成**同一张图**的原图档,见 03 章「高清替代」。
     @Published public private(set) var spotifyArtworkURL: URL?
+    /// YouTube Music 网页版页面上这首的专辑图地址,浏览器位置探针顺带读到的(还是这首才收,见 noteWebPageArtwork)。
+    /// 换歌 / 停播置 nil。只给 App 外面用(Discord 状态的封面),界面不用它。
+    @Published public private(set) var webPageArtworkURL: URL?
     // "歌词窗口"进度条用(随 Apple Music 风格重做补上):暂停时 anchor 会被
     // 置 nil(见 apply() 的 else 分支),进度条如果只认 anchor,一暂停就整个没有位置可
     // 显示。暂停态 media-control/AppleScript 的 elapsedTime 本身就是精确的冻结位置,
@@ -374,6 +377,24 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public var acceptsSeek: Bool {
         Self.acceptsSeek(bundleID: lastSnapshot?.bundleIdentifier, adBreak: isCurrentTrackAdBreak)
+    }
+
+    /// 当前这首 Kaset 自己报的封面地址;在放的不是 Kaset、或还没读到这首的为 nil。
+    public var kasetArtworkURL: URL? {
+        guard lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier else { return nil }
+        return MediaControlClient.kasetArtworkURL(forTrackKey: lastKey)
+    }
+
+    /// 当前这首在 Apple Music 曲库里的曲目 ID(系统会话报的);在放的不是 Apple Music、或系统没报为 nil。
+    public var appleCatalogTrackID: Int64? {
+        guard lastResolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }
+        return lastProvenance?.identifiers?.catalogTrackID
+    }
+
+    /// 当前这首在 Kaset 里的 videoId;在放的不是 Kaset、或还没读到这首的为 nil。
+    public var kasetVideoID: String? {
+        guard lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier, let snapshot = lastSnapshot else { return nil }
+        return MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey)
     }
 
     // ---- 播放位置平滑(加,修 QQ 音乐"歌词时间不准") --------------------
@@ -1437,6 +1458,12 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
+    /// 浏览器位置探针带回 YouTube Music 网页版这首的专辑图;还是这首才收(同 noteSpotifyArtwork)。
+    public func noteWebPageArtwork(url: URL, forKey key: String) {
+        guard lastSnapshot?.trackKey == key else { return }
+        if webPageArtworkURL != url { webPageArtworkURL = url }
+    }
+
     /// 网页播放器交出的视频身份:是 MV(`MusicVideoTimeline.isMusicVideoType`)时按 `noteMusicVideo` 换算时间轴。
     public func noteBrowserVideo(_ video: BrowserPositionProbe.VideoIdentity, forKey key: String) {
         guard MusicVideoTimeline.isMusicVideoType(video.musicVideoType) else { return }
@@ -2146,6 +2173,10 @@ public final class LocalPlaybackSource: ObservableObject {
         BrowserPositionProbe.shared.setArtworkSink { [weak self] key, url in
             Task { @MainActor [weak self] in self?.noteSpotifyArtwork(url: url, forKey: key) }
         }
+        // YouTube Music 网页版页面上的专辑图另存一份,只给 App 外面用(见 webPageArtworkURL)。
+        BrowserPositionProbe.shared.setPageArtworkSink { [weak self] key, url in
+            Task { @MainActor [weak self] in self?.noteWebPageArtwork(url: url, forKey: key) }
+        }
         // 同一次探针顺带读到的视频身份:是 MV 时按 SponsorBlock 片段换算时间轴(见 noteBrowserVideo)。
         BrowserPositionProbe.shared.setVideoSink { [weak self] key, video in
             Task { @MainActor [weak self] in self?.noteBrowserVideo(video, forKey: key) }
@@ -2711,6 +2742,7 @@ public final class LocalPlaybackSource: ObservableObject {
             artworkData = nil
             artworkAverageHex = nil
             if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
+            if webPageArtworkURL != nil { webPageArtworkURL = nil }
             clearMusicVideoTimeline()
             pausedPositionMs = nil
             currentDurationMs = nil
@@ -3231,6 +3263,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 logger.notice("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
                 // 上一首的图床地址跟着换歌走;新地址要等探针 2.5s 后带回来(见 spotifyArtworkURL)。
                 if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
+                if webPageArtworkURL != nil { webPageArtworkURL = nil }
                 clearMusicVideoTimeline()
             }
             lastKey = key

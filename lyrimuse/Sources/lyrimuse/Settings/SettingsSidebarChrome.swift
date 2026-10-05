@@ -4,7 +4,7 @@ import LyrimuseCore
 import SwiftUI
 
 // 设置侧栏的"chrome"组件(整张侧栏按系统「设置」的侧栏重排):
-// 顶部身份区、有更新时的提示行、红色计数徽标,以及身份区头像的取图。分类行本身仍在
+// 顶部身份区(Last.fm 与其下「关联平台」那一行)、有更新时的提示行、红色计数徽标,以及身份区头像的取图。分类行本身仍在
 // SettingsView.sidebarLabel,账号行仍是 AccountSidebarRow —— 这里只放系统设置侧栏有、
 // 我们原来没有的那几样东西。
 //
@@ -87,6 +87,31 @@ struct LastfmIdentityRow: View {
                     .offset(y: 1)
             }
         }
+    }
+}
+
+// MARK: - 关联平台
+
+/// 身份区 Last.fm 下面那一行,仿系统设置 Apple 账户下面的「家人」:图标位是一排圆形平台标志(现在只有 Discord),文字「关联平台」。
+/// Last.fm 是主账号,其余平台都排进这一行;圆圈里只放平台标志,不放你的头像。List 里 tag 为 `.account(.discord)`,点了直接进
+/// Discord 页;再接平台时这一行改成先进一页总览。见 14 章决策 51、53。
+struct LinkedPlatformsRow: View {
+    // 手动切语言时这一行要重画。
+    @ObservedObject private var languageSettings = AppSettings.shared
+
+    static let circleSize: CGFloat = 20
+
+    var body: some View {
+        Label {
+            Text(L10n.t("关联平台"))
+                .lineLimit(1)
+        } icon: {
+            HStack(spacing: -Self.circleSize * 0.3) {
+                accountIconBadge(.discord, size: Self.circleSize, cornerRadius: Self.circleSize / 2)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -231,6 +256,66 @@ final class LastfmAvatarStore: ObservableObject {
             return NSImage(data: data)
         } catch {
             NetworkAuditLog.record(service: "lastfm", operation: "user.avatar", host: url.host ?? "",
+                                   statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
+            return nil
+        }
+    }
+}
+
+/// 身份区 Discord 那一行的头像。连上 Discord 时按握手拿到的账号取一次(`DiscordUser.avatarURL`),只在内存里缓存一张,
+/// 不落盘、不加 UserDefaults 键;失败后 10 分钟内不重试。下载记进 NetworkAuditLog。
+@MainActor
+final class DiscordAvatarStore: ObservableObject {
+    static let shared = DiscordAvatarStore()
+
+    @Published private(set) var image: NSImage?
+
+    private var loadedURL: URL?
+    private var lastAttempt: Date?
+    private var inflight: Task<Void, Never>?
+    private var statusObserver: AnyCancellable?
+    private static let retryInterval: TimeInterval = 600
+
+    private init() {
+        statusObserver = DiscordPresenceController.shared.$status
+            .sink { [weak self] status in
+                guard case .connected(let user?) = status else { return }
+                self?.load(user.avatarURL())
+            }
+    }
+
+    private func load(_ url: URL?) {
+        guard let url else { return }
+        if url == loadedURL {
+            if image != nil || inflight != nil { return }
+            if let last = lastAttempt, Date().timeIntervalSince(last) < Self.retryInterval { return }
+        } else {
+            inflight?.cancel()
+            image = nil
+        }
+        loadedURL = url
+        lastAttempt = Date()
+        inflight = Task { [weak self] in
+            let fetched = await Self.download(url)
+            guard let self, !Task.isCancelled, self.loadedURL == url else { return }
+            self.image = fetched
+            self.inflight = nil
+        }
+    }
+
+    private static func download(_ url: URL) async -> NSImage? {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        let start = Date()
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            NetworkAuditLog.record(service: "discord", operation: "avatar", host: url.host ?? "",
+                                   statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
+            guard status == 200 else { return nil }
+            return NSImage(data: data)
+        } catch {
+            NetworkAuditLog.record(service: "discord", operation: "avatar", host: url.host ?? "",
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
             return nil
         }

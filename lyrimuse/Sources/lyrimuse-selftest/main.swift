@@ -54,6 +54,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "player-query", summary: "App 代引擎跑的播放器查询:请求判定 / 固定脚本的守卫 / 网页队列 JS / 契约键名", run: runPlayerQueryTests),
     TestGroup(name: "player-picker", summary: "选择播放器网格:摆哪几张卡 / 「更多播放器」", run: runPlayerPickerTests),
     TestGroup(name: "lastfm", summary: "Last.fm:第 N 次听 / 写法族 / 分页 / 计次规则 / 最近记录 feed", run: runLastfmTests),
+    TestGroup(name: "discord", summary: "Discord「正在听」:帧编解码 / activity 组装 / 暂停宽限 / 节流去重 / 假 Discord 走一遍握手、发送、断线重连", run: runDiscordPresenceTests),
     TestGroup(name: "cover-art", summary: "封面取图 / 取色 / 专辑简介", run: runCoverArtTests),
     TestGroup(name: "spotify-native", summary: "Spotify 原生客户端本机数据:图床换档 / 通知广告分类 / 位置探针输出解析", run: runSpotifyNativeTests),
     TestGroup(name: "spotify-web-probe", summary: "网页版 Spotify:浏览器位置探针输出的封面地址段", run: runSpotifyWebProbeReadingTests),

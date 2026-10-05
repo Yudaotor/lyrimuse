@@ -441,7 +441,7 @@ struct SettingsView: View {
             if let destination = AccountDestination.allCases.first(where: { String(describing: $0) == name }) {
                 // ListenBrainz / 网页推送 / 推送提醒住在默认折叠的「实验室功能」区,不展开的话
                 // detail 切过去了、侧栏却高亮不到任何一行(同 onJumpToAccount 那条注释)。
-                if destination != .lastfm {
+                if destination.livesInLabs {
                     withAnimation { isAdditionalFeaturesExpanded = true }
                 }
                 selection = .account(destination)
@@ -454,7 +454,7 @@ struct SettingsView: View {
 
     /// 平时(不在搜索)的侧栏内容,按系统「设置」的侧栏排布(对照表见
     /// Settings/SettingsSidebarChrome.swift 头注):
-    ///   ① 身份区(Last.fm 头像 + 用户名)+ 有待处理建议时的「Last.fm 账号建议」行 + 有新版本时的「有软件更新可用」行;
+    ///   ① 身份区(Last.fm 头像 + 用户名,其下「关联平台」一行)+ 有待处理建议时的「Last.fm 账号建议」行 + 有新版本时的「有软件更新可用」行;
     ///   ② 六个分类,分组之间只留空白、不加小标题 —— 系统设置的侧栏没有这种标题;
     ///   ③ 「实验室功能」用原生 `Section(isExpanded:)` 折叠(Finder / 邮件侧栏那种悬停露出的
     ///      显示/隐藏),标题旁的「?」悬浮提示放在自定义 header 里。
@@ -462,6 +462,9 @@ struct SettingsView: View {
         Section {
             LastfmIdentityRow()
                 .tag(SettingsSidebarItem.account(.lastfm))
+            // 「关联平台」固定排在 Last.fm 下面、两行提示前面:提示行有事才出现,排在它们后面它就会跟着上下跳。
+            LinkedPlatformsRow()
+                .tag(SettingsSidebarItem.account(.discord))
             if !suggestions.items.isEmpty {
                 // 仿系统设置身份区下面的「Apple 账户建议 ①」:有待处理的建议才有这一行,点了进建议页、这一行亮起来。
                 LastfmSuggestionsSidebarRow(count: suggestions.items.count)
@@ -488,9 +491,9 @@ struct SettingsView: View {
         //
         // 用带 `header:` 尾闭包的 `Section(isExpanded:header:)` 重载 —— 那个 header 是任意 View,
         // 「?」图标照放(放不下的是 `Section(_ title:isExpanded:)` 那个便捷初始化)。
-        // Last.fm 不在这里:它是顶上的身份区。
+        // Last.fm、Discord 不在这里:它们在顶上的身份区(`AccountDestination.livesInLabs`)。
         Section(isExpanded: $isAdditionalFeaturesExpanded) {
-            ForEach(AccountDestination.allCases.filter { $0 != .lastfm }) { destination in
+            ForEach(AccountDestination.allCases.filter(\.livesInLabs)) { destination in
                 AccountSidebarRow(destination: destination)
                     .tag(SettingsSidebarItem.account(destination))
             }
@@ -548,8 +551,8 @@ struct SettingsView: View {
                         // 跳转目标如果落在"实验室功能"这个默认折叠的区域里(比如从 Last.fm 卡片跳去
                         // 配置 ListenBrainz),detail 面板会正常切过去,但侧边栏因为这一行还没展开、
                         // 根本不存在于列表里,高亮不到任何一行,看起来就是"跳过去了但侧边栏什么都
-                        // 没选中"。.lastfm 本身常驻可见,不需要展开这个折叠区。
-                        if target != .lastfm {
+                        // 没选中"。身份区里的 Last.fm、Discord 常驻可见,不需要展开这个折叠区。
+                        if target.livesInLabs {
                             withAnimation { isAdditionalFeaturesExpanded = true }
                         }
                         selection = .account(target)

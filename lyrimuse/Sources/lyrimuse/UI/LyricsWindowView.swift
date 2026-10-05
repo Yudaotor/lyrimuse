@@ -3437,8 +3437,7 @@ struct LyricsWindowView: View {
             if let u = links.qqAlbum { out.append(.init(id: "qq-album", title: L10n.t("QQ 音乐专辑页"), url: u)) }
             if let u = links.qqArtist { out.append(.init(id: "qq-artist", title: L10n.t("QQ 音乐歌手页"), url: u)) }
         } else if bundleID == PlaybackPlayer.netease.bundleIdentifier {
-            // 网易云只白捡歌曲页:引擎解出过专辑 ID,但它只活在内存里给同专辑预取用,
-            // 没有落进 enrich 缓存(要加得动引擎,与 QQ 那两个 mid 同一条路)。
+            // 网易云只给歌曲页:它的专辑页、歌手页不登录看不到内容(07 章决策 107)。
             if let u = links.neteaseSong { out.append(.init(id: "ne-song", title: L10n.t("网易云音乐歌曲页"), url: u)) }
         } else if bundleID == PlaybackPlayer.soda.bundleIdentifier {
             if let u = links.sodaSong { out.append(.init(id: "soda-song", title: L10n.t("汽水音乐歌曲页"), url: u)) }

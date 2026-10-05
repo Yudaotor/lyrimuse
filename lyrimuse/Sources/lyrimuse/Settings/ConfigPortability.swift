@@ -106,6 +106,8 @@ enum ConfigPortability {
         // 不是偏好。带去新机器等于一导入完重启就弹出一扇窗。
         "np:lyricsWindowOpen",
         "np:lyricsWindowMiniMode",
+        // Discord「暂时隐藏」到几点(DiscordPresenceController.hiddenUntilKey):眼下这一段的状态,不是偏好。
+        "np:discordHiddenUntil",
         "np:launchAtLoginEnabled",
         // launchAtLoginEnabled 的同类,补上 —— 判据(见本组注释末尾"装没装
         // LaunchAgent 是机器状态")对它一字不差地成立:它记的是"这台机器上装没装引擎

@@ -84,6 +84,8 @@ public struct EnrichCacheEntry: Decodable, Sendable {
     // YouTube Music 歌曲页(引擎的 enrichEntry.YouTubeMusicURL,用 Kaset 放这首时按它报的 videoId 拼的)。
     // 只喂 PlatformLinks.youtubeMusicSong。
     let youtubeMusicURL: String?
+    // 各播放器自己给这首记下的封面地址(引擎的 enrichEntry.PlayerCovers,键是播放器 bundle id)。只喂 playerCoverURLs。
+    let playerCovers: [String: String]?
     // YouTube Music 给这首的音轨版本登记的专辑(引擎的 enrichEntry.YouTubeMusicAlbum,用 Kaset 放这首时存的)。
     // 只喂界面专辑位(LocalPlaybackSource.youtubeMusicAlbum)。
     let youtubeMusicAlbum: String?
@@ -157,6 +159,7 @@ public struct EnrichCacheEntry: Decodable, Sendable {
         case kkboxURL = "kkbox_url"
         case amazonURL = "amazon_url"
         case youtubeMusicURL = "youtube_music_url"
+        case playerCovers = "player_covers"
         case youtubeMusicAlbum = "youtube_music_album"
         case youtubeMusicMV = "youtube_music_mv"
         case songLanguage = "song_language"
@@ -386,7 +389,12 @@ public enum EnrichCacheReader {
             spotifyAlbum: PlatformLinks.spotifyAlbumURL(id: entry.spotifyAlbumID ?? ""),
             spotifyArtist: PlatformLinks.spotifyArtistURL(id: entry.spotifyArtistID ?? ""),
             youtubeMusicAlbum: PlatformLinks.youtubeMusicAlbumURL(browseID: entry.youtubeMusicAlbumID ?? ""),
-            youtubeMusicArtist: PlatformLinks.youtubeMusicArtistURL(channelID: entry.youtubeMusicArtistID ?? ""))
+            youtubeMusicArtist: PlatformLinks.youtubeMusicArtistURL(channelID: entry.youtubeMusicArtistID ?? ""),
+            appleMusicWeb: MusicCatalogSearch.musicSchemeURL(entry.appleMusicURL) == nil
+                ? nil : entry.appleMusicURL.flatMap { URL(string: $0) },
+            kkboxWeb: PlatformLinks.kkboxAppURL(songPage: entry.kkboxURL ?? "") == nil
+                ? nil : entry.kkboxURL.flatMap { URL(string: $0) },
+            kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: entry.kkboxURL ?? "", artistID: entry.kkboxArtistID ?? ""))
         return links.isEmpty ? nil : links
     }
 
@@ -706,6 +714,24 @@ public enum EnrichCacheReader {
         guard let all = loadEntries() else { return nil }
         if let s = matchedEntry(key, in: all)?.coverURL, let url = URL(string: s) { return url }
         return nil
+    }
+
+    /// 各播放器自己给这首记下的封面地址(引擎从播放器本机数据里读的,见 lyrimuse-engine/playercover.go),键是播放器
+    /// bundle id。查法同 `albumMatchedCoverURL`;只收 https。没有返回空表。
+    public static func playerCoverURLs(artist: String, title: String, album: String) -> [String: URL] {
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        let entry: EnrichCacheEntry?
+        if let fresh = freshPlayingEntry(forKey: key) {
+            entry = fresh
+        } else {
+            guard let all = loadEntries() else { return [:] }
+            entry = matchedEntry(key, in: all)
+        }
+        var out: [String: URL] = [:]
+        for (bundleID, raw) in entry?.playerCovers ?? [:] {
+            if let url = URL(string: raw), url.scheme?.lowercased() == "https" { out[bundleID] = url }
+        }
+        return out
     }
 
     /// 这一行的**动态封面**:master m3u8 + 静态首帧模板,两个都可能为空。

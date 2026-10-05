@@ -116,6 +116,16 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
                                  symbol: locked ? "lock.fill" : "lock.open.fill",
                                  on: locked, action: #selector(toggleLockPosition)))
         }
+        // Discord「正在听」开着时才有:勾上 = 正暂时隐藏着,点一下提前恢复;隐藏多久用设置里选的。
+        if settings.discordPresenceEnabled {
+            let hiddenUntil = DiscordPresenceController.shared.hiddenUntil
+            let title = hiddenUntil.map {
+                String(format: L10n.t("已在 Discord 上隐藏，%@ 恢复"), DiscordPresenceController.restoreTimeText($0))
+            } ?? String(format: L10n.t("在 Discord 上隐藏 %@"),
+                        DiscordPresenceController.hideDurationText(minutes: settings.discordHideMinutes))
+            quick.addItem(toggle(title, symbol: "eye.slash", on: hiddenUntil != nil,
+                                 action: #selector(toggleDiscordHidden)))
+        }
         quick.addItem(.separator())
         settings.syncLaunchAtLoginFromSystem()
         quick.addItem(toggle(L10n.t("开机启动"), symbol: "power",
@@ -257,6 +267,15 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
 
     @objc private func toggleLaunchAtLogin() {
         AppSettings.shared.launchAtLoginEnabled.toggle()
+    }
+
+    @objc private func toggleDiscordHidden() {
+        let discord = DiscordPresenceController.shared
+        if discord.hiddenUntil == nil {
+            discord.hide(minutes: AppSettings.shared.discordHideMinutes)
+        } else {
+            discord.unhide()
+        }
     }
 
     @objc private func nudgeEarlier() {

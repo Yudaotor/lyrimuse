@@ -411,6 +411,11 @@ type enrichEntry struct {
 	// (`https://music.youtube.com/watch?v=<id>`,见 kasetlink.go youtubeMusicTrackURLFor)。App 和网页都原样用。
 	YouTubeMusicURL string `json:"youtube_music_url,omitempty"`
 
+	// PlayerCovers:各播放器自己给这首记下的封面地址(公网 https),键是播放器 bundle id,只从播放器本机的数据里读
+	// (见 playercover.go)。跟 CoverURL 分开存:那个常是设备直送、存在本机的文件,离开这台机器打不开,设备封面覆盖它时
+	// 不动这里。只有 App 读(给 Discord 这类 App 外面的地方挑封面),不进 fields()。
+	PlayerCovers map[string]string `json:"player_covers,omitempty"`
+
 	// YouTubeMusicAlbum:用 Kaset 放这首歌时,按 YouTube Music 的登记判出来的专辑(见 kasetalbum.go)。给 App 界面、上送,
 	// 以及播放器没报专辑时搜歌词用(见 lyricsSearchAlbum;Kaset 报的专辑那一栏放歌单时是歌单名,不用),不进缓存 key。
 	YouTubeMusicAlbum string `json:"youtube_music_album,omitempty"`
@@ -703,6 +708,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	amazonURL := amazonTrackURLFor(bundleID, artist, title)
 	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title)
 	youtubeMusicURL := youtubeMusicWatchURL(kasetVideoID)
+	// 播放器自己给这首记下的封面地址:读它本机的数据,同样放在锁外(见 playercover.go)。
+	playerCover := playerCoverURLFor(bundleID, artist, title, album, durationSecs, kkboxInfo)
 	ytmVerdict, ytmSettled := kasetAlbumVerdictFor(kasetVideoID, durationSecs, artist, title)
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
@@ -748,6 +755,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 		if youtubeMusicURL != "" && e.YouTubeMusicURL != youtubeMusicURL {
 			e.YouTubeMusicURL = youtubeMusicURL
+			spotifyHintDirty = true
+		}
+		if applyPlayerCoverLocked(&e, bundleID, playerCover) {
 			spotifyHintDirty = true
 		}
 		if ytmSettled && applyKasetAlbumVerdict(&e, ytmVerdict, ytmusicDisplayLanguage()) {

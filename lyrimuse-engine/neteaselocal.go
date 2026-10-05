@@ -90,8 +90,9 @@ type neteaseLocalTrack struct {
 		Name string `json:"name"`
 	} `json:"artists"`
 	Album struct {
-		ID   flexID `json:"id"`
-		Name string `json:"name"`
+		ID     flexID `json:"id"`
+		Name   string `json:"name"`
+		PicURL string `json:"picUrl"`
 	} `json:"album"`
 	Duration float64 `json:"duration"` // 毫秒
 }

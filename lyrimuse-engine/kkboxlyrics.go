@@ -237,10 +237,11 @@ func kkboxLocalLyricsFor(artist, title string, durationSecs float64) (lyricSourc
 	}, true
 }
 
-// kkboxPlayingInfo:用 KKBOX 放的这首,它缓存里现在有的两样东西 —— 单曲详情给的歌曲页,和有没有它的歌词。
+// kkboxPlayingInfo:用 KKBOX 放的这首,它缓存里现在有的几样东西 —— 单曲详情给的歌曲页和专辑图,有没有它的歌词。
 type kkboxPlayingInfo struct {
 	url    string
 	lyrics bool
+	cover  string
 }
 
 // kkboxPlayingInfoTTL:同一首记多久。trackEnrichment 在同一首歌的播放期间会被反复调用,每次都扫一遍缓存目录不值当;
@@ -269,7 +270,8 @@ func kkboxPlayingInfoFor(artist, title string, durationSecs float64) kkboxPlayin
 	kkboxPlayingInfoMu.Unlock()
 	c := scanKKBOXCache(kkboxCacheDir())
 	_, lyrics := c.lyricFor(artist, title, durationSecs)
-	info := kkboxPlayingInfo{url: c.songURLFor(artist, title, durationSecs), lyrics: lyrics}
+	info := kkboxPlayingInfo{url: c.songURLFor(artist, title, durationSecs), lyrics: lyrics,
+		cover: c.coverFor(artist, title, durationSecs)}
 	kkboxPlayingInfoMu.Lock()
 	for k, m := range kkboxPlayingInfoMemo {
 		if now.Sub(m.at) >= kkboxPlayingInfoTTL {
