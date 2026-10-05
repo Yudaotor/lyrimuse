@@ -22,6 +22,13 @@ public enum LyricTypesetting {
         lock.unlock()
     }
 
+    /// 当前这首是不是日文歌(`setJapaneseSong` 设的值)。
+    static var isJapaneseSong: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return japaneseSong
+    }
+
     /// 简繁显示是不是设成了繁体。
     public static func setTraditionalChinese(_ value: Bool) {
         lock.lock()

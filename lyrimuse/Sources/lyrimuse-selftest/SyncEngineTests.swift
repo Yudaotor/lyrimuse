@@ -359,8 +359,8 @@ func runSyncEngineTests() {
             translation: .init(maxWidth: 100, measure: measure)), for: .overlay)
         let trFirst = trEngine.surfaceTick(.overlay, atMs: 1100)
         expectEqual(trFirst.line?.plainText, "short", "按宽度断句: 译文放不下时主行也跟着拆")
-        expectEqual(trFirst.line?.translation, "这一句的译文特", "按宽度断句: 译文切成放得下的几截")
-        expectEqual(trEngine.surfaceTick(.overlay, atMs: 2100).line?.translation, "别特别长长长长",
+        expectEqual(trFirst.line?.translation, "这一句的译文特别", "按宽度断句: 译文切成放得下的几截(按词界)")
+        expectEqual(trEngine.surfaceTick(.overlay, atMs: 2100).line?.translation, "特别长长长长",
                     "按宽度断句: 后一段显示译文的后一截")
 
         // 一个词比整行还宽:按字硬切,时间按字数平分。
@@ -566,8 +566,8 @@ func runSyncEngineTests() {
                     "按宽度断句(禁则): 括号成对留在同一段")
         // 悬浮歌词、歌词窗口折行用同一份禁则。
         expectEqual(WrapLayoutMath.breakOpportunities(texts: ["君", "が", "好", "き", "っ", "て", "。", "「", "嘘", "」"]),
-                    [true, true, true, true, false, true, false, true, false, false],
-                    "换行断点(禁则): 小假名、句号、右括号不放到行首,左括号不留在行尾,标点后面能断")
+                    [true, true, true, false, false, false, false, true, false, false],
+                    "换行断点(禁则、词界): 小假名、句号、右括号不放到行首,左括号不留在行尾,标点后面能断,「好き」「って」中间不断")
 
         // 中日文按分词器的词界断:词中间不断;切在助词 / 虚字前面代价高,切在日文助词后面代价低。
         let jaBreaks = LyricsSegmenter.WordBreaks(text: "君が好きだってこと以外は", script: .japanese)
@@ -626,6 +626,29 @@ func runSyncEngineTests() {
         let unmatched = LyricsSegmenter.segments([romaLine("나는 너를 사랑해 Baby", "something else entirely here")],
                                                  budget: romaBudget).compactMap(\.part)
         expectEqual(unmatched.map(\.romanization), [nil, nil], "按宽度断句(罗马音): 对不上又放得下时每段显示整句")
+
+        // 促音后面不断:断开的话前一段的读音少一个辅音。
+        expectEqual(LyricsSegmenter.cutPenalty(after: "行っ", before: "たって"), nil, "按宽度断句: 促音后面不断")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "あっ ", before: "見て"), 0.05, "按宽度断句: 促音后面隔着空格照常能断")
+        // 译文摊到各段时同样按词界切。
+        let trLine = LyricsSegmenter.Line(
+            startMs: 1000, nextStartMs: 5000, text: "abc def",
+            words: [SyncedLyricWord(text: "abc ", startMs: 1000, durationMs: 1000),
+                    SyncedLyricWord(text: "def", startMs: 2000, durationMs: 1000)],
+            translation: "然后发现你的改变孤单的今后", side: nil, sungEndMs: 3000, mergeable: true, gapAfter: false)
+        let trParts = LyricsSegmenter.segments([trLine], budget: LineLayoutBudget(
+            key: "tr-words", main: .init(maxWidth: 80, measure: measure),
+            translation: .init(maxWidth: 80, measure: measure))).compactMap(\.part)
+        expectEqual(trParts.map(\.translation), ["然后发现你的", "改变孤单的今后"], "按宽度断句: 译文摊到各段时不切在词中间")
+        // 悬浮歌词、歌词窗口折行不在一个词中间换行。
+        func wrapped(_ text: String, _ maxWidth: CGFloat) -> [String] {
+            let texts = text.map { String($0) }
+            return WrapLayoutMath.rows(sizes: texts.map { _ in CGSize(width: 10, height: 10) }, maxWidth: maxWidth,
+                                       horizontalSpacing: 0, breakBefore: WrapLayoutMath.breakOpportunities(texts: texts))
+                .map { $0.indices.map { texts[$0] }.joined() }
+        }
+        expectEqual(wrapped("ウーバーイーツでなんか頼んで", 100), ["ウーバーイーツで", "なんか頼んで"], "换行断点(词界): 日文不在一个词中间换行")
+        expectEqual(wrapped("吹了一整天的头发", 40), ["吹了", "一整天的", "头发"], "换行断点(词界): 中文不在一个词中间换行")
     }
 
     // ---- LyricsSyncEngine: 单曲歌词时间轴微调(offsetMs) ----

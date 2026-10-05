@@ -194,6 +194,20 @@ func runRomanizationTests() {
                     SyncedLyricWord(text: "깨", startMs: 300, durationMs: 300)],
             line: "틀을 깨", japanese: false, koreanRomanization: "teu reul  kkae")
         expectEqual(syllabicGroups?.map(\.romanization), ["teureul", "kkae"], "韩语: 罗马音按音节加空格时也分得出组")
+        // 韩文整行罗马音逐段对不上(两种空格夹着写、多带一截和声):按英文锚点和读音长度切;英文对不上的不切。
+        func offset(_ s: String, _ sub: String) -> Int { s.utf16.distance(from: s.utf16.startIndex, to: s.range(of: sub)!.lowerBound) }
+        let mixedText = "간직해왔던 불꽃을 일으켜", mixedRoma = "ganji kae watdeon bul kkocheul  i reukyeo"
+        expectEqual(Romanizer.romanizationCuts(text: mixedText, romanization: mixedRoma, script: .korean,
+                                               at: [offset(mixedText, "불꽃을")]),
+                    [offset(mixedRoma, "bul")], "罗马音对齐: 韩文空格写法混着时按读音长度切")
+        let extraText = "Turn this 아파트 Into a club", extraRoma = "Turn this  a pa teu  Into a club (Uh-huh, uh-huh)"
+        expectEqual(Romanizer.romanizationCuts(text: extraText, romanization: extraRoma, script: .korean,
+                                               at: [offset(extraText, "Into")]),
+                    [offset(extraRoma, "Into")], "罗马音对齐: 韩文罗马音多带一截时切在英文锚点上")
+        let wrongText = "뇌리에 한방 날려 Punchline"
+        expectEqual(Romanizer.romanizationCuts(text: wrongText, romanization: "Bring that beat back", script: .korean,
+                                               at: [offset(wrongText, "날려")]) == nil, true,
+                    "罗马音对齐: 英文对不上的罗马音(配错了行)不切")
     }
 
     // 逐词罗马音的分组:分词器的片段边界跟歌词源的逐字切分不一定对齐,分组必须两个方向都兜住。

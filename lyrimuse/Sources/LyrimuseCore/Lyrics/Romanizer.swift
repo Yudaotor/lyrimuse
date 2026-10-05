@@ -521,56 +521,137 @@ public enum Romanizer {
     }
 
     /// 整行罗马音按原文的切口切开:`cuts` 是原文里的切口(UTF-16 下标,升序),返回罗马音里对应的切口(落在
-    /// 罗马音词与词之间);对不上返回 nil。韩文、中文按 `readingSpans` 逐段对,切口落在一段中间就对不上;日文用
-    /// 分词器的读音估每个切口前面的读音有多长,在罗马音里找长度最接近的词界,差得太多就对不上。
+    /// 罗马音词与词之间);对不上返回 nil。只切一次时用;同一句要按好几种切法试时用 `RomanizationAligner`。
     public static func romanizationCuts(text: String, romanization: String, script: LyricScript, at cuts: [Int]) -> [Int]? {
         guard !cuts.isEmpty else { return [] }
-        if script == .japanese { return japaneseRomanizationCuts(text: text, romanization: romanization, at: cuts) }
-        guard script == .korean || script == .chinese || script == .cantonese,
-              let spans = readingSpans(text, romanization: romanization) else { return nil }
-        var out: [Int] = []
-        for cut in cuts {
-            guard !spans.contains(where: { $0.textStart < cut && cut < $0.textEnd }),
-                  let next = spans.first(where: { $0.textStart >= cut }) else { return nil }
-            out.append(next.romanStart)
-        }
-        return out
+        return RomanizationAligner(text: text, romanization: romanization, script: script)?.cuts(at: cuts)
     }
 
     /// 罗马音里每个切口前面的读音,允许跟分词器的读音长度差这么多(按比例,至少 2 个字母):两边的写法不完全
     /// 一样(「wo / o」「ou / ō」),整句越长差得越多。
     static let japaneseRomanizationCutTolerance = 0.12
 
-    private static func japaneseRomanizationCuts(text: String, romanization: String, at cuts: [Int]) -> [Int]? {
-        func letters(_ s: String) -> Int {
+    /// 一句原文跟它的整行罗马音的对齐:分词、读音这些只算一次,之后按切口查(拆一句时要试好几种切法)。
+    /// 韩文、中文按 `readingSpans` 逐段对,切口落在一段中间就对不上。韩文逐段对不上时(按音节、按词两种空格夹着写,
+    /// 或者多带了一截和声),原文里的英文词在罗马音里按顺序找同一个词当锚点,切口挨着英文词就切在它那里,其余按读音长度
+    /// (`KoreanRomanization`)找最近的词界;英文词找不全、两边读音长度比超出 0.5~2 就对不上。日文用分词器的读音估每个
+    /// 切口前面的读音有多长,在罗马音里找长度最接近的词界,差得太多就对不上。
+    public struct RomanizationAligner {
+        private let map: ([Int]) -> [Int]?
+
+        public init?(text: String, romanization: String, script: LyricScript) {
+            switch script {
+            case .japanese:
+                guard let m = Self.japanese(text: text, romanization: romanization) else { return nil }
+                map = m
+            case .korean, .chinese, .cantonese:
+                if let spans = Romanizer.readingSpans(text, romanization: romanization) {
+                    map = { cuts in
+                        var out: [Int] = []
+                        for cut in cuts {
+                            guard !spans.contains(where: { $0.textStart < cut && cut < $0.textEnd }),
+                                  let next = spans.first(where: { $0.textStart >= cut }) else { return nil }
+                            out.append(next.romanStart)
+                        }
+                        return out
+                    }
+                } else if script == .korean, let m = Self.korean(text: text, romanization: romanization) {
+                    map = m
+                } else {
+                    return nil
+                }
+            default:
+                return nil
+            }
+        }
+
+        /// 原文里的切口对应罗马音里的哪几处;对不上返回 nil。
+        public func cuts(at cuts: [Int]) -> [Int]? { cuts.isEmpty ? [] : map(cuts) }
+
+        private static func letters(_ s: String) -> Int {
             s.unicodeScalars.filter { $0.isASCII && CharacterSet.alphanumerics.contains($0) }.count
         }
-        let segs = japaneseSegments(text)
-        let tokens = whitespaceSeparated(romanization)
-        guard !segs.isEmpty, tokens.count >= 2 else { return nil }
-        let ours = segs.map { letters($0.latin) }
-        let total = ours.reduce(0, +)
-        var prefix = [0]
-        for t in tokens { prefix.append(prefix.last! + letters(t.text)) }
-        guard total > 0, prefix.last! > 0 else { return nil }
-        let scale = Double(prefix.last!) / Double(total)
-        var out: [Int] = []
-        var lastToken = 0
-        for cut in cuts {
-            guard !segs.contains(where: { $0.utf16Start < cut && cut < $0.utf16End }) else { return nil }
-            let before = zip(segs, ours).filter { $0.0.utf16End <= cut }.reduce(0) { $0 + $1.1 }
-            let target = Double(before) * scale
-            var best: Int?
-            for t in (lastToken + 1)..<tokens.count {
-                let d = abs(Double(prefix[t]) - target)
-                if best == nil || d < abs(Double(prefix[best!]) - target) { best = t }
+
+        private static func korean(text: String, romanization: String) -> (([Int]) -> [Int]?)? {
+            let words = Romanizer.whitespaceSeparated(text)
+            let tokens = Romanizer.whitespaceSeparated(romanization)
+            guard words.count >= 2, tokens.count >= 2 else { return nil }
+            var anchors: [Int: Int] = [:]
+            var next = 0
+            for (w, word) in words.enumerated() where !Romanizer.containsHangul(word.text) && letters(word.text) > 0 {
+                guard let found = (next..<tokens.count).first(where: { Romanizer.sameLatin(word.text, tokens[$0].text) }) else {
+                    return nil
+                }
+                anchors[w] = found
+                next = found + 1
             }
-            guard let t = best,
-                  abs(Double(prefix[t]) - target) <= max(2, target * japaneseRomanizationCutTolerance) else { return nil }
-            out.append(tokens[t].start)
-            lastToken = t
+            let ours = words.map {
+                Romanizer.containsHangul($0.text) ? letters(KoreanRomanization.romanize($0.text)) : letters($0.text)
+            }
+            var prefix = [0]
+            for token in tokens { prefix.append(prefix.last! + letters(token.text)) }
+            let total = ours.reduce(0, +)
+            guard total > 0, prefix.last! > 0 else { return nil }
+            let ratio = Double(prefix.last!) / Double(total)
+            guard ratio > 0.5, ratio < 2 else { return nil }
+            return { cuts in
+                var out: [Int] = []
+                var lastToken = 0
+                for cut in cuts {
+                    guard !words.contains(where: { $0.start < cut && cut < $0.end }),
+                          let w = words.firstIndex(where: { $0.start >= cut }), w > 0 else { return nil }
+                    var boundary: Int?
+                    if let a = anchors[w] {
+                        boundary = a
+                    } else if let a = anchors[w - 1] {
+                        boundary = a + 1
+                    } else if lastToken + 1 < tokens.count {
+                        let target = Double(ours[0..<w].reduce(0, +)) * ratio
+                        let best = ((lastToken + 1)..<tokens.count).min {
+                            abs(Double(prefix[$0]) - target) < abs(Double(prefix[$1]) - target)
+                        }
+                        if let b = best,
+                           abs(Double(prefix[b]) - target) <= max(2, target * Romanizer.japaneseRomanizationCutTolerance) {
+                            boundary = b
+                        }
+                    }
+                    guard let b = boundary, b > lastToken, b < tokens.count else { return nil }
+                    out.append(tokens[b].start)
+                    lastToken = b
+                }
+                return out
+            }
         }
-        return out
+
+        private static func japanese(text: String, romanization: String) -> (([Int]) -> [Int]?)? {
+            let segs = Romanizer.japaneseSegments(text)
+            let tokens = Romanizer.whitespaceSeparated(romanization)
+            guard !segs.isEmpty, tokens.count >= 2 else { return nil }
+            let ours = segs.map { letters($0.latin) }
+            let total = ours.reduce(0, +)
+            var prefix = [0]
+            for t in tokens { prefix.append(prefix.last! + letters(t.text)) }
+            guard total > 0, prefix.last! > 0 else { return nil }
+            let scale = Double(prefix.last!) / Double(total)
+            return { cuts in
+                var out: [Int] = []
+                var lastToken = 0
+                for cut in cuts {
+                    guard !segs.contains(where: { $0.utf16Start < cut && cut < $0.utf16End }) else { return nil }
+                    let before = zip(segs, ours).filter { $0.0.utf16End <= cut }.reduce(0) { $0 + $1.1 }
+                    let target = Double(before) * scale
+                    guard lastToken + 1 < tokens.count,
+                          let t = ((lastToken + 1)..<tokens.count).min(by: {
+                              abs(Double(prefix[$0]) - target) < abs(Double(prefix[$1]) - target)
+                          }),
+                          abs(Double(prefix[t]) - target) <= max(2, target * Romanizer.japaneseRomanizationCutTolerance)
+                    else { return nil }
+                    out.append(tokens[t].start)
+                    lastToken = t
+                }
+                return out
+            }
+        }
     }
 
     /// - Parameter songLooksJapanese: 整首歌是不是日文歌(`Romanizer.looksJapaneseSong`)。

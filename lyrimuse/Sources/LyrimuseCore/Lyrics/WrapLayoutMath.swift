@@ -113,8 +113,44 @@ public enum WrapLayoutMath {
     /// 每一项前面能不能断行:前一项以空白 / 连字符结尾、这一项以空白开头,或两边挨着的是汉字 / 假名
     /// (中日文逐字切,字与字之间本来就能断)。第 0 项恒 true。别的文字(英文音节、韩文一个词里的
     /// 几个音节)挨在一起就不断。禁则同按宽度断句(`LyricsSegmenter.cutPenalty`):标点、小假名、长音、
-    /// 右括号不放到行首,左括号不留在行尾;标点、右括号后面能断。
+    /// 右括号不放到行首,左括号不留在行尾;标点、右括号后面能断。中日文还按分词器的词界(`LyricsSegmenter.WordBreaks`),
+    /// 不在一个词中间换行。
     public static func breakOpportunities(texts: [String]) -> [Bool] {
+        let base = characterBreaks(texts)
+        guard let inside = wordInside(texts) else { return base }
+        var offsets: [Int] = []
+        var offset = 0
+        for t in texts {
+            offsets.append(offset)
+            offset += t.utf16.count
+        }
+        return texts.indices.map { i in base[i] && (i == 0 || !inside.contains(offsets[i])) }
+    }
+
+    /// 一行中日文里落在一个词中间的 UTF-16 下标;别的文字为 nil。按「文字种类 + 文字」缓存:歌词窗口每次刷新都会问。
+    private static func wordInside(_ texts: [String]) -> Set<Int>? {
+        let text = texts.joined()
+        guard text.unicodeScalars.contains(where: { CharacterSet.hanLike.contains($0) }) else { return nil }
+        let script = Romanizer.script(ofLine: text, song: LyricTypesetting.isJapaneseSong ? .japanese : .other)
+        let key = "\(script.rawValue)|\(text)" as NSString
+        if let hit = insideCache.object(forKey: key) { return hit.value }
+        let inside = LyricsSegmenter.WordBreaks(text: text, script: script)?.inside ?? []
+        insideCache.setObject(InsideBox(inside), forKey: key)
+        return inside
+    }
+
+    private final class InsideBox {
+        let value: Set<Int>
+        init(_ value: Set<Int>) { self.value = value }
+    }
+
+    nonisolated(unsafe) private static let insideCache: NSCache<NSString, InsideBox> = {
+        let cache = NSCache<NSString, InsideBox>()
+        cache.countLimit = 512
+        return cache
+    }()
+
+    private static func characterBreaks(_ texts: [String]) -> [Bool] {
         texts.indices.map { i in
             guard i > 0 else { return true }
             guard let p = texts[i - 1].unicodeScalars.last, let c = texts[i].unicodeScalars.first else { return true }

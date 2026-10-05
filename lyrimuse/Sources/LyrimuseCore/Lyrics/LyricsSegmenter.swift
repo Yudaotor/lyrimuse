@@ -376,11 +376,20 @@ public enum LyricsSegmenter {
         let joinedText = words.map(\.text).joined()
         let script = line.script ?? Romanizer.script(ofLine: line.text, song: .other)
         let wordBreaks = WordBreaks(text: joinedText, script: script)
+        /// 整行罗马音跟原文的对齐,第一次要用时才算(按组拆的行用不到),这一句的几种切法共用。
+        final class AlignerBox {
+            var made = false
+            var aligner: Romanizer.RomanizationAligner?
+        }
+        let alignerBox = AlignerBox()
         /// 整行罗马音按主行的切口(原文 UTF-16 下标)切成各段的;对不上、或有一段放不下返回 nil。
         func alignedRomanization(_ romanization: String, cuts: [Int], row: LineLayoutBudget.Row,
                                  maxWidth: CGFloat) -> [String]? {
-            guard let romanCuts = Romanizer.romanizationCuts(text: joinedText, romanization: romanization,
-                                                             script: script, at: cuts) else { return nil }
+            if !alignerBox.made {
+                alignerBox.made = true
+                alignerBox.aligner = Romanizer.RomanizationAligner(text: joinedText, romanization: romanization, script: script)
+            }
+            guard let romanCuts = alignerBox.aligner?.cuts(at: cuts) else { return nil }
             let roman = romanization as NSString
             let bounds = [0] + romanCuts + [roman.length]
             let pieces = bounds.indices.dropLast().map { k in
@@ -417,6 +426,8 @@ public enum LyricsSegmenter {
         let translationNeedsSplit = budget.translation.flatMap { row in
             line.translation.map { row.measure($0) > translationLimit! + fitTolerance }
         } ?? false
+        let translationBreaks = translationNeedsSplit
+            ? line.translation.flatMap { WordBreaks(text: $0, script: Romanizer.script(ofLine: $0, song: .other)) } : nil
         let romanizationTooWide = budget.romanization.flatMap { row in
             line.romanization.map { row.measure($0) > romanizationLimit! + fitTolerance }
         } ?? false
@@ -440,12 +451,7 @@ public enum LyricsSegmenter {
                 offsets.append(offset)
                 offset += u.text.utf16.count
             }
-            let natural: [CGFloat?] = units.indices.map { c in
-                guard c > 0 else { return nil }
-                let base = cutPenalty(after: units[c - 1].text, before: units[c].text)
-                guard base == cjkCutPenalty, let wordBreaks else { return base }
-                return wordBreaks.penalty(at: offsets[c])
-            }
+            let natural = cutPenalties(units.map(\.text), wordBreaks: wordBreaks)
             let forced: [CGFloat?] = units.indices.map { c in c == 0 ? nil : (natural[c] ?? 1) }
 
             /// 按这组切点出各段;有一行放不下返回 nil。`balanced`:译文 / 罗马音也按各段等宽切(段数多时改为逐行装满)。
@@ -468,13 +474,14 @@ public enum LyricsSegmenter {
                     let previewLimit = row.maxWidth + fitTolerance
                     guard partTexts.allSatisfy({ row.measure($0) <= previewLimit }) else { return nil }
                 }
-                func companion(_ text: String, _ row: LineLayoutBudget.Row, _ maxWidth: CGFloat) -> [String]? {
-                    balanced ? spreadText(text, parts: parts, row: row, maxWidth: maxWidth)
-                             : packText(text, parts: parts, row: row, maxWidth: maxWidth)
+                func companion(_ text: String, _ row: LineLayoutBudget.Row, _ maxWidth: CGFloat,
+                               _ breaks: WordBreaks?) -> [String]? {
+                    balanced ? spreadText(text, parts: parts, row: row, maxWidth: maxWidth, wordBreaks: breaks)
+                             : packText(text, parts: parts, row: row, maxWidth: maxWidth, wordBreaks: breaks)
                 }
                 var translations: [String]?
                 if translationNeedsSplit, let row = budget.translation, let tr = line.translation {
-                    guard let t = companion(tr, row, translationLimit!) else { return nil }
+                    guard let t = companion(tr, row, translationLimit!, translationBreaks) else { return nil }
                     translations = t
                 }
                 // 整行罗马音那一行只在这一段没有逐词读音时出现。先按主行的切口切,读音跟着这一段的字走;
@@ -486,7 +493,7 @@ public enum LyricsSegmenter {
                                                          row: row, maxWidth: romanizationLimit!) {
                         romanizations = aligned
                     } else if romanizationTooWide {
-                        guard let r = companion(ro, row, romanizationLimit!) else { return nil }
+                        guard let r = companion(ro, row, romanizationLimit!, nil) else { return nil }
                         romanizations = r
                     }
                 }
@@ -661,9 +668,11 @@ public enum LyricsSegmenter {
 
     /// 主行拆成 parts 段时,译文 / 罗马音那一行跟着切:切成放得下的最少段数(不超过 parts),按顺序摊到主行的
     /// 各段上(段数少于 parts 时相邻几段显示同一截)。切不出来返回 nil。
-    static func spreadText(_ text: String, parts: Int, row: LineLayoutBudget.Row, maxWidth: CGFloat) -> [String]? {
+    /// `wordBreaks`:这行文字的词界(`WordBreaks`,中日文才有),一次拆分里算一次传下来。
+    static func spreadText(_ text: String, parts: Int, row: LineLayoutBudget.Row, maxWidth: CGFloat,
+                           wordBreaks: WordBreaks?) -> [String]? {
         for q in 2...max(2, parts) where q <= parts {
-            guard let pieces = splitText(text, parts: q, row: row, maxWidth: maxWidth) else { continue }
+            guard let pieces = splitText(text, parts: q, row: row, maxWidth: maxWidth, wordBreaks: wordBreaks) else { continue }
             return (0..<parts).map { pieces[$0 * q / parts] }
         }
         return nil
@@ -694,7 +703,8 @@ public enum LyricsSegmenter {
     }
 
     /// 译文 / 罗马音逐行装满(主行也是逐行装满的时候用),段数不超过 parts,按顺序摊到主行各段上。
-    static func packText(_ text: String, parts: Int, row: LineLayoutBudget.Row, maxWidth: CGFloat) -> [String]? {
+    static func packText(_ text: String, parts: Int, row: LineLayoutBudget.Row, maxWidth: CGFloat,
+                         wordBreaks: WordBreaks?) -> [String]? {
         let tokens = textTokens(text).flatMap { t -> [String] in
             row.measure(t) > maxWidth + fitTolerance ? t.map(String.init) : [t]
         }
@@ -702,9 +712,7 @@ public enum LyricsSegmenter {
         let spaceWidth = row.measure(" ")
         let widths = tokens.map(row.measure)
         let trailing = tokens.map { $0.last?.isWhitespace == true ? spaceWidth : 0 }
-        let penalties: [CGFloat?] = tokens.indices.map { c in
-            c == 0 ? nil : cutPenalty(after: tokens[c - 1], before: tokens[c])
-        }
+        let penalties = cutPenalties(tokens, wordBreaks: wordBreaks)
         guard let starts = packedCuts(widths: widths, trailing: trailing, penalties: penalties, maxWidth: maxWidth),
               starts.count <= parts else { return nil }
         let q = starts.count
@@ -717,7 +725,8 @@ public enum LyricsSegmenter {
     }
 
     /// 没有时间的一行文字(译文 / 罗马音)切成 parts 段、每段都放得下;切不出来返回 nil。
-    static func splitText(_ text: String, parts: Int, row: LineLayoutBudget.Row, maxWidth: CGFloat) -> [String]? {
+    static func splitText(_ text: String, parts: Int, row: LineLayoutBudget.Row, maxWidth: CGFloat,
+                          wordBreaks: WordBreaks?) -> [String]? {
         var tokens = textTokens(text)
         var glued = [Bool](repeating: false, count: tokens.count)
         // 一个词比整行还宽就按字切开,切口只在别处断不开时用。
@@ -736,10 +745,8 @@ public enum LyricsSegmenter {
         let spaceWidth = row.measure(" ")
         let widths = tokens.map(row.measure)
         let trailing = tokens.map { $0.last?.isWhitespace == true ? spaceWidth : 0 }
-        let natural: [CGFloat?] = tokens.indices.map { c in
-            guard c > 0, !glued[c] else { return nil }
-            return cutPenalty(after: tokens[c - 1], before: tokens[c])
-        }
+        let refined = cutPenalties(tokens, wordBreaks: wordBreaks)
+        let natural: [CGFloat?] = tokens.indices.map { c in glued[c] ? nil : refined[c] }
         let forced: [CGFloat?] = tokens.indices.map { c in c == 0 ? nil : (natural[c] ?? 1) }
         for penalties in [natural, forced] {
             guard let starts = balancedCuts(widths: widths, trailing: trailing, penalties: penalties,
@@ -802,8 +809,29 @@ public enum LyricsSegmenter {
         return starts.reversed()
     }
 
+    /// 一串单位里每个单位前面断开的代价(第 0 个恒为 nil):`cutPenalty`,中日文字与字之间再按 `wordBreaks` 细分。
+    /// 主行、译文、整行罗马音的切分共用。
+    static func cutPenalties(_ texts: [String], wordBreaks: WordBreaks?) -> [CGFloat?] {
+        var out: [CGFloat?] = []
+        var offset = 0
+        for (c, text) in texts.enumerated() {
+            if c > 0 {
+                let base = cutPenalty(after: texts[c - 1], before: text)
+                if base == cjkCutPenalty, let wordBreaks {
+                    out.append(wordBreaks.penalty(at: offset))
+                } else {
+                    out.append(base)
+                }
+            } else {
+                out.append(nil)
+            }
+            offset += text.utf16.count
+        }
+        return out
+    }
+
     /// 在两个词之间断开的代价;nil = 不能断(拉丁词、谚文词中间,下一段会以标点或行首禁则字开头,上一段会以
-    /// 左括号 / 左引号结尾)。
+    /// 左括号 / 左引号结尾,促音后面)。
     public static func cutPenalty(after previous: String, before next: String) -> CGFloat? {
         guard let last = previous.unicodeScalars.last, let first = next.unicodeScalars.first else { return 0 }
         // 禁则:标点、小假名、长音、右括号 / 右引号这些不放到下一段开头,左括号 / 左引号不留在上一段末尾。
@@ -815,6 +843,8 @@ public enum LyricsSegmenter {
         if CharacterSet.whitespacesAndNewlines.contains(last) || CharacterSet.whitespacesAndNewlines.contains(first) {
             return 0.05
         }
+        // 促音后面不断:断开的话前一段读音没有可双写的辅音,少写一个(「行っ」读成「i」)。
+        if last == "っ" || last == "ッ" { return nil }
         // 连字符后面能断,比空格差一点;谚文按空格分词,一个词的几个音节之间不断。两条都同悬浮歌词换行
         // (`WrapLayoutMath.breakOpportunities`)。
         if last == "-", CharacterSet.alphanumerics.contains(first) { return 0.1 }

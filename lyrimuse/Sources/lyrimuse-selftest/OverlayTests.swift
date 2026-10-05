@@ -812,7 +812,7 @@ func runOverlayTests() {
                     [[0], [1, 2], [3]], "WrapLayout: 一个词独占一行都放不下时退回逐项断")
         // 中文逐字、中英混排:汉字两侧都能断。
         expectEqual(WrapLayoutMath.breakOpportunities(texts: ["你", "好", "a", "b", "-", "c"]),
-                    [true, true, true, false, false, true], "WrapLayout: 汉字两侧能断,连字符后能断")
+                    [true, false, true, false, false, true], "WrapLayout: 汉字跟拉丁字母之间能断、一个词(「你好」)中间不断,连字符后能断")
 
         // 长音强调:一个词的几个 token 都绕整词中心放大,放大后首尾仍然相接(不互相压住)。
         do {
