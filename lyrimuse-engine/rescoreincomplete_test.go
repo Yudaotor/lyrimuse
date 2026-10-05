@@ -30,6 +30,7 @@ func setupRescoreTest(t *testing.T, sources []string, onFetch func(ctx context.C
 	_, hadAlias := artistAliasCache[rescoreTestArtist]
 	artistAliasCache[rescoreTestArtist] = ""
 	artistAliasMu.Unlock()
+	withCachedMBAliases(t, map[string][]string{rescoreTestArtist: nil})
 	t.Cleanup(func() {
 		enrichPlayingKey.Store(savedPlaying)
 		musixmatchResolve = savedResolve

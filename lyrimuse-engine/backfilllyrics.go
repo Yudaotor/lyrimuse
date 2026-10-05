@@ -28,6 +28,7 @@ func adoptBackfilledLyrics(e *enrichEntry, fresh enrichEntry) bool {
 	e.LyricsSourcesResponded = fresh.LyricsSourcesResponded
 	e.LyricsSourcesSkipped = fresh.LyricsSourcesSkipped
 	e.LyricsListedAlbum = fresh.LyricsListedAlbum
+	e.LyricsNativeVideoID = fresh.LyricsNativeVideoID
 	if len(fresh.LyricsSongwriters) > 0 {
 		e.LyricsSongwriters = fresh.LyricsSongwriters
 	}

@@ -472,6 +472,16 @@ func (r *lyricSourceRound) reachedAny() bool {
 	return len(r.reached) > 0
 }
 
+// reachedSource:这一轮 source 拿到过正常应答(口径同 reached)。
+func (r *lyricSourceRound) reachedSource(source string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.reached[source]
+}
+
 func (r *lyricSourceRound) skippedSources() []string {
 	if r == nil {
 		return nil

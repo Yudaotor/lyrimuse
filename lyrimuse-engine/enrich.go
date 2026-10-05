@@ -262,6 +262,9 @@ type enrichEntry struct {
 	// 最近一轮歌词评估拿去当专辑搜索、打分的 YouTube Music 登记专辑(播放器没报专辑时才有,见 lyricsSearchAlbum)。
 	// 跟 YouTubeMusicAlbum 对不上就带着登记专辑重搜一次,见 listedAlbumLyricsWorthRecheck。
 	LyricsListedAlbum string `json:"lyrics_listed_album,omitempty"`
+	// 最近一轮歌词评估按哪个 videoId 问了 Kaset 自家那个源(lyricfind 按 videoId 取那一版,MV 换成配对的音轨版本,见
+	// kasetNativeLyricsVideoID)。跟这首现在该问的对不上就带着 videoId 重搜一次,见 kasetLyricsWorthRecheck。
+	LyricsNativeVideoID string `json:"lyrics_native_video_id,omitempty"`
 	// 最近一次完整评估的决策记录(候选表+得分明细,只存元数据),见 decision.go。
 	// 只写不读:解析逻辑不许拿它当输入。
 	LyricsDecision *lyricsDecision `json:"lyrics_decision,omitempty"`
@@ -826,6 +829,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if spotifyLyricsWorthRecheck(e, bundleID, pinned, features().LyricsAutoUpgrade, spotifyLyricsAvail) &&
 			!enrichInflight[key] && spotifyLyricsRecheckOnce(key) {
 			// Musixmatch 当初没给出词,Spotify 缓存里现在有(见 spotifyLyricsWorthRecheck),让它进一次打分。
+			enrichInflight[key] = true
+			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
+		} else if kasetLyricsWorthRecheck(e, bundleID, kasetVideoID, kasetAudioVideoIDFor(kasetVideoID), pinned,
+			features().LyricsAutoUpgrade, lyricSourceEnabled("lyricfind")) && !enrichInflight[key] && kasetLyricsRecheckOnce(key) {
+			// 这份词最近一轮没按这一版的 videoId 问过 Kaset 自家那个源(见 kasetLyricsWorthRecheck)。
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
 		} else if needsLyricsRetry(e, wrongDuration, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
@@ -1547,10 +1555,12 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	//
 	// kkbox 不走这条:它的词只在用 KKBOX 放过之后才进缓存,出现在候选里时几乎总是已经带着同源加权打过分了,「没选它」
 	// 就是结论(它只有逐行,输给逐字源是常态),走这条会让每首用 KKBOX 放的歌都连着全源重搜到次数上限。它什么时候值得
-	// 重来一次由 kkboxLyricsWorthRecheck 管。
+	// 重来一次由 kkboxLyricsWorthRecheck 管。lyricfind 在条目记下按 videoId 问过它(LyricsNativeVideoID)之后同理:那一轮
+	// 已经带着同源加权比过,再搜结论不变;什么时候值得再按 videoId 问一次由 kasetLyricsWorthRecheck 管。
 	nativeMissedOut := hasNativeLyricSource() && !isNativeLyricSource(e.LyricsSource) &&
 		slices.ContainsFunc(e.LyricsSourcesSeen, func(s string) bool {
-			return isNativeLyricSource(s) && s != kkboxLocalLyricsSource && s != amazonLocalLyricsSource
+			return isNativeLyricSource(s) && s != kkboxLocalLyricsSource && s != amazonLocalLyricsSource &&
+				(s != lyricSourceLyricFind || e.LyricsNativeVideoID == "")
 		})
 	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
 	// 一次的理由,同样要越过下面"已经有逐字就不重试"那道闸。wrongDuration 由调用方
@@ -1741,6 +1751,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	e.LyricsSourcesSkipped = round.skippedSources()
 	if reached {
 		e.LyricsListedAlbum = listedAlbum
+		e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
 	}
 	if sw := songwritersFromScored(scored); len(sw) > 0 {
 		e.LyricsSongwriters = sw
@@ -2067,6 +2078,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	skipped := round.skippedSources()
 	if decidable {
 		e.LyricsListedAlbum = listedAlbum
+		e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
 		if len(seen) > 0 {
 			e.LyricsSourcesSeen = seen
 		}
@@ -2865,6 +2877,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 			if p, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
 				round.skippedSources(), queries.queries(), true, ""); picked != nil {
 				p.LyricsListedAlbum = listedAlbum
+				p.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
 				timer.mark("build")
 				shownMu.Lock()
 				shownFirst = picked.Source
@@ -2894,6 +2907,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	e, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
 		round.skippedSources(), queries.queries(), false, provisionalSource)
 	e.LyricsListedAlbum = listedAlbum
+	e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
 	// 首次解析这里拿不到 key(它由上层 trackEnrichment 用**未转简体**的原始标签拼),
 	// 用查询词拼一个等价形状 —— trace 是流水账,要的是"能对上是哪首歌",不参与任何查找。
 	traceLyricsDecision(artist+"|"+title+"|"+album, e.LyricsDecision)
