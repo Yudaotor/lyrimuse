@@ -79,11 +79,12 @@ func runSettingsSearchTests() {
         guard let structRange = settingsView.range(of: "struct AppearanceSettingsTab") else { return [] }
         return enumCaseNames(after: "private enum Section:", in: String(settingsView[structRange.upperBound...]))
     }()
-    // 前三段跟 LyricsSurface 一一对应;第四段「歌词窗口」不是一个形态(那扇窗没有常驻开关),
-    // 取值只在目录那边有一份常量。
+    // 前三段跟 LyricsSurface 一一对应;第四段「触控栏」、第五段「歌词窗口」都不是 LyricsSurface(触控栏不按
+    // 宽度断句,歌词窗口没有常驻开关),取值只在目录那边各有一份常量。
     expectEqual(appearanceSectionCases,
-                LyricsSurface.allCases.map(\.appearanceSectionRawValue) + [SettingsSearchCatalog.lyricsWindowSectionValue],
-                "设置搜索: 「歌词显示」页前三段跟 LyricsSurface 一一对应,第四段是歌词窗口")
+                LyricsSurface.allCases.map(\.appearanceSectionRawValue)
+                    + [SettingsSearchCatalog.touchBarSectionValue, SettingsSearchCatalog.lyricsWindowSectionValue],
+                "设置搜索: 「歌词显示」页前三段跟 LyricsSurface 一一对应,第四段是触控栏、第五段是歌词窗口")
     expectEqual(SettingsSearchCatalog.lyricsSectionDefault, lyricsSectionCases.first,
                 "设置搜索: 「歌词」页默认分段 = 枚举第一个 case")
     expectEqual(SettingsSearchCatalog.lastfmSectionDefault, lastfmSectionCases.first,
@@ -167,6 +168,7 @@ func runSettingsSearchTests() {
         "更新", "反馈与社区", "许可与版权", "诊断与数据",                 // 关于页卡头
         "自动更新", "已安装",                                         // 软件更新页:卡头与只读状态行
         "已改用自定义位置",                                           // 歌词文件夹的状态子行
+        "这台 Mac 没有触控栏",                                         // 歌词显示 › 触控栏:没有触控栏时的说明卡
         // 全量扫库那条"下次启动接着跑"的状态子行。它是 subtitle 不是 title —— 上面那条
         // 正则里 `title:` 会顺带匹配到 `subtitle:` 的尾巴,所以状态子行一律走白名单
         // (同「已改用自定义位置」)。
@@ -257,10 +259,10 @@ func runSettingsSearchTests() {
     expectEqual(SettingsSearchMatcher.ranked([("a", [String]())], query: "", title: { $0.0 }, secondary: { $0.1 }).count, 0,
                 "匹配: 空查询零结果")
 
-    // 目录层面的抽查:四个面的「字号」都能被同一个词搜到,且顺序跟目录一致。
+    // 目录层面的抽查:五个面的「字号」都能被同一个词搜到,且顺序跟目录一致。
     let fontSizeHits = SettingsSearchMatcher.ranked(entries, query: "字号", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
-    expectEqual(fontSizeHits.map(\.sectionValue), ["overlay", "notch", "menuBar", "lyricsWindow"],
-                "目录: 「字号」命中悬浮歌词、灵动岛、菜单栏、歌词窗口迷你尺寸四条,按目录顺序")
+    expectEqual(fontSizeHits.map(\.sectionValue), ["overlay", "notch", "menuBar", "touchBar", "lyricsWindow"],
+                "目录: 「字号」命中悬浮歌词、灵动岛、菜单栏、触控栏、歌词窗口迷你尺寸五条,按目录顺序")
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
     expectEqual(qqHits.map(\.titleKey).contains("播放器"), true, "目录: 搜「QQ」也能落到「播放器」卡")

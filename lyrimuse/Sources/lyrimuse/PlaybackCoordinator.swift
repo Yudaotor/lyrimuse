@@ -294,12 +294,20 @@ final class PlaybackCoordinator: ObservableObject {
         return Double(ms) / 1000
     }
 
-    /// 当前行会显示多久(秒)。窗口口径见 `LyricDisplayWindow`(最后一句用曲长兜底,时间戳异常
+    /// 当前行会显示多久(毫秒)。窗口口径见 `LyricDisplayWindow`(最后一句用曲长兜底,时间戳异常
     /// 返回 nil,调用方拿它做除数)。
-    var currentLineDwellSeconds: Double? {
+    var currentLineDwellMs: Int? {
         LyricDisplayWindow.of(index: currentLineIndex, starts: allLines.lazy.map(\.timeMs),
-                              trackDurationMs: currentDurationMs)?
-            .dwellMs.map { Double($0) / 1000 }
+                              trackDurationMs: currentDurationMs)?.dwellMs
+    }
+
+    /// 同 `currentLineDwellMs`,单位秒。
+    var currentLineDwellSeconds: Double? { currentLineDwellMs.map { Double($0) / 1000 } }
+
+    /// 歌词时间轴上的此刻(毫秒):锚点外推 ?? 暂停冻结的位置,再叠歌词时间轴偏移。悬浮歌词和触控栏的
+    /// 图层歌词行装动画时都读它。只给歌词用:进度条、播放位置不叠这个偏移,别拿它。
+    func lyricsTimelineMs(now: Date = Date()) -> Int {
+        (anchor?.extrapolatedPositionMs(now: now) ?? pausedPositionMs ?? 0) + currentLyricsOffsetMs
     }
 
     private var cancellables: [AnyCancellable] = []

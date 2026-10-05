@@ -4032,29 +4032,6 @@
         }
       }
     },
-    "悬浮歌词、灵动岛、菜单栏可同时开启，歌词窗口随用随开" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Floating Lyrics, Notch and Menu Bar can run together; open the Lyrics Window when needed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "悬浮歌词、灵动岛、菜单栏可同时开启，歌词窗口随用随开"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "浮動歌詞、動態島、選單列可同時開啟，歌詞視窗隨用隨開"
-          }
-        }
-      }
-    },
     "三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -37338,6 +37315,282 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "YouTube Music 的第三方 Mac 用戶端"
+          }
+        }
+      }
+    },
+    "触控栏歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch Bar Lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "触控栏歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "觸控列歌詞"
+          }
+        }
+      }
+    },
+    "功能栏里会出现 Lyrimuse 图标，轻点展开歌词；仅限带触控栏的 Mac" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics. Requires a Mac with Touch Bar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能栏里会出现 Lyrimuse 图标，轻点展开歌词；仅限带触控栏的 Mac"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能列中會出現 Lyrimuse 圖像，點一下即可展開歌詞；僅限配備觸控列的 Mac"
+          }
+        }
+      }
+    },
+    "触控栏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch Bar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "触控栏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "觸控列"
+          }
+        }
+      }
+    },
+    "悬浮歌词、灵动岛、菜单栏、触控栏可同时开，歌词窗口随用随开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬浮歌词、灵动岛、菜单栏、触控栏可同时开，歌词窗口随用随开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浮動歌詞、動態島、選單列、觸控列可同時開，歌詞視窗隨用隨開"
+          }
+        }
+      }
+    },
+    "这台 Mac 的系统里找不到触控栏的系统接口，打开也不会生效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Mac's system doesn't provide the Touch Bar interfaces this needs, so turning it on has no effect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 的系统里找不到触控栏的系统接口，打开也不会生效"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這台 Mac 的系統裡找不到觸控列的系統介面，打開也不會生效"
+          }
+        }
+      }
+    },
+    "歌词取封面的主色，取不到时用白色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics use the cover's main color, or white when there isn't one"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词取封面的主色，取不到时用白色"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞取封面的主色，取不到時用白色"
+          }
+        }
+      }
+    },
+    "这台 Mac 没有触控栏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Mac Doesn't Have a Touch Bar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 没有触控栏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這台 Mac 沒有觸控列"
+          }
+        }
+      }
+    },
+    "触控栏歌词只能在带触控栏的 MacBook Pro 上使用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "触控栏歌词只能在带触控栏的 MacBook Pro 上使用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "觸控列歌詞只能在配備觸控列的 MacBook Pro 上使用"
+          }
+        }
+      }
+    },
+    "主歌词下方多一行（两行 14pt / 11pt，「字号」不生效）。译文和读音显示当前句，「下一句」显示接下来那句；开着副行时主行不再提前切到下一句。副行放不下时，跟着这一句的时长横向滚动。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a second line under the lyric (14pt / 11pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. When the second line doesn't fit, it scrolls across over the line's duration."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主歌词下方多一行（两行 14pt / 11pt，「字号」不生效）。译文和读音显示当前句，「下一句」显示接下来那句；开着副行时主行不再提前切到下一句。副行放不下时，跟着这一句的时长横向滚动。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主歌詞下方多一行（兩行 14pt / 11pt，「字級」不生效）。譯文和讀音顯示目前這句，「下一句」顯示接下來那句；開著副行時主行不再提前切到下一句。副行放不下時，跟著這一句的時長橫向捲動。"
+          }
+        }
+      }
+    },
+    "展开时隐藏功能栏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Control Strip While Expanded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展开时隐藏功能栏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展開時隱藏功能列"
+          }
+        }
+      }
+    },
+    "歌词占满整条触控栏；要用亮度、音量等系统按键时，先点左端的 ✕ 收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics fill the whole Touch Bar. To use brightness, volume and other system buttons, tap ✕ on the left to collapse first."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词占满整条触控栏；要用亮度、音量等系统按键时，先点左端的 ✕ 收起"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞佔滿整條觸控列；要用亮度、音量等系統按鍵時，先按一下左端的 ✕ 收起"
+          }
+        }
+      }
+    },
+    "上一首、播放/暂停、下一首，旁边那颗设置键打开这一页" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous, Play/Pause and Next, plus a settings button that opens this page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一首、播放/暂停、下一首，旁边那颗设置键打开这一页"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一首、播放/暫停、下一首，旁邊那顆設定鍵打開這一頁"
           }
         }
       }

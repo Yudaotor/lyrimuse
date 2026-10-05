@@ -345,6 +345,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 在碰 NotchLyricsWindowController.shared 之前就 return(碰一下就会凭空建出窗口,
         // 见那个类文件头的不变量)。
         NotchMirrorManager.start()
+        // 触控栏歌词(默认关,设置 › 歌词显示 › 触控栏)。开着就把图标放进功能栏。
+        TouchBarLyricsController.shared.start()
         // PlaybackCoordinator.shared.start() / MenuBarStatusItem.shared.start() 挪到上面
         // BrowserAutomationPermission.manuallyAddedFamilies 那一行之后了(
         // 见那边的注释)——状态栏项的创建时机要尽量靠前。

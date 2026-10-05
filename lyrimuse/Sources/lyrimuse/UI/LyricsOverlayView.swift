@@ -254,14 +254,8 @@ private final class OverlayPlayback: ObservableObject {
                 .sink { [weak self] in self?.cardAvailableWidth = $0 },
             s.$overlayNSFonts.removeDuplicates().sink { [weak self] in self?.overlayNSFonts = $0 },
             Publishers.CombineLatest3(p.$anchor, p.$pausedPositionMs, p.$currentLyricsOffsetMs)
-                .map { anchor, paused, offset -> Int in
-                    var h = Hasher()
-                    h.combine(anchor?.fetchedAt)
-                    h.combine(anchor?.progressMs)
-                    h.combine(anchor?.rate)
-                    h.combine(paused)
-                    h.combine(offset)
-                    return h.finalize()
+                .map { anchor, paused, offset in
+                    LyricsTimingEpoch.of(anchor: anchor, pausedPositionMs: paused, offsetMs: offset)
                 }
                 .removeDuplicates()
                 .sink { [weak self] in self?.timingEpoch = $0 },
@@ -1040,11 +1034,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
 
     /// 图层行读的播放位置:跟逐字染色那条 TimelineView 逐字节一份 —— 锚点外推 ?? 暂停冻结位置,
-    /// 再叠歌词时间轴偏移。
+    /// 再叠歌词时间轴偏移(`PlaybackCoordinator.lyricsTimelineMs`,触控栏读的也是它)。
     private static func lyricsNowMs() -> Int {
-        (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: Date())
-            ?? PlaybackCoordinator.shared.pausedPositionMs ?? 0)
-            + PlaybackCoordinator.shared.currentLyricsOffsetMs
+        PlaybackCoordinator.shared.lyricsTimelineMs()
     }
 
     /// 这一帧各行怎么排(显示什么、动不动、怎么动)。判据全在 Core 的 `OverlayRowPlan`,这里只喂输入;

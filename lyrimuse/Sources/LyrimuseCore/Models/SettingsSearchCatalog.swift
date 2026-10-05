@@ -94,6 +94,12 @@ public enum SettingsSearchCatalog {
     /// 前三段的取值来自 `LyricsSurface`,这一段没有对应的形态,所以单独在这里定义一份。
     public static let lyricsWindowSectionValue = "lyricsWindow"
 
+    /// 「歌词显示」页「触控栏」那一段的分段取值(`AppearanceSettingsTab.Section.touchBar`)。跟歌词窗口一样
+    /// 不是一个 `LyricsSurface`(见 `touchBar(_:sub:kw:)`),单独定义一份。
+    public static let touchBarSectionValue = "touchBar"
+    /// 那一段总开关的标题。没有触控栏的 Mac 上设置搜索只留这一条(落到「这台 Mac 没有触控栏」那张说明卡)。
+    public static let touchBarToggleTitleKey = "触控栏歌词"
+
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这两个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。
     public static let brandPathComponents: Set<String> = ["ListenBrainz", "Last.fm"]
@@ -146,6 +152,17 @@ public enum SettingsSearchCatalog {
                             sectionValue: lyricsWindowSectionValue,
                             titleKey: title, subtitleKey: sub, keywords: kw,
                             pathKeys: ["歌词显示", "歌词窗口"] + (group.map { [$0] } ?? []))
+    }
+
+    /// 「歌词显示 › 触控栏」那一段。跟 `lyricsWindow` 同理不是一个 `LyricsSurface`:触控栏有常驻开关,但歌词
+    /// 取不按宽度断句的那一份,不进那个枚举的断句预算和菜单栏面板磁贴。这一段没有抽屉。
+    private static func touchBar(_ title: String, sub: String? = nil, kw: [String] = [],
+                                 group: String? = nil) -> SettingsSearchEntry {
+        SettingsSearchEntry(destination: .tab("appearance"),
+                            sectionKey: LyricsSurface.appearanceSectionStorageKey,
+                            sectionValue: touchBarSectionValue,
+                            titleKey: title, subtitleKey: sub, keywords: kw,
+                            pathKeys: ["歌词显示", "触控栏"] + (group.map { [$0] } ?? []))
     }
 
     private static func shortcut(_ title: String, sub: String? = nil, kw: [String] = []) -> SettingsSearchEntry {
@@ -305,6 +322,19 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "悬停显示播放控制", kw: ["悬停", "播放控制", "鼠标"], group: "行为"),
         surface(.menuBar, "无歌词时显示歌名", kw: ["歌名", "兜底", "没有歌词"], group: "行为"),
         surface(.menuBar, "恢复默认", sub: "不含宽度和总开关", kw: ["重置"]),
+
+        // ---- 歌词显示 › 触控栏 ----
+        touchBar(touchBarToggleTitleKey, kw: ["Touch Bar", "触控栏", "功能栏", "Control Strip", "开关"]),
+        touchBar("卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "外观"),
+        touchBar("跟随封面", sub: "歌词取封面的主色，取不到时用白色", kw: ["颜色", "主色", "封面颜色"], group: "外观"),
+        touchBar("字号", kw: ["大小", "font size"], group: "外观"),
+        touchBar("显示封面", kw: ["封面缩略图", "专辑图", "位置", "左边", "右边"], group: "布局"),
+        touchBar("显示播放控制", sub: "上一首、播放/暂停、下一首，旁边那颗设置键打开这一页",
+                 kw: ["播放", "暂停", "上一首", "下一首", "三键", "设置", "位置", "左边", "右边"], group: "布局"),
+        touchBar("对齐方式", kw: ["左对齐", "居中", "右对齐", "自动", "靠左", "靠右", "对唱"], group: "布局"),
+        touchBar("副行", kw: ["下一句", "译文", "读音", "罗马音", "两行", "双行"], group: "布局"),
+        touchBar("展开时隐藏功能栏", sub: "歌词占满整条触控栏；要用亮度、音量等系统按键时，先点左端的 ✕ 收起",
+                 kw: ["功能栏", "Control Strip", "全宽", "占满", "亮度", "音量"], group: "布局"),
 
         // ---- 歌词显示 › 歌词窗口 ----
         // 预览下面那张卡「歌词窗口 [打开]」。搜「打开歌词窗口」另有快捷键那一条,各跳各的。

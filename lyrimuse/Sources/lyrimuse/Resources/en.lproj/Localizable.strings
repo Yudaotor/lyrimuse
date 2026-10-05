@@ -174,6 +174,7 @@
 "上一轮还没跑完，稍后会自动接着跑" = "The previous run hasn't finished; it resumes automatically";
 "上一页" = "Previous";
 "上一首" = "Previous Track";
+"上一首、播放/暂停、下一首，旁边那颗设置键打开这一页" = "Previous, Play/Pause and Next, plus a settings button that opens this page";
 "上次保存：%@ · 歌词引擎已重启" = "Last saved: %@ · Lyrics engine restarted";
 "上次刷新没有成功，显示的是 %@ 的内容" = "Last refresh failed; showing content from %@";
 "上次刷新：%@" = "Last refreshed: %@";
@@ -224,6 +225,7 @@
 "两边都是现场版，但这个候选的专辑名指向另一场不同命名的演出（比如另一次巡演）——时间轴是那场演出的，套在这次播放的录音上会对不上" = "Both are live versions, but this candidate’s album name points to a differently named performance (e.g. a different tour) — its timing track belongs to that show and won’t line up with this recording.";
 "两首探测曲都没有响应，这个源目前可能不可用" = "Neither probe track got a response — this source may currently be unavailable";
 "中文" = "Chinese";
+"主歌词下方多一行（两行 14pt / 11pt，「字号」不生效）。译文和读音显示当前句，「下一句」显示接下来那句；开着副行时主行不再提前切到下一句。副行放不下时，跟着这一句的时长横向滚动。" = "Adds a second line under the lyric (14pt / 11pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. When the second line doesn't fit, it scrolls across over the line's duration.";
 "主歌词下方多一行，高度不变（两行 10pt / 9pt，「字号」不生效）。译文和读音显示当前句，「下一句」显示接下来那句；开着副行时主行不再提前切到下一句。副行不滚动，装不下时尾部渐隐。" = "Adds a second line under the lyric without changing the item's height (10pt / 9pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. The second line never scrolls — its tail fades when it doesn't fit.";
 "主歌词下方多显示一行，行高不变。译文和读音显示的是当前句，下一句显示接下来那句；选「下一句」时展开区不再重复显示下一句预览" = "Adds one more line under the main lyric without changing the row height. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview";
 "主行的笔画粗细；副行和展开时的下一句预览比它细一档" = "Stroke weight of the main line; the secondary line and the expanded next-line preview are one step lighter";
@@ -391,6 +393,7 @@
 "前进" = "Forward";
 "剩余时长" = "Remaining";
 "副行" = "Second Line";
+"功能栏里会出现 Lyrimuse 图标，轻点展开歌词；仅限带触控栏的 Mac" = "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics. Requires a Mac with Touch Bar";
 "加入信任列表" = "Trust This App";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "加粗" = "Bold";
@@ -602,6 +605,7 @@
 "展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。" = "When expanded, shows four buttons to the right of the track info: search lyrics, show lyrics, settings, and turn off notch lyrics.";
 "展开时在歌词行上方多一块曲目信息，四项各自独立；全关则这一块不占位置。" = "When expanded, shows a track-info block above the lyric row. The four items are independent; turn them all off and the block takes no space.";
 "展开时在进度条上方显示下一句要唱的歌词。" = "Shows the next lyric line above the progress bar when expanded.";
+"展开时隐藏功能栏" = "Hide Control Strip While Expanded";
 "展开时预览下一句" = "Preview Next Line When Expanded";
 "左" = "Left";
 "左侧" = "Left";
@@ -743,7 +747,7 @@
 "悬停控制条" = "Controls on hover";
 "悬停显示播放控制" = "Show Controls on Hover";
 "悬浮歌词" = "Floating Lyrics";
-"悬浮歌词、灵动岛、菜单栏可同时开启，歌词窗口随用随开" = "Floating Lyrics, Notch and Menu Bar can run together; open the Lyrics Window when needed";
+"悬浮歌词、灵动岛、菜单栏、触控栏可同时开，歌词窗口随用随开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
 "悬浮歌词、灵动岛和菜单栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行" = "On Desktop Floating Lyrics, the Notch and the Menu Bar, lines too wide for one row are split into parts shown one after another, so no line wraps or scrolls; the Lyrics Window still shows one line at a time";
 "悬浮歌词、灵动岛和菜单栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；歌词窗口仍然一句一行" = "On Desktop Floating Lyrics, the Notch and the Menu Bar, runs of very short lines are shown as one line, only when the result fits on one row; the Lyrics Window still shows one line at a time";
 "悬浮歌词宽度" = "Overlay lyrics width";
@@ -1063,6 +1067,8 @@
 "歌词内容与 %@ 相同" = "Same lyrics and line timing as %@";
 "歌词内容跟其它来源高度一致（2 家以上 250 · 1 家 150），串版本的拿不到" = "Lyric text agrees with other sources (2+ sources 250 · one 150); wrong-version candidates can't earn this";
 "歌词列表" = "Lyric List";
+"歌词占满整条触控栏；要用亮度、音量等系统按键时，先点左端的 ✕ 收起" = "Lyrics fill the whole Touch Bar. To use brightness, volume and other system buttons, tap ✕ on the left to collapse first.";
+"歌词取封面的主色，取不到时用白色" = "Lyrics use the cover's main color, or white when there isn't one";
 "歌词已经跟上了" = "Lyrics are showing";
 "歌词布局" = "Lyrics Layout";
 "歌词库" = "Lyrics library";
@@ -1418,6 +1424,9 @@
 "解析本地记录文件失败" = "Couldn't read the lyrics cache — the file looks damaged";
 "解锁位置" = "Unlock Position";
 "解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' in Settings";
+"触控栏" = "Touch Bar";
+"触控栏歌词" = "Touch Bar Lyrics";
+"触控栏歌词只能在带触控栏的 MacBook Pro 上使用" = "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar";
 "认歌、找歌词和封面；只在本机运行，找歌词时只发送歌名、歌手这类曲目信息" = "Recognizes songs and finds lyrics and artwork. Runs only on this Mac; looking up lyrics sends nothing but track info such as title and artist";
 "让它跑起来" = "Get It Running";
 "记录的是手动修改之前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";
@@ -1564,6 +1573,8 @@
 "这台 Mac 上没装的播放器" = "Players not installed on this Mac";
 "这台 Mac 上没装这个播放器" = "This player isn't installed on this Mac";
 "这台 Mac 没有刘海，会显示在屏幕顶部正中" = "No notch on this Mac, so it sits at the top center";
+"这台 Mac 没有触控栏" = "This Mac Doesn't Have a Touch Bar";
+"这台 Mac 的系统里找不到触控栏的系统接口，打开也不会生效" = "This Mac's system doesn't provide the Touch Bar interfaces this needs, so turning it on has no effect";
 "这台电脑上没有找到默认列出的浏览器（Safari、Chrome、Edge）。别的浏览器可以用下面的「从应用程序中选择…」自己挑一个" = "None of the browsers listed by default (Safari, Chrome, Edge) were found on this Mac. For any other browser, use “Choose from Applications…” below to pick it yourself";
 "这就是 Lyrimuse 自己。" = "That’s Lyrimuse itself.";
 "这是上限：窗口够大时按这个值，拖小了字会跟着变小以免挤出窗外" = "This is a ceiling: the text uses this size when the window is large enough, and shrinks with the window so it never overflows";

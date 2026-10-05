@@ -210,6 +210,17 @@ final class AppSettings: ObservableObject {
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let overlayLineOverflow = "np:overlayLineOverflow"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
+        static let showLyricsInTouchBar = "np:showLyricsInTouchBar"
+        static let touchBarLyricsKaraoke = "np:touchBarLyricsKaraoke"
+        static let touchBarLyricsFollowsCover = "np:touchBarLyricsFollowsCover"
+        static let touchBarLyricsFontSize = "np:touchBarLyricsFontSize"
+        static let touchBarShowsArtwork = "np:touchBarShowsArtwork"
+        static let touchBarShowsControls = "np:touchBarShowsControls"
+        static let touchBarSecondaryLine = "np:touchBarSecondaryLine"
+        static let touchBarArtworkSide = "np:touchBarArtworkSide"
+        static let touchBarControlsSide = "np:touchBarControlsSide"
+        static let touchBarLyricsAlignment = "np:touchBarLyricsAlignment"
+        static let touchBarHidesControlStrip = "np:touchBarHidesControlStrip"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
         static let menuBarLyricsWidthMode = "np:menuBarLyricsWidthMode"
@@ -712,6 +723,48 @@ final class AppSettings: ObservableObject {
     // 面积明显变大——不应该在谁都没主动选择的情况下就改变状态栏原有的观感。
     @Published var showLyricsInMenuBar: Bool {
         didSet { defaults.set(showLyricsInMenuBar, forKey: Keys.showLyricsInMenuBar) }
+    }
+    // 触控栏歌词:功能栏里那枚图标 + 轻点展开的整条歌词(TouchBarLyricsController)。默认关,跟
+    // showLyricsInMenuBar 同一个道理:开了要多占功能栏一格。
+    @Published var showLyricsInTouchBar: Bool {
+        didSet { defaults.set(showLyricsInTouchBar, forKey: Keys.showLyricsInTouchBar) }
+    }
+    // 触控栏歌词那一段的外观与布局:卡拉OK效果、跟随封面、字号、显示封面 / 播放控制(连同各自的位置)、对齐方式、
+    // 副行、展开时隐藏功能栏(TouchBarLyricsController 订阅,改了当场生效)。字号存原值,越界由用的地方夹回 `TouchBarLyricsStyle.fontSizeRange`。
+    @Published var touchBarLyricsKaraoke: Bool {
+        didSet { defaults.set(touchBarLyricsKaraoke, forKey: Keys.touchBarLyricsKaraoke) }
+    }
+    @Published var touchBarLyricsFollowsCover: Bool {
+        didSet { defaults.set(touchBarLyricsFollowsCover, forKey: Keys.touchBarLyricsFollowsCover) }
+    }
+    @Published var touchBarLyricsFontSize: Double {
+        didSet { defaults.set(touchBarLyricsFontSize, forKey: Keys.touchBarLyricsFontSize) }
+    }
+    @Published var touchBarShowsArtwork: Bool {
+        didSet { defaults.set(touchBarShowsArtwork, forKey: Keys.touchBarShowsArtwork) }
+    }
+    @Published var touchBarShowsControls: Bool {
+        didSet { defaults.set(touchBarShowsControls, forKey: Keys.touchBarShowsControls) }
+    }
+    /// 触控栏歌词的副行(跟灵动岛 / 菜单栏同一个四选一,各存各的键),默认不显示。开着时两行的字号由触控栏的高定
+    /// (`TouchBarLyricsStyle.twoRowMainFontSize` / `twoRowSecondaryFontSize`),`touchBarLyricsFontSize` 不生效。
+    @Published var touchBarSecondaryLine: LyricSecondaryLine {
+        didSet { defaults.set(touchBarSecondaryLine.rawValue, forKey: Keys.touchBarSecondaryLine) }
+    }
+    /// 触控栏展开态里封面、三键各自摆在歌词哪一边(Core `TouchBarSide`),默认都在左边(加这两项之前的排法)。
+    @Published var touchBarArtworkSide: TouchBarSide {
+        didSet { defaults.set(touchBarArtworkSide.rawValue, forKey: Keys.touchBarArtworkSide) }
+    }
+    @Published var touchBarControlsSide: TouchBarSide {
+        didSet { defaults.set(touchBarControlsSide.rawValue, forKey: Keys.touchBarControlsSide) }
+    }
+    /// 触控栏歌词装得下的短句靠哪边:同灵动岛那四档(含按对唱声部走的「自动」),默认左对齐,即加这一项之前的样子。
+    @Published var touchBarLyricsAlignment: LyricsRestingAlignment {
+        didSet { defaults.set(touchBarLyricsAlignment.rawValue, forKey: Keys.touchBarLyricsAlignment) }
+    }
+    /// 展开时隐藏功能栏:展开条占满整条触控栏,左端换成 App 自己的收起键。默认关:展开期间够不着系统的亮度、音量。
+    @Published var touchBarHidesControlStrip: Bool {
+        didSet { defaults.set(touchBarHidesControlStrip, forKey: Keys.touchBarHidesControlStrip) }
     }
     // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——做成可调的
     // 上限而不是写死一个数字。
@@ -1795,6 +1848,22 @@ final class AppSettings: ObservableObject {
         overlayLineOverflow = defaults.string(forKey: Keys.overlayLineOverflow)
             .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
+        showLyricsInTouchBar = (defaults.object(forKey: Keys.showLyricsInTouchBar) as? Bool) ?? false
+        touchBarLyricsKaraoke = (defaults.object(forKey: Keys.touchBarLyricsKaraoke) as? Bool) ?? true
+        touchBarLyricsFollowsCover = (defaults.object(forKey: Keys.touchBarLyricsFollowsCover) as? Bool) ?? false
+        touchBarLyricsFontSize = (defaults.object(forKey: Keys.touchBarLyricsFontSize) as? Double)
+            ?? TouchBarLyricsStyle.defaultFontSize
+        touchBarShowsArtwork = (defaults.object(forKey: Keys.touchBarShowsArtwork) as? Bool) ?? true
+        touchBarShowsControls = (defaults.object(forKey: Keys.touchBarShowsControls) as? Bool) ?? true
+        touchBarSecondaryLine = defaults.string(forKey: Keys.touchBarSecondaryLine)
+            .flatMap(LyricSecondaryLine.init(rawValue:)) ?? .off
+        touchBarArtworkSide = defaults.string(forKey: Keys.touchBarArtworkSide)
+            .flatMap(TouchBarSide.init(rawValue:)) ?? .leading
+        touchBarControlsSide = defaults.string(forKey: Keys.touchBarControlsSide)
+            .flatMap(TouchBarSide.init(rawValue:)) ?? .leading
+        touchBarLyricsAlignment = defaults.string(forKey: Keys.touchBarLyricsAlignment)
+            .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? .leading
+        touchBarHidesControlStrip = (defaults.object(forKey: Keys.touchBarHidesControlStrip) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         // 默认 250pt:大约中文 19 个字、英文 37 个字,菜单栏上占一小条,不至于把右边
         // 其它 App 的图标挤走。从 200 改上来 —— 用户把自己在用的这一版菜单栏

@@ -58,6 +58,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "spotify-native", summary: "Spotify 原生客户端本机数据:图床换档 / 通知广告分类 / 位置探针输出解析", run: runSpotifyNativeTests),
     TestGroup(name: "spotify-web-probe", summary: "网页版 Spotify:浏览器位置探针输出的封面地址段", run: runSpotifyWebProbeReadingTests),
     TestGroup(name: "menu-bar", summary: "菜单栏跑马灯 / 逐字染色 / 进度图标", run: runMenuBarTests),
+    TestGroup(name: "touch-bar", summary: "触控栏歌词:显示哪一档 / 私有入口收口 / 接线", run: runTouchBarTests),
     TestGroup(name: "overlay", summary: "桌面悬浮歌词 / 歌词窗口的几何与命中测试", run: runOverlayTests),
     TestGroup(name: "lyrics-window", summary: "歌词窗口:空状态优先级 / 字号 / 景深 / 迷你两行 / 窗口位置 / 文字色调 / vibrancy / Last.fm 喜欢 / 进度外推", run: runLyricsWindowTests),
     TestGroup(name: "notch", summary: "灵动岛:展开区 / 音浪包络", run: runNotchTests),
