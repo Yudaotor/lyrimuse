@@ -2167,6 +2167,85 @@ func runLastfmTests() {
                     "右键链接: QQ 音乐没开着时先启动好再发链接")
     }
 
+    // ---- 本机缓存的派生索引在后台解码时建好(12 章决策 45) ----
+    do {
+        typealias R = EnrichCacheReader
+        func entry(_ json: String) -> EnrichCacheEntry {
+            try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8))
+        }
+        // (key, 封面, 封面所属专辑, 其余字段):条目和期望值都从这一份拼
+        let spec: [(key: String, cover: String?, album: String?, extra: String)] = [
+            ("陈柏宇|你瞒我瞒|Quinquennium (新曲+精选)", "https://cover/a", nil, "\"lyrics\":\"x\""),
+            ("陈柏宇|一事无成|Quinquennium (新曲+精选)", "https://cover/b", "Quinquennium (新曲+精选)", "\"lyrics\":\"x\""),
+            ("蔡徐坤 & 某某|Jasmine|KUN", "https://cover/kun", "KUN", "\"lyrics\":\"x\""),
+            ("K/DA|POP/STARS|POP/STARS", "https://cover/kda", nil, "\"lyrics\":\"x\",\"lyrics_score\":90"),
+            ("K/DA|POP / STARS|POP/STARS", nil, nil, "\"lyrics\":\"x\",\"lyrics_score\":95"),
+            ("无封面|一首歌|", nil, nil, "\"lyrics\":\"x\""),
+        ]
+        var all: [String: EnrichCacheEntry] = [:]
+        var covers: [String: String] = [:]
+        var rows: [(key: String, cover: String, coverAlbum: String?)] = []
+        for s in spec {
+            var fields = [s.extra]
+            if let c = s.cover {
+                fields.append("\"cover_url\":\"\(c)\"")
+                covers[s.key] = c
+                rows.append((s.key, c, s.album))
+            }
+            if let a = s.album { fields.append("\"cover_album\":\"\(a)\"") }
+            all[s.key] = entry("{" + fields.joined(separator: ",") + "}")
+        }
+        let d = R.buildDerivedIndexes(all)
+        expectEqual(d.covers, R.coverIndexByArtistTitle(covers), "派生索引: 按歌名查封面那份跟现建的一样")
+        expectEqual(d.albumCovers, R.albumCoverIndex(rows), "派生索引: 按专辑查封面那份跟现建的一样")
+        var loose: [String: String] = [:]
+        for (k, e) in all {
+            let lk = EnrichCacheKeys.looseKey(k)
+            if let cur = loose[lk], let ce = all[cur], !R.betterEntry(e, ce, k, cur) { continue }
+            loose[lk] = k
+        }
+        expectEqual(d.loose, loose, "派生索引: 宽松匹配那份每组挑的代表跟引擎同序")
+        let again = R.buildDerivedIndexes(all, looseKeyMemo: d.looseKeyMemo, titleCoverKeyMemo: d.titleCoverKeyMemo,
+                                          albumCoverKeyMemo: d.albumCoverKeyMemo, nameLooseKeyMemo: d.nameLooseKeyMemo)
+        expectEqual(again.loose == d.loose && again.covers == d.covers && again.albumCovers == d.albumCovers, true,
+                    "派生索引: 带着上一版的记忆表再建,结果一样")
+    }
+    do {
+        let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reader = (try? String(contentsOf: base.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(reader.isEmpty, false, "派生索引(契约): 读到源码")
+        expectEqual(reader.contains("// 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes)\n            let derived = decoded.map {"),
+                    true, "派生索引(契约): 后台解码那一路顺带建索引")
+        expectEqual(reader.contains("adopt(entries: decoded, mtime: mtime, fromIndex: fromIndex, notify: true, derived: derived)"), true,
+                    "派生索引(契约): 采纳新内容时连同建好的索引一起换上")
+        expectEqual(reader.contains("cachedCoverIndex = derived?.covers\n        cachedAlbumCoverIndex = derived?.albumCovers\n        cachedLooseIndex = derived?.loose"),
+                    true, "派生索引(契约): 换上的就是后台建的那三份,不在主线程作废重建")
+    }
+
+    // ---- 本机封面兜底只在有面板在屏上时跟着缓存重算(契约) ----
+    // 每行一次缓存查询,缓存一推进还要重建索引,一轮几十毫秒主线程;5 秒的定时器一看到缓存推进就跑一轮,跟歌词滚动抢。
+    do {
+        let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let service = (try? String(contentsOf: base.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"),
+                                   encoding: .utf8)) ?? ""
+        let recent = (try? String(contentsOf: base.appendingPathComponent("lyrimuse/UI/RecentListensPanel.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(service.isEmpty || recent.isEmpty, false, "本机封面: 读到源码")
+        expectEqual(service.contains("if chartAppLinksOnScreen || !localCoversConsumers.isEmpty { refreshLocalCovers() }\n        if chartAppLinksOnScreen { refreshChartLocalCovers() }"),
+                    true, "本机封面: 缓存推进时只在有面板在屏上才重算")
+        expectEqual(service.contains("guard localCoversConsumers.insert(id).inserted else { return }\n            refreshLocalCovers()"),
+                    true, "本机封面: 最近听过面板露出来那一刻补算")
+        expectEqual(service.contains("refreshChartAppLinks()\n            refreshLocalCovers()\n            refreshChartLocalCovers()"),
+                    true, "本机封面: 统计区露出来那一刻两份都补算")
+        expectEqual(service.contains("先补齐,免得本机给得出封面的行也去发 getinfo。行和缓存都没变时只是一次比较。\n        refreshLocalCovers()"),
+                    true, "本机封面: 判「封面还缺」之前先补齐 —— 不然本机给得出封面的行也去发 getinfo,白烧限速额度")
+        expectEqual(recent.contains(".onAppear { stats.setLocalCoversConsumer(coverConsumerID, onScreen: true) }"), true,
+                    "本机封面: 最近听过面板挂上时报给服务")
+        expectEqual(recent.contains("stats.setLocalCoversConsumer(coverConsumerID, onScreen: false)"), true,
+                    "本机封面: 面板卸载时报不在屏上")
+    }
+
     // ---- Last.fm 账号连没连 Spotify(spotify_expiry_estimate,见 LastfmSpotifyLink)----
     do {
         func user(_ json: String) -> [String: Any] {

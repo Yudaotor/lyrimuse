@@ -4540,9 +4540,10 @@ func runSourceContractTests() {
                     "Last.fm 榜单: 头像按 10 个名字一批、几批依次交给引擎")
         expectEqual(stats.contains("resolveTrackCovers(visible, cred: cred, priority: .background)"), true,
                     "Last.fm 榜单: 显示更多补封面走后台档")
-        // 榜单封面:Last.fm 没图时退到本机缓存;缓存变了跟着重算。
-        expectEqual(stats.contains("refreshLocalCovers()\n        refreshChartLocalCovers()"), true,
-                    "Last.fm 榜单封面: 本机缓存变了也重算榜单的本机封面")
+        // 榜单封面:Last.fm 没图时退到本机缓存;缓存变了、统计区在屏上时跟着重算,统计区露出来那一刻补算。
+        expectEqual(stats.contains("if chartAppLinksOnScreen { refreshChartLocalCovers() }")
+                    && stats.contains("refreshLocalCovers()\n            refreshChartLocalCovers()"), true,
+                    "Last.fm 榜单封面: 本机缓存变了也重算榜单的本机封面(统计区在屏上时;露出来那一刻补算)")
         expectEqual(code("LastfmStatsSection.swift").contains("?? stats.chartLocalCover(kind: kind, entry: e)"), true,
                     "Last.fm 榜单封面: 缩略图在 Last.fm 之后退到本机封面")
         let catalog = (try? String(contentsOfFile: appDir.deletingLastPathComponent()

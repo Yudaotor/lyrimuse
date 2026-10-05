@@ -781,13 +781,31 @@ final class LastfmStatsService: ObservableObject {
                                       artistAliases: [String: String])?
     /// 统计区此刻在不在屏上(挂着、且设置窗口看得见),由 LastfmStatsSection 报上来。右键菜单只在那里出现,
     /// 不在屏上时 refreshChartAppLinks 不算:整份建链接索引要几百毫秒主线程,而本机缓存播放中几秒就变一次,
-    /// 设置是 `Settings {}` 场景、关窗不卸载视图,不拦的话关着窗也每变一次缓存重建一次。
+    /// 设置是 `Settings {}` 场景、关窗不卸载视图,不拦的话关着窗也每变一次缓存重建一次。榜单的本机封面兜底
+    /// (refreshChartLocalCovers)只在统计区显示,跟着同一个判据。
     private var chartAppLinksOnScreen = false
 
     func setChartAppLinksOnScreen(_ onScreen: Bool) {
         guard onScreen != chartAppLinksOnScreen else { return }
         chartAppLinksOnScreen = onScreen
-        if onScreen { refreshChartAppLinks() }
+        if onScreen {
+            refreshChartAppLinks()
+            refreshLocalCovers()
+            refreshChartLocalCovers()
+        }
+    }
+
+    /// 此刻挂着的「最近听过」面板(歌词窗口的播放记录、停播页右列)。最近记录的本机封面兜底只给它们和统计区看,
+    /// 都不在屏上时本机缓存推进不重算,露出来那一刻补算(见 refreshLocalCoversIfCacheChanged)。
+    private var localCoversConsumers = Set<UUID>()
+
+    func setLocalCoversConsumer(_ id: UUID, onScreen: Bool) {
+        if onScreen {
+            guard localCoversConsumers.insert(id).inserted else { return }
+            refreshLocalCovers()
+        } else {
+            localCoversConsumers.remove(id)
+        }
     }
     /// 统计页实时行那首歌(不一定在 recent 里:本机刚开播、Last.fm 还没确认时没有 nowplaying 条目)。
     /// refreshChartAppLinks 把它跟最近记录一起算进 chartAppLinks。
@@ -3124,8 +3142,10 @@ final class LastfmStatsService: ObservableObject {
         let stamp = EnrichCacheReader.decodedContentVersion
         guard stamp != localCoversStamp else { return }
         localCoversStamp = stamp
-        refreshLocalCovers()
-        refreshChartLocalCovers()
+        // 两份本机封面兜底只给面板看:每行一次缓存查询,缓存一推进还要重建索引,一轮几十毫秒主线程,跟歌词滚动抢。
+        // 没有面板在屏上时不算,露出来那一刻补算(setLocalCoversConsumer / setChartAppLinksOnScreen,12 章决策 40)。
+        if chartAppLinksOnScreen || !localCoversConsumers.isEmpty { refreshLocalCovers() }
+        if chartAppLinksOnScreen { refreshChartLocalCovers() }
         // 同一份缓存还派生第三层歌名别名:引擎刚给某首英文名的歌解析出跟
         // 中文名同一个网易云 id,这一拍就该并族、次数标过期,不等下次启动。写法索引没加载时
         // 不动 —— loadTitleForms 自己会在建族前灌一次。
@@ -3721,6 +3741,9 @@ final class LastfmStatsService: ObservableObject {
     ///   预取页提前把这一批请求排上,不跟前台交互抢限速队列的优先位置。
     private func resolvePlayCounts(for rows: [RecentTrack], priority: LastfmRateLimiter.Priority = .interactive) {
         guard let cred = credentials else { return }
+        // 下面判「封面还缺」要看本机封面兜底:面板都不在屏上时它没跟着缓存重算(见 refreshLocalCoversIfCacheChanged),
+        // 先补齐,免得本机给得出封面的行也去发 getinfo。行和缓存都没变时只是一次比较。
+        refreshLocalCovers()
         var seen = Set<String>()
         let now = Date()
         let missing = rows.compactMap { r -> (key: String, artist: String, title: String,

@@ -679,7 +679,7 @@ public enum EnrichCacheReader {
     }
 
     /// 引擎 `betterEnrichEntry` 的镜像,两边必须同序:a 是否比 b 更该当这一组的代表。
-    public static func betterEntry(_ a: EnrichCacheEntry, _ b: EnrichCacheEntry, _ aKey: String, _ bKey: String) -> Bool {
+    public nonisolated static func betterEntry(_ a: EnrichCacheEntry, _ b: EnrichCacheEntry, _ aKey: String, _ bKey: String) -> Bool {
         let aManual = a.manualLyrics ?? false, bManual = b.manualLyrics ?? false
         if aManual != bManual { return aManual }
         let aHas = !(a.lyrics ?? "").isEmpty, bHas = !(b.lyrics ?? "").isEmpty
@@ -951,6 +951,82 @@ public enum EnrichCacheReader {
     public nonisolated static func artistTitleKey(artist: String, title: String) -> String {
         artist.trimmingCharacters(in: .whitespaces).lowercased()
             + "|" + EnrichCacheKeys.normalizedTitle(title).trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    /// 后台解码顺带建好的三份派生索引(宽松匹配、按歌名查封面、按专辑查封面),连同建的时候用到的记忆表。
+    /// 主线程接过来只换指针;按需在主线程建的话,缓存每换一版第一次查询就要停几十毫秒(12 章决策 45)。
+    public struct DerivedIndexes: Sendable {
+        public let loose: [String: String]
+        public let covers: [String: String]
+        public let albumCovers: [String: String]
+        public let looseKeyMemo: [String: String]
+        public let titleCoverKeyMemo: [String: CoverIndexKeys]
+        public let albumCoverKeyMemo: [String: CoverIndexKeys]
+        public let nameLooseKeyMemo: [String: String]
+    }
+
+    /// 从一份条目建出三份派生索引,结果跟主线程按需构建的三条路(looseIndex / coverByArtistTitle / albumCoverURL)
+    /// 逐条相同。纯函数,在后台跑;记忆表从主线程带进来、建完连同新算的一起带回去,修剪口径也同那三条路。
+    public nonisolated static func buildDerivedIndexes(_ all: [String: EnrichCacheEntry],
+                                                       looseKeyMemo: [String: String] = [:],
+                                                       titleCoverKeyMemo: [String: CoverIndexKeys] = [:],
+                                                       albumCoverKeyMemo: [String: CoverIndexKeys] = [:],
+                                                       nameLooseKeyMemo: [String: String] = [:]) -> DerivedIndexes {
+        var looseMemo = looseKeyMemo
+        var titleMemo = titleCoverKeyMemo
+        var albumMemo = albumCoverKeyMemo
+        var nameMemo = nameLooseKeyMemo
+        func looseKeyOf(_ key: String) -> String {
+            if let v = looseMemo[key] { return v }
+            let v = EnrichCacheKeys.looseKey(key)
+            looseMemo[key] = v
+            return v
+        }
+        func titleKeysOf(_ key: String) -> CoverIndexKeys? {
+            if let v = titleMemo[key] { return v }
+            guard let v = titleCoverKeys(key) else { return nil }
+            titleMemo[key] = v
+            return v
+        }
+        func albumKeysOf(_ key: String) -> CoverIndexKeys? {
+            if let v = albumMemo[key] { return v }
+            guard let v = albumCoverKeys(key) else { return nil }
+            albumMemo[key] = v
+            return v
+        }
+        func nameLooseKeyOf(_ name: String) -> String {
+            if let v = nameMemo[name] { return v }
+            if nameMemo.count > 50_000 { nameMemo.removeAll(keepingCapacity: true) }
+            let v = EnrichCacheKeys.looseKey(name)
+            nameMemo[name] = v
+            return v
+        }
+        var loose: [String: String] = [:]
+        loose.reserveCapacity(all.count)
+        for (k, e) in all {
+            let lk = looseKeyOf(k)
+            if let existing = loose[lk], let current = all[existing] {
+                if betterEntry(e, current, k, existing) { loose[lk] = k }
+            } else {
+                loose[lk] = k
+            }
+        }
+        var covers: [String: String] = [:]
+        var rows: [(key: String, cover: String, coverAlbum: String?)] = []
+        for (key, entry) in all {
+            guard let cover = entry.coverURL, !cover.isEmpty else { continue }
+            covers[key] = cover
+            rows.append((key, cover, entry.coverAlbum))
+        }
+        let coverIndex = coverIndexByArtistTitle(covers, keys: titleKeysOf)
+        let albumIndex = albumCoverIndex(rows, keys: albumKeysOf, looseKey: nameLooseKeyOf)
+        let cap = all.count * 2 + 64
+        if looseMemo.count > cap { looseMemo = looseMemo.filter { all[$0.key] != nil } }
+        if titleMemo.count > cap { titleMemo = titleMemo.filter { all[$0.key] != nil } }
+        if albumMemo.count > cap { albumMemo = albumMemo.filter { all[$0.key] != nil } }
+        return DerivedIndexes(loose: loose, covers: coverIndex, albumCovers: albumIndex,
+                              looseKeyMemo: looseMemo, titleCoverKeyMemo: titleMemo,
+                              albumCoverKeyMemo: albumMemo, nameLooseKeyMemo: nameMemo)
     }
 
     /// 忽略专辑的封面索引。跟 cachedEntries 同寿命(mtime 一变就一起作废),不是每次查询
@@ -1306,10 +1382,16 @@ public enum EnrichCacheReader {
         inFlightGeneration = gen
         let url = source.url
         let fromIndex = source.isIndex
+        let memos = (loose: looseKeyMemo, title: titleCoverKeyMemo, album: albumCoverKeyMemo, name: nameLooseKeyMemo)
         Task.detached(priority: .utility) {
             let mtime = mtime(of: url)
             let decoded: [String: EnrichCacheEntry]? = (try? Data(contentsOf: url))
                 .flatMap { try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: $0) }
+            // 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes)
+            let derived = decoded.map {
+                buildDerivedIndexes($0, looseKeyMemo: memos.loose, titleCoverKeyMemo: memos.title,
+                                    albumCoverKeyMemo: memos.album, nameLooseKeyMemo: memos.name)
+            }
             await MainActor.run {
                 if inFlightGeneration == gen { inFlightGeneration = nil }
                 guard gen == decodeGeneration else { return } // 被 reloadSoon/压力清空顶掉
@@ -1320,7 +1402,7 @@ public enum EnrichCacheReader {
                     if fromIndex, let mtime { indexRejectedAt = mtime; failedDecodeMTime = nil }
                     return
                 }
-                adopt(entries: decoded, mtime: mtime, fromIndex: fromIndex, notify: true)
+                adopt(entries: decoded, mtime: mtime, fromIndex: fromIndex, notify: true, derived: derived)
             }
         }
     }
@@ -1339,25 +1421,37 @@ public enum EnrichCacheReader {
     /// 明显变慢(对抗核实抓出的口径差)。钩子只在真的采纳了新内容时调。
     public static var onContentAdopted: (() -> Void)?
 
+    /// `derived`:后台解码时按这份内容建好的派生索引。同步那条路(冷启动)不带,三份索引留空、要用时再建。
     private static func adopt(entries: [String: EnrichCacheEntry], mtime: Date?, fromIndex: Bool = false,
-                              notify: Bool = false) {
+                              notify: Bool = false, derived: DerivedIndexes? = nil) {
         // 换指针是 O(1),**丢掉上一份不是**:这份字典是从上百 MB 的 JSON 解出来的,
         // 几十万条 `EnrichCacheEntry` 要逐条析构。直接赋值的话这笔析构就落在主线程上
         // (profile 里长这样:adopt 到 _DictionaryStorage.deinit 到 destroy for
         // EnrichCacheEntry),而四个展示面共用这条主线程,一次就是所有歌词一起顿一下。
         // 先把旧引用接住,交给后台队列去释放 —— 主线程这边只剩换指针。
         let previous = cachedEntries
+        // 换下来的旧索引和旧记忆表各有九千多条,同理交给后台释放
+        let previousDerived = (cachedCoverIndex, cachedAlbumCoverIndex, cachedLooseIndex,
+                               derived == nil ? nil : (looseKeyMemo, titleCoverKeyMemo, albumCoverKeyMemo, nameLooseKeyMemo))
         cachedMTime = mtime
         cachedEntries = entries
         cachedFromIndex = fromIndex
         cachedBody = nil
-        cachedCoverIndex = nil  // 内容换了,派生索引跟着作废,下次要用时按新内容重建
-        cachedAlbumCoverIndex = nil
-        cachedLooseIndex = nil
+        // 内容换了,派生索引跟着换:后台已经按新内容建好的直接用,没有的作废、下次要用时再建
+        cachedCoverIndex = derived?.covers
+        cachedAlbumCoverIndex = derived?.albumCovers
+        cachedLooseIndex = derived?.loose
+        if let derived {
+            looseKeyMemo = derived.looseKeyMemo
+            titleCoverKeyMemo = derived.titleCoverKeyMemo
+            albumCoverKeyMemo = derived.albumCoverKeyMemo
+            nameLooseKeyMemo = derived.nameLooseKeyMemo
+        }
         cachedAliasTables = nil; aliasTablesGeneration += 1
         if previous != nil {
             DispatchQueue.global(qos: .utility).async { withExtendedLifetime(previous) {} }
         }
+        DispatchQueue.global(qos: .utility).async { withExtendedLifetime(previousDerived) {} }
         if notify { onContentAdopted?() }
     }
 

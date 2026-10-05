@@ -42,6 +42,8 @@ struct RecentListensPanel: View {
 
     @ObservedObject private var stats = LastfmStatsService.shared
     @State private var hoveredID: String?
+    /// 报给服务「这块面板在屏上」用的身份,见 LastfmStatsService.setLocalCoversConsumer。
+    @State private var coverConsumerID = UUID()
 
     private enum Item: Identifiable {
         case header(String)
@@ -81,7 +83,10 @@ struct RecentListensPanel: View {
                             .stroke(Color.primary.opacity(0.07), lineWidth: 1))
             }
         }
+        // 本机封面兜底只在有这块面板挂着时才跟着缓存重算(见 LastfmStatsService.setLocalCoversConsumer)。
+        .onAppear { stats.setLocalCoversConsumer(coverConsumerID, onScreen: true) }
         .onDisappear {
+            stats.setLocalCoversConsumer(coverConsumerID, onScreen: false)
             if stats.recentPage != 1 { stats.goToPage(1) }
         }
     }
