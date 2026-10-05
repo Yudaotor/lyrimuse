@@ -1665,6 +1665,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	stamp := enrichEditStampLocked()
 	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
+	ctx = withLearnedAliasSelf(ctx, key)
 	// 播放器没报专辑时拿 YouTube Music 登记的专辑去搜、去打分,见 lyricsSearchAlbum。
 	searchAlbum, listedAlbum := lyricsSearchAlbum(ctx, album, listed, durationSecs, artist, title)
 
@@ -1998,6 +1999,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	stamp := enrichEditStampLocked()
 	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
+	ctx = withLearnedAliasSelf(ctx, key)
 	// 搜索用的专辑同 retryLyricsUpgrade。
 	searchAlbum, listedAlbum := lyricsSearchAlbum(ctx, album, listed, durationSecs, artist, title)
 
@@ -2697,6 +2699,7 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	enrichMu.Lock()
 	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
+	ctx = withLearnedAliasSelf(ctx, key)
 	// deviceCoverURL 传空串,理由见 resolveTrackEnrichment 参数注释:补的是已存在条目的
 	// 外围字段,补的这一刻播的多半已经是别的歌,不能假装这是"正在播的这首"。设备封面的
 	// 升级另有专门路径(applyDeviceCoverUpgrade),不走这里。

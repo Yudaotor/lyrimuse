@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+)
 
 // 造一条"成功解析过"的条目:胜出候选的源侧署名是 sourceArtist。
 func learnedEntry(winner, sourceArtist string, losers ...string) enrichEntry {
@@ -22,7 +28,7 @@ func TestLearnedSourceArtistAliasLearnsFromSiblingTracks(t *testing.T) {
 		// 别的歌手不该被扫进来。
 		"周杰伦|七里香|": learnedEntry("netease", "Jay Chou"),
 	})
-	if got := learnedSourceArtistAlias("王子"); got != "Prince" {
+	if got := learnedSourceArtistAlias("王子", ""); got != "Prince" {
 		t.Fatalf("learnedSourceArtistAlias(王子) = %q, want Prince", got)
 	}
 }
@@ -33,7 +39,7 @@ func TestLearnedSourceArtistAliasIgnoresCollaborationCredit(t *testing.T) {
 		"Taylor Swift|Shake It Off|1989":   learnedEntry("kugou", "Taylor Swift"),
 		"Taylor Swift|End Game|reputation": learnedEntry("qq", "Taylor Swift、Ed Sheeran、Future"),
 	})
-	if got := learnedSourceArtistAlias("Taylor Swift"); got != "" {
+	if got := learnedSourceArtistAlias("Taylor Swift", ""); got != "" {
 		t.Fatalf("合作署名不该学成别名,却学到了 %q", got)
 	}
 }
@@ -44,7 +50,7 @@ func TestLearnedSourceArtistAliasRefusesWhenAmbiguous(t *testing.T) {
 		"王子|The Guilty Ones|": learnedEntry("kugou", "Prince"),
 		"王子|夢見|":              learnedEntry("qq", "邱勝翊"),
 	})
-	if got := learnedSourceArtistAlias("王子"); got != "" {
+	if got := learnedSourceArtistAlias("王子", ""); got != "" {
 		t.Fatalf("歧义时应当放弃,却学到了 %q", got)
 	}
 }
@@ -56,12 +62,12 @@ func TestLearnedSourceArtistAliasIsDeterministic(t *testing.T) {
 		"王子|b|": learnedEntry("qq", "PRINCE"),
 		"王子|c|": learnedEntry("netease", "prince"),
 	})
-	first := learnedSourceArtistAlias("王子")
+	first := learnedSourceArtistAlias("王子", "")
 	if first != "PRINCE" {
 		t.Fatalf("应当返回字典序最小的写法 PRINCE,得到 %q", first)
 	}
 	for i := 0; i < 30; i++ {
-		if got := learnedSourceArtistAlias("王子"); got != first {
+		if got := learnedSourceArtistAlias("王子", ""); got != first {
 			t.Fatalf("第 %d 次得到 %q,与首次 %q 不一致 —— 没有定序", i, got, first)
 		}
 	}
@@ -74,7 +80,7 @@ func TestLearnedSourceArtistAliasIgnoresUnresolvedEntries(t *testing.T) {
 		"王子|1999 (Edit)|": {TS: 1788890000}, // 确证查无落下的空条目
 		"王子|别的歌|":         {LyricsDecisionApplied: &lyricsDecision{Winner: ""}},
 	})
-	if got := learnedSourceArtistAlias("王子"); got != "" {
+	if got := learnedSourceArtistAlias("王子", ""); got != "" {
 		t.Fatalf("没有成功条目时不该学到东西,得到 %q", got)
 	}
 }
@@ -84,7 +90,7 @@ func TestLearnedSourceArtistAliasIgnoresLosingCandidates(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"王子|The Guilty Ones|": learnedEntry("kugou", "Prince", "冒牌王子", "Another Prince"),
 	})
-	if got := learnedSourceArtistAlias("王子"); got != "Prince" {
+	if got := learnedSourceArtistAlias("王子", ""); got != "Prince" {
 		t.Fatalf("只该认胜出候选的署名,得到 %q", got)
 	}
 }
@@ -94,7 +100,7 @@ func TestLearnedSourceArtistAliasSkipsSelf(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"周杰伦|七里香|": learnedEntry("netease", "周杰伦"),
 	})
-	if got := learnedSourceArtistAlias("周杰伦"); got != "" {
+	if got := learnedSourceArtistAlias("周杰伦", ""); got != "" {
 		t.Fatalf("跟本地标签相同不算别名,得到 %q", got)
 	}
 }
@@ -105,8 +111,92 @@ func TestLearnedSourceArtistAliasMatchesArtistSegmentExactly(t *testing.T) {
 		"小王子|某首歌|": learnedEntry("kugou", "Le Petit Prince"),
 		"王子李|某首歌|": learnedEntry("qq", "Wang Zili"),
 	})
-	if got := learnedSourceArtistAlias("王子"); got != "" {
+	if got := learnedSourceArtistAlias("王子", ""); got != "" {
 		t.Fatalf("不该匹配到别的歌手,得到 %q", got)
+	}
+}
+
+// 给一条已有条目重搜时,只有它自己作证的署名不学;给同一歌手别的歌找词时照旧学得到。
+func TestLearnedSourceArtistAliasExcludesEntryBeingResolved(t *testing.T) {
+	const self = "王子|The Guilty Ones|"
+	withEnrichCache(t, map[string]enrichEntry{
+		self: learnedEntry("kugou", "Prince"),
+	})
+	if got := learnedSourceArtistAlias("王子", self); got != "" {
+		t.Fatalf("只有正在重搜的这一条自己作证,不该学到别名,得到 %q", got)
+	}
+	if got := learnedSourceArtistAlias("王子", "王子|1999 (Edit)|"); got != "Prince" {
+		t.Fatalf("给别的歌找词时照旧学到 Prince,得到 %q", got)
+	}
+}
+
+// 别的条目作证时照学,写法取别的条目里的;它自己的署名仍算进「唯一」判断,排除它不会学出原来判成歧义的别名。
+func TestLearnedSourceArtistAliasSelfStillCountsForAmbiguity(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{
+		"王子|The Guilty Ones|": learnedEntry("kugou", "Prince"),
+		"王子|1999|":            learnedEntry("qq", "PRINCE"),
+	})
+	if got := learnedSourceArtistAlias("王子", "王子|1999|"); got != "Prince" {
+		t.Fatalf("别的条目作证时照学、写法取别的条目里的,得到 %q", got)
+	}
+	withEnrichCache(t, map[string]enrichEntry{
+		"王子|The Guilty Ones|": learnedEntry("kugou", "Prince"),
+		"王子|夢見|":              learnedEntry("qq", "邱勝翊"),
+	})
+	if got := learnedSourceArtistAlias("王子", "王子|夢見|"); got != "" {
+		t.Fatalf("它自己的署名跟别的条目不一致时照样判歧义,得到 %q", got)
+	}
+}
+
+// 重试 / 补空 / 全源重搜和重选开搜前把这条的 key 挂到 ctx 上:补空扫描、全量扫库、手动重新匹配、播放时的几路重搜
+// 都走这两个函数。
+func TestLyricsReSearchMarksLearnedAliasSelf(t *testing.T) {
+	var mu sync.Mutex
+	seen := map[string]bool{}
+	setupRescoreTest(t, []string{"musixmatch"}, func(ctx context.Context) {
+		mu.Lock()
+		seen[learnedAliasSelfFrom(ctx)] = true
+		mu.Unlock()
+	})
+	const artist = rescoreTestArtist
+	emptyKey, lyricKey := enrichKey(artist, "Empty Song", ""), enrichKey(artist, "Rescored Song", "Some Album")
+	withEnrichCache(t, map[string]enrichEntry{
+		emptyKey: {},
+		lyricKey: {Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "musixmatch",
+			LyricsScoringVersion: lyricsScoringVersion - 1},
+	})
+	retryLyricsUpgrade(context.Background(), emptyKey, artist, "Empty Song", "", 180, true)
+	rescoreLyrics(context.Background(), lyricKey, artist, "Rescored Song", "Some Album", 180)
+	mu.Lock()
+	defer mu.Unlock()
+	if !seen[emptyKey] || !seen[lyricKey] {
+		t.Fatalf("两条路径取词时都该带着这条的 key, seen=%v", seen)
+	}
+}
+
+// 外围回填、search-lyrics、resync-lyrics 也是给已有条目重搜,要跑整轮联网检索,按源码钉住:开搜前同样挂上这条的 key。
+func TestLearnedAliasSelfMarkedOnOtherReSearches(t *testing.T) {
+	for _, c := range []struct{ file, fn string }{
+		{"enrich.go", "func backfillPeripheralFields("},
+		{"searchcli.go", "func runSearchLyricsCLI("},
+		{"resynclyricscli.go", "func runResyncLyrics("},
+	} {
+		src, err := os.ReadFile(c.file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(src)
+		i := strings.Index(body, c.fn)
+		if i < 0 {
+			t.Fatalf("%s 里找不到 %s", c.file, c.fn)
+		}
+		body = body[i+len(c.fn):]
+		if j := strings.Index(body, "\nfunc "); j >= 0 {
+			body = body[:j]
+		}
+		if !strings.Contains(body, "withLearnedAliasSelf(") {
+			t.Errorf("%s 开搜前没挂 withLearnedAliasSelf:学署名会拿这一条自己的署名给它当别名", c.fn)
+		}
 	}
 }
 
@@ -115,7 +205,7 @@ func TestLearnedSourceArtistAliasEmptyArtist(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{
 		"|某首歌|": learnedEntry("kugou", "Whoever"),
 	})
-	if got := learnedSourceArtistAlias(""); got != "" {
+	if got := learnedSourceArtistAlias("", ""); got != "" {
 		t.Fatalf("空歌手名应当直接返回空,得到 %q", got)
 	}
 }

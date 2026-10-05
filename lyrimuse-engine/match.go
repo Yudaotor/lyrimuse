@@ -1933,8 +1933,9 @@ func retryArtistIdentitiesWithOrigin(ctx context.Context, artist string) []artis
 	// 查询前面):这台机器上同一个歌手的**别的**歌成功解析时,源那边把他署成什么名——
 	// 覆盖"这位歌手在线上全部落空,但本机缓存里同一个人的另一首歌已经采纳过候选"的场景
 	// (如王子(=Prince)《1999 (Edit)》,答案就躺在同一个「王子」另外两首歌的候选署名
-	// "Prince" 里)。判据从严、结果定序,完整理由见 learnedSourceArtistAlias 头注。
-	add(learnedSourceArtistAlias(artist), lyricQueryOriginLearned)
+	// "Prince" 里)。判据从严、结果定序,完整理由见 learnedSourceArtistAlias 头注;正在重搜的那一条不给自己作证
+	// (withLearnedAliasSelf)。
+	add(learnedSourceArtistAlias(artist, learnedAliasSelfFrom(ctx)), lyricQueryOriginLearned)
 	// YouTube Music 登记的原名(ctx 上挂着这首的 videoId 时,Kaset 放的歌):界面是中文时一部分西方歌手报成本地化
 	// 译名(「菲尔·科林斯」),各源都按原名收录。署名里有非拉丁文字才问,见 ytmusiccredit.go。
 	if id := youTubeMusicVideoIDFrom(ctx); id != "" && hasNonLatinLetter(artist) {

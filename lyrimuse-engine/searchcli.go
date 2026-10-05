@@ -210,6 +210,8 @@ func runSearchLyricsCLI(args []string) {
 	enrichMu.Lock()
 	searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, enrichKey(*artist, *title, *album))
 	enrichMu.Unlock()
+	// 这首在缓存里有条目时,学署名同样不拿它自己的署名给它当别名。
+	searchCtx = withLearnedAliasSelf(searchCtx, enrichKey(*artist, *title, *album))
 	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在

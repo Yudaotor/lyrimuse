@@ -257,3 +257,19 @@ func TestRetryArtistIdentitiesLearnsFromLocalCache(t *testing.T) {
 		t.Fatalf(`retryArtistIdentities("王子") = %v, want ["Prince"]`, got)
 	}
 }
+
+// 别名轮认 ctx 上记下的正在重搜的那一条(withLearnedAliasSelf):只有它自己作证的署名不拿来给它自己换名。
+func TestRetryArtistIdentitiesSkipsAliasOnlyVouchedBySelf(t *testing.T) {
+	const self = "王子|The Guilty Ones|"
+	withEnrichCache(t, map[string]enrichEntry{self: learnedEntry("kugou", "Prince")})
+	withCachedAliases(t, map[string]string{"王子": ""})
+	withCachedMBAliases(t, map[string][]string{"王子": nil})
+	withCachedQQArtistNames(t, map[string]string{"王子": ""})
+
+	if got := retryArtistIdentities(withLearnedAliasSelf(context.Background(), self), "王子"); len(got) != 0 {
+		t.Fatalf("只有正在重搜的这一条作证,不该换成它自己的署名, got %v", got)
+	}
+	if got := retryArtistIdentities(context.Background(), "王子"); len(got) != 1 || got[0] != "Prince" {
+		t.Fatalf("给别的歌找词时照旧换成 Prince, got %v", got)
+	}
+}

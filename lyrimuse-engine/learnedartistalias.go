@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"sort"
@@ -47,6 +48,9 @@ import (
 //
 //   - 同一歌手名下所有成功条目给出的署名,normLoose 之后必须**唯一**才用。「王子」既是
 //     Prince 又是邱胜翊的用户,这里一律不猜。
+//   - 给一条已有条目重搜时(selfKey,见 withLearnedAliasSelf),返回的写法只从**别的**条目里取,没有别的条目
+//     作证就不学:这一条采纳的候选挂错了人时,学到的别名会让它每次重搜都找回那个人。它自己的署名仍算进上一条的
+//     「唯一」判断,所以排除它只会让这一条学不到,不会学出原来判成歧义的别名。见 09 章决策 185。
 //   - 跟本地标签自身相同的不算别名(它不提供任何新信息;retryArtistIdentities 的 add()
 //     也会去重,这里提前挡掉只是省事)。
 //   - 包含本地标签自身的也不算(「Taylor Swift」名下那首合作曲,源署的是「Taylor Swift、Ed Sheeran、Future」):
@@ -67,7 +71,7 @@ import (
 // 11 分钟就是持锁期间又加锁来的)。当前唯一调用方 retryArtistIdentities 在兜底轮里跑,
 // 那条链路上不持锁。全表扫描 4000+ 条只做字符串前缀比较,而且只有"前面几轮都没搜到"
 // 时才会走到这里,不是热路径。
-func learnedSourceArtistAlias(artist string) string {
+func learnedSourceArtistAlias(artist, selfKey string) string {
 	prefix := cleanMediaTag(artist)
 	if prefix == "" {
 		return ""
@@ -86,16 +90,33 @@ func learnedSourceArtistAlias(artist string) string {
 		if name == "" || strings.Contains(normLoose(name), self) {
 			continue
 		}
-		names = append(names, name)
 		distinct[normLoose(name)] = true
+		if k != selfKey {
+			names = append(names, name)
+		}
 	}
 	enrichMu.Unlock()
 
-	if len(distinct) != 1 {
-		return "" // 一个都没学到,或者同一歌手指向两个不同的人 —— 都不猜
+	if len(distinct) != 1 || len(names) == 0 {
+		return "" // 一个都没学到、同一歌手指向两个不同的人,或者只有正在重搜的这一条自己作证 —— 都不猜
 	}
 	sort.Strings(names)
 	return names[0]
+}
+
+type learnedAliasSelfKey struct{}
+
+// withLearnedAliasSelf 记下这一轮在给哪条已有条目重搜歌词,learnedSourceArtistAlias 不拿这一条自己的署名给它当别名。
+// 给已有条目重搜的入口(重试 / 补空 / 全源重搜、重选、外围回填、search-lyrics、resync-lyrics)开搜前都要挂上;
+// 首次解析时条目还不存在,不用挂。
+func withLearnedAliasSelf(ctx context.Context, key string) context.Context {
+	return context.WithValue(ctx, learnedAliasSelfKey{}, key)
+}
+
+// learnedAliasSelfFrom:withLearnedAliasSelf 记下的 key,没记时为空。
+func learnedAliasSelfFrom(ctx context.Context) string {
+	k, _ := ctx.Value(learnedAliasSelfKey{}).(string)
+	return k
 }
 
 // winningCandidateArtist 取"这条歌词最终采纳的那个候选,源那边把歌手署成什么名"。
