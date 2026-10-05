@@ -77,6 +77,7 @@ type sodaLocalTrack struct {
 	Duration int64  `json:"duration"` // 毫秒
 	Vocal    int    `json:"vocal"`
 	Artists  []struct {
+		ID   string `json:"id"` // 歌手页用,见 playercatalog.go
 		Name string `json:"name"`
 	} `json:"artists"`
 	Album struct {

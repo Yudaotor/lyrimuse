@@ -58,6 +58,20 @@ public struct EnrichCacheEntry: Decodable, Sendable {
     let neteaseURL: String?
     let qqAlbumMid: String?
     let qqSingerMid: String?
+    // 汽水音乐歌曲页(引擎的 enrichEntry.SodaURL,用汽水放这首时按它本机数据里的曲目 id 拼的)。只喂 PlatformLinks.sodaSong。
+    let sodaURL: String?
+    // 各播放器自己给这首记下的专辑 id、第一位歌手的 id(引擎的 enrichEntry.SodaAlbumID 那一组,见
+    // lyrimuse-engine/playercatalog.go;YouTube Music 的跟专辑一起判,见 kasetalbum.go)。只喂 PlatformLinks 的专辑页、歌手页。
+    let sodaAlbumID: String?
+    let sodaArtistID: String?
+    let kkboxAlbumID: String?
+    let kkboxArtistID: String?
+    let amazonAlbumASIN: String?
+    let amazonArtistASIN: String?
+    let spotifyAlbumID: String?
+    let spotifyArtistID: String?
+    let youtubeMusicAlbumID: String?
+    let youtubeMusicArtistID: String?
     // Spotify 真曲目 ID(lyrimuse-engine/spotifytrack.go,Spotify 原生播放换曲那一拍从 `spotify url` 留下的
     // 22 位 base62)。解码,只喂 PlatformLinks.spotifySong;缓存里另一个 spotify_url 是
     // 本地拼的搜索页兜底,刻意不读。
@@ -128,6 +142,17 @@ public struct EnrichCacheEntry: Decodable, Sendable {
         case neteaseURL = "netease_url"
         case qqAlbumMid = "qq_album_mid"
         case qqSingerMid = "qq_singer_mid"
+        case sodaURL = "soda_url"
+        case sodaAlbumID = "soda_album_id"
+        case sodaArtistID = "soda_artist_id"
+        case kkboxAlbumID = "kkbox_album_id"
+        case kkboxArtistID = "kkbox_artist_id"
+        case amazonAlbumASIN = "amazon_album_asin"
+        case amazonArtistASIN = "amazon_artist_asin"
+        case spotifyAlbumID = "spotify_album_id"
+        case spotifyArtistID = "spotify_artist_id"
+        case youtubeMusicAlbumID = "youtube_music_album_id"
+        case youtubeMusicArtistID = "youtube_music_artist_id"
         case spotifyTrackID = "spotify_track_id"
         case kkboxURL = "kkbox_url"
         case amazonURL = "amazon_url"
@@ -350,7 +375,18 @@ public enum EnrichCacheReader {
             spotifySong: PlatformLinks.spotifyTrackURL(id: entry.spotifyTrackID ?? ""),
             kkboxSong: PlatformLinks.kkboxAppURL(songPage: entry.kkboxURL ?? ""),
             amazonSong: PlatformLinks.amazonTrackURL(entry.amazonURL ?? ""),
-            youtubeMusicSong: PlatformLinks.youtubeMusicWatchURL(entry.youtubeMusicURL ?? ""))
+            youtubeMusicSong: PlatformLinks.youtubeMusicWatchURL(entry.youtubeMusicURL ?? ""),
+            sodaSong: PlatformLinks.sodaTrackURL(entry.sodaURL ?? ""),
+            sodaAlbum: PlatformLinks.sodaAlbumURL(id: entry.sodaAlbumID ?? ""),
+            sodaArtist: PlatformLinks.sodaArtistURL(id: entry.sodaArtistID ?? ""),
+            kkboxAlbum: PlatformLinks.kkboxAlbumAppURL(id: entry.kkboxAlbumID ?? ""),
+            kkboxArtist: PlatformLinks.kkboxArtistAppURL(id: entry.kkboxArtistID ?? ""),
+            amazonAlbum: PlatformLinks.amazonAlbumURL(asin: entry.amazonAlbumASIN ?? ""),
+            amazonArtist: PlatformLinks.amazonArtistURL(asin: entry.amazonArtistASIN ?? ""),
+            spotifyAlbum: PlatformLinks.spotifyAlbumURL(id: entry.spotifyAlbumID ?? ""),
+            spotifyArtist: PlatformLinks.spotifyArtistURL(id: entry.spotifyArtistID ?? ""),
+            youtubeMusicAlbum: PlatformLinks.youtubeMusicAlbumURL(browseID: entry.youtubeMusicAlbumID ?? ""),
+            youtubeMusicArtist: PlatformLinks.youtubeMusicArtistURL(channelID: entry.youtubeMusicArtistID ?? ""))
         return links.isEmpty ? nil : links
     }
 

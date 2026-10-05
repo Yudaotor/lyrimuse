@@ -24,6 +24,11 @@ import Foundation
 ///   跟 QQ / 网易云一样写成「歌曲页」。
 /// - Kaset 那条是 YouTube Music 网页歌曲页 `music.youtube.com/watch?v=<id>`:Kaset 的 `kaset://play?v=` 一打开就从这首
 ///   开始放、换掉当前队列,不是「打开」的语义,所以同样只给网页。
+/// - 汽水音乐那条是网页分享页 `music.douyin.com/qishui/share/track?track_id=<id>`,写成「歌曲页」。
+/// - 专辑页 / 歌手页:QQ 音乐、汽水、Amazon Music、Spotify、YouTube Music 都是网页,写成「…专辑页 / 歌手页」;KKBOX 的是
+///   `kkbox://album/<id>#view` / `kkbox://artist/<id>#view`,跟歌曲那条一样只在 KKBOX 里打开页面、不播放,写成
+///   「在 KKBOX 中显示专辑 / 歌手」。id 都是引擎用那个播放器放这首时从它本机数据里记下的(lyrimuse-engine/playercatalog.go,
+///   YouTube Music 的见 kasetalbum.go)。
 public struct PlatformLinks: Sendable, Equatable {
     /// Apple Music 曲目页(已是 `music://`,进 App)。
     public let appleMusic: URL?
@@ -46,14 +51,36 @@ public struct PlatformLinks: Sendable, Equatable {
     /// YouTube Music 歌曲页 `https://music.youtube.com/watch?v=<id>`(浏览器)。引擎用 Kaset 放这首时按它报的 videoId
     /// 拼的,形状闸见 `youtubeMusicWatchURL`。
     public let youtubeMusicSong: URL?
+    /// 汽水音乐歌曲页 `https://music.douyin.com/qishui/share/track?track_id=<id>`(浏览器)。引擎用汽水放这首时拼的,
+    /// 形状闸见 `sodaTrackURL`。
+    public let sodaSong: URL?
+    /// 各家的专辑页 / 歌手页(KKBOX 的是进 App 的深链,其余是浏览器),缺 id 时为 nil,调用方据此隐藏对应入口。
+    /// 拼法与形状闸见下面同名的静态函数。
+    public let sodaAlbum: URL?
+    public let sodaArtist: URL?
+    public let kkboxAlbum: URL?
+    public let kkboxArtist: URL?
+    public let amazonAlbum: URL?
+    public let amazonArtist: URL?
+    public let spotifyAlbum: URL?
+    public let spotifyArtist: URL?
+    public let youtubeMusicAlbum: URL?
+    public let youtubeMusicArtist: URL?
 
     public var isEmpty: Bool {
         appleMusic == nil && qqSong == nil && qqAlbum == nil && qqArtist == nil && neteaseSong == nil && spotifySong == nil
             && kkboxSong == nil && amazonSong == nil && youtubeMusicSong == nil
+            && sodaSong == nil && sodaAlbum == nil && sodaArtist == nil && kkboxAlbum == nil && kkboxArtist == nil
+            && amazonAlbum == nil && amazonArtist == nil && spotifyAlbum == nil && spotifyArtist == nil
+            && youtubeMusicAlbum == nil && youtubeMusicArtist == nil
     }
 
     public init(appleMusic: URL?, qqSong: URL?, qqAlbum: URL?, qqArtist: URL?, neteaseSong: URL?, spotifySong: URL? = nil,
-                kkboxSong: URL? = nil, amazonSong: URL? = nil, youtubeMusicSong: URL? = nil) {
+                kkboxSong: URL? = nil, amazonSong: URL? = nil, youtubeMusicSong: URL? = nil,
+                sodaSong: URL? = nil, sodaAlbum: URL? = nil, sodaArtist: URL? = nil,
+                kkboxAlbum: URL? = nil, kkboxArtist: URL? = nil, amazonAlbum: URL? = nil, amazonArtist: URL? = nil,
+                spotifyAlbum: URL? = nil, spotifyArtist: URL? = nil,
+                youtubeMusicAlbum: URL? = nil, youtubeMusicArtist: URL? = nil) {
         self.appleMusic = appleMusic
         self.qqSong = qqSong
         self.qqAlbum = qqAlbum
@@ -63,11 +90,22 @@ public struct PlatformLinks: Sendable, Equatable {
         self.kkboxSong = kkboxSong
         self.amazonSong = amazonSong
         self.youtubeMusicSong = youtubeMusicSong
+        self.sodaSong = sodaSong
+        self.sodaAlbum = sodaAlbum
+        self.sodaArtist = sodaArtist
+        self.kkboxAlbum = kkboxAlbum
+        self.kkboxArtist = kkboxArtist
+        self.amazonAlbum = amazonAlbum
+        self.amazonArtist = amazonArtist
+        self.spotifyAlbum = spotifyAlbum
+        self.spotifyArtist = spotifyArtist
+        self.youtubeMusicAlbum = youtubeMusicAlbum
+        self.youtubeMusicArtist = youtubeMusicArtist
     }
 
     /// 歌曲页所在的平台 —— 给「简介」面板那行选文案用(名字在 App 层本地化,这里只给身份)。
     public enum Platform: String, Sendable, Equatable {
-        case appleMusic, qqMusic, netease, spotify, kkbox, amazonMusic, youtubeMusic
+        case appleMusic, qqMusic, netease, spotify, kkbox, amazonMusic, youtubeMusic, soda
     }
 
     /// **当前播放器自己那个平台**上这首歌的歌曲页(规则:简介面板的「网页」行
@@ -75,7 +113,7 @@ public struct PlatformLinks: Sendable, Equatable {
     ///
     /// - Apple Music 播放 → Apple Music 曲目页(`music://`,进 App);QQ 音乐 → QQ 歌曲页;网易云 →
     ///   网易云歌曲页;Spotify(原生客户端,或浏览器里配对成 `spotifyWeb` 的网页版)→ Spotify 曲目页。
-    /// - Kaset → YouTube Music 歌曲页(用它放的时候引擎才存)。
+    /// - Kaset → YouTube Music 歌曲页(用它放的时候引擎才存)。汽水 → 汽水的网页分享页(同样是用它放的时候才存)。
     /// - 酷狗 / 浏览器里的 YouTube Music / 认不出来的播放器 → nil:引擎没存酷狗歌曲页(酷狗网页版能开的只有
     ///   `kugou.com/mixsong/<EMixSongID>.html`,那个编码 ID 只有带签名的网页版搜索接口才给),浏览器里放的
     ///   YouTube Music 没存链接。调用方据 nil 整行隐藏,不拿别的平台顶上。
@@ -96,6 +134,7 @@ public struct PlatformLinks: Sendable, Equatable {
         case PlaybackPlayer.kkbox.bundleIdentifier: return kkboxSong.map { (.kkbox, $0) }
         case PlaybackPlayer.amazonMusic.bundleIdentifier: return amazonSong.map { (.amazonMusic, $0) }
         case PlaybackPlayer.kaset.bundleIdentifier: return youtubeMusicSong.map { (.youtubeMusic, $0) }
+        case PlaybackPlayer.soda.bundleIdentifier: return sodaSong.map { (.soda, $0) }
         default: return nil
         }
     }
@@ -110,6 +149,82 @@ public struct PlatformLinks: Sendable, Equatable {
         let asin = raw.dropFirst(prefix.count)
         guard asin.count == 10, asin.allSatisfy({ ($0 >= "A" && $0 <= "Z") || ($0 >= "0" && $0 <= "9") }) else { return nil }
         return URL(string: raw)
+    }
+
+    /// 汽水音乐歌曲页。形状闸与引擎的 `sodaTrackPageURL` 同源:网页分享页后面跟一串数字的曲目 id,别的一律不认。
+    public static func sodaTrackURL(_ raw: String) -> URL? {
+        let prefix = "https://music.douyin.com/qishui/share/track?track_id="
+        guard raw.hasPrefix(prefix), isCatalogID(raw.dropFirst(prefix.count), length: 1...32, extra: [], digitsOnly: true) else {
+            return nil
+        }
+        return URL(string: raw)
+    }
+
+    /// 汽水音乐专辑页 / 歌手页(网页分享页)。id 的形状同 `sodaTrackURL`(引擎的 `playerCatalogIDOK`):一串数字。
+    public static func sodaAlbumURL(id: String) -> URL? {
+        isCatalogID(id[...], length: 1...32, extra: [], digitsOnly: true)
+            ? URL(string: "https://music.douyin.com/qishui/share/album?album_id=" + id) : nil
+    }
+
+    public static func sodaArtistURL(id: String) -> URL? {
+        isCatalogID(id[...], length: 1...32, extra: [], digitsOnly: true)
+            ? URL(string: "https://music.douyin.com/qishui/share/artist?artist_id=" + id) : nil
+    }
+
+    /// KKBOX 专辑 / 歌手在 KKBOX 里打开的深链 `kkbox://album/<id>#view` / `kkbox://artist/<id>#view`:KKBOX 的深链路由里
+    /// album、artist 跟 song 是同一套,`#view` 只打开页面、不播放。id 是字母数字加 `-` `_`(同 `kkboxAppURL`)。
+    public static func kkboxAlbumAppURL(id: String) -> URL? {
+        isCatalogID(id[...], length: 1...32, extra: ["-", "_"]) ? URL(string: "kkbox://album/" + id + "#view") : nil
+    }
+
+    public static func kkboxArtistAppURL(id: String) -> URL? {
+        isCatalogID(id[...], length: 1...32, extra: ["-", "_"]) ? URL(string: "kkbox://artist/" + id + "#view") : nil
+    }
+
+    /// Amazon Music 专辑页 `https://music.amazon.com/albums/<ASIN>` / 歌手页 `https://music.amazon.com/artists/<ASIN>`。
+    /// ASIN 的形状同 `amazonTrackURL`。
+    public static func amazonAlbumURL(asin: String) -> URL? {
+        isASIN(asin) ? URL(string: "https://music.amazon.com/albums/" + asin) : nil
+    }
+
+    public static func amazonArtistURL(asin: String) -> URL? {
+        isASIN(asin) ? URL(string: "https://music.amazon.com/artists/" + asin) : nil
+    }
+
+    /// Spotify 专辑页 `https://open.spotify.com/album/<id>` / 歌手页 `https://open.spotify.com/artist/<id>`。id 的形状同
+    /// `spotifyTrackURL`:22 位 base62。
+    public static func spotifyAlbumURL(id: String) -> URL? {
+        isCatalogID(id[...], length: 22...22, extra: []) ? URL(string: "https://open.spotify.com/album/" + id) : nil
+    }
+
+    public static func spotifyArtistURL(id: String) -> URL? {
+        isCatalogID(id[...], length: 22...22, extra: []) ? URL(string: "https://open.spotify.com/artist/" + id) : nil
+    }
+
+    /// YouTube Music 专辑页 `https://music.youtube.com/browse/<MPREb_…>` / 歌手页 `https://music.youtube.com/channel/<UC…>`。
+    /// 形状闸与引擎的 `ytmusicBrowseIDOK` 同源:以 `MPREb_` / `UC` 开头,后面只有字母数字和 `-` `_`。
+    public static func youtubeMusicAlbumURL(browseID: String) -> URL? {
+        isBrowseID(browseID, prefix: "MPREb_") ? URL(string: "https://music.youtube.com/browse/" + browseID) : nil
+    }
+
+    public static func youtubeMusicArtistURL(channelID: String) -> URL? {
+        isBrowseID(channelID, prefix: "UC") ? URL(string: "https://music.youtube.com/channel/" + channelID) : nil
+    }
+
+    /// 长度在 `length` 内、只有 ASCII 字母数字(`digitsOnly` 时只有数字)和 `extra` 里的字符。
+    private static func isCatalogID(_ id: Substring, length: ClosedRange<Int>, extra: Set<Character>,
+                                    digitsOnly: Bool = false) -> Bool {
+        length.contains(id.count) && id.allSatisfy { c in
+            c.isASCII && (c.isNumber || (!digitsOnly && c.isLetter) || extra.contains(c))
+        }
+    }
+
+    private static func isASIN(_ s: String) -> Bool {
+        s.count == 10 && s.allSatisfy { ($0 >= "A" && $0 <= "Z") || ($0 >= "0" && $0 <= "9") }
+    }
+
+    private static func isBrowseID(_ id: String, prefix: String) -> Bool {
+        id.hasPrefix(prefix) && isCatalogID(id.dropFirst(prefix.count), length: 1...(64 - prefix.count), extra: ["-", "_"])
     }
 
     /// 引擎存的 YouTube Music 歌曲页。形状闸与引擎的 `youtubeMusicWatchURL` 同源:videoId 是 11 位字母数字加

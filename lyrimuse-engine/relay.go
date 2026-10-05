@@ -103,7 +103,7 @@ func relayState(s snapshot, playing bool, device string, listenedAt int64, curre
 		// 那一行是错的。这个值早就在 additional_info 里交给 ListenBrainz 了,只是没往
 		// 中继这条路径带。
 		"mediaPlayer": ai["media_player"],
-		"links":       map[string]any{"apple": ai["apple_music_url"], "qq": ai["qq_music_url"], "netease": ai["netease_url"], "spotify": ai["spotify_url"], "kkbox": ai["kkbox_url"], "amazon": ai["amazon_url"], "youtubeMusic": ai["youtube_music_url"]},
+		"links":       map[string]any{"apple": ai["apple_music_url"], "qq": ai["qq_music_url"], "netease": ai["netease_url"], "spotify": ai["spotify_url"], "kkbox": ai["kkbox_url"], "amazon": ai["amazon_url"], "youtubeMusic": ai["youtube_music_url"], "soda": ai["soda_url"]},
 		"durationMs":  ai["duration_ms"], "progressMs": ai["progress_ms"], "progressTs": ai["progress_ts"], "rate": ai["playback_rate"],
 	}
 	if listenedAt > 0 {

@@ -72,6 +72,8 @@
 "%d 个源的歌词正文相同" = "%d 个源的歌词正文相同";
 "%d 次" = "%d 次";
 "/ %@ 页" = "/ %@ 页";
+"Amazon Music 专辑页" = "Amazon Music 专辑页";
+"Amazon Music 歌手页" = "Amazon Music 歌手页";
 "Amazon Music 歌曲页" = "Amazon Music 歌曲页";
 "Apple Music" = "Apple Music";
 "Apple Music 登录已失效（过期或被吊销），需要重新连接" = "Apple Music 登录已失效（过期或被吊销），需要重新连接";
@@ -124,12 +126,17 @@
 "Scrobble 规则" = "Scrobble 规则";
 "Server酱" = "Server酱";
 "Spotify 上放的歌没有记到 Last.fm" = "Spotify 上放的歌没有记到 Last.fm";
+"Spotify 专辑页" = "Spotify 专辑页";
+"Spotify 歌手页" = "Spotify 歌手页";
+"Spotify 歌曲页" = "Spotify 歌曲页";
 "Spotify 每首会记两次" = "Spotify 每首会记两次";
 "Token 无效，请重新拷贝一次" = "Token 无效，请重新复制一次";
 "Webhook 地址" = "Webhook 地址";
+"YouTube Music 专辑页" = "YouTube Music 专辑页";
 "YouTube Music 原名" = "YouTube Music 原名";
 "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）" = "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）";
 "YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选你平时用来听歌的（可以多选）——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改" = "YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选你平时用来听歌的（可以多选）——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改";
+"YouTube Music 歌手页" = "YouTube Music 歌手页";
 "YouTube Music 歌曲页" = "YouTube Music 歌曲页";
 "YouTube Music 用哪个浏览器？" = "YouTube Music 用哪个浏览器？";
 "YouTube Music 的浏览器" = "YouTube Music 的浏览器";
@@ -501,6 +508,8 @@
 "在 Edge 菜单栏依次打开「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。" = "在 Edge 菜单栏依次打开「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。";
 "在 GitHub 提 issue" = "在 GitHub 提 issue";
 "在 KKBOX 中显示" = "在 KKBOX 中显示";
+"在 KKBOX 中显示专辑" = "在 KKBOX 中显示专辑";
+"在 KKBOX 中显示歌手" = "在 KKBOX 中显示歌手";
 "在 Last.fm 上喜欢" = "在 Last.fm 上喜欢";
 "在 Last.fm 打开" = "在 Last.fm 打开";
 "在 Last.fm 网站查看主页" = "在 Last.fm 网站查看主页";
@@ -1148,6 +1157,9 @@
 "毛玻璃的材质浓淡（五档）" = "毛玻璃的材质浓淡（五档）";
 "毛玻璃背景" = "毛玻璃背景";
 "汽水音乐" = "汽水音乐";
+"汽水音乐专辑页" = "汽水音乐专辑页";
+"汽水音乐歌手页" = "汽水音乐歌手页";
+"汽水音乐歌曲页" = "汽水音乐歌曲页";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更）——这不是这首歌没有歌词，等一次版本更新通常会修好" = "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更）——这不是这首歌没有歌词，等一次版本更新通常会修好";
 "没在运行，查不到当前状态" = "没在运行，查不到当前状态";
 "没找到这首的歌词" = "没找到这首的歌词";

@@ -297,5 +297,51 @@ func runIdlePageTests() {
                     "网页行:网易云播放但没有网易云链接(周杰伦那类版权下架)→ nil,不拿 QQ / AM 顶上")
         expectEqual(noNetease.songLink(forPlayerBundleID: PlaybackPlayer.spotify.bundleIdentifier) == nil, true,
                     "网页行:Spotify 播放但缓存里只有搜索页兜底、没有真 ID → nil")
+
+        // 汽水歌曲页,以及各家的专辑页 / 歌手页:id 的形状闸与引擎同源(playercatalog.go playerCatalogIDOK、
+        // kasetalbum.go ytmusicBrowseIDOK)。
+        let soda = P.sodaTrackURL("https://music.douyin.com/qishui/share/track?track_id=7687935075879012369")
+        expectEqual(soda?.absoluteString, "https://music.douyin.com/qishui/share/track?track_id=7687935075879012369",
+                    "汽水歌曲页:数字曲目 id 认")
+        for bad in ["https://music.douyin.com/qishui/share/track?track_id=", "https://music.douyin.com/qishui/share/track?track_id=1&x=2",
+                    "https://evil.example.com/qishui/share/track?track_id=1", ""] {
+            expectEqual(P.sodaTrackURL(bad) == nil, true, "汽水歌曲页:\(bad) 不认")
+        }
+        expectEqual(P.sodaAlbumURL(id: "7687934888654342145")?.absoluteString,
+                    "https://music.douyin.com/qishui/share/album?album_id=7687934888654342145", "汽水专辑页 URL")
+        expectEqual(P.sodaArtistURL(id: "6841932444073986049")?.absoluteString,
+                    "https://music.douyin.com/qishui/share/artist?artist_id=6841932444073986049", "汽水歌手页 URL")
+        expectEqual(P.sodaAlbumURL(id: "a") == nil, true, "汽水专辑 id:不是数字挡掉")
+        expectEqual(P.kkboxAlbumAppURL(id: "DY_DcEg9I9ARV8260S")?.absoluteString, "kkbox://album/DY_DcEg9I9ARV8260S#view",
+                    "KKBOX 专辑 → 进 App 的深链")
+        expectEqual(P.kkboxArtistAppURL(id: "CpWsMZtnOiWI4EO-Ej")?.absoluteString, "kkbox://artist/CpWsMZtnOiWI4EO-Ej#view",
+                    "KKBOX 歌手 → 进 App 的深链")
+        expectEqual(P.kkboxAlbumAppURL(id: "a/b") == nil, true, "KKBOX id:带斜杠挡掉")
+        expectEqual(P.kkboxArtistAppURL(id: "") == nil, true, "KKBOX id:空串不给链接")
+        expectEqual(P.amazonAlbumURL(asin: "B0DVKJ3PKW")?.absoluteString, "https://music.amazon.com/albums/B0DVKJ3PKW",
+                    "Amazon 专辑页 URL")
+        expectEqual(P.amazonArtistURL(asin: "B001KX03JE")?.absoluteString, "https://music.amazon.com/artists/B001KX03JE",
+                    "Amazon 歌手页 URL")
+        expectEqual(P.amazonAlbumURL(asin: "b0dvkj3pkw") == nil, true, "Amazon ASIN:小写挡掉")
+        expectEqual(P.spotifyAlbumURL(id: "1e8cp3UgVJORQmHWHjvRiq")?.absoluteString,
+                    "https://open.spotify.com/album/1e8cp3UgVJORQmHWHjvRiq", "Spotify 专辑页 URL")
+        expectEqual(P.spotifyArtistURL(id: "72NhFAGG5Pt91VbheJeEPG")?.absoluteString,
+                    "https://open.spotify.com/artist/72NhFAGG5Pt91VbheJeEPG", "Spotify 歌手页 URL")
+        expectEqual(P.spotifyArtistURL(id: "72NhFAGG5Pt91VbheJeEP") == nil, true, "Spotify id:21 位挡掉")
+        expectEqual(P.youtubeMusicAlbumURL(browseID: "MPREb_OUh6Wf3kq7x")?.absoluteString,
+                    "https://music.youtube.com/browse/MPREb_OUh6Wf3kq7x", "YouTube Music 专辑页 URL")
+        expectEqual(P.youtubeMusicArtistURL(channelID: "UCZONOh3FvcD-a_b")?.absoluteString,
+                    "https://music.youtube.com/channel/UCZONOh3FvcD-a_b", "YouTube Music 歌手页 URL")
+        expectEqual(P.youtubeMusicAlbumURL(browseID: "VLPL123") == nil, true, "YouTube Music 专辑页:不是 MPREb_ 开头挡掉")
+        expectEqual(P.youtubeMusicArtistURL(channelID: "UC") == nil, true, "YouTube Music 歌手页:只有前缀挡掉")
+        expectEqual(P.youtubeMusicArtistURL(channelID: "UC1/../x") == nil, true, "YouTube Music 歌手页:带斜杠挡掉")
+        let withSoda = PlatformLinks(appleMusic: am, qqSong: qq, qqAlbum: nil, qqArtist: nil, neteaseSong: ne, sodaSong: soda)
+        expectEqual(withSoda.songLink(forPlayerBundleID: PlaybackPlayer.soda.bundleIdentifier)?.platform, .soda,
+                    "网页行:汽水播放 → 汽水歌曲页")
+        expectEqual(all.songLink(forPlayerBundleID: PlaybackPlayer.soda.bundleIdentifier) == nil, true,
+                    "网页行:汽水播放但没存它的歌曲页 → nil,不拿别的平台顶上")
+        expectEqual(PlatformLinks(appleMusic: nil, qqSong: nil, qqAlbum: nil, qqArtist: nil, neteaseSong: nil,
+                                  kkboxArtist: P.kkboxArtistAppURL(id: "CpWsMZtnOiWI4EO-Ej")).isEmpty, false,
+                    "只有歌手页也不算 isEmpty")
     }
 }

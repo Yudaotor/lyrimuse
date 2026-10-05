@@ -35,8 +35,10 @@ const kasetAlbumVerdictRev = 1
 type kasetAlbumVerdict struct {
 	album string
 	mv    bool
-	// albumBrowseID:那张专辑的专辑页 id(同专辑预取用,kasetalbumprefetch.go)。
+	// albumBrowseID:那张专辑的专辑页 id(同专辑预取用,kasetalbumprefetch.go;也记进条目,App 拼专辑页)。
 	albumBrowseID string
+	// artistBrowseID:放的这一版署名里歌手那一段的频道 id(记进条目,App 拼歌手页)。判不出专辑时也有。
+	artistBrowseID string
 }
 
 // kasetAlbumLookups:判专辑要问的三样。listed / catalog 的 ok=false 是还没问到,这一回不下结论。
@@ -51,8 +53,8 @@ func kasetSameLength(a, b float64) bool {
 	return a > 0 && b > 0 && math.Abs(a-b) <= kasetSameLengthTolerance
 }
 
-// kasetAlbumVerdictWith 按头注那三条判。这一版的时长取 YouTube Music 登记的,没有才用 playedSecs。纯函数(问法从 l
-// 传进来),单测覆盖。
+// kasetAlbumVerdictWith 按头注那三条判,连同放的这一版署名里歌手的频道 id。这一版的时长取 YouTube Music 登记的,没有才用
+// playedSecs。纯函数(问法从 l 传进来),单测覆盖。
 func kasetAlbumVerdictWith(l kasetAlbumLookups, videoID string, playedSecs float64, artist, title string) (kasetAlbumVerdict, bool) {
 	if videoID == "" {
 		return kasetAlbumVerdict{}, false
@@ -61,6 +63,13 @@ func kasetAlbumVerdictWith(l kasetAlbumLookups, videoID string, playedSecs float
 	if !ok {
 		return kasetAlbumVerdict{}, false
 	}
+	v, ok := kasetAlbumOf(l, videoID, played, playedSecs, artist, title)
+	v.artistBrowseID = played.artistBrowseID
+	return v, ok
+}
+
+// kasetAlbumOf:头注那三条。played 是放的这一版的登记。
+func kasetAlbumOf(l kasetAlbumLookups, videoID string, played ytmusicCredit, playedSecs float64, artist, title string) (kasetAlbumVerdict, bool) {
 	if played.album != "" {
 		return kasetAlbumVerdict{album: played.album, albumBrowseID: played.albumBrowseID}, true
 	}
@@ -118,15 +127,38 @@ func kasetAlbumVerdictFor(videoID string, playedSecs float64, artist, title stri
 	}, videoID, playedSecs, artist, title)
 }
 
-// applyKasetAlbumVerdict:判出来的结论写进条目,连同判的时候用的界面语言和判法版本;都没变返回 false。调用方持有 enrichMu。
+// applyKasetAlbumVerdict:判出来的结论写进条目,连同判的时候用的界面语言和判法版本、专辑页与歌手频道的 id;都没变返回
+// false。专辑页 id 跟着专辑走(判成 MV、没有专辑时一起清掉);这一版的署名里没链着歌手页时,记下过的歌手频道 id 留着。
+// 形状不对的 id 不记(ytmusicBrowseIDOK)。调用方持有 enrichMu。
 func applyKasetAlbumVerdict(e *enrichEntry, v kasetAlbumVerdict, hl string) bool {
+	albumID, artistID := "", e.YouTubeMusicArtistID
+	if ytmusicBrowseIDOK(v.albumBrowseID, ytmusicAlbumBrowsePrefix) {
+		albumID = v.albumBrowseID
+	}
+	if ytmusicBrowseIDOK(v.artistBrowseID, ytmusicChannelPrefix) {
+		artistID = v.artistBrowseID
+	}
 	if e.YouTubeMusicAlbum == v.album && e.YouTubeMusicMV == v.mv && e.YouTubeMusicAlbumLang == hl &&
-		e.YouTubeMusicAlbumRev == kasetAlbumVerdictRev {
+		e.YouTubeMusicAlbumRev == kasetAlbumVerdictRev && e.YouTubeMusicAlbumID == albumID && e.YouTubeMusicArtistID == artistID {
 		return false
 	}
 	e.YouTubeMusicAlbum, e.YouTubeMusicMV, e.YouTubeMusicAlbumLang = v.album, v.mv, hl
 	e.YouTubeMusicAlbumRev = kasetAlbumVerdictRev
+	e.YouTubeMusicAlbumID, e.YouTubeMusicArtistID = albumID, artistID
 	return true
+}
+
+// YouTube Music 专辑页的 browseId、歌手频道 id 的开头。
+const (
+	ytmusicAlbumBrowsePrefix = "MPREb_"
+	ytmusicChannelPrefix     = "UC"
+)
+
+// ytmusicBrowseIDOK:以 prefix 开头、后面跟着字母数字和 - _ 的页面 id。App 侧 PlatformLinks 的形状闸与这里同源。
+func ytmusicBrowseIDOK(id, prefix string) bool {
+	return strings.HasPrefix(id, prefix) && catalogIDChars(id, len(prefix)+1, 64, func(r rune) bool {
+		return isASCIIAlnumRune(r) || r == '-' || r == '_'
+	})
 }
 
 var (

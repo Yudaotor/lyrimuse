@@ -72,6 +72,8 @@
 "%d 个源的歌词正文相同" = "%d sources returned identical lyrics";
 "%d 次" = "×%d";
 "/ %@ 页" = "of %@";
+"Amazon Music 专辑页" = "Amazon Music album page";
+"Amazon Music 歌手页" = "Amazon Music artist page";
 "Amazon Music 歌曲页" = "Amazon Music song page";
 "Apple Music" = "Apple Music";
 "Apple Music 登录已失效（过期或被吊销），需要重新连接" = "Your Apple Music sign-in is no longer valid (expired or revoked). Reconnect to continue.";
@@ -124,12 +126,17 @@
 "Scrobble 规则" = "Scrobble Rules";
 "Server酱" = "ServerChan";
 "Spotify 上放的歌没有记到 Last.fm" = "Songs played on Spotify aren't being scrobbled";
+"Spotify 专辑页" = "Spotify album page";
+"Spotify 歌手页" = "Spotify artist page";
+"Spotify 歌曲页" = "Spotify song page";
 "Spotify 每首会记两次" = "Each Spotify song is scrobbled twice";
 "Token 无效，请重新拷贝一次" = "Invalid token — copy it again";
 "Webhook 地址" = "Webhook URL";
+"YouTube Music 专辑页" = "YouTube Music album page";
 "YouTube Music 原名" = "Original name on YouTube Music";
 "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）" = "YouTube Music is not available in this network's region (a regional restriction, not a network fault)";
 "YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选你平时用来听歌的（可以多选）——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改" = "YouTube Music plays in a browser, so Lyrimuse needs to know which one to read the playback position from. Pick the ones you listen in (you can choose more than one) — macOS will ask you to authorise them, just allow. You can change this later under Web Players in Settings";
+"YouTube Music 歌手页" = "YouTube Music artist page";
 "YouTube Music 歌曲页" = "YouTube Music song page";
 "YouTube Music 用哪个浏览器？" = "Which browser do you use for YouTube Music?";
 "YouTube Music 的浏览器" = "Browser for YouTube Music";
@@ -501,6 +508,8 @@
 "在 Edge 菜单栏依次打开「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。" = "In Edge’s menu bar: View → Developer → Allow JavaScript from Apple Events.";
 "在 GitHub 提 issue" = "Request it on GitHub";
 "在 KKBOX 中显示" = "Show in KKBOX";
+"在 KKBOX 中显示专辑" = "Show Album in KKBOX";
+"在 KKBOX 中显示歌手" = "Show Artist in KKBOX";
 "在 Last.fm 上喜欢" = "Love on Last.fm";
 "在 Last.fm 打开" = "Open on Last.fm";
 "在 Last.fm 网站查看主页" = "View My Profile on Last.fm";
@@ -1148,6 +1157,9 @@
 "毛玻璃的材质浓淡（五档）" = "Frosted glass material density (five levels)";
 "毛玻璃背景" = "Frosted Glass Background";
 "汽水音乐" = "Soda Music";
+"汽水音乐专辑页" = "Soda Music album page";
+"汽水音乐歌手页" = "Soda Music artist page";
+"汽水音乐歌曲页" = "Soda Music song page";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更）——这不是这首歌没有歌词，等一次版本更新通常会修好" = "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it";
 "没在运行，查不到当前状态" = "Not running, so its status can’t be read";
 "没找到这首的歌词" = "No lyrics found for this song";

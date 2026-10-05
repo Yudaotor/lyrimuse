@@ -135,7 +135,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	// poller.go handle() 那种"刚确认是新曲目"的现场时刻。
 	// 桥接来的只查缓存,见 enrichmentFor。
 	enr := enrichmentFor(s)
-	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "kkbox_url", "amazon_url", "youtube_music_url", "cover_source", "lyrics_source"} {
+	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "kkbox_url", "amazon_url", "youtube_music_url", "soda_url", "cover_source", "lyrics_source"} {
 		v := enr[k]
 		if k == "cover_url" {
 			// 这份 info 是**要离开这台机器**的(ListenBrainz 的 additional_info,

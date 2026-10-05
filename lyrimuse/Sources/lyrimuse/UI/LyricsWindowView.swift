@@ -3324,13 +3324,13 @@ struct LyricsWindowView: View {
                     openCatalogPage(album: false)
                 }
             }
-            // ---- QQ 音乐 / 网易云的目录动作。AM 有自己那套(上面这块) ----
+            // ---- 非 AM 播放器的目录动作(歌曲页 / 专辑页 / 歌手页)。AM 有自己那套(上面这块) ----
             //
-            // 只给**当前播放器**那一个平台,不把三个平台全铺进菜单(菜单每多一行都在变长)。
+            // 只给**当前播放器**那一个平台,不把各平台全铺进菜单(菜单每多一行都在变长)。
             // 「显示简介」面板那行「网页」同样只给当前播放器,两处口径一致;区别只在
-            // 菜单多给 QQ 的专辑页 / 歌手页。
+            // 菜单多给专辑页 / 歌手页(引擎记下了 id 的那几家)。
             //
-            // 文案统一写「…页」而不是「在 XX 中打开」:这些**全部落在浏览器**。QQ 音乐没有
+            // 文案统一写「…页」而不是「在 XX 中打开」:这些**落在浏览器**(KKBOX 那几条是进 App 的深链,除外)。QQ 音乐没有
             // associated-domains 授权(y.qq.com 不会被 App 接走),它注册的 qqmusicmac://
             // 命令表只有 playsong/downloadsong、没有"打开这一页"的语义(而 playsong 会把
             // 正在放的这首从头重播,不是我们要的)。详见 PlatformLinks 的头注。
@@ -3440,14 +3440,29 @@ struct LyricsWindowView: View {
             // 网易云只白捡歌曲页:引擎解出过专辑 ID,但它只活在内存里给同专辑预取用,
             // 没有落进 enrich 缓存(要加得动引擎,与 QQ 那两个 mid 同一条路)。
             if let u = links.neteaseSong { out.append(.init(id: "ne-song", title: L10n.t("网易云音乐歌曲页"), url: u)) }
+        } else if bundleID == PlaybackPlayer.soda.bundleIdentifier {
+            if let u = links.sodaSong { out.append(.init(id: "soda-song", title: L10n.t("汽水音乐歌曲页"), url: u)) }
+            if let u = links.sodaAlbum { out.append(.init(id: "soda-album", title: L10n.t("汽水音乐专辑页"), url: u)) }
+            if let u = links.sodaArtist { out.append(.init(id: "soda-artist", title: L10n.t("汽水音乐歌手页"), url: u)) }
         } else if bundleID == PlaybackPlayer.kkbox.bundleIdentifier {
             // KKBOX 的是进 App 的深链(见 PlatformLinks.kkboxSong),文案跟上面几条浏览器页不同。
             if let u = links.kkboxSong { out.append(.init(id: "kkbox-song", title: L10n.t("在 KKBOX 中显示"), url: u)) }
+            if let u = links.kkboxAlbum { out.append(.init(id: "kkbox-album", title: L10n.t("在 KKBOX 中显示专辑"), url: u)) }
+            if let u = links.kkboxArtist { out.append(.init(id: "kkbox-artist", title: L10n.t("在 KKBOX 中显示歌手"), url: u)) }
+        } else if bundleID == PlaybackPlayer.spotify.bundleIdentifier {
+            // 浏览器里的网页;在 Spotify 客户端里跳到这首的是下面「在 Spotify 中显示」那条。
+            if let u = links.spotifySong { out.append(.init(id: "spotify-song", title: L10n.t("Spotify 歌曲页"), url: u)) }
+            if let u = links.spotifyAlbum { out.append(.init(id: "spotify-album", title: L10n.t("Spotify 专辑页"), url: u)) }
+            if let u = links.spotifyArtist { out.append(.init(id: "spotify-artist", title: L10n.t("Spotify 歌手页"), url: u)) }
         } else if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier {
             if let u = links.amazonSong { out.append(.init(id: "amazon-song", title: L10n.t("Amazon Music 歌曲页"), url: u)) }
+            if let u = links.amazonAlbum { out.append(.init(id: "amazon-album", title: L10n.t("Amazon Music 专辑页"), url: u)) }
+            if let u = links.amazonArtist { out.append(.init(id: "amazon-artist", title: L10n.t("Amazon Music 歌手页"), url: u)) }
         } else if bundleID == PlaybackPlayer.kaset.bundleIdentifier {
             // 落到浏览器的网页,不是 Kaset 自己的深链(那条一打开就开始放,见 PlatformLinks.youtubeMusicSong)。
             if let u = links.youtubeMusicSong { out.append(.init(id: "ytm-song", title: L10n.t("YouTube Music 歌曲页"), url: u)) }
+            if let u = links.youtubeMusicAlbum { out.append(.init(id: "ytm-album", title: L10n.t("YouTube Music 专辑页"), url: u)) }
+            if let u = links.youtubeMusicArtist { out.append(.init(id: "ytm-artist", title: L10n.t("YouTube Music 歌手页"), url: u)) }
         }
         return out
     }
@@ -3971,6 +3986,7 @@ struct LyricsWindowView: View {
         case .kkbox: return "KKBOX"
         case .amazonMusic: return "Amazon Music"
         case .youtubeMusic: return "YouTube Music"
+        case .soda: return L10n.t("汽水音乐")
         }
     }
 

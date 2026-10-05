@@ -186,9 +186,24 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 	if winner.YouTubeMusicURL == "" {
 		winner.YouTubeMusicURL = loser.YouTubeMusicURL
 	}
+	if winner.SodaURL == "" {
+		winner.SodaURL = loser.SodaURL
+	}
+	for _, f := range []struct{ dst, src *string }{
+		{&winner.SodaAlbumID, &loser.SodaAlbumID}, {&winner.SodaArtistID, &loser.SodaArtistID},
+		{&winner.KKBOXAlbumID, &loser.KKBOXAlbumID}, {&winner.KKBOXArtistID, &loser.KKBOXArtistID},
+		{&winner.AmazonAlbumASIN, &loser.AmazonAlbumASIN}, {&winner.AmazonArtistASIN, &loser.AmazonArtistASIN},
+		{&winner.SpotifyAlbumID, &loser.SpotifyAlbumID}, {&winner.SpotifyArtistID, &loser.SpotifyArtistID},
+		{&winner.YouTubeMusicArtistID, &loser.YouTubeMusicArtistID},
+	} {
+		if *f.dst == "" {
+			*f.dst = *f.src
+		}
+	}
 	if winner.YouTubeMusicAlbumLang == "" && loser.YouTubeMusicAlbumLang != "" {
 		winner.YouTubeMusicAlbum, winner.YouTubeMusicMV, winner.YouTubeMusicAlbumLang, winner.YouTubeMusicAlbumRev =
 			loser.YouTubeMusicAlbum, loser.YouTubeMusicMV, loser.YouTubeMusicAlbumLang, loser.YouTubeMusicAlbumRev
+		winner.YouTubeMusicAlbumID = loser.YouTubeMusicAlbumID
 	}
 	if winner.YouTubeMusicAlbum == "" && !winner.YouTubeMusicMV && winner.YouTubeMusicAlbumLang == "" {
 		winner.YouTubeMusicAlbum = loser.YouTubeMusicAlbum

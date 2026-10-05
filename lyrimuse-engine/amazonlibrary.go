@@ -97,11 +97,14 @@ func amazonFirstJSONObject(raw []byte, v any) bool {
 	return json.NewDecoder(bytes.NewReader(raw[i:])).Decode(v) == nil
 }
 
+// amazonCatalogKeyPrefix:目录缓存里一首的键是它加上 ASIN。
+const amazonCatalogKeyPrefix = "*.MusicContent.CacheEntry.PrimeCatalog_KATANA_"
+
 // amazonCatalog 查一组 ASIN 的目录缓存。查不到的不在结果里。
 func amazonCatalog(asins []string) map[string]amazonCatalogTrack {
 	keys := make([][]byte, 0, len(asins))
 	for _, a := range asins {
-		keys = append(keys, []byte("*.MusicContent.CacheEntry.PrimeCatalog_KATANA_"+a))
+		keys = append(keys, []byte(amazonCatalogKeyPrefix+a))
 	}
 	out := map[string]amazonCatalogTrack{}
 	for k, v := range ldbGet(amazonLocalStorageDir(), keys) {
@@ -109,7 +112,7 @@ func amazonCatalog(asins []string) map[string]amazonCatalogTrack {
 		if !amazonFirstJSONObject(v, &t) || t.Title == "" || t.Artist.Name == "" {
 			continue
 		}
-		out[strings.TrimPrefix(k, "*.MusicContent.CacheEntry.PrimeCatalog_KATANA_")] = t
+		out[strings.TrimPrefix(k, amazonCatalogKeyPrefix)] = t
 	}
 	return out
 }

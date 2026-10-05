@@ -62,6 +62,7 @@ type sodaPreloadedTrack struct {
 	at       int64 // 缓存建立的时刻(秒)
 	upcoming upcomingTrack
 	albumID  string // 给同专辑兜底找专辑用(sodaalbum.go)
+	artistID string // 第一位歌手的 id,歌手页用(playercatalog.go)
 	// 试听段(毫秒),给非会员试听的时长换算用(sodaPreloadPreview);没有就是 0。
 	previewStartMs, previewDurMs, fullMs int64
 }
@@ -171,10 +172,14 @@ func sodaPreloadFromRecord(v any) (sodaPreloadedTrack, bool) {
 	name, _ := p["name"].(string)
 	name = strings.TrimSpace(name)
 	var artists []string
+	artistID := ""
 	arr, _ := p["artists"].([]any)
 	for _, a := range arr {
 		m, _ := a.(map[string]any)
 		if s, _ := m["name"].(string); strings.TrimSpace(s) != "" {
+			if len(artists) == 0 {
+				artistID, _ = m["id"].(string)
+			}
 			artists = append(artists, strings.TrimSpace(s))
 		}
 	}
@@ -193,7 +198,7 @@ func sodaPreloadFromRecord(v any) (sodaPreloadedTrack, bool) {
 		pvDur, _ = msgpackrInt(pv["duration"])
 	}
 	// 歌手用 "/" 连起来,跟 sodaUpcomingArtist 同一个理由:要跟播放器报的完整串对得上。
-	return sodaPreloadedTrack{id: id, at: at, albumID: albumID, previewStartMs: pvStart, previewDurMs: pvDur, fullMs: ms, upcoming: upcomingTrack{
+	return sodaPreloadedTrack{id: id, at: at, albumID: albumID, artistID: artistID, previewStartMs: pvStart, previewDurMs: pvDur, fullMs: ms, upcoming: upcomingTrack{
 		artist: strings.Join(artists, "/"), title: name, album: strings.TrimSpace(album), duration: float64(ms) / 1000,
 	}}, true
 }

@@ -56,12 +56,23 @@ func spotifyAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 
 // spotifyParseTrackAlbumID 取 spotify.metadata.Track 里所属专辑的 id。拿不到返回 ""。
 func spotifyParseTrackAlbumID(v []byte) string {
+	return spotifyParseTrackRefID(v, 3)
+}
+
+// spotifyParseTrackArtistID 取 spotify.metadata.Track 里第一位歌手的 id(歌手是可重复的第 4 个字段,{1: gid, 2: 名字})。
+// 拿不到返回 ""。
+func spotifyParseTrackArtistID(v []byte) string {
+	return spotifyParseTrackRefID(v, 4)
+}
+
+// spotifyParseTrackRefID:spotify.metadata.Track 第 field 个字段里的 {1: gid},换成 id。
+func spotifyParseTrackRefID(v []byte, field int) string {
 	fields, err := pbParse(spotifyFindAny(v, "spotify.metadata.Track", 0))
 	if err != nil {
 		return ""
 	}
 	for _, f := range fields {
-		if f.num != 3 || f.wire != 2 {
+		if f.num != field || f.wire != 2 {
 			continue
 		}
 		sub, err := pbParse(f.b)

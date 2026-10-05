@@ -58,6 +58,8 @@ type ytmusicCredit struct {
 	durationSecs float64
 	// albumBrowseID:专辑页的 id(browseId),同专辑预取拉曲目表用(kasetalbumprefetch.go)。
 	albumBrowseID string
+	// artistBrowseID:署名行里第一段链到歌手页的 browseId(频道 id `UC…`),见 ytmusicCreditRun。
+	artistBrowseID string
 	// cover:这一版的缩略图(最大的那张换成原图地址,见 ytmusicOriginalThumbnail),音轨版本的是专辑封面。
 	cover string
 }
@@ -148,6 +150,7 @@ func ytmusicCreditFromNext(raw []byte, videoID string) ytmusicCredit {
 		out.artist = strings.TrimSpace(ytmusicCreditRunsText(r["longBylineText"], true))
 		album, albumBrowseID := ytmusicCreditAlbumRun(r["longBylineText"])
 		out.album, out.albumBrowseID = strings.TrimSpace(album), albumBrowseID
+		_, out.artistBrowseID = ytmusicCreditRun(r["longBylineText"], "MUSIC_PAGE_TYPE_ARTIST")
 		out.videoType = ytmusicCreditVideoType(r["navigationEndpoint"])
 		out.durationSecs = ytmusicParseDurationText(ytmusicCreditRunsText(r["lengthText"], false))
 		out.cover = ytmusicCreditThumbnail(r["thumbnail"])
@@ -182,6 +185,12 @@ func ytmusicCreditThumbnail(node any) string {
 // ytmusicCreditAlbumRun:署名行里链到专辑页(MUSIC_PAGE_TYPE_ALBUM)的那一段,连同专辑页的 id。音轨版本才有,MV / 视频
 // 那一段是播放量。
 func ytmusicCreditAlbumRun(node any) (string, string) {
+	return ytmusicCreditRun(node, "MUSIC_PAGE_TYPE_ALBUM")
+}
+
+// ytmusicCreditRun:署名行里第一段链到 pageType 那种页面的文字和页面 id(browseId)。歌手那一段是 MUSIC_PAGE_TYPE_ARTIST;
+// 用户上传的视频链的是上传者的频道(MUSIC_PAGE_TYPE_USER_CHANNEL),不算歌手。
+func ytmusicCreditRun(node any, pageType string) (string, string) {
 	m, _ := node.(map[string]any)
 	runs, _ := m["runs"].([]any)
 	for _, run := range runs {
@@ -190,7 +199,7 @@ func ytmusicCreditAlbumRun(node any) (string, string) {
 		browse, _ := nav["browseEndpoint"].(map[string]any)
 		configs, _ := browse["browseEndpointContextSupportedConfigs"].(map[string]any)
 		music, _ := configs["browseEndpointContextMusicConfig"].(map[string]any)
-		if music["pageType"] == "MUSIC_PAGE_TYPE_ALBUM" {
+		if music["pageType"] == pageType {
 			text, _ := r["text"].(string)
 			id, _ := browse["browseId"].(string)
 			return text, id

@@ -418,6 +418,25 @@ type enrichEntry struct {
 	YouTubeMusicAlbumLang string `json:"youtube_music_album_lang,omitempty"`
 	// YouTubeMusicAlbumRev:上面三个是按哪一版判法判的(kasetAlbumVerdictRev)。
 	YouTubeMusicAlbumRev int `json:"youtube_music_album_rev,omitempty"`
+	// YouTubeMusicAlbumID / YouTubeMusicArtistID:跟专辑一起判出来的专辑页 browseId(`MPREb_…`)和歌手频道 id(`UC…`),
+	// App 拼成 YouTube Music 的专辑页、歌手页(见 kasetalbum.go applyKasetAlbumVerdict)。不进 fields()。
+	YouTubeMusicAlbumID  string `json:"youtube_music_album_id,omitempty"`
+	YouTubeMusicArtistID string `json:"youtube_music_artist_id,omitempty"`
+
+	// SodaURL:用汽水音乐放这首歌时,它本机数据里这首的曲目 id 拼成的网页分享页
+	// (`https://music.douyin.com/qishui/share/track?track_id=<id>`,见 playercatalog.go)。App 和网页都原样用。
+	SodaURL string `json:"soda_url,omitempty"`
+
+	// 各播放器自己给这首记下的专辑 id 和第一位歌手的 id(Amazon Music 的是 ASIN),用它放这首时从它本机的数据里读
+	// (见 playercatalog.go)。App 拼成那家的专辑页、歌手页;跟 QQAlbumMid 一样不进 fields()。
+	SodaAlbumID      string `json:"soda_album_id,omitempty"`
+	SodaArtistID     string `json:"soda_artist_id,omitempty"`
+	KKBOXAlbumID     string `json:"kkbox_album_id,omitempty"`
+	KKBOXArtistID    string `json:"kkbox_artist_id,omitempty"`
+	AmazonAlbumASIN  string `json:"amazon_album_asin,omitempty"`
+	AmazonArtistASIN string `json:"amazon_artist_asin,omitempty"`
+	SpotifyAlbumID   string `json:"spotify_album_id,omitempty"`
+	SpotifyArtistID  string `json:"spotify_artist_id,omitempty"`
 
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
 	// (enrichjson.go)。
@@ -448,6 +467,7 @@ func (e enrichEntry) fields() map[string]string {
 	put("kkbox_url", e.KKBOXURL)
 	put("amazon_url", e.AmazonURL)
 	put("youtube_music_url", e.YouTubeMusicURL)
+	put("soda_url", e.SodaURL)
 	put("youtube_music_album", e.YouTubeMusicAlbum)
 	put("lyrics", e.Lyrics)
 	put("lyrics_tr", e.LyricsTr)
@@ -674,6 +694,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	}
 	// Spotify 缓存里现在有没有这首的词:同理放在锁外(记忆 30 秒,见 spotifyLocalLyricsAvailable)。
 	spotifyLyricsAvail := bundleID == spotifyBundleID && spotifyLocalLyricsAvailable(artist, title)
+	// 播放器自己给这首记下的专辑、歌手 id(汽水还有歌曲页):读它本机的数据,放在锁外(见 playercatalog.go)。
+	catalogIDs := playerCatalogIDsFor(bundleID, artist, title, album, durationSecs)
 	// Amazon Music 曲目页:它的时钟那一拍记下的 ASIN,另一把锁,同样放在锁外取。
 	amazonURL := amazonTrackURLFor(bundleID, artist, title)
 	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title)
@@ -730,6 +752,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 		// 目录锚点跟电台真曲长一样是异步到位的,条目常常先带着按歌名搜出来的链接写下,锚点到了换成它的页面。
 		if applyAppleCatalogLinkLocked(&e, anchorLink) {
+			spotifyHintDirty = true
+		}
+		if applyPlayerCatalogIDsLocked(&e, bundleID, catalogIDs) {
 			spotifyHintDirty = true
 		}
 		if spotifyHintDirty {
