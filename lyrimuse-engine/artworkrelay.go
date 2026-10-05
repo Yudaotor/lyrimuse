@@ -293,7 +293,7 @@ func ensureArtworkUploadedTo(ctx context.Context, base, token, sha, path string)
 	defer cancel()
 
 	if req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil); err == nil {
-		if resp, err := doHTTPTracked(http.DefaultClient, req); err == nil {
+		if resp, err := doHTTPTracked(relayHTTPClient, req); err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return nil
@@ -319,7 +319,7 @@ func ensureArtworkUploadedTo(ctx context.Context, base, token, sha, path string)
 	}
 	req.Header.Set("Content-Type", artworkContentType(path))
 	req.Header.Set("x-token", token)
-	resp, err := doHTTPTracked(http.DefaultClient, req)
+	resp, err := doHTTPTracked(relayHTTPClient, req)
 	if err != nil {
 		return err
 	}

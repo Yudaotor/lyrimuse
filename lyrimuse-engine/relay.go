@@ -30,6 +30,34 @@ func webRelayConfigured() bool {
 	return webRelayURL != ""
 }
 
+// relayRequestTimeout:推送、启动补「上次播放」这类一次请求的总时限,要装得下「直连探路 + 走系统代理」两次尝试。
+const relayRequestTimeout = proxyFallbackDirectBudget + proxyFallbackProxyBudget + 2*time.Second
+
+// proxyFallbackClient:先直连、不通再走 macOS 系统代理的 client(proxyfallback.go)。不设 Client.Timeout,
+// 理由同 telegramHTTPClient:预算落在每次尝试上,调用方 ctx 上的时限照常生效。走代理的粘性记在 transport
+// 实例上、不分主机,所以每个目标主机各用一个。
+func proxyFallbackClient() *http.Client {
+	return &http.Client{
+		Transport: &proxyFallbackTransport{
+			direct: &http.Transport{
+				TLSHandshakeTimeout: 10 * time.Second,
+				ForceAttemptHTTP2:   true,
+			},
+			viaProxy: &http.Transport{
+				Proxy:               func(*http.Request) (*neturl.URL, error) { return systemProxyURL(), nil },
+				TLSHandshakeTimeout: 10 * time.Second,
+				ForceAttemptHTTP2:   true,
+			},
+		},
+	}
+}
+
+// relayHTTPClient:状态中继的推送与封面托管。中继在 workers.dev 上,一部分网络里直连不通。
+var relayHTTPClient = proxyFallbackClient()
+
+// relaySeedClient:启动补「上次播放」那一次 ListenBrainz 查询。
+var relaySeedClient = proxyFallbackClient()
+
 // relayState converts a snapshot (+ playing/device/listenedAt) into the exact
 // JSON shape the web reads from the state relay's /now (same shape the worker's
 // LB-fallback produces). Reuses lbMeta so all the enrichment (cover/accent/
@@ -94,7 +122,7 @@ func postRelay(ctx context.Context, cfg *config, path string, payload any) error
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, relayRequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(cfg.StateRelayURL, "/")+path, bytes.NewReader(body))
 	if err != nil {
@@ -102,7 +130,7 @@ func postRelay(ctx context.Context, cfg *config, path string, payload any) error
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-token", cfg.StateRelayToken)
-	resp, err := doHTTPTracked(http.DefaultClient, req)
+	resp, err := doHTTPTracked(relayHTTPClient, req)
 	if err != nil {
 		return err
 	}
@@ -127,14 +155,14 @@ type lastListenSeed struct {
 // 这时没在放歌的话,推给中继的是 {"empty":true}:飞书预览照实说「这会儿没在听歌」、网页新访客看到
 // 「还没有收听记录」(实测 3742 次预览里 419 次是这样)。取不到就算了,跟原来一样推空。
 func seedLastListen(ctx context.Context, root, user string, out chan<- lastListenSeed) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, relayRequestTimeout)
 	defer cancel()
 	u := strings.TrimRight(root, "/") + "/1/user/" + neturl.PathEscape(user) + "/listens?count=1"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return
 	}
-	resp, err := doHTTPTracked(http.DefaultClient, req)
+	resp, err := doHTTPTracked(relaySeedClient, req)
 	if err != nil {
 		return
 	}

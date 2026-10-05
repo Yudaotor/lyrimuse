@@ -18,10 +18,11 @@ import (
 // 一句话:代理在这台机器上是**更差**的通道(Last.fm 实测 p50 0.4s→1.2s、失败率 1%→16%,
 // 见 docs/features/12 章),所以它只能是兜底 —— 直连正常时一个包都不该经过它。
 //
-// 生效范围只有两处:doh.go 的 dohHTTPClient(dohHostSuffixes,当前只有 .musixmatch.com),
-// 和 alerter.go 的 telegramHTTPClient(推送到 api.telegram.org)。其它歌词源(netease/qq/kugou/lrclib/kuwo/migu/amll/
+// 生效范围:doh.go 的 dohHTTPClient(dohHostSuffixes,当前只有 .musixmatch.com)、alerter.go 的 telegramHTTPClient
+// (推送到 api.telegram.org),以及 relay.go 的 relayHTTPClient / relaySeedClient(状态中继的推送与封面托管、启动补
+// 「上次播放」那一次 ListenBrainz 查询)。其它歌词源(netease/qq/kugou/lrclib/kuwo/migu/amll/
 // lyricfind)走 lyricsourcedial.go 的 lyricSourceTransport(系统 DNS 优先、不答才
-// DoH,**没有**代理兜底),Last.fm / ListenBrainz / iTunes 等仍是 http.DefaultTransport。
+// DoH,**没有**代理兜底),Last.fm / ListenBrainz 提交 / iTunes 等仍是 http.DefaultTransport。
 const (
 	// proxyFallbackDirectBudget:直连探路预算。黑洞的特征是 SYN 石沉大海 —— 量
 	// 到的三次侥幸成功都落在 1.3s / 3.4s(SYN 重传之后),而路通的时候 TCP+TLS 全程 <1s。

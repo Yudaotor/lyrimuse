@@ -176,3 +176,15 @@ func TestRelayStatusMatchesSharedSamples(t *testing.T) {
 		}
 	}
 }
+
+// 中继的请求先直连、不通再走系统代理;中继和 ListenBrainz 各用一个,走代理的粘性不互相带。
+func TestRelayClientsFallBackToSystemProxy(t *testing.T) {
+	push, ok1 := relayHTTPClient.Transport.(*proxyFallbackTransport)
+	seed, ok2 := relaySeedClient.Transport.(*proxyFallbackTransport)
+	if !ok1 || !ok2 || push == seed {
+		t.Fatalf("relay=%T seed=%T same=%v", relayHTTPClient.Transport, relaySeedClient.Transport, push == seed)
+	}
+	if relayRequestTimeout < proxyFallbackDirectBudget+proxyFallbackProxyBudget {
+		t.Fatalf("总时限 %v 装不下直连 + 代理两次尝试", relayRequestTimeout)
+	}
+}

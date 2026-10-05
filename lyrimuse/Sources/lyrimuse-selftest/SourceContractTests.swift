@@ -4273,11 +4273,15 @@ func runSourceContractTests() {
         }
         expectEqual(platformPages.contains("return readPlatformPagesWanted(configFilePath(platformPagesWantedFileName))"), true,
                     "Last.fm 榜单: 引擎每轮读 App 写的预取清单")
-        // 网页推送:引擎把推送结果写进状态文件(relaystatus.go),设置页据此报红 / 橙。
+        // 网页推送:引擎把推送结果写进状态文件(relaystatus.go),设置页据此报红 / 橙;中继相关的请求先直连、不通再走系统代理。
         func relayEngineSource(_ name: String) -> String {
             (try? String(contentsOf: appDir.deletingLastPathComponent().deletingLastPathComponent()
                 .deletingLastPathComponent().appendingPathComponent("lyrimuse-engine/" + name), encoding: .utf8)) ?? ""
         }
+        let relayGo = relayEngineSource("relay.go"), artworkRelayGo = relayEngineSource("artworkrelay.go")
+        expectEqual(!relayGo.isEmpty && !artworkRelayGo.isEmpty
+                    && !relayGo.contains("http.DefaultClient") && !artworkRelayGo.contains("http.DefaultClient"), true,
+                    "网页推送: 推送、封面托管、补「上次播放」都走先直连后代理的 client")
         expectEqual(relayEngineSource("main.go").contains("clientName+\"-relay-status.json\"")
                     && RelayPushStatus.fileName == "lyrimuse-relay-status.json"
                     && relayEngineSource("relaystatus.go").contains("const relayStatusSchema = \(RelayPushStatus.currentSchema)\n"), true,
