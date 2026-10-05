@@ -223,7 +223,8 @@ struct LyricsWindowActionsCapsule: View {
     /// 第三格是个朝上的箭头:指针停上去一会儿、或点一下,往上弹出一颗小菜单(现在只有「用外部编辑器改歌词」),
     /// 箭头转成朝下;再点一下收起。
     private var arrowSlot: some View {
-        let label = menu.isOpen ? L10n.t("收起") : L10n.t("更多")
+        // 左栏「⋯」那颗叫「更多」,这里别重名,旁白里分不出是哪一颗。
+        let label = menu.isOpen ? L10n.t("收起") : L10n.t("更多歌词操作")
         return Button {
             setMenu(!menu.isOpen)
         } label: {

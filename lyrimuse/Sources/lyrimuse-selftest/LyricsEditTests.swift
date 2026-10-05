@@ -78,6 +78,10 @@ func runLyricsEditTests() {
     expectEqual(fixed.yrc, "[1000,2000](1000,500,0)Hello (1500,500,0)world", "只改字: 改拼写不拆开那个词")
     let added = LyricsWordTimingEdit.apply(edited: "[00:01.00]Hello big world", yrc: "[1000,2000](1000,500,0)Hello (1500,500,0)world", lrc: "")
     expectEqual(added.yrc, "[1000,2000](1000,500,0)Hello big (1500,500,0)world", "只改字: 插进来的词并进前一个词")
+    let prefixed = LyricsWordTimingEdit.apply(edited: "[00:01.00]You're not there",
+                                              yrc: "[1000,2000](1000,500,0)You're (1500,500,0)not (2000,500,0)here", lrc: "")
+    expectEqual(prefixed.yrc, "[1000,2000](1000,500,0)You're (1500,500,0)not (2000,500,0)there",
+                "只改字: 贴着后一个词开头插进来的字母并进后一个词")
 
     // 清空一行 = 删掉这一行;删行时整行歌词里对得上的那行跟着删
     let cleared = LyricsWordTimingEdit.apply(edited: edited("[00:11.00]第二句", "[00:11.00]  "), yrc: yrc, lrc: lrc)

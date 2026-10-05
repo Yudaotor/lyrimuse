@@ -182,8 +182,9 @@ public enum LyricsWordTimingEdit {
         return slots.firstIndex(where: { $0.startMs != nil }) ?? slots.count
     }
 
-    /// 改了字的行:行头和每个词的时间原样,字按原文到新文的逐字对齐归到原来的词里。纯插入的字并进前一个字所在的词
-    /// (在行首就并进后一个);一段被替换掉的字,新字按原来那几个词各占的字数比例分回去,不拆开拉丁词;分不到字的词去掉。
+    /// 改了字的行:行头和每个词的时间原样,字按原文到新文的逐字对齐归到原来的词里。纯插入的字并进前一个字所在的词;
+    /// 在行首、或者贴着后一个词开头插进来(前面是空白、自己不以空白结尾,"not here" 改成 "not there")就并进后一个;
+    /// 一段被替换掉的字,新字按原来那几个词各占的字数比例分回去,不拆开拉丁词;分不到字的词去掉。
     private static func retokenized(_ line: WordLine, to newText: String) -> String {
         var oldChars: [Character] = []
         var owner: [Int] = []
@@ -196,6 +197,7 @@ public enum LyricsWordTimingEdit {
         let newChars = Array(newText)
         var assigned = [String](repeating: "", count: line.words.count)
         var previous: Int?
+        var lastKept: Character?
         var deleted: [Int] = []
         var inserted: [Int] = []
         func flush(next: Int?) {
@@ -203,7 +205,11 @@ public enum LyricsWordTimingEdit {
             guard !inserted.isEmpty else { return }
             let text = String(inserted.map { newChars[$0] })
             if deleted.isEmpty {
-                assigned[previous ?? next ?? 0] += text
+                if let next, lastKept?.isWhitespace == true, text.last?.isWhitespace == false {
+                    assigned[next] += text
+                } else {
+                    assigned[previous ?? next ?? 0] += text
+                }
             } else {
                 distribute(text, over: deleted.map { owner[$0] }, into: &assigned)
             }
@@ -214,6 +220,7 @@ public enum LyricsWordTimingEdit {
                 flush(next: owner[i])
                 assigned[owner[i]].append(newChars[j])
                 previous = owner[i]
+                lastKept = newChars[j]
             case let .delete(i):
                 deleted.append(i)
             case let .insert(j):

@@ -39450,6 +39450,23 @@
           }
         }
       }
+    },
+    "更多歌词操作" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More Lyrics Actions"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多歌詞操作"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
