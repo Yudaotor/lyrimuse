@@ -3332,22 +3332,15 @@ struct LyricsWindowView: View {
             // 「显示简介」面板那行「网页」同样只给当前播放器,两处口径一致;区别只在
             // 菜单多给专辑页 / 歌手页(引擎记下了 id 的那几家)。
             //
-            // 文案统一写「…页」而不是「在 XX 中打开」:这些**落在浏览器**(KKBOX 那几条是进 App 的深链,除外)。QQ 音乐没有
+            // 文案统一写「…页」而不是「在 XX 中打开」:这些**落在浏览器**(KKBOX 那两条是进 App 的深链,除外)。QQ 音乐没有
             // associated-domains 授权(y.qq.com 不会被 App 接走),它注册的 qqmusicmac://
             // 命令表只有 playsong/downloadsong、没有"打开这一页"的语义(而 playsong 会把
             // 正在放的这首从头重播,不是我们要的)。详见 PlatformLinks 的头注。
             if !platformMenuRows.isEmpty {
                 ForEach(platformMenuRows) { row in
-                    // 标题带 ↗:这三项**落在浏览器**,不是在客户端里打开。用户
-                    // 实测问过「这三个不能在客户端打开吗」——不能,而且是查透了的:QQ 音乐
-                    // 整个 bundle 只注册一个 scheme(qqmusicmac),而它的协议处理器
-                    // (QMTenProtocolHandler.mm)完整字符串簇只有三个命令 playsong /
-                    // downloadsong / CODE(登录回调),**没有任何"打开某一页"的命令**;
-                    // qmusic:// 是它自己 webview 的 JS 桥(紧挨着 GeneralWebview
-                    // openUrlString:),外部用不了;也没有 associated-domains。
-                    // 连 `open -a QQ音乐 <y.qq.com URL>` 都实测过:只把 App 拉到前台、
-                    // 窗口数不变、URL 被忽略。所以 ↗ 不是装饰,是如实告知落点。
-                    MoreMenuRow(title: row.title + " ↗") {
+                    // 落到浏览器的行标题带 ↗、进 App 的深链(KKBOX)不带:↗ 是如实告知落点,按链接本身判,
+                    // 别写成每行都拼(07 章决策 110)。QQ 音乐这几页为什么进不了客户端见 PlatformLinks 头注。
+                    MoreMenuRow(title: PlatformLinks.opensInBrowser(row.url) ? row.title + " ↗" : row.title) {
                         closeMoreMenu()
                         NSWorkspace.shared.open(row.url)
                     }
@@ -3356,14 +3349,18 @@ struct LyricsWindowView: View {
             }
             // 「在 XX 中显示」:标题随当前播放器变;Apple Music 走 reveal(在 Music 里定位选中
             // 当前曲目,流媒体曲目也可用);Spotify 原生客户端走 `spotify:track:<id>` 深链跳到
-            // 曲目页(SpotifyReveal;网页版的播放器 bundle 是浏览器,不进这支);其它走
-            // openResolvedPlayer —— 原生播放器激活该 App,网页平台翻到正在放歌的那枚标签页。
+            // 曲目页(SpotifyReveal;网页版的播放器 bundle 是浏览器,不进这支);KKBOX 有歌曲深链时打开它
+            // (`kkbox://song/<id>#view`,跳到这首的页面、不播放);其它走 openResolvedPlayer —— 原生播放器激活该 App,
+            // 网页平台翻到正在放歌的那枚标签页。
             MoreMenuRow(title: String(format: L10n.t("在 %@ 中显示"), playerName ?? L10n.t("播放器"))) {
                 closeMoreMenu()
                 if isAM {
                     runAppleMusicMenuAction { MusicPlaybackController.revealCurrentTrack() }
                 } else if PlaybackCoordinator.shared.resolvedPlayerBundleID == PlaybackPlayer.spotify.bundleIdentifier {
                     SpotifyReveal.revealCurrentTrack { PlaybackCoordinator.shared.openResolvedPlayerApp() }
+                } else if PlaybackCoordinator.shared.resolvedPlayerBundleID == PlaybackPlayer.kkbox.bundleIdentifier,
+                          let song = platformLinks?.kkboxSong {
+                    NSWorkspace.shared.open(song)
                 } else {
                     PlaybackCoordinator.shared.openResolvedPlayer()
                 }
@@ -3446,8 +3443,8 @@ struct LyricsWindowView: View {
             if let u = links.sodaAlbum { out.append(.init(id: "soda-album", title: L10n.t("汽水音乐专辑页"), url: u)) }
             if let u = links.sodaArtist { out.append(.init(id: "soda-artist", title: L10n.t("汽水音乐歌手页"), url: u)) }
         } else if bundleID == PlaybackPlayer.kkbox.bundleIdentifier {
-            // KKBOX 的是进 App 的深链(见 PlatformLinks.kkboxSong),文案跟上面几条浏览器页不同。
-            if let u = links.kkboxSong { out.append(.init(id: "kkbox-song", title: L10n.t("在 KKBOX 中显示"), url: u)) }
+            // KKBOX 的是进 App 的深链(见 PlatformLinks.kkboxAlbumAppURL),文案跟上面几条浏览器页不同。这首歌本身走菜单里
+            // 「在 KKBOX 中显示」那一行(有歌曲深链时打开它),别在这里再加一行同名的。
             if let u = links.kkboxAlbum { out.append(.init(id: "kkbox-album", title: L10n.t("在 KKBOX 中显示专辑"), url: u)) }
             if let u = links.kkboxArtist { out.append(.init(id: "kkbox-artist", title: L10n.t("在 KKBOX 中显示歌手"), url: u)) }
         } else if bundleID == PlaybackPlayer.spotify.bundleIdentifier {

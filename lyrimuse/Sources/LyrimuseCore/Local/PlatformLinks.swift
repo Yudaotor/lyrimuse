@@ -320,6 +320,13 @@ public struct PlatformLinks: Sendable, Equatable {
         raw.hasPrefix("https://y.qq.com/n/ryqq/search?")
     }
 
+    /// 点这个链接是不是落到浏览器:网页地址(http / https)。`kkbox://`、`music://`、`spotify:` 这类进 App 的深链不算。
+    /// 「⋯」菜单据此决定标题带不带 ↗(07 章决策 110)。
+    public static func opensInBrowser(_ url: URL) -> Bool {
+        let scheme = url.scheme?.lowercased()
+        return scheme == "https" || scheme == "http"
+    }
+
     /// `qq_music_url` 里的 songmid(`https://y.qq.com/n/ryqq/songDetail/<mid>`)。搜索兜底链接、别的路径、不像 mid 的
     /// 片段都不认。
     public static func qqSongMID(songPage raw: String) -> String? {

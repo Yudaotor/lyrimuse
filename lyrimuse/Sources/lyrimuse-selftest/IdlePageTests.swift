@@ -343,5 +343,21 @@ func runIdlePageTests() {
         expectEqual(PlatformLinks(appleMusic: nil, qqSong: nil, qqAlbum: nil, qqArtist: nil, neteaseSong: nil,
                                   kkboxArtist: P.kkboxArtistAppURL(id: "CpWsMZtnOiWI4EO-Ej")).isEmpty, false,
                     "只有歌手页也不算 isEmpty")
+
+        // 「⋯」菜单的 ↗ 只给落到浏览器的链接,进 App 的深链不带(07 章决策 110)。
+        for (raw, web) in [("https://y.qq.com/n/ryqq/songDetail/0039MnYb0qxYhV", true), ("http://example.com/a", true),
+                           ("kkbox://album/DY_DcEg9I9ARV8260S#view", false), ("music://music.apple.com/cn/album/1", false),
+                           ("spotify:track:72NhFAGG5Pt91VbheJeEPG", false)] {
+            expectEqual(P.opensInBrowser(URL(string: raw)!), web, "↗ 落点: \(raw)")
+        }
+        let window = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty, false, "↗ 落点(契约): 读到源码")
+        expectEqual(sourceBytes(window, contain: "MoreMenuRow(title: PlatformLinks.opensInBrowser(row.url) ? row.title + \" ↗\" : row.title) {"),
+                    true, "↗ 落点(契约): 「⋯」菜单按链接判带不带 ↗,不是每行都拼")
+        expectEqual(sourceBytes(window, contain: "\"kkbox-song\""), false,
+                    "↗ 落点(契约): KKBOX 这首歌不在目录入口里另占一行(跟下面「在 KKBOX 中显示」同名)")
+        expectEqual(sourceBytes(window, contain: "let song = platformLinks?.kkboxSong {\n                    NSWorkspace.shared.open(song)"),
+                    true, "↗ 落点(契约): 「在 KKBOX 中显示」有歌曲深链时打开它")
     }
 }
