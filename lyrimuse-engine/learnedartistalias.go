@@ -51,6 +51,8 @@ import (
 //   - 给一条已有条目重搜时(selfKey,见 withLearnedAliasSelf),返回的写法只从**别的**条目里取,没有别的条目
 //     作证就不学:这一条采纳的候选挂错了人时,学到的别名会让它每次重搜都找回那个人。它自己的署名仍算进上一条的
 //     「唯一」判断,所以排除它只会让这一条学不到,不会学出原来判成歧义的别名。见 09 章决策 185。
+//   - 正文是用户给的条目(lyricsFromUser)整条不算,也不进「唯一」判断:它的决策记录记的是被换掉的那一份,
+//     署名可能正是用户换掉的那个人。见 09 章决策 186。
 //   - 跟本地标签自身相同的不算别名(它不提供任何新信息;retryArtistIdentities 的 add()
 //     也会去重,这里提前挡掉只是省事)。
 //   - 包含本地标签自身的也不算(「Taylor Swift」名下那首合作曲,源署的是「Taylor Swift、Ed Sheeran、Future」):
@@ -83,7 +85,7 @@ func learnedSourceArtistAlias(artist, selfKey string) string {
 	var names []string
 	distinct := map[string]bool{}
 	for k, e := range enrichCache {
-		if !strings.HasPrefix(k, prefix) {
+		if !strings.HasPrefix(k, prefix) || e.lyricsFromUser() {
 			continue
 		}
 		name := winningCandidateArtist(e)

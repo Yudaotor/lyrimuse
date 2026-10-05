@@ -200,6 +200,39 @@ func TestLearnedAliasSelfMarkedOnOtherReSearches(t *testing.T) {
 	}
 }
 
+// 正文是用户给的条目不算依据:锁定着的、原样采纳的候选,决策记录记的都是被换掉的那一份;采纳之后正文又被自动换过的照常算。
+func TestLearnedSourceArtistAliasIgnoresUserProvidedLyrics(t *testing.T) {
+	adopted := learnedEntry("qq", "Maty Noyes")
+	adopted.ManualPickSHA = manualPickFingerprint(adopted.Lyrics)
+	locked := learnedEntry("qq", "Maty Noyes")
+	locked.ManualLyrics = true
+	for name, e := range map[string]enrichEntry{"原样采纳": adopted, "锁定着": locked} {
+		withEnrichCache(t, map[string]enrichEntry{"海龟先生|Porn Star|海龟先生": e})
+		if got := learnedSourceArtistAlias("海龟先生", ""); got != "" {
+			t.Errorf("%s:正文是用户给的,决策记录里的署名不该学,得到 %q", name, got)
+		}
+	}
+	replaced := learnedEntry("qq", "Mr. Sea Turtle")
+	replaced.ManualPickSHA = manualPickFingerprint("[00:01.00]当初采纳的那份")
+	withEnrichCache(t, map[string]enrichEntry{"海龟先生|Porn Star|海龟先生": replaced})
+	if got := learnedSourceArtistAlias("海龟先生", ""); got != "Mr. Sea Turtle" {
+		t.Errorf("采纳之后正文又被自动换过,决策记录描述的是现在的正文,照常学,得到 %q", got)
+	}
+}
+
+// 正文是用户给的条目也不进「唯一」判断:它的旧署名不会让别的条目学到的别名变成歧义。
+func TestLearnedSourceArtistAliasUserProvidedDoesNotMakeAmbiguous(t *testing.T) {
+	stale := learnedEntry("qq", "Maty Noyes")
+	stale.ManualLyrics = true
+	withEnrichCache(t, map[string]enrichEntry{
+		"海龟先生|Porn Star|海龟先生": stale,
+		"海龟先生|男孩别哭|海龟先生":      learnedEntry("netease", "Mr. Sea Turtle"),
+	})
+	if got := learnedSourceArtistAlias("海龟先生", ""); got != "Mr. Sea Turtle" {
+		t.Fatalf("用户换掉的那条的旧署名不该让别的条目判成歧义,得到 %q", got)
+	}
+}
+
 // 空歌手名不扫全表。
 func TestLearnedSourceArtistAliasEmptyArtist(t *testing.T) {
 	withEnrichCache(t, map[string]enrichEntry{

@@ -36,6 +36,12 @@ func (e enrichEntry) lyricsHandEdited() bool {
 	return e.ManualLyrics && e.ManualPickSHA != manualPickFingerprint(e.Lyrics)
 }
 
+// lyricsFromUser:正文是用户给的 —— 锁定着(手改过,或采纳时锁上的),或者是原样采纳的候选(manual_pick_sha 跟正文
+// 对得上)。这时 LyricsDecisionApplied 记的是被换掉的那一份,说的不是现在的正文。
+func (e enrichEntry) lyricsFromUser() bool {
+	return e.ManualLyrics || (e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics))
+}
+
 // manualPickCanonicalLyrics 逐行剥掉开头所有 `[...]` 方括号组(行时间戳,以及
 // [ti:]/[ar:]/[al:]/[by:]/[offset:] 这些元数据标签)、去掉首尾空白、丢掉空行。
 //
