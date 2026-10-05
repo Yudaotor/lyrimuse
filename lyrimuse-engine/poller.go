@@ -27,9 +27,15 @@ type playSession struct {
 	// 这段空档可以按位置补,不受 maxAccrualGapSecs 限制。
 	gapHeld    bool
 	listenSent bool
-	lastPN     time.Time
-	// lastfmNPAt:上一次发 Last.fm now-playing 的时刻。跟 lastPN 分开记:lastPN 只在 LB 那条成功后才推进,
-	// LB 挂着(断网 / 5xx / 429 冷却)时每一拍都会再 announce 一次,Last.fm 那一路不能跟着每 5 秒发一次。
+	// listenFailures / listenRetryAt:这首的收听提交连着失败了几次、下一次最早什么时候再试(listenRetrySchedule)。
+	// 只管歌还在放时的重试;会话结束之后的失败进待重发队列(lbretry.go)。
+	listenFailures int
+	listenRetryAt  time.Time
+	// pnTriedAt:上一次往 LB 发 playing_now 的时刻,成败都算。周期刷新、挂起首条的重发都按它隔 playingNowRefresh:
+	// LB 挂着时失败了就等下一次刷新,别改成每拍重发(一个 8 秒超时接一个,对着一个挂掉的服务每 10 秒打一次)。
+	pnTriedAt time.Time
+	// lastfmNPAt:上一次发 Last.fm now-playing 的时刻。LB 那条在播放 / 暂停切换、重新对时这些时候都会发,
+	// Last.fm 那一路自己节流(见 announce 里的 lastfmDue),不跟着发。
 	lastfmNPAt  time.Time
 	lastPlaying bool // last observed play/pause state, to detect transitions
 	pnPending   bool // 首条 playing_now 因歌词还在异步解析而挂起(LB 只认换曲那条,故首条必须带歌词)
@@ -841,11 +847,26 @@ type submitOutcome struct {
 	// shortTrackLastfmOnly);err 恒为 nil,applySubmitOutcome 据此换一行日志。
 	lastfmOnly bool
 	err        error
+	// doneAt:提交结果回来的时刻,失败时据此排下一次重试(listenRetryAt)。没填(测试里手拼的)按处理时的当前时间算。
+	doneAt time.Time
+}
+
+// listenRetrySchedule:歌还在放时,收听提交连着失败第 N 次之后隔多久再试(N 从 1 起,超出表长按最后一档)。
+// 别改成每拍重试:LB 回 502 的时候一首歌会在一分钟里连发十几次。
+var listenRetrySchedule = []time.Duration{15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute}
+
+func listenRetryDelay(failures int) time.Duration {
+	if failures < 1 {
+		failures = 1
+	}
+	if failures > len(listenRetrySchedule) {
+		failures = len(listenRetrySchedule)
+	}
+	return listenRetrySchedule[failures-1]
 }
 
 type announceOutcome struct {
 	sess *playSession
-	at   time.Time
 	ok   bool
 }
 
@@ -886,7 +907,8 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 	go func() {
 		err := p.lb.submit(p.ctx, "single", startedAt, lm)
 		select {
-		case p.submitDoneCh <- submitOutcome{sess: sess, meta: meta, artistName: lm.ArtistName, startedAt: startedAt, lm: lm, err: err}:
+		case p.submitDoneCh <- submitOutcome{sess: sess, meta: meta, artistName: lm.ArtistName, startedAt: startedAt, lm: lm, err: err,
+			doneAt: time.Now()}:
 		case <-p.ctx.Done():
 		}
 	}()
@@ -946,7 +968,14 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 		}
 		if r.sess.ended {
 			enqueueLBRetry(r.startedAt, r.lm)
+			return
 		}
+		doneAt := r.doneAt
+		if doneAt.IsZero() {
+			doneAt = time.Now()
+		}
+		r.sess.listenFailures++
+		r.sess.listenRetryAt = doneAt.Add(listenRetryDelay(r.sess.listenFailures))
 		return
 	}
 	r.sess.listenSent = true
@@ -966,7 +995,6 @@ func (p *poller) applyAnnounceOutcome(r announceOutcome) {
 	if !r.ok {
 		return
 	}
-	r.sess.lastPN = r.at
 	r.sess.pnPending = false
 	p.pushRelayState(time.Now(), false)
 }
@@ -998,8 +1026,8 @@ func (p *poller) finalize(now time.Time) {
 // announce 异步提交一条 playing_now，不阻塞 poll 主循环(理由同 submitSingleAsync)。
 // 歌词/封面是开播后异步解析的;LB 只认"换曲那条"、同曲存活期内拒覆盖,故首条须带
 // 歌词,未就绪时挂起等 enrich(见 handle)。同一个 session 在结果返回前重复调用会被
-// 去重(sess.announcing)；lastPN/pnPending 的变更挪到 applyAnnounceOutcome,调用方
-// 不再能同步拿到"是否成功"。
+// 去重(sess.announcing)；pnPending 在 applyAnnounceOutcome 里清除,调用方拿不到同步的"是否成功"。
+// 发出去就记 pnTriedAt(成败都算),下一次刷新按它隔开。
 // detectAdAtSessionStart 开播时的广告判定:isAdBreak(App 的广告结论)。不是广告的 Spotify
 // 原生播放顺带记下这次的曲目 ID(App 带来的那个),给歌词缓存的真曲目链接与 LB 上送用。
 func (p *poller) detectAdAtSessionStart() bool {
@@ -1030,6 +1058,7 @@ func (p *poller) announce(now time.Time, why string) {
 		return
 	}
 	p.sess.announcing = true
+	p.sess.pnTriedAt = now
 	sess := p.sess
 	m := lbMeta(p.cur)
 	// artist 给 Last.fm 用:跟 m.ArtistName(给 LB 用)取同一份,保证 now-playing 与
@@ -1078,7 +1107,7 @@ func (p *poller) announce(now time.Time, why string) {
 			warnf("submit playing_now (%s) failed: %v", why, err)
 		}
 		select {
-		case p.announceDoneCh <- announceOutcome{sess: sess, at: now, ok: err == nil}:
+		case p.announceDoneCh <- announceOutcome{sess: sess, ok: err == nil}:
 		case <-p.ctx.Done():
 		}
 	}()
@@ -1206,13 +1235,14 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	// instead of waiting up to one refresh interval.
 	submitted := false
 	// 挂起的首条:等 enrich 解析完(enrichNotify 会触发一轮 poll,那时才知有无歌词)或超过
-	// pnPendingMax 再作为"换曲那条"发出。挂起期间不发状态切换/刷新提交(会锁死无歌词的换曲那条)。
+	// pnPendingMax 再作为"换曲那条"发出,发出去失败了隔 playingNowRefresh 再发(pnTriedAt)。
+	// 挂起期间不发状态切换/刷新提交(会锁死无歌词的换曲那条)。
 	if p.sess.pnPending {
 		// isNewTrack 传 false:这是同一个 session 里等 enrich 完成的轮询重试,不是新曲目
 		// 开始播放的那一刻,不该再取一次设备封面(那一刻已经在上面 "New track" 分支取过了)。
 		resolved := !p.cur.SodaPreviewPending &&
 			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), false, p.cur.Radio)) > 0
-		if resolved || now.Sub(p.sess.startedAt) >= pnPendingMax {
+		if (resolved || now.Sub(p.sess.startedAt) >= pnPendingMax) && now.Sub(p.sess.pnTriedAt) >= playingNowRefresh {
 			p.announce(now, "first") // pnPending 在结果异步返回后由 applyAnnounceOutcome 清除
 		}
 		submitted = true
@@ -1242,10 +1272,11 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	p.settleLastfmPending(p.sess)
 	// Publish a fresh anchor on a re-anchor (seek / sleep-wake) or on the
 	// periodic refresh, so the web always extrapolates from a recent point.
-	if !submitted && (reanchored || now.Sub(p.sess.lastPN) >= playingNowRefresh) {
+	if !submitted && (reanchored || now.Sub(p.sess.pnTriedAt) >= playingNowRefresh) {
 		p.announce(now, "refresh")
 	}
-	if !p.sess.listenSent && !p.sess.submitting && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
+	if !p.sess.listenSent && !p.sess.submitting && !now.Before(p.sess.listenRetryAt) &&
+		p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 		!tooShortToScrobble(p.sess.meta.Duration) {
 		p.sess.submitting = true
 		p.submitSingleAsync(p.sess, p.sess.meta, p.sess.startedAt.Unix())

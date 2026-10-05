@@ -163,7 +163,7 @@ func suppressEnrichResolveForTest(t *testing.T, keys ...string) {
 	})
 }
 
-// LB 挂着时每一拍都会再 announce 一次:Last.fm now-playing 自己节流,播放 / 暂停切换当场发,其余最多每分钟一次。
+// LB 那条在播放 / 暂停切换、重新对时这些时候都会发:Last.fm now-playing 自己节流,播放 / 暂停切换当场发,其余最多每分钟一次。
 func TestAnnounceThrottlesLastfmNowPlaying(t *testing.T) {
 	p := &poller{ctx: context.Background(), lb: &lbClient{dryRun: true}, announceDoneCh: make(chan announceOutcome, 8)}
 	p.cur = snapshot{Artist: "歌手", Title: "歌", Playing: true}
@@ -176,7 +176,7 @@ func TestAnnounceThrottlesLastfmNowPlaying(t *testing.T) {
 		t.Helper()
 		p.announce(at, why)
 		r := <-p.announceDoneCh
-		r.ok = false // 模拟 LB 失败:lastPN 不推进,下一拍照样会再 announce
+		r.ok = false // 模拟 LB 失败
 		p.applyAnnounceOutcome(r)
 	}
 	step(t0, "first")

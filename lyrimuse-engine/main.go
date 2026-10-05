@@ -11,7 +11,6 @@ import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -430,7 +429,7 @@ func main() {
 	yearlyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-yearly-digest.json")
 	topArtistsStatePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-top-artists.json")
 
-	lb := &lbClient{root: cfg.APIRoot, token: cfg.Token, hc: &http.Client{}, dryRun: *dryRun, alerter: alerterFromConfig(cfg)}
+	lb := &lbClient{root: cfg.APIRoot, token: cfg.Token, hc: lbHTTPClient(), dryRun: *dryRun, alerter: alerterFromConfig(cfg)}
 	// 从这里起 config.json 改了就热重读,不用重启(configreload.go)。放在上面那些按 cfg 设好的
 	// 状态之后:热重读换快照时要拿它们当"旧值"比。
 	setLiveConfigAt(*cfgPath, cfg, cfgBaseline)

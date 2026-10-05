@@ -181,7 +181,7 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 		return &lastfmAPIError{Code: out.Error, Message: out.Message, Method: method}
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("lastfm %s: status %d: %s", method, resp.StatusCode, body)
+		return fmt.Errorf("lastfm %s: status %d: %s", method, resp.StatusCode, httpErrorBody(resp.Header.Get("Content-Type"), body))
 	}
 	// track.scrobble 的"被忽略"也是 200:accepted=0,原来会被当成功。不算致命错误,
 	// 但必须如实报出去让日志可见。
