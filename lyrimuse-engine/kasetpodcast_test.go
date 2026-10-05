@@ -22,6 +22,8 @@ func TestKasetPodcastEpisode(t *testing.T) {
 			_, _ = io.WriteString(w, ytmFakeVideoNext(id, ytmusicVideoTypePodcastEpisode))
 		case "OsfAnsMY21M":
 			_, _ = io.WriteString(w, ytmFakeVideoNext(id, ytmusicVideoTypeATV))
+		case "TUVcZfQe-Kw":
+			_, _ = io.WriteString(w, ytmFakeVideoNext(id, ytmusicVideoTypeOMV))
 		default:
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
@@ -31,6 +33,9 @@ func TestKasetPodcastEpisode(t *testing.T) {
 	}
 	if kasetPodcastEpisode("OsfAnsMY21M") {
 		t.Error("音轨版本不是播客单集")
+	}
+	if kasetPodcastEpisode("TUVcZfQe-Kw") {
+		t.Error("MV 不是播客单集")
 	}
 	if kasetPodcastEpisode("Bad0Request") {
 		t.Error("问不成当不是")
