@@ -553,16 +553,16 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarSecondaryLine = LyricSecondaryLine.nextLine
 
     // 「歌词显示 › 触控栏」那一段十项的默认值:`init()` 的 fallback 和 `TouchBarStyleDefaults.restoreDefaults()` 读同一组。
-    // 字号的默认值在 Core(`TouchBarLyricsStyle.defaultFontSize`)。
+    // 字号的默认值在 Core(`TouchBarLyricsStyle.defaultFontSize`)。取值见 17 章决策 31。
     static let defaultTouchBarLyricsKaraoke = true
-    static let defaultTouchBarLyricsFollowsCover = false
+    static let defaultTouchBarLyricsFollowsCover = true
     static let defaultTouchBarShowsArtwork = true
     static let defaultTouchBarShowsControls = true
-    static let defaultTouchBarSecondaryLine = LyricSecondaryLine.off
+    static let defaultTouchBarSecondaryLine = LyricSecondaryLine.nextLine
     static let defaultTouchBarArtworkSide = TouchBarSide.leading
     static let defaultTouchBarControlsSide = TouchBarSide.leading
-    static let defaultTouchBarLyricsAlignment = LyricsRestingAlignment.leading
-    static let defaultTouchBarHidesControlStrip = false
+    static let defaultTouchBarLyricsAlignment = LyricsRestingAlignment.automatic
+    static let defaultTouchBarHidesControlStrip = true
 
     private let defaults = UserDefaults.standard
 
@@ -784,7 +784,7 @@ final class AppSettings: ObservableObject {
     @Published var touchBarShowsControls: Bool {
         didSet { defaults.set(touchBarShowsControls, forKey: Keys.touchBarShowsControls) }
     }
-    /// 触控栏歌词的副行(跟灵动岛 / 菜单栏同一个四选一,各存各的键),默认不显示。开着时两行的字号由触控栏的高定
+    /// 触控栏歌词的副行(跟灵动岛 / 菜单栏同一个四选一,各存各的键),默认「下一句」。开着时两行的字号由触控栏的高定
     /// (`TouchBarLyricsStyle.twoRowMainFontSize` / `twoRowSecondaryFontSize`),`touchBarLyricsFontSize` 不生效。
     @Published var touchBarSecondaryLine: LyricSecondaryLine {
         didSet { defaults.set(touchBarSecondaryLine.rawValue, forKey: Keys.touchBarSecondaryLine) }
@@ -796,11 +796,11 @@ final class AppSettings: ObservableObject {
     @Published var touchBarControlsSide: TouchBarSide {
         didSet { defaults.set(touchBarControlsSide.rawValue, forKey: Keys.touchBarControlsSide) }
     }
-    /// 触控栏歌词装得下的短句靠哪边:同灵动岛那四档(含按对唱声部走的「自动」),默认左对齐,即加这一项之前的样子。
+    /// 触控栏歌词装得下的短句靠哪边:同灵动岛那四档(含按对唱声部走的「自动」),默认「自动」,没有对唱信息时就是左对齐。
     @Published var touchBarLyricsAlignment: LyricsRestingAlignment {
         didSet { defaults.set(touchBarLyricsAlignment.rawValue, forKey: Keys.touchBarLyricsAlignment) }
     }
-    /// 展开时隐藏功能栏:展开条占满整条触控栏,左端换成 App 自己的收起键。默认关:展开期间够不着系统的亮度、音量。
+    /// 展开时隐藏功能栏:展开条占满整条触控栏,左端换成 App 自己的收起键。默认开;开着时展开期间够不着系统的亮度、音量,收起才回来。
     @Published var touchBarHidesControlStrip: Bool {
         didSet { defaults.set(touchBarHidesControlStrip, forKey: Keys.touchBarHidesControlStrip) }
     }
