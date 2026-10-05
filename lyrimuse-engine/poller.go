@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1699,6 +1700,12 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	// 快速通道:App 状态一变就跑一轮,不等主节拍(见 appsource.go)。
 	appTicker := time.NewTicker(appStateCheckInterval)
 	defer appTicker.Stop()
+	// App 一写播放状态就跑一轮:盯着状态文件所在的目录(见 dirwatch.go);盯不了时只剩上面每秒一次的检查。
+	appWrites := make(chan struct{}, 1)
+	if !watchDirWrites(ctx, filepath.Dir(appState.path), appWrites) {
+		warnf("playback source: cannot watch the playback state dir, checking it once a second instead")
+	}
+	var lastWritePoll time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -1765,6 +1772,12 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			p.poll()
 		case <-appTicker.C:
 			if p.app.changed(time.Now()) {
+				p.poll()
+			}
+		case <-appWrites:
+			now := time.Now()
+			if now.Sub(lastWritePoll) >= appStateMinGap && p.app.changed(now) {
+				lastWritePoll = now
 				p.poll()
 			}
 		case r := <-p.submitDoneCh:

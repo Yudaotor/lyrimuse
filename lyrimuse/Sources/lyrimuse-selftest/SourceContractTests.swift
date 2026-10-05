@@ -4296,6 +4296,9 @@ func runSourceContractTests() {
         expectEqual(accountTab.contains("case .misconfigured(let problem): return (relayPushProblemText(problem), true)")
                     && accountTab.contains("case .unreachable(let problem): return (relayPushProblemText(problem), false)"), true,
                     "网页推送: 配置错报红、一直连不上报橙")
+        let pollerGo = relayEngineSource("poller.go")
+        expectEqual(pollerGo.contains("watchDirWrites(ctx, filepath.Dir(appState.path), appWrites)") && pollerGo.contains("case <-appWrites:"), true,
+                    "网页推送: 引擎盯着播放状态所在的目录,App 一写就跑一轮")
         if let fn = stats.range(of: "private func writePlatformPagesWanted() {"),
            let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
             let body = stats[fn.lowerBound..<end.lowerBound]
