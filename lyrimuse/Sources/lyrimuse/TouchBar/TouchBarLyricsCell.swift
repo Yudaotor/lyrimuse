@@ -19,8 +19,8 @@ enum TouchBarLyricsCell {
     /// 副行的字体:11pt,比主行细一档(同灵动岛副行)。
     static let secondaryFont = NSFont.systemFont(ofSize: CGFloat(TouchBarLyricsStyle.twoRowSecondaryFontSize),
                                                  weight: .regular)
-    /// 歌词句的颜色:白色,开了「跟随封面」用封面主色(`coverAccent(hex:)`)。还没唱到的部分是它打 `unsungAlpha`
-    /// 这个折。触控栏底色恒黑,不跟系统浅深色。
+    /// 歌词句的颜色:白色,开了「跟随封面」用封面主色(`coverAccent(hex:)`)。还没唱到的部分打 `unsungAlpha` 这个折,
+    /// 打折走 `dimmedOnBlack`(不暗于白字打同一个折)。触控栏底色恒黑,不跟系统浅深色。
     static let lyricColor = NSColor.white
     static let unsungAlpha: CGFloat = 0.45
     /// 不是歌词的那几档(间奏、歌名、广告)。
@@ -186,6 +186,15 @@ enum TouchBarLyricsCell {
         followsCover ? (coverAccent ?? lyricColor) : lyricColor
     }
 
+    /// 黑底上打 `opacity` 这个折的歌词色(未唱的部分、副行),不暗于白字打同一个折;算法见 Core
+    /// `TouchBarLyricsStyle.dimmedOnBlack`。
+    static func dimmedOnBlack(_ color: NSColor, opacity: CGFloat) -> NSColor {
+        let c = color.usingColorSpace(.sRGB) ?? color
+        let d = TouchBarLyricsStyle.dimmedOnBlack(r: Double(c.redComponent), g: Double(c.greenComponent),
+                                                 b: Double(c.blueComponent), opacity: Double(opacity))
+        return NSColor(srgbRed: d.r, green: d.g, blue: d.b, alpha: 1)
+    }
+
     /// 这一档那一格显示的文字;`.idle` 是 nil(那一格整个藏起来)。
     static func text(for content: TouchBarLyricsContent) -> String? {
         switch content {
@@ -206,7 +215,7 @@ enum TouchBarLyricsCell {
             let alignment = side(inputs.alignment, duetSide: line.side)
             if let words = line.words, !words.isEmpty {
                 // 卡拉OK效果关着:照样按逐字时间轴跟唱滚动,只是不染色(已唱、未唱同一个颜色)。
-                let unsung = inputs.karaoke ? inputs.color.withAlphaComponent(unsungAlpha) : inputs.color
+                let unsung = inputs.karaoke ? dimmedOnBlack(inputs.color, opacity: unsungAlpha) : inputs.color
                 return makeSpec(key: line.plainText ?? "", words: words, base: unsung, fill: inputs.color,
                                 window: nil, alignment: alignment, inputs)
             }
@@ -219,7 +228,7 @@ enum TouchBarLyricsCell {
     }
 
     /// 副行那一行的规格:副行开着、这一刻也有字时才有;nil = 那一行留空,主行不挪位置。整行一个颜色(歌词色打
-    /// `TouchBarLyricsStyle.secondaryRowOpacity` 的折,不做卡拉OK),放不下时跟主行同一个起点、按主行这一句的时长
+    /// `TouchBarLyricsStyle.secondaryRowOpacity` 的折,走 `dimmedOnBlack`,不做卡拉OK),放不下时跟主行同一个起点、按主行这一句的时长
     /// 配速滚;主行不是歌词句时(间奏、前奏里的歌名)按固定速度。对齐跟主行;「自动」时「下一句」按下一句自己的声部
     /// (`nextLineSide`),同灵动岛副行。
     static func secondarySpec(for content: TouchBarLyricsContent, kind: LyricSecondaryLine, nextLineText: String?,
@@ -227,7 +236,7 @@ enum TouchBarLyricsCell {
         guard let text = content.secondaryText(kind, nextLineText: nextLineText) else { return nil }
         var row = inputs
         row.font = secondaryFont
-        let color = inputs.color.withAlphaComponent(CGFloat(TouchBarLyricsStyle.secondaryRowOpacity(for: kind)))
+        let color = dimmedOnBlack(inputs.color, opacity: CGFloat(TouchBarLyricsStyle.secondaryRowOpacity(for: kind)))
         let duetSide: LyricDuet.Side?
         if kind == .nextLine {
             duetSide = nextLineSide

@@ -166,6 +166,33 @@ func runTouchBarTests() {
                     "触控栏副行: 译文最清楚、读音次之、下一句最淡")
     }
 
+    // ---- 黑底上打折的歌词色(未唱的部分、副行):不暗于白字打同一个折,只往亮里补,色相族不变,未唱仍比已唱暗 ----
+    do {
+        typealias S = TouchBarLyricsStyle
+        typealias RGB = (r: Double, g: Double, b: Double)
+        func luma(_ c: RGB) -> Double { 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b }
+        func strongest(_ c: RGB) -> Int { c.r >= c.g && c.r >= c.b ? 0 : (c.g >= c.b ? 1 : 2) }
+        let white = S.dimmedOnBlack(r: 1, g: 1, b: 1, opacity: 0.45)
+        expectEqual(abs(white.r - 0.45) < 0.001 && abs(white.g - 0.45) < 0.001 && abs(white.b - 0.45) < 0.001, true,
+                    "触控栏配色: 白字打折就是同一档的灰(白字模式的样子不变)")
+        // 深红 / 宝蓝 / 墨绿三种封面均值色,先走「跟随封面」本来那两步得到已唱色。
+        let raws: [RGB] = [(0.55, 0.11, 0.11), (0.16, 0.27, 0.71), (0.12, 0.42, 0.23)]
+        for raw in raws {
+            let base = LocalPlaybackSource.brightenedAccent(r: raw.r, g: raw.g, b: raw.b)
+            let sung = LocalPlaybackSource.accentForDarkBackdrop(r: base.r, g: base.g, b: base.b)
+            for opacity in [0.45, 0.6, 0.75] {
+                let dim = S.dimmedOnBlack(r: sung.r, g: sung.g, b: sung.b, opacity: opacity)
+                expectEqual(luma(dim) >= opacity - 0.001, true, "触控栏配色: \(raw) 打 \(opacity) 的折不暗于白字同一档")
+                expectEqual(dim.r >= sung.r * opacity - 1e-9 && dim.g >= sung.g * opacity - 1e-9
+                                && dim.b >= sung.b * opacity - 1e-9, true,
+                            "触控栏配色: \(raw) 打 \(opacity) 的折只往亮里补,不比直接打折暗")
+            }
+            let unsung = S.dimmedOnBlack(r: sung.r, g: sung.g, b: sung.b, opacity: 0.45)
+            expectEqual(luma(unsung) < luma(sung), true, "触控栏配色: \(raw) 未唱仍比已唱暗,看得出唱到哪")
+            expectEqual(strongest(unsung), strongest(sung), "触控栏配色: \(raw) 未唱跟已唱同一个色相族")
+        }
+    }
+
     // ---- 副行开着时的两行:各自那一格的高正好是位图高;照图层行画字的办法量墨迹,两行都不出触控栏、也不互相碰 ----
     do {
         typealias S = TouchBarLyricsStyle
@@ -415,6 +442,13 @@ func runTouchBarTests() {
             expectEqual(restore.contains("settings.\(key) = "), true, "触控栏: 「恢复默认」管到 \(key)")
         }
         expectEqual(restore.contains("showLyricsInTouchBar"), false, "触控栏: 「恢复默认」不碰总开关")
+        // 主行未唱的部分、副行在黑底上打折都走 dimmedOnBlack,不直接打透明度(跟随封面时那样会发糊)。
+        let dimmedColorCell = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsCell.swift")) ?? ""
+        expectEqual(dimmedColorCell.contains("dimmedOnBlack(inputs.color, opacity: unsungAlpha)")
+                        && dimmedColorCell.contains("dimmedOnBlack(inputs.color, opacity: CGFloat(TouchBarLyricsStyle.secondaryRowOpacity(for: kind)))")
+                        && !dimmedColorCell.contains("withAlphaComponent(unsungAlpha)")
+                        && !dimmedColorCell.contains("withAlphaComponent(CGFloat(TouchBarLyricsStyle.secondaryRowOpacity"), true,
+                    "触控栏配色: 未唱的部分、副行打折走 dimmedOnBlack")
 
         // 没有触控栏时:那一段照样在、点进去只有说明卡,搜索只留总开关那一条,控制器不启用。漏一处都不报错,只表现成
         // 没有触控栏的 Mac 上冒出几项拨了没用的设置,或者白调私有接口。

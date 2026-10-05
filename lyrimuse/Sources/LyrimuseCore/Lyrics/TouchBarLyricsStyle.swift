@@ -41,6 +41,14 @@ public enum TouchBarLyricsStyle {
         }
     }
 
+    /// 黑底上打折的歌词色(未唱的部分、副行):效果同在黑底上打 `opacity` 这个透明度,但压暗之后的感知亮度(Rec.709
+    /// luma)不低于白色打同一个折 —— 封面色本来就比白暗,直接打折在黑底上发糊。不够时朝白色混到那个亮度(同
+    /// `LocalPlaybackSource.accentForDarkBackdrop` 的提法),色相族不变、饱和度跟着变淡;白色进来就是白打这个折的灰。
+    /// 结果按不透明色用,只对恒黑的触控栏底成立。见 17 章决策 30。
+    public static func dimmedOnBlack(r: Double, g: Double, b: Double, opacity: Double) -> (r: Double, g: Double, b: Double) {
+        LocalPlaybackSource.accentForDarkBackdrop(r: r * opacity, g: g * opacity, b: b * opacity, lumaFloor: opacity)
+    }
+
     // MARK: - 展开态的版面(实测)
     //
     // 系统模态条默认只占触控栏左边给 App 的那一块,右边收起的功能栏一直在;开了「展开时隐藏功能栏」时占满整条,
