@@ -107,8 +107,6 @@ private final class NotchPlayback: ObservableObject {
     /// 稳态/展开那一行两只耳朵各显示什么(见 NotchEarModule)。
     @Published private(set) var leftEar: NotchEarModule = .title
     @Published private(set) var rightEar: NotchEarModule = .artist
-    /// 换歌翻牌开没开(`AppSettings.notchTrackChangeFlip`):开着时耳朵里的封面走 `NotchEarArtworkFlip`。只影响渲染,同上走这里现读。
-    @Published private(set) var trackChangeFlip: Bool = AppSettings.defaultNotchTrackChangeFlip
     /// 换歌翻牌那条歌名前那枚音符的颜色:封面(高清替代优先)里最鲜艳的那种(`ArtworkVividColor`);没有封面、或封面里
     /// 没有够鲜艳的颜色时为 nil(画白)。换图时在后台算,只认最后一次换图的结果。
     @Published private(set) var vividAccent: Color?
@@ -328,7 +326,6 @@ private final class NotchPlayback: ObservableObject {
             s.$notchCardStyle.removeDuplicates().sink { [weak self] in self?.notchCardStyle = $0 },
             s.$notchLeftEar.removeDuplicates().sink { [weak self] in self?.leftEar = $0 },
             s.$notchRightEar.removeDuplicates().sink { [weak self] in self?.rightEar = $0 },
-            s.$notchTrackChangeFlip.removeDuplicates().sink { [weak self] in self?.trackChangeFlip = $0 },
             Publishers.CombineLatest(p.$highResArtworkImage, p.$artworkImage)
                 .map { highRes, system in highRes ?? system }
                 .removeDuplicates(by: { $0 === $1 })
@@ -1280,7 +1277,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 if isIdleNoTrack {
                     // 经 idleEarIcon 再包一层:有「发现新播放器」的信任提议挂着时换成那个播放器的图标。
                     idleEarIcon(alignment: .leading)
-                } else if leftModule == .artwork, playback.trackChangeFlip {
+                } else if leftModule == .artwork {
                     // 换歌翻牌:封面和广告时的喇叭画在同一枚翻牌里,广告结束、新封面到了,喇叭才能翻成封面。
                     flippingEarArtwork(alignment: .leading, showsAdIcon: controller.isAdBreakNow)
                 } else if controller.isAdBreakNow {
@@ -1365,7 +1362,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     private func earContent(_ module: NotchEarModule, alignment: Alignment) -> some View {
         switch module {
         case .artwork:
-            earArtwork(alignment: alignment)
+            flippingEarArtwork(alignment: alignment, showsAdIcon: false)
         case .controls:
             earControls(alignment: alignment)
         case .elapsed, .remaining:
@@ -1381,29 +1378,14 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
     }
 
-    /// 耳朵里那枚封面小图。
+    /// 耳朵里那枚封面(`NotchEarArtworkFlip`):换歌后新封面到了翻一下,一直开着、不看设置。`showsAdIcon` 只有左耳会传
+    /// true —— 喇叭也画在这枚翻牌里,广告结束才能翻成封面。
     ///
     /// 尺寸走**收起态那一枚**的公式(`contentTopInset − 10`,约 23pt),**不是**歌词行末尾
     /// 那枚 32pt 的:耳朵只有 `contentTopInset` 那么高,32pt 塞进来上下一点余量都不剩。当年
     /// 「封面放不进耳朵」的实测结论(见 artworkThumbnail 上方)量的正是 32pt 那一档。
     ///
     /// 没有封面数据时**整块不画**(不摆占位方块)—— 跟歌词行末尾那枚同一个取舍,理由见那边。
-    @ViewBuilder
-    private func earArtwork(alignment: Alignment) -> some View {
-        if playback.trackChangeFlip {
-            flippingEarArtwork(alignment: alignment, showsAdIcon: false)
-        } else if let image = radioTalkStation?.image ?? playback.highResArtworkImage ?? playback.artworkImage {
-            artworkThumbnail(
-                image,
-                side: NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset))
-                .frame(maxWidth: .infinity, alignment: alignment)
-        } else {
-            Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
-        }
-    }
-
-    /// 换歌翻牌开着时耳朵里那枚封面(`NotchEarArtworkFlip`):换歌后新封面到了翻一下。`showsAdIcon` 只有左耳会传 true ——
-    /// 喇叭也画在这枚翻牌里,广告结束才能翻成封面。尺寸、点击、没封面时不画占位都跟关着时那一格一样。
     private func flippingEarArtwork(alignment: Alignment, showsAdIcon: Bool) -> some View {
         let side = NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset)
         return NotchEarArtworkFlip(

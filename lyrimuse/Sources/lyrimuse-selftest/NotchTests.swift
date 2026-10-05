@@ -956,7 +956,7 @@ func runNotchTests() {
             expectEqual(v.contains(": (trackDrop != nil ? NotchMetrics.trackDropHeight : 0))"), true,
                         "换歌翻牌契约: 关着歌词行时卡片为掉出来的歌名多长一截")
             expectEqual(stageSrc.contains("var trackDrop: NotchTrackDrop? { nil }"), true, "换歌翻牌契约: 预览不掉歌名")
-            expectEqual(ctrlSrc.contains("&& AppSettings.shared.notchTrackChangeFlip")
+            expectEqual(ctrlSrc.contains("&& AppSettings.shared.notchShowsTrackDrop")
                         && ctrlSrc.contains("!isCollapsed && !isExpanded && milestone == nil && !alertHold")
                         && ctrlSrc.contains("trackDropObserver?.cancel()"), true,
                         "换歌翻牌契约: 开关开着、卡片看得见、不在收起 / 展开 / 报喜 / 提醒里才掉,收尾取消订阅")
@@ -964,6 +964,10 @@ func runNotchTests() {
                         "换歌翻牌契约: 开着歌词行时歌名盖上来,稳态那份歌词行让开")
             expectEqual(v.contains("flippingEarArtwork(alignment: .leading, showsAdIcon: controller.isAdBreakNow)"), true,
                         "换歌翻牌契约: 左耳的翻牌连广告时的喇叭一起画(广告结束才能翻成封面)")
+            expectEqual(v.contains("} else if leftModule == .artwork {\n")
+                        && v.contains("case .artwork:\n            flippingEarArtwork(alignment: alignment, showsAdIcon: false)")
+                        && !v.contains("notchShowsTrackDrop"), true,
+                        "换歌翻牌契约: 耳朵里的封面一直走翻牌,「换歌时显示歌名」只管歌名条")
             let dropSrc = src("NotchTrackChangeViews.swift")
             expectEqual(dropSrc.contains("Image(systemName: \"music.note\")")
                         && dropSrc.contains(".foregroundStyle(.white.opacity(0.96))")

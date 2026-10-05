@@ -822,7 +822,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     /// 换歌翻牌的「掉歌名」(`trackDropObserver` 去抖后调):换了一首(判法见 `NotchTrackDropTracker`:不是这个实例看到的
-    /// 第一首、不是广告,声音还没走起来时先不判),开关开着,卡片此刻看得见、不在收起 / 展开 / 报喜 / 提醒里,就让新歌名
+    /// 第一首、不是广告,声音还没走起来时先不判),「换歌时显示歌名」开着,卡片此刻看得见、不在收起 / 展开 / 报喜 / 提醒里,就让新歌名
     /// 掉出来停 `NotchTrackDropRules.holdDuration`;停的时候又换歌就原地换成新的、重新计时。封面那一翻在视图里
     /// (`NotchEarArtworkFlip`),不经这里。
     private func trackChanged(title: String, artist: String, isAdBreak: Bool, isWaitingToPlay: Bool) {
@@ -830,11 +830,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                                                isWaitingToPlay: isWaitingToPlay)
         guard outcome != .none else { return }
         let drops = outcome == .drop
-            && AppSettings.shared.notchTrackChangeFlip
+            && AppSettings.shared.notchShowsTrackDrop
             && lastAppliedShouldShow == true && !isVanished && isSurfaceVisible
             && !isCollapsed && !isExpanded && milestone == nil && !alertHold
         guard drops else {
-            if outcome == .drop, AppSettings.shared.notchTrackChangeFlip {
+            if outcome == .drop, AppSettings.shared.notchShowsTrackDrop {
                 Self.trackDropLog.notice("track drop: skipped, card not showing for \(artist, privacy: .public) - \(title, privacy: .public)")
             }
             clearTrackDrop()

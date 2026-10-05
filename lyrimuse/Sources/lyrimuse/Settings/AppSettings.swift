@@ -269,8 +269,8 @@ final class AppSettings: ObservableObject {
         static let notchHideInFullScreen = "np:notchHideInFullScreen"
         // 收听里程碑:灵动岛自己撑开报喜(ListenMilestoneCenter)。
         static let notchListenMilestones = "np:notchListenMilestones"
-        // 换歌翻牌:换歌时耳朵里的封面翻一下、新歌名从刘海里掉出来(NotchEarArtworkFlip / NotchTrackDropStrip)。
-        static let notchTrackChangeFlip = "np:notchTrackChangeFlip"
+        // 换歌时显示歌名:新歌名从刘海里掉出来(NotchTrackDropStrip)。耳朵里的封面那一翻一直开,不看设置。
+        static let notchShowsTrackDrop = "np:notchShowsTrackDrop"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
         // 悬停时露不露出那排播放控制按钮。默认 true = 改动前的行为。
@@ -441,8 +441,8 @@ final class AppSettings: ObservableObject {
     static let defaultNotchHideInFullScreen = true
     /// 默认开:某首歌第 100 / 1,000…… 次、累计跨过一档时灵动岛报一次喜(连着 Last.fm 才有)。
     static let defaultNotchListenMilestones = true
-    /// 默认开:换歌时耳朵里的封面翻一下,新歌名从刘海里掉出来停几秒。
-    static let defaultNotchTrackChangeFlip = true
+    /// 默认开:换歌时新歌名从刘海里掉出来停几秒。
+    static let defaultNotchShowsTrackDrop = true
     /// 默认关:换歌时弹一条系统通知(歌名、「歌手 — 专辑」、封面),见 `NowPlayingNotifier`。
     static let defaultNowPlayingNotifications = false
     static let defaultNotchShowLyrics = true
@@ -904,10 +904,10 @@ final class AppSettings: ObservableObject {
     @Published var notchListenMilestones: Bool {
         didSet { defaults.set(notchListenMilestones, forKey: Keys.notchListenMilestones) }
     }
-    /// 换歌翻牌:换歌后耳朵里的封面等新图到了翻一下,新歌名从刘海里掉出来停几秒(关着歌词行时卡片多长一截,
-    /// 开着时盖在歌词行上)。封面那一翻由灵动岛视图经 `NotchPlayback` 读;掉歌名由灵动岛控制器判的时候现读。
-    @Published var notchTrackChangeFlip: Bool {
-        didSet { defaults.set(notchTrackChangeFlip, forKey: Keys.notchTrackChangeFlip) }
+    /// 换歌时显示歌名:新歌名从刘海里掉出来停几秒(关着歌词行时卡片多长一截,开着时盖在歌词行上),灵动岛控制器
+    /// 判的时候现读。耳朵里的封面那一翻一直开,不看这一项。
+    @Published var notchShowsTrackDrop: Bool {
+        didSet { defaults.set(notchShowsTrackDrop, forKey: Keys.notchShowsTrackDrop) }
     }
     // 指针划过悬浮歌词时让它淡下去,离开再恢复。**只对桌面悬浮歌词生效**(灵动岛贴在刘海
     // 上、hover 是它展开的手势,让开会互相打架)。
@@ -1878,8 +1878,8 @@ final class AppSettings: ObservableObject {
             ?? Self.defaultNotchHideInFullScreen
         notchListenMilestones = (defaults.object(forKey: Keys.notchListenMilestones) as? Bool)
             ?? Self.defaultNotchListenMilestones
-        notchTrackChangeFlip = (defaults.object(forKey: Keys.notchTrackChangeFlip) as? Bool)
-            ?? Self.defaultNotchTrackChangeFlip
+        notchShowsTrackDrop = (defaults.object(forKey: Keys.notchShowsTrackDrop) as? Bool)
+            ?? Self.defaultNotchShowsTrackDrop
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
         hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
             ?? (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false

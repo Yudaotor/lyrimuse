@@ -36558,48 +36558,48 @@
         }
       }
     },
-    "换歌翻牌" : {
+    "换歌时显示歌名" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Track Change Flip"
+            "value" : "Show Title on Song Change"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "换歌翻牌"
+            "value" : "换歌时显示歌名"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "換歌翻牌"
+            "value" : "換歌時顯示歌名"
           }
         }
       }
     },
-    "换歌时新歌名从刘海下方滑出，旁边的封面翻成新歌的" : {
+    "换歌时新歌名从刘海下方滑出，几秒后收回" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On a song change, the new title slides out below the notch and the cover beside it flips to the new one"
+            "value" : "On a song change, the new title slides out below the notch for a few seconds"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "换歌时新歌名从刘海下方滑出，旁边的封面翻成新歌的"
+            "value" : "换歌时新歌名从刘海下方滑出，几秒后收回"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "換歌時新歌名從瀏海下方滑出，旁邊的封面翻成新歌的"
+            "value" : "換歌時新歌名從瀏海下方滑出，幾秒後收回"
           }
         }
       }

@@ -797,9 +797,9 @@
 "换个筛选条件或关键词试试" = "Try different filters or search terms.";
 "换文件夹后，旧文件不会自动搬过去" = "Existing files aren't moved to the new folder";
 "换歌时弹一条系统通知：封面、歌名、歌手和专辑" = "Show a system notification with the artwork, title, artist and album when a new song starts";
-"换歌时新歌名从刘海下方滑出，旁边的封面翻成新歌的" = "On a song change, the new title slides out below the notch and the cover beside it flips to the new one";
+"换歌时新歌名从刘海下方滑出，几秒后收回" = "On a song change, the new title slides out below the notch for a few seconds";
+"换歌时显示歌名" = "Show Title on Song Change";
 "换歌时显示通知" = "Notify When the Song Changes";
-"换歌翻牌" = "Track Change Flip";
 "换行" = "Wrap";
 "换行（默认）：一行放不下就折到下一行。\n滚动：每行只占一行高，放不下的横向滚动；这一句有逐字时间轴时跟着唱到哪滚到哪。" = "Wrap (default): long lines fold onto the next line.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
 "换行（默认）：一行放不下就折到下一行，窗口跟着变高。\n滚动：每行只占一行高，放不下的横向滚动；这一句有逐字时间轴时跟着唱到哪滚到哪。" = "Wrap (default): long lines fold onto the next line and the window grows taller.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
