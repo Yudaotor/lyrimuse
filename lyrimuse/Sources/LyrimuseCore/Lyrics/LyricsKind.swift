@@ -16,11 +16,11 @@ public enum LyricsKind: String, CaseIterable, Sendable {
     case lineByLine
     /// 只有 `plain_lyrics`(引擎侧的纯文本兜底):有词可读,但没有任何时间戳。
     case plainText
-    /// 引擎联网确证过"这首本来就没有词"(lrclib 的 instrumental / 网易云的 pureMusic)。
+    /// 按纯音乐处理:引擎联网确证过"这首本来就没有词"(lrclib 的 instrumental / 网易云的 pureMusic),
+    /// 或者用户手动标的。
     ///
-    /// 它排在 `.none` **前面**是有意的:确证过的纯音乐跟"没搜到"是两回事,混为一谈正是
-    /// 在歌词管理列表里修过的那个错(一整批 LoL 原声带被显示成刺眼的红色
-    /// 「无歌词」)。统计面板不该把那个错重新犯一遍。
+    /// 排在最前:标了纯音乐就不显示歌词(EnrichCacheReader.makeLyrics),条目里留着的歌词不算数。
+    /// 跟"没搜到"(`.none`)是两回事,统计面板不能把确证过的纯音乐算进「无歌词」。
     case instrumental
     /// 什么都还没有 —— 没搜到,或者还没轮到它。
     case none
@@ -33,10 +33,10 @@ public enum LyricsKind: String, CaseIterable, Sendable {
         hasPlainTextFallback: Bool,
         isInstrumental: Bool
     ) -> LyricsKind {
+        if isInstrumental { return .instrumental }
         if hasWordTiming { return .wordByWord }
         if hasLyrics { return .lineByLine }
         if hasPlainTextFallback { return .plainText }
-        if isInstrumental { return .instrumental }
         return .none
     }
 }

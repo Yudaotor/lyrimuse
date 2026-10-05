@@ -54,6 +54,8 @@ struct LyricsQuickSearchWindow: View {
         /// 当前正文的只取词指纹(「当前使用」双判据);没有正文时 nil。
         let currentFingerprint: String?
         let durationSecs: Double
+        /// 这首眼下是不是标成了纯音乐(搜索面板里纯音乐按钮和说明条的初值)。
+        let isInstrumental: Bool
     }
 
     var body: some View {
@@ -67,7 +69,9 @@ struct LyricsQuickSearchWindow: View {
                 LyricsSearchSheet(
                     artist: context.artist, title: context.title, album: context.album,
                     currentSource: context.currentSource, currentFingerprint: context.currentFingerprint,
-                    durationSecs: context.durationSecs, keepsOpenAfterApply: true
+                    durationSecs: context.durationSecs, keepsOpenAfterApply: true,
+                    isMarkedInstrumental: context.isInstrumental,
+                    onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: context.key, value) }
                 ) { candidate in
                     // 同 LyricsWindowView 的 onApply:saveEdit → 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
                     // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本;
@@ -117,7 +121,7 @@ struct LyricsQuickSearchWindow: View {
         .onReceive(PlaybackCoordinator.shared.$allLines.dropFirst()) { _ in refreshCurrentMarker() }
     }
 
-    /// 正在放的还是面板里这首时,按缓存现状重算「当前使用」要的来源和正文指纹。换了歌就不动:
+    /// 正在放的还是面板里这首时,按缓存现状重算「当前使用」要的来源、正文指纹和纯音乐标记。换了歌就不动:
     /// 这扇窗口开着期间不跟着换歌(见文件头注),换歌由再点一次「搜索歌词…」那条路接手。
     private func refreshCurrentMarker() {
         guard let old = context else { return }
@@ -127,12 +131,16 @@ struct LyricsQuickSearchWindow: View {
             ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         guard key == old.key else { return }
         let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
-        let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
+        let cached = EnrichCacheReader.lookup(artist: artist, title: title, album: album)
+        let lyrics = cached?.storedLyrics ?? ""
         let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
-        guard source != old.currentSource || fingerprint != old.currentFingerprint else { return }
+        let instrumental = cached?.instrumental ?? false
+        guard source != old.currentSource || fingerprint != old.currentFingerprint || instrumental != old.isInstrumental
+        else { return }
         context = Context(
             artist: old.artist, title: old.title, album: old.album, key: old.key,
-            currentSource: source, currentFingerprint: fingerprint, durationSecs: old.durationSecs)
+            currentSource: source, currentFingerprint: fingerprint, durationSecs: old.durationSecs,
+            isInstrumental: instrumental)
     }
 
     private func loadContext() {
@@ -143,13 +151,15 @@ struct LyricsQuickSearchWindow: View {
             ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
         // 「当前使用」双判据要的正文指纹。lookup 走同一份内存缓存,再读一次不贵。
-        let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
+        let cached = EnrichCacheReader.lookup(artist: artist, title: title, album: album)
+        let lyrics = cached?.storedLyrics ?? ""
         let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
         // title 传归一化后的,理由跟 LyricsWindowView.openLyricsSearch 同一处注释——两处
         // 曲目快照算法本来就是"同一套"(见本文件头注),这条也要保持一致。
         context = Context(
             artist: artist, title: EnrichCacheKeys.normalizedTitle(title),
             album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: LocalPlaybackSource.shared.youtubeMusicAlbum),
-            key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs)
+            key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs,
+            isInstrumental: cached?.instrumental ?? false)
     }
 }

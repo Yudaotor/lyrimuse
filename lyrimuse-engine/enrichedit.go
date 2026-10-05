@@ -210,13 +210,25 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		e := enrichCache[req.Key]
 		e.PlainLyrics = req.PlainLyrics
 		e.PlainLyricsSource = req.PlainLyricsSource
+		// 同 save_edit:存进来一份纯文本就撤掉纯音乐标记。
+		if strings.TrimSpace(req.PlainLyrics) != "" {
+			e.Instrumental = false
+		}
 		enrichCache[req.Key] = e
 		return enrichEditOutcome{changed: 1}
 	case "set_instrumental":
 		if req.Key == "" {
 			return enrichEditOutcome{err: fmt.Errorf("set_instrumental: empty key")}
 		}
-		e := enrichCache[req.Key]
+		e, existed := enrichCache[req.Key]
+		if !existed {
+			// 缓存里还没有这首(刚开播、首轮解析没写回,或者本来就不进缓存的播客):不凭空建条目。建出来的没有解析时刻,
+			// 还会让在飞的首轮解析作废,撤标之后一直停在「搜索中」。撤标本来就没什么可撤;标上回报失败,等条目有了再标。
+			if !req.Value {
+				return enrichEditOutcome{}
+			}
+			return enrichEditOutcome{err: fmt.Errorf("set_instrumental: %q is not in the cache yet", req.Key)}
+		}
 		e.Instrumental = req.Value
 		enrichCache[req.Key] = e
 		return enrichEditOutcome{changed: 1}
@@ -279,6 +291,10 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 		e.LyricsBG = ""
 	}
 	e.Lyrics, e.LyricsTr, e.LyricsRoma = req.Lyrics, req.Tr, roma
+	// 存进来一份能显示的歌词,纯音乐标记跟着撤掉:标记优先于歌词(fields、App 的 makeLyrics),不撤的话这份词存了也不显示。
+	if strings.TrimSpace(req.Lyrics) != "" {
+		e.Instrumental = false
+	}
 	if req.TrLang != nil {
 		e.LyricsTrLang = *req.TrLang
 	}

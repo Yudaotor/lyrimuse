@@ -26,9 +26,10 @@ var speakersBackfillTried = map[string]bool{}
 
 // needsLyricSpeakersBackfill:值得补问一次 Musixmatch 的有词条目 —— 还没补过、当前没有对得上正文的标注、
 // Musixmatch 以前给过可用候选(多半认得这首)、像是好几个人唱的(署名里有好几位,或曲名带 feat.)、正文自己
-// 不带演唱者标记,而且 Musixmatch 这个源开着。手改过的不动。
+// 不带演唱者标记,而且 Musixmatch 这个源开着。手改过的、标了纯音乐的不动。
 func needsLyricSpeakersBackfill(e enrichEntry, artist, title string) bool {
-	if e.LyricsSpeakersChecked >= lyricsSpeakersVersion || e.Lyrics == "" || e.lyricsHandEdited() || !lyricSourceEnabled("musixmatch") {
+	if e.LyricsSpeakersChecked >= lyricsSpeakersVersion || e.Lyrics == "" || e.Instrumental || e.lyricsHandEdited() ||
+		!lyricSourceEnabled("musixmatch") {
 		return false
 	}
 	if e.LyricsSpeakers != nil && e.LyricsSpeakers.For == lyricSpeakersFingerprint(e.Lyrics, e.LyricsYRC) {

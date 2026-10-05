@@ -42,6 +42,10 @@ struct LyricsSearchSheet: View {
     /// 留着的话给一条回声、关窗模式直接关;失败 → 关窗模式照旧关(调用方那边的 lastError 红字
     /// 负责说明),留着的话在标题栏说一句、让人直接重试。
     let onApply: (LyricsSearchService.Candidate) async -> Bool
+    /// 打开面板时这首歌是不是标成了纯音乐(宿主读缓存给的)。
+    let isMarkedInstrumental: Bool
+    /// 标 / 撤「纯音乐」:调用方按打开面板时那首歌写回,回报有没有落盘。三个入口都得传(contracts 组守卫钉着)。
+    let onSetInstrumental: (Bool) async -> Bool
 
     /// 正在写回的那条候选的来源(按钮禁用 + 文案变「正在采用…」);nil = 没有在飞的采纳。
     @State private var applyingSource: String?
@@ -53,6 +57,10 @@ struct LyricsSearchSheet: View {
     @State private var appliedFingerprint: String?
     @State private var applyFeedback: ApplyFeedback?
     @State private var applyFeedbackGeneration = 0
+    /// 本次面板存活期间切过的纯音乐标记;nil = 没切过,认宿主给的。换歌、宿主给的值变了都重置。
+    @State private var instrumentalOverride: Bool?
+    /// 纯音乐标记正在写回(标记按钮禁用)。
+    @State private var settingInstrumental = false
 
     private struct ApplyFeedback: Equatable {
         let text: String
@@ -420,6 +428,7 @@ struct LyricsSearchSheet: View {
 
     init(artist: String, title: String, album: String, currentSource: String?, currentFingerprint: String? = nil,
          durationSecs: Double, keepsOpenAfterApply: Bool = false,
+         isMarkedInstrumental: Bool, onSetInstrumental: @escaping (Bool) async -> Bool,
          onApply: @escaping (LyricsSearchService.Candidate) async -> Bool) {
         self.originalArtist = artist
         self.originalTitle = title
@@ -428,6 +437,8 @@ struct LyricsSearchSheet: View {
         self.currentFingerprint = currentFingerprint
         self.durationSecs = durationSecs
         self.keepsOpenAfterApply = keepsOpenAfterApply
+        self.isMarkedInstrumental = isMarkedInstrumental
+        self.onSetInstrumental = onSetInstrumental
         self.onApply = onApply
         self._artist = State(initialValue: artist)
         self._title = State(initialValue: title)
@@ -437,6 +448,9 @@ struct LyricsSearchSheet: View {
     private var isDirty: Bool {
         artist != originalArtist || title != originalTitle || album != originalAlbum
     }
+
+    /// 这首歌眼下是不是标成了纯音乐:面板里切过就认切过之后的,没切过认宿主给的。
+    private var markedInstrumental: Bool { instrumentalOverride ?? isMarkedInstrumental }
 
     /// 「这次搜索是为哪首歌开的」——三个原始字段拼成的标识,给下面 `.task(id:)` / `.onChange`
     /// 用。三个入口里,歌词管理(`sheet(isPresented:)`)与歌词窗口(`sheet(item:)`)在面板存活
@@ -448,13 +462,17 @@ struct LyricsSearchSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(L10n.t("搜索候选歌词")).font(.title3.weight(.semibold))
-                applyFeedbackView
-                Spacer()
-                sourceAvailabilityBadge
-                Button(L10n.t("关闭")) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(L10n.t("搜索候选歌词")).font(.title3.weight(.semibold))
+                    applyFeedbackView
+                    Spacer()
+                    instrumentalButton
+                    sourceAvailabilityBadge
+                    Button(L10n.t("关闭")) { dismiss() }
+                        .keyboardShortcut(.cancelAction)
+                }
+                instrumentalBanner
             }
             .padding(16)
             // 这个面板(sheet 弹出,没有系统标题栏)能拖动。sheet 默认
@@ -464,6 +482,8 @@ struct LyricsSearchSheet: View {
             // 垫在背景层不影响上面"关闭"/来源徽标按钮各自接收点击(SwiftUI 命中测试是
             // 前景优先,背景只接住前景没吃掉的点击)。
             .background(WindowDragHandle())
+            // 说明条随标记出现 / 消失,按钮文字跟着换,一起过渡。
+            .animation(.easeInOut(duration: 0.2), value: markedInstrumental)
 
             Divider()
 
@@ -503,6 +523,7 @@ struct LyricsSearchSheet: View {
             appliedSource = nil
             appliedFingerprint = nil
             applyFeedback = nil
+            instrumentalOverride = nil
         }
         .onChange(of: currentSource) { _, _ in
             appliedSource = nil
@@ -512,6 +533,7 @@ struct LyricsSearchSheet: View {
             appliedSource = nil
             appliedFingerprint = nil
         }
+        .onChange(of: isMarkedInstrumental) { _, _ in instrumentalOverride = nil }
         .task(id: searchSubject) { await load() }
         // 关闭/采纳/Esc 任何一条退出路径都把还在跑的引擎子进程停掉 —— 不停的话
         // 它会继续对九个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
@@ -671,6 +693,8 @@ struct LyricsSearchSheet: View {
                     Label(L10n.t("纯音乐"), systemImage: "waveform")
                 } description: {
                     Text(L10n.t("有源明确说这首是纯音乐，没有可用的歌词候选"))
+                } actions: {
+                    markInstrumentalAction
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !tracksFoundNoLyrics.isEmpty {
@@ -713,8 +737,11 @@ struct LyricsSearchSheet: View {
                     }
                     .padding(.top, 2)
                 } actions: {
-                    // 跟顶部那颗按钮同名:说的是同一件事,不该一个叫"重试"、一个叫"重新搜索"。
-                    Button(L10n.t("重新搜索")) { Task { await load() } }
+                    HStack {
+                        // 跟顶部那颗按钮同名:说的是同一件事,不该一个叫"重试"、一个叫"重新搜索"。
+                        Button(L10n.t("重新搜索")) { Task { await load() } }
+                        markInstrumentalAction
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -804,7 +831,9 @@ struct LyricsSearchSheet: View {
     private var effectiveCurrentFingerprint: String? { appliedSource != nil ? appliedFingerprint : currentFingerprint }
 
     private func isCurrentCandidate(_ c: LyricsSearchService.Candidate) -> Bool {
-        LyricsCandidateDuplicates.isCurrent(
+        // 标成纯音乐时这首没有在用的歌词。
+        guard !markedInstrumental else { return false }
+        return LyricsCandidateDuplicates.isCurrent(
             candidateSource: c.source, candidateFingerprint: c.fingerprint,
             currentSource: effectiveCurrentSource, currentFingerprint: effectiveCurrentFingerprint)
     }
@@ -841,6 +870,8 @@ struct LyricsSearchSheet: View {
         if saved {
             appliedSource = c.source
             appliedFingerprint = c.fingerprint
+            // 存进歌词时引擎顺带撤掉纯音乐标记(enrichedit.go 的 save_edit / save_plain_text)。
+            instrumentalOverride = false
         }
         guard keepsOpenAfterApply else {
             dismiss()
@@ -849,6 +880,73 @@ struct LyricsSearchSheet: View {
         if saved {
             let name = LyricsSource(rawValue: c.source)?.displayName ?? c.source
             showApplyFeedback(String(format: L10n.t("已采用 %@ 的歌词"), name), ok: true)
+        } else {
+            showApplyFeedback(L10n.t("未能保存，请再试一次"), ok: false)
+        }
+    }
+
+    /// 标题栏里标 / 撤「纯音乐」的按钮:图标 + 文字,文字写的是点下去会做什么;标没标上由下面的 `instrumentalBanner` 说。
+    /// 标上之后这首按纯音乐处理:各处不显示歌词,也不再自动搜歌词;歌词留在缓存里,撤掉就回来。有没有搜到候选都在:
+    /// 没搜到不等于纯音乐,标不标由用户定。图标跟歌词管理详情页那对按钮同一组(pianokeys / pianokeys.inverse)。
+    private var instrumentalButton: some View {
+        Button {
+            let value = !markedInstrumental
+            Task { await setInstrumental(value) }
+        } label: {
+            Label(markedInstrumental ? L10n.t("取消纯音乐标记") : L10n.t("标为纯音乐"),
+                  systemImage: markedInstrumental ? "pianokeys.inverse" : "pianokeys")
+        }
+        .help(markedInstrumental
+              ? L10n.t("撤回「纯音乐」标记：有歌词的恢复显示，没有歌词的重新回到自动补搜的队列")
+              : L10n.t("按纯音乐处理：各处不显示歌词，也不再自动搜歌词；已有的歌词会留着，取消标记就恢复"))
+        .disabled(settingInstrumental || applyingSource != nil)
+    }
+
+    /// 标成纯音乐时挂在标题栏下面的说明条:标没标上一眼看得出,也说清这时采用候选会怎样。卡片样式同歌词管理的
+    /// `wordTimingHint`。
+    @ViewBuilder
+    private var instrumentalBanner: some View {
+        if markedInstrumental {
+            Label(L10n.t("已标为纯音乐：各处不显示这首的歌词，也不再自动搜歌词。采用一条候选会取消标记"),
+                  systemImage: "pianokeys.inverse")
+                .font(.callout)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.18)))
+                .transition(.opacity)
+        }
+    }
+
+    /// 空状态里的「标为纯音乐」:有源说这首是纯音乐、或者匹配到了曲目却没有歌词文本,用户多半就在这里拍板。
+    /// 已经标上就不给(标题栏下面的说明条在说)。
+    @ViewBuilder
+    private var markInstrumentalAction: some View {
+        if !markedInstrumental {
+            Button {
+                Task { await setInstrumental(true) }
+            } label: {
+                Label(L10n.t("标为纯音乐"), systemImage: "pianokeys")
+            }
+            .disabled(settingInstrumental || applyingSource != nil)
+        }
+    }
+
+    /// 写回纯音乐标记,等调用方落盘再收尾。等待期间换了歌(小窗再点一次会换 context)这一笔写的是上一首,
+    /// 不改面板上的标记、不回声。
+    private func setInstrumental(_ value: Bool) async {
+        guard !settingInstrumental else { return }
+        let subject = subjectGeneration
+        settingInstrumental = true
+        let saved = await onSetInstrumental(value)
+        settingInstrumental = false
+        guard subject == subjectGeneration else { return }
+        if saved {
+            instrumentalOverride = value
+            // 标上时不回声:标题栏下面那条说明条说的就是这件事。撤掉时说明条收起,回一声。
+            if !value {
+                showApplyFeedback(L10n.t("已取消纯音乐标记"), ok: true)
+            }
         } else {
             showApplyFeedback(L10n.t("未能保存，请再试一次"), ok: false)
         }
@@ -897,7 +995,7 @@ struct LyricsSearchSheet: View {
                     Task { await apply(c) }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(applyingSource != nil)
+                .disabled(applyingSource != nil || settingInstrumental)
             }
             // showsSource: true —— 右侧详情**不跟着**挪去右上角:挪的收益是
             // "多行之间对齐、好扫",而这里永远只有一条候选,没有可对齐的对象;这一行的

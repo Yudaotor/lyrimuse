@@ -975,7 +975,8 @@ func needsTranslationBackfill(e enrichEntry, key string) bool {
 	if !features().LyricsMachineTranslation {
 		return false
 	}
-	if e.Lyrics == "" {
+	// 标了纯音乐的不翻:歌词不显示,翻了也看不到;撤标之后下次播放再补。
+	if e.Lyrics == "" || e.Instrumental {
 		return false
 	}
 	target := myMemoryLangCode(features().LyricsTranslationLanguage)

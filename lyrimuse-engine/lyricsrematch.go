@@ -127,6 +127,15 @@ type lyricsRematchFacts struct {
 	keptWordTiming bool // 有冠军,但换过去会丢掉逐字,留着当前这份
 }
 
+// rematchClearsInstrumental:手动「重新自动匹配」这一轮换了词就撤掉纯音乐标记。换词的判据对着 lyricsRematchOutcome
+// 报 changed / plain_text 的两档(正文、逐字、来源、纯文本有一样变了)。标记压过歌词,不撤的话结论说换了词、各处照样
+// 显示纯音乐;没换词就不动,用户标的照留。自动路径(manual 为 false)永远不撤。
+func rematchClearsInstrumental(manual bool, before, after enrichEntry) bool {
+	return manual && after.Instrumental &&
+		(after.Lyrics != before.Lyrics || after.LyricsYRC != before.LyricsYRC ||
+			after.LyricsSource != before.LyricsSource || after.PlainLyrics != before.PlainLyrics)
+}
+
 // lyricsRematchOutcome 按动手前后的条目定结论:真换了就是 changed,不管是哪一步换的(跨专辑对齐也算)。
 func lyricsRematchOutcome(f lyricsRematchFacts) lyricsRematchResult {
 	b, a := f.before, f.after

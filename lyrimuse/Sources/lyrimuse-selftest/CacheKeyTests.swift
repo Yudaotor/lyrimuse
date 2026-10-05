@@ -662,4 +662,31 @@ func runCacheKeyTests() {
         expectEqual(EnrichCacheReader.betterEntry(newer, scored, "b", "a"), true, "宽松胜者: 其余相同时解析得晚的优先")
         expectEqual(EnrichCacheReader.betterEntry(scored, scored, "a", "b"), true, "宽松胜者: 全同按 key 字典序")
     }
+
+    // ---- 标了纯音乐:按没有歌词交给显示层,歌词留在条目里(EnrichCacheReader.makeLyrics) ----
+    do {
+        func entry(_ json: String) -> EnrichCacheEntry {
+            try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8))
+        }
+        func make(_ e: EnrichCacheEntry) -> EnrichCacheLyrics {
+            EnrichCacheReader.makeLyrics(e, lyrics: "[00:01.00]词", tr: "tr", roma: "roma", yrc: "yrc", plain: "纯文本", bg: "bg")
+        }
+        let marked = make(entry(#"{"lyrics":"[00:01.00]词","instrumental":true,"ts":1}"#))
+        expectEqual([marked.lyrics, marked.lyricsTr, marked.lyricsRoma, marked.lyricsYRC, marked.lyricsBG, marked.plainLyrics]
+                        .allSatisfy(\.isEmpty), true,
+                    "纯音乐标记: 歌词、译文、罗马音、逐字、背景人声、纯文本都不交")
+        expectEqual(marked.instrumental && marked.resolved && !marked.searchIncomplete, true,
+                    "纯音乐标记: 按纯音乐交出去,不报搜索未完成")
+        expectEqual(marked.storedLyrics, "[00:01.00]词", "纯音乐标记: 条目里存着的正文照给「当前使用」判据")
+        let plain = make(entry(#"{"lyrics":"[00:01.00]词","ts":1}"#))
+        expectEqual(plain.lyrics == "[00:01.00]词" && plain.lyricsYRC == "yrc" && plain.plainLyrics == "纯文本" && !plain.instrumental,
+                    true, "纯音乐标记: 没标的照常交出歌词")
+        func blank(_ e: EnrichCacheEntry) -> EnrichCacheLyrics {
+            EnrichCacheReader.makeLyrics(e, lyrics: "", tr: "", roma: "", yrc: "", plain: "", bg: "")
+        }
+        expectEqual(blank(entry(#"{"lyrics_sources_skipped":["qq"],"ts":1}"#)).searchIncomplete, true,
+                    "纯音乐标记: 没标的、有源被跳过,照常报搜索未完成")
+        expectEqual(blank(entry(#"{"lyrics_sources_skipped":["qq"],"instrumental":true,"ts":1}"#)).searchIncomplete, false,
+                    "纯音乐标记: 标了纯音乐的不报搜索未完成")
+    }
 }

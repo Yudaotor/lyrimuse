@@ -344,7 +344,7 @@ func kkboxLyricsRecheckOnce(key string) bool {
 // 它不写 LyricsSourcesSeen),就不再来;kkbox 只有真拿到词才算应答,所以应答过 = 已经打过分。手改过、校准过、
 // 关了自动升级的都不动。
 func kkboxLyricsWorthRecheck(e enrichEntry, bundleID string, pinned, autoUpgrade, available bool) bool {
-	if bundleID != kkboxBundleID || !autoUpgrade || pinned || e.ManualLyrics || !available {
+	if bundleID != kkboxBundleID || !autoUpgrade || pinned || e.ManualLyrics || e.Instrumental || !available {
 		return false
 	}
 	if slices.Contains(e.LyricsSourcesSeen, kkboxLocalLyricsSource) || slices.Contains(e.LyricsSourcesResponded, kkboxLocalLyricsSource) {

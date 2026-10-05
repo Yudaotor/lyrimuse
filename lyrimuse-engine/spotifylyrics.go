@@ -447,7 +447,7 @@ func spotifyLyricsRecheckOnce(key string) bool {
 // 预解析过、或解析跟它赛跑的条目,不补这一次就进不了打分。Musixmatch 给出过候选时不补:两份同源,多一份不改结论。
 // available 由调用方在锁外算好传进来。手改过、校准过、关了自动升级的都不动。
 func spotifyLyricsWorthRecheck(e enrichEntry, bundleID string, pinned, autoUpgrade, available bool) bool {
-	if bundleID != spotifyBundleID || !autoUpgrade || pinned || e.ManualLyrics || !available {
+	if bundleID != spotifyBundleID || !autoUpgrade || pinned || e.ManualLyrics || e.Instrumental || !available {
 		return false
 	}
 	if slices.Contains(e.LyricsSourcesSeen, "musixmatch") ||

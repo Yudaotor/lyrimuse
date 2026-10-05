@@ -38,5 +38,5 @@ func listedAlbumLyricsWorthRecheck(e enrichEntry, album string, pinned, autoUpgr
 	if album != "" || e.YouTubeMusicAlbum == "" || e.LyricsListedAlbum == e.YouTubeMusicAlbum {
 		return false
 	}
-	return e.Lyrics != "" && !e.ManualLyrics && !pinned && autoUpgrade
+	return e.Lyrics != "" && !e.ManualLyrics && !e.Instrumental && !pinned && autoUpgrade
 }

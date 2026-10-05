@@ -378,6 +378,9 @@ type enrichEntry struct {
 	// 跟"Lyrics 为空"要分开看:后者也可能是"所有源都没查到、真的没搜到"这种更含糊的
 	// 情况(用户可能想手动重新搜索候选歌词试试),前者是有明确依据的结论,UI 上应该
 	// 显示成"纯音乐"而不是笼统的"无歌词"。信号来源见 lrclibResult 定义处的注释。
+	// 用户也能手标(歌词管理详情页、搜索候选歌词面板,set_instrumental)。标了就按纯音乐处理:fields() 不交歌词,
+	// 自动搜歌词、补附属内容的路径都跳过;条目里留着的歌词不删,撤标就回来。撤标只有两处:用户存进歌词
+	// (applySaveEdit / save_plain_text),手动重新匹配换了词(rematchClearsInstrumental)。
 	Instrumental bool `json:"instrumental,omitempty"`
 	// TS 是**这条记录当初被解析出来的时刻**,不是任何一种节流时间戳。它只被 needsLyricsRetry
 	// 当作"歌词重搜"6 小时间隔的起算点。
@@ -477,13 +480,21 @@ func (e enrichEntry) fields() map[string]string {
 	put("youtube_music_url", e.YouTubeMusicURL)
 	put("soda_url", e.SodaURL)
 	put("youtube_music_album", e.YouTubeMusicAlbum)
-	put("lyrics", e.Lyrics)
-	put("lyrics_tr", e.LyricsTr)
-	put("lyrics_roma", e.LyricsRoma)
-	put("lyrics_yrc", e.LyricsYRC)
+	// 标了纯音乐就不交歌词,网页和 ListenBrainz 都不显示;歌词还在条目里,撤掉标记就回来。App 读缓存同一口径
+	// (EnrichCacheReader.makeLyrics)。
+	// 改交一个 instrumental 记号:字段表非空才算解析过(poller 里换曲那条 playing_now 的挂起判据),只存着歌词的条目
+	// 标上之后别的字段一个都没有,不交的话换曲那条白等 pnPendingMax。上送和中继只按键名取字段,不会带上它。
+	if e.Instrumental {
+		m["instrumental"] = "1"
+	} else {
+		put("lyrics", e.Lyrics)
+		put("lyrics_tr", e.LyricsTr)
+		put("lyrics_roma", e.LyricsRoma)
+		put("lyrics_yrc", e.LyricsYRC)
+		put("lyrics_source", e.LyricsSource)
+	}
 	put("canonical_artist", e.CanonicalArtist)
 	put("cover_source", e.CoverSource)
-	put("lyrics_source", e.LyricsSource)
 	return m
 }
 
@@ -1534,7 +1545,8 @@ type wrongDurationObs struct {
 var wrongDurationSeen = map[string]wrongDurationObs{}
 
 func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bool {
-	if e.Lyrics == "" {
+	// 标了纯音乐的不自动重搜:用户手标时歌词留着,不挡的话这份留着的词会被换掉(见 enrichEntry.Instrumental)。
+	if e.Lyrics == "" || e.Instrumental {
 		return false
 	}
 	// 同 needsLyricsRescore:关掉「自动跟进算法升级」之后,已经有歌词的曲目不再自动重搜升级。
@@ -1851,6 +1863,9 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		lyricsChanged = true
 	}
 	refreshSpeakers(&e, scored)
+	if rematchClearsInstrumental(opts.manual, before, e) {
+		e.Instrumental = false
+	}
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: true})
 	enrichCache[key] = e
 	enrichDirty = true
@@ -1934,7 +1949,7 @@ const (
 // 太近不碰。第一次尝试没有时间门槛(LyricsRescoreTS 为 0)—— 这条路径的目的就是让存量条目
 // 尽快跟上新规则;只有需要再试时才拉开间隔,见 lyricsRescoreDeferInterval。
 func needsLyricsRescore(e enrichEntry, pinned, autoUpgrade bool) bool {
-	if e.Lyrics == "" || e.ManualLyrics || pinned {
+	if e.Lyrics == "" || e.ManualLyrics || e.Instrumental || pinned {
 		return false
 	}
 	// 用户关掉了「自动跟进算法升级」:已经选定的歌词不再因为打分规则升级被换掉
@@ -2197,6 +2212,9 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		lyricsChanged = true
 	}
 	refreshSpeakers(&e, scored)
+	if rematchClearsInstrumental(opts.manual, before, e) {
+		e.Instrumental = false
+	}
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: decidable,
 		keptWordTiming: keep && rescoreWouldLoseWordTiming(before, picked)})
 	enrichCache[key] = e

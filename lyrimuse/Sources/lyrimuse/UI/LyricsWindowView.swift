@@ -2636,7 +2636,9 @@ struct LyricsWindowView: View {
                 LyricsSearchSheet(
                     artist: ctx.artist, title: ctx.title, album: ctx.album,
                     currentSource: ctx.currentSource, currentFingerprint: ctx.currentFingerprint,
-                    durationSecs: ctx.durationSecs
+                    durationSecs: ctx.durationSecs,
+                    isMarkedInstrumental: ctx.isInstrumental,
+                    onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: ctx.key, value) }
                 ) { candidate in
                     // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本。
                     // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能
@@ -3687,8 +3689,10 @@ struct LyricsWindowView: View {
         let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
             ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
-        // 「当前使用」双判据要的正文指纹。
-        let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
+        // 「当前使用」双判据要的正文指纹,取条目里存着的那份(标了纯音乐时 lyrics 是空的)。
+        let cached = EnrichCacheReader.lookup(artist: artist, title: title, album: album)
+        let lyrics = cached?.storedLyrics ?? ""
+        let instrumental = cached?.instrumental ?? false
         Task.detached(priority: .userInitiated) {
             let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
             await MainActor.run {
@@ -3699,7 +3703,8 @@ struct LyricsWindowView: View {
                 lyricsSearchContext = LyricsSearchContext(
                     artist: artist, title: EnrichCacheKeys.normalizedTitle(title),
                     album: LocalPlaybackSource.albumOrListed(album: album, youtubeMusicAlbum: listedAlbum),
-                    key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs)
+                    key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs,
+                    isInstrumental: instrumental)
             }
         }
     }
@@ -6612,6 +6617,8 @@ private struct LyricsSearchContext: Identifiable {
     /// 当前正文的只取词指纹(「当前使用」双判据);没有正文时 nil。
     let currentFingerprint: String?
     let durationSecs: Double
+    /// 这首眼下是不是标成了纯音乐(搜索面板里纯音乐按钮和说明条的初值)。
+    let isInstrumental: Bool
 
     var id: String { key }
 }

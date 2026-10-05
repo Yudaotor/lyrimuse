@@ -340,7 +340,7 @@ func amazonLyricsRecheckOnce(key string) bool {
 // amazonLyricsWorthRecheck:同 kkboxLyricsWorthRecheck。条目当初不是用 Amazon Music 放着解析的(没见过这份候选),
 // 现在正用它放、本地有词 → 值得重来一次(retryLyricsUpgrade,分数严格更高才替换)。
 func amazonLyricsWorthRecheck(e enrichEntry, bundleID string, pinned, autoUpgrade, available bool) bool {
-	if bundleID != amazonMusicBundleID || !autoUpgrade || pinned || e.ManualLyrics || !available {
+	if bundleID != amazonMusicBundleID || !autoUpgrade || pinned || e.ManualLyrics || e.Instrumental || !available {
 		return false
 	}
 	if slices.Contains(e.LyricsSourcesSeen, amazonLocalLyricsSource) || slices.Contains(e.LyricsSourcesResponded, amazonLocalLyricsSource) {

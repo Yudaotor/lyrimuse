@@ -3174,7 +3174,8 @@ func runSourceContractTests() {
     // `fromManualPick: true`。这个仓库为"改了两处漏第三处"付过两次代价:补
     // markManual 时漏了歌词窗口那处;发现小窗那处从 08-30 加纯文本候选起就没有
     // 分流。守卫先数清楚调用点(多一处也要红 —— 新入口必须来这里登记,顺便读一遍上面的规矩),
-    // 再逐处查五个记号(加 currentFingerprint:「当前使用」双判据的正文指纹,三处都得传)。只数非注释行:别处的注释会提到 `LyricsSearchSheet(` 让人去 grep。
+    // 再逐处查五个记号(加 currentFingerprint:「当前使用」双判据的正文指纹,三处都得传;加 isMarkedInstrumental /
+    // onSetInstrumental:面板里标 / 撤纯音乐,按打开面板时那首写回)。只数非注释行:别处的注释会提到 `LyricsSearchSheet(` 让人去 grep。
     do {
         let appSources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -3200,10 +3201,32 @@ func runSourceContractTests() {
                     "采纳候选入口: LyricsSearchSheet 的调用点就这三处(多了/少了都要来这条守卫登记)")
         for rel in callSites.sorted() {
             guard let text = read(rel) else { continue }
-            for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "bg: candidate.lyricsBG", "trLang: candidate.lyricsTrLang", "currentFingerprint:"] {
+            for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "bg: candidate.lyricsBG", "trLang: candidate.lyricsTrLang", "currentFingerprint:",
+                           "isMarkedInstrumental:", "onSetInstrumental:", "setInstrumental(key:"] {
                 expectEqual(text.contains(marker), true, "采纳候选入口: \(rel) 缺 \(marker)")
             }
         }
+        let sheet = read("LyricsManager/LyricsSearchSheet.swift") ?? ""
+        expectEqual(sheet.contains("instrumentalButton\n                    sourceAvailabilityBadge")
+                    && sheet.contains("Label(markedInstrumental ? L10n.t(\"取消纯音乐标记\") : L10n.t(\"标为纯音乐\"),")
+                    && sheet.contains("}\n                instrumentalBanner\n            }")
+                    && sheet.contains("instrumentalOverride = false"), true,
+                    "采纳候选入口: 搜索面板标题栏常驻带文字的标 / 撤纯音乐按钮,标上时挂说明条,采纳成功后跟着撤")
+        expectEqual(sheet.components(separatedBy: "markInstrumentalAction\n").count - 1, 2,
+                    "采纳候选入口: 「纯音乐」「已匹配曲目 · 无歌词文本」两个空状态里有「标为纯音乐」")
+        // 歌词窗口 / 悬浮窗小窗算「当前使用」的正文指纹取条目里存着的那份:标了纯音乐时 lyrics 是空的,撤标之后
+        // 判据会退成只比来源。
+        expectEqual((read("UI/LyricsWindowView.swift") ?? "").contains("let lyrics = cached?.storedLyrics ?? \"\"")
+                    && (read("LyricsManager/LyricsQuickSearchWindow.swift") ?? "")
+                        .components(separatedBy: "let lyrics = cached?.storedLyrics ?? \"\"").count - 1 == 2, true,
+                    "采纳候选入口: 「当前使用」的正文指纹取 storedLyrics")
+        let manager = read("LyricsManager/LyricsManagerView.swift") ?? ""
+        expectEqual(manager.contains("case .wordTiming: guard kind == .wordByWord else { return false }")
+                    && manager.contains("case .lineOnly: guard kind == .lineByLine else { return false }")
+                    && manager.contains("case .plainTextOnly: guard kind == .plainText else { return false }"), true,
+                    "歌词管理: 「仅逐字 / 仅整行 / 仅纯文本」跟设置页统计同一个阶梯(LyricsKind.classify)")
+        expectEqual(manager.components(separatedBy: "!summary.hasLyrics || summary.isInstrumental").count - 1, 2,
+                    "歌词管理: 标了纯音乐的条目存着歌词也显示「纯音乐」(列表行、详情页信息条)")
     }
 
     // ---- 设置页顶层分类记忆----

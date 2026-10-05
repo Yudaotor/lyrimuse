@@ -1039,16 +1039,13 @@ public final class EnrichCacheStore: ObservableObject {
         await commit("save_plain_text", ["key": key, "plain_lyrics": plainLyrics, "plain_lyrics_source": source]).ok
     }
 
-    /// 用户在详情页手动标/撤「纯音乐」。起因:MJ《Off the Wall》的 Quincy Jones
-    /// 访谈口白、《Raise!》26 秒的 Kalimba Tree 这类曲目,九个源里没有任何一个会给出
-    /// instrumental 标记(lrclib 的 instrumental 字段和网易云的 pureMusic 都只覆盖它们自己
-    /// 收录且标了的曲目),引擎永远拿不到"这首本来就没词"的结论,列表就永远红着「无歌词」、
-    /// 补空扫描也会每隔一天(退避后翻倍)白搜一轮——这个结论只有人能下。
-    /// 只置一个字段、不碰 lyrics/manual_lyrics/source;撤销时把键
-    /// 整个删掉(引擎侧 omitempty,false 与缺失等价)。标上之后引擎的
-    /// needsLyricsFirstFill 会直接 return——这也是这个动作真正的效果:告诉自动逻辑"别再搜了"。
-    public func setInstrumental(key: String, _ value: Bool) async {
-        await commit("set_instrumental", ["key": key, "value": value])
+    /// 用户手动标 / 撤「纯音乐」(详情页那对按钮、搜索候选歌词面板标题栏的按钮)。
+    /// 只置一个字段、不碰 lyrics/manual_lyrics/source;撤销时把键整个删掉(引擎侧 omitempty,false 与缺失等价)。
+    /// 标上之后各处按纯音乐显示、不显示条目里的歌词(EnrichCacheReader.makeLyrics),引擎也不再自动搜歌词;
+    /// 撤掉之后歌词原样回来。回报有没有落盘。为什么标记压过歌词、哪些操作撤标,见 11 章决策 50。
+    @discardableResult
+    public func setInstrumental(key: String, _ value: Bool) async -> Bool {
+        await commit("set_instrumental", ["key": key, "value": value]).ok
     }
 
     /// 一条记录会不会被引擎的补空扫描真的拿去搜:没词、没确证纯音乐、没人工

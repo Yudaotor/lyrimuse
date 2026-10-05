@@ -641,6 +641,7 @@
 "已匹配曲目 · 无歌词文本" = "Track matched · no lyrics text";
 "已匹配，无歌词" = "Matched, no lyrics";
 "已匹配：%@" = "Matched: %@";
+"已取消纯音乐标记" = "Instrumental mark removed";
 "已唱到的颜色" = "Sung Color";
 "已唱到部分的颜色，也是歌词旁那枚图标上进度涨上来那一截的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮" = "The color of the sung part — and of the risen portion of the progress icon beside the lyrics. Follows the system accent color by default (brightened on a dark menu bar); a custom color is used as-is, with no brightening.";
 "已在 Discord 上隐藏，%@ 恢复" = "Hidden on Discord Until %@";
@@ -675,6 +676,7 @@
 "已暂停：授权失效，重新连接后恢复" = "Paused: authorization revoked. Reconnect to resume.";
 "已更新 %@ 首" = "%@ updated";
 "已更新到 %@" = "Updated to %@";
+"已标为纯音乐：各处不显示这首的歌词，也不再自动搜歌词。采用一条候选会取消标记" = "Marked as instrumental: lyrics for this track are hidden everywhere and no longer searched for automatically. Using a candidate removes the mark";
 "已校准" = "Calibrated";
 "已校准 %d 首歌的歌词时间轴" = "%d songs with calibrated timing";
 "已校准的歌不再自动更换歌词源：后台一换歌词内容，这个校正值就会失效。把偏移改回 0 即解除" = "Calibrated songs are no longer switched to another lyrics source automatically — if the background swaps in different lyrics, this offset stops applying. Set the offset back to 0 to release it.";
@@ -825,6 +827,7 @@
 "按住歌词即可拖动位置" = "Hold the lyrics to reposition";
 "按听得最多的前 %1$@ 位歌手统计，占这段时间 %2$@ 的收听" = "Based on your top %1$@ artists, %2$@ of your plays in this period";
 "按听得最多的前 %@ 位歌手统计" = "Based on your top %@ artists";
+"按纯音乐处理：各处不显示歌词，也不再自动搜歌词；已有的歌词会留着，取消标记就恢复" = "Treat as instrumental: lyrics are hidden everywhere and no longer searched for automatically. Any lyrics it has are kept and come back when you unmark it";
 "按翻唱者署名" = "Covering artist from the title";
 "挑一个你想让 Lyrimuse 当作播放器的应用" = "Pick an app you want Lyrimuse to treat as a player";
 "挑一个用来播放这个网站的浏览器" = "Pick the browser you use for this site";
@@ -868,7 +871,7 @@
 "搜索歌词中…" = "Searching for lyrics…";
 "搜索设置" = "Search Settings";
 "搜索（或在搜索框按回车）" = "Search (or press Return in the search field)";
-"撤回「纯音乐」结论，这首歌重新回到自动补搜歌词的队列" = "Withdraw the instrumental verdict; this track goes back into the automatic lyric-retry queue";
+"撤回「纯音乐」标记：有歌词的恢复显示，没有歌词的重新回到自动补搜的队列" = "Remove the instrumental mark: lyrics it has show again, and a track without lyrics goes back into the automatic lyric-retry queue";
 "播放/暂停" = "Play/Pause";
 "播放器" = "Player";
 "播放器联动" = "Player Linkage";
@@ -1625,7 +1628,6 @@
 "这里是读音示例" = "Romanization looks like this";
 "这里能看到已创建应用的 API Key，但看不到 Secret；丢了就用「前往申请」再建一个。" = "Shows your existing apps and their API Key, but not the Secret; if it's lost, use Get One to create a new app.";
 "这首是纯音乐" = "This one is instrumental";
-"这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，歌词引擎也不再反复重搜" = "This track has no lyrics by nature (spoken word, interlude, instrumental): once marked it no longer shows as “No Lyrics” and the lyrics engine stops re-searching it";
 "这首歌在你 Last.fm 上的第几次收听" = "Which play of this track this was in your Last.fm history";
 "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法" = "Which play of this track this was in your Last.fm history. Click to see which spellings were merged";
 "这首歌没有歌词或还在搜索时，用歌名占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";

@@ -45,7 +45,7 @@ func kasetLyricsWorthRecheck(e enrichEntry, bundleID, videoID, target string, pi
 	if bundleID != kasetBundleID || videoID == "" || target == "" || !nativeEnabled {
 		return false
 	}
-	if e.Lyrics == "" || e.ManualLyrics || pinned || !autoUpgrade || e.LyricsSource == "lyricfind" {
+	if e.Lyrics == "" || e.ManualLyrics || e.Instrumental || pinned || !autoUpgrade || e.LyricsSource == "lyricfind" {
 		return false
 	}
 	if e.YouTubeMusicMV && target == videoID {

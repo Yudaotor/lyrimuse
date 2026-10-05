@@ -259,6 +259,9 @@ public struct EnrichCacheLyrics {
     /// needsLyricsFirstFill,跳过的源不冷却了 30 秒后就跑)这个字段立刻变成 false,不管补
     /// 搜有没有找到歌词,界面都会落定。
     public let searchIncomplete: Bool
+    /// 条目里存着的主歌词正文,标了纯音乐也照给(那时 `lyrics` 是空的)。只给搜索候选歌词面板「当前使用」的
+    /// 正文判据用,显示一律读 `lyrics`。
+    public let storedLyrics: String
 }
 
 @MainActor
@@ -526,25 +529,30 @@ public enum EnrichCacheReader {
         return makeLyrics(entry, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc, plain: plain, bg: bg)
     }
 
-    private static func makeLyrics(_ entry: EnrichCacheEntry, lyrics: String, tr: String, roma: String,
-                                   yrc: String, plain: String, bg: String) -> EnrichCacheLyrics {
-        EnrichCacheLyrics(
-            lyrics: lyrics,
-            lyricsTr: tr,
-            lyricsRoma: roma,
-            lyricsYRC: yrc,
-            lyricsBG: bg,
+    /// 条目 + 取出来的歌词正文 → 交给显示层的那一份。标了纯音乐就按没有歌词交出去,各处显示成纯音乐;
+    /// 歌词还在缓存里,撤掉标记就回来。引擎导出给网页 / ListenBrainz 的字段同一口径(enrichEntry.fields)。
+    public static func makeLyrics(_ entry: EnrichCacheEntry, lyrics: String, tr: String, roma: String,
+                                  yrc: String, plain: String, bg: String) -> EnrichCacheLyrics {
+        let instrumental = entry.instrumental ?? false
+        func shown(_ text: String) -> String { instrumental ? "" : text }
+        return EnrichCacheLyrics(
+            lyrics: shown(lyrics),
+            lyricsTr: shown(tr),
+            lyricsRoma: shown(roma),
+            lyricsYRC: shown(yrc),
+            lyricsBG: shown(bg),
             songwriters: entry.lyricsSongwriters ?? [],
             speakers: entry.lyricsSpeakers,
-            instrumental: entry.instrumental ?? false,
+            instrumental: instrumental,
             resolved: (entry.ts ?? 0) > 0,
             isCantonese: entry.songLanguage == songLanguageCantonese,
             isHokkien: entry.songLanguage == songLanguageHokkien,
-            plainLyrics: plain,
-            searchIncomplete: enrichLyricsSearchIncomplete(
+            plainLyrics: shown(plain),
+            searchIncomplete: !instrumental && enrichLyricsSearchIncomplete(
                 lyrics: lyrics,
                 sourcesSkipped: entry.lyricsSourcesSkipped ?? [],
-                fillCount: entry.lyricsFillCount ?? 0)
+                fillCount: entry.lyricsFillCount ?? 0),
+            storedLyrics: lyrics
         )
     }
 

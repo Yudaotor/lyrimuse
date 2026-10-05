@@ -796,13 +796,15 @@ struct LyricsManagerView: View {
             if let af, s.normPrimaryArtist != af { return false }
             if let bf, s.normAlbum != bf { return false }
             guard sourceFilter.matches(s.lyricsSource) else { return false }
+            // 三档跟设置页「歌词库」统计同一个阶梯(LyricsKind.classify):标了纯音乐的条目存着歌词也只算纯音乐,
+            // 有歌词的条目不算「仅纯文本」,筛出来的数跟统计对得上。
+            let kind = LyricsKind.classify(hasWordTiming: s.hasWordTiming, hasLyrics: s.hasLyrics,
+                                           hasPlainTextFallback: s.hasPlainTextFallback, isInstrumental: s.isInstrumental)
             switch timingFilter {
             case .all: break
-            case .wordTiming: guard s.hasWordTiming else { return false }
-            // s.hasLyrics 这道闸是必需的:"整行时间戳"只该指真的有逐行 LRC 的那批,
-            // 不能只看 !hasWordTiming——完全没有歌词/只有纯文本兜底的行同样 hasWordTiming==false。
-            case .lineOnly: guard s.hasLyrics && !s.hasWordTiming else { return false }
-            case .plainTextOnly: guard s.hasPlainTextFallback else { return false }
+            case .wordTiming: guard kind == .wordByWord else { return false }
+            case .lineOnly: guard kind == .lineByLine else { return false }
+            case .plainTextOnly: guard kind == .plainText else { return false }
             }
             // 「仅人工修正」现在并入「已校准」(手动调过时间轴偏移,见 LyricsPinStore):
             // 两者语义上并列,都是"用户已经亲手把这首歌弄对了",分开筛选只会让用户漏看
@@ -2537,7 +2539,9 @@ struct LyricsManagerView: View {
                 // EnrichCacheReader.lookup(store 刚 persist 过的就是这份文件),三处口径一致。
                 currentFingerprint: EnrichCacheReader.lookup(artist: summary.artist, title: summary.title, album: summary.album)
                     .map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 },
-                durationSecs: summary.durationSecs
+                durationSecs: summary.durationSecs,
+                isMarkedInstrumental: summary.isInstrumental,
+                onSetInstrumental: { value in await store.setInstrumental(key: key, value) }
             ) { candidate in
                 // 仅纯文本的候选走完全独立的一条路——不写 editedLyrics/
                 // editedTr/editedRoma(那三个编辑框是给带时间戳的 LRC 内容准备的,纯文本
@@ -2674,22 +2678,17 @@ struct LyricsManagerView: View {
                        help: L10n.t("联网搜索候选歌词"), disabled: rematchRunningKey != nil) {
                 showSearchSheet = true
             }
-            // 「标为纯音乐」/「取消纯音乐标记」只对没歌词的条目出现:口白 intro、
-            // 访谈、几十秒的过场,九个源里没有任何一个会替它们给出 instrumental 结论,
-            // 这个判断只有人能下。标上之后列表从红色「无歌词」变成中性「纯音乐」,引擎
-            // 也不再每隔一天白搜一轮(needsLyricsFirstFill 见到这个标记直接 return)。
-            // 可撤销:标错了点一下就回来,没有别的副作用(见 EnrichCacheStore.setInstrumental)。
-            if !summary.hasLyrics {
-                if summary.isInstrumental {
-                    ActionTile(icon: "waveform.slash", title: L10n.t("取消纯音乐标记"),
-                               help: L10n.t("撤回「纯音乐」结论，这首歌重新回到自动补搜歌词的队列")) {
-                        Task { await store.setInstrumental(key: summary.key, false) }
-                    }
-                } else {
-                    ActionTile(icon: "waveform", title: L10n.t("标为纯音乐"),
-                               help: L10n.t("这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，歌词引擎也不再反复重搜")) {
-                        Task { await store.setInstrumental(key: summary.key, true) }
-                    }
+            // 「标为纯音乐」/「取消纯音乐标记」:有没有歌词都能标。标上之后各处不显示歌词,引擎也不再自动搜;
+            // 歌词留在条目里,撤掉就回来(见 EnrichCacheStore.setInstrumental)。搜索候选歌词面板标题栏有同一对动作。
+            if summary.isInstrumental {
+                ActionTile(icon: "pianokeys.inverse", title: L10n.t("取消纯音乐标记"),
+                           help: L10n.t("撤回「纯音乐」标记：有歌词的恢复显示，没有歌词的重新回到自动补搜的队列")) {
+                    Task { await store.setInstrumental(key: summary.key, false) }
+                }
+            } else {
+                ActionTile(icon: "pianokeys", title: L10n.t("标为纯音乐"),
+                           help: L10n.t("按纯音乐处理：各处不显示歌词，也不再自动搜歌词；已有的歌词会留着，取消标记就恢复")) {
+                    Task { await store.setInstrumental(key: summary.key, true) }
                 }
             }
             // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
@@ -2751,7 +2750,8 @@ struct LyricsManagerView: View {
                 && summary.lyricsTrSource == LyricsTranslationSource.machineSentinel {
                 InfoChip(icon: "character.book.closed", text: L10n.t("机器翻译"), tint: .purple)
             }
-            if !summary.hasLyrics {
+            // 标了纯音乐的条目存着歌词也显示「纯音乐」,跟列表行同一口径(各处按纯音乐显示,见 LyricsKind.instrumental)。
+            if !summary.hasLyrics || summary.isInstrumental {
                 // 图标跟歌词窗口的纯音乐占位保持一致(waveform),颜色也从红色降成中性。
                 if summary.isInstrumental {
                     InfoChip(icon: "waveform", text: L10n.t("纯音乐"), tint: .secondary)
@@ -3283,9 +3283,9 @@ private struct LyricsManagerRow: View {
                     // 都是默认值 false,会显示成刺眼的红色"无歌词"——那是"确认没有"的结论,
                     // 而这里连问都还没问完,两者不能混为一谈(正是这次要修的问题本身)。
                     Text(L10n.t("搜索歌词中…")).font(.caption2).foregroundStyle(.secondary)
-                } else if !summary.hasLyrics {
-                    // 确证过的纯音乐不算"缺东西":同一格换成中性色的「纯音乐」,别用红色
-                    // 报警——它没什么要修的。判据是引擎联网拿到的明确结论,不是猜的。
+                } else if !summary.hasLyrics || summary.isInstrumental {
+                    // 标了纯音乐(引擎确证或用户手标)的不算"缺东西":同一格显示中性色的「纯音乐」,别用红色报警。
+                    // 条目里存着歌词也显示它,歌词徽章照留(各处按纯音乐显示,见 LyricsKind.instrumental)。
                     if summary.isInstrumental {
                         Text(L10n.t("纯音乐")).font(.caption2).foregroundStyle(.secondary)
                     } else if summary.hasPlainTextFallback {
