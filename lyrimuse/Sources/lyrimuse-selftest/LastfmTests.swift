@@ -1553,6 +1553,85 @@ func runLastfmTests() {
                     "次数退避: 时钟倒退(now 早于记录时刻)不算到期")
     }
 
+    // ---- 封面没有的退避 ----
+    //
+    // getinfo 没给图、Apple Music 目录也对不上的行记下时刻与连续次数,1 天 → 7 天 → 30 天到期才重问,拿到图整条清掉;
+    // 随翻页缓存落盘,读盘只补内存里还没有的键(12 章决策 47)。
+    do {
+        typealias L = CoverUnavailableLedger
+        let day = 86_400.0
+        expectEqual(L.delay(strikes: 1), 1 * day, "封面退避: 第 1 次判没有 → 1 天后重问")
+        expectEqual(L.delay(strikes: 2), 7 * day, "封面退避: 第 2 次 → 7 天")
+        expectEqual(L.delay(strikes: 3), 30 * day, "封面退避: 第 3 次 → 30 天")
+        expectEqual(L.delay(strikes: 8), 30 * day, "封面退避: 之后封顶 30 天")
+        expectEqual(L.delay(strikes: 0), 1 * day, "封面退避: 非法的 0 次按第 1 档")
+        let t0 = Date(timeIntervalSince1970: 1_791_180_000)
+        var ledger = L()
+        expectEqual(ledger.shouldAsk("a|t", now: t0), true, "封面退避: 没判过就问")
+        expectEqual(ledger.contains("a|t"), false, "封面退避: 没判过不算判过")
+        ledger.mark("a|t", at: t0)
+        expectEqual(ledger.contains("a|t"), true, "封面退避: 判过没有")
+        expectEqual(ledger.shouldAsk("a|t", now: t0.addingTimeInterval(day - 1)), false, "封面退避: 不到 1 天不问")
+        expectEqual(ledger.shouldAsk("a|t", now: t0.addingTimeInterval(day)), true, "封面退避: 满 1 天到期(闭区间)")
+        expectEqual(ledger.shouldAsk("a|t", now: t0.addingTimeInterval(-2 * day)), false, "封面退避: 时钟倒退不算到期")
+        ledger.mark("a|t", at: t0.addingTimeInterval(day))
+        expectEqual(ledger.strikes["a|t"], 2, "封面退避: 再判一次没有,连续次数 +1")
+        expectEqual(ledger.shouldAsk("a|t", now: t0.addingTimeInterval(7 * day)), false, "封面退避: 第 2 次之后 6 天不问")
+        expectEqual(ledger.shouldAsk("a|t", now: t0.addingTimeInterval(8 * day)), true, "封面退避: 第 2 次之后 7 天到期")
+        ledger.mark("b|t", at: t0)
+        let saved = ledger.persisted(scope: ["a|t"])
+        expectEqual(saved.markedAt, ["a|t": t0.addingTimeInterval(day).timeIntervalSince1970], "封面退避: 落盘只留范围里的键")
+        expectEqual(saved.strikes, ["a|t": 2], "封面退避: 落盘带上连续次数")
+        ledger.clear("a|t")
+        expectEqual(ledger.contains("a|t") || ledger.strikes["a|t"] != nil, false, "封面退避: 拿到图整条清掉")
+        var restored = L()
+        restored.mark("b|t", at: t0.addingTimeInterval(5))
+        restored.restore(markedAt: ["a|t": t0.timeIntervalSince1970, "b|t": t0.timeIntervalSince1970, "c|t": t0.timeIntervalSince1970],
+                         strikes: ["a|t": 2, "b|t": 3])
+        expectEqual(restored.strikes["a|t"], 2, "封面退避: 读盘恢复连续次数")
+        expectEqual(restored.markedAt["b|t"], t0.addingTimeInterval(5), "封面退避: 内存里已有的键以内存为准")
+        expectEqual(restored.strikes["b|t"], 1, "封面退避: 内存里已有的键次数也不动")
+        expectEqual(restored.strikes["c|t"], 1, "封面退避: 盘上没记次数的按 1 次算")
+        restored.restore(markedAt: nil, strikes: nil)
+        expectEqual(restored.markedAt.count, 3, "封面退避: 老文件没有这两张表,什么都不动")
+    }
+
+    // ---- 封面结论随翻页缓存落盘(契约) ----
+    // 主快照只带第一页的封面;翻页缓存里第 2~10 页缺图的行不带这一份,每次启动都要重发 getinfo、重查目录。
+    do {
+        let src = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(src.isEmpty, false, "封面落盘(契约): 读到源码")
+        let restoreAt = src.range(of: "        restoreRecentPageCovers(from: snap)\n")?.lowerBound
+        let ruleGuardAt = src.range(of: "guard snap.playCountRule == Self.playCountRuleVersion else { return }")?.lowerBound
+        expectEqual(restoreAt != nil && ruleGuardAt != nil && restoreAt! < ruleGuardAt!, true,
+                    "封面落盘(契约): 读盘时封面结论排在次数判据版本那道闸前面")
+        for (needle, label) in [
+            ("coverUnavailable.restore(markedAt: snap.coverUnavailableAt, strikes: snap.coverUnavailableStrikes)", "读盘恢复 getinfo 那级的没有"),
+            ("catalogCoverUnavailable.restore(markedAt: snap.catalogCoverUnavailableAt, strikes: snap.catalogCoverUnavailableStrikes)", "读盘恢复目录那级的没有"),
+            ("recentTrackCovers: recentTrackCovers.filter { scopedKeys.contains($0.key) },", "落盘带 getinfo 取到的图"),
+            ("recentAlbumCovers: recentAlbumCovers.filter { scopedAlbumKeys.contains($0.key) },", "落盘带同专辑共用的图"),
+            ("catalogCovers: catalogCovers.filter { scopedKeys.contains($0.key) },", "落盘带目录取到的图"),
+            ("coverUnavailableAt: noCover.markedAt, coverUnavailableStrikes: noCover.strikes,", "落盘带 getinfo 那级的没有"),
+            ("catalogCoverUnavailableAt: noCatalogCover.markedAt, catalogCoverUnavailableStrikes: noCatalogCover.strikes)", "落盘带目录那级的没有"),
+            ("let needsCover = !hasCover && coverUnavailable.shouldAsk(key, now: now)", "判过没有的等到期再发 getinfo"),
+            ("catalogCoverUnavailable.shouldAsk(key, now: now),", "判过没有的等到期再查目录"),
+            ("for k in noCover { coverUnavailable.mark(k, at: markedAt) }", "getinfo 没给图记一次没有"),
+            ("for k in covers.keys { coverUnavailable.clear(k) }", "getinfo 给了图清掉没有"),
+            ("for k in missed { catalogCoverUnavailable.mark(k, at: markedAt) }", "目录对不上记一次没有"),
+            ("if !found.isEmpty || !missed.isEmpty { scheduleRecentPageCacheSave() }", "目录有结论就落盘"),
+            ("if !counts.isEmpty || !noCount.isEmpty || !covers.isEmpty || !albumCovers.isEmpty || !noCover.isEmpty {", "getinfo 有封面结论就落盘"),
+        ] {
+            expectEqual(sourceBytes(src, contain: needle), true, "封面落盘(契约): \(label)")
+        }
+        // 日志那行次数、封面各数各的分母(只为补封面的行不算进次数的分母)。
+        expectEqual(sourceBytes(src, contain: #"counts, \(coversFound, privacy: .public)/\(wantedCovers.count, privacy: .public) covers"#), true,
+                    "次数解析日志(契约): 封面单独一个分母")
+        expectEqual(sourceBytes(src, contain: #"resolved \(counts.count, privacy: .public)/\(wantedCounts.count, privacy: .public) counts"#), true,
+                    "次数解析日志(契约): 次数的分母只数问次数的行")
+    }
+
     // ---- 次数记账三态:字段缺失 ≠ 那边是 0 ----
     //
     // `userplaycount` **字段缺失**(Last.fm 的按用户计数是另一次后端查询,高并发下会静默

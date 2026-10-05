@@ -429,6 +429,16 @@ final class LastfmStatsService: ObservableObject {
         /// 丢掉退避时间戳 —— 按上面那条「欠一次重探」的语义,下一轮立刻按新判据重查,不必等退避到期。
         /// 老文件没有 → nil,同样当作对不上。
         var playCountRule: Int?
+        /// 封面兜底的结论,范围同 playCounts:第③级(track.getinfo)取到的图和同专辑共用的那张、第⑤级(Apple Music 目录)
+        /// 取到的图,以及这两级「那边没有」的记录时刻与连续次数(CoverUnavailableLedger)。主快照只带第一页的这几样。
+        /// 老文件没有 → nil。见 12 章决策 47。
+        var recentTrackCovers: [String: URL]?
+        var recentAlbumCovers: [String: URL]?
+        var catalogCovers: [String: URL]?
+        var coverUnavailableAt: [String: Double]?
+        var coverUnavailableStrikes: [String: Int]?
+        var catalogCoverUnavailableAt: [String: Double]?
+        var catalogCoverUnavailableStrikes: [String: Int]?
     }
 
     /// 「查不到次数」的判据版本。判据变宽(能把以前查不到的查出来)时加一,旧快照里那批「查不到」
@@ -464,6 +474,8 @@ final class LastfmStatsService: ObservableObject {
         if let unavailable = snap.playCountUnavailable, !unavailable.isEmpty {
             playCountUnavailable.formUnion(unavailable)
         }
+        // 封面结论跟次数的判据版本无关,排在下面那道闸前面。
+        restoreRecentPageCovers(from: snap)
         // 判据版本对不上:名单照收,但不恢复退避状态 —— 这批键下一轮按新判据重查一次(见 playCountRule)。
         guard snap.playCountRule == Self.playCountRuleVersion else { return }
         if let at = snap.playCountUnavailableAt {
@@ -476,6 +488,26 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
+    /// 翻页缓存里存着的封面结论并回内存:同上只补没有的键。并进了图的话,实时行复用的两张索引跟着重建。
+    private func restoreRecentPageCovers(from snap: RecentPageCacheSnapshot) {
+        var merged = false
+        if let c = snap.recentTrackCovers, !c.isEmpty {
+            recentTrackCovers.merge(c) { current, _ in current }
+            merged = true
+        }
+        if let c = snap.recentAlbumCovers, !c.isEmpty {
+            recentAlbumCovers.merge(c) { current, _ in current }
+            merged = true
+        }
+        if let c = snap.catalogCovers, !c.isEmpty {
+            catalogCovers.merge(c) { current, _ in current }
+            merged = true
+        }
+        coverUnavailable.restore(markedAt: snap.coverUnavailableAt, strikes: snap.coverUnavailableStrikes)
+        catalogCoverUnavailable.restore(markedAt: snap.catalogCoverUnavailableAt, strikes: snap.catalogCoverUnavailableStrikes)
+        if merged { rebuildRecentCoverIndex() }
+    }
+
     /// 防抖落盘,同 scheduleTitleFormsSave 的取舍。只落盘前 recentPagePrefetchCount 页——
     /// 翻到再深的历史页留在内存缓存(本次运行期间有效)就够,没必要让磁盘占用跟着"翻过
     /// 多少页历史"无界增长。
@@ -484,6 +516,7 @@ final class LastfmStatsService: ObservableObject {
     /// 覆盖的曲目范围内——跟 pages 本身一样有界,不会随"这个账号一共听过多少歌"无界
     /// 增长(那次审阅对 pages 提过的顾虑,同样适用于这两份新加的数据,这里
     /// 靠"只收当前 10 页里出现过的 key"天然维持同一条边界,不需要另开一套裁剪逻辑)。
+    /// 封面兜底的结论(拿到的图、两级「没有」)按同一个范围带上,同专辑共用的图按这些行的专辑键。
     private func scheduleRecentPageCacheSave() {
         recentPageCacheSaveTask?.cancel()
         recentPageCacheSaveTask = Task {
@@ -503,11 +536,17 @@ final class LastfmStatsService: ObservableObject {
                 .filter { $0.key >= 1 && $0.key <= Self.recentPagePrefetchCount }
                 .mapValues { $0.filter { $0.date != nil } }
             var scopedKeys = Set<String>()
+            var scopedAlbumKeys = Set<String>()
             for rows in capped.values {
-                for r in rows { scopedKeys.insert(Self.playCountKey(artist: r.artist, title: r.title)) }
+                for r in rows {
+                    scopedKeys.insert(Self.playCountKey(artist: r.artist, title: r.title))
+                    if let ak = Self.albumKey(artist: r.artist, album: r.album) { scopedAlbumKeys.insert(ak) }
+                }
             }
             let scopedCounts = trackPlayCounts.filter { scopedKeys.contains($0.key) }
             let scopedUnavailable = playCountUnavailable.intersection(scopedKeys)
+            let noCover = coverUnavailable.persisted(scope: scopedKeys)
+            let noCatalogCover = catalogCoverUnavailable.persisted(scope: scopedKeys)
             let snap = RecentPageCacheSnapshot(
                 username: cred.user,
                 pages: Dictionary(uniqueKeysWithValues: capped.map { (String($0.key), $0.value) }),
@@ -522,7 +561,12 @@ final class LastfmStatsService: ObservableObject {
                 playCountUnavailableStrikes: Dictionary(uniqueKeysWithValues: scopedUnavailable.compactMap { k in
                     playCountUnavailableStrikes[k].map { (k, $0) }
                 }),
-                playCountRule: Self.playCountRuleVersion)
+                playCountRule: Self.playCountRuleVersion,
+                recentTrackCovers: recentTrackCovers.filter { scopedKeys.contains($0.key) },
+                recentAlbumCovers: recentAlbumCovers.filter { scopedAlbumKeys.contains($0.key) },
+                catalogCovers: catalogCovers.filter { scopedKeys.contains($0.key) },
+                coverUnavailableAt: noCover.markedAt, coverUnavailableStrikes: noCover.strikes,
+                catalogCoverUnavailableAt: noCatalogCover.markedAt, catalogCoverUnavailableStrikes: noCatalogCover.strikes)
             let url = Self.recentPageCacheURL
             await Task.detached(priority: .utility) {
                 guard let data = try? JSONEncoder().encode(snap) else { return }
@@ -825,7 +869,8 @@ final class LastfmStatsService: ObservableObject {
     /// 15 分钟:实测几分钟就并好了,留足余量;超过这个岁数还是 0 才认为那边真的没有
     /// (那时行也快被新的 scrobble 顶下去了,重查的成本自然收敛)。
     private static let playCountZeroGraceSecs: TimeInterval = 15 * 60
-    private var coverUnavailable = Set<String>()
+    /// getinfo 成功返回却没带封面的行,按 CoverUnavailableLedger 退避重问,随翻页缓存落盘。第⑤级的时序闸也看它。
+    private var coverUnavailable = CoverUnavailableLedger()
     /// 上一次 applyRecent 时看的是第几页。翻了页就不做下面那套"同曲次数变多 → 旧总数
     /// 作废"的判定:换了一批完全不同的行,那个比较没有意义。
     private var lastAppliedRecentPage = 0
@@ -1082,13 +1127,13 @@ final class LastfmStatsService: ObservableObject {
         playCountUnavailable = []
         playCountUnavailableAt = [:]
         playCountUnavailableStrikes = [:]
-        coverUnavailable = []
+        coverUnavailable = CoverUnavailableLedger()
         playCountsInFlight = []
         stalePlayCountKeys = []
         playCountFetchedAt = [:]
         newestPlaySeen = [:]
         catalogCovers = [:]
-        catalogCoverUnavailable = []
+        catalogCoverUnavailable = CoverUnavailableLedger()
         catalogCoversInFlight = []
         artistCorrections = [:]
         artistCorrectionTasks.values.forEach { $0.cancel() }
@@ -3017,8 +3062,8 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var catalogCovers: [String: URL] = [:]
     /// 问过 Apple Music、那边也匹配不上的行。**匹配不上就留空位**,不退回搜索结果第一条
     /// (实测那样会给《微醺卡带 - 情非得已 (微醺版)》配上完全无关的封面)。
-    /// 只在请求**成功返回**但挑不出条目时才记,超时/限流留给下次重试。
-    private var catalogCoverUnavailable = Set<String>()
+    /// 只在请求**成功返回**但挑不出条目时才记,超时/限流留给下次重试。退避与落盘同 coverUnavailable。
+    private var catalogCoverUnavailable = CoverUnavailableLedger()
     private var catalogCoversInFlight = Set<String>()
     /// 每一轮最多为几行查 Apple Music。iTunes Search 没有公开配额,社区实测约 20 次/分钟,
     /// 而缺图的行可能占满一整页 —— 分几轮慢慢补,别一次把额度打光(封面是锦上添花,
@@ -3518,13 +3563,14 @@ final class LastfmStatsService: ObservableObject {
     /// 代价是比 getinfo 晚一轮出图,换来的是不抢跑、不浪费额度。
     private func resolveCatalogCovers(for rows: [RecentTrack]) {
         let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
+        let now = Date()
         var seen = Set<String>()
         let all = rows.compactMap { r -> (key: String, artist: String, title: String, album: String?)? in
             guard !r.nowPlaying, !r.artist.isEmpty, !r.title.isEmpty else { return nil }
             let key = Self.playCountKey(artist: r.artist, title: r.title)
             guard coverURL(for: r) == nil,          // 前四级(含第⑤级自身)都没有
                   coverUnavailable.contains(key),   // getinfo 已经问过、那边确实没有
-                  !catalogCoverUnavailable.contains(key),
+                  catalogCoverUnavailable.shouldAsk(key, now: now),   // 没判过目录里没有,或退避到期
                   !catalogCoversInFlight.contains(key),
                   seen.insert(key).inserted
             else { return nil }
@@ -3576,7 +3622,10 @@ final class LastfmStatsService: ObservableObject {
                 rebuildRecentCoverIndex()
                 scheduleSnapshotSave()
             }
-            catalogCoverUnavailable.formUnion(missed)
+            let markedAt = Date()
+            for k in missed { catalogCoverUnavailable.mark(k, at: markedAt) }
+            for k in found.keys { catalogCoverUnavailable.clear(k) }
+            if !found.isEmpty || !missed.isEmpty { scheduleRecentPageCacheSave() }
         }
     }
 
@@ -3676,7 +3725,7 @@ final class LastfmStatsService: ObservableObject {
         let now = Date()
         let missing = rows.compactMap { r -> (key: String, artist: String, title: String,
                                               album: String?, wantsCount: Bool,
-                                              zeroIsFinal: Bool)? in
+                                              zeroIsFinal: Bool, wantsCover: Bool)? in
             let key = Self.playCountKey(artist: r.artist, title: r.title)
             // 次数还缺、或已知过期(旧值仍在显示,见 stalePlayCountKeys),且没被判定为"那边没有"
             // —— 或虽判过"没有"但退避期已到、该重探了(playCountUnavailableDue)
@@ -3689,14 +3738,15 @@ final class LastfmStatsService: ObservableObject {
             let hasCover = r.imageURL != nil || localCovers[key] != nil || recentTrackCovers[key] != nil
                 || catalogCovers[key] != nil
                 || Self.albumKey(artist: r.artist, album: r.album).map { recentAlbumCovers[$0] != nil } ?? false
-            let needsCover = !hasCover && !coverUnavailable.contains(key)
+            // 判过「那边没有」的等退避到期再问(CoverUnavailableLedger)。
+            let needsCover = !hasCover && coverUnavailable.shouldAsk(key, now: now)
             guard needsCount || needsCover, !playCountsInFlight.contains(key),
                   seen.insert(key).inserted, !r.artist.isEmpty, !r.title.isEmpty else { return nil }
             // 这一行是不是"够老":刚 scrobble 完的行拿到 0 不能当真(见 playCountUnavailable
             // 的注释)。nowPlaying 行没有时间戳,按最新处理。
             let age = r.date.map { now.timeIntervalSince($0) } ?? 0
             return (key, r.artist, r.title, r.album, needsCount,
-                    age >= Self.playCountZeroGraceSecs)
+                    age >= Self.playCountZeroGraceSecs, needsCover)
         }
         guard !missing.isEmpty else { return }
         missing.forEach { playCountsInFlight.insert($0.key) }
@@ -3843,10 +3893,14 @@ final class LastfmStatsService: ObservableObject {
                 // 真的在解析"全靠猜,留一条轻量日志比重新加临时诊断代码划算。
                 // 没解析出来的那几首把键名一起打出来:排查《慢歌 3》时只有
                 // "0/1" 这种计数,得靠时间点去对是哪一首。封顶 6 个,免得刷屏。
-                let unresolved = missing.filter { $0.wantsCount && counts[$0.key] == nil }.map(\.key)
+                // 次数、封面各数各的分母:只为补封面的那几行不问次数,别算进次数的分母。
+                let wantedCounts = missing.filter(\.wantsCount)
+                let wantedCovers = missing.filter(\.wantsCover)
+                let unresolved = wantedCounts.filter { counts[$0.key] == nil }.map(\.key)
                 let unresolvedNote = unresolved.isEmpty ? "" :
                     " (unresolved: \(unresolved.prefix(6).joined(separator: ", "))\(unresolved.count > 6 ? ", …" : ""))"
-                logger.notice("resolvePlayCounts: resolved \(counts.count, privacy: .public)/\(missing.count, privacy: .public) counts\(unresolvedNote, privacy: .public)")
+                let coversFound = wantedCovers.filter { covers[$0.key] != nil }.count
+                logger.notice("resolvePlayCounts: resolved \(counts.count, privacy: .public)/\(wantedCounts.count, privacy: .public) counts, \(coversFound, privacy: .public)/\(wantedCovers.count, privacy: .public) covers\(unresolvedNote, privacy: .public)")
                 if !counts.isEmpty {
                     trackPlayCounts.merge(counts) { _, new in new }
                     // 取到新值 = 不再过期(见 stalePlayCountKeys)。
@@ -3865,13 +3919,17 @@ final class LastfmStatsService: ObservableObject {
                 // 一个过期旧值(用户删过 scrobble 之类),要一并撤掉——"没有"就不该再显示数字。
                 stalePlayCountKeys.subtract(noCount)
                 for k in noCount { trackPlayCounts[k] = nil }
-                coverUnavailable.formUnion(noCover)
+                for k in noCover { coverUnavailable.mark(k, at: markedAt) }
+                for k in covers.keys { coverUnavailable.clear(k) }
                 // 新学到的次数/"确认没有"结论跟着落一次盘(recentPageCache 那份快照,
                 // 内部按当前 10 页的曲目范围裁剪),不然只留在这次进程的内存里——下次
                 // 重开 App 又要把这些已经问过的曲目重新问一遍,正是现象是的"每次都要
                 // 等"的根因之一。translatePage/goToPage 那些"新抓到一页原始行"的路径
                 // 已经在调它,这里补的是"次数变了、但原始行没变"的这条路径。
-                if !counts.isEmpty || !noCount.isEmpty { scheduleRecentPageCacheSave() }
+                // 封面结论(拿到的图、「没有」)同样随这份快照落盘,见 RecentPageCacheSnapshot。
+                if !counts.isEmpty || !noCount.isEmpty || !covers.isEmpty || !albumCovers.isEmpty || !noCover.isEmpty {
+                    scheduleRecentPageCacheSave()
+                }
                 if !countFetched.isEmpty {
                     let stamp = Date()
                     for key in countFetched {
