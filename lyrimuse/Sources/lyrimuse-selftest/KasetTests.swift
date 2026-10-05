@@ -618,6 +618,20 @@ func runKasetTests() {
                     "Kaset 播客: 队列没标当前这一条时从头取")
     }
 
+    // ---- WebKit 媒体进程那份会话记在谁名下 ----
+    do {
+        let webKit = MediaControlClient.safariMediaProcessBundleID
+        let kaset = PlaybackPlayer.kaset.bundleIdentifier
+        expectEqual(MediaControlClient.reportingPlayerBundleID(webKit, owner: kaset), kaset,
+                    "Kaset 归属: Kaset 内嵌网页那份 WebKit 会话记在 Kaset 名下")
+        expectEqual(MediaControlClient.reportingPlayerBundleID(webKit, owner: "com.apple.Safari"), webKit,
+                    "Kaset 归属: Safari 自己那份照旧")
+        expectEqual(MediaControlClient.reportingPlayerBundleID(webKit, owner: nil), webKit,
+                    "Kaset 归属: 查不到负责进程的照旧")
+        expectEqual(MediaControlClient.reportingPlayerBundleID(PlaybackPlayer.appleMusic.bundleIdentifier, owner: kaset),
+                    PlaybackPlayer.appleMusic.bundleIdentifier, "Kaset 归属: 不是 WebKit 媒体进程报的不动")
+    }
+
     // ---- 接线契约(扫源码)----
     do {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -755,6 +769,11 @@ func runKasetTests() {
                         && videoKind.contains("if known.count >= cacheLimit { known = known.filter { $0.key == lastAsked } }")
                         && videoKind.contains("if failedAt.count >= cacheLimit { failedAt = failedAt.filter { $0.key == lastAsked } }"), true,
                     "Kaset 契约: 结论表满了清表时留下正在放那一条的,它不会被重新按住")
+        expectEqual(client.contains("let owner = reportedBundleID == safariMediaProcessBundleID\n            ? raw.processIdentifier.flatMap { responsibleBundleID(ofPID: $0) } : nil")
+                        && client.contains("let bundleID = reportingPlayerBundleID(reportedBundleID, owner: owner)"), true,
+                    "Kaset 契约: 系统当选的是 WebKit 媒体进程时按负责进程认,Kaset 内嵌网页那份不当成 Safari")
+        expectEqual(playbackSource.contains("                let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier\n                return await Self.runOffPool(Self.artworkQueue)"),
+                    true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
         expectEqual(client.contains("if snapshot == nil, player != .kaset {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
         expectEqual(client.contains("if players.contains(.auto) { return heldAcrossPlayerGap(preferringPlayingKaset(fetchAutoDetectedSnapshot())) }"), true,

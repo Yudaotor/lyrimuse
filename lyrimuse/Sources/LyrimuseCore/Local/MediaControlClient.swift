@@ -2400,10 +2400,14 @@ public enum MediaControlClient {
         // `try?` 落到下面的 guard raw != nil,行为跟"没有可报告的正在播放"一致。
         // 退出码已经由上面的 r.succeeded 判过。
         guard let raw = try? JSONDecoder().decode(RawPayload.self, from: data),
-              let bundleID = raw.bundleIdentifier else {
+              let reportedBundleID = raw.bundleIdentifier else {
             setSnapshotFailure(.nobodyReporting)
             return nil
         }
+        // WebKit 的媒体进程替谁报的按负责进程认,Kaset 内嵌网页那份记在 Kaset 名下(见 `reportingPlayerBundleID`)。
+        let owner = reportedBundleID == safariMediaProcessBundleID
+            ? raw.processIdentifier.flatMap { responsibleBundleID(ofPID: $0) } : nil
+        let bundleID = reportingPlayerBundleID(reportedBundleID, owner: owner)
         // 真读到了一份快照:通道是好的,自检留下的「坏了」也作废。
         noteChannelReadSnapshot()
         setNowPlayingIdentifiers(bundleID: bundleID, title: raw.title, artist: raw.artist,
@@ -2603,6 +2607,32 @@ public enum MediaControlClient {
             || LocalPlaybackSource.followsRepublishedAnchors(bundleID: bundleID)
     }
     public static let safariMediaProcessBundleID = "com.apple.WebKit.GPU"
+
+    /// 系统当选的这份会话记在谁名下。WebKit 的媒体进程每个用到网页的 App 各有一个,bundle id 都是
+    /// `safariMediaProcessBundleID`,只有负责进程分得出是谁的(`owner`,见 `responsibleBundleID(ofPID:)`):Kaset 内嵌网页那份
+    /// 记成 Kaset,别的照报上来的记(Safari 自己那份再经 `mediaProxyOwners` 换回 Safari)。见 02 章决策 91。纯函数,selftest 覆盖。
+    public static func reportingPlayerBundleID(_ reported: String, owner: String?) -> String {
+        reported == safariMediaProcessBundleID && owner == PlaybackPlayer.kaset.bundleIdentifier
+            ? PlaybackPlayer.kaset.bundleIdentifier : reported
+    }
+
+    private typealias ResponsiblePIDFunction = @convention(c) (pid_t) -> pid_t
+    /// 系统把子进程算到哪个 App 头上用的函数(活动监视器把 WebKit 的媒体进程算到宿主头上用的也是它)。私有符号,按名字取
+    /// (`bitPattern: -2` 即 `RTLD_DEFAULT`);取不到为 nil。
+    private static let responsiblePIDFunction: ResponsiblePIDFunction? = {
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") else {
+            return nil
+        }
+        return unsafeBitCast(symbol, to: ResponsiblePIDFunction.self)
+    }()
+
+    /// 这个进程的负责 App 的 bundle id;查不到为 nil。在轮询线程上调。
+    private static func responsibleBundleID(ofPID pid: Int) -> String? {
+        guard pid > 0, let responsible = responsiblePIDFunction else { return nil }
+        let owner = responsible(pid_t(pid))
+        guard owner > 0 else { return nil }
+        return NSRunningApplication(processIdentifier: owner)?.bundleIdentifier
+    }
 
     // MARK: - 电台曲内时钟
 
