@@ -391,6 +391,14 @@ func runTouchBarTests() {
                         && controller.contains("UserDefaults.standard.set(SettingsSearchCatalog.touchBarSectionValue,")
                         && controller.contains("AppActions.shared.openSettings?()"), true,
                     "触控栏: 三键旁边的设置键打开设置里「触控栏」那一段")
+        // 封面那一格按下去打开歌词窗口,跟灵动岛的封面键、菜单栏菜单同一个入口。
+        expectEqual(controller.contains("action: #selector(artworkTapped)")
+                        && controller.contains("@objc private func artworkTapped() {\n        AppActions.shared.openLyricsWindow?()\n    }")
+                        && controller.contains("item.view = artworkButton"), true,
+                    "触控栏: 封面那一格按下去打开歌词窗口")
+        // 预览:整条按真实大小画(1:1),比内容列宽出来的部分左右滑动看,不再整体缩小。
+        expectEqual(preview.contains("return ScrollView(.horizontal) {") && !preview.contains(".scaleEffect("), true,
+                    "触控栏: 预览整条按真实大小画、左右滑动看")
         // 对齐方式:「自动」按每一行的对唱声部落成方向(同灵动岛),本体和预览都把设置传进规格。
         let cellSource = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsCell.swift")) ?? ""
         expectEqual(cellSource.contains("switch alignment.resolved(duetSide: duetSide) {"), true,

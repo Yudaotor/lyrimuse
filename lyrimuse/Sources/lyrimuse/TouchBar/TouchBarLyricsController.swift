@@ -7,7 +7,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 
 /// 触控栏歌词(默认关,设置 › 歌词显示 › 触控栏)。
 ///
-/// 开着时功能栏里常驻一枚图标(菜单栏图标当前选的那一款),轻点展开成整条触控栏:封面、上一首 / 播放暂停 /
+/// 开着时功能栏里常驻一枚图标(菜单栏图标当前选的那一款),轻点展开成整条触控栏:封面(按下去打开歌词窗口)、上一首 / 播放暂停 /
 /// 下一首(旁边一颗设置键,打开设置里这一段)、这一句歌词,封面和三键各自摆在歌词哪一边听它们各自的「位置」(Core `TouchBarSlot.order`);广告期间封面那一格
 /// 换成喇叭(`TouchBarLyricsCell.artworkTile`)。展开态是系统
 /// 模态条,不管哪个 App 在前台都显示,左端的 ✕ 收回成图标;开了「展开时隐藏功能栏」时展开条占满整条触控栏,
@@ -64,7 +64,19 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         button.translatesAutoresizingMaskIntoConstraints = false
         return button
     }()
-    private let artworkView = NSImageView()
+    /// 封面那一格:按下去打开歌词窗口(同灵动岛的封面键)。图跟着 `updateArtwork` 换,广告期间是喇叭、没曲目时是音符,照样能按。
+    private lazy var artworkButton: NSButton = {
+        let button = NSButton(image: TouchBarLyricsCell.placeholderArtwork, target: self, action: #selector(artworkTapped))
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleProportionallyUpOrDown
+        button.wantsLayer = true
+        button.layer?.cornerRadius = TouchBarLyricsCell.artworkCornerRadius
+        button.layer?.masksToBounds = true
+        button.setAccessibilityLabel(L10n.t("打开歌词窗口"))
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
     /// 三键 + 一颗设置键,同一个分段控件:设置键跟着三键出没、跟着它的「位置」挪。
     private lazy var controls = NSSegmentedControl(
         images: [Self.controlImage(NSImage.touchBarSkipToStartTemplateName, label: L10n.t("上一首")),
@@ -163,12 +175,6 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         trayItem.view = trayButton
         trayButton.setAccessibilityLabel(L10n.t("触控栏歌词"))
 
-        artworkView.imageScaling = .scaleProportionallyUpOrDown
-        artworkView.wantsLayer = true
-        artworkView.layer?.cornerRadius = TouchBarLyricsCell.artworkCornerRadius
-        artworkView.layer?.masksToBounds = true
-        artworkView.translatesAutoresizingMaskIntoConstraints = false
-
         for segment in 0..<controls.segmentCount {
             controls.setWidth(TouchBarLyricsCell.controlSegmentWidth, forSegment: segment)
         }
@@ -189,8 +195,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         NSLayoutConstraint.activate([
             collapseButton.widthAnchor.constraint(equalToConstant: CGFloat(TouchBarLyricsStyle.collapseItemWidth)),
             collapseButton.heightAnchor.constraint(equalToConstant: TouchBarLyricsCell.barHeight),
-            artworkView.widthAnchor.constraint(equalToConstant: TouchBarLyricsCell.barHeight),
-            artworkView.heightAnchor.constraint(equalToConstant: TouchBarLyricsCell.barHeight),
+            artworkButton.widthAnchor.constraint(equalToConstant: TouchBarLyricsCell.barHeight),
+            artworkButton.heightAnchor.constraint(equalToConstant: TouchBarLyricsCell.barHeight),
             lyricsContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: TouchBarLyricsCell.lyricsMinWidth),
             lyricsContainer.heightAnchor.constraint(equalToConstant: TouchBarLyricsCell.barHeight),
             mainRowTop,
@@ -247,6 +253,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
 
     @objc private func collapseTapped() {
         TouchBarPrivateAPI.minimizeSystemModal(bar)
+    }
+
+    /// 封面那一格:打开歌词窗口,跟灵动岛的封面键、菜单栏菜单和快捷键同一个入口。
+    @objc private func artworkTapped() {
+        AppActions.shared.openLyricsWindow?()
     }
 
     /// 同悬浮歌词那排按钮:播放 / 暂停走乐观回声版,三个动作都先过「点了才校验权限」。第四格是设置键。
@@ -352,8 +363,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     }
 
     private func updateArtwork(_ image: NSImage) {
-        guard artworkView.image !== image else { return }
-        artworkView.image = image
+        guard artworkButton.image !== image else { return }
+        artworkButton.image = image
     }
 
     /// 三键的图标带上无障碍描述(旁白读它,触控栏不显示 tooltip)。系统图是进程内共享的实例,拷一份再改。
@@ -379,7 +390,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         case Item.collapse:
             item.view = collapseButton
         case Item.artwork:
-            item.view = artworkView
+            item.view = artworkButton
             item.visibilityPriority = .low
         case Item.controls:
             item.view = controls

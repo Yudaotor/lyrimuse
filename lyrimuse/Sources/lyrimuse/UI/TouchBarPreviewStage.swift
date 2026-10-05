@@ -3,8 +3,8 @@ import Combine
 import LyrimuseCore
 import SwiftUI
 
-/// 「歌词显示 › 触控栏」那一段的预览:一整条触控栏(展开成系统模态条时的样子),按真实尺寸画好、再整体缩到内容列宽 ——
-/// 同「歌词窗口」那块预览(`LyricsWindowPreviewStage`)的做法,预览回答的是形态。版面照 Xcode 触控栏模拟器里实拍的样子:
+/// 「歌词显示 › 触控栏」那一段的预览:一整条触控栏(展开成系统模态条时的样子),按真实尺寸(1:1)画,比内容列宽出来的
+/// 部分左右滑动看 —— 整条缩进内容列只有约 0.57 倍,字小得看不清(见 17 章决策 26)。版面照 Xcode 触控栏模拟器里实拍的样子:
 /// 左边是给 App 的那一块(`TouchBarLyricsStyle.systemModalWidth`),最左是收起键(✕),后面封面、三键、歌词那一格按
 /// 封面和三键各自的「位置」排(跟本体同一份 `TouchBarSlot.order`),封面 / 三键跟着「显示封面」「显示播放控制」出没、
 /// 让出来的宽度归歌词,封面那一格贴哪张图也跟本体同一份(`TouchBarLyricsCell.artworkTile`,广告期间是喇叭);右边是收起的系统功能栏(默认那四颗:亮度、音量、静音、Siri),只是参照物。开了「展开时隐藏功能栏」时
@@ -23,7 +23,7 @@ struct TouchBarPreviewStage: View {
     private static let stripChevronWidth: CGFloat = 15
     private static let stripButtonWidth: CGFloat = 57
     private static let stripTrailingInset: CGFloat = 10
-    /// 触控栏四周露出来的那一圈键盘面(缩放前的点)。
+    /// 触控栏四周露出来的那一圈键盘面。
     private static let deckPadding: CGFloat = 18
     private static let barCornerRadius: CGFloat = 7
     private static let buttonCornerRadius: CGFloat = 6
@@ -34,8 +34,6 @@ struct TouchBarPreviewStage: View {
     private static var contentSize: CGSize {
         CGSize(width: barSize.width + deckPadding * 2, height: barSize.height + deckPadding * 2)
     }
-    /// 缩到内容列宽(`SettingsPage.maxCardColumnWidth`)。
-    private static var scale: CGFloat { SettingsPage<EmptyView>.maxCardColumnWidth / contentSize.width }
 
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var feed = TouchBarPreviewFeed()
@@ -74,7 +72,7 @@ struct TouchBarPreviewStage: View {
         let rows = LyricRows(main: spec, secondary: secondarySpec, twoRows: snapshot.secondary.showsSecondaryRow)
         return VStack(spacing: SectionPreviewMetrics.captionSpacing) {
             stage(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, snapshot: snapshot)
-            Text(scrolls ? L10n.t("预览 · 本句会横向滚动") : L10n.t("预览"))
+            Text(scrolls ? L10n.t("预览 · 左右滑动看整条 · 本句会横向滚动") : L10n.t("预览 · 左右滑动看整条"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(height: SectionPreviewMetrics.captionHeight)
@@ -101,17 +99,20 @@ struct TouchBarPreviewStage: View {
                        snapshot: TouchBarPreviewFeed.Snapshot) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.stageCornerRadius, style: .continuous)
         let size = Self.contentSize
-        return bar(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, snapshot: snapshot)
-            .padding(Self.deckPadding)
-            .frame(width: size.width, height: size.height)
-            .background(deck)
-            .scaleEffect(Self.scale, anchor: .topLeading)
-            // scaleEffect 不改布局尺寸,再套一层缩小后的 frame 把占位收回来(同 `LyricsWindowPreviewStage`)。
-            .frame(width: size.width * Self.scale, height: size.height * Self.scale, alignment: .topLeading)
-            .clipShape(shape)
-            .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
-            .allowsHitTesting(false)
-            .environment(\.colorScheme, .dark)
+        // 横向滚动条常显:触控板下系统默认只在滑动时露出滚动条,不显示的话看不出这一条能滑。
+        return ScrollView(.horizontal) {
+            bar(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, snapshot: snapshot)
+                .padding(Self.deckPadding)
+                .frame(width: size.width, height: size.height)
+                .background(deck)
+                .allowsHitTesting(false)
+        }
+        .scrollIndicators(.visible)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: SettingsPage<EmptyView>.maxCardColumnWidth)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
+        .environment(\.colorScheme, .dark)
     }
 
     /// 触控栏四周那一圈键盘面(深空灰铝)。不跟设置窗口的浅深色走:那一块本来就是机身。
