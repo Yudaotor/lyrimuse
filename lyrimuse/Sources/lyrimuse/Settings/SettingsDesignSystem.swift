@@ -1406,3 +1406,84 @@ private struct SegmentedControlRepresentableHashable<T: Hashable>: NSViewReprese
         return context.coordinator.fixedSize
     }
 }
+
+// MARK: - 首启引导的整窗玻璃
+
+extension View {
+    /// 首启引导整扇窗的底,挂在引导页根视图上,伸进标题栏那一截(玻璃从窗顶铺到窗底)。
+    ///
+    /// macOS 26+ 是一整块液态玻璃(`NSGlassEffectView` 常规那一档),窗口同时改成透明:窗口不透明时玻璃只折射得到
+    /// 窗口里面,出来一块实心灰;透明之后折射的是背后的桌面。窗口透明走两道 —— SwiftUI 的
+    /// `.containerBackground(.clear, for: .window)`,加上玻璃视图进窗口时自己设 `isOpaque` / `backgroundColor`。
+    /// 旧系统退回磨砂材质。见 14 章决策 54。
+    @ViewBuilder
+    func onboardingWindowBackground() -> some View {
+        if #available(macOS 26.0, *) {
+            background { OnboardingWindowBackground().ignoresSafeArea() }
+                .containerBackground(.clear, for: .window)
+        } else {
+            background { OnboardingWindowBackground().ignoresSafeArea() }
+        }
+    }
+
+    /// 首启引导里的卡片。macOS 26+ 是浮在整窗玻璃上的一块透明玻璃(`.clear`,更通透、边缘带高光;整窗那块是
+    /// 常规那一档,两档叠着卡片才浮得起来),外加一条白色发丝亮边 —— 背后发白时玻璃边界很淡,理由同
+    /// `settingsCardBackground`。`tint` 给收尾页的状态条着色。旧系统退回调用方给的淡底和描边。
+    @ViewBuilder
+    func onboardingCardBackground(cornerRadius: CGFloat, tint: Color? = nil,
+                                  fallbackFill: Color, fallbackStroke: Color) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(macOS 26.0, *) {
+            glassEffect(tint.map { Glass.clear.tint($0.opacity(0.2)) } ?? Glass.clear, in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+        } else {
+            background(shape.fill(fallbackFill))
+                .overlay(shape.strokeBorder(fallbackStroke))
+        }
+    }
+}
+
+/// `onboardingWindowBackground()` 垫的那块底。两档都在进窗口时把标题设回可见:scene 挂 `.hiddenTitleBar`(标题栏
+/// 透明 + 内容铺满,玻璃才能通到窗顶)会顺带把标题藏掉,而标题要跟着界面语言走(`.navigationTitle`)。别改成自己设
+/// `titlebarAppearsTransparent` / `fullSizeContentView`:SwiftUI 管着 scene 的窗口样式,手设的会被它盖回去,标题栏
+/// 留下一条底色带和分隔线。
+///
+/// 旧系统那档是 `.behindWindow` 的 `NSVisualEffectView`(`.sidebar`),`state = .active`:默认跟随窗口激活态、
+/// 失焦时退成不透明的灰底,而引导里系统授权对话框一弹这扇窗就失焦。厚薄只换材质或玻璃档位,别调这一层的
+/// `alphaValue`:降透明度不会让模糊变弱,只是把没模糊过的桌面原样混进来,像脏玻璃。别换成 SwiftUI 的 `Material`:
+/// 那是窗口内部混合,窗口底下是纯色时等于没模糊。
+struct OnboardingWindowBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        if #available(macOS 26.0, *) {
+            let glass = TransparentWindowGlass()
+            glass.style = .regular
+            return glass
+        }
+        let frosted = TitleRevealingEffectView()
+        frosted.material = .sidebar
+        frosted.blendingMode = .behindWindow
+        frosted.state = .active
+        return frosted
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    @available(macOS 26.0, *)
+    private final class TransparentWindowGlass: NSGlassEffectView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.titleVisibility = .visible
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.invalidateShadow()
+        }
+    }
+
+    private final class TitleRevealingEffectView: NSVisualEffectView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.titleVisibility = .visible
+        }
+    }
+}

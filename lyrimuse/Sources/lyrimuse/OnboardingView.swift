@@ -189,7 +189,7 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             // 这一层 ScrollView 是**溢出兜底**,不是"让内容可以随便长"。
             //
-            // 窗口固定 480×440、不可拖拽(App.swift 的 .windowResizability(.contentSize)),
+            // 窗口固定 480×500、不可拖拽(App.swift 的 .windowResizability(.contentSize)),
             // 在此之前内容超出就是**静默裁切**:超出的部分既不滚动也不撑大窗口,只会被切掉
             // 或压成省略号,而且在开发机上通常看不出来 —— 最坏情况是英文界面(同一句话普遍
             // 比中文多占一到两行)叠上「辅助功能 → 更大文字」。`.basedOnSize` 让内容装得下
@@ -236,6 +236,7 @@ struct OnboardingView: View {
                 if step > 0 {
                     Button(L10n.t("上一步")) { goTo(step - 1) }
                         .controlSize(.large)
+                        .settingsGlassButtons()
                 }
                 Button(isLastStep ? L10n.t("开始使用") : L10n.t("下一步")) {
                     if isLastStep {
@@ -246,6 +247,7 @@ struct OnboardingView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .controlSize(.large)
+                .settingsProminentGlassButton(tint: .accentColor)
                 // 判据收在 `nextIsLocked` 里一处(那边记着 automation 为什么被移出去)。
                 // 仍然是"软强制":只锁这一个按钮,不禁用/隐藏窗口的关闭按钮,而且旁边现在
                 // 有一个显式的「暂时跳过」。
@@ -254,12 +256,12 @@ struct OnboardingView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .frame(width: 480, height: 440)
-        // 磨砂玻璃底。`ignoresSafeArea` 让它伸进标题栏那一截(窗口是 `.hiddenTitleBar`,见 App.swift),
-        // 玻璃从窗顶一直铺到窗底;内容本身仍在安全区内,不会跑到红绿灯底下。
-        .background { OnboardingGlassBackground().ignoresSafeArea() }
+        .frame(width: 480, height: 500)
+        // 整扇窗的玻璃底(macOS 26+ 液态玻璃、窗口透明,旧系统磨砂材质),伸进标题栏那一截(窗口是
+        // `.hiddenTitleBar`,见 App.swift),从窗顶一直铺到窗底;内容本身仍在安全区内,不会跑到红绿灯底下。
+        .onboardingWindowBackground()
         // 撒花盖在**整扇窗**上(叠在 `.frame` 之后,所以它正好是窗口那么大):纸片会从进度点和
-        // 「开始使用」上面落过去,而不是只落在上面那块内容区里 —— 后者在这个 440pt 高的窗口里
+        // 「开始使用」上面落过去,而不是只落在上面那块内容区里 —— 后者在这个 500pt 高的窗口里
         // 看着像"纸片撞在一条看不见的线上"。它自己从不吃点击,按钮照常能按(见 ConfettiOverlay)。
         .overlay { ConfettiOverlay(burst: confettiBurst) }
         // 窗口标题跟着界面语言走。App.swift 里 `Window(L10n.t("欢迎使用 Lyrimuse"), id:)`
@@ -493,8 +495,8 @@ struct OnboardingView: View {
                 }
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.035)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+            .onboardingCardBackground(cornerRadius: 14, fallbackFill: Color.primary.opacity(0.035),
+                                      fallbackStroke: Color.primary.opacity(0.08))
             .padding(.top, 16)
         }
     }
@@ -884,7 +886,7 @@ struct OnboardingView: View {
                     isOn: $settings.showRomanization)
             }
             Text(touchBar.isPresent
-                 ? L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏在各自的「副行」里选择译文或读音")
+                 ? L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏、触控栏各在「副行」里选译文或读音")
                  : L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文或读音"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -926,7 +928,8 @@ struct OnboardingView: View {
     // (`@Published`),引导页自己的 .lastfm 那一步还有个按钮专门去开设置窗。真正的守卫现在
     // 是 `currentStep` + `.onChange(of: steps.count)` 那一对,详见 `currentStep` 头注。
     private var displayModeStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // 段间距比别的步骤紧(12 不是 16):有触控栏时这一步多一行,这样中文下四行也放得进窗口。
+        VStack(alignment: .leading, spacing: 12) {
             Text(L10n.t("歌词怎么显示"))
                 .font(.title2.bold())
             Text(L10n.t("这几种可以同时开着，先挑你现在想用的——之后随时能在设置里单独开关"))
@@ -963,9 +966,8 @@ struct OnboardingView: View {
                 }
             }
 
-            // 这两条提示**互斥**,任何时候最多出现一条 —— 整个向导没有 ScrollView、窗口
-            // 固定 480×440,超出部分既不滚动也不撑大窗口,只会被静默裁掉/压成省略号;两条
-            // 同时出现正好会顶破这一步的高度预算。全关时"等播起来才看得到"也没意义了,
+            // 这两条提示**互斥**,任何时候最多出现一条 —— 窗口固定 480×500,两条同时出现会把这一步
+            // 顶出窗口(超出时外层只是滚动兜底,见 body 头注)。全关时"等播起来才看得到"也没意义了,
             // 所以警告优先。
             if noDisplayModeEnabled {
                 displayModeNote(
@@ -1279,10 +1281,9 @@ struct OnboardingView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill((tint ?? Color.primary).opacity(tint == nil ? 0.035 : 0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder((tint ?? Color.primary).opacity(tint == nil ? 0.08 : 0.2)))
+        .onboardingCardBackground(cornerRadius: 12, tint: tint,
+                                  fallbackFill: (tint ?? Color.primary).opacity(tint == nil ? 0.035 : 0.08),
+                                  fallbackStroke: (tint ?? Color.primary).opacity(tint == nil ? 0.08 : 0.2))
     }
 
     private func liveHeadline(_ state: OnboardingFlow.LiveCheck) -> String {
@@ -1318,9 +1319,8 @@ struct OnboardingView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.55)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.07)))
+        .onboardingCardBackground(cornerRadius: 12, fallbackFill: Color(nsColor: .controlBackgroundColor).opacity(0.55),
+                                  fallbackStroke: Color.primary.opacity(0.07))
     }
 
     /// 选的播放器:图标走 `PlayerIconView`(三级兜底取图,跟选项卡共用一份),最多并排四个;
@@ -1519,7 +1519,7 @@ struct OnboardingView: View {
 // 键盘(上沿一条深色触控栏),不画菜单栏条:它不在屏幕上。
 //
 // 尺寸全部写成固定常量、**不用 GeometryReader**:示意图必须是可预测的固定高度,不能跟着
-// 容器变(这一步没有 ScrollView,窗口固定 480×440,溢出是静默裁切)。
+// 容器变(窗口固定尺寸,这一步的高度预算按固定行高算)。
 //
 // 示意图**不跟着开关变灰**。做成"关掉就 saturation(0)+opacity(0.45)"是反效果:
 // 灵动岛和菜单栏歌词默认都是关的,于是最需要被解释的那两张恰好被洗成
@@ -1616,51 +1616,12 @@ private struct DisplayModeThumbnail: View {
     }
 }
 
-/// 引导窗口的磨砂玻璃底:`blendingMode = .behindWindow` 的 `NSVisualEffectView`,透出窗口后面的桌面
-/// 和别的窗口。
-///
-/// 材质用 `.sidebar`:用真实壁纸把 `.hudWindow` / `.popover` / `.menu` / `.sidebar` /
-/// `.underWindowBackground` / `.fullScreenUI` 和「满模糊 + 一层雾」并排比过,作者选的是它 ——
-/// 最白、最厚,只透出颜色轮廓,文字最稳;深色外观下它自动变深。
-/// `NSGlassEffectView`(液态玻璃)不适合铺整窗:窗口本身不透明,它只折射得到窗口里的东西,出来是一块实心灰。
-///
-/// 别换成 SwiftUI 的 `Material`:那是窗口**内部**混合(within-window),窗口底下是纯色时等于没模糊;
-/// `.containerBackground(_:for: .window)` 要 macOS 15,部署目标是 14。
-///
-/// 标题栏:scene 挂 `.windowStyle(.hiddenTitleBar)`(标题栏透明 + 内容铺满,玻璃才能通到窗顶),它顺带把
-/// 标题文字藏了,这里在进窗口时把 `titleVisibility` 设回 `.visible` —— 标题跟着界面语言走那条
-/// (`.navigationTitle`)仍然要看得见。别改成自己设 `titlebarAppearsTransparent` / `fullSizeContentView`:
-/// SwiftUI 管着 scene 的窗口样式,手设的会被它盖回去,标题栏留下一条底色带和分隔线。
-///
-/// `state = .active`:默认跟随窗口激活态,失焦时退成不透明的灰底 —— 引导过程中系统授权对话框一弹,
-/// 这扇窗就失焦,玻璃不该跟着一闪一闪。
-///
-/// 厚薄只换材质,别调玻璃层的 `alphaValue`:降透明度不会让模糊变弱,只是把没模糊过的桌面原样混进来,
-/// 看着像脏玻璃(试过 0.8 / 0.9,作者都不满意)。
-private struct OnboardingGlassBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = TitleRevealingEffectView()
-        view.material = .sidebar
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
-
-    private final class TitleRevealingEffectView: NSVisualEffectView {
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            window?.titleVisibility = .visible
-        }
-    }
-}
-
 private extension View {
-    /// 引导页里的淡玻璃卡片:欢迎页的两个偏好、「让它跑起来」的状态行、收尾页的两张卡片共用一份。
+    /// 引导页里的卡片:欢迎页的两个偏好、「让它跑起来」的状态行、收尾页待处理那张共用一份。材质见
+    /// `onboardingCardBackground`。
     func onboardingCard() -> some View {
         padding(.horizontal, 12)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.035)))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+            .onboardingCardBackground(cornerRadius: 12, fallbackFill: Color.primary.opacity(0.035),
+                                      fallbackStroke: Color.primary.opacity(0.08))
     }
 }

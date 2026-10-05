@@ -25458,25 +25458,25 @@
         }
       }
     },
-    "这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏在各自的「副行」里选择译文或读音" : {
+    "这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏、触控栏各在「副行」里选译文或读音" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar pick translation or romanization in their own “Second Line” setting"
+            "value" : "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar each pick translation or romanization in their own “Second Line”"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏在各自的「副行」里选择译文或读音"
+            "value" : "这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏、触控栏各在「副行」里选译文或读音"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這兩個開關管浮動歌詞和歌詞視窗；動態島、選單列和觸控列在各自的「副行」裡選擇譯文或讀音"
+            "value" : "這兩個開關管浮動歌詞和歌詞視窗；動態島、選單列、觸控列各在「副行」裡選譯文或讀音"
           }
         }
       }

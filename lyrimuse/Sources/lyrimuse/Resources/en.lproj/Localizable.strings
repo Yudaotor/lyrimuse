@@ -1606,7 +1606,7 @@
 "这一轮没有源应答" = "No source replied this round";
 "这一首在搜的时候被改过，这一轮的结果没有采用" = "This song was edited while the search ran, so this round's result wasn't applied";
 "这一首已经不在歌词库里了" = "This song is no longer in the lyrics library";
-"这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏在各自的「副行」里选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar pick translation or romanization in their own “Second Line” setting";
+"这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏、触控栏各在「副行」里选译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar each pick translation or romanization in their own “Second Line”";
 "这两个开关管悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation or romanization in their own “Second Line” setting";
 "这个应用用不了" = "This app won’t work";
 "这个开关已经被关掉了——现在还能用，只是因为该浏览器还没重启；重启后就会失效" = "This switch has been turned off — it still works right now only because the browser hasn't restarted yet, and it will stop working after a restart";

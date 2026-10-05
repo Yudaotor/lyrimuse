@@ -74,8 +74,8 @@ struct LyrimuseApp: App {
         .windowStyle(.hiddenTitleBar)
         // 固定尺寸的一次性向导,不需要用户手动拖拽调整——.windowResizability(.contentSize)
         // 让窗口尺寸完全跟着 OnboardingView 自己声明的 .frame(width:height:) 走。
-        // .hiddenTitleBar 是给磨砂玻璃底让路(玻璃要通到窗顶);标题文字由
-        // OnboardingGlassBackground 设回可见,见那边的头注。
+        // .hiddenTitleBar 是给整窗玻璃底让路(玻璃要通到窗顶);标题文字由
+        // OnboardingWindowBackground 设回可见,见那边的头注。
         Window(L10n.t("欢迎使用 Lyrimuse"), id: "onboarding") {
             OnboardingView()
         }
