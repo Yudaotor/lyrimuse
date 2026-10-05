@@ -4,7 +4,8 @@
   'use strict';
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 
-  // Menus (download, language): hover on desktop, first tap opens on touch.
+  // Menus (download, language): hover on desktop, a tap or click toggles, and a click on a trigger never follows
+  // its href while this script runs (same as lp.js).
   const menus = [...document.querySelectorAll('.dl')];
   const closers = new Map();
   const closeAll = (except) => menus.forEach((d) => { if (d !== except && closers.has(d)) closers.get(d)(); });
@@ -50,14 +51,9 @@
     });
     d.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'mouse') return; t = setTimeout(close, 160); });
     trigger.addEventListener('click', (e) => {
-      if (trigger.tagName === 'BUTTON') {
-        e.preventDefault();
-        if (viaHover) { viaHover = false; return; }
-        d.classList.contains('open') ? close() : open();
-      } else if (!d.classList.contains('open')) {
-        e.preventDefault();
-        open();
-      }
+      e.preventDefault();
+      if (viaHover) { viaHover = false; return; }
+      d.classList.contains('open') ? close() : open();
     });
     trigger.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') { e.preventDefault(); open(); const first = d.querySelector('.dl-item'); if (first) first.focus(); }

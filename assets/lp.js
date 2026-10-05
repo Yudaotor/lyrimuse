@@ -784,8 +784,9 @@
     });
   }
 
-  // Menus (download, language): hover on desktop, first tap opens on touch.
-  // A click on a button trigger that hover just opened must not close it again.
+  // Menus (download, language): hover on desktop, a tap or click toggles. While this script runs a click on a
+  // trigger never follows its href (that link is for a page without the script): the downloads and the GitHub
+  // link are items in the menu. A click on a menu that hover just opened must not close it again.
   const menus = [...document.querySelectorAll('.dl')];
   const closers = new Map();
   const closeAll = (except) => menus.forEach((d) => { if (d !== except && closers.has(d)) closers.get(d)(); });
@@ -831,14 +832,9 @@
     });
     d.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'mouse') return; t = setTimeout(close, 160); });
     trigger.addEventListener('click', (e) => {
-      if (trigger.tagName === 'BUTTON') {
-        e.preventDefault();
-        if (viaHover) { viaHover = false; return; }
-        d.classList.contains('open') ? close() : open();
-      } else if (!d.classList.contains('open')) {
-        e.preventDefault();
-        open();
-      }
+      e.preventDefault();
+      if (viaHover) { viaHover = false; return; }
+      d.classList.contains('open') ? close() : open();
     });
     trigger.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') { e.preventDefault(); open(); const first = d.querySelector('.dl-item'); if (first) first.focus(); }

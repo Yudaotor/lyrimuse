@@ -16,8 +16,8 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="../assets/lp.css?v=202610050021">
-<script src="../assets/lp.js?v=202610050021" defer fetchpriority="high"></script>
+<link rel="stylesheet" href="../assets/lp.css?v=202610050452">
+<script src="../assets/lp.js?v=202610050452" defer fetchpriority="high"></script>
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh-Hant/">
 <meta property="og:locale" content="zh_TW">
@@ -52,7 +52,12 @@
     "@type": "Person",
     "name": "Yudaotor",
     "url": "https://github.com/Yudaotor"
-  }
+  },
+  "sameAs": [
+    "https://github.com/Yudaotor/lyrimuse",
+    "https://www.producthunt.com/products/lyrimuse",
+    "https://macmenubar.com/lyrimuse/"
+  ]
 }
 </script>
 <script type="application/ld+json">
@@ -74,7 +79,7 @@
       "name": "怎麼安裝？",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "推薦用 Homebrew：點上面的「複製 Homebrew 安裝指令」，貼到終端機執行，第一次打開時的 Gatekeeper 提示它會順手處理，也不需要 Apple 開發者帳號。也可以從 GitHub 下載 DMG 手動安裝，步驟見 README。之後的更新都在 App 裡完成。"
+        "text": "推薦用 Homebrew：點上面的「複製 Homebrew 安裝指令」，貼到終端機執行，第一次打開時的 Gatekeeper 提示它會順手處理，也不需要 Apple 開發者帳號。也可以下載 DMG，把 Lyrimuse 拖進「應用程式」。App 沒有經過 Apple 公證，第一次打開會被系統擋下：打開「系統設定 → 隱私權與安全性」，捲到最底部按「強制打開」，只需要這一次。之後的更新都在 App 裡完成。"
       }
     },
     {
@@ -122,7 +127,7 @@
       "name": "和 LyricsX 有什麼差別？",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支援了 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 和 YouTube Music，歌詞按評分挑選，有粵拼和日文假名，還能記錄到 Last.fm。詳見逐項查證過的對比。"
+        "text": "LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支援了 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 和 YouTube Music，歌詞按評分挑選，有粵拼和日文羅馬拼音，還能記錄到 Last.fm。詳見逐項查證過的對比。"
       }
     }
   ]
@@ -148,7 +153,7 @@
 <header class="nav">
   <div class="nav-in">
     <a class="brand" href="#top"><img src="../assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
-    <nav class="links">
+    <nav class="links" aria-label="主要">
       <a href="#display">功能</a>
       <a href="compare/">對比 LyricsX</a>
       <a href="#faq">常見問題</a>
@@ -166,6 +171,7 @@
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推薦</span></b><em>M1 及更新的晶片 · DMG · <span class="dl-size">26 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推薦</span></b><em>Intel 晶片的 Mac · DMG · <span class="dl-size">50 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下載</b><em>所有版本、ZIP 與校驗檔</em></span></a>
+      <p class="dl-note">DMG 沒有經過 Apple 公證，第一次打開會被系統擋下：到「系統設定 → 隱私權與安全性」按「強制打開」。用 Homebrew 安裝不會遇到。</p>
     </div></div>
   </div>
 </header>
@@ -185,6 +191,7 @@
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推薦</span></b><em>M1 及更新的晶片 · DMG · <span class="dl-size">26 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推薦</span></b><em>Intel 晶片的 Mac · DMG · <span class="dl-size">50 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下載</b><em>所有版本、ZIP 與校驗檔</em></span></a>
+      <p class="dl-note">DMG 沒有經過 Apple 公證，第一次打開會被系統擋下：到「系統設定 → 隱私權與安全性」按「強制打開」。用 Homebrew 安裝不會遇到。</p>
     </div></div>
     <button class="btn btn-light" type="button" id="copyBrew" data-copy="brew tap yudaotor/lyrimuse&#10;brew trust --cask yudaotor/lyrimuse/lyrimuse&#10;brew install --cask lyrimuse" data-copied="已複製，貼到終端機執行"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6a1.5 1.5 0 0 0 1.5 1.5H4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="copy-label">複製 Homebrew 安裝指令</span></button>
   </div>
@@ -278,6 +285,7 @@
     </video>
     <button class="watch-play" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.6v10.8c0 .5.5.8.9.5l8.1-5.4a.6.6 0 0 0 0-1L5.4 2.1c-.4-.3-.9 0-.9.5z"/></svg><span>播放</span><em>0:32</em></button>
   </div>
+  <p class="watch-more reveal"><a href="https://youtu.be/-NurKoxyxuc">在 YouTube 看完整版（1 分 17 秒） <span aria-hidden="true">›</span></a></p>
 </section>
 
 <section class="ch" id="display">
@@ -645,13 +653,13 @@
     </div>
     <div class="faq-list reveal">
       <details class="qa" style="--i:0"><summary><span class="qa-q">支援哪些 Mac？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>macOS 14 Sonoma 以上，Apple Silicon 和 Intel 都支援，Intel 用單獨的安裝包。想在本機翻譯歌詞，需要 macOS 15 以上。</p></div></details>
-      <details class="qa" style="--i:1"><summary><span class="qa-q">怎麼安裝？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>推薦用 Homebrew：點上面的「複製 Homebrew 安裝指令」，貼到終端機執行，第一次打開時的 Gatekeeper 提示它會順手處理，也不需要 Apple 開發者帳號。也可以從 GitHub 下載 DMG 手動安裝，步驟見 <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">README</a>。之後的更新都在 App 裡完成。</p></div></details>
+      <details class="qa" style="--i:1"><summary><span class="qa-q">怎麼安裝？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>推薦用 Homebrew：點上面的「複製 Homebrew 安裝指令」，貼到終端機執行，第一次打開時的 Gatekeeper 提示它會順手處理，也不需要 Apple 開發者帳號。也可以下載 DMG，把 Lyrimuse 拖進「應用程式」。App 沒有經過 Apple 公證，第一次打開會被系統擋下：打開「系統設定 → 隱私權與安全性」，捲到最底部按「強制打開」，只需要這一次。之後的更新都在 App 裡完成。</p></div></details>
       <details class="qa" style="--i:2"><summary><span class="qa-q">需要給哪些權限？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Apple Music 和 Spotify 第一次使用時，macOS 會問你要不要允許 Lyrimuse 控制它們（「自動化」權限），同意就好；QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 都不用額外授權。</p></div></details>
       <details class="qa" style="--i:3"><summary><span class="qa-q">我的資料會上傳嗎？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>沒有帳號、沒有遙測、沒有統計，關於你和你聽什麼，不會有任何資訊傳到開發者那裡。找歌詞時會把正在播的這首歌拿去問各個歌詞來源，翻譯預設在本機完成。完整清單見<a href="privacy/">隱私政策</a>。</p></div></details>
       <details class="qa" style="--i:4"><summary><span class="qa-q">沒有網路能看歌詞嗎？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>可以。找過一次的歌詞會存在本機，之後不連網也能顯示；第一次找歌詞和線上翻譯需要網路。</p></div></details>
       <details class="qa" style="--i:5"><summary><span class="qa-q">沒有瀏海的 Mac 能用動態島嗎？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>可以。在沒有瀏海的螢幕上（舊款 MacBook 或外接顯示器），膠囊貼在螢幕頂部置中，跟選單列一樣高，放在哪個螢幕可以在設定裡選。</p></div></details>
       <details class="qa" style="--i:6"><summary><span class="qa-q">歌詞不對或不同步怎麼辦？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>時間對不上，就幫這首歌調個偏移，之後會一直記住；版本不對，就打開手動搜尋換一份，選中的那份會被鎖定。也可以在「歌詞管理」裡直接修改。</p></div></details>
-      <details class="qa" style="--i:7"><summary><span class="qa-q">和 LyricsX 有什麼差別？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支援了 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 和 YouTube Music，歌詞按評分挑選，有粵拼和日文假名，還能記錄到 Last.fm。詳見<a href="compare/">逐項查證過的對比</a>。</p></div></details>
+      <details class="qa" style="--i:7"><summary><span class="qa-q">和 LyricsX 有什麼差別？</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX 最後一個版本是 2022 年 4 月的 v1.6.3。Lyrimuse 需要 macOS 14 以上，多支援了 QQ 音樂、網易雲音樂、酷狗、汽水音樂、KKBOX、Amazon Music 和 YouTube Music，歌詞按評分挑選，有粵拼和日文羅馬拼音，還能記錄到 Last.fm。詳見<a href="compare/">逐項查證過的對比</a>。</p></div></details>
     </div>
   </div>
 </section>
@@ -668,6 +676,7 @@
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon 版<span class="dl-rec">推薦</span></b><em>M1 及更新的晶片 · DMG · <span class="dl-size">26 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel 版<span class="dl-rec">推薦</span></b><em>Intel 晶片的 Mac · DMG · <span class="dl-size">50 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>前往 GitHub 下載</b><em>所有版本、ZIP 與校驗檔</em></span></a>
+      <p class="dl-note">DMG 沒有經過 Apple 公證，第一次打開會被系統擋下：到「系統設定 → 隱私權與安全性」按「強制打開」。用 Homebrew 安裝不會遇到。</p>
     </div></div>
       <a class="btn btn-ghost mag" href="https://github.com/Yudaotor/lyrimuse">在 GitHub 上查看</a>
     </div>
@@ -680,7 +689,7 @@
 <footer class="foot">
   <div class="foot-in">
     <div class="foot-brand"><img src="../assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
-    <nav class="foot-links">
+    <nav class="foot-links" aria-label="頁尾">
       <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md">GitHub（繁體中文說明）</a>
       <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
       <a href="changelog/">更新記錄</a>

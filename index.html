@@ -28,8 +28,8 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="stylesheet" href="assets/lp.css?v=202610050021">
-<script src="assets/lp.js?v=202610050021" defer fetchpriority="high"></script>
+<link rel="stylesheet" href="assets/lp.css?v=202610050452">
+<script src="assets/lp.js?v=202610050452" defer fetchpriority="high"></script>
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://yudaotor.github.io/lyrimuse/">
 <meta property="og:locale" content="en_US">
@@ -64,7 +64,12 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
     "@type": "Person",
     "name": "Yudaotor",
     "url": "https://github.com/Yudaotor"
-  }
+  },
+  "sameAs": [
+    "https://github.com/Yudaotor/lyrimuse",
+    "https://www.producthunt.com/products/lyrimuse",
+    "https://macmenubar.com/lyrimuse/"
+  ]
 }
 </script>
 <script type="application/ld+json">
@@ -86,7 +91,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
       "name": "How do I install it?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "With Homebrew: copy the install command above and paste it into Terminal. It takes care of the one-time Gatekeeper prompt, and you don't need an Apple Developer account. You can also download the DMG from GitHub; the README has the steps. Updates come through the app after that."
+        "text": "With Homebrew: copy the install command above and paste it into Terminal. It takes care of the one-time Gatekeeper prompt, and you don't need an Apple Developer account. Or download the DMG and drag Lyrimuse into Applications. The app isn't notarized by Apple, so macOS blocks the first launch: open System Settings → Privacy & Security, scroll to the bottom and click Open Anyway. You only do this once. Updates come through the app after that."
       }
     },
     {
@@ -134,7 +139,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
       "name": "How is it different from LyricsX?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and YouTube Music, scored lyric matching, Jyutping and furigana, and Last.fm scrobbling. See the fact-checked comparison."
+        "text": "LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and YouTube Music, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the fact-checked comparison."
       }
     }
   ]
@@ -160,7 +165,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <header class="nav">
   <div class="nav-in">
     <a class="brand" href="#top"><img src="assets/img/app-icon.webp" alt="" width="28" height="28"><span>Lyrimuse</span></a>
-    <nav class="links">
+    <nav class="links" aria-label="Main">
       <a href="#display">Features</a>
       <a href="compare/">vs LyricsX</a>
       <a href="#faq">FAQ</a>
@@ -178,6 +183,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">26 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">50 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
+      <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
     </div></div>
   </div>
 </header>
@@ -197,6 +203,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">26 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">50 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
+      <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
     </div></div>
     <button class="btn btn-light" type="button" id="copyBrew" data-copy="brew tap yudaotor/lyrimuse&#10;brew trust --cask yudaotor/lyrimuse/lyrimuse&#10;brew install --cask lyrimuse" data-copied="Copied. Paste it into Terminal."><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 2 3v6a1.5 1.5 0 0 0 1.5 1.5H4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="copy-label">Copy Homebrew install</span></button>
   </div>
@@ -290,6 +297,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
     </video>
     <button class="watch-play" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.6v10.8c0 .5.5.8.9.5l8.1-5.4a.6.6 0 0 0 0-1L5.4 2.1c-.4-.3-.9 0-.9.5z"/></svg><span>Play</span><em>0:32</em></button>
   </div>
+  <p class="watch-more reveal"><a href="https://youtu.be/0CRK4arrBOc">Watch the full version on YouTube (1:17) <span aria-hidden="true">›</span></a></p>
 </section>
 
 <section class="ch" id="display">
@@ -657,13 +665,13 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
     </div>
     <div class="faq-list reveal">
       <details class="qa" style="--i:0"><summary><span class="qa-q">Which Macs does it support?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>macOS 14 Sonoma or later, on Apple Silicon and Intel; Intel Macs use a separate build. Translating lyrics on your Mac needs macOS 15 or later.</p></div></details>
-      <details class="qa" style="--i:1"><summary><span class="qa-q">How do I install it?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>With Homebrew: copy the install command above and paste it into Terminal. It takes care of the one-time Gatekeeper prompt, and you don't need an Apple Developer account. You can also download the DMG from GitHub; the <a href="https://github.com/Yudaotor/lyrimuse">README</a> has the steps. Updates come through the app after that.</p></div></details>
+      <details class="qa" style="--i:1"><summary><span class="qa-q">How do I install it?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>With Homebrew: copy the install command above and paste it into Terminal. It takes care of the one-time Gatekeeper prompt, and you don't need an Apple Developer account. Or download the DMG and drag Lyrimuse into Applications. The app isn't notarized by Apple, so macOS blocks the first launch: open System Settings → Privacy & Security, scroll to the bottom and click Open Anyway. You only do this once. Updates come through the app after that.</p></div></details>
       <details class="qa" style="--i:2"><summary><span class="qa-q">Which permissions does it need?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>The first time it reads Apple Music or Spotify, macOS asks whether Lyrimuse may control it (Automation); allow it. QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX and Amazon Music need nothing extra.</p></div></details>
       <details class="qa" style="--i:3"><summary><span class="qa-q">Does any of my data leave my Mac?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>There's no account, no telemetry and no analytics, so nothing about you or what you play goes to the developer. To find lyrics it asks the lyric sources about the song that's playing, and translation happens on your Mac by default. The <a href="privacy/">privacy policy</a> lists every server it talks to.</p></div></details>
       <details class="qa" style="--i:4"><summary><span class="qa-q">Do lyrics work offline?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Yes. Lyrics it has found once are cached on your Mac and show without a connection. The first lookup for a song needs one, and so does online translation.</p></div></details>
       <details class="qa" style="--i:5"><summary><span class="qa-q">Does the Dynamic Island capsule work on a Mac without a notch?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>Yes. On a screen without a notch, like an older MacBook or an external display, the capsule sits at the top center, as tall as the menu bar. You pick the screen in Settings.</p></div></details>
       <details class="qa" style="--i:6"><summary><span class="qa-q">What if the lyrics are wrong or out of sync?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>If the timing's off, shift it for that song and it's remembered. If it's the wrong version, open manual search and pick another one; your pick stays locked. You can also edit any song's lyrics in Lyrics Manager.</p></div></details>
-      <details class="qa" style="--i:7"><summary><span class="qa-q">How is it different from LyricsX?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and YouTube Music, scored lyric matching, Jyutping and furigana, and Last.fm scrobbling. See the <a href="compare/">fact-checked comparison</a>.</p></div></details>
+      <details class="qa" style="--i:7"><summary><span class="qa-q">How is it different from LyricsX?</span><i class="qa-ico" aria-hidden="true"></i></summary><div class="qa-a"><p>LyricsX's last release is v1.6.3 from April 2022. Lyrimuse needs macOS 14 or later and adds QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and YouTube Music, scored lyric matching, Jyutping and Japanese romaji, and Last.fm scrobbling. See the <a href="compare/">fact-checked comparison</a>.</p></div></details>
     </div>
   </div>
 </section>
@@ -680,6 +688,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
       <a class="dl-item" role="menuitem" data-arch="arm" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Apple Silicon<span class="dl-rec">Recommended</span></b><em>M1 and later · DMG · <span class="dl-size">26 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" data-arch="x86" href="https://github.com/Yudaotor/lyrimuse/releases/download/v1.9.0/Lyrimuse-v1.9.0-macos-intel.dmg"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 2.5V5M12 2.5V5M8 15v2.5M12 15v2.5M2.5 8H5M2.5 12H5M15 8h2.5M15 12h2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="dl-txt"><b>Intel<span class="dl-rec">Recommended</span></b><em>Intel-based Macs · DMG · <span class="dl-size">50 MB</span></em></span></a>
       <a class="dl-item" role="menuitem" href="https://github.com/Yudaotor/lyrimuse/releases/latest"><span class="dl-ico"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 1.8a8.2 8.2 0 0 0-2.6 16c.4.1.6-.2.6-.4v-1.5c-2.3.5-2.8-1-2.8-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.3.9 1.3.9.7 1.3 2 .9 2.4.7.1-.5.3-.9.5-1.1-1.8-.2-3.7-.9-3.7-4 0-.9.3-1.6.9-2.2-.1-.2-.4-1 .1-2.2 0 0 .7-.2 2.3.9a7.9 7.9 0 0 1 4.1 0c1.6-1.1 2.3-.9 2.3-.9.4 1.2.2 2 .1 2.2.5.6.9 1.3.9 2.2 0 3.2-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.3c0 .2.1.5.6.4A8.2 8.2 0 0 0 10 1.8z"/></svg></span><span class="dl-txt"><b>All downloads on GitHub</b><em>Every version, ZIPs and checksums</em></span></a>
+      <p class="dl-note">Lyrimuse isn&#x27;t notarized by Apple, so macOS blocks its first launch from the DMG: open System Settings → Privacy &amp; Security and click Open Anyway. Homebrew takes care of this.</p>
     </div></div>
       <a class="btn btn-ghost mag" href="https://github.com/Yudaotor/lyrimuse">View on GitHub</a>
     </div>
@@ -692,7 +701,7 @@ else if(want==='zh-Hant')location.replace('zh-Hant/'+location.search+location.ha
 <footer class="foot">
   <div class="foot-in">
     <div class="foot-brand"><img src="assets/img/app-icon.webp" alt="" width="22" height="22"><span>Lyrimuse</span></div>
-    <nav class="foot-links">
+    <nav class="foot-links" aria-label="Footer">
       <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
       <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
       <a href="changelog/">Changelog</a>

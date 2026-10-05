@@ -4,7 +4,7 @@
 /* ---------- page head ---------- */
 .sub-head { max-width: 1040px; margin: 0 auto; padding: 96px 24px 8px; text-align: center; }
 .sub .k {
-  width: fit-content; margin: 0 auto 14px; font-size: 15px; font-weight: 600; color: var(--brand); letter-spacing: .01em;
+  width: fit-content; margin: 0 auto 14px; font-size: 15px; font-weight: 600; color: var(--brand-ink); letter-spacing: .01em;
   background: linear-gradient(90deg, #e5486f, #b0479f 60%, #8d4fc7); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
 .sub-h1 { margin: 0; font-size: clamp(32px, 4.6vw, 56px); line-height: 1.06; letter-spacing: -.04em; font-weight: 700; text-wrap: balance; word-break: keep-all; }
@@ -19,8 +19,8 @@
   background: var(--brand-soft); color: var(--ink-2); font-size: 14.5px; line-height: 1.7;
 }
 .callout strong { color: var(--ink); }
-.callout a, .doc-sec a, .qa-item a { color: var(--brand); }
-.callout a:hover, .doc-sec a:hover, .qa-item a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.callout a, .doc-sec a, .qa-item a { color: var(--brand-ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.callout a:hover, .doc-sec a:hover, .qa-item a:hover { text-decoration-thickness: 2px; }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 
 /* ---------- comparison: the three apps ---------- */
@@ -56,7 +56,7 @@
 .cmp tbody th { width: 16%; }
 .cmp td { width: 28%; }
 .cmp .me { background: color-mix(in srgb, var(--brand) 5%, transparent); color: var(--ink); }
-.cmp thead .me { color: var(--brand); }
+.cmp thead .me { color: var(--brand-ink); }
 .cmp td[data-none] { color: var(--ink-3); }
 .tbl-note { margin: 12px 4px 0; font-size: 13px; color: var(--ink-3); }
 .tbl-svc { font-size: 14.5px; }
@@ -74,7 +74,7 @@
   .tbl td::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
   .tbl td:last-child { padding-bottom: 15px; }
   .cmp .me { margin: 6px 8px 2px; padding: 9px 10px; border-radius: 12px; }
-  .cmp .me::before { color: var(--brand); }
+  .cmp .me::before { color: var(--brand-ink); }
 }
 
 /* ---------- comparison: how lyrics are picked (the app's own resolution panel, as on the home page) ---------- */
@@ -116,13 +116,13 @@
 .doc-toc a { display: flex; gap: 10px; padding: 6px 10px; border-radius: 10px; line-height: 1.4; color: var(--ink-2); transition: background .2s, color .2s; }
 .doc-toc a::before { content: counter(toc); min-width: 1.3em; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .doc-toc a:hover { background: var(--wash-2); color: var(--ink); }
-.doc-toc a.on { background: var(--brand-soft); color: var(--brand); }
-.doc-toc a.on::before { color: var(--brand); }
+.doc-toc a.on { background: var(--brand-soft); color: var(--brand-ink); }
+.doc-toc a.on::before { color: var(--brand-ink); }
 .doc-body { min-width: 0; max-width: 780px; }
 .doc-body > .callout { width: auto; max-width: none; margin: 0; }
 .doc-sec { padding-top: 44px; scroll-margin-top: 72px; }
 .doc-sec h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 0 14px; font-size: clamp(22px, 2.4vw, 28px); line-height: 1.25; letter-spacing: -.02em; }
-.doc-n { font-size: .68em; color: var(--brand); font-variant-numeric: tabular-nums; }
+.doc-n { font-size: .68em; color: var(--brand-ink); font-variant-numeric: tabular-nums; }
 .doc-sec h3 { margin: 28px 0 12px; font-size: 18px; letter-spacing: -.01em; }
 .doc-sec p, .doc-sec li { font-size: 16px; line-height: 1.78; color: var(--ink-2); }
 .doc-sec p { margin: 0 0 12px; }
@@ -148,22 +148,23 @@
 .cl-sum::-webkit-details-marker { display: none; }
 .cl-sum:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
 .cl-v { margin: 0; font-size: 24px; line-height: 1.2; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.cl-badge { align-self: center; padding: 2px 9px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 12px; font-weight: 600; }
+.cl-badge { align-self: center; padding: 2px 9px; border-radius: 999px; background: var(--brand-soft); color: var(--brand-ink); font-size: 12px; font-weight: 600; }
 .cl-date { font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .cl-count { margin-left: auto; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .cl-chev { position: absolute; right: 26px; top: 50%; width: 9px; height: 9px; margin-top: -7px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(45deg); transition: transform .2s; }
 .cl-ver[open] .cl-chev { margin-top: -2px; transform: rotate(-135deg); }
 .cl-body { padding: 0 24px 22px; border-top: 1px solid var(--line); }
 .cl-intro { margin: 18px 0 0; font-size: 15.5px; line-height: 1.75; color: var(--ink-2); }
-.cl-g h3 { margin: 22px 0 8px; font-size: 13px; font-weight: 600; letter-spacing: .03em; color: var(--brand); }
+.cl-g h3 { margin: 22px 0 8px; font-size: 13px; font-weight: 600; letter-spacing: .03em; color: var(--brand-ink); }
 .cl-g ul { margin: 0; padding-left: 1.15em; }
 .cl-g li { font-size: 15px; line-height: 1.68; color: var(--ink-2); }
 .cl-g li + li { margin-top: 6px; }
 .cl-g code { padding: 1px 6px; border-radius: 5px; background: var(--bg-alt); color: var(--ink); font: .88em var(--mono); }
 .cl-gh { margin: 20px 0 0; font-size: 14px; }
 .cl-older { margin: 8px 4px 0; font-size: 13.5px; color: var(--ink-3); }
-.cl-gh a, .cl-older a { color: var(--brand); }
-.cl-gh a:hover, .cl-older a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.cl-gh a, .cl-older a { color: var(--brand-ink); }
+.cl-older a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.cl-gh a:hover, .cl-older a:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 @media (max-width: 600px) {
   .cl { padding-top: 32px; }
   .cl-sum { padding: 16px 48px 16px 18px; }

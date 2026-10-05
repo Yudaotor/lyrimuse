@@ -4,10 +4,11 @@
   --bg-alt: #f5f5f7;
   --ink: #1d1d1f;
   --ink-2: #6e6e73;
-  --ink-3: #86868b;
+  --ink-3: #6e6e73;
   --line: rgba(0, 0, 0, .08);
   --brand: #e5486f;
   --brand-soft: #fff1f4;
+  --brand-ink: #c9365c;
   --card: #fff;
   --line-strong: rgba(0, 0, 0, .18);
   --wash: rgba(0, 0, 0, .025);
@@ -22,6 +23,9 @@
   --wallpaper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='g0' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23FEF2EC'/%3E%3Cstop offset='1' stop-color='%23F4D1C2'/%3E%3C/linearGradient%3E%3ClinearGradient id='g1' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23FBE0D3'/%3E%3Cstop offset='.55' stop-color='%23F9CBB6'/%3E%3Cstop offset='1' stop-color='%23D7ACA1'/%3E%3C/linearGradient%3E%3ClinearGradient id='g2' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23F7CCD0'/%3E%3Cstop offset='.55' stop-color='%23F2AAB0'/%3E%3Cstop offset='1' stop-color='%23D1919C'/%3E%3C/linearGradient%3E%3ClinearGradient id='g3' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23EFBBCC'/%3E%3Cstop offset='.55' stop-color='%23E48DAA'/%3E%3Cstop offset='1' stop-color='%23C57997'/%3E%3C/linearGradient%3E%3ClinearGradient id='g4' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23DCA9C5'/%3E%3Cstop offset='.55' stop-color='%23C4709F'/%3E%3Cstop offset='1' stop-color='%23AB618E'/%3E%3C/linearGradient%3E%3ClinearGradient id='g5' x1='0' y1='0' x2='.3' y2='1'%3E%3Cstop offset='0' stop-color='%23B99BBD'/%3E%3Cstop offset='.55' stop-color='%238A5891'/%3E%3Cstop offset='1' stop-color='%237C4E82'/%3E%3C/linearGradient%3E%3Cfilter id='sh' x='-30%25' y='-10%25' width='160%25' height='120%25'%3E%3CfeDropShadow dx='-22' dy='8' stdDeviation='30' flood-color='%235A2A48' flood-opacity='.30'/%3E%3C/filter%3E%3Cfilter id='soft' x='-10%25' y='-10%25' width='120%25' height='120%25'%3E%3CfeGaussianBlur stdDeviation='10'/%3E%3C/filter%3E%3CradialGradient id='glow' cx='.85' cy='.04' r='.6'%3E%3Cstop offset='0' stop-color='%23FFFFFF' stop-opacity='.42'/%3E%3Cstop offset='1' stop-color='%23FFFFFF' stop-opacity='0'/%3E%3C/radialGradient%3E%3ClinearGradient id='vig' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='.55' stop-color='%232A1030' stop-opacity='0'/%3E%3Cstop offset='1' stop-color='%232A1030' stop-opacity='.2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='1000' fill='url(%23g0)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120 L1800,1120 L1800,-120 Z' fill='url(%23g1)' filter='url(%23sh)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M180,-120 C800,260 -500,640 -260,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120 L1800,1120 L1800,-120 Z' fill='url(%23g2)' filter='url(%23sh)'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M600,-120 C1160,260 -340,640 80,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120 L1800,1120 L1800,-120 Z' fill='url(%23g3)' filter='url(%23sh)'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M860,-120 C1380,260 0,640 300,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120 L1800,1120 L1800,-120 Z' fill='url(%23g4)' filter='url(%23sh)'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M1000,-120 C1520,260 150,640 470,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120 L1800,1120 L1800,-120 Z' fill='url(%23g5)' filter='url(%23sh)'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.12' stroke-width='30' filter='url(%23soft)'/%3E%3Cpath d='M1330,-120 C1770,260 400,640 860,1120' fill='none' stroke='%23FFFFFF' stroke-opacity='.6' stroke-width='1.6'/%3E%3Crect width='1600' height='1000' fill='url(%23glow)'/%3E%3Crect width='1600' height='1000' fill='url(%23vig)'/%3E%3C/svg%3E");
   color-scheme: light dark;
 }
+/* Page text uses --ink-3 and --brand-ink, dark enough for small text (4.5:1). The app mockups keep the
+   lighter macOS tertiary gray they imitate. */
+.ch-stage, .more-stage, .mac { --ink-3: #86868b; }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; background: var(--bg); }
@@ -121,11 +125,13 @@ main { overflow-x: clip; }
 .dl-txt { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
 .dl-txt b { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
 .dl-txt em { font-style: normal; font-size: 12.5px; color: var(--ink-3); }
-.dl-rec { display: none; padding: 1px 7px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 11px; font-weight: 700; line-height: 1.5; }
+.dl-rec { display: none; padding: 1px 7px; border-radius: 999px; background: var(--brand-soft); color: var(--brand-ink); font-size: 11px; font-weight: 700; line-height: 1.5; }
 .dl-item.rec .dl-rec { display: inline-block; }
 .dl-lang .dl-item { padding: 9px 12px; font-size: 15px; justify-content: space-between; }
 .dl-lang .dl-item[aria-current] { font-weight: 600; }
 .dl-lang .dl-item[aria-current]::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
+/* how to open the DMG build the first time, under the menu items */
+.dl-note { margin: 6px 10px 4px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.5; color: var(--ink-2); word-break: keep-all; overflow-wrap: anywhere; }
 
 /* ---------- hero ---------- */
 .hero { max-width: 1120px; margin: 0 auto; padding: 40px 24px 40px; display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -369,7 +375,7 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 .fl {
   position: absolute; width: 76px; height: 76px; filter: drop-shadow(0 14px 22px rgba(60, 20, 50, .22));
   animation: flpop .9s cubic-bezier(.3, 1.45, .5, 1) backwards, bob 6s ease-in-out infinite;
-  animation-delay: calc(1.3s + var(--k, 0) * 80ms), var(--bd, 0s);
+  animation-delay: calc(.5s + var(--k, 0) * 60ms), var(--bd, 0s);
 }
 .fl-1 { left: -54px; top: 16%; transform: rotate(-8deg); --bd: -1s; }
 .fl-2 { left: -30px; top: 62%; width: 64px; height: 64px; --bd: -3s; }
@@ -421,7 +427,7 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 .ch-head { max-width: 840px; margin: 0 auto 44px; text-align: center; }
 #display { padding-top: 70px; }
 .ch .k {
-  width: fit-content; margin: 0 auto 14px; font-size: 15px; font-weight: 600; color: var(--brand); letter-spacing: .01em;
+  width: fit-content; margin: 0 auto 14px; font-size: 15px; font-weight: 600; color: var(--brand-ink); letter-spacing: .01em;
   background: linear-gradient(90deg, #e5486f, #b0479f 60%, #8d4fc7); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
 .ch h2 { margin: 0; font-size: clamp(34px, 5vw, 64px); line-height: 1.06; letter-spacing: -.04em; font-weight: 700; text-wrap: balance; }
@@ -996,7 +1002,7 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 .news-meta h2 a:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
 .news-meta time { display: block; margin-top: 6px; font-size: 13.5px; color: var(--ink-3); }
 .news-list { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; font-size: 15.5px; line-height: 1.6; color: var(--ink-2); }
-.news-all { justify-self: end; white-space: nowrap; font-size: 15px; font-weight: 600; color: var(--brand); }
+.news-all { justify-self: end; white-space: nowrap; font-size: 15px; font-weight: 600; color: var(--brand-ink); }
 .news-all:hover { text-decoration: underline; text-underline-offset: 3px; }
 .news + .faq-sec { padding-top: 110px; }
 @media (max-width: 900px) {
@@ -1031,8 +1037,8 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 .qa[open]:not(.closing) .qa-ico::before, .qa[open]:not(.closing) .qa-ico::after { background: var(--brand); }
 .qa-a { overflow: hidden; }
 .qa-a p { margin: 0; padding: 0 74px 24px 26px; font-size: 16px; line-height: 1.72; color: var(--ink-2); }
-.qa-a a { color: var(--brand); }
-.qa-a a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.qa-a a { color: var(--brand-ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.qa-a a:hover { text-decoration-thickness: 2px; }
 .qa-a code { background: var(--bg-alt); border-radius: 5px; padding: 1px 6px; font-size: 14px; font-family: var(--mono); }
 
 /* ---------- final call to action ---------- */
@@ -1128,6 +1134,9 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 .watch-play svg { width: 18px; height: 18px; fill: currentColor; }
 .watch-play em { font-style: normal; font-weight: 500; opacity: .65; }
 .watch-frame.playing .watch-play { opacity: 0; pointer-events: none; }
+.watch-more { margin: 22px 0 0; text-align: center; font-size: 15px; }
+.watch-more a { font-weight: 600; color: var(--brand-ink); }
+.watch-more a:hover { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 820px) {
   .ch.watch { padding-top: 24px; }
   .watch-frame { border-radius: 18px; }
@@ -1196,14 +1205,14 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
     --ink: #f5f5f7; --ink-2: #a1a1a6; --ink-3: #86868b;
     --line: rgba(255, 255, 255, .12); --line-strong: rgba(255, 255, 255, .28);
     --wash: rgba(255, 255, 255, .04); --wash-2: rgba(255, 255, 255, .08);
-    --brand: #ff5c86; --brand-soft: rgba(255, 92, 134, .16);
+    --brand: #ff5c86; --brand-soft: rgba(255, 92, 134, .16); --brand-ink: #ff5c86;
     --unlit: #3a3a3c; --on-ink: #1d1d1f;
     --g1: #ff5c86; --g2: #df5cb6; --g3: #a97ef2;
   }
   .ch-stage, .more-stage, .mac {
     color-scheme: light; color: #1d1d1f;
     --bg: #fbfbfd; --bg-alt: #f5f5f7; --card: #fff; --ink: #1d1d1f; --ink-2: #6e6e73; --ink-3: #86868b;
-    --line: rgba(0, 0, 0, .08); --brand: #e5486f; --brand-soft: #fff1f4;
+    --line: rgba(0, 0, 0, .08); --brand: #e5486f; --brand-soft: #fff1f4; --brand-ink: #c9365c;
   }
   .nav {
     background: linear-gradient(180deg, rgba(28, 28, 30, .72), rgba(0, 0, 0, .6));
