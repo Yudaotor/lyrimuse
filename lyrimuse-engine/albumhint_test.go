@@ -299,6 +299,26 @@ func TestCoverAlbumForTrack(t *testing.T) {
 	}
 }
 
+// 正文是用户给的条目(锁定着、原样采纳的候选),决策记录记的是被换掉的那一份,它的胜出署名不当 1 档旁证。
+func TestCoverAlbumForTrackIgnoresReplacedWinner(t *testing.T) {
+	_, restore := seedPrinceHintCache(t)
+	defer restore()
+	ctx := context.Background()
+	const title = "Why You Wanna Treat Me So Bad?"
+	key := "王子|" + title + "|"
+	locked := enrichCache[key]
+	locked.Lyrics, locked.ManualLyrics = "[00:01.00]换上的词", true
+	adopted := enrichCache[key]
+	adopted.Lyrics = "[00:01.00]换上的词"
+	adopted.ManualPickSHA = manualPickFingerprint(adopted.Lyrics)
+	for name, e := range map[string]enrichEntry{"锁定着": locked, "原样采纳": adopted} {
+		enrichCache = map[string]enrichEntry{key: e}
+		if got := coverAlbumForTrack(ctx, "王子", title, "", 230.121); got != "" {
+			t.Errorf("%s:旧决策记录里的署名不该当旁证, got %q", name, got)
+		}
+	}
+}
+
 func TestCoverAlbumCorroboration(t *testing.T) {
 	_, restore := seedPrinceHintCache(t)
 	defer restore()

@@ -623,6 +623,7 @@ func albumHintHasEditionQualifier(album string) bool {
 // lyricResolvedArtists:歌词链路核实过的"这首歌到底是谁的",给 pickAppleAlbumHint 的 1 档当旁证。两处来源:
 //   - enrich 条目的 CanonicalArtist(网易云 / QQ 曲库核实过的官方歌手名);
 //   - 已采纳的歌词决策(LyricsDecisionApplied)里**胜出候选**所报的 artist(王子 那首:kugou 候选报「Prince」)。
+//     正文是用户给的(lyricsFromUser)时不算:决策记录记的是被换掉的那一份。见 02 章决策 95。
 //
 // 只读内存里的 enrich 缓存、不发请求;条目还没解析出来就返回空 —— appleAlbumHint 每拍重挑,晚几秒到也没事。
 func lyricResolvedArtists(artist, title, album string) []string {
@@ -634,7 +635,7 @@ func lyricResolvedArtists(artist, title, album string) []string {
 	if e.CanonicalArtist != "" {
 		out = append(out, e.CanonicalArtist)
 	}
-	if a := decisionWinnerArtist(e.LyricsDecisionApplied); a != "" {
+	if a := decisionWinnerArtist(e.LyricsDecisionApplied); a != "" && !e.lyricsFromUser() {
 		out = append(out, a)
 	}
 	return out
