@@ -17,6 +17,8 @@ struct LyricsLayerList: NSViewRepresentable {
         var style: LyricsLayerRowStyle
         /// 行与行之间的距离。
         var lineSpacing: CGFloat
+        /// 右边的滚动指示条;迷你「多行」不画。
+        var showsScrollIndicator: Bool
         /// 歌词这一列离列表左右边的距离(同 SwiftUI 版 VStack 的 leading / trailing padding)。
         var leading: CGFloat
         var trailing: CGFloat
@@ -698,7 +700,7 @@ final class LyricsLayerListView: NSView {
         let topInset: CGFloat = 90, bottomInset: CGFloat = 40
         let trackH = viewH - topInset - bottomInset
         let content = contentHeight
-        let visible = content > viewH + 4 && trackH > 80
+        let visible = (spec?.showsScrollIndicator ?? false) && content > viewH + 4 && trackH > 80
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         track.isHidden = !visible

@@ -823,7 +823,26 @@ func runMenuBarTests() {
             expectEqual(c.offset(at: 2.2 + c.travel + 1.0), c.distance, "周期: 滚到底停 1.1 秒")
             expectEqual(c.offset(at: c.period + 0.5), 0, "周期: 末尾停完瞬时回开头")
             expectEqual(c.offset(at: c.period + 2.1), 0, "周期: 之后每轮开头停 2.2 秒")
-            expectEqual(c.trailingFades(full: 32), [32, 32, 0, 0], "周期: 渐隐带开头满宽、滚动中收掉、末尾为 0")
+            let fades = c.fadeKeyframes(leading: 24, trailing: 32)
+            expectEqual(fades.keyTimes.count == 5 && fades.leading.count == 5 && fades.trailing.count == 5, true,
+                        "周期渐隐: 比滚动多一帧(左端长满那一刻)")
+            expectEqual(fades.leading, [0, 0, 24, 24, 24], "周期渐隐: 左端开头为 0、滚出 24 点长满、之后不变")
+            expectEqual(fades.trailing[0] == 32 && fades.trailing[1] == 32 && fades.trailing[3] == 0 && fades.trailing[4] == 0, true,
+                        "周期渐隐: 右端开头满宽、滚到底为 0")
+            expectEqual(near(fades.keyTimes[2] * c.period, 2.2 + c.travel * 24 / Double(c.distance)), true,
+                        "周期渐隐: 左端在滚出 24 点那一刻长满")
+            expectEqual(near(Double(fades.trailing[2]), 32 * (1 - 24 / Double(c.distance))), true,
+                        "周期渐隐: 多出来那一帧右端仍在线性收窄的线上")
+            expectEqual(near(fades.keyTimes[1], c.keyTimes[1]) && near(fades.keyTimes[3], c.keyTimes[2]) && fades.keyTimes[4] == 1, true,
+                        "周期渐隐: 其余几帧跟滚动同一条时间线")
+            expectEqual(c.leadingFade(forOffset: 0, full: 24), 0, "周期渐隐: 停在开头左端不淡")
+            expectEqual(c.leadingFade(forOffset: 10, full: 24), 10, "周期渐隐: 滚出多远淡多宽")
+            expectEqual(c.leadingFade(forOffset: 100, full: 24), 24, "周期渐隐: 到满宽封顶")
+            let short = MarqueeCycle(distance: 10, travel: 10.0 / 24, hold: 1.1).fadeKeyframes(leading: 24, trailing: 32)
+            expectEqual(short.keyTimes.count, 4, "周期渐隐: 滚不满 24 点时不加那一帧")
+            expectEqual(short.leading, [0, 0, 10, 10], "周期渐隐: 滚不满 24 点时左端只长到滚出去的距离")
+            expectEqual(MarqueeCycle(distance: 293, travel: 293.0 / 24, hold: 1.1).fadeKeyframes(leading: 0, trailing: 32).leading,
+                        [0, 0, 0, 0], "周期渐隐: 不要左端渐隐时恒为 0、也不加帧")
             expectEqual(near(Double(c.trailingFade(forOffset: c.distance / 2, full: 32)), 16), true, "周期: 渐隐带跟滚动一起线性收窄")
             expectEqual(c.resumeTime(forOffset: 0), c.firstCycleTimeOffset, "周期: 停在开头,接着播时先停 1.1 秒")
             expectEqual(near(c.resumeTime(forOffset: c.distance), 2.2 + c.travel), true, "周期: 停在末端,接着播从末尾停顿起")

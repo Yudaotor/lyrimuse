@@ -3053,13 +3053,15 @@ struct LyricsWindowView: View {
                     ],
                     startPoint: .top, endPoint: .bottom)
             )
-            // 指示条挂在 mask 之后 —— AM 的指示条在渐隐带里仍是全强度,不跟文字一起淡。
+            // 指示条挂在 mask 之后 —— AM 的指示条在渐隐带里仍是全强度,不跟文字一起淡。迷你「多行」不画。
             .overlay(alignment: .trailing) {
-                LyricsScrollIndicator(metrics: scrollMetrics, onArtwork: hasArtworkBackground)
-                    .frame(width: 12)
-                    // 53:滑块宽 12,右缘落在 53、中心 59 —— AM 实测中心距窗右缘 59pt。
-                    .padding(.trailing, 53)
-                    .allowsHitTesting(false)
+                if !centered {
+                    LyricsScrollIndicator(metrics: scrollMetrics, onArtwork: hasArtworkBackground)
+                        .frame(width: 12)
+                        // 53:滑块宽 12,右缘落在 53、中心 59 —— AM 实测中心距窗右缘 59pt。
+                        .padding(.trailing, 53)
+                        .allowsHitTesting(false)
+                }
             }
         }
     }
@@ -3078,7 +3080,7 @@ struct LyricsWindowView: View {
                              showRomanization: playback.showRomanization, showTranslation: playback.showTranslation,
                              centered: centered, wordRise: wordRise, reduceMotion: reduceMotion,
                              duetInsetUnit: duetInsetUnit, scale: displayScale),
-                lineSpacing: lyricLineSpacing, leading: leading, trailing: trailing,
+                lineSpacing: lyricLineSpacing, showsScrollIndicator: !centered, leading: leading, trailing: trailing,
                 onArtwork: hasArtworkBackground, suspendsBlur: windowController.isLiveResizing,
                 currentLineIndex: playback.currentLineIndex, scrollLineIndex: playback.scrollLineIndex,
                 overlapping: Set(playback.overlappingLineIndices), currentGapIndex: playback.currentGapIndex,
@@ -3253,8 +3255,8 @@ struct LyricsWindowView: View {
             // 跑马灯,用原标题的话 id 不变、滚动位置会带着上一条的进度(灵动岛那边同一个理由,
             // 见 NotchLyricsView 那段注释)。
             //
-            // 两行都往左多伸出一截、内容垫回同样宽:停着时跟封面左缘齐,滚起来文字滑进这一截淡出,
-            // 不在左缘硬切;右端溢出时渐隐(07 章决策 93)。滚动交给图层(`LayerMarquee`),窗口看不见时停在开头。
+            // 两行的可见区左缘跟封面、进度条齐:停着时第一个字贴着左缘、不淡;滚起来左端渐隐带随滚出去的距离长出来,
+            // 到 24pt 封顶;右端溢出时渐隐(07 章决策 114)。滚动交给图层(`LayerMarquee`),窗口看不见时停在开头。
             LayerMarquee(id: displayTitle,
                          edgeFadeWidth: Self.trackInfoTrailingFade,
                          leadingFadeWidth: Self.trackInfoLeadingFade,
@@ -3262,10 +3264,8 @@ struct LyricsWindowView: View {
                 Text(displayTitle)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(primaryTextColor)
-                    .padding(.leading, Self.trackInfoOverhang)
             }
             .frame(height: 22)
-            .padding(.leading, -Self.trackInfoOverhang)
             // 歌名这一行没有可点的东西,不接鼠标。
             .allowsHitTesting(false)
             // 歌手 / 专辑能点开简介:光标进了这一行就停住滚动,链接落在看到的位置上。
@@ -3279,15 +3279,12 @@ struct LyricsWindowView: View {
                     // 歌名小一号;歌名的 17pt 与 AM 完全一致(32px vs 32px)不动。
                     .font(.system(size: 15.5))
                     .foregroundStyle(secondaryTextColor)
-                    .padding(.leading, Self.trackInfoOverhang)
             }
             .frame(height: 22)
-            .padding(.leading, -Self.trackInfoOverhang)
         }
     }
 
-    /// 歌名 / 副标题跑马灯往左多伸出的宽度、其中的渐隐带、右端渐隐带(07 章决策 93)。
-    private static let trackInfoOverhang: CGFloat = 30
+    /// 歌名 / 副标题跑马灯左端渐隐带的满宽(滚出去多远淡多宽、到这里封顶)、右端渐隐带(07 章决策 114)。
     private static let trackInfoLeadingFade: CGFloat = 24
     private static let trackInfoTrailingFade: CGFloat = 32
 

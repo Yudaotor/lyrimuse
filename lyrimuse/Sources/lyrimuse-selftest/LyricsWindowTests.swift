@@ -334,7 +334,14 @@ func runLyricsWindowTests() {
         let list = source("lyrimuse/UI/LyricsLayerList.swift")
         let row = source("lyrimuse/UI/LyricsLayerListRow.swift")
         let text = source("lyrimuse/UI/LyricsLayerListText.swift")
-        expectEqual(list.isEmpty || row.isEmpty || text.isEmpty, false, "图层列表(契约): 读到源码")
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        expectEqual(list.isEmpty || row.isEmpty || text.isEmpty || window.isEmpty, false, "图层列表(契约): 读到源码")
+        expectEqual(sourceBytes(list, contain: "let visible = (spec?.showsScrollIndicator ?? false) && content > viewH + 4"), true,
+                    "图层列表(契约): 指示条只在调用方要的时候画")
+        expectEqual(sourceBytes(window, contain: "showsScrollIndicator: !centered"), true,
+                    "图层列表(契约): 迷你「多行」不画滚动指示条")
+        expectEqual(sourceBytes(window, contain: "if !centered {\n                    LyricsScrollIndicator("), true,
+                    "SwiftUI 版列表(契约): 迷你「多行」不画滚动指示条")
         expectEqual(sourceBytes(row, contain: "a.beginTime = gradient.convertTime(mediaNow, from: nil) + track.beginOffset"), true,
                     "图层列表(契约): 逐字填色按播放位置绝对对齐 —— 起步留给提交那一刻的话会跟演唱错开一截")
         expectEqual(sourceBytes(row, contain: "fill.mask = mask"), true,
@@ -491,6 +498,16 @@ func runLyricsWindowTests() {
                     "图层跑马灯(契约): 文字横移声明 60Hz,不交给系统降档")
         expectEqual(sourceBytes(marquee, contain: "animating: isActive && !reduceMotion"), true,
                     "图层跑马灯(契约): 看不见或减弱动态效果时不滚")
+        expectEqual(sourceBytes(marquee, contain: "scroller.layer?.add(move, forKey: Self.scrollKey)"), true,
+                    "图层跑马灯(契约): 滚动动画挂在内层视图的图层上 —— 跟渐隐遮罩挂同一个图层时 sublayerTransform 连遮罩一起挪,文字滑出左边界")
+        expectEqual(sourceBytes(marquee, contain: "        layer?.mask = fadeMask\n"), true,
+                    "图层跑马灯(契约): 渐隐遮罩挂在外层本视图的图层上")
+        expectEqual(sourceBytes(window, contain: "trackInfoOverhang"), false,
+                    "图层跑马灯(契约): 可见区左缘跟封面、进度条齐,不往左伸")
+        expectEqual(sourceBytes(marquee, contain: "cycle.fadeKeyframes(leading: leadingFadeWidth, trailing: restingFade)"), true,
+                    "图层跑马灯(契约): 两端渐隐按周期关键帧走,左端随滚动长出来")
+        expectEqual(sourceBytes(marquee, contain: "cycle.leadingFade(forOffset: offset, full: leadingFadeWidth)"), true,
+                    "图层跑马灯(契约): 悬停停住时左端渐隐按停住的偏移算")
     }
 
     // MARK: - 迷你两行选取

@@ -95,9 +95,29 @@ public struct MarqueeCycle: Equatable {
     /// 同上四个时刻往左滚了多少(点)。
     public var offsets: [CGFloat] { [0, 0, distance, distance] }
 
-    /// 同上四个时刻右端渐隐带的宽度:开头停着时满宽,滚动中线性收到 0,末尾停着为 0(同 `MarqueeMath.trailingFadeWidth`
-    /// 的规则,收窄的节奏同 `MarqueeText` 里随滚动一起补间的那条渐隐带)。
-    public func trailingFades(full: CGFloat) -> [CGFloat] { [full, full, 0, 0] }
+    /// 两端渐隐带的关键帧。右端:开头停着时满宽,滚动中线性收到 0,末尾停着为 0(同 `MarqueeMath.trailingFadeWidth`
+    /// 的规则)。左端见 `leadingFade`:停在开头时 0,滚出去多远淡多宽,到满宽封顶。
+    public struct FadeKeyframes: Equatable {
+        /// 0…1,跟 `keyTimes` 同一条时间线。
+        public let keyTimes: [Double]
+        public let leading: [CGFloat]
+        public let trailing: [CGFloat]
+    }
+
+    /// 比滚动那四帧多一帧:左端在滚出 `leading` 那一刻长满、之后不变。只按四帧线性插值的话,左端要到滚到底才长满。
+    public func fadeKeyframes(leading: CGFloat, trailing: CGFloat) -> FadeKeyframes {
+        var times: [Double] = [0, startHold]
+        var offsets: [CGFloat] = [0, 0]
+        if leading > 0, leading < distance {
+            times.append(startHold + travel * Double(leading / distance))
+            offsets.append(leading)
+        }
+        times += [startHold + travel, period]
+        offsets += [distance, distance]
+        return FadeKeyframes(keyTimes: times.map { period > 0 ? $0 / period : 0 },
+                             leading: offsets.map { leadingFade(forOffset: $0, full: leading) },
+                             trailing: offsets.map { trailingFade(forOffset: $0, full: trailing) })
+    }
 
     /// 周期里某一刻(秒,按周期取模)往左滚了多少。
     public func offset(at time: Double) -> CGFloat {
@@ -105,6 +125,11 @@ public struct MarqueeCycle: Equatable {
         if t <= startHold { return 0 }
         if t >= startHold + travel { return distance }
         return distance * CGFloat((t - startHold) / travel)
+    }
+
+    /// 滚到 `offset` 时左端渐隐带的宽度:停在开头时 0(第一个字贴着左缘、不淡),滚出去多远淡多宽,到 `full` 封顶。
+    public func leadingFade(forOffset offset: CGFloat, full: CGFloat) -> CGFloat {
+        min(max(offset, 0), max(full, 0))
     }
 
     /// 滚到 `offset` 时右端渐隐带的宽度。
