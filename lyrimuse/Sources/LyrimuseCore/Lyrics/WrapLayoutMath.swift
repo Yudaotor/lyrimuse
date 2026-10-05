@@ -112,11 +112,18 @@ public enum WrapLayoutMath {
 
     /// 每一项前面能不能断行:前一项以空白 / 连字符结尾、这一项以空白开头,或两边挨着的是汉字 / 假名
     /// (中日文逐字切,字与字之间本来就能断)。第 0 项恒 true。别的文字(英文音节、韩文一个词里的
-    /// 几个音节)挨在一起就不断。
+    /// 几个音节)挨在一起就不断。禁则同按宽度断句(`LyricsSegmenter.cutPenalty`):标点、小假名、长音、
+    /// 右括号不放到行首,左括号不留在行尾;标点、右括号后面能断。
     public static func breakOpportunities(texts: [String]) -> [Bool] {
         texts.indices.map { i in
             guard i > 0 else { return true }
             guard let p = texts[i - 1].unicodeScalars.last, let c = texts[i].unicodeScalars.first else { return true }
+            if LyricsSegmenter.sentencePunctuation.contains(c) || LyricsSegmenter.noLineStart.contains(c) { return false }
+            let visible = texts[i - 1].unicodeScalars.last { !$0.properties.isWhitespace }
+            if let v = visible, LyricsSegmenter.noLineEnd.contains(v) { return false }
+            if let v = visible, LyricsSegmenter.sentencePunctuation.contains(v) || LyricsSegmenter.closingBrackets.contains(v) {
+                return true
+            }
             if p.properties.isWhitespace || c.properties.isWhitespace || p == "-" { return true }
             return CharacterSet.hanLike.contains(p) || CharacterSet.hanLike.contains(c)
         }

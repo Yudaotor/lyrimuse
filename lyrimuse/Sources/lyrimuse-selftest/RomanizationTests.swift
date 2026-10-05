@@ -173,6 +173,27 @@ func runRomanizationTests() {
             Romanizer.koreanSegments("나는 너를 사랑해", romanization: "naneun salanghae") == nil,
             true, "韩语片段: 词数(2)与原文词数(3)对不上时放弃")
         expectEqual(Romanizer.koreanSegments("", romanization: "") == nil, true, "韩语片段: 空输入放弃")
+        // 罗马音按音节加空格(词间两个空格、英文照抄):按音节对上,一个词的读音是它那几个音节连起来。
+        let syllabic = Romanizer.koreanSegments("틀을 깨 Can't stop", romanization: "teu reul  kkae  Can't stop")
+        expectEqual(syllabic?.map(\.latin), ["teureul", "kkae", "Can't", "stop"],
+                    "韩语片段: 罗马音按音节加空格时逐音节对上")
+        expectEqual(syllabic?.map(\.utf16Start), [0, 3, 5, 11], "韩语片段: 按音节对上时各词的位置不变")
+        expectEqual(Romanizer.koreanSegments("봐, 지금", romanization: "bwa  ji geum")?.map(\.latin), ["bwa", "jigeum"],
+                    "韩语片段: 罗马音里省掉的标点不占音节")
+        expectEqual(Romanizer.koreanSegments("나는", romanization: "naneun neoleul") == nil, true,
+                    "韩语片段: 一个音节配上不像一个音节的罗马音时放弃")
+        expectEqual(Romanizer.koreanSegments("이제 Pick", romanization: "i je  Kick") == nil, true,
+                    "韩语片段: 英文跟原文不同时放弃")
+        expectEqual(Romanizer.readingSpans("你好 baby", romanization: "nei5 hou2 baby")?.count, 3,
+                    "罗马音对齐: 粤拼一个汉字一个音节、英文照抄")
+        expectEqual(Romanizer.looksLikeOneSyllable("m4", needsVowel: false), true, "罗马音对齐: 粤拼「m」「ng」算一个音节")
+        expectEqual(Romanizer.looksLikeOneSyllable("xiǎo", needsVowel: false), true, "罗马音对齐: 带声调符号的拼音算一个音节")
+        // 按音节对上之后逐字歌词也能分组。
+        let syllabicGroups = LyricsSyncEngine.buildWordGroups(
+            words: [SyncedLyricWord(text: "틀을 ", startMs: 0, durationMs: 300),
+                    SyncedLyricWord(text: "깨", startMs: 300, durationMs: 300)],
+            line: "틀을 깨", japanese: false, koreanRomanization: "teu reul  kkae")
+        expectEqual(syllabicGroups?.map(\.romanization), ["teureul", "kkae"], "韩语: 罗马音按音节加空格时也分得出组")
     }
 
     // 逐词罗马音的分组:分词器的片段边界跟歌词源的逐字切分不一定对齐,分组必须两个方向都兜住。

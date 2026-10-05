@@ -2916,7 +2916,8 @@ public final class LyricsSyncEngine {
             side: displayLineSide(i),
             sungEndMs: gapLineEndMs(at: i),
             mergeable: !holds(i),
-            gapAfter: gapWindow(after: i) != nil)
+            gapAfter: gapWindow(after: i) != nil,
+            script: Romanizer.script(ofLine: text, song: songScript))
         surfaceBreaks[surface]?.lines[i] = line
         return line
     }

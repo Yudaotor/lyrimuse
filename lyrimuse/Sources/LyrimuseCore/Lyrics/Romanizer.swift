@@ -293,36 +293,184 @@ public enum Romanizer {
     /// 词数(空格分隔的段数)对不上时返回 nil——多半是罗马字来源对这一行的标点/空格做了
     /// 什么改写,宁可放弃对齐、退回整行罗马音,也不要猜错位置(跟 hanRomanization 那条
     /// 分支同一个安全网思路)。
+    ///
+    /// 罗马音按音节加空格(「틀을 깨」→「teu reul  kkae」)时词数对不上,按 `readingSpans` 逐音节对上,一个词的
+    /// 读音是它那几个音节连起来(「teureul」)。
     public static func koreanSegments(_ text: String, romanization: String) -> [JapaneseSegment]? {
-        let romTokens = romanization.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-        guard !romTokens.isEmpty else { return nil }
+        guard let spans = readingSpans(text, romanization: romanization) else { return nil }
+        let roman = romanization as NSString
         var segs: [JapaneseSegment] = []
-        var utf16Offset = 0
-        var tokenIdx = 0
-        var wordStart: Int?
-        for ch in text {
-            let chLen = String(ch).utf16.count
-            if ch.isWhitespace {
-                if let start = wordStart {
-                    guard tokenIdx < romTokens.count else { return nil }
-                    segs.append(JapaneseSegment(
-                        utf16Start: start, utf16Length: utf16Offset - start, latin: romTokens[tokenIdx]))
-                    tokenIdx += 1
-                    wordStart = nil
-                }
-            } else if wordStart == nil {
-                wordStart = utf16Offset
+        var s = 0
+        for word in whitespaceSeparated(text) {
+            var pieces: [String] = []
+            while s < spans.count, spans[s].textEnd <= word.end {
+                pieces.append(roman.substring(with: NSRange(location: spans[s].romanStart,
+                                                            length: spans[s].romanEnd - spans[s].romanStart)))
+                s += 1
             }
-            utf16Offset += chLen
+            guard !pieces.isEmpty else { continue }
+            segs.append(JapaneseSegment(utf16Start: word.start, utf16Length: word.end - word.start, latin: pieces.joined()))
         }
-        if let start = wordStart {
-            guard tokenIdx < romTokens.count else { return nil }
-            segs.append(JapaneseSegment(
-                utf16Start: start, utf16Length: utf16Offset - start, latin: romTokens[tokenIdx]))
-            tokenIdx += 1
+        return segs.isEmpty ? nil : segs
+    }
+
+    /// 原文的一段(UTF-16 范围)跟整行罗马音里的一截(UTF-16 范围,首尾不含空白)。
+    public struct ReadingSpan: Equatable, Sendable {
+        public let textStart: Int
+        public let textEnd: Int
+        public let romanStart: Int
+        public let romanEnd: Int
+    }
+
+    /// 韩文 / 中文一行跟它的整行罗马音逐段对上,按原文顺序。原文按空格分出的词数跟罗马音的词数相同、而且英文词
+    /// 跟罗马音里那个词一样时一个词对一个;不然按音节对(罗马音按音节加空格,「틀을」→「teu reul」;拼音、粤拼一个汉字一个):一个谚文
+    /// 音节、一个汉字各占罗马音的一个词、而且那个词得像一个音节(`looksLikeOneSyllable`),其余的字连成的一串占
+    /// 一个、而且要跟原文相同(英文照抄),只有标点的那一串罗马音里可有可无。对不上返回 nil。
+    public static func readingSpans(_ text: String, romanization: String) -> [ReadingSpan]? {
+        let words = whitespaceSeparated(text)
+        let tokens = whitespaceSeparated(romanization)
+        guard !words.isEmpty, !tokens.isEmpty else { return nil }
+        if words.count == tokens.count, zip(words, tokens).allSatisfy({ sameLatin($0.text, $1.text) }) {
+            return zip(words, tokens).map {
+                ReadingSpan(textStart: $0.start, textEnd: $0.end, romanStart: $1.start, romanEnd: $1.end)
+            }
         }
-        guard tokenIdx == romTokens.count else { return nil }
-        return segs
+        var spans: [ReadingSpan] = []
+        var k = 0
+        for word in words {
+            for run in syllableRuns(word.text, offset: word.start) {
+                if run.syllable {
+                    let hangul = run.text.unicodeScalars.first.map { (0xAC00...0xD7AF).contains($0.value) } ?? false
+                    guard k < tokens.count, looksLikeOneSyllable(tokens[k].text, needsVowel: hangul) else { return nil }
+                } else if k >= tokens.count || !sameLatin(run.text, tokens[k].text) {
+                    if run.text.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) }) { return nil }
+                    continue
+                }
+                spans.append(ReadingSpan(textStart: run.start, textEnd: run.end,
+                                         romanStart: tokens[k].start, romanEnd: tokens[k].end))
+                k += 1
+            }
+        }
+        guard k == tokens.count else { return nil }
+        return spans
+    }
+
+    /// 罗马音的一个词像不像一个音节:去掉声调符号后,元音字母(a e i o u w y)只连成一段。谚文音节一定有这一段;
+    /// 汉字的读音可以没有(粤拼的「m」「ng」)。一个音节配上一整个词的读音(「나」配「naneun」)时靠这条对不上。
+    public static func looksLikeOneSyllable(_ token: String, needsVowel: Bool) -> Bool {
+        var runs = 0
+        var inVowel = false
+        for ch in token.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil) where ch.isLetter {
+            let vowel = "aeiouwy".contains(ch)
+            if vowel && !inVowel { runs += 1 }
+            inVowel = vowel
+        }
+        return runs == 1 || (!needsVowel && runs == 0)
+    }
+
+    /// 原文里不带谚文、汉字的一段跟罗马音的一个词是不是同一个(英文照抄):只比字母和数字,不分大小写。带谚文、
+    /// 汉字的一段不比。
+    static func sameLatin(_ text: String, _ token: String) -> Bool {
+        if text.unicodeScalars.contains(where: { (0xAC00...0xD7AF).contains($0.value) || $0.properties.isIdeographic }) {
+            return true
+        }
+        func key(_ s: String) -> String {
+            String(String.UnicodeScalarView(s.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
+        }
+        return key(text) == key(token)
+    }
+
+    /// 按空白分开的几段,各带 UTF-16 范围。
+    static func whitespaceSeparated(_ text: String) -> [(start: Int, end: Int, text: String)] {
+        var out: [(start: Int, end: Int, text: String)] = []
+        var offset = 0
+        var start: Int?
+        var buf = ""
+        for ch in text {
+            if ch.isWhitespace {
+                if let s = start { out.append((s, offset, buf)) }
+                start = nil
+                buf = ""
+            } else {
+                if start == nil { start = offset }
+                buf.append(ch)
+            }
+            offset += ch.utf16.count
+        }
+        if let s = start { out.append((s, offset, buf)) }
+        return out
+    }
+
+    /// 一个词按音节切:谚文音节、汉字一个一段(`syllable`),其余挨着的字连成一段。
+    static func syllableRuns(_ word: String, offset: Int) -> [(start: Int, end: Int, text: String, syllable: Bool)] {
+        var out: [(start: Int, end: Int, text: String, syllable: Bool)] = []
+        var position = offset
+        for ch in word {
+            let length = ch.utf16.count
+            let syllable = ch.unicodeScalars.first.map { scalar in
+                (0xAC00...0xD7AF).contains(scalar.value) || scalar.properties.isIdeographic
+            } ?? false
+            if !syllable, let last = out.last, !last.syllable {
+                out[out.count - 1] = (last.start, position + length, last.text + String(ch), false)
+            } else {
+                out.append((position, position + length, String(ch), syllable))
+            }
+            position += length
+        }
+        return out
+    }
+
+    /// 整行罗马音按原文的切口切开:`cuts` 是原文里的切口(UTF-16 下标,升序),返回罗马音里对应的切口(落在
+    /// 罗马音词与词之间);对不上返回 nil。韩文、中文按 `readingSpans` 逐段对,切口落在一段中间就对不上;日文用
+    /// 分词器的读音估每个切口前面的读音有多长,在罗马音里找长度最接近的词界,差得太多就对不上。
+    public static func romanizationCuts(text: String, romanization: String, script: LyricScript, at cuts: [Int]) -> [Int]? {
+        guard !cuts.isEmpty else { return [] }
+        if script == .japanese { return japaneseRomanizationCuts(text: text, romanization: romanization, at: cuts) }
+        guard script == .korean || script == .chinese || script == .cantonese,
+              let spans = readingSpans(text, romanization: romanization) else { return nil }
+        var out: [Int] = []
+        for cut in cuts {
+            guard !spans.contains(where: { $0.textStart < cut && cut < $0.textEnd }),
+                  let next = spans.first(where: { $0.textStart >= cut }) else { return nil }
+            out.append(next.romanStart)
+        }
+        return out
+    }
+
+    /// 罗马音里每个切口前面的读音,允许跟分词器的读音长度差这么多(按比例,至少 2 个字母):两边的写法不完全
+    /// 一样(「wo / o」「ou / ō」),整句越长差得越多。
+    static let japaneseRomanizationCutTolerance = 0.12
+
+    private static func japaneseRomanizationCuts(text: String, romanization: String, at cuts: [Int]) -> [Int]? {
+        func letters(_ s: String) -> Int {
+            s.unicodeScalars.filter { $0.isASCII && CharacterSet.alphanumerics.contains($0) }.count
+        }
+        let segs = japaneseSegments(text)
+        let tokens = whitespaceSeparated(romanization)
+        guard !segs.isEmpty, tokens.count >= 2 else { return nil }
+        let ours = segs.map { letters($0.latin) }
+        let total = ours.reduce(0, +)
+        var prefix = [0]
+        for t in tokens { prefix.append(prefix.last! + letters(t.text)) }
+        guard total > 0, prefix.last! > 0 else { return nil }
+        let scale = Double(prefix.last!) / Double(total)
+        var out: [Int] = []
+        var lastToken = 0
+        for cut in cuts {
+            guard !segs.contains(where: { $0.utf16Start < cut && cut < $0.utf16End }) else { return nil }
+            let before = zip(segs, ours).filter { $0.0.utf16End <= cut }.reduce(0) { $0 + $1.1 }
+            let target = Double(before) * scale
+            var best: Int?
+            for t in (lastToken + 1)..<tokens.count {
+                let d = abs(Double(prefix[t]) - target)
+                if best == nil || d < abs(Double(prefix[best!]) - target) { best = t }
+            }
+            guard let t = best,
+                  abs(Double(prefix[t]) - target) <= max(2, target * japaneseRomanizationCutTolerance) else { return nil }
+            out.append(tokens[t].start)
+            lastToken = t
+        }
+        return out
     }
 
     /// - Parameter songLooksJapanese: 整首歌是不是日文歌(`Romanizer.looksJapaneseSong`)。

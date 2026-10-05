@@ -117,13 +117,16 @@ public enum LyricsSegmenter {
         public let mergeable: Bool
         /// 这一行后面紧跟着一段间奏点,不跨过去合并。
         public let gapAfter: Bool
+        /// 这一行是哪种文字(`Romanizer.script(ofLine:song:)`,只有汉字的行要靠整首歌判);拆开时中日文按它选分词器。
+        /// nil = 只看这一行自己的字。
+        public let script: LyricScript?
 
         public init(startMs: Int, nextStartMs: Int? = nil, text: String, words: [SyncedLyricWord]?,
                     groups: [SyncedLyricWordGroup]? = nil,
                     groupsFor: (([SyncedLyricWord], String) -> [SyncedLyricWordGroup]?)? = nil,
                     translation: String? = nil,
                     romanization: String? = nil, side: LyricDuet.Side?, sungEndMs: Int?,
-                    mergeable: Bool, gapAfter: Bool) {
+                    mergeable: Bool, gapAfter: Bool, script: LyricScript? = nil) {
             self.startMs = startMs
             self.nextStartMs = nextStartMs
             self.text = text
@@ -136,6 +139,7 @@ public enum LyricsSegmenter {
             self.sungEndMs = sungEndMs
             self.mergeable = mergeable
             self.gapAfter = gapAfter
+            self.script = script
         }
     }
 
@@ -150,7 +154,7 @@ public enum LyricsSegmenter {
         /// 逐词读音按组拆时,每组有几个词(依次覆盖 `words`)。
         public let groupSizes: [Int]?
         public let groupRomanizations: [String?]?
-        /// 这一段自己的译文 / 罗马音;nil = 整句的那一行放得下,每段都显示整句的。
+        /// 这一段自己的译文 / 罗马音;nil = 每段都显示整句的(译文放得下;罗马音跟主行的切口对不上又放得下)。
         public let translation: String?
         public let romanization: String?
 
@@ -190,7 +194,7 @@ public enum LyricsSegmenter {
     public static let mergeNextMaxDwellMs = 3500
     /// 「很短的一句」:停留不到 mergeShortDwellMs、而且不超过这么多字(displayWidth)。相邻两句里至少有一句是
     /// 这样的才合并,两句完整的句子只是唱得快,不往一起粘。
-    public static let mergeTinyMaxWidth = 4
+    public static let mergeTinyMaxWidth: Double = 4
     /// 合完从第一句开始到最后一句唱完不超过这么久。
     public static let mergeMaxSpanMs = 5000
     /// 一句最多拆成几段。到这个数还放不下,说明一行窄得放不下几个字,不再往下拆。
@@ -353,6 +357,23 @@ public enum LyricsSegmenter {
         let estimated = line.words == nil
         let words = line.words ?? estimatedWords(line, measure: budget.main.measure)
         guard !words.isEmpty else { return nil }
+        let joinedText = words.map(\.text).joined()
+        let script = line.script ?? Romanizer.script(ofLine: line.text, song: .other)
+        let wordBreaks = WordBreaks(text: joinedText, script: script)
+        /// 整行罗马音按主行的切口(原文 UTF-16 下标)切成各段的;对不上、或有一段放不下返回 nil。
+        func alignedRomanization(_ romanization: String, cuts: [Int], row: LineLayoutBudget.Row,
+                                 maxWidth: CGFloat) -> [String]? {
+            guard let romanCuts = Romanizer.romanizationCuts(text: joinedText, romanization: romanization,
+                                                             script: script, at: cuts) else { return nil }
+            let roman = romanization as NSString
+            let bounds = [0] + romanCuts + [roman.length]
+            let pieces = bounds.indices.dropLast().map { k in
+                roman.substring(with: NSRange(location: bounds[k], length: bounds[k + 1] - bounds[k]))
+                    .trimmingCharacters(in: .whitespaces)
+            }
+            guard pieces.allSatisfy({ !$0.isEmpty && row.measure($0) <= maxWidth + fitTolerance }) else { return nil }
+            return pieces
+        }
         let groupMode = budget.wordRomanization != nil && line.groups != nil
             && line.groups!.reduce(0, { $0 + $1.words.count }) == words.count
         var groupUnits: [Unit] = []
@@ -397,8 +418,17 @@ public enum LyricsSegmenter {
             let spaceWidth = budget.main.measure(" ")
             let widths = units.map(\.width)
             let trailing = units.map { $0.text.last?.isWhitespace == true ? spaceWidth : 0 }
+            var offsets: [Int] = []
+            var offset = 0
+            for u in units {
+                offsets.append(offset)
+                offset += u.text.utf16.count
+            }
             let natural: [CGFloat?] = units.indices.map { c in
-                c == 0 ? nil : cutPenalty(after: units[c - 1].text, before: units[c].text)
+                guard c > 0 else { return nil }
+                let base = cutPenalty(after: units[c - 1].text, before: units[c].text)
+                guard base == cjkCutPenalty, let wordBreaks else { return base }
+                return wordBreaks.penalty(at: offsets[c])
             }
             let forced: [CGFloat?] = units.indices.map { c in c == 0 ? nil : (natural[c] ?? 1) }
 
@@ -431,12 +461,18 @@ public enum LyricsSegmenter {
                     guard let t = companion(tr, row, translationLimit!) else { return nil }
                     translations = t
                 }
-                // 整行罗马音那一行只在这一段没有逐词读音时出现。
+                // 整行罗马音那一行只在这一段没有逐词读音时出现。先按主行的切口切,读音跟着这一段的字走;
+                // 对不上时:放得下就每段显示整句,放不下按宽度切。
                 let romanizationRowShown = budget.wordRomanization == nil || partGroups.contains { $0 == nil }
                 var romanizations: [String]?
-                if romanizationTooWide, romanizationRowShown, let row = budget.romanization, let ro = line.romanization {
-                    guard let r = companion(ro, row, romanizationLimit!) else { return nil }
-                    romanizations = r
+                if romanizationRowShown, let row = budget.romanization, let ro = line.romanization {
+                    if let aligned = alignedRomanization(ro, cuts: starts.dropFirst().map { offsets[$0] },
+                                                         row: row, maxWidth: romanizationLimit!) {
+                        romanizations = aligned
+                    } else if romanizationTooWide {
+                        guard let r = companion(ro, row, romanizationLimit!) else { return nil }
+                        romanizations = r
+                    }
                 }
                 return partUnits.indices.map { k in
                     let us = partUnits[k]
@@ -750,27 +786,115 @@ public enum LyricsSegmenter {
         return starts.reversed()
     }
 
-    /// 在两个词之间断开的代价;nil = 不能断(拉丁词、谚文词中间,下一段会以标点开头)。
+    /// 在两个词之间断开的代价;nil = 不能断(拉丁词、谚文词中间,下一段会以标点或行首禁则字开头,上一段会以
+    /// 左括号 / 左引号结尾)。
     public static func cutPenalty(after previous: String, before next: String) -> CGFloat? {
         guard let last = previous.unicodeScalars.last, let first = next.unicodeScalars.first else { return 0 }
-        // 标点不放到下一段开头。
-        if sentencePunctuation.contains(first) { return nil }
-        if CharacterSet.whitespacesAndNewlines.contains(last) {
-            let beforeSpace = previous.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.last
-            if let p = beforeSpace, sentencePunctuation.contains(p) { return 0 }
+        // 禁则:标点、小假名、长音、右括号 / 右引号这些不放到下一段开头,左括号 / 左引号不留在上一段末尾。
+        if sentencePunctuation.contains(first) || noLineStart.contains(first) { return nil }
+        let visibleLast = previous.unicodeScalars.last { !CharacterSet.whitespacesAndNewlines.contains($0) }
+        if let v = visibleLast, noLineEnd.contains(v) { return nil }
+        // 标点、右括号后面能断。
+        if let v = visibleLast, sentencePunctuation.contains(v) || closingBrackets.contains(v) { return 0 }
+        if CharacterSet.whitespacesAndNewlines.contains(last) || CharacterSet.whitespacesAndNewlines.contains(first) {
             return 0.05
         }
-        if sentencePunctuation.contains(last) { return 0 }
-        if CharacterSet.whitespacesAndNewlines.contains(first) { return 0.05 }
         // 连字符后面能断,比空格差一点;谚文按空格分词,一个词的几个音节之间不断。两条都同悬浮歌词换行
         // (`WrapLayoutMath.breakOpportunities`)。
         if last == "-", CharacterSet.alphanumerics.contains(first) { return 0.1 }
         if isHangul(last) && isHangul(first) { return nil }
-        if isCJK(last) || isCJK(first) { return 0.15 }
+        if isCJK(last) || isCJK(first) { return cjkCutPenalty }
         return nil
     }
 
+    /// 中日文字与字之间(不隔空格、标点)断开的代价。拆长句时中日文行再按分词器的词界细分(`WordBreaks`)。
+    static let cjkCutPenalty: CGFloat = 0.15
+
     static let sentencePunctuation = CharacterSet(charactersIn: ",.!?;:、，。！？；：…")
+
+    /// 右括号。后面能断(同标点);右引号不算,它在拉丁文字里也当撇号用(「don’t」)。
+    static let closingBrackets = CharacterSet(charactersIn: ")）]］}｝」』】〕〉》〗〙〛｣")
+
+    /// 不放到一段开头的字(禁则):小假名、长音、叠字符、波浪号、中点、半角 / 全角句读,右括号 / 右引号。
+    /// 悬浮歌词、歌词窗口折行(`WrapLayoutMath.breakOpportunities`)用的是同一份。
+    public static let noLineStart = closingBrackets.union(CharacterSet(charactersIn:
+        "ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿｧｨｩｪｫｬｭｮｯ"
+            + "ーｰ々〻ゝゞヽヾ〜～・･‥．｡､”’"))
+
+    /// 不留在一段末尾的字(禁则):左括号 / 左引号。
+    public static let noLineEnd = CharacterSet(charactersIn: "(（[［{｛「『【〔〈《〖〘〚｢“‘")
+
+    /// 一行中日文按分词器切出的词界:词中间不断(只在硬切时用),切在助词 / 助动词前面会拆开一个短语、代价高,
+    /// 切在日文助词 / 助动词后面正好是短语的边界、代价低。日文的切法同标读音(`Romanizer.japaneseSegments`),只是不取读音。
+    public struct WordBreaks {
+        /// 落在一个词中间的 UTF-16 下标。
+        let inside: Set<Int>
+        /// 词界上不同于 `cjkCutPenalty` 的代价,按 UTF-16 下标。
+        let penalties: [Int: CGFloat]
+
+        static let beforeAttached: CGFloat = 0.3
+        static let afterAttached: CGFloat = 0.1
+
+        /// 日文的助词、助动词:分词器把它们切成单独的词,跟前面的词合起来才是一个短语。
+        static let japaneseAttached: Set<String> = [
+            "は", "が", "を", "に", "へ", "と", "で", "も", "の", "や", "か", "な", "ね", "よ", "ぞ", "ぜ", "さ", "わ",
+            "ば", "て", "って", "から", "まで", "より", "けど", "けれど", "ので", "のに", "し", "ながら", "たり",
+            "たら", "だら", "なら",
+            "だけ", "しか", "ほど", "くらい", "ぐらい", "など", "なんて",
+            "た", "だ", "たい", "ない", "ます", "です", "う", "よう", "れる", "られる", "せる", "させる",
+            "れ", "られ", "せ", "させ", "ませ", "まし", "でし", "なかっ", "たかっ", "だっ", "ちゃ", "じゃ",
+            "てる", "でる", "ちゃう", "ちゃっ", "じゃう", "じゃっ",
+            "ん", "ぬ", "ず", "だろう", "でしょう", "らしい", "みたい",
+        ]
+        /// 中文里跟着前一个词的虚字:不放到下一段开头。
+        static let chineseAttached: Set<String> = [
+            "的", "地", "得", "了", "着", "过", "吗", "呢", "吧", "啊", "呀", "们", "么", "嘛", "啦", "哦", "喔",
+        ]
+
+        public init?(text: String, script: LyricScript) {
+            let ns = text as NSString
+            var pieces: [(start: Int, end: Int, text: String)] = []
+            let unit: CFOptionFlags, locale: CFLocale
+            switch script {
+            case .japanese: (unit, locale) = (kCFStringTokenizerUnitWordBoundary, Self.japaneseLocale)
+            case .chinese, .cantonese: (unit, locale) = (kCFStringTokenizerUnitWord, Self.chineseLocale)
+            default: return nil
+            }
+            let cf = text as CFString
+            guard let tokenizer = CFStringTokenizerCreate(nil, cf, CFRangeMake(0, CFStringGetLength(cf)), unit, locale) else {
+                return nil
+            }
+            while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+                let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                let piece = ns.substring(with: NSRange(location: r.location, length: r.length))
+                guard !piece.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+                pieces.append((r.location, r.location + r.length, piece))
+            }
+            guard !pieces.isEmpty else { return nil }
+            let attached = script == .japanese ? Self.japaneseAttached : Self.chineseAttached
+            var inside = Set<Int>()
+            var penalties: [Int: CGFloat] = [:]
+            for (k, p) in pieces.enumerated() {
+                if p.end - p.start > 1 { inside.formUnion((p.start + 1)..<p.end) }
+                guard k > 0, pieces[k - 1].end == p.start else { continue }
+                if attached.contains(p.text) {
+                    penalties[p.start] = Self.beforeAttached
+                } else if script == .japanese, attached.contains(pieces[k - 1].text) {
+                    penalties[p.start] = Self.afterAttached
+                }
+            }
+            self.inside = inside
+            self.penalties = penalties
+        }
+
+        /// 在 UTF-16 下标 `offset` 处断开的代价;nil = 落在一个词中间。
+        public func penalty(at offset: Int) -> CGFloat? {
+            inside.contains(offset) ? nil : penalties[offset] ?? LyricsSegmenter.cjkCutPenalty
+        }
+
+        private static let japaneseLocale = Locale(identifier: "ja") as CFLocale
+        private static let chineseLocale = Locale(identifier: "zh") as CFLocale
+    }
 
     static func isHangul(_ scalar: Unicode.Scalar) -> Bool { (0xAC00...0xD7AF).contains(scalar.value) }
 
@@ -780,18 +904,20 @@ public enum LyricsSegmenter {
             || (0xF900...0xFAFF).contains(v) || (0xAC00...0xD7AF).contains(v)
     }
 
-    /// 字数:汉字 / 假名 / 谚文一个字算 1,其余按空白分开的词算 1(只算带字母或数字的词)。判「很短的一句」用。
-    public static func displayWidth(_ text: String) -> Int {
-        var width = 0
+    /// 字数:汉字 / 谚文一个字算 1,假名算半个,其余按空白分开的词算 1(只算带字母或数字的词);片假名中点「・」不算。
+    /// 判「很短的一句」用。
+    public static func displayWidth(_ text: String) -> Double {
+        var width = 0.0
         var inWord = false
         var wordHasAlnum = false
         for scalar in text.unicodeScalars {
-            let cjk = isCJK(scalar)
-            if cjk || CharacterSet.whitespacesAndNewlines.contains(scalar) {
+            let separator = scalar == "・"
+            let cjk = isCJK(scalar) && !separator
+            if cjk || separator || CharacterSet.whitespacesAndNewlines.contains(scalar) {
                 if inWord, wordHasAlnum { width += 1 }
                 inWord = false
                 wordHasAlnum = false
-                if cjk { width += 1 }
+                if cjk { width += (0x3040...0x30FF).contains(scalar.value) ? 0.5 : 1 }
                 continue
             }
             inWord = true

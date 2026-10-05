@@ -494,6 +494,12 @@ func runSyncEngineTests() {
                                   mergeable: true, gapAfter: false)],
             budget: LineLayoutBudget(key: "tail-lrc", maxWidth: 400, measure: measure))
         expectEqual(lrcEnding.count, 2, "按宽度断句: 行级歌词最后一句不知道停多久,不并")
+        // 日文假名按半个字计:五六个假名的碎片也算很短的一句。
+        let jaMerge = LyricsSegmenter.segments(
+            [tail(0, "泣きそうで", 1400), tail(1500, "消えてしまい", 2900), tail(3000, "長い長い一つの文がここに続いている", 8000)],
+            budget: LineLayoutBudget(key: "ja-merge", maxWidth: 400, measure: measure))
+        expectEqual(jaMerge.map { [$0.firstLine, $0.lastLine] }, [[0, 1], [2, 2]],
+                    "按宽度断句(合并): 日文五六个假名的碎片也合并")
 
         // 保证:随机宽度下,每一段的主行、译文、下一句都放得下。
         let fuzzYRC = (0..<30).map { k -> String in
@@ -534,10 +540,92 @@ func runSyncEngineTests() {
         }
 
         expectEqual(LyricsSegmenter.displayWidth("Your peacock 你好"), 4, "按宽度断句: 字数按拉丁词和汉字计")
+        expectEqual(LyricsSegmenter.displayWidth("泣きそうで"), 3, "按宽度断句(合并): 假名按半个字计")
+        expectEqual(LyricsSegmenter.displayWidth("サテライト・ベイビー"), 4.5, "按宽度断句(合并): 片假名中点不计")
+        expectEqual(LyricsSegmenter.displayWidth("사랑해 너를"), 5, "按宽度断句(合并): 谚文一个字计 1")
         expectEqual(LyricsSegmenter.cutPenalty(after: "你", before: "，"), nil, "按宽度断句: 标点不放到下一段开头")
         expectEqual(LyricsSegmenter.cutPenalty(after: "ooh-", before: "ooh"), 0.1, "按宽度断句: 连字符后面能断")
         expectEqual(LyricsSegmenter.cutPenalty(after: "가", before: "까"), nil, "按宽度断句: 谚文一个词的音节之间不断")
         expectEqual(LyricsSegmenter.cutPenalty(after: "무 ", before: "가"), 0.05, "按宽度断句: 谚文在空格处断")
+
+        // 禁则:小假名、长音、叠字符、右括号不放到下一段开头,左括号不留在上一段末尾;右括号后面能断。
+        expectEqual(LyricsSegmenter.cutPenalty(after: "ポケ", before: "ット"), nil, "按宽度断句(禁则): 小假名不放到下一段开头")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "スト", before: "ーリー"), nil, "按宽度断句(禁则): 长音不放到下一段开头")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "先祖代", before: "々"), nil, "按宽度断句(禁则): 叠字符不放到下一段开头")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "なんでもない", before: "」"), nil, "按宽度断句(禁则): 右括号不放到下一段开头")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "「", before: "守る"), nil, "按宽度断句(禁则): 左括号不留在上一段末尾")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "他说“", before: "再见"), nil, "按宽度断句(禁则): 左引号不留在上一段末尾")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "「さよなら」", before: "「"), 0, "按宽度断句(禁则): 右括号后面能断")
+        expectEqual(LyricsSegmenter.cutPenalty(after: "don’", before: "t"), nil, "按宽度断句(禁则): 撇号后面照旧不断")
+        func lrcLine(_ text: String) -> LyricsSegmenter.Line {
+            LyricsSegmenter.Line(startMs: 1000, nextStartMs: 7000, text: text, words: nil, side: nil, sungEndMs: 7000,
+                                 mergeable: true, gapAfter: false)
+        }
+        expectEqual(LyricsSegmenter.segments([lrcLine("「さよなら」「へいきだよ」")], budget: budget(90))
+                        .compactMap { $0.part?.text }, ["「さよなら」", "「へいきだよ」"],
+                    "按宽度断句(禁则): 括号成对留在同一段")
+        // 悬浮歌词、歌词窗口折行用同一份禁则。
+        expectEqual(WrapLayoutMath.breakOpportunities(texts: ["君", "が", "好", "き", "っ", "て", "。", "「", "嘘", "」"]),
+                    [true, true, true, true, false, true, false, true, false, false],
+                    "换行断点(禁则): 小假名、句号、右括号不放到行首,左括号不留在行尾,标点后面能断")
+
+        // 中日文按分词器的词界断:词中间不断;切在助词 / 虚字前面代价高,切在日文助词后面代价低。
+        let jaBreaks = LyricsSegmenter.WordBreaks(text: "君が好きだってこと以外は", script: .japanese)
+        expectEqual(jaBreaks?.penalty(at: 1), 0.3, "按宽度断句(词界): 日文助词前面代价高")
+        expectEqual(jaBreaks?.penalty(at: 2), 0.1, "按宽度断句(词界): 日文助词后面代价低")
+        expectEqual(jaBreaks?.penalty(at: 6), .some(nil), "按宽度断句(词界): 日文一个词中间不断")
+        expectEqual(jaBreaks?.penalty(at: 9), 0.15, "按宽度断句(词界): 日文两个实词之间照常")
+        let zhBreaks = LyricsSegmenter.WordBreaks(text: "然后发现你的改变孤单的今后", script: .chinese)
+        expectEqual(zhBreaks?.penalty(at: 7), .some(nil), "按宽度断句(词界): 中文一个词中间不断")
+        expectEqual(zhBreaks?.penalty(at: 5), 0.3, "按宽度断句(词界): 中文虚字前面代价高")
+        expectEqual(zhBreaks?.penalty(at: 8), 0.15, "按宽度断句(词界): 中文两个词之间照常")
+        expectEqual(LyricsSegmenter.WordBreaks(text: "나를 사랑해", script: .korean) == nil, true,
+                    "按宽度断句(词界): 韩文不分词(按空格断)")
+        expectEqual(LyricsSegmenter.segments([lrcLine("然后发现你的改变孤单的今后")], budget: budget(80))
+                        .compactMap { $0.part?.text }, ["然后发现你的", "改变孤单的今后"],
+                    "按宽度断句(词界): 中文不切在词中间")
+        expectEqual(LyricsSegmenter.segments([lrcLine("我想念你的温柔")], budget: budget(50))
+                        .compactMap { $0.part?.text }, ["我想念", "你的温柔"],
+                    "按宽度断句(词界): 中文不把「的」放到下一段开头")
+        expectEqual(LyricsSegmenter.segments([lrcLine("君が好きだってこと以外は")], budget: budget(70))
+                        .compactMap { $0.part?.text }, ["君が好きだって", "こと以外は"],
+                    "按宽度断句(词界): 日文断在助词后面")
+        // 逐字一字一个词(酷狗式)也按词界断。
+        let perChar = "君が好きだってこと以外は".map { String($0) }
+        let perCharLine = LyricsSegmenter.Line(
+            startMs: 1000, nextStartMs: 7000, text: perChar.joined(),
+            words: perChar.enumerated().map { SyncedLyricWord(text: $1, startMs: 1000 + $0 * 400, durationMs: 400) },
+            side: nil, sungEndMs: 6000, mergeable: true, gapAfter: false)
+        expectEqual(LyricsSegmenter.segments([perCharLine], budget: budget(70)).compactMap { $0.part?.text },
+                    ["君が好きだって", "こと以外は"], "按宽度断句(词界): 逐字一字一个词时同样按词界断")
+        let engineSrc = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Lyrics/LyricsSyncEngine.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(engineSrc.contains("script: Romanizer.script(ofLine: text, song: songScript))"), true,
+                    "按宽度断句(词界契约): 引擎按整首歌给每行定文字种类,只有汉字的日文行也按日文分词")
+
+        // 拆开后没有逐词读音的段:整行罗马音按主行的切口切,读音跟着这一段的字走;对不上才每段显示整句。
+        func romaLine(_ text: String, _ romanization: String) -> LyricsSegmenter.Line {
+            LyricsSegmenter.Line(startMs: 1000, nextStartMs: 7000, text: text, words: nil, romanization: romanization,
+                                 side: nil, sungEndMs: 7000, mergeable: true, gapAfter: false)
+        }
+        let romaBudget = LineLayoutBudget(key: "roma", main: .init(maxWidth: 80, measure: measure),
+                                          romanization: .init(maxWidth: 400, measure: measure))
+        let koParts = LyricsSegmenter.segments([romaLine("나는 너를 사랑해 Baby", "na neun  neo reul  sa rang hae  Baby")],
+                                               budget: romaBudget).compactMap(\.part)
+        expectEqual(koParts.map(\.text), ["나는 너를", "사랑해 Baby"], "按宽度断句(罗马音): 韩文在空格处拆开")
+        expectEqual(koParts.map(\.romanization), ["na neun  neo reul", "sa rang hae  Baby"],
+                    "按宽度断句(罗马音): 韩文整行罗马音按音节对上切开")
+        let jaParts = LyricsSegmenter.segments([romaLine("本当の幸せを探したときに", "hontou no shiawase wo sagashi ta toki ni")],
+                                               budget: LineLayoutBudget(key: "roma-ja", main: .init(maxWidth: 70, measure: measure),
+                                                                        romanization: .init(maxWidth: 400, measure: measure)))
+            .compactMap(\.part)
+        expectEqual(jaParts.map(\.text), ["本当の幸せを", "探したときに"], "按宽度断句(罗马音): 日文断在助词后面")
+        expectEqual(jaParts.map(\.romanization), ["hontou no shiawase wo", "sagashi ta toki ni"],
+                    "按宽度断句(罗马音): 日文整行罗马音按读音长度对上切开(写法不同的「wo」照样对上)")
+        let unmatched = LyricsSegmenter.segments([romaLine("나는 너를 사랑해 Baby", "something else entirely here")],
+                                                 budget: romaBudget).compactMap(\.part)
+        expectEqual(unmatched.map(\.romanization), [nil, nil], "按宽度断句(罗马音): 对不上又放得下时每段显示整句")
     }
 
     // ---- LyricsSyncEngine: 单曲歌词时间轴微调(offsetMs) ----
