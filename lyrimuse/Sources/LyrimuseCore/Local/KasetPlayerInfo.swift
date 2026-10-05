@@ -89,6 +89,12 @@ public enum KasetPlayerInfo {
         reading.title == "Loading..." && reading.artist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// 定向发过跳转之后要不要补一个播放:跳转前在放,现在报暂停。Kaset 处在恢复上次播放的那套状态时,跳转会变成跳到位置并保持
+    /// 暂停,见 02 章决策 94。纯函数,selftest 覆盖。
+    public static func shouldResumeAfterSeek(wasPlaying: Bool, reading: Reading) -> Bool {
+        wasPlaying && reading.isPaused
+    }
+
     private struct ScriptOutput: Decodable {
         let readAtMs: Double
         let info: String

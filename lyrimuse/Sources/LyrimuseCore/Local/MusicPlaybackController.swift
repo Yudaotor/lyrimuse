@@ -768,17 +768,20 @@ public enum MusicPlaybackController {
     /// media-control;但如果实际在播的就是 Apple Music,那么位置**读**路径走的是精确的
     /// AppleScript 播放头,写路径也该走同一条,两边保持一致。
     /// 返回这一下走的哪条路,没发出去返回 nil。
+    /// `kasetWasPlaying`:这一刻在放的是 Kaset 时传它跳转前在不在放,不是 Kaset 传 nil(见 `seekRoute`)。
     @discardableResult
-    public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = false) -> ControlRoute? {
+    public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = false,
+                            kasetWasPlaying: Bool? = nil) -> ControlRoute? {
         let value = seekArgument(forSeconds: seconds)
         let script = #"tell application "Music" to set player position to "# + value
         if preferAppleScript {
             runAppleScript(script)
             return .appleMusicScript
         }
-        // Kaset 的字典里没有跳转:焦点回退到它时这一下不发(见 dispatch 的 kasetScript)。
+        // Kaset 的字典里没有跳转:焦点回退到它时这一下不发(见 dispatch 的 kasetScript);焦点就是它时定向发给它(`.kasetDirect`)。
         return dispatchRoute(appleScript: script, spotifyScript: #"tell application "Spotify" to set player position to "# + value,
-                             kasetScript: nil, mediaControlCommand: "seek", mediaControlArguments: [value])
+                             kasetScript: nil, mediaControlCommand: "seek", mediaControlArguments: [value],
+                             kasetDirectSeek: kasetWasPlaying.map { KasetDirectSeek(seconds: seconds, wasPlaying: $0) })
     }
 
     /// 把秒数格式化成两个后端都吃、且能安全拼进 AppleScript 源码的字符串。抽成独立的纯
@@ -806,6 +809,8 @@ public enum MusicPlaybackController {
         case spotifyScript
         case kasetScript
         case mediaControl
+        /// 跳转定向发给 Kaset 本体那份会话(`NowPlayingClientsProbe.sendSeek`),不发给系统当前会话。只有跳转走这条,见 `seekRoute`。
+        case kasetDirect
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
         /// 按 bundle id 定向发(`MRMediaRemoteSendCommandToApp`)也不行 —— 目标不接时它不报错,照样落到焦点上,
         /// 见 02 章决策 51。
@@ -827,6 +832,19 @@ public enum MusicPlaybackController {
         }
     }
 
+    /// 跳转发给谁:`controlRoute` 判成发给系统当前会话、而这一刻在放的是 Kaset 时,定向发给 Kaset 本体。焦点落在它内嵌网页那份
+    /// 会话、又在放时,发给系统当前会话的跳转不生效(见 02 章决策 94)。焦点被别的 App 占着(`.kasetScript`)不改:定向发的目标
+    /// 不接时会落到焦点上。纯函数,selftest 覆盖。
+    public static func seekRoute(_ route: ControlRoute, playerIsKaset: Bool) -> ControlRoute {
+        route == .mediaControl && playerIsKaset ? .kasetDirect : route
+    }
+
+    /// 定向发给 Kaset 的一次跳转:目标秒数、跳转前在不在放(在放的,跳完停了要补播放)。
+    struct KasetDirectSeek: Sendable {
+        let seconds: Double
+        let wasPlaying: Bool
+    }
+
     /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
     private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?,
                                  mediaControlCommand: String, mediaControlArguments: [String] = []) -> Bool {
@@ -836,10 +854,12 @@ public enum MusicPlaybackController {
 
     /// 同 `dispatch`,另外交回这一下走的哪条路;没发出去返回 nil。
     private static func dispatchRoute(appleScript: String, spotifyScript: String, kasetScript: String?,
-                                      mediaControlCommand: String, mediaControlArguments: [String] = []) -> ControlRoute? {
-        let route = controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
-                                 focusFallback: MediaControlClient.focusControlTarget(),
-                                 focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())
+                                      mediaControlCommand: String, mediaControlArguments: [String] = [],
+                                      kasetDirectSeek: KasetDirectSeek? = nil) -> ControlRoute? {
+        let base = controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
+                                focusFallback: MediaControlClient.focusControlTarget(),
+                                focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())
+        let route = seekRoute(base, playerIsKaset: kasetDirectSeek != nil)
         switch route {
         case .appleMusicScript:
             runAppleScript(appleScript)
@@ -854,6 +874,9 @@ public enum MusicPlaybackController {
             runAppleScript(kasetRunningGuard + kasetScript)
         case .mediaControl:
             runMediaControl(mediaControlCommand, arguments: mediaControlArguments)
+        case .kasetDirect:
+            guard let kasetDirectSeek else { return nil }
+            runKasetDirectSeek(kasetDirectSeek, fallbackCommand: mediaControlCommand, fallbackArguments: mediaControlArguments)
         case .withheld:
             logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): now playing focus is held by another app")
             DispatchQueue.main.async { onControlWithheld?() }
@@ -877,8 +900,14 @@ public enum MusicPlaybackController {
     private static let commandQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.playback-commands",
                                                     qos: .userInitiated)
 
+    /// 排进 `commandQueue` 的播放控制的序号,只在 `commandQueue` 上读写。定向跳转之后补不补播放,靠它认「这期间又发过别的控制」。
+    nonisolated(unsafe) private static var commandSerial = 0
+    /// 定向发给 Kaset 的跳转发出后多久核一次它停没停(见 `runKasetDirectSeek`)。
+    static let kasetSeekResumeCheckDelay: TimeInterval = 1.0
+
     private static func runAppleScript(_ script: String) {
         commandQueue.async {
+            commandSerial &+= 1
             _ = ProcessRunner.run("/usr/bin/osascript", ["-e", script], timeout: appleScriptTimeout)
         }
     }
@@ -903,7 +932,36 @@ public enum MusicPlaybackController {
     private static func runMediaControl(_ command: String, arguments: [String] = []) {
         guard let binaryPath = MediaControlClient.binaryPath() else { return }
         commandQueue.async {
+            commandSerial &+= 1
             _ = ProcessRunner.run(binaryPath, [command] + arguments, timeout: appleScriptTimeout)
+        }
+    }
+
+    /// 定向给 Kaset 发跳转(`.kasetDirect`),发不出去退回 media-control。跳转前在放的,`kasetSeekResumeCheckDelay` 之后问一次
+    /// Kaset,停了就补一个 `play`;这期间又排进来过别的控制就不补(见 02 章决策 94)。
+    private static func runKasetDirectSeek(_ seek: KasetDirectSeek, fallbackCommand: String, fallbackArguments: [String]) {
+        commandQueue.async {
+            commandSerial &+= 1
+            let serial = commandSerial
+            guard NowPlayingClientsProbe.sendSeek(toBundleID: PlaybackPlayer.kaset.bundleIdentifier, seconds: seek.seconds) else {
+                logger.notice("seek: direct send to Kaset failed, sending through media-control")
+                if let binaryPath = MediaControlClient.binaryPath() {
+                    _ = ProcessRunner.run(binaryPath, [fallbackCommand] + fallbackArguments, timeout: appleScriptTimeout)
+                }
+                return
+            }
+            guard seek.wasPlaying else { return }
+            commandQueue.asyncAfter(deadline: .now() + kasetSeekResumeCheckDelay) {
+                guard commandSerial == serial,
+                      let out = runAppleScriptCapturing(kasetRunningGuard + #"tell application "Kaset" to get player info"#),
+                      let reading = KasetPlayerInfo.reading(fromJSON: Data(out.utf8)),
+                      KasetPlayerInfo.shouldResumeAfterSeek(wasPlaying: seek.wasPlaying, reading: reading)
+                else { return }
+                logger.notice("seek: Kaset paused itself after the direct seek, sending play")
+                commandSerial &+= 1
+                _ = ProcessRunner.run("/usr/bin/osascript", ["-e", kasetRunningGuard + #"tell application "Kaset" to play"#],
+                                      timeout: appleScriptTimeout)
+            }
         }
     }
 }

@@ -3791,8 +3791,12 @@ public final class LocalPlaybackSource: ObservableObject {
         // 写路径会走 media-control,而读路径对 Apple Music 走的是精确的 AppleScript 播放头,
         // 两条路不一致。
         let resolvedIsAppleMusic = lastSnapshot?.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
+        // Kaset 的跳转定向发给它本体,跳完停了要补播放,所以带上跳转前在不在放(见 MusicPlaybackController.seekRoute)。
+        let kasetWasPlaying = lastSnapshot?.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier
+            ? (lastSnapshot?.playing ?? false) : nil
         // 没发出去(焦点被别的 App 占着)就别把屏上位置挪到目标:播放器没动,挪了要等下一拍才被拽回来。
-        guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic) else { return }
+        guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic,
+                                                       kasetWasPlaying: kasetWasPlaying) else { return }
 
         let now = Date()
         noteSeekSent(target: seconds, previous: trackPosSeconds, route: route, at: now)

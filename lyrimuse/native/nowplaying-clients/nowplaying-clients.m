@@ -47,6 +47,16 @@
 // 会话(在放时每 0.25 秒、没在放时每 0.5 秒一轮),跟上一次输出的不一样才输出一行(在不在放、速率、锚点、时长;没有这份
 // 会话、那个 App 没在列表里都输出 `null`),见 `watchWebSession`。要连着盯的走这个模式,别隔一会儿起一次
 // helper(两种的开销见 02 章决策 88)。App 用它盯 Kaset 的暂停 / 恢复(`KasetWebSessionWatcher`)。
+//
+// ## 定向发一次跳转(`LYRIMUSE_NOWPLAYING_SEEK=<秒>`,必须同时给 bundle id)
+//
+//   MRMediaRemoteSendCommandToApp(command, options, origin, bundleID, appOptions, queue, ^(error, statuses))
+//
+// **七个参数**:命令号 24 是跳到某一位置,`options` 里 `kMRMediaRemoteOptionPlaybackPosition` 给秒数,origin 用
+// `MRMediaRemoteGetLocalOrigin()`,appOptions 传 0。发给这个 App 自己登记的那份会话,不看系统焦点在谁身上;目标不接这个
+// 命令时它不报错、照样落到焦点上,所以只在焦点就是这个 App(或它内嵌网页那份会话)时用。输出一行
+// `{"sent":true,"answered":true,"error":<错误码>}`(等不到回话时 answered 为 false),接口取不到输出 `null`。
+// App 用它给 Kaset 发跳转,见 02 章决策 94。
 
 #import <Foundation/Foundation.h>
 #import <objc/message.h>
@@ -61,6 +71,9 @@ typedef void (*RequestQueueFn)(void *, void *, void *, dispatch_queue_t, void (^
 typedef CFArrayRef (*QueueCopyItemsFn)(void *);
 typedef CFDictionaryRef (*ItemCopyInfoFn)(void *);
 typedef CFStringRef (*ItemGetIdentifierFn)(void *);
+typedef void (*SendCommandToAppFn)(uint32_t, CFDictionaryRef, void *, CFStringRef, uint32_t, dispatch_queue_t,
+                                   void (^)(uint32_t, CFArrayRef));
+typedef void *(*GetLocalOriginFn)(void);
 
 /// 第三个参数是"要不要连封面数据一起给"的开关(实测:0 只给 ArtworkIdentifier / MIMEType /
 /// 原图尺寸,≥1 才附 `ArtworkData`)。⚠️ 带上封面这一趟明显更贵(一份 JPEG 走 base64 过 JSON),
@@ -79,6 +92,8 @@ static const useconds_t kWatchIdleIntervalUs = 500000;
 static NSString *const kWebMediaBundleID = @"com.apple.WebKit.GPU";
 static const long kIncludeArtwork = 1;
 static const long kNoArtwork = 0;
+/// MediaRemote 的「跳到某一位置」命令号(kMRMediaRemoteCommandSeekToPlaybackPosition)。
+static const uint32_t kSeekToPlaybackPositionCommand = 24;
 
 static NSString *K(const char *suffix) {
     return [NSString stringWithFormat:@"kMRMediaRemoteNowPlayingInfo%s", suffix];
@@ -258,6 +273,26 @@ static void watchWebSession(GetClientsFn getClients, GetInfoForClientFn getInfo,
     }
 }
 
+/// 定向给 `bundleID` 那个 App 发一次「跳到第几秒」(见头注)。接口取不到、秒数不对返回 nil。
+static NSDictionary *sendSeek(void *h, NSString *bundleID, double seconds) {
+    SendCommandToAppFn send = (SendCommandToAppFn)dlsym(h, "MRMediaRemoteSendCommandToApp");
+    GetLocalOriginFn localOrigin = (GetLocalOriginFn)dlsym(h, "MRMediaRemoteGetLocalOrigin");
+    CFStringRef *positionKey = (CFStringRef *)dlsym(h, "kMRMediaRemoteOptionPlaybackPosition");
+    if (!send || !positionKey || !*positionKey || !(seconds >= 0)) return nil;
+    NSDictionary *options = @{(__bridge NSString *)*positionKey: @(seconds)};
+    dispatch_semaphore_t s = dispatch_semaphore_create(0);
+    __block uint32_t error = UINT32_MAX;
+    send(kSeekToPlaybackPositionCommand, (__bridge CFDictionaryRef)options, localOrigin ? localOrigin() : NULL,
+         (__bridge CFStringRef)bundleID, 0, dispatch_get_global_queue(0, 0), ^(uint32_t e, CFArrayRef statuses) {
+             error = e;
+             dispatch_semaphore_signal(s);
+         });
+    if (dispatch_semaphore_wait(s, dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC)) != 0) {
+        return @{@"sent": @YES, @"answered": @NO};
+    }
+    return @{@"sent": @YES, @"answered": @YES, @"error": @(error)};
+}
+
 void nowplaying_clients(void *my_perl, void *cv) {
     @autoreleasepool {
         const char *want = getenv("LYRIMUSE_NOWPLAYING_BUNDLE");
@@ -266,8 +301,13 @@ void nowplaying_clients(void *my_perl, void *cv) {
         const char *queueEnv = getenv("LYRIMUSE_NOWPLAYING_QUEUE");
         const long queueCount = queueEnv ? atol(queueEnv) : 0;
         const char *watchEnv = getenv("LYRIMUSE_NOWPLAYING_WATCH");
+        const char *seekEnv = getenv("LYRIMUSE_NOWPLAYING_SEEK");
         void *h = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW);
         if (!h) { emit(nil); return; }
+        if (seekEnv && seekEnv[0]) {
+            emit(want ? sendSeek(h, [NSString stringWithUTF8String:want], atof(seekEnv)) : nil);
+            return;
+        }
         GetClientsFn getClients = (GetClientsFn)dlsym(h, "MRMediaRemoteGetNowPlayingClients");
         GetInfoForClientFn getInfo = (GetInfoForClientFn)dlsym(h, "MRMediaRemoteGetNowPlayingInfoForClient");
         if (!getClients || !getInfo) { emit(nil); return; }

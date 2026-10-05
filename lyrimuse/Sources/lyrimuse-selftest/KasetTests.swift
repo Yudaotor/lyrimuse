@@ -632,6 +632,30 @@ func runKasetTests() {
                     PlaybackPlayer.appleMusic.bundleIdentifier, "Kaset 归属: 不是 WebKit 媒体进程报的不动")
     }
 
+    // ---- 跳转定向发给 Kaset 本体(02 章决策 94)----
+    do {
+        typealias C = MusicPlaybackController
+        expectEqual(C.seekRoute(.mediaControl, playerIsKaset: true), .kasetDirect,
+                    "Kaset 跳转: 本该发给系统当前会话的改成定向发给 Kaset")
+        expectEqual(C.seekRoute(.mediaControl, playerIsKaset: false), .mediaControl, "Kaset 跳转: 别的播放器照旧发给系统当前会话")
+        expectEqual(C.seekRoute(.kasetScript, playerIsKaset: true), .kasetScript, "Kaset 跳转: 焦点被别的 App 占着照旧不发")
+        expectEqual(C.seekRoute(.withheld, playerIsKaset: true) == .withheld
+                        && C.seekRoute(.appleMusicScript, playerIsKaset: true) == .appleMusicScript, true, "Kaset 跳转: 别的路线不动")
+        func r(paused: Bool) -> K.Reading {
+            K.Reading(title: "T", artist: "A", videoID: "vid00000001", duration: 200, position: 10, isPlaying: !paused, isPaused: paused)
+        }
+        expectEqual(K.shouldResumeAfterSeek(wasPlaying: true, reading: r(paused: true)), true, "Kaset 跳转: 跳前在放、跳完停了要补播放")
+        expectEqual(K.shouldResumeAfterSeek(wasPlaying: false, reading: r(paused: true))
+                        || K.shouldResumeAfterSeek(wasPlaying: true, reading: r(paused: false)), false,
+                    "Kaset 跳转: 跳前就停着、跳完还在放都不补")
+        let P = NowPlayingClientsProbe.self
+        expectEqual(P.seekAccepted(Data(#"{"sent":true,"answered":true,"error":0}"#.utf8)), true,
+                    "Kaset 跳转: helper 报发出去、对方答了、没报错")
+        expectEqual(P.seekAccepted(Data(#"{"sent":true,"answered":true,"error":1}"#.utf8))
+                        || P.seekAccepted(Data(#"{"sent":true,"answered":false}"#.utf8)) || P.seekAccepted(Data("null".utf8)), false,
+                    "Kaset 跳转: 报错、没答话、发不出去都算没成,退回 media-control")
+    }
+
     // ---- 接线契约(扫源码)----
     do {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -777,6 +801,13 @@ func runKasetTests() {
         expectEqual(client.contains("let owner = reportedBundleID == safariMediaProcessBundleID\n            ? raw.processIdentifier.flatMap { responsibleBundleID(ofPID: $0) } : nil")
                         && client.contains("let bundleID = reportingPlayerBundleID(reportedBundleID, owner: owner)"), true,
                     "Kaset 契约: 系统当选的是 WebKit 媒体进程时按负责进程认,Kaset 内嵌网页那份不当成 Safari")
+        expectEqual(playbackSource.contains("kasetWasPlaying: kasetWasPlaying) else { return }")
+                        && src("LyrimuseCore/Local/MusicPlaybackController.swift").contains("let route = seekRoute(base, playerIsKaset: kasetDirectSeek != nil)")
+                        && src("../native/nowplaying-clients/nowplaying-clients.pl").contains(
+                            #"$ENV{LYRIMUSE_NOWPLAYING_SEEK} = $1 if defined $mode && $mode =~ /^seek=(\d+(?:\.\d+)?)$/;"#)
+                        && src("../native/nowplaying-clients/nowplaying-clients.m").contains(
+                            "emit(want ? sendSeek(h, [NSString stringWithUTF8String:want], atof(seekEnv)) : nil);"), true,
+                    "Kaset 契约: 跳转带上跳转前在不在放、定向发给 Kaset 本体,helper 有 seek 模式")
         expectEqual(playbackSource.contains("                let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier\n                return await Self.runOffPool(Self.artworkQueue)"),
                     true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
         expectEqual(client.contains("if snapshot == nil, player != .kaset {"), true,

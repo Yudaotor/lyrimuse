@@ -148,7 +148,8 @@ func runPlayerIdentityTests() {
             let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
             let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
             expectEqual(coordinator.contains("guard MusicPlaybackController.playPause() else { return }")
-                        && source.contains("guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic) else { return }"),
+                        && source.contains("guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic,\n"
+                                           + "                                                       kasetWasPlaying: kasetWasPlaying) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
             expectEqual(client.contains("fallbackViaAppleScript = viaAppleScript")
                         && client.contains("if fallbackActive && fallbackViaAppleScript { return lastAcceptedDirectQueryPlayer }")

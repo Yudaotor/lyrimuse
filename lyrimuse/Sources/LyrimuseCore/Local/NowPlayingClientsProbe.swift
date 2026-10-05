@@ -86,6 +86,31 @@ public enum NowPlayingClientsProbe {
         return r.stdoutText
     }
 
+    /// 定向给某个 App 发一次「跳到第几秒」(helper 的 seek 模式,`MRMediaRemoteSendCommandToApp`)。对方答了、没报错返回 true;
+    /// 没装 helper、跑失败、超时、对方没答话或报错返回 false。目标不接这个命令时 MediaRemote 会落到系统焦点上,只在焦点就是
+    /// 这个 App(或它内嵌网页那份会话)时调。会阻塞到 helper 退出,别在主线程上调。
+    public static func sendSeek(toBundleID bundleID: String, seconds: Double) -> Bool {
+        guard !bundleID.isEmpty, seconds.isFinite, seconds >= 0, let paths = helperPaths() else { return false }
+        let value = MusicPlaybackController.seekArgument(forSeconds: seconds)
+        guard let r = ProcessRunner.run(
+            "/usr/bin/perl", [paths.script, paths.library, bundleID, "seek=\(value)"], timeout: timeout),
+            r.succeeded
+        else { return false }
+        return seekAccepted(r.stdout)
+    }
+
+    /// helper seek 模式那一行输出:发出去了、对方答了、错误码是 0。纯函数,selftest 覆盖。
+    public static func seekAccepted(_ output: Data) -> Bool {
+        guard let reply = try? JSONDecoder().decode(SeekReply.self, from: output) else { return false }
+        return reply.sent && reply.answered == true && reply.error == 0
+    }
+
+    private struct SeekReply: Decodable {
+        let sent: Bool
+        let answered: Bool?
+        let error: Int?
+    }
+
     /// 问某个 bundle id 此刻在报什么。拿不到(没装 helper / 超时 / 那个 App 没在报)一律 nil。
     ///
     /// 位置已经在 helper 里按锚点外推过(`elapsed + (now - timestamp) * rate`)—— 载荷里的
