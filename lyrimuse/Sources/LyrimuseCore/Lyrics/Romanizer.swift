@@ -835,18 +835,15 @@ extension Romanizer {
     //   · **纯汉字**的行才有中日歧义(同一个汉字两种读音),这种行退回整首歌的判断;
     //   · 整首歌的判断改成**含假名的行占比**,而不是「出现过没有」。
     //
-    // 实测用户曲库 647 首有歌词的歌里只有 3 首出现过假名,含假名行占比分别是:
-    //   Michael Jackson《Keep the Faith》 1/156  =  0.6%(夹了一行日文)
-    //   群星《这样吧》                     3/75   =  4.0%(就是这次报的)
-    //   陶喆《My Anata》                  18/44  = 40.9%(真·中日混唱)
-    // 这批数据里**没有一首纯日文歌**,所以阈值的正向一侧不是从数据拟合的,是从正字法
-    // 推的:日语正字法离不开假名(助词 は/が/を/の、动词词尾、送り仮名),真正的日文歌
-    // 几乎每一行都含假名、占比接近 100%。取 50% 两边都留着很宽的余量。
+    // 阈值取 50%:日语正字法离不开假名(助词 は/が/を/の、动词词尾、送り仮名),日文歌里含汉字的行
+    // 几乎都带假名;中文歌引用几句日文、中日混唱都落在线下。依据见 10 章决策 34。
 
-    /// 「整首歌是日文歌」的阈值:含假名的**行**占非空行的比例。
+    /// 「整首歌是日文歌」的阈值,见 kanaLineRatio。
     public static let japaneseSongKanaLineRatio = 0.5
 
-    /// 含假名的行占非空行的比例。没有非空行时返回 0。
+    /// 含假名的行占「含汉字、假名或谚文的行」的比例,一行都没有时返回 0。纯拉丁字母的行(英文歌词、
+    /// 元信息标签)不进分母:它跟汉字按中文还是日文读无关,算进去的话英文多的日文歌会被拉到阈值以下;
+    /// 谚文行进分母,韩文歌里夹一两行日文不算日文歌。
     public static func kanaLineRatio(_ text: String) -> Double {
         var total = 0
         var kana = 0
@@ -855,8 +852,12 @@ extension Romanizer {
         for raw in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.isEmpty { continue }
-            total += 1
-            if looksJapanese(line) { kana += 1 }
+            if looksJapanese(line) {
+                kana += 1
+                total += 1
+            } else if containsHan(line) || containsHangul(line) {
+                total += 1
+            }
         }
         guard total > 0 else { return 0 }
         return Double(kana) / Double(total)

@@ -779,6 +779,23 @@ func runRomanizationTests() {
                     false, "预生成罗马音: 演唱者标签先剥掉再读")
         expectEqual(duetRoma.contains("zhōu mò"), true, "预生成罗马音: 正文照常出读音")
         expectEqual(Romanizer.kanaLineRatio(""), 0, "行占比: 空文本 0,不除零")
+        // 分母只算含汉字 / 假名 / 谚文的行:英文多的日文歌照样是日文歌,韩文歌夹一行日文不是。
+        expectEqual(Romanizer.kanaLineRatio("Hello\nworld"), 0, "行占比: 只有拉丁字母的行时 0")
+        let englishHeavyJa = (Array(repeating: "Under the same sky", count: 30)
+            + Array(repeating: "同じ空の下で 君を想う", count: 10)).joined(separator: "\n")
+        expectEqual(Romanizer.kanaLineRatio(englishHeavyJa), 1, "行占比: 拉丁字母的行不进分母")
+        expectEqual(Romanizer.looksJapaneseSong(englishHeavyJa), true, "整首: 英文多的日文歌仍是日文歌")
+        let independentKanji = Romanizer.japaneseSegments(
+            "下敷きになった犬小屋", songLooksJapanese: Romanizer.looksJapaneseSong(englishHeavyJa))
+            .map(\.latin).joined(separator: " ")
+        expectEqual(independentKanji.contains("quǎn") || independentKanji.contains("xiǎo"), false,
+                    "整首: 英文多的日文歌里,行尾独立的汉字按日文读")
+        let koreanWithJa = (Array(repeating: "똑똑똑 누구세요", count: 30) + ["是谁?", "だれ?"]).joined(separator: "\n")
+        expectEqual(Romanizer.looksJapaneseSong(koreanWithJa), false, "整首: 谚文行进分母,韩文歌夹一行日文不算日文歌")
+        expectEqual(Romanizer.songScript(of: koreanWithJa), .korean, "整首: 韩文歌夹日文仍是韩文")
+        let englishChineseWithJa = (Array(repeating: "Hello world", count: 30)
+            + Array(repeating: "你对我笑一次", count: 4) + ["サヨナラ"]).joined(separator: "\n")
+        expectEqual(Romanizer.looksJapaneseSong(englishChineseWithJa), false, "整首: 中英混唱夹一行日文仍不算日文歌")
 
         // 真实形状:《这样吧》75 行里 3 行含假名(4.0%)→ 不是日文歌。
         let zhWithJa = (Array(repeating: "就从明天开始吧", count: 72) + Array(repeating: "サヨナラ", count: 3))
