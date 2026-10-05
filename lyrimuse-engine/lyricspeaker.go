@@ -268,7 +268,9 @@ func lyricPlausibleSpeakerName(label string) bool {
 	// 用的是跟 Swift 那边同一条关键词正则(lyricKeywordCreditRe,对应 LyricsSyncEngine.creditLinePattern),
 	// 不是打分用的 creditLineRe(那条窄得多,只认作词/作曲/编曲/制作人/演唱/混音/录音):两边对「哪些
 	// 标签是说话人」必须一致,不然 App 删掉的署名行在这边被当成说话人豁免,曲末时间和正文共识都被带偏。
-	if lyricKeywordCreditRe.MatchString(label+"：") || lyricLabelLooksLikeCreditRole(label) {
+	// 繁体 / 日文字形(「詞曲編」)转简体再比一次,同 Swift 侧 matchesKeywordCreditPattern。
+	if lyricKeywordCreditRe.MatchString(label+"：") || lyricKeywordCreditRe.MatchString(toSimplified(label)+"：") ||
+		lyricLabelLooksLikeCreditRole(label) {
 		return false
 	}
 	if strings.ContainsAny(label, lyricNonNameRunes) {

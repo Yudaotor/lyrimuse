@@ -1199,8 +1199,14 @@ public final class LyricsSyncEngine {
 
     /// internal(不是 private):LyricDuet 拿它来否决"长得像角色名"的说话人标签,
     /// 复用同一张词表,免得两边各维护一份还对不齐。
+    ///
+    /// 表里只写简体。繁体 / 日文字形(「詞：」「編：」;日文歌词里的简体「词」会先被 `JapaneseKanjiRepair`
+    /// 修成「詞」)按 `HanScript.sibling` 转成简体再比一次,跟 `matchesRoleWordCredit` 同一种简繁互认。
+    /// 正则要求冒号,没冒号的行不转。引擎 lyricspeaker.go 的说话人否决同样转简体再比,两边一起改。见 08 章决策 37。
     static func matchesKeywordCreditPattern(_ text: String) -> Bool {
-        creditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+        if creditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil { return true }
+        guard text.contains(where: { $0 == ":" || $0 == "：" }), let sibling = HanScript.sibling(text) else { return false }
+        return creditLinePattern.firstMatch(in: sibling, range: NSRange(sibling.startIndex..., in: sibling)) != nil
     }
 
     /// 文字里有没有英文的署名角色名(`englishRoleNounPattern`)。LyricDuet 判单独一行的名字标签时用。

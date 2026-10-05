@@ -187,6 +187,25 @@ func runCreditLineTests() {
     }
 
     do {
+        // 单字缩写的繁体 / 日文字形(「詞：」「編：」):精确角色名那张表只写简体,转简体再比一次。日文歌词里的
+        // 简体「词」会先被 JapaneseKanjiRepair 修成「詞」,署名过滤看到的是修过的那一份。
+        let natori = ["Overdose - なとり", "词：なとり", "曲：なとり", "本当は分かっていた", "いけないことだったって"]
+            .map(JapaneseKanjiRepair.repairLine)
+        expectEqual(natori[1], "詞：なとり", "繁体自动识别(前提): 日文歌词里的「词」修成「詞」")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(natori, trackTitle: "Overdose", trackArtist: "natori"),
+                    [false, true, true, false, false], "繁体自动识别: 修过字形的「詞：」照样按署名删")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["詞：林夕", "編：陳輝陽", "監：李宗盛", "詞曲編：周杰倫", "我會一直等", "等到花都謝了", "風吹過的街道",
+             "你還在不在", "我們說好的"]),
+            [true, true, true, true, false, false, false, false, false],
+            "繁体自动识别: 单字缩写「詞」「編」「監」与连写")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(["我會一直等", "曲婉婷：好久不見", "等到花都謝了", "風吹過的街道"]),
+                    [false, false, false, false], "繁体自动识别(反向): 歌手名当说话人标签不删")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(["我會一直等", "詞窮的我：還在等", "等到花都謝了", "風吹過的街道"]),
+                    [false, false, false, false], "繁体自动识别(反向): 以「詞」开头、带冒号的真歌词不删")
+    }
+
+    do {
         // 整行只有符号:实测库里存在单独一行 `-`。
         expectEqual(LyricsSyncEngine.isSymbolOnlyLine("-"), true, "纯符号行: 单个连字符")
         expectEqual(LyricsSyncEngine.isSymbolOnlyLine("——"), true, "纯符号行: 破折号")

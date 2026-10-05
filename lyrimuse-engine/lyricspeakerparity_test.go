@@ -76,6 +76,7 @@ func TestLyricPlausibleSpeakerNameRejectsCreditRoles(t *testing.T) {
 	rejected := []string{
 		"总策划", "版权方", "人声编辑", "封面设计", "翻译", "和声", "唱片公司", "作词/作曲",
 		"制作人 Producer", "鼓 Drums", "Protools编辑", "录音师/录音室", "監製", "封面設計",
+		"詞曲編",
 	}
 	for _, l := range rejected {
 		if lyricPlausibleSpeakerName(l) {
