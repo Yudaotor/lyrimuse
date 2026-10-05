@@ -47,8 +47,8 @@ extension PanelQuickTarget {
         switch self {
         case .surface(let surface): return surface.symbolName
         case .lyricsWindow: return "text.quote"
-        // 同设置页「触控栏」那张开关卡、右键菜单「快速开关」里那一项。
-        case .touchBar: return "rectangle.and.hand.point.up.left"
+        // 系统符号里没有触控栏,用自画的那枚;设置页那张开关卡、右键菜单「快速开关」里那一项也是它。
+        case .touchBar: return SurfaceGlyph.touchBar.rawValue
         }
     }
 
@@ -86,7 +86,8 @@ extension LyricsSurface {
     var symbolName: String {
         switch self {
         case .overlay: return "captions.bubble"
-        case .notch: return "rectangle.topthird.inset.filled"
+        // 系统符号里没有灵动岛的形状,用自画的那枚(`SurfaceGlyph`)。
+        case .notch: return SurfaceGlyph.notch.rawValue
         case .menuBar: return "menubar.rectangle"
         }
     }
@@ -308,8 +309,7 @@ struct PanelQuickSettings: View {
             }
             .buttonStyle(.plain)
             .help(L10n.t("返回"))
-            Image(systemName: target.symbolName)
-                .font(.system(size: 12, weight: .semibold))
+            SymbolImage(name: target.symbolName, size: 12, weight: .semibold)
                 .foregroundStyle(target.isEnabled ? Color.accentColor : Color.secondary)
                 .frame(width: 18)
             Text(target.panelTitle).font(.system(size: 12, weight: .semibold))

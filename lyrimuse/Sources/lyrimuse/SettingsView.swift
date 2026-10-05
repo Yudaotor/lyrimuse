@@ -2473,7 +2473,7 @@ private struct AppearanceSettingsTab: View {
             // 总开关排在编辑台下面而不是上面,跟悬浮歌词那一段同一个排法:先看见这个形态
             // 长什么样,再决定开不开。
             modeToggleCard(
-                icon: "rectangle.topthird.inset.filled",
+                icon: SurfaceGlyph.notch.rawValue,
                 title: L10n.t("灵动岛歌词"),
                 subtitle: L10n.t("紧凑地贴着屏幕顶部的刘海显示"),
                 isOn: Binding(
@@ -2509,7 +2509,7 @@ private struct AppearanceSettingsTab: View {
                 // 配置不看开关,关着也能先调好(同另外几段)。系统里取不到触控栏的那几个入口时(`TouchBarPrivateAPI.isAvailable`
                 // 为假),开关的副标题换成「不会生效」的说明,开关照样能拨。
                 modeToggleCard(
-                    icon: "rectangle.and.hand.point.up.left",
+                    icon: SurfaceGlyph.touchBar.rawValue,
                     title: L10n.t("触控栏歌词"),
                     subtitle: TouchBarPrivateAPI.isAvailable
                         ? L10n.t("功能栏里会出现 Lyrimuse 图标，轻点展开歌词")

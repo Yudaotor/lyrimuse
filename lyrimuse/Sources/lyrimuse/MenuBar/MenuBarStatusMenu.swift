@@ -98,7 +98,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         quick.addItem(toggle(L10n.t("显示桌面悬浮歌词"), symbol: "captions.bubble",
                              on: settings.classicOverlayEnabled,
                              action: #selector(toggleClassicOverlay)))
-        quick.addItem(toggle(L10n.t("显示灵动岛歌词"), symbol: "rectangle.topthird.inset.filled",
+        quick.addItem(toggle(L10n.t("显示灵动岛歌词"), symbol: SurfaceGlyph.notch.rawValue,
                              on: settings.notchOverlayEnabled,
                              action: #selector(toggleNotchOverlay)))
         // 菜单栏歌词跟上面两个不一样:它没有独立的 WindowController(就画在状态栏那一行
@@ -109,7 +109,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         // 触控栏歌词:这台 Mac 此刻有触控栏时才有(`TouchBarAvailability`,App 启动时已经开始盯,读它没有副作用)。
         // 跟菜单栏歌词一样只翻 AppSettings 那个布尔值,`TouchBarLyricsController` 盯着它启停,拨开的那一下顺手展开。
         if TouchBarAvailability.shared.isPresent {
-            quick.addItem(toggle(L10n.t("显示触控栏歌词"), symbol: "rectangle.and.hand.point.up.left",
+            quick.addItem(toggle(L10n.t("显示触控栏歌词"), symbol: SurfaceGlyph.touchBar.rawValue,
                                  on: settings.showLyricsInTouchBar,
                                  action: #selector(toggleTouchBarLyrics)))
         }
@@ -189,12 +189,9 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
         item.target = self
         item.isEnabled = true
-        if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) {
-            // 菜单项图标按 14pt 排,跟系统自带菜单里的 SF Symbol 一个量级;不写死
-            // size(那样会把非正方形的符号压变形)。
-            item.image = image.withSymbolConfiguration(
-                NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)) ?? image
-        }
+        // 菜单项图标按 14pt 排,跟系统自带菜单里的 SF Symbol 一个量级;不写死
+        // size(那样会把非正方形的符号压变形)。符号名也可以是自画图标的名字(`SurfaceGlyph`)。
+        item.image = NSImage.symbol(named: symbol, pointSize: 14, weight: .regular)
         return item
     }
 

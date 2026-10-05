@@ -946,8 +946,7 @@ private struct MenuBarPanelView: View {
             // 代价:每格高一些(图标不再跟文字并排占同一行高)。菜单栏面板是 popover,
             // 纵向余量本来就宽松,换来的是不必为每种语言各想一套缩写。
             VStack(spacing: 5) {
-                Image(systemName: symbol)
-                    .font(.system(size: 16, weight: .semibold))
+                SymbolImage(name: symbol, size: 16, weight: .semibold)
                     .foregroundStyle(on ? Color.white : Color.secondary)
                     .frame(width: 36, height: 36)
                     .background(

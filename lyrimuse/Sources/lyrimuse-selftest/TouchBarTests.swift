@@ -592,9 +592,11 @@ func runTouchBarTests() {
                     "触控栏面板: 短按和快捷设置头部那颗开关走同一条闭包,翻的是同一个总开关")
         expectEqual(panel.contains("symbol: PanelQuickTarget.touchBar.symbolName"), true,
                     "触控栏面板: 格子和它翻过来的背面读同一个符号")
-        let symbol = "\"rectangle.and.hand.point.up.left\""
-        expectEqual(quick.contains("case .touchBar: return \(symbol)") && settingsView.contains("icon: \(symbol)"), true,
-                    "触控栏面板: 那一格的符号跟设置页「触控栏」那张开关卡同一个")
+        let menu = code(appDir.appendingPathComponent("MenuBar/MenuBarStatusMenu.swift")) ?? ""
+        expectEqual(quick.contains("case .touchBar: return SurfaceGlyph.touchBar.rawValue")
+                        && settingsView.contains("icon: SurfaceGlyph.touchBar.rawValue")
+                        && menu.contains("symbol: SurfaceGlyph.touchBar.rawValue"), true,
+                    "触控栏面板: 那一格、设置页开关卡、右键菜单那一项都用自画的触控栏图标")
         expectEqual(quick.contains("case .touchBar: return SettingsSearchCatalog.touchBarSectionValue"), true,
                     "触控栏面板: 「全部设置…」翻到「触控栏」那一段,取值读 Core 常量")
         for needle in ["toggleRow(L10n.t(\"显示封面\"), isOn: $settings.touchBarShowsArtwork)",

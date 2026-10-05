@@ -1864,4 +1864,47 @@ func runNotchTests() {
         expectEqual(row.contains("guard layerActive else { return }\n        view.apply(spec: spec, nowMs: nowMs())"), true,
                     "隐藏层契约: 藏着时不调 apply(不重画位图、不装动画)")
     }
+
+    // ---- 自画图标:灵动岛、触控栏两枚(系统符号里没有,`SurfaceGlyph`) ----
+    //
+    // 灵动岛那一格、设置页开关卡、右键菜单那一项都从 SurfaceGlyph 取名字;按名字画图标的几处(面板格子、快捷设置
+    // 头部、两种设置行、菜单项)都先认自画的名字。哪一处还拿 Image(systemName:) 画,那一枚就是空白,不报错。
+    do {
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String {
+            (try? String(contentsOfFile: appDir.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let glyph = read("UI/SurfaceGlyph.swift")
+        let quick = read("MenuBar/MenuBarPanelQuickSettings.swift")
+        let panel = read("MenuBar/MenuBarPanel.swift")
+        let menu = read("MenuBar/MenuBarStatusMenu.swift")
+        let settingsView = read("SettingsView.swift")
+        let design = read("Settings/SettingsDesignSystem.swift")
+        expectEqual(glyph.contains("case notch = \"lyrimuse.notch\"")
+                        && glyph.contains("case touchBar = \"lyrimuse.touchbar\""), true,
+                    "自画图标: 灵动岛、触控栏两枚在 SurfaceGlyph 里")
+        // SwiftUI 里用它自己的形状拼:把菜单用的那张模板图塞进 Image(nsImage:),着色比旁边的系统符号暗一截。
+        // 判的是调用(冒号后带参数),写理由的注释里也出现这个名字。
+        expectEqual(glyph.contains("SurfaceGlyphView(glyph: glyph, size: size, weight: weight)")
+                        && !glyph.contains("Image(nsImage: "), true,
+                    "自画图标: SwiftUI 里按共用几何拼形状,不用模板图")
+        // 实心的药丸、长条画成圆头粗线描边:磨砂底上 SwiftUI 的实心填充比描边、系统符号浅一截。
+        expectEqual(glyph.contains("RoundBar(rect: layout.island)") && glyph.contains("RoundBar(rect: layout.bar)")
+                        && !glyph.contains(" Capsule()\n"), true,
+                    "自画图标: 药丸、长条用描边画,不用 Capsule 填充")
+        expectEqual(quick.contains("case .notch: return SurfaceGlyph.notch.rawValue")
+                        && settingsView.contains("icon: SurfaceGlyph.notch.rawValue")
+                        && menu.contains("symbol: SurfaceGlyph.notch.rawValue"), true,
+                    "自画图标: 灵动岛那一格、设置页开关卡、右键菜单那一项都用自画的灵动岛图标")
+        expectEqual(panel.contains("SymbolImage(name: symbol, size: 16, weight: .semibold)")
+                        && quick.contains("SymbolImage(name: target.symbolName, size: 12, weight: .semibold)")
+                        && menu.contains("item.image = NSImage.symbol(named: symbol, pointSize: 14, weight: .regular)"), true,
+                    "自画图标: 面板格子、快捷设置头部、菜单项都按名字认自画图标")
+        expectEqual(design.components(separatedBy: "SymbolImage(name: icon, size: 13)").count - 1, 2,
+                    "自画图标: SettingsRow、SettingsRawRow 两种设置行都按名字认自画图标")
+        expectEqual(design.contains("Image(systemName: icon)") || quick.contains("Image(systemName: target.symbolName)")
+                        || menu.contains("NSImage(systemSymbolName: symbol"), false,
+                    "自画图标: 设置行、快捷设置头部、菜单项不再直接拿符号名画系统符号")
+    }
 }

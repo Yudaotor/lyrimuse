@@ -499,8 +499,8 @@ struct SettingsRow<Trailing: View>: View {
                         .resizable()
                         .frame(width: SettingsRowMetrics.iconWidth, height: SettingsRowMetrics.iconWidth)
                 } else if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 13))
+                    // 系统符号名、自画图标的名字(`SurfaceGlyph`)都收。
+                    SymbolImage(name: icon, size: 13)
                         .foregroundStyle(iconTint ?? Color.secondary)
                         // 锁定成拉丁语区:SF Symbols 里 textformat / textformat.alt /
                         // textformat.size 这类"字母造型"的符号带 CJK 本地化变体,中文界面下
@@ -731,8 +731,7 @@ struct SettingsRawRow<Content: View>: View {
             if insetToText {
                 Group {
                     if let icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 13))
+                        SymbolImage(name: icon, size: 13)
                             .foregroundStyle(.secondary)
                             // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分
                             // 符号有 CJK 变体,中文界面下会被渲染成汉字)。
