@@ -1211,6 +1211,8 @@ struct LyricsWindowView: View {
     @StateObject private var windowController = LyricsWindowController()
     /// 逐帧时钟,挂在这一份所在的窗口上(`FrameClockHost`),各处 `FrameTimeline` 从环境里取。
     @State private var frameClock = FrameClock()
+    /// 歌词列表走图层版(`LyricsLayerList`,默认)还是 SwiftUI 版(这颗设成 false);SwiftUI 版留着做对照(07 章决策 111)。
+    @AppStorage("debug:lyricsListLayer") private var usesLayerList = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 预览模式下宿主(设置窗口)看不看得见,见 PreviewHostVisibility.swift。真窗口恒 true、不读它。
     @Environment(\.previewHostVisible) private var previewHostVisible
@@ -2880,6 +2882,8 @@ struct LyricsWindowView: View {
             } else {
                 emptyState
             }
+        } else if usesLayerList {
+            layerLyricsList(leading: leading, trailing: trailing, centered: centered, wordRise: wordRise)
         } else {
             ScrollView {
                 // 用 VStack 而不是 LazyVStack:歌词就几十行(这首 43 行),lazy 省不下什么,
@@ -3058,6 +3062,51 @@ struct LyricsWindowView: View {
                     .allowsHitTesting(false)
             }
         }
+    }
+
+    /// 图层版歌词列表:逐字填色、上浮、换句错开、景深过渡都交给 Core Animation,主线程只在换句那一刻装一次动画。
+    /// 输入跟 SwiftUI 版各行同一份(字号、颜色、开关、当前行 / 滚动锚 / 间奏、定格、在播与可见)。
+    private func layerLyricsList(leading: CGFloat, trailing: CGFloat, centered: Bool, wordRise: Bool) -> some View {
+        LyricsLayerList(
+            spec: .init(
+                lines: playback.allLines,
+                gapMarkers: playback.lyricsGapMarkersByIndex,
+                songwriters: centered ? [] : playback.songwriters,
+                style: .init(fontSize: lyricFontSize, romaFontSize: romaFontSize, translationFontSize: translationFontSize,
+                             fontFamily: activeFontFamily, textColor: NSColor(lyricTextColor),
+                             secondaryColor: NSColor(lyricSecondaryTextColor),
+                             showRomanization: playback.showRomanization, showTranslation: playback.showTranslation,
+                             centered: centered, wordRise: wordRise, reduceMotion: reduceMotion,
+                             duetInsetUnit: duetInsetUnit, scale: displayScale),
+                lineSpacing: lyricLineSpacing, leading: leading, trailing: trailing,
+                onArtwork: hasArtworkBackground, suspendsBlur: windowController.isLiveResizing,
+                currentLineIndex: playback.currentLineIndex, scrollLineIndex: playback.scrollLineIndex,
+                overlapping: Set(playback.overlappingLineIndices), currentGapIndex: playback.currentGapIndex,
+                fillSettled: playback.currentLineFillSettled,
+                isPlaying: playback.isPlayingNow, surfaceVisible: windowController.isSurfaceVisible,
+                timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
+                                                  offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs),
+                rate: playback.anchor?.rate ?? 1),
+            nowMs: { PlaybackCoordinator.shared.lyricsTimelineMs() },
+            onTapLine: { index in
+                guard playback.allLines.indices.contains(index) else { return }
+                // 减去当前歌词偏移,理由同 SwiftUI 版各行的 onTap
+                PlaybackCoordinator.shared.seek(
+                    toMs: max(0, playback.allLines[index].timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
+            })
+        .background(
+            GeometryReader { g in
+                Color.clear
+                    // 拖窗口边角 / 切迷你期间不提交,理由同 SwiftUI 版那一份(07 章决策 53)
+                    .onAppear { if !defersLyricsPaneResize { setLyricsPaneSize(g.size) } }
+                    .onChange(of: g.size) { _, size in
+                        if !defersLyricsPaneResize { setLyricsPaneSize(size) }
+                    }
+                    .onChange(of: defersLyricsPaneResize) { _, deferring in
+                        if !deferring { setLyricsPaneSize(g.size) }
+                    }
+            }
+        )
     }
 
     // ---- 左列:封面 + 曲目信息 + 进度条 + 播放控制 --------------------------------

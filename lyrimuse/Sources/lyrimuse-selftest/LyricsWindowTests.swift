@@ -277,6 +277,86 @@ func runLyricsWindowTests() {
                     "逐帧时钟(契约): 时钟是宿主窗口的 display link")
     }
 
+    // MARK: - 图层列表的时间轴(LyricsLayerTiming)
+    do {
+        typealias T = LyricsLayerTiming
+        let band = KaraokeFill.wordEdgeSoftenBand
+        let f = T.fillTrack(startMs: 1000, durationMs: 500, nowMs: 900, rate: 1)
+        expectEqual(abs(f.beginOffset - (1000 - band * 500 - 900) / 1000) < 1e-9, true,
+                    "图层时间轴: 填色从开唱前 band 个时长起走,离此刻多少秒")
+        expectEqual(abs(f.duration - (1 + 2 * band) * 0.5) < 1e-9, true, "图层时间轴: 软边从左外走到右外共 (1+2band) 个时长")
+        let fast = T.fillTrack(startMs: 1000, durationMs: 500, nowMs: 900, rate: 2)
+        expectEqual(abs(fast.duration - f.duration / 2) < 1e-9 && abs(fast.beginOffset - f.beginOffset / 2) < 1e-9, true,
+                    "图层时间轴: 倍速时墙钟时长按速率缩短")
+        let short = T.fillTrack(startMs: 0, durationMs: 10, nowMs: 0, rate: 1)
+        expectEqual(abs(short.duration - (1 + 2 * band) * Double(KaraokeFill.minWordDurationMs) / 1000) < 1e-9, true,
+                    "图层时间轴: 太短的词按最短可扫时长走,同 fillFraction")
+        expectEqual(T.fillCenter(startMs: 1000, durationMs: 500, atMs: 0), T.unsungCenter, "图层时间轴: 开唱前整词未唱")
+        expectEqual(T.fillCenter(startMs: 1000, durationMs: 500, atMs: 9000), T.sungCenter, "图层时间轴: 唱完整词已唱")
+        expectEqual(abs(T.fillCenter(startMs: 1000, durationMs: 500, atMs: 1250) - 0.5) < 1e-9, true,
+                    "图层时间轴: 唱到一半软边中心在词中间")
+        let rise = T.Motion(riseStartMs: 1000, amplitude: 3)
+        expectEqual(rise.pose(atMs: 1000).lift, 0, "图层时间轴: 开唱那一刻还没浮")
+        expectEqual(rise.pose(atMs: 1000 + Double(KaraokeLift.durationMs)).lift, 3, "图层时间轴: 上浮曲线走完到顶")
+        expectEqual(rise.activeRangeMs, 1000...(1000 + Double(KaraokeLift.durationMs)), "图层时间轴: 只有上浮时变化段就是那 1.4 秒")
+        let span = LyricsWordEmphasis.Span(startMs: 1000, endMs: 3000)
+        let emph = T.Motion(riseStartMs: 1000, amplitude: 3, emphasis: span)
+        let mid = emph.pose(atMs: 2000)
+        expectEqual(abs(mid.lift - (KaraokeLift.progress(elapsedMs: 1000) * 3 + LyricsWordEmphasis.frame(for: span, atMs: 2000).extraLift * 3)) < 1e-9,
+                    true, "图层时间轴: 长音强调的额外上浮跟普通上浮同一个幅度,叠在上面")
+        expectEqual(mid.scale > 1 && mid.glow > 0, true, "图层时间轴: 强调窗口里有放大和辉光")
+        expectEqual(emph.activeRangeMs.upperBound, 3000, "图层时间轴: 有强调时变化段走到词尾")
+        expectEqual(T.poseTrack(rise, nowMs: 5000, rate: 1) == nil, true, "图层时间轴: 已经走完的不排关键帧,画终态")
+        if let early = T.poseTrack(rise, nowMs: 500, rate: 1) {
+            expectEqual(abs(early.beginOffset - 0.5) < 1e-9, true, "图层时间轴: 还没开唱的从开唱那一刻起排")
+            expectEqual(early.poses.first, .rest, "图层时间轴: 关键帧从静止的样子起")
+            expectEqual(early.keyTimes.first == 0 && early.keyTimes.last == 1 && zip(early.keyTimes, early.keyTimes.dropFirst()).allSatisfy { $0 < $1 },
+                        true, "图层时间轴: 关键帧时刻从 0 到 1 递增")
+            expectEqual(early.poses.count >= Int(Double(KaraokeLift.durationMs) / 1000 * T.samplesPerSecond), true,
+                        "图层时间轴: 每秒至少 60 个关键帧")
+        } else {
+            expectEqual(true, false, "图层时间轴: 还没开唱的应当排出关键帧")
+        }
+        if let late = T.poseTrack(rise, nowMs: 1700, rate: 1) {
+            expectEqual(late.beginOffset, 0, "图层时间轴: 走到一半的从此刻起排")
+            expectEqual(abs(late.poses.first!.lift - rise.pose(atMs: 1700).lift) < 1e-9, true, "图层时间轴: 第一帧就是此刻的姿态")
+        } else {
+            expectEqual(true, false, "图层时间轴: 走到一半的应当排出关键帧")
+        }
+    }
+
+    // MARK: - 图层版歌词列表的几条硬约束(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let list = source("lyrimuse/UI/LyricsLayerList.swift")
+        let row = source("lyrimuse/UI/LyricsLayerListRow.swift")
+        let text = source("lyrimuse/UI/LyricsLayerListText.swift")
+        expectEqual(list.isEmpty || row.isEmpty || text.isEmpty, false, "图层列表(契约): 读到源码")
+        expectEqual(sourceBytes(row, contain: "a.beginTime = gradient.convertTime(mediaNow, from: nil) + track.beginOffset"), true,
+                    "图层列表(契约): 逐字填色按播放位置绝对对齐 —— 起步留给提交那一刻的话会跟演唱错开一截")
+        expectEqual(sourceBytes(row, contain: "fill.mask = mask"), true,
+                    "图层列表(契约): 字形遮罩挂在填色那一层,不挂在外层 —— 挂外层会把辉光也裁成字形")
+        expectEqual(sourceBytes(list, contain: "spring.beginTime = delay\n            spring.fillMode = .backwards\n            let group = CAAnimationGroup()"),
+                    true, "图层列表(契约): 换句位移的错开延迟放在组动画里面,组的起步留给提交那一刻 —— 装完之后主线程再卡也不会一下跳过一截")
+        expectEqual(sourceBytes(list, contain: "spring.isAdditive = true"), true,
+                    "图层列表(契约): 换句位移是加法动画,连续换句几笔叠着各自走完")
+        expectEqual(sourceBytes(list, contain: "guard bounds.size != laidOutSize else { return }"), true,
+                    "图层列表(契约): 宿主随时会叫 layout,尺寸没变不重排、不重装动画")
+        expectEqual(sourceBytes(list, contain: "with: \"gaussianBlur\""), true,
+                    "图层列表(契约): 景深模糊用 Core Animation 自己的 gaussianBlur —— 换成 CIGaussianBlur,渲染服务每帧要多花一倍多,窗口掉到二十几帧")
+        expectEqual(sourceBytes(list, contain: "DispatchQueue.concurrentPerform(iterations: lines.count)"), true,
+                    "图层列表(契约): 建表的排版、画字在后台按行并行算 —— 放回主线程,换歌那一下要卡两三百毫秒")
+        expectEqual(sourceBytes(list, contain: "guard rowsCurrent else { return }"), true,
+                    "图层列表(契约): 新歌词那张还在后台画时,不拿新下标去动旧的那张")
+        expectEqual(sourceBytes(text, contain: "vImageBoxConvolve_ARGB8888"), true,
+                    "图层列表(契约): 辉光在 CPU 上糊 —— 走 Core Image 要排 GPU 的队,整首歌并行也快不了")
+        expectEqual(sourceBytes(text, contain: "@MainActor"), false,
+                    "图层列表(契约): 画字、量字不绑主线程 —— 后台建表要调")
+    }
+
     // MARK: - 过渡的时间轴扣掉主线程卡住的那段(FrameStall,07 章决策 108)
     do {
         let f60 = 1.0 / 60, f120 = 1.0 / 120
