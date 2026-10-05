@@ -1920,5 +1920,18 @@ func runSyncEngineTests() {
         expectEqual(abs(G.windowOffset(dot: 0, scale: 1.3, dotSize: 10) + 3) < 1e-9
                         && abs(G.windowOffset(dot: 2, scale: 1.3, dotSize: 10) - 3) < 1e-9, true,
                     "窗口三点: 两侧各往外挪一个放大量,间隙不变")
+
+        // 歌词窗口的点亮(07 章决策 105):进度同悬浮歌词那一份,还没轮到的点更淡
+        let wf = G.windowOpacityFloor
+        expectEqual(G.windowOpacity(dot: 0, progress: 0), wf, "窗口三点点亮: 刚进间奏时三颗都在地板上")
+        expectEqual(G.windowOpacity(dot: 2, progress: 0.5), wf, "窗口三点点亮: 进度没到 2/3 时第三颗还没起亮")
+        expectEqual(abs(G.windowOpacity(dot: 0, progress: 1.0 / 3) - 1) < 1e-12, true, "窗口三点点亮: 走完第一段第一颗满亮")
+        let mid = G.windowOpacity(dot: 1, progress: 0.5)
+        expectEqual(mid > wf && mid < 1, true, "窗口三点点亮: 第二颗在自己那一段里平滑爬升(\(mid))")
+        expectEqual((0..<G.dotCount).allSatisfy { abs(G.windowOpacity(dot: $0, progress: 1) - 1) < 1e-12 }, true,
+                    "窗口三点点亮: 间奏结束时三颗都满亮")
+        expectEqual(wf < G.opacityFloor, true, "窗口三点点亮: 歌词窗口的地板比悬浮歌词低(Apple 同窗口约 12%)")
+        expectEqual(G.windowOpacity(dot: 1, progress: 0.5) == G.windowOpacity(dot: 1, progress: 0.5), true,
+                    "窗口三点点亮: 只看进度,跟减弱动态效果无关")
     }
 }

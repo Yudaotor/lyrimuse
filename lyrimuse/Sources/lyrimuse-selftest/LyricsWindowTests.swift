@@ -216,6 +216,20 @@ func runLyricsWindowTests() {
                     "逐帧时钟(契约): 时钟是宿主窗口的 display link")
     }
 
+    // MARK: - 歌词窗口间奏三点按时间点亮(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let dots = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsGapDots.swift"),
+                                encoding: .utf8)) ?? ""
+        expectEqual(dots.isEmpty, false, "窗口三点(契约): 读到源码")
+        expectEqual(sourceBytes(dots, contain: "case .window:\n            return GapDotsCurve.windowOpacity(dot: dot,"), true,
+                    "窗口三点(契约): 定格时按此刻的进度画亮度,不是恒满 —— 一开始就三颗实心看不出间奏走到哪")
+        expectEqual(sourceBytes(dots, contain: "installFade(on: dot, frames: GapDotsCurve.windowOpacityKeyframes(dot: i,"), true,
+                    "窗口三点(契约): 装动画时把点亮交给 Core Animation")
+        expectEqual(sourceBytes(dots, contain: "let scales: [Double] = c.reduceMotion ? [] :"), true,
+                    "窗口三点(契约): 减弱动态效果只停大小,点亮照走")
+    }
+
     // MARK: - 歌词窗口看不见时不做隐式动画(源码契约)
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

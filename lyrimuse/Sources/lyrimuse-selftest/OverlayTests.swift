@@ -32,6 +32,26 @@ func runOverlayTests() {
         }
         expectEqual(GapDotsCurve.opacityKeyframes(dot: 0, startMs: start, endMs: end, fromMs: 22_000).isEmpty, true,
                     "间奏三点关键帧: 已到结束时间不排")
+        // 歌词窗口那一份(07 章决策 105):时刻同一套,线性插值同样逐点等于现算的 windowOpacity
+        for dot in 0..<GapDotsCurve.dotCount {
+            for from in [10_000.0, 15_000.0, 21_999.0] {
+                let frames = GapDotsCurve.windowOpacityKeyframes(dot: dot, startMs: start, endMs: end, fromMs: from)
+                expectEqual(frames.map(\.ms), GapDotsCurve.opacityKeyframes(dot: dot, startMs: start, endMs: end, fromMs: from).map(\.ms),
+                            "窗口三点关键帧: 时刻跟悬浮歌词那一份相同(dot \(dot) from \(from))")
+                var exact = true
+                var t = from
+                while t <= Double(end) {
+                    let k = frames.lastIndex(where: { $0.ms <= t }) ?? 0
+                    let a = frames[k], b = frames[min(k + 1, frames.count - 1)]
+                    let f = b.ms > a.ms ? (t - a.ms) / (b.ms - a.ms) : 0
+                    let interp = a.opacity + (b.opacity - a.opacity) * f
+                    let want = GapDotsCurve.windowOpacity(dot: dot, progress: GapDotsCurve.progress(posMs: Int(t), startMs: start, endMs: end))
+                    if abs(interp - want) > 0.002 { exact = false }
+                    t += 37
+                }
+                expectEqual(exact, true, "窗口三点关键帧: 线性插值逐点等于现算亮度(dot \(dot) from \(from))")
+            }
+        }
     }
 
     // ---- WindowCoverage:几乎被别的窗口整扇盖住(补 occlusionState 的盲区) ----

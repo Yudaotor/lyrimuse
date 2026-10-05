@@ -4361,7 +4361,7 @@ struct LyricsWindowView: View {
     }
 
     /// 三颗呼吸圆点。不活跃时**整行不渲染**(零高度零开销,VStack 也不会为它多出一段
-    /// 行距);间奏进行中在原位展开,三颗一直全亮、整组慢慢变大变小(07 章决策 91)—— 活跃判定在
+    /// 行距);间奏进行中在原位展开,三颗按进度逐颗点亮、整组慢慢变大变小(07 章决策 91、105)—— 活跃判定在
     /// 数据层(LocalPlaybackSource 20Hz 发布 currentGapIndex,进出间奏才变)。动画交给 Core Animation,
     /// 见 `GapDotsNSView`。
     @ViewBuilder

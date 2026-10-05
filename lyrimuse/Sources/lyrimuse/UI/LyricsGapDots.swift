@@ -17,7 +17,7 @@ import LyrimuseCore
 ///     每颗点 4 个关键帧就是精确的,不用采样;
 ///   - 呼吸:`breathe(atMs:)` 以 `breathePeriodMs` 为周期,排一个周期(30 点/秒)无限循环,按此刻的
 ///     位置对齐相位。三颗点同步放大缩小(AM 的样子),各绕自己的中心。
-/// 歌词窗口那一份(`.window`)亮度恒满;倍率曲线不循环(出现、结束前那两段只走一次),从此刻到间奏
+/// 歌词窗口那一份(`.window`)也逐颗点亮,只是没轮到的点更淡;倍率曲线不循环(出现、结束前那两段只走一次),从此刻到间奏
 /// 结束整段采样成一条关键帧,每颗点绕自己的中心放大、再横挪让间隙不变。
 /// 重装时机:起止时间 / 在播 / 可见 / 减弱动态效果变了,以及每 3 秒对一次表(拖动进度 / 锚点重发会让
 /// 位置跳一下,偏差超过 250ms 就按新位置重排)。暂停 / 看不见时摘掉动画、定格在此刻的样子。
@@ -52,7 +52,7 @@ struct LyricsGapDotsView: View {
 }
 
 /// 三颗点的画法。`standard`:悬浮歌词 / 灵动岛(菜单栏同一条曲线),逐颗点亮、各绕中心周期呼吸。
-/// `window`:歌词窗口,一直全亮、只靠大小变化、间隙不变(`GapDotsCurve.windowScale`)。
+/// `window`:歌词窗口,逐颗点亮(地板更低)、大小按 `GapDotsCurve.windowScale` 变、间隙不变。
 enum GapDotsStyle: Equatable {
     case standard
     case window
@@ -217,7 +217,8 @@ final class GapDotsNSView: NSView {
             return GapDotsCurve.opacity(dot: dot, progress: GapDotsCurve.progress(posMs: Int(ms), startMs: c.startMs,
                                                                                    endMs: c.endMs))
         case .window:
-            return 1
+            return GapDotsCurve.windowOpacity(dot: dot, progress: GapDotsCurve.progress(posMs: Int(ms), startMs: c.startMs,
+                                                                                         endMs: c.endMs))
         }
     }
 
@@ -245,20 +246,9 @@ final class GapDotsNSView: NSView {
         let remainingMs = max(0, Double(c.endMs) - pos)
         for (i, dot) in dots.enumerated() {
             let begin = dot.convertTime(media, from: nil)
-            // 点亮:progress 线性于时间,opacity 在 i/3、(i+1)/3 处折 —— 这两个时刻加首尾四个关键帧。
-            let frames = GapDotsCurve.opacityKeyframes(dot: i, startMs: c.startMs, endMs: c.endMs, fromMs: pos)
-            if remainingMs > 0, !frames.isEmpty {
-                let fade = CAKeyframeAnimation(keyPath: "opacity")
-                fade.values = frames.map(\.opacity)
-                fade.keyTimes = frames.map { NSNumber(value: ($0.ms - pos) / remainingMs) }
-                fade.duration = remainingMs / 1000
-                fade.beginTime = begin
-                fade.calculationMode = .linear
-                fade.fillMode = .forwards
-                fade.isRemovedOnCompletion = false
-                dot.add(fade, forKey: Self.opacityKey)
-                dot.opacity = Float(GapDotsCurve.opacity(dot: i, progress: 1))
-            }
+            installFade(on: dot, frames: GapDotsCurve.opacityKeyframes(dot: i, startMs: c.startMs, endMs: c.endMs,
+                                                                       fromMs: pos),
+                        pos: pos, remainingMs: remainingMs, begin: begin)
             // 呼吸:一个周期的关键帧、无限循环,相位对齐此刻的位置。
             if !c.reduceMotion {
                 let period = GapDotsCurve.breathePeriodMs
@@ -280,29 +270,49 @@ final class GapDotsNSView: NSView {
         }
     }
 
-    /// 歌词窗口那一份:亮度恒满,只排大小。曲线不循环,从此刻到间奏结束整段采样成一条关键帧。
+    /// 歌词窗口那一份:逐颗点亮 + 大小。大小曲线不循环,从此刻到间奏结束整段采样成一条关键帧;
+    /// 减弱动态效果时只停大小,点亮照走(那是进度信息)。
     private func installWindow(_ c: Config, pos: Double, media: CFTimeInterval) {
         let remainingMs = Double(c.endMs) - pos
-        guard !c.reduceMotion, remainingMs > 0 else { return }
+        guard remainingMs > 0 else { return }
         let count = max(1, Int((remainingMs / 1000 * Self.windowSamplesPerSecond).rounded(.up)))
-        let scales = (0...count).map { k in
+        let scales: [Double] = c.reduceMotion ? [] : (0...count).map { k in
             GapDotsCurve.windowScale(atMs: pos + remainingMs * Double(k) / Double(count),
                                      startMs: c.startMs, endMs: c.endMs)
         }
         for (i, dot) in dots.enumerated() {
+            let begin = dot.convertTime(media, from: nil)
+            installFade(on: dot, frames: GapDotsCurve.windowOpacityKeyframes(dot: i, startMs: c.startMs, endMs: c.endMs,
+                                                                             fromMs: pos),
+                        pos: pos, remainingMs: remainingMs, begin: begin)
+            guard let last = scales.last else { continue }
             let size = CAKeyframeAnimation(keyPath: "transform")
             size.values = scales.map { NSValue(caTransform3D: Self.windowTransform(dot: i, dotSize: c.dotSize, scale: $0)) }
             size.calculationMode = .linear
             size.duration = remainingMs / 1000
-            size.beginTime = dot.convertTime(media, from: nil)
+            size.beginTime = begin
             size.fillMode = .forwards
             size.isRemovedOnCompletion = false
             size.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: 30, preferred: 30)
             dot.add(size, forKey: Self.breatheKey)
-            if let last = scales.last {
-                dot.transform = Self.windowTransform(dot: i, dotSize: c.dotSize, scale: last)
-            }
+            dot.transform = Self.windowTransform(dot: i, dotSize: c.dotSize, scale: last)
         }
+    }
+
+    /// 点亮:progress 线性于时间,亮度在 i/3、(i+1)/3 处折 —— 这两个时刻加首尾四个关键帧。
+    private func installFade(on dot: CALayer, frames: [(ms: Double, opacity: Double)], pos: Double,
+                             remainingMs: Double, begin: CFTimeInterval) {
+        guard remainingMs > 0, let last = frames.last else { return }
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = frames.map(\.opacity)
+        fade.keyTimes = frames.map { NSNumber(value: ($0.ms - pos) / remainingMs) }
+        fade.duration = remainingMs / 1000
+        fade.beginTime = begin
+        fade.calculationMode = .linear
+        fade.fillMode = .forwards
+        fade.isRemovedOnCompletion = false
+        dot.add(fade, forKey: Self.opacityKey)
+        dot.opacity = Float(last.opacity)
     }
 
     private func resyncIfDrifted() {

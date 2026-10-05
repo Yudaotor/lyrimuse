@@ -40,16 +40,26 @@ public enum GapDotsCurve {
         return breatheMin + breatheSpan * raised
     }
 
+    /// 第 `dot` 颗点此刻点亮了多少,0…1:第 i 颗在间奏进行到 i/3 之后开始,到 (i+1)/3 满。
+    public static func lit(dot: Int, progress: Double) -> Double {
+        min(1, max(0, progress * Double(dotCount) - Double(dot)))
+    }
+
     /// 第 `dot` 颗点此刻的不透明度。第 i 颗在间奏进行到 i/3 之后开始点亮,亮度平滑爬升。
     public static func opacity(dot: Int, progress: Double) -> Double {
-        let lit = min(1, max(0, progress * Double(dotCount) - Double(dot)))
-        return opacityFloor + opacitySpan * lit
+        opacityFloor + opacitySpan * lit(dot: dot, progress: progress)
     }
 
     /// 某颗点从 `fromMs` 到间奏结束的亮度关键帧 `(ms, opacity)`,线性插值即精确:progress 线性于时间,
     /// `opacity(dot:progress:)` 只在 progress = dot/n、(dot+1)/n 处折一下。给 `LyricsGapDotsView` 交给
     /// Core Animation 播(关键帧之间 CA 线性插值)。`fromMs` 已到或过了结束时间时返回空。
     public static func opacityKeyframes(dot: Int, startMs: Int, endMs: Int, fromMs: Double) -> [(ms: Double, opacity: Double)] {
+        keyframes(dot: dot, startMs: startMs, endMs: endMs, fromMs: fromMs) { opacity(dot: dot, progress: $0) }
+    }
+
+    /// 关键帧时刻只看点亮进度在哪儿折(i/3、(i+1)/3),跟地板取多少无关;两种亮度共用这一份。
+    private static func keyframes(dot: Int, startMs: Int, endMs: Int, fromMs: Double,
+                                  opacityAt: (Double) -> Double) -> [(ms: Double, opacity: Double)] {
         let end = Double(endMs)
         guard fromMs < end else { return [] }
         let span = Double(max(1, endMs - startMs))
@@ -61,14 +71,14 @@ public enum GapDotsCurve {
         }
         times.append(end)
         return times.map { t in
-            (t, opacity(dot: dot, progress: progress(posMs: Int(t.rounded()), startMs: startMs, endMs: endMs)))
+            (t, opacityAt(progress(posMs: Int(t.rounded()), startMs: startMs, endMs: endMs)))
         }
     }
 
     // MARK: - 歌词窗口
 
-    /// 歌词窗口的三颗点照 Apple Music 歌词页同窗口录屏(07 章决策 91):一直全亮,只靠大小变化。
-    /// 排版尺寸是最小那一档,倍率在 1…`windowPeakScale` 之间:出现时 `windowAppearScale`,
+    /// 歌词窗口的三颗点照 Apple Music 歌词页同窗口录屏:按间奏进度逐颗点亮,还没轮到的点更淡(07 章决策 105);
+    /// 大小另走一条曲线(07 章决策 91)。排版尺寸是最小那一档,倍率在 1…`windowPeakScale` 之间:出现时 `windowAppearScale`,
     /// `windowAppearMs` 内涨到顶;之后以 `windowBreathePeriodMs` 为周期从顶上缓缓缩到 1 再涨回;
     /// 离结束 `windowSwellMs` 起涨回顶,停在顶上等收起。
     public static let windowPeakScale = 1.35
@@ -78,6 +88,19 @@ public enum GapDotsCurve {
     public static let windowSwellMs = 1000.0
     /// 涨回顶在 `windowSwellMs` 这一段的哪个比例处到位。
     private static let windowSwellReach = 0.85
+
+    /// 歌词窗口还没轮到的点的不透明度:Apple 同窗口录屏里停在歌曲开头时,前奏三颗都约为 12% 的白。
+    public static let windowOpacityFloor = 0.12
+
+    /// 歌词窗口第 `dot` 颗点此刻的不透明度:点亮进度同 `opacity(dot:progress:)`,地板换成 `windowOpacityFloor`。
+    public static func windowOpacity(dot: Int, progress: Double) -> Double {
+        windowOpacityFloor + (1 - windowOpacityFloor) * lit(dot: dot, progress: progress)
+    }
+
+    /// `windowOpacity` 的关键帧,时刻同 `opacityKeyframes`。
+    public static func windowOpacityKeyframes(dot: Int, startMs: Int, endMs: Int, fromMs: Double) -> [(ms: Double, opacity: Double)] {
+        keyframes(dot: dot, startMs: startMs, endMs: endMs, fromMs: fromMs) { windowOpacity(dot: dot, progress: $0) }
+    }
 
     /// 歌词窗口三颗点此刻的倍率。`reduceMotion` 为真时恒 1。
     public static func windowScale(atMs posMs: Double, startMs: Int, endMs: Int, reduceMotion: Bool = false) -> Double {
