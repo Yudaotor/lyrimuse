@@ -81,6 +81,16 @@ type lyricsRescoreOpts struct {
 	manual   bool
 	progress func(done, total int)
 	result   *lyricsRematchResult
+	// reasons:播放时起的这一轮升级重搜为的是哪几个理由(lyricsRecheck.String),记进决策日志那一行。
+	reasons string
+}
+
+// logAttrs:追加进这一轮决策日志那一行的字段。
+func (o lyricsRescoreOpts) logAttrs() []any {
+	if o.reasons == "" {
+		return nil
+	}
+	return []any{"reasons", o.reasons}
 }
 
 // sourceChoice:这一轮只在哪个源里挑冠军,空串 = 全源。

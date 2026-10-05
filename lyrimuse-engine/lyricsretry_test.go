@@ -73,6 +73,39 @@ func TestNeedsLyricsRetry(t *testing.T) {
 
 }
 
+// 同源落选、时长对不上越过的是「有源缺席」和「已经有逐字」两道闸,不越过节流:离上一轮重试不到间隔就不来,
+// 条目刚解析过(TS 新)、还没重试过照样马上给这一次。
+func TestNeedsLyricsRetryBypassStillThrottled(t *testing.T) {
+	saved, savedNative := features(), nativeLyricSources
+	t.Cleanup(func() { setFeatures(saved); nativeLyricSources = savedNative })
+	featuresRef().LyricsSources = map[string]bool{"kugou": true, "qq": true}
+	setNativeLyricSourcesForPlayer(qqMusicBundleID)
+	long, recent := time.Now().Unix()-int64(lyricsRetryInterval/time.Second)-1, time.Now().Unix()
+	missed := enrichEntry{Lyrics: "[00:01.00]x", LyricsYRC: "yrc", LyricsSource: "kugou",
+		LyricsSourcesSeen: []string{"kugou", "qq"}, LyricsSourcesResponded: []string{"kugou", "qq"}}
+	with := func(e enrichEntry, f func(e *enrichEntry)) enrichEntry { f(&e); return e }
+	for _, c := range []struct {
+		name          string
+		e             enrichEntry
+		wrongDuration bool
+		want          bool
+	}{
+		{"同源落选、还没重试过", missed, false, true},
+		{"同源落选、刚解析过也给这一次", with(missed, func(e *enrichEntry) { e.TS = recent }), false, true},
+		{"同源落选、刚重试过", with(missed, func(e *enrichEntry) { e.LyricsRetryTS = recent }), false, false},
+		{"同源落选、上一轮重试已过间隔", with(missed, func(e *enrichEntry) { e.LyricsRetryTS = long }), false, true},
+		{"时长对不上、刚解析过", with(missed, func(e *enrichEntry) { e.LyricsSource, e.TS = "qq", recent }), true, true},
+		{"时长对不上、刚重试过", with(missed, func(e *enrichEntry) { e.LyricsSource, e.LyricsRetryTS = "qq", recent }), true, false},
+		{"刚重试过、次数也用完了", with(missed, func(e *enrichEntry) {
+			e.LyricsRetryTS, e.LyricsRetryCount = long, lyricsRetryMaxAttempts
+		}), false, false},
+	} {
+		if got := needsLyricsRetry(c.e, c.wrongDuration, false, true); got != c.want {
+			t.Errorf("%s: got %v want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // 未启用的源缺席不算数——只有**已启用**的源缺席才说明这次决定是在信息不全的情况下做的。
 func TestNeedsLyricsRetryIgnoresDisabledSources(t *testing.T) {
 	saved := features()

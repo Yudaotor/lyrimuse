@@ -157,11 +157,17 @@ func TestListedAlbumLyricsSearchIsWired(t *testing.T) {
 		"\tsearchAlbum, listedAlbum := lyricsSearchAlbum(ctx, album, \"\", durationSecs, artist, title)\n",
 		"\tne, scored = scoredLyricCandidates(roundCtx, artist, title, searchAlbum, durationSecs)\n",
 		"\te.LyricsListedAlbum = listedAlbum\n",
-		"} else if listedAlbumLyricsWorthRecheck(e, album, pinned, features().LyricsAutoUpgrade) &&\n" +
-			"\t\t\t!enrichInflight[key] && listedAlbumLyricsRecheckOnce(key) {",
+		"\t\trecheck := lyricsRecheckForLocked(key, e, lyricsRecheckScene{\n\t\t\talbum: album, ",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("enrich.go 缺 %q", want)
 		}
+	}
+	recheck, err := os.ReadFile("lyricsrecheck.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "listedAlbumLyricsWorthRecheck(e, s.album, s.pinned, auto) && !listedAlbumLyricsRechecked[key]"; !strings.Contains(string(recheck), want) {
+		t.Errorf("lyricsrecheck.go 缺 %q", want)
 	}
 }

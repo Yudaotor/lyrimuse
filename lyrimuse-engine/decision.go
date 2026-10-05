@@ -143,7 +143,7 @@ type lyricsDecisionCandidate struct {
 }
 
 // buildLyricsDecision 把一轮完整评估固化成决策记录。picked 传 nil 表示没选出;
-// applied 表示这次评估的胜者有没有真的写进缓存(见 lyricsDecision.Applied)。
+// applied 表示这次评估的胜者有没有真的写进缓存(见 lyricsDecision.Applied);extra 追加进决策日志那一行。
 // 决策存档的 path 取值全集。
 //
 // 新增一条**必须同时**在 App 侧 LyricsDecisionSheet.pathLabel 那个 switch 里补中文译名 ——
@@ -178,10 +178,10 @@ func lyricsDecisionPaths() []string {
 
 func buildLyricsDecision(
 	path, artist, title, album string, durationSecs float64,
-	scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, applied bool,
+	scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, applied bool, extra ...any,
 ) *lyricsDecision {
 	d := newLyricsDecision(path, artist, title, album, durationSecs, scored, picked, applied)
-	logLyricsDecision(d, picked, false)
+	logLyricsDecision(d, picked, false, extra...)
 	return d
 }
 

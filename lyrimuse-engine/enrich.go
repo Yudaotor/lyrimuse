@@ -803,6 +803,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if musicVideoLyricsStaleLocked(hintKey, e) {
 			wrongDuration = true
 		}
+		// 已经有词、值得再全源搜一轮的几个理由,下面分支链里一个分支起一轮、全部带上(见 lyricsRecheck)。
+		recheck := lyricsRecheckForLocked(key, e, lyricsRecheckScene{
+			album: album, bundleID: bundleID, kasetVideoID: kasetVideoID, pinned: pinned, wrongDuration: wrongDuration,
+			kkboxLyrics: kkboxInfo.lyrics, amazonLyrics: amazonLyricsAvail, spotifyLyrics: spotifyLyricsAvail,
+		})
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
 		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送这一档时才
 		// 起——后一条门槛避免同一首歌每次重播都重新取一遍设备封面(coverSource 一旦
@@ -832,34 +837,12 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if needsLyricsRescore(e, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go rescoreLyrics(context.Background(), key, artist, title, album, durationSecs)
-		} else if listedAlbumLyricsWorthRecheck(e, album, pinned, features().LyricsAutoUpgrade) &&
-			!enrichInflight[key] && listedAlbumLyricsRecheckOnce(key) {
-			// YouTube Music 登记的专辑判出来了,这份词最近一轮没带着它搜(见 listedAlbumLyricsWorthRecheck)。
+		} else if recheck.due() && !enrichInflight[key] {
+			// 已经有词、值得再全源搜一轮:这一刻成立的理由这一轮全部带上(见 lyricsRecheck)。
+			recheck.consumeLocked(key)
 			enrichInflight[key] = true
-			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
-		} else if kkboxLyricsWorthRecheck(e, bundleID, pinned, features().LyricsAutoUpgrade, kkboxInfo.lyrics) &&
-			!enrichInflight[key] && kkboxLyricsRecheckOnce(key) {
-			// KKBOX 自己的词在这首被预解析之后才有(见 kkboxLyricsWorthRecheck),让它进一次打分。
-			enrichInflight[key] = true
-			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
-		} else if amazonLyricsWorthRecheck(e, bundleID, pinned, features().LyricsAutoUpgrade, amazonLyricsAvail) &&
-			!enrichInflight[key] && amazonLyricsRecheckOnce(key) {
-			// 这首当初不是用 Amazon Music 放着解析的,它本地现在有词(见 amazonLyricsWorthRecheck),让它进一次打分。
-			enrichInflight[key] = true
-			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
-		} else if spotifyLyricsWorthRecheck(e, bundleID, pinned, features().LyricsAutoUpgrade, spotifyLyricsAvail) &&
-			!enrichInflight[key] && spotifyLyricsRecheckOnce(key) {
-			// Musixmatch 当初没给出词,Spotify 缓存里现在有(见 spotifyLyricsWorthRecheck),让它进一次打分。
-			enrichInflight[key] = true
-			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
-		} else if kasetLyricsWorthRecheck(e, bundleID, kasetVideoID, kasetAudioVideoIDFor(kasetVideoID), pinned,
-			features().LyricsAutoUpgrade, lyricSourceEnabled("lyricfind")) && !enrichInflight[key] && kasetLyricsRecheckOnce(key) {
-			// 这份词最近一轮没按这一版的 videoId 问过 Kaset 自家那个源(见 kasetLyricsWorthRecheck)。
-			enrichInflight[key] = true
-			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
-		} else if needsLyricsRetry(e, wrongDuration, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
-			enrichInflight[key] = true
-			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, false)
+			go retryLyricsUpgradeWith(context.Background(), key, artist, title, album, durationSecs, false,
+				lyricsRescoreOpts{reasons: recheck.String()})
 		} else if needsBackgroundVocalsBackfill(e) && !enrichInflight[key] && bgBackfillOnce(key) {
 			// 存量 amll / applemusic 条目补背景人声,只重取那一个源、不动正文(见 bgbackfill.go)。
 			enrichInflight[key] = true
@@ -1576,7 +1559,7 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	// 实在差,250 分也翻不过来),重试次数上限会兜住,不会没完没了地重搜。
 	//
 	// kkbox 不走这条:它的词只在用 KKBOX 放过之后才进缓存,出现在候选里时几乎总是已经带着同源加权打过分了,「没选它」
-	// 就是结论(它只有逐行,输给逐字源是常态),走这条会让每首用 KKBOX 放的歌都连着全源重搜到次数上限。它什么时候值得
+	// 就是结论(它只有逐行,输给逐字源是常态),走这条会让每首用 KKBOX 放的歌都白白全源重搜到次数上限。它什么时候值得
 	// 重来一次由 kkboxLyricsWorthRecheck 管。lyricfind 在条目记下按 videoId 问过它(LyricsNativeVideoID)之后同理:那一轮
 	// 已经带着同源加权比过,再搜结论不变;什么时候值得再按 videoId 问一次由 kasetLyricsWorthRecheck 管。
 	nativeMissedOut := hasNativeLyricSource() && !isNativeLyricSource(e.LyricsSource) &&
@@ -1606,8 +1589,13 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	// 同源候选当初落选:这本身就是重来一次的理由,不必再要求"有源缺席"。下面那段找的是
 	// "有源当初没答上话",跟这里说的"答了但没选它"是两回事 —— 混在一起会让这条路径永远
 	// 返回 false。
+	//
+	// 越过的只是「有源缺席」,节流照样要过:离上一轮重试(不管因为什么起的)不到 lyricsRetryInterval 就不来。
+	// 别写成直接返回 true —— 那一轮已经带着同源加权、按这一刻的时长评过,输的照样输、时长照样对不上,条件
+	// 原样成立,下一拍又起一轮,一直跑到次数上限。基准只看 LyricsRetryTS、不看 TS:换了播放器、换了版本是
+	// 解析之后才有的新情况,条目刚解析过也要马上给这一次。见 09 章决策 182。
 	if nativeMissedOut || wrongDuration {
-		return true
+		return time.Now().Unix()-e.LyricsRetryTS >= int64(lyricsRetryInterval/time.Second)
 	}
 	// 「缺席」= 这个源这一轮压根没露面(超时 / 失败),看应答名单(给出过候选就算,哪怕是负分候选)。
 	// 拿「给出了能用候选」的名单判,开着十几个源时几乎每条都算有源缺席。老条目没记应答名单时退回它。
@@ -1786,7 +1774,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	path = opts.decisionPath(path)
 	// 无论换没换,这一轮完整评估都值得留证(Applied 区分两种含义,见 decision.go)。
 	e.LyricsDecision = buildLyricsDecision(
-		path, artist, title, searchAlbum, durationSecs, scored, picked, upgraded)
+		path, artist, title, searchAlbum, durationSecs, scored, picked, upgraded, opts.logAttrs()...)
 	e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
 	e.LyricsDecision.QueriesTried = queries.queries()
 	traceLyricsDecision(key, e.LyricsDecision)

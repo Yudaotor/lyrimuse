@@ -205,13 +205,19 @@ func TestKasetNativeLyricsRecheckWiring(t *testing.T) {
 	}
 	s := string(src)
 	for _, want := range []string{
-		"kasetLyricsWorthRecheck(e, bundleID, kasetVideoID, kasetAudioVideoIDFor(kasetVideoID), pinned,",
-		"&& !enrichInflight[key] && kasetLyricsRecheckOnce(key) {",
+		"bundleID: bundleID, kasetVideoID: kasetVideoID,",
 		"p.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("enrich.go 里要有: %s", want)
 		}
+	}
+	recheck, err := os.ReadFile("lyricsrecheck.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "kasetLyricsWorthRecheck(e, s.bundleID, s.kasetVideoID, kasetAudioVideoIDFor(s.kasetVideoID), s.pinned, auto,"; !strings.Contains(string(recheck), want) {
+		t.Errorf("lyricsrecheck.go 里要有: %s", want)
 	}
 	if n := strings.Count(s, "e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)"); n != 3 {
 		t.Errorf("首次解析最终那份、升级重试、重打分三处都要记,现在 %d 处", n)
