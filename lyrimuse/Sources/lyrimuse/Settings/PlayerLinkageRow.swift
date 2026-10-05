@@ -94,24 +94,37 @@ struct PlayerBundleChipsRow: View {
 
     var body: some View {
         SettingsRow(icon: icon, title: title, subtitle: summary, help: help) {
-            SettingsFlowRow(spacing: PlayerChipMetrics.spacing) {
-                ForEach(choices) { choice in
-                    let selected = !excluded.contains(choice.id)
-                    PlayerChip(selected: selected, label: choice.name) {
-                        onToggle(choice.id, !selected)
-                    } icon: {
-                        if let player = choice.player {
-                            PlayerIconView(player: player, size: PlayerChipMetrics.iconSize)
-                        } else {
-                            TrustedPlayerIconView(bundleID: choice.id, size: PlayerChipMetrics.iconSize)
-                        }
+            PlayerBundleChips(choices: choices, excluded: excluded, onToggle: onToggle)
+                // 芯片数量由用户的信任列表决定(可能十几个),所以给一个上限让它换行,而不是像
+                // PlayerLinkageRow 那样 fixedSize 钉成一行——一行钉死在窄窗口下会把标题挤没。
+                // 320 ≈ 十枚芯片:最窄窗口(760 − 侧栏 170)下仍给标题留 200pt 以上。
+                .frame(maxWidth: PlayerChipMetrics.flowMaxWidth, alignment: .trailing)
+        }
+    }
+}
+
+/// 一排可勾选的播放器芯片(按 bundle id),放不下就换行。`PlayerBundleChipsRow` 和 Discord 页「显示哪些播放器」的浮层共用。
+struct PlayerBundleChips: View {
+    let choices: [PlayerBundleChoice]
+    /// 未勾选(被排除)的 bundle id。
+    let excluded: Set<String>
+    /// (bundle id, 改后是否勾选)
+    let onToggle: (String, Bool) -> Void
+
+    var body: some View {
+        SettingsFlowRow(spacing: PlayerChipMetrics.spacing) {
+            ForEach(choices) { choice in
+                let selected = !excluded.contains(choice.id)
+                PlayerChip(selected: selected, label: choice.name) {
+                    onToggle(choice.id, !selected)
+                } icon: {
+                    if let player = choice.player {
+                        PlayerIconView(player: player, size: PlayerChipMetrics.iconSize)
+                    } else {
+                        TrustedPlayerIconView(bundleID: choice.id, size: PlayerChipMetrics.iconSize)
                     }
                 }
             }
-            // 芯片数量由用户的信任列表决定(可能十几个),所以给一个上限让它换行,而不是像
-            // PlayerLinkageRow 那样 fixedSize 钉成一行——一行钉死在窄窗口下会把标题挤没。
-            // 320 ≈ 十枚芯片:最窄窗口(760 − 侧栏 170)下仍给标题留 200pt 以上。
-            .frame(maxWidth: PlayerChipMetrics.flowMaxWidth, alignment: .trailing)
         }
     }
 }

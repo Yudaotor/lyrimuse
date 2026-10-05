@@ -176,6 +176,8 @@ enum ConfigPortability {
         // np:notchLyricsKaraoke / 既有的 np:menuBarLyricsKaraoke),旧键只在 AppSettings.init() 里
         // 读一次做迁移(读在前、init 末尾才清)。
         "np:preferWordLevelKaraoke",
+        // Discord「暂时隐藏」记下的上次时长,只给菜单栏「快速开关」里那一项用;那一项撤掉了。
+        "np:discordHideMinutes",
     ]
 
     /// 导出/导入都要跳过的键 = 机器专属的 + 已经死掉的。

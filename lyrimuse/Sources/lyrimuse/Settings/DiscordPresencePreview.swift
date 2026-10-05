@@ -2,11 +2,12 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-/// Discord 页顶上的预览:照 Discord 桌面版深色主题的样子画两处——服务器成员名单里你那一行(头像、名字,下面是绿色音符
-/// 加「状态里显示」选的那一项),以及别人点开你资料卡时「当前动态」那一块(「正在听 应用名」、封面、歌名、歌手、专辑、进度)。
-/// 尺寸、字号、颜色见 12 章决策 36。内容就是此刻会发出去的那一份(`DiscordPresence.activity`);没在放歌、或者这首不会显示时
-/// 用一份示例。不联网:封面用 App 手上那张,没有公网封面时跟 Discord 一样显示应用图标;头像用 `DiscordAvatarStore` 已经取到的
-/// 那张。画面不随开关、暂停、暂时隐藏变淡,这些情况只写在下面那行说明里。设置窗口看不见时停表。
+/// Discord 页顶上的预览,画成 Discord 桌面版深色主题的一角:右边服务器成员名单(两位示例好友夹着你,你那一行头像、名字,
+/// 下面是绿色音符加「名字下面显示」选的那一项),左边是别人点开你时从名单旁弹出的资料卡(横幅、头像、名字、用户名,「当前动态」
+/// 里「正在听 应用名」、封面、歌名、歌手、专辑、进度)。尺寸、字号、颜色见 12 章决策 36;资料卡上半截按比例缩小过。内容就是此刻
+/// 会发出去的那一份(`DiscordPresence.activity`);没在放歌、或者这首不会显示时用一份示例。不联网:封面用 App 手上那张,没有公网
+/// 封面时跟 Discord 一样显示应用图标;头像用 `DiscordAvatarStore` 已经取到的那张,横幅用它的平均色。画面不随开关、暂停、
+/// 暂时隐藏变淡,这些情况只写在下面那行说明里。设置窗口看不见时停表。
 struct DiscordPresencePreview: View {
     @ObservedObject private var discord = DiscordPresenceController.shared
     @ObservedObject private var avatars = DiscordAvatarStore.shared
@@ -20,15 +21,28 @@ struct DiscordPresencePreview: View {
         static let headerText = Color(red: 0xFB / 255, green: 0xFB / 255, blue: 0xFB / 255)
         static let cardText = Color(red: 0xEF / 255, green: 0xEF / 255, blue: 0xF1 / 255)
         static let menuIcon = Color(red: 0xAB / 255, green: 0xAC / 255, blue: 0xB2 / 255)
+        /// 资料卡里活动那一块的底色,比资料卡亮一点。
+        static let card = Color(red: 0x2E / 255, green: 0x2F / 255, blue: 0x35 / 255)
+        static let profileName = Color(red: 0xF2 / 255, green: 0xF3 / 255, blue: 0xF5 / 255)
+        static let sectionTitle = Color(red: 0xB5 / 255, green: 0xBA / 255, blue: 0xC1 / 255)
+        /// 成员名单里点开资料卡时你那一行的底色。
+        static let selectedRow = Color.white.opacity(0.06)
+        /// 没有头像可取色时横幅用 Discord 的蓝紫。
+        static let defaultBanner = Color(red: 0x58 / 255, green: 0x65 / 255, blue: 0xF2 / 255)
         static let green = Color(red: 0x45 / 255, green: 0xA3 / 255, blue: 0x66 / 255)
         static let progressTrack = Color(red: 151 / 255, green: 151 / 255, blue: 159 / 255).opacity(0.16)
         /// 暂停小图的底色,跟传到 Discord 的那张同色。
         static let pausedBadge = Color(red: 0x4E / 255, green: 0x50 / 255, blue: 0x58 / 255)
     }
 
-    /// 资料卡那一块的宽度,和它最高时(有专辑、有进度条)的高度。舞台按最高的留位置,暂停时进度条没了页面也不跳。
-    private static let cardWidth: CGFloat = 268
-    private static let cardTallestHeight: CGFloat = 110
+    /// 资料卡宽 300(实测),里面活动那一块左右各让 16,正好 268。横幅实测 105、头像 80,这里缩成 60 和 64,舞台不至于太高。
+    private static let popoutWidth: CGFloat = 300
+    private static let popoutInset: CGFloat = 16
+    private static let bannerHeight: CGFloat = 60
+    private static let popoutAvatar: CGFloat = 64
+    private static let popoutAvatarRing: CGFloat = 5
+    /// 资料卡最高时(活动那一块有专辑、有进度条)的高度。舞台按最高的留位置,暂停时进度条没了页面也不跳。
+    private static let popoutTallestHeight: CGFloat = 300
     /// 小图跟封面之间那一圈弹窗底色的宽度。
     private static let smallImageRing: CGFloat = 2
 
@@ -38,6 +52,8 @@ struct DiscordPresencePreview: View {
         /// 有公网封面时用 App 手上那张;nil = 跟 Discord 一样显示应用图标。
         let artwork: NSImage?
         let progress: (elapsedMs: Int64, totalMs: Int64)?
+        /// 只有开始时间时底下那一行的时长(暂停后保留的那份恒为 0)。
+        let elapsed: Int64?
         let caption: String
 
         var activityName: String { activity.name ?? application.registeredName }
@@ -64,11 +80,12 @@ struct DiscordPresencePreview: View {
         let live = discord.previewTrack(now: now)
         let pausedKept = live != nil && !playback.isPlayingSmoothed && settings.discordKeepWhenPaused
         let track = live ?? sampleTrack
-        let smallImage: DiscordPresence.SmallImage? = pausedKept
-            ? .paused(L10n.t("已暂停"))
-            : DiscordPresence.smallImage(for: settings.discordBadge, applicationID: track.applicationID)
-        let activity = DiscordPresence.activity(track, statusLine: settings.discordStatusDisplay, now: now,
-                                                smallImage: smallImage)
+        let activity = pausedKept
+            ? DiscordPresence.pausedActivity(track, statusLine: settings.discordStatusDisplay, now: now,
+                                             pausedText: L10n.t("已暂停"), pausedNameFormat: L10n.t("%@（已暂停）"))
+            : DiscordPresence.activity(track, statusLine: settings.discordStatusDisplay, now: now,
+                                       smallImage: DiscordPresence.smallImage(for: settings.discordBadge,
+                                                                              applicationID: track.applicationID))
         let caption: String
         if !settings.discordPresenceEnabled {
             caption = L10n.t("预览 · 开关关着，Discord 上不会显示")
@@ -86,6 +103,7 @@ struct DiscordPresencePreview: View {
             application: DiscordPresence.application(forApplicationID: activity.applicationID),
             artwork: live != nil && activity.assets != nil ? playback.highResArtworkImage ?? playback.artworkImage : nil,
             progress: DiscordPresence.progress(of: activity, now: now),
+            elapsed: DiscordPresence.elapsed(of: activity, now: now),
             caption: caption)
     }
 
@@ -105,36 +123,52 @@ struct DiscordPresencePreview: View {
         return L10n.t("你")
     }
 
+    /// 资料卡名字下面的用户名(不带 @);没连上时不写。
+    private var userHandle: String? {
+        if case .connected(let user?) = discord.status { return user.username }
+        return nil
+    }
+
     // MARK: - 舞台
 
     private func stage(_ model: Model) -> some View {
         HStack(alignment: .top, spacing: 16) {
-            section(L10n.t("服务器成员名单")) { memberRow(model) }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            section(L10n.t("资料卡 · 当前动态")) { activityCard(model) }
-                .frame(width: Self.cardWidth)
+            profilePopout(model)
+                .frame(width: Self.popoutWidth)
+            memberList(model)
+                .frame(minWidth: 150, maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(minHeight: Self.cardTallestHeight + 20, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: Self.popoutTallestHeight, alignment: .top)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Palette.window))
     }
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 10, weight: .semibold))
+    /// 成员名单那一栏:分组标题「在线 — 3」(实测 14pt 中粗),两位示例好友(变淡)夹着你,你那一行带点开资料卡时的选中底色。
+    private func memberList(_ model: Model) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(String(format: L10n.t("在线 — %d"), 3))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Palette.memberText)
-            content()
+                .frame(height: 18)
+                .padding(.leading, 8)
+                .padding(.bottom, 4)
+            friendRow(name: "Momo", tint: Color(red: 0.36, green: 0.37, blue: 0.40),
+                      status: String(format: L10n.t("正在玩 %@"), "Minecraft"))
+            memberRow(model)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Palette.selectedRow))
+            friendRow(name: "Ryan", tint: Color(red: 0.42, green: 0.40, blue: 0.36), status: nil)
         }
+        .lineLimit(1)
     }
 
-    /// 成员名单里那一行:头像带在线点,名字,下面一行是绿色音符加状态文字,没有「正在听」三个字。
+    /// 成员名单里你那一行:头像带在线点,名字,下面一行是绿色音符加状态文字,没有「正在听」三个字。
     private func memberRow(_ model: Model) -> some View {
         HStack(spacing: 12) {
             avatar(size: 32)
             VStack(alignment: .leading, spacing: 0) {
                 Text(userName)
                     .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Palette.cardText)
                     .frame(height: 20)
                 HStack(spacing: 4) {
                     Text("\u{266B}")
@@ -146,10 +180,94 @@ struct DiscordPresencePreview: View {
                 .frame(height: 16)
             }
             .foregroundStyle(Palette.memberText)
-            .lineLimit(1)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 示例好友:灰色圆头像写首字母,名字下面可有一行状态,整行变淡,一看就知道是陪衬。
+    private func friendRow(name: String, tint: Color, status: String?) -> some View {
+        HStack(spacing: 12) {
+            Text(String(name.prefix(1)))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(tint))
+                .overlay(alignment: .bottomTrailing) { onlineDot(size: 10, ring: Palette.window) }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(name)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(height: 20)
+                if let status {
+                    Text(status)
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(height: 16)
+                }
+            }
+            .foregroundStyle(Palette.memberText)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(minHeight: 42)
+        .opacity(0.5)
+    }
+
+    /// 点开你时弹出的资料卡:横幅(头像的平均色),压在横幅上的头像,名字、用户名,「当前动态」和活动那一块。
+    private func profilePopout(_ model: Model) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle()
+                .fill(bannerColor)
+                .frame(height: Self.bannerHeight)
+            DiscordAvatarImage(size: Self.popoutAvatar)
+                .padding(Self.popoutAvatarRing)
+                .background(Circle().fill(Palette.popout))
+                .overlay(alignment: .bottomTrailing) {
+                    onlineDot(size: 12, ring: Palette.popout)
+                        .offset(x: -Self.popoutAvatarRing, y: -Self.popoutAvatarRing)
+                }
+                .padding(.leading, Self.popoutInset - Self.popoutAvatarRing)
+                .padding(.top, -(Self.popoutAvatar / 2 + Self.popoutAvatarRing))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(userName)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(Palette.profileName)
+                    .frame(height: 24)
+                if let userHandle {
+                    Text(userHandle)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Palette.headerText)
+                        .frame(height: 18)
+                }
+                Text(L10n.t("当前动态"))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.sectionTitle)
+                    .frame(height: 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
+                activityCard(model)
+            }
+            .lineLimit(1)
+            .padding(.horizontal, Self.popoutInset)
+            .padding(.top, 6)
+            .padding(.bottom, 14)
+        }
+        .background(Palette.popout)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
+    }
+
+    private var bannerColor: Color {
+        if case .connected = discord.status, let average = avatars.averageColor { return Color(nsColor: average) }
+        return Palette.defaultBanner
+    }
+
+    private func onlineDot(size: CGFloat, ring: Color) -> some View {
+        Circle()
+            .fill(Palette.green)
+            .frame(width: size, height: size)
+            .overlay(Circle().stroke(ring, lineWidth: 3))
+            .offset(x: 2, y: 2)
     }
 
     /// 资料卡里「当前动态」那一块:标题「正在听 应用名」带右上角「···」,下面是 60pt 封面和歌名、歌手、专辑,在放时文字列底下
@@ -200,6 +318,9 @@ struct DiscordPresencePreview: View {
                     if let progress = model.progress {
                         progressRow(progress)
                             .padding(.top, 4)
+                    } else if let elapsed = model.elapsed {
+                        elapsedRow(elapsed)
+                            .padding(.top, 4)
                     }
                 }
                 .foregroundStyle(Palette.cardText)
@@ -209,30 +330,14 @@ struct DiscordPresencePreview: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Palette.popout))
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Palette.card))
     }
 
     // MARK: - 零件
 
     private func avatar(size: CGFloat) -> some View {
-        Group {
-            if case .connected = discord.status, let image = avatars.image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                accountIconBadge(.discord, size: size, cornerRadius: 0)
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .overlay(alignment: .bottomTrailing) {
-            Circle()
-                .fill(Palette.green)
-                .frame(width: size * 0.3125, height: size * 0.3125)
-                .overlay(Circle().stroke(Palette.window, lineWidth: 3))
-                .offset(x: 2, y: 2)
-        }
+        DiscordAvatarImage(size: size)
+            .overlay(alignment: .bottomTrailing) { onlineDot(size: size * 0.3125, ring: Palette.window) }
     }
 
     @ViewBuilder private func largeImage(_ model: Model) -> some View {
@@ -253,7 +358,7 @@ struct DiscordPresencePreview: View {
                     .frame(width: 24, height: 24)
                     .clipShape(Circle())
                     .padding(Self.smallImageRing)
-                    .background(Circle().fill(Palette.popout))
+                    .background(Circle().fill(Palette.card))
             }
             .help(assets.smallText ?? "")
             .offset(x: 4 + Self.smallImageRing, y: 4 + Self.smallImageRing)
@@ -313,6 +418,21 @@ struct DiscordPresencePreview: View {
             Text(Self.clock(progress.totalMs))
         }
         .font(.system(size: 12).monospacedDigit())
+        .frame(height: 16)
+    }
+
+    /// 只有开始时间时那一行:绿色音符加时长,分钟不补零(0:00、2:40)。
+    private func elapsedRow(_ ms: Int64) -> some View {
+        let seconds = Int(max(0, ms / 1000))
+        let text = seconds >= 3600
+            ? String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+            : String(format: "%d:%02d", seconds / 60, seconds % 60)
+        return HStack(spacing: 4) {
+            Text("\u{266B}")
+            Text(text)
+        }
+        .font(.system(size: 12).monospacedDigit())
+        .foregroundStyle(Palette.green)
         .frame(height: 16)
     }
 

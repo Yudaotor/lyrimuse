@@ -251,6 +251,12 @@ public enum DiscordPresence {
         return (min(max(elapsed, 0), total), total)
     }
 
+    /// 只有开始时间、没有结束时间时 Discord 在卡片底下写的时长:从开始到现在,开始在将来时是 0。
+    public static func elapsed(of activity: DiscordActivity, now: Date) -> Int64? {
+        guard let timestamps = activity.timestamps, timestamps.end == nil else { return nil }
+        return max(0, Int64((now.timeIntervalSince1970 * 1000).rounded()) - timestamps.start)
+    }
+
     /// 暂停后先留着原来那份这么久,再按设置清掉或换成暂停的那份:切歌间隙、随手暂停一下都不闪。
     public static let pauseGrace: TimeInterval = 10
     /// Discord 对文本字段的限制,按 UTF-16 码元数(它的校验按 JavaScript 的字符串长度算)。
@@ -315,11 +321,11 @@ public enum DiscordPresence {
     }
 
     /// 暂时隐藏期间(`hiddenUntil` 之前)、track 为 nil(没在放、广告、电台口白、排除的播放器)、没歌名或没歌手时清掉。
-    /// 在放时按 `badge` 带角标(`smallImage(for:applicationID:)`)。暂停满 `pauseGrace` 后 `keepWhenPaused` 时换成不带
-    /// 时间戳、带暂停小图(悬停文字 `pausedText`)的那份,否则清掉。
+    /// 在放时按 `badge` 带角标(`smallImage(for:applicationID:)`)。暂停满 `pauseGrace` 后 `keepWhenPaused` 时换成暂停
+    /// 的那份(`pausedActivity`,暂停小图的悬停文字 `pausedText`,应用名按 `pausedNameFormat` 拼),否则清掉。
     public static func intent(track: Track?, pausedSince: Date?, statusLine: StatusLine, keepWhenPaused: Bool,
-                              badge: Badge = .none, pausedText: String = "Paused", hiddenUntil: Date? = nil,
-                              now: Date) -> Intent {
+                              badge: Badge = .none, pausedText: String = "Paused", pausedNameFormat: String = "%@ (Paused)",
+                              hiddenUntil: Date? = nil, now: Date) -> Intent {
         if let hiddenUntil, now < hiddenUntil { return .clear }
         guard let track, !trimmed(track.title).isEmpty, !trimmed(track.artist).isEmpty else { return .clear }
         guard let pausedSince else {
@@ -329,7 +335,23 @@ public enum DiscordPresence {
         let graceEnds = pausedSince.addingTimeInterval(pauseGrace)
         if now < graceEnds { return .hold(until: graceEnds) }
         guard keepWhenPaused else { return .clear }
-        return .show(activity(track, statusLine: statusLine, now: nil, smallImage: .paused(pausedText)))
+        return .show(pausedActivity(track, statusLine: statusLine, now: now, pausedText: pausedText,
+                                    pausedNameFormat: pausedNameFormat))
+    }
+
+    /// 暂停后保留的那份。Discord 没有暂停状态:不带时间戳它写这条状态挂了多久、一直往上走;开始时间在将来时停在 0:00。
+    /// 开始时间取「当前这个十二小时段的起点再加一天」,总在十二到二十四小时之后:同一段里内容不变、不重发,跨段重发一次。
+    /// 别放得太远,太远 Discord 整条不显示(见 12 章决策 50)。应用名后面加上暂停字样(`pausedNameFormat`,没有播放器名
+    /// 时拿应用的注册名去拼),封面角上是暂停图标。
+    public static func pausedActivity(_ track: Track, statusLine: StatusLine, now: Date, pausedText: String,
+                                      pausedNameFormat: String) -> DiscordActivity {
+        var paused = activity(track, statusLine: statusLine, now: nil, smallImage: .paused(pausedText))
+        let block: Int64 = 12 * 3_600_000
+        let nowMs = Int64((now.timeIntervalSince1970 * 1000).rounded())
+        paused.timestamps = DiscordActivity.Timestamps(start: nowMs / block * block + 2 * block)
+        let player = paused.name ?? application(forApplicationID: track.applicationID).registeredName
+        paused.name = fitted(String(format: pausedNameFormat, player))
+        return paused
     }
 
     /// `now` 为 nil 时不带时间戳(暂停时保留的那份)。有位置才出时间戳,有时长才出进度条。没有封面就不给大图,Discord 显示

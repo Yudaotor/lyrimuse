@@ -9,6 +9,7 @@ func runDiscordPresenceTests() {
     checkDiscordWire()
     checkDiscordActivity()
     checkDiscordSmallImage()
+    checkDiscordPaused()
     checkDiscordArtistLinks()
     checkDiscordGate()
     checkDiscordConnection()
@@ -257,7 +258,8 @@ private func checkDiscordActivity() {
                 "Discord 意图: 刚暂停先留着,宽限满了再看")
     expectEqual(intent(sampleTrack(), pausedFor: 10), .clear, "Discord 意图: 暂停满宽限默认清掉")
     expectEqual(intent(sampleTrack(), pausedFor: 10, keep: true),
-                .show(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: nil, smallImage: .paused("Paused"))),
+                .show(DiscordPresence.pausedActivity(sampleTrack(), statusLine: .title, now: now, pausedText: "Paused",
+                                                     pausedNameFormat: "%@ (Paused)")),
                 "Discord 意图: 选了暂停时保留,换成不带进度条、带暂停小图的那份")
 }
 
@@ -319,7 +321,9 @@ private func checkDiscordSmallImage() {
     expectEqual(intent(appleMusicTrack, badge: .player),
                 .show(DiscordPresence.activity(appleMusicTrack, statusLine: .title, now: now, smallImage: .player(.appleMusic))),
                 "Discord 意图: 角标选播放器时带当前播放器的图标")
-    expectEqual(intent(sampleTrack(), pausedFor: 10, keep: true, badge: .none), .show(paused),
+    expectEqual(intent(sampleTrack(), pausedFor: 10, keep: true, badge: .none),
+                .show(DiscordPresence.pausedActivity(sampleTrack(), statusLine: .title, now: now, pausedText: "已暂停",
+                                                     pausedNameFormat: "%@ (Paused)")),
                 "Discord 意图: 暂停后保留的那份带暂停图标,不受角标设置管")
     expectEqual(intent(sampleTrack(), pausedFor: 3, keep: true), .hold(until: now.addingTimeInterval(7)),
                 "Discord 意图: 宽限内还是在放那份,先不换暂停图标")
@@ -328,6 +332,34 @@ private func checkDiscordSmallImage() {
                 "Discord 意图: 暂时隐藏期间暂停保留的那份也清掉")
     expectEqual(intent(sampleTrack(), hiddenUntil: now), .show(badged), "Discord 意图: 隐藏到点就恢复")
     expectEqual(DiscordPresence.hideDurations.contains(60), true, "Discord 暂时隐藏: 默认的 60 分钟在可选时长里")
+}
+
+private func checkDiscordPaused() {
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    let nowMs: Int64 = 1_000_000_000
+    let hour: Int64 = 3_600_000
+    func pausedAt(_ date: Date, _ track: DiscordPresence.Track = sampleTrack()) -> DiscordActivity {
+        DiscordPresence.pausedActivity(track, statusLine: .player, now: date, pausedText: "已暂停", pausedNameFormat: "%@（已暂停）")
+    }
+    let paused = pausedAt(now)
+    expectEqual(paused.name, "Apple Music（已暂停）", "Discord 暂停: 应用名后面加（已暂停）")
+    expectEqual(paused.statusDisplayType, 0, "Discord 暂停: 状态里显示播放器时成员名单那一行也带（已暂停）")
+    expectEqual(paused.timestamps?.end, nil, "Discord 暂停: 不给结束时间")
+    let start = paused.timestamps?.start ?? 0
+    expectEqual(start > nowMs + 12 * hour && start <= nowMs + 24 * hour, true, "Discord 暂停: 开始时间在十二到二十四小时之后")
+    expectEqual(DiscordPresence.elapsed(of: paused, now: now), 0, "Discord 暂停: 开始在将来,卡片底下停在 0:00")
+    expectEqual(DiscordPresence.elapsed(of: paused, now: now.addingTimeInterval(11 * 3600)), 0, "Discord 暂停: 十一小时后还是 0:00")
+    expectEqual(DiscordPresence.progress(of: paused, now: now) == nil, true, "Discord 暂停: 没有进度条")
+    expectEqual(paused.assets?.smallImage, DiscordPresence.pausedBadgeURL, "Discord 暂停: 封面角上是暂停图标")
+    expectEqual(pausedAt(now.addingTimeInterval(3600)).timestamps, paused.timestamps, "Discord 暂停: 同一个十二小时段里内容不变,不重发")
+    expectEqual(pausedAt(now.addingTimeInterval(12 * 3600)).timestamps?.start, start + 12 * hour, "Discord 暂停: 跨段时往后挪十二小时")
+    var unnamed = sampleTrack()
+    unnamed.playerName = nil
+    expectEqual(pausedAt(now, unnamed).name, "Lyrimuse（已暂停）", "Discord 暂停: 没有播放器名时拿应用的注册名去拼")
+    let startOnly = DiscordPresence.activity(sampleTrack(duration: nil), statusLine: .title, now: now)
+    expectEqual(DiscordPresence.elapsed(of: startOnly, now: now), 30_000, "Discord 时长: 只有开始时间时写从开始到现在")
+    expectEqual(DiscordPresence.elapsed(of: DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now), now: now),
+                nil, "Discord 时长: 有结束时间时走进度条,不写这一行")
 }
 
 private func checkDiscordArtistLinks() {

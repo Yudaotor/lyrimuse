@@ -262,6 +262,27 @@ final class LastfmAvatarStore: ObservableObject {
     }
 }
 
+/// 圆形的 Discord 头像:连上 Discord 并取到了就画头像,否则画 Discord 标志。
+struct DiscordAvatarImage: View {
+    @ObservedObject private var avatars = DiscordAvatarStore.shared
+    @ObservedObject private var discord = DiscordPresenceController.shared
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if case .connected = discord.status, let image = avatars.image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                accountIconBadge(.discord, size: size, cornerRadius: 0)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+}
+
 /// 身份区 Discord 那一行的头像。连上 Discord 时按握手拿到的账号取一次(`DiscordUser.avatarURL`),只在内存里缓存一张,
 /// 不落盘、不加 UserDefaults 键;失败后 10 分钟内不重试。下载记进 NetworkAuditLog。
 @MainActor
@@ -269,6 +290,8 @@ final class DiscordAvatarStore: ObservableObject {
     static let shared = DiscordAvatarStore()
 
     @Published private(set) var image: NSImage?
+    /// 头像的平均色:没设横幅的人,Discord 用头像的主色画资料卡横幅,预览照这个画。
+    @Published private(set) var averageColor: NSColor?
 
     private var loadedURL: URL?
     private var lastAttempt: Date?
@@ -292,6 +315,7 @@ final class DiscordAvatarStore: ObservableObject {
         } else {
             inflight?.cancel()
             image = nil
+            averageColor = nil
         }
         loadedURL = url
         lastAttempt = Date()
@@ -299,8 +323,29 @@ final class DiscordAvatarStore: ObservableObject {
             let fetched = await Self.download(url)
             guard let self, !Task.isCancelled, self.loadedURL == url else { return }
             self.image = fetched
+            self.averageColor = fetched.flatMap(Self.averageColor(of:))
             self.inflight = nil
         }
+    }
+
+    /// 整张图缩到一个像素取颜色。全透明时为 nil。
+    static func averageColor(of image: NSImage) -> NSColor? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let drawn: Bool = pixel.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+                return false
+            }
+            context.interpolationQuality = .medium
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard drawn, pixel[3] > 0 else { return nil }
+        let alpha = CGFloat(pixel[3])
+        return NSColor(srgbRed: CGFloat(pixel[0]) / alpha, green: CGFloat(pixel[1]) / alpha, blue: CGFloat(pixel[2]) / alpha,
+                       alpha: 1)
     }
 
     private static func download(_ url: URL) async -> NSImage? {

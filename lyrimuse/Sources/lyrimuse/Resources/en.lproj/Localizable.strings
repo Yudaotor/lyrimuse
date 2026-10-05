@@ -65,12 +65,14 @@
 "%@pt" = "%@pt";
 "%@–%@pt" = "%@–%@pt";
 "%@更新" = "Updated %@";
+"%@（已暂停）" = "%@ (Paused)";
 "%@（推荐）" = "%@ (recommended)";
 "%@（未安装）" = "%@ (not installed)";
 "%@，已下载" = "%@, downloaded";
 "%@，点击下载" = "%@, click to download";
 "%d 个源的歌词正文相同" = "%d sources returned identical lyrics";
 "%d 次" = "×%d";
+"%d 秒后清掉" = "Clear After %d Seconds";
 "/ %@ 页" = "of %@";
 "Amazon Music 专辑页" = "Amazon Music album page";
 "Amazon Music 歌手页" = "Amazon Music artist page";
@@ -213,7 +215,6 @@
 "不打分，按下面的顺序取第一个有结果的来源" = "No scoring — takes the first source below that returns lyrics";
 "不是带时间戳的歌词" = "Not timestamped lyrics";
 "不显示" = "Nothing";
-"不显示：%@" = "Not shown: %@";
 "不转换" = "As-is";
 "不透明度" = "Opacity";
 "与 %@ 正文相同" = "Same lyrics as %@";
@@ -467,7 +468,7 @@
 "只恢复迷你尺寸这一套，完整尺寸和窗口大小不动" = "Resets only the Mini Size settings; the Full Size and the window's dimensions stay as they are";
 "只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的读音在播放时实时生成，不计入" = "Counts only romanization stored in the cache and exported alongside the lyrics files. For other songs it is generated on the fly while playing and is not counted.";
 "只有勾选的播放器会 scrobble 到 Last.fm；默认全部勾选。" = "Only checked players scrobble to Last.fm; all checked by default.";
-"只有勾选的播放器会显示到 Discord；默认全部勾选。" = "Only checked players show on Discord; all checked by default.";
+"只有勾选的播放器会显示到 Discord；浏览器里的网页按浏览器算。" = "Only checked players show on Discord; web players count as the browser they play in.";
 "只统计能翻成当前译文语言的语言；译文语言自己和同一语系的语言不计，所以数字可能比「系统设置」里的少。语言包由 macOS 管理，翻译在本机完成" = "Counts only languages that can be translated into the current translation language; the target language itself and languages in the same family are excluded, so the number can be lower than in System Settings. Language packs are managed by macOS and translation runs on this Mac";
 "只让 Last.fm 记" = "Keep Last.fm";
 "只让 Lyrimuse 记…" = "Keep Lyrimuse…";
@@ -487,6 +488,7 @@
 "同步服务地址" = "Sync Server URL";
 "同步服务地址不对" = "The sync server URL looks wrong";
 "同步服务拒绝了推送（%d）" = "The sync server rejected the push (%d)";
+"名字下面显示" = "Shown Under Your Name";
 "名次跟上一期一样" = "Same rank as the previous period";
 "后台服务这次没把它们收进缓存，列表里暂时看不到；文件已经在歌词文件夹里，后台服务下次启动时会自动导入" = "The background service didn't take them into the cache this time, so they won't show in the list yet. The files are already in the lyrics folder and will be imported the next time the background service starts.";
 "后台正在查歌手来自哪里，稍后会出现在这里" = "Looking up where your artists are from — this appears here shortly";
@@ -516,8 +518,7 @@
 "在 Arc 菜单栏依次打开「View → Developer → Allow JavaScript from Apple Events」。Arc 的这几个菜单项在中文系统下也是英文。" = "In Arc’s menu bar: View → Developer → Allow JavaScript from Apple Events.";
 "在 Brave 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。" = "In Brave’s menu bar: View → Developer → Allow JavaScript from Apple Events.";
 "在 Chrome 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。" = "In Chrome’s menu bar: View → Developer → Allow JavaScript from Apple Events.";
-"在 Discord 上显示你正在听的歌" = "Show what you're listening to on Discord";
-"在 Discord 上隐藏 %@" = "Hide on Discord for %@";
+"在 Discord 上显示" = "Show on Discord";
 "在 Dock 中显示" = "Show in Dock";
 "在 Edge 菜单栏依次打开「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。" = "In Edge’s menu bar: View → Developer → Allow JavaScript from Apple Events.";
 "在 GitHub 提 issue" = "Request it on GitHub";
@@ -539,6 +540,7 @@
 "在歌词一格的最左或最右放一枚菜单栏图标，图标颜色从下往上涨表示播放进度：涨上来的用「已唱到」色，其余用「未唱到」色。只在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color rises from the bottom to show playback progress — the risen part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
 "在系统设置的「完全磁盘访问权限」里打开 Lyrimuse（列表里没有就点「+」把它加进去），再回到这里点「重启歌词引擎」——授权对已经在运行的歌词引擎不生效。" = "Turn on Lyrimuse under Full Disk Access in System Settings (if it isn’t listed, click “+” to add it), then come back and hit Restart Lyrics Engine — access doesn’t reach a lyrics engine that’s already running.";
 "在系统设置的「辅助功能」里打开 Lyrimuse。之前授权过、这里仍显示没有授权的话，把 Lyrimuse 那一项取消再勾上。" = "Turn on Lyrimuse under Accessibility in System Settings. If you granted it before and it still shows as not granted, uncheck Lyrimuse there and check it again.";
+"在线 — %d" = "Online — %d";
 "在菜单栏里" = "In the menu bar";
 "在设置中查看 Last.fm" = "View Last.fm in Settings";
 "在访达中显示" = "Show in Finder";
@@ -563,7 +565,6 @@
 "大约还要%@" = "about %@ to go";
 "套用主题之前手调的配色，点一下恢复" = "The colors you set before applying a theme. Click to restore them";
 "好" = "OK";
-"好友列表里「正在听」后面显示的内容" = "What appears after “Listening to” in your friends list";
 "好的" = "OK";
 "字体" = "Font";
 "字号" = "Font Size";
@@ -604,7 +605,6 @@
 "导出诊断…" = "Export Diagnostics…";
 "封面" = "Artwork";
 "封面位置" = "Artwork Position";
-"封面右下角的小图标：Lyrimuse 的图标，或者正在用的播放器的图标（认不出的播放器不显示）。暂停后保留状态时，这个位置换成暂停图标。好友点它都会打开 Lyrimuse 官网；没有封面时不显示。" = "The small icon on the bottom-right corner of the cover: the Lyrimuse icon, or the icon of the player you're using (none for players it doesn't recognize). When your status is kept while paused, a pause icon takes its place. Whichever it is, friends who click it open the Lyrimuse website. Nothing shows there when there's no cover.";
 "封面角标" = "Cover Badge";
 "将在退出 Lyrimuse 时安装" = "Will install when Lyrimuse quits";
 "将当前配色存为新主题…" = "Save Current Colors as New Theme…";
@@ -644,7 +644,6 @@
 "已取消纯音乐标记" = "Instrumental mark removed";
 "已唱到的颜色" = "Sung Color";
 "已唱到部分的颜色，也是歌词旁那枚图标上进度涨上来那一截的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮" = "The color of the sung part — and of the risen portion of the progress icon beside the lyrics. Follows the system accent color by default (brightened on a dark menu bar); a custom color is used as-is, with no brightening.";
-"已在 Discord 上隐藏，%@ 恢复" = "Hidden on Discord Until %@";
 "已在 Last.fm 上喜欢" = "Loved on Last.fm";
 "已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮" = "Last.fm's authorization page is open in your browser. Click “Yes, allow access” there to finish, and you'll be sent back to Lyrimuse automatically. If your browser doesn't come back on its own, use the button below";
 "已在资料库" = "In Library";
@@ -695,6 +694,7 @@
 "已连接" = "Connected";
 "已连接 Last.fm 账号" = "Connected to Last.fm Account";
 "已连接 · %@ · 登录有效期至 %@" = "Connected · %@ · Sign-in valid until %@";
+"已连接 · @%@" = "Connected · @%@";
 "已连接为 @%@" = "Connected as @%@";
 "已连接：%@" = "Connected: %@";
 "已选 %@ 首" = "%@ selected";
@@ -738,11 +738,11 @@
 "开源组件与词典" = "Open-source components and dictionaries";
 "开源许可证" = "Open-Source License";
 "开（默认）：匹配算法或打分规则更新后，后台会重新评估已有歌词，可能换成更合适的一份\n关：一旦定下来就不再自动更换；首次解析、手动重搜和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
-"开：暂停时状态还在，没有进度条。\n关：暂停 %d 秒后清掉。" = "On: your status stays while paused, without a progress bar.\nOff: it's cleared %d seconds after you pause.";
 "开：短于 30 秒的曲目也 scrobble，听过一半就记。\n关：不记（Last.fm 官方规则）。" = "On: tracks under 30 seconds are scrobbled too, once half-played.\nOff: they aren't (Last.fm's rule).";
 "引号" = "Quote";
 "当初为什么选了这份歌词：当时的候选、得分与拒绝原因" = "Why these lyrics were chosen: the candidates, scores and rejections at decision time";
 "当前使用" = "In use";
+"当前动态" = "Activity";
 "当前启用的其余源没有应答：%@" = "Other enabled sources did not answer: %@";
 "当前歌词的出处" = "Where the current lyrics came from";
 "当前连续 · 最长 %@ 天" = "Current streak · longest %@ days";
@@ -939,6 +939,8 @@
 "显示/隐藏读音" = "Show/Hide Romanization";
 "显示专辑" = "Show Album";
 "显示专辑简介" = "Show Album Notes";
+"显示内容" = "What's Shown";
+"显示哪些播放器" = "Players Shown";
 "显示在哪块屏幕" = "Show On";
 "显示封面" = "Show Artwork";
 "显示播放控制" = "Show Playback Controls";
@@ -949,9 +951,7 @@
 "显示歌手简介" = "Show Artist Bio";
 "显示歌词" = "Show Lyrics";
 "显示歌词校准" = "Show Lyrics Calibration";
-"显示正在听的歌" = "Show What You're Listening To";
 "显示灵动岛歌词" = "Show Notch Lyrics";
-"显示的播放器" = "Players Shown";
 "显示简介" = "Show Info";
 "显示菜单栏歌词" = "Show Menu Bar Lyrics";
 "显示译文" = "Show Translation";
@@ -960,7 +960,7 @@
 "普通话" = "Mandarin";
 "智能" = "Smart";
 "智能算法" = "Smart Matching";
-"暂停时保留状态" = "Keep Status When Paused";
+"暂停以后" = "When Paused";
 "暂停时收起" = "Shrink When Paused";
 "暂停时缩到最小" = "Shrink When Paused";
 "暂停时隐藏" = "Hide When Paused";
@@ -1005,7 +1005,6 @@
 "有记录 · 日均 %@ 首" = "Days with plays · %@ per day";
 "有软件更新可用" = "Software Update Available";
 "有部分设置没能写入（%@），其余已导入。可以再导入一次，或检查配置文件夹的写入权限" = "Some settings couldn't be written (%@); the rest were imported. Try importing again, or check that the config folder is writable.";
-"服务器成员名单" = "Server member list";
 "服务器报错（5xx）：%@" = "Server error (5xx): %@";
 "服务器报错（HTTP 5xx），稍后重试通常会恢复" = "Server error (HTTP 5xx); retrying later usually works";
 "服务器设置 → 整合（Integrations） → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL" = "Server Settings → Integrations → Webhooks → New Webhook. Pick the channel to post to, then copy the Webhook URL";
@@ -1166,6 +1165,7 @@
 "正在查那年今日…" = "Looking up this day in past years…";
 "正在检查已经手动选定过的歌…" = "Checking songs you picked manually…";
 "正在检查更新…" = "Checking for updates…";
+"正在玩 %@" = "Playing %@";
 "正在生效" = "Active";
 "正在确认授权，即将完成…" = "Confirming authorization, almost done…";
 "正在统计歌词库…" = "Counting your lyrics library…";
@@ -1275,7 +1275,6 @@
 "特厚" = "Ultra Thick";
 "特粗" = "Heavy";
 "状态未知" = "Status unknown";
-"状态里显示" = "Status Shows";
 "现在是广告" = "An ad is playing";
 "现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到" = "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch Lyrics and Menu Bar Lyrics only show up once playback starts";
 "现在没有在放的歌" = "Nothing Is Playing";
@@ -1371,6 +1370,7 @@
 "继续即表示你已了解" = "By continuing, you acknowledge the";
 "继续导出" = "Export";
 "继续播放" = "Resume";
+"继续显示" = "Keep Showing";
 "缪斯还在候场——把下面标橙的那几项补齐，她随时可以开嗓" = "The muse is waiting in the wings — sort out the orange items below and she’s ready to sing";
 "网易云接口限流（短时间内请求过多，操作频繁，code 405），不是网络故障" = "NetEase Cloud Music's API is rate-limiting (too many requests in a short time, code 405) — not a network fault";
 "网易云音乐" = "NetEase Cloud Music";
@@ -1463,6 +1463,7 @@
 "触控栏歌词" = "Touch Bar Lyrics";
 "触控栏歌词只能在带触控栏的 MacBook Pro 上使用" = "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar";
 "认歌、找歌词和封面；只在本机运行，找歌词时只发送歌名、歌手这类曲目信息" = "Recognizes songs and finds lyrics and artwork. Runs only on this Mac; looking up lyrics sends nothing but track info such as title and artist";
+"让 Discord 好友看到你正在听什么" = "Let your Discord friends see what you're listening to";
 "让它跑起来" = "Get It Running";
 "记录的是手动修改之前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";
 "许可与版权" = "License & Copyright";
@@ -1511,7 +1512,6 @@
 "账号信息" = "Account Info";
 "贴哪只耳朵" = "Which Ear";
 "贴在桌面上" = "Sits on your desktop";
-"资料卡 · 当前动态" = "Profile · Activity";
 "超薄" = "Ultra Thin";
 "足迹" = "Footprint";
 "跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、歌词窗口都能放，还能对照译文、标注读音。接下来几步帮你调成合适的样子，以后随时能在设置里改" = "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings.";
@@ -1621,7 +1621,6 @@
 "这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启" = "This is taking longer than usual. If a system dialog appeared, respond to it there. If you don't see one, you can turn this on in System Settings instead";
 "这段时间的歌曲榜里没有这位歌手的歌" = "No songs by this artist in this period's track chart";
 "这段时间还没有收听记录" = "No scrobbles in this period";
-"这段时间里 Discord 上不显示正在听的歌，到点自动恢复。菜单栏图标的「快速开关」里也能一键隐藏，时长用这里选的。" = "For this long, Discord won't show what you're listening to, then it comes back on its own. You can also hide it in one click under Quick Toggles in the menu bar icon's menu, using the length chosen here.";
 "这里是一句歌词示例" = "A line of lyrics looks like this";
 "这里是下一句歌词示例" = "The next line looks like this";
 "这里是译文示例" = "The translation looks like this";
@@ -1726,9 +1725,11 @@
 "长按或右键打开设置" = "Click and hold or right-click for settings";
 "长按拖动" = "Long-press to drag";
 "间奏里多出一段歌词" = "Extra lyrics in an instrumental break";
+"除了 %@" = "All except %@";
 "随播放律动" = "Move with the Music";
 "随机播放" = "Shuffle";
-"隐藏" = "Hide";
+"隐私" = "Privacy";
+"隐藏…" = "Hide…";
 "隐藏歌词" = "Hide Lyrics";
 "隐藏译文" = "Hide Translation";
 "隐藏读音" = "Hide Romanization";

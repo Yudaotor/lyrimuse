@@ -1102,11 +1102,14 @@ private struct SegmentedControlRepresentable<T: Identifiable & Equatable>: NSVie
         // 强制固定尺寸：sizeToFit() 之后记住这个尺寸，后续不再变化
         control.sizeToFit()
         context.coordinator.fixedSize = control.fittingSize
+        control.isEnabled = context.environment.isEnabled
         
         return control
     }
     
     func updateNSView(_ control: NSSegmentedControl, context: Context) {
+        // 外面套的 `.disabled` 不会自己传到 AppKit 控件上,每次更新照环境同步。
+        if control.isEnabled != context.environment.isEnabled { control.isEnabled = context.environment.isEnabled }
         // 段数、文字只在 makeNSView 里设过一次:选项列表变了(决策面板的记录数)、运行中切了界面语言,都要在这里跟上,
         // 不然显示的还是旧的段。变了才重建,并重新量一次固定尺寸。
         context.coordinator.selection = $selection
@@ -1182,11 +1185,14 @@ private struct SegmentedControlRepresentableHashable<T: Hashable>: NSViewReprese
         // 强制固定尺寸：sizeToFit() 之后记住这个尺寸，后续不再变化
         control.sizeToFit()
         context.coordinator.fixedSize = control.fittingSize
+        control.isEnabled = context.environment.isEnabled
         
         return control
     }
     
     func updateNSView(_ control: NSSegmentedControl, context: Context) {
+        // 外面套的 `.disabled` 不会自己传到 AppKit 控件上,每次更新照环境同步。
+        if control.isEnabled != context.environment.isEnabled { control.isEnabled = context.environment.isEnabled }
         // 段数、文字只在 makeNSView 里设过一次:选项列表变了(决策面板的记录数)、运行中切了界面语言,都要在这里跟上,
         // 不然显示的还是旧的段。变了才重建,并重新量一次固定尺寸。
         context.coordinator.selection = $selection

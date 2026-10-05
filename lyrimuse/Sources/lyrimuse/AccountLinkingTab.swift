@@ -369,7 +369,7 @@ private func discordDestinationStatus() -> DestinationStatus {
 func discordStatusText(_ status: DiscordPresenceController.Status) -> String {
     switch status {
     case .connected(let user):
-        return user.map { String(format: L10n.t("已连接为 @%@"), $0.username) } ?? L10n.t("已连接")
+        return user.map { String(format: L10n.t("已连接 · @%@"), $0.username) } ?? L10n.t("已连接")
     case .refused:
         return L10n.t("Discord 拒绝了连接")
     case .waiting(.notInstalled):
@@ -508,6 +508,8 @@ struct AccountLinkingTab: View {
     // "连接 Last.fm"向导 sheet 开没开——见 lastfmFields 顶部注释,未连接时打开
     // scrobble 开关就是打开它。
     @State private var showLastfmWizard = false
+    /// Discord 页「显示哪些播放器」的浮层开着没有。
+    @State private var showDiscordPlayers = false
     // 「断开」的确认框 —— 重连要重新走一遍浏览器授权,一次误点的代价不小,值得拦一下
     // (发散采纳)。
     @State private var showLastfmDisconnectConfirm = false
@@ -552,6 +554,10 @@ struct AccountLinkingTab: View {
                                 .multilineTextAlignment(.center)
                                 .frame(maxWidth: 380)
                                 .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if destination == .discord, appSettings.discordPresenceEnabled {
+                            discordAccountChip
+                                .padding(.top, 4)
                         }
                     }
                 }
@@ -743,7 +749,7 @@ struct AccountLinkingTab: View {
         case .bark:
             return L10n.t("接收 Lyrimuse 的推送通知")
         case .discord:
-            return L10n.t("在 Discord 上显示你正在听的歌")
+            return L10n.t("让 Discord 好友看到你正在听什么")
         }
     }
 
@@ -1915,10 +1921,41 @@ struct AccountLinkingTab: View {
 
     // MARK: - Discord
 
-    /// 开关下面那行:连没连上 Discord。开关关着时不写。
-    private var discordStatusLine: String? {
-        guard appSettings.discordPresenceEnabled else { return nil }
-        return discordStatusText(discord.status)
+    /// 页头说明下面那一小块:连上时是 Discord 头像、名字、用户名和「已连接」,没连上时写卡在哪一步。
+    private var discordAccountChip: some View {
+        HStack(spacing: 6) {
+            if case .connected(let user?) = discord.status {
+                DiscordAvatarImage(size: 20)
+                Text(user.displayName)
+                Text("@" + user.username)
+                    .foregroundStyle(.secondary)
+                Text(verbatim: "·")
+                    .foregroundStyle(.tertiary)
+                Text(L10n.t("已连接"))
+                    .foregroundStyle(.green)
+            } else {
+                Circle()
+                    .fill(discordChipTint)
+                    .frame(width: 6, height: 6)
+                    .padding(.leading, 7)
+                Text(discordStatusText(discord.status))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .lineLimit(1)
+        .padding(.vertical, 3)
+        .padding(.leading, 3)
+        .padding(.trailing, 10)
+        .background(Capsule().fill(Color.primary.opacity(0.06)))
+    }
+
+    private var discordChipTint: Color {
+        switch discord.status {
+        case .refused: return .red
+        case .waiting(.connecting): return .orange
+        default: return .secondary
+        }
     }
 
     /// 没装、没打开 Discord,或者开着却一直连不上时,开关下面多一行:说清楚要什么,带一颗按钮直接去做。
@@ -1949,49 +1986,46 @@ struct AccountLinkingTab: View {
         }
     }
 
+    /// 预览,下面三张卡:总开关(连不上时多一行引导),「显示内容」,「隐私」。总开关关着时后两张变灰。见 12 章决策 48。
     private var discordFields: some View {
         VStack(spacing: 14) {
             DiscordPresencePreview()
-            discordCard
+            SettingsCard {
+                SettingsRow(icon: "headphones", title: L10n.t("在 Discord 上显示"),
+                            help: L10n.t("开了以后，你的 Discord 资料卡和好友列表里会显示正在听的歌。好友看不到的话，到 Discord 的「用户设置 › 活动隐私」里打开分享活动状态。")) {
+                    Toggle("", isOn: $appSettings.discordPresenceEnabled)
+                }
+                if appSettings.discordPresenceEnabled {
+                    discordSetupRow
+                }
+            }
+            discordDisplayCard
+                .disabled(!appSettings.discordPresenceEnabled)
+            discordPrivacyCard
+                .disabled(!appSettings.discordPresenceEnabled)
         }
     }
 
-    private var discordCard: some View {
+    /// 「显示内容」:名字下面那一行写什么,封面角标,暂停以后还显不显示。
+    private var discordDisplayCard: some View {
         SettingsCard {
-            SettingsRow(icon: "headphones", title: L10n.t("显示正在听的歌"), subtitle: discordStatusLine,
-                        help: L10n.t("开了以后，你的 Discord 资料卡和好友列表里会显示正在听的歌。好友看不到的话，到 Discord 的「用户设置 › 活动隐私」里打开分享活动状态。")) {
-                Toggle("", isOn: $appSettings.discordPresenceEnabled)
-            }
-            if appSettings.discordPresenceEnabled {
-                discordSetupRow
+            SettingsCardHeader(title: L10n.t("显示内容"))
+            CardDivider()
+            SettingsRow(icon: "text.alignleft", title: L10n.t("名字下面显示")) {
+                SettingsSegmentedControlHashable(
+                    selection: $appSettings.discordStatusDisplay,
+                    options: DiscordPresence.StatusLine.allCases,
+                    label: { line in
+                        switch line {
+                        case .title: return L10n.t("歌名")
+                        case .artist: return L10n.t("歌手")
+                        case .player: return L10n.t("播放器")
+                        }
+                    }
+                )
             }
             CardDivider()
-            SettingsRow(icon: "person.2", title: L10n.t("状态里显示"), help: L10n.t("好友列表里「正在听」后面显示的内容")) {
-                Picker("", selection: $appSettings.discordStatusDisplay) {
-                    Text(L10n.t("歌名")).tag(DiscordPresence.StatusLine.title)
-                    Text(L10n.t("歌手")).tag(DiscordPresence.StatusLine.artist)
-                    Text(L10n.t("播放器")).tag(DiscordPresence.StatusLine.player)
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            .disabled(!appSettings.discordPresenceEnabled)
-            CardDivider()
-            SettingsRow(
-                icon: "pause.circle",
-                title: L10n.t("暂停时保留状态"),
-                help: String(format: L10n.t("开：暂停时状态还在，没有进度条。\n关：暂停 %d 秒后清掉。"),
-                             Int(DiscordPresence.pauseGrace))
-            ) {
-                Toggle("", isOn: $appSettings.discordKeepWhenPaused)
-            }
-            .disabled(!appSettings.discordPresenceEnabled)
-            CardDivider()
-            SettingsRow(
-                icon: "seal",
-                title: L10n.t("封面角标"),
-                help: L10n.t("封面右下角的小图标：Lyrimuse 的图标，或者正在用的播放器的图标（认不出的播放器不显示）。暂停后保留状态时，这个位置换成暂停图标。好友点它都会打开 Lyrimuse 官网；没有封面时不显示。")
-            ) {
+            SettingsRow(icon: "app.badge", title: L10n.t("封面角标")) {
                 Picker("", selection: $appSettings.discordBadge) {
                     Text(L10n.t("Lyrimuse")).tag(DiscordPresence.Badge.lyrimuse)
                     Text(L10n.t("播放器")).tag(DiscordPresence.Badge.player)
@@ -2000,55 +2034,88 @@ struct AccountLinkingTab: View {
                 .pickerStyle(.menu)
                 .fixedSize()
             }
-            .disabled(!appSettings.discordPresenceEnabled)
             CardDivider()
-            discordHideRow
-                .disabled(!appSettings.discordPresenceEnabled)
-            CardDivider()
-            PlayerBundleChipsRow(
-                icon: "music.note.list",
-                title: L10n.t("显示的播放器"),
-                help: L10n.t("只有勾选的播放器会显示到 Discord；默认全部勾选。"),
-                allOffSummary: L10n.t("全部不显示"),
-                offSummaryFormat: L10n.t("不显示：%@"),
-                choices: playerBundleChoices,
-                excluded: appSettings.discordExcludedBundles
-            ) { bundleID, on in
-                if on {
-                    appSettings.discordExcludedBundles.remove(bundleID)
-                } else {
-                    appSettings.discordExcludedBundles.insert(bundleID)
+            SettingsRow(icon: "pause.circle", title: L10n.t("暂停以后")) {
+                Picker("", selection: $appSettings.discordKeepWhenPaused) {
+                    Text(L10n.t("继续显示")).tag(true)
+                    Text(String(format: L10n.t("%d 秒后清掉"), Int(DiscordPresence.pauseGrace))).tag(false)
                 }
+                .pickerStyle(.menu)
+                .fixedSize()
             }
-            .disabled(!appSettings.discordPresenceEnabled)
         }
     }
 
-    /// 「暂时隐藏」:选好时长点「隐藏」;隐藏着时写几点恢复,换成「恢复显示」。
+    /// 「隐私」:暂时隐藏,显示哪些播放器。
+    private var discordPrivacyCard: some View {
+        SettingsCard {
+            SettingsCardHeader(title: L10n.t("隐私"))
+            CardDivider()
+            discordHideRow
+            CardDivider()
+            discordPlayersRow
+        }
+    }
+
+    /// 「暂时隐藏」:「隐藏…」菜单里直接选时长;隐藏着时写几点恢复,换成「恢复显示」。
     private var discordHideRow: some View {
         SettingsRow(
             icon: "eye.slash",
             title: L10n.t("暂时隐藏"),
             subtitle: discord.hiddenUntil.map {
                 String(format: L10n.t("已隐藏，%@ 恢复"), DiscordPresenceController.restoreTimeText($0))
-            },
-            help: L10n.t("这段时间里 Discord 上不显示正在听的歌，到点自动恢复。菜单栏图标的「快速开关」里也能一键隐藏，时长用这里选的。")
+            }
         ) {
             if discord.hiddenUntil != nil {
                 Button(L10n.t("恢复显示")) { discord.unhide() }
             } else {
-                HStack(spacing: 8) {
-                    Picker("", selection: $appSettings.discordHideMinutes) {
-                        ForEach(DiscordPresence.hideDurations, id: \.self) { minutes in
-                            Text(DiscordPresenceController.hideDurationText(minutes: minutes)).tag(minutes)
+                Menu(L10n.t("隐藏…")) {
+                    ForEach(DiscordPresence.hideDurations, id: \.self) { minutes in
+                        Button(DiscordPresenceController.hideDurationText(minutes: minutes)) {
+                            discord.hide(minutes: minutes)
                         }
                     }
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                    Button(L10n.t("隐藏")) { discord.hide(minutes: appSettings.discordHideMinutes) }
                 }
+                .fixedSize()
             }
         }
+    }
+
+    /// 「显示哪些播放器」:副标题写全部 / 除了哪几个,芯片放进「选择…」弹出的浮层。
+    private var discordPlayersRow: some View {
+        SettingsRow(icon: "music.note.list", title: L10n.t("显示哪些播放器"), subtitle: discordPlayersSummary) {
+            Button(L10n.t("选择…")) { showDiscordPlayers = true }
+                .popover(isPresented: $showDiscordPlayers, arrowEdge: .bottom) {
+                    SettingsPopoverShell(
+                        title: L10n.t("显示哪些播放器"),
+                        width: PlayerChipMetrics.flowMaxWidth + 2 * SettingsRowMetrics.horizontalPadding
+                    ) {
+                        SettingsRawRow {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(L10n.t("只有勾选的播放器会显示到 Discord；浏览器里的网页按浏览器算。"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                PlayerBundleChips(choices: playerBundleChoices,
+                                                  excluded: appSettings.discordExcludedBundles) { bundleID, on in
+                                    if on {
+                                        appSettings.discordExcludedBundles.remove(bundleID)
+                                    } else {
+                                        appSettings.discordExcludedBundles.insert(bundleID)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+        }
+    }
+
+    private var discordPlayersSummary: String {
+        let off = playerBundleChoices.filter { appSettings.discordExcludedBundles.contains($0.id) }
+        if off.isEmpty { return L10n.t("全部") }
+        if off.count == playerBundleChoices.count { return L10n.t("全部不显示") }
+        return String(format: L10n.t("除了 %@"), off.map(\.name).joined(separator: "、"))
     }
 
     // MARK: - 底部状态栏

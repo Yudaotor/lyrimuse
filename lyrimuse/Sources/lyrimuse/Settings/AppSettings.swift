@@ -212,7 +212,6 @@ final class AppSettings: ObservableObject {
         static let discordKeepWhenPaused = "np:discordKeepWhenPaused"
         static let discordExcludedBundles = "np:discordExcludedBundles"
         static let discordBadge = "np:discordBadge"
-        static let discordHideMinutes = "np:discordHideMinutes"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let overlayLineOverflow = "np:overlayLineOverflow"
@@ -730,10 +729,6 @@ final class AppSettings: ObservableObject {
     /// 在放时封面右下角的角标(`DiscordPresence.Badge`)。默认 Lyrimuse。
     @Published var discordBadge: DiscordPresence.Badge {
         didSet { defaults.set(discordBadge.rawValue, forKey: Keys.discordBadge) }
-    }
-    /// 「暂时隐藏」一次隐藏多久(分钟),取值在 `DiscordPresence.hideDurations` 里。
-    @Published var discordHideMinutes: Int {
-        didSet { defaults.set(discordHideMinutes, forKey: Keys.discordHideMinutes) }
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
@@ -1876,8 +1871,6 @@ final class AppSettings: ObservableObject {
         discordKeepWhenPaused = (defaults.object(forKey: Keys.discordKeepWhenPaused) as? Bool) ?? false
         discordExcludedBundles = Set((defaults.array(forKey: Keys.discordExcludedBundles) as? [String]) ?? [])
         discordBadge = defaults.string(forKey: Keys.discordBadge).flatMap(DiscordPresence.Badge.init(rawValue:)) ?? .lyrimuse
-        discordHideMinutes = (defaults.object(forKey: Keys.discordHideMinutes) as? Int)
-            .flatMap { DiscordPresence.hideDurations.contains($0) ? $0 : nil } ?? 60
         // 默认开。多显示一句下文对跟读几乎总是有用的,而这一项本身不占额外窗口高度。
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true
         overlayDuetAlignmentOverride = defaults.string(forKey: Keys.overlayDuetAlignmentOverride)
