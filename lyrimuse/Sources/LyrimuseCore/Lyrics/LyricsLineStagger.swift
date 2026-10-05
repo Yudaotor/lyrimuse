@@ -43,4 +43,19 @@ public enum LyricsLineStagger {
 
     /// 一次换句从开始到最晚那一行落定。
     public static var settleMs: Double { maxDelayMs + springSettleMs }
+
+    /// 一行至少这么高(字号的倍数):单行、不带译文时字高约 1.175 倍字号,行距 0.98 倍字号(歌词窗口 `lyricLineSpacing`),往小取。
+    public static let minimumRowPitchEm = 2.1
+    /// 视口外再多带几行:页面一次最多滚 `maxStaggerJumpRows` 行,错开期间刚出视口、还没进视口的行也会露出来。
+    public static let reachMarginRows = 4
+    /// 一次换句滚动锚最多跳这么多行还走错开;跳得更远(点了远处一句、跳转)整页带动画滚过去(07 章决策 109)。
+    public static let maxStaggerJumpRows = 3
+    /// 换句前用户自己滚开超过视口高度的这个比例,同样整页带动画滚回来。
+    public static let maxStaggerDriftFraction = 0.25
+
+    /// 离滚动锚多少行以内的行跟着错开:视口按最矮的行放得下几行,再加 `reachMarginRows`。还没量出尺寸时全都带上。
+    public static func reachRows(viewportHeight: Double, fontSize: Double) -> Int {
+        guard viewportHeight > 0, fontSize > 0 else { return Int.max }
+        return Int((viewportHeight / (minimumRowPitchEm * fontSize)).rounded(.up)) + reachMarginRows
+    }
 }

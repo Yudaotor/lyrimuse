@@ -2013,7 +2013,7 @@ func runSourceContractTests() {
                 // 漏进比较函数的话,拖动开始 / 结束时行不重画,模糊关不掉也回不来。
                 expectEqual(view.contains("suspendsBlur: windowController.isLiveResizing,"), true,
                             "歌词窗口拖动: 行模糊跟着 isLiveResizing 暂停")
-                expectEqual(view.contains(".blur(radius: (reduceMotion || isHovered || suspendsBlur) ? 0 : lineBlur)"), true,
+                expectEqual(view.contains("blur: (reduceMotion || isHovered || suspendsBlur) ? 0 : lineBlur,"), true,
                             "歌词窗口拖动: 暂停时模糊为 0")
                 expectEqual(view.contains("&& a.suspendsBlur == b.suspendsBlur"), true,
                             "歌词窗口拖动: 行的 Equatable 比较带上 suspendsBlur")

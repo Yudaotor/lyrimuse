@@ -13,6 +13,10 @@ final class FrameClock {
     private weak var host: NSView?
     /// 此刻要逐帧刷新的票。弱引用:视图没走 `onDisappear` 就被释放时自动出列。
     private let active = NSHashTable<FrameTicket>.weakObjects()
+    /// 主线程卡住、漏掉的帧累计多长(秒,判据见 `FrameStall`),只增不减。
+    private(set) var stalledSeconds: Double = 0
+    /// 上一帧的目标时刻(`CACurrentMediaTime` 时基);时钟停着时 nil。
+    private var lastFrame: CFTimeInterval?
 
     nonisolated init() {}
 
@@ -24,13 +28,27 @@ final class FrameClock {
         host = view
         link?.invalidate()
         link = nil
+        lastFrame = active.count > 0 ? CACurrentMediaTime() : nil
         startIfNeeded()
     }
 
     func setActive(_ ticket: FrameTicket, _ on: Bool) {
         if on { active.add(ticket) } else { active.remove(ticket) }
         startIfNeeded()
-        link?.isPaused = active.count == 0
+        let idle = active.count == 0
+        // 从停着恢复时从这一刻算起:恢复它的那次更新把主线程卡住的话,下一帧晚到的那段照样算卡住。
+        if idle { lastFrame = nil } else if lastFrame == nil { lastFrame = CACurrentMediaTime() }
+        link?.isPaused = idle
+    }
+
+    /// 过渡动画(换句错开、景深、滚动指示条)用的时刻:墙钟减去累计卡住的时长(07 章决策 108)。
+    /// 逐字填色、进度这类跟着播放位置走的不用它。
+    func transitionDate(_ date: Date) -> Date {
+        date.addingTimeInterval(-stalledSeconds)
+    }
+
+    func transitionNow() -> Date {
+        transitionDate(Date())
     }
 
     private func startIfNeeded() {
@@ -47,9 +65,15 @@ final class FrameClock {
         let tickets = active.allObjects
         guard !tickets.isEmpty else {
             link.isPaused = true
+            lastFrame = nil
             return
         }
-        let date = Date(timeIntervalSinceNow: link.targetTimestamp - CACurrentMediaTime())
+        let target = link.targetTimestamp
+        if let last = lastFrame {
+            stalledSeconds += FrameStall.missedSeconds(gap: target - last, frame: target - link.timestamp)
+        }
+        lastFrame = target
+        let date = Date(timeIntervalSinceNow: target - CACurrentMediaTime())
         for ticket in tickets { ticket.advance(to: date) }
     }
 }
@@ -93,17 +117,26 @@ final class FrameTicket: ObservableObject {
     }
 }
 
+/// `FrameTimeline` 交给内容的时刻。
+enum FrameTimebase {
+    /// 墙钟。跟着播放位置走的(逐字填色、进度)用这个。
+    case wall
+    /// 过渡时刻(`FrameClock.transitionDate`):主线程卡住漏掉的帧不算进度。过渡的起点也要用同一个时钟的 `transitionNow()` 记。
+    case transition
+}
+
 /// 逐帧刷新内容,用法同 `TimelineView(.animation(minimumInterval:paused:))`,时钟换成环境里的 `FrameClock`。
 /// 停表时日期冻结在最后一次刷新;恢复时立刻按当下刷新一次。
 struct FrameTimeline<Content: View>: View {
     var minimumInterval: Double = 0
+    var timebase: FrameTimebase = .wall
     let paused: Bool
     @ViewBuilder let content: (Date) -> Content
     @Environment(\.frameClock) private var clock
     @StateObject private var ticket = FrameTicket()
 
     var body: some View {
-        content(ticket.date)
+        content(timebase == .transition ? clock.transitionDate(ticket.date) : ticket.date)
             .onAppear {
                 ticket.minimumInterval = minimumInterval
                 if !paused { ticket.jump(to: Date()) }

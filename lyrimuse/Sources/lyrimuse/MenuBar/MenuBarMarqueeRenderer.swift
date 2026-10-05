@@ -164,11 +164,35 @@ enum MenuBarMarqueeRenderer {
     }
 
     /// 带上排字语言量(`LyricTypesetting`,跟画字同一口径)。`translation`:这段是译文。
+    /// 量过的按「文字 + 字体 + 标的语言」记住:悬浮歌词、灵动岛、菜单栏、歌词窗口都拿它量,换句那一刻同一批字会被
+    /// 反复量好几遍(折行时一次布局里 `sizeThatFits` 要问好几回)。键里放标的语言而不是 `translation`:同一段字
+    /// 换了日文歌 / 繁体设置会换字形,宽度跟着变。
     static func width(of text: String, font: NSFont, translation: Bool = false) -> CGFloat {
+        guard !text.isEmpty else { return 0 }
+        let key = WidthKey(text: text, font: font, language: LyricTypesetting.language(for: text, translation: translation))
+        if let cached = widthMemo[key] { return cached }
+        let width = measure(text, font: font, translation: translation)
+        if widthMemo.count >= widthMemoLimit { widthMemo.removeAll(keepingCapacity: true) }
+        widthMemo[key] = width
+        return width
+    }
+
+    /// 量宽本身(不查不记 `widthMemo`),哪个线程都能调:歌词窗口的图层列表在后台排整首歌时用它。
+    nonisolated static func measure(_ text: String, font: NSFont, translation: Bool = false) -> CGFloat {
         guard !text.isEmpty else { return 0 }
         return (text as NSString).size(
             withAttributes: LyricTypesetting.attributes([.font: font], for: text, translation: translation)).width
     }
+
+    private struct WidthKey: Hashable {
+        let text: String
+        let font: NSFont
+        let language: String?
+    }
+
+    /// 上限按几首歌的字量估;满了整张清掉重来,清空只是多量几次。
+    private static let widthMemoLimit = 4096
+    private static var widthMemo: [WidthKey: CGFloat] = [:]
 
     /// 一行文字的高度(含上下各 1pt 的富余,避免 'g'/'q' 的下伸部分被裁掉一丝)。
     static var lineHeight: CGFloat {

@@ -170,7 +170,7 @@ func runLyricsWindowTests() {
         let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
                                   encoding: .utf8)) ?? ""
         expectEqual(window.isEmpty, false, "命中(契约): 读到源码")
-        expectEqual(sourceBytes(window, contain: ".modifier(LineStagger(model: stagger, fontSize: fontSize))\n        .allowsHitTesting(false)\n"),
+        expectEqual(sourceBytes(window, contain: ".modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize))\n        .allowsHitTesting(false)\n"),
                     true, "命中(契约): 歌词行的错开位移连同行内容不参与命中,悬停 / 点按由外面不动的矩形接 —— 在动的可命中内容让主线程每帧重算标题栏拖窗区")
     }
 
@@ -194,6 +194,67 @@ func runLyricsWindowTests() {
         expectEqual(updates, 4, "节流: 0.25 秒档在 60Hz 屏上每秒刷 4 次")
     }
 
+    // MARK: - 各行景深的过渡曲线(LyricsDepthMotion,07 章决策 106)
+    do {
+        typealias M = LyricsDepthMotion
+        expectEqual(M.progress(.line, elapsed: 0), 0, "景深过渡: 换句弹簧从 0 起")
+        expectEqual(abs(M.progress(.line, elapsed: 0.225) - 0.8210) < 0.001, true,
+                    "景深过渡: 半个 response 走到 82%(同 SwiftUI .smooth(duration: 0.45) 那条临界阻尼弹簧)")
+        expectEqual(abs(M.progress(.line, elapsed: 0.45) - 0.9864) < 0.001, true, "景深过渡: 一个 response 走到 98.6%")
+        expectEqual(abs(M.settleSeconds(.line) - 0.6613) < 0.001, true, "景深过渡: 离终点不到千分之一算走完,约 0.66 秒")
+        expectEqual(M.progress(.line, elapsed: M.settleSeconds(.line)), 1, "景深过渡: 走完恒为 1")
+        let ramp = stride(from: 0.0, through: 0.7, by: 0.005).map { M.progress(.line, elapsed: $0) }
+        expectEqual(zip(ramp, ramp.dropFirst()).allSatisfy { $1 >= $0 }, true, "景深过渡: 换句弹簧单调、不过冲")
+        expectEqual(abs(M.progress(.hover, elapsed: 0.08) - 0.6846) < 0.001, true,
+                    "景深过渡: 悬停走一半时间到 68.5%(同 SwiftUI .easeOut(duration: 0.16))")
+        expectEqual(abs(M.progress(.hover, elapsed: 0.04) - 0.3781) < 0.001, true, "景深过渡: 悬停走四分之一时间到 37.8%")
+        expectEqual(M.progress(.hover, elapsed: 0.16), 1, "景深过渡: 悬停 0.16 秒到位")
+        let t0 = Date(timeIntervalSinceReferenceDate: 1000)
+        var ch = M.Channel(value: 0.3, now: t0)
+        expectEqual(ch.isMoving(at: t0), false, "景深过渡: 新建时不动")
+        ch.retarget(to: 1, curve: .line, now: t0)
+        let t1 = t0.addingTimeInterval(0.1)
+        let mid = ch.value(at: t1)
+        expectEqual(mid > 0.3 && mid < 1, true, "景深过渡: 走到一半在两端之间(\(mid))")
+        ch.retarget(to: 0.2, curve: .line, now: t1)
+        expectEqual(abs(ch.value(at: t1) - mid) < 1e-12, true, "景深过渡: 中途换目标从此刻画着的值接着走,不跳")
+        expectEqual(ch.isMoving(at: t1.addingTimeInterval(0.3)), true, "景深过渡: 换目标之后还在走")
+        let done = t1.addingTimeInterval(M.settleSeconds(.line))
+        expectEqual(ch.value(at: done), 0.2, "景深过渡: 走完停在新目标")
+        expectEqual(ch.isMoving(at: done), false, "景深过渡: 走完不再动")
+        expectEqual(ch.end, done, "景深过渡: 走完的时刻 = 开始 + 这条曲线的时长")
+        ch.retarget(to: 0.9, curve: nil, now: t0.addingTimeInterval(5))
+        expectEqual(ch.value(at: t0.addingTimeInterval(5)), 0.9, "景深过渡: 瞬时那一种直接落到目标")
+        expectEqual(ch.isMoving(at: t0.addingTimeInterval(5)), false, "景深过渡: 瞬时不开时钟")
+    }
+
+    // MARK: - 各行景深逐帧推、不挂隐式动画(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty, false, "景深(契约): 读到源码")
+        expectEqual(sourceBytes(window, contain: ".animation(LyricsWindowView.lineTransition, value: distance)"), false,
+                    "景深(契约): 歌词行和创作者行不挂 SwiftUI 隐式动画 —— 进程里有 SwiftUI ScrollView 时它每帧渲染两次")
+        expectEqual(sourceBytes(window, contain: ".animation(isActive ? nil : LyricsWindowView.lineTransition"), false,
+                    "景深(契约): 当前行的不透明度也不靠隐式动画")
+        expectEqual(window.components(separatedBy: ".modifier(RowDepth(inputs: .init(").count - 1, 2,
+                    "景深(契约): 歌词行和创作者行都走 RowDepth")
+        expectEqual(sourceBytes(window, contain: "o.retarget(to: new.opacity, curve: curve == .line && new.isActive ? nil : curve, now: now)"), true,
+                    "景深(契约): 换句时当前行的不透明度瞬时到位(跟着爬会跟填色相乘出先暗一拍的凹陷)")
+        expectEqual(window.components(separatedBy: "FrameTimeline(timebase: .transition, paused: !moving) { now in").count - 1, 2,
+                    "景深(契约): 时钟是这扇窗的 display link(各行景深与滚动指示条)")
+        expectEqual(sourceBytes(window, contain: "isActive: isActive)))\n        // 外层的动画"), true,
+                    "景深(契约): 整行外面挡一道外层动画,景深自己逐帧走")
+        expectEqual(sourceBytes(window, contain: "static let lineTransition: Animation = .smooth(duration: 0.45)"), true,
+                    "景深(契约): 进出间奏那条曲线还是 0.45 秒")
+        expectEqual(LyricsDepthMotion.lineResponse, 0.45, "景深(契约): 各行逐帧算的弹簧跟 lineTransition 同一个时长")
+        expectEqual(sourceBytes(window, contain: ".animation(metrics.glides ? Self.glide : nil, value: f)"), false,
+                    "景深(契约): 滚动指示条换句那一下也不挂 SwiftUI 隐式动画")
+        expectEqual(sourceBytes(window, contain: "ch.retarget(to: new, curve: metrics.glides ? .line : nil, now: now)"), true,
+                    "景深(契约): 指示条换句时沿同一条弹簧逐帧推,用户自己滚时直接跟手")
+    }
+
     // MARK: - 歌词窗口逐帧时钟走 display link(源码契约)
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -208,12 +269,92 @@ func runLyricsWindowTests() {
                     "逐帧时钟(契约): 逐字填色细时钟走 FrameTimeline")
         expectEqual(sourceBytes(window, contain: "FrameTimeline(minimumInterval: Self.coarseInterval,"), true,
                     "逐帧时钟(契约): 逐字填色粗时钟走 FrameTimeline")
-        expectEqual(sourceBytes(window, contain: "FrameTimeline(paused: shifts.isEmpty)"), true,
+        expectEqual(sourceBytes(window, contain: "FrameTimeline(timebase: .transition, paused: shifts.isEmpty)"), true,
                     "逐帧时钟(契约): 换句错开走 FrameTimeline")
         expectEqual(sourceBytes(window, contain: ".environment(\\.frameClock, frameClock)"), true,
                     "逐帧时钟(契约): 时钟挂在这一份所在的窗口上")
         expectEqual(sourceBytes(frame, contain: "displayLink(target: proxy, selector: selector)"), true,
                     "逐帧时钟(契约): 时钟是宿主窗口的 display link")
+    }
+
+    // MARK: - 过渡的时间轴扣掉主线程卡住的那段(FrameStall,07 章决策 108)
+    do {
+        let f60 = 1.0 / 60, f120 = 1.0 / 120
+        expectEqual(FrameStall.missedSeconds(gap: f60, frame: f60), 0, "卡顿: 正常一帧不算")
+        expectEqual(FrameStall.missedSeconds(gap: 2 * f60, frame: f60), 0, "卡顿: 偶尔掉一帧不算")
+        expectEqual(FrameStall.missedSeconds(gap: 2 * f120, frame: f120), 0,
+                    "卡顿: 120Hz 屏降到 60Hz 跑不算 —— 算的话每一帧都是卡顿,过渡慢一半")
+        expectEqual(FrameStall.missedSeconds(gap: 0.028, frame: f120), 0, "卡顿: 不到 30ms 的空档不算")
+        expectEqual(abs(FrameStall.missedSeconds(gap: 0.072, frame: f60) - (0.072 - f60)) < 1e-12, true,
+                    "卡顿: 卡了几帧,多出一帧的那段都扣掉")
+        expectEqual(abs(FrameStall.missedSeconds(gap: 0.05, frame: f60) - (0.05 - f60)) < 1e-12, true,
+                    "卡顿: 60Hz 屏上卡三帧(50ms)就算 —— 起步那一顿常常就这么长")
+        expectEqual(abs(FrameStall.missedSeconds(gap: 0.04, frame: f120) - (0.04 - f120)) < 1e-12, true,
+                    "卡顿: 120Hz 屏上 40ms 的空档算")
+        expectEqual(FrameStall.missedSeconds(gap: 0.3, frame: f60), 0,
+                    "卡顿: 长过 0.25 秒的空档不扣(窗口被盖住、系统睡眠),过渡照真实时间走")
+        expectEqual(FrameStall.missedSeconds(gap: 0.072, frame: 0), 0, "卡顿: 帧长读不到时不扣")
+    }
+
+    // MARK: - 过渡走过渡时刻、逐字填色走墙钟(源码契约,07 章决策 108)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        let frame = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/FrameTimeline.swift"),
+                                 encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty || frame.isEmpty, false, "过渡时刻(契约): 读到源码")
+        expectEqual(sourceBytes(frame, contain: "stalledSeconds += FrameStall.missedSeconds(gap: target - last, frame: target - link.timestamp)"), true,
+                    "过渡时刻(契约): 每帧把漏掉的那段记进累计卡顿")
+        expectEqual(sourceBytes(frame, contain: "if idle { lastFrame = nil } else if lastFrame == nil { lastFrame = CACurrentMediaTime() }"), true,
+                    "过渡时刻(契约): 停着的时钟恢复时从恢复那一刻算 —— 恢复它的那次更新卡住了也要算")
+        expectEqual(sourceBytes(frame, contain: "content(timebase == .transition ? clock.transitionDate(ticket.date) : ticket.date)"), true,
+                    "过渡时刻(契约): 过渡拿到的是扣掉卡顿的时刻")
+        expectEqual(sourceBytes(window, contain: "lineStagger.begin(clock: frameClock,"), true,
+                    "过渡时刻(契约): 换句错开的起点跟各行逐帧取值同一个时钟")
+        expectEqual(sourceBytes(window, contain: ".onChange(of: inputs) { old, new in\n            let now = clock.transitionNow()"), true,
+                    "过渡时刻(契约): 景深的起点按过渡时刻记")
+        expectEqual(sourceBytes(window, contain: ".onChange(of: f) { old, new in\n                        let now = clock.transitionNow()"), true,
+                    "过渡时刻(契约): 指示条的起点按过渡时刻记")
+        expectEqual(sourceBytes(window, contain: "FrameTimeline(minimumInterval: WordKaraokeGradient.windowRefreshInterval,\n                      paused: !isPlaying || !isLive)"), true,
+                    "过渡时刻(契约): 逐字填色细时钟照旧走墙钟 —— 扣掉卡顿就跟演唱错开")
+        expectEqual(sourceBytes(window, contain: "FrameTimeline(minimumInterval: Self.coarseInterval,\n                      paused: !isActive || !isPlaying || fillSettled)"), true,
+                    "过渡时刻(契约): 逐字填色粗时钟照旧走墙钟")
+    }
+
+    // MARK: - 换句错开只带视口附近的行(LyricsLineStagger.reachRows,07 章决策 109)
+    do {
+        expectEqual(LyricsLineStagger.reachRows(viewportHeight: 800, fontSize: 48), 12,
+                    "错开范围: 800pt 高、48pt 字 → 视口放得下 8 行,再加 4 行")
+        expectEqual(LyricsLineStagger.reachRows(viewportHeight: 0, fontSize: 48), Int.max, "错开范围: 还没量出尺寸时全都带上")
+        expectEqual(LyricsLineStagger.reachRows(viewportHeight: 800, fontSize: 0), Int.max, "错开范围: 字号读不到时全都带上")
+        // 跳 3 行、用户滚开四分之一视口的最坏情况下,原来看着的行(锚点上面约 37%、下面约 63%)都还在范围里
+        for (h, f) in [(800.0, 48.0), (1200.0, 30.0), (500.0, 60.0), (900.0, 16.0)] {
+            let v = h / (LyricsLineStagger.minimumRowPitchEm * f)
+            let worst = Double(LyricsLineStagger.maxStaggerJumpRows) + v * (0.63 + LyricsLineStagger.maxStaggerDriftFraction)
+            expectEqual(worst <= Double(LyricsLineStagger.reachRows(viewportHeight: h, fontSize: f)), true,
+                        "错开范围: \(Int(h))pt 高、\(Int(f))pt 字时原来看着的行都还在范围里")
+        }
+    }
+
+    // MARK: - 换句错开只带视口附近的行(源码契约,07 章决策 109)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty, false, "错开范围(契约): 读到源码")
+        expectEqual(sourceBytes(window, contain: ".modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize))"), true,
+                    "错开范围(契约): 离得远的行挂从不开始的那一份")
+        expectEqual(sourceBytes(window, contain: "&& a.staggers == b.staggers"), true,
+                    "错开范围(契约): 参不参与进行的 ==,换句时只有跨过边界的行重算")
+        expectEqual(sourceBytes(window, contain: "staggers: staggerAnchor.map { abs(index - $0) <= staggerReach } ?? true"), true,
+                    "错开范围(契约): 按离滚动锚几行算")
+        expectEqual(sourceBytes(window, contain: "jumpRows <= LyricsLineStagger.maxStaggerJumpRows,"), true,
+                    "错开范围(契约): 一次跳得远时整页带动画滚 —— 离得远的行不会被垫回原处")
+        expectEqual(sourceBytes(window, contain: "if let landed = landedScroll, abs(before - landed) > maxDrift {"), true,
+                    "错开范围(契约): 用户自己滚开了整页带动画滚回来")
+        expectEqual(sourceBytes(window, contain: "if left > 0.001 { self.clearWhenSettled(after: left) } else { self.clear() }"), true,
+                    "错开范围(契约): 走完收掉时不清落定的滚动量 —— 清了的话下一次换句永远没有参照")
     }
 
     // MARK: - 歌词窗口间奏三点按时间点亮(源码契约)

@@ -2687,10 +2687,11 @@ struct LyricsWindowView: View {
             // 的位置,开唱那一刻只染色、不再滚动。scrollLineIndex 在空档里提前指向下一行
             // (逐字歌词才知道"唱完"是几点;行级 LRC 不抢跑,两个下标恒等,行为跟改前
             // 一致),染色/加粗/虚化仍全部看 currentLineIndex。
-            .onChange(of: playback.scrollLineIndex) {
+            .onChange(of: playback.scrollLineIndex) { old, new in
                 // 窗口面不可见时不做滚动动画(没人看,被遮住/最小化的窗口也不会去合成),
                 // 直接定位;并记一笔,恢复可见时再无动画定位一次兜底(已知坑 #17)。
-                scrollToActiveLine(scrollProxy: scrollProxy, animated: windowController.isSurfaceVisible)
+                scrollToActiveLine(scrollProxy: scrollProxy, animated: windowController.isSurfaceVisible,
+                                   jumpRows: old.flatMap { o in new.map { abs($0 - o) } } ?? 0)
                 if !windowController.isSurfaceVisible { scrollPendingWhileHidden = true }
             }
             .onChange(of: playback.currentGapIndex) {
@@ -2782,11 +2783,12 @@ struct LyricsWindowView: View {
     // 视觉中心落在约 41%(同窗口对拍,07 章决策 87)。
     private static let activeLineAnchor = UnitPoint(x: 0.5, y: 0.37)
 
-    /// 每行虚化 / 亮度的变化、进出间奏那次滚动用这一条曲线。换句的滚动不走它:页面一次跳到位,各行
-    /// 错开着归位(`LineStagger`,07 章决策 94)。
+    /// 进出间奏那次滚动、间奏点的进出用这一条曲线。各行虚化 / 亮度的过渡按同一条弹簧逐帧算(`LyricsDepthMotion.line`,
+    /// 见 RowDepth),两处时长必须一起改。换句的滚动不走它:页面一次跳到位,各行错开着归位(`LineStagger`,07 章决策 94)。
     static let lineTransition: Animation = .smooth(duration: 0.45)
 
-    private func scrollToActiveLine(scrollProxy: ScrollViewProxy, animated: Bool) {
+    /// `jumpRows`:这一次滚动锚跳了几行(换句通常是 1),跳得远时不错开(07 章决策 109)。
+    private func scrollToActiveLine(scrollProxy: ScrollViewProxy, animated: Bool, jumpRows: Int = 0) {
         // 开场(还没唱到第一句)不停在顶部:AM 的开场是前奏「•••」锚在 41%、第一句
         // 在它下方约窗高 52% 处(对照 AM 截图量出第一句中心 51.8%)。
         // 不能直接 scrollTo「•••」那一行 —— gapDotsRow 不活跃时整行不渲染,id 根本
@@ -2803,7 +2805,9 @@ struct LyricsWindowView: View {
             target = nil
         }
         guard let target else { return }
-        if animated, activeID != nil, !reduceMotion, lineStagger.begin() {
+        if animated, activeID != nil, !reduceMotion, jumpRows <= LyricsLineStagger.maxStaggerJumpRows,
+           lineStagger.begin(clock: frameClock,
+                             maxDrift: lyricsViewportHeight * CGFloat(LyricsLineStagger.maxStaggerDriftFraction)) {
             // 换句:无动画一次到位,各行在 LineStagger 里先垫回原处、再错开着归位(07 章决策 94)。
             scrollProxy.scrollTo(target.id, anchor: target.anchor)
         } else if animated {
@@ -2892,6 +2896,10 @@ struct LyricsWindowView: View {
                     let rowOnArtwork = hasArtworkBackground
                     let rowTextColor = lyricTextColor
                     let rowSecondaryColor = lyricSecondaryTextColor
+                    // 离滚动锚多远的行跟着换句错开(07 章决策 109)。
+                    let staggerAnchor = playback.scrollLineIndex ?? playback.currentLineIndex
+                    let staggerReach = LyricsLineStagger.reachRows(viewportHeight: Double(lyricsViewportHeight),
+                                                                   fontSize: Double(lyricFontSize))
                     ForEach(Array(playback.allLines.enumerated()), id: \.element.id) { index, item in
                         // .equatable():没有它,**每一行**都会跟着整页 body 重算一遍 —— 稳定播放期间主线程
                         // 曾有 ~22% 的时间耗在 NSHostingView.layout → ViewGraphRootValueUpdater.render 里,
@@ -2951,7 +2959,8 @@ struct LyricsWindowView: View {
                                 // 的会是隔壁行。
                                 PlaybackCoordinator.shared.seek(toMs: max(0, item.timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
                             },
-                            stagger: lineStagger
+                            stagger: lineStagger,
+                            staggers: staggerAnchor.map { abs(index - $0) <= staggerReach } ?? true
                         )
                         .equatable()
                         .id(item.id)
@@ -2977,7 +2986,7 @@ struct LyricsWindowView: View {
                         .allowsHitTesting(false)
                     }
                 }
-                // 间奏点的插入/移除(以及各行随之退暗一档)跟换行滚动同一条曲线。
+                // 间奏点的插入/移除跟换行滚动同一条曲线(各行随之退暗一档由各行自己的 RowDepth 走)。
                 // 用 value 限定形而不是 withAnimation:只在进出间奏那一刻生效,
                 // 不会波及各行叶子上逐帧跑的填色时钟(上午面板那个坑)。
                 .animation(Self.lineTransition, value: playback.currentGapIndex)
@@ -4776,6 +4785,9 @@ private struct LyricsLineRow: View, Equatable {
     /// 那块不动的矩形接 —— 跟着错开一帧帧挪动的可命中内容,会让 SwiftUI 每帧重做悬停判定,整扇窗跟着
     /// 重算标题栏拖窗区(07 章决策 98)。
     let stagger: LyricsLineStaggerModel
+    /// 离滚动锚够近、换句时跟着错开(07 章决策 109)。离得远的行挂 `LyricsLineStaggerModel.inert`:换句那一下不跟着重算,
+    /// 错开期间不逐帧刷新。
+    var staggers: Bool = true
 
     static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
         // item 比整行而不只比 id:id 只保证同一首、同一份歌词正文,译文 / 罗马音 / 逐字是后补进来的,
@@ -4809,6 +4821,7 @@ private struct LyricsLineRow: View, Equatable {
             && a.showTranslation == b.showTranslation
             && a.reduceMotion == b.reduceMotion
             && a.displayScale == b.displayScale
+            && a.staggers == b.staggers
     }
 
     private var secondaryTextColor: Color { secondaryColor }
@@ -4875,7 +4888,7 @@ private struct LyricsLineRow: View, Equatable {
     // (07 章决策 90,算式在 LyricsWindowDepth)。
     private var lineOpacity: Double { LyricsWindowDepth.opacity(distance: distance) }
 
-    // SwiftUI 的 .blur() 本身是可动画属性,复用调用点已有的 .animation(value: distance)。
+    // 景深的模糊半径;过渡见 RowDepth。
     private var lineBlur: CGFloat { LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize) }
 
     /// 背景人声显示用的词:去掉整段首尾的括号(源里写成「(What you doing?)」,Apple Music 显示时不带)。
@@ -4944,29 +4957,18 @@ private struct LyricsLineRow: View, Equatable {
         .padding(.leading, duetInsets.leading)
         .padding(.trailing, duetInsets.trailing)
         .frame(maxWidth: .infinity, alignment: alignment)
-        // 动画屏障(60fps 逐帧胶片实测抓包定的):下面那两条行级 .animation(value:) 本意只给
-        // opacity/blur 的景深过渡用,但它们的作用域是整棵子树 —— 行激活瞬间词的填色取值从
-        // "定格全亮"跳到"按时间≈0",这个 diff 被 lineTransition 捕获,渐变 stop 被从 1 插值回 0,
-        // 表现为"下一行前几个字先全亮、亮暗边界 ~100ms 从右往左回撤"。字级叶子上的
-        // .transaction{animation=nil} **拦不住**这条路径;同类型的 .animation(nil, value:) 屏障
-        // (内层覆盖外层是文档化行为)插在内容与 opacity/blur 之间才切实有效:内容子树对这两个
-        // value 的变化拿到 nil 动画,opacity/blur 在屏障之上、照常吃外层动画。
+        // 景深按显示刷新逐帧推,不挂 SwiftUI 隐式动画(07 章决策 106)。换句时当前行的不透明度瞬时到位、模糊照样
+        // 走 0.45 秒的「对焦」:不透明度跟着爬的话,跟瞬时切到「未唱暗色」的填色相乘出一个先暗一拍的凹陷,看着像
+        // 新行重新加载了一遍。模糊是跟缩放同一批的「聚焦感」装饰,减弱动态效果时一起关;悬停那一行恢复清晰(同 Apple
+        // Music),看得清要跳去哪一句;拖窗改尺寸期间也关掉(决策 71)。
+        .modifier(RowDepth(inputs: .init(
+            opacity: isHovered ? 1 : lineOpacity,
+            blur: (reduceMotion || isHovered || suspendsBlur) ? 0 : lineBlur,
+            distance: distance, isHovered: isHovered, isActive: isActive)))
+        // 外层的动画(进出间奏那条 `.animation(_:value:)` 也罩着各行)别接管这一行:景深自己逐帧走;内容被接管的话,
+        // 行激活瞬间词的填色取值从「定格全亮」跳到「按时间≈0」会被插值,下一行前几个字先全亮再回撤。字级叶子上的
+        // .transaction{animation=nil} 拦不住这条路径,屏障得挂在整行外面。
         .animation(nil, value: distance)
-        .animation(nil, value: isHovered)
-        .opacity(isHovered ? 1 : lineOpacity)
-        // 激活行的不透明度**瞬时到位**(60fps 亮度轨迹实测):行落位瞬间填色已瞬时切到"未唱
-        // 暗色",若不透明度还在 0.42→1.0 慢慢爬,两通道相乘出一个"先暗一拍(129→120)再用
-        // 0.45s 爬回 139"的凹陷 —— 观感就是"新行像被重新加载一遍,闪烁一下"。激活行直接落在
-        // 终态(129→139 的一次性小步升,无凹陷);退场行/其他行仍走 lineTransition(1→0.42 的
-        // 退暗要动画,否则旧行"啪"地熄灭)。模糊不在此列 —— 它由更外层的 .animation 驱动,
-        // 激活行仍有 0.45s 的"对焦"过程。
-        .animation(isActive ? nil : LyricsWindowView.lineTransition, value: distance)
-        // 模糊跟缩放一样受 reduceMotion 影响时直接关掉——虽然模糊本身不是"位移类"动效,
-        // 但它是这套"聚焦感"视觉效果里跟缩放同一批的非必要装饰,减少动态效果的用户大概率
-        // 也不想要这层模糊,统一用同一个开关关掉,不单独加一个新设置项。
-        // 鼠标悬在哪一行,哪一行就恢复清晰 —— 跟 Apple Music 一样,让你能看清要跳去的是
-        // 哪一句,再决定点不点。
-        .blur(radius: (reduceMotion || isHovered || suspendsBlur) ? 0 : lineBlur)
         // 别给当前行挂 .scaleEffect(1.02)。.scaleEffect 是**渲染后**的仿射变换:文字先按
         // 原字号栅格化,再整体拉大 1.02 倍,是个非整数倍重采样。在 Retina 上看不太出来,在 1x
         // 外接屏上直接把**最该看清的那一行**糊掉 —— 同一张截图里当前行的字形边缘平均过渡宽度
@@ -4974,10 +4976,8 @@ private struct LyricsLineRow: View, Equatable {
         //
         // 2% 的放大本来就几乎看不出来,而"当前行"的强调其实是另外三样在扛:满不透明度、
         // 零模糊、逐字填色。为了一个看不见的收益去糊掉正文,不划算。
-        .animation(LyricsWindowView.lineTransition, value: distance)
-        .animation(.easeOut(duration: 0.16), value: isHovered)
         // 换句错开的位移和整行内容都不参与命中,理由见 `stagger`。
-        .modifier(LineStagger(model: stagger, fontSize: fontSize))
+        .modifier(LineStagger(model: staggers ? stagger : .inert, fontSize: fontSize))
         .allowsHitTesting(false)
         // 命中区要盖满整行(含左右空白),否则只有文字上才点得到
         .contentShape(Rectangle())
@@ -5051,10 +5051,11 @@ private struct LyricsSongwritersFooter: View, Equatable {
             .foregroundStyle(textColor)
             .lyricTypesetting(list)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .opacity(LyricsWindowDepth.opacity(distance: distance))
-            .blur(radius: (reduceMotion || suspendsBlur)
-                ? 0 : LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize))
-            .animation(LyricsWindowView.lineTransition, value: distance)
+            .modifier(RowDepth(inputs: .init(
+                opacity: LyricsWindowDepth.opacity(distance: distance),
+                blur: (reduceMotion || suspendsBlur) ? 0 : LyricsWindowDepth.blurRadius(distance: distance, fontSize: fontSize),
+                distance: distance, isHovered: false, isActive: false)))
+            .animation(nil, value: distance)
     }
 }
 
@@ -6302,11 +6303,25 @@ final class LyricsScrollProbe: @unchecked Sendable {
     @Published private(set) var shifts: [Shift] = []
     let scrollProbe = LyricsScrollProbe()
     private var clearWork: DispatchWorkItem?
+    /// 各笔的起点和收尾都按这个时钟的过渡时刻算,跟各行逐帧取值同一个时钟(07 章决策 108)。
+    private weak var clock: FrameClock?
+    /// 上一笔换句落定时的滚动量。下一次换句前跟它比,就知道用户有没有自己滚开;进间奏、无动画定位时清掉。
+    private var landedScroll: CGFloat?
 
-    /// 换句开始。还没有哪一行量过滚动量(列表还没画出来)时返回 false,调用方照旧带动画滚。
-    /// 上一笔还没定下的,滚动量定在此刻。
-    func begin(now: Date = Date()) -> Bool {
+    /// 离滚动锚太远、不跟着错开的行挂这一份:它从不开始,那些行换句时不重算、错开期间不逐帧刷新(07 章决策 109)。
+    static let inert = LyricsLineStaggerModel()
+
+    /// 换句开始。还没有哪一行量过滚动量(列表还没画出来)、或者换句前用户自己滚开超过 `maxDrift` 时返回 false,
+    /// 调用方照旧带动画滚。上一笔还没定下的,滚动量定在此刻。
+    func begin(clock: FrameClock, maxDrift: CGFloat) -> Bool {
         guard let before = scrollProbe.value else { return false }
+        // 离锚点远的行不跟着垫回原处,用户滚开时原来看着的那几行会一下消失,整页滚回来
+        if let landed = landedScroll, abs(before - landed) > maxDrift {
+            landedScroll = nil
+            return false
+        }
+        self.clock = clock
+        let now = clock.transitionNow()
         var next = shifts.filter { now.timeIntervalSince($0.start) * 1000 < LyricsLineStagger.settleMs }
         if let last = next.indices.last, next[last].amount == nil {
             next[last].amount = before - next[last].scrollBefore
@@ -6317,11 +6332,21 @@ final class LyricsScrollProbe: @unchecked Sendable {
         for delay in [0.1, 0.3] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.settleLatest() }
         }
-        clearWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.reset() }
-        clearWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + LyricsLineStagger.settleMs / 1000, execute: work)
+        clearWhenSettled(after: LyricsLineStagger.settleMs / 1000)
         return true
+    }
+
+    /// 最新那一笔走完就收掉。主线程卡过的话过渡时刻往后推了,到点没走完就再等剩下那一截。
+    private func clearWhenSettled(after seconds: Double) {
+        clearWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let now = self.clock?.transitionNow() ?? Date()
+            let left = self.shifts.last.map { LyricsLineStagger.settleMs / 1000 - now.timeIntervalSince($0.start) } ?? 0
+            if left > 0.001 { self.clearWhenSettled(after: left) } else { self.clear() }
+        }
+        clearWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
     /// 最新那一笔换句的滚动量还没定下:此刻滚动量的变化就是那一下跳动(滚动指示条据此补间)。
@@ -6332,19 +6357,82 @@ final class LyricsScrollProbe: @unchecked Sendable {
         guard let last = shifts.indices.last, shifts[last].amount == nil, let now = scrollProbe.value,
               abs(now - shifts[last].scrollBefore) > 0.5 else { return }
         shifts[last].amount = now - shifts[last].scrollBefore
+        landedScroll = now
     }
 
     /// 别的滚动(进间奏)开始前把最新那一笔定下,免得各行把那次滚动也当成换句往回垫。
     func freeze() {
+        landedScroll = nil
         guard let last = shifts.indices.last, shifts[last].amount == nil, let now = scrollProbe.value else { return }
         shifts[last].amount = now - shifts[last].scrollBefore
     }
 
     /// 无动画定位(换歌、窗口恢复可见、改尺寸):不再错开,各行直接落位。
     func reset() {
+        landedScroll = nil
+        clear()
+    }
+
+    /// 收掉各笔。换句走完时只走这一步,落定的滚动量留着给下一次换句比。
+    private func clear() {
         clearWork?.cancel()
         clearWork = nil
         if !shifts.isEmpty { shifts = [] }
+    }
+}
+
+/// 一行的景深(不透明度 / 模糊):目标一变,从此刻画着的值起逐帧推到新目标,走完停表、画目标值(07 章决策 106)。
+/// 时钟是这扇窗的 display link(`FrameTimeline`),不挂 SwiftUI 隐式动画 —— 进程里有 SwiftUI `ScrollView` 时那种动画
+/// 每帧要渲染两次。换句(距离变了)走 `.line`、悬停走 `.hover`,别的变化(改字号、拖窗关模糊、减弱动态效果)瞬时;
+/// 换句时当前行的不透明度也瞬时。时间轴用过渡时刻,主线程卡住漏掉的帧不算进度(07 章决策 108)。
+private struct RowDepth: ViewModifier {
+    struct Inputs: Equatable {
+        var opacity: Double
+        var blur: CGFloat
+        var distance: Int?
+        var isHovered: Bool
+        var isActive: Bool
+    }
+
+    let inputs: Inputs
+    @Environment(\.frameClock) private var clock
+    @State private var opacity: LyricsDepthMotion.Channel?
+    @State private var blur: LyricsDepthMotion.Channel?
+
+    func body(content: Content) -> some View {
+        let end = max(opacity?.end ?? .distantPast, blur?.end ?? .distantPast)
+        let moving = end > clock.transitionNow()
+        FrameTimeline(timebase: .transition, paused: !moving) { now in
+            content
+                .opacity(moving ? opacity?.value(at: now) ?? inputs.opacity : inputs.opacity)
+                .blur(radius: moving ? CGFloat(blur?.value(at: now) ?? Double(inputs.blur)) : inputs.blur)
+        }
+        .onChange(of: inputs) { old, new in
+            let now = clock.transitionNow()
+            let curve: LyricsDepthMotion.Curve? = old.distance != new.distance ? .line
+                : old.isHovered != new.isHovered ? .hover : nil
+            var o = opacity ?? .init(value: old.opacity, now: now)
+            var b = blur ?? .init(value: Double(old.blur), now: now)
+            o.retarget(to: new.opacity, curve: curve == .line && new.isActive ? nil : curve, now: now)
+            b.retarget(to: Double(new.blur), curve: curve, now: now)
+            opacity = o
+            blur = b
+        }
+        // 走完那一刻收掉两条过渡:body 重算一次,时钟停下,画回目标值。中途卡过的话走完的时刻往后推了,醒来没走完就再等。
+        .task(id: end) {
+            var wait = end.timeIntervalSince(clock.transitionNow())
+            guard wait > 0 else { return }
+            while wait > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000) + 1_000_000)
+                guard !Task.isCancelled else { return }
+                wait = end.timeIntervalSince(clock.transitionNow())
+            }
+            let now = clock.transitionNow()
+            if !(opacity?.isMoving(at: now) ?? false) && !(blur?.isMoving(at: now) ?? false) {
+                opacity = nil
+                blur = nil
+            }
+        }
     }
 }
 
@@ -6358,7 +6446,7 @@ private struct LineStagger: ViewModifier {
     func body(content: Content) -> some View {
         let shifts = model.shifts
         let probe = model.scrollProbe
-        FrameTimeline(paused: shifts.isEmpty) { now in
+        FrameTimeline(timebase: .transition, paused: shifts.isEmpty) { now in
             content.visualEffect { [now, fontSize = fontSize] effect, proxy in
                 effect.offset(y: Self.offset(shifts: shifts, now: now, proxy: proxy, fontSize: fontSize, probe: probe))
             }
@@ -6438,9 +6526,10 @@ private struct LyricsScrollMetricsReporter: ViewModifier {
 private struct LyricsScrollIndicator: View {
     @ObservedObject var metrics: LyricsScrollMetricsModel
     let onArtwork: Bool
-
-    /// 换句那一下滑块的补间。
-    private static let glide: Animation = .smooth(duration: 0.45)
+    /// 滑块位置(0…1)的过渡:换句那一下沿各行景深那条弹簧逐帧推,时钟是这扇窗的 display link,不挂 SwiftUI
+    /// 隐式动画(07 章决策 106);用户自己滚时直接跟手。时间轴用过渡时刻(07 章决策 108)。
+    @State private var glide: LyricsDepthMotion.Channel?
+    @Environment(\.frameClock) private var clock
 
     var body: some View {
         GeometryReader { g in
@@ -6459,11 +6548,32 @@ private struct LyricsScrollIndicator: View {
                     Capsule()
                         .fill(ink.opacity(onArtwork ? 0.08 : 0.10))
                         .frame(width: 6, height: trackH)
-                    Capsule()
-                        .fill(ink.opacity(onArtwork ? 0.30 : 0.35))
-                        .frame(width: 12, height: thumbH)
-                        .offset(y: (trackH - thumbH) * f)
-                        .animation(metrics.glides ? Self.glide : nil, value: f)
+                    let end = glide?.end ?? .distantPast
+                    let moving = end > clock.transitionNow()
+                    FrameTimeline(timebase: .transition, paused: !moving) { now in
+                        Capsule()
+                            .fill(ink.opacity(onArtwork ? 0.30 : 0.35))
+                            .frame(width: 12, height: thumbH)
+                            .offset(y: (trackH - thumbH) * (moving ? glide?.value(at: now) ?? f : f))
+                    }
+                    .onChange(of: f) { old, new in
+                        let now = clock.transitionNow()
+                        var ch = glide ?? .init(value: old, now: now)
+                        ch.retarget(to: new, curve: metrics.glides ? .line : nil, now: now)
+                        glide = ch
+                    }
+                    // 走完那一刻收掉过渡:body 重算一次,时钟停下。中途卡过的话醒来没走完就再等(同 RowDepth)。
+                    .task(id: end) {
+                        var wait = end.timeIntervalSince(clock.transitionNow())
+                        guard wait > 0 else { return }
+                        while wait > 0 {
+                            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000) + 1_000_000)
+                            guard !Task.isCancelled else { return }
+                            wait = end.timeIntervalSince(clock.transitionNow())
+                        }
+                        guard !(glide?.isMoving(at: clock.transitionNow()) ?? false) else { return }
+                        glide = nil
+                    }
                 }
                 .frame(width: 12)
                 .padding(.top, topInset)

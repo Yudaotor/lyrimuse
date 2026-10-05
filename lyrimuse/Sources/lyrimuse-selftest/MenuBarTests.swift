@@ -791,6 +791,18 @@ func runMenuBarTests() {
                                         containerWidth: 30, offset: 0), 10,
                     "容器 30pt 已经容得下 10pt 渐隐带,不必封顶")
 
+        // 量宽度按「文字 + 字体 + 标的语言」记住(源码契约):换句那一刻各面会把同一批字反复量好几遍
+        do {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let renderer = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/MenuBar/MenuBarMarqueeRenderer.swift"),
+                                        encoding: .utf8)) ?? ""
+            expectEqual(renderer.isEmpty, false, "量宽(契约): 读到源码")
+            expectEqual(sourceBytes(renderer, contain: "let key = WidthKey(text: text, font: font, language: LyricTypesetting.language(for: text, translation: translation))"),
+                        true, "量宽(契约): 键里带标的语言 —— 换日文歌 / 繁体设置会换字形,宽度跟着变")
+            expectEqual(sourceBytes(renderer, contain: "if let cached = widthMemo[key] { return cached }"), true,
+                        "量宽(契约): 量过的直接用")
+        }
+
         // ④ 图层版跑马灯的周期(MarqueeCycle):关键帧逐段复刻 MarqueeText 的滚动循环
         expectEqual(M.cycle(contentWidth: 200, containerWidth: 286) == nil, true, "周期: 装得下没有周期")
         expectEqual(M.cycle(contentWidth: 290, containerWidth: 286) == nil, true, "周期: 死区以内没有周期")
