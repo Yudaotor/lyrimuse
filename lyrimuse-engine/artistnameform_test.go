@@ -85,3 +85,51 @@ func TestLyricSourceArtistMatchesIterationMarkParts(t *testing.T) {
 		t.Error("「水树奈奈」跟「水樹奈」不是同一个人")
 	}
 }
+
+// 「中文名 英文名」连写的署名:一头是一整段汉字(至少两个字)、其余都是拉丁字母或数字写的词才拆;全角空格也算空白。
+func TestBilingualNameParts(t *testing.T) {
+	cases := []struct {
+		in, han, other string
+		ok             bool
+	}{
+		{"田馥甄 hebe tien", "田馥甄", "hebe tien", true},
+		{"anson lo 卢瀚霆", "卢瀚霆", "anson lo", true},
+		{"g.e.m. 邓紫棋", "邓紫棋", "g.e.m.", true},
+		{"八三夭 831", "八三夭", "831", true},
+		{"田馥甄\u3000hebe", "田馥甄", "hebe", true},
+		{"田馥甄", "", "", false},
+		{"hebe tien", "", "", false},
+		{"田馥甄 林宥嘉", "", "", false},
+		{"鹤 the crane", "", "", false},
+		{"田馥甄 feat. lara", "", "", false},
+		{"田馥甄 x lara", "", "", false},
+		{"田馥甄 hebe-", "", "", false},
+		{"hebe 田馥甄 tien", "", "", false},
+		{"田馥甄 hebe/tien", "", "", false},
+		{"田馥甄- hebe tien", "", "", false},
+		{"", "", "", false},
+	}
+	for _, c := range cases {
+		han, other, ok := bilingualNameParts(c.in)
+		if han != c.han || other != c.other || ok != c.ok {
+			t.Errorf("bilingualNameParts(%q) = %q, %q, %v, 要 %q, %q, %v", c.in, han, other, ok, c.han, c.other, c.ok)
+		}
+	}
+}
+
+// bilingualHanPart 先归一化(繁转简、小写)再拆,给出的汉字段是 artistMatches 的写法。
+func TestBilingualHanPart(t *testing.T) {
+	for in, want := range map[string]string{
+		"田馥甄 Hebe Tien": "田馥甄",
+		"Anson Lo 盧瀚霆":  "卢瀚霆",
+		"周杰倫 Jay Chou":  "周杰伦",
+		"八三夭 831":       "八三夭",
+		"田馥甄":           "",
+		"Hebe Tien":     "",
+		"鹤 The Crane":   "",
+	} {
+		if got := bilingualHanPart(in); got != want {
+			t.Errorf("bilingualHanPart(%q) = %q, 要 %q", in, got, want)
+		}
+	}
+}

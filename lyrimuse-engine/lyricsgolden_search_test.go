@@ -301,9 +301,10 @@ func searchGoldenItemPlausible(q goldenQuery, localDur float64, it searchGoldenI
 		return false
 	}
 	artistOK := false
+	// Artists 只有网易云有:跟 neteasePickSong 用同一个比对。
 	if len(it.Artists) > 0 {
 		for _, a := range it.Artists {
-			if artistMatches(a, q.Artist) {
+			if neteaseArtistMatches(a, q.Artist) {
 				artistOK = true
 			}
 		}
@@ -340,9 +341,10 @@ func goldenComputeSearchJudge(fx *searchGoldenFixture, e searchGoldenExpect) sea
 	}
 	j.TitleAccepted = lyricTitleAccepted(it.Title, q.Title)
 	j.ArtistMatches = false
+	// Artists 只有网易云有:跟 neteasePickSong 用同一个比对。
 	if len(it.Artists) > 0 {
 		for _, a := range it.Artists {
-			if artistMatches(a, q.Artist) {
+			if neteaseArtistMatches(a, q.Artist) {
 				j.ArtistMatches = true
 			}
 		}

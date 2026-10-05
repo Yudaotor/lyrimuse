@@ -578,7 +578,7 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 		}
 		artistMatch := false
 		for _, a := range s.Artists {
-			if artistMatches(a.Name, artist) {
+			if neteaseArtistMatches(a.Name, artist) {
 				artistMatch = true
 				break
 			}
@@ -683,6 +683,20 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 // 的 12% 严得多:没有专辑佐证时只剩时长能分出剪辑版和专辑版,两者歌词相同、行时间却会错开。
 const neteaseLyricOnlyDurationTolerance = 0.03
 
+// neteaseArtistMatches:网易云认身份时的歌手比对 —— 挑歌(封面、链接、专辑 id 跟着这一条走)、只给歌词的兜底、规范署名、
+// 按专辑名找专辑、按歌手搜反查曲名、专辑曲目锚定。在 artistMatches 之上,「中文名 英文名」连写的署名汉字那段
+// (bilingualHanPart)也算同一个人。只给网易云用,别的源的歌词闸别换成它,见 09 章决策 180。
+func neteaseArtistMatches(name, artist string) bool {
+	if artistMatches(name, artist) {
+		return true
+	}
+	if h := bilingualHanPart(artist); h != "" && artistMatches(name, h) {
+		return true
+	}
+	h := bilingualHanPart(name)
+	return h != "" && artistMatches(h, artist)
+}
+
 // neteaseLyricOnlyPick:neteasePickSong 挑不出(同名候选都对不上专辑、身份有歧义,或歌手写法对不上)时,给歌词用的
 // 候选。只放行歌词:调用方不拿它给封面、链接、歌手名、专辑 id,那几样判的是身份,照旧宁缺毋滥。判据:歌名闸 +
 // (歌手对得上,或收紧版三角验证 lyricRecordingTriangleMatchesGuarded)+ 版本闸 + 自报时长差在
@@ -715,7 +729,7 @@ func neteaseLyricOnlyPick(songs []neSearchSong, artist, title, album string, dur
 		matched := false
 		for _, a := range s.Artists {
 			names = append(names, a.Name)
-			matched = matched || artistMatches(a.Name, artist)
+			matched = matched || neteaseArtistMatches(a.Name, artist)
 		}
 		if !matched && !lyricRecordingTriangleMatchesGuarded(s.Name, s.Album.Name, strings.Join(names, "/"), d, title, album, artist, durationSecs) {
 			continue
@@ -972,7 +986,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// credit,会悄悄丢人。
 	if !lyricOnly && len(artistCreditParts(artist)) < 2 {
 		for _, a := range chosen.Artists {
-			if artistMatches(a.Name, artist) {
+			if neteaseArtistMatches(a.Name, artist) {
 				info.Artist = a.Name
 				break
 			}
@@ -1294,7 +1308,7 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 		bestID := int64(0)
 		bestScore := -1
 		for _, a := range out.Result.Albums {
-			if !artistMatches(a.Artist.Name, artist) {
+			if !neteaseArtistMatches(a.Artist.Name, artist) {
 				continue
 			}
 			s := albumScore(a.Name, album)
@@ -1543,7 +1557,7 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 			}
 			matched := false
 			for _, a := range s.Artists {
-				if artistMatches(a.Name, artist) {
+				if neteaseArtistMatches(a.Name, artist) {
 					matched = true
 					break
 				}
@@ -1667,7 +1681,7 @@ func anchorAlbumTrackForLocalTitle(tracks []albumTrack, artist, title string, du
 		if !lyricTitleAccepted(t.title, title) {
 			continue
 		}
-		if t.artist != "" && !artistMatches(t.artist, artist) {
+		if t.artist != "" && !neteaseArtistMatches(t.artist, artist) {
 			continue
 		}
 		d := math.Abs(t.duration - durationSecs)

@@ -1353,8 +1353,7 @@ func expectsCanonicalArtist(artist string) bool {
 // 变音也折叠(foldDiacritics,同 normLoose):「Beyoncé」对「Beyonce」、「Elley Duhé」对「Elley Duhe」是同一个人。
 // 折完仍然逐字节比,不碰标点,防仿冒的精度不变。「々」按前一个字展开(foldIterationMark):中文曲库把「水樹奈々」写成「水树奈奈」。
 func artistMatches(a, b string) bool {
-	na := strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(foldIterationMark(a)))))
-	nb := strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(foldIterationMark(b)))))
+	na, nb := artistMatchKey(a), artistMatchKey(b)
 	if na == "" || nb == "" {
 		return false
 	}
@@ -2013,8 +2012,14 @@ var neteaseImpersonatorRiddenArtists = map[string]bool{
 // isNeteaseImpersonatorRidden reports whether artist is a known "copyright
 // pulled from NetEase entirely, catalog is 100% impersonators" case — see
 // neteaseImpersonatorRiddenArtists 注释。
+//
+// 「中文名 英文名」连写的署名按汉字那段查(「周杰倫 Jay Chou」):neteaseArtistMatches 认它跟「周杰伦」是同一个人。
 func isNeteaseImpersonatorRidden(artist string) bool {
-	return neteaseImpersonatorRiddenArtists[strings.TrimSpace(artist)]
+	if neteaseImpersonatorRiddenArtists[strings.TrimSpace(artist)] {
+		return true
+	}
+	h := bilingualHanPart(artist)
+	return h != "" && neteaseImpersonatorRiddenArtists[h]
 }
 
 // toSimplified 把繁体字/词转成简体——用于统一搜索关键词/本地比较字符串的书写形式,不是

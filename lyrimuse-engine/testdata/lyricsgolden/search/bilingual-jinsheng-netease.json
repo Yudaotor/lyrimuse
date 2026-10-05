@@ -1,0 +1,329 @@
+{
+  "id": "bilingual-jinsheng-netease",
+  "source": "netease",
+  "note": "「中文名 英文名」署名,网易云署中文名",
+  "track": {
+    "artist": "Gigi 炎明熹",
+    "title": "今生今世",
+    "album": "今生今世 - Single"
+  },
+  "captured_at": "2026-10-05",
+  "query": {
+    "artist": "Gigi 炎明熹",
+    "title": "今生今世",
+    "album": "今生今世 - Single",
+    "duration_secs": 198.8070068359375
+  },
+  "local_duration_secs": 198.8070068359375,
+  "items": [
+    {
+      "id": "2024889454",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "今生今世",
+      "album_id": "160626653",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "1949419768",
+      "title": "今生今世 (Live)",
+      "artists": [
+        "林晓峰"
+      ],
+      "album": "声生不息 第5期",
+      "album_id": "145347403",
+      "duration_secs": 248.346
+    },
+    {
+      "id": "2032788743",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "REMEMBERING Leslie",
+      "album_id": "162352923",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "276207",
+      "title": "今生今世(Live)",
+      "artists": [
+        "梅艳芳"
+      ],
+      "album": "Anita Classic Moment(Live)",
+      "album_id": "27436",
+      "duration_secs": 64.813
+    },
+    {
+      "id": "1306436168",
+      "title": "今生今世 (Live)",
+      "artists": [
+        "张杰"
+      ],
+      "album": "Just For Star洛杉矶音乐分享会",
+      "album_id": "72594320",
+      "duration_secs": 248.149
+    },
+    {
+      "id": "187815",
+      "title": "今生今世(Live)",
+      "artists": [
+        "张国荣"
+      ],
+      "album": "张国荣跨越97演唱会",
+      "album_id": "19034",
+      "duration_secs": 213.293
+    },
+    {
+      "id": "1472536492",
+      "title": "今生今世 (Live)",
+      "artists": [
+        "张杰"
+      ],
+      "album": "2019张杰未·LIVE巡回演唱会北京鸟巢站+上海站LIVE专辑",
+      "album_id": "94232990",
+      "duration_secs": 249.105
+    },
+    {
+      "id": "545407148",
+      "title": "今生今世 (DVD版)",
+      "artists": [
+        "张杰"
+      ],
+      "album": "这，就是爱",
+      "album_id": "19298",
+      "duration_secs": 296.491
+    },
+    {
+      "id": "3383972050",
+      "title": "今生今世 (烟嗓版)",
+      "artists": [
+        "锦鲤"
+      ],
+      "duration_secs": 194.838
+    },
+    {
+      "id": "1329734080",
+      "title": "今生今世 (DVD版)",
+      "artists": [
+        "张杰"
+      ],
+      "album": "2011“这就是爱” 成都演唱会Live专辑",
+      "album_id": "74675643",
+      "duration_secs": 296.491
+    },
+    {
+      "id": "562682049",
+      "title": "今生今世（Cover 张国荣）",
+      "artists": [
+        "张斯麒"
+      ],
+      "album": "今生今世",
+      "album_id": "38793575",
+      "duration_secs": 263.27
+    },
+    {
+      "id": "1411575962",
+      "title": "今生今世 (Live)",
+      "artists": [
+        "曹格"
+      ],
+      "album": "蒙面唱将猜猜猜第四季 第11期",
+      "album_id": "84308804",
+      "duration_secs": 228.116
+    },
+    {
+      "id": "3374324129",
+      "title": "今生今世（烟嗓版）",
+      "artists": [
+        "烟嗓哥"
+      ],
+      "album": "寂静里有你",
+      "album_id": "371885007",
+      "duration_secs": 268.202
+    },
+    {
+      "id": "29095723",
+      "title": "今生今世(电影版)",
+      "artists": [
+        "张国荣"
+      ],
+      "album": "I Am What I Am",
+      "album_id": "18937",
+      "duration_secs": 105.293
+    },
+    {
+      "id": "29343369",
+      "title": "今生今世(电影版)",
+      "artists": [
+        "张国荣"
+      ],
+      "album": "Leslie Cheung Four Seasons",
+      "album_id": "18934",
+      "duration_secs": 105.266
+    },
+    {
+      "id": "3431397591",
+      "title": "今生今世 (电影\"金枝玉叶\"歌曲)",
+      "artists": [
+        "张国荣"
+      ],
+      "album": "LESLIE CHEUNG 70",
+      "album_id": "396490741",
+      "duration_secs": 102.293
+    },
+    {
+      "id": "2156410237",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "旧歌新唱精选",
+      "album_id": "196059703",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "2042824254",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "想像．张国荣 (繁星篇)",
+      "album_id": "164534958",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "2165724184",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "仲夏夜之歌",
+      "album_id": "199104048",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "2094058132",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "你还爱我吗",
+      "album_id": "177705343",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "1893266011",
+      "title": "今生今世 (电影\"金枝玉叶\"歌曲)",
+      "artists": [
+        "张国荣"
+      ],
+      "album": "KTV必唱：全場合唱金曲集",
+      "album_id": "135828162",
+      "duration_secs": 102.293
+    },
+    {
+      "id": "2069199746",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "酷爽夏日",
+      "album_id": "171036601",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "2091576495",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "失落角落",
+      "album_id": "177030091",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "3354143190",
+      "title": "今生今世 (电影\"金枝玉叶\"歌曲)",
+      "artists": [
+        "张国荣"
+      ],
+      "album": "粤语时光留声机",
+      "album_id": "363990200",
+      "duration_secs": 102.293
+    },
+    {
+      "id": "2111688449",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "一人圣诞派对",
+      "album_id": "181839595",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "31370033",
+      "title": "广场舞今生今世爱着你(恰恰)",
+      "artists": [
+        "吴克国"
+      ],
+      "album": "今生今世爱着你",
+      "album_id": "3098835",
+      "duration_secs": 254
+    },
+    {
+      "id": "29553379",
+      "title": "今生今世(原曲：China Sea)",
+      "artists": [
+        "原声带"
+      ],
+      "album": "杨佩佩精装大戏主题曲",
+      "album_id": "3044021",
+      "duration_secs": 201.92
+    },
+    {
+      "id": "2110910962",
+      "title": "今生今世",
+      "artists": [
+        "炎明熹"
+      ],
+      "album": "到了圣诞，约你这晚",
+      "album_id": "181680931",
+      "duration_secs": 199.743
+    },
+    {
+      "id": "35831098",
+      "title": "今生今世(电影\"金枝玉叶\"歌曲)",
+      "artists": [
+        "张国荣"
+      ],
+      "album": "电影歌曲101",
+      "album_id": "3376004",
+      "duration_secs": 105.533
+    },
+    {
+      "id": "1411575966",
+      "title": "今生今世 (Live伴奏)",
+      "artists": [
+        "曹格"
+      ],
+      "album": "蒙面唱将猜猜猜第四季 第11期",
+      "album_id": "84308804",
+      "duration_secs": 228.116
+    }
+  ],
+  "expect": {
+    "picked_id": "2024889454"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.47080491727080287,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

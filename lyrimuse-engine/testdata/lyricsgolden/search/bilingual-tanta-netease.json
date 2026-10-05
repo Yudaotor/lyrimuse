@@ -1,0 +1,332 @@
+{
+  "id": "bilingual-tanta-netease",
+  "source": "netease",
+  "note": "「中文名 英文名」署名,网易云署中文名",
+  "track": {
+    "artist": "田馥甄 Hebe Tien",
+    "title": "坍塌",
+    "album": ""
+  },
+  "captured_at": "2026-10-05",
+  "query": {
+    "artist": "田馥甄 Hebe Tien",
+    "title": "坍塌",
+    "album": "要去什么地方",
+    "duration_secs": 214
+  },
+  "local_duration_secs": 214,
+  "items": [
+    {
+      "id": "3439441351",
+      "title": "坍塌",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 213.828
+    },
+    {
+      "id": "3439441799",
+      "title": "要去什么地方",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 227.746
+    },
+    {
+      "id": "3439441346",
+      "title": "干净的房间",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 236.325
+    },
+    {
+      "id": "3439441800",
+      "title": "云",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 204.173
+    },
+    {
+      "id": "3439441353",
+      "title": "果",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 234.61
+    },
+    {
+      "id": "3439441352",
+      "title": "静脉",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 233.24
+    },
+    {
+      "id": "3439441801",
+      "title": "乌鸦",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 224.912
+    },
+    {
+      "id": "3439441347",
+      "title": "值得纪念的垃圾",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 245.666
+    },
+    {
+      "id": "3439441797",
+      "title": "大船",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 192.393
+    },
+    {
+      "id": "3439441802",
+      "title": "蹉跎",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "要去什么地方",
+      "album_id": "399723430",
+      "duration_secs": 202.306
+    },
+    {
+      "id": "1481931539",
+      "title": "人什么的最麻烦了",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 268.266
+    },
+    {
+      "id": "1923183766",
+      "title": "现在是什么时辰了",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "现在是什么时辰了",
+      "album_id": "140916225",
+      "duration_secs": 239.711
+    },
+    {
+      "id": "1472606824",
+      "title": "或是一首歌",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 274
+    },
+    {
+      "id": "1481929838",
+      "title": "田",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 235.2
+    },
+    {
+      "id": "1477319527",
+      "title": "讽刺的情书",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 258.533
+    },
+    {
+      "id": "1481929839",
+      "title": "无人知晓",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 288.733
+    },
+    {
+      "id": "1416387774",
+      "title": "悬日",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 271.374
+    },
+    {
+      "id": "1386055857",
+      "title": "不晚",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "不晚",
+      "album_id": "81104012",
+      "duration_secs": 255.159
+    },
+    {
+      "id": "2695954436",
+      "title": "一二三",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "一二三",
+      "album_id": "269326121",
+      "duration_secs": 235.419
+    },
+    {
+      "id": "1454447163",
+      "title": "皆可",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 266.6
+    },
+    {
+      "id": "1466033420",
+      "title": "先知",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 301.066
+    },
+    {
+      "id": "1459744130",
+      "title": "一一",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 250.733
+    },
+    {
+      "id": "1481931534",
+      "title": "Intro",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 104.733
+    },
+    {
+      "id": "1481931536",
+      "title": "底里歇斯",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "无人知晓",
+      "album_id": "95902047",
+      "duration_secs": 234.666
+    },
+    {
+      "id": "3349606557",
+      "title": "不醉不会",
+      "artists": [
+        "田馥甄的小迷妹"
+      ],
+      "album": "不醉不会",
+      "album_id": "362061708",
+      "duration_secs": 231.57
+    },
+    {
+      "id": "2074386770",
+      "title": "乘着无人光影的远行",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "乘着无人光影的远行",
+      "album_id": "172706026",
+      "duration_secs": 369.986
+    },
+    {
+      "id": "459275100",
+      "title": "美女与野兽",
+      "artists": [
+        "田馥甄",
+        "井柏然"
+      ],
+      "album": "美女与野兽",
+      "album_id": "35181017",
+      "duration_secs": 265.93
+    },
+    {
+      "id": "1954974529",
+      "title": "一周的朋友",
+      "artists": [
+        "田馥甄"
+      ],
+      "album": "一周的朋友",
+      "album_id": "146325764",
+      "duration_secs": 274.026
+    },
+    {
+      "id": "537854964",
+      "title": "失恋阵线联盟",
+      "artists": [
+        "草蜢"
+      ],
+      "album": "我的少女时代 电影原声带",
+      "album_id": "37542525",
+      "duration_secs": 174.733
+    },
+    {
+      "id": "440767886",
+      "title": "魔鬼中的天使（Cover 田馥甄）",
+      "artists": [
+        "杨亚茹Triste"
+      ],
+      "album": "魔鬼中的天使",
+      "album_id": "34993706",
+      "duration_secs": 235.075
+    }
+  ],
+  "expect": {
+    "picked_id": "3439441351"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.08037383177569955,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}
