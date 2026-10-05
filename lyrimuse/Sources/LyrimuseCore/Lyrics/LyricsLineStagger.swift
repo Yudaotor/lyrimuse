@@ -3,16 +3,17 @@ import Foundation
 /// 歌词窗口换句时的逐行错开(照 Apple Music 歌词页录屏,07 章决策 94):页面一次滚到位,每一行先被垫回
 /// 原处,再各自走一条弹簧回去 —— 从视口顶往下,越靠下起步越晚,看上去是一道从上往下传的波。
 public enum LyricsLineStagger {
-    /// 每行那条弹簧,跟 SwiftUI `Spring(response:dampingRatio:)` 同一组参数:约 0.1 秒走到一半、过冲约 15%。
-    public static let springResponse = 0.50
-    public static let springDampingRatio = 0.52
+    /// 每行那条弹簧,跟 SwiftUI `Spring(response:dampingRatio:)` 同一组参数:约 0.15 秒走到一半、0.3 秒走到九成,
+    /// 过冲约 0.8%,看不出回弹。阻尼比必须小于 1:`progress` 与 `springSettleMs` 按欠阻尼解算,到 1 就除零。
+    public static let springResponse = 0.62
+    public static let springDampingRatio = 0.84
     /// 往下每隔这么多倍字号,起步晚 `rowDelayMs`(Apple 带译文的一行约 3 倍字号高,相邻两行起步差约 50ms)。
     public static let rowPitchEm = 3.0
     public static let rowDelayMs = 50.0
     /// 起步最多晚这么多:视口下面还没露出来的行不再往后推。
     public static let maxDelayMs = 400.0
 
-    /// 弹簧阶跃响应,0 → 1,带过冲;没到起步时刻时 0。
+    /// 弹簧阶跃响应,0 → 1;没到起步时刻时 0。
     public static func progress(elapsedMs: Double) -> Double {
         guard elapsedMs > 0 else { return 0 }
         let omega = 2 * Double.pi / springResponse

@@ -1209,6 +1209,8 @@ struct LyricsWindowView: View {
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 WindowPlayback 的注释。
     @StateObject private var playback = WindowPlayback()
     @StateObject private var windowController = LyricsWindowController()
+    /// 逐帧时钟,挂在这一份所在的窗口上(`FrameClockHost`),各处 `FrameTimeline` 从环境里取。
+    @State private var frameClock = FrameClock()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 预览模式下宿主(设置窗口)看不看得见,见 PreviewHostVisibility.swift。真窗口恒 true、不读它。
     @Environment(\.previewHostVisible) private var previewHostVisible
@@ -1346,6 +1348,12 @@ struct LyricsWindowView: View {
                 fullBody
             }
         }
+        // 窗口看不见时整窗不做隐式动画,换句的景深、玻璃胶囊直接落到终态:SwiftUI 不会替被盖住的窗口停动画(07 章决策 104)。
+        .transaction { transaction in
+            guard !windowController.isSurfaceVisible else { return }
+            transaction.disablesAnimations = true
+            transaction.animation = nil
+        }
         // 从竖长阅读面板改成 Apple Music 歌词页同款的横向双列比例。窗口尺寸
         // 由系统状态恢复机制记忆,老用户第一次打开还是旧的竖长尺寸(此时按上面的宽度
         // 判断退化成单列),手动拖宽一次之后就会记住新比例。
@@ -1361,6 +1369,8 @@ struct LyricsWindowView: View {
                 LyricsWindowCapture(controller: windowController).frame(width: 0, height: 0)
             }
         }
+        .background(FrameClockHost(clock: frameClock).frame(width: 0, height: 0))
+        .environment(\.frameClock, frameClock)
         // 见 AuxiliaryWindowActivation 注释——只记账,不碰 Dock 图标。
         // 这扇窗设计成"跟随播放持续显示"、用户中途切去别的 App 很常见,所以它曾是借 Dock
         // 图标最有理由的一扇;用户仍然选择让「在 Dock 中显示」这个开关说了算,切走之后靠
@@ -1989,10 +1999,10 @@ struct LyricsWindowView: View {
         let thick = miniControlsVisible ? Self.miniBarHoverHeight : Self.miniBarHeight
         // 暂停 / 窗口不可见时停表:位置不动,条子就不用每秒重画四次(暂停中拖动、seek 会改
         // miniScrubFraction / pausedPositionMs,照样触发重算,不靠这个时钟)。
-        return TimelineView(.animation(minimumInterval: 0.25,
-                                       paused: !playback.isPlayingNow || !windowController.isSurfaceVisible)) { ctx in
+        return FrameTimeline(minimumInterval: 0.25,
+                             paused: !playback.isPlayingNow || !windowController.isSurfaceVisible) { now in
             let played = total > 0
-                ? min(1, max(0, Double(miniPositionMs(now: ctx.date)) / Double(total))) : 0
+                ? min(1, max(0, Double(miniPositionMs(now: now)) / Double(total))) : 0
             let fraction = miniScrubFraction ?? played
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -2771,7 +2781,7 @@ struct LyricsWindowView: View {
     private static let activeLineAnchor = UnitPoint(x: 0.5, y: 0.37)
 
     /// 每行虚化 / 亮度的变化、进出间奏那次滚动用这一条曲线。换句的滚动不走它:页面一次跳到位,各行
-    /// 错开着弹回(`LineStagger`,07 章决策 94)。
+    /// 错开着归位(`LineStagger`,07 章决策 94)。
     static let lineTransition: Animation = .smooth(duration: 0.45)
 
     private func scrollToActiveLine(scrollProxy: ScrollViewProxy, animated: Bool) {
@@ -2792,7 +2802,7 @@ struct LyricsWindowView: View {
         }
         guard let target else { return }
         if animated, activeID != nil, !reduceMotion, lineStagger.begin() {
-            // 换句:无动画一次到位,各行在 LineStagger 里先垫回原处、再错开着弹回(07 章决策 94)。
+            // 换句:无动画一次到位,各行在 LineStagger 里先垫回原处、再错开着归位(07 章决策 94)。
             scrollProxy.scrollTo(target.id, anchor: target.anchor)
         } else if animated {
             lineStagger.freeze()
@@ -2938,10 +2948,10 @@ struct LyricsWindowView: View {
                                 // 播放位置上(见 activeLine),这里不减回去的话,跳过去之后落在
                                 // 的会是隔壁行。
                                 PlaybackCoordinator.shared.seek(toMs: max(0, item.timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
-                            }
+                            },
+                            stagger: lineStagger
                         )
                         .equatable()
-                        .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize))
                         .id(item.id)
                         // 这一行之后有间奏 → 插「•••」(不活跃时零高度不占位,见 gapDotsRow)。
                         if let g = gapMarker(index) {
@@ -2961,11 +2971,13 @@ struct LyricsWindowView: View {
                         )
                         .equatable()
                         .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize))
+                        // 跟着换句错开移动、本身不可点,不参与命中(理由见 LyricsLineRow.stagger)。
+                        .allowsHitTesting(false)
                     }
                 }
                 // 间奏点的插入/移除(以及各行随之退暗一档)跟换行滚动同一条曲线。
                 // 用 value 限定形而不是 withAnimation:只在进出间奏那一刻生效,
-                // 不会波及各行叶子上逐帧跑的填色 TimelineView(上午面板那个坑)。
+                // 不会波及各行叶子上逐帧跑的填色时钟(上午面板那个坑)。
                 .animation(Self.lineTransition, value: playback.currentGapIndex)
                 // 顶/底留白按**视口比例**,不能写固定值:固定 88pt 时列表顶部之上根本没有可滚空间
                 // —— scrollTo(第一句, 0.52) 超出内容范围被钳回 offset 0,开场永远停在顶部(改 id
@@ -3168,24 +3180,25 @@ struct LyricsWindowView: View {
     private var trackInfoTexts: some View {
         // spacing -3(对拍 AM 同区截图):AM 两行视觉空隙 3pt,而两行各是 22pt 定高框
         // (墨高 16pt,上下各余 3pt),3+spacing+3 要等于 3,spacing 只能是 -3。
-        // 别去缩 frame 高:MarqueeText 会把超出框的拉丁降部裁掉。
+        // 别去缩 frame 高:跑马灯按框裁,会把超出框的拉丁降部裁掉。
         VStack(alignment: .leading, spacing: -3) {
             // 放不下就滚,不直接截断成 "Automatic (Remastered 20…" —— 这两行是这一栏唯一说明
             // "现在放的是哪一版"的地方,截掉的恰好是版本后缀。
-            // 显式给行高:MarqueeText 内部是 GeometryReader,纵向贪心,不定高会把整栏撑开。
+            // 显式给行高:跑马灯纵向取满提案的高度,不定高会把整栏撑开。
             // 广告插播:歌名位写「广告中」,跟灵动岛(NotchLyricsView)和下面歌词区的空状态
             // (emptyStateSpec)用同一个判据、同一句文案 —— 少了这一处,广告时这一行会原样显示
             // 播放器给的占位标题「—」,配上没有封面的占位图,整张卡看起来像是坏了。
             //
-            // MarqueeText 的 id 必须用**显示串**而不是 playback.title:切进/切出广告时要重置
+            // 跑马灯的 id 必须用**显示串**而不是 playback.title:切进/切出广告时要重置
             // 跑马灯,用原标题的话 id 不变、滚动位置会带着上一条的进度(灵动岛那边同一个理由,
             // 见 NotchLyricsView 那段注释)。
             //
             // 两行都往左多伸出一截、内容垫回同样宽:停着时跟封面左缘齐,滚起来文字滑进这一截淡出,
-            // 不在左缘硬切;右端溢出时渐隐(07 章决策 93)。
-            MarqueeText(id: displayTitle,
-                        edgeFadeWidth: Self.trackInfoTrailingFade,
-                        leadingFadeWidth: Self.trackInfoLeadingFade) {
+            // 不在左缘硬切;右端溢出时渐隐(07 章决策 93)。滚动交给图层(`LayerMarquee`),窗口看不见时停在开头。
+            LayerMarquee(id: displayTitle,
+                         edgeFadeWidth: Self.trackInfoTrailingFade,
+                         leadingFadeWidth: Self.trackInfoLeadingFade,
+                         isActive: windowController.isSurfaceVisible) {
                 Text(displayTitle)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(primaryTextColor)
@@ -3193,9 +3206,14 @@ struct LyricsWindowView: View {
             }
             .frame(height: 22)
             .padding(.leading, -Self.trackInfoOverhang)
-            MarqueeText(id: displayArtistAlbum,
-                        edgeFadeWidth: Self.trackInfoTrailingFade,
-                        leadingFadeWidth: Self.trackInfoLeadingFade) {
+            // 歌名这一行没有可点的东西,不接鼠标。
+            .allowsHitTesting(false)
+            // 歌手 / 专辑能点开简介:光标进了这一行就停住滚动,链接落在看到的位置上。
+            LayerMarquee(id: displayArtistAlbum,
+                         edgeFadeWidth: Self.trackInfoTrailingFade,
+                         leadingFadeWidth: Self.trackInfoLeadingFade,
+                         isActive: windowController.isSurfaceVisible,
+                         pausesOnHover: true) {
                 artistAlbumLine
                     // 15.5:同一对拍量出 AM 副行墨高 28px、我们(17pt 时)31px,副行比
                     // 歌名小一号;歌名的 17pt 与 AM 完全一致(32px vs 32px)不动。
@@ -4371,6 +4389,8 @@ struct LyricsWindowView: View {
             }
             .frame(height: lyricFontSize * 0.5)
             .modifier(LineStagger(model: lineStagger, fontSize: lyricFontSize))
+            // 跟着换句错开移动、本身不可点,不参与命中(理由见 LyricsLineRow.stagger)。
+            .allowsHitTesting(false)
             .id(id)
             // 出现只淡入(Apple 出现时没有放大那一下),收起时缩小淡出。
             .transition(.asymmetric(
@@ -4735,6 +4755,10 @@ private struct LyricsLineRow: View, Equatable {
     let displayScale: CGFloat
     let onHover: (Bool) -> Void
     let onTap: () -> Void
+    /// 换句逐行错开(07 章决策 94),不参与 `==`。错开位移连同整行内容一起不参与命中,悬停和点按只由外面
+    /// 那块不动的矩形接 —— 跟着错开一帧帧挪动的可命中内容,会让 SwiftUI 每帧重做悬停判定,整扇窗跟着
+    /// 重算标题栏拖窗区(07 章决策 98)。
+    let stagger: LyricsLineStaggerModel
 
     static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
         // item 比整行而不只比 id:id 只保证同一首、同一份歌词正文,译文 / 罗马音 / 逐字是后补进来的,
@@ -4935,6 +4959,9 @@ private struct LyricsLineRow: View, Equatable {
         // 零模糊、逐字填色。为了一个看不见的收益去糊掉正文,不划算。
         .animation(LyricsWindowView.lineTransition, value: distance)
         .animation(.easeOut(duration: 0.16), value: isHovered)
+        // 换句错开的位移和整行内容都不参与命中,理由见 `stagger`。
+        .modifier(LineStagger(model: stagger, fontSize: fontSize))
+        .allowsHitTesting(false)
         // 命中区要盖满整行(含左右空白),否则只有文字上才点得到
         .contentShape(Rectangle())
         .onHover(perform: onHover)
@@ -5354,9 +5381,9 @@ private struct KaraokeLineText: View {
         // 行级 4Hz 粗时钟:只判断每个字"此刻是不是正在被扫"(isLive)+ 给静态字一个时间
         // 基准(staticDate);满速细时钟只挂在正在扫的那个字上(见 KaraokeWordText)。
         // 粗时钟让 WrapLayout 每秒过 4 次布局回合,但 contentKey 缓存保证不整行重测宽。
-        TimelineView(.animation(minimumInterval: Self.coarseInterval,
-                                paused: !isActive || !isPlaying || fillSettled)) { coarse in
-            lineContent(coarseDate: coarse.date, coarseMs: currentMs(at: coarse.date))
+        FrameTimeline(minimumInterval: Self.coarseInterval,
+                      paused: !isActive || !isPlaying || fillSettled) { coarseDate in
+            lineContent(coarseDate: coarseDate, coarseMs: currentMs(at: coarseDate))
         }
     }
 
@@ -5614,13 +5641,13 @@ private struct KaraokeWordText: View {
 
     var body: some View {
         // 两层:底下一层透明的同款字只管占位(决定尺寸,永远不变),逐帧换色的那层作为 overlay
-        // 画在同一位置。别把 TimelineView 直接放回布局链里:它每帧一失效,SwiftUI 就顺着把所有
+        // 画在同一位置。别把逐帧时钟(`FrameTimeline`)直接放回布局链里:它每帧一失效,SwiftUI 就顺着把所有
         // 祖先重新测一遍 —— 这一行、整张列表(几十行)、滚动视图、直到窗口根,颜色变化明明不改
         // 尺寸也照测。实测多行列表开着时主线程每帧约 40ms、卡顿不断(07 章决策 50)。overlay 里
         // 怎么变都不影响父视图尺寸,每帧只剩这一个字自己重画。
         //
         // 非当前行(forceFilled)只画一层静态字:画面跟时钟那层的定格终态逐像素相同(同一份
-        // fullStyle、零上浮),却省掉一半 Text 和整个 TimelineView。整张列表几百个字,建树 / 换字号
+        // fullStyle、零上浮),却省掉一半 Text 和整个逐帧时钟。整张列表几百个字,建树 / 换字号
         // 时这两样的解析和测量就是大头(07 章决策 53)。行激活时这里换分支,换在行级
         // `.animation(nil, value: distance)` 屏障之下,不会淡入淡出。
         // 排字语言逐词判,跟 KaraokeLineText 折行时逐词量宽度同一口径(见 `LyricTypesetting`)。
@@ -5641,13 +5668,13 @@ private struct KaraokeWordText: View {
     }
 
     private var animatedGlyph: some View {
-        TimelineView(.animation(minimumInterval: WordKaraokeGradient.windowRefreshInterval,
-                                paused: !isPlaying || !isLive)) { context in
-            // 直接读单例而不是 @ObservedObject:这个闭包本来就由 TimelineView 按帧驱动,
+        FrameTimeline(minimumInterval: WordKaraokeGradient.windowRefreshInterval,
+                      paused: !isPlaying || !isLive) { frameDate in
+            // 直接读单例而不是 @ObservedObject:这个闭包本来就由 FrameTimeline 按帧驱动,
             // 订阅反而会把协调器上二十来个 @Published 的每次变动都变成额外重算。
             let coordinator = PlaybackCoordinator.shared
             // 时钟停着时用粗时钟的时刻,理由见 staticDate。
-            let date = isLive ? context.date : staticDate
+            let date = isLive ? frameDate : staticDate
             // +currentLyricsOffsetMs:同"当前词判定"的时间基准,不加会填到一半卡住;
             // ?? pausedPositionMs:暂停基准兜底。
             let currentMs = (coordinator.anchor?.extrapolatedPositionMs(now: date)
@@ -6304,7 +6331,7 @@ final class LyricsScrollProbe: @unchecked Sendable {
     }
 }
 
-/// 换句时这一行先垫回原处、再按 `LyricsLineStagger` 晚一点弹回(07 章决策 94)。滚动量在 `visualEffect` 里
+/// 换句时这一行先垫回原处、再按 `LyricsLineStagger` 晚一点归位(07 章决策 94)。滚动量在 `visualEffect` 里
 /// 现量:行在内容坐标与滚动坐标里的差就是此刻的滚动量,跟这一帧的布局同一份 —— `scrollTo` 还没生效时量出来
 /// 没变、不垫;生效那一帧量出整段、整段垫上,不会有错位的一帧。位移只在渲染时生效,不动布局。
 private struct LineStagger: ViewModifier {
@@ -6314,8 +6341,8 @@ private struct LineStagger: ViewModifier {
     func body(content: Content) -> some View {
         let shifts = model.shifts
         let probe = model.scrollProbe
-        TimelineView(.animation(paused: shifts.isEmpty)) { context in
-            content.visualEffect { [now = context.date, fontSize = fontSize] effect, proxy in
+        FrameTimeline(paused: shifts.isEmpty) { now in
+            content.visualEffect { [now, fontSize = fontSize] effect, proxy in
                 effect.offset(y: Self.offset(shifts: shifts, now: now, proxy: proxy, fontSize: fontSize, probe: probe))
             }
         }
@@ -7319,7 +7346,7 @@ private struct ChartsPanelView: View {
 
 /// 能点开简介的一段文字(完整布局的「歌手 — 专辑」、迷你尺寸的顶部文字)。有简介时:指针移上去换成手形光标、
 /// 字色提到 `hoverColor`、加下划线,点了执行 `action`;没有简介时就是一段普通文字,不给任何「能点」的暗示。
-/// 不加补间:它常被包在 `MarqueeText` 里,那一层把内容子树的动画整个摘掉了。
+/// 悬停变色、下划线都是瞬时的,不加补间。
 private struct EditorialLinkText: View {
     let text: String
     let available: Bool

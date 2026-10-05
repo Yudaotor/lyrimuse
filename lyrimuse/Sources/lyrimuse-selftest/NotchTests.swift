@@ -1614,6 +1614,15 @@ func runNotchTests() {
         expectEqual(view.contains(".environment(\\.notchCardLayerActive, active)"), false,
                     "停表契约: 层修饰器不许直接覆盖成本层的值(会把窗口不可见时的停表冲掉)")
 
+        // 迷你进度条:时钟走 FrameTimeline,只包住已播段和两个时间数字,偏移按钮那组不在时钟里(05 章决策 62)。
+        expectEqual(view.contains("TimelineView(.animation("), false,
+                    "进度条契约: 灵动岛不用 TimelineView(.animation) —— 进程里有 SwiftUI ScrollView 时每拍要渲染两次")
+        expectEqual(view.components(separatedBy: "FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking)").count - 1, 3,
+                    "进度条契约: 已播段和两个时间数字各一个时钟")
+        expectEqual(view.contains("if showsLyricsOffsetControls {\n                    lyricsOffsetControls"), true,
+                    "进度条契约: 偏移按钮直接排在时间行里,不在时钟闭包里")
+        expectEqual(root.contains(".environment(\\.frameClock, frameClock)"), true, "进度条契约: 时钟挂在这扇灵动岛窗口上")
+
         // 窗口看不见时整卡停表:SwiftUI 不会因遮挡 / orderOut 自己停 TimelineView(.animation)。
         expectEqual(root.contains(".environment(\\.notchCardLayerActive, controller.isSurfaceVisible)"), true,
                     "可见性契约: 根上把窗口可见性注入成层值的根")

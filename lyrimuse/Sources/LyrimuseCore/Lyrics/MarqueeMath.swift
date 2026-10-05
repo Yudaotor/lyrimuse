@@ -47,3 +47,83 @@ public enum MarqueeMath {
         return min(configured, containerWidth / 2)
     }
 }
+
+extension MarqueeMath {
+    /// 匀速滚动的速度(点 / 秒)。`MarqueeText` 与 `LayerMarquee` 共用。
+    public static let pointsPerSecond: Double = 24
+    /// 停在开头、停在末尾的单位停顿(秒)。
+    public static let holdDuration: Double = 1.1
+
+    /// 装不下(超过死区)时的循环周期;装得下返回 nil。
+    public static func cycle(contentWidth: CGFloat, containerWidth: CGFloat,
+                             pointsPerSecond: Double = MarqueeMath.pointsPerSecond,
+                             hold: Double = MarqueeMath.holdDuration) -> MarqueeCycle? {
+        guard pointsPerSecond > 0,
+              isOverflowing(contentWidth: contentWidth, containerWidth: containerWidth) else { return nil }
+        let distance = overflow(contentWidth: contentWidth, containerWidth: containerWidth)
+        return MarqueeCycle(distance: distance, travel: Double(distance) / pointsPerSecond, hold: hold)
+    }
+}
+
+/// 循环跑马灯的一个周期:开头停 → 匀速滚到底 → 末尾停 → 瞬时回开头。
+///
+/// 节奏跟 `MarqueeText` 的滚动循环逐段一致:首轮开头停一个 `hold`;之后每轮开头停两个 `hold`(末尾停完瞬时归零后
+/// 先停一个,下一轮开头再停一个)。周期按「开头停两个 `hold`」排,首轮从 `firstCycleTimeOffset` 起播,开头就只停一个。
+/// 周期末到下一轮起点是一次瞬时归零:图层动画重复播放时从末帧回到首帧本来就不补间。
+public struct MarqueeCycle: Equatable {
+    /// 要滚的距离(点),> 0。
+    public let distance: CGFloat
+    /// 滚一遍的秒数。
+    public let travel: Double
+    /// 单位停顿(秒)。
+    public let hold: Double
+
+    public init(distance: CGFloat, travel: Double, hold: Double) {
+        self.distance = distance
+        self.travel = travel
+        self.hold = hold
+    }
+
+    /// 每轮开头停多久(首轮见 `firstCycleTimeOffset`)。
+    public var startHold: Double { 2 * hold }
+    /// 一个周期的秒数。
+    public var period: Double { startHold + travel + hold }
+    /// 首轮从周期的这一刻起播。
+    public var firstCycleTimeOffset: Double { hold }
+    /// 四个关键帧在周期里的位置(0…1):周期起点、起滚、滚到底、周期末。
+    public var keyTimes: [Double] { [0, startHold / period, (startHold + travel) / period, 1] }
+    /// 同上四个时刻往左滚了多少(点)。
+    public var offsets: [CGFloat] { [0, 0, distance, distance] }
+
+    /// 同上四个时刻右端渐隐带的宽度:开头停着时满宽,滚动中线性收到 0,末尾停着为 0(同 `MarqueeMath.trailingFadeWidth`
+    /// 的规则,收窄的节奏同 `MarqueeText` 里随滚动一起补间的那条渐隐带)。
+    public func trailingFades(full: CGFloat) -> [CGFloat] { [full, full, 0, 0] }
+
+    /// 周期里某一刻(秒,按周期取模)往左滚了多少。
+    public func offset(at time: Double) -> CGFloat {
+        let t = phase(time)
+        if t <= startHold { return 0 }
+        if t >= startHold + travel { return distance }
+        return distance * CGFloat((t - startHold) / travel)
+    }
+
+    /// 滚到 `offset` 时右端渐隐带的宽度。
+    public func trailingFade(forOffset offset: CGFloat, full: CGFloat) -> CGFloat {
+        guard distance > 0 else { return full }
+        return full * (1 - min(max(offset / distance, 0), 1))
+    }
+
+    /// 停在 `offset` 上之后从周期的哪一刻接着播:开头(0.5pt 以内)按首轮起点,停一个 `hold` 再滚;末端(0.5pt 以内)
+    /// 按末尾停顿的起点;中途按匀速反推。
+    public func resumeTime(forOffset offset: CGFloat) -> Double {
+        if offset < 0.5 { return firstCycleTimeOffset }
+        if offset > distance - 0.5 { return startHold + travel }
+        return startHold + travel * Double(offset / distance)
+    }
+
+    private func phase(_ time: Double) -> Double {
+        guard period > 0 else { return 0 }
+        let r = time.truncatingRemainder(dividingBy: period)
+        return r < 0 ? r + period : r
+    }
+}

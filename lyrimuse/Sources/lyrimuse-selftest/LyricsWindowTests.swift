@@ -141,9 +141,10 @@ func runLyricsWindowTests() {
         expectEqual(S.progress(elapsedMs: 0), 0, "错开: 起步那一刻不动")
         expectEqual(S.progress(elapsedMs: -30), 0, "错开: 没到起步时刻不动")
         let half = (1...400).first { S.progress(elapsedMs: Double($0)) >= 0.5 } ?? 0
-        expectEqual((90...120).contains(half), true, "错开: 约 0.1 秒走到一半(Apple 录屏拟合)")
+        expectEqual((140...165).contains(half), true, "错开: 约 0.15 秒走到一半(Apple 录屏拟合)")
         let peak = (1...1500).map { S.progress(elapsedMs: Double($0)) }.max() ?? 0
-        expectEqual(peak > 1.08 && peak < 1.2, true, "错开: 有过冲,不过分")
+        expectEqual(peak < 1.01, true, "错开: 不回弹,过冲不到 1%(Apple 录屏拟合)")
+        expectEqual(S.springDampingRatio < 1, true, "错开: 阻尼比小于 1(progress 按欠阻尼解算)")
         expectEqual(abs(S.progress(elapsedMs: S.springSettleMs) - 1) <= 0.005, true, "错开: 落定时刻剩余不到千分之五")
         expectEqual(S.delayMs(distanceFromTop: -100, fontSize: 50), 0, "错开: 视口顶上面的行不等")
         expectEqual(r3(S.delayMs(distanceFromTop: 150, fontSize: 50)), 50, "错开: 往下 3 倍字号晚 50ms")
@@ -161,6 +162,100 @@ func runLyricsWindowTests() {
         expectEqual(marquee.isEmpty, false, "跑马灯(契约): 读到源码")
         expectEqual(sourceBytes(marquee, contain: ".transaction { $0.animation = nil }\n            .geometryGroup()\n            .offset(x: -offset)"),
                     true, "跑马灯(契约): 内容摘掉动画之后先 geometryGroup 再 offset —— 少了它 offset 的滚动动画一起被摘掉,一步跳到终点")
+    }
+
+    // MARK: - 在动的可点内容不常驻命中(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty, false, "命中(契约): 读到源码")
+        expectEqual(sourceBytes(window, contain: ".modifier(LineStagger(model: stagger, fontSize: fontSize))\n        .allowsHitTesting(false)\n"),
+                    true, "命中(契约): 歌词行的错开位移连同行内容不参与命中,悬停 / 点按由外面不动的矩形接 —— 在动的可命中内容让主线程每帧重算标题栏拖窗区")
+    }
+
+    // MARK: - 逐帧时钟节流(FrameCadence)
+    do {
+        typealias C = FrameCadence
+        expectEqual(C.isDue(sinceLast: 1.0 / 60, minimumInterval: 1.0 / 60), true, "节流: 60Hz 屏上要 60Hz,每帧都刷")
+        expectEqual(C.isDue(sinceLast: 0.0160, minimumInterval: 1.0 / 60), true, "节流: 帧间隔抖短 0.7ms 仍算到点,不隔帧")
+        expectEqual(C.isDue(sinceLast: 1.0 / 120, minimumInterval: 1.0 / 60), false, "节流: 120Hz 屏上要 60Hz,隔一帧刷")
+        expectEqual(C.isDue(sinceLast: 2.0 / 120, minimumInterval: 1.0 / 60), true, "节流: 120Hz 屏上第二帧到点")
+        expectEqual(C.isDue(sinceLast: 0.001, minimumInterval: 0), true, "节流: 间隔 0 每帧都刷")
+        var updates = 0
+        var last = -1.0
+        for k in 0..<60 {
+            let t = Double(k) / 60
+            if C.isDue(sinceLast: t - last, minimumInterval: 0.25) {
+                updates += 1
+                last = t
+            }
+        }
+        expectEqual(updates, 4, "节流: 0.25 秒档在 60Hz 屏上每秒刷 4 次")
+    }
+
+    // MARK: - 歌词窗口逐帧时钟走 display link(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        let frame = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/FrameTimeline.swift"),
+                                 encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty || frame.isEmpty, false, "逐帧时钟(契约): 读到源码")
+        expectEqual(sourceBytes(window, contain: "TimelineView(.animation("), false,
+                    "逐帧时钟(契约): 歌词窗口不用 TimelineView(.animation) —— 进程里有 SwiftUI ScrollView 时它驱动的每一帧要完整渲染两次")
+        expectEqual(sourceBytes(window, contain: "FrameTimeline(minimumInterval: WordKaraokeGradient.windowRefreshInterval,"), true,
+                    "逐帧时钟(契约): 逐字填色细时钟走 FrameTimeline")
+        expectEqual(sourceBytes(window, contain: "FrameTimeline(minimumInterval: Self.coarseInterval,"), true,
+                    "逐帧时钟(契约): 逐字填色粗时钟走 FrameTimeline")
+        expectEqual(sourceBytes(window, contain: "FrameTimeline(paused: shifts.isEmpty)"), true,
+                    "逐帧时钟(契约): 换句错开走 FrameTimeline")
+        expectEqual(sourceBytes(window, contain: ".environment(\\.frameClock, frameClock)"), true,
+                    "逐帧时钟(契约): 时钟挂在这一份所在的窗口上")
+        expectEqual(sourceBytes(frame, contain: "displayLink(target: proxy, selector: selector)"), true,
+                    "逐帧时钟(契约): 时钟是宿主窗口的 display link")
+    }
+
+    // MARK: - 歌词窗口看不见时不做隐式动画(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty, false, "看不见停动画(契约): 读到源码")
+        expectEqual(sourceBytes(window, contain: "        }\n        // 窗口看不见时整窗不做隐式动画"), true,
+                    "看不见停动画(契约): 闸挂在根部那个 Group 上,迷你 / 完整两套布局和各处浮层胶囊都在它下面")
+        expectEqual(sourceBytes(window, contain: ".transaction { transaction in\n            guard !windowController.isSurfaceVisible else { return }\n            transaction.disablesAnimations = true\n            transaction.animation = nil\n        }"),
+                    true, "看不见停动画(契约): 看不见时关掉隐式动画 —— SwiftUI 不替被盖住的窗口停动画,换句的景深每帧照跑")
+    }
+
+    // MARK: - 系统判为看不见时算盖住(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let monitor = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/WindowCoverageMonitor.swift"),
+                                   encoding: .utf8)) ?? ""
+        expectEqual(monitor.isEmpty, false, "覆盖(契约): 读到源码")
+        expectEqual(sourceBytes(monitor, contain: "guard window.isVisible, !window.isMiniaturized, window.occlusionState.contains(.visible) else { return true }"), true,
+                    "覆盖(契约): 没上屏 / 最小化 / 被遮住直接算盖住 —— 窗口一上屏就被整扇盖住时系统不发遮挡通知,宿主的初值停在「可见」")
+    }
+
+    // MARK: - 左栏跑马灯走图层、看不见时不滚(源码契约)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        let marquee = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LayerMarquee.swift"),
+                                   encoding: .utf8)) ?? ""
+        expectEqual(window.isEmpty || marquee.isEmpty, false, "图层跑马灯(契约): 读到源码")
+        expectEqual(sourceBytes(window, contain: "LayerMarquee(id: displayTitle,\n                         edgeFadeWidth: Self.trackInfoTrailingFade,\n                         leadingFadeWidth: Self.trackInfoLeadingFade,\n                         isActive: windowController.isSurfaceVisible) {"),
+                    true, "图层跑马灯(契约): 歌名走图层、按窗口可见性停 —— SwiftUI 跑马灯在这扇窗里每帧要完整渲染两次")
+        expectEqual(sourceBytes(window, contain: "LayerMarquee(id: displayArtistAlbum,\n                         edgeFadeWidth: Self.trackInfoTrailingFade,\n                         leadingFadeWidth: Self.trackInfoLeadingFade,\n                         isActive: windowController.isSurfaceVisible,\n                         pausesOnHover: true) {"),
+                    true, "图层跑马灯(契约): 副标题走图层、悬停时停住 —— 里面的歌手 / 专辑链接要落在看到的位置上")
+        expectEqual(sourceBytes(marquee, contain: "animation.repeatCount = .infinity"), true,
+                    "图层跑马灯(契约): 关键帧重复播放,装好之后主线程不再参与")
+        expectEqual(sourceBytes(marquee, contain: "MenuBarAnimation.capped(animation, fps: MenuBarAnimation.scrollFPS)"), true,
+                    "图层跑马灯(契约): 文字横移声明 60Hz,不交给系统降档")
+        expectEqual(sourceBytes(marquee, contain: "animating: isActive && !reduceMotion"), true,
+                    "图层跑马灯(契约): 看不见或减弱动态效果时不滚")
     }
 
     // MARK: - 迷你两行选取

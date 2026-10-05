@@ -11,9 +11,7 @@ import SwiftUI
 // id 参数控制"什么时候该重新测量、重新从头开始滚动"——歌词行内部逐字变色(由外面
 // TimelineView 驱动)不应该打断/重置正在进行的滚动,那只是同一句歌词内部的高亮进度
 // 在变,不是这一行内容本身换了;只有真的换了一句歌词、换了一首歌才应该重新开始。
-// Swift 不支持泛型类型里放 static stored property,这两个纯常量挪到文件作用域。
-let marqueePixelsPerSecond: Double = 24
-let marqueeHoldDuration: Double = 1.1
+// 速度和停顿取 `MarqueeMath.pointsPerSecond` / `MarqueeMath.holdDuration`,图层版跑马灯(`LayerMarquee`)用同一组。
 struct MarqueeText<Content: View>: View {
     let id: AnyHashable
     /// **没溢出时**内容靠容器哪一边。溢出时一律 .leading,不受这个参数影响 —— 滚动是
@@ -230,7 +228,7 @@ struct MarqueeText<Content: View>: View {
         guard isOverflowing, !reduceMotion else { return }
         scrollTask = Task { @MainActor in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(marqueeHoldDuration * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(MarqueeMath.holdDuration * 1_000_000_000))
                 if Task.isCancelled { return }
                 // 距离在**起步这一刻**读,不在 restart 时捕获:apply 对"等待期间
                 // 容器宽度在变"的情况不再重启,这里读到的才是当下真实的溢出量。@State 是引用
@@ -238,12 +236,12 @@ struct MarqueeText<Content: View>: View {
                 // apply 那边会因溢出翻转而重启并取消本 Task,不会走到这里。
                 let distance = overflow
                 guard distance > 0 else { return }  // 防御:翻转与取消之间的窄窗口
-                let travelDuration = Double(distance) / marqueePixelsPerSecond
+                let travelDuration = Double(distance) / MarqueeMath.pointsPerSecond
                 withAnimation(.linear(duration: travelDuration)) { offset = distance }
                 // 不循环:停在末尾。归零交给换句时的 restart()(模型值此时是 distance,那次归零仍是
                 // 一次真实的值变化,下面那段"回程必须瞬时"的前提不受影响)。
                 guard loops else { return }
-                try? await Task.sleep(nanoseconds: UInt64(travelDuration * 1_000_000_000) + UInt64(marqueeHoldDuration * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(travelDuration * 1_000_000_000) + UInt64(MarqueeMath.holdDuration * 1_000_000_000))
                 if Task.isCancelled { return }
                 // 回程是**瞬时**的,不是滑回去 —— 这一条不是审美选择,是正确性要求。
                 //
@@ -254,7 +252,7 @@ struct MarqueeText<Content: View>: View {
                 // 的可动画数据没有变化,SwiftUI 没有任何理由去重新定向那条已经在跑的动画,
                 // 于是它继续把**新一句**的文字从半路慢慢挪回来。抓到的帧里,新一句在换句
                 // 后 0.17 秒仍缺着开头几个字,再过 0.4 秒才右移约 9.6pt(正好是
-                // marqueePixelsPerSecond × 0.4)。只在归零时关掉动画治不了它 ——
+                // MarqueeMath.pointsPerSecond × 0.4)。只在归零时关掉动画治不了它 ——
                 // 因为压根没触发那次更新。
                 //
                 // 改成瞬时归位之后,模型值只可能是两种:有动画在跑时是 distance、静止时是 0。
@@ -262,7 +260,7 @@ struct MarqueeText<Content: View>: View {
                 var reset = Transaction()
                 reset.disablesAnimations = true
                 withTransaction(reset) { offset = 0 }
-                try? await Task.sleep(nanoseconds: UInt64(marqueeHoldDuration * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(MarqueeMath.holdDuration * 1_000_000_000))
             }
         }
     }

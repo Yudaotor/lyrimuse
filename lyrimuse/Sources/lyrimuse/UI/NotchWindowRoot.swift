@@ -30,6 +30,8 @@ struct NotchWindowRoot: View {
     /// 要连着改这里。
     static let vanishSettleDelay: TimeInterval = 0.25
     @ObservedObject var controller: NotchLyricsWindowController
+    /// 逐帧时钟,挂在这扇灵动岛窗口上(`FrameClockHost`),迷你进度条从环境里取。
+    @State private var frameClock = FrameClock()
     /// 光标上一次是不是在卡片上 —— 只为了让触觉反馈在"进入"那一下触发一次,不是状态源。
     @State private var hoveringCard = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -148,6 +150,8 @@ struct NotchWindowRoot: View {
             .environment(\.notchHostClipsCard, true)
             // 窗口看不见时整卡停表(见 controller.isSurfaceVisible);cardBodyLayer 里每层再与自己的可见性取与。
             .environment(\.notchCardLayerActive, controller.isSurfaceVisible)
+            .environment(\.frameClock, frameClock)
+            .background(FrameClockHost(clock: frameClock).frame(width: 0, height: 0))
             .frame(width: cardWidth, height: cardHeight)
             // 出场动画「从刘海撑开」:卡片「从无到有」露面时(冷启动 / 手动打开 /
             // 从刘海回场,由控制器的 revealGeneration 计数触发)播一遍 —— 裁剪区从真刘海宽、顶行高起,横向

@@ -72,9 +72,11 @@ final class WindowCoverageMonitor {
     }
 
     private static func computeCovered(_ window: NSWindow) -> Bool {
-        // 看不见 / 最小化 / 前台正是它自己时不必算:occlusionState 已经管着前者,后者上面没有别的窗口。
-        guard window.isVisible, !window.isMiniaturized, window.occlusionState.contains(.visible),
-              !window.isKeyWindow else { return false }
+        // 没上屏 / 最小化 / 系统判为被遮住时直接算盖住:窗口一上屏就被整扇盖住时系统不发遮挡变化通知,
+        // 宿主手里的遮挡初值会一直停在「可见」,靠这里每 2 秒的重算纠正(07 章决策 103)。
+        guard window.isVisible, !window.isMiniaturized, window.occlusionState.contains(.visible) else { return true }
+        // 前台正是它自己时上面没有别的窗口。
+        guard !window.isKeyWindow else { return false }
         let id = CGWindowID(window.windowNumber)
         guard let selfInfo = (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first,
               let target = bounds(selfInfo),

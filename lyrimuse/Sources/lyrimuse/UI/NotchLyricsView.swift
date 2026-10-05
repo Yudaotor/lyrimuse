@@ -3060,15 +3060,13 @@ private struct NotchTransientHost<Fallback: View>: View {
 /// ① 拖动的三个交互状态(@GestureState/测宽/悬停)在这里自持 —— 原来挂在
 ///    NotchLyricsView 根上,拖动时每个指针事件(60~120Hz)都整卡重估,实际要变的只有
 ///    这十来个视图;
-/// ② TimelineView 补上 minimumInterval —— 原来是全仓唯一没封帧率上限的 .animation
-///    时刻表(正是那次「只给窗口加了上限,这里和灵动岛漏了」同款失误的
-///    残留),hover 展开+播放中按显示器刷新率(ProMotion 120Hz)驱动一条每秒只走
-///    ~1.8pt、时间文字每秒才变一次的进度条。30Hz 与其余三处逐字填色同一口径。
+/// ② 逐帧时钟是 `FrameTimeline`(30Hz 上限,同其余逐字填色口径),只包住已播段和两个时间数字;
+///    中间那组歌词偏移按钮不在时钟里,只随父视图更新(05 章决策 62)。
 ///
 /// 两种数据来源,跟「歌词窗口」的 progressSection 同一套三态口径:
 ///  - **播放中**:anchor 在,按帧从锚点外推;
 ///  - **暂停**:anchor 被清成 nil(见 PlaybackCoordinator.pausedPositionMs 的注释),
-///    改用冻结位置 + 曲目时长照常显示,无 TimelineView。
+///    改用冻结位置 + 曲目时长照常显示,时钟不走。
 /// 暂停这一档是补的:在那之前一暂停整条进度条凭空消失,顺带让展开区
 /// 失去撑宽度的内容(「暂停时下一句歌词跑到中间」的根源,见 expandedContent 末尾注释)。
 private struct NotchScrubber: View {
@@ -3098,32 +3096,33 @@ private struct NotchScrubber: View {
     @State private var hoveringScrubber = false
 
     var body: some View {
+        let fingerFraction = scrubbingFraction
         if let anchor, anchor.durationMs > 0 {
-            TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
-                                    paused: !isPlayingNow || !cardLayerActive)) { context in
-                // 拖动期间显示手指按住的位置,而不是外推出的真实位置——否则进度条会在
-                // 手指底下被 TimelineView 每帧拉回去。松手才真的发 seek。
-                let currentMs = scrubbingFraction.map { Int($0 * Double(anchor.durationMs)) }
-                    ?? anchor.extrapolatedPositionMs(now: context.date)
-                scrubberAndTimes(currentMs: currentMs, durationMs: anchor.durationMs)
+            // 拖动期间显示手指按住的位置,而不是外推出的真实位置——否则进度条会在
+            // 手指底下被时钟每帧拉回去。松手才真的发 seek。
+            scrubberAndTimes(durationMs: anchor.durationMs, ticking: isPlayingNow && cardLayerActive) { now in
+                fingerFraction.map { Int($0 * Double(anchor.durationMs)) } ?? anchor.extrapolatedPositionMs(now: now)
             }
         } else if let paused = pausedPositionMs,
                   let duration = durationMs, duration > 0 {
-            // 暂停态不需要 TimelineView —— 位置是冻住的,没有随时间推进这回事。
-            let currentMs = scrubbingFraction.map { Int($0 * Double(duration)) } ?? paused
-            scrubberAndTimes(currentMs: currentMs, durationMs: duration)
+            // 暂停态位置是冻住的,时钟不走。
+            scrubberAndTimes(durationMs: duration, ticking: false) { _ in
+                fingerFraction.map { Int($0 * Double(duration)) } ?? paused
+            }
         }
     }
 
-    /// 进度条本体 + 下面那行时间。播放态和暂停态共用,只是 currentMs/durationMs 的来源不同。
-    private func scrubberAndTimes(currentMs: Int, durationMs: Int) -> some View {
+    /// 进度条本体 + 下面那行时间。播放态和暂停态共用,只是位置的来源不同;`ticking` 为 false 时时钟停着。
+    private func scrubberAndTimes(durationMs: Int, ticking: Bool,
+                                  positionMs: @escaping (Date) -> Int) -> some View {
         VStack(spacing: 3) {
             GeometryReader { proxy in
-                let fraction = min(1, max(0, Double(currentMs) / Double(durationMs)))
                 ZStack(alignment: .leading) {
                     Capsule().fill(tint.opacity(0.18))
-                    Capsule().fill(tint.opacity(0.85))
-                        .frame(width: proxy.size.width * fraction)
+                    FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking) { now in
+                        Capsule().fill(tint.opacity(0.85))
+                            .frame(width: proxy.size.width * min(1, max(0, Double(positionMs(now)) / Double(durationMs))))
+                    }
                 }
                 // 变粗只发生在下面那个**恒定高度的槽**里(垂直居中),布局上不占多一分 ——
                 // 别让 .frame(height: scrubberHeight) 直接参与布局:悬停 3→5 那 2pt 会把
@@ -3174,7 +3173,9 @@ private struct NotchScrubber: View {
             // 播放器不吃外部跳转指令(Amazon Music)、或者在放广告时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
             .allowsHitTesting(seekable)
             HStack {
-                Text(Self.timeString(ms: currentMs))
+                FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking) { now in
+                    Text(Self.timeString(ms: positionMs(now)))
+                }
                 Spacer()
                 // 「歌词时间轴微调」:中间这一截以前一直空着(两个时间数字
                 // 中间的 Spacer),塞进跟菜单栏面板同一份功能的灵动岛入口——见
@@ -3185,7 +3186,9 @@ private struct NotchScrubber: View {
                     lyricsOffsetControls
                     Spacer()
                 }
-                Text("-" + Self.timeString(ms: max(0, durationMs - currentMs)))
+                FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !ticking) { now in
+                    Text("-" + Self.timeString(ms: max(0, durationMs - positionMs(now))))
+                }
             }
             .font(.system(size: 9, weight: .medium))
             .foregroundStyle(tint.opacity(0.4))

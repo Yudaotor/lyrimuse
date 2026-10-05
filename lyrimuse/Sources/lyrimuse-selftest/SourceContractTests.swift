@@ -1676,7 +1676,7 @@ func runSourceContractTests() {
                         "歌词窗口背景: 别改回 SwiftUI rotationEffect + repeatForever")
             expectEqual(lwv.contains("animating: windowController.isSurfaceVisible && playback.isPlayingNow)"), true,
                         "歌词窗口背景: 窗口不可见 / 暂停播放时光斑定格")
-            expectEqual(lwv.contains("paused: !playback.isPlayingNow || !windowController.isSurfaceVisible)) { ctx in"), true,
+            expectEqual(lwv.contains("paused: !playback.isPlayingNow || !windowController.isSurfaceVisible) { now in"), true,
                         "迷你进度条: 暂停 / 不可见时停表")
             // 迷你窗:红绿灯只留关闭和最小化;进迷你默认置顶,退出时置顶状态原样还回去。
             expectEqual(lwv.contains("let hide = hidden || (type == .zoomButton && isMini)"), true,

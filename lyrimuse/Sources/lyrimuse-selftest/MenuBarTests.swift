@@ -790,6 +790,37 @@ func runMenuBarTests() {
         expectEqual(M.trailingFadeWidth(configured: fade, contentWidth: 400,
                                         containerWidth: 30, offset: 0), 10,
                     "容器 30pt 已经容得下 10pt 渐隐带,不必封顶")
+
+        // ④ 图层版跑马灯的周期(MarqueeCycle):关键帧逐段复刻 MarqueeText 的滚动循环
+        expectEqual(M.cycle(contentWidth: 200, containerWidth: 286) == nil, true, "周期: 装得下没有周期")
+        expectEqual(M.cycle(contentWidth: 290, containerWidth: 286) == nil, true, "周期: 死区以内没有周期")
+        if let c = M.cycle(contentWidth: 607.5, containerWidth: 314.25) {
+            func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 1e-6 }
+            expectEqual(near(Double(c.distance), 293.25), true, "周期: 距离 = 内容宽 − 容器宽")
+            expectEqual(near(c.travel, 293.25 / 24), true, "周期: 每秒滚 24 点")
+            expectEqual(near(c.period, 2.2 + c.travel + 1.1), true, "周期: 开头停 2.2 秒 + 滚 + 末尾停 1.1 秒")
+            expectEqual(c.offsets, [0, 0, c.distance, c.distance], "周期: 开头静止、滚到底、末尾静止")
+            expectEqual(c.keyTimes.first, 0, "周期: 关键帧从 0 开始")
+            expectEqual(c.keyTimes.last, 1, "周期: 关键帧到 1 结束")
+            expectEqual(near(c.keyTimes[1] * c.period, 2.2), true, "周期: 开头停够 2.2 秒才起滚")
+            expectEqual(near(c.keyTimes[2] * c.period, 2.2 + c.travel), true, "周期: 滚完一遍接末尾停顿")
+            // 首轮开头只停 1.1 秒(同 MarqueeText 首轮)
+            expectEqual(c.offset(at: c.firstCycleTimeOffset + 1.0), 0, "周期: 首轮起播 1.0 秒时还停在开头")
+            expectEqual(c.offset(at: c.firstCycleTimeOffset + 1.2) > 0, true, "周期: 首轮起播 1.1 秒后起滚")
+            expectEqual(near(Double(c.offset(at: 2.2 + c.travel / 2)), Double(c.distance) / 2), true, "周期: 匀速,走一半时间滚一半")
+            expectEqual(c.offset(at: 2.2 + c.travel + 1.0), c.distance, "周期: 滚到底停 1.1 秒")
+            expectEqual(c.offset(at: c.period + 0.5), 0, "周期: 末尾停完瞬时回开头")
+            expectEqual(c.offset(at: c.period + 2.1), 0, "周期: 之后每轮开头停 2.2 秒")
+            expectEqual(c.trailingFades(full: 32), [32, 32, 0, 0], "周期: 渐隐带开头满宽、滚动中收掉、末尾为 0")
+            expectEqual(near(Double(c.trailingFade(forOffset: c.distance / 2, full: 32)), 16), true, "周期: 渐隐带跟滚动一起线性收窄")
+            expectEqual(c.resumeTime(forOffset: 0), c.firstCycleTimeOffset, "周期: 停在开头,接着播时先停 1.1 秒")
+            expectEqual(near(c.resumeTime(forOffset: c.distance), 2.2 + c.travel), true, "周期: 停在末端,接着播从末尾停顿起")
+            let quarter = c.distance / 4
+            expectEqual(near(Double(c.offset(at: c.resumeTime(forOffset: quarter))), Double(quarter)), true,
+                        "周期: 中途停住,接着播从同一个偏移起")
+        } else {
+            expectEqual(true, false, "周期: 装不下应该有周期")
+        }
     }
 
     // ---- 菜单栏悬停三键:排布与命中 ----
