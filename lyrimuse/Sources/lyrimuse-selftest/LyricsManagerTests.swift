@@ -786,21 +786,36 @@ func runLyricsManagerTests() {
 
     // ---- 跨源同词标注 + 「当前使用」双判据----
     //
-    // 「搜索候选歌词」列表:不同源常给出逐字相同的词,后到的那几条标「歌词文字与 X 相同」(只标注不隐藏);
+    // 「搜索候选歌词」列表:不同源常给出一样的词,后到的那几条标「歌词内容 / 文字与 X 相同」(只标注不隐藏);
     // 「当前使用」从只比来源改成来源 + 词双判据。分组与判据都在 LyricsCandidateDuplicates(Core),面板只是消费。
     do {
         typealias D = LyricsCandidateDuplicates
-        let ordered: [(source: String, fingerprint: String)] = [
-            ("kugou", "aaa"), ("qq", "bbb"), ("netease", "aaa"), ("lrclib", ""), ("migu", "aaa"), ("amll", ""),
+        let t1: [[Int]] = [[1000], [2000]], t2: [[Int]] = [[1000], [2600]]
+        let ordered: [(source: String, fingerprint: String, timeline: [[Int]])] = [
+            ("kugou", "aaa", t1), ("qq", "bbb", t1), ("netease", "aaa", t1), ("lrclib", "", t1), ("migu", "aaa", t1),
+            ("amll", "", t1),
         ]
         let m = D.firstMatches(ordered)
         expectEqual(m["kugou"], nil, "同词标注: 每组首条不标")
-        expectEqual(m["netease"], "kugou", "同词标注: 后来者指向排在前面的那条")
-        expectEqual(m["migu"], "kugou", "同词标注: 第三条仍指向首条,不是链式指向上一条")
+        expectEqual(m["netease"], D.Match(anchor: "kugou", sameTimeline: true), "同词标注: 后来者指向排在前面的那条")
+        expectEqual(m["migu"], D.Match(anchor: "kugou", sameTimeline: true), "同词标注: 第三条仍指向首条,不是链式指向上一条")
         expectEqual(m["qq"], nil, "同词标注: 独一份的不标")
         expectEqual(m["lrclib"], nil, "同词标注: 指纹为空的不标")
-        expectEqual(D.firstMatches([("lrclib", ""), ("amll", "")]).isEmpty, true, "同词标注: 空指纹互相不算相同")
+        expectEqual(D.firstMatches([("lrclib", "", t1), ("amll", "", t1)]).isEmpty, true, "同词标注: 空指纹互相不算相同")
         expectEqual(D.firstMatches([]).isEmpty, true, "同词标注: 空列表")
+        // 词一样、每行时间不一样的只算文字相同;后面又有跟它时间也一样的,指向它而不是首条。
+        let mixed = D.firstMatches([("qq", "aaa", t1), ("lrclib", "aaa", t2), ("musixmatch", "aaa", t2)])
+        expectEqual(mixed["lrclib"], D.Match(anchor: "qq", sameTimeline: false), "同词标注: 每行时间不一样只算文字相同")
+        expectEqual(mixed["musixmatch"], D.Match(anchor: "lrclib", sameTimeline: true), "同词标注: 优先指向词和时间都一样的那条")
+        // 每行时间:取行规则跟只取词的指纹一样;行首认不出时间的标签不算,一行挂几个时间就记几个。
+        let timed = "[ti:歌名]\n[00:11.13]第一句\n\n[00:12.00][01:05.5]副歌\n 没时间戳 \n[00:30.00]"
+        expectEqual(D.lineTimestamps(timed), [[11130], [12000, 65500], []], "每行时间: 剥标签、空行不算、一行几个时间都记")
+        expectEqual(D.lineTimestamps(timed).count, ManualPickLock.canonicalLyrics(timed).split(separator: "\n").count,
+                    "每行时间: 行数跟只取词的规整结果一致")
+        expectEqual(D.sameTimeline([[11134], [12000]], [[11130], [12000]]), true, "每行时间: 毫秒和百分秒写法的取整差算一样")
+        expectEqual(D.sameTimeline([[11141]], [[11130]]), false, "每行时间: 差出 10 毫秒就不一样")
+        expectEqual(D.sameTimeline([[1000, 2000]], [[1000]]), false, "每行时间: 一行挂的时间个数不同就不一样")
+        expectEqual(D.sameTimeline([[1000]], [[1000], [2000]]), false, "每行时间: 行数不同就不一样")
         expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: "qq", currentFingerprint: "x"), true,
                     "当前使用: 源同词同")
         expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: "qq", currentFingerprint: "y"), false,

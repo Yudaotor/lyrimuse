@@ -263,6 +263,9 @@ final class LyricsSearchService {
         /// 「只取词」的内容指纹(ManualPickLock.fingerprint:不含时间戳/YRC/译文),构造时算一次
         /// (理由同 lineCount)。跨源同词标注与「当前使用」双判据都读它;空串 = 没有词。
         let fingerprint: String
+        /// 每一行挂的时间戳(LyricsCandidateDuplicates.lineTimestamps),构造时算一次(理由同 lineCount)。
+        /// 跨源同词标注拿它判「每行时间也一样」。
+        let timeline: [[Int]]
 
         static func countLines(of lyrics: String) -> Int {
             lyrics.replacingOccurrences(of: "\r\n", with: "\n")
@@ -651,7 +654,8 @@ private extension LyricsSearchService.Candidate {
             coverURL: raw.coverURL.flatMap(URL.init(string:)),
             isPlainTextOnly: raw.plainTextOnly ?? false,
             lineCount: LyricsSearchService.Candidate.countLines(of: raw.lyrics),
-            fingerprint: ManualPickLock.fingerprint(lyrics: raw.lyrics)
+            fingerprint: ManualPickLock.fingerprint(lyrics: raw.lyrics),
+            timeline: LyricsCandidateDuplicates.lineTimestamps(raw.lyrics)
         )
     }
 }

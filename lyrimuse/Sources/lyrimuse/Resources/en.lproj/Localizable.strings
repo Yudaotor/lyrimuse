@@ -456,7 +456,6 @@
 "只恢复迷你尺寸这一套，完整尺寸和窗口大小不动" = "Resets only the Mini Size settings; the Full Size and the window's dimensions stay as they are";
 "只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的读音在播放时实时生成，不计入" = "Counts only romanization stored in the cache and exported alongside the lyrics files. For other songs it is generated on the fly while playing and is not counted.";
 "只有勾选的播放器会 scrobble 到 Last.fm；默认全部勾选。" = "Only checked players scrobble to Last.fm; all checked by default.";
-"只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文" = "Compares lyric text only, ignoring timestamps, word timing and translations. This candidate may still carry word timing or a translation the other source lacks";
 "只统计能翻成当前译文语言的语言；译文语言自己和同一语系的语言不计，所以数字可能比「系统设置」里的少。语言包由 macOS 管理，翻译在本机完成" = "Counts only languages that can be translated into the current translation language; the target language itself and languages in the same family are excluded, so the number can be lower than in System Settings. Language packs are managed by macOS and translation runs on this Mac";
 "只让 Last.fm 记" = "Keep Last.fm";
 "只让 Lyrimuse 记…" = "Keep Lyrimuse…";
@@ -1061,6 +1060,7 @@
 "歌词下面并排显示一行译文" = "Show a line of translation under the lyrics";
 "歌词偏移" = "Lyrics offset";
 "歌词偏移归零" = "Reset Lyric Offset";
+"歌词内容与 %@ 相同" = "Same lyrics and line timing as %@";
 "歌词内容跟其它来源高度一致（2 家以上 250 · 1 家 150），串版本的拿不到" = "Lyric text agrees with other sources (2+ sources 250 · one 150); wrong-version candidates can't earn this";
 "歌词列表" = "Lyric List";
 "歌词已经跟上了" = "Lyrics are showing";
@@ -1081,7 +1081,9 @@
 "歌词提前" = "Advance Lyrics";
 "歌词文件夹" = "Lyrics Folder";
 "歌词文件夹和本地记录文件加起来占用的磁盘空间" = "Disk space used by the lyrics folder and the local records file";
+"歌词文字一样，每行时间不一样；这条候选仍可能带别的来源没有的逐字轨或译文" = "Same words, different line times. This candidate may still carry word timing or a translation the other source lacks";
 "歌词文字与 %@ 相同" = "Same lyrics text as %@";
+"歌词文字和每行时间都一样（逐字时间和译文不比）；这条候选仍可能带别的来源没有的逐字轨或译文" = "Same words and line times (word timing and translations aren't compared). This candidate may still carry word timing or a translation the other source lacks";
 "歌词旁的图标" = "Icon Beside Lyrics";
 "歌词时间轴" = "Lyrics Timing";
 "歌词时间轴偏移" = "Lyrics Timing Offset";

@@ -26298,19 +26298,19 @@
         }
       }
     },
-    "只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文" : {
+    "歌词文字一样，每行时间不一样；这条候选仍可能带别的来源没有的逐字轨或译文" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compares lyric text only, ignoring timestamps, word timing and translations. This candidate may still carry word timing or a translation the other source lacks"
+            "value" : "Same words, different line times. This candidate may still carry word timing or a translation the other source lacks"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只比對歌詞文字，不含時間戳、逐字與譯文；這條候選仍可能帶別的來源沒有的逐字軌或譯文"
+            "value" : "歌詞文字一樣，每行時間不一樣；這條候選仍可能帶別的來源沒有的逐字軌或譯文"
           }
         }
       }
@@ -26345,6 +26345,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "歌詞文字與 %@ 相同"
+          }
+        }
+      }
+    },
+    "歌词内容与 %@ 相同" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same lyrics and line timing as %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞內容與 %@ 相同"
+          }
+        }
+      }
+    },
+    "歌词文字和每行时间都一样（逐字时间和译文不比）；这条候选仍可能带别的来源没有的逐字轨或译文" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same words and line times (word timing and translations aren't compared). This candidate may still carry word timing or a translation the other source lacks"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞文字和每行時間都一樣（逐字時間和譯文不比）；這條候選仍可能帶別的來源沒有的逐字軌或譯文"
           }
         }
       }

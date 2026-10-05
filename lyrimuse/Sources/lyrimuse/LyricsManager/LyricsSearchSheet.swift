@@ -792,7 +792,7 @@ struct LyricsSearchSheet: View {
                     .fixedSize()
             }
             // showsSource: false —— 这一处的来源标已经在上面的右上角了,别在标签排里再来一遍。
-            characteristicBadges(c, source: c.source, showsSource: false, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
+            characteristicBadges(c, source: c.source, showsSource: false, isCurrent: isCurrentCandidate(c), duplicate: duplicates[c.source])
         }
         .tag(c.source)
         .padding(.vertical, 3)
@@ -809,10 +809,11 @@ struct LyricsSearchSheet: View {
             currentSource: effectiveCurrentSource, currentFingerprint: effectiveCurrentFingerprint)
     }
 
-    /// source → 排在它前面、词逐字相同的那个源(LyricsCandidateDuplicates.firstMatches)。候选最多九条,
-    /// 每次 body 算一遍不贵;指纹本身在 Candidate 构造时算好了。
-    private var duplicateAnchors: [String: String] {
-        LyricsCandidateDuplicates.firstMatches(candidates.map { (source: $0.source, fingerprint: $0.fingerprint) })
+    /// source → 排在它前面、跟它一样的那个源(LyricsCandidateDuplicates.firstMatches)。候选最多九条,
+    /// 每次 body 算一遍不贵;指纹和每行时间都在 Candidate 构造时算好了。
+    private var duplicates: [String: LyricsCandidateDuplicates.Match] {
+        LyricsCandidateDuplicates.firstMatches(
+            candidates.map { (source: $0.source, fingerprint: $0.fingerprint, timeline: $0.timeline) })
     }
 
     private func applyButtonTitle(for c: LyricsSearchService.Candidate) -> String {
@@ -901,7 +902,7 @@ struct LyricsSearchSheet: View {
             // showsSource: true —— 右侧详情**不跟着**挪去右上角:挪的收益是
             // "多行之间对齐、好扫",而这里永远只有一条候选,没有可对齐的对象;这一行的
             // 右上角又被「采用此候选」这颗主按钮占着,塞个胶囊进去只会跟它抢视线。
-            characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
+            characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c), duplicate: duplicates[c.source])
             if c.isPlainTextOnly {
                 Label(
                     L10n.t("这份歌词没有时间戳，采纳后只能在「歌词窗口」里作为静态文字展示，不会逐字/逐行跟随播放高亮"),
@@ -1008,14 +1009,14 @@ struct LyricsSearchSheet: View {
     @ViewBuilder
     private func characteristicBadges(
         _ c: LyricsSearchService.Candidate, source: String, showsSource: Bool,
-        isCurrent: Bool, duplicateOf: String?
+        isCurrent: Bool, duplicate: LyricsCandidateDuplicates.Match?
     ) -> some View {
         // 一个标签都没有时整排不渲染(而不是渲染一个空的 WrapLayout):空 Layout 高度是 0
         // 但外层 VStack 照样给它算 4pt 间距,那一行看起来就比别的行多垫了一截。来源标从
         // 这排挪走之后这种"全空"是真会发生的——一条有逐行时间戳、没译文没罗马音、既不
         // 重复也不是当前使用的普通候选,剩下的就是空。
-        if hasAnyCharacteristicBadge(c, showsSource: showsSource, isCurrent: isCurrent, duplicateOf: duplicateOf) {
-            // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/文字相同/当前使用),
+        if hasAnyCharacteristicBadge(c, showsSource: showsSource, isCurrent: isCurrent, duplicate: duplicate) {
+            // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/内容或文字相同/当前使用),
             // 左侧那一列只有 ~300pt 宽,挤不下时该折行,不该被裁掉。
             WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
                 // 加:警示色（橙）跟下面几个"这条候选有什么特性"的描述性标签区分
@@ -1037,14 +1038,19 @@ struct LyricsSearchSheet: View {
                 if showsSource {
                     sourceBadge(source)
                 }
-                if let duplicateOf {
-                    // 跟排在前面的某个源逐字同词(ManualPickLock 指纹,只比词)。**只标注不隐藏**——
-                    // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学;所以文案写「文字相同」
-                    // 不写「完全相同」,悬停说明把口径讲清。灰色:它是"这条跟别人重复"的提示,不是加分项。
+                if let duplicate {
+                    // 跟排在前面的某个源一样(见 LyricsCandidateDuplicates):词和每行时间都一样写「内容相同」,只有词一样
+                    // 写「文字相同」;逐字时间与译文不比,所以不写「完全相同」,悬停说明把口径讲清。**只标注不隐藏**——
+                    // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学。灰色:它是"这条跟别人重复"的
+                    // 提示,不是加分项。
+                    let anchor = LyricsSource(rawValue: duplicate.anchor)?.displayName ?? duplicate.anchor
                     characteristicBadge(
-                        String(format: L10n.t("歌词文字与 %@ 相同"), LyricsSource(rawValue: duplicateOf)?.displayName ?? duplicateOf),
+                        String(format: duplicate.sameTimeline ? L10n.t("歌词内容与 %@ 相同") : L10n.t("歌词文字与 %@ 相同"),
+                               anchor),
                         "equal.circle", .secondary)
-                        .help(L10n.t("只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文"))
+                        .help(duplicate.sameTimeline
+                              ? L10n.t("歌词文字和每行时间都一样（逐字时间和译文不比）；这条候选仍可能带别的来源没有的逐字轨或译文")
+                              : L10n.t("歌词文字一样，每行时间不一样；这条候选仍可能带别的来源没有的逐字轨或译文"))
                 }
                 if isCurrent {
                     // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——
@@ -1064,10 +1070,11 @@ struct LyricsSearchSheet: View {
     /// `characteristicBadges` 的渲染体一一对应,改那边记得改这里(漏一项 = 那一排明明
     /// 有内容却被整个跳过)。
     private func hasAnyCharacteristicBadge(
-        _ c: LyricsSearchService.Candidate, showsSource: Bool, isCurrent: Bool, duplicateOf: String?
+        _ c: LyricsSearchService.Candidate, showsSource: Bool, isCurrent: Bool,
+        duplicate: LyricsCandidateDuplicates.Match?
     ) -> Bool {
         c.isPlainTextOnly || c.hasWordTiming || c.hasTranslation || c.hasRomanization
-            || showsSource || duplicateOf != nil || isCurrent
+            || showsSource || duplicate != nil || isCurrent
     }
 
     private func sourceBadge(_ source: String) -> some View {
