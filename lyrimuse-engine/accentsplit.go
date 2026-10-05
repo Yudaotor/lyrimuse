@@ -9,13 +9,13 @@ import (
 )
 
 // 重音字母旁多切的空格:`groß en`(großen)、`mirá ndote`(mirándote),也有切在重音字母前面的:
-// `derni ère`(dernière)。整行文字和逐字词条里是同样切的。
+// `derni ère`(dernière)。整行文字和逐字词条都可能这样切,也有只坏了逐字的。
 //
 // 删一处空格的唯一依据:去掉它之后跨过它的那个词,在证据词表里出现过。别改成按字形或词典判断,
 // 见 09 章决策 178。证据分两级:
 //
-//  1. 同一首歌这一轮的全部候选,纯文本候选也算(repairCandidateAccentSplits);
-//  2. 缓存里全部条目的整行歌词(refreshAccentCacheWords),只用于 accentInsideWord 为假的文本。
+//  1. 同一首歌的整行与逐字文字:这一轮的全部候选(纯文本候选也算),存量条目则是它自己;
+//  2. 缓存里全部条目的整行歌词(refreshAccentCacheWords),整行与逐字各自在 accentInsideWord 为假时才用。
 //
 // 只删空格:词条不合并、时间不动,整行文字与逐字数据按同一个判据各删各的。只看拉丁字母之间的空格。
 
@@ -137,12 +137,20 @@ func (s accentWordSet) addWord(w string) {
 	}
 }
 
+// addYRC 收下逐字数据里各词条文字拼成的句子中含重音字母的词。
+func (s accentWordSet) addYRC(yrc string) {
+	if mayContainAccentLetter(yrc) {
+		s.addText(yrcPlainLines(yrc))
+	}
+}
+
 func (s accentWordSet) has(w string) bool {
 	_, ok := s[w]
 	return ok
 }
 
 // accentInsideWord:有没有重音字母紧跟着 ASCII 字母(`für`、`dernière`)。为假的文本才用第二级证据。
+// 逐字数据看 yrcAccentInsideWord。
 func accentInsideWord(text string) bool {
 	if !mayContainAccentLetter(text) {
 		return false
@@ -153,6 +161,29 @@ func accentInsideWord(text string) bool {
 			return true
 		}
 		prevAccent = isAccentLetter(r)
+	}
+	return false
+}
+
+// yrcAccentInsideWord:逐字数据里各词条文字拼成的句子的 accentInsideWord。
+func yrcAccentInsideWord(yrc string) bool {
+	return mayContainAccentLetter(yrc) && accentInsideWord(yrcPlainLines(yrc))
+}
+
+// hasAccentSplitPoint:文本里有没有 accentSplitPoint 那样的位置(一个空格两边紧挨着拉丁字母,至少一边是重音字母)。
+func hasAccentSplitPoint(s string) bool {
+	if !mayContainAccentLetter(s) {
+		return false
+	}
+	for i := 1; i+1 < len(s); i++ {
+		if s[i] != ' ' {
+			continue
+		}
+		l, _ := utf8.DecodeLastRuneInString(s[:i])
+		r, _ := utf8.DecodeRuneInString(s[i+1:])
+		if lyricLatinLetter(l) && lyricLatinLetter(r) && (isAccentLetter(l) || isAccentLetter(r)) {
+			return true
+		}
 	}
 	return false
 }
@@ -283,14 +314,23 @@ func repairAccentSplitYRC(yrc string, attested func(string) bool) (string, bool)
 	return strings.Join(lines, "\n"), true
 }
 
-// repairCandidateAccentSplits 就地修一批候选的整行歌词与逐字数据。
+// accentAttested:先查 own;useCached 时再查第二级证据词表 cached。
+func accentAttested(own, cached accentWordSet, useCached bool) func(string) bool {
+	if !useCached || len(cached) == 0 {
+		return own.has
+	}
+	return func(w string) bool { return own.has(w) || cached.has(w) }
+}
+
+// repairCandidateAccentSplits 就地修一批候选的整行歌词与逐字数据。第一级证据是整批候选的整行与逐字文字。
 //
 // 调用时机(enrich.go):候选装配完、打分之前,rankLyricSourceResults 与 mergeLyricCandidateRounds 都调 ——
-// 第一级证据是整批候选,后一轮到的源可能正好带来证据。
+// 后一轮到的源可能正好带来证据。
 func repairCandidateAccentSplits(candidates []lyricCandidate) {
 	inRound := accentWordSet{}
 	for _, c := range candidates {
 		inRound.addText(c.lyrics)
+		inRound.addYRC(c.wordTimingYRC)
 	}
 	if len(inRound) == 0 {
 		return
@@ -298,14 +338,10 @@ func repairCandidateAccentSplits(candidates []lyricCandidate) {
 	cached := currentAccentCacheWords()
 	for i := range candidates {
 		c := &candidates[i]
-		attested := inRound.has
-		if len(cached) > 0 && !accentInsideWord(c.lyrics) {
-			attested = func(w string) bool { return inRound.has(w) || cached.has(w) }
-		}
-		if fixed, ok := repairAccentSplitLRC(c.lyrics, attested); ok {
+		if fixed, ok := repairAccentSplitLRC(c.lyrics, accentAttested(inRound, cached, !accentInsideWord(c.lyrics))); ok {
 			c.lyrics = fixed
 		}
-		if fixed, ok := repairAccentSplitYRC(c.wordTimingYRC, attested); ok {
+		if fixed, ok := repairAccentSplitYRC(c.wordTimingYRC, accentAttested(inRound, cached, !yrcAccentInsideWord(c.wordTimingYRC))); ok {
 			c.wordTimingYRC = fixed
 		}
 	}
@@ -337,27 +373,40 @@ func currentAccentCacheWords() accentWordSet {
 	return accentCacheWords
 }
 
-// migrateAccentSplits 用第二级证据词表把存量条目修一遍。手改过的条目不碰。
+// migrateAccentSplits 把存量条目修一遍。证据是这条自己的整行与逐字文字,加上第二级证据词表;手改过的条目不碰。
+// 对唱标注按行记,删空格不改行的结构:原先对得上正文的,指纹跟着换成新正文的。
 //
 // 位置(main.go):importLyricsFromFiles 之后、exportLyricsFiles 与 migrateManualPickMarks 之前,必须排在
 // migrateYRCWhitespaceTokens 之后 —— 纯空白词条先并进前一个词,repairAccentSplitYRC 才删得到那个空格。
-// 不加水位:真正逐行走一遍的只有带重音字母、又没有词中重音字母的条目;词表跟着缓存长,下次启动能证实的更多。
+// 不加水位:真正逐行走一遍的只有带重音字母的条目;词表跟着缓存长,下次启动能证实的更多。
 func migrateAccentSplits() {
 	refreshAccentCacheWords()
-	words := currentAccentCacheWords()
-	if len(words) == 0 {
-		return
-	}
+	cached := currentAccentCacheWords()
 	enrichMu.Lock()
 	fixed := 0
 	for k, e := range enrichCache {
-		if e.ManualLyrics || accentInsideWord(e.Lyrics) {
+		if e.ManualLyrics {
 			continue
 		}
-		lrc, lrcChanged := repairAccentSplitLRC(e.Lyrics, words.has)
-		yrc, yrcChanged := repairAccentSplitYRC(e.LyricsYRC, words.has)
+		yrcText := ""
+		if mayContainAccentLetter(e.LyricsYRC) {
+			yrcText = yrcPlainLines(e.LyricsYRC)
+		}
+		if !hasAccentSplitPoint(e.Lyrics) && !hasAccentSplitPoint(yrcText) {
+			continue
+		}
+		own := accentWordSet{}
+		own.addText(e.Lyrics)
+		own.addText(yrcText)
+		lrc, lrcChanged := repairAccentSplitLRC(e.Lyrics, accentAttested(own, cached, !accentInsideWord(e.Lyrics)))
+		yrc, yrcChanged := repairAccentSplitYRC(e.LyricsYRC, accentAttested(own, cached, !accentInsideWord(yrcText)))
 		if !lrcChanged && !yrcChanged {
 			continue
+		}
+		if sp := e.LyricsSpeakers; sp != nil && sp.For == lyricSpeakersFingerprint(e.Lyrics, e.LyricsYRC) {
+			moved := *sp
+			moved.For = lyricSpeakersFingerprint(lrc, yrc)
+			e.LyricsSpeakers = &moved
 		}
 		e.Lyrics, e.LyricsYRC = lrc, yrc
 		enrichCache[k] = e
