@@ -148,7 +148,7 @@ func runPlayerIdentityTests() {
             let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
             let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
             expectEqual(coordinator.contains("guard MusicPlaybackController.playPause() else { return }")
-                        && source.contains("guard MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic) else { return }"),
+                        && source.contains("guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
             expectEqual(client.contains("fallbackViaAppleScript = viaAppleScript")
                         && client.contains("if fallbackActive && fallbackViaAppleScript { return lastAcceptedDirectQueryPlayer }")
@@ -157,6 +157,41 @@ func runPlayerIdentityTests() {
             expectEqual(adProbe.contains("if Self.notFoundSuppresses(notedKey: notFoundKey, notedAt: notFoundAt, key: key, now: Date())")
                         && adProbe.contains("if reading == nil, notFound {"), true,
                         "NOTFOUND 免探期(契约): kickIfNeeded 查免探期、只在 NOTFOUND 时记")
+        }
+
+        // 广告期间不能拖:广告跳不了,发出去没反应,屏上先挪过去又被拉回来。
+        expectEqual(LocalPlaybackSource.acceptsSeek(bundleID: PlaybackPlayer.spotify.bundleIdentifier, adBreak: true), false,
+                    "拖进度: 广告中不能拖(Spotify)")
+        expectEqual(LocalPlaybackSource.acceptsSeek(bundleID: PlaybackPlayer.kaset.bundleIdentifier, adBreak: true), false,
+                    "拖进度: 广告中不能拖(Kaset)")
+        expectEqual(LocalPlaybackSource.acceptsSeek(bundleID: nil, adBreak: true), false, "拖进度: 广告中认不出播放器也不能拖")
+        expectEqual(LocalPlaybackSource.acceptsSeek(bundleID: PlaybackPlayer.kaset.bundleIdentifier, adBreak: false), true,
+                    "拖进度: 不是广告照常能拖")
+        // 跳转之后的读数落在哪(只记日志)。
+        typealias Landing = LocalPlaybackSource.SeekLanding
+        let landing = { LocalPlaybackSource.seekLanding(target: $0, previous: $1, reported: $2, elapsed: $3, playing: $4) }
+        expectEqual(landing(100, 50, 102, 2, true), Landing.landed, "跳转核对: 在放,读数到了目标往后 2 秒 → 到位")
+        expectEqual(landing(100, 50, 52.5, 2, true), Landing.notLanded, "跳转核对: 在放,读数还在原位置往后走 → 没到位")
+        expectEqual(landing(100, 50, 100.4, 2, false), Landing.landed, "跳转核对: 暂停中,读数停在目标 → 到位")
+        expectEqual(landing(100, 50, 50, 2, false), Landing.notLanded, "跳转核对: 暂停中,读数还在原位置 → 没到位")
+        expectEqual(landing(100, 97, 101, 2, true), Landing.unclear, "跳转核对: 跳得太近分不开 → 不下结论")
+        expectEqual(landing(100, 50, 200, 2, true), Landing.unclear, "跳转核对: 两边都不像 → 不下结论")
+        do {
+            let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            func src(_ path: String) -> String {
+                (try? String(contentsOf: sourcesRoot.appendingPathComponent(path), encoding: .utf8)) ?? ""
+            }
+            let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
+            expectEqual(source.contains("Self.acceptsSeek(bundleID: lastSnapshot?.bundleIdentifier, adBreak: isCurrentTrackAdBreak)"), true,
+                        "拖进度(契约): 实例属性带上这一刻是不是广告")
+            expectEqual(source.contains("        noteSeekSent(target: seconds, previous: trackPosSeconds, route: route, at: now)\n"), true,
+                        "跳转核对(契约): 发出去之后记日志、排一次核对")
+            for (path, label) in [("lyrimuse/UI/NotchLyricsView.swift", "灵动岛"), ("lyrimuse/MenuBar/MenuBarPanel.swift", "菜单栏面板"),
+                                  ("lyrimuse/UI/LyricsWindowView.swift", "歌词窗口")] {
+                let s = src(path)
+                expectEqual(s.contains(".allowsHitTesting(seekable)") && s.contains("seekable: PlaybackCoordinator.shared.acceptsSeek"), true,
+                            "拖进度(契约): \(label)的进度条子视图由父视图传入能不能拖")
+            }
         }
     }
 

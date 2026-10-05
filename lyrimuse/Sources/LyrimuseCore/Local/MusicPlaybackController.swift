@@ -767,17 +767,18 @@ public enum MusicPlaybackController {
     /// PlaybackPlayerPreference.isExclusivelyAppleMusic 是 false,dispatch 默认会走
     /// media-control;但如果实际在播的就是 Apple Music,那么位置**读**路径走的是精确的
     /// AppleScript 播放头,写路径也该走同一条,两边保持一致。
+    /// 返回这一下走的哪条路,没发出去返回 nil。
     @discardableResult
-    public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = false) -> Bool {
+    public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = false) -> ControlRoute? {
         let value = seekArgument(forSeconds: seconds)
         let script = #"tell application "Music" to set player position to "# + value
         if preferAppleScript {
             runAppleScript(script)
-            return true
+            return .appleMusicScript
         }
         // Kaset 的字典里没有跳转:焦点回退到它时这一下不发(见 dispatch 的 kasetScript)。
-        return dispatch(appleScript: script, spotifyScript: #"tell application "Spotify" to set player position to "# + value,
-                        kasetScript: nil, mediaControlCommand: "seek", mediaControlArguments: [value])
+        return dispatchRoute(appleScript: script, spotifyScript: #"tell application "Spotify" to set player position to "# + value,
+                             kasetScript: nil, mediaControlCommand: "seek", mediaControlArguments: [value])
     }
 
     /// 把秒数格式化成两个后端都吃、且能安全拼进 AppleScript 源码的字符串。抽成独立的纯
@@ -829,9 +830,17 @@ public enum MusicPlaybackController {
     /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
     private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?,
                                  mediaControlCommand: String, mediaControlArguments: [String] = []) -> Bool {
-        switch controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
-                            focusFallback: MediaControlClient.focusControlTarget(),
-                            focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp()) {
+        dispatchRoute(appleScript: appleScript, spotifyScript: spotifyScript, kasetScript: kasetScript,
+                      mediaControlCommand: mediaControlCommand, mediaControlArguments: mediaControlArguments) != nil
+    }
+
+    /// 同 `dispatch`,另外交回这一下走的哪条路;没发出去返回 nil。
+    private static func dispatchRoute(appleScript: String, spotifyScript: String, kasetScript: String?,
+                                      mediaControlCommand: String, mediaControlArguments: [String] = []) -> ControlRoute? {
+        let route = controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
+                                 focusFallback: MediaControlClient.focusControlTarget(),
+                                 focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())
+        switch route {
         case .appleMusicScript:
             runAppleScript(appleScript)
         case .spotifyScript:
@@ -840,7 +849,7 @@ public enum MusicPlaybackController {
             guard let kasetScript else {
                 logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): Kaset has no AppleScript command for it")
                 DispatchQueue.main.async { onControlWithheld?() }
-                return false
+                return nil
             }
             runAppleScript(kasetRunningGuard + kasetScript)
         case .mediaControl:
@@ -848,9 +857,9 @@ public enum MusicPlaybackController {
         case .withheld:
             logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): now playing focus is held by another app")
             DispatchQueue.main.async { onControlWithheld?() }
-            return false
+            return nil
         }
-        return true
+        return route
     }
 
     /// 问播放器要状态的超时上限。

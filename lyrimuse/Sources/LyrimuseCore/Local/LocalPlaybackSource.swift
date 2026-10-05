@@ -331,7 +331,11 @@ public final class LocalPlaybackSource: ObservableObject {
     // 播放位置现算,不再靠这里的 20Hz tick 把预算好的 fillFraction 塞进 currentLine。
     @Published public private(set) var anchor: ProgressAnchor?
     private var lastKey = ""
-    private var lastSnapshot: MediaControlSnapshot?
+    private var lastSnapshot: MediaControlSnapshot? {
+        didSet { lastSnapshotAppliedAt = Date() }
+    }
+    /// `lastSnapshot` 最近一次被换上的时刻。跳转之后核「播放器到没到」时,靠它认读数是不是跳转之后才拿到的。
+    private var lastSnapshotAppliedAt: Date?
     /// `lastSnapshot` 是怎么来的(原始标签、套用的署名纠正版本、系统原始标识),写播放状态文件用。
     private var lastProvenance: MediaControlClient.SnapshotProvenance?
     private var tornHold = TornTrackHold()
@@ -361,13 +365,16 @@ public final class LocalPlaybackSource: ObservableObject {
         return id.isEmpty ? nil : id
     }
 
-    /// 这一刻在播的播放器吃不吃外部的跳转指令(`PlaybackPlayer.ignoresSeekCommand`)。不吃的,各处进度条只显示不能拖、
-    /// 点歌词不跳,`seek(toMs:)` 什么都不做 —— 发出去它没反应,我们这边先挪过去、下一拍又被它的真实位置拉回来。纯函数。
-    public nonisolated static func acceptsSeek(bundleID: String?) -> Bool {
-        PlaybackPlayer.builtin(forBundleID: bundleID)?.ignoresSeekCommand != true
+    /// 这一刻能不能拖进度:在播的播放器吃外部的跳转指令(`PlaybackPlayer.ignoresSeekCommand`),而且放的不是广告(广告跳不了)。
+    /// 不能拖的,各处进度条只显示不能拖、点歌词不跳,`seek(toMs:)` 什么都不做 —— 发出去它没反应,我们这边先挪过去、
+    /// 下一拍又被它的真实位置拉回来。纯函数。
+    public nonisolated static func acceptsSeek(bundleID: String?, adBreak: Bool = false) -> Bool {
+        !adBreak && PlaybackPlayer.builtin(forBundleID: bundleID)?.ignoresSeekCommand != true
     }
 
-    public var acceptsSeek: Bool { Self.acceptsSeek(bundleID: lastSnapshot?.bundleIdentifier) }
+    public var acceptsSeek: Bool {
+        Self.acceptsSeek(bundleID: lastSnapshot?.bundleIdentifier, adBreak: isCurrentTrackAdBreak)
+    }
 
     // ---- 播放位置平滑(加,修 QQ 音乐"歌词时间不准") --------------------
     //
@@ -3679,9 +3686,64 @@ public final class LocalPlaybackSource: ObservableObject {
         return abs(reported - previous) < abs(reported - target)
     }
 
+    /// 跳转发出后多久核一次「播放器到没到」。只记日志,不改任何状态;要比 `seekSettleWindow` 长,才读得到跳转之后的那份。
+    public nonisolated static let seekLandingCheckDelay: TimeInterval = 2.0
+
+    /// 跳转之后播放器的读数落在哪:到了目标附近、还在原来的位置往后走,或者两边都不像 / 跳得太近分不开。
+    public enum SeekLanding: String, Equatable, Sendable {
+        case landed
+        case notLanded = "not landed"
+        case unclear
+    }
+
+    /// 纯函数,selftest 覆盖。`elapsed` 是发出跳转到这份读数之间过了多久,在放时两边的期望位置都往后推这么多;
+    /// 目标离原位置不到两倍容差时分不开,一律 `.unclear`。
+    public nonisolated static func seekLanding(target: Double, previous: Double, reported: Double,
+                                               elapsed: Double, playing: Bool) -> SeekLanding {
+        let tolerance = 2.0
+        guard abs(target - previous) >= 2 * tolerance else { return .unclear }
+        let advance = playing ? max(0, elapsed) : 0
+        if abs(reported - (target + advance)) <= tolerance { return .landed }
+        if abs(reported - (previous + advance)) <= tolerance { return .notLanded }
+        return .unclear
+    }
+
+    /// 最近一次跳转的编号。核对那一拍发现后面又跳过、或者已经换了歌,就不下结论。
+    private var seekCheckGeneration = 0
+
+    /// 记下这次跳转发给了谁、从哪跳到哪,并排一次 `checkSeekLanding`。
+    private func noteSeekSent(target: Double, previous: Double, route: MusicPlaybackController.ControlRoute, at sentAt: Date) {
+        seekCheckGeneration += 1
+        let generation = seekCheckGeneration
+        let key = lastKey
+        let player = lastSnapshot?.bundleIdentifier ?? "-"
+        logger.notice("seek sent: player=\(player, privacy: .public) route=\(String(describing: route), privacy: .public) from=\(previous, format: .fixed(precision: 2)) to=\(target, format: .fixed(precision: 2))")
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.seekLandingCheckDelay))
+            self?.checkSeekLanding(generation: generation, key: key, target: target, previous: previous, sentAt: sentAt)
+        }
+    }
+
+    /// 跳转发出 `seekLandingCheckDelay` 之后,拿那之后才到的读数判一次到没到,带上判断用的数值记一行。
+    private func checkSeekLanding(generation: Int, key: String, target: Double, previous: Double, sentAt: Date) {
+        guard generation == seekCheckGeneration, key == lastKey else { return }
+        guard let snapshot = lastSnapshot, let appliedAt = lastSnapshotAppliedAt, appliedAt > sentAt,
+              let reading = snapshot.elapsedTime else {
+            logger.notice("seek landing unknown: no reading since the seek to=\(target, format: .fixed(precision: 2))")
+            return
+        }
+        let now = Date()
+        let playing = snapshot.playing ?? false
+        let readAt = snapshot.capturedAt ?? appliedAt
+        let reported = reading + (playing ? (snapshot.playbackRate ?? 1) : 0) * now.timeIntervalSince(readAt)
+        let landing = Self.seekLanding(target: target, previous: previous, reported: reported,
+                                       elapsed: now.timeIntervalSince(sentAt), playing: playing)
+        logger.notice("seek \(landing.rawValue, privacy: .public): player=\(snapshot.bundleIdentifier ?? "-", privacy: .public) from=\(previous, format: .fixed(precision: 2)) to=\(target, format: .fixed(precision: 2)) reported=\(reported, format: .fixed(precision: 2)) playing=\(playing) readAge=\(now.timeIntervalSince(readAt), format: .fixed(precision: 2))")
+    }
+
     public func seek(toMs targetMs: Int) {
         guard acceptsSeek else {
-            logger.notice("seek ignored: the current player does not accept seek commands")
+            logger.notice("seek ignored: \(self.isCurrentTrackAdBreak ? "an ad is playing" : "the current player does not accept seek commands", privacy: .public)")
             return
         }
         let clampedMs = max(0, min(targetMs, currentDurationMs ?? targetMs))
@@ -3692,9 +3754,10 @@ public final class LocalPlaybackSource: ObservableObject {
         // 两条路不一致。
         let resolvedIsAppleMusic = lastSnapshot?.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
         // 没发出去(焦点被别的 App 占着)就别把屏上位置挪到目标:播放器没动,挪了要等下一拍才被拽回来。
-        guard MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic) else { return }
+        guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic) else { return }
 
         let now = Date()
+        noteSeekSent(target: seconds, previous: trackPosSeconds, route: route, at: now)
         // 记下"从哪跳到哪",用来在接下来一小段时间里识别并丢弃 seek 之前采样的陈旧读数。
         lastSeekPrevSecs = trackPosSeconds
         lastSeekTargetSecs = seconds

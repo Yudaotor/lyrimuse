@@ -2040,7 +2040,7 @@ struct LyricsWindowView: View {
                     PlaybackCoordinator.shared.seek(toMs: Int(f * Double(total)))
                 }
         )
-        // 播放器不吃外部跳转指令(Amazon Music)时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
+        // 播放器不吃外部跳转指令(Amazon Music)、或者在放广告时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
         .allowsHitTesting(PlaybackCoordinator.shared.acceptsSeek)
     }
 
@@ -3054,6 +3054,7 @@ struct LyricsWindowView: View {
                 isVisible: windowController.isSurfaceVisible,
                 pausedPositionMs: playback.pausedPositionMs,
                 durationMs: playback.currentDurationMs,
+                seekable: PlaybackCoordinator.shared.acceptsSeek,
                 onArtwork: hasArtworkBackground,
                 backgroundLayers: playback.windowBackgroundLayers,
                 title: playback.title,
@@ -5795,6 +5796,8 @@ private struct WindowProgressSection: View {
     let isVisible: Bool
     let pausedPositionMs: Int?
     let durationMs: Int?
+    /// 能不能拖(`PlaybackCoordinator.acceptsSeek`)。由父视图算好传进来,广告开始、结束那一拍这里跟着重算。
+    let seekable: Bool
     let onArtwork: Bool
     let backgroundLayers: WindowBackgroundLayers?
     /// 收听次数徽标要用的曲目标识(摆在时间行正中央)。
@@ -5988,8 +5991,8 @@ private struct WindowProgressSection: View {
                         PlaybackCoordinator.shared.seek(toMs: Int(f * Double(durationMs)))
                     }
             )
-            // 播放器不吃外部跳转指令(Amazon Music)时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
-            .allowsHitTesting(PlaybackCoordinator.shared.acceptsSeek)
+            // 播放器不吃外部跳转指令(Amazon Music)、或者在放广告时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
+            .allowsHitTesting(seekable)
             HStack {
                 Text(Self.formatTime(ms: shownMs))
                 Spacer()

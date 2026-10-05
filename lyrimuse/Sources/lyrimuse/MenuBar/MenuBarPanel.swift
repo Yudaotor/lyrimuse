@@ -577,6 +577,7 @@ private struct MenuBarPanelView: View {
                     anchor: playback.anchor,
                     pausedPositionMs: playback.pausedPositionMs,
                     durationMs: playback.currentDurationMs,
+                    seekable: PlaybackCoordinator.shared.acceptsSeek,
                     trackLyricsOffsetMs: playback.trackLyricsOffsetMs,
                     lyricsOffsetStepMs: playback.lyricsOffsetStepMs)
                 HStack(spacing: 28) {
@@ -1149,6 +1150,8 @@ private struct PanelProgressSection: View {
     let anchor: ProgressAnchor?
     let pausedPositionMs: Int?
     let durationMs: Int?
+    /// 能不能拖(`PlaybackCoordinator.acceptsSeek`)。由父视图算好传进来,广告开始、结束那一拍这里跟着重算。
+    let seekable: Bool
     let trackLyricsOffsetMs: Int
     let lyricsOffsetStepMs: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1209,8 +1212,8 @@ private struct PanelProgressSection: View {
                             PlaybackCoordinator.shared.seek(toMs: Int(f * Double(durationMs)))
                         }
                 )
-                // 播放器不吃外部跳转指令(Amazon Music)时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
-                .allowsHitTesting(PlaybackCoordinator.shared.acceptsSeek)
+                // 播放器不吃外部跳转指令(Amazon Music)、或者在放广告时只显示、不能拖,见 `PlaybackCoordinator.acceptsSeek`。
+                .allowsHitTesting(seekable)
             }
             .frame(height: 14)
             HStack {
