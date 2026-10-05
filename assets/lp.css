@@ -67,6 +67,16 @@ main { overflow-x: clip; }
 .lang-btn:hover { color: var(--ink); }
 .lang-btn svg { width: 16px; height: 16px; }
 .lang-btn .chev { width: 11px; height: 11px; }
+/* GitHub Sponsors links (the heart after Download, the final card's button): an outlined heart that fills in on hover, like GitHub's own */
+.nav-sponsor {
+  display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 999px;
+  color: var(--brand-ink); background: var(--card); box-shadow: inset 0 0 0 1px var(--line);
+}
+.nav-sponsor svg { width: 16px; height: 16px; }
+.nav-sponsor svg, .btn-sponsor svg { transition: transform .25s var(--ease-out); }
+.nav-sponsor svg path, .btn-sponsor svg path { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; transition: fill .2s; }
+.nav-sponsor:hover svg path, .btn-sponsor:hover svg path { fill: currentColor; }
+@media (prefers-reduced-motion: no-preference) { .nav-sponsor:hover svg, .btn-sponsor:hover svg { transform: scale(1.15); } }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -1098,6 +1108,8 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 /* the generator writes the heading as one .ln block per line, so each line can carry .pe */
 .final-card h2 > .ln { display: block; }
 .final-card .cta { margin-top: 0; }
+/* the sponsor button's heart, light enough for the dark card */
+.btn-sponsor svg { color: #ffb3d1; }
 .final-fine { margin: 18px 0 0; font-size: 13px; color: rgba(255, 255, 255, .82); }
 
 /* ---------- footer ---------- */
