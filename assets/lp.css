@@ -158,6 +158,24 @@ main { overflow-x: clip; }
 @keyframes orbit { to { --ang: 360deg; } }
 h1 { font-size: clamp(36px, 6.2vw, 72px); line-height: 1.04; letter-spacing: -.035em; font-weight: 700; margin: 0 0 18px; text-wrap: balance; word-break: keep-all; }
 h1 > span { display: inline-block; max-width: 100%; }
+/* A centred heading line that ends in fullwidth punctuation (，。、；：) has most of that last em box empty on
+   the right: Simplified Chinese fonts set the mark at the bottom left, Traditional ones in the middle. The
+   generator puts class pe on such a heading half (or on its last .wu unit), and the negative margin gives
+   that empty part back. The margin sits on a block or an inline-block: Chrome's line breaker does not count
+   a negative end margin on a plain inline, so the line would break as if the margin were not there. */
+:lang(zh-Hans) .pe { margin-right: -.62em; }
+:lang(zh-Hant) .pe { margin-right: -.32em; }
+/* the pieces of a heading half between its break points (spaces and <wbr>) */
+.wu { display: inline-block; }
+/* the headline's halves share one line on wider screens, where the first half's mark is mid-line */
+.hero h1 > .pe:first-child { margin-right: 0; }
+/* below 480px the halves always sit on separate lines (the headline wraps at 490px in zh-Hans, 500px in zh-Hant) */
+@media (max-width: 480px) {
+  :lang(zh-Hans) .hero h1 > .pe:first-child { margin-right: -.62em; }
+  :lang(zh-Hant) .hero h1 > .pe:first-child { margin-right: -.32em; }
+}
+/* h1 > span caps a line at 100%, which would keep the margin from widening it */
+.sub-h1 > .pe { max-width: none; }
 /* CJK glyphs fill their em box: headings keep almost no negative tracking and a looser line */
 :lang(zh) h1 { letter-spacing: -.015em; line-height: 1.1; }
 :lang(zh) .lede { letter-spacing: 0; }
@@ -435,7 +453,7 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 /* the statement and its payoff always sit on two lines */
 .ch h2 > span { display: block; }
 :lang(zh) .ch h2, :lang(zh) .faq-side h2 { letter-spacing: -.015em; line-height: 1.14; }
-.ch h2 > span:not(.hm) { color: var(--ink-3); }
+.ch h2 > span:not(.lead) { color: var(--ink-3); }
 .ch-lede { margin: 22px auto 0; max-width: 34em; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.6; color: var(--ink-2); text-wrap: balance; }
 
 .ch-stage {
@@ -1077,6 +1095,8 @@ h1.sing { --fa: var(--ink); --uc: var(--unlit); }
 /* the lit heading gets its shadow from a filter: a text-shadow would paint over the clipped fill */
 :lang(zh) .final-card h2 { letter-spacing: -.01em; line-height: 1.16; }
 .final-card h2.sing { --fa: #fff; --uc: rgba(255, 255, 255, .38); text-shadow: none; filter: drop-shadow(0 2px 14px rgba(40, 10, 40, .35)); }
+/* the generator writes the heading as one .ln block per line, so each line can carry .pe */
+.final-card h2 > .ln { display: block; }
 .final-card .cta { margin-top: 0; }
 .final-fine { margin: 18px 0 0; font-size: 13px; color: rgba(255, 255, 255, .82); }
 
