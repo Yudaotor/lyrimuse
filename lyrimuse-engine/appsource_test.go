@@ -359,3 +359,22 @@ func TestReadAppPlaybackAndStandby(t *testing.T) {
 		t.Fatal("no App source: nothing to watch")
 	}
 }
+
+// 曲长换成了 Apple 目录给的、比 App 报的短(电台只认目录,歌曲以目录为准):位置再按换过的曲长截一次。
+// App 报的曲长那一层在 appStateSnapshot 里已经截过。没有曲长的不截。
+func TestAppPlaybackTickClampsPositionToDuration(t *testing.T) {
+	at := time.Unix(1_790_000_000, 0)
+	rec := appSourceRec(7, 1, 1, "Song", at)
+	rec.Position.Secs = 190
+	id := int64(42)
+	rec.Track.CatalogTrackID = &id
+	j := plainAppJudge()
+	j.catalog = func(string, int64, int, string, string, string) (float64, bool) { return 150, true }
+	if tick, _ := appPlaybackTickFor(rec, appPlaybackMarks{}, at, j); tick.snap.Duration != 150 || tick.snap.Position != 150 {
+		t.Fatalf("目录曲长更短:位置截在目录曲长: duration=%.3f position=%.3f", tick.snap.Duration, tick.snap.Position)
+	}
+	rec.Track.DurationSecs, rec.Track.CatalogTrackID = nil, nil
+	if tick, _ := appPlaybackTickFor(rec, appPlaybackMarks{}, at.Add(100*time.Second), plainAppJudge()); tick.snap.Position <= 190 {
+		t.Fatalf("没有曲长不截: %.3f", tick.snap.Position)
+	}
+}

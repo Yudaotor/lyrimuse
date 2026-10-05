@@ -68,3 +68,25 @@ func TestParseKasetQueueRepeatModes(t *testing.T) {
 		t.Errorf("不循环:队尾之后没有了: ok=%v got=%v", ok, kasetTitles(got))
 	}
 }
+
+// 队列标的那一格对不上、按歌名歌手又找到不止一处:认不出是哪一格,退回同专辑预取。
+// 接下来那几格里缺歌名或歌手的跳过,不当成一首。
+func TestParseKasetQueueAmbiguousAndBlankRows(t *testing.T) {
+	dup := `{"current_index":0,"repeating":"off","tracks":[
+		{"title":"Intro","artist":"Band"},
+		{"title":"Song","artist":"Band"},
+		{"title":"Other","artist":"Band"},
+		{"title":"Song","artist":"Band"}]}`
+	if got, ok := parseKasetQueue(dup, "Band", "Song", 3); ok {
+		t.Errorf("同一首出现两次应退回: got=%v", kasetTitles(got))
+	}
+	blanks := `{"current_index":0,"repeating":"off","tracks":[
+		{"title":"Song","artist":"Band"},
+		{"title":"","artist":"Band"},
+		{"title":"No Artist","artist":""},
+		{"title":"Next","artist":"Band"}]}`
+	got, ok := parseKasetQueue(blanks, "Band", "Song", 3)
+	if !ok || !reflect.DeepEqual(kasetTitles(got), []string{"Band - Next"}) {
+		t.Errorf("缺歌名或歌手的跳过: ok=%v got=%v", ok, kasetTitles(got))
+	}
+}

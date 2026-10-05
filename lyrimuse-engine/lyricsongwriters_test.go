@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -95,5 +96,28 @@ func TestLyricsSongwritersSurviveIndexAndBackfill(t *testing.T) {
 	kept := enrichEntry{LyricsSongwriters: []string{"原来的"}}
 	if !adoptBackfilledLyrics(&kept, enrichEntry{Lyrics: "[00:01.00]x"}) || !reflect.DeepEqual(kept.LyricsSongwriters, []string{"原来的"}) {
 		t.Fatalf("这一轮没有名单时保留原值: %q", kept.LyricsSongwriters)
+	}
+}
+
+// 升级重试、重评选完歌词,作词作曲跟着这一轮的打分结果更新(选哪一份由 songwritersFromScored 定,见上面几条)。
+// 这两条路要联网拿候选,这里钉的是接线。
+func TestRescoreAndUpgradeWriteSongwriters(t *testing.T) {
+	src, err := os.ReadFile("enrich.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fn := range []string{"func retryLyricsUpgradeWith(", "func rescoreLyricsWith("} {
+		body := string(src)
+		i := strings.Index(body, fn)
+		if i < 0 {
+			t.Fatalf("找不到 %s", fn)
+		}
+		body = body[i+len(fn):]
+		if j := strings.Index(body, "\nfunc "); j >= 0 {
+			body = body[:j]
+		}
+		if !strings.Contains(body, "if sw := songwritersFromScored(scored); len(sw) > 0 {") || !strings.Contains(body, "e.LyricsSongwriters = sw\n") {
+			t.Errorf("%s 要把打分结果里的作词作曲写回条目", fn)
+		}
 	}
 }
