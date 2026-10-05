@@ -523,6 +523,14 @@ func runNotchTests() {
                         "灵动岛接线: 两条收走窗口的路都清悬停状态")
             expectEqual(view.contains("p.$currentLyricsOffsetMs") && view.contains("timingEpoch: playback.lyricsOffsetMs"), true,
                         "灵动岛接线: 订阅总偏移,偏移一变当前行重装")
+            // 先算几何再建 hostingView:SwiftUI 第一次排版就拿终值,卡片不从占位窗口里那份旧版位置弹过去。见 05 章决策 64。
+            let initBody = controller.components(separatedBy: "convenience init(pinnedScreenID: String?) {").last ?? ""
+            let geometryAt = initBody.range(of: "recomputeGeometry(animate: false)")?.lowerBound
+            let hostingAt = initBody.range(of: "NSHostingView(rootView: NotchWindowRoot(controller: self))")?.lowerBound
+            expectEqual(geometryAt != nil && hostingAt != nil && geometryAt! < hostingAt!, true,
+                        "灵动岛接线: 初始化先算几何再建 hostingView")
+            expectEqual(initBody.contains("hosting.frame = NSRect(origin: .zero, size: panel.frame.size)"), true,
+                        "灵动岛接线: hostingView 按算好的窗口尺寸建,不按占位尺寸")
         }
 
         // 跟随封面背景:换图两层交叉淡入,旧图不透明地留在下面 —— 直接换 Image 内容会让旧图当场消失、

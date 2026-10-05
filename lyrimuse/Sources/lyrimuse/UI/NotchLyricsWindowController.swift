@@ -369,8 +369,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// `if isMirror { ... }` 的分支,那正是两套行为慢慢分叉的起点。
     private var pinnedScreenID: String?
 
-    /// pinnedScreenID **必须**在这里传进来,不能等构造完再赋值:init() 末尾就会
-    /// recomputeGeometry() 一次、并订阅播放状态(订阅那一瞬间就会触发一次
+    /// pinnedScreenID **必须**在这里传进来,不能等构造完再赋值:init() 一开头就会
+    /// recomputeGeometry() 一次、随后订阅播放状态(订阅那一瞬间就会触发一次
     /// updateActualVisibility → orderFront)。晚设一步的话,新建的副本会先按
     /// targetScreen() 在**主屏**上摆好并显示出来,然后才被挪到它该去的那块屏 ——
     /// 表现为主屏上闪一下重叠的第二个灵动岛。
@@ -391,8 +391,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         self.init(window: panel)
         self.pinnedScreenID = pinnedScreenID
 
+        // 先算好几何(刘海尺寸、两档卡宽、窗口 frame)再建 hostingView:反过来 SwiftUI 先按声明默认值和占位窗口排一版,
+        // 几何一到卡片就从那个位置沿 cardAnimation 弹过去,冷启动主线程一忙就冻在半路。见 05 章决策 64。
+        recomputeGeometry(animate: false)
+
         let hosting = NSHostingView(rootView: NotchWindowRoot(controller: self))
-        hosting.frame = NSRect(origin: .zero, size: placeholder)
+        hosting.frame = NSRect(origin: .zero, size: panel.frame.size)
         hosting.autoresizingMask = [.width, .height]
         // 尺寸完全由 recomputeGeometry 手动管理(窗口和 hostingView 的 frame 都是),
         // 默认 .standardBounds 的 intrinsic 尺寸汇报没有任何消费者 —— 跟悬浮窗
@@ -415,8 +419,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 }
             }
         }
-
-        recomputeGeometry(animate: false)
 
         // 外接显示器插拔/切换分辨率时,"这台屏幕有没有真刘海"这个前提可能整个变了
         // (外接显示器基本不会有刘海)——重新算一遍,思路照抄经典悬浮窗
