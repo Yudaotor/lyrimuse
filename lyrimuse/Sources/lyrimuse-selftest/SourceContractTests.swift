@@ -2749,6 +2749,140 @@ func runSourceContractTests() {
                     "抽屉重置闸: 「歌词显示」四段的「全部设置」抽屉都要有重置那一行 —— 抽屉是键盘/VoiceOver 的全量兜底通路,工具栏那颗 Menu 不能算数")
     }
 
+    // ---- 「全部设置」抽屉是工具栏浮层的镜像 ----
+    //
+    // 抽屉是键盘 / VoiceOver 的全量兜底通路:编辑台工具栏每个浮层里的项、舞台上的宽度条,抽屉里都得有。
+    // 四段现在靠"浮层和抽屉调同一份行视图"做到这一点,但没有东西拦着下一次改动 —— 往浮层里直接加一行、
+    // 或者新开一个浮层却没进抽屉,既不报错、也不影响鼠标用户。这里从源码读出每个浮层渲染的是哪份行视图,
+    // 要求抽屉的 body 装配了同一份。新开浮层时它的内容也得是一份共享行视图(下面几条正则认的就是这个形状),
+    // 认不出来会直接报出来。总开关不在此列:它常驻在编辑台下面那张卡上,不收进抽屉。
+    do {
+        let sourcesDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        // 读源码并剥掉注释行,注释里提到的写法不该被当成装配。
+        func code(_ rel: String) -> String {
+            guard let text = try? String(contentsOfFile: sourcesDir.appendingPathComponent(rel).path, encoding: .utf8)
+            else { return "" }
+            return text.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+        }
+        // `signature` 起、到与它之后第一个 `{` 配对的 `}` 为止;找不到返回空串(断言随之失败)。
+        func body(_ signature: String, in text: String) -> String {
+            guard let start = text.range(of: signature),
+                  let open = text[start.lowerBound...].firstIndex(of: "{") else { return "" }
+            var depth = 0
+            var i = open
+            while i < text.endIndex {
+                if text[i] == "{" {
+                    depth += 1
+                } else if text[i] == "}" {
+                    depth -= 1
+                    if depth == 0 { return String(text[start.lowerBound...i]) }
+                }
+                i = text.index(after: i)
+            }
+            return ""
+        }
+        func captures(_ pattern: String, in text: String) -> [[String]] {
+            guard let re = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) else { return [] }
+            let ns = text as NSString
+            return re.matches(in: text, range: NSRange(location: 0, length: ns.length)).map { m in
+                (1..<m.numberOfRanges).map { m.range(at: $0).location == NSNotFound ? "" : ns.substring(with: m.range(at: $0)) }
+            }
+        }
+        // 枚举声明里独占一行的 `case xxx`(计算属性里的 `case .xxx:` 不算)。
+        func enumCases(_ signature: String, in text: String) -> Set<String> {
+            Set(captures(#"^\s*case (\w+)\s*$"#, in: body(signature, in: text)).map { $0[0] })
+        }
+
+        let overlayStage = code("lyrimuse/UI/OverlayEditorStage.swift")
+        let overlayDrawerFile = code("lyrimuse/UI/OverlayAllSettingsDrawer.swift")
+        let notchStage = code("lyrimuse/UI/NotchEditorStage.swift")
+        let menuBarStage = code("lyrimuse/UI/MenuBarEditorStage.swift")
+        let settingsView = code("lyrimuse/SettingsView.swift")
+        expectEqual([overlayStage, overlayDrawerFile, notchStage, menuBarStage, settingsView].filter(\.isEmpty).count, 0,
+                    "抽屉镜像: 编辑台和抽屉的宿主文件都读得到(读不到 = 路径挪了)")
+
+        // 悬浮歌词:popoverRows(for:) 的每个 case 直接是一份行视图;抽屉 body 里装配的组是本文件的 private var,展开一层再找。
+        let overlayStageCases = enumCases("private enum StagePopover: Hashable, CaseIterable {", in: overlayStage)
+        let overlayRows = captures(#"case \.(\w+): (Overlay\w+SettingsRows)\(\)"#,
+                                   in: body("private func popoverRows(for target: StagePopover) -> some View {", in: overlayStage))
+        expectEqual(overlayStageCases.isEmpty, false, "抽屉镜像(悬浮歌词): 认得出浮层枚举")
+        expectEqual(Set(overlayRows.map { $0[0] }), overlayStageCases,
+                    "抽屉镜像(悬浮歌词): 每个浮层的内容都是一份共享行视图")
+        var overlayDrawer = body("var body: some View {", in: overlayDrawerFile)
+        for name in captures(#"private var (\w+): some View \{"#, in: overlayDrawerFile).map({ $0[0] })
+        where overlayDrawer.range(of: #"\b\#(name)\b"#, options: .regularExpression) != nil {
+            overlayDrawer += "\n" + body("private var \(name): some View {", in: overlayDrawerFile)
+        }
+        expectEqual(overlayRows.map { $0[1] }.filter { !overlayDrawer.contains("\($0)()") }, [],
+                    "抽屉镜像(悬浮歌词): 浮层里的行视图抽屉都要装配")
+        expectEqual(overlayDrawer.contains("in: OverlayEditorStage.widthRange"), true,
+                    "抽屉镜像(悬浮歌词): 舞台上的宽度条在抽屉里有「宽度」一行(同一个区间)")
+
+        // 灵动岛:popoverContent(for:) 的每个 case 是一个 NotchXxxPopover,它的 body 里是一份行视图;
+        // 左右耳是同一份行视图带 side 参数,抽屉里两边都要有。
+        let notchStageCases = enumCases("private enum StagePopover: Equatable {", in: notchStage)
+        let notchCases = captures(#"case \.(\w+): (Notch\w+Popover)\((.*)$"#,
+                                  in: body("private func popoverContent(for target: StagePopover) -> some View {", in: notchStage))
+        expectEqual(notchStageCases.isEmpty, false, "抽屉镜像(灵动岛): 认得出浮层枚举")
+        expectEqual(Set(notchCases.map { $0[0] }), notchStageCases,
+                    "抽屉镜像(灵动岛): 每个浮层都是一个 NotchXxxPopover")
+        let notchDrawerStruct = body("private struct NotchAllSettingsDrawer: View {", in: settingsView)
+        let notchDrawer = body("var body: some View {", in: notchDrawerStruct)
+        var notchMissing: [String] = []
+        for c in notchCases {
+            let popover = body("struct \(c[1]): View {", in: notchStage + "\n" + settingsView)
+            guard let rows = captures(#"(Notch\w+SettingsRows)\("#, in: popover).first?[0] else {
+                notchMissing.append("\(c[1]) 里认不出行视图")
+                continue
+            }
+            let call = captures(#"side: \.(\w+)"#, in: c[2]).first.map { "\(rows)(side: .\($0[0]))" } ?? "\(rows)("
+            if !notchDrawer.contains(call) { notchMissing.append(call) }
+        }
+        expectEqual(notchMissing, [], "抽屉镜像(灵动岛): 浮层里的行视图抽屉都要装配")
+        expectEqual(captures(#"^\s*(widthRow|expandedWidthRow)\s*$"#, in: notchDrawer).map { $0[0] }.sorted(),
+                    ["expandedWidthRow", "widthRow"],
+                    "抽屉镜像(灵动岛): 舞台上双滑块宽度条的两只滑块,抽屉里各装配一行")
+        expectEqual(notchDrawerStruct.contains("commitWidths(steady:") && notchDrawerStruct.contains("commitWidths(expanded:"), true,
+                    "抽屉镜像(灵动岛): 抽屉那两行写回走编辑台同一个 commitWidths")
+
+        // 菜单栏:popoverContent(for:) 的每个 case 是一个 MenuBarXxxPopover,它的 body 里是一份 MenuBarXxxRows。
+        let menuBarStageCases = enumCases("private enum StagePopover: Equatable {", in: menuBarStage)
+        let menuBarCases = captures(#"case \.(\w+): (MenuBar\w+Popover)\(\)"#,
+                                    in: body("private func popoverContent(for target: StagePopover) -> some View {", in: menuBarStage))
+        expectEqual(menuBarStageCases.isEmpty, false, "抽屉镜像(菜单栏): 认得出浮层枚举")
+        expectEqual(Set(menuBarCases.map { $0[0] }), menuBarStageCases,
+                    "抽屉镜像(菜单栏): 每个浮层都是一个 MenuBarXxxPopover")
+        let menuBarDrawer = body("var body: some View {", in: body("struct MenuBarAllSettingsDrawer: View {", in: menuBarStage))
+        var menuBarMissing: [String] = []
+        for c in menuBarCases {
+            guard let rows = captures(#"(MenuBar\w+Rows)\(\)"#, in: body("struct \(c[1]): View {", in: menuBarStage)).first?[0] else {
+                menuBarMissing.append("\(c[1]) 里认不出行视图")
+                continue
+            }
+            if !menuBarDrawer.contains("\(rows)()") { menuBarMissing.append(rows) }
+        }
+        expectEqual(menuBarMissing, [], "抽屉镜像(菜单栏): 浮层里的行视图抽屉都要装配")
+        expectEqual(menuBarDrawer.contains("MenuBarWidthRow()"), true,
+                    "抽屉镜像(菜单栏): 舞台上的「最大宽度」条在抽屉里有同一行")
+
+        // 歌词窗口:浮层和抽屉都在 SettingsView 里,调的是同一组 lyricsWindowXxxRows。抽屉跟着预览的「完整 / 迷你」
+        // 只装配那一套,跟工具栏同一个条件,这里只比"浮层里出现过的,抽屉里也出现过"。
+        let lyricsWindowRows = #"(lyricsWindow\w+Rows(?:\(\.\w+\))?)"#
+        let lyricsWindowPopover = body("private func lyricsWindowPopoverContent(_ item: LyricsWindowToolbarItem) -> some View {", in: settingsView)
+        let lyricsWindowPopoverRows = Set(captures(lyricsWindowRows, in: lyricsWindowPopover).map { $0[0] })
+        let lyricsWindowDrawerRows = Set(captures(lyricsWindowRows, in: body("LyricsWindowAllSettingsDrawer {", in: settingsView)).map { $0[0] })
+        expectEqual(Set(captures(#"case \.(\w+):"#, in: lyricsWindowPopover).map { $0[0] }),
+                    enumCases("enum LyricsWindowToolbarItem: Equatable {", in: settingsView),
+                    "抽屉镜像(歌词窗口): 每个工具栏入口都有浮层内容")
+        expectEqual(lyricsWindowPopoverRows.isEmpty, false, "抽屉镜像(歌词窗口): 认得出浮层里的行(认不出 = 写法变了,先改这条正则)")
+        expectEqual(lyricsWindowPopoverRows.subtracting(lyricsWindowDrawerRows).sorted(), [],
+                    "抽屉镜像(歌词窗口): 浮层里的行抽屉都要装配")
+    }
+
     // ---- 三个编辑台工具栏第二行的对齐占位 ----
     //
     // 按钮宽度是**一行之内平分**出来的,第一行末尾那颗「重置 ▾」占掉的一截就是两行错位的全部原因
