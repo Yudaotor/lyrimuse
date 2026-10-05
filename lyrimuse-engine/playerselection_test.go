@@ -2,6 +2,17 @@ package main
 
 import "testing"
 
+// 信任列表里的 App 后来成了内置播放器,引擎这边把它剔出信任列表(挪进选中集合是 App 加载设置时的迁移,
+// selftest 的「信任→内置」那段)。规则对每个内置播放器都成立,下一个从信任列表升级上来的不用再记得补一条。
+func TestResolveTrustedPlayersDropsEveryBuiltin(t *testing.T) {
+	for id, bundle := range playerBundleIDs {
+		got := resolveTrustedPlayers(map[string]string{bundle: id, "com.apple.Safari": "Safari"})
+		if len(got) != 1 || got["com.apple.Safari"] != "Safari" {
+			t.Errorf("%s(%s)是内置播放器,该剔出信任列表、别的留着: %v", id, bundle, got)
+		}
+	}
+}
+
 // 播放器多选——设置页"播放器"卡可以同时勾好几个具体播放器,也可以额外勾"自动识别"。这一串盯的是
 // 共享 JSON 里播放器列表的解析(老写法的迁移只在 App 做)。这一拍算不算数只在 App 判,
 // 见 TestIsTrackedTrustsTheAppsPlayer。

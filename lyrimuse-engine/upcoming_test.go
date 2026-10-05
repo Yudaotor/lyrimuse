@@ -5,8 +5,12 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -229,6 +233,78 @@ func TestUpcomingFromQueueSpotifyAndUnknownPlayers(t *testing.T) {
 	// 不认识的播放器(信任列表里的第三方 App、浏览器)一律 false。
 	if _, ok := upcomingFromQueue("甲", "乙", "丙", "com.example.player", 0, 5); ok {
 		t.Errorf("未知播放器该返回 false")
+	}
+}
+
+// 每个内置播放器在分发里都要有自己的 case。Go 的 switch 不查写没写全:漏了的那家落到最后的浏览器分支
+// (browserUpcoming),读不到就退回同专辑预取 —— 上面两条拦不住,浏览器分支对它同样返回 false。所以这里直接
+// 读 upcomingFromQueue 的 case。查实拿不到队列的播放器也给它一个 case,在里面写明为什么、直接返回 nil, false。
+func TestUpcomingFromQueueHasACaseForEveryBuiltinPlayer(t *testing.T) {
+	fset := token.NewFileSet()
+	generated, err := parser.ParseFile(fset, "players_generated.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	consts := map[string]string{}
+	for _, decl := range generated.Decls {
+		d, ok := decl.(*ast.GenDecl)
+		if !ok || d.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range d.Specs {
+			vs := spec.(*ast.ValueSpec)
+			for i, name := range vs.Names {
+				if i >= len(vs.Values) {
+					break
+				}
+				if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					consts[name.Name], _ = strconv.Unquote(lit.Value)
+				}
+			}
+		}
+	}
+	src, err := parser.ParseFile(fset, "upcoming.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatched := map[string]bool{}
+	for _, decl := range src.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "upcomingFromQueue" {
+			continue
+		}
+		for _, stmt := range fn.Body.List {
+			sw, ok := stmt.(*ast.SwitchStmt)
+			if !ok {
+				continue
+			}
+			if tag, ok := sw.Tag.(*ast.Ident); !ok || tag.Name != "bundleID" {
+				continue
+			}
+			for _, clause := range sw.Body.List {
+				for _, expr := range clause.(*ast.CaseClause).List {
+					id, ok := expr.(*ast.Ident)
+					if !ok || consts[id.Name] == "" {
+						t.Errorf("%s: case 要写 players_generated.go 里的 bundle id 常量", fset.Position(expr.Pos()))
+						continue
+					}
+					dispatched[consts[id.Name]] = true
+				}
+			}
+		}
+	}
+	if len(dispatched) == 0 {
+		t.Fatal("upcoming.go 里没认出 upcomingFromQueue 的 switch bundleID(写法改了就跟着改这条测试)")
+	}
+	for id, bundle := range playerBundleIDs {
+		if !dispatched[bundle] {
+			t.Errorf("%s(%s)在 upcomingFromQueue 里没有 case:预解析会落到浏览器分支,悄悄退回同专辑预取", id, bundle)
+		}
+	}
+	for bundle := range dispatched {
+		if !builtinPlayerBundleIDs[bundle] {
+			t.Errorf("upcomingFromQueue 的 case %s 不是内置播放器", bundle)
+		}
 	}
 }
 

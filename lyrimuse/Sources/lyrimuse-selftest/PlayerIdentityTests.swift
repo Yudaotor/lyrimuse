@@ -392,6 +392,19 @@ func runPlayerIdentityTests() {
         let promotedAmz = TrustedPlayers.promotingBuiltins(trusted: trustedAmz, players: [.appleMusic])
         expectEqual(promotedAmz.trusted, [:], "信任→内置: Amazon Music 从信任列表里拿掉")
         expectEqual(promotedAmz.players, [.appleMusic, .amazonMusic], "信任→内置: 没勾自动识别的补勾 Amazon Music")
+        // 上面三家是先进过信任列表、后来才内置的实例;规则本身对每个内置播放器都成立,下一个从信任列表升级上来的
+        // 不用再记得补一条。
+        for player in PlaybackPlayer.allCases where player != .auto {
+            let trustedOne = [player.bundleIdentifier: "\(player)", "com.apple.Safari": "Safari"]
+            let other: PlaybackPlayer = player == .qqMusic ? .netease : .qqMusic
+            let promoted = TrustedPlayers.promotingBuiltins(trusted: trustedOne, players: [other])
+            expectEqual(promoted.trusted, ["com.apple.Safari": "Safari"], "信任→内置: \(player) 从信任列表里拿掉,别的留着")
+            expectEqual(promoted.players, [other, player], "信任→内置: 没勾自动识别的补勾 \(player)")
+            let promotedWithAuto = TrustedPlayers.promotingBuiltins(trusted: trustedOne, players: [.auto])
+            expectEqual(promotedWithAuto.trusted, ["com.apple.Safari": "Safari"],
+                        "信任→内置: 勾着自动识别时 \(player) 也从信任列表里拿掉")
+            expectEqual(promotedWithAuto.players, [.auto], "信任→内置: 勾着自动识别的不用补勾 \(player)")
+        }
 
         // 切歌间隙保持(PlayerGapHold):KKBOX 切歌时先撤掉 Now Playing,这段时间里 Apple Music 暂停着的旧会话不算换播放器。
         typealias H = PlayerGapHold
@@ -419,6 +432,184 @@ func runPlayerIdentityTests() {
         expectEqual(H.heldElapsed(elapsed: 200, rate: 1, duration: 208, since: 4), 204, "切歌间隙: 位置照墙钟往前走")
         expectEqual(H.heldElapsed(elapsed: 206, rate: 1, duration: 208, since: 4), 208, "切歌间隙: 不超过曲长")
         expectEqual(H.heldElapsed(elapsed: 10, rate: 0, duration: nil, since: 2), 12, "切歌间隙: 速率报 0 按 1 算(它在放)")
+    }
+
+    // ---- 每个播放器一张决定表 ----
+    //
+    // 按播放器分派的代码大多写成"点名几家、其余走 default"(特殊行为只对实测过的播放器开,02 章决策 41),
+    // 接一个新播放器时哪一处没跟上,既不报错、也不影响别家,只是它悄悄走了默认那条路。这张表把那些默认摊开:
+    // 每个具体播放器一行,写明它走不走 AppleScript、简介面板给哪个平台的歌曲页、位置与锚点那几项修正开不开
+    // (docs/features/16 第 3、6 节)。新加播放器时总数断言先红,逼着在这里补一行、逐项表态;表里写的跟代码
+    // 对不上的,下面逐列报出来,报错里写着去哪改。每一列都问真实的函数,私有的 switch 和 App 那一侧的分支读源码。
+    //
+    // players.json 里有字段的(权限、artistArrivesLate 这一类)不进这张表:那份 JSON 本身就是它们的决定表。
+    do {
+        typealias L = LocalPlaybackSource
+        typealias C = MusicPlaybackController
+        /// 一处按播放器分派的地方。rawValue 是这一列的说明,报错时原样打出来:它管什么、在哪改。
+        enum On: String, CaseIterable {
+            case controlScript = "焦点被占时播放控制改发它自己的 AppleScript(MusicPlaybackController.controlRoute)"
+            case appleScriptSnapshot = "焦点被占时经 AppleScript 读快照、播放中整份顶替系统那份(MediaControlClient 的 snapshotAfterFocusLost / adaptedSnapshot)"
+            case channelFallback = "media-control 通道坏了时直接问它(MediaControlClient.channelFallbackCandidates / snapshotWhileChannelBroken)"
+            case extendedControls = "播放模式与音量(MusicPlaybackController.supportsExtendedControls 及 extendedControlsState / playbackMode / setPlaybackMode / soundVolume / setSoundVolume)"
+            case repeatOne = "单曲循环(MusicPlaybackController.supportsRepeatOne)"
+            case favorite = "喜欢(MusicPlaybackController.supportsFavorite 及 favoritedState / setFavorited)"
+            case resume = "停播页「继续播放」(App 侧 IdlePlaybackActions.canResume / resume)"
+            case gaplessLead = "自然切歌、单曲循环回绕的超前量估计(LocalPlaybackSource.carriesGaplessLead)"
+            case lateAnchorProbe = "晚锚点探针(LocalPlaybackSource.shouldProbeLateAnchor)"
+            case learnsAnchorLag = "锚点滞后学习(LocalPlaybackSource.learnsAnchorLag)"
+            case followsRepublishedAnchors = "跟随重发锚点(LocalPlaybackSource.followsRepublishedAnchors)"
+            case snapsToReportedPosition = "偏差过线直接对齐读数(LocalPlaybackSource.snapsToReportedPosition)"
+            case resetAnchorCorrection = "按先到的归零锚点补晚打的开播锚点(MediaControlClient.correctsFromResetAnchor)"
+            case pausedAnchorStartsOnPlay = "暂停中发布的锚点改从起播时刻算(MediaControlClient.startsPausedAnchorOnPlay)"
+            case stampsCaptureTime = "读数带上读到的时刻(MediaControlClient.stampsCaptureTime)"
+            case arrivesWhole = "快照整份读来、不按撕裂快照处理(TornTrackHold.arrivesWhole)"
+            case adSharesTrackIdentity = "广告跟正片共用一首的身份(LocalPlaybackSource.adSharesTrackIdentity)"
+            case systemNeverHasArtwork = "系统会话里从来没有封面(CoverArtReplacementGate.systemNeverHasArtwork)"
+            case spatialAudioOffset = "叠加空间音频版的歌词偏移(LocalPlaybackSource.spatialAudioOffsetMs)"
+            case catalogMenuRows = "歌词窗口「⋯」菜单里本平台的目录入口(App 侧 LyricsWindowView.platformMenuRows)"
+        }
+        let table: [PlaybackPlayer: (songLink: PlatformLinks.Platform?, on: Set<On>)] = [
+            .appleMusic: (.appleMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
+                                        .favorite, .resume, .learnsAnchorLag, .spatialAudioOffset]),
+            .qqMusic: (.qqMusic, [.learnsAnchorLag, .catalogMenuRows]),
+            .netease: (.netease, [.learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
+            .kugou: (nil, [.lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime]),
+            .soda: (.soda, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
+            .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
+                              .snapsToReportedPosition, .stampsCaptureTime, .catalogMenuRows]),
+            .spotify: (.spotify, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .resume,
+                                  .gaplessLead, .learnsAnchorLag, .catalogMenuRows]),
+            .amazonMusic: (.amazonMusic, [.learnsAnchorLag, .snapsToReportedPosition, .catalogMenuRows]),
+            .kaset: (.youtubeMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
+                                     .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
+                                     .systemNeverHasArtwork, .catalogMenuRows]),
+        ]
+        expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
+                    "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")
+        /// 表里某一列开着的那几家,按名字排好。
+        func players(_ column: On) -> [String] {
+            table.filter { $0.value.on.contains(column) }.keys.map { "\($0)" }.sorted()
+        }
+
+        // 能直接问的:每个播放器逐列比。
+        let anyURL = URL(string: "https://example.com/song")!
+        let allLinks = PlatformLinks(appleMusic: anyURL, qqSong: anyURL, qqAlbum: anyURL, qqArtist: anyURL,
+                                     neteaseSong: anyURL, spotifySong: anyURL, kkboxSong: anyURL, amazonSong: anyURL,
+                                     youtubeMusicSong: anyURL, sodaSong: anyURL)
+        let spatialCue = LRCParser.SpatialAudioCue(lyricOffsetMs: 1672, stereoDurationMs: 196373)
+        for (player, row) in table.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            let b = player.bundleIdentifier
+            let tier = L.positionSourceTier(forBundleID: b)
+            let asked: [On: Bool] = [
+                .controlScript: C.controlRoute(exclusivelyAppleMusic: false, focusFallback: player,
+                                               focusHeldElsewhere: true) != .withheld,
+                .channelFallback: MediaControlClient.channelFallbackCandidates(selected: [player]) == [player],
+                .extendedControls: C.supportsExtendedControls(player),
+                .repeatOne: C.supportsRepeatOne(player),
+                .favorite: C.supportsFavorite(player),
+                .gaplessLead: L.carriesGaplessLead(tier: tier, bundleID: b),
+                .lateAnchorProbe: L.shouldProbeLateAnchor(reported: 10, predicted: 11, tier: tier, bundleID: b),
+                .learnsAnchorLag: L.learnsAnchorLag(bundleID: b),
+                .followsRepublishedAnchors: L.followsRepublishedAnchors(bundleID: b),
+                .snapsToReportedPosition: L.snapsToReportedPosition(bundleID: b),
+                .resetAnchorCorrection: MediaControlClient.correctsFromResetAnchor(bundleID: b),
+                .pausedAnchorStartsOnPlay: MediaControlClient.startsPausedAnchorOnPlay(bundleID: b),
+                .stampsCaptureTime: MediaControlClient.stampsCaptureTime(bundleID: b),
+                .arrivesWhole: TornTrackHold.arrivesWhole(bundle: b),
+                .adSharesTrackIdentity: L.adSharesTrackIdentity(bundleID: b),
+                .systemNeverHasArtwork: CoverArtReplacementGate.systemNeverHasArtwork(bundleID: b),
+                .spatialAudioOffset: L.spatialAudioOffsetMs(cue: spatialCue, bundleID: b, playingDuration: 198.698,
+                                                            isMusicVideo: false) != 0,
+            ]
+            for column in On.allCases {
+                guard let value = asked[column] else { continue }
+                expectEqual(value, row.on.contains(column), "决定表(\(player)): \(column.rawValue)")
+            }
+            expectEqual(allLinks.songLink(forPlayerBundleID: b)?.platform, row.songLink,
+                        "决定表(\(player)): 简介面板「网页」那行给哪个平台的歌曲页(PlatformLinks.songLink)")
+        }
+
+        // 私有的 switch,以及 App 那一侧的分支(自测进程编不进 App target):读源码,看点名的是不是表里那几家。
+        let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func code(_ path: String) -> String {
+            guard let text = try? String(contentsOfFile: sourcesRoot.appendingPathComponent(path).path, encoding: .utf8)
+            else { return "" }
+            return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+        }
+        /// `signature` 起到与它之后第一个 `{` 配对的 `}` 为止;找不到返回空串。
+        func body(_ signature: String, in text: String) -> String {
+            guard let start = text.range(of: signature), let open = text[start.lowerBound...].firstIndex(of: "{") else { return "" }
+            var depth = 0
+            var i = open
+            while i < text.endIndex {
+                if text[i] == "{" { depth += 1 } else if text[i] == "}" {
+                    depth -= 1
+                    if depth == 0 { return String(text[start.lowerBound...i]) }
+                }
+                i = text.index(after: i)
+            }
+            return ""
+        }
+        /// 一段代码里点到的播放器(`.appleMusic`、`PlaybackPlayer.appleMusic.bundleIdentifier` 都算),按名字排好。
+        func named(_ text: String) -> [String] {
+            PlaybackPlayer.allCases.map { "\($0)" }
+                .filter { text.range(of: #"\.\#($0)\b"#, options: .regularExpression) != nil }.sorted()
+        }
+        /// 只看 `case` 标签里点到的:`if player != .kaset` 那种是把它排除在外,不算分派到它。
+        func caseLabels(_ text: String) -> [String] {
+            guard let re = try? NSRegularExpression(pattern: #"^\s*case\s+(.+?):"#, options: [.anchorsMatchLines])
+            else { return [] }
+            let ns = text as NSString
+            return named(re.matches(in: text, range: NSRange(location: 0, length: ns.length))
+                .map { ns.substring(with: $0.range(at: 1)) }.joined(separator: "\n"))
+        }
+        let client = code("LyrimuseCore/Local/MediaControlClient.swift")
+        let controller = code("LyrimuseCore/Local/MusicPlaybackController.swift")
+        let idle = code("lyrimuse/UI/IdlePlaybackActions.swift")
+        let window = code("lyrimuse/UI/LyricsWindowView.swift")
+        let switches: [(name: String, body: String, column: On)] = [
+            ("snapshotAfterFocusLost",
+             body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client), .appleScriptSnapshot),
+            ("adaptedSnapshot", body("private static func adaptedSnapshot(", in: client), .appleScriptSnapshot),
+            ("extendedControlsState", body("public static func extendedControlsState(", in: controller), .extendedControls),
+            ("playbackMode(for:)",
+             body("public static func playbackMode(for player: PlaybackPlayer) -> MusicPlaybackMode? {", in: controller),
+             .extendedControls),
+            ("setPlaybackMode(_:for:)",
+             body("public static func setPlaybackMode(_ mode: MusicPlaybackMode, for player: PlaybackPlayer) -> Bool {",
+                  in: controller), .extendedControls),
+            ("soundVolume(for:)", body("public static func soundVolume(for player: PlaybackPlayer) -> Int? {", in: controller),
+             .extendedControls),
+            ("setSoundVolume(_:for:)",
+             body("public static func setSoundVolume(_ value: Int, for player: PlaybackPlayer) -> Bool {", in: controller),
+             .extendedControls),
+            ("favoritedState(for:)", body("public static func favoritedState(for player: PlaybackPlayer) -> Bool? {", in: controller),
+             .favorite),
+            ("setFavorited(_:for:)",
+             body("public static func setFavorited(_ value: Bool, for player: PlaybackPlayer) -> Bool {", in: controller), .favorite),
+            ("IdlePlaybackActions.resume", body("static func resume(player: PlaybackPlayer) {", in: idle), .resume),
+        ]
+        expectEqual(switches.filter { $0.body.isEmpty }.map(\.name), [],
+                    "决定表(源码): 这几个函数都找得到(找不到 = 签名改了,跟着改这里的签名串)")
+        for s in switches {
+            expectEqual(caseLabels(s.body), players(s.column),
+                        "决定表(源码): \(s.name) 的 switch 点名的就是表里「\(s.column.rawValue)」那几家")
+        }
+        // 通道坏了那条的 default 分支直接问 Spotify,case 里没有它,所以连 default 问的那一家一起算。
+        let broken = body("private static func snapshotWhileChannelBroken(players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {",
+                          in: client)
+        let defaultFetch = broken.range(of: #"default:\s*snapshot = fetch\w+Snapshot\(\)"#, options: .regularExpression)
+            .map { broken[$0].lowercased() } ?? ""
+        let defaultPlayer = PlaybackPlayer.allCases.map { "\($0)" }
+            .filter { defaultFetch.contains("fetch\($0.lowercased())snapshot") }
+        expectEqual((caseLabels(broken) + defaultPlayer).sorted(), players(.channelFallback),
+                    "决定表(源码): snapshotWhileChannelBroken 的 switch(连同 default 问的那一家)就是表里「\(On.channelFallback.rawValue)」那几家")
+        expectEqual(named(body("static func canResume(_ player: PlaybackPlayer) -> Bool {", in: idle)), players(.resume),
+                    "决定表(源码): IdlePlaybackActions.canResume 点名的就是表里「\(On.resume.rawValue)」那几家")
+        expectEqual(named(body("private var platformMenuRows: [PlatformMenuRow] {", in: window)), players(.catalogMenuRows),
+                    "决定表(源码): LyricsWindowView.platformMenuRows 点名的就是表里「\(On.catalogMenuRows.rawValue)」那几家")
     }
 
     // ---- 播放器多选:Set<PlaybackPlayer>.soleExplicitPlayer ----

@@ -61,7 +61,12 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
                 读界面的是 App,引擎不碰
 - tint          {"rgb": [r,g,b]} / {"source": "…"}(复用歌词来源配色) / {"secondary": true}
 - fallbackSymbol      没装这个 App、也没有随包图标时的 SF Symbol
-- bundledIcon   随包打包的品牌图资源名;没有就 null
+- bundledIcon   随包打包的品牌图资源名(lyrimuse/Sources/lyrimuse/Resources/<名字>.png,生成时核对文件在不在);
+                没有就 null
+- note          画像摘要,原样生成进 Swift 的文档注释,所以也受注释卫生检查约束
+
+每条记录都要把上面每个字段写出来,不适用的写 null / false。渲染时缺省的字段按假值处理:漏写一个字段生成照样
+成功,只是那个播放器悄悄少了这一项(漏了 positionTier 就是没有位置档位),所以加载时就拦下;拼错的键同样拦下。
 
 # 媒体进程别名
 
@@ -78,6 +83,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "shared" / "players.json"
+ICON_DIR = ROOT / "lyrimuse" / "Sources" / "lyrimuse" / "Resources"
+
+# 每条播放器记录必须写全的字段,顺序同上面的文档字符串。
+FIELDS = (
+    "id", "swiftCase", "goConst", "bundleID", "goBundleConst", "processName", "displayName", "scrobbleLabel",
+    "nativeLyricSource", "positionTier", "republishesZeroAnchor", "playingFromRate", "artistArrivesLate",
+    "artistlessNotMusic", "dropsSessionBetweenTracks", "ignoresSeekCommand", "needsAutomationPermission",
+    "needsFullDiskAccess", "needsAccessibilityPermission", "tint", "fallbackSymbol", "bundledIcon", "note",
+)
 
 CORE_SWIFT = "lyrimuse/Sources/LyrimuseCore/Local/PlaybackPlayer+Generated.swift"
 APP_SWIFT = "lyrimuse/Sources/lyrimuse/Settings/PlaybackPlayerMeta+Generated.swift"
@@ -99,6 +113,16 @@ BANNER_GO = (
 def load():
     spec = json.loads(SPEC.read_text(encoding="utf-8"))
     players = spec["players"]
+    for p in players:
+        missing = [f for f in FIELDS if f not in p]
+        unknown = [k for k in p if k not in FIELDS and not k.startswith("$")]
+        if missing or unknown:
+            sys.exit(f"players.json 的 {p.get('id')!r}: 少了 {missing} / 认不出 {unknown}"
+                     "(每个字段都要写出来,不适用的写 null / false;字段表见 scripts/gen-players.py 开头)")
+        if p["bundledIcon"]:
+            icon = ICON_DIR / (p["bundledIcon"] + ".png")
+            if not icon.is_file():
+                sys.exit(f"players.json 的 {p['id']!r}: bundledIcon 登记的 {icon.relative_to(ROOT)} 不存在")
     by_id = {p["id"]: p for p in players}
     for group, order in spec["displayOrder"].items():
         if group.startswith("$"):
