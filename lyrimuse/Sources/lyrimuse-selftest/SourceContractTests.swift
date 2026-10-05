@@ -2881,6 +2881,19 @@ func runSourceContractTests() {
         expectEqual(lyricsWindowPopoverRows.isEmpty, false, "抽屉镜像(歌词窗口): 认得出浮层里的行(认不出 = 写法变了,先改这条正则)")
         expectEqual(lyricsWindowPopoverRows.subtracting(lyricsWindowDrawerRows).sorted(), [],
                     "抽屉镜像(歌词窗口): 浮层里的行抽屉都要装配")
+
+        // 触控栏:工具栏、浮层、抽屉都在 TouchBarSettingsRows.swift,每个工具栏入口的浮层是一份 TouchBarXxxRows,抽屉装配同一组。
+        let touchBarFile = code("lyrimuse/UI/TouchBarSettingsRows.swift")
+        expectEqual(touchBarFile.isEmpty, false, "抽屉镜像(触控栏): 宿主文件读得到(读不到 = 路径挪了)")
+        let touchBarGroups = enumCases("enum TouchBarSettingsGroup: CaseIterable {", in: touchBarFile)
+        let touchBarPopovers = captures(#"case \.(\w+): SettingsPopoverShell\([^\n]*\{ (TouchBar\w+Rows)\(\) \}"#,
+                                        in: body("private func popoverContent(for group: TouchBarSettingsGroup) -> some View {", in: touchBarFile))
+        expectEqual(touchBarGroups.isEmpty, false, "抽屉镜像(触控栏): 认得出工具栏入口的枚举")
+        expectEqual(Set(touchBarPopovers.map { $0[0] }), touchBarGroups,
+                    "抽屉镜像(触控栏): 每个工具栏入口的浮层都是一份 TouchBarXxxRows")
+        let touchBarDrawer = body("var body: some View {", in: body("struct TouchBarAllSettingsDrawer: View {", in: touchBarFile))
+        expectEqual(touchBarPopovers.map { $0[1] }.filter { !touchBarDrawer.contains("\($0)()") }, [],
+                    "抽屉镜像(触控栏): 浮层里的行视图抽屉都要装配")
     }
 
     // ---- 三个编辑台工具栏第二行的对齐占位 ----

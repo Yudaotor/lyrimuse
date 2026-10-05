@@ -2498,114 +2498,26 @@ private struct AppearanceSettingsTab: View {
                 isOn: $settings.showLyricsInMenuBar)
             MenuBarAllSettingsDrawer()
         case .touchBar:
-            // 预览排在最前面,跟另外几段同一个位置;有没有触控栏都给看(没有时下面只有一张说明卡)。
+            // 编辑台:工具栏在预览上面,总开关卡和「全部设置」抽屉在预览下面,排法照歌词窗口那一段;工具栏、浮层、抽屉和三组行视图
+            // 都在 UI/TouchBarSettingsRows.swift。有没有触控栏都给看预览,没有时预览下面只有一张说明卡。
+            if touchBar.isPresent {
+                TouchBarEditorToolbar()
+            }
             TouchBarPreviewStage()
             if touchBar.isPresent {
-                // 总开关在上,两张配置卡在下;配置卡不看开关,关着也能先调好(同另外几段)。系统里取不到触控栏的
-                // 那几个入口时(`TouchBarPrivateAPI.isAvailable` 为假),开关的副标题换成「不会生效」的说明,开关照样能拨。
+                // 配置不看开关,关着也能先调好(同另外几段)。系统里取不到触控栏的那几个入口时(`TouchBarPrivateAPI.isAvailable`
+                // 为假),开关的副标题换成「不会生效」的说明,开关照样能拨。
                 modeToggleCard(
                     icon: "rectangle.and.hand.point.up.left",
                     title: L10n.t("触控栏歌词"),
                     subtitle: TouchBarPrivateAPI.isAvailable
-                        ? L10n.t("功能栏里会出现 Lyrimuse 图标，轻点展开歌词；仅限带触控栏的 Mac")
+                        ? L10n.t("功能栏里会出现 Lyrimuse 图标，轻点展开歌词")
                         : L10n.t("这台 Mac 的系统里找不到触控栏的系统接口，打开也不会生效"),
                     isOn: $settings.showLyricsInTouchBar)
-                SettingsCard {
-                    SettingsCardHeader(title: L10n.t("外观"))
-                    CardDivider()
-                    SettingsRow(
-                        icon: "sparkles",
-                        title: L10n.t("卡拉OK效果"),
-                        help: L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
-                    ) {
-                        Toggle("", isOn: $settings.touchBarLyricsKaraoke)
-                    }
-                    CardDivider()
-                    SettingsRow(icon: "paintpalette", title: L10n.t("跟随封面"),
-                                subtitle: L10n.t("歌词取封面的主色，取不到时用白色")) {
-                        Toggle("", isOn: $settings.touchBarLyricsFollowsCover)
-                    }
-                    CardDivider()
-                    SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
-                        // 副行开着时两行的字号由触控栏的高定(14 / 11pt,见 TouchBarLyricsStyle),滑杆拨了也没效果:
-                        // 行留着、尾部换成一句灰字「由副行决定」指向「布局」卡里的副行(同菜单栏「字号」那一行)。
-                        if settings.touchBarSecondaryLine.showsSecondaryRow {
-                            Text(L10n.t("由副行决定"))
-                                .font(.system(size: 13))
-                                .foregroundStyle(.secondary)
-                        } else {
-                            HStack(spacing: 8) {
-                                SteppedSlider(value: Binding(
-                                    get: { TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize) },
-                                    set: { newValue in
-                                        guard newValue != settings.touchBarLyricsFontSize else { return }
-                                        settings.touchBarLyricsFontSize = newValue
-                                    }
-                                ), in: TouchBarLyricsStyle.fontSizeRange, step: 1)
-                                .frame(width: 150)
-                                Text(String(format: L10n.t("%@pt"),
-                                            "\(Int(TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize)))"))
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                                    .frame(width: 46, alignment: .trailing)
-                            }
-                        }
-                    }
-                }
-                SettingsCard {
-                    SettingsCardHeader(title: L10n.t("布局"))
-                    CardDivider()
-                    SettingsRow(icon: "photo", title: L10n.t("显示封面")) {
-                        Toggle("", isOn: $settings.touchBarShowsArtwork)
-                    }
-                    // 封面、三键各自摆在歌词哪一边(`TouchBarSide`,两项各管各的),开着才有这一行。
-                    if settings.touchBarShowsArtwork {
-                        CardDivider()
-                        SettingsSubRow(title: L10n.t("位置")) {
-                            TouchBarSidePicker(selection: $settings.touchBarArtworkSide)
-                        }
-                    }
-                    CardDivider()
-                    SettingsRow(icon: "playpause.fill", title: L10n.t("显示播放控制"),
-                                subtitle: L10n.t("上一首、播放/暂停、下一首，旁边那颗设置键打开这一页")) {
-                        Toggle("", isOn: $settings.touchBarShowsControls)
-                    }
-                    if settings.touchBarShowsControls {
-                        CardDivider()
-                        SettingsSubRow(title: L10n.t("位置")) {
-                            TouchBarSidePicker(selection: $settings.touchBarControlsSide)
-                        }
-                    }
-                    CardDivider()
-                    // 同灵动岛「对齐方式」那四档(含按对唱声部走的「自动」),说明文案也是同一条。
-                    SettingsRow(icon: "text.alignleft", title: L10n.t("对齐方式"),
-                                help: L10n.t("只影响装得下的短句：它在歌词行里靠哪边。「自动」按对唱声部走：谁唱靠谁那边、合唱居中，没有对唱信息就靠左。放不下的句子会横向滚动，没有多余空间，对齐不起作用")) {
-                        LyricsAlignmentSegmentedControl(selection: $settings.touchBarLyricsAlignment,
-                                                        options: LyricsRestingAlignment.notchOptions)
-                    }
-                    CardDivider()
-                    // 四选一同灵动岛 / 菜单栏的「副行」(同一个枚举、同一套显示名),各存各的键,默认不显示。
-                    SettingsRow(icon: "text.append", title: L10n.t("副行"),
-                                help: L10n.t("主歌词下方多一行（两行 14pt / 11pt，「字号」不生效）。译文和读音显示当前句，「下一句」显示接下来那句；开着副行时主行不再提前切到下一句。副行放不下时，跟着这一句的时长横向滚动。")) {
-                        Picker("", selection: $settings.touchBarSecondaryLine) {
-                            ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
-                                Text(kind.displayName).tag(kind)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                    }
-                    CardDivider()
-                    // 占满整条触控栏要连系统的功能栏一起收起,展开期间够不着亮度、音量,所以默认关。
-                    SettingsRow(icon: "arrow.left.and.right", title: L10n.t("展开时隐藏功能栏"),
-                                subtitle: L10n.t("歌词占满整条触控栏；要用亮度、音量等系统按键时，先点左端的 ✕ 收起")) {
-                        Toggle("", isOn: $settings.touchBarHidesControlStrip)
-                    }
-                }
+                TouchBarAllSettingsDrawer()
             } else {
-                // 这台 Mac 此刻没有触控栏(真机没有,Xcode 的触控栏模拟器也没开):只放这一张说明卡,开关和两张
-                // 配置卡都不出现 —— 拨了也不会生效。开关存着的值不动。
+                // 这台 Mac 此刻没有触控栏(真机没有,Xcode 的触控栏模拟器也没开):只放这一张说明卡,工具栏、开关和抽屉都不出现
+                // —— 拨了也不会生效。开关存着的值不动。
                 SettingsCard {
                     SettingsRow(icon: "info.circle", title: L10n.t("这台 Mac 没有触控栏"),
                                 subtitle: L10n.t("触控栏歌词只能在带触控栏的 MacBook Pro 上使用")) {

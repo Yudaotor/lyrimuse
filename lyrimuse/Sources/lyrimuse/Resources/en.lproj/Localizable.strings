@@ -179,7 +179,7 @@
 "上一轮还没跑完，稍后会自动接着跑" = "The previous run hasn't finished; it resumes automatically";
 "上一页" = "Previous";
 "上一首" = "Previous Track";
-"上一首、播放/暂停、下一首，旁边那颗设置键打开这一页" = "Previous, Play/Pause and Next, plus a settings button that opens this page";
+"上一首、播放/暂停、下一首和设置键" = "Previous, Play/Pause and Next, plus a settings button";
 "上次保存：%@ · 歌词引擎已重启" = "Last saved: %@ · Lyrics engine restarted";
 "上次刷新没有成功，显示的是 %@ 的内容" = "Last refresh failed; showing content from %@";
 "上次刷新：%@" = "Last refreshed: %@";
@@ -211,6 +211,7 @@
 "不可用：%@" = "Unusable: %@";
 "不含宽度和总开关" = "Width and the master toggle are left alone";
 "不含宽度和锁定位置" = "Width and locked position are left alone";
+"不含总开关" = "The master toggle is left alone";
 "不含排版、行为、位置和宽度" = "Layout, behavior, position and width are left alone";
 "不打分，按下面的顺序取第一个有结果的来源" = "No scoring — takes the first source below that returns lyrics";
 "不是带时间戳的歌词" = "Not timestamped lyrics";
@@ -402,7 +403,7 @@
 "前进" = "Forward";
 "剩余时长" = "Remaining";
 "副行" = "Second Line";
-"功能栏里会出现 Lyrimuse 图标，轻点展开歌词；仅限带触控栏的 Mac" = "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics. Requires a Mac with Touch Bar";
+"功能栏里会出现 Lyrimuse 图标，轻点展开歌词" = "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics.";
 "加入信任列表" = "Trust This App";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "加粗" = "Bold";
@@ -876,6 +877,7 @@
 "播放器" = "Player";
 "播放器联动" = "Player Linkage";
 "播放控制" = "Controls";
+"播放控制位置" = "Controls Position";
 "播放时图标动起来，暂停即静止" = "Icons come alive while playing, still when paused";
 "播放热力图" = "Listening Heatmap";
 "播放用的是逐字时间轴，改「歌词（LRC）」不生效。要手改主歌词，先用「联网搜索候选歌词」换一份不带逐字的；译文/读音不受影响" = "Playback uses the word-level timing, so editing Lyrics (LRC) has no effect. To hand-edit the main lyrics, use 「Search Online for Lyric Candidates」 to swap in a candidate without word-level timing; translation and romanization edits still apply.";
@@ -1731,6 +1733,7 @@
 "随机播放" = "Shuffle";
 "隐私" = "Privacy";
 "隐藏…" = "Hide…";
+"隐藏功能栏" = "Hide Control Strip";
 "隐藏歌词" = "Hide Lyrics";
 "隐藏译文" = "Hide Translation";
 "隐藏读音" = "Hide Romanization";

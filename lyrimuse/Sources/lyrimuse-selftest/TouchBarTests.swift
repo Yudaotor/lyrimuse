@@ -391,15 +391,30 @@ func runTouchBarTests() {
         expectEqual(menuBarBranch.map { $0.contains("showLyricsInTouchBar") }, false,
                     "触控栏: 菜单栏那段不再放触控栏的开关")
 
-        // 八项设置:设置行都在这一支里,控制器都接上了(漏接一项不报错,只表现成拨了没反应)。
+        // 十项设置:设置行在 TouchBarSettingsRows.swift 的三组行视图里,`.touchBar` 那一支装着工具栏和「全部设置」抽屉;
+        // 控制器都接上了,「恢复默认」每一项都管到、不碰总开关(漏一项都不报错,只表现成拨了没反应 / 恢复不了)。
         let controller = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsController.swift")) ?? ""
+        let rows = code(appDir.appendingPathComponent("UI/TouchBarSettingsRows.swift")) ?? ""
+        func structBody(_ name: String) -> String {
+            guard let from = rows.range(of: "struct \(name): View {") else { return "" }
+            let to = rows.range(of: "\nstruct ", range: from.upperBound..<rows.endIndex)?.lowerBound ?? rows.endIndex
+            return String(rows[from.upperBound..<to])
+        }
+        let rowViews = structBody("TouchBarLyricsRows") + structBody("TouchBarStyleRows") + structBody("TouchBarLayoutRows")
+        let restore = rows.range(of: "static func restoreDefaults() {")
+            .map { String(rows[$0.upperBound...].prefix { $0 != "}" }) } ?? ""
+        expectEqual(touchBarBranch?.contains("TouchBarEditorToolbar()") == true
+                        && touchBarBranch?.contains("TouchBarAllSettingsDrawer()") == true, true,
+                    "触控栏: .touchBar 那一支装着工具栏和「全部设置」抽屉")
         for key in ["touchBarLyricsKaraoke", "touchBarLyricsFollowsCover", "touchBarLyricsFontSize",
                     "touchBarShowsArtwork", "touchBarShowsControls", "touchBarSecondaryLine",
                     "touchBarArtworkSide", "touchBarControlsSide", "touchBarHidesControlStrip",
                     "touchBarLyricsAlignment"] {
-            expectEqual(touchBarBranch?.contains("settings.\(key)"), true, "触控栏: \(key) 的设置行在 .touchBar 那一支")
+            expectEqual(rowViews.contains("settings.\(key)"), true, "触控栏: \(key) 的设置行在三组行视图里")
             expectEqual(controller.contains("settings.$\(key)"), true, "触控栏: 控制器订阅了 \(key)")
+            expectEqual(restore.contains("settings.\(key) = "), true, "触控栏: 「恢复默认」管到 \(key)")
         }
+        expectEqual(restore.contains("showLyricsInTouchBar"), false, "触控栏: 「恢复默认」不碰总开关")
 
         // 没有触控栏时:那一段照样在、点进去只有说明卡,搜索只留总开关那一条,控制器不启用。漏一处都不报错,只表现成
         // 没有触控栏的 Mac 上冒出几项拨了没用的设置,或者白调私有接口。
@@ -407,10 +422,16 @@ func runTouchBarTests() {
                     "触控栏: .touchBar 那一支按有没有触控栏分两种内容")
         expectEqual(touchBarBranch?.contains("L10n.t(\"这台 Mac 没有触控栏\")"), true,
                     "触控栏: 没有触控栏时放「这台 Mac 没有触控栏」那张说明卡")
-        // 副行开着时两行字号由触控栏的高定,「字号」那一行留着、尾部换成「由副行决定」(同菜单栏)。
-        expectEqual(touchBarBranch?.contains("if settings.touchBarSecondaryLine.showsSecondaryRow {") == true
-                        && touchBarBranch?.contains("L10n.t(\"由副行决定\")") == true, true,
+        // 副行开着时两行字号由触控栏的高定,「字号」那一行留着、尾部换成「由副行决定」(同菜单栏),而且紧跟在「副行」下面。
+        let lyricsRows = structBody("TouchBarLyricsRows")
+        expectEqual(lyricsRows.contains("if settings.touchBarSecondaryLine.showsSecondaryRow {")
+                        && lyricsRows.contains("L10n.t(\"由副行决定\")"), true,
                     "触控栏: 副行开着时「字号」那一行显示「由副行决定」")
+        let secondaryAt = lyricsRows.range(of: "title: L10n.t(\"副行\")")?.lowerBound
+        let sizeAt = lyricsRows.range(of: "title: L10n.t(\"字号\")")?.lowerBound
+        let alignAt = lyricsRows.range(of: "title: L10n.t(\"对齐方式\")")?.lowerBound
+        expectEqual(secondaryAt != nil && sizeAt != nil && alignAt != nil && secondaryAt! < sizeAt! && sizeAt! < alignAt!, true,
+                    "触控栏: 「歌词」组按 副行 → 字号 → 对齐方式 排")
         // 歌词那一格填满剩下的宽度,不给固定的期望宽度:给了的话放不下时系统先藏封面和三键,
         // 「显示封面」「显示播放控制」拨了也没反应。
         expectEqual(controller.contains("lyricsContainer.setContentHuggingPriority(.init(1), for: .horizontal)"), true,
@@ -437,11 +458,14 @@ func runTouchBarTests() {
             expectEqual(text.contains("TouchBarPrivateAPI.supportsHidingControlStrip"), true,
                         "触控栏: \(name)只在系统入口在时才当隐藏功能栏算")
         }
-        // 「显示封面」「显示播放控制」开着时下面各挂一行「位置」(从属行),两项各管各的。
-        expectEqual(touchBarBranch?.contains("if settings.touchBarShowsArtwork {") == true
-                        && touchBarBranch?.contains("if settings.touchBarShowsControls {") == true
-                        && touchBarBranch.map { $0.components(separatedBy: "TouchBarSidePicker(selection:").count - 1 } == 2,
-                    true, "触控栏: 封面、三键开着时下面各有一行「位置」")
+        // 「显示封面」「显示播放控制」开着时下面各挂一行位置(从属行),两项各管各的。
+        let layoutRows = structBody("TouchBarLayoutRows")
+        expectEqual(layoutRows.contains("if settings.touchBarShowsArtwork {")
+                        && layoutRows.contains("if settings.touchBarShowsControls {")
+                        && layoutRows.components(separatedBy: "TouchBarSidePicker(selection:").count - 1 == 2
+                        && layoutRows.contains("SettingsSubRow(title: L10n.t(\"封面位置\"))")
+                        && layoutRows.contains("SettingsSubRow(title: L10n.t(\"播放控制位置\"))"),
+                    true, "触控栏: 封面、三键开着时下面各有一行「封面位置」「播放控制位置」")
         // 三键旁边那颗设置键:分段控件的第四格,按下去打开设置、翻到「触控栏」这一段。
         expectEqual(controller.contains("case 3: openTouchBarSettings()")
                         && controller.contains("UserDefaults.standard.set(SettingsSearchCatalog.touchBarSectionValue,")

@@ -180,7 +180,7 @@ func runSettingsSearchTests() {
         "SettingsView.swift", "AccountLinkingTab.swift",
         "UI/OverlayEditorStage.swift", "UI/NotchEditorStage.swift", "UI/MenuBarEditorStage.swift",
         "UI/OverlayStyleSettingsRows.swift", "UI/OverlayBehaviorSettingsRows.swift", "UI/AutoHideSettingsRows.swift",
-        "UI/OverlayAllSettingsDrawer.swift",
+        "UI/OverlayAllSettingsDrawer.swift", "UI/TouchBarSettingsRows.swift",
         "Settings/LanguagePackRow.swift", "Settings/PlayerLinkageRow.swift", "Settings/LyricsLibraryStats.swift",
         "Settings/SoftwareUpdatePage.swift",
     ]

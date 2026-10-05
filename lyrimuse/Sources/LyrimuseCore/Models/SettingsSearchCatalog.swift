@@ -155,7 +155,8 @@ public enum SettingsSearchCatalog {
     }
 
     /// 「歌词显示 › 触控栏」那一段。跟 `lyricsWindow` 同理不是一个 `LyricsSurface`:触控栏有常驻开关、也按宽度断句
-    /// (`LineBreakSurface.touchBar`),但进不了菜单栏面板那排磁贴。这一段没有抽屉。
+    /// (`LineBreakSurface.touchBar`),但进不了菜单栏面板那排磁贴。这一段的「全部设置」抽屉同歌词窗口那一段,搜索命中时
+    /// 靠行高亮展开,`drawer` 留空。
     private static func touchBar(_ title: String, sub: String? = nil, kw: [String] = [],
                                  group: String? = nil) -> SettingsSearchEntry {
         SettingsSearchEntry(destination: .tab("appearance"),
@@ -325,16 +326,19 @@ public enum SettingsSearchCatalog {
 
         // ---- 歌词显示 › 触控栏 ----
         touchBar(touchBarToggleTitleKey, kw: ["Touch Bar", "触控栏", "功能栏", "Control Strip", "开关"]),
-        touchBar("卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "外观"),
-        touchBar("跟随封面", sub: "歌词取封面的主色，取不到时用白色", kw: ["颜色", "主色", "封面颜色"], group: "外观"),
-        touchBar("字号", kw: ["大小", "font size"], group: "外观"),
+        touchBar("副行", kw: ["下一句", "译文", "读音", "罗马音", "两行", "双行"], group: "歌词"),
+        touchBar("字号", kw: ["大小", "font size"], group: "歌词"),
+        touchBar("对齐方式", kw: ["左对齐", "居中", "右对齐", "自动", "靠左", "靠右", "对唱"], group: "歌词"),
+        touchBar("卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "样式"),
+        touchBar("跟随封面", sub: "歌词取封面的主色，取不到时用白色", kw: ["颜色", "主色", "封面颜色"], group: "样式"),
         touchBar("显示封面", kw: ["封面缩略图", "专辑图", "位置", "左边", "右边"], group: "布局"),
-        touchBar("显示播放控制", sub: "上一首、播放/暂停、下一首，旁边那颗设置键打开这一页",
+        touchBar("封面位置", kw: ["位置", "左边", "右边", "封面"], group: "布局"),
+        touchBar("显示播放控制", sub: "上一首、播放/暂停、下一首和设置键",
                  kw: ["播放", "暂停", "上一首", "下一首", "三键", "设置", "位置", "左边", "右边"], group: "布局"),
-        touchBar("对齐方式", kw: ["左对齐", "居中", "右对齐", "自动", "靠左", "靠右", "对唱"], group: "布局"),
-        touchBar("副行", kw: ["下一句", "译文", "读音", "罗马音", "两行", "双行"], group: "布局"),
+        touchBar("播放控制位置", kw: ["位置", "左边", "右边", "三键", "播放控制"], group: "布局"),
         touchBar("展开时隐藏功能栏", sub: "歌词占满整条触控栏；要用亮度、音量等系统按键时，先点左端的 ✕ 收起",
                  kw: ["功能栏", "Control Strip", "全宽", "占满", "亮度", "音量"], group: "布局"),
+        touchBar("恢复默认", sub: "不含总开关", kw: ["重置"]),
 
         // ---- 歌词显示 › 歌词窗口 ----
         // 预览下面那张卡「歌词窗口 [打开]」。搜「打开歌词窗口」另有快捷键那一条,各跳各的。

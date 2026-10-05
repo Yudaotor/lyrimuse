@@ -552,6 +552,18 @@ final class AppSettings: ObservableObject {
     /// 仍是 22pt)、「字号」滑杆随之让位,见 `LyricSecondaryLine` 与 06 章「副行:双排歌词」。
     static let defaultMenuBarSecondaryLine = LyricSecondaryLine.nextLine
 
+    // 「歌词显示 › 触控栏」那一段十项的默认值:`init()` 的 fallback 和 `TouchBarStyleDefaults.restoreDefaults()` 读同一组。
+    // 字号的默认值在 Core(`TouchBarLyricsStyle.defaultFontSize`)。
+    static let defaultTouchBarLyricsKaraoke = true
+    static let defaultTouchBarLyricsFollowsCover = false
+    static let defaultTouchBarShowsArtwork = true
+    static let defaultTouchBarShowsControls = true
+    static let defaultTouchBarSecondaryLine = LyricSecondaryLine.off
+    static let defaultTouchBarArtworkSide = TouchBarSide.leading
+    static let defaultTouchBarControlsSide = TouchBarSide.leading
+    static let defaultTouchBarLyricsAlignment = LyricsRestingAlignment.leading
+    static let defaultTouchBarHidesControlStrip = false
+
     private let defaults = UserDefaults.standard
 
     /// 悬浮歌词 / 灵动岛的「卡拉OK效果」:这一面要不要按逐字时间轴填色。关掉就把
@@ -1881,21 +1893,23 @@ final class AppSettings: ObservableObject {
             .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         showLyricsInTouchBar = (defaults.object(forKey: Keys.showLyricsInTouchBar) as? Bool) ?? false
-        touchBarLyricsKaraoke = (defaults.object(forKey: Keys.touchBarLyricsKaraoke) as? Bool) ?? true
-        touchBarLyricsFollowsCover = (defaults.object(forKey: Keys.touchBarLyricsFollowsCover) as? Bool) ?? false
+        touchBarLyricsKaraoke = (defaults.object(forKey: Keys.touchBarLyricsKaraoke) as? Bool) ?? Self.defaultTouchBarLyricsKaraoke
+        touchBarLyricsFollowsCover = (defaults.object(forKey: Keys.touchBarLyricsFollowsCover) as? Bool)
+            ?? Self.defaultTouchBarLyricsFollowsCover
         touchBarLyricsFontSize = (defaults.object(forKey: Keys.touchBarLyricsFontSize) as? Double)
             ?? TouchBarLyricsStyle.defaultFontSize
-        touchBarShowsArtwork = (defaults.object(forKey: Keys.touchBarShowsArtwork) as? Bool) ?? true
-        touchBarShowsControls = (defaults.object(forKey: Keys.touchBarShowsControls) as? Bool) ?? true
+        touchBarShowsArtwork = (defaults.object(forKey: Keys.touchBarShowsArtwork) as? Bool) ?? Self.defaultTouchBarShowsArtwork
+        touchBarShowsControls = (defaults.object(forKey: Keys.touchBarShowsControls) as? Bool) ?? Self.defaultTouchBarShowsControls
         touchBarSecondaryLine = defaults.string(forKey: Keys.touchBarSecondaryLine)
-            .flatMap(LyricSecondaryLine.init(rawValue:)) ?? .off
+            .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultTouchBarSecondaryLine
         touchBarArtworkSide = defaults.string(forKey: Keys.touchBarArtworkSide)
-            .flatMap(TouchBarSide.init(rawValue:)) ?? .leading
+            .flatMap(TouchBarSide.init(rawValue:)) ?? Self.defaultTouchBarArtworkSide
         touchBarControlsSide = defaults.string(forKey: Keys.touchBarControlsSide)
-            .flatMap(TouchBarSide.init(rawValue:)) ?? .leading
+            .flatMap(TouchBarSide.init(rawValue:)) ?? Self.defaultTouchBarControlsSide
         touchBarLyricsAlignment = defaults.string(forKey: Keys.touchBarLyricsAlignment)
-            .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? .leading
-        touchBarHidesControlStrip = (defaults.object(forKey: Keys.touchBarHidesControlStrip) as? Bool) ?? false
+            .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? Self.defaultTouchBarLyricsAlignment
+        touchBarHidesControlStrip = (defaults.object(forKey: Keys.touchBarHidesControlStrip) as? Bool)
+            ?? Self.defaultTouchBarHidesControlStrip
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         // 默认 250pt:大约中文 19 个字、英文 37 个字,菜单栏上占一小条,不至于把右边
         // 其它 App 的图标挤走。从 200 改上来 —— 用户把自己在用的这一版菜单栏

@@ -37296,29 +37296,6 @@
         }
       }
     },
-    "功能栏里会出现 Lyrimuse 图标，轻点展开歌词；仅限带触控栏的 Mac" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics. Requires a Mac with Touch Bar"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "功能栏里会出现 Lyrimuse 图标，轻点展开歌词；仅限带触控栏的 Mac"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "功能列中會出現 Lyrimuse 圖像，點一下即可展開歌詞；僅限配備觸控列的 Mac"
-          }
-        }
-      }
-    },
     "触控栏" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -37522,29 +37499,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "歌詞佔滿整條觸控列；要用亮度、音量等系統按鍵時，先按一下左端的 ✕ 收起"
-          }
-        }
-      }
-    },
-    "上一首、播放/暂停、下一首，旁边那颗设置键打开这一页" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Previous, Play/Pause and Next, plus a settings button that opens this page"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上一首、播放/暂停、下一首，旁边那颗设置键打开这一页"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上一首、播放/暫停、下一首，旁邊那顆設定鍵打開這一頁"
           }
         }
       }
@@ -38741,6 +38695,121 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "顯示觸控列歌詞"
+          }
+        }
+      }
+    },
+    "上一首、播放/暂停、下一首和设置键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous, Play/Pause and Next, plus a settings button"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一首、播放/暂停、下一首和设置键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一首、播放/暫停、下一首和設定鍵"
+          }
+        }
+      }
+    },
+    "不含总开关" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The master toggle is left alone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不含总开关"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不含總開關"
+          }
+        }
+      }
+    },
+    "功能栏里会出现 Lyrimuse 图标，轻点展开歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能栏里会出现 Lyrimuse 图标，轻点展开歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能列中會出現 Lyrimuse 圖像，點一下即可展開歌詞"
+          }
+        }
+      }
+    },
+    "播放控制位置" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controls Position"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放控制位置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放控制位置"
+          }
+        }
+      }
+    },
+    "隐藏功能栏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Control Strip"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏功能栏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱藏功能列"
           }
         }
       }
