@@ -70,3 +70,40 @@ func TestHeaderLineOnlySkippedOnFirstBodyLine(t *testing.T) {
 		t.Errorf("第一行该被跳过、第三行该保留,实际 %q", sent)
 	}
 }
+
+// 歌名 / 歌手也认歌词自己的 [ti:] / [ar:]:播放器报罗马字、抬头写假名时照样认;只有歌名、形状对不上的照旧不认。
+// 同 Swift 侧 selftest「抬头标签」那一组。
+func TestLyricHeaderLineTagged(t *testing.T) {
+	title, artist := lyricHeaderTags("[ti:Overdose]\n[ar:なとり]\n[00:00.00]Overdose - なとり\n")
+	if title != "Overdose" || artist != "なとり" {
+		t.Fatalf("lyricHeaderTags = %q, %q", title, artist)
+	}
+	if tt, ta := lyricHeaderTags("[ti:]\n[ar:  ]\n"); tt != "" || ta != "" {
+		t.Errorf("空的标签不算: %q, %q", tt, ta)
+	}
+	cases := []struct {
+		name, text, title, artist, tagTitle, tagArtist string
+		want                                           bool
+	}{
+		{"播放器报罗马字、抬头写假名", "Overdose - なとり", "Overdose", "natori", "Overdose", "なとり", true},
+		{"不带标签照旧不认", "Overdose - なとり", "Overdose", "natori", "", "", false},
+		{"播放器的歌名 + 标签的歌手", "缘分一道桥 (《长城》电影片尾曲) - 王力宏、谭维维", "缘分一道桥", "Wang Leehom", "电影片尾曲", "王力宏、谭维维", true},
+		{"只有歌名不算", "First Love", "First Love", "Utada", "First Love", "", false},
+		{"真歌词里同时有歌名和歌手", "新的经典 蛋堡 x Jabberloop", "经典", "Soft Lipa", "经典", "蛋堡", false},
+	}
+	for _, c := range cases {
+		if got := looksLikeLyricHeaderLineTagged(c.text, c.title, c.artist, c.tagTitle, c.tagArtist); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+	// 送翻选行读同一份标签:播放器报的歌名、歌手都是另一种语种时,按标签认出抬头、不送翻;去掉标签就认不出,照旧送。
+	body := "[00:00.50]黑白 - 方大同 (Khalil Fong)\n[00:02.00]I wanna see you\n"
+	tagged := selectTranslationWork("[ti:黑白]\n[ar:方大同]\n"+body, "zh-CN", "Khalil Fong", "Black & White").uniqueTexts
+	if len(tagged) != 1 || tagged[0] != "I wanna see you" {
+		t.Errorf("抬头不该送翻,实际 %q", tagged)
+	}
+	untagged := selectTranslationWork(body, "zh-CN", "Khalil Fong", "Black & White").uniqueTexts
+	if len(untagged) != 2 || untagged[0] != "黑白 - 方大同 (Khalil Fong)" {
+		t.Errorf("对照: 不带标签时抬头照旧送翻,实际 %q", untagged)
+	}
+}

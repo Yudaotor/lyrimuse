@@ -15,8 +15,9 @@ import (
 // 不要求另一段含歌手名。歌手名换了语种或写法时(「Throw It Off - 方大同」配 Khalil Fong)展示端宁可不删,
 // 翻译这边跳过它只少翻一行。歌名只比整串的几种写法(原样 / 去括号 / 去掉「 - 版本」尾巴),不比按字形
 // 切出的段 —— 双语歌名的半段太短,单凭它认会把真歌词当抬头。
-func looksLikeTranslationHeaderLine(text, title, artist string) bool {
-	if looksLikeLyricHeaderLine(text, title, artist) {
+// tagTitle / tagArtist 是歌词自己的 [ti:] / [ar:](lyricHeaderTags),展示端那套判据按播放器的和标签的两两搭配判。
+func looksLikeTranslationHeaderLine(text, title, artist, tagTitle, tagArtist string) bool {
+	if looksLikeLyricHeaderLineTagged(text, title, artist, tagTitle, tagArtist) {
 		return true
 	}
 	if title == "" {

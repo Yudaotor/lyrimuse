@@ -854,6 +854,34 @@ public final class LyricsSyncEngine {
         }
     }
 
+    /// 抬头里的歌名 / 歌手除了播放器报的,还认这份歌词自己的 `[ti:]` / `[ar:]`(`LRCParser.headerTags`):抬头是歌词源按
+    /// 自己的写法写的,播放器报的常是另一种语种或写法(罗马字对假名)。播放器的和标签的两两搭配逐一判,任一成立就算;
+    /// 判据本身(形状、等值、长度下限)一条没放宽。Go 侧 lyricheader.go 的 looksLikeLyricHeaderLineTagged 同一个做法。
+    static func looksLikeHeaderLine(_ text: String, trackTitle: String, trackArtist: String,
+                                    tags: LRCParser.HeaderTags) -> Bool {
+        headerIdentities(trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
+            .contains { looksLikeHeaderLine(text, trackTitle: $0.title, trackArtist: $0.artist) }
+    }
+
+    /// 带标签的抬头(`looksLikeLabeledHeaderLine`),歌名 / 歌手同上两两搭配。
+    static func looksLikeLabeledHeaderLine(_ text: String, trackTitle: String, trackArtist: String,
+                                           tags: LRCParser.HeaderTags) -> Bool {
+        headerIdentities(trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
+            .contains { looksLikeLabeledHeaderLine(text, trackTitle: $0.title, trackArtist: $0.artist) }
+    }
+
+    /// 播放器报的和歌词标签里的歌名、歌手两两搭配;空的、重复的不算。
+    private static func headerIdentities(trackTitle: String, trackArtist: String,
+                                         tags: LRCParser.HeaderTags) -> [(title: String, artist: String)] {
+        var out: [(title: String, artist: String)] = []
+        for title in [trackTitle, tags.title] where !title.isEmpty {
+            for artist in [trackArtist, tags.artist] where !artist.isEmpty {
+                if !out.contains(where: { $0.title == title && $0.artist == artist }) { out.append((title, artist)) }
+            }
+        }
+        return out
+    }
+
     /// 署名判定之前把等价写法换成同一种,只用于判定、不改显示:同形异码字换回标准字
     /// (`HanCompatibility`)、冒号的竖排 / 小号变体换成「：」、全角拉丁字母与数字换成半角(「ＯＰ：」)。
     static func creditProbeText(_ text: String) -> String {
@@ -1400,10 +1428,10 @@ public final class LyricsSyncEngine {
     /// 直接曝光这一层,语料统计和单测都拿它当唯一判据。
     public static func creditLineDropDecisions(
         _ texts: [String], trackTitle: String = "", trackArtist: String = "",
-        speakerExemptions: Set<String> = []
+        tags: LRCParser.HeaderTags = LRCParser.HeaderTags(), speakerExemptions: Set<String> = []
     ) -> [Bool] {
         strippingCreditLines(
-            texts, trackTitle: trackTitle, trackArtist: trackArtist,
+            texts, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags,
             speakerExemptions: speakerExemptions)
     }
 
@@ -1412,7 +1440,7 @@ public final class LyricsSyncEngine {
     // 模块内可见:预生成罗马音(LyricsRomanization.romanizeLRC)要按同一套规则认署名行。
     static func strippingCreditLines(
         _ texts: [String], trackTitle: String = "", trackArtist: String = "",
-        speakerExemptions: Set<String> = []
+        tags: LRCParser.HeaderTags = LRCParser.HeaderTags(), speakerExemptions: Set<String> = []
     ) -> [Bool] {
         let texts = texts.map(creditProbeText)
         let useStructural = shouldApplyStructuralCreditFilter(texts, exemptions: speakerExemptions)
@@ -1472,7 +1500,7 @@ public final class LyricsSyncEngine {
             // 整行只有符号(单独一行 `-` 之类),见 isSymbolOnlyLine。
             if isSymbolOnlyLine(text) { return true }
             // 抬头只在第一行认 —— 别的位置出现同样的字样多半是真歌词。
-            if i == 0, looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist) {
+            if i == 0, looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist, tags: tags) {
                 return true
             }
             return useStructural && matchesStructuralCreditPattern(text, exemptions: speakerExemptions)
@@ -1491,8 +1519,8 @@ public final class LyricsSyncEngine {
         // 进了正文再出现同样字样的多半是真歌词。
         for i in texts.indices {
             if base[i] { continue }
-            guard looksLikeHeaderLine(texts[i], trackTitle: trackTitle, trackArtist: trackArtist)
-                || looksLikeLabeledHeaderLine(texts[i], trackTitle: trackTitle, trackArtist: trackArtist)
+            guard looksLikeHeaderLine(texts[i], trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
+                || looksLikeLabeledHeaderLine(texts[i], trackTitle: trackTitle, trackArtist: trackArtist, tags: tags)
             else { break }
             base[i] = true
         }
@@ -1533,6 +1561,12 @@ public final class LyricsSyncEngine {
         // 还有别的源/标记纯音乐兜底)该管的事,不该在展示层为了这一种情况反过来削弱这道
         // 保护全库的安全阀。
         if drop.allSatisfy({ $0 }) && !texts.isEmpty {
+            // 歌词标签只用来多认几行抬头,不能靠它把整份推到这道闸门上(那样职员表会整份放回来):
+            // 带标签删空时按不带标签重判,见 08 章决策 38。texts 已归一化过,creditProbeText 再套一次不变。
+            if tags != LRCParser.HeaderTags() {
+                return strippingCreditLines(
+                    texts, trackTitle: trackTitle, trackArtist: trackArtist, speakerExemptions: speakerExemptions)
+            }
             return texts.map { _ in false }
         }
         return drop
@@ -1630,8 +1664,10 @@ public final class LyricsSyncEngine {
         let baseSpeakers = LyricDuet.speakers(in: baseTexts)
         // 正文两条路径(整行 / 逐字)各自认出来的演唱者标签的并集,下面剥译文和罗马音用。
         var allSpeakers = baseSpeakers
+        // 抬头里的歌名 / 歌手也认这份歌词自己的 [ti:] / [ar:](整行那份优先,缺的从逐字那份补)。
+        let lrcHeaderTags = LRCParser.headerTags(lyrics, lyricsYRC)
         let baseDrop = Self.strippingCreditLines(
-            baseTexts, trackTitle: trackTitle, trackArtist: trackArtist,
+            baseTexts, trackTitle: trackTitle, trackArtist: trackArtist, tags: lrcHeaderTags,
             speakerExemptions: baseSpeakers)
         let filteredBase = zip(parsedBase, baseDrop).compactMap { $0.1 ? nil : $0.0 }
         // 被判成署名的那些**时间戳**。译文/罗马音跟着它走,见下面 romaLines/trLines 的注释。
@@ -1647,7 +1683,7 @@ public final class LyricsSyncEngine {
             // 条目 baseTexts 是空的,baseSpeakers 也就是空集。两边并起来才不会漏。
             allSpeakers.formUnion(wordSpeakers)
             let drop = Self.strippingCreditLines(
-                texts, trackTitle: trackTitle, trackArtist: trackArtist,
+                texts, trackTitle: trackTitle, trackArtist: trackArtist, tags: lrcHeaderTags,
                 speakerExemptions: wordSpeakers)
             candidateWords = zip(yrc, drop).compactMap { $0.1 ? nil : $0.0 }
             creditTimesMs.formUnion(zip(yrc, drop).compactMap { $0.1 ? $0.0.timeMs : nil })

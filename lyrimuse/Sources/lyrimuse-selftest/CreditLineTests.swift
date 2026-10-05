@@ -206,6 +206,71 @@ func runCreditLineTests() {
     }
 
     do {
+        // 抬头的歌名 / 歌手也认这份歌词自带的 [ti:] / [ar:]:播放器报的是另一种写法(罗马字对假名)时照样删。
+        let tags = LRCParser.headerTags("[ti:Overdose]\n[ar:なとり]\n[00:00.00]Overdose - なとり\n")
+        expectEqual(tags, LRCParser.HeaderTags(title: "Overdose", artist: "なとり"), "抬头标签: 读出 [ti:] / [ar:]")
+        expectEqual(LRCParser.headerTags("[ti:]\n[ar:  ]\n", "[ti:A]\n[ar:B]\n"), LRCParser.HeaderTags(title: "A", artist: "B"),
+                    "抬头标签: 空的标签不算,缺的从第二份补")
+        expectEqual(LRCParser.headerTags("[ti:A]\n", "[ti:B]\n[ar:C]\n"), LRCParser.HeaderTags(title: "A", artist: "C"),
+                    "抬头标签: 前一份有的不被后一份盖掉")
+        let natori = ["Overdose - なとり", "詞：なとり", "本当は分かっていた", "いけないことだったって"]
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(natori, trackTitle: "Overdose", trackArtist: "natori", tags: tags),
+                    [true, true, false, false], "抬头标签: 播放器报罗马字、抬头写假名,按歌词自带的歌手名认出抬头")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(natori, trackTitle: "Overdose", trackArtist: "natori"),
+                    [false, true, false, false], "抬头标签(对照): 不带标签时歌手名对不上,照旧不删")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["缘分一道桥 (《长城》电影片尾曲) - 王力宏、谭维维", "作词：方文山", "我走过你走过的路"],
+            trackTitle: "缘分一道桥", trackArtist: "Wang Leehom",
+            tags: LRCParser.HeaderTags(title: "电影片尾曲", artist: "王力宏、谭维维")),
+            [true, true, false], "抬头标签: 播放器的歌名 + 标签的歌手也算一种搭配")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["First Love", "最後のキスは"], trackTitle: "First Love", trackArtist: "Utada",
+            tags: LRCParser.HeaderTags(title: "First Love")),
+            [false, false], "抬头标签(反向): 只有歌名的第一句不算抬头")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["新的经典 蛋堡 x Jabberloop", "你懂吗"], trackTitle: "经典", trackArtist: "Soft Lipa",
+            tags: LRCParser.HeaderTags(title: "经典", artist: "蛋堡")),
+            [false, false], "抬头标签(反向): 真歌词里同时有歌名和歌手也不删")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["本当は分かっていた", "Overdose - なとり"], trackTitle: "Overdose", trackArtist: "natori", tags: tags),
+            [false, false], "抬头标签(反向): 正文里出现同样字样不删")
+        // 标签认出的抬头加上后面的职员表正好是整份:不带标签判,只留抬头那一行,不让兜底闸门把职员表放回来。
+        let creditOnly = ["夜曲 (Instrumental) - 周杰伦", "作词：方文山", "作曲：周杰伦", "编曲：林迈可"]
+        let creditOnlyTags = LRCParser.HeaderTags(title: "夜曲 (Instrumental)", artist: "周杰伦")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            creditOnly, trackTitle: "夜曲 (Instrumental)", trackArtist: "Jay Chou", tags: creditOnlyTags),
+            [false, true, true, true], "抬头标签: 靠标签认出抬头会把整份删空时,按不带标签判")
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["作词：甲", "作曲：乙", "编曲：丙"], tags: creditOnlyTags),
+            [false, false, false], "抬头标签: 整份都是职员表时兜底闸门照旧整份保留")
+        // 逐字歌词里时间戳错开一位的抬头:行首那段字收进来以后,跟整行歌词那份一样认得出。
+        let yrcHeader = YRCParser.parse(
+            "[311,775]Unstoppable (311,159,0)(Explicit)(470,184,0) - (654,168,0)Daniel (822,264,0)Caesar\n"
+                + "[1286,1208](1286,168,0)When (1454,168,0)I (1622,168,0)wake")
+            .map { $0.words.map(\.text).joined() }
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(yrcHeader, trackTitle: "Unstoppable", trackArtist: "Daniel Caesar"),
+                    [true, false], "抬头(逐字): 行首没带时间戳的歌名收进来以后,抬头照样删")
+    }
+
+    do {
+        // load 把歌词自带的 [ti:] / [ar:] 交给抬头判定:逐字那份用同一组标签,整行那份没有时从逐字那份取。
+        let lrc = "[ti:Overdose]\n[ar:なとり]\n[00:00.50]Overdose - なとり\n[00:02.00]本当は分かっていた\n"
+        let yrc = "[500,1000]Overdose - (500,500,0)なとり\n[2000,1000](2000,500,0)本当は(2500,500,0)分かっていた\n"
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", trackTitle: "Overdose", trackArtist: "natori")
+        expectEqual(engine.activeLine(atMs: 1000)?.mainText, nil, "抬头标签(load): 整行歌词的抬头不显示")
+        expectEqual(engine.activeLine(atMs: 2500)?.mainText, "本当は分かっていた", "抬头标签(load): 正文照常显示")
+        let words = LyricsSyncEngine()
+        words.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, trackTitle: "Overdose", trackArtist: "natori")
+        expectEqual(words.activeLine(atMs: 1000)?.words, nil, "抬头标签(load): 逐字那份用整行那份的标签,抬头同样不显示")
+        expectEqual(words.activeLine(atMs: 2500)?.words?.map(\.text), ["本当は", "分かっていた"], "抬头标签(load): 逐字正文照常显示")
+        let yrcOnly = LyricsSyncEngine()
+        yrcOnly.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: "[ti:Overdose]\n[ar:なとり]\n" + yrc,
+                     trackTitle: "Overdose", trackArtist: "natori")
+        expectEqual(yrcOnly.activeLine(atMs: 1000)?.words, nil, "抬头标签(load): 只有逐字歌词时用它自己的标签")
+    }
+
+    do {
         // 整行只有符号:实测库里存在单独一行 `-`。
         expectEqual(LyricsSyncEngine.isSymbolOnlyLine("-"), true, "纯符号行: 单个连字符")
         expectEqual(LyricsSyncEngine.isSymbolOnlyLine("——"), true, "纯符号行: 破折号")

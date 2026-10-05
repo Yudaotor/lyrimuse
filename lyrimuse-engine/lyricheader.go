@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -53,6 +54,41 @@ func looksLikeLyricHeaderLine(text, title, artist string) bool {
 		}
 		if rightTitle && headerContainsAny(leftRaw, artists) {
 			return true
+		}
+	}
+	return false
+}
+
+// lyricHeaderTagRe 歌词文件头部的 [ti:] / [ar:]。同 Swift 侧 LRCParser.headerTagRegex。
+var lyricHeaderTagRe = regexp.MustCompile(`(?im)^\s*\[(ti|ar)\s*:([^\]\r\n]*)\]`)
+
+// lyricHeaderTags 歌词自己写的歌名、歌手([ti:] / [ar:],各取第一个非空的)。抬头行用的是这一套写法,跟播放器报的
+// 常不是同一种语种或写法。同 Swift 侧 LRCParser.headerTags。
+func lyricHeaderTags(lrc string) (title, artist string) {
+	for _, m := range lyricHeaderTagRe.FindAllStringSubmatch(lrc, -1) {
+		value := strings.TrimSpace(m[2])
+		if value == "" {
+			continue
+		}
+		if strings.EqualFold(m[1], "ti") {
+			if title == "" {
+				title = value
+			}
+		} else if artist == "" {
+			artist = value
+		}
+	}
+	return title, artist
+}
+
+// looksLikeLyricHeaderLineTagged:播放器报的和歌词标签里的歌名、歌手两两搭配,任一搭配成立就是抬头;判据本身
+// 不放宽。同 Swift 侧 LyricsSyncEngine.looksLikeHeaderLine(_:trackTitle:trackArtist:tags:)。
+func looksLikeLyricHeaderLineTagged(text, title, artist, tagTitle, tagArtist string) bool {
+	for _, t := range []string{title, tagTitle} {
+		for _, a := range []string{artist, tagArtist} {
+			if t != "" && a != "" && looksLikeLyricHeaderLine(text, t, a) {
+				return true
+			}
 		}
 	}
 	return false

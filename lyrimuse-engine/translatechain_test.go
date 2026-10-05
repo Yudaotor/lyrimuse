@@ -232,7 +232,7 @@ func TestTranslationHeaderLineOnlyNeedsTitle(t *testing.T) {
 		{"The Dawn - is coming", "日出 The Dawn", "丁世光", false}, // 双语歌名的半段不算
 	}
 	for _, c := range cases {
-		if got := looksLikeTranslationHeaderLine(c.text, c.title, c.artist); got != c.want {
+		if got := looksLikeTranslationHeaderLine(c.text, c.title, c.artist, "", ""); got != c.want {
 			t.Errorf("looksLikeTranslationHeaderLine(%q, %q, %q) = %v, want %v", c.text, c.title, c.artist, got, c.want)
 		}
 	}

@@ -49,6 +49,39 @@ public enum LRCParser {
     /// 少数确实偏得多的社区歌词一并否掉。
     public static let maxOffsetMs = 10_000
 
+    private static let headerTagRegex = try! NSRegularExpression(
+        pattern: #"^\s*\[(ti|ar)\s*:([^\]\r\n]*)\]"#, options: [.caseInsensitive, .anchorsMatchLines])
+
+    /// 歌词文件头部的 `[ti:]` / `[ar:]`:歌词源自己写的歌名、歌手。抬头行(「曲名 - 歌手」)用的是这一套写法,
+    /// 跟播放器报的常不是同一种语种或写法,见 `LyricsSyncEngine.looksLikeHeaderLine(_:trackTitle:trackArtist:tags:)`。
+    public struct HeaderTags: Equatable, Sendable {
+        public var title: String
+        public var artist: String
+
+        public init(title: String = "", artist: String = "") {
+            self.title = title
+            self.artist = artist
+        }
+    }
+
+    /// 按顺序在这几份里找,各取第一个非空的。
+    public static func headerTags(_ texts: String...) -> HeaderTags {
+        var tags = HeaderTags()
+        for text in texts {
+            let ns = text as NSString
+            for m in headerTagRegex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                let value = ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespaces)
+                if value.isEmpty { continue }
+                if ns.substring(with: m.range(at: 1)).lowercased() == "ti" {
+                    if tags.title.isEmpty { tags.title = value }
+                } else if tags.artist.isEmpty {
+                    tags.artist = value
+                }
+            }
+        }
+        return tags
+    }
+
     /// Apple 歌词给空间音频(杜比全景声)版的偏移。Apple 的时间轴按立体声母带打,全景声混音跟它对不齐时,
     /// 引擎把 TTML 里 `<audio lyricOffset role="spatial">` 的值连同立体声版时长写成正文里的一行
     /// `[am-spatial:<偏移毫秒>/<立体声时长毫秒>]`(引擎 `applemusicspatial.go`)。

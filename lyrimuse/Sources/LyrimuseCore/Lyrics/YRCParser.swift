@@ -76,11 +76,26 @@ public enum YRCParser {
             let nsLine = line as NSString
             let fullRange = NSRange(location: 0, length: nsLine.length)
             var words: [LyricWord] = []
-            for m in wordRegex.matches(in: line, range: fullRange) {
+            let matches = wordRegex.matches(in: line, range: fullRange)
+            // 行头之后、第一个字的时间戳之前还有字(`[311,775]歌名 (311,159,0)(版本)(470,184,0) - …`、
+            // `[83792,500](Yeah(83792,500,0))`):并进第一个字,起点提前到行首。丢掉的话这一行只剩后半截、
+            // 跟同一句的整行歌词对不上;单独算一个字的话,按字数配读音的那条路(拼音 / 粤拼)会差一个。
+            let headEnd = head.range.location + head.range.length
+            var leading = ""
+            if let first = matches.first, first.range.location > headEnd {
+                leading = nsLine.substring(with: NSRange(location: headEnd, length: first.range.location - headEnd))
+                if leading.trimmingCharacters(in: .whitespaces).isEmpty { leading = "" }
+            }
+            for m in matches {
                 let wordText = nsLine.substring(with: m.range(at: 3))
                 if wordText.isEmpty { continue }
                 let start = Int(nsLine.substring(with: m.range(at: 1))) ?? 0
                 let dur = Int(nsLine.substring(with: m.range(at: 2))) ?? 0
+                if words.isEmpty, !leading.isEmpty {
+                    let begin = min(lineTimeMs, start)
+                    words.append(LyricWord(startMs: begin, durationMs: start + dur - begin, text: leading + wordText))
+                    continue
+                }
                 words.append(LyricWord(startMs: start, durationMs: dur, text: wordText))
             }
             if !words.isEmpty { out.append(LyricLineWords(timeMs: lineTimeMs, words: words, durationMs: lineDurationMs)) }

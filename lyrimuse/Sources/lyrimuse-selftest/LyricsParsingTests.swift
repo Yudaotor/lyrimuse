@@ -168,6 +168,19 @@ func runLyricsParsingTests() {
     expectEqual(YRCParser.parse("no header here (1,2,0)x"), [], "YRC: 没有行头的行忽略")
 
     do {
+        // 行头之后、第一个字的时间戳之前的字并进第一个字,起点提前到行首;只有空白不算。
+        let lines = YRCParser.parse("[311,775]歌名 (311,159,0)(版本)(470,184,0) - (654,168,0)歌手")
+        expectEqual(lines.first?.words.map(\.text).joined(), "歌名 (版本) - 歌手", "YRC: 行首没带时间戳的字收进来")
+        expectEqual(lines.first?.words.first, LyricWord(startMs: 311, durationMs: 159, text: "歌名 (版本)"),
+                    "YRC: 行首那段字并进第一个字,字数不变")
+        expectEqual(YRCParser.parse("[1000,2000](Calling )(1970,430,0) Live").first?.words ?? [],
+                    [LyricWord(startMs: 1000, durationMs: 1400, text: "(Calling ) Live")],
+                    "YRC: 并进去的字从行首开始,唱到第一个字结束")
+        expectEqual(YRCParser.parse("[0,1000]   (0,500,0)word").first?.words ?? [],
+                    [LyricWord(startMs: 0, durationMs: 500, text: "word")], "YRC: 行首只有空白不算")
+    }
+
+    do {
         // 修复:词文字本身含字面括号(和声/口白标注常见,比如"(oh)")时,不能被
         // 误判成"下一个时间戳元组开始了"而截断丢字,详见 wordRegex 定义处的注释。
         let text = "[0,3000](0,500,0)Hello(1600,400,0)(oh)(2100,300,0)world"

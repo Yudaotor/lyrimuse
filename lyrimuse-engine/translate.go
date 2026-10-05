@@ -410,6 +410,7 @@ type translationWork struct {
 // 共用这一份,两边口径一旦分开,就会出现"判成要翻、执行时一行不剩"的白跑。
 func selectTranslationWork(lyrics, target, artist, title string) translationWork {
 	lines := parseLRCLines(lyrics)
+	tagTitle, tagArtist := lyricHeaderTags(lyrics)
 	if len(lines) == 0 {
 		return translationWork{}
 	}
@@ -470,7 +471,7 @@ func selectTranslationWork(lyrics, target, artist, title string) translationWork
 		// 不管它是不是抬头,后面的行都不该再走这条判定。
 		if text != "" && firstBodyLine {
 			firstBodyLine = false
-			if looksLikeTranslationHeaderLine(text, title, artist) {
+			if looksLikeTranslationHeaderLine(text, title, artist, tagTitle, tagArtist) {
 				continue
 			}
 		}
