@@ -291,6 +291,10 @@ type poller struct {
 	lastListenAt     int64
 	lastListenDev    string
 
+	// 启动时等推送要用的信息到齐(见 relayStartupPending)。
+	relayStartupUntil time.Time // 等到这一刻为止;零值表示不等
+	lastListenSeeding bool      // 启动补种(seedLastListen)还没回来
+
 	// 推送健康度(见 relaystatus.go)。
 	relayGen          int       // 中继地址或令牌每改一次加一;在飞的推送带着它,回来时不是这一份就不记账
 	relayFailingSince time.Time // 这一串推送失败从什么时候开始;零 = 上一次推成功了或还没推过
@@ -646,6 +650,9 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 		payload = map[string]any{"ok": true, "empty": true, "playing": false}
 		key = "empty"
 	}
+	if p.relayStartupPending(now, key) {
+		return
+	}
 	// enrich 完成后同一首歌封面会从无到有,并入去重 key,触发一次补推(否则 key 未变被吞)。
 	if cov, _ := payload["artwork"].(string); cov != "" {
 		key += "|c"
@@ -676,6 +683,8 @@ const (
 	// 等一下就能一次写到位,不用先推一次无封面、再补推一次(实测补推约占全部写的一成)。网页本身
 	// 10 秒才拉一次,这点延迟看不出来。
 	relayCoverWait = 5 * time.Second
+	// 引擎刚启动时最多等这么久再推(见 relayStartupPending),覆盖启动补种那次请求的整个时限。
+	relayStartupWait = relayRequestTimeout
 )
 
 // relayTrackOf 取 key 里标识曲目的那段(去掉状态前缀和 |c / |a 后缀),用来判断是不是换了一首歌。
@@ -732,6 +741,20 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 		return "", false
 	}
 	return reason, true
+}
+
+// relayStartupPending:引擎刚启动时这一拍先不推。App 的播放状态读到之前什么都不推(还不知道 Mac 在不在放),
+// 启动补种回来之前不推「空」。两样都到齐、或等满 relayStartupWait,就撤掉这道等,往后照常推。见 13 章决策 13。
+func (p *poller) relayStartupPending(now time.Time, key string) bool {
+	if p.relayStartupUntil.IsZero() {
+		return false
+	}
+	appKnown := p.app == nil || p.app.usedAvail == appStateAvailable
+	if !now.Before(p.relayStartupUntil) || appKnown && !p.lastListenSeeding {
+		p.relayStartupUntil = time.Time{}
+		return false
+	}
+	return !appKnown || key == "empty"
 }
 
 // relayPushResult 是后台推送的结果,经 relayDoneCh 送回主循环。
@@ -1679,10 +1702,12 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	appAvailable := func() bool { _, avail := appState.read(time.Now()); return avail == appStateAvailable }
 	// 预解析要问播放器的那几样请 App 代跑(见 appquery.go);文件名与 App 侧 PlayerQueryServer 逐字一致。
 	setAppQueryChannel(configFilePath(clientName+"-player-query-request.json"), configFilePath(clientName+"-player-query-reply.json"), appAvailable)
-	p.poll() // render immediately, don't wait a full interval on startup
 	if cfg.StateRelayURL != "" && cfg.User != "" && lb != nil {
+		p.lastListenSeeding = true
 		go seedLastListen(ctx, lb.apiRoot(), cfg.User, p.lastListenSeedCh)
 	}
+	p.relayStartupUntil = time.Now().Add(relayStartupWait)
+	p.poll() // render immediately, don't wait a full interval on startup
 	if lb != nil {
 		// 不看启动时有没有令牌:令牌可能是之后热重读才填上的。没有令牌的那几轮由循环自己跳过(见 startLBRetryLoop)。
 		go startLBRetryLoop(ctx, lb) // 会话结束后才失败的收听,后台重发,见 lbretry.go
@@ -1787,10 +1812,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		case r := <-p.relayDoneCh:
 			p.applyRelayResult(r)
 		case r := <-p.lastListenSeedCh:
-			// 本进程已经记下过一条真实收听(或 iPhone 桥接到了)就不用它:那条更新。
-			if p.lastListen.key() == "" {
-				p.lastListen, p.lastListenAt, p.lastListenDev = r.track, r.listenedAt, r.device
-			}
+			p.applyLastListenSeed(r)
 		case r := <-p.bridgeForwardDoneCh:
 			p.applyBridgeForwardResults(r)
 		case r := <-p.bridgeDoneCh:

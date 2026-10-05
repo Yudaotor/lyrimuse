@@ -149,26 +149,32 @@ type lastListenSeed struct {
 	device     string
 }
 
-// seedLastListen 在后台取 ListenBrainz 最近一条收听,给「上次播放」补上初值。
+// seedLastListen 在后台取 ListenBrainz 最近一条收听,给「上次播放」补上初值。往 out 送且只送一条(out 要有一格缓冲);
+// 取不到时送空的一条,主循环据此知道补种结束了(见 relayStartupPending)。
 //
 // 「上次播放」(p.lastListen)只活在内存里,引擎一重启(改设置、装机、崩溃被拉起都会)就空了。
 // 这时没在放歌的话,推给中继的是 {"empty":true}:飞书预览照实说「这会儿没在听歌」、网页新访客看到
 // 「还没有收听记录」(实测 3742 次预览里 419 次是这样)。取不到就算了,跟原来一样推空。
 func seedLastListen(ctx context.Context, root, user string, out chan<- lastListenSeed) {
+	out <- fetchLastListen(ctx, root, user)
+}
+
+// fetchLastListen 取 ListenBrainz 上 user 最近一条收听;取不到返回零值。
+func fetchLastListen(ctx context.Context, root, user string) lastListenSeed {
 	ctx, cancel := context.WithTimeout(ctx, relayRequestTimeout)
 	defer cancel()
 	u := strings.TrimRight(root, "/") + "/1/user/" + neturl.PathEscape(user) + "/listens?count=1"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return
+		return lastListenSeed{}
 	}
 	resp, err := doHTTPTracked(relaySeedClient, req)
 	if err != nil {
-		return
+		return lastListenSeed{}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return
+		return lastListenSeed{}
 	}
 	var body struct {
 		Payload struct {
@@ -184,21 +190,27 @@ func seedLastListen(ctx context.Context, root, user string, out chan<- lastListe
 		} `json:"payload"`
 	}
 	if json.NewDecoder(resp.Body).Decode(&body) != nil || len(body.Payload.Listens) == 0 {
-		return
+		return lastListenSeed{}
 	}
 	l := body.Payload.Listens[0]
 	m := l.TrackMetadata
 	if m.TrackName == "" || m.ArtistName == "" {
-		return
+		return lastListenSeed{}
 	}
 	device, _ := m.AdditionalInfo["source"].(string)
-	seed := lastListenSeed{
+	return lastListenSeed{
 		track:      snapshot{Title: m.TrackName, Artist: m.ArtistName, Album: m.ReleaseName},
 		listenedAt: l.ListenedAt,
 		device:     device,
 	}
-	select {
-	case out <- seed:
-	case <-ctx.Done():
+}
+
+// applyLastListenSeed:启动补种回来了(主循环上调用)。本进程已经记下过一条真实收听(或 iPhone 桥接到了)就不用它:
+// 那条更新。回来就推一拍,不等下一轮主节拍。
+func (p *poller) applyLastListenSeed(r lastListenSeed) {
+	p.lastListenSeeding = false
+	if r.track.key() != "" && p.lastListen.key() == "" {
+		p.lastListen, p.lastListenAt, p.lastListenDev = r.track, r.listenedAt, r.device
 	}
+	p.pushRelayState(time.Now(), false)
 }

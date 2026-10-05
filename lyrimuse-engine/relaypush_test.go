@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -134,7 +136,7 @@ func TestPushRelayStateDoesNotBlock(t *testing.T) {
 	}
 }
 
-// 启动时从 ListenBrainz 取最近一条收听补「上次播放」。
+// 启动时从 ListenBrainz 取最近一条收听补「上次播放」;取不到也送一条空的,主循环据此知道补种结束了。
 func TestSeedLastListen(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/1/user/u%20x/listens" && r.URL.Path != "/1/user/u x/listens" {
@@ -159,10 +161,131 @@ func TestSeedLastListen(t *testing.T) {
 		_, _ = w.Write([]byte(`{"payload":{"listens":[]}}`))
 	}))
 	t.Cleanup(empty.Close)
-	seedLastListen(context.Background(), empty.URL, "u", out)
-	select {
-	case s := <-out:
-		t.Fatalf("没有收听时不该送: %+v", s)
-	default:
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(down.Close)
+	for _, root := range []string{empty.URL, down.URL} {
+		seedLastListen(context.Background(), root, "u", out)
+		select {
+		case s := <-out:
+			if s.track.key() != "" {
+				t.Fatalf("%s: 取不到时送的是空的一条: %+v", root, s)
+			}
+		default:
+			t.Fatalf("%s: 取不到也要送一条", root)
+		}
+	}
+}
+
+// 引擎刚启动:App 的播放状态读到之前什么都不推,补种回来之前不推「空」;两样都到齐、或等满就撤掉这道等。
+func TestRelayStartupPending(t *testing.T) {
+	now := time.Now()
+	p := &poller{app: &appPlayback{usedAvail: appStateExiting}, relayStartupUntil: now.Add(relayStartupWait), lastListenSeeding: true}
+	if !p.relayStartupPending(now, "macpause|t|a|b") {
+		t.Error("App 的播放状态还没读到,什么都先不推")
+	}
+	p.app.usedAvail = appStateAvailable
+	if p.relayStartupPending(now, "macpause|t|a|b") {
+		t.Error("读到 App 的播放状态了,Mac 的状态照推")
+	}
+	if !p.relayStartupPending(now, "empty") {
+		t.Error("补种没回来,不推「空」")
+	}
+	p.lastListenSeeding = false
+	if p.relayStartupPending(now, "empty") || !p.relayStartupUntil.IsZero() {
+		t.Error("两样都到齐了,撤掉这道等")
+	}
+	p.app.usedAvail = appStateExiting
+	if p.relayStartupPending(now, "empty") {
+		t.Error("撤掉之后 App 再不可用也照推")
+	}
+
+	late := &poller{app: &appPlayback{usedAvail: appStateMissing}, relayStartupUntil: now.Add(relayStartupWait), lastListenSeeding: true}
+	if late.relayStartupPending(now.Add(relayStartupWait), "empty") || !late.relayStartupUntil.IsZero() {
+		t.Error("等满了就照推")
+	}
+	if (&poller{}).relayStartupPending(now, "empty") {
+		t.Error("没上这道等(单测、子命令)时照推")
+	}
+}
+
+// Mac 空闲时启动:不先推一次「空」,补种一回来就推「上次播放」,只写一次;补种取不到时推「空」。
+func TestRelayStartupPushesSeedOnce(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(srv.Close)
+	seed := lastListenSeed{track: snapshot{Title: "浮夸", Artist: "陈奕迅", Album: "U87"}, listenedAt: 1700000000, device: "iphone"}
+	suppressEnrichResolveForTest(t, enrichKey(seed.track.Artist, seed.track.Title, seed.track.Album))
+	starting := func() *poller {
+		return &poller{ctx: context.Background(), cfg: &config{StateRelayURL: srv.URL}, relayDoneCh: make(chan relayPushResult, 1),
+			app: &appPlayback{usedAvail: appStateAvailable}, relayStartupUntil: time.Now().Add(relayStartupWait), lastListenSeeding: true}
+	}
+	pushed := func(p *poller) string {
+		t.Helper()
+		if !p.relayInflight {
+			return ""
+		}
+		select {
+		case r := <-p.relayDoneCh:
+			if r.err != nil {
+				t.Fatalf("推送失败: %v", r.err)
+			}
+			p.applyRelayResult(r)
+			return r.key
+		case <-time.After(3 * time.Second):
+			t.Fatal("没收到推送结果")
+			return ""
+		}
+	}
+
+	p := starting()
+	p.pushRelayState(time.Now(), false)
+	if k := pushed(p); k != "" {
+		t.Fatalf("补种没回来,不该先推: %q", k)
+	}
+	p.applyLastListenSeed(seed)
+	if k := pushed(p); k != "last|浮夸|陈奕迅|U87" {
+		t.Fatalf("补种回来就推「上次播放」: %q", k)
+	}
+	p.pushRelayState(time.Now(), false)
+	if k := pushed(p); k != "" || p.relayWrites != 1 {
+		t.Fatalf("只写一次: 又推了 %q,共 %d 次", k, p.relayWrites)
+	}
+
+	q := starting()
+	q.applyLastListenSeed(lastListenSeed{})
+	if k := pushed(q); k != "empty" {
+		t.Fatalf("补种取不到就推「空」: %q", k)
+	}
+}
+
+// run() 在第一拍之前发出补种、上这道等;补种回来交给 applyLastListenSeed。
+func TestRelayStartupWaitIsWired(t *testing.T) {
+	src, err := os.ReadFile("poller.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	first := strings.Index(s, "p.poll() // render immediately")
+	if first < 0 {
+		t.Fatal("找不到 run() 里的第一拍")
+	}
+	for _, needle := range []string{"p.lastListenSeeding = true", "p.relayStartupUntil = time.Now().Add(relayStartupWait)"} {
+		if i := strings.Index(s, needle); i < 0 || i > first {
+			t.Errorf("run() 要在第一拍之前: %s", needle)
+		}
+	}
+	if !strings.Contains(s, "case r := <-p.lastListenSeedCh:\n\t\t\tp.applyLastListenSeed(r)\n") {
+		t.Error("补种回来要交给 applyLastListenSeed")
+	}
+}
+
+// 补种回来时本进程已经记下过一条真实收听:那条更新,不用补种的。
+func TestApplyLastListenSeedKeepsRealListen(t *testing.T) {
+	heard := snapshot{Title: "十年", Artist: "陈奕迅"}
+	p := &poller{cfg: &config{}, lastListen: heard, lastListenAt: 1800000000, lastListenDev: "mac", lastListenSeeding: true}
+	p.applyLastListenSeed(lastListenSeed{track: snapshot{Title: "浮夸", Artist: "陈奕迅"}, listenedAt: 1700000000, device: "iphone"})
+	if p.lastListen.key() != heard.key() || p.lastListenAt != 1800000000 || p.lastListenDev != "mac" || p.lastListenSeeding {
+		t.Fatalf("真实收听不该被补种盖掉: %+v / %d / %q / seeding=%v", p.lastListen, p.lastListenAt, p.lastListenDev, p.lastListenSeeding)
 	}
 }
