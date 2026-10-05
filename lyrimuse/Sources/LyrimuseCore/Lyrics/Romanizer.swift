@@ -110,6 +110,8 @@ public enum Romanizer {
     // 的标准做法,kanji 的读音由词典决定,而不是逐字音译。
     private static let japaneseLocale = CFLocaleCreate(
         nil, CFLocaleIdentifier("ja_JP" as CFString))
+    private static let japaneseTokenizers = StringTokenizerPool(
+        unit: kCFStringTokenizerUnitWordBoundary, locale: japaneseLocale)
 
     /// 助词读音修正。は/へ/を 作助词时读 wa/e/o,而分词器给的是**字面**读音 ha/he/wo ——
     /// Apple Music 标的是前者,这也是日语实际的念法。
@@ -165,17 +167,17 @@ public enum Romanizer {
             converted.unicodeScalars.append(scalar)
         }
         guard flushDigits() else { return nil }
-        let cf = converted as CFString
-        let tokenizer = CFStringTokenizerCreate(
-            nil, cf, CFRangeMake(0, CFStringGetLength(cf)), kCFStringTokenizerUnitWordBoundary, japaneseLocale)
-        var tokens: [String] = []
-        while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
-            guard let reading = CFStringTokenizerCopyCurrentTokenAttribute(
-                tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String, !reading.isEmpty
-            else { return nil }
-            tokens.append(reading)
+        let tokens = japaneseTokenizers.withTokenizer(for: converted as CFString) { tokenizer -> [String]? in
+            var tokens: [String] = []
+            while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+                guard let reading = CFStringTokenizerCopyCurrentTokenAttribute(
+                    tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String, !reading.isEmpty
+                else { return nil }
+                tokens.append(reading)
+            }
+            return tokens
         }
-        guard !tokens.isEmpty else { return nil }
+        guard let tokens, !tokens.isEmpty else { return nil }
         return mergeSokuon(tokens).joined(separator: " ")
     }
 
@@ -682,37 +684,37 @@ public enum Romanizer {
         hanRuns: HanRunReading = .latin
     ) -> [JapaneseSegment] {
         let cf = text as CFString
-        let range = CFRangeMake(0, CFStringGetLength(cf))
-        let tokenizer = CFStringTokenizerCreate(
-            nil, cf, range, kCFStringTokenizerUnitWordBoundary, japaneseLocale)
         // 整行 UTF-16 只物化一次,供 annotatedReading 的每个 token 共用(没有标注时它
         // 用不到,不白建)。
         let units: [UTF16.CodeUnit]? = marks.isEmpty ? nil : Array(text.utf16)
-        var out: [JapaneseSegment] = []
-        while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
-            let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
-            let piece = CFStringCreateWithSubstring(nil, cf, r) as String? ?? ""
-            var latin = CFStringTokenizerCopyCurrentTokenAttribute(
-                tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String ?? ""
-            if let numeral = numeralReading(piece) { latin = numeral }
-            // 歌词源自带的假名标注优先于分词器 —— 多音词该念哪个,标注说了算。
-            if let annotated = annotatedReading(
-                in: text, utf16Start: r.location, utf16Length: r.length, marks: marks,
-                unitsHint: units)
-            {
-                latin = annotated
+        var out = japaneseTokenizers.withTokenizer(for: cf) { tokenizer -> [JapaneseSegment]? in
+            var out: [JapaneseSegment] = []
+            while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+                let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                let piece = CFStringCreateWithSubstring(nil, cf, r) as String? ?? ""
+                var latin = CFStringTokenizerCopyCurrentTokenAttribute(
+                    tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String ?? ""
+                if let numeral = numeralReading(piece) { latin = numeral }
+                // 歌词源自带的假名标注优先于分词器 —— 多音词该念哪个,标注说了算。
+                if let annotated = annotatedReading(
+                    in: text, utf16Start: r.location, utf16Length: r.length, marks: marks,
+                    unitsHint: units)
+                {
+                    latin = annotated
+                }
+                if let fixed = particleLatin(for: piece) { latin = fixed }
+                if latin.isEmpty {
+                    // 拿不到读音的(标点/拉丁词本身)原样留着 —— 但纯空白不值得占一个片段。
+                    guard !piece.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+                    latin = piece
+                }
+                // ICU 对促音「っ」会吐出字面的 "~tsu",单片段里也要按双写辅音归并
+                // (mergeSokuon 是按片段序列做的,这里先各自留着,拼接时再交给它)。
+                out.append(JapaneseSegment(
+                    utf16Start: r.location, utf16Length: r.length, latin: latin))
             }
-            if let fixed = particleLatin(for: piece) { latin = fixed }
-            if latin.isEmpty {
-                // 拿不到读音的(标点/拉丁词本身)原样留着 —— 但纯空白不值得占一个片段。
-                guard !piece.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-                latin = piece
-            }
-            // ICU 对促音「っ」会吐出字面的 "~tsu",单片段里也要按双写辅音归并
-            // (mergeSokuon 是按片段序列做的,这里先各自留着,拼接时再交给它)。
-            out.append(JapaneseSegment(
-                utf16Start: r.location, utf16Length: r.length, latin: latin))
-        }
+            return out
+        } ?? []
         out = mergingNumeralCounters(out, in: text)
         guard !songLooksJapanese else { return out }
         return applyCodeSwitchFallback(to: out, in: text, reading: hanRuns)
@@ -849,30 +851,30 @@ public enum Romanizer {
         _ text: String, marks: [KanaAnnotation.Mark] = []
     ) -> String? {
         let cf = text as CFString
-        let range = CFRangeMake(0, CFStringGetLength(cf))
-        let tokenizer = CFStringTokenizerCreate(
-            nil, cf, range, kCFStringTokenizerUnitWordBoundary, japaneseLocale)
-        var tokens: [String] = []
-        while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
-            let tokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
-            let piece = CFStringCreateWithSubstring(nil, cf, tokenRange) as String? ?? ""
-            if let fixed = particleLatin(for: piece) {
-                tokens.append(fixed)
-            } else if let annotated = annotatedReading(
-                in: text, utf16Start: tokenRange.location, utf16Length: tokenRange.length,
-                marks: marks)
-            {
-                tokens.append(annotated)
-            } else if let reading = CFStringTokenizerCopyCurrentTokenAttribute(
-                tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String,
-                !reading.isEmpty
-            {
-                tokens.append(reading)
-            } else if !piece.trimmingCharacters(in: .whitespaces).isEmpty {
-                // 标点/符号之类拿不到读音的,原样保留,别把它们吞掉。
-                tokens.append(piece)
+        let tokens = japaneseTokenizers.withTokenizer(for: cf) { tokenizer -> [String]? in
+            var tokens: [String] = []
+            while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+                let tokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                let piece = CFStringCreateWithSubstring(nil, cf, tokenRange) as String? ?? ""
+                if let fixed = particleLatin(for: piece) {
+                    tokens.append(fixed)
+                } else if let annotated = annotatedReading(
+                    in: text, utf16Start: tokenRange.location, utf16Length: tokenRange.length,
+                    marks: marks)
+                {
+                    tokens.append(annotated)
+                } else if let reading = CFStringTokenizerCopyCurrentTokenAttribute(
+                    tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String,
+                    !reading.isEmpty
+                {
+                    tokens.append(reading)
+                } else if !piece.trimmingCharacters(in: .whitespaces).isEmpty {
+                    // 标点/符号之类拿不到读音的,原样保留,别把它们吞掉。
+                    tokens.append(piece)
+                }
             }
-        }
+            return tokens
+        } ?? []
         guard !tokens.isEmpty else { return nil }
         return mergeSokuon(tokens).joined(separator: " ")
     }

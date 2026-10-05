@@ -824,6 +824,32 @@ func runRomanizationTests() {
         expectEqual(Romanizer.japaneseSegments("3本の矢").map(\.latin).joined(separator: " ").contains("mimoto"), false,
                     "数字+汉字: 人 / つ 以外的量词照用分词器的读音(三本 会被读成人名)")
 
+        // 分词器借来用、用完收回:多个线程同时切,切到数字时遍历途中再借一个,结果都跟单线程一样。
+        expectEqual(Romanizer.japaneseSegments("2人だけの世界").map(\.latin), ["futari", "dake", "no", "sekai"],
+                    "分词器复用: 切到数字时另借一个分词器读数字,这一行后面的词照常切完")
+        final class MismatchCount: @unchecked Sendable {
+            private let lock = NSLock()
+            private var count = 0
+            func add() { lock.lock(); count += 1; lock.unlock() }
+            var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+        }
+        let poolLines = ["2人だけの世界", "君が好きだってこと以外は", "3つ数えて Honey", "東京特許許可局ありがとう"]
+        let serialSegments = poolLines.map { Romanizer.japaneseSegments($0).map(\.latin) }
+        let serialBreaks = poolLines.map { line in
+            LyricsSegmenter.WordBreaks(text: line, script: .japanese).map { wb in (0...line.utf16.count).map { wb.penalty(at: $0) } }
+        }
+        let mismatches = MismatchCount()
+        DispatchQueue.concurrentPerform(iterations: 8) { worker in
+            for round in 0..<25 {
+                let k = (worker + round) % poolLines.count
+                let segments = Romanizer.japaneseSegments(poolLines[k]).map(\.latin)
+                let breaks = LyricsSegmenter.WordBreaks(text: poolLines[k], script: .japanese)
+                    .map { wb in (0...poolLines[k].utf16.count).map { wb.penalty(at: $0) } }
+                if segments != serialSegments[k] || breaks != serialBreaks[k] { mismatches.add() }
+            }
+        }
+        expectEqual(mismatches.value, 0, "分词器复用: 多线程同时切、遍历途中嵌套借用,结果跟单线程一样")
+
         // 真实形状:《这样吧》75 行里 3 行含假名(4.0%)→ 不是日文歌。
         let zhWithJa = (Array(repeating: "就从明天开始吧", count: 72) + Array(repeating: "サヨナラ", count: 3))
             .joined(separator: "\n")

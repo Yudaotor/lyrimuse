@@ -951,24 +951,23 @@ public enum LyricsSegmenter {
 
         public init?(text: String, script: LyricScript) {
             let ns = text as NSString
-            var pieces: [(start: Int, end: Int, text: String)] = []
-            let unit: CFOptionFlags, locale: CFLocale
+            let pool: StringTokenizerPool
             switch script {
-            case .japanese: (unit, locale) = (kCFStringTokenizerUnitWordBoundary, Self.japaneseLocale)
-            case .chinese, .cantonese: (unit, locale) = (kCFStringTokenizerUnitWord, Self.chineseLocale)
+            case .japanese: pool = Self.japaneseTokenizers
+            case .chinese, .cantonese: pool = Self.chineseTokenizers
             default: return nil
             }
-            let cf = text as CFString
-            guard let tokenizer = CFStringTokenizerCreate(nil, cf, CFRangeMake(0, CFStringGetLength(cf)), unit, locale) else {
-                return nil
+            let found = pool.withTokenizer(for: text as CFString) { tokenizer -> [(start: Int, end: Int, text: String)]? in
+                var pieces: [(start: Int, end: Int, text: String)] = []
+                while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+                    let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                    let piece = ns.substring(with: NSRange(location: r.location, length: r.length))
+                    guard !piece.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+                    pieces.append((r.location, r.location + r.length, piece))
+                }
+                return pieces
             }
-            while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
-                let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
-                let piece = ns.substring(with: NSRange(location: r.location, length: r.length))
-                guard !piece.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-                pieces.append((r.location, r.location + r.length, piece))
-            }
-            guard !pieces.isEmpty else { return nil }
+            guard let pieces = found, !pieces.isEmpty else { return nil }
             let attached = script == .japanese ? Self.japaneseAttached : Self.chineseAttached
             var inside = Set<Int>()
             var penalties: [Int: CGFloat] = [:]
@@ -1016,15 +1015,14 @@ public enum LyricsSegmenter {
 
         /// 日文一段文字分词后的第一个词(跳过空白)。
         static func firstJapaneseToken(_ text: String) -> String? {
-            let cf = text as CFString
-            guard let tokenizer = CFStringTokenizerCreate(nil, cf, CFRangeMake(0, CFStringGetLength(cf)),
-                                                          kCFStringTokenizerUnitWordBoundary, japaneseLocale) else { return nil }
-            while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
-                let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
-                let piece = (text as NSString).substring(with: NSRange(location: r.location, length: r.length))
-                if !piece.trimmingCharacters(in: .whitespaces).isEmpty { return piece }
+            japaneseTokenizers.withTokenizer(for: text as CFString) { tokenizer -> String? in
+                while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+                    let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                    let piece = (text as NSString).substring(with: NSRange(location: r.location, length: r.length))
+                    if !piece.trimmingCharacters(in: .whitespaces).isEmpty { return piece }
+                }
+                return nil
             }
-            return nil
         }
 
         /// 在 UTF-16 下标 `offset` 处断开的代价;nil = 落在一个词中间。
@@ -1034,6 +1032,8 @@ public enum LyricsSegmenter {
 
         private static let japaneseLocale = Locale(identifier: "ja") as CFLocale
         private static let chineseLocale = Locale(identifier: "zh") as CFLocale
+        private static let japaneseTokenizers = StringTokenizerPool(unit: kCFStringTokenizerUnitWordBoundary, locale: japaneseLocale)
+        private static let chineseTokenizers = StringTokenizerPool(unit: kCFStringTokenizerUnitWord, locale: chineseLocale)
     }
 
     static func isHangul(_ scalar: Unicode.Scalar) -> Bool { (0xAC00...0xD7AF).contains(scalar.value) }
