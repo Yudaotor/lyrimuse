@@ -13,6 +13,7 @@
 [![Latest release](https://img.shields.io/github/v/release/Yudaotor/lyrimuse)](https://github.com/Yudaotor/lyrimuse/releases/latest)
 [![Last commit](https://img.shields.io/github/last-commit/Yudaotor/lyrimuse/dev)](https://github.com/Yudaotor/lyrimuse/commits/dev)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Yudaotor)
 
 </div>
 
@@ -220,7 +221,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 沒有。用 Homebrew 裝（上面的方案 A），或者到 [Releases 頁面](https://github.com/Yudaotor/lyrimuse/releases) 下載（方案 B）。不管哪種，之後的更新都在 App 裡完成。
 
 ### Lyrimuse 免費嗎？
-免費。它是 GPL-3.0 開源的，沒有付費版，沒有 App 內購買，也不用註冊帳號。Last.fm 這些帳號連不連都隨你。
+免費。它是 GPL-3.0 開源的，沒有付費版，沒有 App 內購買，也不用註冊帳號。Last.fm 這些帳號連不連都隨你。如果它幫到了你、想支持一下，可以在 [GitHub Sponsors](https://github.com/sponsors/Yudaotor) 上贊助，或者用支付寶、微信[請作者喝杯咖啡](https://yudaotor.github.io/donate/)。
 
 ### 只支援 Apple Music 嗎，Spotify、QQ 音樂、網易雲音樂能用嗎？
 都能用，另外還有酷狗音樂、汽水音樂、KKBOX、Amazon Music 和 YouTube Music 播放器 Kaset，一共九個播放器，還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，macOS 顯示哪個在「正在播放」就跟哪個。Apple Music、Spotify 和 Kaset 需要「自動化」權限（Spotify 和 Kaset 用它取得精確進度、控制播放），其他六個走 macOS 的 MediaRemote，不需要任何權限。用 KKBOX 或 Amazon Music 播放時，它們自己存下的這首歌詞也會拿來比較，Lyrimuse 不會向這兩家發出任何請求。

@@ -13,6 +13,7 @@
 [![Latest release](https://img.shields.io/github/v/release/Yudaotor/lyrimuse)](https://github.com/Yudaotor/lyrimuse/releases/latest)
 [![Last commit](https://img.shields.io/github/last-commit/Yudaotor/lyrimuse/dev)](https://github.com/Yudaotor/lyrimuse/commits/dev)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Yudaotor)
 
 </div>
 
@@ -223,7 +224,7 @@ No. Releases are signed with the project's own certificate instead of an Apple D
 No. Install it with Homebrew (Option A above) or download it from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) (Option B). Either way, updates come through the app after that.
 
 ### Is Lyrimuse free?
-Yes. It's open source under GPL-3.0. There's no paid version, no in-app purchase and no account to sign up for. Last.fm and the other services are up to you.
+Yes. It's open source under GPL-3.0. There's no paid version, no in-app purchase and no account to sign up for. Last.fm and the other services are up to you. If it's useful to you and you'd like to support it, you can [sponsor it on GitHub](https://github.com/sponsors/Yudaotor) or [buy the author a coffee](https://yudaotor.github.io/donate/) with Alipay or WeChat Pay.
 
 ### Does it work with Spotify, QQ Music, or NetEase Cloud Music, or only Apple Music?
 All of those, plus Kugou Music, Soda Music, KKBOX, Amazon Music and Kaset (a YouTube Music app), so nine players in all. Or let it auto-detect whatever macOS shows as Now Playing. Apple Music, Spotify and Kaset ask for Automation access (Spotify and Kaset use it for exact timing and the playback buttons). The other six need no permission, because they're read through macOS's MediaRemote. With KKBOX or Amazon Music, the lyrics that app already saved for the song are considered too, and neither service is ever contacted.

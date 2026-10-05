@@ -13,6 +13,7 @@
 [![Latest release](https://img.shields.io/github/v/release/Yudaotor/lyrimuse)](https://github.com/Yudaotor/lyrimuse/releases/latest)
 [![Last commit](https://img.shields.io/github/last-commit/Yudaotor/lyrimuse/dev)](https://github.com/Yudaotor/lyrimuse/commits/dev)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Yudaotor)
 
 </div>
 
@@ -222,7 +223,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/Spotify/K
 没有。用 Homebrew 装（上面的方案 A），或者去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载（方案 B）。不管哪种，之后的更新都在 App 里完成。
 
 ### Lyrimuse 免费吗？
-免费。它是 GPL-3.0 开源的，没有付费版，没有内购，也不用注册账号。Last.fm 这些账号连不连都随你。
+免费。它是 GPL-3.0 开源的，没有付费版，没有内购，也不用注册账号。Last.fm 这些账号连不连都随你。如果它帮到了你、想支持一下，可以在 [GitHub Sponsors](https://github.com/sponsors/Yudaotor) 上赞助，或者用支付宝、微信[请作者喝杯咖啡](https://yudaotor.github.io/donate/)。
 
 ### 只支持 Apple Music 吗，Spotify、QQ 音乐、网易云音乐能用吗？
 都能用，另外还有酷狗音乐、汽水音乐、KKBOX、Amazon Music 和 YouTube Music 客户端 Kaset，一共九个播放器；也可以交给自动识别，macOS 显示哪个在「正在播放」就跟哪个。Apple Music、Spotify 和 Kaset 需要「自动化」权限（Spotify 和 Kaset 用它拿精确进度、控制播放），其它六个走 macOS 的 MediaRemote，不需要任何权限。用 KKBOX 或 Amazon Music 放歌时，它们自己存下的这首歌词也会拿来比较，Lyrimuse 不会向这两家发任何请求。
