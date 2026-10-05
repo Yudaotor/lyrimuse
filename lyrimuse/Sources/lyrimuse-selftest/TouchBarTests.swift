@@ -7,7 +7,7 @@ import LyrimuseCore
 // 展开态从左到右排哪几项(`TouchBarSlot.order`)、隐藏功能栏时的宽度、广告期间封面那一格贴喇叭、按触控栏这一格的宽度断句;
 // 私有入口只在 `TouchBar/TouchBarPrivateAPI.swift` 一个文件里、App 启动时起控制器、开关和十项设置在「歌词显示」页
 // 自己那一段(「触控栏」)里、控制器都接上了;这台 Mac 有没有触控栏的判据(`TouchBarPresence`)和它在设置页 / 搜索 /
-// 控制器三处的接线。
+// 控制器三处的接线;菜单栏左键面板第二排那一格「触控栏歌词」。
 // 由 main.swift 的注册表按组调用。
 
 func runTouchBarTests() {
@@ -573,5 +573,37 @@ func runTouchBarTests() {
         expectEqual(controller.contains("on && TouchBarAvailability.shared.isPresent")
                         && controller.contains("availability.$isPresent"), true,
                     "触控栏: 控制器只在有触控栏时启用,并跟着触控栏出现 / 消失启停")
+    }
+
+    // 菜单栏左键面板第二排那一格「触控栏歌词」(06 章决策 37):只在有触控栏时出现,短按翻总开关,长按 / 右键翻出它自己的
+    // 快捷设置,底栏「全部设置…」翻到「触控栏」这一段。漏一处都不报错:要么没有触控栏的 Mac 上冒出一格拨了没用的开关,
+    // 要么长按退化成普通按一下、翻出来的那页少了旋钮。
+    do {
+        let panel = code(appDir.appendingPathComponent("MenuBar/MenuBarPanel.swift")) ?? ""
+        let quick = code(appDir.appendingPathComponent("MenuBar/MenuBarPanelQuickSettings.swift")) ?? ""
+        let settingsView = code(appDir.appendingPathComponent("SettingsView.swift")) ?? ""
+        expectEqual(panel.contains("if playback.touchBarPresent {")
+                        && panel.contains("TouchBarAvailability.shared.$isPresent")
+                        && panel.contains("if !present, quickTarget == .touchBar { setQuickTarget(nil) }"), true,
+                    "触控栏面板: 那一格只在有触控栏时出现,跟着触控栏出现 / 消失,没了时快捷设置退回网格")
+        expectEqual(panel.contains("quick: .touchBar")
+                        && panel.contains("case .touchBar: return toggleTouchBarAction")
+                        && panel.contains("{ AppSettings.shared.showLyricsInTouchBar.toggle() }"), true,
+                    "触控栏面板: 短按和快捷设置头部那颗开关走同一条闭包,翻的是同一个总开关")
+        expectEqual(panel.contains("symbol: PanelQuickTarget.touchBar.symbolName"), true,
+                    "触控栏面板: 格子和它翻过来的背面读同一个符号")
+        let symbol = "\"rectangle.and.hand.point.up.left\""
+        expectEqual(quick.contains("case .touchBar: return \(symbol)") && settingsView.contains("icon: \(symbol)"), true,
+                    "触控栏面板: 那一格的符号跟设置页「触控栏」那张开关卡同一个")
+        expectEqual(quick.contains("case .touchBar: return SettingsSearchCatalog.touchBarSectionValue"), true,
+                    "触控栏面板: 「全部设置…」翻到「触控栏」那一段,取值读 Core 常量")
+        for needle in ["toggleRow(L10n.t(\"显示封面\"), isOn: $settings.touchBarShowsArtwork)",
+                       "toggleRow(L10n.t(\"显示播放控制\"), isOn: $settings.touchBarShowsControls)",
+                       "alignmentRow(selection: $settings.touchBarLyricsAlignment,",
+                       "secondaryLineRow(selection: $settings.touchBarSecondaryLine)",
+                       "range: TouchBarLyricsStyle.fontSizeRange",
+                       "if settings.touchBarSecondaryLine.showsSecondaryRow {"] {
+            expectEqual(quick.contains(needle), true, "触控栏面板: 快捷设置里有 \(needle)")
+        }
     }
 }

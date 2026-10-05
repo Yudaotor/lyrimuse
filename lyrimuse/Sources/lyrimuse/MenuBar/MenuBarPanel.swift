@@ -5,7 +5,7 @@ import LyrimuseCore
 
 /// 面板的**窄订阅代理**(性能审计,四个展示面里最后一个接上;完整机制见
 /// OverlayPlayback 的注释):PlaybackCoordinator 32 个 @Published 面板实读约 16 个、
-/// AppSettings 48 个只读 4 个,整对象订阅会让歌词窗口拖音量、设置页无关滑杆这类写入
+/// AppSettings 48 个只读 5 个,整对象订阅会让歌词窗口拖音量、设置页无关滑杆这类写入
 /// 打醒整个面板 body。只转发实读字段,值类型一律 removeDuplicates。
 ///
 /// sink 只用参数值,不回读源属性(@Published willSet 时机,回读是旧值)。
@@ -14,8 +14,8 @@ import LyrimuseCore
 /// 播放/暂停两条分支,而锚点只在换歌/seek 时重建,低频);currentLyricsOffsetMs 仍由
 /// 逐字填色的 TimelineView 闭包直读协调器。resolvedPlayerIcon/DisplayName 不是
 /// @Published(计算属性),body 直读 shared 即可,不经代理。
-/// 三个悬浮层开关转发进来只为触发 body 重估 —— LyricsSurface.isEnabled 自己读
-/// AppSettings.shared 的存储值(body 重估发生在落库后,读到的是新值)。
+/// 三个悬浮层开关和触控栏开关转发进来只为触发 body 重估 —— LyricsSurface.isEnabled /
+/// PanelQuickTarget.isEnabled 自己读 AppSettings.shared 的存储值(body 重估发生在落库后,读到的是新值)。
 @MainActor
 private final class PanelPlayback: ObservableObject {
     // ---- 来自 PlaybackCoordinator ----
@@ -64,11 +64,15 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var pausedPositionMs: Int?
     @Published private(set) var currentDurationMs: Int?
     @Published private(set) var trackLyricsOffsetMs = 0
-    // ---- 来自 AppSettings(只挑面板实读的四项) ----
+    // ---- 来自 AppSettings(只挑面板实读的五项) ----
     @Published private(set) var classicOverlayEnabled = false
     @Published private(set) var notchOverlayEnabled = false
     @Published private(set) var showLyricsInMenuBar = false
+    @Published private(set) var showLyricsInTouchBar = false
     @Published private(set) var lyricsOffsetStepMs = 200
+    // ---- 来自 TouchBarAvailability ----
+    /// 这台 Mac 此刻有没有触控栏。第二排那一格「触控栏歌词」只在有的时候出现,模拟器开 / 关时面板开着也跟着变。
+    @Published private(set) var touchBarPresent = false
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -116,7 +120,10 @@ private final class PanelPlayback: ObservableObject {
             s.$classicOverlayEnabled.removeDuplicates().sink { [weak self] in self?.classicOverlayEnabled = $0 },
             s.$notchOverlayEnabled.removeDuplicates().sink { [weak self] in self?.notchOverlayEnabled = $0 },
             s.$showLyricsInMenuBar.removeDuplicates().sink { [weak self] in self?.showLyricsInMenuBar = $0 },
+            s.$showLyricsInTouchBar.removeDuplicates().sink { [weak self] in self?.showLyricsInTouchBar = $0 },
             s.$lyricsOffsetStepMs.removeDuplicates().sink { [weak self] in self?.lyricsOffsetStepMs = $0 },
+            TouchBarAvailability.shared.$isPresent.removeDuplicates()
+                .sink { [weak self] in self?.touchBarPresent = $0 },
         ]
     }
 }
@@ -327,6 +334,10 @@ private struct MenuBarPanelView: View {
         }
         .padding(10)
         .frame(width: 336)
+        // 快捷设置正翻在「触控栏歌词」那一格上时触控栏没了(模拟器关掉):那一格已经不在了,退回钮块网格。
+        .onChange(of: playback.touchBarPresent) { _, present in
+            if !present, quickTarget == .touchBar { setQuickTarget(nil) }
+        }
         // 只在弹出这一刻取一次 —— 面板每次打开都是新建的一份视图,所以"每次开窗刷新一次"
         // 已经够了,不用为它常驻订阅 ConfigStore/LastfmConnectController/状态文件观察器
         // 三个东西(这张面板的渲染路径一直刻意只依赖 AppSettings/PlaybackCoordinator)。
@@ -360,13 +371,14 @@ private struct MenuBarPanelView: View {
         quickTarget = target
     }
 
-    /// 某一格的主动作。快捷设置头部那颗控件跟格子本身调的必须是**同一条闭包**(三个形态那里
-    /// 是总开关,歌词窗口那里是「打开」),两处各写一遍必然走岔 —— 尤其菜单栏歌词那条"先收面板"
+    /// 某一格的主动作。快捷设置头部那颗控件跟格子本身调的必须是**同一条闭包**(三个形态和触控栏
+    /// 那里是总开关,歌词窗口那里是「打开」),两处各写一遍必然走岔 —— 尤其菜单栏歌词那条"先收面板"
     /// 的绕路和歌词窗口这条"先收面板再开窗"的顺序。
     private func quickAction(for target: PanelQuickTarget) -> () -> Void {
         switch target {
         case .surface(let surface): return toggleAction(for: surface)
         case .lyricsWindow: return openLyricsWindowAction
+        case .touchBar: return toggleTouchBarAction
         }
     }
 
@@ -378,6 +390,12 @@ private struct MenuBarPanelView: View {
             close()
             AppActions.shared.openLyricsWindow?()
         }
+    }
+
+    /// 「触控栏歌词」那一格:翻总开关,跟设置页那张开关卡、右键菜单「快速开关」那一项是同一个值。控制器订阅着它,
+    /// 打开那一下当场展开触控栏(`TouchBarLyricsController.start`)。不收面板:效果在触控栏上,跟面板锚着的状态栏项无关。
+    private var toggleTouchBarAction: () -> Void {
+        { AppSettings.shared.showLyricsInTouchBar.toggle() }
     }
 
     /// 某个形态"开 / 关"这一下该做什么。抽成一份是因为格子和快捷设置头部那个开关必须是
@@ -436,6 +454,15 @@ private struct MenuBarPanelView: View {
                          title: PanelQuickTarget.lyricsWindow.panelTitle,
                          on: false, quick: .lyricsWindow,
                          action: openLyricsWindowAction)
+                // 「触控栏歌词」只在这台 Mac 此刻有触控栏时出现(真机,或 Xcode 的触控栏模拟器开着;判据同设置页
+                // 「触控栏」那一段、右键菜单「快速开关」那一项),没有时这一排照旧两格。短按 = 总开关,长按 / 右键 =
+                // 它自己的快捷设置,跟第一排三个形态同一套。见 06 章决策 37。
+                if playback.touchBarPresent {
+                    knobTile(symbol: PanelQuickTarget.touchBar.symbolName,
+                             title: PanelQuickTarget.touchBar.panelTitle,
+                             on: PanelQuickTarget.touchBar.isEnabled, quick: .touchBar,
+                             action: toggleTouchBarAction)
+                }
                 // 这一格从「统计」换成「歌词管理」(统计入口收进
                 // 设置窗口的 Last.fm 账号页),底栏那条「歌词管理…」随之撤掉,不留双入口。
                 knobTile(symbol: "music.note.list", title: L10n.t("歌词管理"), on: false) {

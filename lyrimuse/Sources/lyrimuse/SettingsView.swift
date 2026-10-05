@@ -2395,8 +2395,9 @@ private struct AppearanceSettingsTab: View {
     /// 设置搜索目录那边因此单列一个构造器。
     ///
     /// **「触控栏」段同样不是一个 `LyricsSurface`**:它有常驻开关、也按宽度断句(断句用的是另一个类型
-    /// `LineBreakSurface`),但不进菜单栏面板那排磁贴。分段取值在
-    /// `SettingsSearchCatalog.touchBarSectionValue`,目录那边同样单列一个构造器。
+    /// `LineBreakSurface`),但不进菜单栏面板第一排那三个形态格子(面板里它在第二排,去处是
+    /// `PanelQuickTarget.touchBar`)。分段取值在 `SettingsSearchCatalog.touchBarSectionValue`,
+    /// 目录那边同样单列一个构造器。
     private enum Section: String, CaseIterable, Identifiable {
         case overlay, notch, menuBar, touchBar, lyricsWindow
         var id: Self { self }

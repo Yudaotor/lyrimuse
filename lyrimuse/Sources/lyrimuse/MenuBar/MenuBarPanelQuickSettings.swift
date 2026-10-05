@@ -20,7 +20,8 @@ import LyrimuseCore
 
 // MARK: - 能翻到背面的那几格
 
-/// 面板里长按 / 右键能翻出快捷设置的格子:三个展示形态各一格,外加「歌词窗口」那一格。
+/// 面板里长按 / 右键能翻出快捷设置的格子:三个展示形态各一格,外加第二排的「歌词窗口」和「触控栏歌词」
+/// (后者只在这台 Mac 此刻有触控栏时出现)。
 ///
 /// **歌词窗口不是一个 `LyricsSurface`,别为了少包一层就往那个枚举里塞第四个 case。**
 /// 那个枚举的契约是"三个可以同时开着、各有常驻开关的展示形态"(见它的头注):歌词窗口是
@@ -28,11 +29,15 @@ import LyrimuseCore
 /// 目录的 `surface(_:)` 都要多长一个永远为假 / 永远走不到的分支,而 `appearanceSectionRawValue`
 /// 那条"前三个 rawValue 是跨文件契约"的约定也会被稀释。
 ///
-/// 反过来,「歌词显示」页第四段的分段取值是现成的(`SettingsSearchCatalog.lyricsWindowSectionValue`,
+/// 反过来,「歌词显示」页「歌词窗口」那一段的分段取值是现成的(`SettingsSearchCatalog.lyricsWindowSectionValue`,
 /// selftest 钉着它认不回任何形态),所以底栏那颗「全部设置…」照样翻得过去。
+///
+/// 触控栏同样不进 `LyricsSurface`:它有常驻开关,但设置页分段、设置搜索目录都把它单列(selftest 钉着
+/// `touchBarSectionValue` 认不回任何形态),分段取值用现成的 `SettingsSearchCatalog.touchBarSectionValue`。
 enum PanelQuickTarget: Hashable {
     case surface(LyricsSurface)
     case lyricsWindow
+    case touchBar
 }
 
 @MainActor
@@ -42,6 +47,8 @@ extension PanelQuickTarget {
         switch self {
         case .surface(let surface): return surface.symbolName
         case .lyricsWindow: return "text.quote"
+        // 同设置页「触控栏」那张开关卡、右键菜单「快速开关」里那一项。
+        case .touchBar: return "rectangle.and.hand.point.up.left"
         }
     }
 
@@ -49,15 +56,17 @@ extension PanelQuickTarget {
         switch self {
         case .surface(let surface): return surface.panelTitle
         case .lyricsWindow: return L10n.t("歌词窗口")
+        case .touchBar: return L10n.t("触控栏歌词")
         }
     }
 
-    /// 头部那枚图标要不要点亮。歌词窗口没有"开着"这个常驻状态(它是一扇按需打开的窗),
-    /// 恒为假 —— 跟它在钮块网格里那一格 `on: false` 同一个口径。
+    /// 头部那枚图标要不要点亮(触控栏那一格的格子本身也读它)。歌词窗口没有"开着"这个常驻状态(它是一扇按需打开的窗),
+    /// 恒为假 —— 跟它在钮块网格里那一格 `on: false` 同一个口径。只读 AppSettings,同 `LyricsSurface.isEnabled`。
     var isEnabled: Bool {
         switch self {
         case .surface(let surface): return surface.isEnabled
         case .lyricsWindow: return false
+        case .touchBar: return AppSettings.shared.showLyricsInTouchBar
         }
     }
 
@@ -66,6 +75,7 @@ extension PanelQuickTarget {
         switch self {
         case .surface(let surface): return surface.appearanceSectionRawValue
         case .lyricsWindow: return SettingsSearchCatalog.lyricsWindowSectionValue
+        case .touchBar: return SettingsSearchCatalog.touchBarSectionValue
         }
     }
 }
@@ -264,7 +274,7 @@ struct PanelQuickSettings: View {
     let target: PanelQuickTarget
     /// 头部那颗控件**直接复用格子自己的动作闭包** —— 同一件事在两处必须一模一样,尤其
     /// 菜单栏歌词那一个(它要先收面板再切,理由见 MenuBarPanelView.toggleAction)。
-    /// 三个形态那里它是总开关,歌词窗口那里是一颗「打开」——那一格本来就是"按一下开一扇窗"。
+    /// 三个形态和触控栏那里它是总开关,歌词窗口那里是一颗「打开」——那一格本来就是"按一下开一扇窗"。
     let action: () -> Void
     let back: () -> Void
     let close: () -> Void
@@ -311,15 +321,15 @@ struct PanelQuickSettings: View {
         .padding(.vertical, 7)
     }
 
-    /// 头部右边那一颗。三个形态是总开关;歌词窗口没有"开不开"可配(它是一扇按需打开的真窗口,
+    /// 头部右边那一颗。三个形态和触控栏是总开关;歌词窗口没有"开不开"可配(它是一扇按需打开的真窗口,
     /// 见 `AppearanceSettingsTab` 第四段的注释),换成一颗「打开」—— 这块设置调的全是那扇窗里
     /// 看得见的东西,"先把它开着"正该摆在最上面。
     @ViewBuilder private var headerControl: some View {
         switch target {
-        case .surface(let surface):
+        case .surface, .touchBar:
             // 开关的真值只从 AppSettings 读,set 一律转给 action() —— 那条闭包里才有资格
             // 碰窗口控制器。
-            Toggle("", isOn: Binding(get: { surface.isEnabled }, set: { _ in action() }))
+            Toggle("", isOn: Binding(get: { target.isEnabled }, set: { _ in action() }))
                 .labelsHidden()
                 .controlSize(.mini)
         case .lyricsWindow:
@@ -471,6 +481,16 @@ struct PanelQuickSettings: View {
                 .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        case .touchBar:
+            // 跟设置页「布局」卡同序(显示封面 → 显示播放控制 → 对齐方式 → 副行),「字号」在「外观」卡、排在最后,
+            // 让「由副行决定」的原因就在上一行(同菜单栏那格)。收哪几项见 06 章决策 37。
+            toggleRow(L10n.t("显示封面"), isOn: $settings.touchBarShowsArtwork)
+            toggleRow(L10n.t("显示播放控制"), isOn: $settings.touchBarShowsControls)
+            alignmentRow(selection: $settings.touchBarLyricsAlignment,
+                         options: LyricsRestingAlignment.notchOptions,
+                         label: LyricsAlignmentSegmentedControl.label(for:))
+            secondaryLineRow(selection: $settings.touchBarSecondaryLine)
+            touchBarFontSizeRow
         case .lyricsWindow:
             // 「背景」两行跟设置页那一段同序、同判据:方向只在渐变档出现(纯色没有方向可言),
             // 跟菜单栏「对齐方式」是同一条规矩 —— **藏一个旋钮的前提是把"为什么"摆在它上面**,
@@ -690,9 +710,30 @@ struct PanelQuickSettings: View {
         }
     }
 
-    /// 「对齐方式」行。三个形态各一行,枚举不同(悬浮歌词是四档的
-    /// `OverlayDuetAlignmentOverride`,灵动岛/菜单栏共用 `LyricsRestingAlignment`——
-    /// 它也有了「自动」,但只有灵动岛提供,所以选项列表由调用方**显式**传(`notchOptions` /
+    /// 触控栏「字号」行。副行开着时两行的字号由触控栏的高定(见 `TouchBarLyricsStyle`),滑杆让位成一句灰字
+    /// 「由副行决定」,跟设置页那一行同进同出(同 `menuBarFontSizeRow`)。存的是原值,读的时候夹回区间。
+    @ViewBuilder private var touchBarFontSizeRow: some View {
+        if settings.touchBarSecondaryLine.showsSecondaryRow {
+            row(L10n.t("字号")) {
+                Text(L10n.t("由副行决定"))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+        } else {
+            sliderRow(L10n.t("字号"), value: Binding(
+                get: { TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize) },
+                set: { newValue in
+                    // 相等守卫同设置页那根:拖动中每个鼠标事件都写一次,量化后大量等值赋值照样广播。
+                    guard newValue != settings.touchBarLyricsFontSize else { return }
+                    settings.touchBarLyricsFontSize = newValue
+                }
+            ), range: TouchBarLyricsStyle.fontSizeRange)
+        }
+    }
+
+    /// 「对齐方式」行。三个形态和触控栏各一行,枚举不同(悬浮歌词是四档的
+    /// `OverlayDuetAlignmentOverride`,灵动岛/菜单栏/触控栏共用 `LyricsRestingAlignment`——
+    /// 它也有了「自动」,但菜单栏不提供,所以选项列表由调用方**显式**传(`notchOptions` /
     /// `menuBarOptions`),不再在这里 `allCases`),所以泛型化 + 标签用闭包传 —— 标签本身**一定要用
     /// 各自设置页那份 `label(for:)`**,不在这里另写:控件里叫「左对齐」而这儿叫「左」就是同一个值的
     /// 两种叫法(悬浮歌词那边为这件事专门把 label 提成了 static func)。
