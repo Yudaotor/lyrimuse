@@ -2,11 +2,15 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-// "联网搜索候选歌词"弹窗,沿用这类工具常见的双栏形态:左侧候选列表
-// (来源+分数+是否逐字),右侧选中候选的完整预览,"采用此候选"把内容交回调用方
+// "联网搜索候选歌词"弹窗。左边一块浮起来的侧栏:查询词(歌名 / 歌手 / 专辑)、「重新搜索」和搜出来的
+// 候选(来源 + 分数 + 是否逐字);右边是选中候选的预览,"采用此候选"把内容交回调用方
 // (调用方负责真正写回缓存,这里只管搜索和展示)。onApply 是可等待的、回报有没有真的落盘:
 // 面板据此挪「当前使用」徽标、给一条回声;`keepsOpenAfterApply` 决定采纳后关窗还是留着
 // (只有悬浮窗 ⚙ 的独立小窗传 true,理由见 apply(_:))。
+//
+// 两种宿主:悬浮窗 ⚙ 的独立小窗(`standaloneWindow: true`)标题栏透明、内容铺到最顶上,红绿灯落在
+// 侧栏顶部那一截里,「关闭」交给红灯和 Esc;歌词管理、歌词窗口弹出的是 sheet,没有标题栏,右上角留
+// 「关闭」。版面与取舍见 11 章决策 51。
 //
 // 歌名/歌手/专辑是可编辑字段,默认沿用这首歌本身的元数据,也支持改关键词后重新联网
 // 查(比如原始元数据不准/有别名,想换个关键词试试能不能搜到更好的候选)。改这三个
@@ -38,6 +42,20 @@ struct LyricsSearchSheet: View {
     /// 同一批候选还在,点即切。歌词管理(编辑器上方的模态,留着会挡住刚回填的编辑器)和歌词窗口
     /// 的 sheet(关了才看得到背后的歌词)维持关窗。
     let keepsOpenAfterApply: Bool
+    /// 宿主是悬浮窗 ⚙ 的独立小窗,不是 sheet:侧栏顶上给红绿灯让出一截、不画「关闭」(红灯和 Esc 都能关)。
+    /// 窗口那一侧:场景挂 `.windowStyle(.hiddenTitleBar)`(标题栏透明、内容铺到顶),宿主再挂 EmptyUnifiedToolbar
+    /// 把标题栏撑高、红绿灯挪进侧栏的圆角里。
+    let standaloneWindow: Bool
+
+    /// 窗口 / sheet 能拖到的最小内容尺寸。宽:侧栏连外边距约 404pt,右边预览至少留 ~400pt;高:独立小窗里侧栏
+    /// 上半截(红绿灯那一截 + 查询卡 + 按钮 + 表头)约 240pt,剩下的放得下三条候选。独立小窗的宿主在面板出来之前也用这一对。
+    static let minimumSize = CGSize(width: 800, height: 580)
+    /// 侧栏宽度,固定、不能拖。
+    private static let sidebarWidth: CGFloat = 396
+    /// 侧栏离窗口边缘的距离。
+    private static let panelInset: CGFloat = 8
+    /// 侧栏的圆角。
+    private static let panelCornerRadius: CGFloat = 22
     /// 调用方真正写回缓存,回报有没有落盘。面板等它结束再决定:成功 → 挪「当前使用」徽标,
     /// 留着的话给一条回声、关窗模式直接关;失败 → 关窗模式照旧关(调用方那边的 lastError 红字
     /// 负责说明),留着的话在标题栏说一句、让人直接重试。
@@ -46,6 +64,10 @@ struct LyricsSearchSheet: View {
     let isMarkedInstrumental: Bool
     /// 标 / 撤「纯音乐」:调用方按打开面板时那首歌写回,回报有没有落盘。三个入口都得传(contracts 组守卫钉着)。
     let onSetInstrumental: (Bool) async -> Bool
+    /// 「重新自动匹配」:请引擎按设置里的「匹配算法」重挑一轮、等结论(宿主转给 LyricsRematchRunner,跟歌词管理那颗
+    /// 按钮同一条路),不经过这里的候选列表。参数是进度回调(回过话的源数 / 一共几个源);返回 nil = 没拿到结论。
+    /// 三个入口都得传(contracts 组守卫钉着)。
+    let onAutoMatch: (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?
 
     /// 正在写回的那条候选的来源(按钮禁用 + 文案变「正在采用…」);nil = 没有在飞的采纳。
     @State private var applyingSource: String?
@@ -61,6 +83,12 @@ struct LyricsSearchSheet: View {
     @State private var instrumentalOverride: Bool?
     /// 纯音乐标记正在写回(标记按钮禁用)。
     @State private var settingInstrumental = false
+    /// 「重新自动匹配」在飞:按钮禁用,标题行下面出进度;采纳、标纯音乐也置灰(期间改了条目,引擎这一轮就作废)。
+    @State private var autoMatching = false
+    @State private var autoMatchDone = 0
+    @State private var autoMatchTotal = 0
+    /// 上一轮自动匹配的结论,挂在标题行下面;换歌、再点一次、采纳成功时收掉。
+    @State private var autoMatchLine: LyricsRematch.Line?
 
     private struct ApplyFeedback: Equatable {
         let text: String
@@ -80,29 +108,35 @@ struct LyricsSearchSheet: View {
     @State private var candidates: [LyricsSearchService.Candidate] = []
     /// 这个面板作为搜索发起方的身份,见 `LyricsSearchService.Owner`。
     @State private var searchOwner = LyricsSearchService.Owner()
-    /// 预览区那份过滤后的正文。整首逐行分类(元信息标签、署名行)不便宜,而查询词每敲一个字、
+    /// 预览区那份按行拆好的正文(`LyricsPreviewText.rows` 要整首走一遍播放引擎),而查询词每敲一个字、
     /// 每到一批候选都会重算 body;选中的候选没变就沿用上一次的结果。
-    @State private var previewMemo = PreviewTextMemo()
+    @State private var previewMemo = PreviewRowsMemo()
     /// 查询对象(换歌)换了几次,见 apply 里那道守卫。
     @State private var subjectGeneration = 0
+    /// 候选列表有没有焦点:点一行时交给它,方向键才换得了行(onMoveCommand)。
+    @FocusState private var candidateListFocused: Bool
 
-    private final class PreviewTextMemo {
+    private final class PreviewRowsMemo {
         private var lyrics = ""
+        private var translation = ""
         private var title = ""
         private var artist = ""
-        private var cached: String?
+        private var cached: [LyricsPreviewRow]?
 
-        func text(_ c: LyricsSearchService.Candidate) -> String {
-            if let cached, c.lyrics == lyrics, c.title == title, c.artist == artist { return cached }
-            let text = LyricsPreviewText.forPreview(c.lyrics, title: c.title, artist: c.artist)
+        func rows(_ c: LyricsSearchService.Candidate) -> [LyricsPreviewRow] {
+            if let cached, c.lyrics == lyrics, c.lyricsTr == translation, c.title == title, c.artist == artist {
+                return cached
+            }
+            let rows = LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, title: c.title, artist: c.artist)
             lyrics = c.lyrics
+            translation = c.lyricsTr
             title = c.title
             artist = c.artist
-            cached = text
-            return text
+            cached = rows
+            return rows
         }
     }
-    /// 给"还在搜索"那两处提示缀的进度,形如 "（2/5）"。还没收到任何一行时是空串。
+    /// 给侧栏那一行"还在搜索"提示缀的进度,形如 "（2/5）"。还没收到任何一行时是空串。
     ///
     /// 轮次标识:引擎的兜底轮(首歌手变体/标题反查,见
     /// 第 09 章)每轮都重新扫全部源,进度"到 8/8 又回到 1/8"——数字回跳没有任何标注,
@@ -205,29 +239,35 @@ struct LyricsSearchSheet: View {
     /// 空集 = 还没开搜(徽标那时也不显示);行列表把空集当"全开"处理,别把九行全标成未启用。
     @State private var enabledSources: Set<String> = []
 
-    // 头部"(x/y)"标记 + 点开的可用情况列表。sourcesTotal 为 0(还没收到任何一行)时不
-    // 显示——那不是"零个可用",是"还没开始",跟 searchProgressSuffix 同一条准则。
+    // 候选表头右边那颗「x/y」+ 点开的可用情况列表。一打开面板就在(表头不能等第一行才冒出来,下面的列表会跟着跳)。
     //
     // 分母是引擎报的 sourcesTotal(它只数用户开着的源,见 enrich.go lyricSearchUpdateFunc
-    // 的注释),跟进度那对「(x/y)」同一个数——前这里写的是全部源数,用户关掉一个源
-    // 就会出现进度「x/8」、徽标「y/9」两个分母对不上。分子照旧数"给过候选的源":引擎的
-    // filterEnabledLyricSources 保证候选里没有关掉的源,不用再交集一次。
-    @ViewBuilder
+    // 的注释),跟进度那对「(x/y)」同一个数,用户关掉一个源时两处的分母一致。还没收到第一行时先用这一轮开着的
+    // 源数(availabilityDenominator)。那时分子是 0,但正下方那行写着「正在查询各个歌词源…」,读不成「零个可用」。
+    // 分子数"给过候选的源":引擎的 filterEnabledLyricSources 保证候选里没有关掉的源,不用再交集一次。
     private var sourceAvailabilityBadge: some View {
-        if sourcesTotal > 0 {
-            Button {
-                showSourceAvailability = true
-            } label: {
-                Text("\(respondedSources.count)/\(sourcesTotal)")
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help(L10n.t("这一轮有几个歌词源给出了候选，点击查看明细"))
-            .popover(isPresented: $showSourceAvailability, arrowEdge: .bottom) {
-                sourceAvailabilityList
+        Button {
+            showSourceAvailability = true
+        } label: {
+            Label {
+                Text("\(respondedSources.count)/\(availabilityDenominator)").monospacedDigit()
+            } icon: {
+                Image(systemName: "antenna.radiowaves.left.and.right")
             }
         }
+        .controlSize(.small)
+        .settingsGlassButtons(inSheet: presentedAsSheet)
+        .help(L10n.t("这一轮有几个歌词源给出了候选，点击查看明细"))
+        .popover(isPresented: $showSourceAvailability, arrowEdge: .bottom) {
+            sourceAvailabilityList
+        }
+    }
+
+    /// 徽标的分母:引擎报了就用它;还没收到第一行时先用这一轮开着的源数(引擎子进程读的是同一份 features.json,
+    /// 随后报的通常就是这个数),还没开搜过时用设置里开着的源数。
+    private var availabilityDenominator: Int {
+        if sourcesTotal > 0 { return sourcesTotal }
+        return enabledSources.isEmpty ? FeatureSettingsStore.shared.lyricsSources.count : enabledSources.count
     }
 
     /// 列表行序:开着的源在前(名单序),关掉的沉底——用户看这张表是想知道"查了的那几个怎么样",
@@ -408,9 +448,8 @@ struct LyricsSearchSheet: View {
     // (原有设计的"不抢用户已经手动点开看的那个候选"这条原则不能失效)。
     @State private var userPickedSource = false
 
-    // List(selection:) 直接绑 $selectedSource 拿不到"这次赋值是用户点的还是代码自己设的"
-    // 这个区分——包一层 Binding,只有真正经这层写回的(等价于用户在 List 里点了一行)
-    // 才会把 userPickedSource 标记为 true。
+    // 候选列表的点选、方向键都经这层 Binding 写回,只有经这层写回的(用户点了一行或按了方向键)
+    // 才会把 userPickedSource 标记为 true;代码自己改选中(load 里的自动选)直接写 selectedSource。
     private var selectedSourceBinding: Binding<String?> {
         Binding(
             get: { selectedSource },
@@ -427,8 +466,9 @@ struct LyricsSearchSheet: View {
     @State private var album: String
 
     init(artist: String, title: String, album: String, currentSource: String?, currentFingerprint: String? = nil,
-         durationSecs: Double, keepsOpenAfterApply: Bool = false,
+         durationSecs: Double, keepsOpenAfterApply: Bool = false, standaloneWindow: Bool = false,
          isMarkedInstrumental: Bool, onSetInstrumental: @escaping (Bool) async -> Bool,
+         onAutoMatch: @escaping (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?,
          onApply: @escaping (LyricsSearchService.Candidate) async -> Bool) {
         self.originalArtist = artist
         self.originalTitle = title
@@ -437,8 +477,10 @@ struct LyricsSearchSheet: View {
         self.currentFingerprint = currentFingerprint
         self.durationSecs = durationSecs
         self.keepsOpenAfterApply = keepsOpenAfterApply
+        self.standaloneWindow = standaloneWindow
         self.isMarkedInstrumental = isMarkedInstrumental
         self.onSetInstrumental = onSetInstrumental
+        self.onAutoMatch = onAutoMatch
         self.onApply = onApply
         self._artist = State(initialValue: artist)
         self._title = State(initialValue: title)
@@ -448,6 +490,10 @@ struct LyricsSearchSheet: View {
     private var isDirty: Bool {
         artist != originalArtist || title != originalTitle || album != originalAlbum
     }
+
+    /// 从歌词管理 / 歌词窗口弹出的 sheet(不是悬浮窗 ⚙ 的独立小窗)。sheet 里的玻璃一直是失焦那一档,侧栏和玻璃
+    /// 按钮改画设计系统的替身(决策 57)。
+    private var presentedAsSheet: Bool { !standaloneWindow }
 
     /// 这首歌眼下是不是标成了纯音乐:面板里切过就认切过之后的,没切过认宿主给的。
     private var markedInstrumental: Bool { instrumentalOverride ?? isMarkedInstrumental }
@@ -461,45 +507,23 @@ struct LyricsSearchSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(L10n.t("搜索候选歌词")).font(.title3.weight(.semibold))
-                    applyFeedbackView
-                    Spacer()
-                    instrumentalButton
-                    sourceAvailabilityBadge
-                    Button(L10n.t("关闭")) { dismiss() }
-                        .keyboardShortcut(.cancelAction)
-                }
-                instrumentalBanner
-            }
-            .padding(16)
-            // 这个面板(sheet 弹出,没有系统标题栏)能拖动。sheet 默认
-            // 不可拖——AppKit 故意把它钉死在依附点,不是漏配了 isMovableByWindowBackground
-            // 能补的(那个修饰符对 sheet 样式的窗口不生效)。WindowDragHandle 垫在标题栏这行
-            // 背后,直接对底层 NSWindow 发起编程式拖动(performDrag),不问它是不是 sheet;
-            // 垫在背景层不影响上面"关闭"/来源徽标按钮各自接收点击(SwiftUI 命中测试是
-            // 前景优先,背景只接住前景没吃掉的点击)。
-            .background(WindowDragHandle())
-            // 说明条随标记出现 / 消失,按钮文字跟着换,一起过渡。
-            .animation(.easeInOut(duration: 0.2), value: markedInstrumental)
-
-            Divider()
-
-            queryFieldsBar
-
-            Divider()
-
-            content
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: Self.sidebarWidth)
+                .padding(.leading, Self.panelInset)
+                .padding(.vertical, Self.panelInset)
+            detail
         }
-        .frame(minWidth: 720, maxWidth: .infinity, minHeight: 480, maxHeight: .infinity)
-        // "这个页面要支持扩大边框"。独立小窗那条路径本来就能拖,
-        // 从歌词管理/歌词窗口弹出的这张是 **sheet** —— AppKit 给 sheet 的默认 styleMask
-        // 里没有 .resizable,窗口边缘对拖拽完全没反应。补一颗探针把这个标志插回去
-        // (同 WindowDragHandle 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 同时
-        // 从"只有下限"改成"下限 + 可无限撑大",不然窗口拖大了内容仍停在 720×480。
-        .background(WindowResizeEnabler(minWidth: 720, minHeight: 480))
+        // 独立小窗的标题栏是透明的(场景挂 .windowStyle(.hiddenTitleBar)),内容铺到最顶上,红绿灯压在侧栏
+        // 顶部那一截里;sheet 没有标题栏,这句不改什么。
+        .ignoresSafeArea()
+        .frame(minWidth: Self.minimumSize.width, maxWidth: .infinity,
+               minHeight: Self.minimumSize.height, maxHeight: .infinity)
+        // 从歌词管理 / 歌词窗口弹出的这张是 sheet,AppKit 给 sheet 的默认 styleMask 里没有 .resizable,
+        // 窗口边缘对拖拽完全没反应:这颗探针把标志插回去,同时把最小尺寸写进窗口(同 WindowDragHandle
+        // 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 要带 maxWidth / maxHeight: .infinity,
+        // 不然窗口拖大了内容仍停在最小尺寸。
+        .background(WindowResizeEnabler(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height))
         // 悬浮窗 ⚙「搜索歌词…」小窗切歌后会串 key:那扇窗口是
         // `if let context { LyricsSearchSheet(...) }`,让它再点一次就重查曲目、把新
         // context 喂进来——但 SwiftUI 里 Optional 从 A 换成 B 是**同一个视图身份**:上面三个
@@ -524,6 +548,7 @@ struct LyricsSearchSheet: View {
             appliedFingerprint = nil
             applyFeedback = nil
             instrumentalOverride = nil
+            autoMatchLine = nil
         }
         .onChange(of: currentSource) { _, _ in
             appliedSource = nil
@@ -542,30 +567,73 @@ struct LyricsSearchSheet: View {
         .onDisappear { LyricsSearchService.shared.cancelRunning(for: searchOwner) }
     }
 
-    // 三个可编辑的查询维度——默认展示这首歌本身的元数据,.task { await load() } 直接
-    // 拿这三个初始值发起搜索;改了之后要显式点"重新搜索"(或者在任一输入框按下 Enter)
-    // 才会真的重新发起查询,不会敲一个字就发一次网络请求。
-    private var queryFieldsBar: some View {
-        // 底边对齐:三栏上面各有一行标题,右边的按钮要跟输入框齐平,不跟标题 + 输入框的整体居中。
-        HStack(alignment: .bottom, spacing: 10) {
-            // 三栏**按内容长度分宽**,不等分——三栏的内容长度天然不对等,均分等于把宽度
-            // 分给了最不需要的那栏,常见形状是歌手栏「PRINCE」六个字母后面空着大半格、
-            // 旁边歌名「Around the World in a Day (2025 Remaster)」和专辑双双被截断。
-            // 分法(含放不下时
-            // 的下限保护)在 LyricsQueryFieldLayout,这里只负责按实际字体把"想要多宽"量
-            // 出来。挂 help:再怎么分也有装不下的时候,悬停能看全文。
-            ProportionalFieldsLayout(
-                desired: [
-                    Self.desiredFieldWidth(title, placeholder: L10n.t("歌名")),
-                    Self.desiredFieldWidth(artist, placeholder: L10n.t("歌手")),
-                    Self.desiredFieldWidth(album, placeholder: L10n.t("专辑")),
-                ],
-                spacing: 10, minWidth: 88
-            ) {
-                Self.labeledQueryField(L10n.t("歌名"), text: $title)
-                Self.labeledQueryField(L10n.t("歌手"), text: $artist)
-                Self.labeledQueryField(L10n.t("专辑"), text: $album)
+    // MARK: - 侧栏(查询词 + 候选)
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if standaloneWindow {
+                // 独立小窗的红绿灯落在这一截里;垫拖拽区,按住这里能拖窗口。高度让查询卡从标题栏(连工具栏
+                // 66pt)下面开始:那一条是系统的拖拽区,在里面按住拖动挪的是窗口,输入框里拖选文字会变成拖窗口。
+                Color.clear
+                    .frame(height: 48)
+                    .background(WindowDragHandle())
             }
+            queryCard
+            searchActions
+            candidatesHeader
+            candidatesSection
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, standaloneWindow ? 0 : 12)
+        // 列表滚到底时别把行画到侧栏圆角外面。
+        .clipShape(RoundedRectangle(cornerRadius: Self.panelCornerRadius, style: .continuous))
+        .settingsCardBackground(cornerRadius: Self.panelCornerRadius, inSheet: presentedAsSheet)
+    }
+
+    // 三个可编辑的查询维度——默认展示这首歌本身的元数据,.task(id:) 直接拿这三个初始值发起搜索;
+    // 改了之后要显式点"重新搜索"(或者在任一输入框按下 Enter)才会真的重新发起查询,不会敲一个字就
+    // 发一次网络请求。一栏一行:栏名在左(框里有内容时占位文字就看不见了,单看内容分不清哪栏是歌名
+    // 哪栏是专辑),输入框占满剩下的宽度;栏名那一列由 Grid 对齐、宽度跟着最长的栏名走(英文的
+    // Artist / Album 比中文长)。挂 help:很长的歌名 / 专辑在侧栏里装不下,悬停看全文。
+    private var queryCard: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 0) {
+            queryRow(L10n.t("歌名"), text: $title)
+            Divider()
+            queryRow(L10n.t("歌手"), text: $artist)
+            Divider()
+            queryRow(L10n.t("专辑"), text: $album)
+        }
+        .padding(.horizontal, 12)
+        .background(shape.fill(Color.primary.opacity(0.045)))
+        .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+        .onSubmit { Task { await load() } }
+    }
+
+    private func queryRow(_ label: String, text: Binding<String>) -> GridRow<some View> {
+        GridRow {
+            Text(label)
+                .foregroundStyle(.secondary)
+            TextField("", text: text)
+                .textFieldStyle(.plain)
+                .accessibilityLabel(label)
+                .help(text.wrappedValue)
+                .frame(minHeight: 32)
+        }
+    }
+
+    // 搜索途中也允许再点:上一轮会被 load() 里的 searchGeneration 判作废,子进程
+    // 也会被 LyricsSearchService 按同一发起方顶掉、杀掉。改了关键词却要等上一轮跑完
+    // (最长 20 秒)才能重搜,是没道理的等待。
+    private var searchActions: some View {
+        HStack(spacing: 8) {
+            Button { Task { await load() } } label: {
+                Label(L10n.t("重新搜索"), systemImage: "magnifyingglass")
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.large)
+            .settingsGlassButtons(inSheet: presentedAsSheet)
+            .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             if isDirty {
                 Button(L10n.t("恢复原信息")) {
                     artist = originalArtist
@@ -574,25 +642,154 @@ struct LyricsSearchSheet: View {
                 }
                 .buttonStyle(.link)
             }
-            // 搜索途中也允许再点:上一轮会被 load() 里的 searchGeneration 判作废,子进程
-            // 也会被 LyricsSearchService 按同一发起方顶掉、杀掉。改了关键词却要等上一轮跑完
-            // (最长 20 秒)才能重搜,是没道理的等待。
-            Button(L10n.t("重新搜索")) { Task { await load() } }
-                .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
         }
-        .onSubmit { Task { await load() } }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
     }
 
-    /// 查询栏的一栏:上面一行标题(输入框里有内容时占位文字就看不见了,单看内容分不清哪栏是歌名哪栏是专辑),
-    /// 下面是输入框。宽度由外层 ProportionalFieldsLayout 分。
-    private static func labeledQueryField(_ label: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField(label, text: text).textFieldStyle(.roundedBorder).help(text.wrappedValue)
+    /// 候选列表的表头:「候选 N」,右边是歌词源可用情况徽标,下面一行是搜索进度(右边不另放)。整块一打开就在、
+    /// 高度不变:候选陆续到达、搜完收起进度时,下面的列表都不跳。
+    private var candidatesHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(L10n.t("候选"))
+                    .font(.headline)
+                Text("\(candidates.count)")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                sourceAvailabilityBadge
+            }
+            // 一条候选都还没到时说「正在查询」,到了几条之后说「其它源仍在搜索」;搜完这一行留空,高度照留。
+            HStack(spacing: 6) {
+                if isSearching {
+                    ProgressView().controlSize(.small)
+                    Text((candidates.isEmpty ? L10n.t("正在查询各个歌词源…") : L10n.t("其它源仍在搜索中…"))
+                         + searchProgressSuffix)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 18)
+        }
+        .padding(.top, 6)
+        .padding(.horizontal, 4)
+    }
+
+    /// 侧栏下半截。有候选时是列表,中途出错的一行提示挂在列表上面;一个候选都还没有时空着,搜完的结论(报错、
+    /// 各种空状态)在右边(detailContent)。
+    @ViewBuilder
+    private var candidatesSection: some View {
+        if candidates.isEmpty {
+            Spacer(minLength: 0)
+        } else {
+            if let msg = loadError {
+                Label(msg, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+                    .padding(.horizontal, 4)
+            }
+            candidateList
+        }
+    }
+
+    /// 候选列表。不用 `List`:选中底要画成侧栏这一套的圆角浅底,`List` 的系统选中在列表拿到焦点时换成
+    /// 实心强调色、字变白,行里彩色的来源名和标签会被盖住。方向键换行由 onMoveCommand 接,点一行就把焦点
+    /// 交给列表。
+    private var candidateList: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(candidates) { c in
+                        candidateRow(c)
+                            .id(c.source)
+                    }
+                }
+                .padding(.bottom, 8)
+                .focusable()
+                .focused($candidateListFocused)
+                .focusEffectDisabled()
+                .onMoveCommand { direction in moveSelection(direction, proxy: proxy) }
+            }
+        }
+    }
+
+    /// 右边预览的那一条:选中的那条,还没选中任何一条时是排第一的。列表里画选中底的也是它。
+    private var previewedCandidate: LyricsSearchService.Candidate? {
+        candidates.first(where: { $0.source == selectedSource }) ?? candidates.first
+    }
+
+    /// 点一行:经 selectedSourceBinding 写回(记下"用户点过",之后不再自动改选),并把焦点交给列表。
+    private func select(_ source: String) {
+        selectedSourceBinding.wrappedValue = source
+        candidateListFocused = true
+    }
+
+    /// ↑ / ↓ 换到上一条 / 下一条,跟点选同一条写回路径;滚到刚好露出那一行。
+    private func moveSelection(_ direction: MoveCommandDirection, proxy: ScrollViewProxy) {
+        guard let current = candidates.firstIndex(where: { $0.source == previewedCandidate?.source }) else { return }
+        let next: Int
+        switch direction {
+        case .up: next = current - 1
+        case .down: next = current + 1
+        default: return
+        }
+        guard candidates.indices.contains(next) else { return }
+        let source = candidates[next].source
+        selectedSourceBinding.wrappedValue = source
+        proxy.scrollTo(source)
+    }
+
+    // MARK: - 右侧(标题行 + 预览 / 空状态)
+
+    private var detail: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            detailToolbar
+            instrumentalBanner
+            autoMatchStatus
+            detailContent
+        }
+        // 说明条随标记出现 / 消失,按钮文字跟着换,一起过渡。
+        .animation(.easeInOut(duration: 0.2), value: markedInstrumental)
+    }
+
+    /// 右侧顶上那一行:标题、回声、「标为纯音乐」,sheet 里再加「关闭」。独立小窗里这一行正好压在透明
+    /// 标题栏那一截(52pt)上。
+    ///
+    /// 背后垫 WindowDragHandle,按住这一行能拖窗口:sheet 默认**不可拖**——AppKit 故意把它钉死在依附点,
+    /// 不是漏配了 isMovableByWindowBackground 能补的(那个修饰符对 sheet 样式的窗口不生效);独立小窗的
+    /// 透明标题栏整片被内容盖住,点到的是内容,也靠这块拖。垫在背景层不影响上面的按钮各自接收点击
+    /// (SwiftUI 命中测试是前景优先,背景只接住前景没吃掉的点击)。
+    private var detailToolbar: some View {
+        HStack(spacing: 8) {
+            // 放得下就是「标题 + 带文字的按钮」;右栏窄(面板拖到最窄、英文文案更长)时先收起标题,再窄才把两颗按钮
+            // 收成图标(悬停说明、无障碍标签照留)——「标为纯音乐」要带文字,能留就留(决策 50)。
+            ViewThatFits(in: .horizontal) {
+                toolbarRow(showsTitle: true, iconOnly: false)
+                toolbarRow(showsTitle: false, iconOnly: false)
+                toolbarRow(showsTitle: false, iconOnly: true)
+            }
+            if !standaloneWindow {
+                Button(L10n.t("关闭")) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .settingsGlassButtons(inSheet: presentedAsSheet)
+                    .fixedSize()
+            }
+        }
+        .padding(.leading, 22)
+        .padding(.trailing, 14)
+        .frame(height: 52)
+        .background(WindowDragHandle())
+        .background {
+            if standaloneWindow {
+                // 独立小窗不画「关闭」(左上角的红灯就是),Esc 照样关:一颗不可见的按钮接 cancelAction,
+                // 同设置页 ⌘F 那颗。
+                Button("") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
+                    .accessibilityHidden(true)
+            }
         }
     }
 
@@ -601,8 +798,8 @@ struct LyricsSearchSheet: View {
     // 九个源已经查完了(可能只是跑得快的那几个还没轮到),那样会把"还在搜"误判成
     // "查完了、真的什么都没有",提前弹出"没找到候选"的空状态提示。
     @ViewBuilder
-    private var content: some View {
-        // 已经收到候选时出错(比如后面的源把子进程带崩了)不整页换成报错:到手的候选照样能挑,报错挪到列表上方一行。
+    private var detailContent: some View {
+        // 已经收到候选时出错(比如后面的源把子进程带崩了)不整页换成报错:到手的候选照样能挑,报错挪到侧栏列表上方一行。
         if let msg = loadError, candidates.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle")
@@ -614,14 +811,9 @@ struct LyricsSearchSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if candidates.isEmpty {
             if isSearching {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text(L10n.t("正在查询各个歌词源…")
-                        + searchProgressSuffix)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // 还没有候选:右边空着,进度在侧栏(candidatesSection)。占满这一栏,标题行才留在顶上。
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if networkLooksDown {
                 // 补上——跟下面"真的查了但没有"分开展示,别让用户以为这首歌
                 // 真没有网络歌词、白白灰心,其实只是网络本身有问题,重试大概率能查到。
@@ -738,7 +930,7 @@ struct LyricsSearchSheet: View {
                     .padding(.top, 2)
                 } actions: {
                     HStack {
-                        // 跟顶部那颗按钮同名:说的是同一件事,不该一个叫"重试"、一个叫"重新搜索"。
+                        // 跟侧栏那颗按钮同名:说的是同一件事,不该一个叫"重试"、一个叫"重新搜索"。
                         Button(L10n.t("重新搜索")) { Task { await load() } }
                         markInstrumentalAction
                     }
@@ -748,81 +940,49 @@ struct LyricsSearchSheet: View {
                 ContentUnavailableView(L10n.t("启用的歌词源都没找到可用的候选"), systemImage: "text.badge.xmark")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        } else {
-            VStack(spacing: 0) {
-                if isSearching {
-                    // 已经有候选可看了,但还有源没回来——小小一条提示,不用整页占用
-                    // ProgressView 挡住已经到手的结果。
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text(L10n.t("其它源仍在搜索中…") + searchProgressSuffix)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 6)
-                }
-                if let msg = loadError {
-                    Label(msg, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .lineLimit(2)
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                }
-                HSplitView {
-                    List(candidates, selection: selectedSourceBinding) { c in
-                        candidateRow(c)
-                    }
-                    // 把理想/上限各放宽一档(280→300、320→380):这一列要放
-                    // 歌名/歌手/专辑三行,长专辑名在 280pt 下必换行甚至截断;右侧预览
-                    // 有 minWidth 380 兜着,拖不塌。
-                    .frame(minWidth: 250, idealWidth: 300, maxWidth: 380)
-
-                    if let c = candidates.first(where: { $0.source == selectedSource }) ?? candidates.first {
-                        previewPane(c)
-                    }
-                }
-            }
+        } else if let c = previewedCandidate {
+            previewPane(c)
         }
     }
 
     private func candidateRow(_ c: LyricsSearchService.Candidate) -> some View {
-        // 把标签排挪到封面下面、统一一个位置:原来它跟在标题/歌手·
-        // 专辑/分数后面,起点 x 跟着**文字列**走,而每一行的标题/歌手·专辑长短不一
-        // (有的一行占满、有的很短),标签排看起来就没个准地方。改成外层 VStack 包一层,
-        // 标签排放在"封面+文字"这一整条 HStack **下面**、贴着整行的左缘(也就是封面的
-        // 左缘,不是文字的左缘)——不管这一行标题/歌手·专辑多长、封面下面空多少,
-        // 标签排永远钉在同一个 x、同一个"这一行内容结束后"的 y,五行看下来是一条直线。
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .top, spacing: 8) {
-                coverThumbnail(c.coverURL, size: 40)
-                VStack(alignment: .leading, spacing: 3) {
-                    // 第一行放这个候选**实际匹配到的歌名**,不再放来源名 —— 挑候选时最要紧的
-                    // 判断是"这条到底对上了哪首歌/哪个版本",来源只是附带信息,挪到下面的标签排。
+        let isSelected = c.source == previewedCandidate?.source
+        let shape = RoundedRectangle(cornerRadius: 13, style: .continuous)
+        // 标签排放在"封面+文字"这一整条 HStack **下面**、贴着整行的左缘(也就是封面的左缘,不是文字的
+        // 左缘)——不管这一行标题/歌手·专辑多长、封面下面空多少,标签排永远钉在同一个 x、同一个
+        // "这一行内容结束后"的 y,一列看下来是一条直线。
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .top, spacing: 10) {
+                coverThumbnail(c.coverURL, size: 42, cornerRadius: 8)
+                VStack(alignment: .leading, spacing: 2) {
+                    // 第一行放这个候选**实际匹配到的歌名**,不放来源名 —— 挑候选时最要紧的
+                    // 判断是"这条到底对上了哪首歌/哪个版本",来源只是附带信息。
                     candidateMatchInfo(c, titleFont: .body.weight(.medium))
                     scoreLine(c, font: .caption2)
+                        .padding(.top, 1)
                 }
                 Spacer(minLength: 0)
-                // 把来源标挪到这里(每行**右上角**),不再混在下面那排
-                // 标签里。跟上面 08-26 那条是同一个诉求的延伸而不是推翻它:那次要的是
-                // "标签排别跟着文字长短漂移",而来源标在标签排**内部**仍然在漂——它前面
-                // 站着无时间戳/逐字/译文/罗马音四个可有可无的标签,有几个全看这条候选的
-                // 成色,于是九条候选扫下来"这条是谁给的"每行都在不同的 x,窄列时还会被
-                // 挤到第二行。来源跟那几个标签也不是一类东西:那几个说的是"这条候选有
-                // 什么"(越多越好的加分项),来源说的是"这条是谁给的"(身份),身份钉在
-                // 行的右上角、九行右缘对齐,扫起来最省事。
+                // 来源标钉在每行**右上角**,不混在下面那排标签里:那几个标签说的是"这条候选有什么"
+                // (越多越好的加分项),来源说的是"这条是谁给的"(身份),身份钉在行的右上角、各行右缘
+                // 对齐,扫起来最省事;混在标签排里的话,它前面站着几个标签全看这条候选的成色,每行落在
+                // 不同的 x。
                 //
-                // `fixedSize()`:列宽最窄能拖到 250pt,不钉住的话 SwiftUI 会先压这个
-                // 胶囊(「网易云音乐」折成两行、「Musixmatch」被截成「Musixmat…」)。
-                // 来源名截半个字等于没标,宁可让上面的歌名先换行——它本来就允许两行 + 悬停看全文。
+                // `fixedSize()`:侧栏里一行只有约 350pt 宽,不钉住的话 SwiftUI 会先压这个胶囊(「网易云
+                // 音乐」折成两行、「Musixmatch」被截成「Musixmat…」)。来源名截半个字等于没标,宁可让上面的
+                // 歌名先换行——它本来就允许两行 + 悬停看全文。
                 sourceBadge(c.source)
                     .fixedSize()
             }
             // showsSource: false —— 这一处的来源标已经在上面的右上角了,别在标签排里再来一遍。
             characteristicBadges(c, source: c.source, showsSource: false, isCurrent: isCurrentCandidate(c), duplicate: duplicates[c.source])
         }
-        .tag(c.source)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 10)
+        .background(shape.fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear))
+        .contentShape(shape)
+        // 整行可点;分数旁的问号自己接点击(QuickHelpLabel),子视图的手势先于这里。
+        .onTapGesture { select(c.source) }
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     /// 这首歌眼下实际生效的来源:本次面板里采纳过就是刚采纳的那条,否则是打开时的快照。
@@ -859,7 +1019,7 @@ struct LyricsSearchSheet: View {
     /// ③ 成功 → `appliedSource` 挪「当前使用」徽标;关窗模式到此关窗(失败也关,调用方那边
     ///    的 lastError 红字负责说明),留着的模式给标题栏一条回声、不重搜 —— 候选本来就在。
     private func apply(_ c: LyricsSearchService.Candidate) async {
-        guard applyingSource == nil else { return }
+        guard applyingSource == nil, !autoMatching else { return }
         // 比 @State 里的代数,不比 searchSubject:这个方法跑在按钮闭包捕获的那份视图副本上,副本的 let 属性
         // 永远是旧值,前后比较恒等;@State 读的是共享存储,换了歌(onChange(of: searchSubject))这里看得见。
         let subject = subjectGeneration
@@ -870,6 +1030,7 @@ struct LyricsSearchSheet: View {
         if saved {
             appliedSource = c.source
             appliedFingerprint = c.fingerprint
+            autoMatchLine = nil
             // 存进歌词时引擎顺带撤掉纯音乐标记(enrichedit.go 的 save_edit / save_plain_text)。
             instrumentalOverride = false
         }
@@ -885,24 +1046,119 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 标题栏里标 / 撤「纯音乐」的按钮:图标 + 文字,文字写的是点下去会做什么;标没标上由下面的 `instrumentalBanner` 说。
+    /// 标题行左半边(标题、回声)加两颗按钮,`detailToolbar` 按放不放得下挑一档。回声的理想宽度记 0:它不参与
+    /// 「放不放得下」的判断,占剩下的地方,太长就自己截断,不会把按钮挤成图标。按钮(连「关闭」)都按完整宽度排
+    /// (`fixedSize`):不然同一行里那块可伸缩的回声区会跟它们平分宽度,先把按钮压成「重新自动…」,`ViewThatFits`
+    /// 量出来的「放得下」也就跟实际排出来的对不上。
+    private func toolbarRow(showsTitle: Bool, iconOnly: Bool) -> some View {
+        HStack(spacing: 8) {
+            if showsTitle {
+                Text(L10n.t("搜索候选歌词"))
+                    .font(.headline)
+                    .fixedSize()
+            }
+            ZStack(alignment: .leading) {
+                applyFeedbackView
+            }
+            .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
+            autoMatchButton(iconOnly: iconOnly)
+            instrumentalButton(iconOnly: iconOnly)
+        }
+    }
+
+    /// 标题行按钮的标签:`iconOnly` 时只留图标(标题仍是无障碍标签)。
+    @ViewBuilder
+    private func toolbarLabel(_ title: String, systemImage: String, iconOnly: Bool) -> some View {
+        if iconOnly {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+        } else {
+            Label(title, systemImage: systemImage)
+        }
+    }
+
+    /// 右侧标题行里标 / 撤「纯音乐」的按钮:图标 + 文字,文字写的是点下去会做什么;标没标上由下面的 `instrumentalBanner` 说。
     /// 标上之后这首按纯音乐处理:各处不显示歌词,也不再自动搜歌词;歌词留在缓存里,撤掉就回来。有没有搜到候选都在:
     /// 没搜到不等于纯音乐,标不标由用户定。图标跟歌词管理详情页那对按钮同一组(pianokeys / pianokeys.inverse)。
-    private var instrumentalButton: some View {
+    private func instrumentalButton(iconOnly: Bool) -> some View {
         Button {
             let value = !markedInstrumental
             Task { await setInstrumental(value) }
         } label: {
-            Label(markedInstrumental ? L10n.t("取消纯音乐标记") : L10n.t("标为纯音乐"),
-                  systemImage: markedInstrumental ? "pianokeys.inverse" : "pianokeys")
+            toolbarLabel(markedInstrumental ? L10n.t("取消纯音乐标记") : L10n.t("标为纯音乐"),
+                         systemImage: markedInstrumental ? "pianokeys.inverse" : "pianokeys", iconOnly: iconOnly)
         }
         .help(markedInstrumental
               ? L10n.t("撤回「纯音乐」标记：有歌词的恢复显示，没有歌词的重新回到自动补搜的队列")
               : L10n.t("按纯音乐处理：各处不显示歌词，也不再自动搜歌词；已有的歌词会留着，取消标记就恢复"))
-        .disabled(settingInstrumental || applyingSource != nil)
+        .disabled(settingInstrumental || applyingSource != nil || autoMatching)
+        .settingsGlassButtons(inSheet: presentedAsSheet)
+        .fixedSize()
     }
 
-    /// 标成纯音乐时挂在标题栏下面的说明条:标没标上一眼看得出,也说清这时采用候选会怎样。卡片样式同歌词管理的
+    /// 右侧标题行里的「重新自动匹配」:交给引擎按设置里的「匹配算法」重挑一份,不用自己从列表里挑。图标、文案、
+    /// 悬停说明跟歌词管理那颗一样(文案不写「智能」,理由见那边)。
+    private func autoMatchButton(iconOnly: Bool) -> some View {
+        Button {
+            Task { await runAutoMatch() }
+        } label: {
+            toolbarLabel(L10n.t("重新自动匹配"), systemImage: "wand.and.stars", iconOnly: iconOnly)
+        }
+        .help(L10n.t("重新联网跑一遍匹配，直接采用算法选出的那一份，不用自己挑；跟设置里的「匹配算法」一致"))
+        .disabled(autoMatching || applyingSource != nil || settingInstrumental)
+        .settingsGlassButtons(inSheet: presentedAsSheet)
+        .fixedSize()
+    }
+
+    /// 标题行下面那一行:自动匹配跑着时是进度,跑完是结论(说法和颜色同歌词管理详情页那一行)。
+    @ViewBuilder
+    private var autoMatchStatus: some View {
+        if autoMatching {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(autoMatchTotal > 0
+                     ? String(format: L10n.t("正在重新匹配…（%1$@/%2$@）"), "\(autoMatchDone)", "\(autoMatchTotal)")
+                     : L10n.t("正在重新匹配…"))
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 10)
+        } else if let line = autoMatchLine {
+            Label(LyricsRematchRunner.text(line), systemImage: LyricsRematchRunner.icon(line.tone))
+                .font(.callout)
+                .foregroundStyle(LyricsRematchRunner.tint(line.tone))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 10)
+        }
+    }
+
+    /// 「重新自动匹配」的整条流程:等宿主跑完一轮(进度经回调写进来)。改写了歌词时 sheet 跟采纳一样关掉(歌词管理
+    /// 的编辑框、歌词窗口的正文都在背后),独立小窗留着、挂结论,「当前使用」随宿主重读挪过去;没改写时都留着、挂结论,
+    /// 用户可以接着自己挑。等待期间换了歌,这一轮的结论不挂。
+    private func runAutoMatch() async {
+        guard !autoMatching, applyingSource == nil, !settingInstrumental else { return }
+        let subject = subjectGeneration
+        autoMatching = true
+        autoMatchLine = nil
+        autoMatchDone = 0
+        autoMatchTotal = 0
+        let line = await onAutoMatch { sourcesDone, sourcesTotal in
+            guard subject == subjectGeneration else { return }
+            autoMatchDone = sourcesDone
+            autoMatchTotal = sourcesTotal
+        }
+        autoMatching = false
+        guard subject == subjectGeneration, let line else { return }
+        if LyricsRematchRunner.rewroteLyrics(line), !keepsOpenAfterApply {
+            dismiss()
+            return
+        }
+        autoMatchLine = line
+    }
+
+    /// 标成纯音乐时挂在右侧标题行下面的说明条:标没标上一眼看得出,也说清这时采用候选会怎样。卡片样式同歌词管理的
     /// `wordTimingHint`。
     @ViewBuilder
     private var instrumentalBanner: some View {
@@ -914,6 +1170,8 @@ struct LyricsSearchSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.18)))
+                .padding(.horizontal, 24)
+                .padding(.bottom, 10)
                 .transition(.opacity)
         }
     }
@@ -928,14 +1186,14 @@ struct LyricsSearchSheet: View {
             } label: {
                 Label(L10n.t("标为纯音乐"), systemImage: "pianokeys")
             }
-            .disabled(settingInstrumental || applyingSource != nil)
+            .disabled(settingInstrumental || applyingSource != nil || autoMatching)
         }
     }
 
     /// 写回纯音乐标记,等调用方落盘再收尾。等待期间换了歌(小窗再点一次会换 context)这一笔写的是上一首,
     /// 不改面板上的标记、不回声。
     private func setInstrumental(_ value: Bool) async {
-        guard !settingInstrumental else { return }
+        guard !settingInstrumental, !autoMatching else { return }
         let subject = subjectGeneration
         settingInstrumental = true
         let saved = await onSetInstrumental(value)
@@ -963,9 +1221,9 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 标题栏里的回声:「已采用 X 的歌词」/「未能保存」,2.5 秒后自己消失。放标题栏而不是另起一层
-    /// toast 浮层:这个面板没有第二层浮层机制,标题右侧那段本来就是空的,而且它跟「当前使用」徽标
-    /// 的移动同一刻出现,视线不用离开列表。
+    /// 右侧标题行里的回声:「已采用 X 的歌词」/「未能保存」,2.5 秒后自己消失。放标题行而不是另起一层
+    /// toast 浮层:这个面板没有第二层浮层机制,标题后面那段本来就是空的,而且它跟「当前使用」徽标
+    /// 的移动同一刻出现。
     @ViewBuilder
     private var applyFeedbackView: some View {
         if let applyFeedback {
@@ -980,27 +1238,34 @@ struct LyricsSearchSheet: View {
     }
 
     private func previewPane(_ c: LyricsSearchService.Candidate) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                coverThumbnail(c.coverURL, size: 56)
-                VStack(alignment: .leading, spacing: 4) {
-                    candidateMatchInfo(c, titleFont: .headline)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 16) {
+                coverThumbnail(c.coverURL, size: 76, cornerRadius: 12)
+                    .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                VStack(alignment: .leading, spacing: 3) {
+                    candidateMatchInfo(c, titleFont: .title2.weight(.semibold), detailFont: .callout)
                     scoreLine(c, font: .caption)
+                        .padding(.top, 2)
                 }
-                Spacer()
-                // 按钮文案跟着"这条候选到底能干什么"走——加:纯文本那条采纳后
-                // 不会像别的候选一样逐字/逐行跟播放同步,措辞不该让人以为跟别的候选是同一
-                // 回事,得在真正点下去之前再确认一次,不能只靠上面那个警示标签。
+                Spacer(minLength: 12)
+                // 按钮文案跟着"这条候选到底能干什么"走——纯文本那条采纳后不会像别的候选一样
+                // 逐字/逐行跟播放同步,措辞不该让人以为跟别的候选是同一回事,得在真正点下去之前
+                // 再确认一次,不能只靠上面那个警示标签。
                 Button(applyButtonTitle(for: c)) {
                     Task { await apply(c) }
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(applyingSource != nil || settingInstrumental)
+                .controlSize(.large)
+                .settingsProminentGlassButton(tint: .accentColor)
+                .disabled(applyingSource != nil || settingInstrumental || autoMatching)
             }
-            // showsSource: true —— 右侧详情**不跟着**挪去右上角:挪的收益是
-            // "多行之间对齐、好扫",而这里永远只有一条候选,没有可对齐的对象;这一行的
-            // 右上角又被「采用此候选」这颗主按钮占着,塞个胶囊进去只会跟它抢视线。
+            .padding(.horizontal, 24)
+            .padding(.top, 4)
+            // showsSource: true —— 右侧详情**不跟着**把来源挪去右上角:挪的收益是"多行之间对齐、好扫",
+            // 而这里永远只有一条候选,没有可对齐的对象;这一行的右上角又被「采用此候选」这颗主按钮占着,
+            // 塞个胶囊进去只会跟它抢视线。
             characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c), duplicate: duplicates[c.source])
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
             if c.isPlainTextOnly {
                 Label(
                     L10n.t("这份歌词没有时间戳，采纳后只能在「歌词窗口」里作为静态文字展示，不会逐字/逐行跟随播放高亮"),
@@ -1008,31 +1273,54 @@ struct LyricsSearchSheet: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
             }
-            ScrollView {
-                // 摘掉 [ti:]/[by:]/[offset:] 这类元信息标签行和署名行再显示——它们播放时
-                // 一个字都不会出现,却占满预览框顶部,把用户真正要判断的"第一句词对不对、
-                // 轴准不准"挤到看不见的地方(用户提)。只影响预览,采纳落盘的
-                // 仍是候选原始文本;判据与理由见 LyricsPreviewText。
-                Text(previewMemo.text(c))
-                    .font(.system(.callout, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 6))
+            lyricsPreview(c)
         }
-        .padding(16)
-        .frame(minWidth: 380)
     }
 
-    /// 一栏输入框「装下自己的内容需要多宽」:按输入框实际用的系统字体量一次文字宽度,
-    /// 再加上 roundedBorder 的左右内边距与描边。空栏按占位符量(不然它会被压到下限,
-    /// 而用户点进去要打字的正是这一栏)。
-    private static func desiredFieldWidth(_ text: String, placeholder: String) -> CGFloat {
-        let shown = text.isEmpty ? placeholder : text
-        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        let width = (shown as NSString).size(withAttributes: [.font: font]).width
-        return width + 22
+    /// 预览正文:左边一列时间、右边正文,候选带译文时译文排在那一句下面。行取自 `LyricsPreviewText.rows`,
+    /// 跟歌词窗口实际显示的是同一批行(署名过滤、多时间戳展开、译文挂靠都走播放引擎);只读整行 LRC,
+    /// 逐字轨不参与,时间列就是这份 LRC 自己的时间戳。没有时间戳的纯文本候选不画时间列。采纳落盘的仍是
+    /// 候选原始文本,这里只管看(边界见 LyricsPreviewText 头注)。
+    private func lyricsPreview(_ c: LyricsSearchService.Candidate) -> some View {
+        let rows = previewMemo.rows(c)
+        let timed = rows.contains { $0.timeMs != nil }
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 7) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    previewRow(row, timed: timed)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 18)
+            .textSelection(.enabled)
+        }
+        // 换一条候选从头看起:要判断的是"第一句对不对、轴准不准"。
+        .id(c.source)
+    }
+
+    private func previewRow(_ row: LyricsPreviewRow, timed: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            if timed {
+                Text(row.timeMs.map(LyricsPreviewText.timeLabel) ?? "")
+                    .font(.system(size: 11.5).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 60, alignment: .leading)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                // 纯文本里的分段空行要占一行高,别塌成 0。
+                Text(row.text.isEmpty ? " " : row.text)
+                    .font(.system(size: 14))
+                if let translation = row.translation, !translation.isEmpty {
+                    Text(translation)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     // 这个候选实际匹配到的歌名 / 歌手 / 专辑,**各占一行**——不是每个源都能给全,哪一项
@@ -1057,7 +1345,7 @@ struct LyricsSearchSheet: View {
     //    看全文;不封顶的话一条候选能自己撑出五六行,九条排下来列表就没法扫了。
     @ViewBuilder
     private func candidateMatchInfo(
-        _ c: LyricsSearchService.Candidate, titleFont: Font
+        _ c: LyricsSearchService.Candidate, titleFont: Font, detailFont: Font = .caption2
     ) -> some View {
         if !c.title.isEmpty {
             Text(c.title)
@@ -1067,14 +1355,14 @@ struct LyricsSearchSheet: View {
         }
         if !c.artist.isEmpty {
             Text(c.artist)
-                .font(.caption2)
+                .font(detailFont)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .help(c.artist)
         }
         if !c.album.isEmpty {
             Text(c.album)
-                .font(.caption2)
+                .font(detailFont)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .help(c.album)
@@ -1086,14 +1374,14 @@ struct LyricsSearchSheet: View {
     // 这个区别。候选封面地址是各源的原图(可到 3000px),必须走 CachedImage 的缩略档在解码期
     // 降采样,别换回 AsyncImage:那会整张解码,十几条候选就是几百 MB。
     @ViewBuilder
-    private func coverThumbnail(_ url: URL?, size: CGFloat) -> some View {
-        CachedImage(url: url) { coverPlaceholder }
+    private func coverThumbnail(_ url: URL?, size: CGFloat, cornerRadius: CGFloat) -> some View {
+        CachedImage(url: url) { coverPlaceholder(cornerRadius: cornerRadius) }
             .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 
-    private var coverPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
+    private func coverPlaceholder(cornerRadius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(.quaternary)
             .overlay(Image(systemName: "music.note").foregroundStyle(.secondary))
     }
@@ -1115,7 +1403,7 @@ struct LyricsSearchSheet: View {
         // 重复也不是当前使用的普通候选,剩下的就是空。
         if hasAnyCharacteristicBadge(c, showsSource: showsSource, isCurrent: isCurrent, duplicate: duplicate) {
             // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/内容或文字相同/当前使用),
-            // 左侧那一列只有 ~300pt 宽,挤不下时该折行,不该被裁掉。
+            // 侧栏里一行只有 ~350pt 宽,挤不下时该折行,不该被裁掉。
             WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
                 // 加:警示色（橙）跟下面几个"这条候选有什么特性"的描述性标签区分
                 // 开——那几个都是"越多越好"的加分项,这一个反过来是"用之前必须知道的限制"。
@@ -1289,44 +1577,5 @@ struct LyricsSearchSheet: View {
         }
         guard generation == searchGeneration else { return } // 别让旧一轮的收尾把新一轮的"正在搜索"关掉
         isSearching = false
-    }
-}
-
-/// 一排等高、**按各自内容长度分宽**的输入框。分宽的算术在 `LyricsQueryFieldLayout`
-/// (纯函数、有 selftest),这里只做两件 SwiftUI 侧的事:把整行可用宽度交给它,再按
-/// 结果摆位置。
-private struct ProportionalFieldsLayout: Layout {
-    let desired: [CGFloat]
-    let spacing: CGFloat
-    let minWidth: CGFloat
-
-    private func widths(for subviews: Subviews, in total: CGFloat) -> [CGFloat] {
-        let gaps = spacing * CGFloat(max(subviews.count - 1, 0))
-        // desired 少给了就按下限补齐,多给了就截断——布局不该因为调用方数错了个数而崩。
-        let want = (0..<subviews.count).map { $0 < desired.count ? desired[$0] : minWidth }
-        return LyricsQueryFieldLayout.widths(
-            desired: want, available: max(total - gaps, 0), minWidth: minWidth)
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let height = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
-        // 没有被提议宽度时(比如量"理想宽")报三栏都装得下的那个宽度。
-        let natural = desired.reduce(0, +) + spacing * CGFloat(max(subviews.count - 1, 0))
-        return CGSize(width: proposal.width ?? natural, height: height)
-    }
-
-    func placeSubviews(
-        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
-    ) {
-        let ws = widths(for: subviews, in: bounds.width)
-        var x = bounds.minX
-        for (i, sub) in subviews.enumerated() {
-            let w = i < ws.count ? ws[i] : 0
-            sub.place(
-                at: CGPoint(x: x, y: bounds.midY),
-                anchor: .leading,
-                proposal: ProposedViewSize(width: w, height: bounds.height))
-            x += w + spacing
-        }
     }
 }

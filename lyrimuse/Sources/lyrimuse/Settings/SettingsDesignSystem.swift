@@ -44,12 +44,18 @@ extension View {
     /// 方向相反)。同一份 SettingsCard 在两页长得不一样,是因为液态玻璃的可见度**完全取决于
     /// 它背后有什么**——纯白底上它几乎折射不到任何东西。描边不依赖背后内容,是"卡片边界一定
     /// 看得见、且每一页都一致"的唯一保证。
+    ///
+    /// 放在 sheet 里的卡片传 `inSheet: true`,画下面「sheet 里的玻璃替身」:sheet 里的玻璃一直是失焦那一档。
     @ViewBuilder
-    func settingsCardBackground(cornerRadius: CGFloat) -> some View {
+    func settingsCardBackground(cornerRadius: CGFloat, inSheet: Bool = false) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(macOS 26.0, *) {
-            glassEffect(.regular, in: shape)
-                .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
+            if inSheet {
+                modifier(SheetGlassCardBackground(shape: shape))
+            } else {
+                glassEffect(.regular, in: shape)
+                    .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
+            }
         } else {
             background(shape.fill(Color.primary.opacity(0.05)))
                 .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
@@ -89,10 +95,16 @@ extension View {
     /// 它是挂在**祖先**上的:调用点自己显式写了 .buttonStyle(.link) 的按钮
     /// (「将当前配色存为新主题…」「恢复默认文字与配色」这类文字链接)不会被它盖掉——SwiftUI 里
     /// 离 Button 更近的那个 buttonStyle 胜出,这正是我们想要的:它们本来就该是链接样式。
+    ///
+    /// 放在 sheet 里的按钮传 `inSheet: true`,同 `settingsCardBackground`。
     @ViewBuilder
-    func settingsGlassButtons() -> some View {
+    func settingsGlassButtons(inSheet: Bool = false) -> some View {
         if #available(macOS 26.0, *) {
-            buttonStyle(.glass)
+            if inSheet {
+                buttonStyle(SheetGlassButtonStyle())
+            } else {
+                buttonStyle(.glass)
+            }
         } else {
             self
         }
@@ -152,6 +164,161 @@ struct SettingsGlassContainer<Content: View>: View {
         } else {
             content()
         }
+    }
+}
+
+// MARK: - sheet 里的玻璃替身
+
+// `.glassEffect` 与 `.buttonStyle(.glass)` 的材质只认窗口级的激活外观,sheet 不会成为主窗口、拿不到它:放进
+// sheet 的玻璃不管 sheet 有没有焦点都画成失焦那一档(平的浅灰、没有投影)。文字颜色和 `.glassProminent` 的
+// 着色认的是 key 状态,不受影响。`settingsCardBackground` / `settingsGlassButtons` 传 `inSheet: true` 时画这里
+// 的替身:纯色底,外圈一条上下发亮、两侧压暗的发丝描边,获得焦点时内侧加一圈高光,浅色下加投影,照着玻璃两档的
+// 样子画;App 在前台画获得焦点那一档,退到后台画失焦那一档。按钮宽高跟 `.glass` 逐档一致,换样式不挪布局。
+//
+// 颜色对齐玻璃两档的实际像素,改之前按 11 章决策 57 的量法重新量:SwiftUI 半透明叠色的实际效果跟标称透明度
+// 不成正比,按透明度心算会偏。
+
+/// 替身的底色与边。
+private enum SheetGlassStandIn {
+    /// 卡片底色。浅色前台不透明(投影只有不透明的形状才画得出来),其余三档半透明、叠在 sheet 底色上。
+    static func cardFill(dark: Bool, active: Bool) -> Color {
+        if dark { return Color.white.opacity(active ? 0.112 : 0.092) }
+        return active ? Color(white: 0.996) : Color.black.opacity(0.077)
+    }
+
+    /// 按钮底色。浅色前台不透明(同上);浅色后台是半透明的灰,放在白底上、卡片上都跟失焦的玻璃一样深。
+    static func buttonFill(dark: Bool, active: Bool, pressed: Bool) -> Color {
+        if dark { return Color.white.opacity(pressed ? 0.2 : (active ? 0.13 : 0.092)) }
+        if pressed { return Color.black.opacity(0.09) }
+        return active ? Color(white: 0.98) : Color(white: 0.88).opacity(0.62)
+    }
+
+    static func cardEdge(dark: Bool, active: Bool) -> SheetGlassEdge {
+        switch (dark, active) {
+        case (false, true): SheetGlassEdge(rimEnds: .black.opacity(0.06), rimSides: .black.opacity(0.28), highlight: nil)
+        case (false, false): SheetGlassEdge(rimEnds: .black.opacity(0.17), rimSides: .black.opacity(0.28), highlight: nil)
+        case (true, true): SheetGlassEdge(rimEnds: .clear, rimSides: .black.opacity(0.67), highlight: .white.opacity(0.29))
+        case (true, false): SheetGlassEdge(rimEnds: .black.opacity(0.32), rimSides: .black.opacity(0.5), highlight: nil)
+        }
+    }
+
+    static func buttonEdge(dark: Bool, active: Bool) -> SheetGlassEdge {
+        switch (dark, active) {
+        case (false, true): SheetGlassEdge(rimEnds: .black.opacity(0.06), rimSides: .black.opacity(0.26), highlight: .white.opacity(0.9))
+        case (false, false): SheetGlassEdge(rimEnds: .black.opacity(0.18), rimSides: .black.opacity(0.27), highlight: nil)
+        case (true, true): SheetGlassEdge(rimEnds: .clear, rimSides: .black.opacity(0.64), highlight: .white.opacity(0.3))
+        case (true, false): SheetGlassEdge(rimEnds: .black.opacity(0.32), rimSides: .black.opacity(0.47), highlight: nil)
+        }
+    }
+}
+
+/// 玻璃的边:外圈一条发丝描边(上下两端一种颜色、两侧一种),获得焦点时内侧再加一圈上下亮、往两侧淡出的高光。
+private struct SheetGlassEdge {
+    let rimEnds: Color
+    let rimSides: Color
+    let highlight: Color?
+}
+
+private struct SheetGlassEdgeOverlay<S: InsettableShape>: View {
+    let shape: S
+    let edge: SheetGlassEdge
+    /// 两端的颜色过渡到两侧的颜色走多长(占高度的比例):卡片只过渡圆角那一截,胶囊一直过渡到中线。
+    let reach: CGFloat
+    let highlightWidth: CGFloat
+
+    var body: some View {
+        ZStack {
+            // 描边在形状外面一圈,同玻璃。
+            shape.inset(by: -0.5)
+                .strokeBorder(Self.endsAndSides(ends: edge.rimEnds, sides: edge.rimSides, reach: reach), lineWidth: 0.5)
+            if let highlight = edge.highlight {
+                shape.strokeBorder(Self.endsAndSides(ends: highlight, sides: highlight.opacity(0), reach: reach),
+                                   lineWidth: highlightWidth)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private static func endsAndSides(ends: Color, sides: Color, reach: CGFloat) -> LinearGradient {
+        LinearGradient(stops: [.init(color: ends, location: 0), .init(color: sides, location: reach),
+                               .init(color: sides, location: 1 - reach), .init(color: ends, location: 1)],
+                       startPoint: .top, endPoint: .bottom)
+    }
+}
+
+private struct SheetGlassCardBackground<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var appActive = NSApplication.shared.isActive
+
+    func body(content: Content) -> some View {
+        let dark = colorScheme == .dark
+        content
+            .background {
+                shape.fill(SheetGlassStandIn.cardFill(dark: dark, active: appActive))
+                    .shadow(color: .black.opacity(appActive && !dark ? 0.13 : 0), radius: 16, y: 2)
+            }
+            // 内侧一条细线:玻璃边缘里面那一像素的明暗。
+            .overlay(shape.strokeBorder(dark ? Color.white.opacity(0.07) : Color.black.opacity(0.065), lineWidth: 0.5)
+                .allowsHitTesting(false))
+            .overlay(SheetGlassEdgeOverlay(shape: shape, edge: SheetGlassStandIn.cardEdge(dark: dark, active: appActive),
+                                           reach: 0.06, highlightWidth: 0.5))
+            .modifier(AppActivityTracking(isActive: $appActive))
+    }
+}
+
+private struct SheetGlassButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        SheetGlassButton(configuration: configuration)
+    }
+}
+
+private struct SheetGlassButton: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.controlSize) private var controlSize
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var appActive = NSApplication.shared.isActive
+
+    var body: some View {
+        let dark = colorScheme == .dark
+        let pressed = configuration.isPressed
+        // 字号、内边距跟 `.glass` 同档:文字、图标加文字、纯图标几种标签排出来的宽高都跟它逐个相等。
+        let (fontSize, horizontal, vertical): (CGFloat, CGFloat, CGFloat) = switch controlSize {
+        case .mini, .small: (11, 10, 3)
+        case .large, .extraLarge: (13, 14, 6)
+        default: (13, 12, 4)
+        }
+        configuration.label
+            .font(.system(size: fontSize))
+            .foregroundStyle(isEnabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+            .padding(.horizontal, horizontal)
+            .padding(.vertical, vertical)
+            .background {
+                Capsule()
+                    .fill(SheetGlassStandIn.buttonFill(dark: dark, active: appActive, pressed: pressed))
+                    .shadow(color: .black.opacity(appActive && !dark && !pressed ? 0.035 : 0), radius: 3, y: 2)
+            }
+            .overlay(SheetGlassEdgeOverlay(shape: Capsule(), edge: SheetGlassStandIn.buttonEdge(dark: dark, active: appActive),
+                                           reach: 0.5, highlightWidth: dark ? 1.5 : 1))
+            .contentShape(Capsule())
+            .contentShape(.focusEffect, Capsule())
+            .modifier(AppActivityTracking(isActive: $appActive))
+    }
+}
+
+/// App 在不在前台:替身按它挑画哪一档。
+private struct AppActivityTracking: ViewModifier {
+    @Binding var isActive: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                isActive = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+                isActive = false
+            }
     }
 }
 

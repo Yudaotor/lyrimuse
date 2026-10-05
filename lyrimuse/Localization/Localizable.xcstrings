@@ -12396,6 +12396,29 @@
         }
       }
     },
+    "候选" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Candidates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "候选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "候選"
+          }
+        }
+      }
+    },
     "搜索失败：%@" : {
       "extractionState" : "manual",
       "localizations" : {

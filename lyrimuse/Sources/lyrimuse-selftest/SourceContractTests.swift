@@ -3349,16 +3349,63 @@ func runSourceContractTests() {
         for rel in callSites.sorted() {
             guard let text = read(rel) else { continue }
             for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "bg: candidate.lyricsBG", "trLang: candidate.lyricsTrLang", "currentFingerprint:",
-                           "isMarkedInstrumental:", "onSetInstrumental:", "setInstrumental(key:"] {
+                           "isMarkedInstrumental:", "onSetInstrumental:", "setInstrumental(key:",
+                           "onAutoMatch:", "LyricsRematchRunner.run(key:"] {
                 expectEqual(text.contains(marker), true, "采纳候选入口: \(rel) 缺 \(marker)")
             }
         }
         let sheet = read("LyricsManager/LyricsSearchSheet.swift") ?? ""
-        expectEqual(sheet.contains("instrumentalButton\n                    sourceAvailabilityBadge")
-                    && sheet.contains("Label(markedInstrumental ? L10n.t(\"取消纯音乐标记\") : L10n.t(\"标为纯音乐\"),")
-                    && sheet.contains("}\n                instrumentalBanner\n            }")
+        expectEqual(sheet.contains("autoMatchButton(iconOnly: iconOnly)\n            instrumentalButton(iconOnly: iconOnly)\n")
+                    && sheet.contains("toolbarRow(showsTitle: true, iconOnly: false)\n                toolbarRow(showsTitle: false, iconOnly: false)\n                toolbarRow(showsTitle: false, iconOnly: true)")
+                    && sheet.contains("toolbarLabel(markedInstrumental ? L10n.t(\"取消纯音乐标记\") : L10n.t(\"标为纯音乐\"),")
+                    && sheet.contains("detailToolbar\n            instrumentalBanner\n")
                     && sheet.contains("instrumentalOverride = false"), true,
-                    "采纳候选入口: 搜索面板标题栏常驻带文字的标 / 撤纯音乐按钮,标上时挂说明条,采纳成功后跟着撤")
+                    "采纳候选入口: 搜索面板右侧标题行常驻带文字的标 / 撤纯音乐按钮,标上时说明条挂在那一行下面,采纳成功后跟着撤")
+        // 「重新自动匹配」:面板和歌词管理详情页走同一个 runner、同一套结论说法(管理页不留自己那份 rematchText),
+        // 自动匹配在飞时采纳、标纯音乐都置灰(期间改了条目,引擎那一轮就作废)。
+        let managerView = read("LyricsManager/LyricsManagerView.swift") ?? ""
+        expectEqual(managerView.contains("guard let line = await LyricsRematchRunner.run(\n            key: key, id: id,")
+                    && !managerView.contains("func rematchText(")
+                    && sheet.contains("Label(LyricsRematchRunner.text(line), systemImage: LyricsRematchRunner.icon(line.tone))"), true,
+                    "搜索候选歌词: 重新自动匹配跟歌词管理同一个 runner、同一套结论文案")
+        expectEqual(sheet.contains(".disabled(applyingSource != nil || settingInstrumental || autoMatching)")
+                    && sheet.contains(".disabled(settingInstrumental || applyingSource != nil || autoMatching)")
+                    && sheet.contains("guard applyingSource == nil, !autoMatching else { return }"), true,
+                    "搜索候选歌词: 自动匹配在飞时不采纳、不标纯音乐")
+        // 搜索进度只在侧栏表头下面那一行(用户定的):右边还没有候选时空着,别再放一个大转圈。
+        expectEqual(sheet.components(separatedBy: "L10n.t(\"正在查询各个歌词源…\")").count - 1 == 1
+                    && sheet.contains("Text((candidates.isEmpty ? L10n.t(\"正在查询各个歌词源…\") : L10n.t(\"其它源仍在搜索中…\"))"), true,
+                    "搜索候选歌词: 搜索进度只在侧栏那一行,右边还没有候选时空着")
+        // 表头、徽标一打开就在,进度那一行搜完也留着高度:别再等第一行才冒出来(用户:「不要页面发生跳动」)。
+        expectEqual(!sheet.contains("if sourcesTotal > 0 || !candidates.isEmpty {")
+                    && !sheet.contains("if sourcesTotal > 0 {\n            Button {\n                showSourceAvailability = true")
+                    && sheet.contains("+ searchProgressSuffix)\n                }\n            }\n            .font(.caption)\n            .foregroundStyle(.secondary)\n            .frame(maxWidth: .infinity, alignment: .leading)\n            .frame(height: 18)"), true,
+                    "搜索候选歌词: 表头和徽标一打开就在,进度那一行高度一直留着,列表不跳")
+        // 独立小窗(悬浮窗 ⚙)标题栏透明、红灯就是关闭,面板不画「关闭」、Esc 由一颗不可见的按钮接;sheet 没有红灯,
+        // 右上角得有「关闭」。透明要靠场景的 .windowStyle(.hiddenTitleBar):手设 titlebarAppearsTransparent 会在窗口
+        // 激活时被 SwiftUI 盖回去,顶上留一条模糊底色带。这几样退回去都不会编译报错。
+        let quick = read("LyricsManager/LyricsQuickSearchWindow.swift") ?? ""
+        expectEqual(quick.contains("standaloneWindow: true,") && quick.contains(".background(EmptyUnifiedToolbar())"), true,
+                    "搜索候选歌词: 独立小窗挂空工具栏,并告诉面板它在独立窗口里")
+        let quickScene = (read("App.swift") ?? "")
+            .components(separatedBy: "Window(L10n.t(\"搜索歌词…\"), id: \"lyrics-quick-search\")").dropFirst().first?
+            .components(separatedBy: "\n        Window(").first ?? ""
+        expectEqual(quickScene.contains(".windowStyle(.hiddenTitleBar)"), true,
+                    "搜索候选歌词: 独立小窗的透明标题栏由场景的 .windowStyle(.hiddenTitleBar) 负责")
+        expectEqual((read("LyricsManager/SheetWindowAffordances.swift") ?? "").contains("titlebarAppearsTransparent = "), false,
+                    "搜索候选歌词: 不在窗口上手设 titlebarAppearsTransparent(激活时会被 SwiftUI 盖回去)")
+        expectEqual(sheet.contains("if !standaloneWindow {\n                Button(L10n.t(\"关闭\")) { dismiss() }\n                    .keyboardShortcut(.cancelAction)")
+                    && sheet.contains("Button(\"\") { dismiss() }\n                    .keyboardShortcut(.cancelAction)\n                    .opacity(0)"), true,
+                    "搜索候选歌词: sheet 右上角有「关闭」;独立小窗不画它,Esc 由不可见的按钮接")
+        // sheet 拿不到窗口的激活外观,玻璃在 sheet 里一直是失焦那一档(决策 57):侧栏和玻璃按钮在 sheet 里画设计系统的
+        // 替身,独立小窗照用玻璃。漏一处不会编译报错,只是那一块在 sheet 里发灰。
+        let designSystem = read("Settings/SettingsDesignSystem.swift") ?? ""
+        expectEqual(sheet.contains("private var presentedAsSheet: Bool { !standaloneWindow }")
+                    && sheet.contains(".settingsCardBackground(cornerRadius: Self.panelCornerRadius, inSheet: presentedAsSheet)")
+                    && !sheet.contains(".settingsGlassButtons()")
+                    && designSystem.contains("if inSheet {\n                modifier(SheetGlassCardBackground(shape: shape))")
+                    && designSystem.contains("if inSheet {\n                buttonStyle(SheetGlassButtonStyle())"), true,
+                    "搜索候选歌词: sheet 里的侧栏和玻璃按钮画设计系统的替身(inSheet: presentedAsSheet),不直接用玻璃")
         expectEqual(sheet.components(separatedBy: "markInstrumentalAction\n").count - 1, 2,
                     "采纳候选入口: 「纯音乐」「已匹配曲目 · 无歌词文本」两个空状态里有「标为纯音乐」")
         // 歌词窗口 / 悬浮窗小窗算「当前使用」的正文指纹取条目里存着的那份:标了纯音乐时 lyrics 是空的,撤标之后

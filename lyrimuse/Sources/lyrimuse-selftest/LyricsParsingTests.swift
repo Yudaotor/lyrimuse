@@ -400,6 +400,28 @@ func runLyricsParsingTests() {
         expectEqual(LyricsPreviewText.forPreview("[ti:]\n[ar:]\n"), "", "预览: 整份只有元信息 → 空")
     }
 
+    // ---- LyricsPreviewText.rows ----
+    //
+    // 两栏预览的行跟歌词窗口走同一条路:署名行摘掉、一行多个时间戳展开、译文挂在同一时间那句下面;
+    // 纯文本不带时间、分段空行留着。
+    do {
+        let lrc = "[ti:]\n[00:00.00] 作词 : Prince\n[00:01.00] 作曲 : Prince\n[00:02.00] 制作人 : Prince\n"
+            + "[00:20.50]One more card\n[00:24.25][01:30.00]Hold on\n"
+        let tr = "[00:20.50]再来一张\n[00:24.25]等一下\n"
+        let rows = LyricsPreviewText.rows(lyrics: lrc, translation: tr)
+        expectEqual(rows.map(\.timeMs), [20_500, 24_250, 90_000], "预览两栏: 元信息和署名行摘掉,一行两个时间戳展开成两行")
+        expectEqual(rows.map(\.text), ["One more card", "Hold on", "Hold on"], "预览两栏: 正文不带时间戳")
+        expectEqual(rows.first?.translation, "再来一张", "预览两栏: 译文挂在同一时间那句下面")
+        expectEqual(LyricsPreviewText.rows(lyrics: "[00:20.50]a\n", translation: "").first?.translation, nil,
+                    "预览两栏: 没有译文就是 nil")
+        let plain = LyricsPreviewText.rows(lyrics: "first verse\n\nsecond verse\n", translation: "")
+        expectEqual(plain.map(\.text), ["first verse", "", "second verse"], "预览两栏: 纯文本的分段空行留着")
+        expectEqual(plain.allSatisfy { $0.timeMs == nil }, true, "预览两栏: 纯文本不带时间")
+        expectEqual(LyricsPreviewText.rows(lyrics: "", translation: ""), [], "预览两栏: 空输入")
+        expectEqual(LyricsPreviewText.timeLabel(22_310), "00:22.31", "预览两栏: 时间写成 mm:ss.xx")
+        expectEqual(LyricsPreviewText.timeLabel(3_723_459), "62:03.45", "预览两栏: 分钟不封顶、百分秒截断")
+    }
+
     // ---- LyricsBodyEdit ----
     //
     // 「歌词管理」详情页「歌词(LRC)」编辑框只显示正文,但保存时被摘掉的行一行都不能丢(`[offset:]` 有人消费)。
@@ -433,47 +455,6 @@ func runLyricsParsingTests() {
         let metaOnly = LyricsBodyEdit(lyrics: "[ti:]\n[ar:]\n")
         expectEqual(metaOnly.body, "", "正文编辑: 整份只有元信息 → 正文空")
         expectEqual(metaOnly.reassembled(body: ""), "[ti:]\n[ar:]\n", "正文编辑: 整份只有元信息 → 拼回原文")
-    }
-
-    // ---- LyricsQueryFieldLayout ----
-    //
-    // 「搜索候选歌词」那排查询词输入框按内容长度分宽。三条规则各钉边界。
-    do {
-        // 规则 2:放得下 → 每栏拿满自己想要的,多出来的**平均**分(而不是全给最长那栏)
-        let roomy = LyricsQueryFieldLayout.widths(desired: [100, 90, 170], available: 390, minWidth: 88)
-        expectEqual(roomy, [110, 100, 180], "查询词分宽: 放得下时各拿所需 + 余量平均分")
-        expectEqual(roomy.reduce(0, +), 390, "查询词分宽: 放得下时正好铺满")
-
-        // 空栏(desired 小于下限)先被托到下限,再参与余量平均分
-        expectEqual(
-            LyricsQueryFieldLayout.widths(desired: [10, 10, 10], available: 300, minWidth: 88),
-            [100, 100, 100],
-            "查询词分宽: 短到低于下限的栏先托到下限"
-        )
-
-        // 规则 3:放不下 → 按比例,但谁都不低于下限;被托住的钉死,其余再按比例分
-        let tight = LyricsQueryFieldLayout.widths(desired: [400, 40, 400], available: 500, minWidth: 88)
-        expectEqual(tight[1], 88, "查询词分宽: 挤的时候短栏被下限托住,不会压成几像素")
-        expectEqual(tight[0], tight[2], "查询词分宽: 同样长的两栏分到一样宽")
-        expectEqual(tight.reduce(0, +), 500, "查询词分宽: 挤的时候也正好铺满")
-        expectEqual(tight[0] > 88, true, "查询词分宽: 长栏拿到的比下限多")
-
-        // 规则 1:连下限都给不到 → 平均分(可预测优先)
-        expectEqual(
-            LyricsQueryFieldLayout.widths(desired: [400, 40, 400], available: 120, minWidth: 88),
-            [40, 40, 40],
-            "查询词分宽: 窄到给不满下限时平均分"
-        )
-
-        expectEqual(LyricsQueryFieldLayout.widths(desired: [], available: 400, minWidth: 88), [],
-                    "查询词分宽: 空输入")
-        expectEqual(LyricsQueryFieldLayout.widths(desired: [100, 100], available: 0, minWidth: 88), [0, 0],
-                    "查询词分宽: 可用宽度为 0")
-        expectEqual(
-            LyricsQueryFieldLayout.widths(desired: [0, 0, 0], available: 600, minWidth: 88),
-            [200, 200, 200],
-            "查询词分宽: desired 全 0 退化成等分,不出 NaN"
-        )
     }
 
     // ---- 演唱者标注(引擎 lyrics_speakers,LyricSpeakerTags) ----

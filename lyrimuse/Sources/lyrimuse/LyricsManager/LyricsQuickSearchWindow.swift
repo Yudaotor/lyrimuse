@@ -64,14 +64,22 @@ struct LyricsQuickSearchWindow: View {
                 // 没在播放:拿空歌名去搜只会报错,手动填完再采纳会写进一条没有元数据的空条目。
                 ContentUnavailableView(L10n.t("现在没有在放的歌"), systemImage: "music.note",
                                        description: Text(L10n.t("开始播放一首歌，再点「搜索歌词…」")))
-                    .frame(minWidth: 720, minHeight: 480)
+                    .frame(minWidth: LyricsSearchSheet.minimumSize.width, minHeight: LyricsSearchSheet.minimumSize.height)
             } else if let context {
                 LyricsSearchSheet(
                     artist: context.artist, title: context.title, album: context.album,
                     currentSource: context.currentSource, currentFingerprint: context.currentFingerprint,
-                    durationSecs: context.durationSecs, keepsOpenAfterApply: true,
+                    durationSecs: context.durationSecs, keepsOpenAfterApply: true, standaloneWindow: true,
                     isMarkedInstrumental: context.isInstrumental,
-                    onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: context.key, value) }
+                    onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: context.key, value) },
+                    onAutoMatch: { progress in
+                        // 跟歌词管理「重新自动匹配」同一条路;换了词让播放侧立刻重载,「当前使用」随 refreshCurrentMarker 挪过去。
+                        let line = await LyricsRematchRunner.run(key: context.key, onProgress: progress)
+                        if let line, LyricsRematchRunner.rewroteLyrics(line) {
+                            PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+                        }
+                        return line
+                    }
                 ) { candidate in
                     // 同 LyricsWindowView 的 onApply:saveEdit → 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
                     // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本;
@@ -108,9 +116,13 @@ struct LyricsQuickSearchWindow: View {
             } else {
                 // 极短暂的占位——曲目快照是纯内存读取(PlaybackCoordinator 当前值 + 一次
                 // 缓存查找),这一帧几乎不可见,但窗口刚建出来时 body 总要先渲染点什么。
-                ProgressView().frame(minWidth: 720, minHeight: 480)
+                ProgressView()
+                    .frame(minWidth: LyricsSearchSheet.minimumSize.width, minHeight: LyricsSearchSheet.minimumSize.height)
             }
         }
+        // 标题栏透明、内容铺到顶是场景的 .windowStyle(.hiddenTitleBar)(App.swift);这里再挂一条空工具栏,把标题栏
+        // 撑到 52pt,红绿灯才落进搜索面板侧栏的圆角里(面板那一侧见 LyricsSearchSheet.standaloneWindow)。
+        .background(EmptyUnifiedToolbar())
         .task { loadContext() }
         // 窗口没被真关掉(只是切到后台/被挡住)时再点一次「搜索歌词…」,.task 不会重跑——
         // 见 AppActions.quickSearchRefreshRequests 的注释,这里补上"每次点击都重新现查一次"

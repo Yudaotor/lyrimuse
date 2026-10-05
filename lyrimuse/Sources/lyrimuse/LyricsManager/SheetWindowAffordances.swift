@@ -1,10 +1,9 @@
 import AppKit
 import SwiftUI
 
-// 两块补给「没有系统标题栏的面板」的窗口能力,`.sheet` 弹出的那几张都缺(从
-// LyricsSearchSheet.swift 搬出来共用 —— 决策弹窗也要这两样,「决策解析这个窗口也要
-// 支持可拖拽可调整大小」)。两块都只做一件很小的事,但都必须落到底层 `NSWindow` 上:
-// SwiftUI 层没有对应的表达。
+// 补给面板的几块窗口能力,都只做一件很小的事,但都必须落到底层 `NSWindow` 上(SwiftUI 层没有
+// 对应的表达):`.sheet` 弹出的那几张(搜索候选歌词、解析决策)缺的拖动和改大小,外加搜索歌词
+// 独立小窗那条撑高标题栏的空工具栏。
 
 /// 垫在自定义标题栏背后的一块透明拖拽区——按下并拖动时直接对它所在的 `NSWindow` 发起
 /// `performDrag`,让没有系统标题栏的窗口(sheet / hiddenTitleBar 都算)也能靠那一行拖动。
@@ -89,4 +88,31 @@ struct WindowResizeEnabler: NSViewRepresentable {
             window.contentMinSize = probe.minSize
         }
     }
+}
+
+/// 给标题栏透明、内容铺到顶的独立窗口挂一条空的统一样式工具栏:有工具栏时标题栏 52pt 高,红绿灯落在离左上角
+/// 约 19pt 处,正好在内容自己画的浮动侧栏圆角里面;没有工具栏时标题栏只有 32pt,红绿灯会贴到侧栏边上。
+///
+/// 透明标题栏本身别在这里设(`titlebarAppearsTransparent` / `fullSizeContentView` / `titleVisibility`):SwiftUI 管着
+/// 场景的窗口样式,窗口一激活就把手设的盖回去,标题栏变回一条模糊的底色带加分隔线(同 OnboardingView 那段的结论,
+/// 探针实测激活后 `titlebarAppearsTransparent` 被改回 false)。透明交给场景的 `.windowStyle(.hiddenTitleBar)`;
+/// 工具栏它不碰,挂上之后激活也还在。内容那一侧要 `.ignoresSafeArea()` 才铺得上去,还得自己给红绿灯留位置、
+/// 自己垫拖拽区(标题栏整片被内容盖住,点到的是内容)。
+///
+/// 在挂进窗口那一刻挂一次,已经有工具栏就不动。sheet 没有标题栏,别给它挂。
+struct EmptyUnifiedToolbar: NSViewRepresentable {
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, window.styleMask.contains(.titled) else { return }
+            if window.toolbar == nil {
+                window.toolbar = NSToolbar(identifier: "empty-unified-toolbar")
+            }
+            window.toolbarStyle = .unified
+            window.titlebarSeparatorStyle = .none
+        }
+    }
+
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }

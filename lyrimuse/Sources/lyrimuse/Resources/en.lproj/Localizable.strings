@@ -302,6 +302,7 @@
 "保持锁定" = "Keep Locked";
 "信任之后它跟内置播放器完全同权：显示歌词，也会记进收听历史" = "Once trusted, it works exactly like a built-in player: lyrics show up, and plays are recorded to your listening history.";
 "修好文件后重新打开 Lyrimuse；或放弃这份文件，用当前界面上的值重建（原文件会改名保留，不会删除）。" = "Fix the file and reopen Lyrimuse, or discard it and rebuild it from the values shown here (the original is renamed, not deleted).";
+"候选" = "Candidates";
 "偏移" = "Offset";
 "停止" = "Stop";
 "停止扫库" = "Stop Rescan";

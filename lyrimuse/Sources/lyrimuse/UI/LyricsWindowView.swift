@@ -2654,7 +2654,15 @@ struct LyricsWindowView: View {
                     currentSource: ctx.currentSource, currentFingerprint: ctx.currentFingerprint,
                     durationSecs: ctx.durationSecs,
                     isMarkedInstrumental: ctx.isInstrumental,
-                    onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: ctx.key, value) }
+                    onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: ctx.key, value) },
+                    onAutoMatch: { progress in
+                        // 跟歌词管理「重新自动匹配」同一条路;换了词让播放侧立刻重载(面板随后关掉,同采纳)。
+                        let line = await LyricsRematchRunner.run(key: ctx.key, onProgress: progress)
+                        if let line, LyricsRematchRunner.rewroteLyrics(line) {
+                            PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+                        }
+                        return line
+                    }
                 ) { candidate in
                     // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本。
                     // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能

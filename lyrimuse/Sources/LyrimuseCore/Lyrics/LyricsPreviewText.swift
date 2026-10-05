@@ -184,3 +184,50 @@ public struct LyricsBodyEdit: Equatable, Sendable {
         return text
     }
 }
+
+/// 「搜索候选歌词」预览里的一行,见 `LyricsPreviewText.rows`。
+public struct LyricsPreviewRow: Equatable {
+    /// 这一行的时间(毫秒,`[offset:]` 校正前,跟 LRC 里写的一致);nil = 没有时间戳(纯文本候选,或整份
+    /// 解析不出一行时的原样兜底)。
+    public let timeMs: Int?
+    /// 正文;纯文本候选里的分段空行是空串。
+    public let text: String
+    /// 挂在这一句下面的译文,跟歌词窗口挂的是同一句;没有为 nil。
+    public let translation: String?
+
+    public init(timeMs: Int?, text: String, translation: String?) {
+        self.timeMs = timeMs
+        self.text = text
+        self.translation = translation
+    }
+}
+
+extension LyricsPreviewText {
+    /// 「时间 | 正文」两栏预览的行。带时间戳的候选走播放引擎同一条路(`LyricsSyncEngine.load` → `allLines`):
+    /// 署名过滤、多时间戳展开、对唱标记、译文挂靠都跟歌词窗口一致,预览就是采纳之后看到的那些行。
+    ///
+    /// 只交整行 LRC 和译文:逐字轨不交,时间列就是这份 LRC 自己的时间戳,也不会为预览打时间轴归一化的
+    /// 日志;读音不显示,`romanizationScripts` 传空集,不去现算。一行都解析不出(没有时间戳的纯文本)时
+    /// 退回 `forPreview` 的原样文本,不带时间。`title` / `artist` 传候选自己那份,只用于署名过滤。
+    public static func rows(lyrics: String, translation: String, title: String = "", artist: String = "") -> [LyricsPreviewRow] {
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: lyrics, lyricsTr: translation, lyricsRoma: "", lyricsYRC: "",
+                    trackTitle: title, trackArtist: artist, romanizationScripts: [])
+        let lines = engine.allLines(idPrefix: "")
+        if !lines.isEmpty {
+            return lines.map {
+                LyricsPreviewRow(timeMs: $0.timeMs, text: $0.line.plainText ?? "", translation: $0.line.translation)
+            }
+        }
+        let text = forPreview(lyrics, title: title, artist: artist)
+        guard !text.isEmpty else { return [] }
+        return text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { LyricsPreviewRow(timeMs: nil, text: String($0), translation: nil) }
+    }
+
+    /// 时间列的写法:`mm:ss.xx`(百分之一秒截断),跟 LRC 时间戳同一个形状;分钟不封顶。
+    public static func timeLabel(_ ms: Int) -> String {
+        let t = max(ms, 0)
+        return String(format: "%02d:%02d.%02d", t / 60_000, t / 1000 % 60, t % 1000 / 10)
+    }
+}

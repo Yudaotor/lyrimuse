@@ -1598,7 +1598,7 @@ func runLyricsManagerTests() {
                     "搜索框: 只多了首尾空格时搜索按钮仍是禁用(没有新东西要查)")
         expectEqual(view.contains("if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {"), true,
                     "搜索框: 删到只剩空格就回到全量列表")
-        expectEqual(view.contains("await store.reload(onlyIfChanged: true)\n                guard generation == rematchGeneration else { return }"),
+        expectEqual(view.contains("await store.reload(onlyIfChanged: true)\n        guard generation == rematchGeneration else { return }\n        finishRematch(key: key, line: line)"),
                     true, "重新匹配: 「正在重新匹配」撑到列表重读完再清,中间不空一下、按钮不提前解禁")
     }
 }
