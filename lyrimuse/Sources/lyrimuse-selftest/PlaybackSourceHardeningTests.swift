@@ -55,6 +55,13 @@ private func playbackStateTests() {
                 "焦点宽限: 选中的播放器自己在放播客,不是焦点被占,不给 300 秒宽限")
     expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 2, failure: .targetNotPlayingMusic, nilStreakSeconds: 4), true,
                 "焦点宽限: 播放器在放非音乐 → 按短宽限清(跟引擎约 3 拍清一致)")
+    expectEqual(M.isFocusHeldElsewhere(.targetLoading), false, "加载宽限: 播放器在加载下一首不是焦点被占")
+    expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 5, failure: .targetLoading,
+                                         nilStreakSeconds: M.loadingGraceSeconds - 0.5), false,
+                "加载宽限: 播放器在加载下一首,拍数够了也留着上一首")
+    expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: 5, failure: .targetLoading,
+                                         nilStreakSeconds: M.loadingGraceSeconds), true,
+                "加载宽限: 一直报加载,到上限清")
     expectEqual(M.isFocusHeldElsewhere(.notASong), true, "焦点宽限: 别的 App(浏览器)在放非歌曲内容仍算焦点被占")
     expectEqual(M.failureWithoutFallbackTarget(targetConfirmedGone: true), .appleScriptUnavailable,
                 "焦点宽限: 回退已确认目标播放器不在 → 之后几拍记成问不到,不停在焦点被占那一档")

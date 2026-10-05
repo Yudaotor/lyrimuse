@@ -2349,7 +2349,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、广告、卡住)也留在 2s 档。
     private var desiredPollInterval: TimeInterval {
         if isPlayingNow || lastSnapshot?.isWaitingToPlay == true { return PollInterval.playing }
-        if consecutiveNilSnapshots > 0, consecutiveNilSnapshots <= PollInterval.nilGraceTicks {
+        // 播放器在加载下一首(`targetLoading`)时留着上一首,轮询也留在播放档,别等暂停档的慢节拍才认出新歌。
+        if consecutiveNilSnapshots > 0, consecutiveNilSnapshots <= PollInterval.nilGraceTicks || nilStreakIsLoading {
             return PollInterval.playing
         }
         return title.isEmpty ? PollInterval.idle : PollInterval.paused
@@ -2829,6 +2830,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 这一串连续拿不到快照是从哪一刻开始的。焦点那一档的宽限按秒算,见
     /// `MediaControlClient.focusHeldGraceSeconds`。
     private var nilStreakStartedAt: Date?
+    /// 这一串空快照的原因是播放器在加载下一首(`MediaControlClient.SnapshotFailure.targetLoading`)。
+    private var nilStreakIsLoading = false
 
     private func poll() {
         guard pollFlight.begin() else { return }
@@ -2874,6 +2877,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 单拍 nil 不清状态:判据与代价见
                 // MediaControlClient.nilSnapshotClearsState。
                 let failure = snapshotFailure
+                self.nilStreakIsLoading = failure == .targetLoading
                 let nilStreakSeconds = Date().timeIntervalSince(self.nilStreakStartedAt ?? Date())
                 if MediaControlClient.nilSnapshotClearsState(
                     consecutiveNilCount: self.consecutiveNilSnapshots,
@@ -2895,6 +2899,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 logger.notice("snapshot recovered after \(self.consecutiveNilSnapshots) consecutive failures")
                 self.consecutiveNilSnapshots = 0
                 self.nilStreakStartedAt = nil
+                self.nilStreakIsLoading = false
             }
             // isMusicApp 现在直接由 MediaControlClient 硬编码为 true(只在真的问到
             // Music.app 自己的当前曲目时才会返回非 nil 快照,不再是系统级 Now Playing

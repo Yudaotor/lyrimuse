@@ -86,6 +86,7 @@ public enum MediaControlClient {
         kasetLock.lock()
         kasetAskedThisRound = false
         kasetNotSongThisRound = false
+        kasetLoadingThisRound = false
         kasetLock.unlock()
         let raw = rawSnapshot(players: players)
         // 三条路都要过一遍署名纠正:酷狗 3.3.2 把当前这句歌词发布成 artist,而
@@ -416,6 +417,8 @@ public enum MediaControlClient {
     /// 这一拍问过 Kaset,它在放的不是一首歌(开播时的占位、播客单集,见 `readKasetSnapshot`;入口清零):这一拍别报它,也别退回去
     /// 报系统那份或别家暂停着的会话。
     private static var kasetNotSongThisRound = false
+    /// 上面那一拍是在加载下一首(开播占位、这一条的类型还在问),不是播客单集:按「在加载」留住上一首(见 02 章决策 92)。
+    private static var kasetLoadingThisRound = false
     /// 认成播客单集时打过日志的那一条(videoId),同一条只打一条。
     private static var kasetPodcastLoggedVideoID: String?
     /// 最近一次读到的那首(曲目身份同快照的 `trackKey`)和它的 videoId,写播放状态用(`kasetVideoID`)。
@@ -463,6 +466,7 @@ public enum MediaControlClient {
         if kind != .notPodcast {
             kasetLock.lock()
             kasetNotSongThisRound = true
+            kasetLoadingThisRound = kind != .podcastEpisode
             let logPodcast = kind == .podcastEpisode && kasetPodcastLoggedVideoID != raw.videoID
             if logPodcast { kasetPodcastLoggedVideoID = raw.videoID }
             kasetLock.unlock()
@@ -640,7 +644,7 @@ public enum MediaControlClient {
 
     private static func fetchKasetSnapshot() -> MediaControlSnapshot? {
         guard let snapshot = readKasetSnapshot() else {
-            setSnapshotFailure(kasetNotSongThisRoundValue() ? .targetNotPlayingMusic : .appleScriptUnavailable)
+            setSnapshotFailure(kasetNotSongFailure() ?? .appleScriptUnavailable)
             return nil
         }
         return snapshot
@@ -650,6 +654,15 @@ public enum MediaControlClient {
         kasetLock.lock()
         defer { kasetLock.unlock() }
         return kasetNotSongThisRound
+    }
+
+    /// 这一拍问过 Kaset、它在放的不是一首歌时记哪一种原因:在加载下一首(开播占位、类型还在问)还是没在放音乐(播客单集)。
+    /// 不是这种情况为 nil。
+    private static func kasetNotSongFailure() -> SnapshotFailure? {
+        kasetLock.lock()
+        defer { kasetLock.unlock() }
+        guard kasetNotSongThisRound else { return nil }
+        return kasetLoadingThisRound ? .targetLoading : .targetNotPlayingMusic
     }
 
     /// 这一拍别的来源没给出在放的歌、Kaset 又开着,就直接问它一次。
@@ -665,7 +678,10 @@ public enum MediaControlClient {
     private static func preferringPlayingKaset(_ found: MediaControlSnapshot?) -> MediaControlSnapshot? {
         let kaset = kasetToPrefer(over: found)
         // Kaset 在放的不是一首歌(播客单集、开播占位)时什么都不报,别报别家暂停着的会话(同 KKBOX 的播客)。
-        if kaset == nil, kasetNotSongThisRoundValue() { return nil }
+        if kaset == nil, let failure = kasetNotSongFailure() {
+            setSnapshotFailure(failure)
+            return nil
+        }
         let other = kaset == nil ? nil : (found?.bundleIdentifier ?? "nothing")
         kasetLock.lock()
         let changed = kasetPreferredOver != other
@@ -787,10 +803,15 @@ public enum MediaControlClient {
         }
     }
 
+    /// 「播放器在加载下一首」(`targetLoading`)这一档留住上一首的上限,单位秒。Kaset 换歌通常 1~2 秒就加载完;一直报加载
+    /// (网络断了、卡在占位)就按这个清。
+    public static let loadingGraceSeconds: Double = 10
+
     public static func nilSnapshotClearsState(
         consecutiveNilCount: Int, failure: SnapshotFailure?, nilStreakSeconds: Double
     ) -> Bool {
         if isFocusHeldElsewhere(failure) { return nilStreakSeconds >= focusHeldGraceSeconds }
+        if failure == .targetLoading { return nilStreakSeconds >= loadingGraceSeconds }
         return consecutiveNilCount >= nilSnapshotGrace
     }
 
@@ -1017,6 +1038,9 @@ public enum MediaControlClient {
         /// 跟 `notASong`(别的 App 在放非歌曲内容)不同:这里焦点没被别人占,是这个播放器确实没在放音乐,按短宽限清
         /// (引擎那边同样交回空状态,约 3 拍清掉)。
         case targetNotPlayingMusic = "the selected player is reporting something that is not a song"
+        /// 报的就是我们要的播放器,它在加载下一首(Kaset 的开播占位、新的一条还没问到是不是播客)。不是没在放:留着上一首,
+        /// 按 `loadingGraceSeconds` 清,不然换歌那一下界面整个空掉(见 02 章决策 92)。
+        case targetLoading = "the selected player is loading the next track"
     }
 
     private static let failureLock = NSLock()

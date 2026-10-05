@@ -754,9 +754,14 @@ func runKasetTests() {
         expectEqual(client.contains("let kind = KasetPlayerInfo.isPlaceholder(raw) ? nil : KasetVideoKind.verdict(for: raw.videoID ?? \"\")")
                         && client.contains("if kind != .notPodcast {")
                         && client.contains("if let kaset = fetchKasetSnapshot() { return kaset }\n            return kasetNotSongThisRoundValue() ? nil : mediaControl")
-                        && client.contains("if kaset == nil, kasetNotSongThisRoundValue() { return nil }")
-                        && client.contains("setSnapshotFailure(kasetNotSongThisRoundValue() ? .targetNotPlayingMusic : .appleScriptUnavailable)"),
+                        && client.contains("if kaset == nil, let failure = kasetNotSongFailure() {\n            setSnapshotFailure(failure)\n            return nil")
+                        && client.contains("setSnapshotFailure(kasetNotSongFailure() ?? .appleScriptUnavailable)"),
                     true, "Kaset 契约: 开播占位、播客单集这一拍不报,也不退回去报系统那份或别家暂停着的")
+        expectEqual(client.contains("kasetLoadingThisRound = kind != .podcastEpisode")
+                        && client.contains("return kasetLoadingThisRound ? .targetLoading : .targetNotPlayingMusic")
+                        && playbackSource.contains("self.nilStreakIsLoading = failure == .targetLoading")
+                        && playbackSource.contains("consecutiveNilSnapshots <= PollInterval.nilGraceTicks || nilStreakIsLoading"), true,
+                    "Kaset 契约: 开播占位、类型还在问记成在加载,留住上一首、轮询留在播放档;播客单集照旧记成没在放音乐")
         expectEqual(src("LyrimuseCore/Local/PlayerQueryServer.swift").contains(
                         "KasetVideoKind.prefetch(Self.kasetKindPrefetchIDs(currentIndex: reply.currentIndex, videoIDs: reply.tracks.map(\\.videoID)))")
                         && playbackSource.contains("KasetVideoKind.setResultSink { [weak self] in"), true,
