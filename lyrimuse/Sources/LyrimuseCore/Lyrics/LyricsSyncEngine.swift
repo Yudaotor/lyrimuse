@@ -2001,7 +2001,13 @@ public final class LyricsSyncEngine {
     }
 
     private func translationText(timeMs: Int, plainText: String) -> String? {
-        guard !Self.isBareSpeakerTag(plainText) else { return nil }
+        guard !Self.isBareSpeakerTag(plainText),
+              let found = translationCandidate(timeMs: timeMs, plainText: plainText),
+              !Self.translationRestatesOriginal(found, plainText) else { return nil }
+        return found
+    }
+
+    private func translationCandidate(timeMs: Int, plainText: String) -> String? {
         let key = Self.contentMatchKey(plainText)
         if let byContent = trTextByPlainText[key] {
             return byContent
@@ -2010,6 +2016,19 @@ public final class LyricsSyncEngine {
         if let near = nearestText(trLines, timeMs) { return near }
         if let adopted = trFallback.adopted[timeMs], adopted.key == key { return adopted.text }
         return nil
+    }
+
+    /// 译文只是把原文照抄了一遍:两边去掉标点空白、转小写后相同,或者再一起转成简体(跟引擎 `scriptVariantKey`
+    /// 同一张 OpenCC 表)后相同。只认完全相同,不认差一两个字:日文「红莲の弓矢」译成「红莲的弓矢」是真翻译。
+    /// 见 10 章决策 37。
+    private static func translationRestatesOriginal(_ translation: String, _ original: String) -> Bool {
+        let tr = contentMatchKey(translation)
+        guard !tr.isEmpty else { return false }
+        let orig = contentMatchKey(original)
+        if tr == orig { return true }
+        func hasHan(_ s: String) -> Bool { s.unicodeScalars.contains { CharacterSet.hanLike.contains($0) } }
+        guard hasHan(tr), hasHan(orig) else { return false }
+        return contentMatchKey(OpenCCT2S.toSimplified(translation)) == contentMatchKey(OpenCCT2S.toSimplified(original))
     }
 
     private func nearestText(_ arr: [LyricLine], _ t: Int, tolerance: Int = 700) -> String? {

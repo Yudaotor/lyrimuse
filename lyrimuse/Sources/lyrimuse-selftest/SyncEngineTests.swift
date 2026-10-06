@@ -1487,6 +1487,27 @@ func runSyncEngineTests() {
         expectEqual(engineDriftNoMatch.allLines(idPrefix: "t").first?.line.translation, nil,
                     "内容匹配反例: 内容对不上时退回 nearestText,容差语义不受影响")
 
+        // ③.6f 译文只是把原文照抄一遍的行不挂(见 10 章决策 37):去掉标点空白、转小写后相同,或者再繁转简后相同;
+        // 差一两个字的照挂(日文「の」译成「的」是真翻译)。按内容配上的、按时间就近找到的都要拦。
+        let restated = LyricsSyncEngine()
+        restated.load(
+            lyrics: "[00:01.00]火箭菜的沙拉有一点苦\n[00:04.00]I think I know\n[00:07.00]Oh oh\n[00:10.00]Sofly\n"
+                + "[00:13.00]說好的幸福呢\n[00:16.00]红莲の弓矢\n[00:19.00]你好\n[00:22.00]就近这一句",
+            lyricsTr: "[00:01.00]火箭菜的沙拉有一点苦\n[00:04.00]我想我知道\n[00:07.00]Oh oh!\n[00:10.00]so fly\n"
+                + "[00:13.00]说好的幸福呢\n[00:16.00]红莲的弓矢\n[00:19.00]你好呀\n[00:22.40]就近这一句",
+            lyricsRoma: "", lyricsYRC: "")
+        expectEqual(restated.allLines(idPrefix: "t").map(\.line.translation),
+                    [nil, "我想我知道", nil, nil, nil, "红莲的弓矢", "你好呀", nil],
+                    "译文照抄原文: 一样的、只差标点空白大小写或繁简的不挂,真翻译照挂")
+        let restatedYRC = LyricsSyncEngine()
+        restatedYRC.load(
+            lyrics: "[00:01.00]火箭菜的沙拉有一点苦",
+            lyricsTr: "[00:01.00]火箭菜的沙拉有一点苦",
+            lyricsRoma: "",
+            lyricsYRC: "[1000,2000](1000,1000,0)火箭菜的(2000,1000,0)沙拉有一点苦")
+        expectEqual(restatedYRC.surfaceTick(.overlay, atMs: 1500).line?.translation, nil,
+                    "译文照抄原文: 逐字行同样不挂(悬浮歌词走的是这条)")
+
         // ③.6e 内容键查不到时的就近兜底(SecondaryLineFallback):已经显示在原句下面的那条不再挂到不相干的行上;
         // 改过几个字的同一句照挂;附近没有的从没显示过的整行里补。网易云形状:译文跟着整行走,逐字整体晚 1.2 秒。
         func pairing(_ lrc: String, _ tr: String, _ yrc: String, roma: String = "") -> [(String, String?, String?)] {

@@ -3,8 +3,9 @@ import Foundation
 /// 引擎 `toSimplifiedT2S`(t2s.go)的 Swift 移植:OpenCC 词组表最长匹配,词组没命中查单字表,
 /// 单字表也没有再查异体字表(HanVariants),都没有原样保留。
 ///
-/// 只给「两侧必须算出同一个结果」的匹配用(`EnrichCacheKeys.looseKey`)。界面显示的简繁转换仍走
-/// ICU(`ChineseVariant`),两者不要混用:ICU 按上下文取舍,跟引擎的结果对不上。
+/// 只给匹配用:两侧必须算出同一个结果的(`EnrichCacheKeys.looseKey`),以及判译文是不是原文换了种写法
+/// (`LyricsSyncEngine.translationRestatesOriginal`,跟引擎 `scriptVariantKey` 同一张表)。界面显示的简繁转换
+/// 仍走 ICU(`ChineseVariant`),两者不要混用:ICU 按上下文取舍,跟引擎的结果对不上。
 ///
 /// 两侧必须同步改的约束:
 ///   - 按 Unicode 标量(Go 的 rune)走,词组表的 key 用 `[Unicode.Scalar]` 比较,不用 `String`:
