@@ -2678,6 +2678,8 @@ func parentheticalSegments(s string) []string {
 //
 // v9 起限定词集合来自 recordingVersionTags(不再直接用 versionTagsIn):专辑名带中文
 // 现场标记(演唱会/现场/音乐会)视同声明了 "live",双向对称——见 recordingVersionTags 注释。
+//
+// 一边标明不删减(Explicit)、另一边标明删减版(Edited / Clean)也算不匹配,只有一边标的不算(explicitnessConflict)。
 func versionTagsMismatch(localTitle, localAlbum, candidateTitle, candidateAlbum string) bool {
 	return versionTagsMismatchIgnoringLanguage(localTitle, localAlbum, candidateTitle, candidateAlbum, false)
 }
@@ -2703,7 +2705,7 @@ func versionTagsMismatchIgnoringLanguage(localTitle, localAlbum, candidateTitle,
 			return true
 		}
 	}
-	return false
+	return explicitnessConflict(localTitle, localAlbum, candidateTitle, candidateAlbum)
 }
 
 // lyricHeaderClaimsOtherVersion:候选歌词自己写的歌名([ti:],见 lyricHeaderTags)带着本地歌名、专辑名都没有的
@@ -3146,6 +3148,10 @@ func sameRecordingDespiteVersionTagsIgnoringLanguage(
 	candTitle, candAlbum string, candDurationSecs float64,
 	ignoreLanguage bool,
 ) bool {
+	// 删减版和不删减版伴奏、时长都一样,时长证明不了是同一个版本。
+	if explicitnessConflict(localTitle, localAlbum, candTitle, candAlbum) {
+		return false
+	}
 	if localDurationSecs <= 0 || candDurationSecs <= 0 {
 		return false
 	}
