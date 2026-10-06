@@ -1376,8 +1376,9 @@ func applemusicLyric(ctx context.Context, artist, title, album string, durationS
 	applemusicMu.Unlock()
 
 	// 本地命中就直接用:那是 Music.app 为**正在播的这一条**取回的官方歌词,比搜索出来的
-	// 候选更权威,也不必再花一轮网络。
-	if r, ok := applemusicLocalLyric(catalogID, artist, title, album, durationSecs); ok {
+	// 候选更权威,也不必再花一轮网络。按名字认时用播放器原样标签(lyricIdentityFields):缓存里存的就是它显示的写法。
+	idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)
+	if r, ok := applemusicLocalLyric(catalogID, idArtist, idTitle, idAlbum, durationSecs); ok {
 		applemusicMu.Lock()
 		applemusicCache[key] = r
 		applemusicMu.Unlock()

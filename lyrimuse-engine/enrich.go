@@ -4794,6 +4794,8 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 全量扫库每首只隔几秒,残留请求会跟下一首的叠在一起抢出站配额。取消不计进源的熔断(sourcebreaker.go)。
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	// 播放时的平台曲目 ID、本机客户端歌词按播放器原样标签记,用这一组查;查询词照旧用 artist / title / album。
+	idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)
 	// 缓冲开到"每个 goroutine 都能不阻塞地放下自己那一份"= 源数(每个源一个 goroutine)。同样不写
 	// 字面量:下面那个 collect 循环就是栽在字面量跟源数脱钩上的。
 	resultsCh := make(chan lyricSourceResult, len(lyricSourceNames))
@@ -4939,7 +4941,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// Apple / Spotify 的曲目 ID 由播放侧顺带记下(见 platformtrackid.go),这里只读。
 		// 别名轮 / 拆分身份轮传的是改写过的署名,那时必然落空、退回只用上面两个 ID。
-		appleCatalogID, spotifyTrackID := playbackTrackIDsFor(artist, title, album)
+		appleCatalogID, spotifyTrackID := playbackTrackIDsFor(idArtist, idTitle, idAlbum)
 		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, amllQuery{
 			neteaseID: neteaseID, qqID: qqID, appleCatalogID: appleCatalogID, spotifyTrackID: spotifyTrackID,
 			isrc: lyricSourceISRC(ctx, artist, title, album), artist: artist, title: title, album: album,
@@ -4995,7 +4997,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 只在首轮取:补查轮换的是歌手别名,key 本来就对不上,按 ID 那一次首轮也已经试过。
 		mxCtx := ctx
 		if lyricQueryReasonFrom(ctx) == lyricQueryReasonPrimary {
-			appleID, spotifyID := musixmatchTrackIDsFor(artist, title, album)
+			appleID, spotifyID := musixmatchTrackIDsFor(idArtist, idTitle, idAlbum)
 			mxCtx = withMusixmatchPlaybackIDs(ctx, appleID, spotifyID)
 		}
 		r := musixmatchLyric(mxCtx, artist, title, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
@@ -5052,7 +5054,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// Apple 目录 id 由播放侧顺带记下(platformtrackid.go,同 amll 那路);有它就能先问
 		// Music.app 自己的歌词缓存,拿到官方逐字 + 官方译文,见 applemusiclocal.go。
 		// isrc 有值时(同 deezer 那路)先按 ISRC 直取这条录音,再按名字搜。
-		appleID, _ := playbackTrackIDsFor(artist, title, album)
+		appleID, _ := playbackTrackIDsFor(idArtist, idTitle, idAlbum)
 		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
 	}()
@@ -5075,15 +5077,15 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 只在首轮读:它按时长就认得出这首,跟查询用的歌手写法无关,别名轮 / 反查轮里再放一份,会被当成「这个别名救回了
 	// 候选」。首轮那份靠 mergeLyricCandidateRounds 的只增不减留到最后。
 	if lyricQueryReasonFrom(ctx) == lyricQueryReasonPrimary {
-		if r, ok := kkboxLocalLyricsFor(artist, title, durationSecs); ok {
+		if r, ok := kkboxLocalLyricsFor(idArtist, idTitle, durationSecs); ok {
 			raw[kkboxLocalLyricsSource] = r
 		}
 		// Spotify 本地歌词同理(Musixmatch 的备用管道,见 spotifylyrics.go),不看当前播放器:按曲目 ID 找得到就放。
-		if r, ok := spotifyLocalLyricsFor(artist, title, album); ok {
+		if r, ok := spotifyLocalLyricsFor(idArtist, idTitle, idAlbum); ok {
 			raw[spotifyLocalLyricsSource] = r
 		}
 		// Amazon Music 本地歌词同 KKBOX:正用它放歌时读,按 ASIN 认这首(见 amazonlibrary.go)。
-		if r, ok := amazonLocalLyricsFor(artist, title); ok {
+		if r, ok := amazonLocalLyricsFor(idArtist, idTitle); ok {
 			raw[amazonLocalLyricsSource] = r
 		}
 	}
