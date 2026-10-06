@@ -7,6 +7,10 @@ enum OverlayMetrics {
     /// lyricsCard 的水平内边距。算可用宽度要减掉它。对唱行的声部指示条挂在这里面
     /// (`OverlayCardGeometry.SpeakerBar.reach` 加描边那圈要比它小)。
     static let cardHorizontalPadding: CGFloat = 20
+    /// lyricsCard 的上下内边距。上边比下边少:第一行的行框在字顶上方自带一截空白(ascender 高过字形),
+    /// 两边给一样多时上沿看起来比下沿空。那截空白别靠压行高去省,高过汉字的字形会被裁。见 04 章决策 46。
+    static let cardTopPadding: CGFloat = 4
+    static let cardBottomPadding: CGFloat = 8
 }
 
 /// 悬浮歌词的**窄订阅代理**(性能审计落地,照「歌词管理」LiveRowPlayback 的
@@ -1153,7 +1157,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             .padding(.leading, duetInsets.leading * duetInsetScale)
             .padding(.trailing, duetInsets.trailing * duetInsetScale)
             .padding(.horizontal, OverlayPlayback.cardHorizontalPadding)
-            .padding(.vertical, 14)
+            .padding(.top, OverlayMetrics.cardTopPadding)
+            .padding(.bottom, OverlayMetrics.cardBottomPadding)
             .frame(maxWidth: .infinity, alignment: duetFrameAlignment)
             .background(overlayBackground)
             // 长按拖动"武装"后的视觉提示——一圈跟前景色同色的高亮描边,松手/取消立刻淡出。
@@ -1810,6 +1815,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     + PlaybackCoordinator.shared.currentLyricsOffsetMs
             }
             .frame(height: playback.mainFontSize * 0.5)
+            // 文字行的字顶离行框上沿约 ascender − capHeight,圆点行没有这一截;补上,卡片上沿到第一行的距离
+            // 才跟有字时一致(卡片上内边距按文字行定,见 OverlayMetrics.cardTopPadding)。
+            .padding(.top, max(0, playback.overlayNSFonts.main.ascender - playback.overlayNSFonts.main.capHeight))
         } else {
             // 兜底:数据层理论上「currentLine==nil 且以上分支都不命中」必然落在
             // rawGapWindow 的覆盖范围内(前奏 index==-1 到最后一句之前的整段时间轴,
