@@ -46,8 +46,9 @@ final class NowPlayingNotifier {
             if image != nil { self?.highResArrivedAt = Date() }
         })
         // 换歌时歌名、歌手先后各发一次,攒一下。空歌名(停播、元数据闪空)不算一首,停了再放同一首不重复弹。
+        // 去抖挂主队列、别挂 RunLoop.main:菜单开着时它不走,通知会等菜单关了才弹(见 01 章决策 11)。
         observers.append(
-            track.debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            track.debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
                 .filter { !$0.0.isEmpty }
                 .removeDuplicates { $0 == $1 }
                 .sink { [weak self] title, artist in self?.trackChanged(title: title, artist: artist) })

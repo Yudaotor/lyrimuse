@@ -35,8 +35,9 @@ final class ListenMilestoneCenter: ObservableObject {
     private init() {
         let playback = PlaybackCoordinator.shared
         // 换歌时歌名、歌手先后各发一次,攒一下再看,别拿「新歌名 + 旧歌手」去取一次次数。
+        // 去抖挂主队列、别挂 RunLoop.main:菜单开着时它不走(见 01 章决策 11)。
         trackObserver = Publishers.CombineLatest(playback.$title, playback.$artist)
-            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .removeDuplicates { $0 == $1 }
             .sink { [weak self] title, artist in self?.trackChanged(title: title, artist: artist) }
     }

@@ -837,6 +837,8 @@ final class PlaybackCoordinator: ObservableObject {
         // 订阅),所以这里也要拿到 AppSettings。
         let settings = AppSettings.shared
         s.start()
+        // 这一组里的去抖都挂主队列、别挂 RunLoop.main:菜单栏菜单开着时主线程在事件跟踪模式里转,RunLoop.main 的计时器
+        // 要等菜单关了才走,换歌后的高清封面、收藏 / 随机状态都会跟着晚(见 01 章决策 11)。
         cancellables = [
             s.$title.assign(to: \.title, on: self),
             // 换歌就重读一次"喜欢"状态。用 title+artist 组合去重而不是只看 title:同名不同
@@ -845,7 +847,7 @@ final class PlaybackCoordinator: ObservableObject {
             // 「新歌名|旧歌手」的中间态,一次换歌就起两次 osascript 回读(停播时依次清空也一样)。
             s.$title.combineLatest(s.$artist)
                 .map { "\($0)|\($1)" }
-                .debounce(for: .milliseconds(50), scheduler: RunLoop.main)
+                .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
                 .removeDuplicates()
                 .sink { [weak self] _ in
                     // 三项合并成一次 osascript 回读,见
@@ -954,7 +956,7 @@ final class PlaybackCoordinator: ObservableObject {
             // willSet 都已落定,refreshHighResCover() 再去读一份自洽的快照。
             // 这 300ms 用户看不见 —— 系统那张小图在第一帧就已经显示了。
             Publishers.CombineLatest4(s.$title, s.$artist, s.$album, s.$artworkData)
-                .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
                 .sink { [weak self] _, _, _, _ in
                     self?.refreshInferredIdentity()
                     self?.refreshHighResCover()
@@ -978,11 +980,11 @@ final class PlaybackCoordinator: ObservableObject {
             s.$artworkIsPlaceholder
                 .removeDuplicates()
                 .filter { $0 }
-                .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
                 .sink { [weak self] _ in self?.refreshHighResCover(onlyIfMissing: true) },
             s.$enrichContentVersion
                 .dropFirst() // 启动时那一次不是"新解析出来的",换歌那条路已经覆盖
-                .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
                 .sink { [weak self] _ in
                     self?.refreshInferredIdentity()
                     self?.refreshHighResCover(onlyIfMissing: true)
@@ -1005,7 +1007,7 @@ final class PlaybackCoordinator: ObservableObject {
             // 这里按同一地址放回去)。跟 artworkData 合在一起订阅、比上面多等 50ms,保证跑在
             // refreshHighResCover 的 clearHighRes() **之后**,不然刚换上的原图会被它撤掉。
             Publishers.CombineLatest(s.$spotifyArtworkURL, s.$artworkData)
-                .debounce(for: .milliseconds(350), scheduler: RunLoop.main)
+                .debounce(for: .milliseconds(350), scheduler: DispatchQueue.main)
                 .sink { [weak self] url, _ in self?.refreshSpotifyOriginalCover(url) },
             // 两个消费面各自从**同一份原始均值**派生自己那一版,处理都是纯数学,放在这一层
             // 跟 hex→Color 的转换一起做,每首歌只算一次,不在两边的 body 里反复算。

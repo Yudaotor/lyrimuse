@@ -7,6 +7,24 @@ import Foundation
 
 @MainActor
 func runSourceContractTests() {
+    // 换歌后要及时做的去抖挂主队列(01 章决策 11):Combine 挂 RunLoop.main 的计时器只在默认模式走,菜单栏菜单开着时不触发。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String {
+            (try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let coordinator = read("PlaybackCoordinator.swift")
+        expectEqual(coordinator.contains("scheduler: DispatchQueue.main") && !coordinator.contains("scheduler: RunLoop.main"), true,
+                    "调度器: 协调器里换歌后的去抖(高清封面、收藏 / 随机状态、Spotify 原图)都挂主队列")
+        for (file, label) in [("UI/ListenMilestoneCenter.swift", "收听里程碑"), ("Settings/DiscordPresenceController.swift", "Discord 状态"),
+                              ("Settings/NowPlayingNotifier.swift", "换歌通知"), ("UI/NotchLyricsWindowController.swift", "换歌翻牌")] {
+            let text = read(file)
+            expectEqual(text.contains("scheduler: DispatchQueue.main") && !text.contains("scheduler: RunLoop.main"), true,
+                        "调度器: \(label)的去抖挂主队列,菜单开着时也照常走")
+        }
+    }
+
     // 待机页「刚才在听」的封面:取数那一刻主缓存还没解码完时,歌词经「正在放的这一条」拿得到、封面拿不到,
     // 卡片又只在换歌时取一次 —— 有词没图一直挂到下一首。两头都要守:查封面也看那份快照,卡片在缓存换了内容时补封面。
     do {

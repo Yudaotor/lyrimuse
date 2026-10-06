@@ -104,8 +104,9 @@ final class DiscordPresenceController: ObservableObject {
             signal(settings.$discordKeepWhenPaused), signal(settings.$discordExcludedBundles),
             signal(settings.$discordBadge),
         ]
+        // 去抖挂主队列、别挂 RunLoop.main:菜单开着时它不走,换歌后的状态要等菜单关了才更新(见 01 章决策 11)。
         observers.append(Publishers.MergeMany(changes)
-            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .sink { [weak self] in self?.refresh() })
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.publisher(for: NSWorkspace.didLaunchApplicationNotification)
