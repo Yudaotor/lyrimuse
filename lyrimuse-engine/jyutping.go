@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"embed"
+	"log"
 	"strings"
 	"sync"
 	"unicode"
@@ -377,4 +378,61 @@ func looksMandarinPinyin(roma string) bool {
 		}
 	}
 	return total > 0 && float64(mandarin) >= float64(total)*mandarinPinyinMinShare
+}
+
+// 至少这么多个音节、其中带声调数字(1–6)的不到这个比例,才算没标声调。源给的不带声调的粤拼一个数字都没有;
+// 引擎生成的粤拼每个音节都带,只有夹着的英文词不带。太短的判不准,当作标了。见 10 章决策 36。
+const (
+	jyutpingTonelessMinSyllables = 8
+	jyutpingTonelessMaxShare     = 0.05
+)
+
+// lacksJyutpingTones:这份罗马音的音节几乎都没标声调数字。分词跟 looksMandarinPinyin 同一套。
+func lacksJyutpingTones(roma string) bool {
+	total, toned := 0, 0
+	for _, f := range strings.Fields(strings.ToLower(lrcTimestampRe.ReplaceAllString(roma, " "))) {
+		f = strings.Trim(f, ",.!?;:'\"()")
+		if f == "" || !unicode.IsLetter(rune(f[0])) {
+			continue
+		}
+		total++
+		if c := f[len(f)-1]; c >= '1' && c <= '6' {
+			toned++
+		}
+	}
+	return total >= jyutpingTonelessMinSyllables && float64(toned) <= float64(total)*jyutpingTonelessMaxShare
+}
+
+// migrateTonelessCantoneseRoma:存量粤语歌里没标声调的罗马音换成引擎生成的带声调粤拼。运行期在源头已经这样做
+// (dropUnusableCantoneseRoma 清掉、maybeGenerateJyutpingRoma 补上),所以是一次性的,挂水位闸。
+// 位置(main.go):import 与 export 之间 —— 换掉的罗马音由 exportLyricsFiles 同步成新的 .roma.lrc。
+func migrateTonelessCantoneseRoma() {
+	scope := migrationScopeOf(migrationTonelessCantoneseRoma, migrationTonelessCantoneseRomaVersion)
+	if scope.skip() {
+		return
+	}
+	enrichMu.Lock()
+	replaced := 0
+	for k, e := range scope.entries() {
+		if e.SongLanguage != songLanguageCantonese || e.LyricsRoma == "" || !lacksJyutpingTones(e.LyricsRoma) {
+			continue
+		}
+		before := e.LyricsRoma
+		e.dropUnusableCantoneseRoma()
+		e.maybeGenerateJyutpingRoma()
+		if e.LyricsRoma == before {
+			continue
+		}
+		enrichCache[k] = e
+		replaced++
+	}
+	if replaced > 0 {
+		enrichDirty = true // 同 migrateHokkienSongLanguage:不置脏 saveEnrichCache 不写盘
+	}
+	enrichMu.Unlock()
+	if replaced > 0 {
+		log.Printf("toneless cantonese romanization: regenerated jyutping on %d entries", replaced)
+		saveEnrichCache()
+	}
+	markMigrationDone(migrationTonelessCantoneseRoma, migrationTonelessCantoneseRomaVersion)
 }

@@ -96,6 +96,10 @@ const (
 	// 运行期新生成的已经是按读音的,运行期不再产生。改了「是不是旧版」的判据就 +1。
 	migrationLegacyKoreanRoma        = "legacy_korean_roma"
 	migrationLegacyKoreanRomaVersion = 1
+	// migrationTonelessCantoneseRoma:存量粤语歌里没标声调的罗马音换成带声调的粤拼(jyutping.go)。运行期在源头
+	// 已经这样做,不再产生。改了 lacksJyutpingTones 的判据就 +1。
+	migrationTonelessCantoneseRoma        = "toneless_cantonese_roma"
+	migrationTonelessCantoneseRomaVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

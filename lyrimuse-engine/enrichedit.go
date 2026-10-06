@@ -335,7 +335,7 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 		// 原样采纳的候选按源给的内容处理(lyricsHandEdited):罗马音过一遍跟自动选中时同样的规则,
 		// 演唱者标注按新正文重新问一次。
 		e.dropHokkienRoma()
-		e.dropMandarinRomaForCantonese()
+		e.dropUnusableCantoneseRoma()
 		e.maybeGenerateJyutpingRoma()
 		e.LyricsSpeakersChecked = 0
 	}

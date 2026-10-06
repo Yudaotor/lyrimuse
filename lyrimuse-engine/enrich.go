@@ -111,11 +111,12 @@ func (e *enrichEntry) maybeGenerateJyutpingRoma() {
 	}
 }
 
-// dropMandarinRomaForCantonese:粤语歌的罗马音只要粤拼。源自带的罗马音是普通话拼音(looksMandarinPinyin)
-// 时清掉,交给粤拼补上;源给的粤拼(网易云的不带声调数字)照留。用户手改过的不动(lyricsHandEdited)。必须排在
-// maybeGenerateJyutpingRoma / applyPregeneratedRoma 之前 —— 那两处只在罗马音为空时才填。
-func (e *enrichEntry) dropMandarinRomaForCantonese() {
-	if e.SongLanguage == songLanguageCantonese && !e.lyricsHandEdited() && e.LyricsRoma != "" && looksMandarinPinyin(e.LyricsRoma) {
+// dropUnusableCantoneseRoma:粤语歌的罗马音只要带声调的粤拼。源自带的罗马音是普通话拼音(looksMandarinPinyin),
+// 或者音节几乎都没标声调(lacksJyutpingTones)时清掉,交给粤拼补上。用户手改过的不动(lyricsHandEdited)。必须排在
+// maybeGenerateJyutpingRoma / applyPregeneratedRoma 之前 —— 那两处只在罗马音为空时才填。见 10 章决策 36。
+func (e *enrichEntry) dropUnusableCantoneseRoma() {
+	if e.SongLanguage == songLanguageCantonese && !e.lyricsHandEdited() && e.LyricsRoma != "" &&
+		(looksMandarinPinyin(e.LyricsRoma) || lacksJyutpingTones(e.LyricsRoma)) {
 		e.LyricsRoma = ""
 	}
 }
@@ -1822,7 +1823,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
 		e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
 		e.dropHokkienRoma()
-		e.dropMandarinRomaForCantonese()
+		e.dropUnusableCantoneseRoma()
 		e.applyPregeneratedRoma(preparedRoma)
 		lyricsChanged = true
 		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
@@ -2211,7 +2212,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
 			e.SongLanguage = entrySongLanguage(picked.Lyrics, scored)
 			e.dropHokkienRoma()
-			e.dropMandarinRomaForCantonese()
+			e.dropUnusableCantoneseRoma()
 			e.applyPregeneratedRoma(preparedRoma)
 			lyricsChanged = true
 			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
