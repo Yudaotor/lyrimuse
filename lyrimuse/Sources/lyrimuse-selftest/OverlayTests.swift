@@ -1191,25 +1191,25 @@ func runOverlayTests() {
         expectEqual(OverlayPlacement.presetFrame(mode: .free, size: size, visibleFrame: screen) == nil, true,
                     "位置预设: free 不给落点")
 
-        // 顶部居中 = x 居中、顶边贴着可见区顶(菜单栏底)下方 12 —— 跟底部同一个数(从 40 收紧)。
+        // 顶部居中 = x 居中、顶边贴着可见区顶(菜单栏底)。
         let top = OverlayPlacement.presetFrame(mode: .topCenter, size: size, visibleFrame: screen)
         expectEqual(top?.midX, 735, "位置预设: 顶部居中 x 居中 (1470/2)")
-        expectEqual(top?.maxY, 923 - OverlayPlacement.presetTopMargin, "位置预设: 顶部居中顶边距可见区顶 = 顶部边距")
+        expectEqual(top?.maxY, 923, "位置预设: 顶部居中顶边贴着可见区顶(菜单栏底边)")
         expectEqual(top?.size.height, 120, "位置预设: 顶部居中不改尺寸")
-        expectEqual(OverlayPlacement.presetTopMargin, 12, "位置预设: 顶部边距 12(贴菜单栏,不是默认落点那个 40)")
-        expectEqual(OverlayPlacement.presetTopMargin, OverlayPlacement.presetBottomMargin, "位置预设: 上下边距对称")
+        expectEqual(OverlayPlacement.presetTopMargin, 0, "位置预设: 顶部边距 0(卡片贴着菜单栏,不是默认落点那个 40)")
+        expectEqual(OverlayPlacement.presetBottomMargin, 0, "位置预设: 底部边距 0(卡片贴着 Dock 顶)")
 
-        // 底部居中 = 贴着可见区底边(Dock 顶)上方 12pt。
+        // 底部居中 = 底边贴着可见区底边(Dock 顶)。
         let bottom = OverlayPlacement.presetFrame(mode: .bottomCenter, size: size, visibleFrame: screen)
         expectEqual(bottom?.midX, 735, "位置预设: 底部居中 x 居中")
-        expectEqual(bottom?.minY, 70 + OverlayPlacement.presetBottomMargin, "位置预设: 底部居中底边在 Dock 顶上方 12")
+        expectEqual(bottom?.minY, 70, "位置预设: 底部居中底边贴着可见区底(Dock 顶)")
         expectEqual(bottom?.size.width, 488, "位置预设: 底部居中不改尺寸")
 
         // 屏幕原点不是 (0,0)(外接屏常有负坐标)时跟着屏走。
         let external = CGRect(x: -526, y: 956, width: 2560, height: 1440)
         let onExternal = OverlayPlacement.presetFrame(mode: .bottomCenter, size: size, visibleFrame: external)
         expectEqual(onExternal?.midX, external.midX, "位置预设: 外接屏上按外接屏居中")
-        expectEqual(onExternal?.minY, 956 + 12, "位置预设: 外接屏上贴外接屏的底边")
+        expectEqual(onExternal?.minY, 956, "位置预设: 外接屏上贴外接屏的底边")
 
         // 「自由」模式控制排放卡片上方还是下方,按卡片位置判:卡片上方放得下整个槽位才放上方。
         let slot = OverlayPlacement.controlsSlotHeight
@@ -1277,7 +1277,7 @@ func runOverlayTests() {
 
         // 增高:守底边向上长(底部居中)。 手动拖到底边贴着 Dock 顶的窗口
         // 照旧向下长的话,上限 = 顶边 − 可见区底边 = 120 = 地板,一点都长不了,译文直接被裁;
-        // 预设留的 12pt 边距也只多给 12pt,150 的内容仍被裁掉一截。
+        // 底部预设的底边就贴着 Dock 顶,守顶边同样一点都长不了。
         let flush = CGRect(x: 491, y: 70, width: 488, height: 120)
         let stuck = OverlayPlacement.grownFrame(
             current: flush, contentHeight: 150, minHeight: 120, anchorsBottom: false, visibleFrame: screen)
@@ -1285,17 +1285,17 @@ func runOverlayTests() {
         let bottomFrame = bottom!
         let stuckPreset = OverlayPlacement.grownFrame(
             current: bottomFrame, contentHeight: 150, minHeight: 120, anchorsBottom: false, visibleFrame: screen)
-        expectEqual(stuckPreset.height, 132, "增高: 底部预设位置守顶边时只能长到 Dock 顶(132),150 装不下")
+        expectEqual(stuckPreset.height, 120, "增高: 底部预设位置守顶边时一点都长不了(底边就是 Dock 顶),150 装不下")
         let grownUp = OverlayPlacement.grownFrame(
             current: bottomFrame, contentHeight: 150, minHeight: 120, anchorsBottom: true, visibleFrame: screen)
         expectEqual(grownUp.minY, bottomFrame.minY, "增高: 守底边时底边不动")
         expectEqual(grownUp.height, 150, "增高: 守底边时按内容长到 150")
         expectEqual(grownUp.maxY, bottomFrame.minY + 150, "增高: 守底边时顶边上移")
-        // 夹取对称:守底边时顶边不许越过可见区顶边 —— 底边 82、可见区顶 923,最多 841。
+        // 夹取对称:守底边时顶边不许越过可见区顶边 —— 底边 70、可见区顶 923,最多 853。
         let tallUp = OverlayPlacement.grownFrame(
             current: bottomFrame, contentHeight: 2000, minHeight: 120, anchorsBottom: true, visibleFrame: screen)
         expectEqual(tallUp.maxY, 923, "增高: 守底边时顶边夹到可见区顶边")
-        expectEqual(tallUp.height, 841, "增高: 守底边时上限 = 可见区顶边 − 底边")
+        expectEqual(tallUp.height, 853, "增高: 守底边时上限 = 可见区顶边 − 底边")
         // 一块屏都不沾:不夹。
         expectEqual(OverlayPlacement.grownFrame(
             current: bottomFrame, contentHeight: 2000, minHeight: 120, anchorsBottom: true, visibleFrame: nil).height,

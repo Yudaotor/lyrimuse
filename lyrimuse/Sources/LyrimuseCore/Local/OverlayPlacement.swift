@@ -11,10 +11,9 @@ import CoreGraphics
 public enum OverlayPlacementMode: String, Codable, Hashable, CaseIterable, Sendable {
     /// 现状:位置只由用户拖动决定(见 `OverlayPlacement` 头注与 04 章「多屏」一节的不变量)。
     case free
-    /// 所在屏可见区顶边下方 `OverlayPlacement.presetTopMargin`、水平居中 —— 跟没存过位置时的
-    /// 默认落点同一个数,只是从"一次性默认"变成"一直钉着"。
+    /// 贴着所在屏可见区顶边(菜单栏底边)、水平居中,见 `OverlayPlacement.presetTopMargin`。
     case topCenter
-    /// 所在屏可见区**底边**上方 `OverlayPlacement.presetBottomMargin`、水平居中。`visibleFrame`
+    /// 贴着所在屏可见区**底边**、水平居中,见 `OverlayPlacement.presetBottomMargin`。`visibleFrame`
     /// 本来就扣掉了 Dock(Dock 在底部且未自动隐藏时),所以"Dock 之上"不用自己算 Dock 有多高;
     /// Dock 放侧边 / 自动隐藏时退化成"屏幕底部居中",跟任何按 visibleFrame 摆的 App 一致。
     case bottomCenter
@@ -139,13 +138,12 @@ public enum OverlayPlacement {
 
     // MARK: - 位置预设(OverlayPlacementMode)
 
-    /// 「顶部居中」离可见区顶边(= 菜单栏底)的距离,跟底部同为 12。 别照搬"没存过位置时那个
-    /// 默认落点"的 40 —— 预设的意图是"贴着菜单栏",跟"新装 App 随手
-    /// 丢一个好抓的位置"不是一回事。默认落点那个 40 不动。
-    public static let presetTopMargin: CGFloat = 12
-    /// 「底部居中」离可见区底边(= Dock 顶)的距离。这条边本身就是 Dock 图标的顶沿,贴得太远就
-    /// 不像"Dock 之上"了。
-    public static let presetBottomMargin: CGFloat = 12
+    /// 「顶部居中」离可见区顶边(= 菜单栏底)的距离:0,卡片顶边贴着菜单栏底边。这一档控制排在卡片下方,
+    /// 窗口顶边就是卡片顶边。没存过位置时的默认落点 40 是另一回事,不动。见 04 章决策 49。
+    public static let presetTopMargin: CGFloat = 0
+    /// 「底部居中」离可见区底边(= Dock 顶)的距离:0,卡片底边贴着 Dock 顶。这一档控制排在卡片上方、内容在
+    /// 窗口里贴底,窗口底边就是卡片底边。见 04 章决策 49。
+    public static let presetBottomMargin: CGFloat = 0
 
     /// 预设模式下窗口该在的 frame。`.free` 返回 nil(调用方:那就别动)。
     ///
