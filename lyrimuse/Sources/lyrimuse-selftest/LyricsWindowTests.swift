@@ -666,8 +666,8 @@ func runLyricsWindowTests() {
         expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniLyricsKaraoke = true"), true, "迷你卡拉OK: 「重置」恢复成开")
         let hits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "卡拉OK效果", title: { $0.titleKey },
                                                 secondary: { $0.keywords + $0.pathKeys })
-        expectEqual(hits.contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.pathKeys.last == "布局" },
-                    true, "迷你卡拉OK: 设置搜索搜得到,落在歌词窗口的「布局」")
+        expectEqual(hits.contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.pathKeys.last == "文字" },
+                    true, "迷你卡拉OK: 设置搜索搜得到,落在歌词窗口的「文字」")
     }
 
     // MARK: - 迷你的粗细、已唱颜色,切换迷你 / 完整尺寸的快捷键(07 章决策 117)
@@ -759,6 +759,43 @@ func runLyricsWindowTests() {
         expectEqual(hits("已唱颜色").contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue }, true,
                     "已唱颜色: 设置搜索搜得到")
         expectEqual(hits("切换迷你").contains { $0.titleKey == "切换迷你 / 完整尺寸" }, true, "切换迷你快捷键: 设置搜索搜得到")
+    }
+
+    // MARK: - 「歌词窗口」设置的分组:工具栏、抽屉、设置搜索同名(07 章决策 119)
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let settingsView = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/SettingsView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.background)\n                lyricsWindowToolbarButton(.text)\n"),
+                    true, "设置分组: 工具栏第一行是背景、文字")
+        expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.content)\n                if lyricsWindowPreviewShowsMini {\n"
+                                + "                    lyricsWindowToolbarButton(.layout)\n                    lyricsWindowToolbarButton(.info)"),
+                    true, "设置分组: 迷你第二行是内容、布局、顶部信息")
+        expectEqual(sourceBytes(settingsView, contain: "SettingsCardHeader(title: L10n.t(\"背景\"))\n                CardDivider()\n"
+                                + "                lyricsWindowAppearanceRows(.background)\n                CardDivider()\n"
+                                + "                SettingsCardHeader(title: L10n.t(\"文字\"))\n                CardDivider()\n"
+                                + "                lyricsWindowAppearanceRows(.text)"),
+                    true, "设置分组: 抽屉按背景、文字分组,跟工具栏同名")
+        let textPart = settingsView.components(separatedBy: "        case .text:\n            // 排法同悬浮歌词「文字」浮层").dropFirst().first?
+            .components(separatedBy: "        case .layout:\n            if let miniLyricsLayout {").first ?? ""
+        let positions = ["字体", "粗细", "字号", "卡拉OK效果", "文字颜色", "已唱颜色"].map { title in
+            textPart.range(of: "title: L10n.t(\"\(title)\")")?.lowerBound
+        }
+        expectEqual(!textPart.isEmpty && positions.allSatisfy { $0 != nil }
+                    && zip(positions, positions.dropFirst()).allSatisfy { $0! < $1! }, true,
+                    "设置分组: 「文字」里按字体、粗细、字号、卡拉OK效果、文字颜色、已唱颜色排")
+        let layoutPart = settingsView.components(separatedBy: "        case .layout:\n            if let miniLyricsLayout {").dropFirst().first?
+            .components(separatedBy: "    /// 迷你顶部那一行的某一样勾没勾。").first ?? ""
+        expectEqual(!layoutPart.isEmpty && !layoutPart.contains("卡拉OK效果"), true, "设置分组: 「布局」只剩歌词布局、长句处理")
+        func group(_ title: String) -> String? {
+            SettingsSearchCatalog.entries.first {
+                $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.titleKey == title
+            }?.pathKeys.last
+        }
+        expectEqual(["背景", "方向", "玻璃浓淡", "底部颜色"].map(group), Array(repeating: Optional("背景"), count: 4),
+                    "设置分组: 搜索里背景那几样归「背景」")
+        expectEqual(["字体", "粗细", "字号", "卡拉OK效果", "文字颜色", "指定颜色", "已唱颜色"].map(group),
+                    Array(repeating: Optional("文字"), count: 7), "设置分组: 搜索里文字那几样归「文字」")
+        expectEqual(["歌词布局", "长句处理"].map(group), [Optional("布局"), Optional("布局")], "设置分组: 搜索里歌词布局、长句处理归「布局」")
     }
 
     // MARK: - 窗口位置恢复
