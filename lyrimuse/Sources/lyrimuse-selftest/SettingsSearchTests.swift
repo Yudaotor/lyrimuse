@@ -8,7 +8,7 @@ import Foundation
 //      对得上(那些枚举没有 rawValue 契约,只能扫源码文本);
 //   2. 目录里每个 L10n 键都在 Localizable.xcstrings 里(表里的键是裸字符串,contracts 组那条
 //      「源码里的 L10n.t 字面量都在 catalog 里」扫不到它们);
-//   3. 覆盖:源码里每一处 `SettingsRow(` / `SettingsSubRow(` / `SettingsCardHeader(` 的字面量标题、
+//   3. 覆盖:源码里每一处 `SettingsRow(` / `SettingsSubRow(` / `SettingsCardHeader(` / `PlayerBundleChipsRow(` 的字面量标题、
 //      三个"标题在枚举里"的行族(OverlayBehaviorItem / AutoHideItem / NotchBehaviorItem),都得在目录里,
 //      刻意不登记的写进下面的白名单——白名单里的项反过来也必须真的被扫到,免得成了死条目;
 //   4. 匹配器:等级、多词、大小写、排序稳定。
@@ -188,7 +188,7 @@ func runSettingsSearchTests() {
     var scannedTitles: [String: [String]] = [:]   // 标题 → 出现的文件
     for relative in scannedFiles {
         let text = source(relative)
-        for marker in ["SettingsRow(", "SettingsSubRow(", "SettingsCardHeader("] {
+        for marker in ["SettingsRow(", "SettingsSubRow(", "SettingsCardHeader(", "PlayerBundleChipsRow("] {
             var searchStart = text.startIndex
             while let found = text.range(of: marker, range: searchStart..<text.endIndex) {
                 // 取到配对右括号或第一个 `{`(尾随闭包)为止的参数段。

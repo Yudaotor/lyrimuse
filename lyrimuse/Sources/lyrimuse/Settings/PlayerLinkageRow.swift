@@ -62,49 +62,62 @@ struct PlayerBundleChoice: Identifiable, Equatable {
     let player: PlaybackPlayer?
 }
 
-/// 「按 bundle 勾选一组播放器」的一行(Last.fm 页的「Scrobble 的播放器」、Discord 页的「显示的播放器」)。
+/// 「按 bundle 勾选一组播放器」的一行(Last.fm 页的「Scrobble 的播放器」、Discord 页的「显示哪些播放器」):
+/// 副标题写全部 / 除了哪几个,芯片收进「选择…」弹出的浮层。两页共用这一个组件,行和浮层的样子别在调用点各写一份。
 ///
 /// 跟 `PlayerLinkageRow` 是姐妹:同一套芯片视觉、同一种"图标即选项"的语言,区别只在候选的身份——那边是
 /// `PlaybackPlayer` 枚举,这边是 bundle id,好让内置播放器和信任列表里的浏览器摆进**同一排**。
-/// 信任项**别做成一人一行的开关**:四个浏览器就吃掉五行、比整张卡其余部分加起来还高
-/// (「这一块占用区域太大了…收拢到一起」),所以收成芯片。
+/// 信任项**别做成一人一行的开关**:候选个数由信任列表决定、没有上限,一人一行会比整张卡其余部分加起来还高。
+/// 芯片也别摆回行尾:十几枚要铺成两行,这一行会比卡里别的行高出一截。
 ///
 /// 存的是**排除**集合而不是勾选集合:缺省(空)= 全部勾选,新装机和老配置都不会因为少一个键而静默少记。
-/// 副标题按状态说人话——全勾「全部勾选」,全不勾、部分不勾的说法由调用方给,部分时只列**被排除**的那几个
-/// (通常就一两个,比列出全部九个短得多,也正是用户改完想确认的那件事)。
+/// 副标题全勾写「全部」,全不勾的说法由调用方给,部分时只列**被排除**的那几个(通常就一两个,比列出全部短得多)。
 struct PlayerBundleChipsRow: View {
     let icon: String
     let title: String
-    var help: String?
-    /// 全都没勾时的副标题,和部分没勾时的格式(参数是没勾的那几个名字)。
+    /// 浮层里芯片上面那一句说明。
+    let note: String
+    /// 全都没勾时的副标题。
     let allOffSummary: String
-    let offSummaryFormat: String
     let choices: [PlayerBundleChoice]
     /// 未勾选(被排除)的 bundle id。
     let excluded: Set<String>
     /// (bundle id, 改后是否勾选)
     let onToggle: (String, Bool) -> Void
+    @State private var showsChips = false
 
     private var summary: String {
         let off = choices.filter { excluded.contains($0.id) }
-        if off.isEmpty { return L10n.t("全部勾选") }
+        if off.isEmpty { return L10n.t("全部") }
         if off.count == choices.count { return allOffSummary }
-        return String(format: offSummaryFormat, off.map(\.name).joined(separator: "、"))
+        return String(format: L10n.t("除 %@ 外"), off.map(\.name).joined(separator: "、"))
     }
 
     var body: some View {
-        SettingsRow(icon: icon, title: title, subtitle: summary, help: help) {
-            PlayerBundleChips(choices: choices, excluded: excluded, onToggle: onToggle)
-                // 芯片数量由用户的信任列表决定(可能十几个),所以给一个上限让它换行,而不是像
-                // PlayerLinkageRow 那样 fixedSize 钉成一行——一行钉死在窄窗口下会把标题挤没。
-                // 320 ≈ 十枚芯片:最窄窗口(760 − 侧栏 170)下仍给标题留 200pt 以上。
-                .frame(maxWidth: PlayerChipMetrics.flowMaxWidth, alignment: .trailing)
+        SettingsRow(icon: icon, title: title, subtitle: summary) {
+            Button(L10n.t("选择…")) { showsChips = true }
+                .popover(isPresented: $showsChips, arrowEdge: .bottom) {
+                    SettingsPopoverShell(
+                        title: title,
+                        width: PlayerChipMetrics.flowMaxWidth + 2 * SettingsRowMetrics.horizontalPadding
+                    ) {
+                        SettingsRawRow {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(note)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                PlayerBundleChips(choices: choices, excluded: excluded, onToggle: onToggle)
+                            }
+                        }
+                    }
+                }
         }
     }
 }
 
-/// 一排可勾选的播放器芯片(按 bundle id),放不下就换行。`PlayerBundleChipsRow` 和 Discord 页「显示哪些播放器」的浮层共用。
-struct PlayerBundleChips: View {
+/// 一排可勾选的播放器芯片(按 bundle id),放不下就换行:`PlayerBundleChipsRow` 浮层里的那一块。
+private struct PlayerBundleChips: View {
     let choices: [PlayerBundleChoice]
     /// 未勾选(被排除)的 bundle id。
     let excluded: Set<String>
@@ -158,6 +171,7 @@ private struct TrustedPlayerIconView: View {
 enum PlayerChipMetrics {
     static let iconSize: CGFloat = 22
     static let spacing: CGFloat = 6
+    /// `PlayerBundleChipsRow` 浮层里那排芯片的宽度上限:一行放九枚(芯片 28 + 间距 6)。
     static let flowMaxWidth: CGFloat = 320
 }
 

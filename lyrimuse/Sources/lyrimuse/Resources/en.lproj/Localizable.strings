@@ -207,7 +207,6 @@
 "下移" = "Move Down";
 "下载 Discord…" = "Download Discord…";
 "下载中…" = "Downloading…";
-"不 scrobble：%@" = "Not scrobbled: %@";
 "不保存" = "Don’t Save";
 "不再悬停显示播放控制" = "Stop Showing Playback Controls on Hover";
 "不再显示这首歌曲的歌词，也不再自动搜索" = "Lyrics for this song are hidden everywhere and no longer searched automatically";
@@ -255,7 +254,7 @@
 "仅作用于歌词；「自动」根据背景亮度在浅色与深色之间切换" = "Applies to lyrics only; Automatic switches between light and dark based on background brightness";
 "仅作用于歌词；字号随窗口大小自动调整" = "Applies to lyrics only; size scales with the window";
 "仅作用于歌词；顶部信息和控制条仍用系统字体" = "Lyrics only; the header and controls keep the system font.";
-"仅勾选的播放器会 Scrobble 到 Last.fm；默认全部勾选。" = "Only checked players scrobble to Last.fm; all checked by default.";
+"仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。" = "Only checked players scrobble to Last.fm; web players count as the browser they play in.";
 "仅勾选的播放器会显示在 Discord 上；网页播放器按所在浏览器计算。" = "Only checked players show on Discord; web players count as the browser they play in.";
 "仅含署名行，无正文" = "Credits only, no lyrics";
 "仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息" = "Only needed if the bot's security settings have “Signature Verification” enabled — messages still arrive without it";
@@ -341,7 +340,6 @@
 "全部不显示" = "None shown";
 "全部专辑" = "All Albums";
 "全部关闭" = "All Off";
-"全部勾选" = "All checked";
 "全部屏幕" = "All Displays";
 "全部开启" = "All On";
 "全部播放器" = "All players";

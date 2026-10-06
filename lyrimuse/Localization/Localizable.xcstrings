@@ -27526,40 +27526,6 @@
         }
       }
     },
-    "仅勾选的播放器会 Scrobble 到 Last.fm；默认全部勾选。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only checked players scrobble to Last.fm; all checked by default."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "僅勾選的播放器會 Scrobble 到 Last.fm；預設全部勾選。"
-          }
-        }
-      }
-    },
-    "全部勾选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All checked"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部勾選"
-          }
-        }
-      }
-    },
     "全部不 scrobble" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27573,23 +27539,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全部不 scrobble"
-          }
-        }
-      }
-    },
-    "不 scrobble：%@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not scrobbled: %@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不 scrobble：%@"
           }
         }
       }
@@ -40677,6 +40626,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "還有 %@ 筆"
+          }
+        }
+      }
+    },
+    "仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only checked players scrobble to Last.fm; web players count as the browser they play in."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅勾選的播放器會 Scrobble 到 Last.fm；網頁播放器按所在瀏覽器計算。"
           }
         }
       }

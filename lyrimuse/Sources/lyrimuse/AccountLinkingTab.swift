@@ -509,8 +509,6 @@ struct AccountLinkingTab: View {
     // "连接 Last.fm"向导 sheet 开没开——见 lastfmFields 顶部注释,未连接时打开
     // scrobble 开关就是打开它。
     @State private var showLastfmWizard = false
-    /// Discord 页「显示哪些播放器」的浮层开着没有。
-    @State private var showDiscordPlayers = false
     // 「断开」的确认框 —— 重连要重新走一遍浏览器授权,一次误点的代价不小,值得拦一下
     // (发散采纳)。
     @State private var showLastfmDisconnectConfirm = false
@@ -1287,20 +1285,17 @@ struct AccountLinkingTab: View {
                     ))
                 }
                 CardDivider()
-                // Scrobble 的播放器(「只控制 lastfm 的上送」):按播放器决定放的歌
-                // 要不要 scrobble 到 Last.fm(含它的 now-playing),默认全勾。取消的写进 features.json 的
-                // lastfm_excluded_bundles,引擎开会话那一拍算一次标记,只挡 Last.fm 那一路(poller.go
-                // recordLastfmListen / announce 的 now-playing 镜像,机制在 lastfmexclude.go 头注),ListenBrainz /
-                // 网页 / 歌词不动 —— 跟这张卡上面三项同一口径。内置播放器复用「播放器联动」卡那排图标芯片
-                // (候选同那边:选中集合,auto 时五个),信任列表里的 App / 浏览器各一行开关 —— 它们没有
-                // PlaybackPlayer 枚举值。浏览器按整个浏览器算:引擎侧不知道里面放的是 YouTube Music 还是
-                // Spotify 网页版。文案照这张卡的惯例只写效果。
+                // Scrobble 的播放器:按播放器决定放的歌要不要 scrobble 到 Last.fm(含它的 now-playing),默认全勾。
+                // 取消的写进 features.json 的 lastfm_excluded_bundles,引擎开会话那一拍算一次标记,只挡 Last.fm 那一路
+                // (poller.go recordLastfmListen / announce 的 now-playing 镜像,机制在 lastfmexclude.go 头注),
+                // ListenBrainz / 网页 / 歌词不动 —— 跟这张卡上面三项同一口径。行和浮层跟 Discord 页「显示哪些播放器」
+                // 是同一个组件,候选也是同一份 playerBundleChoices。浏览器按整个浏览器算:引擎侧不知道里面放的是
+                // YouTube Music 还是 Spotify 网页版。
                 PlayerBundleChipsRow(
                     icon: "music.note.list",
                     title: L10n.t("Scrobble 的播放器"),
-                    help: L10n.t("仅勾选的播放器会 Scrobble 到 Last.fm；默认全部勾选。"),
+                    note: L10n.t("仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。"),
                     allOffSummary: L10n.t("全部不 scrobble"),
-                    offSummaryFormat: L10n.t("不 scrobble：%@"),
                     choices: playerBundleChoices,
                     excluded: features.lastfmExcludedBundles
                 ) { bundleID, on in
@@ -1312,9 +1307,9 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 「Scrobble 的播放器」「显示的播放器」两排芯片的候选:内置播放器跟「播放器联动」卡同一套(`PlayerLinkage.listed`:选中的,
+    /// 「Scrobble 的播放器」「显示哪些播放器」两处芯片的候选:内置播放器跟「播放器联动」卡同一套(`PlayerLinkage.listed`:选中的,
     /// 选了 auto 时再加上装了的),后面接上信任列表里的 App / 浏览器(按 bundle id 排序,别让顺序随 Dictionary 遍历乱跳)。
-    /// 两类摆在同一排是 「收拢到一起」——此前信任项一人一行、四个浏览器吃掉五行。
+    /// 两类摆在同一排,信任项别退回一人一行。
     private var playerBundleChoices: [PlayerBundleChoice] {
         let set = PlayerLinkage.listed(selectedPlayers: features.players, installed: InstalledPlayersCache.current())
         let builtIn = PlaybackPlayer.displayOrder.filter { set.contains($0) }
@@ -2082,41 +2077,22 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 「显示哪些播放器」:副标题写全部 / 除了哪几个,芯片放进「选择…」弹出的浮层。
+    /// 「显示哪些播放器」:行和浮层跟 Last.fm 页「Scrobble 的播放器」是同一个组件。
     private var discordPlayersRow: some View {
-        SettingsRow(icon: "music.note.list", title: L10n.t("显示哪些播放器"), subtitle: discordPlayersSummary) {
-            Button(L10n.t("选择…")) { showDiscordPlayers = true }
-                .popover(isPresented: $showDiscordPlayers, arrowEdge: .bottom) {
-                    SettingsPopoverShell(
-                        title: L10n.t("显示哪些播放器"),
-                        width: PlayerChipMetrics.flowMaxWidth + 2 * SettingsRowMetrics.horizontalPadding
-                    ) {
-                        SettingsRawRow {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(L10n.t("仅勾选的播放器会显示在 Discord 上；网页播放器按所在浏览器计算。"))
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                PlayerBundleChips(choices: playerBundleChoices,
-                                                  excluded: appSettings.discordExcludedBundles) { bundleID, on in
-                                    if on {
-                                        appSettings.discordExcludedBundles.remove(bundleID)
-                                    } else {
-                                        appSettings.discordExcludedBundles.insert(bundleID)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        PlayerBundleChipsRow(
+            icon: "music.note.list",
+            title: L10n.t("显示哪些播放器"),
+            note: L10n.t("仅勾选的播放器会显示在 Discord 上；网页播放器按所在浏览器计算。"),
+            allOffSummary: L10n.t("全部不显示"),
+            choices: playerBundleChoices,
+            excluded: appSettings.discordExcludedBundles
+        ) { bundleID, on in
+            if on {
+                appSettings.discordExcludedBundles.remove(bundleID)
+            } else {
+                appSettings.discordExcludedBundles.insert(bundleID)
+            }
         }
-    }
-
-    private var discordPlayersSummary: String {
-        let off = playerBundleChoices.filter { appSettings.discordExcludedBundles.contains($0.id) }
-        if off.isEmpty { return L10n.t("全部") }
-        if off.count == playerBundleChoices.count { return L10n.t("全部不显示") }
-        return String(format: L10n.t("除 %@ 外"), off.map(\.name).joined(separator: "、"))
     }
 
     // MARK: - 底部状态栏

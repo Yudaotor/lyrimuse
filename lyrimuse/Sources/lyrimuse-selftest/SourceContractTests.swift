@@ -622,13 +622,23 @@ func runSourceContractTests() {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/Settings/FeatureSettingsStore.swift(路径挪了?)")
         }
         if let tab = code(sourcesRoot.appendingPathComponent("lyrimuse/AccountLinkingTab.swift")) {
-            expectEqual(tab.contains("PlayerBundleChipsRow("), true, "Last.fm 播放器排除: Last.fm 设置卡要有那排播放器芯片")
+            expectEqual(count(tab, "PlayerBundleChipsRow(") == 2, true,
+                        "Last.fm 播放器排除: 「Scrobble 的播放器」与 Discord「显示哪些播放器」用同一个组件(现 \(count(tab, "PlayerBundleChipsRow(")) 处)")
             expectEqual(count(tab, "updateLastfmExclusion(") >= 1, true, "Last.fm 播放器排除: 勾选要经 updateLastfmExclusion 落盘")
-            // 内置播放器与信任列表里的浏览器必须摆进**同一排**芯片(「收拢到一起」):
-            // 候选拼装在 lastfmPlayerChoices 里,信任项若又退回一人一行的 SettingsRow 就等于回到旧形态。
+            // 内置播放器与信任列表里的浏览器必须摆进**同一排**芯片:
+            // 候选拼装在 playerBundleChoices 里,信任项若又退回一人一行的 SettingsRow 就等于回到旧形态。
             expectEqual(tab.contains("builtIn + trusted"), true, "Last.fm 播放器排除: 内置播放器与信任的浏览器要拼成同一排候选")
         } else {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/AccountLinkingTab.swift(路径挪了?)")
+        }
+        // 行上只有副标题和「选择…」,芯片在浮层里:十几枚芯片摆在行尾会铺成两行。
+        if let row = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/PlayerLinkageRow.swift")) {
+            expectEqual(row.contains("Button(L10n.t(\"选择…\")) { showsChips = true }")
+                        && row.contains(".popover(isPresented: $showsChips, arrowEdge: .bottom)")
+                        && row.contains("L10n.t(\"除 %@ 外\")"), true,
+                        "Last.fm 播放器排除: 芯片收进「选择…」弹出的浮层,副标题写全部 / 除了哪几个")
+        } else {
+            expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/Settings/PlayerLinkageRow.swift(路径挪了?)")
         }
         // ---- 电台:两条链路都要把"整档节目"的值换成单曲口径----
         //
