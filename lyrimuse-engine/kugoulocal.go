@@ -83,6 +83,8 @@ type kugouLocalEntry struct {
 	artist string
 	title  string
 	album  string
+	// hash:KRC 的 [hash:],这一版录音的文件 hash;补封面时拿它认搜索结果,见 kugouLocalCoverURL。
+	hash string
 }
 
 // kugouLocalFile 是单个 .krc 上一轮的解析结果,按 mtime+size 判断要不要重新解密。
@@ -168,7 +170,8 @@ func refreshKugouLocalIndexLocked() {
 				_, body := splitKRCLanguageLine(krc)
 				artist, title := krcTag(body, "ar"), krcTag(body, "ti")
 				if kugouLocalKey(artist, title) != "" {
-					f.entry = kugouLocalEntry{path: path, artist: artist, title: title, album: krcTag(body, "al")}
+					f.entry = kugouLocalEntry{path: path, artist: artist, title: title, album: krcTag(body, "al"),
+						hash: krcTag(body, "hash")}
 					f.ok = true
 				}
 			}
@@ -230,7 +233,7 @@ func kugouLocalLyric(artist, title, album string, durationSecs float64) (kugouRe
 	log.Printf("kugou local: hit %q - %q (album %q)", artist, title, hit.album)
 	return kugouResult{
 		lrc: lrc, yrc: krcToYRC(body), tr: tr, roma: roma,
-		title: hit.title, artist: hit.artist, album: hit.album,
+		title: hit.title, artist: hit.artist, album: hit.album, localHash: hit.hash,
 		// 身份来自客户端为这一版录音下的那份 KRC,不经搜索 —— 同源加权的准入条件。
 		// 宽松命中不算:那是按歌名前缀猜出来的,跟搜索打分一样可能认错版本,不配拿这份加权。
 		fromLocalClient: !loose,

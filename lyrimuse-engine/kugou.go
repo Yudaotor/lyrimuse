@@ -46,6 +46,9 @@ type kugouResult struct {
 	// fromLocalClient:这份歌词读自酷狗客户端自己的缓存(kugouLocalLyric),不是搜索来的。
 	// 透传给 lyricCandidate.identityFromLocalClient,是同源加权的准入条件之一。
 	fromLocalClient bool
+	// localHash:本地缓存那份 KRC 的 [hash:],即这一版录音的文件 hash(跟搜索结果的 hash 是同一个值)。
+	// 只给本地命中补封面用,见 kugouLocalCoverURL。
+	localHash string
 }
 
 var (
@@ -67,11 +70,14 @@ func kugouLyric(ctx context.Context, artist, title, album string, durationSecs f
 	}
 	kugouMu.Unlock()
 
-	// 先问酷狗客户端自己的本地缓存 —— 命中就省掉整条网络链路,而且拿到的是它为用户
-	// 正在听的那一版下的那一份歌词(见 kugoulocal.go)。没命中照常走网络。
+	// 先问酷狗客户端自己的本地缓存 —— 命中就省掉搜索 → 歌词库 → 下载这条链路,而且拿到的是它为用户
+	// 正在听的那一版下的那一份歌词(见 kugoulocal.go);本地缓存不带封面,只为封面再问一次搜索(kugouLocalCoverURL)。
+	// 没命中照常走网络。
 	ctx, sub := withLyricSubFetch(ctx)
 	r, ok := kugouLocalLyric(artist, title, album, durationSecs)
-	if !ok {
+	if ok {
+		r.cover = kugouLocalCoverURL(ctx, artist, title, r.localHash)
+	} else {
 		r = resolveKugouLyric(ctx, artist, title, album, durationSecs)
 	}
 	// 逐字那一趟没问成的不缓存,见 lyricsubfetch.go。
@@ -292,7 +298,10 @@ func krcLanguageTrackToLRC(content [][]string, starts []int) string {
 }
 
 type kugouSong struct {
-	Hash       string  `json:"hash"`
+	Hash string `json:"hash"`
+	// Hash320 / HashSQ:同一版录音另外两种音质的文件 hash。按 hash 认版本时三个都算,见 kugouSongByHash。
+	Hash320    string  `json:"320hash"`
+	HashSQ     string  `json:"sqhash"`
 	SongName   string  `json:"songname"`
 	SingerName string  `json:"singername"`
 	AlbumName  string  `json:"album_name"`
@@ -750,6 +759,50 @@ func kugouMergeSongs(pool, songs []kugouSong) []kugouSong {
 		}
 	}
 	return pool
+}
+
+// kugouLocalCoverURL 给本地缓存命中的那份补封面:本地 KRC 不带封面,拿它的 [hash:] 在搜索结果里认出同一版录音,
+// 取那一条的封面(kugouSongCoverURL)。搜索词按 searchTitleVariants 逐个试,认出即停;认不出留空,不拿别的版本的封面顶上。
+// 见 09 章决策 199。
+func kugouLocalCoverURL(ctx context.Context, artist, title, hash string) string {
+	if hash == "" {
+		return ""
+	}
+	for _, q := range searchTitleVariants(title) {
+		songs, ok := kugouSearchSongs(ctx, artist+" "+q)
+		if !ok {
+			continue
+		}
+		if s := kugouSongByHash(songs, hash); s != nil {
+			return kugouSongCoverURL(ctx, s)
+		}
+	}
+	return ""
+}
+
+// kugouSongByHash 在搜索结果里找文件 hash 对得上的那一条:三种音质的 hash 都算、不分大小写,同一首歌挂在别的专辑下的
+// 条目(Group)也找。纯函数,便于单测。
+func kugouSongByHash(songs []kugouSong, hash string) *kugouSong {
+	for i := range songs {
+		if songs[i].hasFileHash(hash) {
+			return &songs[i]
+		}
+		for j := range songs[i].Group {
+			if songs[i].Group[j].hasFileHash(hash) {
+				return &songs[i].Group[j]
+			}
+		}
+	}
+	return nil
+}
+
+func (s *kugouSong) hasFileHash(hash string) bool {
+	for _, h := range []string{s.Hash, s.Hash320, s.HashSQ} {
+		if h != "" && strings.EqualFold(h, hash) {
+			return true
+		}
+	}
+	return false
 }
 
 // kugouSongCoverURL:搜索结果自带的封面(trans_param.union_cover)在 stdmusic 路径下就是专辑封面,跟 album/info

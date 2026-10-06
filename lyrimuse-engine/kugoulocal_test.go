@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -131,6 +132,9 @@ func TestKugouLocalLyricHit(t *testing.T) {
 	if r.durationSecs != 0 {
 		t.Errorf("KRC 的 [total:] 实测恒为 0,不该报出一个假时长: %v", r.durationSecs)
 	}
+	if r.localHash != "fbc234520fed713c30c1c026e7352770" {
+		t.Errorf("KRC 的 [hash:] 要带出来(补封面认版本用): %q", r.localHash)
+	}
 
 	// 繁简 / 大小写 / 标点的差异由 normLoose 折掉 —— 本地曲库标的是简体、播放器报的是
 	// 繁体(或反过来)时照样要命中,这正是 normLoose 存在的理由。
@@ -142,6 +146,75 @@ func TestKugouLocalLyricHit(t *testing.T) {
 	}
 	if _, ok := kugouLocalLyric("", "搁浅", "", 0); ok {
 		t.Error("歌手为空时不该拿歌名硬匹配")
+	}
+}
+
+// 本地缓存不带封面:拿 KRC 的 [hash:] 在搜索结果里认出同一版录音,只为封面问一次搜索,歌词库与下载都不碰。
+func TestKugouLyricLocalHitFetchesCoverByHash(t *testing.T) {
+	resetSourceCachesForTest(t)
+	dir := t.TempDir()
+	writeTestKRC(t, dir, "周杰伦 - 搁浅_abc.krc", testKRCGeLian)
+	resetKugouLocalIndex(t, dir)
+	f := withKugouFake(t, func(target string) (int, string) {
+		if target == "http://mobilecdn.kugou.com/api/v3/search/song" {
+			// 第一条是别的版本(同名、别的专辑),第二条的 320 音质 hash 才是本地那份(大小写不同)。
+			return http.StatusOK, `{"status":1,"errcode":0,"data":{"info":[` +
+				`{"hash":"0000","songname":"搁浅","singername":"周杰伦","album_name":"别的专辑","trans_param":{"union_cover":"http://imge.kugou.com/stdmusic/{size}/other.jpg"}},` +
+				`{"hash":"1111","320hash":"FBC234520FED713C30C1C026E7352770","songname":"搁浅","singername":"周杰伦","album_name":"七里香","trans_param":{"union_cover":"http://imge.kugou.com/stdmusic/{size}/qilixiang.jpg"}}]}}`
+		}
+		return http.StatusNotFound, ""
+	})
+	r := kugouLyric(qqRoundCtx(), "周杰伦", "搁浅", "七里香", 0)
+	if !r.fromLocalClient || r.lrc == "" {
+		t.Fatalf("前提:本地缓存命中: %+v", r)
+	}
+	if want := "https://imge.kugou.com/stdmusic/0/qilixiang.jpg"; r.cover != want {
+		t.Errorf("封面要取 hash 对得上的那一版: %q,期望 %q", r.cover, want)
+	}
+	if n := f.count("http://mobilecdn.kugou.com/api/v3/search/song"); n != 1 {
+		t.Errorf("只为封面问一次搜索,实际 %d 次", n)
+	}
+	if n := f.count("http://krcs.kugou.com/search") + f.count("http://lyrics.kugou.com/download"); n != 0 {
+		t.Errorf("本地命中不该再查歌词库 / 下载,实际 %d 次", n)
+	}
+}
+
+// 搜索结果里没有 hash 对得上的版本:封面留空,不拿别的版本的顶上;歌词照样用本地那份。
+func TestKugouLyricLocalHitLeavesCoverEmptyWithoutHashMatch(t *testing.T) {
+	resetSourceCachesForTest(t)
+	dir := t.TempDir()
+	writeTestKRC(t, dir, "周杰伦 - 搁浅_abc.krc", testKRCGeLian)
+	resetKugouLocalIndex(t, dir)
+	withKugouFake(t, func(target string) (int, string) {
+		if target == "http://mobilecdn.kugou.com/api/v3/search/song" {
+			return http.StatusOK, `{"status":1,"errcode":0,"data":{"info":[{"hash":"0000","songname":"搁浅","singername":"周杰伦","album_name":"别的专辑","trans_param":{"union_cover":"http://imge.kugou.com/stdmusic/{size}/other.jpg"}}]}}`
+		}
+		return http.StatusNotFound, ""
+	})
+	r := kugouLyric(qqRoundCtx(), "周杰伦", "搁浅", "七里香", 0)
+	if !r.fromLocalClient || r.lrc == "" {
+		t.Fatalf("前提:本地缓存命中: %+v", r)
+	}
+	if r.cover != "" {
+		t.Errorf("认不出同一版就不给封面: %q", r.cover)
+	}
+}
+
+func TestKugouSongByHash(t *testing.T) {
+	songs := []kugouSong{
+		{Hash: "AAA", SongName: "a"},
+		{Hash: "BBB", HashSQ: "ccc", SongName: "b", Group: []kugouSong{{Hash: "DDD", SongName: "b-合辑"}}},
+	}
+	for _, c := range []struct{ hash, want string }{
+		{"aaa", "a"}, {"CCC", "b"}, {"ddd", "b-合辑"}, {"eee", ""}, {"", ""},
+	} {
+		got := ""
+		if s := kugouSongByHash(songs, c.hash); s != nil {
+			got = s.SongName
+		}
+		if got != c.want {
+			t.Errorf("hash %q: 得到 %q,期望 %q", c.hash, got, c.want)
+		}
 	}
 }
 
