@@ -143,8 +143,9 @@ func runPlayerIdentityTests() {
             expectEqual(controller.contains("focusFallback: MediaControlClient.focusControlTarget(),\n")
                         && controller.contains("focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())"), true,
                         "控制分派(契约): dispatch 按焦点回退目标与「焦点被占、没有 AppleScript」分派")
-            expectEqual(client.contains("return fallbackActive && !fallbackViaAppleScript"), true,
-                        "控制分派(契约): 焦点被占 = 在回退、且不是经 AppleScript 问到的")
+            expectEqual(client.contains("let viaProbe = fallbackActive && !fallbackViaAppleScript")
+                        && client.contains("return viaProbe || holdingDroppedSession"), true,
+                        "控制分派(契约): 焦点被占 = 在回退、且不是经 AppleScript 问到的;或者屏上这首是会话被撤后保持出来的")
             let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
             let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
             expectEqual(coordinator.contains("guard MusicPlaybackController.playPause() else { return }")
@@ -432,6 +433,41 @@ func runPlayerIdentityTests() {
         expectEqual(H.heldElapsed(elapsed: 200, rate: 1, duration: 208, since: 4), 204, "切歌间隙: 位置照墙钟往前走")
         expectEqual(H.heldElapsed(elapsed: 206, rate: 1, duration: 208, since: 4), 208, "切歌间隙: 不超过曲长")
         expectEqual(H.heldElapsed(elapsed: 10, rate: 0, duration: nil, since: 2), 12, "切歌间隙: 速率报 0 按 1 算(它在放)")
+
+        // 会话在放时被撤(PlayerGapHold.shouldHoldWhileOutputting):网易云冷启动后一两秒内开播,启动时那次延迟的清空
+        // 把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。
+        let ne = PlaybackPlayer.netease.bundleIdentifier
+        func holdOut(last: String? = ne, elapsed: Double? = 6, duration: Double? = 208, new: String? = nil,
+                     playing: Bool = false, outputting: Bool = true, at: TimeInterval) -> Bool {
+            H.shouldHoldWhileOutputting(lastBundleID: last, lastElapsed: elapsed, lastDuration: duration,
+                                        lastSeenAt: last == nil ? nil : t0, newBundleID: new, newPlaying: playing,
+                                        outputting: { outputting }, now: t0.addingTimeInterval(at))
+        }
+        expectEqual(holdOut(at: 1), true, "会话在放时被撤: 谁都没在报、它还在出声 → 保持")
+        expectEqual(holdOut(new: apple, at: 30), true, "会话在放时被撤: 落到暂停着的 Apple Music、它还在出声 → 保持")
+        expectEqual(holdOut(new: apple, playing: true, at: 30), false, "会话在放时被撤: 别的播放器在放 → 照常切")
+        expectEqual(holdOut(new: ne, at: 30), false, "会话在放时被撤: 它自己重新登记了(暂停 / 换歌)→ 照常采纳")
+        expectEqual(holdOut(outputting: false, at: 1), false, "会话在放时被撤: 不出声了 → 不保持")
+        expectEqual(holdOut(at: 208 - 6 + H.whileOutputtingEndGrace - 0.5), true, "会话在放时被撤: 推算的位置还在曲长以内 → 保持")
+        expectEqual(holdOut(at: 208 - 6 + H.whileOutputtingEndGrace + 0.5), false,
+                    "会话在放时被撤: 推算过了曲长还没有新会话 → 当它放完了")
+        expectEqual(holdOut(duration: nil, at: H.whileOutputtingMaxHold - 1), true, "会话在放时被撤: 不知道曲长时在上限内保持")
+        expectEqual(holdOut(duration: nil, at: H.whileOutputtingMaxHold + 1), false, "会话在放时被撤: 不知道曲长时过了上限不保持")
+        expectEqual(holdOut(last: kk, at: 1), false, "会话在放时被撤: 只对实测会这样的播放器生效(决策 41)")
+        expectEqual(holdOut(last: nil, at: 1), false, "会话在放时被撤: 之前没采纳过快照就不保持")
+        var askedOutput = false
+        _ = H.shouldHoldWhileOutputting(lastBundleID: ne, lastElapsed: 6, lastDuration: 208, lastSeenAt: t0, newBundleID: apple,
+                                        newPlaying: true, outputting: { askedOutput = true; return true },
+                                        now: t0.addingTimeInterval(1))
+        expectEqual(askedOutput, false, "会话在放时被撤: 别的条件不满足时不去问出声")
+        if let paused = try? JSONDecoder().decode(MediaControlSnapshot.self, from: Data(
+            #"{"title":"异类","artist":"华晨宇","duration":208,"elapsedTime":6,"playing":false,"playbackRate":0,"bundleIdentifier":"com.netease.163music"}"#.utf8)) {
+            let held = paused.playing(atElapsed: 9, capturedAt: t0)
+            expectEqual(held.playing == true && held.playbackRate == 1 && held.elapsedTime == 9 && held.title == "异类", true,
+                        "会话在放时被撤: 上一份还是暂停着登记的那份时,保持出来的当成在放")
+        } else {
+            expectEqual(true, false, "会话在放时被撤: 测试用快照解不出来")
+        }
     }
 
     // ---- 每个播放器一张决定表 ----

@@ -12,7 +12,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case appleMusic = "apple_music"
     /// 无 AppleScript 字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),走 media-control;读数整秒下取整 + ±1~1.5s 抖动。
     case qqMusic = "qq_music"
-    /// 同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。
+    /// 同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。
     case netease = "netease_music"
     /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。
     case kugou = "kugou_music"
@@ -170,6 +170,15 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     public var dropsSessionBetweenTracks: Bool {
         switch self {
         case .kkbox: return true
+        default: return false
+        }
+    }
+
+    /// 在放的时候会把 Now Playing 撤掉、声音照放,直到暂停或换歌才重新登记。只有**实测见过**的播放器为 true。
+    /// 判定在 `PlayerGapHold.shouldHoldWhileOutputting`。
+    public var dropsSessionWhilePlaying: Bool {
+        switch self {
+        case .netease: return true
         default: return false
         }
     }

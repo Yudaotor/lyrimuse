@@ -47,6 +47,9 @@ CI 跑 `--check` 保证生成物没被手改、也没忘记重新生成。
 - dropsSessionBetweenTracks  切歌时先撤掉 Now Playing、隔几秒才发下一首;auto 为 null
                 只给**实测见过**的播放器置 true(KKBOX 约 4 秒)。上一首来自它时,这几秒里别的播放器暂停着的
                 旧会话不当成「换播放器了」,判定在 PlayerGapHold。只生成 Swift 侧
+- dropsSessionWhilePlaying  在放的时候会把 Now Playing 撤掉、声音照放,直到暂停或换歌才重新登记;auto 为 null
+                只给**实测见过**的播放器置 true(网易云冷启动后一两秒内开播)。上一首来自它、它的进程还在出声时
+                照旧当它在放,判定在 PlayerGapHold.shouldHoldWhileOutputting。只生成 Swift 侧
 - ignoresSeekCommand  外部的跳转指令(media-control `seek`)它不响应;auto 为 null。只生成 Swift 侧(引擎不发跳转)。
                 只给**实测见过**的播放器置 true(Amazon Music:界面上也没有可设值的进度条)。这类播放器上
                 进度条只显示不能拖、点歌词不跳,`LocalPlaybackSource.seek` 直接不动
@@ -89,7 +92,7 @@ ICON_DIR = ROOT / "lyrimuse" / "Sources" / "lyrimuse" / "Resources"
 FIELDS = (
     "id", "swiftCase", "goConst", "bundleID", "goBundleConst", "processName", "displayName", "scrobbleLabel",
     "nativeLyricSource", "positionTier", "republishesZeroAnchor", "playingFromRate", "artistArrivesLate",
-    "artistlessNotMusic", "dropsSessionBetweenTracks", "ignoresSeekCommand", "needsAutomationPermission",
+    "artistlessNotMusic", "dropsSessionBetweenTracks", "dropsSessionWhilePlaying", "ignoresSeekCommand", "needsAutomationPermission",
     "needsFullDiskAccess", "needsAccessibilityPermission", "tint", "fallbackSymbol", "bundledIcon", "note",
 )
 
@@ -377,6 +380,14 @@ def render_core_swift(spec, players):
                "    public var dropsSessionBetweenTracks: Bool {\n        switch self {\n")
     for p in concrete:
         if p.get("dropsSessionBetweenTracks"):
+            out.append("        case .%s: return true\n" % p["swiftCase"])
+    out.append("        default: return false\n        }\n    }\n")
+
+    out.append("\n    /// 在放的时候会把 Now Playing 撤掉、声音照放,直到暂停或换歌才重新登记。只有**实测见过**的播放器为 true。\n"
+               "    /// 判定在 `PlayerGapHold.shouldHoldWhileOutputting`。\n"
+               "    public var dropsSessionWhilePlaying: Bool {\n        switch self {\n")
+    for p in concrete:
+        if p.get("dropsSessionWhilePlaying"):
             out.append("        case .%s: return true\n" % p["swiftCase"])
     out.append("        default: return false\n        }\n    }\n")
 

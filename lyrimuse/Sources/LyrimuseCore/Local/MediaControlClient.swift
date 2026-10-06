@@ -146,6 +146,8 @@ public enum MediaControlClient {
     private static var gapHoldLast: (snapshot: MediaControlSnapshot, at: Date)?
     /// 这一轮保持从哪一拍开始;nil = 没在保持。
     private static var gapHoldingSince: Date?
+    /// 屏上这首是不是会话被撤后保持出来的(`PlayerGapHold.shouldHoldWhileOutputting`)。播放控制看它,见 `focusHeldByAnotherApp`。
+    private static var holdingDroppedSession = false
     /// 会撤会话的那个播放器的进程号,保持期间拿它问内核「还在不在」。只在采纳它的快照时记:
     /// NSRunningApplication 在后台线程上偶尔返回空,保持期间别照它判(会提前放手)。
     private static var gapHoldPID: (bundleID: String, pid: pid_t)?
@@ -169,6 +171,7 @@ public enum MediaControlClient {
         let now = Date()
         gapHoldLock.lock()
         defer { gapHoldLock.unlock() }
+        holdingDroppedSession = false
         if let last = gapHoldLast,
            PlayerGapHold.shouldHold(lastBundleID: last.snapshot.bundleIdentifier, lastTrackKey: last.snapshot.trackKey,
                                     lastSeenAt: last.at, holdingSince: gapHoldingSince,
@@ -185,6 +188,22 @@ public enum MediaControlClient {
             let elapsed = PlayerGapHold.heldElapsed(elapsed: s.elapsedTime, rate: s.playbackRate, duration: s.duration,
                                                     since: now.timeIntervalSince(last.at))
             return s.withElapsed(elapsed, capturedAt: now)
+        }
+        if let last = gapHoldLast, let lastBundleID = last.snapshot.bundleIdentifier,
+           PlayerGapHold.shouldHoldWhileOutputting(lastBundleID: lastBundleID, lastElapsed: last.snapshot.elapsedTime,
+                                                   lastDuration: last.snapshot.duration, lastSeenAt: last.at,
+                                                   newBundleID: snapshot?.bundleIdentifier, newPlaying: snapshot?.playing == true,
+                                                   outputting: { ProcessAudioOutput.isRunningOutput(bundleID: lastBundleID) },
+                                                   now: now) {
+            if gapHoldingSince == nil {
+                gapHoldingSince = now
+                logger.notice("now playing: \(lastBundleID, privacy: .public) dropped its session while still outputting audio, holding its last track")
+            }
+            holdingDroppedSession = true
+            let s = last.snapshot
+            let elapsed = PlayerGapHold.heldElapsed(elapsed: s.elapsedTime, rate: s.playbackRate, duration: s.duration,
+                                                    since: now.timeIntervalSince(last.at))
+            return s.playing(atElapsed: elapsed, capturedAt: now)
         }
         if let since = gapHoldingSince {
             gapHoldingSince = nil
@@ -1136,12 +1155,16 @@ public enum MediaControlClient {
         return channelFallbackPlayer
     }
 
-    /// 焦点被别的 App 占着,屏上这首是按 bundle id 直查回退问到的(没有 AppleScript 可发)。这时 media-control 的控制
-    /// 指令会落在占用者身上,播放控制不发(见 `MusicPlaybackController.controlRoute`)。
+    /// 焦点被别的 App 占着,屏上这首是按 bundle id 直查回退问到的(没有 AppleScript 可发);或者屏上这首是会话被撤后保持出来的
+    /// (`PlayerGapHold.shouldHoldWhileOutputting`,这时系统焦点是空的或者在别人手里)。这两种时候 media-control 的控制指令
+    /// 都会落在焦点上,播放控制不发(见 `MusicPlaybackController.controlRoute`)。
     public static func focusHeldByAnotherApp() -> Bool {
         appleMusicFocusLock.lock()
-        defer { appleMusicFocusLock.unlock() }
-        return fallbackActive && !fallbackViaAppleScript
+        let viaProbe = fallbackActive && !fallbackViaAppleScript
+        appleMusicFocusLock.unlock()
+        gapHoldLock.lock()
+        defer { gapHoldLock.unlock() }
+        return viaProbe || holdingDroppedSession
     }
 
     private static func setFocusFallbackPlayer(_ value: PlaybackPlayer?) {

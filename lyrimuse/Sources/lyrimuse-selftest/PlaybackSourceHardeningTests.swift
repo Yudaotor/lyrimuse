@@ -440,6 +440,15 @@ private func wiringContracts() {
                 "Spotify 镜像接线: 没换成网页版就清掉记录,之后不再问")
     let noteAcceptedBody = body("private static func noteAccepted(bundleID: String) {", in: client)
     expectEqual(noteAcceptedBody.contains("spotifyWebSource = webSource"), true, "Spotify 镜像接线: 每次接受快照都更新网页版来源")
+
+    // 会话在放时被撤(网易云冷启动,02 章决策 96):保持接在两条取快照的入口共用的 heldAcrossPlayerGap;保持出来的那首,播放控制
+    // 不发 —— 这时系统焦点是空的或者在别人手里,media-control 的指令会落在焦点上。
+    let gapHold = body("private static func heldAcrossPlayerGap(_ snapshot: MediaControlSnapshot?) -> MediaControlSnapshot? {", in: client)
+    expectEqual(gapHold.contains("PlayerGapHold.shouldHoldWhileOutputting(") && gapHold.contains("holdingDroppedSession = true")
+                && gapHold.contains("outputting: { ProcessAudioOutput.isRunningOutput(bundleID: lastBundleID) }"), true,
+                "会话在放时被撤: 保持接在 heldAcrossPlayerGap、按进程出声判,保持时记下")
+    expectEqual(body("public static func focusHeldByAnotherApp() -> Bool {", in: client).contains("return viaProbe || holdingDroppedSession"),
+                true, "会话在放时被撤: 保持出来的那首,播放控制不发")
 }
 
 // ---- 桌面版 Spotify 的 Connect 镜像 ----

@@ -123,6 +123,16 @@ public struct MediaControlSnapshot: Decodable {
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt)
     }
 
+    /// 当成在放、换掉位置和读数时刻的副本。唯一的用处是会话在放时被撤掉的那段保持(`PlayerGapHold.shouldHoldWhileOutputting`):
+    /// 上一份快照可能还是开播前暂停着登记的那一份,而它这时已经在出声。写成显式方法,理由同 `withAlbum`。
+    public func playing(atElapsed newElapsed: Double?, capturedAt newCapturedAt: Date) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: album, duration: duration,
+            elapsedTime: newElapsed, playing: true, playbackRate: (playbackRate ?? 0) > 0 ? playbackRate : 1,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: newCapturedAt)
+    }
+
     public func withAlbum(_ newAlbum: String) -> MediaControlSnapshot {
         MediaControlSnapshot(
             title: title, artist: artist, album: newAlbum, duration: duration,

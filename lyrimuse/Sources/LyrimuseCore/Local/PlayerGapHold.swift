@@ -43,4 +43,33 @@ public enum PlayerGapHold {
         if let duration, duration > 0 { value = min(value, duration) }
         return value
     }
+
+    // MARK: 会话在放的时候被撤掉
+
+    /// 推算的位置过了曲长这么久还没有新会话,当它放完了。
+    public static let whileOutputtingEndGrace: TimeInterval = 5
+    /// 不知道曲长时最多保持这么久。
+    public static let whileOutputtingMaxHold: TimeInterval = 600
+
+    /// 会话在放的时候被撤掉、声音照放(`PlaybackPlayer.dropsSessionWhilePlaying`,见 02 章决策 96):上一份被采纳的快照来自
+    /// 这样的播放器,这一拍谁都没在报、或者是别的播放器没在放,而它的进程还在出声 → 还当是上一首在放。它自己再报什么
+    /// (暂停、换歌都会重新登记)都照常采纳;接手的播放器在放就照常切。位置按上一份快照照墙钟往前推,过了曲长
+    /// `whileOutputtingEndGrace` 秒还没有新会话就当它放完了;不知道曲长时最多保持 `whileOutputtingMaxHold` 秒。
+    /// 上一份快照暂停着也算(清空赶在开播被看到之前到),出声就是在放。不能反过来拿「不出声」判暂停:暂停后输出还会开
+    /// 好几秒。`outputting` 只在别的条件都满足时才问。
+    public static func shouldHoldWhileOutputting(lastBundleID: String?, lastElapsed: Double?, lastDuration: Double?,
+                                                 lastSeenAt: Date?, newBundleID: String?, newPlaying: Bool,
+                                                 outputting: () -> Bool, now: Date) -> Bool {
+        guard let lastBundleID, let lastSeenAt,
+              PlaybackPlayer.builtin(forBundleID: lastBundleID)?.dropsSessionWhilePlaying == true,
+              newBundleID != lastBundleID, !newPlaying else { return false }
+        let since = now.timeIntervalSince(lastSeenAt)
+        guard since >= 0 else { return false }
+        if let lastDuration, lastDuration > 0 {
+            guard (lastElapsed ?? 0) + since <= lastDuration + whileOutputtingEndGrace else { return false }
+        } else {
+            guard since <= whileOutputtingMaxHold else { return false }
+        }
+        return outputting()
+    }
 }
