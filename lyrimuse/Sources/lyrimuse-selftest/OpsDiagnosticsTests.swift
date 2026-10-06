@@ -1135,6 +1135,39 @@ func runOpsDiagnosticsTests() {
                     "常驻内存(契约): Info.plist 关掉 malloc 的大块缓存 —— 不关的话解完索引释放的大块攒着算进占用")
     }
 
+    // ---- 缓存索引整份重解的节奏(15 章决策 23)----
+    do {
+        typealias P = EnrichIndexRefreshPolicy
+        expectEqual(P.shouldRedecode(hasDecoded: false, lastKick: 100, now: 101), true, "重解节奏: 还没解过一律要解")
+        expectEqual(P.shouldRedecode(hasDecoded: true, lastKick: nil, now: 101), true, "重解节奏: 没起过解一律要解")
+        expectEqual(P.shouldRedecode(hasDecoded: true, lastKick: 100, now: 100 + P.minimumInterval - 1), false,
+                    "重解节奏: 离上次起解不到间隔先不解")
+        expectEqual(P.shouldRedecode(hasDecoded: true, lastKick: 100, now: 100 + P.minimumInterval), true,
+                    "重解节奏: 到点就解")
+        let t0 = Date(timeIntervalSince1970: 1000), t1 = Date(timeIntervalSince1970: 1010)
+        expectEqual(P.shouldRedecodeOnMiss(fileMTime: nil, decodedMTime: t0, lastForcedMTime: nil), false,
+                    "重解节奏: 文件没了不为查不到提前解")
+        expectEqual(P.shouldRedecodeOnMiss(fileMTime: t0, decodedMTime: t0, lastForcedMTime: nil), false,
+                    "重解节奏: 磁盘上就是解出来的那版,查不到也不重解")
+        expectEqual(P.shouldRedecodeOnMiss(fileMTime: t1, decodedMTime: t0, lastForcedMTime: nil), true,
+                    "重解节奏: 磁盘上更新,查不到就提前解")
+        expectEqual(P.shouldRedecodeOnMiss(fileMTime: t1, decodedMTime: t0, lastForcedMTime: t1), false,
+                    "重解节奏: 同一版只为查不到提前解一次")
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(reader, contain: "guard releasedUnderMemoryPressure || EnrichIndexRefreshPolicy.shouldRedecode("), true,
+                    "重解节奏(契约): 轮询发现文件变了先问节奏")
+        expectEqual(sourceBytes(reader, contain: "let entry = all[matchedKey] else {\n            redecodeSoonIfNewer()"), true,
+                    "重解节奏(契约): 查歌词查不到时走提前重解")
+        for getter in ["func platformLinks(", "func trackDurationSecs(", "func sourceInfo(", "func appleAlbumRef(",
+                       "func youtubeMusicAlbum(", "func youtubeMusicIsMV("] {
+            let body = reader.components(separatedBy: getter).dropFirst().first?.components(separatedBy: "\n    }\n").first ?? ""
+            expectEqual(body.contains("currentEntry(key)") && !body.contains("loadEntries()"), true,
+                        "重解节奏(契约): \(getter)…) 正在播的那首先读单条快照")
+        }
+    }
+
     // ---- build.sh 装完必须确认进程真换了----
     //
     // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本

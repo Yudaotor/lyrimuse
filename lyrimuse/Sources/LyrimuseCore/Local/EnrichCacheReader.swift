@@ -321,6 +321,10 @@ public enum EnrichCacheReader {
     // 会推进世代号,把在飞的旧结果作废)。inFlightGeneration nil = 没有在飞的后台解码。
     private static var decodeGeneration = 0
     private static var inFlightGeneration: Int?
+    /// 上一次起整份重解的时刻(`systemUptime`),两次之间至少隔 `EnrichIndexRefreshPolicy.minimumInterval`。
+    private static var lastDecodeKick: TimeInterval?
+    /// 当前这首查不到时为哪一版文件提前重解过,同一版不再提前。
+    private static var missForcedMTime: Date?
     private static var memoryPressureSource: DispatchSourceMemoryPressure?
 
     /// 缓存文件当前的 mtime,拿不到就是 nil。
@@ -337,18 +341,16 @@ public enum EnrichCacheReader {
     }
 
     public static func sourceInfo(artist: String, title: String, album: String) -> SourceInfo? {
-        guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = matchedEntry(key, in: all) else { return nil }
+        guard let entry = currentEntry(key) else { return nil }
         return SourceInfo(lyricsSource: entry.lyricsSource, coverSource: entry.coverSource)
     }
 
     /// 这首歌所属的 Apple Music 专辑(专辑简介用),取自 `apple_music_url`:专辑 ID + 链接里的店面。**零网络**,
     /// 匹配方式与 `platformLinks` 相同;缓存首次加载要解析整份 JSON,别在主线程调冷路径。
     public static func appleAlbumRef(artist: String, title: String, album: String) -> AlbumEditorialNotes.AlbumRef? {
-        guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = matchedEntry(key, in: all) else { return nil }
+        guard let entry = currentEntry(key) else { return nil }
         return AlbumEditorialNotes.albumRef(fromAppleMusicURL: entry.appleMusicURL)
     }
 
@@ -374,9 +376,8 @@ public enum EnrichCacheReader {
     /// 首次调用要解析整份缓存 JSON(之后靠 mtime 缓存是 µs 级),别在主线程调。
     /// 沿用 lookup/sourceInfo 同款的 精确 key → 宽松 key 两级匹配。
     public static func platformLinks(artist: String, title: String, album: String) -> PlatformLinks? {
-        guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = matchedEntry(key, in: all) else { return nil }
+        guard let entry = currentEntry(key) else { return nil }
         let rawQQ = entry.qqMusicURL ?? ""
         // 搜索兜底链接不当"歌曲页"给出去,理由见 PlatformLinks.isQQSearchFallback
         let qqSong = (!rawQQ.isEmpty && !PlatformLinks.isQQSearchFallback(rawQQ))
@@ -415,18 +416,16 @@ public enum EnrichCacheReader {
     /// 这首在 YouTube Music 上登记的专辑(用 Kaset 放时引擎存的)。零网络,精确 key → 宽松 key 两级匹配;
     /// 查不到或是空的返回 nil。只给界面专辑位用,播放器自己报了专辑时不看它。
     public static func youtubeMusicAlbum(artist: String, title: String, album: String) -> String? {
-        guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let listed = matchedEntry(key, in: all)?.youtubeMusicAlbum?.trimmingCharacters(in: .whitespaces),
+        guard let listed = currentEntry(key)?.youtubeMusicAlbum?.trimmingCharacters(in: .whitespaces),
               !listed.isEmpty else { return nil }
         return listed
     }
 
     /// 用 Kaset 放的这一版是不是 MV 版本(引擎按 YouTube Music 的登记判的)。零网络,两级匹配同上;查不到是 false。
     public static func youtubeMusicIsMV(artist: String, title: String, album: String) -> Bool {
-        guard let all = loadEntries() else { return false }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        return matchedEntry(key, in: all)?.youtubeMusicMV == true
+        return currentEntry(key)?.youtubeMusicMV == true
     }
 
     /// 这首歌的**真实曲长**(秒),来自引擎写进缓存的那份。零网络,沿用 lookup/sourceInfo
@@ -439,9 +438,8 @@ public enum EnrichCacheReader {
     /// 返回 nil,调用方退回快照自己那份 —— **绝不能因此让时长变成 0**:进度锚点按 durationMs
     /// 夹位置(ProgressClock),0 会把位置钉死在开头,表现成整档没有歌词(真踩过)。
     public static func trackDurationSecs(artist: String, title: String, album: String) -> Double? {
-        guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = matchedEntry(key, in: all) else { return nil }
+        guard let entry = currentEntry(key) else { return nil }
         // durationSecs 在前:引擎的 radioduration.go 只把真实曲长写进它、刻意不碰 resolvedDurationSecs ——
         // 后者是配到的那份歌词在来源上的时长,专辑预取时可能是网易云另一个版本的,拿它当分母进度会提前顶满。
         for candidate in [entry.durationSecs, entry.resolvedDurationSecs] {
@@ -524,7 +522,10 @@ public enum EnrichCacheReader {
                               yrc: e.lyricsYRC ?? "", plain: e.plainLyrics ?? "", bg: e.lyricsBG ?? "")
         }
         guard let all = loadEntries() else { return nil }
-        guard let matchedKey = matchedKey(key, in: all), let entry = all[matchedKey] else { return nil }
+        guard let matchedKey = matchedKey(key, in: all), let entry = all[matchedKey] else {
+            redecodeSoonIfNewer()
+            return nil
+        }
         // 精简条目(索引,以及新版引擎写的主缓存都是)的四块大正文在这首的正文小文件里。读不到就先用
         // 条目里的主歌词顶着;读的是索引时同时作废这一版索引、后台改读主缓存 —— 绝不拿不自洽的正文拼进来。
         var lyrics = entry.lyrics ?? "", tr = entry.lyricsTr ?? "", roma = entry.lyricsRoma ?? ""
@@ -643,6 +644,13 @@ public enum EnrichCacheReader {
 
     private static func matchedEntry(_ key: String, in all: [String: EnrichCacheEntry]) -> EnrichCacheEntry? {
         matchedKey(key, in: all).flatMap { all[$0] }
+    }
+
+    /// 正在播的那首先看单条快照(整份索引可能还没重解到,见 15 章决策 23),再看解出来的整份(精确 key → 宽松 key)。
+    private static func currentEntry(_ key: String) -> EnrichCacheEntry? {
+        if let fresh = freshPlayingEntry(forKey: key) { return fresh }
+        guard let all = loadEntries() else { return nil }
+        return matchedEntry(key, in: all)
     }
 
     /// 正在放的这首的时长(秒),连同按播放器报的三段算出的归一化 key。只对这一个 key 生效:
@@ -1424,9 +1432,22 @@ public enum EnrichCacheReader {
         } else {
             // 压力让出之后重建走后台(见 releasedUnderMemoryPressure):同步解这份文件实测
             // 要 0.5 秒以上,主线程停这么久是四个展示面一起停;少一拍歌词只是这一拍查不到。
+            // 解过的话两次整份重解之间至少隔一段(见 EnrichIndexRefreshPolicy),到点之后的轮询再解。
+            guard releasedUnderMemoryPressure || EnrichIndexRefreshPolicy.shouldRedecode(
+                hasDecoded: cachedEntries != nil, lastKick: lastDecodeKick, now: ProcessInfo.processInfo.systemUptime)
+            else { return }
             releasedUnderMemoryPressure = false
             kickBackgroundDecode()
         }
+    }
+
+    /// 当前这首在解出来的那份里查不到:磁盘上那份更新、这一版还没为此提前解过,就不等间隔当场起一次后台重解。
+    private static func redecodeSoonIfNewer() {
+        let mtime = fileModificationDate
+        guard EnrichIndexRefreshPolicy.shouldRedecodeOnMiss(fileMTime: mtime, decodedMTime: cachedMTime,
+                                                            lastForcedMTime: missForcedMTime) else { return }
+        missForcedMTime = mtime
+        kickBackgroundDecode()
     }
 
     /// 歌词数据刚被改过(「歌词管理」保存/删除、采纳候选,经 forceReloadLyricsForCurrentTrack)时调:作废在飞的
@@ -1461,6 +1482,7 @@ public enum EnrichCacheReader {
         let mtime = source.mtime
         // 同一版文件上次就没解开:不再每拍在主线程把几十 MB 重读重解一遍,等文件变了再试。
         if let mtime, mtime == failedDecodeMTime { return }
+        lastDecodeKick = ProcessInfo.processInfo.systemUptime
         // 整份按映射读,几十 MB 的文件内容不拷进堆(见 15 章决策 22)。引擎换这份文件一律是新文件改名过来,不会原地截断。
         guard let data = try? Data(contentsOf: source.url, options: .mappedIfSafe),
               let all = try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: data)
@@ -1485,6 +1507,7 @@ public enum EnrichCacheReader {
         // 同一版文件上次就没解开:等文件变了再试,口径同同步那条路(见 failedDecodeMTime)。不挡的话每拍(2 秒)
         // 重读重解一遍几十 MB,而 App 一直停在旧的那一版。
         if Self.decodeAlreadyFailed(mtime: source.mtime, failedMTime: failedDecodeMTime) { return }
+        lastDecodeKick = ProcessInfo.processInfo.systemUptime
         decodeGeneration += 1
         let gen = decodeGeneration
         inFlightGeneration = gen
