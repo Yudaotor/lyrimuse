@@ -1769,11 +1769,14 @@ struct LyricsManagerView: View {
             }
         }
 
+        private func albumDisplay(_ album: String) -> String {
+            LyricsManagerView.albumDisplay(album, in: albumDisplayMap)
+        }
+
         private func row(_ summary: EnrichCacheStore.Summary) -> some View {
             SongListRow(
                 summary: summary,
-                albumDisplayName: summary.isListedMV ? L10n.t("MV")
-                    : LyricsManagerView.albumDisplay(summary.displayAlbum, in: albumDisplayMap),
+                albumDisplayName: summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum),
                 query: query,
                 isNowPlaying: summary.key == nowPlayingKey,
                 isPinned: pins[summary.key] != nil,
