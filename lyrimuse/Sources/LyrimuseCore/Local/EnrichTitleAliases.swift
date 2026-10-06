@@ -54,9 +54,11 @@ public enum EnrichTitleAliases {
         public var resolvedDurationSecs: Double?
         /// LRC 正文(缓存里的 `lyrics`);E2 用。
         public var lyrics: String?
+        /// 精简条目不带正文原文,给这一条的正文引用;E2 真要比对时经 `derive` 的 `storedBody` 取。`lyrics` 有值时不看它。
+        public var lyricsRef: LyricsRef?
 
         public init(artist: String, title: String, neteaseURL: String?, qqMusicURL: String?, durationSecs: Double?,
-                    resolvedDurationSecs: Double? = nil, lyrics: String? = nil) {
+                    resolvedDurationSecs: Double? = nil, lyrics: String? = nil, lyricsRef: LyricsRef? = nil) {
             self.artist = artist
             self.title = title
             self.neteaseURL = neteaseURL
@@ -64,6 +66,44 @@ public enum EnrichTitleAliases {
             self.durationSecs = durationSecs
             self.resolvedDurationSecs = resolvedDurationSecs
             self.lyrics = lyrics
+            self.lyricsRef = lyricsRef
+        }
+    }
+
+    /// 一条精简条目的歌词正文在哪:缓存 key 对应的正文小文件,`crc` 是条目记的 `body_crc`(正文变了它就变)。
+    public struct LyricsRef: Hashable, Sendable {
+        public var key: String
+        public var crc: UInt32
+
+        public init(key: String, crc: UInt32) {
+            self.key = key
+            self.crc = crc
+        }
+    }
+
+    /// E2 按需取的剥好的正文:先看上一轮记下的,没有再经 `load` 读原文、剥一遍。`used` 是这一轮用到的那些,
+    /// 下一轮只带它们过去,缓存换代之后不再比对的自然丢掉。读不到原文给 nil,那一份不参与比对。
+    public struct StoredBodies {
+        public private(set) var used: [LyricsRef: String] = [:]
+        public private(set) var loads = 0
+        private let remembered: [LyricsRef: String]
+        private let load: (LyricsRef) -> String?
+
+        public init(remembered: [LyricsRef: String], load: @escaping (LyricsRef) -> String?) {
+            self.remembered = remembered
+            self.load = load
+        }
+
+        public mutating func body(for ref: LyricsRef) -> String? {
+            if let b = used[ref] ?? remembered[ref] {
+                used[ref] = b
+                return b
+            }
+            loads += 1
+            guard let text = load(ref) else { return nil }
+            let b = EnrichTitleAliases.lyricsBody(text)
+            used[ref] = b
+            return b
         }
     }
 
@@ -250,19 +290,22 @@ public enum EnrichTitleAliases {
     /// - Parameter artistKey: 歌手分桶用的键函数。默认走 `PlayCountFold.canonicalArtistKey`(读全局的本机
     ///   歌手别名表);EnrichCacheReader 同一轮刚推完歌手表、还没灌进全局时,把基于新表的键函数传进来。
     /// - Parameter lyricsBody: 剥歌词正文的函数,默认 `lyricsBody(_:)`;selftest 传计数版,核对只给真要比对的那几条剥。
+    /// - Parameter storedBody: 带 `lyricsRef` 的条目(精简条目)取剥好的正文;取不到给 nil,那一份不参与比对。
     ///
     /// 歌词正文只在 E2 真要比一对写法时才剥(同一歌手、跨脚本或单字差异、时长接近):每剥一份要逐行正则 + 繁简
     /// 转换,全库九千多条都剥一遍是几秒 CPU,而真正进入比对的只有极少数。别改回收集条目时就剥。
     public static func derive(_ entries: [Entry],
                               artistKey: (String) -> String = { PlayCountFold.canonicalArtistKey($0) },
-                              lyricsBody: (String) -> String = { EnrichTitleAliases.lyricsBody($0) }) -> [String: [String: String]] {
+                              lyricsBody: (String) -> String = { EnrichTitleAliases.lyricsBody($0) },
+                              storedBody: (LyricsRef) -> String? = { _ in nil }) -> [String: [String: String]] {
         // 同一歌手名下,按折叠键去重的条目(原始写法取字典序最小),两侧分开放
         struct Item {
             var title: String
             var count = 0                     // 本机条目数(E2 选代表用)
             var durations: [Double] = []
-            var trustedLyrics: [String] = []  // 可信的歌词原文(同一写法在几张专辑下的条目都收),正文到比对时才剥
+            var trustedLyrics: [TrustedLyrics] = []  // 可信的歌词(同一写法在几张专辑下的条目都收),正文到比对时才取、才剥
         }
+        enum TrustedLyrics { case text(String), stored(LyricsRef) }
         struct Bucket { var han: [String: Item] = [:]; var nonHan: [String: Item] = [:] }
         var buckets: [String: Bucket] = [:]
         // E1 分组:(歌手键, id) → 两侧 折叠键 → 原始写法,以及两侧的时长
@@ -289,7 +332,9 @@ public enum EnrichTitleAliases {
             item.count += 1
             if title < item.title { item.title = title }
             if let d = e.durationSecs, d > 0 { item.durations.append(d) }
-            if let l = e.lyrics, lyricsTrusted(e) { item.trustedLyrics.append(l) }
+            if lyricsTrusted(e) {
+                if let l = e.lyrics { item.trustedLyrics.append(.text(l)) } else if let r = e.lyricsRef { item.trustedLyrics.append(.stored(r)) }
+            }
             side[folded] = item
             if isHan { bucket.han = side } else { bucket.nonHan = side }
             buckets[artistKey] = bucket
@@ -346,7 +391,12 @@ public enum EnrichTitleAliases {
             var bodies = [[String]?](repeating: nil, count: members.count)
             func bodiesOf(_ i: Int) -> [String] {
                 if let b = bodies[i] { return b }
-                let b = members[i].item.trustedLyrics.map(lyricsBody).filter { lyricsTokens($0).count >= lyricsMinTokens }
+                let b = members[i].item.trustedLyrics.compactMap { l -> String? in
+                    switch l {
+                    case .text(let lrc): return lyricsBody(lrc)
+                    case .stored(let ref): return storedBody(ref)
+                    }
+                }.filter { lyricsTokens($0).count >= lyricsMinTokens }
                 bodies[i] = b
                 return b
             }

@@ -5,8 +5,13 @@ import Foundation
 // "歌手|歌名|专辑"(跟 lyrimuse-engine/enrich.go:93 的 `artist + "|" + title + "|" + album`
 // 完全一致),value 里已经有解析好的歌词——本地数据源靠这个拿歌词,不用在 Swift 里
 // 重新实现一遍网易云/QQ/酷狗/Musixmatch/LRCLIB 的匹配逻辑。
-public struct EnrichCacheEntry: Decodable, Sendable {
+/// 是类不是结构体:字典槽位里只放指针,不按每条近 800 字节给空槽占位(见 15 章决策 24)。
+public final class EnrichCacheEntry: Decodable, Sendable {
+    /// 主歌词。精简条目(带 `body_crc`)不解它,正文小文件里有同一份,用到时去读;不带 `body_crc` 的完整条目
+    /// (老格式、正在播放快照)照旧解。见 15 章决策 24。
     let lyrics: String?
+    /// 有没有主歌词。精简条目按 `lyrics` 这个键在不在判:引擎写它是 omitempty,在就非空(selftest 钉着)。
+    public let hasLyrics: Bool
     let lyricsTr: String?
     let lyricsRoma: String?
     let lyricsYRC: String?
@@ -183,6 +188,69 @@ public struct EnrichCacheEntry: Decodable, Sendable {
         case manualLyrics = "manual_lyrics"
         case lyricsScore = "lyrics_score"
         case bodyFields = "body_fields"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bodyCRC = try c.decodeIfPresent(UInt32.self, forKey: .bodyCRC)
+        if bodyCRC == nil {
+            lyrics = try c.decodeIfPresent(String.self, forKey: .lyrics)
+            hasLyrics = !(lyrics ?? "").isEmpty
+        } else {
+            lyrics = nil
+            hasLyrics = c.contains(.lyrics)
+        }
+        lyricsTr = try c.decodeIfPresent(String.self, forKey: .lyricsTr)
+        lyricsRoma = try c.decodeIfPresent(String.self, forKey: .lyricsRoma)
+        lyricsYRC = try c.decodeIfPresent(String.self, forKey: .lyricsYRC)
+        lyricsBG = try c.decodeIfPresent(String.self, forKey: .lyricsBG)
+        lyricsSongwriters = try c.decodeIfPresent([String].self, forKey: .lyricsSongwriters)
+        lyricsSpeakers = try c.decodeIfPresent(LyricSpeakerTags.self, forKey: .lyricsSpeakers)
+        lyricsSource = try c.decodeIfPresent(String.self, forKey: .lyricsSource)
+        coverSource = try c.decodeIfPresent(String.self, forKey: .coverSource)
+        coverURL = try c.decodeIfPresent(String.self, forKey: .coverURL)
+        motionCoverURL = try c.decodeIfPresent(String.self, forKey: .motionCoverURL)
+        motionPreviewURL = try c.decodeIfPresent(String.self, forKey: .motionPreviewURL)
+        motionCoverIdentityVerified = try c.decodeIfPresent(Bool.self, forKey: .motionCoverIdentityVerified)
+        coverAlbum = try c.decodeIfPresent(String.self, forKey: .coverAlbum)
+        instrumental = try c.decodeIfPresent(Bool.self, forKey: .instrumental)
+        ts = try c.decodeIfPresent(Int64.self, forKey: .ts)
+        appleMusicURL = try c.decodeIfPresent(String.self, forKey: .appleMusicURL)
+        qqMusicURL = try c.decodeIfPresent(String.self, forKey: .qqMusicURL)
+        neteaseURL = try c.decodeIfPresent(String.self, forKey: .neteaseURL)
+        qqAlbumMid = try c.decodeIfPresent(String.self, forKey: .qqAlbumMid)
+        qqSingerMid = try c.decodeIfPresent(String.self, forKey: .qqSingerMid)
+        sodaURL = try c.decodeIfPresent(String.self, forKey: .sodaURL)
+        sodaAlbumID = try c.decodeIfPresent(String.self, forKey: .sodaAlbumID)
+        sodaArtistID = try c.decodeIfPresent(String.self, forKey: .sodaArtistID)
+        kkboxAlbumID = try c.decodeIfPresent(String.self, forKey: .kkboxAlbumID)
+        kkboxArtistID = try c.decodeIfPresent(String.self, forKey: .kkboxArtistID)
+        amazonAlbumASIN = try c.decodeIfPresent(String.self, forKey: .amazonAlbumASIN)
+        amazonArtistASIN = try c.decodeIfPresent(String.self, forKey: .amazonArtistASIN)
+        spotifyAlbumID = try c.decodeIfPresent(String.self, forKey: .spotifyAlbumID)
+        spotifyArtistID = try c.decodeIfPresent(String.self, forKey: .spotifyArtistID)
+        youtubeMusicAlbumID = try c.decodeIfPresent(String.self, forKey: .youtubeMusicAlbumID)
+        youtubeMusicArtistID = try c.decodeIfPresent(String.self, forKey: .youtubeMusicArtistID)
+        spotifyTrackID = try c.decodeIfPresent(String.self, forKey: .spotifyTrackID)
+        kkboxURL = try c.decodeIfPresent(String.self, forKey: .kkboxURL)
+        amazonURL = try c.decodeIfPresent(String.self, forKey: .amazonURL)
+        youtubeMusicURL = try c.decodeIfPresent(String.self, forKey: .youtubeMusicURL)
+        playerCovers = try c.decodeIfPresent([String: String].self, forKey: .playerCovers)
+        publicCoverURL = try c.decodeIfPresent(String.self, forKey: .publicCoverURL)
+        publicCoverFor = try c.decodeIfPresent(String.self, forKey: .publicCoverFor)
+        youtubeMusicAlbum = try c.decodeIfPresent(String.self, forKey: .youtubeMusicAlbum)
+        youtubeMusicMV = try c.decodeIfPresent(Bool.self, forKey: .youtubeMusicMV)
+        songLanguage = try c.decodeIfPresent(String.self, forKey: .songLanguage)
+        inferredArtist = try c.decodeIfPresent(String.self, forKey: .inferredArtist)
+        inferredAlbum = try c.decodeIfPresent(String.self, forKey: .inferredAlbum)
+        plainLyrics = try c.decodeIfPresent(String.self, forKey: .plainLyrics)
+        durationSecs = try c.decodeIfPresent(Double.self, forKey: .durationSecs)
+        resolvedDurationSecs = try c.decodeIfPresent(Double.self, forKey: .resolvedDurationSecs)
+        lyricsSourcesSkipped = try c.decodeIfPresent([String].self, forKey: .lyricsSourcesSkipped)
+        lyricsFillCount = try c.decodeIfPresent(Int.self, forKey: .lyricsFillCount)
+        manualLyrics = try c.decodeIfPresent(Bool.self, forKey: .manualLyrics)
+        lyricsScore = try c.decodeIfPresent(Int.self, forKey: .lyricsScore)
+        bodyFields = try c.decodeIfPresent(Int.self, forKey: .bodyFields)
     }
 
     /// 有没有逐字:完整条目看字段本身,精简条目看位图(位图带 known 位才可信,见 EnrichCacheSlim.Fields)。
@@ -475,15 +543,21 @@ public enum EnrichCacheReader {
         return (cacheURL, main, false)
     }
 
-    /// 读一首的正文小文件。校验值对得上才用;对不上但文件自洽,说明手上这一版比小文件旧(引擎先写
-    /// 小文件、再写主缓存),小文件是新的那份,也用(见 `EnrichCacheSlim.adoptNewerBody`)。
+    /// 读一首的正文小文件,记住最近读过的那一份(见 `cachedBody`)。
     private static func body(forKey key: String, crc: UInt32) -> EnrichCacheBody? {
         if let c = cachedBody, c.key == key, c.crc == crc { return c.body }
-        let url = bodiesDir.appendingPathComponent(DecisionSidecar.fileName(forKey: key))
+        guard let body = readBody(forKey: key, crc: crc, in: bodiesDir) else { return nil }
+        cachedBody = (key, crc, body)
+        return body
+    }
+
+    /// 读一首的正文小文件,不记缓存、哪个线程都能调。校验值对得上才用;对不上但文件自洽,说明手上这一版比小文件旧
+    /// (引擎先写小文件、再写主缓存),小文件是新的那份,也用(见 `EnrichCacheSlim.adoptNewerBody`)。
+    nonisolated static func readBody(forKey key: String, crc: UInt32, in dir: URL) -> EnrichCacheBody? {
+        let url = dir.appendingPathComponent(DecisionSidecar.fileName(forKey: key))
         guard let data = try? Data(contentsOf: url),
               let body = try? JSONDecoder().decode(EnrichCacheBody.self, from: data),
               body.crc == crc || EnrichCacheSlim.isSelfConsistent(body) else { return nil }
-        cachedBody = (key, crc, body)
         return body
     }
 
@@ -526,8 +600,8 @@ public enum EnrichCacheReader {
             redecodeSoonIfNewer()
             return nil
         }
-        // 精简条目(索引,以及新版引擎写的主缓存都是)的四块大正文在这首的正文小文件里。读不到就先用
-        // 条目里的主歌词顶着;读的是索引时同时作废这一版索引、后台改读主缓存 —— 绝不拿不自洽的正文拼进来。
+        // 精简条目(索引,以及新版引擎写的主缓存都是)的正文全在这首的正文小文件里。读不到时,正在播放快照恰好是
+        // 这一条就整条用它,否则正文全空;读的是索引时同时作废这一版索引、后台改读主缓存 —— 绝不拿不自洽的正文拼进来。
         var lyrics = entry.lyrics ?? "", tr = entry.lyricsTr ?? "", roma = entry.lyricsRoma ?? ""
         var yrc = entry.lyricsYRC ?? "", plain = entry.plainLyrics ?? "", bg = entry.lyricsBG ?? ""
         if let crc = entry.bodyCRC, crc != 0 {
@@ -536,6 +610,10 @@ public enum EnrichCacheReader {
                 yrc = b.lyricsYRC ?? ""; plain = b.plainLyrics ?? ""; bg = b.lyricsBG ?? ""
             } else {
                 rejectCurrentIndex()
+                if let s = playingSnapshot(forExactKey: matchedKey) {
+                    return makeLyrics(s, lyrics: s.lyrics ?? "", tr: s.lyricsTr ?? "", roma: s.lyricsRoma ?? "",
+                                      yrc: s.lyricsYRC ?? "", plain: s.plainLyrics ?? "", bg: s.lyricsBG ?? "")
+                }
             }
         }
         return makeLyrics(entry, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc, plain: plain, bg: bg)
@@ -753,7 +831,7 @@ public enum EnrichCacheReader {
     public nonisolated static func betterEntry(_ a: EnrichCacheEntry, _ b: EnrichCacheEntry, _ aKey: String, _ bKey: String) -> Bool {
         let aManual = a.manualLyrics ?? false, bManual = b.manualLyrics ?? false
         if aManual != bManual { return aManual }
-        let aHas = !(a.lyrics ?? "").isEmpty, bHas = !(b.lyrics ?? "").isEmpty
+        let aHas = a.hasLyrics, bHas = b.hasLyrics
         if aHas != bHas { return aHas }
         let aScore = a.lyricsScore ?? 0, bScore = b.lyricsScore ?? 0
         if aScore != bScore { return aScore > bScore }
@@ -1306,6 +1384,8 @@ public enum EnrichCacheReader {
     public static var localAliasTablesIfComputed: LocalAliasTables? { cachedAliasTables }
     private static var cachedAliasTables: LocalAliasTables?
     private static var aliasTablesGeneration = 0
+    /// 上一轮 E2 比对用到的、剥好的正文(按 key + body_crc 记),下一轮只剥新的(见 `EnrichTitleAliases.StoredBodies`)。
+    private static var aliasLyricsBodies: [EnrichTitleAliases.LyricsRef: String] = [:]
 
     /// 在后台算两张表,算完缓存并返回。跟 cachedEntries 同寿命(内容一变就作废)。
     ///
@@ -1323,7 +1403,10 @@ public enum EnrichCacheReader {
         let gen = aliasTablesGeneration
         let entries = all
         let caches = ArtistIdentityCaches.load()
-        let tables = await Task.detached(priority: .utility) { () -> LocalAliasTables in
+        let remembered = aliasLyricsBodies
+        let dir = bodiesDir
+        let (tables, used) = await Task.detached(priority: .utility) {
+            () -> (LocalAliasTables, [EnrichTitleAliases.LyricsRef: String]) in
             var inputs: [EnrichTitleAliases.Entry] = []
             inputs.reserveCapacity(entries.count)
             for (key, entry) in entries {
@@ -1332,25 +1415,35 @@ public enum EnrichCacheReader {
                 guard EnrichCacheKeys.strippingDurationVariant(key) == key else { continue }
                 let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
                 guard parts.count == 3 else { continue }
+                // 精简条目没解主歌词,给正文引用,真要比对时才读正文小文件
+                var ref: EnrichTitleAliases.LyricsRef?
+                if entry.lyrics == nil, entry.hasLyrics, let crc = entry.bodyCRC, crc != 0 { ref = .init(key: key, crc: crc) }
                 inputs.append(.init(artist: String(parts[0]), title: String(parts[1]),
                                     neteaseURL: entry.neteaseURL, qqMusicURL: entry.qqMusicURL,
                                     durationSecs: entry.durationSecs,
                                     resolvedDurationSecs: entry.resolvedDurationSecs,
-                                    lyrics: entry.lyrics))
+                                    lyrics: entry.lyrics, lyricsRef: ref))
             }
-            return deriveLocalAliasTables(entries: inputs, caches: caches)
+            var bodies = EnrichTitleAliases.StoredBodies(remembered: remembered) { ref in
+                readBody(forKey: ref.key, crc: ref.crc, in: dir)?.lyrics
+            }
+            let tables = deriveLocalAliasTables(entries: inputs, caches: caches, storedBody: { bodies.body(for: $0) })
+            return (tables, bodies.used)
         }.value
+        aliasLyricsBodies = used
         if gen == aliasTablesGeneration, cachedEntries != nil { cachedAliasTables = tables }
         return tables
     }
 
     /// 两张别名表的推导本体(纯函数,selftest 覆盖):歌手表先推,歌名表按新推出的歌手表分桶。
     public nonisolated static func deriveLocalAliasTables(entries: [EnrichTitleAliases.Entry],
-                                                         caches: LocalArtistAliases.MusicBrainzCaches) -> LocalAliasTables {
+                                                         caches: LocalArtistAliases.MusicBrainzCaches,
+                                                         storedBody: (EnrichTitleAliases.LyricsRef) -> String? = { _ in nil })
+        -> LocalAliasTables {
         let artists = LocalArtistAliases.derive(caches: caches, entries: entries)
-        // derive 的两个函数参数都是 (String) -> String:必须写 `artistKey:` 标签,别写成尾随闭包(会绑到最后一个参数
-        // lyricsBody 上)。见 12 章决策 27。
-        let titles = EnrichTitleAliases.derive(entries, artistKey: { LocalArtistAliases.canonicalArtistKey($0, table: artists) })
+        // derive 有好几个函数参数:必须写 `artistKey:` 标签,别写成尾随闭包。见 12 章决策 27。
+        let titles = EnrichTitleAliases.derive(entries, artistKey: { LocalArtistAliases.canonicalArtistKey($0, table: artists) },
+                                               storedBody: storedBody)
         return LocalAliasTables(artists: artists, titles: titles)
     }
 
@@ -1400,6 +1493,17 @@ public enum EnrichCacheReader {
               EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key)
         else { return nil }
         return p.entry
+    }
+
+    /// 正在播放快照里 key 正好是这一条的那份,不管比已解码的内容新还是旧。只给正文小文件读不到时兜底:快照是完整
+    /// 条目,正文都在。
+    private static func playingSnapshot(forExactKey key: String) -> EnrichCacheEntry? {
+        guard let mtime = mtime(of: playingEntryURL) else { return nil }
+        if let c = cachedPlayingEntry, c.mtime == mtime { return c.key == key ? c.entry : nil }
+        guard let data = try? Data(contentsOf: playingEntryURL),
+              let file = try? JSONDecoder().decode(PlayingEntryFile.self, from: data) else { return nil }
+        cachedPlayingEntry = (mtime, file.key, file.entry)
+        return file.key == key ? file.entry : nil
     }
 
     /// 比已解码内容新的单条快照;没有、比缓存旧、或解不开都是 nil。

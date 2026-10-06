@@ -1168,6 +1168,78 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    // ---- App 不常驻主歌词(15 章决策 24)----
+    do {
+        func entry(_ json: String) -> EnrichCacheEntry {
+            try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8))
+        }
+        let leanWith = entry(#"{"lyrics":"[00:01.00]词","body_crc":7,"body_fields":128,"lyrics_score":10}"#)
+        let leanWithout = entry(#"{"body_crc":7,"body_fields":129,"lyrics_score":90}"#)
+        let full = entry(#"{"lyrics":"[00:01.00]词","lyrics_score":10}"#)
+        let fullEmpty = entry(#"{"lyrics":"","lyrics_score":10}"#)
+        expectEqual([leanWith.hasLyrics, leanWithout.hasLyrics, full.hasLyrics, fullEmpty.hasLyrics], [true, false, true, false],
+                    "主歌词不常驻: 精简条目按键在不在判有没有主歌词,完整条目看正文")
+        expectEqual(EnrichCacheReader.betterEntry(leanWith, leanWithout, "b", "a"), true,
+                    "主歌词不常驻: 精简条目没解主歌词,宽松胜者照样是有词的那条(同引擎 betterEnrichEntry)")
+
+        typealias A = EnrichTitleAliases
+        let lrcHans = """
+        [00:00.50]作词 : 方大同
+        [00:12.10]我在黑洞里 找不到出口
+        [00:18.30]你说的话 像光一样穿过
+        [00:24.00]黑洞里没有时间 只有你的声音
+        [00:31.20]我一直往前走 走不到尽头
+        [00:38.00]黑洞里没有时间 只有你的声音
+        """
+        let lrcHant = """
+        [00:12.10]<0,300>我<300,300>在<600,300>黑洞裡
+        [00:14.00]找不到出口
+        [00:18.30]你說的話 像光一樣穿過
+        [00:24.00]黑洞裡沒有時間
+        [00:26.00]只有你的聲音
+        [00:31.20]我一直往前走 走不到盡頭
+        [00:38.00]黑洞裡沒有時間 只有你的聲音
+        """
+        let refs = [A.LyricsRef(key: "方大同|Black Hole|", crc: 1), A.LyricsRef(key: "方大同|黑洞里|", crc: 2),
+                    A.LyricsRef(key: "陶喆|Melody|", crc: 3)]
+        let texts = [refs[0]: lrcHans, refs[1]: lrcHant, refs[2]: lrcHans]
+        func e(_ artist: String, _ title: String, dur: Double, ref: A.LyricsRef) -> A.Entry {
+            .init(artist: artist, title: title, neteaseURL: nil, qqMusicURL: nil, durationSecs: dur, lyricsRef: ref)
+        }
+        let inputs = [e("方大同", "Black Hole", dur: 213.586666, ref: refs[0]), e("方大同", "黑洞里", dur: 213.586, ref: refs[1]),
+                      e("陶喆", "Melody", dur: 200.5, ref: refs[2])]
+        var asked: [A.LyricsRef] = []
+        var first = A.StoredBodies(remembered: [:]) { ref in asked.append(ref); return texts[ref] }
+        expectEqual(A.derive(inputs, storedBody: { first.body(for: $0) }), ["方大同": ["blackhole": "黑洞里"]],
+                    "主歌词不常驻: E2 从正文引用取正文,推出的别名跟直接给原文一样")
+        expectEqual(Set(asked), Set(refs[0...1]), "主歌词不常驻: E2 只读真进入比对的那几份正文")
+        asked.removeAll()
+        var second = A.StoredBodies(remembered: first.used) { ref in asked.append(ref); return texts[ref] }
+        expectEqual(A.derive(inputs, storedBody: { second.body(for: $0) }), ["方大同": ["blackhole": "黑洞里"]],
+                    "主歌词不常驻: 带着上一轮剥好的正文再推一次,结果不变")
+        expectEqual(asked.isEmpty && second.loads == 0 && first.loads == 2, true,
+                    "主歌词不常驻: 上一轮剥好的正文这一轮直接用,不再读盘")
+        expectEqual(Set(second.used.keys), Set(refs[0...1]), "主歌词不常驻: 带到下一轮的只有这一轮用到的那几份")
+        var third = A.StoredBodies(remembered: second.used) { _ in lrcHant }
+        _ = third.body(for: A.LyricsRef(key: refs[1].key, crc: 9))
+        expectEqual(third.loads, 1, "主歌词不常驻: 正文变了(body_crc 不同)就重新读")
+        var missing = A.StoredBodies(remembered: [:]) { _ in nil }
+        expectEqual(missing.body(for: refs[0]) == nil && missing.used.isEmpty, true,
+                    "主歌词不常驻: 正文小文件读不到,那一份不参与比对")
+
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(reader, contain: "} else {\n            lyrics = nil\n            hasLyrics = c.contains(.lyrics)\n        }"),
+                    true, "主歌词不常驻(契约): 精简条目不解主歌词")
+        expectEqual(sourceBytes(reader, contain: "if let s = playingSnapshot(forExactKey: matchedKey) {"), true,
+                    "主歌词不常驻(契约): 正文小文件读不到时拿正在播放快照兜底")
+        let engine = (try? String(contentsOf: sources.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse-engine/enrich.go"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(engine, contain: "`json:\"lyrics,omitempty\"`"), true,
+                    "主歌词不常驻(契约): 引擎写主歌词是 omitempty,精简条目里有这个键就有词")
+    }
+
     // ---- build.sh 装完必须确认进程真换了----
     //
     // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本
