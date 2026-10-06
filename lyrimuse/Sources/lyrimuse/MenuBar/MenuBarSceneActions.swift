@@ -99,6 +99,7 @@ private struct SceneActionRegistrar: View {
                 // accessory 策略(没有 Dock 图标)下,不先手动激活 App,openSettings()/
                 // openWindow(id:) 都会静默没反应 —— 所以激活这一步包进闭包里,让所有
                 // 调用方(菜单、全局快捷键、AppDelegate 的 Dock 点击回调)都免费拿到。
+                // 启动时重开歌词窗口是例外:不走这些闭包、不激活 App,窗口由 attach 摆到最前(07 章决策 123)。
                 AppActions.shared.openSettings = {
                     MenuBarSceneActions.presentSettings { openSettingsAction() }
                 }
