@@ -835,7 +835,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 共用同一套上限与节流,而**不是**塞进 needsPeripheralBackfill:那个函数被四个测试文件
 			// 按三参数签名调着,为一条判据改签名不值得。三态判据见 motionCoverWorthBackfill。
 			enrichInflight[key] = true
-			go backfillPeripheralFields(key, artist, title, album, durationSecs)
+			go backfillPeripheralFields(context.Background(), key, artist, title, album, durationSecs)
 		} else if needsLyricsFirstFill(e) && !enrichInflight[key] {
 			// "条目已存在但一条歌词都没有" —— 少了这条,一首歌搜砸一次就永久卡住,见
 			// needsLyricsFirstFill 的注释。排在下面两条前面无所谓先后:那两条对空歌词条目都
@@ -2691,7 +2691,7 @@ func recheckMotionCoverAgainstCurrentCover(ctx context.Context, key, title, albu
 
 // backfillPeripheralFields 只补外围链接(Apple/QQ/网易云/主色),绝不动歌词/封面来源/
 // 人工修正标记等身份字段——这些一旦解析出结果就永久生效,不该被这条自愈路径悄悄改掉。
-func backfillPeripheralFields(key, artist, title, album string, durationSecs float64) {
+func backfillPeripheralFields(ctx context.Context, key, artist, title, album string, durationSecs float64) {
 	// 开跑时的改动序号:这一轮顺带收下歌词之前要核对这期间没人改过这条(见 adoptBackfilledLyrics)。
 	enrichMu.Lock()
 	stamp := enrichEditStampLocked()
@@ -2702,9 +2702,10 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 		delete(enrichInflight, key)
 		enrichMu.Unlock()
 	}()
-	// 没有对应的"停止"入口——这条路径补的是**已存在**条目的外围字段(不是首次搜索的
-	// 占位行),没有可以取消它的 UI,context.Background() 就够。
-	ctx := context.Background()
+	// ctx:播放时那一处没有"停止"入口(补的是**已存在**条目的外围字段,不是首次搜索的占位行),
+	// 传 context.Background();后台补封面(coversweep.go)传进来的那个进程退出时取消。
+	// 这一轮有没有一个请求成功,决定记不记一次补全次数(见下面 PeripheralRetryCount 那一行)。
+	networkRound := beginNetworkRound()
 	if skipLyrics {
 		ctx = withPeripheralOnly(ctx)
 	}
@@ -2832,8 +2833,11 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	// 只推自己那个节流时间戳。**不要**去动 e.TS —— 那是这条记录的解析时刻,歌词重搜拿它
 	// 当起算点,推它等于每补一次外围字段就把歌词重搜往后拖 10 分钟(见 TS 字段的注释)。
 	e.PeripheralTS = time.Now().Unix()
-	// 不管补没补上都记一次 —— 上限就是靠它生效的(见 peripheralBackfillMaxAttempts)。
-	e.PeripheralRetryCount++
+	// 补没补上都记一次,上限靠它生效(见 peripheralBackfillMaxAttempts);一个请求都没成功的这一轮
+	// (断网、全被熔断跳过或被本地出站闸挡下)不记。见 09 章决策 195。
+	if attempts, failures := networkRound(); lyricsRoundConfirmsNoResult(attempts, failures) {
+		e.PeripheralRetryCount++
+	}
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()

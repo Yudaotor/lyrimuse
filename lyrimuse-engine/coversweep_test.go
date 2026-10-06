@@ -1,0 +1,218 @@
+package main
+
+import (
+	"context"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+)
+
+// coverSweepCall 是假的 backfillPeripheralFields 收到的一次调用。
+type coverSweepCall struct {
+	key, artist, title, album string
+	dur                       float64
+	background                bool
+}
+
+// withCoverSweepFakes 换掉补一条、观察请求和等待:每补一条先调 onBackfill(可以改缓存),再按 rounds 依次报这一条的
+// (请求数, 失败数),报完了沿用最后一个。返回记下的调用与等待时长。
+func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key string)) (*[]coverSweepCall, *[]time.Duration) {
+	t.Helper()
+	savedBackfill, savedRound, savedWait := coverSweepBackfill, coverSweepNetworkRound, coverSweepWait
+	enrichMu.Lock()
+	savedInflight := enrichInflight
+	enrichInflight = map[string]bool{}
+	enrichMu.Unlock()
+	t.Cleanup(func() {
+		coverSweepBackfill, coverSweepNetworkRound, coverSweepWait = savedBackfill, savedRound, savedWait
+		enrichMu.Lock()
+		enrichInflight = savedInflight
+		enrichMu.Unlock()
+	})
+	var calls []coverSweepCall
+	var waits []time.Duration
+	coverSweepWait = func(_ context.Context, d time.Duration) { waits = append(waits, d) }
+	coverSweepBackfill = func(ctx context.Context, key, artist, title, album string, dur float64) {
+		calls = append(calls, coverSweepCall{key, artist, title, album, dur, isBackgroundOutbound(ctx)})
+		if onBackfill != nil {
+			onBackfill(key)
+		}
+		enrichMu.Lock()
+		delete(enrichInflight, key)
+		enrichMu.Unlock()
+	}
+	coverSweepNetworkRound = func() func() (int32, int32) {
+		r := rounds[min(len(calls), len(rounds)-1)]
+		return func() (int32, int32) { return r[0], r[1] }
+	}
+	return &calls, &waits
+}
+
+func coverSweepSetCover(key string) {
+	enrichMu.Lock()
+	e := enrichCache[key]
+	e.CoverURL = "https://example.invalid/" + key
+	enrichCache[key] = e
+	enrichMu.Unlock()
+}
+
+const coverSweepLyrics = "[00:01.00]line"
+
+func TestCoverSweepCandidates(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{
+		"B|t1|Album": {Lyrics: coverSweepLyrics},
+		"A|t2|Z":     {Lyrics: coverSweepLyrics},
+		"A|t1|Y":     {Instrumental: true},
+		"A|t3|Y":     {ManualLyrics: true, Lyrics: coverSweepLyrics},
+		"A|has|Y":    {Lyrics: coverSweepLyrics, CoverURL: "https://c"},
+		"A|tried|Y":  {Lyrics: coverSweepLyrics, PeripheralRetryCount: 1},
+		"A|nolyr|Y":  {},
+		"|t|Y":       {Lyrics: coverSweepLyrics},
+		"A|fresh|Y":  {Lyrics: coverSweepLyrics, TS: time.Now().Unix()},
+		"A|busy|Y":   {Lyrics: coverSweepLyrics},
+	})
+	withCoverSweepFakes(t, [][2]int32{{1, 0}}, nil)
+	enrichMu.Lock()
+	enrichInflight["A|busy|Y"] = true
+	got := coverSweepCandidatesLocked()
+	enrichMu.Unlock()
+	want := []string{"A|t1|Y", "A|t3|Y", "A|t2|Z", "B|t1|Album"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("候选 = %v, 要 %v(有封面、补过、没词、没歌手、刚解析过、正在解析的都不挑;同歌手按专辑排)", got, want)
+	}
+}
+
+func TestCoverSweepTitle(t *testing.T) {
+	for in, want := range map[string]string{
+		"Song~dur2": "Song", "Song~dur12": "Song", "Song": "Song", "Song~dur": "Song~dur",
+		"Song~durX": "Song~durX", "Song~dur1": "Song~dur1", "~dur2": "~dur2",
+	} {
+		if got := coverSweepTitle(in); got != want {
+			t.Errorf("coverSweepTitle(%q) = %q, 要 %q", in, got, want)
+		}
+	}
+}
+
+// 补上的、没补上的、轮到时已经不用补的各记一次;查的时候走后台档、标题去掉时长后缀、带上存着的时长;
+// 两首之间等 coverSweepGap,轮到时不用补的那条之后不等。
+func TestCoverSweepRunsEachCandidateOnce(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|Gone|Al":      {Lyrics: coverSweepLyrics, DurationSecs: 180},
+		"A|Other|Al":     {Lyrics: coverSweepLyrics},
+		"A|Song~dur2|Al": {Lyrics: coverSweepLyrics, ResolvedDurationSecs: 200, DurationSecs: 190},
+	})
+	calls, waits := withCoverSweepFakes(t, [][2]int32{{4, 1}}, func(key string) {
+		switch key {
+		case "A|Gone|Al":
+			coverSweepSetCover("A|Other|Al")
+		case "A|Song~dur2|Al":
+			coverSweepSetCover(key)
+		}
+	})
+	pass := runCoverSweep(context.Background())
+	wantCalls := []coverSweepCall{
+		{"A|Gone|Al", "A", "Gone", "Al", 180, true},
+		{"A|Song~dur2|Al", "A", "Song", "Al", 200, true},
+	}
+	if !reflect.DeepEqual(*calls, wantCalls) {
+		t.Fatalf("调用 = %+v, 要 %+v", *calls, wantCalls)
+	}
+	if want := (coverSweepPass{candidates: 3, filled: 1, missed: 1, skipped: 1}); pass != want {
+		t.Errorf("结果 = %+v, 要 %+v", pass, want)
+	}
+	if want := []time.Duration{coverSweepGap}; !reflect.DeepEqual(*waits, want) {
+		t.Errorf("等待 = %v, 要 %v", *waits, want)
+	}
+}
+
+// 一个请求都没成功(全失败,或者一个都没发出去)的连着 coverSweepOfflineLimit 条,这一遍停下;中间成了一条就重新数。
+func TestCoverSweepStopsAfterOfflineStreak(t *testing.T) {
+	entries := map[string]enrichEntry{}
+	for _, k := range []string{"A|1|X", "A|2|X", "A|3|X", "A|4|X", "A|5|X", "A|6|X", "A|7|X"} {
+		entries[k] = enrichEntry{Lyrics: coverSweepLyrics}
+	}
+	withEnrichCache(t, entries)
+	calls, waits := withCoverSweepFakes(t, [][2]int32{{3, 3}, {0, 0}, {5, 5}, {2, 2}, {4, 4}}, nil)
+	pass := runCoverSweep(context.Background())
+	if len(*calls) != coverSweepOfflineLimit || !pass.offline {
+		t.Fatalf("补了 %d 条、offline=%v,要补 %d 条后停下", len(*calls), pass.offline, coverSweepOfflineLimit)
+	}
+	want := []time.Duration{coverSweepOfflineWait, coverSweepOfflineWait, coverSweepOfflineWait, coverSweepOfflineWait}
+	if !reflect.DeepEqual(*waits, want) {
+		t.Errorf("等待 = %v, 要 %v", *waits, want)
+	}
+
+	withEnrichCache(t, entries)
+	calls, _ = withCoverSweepFakes(t, [][2]int32{{3, 3}, {3, 3}, {3, 3}, {3, 3}, {3, 1}, {3, 3}, {3, 3}}, nil)
+	if pass := runCoverSweep(context.Background()); pass.offline || len(*calls) != len(entries) || pass.missed != 1 {
+		t.Errorf("中间成了一条就该重新数: 补了 %d 条, %+v", len(*calls), pass)
+	}
+}
+
+// 有别的歌在解析时先等它;一直不完也只等 coverSweepYieldMax。
+func TestCoverSweepYieldsToResolvingEntries(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: coverSweepLyrics}})
+	calls, waits := withCoverSweepFakes(t, [][2]int32{{1, 0}}, nil)
+	enrichMu.Lock()
+	enrichInflight["Z|playing|Y"] = true
+	enrichMu.Unlock()
+	polls := 0
+	coverSweepWait = func(_ context.Context, d time.Duration) {
+		*waits = append(*waits, d)
+		if polls++; polls == 3 {
+			enrichMu.Lock()
+			delete(enrichInflight, "Z|playing|Y")
+			enrichMu.Unlock()
+		}
+	}
+	runCoverSweep(context.Background())
+	if len(*calls) != 1 || len(*waits) != 3 || (*waits)[0] != coverSweepYieldPoll {
+		t.Fatalf("要等三次再补: 调用 %d, 等待 %v", len(*calls), *waits)
+	}
+
+	withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: coverSweepLyrics}})
+	calls, waits = withCoverSweepFakes(t, [][2]int32{{1, 0}}, nil)
+	enrichMu.Lock()
+	enrichInflight["Z|stuck|Y"] = true
+	enrichMu.Unlock()
+	runCoverSweep(context.Background())
+	if want := int(coverSweepYieldMax / coverSweepYieldPoll); len(*calls) != 1 || len(*waits) != want {
+		t.Errorf("一直有别的在解析时等满 %d 次照样补: 调用 %d, 等待 %d 次", want, len(*calls), len(*waits))
+	}
+}
+
+// 外围补全一个请求都没成功的这一轮不记次数,后台补封面靠它不在断网时把次数耗光。
+func TestBackfillPeripheralFieldsCountsOnlyReachedRounds(t *testing.T) {
+	src := string(mustRead(t, "enrich.go"))
+	start := strings.Index(src, "func backfillPeripheralFields(ctx context.Context,")
+	if start < 0 {
+		t.Fatal("找不到 backfillPeripheralFields(ctx context.Context, …)")
+	}
+	body := src[start:]
+	if end := strings.Index(body, "\n}\n"); end >= 0 {
+		body = body[:end]
+	}
+	begin := strings.Index(body, "networkRound := beginNetworkRound()")
+	resolve := strings.Index(body, "resolveTrackEnrichment(")
+	if begin < 0 || resolve < 0 || begin > resolve {
+		t.Error("要在发请求之前开始观察这一轮(networkRound := beginNetworkRound())")
+	}
+	if !strings.Contains(body, "if attempts, failures := networkRound(); lyricsRoundConfirmsNoResult(attempts, failures) {\n\t\te.PeripheralRetryCount++") {
+		t.Error("PeripheralRetryCount 只在这一轮有请求成功时才加")
+	}
+	if strings.Count(body, "e.PeripheralRetryCount++") != 1 {
+		t.Error("PeripheralRetryCount 只该在那一处加")
+	}
+}
+
+func TestCoverSweeperStartedByRun(t *testing.T) {
+	src, err := os.ReadFile("poller.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "go startCoverSweeper(ctx)") {
+		t.Error("run() 里要起 startCoverSweeper")
+	}
+}

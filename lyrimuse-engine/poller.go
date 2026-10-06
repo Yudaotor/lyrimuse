@@ -1749,6 +1749,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startEnrichEditWatcher(ctx)                    // App 侧改歌词缓存的请求,见 enrichedit.go 顶部注释
 	go startKasetAlbumSweep(ctx)                      // 用 Kaset 放过、还没按当前界面语言判过专辑的条目补判一次,见 kasetalbum.go
 	go startLyricsFillSweeper(ctx)                    // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
+	go startCoverSweeper(ctx)                         // 有词、没封面、外围字段从没补过的条目在后台各补一次,见 coversweep.go 顶部注释
 	go startLyricsRematchWatcher(ctx)                 // 「重新自动匹配」,见 lyricsrematch.go 顶部注释
 
 	ticker := time.NewTicker(pollInterval)
