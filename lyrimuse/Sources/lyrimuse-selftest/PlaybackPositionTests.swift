@@ -794,35 +794,42 @@ func runPlaybackPositionTests() {
             }
             expectEqual(LocalPlaybackSource.spotifyStartLeadPrior(.seek), 0.45, "起播领先: 播放中拖动 先验 0.45")
             expectEqual(LocalPlaybackSource.spotifyStartLeadPrior(.gapless), 0.66, "起播领先: 预载无缝换歌 先验 0.66(实测 0.49~0.73 的均值)")
-            // 预载:新曲的钟在旧曲钟走到头那一刻接上(实测差 ~0.1);没预载:新曲的钟晚 1.9s。
+            // 预载:新曲的钟在旧曲钟走到头前后接上(实测差 −0.9~+0.65);没预载:新曲的钟晚 1.9s。容差 1.2 取两簇之间。
             expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 0.056, clockOverrun: 0.13), true, "起播方式: 钟接得上 → 预载无缝")
+            expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 1.133, clockOverrun: 1.778), true, "起播方式: 新曲的钟晚 0.65s → 仍算预载")
+            expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 0.49, clockOverrun: -0.21), true, "起播方式: 新曲的钟早 0.7s → 仍算预载")
             expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 0.05, clockOverrun: 1.95), false, "起播方式: 钟晚 1.9s → 没预载")
+            expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 0.3, clockOverrun: -1.5), false, "起播方式: 旧曲还剩 1.5s 就换了(手动跳歌)→ 不算")
             expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 0.3, clockOverrun: -120), false, "起播方式: 旧曲远没放完(手动跳歌)→ 不算")
-            // 广告放完接着放的那首(真机:广告报 29.99s、29.09 就结束,新曲 raw 0.527、旧曲钟越界 1.05 → 差 0.52 刚好过不了
-            // 预载判据;暂停反推真实领先 0.766)。它得单独一档,学进 fresh 会把手动点播(真实 0.27)抬到 0.6。
+            // 广告放完接着放的那首(真机:广告报 29.99s、29.09 就结束,新曲 raw 0.527、旧曲钟越界 1.05;暂停反推真实领先 0.766):
+            // 不管钟接没接上都单独一档,学进 fresh 会把手动点播(真实 0.27)抬到 0.6。
             expectEqual(LocalPlaybackSource.spotifyNaturalStartKind(raw: 0.527, clockOverrun: 1.05, previousWasAd: true), .afterAd,
                         "起播方式: 广告之后接着放 → afterAd")
-            expectEqual(LocalPlaybackSource.spotifyNaturalStartKind(raw: 0.527, clockOverrun: 1.05, previousWasAd: false), .fresh,
-                        "起播方式: 不是广告之后,同样的数照旧 → fresh")
+            expectEqual(LocalPlaybackSource.spotifyNaturalStartKind(raw: 0.527, clockOverrun: 1.05, previousWasAd: false), .gapless,
+                        "起播方式: 不是广告之后、钟差 0.52 → 预载无缝")
+            expectEqual(LocalPlaybackSource.spotifyNaturalStartKind(raw: 0.05, clockOverrun: 1.95, previousWasAd: false), .fresh,
+                        "起播方式: 不是广告之后、钟晚 1.9s → fresh")
             expectEqual(LocalPlaybackSource.spotifyNaturalStartKind(raw: 0.056, clockOverrun: 0.13, previousWasAd: false), .gapless,
                         "起播方式: 预载无缝换歌照旧")
             expectEqual(LocalPlaybackSource.spotifyNaturalStartKind(raw: 0.3, clockOverrun: -120, previousWasAd: true), .fresh,
                         "起播方式: 广告远没放完就换了(不是自然接上)→ 不算 afterAd")
             expectEqual(LocalPlaybackSource.spotifyStartLeadPrior(.afterAd), 0.66, "起播领先: 广告之后 先验同预载无缝 0.66")
-            // 表的规则版本:旧表(没有版本号 = 1)里的 fresh 混着广告之后的样本(本机被抬到 0.542,真实 0.27),
-            // 升到 2 时只作废 fresh;别的档规则没变,原样保留。按规则作废,不按数值大小。
+            // 表的规则版本:2、3 两版都只改了 fresh 的判定,升版时只作废 fresh;别的档规则没变,原样保留。
+            // 按规则作废,不按数值大小。
             do {
                 let old: [String: Double] = ["fresh": 0.542, "gapless": 0.705, "seek": 0.466]
-                let v2 = LocalPlaybackSource.migratedStartLeadTable(old, fromSchema: 1)
-                expectEqual(v2["fresh"], nil, "起播领先表迁移: 旧 fresh 作废,回到先验")
-                expectEqual(v2["gapless"], 0.705, "起播领先表迁移: gapless 保留")
-                expectEqual(v2["seek"], 0.466, "起播领先表迁移: seek 保留")
+                let v3 = LocalPlaybackSource.migratedStartLeadTable(old, fromSchema: 1)
+                expectEqual(v3["fresh"], nil, "起播领先表迁移: 旧 fresh 作废,回到先验")
+                expectEqual(v3["gapless"], 0.705, "起播领先表迁移: gapless 保留")
+                expectEqual(v3["seek"], 0.466, "起播领先表迁移: seek 保留")
                 expectEqual(LocalPlaybackSource.migratedStartLeadTable(["fresh": 0.3], fromSchema: 1)["fresh"], nil,
                             "起播领先表迁移: 旧 fresh 看着像准的也作废(不按数值猜)")
-                expectEqual(LocalPlaybackSource.migratedStartLeadTable(["fresh": 0.26, "afterAd": 0.7], fromSchema: 2),
+                expectEqual(LocalPlaybackSource.migratedStartLeadTable(["fresh": 0.598, "afterAd": 0.7], fromSchema: 2),
+                            ["afterAd": 0.7], "起播领先表迁移: 版本 2 的表作废 fresh、afterAd 保留")
+                expectEqual(LocalPlaybackSource.migratedStartLeadTable(["fresh": 0.26, "afterAd": 0.7], fromSchema: 3),
                             ["fresh": 0.26, "afterAd": 0.7], "起播领先表迁移: 已是当前版本的表原样不动")
                 expectEqual(LocalPlaybackSource.migratedStartLeadTable([:], fromSchema: 1), [:], "起播领先表迁移: 空表(新装)不出错")
-                expectEqual(LocalPlaybackSource.spotifyStartLeadSchema, 2, "起播领先表迁移: 当前版本 2")
+                expectEqual(LocalPlaybackSource.spotifyStartLeadSchema, 3, "起播领先表迁移: 当前版本 3")
             }
             // 暂停残差:偏置为 0、delta −0.504 → 真实领先 0.774(音频直接量 0.732);偏置量得准时 delta ≈ +0.27。
             expectEqual(r3(LocalPlaybackSource.pauseResidualLead(bias: 0, pauseDelta: -0.504)), 0.774, "暂停残差: 没扣偏置的一段反推出 0.774")

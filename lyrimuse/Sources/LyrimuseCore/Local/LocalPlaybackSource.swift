@@ -889,12 +889,13 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 换歌那一拍,是不是预载好的无缝换歌。纯函数,selftest 直接覆盖。
     /// - raw: 新曲第一笔读数(它自己的钟)
     /// - clockOverrun: 旧曲**钟**按连续外推越过其时长的量(= 声音外推越界量 + 旧曲偏置)
-    /// 预载时新曲的钟在旧曲钟走到头那一刻就接上,两者一致;没预载时新曲的钟要等加载完才走,差出一截。
+    /// 预载时新曲的钟在旧曲钟走到头前后接上,两者相近;没预载时新曲的钟要等加载完才走,晚出一截。
     public nonisolated static func isPreloadedGaplessStart(raw: Double, clockOverrun: Double) -> Bool {
         abs(clockOverrun) <= naturalAdvanceWindowSecs && abs(raw - clockOverrun) <= preloadedClockToleranceSecs
     }
-    /// 实测:预载时两者差 ~0.1s;没预载时新曲的钟晚 1.9s。
-    public nonisolated static let preloadedClockToleranceSecs = 0.5
+    /// 实测:预载时两者差 −0.9~+0.65s,没预载时新曲的钟晚 1.9s,容差取两簇之间。别收回 0.5:差 0.6~0.9 的预载换歌
+    /// 会落进 fresh,把手动点播那档(真实 ~0.25)学到 0.6,点播的歌到第一次暂停前一直偏慢(见 02 章决策 100)。
+    public nonisolated static let preloadedClockToleranceSecs = 1.2
 
     /// 暂停那一拍 Spotify 发布的冻结值比我们停在的位置**本来就大**这么多:发出暂停后声音还要淡出
     /// ~0.25s 才停(实测 0.246~0.318),冻结值对应的是停下那一刻。偏置量得准时 `pause transition` 的
@@ -931,12 +932,14 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 起播领先量表的规则版本。某一档的**判定或学习规则**变了,就把版本 +1、在 `migratedStartLeadTable`
     /// 里作废那一档(按规则作废,不按数值大小猜哪个坏了)。没有版本号的旧表算 1。
     /// 2:广告之后那首从 fresh 拆出成 afterAd,旧 fresh 值里混着广告之后的样本,作废(见决策 47)。
-    public nonisolated static let spotifyStartLeadSchema = 2
+    /// 3:认预载的容差放宽(preloadedClockToleranceSecs),旧 fresh 值里混着被判成 fresh 的预载换歌,作废(见 02 章决策 100)。
+    public nonisolated static let spotifyStartLeadSchema = 3
 
     /// 把按旧规则学的表迁到当前版本。纯函数,selftest 直接覆盖。
     public nonisolated static func migratedStartLeadTable(_ table: [String: Double], fromSchema: Int) -> [String: Double] {
         var migrated = table
-        if fromSchema < 2 { migrated.removeValue(forKey: SpotifyStartKind.fresh.rawValue) }
+        // 2、3 两版都只改了 fresh 的判定。
+        if fromSchema < 3 { migrated.removeValue(forKey: SpotifyStartKind.fresh.rawValue) }
         return migrated
     }
 
@@ -948,6 +951,10 @@ public final class LocalPlaybackSource: ObservableObject {
         guard schema < Self.spotifyStartLeadSchema else { return table }
         let migrated = Self.migratedStartLeadTable(table, fromSchema: schema)
         defaults.set(migrated, forKey: Self.spotifyStartLeadDefaultsKey)
+        // 没有学习值的档,样本数一起清掉:不清的话从先验重新学时 α 已是慢档,要暂停五六次才收敛(见 learnedStartLead)。
+        if let counts = defaults.dictionary(forKey: Self.spotifyStartLeadSamplesDefaultsKey) as? [String: Int] {
+            defaults.set(counts.filter { migrated[$0.key] != nil }, forKey: Self.spotifyStartLeadSamplesDefaultsKey)
+        }
         defaults.set(Self.spotifyStartLeadSchema, forKey: Self.spotifyStartLeadSchemaDefaultsKey)
         logger.notice("spotify start lead table migrated: schema \(schema) -> \(Self.spotifyStartLeadSchema) \(table.keys.sorted(), privacy: .public) -> \(migrated.keys.sorted(), privacy: .public)")
         return migrated
@@ -1754,6 +1761,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 let isSpotifyPlayerClock = gaplessLeadBundleID == PlaybackPlayer.spotify.bundleIdentifier
                     && anchorElapsedTime == nil
                 var spotifyKind: SpotifyStartKind?
+                var spotifyClockOverrun: Double?
                 if let bundle = gaplessLeadBundleID, bundle == posPrevGaplessLeadBundleID,
                    posWasPlaying, let prevWall = posPrevWall,
                    posPrevDurationSecs > 0 {
@@ -1762,8 +1770,10 @@ public final class LocalPlaybackSource: ObservableObject {
                         - posPrevDurationSecs
                     if isSpotifyPlayerClock {
                         // 旧曲的钟 = 声音外推 + 旧曲偏置(此刻还没换成新曲的)。
+                        let clockOverrun = overrun + posReportedBiasSecs
+                        spotifyClockOverrun = clockOverrun
                         spotifyKind = Self.spotifyNaturalStartKind(
-                            raw: rawReported, clockOverrun: overrun + posReportedBiasSecs,
+                            raw: rawReported, clockOverrun: clockOverrun,
                             previousWasAd: posPrevWasAdBreak)
                     } else {
                         corrected = Self.naturalAdvanceCorrection(reported: rawReported, overrun: overrun)
@@ -1807,7 +1817,9 @@ public final class LocalPlaybackSource: ObservableObject {
                     // 上一拍不在播(首次观察 / 暂停中换了歌)时不知道怎么起播的:按 fresh 给,但不学。
                     let kind = spotifyKind ?? .fresh
                     let lead = spotifyStartLead(kind)
-                    logger.notice("spotify start lead: kind=\(kind.rawValue, privacy: .public)\(spotifyKind == nil ? " (unknown start)" : "", privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+                    // 带上旧曲的钟越界量:判没判成预载(isPreloadedGaplessStart)靠它核。
+                    let overrunNote = spotifyClockOverrun.map { String(format: ", old clock overrun %.3f", $0) } ?? ""
+                    logger.notice("spotify start lead: kind=\(kind.rawValue, privacy: .public)\(spotifyKind == nil ? " (unknown start)" : "", privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3))\(overrunNote, privacy: .public))")
                     setReportedBias(lead, anchorElapsed: nil, startKind: spotifyKind)
                     trackPosSeconds = rawReported - lead
                 }
@@ -1937,10 +1949,10 @@ public final class LocalPlaybackSource: ObservableObject {
         if isSpotifyPlayerClock, posPrevDurationSecs > 0,
            rawReported < Self.naturalAdvanceWindowSecs,
            abs(predicted - posPrevDurationSecs) <= Self.naturalAdvanceWindowSecs {
-            let kind: SpotifyStartKind = Self.isPreloadedGaplessStart(
-                raw: rawReported, clockOverrun: predicted + posReportedBiasSecs - posPrevDurationSecs) ? .gapless : .fresh
+            let clockOverrun = predicted + posReportedBiasSecs - posPrevDurationSecs
+            let kind: SpotifyStartKind = Self.isPreloadedGaplessStart(raw: rawReported, clockOverrun: clockOverrun) ? .gapless : .fresh
             let lead = spotifyStartLead(kind)
-            logger.notice("repeat-one wrap: spotify start lead kind=\(kind.rawValue, privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+            logger.notice("repeat-one wrap: spotify start lead kind=\(kind.rawValue, privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)), old clock overrun \(clockOverrun, format: .fixed(precision: 3)))")
             setReportedBias(lead, anchorElapsed: nil, startKind: kind)
             trackPosSeconds = rawReported - lead
             posErrEMA = 0

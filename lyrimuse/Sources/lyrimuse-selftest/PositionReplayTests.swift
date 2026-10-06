@@ -244,8 +244,9 @@ private func replaySpotifyManualStart() {
     expectEqual(rig.startLeadTable["afterAd"], nil, "回放·Spotify 手动点播: 不碰 afterAd")
 }
 
-/// 广告放完接着放:广告报 29.99s、29.09s 就结束,新曲的钟与旧曲接不上 0.5s 以内 → 旧版判成 fresh。
-/// 上一首是广告时归 afterAd(先验 0.66);真实领先 0.766 学进 afterAd,fresh 不动。
+/// 广告放完接着放:广告报 29.99s、29.09s 就结束。上一首是广告时归 afterAd(先验 0.66),暂停反推的真实领先 0.766
+/// 学进 afterAd;对照组上一首不是广告,新曲的钟差 0.92s、在预载容差以内,归 gapless(先验同为 0.66)、学进 gapless。
+/// 两组都不碰 fresh。
 @MainActor
 private func replaySpotifyAfterAd() {
     for previousWasAd in [true, false] {
@@ -258,18 +259,19 @@ private func replaySpotifyAfterAd() {
         for t in stride(from: 2.6, through: 18.6, by: 2) {
             rig.tick(spotify("還是會寂寞", artist: "陳綺貞", raw: raw(t), duration: 272.29), at: at(t))
         }
-        let expectedLead = previousWasAd ? 0.66 : 0.24
         let label = previousWasAd ? "广告之后" : "对照(上一首不是广告)"
-        expectEqual(near(rig.source.replayReportedBiasSecs, expectedLead, 0.001), true,
-                    "回放·Spotify \(label): 扣 \(expectedLead)(实际 \(String(format: "%.3f", rig.source.replayReportedBiasSecs)))")
-        guard previousWasAd else { continue }
+        expectEqual(near(rig.source.replayReportedBiasSecs, 0.66, 0.001), true,
+                    "回放·Spotify \(label): 扣 0.66(实际 \(String(format: "%.3f", rig.source.replayReportedBiasSecs)))")
         rig.source.replayPlayerStateEvent(at: at(19), freeze: true)
         let frozen = raw(19) - 0.766 + LocalPlaybackSource.spotifyPauseFadeSecs
         rig.tick(spotify("還是會寂寞", artist: "陳綺貞", raw: frozen, duration: 272.29, playing: false), at: at(19.3))
         let table = rig.startLeadTable
-        expectEqual(near(table["afterAd"], 0.66 * 0.5 + 0.766 * 0.5, 0.002), true,
-                    "回放·Spotify 广告之后: 暂停反推的 0.766 学进 afterAd(\(table["afterAd"].map { String(format: "%.4f", $0) } ?? "nil"))")
-        expectEqual(table["fresh"], nil, "回放·Spotify 广告之后: fresh 不被这个样本污染")
+        let learnedKind = previousWasAd ? "afterAd" : "gapless"
+        let otherKind = previousWasAd ? "gapless" : "afterAd"
+        expectEqual(near(table[learnedKind], 0.66 * 0.5 + 0.766 * 0.5, 0.002), true,
+                    "回放·Spotify \(label): 暂停反推的 0.766 学进 \(learnedKind)(\(table[learnedKind].map { String(format: "%.4f", $0) } ?? "nil"))")
+        expectEqual(table[otherKind], nil, "回放·Spotify \(label): 不碰 \(otherKind)")
+        expectEqual(table["fresh"], nil, "回放·Spotify \(label): fresh 不被这个样本污染")
     }
 }
 
@@ -292,18 +294,22 @@ private func replaySpotifySameTrackJump() {
     expectEqual(near(rig.shown(at: at(10)), 90.5 - 0.45), true, "回放·Spotify 同曲拖动: 屏上 = 自己的钟 − 0.45")
 }
 
-/// 旧版本学的表(没有版本号):fresh 混着广告之后的样本,读表那一刻作废、退回先验;别的档原样保留。
+/// 旧版本学的表:fresh 混着别的起播方式的样本,读表那一刻作废、退回先验,它的样本数一起清掉;别的档原样保留。
 @MainActor
 private func replaySpotifyStartLeadMigration() {
     let rig = ReplayRig("spotify-migration")
     defer { rig.tearDown() }
-    rig.defaults.set(["fresh": 0.542, "gapless": 0.705, "seek": 0.466], forKey: "np:spotifyStartLeadByKind")
+    rig.defaults.set(["fresh": 0.598, "gapless": 0.705, "seek": 0.466], forKey: "np:spotifyStartLeadByKind")
+    rig.defaults.set(["fresh": 5, "gapless": 2, "seek": 2], forKey: "np:spotifyStartLeadSamplesByKind")
+    rig.defaults.set(2, forKey: "np:spotifyStartLeadSchema")
     rig.tick(spotify("蝴蝶", raw: 0.076, duration: 283.2), at: at(0))
     expectEqual(near(rig.source.replayReportedBiasSecs, 0.24, 0.001), true,
-                "回放·起播领先表迁移: 旧 fresh 0.542 作废,按先验 0.24 扣")
+                "回放·起播领先表迁移: 旧 fresh 0.598 作废,按先验 0.24 扣")
     expectEqual(rig.defaults.object(forKey: "np:spotifyStartLeadSchema") as? Int, LocalPlaybackSource.spotifyStartLeadSchema,
                 "回放·起播领先表迁移: 版本号写回")
     expectEqual(rig.startLeadTable, ["gapless": 0.705, "seek": 0.466], "回放·起播领先表迁移: 只删 fresh")
+    expectEqual(rig.defaults.dictionary(forKey: "np:spotifyStartLeadSamplesByKind") as? [String: Int], ["gapless": 2, "seek": 2],
+                "回放·起播领先表迁移: fresh 的样本数一起清掉")
 }
 
 /// Safari 恢复播放卡顿:恢复锚点按按下播放那一刻打、页面的钟晚 0.27s 才走。
