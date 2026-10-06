@@ -824,7 +824,6 @@
 "把整份决策记录拷到剪贴板（纯文本）" = "Copy the whole decision record to the clipboard as plain text";
 "拖动前先长按" = "Long-press before dragging";
 "拖动调整顺序" = "Drag to reorder";
-"括号里的 Live / Remix / Demo / Club Mix 等跟本地歌名对不上" = "A Live / Remix / Demo / Club Mix tag in parentheses doesn't match the local title";
 "拷贝" = "Copy";
 "拷贝名称" = "Copy Name";
 "拼音" = "Pinyin";
@@ -1097,6 +1096,7 @@
 "歌名" = "Title";
 "歌名 A→Z" = "Title A→Z";
 "歌名 Z→A" = "Title Z→A";
+"歌名、专辑名或歌词文件头写的版本（Live / Remix / Demo / Club Mix 等）跟本地这首对不上" = "The version (Live / Remix / Demo / Club Mix …) in the title, album, or lyrics header doesn't match the local track";
 "歌名不一致：本地为「%1$@」，匹配到《%2$@》" = "Title mismatch: local title is “%1$@”, matched “%2$@”";
 "歌名别名" = "Title alias";
 "歌名始终为「%@」" = "Title was always “%@”";

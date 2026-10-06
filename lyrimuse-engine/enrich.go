@@ -1917,6 +1917,21 @@ func instrumentalFromScored(scored []scoredLyricCandidateResult, artist, title, 
 	return false, ""
 }
 
+// rescoreTurnsInstrumental 回答「重新打分时这份歌词该不该改成按纯音乐处理」:这一轮有纯音乐标记,而现有这份歌词的
+// 来源这一轮给的候选被判了版本不符 —— 这份词是给别的版本做的(见 09 章决策 194)。调用方已经确认这一轮没有能用的
+// 候选、用户也没选定过源。
+func rescoreTurnsInstrumental(e enrichEntry, scored []scoredLyricCandidateResult) bool {
+	if e.Lyrics == "" || e.Instrumental || !scoredHasInstrumentalMarker(scored) {
+		return false
+	}
+	for _, c := range scored {
+		if !c.Instrumental && c.Source == e.LyricsSource && c.hasScoreTerm(scoreTermVersionTags) {
+			return true
+		}
+	}
+	return false
+}
+
 // lyricsRescoreMaxAttempts / lyricsRescoreDeferInterval 给"按新打分规则重选"设的上限和节流。
 //
 // 正常情况下一次就够:重选成功就盖上当前版本号,这条在下一次版本升级之前不会再进这条路径。
@@ -2037,6 +2052,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
 		return (opts.manual || !e.ManualLyrics) && decidable && picked != nil && !rescoreKeeps(e, scored, picked) && picked.Lyrics != e.Lyrics
 	})
+	// 只打了纯音乐标记(rescoreTurnsInstrumental):要马上落盘、通知重推,但歌词没换,不导出、不补翻。
+	markedInstrumental := false
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -2055,12 +2072,14 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 			translateAfterLyricsSwapLocked(key)
 		}
 		enrichMu.Unlock()
-		if !lyricsChanged {
+		if !lyricsChanged && !markedInstrumental {
 			requestEnrichBookkeepingSave(key)
 			return
 		}
 		commitEnrichSave(key)
-		exportLyricsFilesFor(key)
+		if lyricsChanged {
+			exportLyricsFilesFor(key)
+		}
 		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,**四条补全路径都要做** —— 漏了
 		// 的话,同一首歌播到中途才补出来的译文要等下一次换歌才会被推出去(译文其实早就翻好、
 		// 也落盘了,只是没人通知)。
@@ -2136,6 +2155,17 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	case !decidable:
 		log.Printf("lyrics rescore deferred: %s  current source %q did not answer this round (responded: %v)",
 			key, currentSource, lyricSourcesResponded(scored))
+	case picked == nil && sourceChoice == "" && !opts.manual && rescoreTurnsInstrumental(e, scored):
+		// 这一轮有纯音乐标记、没有能用的候选,而现有这份歌词就是被判版本不符的那条:按纯音乐处理。同用户手标,
+		// 歌词留在条目里,撤标就回来。
+		if complete {
+			e.LyricsScoringVersion = lyricsScoringVersion
+		}
+		e.ResolvedDurationSecs = durationSecs
+		e.Instrumental = true
+		markedInstrumental = true
+		log.Printf("lyrics rescore: %s  %s is another version and a source says instrumental, marking instrumental under v%d",
+			key, e.LyricsSource, lyricsScoringVersion)
 	case picked == nil:
 		// 够格判断、但新规则下一个能用的候选都没有(比如全被"超出曲目时长"判掉)。
 		// 保留现有歌词不动 —— 有一份存疑的歌词也好过没有 —— 但版本号照盖:结论已经
@@ -2205,8 +2235,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		e.ResolvedDurationSecs = durationSecs
 	}
 	// 跟首次解析同一条「同一段录音、评分高的兄弟赢」(判据见 crossalbum.go),不挂的话
-	// cross-album-reuse 对齐过的组会在这两条路径上各自重选、又长出分歧。
-	if adoptCrossAlbumSiblingLyrics(key, &e) {
+	// cross-album-reuse 对齐过的组会在这两条路径上各自重选、又长出分歧。刚按纯音乐处理的不换词。
+	if !markedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {
 		lyricsChanged = true
 	}
 	refreshSpeakers(&e, scored)
@@ -3282,13 +3312,14 @@ func pickLyricCandidatePreferring(scored []scoredLyricCandidateResult, sourceCho
 }
 
 func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandidateResult {
+	usable := lyricCandidateUsable(scored)
 	if features().LyricsSourceMode == lyricsModePriority {
 		for _, source := range features().LyricsSourceOrder {
 			if !lyricSourceEnabled(source) {
 				continue
 			}
 			for i := range scored {
-				if scored[i].Source == source && scored[i].Score >= 0 {
+				if scored[i].Source == source && usable(scored[i]) {
 					return &scored[i]
 				}
 			}
@@ -3296,7 +3327,7 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 		// KKBOX / Spotify / Amazon Music 本地歌词不在用户排的顺序里(它们不是歌词源):顺序里的源都没给出可用的,才轮到它们。
 		for _, local := range []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource} {
 			for i := range scored {
-				if scored[i].Source == local && scored[i].Score >= 0 {
+				if scored[i].Source == local && usable(scored[i]) {
 					return &scored[i]
 				}
 			}
@@ -3309,13 +3340,41 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 		if !lyricSourceEnabled(scored[i].Source) {
 			continue
 		}
-		if scored[i].Score < 0 || scored[i].Score <= bestScore {
+		if !usable(scored[i]) || scored[i].Score <= bestScore {
 			continue
 		}
 		bestScore = scored[i].Score
 		picked = &scored[i]
 	}
 	return picked
+}
+
+// lyricCandidateUsable 给出「这一条能不能当冠军」的判定:分数不为负;这一轮有纯音乐标记时,吃过版本不符扣分的
+// 也不算 —— 标记说这首没有词,这份词是给别的版本做的(见 09 章决策 194)。同版本的歌词照常以正文为准。
+func lyricCandidateUsable(scored []scoredLyricCandidateResult) func(scoredLyricCandidateResult) bool {
+	instrumental := scoredHasInstrumentalMarker(scored)
+	return func(c scoredLyricCandidateResult) bool {
+		return c.Score >= 0 && !(instrumental && c.hasScoreTerm(scoreTermVersionTags))
+	}
+}
+
+// scoredHasInstrumentalMarker:这一轮有没有源明确说这首是纯音乐(搭车的 Score:-1 标记,见 Instrumental 字段)。
+func scoredHasInstrumentalMarker(scored []scoredLyricCandidateResult) bool {
+	for _, c := range scored {
+		if c.Instrumental {
+			return true
+		}
+	}
+	return false
+}
+
+func (c scoredLyricCandidateResult) hasScoreTerm(kind string) bool {
+	for _, t := range c.ScoreTerms {
+		if t.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // scoredLyricCandidateResult is one scored lyric candidate — exported shape (JSON

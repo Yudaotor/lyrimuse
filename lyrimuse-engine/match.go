@@ -493,7 +493,7 @@ const lyricOvershootToleranceSecs = 5.0
 // 当前维度、权重与每一版改动的真实案例/全库回放证据,记在
 // docs/features/09-lyrics-resolution.md 的打分维度表与「设计决策与已知坑」决策日志
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
-const lyricsScoringVersion = 26
+const lyricsScoringVersion = 27
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -906,13 +906,16 @@ func scoreLyricCandidateDetailed(
 	// v15:语种版本先于标签比对判决(见 lyricCandidate.languageVersionMismatch 注释)。
 	// mismatch 直接 -600、不给 sameRecording 豁免(粤/国两版同伴奏、时长证明不了同一录音);
 	// agrees 时把语种标签从两边集合里拿掉再比(它只是平台消歧用的标注,不是另一个版本);
-	// 两者都不成立退回 v14 原样。三条路只可能落一次 -600,不叠加。
+	// 两者都不成立退回 v14 原样。v27 再加一条:歌词自己的 [ti:] 带出本地没有的版本限定词(见
+	// lyricHeaderClaimsOtherVersion)。几条路只可能落一次 -600,不叠加。
 	switch {
 	case c.languageVersionMismatch:
 		add(scoreTermVersionTags, -versionMismatchPenalty)
 	case versionTagsMismatchIgnoringLanguage(localTitle, localAlbum, c.title, c.album, c.languageVersionAgrees) &&
 		!sameRecordingDespiteVersionTagsIgnoringLanguage(localTitle, localAlbum, durationSecs,
 			c.title, c.album, c.sourceReportedDurationSecs, c.languageVersionAgrees):
+		add(scoreTermVersionTags, -versionMismatchPenalty)
+	case lyricHeaderClaimsOtherVersion(localTitle, localAlbum, durationSecs, c.lyrics, c.album, c.sourceReportedDurationSecs):
 		add(scoreTermVersionTags, -versionMismatchPenalty)
 	}
 	// v7:两场不同命名的演出 → 同级重扣。versionTagsMismatch 在「两边都是 Live」时限定词
@@ -2696,6 +2699,30 @@ func versionTagsMismatchIgnoringLanguage(localTitle, localAlbum, candidateTitle,
 		}
 	}
 	return false
+}
+
+// lyricHeaderClaimsOtherVersion:候选歌词自己写的歌名([ti:],见 lyricHeaderTags)带着本地歌名、专辑名都没有的
+// 版本限定词 —— 这份歌词是给另一个版本做的,挂到了这条曲目上(见 09 章决策 194)。
+//
+// 只认它**多出来的**限定词,它没写的不算:做歌词的人常只写干净的歌名,现场版的歌词头也只写歌名,拿它的沉默去比
+// 会把对的版本误扣。语种限定词不看,语种版本由批级判决管(applyLanguageVersionVerdicts);演奏方式那一类照
+// sameRecordingDespiteVersionTags 的口径豁免。
+func lyricHeaderClaimsOtherVersion(localTitle, localAlbum string, localDurationSecs float64,
+	candidateLyrics, candidateAlbum string, candidateDurationSecs float64) bool {
+	headerTitle, _ := lyricHeaderTags(candidateLyrics)
+	if headerTitle == "" {
+		return false
+	}
+	local := withoutLanguageVersionTags(recordingVersionTags(localTitle, localAlbum))
+	extra := false
+	for tag := range withoutLanguageVersionTags(versionTagsIn(headerTitle)) {
+		if !local[tag] {
+			extra = true
+			break
+		}
+	}
+	return extra && !sameRecordingDespiteVersionTagsIgnoringLanguage(localTitle, localAlbum, localDurationSecs,
+		headerTitle, candidateAlbum, candidateDurationSecs, true)
 }
 
 // versionTagsIn 把若干个字段(歌名/专辑名)里的版本限定词并成一个集合。

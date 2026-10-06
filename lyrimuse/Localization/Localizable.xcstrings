@@ -11880,25 +11880,25 @@
         }
       }
     },
-    "括号里的 Live / Remix / Demo / Club Mix 等跟本地歌名对不上" : {
+    "歌名、专辑名或歌词文件头写的版本（Live / Remix / Demo / Club Mix 等）跟本地这首对不上" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A Live / Remix / Demo / Club Mix tag in parentheses doesn't match the local title"
+            "value" : "The version (Live / Remix / Demo / Club Mix …) in the title, album, or lyrics header doesn't match the local track"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "括号里的 Live / Remix / Demo / Club Mix 等跟本地曲名对不上"
+            "value" : "歌名、专辑名或歌词文件头写的版本（Live / Remix / Demo / Club Mix 等）跟本地这首对不上"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "括號裡的 Live / Remix / Demo / Club Mix 等跟本機曲名對不上"
+            "value" : "歌名、專輯名或歌詞檔頭寫的版本（Live / Remix / Demo / Club Mix 等）跟本機這首對不上"
           }
         }
       }

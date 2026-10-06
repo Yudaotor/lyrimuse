@@ -220,7 +220,9 @@ func TestLyricsSwapPathsTranslateAndWritePlayingEntry(t *testing.T) {
 	}
 	enrich := string(b)
 	swap := "\t\tif lyricsChanged {\n\t\t\ttranslateAfterLyricsSwapLocked(key)\n\t\t}\n\t\tenrichMu.Unlock()\n\t\tif !lyricsChanged {\n\t\t\trequestEnrichBookkeepingSave(key)\n\t\t\treturn\n\t\t}\n\t\tcommitEnrichSave(key)\n\t\texportLyricsFilesFor(key)\n"
-	for _, fn := range []string{"func retryLyricsUpgradeWith(", "func rescoreLyricsWith("} {
+	// 重新打分那条还有「只打了纯音乐标记」这一种:同样落盘、通知,但没换词、不导出(见 rescoreTurnsInstrumental)。
+	rescoreSwap := "\t\tif lyricsChanged {\n\t\t\ttranslateAfterLyricsSwapLocked(key)\n\t\t}\n\t\tenrichMu.Unlock()\n\t\tif !lyricsChanged && !markedInstrumental {\n\t\t\trequestEnrichBookkeepingSave(key)\n\t\t\treturn\n\t\t}\n\t\tcommitEnrichSave(key)\n\t\tif lyricsChanged {\n\t\t\texportLyricsFilesFor(key)\n\t\t}\n"
+	for fn, want := range map[string]string{"func retryLyricsUpgradeWith(": swap, "func rescoreLyricsWith(": rescoreSwap} {
 		i := strings.Index(enrich, fn)
 		if i < 0 {
 			t.Fatalf("enrich.go 找不到 %s", fn)
@@ -229,7 +231,7 @@ func TestLyricsSwapPathsTranslateAndWritePlayingEntry(t *testing.T) {
 		if j := strings.Index(body[1:], "\nfunc "); j >= 0 {
 			body = body[:j+1]
 		}
-		if !strings.Contains(body, swap) {
+		if !strings.Contains(body, want) {
 			t.Errorf("%s 收尾没接 translateAfterLyricsSwapLocked / commitEnrichSave", fn)
 		}
 	}
