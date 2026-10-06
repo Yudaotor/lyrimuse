@@ -135,8 +135,9 @@ final class EditorialNotesStore: ObservableObject {
                 self.song = nil
             }
             .store(in: &cancellables)
+        // 去抖挂主队列、别挂 RunLoop.main:菜单开着时它不走,那时换的歌要等菜单关了才取简介(见 01 章决策 11)。
         track
-            .debounce(for: .milliseconds(600), scheduler: RunLoop.main)
+            .debounce(for: .milliseconds(600), scheduler: DispatchQueue.main)
             .sink { [weak self] t in self?.refresh(t) }
             .store(in: &cancellables)
         // enrich 缓存换了内容(启动后第一次加载完、引擎给这首补上了 apple_music_url):按新内容重查一次,
@@ -144,7 +145,7 @@ final class EditorialNotesStore: ObservableObject {
         LocalPlaybackSource.shared.$enrichContentVersion
             .dropFirst()
             .removeDuplicates()
-            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.artistLinks = self.artistLinks.filter { $0.value != nil }

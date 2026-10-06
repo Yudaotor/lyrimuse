@@ -56,7 +56,8 @@ func runSourceContractTests() {
         expectEqual(coordinator.contains("scheduler: DispatchQueue.main") && !coordinator.contains("scheduler: RunLoop.main"), true,
                     "调度器: 协调器里换歌后的去抖(高清封面、收藏 / 随机状态、Spotify 原图)都挂主队列")
         for (file, label) in [("UI/ListenMilestoneCenter.swift", "收听里程碑"), ("Settings/DiscordPresenceController.swift", "Discord 状态"),
-                              ("Settings/NowPlayingNotifier.swift", "换歌通知"), ("UI/NotchLyricsWindowController.swift", "换歌翻牌")] {
+                              ("Settings/NowPlayingNotifier.swift", "换歌通知"), ("UI/NotchLyricsWindowController.swift", "换歌翻牌"),
+                              ("UI/EditorialNotes.swift", "简介预取")] {
             let text = read(file)
             expectEqual(text.contains("scheduler: DispatchQueue.main") && !text.contains("scheduler: RunLoop.main"), true,
                         "调度器: \(label)的去抖挂主队列,菜单开着时也照常走")
