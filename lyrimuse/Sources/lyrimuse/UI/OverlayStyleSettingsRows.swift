@@ -247,10 +247,10 @@ struct OverlayContentSettingsRows: View {
     }
 }
 
-/// 「排版」那一组:对齐方式 / 长句处理 —— 摆在哪一侧、放不下怎么办,是版面不是字形,不挤在「文字」里。
-/// 显示哪几行是「内容」那一组的事(`OverlayContentSettingsRows`)。
+/// 「排版」那一组:对齐方式 / 长句处理 / 读音、译文、下一句的间距 —— 摆在哪一侧、放不下怎么办、行与行隔多远,
+/// 是版面不是字形,不挤在「文字」里。显示哪几行是「内容」那一组的事(`OverlayContentSettingsRows`)。
 ///
-/// 两项**平级**,都用 `SettingsRow`,不用 `SettingsSubRow`(缩进的子行样式):子行的缩进本身就是一句话
+/// 各项**平级**,都用 `SettingsRow`,不用 `SettingsSubRow`(缩进的子行样式):子行的缩进本身就是一句话
 /// ("这是上一行的子选项"),这里没有这层关系就不该用。
 @MainActor
 struct OverlayLayoutSettingsRows: View {
@@ -292,6 +292,23 @@ struct OverlayLayoutSettingsRows: View {
                     label: OverlayLineOverflowLabel.text(for:)
                 )
             }
+            // 主行下面三行各自离上一行多远,按卡片里从上到下的顺序。那一行在「内容」里关着时这一项不起作用,
+            // 置灰。范围与默认值见 OverlayRowSpacing(04 章决策 48);拖动中只改临时值,见 OverlayRowSpacingDraft。
+            CardDivider()
+            SettingsRow(icon: "textformat.alt", title: L10n.t("读音间距")) {
+                OverlayRowSpacingSlider(item: .romanization)
+            }
+            .disabled(!settings.overlayShowRomanization)
+            CardDivider()
+            SettingsRow(icon: "text.bubble", title: L10n.t("译文间距")) {
+                OverlayRowSpacingSlider(item: .translation)
+            }
+            .disabled(!settings.overlayShowTranslation)
+            CardDivider()
+            SettingsRow(icon: "rectangle.grid.1x2", title: L10n.t("下一句间距")) {
+                OverlayRowSpacingSlider(item: .nextLine)
+            }
+            .disabled(!settings.showNextLinePreview)
         }
     }
 }
@@ -304,6 +321,75 @@ enum OverlayLineOverflowLabel {
         case .wrap: return L10n.t("换行")
         case .scroll: return L10n.t("滚动")
         }
+    }
+}
+
+/// 「排版」里三项间距**拖动中**的临时值。
+///
+/// 拖动中只改这里:编辑台预览经 `OverlayPreviewChrome` 跟手;不写设置、不广播 AppSettings(整页设置、菜单栏面板、
+/// 真悬浮窗都会被打醒)、不碰真窗口(每一格都要重新布局、改一次窗高,改读音间距还要重画主行的位图)。
+/// 松手(`onEditingChanged` 收到 false)一次性提交,真窗口这时才跟上 —— 同编辑台宽度条的 `draggingWidth`。
+/// 见 04 章决策 48。
+@MainActor
+final class OverlayRowSpacingDraft: ObservableObject {
+    static let shared = OverlayRowSpacingDraft()
+
+    /// 拖动中的三项(nil = 没在拖)。
+    @Published private(set) var values: OverlayRowSpacing.Values?
+
+    /// 拖动中改一项:以设置里那一组为底,只换这一项。
+    func set(_ item: OverlayRowSpacing.Item, to value: Double) {
+        var next = values ?? AppSettings.shared.overlayRowSpacing
+        next[item] = value
+        guard next != values else { return }
+        values = next
+    }
+
+    /// 松手:把临时值写进设置(只写变了的项)再清掉。没在拖时什么都不做。
+    func commit() {
+        guard let draft = values else { return }
+        let settings = AppSettings.shared
+        // 相等守卫:`@Published` 等值赋值照样广播,didSet 还会白写一次盘。先写设置再清临时值,
+        // 两者是同一个数,预览不会跳。
+        if settings.overlayRomanizationSpacing != draft.romanization {
+            settings.overlayRomanizationSpacing = draft.romanization
+        }
+        if settings.overlayTranslationSpacing != draft.translation {
+            settings.overlayTranslationSpacing = draft.translation
+        }
+        if settings.overlayNextLineSpacing != draft.nextLine {
+            settings.overlayNextLineSpacing = draft.nextLine
+        }
+        values = nil
+    }
+}
+
+/// 「排版」里三项间距共用的滑杆 + 读数,样式同「文字」里「字号」那一行(150pt 滑杆、等宽数字读数)。
+/// 拖动中只改 `OverlayRowSpacingDraft`、松手才提交,读数跟着临时值走。
+@MainActor
+struct OverlayRowSpacingSlider: View {
+    let item: OverlayRowSpacing.Item
+    @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var draft = OverlayRowSpacingDraft.shared
+
+    private var value: Double { (draft.values ?? settings.overlayRowSpacing)[item] }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            SteppedSlider(
+                value: Binding(get: { value }, set: { draft.set(item, to: $0) }),
+                in: item.range, step: 1,
+                onEditingChanged: { editing in
+                    if !editing { draft.commit() }
+                })
+                .frame(width: 150)
+            Text(String(format: L10n.t("%@pt"), "\(Int(value.rounded()))"))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(width: 46, alignment: .trailing)
+        }
+        // 浮层在拖动中途被关掉时收不到松手那一下,别把临时值留在预览上。
+        .onDisappear { draft.commit() }
     }
 }
 
@@ -769,8 +855,8 @@ enum OverlayStyleSummary {
             ? L10n.t("纯色") : L10n.t("透明")
     }
 
-    /// 例:「自动 · 换行」。「排版」浮层里两项都报(对齐方式 / 长句处理) —— 摘要少报一项等于让人为了
-    /// 确认另一项再点开一次浮层,那这截摘要就白给了。
+    /// 例:「自动 · 换行」。对齐方式 / 长句处理两项都报 —— 摘要少报一项等于让人为了确认另一项再点开一次浮层,
+    /// 那这截摘要就白给了。读音 / 译文 / 下一句三项间距不报:三个数字挤在按钮上读不出是哪一行的。
     ///
     /// 两截都复用控件的同一份标签(`OverlayAlignmentSegmentedControl.label(for:)` / `OverlayLineOverflowLabel`),
     /// 不在这里另写一套短名:控件里选中的是「左对齐」、摘要里却写「左」,是同一个值两种叫法。

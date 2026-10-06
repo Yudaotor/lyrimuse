@@ -26,6 +26,8 @@ struct WrappedKaraokeRows: NSViewRepresentable {
         var words: [SyncedLyricWord]
         /// 非 nil = 开了逐词罗马音:折行的单位是「一组」(字 + 读音一列),不会把一组拆到两行。
         var groups: [SyncedLyricWordGroup]?
+        /// 同 `OverlayScrollingLyricRow.Spec.romaGap`,原样交给每一行,行距也按它算。
+        var romaGap: CGFloat = 0
         var font: NSFont
         var romaFont: NSFont
         var baseColor: NSColor
@@ -80,9 +82,10 @@ final class WrappedKaraokeRowsView: NSView {
         @MainActor
         init(spec: WrappedKaraokeRows.Spec, width: CGFloat?) {
             let inset = spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset
-            let main = Self.textHeight(spec.font)
-            let roma = spec.groups == nil ? 0 : Self.textHeight(spec.romaFont)
-            let pitch = main + roma
+            let pitch = OverlayRowLayout.blockHeight(
+                main: Self.textHeight(spec.font),
+                roma: spec.groups == nil ? nil : Self.textHeight(spec.romaFont),
+                romaGap: spec.romaGap)
             self.inset = inset
             self.pitch = pitch
             let widths: [CGFloat]
@@ -218,6 +221,7 @@ final class WrappedKaraokeRowsView: NSView {
             lineKey: "\(spec.lineKey)#\(index)",
             words: words,
             groups: groups,
+            romaGap: spec.romaGap,
             font: spec.font,
             romaFont: spec.romaFont,
             baseColor: spec.baseColor,

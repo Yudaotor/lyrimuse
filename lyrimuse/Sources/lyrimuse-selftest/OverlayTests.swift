@@ -766,6 +766,88 @@ func runOverlayTests() {
         expectEqual(abs(stroked.romaPlacements[0].x - (pad + stroke)) < 0.001, true, "图层排版: 描边时读音从列首 + 加宽后的留白起画")
     }
 
+    // ---- OverlayRowSpacing:读音 / 译文 / 下一句各自离上一行多远 ----
+    do {
+        typealias S = OverlayRowSpacing
+        expectEqual(S.defaultValue, 4, "行间距: 默认 4pt,跟卡片里各行原来的间距一样")
+        expectEqual(S.range.contains(S.defaultValue) && S.romanizationRange.contains(S.defaultValue), true,
+                    "行间距: 默认值落在两种范围里")
+        expectEqual(S.range.lowerBound < 0 && S.romanizationRange.lowerBound < 0, true,
+                    "行间距: 两种范围都能调成负的(比默认更紧)")
+        expectEqual(S.romanizationRange.lowerBound > S.range.lowerBound, true,
+                    "行间距: 读音下限比译文 / 下一句高(逐词读音再往上会压到主行的描边)")
+        expectEqual(S.clamped(-30, to: S.range), S.range.lowerBound, "行间距: 低于下限夹回下限")
+        expectEqual(S.clamped(99, to: S.range), S.range.upperBound, "行间距: 高于上限夹回上限")
+        expectEqual(S.clamped(.nan, to: S.range), S.defaultValue, "行间距: 读到 nan 按默认值")
+        expectEqual(S.clamped(.infinity, to: S.range), S.defaultValue, "行间距: 读到无穷按默认值")
+        // 逐词读音按设置值比默认值多出的那一截挪:默认值下不动,跟整行读音挪同样的量。
+        expectEqual(S.perWordReadingGap(S.defaultValue), 0, "行间距: 默认值下逐词读音紧贴主行、排版不变")
+        expectEqual(S.perWordReadingGap(10), 6, "行间距: 调大 6pt,逐词读音往下挪 6pt")
+        expectEqual(S.perWordReadingGap(-20), CGFloat(S.romanizationRange.lowerBound - S.defaultValue),
+                    "行间距: 逐词读音的偏移也夹在读音范围里")
+        // 三项一组:构造和按项改值都夹回各自的范围。
+        let clampedSet = S.Values(romanization: -30, translation: 99, nextLine: 6)
+        expectEqual([clampedSet.romanization, clampedSet.translation, clampedSet.nextLine],
+                    [S.romanizationRange.lowerBound, S.range.upperBound, 6], "行间距: 一组三项各自夹回自己的范围")
+        var edited = S.Values.standard
+        edited[.translation] = -100
+        expectEqual(edited[.translation], S.range.lowerBound, "行间距: 按项改值也夹回范围")
+        expectEqual([edited[.romanization], edited[.nextLine]], [S.defaultValue, S.defaultValue],
+                    "行间距: 改一项不动另外两项")
+        expectEqual(S.Values.standard.perWordReadingGap, 0, "行间距: 默认一组的逐词读音偏移为 0")
+        expectEqual(S.Item.romanization.range, S.romanizationRange, "行间距: 读音那一项用读音的范围")
+        expectEqual(S.Item.nextLine.range, S.range, "行间距: 下一句那一项用通用范围")
+        // 图层行一行字的高度:位图、换行模式行距、滚动模式行框三处共用。
+        typealias L = OverlayRowLayout
+        expectEqual(L.blockHeight(main: 43, roma: nil, romaGap: 6), 43, "行间距: 没有逐词读音时行高只有主行,读音间距不起作用")
+        expectEqual(L.blockHeight(main: 43, roma: 26), 69, "行间距: 逐词读音默认紧贴主行")
+        expectEqual(L.blockHeight(main: 43, roma: 26, romaGap: 6), 75, "行间距: 读音间距加进行高")
+        expectEqual(L.blockHeight(main: 43, roma: 26, romaGap: -8), 61, "行间距: 负的读音间距让行高变矮")
+    }
+
+    // ---- 行间距接线(契约):三处行高同一个式子;卡片的 VStack 不另加间距,各行自己加 ----
+    do {
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        func src(_ name: String) -> String {
+            (try? String(contentsOf: ui.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let view = src("LyricsOverlayView.swift")
+        let scroll = src("OverlayScrollingLyricRow.swift")
+        let wrapped = src("WrappedKaraokeRows.swift")
+        expectEqual([view, scroll, wrapped].allSatisfy { $0.contains("OverlayRowLayout.blockHeight(") }, true,
+                    "行间距接线: 位图高、换行模式行距、滚动模式行框都按 blockHeight 算")
+        expectEqual(scroll.contains("let mainY = inset + romaHeight + romaGap + 1"), true,
+                    "行间距接线: 图层行的主行跟读音之间隔出读音间距")
+        expectEqual(view.contains("VStack(alignment: duetAlignment, spacing: 0)"), true,
+                    "行间距接线: 卡片的 VStack 不加间距,不然跟各行自己的间距叠在一起")
+        let rows: [(String, String)] = [
+            (".reportsContentRow(.romanization, in: contentRowRectsSpace)", ".padding(.top, CGFloat(rowSpacing.romanization))"),
+            (".reportsContentRow(.translation, in: contentRowRectsSpace)", ".padding(.top, CGFloat(rowSpacing.translation))"),
+            (".reportsContentRow(.nextLine, in: contentRowRectsSpace)", ".padding(.top, CGFloat(rowSpacing.nextLine))"),
+        ]
+        for (report, padding) in rows {
+            expectEqual(view.components(separatedBy: report + "\n                    " + padding).count - 1, 2,
+                        "行间距接线: 两种行序下这一行都在上报矩形之后加自己的间距(" + padding + ")")
+        }
+        expectEqual(view.contains("VStack(alignment: .leading, spacing: rowSpacing.perWordReadingGap)"), true,
+                    "行间距接线: 前奏首句的逐词列按同一个差值排")
+        // 拖动中只改临时值、松手才写设置:只有编辑台预览跟手,真窗口不在拖动中重排。
+        let settingsRows = src("OverlayStyleSettingsRows.swift")
+        expectEqual(view.contains("overlayController.rowSpacingDraft ?? playback.rowSpacing"), true,
+                    "行间距接线: 视图先看拖动中的临时值")
+        expectEqual(settingsRows.contains("value: Binding(get: { value }, set: { draft.set(item, to: $0) })")
+                        && settingsRows.contains("if !editing { draft.commit() }"), true,
+                    "行间距接线: 滑杆拖动中只写临时值,松手才提交")
+        expectEqual(["overlayRomanizationSpacing", "overlayTranslationSpacing", "overlayNextLineSpacing"]
+                        .allSatisfy { !settingsRows.contains("$settings.\($0)") }, true,
+                    "行间距接线: 滑杆不直接绑设置(那样每一格都广播、都重排真窗口)")
+        expectEqual(src("OverlayEditorStage.swift").contains("OverlayRowSpacingDraft.shared.$values"), true,
+                    "行间距接线: 编辑台预览转发拖动中的临时值")
+        expectEqual(src("LyricsOverlayWindowController.swift").contains("rowSpacingDraft"), false,
+                    "行间距接线: 真窗口不接临时值,松手提交后才跟上")
+    }
+
     // ---- WrapLayoutMath ----
     //
     // 逐字歌词那个自动换行容器的几何。以前长在 LyricsOverlayView 里，改一次就只能盯屏幕看。

@@ -88,6 +88,9 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var duetAlignmentOverride: OverlayDuetAlignmentOverride = .automatic
     /// 一行放不下时换行还是滚动(见 `OverlayLineOverflow`)。
     @Published private(set) var lineOverflow: OverlayLineOverflow = .wrap
+    /// 读音 / 译文 / 下一句各自离上一行多远:设置里存着的那一组(已夹回范围)。视图读的是
+    /// `LyricsOverlayView.rowSpacing`,那里先看编辑台拖动中的临时值。
+    @Published private(set) var rowSpacing = OverlayRowSpacing.Values.standard
     /// 滚动模式下一行要占多高 = 字本身(`scrollTextHeight`)+ 描边那圈预留(`scrollStrokePadding`)。
     ///
     /// 滚动行必须显式定高:`MarqueeText` 的外壳是 `GeometryReader`,没有固有高度,不定高会在卡片的
@@ -211,6 +214,10 @@ private final class OverlayPlayback: ObservableObject {
             s.$showNextLinePreview.removeDuplicates().sink { [weak self] in self?.showNextLinePreview = $0 },
             s.$overlayDuetAlignmentOverride.removeDuplicates().sink { [weak self] in self?.duetAlignmentOverride = $0 },
             s.$overlayLineOverflow.removeDuplicates().sink { [weak self] in self?.lineOverflow = $0 },
+            Publishers.CombineLatest3(s.$overlayRomanizationSpacing, s.$overlayTranslationSpacing, s.$overlayNextLineSpacing)
+                .map { OverlayRowSpacing.Values(romanization: $0, translation: $1, nextLine: $2) }
+                .removeDuplicates()
+                .sink { [weak self] in self?.rowSpacing = $0 },
             s.$mainFont.removeDuplicates().sink { [weak self] in self?.mainFont = $0 },
             s.$fontSize.map { CGFloat($0) }.removeDuplicates().sink { [weak self] in self?.mainFontSize = $0 },
             s.$romanizationFont.removeDuplicates().sink { [weak self] in self?.romanizationFont = $0 },
@@ -336,6 +343,9 @@ protocol OverlayChromeSource: ObservableObject {
     /// 子进程,所以做成回调而不是让视图直接打 `PlaybackCoordinator`:设置页预览必须能把
     /// 这条副作用空实现掉(同 `NotchChromeSource.setExpanded` 的处理)。
     func controlsDidBecomeVisible()
+    /// 「排版」里三项间距拖动中的临时值(nil = 没在拖,用设置里的)。只有编辑台预览那份转发它;真窗口走默认的
+    /// nil,松手提交之后才跟上 —— 拖动中不写设置、不碰真窗口,见 `OverlayRowSpacingDraft`。
+    var rowSpacingDraft: OverlayRowSpacing.Values? { get }
     /// 这扇窗此刻真的看得见(打开着、没被 orderOut、occlusionState 含 `.visible`)。看不见时图层行停表、
     /// 间奏点停表 —— 灵动岛、歌词窗口早就按各自的可见性停了,悬浮窗原来一直当自己看得见。
     /// 预览外壳没有自己的窗口,走默认的 true,停不停由设置窗口推下来的 `previewHostVisible` 管。
@@ -344,6 +354,7 @@ protocol OverlayChromeSource: ObservableObject {
 
 extension OverlayChromeSource {
     var isSurfaceVisible: Bool { true }
+    var rowSpacingDraft: OverlayRowSpacing.Values? { nil }
 }
 
 /// 设置页预览用的示例行 —— **真窗口恒传 nil**,排版逐像素不变。
@@ -998,6 +1009,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 // 开了逐词罗马音才按词组排(字在上、读音在下,见 OverlayRowLayout);否则只画一行字。
                 // layerWrappedKaraokeRows 是同一条判据。
                 groups: usesPerWordRomanization ? line?.wordGroups : nil,
+                romaGap: perWordReadingGap,
                 font: playback.overlayNSFonts.main,
                 romaFont: playback.overlayNSFonts.romanization,
                 baseColor: NSColor(playback.displayKaraokeUnsungColor),
@@ -1028,6 +1040,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 lineKey: line?.plainText ?? "",
                 words: words,
                 groups: usesPerWordRomanization ? line?.wordGroups : nil,
+                romaGap: perWordReadingGap,
                 font: playback.overlayNSFonts.main,
                 romaFont: playback.overlayNSFonts.romanization,
                 baseColor: NSColor(playback.displayKaraokeUnsungColor),
@@ -1125,12 +1138,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
 
     /// 主行在滚动模式下占多高。开了**逐词罗马音**时这一行是「字 + 它的读音」上下两行
-    /// (图层行按 `OverlayRowLayout.layOut` 排),高度要把读音那一行一起算进去,否则读音会被裁掉。
+    /// (图层行按 `OverlayRowLayout.layOut` 排),高度要把读音那一行和读音间距一起算进去,否则读音会被裁掉。
     private var mainScrollRowHeight: CGFloat {
         let main = playback.scrollTextHeight(playback.overlayNSFonts.main)
-        let roma = usesPerWordRomanization ? playback.scrollTextHeight(playback.overlayNSFonts.romanization) : 0
+        let roma = usesPerWordRomanization ? playback.scrollTextHeight(playback.overlayNSFonts.romanization) : nil
         // 描边包的是字 + 读音那一整块,预留只加一份。
-        return main + roma + playback.scrollStrokePadding
+        return OverlayRowLayout.blockHeight(main: main, roma: roma, romaGap: perWordReadingGap)
+            + playback.scrollStrokePadding
     }
 
     /// 滚动模式下**没溢出**的短句靠哪边 —— 跟换行模式下 VStack 的对齐同一个来源,
@@ -1204,7 +1218,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private var translationRowText: String? { rowPlan.translation?.text }
 
     private var lyricsCardContent: some View {
-        VStack(alignment: duetAlignment, spacing: 4) {
+        // 行与行之间的间距由各行自己的 `.padding(.top:)` 给(读音 / 译文 / 下一句各一项,见 OverlayRowSpacing),
+        // VStack 自己不加,不然两份叠在一起。
+        VStack(alignment: duetAlignment, spacing: 0) {
             withSpeakerIndicator(side: duetDecorationSide, font: playback.overlayNSFonts.main, opacity: 1) {
                 reportingMainLineRect(mainLine)
             }
@@ -1242,12 +1258,18 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             //    这个倒序。
             if line == nil {
                 nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                    .padding(.top, CGFloat(rowSpacing.nextLine))
                 romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                    .padding(.top, CGFloat(rowSpacing.romanization))
                 translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                    .padding(.top, CGFloat(rowSpacing.translation))
             } else {
                 romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                    .padding(.top, CGFloat(rowSpacing.romanization))
                 translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                    .padding(.top, CGFloat(rowSpacing.translation))
                 nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                    .padding(.top, CGFloat(rowSpacing.nextLine))
             }
             // 补上——第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后
             // 自动消失,只弹一次(见 LyricsOverlayWindowController.hasShownDragHintKey
@@ -1260,6 +1282,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .font(.caption)
                     .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
                     .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                    .padding(.top, 4)
                     .transition(.opacity)
             } else if overlayController.showDragHint {
                 Text(AppSettings.shared.overlayDragNeedsLongPress
@@ -1268,6 +1291,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .font(.caption)
                     .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
                     .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                    .padding(.top, 4)
                     .transition(.opacity)
             }
         }
@@ -1393,7 +1417,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     @ViewBuilder
     private func upcomingGroupColumns(_ groups: [SyncedLyricWordGroup], key: String, color: Color) -> some View {
         let columns = ForEach(groups) { g in
-            VStack(alignment: .leading, spacing: 0) {
+            // 字跟读音之间按读音间距挪,跟图层行同一个差值(`OverlayRowSpacing.perWordReadingGap`)。
+            VStack(alignment: .leading, spacing: rowSpacing.perWordReadingGap) {
                 Text(g.words.map(\.text).joined())
                     .font(nextLinePreviewFont)
                     .foregroundStyle(color)
@@ -1417,7 +1442,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         } else {
             WrapLayout(rowAlignment: nextLineRowAlignment,
                        contentKey: AnyHashable(OverlayLineKey(
-                           text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: playback.romanizationFont))) {
+                           text: key, roma: true, mainFont: nextLinePreviewFont, romaFont: playback.romanizationFont,
+                           romaGap: rowSpacing.perWordReadingGap))) {
                 columns
             }
         }
@@ -1838,6 +1864,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// (比如中文/粤语行字数跟音节数对不上)时 wordGroups 为 nil,退回整行罗马音。
     private var usesPerWordRomanization: Bool { rowPlan.perWordRomanization }
 
+    /// 读音 / 译文 / 下一句各自离上一行多远:编辑台拖动中的临时值优先(只有预览那份有,见
+    /// `OverlayChromeSource.rowSpacingDraft`),否则用设置里的。
+    private var rowSpacing: OverlayRowSpacing.Values { overlayController.rowSpacingDraft ?? playback.rowSpacing }
+
+    /// 逐词读音跟主行之间多出来的距离;这一行没有逐词读音时为 0,改读音间距不白白重画图层行。
+    private var perWordReadingGap: CGFloat { usesPerWordRomanization ? rowSpacing.perWordReadingGap : 0 }
+
     /// 逐字主行的内容身份:当作 `wrapContentSink` 的 owner(见 WrapContentRectSink —— 读热区的一方
     /// 认它判断「这块矩形是不是这一行的」)。必须含**完整**字体身份(family/size/weight 都在 mainFont/
     /// romanizationFont 里)和罗马音开关 —— 这些一变折行就变、之前量出的矩形就作废。填色 / 描边不影响
@@ -1847,7 +1880,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             text: line?.plainText,
             roma: usesPerWordRomanization,
             mainFont: playback.mainFont,
-            romaFont: playback.romanizationFont))
+            romaFont: playback.romanizationFont,
+            romaGap: perWordReadingGap))
     }
 
     private struct OverlayLineKey: Hashable {
@@ -1855,6 +1889,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         let roma: Bool
         let mainFont: Font
         let romaFont: Font
+        /// 逐词读音的间距改行高,也算排版身份(`WrapLayout` 按这个 key 缓存子视图尺寸)。
+        let romaGap: CGFloat
     }
 }
 

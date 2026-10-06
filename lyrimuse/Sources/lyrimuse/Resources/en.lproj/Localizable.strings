@@ -200,6 +200,7 @@
 "下" = "Bottom";
 "下一句" = "Next Line";
 "下一句歌词预览" = "Next Line Preview";
+"下一句间距" = "Next Line Spacing";
 "下一步" = "Next";
 "下一页" = "Next";
 "下一首" = "Next Track";
@@ -1510,6 +1511,7 @@
 "译文" = "Translation";
 "译文与读音" = "Translation & Romanization";
 "译文语言" = "Translation Language";
+"译文间距" = "Translation Spacing";
 "译文（机器翻译）" = "Translation (machine)";
 "译文（歌词源自带）" = "Translation (from the source)";
 "试一下" = "Try It";
@@ -1532,6 +1534,7 @@
 "读取播放状态、抓歌词和封面" = "Reads playback state and fetches lyrics and artwork";
 "读取本地记录文件失败" = "Couldn't read the lyrics cache";
 "读音" = "Romanization";
+"读音间距" = "Romanization Spacing";
 "调整" = "Adjust";
 "调整宽度" = "Adjust Width";
 "调过颜色后，这里会出现「自定义」，点它就能存成主题" = "After you change any colors, a Custom card appears here. Click it to save them as a theme.";

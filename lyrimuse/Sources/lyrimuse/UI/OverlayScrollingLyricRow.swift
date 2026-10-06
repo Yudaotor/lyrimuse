@@ -29,6 +29,9 @@ struct OverlayScrollingLyricRow: NSViewRepresentable {
         /// 非 nil = 开了逐词罗马音:每一列是「这一组的字 + 它的读音」上下两行,列宽取更宽的
         /// 那一行(同 SwiftUI 那边 VStack 取更宽子视图)。nil = 只有一行字。
         var groups: [SyncedLyricWordGroup]?
+        /// 逐词读音跟上面那行字之间多出来的距离(可以是负的),只在 `groups` 非 nil 时起作用。只有悬浮歌词传,
+        /// 见 `OverlayRowSpacing.perWordReadingGap`。
+        var romaGap: CGFloat = 0
         var font: NSFont
         var romaFont: NSFont
         var baseColor: NSColor
@@ -142,6 +145,8 @@ final class OverlayLyricScrollView: NSView {
     private var flatWords: [SyncedLyricWord] = []
     private var mainHeight: CGFloat = 0
     private var romaHeight: CGFloat = 0
+    /// `Spec.romaGap`,没有逐词读音时为 0。
+    private var romaGap: CGFloat = 0
     private var readingPath: [MenuBarMarquee.KaraokeFillPoint] = []
     private var scrollPath: [MenuBarMarquee.KaraokeFillPoint] = []
     private var installedAtMs: Int?
@@ -274,9 +279,12 @@ final class OverlayLyricScrollView: NSView {
         inset = (spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset) + bleed
         mainHeight = Self.textHeight(spec.font)
         romaHeight = spec.groups == nil ? 0 : Self.textHeight(spec.romaFont)
+        romaGap = spec.groups == nil ? 0 : spec.romaGap
         // 高和宽都对齐到整像素(见 `imageWidth`):位图像素数跟图层点尺寸 × 比例对不上时,Core Animation
         // 按 .resize 把整张图缩放一点点贴上去,每个字都被重采样,1x 屏上整行发糊。
-        boxHeight = Self.alignedUp(mainHeight + romaHeight + 2 * inset, scale: scale)
+        let textHeight = OverlayRowLayout.blockHeight(
+            main: mainHeight, roma: spec.groups == nil ? nil : romaHeight, romaGap: romaGap)
+        boxHeight = Self.alignedUp(textHeight + 2 * inset, scale: scale)
         layOut(spec: spec)
         imageWidth = Self.alignedUp(boxWidth, scale: scale)
         baseTextLayer.contents = drawText(spec: spec, main: spec.baseColor, roma: spec.romaBaseColor, scale: scale)
@@ -340,9 +348,9 @@ final class OverlayLyricScrollView: NSView {
         guard let ctx = makeContext(scale: scale) else { return nil }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-        // flipped: false → 原点在左下、y 向上。主行在上、罗马音在下(同 SwiftUI 那边 VStack 的顺序),
-        // 各自在自己那一格里底部留 1pt;整块再往里让出一圈 inset。
-        let mainY = inset + romaHeight + 1
+        // flipped: false → 原点在左下、y 向上。主行在上、罗马音在下(同 SwiftUI 那边 VStack 的顺序),中间隔
+        // `romaGap`;各自在自己那一格里底部留 1pt;整块再往里让出一圈 inset。
+        let mainY = inset + romaHeight + romaGap + 1
         let romaY = inset + 1
         var mainAttrs: [NSAttributedString.Key: Any] = [.font: spec.font, .foregroundColor: main]
         var romaAttrs: [NSAttributedString.Key: Any] = [.font: spec.romaFont, .foregroundColor: roma]

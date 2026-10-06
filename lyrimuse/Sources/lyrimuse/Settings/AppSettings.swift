@@ -218,6 +218,9 @@ final class AppSettings: ObservableObject {
         static let showNextLinePreview = "np:showNextLinePreview"
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let overlayLineOverflow = "np:overlayLineOverflow"
+        static let overlayRomanizationSpacing = "np:overlayRomanizationSpacing"
+        static let overlayTranslationSpacing = "np:overlayTranslationSpacing"
+        static let overlayNextLineSpacing = "np:overlayNextLineSpacing"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let showLyricsInTouchBar = "np:showLyricsInTouchBar"
         static let touchBarLyricsKaraoke = "np:touchBarLyricsKaraoke"
@@ -774,6 +777,21 @@ final class AppSettings: ObservableObject {
     /// `OverlayLineOverflow` 声明处注释。
     @Published var overlayLineOverflow: OverlayLineOverflow {
         didSet { defaults.set(overlayLineOverflow.rawValue, forKey: Keys.overlayLineOverflow) }
+    }
+    /// 悬浮歌词卡片里读音 / 译文 / 下一句各自离上一行多远(pt)。存原值,读的地方夹回范围,见 `OverlayRowSpacing`。
+    @Published var overlayRomanizationSpacing: Double {
+        didSet { defaults.set(overlayRomanizationSpacing, forKey: Keys.overlayRomanizationSpacing) }
+    }
+    @Published var overlayTranslationSpacing: Double {
+        didSet { defaults.set(overlayTranslationSpacing, forKey: Keys.overlayTranslationSpacing) }
+    }
+    @Published var overlayNextLineSpacing: Double {
+        didSet { defaults.set(overlayNextLineSpacing, forKey: Keys.overlayNextLineSpacing) }
+    }
+    /// 上面三项合成一组(夹回范围)。
+    var overlayRowSpacing: OverlayRowSpacing.Values {
+        .init(romanization: overlayRomanizationSpacing, translation: overlayTranslationSpacing,
+              nextLine: overlayNextLineSpacing)
     }
     // 默认关闭:状态栏平时只是个不起眼的小图标,打开后会换成当前歌词行的文字,占用
     // 面积明显变大——不应该在谁都没主动选择的情况下就改变状态栏原有的观感。
@@ -1921,6 +1939,13 @@ final class AppSettings: ObservableObject {
         // 排版必须逐像素不变。
         overlayLineOverflow = defaults.string(forKey: Keys.overlayLineOverflow)
             .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
+        // 默认 4 = 卡片里各行原来的间距,升级上来的人排版不变。
+        overlayRomanizationSpacing = (defaults.object(forKey: Keys.overlayRomanizationSpacing) as? Double)
+            ?? OverlayRowSpacing.defaultValue
+        overlayTranslationSpacing = (defaults.object(forKey: Keys.overlayTranslationSpacing) as? Double)
+            ?? OverlayRowSpacing.defaultValue
+        overlayNextLineSpacing = (defaults.object(forKey: Keys.overlayNextLineSpacing) as? Double)
+            ?? OverlayRowSpacing.defaultValue
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         showLyricsInTouchBar = (defaults.object(forKey: Keys.showLyricsInTouchBar) as? Bool) ?? false
         touchBarLyricsKaraoke = (defaults.object(forKey: Keys.touchBarLyricsKaraoke) as? Bool) ?? Self.defaultTouchBarLyricsKaraoke

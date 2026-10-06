@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import LyrimuseCore
 import SwiftUI
 
@@ -76,6 +77,17 @@ final class OverlayPreviewChrome: ObservableObject, OverlayChromeSource {
     /// (实际上 `isHoveringForControls` 恒 false,这个回调根本不会被调到;空实现是把这条
     /// 约束写进代码,而不是靠"反正调不到"。)
     func controlsDidBecomeVisible() {}
+
+    /// 「排版」里三项间距拖动中的临时值,从 `OverlayRowSpacingDraft` 转发过来:拖动中只有编辑台预览跟着变,
+    /// 真窗口等松手提交。
+    @Published private(set) var rowSpacingDraft: OverlayRowSpacing.Values?
+    private var rowSpacingDraftSub: AnyCancellable?
+
+    init() {
+        rowSpacingDraftSub = OverlayRowSpacingDraft.shared.$values
+            .removeDuplicates()
+            .sink { [weak self] in self?.rowSpacingDraft = $0 }
+    }
 }
 
 @MainActor

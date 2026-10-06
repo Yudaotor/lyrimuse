@@ -19,6 +19,13 @@ public enum OverlayRowLayout {
         romaSidePadding + max(0, strokeInset)
     }
 
+    /// 图层行一行字的高度:主行字高;开了逐词读音再加读音间距(可以是负的,见 `OverlayRowSpacing.perWordReadingGap`)
+    /// 和读音字高。图层行的位图、换行模式的行距、悬浮窗滚动模式的行框都按它算,三处对不上字会被裁。
+    public static func blockHeight(main: CGFloat, roma: CGFloat?, romaGap: CGFloat = 0) -> CGFloat {
+        guard let roma else { return main }
+        return max(main, main + romaGap + roma)
+    }
+
     public struct RomaPlacement: Equatable, Sendable {
         public let x: CGFloat
         public let text: String
