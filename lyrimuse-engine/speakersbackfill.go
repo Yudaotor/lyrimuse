@@ -95,9 +95,9 @@ func backfillLyricSpeakers(key, artist, title, album string, durationSecs float6
 	cur.LyricsSpeakersChecked = lyricsSpeakersVersion
 	enrichCache[key] = cur
 	enrichDirty = true
-	// 必须先解锁:requestEnrichSave 可能当场保存,保存要取 enrichMu。
+	// 必须先解锁:requestEnrichSaveFor 可能当场保存,保存要取 enrichMu。
 	enrichMu.Unlock()
-	requestEnrichSave()
+	requestEnrichSaveFor(key)
 }
 
 // countSpeakerLines:标上了的行数(整行、逐字两份取多的那份),只给日志用。

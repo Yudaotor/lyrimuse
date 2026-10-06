@@ -879,7 +879,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		startTranslationBackfillLocked(key, e)
 		enrichMu.Unlock()
 		if spotifyHintDirty {
-			requestEnrichSave()
+			requestEnrichSaveFor(key)
 		}
 		return e.fields()
 	}
@@ -2663,7 +2663,7 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()
-	requestEnrichSave()
+	requestEnrichSaveFor(key)
 	if e.MotionCoverURL == "" {
 		// 封面刚换了身份,之前那个结论是对着旧封面得出的——见
 		// recheckMotionCoverAgainstCurrentCover 头注。
@@ -2724,7 +2724,7 @@ func recheckMotionCoverAgainstCurrentCover(ctx context.Context, key, title, albu
 	enrichCache[key] = cur
 	enrichDirty = true
 	enrichMu.Unlock()
-	requestEnrichSave()
+	requestEnrichSaveFor(key)
 	// 留一行:"这首为什么没有动态封面"是个会被反复问到的问题,而这条路径是它唯一的
 	// 自愈入口 —— 没有日志就只能靠翻缓存文件反推。
 	switch {
@@ -2896,8 +2896,8 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 		commitEnrichSave(key)
 		exportLyricsFilesFor(key)
 	} else if cur := enrichPlayingKey.Load(); !coverSweepSaveDeferred(ctx) || (cur != nil && *cur == key) {
-		// 后台补封面那一遍攒着存(见 coversweep.go);正在播的这首照常当场存。
-		requestEnrichSave()
+		// 后台补封面那一遍攒着存(见 coversweep.go);正在播的这首照常当场存,别的歌攒着(见 enrichsave.go)。
+		requestEnrichSaveFor(key)
 	}
 	if enrichNotify != nil {
 		select {

@@ -107,9 +107,9 @@ func backfillBackgroundVocals(key, artist, title, album string, durationSecs flo
 	cur.LyricsBGChecked = lyricsBGParserVersion
 	enrichCache[key] = cur
 	enrichDirty = true
-	// 必须先解锁:requestEnrichSave 可能当场保存,保存要取 enrichMu。
+	// 必须先解锁:requestEnrichSaveFor 可能当场保存,保存要取 enrichMu。
 	enrichMu.Unlock()
-	requestEnrichSave()
+	requestEnrichSaveFor(key)
 }
 
 // yrcLineHeadRe:YRC 一行开头的 `[行始,行长]`。

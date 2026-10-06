@@ -35,26 +35,37 @@ import (
 //
 // ## 合并连续保存
 //
-// App 靠这个文件的 mtime 发现新歌词(`EnrichCacheReader`,播放时每 2 秒轮询一次),所以**第一次**
-// 保存绝不能晚:`requestEnrichSave` 是「先写、再节流」—— 距上次保存超过 `enrichSaveMinInterval`
-// 就当场写;间隔内再来的请求只排一次到点补写,期间再多的请求都合进这一次。后续更新(晚到的译文、
-// 换上来的更好的歌词)最多晚 2 秒,落在 App 轮询的粒度之内。
+// App 靠这个文件的 mtime 发现新歌词(`EnrichCacheReader`,播放时每 2 秒轮询一次),每变一次就整份重读重解
+// (一次 1 秒上下的 CPU),所以存盘既不能晚、也不能密(见 15 章决策 23):
 //
-// 例外:`commitEnrichEntry` 提交的若是**正在播的这首**,当场写一份这一首的单条快照(`writePlayingEntry`),
-// App 读它出词;整份落盘跟别的歌一样走节流。
+//   - 正在播的那首(`noteEnrichPlayingKey` 记下的 key):`commitEnrichSave` 先当场写一份这一首的单条快照
+//     (`writePlayingEntry`,App 读它出词),整份落盘走 `requestEnrichSave` ——「先写、再节流」:距上次保存
+//     超过 `enrichSaveMinInterval` 就当场写,间隔内再来的请求只排一次到点补写。
+//   - 别的歌的改动(预取、补外围字段、补译文……)走 `requestEnrichSaveFor` / `requestEnrichBackgroundSave`,
+//     最多攒 `enrichBackgroundSaveDelay` 整份写一次;只推进记账字段的(`requestEnrichBookkeepingSave`)最多攒
+//     `enrichBookkeepingSaveDelay`。两种延后共用一个定时器,先到期的为准。
+//   - 换歌那一拍:内存里已经有新这首的条目(预取过)就当场写它的单条快照,排着的延后存盘提前到现在。
 //
 // 只在常驻进程里节流(`enableEnrichSaveThrottle`,main 在进 run 之前打开):命令行子命令存完就退出,
-// 排上的补写会随进程一起丢;测试也要同步写才能读回。默认关着 = 跟原来一样当场写。
-// 常驻进程退出前 `flushEnrichSave` 把排着的那次补写当场做掉。
+// 排上的补写会随进程一起丢;测试也要同步写才能读回。默认关着 = 每次都当场写。
+// 常驻进程退出前 `flushEnrichSave` 把排着的补写当场做掉。
 
 // enrichSaveMinInterval 两次保存之间的最小间隔(节流打开时)。
 var enrichSaveMinInterval = 2 * time.Second
+
+// enrichBackgroundSaveDelay 别的歌(不是正在播的那首)的改动最多攒多久才整份落盘。
+var enrichBackgroundSaveDelay = 30 * time.Second
 
 var (
 	enrichSaveThrottleMu sync.Mutex
 	enrichSaveThrottled  bool
 	enrichLastSaveAt     time.Time
 	enrichSaveTimer      *time.Timer
+	// enrichDeferredSaveTimer 排着的那次延后存盘,到点走 requestEnrichSave;enrichDeferredSaveAt 是它到点的时刻。
+	// enrichDeferredSaveSeq 每排一次、每取消一次都加一:被提前、被取消的旧定时器回调对不上号就什么都不做。
+	enrichDeferredSaveTimer *time.Timer
+	enrichDeferredSaveAt    time.Time
+	enrichDeferredSaveSeq   uint64
 	// enrichSaveNow 可换(单测用),默认当场执行一次保存。
 	enrichSaveNow = saveEnrichCache
 )
@@ -66,8 +77,8 @@ func enableEnrichSaveThrottle() {
 	enrichSaveThrottleMu.Unlock()
 }
 
-// requestEnrichSave 是播放热路径上的保存入口,规则见文件头注。调用方跟调 saveEnrichCache 一样:
-// 先置脏、解锁 enrichMu,再调它。
+// requestEnrichSave 是正在播的那首、以及要马上落盘的改动的保存入口,规则见文件头注。调用方跟调
+// saveEnrichCache 一样:先置脏、解锁 enrichMu,再调它。
 func requestEnrichSave() {
 	enrichSaveThrottleMu.Lock()
 	if !enrichSaveThrottled {
@@ -102,11 +113,25 @@ func requestEnrichSave() {
 // 历史),在那里记会在新歌首次出词的那一刻把 key 换成上一首,新歌那次提交就被节流推迟了。
 var enrichPlayingKey atomic.Pointer[string]
 
+func isEnrichPlayingKey(key string) bool {
+	cur := enrichPlayingKey.Load()
+	return cur != nil && *cur == key
+}
+
+// noteEnrichPlayingKey 换歌那一拍记下正在播的那首。内存里已经有这首的条目(预取过)就当场写它的单条快照:
+// 它的整份落盘可能还攒着,App 先读快照出词。排着的延后存盘提前到现在,另起 goroutine 写,不让 poller 等一次整份写。
 func noteEnrichPlayingKey(key string) {
-	if cur := enrichPlayingKey.Load(); cur != nil && *cur == key {
+	if isEnrichPlayingKey(key) {
 		return
 	}
 	enrichPlayingKey.Store(&key)
+	writePlayingEntry(key)
+	enrichSaveThrottleMu.Lock()
+	pending := cancelEnrichDeferredSaveLocked()
+	enrichSaveThrottleMu.Unlock()
+	if pending {
+		go requestEnrichSave()
+	}
 }
 
 // commitEnrichSave 是 `commitEnrichEntry` 的落盘入口。**正在播的这首**当场写单条快照(playingentry.go):
@@ -119,19 +144,31 @@ func commitEnrichSave(key string) {
 
 // commitEnrichSaveTimed 同 commitEnrichSave,顺带给 commitEnrichEntrySince 的分段计时记两段。
 func commitEnrichSaveTimed(key string, timer *stepTimer) {
-	if cur := enrichPlayingKey.Load(); cur != nil && *cur == key {
+	if isEnrichPlayingKey(key) {
 		writePlayingEntry(key)
 		timer.mark("playing_entry")
 	}
-	requestEnrichSave()
+	requestEnrichSaveFor(key)
 	timer.mark("save")
+}
+
+// requestEnrichSaveFor key 那一条改了:正在播的那首走 requestEnrichSave,别的歌攒着(最多
+// enrichBackgroundSaveDelay)。调用方同 requestEnrichSave。
+func requestEnrichSaveFor(key string) {
+	if isEnrichPlayingKey(key) {
+		requestEnrichSave()
+		return
+	}
+	requestEnrichDeferredSave(enrichBackgroundSaveDelay)
+}
+
+// requestEnrichBackgroundSave 后台扫一遍改了一批别的歌(没有单独一个 key):攒着,同 requestEnrichSaveFor 里别的歌。
+func requestEnrichBackgroundSave() {
+	requestEnrichDeferredSave(enrichBackgroundSaveDelay)
 }
 
 // enrichBookkeepingSaveDelay 只推进了记账字段(重试计数 / 时间戳)的改动最多攒多久才落盘。
 var enrichBookkeepingSaveDelay = 60 * time.Second
-
-// enrichBookkeepingTimer 排着的那次记账补写;受 enrichSaveThrottleMu 保护。
-var enrichBookkeepingTimer *time.Timer
 
 // requestEnrichBookkeepingSave 是「这一趟一个歌词字段都没换,只推进了重试计数 / 时间戳」时的保存入口
 // (升级重试、重评)。全量扫库、补空扫描每首都走这两条路,大多数一个字都没改:每首都整份写一次主缓存
@@ -139,25 +176,52 @@ var enrichBookkeepingTimer *time.Timer
 // 等着看:攒着跟下一次正常保存一起写(那次保存取快照时会带上它们),没有别的保存时最多
 // enrichBookkeepingSaveDelay 之后补写一次。正在播的这首照走 requestEnrichSave;退出前 flushEnrichSave 一并写掉。
 func requestEnrichBookkeepingSave(key string) {
-	if cur := enrichPlayingKey.Load(); cur != nil && *cur == key {
+	if isEnrichPlayingKey(key) {
 		requestEnrichSave()
 		return
 	}
+	requestEnrichDeferredSave(enrichBookkeepingSaveDelay)
+}
+
+// requestEnrichDeferredSave 最多 delay 之后整份落盘一次:已经排着的那次到点更早就不动它,更晚就提前到这次。
+// 节流关着(CLI / 测试)时当场写。
+func requestEnrichDeferredSave(delay time.Duration) {
 	enrichSaveThrottleMu.Lock()
 	if !enrichSaveThrottled {
 		enrichSaveThrottleMu.Unlock()
 		enrichSaveNow()
 		return
 	}
-	if enrichBookkeepingTimer == nil {
-		enrichBookkeepingTimer = time.AfterFunc(enrichBookkeepingSaveDelay, func() {
-			enrichSaveThrottleMu.Lock()
-			enrichBookkeepingTimer = nil
-			enrichSaveThrottleMu.Unlock()
-			requestEnrichSave()
-		})
+	at := time.Now().Add(delay)
+	if enrichDeferredSaveTimer != nil && !at.Before(enrichDeferredSaveAt) {
+		enrichSaveThrottleMu.Unlock()
+		return
 	}
+	cancelEnrichDeferredSaveLocked()
+	seq := enrichDeferredSaveSeq
+	enrichDeferredSaveAt = at
+	enrichDeferredSaveTimer = time.AfterFunc(delay, func() {
+		enrichSaveThrottleMu.Lock()
+		if seq != enrichDeferredSaveSeq {
+			enrichSaveThrottleMu.Unlock()
+			return
+		}
+		enrichDeferredSaveTimer = nil
+		enrichSaveThrottleMu.Unlock()
+		requestEnrichSave()
+	})
 	enrichSaveThrottleMu.Unlock()
+}
+
+// cancelEnrichDeferredSaveLocked 取消排着的延后存盘,返回之前有没有排着。调用方持 enrichSaveThrottleMu。
+func cancelEnrichDeferredSaveLocked() bool {
+	enrichDeferredSaveSeq++
+	if enrichDeferredSaveTimer == nil {
+		return false
+	}
+	enrichDeferredSaveTimer.Stop()
+	enrichDeferredSaveTimer = nil
+	return true
 }
 
 // flushEnrichSave 取消排着的补写并当场保存一次(没有脏数据时 saveEnrichCache 自己会直接返回)。
@@ -168,10 +232,7 @@ func flushEnrichSave() {
 		enrichSaveTimer.Stop()
 		enrichSaveTimer = nil
 	}
-	if enrichBookkeepingTimer != nil {
-		enrichBookkeepingTimer.Stop()
-		enrichBookkeepingTimer = nil
-	}
+	cancelEnrichDeferredSaveLocked()
 	enrichLastSaveAt = time.Now()
 	enrichSaveThrottleMu.Unlock()
 	enrichSaveNow()

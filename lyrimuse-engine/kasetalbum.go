@@ -277,7 +277,7 @@ func startKasetAlbumSweep(ctx context.Context) {
 		}
 	}
 	if updated > 0 {
-		requestEnrichSave()
+		requestEnrichBackgroundSave()
 	}
 	log.Printf("kaset album sweep: %d of %d entries updated (hl=%s)", updated, len(keys), hl)
 }

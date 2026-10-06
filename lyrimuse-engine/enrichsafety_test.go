@@ -112,12 +112,11 @@ func TestRequestEnrichBookkeepingSaveCoalesces(t *testing.T) {
 	origPlaying := enrichPlayingKey.Load()
 	t.Cleanup(func() {
 		enrichSaveThrottleMu.Lock()
-		for _, tm := range []**time.Timer{&enrichSaveTimer, &enrichBookkeepingTimer} {
-			if *tm != nil {
-				(*tm).Stop()
-				*tm = nil
-			}
+		if enrichSaveTimer != nil {
+			enrichSaveTimer.Stop()
+			enrichSaveTimer = nil
 		}
+		cancelEnrichDeferredSaveLocked()
 		enrichSaveThrottled, enrichLastSaveAt = origThrottled, origLast
 		enrichSaveThrottleMu.Unlock()
 		enrichSaveNow, enrichSaveMinInterval, enrichBookkeepingSaveDelay = origNow, origInterval, origDelay

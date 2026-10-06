@@ -18,8 +18,8 @@ import (
 // 每条最多在这里补一次:补过一次 PeripheralRetryCount 就不是 0 了,之后照旧等播放时再试。
 // 一条补完一个请求都没成功时不算补过(见 backfillPeripheralFields 记次数那一行),等 coverSweepOfflineWait
 // 再补下一条;连续 coverSweepOfflineLimit 条都这样就停下这一遍,coverSweepOfflineRetry 后再来。
-// 补一条不当场存盘:每补完 coverSweepSaveEvery 条、以及一遍收尾时存一次(App 每次存盘都要整份重读缓存);
-// 正在播的那首照常当场存。
+// 补一条不当场存盘:每补完 coverSweepSaveEvery 条、以及一遍收尾时要一次存盘,这一次也跟别的歌的改动一样攒着、
+// 最多 enrichBackgroundSaveDelay 写(App 每次存盘都要整份重读缓存,见 enrichsave.go);正在播的那首照常当场存。
 
 const (
 	coverSweepInitialDelay = 2 * time.Minute
@@ -45,7 +45,7 @@ var (
 	coverSweepBackfill     = backfillPeripheralFields
 	coverSweepNetworkRound = beginNetworkRound
 	// coverSweepSave 把攒着的改动存盘。单测换成计数。
-	coverSweepSave = requestEnrichSave
+	coverSweepSave = requestEnrichBackgroundSave
 )
 
 type coverSweepDeferSaveKey struct{}

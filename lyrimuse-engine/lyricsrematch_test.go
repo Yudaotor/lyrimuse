@@ -393,12 +393,11 @@ func TestManualRematchSavesBeforeReporting(t *testing.T) {
 	enrichSaveThrottleMu.Unlock()
 	t.Cleanup(func() {
 		enrichSaveThrottleMu.Lock()
-		for _, timer := range []*time.Timer{enrichBookkeepingTimer, enrichSaveTimer} {
-			if timer != nil {
-				timer.Stop()
-			}
+		if enrichSaveTimer != nil {
+			enrichSaveTimer.Stop()
 		}
-		enrichBookkeepingTimer, enrichSaveTimer, enrichSaveThrottled = nil, nil, savedThrottled
+		cancelEnrichDeferredSaveLocked()
+		enrichSaveTimer, enrichSaveThrottled = nil, savedThrottled
 		enrichSaveThrottleMu.Unlock()
 		enrichSaveNow = savedNow
 	})
@@ -409,7 +408,7 @@ func TestManualRematchSavesBeforeReporting(t *testing.T) {
 		t.Fatalf("前提:这一轮的冠军就是现在这一份: %+v", got)
 	}
 	enrichSaveThrottleMu.Lock()
-	pending := enrichBookkeepingTimer != nil || enrichSaveTimer != nil
+	pending := enrichDeferredSaveTimer != nil || enrichSaveTimer != nil
 	enrichSaveThrottleMu.Unlock()
 	if saves == 0 || pending {
 		t.Errorf("报结论之前要当场落盘: saves=%d 还排着补写=%v", saves, pending)

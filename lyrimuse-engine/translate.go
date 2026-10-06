@@ -1064,7 +1064,7 @@ func backfillTranslation(key string) {
 	defer func() {
 		enrichMu.Unlock()
 		if !lyricsChanged {
-			requestEnrichSave()
+			requestEnrichSaveFor(key)
 			return
 		}
 		commitEnrichSave(key)
