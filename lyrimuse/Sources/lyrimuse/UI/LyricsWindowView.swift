@@ -2159,6 +2159,7 @@ struct LyricsWindowView: View {
                     .modifier(miniDeckHover)
             }
             .help(L10n.t("上一首"))
+            .accessibilityLabel(L10n.t("上一首"))
             Button {
                 // 走 coordinator 的乐观回声版,不直接发命令:图标点击即动,不等 0.5~1s 的
                 // 轮询回读(见 userTogglePlayPause 注释)。同完整布局那排。
@@ -2173,11 +2174,13 @@ struct LyricsWindowView: View {
                     .modifier(miniDeckHover)
             }
             .help(L10n.t("播放/暂停"))
+            .accessibilityLabel(L10n.t("播放/暂停"))
             Button { MusicPlaybackController.nextTrack() } label: {
                 Image(systemName: "forward.fill").font(.system(size: 12))
                     .modifier(miniDeckHover)
             }
             .help(L10n.t("下一首"))
+            .accessibilityLabel(L10n.t("下一首"))
         }
         // AM 式点按反馈:按下快缩、松手弹回。跟完整布局那排五颗同一个 style。
         .buttonStyle(TransportButtonStyle(reduceMotion: reduceMotion))
@@ -2264,6 +2267,7 @@ struct LyricsWindowView: View {
         // ± 两颗之间只隔 4pt、中间还夹着读数,底块不往外扩,就是 20×20 的框本身。
         .buttonStyle(WindowActionButtonStyle(onArtwork: hasArtworkBackground, inset: 0, cornerRadius: 6))
         .help(help)
+        .accessibilityLabel(help)
     }
 
     /// 此刻在不在间奏里(含前奏,它的 index 是 -1)。在的话当前行那一格画三颗点。
@@ -2640,6 +2644,7 @@ struct LyricsWindowView: View {
                             }
                             .buttonStyle(.plain)
                             .help(L10n.t("译文与读音"))
+                            .accessibilityLabel(L10n.t("译文与读音"))
                             .anchorPreference(key: TranslationMenuButtonBoundsKey.self, value: .bounds) { $0 }
                         }
                         if !previewMode, !isIdle { lyricsQueuePill(showPlayerPane: showPlayerPane) }
@@ -3395,6 +3400,7 @@ struct LyricsWindowView: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.t(favorited ? "取消喜欢" : "喜欢"))
+                .accessibilityLabel(L10n.t(favorited ? "取消喜欢" : "喜欢"))
             }
             // 从系统 Menu 换成自绘面板(moreMenuPanel,窗级 overlay 定位),
             // 一次解决三件事:① 样式对齐 AM(深色玻璃圆角白字,系统 NSMenu 是浅色小面板,
@@ -3408,6 +3414,7 @@ struct LyricsWindowView: View {
                 circleIcon("ellipsis")
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(L10n.t("更多"))
             .anchorPreference(key: MoreMenuButtonBoundsKey.self, value: .bounds) { $0 }
             // 「设置…」("加在三个点旁边"):这扇窗口本身没有右键菜单/
             // 工具栏,原来只能从菜单栏图标右键或 Dock 才够得着设置。跟星形/「…」同款
@@ -3424,6 +3431,7 @@ struct LyricsWindowView: View {
             }
             .buttonStyle(.plain)
             .help(L10n.t("设置…"))
+            .accessibilityLabel(L10n.t("设置…"))
         }
     }
 
@@ -4003,6 +4011,8 @@ struct LyricsWindowView: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// 「播放记录」面板:填在右侧栏跟歌词同一块地皮上(不是弹出面板),内容按
@@ -4287,6 +4297,7 @@ struct LyricsWindowView: View {
                     .opacity(Self.skipButtonOpacity)
             }
             .help(L10n.t("上一首"))
+            .accessibilityLabel(L10n.t("上一首"))
             Button {
                 // 走 coordinator 的乐观回声版,不直接发命令:封面缩放/图标点击即动,
                 // 不等 0.5~1s 的轮询回读(见 userTogglePlayPause 注释)。
@@ -4301,6 +4312,7 @@ struct LyricsWindowView: View {
                     .opacity(Self.playButtonOpacity)
             }
             .help(L10n.t("播放/暂停"))
+            .accessibilityLabel(L10n.t("播放/暂停"))
             Button {
                 MusicPlaybackController.nextTrack()
             } label: {
@@ -4308,6 +4320,7 @@ struct LyricsWindowView: View {
                     .opacity(Self.skipButtonOpacity)
             }
             .help(L10n.t("下一首"))
+            .accessibilityLabel(L10n.t("下一首"))
             }
             Spacer(minLength: 12)
             repeatButton
@@ -4348,6 +4361,7 @@ struct LyricsWindowView: View {
             .help(
                 (windowController.isAlwaysOnTop ? L10n.t("取消置顶") : L10n.t("置于最顶层"))
                     + " · " + L10n.t("这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认"))
+            .accessibilityLabel(windowController.isAlwaysOnTop ? L10n.t("取消置顶") : L10n.t("置于最顶层"))
             // 全屏那颗在迷你模式下收起来:一扇迷你大小的窗要"进入全屏"是自相矛盾的,
             // 而且迷你时胶囊每多一颗都在挤那点横向空间。
             // 判据用 showsMiniLayout 而不是 windowController.isMini —— 后者在预览里恒为 false,
@@ -4365,6 +4379,7 @@ struct LyricsWindowView: View {
                     .frame(width: Self.windowActionIconWidth)
                 }
                 .help(L10n.t(windowController.isFullScreenActive ? "退出全屏" : "进入全屏"))
+                .accessibilityLabel(L10n.t(windowController.isFullScreenActive ? "退出全屏" : "进入全屏"))
             }
             // 「悬停时浮出控制条」的开关,只在迷你里出现 —— 完整尺寸没有那条控制条,播控本来
             // 就常驻在左栏。
@@ -4385,6 +4400,7 @@ struct LyricsWindowView: View {
                     .frame(width: Self.windowActionIconWidth)
                 }
                 .help(L10n.t(playback.miniShowsControls ? "不再悬停显示播放控制" : "悬停显示播放控制"))
+                .accessibilityLabel(L10n.t(playback.miniShowsControls ? "不再悬停显示播放控制" : "悬停显示播放控制"))
             }
             // 迷你尺寸用画中画那对符号:「缩成一扇小窗」在 Apple 的播放器语汇里就是 pip
             // (Apple Music 全屏歌词页、QuickTime、Safari 视频控件同款),跟全屏那对斜箭头分得开。
@@ -4396,6 +4412,7 @@ struct LyricsWindowView: View {
                     .frame(width: Self.windowActionIconWidth)
             }
             .help(L10n.t(showsMiniLayout ? "退出迷你尺寸" : "进入迷你尺寸"))
+            .accessibilityLabel(L10n.t(showsMiniLayout ? "退出迷你尺寸" : "进入迷你尺寸"))
             // 全屏时不能切(见 toggleMini)。
             .disabled(windowController.isFullScreenActive)
         }
@@ -6326,6 +6343,7 @@ private struct WindowVolumeCapsule: View {
                     }
                     .buttonStyle(.plain)
                     .help(L10n.t("音频输出"))
+                    .accessibilityLabel(L10n.t("音频输出"))
                     .anchorPreference(key: OutputMenuButtonBoundsKey.self, value: .bounds) { $0 }
                     Rectangle()
                         .fill(Color.primary.opacity(0.18))
@@ -6344,6 +6362,7 @@ private struct WindowVolumeCapsule: View {
                 }
                 .buttonStyle(WindowActionButtonStyle(onArtwork: onArtwork, inset: 4))
                 .help(volume == 0 ? L10n.t("取消静音") : L10n.t("静音"))
+                .accessibilityLabel(volume == 0 ? L10n.t("取消静音") : L10n.t("静音"))
             }
             .foregroundStyle(capsuleIconColor)
             .frame(height: compact ? 22 : nil)
@@ -6895,6 +6914,7 @@ private struct OffsetNudgeButton: View {
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 

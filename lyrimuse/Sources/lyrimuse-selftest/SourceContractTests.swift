@@ -23,6 +23,28 @@ func runSourceContractTests() {
                     "歌词窗口播控排: 随机 / 循环键的读屏名跟悬停提示同一串(单曲循环时读「单曲循环」),点亮时带「已选择」")
     }
 
+    // 歌词窗口的纯图标键都要有读屏名:只挂 .help 的话 VoiceOver 读符号自带的描述,跟键的作用对不上,也不跟界面语言走。
+    do {
+        let window = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
+        // 单行的 .help(…) 后面紧跟 .accessibilityLabel(…)(中间可以隔注释行);带文字的控件读的是自己的字,列在 textHelps 里。
+        let textHelps = [".help(L10n.t(\"重置\"))", ".help(L10n.t(\"在设置中查看 Last.fm\"))",
+                         ".help(L10n.t(\"近 12 周的收听热力", ".help(L10n.t(\"在 Apple Music 中打开\"))"]
+        let lines = window.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        var unlabeled: [String] = []
+        for (i, line) in lines.enumerated() where line.hasPrefix(".help(")
+            && line.filter({ $0 == "(" }).count == line.filter({ $0 == ")" }).count
+            && !textHelps.contains(where: { line.hasPrefix($0) }) {
+            let next = lines[(i + 1)...].first { !$0.hasPrefix("//") } ?? ""
+            if !next.hasPrefix(".accessibilityLabel(") { unlabeled.append(line) }
+        }
+        expectEqual(window.isEmpty, false, "歌词窗口纯图标键: 读不到 UI/LyricsWindowView.swift")
+        expectEqual(unlabeled, [], "歌词窗口纯图标键: 悬停提示后面要紧跟读屏名(带文字的控件加进 textHelps)")
+        expectEqual(window.contains(".accessibilityLabel(windowController.isAlwaysOnTop ? L10n.t(\"取消置顶\") : L10n.t(\"置于最顶层\"))")
+                        && window.contains("circleIcon(\"ellipsis\")\n            }\n            .buttonStyle(.plain)\n            .accessibilityLabel(L10n.t(\"更多\"))"), true,
+                    "歌词窗口纯图标键: 置顶(提示是两句、读屏名只取前一句)和「⋯」(没有悬停提示)也有读屏名")
+    }
+
     // 换歌后要及时做的去抖挂主队列(01 章决策 11):Combine 挂 RunLoop.main 的计时器只在默认模式走,菜单栏菜单开着时不触发。
     do {
         let appSources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
