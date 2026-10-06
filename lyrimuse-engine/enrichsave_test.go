@@ -40,7 +40,7 @@ func TestWriteEnrichSnapshotMatchesMarshal(t *testing.T) {
 	}
 }
 
-// 节流:先写;间隔内再来的请求合成一次补写;flush 取消排着的补写并当场写;正在播的这首当场写。
+// 节流:先写;间隔内再来的请求合成一次补写;flush 取消排着的补写并当场写;正在播的这首当场写单条快照,整份跟别的改动一起攒着。
 func TestRequestEnrichSaveThrottle(t *testing.T) {
 	var saves atomic.Int32
 	origNow, origInterval := enrichSaveNow, enrichSaveMinInterval
@@ -114,9 +114,10 @@ func TestRequestEnrichSaveThrottle(t *testing.T) {
 		t.Fatalf("flush must cancel the pending trailing save: %d → %d", before, n)
 	}
 
-	// 正在播的这首:单条快照当场写(App 读它出词),整份落盘节流;预取别的歌攒着,不算进这次补写。
-	savedPath, savedCache := enrichPath, enrichCache
-	t.Cleanup(func() { enrichPath, enrichCache = savedPath, savedCache })
+	// 正在播的这首:单条快照当场写(App 读它出词),整份落盘跟预取的别的歌一起攒着,到点只写一次。
+	savedPath, savedCache, savedDelay := enrichPath, enrichCache, enrichBackgroundSaveDelay
+	t.Cleanup(func() { enrichPath, enrichCache, enrichBackgroundSaveDelay = savedPath, savedCache, savedDelay })
+	enrichBackgroundSaveDelay = 40 * time.Millisecond
 	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{"a|now|b": {Lyrics: "[00:01.00]hi"}}
@@ -128,7 +129,7 @@ func TestRequestEnrichSaveThrottle(t *testing.T) {
 	commitEnrichSave("a|now|b")
 	commitEnrichSave("a|now|b")
 	if n := saves.Load(); n != before {
-		t.Fatalf("playing key must go through the throttle too: %d → %d", before, n)
+		t.Fatalf("playing key must not save the whole cache at once: %d → %d", before, n)
 	}
 	if _, err := os.Stat(playingEntryPath()); err != nil {
 		t.Fatalf("playing entry must be written at once: %v", err)
@@ -139,7 +140,7 @@ func TestRequestEnrichSaveThrottle(t *testing.T) {
 	}
 	time.Sleep(150 * time.Millisecond)
 	if n := saves.Load(); n != before+1 {
-		t.Fatalf("three commits within the interval must coalesce into one trailing save: %d → %d", before, n)
+		t.Fatalf("the commits must coalesce into one deferred save: %d → %d", before, n)
 	}
 }
 
@@ -209,7 +210,7 @@ func waitEnrichSaves(t *testing.T, saves *atomic.Int32, want int32, within time.
 	}
 }
 
-// 别的歌的改动攒着、到点只写一次;正在播的这首照常当场写;两种延后先到期的为准,后来的不往后推;flush 取消排着的。
+// 改动攒着、到点只写一次,正在播的这首也一样;两种延后先到期的为准,后来的不往后推;flush 取消排着的。
 func TestRequestEnrichSaveForDefersOtherSongs(t *testing.T) {
 	var saves atomic.Int32
 	restoreEnrichSaveStateOnCleanup(t)
@@ -236,11 +237,11 @@ func TestRequestEnrichSaveForDefersOtherSongs(t *testing.T) {
 	}
 
 	saves.Store(0)
-	time.Sleep(10 * time.Millisecond)
 	requestEnrichSaveFor("p|now|x")
-	if n := saves.Load(); n != 1 {
-		t.Fatalf("正在播的这首应当当场写: saves = %d", n)
+	if n := saves.Load(); n != 0 {
+		t.Fatalf("正在播的这首也攒着,不该当场整份写: saves = %d", n)
 	}
+	waitEnrichSaves(t, &saves, 1, 2*time.Second)
 
 	// 记账那次(160ms)排着,再来一条别的歌(40ms):提前到 40ms,原来那次不再写。
 	saves.Store(0)
@@ -270,6 +271,51 @@ func TestRequestEnrichSaveForDefersOtherSongs(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	if n := saves.Load(); n != 1 {
 		t.Fatalf("flush 应当当场写一次并取消排着的: saves = %d", n)
+	}
+}
+
+// 整份写盘期间正在播的那首又改过:写完补写一次单条快照,它要比主缓存新;期间没改过就不补写。
+func TestSaveKeepsPlayingEntryFresh(t *testing.T) {
+	restoreEnrichSaveStateOnCleanup(t)
+	savedPath, savedCache := enrichPath, enrichCache
+	t.Cleanup(func() { enrichPath, enrichCache = savedPath, savedCache })
+	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
+	const key = "p|now|x"
+	enrichMu.Lock()
+	enrichCache = map[string]enrichEntry{key: {Lyrics: "[00:01.00]v1"}}
+	enrichMu.Unlock()
+	noteEnrichPlayingKey(key)
+	writeCache := func() {
+		if err := os.WriteFile(enrichPath, []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 假的整份写盘:取完快照、改名之前,正在播的那首又提交了一次(单条快照照常当场写)
+	saveKeepingPlayingEntryFresh(func() {
+		enrichMu.Lock()
+		enrichCache[key] = enrichEntry{Lyrics: "[00:01.00]v2"}
+		enrichMu.Unlock()
+		notePlayingEntryChanged(key)
+		writeCache()
+	})
+	snap, err := os.Stat(playingEntryPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, err := os.Stat(enrichPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snap.ModTime().After(cache.ModTime()) {
+		t.Fatalf("写盘期间改过,写完单条快照应当比主缓存新: snapshot %v cache %v", snap.ModTime(), cache.ModTime())
+	}
+	saveKeepingPlayingEntryFresh(writeCache)
+	again, err := os.Stat(playingEntryPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !again.ModTime().Equal(snap.ModTime()) {
+		t.Fatal("写盘期间没改过,不该补写单条快照")
 	}
 }
 

@@ -524,10 +524,15 @@ public enum EnrichCacheReader {
     /// 精确命中用精确 key;宽松命中返回缓存里真实存在的那条 key —— 播放器报法与缓存
     /// 写法有 空格/大小写/繁简 出入时(见 looseMatch 注释),写回必须落在读取路径命中的
     /// 同一条上,否则读写分家、改了不生效。两级都没有返回 nil,调用方退回 normalizedKey
-    /// 新建条目。首次调用要解析整份缓存 JSON,别在主线程调。
+    /// 新建条目。正在播的那首整份存盘可能还攒着,先看单条快照(判据同 storedEntry)。首次调用要解析整份缓存 JSON,
+    /// 别在主线程调。
     public static func resolvedKey(artist: String, title: String, album: String) -> String? {
-        guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        if let p = freshPlayingEntry(),
+           EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key) {
+            return p.key
+        }
+        guard let all = loadEntries() else { return nil }
         return matchedKey(key, in: all)
     }
 

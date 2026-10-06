@@ -1299,6 +1299,17 @@ func runOpsDiagnosticsTests() {
                     "增量采纳(契约): 别名表只在输入变了时作废")
     }
 
+    // ---- 正在播的那首整份存盘也攒着(15 章决策 26)----
+    do {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(reader, contain: "public static func resolvedKey(artist: String, title: String, album: String) -> String? {"
+                                    + "\n        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)"
+                                    + "\n        if let p = freshPlayingEntry(),"),
+                    true, "延后存盘(契约): 搜索歌词写回用的 key 先看正在播放快照(整份存盘可能还攒着)")
+    }
+
     // ---- build.sh 装完必须确认进程真换了----
     //
     // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本

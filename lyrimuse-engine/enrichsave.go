@@ -35,16 +35,16 @@ import (
 //
 // ## 合并连续保存
 //
-// App 靠这个文件的 mtime 发现新歌词(`EnrichCacheReader`,播放时每 2 秒轮询一次),每变一次就整份重读重解
-// (一次 1 秒上下的 CPU),所以存盘既不能晚、也不能密(见 15 章决策 23):
+// 每次整份落盘都要重写整个主缓存(几十 MB),App 也要跟着比对、采纳一遍(`EnrichCacheReader`),所以整份落盘能攒就攒
+// (见 15 章决策 23、26):
 //
-//   - 正在播的那首(`noteEnrichPlayingKey` 记下的 key):`commitEnrichSave` 先当场写一份这一首的单条快照
-//     (`writePlayingEntry`,App 读它出词),整份落盘走 `requestEnrichSave` ——「先写、再节流」:距上次保存
-//     超过 `enrichSaveMinInterval` 就当场写,间隔内再来的请求只排一次到点补写。
-//   - 别的歌的改动(预取、补外围字段、补译文……)走 `requestEnrichSaveFor` / `requestEnrichBackgroundSave`,
-//     最多攒 `enrichBackgroundSaveDelay` 整份写一次;只推进记账字段的(`requestEnrichBookkeepingSave`)最多攒
-//     `enrichBookkeepingSaveDelay`。两种延后共用一个定时器,先到期的为准。
+//   - 改了正在播的那首(`noteEnrichPlayingKey` 记下的 key):当场写一份这一首的单条快照(`writePlayingEntry`,
+//     App 查当前这首先看它),整份落盘跟别的改动一样攒着。
+//   - 改动走 `requestEnrichSaveFor` / `requestEnrichBackgroundSave`,最多攒 `enrichBackgroundSaveDelay` 整份写一次;
+//     只推进记账字段的(`requestEnrichBookkeepingSave`)最多攒 `enrichBookkeepingSaveDelay`。两种延后共用一个
+//     定时器,先到期的为准;到点走 `requestEnrichSave`,距上次保存不到 `enrichSaveMinInterval` 就等到那一刻。
 //   - 换歌那一拍:内存里已经有新这首的条目(预取过)就当场写它的单条快照,排着的延后存盘提前到现在。
+//   - 整份写盘期间正在播的那首又改过:写完补写一次单条快照(`saveKeepingPlayingEntryFresh`)。
 //
 // 只在常驻进程里节流(`enableEnrichSaveThrottle`,main 在进 run 之前打开):命令行子命令存完就退出,
 // 排上的补写会随进程一起丢;测试也要同步写才能读回。默认关着 = 每次都当场写。
@@ -53,7 +53,7 @@ import (
 // enrichSaveMinInterval 两次保存之间的最小间隔(节流打开时)。
 var enrichSaveMinInterval = 2 * time.Second
 
-// enrichBackgroundSaveDelay 别的歌(不是正在播的那首)的改动最多攒多久才整份落盘。
+// enrichBackgroundSaveDelay 改动最多攒多久才整份落盘(正在播的那首另有单条快照,见文件头注)。
 var enrichBackgroundSaveDelay = 30 * time.Second
 
 var (
@@ -67,7 +67,7 @@ var (
 	enrichDeferredSaveAt    time.Time
 	enrichDeferredSaveSeq   uint64
 	// enrichSaveNow 可换(单测用),默认当场执行一次保存。
-	enrichSaveNow = saveEnrichCache
+	enrichSaveNow = func() { saveKeepingPlayingEntryFresh(saveEnrichCache) }
 )
 
 // enableEnrichSaveThrottle 打开常驻进程的保存节流。只在 main 进 run 之前调一次。
@@ -77,8 +77,8 @@ func enableEnrichSaveThrottle() {
 	enrichSaveThrottleMu.Unlock()
 }
 
-// requestEnrichSave 是正在播的那首、以及要马上落盘的改动的保存入口,规则见文件头注。调用方跟调
-// saveEnrichCache 一样:先置脏、解锁 enrichMu,再调它。
+// requestEnrichSave 整份落盘一次:延后存盘到点、换歌提前的那一次都走它,距上次保存不到 enrichSaveMinInterval
+// 就等到那一刻。调用方跟调 saveEnrichCache 一样:先置脏、解锁 enrichMu,再调它。
 func requestEnrichSave() {
 	enrichSaveThrottleMu.Lock()
 	if !enrichSaveThrottled {
@@ -135,31 +135,52 @@ func noteEnrichPlayingKey(key string) {
 }
 
 // commitEnrichSave 是 `commitEnrichEntry` 的落盘入口。**正在播的这首**当场写单条快照(playingentry.go):
-// 那一刻就是歌词出现在界面上的时刻,App 查当前这首先看它,不等整份缓存。整份落盘一律走
-// requestEnrichSave 的节流 —— 一首新歌现场解析会连着提交三次(首轮先上屏、选定歌词、带外围字段的
-// 最终结果),每次都当场整份写要写三遍、App 跟着整份重解三遍。见 09 章决策 108。
+// 那一刻就是歌词出现在界面上的时刻,App 查当前这首先看它,不等整份缓存。整份落盘攒着,规则见文件头注
+// (09 章决策 108、15 章决策 26)。
 func commitEnrichSave(key string) {
 	commitEnrichSaveTimed(key, nil)
 }
 
 // commitEnrichSaveTimed 同 commitEnrichSave,顺带给 commitEnrichEntrySince 的分段计时记两段。
 func commitEnrichSaveTimed(key string, timer *stepTimer) {
-	if isEnrichPlayingKey(key) {
-		writePlayingEntry(key)
+	if notePlayingEntryChanged(key) {
 		timer.mark("playing_entry")
 	}
-	requestEnrichSaveFor(key)
+	requestEnrichDeferredSave(enrichBackgroundSaveDelay)
 	timer.mark("save")
 }
 
-// requestEnrichSaveFor key 那一条改了:正在播的那首走 requestEnrichSave,别的歌攒着(最多
-// enrichBackgroundSaveDelay)。调用方同 requestEnrichSave。
+// requestEnrichSaveFor key 那一条改了:正在播的那首当场写单条快照;整份落盘攒着,最多 enrichBackgroundSaveDelay。
+// 调用方同 requestEnrichSave。
 func requestEnrichSaveFor(key string) {
-	if isEnrichPlayingKey(key) {
-		requestEnrichSave()
+	notePlayingEntryChanged(key)
+	requestEnrichDeferredSave(enrichBackgroundSaveDelay)
+}
+
+// enrichPlayingChanges 正在播的那首改过几次(notePlayingEntryChanged 加一),整份写盘前后对一下,见 saveKeepingPlayingEntryFresh。
+var enrichPlayingChanges atomic.Uint64
+
+// notePlayingEntryChanged key 是正在播的那首就记一次改动、当场写它的单条快照,返回是不是。调用方先改完内存里那一条。
+func notePlayingEntryChanged(key string) bool {
+	if !isEnrichPlayingKey(key) {
+		return false
+	}
+	enrichPlayingChanges.Add(1)
+	writePlayingEntry(key)
+	return true
+}
+
+// saveKeepingPlayingEntryFresh 整份存盘一次;这期间正在播的那首又改过,写完补写一次它的单条快照。主缓存先取快照、
+// 写完才改名,这期间写的单条快照 mtime 比主缓存旧、内容却更新,App 按 mtime 挑,不补写就会改读主缓存里旧的那份。
+func saveKeepingPlayingEntryFresh(save func()) {
+	before := enrichPlayingChanges.Load()
+	save()
+	if enrichPlayingChanges.Load() == before {
 		return
 	}
-	requestEnrichDeferredSave(enrichBackgroundSaveDelay)
+	if key := enrichPlayingKey.Load(); key != nil {
+		writePlayingEntry(*key)
+	}
 }
 
 // requestEnrichBackgroundSave 后台扫一遍改了一批别的歌(没有单独一个 key):攒着,同 requestEnrichSaveFor 里别的歌。
@@ -174,12 +195,9 @@ var enrichBookkeepingSaveDelay = 60 * time.Second
 // (升级重试、重评)。全量扫库、补空扫描每首都走这两条路,大多数一个字都没改:每首都整份写一次主缓存
 // (三十几 MB),App 跟着整份重读、重算一遍,一场扫库下来两边都断断续续满载。记账字段晚一点落盘没人
 // 等着看:攒着跟下一次正常保存一起写(那次保存取快照时会带上它们),没有别的保存时最多
-// enrichBookkeepingSaveDelay 之后补写一次。正在播的这首照走 requestEnrichSave;退出前 flushEnrichSave 一并写掉。
+// enrichBookkeepingSaveDelay 之后补写一次。正在播的这首当场写单条快照,整份同样攒着;退出前 flushEnrichSave 一并写掉。
 func requestEnrichBookkeepingSave(key string) {
-	if isEnrichPlayingKey(key) {
-		requestEnrichSave()
-		return
-	}
+	notePlayingEntryChanged(key)
 	requestEnrichDeferredSave(enrichBookkeepingSaveDelay)
 }
 

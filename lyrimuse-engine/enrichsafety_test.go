@@ -102,7 +102,7 @@ func TestSaveEnrichCacheFailureKeepsDirty(t *testing.T) {
 	}
 }
 
-// 记账保存:不是正在播的这首时攒着,到点只补写一次;正在播的这首照常当场写;flush 把排着的那次取消并当场写。
+// 记账保存:攒着,到点只补写一次,正在播的这首也一样;flush 把排着的那次取消并当场写。
 func TestRequestEnrichBookkeepingSaveCoalesces(t *testing.T) {
 	var saves atomic.Int32
 	origNow, origInterval, origDelay := enrichSaveNow, enrichSaveMinInterval, enrichBookkeepingSaveDelay
@@ -142,11 +142,11 @@ func TestRequestEnrichBookkeepingSaveCoalesces(t *testing.T) {
 	}
 
 	saves.Store(0)
-	time.Sleep(20 * time.Millisecond)
 	requestEnrichBookkeepingSave("playing|now|x")
-	if n := saves.Load(); n != 1 {
-		t.Fatalf("正在播的这首应当当场写: saves = %d", n)
+	if n := saves.Load(); n != 0 {
+		t.Fatalf("正在播的这首也攒着,不该当场整份写: saves = %d", n)
 	}
+	waitEnrichSaves(t, &saves, 1, 2*time.Second)
 
 	saves.Store(0)
 	requestEnrichBookkeepingSave("other|song|y")
