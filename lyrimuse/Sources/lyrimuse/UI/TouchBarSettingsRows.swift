@@ -107,7 +107,7 @@ struct TouchBarStyleRows: View {
 }
 
 /// 「布局」组:封面、播放控制各自显不显示、摆在歌词哪一边(`TouchBarSide`,两项各管各的,开着才有那一行位置),
-/// 展开时隐藏功能栏。
+/// 展开时隐藏功能栏,以及去系统设置里调功能栏的入口。
 struct TouchBarLayoutRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -138,6 +138,17 @@ struct TouchBarLayoutRows: View {
             SettingsRow(icon: "arrow.left.and.right", title: L10n.t("展开时隐藏功能栏"),
                         subtitle: L10n.t("歌词占满整条触控栏；要用亮度、音量等系统按键时，先点左端的 ✕ 收起")) {
                 Toggle("", isOn: $settings.touchBarHidesControlStrip)
+            }
+            CardDivider()
+            // 右边那排是系统的功能栏,放哪些按钮由用户在系统设置里调,App 没有接口改。链接带 `TouchBarSettings` 锚点,
+            // 直接弹出「触控栏设置…」那一层;不认这个锚点的系统停在「键盘」页,副标题写着往哪点。见 17 章决策 37。
+            SettingsRow(icon: "keyboard", title: L10n.t("系统功能栏"),
+                        subtitle: L10n.t("触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序")) {
+                Button(L10n.t("打开系统设置")) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?TouchBarSettings") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
             }
         }
     }

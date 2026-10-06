@@ -557,6 +557,11 @@ func runTouchBarTests() {
                         && layoutRows.contains("SettingsSubRow(title: L10n.t(\"封面位置\"))")
                         && layoutRows.contains("SettingsSubRow(title: L10n.t(\"播放控制位置\"))"),
                     true, "触控栏: 封面、三键开着时下面各有一行「封面位置」「播放控制位置」")
+        // 「系统功能栏」那一行(17 章决策 37):右边那排系统按键 App 改不了,按钮带锚点直接弹出系统设置里的「触控栏设置…」。
+        // 锚点丢了不报错,只表现成按下去停在「键盘」页、还得自己找。
+        expectEqual(layoutRows.contains("SettingsRow(icon: \"keyboard\", title: L10n.t(\"系统功能栏\"),")
+                        && layoutRows.contains("x-apple.systempreferences:com.apple.Keyboard-Settings.extension?TouchBarSettings"),
+                    true, "触控栏: 「布局」里有一行直接打开系统设置的「触控栏设置…」")
         // 三键旁边那颗设置键:分段控件的第四格,按下去打开设置、翻到「触控栏」这一段。
         expectEqual(controller.contains("case 3: openTouchBarSettings()")
                         && controller.contains("UserDefaults.standard.set(SettingsSearchCatalog.touchBarSectionValue,")
