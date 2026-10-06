@@ -80,3 +80,58 @@ func acceptedSourceISRC(results []scoredLyricCandidateResult, source string, dur
 	}
 	return results[best].ISRC
 }
+
+// isrcRetryReference:前面几轮已认可的候选的正文。按 ISRC 补取那一轮带回来的候选,正文要跟其中至少一条对得上
+// 才并进来,口径同跨源共识(lyricConsensusBody 归一后的 3-gram Jaccard 不低于 lyricConsensusSimThreshold)。
+// 按 ISRC 直取不过歌名闸,这是那一轮唯一的身份核对;不看时长,时长照旧交给打分。前面几轮没有正文够长的
+// 已认可候选、或者补来的这条正文太短没法比时,照旧收下。见 09 章决策 188。
+type isrcRetryReference []map[string]struct{}
+
+func newISRCRetryReference(base []scoredLyricCandidateResult) isrcRetryReference {
+	var ref isrcRetryReference
+	for _, r := range base {
+		if r.Score < 0 {
+			continue
+		}
+		if g := isrcRetryGrams(r.Lyrics); g != nil {
+			ref = append(ref, g)
+		}
+	}
+	return ref
+}
+
+// isrcRetryGrams:正文归一后的 3-gram;归一后不足 lyricConsensusMinBodyRunes 个字(纯音乐、有歌没词的标记都是空正文)时为 nil。
+func isrcRetryGrams(lyrics string) map[string]struct{} {
+	body := lyricConsensusBody(lyrics)
+	if len([]rune(body)) < lyricConsensusMinBodyRunes {
+		return nil
+	}
+	return lyricGram3Set(body)
+}
+
+// similarity:补来的这条候选跟前面几轮最像的那条有多像;没法比时 ok 为 false。
+func (ref isrcRetryReference) similarity(r scoredLyricCandidateResult) (best float64, ok bool) {
+	if len(ref) == 0 {
+		return 0, false
+	}
+	g := isrcRetryGrams(r.Lyrics)
+	if g == nil {
+		return 0, false
+	}
+	for _, x := range ref {
+		best = max(best, gramJaccard(g, x))
+	}
+	return best, true
+}
+
+// filter:正文跟前面几轮哪条都对不上的候选挑进 dropped,其余按原顺序留在 kept。
+func (ref isrcRetryReference) filter(extra []scoredLyricCandidateResult) (kept, dropped []scoredLyricCandidateResult) {
+	for _, r := range extra {
+		if s, ok := ref.similarity(r); ok && s < lyricConsensusSimThreshold {
+			dropped = append(dropped, r)
+			continue
+		}
+		kept = append(kept, r)
+	}
+	return kept, dropped
+}

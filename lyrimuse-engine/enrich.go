@@ -3831,9 +3831,24 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿已被认可的 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
 	// 放在所有轮次之后:别名轮可能才让 Apple Music 查到这首(曲库里署名跟本地不同)。
 	if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != "" {
+		// 补来的候选正文要跟前面几轮已认可的对得上才并进来,中途推给界面的结果同样先筛,见 isrcRetryReference。
+		ref := newISRCRetryReference(results)
 		isrcUpdate := mergedRoundUpdate(onUpdate, artist, title, album, durationSecs, results)
+		if isrcUpdate != nil {
+			update := isrcUpdate
+			isrcUpdate = func(vne neteaseInfo, vres []scoredLyricCandidateResult, done, total int) {
+				kept, _ := ref.filter(vres)
+				update(vne, kept, done, total)
+			}
+		}
 		isrcCtx := withLyricQueryReason(withLyricSourceOnly(withRecordingISRC(ctx, isrc), sources), lyricQueryReasonISRC)
 		_, isrcResults := fetchScoredLyricCandidatesStreaming(isrcCtx, artist, title, album, durationSecs, isrcUpdate)
+		isrcResults, dropped := ref.filter(isrcResults)
+		for _, d := range dropped {
+			s, _ := ref.similarity(d)
+			log.Printf("lyrics: isrc %s from applemusic: dropped %s candidate %q for %q - %q, lyrics match no accepted candidate (best similarity %.2f)",
+				isrc, d.Source, d.Title, artist, title, s)
+		}
 		merged := mergeLyricCandidateRounds(artist, title, album, durationSecs, results, isrcResults)
 		if usableLyricSourceCount(merged) > usableLyricSourceCount(results) {
 			log.Printf("lyrics: isrc %s from applemusic added candidates for %q - %q: usable_sources=%d->%d",
