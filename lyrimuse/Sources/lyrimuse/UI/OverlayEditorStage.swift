@@ -113,6 +113,25 @@ struct OverlayEditorStage: View {
     @State private var popoverMaxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
     @State private var stageTopProbe = StageTopProbe()
 
+    /// 真视图报上来的主行 / 读音 / 译文 / 下一句矩形(画布本地坐标,`canvasSpace`)。预览上的可点区域按它划,
+    /// 见 cardHotspots。
+    @State private var contentRowRects: [OverlayContentRow: CGRect] = [:]
+    /// 指针此刻悬在哪块可点区域上(nil = 都没悬),只用来画高亮框。
+    @State private var hoveredHotspot: CardHotspot.Kind?
+    /// 当前这个浮层锚在哪:工具栏(从舞台上沿往上弹),还是预览上某块可点区域(从那块右侧弹)。跟 `popover`
+    /// 一起构成"哪个浮层、开在哪":同一个浮层在两处各挂着一份 `.popover`,靠它保证同时只亮一份。
+    @State private var popoverAnchor: PopoverAnchor = .toolbar
+    /// 从预览上点开时那块区域的矩形,锚点停在这里(见 hotspotPopoverAnchor)。
+    @State private var hotspotAnchorRect: CGRect = .zero
+
+    private enum PopoverAnchor: Equatable {
+        case toolbar
+        case hotspot(CardHotspot.Kind)
+    }
+
+    /// 画布那层的命名坐标空间:真视图按它报各行矩形,可点区域按它摆。
+    private static let canvasSpace = "overlayEditorCanvas"
+
     /// 用户此刻正按着宽度调整条(Slider 的 onEditingChanged)。
     ///
     /// 用途是把背景透明时那条常驻的窗口轮廓**加强**一档(见 windowEdgeOutline)——
@@ -121,8 +140,8 @@ struct OverlayEditorStage: View {
     ///
     /// (第六步之前这里是**两个** Bool、左右握柄各一个:指针在两个握柄之间移动时,"进了新的"
     /// 和"离开旧的"谁先到不由我们控制,单值状态会被后到的那个"离开"清成 nil。调整条只有一个、
-    /// 来源也只有 onEditingChanged 一处,那条坑在这里不复存在 —— 第十步删掉命中区之后,这个
-    /// 文件里再没有第二处 hover 状态,那条坑的另一半只剩文档里那份记录。)
+    /// 来源也只有 onEditingChanged 一处,那条坑在这里不复存在。预览上的可点区域(`hoveredHotspot`)各块
+    /// 互不重叠,单值状态够用。)
     @State private var adjustingWidth = false
 
     // MARK: - 度量
@@ -378,9 +397,8 @@ struct OverlayEditorStage: View {
     /// 三颗按钮放左边、「重置 ▾」推到右边:重置是一次性的破坏性动作,跟高频入口隔开一段距离,
     /// 少一点误点(设计稿也是把它从卡片里收进这个菜单的 ——"不适合摆在画布上被误点")。
     ///
-    /// 工具栏按钮是各浮层**唯一**的入口(第十步删掉画布命中区之后)。原先画布上还有
-    /// "点歌词/点背景"两块快捷方式,而那种入口靠 hover 才看得见、键盘和 VoiceOver 根本够不着 ——
-    /// 显式入口一直是主路径、不是兜底,所以删掉快捷方式没有留下够不到的设置。
+    /// 工具栏按钮是各浮层的主入口。预览上那两块可点区域(`cardHotspots`:主行 → 「文字」,读音 / 译文 / 下一句
+    /// → 「内容」)只是快捷方式:关着的那一行在预览里根本不存在,要打开它还得走这里。
     ///
     /// 分组:「配色」按内容拆成「主题」(配色主题 / 我的配色主题)和「背景」(背景颜色 / 毛玻璃);
     /// 文字层那几项(字体/粗细/字号/卡拉OK/文字色/描边)归「文字」;「跟随封面」归「主题」
@@ -532,6 +550,7 @@ struct OverlayEditorStage: View {
     ) -> some View {
         Button {
             popoverMaxHeight = stageTopProbe.popoverHeightLimit()
+            popoverAnchor = .toolbar
             popover = target
         } label: {
             EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
@@ -596,13 +615,20 @@ struct OverlayEditorStage: View {
         }
     }
 
+    /// 工具栏那一份 `.popover` 的开关:目标对、**而且**锚点是工具栏才亮 —— 同一个浮层从预览上点开时挂在
+    /// `hotspotPopoverAnchor` 那一份上,这里必须保持关着,否则两份 NSPopover 会同时弹。
     private func popoverBinding(_ target: StagePopover) -> Binding<Bool> {
         Binding(
-            get: { popover == target },
+            get: { popover == target && popoverAnchor == .toolbar },
             // 只在关的是"自己"那一份时才清空:popover 已经切到别的目标时,旧那份收到的
             // isPresented=false 不该把新开的这个也一起关掉。
             set: { shown in
-                if shown { popover = target } else if popover == target { popover = nil }
+                if shown {
+                    popoverAnchor = .toolbar
+                    popover = target
+                } else if popover == target, popoverAnchor == .toolbar {
+                    popover = nil
+                }
             })
     }
 
@@ -764,14 +790,19 @@ struct OverlayEditorStage: View {
         return LyricsOverlayView(
             overlayController: chrome,
             onContentHeightChange: { overlayContentHeight = $0 },
+            contentRowRectsSpace: Self.canvasSpace,
+            onContentRowRectsChange: { contentRowRects = $0 },
             previewLine: Self.previewLine)
             .frame(width: cardWidth, height: cardHeight, alignment: .top)
+            .coordinateSpace(name: Self.canvasSpace)
             // 裁到窗口自己的边界上。常态下这一层什么也不做(卡高就是量出来的内容高度),它兜的
             // 是 maxCardHeight 夹住的那种极端组合(第九步把上限抬到实测的最坏情况之后,只剩
             // "两次以上换行"这一档才够得着):不裁的话溢出的文字会画到窗外那片桌面上、甚至压到
             // 窗下那条调整条。真窗口也是裁在窗口边界上的(NSHostingView 铺满 contentView),
             // 所以这更贴近真实,不是权宜。
             .clipped()
+            // 预览上的可点区域(主行 → 「文字」,读音 / 译文 / 下一句 → 「内容」),见 cardHotspots。
+            .overlay(alignment: .topLeading) { hotspotLayer(visibleWidth: visibleWidth) }
             // 「锁定位置」在编辑台上**唯一**能被看见的产物,所以贴在卡片上、跟着卡片一起
             // 被裁(见 lockBadge 的 clippedInset)—— 它演的就是"这张卡现在长什么样"。
             .overlay(alignment: .bottomLeading) {
@@ -782,6 +813,131 @@ struct OverlayEditorStage: View {
             // 就近给一条只认 lockPosition 的动画。挂 value: 而不是裸 .animation():
             // 裸的那种会把画布里所有变化都动画化,包括逐字填色每一帧。
             .animation(.easeOut(duration: 0.15), value: settings.lockPosition)
+    }
+
+    // MARK: - 预览上的可点区域
+
+    /// 预览上的一块可点区域。同一个浮层只算一块:读音 / 译文 / 下一句三行都开「内容」,合成主行下面一整块。
+    /// 横向铺满卡片露在舞台里的那一截(超宽时两端在舞台外,点不到),纵向是那几行的上下沿 —— 真视图报的,
+    /// 换行、滚动、对唱都量得到。关着的那一行在预览里不存在,要打开它走工具栏「内容」。见 04 章决策 43。
+    private struct CardHotspot: Identifiable {
+        enum Kind: Hashable { case mainLine, content }
+        let kind: Kind
+        let rect: CGRect
+        let target: StagePopover
+        var id: Kind { kind }
+    }
+
+    /// 行与行之间的 VStack 间距是 4pt,每块上下各往外扩一半刚好接上、不重叠。
+    private static let hotspotRowOutset: CGFloat = 2
+
+    private func cardHotspots(visibleWidth: CGFloat) -> [CardHotspot] {
+        let minX = (windowWidth - visibleWidth) / 2
+        func band(_ rows: [OverlayContentRow]) -> CGRect? {
+            let rects = rows.compactMap { contentRowRects[$0] }.filter { $0.height >= 1 }
+            guard let first = rects.first else { return nil }
+            let union = rects.dropFirst().reduce(first) { $0.union($1) }
+            let top = max(0, union.minY - Self.hotspotRowOutset)
+            let bottom = min(cardHeight, union.maxY + Self.hotspotRowOutset)
+            guard bottom > top else { return nil }
+            return CGRect(x: minX, y: top, width: visibleWidth, height: bottom - top)
+        }
+        var spots: [CardHotspot] = []
+        if let rect = band([.main]) { spots.append(CardHotspot(kind: .mainLine, rect: rect, target: .text)) }
+        if let rect = band([.romanization, .translation, .nextLine]) {
+            spots.append(CardHotspot(kind: .content, rect: rect, target: .content))
+        }
+        return spots
+    }
+
+    private func hotspotLayer(visibleWidth: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(cardHotspots(visibleWidth: visibleWidth)) { spot in
+                hotspotView(spot)
+                    .frame(width: spot.rect.width, height: spot.rect.height)
+                    .offset(x: spot.rect.minX, y: spot.rect.minY)
+            }
+            hotspotPopoverAnchor
+        }
+        .frame(width: windowWidth, height: cardHeight, alignment: .topLeading)
+    }
+
+    /// 平时完全透明;指针悬上去(或从它点开的浮层开着时)描一圈白色虚线细框 + 极淡的白底,指针换手形,点一下打开
+    /// 那块的浮层。线型跟 windowEdgeOutline 同一套(4-3 虚线、1pt、白色加一层黑投影):它压在用户真实的桌面壁纸上,
+    /// 语义色在浅壁纸上读不出来。内缩 2pt 让上下两块的框不贴在一起,命中区仍是整块。
+    /// 不碰预览 chrome 的 isHoveringLyrics:那会让整卡淡到 15%,指针一移上去要点的东西就躲开了。
+    private func hotspotView(_ spot: CardHotspot) -> some View {
+        let active = hoveredHotspot == spot.kind || (popover != nil && popoverAnchor == .hotspot(spot.kind))
+        return RoundedRectangle(cornerRadius: 6)
+            .fill(Color.white.opacity(active ? 0.08 : 0))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.white.opacity(active ? 0.85 : 0),
+                                  style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .shadow(color: .black.opacity(active ? 0.55 : 0), radius: 1)
+            .padding(Self.hotspotRowOutset)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside {
+                    hoveredHotspot = spot.kind
+                    NSCursor.pointingHand.push()
+                } else {
+                    if hoveredHotspot == spot.kind { hoveredHotspot = nil }
+                    NSCursor.pop()
+                }
+            }
+            // 指针还停在上面时这块被拿掉(附属行全关了、设置窗关了),离开事件不会来:在这里把手形光标弹掉。
+            .onDisappear {
+                if hoveredHotspot == spot.kind {
+                    hoveredHotspot = nil
+                    NSCursor.pop()
+                }
+            }
+            .onTapGesture { openPopover(for: spot) }
+            .animation(.easeOut(duration: 0.12), value: active)
+            .accessibilityElement()
+            .accessibilityLabel(String(format: L10n.t("打开「%@」设置"), spot.target.title))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { openPopover(for: spot) }
+    }
+
+    private func openPopover(for spot: CardHotspot) {
+        hotspotAnchorRect = spot.rect
+        popoverAnchor = .hotspot(spot.kind)
+        popover = spot.target
+    }
+
+    /// 从预览上点开的浮层真正挂着的透明锚点:常驻,停在点开那一刻那块区域的位置(`hotspotAnchorRect`,浮层开着时
+    /// 行变了也不跟着跳),浮层从它右侧弹出,不压在卡片上,改一项当场看得见。用 padding 定位不用 offset:NSPopover
+    /// 认的是布局 frame。常驻而不是按需插入:`.popover(isPresented:)` 挂在刚插进树、开关已是 true 的视图上有时不弹
+    /// (同灵动岛编辑台 `hotspotPopoverAnchor`)。
+    private var hotspotPopoverAnchor: some View {
+        Color.clear
+            .frame(width: hotspotAnchorRect.width, height: hotspotAnchorRect.height)
+            .popover(isPresented: hotspotPopoverBinding, arrowEdge: .trailing) {
+                if let popover {
+                    SettingsPopoverShell(title: popover.title, width: popover.width) {
+                        popoverRows(for: popover)
+                    }
+                }
+            }
+            .padding(.leading, hotspotAnchorRect.minX)
+            .padding(.top, hotspotAnchorRect.minY)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// 预览上那一份 `.popover` 的开关:从任一块可点区域点开的都走它。
+    private var hotspotPopoverBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .hotspot = popoverAnchor { return popover != nil }
+                return false
+            },
+            set: { shown in
+                if !shown, case .hotspot = popoverAnchor { popover = nil }
+            })
     }
 
     // MARK: - 锁标

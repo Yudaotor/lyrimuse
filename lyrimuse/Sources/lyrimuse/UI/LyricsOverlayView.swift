@@ -431,6 +431,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 歌词**文字**实际占据的矩形(overlayContent 命名坐标空间,多元素并集)。
     /// 给「指针划过时让开」当命中判据 —— 见 LyricsTextRectPreferenceKey。
     var onLyricsTextRectChange: (CGRect) -> Void = { _ in }
+    /// 设置页编辑台的可点区域用:主行、读音 / 译文 / 下一句各自的矩形,坐标在这个命名坐标空间里(编辑台在画布那层定的)。
+    /// nil = 不量,那几层测量整个不挂 —— 真窗口恒为 nil。见 04 章决策 43。
+    var contentRowRectsSpace: String? = nil
+    var onContentRowRectsChange: ([OverlayContentRow: CGRect]) -> Void = { _ in }
     /// 设置页预览的示例行,真窗口恒为 nil —— 见 OverlayPreviewLine。
     var previewLine: OverlayPreviewLine? = nil
 
@@ -529,6 +533,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         .onPreferenceChange(ControlsFramePreferenceKey.self) { onControlsFrameChange($0) }
         .onPreferenceChange(ControlRectsPreferenceKey.self) { onControlRectsChange($0) }
         .onPreferenceChange(LyricsTextRectPreferenceKey.self) { onLyricsTextRectChange($0) }
+        .onPreferenceChange(ContentRowRectsPreferenceKey.self) { onContentRowRectsChange($0) }
         .animation(.easeOut(duration: 0.16), value: controlsVisible)
         .animation(.easeOut(duration: 0.3), value: overlayController.showDragHint)
         .animation(.easeOut(duration: 0.2), value: overlayController.transientHint)
@@ -1195,6 +1200,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             withSpeakerIndicator(side: duetDecorationSide, font: playback.overlayNSFonts.main, opacity: 1) {
                 reportingMainLineRect(mainLine)
             }
+            .reportsContentRow(.main, in: contentRowRectsSpace)
             // 罗马音在**歌词下面、译文上面**。从歌词上面挪下来 —— 歌词窗口
             // (LyricsWindowView)早就是这个顺序了,这里是漏改的那一处,同一首歌只要解析不出
             // 词组就会跳到上面显示,四种组合里唯一的异类。
@@ -1227,13 +1233,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             //    维持原顺序的话,读到的是"译文在前、原文在后",倒着念——截图实测复现过
             //    这个倒序。
             if line == nil {
-                nextLinePreviewRow
-                romanizationRow
-                translationRow
+                nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
             } else {
-                romanizationRow
-                translationRow
-                nextLinePreviewRow
+                romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
             }
             // 补上——第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后
             // 自动消失,只弹一次(见 LyricsOverlayWindowController.hasShownDragHintKey
@@ -2068,6 +2074,35 @@ private struct LyricsTextRectPreferenceKey: PreferenceKey {
 /// 取 max 而不是"跳过零值再覆盖":本 key 只有一个写入方,`max` 与"那唯一一次写入的值"恒等
 /// (其余分支都是 0),内容变矮时也照样报得下去(每一趟布局都从 defaultValue 重新归约,
 /// 不会记住上一趟的旧值)。
+/// 悬浮歌词卡片里的几行。设置页编辑台按它划可点区域(`OverlayEditorStage.cardHotspots`)。
+enum OverlayContentRow: Hashable {
+    case main, romanization, translation, nextLine
+}
+
+/// 各行矩形的表。reduce 必须合并、不能覆盖:别的分支贡献的默认值(空表)会把已经量到的冲掉,
+/// 同下面 ContentHeightPreferenceKey 那条。
+private struct ContentRowRectsPreferenceKey: PreferenceKey {
+    static let defaultValue: [OverlayContentRow: CGRect] = [:]
+    static func reduce(value: inout [OverlayContentRow: CGRect], nextValue: () -> [OverlayContentRow: CGRect]) {
+        value.merge(nextValue()) { $0.union($1) }
+    }
+}
+
+private extension View {
+    /// 把这一行的矩形报到 `space` 那个命名坐标空间里;`space` 为 nil 时原样返回、什么都不挂。
+    @ViewBuilder
+    func reportsContentRow(_ row: OverlayContentRow, in space: String?) -> some View {
+        if let space {
+            background(GeometryReader { proxy in
+                Color.clear.preference(key: ContentRowRectsPreferenceKey.self,
+                                       value: [row: proxy.frame(in: .named(space))])
+            })
+        } else {
+            self
+        }
+    }
+}
+
 private struct ContentHeightPreferenceKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {

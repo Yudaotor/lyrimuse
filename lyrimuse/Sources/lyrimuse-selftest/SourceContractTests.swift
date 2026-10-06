@@ -1940,6 +1940,17 @@ func runSourceContractTests() {
         expectEqual(model.contains("if !defaults.bool(forKey: Keys.overlayContentTogglesMigrated) {")
                         && model.contains("defaults.set(true, forKey: Keys.overlayContentTogglesMigrated)"), true,
                     "内容开关: 悬浮歌词那份只在第一次从歌词窗口那份抄一次,之后不再继承")
+        // 编辑台预览上的可点区域(04 章决策 43)。
+        let stage = read("UI/OverlayEditorStage.swift")
+        expectEqual(stage.contains("get: { popover == target && popoverAnchor == .toolbar }"), true,
+                    "可点区域: 工具栏那份浮层只在锚点是工具栏时亮,同一个浮层不会两处同时弹")
+        expectEqual(stage.contains("CardHotspot(kind: .mainLine, rect: rect, target: .text)")
+                        && stage.contains("CardHotspot(kind: .content, rect: rect, target: .content)"), true,
+                    "可点区域: 主行开「文字」,读音 / 译文 / 下一句开「内容」")
+        expectEqual(overlay.contains("value.merge(nextValue()) { $0.union($1) }"), true,
+                    "可点区域: 各行矩形的 reduce 是合并,别的分支报的空表冲不掉量到的")
+        expectEqual(read("UI/LyricsOverlayWindowController.swift").contains("contentRowRectsSpace"), false,
+                    "可点区域: 真窗口不量各行矩形")
     }
 
     // ---- 日文汉字修回的接线----
@@ -4093,8 +4104,10 @@ func runSourceContractTests() {
         expectEqual(theme.contains("&& (!backgroundGlass || glassIntensity == other.glassIntensity)"), true,
                     "主题: 浓淡只在毛玻璃开着时参与判等")
         let stage = stripComments(code("UI/OverlayEditorStage.swift"))
-        expectEqual(stage.components(separatedBy: ".popover(").count - 1, 1,
-                    "编辑台浮层: 只有舞台上沿那一处锚点挂 popover,工具栏按钮上不挂(从按钮往下弹会盖住预览)")
+        expectEqual(stage.components(separatedBy: ".popover(").count - 1, 2,
+                    "编辑台浮层: 只有舞台上沿那一处锚点和预览可点区域那一处挂 popover,工具栏按钮上不挂(从按钮往下弹会盖住预览)")
+        expectEqual(stage.contains(".popover(isPresented: hotspotPopoverBinding, arrowEdge: .trailing)"), true,
+                    "编辑台浮层: 从预览上点开的往被点那块右侧弹,不压在卡片上(04 章决策 43)")
         expectEqual(stage.contains(".popover(isPresented: popoverBinding(target), arrowEdge: .top)"), true, "编辑台浮层: 往上弹")
         expectEqual(stage.contains(".overlay(alignment: .top) { stagePopoverAnchors }"), true, "编辑台浮层: 锚点在舞台上沿")
         expectEqual(stage.contains("maxHeight: popoverMaxHeight"), true,
