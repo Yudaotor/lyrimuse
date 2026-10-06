@@ -1079,4 +1079,5 @@ func runLyricsWindowTests() {
         expectEqual(surface.contains("let visible = occlusionVisible && !coveredByOthers"), true,
                     "设置窗口可见性(契约): 系统报可见、且没被整扇盖住才算看得见")
     }
+    checkLyricsWindowFormMorph()
 }

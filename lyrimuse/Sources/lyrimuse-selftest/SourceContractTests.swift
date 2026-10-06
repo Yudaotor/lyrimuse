@@ -1646,7 +1646,7 @@ func runSourceContractTests() {
             } else {
                 expectEqual(true, false, "迷你单行: 读不到 SettingsView.swift(路径挪了?)")
             }
-            // 打开 / 关闭 / 进出迷你都不做动画(07 章决策 51)。
+            // 打开 / 关闭不做动画(07 章决策 51);进出迷你时真窗口一步跳到位,动画只在临时窗里跑(决策 125)。
             // 窗口一放进视图树就同步 attach(恢复尺寸、关动画都得赶在首次显示之前),不等下一拍
             // —— 等下一拍的话窗口先按默认尺寸显示、再一闪跳成上次的大小(07 章决策 52)。
             expectEqual(lwv.contains("override func viewDidMoveToWindow()"), true,
@@ -1669,6 +1669,24 @@ func runSourceContractTests() {
                         "歌词窗口: 进出迷你的 setFrame 都是 animate: false")
             expectEqual(lwv.contains("NSAnimationContext.runAnimationGroup"), false,
                         "歌词窗口: 进出迷你不走 NSAnimationContext 缩放动画")
+            // 进出迷你的动画只在临时窗里由 Core Animation 跑:真窗口不做尺寸动画,也不靠 AppKit 在主线程逐帧改 frame(07 章决策 125)。
+            if let morph = read("UI/LyricsWindowFormMorph.swift") {
+                expectEqual(morph.contains("animator()") || morph.contains("NSAnimationContext") || morph.contains("animate: true"), false,
+                            "变形动画: 不走 AppKit 的窗口动画")
+                expectEqual(morph.contains("CABasicAnimation(keyPath: keyPath)"), true, "变形动画: 卡片几何是显式的 Core Animation 动画")
+                expectEqual(morph.components(separatedBy: "SCShareableContent.").count
+                                == morph.components(separatedBy: "SCShareableContent.currentProcess").count, true,
+                            "变形动画: 截图只列本进程的窗口(不经录屏授权),不用 SCShareableContent.current")
+                expectEqual(morph.contains("CGWindowLevelForKey(.desktopWindow)) - 1"), true,
+                            "变形动画: 真窗口藏在桌面层级以下(透明度为 0 截出来全透明)")
+                expectEqual(morph.contains("accessibilityDisplayShouldReduceMotion"), true, "变形动画: 减弱动态效果时不做")
+            } else {
+                expectEqual(true, false, "变形动画: 读不到 UI/LyricsWindowFormMorph.swift")
+            }
+            expectEqual(lwv.contains("windowController.toggleMini(animated: true)"), true, "歌词窗口: 切换键带变形动画")
+            expectEqual(lwv.contains("guard !formMorph.isRunning else { return }"), true, "歌词窗口: 动画没走完时不再切")
+            expectEqual(lwv.contains("if formMorph.isRunning { formMorph.levelAfterMorph = level } else { window.level = level }"), true,
+                        "歌词窗口: 动画期间置顶不直接改窗口层级")
             // 逐字填色那层必须是 overlay、不进布局链:放回布局链的话每帧一失效,SwiftUI 就把整张
             // 列表 / 整扇窗从下往上重测一遍(07 章决策 50)。
             expectEqual(lwv.contains(".opacity(0)\n                .overlay { animatedGlyph }"), true,

@@ -387,6 +387,8 @@ private final class LyricsWindowController: ObservableObject {
     private var frameBeforeMini: NSRect?
     /// 进迷你之前是否置顶,退出时复原(迷你默认置顶)。
     private var alwaysOnTopBeforeMini: Bool?
+    /// 进 / 出迷你的变形动画(07 章决策 125)。
+    private let formMorph = LyricsWindowFormMorph()
 
     /// 迷你窗口的默认尺寸(从没拖过迷你窗时用它)。
     static var miniSize: CGSize { LyricsWindowMiniMetrics.size }
@@ -558,71 +560,96 @@ private final class LyricsWindowController: ObservableObject {
     }
 
     /// 「设置 › 打开」要的形态跟此刻不一样就切过去。窗口还没上屏就先不取(请求留着,等上屏再来)。
-    private func applyFormRequest() {
+    /// 窗口本来就开着时(`animated`)跟点切换键一样带变形动画;刚上屏那一下不带。
+    private func applyFormRequest(animated: Bool = false) {
         guard let window, window.isVisible, let requested = LyricsWindowSession.takeFormRequest() else { return }
-        if requested != isMini { toggleMini() }
+        if requested != isMini { toggleMini(animated: animated) }
     }
 
-    /// 进 / 出迷你**都不做动画**:窗口尺寸直接跳到位,布局同一拍换好(07 章决策 51)。
-    /// 别改回 `setFrame(animate: true)` / `NSAnimationContext`:缩放动画每一帧都会按新尺寸把
-    /// 整张歌词列表重排一遍,几版补救(先放大后切布局、动画期间冻结字号)都没能让它顺。
-    func toggleMini() {
+    /// 进 / 出迷你。真窗口的尺寸**一步跳到位**,布局同一拍换好;`animated` 时由 `formMorph` 另起一扇临时窗,
+    /// 用切换前后两张截图做变形动画盖住这一跳(07 章决策 125)。别改成 `setFrame(animate: true)` /
+    /// `NSAnimationContext` 让真窗口自己缩放:每一帧都会按新尺寸把整张歌词列表重排一遍(决策 47 / 49 / 51 / 53)。
+    func toggleMini(animated: Bool = false) {
+        // 变形动画没走完时这一下不理:真窗口此刻藏在桌面层级以下,临时窗上摆的是这一次的目标形态。
+        guard !formMorph.isRunning else { return }
         // 全屏(含进出的过渡)时不切:对一扇全屏窗 setFrame,退出全屏后系统会把它摆回全屏前的
         // frame,迷你状态和窗口尺寸就对不上了。按钮那边同样置灰。
         guard let window, !isFullScreenActive, !isNativeFullScreenTransition else { return }
         isSwitchingForm = true
+        // 目标 frame 先算好(变形动画要知道往哪走),状态全在 apply 里改;不做动画时 apply 当场跑完。
+        let target: NSRect?
+        let apply: @MainActor (@escaping () -> Void) -> Void
         if isMini {
-            // 置顶状态回到进迷你之前那样(迷你默认置顶,见下面进迷你那一支)。
-            setAlwaysOnTop(alwaysOnTopBeforeMini ?? false)
-            alwaysOnTopBeforeMini = nil
-            let restore = frameBeforeMini
-            frameBeforeMini = nil
-            // 先在迷你布局下把 frame 摆到位,再切完整布局:反过来的话完整布局会先按迷你那点
-            // 尺寸排一帧(挤成一团)再跳到大窗。迷你那档尺寸下限(300×110)不挡放大。
-            if let restore {
-                // 迷你期间可能拔了屏 / 改了分辨率:夹进它此刻所在(或最靠近)的那块屏,不往空处摆。
+            // 迷你期间可能拔了屏 / 改了分辨率:夹进它此刻所在(或最靠近)的那块屏,不往空处摆。
+            target = frameBeforeMini.map { restore in
                 func overlap(_ s: NSScreen) -> CGFloat {
                     let r = s.frame.intersection(restore)
                     return r.isNull ? 0 : r.width * r.height
                 }
                 let best = NSScreen.screens.max { overlap($0) < overlap($1) }
                 let screen = best.flatMap { overlap($0) > 0 ? $0 : nil } ?? window.screen ?? NSScreen.main
-                let target = screen.map { WindowFrameFit.clamp(restore, into: $0.visibleFrame) } ?? restore
-                window.setFrame(target, display: false, animate: false)
+                return screen.map { WindowFrameFit.clamp(restore, into: $0.visibleFrame) } ?? restore
             }
-            isMini = false
-            UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)
-            updateTrafficLightVisibility()
-            DispatchQueue.main.async { [weak self] in self?.isSwitchingForm = false }
+            apply = { [weak self] done in
+                guard let self else { return done() }
+                // 置顶状态回到进迷你之前那样(迷你默认置顶,见下面进迷你那一支)。
+                setAlwaysOnTop(alwaysOnTopBeforeMini ?? false)
+                alwaysOnTopBeforeMini = nil
+                frameBeforeMini = nil
+                // 先在迷你布局下把 frame 摆到位,再切完整布局:反过来的话完整布局会先按迷你那点
+                // 尺寸排一帧(挤成一团)再跳到大窗。迷你那档尺寸下限(300×110)不挡放大。
+                if let target { window.setFrame(target, display: false, animate: false) }
+                isMini = false
+                UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)
+                updateTrafficLightVisibility()
+                DispatchQueue.main.async { [weak self] in
+                    self?.isSwitchingForm = false
+                    done()
+                }
+            }
         } else {
-            frameBeforeMini = window.frame
-            isMini = true
-            UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)
-            updateTrafficLightVisibility()
-            // 迷你**默认置顶**:这一档就是"缩成一条放在旁边看"的形态,被别的窗口一盖就等于没开。
-            // 进之前的状态记下来,退出时原样还回去 —— 完整尺寸那扇窗默认仍不置顶。
-            alwaysOnTopBeforeMini = isAlwaysOnTop
-            setAlwaysOnTop(true)
-            // setFrame 必须等下一拍。窗口的最小尺寸来自 SwiftUI 那层
-            // `.frame(minWidth:minHeight:)`(见 body 根容器),它跟着 isMini 变 —— 而 @Published
-            // 的更新要等 SwiftUI 跑完一轮才落到 NSWindow 的 contentMinSize 上。同一拍里直接
-            // setFrame 会被**旧的**下限(520×480)钳住,表现是"点了迷你,窗口只缩了一点点"。
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                defer { self.isSwitchingForm = false }
-                guard self.isMini else { return }
-                let size = self.miniTargetSize(on: window.screen)
-                // 回到上次迷你窗待的位置;没存过(或那块屏不在了)就顶边钉在原位。
-                let f = self.restoredMiniFrame(size: size) ?? {
-                    var f = window.frame
-                    // 窗口坐标系原点在左下,缩高度时要把 y 往上提,否则整扇窗会"掉下去"。
-                    f.origin.y += f.height - size.height
-                    f.size = size
-                    return f
-                }()
-                window.setFrame(f, display: true, animate: false)
+            let size = self.miniTargetSize(on: window.screen)
+            // 回到上次迷你窗待的位置;没存过(或那块屏不在了)就顶边钉在原位。
+            let f = self.restoredMiniFrame(size: size) ?? {
+                var f = window.frame
+                // 窗口坐标系原点在左下,缩高度时要把 y 往上提,否则整扇窗会"掉下去"。
+                f.origin.y += f.height - size.height
+                f.size = size
+                return f
+            }()
+            target = f
+            apply = { [weak self] done in
+                guard let self else { return done() }
+                frameBeforeMini = window.frame
+                isMini = true
+                UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)
+                updateTrafficLightVisibility()
+                // 迷你**默认置顶**:这一档就是"缩成一条放在旁边看"的形态,被别的窗口一盖就等于没开。
+                // 进之前的状态记下来,退出时原样还回去 —— 完整尺寸那扇窗默认仍不置顶。
+                alwaysOnTopBeforeMini = isAlwaysOnTop
+                setAlwaysOnTop(true)
+                // setFrame 必须等下一拍。窗口的最小尺寸来自 SwiftUI 那层
+                // `.frame(minWidth:minHeight:)`(见 body 根容器),它跟着 isMini 变 —— 而 @Published
+                // 的更新要等 SwiftUI 跑完一轮才落到 NSWindow 的 contentMinSize 上。同一拍里直接
+                // setFrame 会被**旧的**下限(520×480)钳住,表现是"点了迷你,窗口只缩了一点点"。
+                DispatchQueue.main.async { [weak self] in
+                    if let self, self.isMini { window.setFrame(f, display: true, animate: false) }
+                    self?.isSwitchingForm = false
+                    done()
+                }
             }
         }
+        if animated, let target, LyricsWindowFormMorph.canAnimate(window, to: target) {
+            formMorph.run(window: window, to: target, apply: apply)
+        } else {
+            apply {}
+        }
+    }
+
+    /// 见 `LyricsWindowFormMorph.prewarm`。
+    func prewarmFormMorph() {
+        guard let window else { return }
+        formMorph.prewarm(window)
     }
 
     /// 自定义背景带不透明度时,让窗口本体真的透出背后的桌面。
@@ -864,7 +891,7 @@ private final class LyricsWindowController: ObservableObject {
         formRequestObserver = NotificationCenter.default.addObserver(
             forName: LyricsWindowSession.formRequestNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyFormRequest() }
+            MainActor.assumeIsolated { self?.applyFormRequest(animated: true) }
         }
         if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
         // didMove 和 didResize 合用一个回调:两者要存的东西完全一样,而拖动窗口边角同时
@@ -1059,7 +1086,9 @@ private final class LyricsWindowController: ObservableObject {
     private func setAlwaysOnTop(_ on: Bool) {
         guard let window else { return }
         isAlwaysOnTop = on
-        window.level = on ? .floating : .normal
+        let level: NSWindow.Level = on ? .floating : .normal
+        // 变形动画期间真窗口藏在桌面层级以下,层级等动画收尾一起还(见 LyricsWindowFormMorph.levelAfterMorph)。
+        if formMorph.isRunning { formMorph.levelAfterMorph = level } else { window.level = level }
     }
 
     /// 真·原生全屏进行中(自己的 Space、三指横滑)。与伪全屏 isActive 是两个独立状态:
@@ -4420,7 +4449,7 @@ struct LyricsWindowView: View {
             // 迷你尺寸用画中画那对符号:「缩成一扇小窗」在 Apple 的播放器语汇里就是 pip
             // (Apple Music 全屏歌词页、QuickTime、Safari 视频控件同款),跟全屏那对斜箭头分得开。
             Button {
-                windowController.toggleMini()
+                windowController.toggleMini(animated: true)
             } label: {
                 Image(systemName: showsMiniLayout ? "pip.exit" : "pip.enter")
                     .font(Self.windowActionIconFont)
@@ -4428,6 +4457,8 @@ struct LyricsWindowView: View {
             }
             .help(L10n.t(showsMiniLayout ? "退出迷你尺寸" : "进入迷你尺寸"))
             .accessibilityLabel(L10n.t(showsMiniLayout ? "退出迷你尺寸" : "进入迷你尺寸"))
+            // 指针移上来就先叫醒截图服务,点下去时变形动画才赶得上(见 LyricsWindowFormMorph.prewarm)。
+            .onHover { if $0 { windowController.prewarmFormMorph() } }
             // 全屏时不能切(见 toggleMini)。
             .disabled(windowController.isFullScreenActive)
         }
