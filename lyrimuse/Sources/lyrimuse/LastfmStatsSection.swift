@@ -78,6 +78,8 @@ struct LastfmStatsSection: View {
     @State private var expandedArtist: String?
     /// 展开区点过「显示 10 首」的歌手。
     @State private var artistShowsTen: Set<String> = []
+    /// 「最近记录」尾格的宽度:卡片里那份隐形的 `RecentTrailingWidthProbe` 量出来的,不低于保底宽度。
+    @State private var recentTrailingWidth = recentRowTrailingMinWidth
 
     private var kind: LastfmStatsService.ChartKind {
         .init(rawValue: kindRaw) ?? .artists
@@ -939,6 +941,12 @@ struct LastfmStatsSection: View {
                     }
                 }
                 .padding(.vertical, 5)
+                // 尾格宽度:垫一份隐形的量宽视图,量出这一格在当前语言下最宽能有多宽,每一行都按它画。
+                .environment(\.recentTrailingWidth, recentTrailingWidth)
+                .background(alignment: .topTrailing) {
+                    RecentTrailingWidthProbe(times: Self.relativeSamples())
+                }
+                .onPreferenceChange(RecentTrailingWidthKey.self) { recentTrailingWidth = max(recentRowTrailingMinWidth, $0) }
             }
             }
         }
@@ -1034,13 +1042,13 @@ struct LastfmStatsSection: View {
                 expectedTotal: stats.trackPlayCounts[
                     LastfmStatsService.playCountKey(artist: t.artist, title: t.title)])
             if let date = t.date {
-                Text(Self.relative(date))
-                    .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
-                    // 相对时间悬停给精确时刻 —— "1 小时前"想核对到分钟时不用去网站查
-                    .help(Self.absolute(date))
-                    // 宽度跟实时行的状态格共用同一个常量,否则「第 N 次听」
-                    // 那一列会在两种行之间错开(见常量声明处)。
-                    .frame(minWidth: recentRowTrailingMinWidth, alignment: .trailing)
+                // 跟实时行的状态格是同一种尾格,「第 N 次听」那一列才在两种行之间对齐(见 RecentRowTrailingCell)。
+                RecentRowTrailingCell {
+                    Text(Self.relative(date))
+                        .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                        // 相对时间悬停给精确时刻 —— "1 小时前"想核对到分钟时不用去网站查
+                        .help(Self.absolute(date))
+                }
             }
         }
         // 明细行往里缩一个封面宽,读得出是上面组头的展开。
@@ -1208,6 +1216,7 @@ struct LastfmStatsSection: View {
     private static var fmtLang = ""
     private static var absFmt = DateFormatter()
     private static var relFmt = RelativeDateTimeFormatter()
+    private static var relSamples: [String] = []
 
     private static func ensureFormatters() {
         // 按界面语言(L10n.locale):原来非英文一律映射成 zh_CN,繁体界面里是简体的「4分钟前」。
@@ -1218,9 +1227,9 @@ struct LastfmStatsSection: View {
         absFmt.dateStyle = .medium
         absFmt.timeStyle = .short
         absFmt.locale = L10n.locale
-        relFmt = RelativeDateTimeFormatter()
-        relFmt.unitsStyle = .short
-        relFmt.locale = L10n.locale
+        // 跟尾格量宽度的取样是同一种格式(见 RecentRelativeTimeSamples)。
+        relFmt = RecentRelativeTimeSamples.formatter(locale: L10n.locale)
+        relSamples = RecentRelativeTimeSamples.samples(locale: L10n.locale)
     }
 
     /// 精确时刻("2026年8月11日 14:32"),给相对时间的悬停提示用。
@@ -1234,6 +1243,12 @@ struct LastfmStatsSection: View {
     static func relative(_ date: Date) -> String {
         ensureFormatters()
         return relFmt.localizedString(for: date, relativeTo: Date())
+    }
+
+    /// 当前语言下相对时间的每一种写法,给尾格量宽度(`RecentTrailingWidthProbe`)。
+    static func relativeSamples() -> [String] {
+        ensureFormatters()
+        return relSamples
     }
 
     // MARK: - 那年今日
@@ -1651,17 +1666,75 @@ private final class LiveRowPlayback: ObservableObject {
 
 /// 「最近记录」每行**尾部那一格**(历史行的相对时间 / 实时行的「正在播放」「正在记录」)的保底宽度。
 ///
-/// 两种行必须用**同一个**值。这一列是右对齐贴着行尾的,它有多宽,就把左边的「第 N 次听」
-/// 顶到哪里 —— 两种行给的宽度不一样,「第 N 次听」这一列就在实时行上单独错开。
-/// 现象是的正是这个:实时行的状态 Label 当时**完全没有宽度约束**,离屏实测
-/// 中文下 `Label(正在播放, circle.dotted)` 理想宽度 58pt,而历史行的时间列被这个 62 兜着
-/// (中文相对时间实测只有 38–52pt,全都被兜到 62),于是实时行的「第 1 次听」比下面几行右移 4pt。
-///
-/// 取 62 不是为了装下最长的串,是为了**把中文那几种相对时间统一兜到同一宽度**;英文下时间串
-/// 本身就有 53–80pt 的天然差异(`3 minutes ago` 69 / `Yesterday 14:23` 80),那一列在英文里
-/// 本来就参差,不是这次要解决的问题——真要一并抹平得把这个数抬到 80,代价是中文界面里
-/// 「第 N 次听」整体左移一大截,不值当。
+/// 这一列右对齐贴着行尾,它有多宽就把左边的「第 N 次听」顶到哪里,所以每一行的这一格必须同宽:
+/// 一律经 `RecentRowTrailingCell` 画,宽度取卡片量出来的 `recentTrailingWidth`,即这一格在当前语言下
+/// 可能放的每一种内容(`RecentTrailingWidthProbe`)里最宽的那个,不低于这个保底。中文、繁体最宽的是
+/// 状态标签 58pt,整列就是 62;英文的「Scrobbling now」93pt,整列跟着放宽。新加的语言照样按它自己量。
 private let recentRowTrailingMinWidth: CGFloat = 62
+
+/// 实时行尾部的状态标签:Last.fm 确认收到了是「正在记录」,还没确认是「正在播放」。
+/// 样式只写这一份:量宽视图 `RecentTrailingWidthProbe` 里的那两份也是它,两边才量得一样宽。
+private struct RecentLiveStatusLabel: View {
+    let confirmed: Bool
+
+    var body: some View {
+        Label(confirmed ? L10n.t("正在记录") : L10n.t("正在播放"),
+              systemImage: confirmed ? "circle.fill" : "circle.dotted")
+            .font(.caption)
+            .labelStyle(.titleAndIcon)
+            .imageScale(.small)
+    }
+}
+
+/// 「最近记录」每行的尾格。宽度取环境里的 `recentTrailingWidth`(卡片按 `RecentTrailingWidthProbe` 量出来的):
+/// 这一行放的是时间还是状态、实时行在不在、状态有没有确认,整列都同宽,「第 N 次听」在哪种语言下都对齐。
+private struct RecentRowTrailingCell<Content: View>: View {
+    @Environment(\.recentTrailingWidth) private var width
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content().frame(minWidth: width, alignment: .trailing)
+    }
+}
+
+/// 尾格可能放的每一种内容叠在一起:两个状态标签,和当前语言下相对时间的每一种写法(`RecentRelativeTimeSamples`)。
+/// 卡片在列表下面垫一份,隐形、不进旁白,量出来的宽度经 `RecentTrailingWidthKey` 报给卡片。
+/// 样式必须跟行上一致:状态标签用同一个 `RecentLiveStatusLabel`,相对时间同样是 `.caption` 加等宽数字。
+private struct RecentTrailingWidthProbe: View {
+    let times: [String]
+
+    var body: some View {
+        ZStack {
+            RecentLiveStatusLabel(confirmed: true)
+            RecentLiveStatusLabel(confirmed: false)
+            ForEach(times, id: \.self) { Text($0).font(.caption).monospacedDigit() }
+        }
+        .fixedSize()
+        .hidden()
+        .accessibilityHidden(true)
+        .background(GeometryReader { geo in
+            Color.clear.preference(key: RecentTrailingWidthKey.self, value: geo.size.width)
+        })
+    }
+}
+
+/// 量宽视图报上来的宽度。
+private struct RecentTrailingWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct RecentTrailingWidthEnvironmentKey: EnvironmentKey {
+    static let defaultValue = recentRowTrailingMinWidth
+}
+
+extension EnvironmentValues {
+    /// 「最近记录」尾格的宽度,卡片量好之后往下传给每一行。
+    fileprivate var recentTrailingWidth: CGFloat {
+        get { self[RecentTrailingWidthEnvironmentKey.self] }
+        set { self[RecentTrailingWidthEnvironmentKey.self] = newValue }
+    }
+}
 
 /// 「正在记录」活状态行,独立子视图:全 Section 里唯一挂着播放状态订阅的地方(经
 /// LiveRowPlayback 窄化),歌词逐行推进引发的高频发布不再拖着这一行陪跑,更不拖三张卡
@@ -1856,27 +1929,19 @@ private struct LiveScrobbleRow: View {
                         artist: live.artist, title: live.title,
                         count: absorbedRecent?.count ?? stats.nowPlayingCount,
                         unavailable: true, anchorDate: nil, expectedTotal: nil)
+                    // 尾格跟历史行的时间格是同一种,「第 N 次听」才落在同一列(见 RecentRowTrailingCell)。
                     if live.confirmed {
-                        Label(L10n.t("正在记录"), systemImage: "circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(lastfmBrandRed)
-                            .labelStyle(.titleAndIcon)
-                            .imageScale(.small)
-                            // 跟历史行的时间列同宽同对齐,「第 N 次听」才落在同一列(见常量声明处)。
-                            .frame(minWidth: recentRowTrailingMinWidth, alignment: .trailing)
-                            .help(live.remote
-                                  ? L10n.t("在其他设备上播放，Last.fm 已收到")
-                                  : L10n.t("Last.fm 已确认收到这次播放"))
+                        RecentRowTrailingCell {
+                            RecentLiveStatusLabel(confirmed: true).foregroundStyle(lastfmBrandRed)
+                        }
+                        .help(live.remote
+                              ? L10n.t("在其他设备上播放，Last.fm 已收到")
+                              : L10n.t("Last.fm 已确认收到这次播放"))
                     } else {
-                        Label(L10n.t("正在播放"), systemImage: "circle.dotted")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .labelStyle(.titleAndIcon)
-                            .imageScale(.small)
-                            // 同上:这一格没有宽度约束时中文只有 58pt,比时间列的 62 窄,
-                            // 「第 1 次听」就会比下面几行右移(现象是的错位)。
-                            .frame(minWidth: recentRowTrailingMinWidth, alignment: .trailing)
-                            .help(L10n.t("等待 Last.fm 确认（通常几秒内）"))
+                        RecentRowTrailingCell {
+                            RecentLiveStatusLabel(confirmed: false).foregroundStyle(.secondary)
+                        }
+                        .help(L10n.t("等待 Last.fm 确认（通常几秒内）"))
                     }
                 }
                 .padding(.horizontal, 14)

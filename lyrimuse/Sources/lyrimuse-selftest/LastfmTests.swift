@@ -2167,6 +2167,70 @@ func runLastfmTests() {
                     "右键链接: QQ 音乐没开着时先启动好再发链接")
     }
 
+    // ---- 最近记录每行的尾格同宽(12 章决策 59) ----
+    // 尾格多宽就把「第 N 次听」顶到哪里。宽度按这一格在当前语言下可能放的每一种内容量:两个状态标签,加上
+    // 相对时间的每一种写法。取样(RecentRelativeTimeSamples)漏了哪种写法,那种写法所在的行就会单独变宽。
+    do {
+        let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        // 语言从 catalog 里读:新加的语言自动算进来。
+        var languages: Set<String> = []
+        let catalogURL = base.deletingLastPathComponent().appendingPathComponent("Localization/Localizable.xcstrings")
+        if let data = try? Data(contentsOf: catalogURL),
+           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let strings = root["strings"] as? [String: Any] {
+            if let source = root["sourceLanguage"] as? String { languages.insert(source) }
+            for case let entry as [String: Any] in strings.values {
+                if let localizations = entry["localizations"] as? [String: Any] { languages.formUnion(localizations.keys) }
+            }
+        }
+        expectEqual(languages.isSuperset(of: ["zh-Hans", "zh-Hant", "en"]), true,
+                    "最近记录尾格: 从 catalog 读到了全部界面语言(\(languages.sorted()))")
+        // 比取样更密、换一个「此刻」:格式器在这些间隔上写出的每一种写法都得已经取到样。
+        let minute: TimeInterval = 60, hour: TimeInterval = 3600, day: TimeInterval = 86400
+        var dense: [TimeInterval] = []
+        dense += stride(from: 1.0, through: 120, by: 1).map { $0 }
+        dense += stride(from: 2.0, through: 180, by: 1).map { $0 * minute }
+        dense += stride(from: 3.0, through: 72, by: 1).map { $0 * hour }
+        dense += stride(from: 3.0, through: 800, by: 1).map { $0 * day }
+        dense += stride(from: 800.0, through: 40 * 366, by: 11).map { $0 * day }
+        let now = Date(timeIntervalSinceReferenceDate: 812_345_678)
+        for code in languages.sorted() {
+            let locale = Locale(identifier: code)
+            let samples = RecentRelativeTimeSamples.samples(locale: locale)
+            let shapes = Set(samples.map(RecentRelativeTimeSamples.shape))
+            expectEqual(!samples.isEmpty && shapes.count == samples.count, true,
+                        "最近记录尾格: \(code) 的取样非空、每种写法只留一个")
+            let formatter = RecentRelativeTimeSamples.formatter(locale: locale)
+            var missed: [String] = []
+            for offset in dense {
+                let text = formatter.localizedString(for: now.addingTimeInterval(-offset), relativeTo: now)
+                if !shapes.contains(RecentRelativeTimeSamples.shape(text)), !missed.contains(text) { missed.append(text) }
+            }
+            expectEqual(missed, [], "最近记录尾格: \(code) 的相对时间每一种写法都取到了样")
+        }
+        expectEqual(RecentRelativeTimeSamples.shape("22 min. ago"), "00 min. ago", "最近记录尾格: 数字换成 0 再比写法")
+
+        let section = (try? String(contentsOf: base.appendingPathComponent("lyrimuse/LastfmStatsSection.swift"),
+                                   encoding: .utf8)) ?? ""
+        func count(_ needle: String) -> Int { section.components(separatedBy: needle).count - 1 }
+        expectEqual(count("RecentRowTrailingCell {"), 3, "最近记录尾格: 历史行的时间、实时行的两种状态都放进同一种尾格")
+        expectEqual(section.contains("content().frame(minWidth: width, alignment: .trailing)")
+                    && count("frame(minWidth: recentRowTrailingMinWidth") == 0, true,
+                    "最近记录尾格: 尾格的宽度取卡片量出来的那一个")
+        expectEqual(section.contains("relFmt = RecentRelativeTimeSamples.formatter(locale: L10n.locale)")
+                    && section.contains("relSamples = RecentRelativeTimeSamples.samples(locale: L10n.locale)"), true,
+                    "最近记录尾格: 行上的相对时间和取样用同一种格式")
+        expectEqual(section.contains("RecentLiveStatusLabel(confirmed: true)\n            RecentLiveStatusLabel(confirmed: false)\n            ForEach(times, id: \\.self) { Text($0).font(.caption).monospacedDigit() }")
+                    && section.contains("Text(Self.relative(date))\n                        .font(.caption).foregroundStyle(.tertiary).monospacedDigit()"), true,
+                    "最近记录尾格: 量宽视图里放两个状态标签和每一种相对时间,字体跟行上一样")
+        expectEqual(section.contains("RecentTrailingWidthProbe(times: Self.relativeSamples())")
+                    && section.contains(".onPreferenceChange(RecentTrailingWidthKey.self) { recentTrailingWidth = max(recentRowTrailingMinWidth, $0) }")
+                    && section.contains(".environment(\\.recentTrailingWidth, recentTrailingWidth)"), true,
+                    "最近记录尾格: 卡片垫着量宽视图,量出来的宽度传给每一行")
+        expectEqual(count("Label(confirmed ? L10n.t(\"正在记录\") : L10n.t(\"正在播放\")"), 1,
+                    "最近记录尾格: 状态标签的样式只写一份,量宽视图跟实时行量得一样宽")
+    }
+
     // ---- 本机缓存的派生索引在后台解码时建好(12 章决策 45) ----
     do {
         typealias R = EnrichCacheReader
