@@ -489,13 +489,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         }
 
         // 换歌翻牌的「掉歌名」:歌名 / 歌手 / 广告 / 在不在等开播去抖 300ms(常常一前一后到)再判。存 sink 参数值,理由同上。
+        // 去抖挂主队列、别挂 RunLoop.main:菜单栏菜单开着时主线程在事件跟踪模式里转,RunLoop.main 的计时器要等菜单关了才走(见 05 章决策 67)。
         trackDropObserver = Publishers.CombineLatest4(
             PlaybackCoordinator.shared.$title,
             PlaybackCoordinator.shared.$artist,
             PlaybackCoordinator.shared.$isCurrentTrackAdBreak,
             PlaybackCoordinator.shared.$isWaitingToPlay
         )
-        .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+        .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
         .sink { [weak self] title, artist, isAd, isWaiting in
             self?.trackChanged(title: title, artist: artist, isAdBreak: isAd, isWaitingToPlay: isWaiting)
         }
