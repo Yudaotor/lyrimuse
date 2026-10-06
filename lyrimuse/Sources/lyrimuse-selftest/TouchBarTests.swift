@@ -511,7 +511,7 @@ func runTouchBarTests() {
         // 没有触控栏的 Mac 上冒出几项拨了没用的设置,或者白调私有接口。
         expectEqual(touchBarBranch?.contains("if touchBar.isPresent {"), true,
                     "触控栏: .touchBar 那一支按有没有触控栏分两种内容")
-        expectEqual(touchBarBranch?.contains("L10n.t(\"这台 Mac 没有触控栏\")"), true,
+        expectEqual(touchBarBranch?.contains("L10n.t(\"此 Mac 未配备触控栏\")"), true,
                     "触控栏: 没有触控栏时放「这台 Mac 没有触控栏」那张说明卡")
         // 副行开着时两行字号由触控栏的高定,「字号」那一行留着、尾部换成「由副行决定」(同菜单栏),而且紧跟在「副行」下面。
         let lyricsRows = structBody("TouchBarLyricsRows")
@@ -653,8 +653,8 @@ func runTouchBarTests() {
                         && local.contains("if touchBar != touchBarLyrics { touchBarLyrics = touchBar }"), true,
                     "触控栏断句: 逐拍算触控栏这个面并发布")
         let settingsSource = code(appDir.appendingPathComponent("SettingsView.swift")) ?? ""
-        expectEqual(settingsSource.contains("悬浮歌词、灵动岛、菜单栏和触控栏上放不下一行的句子")
-                        && settingsSource.contains("悬浮歌词、灵动岛、菜单栏和触控栏上连续几句很短的歌词"), true,
+        expectEqual(settingsSource.contains("在悬浮歌词、灵动岛、菜单栏和触控栏上，一行显示不下的句子")
+                        && settingsSource.contains("在悬浮歌词、灵动岛、菜单栏和触控栏上，连续的短句"), true,
                     "触控栏断句: 「长句拆开」「短句合并」的说明写上触控栏")
         // 隐藏功能栏时系统不给 ✕:自己那颗收起键要接上「收起」,展开着的时候切换要按新的方式重新展开。
         expectEqual(controller.contains("TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,

@@ -122,7 +122,7 @@ struct OverlayTextSettingsRows: View {
             SettingsRow(
                 icon: "sparkles",
                 title: L10n.t("卡拉OK效果"),
-                help: L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
+                help: L10n.t("逐字歌词随演唱逐字高亮；没有逐字数据的歌曲整行高亮")
             ) {
                 Toggle("", isOn: $settings.overlayLyricsKaraoke)
             }
@@ -268,7 +268,7 @@ struct OverlayLayoutSettingsRows: View {
             SettingsRow(
                 icon: "text.alignleft",
                 title: L10n.t("对齐方式"),
-                help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中间切换。\n其余：忽略声部，固定在一个位置。")
+                help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中之间切换。\n其他：忽略声部，固定在同一位置。")
             ) {
                 // 故意不用系统 `.pickerStyle(.segmented)`(三轮修法都没
                 // 按住"选了哪个选项、控件整体宽度就跟着变"这个问题,完整排查过程见
@@ -284,7 +284,7 @@ struct OverlayLayoutSettingsRows: View {
             SettingsRow(
                 icon: "arrow.left.and.right.text.vertical",
                 title: L10n.t("长句处理"),
-                help: L10n.t("换行（默认）：一行放不下就折到下一行，窗口跟着变高。\n滚动：每行只占一行高，放不下的横向滚动；这一句有逐字时间轴时跟着唱到哪滚到哪。")
+                help: L10n.t("换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。")
             ) {
                 SettingsSegmentedControl(
                     selection: $settings.overlayLineOverflow,
@@ -614,7 +614,7 @@ struct OverlayThemeSettingsRows: View {
                     if isUnsaved {
                         ThemePreviewCard(
                             theme: ColorTheme.current(settings, name: L10n.t("自定义")), isCurrent: true,
-                            badge: "square.and.arrow.down", help: L10n.t("当前配色还没存过，点一下存成主题")
+                            badge: "square.and.arrow.down", help: L10n.t("当前配色尚未保存，点按保存为主题")
                         ) {
                             draftName = ""
                             editing = .naming
@@ -623,7 +623,7 @@ struct OverlayThemeSettingsRows: View {
                     if let restorable {
                         ThemePreviewCard(
                             theme: { var t = restorable; t.name = L10n.t("之前的自定义"); return t }(), isCurrent: false,
-                            badge: "arrow.uturn.backward", help: L10n.t("套用主题之前手调的配色，点一下恢复")
+                            badge: "arrow.uturn.backward", help: L10n.t("应用主题前手动调整的配色，点按即可恢复")
                         ) {
                             restorable.apply(to: settings)
                         }
@@ -636,12 +636,12 @@ struct OverlayThemeSettingsRows: View {
                     }
                 }
             } else {
-                Text(L10n.t("调过颜色后，这里会出现「自定义」，点它就能存成主题"))
+                Text(L10n.t("调整颜色后，此处将出现「自定义」，点按即可保存为主题"))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
             if !settings.customColorThemes.isEmpty {
-                Text(L10n.t("右键点主题可以改名、用当前配色覆盖或删除"))
+                Text(L10n.t("右键点按主题可重命名、用当前配色覆盖或删除"))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
@@ -652,7 +652,7 @@ struct OverlayThemeSettingsRows: View {
 
     @ViewBuilder
     private func customThemeMenu(_ theme: ColorTheme) -> some View {
-        Button(L10n.t("改名…")) {
+        Button(L10n.t("重命名…")) {
             draftName = theme.name
             editing = .renaming(theme.id)
         }
@@ -669,7 +669,7 @@ struct OverlayThemeSettingsRows: View {
             EmptyView()
         case .naming:
             HStack(spacing: 8) {
-                nameField(placeholder: L10n.t("给当前配色起个名字")) { saveNewTheme() }
+                nameField(placeholder: L10n.t("为当前配色命名")) { saveNewTheme() }
                 Button(L10n.t("保存")) { saveNewTheme() }
                     .disabled(trimmedName.isEmpty)
                     .fixedSize()

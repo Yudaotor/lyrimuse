@@ -88,7 +88,7 @@ struct PlayerPicker<Trailing: View>: View {
                 }
             }
             HStack(spacing: 4) {
-                Text(L10n.t("想用的播放器不在这里？"))
+                Text(L10n.t("未找到要使用的播放器？"))
                     .foregroundStyle(.secondary)
                 Link(L10n.t("在 GitHub 提 issue"), destination: Self.playerRequestURL)
             }
@@ -149,7 +149,7 @@ struct MorePlayersCard: View {
             .choiceCardChrome(isSelected: false)
         }
         .buttonStyle(.plain)
-        .help(L10n.t("这台 Mac 上没装的播放器"))
+        .help(L10n.t("这台 Mac 上未安装的播放器"))
     }
 }
 

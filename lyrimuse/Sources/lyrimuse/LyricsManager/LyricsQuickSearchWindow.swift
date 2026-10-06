@@ -62,8 +62,8 @@ struct LyricsQuickSearchWindow: View {
         Group {
             if let context, context.title.trimmingCharacters(in: .whitespaces).isEmpty {
                 // 没在播放:拿空歌名去搜只会报错,手动填完再采纳会写进一条没有元数据的空条目。
-                ContentUnavailableView(L10n.t("现在没有在放的歌"), systemImage: "music.note",
-                                       description: Text(L10n.t("开始播放一首歌，再点「搜索歌词…」")))
+                ContentUnavailableView(L10n.t("当前无正在播放的歌曲"), systemImage: "music.note",
+                                       description: Text(L10n.t("请先播放一首歌曲，再选择「搜索歌词…」")))
                     .frame(minWidth: LyricsSearchSheet.minimumSize.width, minHeight: LyricsSearchSheet.minimumSize.height)
             } else if let context {
                 LyricsSearchSheet(

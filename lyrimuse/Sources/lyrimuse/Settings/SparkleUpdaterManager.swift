@@ -101,7 +101,7 @@ struct SoftwareUpdateItem: Equatable {
     /// 预览钩子用的假条目(见 SparkleUpdaterManager.previewUpdateVersionKey):说明正文明说是预览。
     static func preview(version: String) -> SoftwareUpdateItem {
         SoftwareUpdateItem(version: version, contentLength: 12_800_000, date: Date(),
-                           notesHTML: "<p>" + L10n.t("这是预览：真有新版本时这里显示发版日志") + "</p>",
+                           notesHTML: "<p>" + L10n.t("预览：有新版本时将在此显示更新日志") + "</p>",
                            notesArePlainText: false,
                            releaseURL: UpdateChannel.releasePageURL(displayVersion: version), downloaded: false)
     }

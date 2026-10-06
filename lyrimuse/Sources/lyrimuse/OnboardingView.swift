@@ -428,8 +428,8 @@ struct OnboardingView: View {
             Text(L10n.t("欢迎使用 Lyrimuse"))
                 .font(.title.bold())
             Text(touchBar.isPresent
-                 ? L10n.t("跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、触控栏、歌词窗口都能放，还能对照译文、标注读音。接下来几步帮你调成合适的样子，以后随时能在设置里改")
-                 : L10n.t("跟着正在播放的歌显示歌词：桌面、灵动岛、菜单栏、歌词窗口都能放，还能对照译文、标注读音。接下来几步帮你调成合适的样子，以后随时能在设置里改"))
+                 ? L10n.t("随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏、触控栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改")
+                 : L10n.t("随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改"))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             // 两个跟「这台 Mac 上怎么用它」有关的偏好:界面语言、开机启动。
@@ -472,10 +472,10 @@ struct OnboardingView: View {
     /// 「自动识别」说明:卡片上指向就能读到同一句提示。
     private var playerChoiceStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(L10n.t("你用什么听歌？"))
+            Text(L10n.t("选择播放器"))
                 .font(.title2.bold())
             // 这句不逐个列播放器名:网格里的卡片就是完整清单,文案里再列一遍每加一家就得回来改。
-            Text(L10n.t("Lyrimuse 会跟着正在播放的 App 显示歌词，之后随时能在设置里改"))
+            Text(L10n.t("Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改"))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
@@ -547,9 +547,9 @@ struct OnboardingView: View {
         // 改成一份稳定列表之后,点击的唯一视觉变化就是那张卡自己的选中态,位置不动。
         let candidates = BrowserPairing.candidateBrowsers(platformID: platformID)
         return VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.t("YouTube Music 用哪个浏览器？"))
+            Text(L10n.t("YouTube Music 使用哪个浏览器？"))
                 .font(.title2.bold())
-            Text(L10n.t("YouTube Music 是在浏览器里播的，Lyrimuse 需要知道是哪一个才能读到播放进度。选你平时用来听歌的（可以多选）——之后系统会问你要不要授权，同意就行；随时可以在设置的「网页播放器」里再改"))
+            Text(L10n.t("YouTube Music 在浏览器中播放，Lyrimuse 需要知道是哪个浏览器才能读取播放进度。请选择常用的浏览器（可多选），随后系统会请求授权，选择允许即可；之后可在设置的「网页播放器」中更改"))
                 .foregroundStyle(.secondary)
             if candidates.isEmpty {
                 // 默认候选一个都没有。实践中几乎进不来这个分支(macOS 上 Safari 恒存在,
@@ -559,7 +559,7 @@ struct OnboardingView: View {
                 // 的产品决定正好相反:Arc 被有意从 `knownBrowserBundleIDs` 里拿掉了(适配
                 // 全留着,只是不默认展示,见那边头注),点名它等于承诺一个这里不会出现的选项。
                 // 改成如实说明"默认只列这几个,别的自己挑",正好接上下面那个按钮。
-                Text(L10n.t("这台电脑上没有找到默认列出的浏览器（Safari、Chrome、Edge）。别的浏览器可以用下面的「从应用程序中选择…」自己挑一个"))
+                Text(L10n.t("未在这台 Mac 上找到默认列出的浏览器（Safari、Chrome、Edge）。其他浏览器可通过下方的「从应用程序中选择…」添加"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
@@ -591,7 +591,7 @@ struct OnboardingView: View {
             .font(.callout)
         }
         .alert(
-            L10n.t("这个应用用不了"),
+            L10n.t("无法使用该应用"),
             isPresented: Binding(
                 get: { browserPickerError != nil },
                 set: { if !$0 { browserPickerError = nil } })
@@ -636,13 +636,13 @@ struct OnboardingView: View {
         let fdaTargets = fullDiskAccessTargets
         let axTargets = accessibilityTargets
         return VStack(alignment: .leading, spacing: 14) {
-            Text(L10n.t("让它跑起来"))
+            Text(L10n.t("启用歌词引擎与权限"))
                 .font(.title2.bold())
-            Text(L10n.t("歌词引擎必装，权限推荐开启，不开也能用"))
+            Text(L10n.t("歌词引擎为必需组件；权限建议开启，不开启也可使用"))
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 0) {
                 setupRow(icon: engineIcon, tint: engineTint, title: L10n.t("歌词引擎"),
-                         subtitle: L10n.t("认歌、找歌词和封面；只在本机运行，找歌词时只发送歌名、歌手这类曲目信息")) {
+                         subtitle: L10n.t("识别歌曲、查找歌词和封面；仅在本机运行，查找歌词时只发送歌名、歌手等曲目信息")) {
                     engineTrailing
                 }
                 // 自动启用没起来时的交代:原因 + 出路(按钮已经变成「重试」)。
@@ -736,12 +736,12 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 4) {
                 switch fullDiskAccess.restartPhase {
                 case .waiting:
-                    Text(L10n.t("正在重启歌词引擎，等它重新确认授权…"))
+                    Text(L10n.t("正在重启歌词引擎并重新检查授权…"))
                 case .stillDenied:
-                    Text(L10n.t("歌词引擎已经重启过了，还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。"))
+                    Text(L10n.t("歌词引擎已重启，但仍无法读取。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。"))
                         .foregroundStyle(Color.orange)
                 case .idle:
-                    Text(L10n.t("授权对已经在运行的歌词引擎不生效。在系统设置里勾上之后，回到这里点一下「重启歌词引擎」。"))
+                    Text(L10n.t("授权不会作用于已在运行的歌词引擎。在系统设置中勾选后，请回到此处点按「重启歌词引擎」。"))
                 }
                 // 歌词引擎没在跑(没装上、被跳过)或者正在装的时候不给这颗按钮:重启一个不存在的服务只会白转圈,
                 // 跟正在进行的安装撞在一起还可能互相杀掉对方刚拉起的进程。
@@ -772,7 +772,7 @@ struct OnboardingView: View {
             }
         }
         if !accessibility.trusted, accessibility.prompted {
-            Text(L10n.t("在系统设置的「辅助功能」里打开 Lyrimuse。之前授权过、这里仍显示没有授权的话，把 Lyrimuse 那一项取消再勾上。"))
+            Text(L10n.t("请在系统设置的「辅助功能」中开启 Lyrimuse。如已授权但此处仍显示未授权，请将 Lyrimuse 取消勾选后重新勾选。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -787,14 +787,14 @@ struct OnboardingView: View {
     private func permissionBenefitNote(_ fdaTargets: [PlaybackPlayer], _ axTargets: [PlaybackPlayer]) -> String? {
         var lines: [String] = []
         if !automationTargets.isEmpty {
-            lines.append(L10n.t("自动化权限让播放进度更准，还能在歌词上直接控制播放"))
+            lines.append(L10n.t("自动化权限可让播放进度更准确，并可在歌词上直接控制播放"))
         }
         if !fdaTargets.isEmpty {
-            lines.append(String(format: L10n.t("完全磁盘访问让%@直接用本机已有的歌词，只读它们自己的歌词缓存和播放队列"),
+            lines.append(String(format: L10n.t("完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列"),
                                 fullDiskAccess.playerNames(fdaTargets)))
         }
         if !axTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能让%@的播放进度更准，只读它界面上的播放时间"),
+            lines.append(String(format: L10n.t("辅助功能权限可让%@的播放进度更准确，仅读取其界面上的播放时间"),
                                 accessibility.playerNames(axTargets)))
         }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
@@ -876,19 +876,19 @@ struct OnboardingView: View {
                 toggleRow(
                     icon: "text.bubble",
                     title: L10n.t("显示译文"),
-                    subtitle: L10n.t("歌词下面并排显示一行译文"),
+                    subtitle: L10n.t("在歌词下方显示一行译文"),
                     isOn: overlayAndWindow(\.overlayShowTranslation, \.showTranslation))
                 toggleRow(
                     icon: "textformat.alt",
                     title: L10n.t("显示读音"),
                     subtitle: settings.romanizationScripts.contains(.chinese)
-                        ? L10n.t("日文、韩文、中文、粤语默认都会标注，可在设置里按语言关闭")
-                        : L10n.t("日文、韩文、粤语默认会标注，中文拼音可在设置里打开"),
+                        ? L10n.t("默认为日文、韩文、中文和粤语标注读音，可在设置中按语言关闭")
+                        : L10n.t("默认为日文、韩文和粤语标注读音，普通话拼音可在设置中开启"),
                     isOn: overlayAndWindow(\.overlayShowRomanization, \.showRomanization))
             }
             Text(touchBar.isPresent
-                 ? L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏、触控栏各在「副行」里选译文或读音")
-                 : L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文或读音"))
+                 ? L10n.t("这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音")
+                 : L10n.t("这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -931,16 +931,16 @@ struct OnboardingView: View {
     private var displayModeStep: some View {
         // 段间距比别的步骤紧(12 不是 16):有触控栏时这一步多一行,这样中文下四行也放得进窗口。
         VStack(alignment: .leading, spacing: 12) {
-            Text(L10n.t("歌词怎么显示"))
+            Text(L10n.t("选择歌词显示方式"))
                 .font(.title2.bold())
-            Text(L10n.t("这几种可以同时开着，先挑你现在想用的——之后随时能在设置里单独开关"))
+            Text(L10n.t("以上方式可同时开启，请先选择当前需要的，之后可随时在设置中分别开关"))
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 10) {
                 displayModeRow(
                     kind: .classic,
                     title: L10n.t("桌面悬浮歌词"),
-                    subtitle: L10n.t("贴在桌面上"),
+                    subtitle: L10n.t("显示在桌面上"),
                     isOn: Binding(
                         get: { settings.classicOverlayEnabled },
                         set: { LyricsOverlayWindowController.shared.setVisible($0) }))
@@ -948,21 +948,21 @@ struct OnboardingView: View {
                     kind: .notch,
                     title: L10n.t("灵动岛歌词"),
                     subtitle: hasNotchedScreen
-                        ? L10n.t("紧凑地贴着屏幕顶部的刘海")
-                        : L10n.t("这台 Mac 没有刘海，会显示在屏幕顶部正中"),
+                        ? L10n.t("紧贴屏幕顶部的刘海显示")
+                        : L10n.t("这台 Mac 没有刘海，将显示在屏幕顶部中央"),
                     isOn: Binding(
                         get: { settings.notchOverlayEnabled },
                         set: { NotchLyricsWindowController.shared.setVisible($0) }))
                 displayModeRow(
                     kind: .menuBar,
                     title: L10n.t("菜单栏歌词"),
-                    subtitle: L10n.t("菜单栏里的一行字"),
+                    subtitle: L10n.t("在菜单栏中显示一行歌词"),
                     isOn: $settings.showLyricsInMenuBar)
                 if touchBar.isPresent {
                     displayModeRow(
                         kind: .touchBar,
                         title: L10n.t("触控栏歌词"),
-                        subtitle: L10n.t("功能栏里的一枚图标，轻点展开成整条歌词"),
+                        subtitle: L10n.t("功能栏中的图标，轻点即可展开歌词"),
                         isOn: $settings.showLyricsInTouchBar)
                 }
             }
@@ -974,14 +974,14 @@ struct OnboardingView: View {
                 displayModeNote(
                     icon: "exclamationmark.triangle.fill",
                     tint: .orange,
-                    text: L10n.t("这几种方式都关掉了，播放时不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开"))
+                    text: L10n.t("以上方式均已关闭，播放时不会显示歌词。可随时通过菜单栏图标重新开启"))
             } else if !isPlayingNow {
                 displayModeNote(
                     icon: "info.circle.fill",
                     tint: .secondary,
                     text: touchBar.isPresent
-                        ? L10n.t("现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛、菜单栏和触控栏歌词要等开始播放才看得到")
-                        : L10n.t("现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到"))
+                        ? L10n.t("当前没有播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示")
+                        : L10n.t("当前没有播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示"))
             }
             Divider()
             lyricsExtrasSection
@@ -1159,7 +1159,7 @@ struct OnboardingView: View {
             }
             // 见 finish():歌词引擎没起来时这次不算走完引导,下次启动还会再问。写在脸上,不做无声惩罚。
             if !engineRunning {
-                Text(L10n.t("歌词引擎还没启用，所以这次不算走完引导——下次启动会再问一次"))
+                Text(L10n.t("歌词引擎尚未启用，本次引导未完成，下次启动时将再次显示"))
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1182,11 +1182,11 @@ struct OnboardingView: View {
                     .offset(x: 3, y: 3)
                 }
                 .accessibilityHidden(true)
-            Text(allOK ? L10n.t("一切就绪") : L10n.t("还差一点"))
+            Text(allOK ? L10n.t("一切就绪") : L10n.t("还有未完成的项目"))
                 .font(.title2.bold())
             // 文案里点名了「开始使用」这个按钮(英文 "Get Started"),改按钮文案要连这句一起改。
-            Text(allOK ? L10n.t("按下「开始使用」，让每一句歌词都跟着旋律亮起来")
-                       : L10n.t("缪斯还在候场——把下面标橙的那几项补齐，她随时可以开嗓"))
+            Text(allOK ? L10n.t("点按「开始使用」，让歌词随旋律逐句亮起")
+                       : L10n.t("还差最后几步：请完成下方标为橙色的项目"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -1268,13 +1268,13 @@ struct OnboardingView: View {
                 Group {
                     switch state {
                     case .notPlaying:
-                        Button(L10n.t("已经在放了还没反应？看看选的播放器对不对")) { jump(to: .playerChoice) }
+                        Button(L10n.t("已在播放但没有显示？请检查所选的播放器")) { jump(to: .playerChoice) }
                             .buttonStyle(.link)
                     case .noLyrics:
-                        Button(L10n.t("去歌词管理里手动找")) { AppActions.shared.openLyricsManager?() }
+                        Button(L10n.t("前往歌词管理手动查找")) { AppActions.shared.openLyricsManager?() }
                             .buttonStyle(.link)
                     case .adBreak:
-                        Text(L10n.t("等歌开始就会显示歌词"))
+                        Text(L10n.t("歌曲开始播放后将显示歌词"))
                             .foregroundStyle(.secondary)
                     default:
                         Text(String(format: L10n.t("正在播放「%@」"), song))
@@ -1296,13 +1296,13 @@ struct OnboardingView: View {
 
     private func liveHeadline(_ state: OnboardingFlow.LiveCheck) -> String {
         switch state {
-        case .notPlaying: return L10n.t("放一首歌试试")
-        case .adBreak: return L10n.t("现在是广告")
-        case .lyricsReady: return L10n.t("歌词已经跟上了")
-        case .instrumental: return L10n.t("这首是纯音乐")
-        case .searching: return L10n.t("正在找歌词…")
-        case .noLyrics: return L10n.t("没找到这首的歌词")
-        case .offline: return L10n.t("网络连不上，暂时找不到歌词")
+        case .notPlaying: return L10n.t("请播放一首歌曲")
+        case .adBreak: return L10n.t("正在播放广告")
+        case .lyricsReady: return L10n.t("歌词已同步显示")
+        case .instrumental: return L10n.t("这首歌曲为纯音乐")
+        case .searching: return L10n.t("正在查找歌词…")
+        case .noLyrics: return L10n.t("未找到这首歌曲的歌词")
+        case .offline: return L10n.t("网络无法连接，暂时无法获取歌词")
         }
     }
 
@@ -1344,8 +1344,8 @@ struct OnboardingView: View {
         let appNames = ListFormatter.localizedString(byJoining: apps.map(\.displayName))
         let detail = !autoDetect ? appNames
             : apps.isEmpty ? L10n.t("自动识别正在播放的 App")
-            : String(format: L10n.t("自动识别正在播放的 App，外加 %@"), appNames)
-        return doneTile(title: L10n.t("歌词跟着"), detail: detail) {
+            : String(format: L10n.t("自动识别正在播放的 App，以及 %@"), appNames)
+        return doneTile(title: L10n.t("已选择的播放器"), detail: detail) {
             if apps.isEmpty {
                 Image(systemName: "wand.and.sparkles")
                     .font(.system(size: 18))
@@ -1361,7 +1361,7 @@ struct OnboardingView: View {
             EmptyView()
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(format: L10n.t("你选的播放器：%@"), detail))
+        .accessibilityLabel(String(format: L10n.t("已选择的播放器：%@"), detail))
     }
 
     @ViewBuilder
@@ -1388,7 +1388,7 @@ struct OnboardingView: View {
     /// 画出用户此刻选的那一款菜单栏图标(12 款可选,只说「在菜单栏里」新用户不知道找哪个)。
     /// 跟设置页图标选择器同一份绘制(`MenuBarIconStyle.cachedImage`)。
     private var menuBarTile: some View {
-        doneTile(title: L10n.t("在菜单栏里"), detail: L10n.t("点它打开设置和歌词窗口")) {
+        doneTile(title: L10n.t("位于菜单栏"), detail: L10n.t("点按图标可打开设置和歌词窗口")) {
             Image(nsImage: MenuBarIconStyle.cachedImage(for: settings.menuBarIconStyle))
                 .renderingMode(.template)
                 .foregroundStyle(Color.primary)
@@ -1408,7 +1408,7 @@ struct OnboardingView: View {
             lastfmBadge(size: 24)
                 .accessibilityHidden(true)
         } bottom: {
-            Button(L10n.t("去连接")) {
+            Button(L10n.t("前往连接")) {
                 AppActions.shared.requestSettings(.account(.lastfm))
                 NSApp.activate(ignoringOtherApps: true)
                 openSettings()
@@ -1435,7 +1435,7 @@ struct OnboardingView: View {
                     .accessibilityLabel(L10n.t("未完成"))
             }
         } trailing: {
-            Button(item.isOptional ? L10n.t("去开启") : L10n.t("去处理")) { jump(to: item.target) }
+            Button(item.isOptional ? L10n.t("前往开启") : L10n.t("前往处理")) { jump(to: item.target) }
                 .buttonStyle(.link)
         }
     }
@@ -1443,11 +1443,11 @@ struct OnboardingView: View {
     private func recommendedBenefit(_ kind: OnboardingFlow.ReadinessKind) -> String {
         switch kind {
         case .fullDiskAccess:
-            return L10n.t("推荐开启，获取更多功能：直接用本机已有的歌词，还能提前准备下一首")
+            return L10n.t("建议开启，以获得更多功能：直接使用本机已有的歌词，并提前准备下一首")
         case .accessibility:
-            return L10n.t("推荐开启，获取更多功能：自动连播时播放进度更准")
+            return L10n.t("建议开启，以获得更多功能：自动连播时播放进度更准确")
         default:
-            return L10n.t("推荐开启，获取更多功能：播放进度更准，还能在歌词上直接控制播放")
+            return L10n.t("建议开启，以获得更多功能：播放进度更准确，并可在歌词上直接控制播放")
         }
     }
 
@@ -1480,7 +1480,7 @@ struct OnboardingView: View {
             // 是固定英文的诊断串(见那边头注:它本来就是拿来贴给别人看的),所以只放进括号里
             // 当线索,不承担正文的表达。
             engineFailure = state.isRunning ? nil : String(
-                format: L10n.t("没能启动（%@）。可以先「暂时跳过」，之后到设置的「播放器 → 歌词引擎」里重试，那一页会给出更细的状态。"),
+                format: L10n.t("启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态。"),
                 state.description)
         }
     }

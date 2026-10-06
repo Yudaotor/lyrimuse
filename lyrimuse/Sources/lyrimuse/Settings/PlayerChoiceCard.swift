@@ -66,8 +66,8 @@ struct PlayerChoiceCard: View {
     }
 
     private var status: String? {
-        if isCoveredByAuto { return L10n.t("由「自动识别」接管——取消「自动识别」后才只认你勾选的播放器") }
-        if !isInstalled { return L10n.t("这台 Mac 上没装这个播放器") }
+        if isCoveredByAuto { return L10n.t("已由「自动识别」接管，取消「自动识别」后将仅识别勾选的播放器") }
+        if !isInstalled { return L10n.t("这台 Mac 上未安装此播放器") }
         return nil
     }
 

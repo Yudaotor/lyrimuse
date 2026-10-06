@@ -2353,7 +2353,7 @@ func runLastfmTests() {
         expectEqual(body.contains("LastfmSpotifyLinkMonitor.shared.refreshIfStale()"), true,
                     "Spotify 连接(契约): 打开账号页时按需重查")
         let row = src("lyrimuse/Settings/LastfmAccountSuggestions.swift")
-        expectEqual(row.contains("Button(L10n.t(\"只让 Lyrimuse 记…\")) { openLastfmApplications() }"), true,
+        expectEqual(row.contains("Button(L10n.t(\"仅由 Lyrimuse 记录…\")) { openLastfmApplications() }"), true,
                     "Spotify 连接(契约): 重复记那一行能去 Last.fm 断开")
         expectEqual(row.contains("LastfmSpotifyLinkMonitor.shared.recheckWhenBack()\n        NSWorkspace.shared.open("), true,
                     "Spotify 连接(契约): 去网站之前登记回来重查")

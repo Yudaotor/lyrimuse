@@ -100,7 +100,7 @@ struct SoftwareUpdatePage: View {
             }
             .frame(maxWidth: 260)
         case .readyToInstall:
-            secondaryLine(L10n.t("已下载，可以安装"))
+            secondaryLine(L10n.t("已下载，可安装"))
         case .installing:
             spinnerLine(L10n.t("正在安装…"))
         case .failed:
@@ -112,7 +112,7 @@ struct SoftwareUpdatePage: View {
                 if updater.installOnQuit {
                     secondaryLine(L10n.t("将在退出 Lyrimuse 时安装"))
                 } else if item.downloaded {
-                    secondaryLine(L10n.t("已下载，可以安装"))
+                    secondaryLine(L10n.t("已下载，可安装"))
                 } else {
                     secondaryLine(itemMeta(item))
                 }
@@ -272,7 +272,7 @@ struct SoftwareUpdatePage: View {
     }
 
     private var lastCheckText: String {
-        guard let date = updater.lastUpdateCheckDate else { return L10n.t("还没有检查过更新") }
+        guard let date = updater.lastUpdateCheckDate else { return L10n.t("尚未检查更新") }
         return String(format: L10n.t("上次检查：%@"), Self.dateTimeText(date))
     }
 

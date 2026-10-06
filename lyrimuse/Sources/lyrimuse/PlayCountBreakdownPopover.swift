@@ -35,7 +35,7 @@ struct PlayCountBadge: View {
             Button {
                 showing.toggle()
             } label: {
-                Text(String(format: L10n.t("第 %@ 次听"), "\(count)"))
+                Text(String(format: L10n.t("第 %@ 次收听"), "\(count)"))
                     .font(.caption)
                     .foregroundStyle(hovered || showing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
                     .monospacedDigit()
@@ -44,7 +44,7 @@ struct PlayCountBadge: View {
             }
             .buttonStyle(.plain)
             .onHover { hovered = $0 }
-            .help(L10n.t("这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法"))
+            .help(L10n.t("这首歌曲在 Last.fm 上的收听次序，点按查看合并了哪些写法"))
             .popover(isPresented: $showing, arrowEdge: .bottom) {
                 PlayCountBreakdownPopover(artist: artist, title: title,
                                           anchorDate: anchorDate, expectedTotal: expectedTotal)
@@ -52,7 +52,7 @@ struct PlayCountBadge: View {
         } else if !unavailable {
             Text("···")
                 .font(.caption).foregroundStyle(.quaternary).monospacedDigit()
-                .help(L10n.t("次数还在解析中"))
+                .help(L10n.t("正在解析收听次数"))
         }
     }
 }
@@ -78,7 +78,7 @@ struct PlayCountBreakdownPopover: View {
         // (「Remaster/feat. 等标注」)加上 30 字歌名在 380 里会把歌名压成省略号。
         SettingsPopoverShell(
             title: L10n.t("合并明细"),
-            help: L10n.t("「第 N 次听」把同一首歌的不同写法（繁简、括号风格、合唱署名等）合并计数。这里列出并进这一行的每种写法、各自的次数和原因，以及逐次的时刻"),
+            help: L10n.t("「第 N 次收听」会将同一首歌曲的不同写法（繁简、括号风格、合唱署名等）合并计数。此处列出合并到这一行的每种写法、各自的次数与原因，以及每次收听的时间"),
             width: 440
         ) {
             switch loader.state {
@@ -183,7 +183,7 @@ struct PlayCountBreakdownPopover: View {
             }
             Spacer(minLength: 8)
             if v.failed {
-                Text(L10n.t("未取到")).font(.caption).foregroundStyle(.tertiary)
+                Text(L10n.t("未获取")).font(.caption).foregroundStyle(.tertiary)
             } else {
                 Text(String(format: L10n.t("%@ 次"), "\(v.total)"))
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
@@ -295,7 +295,7 @@ struct PlayCountBreakdownPopover: View {
             VStack(alignment: .leading, spacing: 6) {
                 if b.hasFailure {
                     HStack(spacing: 8) {
-                        Text(L10n.t("部分写法没取到")).font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.t("部分写法未能获取")).font(.caption).foregroundStyle(.secondary)
                         Button(L10n.t("重试")) { Task { await loader.load() } }
                             .buttonStyle(.link).font(.caption)
                     }
@@ -304,7 +304,7 @@ struct PlayCountBreakdownPopover: View {
                     HStack(spacing: 4) {
                         Text(String(format: L10n.t("行上按 %1$@ 次计，明细合计 %2$@ 次"), "\(expected)", "\(b.total)"))
                             .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                        HelpButton(text: L10n.t("两个数来自 Last.fm 的两条接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。不相等通常意味着有一种写法只被其中一边合并了"))
+                        HelpButton(text: L10n.t("两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并"))
                             .font(.system(size: 11))
                     }
                 }
@@ -313,11 +313,11 @@ struct PlayCountBreakdownPopover: View {
                         if loader.loadingOlder {
                             ProgressView().controlSize(.small)
                         } else {
-                            Button(L10n.t("加载更早的")) { Task { await loader.loadOlder() } }
+                            Button(L10n.t("加载更早的记录")) { Task { await loader.loadOlder() } }
                                 .buttonStyle(.link).font(.caption)
                         }
                         if b.ordinalCutoff != nil {
-                            Text(L10n.t("还有更早的记录没加载，这些行暂不编号"))
+                            Text(L10n.t("更早的记录尚未加载，这些行暂不编号"))
                                 .font(.system(size: 10.5)).foregroundStyle(.tertiary)
                         }
                     }

@@ -127,12 +127,12 @@ final class PlayerHealthMonitor: ObservableObject {
     func description(_ warning: PlayerHealth.Warning) -> String {
         switch warning {
         case .automationDenied:
-            return String(format: L10n.t("%@ 的自动化权限被拒，读不到播放状态"), names(automationDeniedPlayers))
+            return String(format: L10n.t("%@ 的自动化权限被拒绝，无法读取播放状态"), names(automationDeniedPlayers))
         case .engineNotRunning: return L10n.t("歌词引擎未运行，歌词不会更新")
         case .fullDiskAccessDenied:
-            return String(format: L10n.t("没有完全磁盘访问权限，读不到 %@ 本机的歌词"), names(fullDiskAccessDeniedPlayers))
+            return String(format: L10n.t("没有完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(fullDiskAccessDeniedPlayers))
         case .accessibilityMissing:
-            return String(format: L10n.t("没有辅助功能权限，%@ 的进度没法校准"), names(accessibilityMissingPlayers))
+            return String(format: L10n.t("没有辅助功能权限，无法校准 %@ 的播放进度"), names(accessibilityMissingPlayers))
         }
     }
 

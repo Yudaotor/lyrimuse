@@ -95,7 +95,7 @@ struct RecentListensPanel: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(L10n.t("最近听过"))
+            Text(L10n.t("最近播放"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(secondaryTextColor)
             Spacer(minLength: 0)
@@ -111,7 +111,7 @@ struct RecentListensPanel: View {
                 .font(.system(size: 10))
                 .foregroundStyle(tertiaryTextColor.opacity(stats.baselineFailed ? 0.6 : 1))
                 .help(stats.baselineFailed
-                      ? String(format: L10n.t("上次刷新没有成功，显示的是 %@ 的内容"),
+                      ? String(format: L10n.t("上次刷新失败，当前显示 %@ 的内容"),
                                updated.formatted(Date.FormatStyle(date: .abbreviated, time: .standard, locale: L10n.locale)))
                       : updated.formatted(Date.FormatStyle(date: .abbreviated, time: .standard, locale: L10n.locale)))
             }
@@ -211,7 +211,7 @@ struct RecentListensPanel: View {
                 .padding(.vertical, 24)
         } else if stats.baselineFailed {
             VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.t("没拉到最近记录"))
+                Text(L10n.t("未能获取最近记录"))
                     .font(.system(size: 12))
                     .foregroundStyle(secondaryTextColor)
                 Button(L10n.t("重试")) { stats.refreshBaseline(force: true) }
@@ -219,7 +219,7 @@ struct RecentListensPanel: View {
             }
             .padding(.vertical, 16)
         } else {
-            Text(L10n.t("还没有收听记录"))
+            Text(L10n.t("暂无收听记录"))
                 .font(.system(size: 12))
                 .foregroundStyle(tertiaryTextColor)
                 .padding(.vertical, 16)
@@ -330,7 +330,7 @@ enum RelativeDayFormat {
 ///
 /// 只读:不提供补提交/删除。补提交需要连账号(没连提交不到任何地方去,跟
 /// pendingListensRow 里"按钮只在连着账号时给"同一个理由);删除留给设置页那边
-/// 已有的、更完整的管理入口(能悬停删单条),这里给一个"去连接"的入口就够了。
+/// 已有的、更完整的管理入口(能悬停删单条),这里给一个"前往连接"的入口就够了。
 struct PendingListensPanel: View {
     /// 点一行 = 在 Apple Music 里打开这首歌——跟 RecentListensPanel 的 onOpenTrack 同一个
     /// 语义、同一份实现(两处调用点本来就把同一个闭包传给了两个面板,见其声明处注释)。
@@ -427,7 +427,7 @@ struct PendingListensPanel: View {
 
     @ViewBuilder private var content: some View {
         if items.isEmpty {
-            Text(L10n.t("本地还没有待推送的收听"))
+            Text(L10n.t("本地暂无待推送的收听记录"))
                 .font(.system(size: 12))
                 .foregroundStyle(tertiaryTextColor)
                 .padding(.vertical, 16)

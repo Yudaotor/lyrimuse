@@ -217,7 +217,7 @@ struct LyricsSearchSheet: View {
         case "dns_failed": template = L10n.t("域名解析失败（DNS）：%@")
         case "connect_failed": template = L10n.t("连接失败或超时：%@")
         case "server_error": template = L10n.t("服务器报错（5xx）：%@")
-        case "upstream_unreachable": template = L10n.t("上游源没连上、没法查：%@")
+        case "upstream_unreachable": template = L10n.t("无法连接上游源，未能查询：%@")
         default: template = code + ": %@"
         }
         let sentinel = "\u{FFFC}"
@@ -260,7 +260,7 @@ struct LyricsSearchSheet: View {
         }
         .controlSize(.small)
         .settingsGlassButtons(inSheet: presentedAsSheet)
-        .help(L10n.t("这一轮有几个歌词源给出了候选，点击查看明细"))
+        .help(L10n.t("本轮给出候选的歌词源数量，点按查看详情"))
         .popover(isPresented: $showSourceAvailability, arrowEdge: .bottom) {
             sourceAvailabilityList
         }
@@ -403,7 +403,7 @@ struct LyricsSearchSheet: View {
                 .foregroundStyle(.tertiary)
         }
         .font(.callout)
-        .help(L10n.t("在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它"))
+        .help(L10n.t("已在「设置 → 歌词 → 歌词来源」中关闭，本轮未查询"))
     }
 
     // 未返回候选的源,查得到具体原因的那几个——给 sourceAvailabilityList
@@ -665,7 +665,7 @@ struct LyricsSearchSheet: View {
             HStack(spacing: 6) {
                 if isSearching {
                     ProgressView().controlSize(.small)
-                    Text((candidates.isEmpty ? L10n.t("正在查询各个歌词源…") : L10n.t("其它源仍在搜索中…"))
+                    Text((candidates.isEmpty ? L10n.t("正在查询各个歌词源…") : L10n.t("其他歌词源仍在搜索中…"))
                          + searchProgressSuffix)
                 }
             }
@@ -821,9 +821,9 @@ struct LyricsSearchSheet: View {
                 // 补上——跟下面"真的查了但没有"分开展示,别让用户以为这首歌
                 // 真没有网络歌词、白白灰心,其实只是网络本身有问题,重试大概率能查到。
                 ContentUnavailableView {
-                    Label(L10n.t("网络似乎不通"), systemImage: "wifi.slash")
+                    Label(L10n.t("网络可能不可用"), systemImage: "wifi.slash")
                 } description: {
-                    Text(L10n.t("启用的歌词源请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
+                    Text(L10n.t("所有已启用的歌词源请求均失败，可能是网络连接问题，并不代表这首歌曲没有歌词。检查网络后可点按下方的「重试」"))
                 } actions: {
                     Button(L10n.t("重试")) { Task { await load() } }
                 }
@@ -843,8 +843,8 @@ struct LyricsSearchSheet: View {
                 let otherCount = max(0, sourcesTotal - unreachableCount)
                 ContentUnavailableView {
                     Label(allUnreachable
-                          ? L10n.t("歌词源全都没连上")
-                          : String(format: L10n.t("有 %@ 个歌词源没连上"), "\(unreachableCount)"),
+                          ? L10n.t("所有歌词源均无法连接")
+                          : String(format: L10n.t("%@ 个歌词源无法连接"), "\(unreachableCount)"),
                           systemImage: "wifi.exclamationmark")
                 } description: {
                     VStack(spacing: 4) {
@@ -853,13 +853,13 @@ struct LyricsSearchSheet: View {
                             Self.transportFailureLine(group.code, sources: group.sources)
                         }
                         if groups.contains(where: { $0.code == "dns_failed" }) {
-                            Text(L10n.t("常见于 VPN / 公司网络接管了 DNS；浏览器能开网页不代表这里能通"))
+                            Text(L10n.t("常见于 VPN 或公司网络接管 DNS 的情况；浏览器能打开网页并不代表此处可以连接"))
                         }
                         if instrumental {
                             // 有源明确说这首是纯音乐 —— 比"其余源未返回候选"更确定的结论,不能被这个
                             // 分支盖掉(评审指出的顺序问题:纯音乐分支排在后面,一旦有源没连上就永远
                             // 到不了)。复用纯音乐分支那句 key。
-                            Text(L10n.t("有源明确说这首是纯音乐，没有可用的歌词候选"))
+                            Text(L10n.t("有歌词源将这首歌曲标记为纯音乐，没有可用的歌词候选"))
                         } else if !tracksFoundNoLyrics.isEmpty {
                             // 同上那个顺序问题,新增的"有歌没词"分支一模一样地中招:
                             // 网易云命中了曲目没词、同时 Musixmatch 因为限流没连上,用户看到的会是
@@ -879,7 +879,7 @@ struct LyricsSearchSheet: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if instrumental {
-                // 排在"网络似乎不通"之后、笼统兜底之前:这是比"真没搜到"更确定的结论——
+                // 排在"网络可能不可用"之后、笼统兜底之前:这是比"真没搜到"更确定的结论——
                 // 至少一个源明确断言过"这首歌没有词"(见 instrumental 声明处注释),不是
                 // 九个源都交白卷说不出理由,不该跟那种情况共用同一句轻描淡写的"没找到"。
                 // 文案复用「重新自动匹配」toast 三分支(LyricsManagerView.swift)已经在用的
@@ -887,7 +887,7 @@ struct LyricsSearchSheet: View {
                 ContentUnavailableView {
                     Label(L10n.t("纯音乐"), systemImage: "waveform")
                 } description: {
-                    Text(L10n.t("有源明确说这首是纯音乐，没有可用的歌词候选"))
+                    Text(L10n.t("有歌词源将这首歌曲标记为纯音乐，没有可用的歌词候选"))
                 } actions: {
                     markInstrumentalAction
                 }
@@ -940,7 +940,7 @@ struct LyricsSearchSheet: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView(L10n.t("启用的歌词源都没找到可用的候选"), systemImage: "text.badge.xmark")
+                ContentUnavailableView(L10n.t("已启用的歌词源均未找到可用的候选"), systemImage: "text.badge.xmark")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else if let c = previewedCandidate {
@@ -1047,7 +1047,7 @@ struct LyricsSearchSheet: View {
             let name = LyricsSource(rawValue: c.source)?.displayName ?? c.source
             showApplyFeedback(String(format: L10n.t("已采用 %@ 的歌词"), name), ok: true)
         } else {
-            showApplyFeedback(L10n.t("未能保存，请再试一次"), ok: false)
+            showApplyFeedback(L10n.t("保存失败，请重试"), ok: false)
         }
     }
 
@@ -1094,8 +1094,8 @@ struct LyricsSearchSheet: View {
                          systemImage: markedInstrumental ? "pianokeys.inverse" : "pianokeys", iconOnly: iconOnly)
         }
         .help(markedInstrumental
-              ? L10n.t("撤回「纯音乐」标记：有歌词的恢复显示，没有歌词的重新回到自动补搜的队列")
-              : L10n.t("按纯音乐处理：各处不显示歌词，也不再自动搜歌词；已有的歌词会留着，取消标记就恢复"))
+              ? L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，没有歌词的重新加入自动匹配队列")
+              : L10n.t("按纯音乐处理：不再显示歌词，也不再自动搜索；现有歌词会保留，取消标记后恢复"))
         .disabled(settingInstrumental || applyingSource != nil || autoMatching)
         .settingsGlassButtons(inSheet: presentedAsSheet)
         .fixedSize()
@@ -1109,7 +1109,7 @@ struct LyricsSearchSheet: View {
         } label: {
             toolbarLabel(L10n.t("重新自动匹配"), systemImage: "wand.and.stars", iconOnly: iconOnly)
         }
-        .help(L10n.t("重新联网跑一遍匹配，直接采用算法选出的那一份，不用自己挑；跟设置里的「匹配算法」一致"))
+        .help(L10n.t("重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」"))
         .disabled(autoMatching || applyingSource != nil || settingInstrumental)
         .settingsGlassButtons(inSheet: presentedAsSheet)
         .fixedSize()
@@ -1168,7 +1168,7 @@ struct LyricsSearchSheet: View {
     @ViewBuilder
     private var instrumentalBanner: some View {
         if markedInstrumental {
-            Label(L10n.t("已标为纯音乐：各处不显示这首的歌词，也不再自动搜歌词。采用一条候选会取消标记"),
+            Label(L10n.t("已标为纯音乐：不再显示这首歌曲的歌词，也不再自动搜索。采用任一候选将取消标记"),
                   systemImage: "pianokeys.inverse")
                 .font(.callout)
                 .padding(10)
@@ -1211,7 +1211,7 @@ struct LyricsSearchSheet: View {
                 showApplyFeedback(L10n.t("已取消纯音乐标记"), ok: true)
             }
         } else {
-            showApplyFeedback(L10n.t("未能保存，请再试一次"), ok: false)
+            showApplyFeedback(L10n.t("保存失败，请重试"), ok: false)
         }
     }
 
@@ -1274,7 +1274,7 @@ struct LyricsSearchSheet: View {
                 .padding(.top, 12)
             if c.isPlainTextOnly {
                 Label(
-                    L10n.t("这份歌词没有时间戳，采纳后只能在「歌词窗口」里作为静态文字展示，不会逐字/逐行跟随播放高亮"),
+                    L10n.t("这份歌词没有时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮"),
                     systemImage: "info.circle"
                 )
                 .font(.caption)
@@ -1418,13 +1418,13 @@ struct LyricsSearchSheet: View {
                     characteristicBadge(L10n.t("无时间戳"), "exclamationmark.triangle.fill", .orange)
                 }
                 if c.hasWordTiming {
-                    characteristicBadge(L10n.t("逐字时间轴"), "text.word.spacing", .blue)
+                    characteristicBadge(L10n.t("逐字时间轴"), "text.word.spacing", LyricsFeatureTint.wordTiming)
                 }
                 if c.hasTranslation {
-                    characteristicBadge(L10n.t("译文"), "character.book.closed", .green)
+                    characteristicBadge(L10n.t("译文"), "character.book.closed", LyricsFeatureTint.translation)
                 }
                 if c.hasRomanization {
-                    characteristicBadge(L10n.t("读音"), "textformat.abc", .purple, latinIcon: true)
+                    characteristicBadge(L10n.t("读音"), "textformat.abc", LyricsFeatureTint.romanization, latinIcon: true)
                 }
                 // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
                 if showsSource {
@@ -1441,8 +1441,8 @@ struct LyricsSearchSheet: View {
                                anchor),
                         "equal.circle", .secondary)
                         .help(duplicate.sameTimeline
-                              ? L10n.t("歌词文字和每行时间都一样（逐字时间和译文不比）；这条候选仍可能带别的来源没有的逐字轨或译文")
-                              : L10n.t("歌词文字一样，每行时间不一样；这条候选仍可能带别的来源没有的逐字轨或译文"))
+                              ? L10n.t("歌词文字和每行时间均相同（未比较逐字时间和译文）；该候选仍可能包含其他来源没有的逐字时间轴或译文")
+                              : L10n.t("歌词文字相同，每行时间不同；该候选仍可能包含其他来源没有的逐字时间轴或译文"))
                 }
                 if isCurrent {
                     // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——

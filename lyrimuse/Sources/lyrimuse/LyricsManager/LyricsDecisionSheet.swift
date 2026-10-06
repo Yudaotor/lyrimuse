@@ -72,7 +72,7 @@ struct LyricsDecisionSheet: View {
         // 「当初一条歌词都没搜到、后来又试了一次」那条路径(引擎的
         // needsLyricsFirstFill)。跟「升级重试」分开显示:那个是"本来有、想换更好的",
         // 这个是"本来没有、这次才填上"。
-        case "refill": return L10n.t("补搜缺失歌词")
+        case "refill": return L10n.t("自动匹配缺失歌词")
         // 用户在详情页点「重新自动匹配」那一次(lyrimuse-engine search-lyrics -pick 写下的存档)。
         // 跟上面三条自动路径分开显示:它是手动触发的,但用的是**同一套**自动决策规则。
         case "manual-rematch": return L10n.t("手动重新匹配")
@@ -81,8 +81,8 @@ struct LyricsDecisionSheet: View {
         case "peripheral-backfill": return L10n.t("补全曲目信息")
         // 这条的歌词不是自己检索的,是从另一条搬来的(reused_from 记着来源 key):同一段录音在另一张专辑下,
         // 或 KKBOX 同一首歌的另一种歌手写法(引擎的 kkboxalias.go)。
-        case "cross-album-reuse": return L10n.t("复用其他专辑的同一首")
-        case "artist-alias-reuse": return L10n.t("复用同一首的另一种歌手写法")
+        case "cross-album-reuse": return L10n.t("复用其他专辑中的同一首歌曲")
+        case "artist-alias-reuse": return L10n.t("复用同一首歌曲的其他歌手写法")
         // 兜底显示原始值:引擎那边新增一条路径、这边忘了补译名时,至少还看得出是哪条
         // (而不是空白)。但那就是漏了 —— 这张表跟引擎里 buildLyricsDecision 的 path
         // 取值必须成对改,的 manual-rematch 就是这么漏出来一个英文串的。
@@ -112,7 +112,7 @@ struct LyricsDecisionSheet: View {
         case "title-from-album": return L10n.t("标题反查：专辑曲目表")
         case "title-from-artist-search": return L10n.t("标题反查：歌手泛搜")
         case "title-from-apple-storefront": return L10n.t("标题反查：Apple 原产地商店")
-        case "title-bilingual": return L10n.t("标题反查：去掉歌名里的英文")
+        case "title-bilingual": return L10n.t("标题反查：去除歌名中的英文")
         case "title-variant": return L10n.t("曲名变体：补查未应答的源")
         case "isrc-from-applemusic": return L10n.t("按 ISRC 补查未应答的源")
         default: return reason ?? ""
@@ -210,7 +210,7 @@ struct LyricsDecisionSheet: View {
                         )
                     }
                     if currentLyricsNotFromDecision {
-                        Label(L10n.t("现在这份歌词是你手动修改或手动采纳的，不是下面这轮自动决策选出来的"),
+                        Label(L10n.t("当前歌词为手动修改或手动采纳，并非下方自动决策的结果"),
                               systemImage: "info.circle")
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -254,8 +254,8 @@ struct LyricsDecisionSheet: View {
                 // "这是当初自动挑歌词那一刻的快照,不是现在重新搜的结果",主语换成动作本身
                 // 就够了,还省掉一个要解释的名词。
                 Text(summary.isManual
-                     ? L10n.t("记录的是手动修改之前的最后一次自动评估")
-                     : L10n.t("自动选定歌词时的存档，现在重新搜索结果可能不同"))
+                     ? L10n.t("此为手动修改前的最后一次自动评估")
+                     : L10n.t("自动选定歌词时的记录，重新搜索的结果可能不同"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -266,7 +266,7 @@ struct LyricsDecisionSheet: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(plainTextDump, forType: .string)
             }
-            .help(L10n.t("把整份决策记录拷到剪贴板（纯文本）"))
+            .help(L10n.t("将完整的决策记录拷贝到剪贴板（纯文本）"))
             Button(L10n.t("完成")) { dismiss() }
                 .keyboardShortcut(.defaultAction)
         }
@@ -549,12 +549,12 @@ struct LyricsDecisionSheet: View {
             s = L10n.t("两者同分。")
         } else if nearTie && sayNearTie {
             s = pct.isEmpty
-                ? String(format: L10n.t("分差只有 %d 分，接近平分。"), gap)
-                : String(format: L10n.t("分差只有 %1$d 分（%2$@），接近平分。"), gap, pct)
+                ? String(format: L10n.t("分差仅 %d 分，接近平分。"), gap)
+                : String(format: L10n.t("分差仅 %1$d 分（%2$@），接近平分。"), gap, pct)
         } else if nearTie {
             s = pct.isEmpty
-                ? String(format: L10n.t("分差只有 %d 分。"), gap)
-                : String(format: L10n.t("分差只有 %1$d 分（%2$@）。"), gap, pct)
+                ? String(format: L10n.t("分差仅 %d 分。"), gap)
+                : String(format: L10n.t("分差仅 %1$d 分（%2$@）。"), gap, pct)
         } else {
             s = pct.isEmpty
                 ? String(format: L10n.t("分差 %d 分。"), gap)
@@ -570,12 +570,12 @@ struct LyricsDecisionSheet: View {
         case .identical:
             return L10n.t("两者各项得分完全相同，按源的顺序排列。")
         case let .single(term) where term.points > 0:
-            return String(format: L10n.t("唯一的差别是胜者在「%1$@」上多 %2$d 分。"),
+            return String(format: L10n.t("唯一的差异是胜者在「%1$@」一项多 %2$d 分。"),
                           termLabel(term.kind), term.points)
         case let .single(term):
             // 理论上冠军在唯一有差的那项上不该更低(会输)——除非分数被夹过。兜底说一句
             // 中性的,别印一个"多 −30 分"。
-            return String(format: L10n.t("唯一的差别在「%@」这一项上。"), termLabel(term.kind))
+            return String(format: L10n.t("唯一的差异在于「%@」一项。"), termLabel(term.kind))
         case .multiple:
             return nil
         }
@@ -780,7 +780,7 @@ struct LyricsDecisionSheet: View {
     private func silentSourcesText(_ responded: [String]) -> String? {
         let silent = silentSources(responded)
         guard !silent.isEmpty else { return nil }
-        return String(format: L10n.t("当前启用的其余源没有应答：%@"),
+        return String(format: L10n.t("当前启用的其余歌词源未应答：%@"),
                       silent.map { sourceDisplayName($0) }.joined(separator: "、"))
     }
 
@@ -1025,7 +1025,7 @@ struct LyricsDecisionSheet: View {
             // 明细挪到旁路文件、又补不回来(文件被删 / 指纹对不上)时,别说成「没有任何源给出候选」。
             Text(decision.detailsExternal == true
                  ? L10n.t("本轮候选明细已不可用")
-                 : L10n.t("本轮没有源返回候选"))
+                 : L10n.t("本轮无歌词源返回候选"))
                 .font(.callout).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 24)

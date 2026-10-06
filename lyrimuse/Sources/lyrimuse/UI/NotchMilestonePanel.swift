@@ -14,7 +14,7 @@ struct NotchMilestonePanel: View {
 
     private var title: String {
         switch milestone.kind {
-        case .track: return String(format: L10n.t("第 %@ 次听"), number)
+        case .track: return String(format: L10n.t("第 %@ 次收听"), number)
         case .total: return String(format: L10n.t("累计第 %@ 次收听"), number)
         }
     }

@@ -19,7 +19,7 @@ struct OverlayPlacementSettingsRows: View {
         SettingsRow(
             icon: "dock.rectangle",
             title: L10n.t("位置"),
-            help: L10n.t("自由：拖到任意位置。\n顶部居中 / 底部居中：贴着菜单栏下方 / Dock 上方水平居中，屏幕或 Dock 变化时自动对齐；此时窗口不可拖动。")
+            help: L10n.t("自由：可拖移到任意位置。\n顶部居中 / 底部居中：在菜单栏下方 / Dock 上方水平居中，屏幕或 Dock 变化时自动对齐；此模式下窗口不可拖移。")
         ) {
             OverlayPlacementSegmentedControl(selection: $settings.overlayPlacementMode)
         }

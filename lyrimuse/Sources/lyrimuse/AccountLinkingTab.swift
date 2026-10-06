@@ -323,7 +323,7 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // 只填了 token、没填用户名:提交收听其实已经在跑了,但听歌报告读不回数据。这跟
         // "压根没配"是两种不同的状态,混成一句"未配置"会让填了 token 的人以为自己没填。
         if config.isListenBrainzConfigured {
-            return .missingCreds(L10n.t("还缺用户名，听歌报告用不了"))
+            return .missingCreds(L10n.t("缺少用户名，无法生成听歌报告"))
         }
         return .notConfigured(L10n.t("未配置（可选）"))
     case .stateRelay:
@@ -371,11 +371,11 @@ func discordStatusText(_ status: DiscordPresenceController.Status) -> String {
     case .connected(let user):
         return user.map { String(format: L10n.t("已连接 · @%@"), $0.username) } ?? L10n.t("已连接")
     case .refused:
-        return L10n.t("Discord 拒绝了连接")
+        return L10n.t("Discord 拒绝连接")
     case .waiting(.notInstalled):
-        return L10n.t("这台 Mac 上没有安装 Discord")
+        return L10n.t("此 Mac 未安装 Discord")
     case .waiting(.notRunning):
-        return L10n.t("Discord 没有打开")
+        return L10n.t("Discord 未打开")
     case .off, .waiting(.connecting):
         return L10n.t("正在连接 Discord…")
     }
@@ -395,11 +395,11 @@ func relayPushProblem(_ verdict: RelayPushStatus.Verdict) -> (text: String, isEr
 @MainActor
 private func relayPushProblemText(_ problem: RelayPushStatus.Problem) -> String {
     switch problem {
-    case .token: return L10n.t("访问令牌不对，同步服务拒绝了推送")
-    case .address: return L10n.t("同步服务地址不对")
-    case .rejected(let code): return String(format: L10n.t("同步服务拒绝了推送（%d）"), code)
-    case .server(let code): return String(format: L10n.t("同步服务一直出错（%d），网页上的状态没在更新"), code)
-    case .network: return L10n.t("连不上同步服务，网页上的状态没在更新")
+    case .token: return L10n.t("访问令牌无效，同步服务拒绝了推送")
+    case .address: return L10n.t("同步服务地址有误")
+    case .rejected(let code): return String(format: L10n.t("同步服务拒绝推送（%d）"), code)
+    case .server(let code): return String(format: L10n.t("同步服务持续出错（%d），网页上的状态未更新"), code)
+    case .network: return L10n.t("无法连接同步服务，网页上的状态未更新")
     }
 }
 
@@ -588,7 +588,7 @@ struct AccountLinkingTab: View {
             }
         }
         .alert(
-            L10n.t("还差一步"),
+            L10n.t("需要先完成配置"),
             isPresented: Binding(
                 get: { missingPrereqAlert != nil },
                 set: { if !$0 { missingPrereqAlert = nil } }
@@ -596,7 +596,7 @@ struct AccountLinkingTab: View {
             presenting: missingPrereqAlert
         ) { alert in
             if let target = alert.jumpTarget {
-                Button(String(format: L10n.t("去配置「%@」"), target.title)) { onJumpToAccount(target) }
+                Button(String(format: L10n.t("前往配置「%@」"), target.title)) { onJumpToAccount(target) }
                 Button(L10n.t("取消"), role: .cancel) {}
             } else {
                 Button(L10n.t("好的"), role: .cancel) {}
@@ -621,7 +621,7 @@ struct AccountLinkingTab: View {
     ) {
         guard newValue else { apply(false); return }
         if let sameCardHint {
-            missingPrereqAlert = MissingPrereqAlert(message: String(format: L10n.t("请先在这张卡上填好：%@"), sameCardHint), jumpTarget: nil)
+            missingPrereqAlert = MissingPrereqAlert(message: String(format: L10n.t("请先在此卡片中填写：%@"), sameCardHint), jumpTarget: nil)
             return
         }
         if let crossCard, let hint = crossCard.hint {
@@ -660,7 +660,7 @@ struct AccountLinkingTab: View {
     private func digestCrossCard(source: String) -> (hint: String?, target: AccountDestination) {
         switch source {
         case "lastfm": return (hint: config.lastfmBridgeMissingHint(), target: .lastfm)
-        case "listenbrainz": return (hint: config.isListenBrainzReadable ? nil : L10n.t("还缺用户名"), target: .listenBrainz)
+        case "listenbrainz": return (hint: config.isListenBrainzReadable ? nil : L10n.t("缺少用户名"), target: .listenBrainz)
         default: return (hint: L10n.t("未配置"), target: .listenBrainz)
         }
     }
@@ -737,19 +737,19 @@ struct AccountLinkingTab: View {
             // 只说这张卡是干什么的,跟 Last.fm 那句同一个句式。原来这里还捎带讲了
             // "建立完整听歌历史""也是网页展示/听歌报告的可选数据来源" —— 那些是后果和
             // 别处的用法,不是这张卡要回答的问题,堆在标题下面只会让人一眼抓不到重点。
-            return L10n.t("把你播放的歌同步到 ListenBrainz")
+            return L10n.t("将播放记录同步到 ListenBrainz")
         case .stateRelay:
-            return L10n.t("用来把当前播放状态推送到网页小组件和状态徽章")
+            return L10n.t("用于将当前播放状态推送到网页小组件和状态徽章")
         case .lastfm:
             // "读取"方向(同步到 ListenBrainz)没有独立开关:这个判定要求"Last.fm 桥接
             // 凭据 + ListenBrainz 都配好"(toggleGuarded 的 sameCardHint/crossCard 两层
             // 校验)才生效,单独留一个开关没有实际区分度。跟"网页推送"那两个字段"填好
             // 就是唯一的开关"是同一个思路(见 stateRelayFields 的 footer 注释)。
-            return L10n.t("把你播放的歌记录到 Last.fm")
+            return L10n.t("将播放记录同步到 Last.fm")
         case .bark:
             return L10n.t("接收 Lyrimuse 的推送通知")
         case .discord:
-            return L10n.t("让 Discord 好友看到你正在听什么")
+            return L10n.t("向 Discord 好友展示正在收听的歌曲")
         }
     }
 
@@ -794,11 +794,11 @@ struct AccountLinkingTab: View {
             Label(String(format: L10n.t("已连接：%@"), user), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         case .invalid:
-            Label(L10n.t("Token 无效，请重新拷贝一次"), systemImage: "exclamationmark.circle.fill")
+            Label(L10n.t("Token 无效，请重新拷贝"), systemImage: "exclamationmark.circle.fill")
                 .foregroundStyle(.orange)
         case .unreachable:
             // 跟"Token 无效"分开说:连不上不代表 Token 有问题,说成无效会害人白白去重生成。
-            Label(L10n.t("连不上 ListenBrainz，稍后会自动重试"), systemImage: "wifi.slash")
+            Label(L10n.t("无法连接 ListenBrainz，稍后将自动重试"), systemImage: "wifi.slash")
                 .foregroundStyle(.secondary)
         }
     }
@@ -832,7 +832,7 @@ struct AccountLinkingTab: View {
         SettingsCard {
             SettingsCardHeader(
                 title: L10n.t("连接信息"),
-                help: L10n.t("要先把网页端部署好并拿到访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端")
+                help: L10n.t("需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端")
             )
             CardDivider()
             SettingsRawRow(insetToText: true) {
@@ -841,7 +841,7 @@ struct AccountLinkingTab: View {
                 HStack(spacing: 4) {
                     Text(L10n.t("同步服务地址"))
                     HelpButton(
-                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见该仓库自己的 README"),
+                        text: L10n.t("使用 Cloudflare Worker + KV 自行搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。也可不自建：配置「ListenBrainz」后，网页同样能显示「正在播放」，两者配置其一即可。效果截图与完整搭建步骤见该仓库的 README"),
                         docTitle: L10n.t("查看效果 + 教程 →"),
                         // 指向 Yudaotor/nowplaying-workers 仓库自己的 README(#readme 锚点,
                         // GitHub 会自动渲染仓库首页那份)。
@@ -1015,7 +1015,7 @@ struct AccountLinkingTab: View {
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 4) {
                             Label(
-                                String(format: L10n.t("本地已记录 %@ 首待补提交"), "\(items.count)"),
+                                String(format: L10n.t("本地有 %@ 首待补交的记录"), "\(items.count)"),
                                 systemImage: "tray.full"
                             )
                             .font(.callout)
@@ -1026,7 +1026,7 @@ struct AccountLinkingTab: View {
                             // (约两年半)",但那条永远不是决定性的:Last.fm 两周的闸门比它严得多,
                             // 本地能存多久对"到底能补回什么"毫无影响,并列写反而让人以为有两道
                             // 需要各自留意的限制。
-                            HelpButton(text: L10n.t("Last.fm 只接受约两周内的记录，更早的补不上去"))
+                            HelpButton(text: L10n.t("Last.fm 仅接受约两周内的记录，更早的记录无法补交"))
                         }
                         if let status = backfillStatusLine() {
                             Text(status).font(.caption).foregroundStyle(.secondary)
@@ -1071,7 +1071,7 @@ struct AccountLinkingTab: View {
         if let result = backfillRunResultText() { return result }
         let tooOld = backfill.pending?.skippedTooOld ?? 0
         guard tooOld > 0 else { return nil }
-        return String(format: L10n.t("另有 %@ 条太旧、Last.fm 不再接受"), "\(tooOld)")
+        return String(format: L10n.t("另有 %@ 条记录过旧，Last.fm 不再接受"), "\(tooOld)")
     }
 
     /// 「补提交」跑完之后的那句结果。nil = 这一趟还没跑过。
@@ -1086,7 +1086,7 @@ struct AccountLinkingTab: View {
     /// - `abortedReason` 从加进 Outcome 那天起就**没有任何显示面** —— 限流(29)、凭据失效、
     ///   服务端拒收整批全走它,用户同样什么都看不到。
     private func backfillRunResultText() -> String? {
-        if backfill.lastRunFailed { return L10n.t("补提交没能完成，请稍后再试") }
+        if backfill.lastRunFailed { return L10n.t("补提交未完成，请稍后重试") }
         guard let last = backfill.lastRun else { return nil }
         // 无条件先报「已补 N 条」,0 也报。用户要的是"我点的那一下到底发生了什么",
         // 而"一条都没补上"同样是一个答案 —— 原来这里要求三项之和 > 0 才出声,
@@ -1195,7 +1195,7 @@ struct AccountLinkingTab: View {
                     //
                     // 「智能」那一档同样只写效果 —— 机制(候选只来自哪几处、时长闸、每首歌只判
                     // 一次、失败维持原样)在引擎 lastfmcatalog.go 头注,不在这行字里展开。
-                    help: L10n.t("上送给 Last.fm 的歌手名和歌名。\n智能：改用 Last.fm 上听的人最多的那种写法，找不到就原样发；专辑名去掉「 - Single」「 - EP」后缀。\n自定义：歌名、歌手分开选。\n原始：原样发播放器报的标签。")
+                    help: L10n.t("发送给 Last.fm 的歌手名和歌名。\n智能：使用 Last.fm 上收听人数最多的写法，未找到时按原样发送；专辑名去除「 - Single」「 - EP」后缀。\n自定义：分别设置歌名和歌手。\n原始：按播放器报告的标签原样发送。")
                 ) {
                     SettingsSegmentedControl(
                         selection: Binding(
@@ -1219,7 +1219,7 @@ struct AccountLinkingTab: View {
                 if features.lastfmMatchMode == .custom {
                     SettingsSubRow(
                         title: L10n.t("歌名"),
-                        help: L10n.t("匹配条目：改用 Last.fm 编目里这首歌的歌名写法，例如「那个女孩」发成「那個女孩」；编目里查不到就原样发。专辑名同时去掉「 - Single」「 - EP」后缀。\n原始：原样发播放器报的歌名。")
+                        help: L10n.t("匹配条目：使用 Last.fm 编目中这首歌曲的歌名写法，例如「那个女孩」发送为「那個女孩」；编目中未找到时按原样发送。专辑名同时去除「 - Single」「 - EP」后缀。\n原始：按播放器报告的歌名原样发送。")
                     ) {
                         SettingsSegmentedControl(
                             selection: Binding(
@@ -1235,7 +1235,7 @@ struct AccountLinkingTab: View {
                     // 条目)。判据在引擎 resolveScrobbleTags,说明气泡里照实写了这一句。
                     SettingsSubRow(
                         title: L10n.t("歌手"),
-                        help: L10n.t("匹配条目：改用 Last.fm 编目里这首歌的歌手写法，例如「Wang Leehom」发成「王力宏」；编目里查不到就原样发。\n只发第一位：合唱串只取第一位，「陶喆, 卢广仲」发成「陶喆」，不查编目；Last.fm 上确实收录了这个合唱条目时不截。\n原始：原样发播放器报的歌手。")
+                        help: L10n.t("匹配条目：使用 Last.fm 编目中这首歌曲的歌手写法，例如「Wang Leehom」发送为「王力宏」；编目中未找到时按原样发送。\n仅第一位：合唱歌手只保留第一位，例如「陶喆, 卢广仲」发送为「陶喆」，不查询编目；Last.fm 已收录该合唱条目时不截取。\n原始：按播放器报告的歌手原样发送。")
                     ) {
                         SettingsSegmentedControl(
                             selection: Binding(
@@ -1256,7 +1256,7 @@ struct AccountLinkingTab: View {
                 SettingsRow(
                     icon: "hourglass",
                     title: L10n.t("Scrobble 时机"),
-                    help: L10n.t("听到哪里才记到 Last.fm。\n50%：曲长一半、最多 4 分钟（官方规则）。\n75% / 90%：听满对应比例。\n曲终：放到结尾才记，中途切歌不记。")
+                    help: L10n.t("收听到何时记录到 Last.fm。\n50%：曲长的一半，最多 4 分钟（官方规则）。\n75% / 90%：达到对应比例。\n曲终：播放至结尾才记录，中途切歌不记录。")
                 ) {
                     SettingsSegmentedControl(
                         selection: Binding(
@@ -1278,7 +1278,7 @@ struct AccountLinkingTab: View {
                 SettingsRow(
                     icon: "timer",
                     title: L10n.t("短于 30 秒的曲目"),
-                    help: L10n.t("开：短于 30 秒的曲目也 scrobble，听过一半就记。\n关：不记（Last.fm 官方规则）。")
+                    help: L10n.t("开：短于 30 秒的曲目也会 Scrobble，播放过半即记录。\n关：不记录（Last.fm 官方规则）。")
                 ) {
                     Toggle("", isOn: Binding(
                         get: { features.scrobbleShortTracks },
@@ -1297,7 +1297,7 @@ struct AccountLinkingTab: View {
                 PlayerBundleChipsRow(
                     icon: "music.note.list",
                     title: L10n.t("Scrobble 的播放器"),
-                    help: L10n.t("只有勾选的播放器会 scrobble 到 Last.fm；默认全部勾选。"),
+                    help: L10n.t("仅勾选的播放器会 Scrobble 到 Last.fm；默认全部勾选。"),
                     allOffSummary: L10n.t("全部不 scrobble"),
                     offSummaryFormat: L10n.t("不 scrobble：%@"),
                     choices: playerBundleChoices,
@@ -1306,7 +1306,7 @@ struct AccountLinkingTab: View {
                     Task { await features.updateLastfmExclusion(scrobbled: on ? [bundleID] : [], excluded: on ? [] : [bundleID]) }
                 }
             } else {
-                SettingsNote { Text(L10n.t("上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用")) }
+                SettingsNote { Text(L10n.t("上方的「Scrobble 到 Last.fm」已关闭，此处设置暂不生效")) }
             }
         }
     }
@@ -1444,7 +1444,7 @@ struct AccountLinkingTab: View {
             Button(L10n.t("取消"), role: .cancel) {}
             Button(L10n.t("断开"), role: .destructive) { performLastfmDisconnect() }
         } message: {
-            Text(L10n.t("重新连接需要再走一次浏览器授权"))
+            Text(L10n.t("重新连接需要再次在浏览器中授权"))
         }
     }
 
@@ -1458,7 +1458,7 @@ struct AccountLinkingTab: View {
             if lastfmConnected, mirrorStatus.info != nil {
                 lastfmStatusDot(.red, L10n.t("授权已失效"))
                     .foregroundStyle(.red)
-                    .help(L10n.t("Last.fm 拒绝了写入，Scrobble 已暂停——授权可能已在网站上被撤销"))
+                    .help(L10n.t("Last.fm 拒绝写入，Scrobble 已暂停，授权可能已在网站上被撤销"))
                 Button(L10n.t("重新连接…")) { showLastfmWizard = true }
             } else if lastfmConnected {
                 lastfmStatusDot(.green, L10n.t("已连接"))
@@ -1540,7 +1540,7 @@ struct AccountLinkingTab: View {
     /// 而不是空白 tab。
     private var lastfmStatsPlaceholderCard: some View {
         SettingsCard {
-            Text(L10n.t("连接后这里会展示你的听歌档案"))
+            Text(L10n.t("连接后将在此显示听歌档案"))
                 .font(.callout).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
@@ -1610,7 +1610,7 @@ struct AccountLinkingTab: View {
                 }
             }
             HStack {
-                Text(L10n.t("下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret"))
+                Text(L10n.t("下方的「连接」需要使用这对密钥完成授权：请先在 Last.fm 创建应用，获取 API Key 和 Secret"))
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
@@ -1637,14 +1637,14 @@ struct AccountLinkingTab: View {
                     }
                     .buttonStyle(.link)
                     .font(.caption)
-                    .help(L10n.t("这里能看到已创建应用的 API Key，但看不到 Secret；丢了就用「前往申请」再建一个。"))
+                    .help(L10n.t("此处可查看已创建应用的 API Key，但无法查看 Secret；如已遗失，可通过「前往申请」重新创建。"))
                 }
             }
             if showLastfmApplyHint {
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle")
                         .foregroundStyle(.secondary)
-                    Text(L10n.t("申请页基本只需要填「应用名称」，其余留空即可；提交后页面会直接显示 API Key 和 Shared Secret"))
+                    Text(L10n.t("申请页只需填写「应用名称」，其余可留空；提交后页面将直接显示 API Key 和 Shared Secret"))
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
@@ -1654,7 +1654,7 @@ struct AccountLinkingTab: View {
                     }
                     .buttonStyle(.link)
                     .font(.caption)
-                    .help(L10n.t("把「Lyrimuse」拷到剪贴板，粘进申请页的应用名称"))
+                    .help(L10n.t("将「Lyrimuse」拷贝到剪贴板，用作申请页中的应用名称"))
                 }
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
@@ -1749,7 +1749,7 @@ struct AccountLinkingTab: View {
         case .waitingForBrowserAuth:
             stepDots(current: 2)
             VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮"))
+                Text(L10n.t("已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮"))
                     .font(.caption).foregroundStyle(.secondary)
                 Button(L10n.t("我已完成授权，继续")) { lastfmConnect.confirmBrowserAuth() }
                 .buttonStyle(.borderedProminent)
@@ -1861,17 +1861,17 @@ struct AccountLinkingTab: View {
                     }
                     if config.notificationPlatform == .dingtalk {
                         SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
-                        Text(L10n.t("机器人安全设置选了「加签」才需要填，留空按未加签处理"))
+                        Text(L10n.t("仅在机器人安全设置选择「加签」时需要填写，留空则按未加签处理"))
                             .font(.caption2).foregroundStyle(.secondary)
                     } else if config.notificationPlatform == .feishu {
                         SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
-                        Text(L10n.t("机器人安全设置开了「签名校验」才需要填，不开也能收到消息"))
+                        Text(L10n.t("仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息"))
                             .font(.caption2).foregroundStyle(.secondary)
                     } else if config.notificationPlatform == .telegram {
                         LabeledInputRow(L10n.t("Chat ID")) {
                             TextField(
                                 L10n.t("Chat ID"), text: $config.telegramChatID,
-                                prompt: Text(L10n.t("Chat ID，个人是一串数字，群组以 -100 开头"))
+                                prompt: Text(L10n.t("Chat ID：个人为一串数字，群组以 -100 开头"))
                             )
                         }
                     }
@@ -1964,21 +1964,21 @@ struct AccountLinkingTab: View {
         case .waiting(.notInstalled):
             CardDivider()
             SettingsRow(icon: "arrow.down.circle", title: L10n.t("需要 Discord 桌面版"),
-                        subtitle: L10n.t("装好并登录后会自动连上；网页版和手机版连不了")) {
+                        subtitle: L10n.t("安装并登录后将自动连接；网页版和手机版不支持连接")) {
                 Button(L10n.t("下载 Discord…")) {
                     if let url = DiscordPresence.downloadURL { NSWorkspace.shared.open(url) }
                 }
             }
         case .waiting(.notRunning):
             CardDivider()
-            SettingsRow(icon: "arrow.up.forward.app", title: L10n.t("需要打开 Discord"),
-                        subtitle: L10n.t("打开并登录后会自动连上")) {
+            SettingsRow(icon: "arrow.up.forward.app", title: L10n.t("请打开 Discord"),
+                        subtitle: L10n.t("打开并登录后将自动连接")) {
                 Button(L10n.t("打开 Discord")) { discord.openDiscord() }
             }
         case .waiting(.connecting) where discord.connectingStalled:
             CardDivider()
-            SettingsRow(icon: "exclamationmark.circle", title: L10n.t("Discord 还没就绪"),
-                        subtitle: L10n.t("确认已经在 Discord 里登录；还是连不上就退出 Discord 再打开")) {
+            SettingsRow(icon: "exclamationmark.circle", title: L10n.t("Discord 尚未就绪"),
+                        subtitle: L10n.t("请确认已登录 Discord；如仍无法连接，请退出 Discord 后重新打开")) {
                 Button(L10n.t("重新连接")) { discord.reconnectNow() }
             }
         default:
@@ -1992,7 +1992,7 @@ struct AccountLinkingTab: View {
             DiscordPresencePreview()
             SettingsCard {
                 SettingsRow(icon: "headphones", title: L10n.t("在 Discord 上显示"),
-                            help: L10n.t("开了以后，你的 Discord 资料卡和好友列表里会显示正在听的歌。好友看不到的话，到 Discord 的「用户设置 › 活动隐私」里打开分享活动状态。")) {
+                            help: L10n.t("开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享。")) {
                     Toggle("", isOn: $appSettings.discordPresenceEnabled)
                 }
                 if appSettings.discordPresenceEnabled {
@@ -2011,7 +2011,7 @@ struct AccountLinkingTab: View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("显示内容"))
             CardDivider()
-            SettingsRow(icon: "text.alignleft", title: L10n.t("名字下面显示")) {
+            SettingsRow(icon: "text.alignleft", title: L10n.t("用户名下方显示")) {
                 SettingsSegmentedControlHashable(
                     selection: $appSettings.discordStatusDisplay,
                     options: DiscordPresence.StatusLine.allCases,
@@ -2035,10 +2035,10 @@ struct AccountLinkingTab: View {
                 .fixedSize()
             }
             CardDivider()
-            SettingsRow(icon: "pause.circle", title: L10n.t("暂停以后")) {
+            SettingsRow(icon: "pause.circle", title: L10n.t("暂停后")) {
                 Picker("", selection: $appSettings.discordKeepWhenPaused) {
                     Text(L10n.t("继续显示")).tag(true)
-                    Text(String(format: L10n.t("%d 秒后清掉"), Int(DiscordPresence.pauseGrace))).tag(false)
+                    Text(String(format: L10n.t("%d 秒后清除"), Int(DiscordPresence.pauseGrace))).tag(false)
                 }
                 .pickerStyle(.menu)
                 .fixedSize()
@@ -2092,7 +2092,7 @@ struct AccountLinkingTab: View {
                     ) {
                         SettingsRawRow {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text(L10n.t("只有勾选的播放器会显示到 Discord；浏览器里的网页按浏览器算。"))
+                                Text(L10n.t("仅勾选的播放器会显示在 Discord 上；网页播放器按所在浏览器计算。"))
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -2115,7 +2115,7 @@ struct AccountLinkingTab: View {
         let off = playerBundleChoices.filter { appSettings.discordExcludedBundles.contains($0.id) }
         if off.isEmpty { return L10n.t("全部") }
         if off.count == playerBundleChoices.count { return L10n.t("全部不显示") }
-        return String(format: L10n.t("除了 %@"), off.map(\.name).joined(separator: "、"))
+        return String(format: L10n.t("除 %@ 外"), off.map(\.name).joined(separator: "、"))
     }
 
     // MARK: - 底部状态栏
@@ -2213,7 +2213,7 @@ private struct PendingListenRow: View {
             // 藏起来的时候必须同时不接受点击 —— 否则清单右侧会有一条看不见却挡手
             // 的区域。
             .allowsHitTesting(isHovered && !busy)
-            .help(L10n.t("从待补提交清单里移除这条（不可恢复）"))
+            .help(L10n.t("从待补提交清单中移除此条（不可恢复）"))
         }
         .contentShape(Rectangle())
         .onHover { inside in isHovered = inside }

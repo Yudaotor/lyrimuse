@@ -181,6 +181,10 @@ enum ConfigPortability {
         "np:preferWordLevelKaraoke",
         // Discord「暂时隐藏」记下的上次时长,只给菜单栏「快速开关」里那一项用;那一项撤掉了。
         "np:discordHideMinutes",
+        // 「歌词管理」列表的三列列宽:列表不再分列。
+        "np:lyricsManagerColArtist",
+        "np:lyricsManagerColAlbum",
+        "np:lyricsManagerColSource",
     ]
 
     /// 导出/导入都要跳过的键 = 机器专属的 + 已经死掉的。

@@ -34,22 +34,22 @@ enum ShortcutConflict {
         var message: String {
             switch self {
             case .otherHotkey(let title):
-                return String(format: L10n.t("这个组合已经分配给「%@」了。"), title)
+                return String(format: L10n.t("该组合已分配给「%@」。"), title)
             case .mainMenu(let title):
-                return String(format: L10n.t("这个组合是本 App 菜单里「%@」的快捷键。"), title)
+                return String(format: L10n.t("该组合是本 App 菜单中「%@」的快捷键。"), title)
             case .system:
-                return L10n.t("这个组合已被 macOS 系统占用。")
+                return L10n.t("该组合已被 macOS 占用。")
             }
         }
 
         var hint: String {
             switch self {
             case .otherHotkey:
-                return L10n.t("换一个组合，或者先清除那一项。")
+                return L10n.t("请更换组合，或先清除该项。")
             case .mainMenu:
-                return L10n.t("换一个组合——否则 Lyrimuse 在前台时，按下它会同时触发菜单里的那一项。")
+                return L10n.t("请更换组合，否则 Lyrimuse 位于前台时，按下该组合会同时触发菜单中的对应项。")
             case .system:
-                return L10n.t("换一个组合。系统占用的组合注册不上，录进去也不会生效；要用它得先到「系统设置 → 键盘 → 键盘快捷键」里把系统那一项关掉。")
+                return L10n.t("请更换组合。系统占用的组合无法注册，录制后也不会生效；如需使用，请先在「系统设置 → 键盘 → 键盘快捷键」中关闭系统的对应项。")
             }
         }
     }

@@ -85,7 +85,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
             let item = makeItem(String(format: L10n.t("%@ 的自动化权限未开启…"), alert.player.displayName),
                                 symbol: "exclamationmark.triangle.fill",
                                 selector: #selector(resolveAutomationAlert))
-            item.toolTip = L10n.t("没有它，播放进度可能不准，歌词上的播放控制也用不了")
+            item.toolTip = L10n.t("未授权时，播放进度可能不准确，歌词上的播放控制也无法使用")
             menu.addItem(item)
             menu.addItem(.separator())
         }

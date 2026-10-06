@@ -119,6 +119,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let url = URL(string: urlString), url.scheme == LyrimuseIdentity.urlScheme else {
             return
         }
+        // lyrimuse://lyrics-manager → 打开「歌词管理」(跟菜单栏那一项同一个入口;也是本机不点界面核对它外观的入口)。
+        if url.host == "lyrics-manager" {
+            AppActions.shared.openLyricsManager?()
+            return
+        }
         // 两种用途(按 host 分流):
         //   lyrimuse://settings/<路径> → 把设置窗口翻到那一页(仿系统设置的 x-apple.systempreferences: 深链;
         //     发版说明 / 支持回复里可以直接给链接,也是本机不点界面核对某一页外观的入口)。路径表见 Core

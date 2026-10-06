@@ -59,7 +59,7 @@ public final class LyricsPinStore: ObservableObject {
         shared.pins = load()
     }
 
-    /// 整份字典对外只读。发布出去是为了让「歌词管理」的工具栏计数和详情页徽章跟着变 ——
+    /// 整份字典对外只读。发布出去是为了让「歌词管理」列表行上的小标记和详情页的标签跟着变 ——
     /// 改动只来自用户动作(调偏移/重置/清空),频率低,不存在 LyricsOffsetStore 那边
     /// "20Hz 热路径重渲染"那类顾虑。
     @Published public private(set) var pins: [String: Int]

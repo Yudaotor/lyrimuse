@@ -62,7 +62,7 @@ struct EngineApplyStatusBar: View {
                 strip {
                     Image(systemName: "pause.circle")
                         .foregroundStyle(.secondary)
-                    Text(L10n.t("歌词引擎已停用，改动会在下次启用时生效"))
+                    Text(L10n.t("歌词引擎已停用，更改将在下次启用时生效"))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)

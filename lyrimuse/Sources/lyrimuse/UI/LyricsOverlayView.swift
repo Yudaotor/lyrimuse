@@ -1794,7 +1794,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         } else if playback.currentTrackHasNoLyrics {
             // 搜完了、确实一句都没有。必须排在下面那个"搜索歌词中…"分支前面,否则这首歌
             // 只要还在播,那句"搜索中"就会一直挂着(见 PlaybackCoordinator.currentTrackHasNoLyrics)。
-            Text(playback.hasPlainLyrics ? L10n.t("仅有纯文本，没有时间戳") : L10n.t("暂无歌词"))
+            Text(playback.hasPlainLyrics ? L10n.t("仅有纯文本，无时间戳") : L10n.t("暂无歌词"))
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)

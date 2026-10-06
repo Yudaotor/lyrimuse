@@ -211,7 +211,7 @@ struct LanguagePackRow: View {
             SettingsRow(
                 icon: "arrow.down.circle",
                 title: L10n.t("翻译语言包"),
-                help: L10n.t("只统计能翻成当前译文语言的语言；译文语言自己和同一语系的语言不计，所以数字可能比「系统设置」里的少。语言包由 macOS 管理，翻译在本机完成")
+                help: L10n.t("仅统计可翻译为当前译文语言的语言；译文语言本身及同一语系的语言不计入，因此数量可能少于「系统设置」中显示的数量。语言包由 macOS 管理，翻译在本机完成")
             ) {
                 HStack(spacing: 10) {
                     // 首次读取有可见延迟(进程刚起时 translationd 冷启动还会先误报全零、
@@ -232,7 +232,7 @@ struct LanguagePackRow: View {
                 CardDivider()
                 SettingsRawRow(insetToText: true) { packGrid }
                 SettingsNote {
-                    Text(L10n.t("要删除已下载的语言包，请到「系统设置 › 通用 › 语言与地区 › 翻译语言」"))
+                    Text(L10n.t("如需删除已下载的语言包，请前往「系统设置 › 通用 › 语言与地区 › 翻译语言」"))
                     Button(L10n.t("打开系统设置")) {
                         // 语言与地区面板;「翻译语言…」是那一页底部的一颗按钮,系统没给它
                         // 单独的深链,只能开到这一层。

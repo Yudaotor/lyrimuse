@@ -31,7 +31,7 @@ struct LastfmListeningHoursView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
         } else {
-            Text(L10n.t("这段时间还没有收听记录"))
+            Text(L10n.t("此期间暂无收听记录"))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
@@ -89,7 +89,7 @@ struct LastfmListeningHoursView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(format: L10n.t("最常听 %@"), hourText(s.peakHour)))
+        .accessibilityLabel(String(format: L10n.t("收听高峰 %@"), hourText(s.peakHour)))
     }
 
     private func hourBubble(_ h: Int, count: Int) -> some View {
@@ -130,14 +130,14 @@ struct LastfmListeningHoursView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(format: L10n.t("听得最多 %@"), names[s.peakWeekday]))
+        .accessibilityLabel(String(format: L10n.t("收听最多 %@"), names[s.peakWeekday]))
     }
 
     private func summaryLine(_ s: ListeningHours.Summary) -> some View {
         HStack(spacing: 14) {
-            Text(emphasized(L10n.t("最常听 %@"), hourText(s.peakHour)))
-            Text(emphasized(L10n.t("听得最多 %@"), Self.weekdayNames[s.peakWeekday]))
-            Text(emphasized(L10n.t("最安静 %@"), hourText(s.quietestHour)))
+            Text(emphasized(L10n.t("收听高峰 %@"), hourText(s.peakHour)))
+            Text(emphasized(L10n.t("收听最多 %@"), Self.weekdayNames[s.peakWeekday]))
+            Text(emphasized(L10n.t("收听最少 %@"), hourText(s.quietestHour)))
             Text(String(format: L10n.t("共 %@ 次"), s.total.formatted()))
             Spacer(minLength: 0)
         }

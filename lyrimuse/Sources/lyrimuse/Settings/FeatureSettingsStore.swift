@@ -174,7 +174,7 @@ public enum LastfmArtistRule: String, CaseIterable, Identifiable, Codable {
     public var displayName: String {
         switch self {
         case .catalog: return L10n.t("匹配条目")
-        case .firstOnly: return L10n.t("只发第一位")
+        case .firstOnly: return L10n.t("仅第一位")
         case .raw: return L10n.t("原始")
         }
     }
@@ -916,7 +916,7 @@ public final class FeatureSettingsStore: ObservableObject {
                 logger.notice("corrupt features.json moved aside as \(moved.lastPathComponent, privacy: .public)")
             }
         } catch {
-            lastError = String(format: L10n.t("无法移走损坏的配置文件：%@"), error.localizedDescription)
+            lastError = String(format: L10n.t("无法移动损坏的配置文件：%@"), error.localizedDescription)
             logger.error("quarantine failed: \(String(describing: error), privacy: .public)")
             return false
         }

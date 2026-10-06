@@ -101,15 +101,15 @@ struct DiscordPresencePreview: View {
         }
         let caption: String
         if !settings.discordPresenceEnabled {
-            caption = L10n.t("预览 · 开关关着，Discord 上不会显示")
+            caption = L10n.t("预览 · 已关闭，Discord 上不会显示")
         } else if let hiddenUntil = discord.hiddenUntil {
             caption = String(format: L10n.t("预览 · 已暂时隐藏，%@ 恢复"), DiscordPresenceController.restoreTimeText(hiddenUntil))
         } else if live == nil || refused {
-            caption = playback.title.isEmpty ? L10n.t("预览 · 没在放歌，先用示例") : L10n.t("预览 · 现在这首不会显示到 Discord")
+            caption = playback.title.isEmpty ? L10n.t("预览 · 当前未播放，显示示例") : L10n.t("预览 · 当前歌曲不会显示在 Discord 上")
         } else if !playback.isPlayingSmoothed && !settings.discordKeepWhenPaused {
-            caption = String(format: L10n.t("预览 · 暂停 %d 秒后从 Discord 上清掉"), Int(DiscordPresence.pauseGrace))
+            caption = String(format: L10n.t("预览 · 暂停 %d 秒后从 Discord 上清除"), Int(DiscordPresence.pauseGrace))
         } else {
-            caption = L10n.t("预览 · 好友在 Discord 里看到的样子")
+            caption = L10n.t("预览 · 好友在 Discord 上看到的效果")
         }
         return Model(
             activity: activity,
@@ -289,7 +289,7 @@ struct DiscordPresencePreview: View {
     private func activityCard(_ model: Model) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 4) {
-                Text(String(format: L10n.t("正在听 %@"), model.activityName))
+                Text(String(format: L10n.t("正在收听 %@"), model.activityName))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Palette.headerText)
                     .lineLimit(1)

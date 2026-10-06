@@ -121,14 +121,14 @@ final class LyricsSearchService {
             // v5:这是全批候选打完分之后才补的一项负分,只在"逐字加分是唯一
             // 让这个候选赢的理由,而另一个候选标题更吻合"时出现,见引擎侧
             // applyWordTimingTitleOverride 的注释。
-            case "wordTimingOverride": return L10n.t("标题吻合度更高的候选存在，撤销逐字加分")
+            case "wordTimingOverride": return L10n.t("存在标题更吻合的候选，撤销逐字加分")
             // v7:「两场不同演唱会」判据,见引擎侧
             // liveAlbumIdentityConflict 的注释(陈奕迅 The Easy Ride vs Get A Life 案)。
             case "liveAlbumConflict": return L10n.t("现场版场次不符")
             // v23:见引擎侧 lyrictimelineoffset.go。
             case "timelineOffset": return L10n.t("时间轴整体偏移")
             // v24:见引擎侧 lyrictimelineintrusion.go。
-            case "timelineIntrusion": return L10n.t("间奏里多出一段歌词")
+            case "timelineIntrusion": return L10n.t("间奏中多出一段歌词")
             // v3新维度,与引擎 match.go 的 scoreTerm kind 一一对应。
             // 旧 "source" case 已删:来源先验分从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
@@ -138,7 +138,7 @@ final class LyricsSearchService {
             case "consensus": return L10n.t("内容获印证")
             case "translation": return L10n.t("自带译文")
             case "romanization": return L10n.t("自带读音")
-            case "rejectNotTimed": return L10n.t("不是带时间戳的歌词")
+            case "rejectNotTimed": return L10n.t("不含时间戳")
             case "rejectWrongLanguage": return L10n.t("语言不符")
             case "rejectCreditOnly": return L10n.t("仅含署名行，无正文")
             case "rejectNoLastTimestamp": return L10n.t("无法获取末句时间")
@@ -146,7 +146,7 @@ final class LyricsSearchService {
             // 加:跟 rejectNotTimed 是同一类症状(没有时间戳)、不同的原因——
             // 那个是"疑似解析失败",这个是"这个源明确说了只有纯文本,压根没有带时间戳的版本"
             // (见引擎 match.go 的 scoreRejectPlainTextOnly 头注)。
-            case "rejectPlainTextOnly": return L10n.t("仅有纯文本，没有时间戳")
+            case "rejectPlainTextOnly": return L10n.t("仅有纯文本，无时间戳")
             // 加,见引擎 match.go 的 scoreRejectContinuousMix 头注。
             case "rejectContinuousMix": return L10n.t("连续混音版，与原版编排不同")
             default: return kind
@@ -160,36 +160,36 @@ final class LyricsSearchService {
         /// 哪一项",这句回答"它凭什么给分、满分多少"。
         var detail: String {
             switch kind {
-            case "duration": return L10n.t("最后一句的时间跟曲长越接近分越高，最多 300")
-            case "corroborated": return L10n.t("时长对不上，但别的源也在这个时间结束，改信这个印证")
-            case "wordTiming": return L10n.t("带逐字（卡拉OK）时间轴，是歌词质量最直接的证据")
-            case "nativeSource": return L10n.t("这个源就是你正在用的播放器，时间轴对着同一份音频母版（+250）")
+            case "duration": return L10n.t("最后一句的时间越接近曲长，得分越高，最高 300")
+            case "corroborated": return L10n.t("时长不符，但其他歌词源也在同一时间结束，予以采信")
+            case "wordTiming": return L10n.t("带逐字（卡拉 OK）时间轴，是衡量歌词质量最直接的依据")
+            case "nativeSource": return L10n.t("该源即当前使用的播放器，时间轴基于同一音频母版（+250）")
             case "lines": return L10n.t("一行 1 分，最多 200")
-            case "durationOvershoot": return L10n.t("最后一句比歌曲结束还晚 5 秒以上，多半是完整版歌词配了精简版曲目")
-            case "album": return L10n.t("这个源匹配到的专辑跟本地专辑一致，版本大概率对（最多 150）")
+            case "durationOvershoot": return L10n.t("最后一句晚于歌曲结束 5 秒以上，可能是完整版歌词对应了精简版曲目")
+            case "album": return L10n.t("该源匹配到的专辑与本地专辑一致，版本很可能正确（最高 150）")
             case "titleMatch": return L10n.t("完全同名 120 · 仅括号差异 60 · 中英双语同名 30")
-            case "consensus": return L10n.t("歌词内容跟其它来源高度一致（2 家以上 250 · 1 家 150），串版本的拿不到")
+            case "consensus": return L10n.t("歌词内容与其他歌词源高度一致（2 家及以上 250 · 1 家 150），版本不符的候选不计")
             case "translation": return L10n.t("自带可用的中文译文，同水平候选间优先")
             case "romanization": return L10n.t("日文歌词自带读音，同水平候选间优先")
-            case "versionTags": return L10n.t("歌名、专辑名或歌词文件头写的版本（Live / Remix / Demo / Club Mix 等）跟本地这首对不上")
+            case "versionTags": return L10n.t("歌名、专辑名或歌词文件头标注的版本（Live / Remix / Demo / Club Mix 等）与本地歌曲不符")
             case "sourceDurationOff":
-                return L10n.t("这个源自己声明的曲目时长跟本地差了 12% 以上，多半挂在另一次录音上")
+                return L10n.t("该源标注的曲目时长与本地相差 12% 以上，可能对应另一个录音版本")
             case "wordTimingOverride":
-                return L10n.t("逐字时间轴本来赢在这上面，但另一个候选的标题更吻合查询词——大概率是另一次录音（比如不同现场版）的逐字版本，时间轴细不代表轴对得上这次播放")
+                return L10n.t("该候选原本凭逐字时间轴领先，但另一个候选的标题更吻合查询词。它很可能是其他录音（如另一场现场版）的逐字版本，时间轴精细并不代表与当前播放对齐")
             case "liveAlbumConflict":
-                return L10n.t("两边都是现场版，但这个候选的专辑名指向另一场不同命名的演出（比如另一次巡演）——时间轴是那场演出的，套在这次播放的录音上会对不上")
+                return L10n.t("两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐")
             case "timelineOffset":
-                return L10n.t("至少两家自报曲长跟本地一致、时间轴彼此对齐的来源都显示，这份歌词整首提前或延后了 2.5 秒以上——多半是按前奏长短不同的另一个母带做的轴，套在这次播放上会整首错位")
+                return L10n.t("至少两个曲长与本地一致、时间轴相互吻合的歌词源显示，这份歌词整体提前或延后 2.5 秒以上，可能是基于前奏长度不同的另一个母带制作，与当前播放会整首错位")
             case "timelineIntrusion":
-                return L10n.t("至少两家自报曲长跟本地一致的来源在这段都是间奏、没有歌词，这份却在里面放了一段别处的歌词——时间轴排错了，套在这次播放上中段会乱")
+                return L10n.t("至少两个曲长与本地一致的歌词源显示这一段是间奏、没有歌词，而这份歌词在此处放入了其他段落的歌词，时间轴有误，播放到中段时会错位")
             case "durationOff":
-                return L10n.t("最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面")
+                return L10n.t("最后一句的时间与曲长相差 25% 以上；仍可选用，但排在所有时长相符的候选之后")
             case "rejectDurationMismatch":
-                return L10n.t("最后一句的时间跟曲长差了 25% 以上，多半是另一个版本")
+                return L10n.t("最后一句的时间与曲长相差 25% 以上，可能是其他版本")
             case "rejectPlainTextOnly":
-                return L10n.t("这个源确实收录了这首歌，但只有不带时间戳的纯文本——可以在「歌词窗口」里当静态文字阅读，无法逐字/逐行跟随播放高亮")
+                return L10n.t("该源收录了这首歌曲，但只有不带时间戳的纯文本，可在「歌词窗口」中作为静态文字阅读，无法随播放逐字 / 逐行高亮")
             case "rejectContinuousMix":
-                return L10n.t("你在放的是 DJ Mix 专辑里的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）——它是从整场演出里剪出来的，前后带过渡、长度跟原版对不上，原版歌词的时间轴套不准，而且没有哪个源收录了混音版的时间轴")
+                return L10n.t("当前播放的是 DJ Mix 专辑中的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）。这类曲目截取自整场演出，前后带有过渡，长度与原版不同，原版歌词的时间轴无法对齐，且没有歌词源收录混音版的时间轴")
             default: return ""
             }
         }

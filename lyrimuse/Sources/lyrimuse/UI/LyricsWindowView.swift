@@ -1340,7 +1340,7 @@ struct LyricsWindowView: View {
     /// 先进资料库)同样会失效,不是电台专属、范围比想象中宽得多,且没有已知的可靠
     /// 替代路径(见 MusicPlaybackController.upNextQueue 被删前的注释,git 历史可查)。
     /// 用户决定干脆把这个位置换成一个不依赖这个能力边界的功能:Last.fm 播放记录 ——
-    /// 连了账号就是"最近听过"(与停播页共用 RecentListensPanel),没连就是本地静默
+    /// 连了账号就是"最近播放"(与停播页共用 RecentListensPanel),没连就是本地静默
     /// 记的、还没提交的收听("待补提交",与设置页的 pendingListensRow 共用数据源
     /// ScrobbleBackfillService)。跟 showsLyricsPane 是**同一块地皮**上的两种内容,
     /// 不是弹出面板——见 body 里 `if showsListenHistory` 那处切换。
@@ -4455,7 +4455,7 @@ struct LyricsWindowView: View {
             // 固定置顶的用户每次重开窗口都要重新点一次,容易被当成 bug。
             .help(
                 (windowController.isAlwaysOnTop ? L10n.t("取消置顶") : L10n.t("置于最顶层"))
-                    + " · " + L10n.t("这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认"))
+                    + " · " + L10n.t("此设置仅在本次打开窗口期间有效，重新打开后恢复默认"))
             .accessibilityLabel(windowController.isAlwaysOnTop ? L10n.t("取消置顶") : L10n.t("置于最顶层"))
             // 全屏那颗在迷你模式下收起来:一扇迷你大小的窗要"进入全屏"是自相矛盾的,
             // 而且迷你时胶囊每多一颗都在挤那点横向空间。
@@ -4845,11 +4845,11 @@ struct LyricsWindowView: View {
                 }
             }
             .frame(width: 180, height: 180)
-            Text(L10n.t("没有在播放"))
+            Text(L10n.t("未在播放"))
                 .font(.system(size: 20, weight: .semibold))
                 .padding(.top, 4)
             // 不点名播放器(用户往往勾了好几家),同灵动岛那句;下面那颗键才指具体那家。
-            Text(L10n.t("在播放器里播放任意歌曲，歌词会自动出现"))
+            Text(L10n.t("在播放器中播放任意歌曲，歌词将自动显示"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .padding(.top, 6)
@@ -4921,7 +4921,7 @@ struct LyricsWindowView: View {
             isPlaying: playback.isPlayingNow))
         let text: String
         switch state {
-        case .notPlaying: text = L10n.t("没有在播放")
+        case .notPlaying: text = L10n.t("未在播放")
         case .adBreak: text = L10n.t("广告中")
         case .radioTalk: text = L10n.t("口白")
         case .instrumental: text = L10n.t("纯音乐")
@@ -4941,7 +4941,7 @@ struct LyricsWindowView: View {
     private func plainLyricsFallback(leading: CGFloat, trailing: CGFloat) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Label(L10n.t("这份歌词没有时间戳，无法跟随播放高亮或自动滚动"), systemImage: "exclamationmark.triangle.fill")
+                Label(L10n.t("此歌词无时间戳，无法随播放高亮或自动滚动"), systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(hasArtworkBackground ? .white.opacity(0.75) : Color.orange)
                 Text(playback.currentTrackPlainLyrics)
@@ -7461,16 +7461,16 @@ private struct InfoPanelListeningRows: View {
             if stats.isConnected {
                 if let n = stats.nowPlayingCount {
                     InfoPanelRow(label: L10n.t("累计"),
-                                 value: String(format: L10n.t("第 %@ 次听"), "\(n)"), onArtwork: onArtwork)
+                                 value: String(format: L10n.t("第 %@ 次收听"), "\(n)"), onArtwork: onArtwork)
                 }
                 if let span = stats.nowPlayingSpan, span.total > 0 {
                     if let first = span.first {
-                        InfoPanelRow(label: L10n.t("首次听"),
+                        InfoPanelRow(label: L10n.t("首次收听"),
                                      value: first.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, locale: L10n.locale)),
                                      onArtwork: onArtwork)
                     }
                     if let last = span.last {
-                        InfoPanelRow(label: L10n.t("上次听"),
+                        InfoPanelRow(label: L10n.t("上次收听"),
                                      value: last.formatted(Date.RelativeFormatStyle(presentation: .named, locale: L10n.locale)),
                                      onArtwork: onArtwork)
                     }
@@ -7517,14 +7517,14 @@ private struct IdleLastfmSection: View {
         if stats.isConnected {
             VStack(spacing: 12) {
                 if let o = stats.overview, let week = weekValue {
-                    Text(String(format: L10n.t("今天听了 %1$@ 首 · 本周 %2$@ 首"),
+                    Text(String(format: L10n.t("今天收听 %1$@ 首 · 本周 %2$@ 首"),
                                 "\(o.today)", "\(week)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
                 if let day = stats.onThisDay, let top = day.top.first {
                     VStack(spacing: 3) {
-                        Text(String(format: L10n.t("那年今日 · %1$@ 年前听了 %2$@ 首"),
+                        Text(String(format: L10n.t("那年今日 · %1$@ 年前收听 %2$@ 首"),
                                     "\(day.yearsAgo)", "\(day.total)"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
@@ -7540,7 +7540,7 @@ private struct IdleLastfmSection: View {
                 // 用户会以为这个功能坏了。total > 3 跟 LastfmStatsService
                 // 内部 dailySyncProgress 的既有分界线一致,日常 1-3 页 top-up 不弹这行字。
                 if case .syncing(_, let total) = stats.bootstrapState, total > 3 {
-                    Text(L10n.t("首次同步历史中，稍候完整数据会自动出现"))
+                    Text(L10n.t("正在首次同步历史记录，完整数据稍后将自动显示"))
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                 }
@@ -7592,7 +7592,7 @@ private struct MiniHeatmapStrip: View {
                 }
             }
         }
-        .help(L10n.t("近 12 周的收听热力（完整年历在设置的统计页）"))
+        .help(L10n.t("近 12 周的收听热力图（完整年历见设置中的统计页）"))
     }
 
     private func cell(for day: Date, future: Bool) -> some View {

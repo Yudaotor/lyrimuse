@@ -520,7 +520,7 @@ private struct IdleLastTrackHero: View {
                 .frame(width: 216, height: 216)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
-            Text(L10n.t("刚才在听"))
+            Text(L10n.t("上次播放"))
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .padding(.top, 18)
@@ -656,11 +656,11 @@ private struct IdleLastTrackHero: View {
                 }
             }
             .frame(width: 180, height: 180)
-            Text(L10n.t("没有在播放"))
+            Text(L10n.t("未在播放"))
                 .font(.system(size: 20, weight: .semibold))
                 .padding(.top, 4)
             // 不点名播放器(用户往往勾了好几家),同灵动岛那句;下面那颗键才指具体那家。
-            Text(L10n.t("在播放器里播放任意歌曲，歌词会自动出现"))
+            Text(L10n.t("在播放器中播放任意歌曲，歌词将自动显示"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .padding(.top, 6)

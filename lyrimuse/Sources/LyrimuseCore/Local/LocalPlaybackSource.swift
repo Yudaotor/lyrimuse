@@ -3234,7 +3234,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 广告主频道名、**非空**,跟"真歌但没报专辑名"在字段上完全分不开 —— 只能问页面。
         // 那次查询由 `YouTubeMusicAdProbe` 异步做、结果进缓存,上面 `isYouTubeMusicAd`
         // 读的就是它。在此之前这类广告在 MediaControlClient 那道闸就被整条丢掉了,后果是
-        // 30 秒广告期间灵动岛/悬浮窗整个塌成"没有在播放"、广告完了再弹回来。
+        // 30 秒广告期间灵动岛/悬浮窗整个塌成"未在播放"、广告完了再弹回来。
         //
         // 上面这段"网页版也要认"的落地方式改了:**不再**把 `isSpotify` 扩成"配对过
         // 网页版就按 Spotify 启发式判",而是网页版只认 `SpotifyWebAdProbe` 的正向证据 —— 配对关系

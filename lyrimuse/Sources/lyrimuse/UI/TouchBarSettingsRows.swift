@@ -53,7 +53,7 @@ struct TouchBarLyricsRows: View {
         VStack(spacing: 0) {
             // 四选一同灵动岛 / 菜单栏的「副行」(同一个枚举、同一套显示名),各存各的键,默认不显示。
             SettingsRow(icon: "text.append", title: L10n.t("副行"),
-                        help: L10n.t("主歌词下方多一行（两行 14pt / 11pt，「字号」不生效）。译文和读音显示当前句，「下一句」显示接下来那句；开着副行时主行不再提前切到下一句。副行放不下时，跟着这一句的时长横向滚动。")) {
+                        help: L10n.t("在主歌词下方增加一行（两行分别为 14pt / 11pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行显示不下时，按该句时长横向滚动。")) {
                 Picker("", selection: $settings.touchBarSecondaryLine) {
                     ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
                         Text(kind.displayName).tag(kind)
@@ -90,7 +90,7 @@ struct TouchBarLyricsRows: View {
             CardDivider()
             // 同灵动岛「对齐方式」那四档(含按对唱声部走的「自动」),说明文案也是同一条。
             SettingsRow(icon: "text.alignleft", title: L10n.t("对齐方式"),
-                        help: L10n.t("只影响装得下的短句：它在歌词行里靠哪边。「自动」按对唱声部走：谁唱靠谁那边、合唱居中，没有对唱信息就靠左。放不下的句子会横向滚动，没有多余空间，对齐不起作用")) {
+                        help: L10n.t("仅影响能完整显示的短句在歌词行中的位置。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左。显示不下的句子会横向滚动，对齐设置对其无效")) {
                 LyricsAlignmentSegmentedControl(selection: $settings.touchBarLyricsAlignment,
                                                 options: LyricsRestingAlignment.notchOptions)
             }
@@ -107,13 +107,13 @@ struct TouchBarStyleRows: View {
             SettingsRow(
                 icon: "sparkles",
                 title: L10n.t("卡拉OK效果"),
-                help: L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
+                help: L10n.t("逐字歌词随演唱逐字高亮；没有逐字数据的歌曲整行高亮")
             ) {
                 Toggle("", isOn: $settings.touchBarLyricsKaraoke)
             }
             CardDivider()
             SettingsRow(icon: "paintpalette", title: L10n.t("跟随封面"),
-                        subtitle: L10n.t("歌词取封面的主色，取不到时用白色")) {
+                        subtitle: L10n.t("歌词使用封面的主色，无法获取时使用白色")) {
                 Toggle("", isOn: $settings.touchBarLyricsFollowsCover)
             }
         }
@@ -150,7 +150,7 @@ struct TouchBarLayoutRows: View {
             CardDivider()
             // 占满整条触控栏要连系统的功能栏一起收起,展开期间够不着亮度、音量,所以默认关。
             SettingsRow(icon: "arrow.left.and.right", title: L10n.t("展开时隐藏功能栏"),
-                        subtitle: L10n.t("歌词占满整条触控栏；要用亮度、音量等系统按键时，先点左端的 ✕ 收起")) {
+                        subtitle: L10n.t("歌词占满整个触控栏；如需使用亮度、音量等系统按键，请先点按左端的 ✕ 收起")) {
                 Toggle("", isOn: $settings.touchBarHidesControlStrip)
             }
             CardDivider()

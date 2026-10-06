@@ -110,6 +110,21 @@ extension View {
         }
     }
 
+    /// 玻璃按钮那一排里的菜单(如「⋯」)。菜单不吃 `.buttonStyle(.glass)`,也不认标签上的 padding / frame:macOS 26 起
+    /// 画成无边框菜单,外面套同一种可交互玻璃,宽高跟玻璃文字按钮一致(24pt 高);更早的系统用按钮样式的菜单。
+    /// 标签写成文字里嵌符号(`Text(Image(systemName:))`):单独一个 Image 时旧系统按符号本身的高度画,ellipsis 很扁。
+    @ViewBuilder
+    func settingsGlassMenu() -> some View {
+        if #available(macOS 26.0, *) {
+            menuStyle(.borderlessButton)
+                .frame(width: 38, height: 24)
+                .glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            menuStyle(.button)
+                .fixedSize()
+        }
+    }
+
     /// 歌词窗口里那些浮在内容之上的玻璃胶囊(音量、窗口操作)。跟卡片同一套写法(玻璃 + 一条发丝描边),
     /// 描边的理由见 settingsCardBackground:液态玻璃的可见度完全取决于背后有什么,而歌词
     /// 窗口的背景是被高斯模糊过的专辑封面,亮暗随歌变化 —— 没有描边时边界时有时无。

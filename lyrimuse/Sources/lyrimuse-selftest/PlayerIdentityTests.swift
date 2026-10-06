@@ -844,7 +844,7 @@ func runPlayerIdentityTests() {
         //    改的那条:判定为广告时**不再丢弃快照**,而是放行、交给
         //    LocalPlaybackSource.isCurrentTrackAdBreak 标成广告驱动 UI(chrome 上
         //    YT Music 的广告也像 Spotify 那样显示「广告中」)。丢弃的话 UI 拿不到任何东西,
-        //    30 秒广告期间灵动岛/悬浮窗会整个塌成"没有在播放"再弹回来。
+        //    30 秒广告期间灵动岛/悬浮窗会整个塌成"未在播放"再弹回来。
         // 放行**不等于**会被记录:Swift 侧一行 scrobble 都不发,提交 listen 全在
         //    引擎(lastfm.go / lb.go),它按 App 播放状态里的 ad 标记(appReportedAd)拦。
         expectEqual(P.gate(artist: "Michael Jackson", verdict: .song), .acceptAsSong,
@@ -871,7 +871,7 @@ func runPlayerIdentityTests() {
         //    song,"按曲目身份缓存 60 秒是安全的"这条前提对 MV 不成立(引擎日志三轮
         //    rejected 之后整整 60 秒才 now playing)。歌仍 60 秒不动;广告 5 秒一探。
         //    可读有效期(cachedReading)仍是 60 秒,窄窗里读到旧的 ad 判定而不是 nil ——
-        //    nil 会让 gate fail-closed 把快照整条丢掉,广告中途 UI 塌成"没有在播放"。
+        //    nil 会让 gate fail-closed 把快照整条丢掉,广告中途 UI 塌成"未在播放"。
         expectEqual(P.refreshInterval(for: .ad), P.adRefreshInterval, "再探间隔: 判定是广告 → 按广告档")
         expectEqual(P.adRefreshInterval <= 5, true, "再探间隔: 广告档 ≤ 5 秒(广告只有 5～30 秒,前贴片一过要尽快翻回来)")
         expectEqual(P.refreshInterval(for: .song), P.songRefreshInterval, "再探间隔: 判定是歌 → 按歌档")
@@ -880,7 +880,7 @@ func runPlayerIdentityTests() {
         // ⓪-b2 **核心不变量:每一档的再探间隔都必须严格小于可读有效期**。
         //    相等就等于没有重叠窗 —— 判定过期那一拍必然同时满足「cachedReading 刚过期返回 nil」
         //    +「这一拍才开始异步重探、结果拿不到」,于是 gate fail-closed 把快照整条丢掉,
-        //    三个展示面一起塌成"没有在播放"。上面那段注释("窄窗里读到旧判定而不是 nil")
+        //    三个展示面一起塌成"未在播放"。上面那段注释("窄窗里读到旧判定而不是 nil")
         //    写下时对广告档成立、对歌档**根本没有窄窗**(歌档当时就是 verdictMaxAge
         //    本身,两个 60),这条断言就是把那句话对**两档**都变成硬约束。
         //    真机日志坐实(Safari 播 YT Music,音樂頑童 - teachme,全程正常播放):

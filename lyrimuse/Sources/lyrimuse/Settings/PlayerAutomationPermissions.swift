@@ -159,7 +159,7 @@ final class PlayerAutomationPermissions: ObservableObject {
         case .authorized: return L10n.t("已授权")
         case .denied: return L10n.t("已拒绝")
         case .notDetermined:
-            return notRunning.contains(player) ? L10n.t("没在运行，查不到当前状态") : L10n.t("未授权")
+            return notRunning.contains(player) ? L10n.t("未在运行，无法获取当前状态") : L10n.t("未授权")
         }
     }
 
@@ -191,7 +191,7 @@ struct PlayerAutomationWaitingNote: View {
 
     var body: some View {
         if timedOut {
-            Text(L10n.t("这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
+            Text(L10n.t("此次请求耗时较长。如已出现系统对话框，请先处理；如未找到对话框，可直接在系统设置中手动开启"))
             Button(L10n.t("打开系统设置")) {
                 NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
             }

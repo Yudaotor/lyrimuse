@@ -104,59 +104,6 @@ func runCacheKeyTests() {
         expectEqual(EnrichCacheSlim.indexHasFields(["a": slim, "b": bare]), true, "精简条目: 新索引可以直接用")
     }
 
-    // ---- EnrichCacheStore.buildSummaries 的"先查前缀再算指纹"这层优化----
-    //
-    // trackKey 里那段内容指纹是对整首歌词+YRC 正文取 SHA256,实测对全库 1760 条无条件都算
-    // 一遍要 250ms+(比读盘解析整份 JSON 还贵),而 offsetsSnapshot 常年只有个位数条目、
-    // 99% 以上的歌注定查不到。buildSummaries 现在先把 offsetsSnapshot 的 key 反过来切一遍
-    // (取"最后一个 | 之前"那一截,指纹段本身不含 | 所以这一刀总能切对)存成一个小前缀集合,
-    // 只有 artist|title 归一化后命中这个集合才值得真的付一次 SHA256。
-    //
-    // buildSummaries 本身是 private,这里没法直接调,改为对着**它依赖的那两个真实公开函数**
-    // (EnrichCacheKeys.cleanTag/normalizedTitle,构造前缀用的正是它们,顺序也逐位照抄)验证
-    // 这套"先查前缀"判定不会漏判——对一首真的被校准过的歌,前缀必须命中且能查到正确的
-    // 非零值;对一首毫不相关的歌,前缀必须不命中(省掉一次哈希),而"不命中就给 0"这个结果
-    // 跟"老逻辑无条件算指纹、查表查不到也是 0"完全一致,不会漏掉任何真实存在的校正值。
-    do {
-        let calibratedArtist = "周杰伦"
-        let calibratedTitle = "枫"
-        let calibratedLyrics = "[00:05.00]词一\n[00:10.00]词二\n"
-        let calibratedYRC = ""
-        let realOffsetKey = LyricsOffsetStore.trackKey(
-            artist: calibratedArtist, title: calibratedTitle,
-            lyrics: calibratedLyrics, lyricsYRC: calibratedYRC)
-        let snapshot: [String: Int] = [realOffsetKey: 1200]
-
-        // buildSummaries 里的构造逻辑:反切 offsetsSnapshot 的 key,取最后一个 "|" 之前那截。
-        let offsetPrefixes: Set<String> = Set(snapshot.keys.compactMap { key in
-            guard let sep = key.range(of: "|", options: .backwards) else { return nil }
-            return String(key[..<sep.lowerBound])
-        })
-
-        // 命中的那首:前缀必须能查到,且用真实 trackKey 查出来的值要跟直接查表一致。
-        let hitPrefix = "\(EnrichCacheKeys.cleanTag(calibratedArtist))|\(EnrichCacheKeys.normalizedTitle(calibratedTitle))"
-        expectEqual(offsetPrefixes.contains(hitPrefix), true,
-                    "前缀优化: 真的校准过的歌,归一化前缀必须命中小集合")
-        let hitKey = LyricsOffsetStore.trackKey(
-            artist: calibratedArtist, title: calibratedTitle,
-            lyrics: calibratedLyrics, lyricsYRC: calibratedYRC)
-        expectEqual(snapshot[hitKey], 1200,
-                    "前缀优化: 命中之后用真实 trackKey 查表,结果要是校准时存的那个值")
-
-        // 毫不相关的另一首歌:前缀不该命中,省掉一次指纹计算;而"不命中直接给 0"要跟
-        // "老逻辑无条件算指纹、查表查不到"结果一致(两条路径查同一份 snapshot 都是 nil)。
-        let unrelatedArtist = "五月天"
-        let unrelatedTitle = "倔强"
-        let missPrefix = "\(EnrichCacheKeys.cleanTag(unrelatedArtist))|\(EnrichCacheKeys.normalizedTitle(unrelatedTitle))"
-        expectEqual(offsetPrefixes.contains(missPrefix), false,
-                    "前缀优化: 不相关的歌,归一化前缀不该出现在小集合里")
-        let oldWayKey = LyricsOffsetStore.trackKey(
-            artist: unrelatedArtist, title: unrelatedTitle,
-            lyrics: "[00:01.00]随便什么歌词\n", lyricsYRC: "")
-        expectEqual(snapshot[oldWayKey], nil,
-                    "前缀优化: 跳过指纹计算给的 0,要跟老逻辑无条件查表查不到的结果一致")
-    }
-
     // ---- EnrichCacheKeys: 缓存 key 与 lyrics/ 导出文件名 ----
     //
     // 实测排查坐实的真实 bug 的回归测试:引擎会给"sanitize 出来的文件名只差

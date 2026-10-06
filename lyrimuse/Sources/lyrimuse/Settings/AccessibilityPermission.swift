@@ -56,7 +56,7 @@ final class AccessibilityPermission: ObservableObject {
     // MARK: - 两个界面共用的措辞
 
     var actionTitle: String { prompted ? L10n.t("打开系统设置") : L10n.t("请求权限") }
-    var caption: String { trusted ? L10n.t("已授权") : L10n.t("没有授权") }
+    var caption: String { trusted ? L10n.t("已授权") : L10n.t("未获授权") }
     var iconName: String { trusted ? "checkmark.circle.fill" : "xmark.circle.fill" }
     var iconColor: Color { trusted ? .green : .orange }
 
@@ -79,7 +79,7 @@ struct AccessibilityPermissionGuide: View {
                 Text(Self.reason(players))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text(L10n.t("在系统设置的「辅助功能」里打开 Lyrimuse。之前授权过、这里仍显示没有授权的话，把 Lyrimuse 那一项取消再勾上。"))
+            Text(L10n.t("请在系统设置的「辅助功能」中开启 Lyrimuse。如已授权但此处仍显示未授权，请将 Lyrimuse 取消勾选后重新勾选。"))
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Button(model.actionTitle) { model.handleAction() }
@@ -91,7 +91,7 @@ struct AccessibilityPermissionGuide: View {
     /// 「为什么要这项授权」那一句。
     @MainActor
     static func reason(_ players: [PlaybackPlayer]) -> String {
-        String(format: L10n.t("%@ 不向系统报告播放进度，Lyrimuse 读它界面上的播放时间来校准进度（只读，不点任何按钮）。不授权也能用，自动连播时进度可能差一两秒。"),
+        String(format: L10n.t("%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度（仅读取，不会点按任何按钮）。不授权也可使用，但自动连播时进度可能偏差一到两秒。"),
                AccessibilityPermission.shared.playerNames(players))
     }
 }

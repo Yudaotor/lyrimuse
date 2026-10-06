@@ -221,7 +221,7 @@ public enum LyricsFillSweep {
 
     nonisolated(unsafe) private static var requestedAt: Date?
 
-    /// 此刻是不是「请求写下了、引擎还没接手」。两个入口(歌词管理工具栏、设置页歌词库)共用。
+    /// 此刻是不是「请求写下了、引擎还没接手」。两个入口(歌词管理侧栏「⋯」、设置页歌词库)共用。
     public static var isPending: Bool {
         lock.lock()
         let at = requestedAt

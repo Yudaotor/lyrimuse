@@ -194,11 +194,14 @@ public struct LyricsPreviewRow: Equatable {
     public let text: String
     /// 挂在这一句下面的译文,跟歌词窗口挂的是同一句;没有为 nil。
     public let translation: String?
+    /// 这一句的读音,跟歌词窗口显示的同一份(源自带的,或按 `romanizationScripts` 现算的);没有为 nil。
+    public let romanization: String?
 
-    public init(timeMs: Int?, text: String, translation: String?) {
+    public init(timeMs: Int?, text: String, translation: String?, romanization: String? = nil) {
         self.timeMs = timeMs
         self.text = text
         self.translation = translation
+        self.romanization = romanization
     }
 }
 
@@ -206,17 +209,21 @@ extension LyricsPreviewText {
     /// 「时间 | 正文」两栏预览的行。带时间戳的候选走播放引擎同一条路(`LyricsSyncEngine.load` → `allLines`):
     /// 署名过滤、多时间戳展开、对唱标记、译文挂靠都跟歌词窗口一致,预览就是采纳之后看到的那些行。
     ///
-    /// 只交整行 LRC 和译文:逐字轨不交,时间列就是这份 LRC 自己的时间戳,也不会为预览打时间轴归一化的
-    /// 日志;读音不显示,`romanizationScripts` 传空集,不去现算。一行都解析不出(没有时间戳的纯文本)时
-    /// 退回 `forPreview` 的原样文本,不带时间。`title` / `artist` 传候选自己那份,只用于署名过滤。
-    public static func rows(lyrics: String, translation: String, title: String = "", artist: String = "") -> [LyricsPreviewRow] {
+    /// 只交整行 LRC、译文和读音:逐字轨不交,时间列就是这份 LRC 自己的时间戳,也不会为预览打时间轴归一化的
+    /// 日志。读音默认不显示(`romanizationScripts` 空集,源自带的也不挂),「歌词管理」的「原文 + 读音」传缓存里那份
+    /// 和用户设置里的文字种类,跟歌词窗口显示的一样。一行都解析不出(没有时间戳的纯文本)时退回 `forPreview` 的
+    /// 原样文本,不带时间。`title` / `artist` 只用于署名过滤。
+    public static func rows(lyrics: String, translation: String, romanization: String = "",
+                            romanizationScripts: RomanizationScripts = [],
+                            title: String = "", artist: String = "") -> [LyricsPreviewRow] {
         let engine = LyricsSyncEngine()
-        engine.load(lyrics: lyrics, lyricsTr: translation, lyricsRoma: "", lyricsYRC: "",
-                    trackTitle: title, trackArtist: artist, romanizationScripts: [])
+        engine.load(lyrics: lyrics, lyricsTr: translation, lyricsRoma: romanization, lyricsYRC: "",
+                    trackTitle: title, trackArtist: artist, romanizationScripts: romanizationScripts)
         let lines = engine.allLines(idPrefix: "")
         if !lines.isEmpty {
             return lines.map {
-                LyricsPreviewRow(timeMs: $0.timeMs, text: $0.line.plainText ?? "", translation: $0.line.translation)
+                LyricsPreviewRow(timeMs: $0.timeMs, text: $0.line.plainText ?? "", translation: $0.line.translation,
+                                 romanization: $0.line.romanization)
             }
         }
         let text = forPreview(lyrics, title: title, artist: artist)
@@ -225,9 +232,119 @@ extension LyricsPreviewText {
             .map { LyricsPreviewRow(timeMs: nil, text: String($0), translation: nil) }
     }
 
+    /// 这份歌词里有没有可能标出读音的字(假名、谚文,或者设置里开了中文 / 粤语读音时的汉字)。只用来决定
+    /// 「原文 + 读音」能不能点,宁宽勿严:真正显示什么还是按 `rows` 算出来的那份。
+    public static func mayHaveRomanization(_ text: String, scripts: RomanizationScripts) -> Bool {
+        let wantsHan = scripts.contains(.chinese) || scripts.contains(.cantonese) || scripts.contains(.japanese)
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x3040...0x30FF: if scripts.contains(.japanese) { return true }
+            case 0x1100...0x11FF, 0x3130...0x318F, 0xAC00...0xD7AF: if scripts.contains(.korean) { return true }
+            case 0x3400...0x4DBF, 0x4E00...0x9FFF: if wantsHan { return true }
+            default: continue
+            }
+        }
+        return false
+    }
+
+    /// 正在唱的是预览里的哪一行。预览的行取自整行歌词,播放那边的当前句常取自逐字歌词,两份的句首差零点几秒很常见
+    /// (网易云同一首逐字比整行早 0.3～0.4 秒),只按时间找会一直落在上一行。所以先在当前句(`lineTimeMs`)前后
+    /// `windowMs` 之内找字对得上的那一行(见 `matchKey`),几行都对得上(副歌)取时间最近的;找不到再按时间找。
+    /// `times` 按时间先后排,跟 `texts` 一一对应,没有时间的行跳过。
+    public static func currentRow(times: [Int?], texts: [String], lineTimeMs: Int, lineText: String?,
+                                  windowMs: Int = 2000, toleranceMs: Int = 30) -> Int? {
+        if let lineText {
+            let key = matchKey(lineText)
+            if !key.isEmpty {
+                var best: Int?
+                var bestDistance = Int.max
+                for (index, time) in times.enumerated() {
+                    guard let time, index < texts.count else { continue }
+                    let distance = abs(time - lineTimeMs)
+                    guard distance <= windowMs, distance < bestDistance, matchKey(texts[index]) == key else { continue }
+                    best = index
+                    bestDistance = distance
+                }
+                if let best { return best }
+            }
+        }
+        return currentRow(times: times, lineTimeMs: lineTimeMs, toleranceMs: toleranceMs)
+    }
+
+    /// 只按时间找:时间不晚于当前句(放宽 `toleranceMs`)的最后一行,没有时间的行跳过。`times` 按时间先后排。
+    public static func currentRow(times: [Int?], lineTimeMs: Int, toleranceMs: Int = 30) -> Int? {
+        var found: Int?
+        for (index, time) in times.enumerated() {
+            guard let time else { continue }
+            guard time <= lineTimeMs + toleranceMs else { break }
+            found = index
+        }
+        return found
+    }
+
     /// 时间列的写法:`mm:ss.xx`(百分之一秒截断),跟 LRC 时间戳同一个形状;分钟不封顶。
     public static func timeLabel(_ ms: Int) -> String {
         let t = max(ms, 0)
         return String(format: "%02d:%02d.%02d", t / 60_000, t / 1000 % 60, t % 1000 / 10)
+    }
+
+    /// 把正在唱的那一句的逐字时间铺到预览这一行的正文上。每一段是正文里连续的一截,全部拼起来一字不差就是 `text`,
+    /// 预览照常排这一行、只按段上色。两边的字母和数字逐个对得上(不分大小写)才铺:预览的正文取自整行歌词,逐字时间
+    /// 取自逐字歌词,空格、标点、引号常常写得不一样;字对不上(两份歌词写法不同、分句不同)返回 nil,这一行退回整行
+    /// 高亮。空白和标点算进它前面那个字,行首的算进第一个字。
+    public static func karaokeSegments(text: String, words: [SyncedLyricWord]) -> [LyricsKaraokeSegment]? {
+        var expected: [(character: String, word: Int)] = []
+        for (index, word) in words.enumerated() {
+            for character in word.text where isMatchable(character) {
+                expected.append((character.lowercased(), index))
+            }
+        }
+        guard !expected.isEmpty else { return nil }
+        var segments: [LyricsKaraokeSegment] = []
+        var pending = ""
+        var owner: Int?
+        var next = 0
+        for character in text {
+            if isMatchable(character) {
+                guard next < expected.count, expected[next].character == character.lowercased() else { return nil }
+                let word = expected[next].word
+                next += 1
+                if let current = owner, current != word {
+                    segments.append(LyricsKaraokeSegment(text: pending, word: words[current]))
+                    pending = ""
+                }
+                owner = word
+            }
+            pending.append(character)
+        }
+        guard next == expected.count, let last = owner else { return nil }
+        segments.append(LyricsKaraokeSegment(text: pending, word: words[last]))
+        return segments
+    }
+
+    /// 两份歌词对字时只看字母和数字(含汉字、假名、谚文),不分大小写。
+    static func matchKey(_ text: String) -> String {
+        String(text.lowercased().filter(isMatchable))
+    }
+
+    private static func isMatchable(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber
+    }
+}
+
+/// 预览当前句逐字染色的一段:这一行正文里连续的一截,和唱它的那个字(词)的起止,见 `LyricsPreviewText.karaokeSegments`。
+public struct LyricsKaraokeSegment: Equatable, Sendable {
+    public let text: String
+    public let startMs: Int
+    public let durationMs: Int
+
+    public init(text: String, startMs: Int, durationMs: Int) {
+        self.text = text
+        self.startMs = startMs
+        self.durationMs = durationMs
+    }
+
+    init(text: String, word: SyncedLyricWord) {
+        self.init(text: text, startMs: word.startMs, durationMs: word.durationMs)
     }
 }

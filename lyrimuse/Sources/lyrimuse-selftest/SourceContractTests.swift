@@ -181,6 +181,9 @@ func runSourceContractTests() {
             /// 缺 zh-Hant 译文的键。新加文案必须把当前支持的语言都写全,所以这里
             /// 不再回退简体后放行,而是记下来让下面那条断言红(生成脚本对同一情况也是直接失败)。
             var missingHant: [String] = []
+            /// 显式 zh-Hans 值和键不一致的键。简体就是键本身,值不等于键时界面显示的是值,
+            /// 改了键(源码字面量)界面照旧显示旧文案。
+            var staleHans: [String] = []
         }
         func catalogPairs(_ path: String) -> CatalogPairs? {
             guard let data = FileManager.default.contents(atPath: path),
@@ -197,6 +200,7 @@ func runSourceContractTests() {
                 // 源语言允许省略(值即键,跟 generate-strings.py 同一条规则);英文缺翻译
                 // 必须红 —— 静默回退成中文正是这套守卫要消灭的事故。
                 out.zh[key] = value("zh-Hans") ?? key
+                if let hans = value("zh-Hans"), hans != key { out.staleHans.append(key) }
                 if let hant = value("zh-Hant"), !hant.isEmpty {
                     out.hant[key] = hant
                 } else {
@@ -216,6 +220,8 @@ func runSourceContractTests() {
             expectEqual(catalog.zh.isEmpty, false, "本地化: catalog 解析出键")
             expectEqual(catalog.missingHant.sorted(), [],
                         "本地化: 每个键都要有 zh-Hant 译文(新加文案必须三语齐全,见 AGENTS.md「本地化」与 Localization/zh-Hant-STYLE.md)")
+            expectEqual(catalog.staleHans.sorted(), [],
+                        "本地化: 显式 zh-Hans 值必须等于键(简体就是键本身;改简体文案要连键一起改,否则界面照旧显示旧值)")
             // 逐键逐值一致。两个方向的差集分别报,谁多谁少一目了然;值不同单独报。
             func diff(_ a: [String: String], _ b: [String: String], _ tag: String) {
                 expectEqual(Set(a.keys).subtracting(b.keys).sorted(), [],
@@ -3584,7 +3590,7 @@ func runSourceContractTests() {
                     "搜索候选歌词: 自动匹配在飞时不采纳、不标纯音乐")
         // 搜索进度只在侧栏表头下面那一行(用户定的):右边还没有候选时空着,别再放一个大转圈。
         expectEqual(sheet.components(separatedBy: "L10n.t(\"正在查询各个歌词源…\")").count - 1 == 1
-                    && sheet.contains("Text((candidates.isEmpty ? L10n.t(\"正在查询各个歌词源…\") : L10n.t(\"其它源仍在搜索中…\"))"), true,
+                    && sheet.contains("Text((candidates.isEmpty ? L10n.t(\"正在查询各个歌词源…\") : L10n.t(\"其他歌词源仍在搜索中…\"))"), true,
                     "搜索候选歌词: 搜索进度只在侧栏那一行,右边还没有候选时空着")
         // 表头、徽标一打开就在,进度那一行搜完也留着高度:别再等第一行才冒出来(用户:「不要页面发生跳动」)。
         expectEqual(!sheet.contains("if sourcesTotal > 0 || !candidates.isEmpty {")
@@ -3625,17 +3631,111 @@ func runSourceContractTests() {
                         .components(separatedBy: "let lyrics = cached?.storedLyrics ?? \"\"").count - 1 == 2, true,
                     "采纳候选入口: 「当前使用」的正文指纹取 storedLyrics")
         let manager = read("LyricsManager/LyricsManagerView.swift") ?? ""
-        expectEqual(manager.contains("case .wordTiming: guard kind == .wordByWord else { return false }")
-                    && manager.contains("case .lineOnly: guard kind == .lineByLine else { return false }")
-                    && manager.contains("case .plainTextOnly: guard kind == .plainText else { return false }"), true,
-                    "歌词管理: 「仅逐字 / 仅整行 / 仅纯文本」跟设置页统计同一个阶梯(LyricsKind.classify)")
-        expectEqual(manager.components(separatedBy: "!summary.hasLyrics || summary.isInstrumental").count - 1, 2,
-                    "歌词管理: 标了纯音乐的条目存着歌词也显示「纯音乐」(列表行、详情页信息条)")
+        expectEqual(manager.contains("if case let .only(wanted) = kindFilter, kind != wanted { return false }")
+                    && manager.contains("statusFilter.matches(statusFacts(s, kind: kind))"), true,
+                    "歌词管理: 歌词类型和状态胶囊跟设置页统计同一个阶梯(LyricsKind.classify)")
+        let managerParts = read("LyricsManager/LyricsManagerParts.swift") ?? ""
+        expectEqual((manager + managerParts).components(separatedBy: "!summary.hasLyrics || summary.isInstrumental").count - 1, 2,
+                    "歌词管理: 标了纯音乐的条目存着歌词也显示「纯音乐」(列表行、详情页标签)")
         expectEqual(manager.contains("LyricsWordTimingEdit.editableText(yrc: loadedYRC)")
                     && manager.contains("LyricsWordTimingEdit.apply(edited: editedWordText, yrc: loadedYRC, lrc: lyrics)")
                     && manager.contains("store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc)")
                     && manager.contains("carryOffset(summary, from: before, to: (after.lyrics, after.yrc))"), true,
                     "歌词管理: 逐字歌词的编辑框只改字、套回逐字,只改字时单曲偏移跟着搬")
+        // 预览时间列:▶ 不进排版、悬停状态在每一行自己身上;图标进排版的话悬停会来回切换停不下来(11 章决策 61)。
+        let previewRow = (managerParts.components(separatedBy: "private struct LyricsManagerPreviewRow: View").dropFirst().first ?? "")
+            .components(separatedBy: "/// 手动滚动预览就暂停").first ?? ""
+        expectEqual(!previewRow.isEmpty && previewRow.contains("@State private var hovered = false")
+                    && !managerParts.contains("hoveredTime"), true,
+                    "歌词管理: 预览的悬停状态在每一行自己身上,不放在整张预览上")
+        expectEqual(previewRow.contains(".overlay(alignment: .leading) {") && previewRow.contains("Image(systemName: \"play.fill\")")
+                    && !previewRow.contains("HStack(spacing: 4)"), true,
+                    "歌词管理: 预览时间列的 ▶ 画在 overlay 里,不进排版")
+        // 逐句格子只有焦点所在那一句是输入框,其余画成文字:每句都是输入框的话滚动时边滚边建,掉帧(11 章决策 65)。
+        let lineEditorSource = managerParts.components(separatedBy: "struct LyricsManagerLineEditor: View").dropFirst().first ?? ""
+        expectEqual(lineEditorSource.contains("if active {")
+                    && lineEditorSource.components(separatedBy: "TextField(\"\", text: Binding(get: { text }, set: onChange))").count - 1 == 1
+                    && lineEditorSource.contains(".onTapGesture { location in"), true,
+                    "歌词管理: 逐句格子只有焦点所在那一句是输入框,其余画成文字、点上去才换")
+        // 列表行不放悬停按钮:会盖住来源和小标记(11 章决策 66)。
+        let songRowSource = (managerParts.components(separatedBy: "struct LyricsManagerSongRow: View").dropFirst().first ?? "")
+            .components(separatedBy: "/// 按专辑分组时的组头").first ?? ""
+        expectEqual(!songRowSource.isEmpty && !songRowSource.contains(".onHover"), true,
+                    "歌词管理: 列表行不放悬停按钮")
+        // 模式切换高亮实际显示的那一档,这首没有的那一档不亮。
+        expectEqual(managerParts.contains("shown == option ? Color.primary.opacity(0.1)")
+                    && manager.contains("shown: effectiveDisplayMode(summary),"), true,
+                    "歌词管理: 模式切换高亮这首实际显示的那一档")
+        // 开窗、换歌只选中不滚动,只有「定位」滚动(11 章决策 64)。
+        expectEqual(manager.components(separatedBy: "focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false)").count - 1, 2,
+                    "歌词管理: 开窗和换歌只选中正在播放的那首,列表不滚动")
+        // 按专辑分组时组头和歌排在同一层 ForEach 里,不在 Section 里套 ForEach:后者每次比对都从第一组数起,上万首时一次几秒(11 章决策 70)。
+        expectEqual(manager.contains("ForEach(albumEntries) { entry in") && !manager.contains("ForEach(group.items)"), true,
+                    "歌词管理: 按专辑分组摊平成一层 ForEach,组头是不能选中的一行")
+        // 播放器没报歌手(网易云云盘里没匹配到曲库的歌)时,列表和详情显示引擎认出来的歌手;查缓存、写回仍用键里的(03 章决策 32)。
+        let storeSource = read("LyricsManager/EnrichCacheStore.swift") ?? ""
+        expectEqual(storeSource.contains("let inferredArtist = parts.artist.isEmpty")
+                    && storeSource.contains("var shownArtist: String { artist.isEmpty ? inferredArtist : artist }")
+                    && managerParts.contains("summary.shownArtist.isEmpty ? L10n.t(\"未知歌手\") : summary.shownArtist")
+                    && manager.contains("Text(summary.shownArtist.isEmpty ? L10n.t(\"未知歌手\") : summary.shownArtist)"), true,
+                    "歌词管理: 播放器没报歌手时列表和详情显示引擎认出来的歌手")
+        // 预览当前句的逐字染色:逐帧时钟在 overlay 里、不进排版,时间基准跟歌词窗口一样(11 章决策 71)。
+        let karaokeOverlay = (managerParts.components(separatedBy: "private struct LyricsManagerKaraokeOverlay: View").dropFirst().first ?? "")
+            .components(separatedBy: "/// 逐字染色那一层里,一段字是第几段").first ?? ""
+        expectEqual(previewRow.contains(".overlay(alignment: .topLeading) {")
+                    && previewRow.contains("LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs)")
+                    && karaokeOverlay.contains("FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !isPlaying)")
+                    && karaokeOverlay.contains(".textRenderer(LyricsManagerKaraokeRenderer(")
+                    && karaokeOverlay.contains("return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)\n            + coordinator.currentLyricsOffsetMs"),
+                    true, "歌词管理: 预览当前句的逐字染色画在 overlay 里,时间基准含歌词偏移")
+        // 标签和小标记的颜色都读 LyricsFeatureTint,跟搜索候选歌词面板同一份,不在调用点各写一份(11 章决策 79)。
+        let headerTagsSource = (manager.components(separatedBy: "private func headerTags(").dropFirst().first ?? "")
+            .components(separatedBy: "private func factsRow(").first ?? ""
+        let paletteTints = [".blue", ".green", ".purple", ".orange", ".indigo", ".teal", ".red", ".pink", ".mint", ".cyan",
+                            ".brown", ".yellow"]
+        let searchSheetSource = read("LyricsManager/LyricsSearchSheet.swift") ?? ""
+        expectEqual(!songRowSource.isEmpty && !headerTagsSource.isEmpty
+                    && !paletteTints.contains(where: { songRowSource.contains("tint: \($0)") || headerTagsSource.contains("tint: \($0)") })
+                    && songRowSource.contains("LyricsFeatureTint.wordTiming") && headerTagsSource.contains("LyricsFeatureTint.wordTiming")
+                    && searchSheetSource.contains("characteristicBadge(L10n.t(\"逐字时间轴\"), \"text.word.spacing\", LyricsFeatureTint.wordTiming)"),
+                    true, "歌词管理: 标签和小标记的颜色读 LyricsFeatureTint,跟搜索候选歌词面板同一份")
+        // 状态胶囊全都摆在侧栏那一行,每一档都在(11 章决策 80)。
+        expectEqual(manager.contains("private static let statusOrder: [LyricsManagerStatus] = [.all, .missing, .instrumental, .adjusted]")
+                    && Set(LyricsManagerStatus.allCases) == [.all, .missing, .instrumental, .adjusted], true,
+                    "歌词管理: 状态胶囊全都在侧栏那一行,每一档都在")
+        // 逐句编辑也标出正在唱的那一句,找法同预览(11 章决策 81)。
+        expectEqual(lineEditorSource.contains("LyricsPreviewText.currentRow(times: indices.map { main.lines[$0].timeMs },")
+                    && lineEditorSource.contains("row(index, isCurrent: index == current)")
+                    && manager.contains("focus: $focusedLine,\n                isNowPlaying: summary.key == nowPlayingKey)"), true,
+                    "歌词管理: 逐句编辑标出正在唱的那一句")
+        // 换分组、换排序之后滚回选中的那一首(11 章决策 75)。
+        expectEqual(manager.contains(".onChange(of: groupByAlbum) { _, _ in revealSelection(scrollProxy: scrollProxy) }")
+                    && manager.contains(".onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }"), true,
+                    "歌词管理: 换分组、换排序之后滚回选中的那一首")
+        // 正在放的那首在列表行、多选清单里跟详情页头部一样用播放器给的封面(11 章决策 78)。
+        expectEqual(manager.contains("artwork: summary.key == nowPlayingKey ? nowPlaying.artwork : nil)")
+                    && manager.contains("LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,\n                               size: 32, radius: 6)")
+                    && managerParts.contains("LyricsManagerCover(url: summary.coverURL, image: artwork, size: 40, radius: 7)"), true,
+                    "歌词管理: 正在放的那首在列表里用播放器给的封面")
+        // 「清理无效记录」按 Core 的判据挑,正在放的那首不算,确认框只在开着时算正文(11 章决策 83)。
+        expectEqual(manager.contains("LyricsManagerCleanup.isInvalid(artist: $0.artist, kind: Self.kind($0), isManual: $0.isManual,")
+                    && manager.contains("return filteredCache.cleanup.filter { $0 != nowPlayingKey }")
+                    && manager.contains("if showCleanupConfirm { Text(cleanupMessage) }"), true,
+                    "歌词管理: 清理无效记录按 Core 判据挑,正在放的那首不算")
+        // 「正在播放」那一行整行是按钮(11 章决策 82)。
+        expectEqual(managerParts.contains("Button(action: onLocate) {\n            HStack(spacing: 10) {"), true,
+                    "歌词管理: 「正在播放」整行点着定位")
+        // 排序和分组记在 UserDefaults(11 章决策 84)。
+        expectEqual(manager.contains("@AppStorage(\"np:lyricsManagerSortOption\") private var sortOption: LyricsSortOption = .updatedDescending")
+                    && manager.contains("@AppStorage(\"np:lyricsManagerGroupByAlbum\") private var groupByAlbum = false"), true,
+                    "歌词管理: 排序和分组下次开窗照旧")
+        // 搜索候选歌词、解析决策面板开着时换歌不跟随,面板的查询词和写回的条目不变(11 章决策 86)。
+        expectEqual(manager.contains("guard followsPlayback, !isEditorDirty, editMode == .preview, !showSearchSheet, !showDecisionSheet else { return }"),
+                    true, "歌词管理: 搜索候选歌词、解析决策面板开着时换歌不跟随")
+        // 列表的估算行高等于实际行高,scrollTo 才落得准(11 章决策 62)。
+        expectEqual(manager.contains(".environment(\\.defaultMinListRowHeight, Self.listRowHeight)")
+                    && manager.contains("private static let listRowHeight: CGFloat = 56"), true,
+                    "歌词管理: 列表的估算行高设成实际行高")
     }
 
     // ---- 设置页顶层分类记忆----

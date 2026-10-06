@@ -179,6 +179,17 @@ def main() -> int:
     if not strings:
         print("catalog 里一个键都没有 —— 拒绝生成空文件覆盖现有翻译", file=sys.stderr)
         return 1
+    # 简体就是键本身:显式 zh-Hans 值和键不一致时,界面显示的是这个值而不是键,
+    # 改键(源码字面量)之后界面照旧显示旧文案。改简体文案要连键一起改,这里直接失败。
+    stale = [k for k, e in strings.items()
+             if (((e or {}).get("localizations") or {}).get("zh-Hans") or {}).get("stringUnit", {}).get("value", k) != k]
+    if stale:
+        print(f"\u2717 zh-Hans 有 {len(stale)} 条显式值和键不一致(简体就是键本身,值要等于键):", file=sys.stderr)
+        for key in sorted(stale)[:20]:
+            print(f"    {key[:80]}", file=sys.stderr)
+        if len(stale) > 20:
+            print(f"    …还有 {len(stale) - 20} 条", file=sys.stderr)
+        return 1
     for lang, lproj in TARGETS.items():
         lines = [HEADER]
         fallback_count = 0

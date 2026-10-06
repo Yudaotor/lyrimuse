@@ -54,11 +54,11 @@ final class LyricsExternalEditor {
         if stored == nil, !EnrichCacheReader.isCurrent {
             // 歌词库正在重读(引擎刚写过、内存压力让出之后):查不到不代表这首没有记录,别给它摊一份空的。
             EnrichCacheReader.refreshIfNeeded()
-            notes.post(.info, title: title, text: L10n.t("歌词库正在刷新，过一两秒再点一次"))
+            notes.post(.info, title: title, text: L10n.t("歌词库正在刷新，请稍后重试"))
             return
         }
         if let stored, !stored.complete {
-            notes.post(.failure, title: title, text: L10n.t("这首的歌词正文暂时读不回来，稍后再试"))
+            notes.post(.failure, title: title, text: L10n.t("暂时无法读取这首歌曲的歌词，请稍后重试"))
             return
         }
         let key = stored?.key ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
@@ -118,7 +118,7 @@ final class LyricsExternalEditor {
 
     private func launch(_ url: URL, title: String, mode: LyricsExternalEdit.Mode, setAside: String?) {
         guard let app = NSWorkspace.shared.urlForApplication(toOpen: url) else {
-            notes.post(.failure, title: title, text: L10n.t("没有找到能打开文本文件的应用"))
+            notes.post(.failure, title: title, text: L10n.t("未找到可打开文本文件的应用"))
             return
         }
         let appName = FileManager.default.displayName(atPath: app.path)
@@ -130,20 +130,20 @@ final class LyricsExternalEditor {
                 let notes = LyricsWindowActionNotes.shared
                 if let failure {
                     logger.error("editor launch failed: \(failure, privacy: .public)")
-                    notes.post(.failure, title: title, text: String(format: L10n.t("没能打开「%1$@」：%2$@"), appName, failure))
+                    notes.post(.failure, title: title, text: String(format: L10n.t("无法打开「%1$@」：%2$@"), appName, failure))
                     return
                 }
                 var lines: [String]
                 switch mode {
                 case .wordTimed:
-                    lines = [String(format: L10n.t("已在「%@」里打开。逐字歌词只改字，每行开头的时间别动，存盘后自动套用"), appName)]
+                    lines = [String(format: L10n.t("已在「%@」中打开。逐字歌词仅修改文字，请勿改动每行开头的时间，保存后自动应用"), appName)]
                 case .lineTimed:
-                    lines = [String(format: L10n.t("已在「%@」里打开，存盘后自动套用"), appName)]
+                    lines = [String(format: L10n.t("已在「%@」中打开，保存后自动应用"), appName)]
                 case .plainText, .empty:
-                    lines = [String(format: L10n.t("已在「%@」里打开。写好存盘后自动套用：带时间戳的存成同步歌词，不带的存成纯文本"), appName)]
+                    lines = [String(format: L10n.t("已在「%@」中打开。保存后自动应用：带时间戳的内容存为同步歌词，不带时间戳的存为纯文本"), appName)]
                 }
                 if let setAside {
-                    lines.append(String(format: L10n.t("上次存了还没套用的那份另存成了「%@」"), setAside))
+                    lines.append(String(format: L10n.t("上次已保存但未应用的内容已另存为「%@」"), setAside))
                 }
                 notes.post(setAside == nil ? .info : .warning, title: title, text: lines.joined(separator: "\n"))
             }
@@ -187,22 +187,22 @@ final class LyricsExternalEditor {
         sessions[key] = session
         guard let data = try? Data(contentsOf: session.url) else { return }
         guard data.count <= Self.maxBytes else {
-            notes.post(.warning, title: session.title, text: L10n.t("文件太大，不像是歌词，没有保存"))
+            notes.post(.warning, title: session.title, text: L10n.t("文件过大，不像是歌词，未保存"))
             return
         }
         guard let text = LyricsExternalEdit.text(from: data) else {
-            notes.post(.failure, title: session.title, text: L10n.t("读不出这份文件（要存成 UTF-8 文本），没有保存"))
+            notes.post(.failure, title: session.title, text: L10n.t("无法读取该文件（需保存为 UTF-8 文本），未保存"))
             return
         }
         guard text != session.reference else { return }
         let stored = EnrichCacheReader.storedEntry(forKey: key)
         if let stored, !stored.complete {
-            notes.post(.failure, title: session.title, text: L10n.t("这首的歌词正文暂时读不回来，稍后再存一次"))
+            notes.post(.failure, title: session.title, text: L10n.t("暂时无法读取这首歌曲的歌词，请稍后再次保存"))
             return
         }
         guard Self.content(stored) == session.base else {
             notes.post(.warning, title: session.title,
-                       text: L10n.t("这首的歌词在你编辑期间变过了，这次没有套用；再点一次编辑会打开最新的一份"))
+                       text: L10n.t("编辑期间这首歌曲的歌词已发生变化，本次未应用；再次编辑将打开最新版本"))
             return
         }
         apply(text, session: session, stored: stored)
@@ -214,18 +214,18 @@ final class LyricsExternalEditor {
         case .unchanged:
             sessions[session.key]?.reference = text
             Self.record(text, for: session.url)
-            notes.post(.info, title: title, text: L10n.t("没有需要保存的改动"))
+            notes.post(.info, title: title, text: L10n.t("没有需要保存的更改"))
         case .empty:
-            notes.post(.warning, title: title, text: L10n.t("文件里还没有歌词，没有保存"))
+            notes.post(.warning, title: title, text: L10n.t("文件中尚无歌词，未保存"))
         case .missingTimestamps:
-            notes.post(.warning, title: title, text: L10n.t("存回来的歌词一行时间戳都没有，没有保存（会丢掉原来的时间轴）"))
+            notes.post(.warning, title: title, text: L10n.t("保存的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）"))
         case let .word(result):
-            var done = [L10n.t("已套用编辑器里的修改")]
+            var done = [L10n.t("已应用编辑器中的修改")]
             if result.estimatedLines > 0 {
-                done.append(String(format: L10n.t("%@ 句是新加的或改了时间戳，逐字时间按字数分配"), "\(result.estimatedLines)"))
+                done.append(String(format: L10n.t("%@ 句为新增或修改了时间戳，已按字数分配逐字时间"), "\(result.estimatedLines)"))
             }
             if result.skippedLines > 0 {
-                done.append(String(format: L10n.t("%@ 行没有时间戳，没有存进逐字歌词"), "\(result.skippedLines)"))
+                done.append(String(format: L10n.t("%@ 行没有时间戳，未写入逐字歌词"), "\(result.skippedLines)"))
             }
             save(text, session: session, done: done, carriesOffsetTo: result.timingUnchanged ? (lyrics: result.lrc, yrc: result.yrc) : nil) {
                 await EnrichCacheStore.shared.saveEdit(key: session.key, lyrics: result.lrc, tr: stored?.lyricsTr ?? "",
@@ -233,13 +233,13 @@ final class LyricsExternalEditor {
             }
         case let .lines(lyrics):
             let sameTimes = LyricsWordTimingEdit.sameLineTimes(session.base.lyrics, lyrics)
-            save(text, session: session, done: [L10n.t("已套用编辑器里的修改")],
+            save(text, session: session, done: [L10n.t("已应用编辑器中的修改")],
                  carriesOffsetTo: sameTimes ? (lyrics: lyrics, yrc: session.base.yrc) : nil) {
                 await EnrichCacheStore.shared.saveEdit(key: session.key, lyrics: lyrics, tr: stored?.lyricsTr ?? "",
                                                        roma: stored?.lyricsRoma ?? "")
             }
         case let .plain(plain):
-            save(text, session: session, done: [L10n.t("已存成纯文本歌词，只在歌词窗口里显示")], carriesOffsetTo: nil) {
+            save(text, session: session, done: [L10n.t("已保存为纯文本歌词，仅在歌词窗口中显示")], carriesOffsetTo: nil) {
                 await EnrichCacheStore.shared.savePlainTextEdit(key: session.key, plainLyrics: plain, source: "")
             }
         }
@@ -254,7 +254,7 @@ final class LyricsExternalEditor {
             let saved = await commit()
             sessions[session.key]?.applying = false
             guard saved else {
-                notes.post(.failure, title: session.title, text: L10n.t("未能保存，请再试一次"))
+                notes.post(.failure, title: session.title, text: L10n.t("保存失败，请重试"))
                 return
             }
             if let new { carryOffset(session, to: new) }
@@ -295,7 +295,7 @@ final class LyricsExternalEditor {
             return true
         } catch {
             logger.error("working copy write failed: \(error.localizedDescription, privacy: .public)")
-            notes.post(.failure, title: title, text: String(format: L10n.t("没能写出歌词文件：%@"), error.localizedDescription))
+            notes.post(.failure, title: title, text: String(format: L10n.t("无法写入歌词文件：%@"), error.localizedDescription))
             return false
         }
     }
@@ -311,7 +311,7 @@ final class LyricsExternalEditor {
             return name
         } catch {
             logger.error("working copy set-aside failed: \(error.localizedDescription, privacy: .public)")
-            notes.post(.failure, title: title, text: String(format: L10n.t("没能写出歌词文件：%@"), error.localizedDescription))
+            notes.post(.failure, title: title, text: String(format: L10n.t("无法写入歌词文件：%@"), error.localizedDescription))
             return nil
         }
     }

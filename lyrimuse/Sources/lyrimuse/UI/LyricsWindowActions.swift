@@ -99,21 +99,21 @@ final class LyricsWindowRematch: ObservableObject {
             // 歌词库正在重读时查不到不代表没有记录。
             if EnrichCacheReader.isCurrent {
                 LyricsWindowActionNotes.shared.post(.warning, title: title,
-                                                    text: L10n.t("这首在歌词库里还没有记录，可以先用「搜索歌词」找一份"))
+                                                    text: L10n.t("歌词库中尚无这首歌曲的记录，可先通过「搜索歌词」查找"))
             } else {
                 EnrichCacheReader.refreshIfNeeded()
-                LyricsWindowActionNotes.shared.post(.info, title: title, text: L10n.t("歌词库正在刷新，过一两秒再点一次"))
+                LyricsWindowActionNotes.shared.post(.info, title: title, text: L10n.t("歌词库正在刷新，请稍后重试"))
             }
             return
         }
         var reasons: [String] = []
         if stored.manualLyrics {
-            reasons.append(L10n.t("这首的歌词是你手动改过或选定的，换上新的会盖掉它。"))
+            reasons.append(L10n.t("这首歌曲的歌词经过手动修改或选定，更换后将被覆盖。"))
         }
         if stored.instrumental {
-            reasons.append(L10n.t("这首标了纯音乐，找到歌词就会撤掉这个标记。"))
+            reasons.append(L10n.t("这首歌曲已标为纯音乐，找到歌词后将取消该标记。"))
         } else if playback.trackLyricsOffsetMs != 0 {
-            reasons.append(String(format: L10n.t("这首调过歌词时间轴（%@），换了歌词这个校准可能就不准了。"),
+            reasons.append(String(format: L10n.t("这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效。"),
                                   AppSettings.signedSeconds(ms: playback.trackLyricsOffsetMs) + "s"))
         }
         if reasons.isEmpty {
@@ -257,8 +257,8 @@ struct LyricsWindowActionsCapsule: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .help(L10n.t("用外部编辑器改歌词"))
-            .accessibilityLabel(L10n.t("用外部编辑器改歌词"))
+            .help(L10n.t("在外部编辑器中编辑歌词"))
+            .accessibilityLabel(L10n.t("在外部编辑器中编辑歌词"))
         }
         .padding(3)
         .clearGlassCapsule(rim: rim)

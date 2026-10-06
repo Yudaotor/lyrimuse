@@ -1443,7 +1443,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // 喇叭本身是装饰(同一行的「广告中 · 还剩 0:20」已经说清楚了);带上提示之后这一组就有了
         // 独立信息 —— 稳态下它**是**读屏用户唯一能知道"这条能跳"的地方,所以这时候要念。
         .accessibilityHidden(!hint)
-        .accessibilityLabel(hint ? L10n.t("这条广告可以跳过") : "")
+        .accessibilityLabel(hint ? L10n.t("此广告可跳过") : "")
     }
 
     /// 稳态下要不要在左耳那枚喇叭旁边补一枚「可跳过」提示(「这个按钮目前只在展开
@@ -2589,13 +2589,13 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         let name = player.displayName
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: NotchMetrics.trackInfoLineSpacing) {
-                Text(L10n.t("没有在播放"))
+                Text(L10n.t("未在播放"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(accentOrWhite.opacity(0.9))
                 // 提示句不点名播放器——
                 // 灵动岛这句是泛指,不像歌词窗口停播页那句要跟旁边「打开 X」按钮对上;右边那颗键的
                 // tooltip 仍带具体名字(那是一个具体动作的目标)。
-                Text(L10n.t("在播放器里播放任意歌曲，歌词会自动出现"))
+                Text(L10n.t("在播放器中播放任意歌曲，歌词将自动显示"))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(accentOrWhite.opacity(0.6))
             }
@@ -3601,7 +3601,7 @@ private struct NotchIdlePanelHost<Fallback: View>: View {
                 Text(L10n.t("检测到新的播放器"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(tint.opacity(0.9))
-                Text(offer.displayName + " · " + String(format: L10n.t("正在放：%@"), offer.nowPlayingText))
+                Text(offer.displayName + " · " + String(format: L10n.t("正在播放：%@"), offer.nowPlayingText))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(tint.opacity(0.6))
             }

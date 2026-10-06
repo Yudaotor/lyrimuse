@@ -378,7 +378,7 @@ struct MenuBarLyricsIconRow: View {
         SettingsRow(
             icon: "chart.bar.fill",
             title: L10n.t("歌词旁的图标"),
-            help: L10n.t("在歌词一格的最左或最右放一枚菜单栏图标，图标颜色从下往上涨表示播放进度：涨上来的用「已唱到」色，其余用「未唱到」色。只在显示歌词时出现。")
+            help: L10n.t("在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱到」颜色，其余使用「未唱到」颜色。仅在显示歌词时出现。")
         ) {
             SettingsSegmentedControlHashable(
                 selection: $settings.menuBarLyricsIconPosition,
@@ -412,7 +412,7 @@ struct MenuBarHoverControlsRow: View {
         SettingsRow(
             icon: "playpause.circle",
             title: L10n.t("悬停显示播放控制"),
-            help: L10n.t("鼠标移到菜单栏歌词上换成「上一曲 / 播放暂停 / 下一曲」三个键，移开变回。暂停后歌词收回成图标、或那一格太窄装不下三个键时不接管。点键以外的地方仍是打开面板。")
+            help: L10n.t("指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板。")
         ) {
             Toggle("", isOn: $settings.menuBarHoverShowsControls)
         }
@@ -431,7 +431,7 @@ struct MenuBarTitleFallbackRow: View {
         SettingsRow(
             icon: "music.note.list",
             title: L10n.t("无歌词时显示歌名"),
-            help: L10n.t("这首歌没有歌词或还在搜索时，用歌名占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示")
+            help: L10n.t("歌曲没有歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示")
         ) {
             Toggle("", isOn: $settings.menuBarShowsTitleWhenNoLyrics)
         }
@@ -572,7 +572,7 @@ struct MenuBarWidthModeRow: View {
             // 图标会停在旧位置(错位、闪动),左键面板也可能被挤掉。UI 上现在只保留它的
             // **可见结果**(宽度随句变、旁边图标跟着挪)——那是"效果";成因和"别用"属于
             // 判断,不进这行字。
-            help: L10n.t("固定：所有歌都用设定的宽度。\n自适应：每首歌按自己的歌词定一个宽度，不超过设定宽度。")
+            help: L10n.t("固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度。")
         ) {
             SettingsSegmentedControlHashable(
                 selection: $settings.menuBarLyricsWidthMode,
@@ -611,7 +611,7 @@ struct MenuBarAlignmentRow: View {
             // (OverlayStyleSettingsRows),统一措辞正是为了"和软件其他地方对齐"。
             // 顺带复用已有词条(含 Left-Aligned/Center/Right-Aligned 三个选项名)。
             title: L10n.t("对齐方式"),
-            help: L10n.t("只影响装得下的短句：它在固定宽度那一格里靠哪边。放不下的句子会横向滚动，没有多余空间，对齐不起作用")
+            help: L10n.t("仅影响能完整显示的短句在固定宽度区域内的位置。显示不下的句子会横向滚动，对齐设置对其无效")
         ) {
             // 跟灵动岛「对齐方式」共用同一个控件(搬到 UI/
             // LyricsAlignmentSegmentedControl.swift,原来长在这个文件里)。
@@ -695,7 +695,7 @@ struct MenuBarSecondaryLineRow: View {
         SettingsRow(
             icon: "text.append",
             title: L10n.t("副行"),
-            help: L10n.t("主歌词下方多一行，高度不变（两行 10pt / 9pt，「字号」不生效）。译文和读音显示当前句，「下一句」显示接下来那句；开着副行时主行不再提前切到下一句。副行不滚动，装不下时尾部渐隐。")
+            help: L10n.t("在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，显示不下时末尾渐隐。")
         ) {
             Picker("", selection: $settings.menuBarSecondaryLine) {
                 ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
@@ -724,7 +724,7 @@ struct MenuBarFontSizeRow: View {
         SettingsRow(
             icon: "textformat.size",
             title: L10n.t("字号"),
-            help: L10n.t("默认跟随系统菜单栏，可在 10～16pt 间调，16pt 仍在菜单栏项高度内。拖回系统字号那一格即恢复跟随。")
+            help: L10n.t("默认跟随系统菜单栏，可在 10～16pt 之间调整，16pt 仍在菜单栏项高度内。拖回系统字号处即恢复跟随。")
         ) {
             // 副行开着时两行字号由行高推出(10 / 9pt,见 MenuBarLyricRows),滑杆翻了也没效果 —— ~07
             // 之间这一行是整行隐藏的;「副行」搬去「布局」浮层之后,这里再藏整行就成了"字号去哪了",
@@ -771,7 +771,7 @@ struct MenuBarFontWeightRow: View {
         SettingsRow(
             icon: "bold",
             title: L10n.t("粗细"),
-            help: L10n.t("菜单栏歌词的笔画粗细。「常规」就是系统菜单栏本来的粗细；中文只变粗不变宽，英文越粗越宽一点")
+            help: L10n.t("菜单栏歌词的字重。「常规」即系统菜单栏的默认字重；中文只加粗不加宽，英文字重越大宽度略增")
         ) {
             Picker("", selection: $settings.menuBarLyricsFontWeight) {
                 ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
@@ -807,7 +807,7 @@ struct MenuBarColorRows: View {
                 // 这颗就是菜单栏那一份,也是菜单栏(状态栏项 + 面板里那行歌词)逐字填色**唯一**的闸:
                 // 引擎侧不再有决定"要不要用逐字数据"的全局开关,染不染色全在各展示面自己。
                 title: L10n.t("卡拉OK效果"),
-                help: L10n.t("跟着演唱进度把已唱到的部分染成系统强调色。只在这首歌有逐字时间轴时生效；打开菜单反白期间暂不染色")
+                help: L10n.t("随演唱进度将已演唱部分显示为系统强调色。仅在歌曲有逐字时间轴时生效；打开菜单反白期间暂停着色")
             ) {
                 Toggle("", isOn: $settings.menuBarLyricsKaraoke)
             }
@@ -823,7 +823,7 @@ struct MenuBarColorRows: View {
                 // **别去改「文字颜色」那个键的值** —— 那会连带把悬浮歌词那一行也改掉。
                 title: settings.menuBarLyricsKaraoke
                     ? L10n.t("未唱到的颜色") : L10n.t("文字颜色"),
-                help: L10n.t("未唱到部分的文字颜色。默认跟随系统：浅色/深色菜单栏自动适配，打开菜单时自动反白")
+                help: L10n.t("未演唱部分的文字颜色。默认跟随系统：自动适配浅色 / 深色菜单栏，打开菜单时自动反白")
             ) {
                 HStack(spacing: 8) {
                     if !settings.menuBarLyricsTextColorHex.isEmpty {
@@ -856,7 +856,7 @@ struct MenuBarColorRows: View {
                     // 而且没说清染的是哪一半。它的 help 一直写着"已唱到部分的颜色" —— 标题
                     // 直接用 help 里那句话,跟上面「未唱到的颜色」成对。
                     title: L10n.t("已唱到的颜色"),
-                    help: L10n.t("已唱到部分的颜色，也是歌词旁那枚图标上进度涨上来那一截的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮")
+                    help: L10n.t("已演唱部分的颜色，也用于歌词旁进度图标的已播放部分。默认跟随系统强调色（深色菜单栏下自动提亮）；自定义后按原色显示，不再自动提亮")
                 ) {
                     HStack(spacing: 8) {
                         if !settings.menuBarLyricsFillColorHex.isEmpty {

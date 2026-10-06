@@ -332,7 +332,7 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 已经调过校正值的曲目数。
     ///
     /// 只发布**数量**、不发布整份字典:字典的消费方是 LocalPlaybackSource,那边有自己的
-    /// @Published 往外推(见类型上方的注释);而这个数字是「歌词管理」工具栏菜单要实时
+    /// @Published 往外推(见类型上方的注释);而这个数字是「歌词管理」侧栏「⋯」菜单要实时
     /// 显示的("已校准 N 首"+清空入口),清空之后必须当场变 0,不能等下次开窗。
     @Published public private(set) var trackOffsetCount: Int
 
@@ -340,12 +340,6 @@ public final class LyricsOffsetStore: ObservableObject {
         guard isValid(key) else { return 0 }
         return offsets[key] ?? 0
     }
-
-    /// 整份字典的只读快照——给「歌词管理」列表的"偏移"列用:那一列要给每一行都查一次
-    /// trackKey,而 buildSummaries 本身要能在后台线程跑(见 EnrichCacheStore.reload),
-    /// 不能在那个函数体内部同步访问这个 @MainActor 单例。调用方在 MainActor 上下文里
-    /// 取一份快照传进去,后台线程只做普通字典查找。
-    public var offsetsSnapshot: [String: Int] { offsets }
 
     // 三个写入口都要求传 pinKey(归一化的 enrich key),不给默认值:调过时间轴的歌要
     // 顺手钉进 LyricsPinStore、让引擎不再自动换歌词源(理由见那个类型的注释)。
@@ -427,7 +421,7 @@ public final class LyricsOffsetStore: ObservableObject {
         logger.notice("offset key migrated off the BOM fingerprint: \(value, privacy: .public)ms")
     }
 
-    /// 清掉**全部**单曲校正值(「歌词管理」工具栏那个入口)。
+    /// 清掉**全部**单曲校正值(「歌词管理」侧栏「⋯」里那个入口)。
     ///
     /// 刻意只清单曲这一层:全局基准描述的是设备侧固定延迟,跟"哪首歌的歌词准不准"是
     /// 两件事,它在设置页有自己的重置入口,被一个叫"清空歌词时间轴校正"的按钮连带抹掉

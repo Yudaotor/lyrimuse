@@ -31,6 +31,9 @@ public final class EnrichCacheStore: ObservableObject {
         //
         // 合唱曲目上它是空的(引擎只在单一歌手时才给值),所以消费方要回退到 artist。
         public let canonicalArtist: String
+        /// 键里没有歌手时(网易云云盘里没匹配到曲库的歌,播放器只报歌名和时长),引擎按「歌名 + 时长」认出来的歌手
+        /// (`inferred_artist`,见 03 章决策 32);键里有歌手时为空。只给显示、排序归并、搜索用,查缓存、写回、偏移仍用 `artist`。
+        public let inferredArtist: String
         // 解析这条时的曲目真实时长(秒),引擎存进缓存的。手动搜索要用它 ——
         // 打分里时长匹配那一档权重很重,传 0 的话弹窗里的排名跟当初真正做决定用的那组
         // 分数不是一回事(见 LyricsSearchSheet 的用法)。老条目没有这个字段,为 0。
@@ -44,17 +47,14 @@ public final class EnrichCacheStore: ObservableObject {
         /// 用 Kaset 放的这一版是 MV 版本(引擎的 `youtube_music_mv`):没有专辑,列表和详情里写「MV」;筛选、排序、
         /// 搜索、搜歌词预填都不把「MV」当专辑名。
         public let isListedMV: Bool
+        /// 这首的封面(缓存里的 `cover_url`:播放器送来的存成本机文件,其余是各家图床的地址);没有为 nil。
+        public let coverURL: URL?
         public let lyricsSource: String
         public let hasWordTiming: Bool
         public let isManual: Bool
         /// 用户在「联网搜索候选歌词」里选定的源(引擎侧 `lyrics_source_choice`)。
         /// 空 = 没选过,由算法自由选。跟 `isManual` 是两件独立的事,详情页各显示各的徽章。
         public let sourceChoice: String
-        /// 这份歌词当前的时间轴校正值(毫秒),权威源是 LyricsOffsetStore——这里存的是
-        /// buildSummaries 那一刻按内容指纹查出来的快照,不是实时值(见该函数的
-        /// offsetsSnapshot 参数注释)。内容一换查出来的指纹就变,自然会变回 0,不需要
-        /// 显式失效。
-        public let offsetMs: Int
         // 译文是机翻补的(见引擎的 translate.go)还是歌词源自带的社区翻译。
         // 空 = 社区翻译(老条目没有这个字段,读成空正是事实)。
         public let lyricsTrSource: String
@@ -137,18 +137,11 @@ public final class EnrichCacheStore: ObservableObject {
         /// 哪天那个跳过逻辑被去掉,这个字段就会集体失真(全变成最后一次启动时间),
         /// 而且**表现是静默的** —— 排序看着还在工作,只是结果全错。
         let lyricsUpdatedAt: Date?
-        /// 这条记录**上次被解析出来**的时刻,取自缓存里的 `ts`(引擎侧
-        /// `enrichEntry.TS`,写入点 enrich.go 的 `e.TS = time.Now().Unix()`)。
-        /// nil = 老条目没有这个字段。
+        /// 这条记录最近一次搜歌词的时刻:首次解析和之后每一轮补搜 / 升级重试 / 重评里最晚的一个,都没有为 nil。
+        /// 判据本体在 LyrimuseCore.EnrichLookupTime(selftest 覆盖)。
         ///
-        /// 它**不是** `lyricsUpdatedAt` 的替代品,只当次级键用:两者量纲不同 ——
-        /// mtime 是"歌词正文上次真的变过",ts 是"这条上次被解析过"(重搜一轮没搜到新
-        /// 东西也会把 ts 推到当下,而正文没变、mtime 不动)。全库覆盖率也更低
-        /// (实测 2445/3402 ≈ 72%,而 mtime 是 3169/3210 ≈ 99%)。
-        ///
-        /// 唯一用途见 `LyricsSortOrder`:**没有歌词文件 / 没有来源**的那一批行,
-        /// 在对应排序档里本来注定是一团分不出先后的平局(退化成默认排序,看起来像
-        /// "选了排序没反应"),用 ts 给这个尾块一个真实的组内顺序。
+        /// 用途:详情页没有歌词文件时的「上次解析于」,`LyricsSortOrder` 里没有歌词文件 / 没有来源的尾块按它断平局。
+        /// 不是 `lyricsUpdatedAt` 的替代品:mtime 是歌词正文上次真的变过,这个是上次搜过,搜了没换词也会往前走。
         let resolvedAt: Date?
         // ---- 预计算归一化键 ----
         // 排序/筛选/归并的热路径原来逐次现算 toSimplified(ICU CFStringTransform)+
@@ -173,7 +166,9 @@ public final class EnrichCacheStore: ObservableObject {
         /// 歌手语言不同,列表里完全没法区分)。
         /// 筛选依然按这个统一名归并(选"方大同"两条都要出来),只是"这一列具体显示哪个
         /// 字符串"改成如实展示每条记录自己的原始写法。
-        var displayArtist: String { canonicalArtist.isEmpty ? artist : canonicalArtist }
+        var displayArtist: String { canonicalArtist.isEmpty ? shownArtist : canonicalArtist }
+        /// 列表、详情里歌手那一位:键里的歌手,没有时用引擎认出来的;都没有为空,界面写「未知歌手」。
+        var shownArtist: String { artist.isEmpty ? inferredArtist : artist }
     }
 
     @Published public private(set) var summaries: [Summary] = []
@@ -209,14 +204,14 @@ public final class EnrichCacheStore: ObservableObject {
 
     /// 换了一首歌之类:上一首的写入失败不该挂在这一首的详情页上。
     public func dismissEditError() { editError = nil }
-    // 缓存 JSON 文件本身 + lyrics/ 权威源文件夹里所有文件的总大小——"歌词管理"工具栏
+    // 缓存 JSON 文件本身 + lyrics/ 权威源文件夹里所有文件的总大小——"歌词管理"侧栏「⋯」菜单
     // 展示用,让用户知道这个"解析一次永久保留"的缓存实际占了多少磁盘空间。跟 reload()
     // 同一次磁盘扫描顺带算出来,不为这一个数字单独再打开一轮文件 I/O。
     @Published public private(set) var totalSizeBytes: Int64 = 0
 
     /// 「占用空间」的**唯一**渲染口径。
     ///
-    /// 同一个字节数现在有三处要显示(「歌词管理」工具栏、自动备份菜单里每份快照、设置页
+    /// 同一个字节数现在有三处要显示(「歌词管理」侧栏「⋯」的段头、自动备份菜单里每份快照、设置页
     /// 「歌词库」那一行),各自 `ByteCountFormatter()` 的话迟早在单位或小数位上分叉 ——
     /// 同一个数在两扇窗口里写法不同,用户只会以为自己看错了。放在**发布这个数字的类型上**
     /// 而不是某个 View 里:数字和它的写法待在一起,下一处要用的人一眼就找得到。
@@ -279,7 +274,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// - Parameter onlyIfChanged: true = 缓存文件的 (mtime, size) 指纹没变就什么都不做
     ///   (性能审计:App 每次激活都触发一次 reload,而绝大多数激活时文件根本
     ///   没变,整份 9.4MB 重读+解析+重建+summaries 重发布 → List 全量 diff 全是白跑;
-    ///   同仓 EnrichCacheReader 早有同款 mtime 门控)。开窗 onAppear 和工具栏「刷新」
+    ///   同仓 EnrichCacheReader 早有同款 mtime 门控)。开窗 onAppear 和侧栏「刷新」
     ///   保持默认 false(显式刷新语义)。
     /// 在飞的那次 reload。两个窗口(设置页「歌词库统计」、歌词管理)各有一条 2 秒轮询,
     /// 扫库跑着的时候它们会在同一拍上各调一次 reload —— 同一份 86MB 文件解析两遍,还
@@ -328,7 +323,7 @@ public final class EnrichCacheStore: ObservableObject {
            fp == lastLoadedFingerprint {
             return
         }
-        // "缓存占用"这个数字只是工具栏一个菜单标签,不是 List 要渲染的内容——原来跟
+        // "缓存占用"这个数字只是侧栏「⋯」里一个菜单段头,不是 List 要渲染的内容——原来跟
         // JSON 解析捆在同一个 detached task 里,summaries 白白多等一轮 lyrics/ 目录扫描
         // (实测约 18ms,数量小但完全没必要挡在关键路径上)。改用已有的
         // refreshSizeBytes()(delete 完刷新占用数字用的同一条路径),独立算、独立更新,
@@ -351,11 +346,8 @@ public final class EnrichCacheStore: ObservableObject {
         }
         let box = ResultBox()
         let reloadStart = CFAbsoluteTimeGetCurrent()
-        // 在进 Task.detached 之前取快照:LyricsOffsetStore 是 @MainActor 单例,detached
-        // 闭包跑在后台线程,不能在里面同步访问它——纯字典拷贝,提前拿一份传进去即可。
-        let offsetsSnapshot = LyricsOffsetStore.shared.offsetsSnapshot
-        // 同理:lyricsDir 读的是 FeatureSettingsStore.shared(MainActor),在这儿取好。
-        // 真正的目录枚举(I/O)在 buildSummaries 里、也就是后台跑。
+        // 在进 Task.detached 之前取好:lyricsDir 读的是 FeatureSettingsStore.shared(MainActor),detached 闭包跑在
+        // 后台线程,不能在里面同步访问它。真正的目录枚举(I/O)在 buildSummaries 里、也就是后台跑。
         let lyricsDir = Self.lyricsDir
         await Task.detached(priority: .userInitiated) {
             box.fingerprint = Self.fileFingerprint(cacheURL)
@@ -371,7 +363,7 @@ public final class EnrichCacheStore: ObservableObject {
             let tBuild = CFAbsoluteTimeGetCurrent()
             // summaries 的构建+排序也在后台做掉(原来回 MainActor 同步跑,
             // 每次开窗/激活吃几十到一二百 ms 主线程),主线程只收结果赋值。
-            box.bundle = Self.buildSummaries(from: obj, offsetsSnapshot: offsetsSnapshot, lyricsDir: lyricsDir)
+            box.bundle = Self.buildSummaries(from: obj, lyricsDir: lyricsDir)
             box.buildMS = LyricsManagerBaseline.ms(since: tBuild)
         }.value
         if let obj = box.obj, let bundle = box.bundle {
@@ -574,14 +566,6 @@ public final class EnrichCacheStore: ObservableObject {
         return try? JSONDecoder().decode(EnrichCacheBody.self, from: data)
     }
 
-    /// 某一条的某块正文;精简条目去读正文小文件(校验值对得上才用),不改 `raw`。给后台构建列表时那几首
-    /// 调过时间轴偏移的歌算内容指纹用。
-    private nonisolated static func bodyText(_ field: String, of entry: [String: Any], key: String) -> String {
-        guard EnrichCacheSlim.isSlim(entry) else { return entry[field] as? String ?? "" }
-        guard let body = loadBody(forKey: key), let full = EnrichCacheSlim.hydrate(entry, body: body) else { return "" }
-        return full[field] as? String ?? ""
-    }
-
     /// 用到这一条的正文之前把它补成完整条目(见 `EnrichCacheSlim`)。先读正文小文件;对不上(引擎还没
     /// 重写 / 文件缺了)就回主缓存取这一条 —— 那要解一遍整份主缓存,只在这种少见情况下付。
     /// - Returns: false = 补不回来(主缓存也读不了),调用方别拿缺正文的条目去改、去写。
@@ -621,12 +605,11 @@ public final class EnrichCacheStore: ObservableObject {
         return true
     }
 
-    // public:「歌词管理」详情页调过/重置过时间轴偏移之后也要调这个——那份改动只落在
-    // LyricsOffsetStore(不是这里的 raw 字典),summaries 里预算好的 offsetMs 不会自己
-    // 跟着变,得靠调用方显式喊一次重建(见 LyricsManagerView.applyOffsetEdit)。
+    // public:「歌词管理」详情页调过/重置过时间轴偏移之后也要调这个——校准名单在 LyricsPinStore(不是这里的 raw 字典),
+    // 而「已校准」胶囊的计数和筛选按 summaries 的代数缓存,得靠调用方显式喊一次重建才会重算(见 LyricsManagerView.applyOffsetEdit)。
     ///
     /// 在后台建:要列举整个歌词目录(上万个文件)再逐条过八千多个条目,放主线程上每调一次偏移就卡一下。
-    /// 建的过程中列表换过一版(reload 读到了新缓存、另一次重建先落地),这一版就作废,按最新的 raw 和偏移重建一次。
+    /// 建的过程中列表换过一版(reload 读到了新缓存、另一次重建先落地),这一版就作废,按最新的 raw 重建一次。
     public func rebuildSummaries() {
         rebuildTask?.cancel()
         final class Box: @unchecked Sendable {
@@ -635,12 +618,11 @@ public final class EnrichCacheStore: ObservableObject {
             init(raw: [String: [String: Any]]) { self.raw = raw }
         }
         let box = Box(raw: raw)
-        let offsetsSnapshot = LyricsOffsetStore.shared.offsetsSnapshot
         let lyricsDir = Self.lyricsDir
         let startGeneration = summariesGeneration
         rebuildTask = Task { [weak self] in
             await Task.detached(priority: .userInitiated) {
-                box.bundle = Self.buildSummaries(from: box.raw, offsetsSnapshot: offsetsSnapshot, lyricsDir: lyricsDir)
+                box.bundle = Self.buildSummaries(from: box.raw, lyricsDir: lyricsDir)
             }.value
             guard let self, !Task.isCancelled, let bundle = box.bundle else { return }
             self.rebuildTask = nil
@@ -664,9 +646,6 @@ public final class EnrichCacheStore: ObservableObject {
     // 专辑归并键跟展示值分开:同一张专辑偶尔因歌词源候选写法大小写/繁简不一致而在
     // s.album 里长得不一样,排序/归并按归一化键走;展示名取排序后首见的原写法
     // (albumDisplayMap),列表/详情/筛选下拉三处共用同一份。
-    /// - Parameter offsetsSnapshot: LyricsOffsetStore 整份字典的一次性快照(调用方在
-    ///   MainActor 上下文取好再传进来,见两处调用点的注释)——这个函数本身要能在后台线程跑,
-    ///   不能在这里同步访问那个 @MainActor 单例。
     /// 扫一遍歌词目录,得到「折叠后的文件基名 → 该组四个文件里最新的 mtime」。
     ///
     /// **一次目录枚举、批量取属性**,不逐条 stat:后者要么 O(n) 次系统调用,要么(如果按
@@ -706,29 +685,12 @@ public final class EnrichCacheStore: ObservableObject {
     private static let lyricsFileSuffixesLongestFirst =
         EnrichCacheKeys.lyricsFileSuffixes.sorted { $0.count > $1.count }
 
-    /// - Parameter lyricsDir: 歌词导出目录的一次性快照。跟 offsetsSnapshot 同一个理由 ——
-    ///   它来自 `FeatureSettingsStore.shared`(MainActor),调用方在 MainActor 上取好传进来,
-    ///   目录枚举这段 I/O 留在这个后台函数里跑。
+    /// - Parameter lyricsDir: 歌词导出目录的一次性快照:它来自 `FeatureSettingsStore.shared`(MainActor),
+    ///   这个函数要在后台线程跑、不能在里面同步访问它,调用方在 MainActor 上取好传进来,目录枚举这段 I/O 留在这里跑。
     private nonisolated static func buildSummaries(
-        from raw: [String: [String: Any]], offsetsSnapshot: [String: Int], lyricsDir: URL
+        from raw: [String: [String: Any]], lyricsDir: URL
     ) -> SummariesBundle {
         let lyricsFileDates = Self.lyricsFileModificationDates(in: lyricsDir)
-        // offsetsSnapshot 几乎永远很小(这台机器实测 1756 条缓存里只有 7 条调过偏移),
-        // 但 trackKey 要在 artist|title 之后拼一段**对整首歌词+YRC 正文取 SHA256** 的内容
-        // 指纹(见 LyricsOffsetStore.contentFingerprint)——实测坐实:对全部
-        // 1760 条无条件算这个指纹,单这一步就要 250ms+,比读盘解析整份 JSON 还贵,而其中
-        // 99% 以上注定查不到东西(offsetsSnapshot 里根本没有对应的 artist|title)。
-        //
-        // 先把 offsetsSnapshot 的 key 反过来切一遍,取"最后一个 | 之前"那一截(= artist|title,
-        // 指纹段本身不含 |,用 .backwards 找最后一个分隔符总能切对,不受 artist/title 自己
-        // 含 | 影响)存成一个小集合——只有几个元素,后面每条曲目只需要用**同一套(cleanTag/
-        // normalizedTitle)归一化过的 artist|title** 去比对这个小集合是否包含,包含了才值得
-        // 付一次真正的 SHA256;不包含直接判定这首歌没有校正值,省掉整段哈希。命中率不变、
-        // 结果逐位不变,只是把"注定查不到"的那 99% 提前挡在开销最大的那一步之前。
-        let offsetPrefixes: Set<String> = Set(offsetsSnapshot.keys.compactMap { key in
-            guard let sep = key.range(of: "|", options: .backwards) else { return nil }
-            return String(key[..<sep.lowerBound])
-        })
         var items = raw.keys.compactMap { key -> Summary? in
             guard let parts = Self.splitKey(key) else { return nil }
             let entry = raw[key] ?? [:]
@@ -736,26 +698,20 @@ public final class EnrichCacheStore: ObservableObject {
             // 四块正文有没有:精简条目看位图(EnrichCacheSlim),不去读正文。
             let bodyFields = EnrichCacheSlim.presentFields(entry)
             let canonical = entry["canonical_artist"] as? String ?? ""
-            let display = canonical.isEmpty ? parts.artist : canonical
-            // trackKey 要用播放时真正生效的那份内容指纹,所以拿这条原始 artist/title(跟
-            // 播放侧同一套归一化,见 LyricsOffsetStore.trackKey 内部的说明),不是展示名。
-            let offsetPrefix = "\(EnrichCacheKeys.cleanTag(parts.artist))|\(EnrichCacheKeys.normalizedTitle(parts.title))"
-            let offsetMs: Int
-            if offsetPrefixes.contains(offsetPrefix) {
-                let offsetKey = LyricsOffsetStore.trackKey(artist: parts.artist, title: parts.title,
-                                                            lyrics: lyrics,
-                                                            lyricsYRC: Self.bodyText("lyrics_yrc", of: entry, key: key))
-                offsetMs = offsetsSnapshot[offsetKey] ?? 0
-            } else {
-                offsetMs = 0
-            }
-            let displayAlbum = LocalPlaybackSource.albumOrListed(
+            // 键里没有歌手时才用引擎认出来的歌手 / 专辑,规则同 InferredTrackIdentity(歌词窗口、悬浮歌词那几处显示位)。
+            let inferredArtist = parts.artist.isEmpty
+                ? (entry["inferred_artist"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "" : ""
+            let display = canonical.isEmpty ? (parts.artist.isEmpty ? inferredArtist : parts.artist) : canonical
+            let listedAlbum = LocalPlaybackSource.albumOrListed(
                 album: parts.album,
                 youtubeMusicAlbum: (entry["youtube_music_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "")
+            let displayAlbum = listedAlbum.isEmpty && !inferredArtist.isEmpty
+                ? (entry["inferred_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "" : listedAlbum
             return Summary(
                 key: key,
                 artist: parts.artist,
                 canonicalArtist: canonical,
+                inferredArtist: inferredArtist,
                 // 从「优先 duration_secs」改成「优先 resolved_duration_secs」——
                 // 真实 bug 坐实(海龟先生《男孩别哭》):duration_secs 是引擎那边
                 // "只在当前为 0 才写"的粘性字段(enrich.go:1428 `if e.DurationSecs <= 0`),
@@ -774,11 +730,11 @@ public final class EnrichCacheStore: ObservableObject {
                 album: parts.album,
                 displayAlbum: displayAlbum,
                 isListedMV: displayAlbum.isEmpty && (entry["youtube_music_mv"] as? Bool ?? false),
+                coverURL: (entry["cover_url"] as? String).flatMap { $0.isEmpty ? nil : URL(string: $0) },
                 lyricsSource: entry["lyrics_source"] as? String ?? "",
                 hasWordTiming: bodyFields.contains(.yrc),
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
                 sourceChoice: entry["lyrics_source_choice"] as? String ?? "",
-                offsetMs: offsetMs,
                 lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
                 hasTranslation: bodyFields.contains(.tr),
                 hasRomanization: bodyFields.contains(.roma),
@@ -795,12 +751,7 @@ public final class EnrichCacheStore: ObservableObject {
                 // 逐条循环里做)。都查不到 = 磁盘上没有这条的歌词文件。
                 lyricsUpdatedAt: lyricsFileDates[EnrichCacheKeys.sanitizeFilename(key).lowercased()]
                     ?? lyricsFileDates[EnrichCacheKeys.disambiguatedName(forKey: key).lowercased()],
-                // `ts` 是 Unix 秒。JSONSerialization 对整数给的是 NSNumber,用 Double
-                // 取一次就够(秒级精度远在 Double 的安全整数范围内);<=0 当没有。
-                resolvedAt: {
-                    let ts = (entry["ts"] as? Double) ?? 0
-                    return ts > 0 ? Date(timeIntervalSince1970: ts) : nil
-                }(),
+                resolvedAt: EnrichLookupTime.latest(in: entry),
                 normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
                 normAlbum: toSimplified(displayAlbum).lowercased(),
                 searchArtistLower: parts.artist.lowercased(),
@@ -919,6 +870,26 @@ public final class EnrichCacheStore: ObservableObject {
             totalChars: result.0.count + result.1.count + result.2.count + result.3.count,
             elapsedMS: LyricsManagerBaseline.ms(since: t0))
         return result
+    }
+
+    /// 这一条的纯文本兜底(`plain_lyrics`,没有时间戳),没有时为空。正文要先补回来,同 `detail(for:)`。
+    public func plainLyrics(for key: String) -> String {
+        _ = hydrate(key)
+        return raw[key]?["plain_lyrics"] as? String ?? ""
+    }
+
+    /// 这一条导出到歌词文件夹里的文件,`.lrc` 优先;磁盘上一个都没有为 nil。文件名有普通名和带哈希的消歧名两种
+    /// (引擎导出时按有没有别的 key 折叠后同名来定),两种都试。
+    public func lyricsFileURL(forKey key: String) -> URL? {
+        let dir = Self.lyricsDir
+        let bases = [EnrichCacheKeys.sanitizeFilename(key), EnrichCacheKeys.disambiguatedName(forKey: key)]
+        for suffix in EnrichCacheKeys.lyricsFileSuffixes {
+            for base in bases {
+                let url = dir.appendingPathComponent(base + suffix)
+                if FileManager.default.fileExists(atPath: url.path) { return url }
+            }
+        }
+        return nil
     }
 
     // yrc 默认 nil = 不碰 lyrics_yrc 字段(只改整行歌词的保存)。传非 nil 的有三处:"联网搜索候选歌词"整条采纳某个
@@ -1048,7 +1019,7 @@ public final class EnrichCacheStore: ObservableObject {
 
     /// 一条记录会不会被引擎的补空扫描真的拿去搜:没词、没确证纯音乐、没人工
     /// 修正(有纯文本兜底的也算——那仍不是带时间轴的词),跟引擎侧 lyricsFillSweepCandidates
-    /// 的三道硬闸同一口径;占位行不算(它此刻正在被搜)。「歌词管理」工具栏/多选面板和设置页
+    /// 的三道硬闸同一口径;占位行不算(它此刻正在被搜)。「歌词管理」侧栏「⋯」/多选面板和设置页
     /// 「歌词库」面板三处按钮上的数字都从这里来,按钮上的数就是真会被搜的条数。
     nonisolated static func isFillSweepRetryable(_ s: Summary) -> Bool {
         !s.hasLyrics && !s.isInstrumental && !s.isManual && !s.isSearching
@@ -1136,7 +1107,7 @@ public final class EnrichCacheStore: ObservableObject {
     private func takeAutoSnapshot(reason: String) async -> Bool {
         lastAutoSnapshotURL = await LyricsBackupStore.writeAutoSnapshot(reason: reason)
         guard lastAutoSnapshotURL == nil, !LyricsBackupStore.hasNoLyricsFiles() else { return true }
-        editError = L10n.t("自动备份没写成功，为免丢了找不回来，这次没有删除。检查一下磁盘空间和配置文件夹的写入权限，再试一次")
+        editError = L10n.t("自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试")
         logger.error("autoSnapshot(\(reason, privacy: .public)) failed, destructive edit aborted")
         return false
     }
@@ -1150,10 +1121,10 @@ public final class EnrichCacheStore: ObservableObject {
         var lines = [String(format: L10n.t("已恢复 %d 个歌词文件（新增 %d、覆盖 %d）"),
                             result.total, result.added, result.overwritten)]
         if result.failed > 0 {
-            lines.append(String(format: L10n.t("另有 %d 个没写进歌词文件夹，检查一下写入权限和磁盘空间"), result.failed))
+            lines.append(String(format: L10n.t("另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间"), result.failed))
         }
         if !result.adopted {
-            lines.append(L10n.t("后台服务这次没把它们收进缓存，列表里暂时看不到；文件已经在歌词文件夹里，后台服务下次启动时会自动导入"))
+            lines.append(L10n.t("歌词引擎本次未能将它们收入缓存，列表中暂时不可见；文件已在歌词文件夹中，歌词引擎下次启动时将自动导入"))
         }
         return lines.joined(separator: "\n")
     }
@@ -1175,7 +1146,7 @@ public final class EnrichCacheStore: ObservableObject {
             editError = String(format: L10n.t("写入本地记录文件失败：%@"), error)
         } else {
             // 引擎回的是英文的内部错误(「save_edit: empty key」这类),原样拼进界面没有意义;原文进日志。
-            editError = L10n.t("写入本地记录文件失败，后台服务没能执行这次修改")
+            editError = L10n.t("写入本地记录文件失败，歌词引擎未能执行此次修改")
             logger.error("enrich edit \(op, privacy: .public) failed: \(result.error ?? "", privacy: .public)")
         }
         PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
@@ -1184,7 +1155,7 @@ public final class EnrichCacheStore: ObservableObject {
         return result
     }
 
-    // 删完之后把工具栏那个"缓存占用"数字刷新一遍。它原来只有 reload() 会重算、clearAll()
+    // 删完之后把侧栏「⋯」里那个"缓存占用"数字刷新一遍。它原来只有 reload() 会重算、clearAll()
     // 会硬置 0,单条 delete 完全不碰——删一条时误差小到没人注意,但批量删掉几百条之后,那个
     // 数字还挂着删之前的值,而它恰好就是"清空全部缓存"这个破坏性入口的标签,显示一个明显
     // 偏大的陈旧值容易让人误判。

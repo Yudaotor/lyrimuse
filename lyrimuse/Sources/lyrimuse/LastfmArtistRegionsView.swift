@@ -57,7 +57,7 @@ struct LastfmArtistRegionsView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
         } else {
-            Text(L10n.t("后台正在查歌手来自哪里，稍后会出现在这里"))
+            Text(L10n.t("正在查询歌手所属地区，稍后将在此显示"))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
@@ -79,7 +79,7 @@ struct LastfmArtistRegionsView: View {
         switch kind {
         case .region(let code): return L10n.locale.localizedString(forRegionCode: code) ?? code
         case .other: return L10n.t("其他")
-        case .pending: return L10n.t("还在查")
+        case .pending: return L10n.t("查询中")
         case .unresolved: return L10n.t("未查到")
         }
     }
@@ -105,9 +105,9 @@ struct LastfmArtistRegionsView: View {
         guard p.topArtists > 0 else { return nil }
         let total = spanTotal()
         guard total > 0, !stats.dailyFullSyncing else {
-            return String(format: L10n.t("按听得最多的前 %@ 位歌手统计"), "\(p.topArtists)")
+            return String(format: L10n.t("按收听最多的前 %@ 位歌手统计"), "\(p.topArtists)")
         }
-        return String(format: L10n.t("按听得最多的前 %1$@ 位歌手统计，占这段时间 %2$@ 的收听"),
+        return String(format: L10n.t("按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@"),
                       "\(p.topArtists)", Self.percent(min(p.covered, total), of: total))
     }
 

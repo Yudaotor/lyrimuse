@@ -45,7 +45,7 @@ final class LastfmMirrorNotifier {
         guard await UnknownPlayerNotifier.shared.ensureAuthorized() else { return }
         let content = UNMutableNotificationContent()
         content.title = "Last.fm"
-        content.body = L10n.t("授权已失效，Scrobble 已暂停") + "\n" + L10n.t("点这里到设置里重新连接")
+        content.body = L10n.t("授权已失效，Scrobble 已暂停") + "\n" + L10n.t("点按此处前往设置重新连接")
         content.categoryIdentifier = Self.categoryID
         content.threadIdentifier = Self.categoryID
         content.sound = .default

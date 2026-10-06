@@ -1385,7 +1385,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// presetDragIntentDistance"(不是按下、不是长按到点);再按住再拖一次:文字续期、再抖一次。
     private func rejectDragForPreset() {
         let label = OverlayPlacementSegmentedControl.label(for: placementMode)
-        placementLockNotice = String(format: L10n.t("位置已固定为「%@」，在 ⚙ 菜单里可改"), label)
+        placementLockNotice = String(format: L10n.t("位置已固定为「%@」，可在 ⚙ 菜单中更改"), label)
         placementLockShakeTick += 1
         placementLockNoticeTimer?.invalidate()
         placementLockNoticeTimer = Timer.scheduledTimer(withTimeInterval: 2.4, repeats: false) { [weak self] _ in

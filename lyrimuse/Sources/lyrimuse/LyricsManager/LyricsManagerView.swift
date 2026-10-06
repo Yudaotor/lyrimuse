@@ -21,23 +21,33 @@ final class AppLanguageObserver: ObservableObject {
 
 /// 只转发"当前播放的是哪首歌"的窄代理,同上面 AppLanguageObserver 一个套路。
 ///
-/// 让高亮跟着"窗口开着期间换歌"实时更新,不止在开窗那一刻和点「回到当前播放」按钮时
-/// 定位一次。这个窗口特意**不**整对象订阅 `PlaybackCoordinator`(见 detailView
-/// 顶部注释:那个单例还同时发布 currentLine/anchor,播放中每秒 20 次刷新,订阅整对象会
-/// 把这个窗口的 body 拖进 20Hz 重渲染),所以要单独开一条窄管道,只转发 artist/title/album
+/// 让高亮跟着"窗口开着期间换歌"实时更新,不止在开窗那一刻和点「定位」时定位一次。这个窗口特意**不**整对象订阅
+/// `PlaybackCoordinator`:那个单例还同时发布 currentLine/anchor,播放中每秒 20 次刷新,订阅整对象会
+/// 把这个窗口的 body 拖进 20Hz 重渲染,所以要单独开一条窄管道,只转发 artist/title/album
 /// 这三个"换歌才变一次"的属性,合成一个去重后的签名串,给 `.onChange` 当触发信号用——
 /// 真正的 key 匹配逻辑仍然读 `PlaybackCoordinator.shared` 的快照(见 focusCurrentlyPlaying),
-/// 这里只负责"该不该再跑一次"。
+/// 这里只负责"该不该再跑一次"。封面换歌之后晚一拍才到,单独转发给「正在播放」那一行。
 @MainActor
 final class LyricsManagerNowPlayingObserver: ObservableObject {
     @Published private(set) var trackSignature = ""
+    @Published private(set) var artwork: NSImage?
+    @Published private(set) var displayArtist = ""
     private var sub: AnyCancellable?
+    private var artworkSub: AnyCancellable?
+    private var displayArtistSub: AnyCancellable?
     init() {
         let p = PlaybackCoordinator.shared
         sub = Publishers.CombineLatest3(p.$artist, p.$title, p.$album)
             .map { artist, title, album in "\(artist)|\(title)|\(album)" }
             .removeDuplicates()
             .sink { [weak self] in self?.trackSignature = $0 }
+        // 「正在播放」那一行显示的歌手:带署名纠正和引擎认出来的歌手兜底,认出来比换歌晚一拍,单独转发。
+        displayArtistSub = p.$displayArtist
+            .removeDuplicates()
+            .sink { [weak self] in self?.displayArtist = $0 }
+        artworkSub = p.$artworkImage
+            .removeDuplicates { $0 === $1 }
+            .sink { [weak self] in self?.artwork = $0 }
     }
 }
 
@@ -85,21 +95,23 @@ private enum SourceFilter: Hashable, Identifiable {
     }
 }
 
-private enum TimingFilter: String, CaseIterable, Identifiable {
-    case all = "全部"
-    case wordTiming = "仅逐字"
-    case lineOnly = "仅整行"
-    // 加:纯文本(无时间戳)兜底跟"整行时间戳"是两回事——前者压根没有
-    // 任何时间戳,不能跟随播放高亮,见 EnrichCacheStore.Summary.hasPlainTextFallback
-    // 声明处的完整说明。
-    case plainTextOnly = "仅纯文本"
-    var id: String { rawValue }
+// 「筛选」里的「歌词类型」:逐字 / 逐行 / 纯文本,跟设置页「歌词库」统计同一个成色阶梯(LyricsKind)。没词和纯音乐那两档
+// 是外面的「缺歌词」「纯音乐」胶囊,不在这里重复(见 11 章决策 77、80)。
+private enum KindFilter: Hashable {
+    case all
+    case only(LyricsKind)
+
+    static let choices: [LyricsKind] = [.wordByWord, .lineByLine, .plainText]
+
+    var id: String {
+        switch self {
+        case .all: return "all"
+        case let .only(kind): return kind.rawValue
+        }
+    }
 }
 
-/// 排序方式("加一个排序功能",筛选栏加一个下拉、九个预设组合)。
-/// 「默认排序」原样对应改动前那套写死的(歌手,专辑,歌名)固定排序——不是新行为,只是
-/// 第一次开放成"用户可以主动切走、也可以切回来"的一个选项,不切它列表长得跟改动前
-/// 逐条一样。
+/// 排序方式。没选过时是「更新时间 新→旧」;在搜时这一档改按相关度排(见 11 章决策 87)。
 ///
 /// 「更新时间」两档补上。上面那版注释曾写着"没有这个候选,
 /// 缓存里没有任何时间戳字段"——**结论对、理由不全**:缓存里确实没有一个表达"更新时间"的
@@ -109,7 +121,6 @@ private enum TimingFilter: String, CaseIterable, Identifiable {
 /// 覆盖率 3169/3210。见 `Summary.lyricsUpdatedAt` 的头注(含"为什么它不会被引擎
 /// 每次启动重写冲掉"这个关键前提)。
 private enum LyricsSortOption: String, CaseIterable, Identifiable {
-    case defaultOrder = "默认排序"
     case titleAscending = "歌名 A→Z"
     case titleDescending = "歌名 Z→A"
     case artistAscending = "歌手 A→Z"
@@ -132,7 +143,6 @@ private enum LyricsSortOption: String, CaseIterable, Identifiable {
     /// 能逐档钉住;留在这个 private enum 里的话一行覆盖都没有(搬走的缘由见它的头注)。
     var coreOrder: LyricsSortOrder {
         switch self {
-        case .defaultOrder: return .defaultOrder
         case .titleAscending: return .title(ascending: true)
         case .titleDescending: return .title(ascending: false)
         case .artistAscending: return .artist(ascending: true)
@@ -164,8 +174,7 @@ private enum LyricsSortOption: String, CaseIterable, Identifiable {
 
 extension EnrichCacheStore.Summary {
     /// 映射成排序用的纯值类型。歌手/专辑取的是归一化键(`normPrimaryArtist`/`normAlbum`,
-    /// 折过简体+小写)而不是列表里展示的原始写法——理由见 `LyricsManagerRow` 调用点上方
-    /// 那条注释:"筛选/排序继续按统一名归并不变,只是这一列如实展示每条记录
+    /// 折过简体+小写)而不是列表里展示的原始写法——理由见 `Summary.displayArtist` 的注释:"筛选/排序继续按统一名归并不变,只是这一列如实展示每条记录
     /// 自己的原始歌手名"。同一位歌手因为原始标签写法不同(简繁/大小写)被拆成两条记录时,
     /// 按归一化键排还能让它们挨在一起;按展示字符串排就会被拆到列表两端。
     var lyricsSortKey: LyricsSortKey {
@@ -334,70 +343,6 @@ func sourceHelpText(_ source: String) -> String {
     }
 }
 
-// 歌名/歌手/专辑/来源四列表头和每一行列表项共用同一组列宽——歌名是主列、拿剩余空间,
-// 后三列固定宽度+单行截断,这样表头文字和每行内容的起始位置对得上。
-// 列宽拖拽手柄:1pt 的细线 + 9pt 的命中区(线本身太细,按 HIG 可拖拽目标不该小于 8pt)。
-// 单独抽成一个 View 是为了让 hover 光标的 push/pop 有地方存状态自己配平——onHover 的退出
-// 事件在拖拽中/窗口切走时可能丢,无条件 pop 会把别人压进去的光标弹掉,连续 push 又会让
-// 双箭头光标一直卡住不还原。
-// 列宽拖拽 + 行内容边界测量共用的命名坐标空间。挂在侧栏最外层的 VStack 上(不是表头上):
-// 表头的拖拽手势和列表里每一行都要在**同一个**空间里报坐标才能互相对齐。这个 VStack
-// 不随列宽变化而移动,所以也是拖拽位移的可靠参照系。
-private enum LyricsColumnHeaderSpace {
-    static let name = "lyricsColumnHeader"
-}
-
-// 列表里"一行内容"的实际左右边界。List(.inset) 自己给每行加的 inset 是 AppKit 给的、会随
-// 系统版本变(实测 leading≈16pt、trailing≈33pt,后者含滚动条留白),不能在表头那边写死一个
-// 猜的数字——让行自己量出来往上报,表头据此对齐,分隔线才真的画在列边界上。
-private struct RowContentBounds: Equatable {
-    var minX: CGFloat
-    var maxX: CGFloat
-}
-
-private struct RowContentBoundsKey: PreferenceKey {
-    static let defaultValue: RowContentBounds? = nil
-    // 取第一个上报的即可——所有行的左右边界都一样,没必要合并。
-    static func reduce(value: inout RowContentBounds?, nextValue: () -> RowContentBounds?) {
-        if value == nil { value = nextValue() }
-    }
-}
-
-private struct ColumnDividerHandle: View {
-    let onDrag: (CGFloat) -> Void
-    let onDragEnd: () -> Void
-    let onDoubleClick: () -> Void
-    @State private var pushedCursor = false
-
-    var body: some View {
-        Rectangle()
-            .fill(Color.secondary.opacity(0.28))
-            .frame(width: 1)
-            .frame(width: 9)
-            .contentShape(Rectangle())
-            .onHover { inside in
-                if inside, !pushedCursor { NSCursor.resizeLeftRight.push(); pushedCursor = true }
-                if !inside, pushedCursor { NSCursor.pop(); pushedCursor = false }
-            }
-            .onDisappear { if pushedCursor { NSCursor.pop(); pushedCursor = false } }
-            // minimumDistance: 1 而不是 0——0 会让双击的第一次按下就被当成拖拽开始,
-            // 下面那个双击复位手势永远收不到。
-            //
-            // 位移必须在**表头这个固定坐标空间**里算(location - startLocation),不能用
-            // value.translation:translation 是相对手势所在视图算的,而这个手柄正是随列宽
-            // 变化而移动的那个视图——拖宽一点手柄就往右跑一点,光标相对它的偏移被吃掉,
-            // 形成反馈回路。实测:拖 40pt 只涨了 22pt,而且本该守恒的
-            // "歌手+专辑总宽"也被破坏(歌名被反向挤窄 13.5pt)。命名坐标空间挂在表头容器上,
-            // 它不随列宽改变,量出来的位移才跟鼠标实际移动一致。
-            .gesture(
-                DragGesture(minimumDistance: 1, coordinateSpace: .named(LyricsColumnHeaderSpace.name))
-                    .onChanged { onDrag($0.location.x - $0.startLocation.x) }
-                    .onEnded { _ in onDragEnd() }
-            )
-            .onTapGesture(count: 2, perform: onDoubleClick)
-    }
-}
-
 // 窗口位置/尺寸/所在屏幕的持久化(补——「歌词窗口」修过同一类
 // 问题,这扇姐妹窗口当时漏补)。这扇窗完全靠 SwiftUI `Window(id:)` 的系统状态恢复,而
 // 系统那套的问题不在"存不存",在**它不认识屏幕**:多显示器下拔插一次或换个分辨率,
@@ -418,7 +363,13 @@ private final class LyricsManagerWindowFramePersistence: ObservableObject {
     private var frameObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
     private var closeObserver: NSObjectProtocol?
+    private var keyObservers: [NSObjectProtocol] = []
+    private var firstResponderObservation: NSKeyValueObservation?
     private var persistFrameTask: Task<Void, Never>?
+
+    /// 列表此刻有没有键盘焦点:窗口是主窗口,第一响应者是那张表格。这时选中行铺实心强调色,行里彩色的字要换成白字那一套。
+    /// `.inset` 样式的列表里 backgroundProminence 不跟着变,所以看 AppKit 自己的状态。
+    @Published private(set) var listHasKeyFocus = false
 
     /// 首次(以及每次 SwiftUI 重新求值 NSViewRepresentable 时)调用,只在真的换了一个
     /// 窗口实例时才重新挂观察者——同一扇窗口重复 attach 是空操作。
@@ -452,10 +403,60 @@ private final class LyricsManagerWindowFramePersistence: ObservableObject {
             forName: NSWindow.didMoveNotification, object: window, queue: .main, using: persist)
         resizeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResizeNotification, object: window, queue: .main, using: persist)
+        observeListFocus(window)
     }
 
-    /// 拖动/缩放停下来之后再落盘,不去抖的话拖动期间每帧一次 UserDefaults 写
-    /// (跟这个窗口里列宽拖动那次性能审计，松手才落盘,同一个坑同一个修法)。
+    private func observeListFocus(_ window: NSWindow) {
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+        let refresh: @Sendable (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.scheduleListFocusRefresh() }
+        }
+        keyObservers = [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification].map {
+            NotificationCenter.default.addObserver(forName: $0, object: window, queue: .main, using: refresh)
+        }
+        // firstResponder 支持 KVO(NSWindow.h)。
+        firstResponderObservation = window.observe(\.firstResponder) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.scheduleListFocusRefresh() }
+        }
+        scheduleListFocusRefresh()
+    }
+
+    /// 推到下一拍再发布:第一响应者可能在 SwiftUI 更新视图的当中换,不能在那时改 @Published。
+    private func scheduleListFocusRefresh() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window else { return }
+            let focused = window.isKeyWindow && window.firstResponder is NSTableView
+            if focused != self.listHasKeyFocus { self.listHasKeyFocus = focused }
+        }
+    }
+
+    /// 等窗口成为主窗口、列表的表格装上至少 `minRows` 行,最多等 `timeout` 秒,到点照样返回。开窗定位和交焦点要等这两样:
+    /// 机器忙的时候(别的程序在编译)开窗那一下它们可能都还没好,定位落空,焦点随后又被系统交给搜索框。
+    func waitUntilListReady(minRows: Int, timeout: Double = 2) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let window, window.isKeyWindow,
+               let table = Self.firstTable(in: window.contentView), table.numberOfRows >= minRows { return }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    /// 把键盘焦点交给窗口里那张列表(侧栏的歌曲列表,窗口里唯一的 NSTableView),直接换 AppKit 的第一响应者。
+    func focusList() {
+        guard let window, let table = Self.firstTable(in: window.contentView) else { return }
+        window.makeFirstResponder(table)
+    }
+
+    private static func firstTable(in view: NSView?) -> NSTableView? {
+        guard let view else { return nil }
+        if let table = view as? NSTableView { return table }
+        for subview in view.subviews {
+            if let table = firstTable(in: subview) { return table }
+        }
+        return nil
+    }
+
+    /// 拖动/缩放停下来之后再落盘,不去抖的话拖动期间每帧一次 UserDefaults 写(侧栏宽度同样是松手才落盘)。
     private func schedulePersistFrame() {
         persistFrameTask?.cancel()
         persistFrameTask = Task { [weak self] in
@@ -530,13 +531,16 @@ private struct LyricsManagerWindowCapture: NSViewRepresentable {
 
 // 歌词管理窗口:浏览目前引擎缓存了哪些歌的歌词、来源是什么,支持手动纠正内容、
 // 联网重新搜索候选歌词(见 LyricsSearchSheet/LyricsSearchService)、
-// 或整条删除(强制下次播放重新解析)。改动通过 EnrichCacheStore 落盘+踢一脚重启
-// 引擎生效(见该文件顶部注释,解释为什么必须这么做而不是直接改内存)。
+// 或整条删除(强制下次播放重新解析)。改动交给引擎执行(见 EnrichCacheStore 顶部注释)。
+//
+// 版面:左边一块浮起来的玻璃侧栏(搜索、状态胶囊、列表,宽度能拖,见 LyricsManagerSidebarWidth),右边是选中那首的
+// 详情(封面氛围头部、预览 / 逐句编辑)、缺歌词的说明,或多选时的批量面板。场景挂 .windowStyle(.hiddenTitleBar),
+// 内容铺到顶,红绿灯落在侧栏左上角。界面零件在 LyricsManagerParts.swift。
 struct LyricsManagerView: View {
     @ObservedObject private var store = EnrichCacheStore.shared
     // 窗口位置/尺寸/所在屏幕的持久化,见 LyricsManagerWindowFramePersistence 类头注。
     @StateObject private var windowFrame = LyricsManagerWindowFramePersistence()
-    // 窗口看不看得见(遮挡 / 最小化 / 在别的桌面)。看不见时列表那个轮询整个停掉:补搜期间缓存文件
+    // 窗口看不看得见(遮挡 / 最小化 / 在别的桌面)。看不见时列表那个轮询整个停掉:自动匹配期间缓存文件
     // 每搜完一首就变,不停的话被挡住的窗口也会跟着反复解析整份缓存。
     @StateObject private var windowSurface = SettingsWindowSurface()
     // 只为了让这个独立窗口(跟 SettingsView 不在同一棵视图树里)在手动切换语言时
@@ -544,17 +548,12 @@ struct LyricsManagerView: View {
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
     // 窗口开着期间跟着换歌自动重新定位,见 LyricsManagerNowPlayingObserver 类头注。
     @StateObject private var nowPlaying = LyricsManagerNowPlayingObserver()
-    // searchText 是搜索框里**正在打字**的内容(见 searchBar,手写 TextField 绑定,每敲一个
-    // 字符都会变);committedSearchText 才是真正喂给 filtered 的那份,只在按下回车/点搜索
-    // 按钮(两者都调 commitSearch)或者搜索框被清空时才更新。 两者不能合并:filtered 的
-    // 缓存键 filterToken 若直接拼 searchText,每敲一个字符 token 就变、缓存作废,
-    // store.summaries 上百条全量重过滤一遍(还要重算 4~5 处引用点,见 FilteredCache 类头注),
-    // 几百条记录规模下逐字符都能感觉到卡顿。拆成两份状态之后,没敲完之前 committedSearchText
-    // 不变、filterToken 不变、filtered 直接命中缓存,真正的过滤只在用户明确"搜索完了"这一下发生。
+    // searchText 是搜索框里正在打的内容;committedSearchText 才是真正喂给 filtered 的那份,停手 150 毫秒(commitSearch)
+    // 或按回车时才同步,删空时立刻同步。两者不能合并:filtered 的缓存键 filterToken 若直接拼 searchText,每敲一个字符
+    // 就要把全库重新过滤、排序一遍。
     @State private var searchText = ""
     @State private var committedSearchText = ""
-    // 搜索框的焦点态,只用来给 searchBar 的边框上一圈强调色高亮(视觉细化)——
-    // 纯展示用途，不影响 committedSearchText 那套提交逻辑。
+    @State private var searchCommitTask: Task<Void, Never>?
     @FocusState private var searchFieldFocused: Bool
     // 多选,支持 Cmd 点选/Shift 连选。
     // 三态由 selectedKeys.count 决定:0 = 空占位,1 = 单曲详情页,≥2 = 批量操作面板。
@@ -564,76 +563,61 @@ struct LyricsManagerView: View {
     // 可能读到空集(什么都没删、用户以为删了)或读到中途被改过的集合。
     @State private var pendingDeleteKeys: [String] = []
     @State private var showBatchDeleteConfirm = false
-    // 删完之后 selectedKeys 清空、右侧面板变回空占位,如果一点反馈都没有,用户看到的就是
-    // "列表少了一批、面板莫名变空"。跟这个文件里已有的 showRefreshedFeedback/
-    // showSaveEditFeedback 是同一套写法:短暂切换成"已删除"+对勾,1 秒后自动变回去。
+    // 删完之后选中清空、右侧变回空占位:列表标题旁闪一下「已删除」,1 秒后收起。
     @State private var showDeletedFeedback = false
     @State private var editedLyrics = ""
-    // 「歌词(LRC)」编辑框里显示的是**正文**(元信息标签行 / 署名行摘掉),不是 editedLyrics 本身;
-    // editedLyrics 仍是完整原文、保存 / 指纹 / 采纳都只认它。两者靠 LyricsBodyEdit 互拼,接法见其头注
-    // (用户圈图「不需要显示,只需要显示歌词正文」)。
+    // 编辑用的**正文**(元信息标签行 / 署名行摘掉),不是 editedLyrics 本身;editedLyrics 仍是完整原文、
+    // 保存 / 指纹 / 采纳都只认它。两者靠 LyricsBodyEdit 互拼,接法见其头注。
     @State private var editedLyricsBody = ""
     @State private var lyricsBodyEdit = LyricsBodyEdit(lyrics: "")
     @State private var editedTr = ""
-    // 「译文」「罗马音」编辑框同样只显示正文(元信息标签行 / 署名行摘掉),跟「歌词(LRC)」
-    // 那对 editedLyrics/editedLyricsBody 是同一套 LyricsBodyEdit 互拼,理由见其头注 ——
-    // 之前只给主歌词接了这层过滤,译文/罗马音编辑框还在摊开原始文本,`[by:xxx]` 这类
-    // 只有标签没时间戳的行(播放时 LRCParser.parse 本就整行跳过)会在编辑框里露出来。
+    // 译文、读音同样只编辑正文,跟 editedLyrics/editedLyricsBody 是同一套 LyricsBodyEdit 互拼。
     @State private var editedTrBody = ""
     @State private var trBodyEdit = LyricsBodyEdit(lyrics: "")
     @State private var editedRoma = ""
     @State private var editedRomaBody = ""
     @State private var romaBodyEdit = LyricsBodyEdit(lyrics: "")
-    // 逐字歌词的「歌词」编辑框改的不是 LRC,是逐字拼出来的每一行(只改字,见 LyricsWordTimingEdit):editedWordText 是完整的
-    // 摊开文本,编辑框显示摘掉署名行之后的正文,跟上面那几对同一套互拼。
+    // 逐字歌词改的不是 LRC,是逐字拼出来的每一行(只改字,见 LyricsWordTimingEdit):editedWordText 是完整的
+    // 摊开文本,编辑时用的是摘掉署名行之后的正文,跟上面那几对同一套互拼。
     @State private var editedWordText = ""
     @State private var editedWordBody = ""
     @State private var wordBodyEdit = LyricsBodyEdit(lyrics: "")
     @State private var loadedWordText = ""
-    /// 编辑框载入时的逐字原文,「保存修改」以它为底套回改动;空 = 这首没有能摊开的逐字行,编辑框改的是 LRC。
+    /// 载入时的逐字原文,「保存修改」以它为底套回改动;空 = 这首没有能摊开的逐字行,改的是 LRC。
     @State private var loadedYRC = ""
-    /// 上一次保存里有几句的逐字时间是按字数估的,在保存按钮旁边说一声。
+    /// 上一次保存里有几句的逐字时间是按字数估的,保存之后说一声。
     @State private var saveEditNote: String?
-    // 编辑框里这份内容属于哪一首、载入时是什么。编辑状态挂在整个窗口上(不是详情页自己的),详情页卸载再装回来
-    // (取消选中再选另一首)时 onChange(of: key) 不触发 —— 所以异步结果(重新匹配、采纳候选、保存完成)写回编辑框
-    // 之前都要核对 editingKey;保存时据 loaded* 判断哪几格用户真的改过(没改的交盘上此刻的值,见保存按钮)。
+    // 编辑缓冲属于哪一首、载入时是什么。编辑状态挂在整个窗口上(不是详情页自己的),详情页卸载再装回来
+    // (取消选中再选另一首)时 onChange(of: key) 不触发 —— 所以异步结果(重新匹配、采纳候选、保存完成)写回编辑缓冲
+    // 之前都要核对 editingKey;保存时据 loaded* 判断哪几格用户真的改过(没改的交盘上此刻的值,见 saveEdits)。
     @State private var editingKey: String?
     @State private var loadedLyrics = ""
     @State private var loadedTr = ""
     @State private var loadedRoma = ""
-    // 这首的正文此刻读不回来(EnrichCacheStore.detail 的 complete == false):编辑框是空的,不许保存,
+    // 这首的正文此刻读不回来(EnrichCacheStore.detail 的 complete == false):编辑缓冲是空的,不许保存,
     // 否则会把盘上的歌词、译文、罗马音一起清掉。
     @State private var detailIncomplete = false
 
-    /// 编辑框里有没保存的改动。
+    /// 编辑缓冲里有没保存的改动。
     private var isEditorDirty: Bool {
         editedLyrics != loadedLyrics || editedTr != loadedTr || editedRoma != loadedRoma || editedWordText != loadedWordText
     }
     // 单曲歌词时间轴偏移——输入框显示/编辑的秒数字符串。跟下面两个"persisted"字段
     // 分开存,是因为算 LyricsOffsetStore 的 key 必须用磁盘上实际持久化的歌词内容,不能
-    // 用 editedLyrics(用户可能正在编辑框里改还没点"保存修改",这时候的文本还没生效到
-    // 播放端,拿它算出来的 key 会跟真正播放时用的 key 对不上)。
+    // 用 editedLyrics(编辑中还没保存的文本还没生效到播放端,拿它算出来的 key 会跟真正播放时用的 key 对不上)。
     @State private var editedOffsetSeconds = ""
     @State private var persistedLyricsForOffset = ""
     @State private var persistedYRCForOffset = ""
-    // 列宽(可拖拽调节 + 持久化,见 LyricsColumnWidthsStore)。
-    @ObservedObject private var columnWidths = LyricsColumnWidthsStore.shared
-    // 单曲时间轴校正值:工具栏那个「已校准 N 首 / 清空」要跟着实时变(整对象订阅是安全的
+    // 单曲时间轴校正值:「⋯」菜单里「已校准 N 首 / 清空」要跟着实时变(整对象订阅是安全的
     // —— 它只在用户动作时发布,不在播放热路径上,见 LyricsOffsetStore.trackOffsetCount)。
     @ObservedObject private var offsets = LyricsOffsetStore.shared
-    // 已校准名单:详情页那颗「已校准」徽章和它下面那句说明认它(见 LyricsPinStore)。
+    // 已校准名单:列表的「已校准」胶囊、详情页那颗「已校准」标签和它下面那句说明认它(见 LyricsPinStore)。
     @ObservedObject private var pins = LyricsPinStore.shared
-    // 一次拖拽开始那一刻的列宽快照——必须按"起点 + 累计位移"算,不能每次 onChanged 都在
-    // 当前值上叠加增量:DragGesture 的 translation 是相对手势起点的累计值,不是帧间增量,
-    // 叠加会让列宽以平方速度飞出去。
-    @State private var dragStartWidths: LyricsColumnWidths?
-    // List 里一行内容的实际左右边界(由行自己通过 preference 上报,见 RowContentBoundsKey)。
-    @State private var rowContentBounds: RowContentBounds?
     @State private var showSearchSheet = false
 
     // MARK: - 「重新自动匹配」
     //
-    // 跟隔壁「联网搜索候选歌词」的区别:那个是把候选摆出来让人挑,这个是**请引擎对这一首跑一轮重评**
+    // 跟隔壁「搜索候选歌词」的区别:那个是把候选摆出来让人挑,这个是**请引擎对这一首跑一轮重评**
     // (LyricsRematch):冠军按设置里的「匹配算法」选,换不换、写哪些字段跟后台重评是同一个函数,这里只发请求、
     // 报进度、按结论说一句话。
     //
@@ -658,75 +642,119 @@ struct LyricsManagerView: View {
         var tint: Color { LyricsRematchRunner.tint(tone) }
     }
     @State private var showDecisionSheet = false
-    // 补上——"保存修改"点了之前完全没有任何肉眼可见的反馈,跟上面
-    // showRefreshedFeedback("刷新"按钮已有的做法)是同一类问题、同一个修法:短暂切换成
-    // "已保存"+对勾图标,1秒后自动变回去。
-    // (原来这段还讲了「移除逐字时间轴」那个按钮的同款反馈,那个按钮已去掉。)
+    // 「保存修改」点了之后闪一下「已保存」+ 对勾,1 秒后变回去。
     @State private var showSaveEditFeedback = false
-    // 「歌词(LRC)」文本框标题行的拷贝按钮反馈,跟 showSaveEditFeedback 同一个理由:拷贝
-    // 一大段文本到剪贴板本身没有任何肉眼可见的变化,不给反馈用户会怀疑点了没反应。
+    // 整段文本编辑里「拷贝」按钮的同款反馈:拷贝一大段文本到剪贴板本身没有任何肉眼可见的变化。
     @State private var showCopyLyricsFeedback = false
     @State private var sourceFilter: SourceFilter = .all
-    @State private var timingFilter: TimingFilter = .all
-    @State private var manualOnly = false
-    @State private var missingLyricsOnly = false
-    @State private var instrumentalOnly = false
+    @State private var kindFilter: KindFilter = .all
+    /// 侧栏状态胶囊选的那一类,判定在 LyricsManagerStatus。
+    @State private var statusFilter: LyricsManagerStatus = .all
     // 引擎侧「补空扫描」的进度快照(LyricsFillSweep,进度文件按 mtime 读),由列表那个
-    // 轮询 .task 刷新;nil = 这个引擎进程还没跑过任何一轮。工具栏「补搜歌词」按钮和
-    // 多选面板的「重试选中的…」都按它判"正在跑"来置灰/显示进度。
+    // 轮询 .task 刷新;nil = 这个引擎进程还没跑过任何一轮。「⋯」里的自动匹配、侧栏底部的进度卡、
+    // 多选面板的「重新自动匹配选中的…」都按它判"正在跑"来置灰/显示进度。
     @State private var fillSweepStatus: LyricsFillSweep.Info?
-    // 点了补搜、引擎还没接手的那几秒(LyricsFillSweep.isPending):按钮置灰、工具栏先转起来,
+    // 点了自动匹配、引擎还没接手的那几秒(LyricsFillSweep.isPending):按钮置灰、进度卡先转起来,
     // 免得用户以为没点上再点一次。由点击处置 true,轮询按 isPending 清掉。
     @State private var fillSweepPending = false
-    /// 点下去的是不是「全量重新扫库」:接手前那几秒按钮上说哪一句。
+    /// 点下去的是不是「全量重新扫库」:接手前那几秒进度卡上说哪一句。
     @State private var fillSweepPendingIsFull = false
+    /// 进度卡上「自动匹配完了」那句说过了的那一轮(按结束时刻认),说过就收起。
+    @State private var dismissedSweepReceipt: Int64?
     /// 引擎公布的全量扫库状态(打分版本号、有没有一轮没跑完);nil = 引擎还没起来过或版本太老,
-    /// 那时「全量重新扫库」入口不出现(同设置页那一行)。跟补搜进度同一个轮询节拍读,开销是一次 stat。
+    /// 那时「全量重新扫库」入口不出现(同设置页那一行)。跟自动匹配进度同一个轮询节拍读,开销是一次 stat。
     @State private var fullScanState: LyricsFullScan.State?
     @State private var confirmFullScan = false
     /// 上一次「闲时」问磁盘的时刻,见 `LyricsManagerRefresh`。
     @State private var lastIdleRefresh = Date.distantPast
-    // nil = 全部歌手/专辑。跟 SourceFilter/TimingFilter 不同,歌手/专辑的候选值不是固定
-    // 的几种,是从当前缓存数据里现算出来的(见 distinctArtists/distinctAlbums),所以
-    // 这两个直接用 String? 而不是另建一个枚举。
+    // nil = 全部歌手/专辑。歌手/专辑的候选值不是固定的几种,是从当前缓存数据里现算出来的
+    // (见 distinctArtists/distinctAlbums),所以这两个直接用 String? 而不是另建一个枚举。
     @State private var artistFilter: String?
     @State private var albumFilter: String?
     // 排序不是筛选(不改变"看得见哪些",只改变"看到的顺序"),所以特意不并进 filterToken——
     // 那个 token 是 filtered 结果集的缓存键/selectedKeys 收敛的触发信号,两者都只关心
     // "集合",不关心顺序,混进去只会让缓存判断多背一个跟"集合"无关的维度。
-    @State private var sortOption: LyricsSortOption = .defaultOrder
-    // 点了"刷新"却没有任何肉眼可见的变化时(比如内容根本没变),用户很容易以为按钮没
-    // 反应——短暂切换成"已刷新"+对勾图标给个明确反馈,1秒后自动变回去。
+    /// 排序和分组记在 UserDefaults,下次开窗照旧;存的值认不出来时回到「更新时间 新→旧」(见 11 章决策 84、87)。
+    @AppStorage("np:lyricsManagerSortOption") private var sortOption: LyricsSortOption = .updatedDescending
+    /// 列表按专辑分组。
+    @AppStorage("np:lyricsManagerGroupByAlbum") private var groupByAlbum = false
+    // 点了「刷新」却没有任何肉眼可见的变化时(比如内容根本没变),用户很容易以为按钮没
+    // 反应——短暂切换成对勾,1 秒后自动变回去。
     @State private var showRefreshedFeedback = false
     @State private var showClearAllConfirm = false
+    /// 「清理无效记录」确认框开着时要删的那几条,点菜单那一刻拍下来(确认框开着期间列表可能重读)。
+    @State private var pendingCleanupKeys: [String] = []
+    @State private var showCleanupConfirm = false
     // 跟上面那个刻意分开:清缓存(歌词内容)和清时间轴校正是两件独立的事,两条路都开着、
     // 互不连带 —— 校正值是用户一句句听出来的,比歌词内容宝贵得多(见 LyricsOffsetStore
     // 类型注释里"故意跟 EnrichCacheStore 彻底分开存"那一段)。
     @State private var showClearOffsetsConfirm = false
     @State private var showClearRadioOffsetsConfirm = false
-    // 「从自动备份恢复」用的三个状态。快照列表在 Menu 打开那一刻现读(autoSnapshots() 只
+    // 「从自动备份恢复」用的三个状态。快照列表在菜单打开那一刻现读(autoSnapshots() 只
     // stat 目录,廉价),不常驻 @State —— 常驻的话清空之后新打的那份不会出现在菜单里。
     @State private var pendingRestoreSnapshot: LyricsBackupStore.Snapshot?
     @State private var showRestoreSnapshotConfirm = false
     @State private var restoreSnapshotResult: String?
-    // "这次开窗还没有自动定位过当前播放的歌"。 不能靠"selectedKeys 是空的"来判断这是不是
+    // "这次开窗还没有自动定位过当前播放的歌"。不能靠"selectedKeys 是空的"来判断这是不是
     // 一次全新的开窗——SwiftUI 的 Window scene 关掉之后**并不销毁根视图**,@State 原样
-    // 留着,第二次打开时 selectedKeys 还是上次选的那一条(实测:第二次开窗 sel=1)。原来那道 `guard selectedKeys.isEmpty`
-    // 于是从第二次开窗起就把定位整个挡掉了(选中不刷新、列表也不滚),表现成"选中的还是当前
-    // 播放这首、但列表不会滚过去"——因为上次开窗时自动选中的本来就是它。
+    // 留着,第二次打开时 selectedKeys 还是上次选的那一条。
     // 窗口关闭时(根视图 .onDisappear)置回 true,所以是"每次开窗定位一次"而不是"整个 App
-    // 生命周期只定位一次";用它当闸也顺带挡住侧栏被折叠/展开时 List 重新 onAppear 把用户
-    // 当前选中项抢走这种误伤。
+    // 生命周期只定位一次";用它当闸也顺带挡住 List 重新 onAppear 把用户当前选中项抢走这种误伤。
     @State private var pendingAutoFocus = true
 
-    /// "这首歌正在联网搜歌词、引擎还没写出任何结论"这段窗口期的占位行(
-    /// 现象是"首次搜索期间歌词管理完全看不到这条记录")。nil = 当前没有需要补的占位——
+    /// "这首歌正在联网搜歌词、引擎还没写出任何结论"这段窗口期的占位行。nil = 当前没有需要补的占位——
     /// 可能是没在播、也可能是缓存里已经有真实条目了。见 `refreshPlaceholder()`。
     @State private var placeholderSummary: EnrichCacheStore.Summary?
 
+    /// 侧栏宽度(存下来的那份;窗口窄时实际画多宽见 LyricsManagerSidebarWidth.shown)。
+    @State private var sidebarWidth: Double = LyricsManagerView.storedSidebarWidth
+    /// 一次拖拽开始那一刻的宽度:按"起点 + 累计位移"算,不在当前值上叠增量。
+    @State private var sidebarDragStart: Double?
+    @State private var showSourcePicker = false
+    @State private var showArtistPicker = false
+    @State private var showAlbumPicker = false
+    @State private var showFilterPopover = false
+    /// 正在放的这首在列表里对应哪一条(含占位行),见 resolveNowPlayingKey。
+    @State private var nowPlayingKey: String?
+
+    /// 右边是预览还是在编辑,见 LyricsManagerEditMode。
+    @State private var editMode: LyricsManagerEditMode = .preview
+    /// 打开编辑那一刻的正文,逐句格子据此标哪几句改过、「还原」还原到哪。
+    @State private var editBase: EditBase?
+    @FocusState private var focusedLine: LyricsManagerLineFocus?
+    @State private var displayMode: LyricsManagerDisplayMode = .translation
+    @State private var followPlayback = true
+    /// 预览的行:不带读音的一份,带读音的一份(「原文 + 读音」那一档)。只在这首的正文、读音或设置里读音的文字种类变了时重算。
+    @State private var previewRows: [LyricsPreviewRow] = []
+    @State private var romanizedRows: [LyricsPreviewRow] = []
+    @State private var previewInputs: [String] = []
+    /// 这首按设置里开着的文字种类,有没有至少一句读音显示得出来;没有时「原文 + 读音」灰掉。
+    @State private var romanizationAvailable = false
+    /// 灰掉是因为设置里没给这首的语言标读音(缓存里存着读音,或者歌词里有能标读音的字),不是这首本来就标不了。
+    @State private var romanizationOffInSettings = false
+    /// 只有纯文本兜底的那首,右边显示的就是它。
+    @State private var plainLyricsText = ""
+    /// 编辑里有没保存的改动时,点到的那一批先记在这里,等用户在提示里选了再换。
+    @State private var pendingSelection: Set<String>?
+    @State private var showUnsavedEditAlert = false
+    @State private var showDiscardEditConfirm = false
+    @State private var markingInstrumental = false
+
+    private struct EditBase: Equatable {
+        let key: String
+        /// 逐字歌词是 editedWordBody,其余是 editedLyricsBody。
+        let main: String
+        let tr: String
+        let roma: String
+    }
+
     private var hasActiveFilters: Bool {
-        sourceFilter != .all || timingFilter != .all || manualOnly || missingLyricsOnly
-            || instrumentalOnly || artistFilter != nil || albumFilter != nil
+        statusFilter != .all || sourceFilter != .all || kindFilter != .all || artistFilter != nil || albumFilter != nil
+    }
+
+    /// 「筛选」弹出层里有没有选着东西(歌词类型、来源、歌手、专辑):按钮上标一个点。
+    private var hasPopoverFilters: Bool {
+        kindFilter != .all || sourceFilter != .all || artistFilter != nil || albumFilter != nil
     }
 
     // 归并字典(歌手/专辑展示名、筛选下拉候选)全部下沉进 EnrichCacheStore,
@@ -738,8 +766,8 @@ struct LyricsManagerView: View {
     }
 
     /// filtered 的缓存盒。@State 里包一个引用类型,让下面的计算属性能在 body 求值过程中
-    /// 写缓存(View struct 本身不可变)—— filtered 在一次 body 构建里被独立求值 4~5 处
-    /// (List 数据源/副标题计数/全选按钮/删除禁用/批量面板),不缓存就是 4~5 遍全量过滤。
+    /// 写缓存(View struct 本身不可变)—— filtered 在一次 body 构建里被独立求值好几处
+    /// (列表数据源、标题计数、右键菜单、批量面板),不缓存就是每处一遍全量过滤。
     private final class FilteredCache {
         var token = "\u{0}"
         var generation = -1
@@ -747,14 +775,21 @@ struct LyricsManagerView: View {
         /// sortedFiltered 的缓存:result 重算过(置 nil)或排序方式变了才重排。
         var sortedFor: LyricsSortOption?
         var sorted: [EnrichCacheStore.Summary] = []
-        // 下面几份都从上面两份派生,一次 body 里各要求值好几遍(工具栏菜单、选择条、标题栏副标题、删除按钮),
-        // 而编辑框每敲一个字都重算 body:不缓存就是每个键把全库八千多条再过好几遍。
-        // result 重算时清前两份,sorted 重排时清后两份;retryableAll 只跟 summaries 代数走。
+        // 下面几份都从上面两份派生,一次 body 里各要求值好几遍(⋯ 菜单、标题、快捷键、批量面板),
+        // 而编辑格子每敲一个字都重算 body:不缓存就是每个键把全库再过好几遍。
+        // result 重算时清 selectable,sorted 重排时清后三份;retryableAll 和胶囊计数只跟 summaries 代数走。
         var selectable: [EnrichCacheStore.Summary]?
         var selectedVisible: (keys: Set<String>, result: [String])?
         var retryableVisible: [String]?
+        var groups: [AlbumGroup]?
+        var albumEntries: [AlbumListEntry]?
         var retryableAllGeneration = -1
         var retryableAll: [String] = []
+        var countsGeneration = -1
+        var counts: [LyricsManagerStatus: Int] = [:]
+        var cleanupGeneration = -1
+        var cleanup: [String] = []
+        var kindCounts: [LyricsKind: Int] = [:]
     }
     @State private var filteredCache = FilteredCache()
 
@@ -768,20 +803,16 @@ struct LyricsManagerView: View {
         // 基线埋点(临时,见 LyricsManagerBaseline)。只量这条"真重算"的路 —— 命中缓存
         // 那条一次 body 求值要走好几遍,记了只会把日志刷爆、也没有信息量。
         let recomputeStart = CFAbsoluteTimeGetCurrent()
-        // 循环不变量提到过滤循环外算一次(原来写在逐行闭包里,每行各付一遍);逐行侧
-        // 全部用 Summary 的预计算归一化键,谓词只剩字符串比较。
+        // 循环不变量提到过滤循环外算一次;逐行侧全部用 Summary 的预计算归一化键,谓词只剩字符串比较。
         let q = committedSearchText.lowercased()
         let af = artistFilter.map { toSimplified($0).lowercased() }
         let bf = albumFilter.map { toSimplified($0).lowercased() }
-        // 「正在搜索」占位行(见 refreshPlaceholder)并进同一份基础列表——刻意不给它开
-        // 特例绕过下面这套筛选谓词:它没歌词/没来源/不是人工修正,该被"仅人工修正"筛掉
-        // 就该被筛掉,跟真实条目一视同仁,不需要另外维护一套"占位行永远显示"的逻辑。
+        // 「正在搜索」占位行(见 refreshPlaceholder)并进同一份基础列表,跟真实条目过同一套筛选谓词。
         let base = placeholderSummary.map { store.summaries + [$0] } ?? store.summaries
         let result = base.filter { s in
             if !q.isEmpty {
                 // 歌手搜索两个写法都认:用户可能按原始写法搜(播放器里看到的那个),也可能按
-                // 官方名搜(列表里显示的那个)。专辑名一起搜:专辑筛选下拉已经
-                // 能按专辑筛,但那是"选一个精确专辑名",搜索框是"打几个字模糊找",两者互补。
+                // 官方名搜。专辑名一起搜:「筛选」里的专辑是"选一个精确专辑名",搜索框是"打几个字模糊找",两者互补。
                 guard s.searchArtistLower.contains(q)
                     || s.searchDisplayArtistLower.contains(q)
                     || s.searchTitleLower.contains(q)
@@ -791,28 +822,14 @@ struct LyricsManagerView: View {
             if let af, s.normPrimaryArtist != af { return false }
             if let bf, s.normAlbum != bf { return false }
             guard sourceFilter.matches(s.lyricsSource) else { return false }
-            // 三档跟设置页「歌词库」统计同一个阶梯(LyricsKind.classify):标了纯音乐的条目存着歌词也只算纯音乐,
-            // 有歌词的条目不算「仅纯文本」,筛出来的数跟统计对得上。
-            let kind = LyricsKind.classify(hasWordTiming: s.hasWordTiming, hasLyrics: s.hasLyrics,
-                                           hasPlainTextFallback: s.hasPlainTextFallback, isInstrumental: s.isInstrumental)
-            switch timingFilter {
-            case .all: break
-            case .wordTiming: guard kind == .wordByWord else { return false }
-            case .lineOnly: guard kind == .lineByLine else { return false }
-            case .plainTextOnly: guard kind == .plainText else { return false }
+            // 歌词类型和「缺歌词」都跟设置页「歌词库」统计同一个阶梯(LyricsKind.classify):标了纯音乐的条目存着歌词也只算
+            // 纯音乐,有歌词的条目不算纯文本,筛出来的数跟统计对得上。
+            let kind = Self.kind(s)
+            if case let .only(wanted) = kindFilter, kind != wanted { return false }
+            // 「正在搜索」占位行只在「全部」里出现:它还没有任何结论。
+            if statusFilter != .all {
+                guard !s.isSearching, statusFilter.matches(statusFacts(s, kind: kind)) else { return false }
             }
-            // 「仅人工修正」现在并入「已校准」(手动调过时间轴偏移,见 LyricsPinStore):
-            // 两者语义上并列,都是"用户已经亲手把这首歌弄对了",分开筛选只会让用户漏看
-            // 那些只调过时间轴、没碰过歌词正文的行。
-            if manualOnly && !s.isManual && !pins.isPinned(s.key) { return false }
-            // 跟徽章/统计同口径:确证过的纯音乐、有纯文本兜底的都不是"缺歌词"
-            // (加后者)——这个筛选是用来找**该修的**,这两类行上已经显示着
-            // 明确的结论("纯音乐"/"仅纯文本"),不该跟"真的一条候选都没有"混在一起。
-            if missingLyricsOnly && (s.hasLyrics || s.isInstrumental || s.hasPlainTextFallback) { return false }
-            // 「仅纯音乐」反过来找**已确证纯音乐**的那批——跟上面那条互斥但不合并:
-            // 一个是"该修的"(缺歌词又不是纯音乐),一个是"不用修、只是想看看有哪些"
-            // (确证过的纯音乐列表,比如核对专辑预取抓了哪些纯乐器曲目)。
-            if instrumentalOnly && !s.isInstrumental { return false }
             return true
         }
         filteredCache.token = token
@@ -826,24 +843,133 @@ struct LyricsManagerView: View {
         return result
     }
 
+    private static func kind(_ s: EnrichCacheStore.Summary) -> LyricsKind {
+        LyricsKind.classify(hasWordTiming: s.hasWordTiming, hasLyrics: s.hasLyrics,
+                            hasPlainTextFallback: s.hasPlainTextFallback, isInstrumental: s.isInstrumental)
+    }
+
+    private func statusFacts(_ s: EnrichCacheStore.Summary, kind: LyricsKind) -> LyricsManagerStatus.Facts {
+        LyricsManagerStatus.Facts(kind: kind, isManual: s.isManual, isPinned: pins.isPinned(s.key))
+    }
+
+    /// 每个状态胶囊上的数,全库口径(跟设置页「歌词库」一样,不随搜索和别的筛选变)。
+    private var statusCounts: [LyricsManagerStatus: Int] {
+        refreshCounts()
+        return filteredCache.counts
+    }
+
+    /// 「清理无效记录」会删的那几条(判据见 LyricsManagerCleanup),正在放的那首不算。跟胶囊计数一样只随 summaries 代数重算。
+    private var cleanupKeys: [String] {
+        let generation = store.summariesGeneration
+        if filteredCache.cleanupGeneration != generation {
+            filteredCache.cleanup = store.summaries.filter {
+                LyricsManagerCleanup.isInvalid(artist: $0.artist, kind: Self.kind($0), isManual: $0.isManual,
+                                               isPinned: pins.isPinned($0.key), durationSecs: $0.durationSecs)
+            }.map(\.key)
+            filteredCache.cleanupGeneration = generation
+        }
+        return filteredCache.cleanup.filter { $0 != nowPlayingKey }
+    }
+
+    /// 「歌词类型」每一档的数,口径同 statusCounts。
+    private var kindCounts: [LyricsKind: Int] {
+        refreshCounts()
+        return filteredCache.kindCounts
+    }
+
+    private func refreshCounts() {
+        let generation = store.summariesGeneration
+        guard filteredCache.countsGeneration != generation else { return }
+        let facts = store.summaries.map { statusFacts($0, kind: Self.kind($0)) }
+        filteredCache.counts = LyricsManagerStatus.counts(facts)
+        filteredCache.kindCounts = Dictionary(facts.map { ($0.kind, 1) }, uniquingKeysWith: +)
+        filteredCache.countsGeneration = generation
+    }
+
+    /// 在搜、排序又是默认的「更新时间 新→旧」时按相关度排(歌名开头命中 > 歌名里命中 > 歌手 > 专辑,同档按更新时间)。
+    private var sortsByRelevance: Bool { !committedSearchText.isEmpty && sortOption == .updatedDescending }
+
     /// `filtered` 按当前排序方式排好的版本——List 的数据源、以及一切"顺序对用户可见"的
     /// 地方(比如 orderedVisibleKeys 那份删除计划)都该用这个,而不是 `filtered` 本身。
     ///
-    /// 跟 `filtered` 共用缓存盒:一次 body 里要求值 3~4 遍(List 数据源、全选 / 删除的可见集合、补搜菜单),
-    /// 而编辑框在同一个视图里,每敲一个字都会重算 body。全库八千多条时重排一遍默认顺序约 20ms、别的排序约 100ms,
-    /// 不缓存就是每个键几十到几百毫秒的卡顿。
+    /// 跟 `filtered` 共用缓存盒:一次 body 里要求值好几遍,而编辑格子在同一个视图里,每敲一个字都会重算 body。
+    /// 全库八千多条时重排一遍默认顺序约 20ms、别的排序约 100ms,不缓存就是每个键几十到几百毫秒的卡顿。
     private var sortedFiltered: [EnrichCacheStore.Summary] {
         let base = filtered
         if filteredCache.sortedFor == sortOption { return filteredCache.sorted }
-        let sorted = sortOption.sorted(base)
+        var sorted = sortOption.sorted(base)
+        if sortsByRelevance {
+            let q = committedSearchText.lowercased()
+            let ranks = sorted.map { s in
+                LyricsManagerSearch.relevance(query: q, title: s.searchTitleLower,
+                                              artists: [s.searchArtistLower, s.searchDisplayArtistLower],
+                                              album: s.searchAlbumLower) ?? Int.max
+            }
+            sorted = sorted.indices.sorted { a, b in ranks[a] != ranks[b] ? ranks[a] < ranks[b] : a < b }.map { sorted[$0] }
+        }
         filteredCache.sortedFor = sortOption
         filteredCache.sorted = sorted
         filteredCache.selectedVisible = nil
         filteredCache.retryableVisible = nil
+        filteredCache.groups = nil
+        filteredCache.albumEntries = nil
         return sorted
     }
 
-    /// 补搜菜单的两个数:全库可补搜的、当前筛选出来可补搜的(见 fillSweepToolbarMenu)。
+    /// 按专辑分组时的一组:同一张专辑(归并键同 albumDisplay)、同一位主歌手的歌。
+    private struct AlbumGroup: Identifiable {
+        let id: String
+        let album: String
+        let artist: String
+        var items: [EnrichCacheStore.Summary]
+    }
+
+    /// 按专辑分组时列表里的一行:组头,或者一首歌。
+    private enum AlbumListEntry: Identifiable {
+        case header(AlbumGroup)
+        case song(EnrichCacheStore.Summary)
+
+        /// 组头的 id 带前缀,跟歌曲的缓存键(「歌手|歌名|专辑」)撞不上。
+        var id: String {
+            switch self {
+            case let .header(group): return "album-header\u{1F}" + group.id
+            case let .song(summary): return summary.key
+            }
+        }
+    }
+
+    /// albumGroups 摊平成一层:组头后面跟这一组的歌。跟 albumGroups 一起缓存,外层视图重算时交给 List 的是同一份数组,
+    /// 不然每次重算都要整表重新比对一遍。
+    private var albumEntries: [AlbumListEntry] {
+        let groups = albumGroups
+        if let cached = filteredCache.albumEntries { return cached }
+        let result = groups.flatMap { group in [AlbumListEntry.header(group)] + group.items.map(AlbumListEntry.song) }
+        filteredCache.albumEntries = result
+        return result
+    }
+
+    /// 组的先后跟着当前排序里各组第一首走,组里的顺序就是当前排序。
+    private var albumGroups: [AlbumGroup] {
+        let base = sortedFiltered
+        if let cached = filteredCache.groups { return cached }
+        var order: [String] = []
+        var groups: [String: AlbumGroup] = [:]
+        for s in base {
+            let id = s.normAlbum + "\u{1F}" + s.normPrimaryArtist
+            if groups[id] == nil {
+                order.append(id)
+                let album = s.isListedMV ? L10n.t("MV")
+                    : (s.displayAlbum.isEmpty ? L10n.t("未知专辑") : albumDisplay(s.displayAlbum))
+                groups[id] = AlbumGroup(id: id, album: album, artist: s.displayArtist, items: [])
+            }
+            groups[id]?.items.append(s)
+        }
+        let result = order.compactMap { groups[$0] }
+        filteredCache.groups = result
+        return result
+    }
+
+    /// 自动匹配的两个数:全库可自动匹配的、当前筛选出来可自动匹配的(见 autoMatchMenuSections)。
     private var retryableAllKeys: [String] {
         let generation = store.summariesGeneration
         if filteredCache.retryableAllGeneration != generation {
@@ -867,18 +993,16 @@ struct LyricsManagerView: View {
         selectedKeys.count == 1 ? selectedKeys.first : nil
     }
 
-    // 把全部筛选状态拼成一个字符串,只为了给 onChange 当变化信号用——否则要给七个 @State
+    // 把全部筛选状态拼成一个字符串,只为了给 onChange 当变化信号用——否则要给每个 @State
     // 各挂一个 onChange 做同一件事(收敛选中项)。
     //
-    // 分隔符用 U+001F(ASCII 单元分隔符)而不是 "|":searchText、歌手名、专辑名里都可能出现
+    // 分隔符用 U+001F(ASCII 单元分隔符)而不是 "|":搜索词、歌手名、专辑名里都可能出现
     // "|",那样两个不同的筛选状态理论上能拼出同一个 token,onChange 就不会触发、选中项不会
-    // 被收敛(而这个收敛正是防误删的那道防线)。虽然要真撞上得刻意构造,但换个用户输入里
-    // 不可能出现的控制字符是零成本的,不用去论证"实际撞不上"。
+    // 被收敛(而这个收敛正是防误删的那道防线)。
     private var filterToken: String {
         let sep = "\u{1F}"
         return [
-            committedSearchText, sourceFilter.id, timingFilter.rawValue,
-            String(manualOnly), String(missingLyricsOnly), String(instrumentalOnly),
+            committedSearchText, sourceFilter.id, kindFilter.id, statusFilter.rawValue,
             artistFilter ?? "", albumFilter ?? "",
             // 占位行的 key 也要算进去——它的出现/消失/换成另一首歌不会让
             // store.summariesGeneration 变(那条代数只跟 raw/真实条目有关),漏了这一项
@@ -910,10 +1034,8 @@ struct LyricsManagerView: View {
         return result
     }
 
-    // 「全选」按钮和标题栏副标题「N / 总数 首」共用这份计数(见各自调用点的注释)——
-    // 占位行不算进来,理由跟 orderedVisibleKeys 排除它一样:它不是一条真实记录,"全选 N
-    // 首"和"N / 总数 首"这两个数字承诺的都是"真实记录"这件事,不该被一条临时状态行
-    // 拉高。列表本身(filtered)仍然把占位行画出来,只是不计入这两处计数。
+    // 「全选」和列表标题的计数共用这份——占位行不算进来,理由跟 orderedVisibleKeys 排除它一样:它不是一条真实记录。
+    // 列表本身(filtered)仍然把占位行画出来,只是不计入计数。
     private var selectableFiltered: [EnrichCacheStore.Summary] {
         let base = filtered
         if let cached = filteredCache.selectable { return cached }
@@ -942,774 +1064,833 @@ struct LyricsManagerView: View {
         let searching = !committedSearchText.isEmpty
         if hasActiveFilters || searching {
             ContentUnavailableView {
-                Label(L10n.t("没有符合条件的歌"), systemImage: "line.3.horizontal.decrease.circle")
+                Label(L10n.t("没有符合条件的歌曲"), systemImage: "line.3.horizontal.decrease.circle")
             } description: {
-                Text(L10n.t("换个筛选条件或关键词试试"))
+                Text(L10n.t("请尝试其他筛选条件或关键词"))
             } actions: {
                 if hasActiveFilters {
                     Button(L10n.t("清除筛选"), action: resetFilters)
                 }
                 if searching {
-                    Button(L10n.t("清空搜索")) {
-                        searchText = ""
-                        committedSearchText = ""
-                    }
+                    Button(L10n.t("清空搜索"), action: clearSearch)
                 }
             }
         } else {
-            ContentUnavailableView(L10n.t("还没有歌词记录"), systemImage: "music.note.list",
-                                   description: Text(L10n.t("播放过的歌会自动出现在这里")))
+            ContentUnavailableView(L10n.t("暂无歌词记录"), systemImage: "music.note.list",
+                                   description: Text(L10n.t("播放过的歌曲将显示在这里")))
         }
     }
 
     private func resetFilters() {
+        statusFilter = .all
         sourceFilter = .all
-        timingFilter = .all
-        manualOnly = false
-        missingLyricsOnly = false
-        instrumentalOnly = false
+        kindFilter = .all
         artistFilter = nil
         albumFilter = nil
     }
 
-    // 侧栏顶部的品牌抬头(用户对照方案A细化稿点名要这一块)：图标+"歌词管理"
-    // 四个字，贴在 searchBar 上方。窗口本身已经有原生标题栏的 .navigationTitle("歌词管理")，
-    // 这里再画一遍算是有意的重复——原生标题栏在失焦/全屏/无边框等场景下不一定显眼，这一行
-    // 是内容区自己的、稳定可见的身份标记，很多打磨过的原生 App（Mail、提醒事项……）的侧栏
-    // 顶部都有同样的"图标+名字"抬头，不是网页 demo 独有的装饰。
-    // 图标沿用菜单栏"歌词管理…"那一项已经在用的 SF Symbol（MenuBarStatusMenu.swift），
-    // 同一个功能在两个入口用同一个图标，不新造一套语言。
-    private var brandHeader: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "music.note.list")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 28, height: 28)
-                .background(
-                    LinearGradient(colors: [Color.accentColor, Color.accentColor.opacity(0.8)],
-                                  startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
-            Text(L10n.t("歌词管理"))
-                .font(.system(size: 15, weight: .semibold))
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+    private func clearSearch() {
+        searchCommitTask?.cancel()
+        searchText = ""
+        committedSearchText = ""
     }
 
-    // 搜索栏——独立一行,贴在 filterBar 上方(从原生 .searchable 换成手写行,
-    // 见 searchBar 声明处注释)。
-    private var searchBar: some View {
+    // MARK: - 侧栏
+
+    /// 侧栏离窗口边缘的距离、圆角。红绿灯落在侧栏左上角那一截里。
+    private static let panelInset: CGFloat = 10
+    /// 列表一行的实际高度:行内容 48(LyricsManagerSongRow:封面 40 + 上下各 4)加 `.inset` 样式每行自带的上下 8。
+    /// 改行高要连这个数一起改。
+    private static let listRowHeight: CGFloat = 56
+    private static let panelCornerRadius: CGFloat = 22
+    private static let sidebarWidthKey = "np:lyricsManagerSidebarWidth"
+
+    private static var storedSidebarWidth: Double {
+        let value = UserDefaults.standard.double(forKey: sidebarWidthKey)
+        return value > 0 ? LyricsManagerSidebarWidth.clamped(value) : LyricsManagerSidebarWidth.standard
+    }
+
+    private func persistSidebarWidth() {
+        UserDefaults.standard.set(sidebarWidth, forKey: Self.sidebarWidthKey)
+    }
+
+    private func sidebar(scrollProxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sidebarHeader
+            searchRow
+            statusChips
+            if nowPlayingKey != nil {
+                nowPlayingRow(scrollProxy: scrollProxy)
+            }
+            listHeader
+            songList(scrollProxy: scrollProxy)
+        }
+        .padding(.horizontal, 12)
+        // 列表滚到底时别把行画到侧栏圆角外面。
+        .clipShape(RoundedRectangle(cornerRadius: Self.panelCornerRadius, style: .continuous))
+        .settingsCardBackground(cornerRadius: Self.panelCornerRadius)
+        .confirmationDialog(
+            L10n.t("确定要清空全部歌词缓存吗？"),
+            isPresented: $showClearAllConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.t("清空全部缓存"), role: .destructive) {
+                Task {
+                    await store.clearAll()
+                    selectedKeys.removeAll()
+                }
+            }
+            Button(L10n.t("取消"), role: .cancel) {}
+        } message: {
+            // 不能写成"随时可以恢复"——快照只保留最近 3 份、库本来是空的时候压根打不出来,承诺过头比不承诺更危险。
+            Text(String(format: L10n.t("将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词"), store.summaries.count))
+        }
+    }
+
+    /// 侧栏顶上一行:左边让出红绿灯,标题和首数,右边「刷新」和「⋯」(自动匹配、占用与清理、从自动备份恢复)。
+    /// 高度 32、贴着侧栏顶边,中线正好跟红绿灯对齐;这一行压在标题栏那一截(系统的拖拽区)里,只放按钮。
+    private var sidebarHeader: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                // 不用 .onSubmit(of: .search)(那是配 .searchable 原生搜索框专用的触发器,
-                // 实测在这扇窗口里不生效)——普通 TextField 配不带 of: 参数的
-                // .onSubmit 是这个文件里已经验证过能用的既有写法(见 offsetSection 里
-                // "歌词时间轴偏移"那个输入框的同款用法),回车会可靠触发。
-                TextField(L10n.t("搜索歌手/歌名/专辑"), text: $searchText)
-                    .textFieldStyle(.plain)
-                    .focused($searchFieldFocused)
-                    .onSubmit(commitSearch)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor))
-            )
-            .overlay(
-                // 聚焦态描边换成强调色+略粗一档(视觉细化)——原来无论有没有
-                // 焦点都是同一条 8% 灰描边，输入框拿到键盘焦点这件事在视觉上完全没有反馈。
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(searchFieldFocused ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.08),
-                            lineWidth: searchFieldFocused ? 1.5 : 1)
-            )
-            .animation(.easeOut(duration: 0.12), value: searchFieldFocused)
-            .frame(maxWidth: .infinity)
-
-            // 搜索触发按钮挪到输入框右边("放到这里",并把输入框
-            // 相应缩短腾出位置)——按钮本身是最朴素的 Button.action,不依赖 .searchable/
-            // .onSubmit 那套内部机制,点了必定生效;禁用态 = 当前搜索已经是最新,没有
-            // 新东西要查。
-            Button(action: commitSearch) {
-                Image(systemName: "magnifyingglass")
-            }
-            .help(L10n.t("搜索（或在搜索框按回车）"))
-            .disabled(LyricsManagerSearch.query(searchText) == committedSearchText)
-        }
-        .font(.callout)
-        // 搜索词一清空就立刻回到全量列表,不需要等按钮/回车——这个方向零过滤开销,
-        // 理由见 committedSearchText 声明处的注释。
-        .onChange(of: searchText) { _, newValue in
-            if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {
-                committedSearchText = ""
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-    }
-
-    private var filterBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .foregroundStyle(.secondary)
-
-                Picker(L10n.t("歌手"), selection: $artistFilter) {
-                    Text(L10n.t("全部歌手")).tag(String?.none)
-                    ForEach(store.distinctArtists, id: \.self) { a in Text(a).tag(String?.some(a)) }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: 140)
-
-                Picker(L10n.t("专辑"), selection: $albumFilter) {
-                    Text(L10n.t("全部专辑")).tag(String?.none)
-                    ForEach(store.distinctAlbums, id: \.self) { a in Text(a).tag(String?.some(a)) }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: 140)
-
-                // 「排序」(加排序功能,选的是"筛选栏加一个下拉"而不是
-                // 点列表头排序那个方案)。宽度同样是量出来的(离屏 NSHostingView.fittingSize,
-                // `.font(.caption)` + `.controlSize(.small)`,取九个选项里最长的一条):
-                // 中文最长("专辑 A→Z" 这一档)118.0pt、英文最长("Default Order")140.0pt,
-                // 跟「来源」「时间轴」同一个套路多留 30pt 余量给箭头/内边距/系统版本差异。
-                //
-                // 跟「来源」「时间轴」不同,这一行(歌手/专辑/排序)**没有**挂
-                // `ViewThatFits` 反应窗口变窄——那套机制是专为下面那一行
-                // (`filterControlsGroup` + `selectionAndFilterActions`)排的,这一行至今没有
-                // 类似的处理:改动前只有「歌手」「专辑」两个下拉时也是同一个状况,只是
-                // Spacer() 一直吃掉多余宽度、没人测过窗口缩到多窄会溢出。多这一个下拉之后
-                // 触发溢出的窗口宽度阈值会更早一些,如果以后真收到"窗口缩到很窄这里挤成一团"
-                // 的反馈,再照下面那一行的方法论(ViewThatFits + 固定宽度候选)补一套。
-                Picker(L10n.t("排序"), selection: $sortOption) {
-                    ForEach(LyricsSortOption.allCases) { option in
-                        Text(L10n.t(option.rawValue)).tag(option)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 170)
-
-                Spacer()
-            }
-
-            // 这一排的宽度必须跟选中状态、筛选状态完全无关,否则会随点击抖动。三点
-            // 缺一不可:
-            //
-            //  1. 两个 Picker 用固定 `width:`,不用 `.frame(maxWidth:)`——maxWidth 只是
-            //     **上限**,不是承诺,一挤就会显示成 "A..." / "All So..." / "All Sour..."
-            //     这类不同截断。
-            //  2. 三个胶囊要有行数上限(加在 PillChipToggleStyle 里),否则挤到一定程度会
-            //     换行成两行,整排高度跟着跳。
-            //  3. 尾部那组控件给一个**固定宽度**的槽位,内容在槽里换、槽不变——它的组成
-            //     本身会变(未选中=「全选 N 首」;选中=「已选 N 首」+「取消选择」;有筛选
-            //     再多一条分隔线+「清除筛选」),宽度需求跟着变,是"随点击变来变去"的直接原因。
-            //
-            // 跟下面 `header(_:)` 那段注释是同一条原则:`ViewThatFits(in: .horizontal)` 比的
-            // 是**理想宽度**,候选宽度只要随状态变就会来回翻。两个候选的理想宽度必须只跟
-            // 窗口宽度有关。
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    filterControlsGroup
-                    Spacer(minLength: 12)
-                    selectionAndFilterActions
-                }
-                // 装不下就把尾部那组挪到第二行(右对齐,位置感不变)。两个候选的宽度都是
-                // 常量,所以选哪个只取决于窗口宽度 —— 点选歌曲不会让它在一行/两行之间翻。
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 12) {
-                        filterControlsGroup
-                        Spacer(minLength: 0)
-                    }
-                    HStack(spacing: 12) {
-                        Spacer(minLength: 0)
-                        selectionAndFilterActions
-                    }
-                }
-            }
-        }
-        // 三个筛选 chip("仅人工修正"/"仅无歌词"/"仅纯音乐")换成胶囊样式（
-        // 用户对照方案A细化稿点名要），原来的 .toggleStyle(.button) 是系统原生按钮式
-        // Toggle（矩形圆角、选中态是实心蓝底），这里这三个是这个 VStack 里仅有的三个
-        // Toggle，直接在这一层换样式即可，不影响别处。
-        .toggleStyle(PillChipToggleStyle())
-        .controlSize(.small)
-        .font(.caption)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.thinMaterial)
-    }
-
-    /// 筛选控件本体(两个下拉 + 三个胶囊)。宽度是常量:下拉固定宽、胶囊单行不换行。
-    ///
-    /// 下拉的宽度是**量出来的**,不是拍的(`.font(.caption)` 在这台机器上解析
-    /// 成 10pt,用 NSFont 实测):
-    ///   - 「来源」最长值 "Musixmatch" 58pt / "All Sources" 54pt,加菜单箭头与内边距约 28pt,
-    ///     再加左边"Source"标签约 35pt → 需要约 121pt,给 150。
-    ///   - 「时间轴」最长值 **"Word Timing Only" 86pt**(英文!),同样加箭头/内边距/标签
-    ///     → 需要约 149pt,给 175。原来写的 110 连这个值本身都装不下 —— 那条注释里
-    ///     "最长 4 字"量的是中文,英文这一档从来没被算进去过。
-    @ViewBuilder
-    private var filterControlsGroup: some View {
-        Picker(L10n.t("来源"), selection: $sourceFilter) {
-            ForEach(SourceFilter.options(extraSources: store.extraSources)) { f in Text(f.label).tag(f) }
-        }
-        .pickerStyle(.menu)
-        .frame(width: 150)
-
-        Picker(L10n.t("时间轴"), selection: $timingFilter) {
-            ForEach(TimingFilter.allCases) { f in Text(L10n.t(f.rawValue)).tag(f) }
-        }
-        .pickerStyle(.menu)
-        .frame(width: 175)
-
-        Divider().frame(height: 14)
-
-        Toggle(L10n.t("仅人工修正"), isOn: $manualOnly)
-        Toggle(L10n.t("仅无歌词"), isOn: $missingLyricsOnly)
-        Toggle(L10n.t("仅纯音乐"), isOn: $instrumentalOnly)
-    }
-
-    /// 选择状态 + 清除筛选。**内容随状态变,宽度不变** —— 固定宽度的槽位是这次修复的核心,
-    /// 理由见上面 ViewThatFits 那段注释第 3 条。
-    ///
-    /// 280 的来历(同样是量的,取英文最坏情况):"2572 selected" 约 72pt + 间距 12 +
-    /// 「Deselect All」按钮 57.5+20 + 间距 12 + 分隔线 1 + 间距 12 + 「Clear Filters」
-    /// 按钮 58+20 ≈ 265,留一点余量给不同系统版本的按钮内边距差异。
-    private var selectionAndFilterActions: some View {
-        HStack(spacing: 12) {
-            // 「全选筛选结果」给一个显式按钮,不能只靠 ⌘A:这个窗口的核心动线正是"在筛选
-            // 栏勾出一批 → 立刻想全选删掉",此时焦点大概率还在上面那个原生搜索框上,⌘A
-            // 会变成"全选搜索框里的文字"。按钮上带的数字跟标题栏副标题「N / 852 首」左边
-            // 那个数完全一致,用户一眼能对上"我选的就是筛出来的这批"。
-            // 按「看得见的真实选中」判:只选着占位行时 selectedKeys 非空,却会显示「已选 0 首」。
-            if selectedVisibleKeys.isEmpty {
-                if !selectableFiltered.isEmpty {
-                    Button(String(format: L10n.t("全选 %@ 首"), "\(selectableFiltered.count)")) {
-                        selectedKeys = Set(selectableFiltered.map(\.key))
-                    }
-                    .foregroundStyle(.secondary)
-                }
-            } else {
-                Text(String(format: L10n.t("已选 %@ 首"), "\(selectedVisibleKeys.count)"))
-                    .foregroundStyle(.secondary)
-                Button(L10n.t("取消选择")) { selectedKeys.removeAll() }
-                    .foregroundStyle(.secondary)
-            }
-
-            if hasActiveFilters {
-                Divider().frame(height: 14)
-                Button(L10n.t("清除筛选"), action: resetFilters)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        // 单行,不许因为数字变长(852 → 2572)而换行。
-        .lineLimit(1)
-        // 固定槽位 + 右对齐:内容少的时候空在左边,右缘永远咬着同一条线。
-        .frame(width: 280, alignment: .trailing)
-    }
-
-    // 胶囊筛选 chip：未选中=描边+次要色文字，选中=强调色浅底+强调色文字（贴方案A细化稿）。
-    // 用 Button 而不是原生 Toggle 的默认渲染——ToggleStyle 协议本来就是"给同一份
-    // isOn/label 换一套画法"，这是它的标准用法，不是绕开 SwiftUI。
-    private struct PillChipToggleStyle: ToggleStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            Button {
-                configuration.isOn.toggle()
-            } label: {
-                configuration.label
-                    // 长英文标签(如 "Manually Edited Only")没有行数约束会折成两行,
-                    // 胶囊跟着变高、整排高度不稳定;中文标签短,不会暴露这个问题。钉成单行
-                    // + 按内容取自然宽度之后,一个胶囊的尺寸只跟它自己的文字有关,与这一排
-                    // 剩多少空间无关。
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule().fill(configuration.isOn
-                            ? Color.accentColor.opacity(0.15)
-                            : Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay(
-                        Capsule().stroke(configuration.isOn
-                            ? Color.accentColor.opacity(0.45)
-                            : Color.primary.opacity(0.12))
-                    )
-                    .foregroundStyle(configuration.isOn ? Color.accentColor : Color.secondary)
+            Color.clear.frame(width: 62, height: 1)
+            Text(L10n.t("歌词管理"))
+                .font(.system(size: 15, weight: .bold))
+                .lineLimit(1)
+            Text(String(format: L10n.t("共 %@ 首"), store.summaries.count.formatted()))
+                .font(.system(size: 12))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            Button(action: refreshWithFeedback) {
+                Image(systemName: showRefreshedFeedback ? "checkmark" : "arrow.clockwise")
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help(showRefreshedFeedback ? L10n.t("已刷新") : L10n.t("刷新"))
+            Menu {
+                libraryMenu
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(L10n.t("更多"))
+        }
+        .font(.system(size: 14, weight: .medium))
+        .frame(height: 32)
+        // 「清理无效记录」的确认框挂在这一行:侧栏、List、根上各有自己的确认框,不叠在同一条修饰符链上。
+        .confirmationDialog(
+            String(format: L10n.t("确定要清理 %@ 条无效记录吗？"), pendingCleanupKeys.count.formatted()),
+            isPresented: $showCleanupConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.t("清理"), role: .destructive, action: performCleanup)
+            Button(L10n.t("取消"), role: .cancel) {}
+        } message: {
+            if showCleanupConfirm { Text(cleanupMessage) }
         }
     }
 
-    // 列名表头——歌名/歌手/专辑/来源,跟 LyricsManagerRow 共用 shownWidths 这一组列宽
-    // 常量,保证表头文字跟每行对应列对得齐。水平内边距(12pt)特意跟 List(.inset 样式)
-    // 默认给每行内容的左右留白对齐,不然表头会跟下面的行错位。
-    private var listColumnHeader: some View {
+    /// 清理确认框的正文:判据和不受影响的几类,下面列出前几条的歌名。
+    private var cleanupMessage: String {
+        let shown = pendingCleanupKeys.prefix(6)
+        var lines = [L10n.t("这些记录没有歌词，且没有歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。"), ""]
+        for key in shown {
+            let title = store.summaries.first(where: { $0.key == key })?.title ?? ""
+            lines.append(title.isEmpty ? key : title)
+        }
+        if pendingCleanupKeys.count > shown.count {
+            lines.append(String(format: L10n.t("还有 %@ 条"), (pendingCleanupKeys.count - shown.count).formatted()))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func performCleanup() {
+        let victims = Set(pendingCleanupKeys)
+        guard !victims.isEmpty else { return }
+        Task {
+            await store.delete(keys: victims)
+            selectedKeys.subtract(victims)
+        }
+    }
+
+    private var searchRow: some View {
         HStack(spacing: 8) {
-            Text(L10n.t("歌名")).frame(maxWidth: .infinity, alignment: .leading)
-            // 三条分隔条都挂成对应列的 .overlay(alignment: .leading) ——overlay 不参与布局,
-            // 所以表头的列宽/间距跟下面每一行仍然逐 pt 对齐(这一点很关键:如果把手柄当成
-            // HStack 的一个真实子视图,它自己的 9pt 宽度会把表头整体右推,表头和行就错位了)。
-            Text(L10n.t("歌手")).frame(width: shownWidths.artist, alignment: .leading)
-                .overlay(alignment: .leading) { columnDivider(0) }
-            Text(L10n.t("专辑")).frame(width: shownWidths.album, alignment: .leading)
-                .overlay(alignment: .leading) { columnDivider(1) }
-            Text(L10n.t("来源")).frame(width: shownWidths.source, alignment: .leading)
-                .overlay(alignment: .leading) { columnDivider(2) }
-            // 「偏移」是固定宽度、不可拖拽的第五列——跟另外三列不是一回事,没必要为了一个
-            // 纯展示的数字列去扩 LyricsColumnWidths 那套拖拽夹值算术(见 offsetColumnWidth
-            // 的注释),所以这里不挂 columnDivider。
-            Text(L10n.t("偏移")).frame(width: Self.offsetColumnWidth, alignment: .leading)
-        }
-        .font(.caption2.weight(.semibold))
-        .foregroundStyle(.secondary)
-        // 表头的横向范围**就是**行内容的横向范围([minX, maxX],由行自己上报,见
-        // RowContentBoundsKey)。List(.inset) 给每行加的 inset 跟表头默认的内边距本来就
-        // 不相等(实测 leading≈12pt、trailing 还含滚动条留白),错开的话分隔线就画不在
-        // 列边界上了;这两个值是 AppKit 给的、会随系统版本变,所以运行时量,不硬编码。
-        //
-        // 用"定宽 + 左内边距"钉住右边界,而不是"左右内边距":右内边距只能由
-        // (表头自身宽度 - maxX) 推出来,那就得**另外再量一次表头的宽度**——多出来的那个
-        // 测量正是那个 bug 的来源,见 columnAreaWidth 的注释。
-        .frame(width: columnAreaWidth > 0 ? columnAreaWidth : nil, alignment: .leading)
-        .padding(.leading, headerLeading)
-        // 还没量到行内容边界时(首帧/列表为空)退回对称的兜底内边距;量到之后右边界由上面
-        // 的定宽决定,这里不能再加内边距,否则会把表头往左推、跟行错开。
-        .padding(.trailing, columnAreaWidth > 0 ? 0 : Self.fallbackHPadding)
-        .padding(.vertical, 5)
-        // 定宽之后表头本身不再撑满整栏,补一个"占满、内容靠左"的外框,右键菜单和将来可能
-        // 加的表头背景才覆盖整行宽度。
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contextMenu {
-            Button(L10n.t("重置列宽")) { columnWidths.reset() }
+            searchField
+            filterButton
         }
     }
 
-    // 量不到行内容边界时的兜底内边距(首帧、或列表还没渲染出任何一行)。
-    private static let fallbackHPadding: CGFloat = 12
-
-    private var headerLeading: CGFloat { rowContentBounds?.minX ?? Self.fallbackHPadding }
-
-    // 四列可以摊开的横向空间 = 行内容的宽度。列宽的收敛(fitted)和拖拽夹值(dragged)都只
-    // 认这一个测量值。
-    //
-    // 别改成用 GeometryReader 的 .onAppear/.onChange(of: g.size.width) 去更新一个
-    // @State headerWidth:那对回调只在首帧后就不再跟进后续布局变化,会让 fitted 拿到的
-    // 宽度远小于侧栏实际渲染宽度,三列因此恒定钳在各自下限。
-    // 存下来的值当时是 56/137.66/70:专辑存的是 137.66、画出来却是 56 —— 也就是说无论怎么
-    // 拖、往哪个方向拖,存进去的值都被这一步抹平成同一组常量,界面纹丝不动,表现成"列宽根本
-    // 拖不动",而且全程没有任何报错。
-    //
-    // 换成 rowContentBounds 之后只剩这**一个**几何输入,而它走的是 PreferenceKey ——
-    // 布局每跑一遍就重新上报一次(这个文件里表头对齐一直用它,实测始终是准的),不像
-    // GeometryReader 里的 onChange 会漏。少一个测量,就少一个能悄悄失效的东西。
-    private var columnAreaWidth: CGFloat {
-        guard let b = rowContentBounds else { return 0 }
-        return max(0, b.maxX - b.minX)
-    }
-    // 「偏移」列固定宽度,不进 LyricsColumnWidths(那套拖拽夹值只管歌名/歌手/专辑/来源
-    // 这三条可拖拽分隔条)——加宽这一列不用碰那段本来就最容易出错的算术,行为完全等价于
-    // 把它当成 chrome 的一部分(下面 headerChrome 已经把它算进去了)。
-    private static let offsetColumnWidth: CGFloat = 56
-
-    // 四个 8pt 列间距(歌名/歌手/专辑/来源/偏移共 5 列、4 条间距)+ 偏移列固定宽度 =
-    // 这一行里不属于三条可拖拽列、也不属于弹性歌名列的固定开销,算歌名列剩余宽度时要先
-    // 扣掉它(见 LyricsColumnWidths.dragged/fitted 的 chrome 参数)。左右内边距不在
-    // 其中——columnAreaWidth 量的已经是内边距**以内**的那一段。
-    private var headerChrome: CGFloat { 8 * 4 + Self.offsetColumnWidth }
-
-    // 真正拿去渲染的列宽:窗口/侧栏被拖窄后,用户存下来的列宽可能已经把歌名挤没,fitted
-    // 会临时等比收敛(不改存下来的值)。还没量到宽度(=0)时 fitted 原样返回,首帧不会算出
-    // 奇怪的宽度。
-    private var shownWidths: LyricsColumnWidths {
-        LyricsColumnWidths.fitted(columnWidths.widths, totalWidth: columnAreaWidth, chrome: headerChrome)
-    }
-
-    private func columnDivider(_ index: Int) -> some View {
-        // 手柄 9pt 宽、居中压在两列之间那个 8pt 间距的正中:overlay 的 leading 让手柄左边缘
-        // 贴着本列左边缘,而间距中点在本列左边缘往左 4pt 处,所以整体左移 9/2 + 4 = 8.5pt。
-        ColumnDividerHandle(
-            onDrag: { dx in
-                if dragStartWidths == nil {
-                    dragStartWidths = columnWidths.widths
-                    // 拖动全程只更新内存值(@Published 照发,行实时重画),UserDefaults 的
-                    // 三个 key 等松手一次性落盘 —— 原来每个鼠标事件写三笔中间态
-                    // (性能审计,onDragEnd 本来就在却没用来收口)。
-                    columnWidths.beginDragging()
+    /// 搜索框。边打边筛:停手 150 毫秒才真的过滤一次(commitSearch),删空立刻回到全量列表;Esc 清空,⌘F 聚焦。
+    private var searchField: some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField(L10n.t("搜索歌手/歌名/专辑"), text: $searchText)
+                .textFieldStyle(.plain)
+                .focused($searchFieldFocused)
+                .onSubmit(commitSearch)
+                .onExitCommand(perform: clearSearch)
+            if !searchText.isEmpty {
+                Button(action: clearSearch) {
+                    Image(systemName: "xmark.circle.fill")
                 }
-                guard let start = dragStartWidths else { return }
-                columnWidths.widths = LyricsColumnWidths.dragged(
-                    from: start, divider: index, dx: dx,
-                    totalWidth: columnAreaWidth, chrome: headerChrome
-                )
-            },
-            onDragEnd: {
-                dragStartWidths = nil
-                columnWidths.endDragging()
-            },
-            onDoubleClick: { resetDivider(index) }
-        )
-        .offset(x: -8.5)
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                .help(L10n.t("清空搜索"))
+            } else if !searchFieldFocused {
+                Text(verbatim: "⌘F")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .font(.system(size: 13))
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .background(shape.fill(Color.primary.opacity(0.06)))
+        .overlay(shape.strokeBorder(searchFieldFocused ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1.5))
+        .animation(.easeOut(duration: 0.12), value: searchFieldFocused)
+        .onChange(of: searchText) { _, newValue in
+            searchCommitTask?.cancel()
+            if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {
+                committedSearchText = ""
+                return
+            }
+            searchCommitTask = Task {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                commitSearch()
+            }
+        }
     }
 
-    // 双击某条分隔条 = 把这条边界两侧的列恢复默认宽度(不是全部三列——只动用户正在操作的
-    // 那条边界更符合预期;要整体恢复用表头右键菜单里的「重置列宽」)。
-    private func resetDivider(_ index: Int) {
-        let d = LyricsColumnWidths.defaults
-        var w = columnWidths.widths
-        switch index {
-        case 0: w.artist = d.artist                       // 左边是弹性的歌名列,只需复位歌手
-        case 1: w.artist = d.artist; w.album = d.album
-        default: w.album = d.album; w.source = d.source
+    /// 「筛选」:歌词类型和来源、歌手、专辑收在这里,状态胶囊都在下面那一行(见 11 章决策 73、77、80)。
+    /// 选了东西按钮上标一个点。
+    private var filterButton: some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return Button {
+            showFilterPopover.toggle()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "line.3.horizontal.decrease")
+                Text(L10n.t("筛选"))
+                if hasPopoverFilters {
+                    Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+                }
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .padding(.horizontal, 11)
+            .frame(height: 32)
+            .background(shape.fill(hasPopoverFilters ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.06)))
+            .contentShape(shape)
         }
-        columnWidths.widths = w
+        .buttonStyle(.plain)
+        .fixedSize()
+        .popover(isPresented: $showFilterPopover, arrowEdge: .bottom) { filterPopover }
     }
+
+    private var filterPopover: some View {
+        let kinds = kindCounts
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                filterLabel(L10n.t("歌词类型"))
+                SettingsFlowRow(spacing: 6) {
+                    ForEach(KindFilter.choices, id: \.self) { kind in
+                        Button {
+                            kindFilter = kindFilter == .only(kind) ? .all : .only(kind)
+                        } label: {
+                            LyricsManagerChip(title: kind.label, count: (kinds[kind] ?? 0) > 0 ? kinds[kind] : nil,
+                                              selected: kindFilter == .only(kind))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow {
+                    filterLabel(L10n.t("来源"))
+                    sourceChip
+                }
+                GridRow {
+                    filterLabel(L10n.t("歌手"))
+                    artistChip
+                }
+                GridRow {
+                    filterLabel(L10n.t("专辑"))
+                    albumChip
+                }
+            }
+            if hasActiveFilters {
+                Button(L10n.t("清除筛选"), action: resetFilters)
+                    .buttonStyle(.link)
+            }
+        }
+        .padding(14)
+        .frame(width: 300, alignment: .leading)
+    }
+
+    private func filterLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+
+    /// 侧栏那一行状态胶囊的顺序,LyricsManagerStatus 的每一档都在(见 11 章决策 80)。
+    private static let statusOrder: [LyricsManagerStatus] = [.all, .missing, .instrumental, .adjusted]
+
+    /// 状态胶囊,一次只看一类,再点一下回到「全部」。
+    private var statusChips: some View {
+        let counts = statusCounts
+        return SettingsFlowRow(spacing: 6) {
+            ForEach(Self.statusOrder, id: \.self) { statusChip($0, count: counts[$0]) }
+        }
+    }
+
+    private static func statusTitle(_ status: LyricsManagerStatus) -> String {
+        switch status {
+        case .all: return L10n.t("全部")
+        case .missing: return L10n.t("歌词缺失")
+        case .instrumental: return L10n.t("纯音乐")
+        case .adjusted: return L10n.t("手动调整")
+        }
+    }
+
+    private func statusChip(_ status: LyricsManagerStatus, count: Int?) -> some View {
+        Button {
+            statusFilter = statusFilter == status ? .all : status
+        } label: {
+            LyricsManagerChip(title: Self.statusTitle(status),
+                              count: (count ?? 0) > 0 || status == .all ? count : nil,
+                              selected: statusFilter == status)
+        }
+        .buttonStyle(.plain)
+        .help(Self.statusHelp(status))
+    }
+
+    private static func statusHelp(_ status: LyricsManagerStatus) -> String {
+        switch status {
+        case .adjusted: return L10n.t("改过歌词或调过时间轴偏移的歌曲")
+        case .all, .missing, .instrumental: return ""
+        }
+    }
+
+    private var sourceChip: some View {
+        Button {
+            showSourcePicker.toggle()
+        } label: {
+            LyricsManagerMenuChip(title: sourceFilter.label, active: sourceFilter != .all)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showSourcePicker, arrowEdge: .bottom) {
+            let options = SourceFilter.options(extraSources: store.extraSources).filter { $0 != .all }
+            LyricsManagerOptionList(
+                allTitle: L10n.t("全部来源"),
+                options: options.map { .init(id: $0.id, title: $0.label) },
+                selectedID: sourceFilter == .all ? nil : sourceFilter.id, searchable: false
+            ) { id in
+                sourceFilter = options.first { $0.id == id } ?? .all
+            }
+        }
+    }
+
+    private var artistChip: some View {
+        Button {
+            showArtistPicker.toggle()
+        } label: {
+            LyricsManagerMenuChip(title: artistFilter ?? L10n.t("全部歌手"), active: artistFilter != nil)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showArtistPicker, arrowEdge: .bottom) {
+            LyricsManagerOptionList(
+                allTitle: L10n.t("全部歌手"),
+                options: store.distinctArtists.map { .init(id: $0, title: $0) },
+                selectedID: artistFilter, searchable: true
+            ) { artistFilter = $0 }
+        }
+    }
+
+    private var albumChip: some View {
+        Button {
+            showAlbumPicker.toggle()
+        } label: {
+            LyricsManagerMenuChip(title: albumFilter ?? L10n.t("全部专辑"), active: albumFilter != nil)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showAlbumPicker, arrowEdge: .bottom) {
+            LyricsManagerOptionList(
+                allTitle: L10n.t("全部专辑"),
+                options: store.distinctAlbums.map { .init(id: $0, title: $0) },
+                selectedID: albumFilter, searchable: true
+            ) { albumFilter = $0 }
+        }
+    }
+
+    private func nowPlayingRow(scrollProxy: ScrollViewProxy) -> some View {
+        let playback = PlaybackCoordinator.shared
+        return LyricsManagerNowPlayingRow(
+            artwork: nowPlaying.artwork, coverURL: nil,
+            title: playback.title, artist: nowPlaying.displayArtist,
+            onLocate: { locateNowPlaying(scrollProxy: scrollProxy) })
+    }
+
+    /// 「定位」:这首被搜索或筛选挡住时先清掉,再跳过去。
+    private func locateNowPlaying(scrollProxy: ScrollViewProxy) {
+        guard let key = nowPlayingKey else { return }
+        guard sortedFiltered.contains(where: { $0.key == key }) else {
+            resetFilters()
+            clearSearch()
+            // 等这一拍的筛选生效、列表换成全量之后再定位。
+            DispatchQueue.main.async { focusCurrentlyPlaying(scrollProxy: scrollProxy) }
+            return
+        }
+        focusCurrentlyPlaying(scrollProxy: scrollProxy)
+    }
+
+    /// 正在放的这首在列表里对应哪一条:跟 focusCurrentlyPlaying 同一套候选(归一化 key、原样拼的 key、各自的宽松 key),
+    /// 占位行也算。换歌、列表重读、占位行变了之后各算一次,不在 body 里现算。
+    private func refreshNowPlayingKey() {
+        let playback = PlaybackCoordinator.shared
+        guard !playback.artist.isEmpty || !playback.title.isEmpty else {
+            if nowPlayingKey != nil { nowPlayingKey = nil }
+            return
+        }
+        let normalizedKey = EnrichCacheKeys.normalizedKey(
+            artist: playback.artist, title: playback.title, album: playback.album)
+        let rawKey = "\(playback.artist)|\(playback.title)|\(playback.album)"
+        let candidates = normalizedKey == rawKey ? [normalizedKey] : [normalizedKey, rawKey]
+        let resolved: String?
+        if let placeholder = placeholderSummary, candidates.contains(placeholder.key) {
+            resolved = placeholder.key
+        } else if let exact = candidates.first(where: { candidate in
+            store.summaries.contains(where: { $0.key == candidate })
+        }) {
+            resolved = exact
+        } else {
+            resolved = candidates.lazy.compactMap({ store.key(matchingLoose: $0) }).first
+        }
+        if resolved != nowPlayingKey { nowPlayingKey = resolved }
+    }
+
+    /// 列表上面那一行:在看哪一类、几首(在搜时是「找到 N 首」),多选时「已选 N 首」,右边是排序 / 分组。
+    private var listHeader: some View {
+        HStack(spacing: 6) {
+            Text(listTitle)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+            if committedSearchText.isEmpty {
+                Text(selectableFiltered.count.formatted())
+                    .font(.system(size: 13))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            if selectedVisibleKeys.count > 1 {
+                Text(String(format: L10n.t("已选 %@ 首"), selectedVisibleKeys.count.formatted()))
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .lineLimit(1)
+            }
+            if showDeletedFeedback {
+                Label(L10n.t("已删除"), systemImage: "checkmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            sortMenu
+        }
+        .padding(.top, 2)
+        .padding(.horizontal, 4)
+    }
+
+    private var listTitle: String {
+        if !committedSearchText.isEmpty {
+            return String(format: L10n.t("找到 %@ 首"), selectableFiltered.count.formatted())
+        }
+        if statusFilter != .all { return Self.statusTitle(statusFilter) }
+        if case let .only(kind) = kindFilter { return kind.label }
+        return L10n.t("全部歌曲")
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker(L10n.t("分组"), selection: $groupByAlbum) {
+                Text(L10n.t("不分组")).tag(false)
+                Text(L10n.t("按专辑分组")).tag(true)
+            }
+            .pickerStyle(.inline)
+            Picker(L10n.t("排序"), selection: $sortOption) {
+                ForEach(LyricsSortOption.allCases) { option in
+                    Text(L10n.t(option.rawValue)).tag(option)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 3) {
+                Text(sortsByRelevance ? L10n.t("按相关度") : L10n.t(sortOption.rawValue))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(.secondary)
+        .help(sortsByRelevance ? L10n.t("搜索时默认按相关度排序：歌名开头匹配的优先，其次是歌名、歌手、专辑中匹配的") : "")
+    }
+
+    /// 列表的选中。编辑里有没保存的改动时,点别的歌先问一句(保存 / 不保存 / 取消),这时选中先不换。
+    private var listSelection: Binding<Set<String>> {
+        Binding(
+            get: { selectedKeys },
+            set: { newValue in
+                if isEditorDirty, newValue != selectedKeys {
+                    pendingSelection = newValue
+                    showUnsavedEditAlert = true
+                    return
+                }
+                selectedKeys = newValue
+            })
+    }
+
+    /// 选中这一首;编辑里有没保存的改动、要换到别的歌时先问一句,问的时候返回 false(这一下的动作不做)。
+    private func select(_ key: String) -> Bool {
+        if isEditorDirty, editingKey != key {
+            pendingSelection = [key]
+            showUnsavedEditAlert = true
+            return false
+        }
+        selectedKeys = [key]
+        return true
+    }
+
+    private func songList(scrollProxy: ScrollViewProxy) -> some View {
+        List(selection: listSelection) {
+            if groupByAlbum {
+                // 组头当作一行不能选中的条目,跟歌排在同一层 ForEach 里。别写成 Section 里再套 ForEach:List 每次比对都要
+                // 从第一组数起找第 i 行,上万首、几千组时插一条占位行就要卡几秒(见 11 章决策 70)。
+                ForEach(albumEntries) { entry in
+                    switch entry {
+                    case let .header(group):
+                        LyricsManagerAlbumHeader(album: group.album, artist: group.artist, count: group.items.count)
+                            // 行高跟歌曲行一样(内容 48 + .inset 自带的 8),估算行高才准;组头贴着下面那组歌。
+                            .frame(height: Self.listRowHeight - 8, alignment: .bottom)
+                            .selectionDisabled()
+                            .listRowSeparator(.hidden)
+                    case let .song(summary):
+                        songRow(summary)
+                    }
+                }
+            } else {
+                ForEach(sortedFiltered) { songRow($0) }
+            }
+        }
+        // 用 .inset 不用 .sidebar:.sidebar 会把行里的字画淡,在玻璃侧栏上读起来像灰掉了。
+        .listStyle(.inset)
+        // 估算行高必须等于实际行高:没滚到过的行按它算,默认的 24 比实际小一半多,几千首时 scrollTo 落点差上百行(见 11 章决策 62)。
+        .environment(\.defaultMinListRowHeight, Self.listRowHeight)
+        .scrollContentBackground(.hidden)
+        // 首次开窗、summaries 还没任何内容时叠一个"正在加载"提示,不让空 List 看着像一片白屏。
+        // 用 .overlay 而不是拿 if/else 把 List 整个换掉:下面 .onAppear(真正触发 reload() 的地方)要挂在一直存在的 List 上。
+        .overlay {
+            if store.isLoading {
+                VStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(L10n.t("正在加载…"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            } else if sortedFiltered.isEmpty, placeholderSummary == nil {
+                emptyListState
+            }
+        }
+        // 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
+        // 从空白处唤出菜单时 keys 是空集(即使当前有选中项也一样);图省事读
+        // selectedKeys 就会变成"右键点空白 → 菜单显示『删除 8 条』 → 删掉 8 条
+        // 根本不在右键位置的条目"。空白处只给「全选」。
+        // 右键点某个未被选中的行时系统会把选中收敛到那一行、keys 就是那一行;
+        // 右键点已选中区内任一行则 keys 是整个选区。
+        // 不传 primaryAction:macOS 上它绑的是双击,这个列表双击目前没有语义。
+        .contextMenu(forSelectionType: String.self) { keys in
+            listMenu(keys)
+        }
+        // 筛选条件一变就把选中项收敛到当前可见集合。用 formIntersection 而不是
+        // 无条件清空:用户只是微调搜索词时保住已有选择更符合预期。
+        .onChange(of: filterToken) { _, _ in
+            selectedKeys.formIntersection(Set(filtered.map(\.key)))
+        }
+        // 换分组、换排序之后每一行的位置都变了,滚回选中的那一首(见 11 章决策 75)。
+        .onChange(of: groupByAlbum) { _, _ in revealSelection(scrollProxy: scrollProxy) }
+        .onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }
+        // 删除确认弹窗挂在 List 上——不能挂在 detailView 里(多选时右侧渲染的是批量
+        // 面板、detailView 根本不在视图树里,置 isPresented 会静默无效),也故意不跟
+        // 「清空全部缓存」那个弹窗挂在同一条修饰符链上:SwiftUI 对同一条链上叠加
+        // 多个同类型呈现修饰符历史上有互相顶掉的问题。List 在侧栏里始终存在、生命周期稳定。
+        // title/actions/message 一律只读 pendingDeleteKeys 这份快照,不读 selectedKeys。
+        .confirmationDialog(
+            batchDeleteTitle,
+            isPresented: $showBatchDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(
+                pendingDeleteKeys.count == 1
+                    ? L10n.t("删除")
+                    : String(format: L10n.t("删除 %@ 条"), "\(pendingDeleteKeys.count)"),
+                role: .destructive
+            ) {
+                performPendingDelete()
+            }
+            Button(L10n.t("取消"), role: .cancel) {}
+        } message: {
+            // 同「全量重新扫库」那处:只在确认框开着时算。
+            if showBatchDeleteConfirm { Text(batchDeleteMessage) }
+        }
+        .onAppear {
+            // reload 必须先于定位——刚打开窗口时 summaries 可能还是上次
+            // 关闭时的旧内容(或空的),定位逻辑要按最新磁盘内容匹配当前
+            // 播放的这首歌。reload() 是 async(读文件+解析在后台线程,避免
+            // 缓存文件变大之后开窗卡顿),这里用 Task 包一层、await 完了再定位。
+            Task {
+                await store.reload()
+                // 跟 pendingAutoFocus 那道闸分开:占位行每次开窗/回到前台都要
+                // 重新核对(不像自动定位只做一次)——收起来的旧占位行可能早就
+                // 该顶替成真实条目了,也可能换了首新歌还在搜。
+                refreshPlaceholder()
+                refreshNowPlayingKey()
+                guard pendingAutoFocus else { return }
+                pendingAutoFocus = false
+                await windowFrame.waitUntilListReady(minRows: sortedFiltered.count)
+                // 只把详情换成正在放的这首,列表停在顶上:滚到它那一行要点「正在播放」那一行的「定位」(见 11 章决策 64)。
+                focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false)
+                // 开窗时 AppKit 把键盘焦点给第一个输入框(搜索框),交给列表:方向键直接换歌,⌘F 再去搜索。
+                DispatchQueue.main.async { windowFrame.focusList() }
+            }
+        }
+        // 自动匹配的进度卡、写入失败的红字挂在列表底下,列表的最后几行能滚到它们上面。
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            sidebarFooter
+        }
+    }
+
+    private func songRow(_ summary: EnrichCacheStore.Summary) -> some View {
+        LyricsManagerSongRow(
+            summary: summary,
+            albumDisplayName: summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum),
+            query: committedSearchText,
+            isNowPlaying: summary.key == nowPlayingKey,
+            isPinned: pins.isPinned(summary.key),
+            isEmphasized: windowFrame.listHasKeyFocus && selectedKeys.contains(summary.key),
+            artwork: summary.key == nowPlayingKey ? nowPlaying.artwork : nil)
+        .tag(summary.key)
+        .listRowSeparator(.hidden)
+    }
+
+    /// 列表的右键菜单:空白处是「全选」,一首是这首的全部操作,几首是批量能做的那几样。
+    @ViewBuilder
+    private func listMenu(_ keys: Set<String>) -> some View {
+        // orderedVisibleKeys 已经把「正在搜索」占位行排除在外:右键点的全是占位行时菜单是空的。
+        let visible = orderedVisibleKeys(keys)
+        if keys.isEmpty {
+            if !selectableFiltered.isEmpty {
+                Button(String(format: L10n.t("全选 %@ 首"), selectableFiltered.count.formatted())) {
+                    selectedKeys = Set(selectableFiltered.map(\.key))
+                }
+            }
+        } else if visible.count == 1, let summary = store.summaries.first(where: { $0.key == visible[0] }) {
+            singleItemMenu(summary)
+        } else if !visible.isEmpty {
+            multiItemMenu(visible)
+        }
+    }
+
+    /// 一首歌能做的事(右键菜单)。
+    @ViewBuilder
+    private func singleItemMenu(_ summary: EnrichCacheStore.Summary) -> some View {
+        Button(L10n.t("搜索候选歌词")) { openSearch(for: summary.key) }
+            .disabled(rematchRunningKey != nil)
+        Button(L10n.t("重新自动匹配")) { startRematch(for: summary.key) }
+            .disabled(rematchBlocked)
+        if summary.hasDecision {
+            Button(L10n.t("解析决策")) { openDecision(for: summary.key) }
+        }
+        Divider()
+        if summary.isInstrumental {
+            Button(L10n.t("取消纯音乐标记")) { Task { await store.setInstrumental(key: summary.key, false) } }
+        } else {
+            Button(L10n.t("标为纯音乐")) { Task { await store.setInstrumental(key: summary.key, true) } }
+        }
+        Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
+        if summary.hasLyrics {
+            Button(L10n.t("在访达中显示歌词文件")) { revealLyricsFile(summary.key) }
+            Button(L10n.t("在外部编辑器中编辑歌词")) {
+                LyricsExternalEditor.shared.open(artist: summary.artist, title: summary.title, album: summary.album)
+            }
+        }
+        Divider()
+        // 跟批量删除、⌘⌫ 走同一条 requestDelete → 侧栏那个确认弹窗的路径:只留一处弹窗,文案/统计/快照逻辑不会两处漂移。
+        Button(L10n.t("删除本地记录…"), role: .destructive) { requestDelete([summary.key]) }
+    }
+
+    /// 选了几首时能做的事:自动匹配其中没词的、标为纯音乐、删除。
+    @ViewBuilder
+    private func multiItemMenu(_ keys: [String]) -> some View {
+        let picked = Set(keys)
+        let retryable = store.summaries.filter { picked.contains($0.key) && EnrichCacheStore.isFillSweepRetryable($0) }
+            .map(\.key)
+        if !retryable.isEmpty {
+            Button(String(format: L10n.t("重新自动匹配选中的 %@ 首"), retryable.count.formatted())) {
+                requestFillSweep(retryable)
+            }
+            .disabled(fillSweepStatus?.running == true || fillSweepPending)
+        }
+        Button(L10n.t("全部标为纯音乐")) { markInstrumental(keys) }
+            .disabled(markingInstrumental)
+        Divider()
+        Button(String(format: L10n.t("删除选中的 %@ 条"), keys.count.formatted()), role: .destructive) {
+            requestDelete(picked)
+        }
+    }
+
+    /// 「重新自动匹配」点不了的时候:一首正在匹配,或者自动匹配 / 全量扫库在跑(引擎那时不接)。
+    private var rematchBlocked: Bool {
+        rematchRunningKey != nil || fillSweepStatus?.running == true || fillSweepPending
+    }
+
+    private func openSearch(for key: String) {
+        guard select(key) else { return }
+        showSearchSheet = true
+    }
+
+    private func openDecision(for key: String) {
+        guard select(key) else { return }
+        showDecisionSheet = true
+    }
+
+    private func startRematch(for key: String) {
+        guard select(key) else { return }
+        Task { await runRematch(key: key) }
+    }
+
+    private func copySongName(_ summary: EnrichCacheStore.Summary) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("\(summary.title) - \(summary.shownArtist)", forType: .string)
+    }
+
+    private func revealLyricsFile(_ key: String) {
+        guard let url = store.lyricsFileURL(forKey: key) else {
+            NSSound.beep()
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    private func requestFillSweep(_ keys: [String]) {
+        if LyricsFillSweep.request(keys: keys) { fillSweepPending = true; fillSweepPendingIsFull = false }
+    }
+
+    private func markInstrumental(_ keys: [String]) {
+        markingInstrumental = true
+        Task {
+            for key in keys { _ = await store.setInstrumental(key: key, true) }
+            markingInstrumental = false
+        }
+    }
+
+    /// 侧栏底部:自动匹配的进度卡,写入失败时的红字。
+    private var sidebarFooter: some View {
+        VStack(spacing: 8) {
+            if let phase = sweepPhase {
+                LyricsManagerSweepCard(
+                    phase: phase,
+                    listingMissing: statusFilter == .missing,
+                    fallbackSecondsPerTrack: fillSweepStatus?.isFullScan == true
+                        ? fullScanFallbackSecondsPerTrack : FillSweepProgressText.fillFallbackSecondsPerTrack,
+                    onStop: { LyricsFillSweep.requestCancel() })
+            }
+            // store.lastError 跟选中状态无关、永远有地方显示:批量删完选中清空、右侧变回空占位时,
+            // 「写入本地记录文件失败」这类错误没有别的宿主。
+            if let error = store.lastError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.red.opacity(0.08)))
+            }
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 12)
+    }
+
+    /// 进度卡此刻该说什么:点了之后、引擎接手之前;跑着;刚跑完的几秒(全量那一轮的收尾不在这里说,设置页那一行有)。
+    private var sweepPhase: LyricsManagerSweepCard.Phase? {
+        if fillSweepPending { return .preparing(full: fillSweepPendingIsFull) }
+        guard let status = fillSweepStatus else { return nil }
+        if status.running { return .running(status) }
+        if let finished = status.finishedAt, !status.isFullScan, dismissedSweepReceipt != finished,
+           status.done > 0 || status.isOffline,
+           Date().timeIntervalSince1970 - Double(finished) < Self.sweepReceiptSeconds {
+            return .finished(status)
+        }
+        return nil
+    }
+
+    /// 「自动匹配完了」那句在进度卡上留几秒。
+    private static let sweepReceiptSeconds: Double = 8
 
     var body: some View {
-        NavigationSplitView {
-            // ScrollViewReader 包住整个侧栏(而不是只包 List)——工具栏的"回到当前播放"
-            // 按钮跟 List 是 VStack 里的兄弟节点、跟 .toolbar 修饰符也不在同一层,要让
-            // scrollProxy 在这两者共同的外层作用域里可见,闭包需要整个包住 VStack+.toolbar。
-            // ScrollViewReader 只是个透明包装,不影响布局。
+        GeometryReader { geometry in
+            let shownSidebarWidth = CGFloat(LyricsManagerSidebarWidth.shown(
+                stored: sidebarWidth, windowWidth: Double(geometry.size.width), inset: Double(Self.panelInset)))
             ScrollViewReader { scrollProxy in
-                VStack(spacing: 0) {
-                    brandHeader
-                    Divider()
-                    searchBar
-                    filterBar
-                    Divider()
-                    listColumnHeader
-                    Divider()
-                    List(sortedFiltered, selection: $selectedKeys) { summary in
-                        // 改用 summary.artist(原始写法)而不是 displayArtist
-                        // (统一后的官方名)——理由见 EnrichCacheStore.Summary.displayArtist
-                        // 的注释:筛选/排序继续按统一名归并不变,只是这一列如实展示每条记录
-                        // 自己的原始歌手名,好让"同一首歌因原始标签不同被拆成两条记录"这种
-                        // 情况在列表里能被用户一眼看出区别,而不是显示成一模一样。
-                        LyricsManagerRow(summary: summary, artistDisplayName: summary.artist, albumDisplayName: summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum), widths: shownWidths, offsetColumnWidth: Self.offsetColumnWidth)
-                    }
-                    .listStyle(.inset(alternatesRowBackgrounds: true))
-                    // 首次开窗、summaries 还没任何内容时叠一个"正在加载"提示,不让空 List
-                    // 看着像一片白屏。
-                    // 用 .overlay 而不是拿 if/else 把 List 整个换掉:那样要把下面 .onAppear
-                    // (真正触发 reload() 的地方)挪到一个"loading 分支和 loaded 分支都在
-                    // 的容器"上才不会死锁(loading 时 List 不存在→onAppear 不触发→永远
-                    // loading)——.overlay 直接叠在同一个 List 上,List 本身、它的 onAppear
-                    // 一个字都不用动,只是内容还是空的那几百毫秒里多画一层提示。
-                    .overlay {
-                        if store.isLoading {
-                            VStack(spacing: 8) {
-                                ProgressView().controlSize(.small)
-                                Text(L10n.t("正在加载…"))
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else if sortedFiltered.isEmpty, placeholderSummary == nil {
-                            emptyListState
+                HStack(spacing: 0) {
+                    sidebar(scrollProxy: scrollProxy)
+                        .frame(width: shownSidebarWidth)
+                        .padding(.leading, Self.panelInset)
+                        .padding(.vertical, Self.panelInset)
+                        .overlay(alignment: .trailing) {
+                            LyricsManagerSidebarHandle(
+                                onDrag: { dx in
+                                    if sidebarDragStart == nil { sidebarDragStart = Double(shownSidebarWidth) }
+                                    guard let start = sidebarDragStart else { return }
+                                    sidebarWidth = LyricsManagerSidebarWidth.clamped(start + Double(dx))
+                                },
+                                onDragEnd: {
+                                    sidebarDragStart = nil
+                                    persistSidebarWidth()
+                                },
+                                onDoubleClick: {
+                                    sidebarWidth = LyricsManagerSidebarWidth.standard
+                                    persistSidebarWidth()
+                                })
+                            .offset(x: 6)
                         }
-                    }
-                    // 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
-                    // 从空白处唤出菜单时 keys 是空集(即使当前有选中项也一样);图省事读
-                    // selectedKeys 就会变成"右键点空白 → 菜单显示『删除 8 条』 → 删掉 8 条
-                    // 根本不在右键位置的条目"。空集时整个菜单不给任何项(= 文档说的停用菜单)。
-                    // 右键点某个未被选中的行时系统会把选中收敛到那一行、keys 就是那一行;
-                    // 右键点已选中区内任一行则 keys 是整个选区——这正是需要的原生行为,给每行
-                    // 单独挂 .contextMenu 拿不到。
-                    // 不传 primaryAction:macOS 上它绑的是双击,这个列表双击目前没有语义,
-                    // 绑上破坏性操作等于给它配一个极易误触的手势。
-                    .contextMenu(forSelectionType: String.self) { keys in
-                        // orderedVisibleKeys 已经把「正在搜索」占位行排除在外(见其注释)——
-                        // 右键点的这批选区如果全是占位行,deletable 就是空集,菜单不给任何
-                        // 项,跟"空白处右键"是同一套既有行为,不需要额外分支。
-                        let deletable = orderedVisibleKeys(keys)
-                        if !deletable.isEmpty {
-                            Button(role: .destructive) {
-                                requestDelete(keys)
-                            } label: {
-                                Text(deletable.count == 1
-                                    ? L10n.t("删除本地记录")
-                                    : String(format: L10n.t("删除选中的 %@ 条"), "\(deletable.count)"))
-                            }
-                        }
-                    }
-                    // 筛选条件一变就把选中项收敛到当前可见集合。用 formIntersection 而不是
-                    // 无条件清空:用户只是微调搜索词时保住已有选择更符合预期。
-                    .onChange(of: filterToken) { _, _ in
-                        selectedKeys.formIntersection(Set(filtered.map(\.key)))
-                    }
-                    // 删除确认弹窗挂在 List 上——不能挂在 detailView 里(多选时右侧渲染的是批量
-                    // 面板、detailView 根本不在视图树里,置 isPresented 会静默无效),也故意不跟
-                    // 下面「清空全部缓存」那个弹窗挂在同一条修饰符链上:SwiftUI 对同一条链上叠加
-                    // 多个同类型呈现修饰符历史上有互相顶掉的问题,挂在层级明确不同的两个视图上
-                    // 就不用去论证"这个版本到底会不会冲突"。List 在侧栏里始终存在、生命周期稳定。
-                    // title/actions/message 一律只读 pendingDeleteKeys 这份快照,不读 selectedKeys。
-                    .confirmationDialog(
-                        batchDeleteTitle,
-                        isPresented: $showBatchDeleteConfirm,
-                        titleVisibility: .visible
-                    ) {
-                        Button(
-                            pendingDeleteKeys.count == 1
-                                ? L10n.t("删除")
-                                : String(format: L10n.t("删除 %@ 条"), "\(pendingDeleteKeys.count)"),
-                            role: .destructive
-                        ) {
-                            performPendingDelete()
-                        }
-                        Button(L10n.t("取消"), role: .cancel) {}
-                    } message: {
-                        // 同「全量重新扫库」那处:只在确认框开着时算。
-                        if showBatchDeleteConfirm { Text(batchDeleteMessage) }
-                    }
-                    .onAppear {
-                        // reload 必须先于定位——刚打开窗口时 summaries 可能还是上次
-                        // 关闭时的旧内容(或空的),定位逻辑要按最新磁盘内容匹配当前
-                        // 播放的这首歌。reload() 是 async(读文件+解析在后台线程,避免
-                        // 缓存文件变大之后开窗卡顿),这里用 Task 包一层、await 完了再定位。
-                        Task {
-                            await store.reload()
-                            // 跟 pendingAutoFocus 那道闸分开:占位行每次开窗/回到前台都要
-                            // 重新核对(不像自动定位只做一次)——收起来的旧占位行可能早就
-                            // 该顶替成真实条目了,也可能换了首新歌还在搜。
-                            refreshPlaceholder()
-                            guard pendingAutoFocus else { return }
-                            pendingAutoFocus = false
-                            // animated: false——开窗那一刻用户还没看过这个列表,从顶部一路
-                            // 滚下去的动画没有任何信息量,只会让人等;而且首帧行高还没量完,
-                            // 不带动画才好在量准之后补一次定位(见函数内注释)。
-                            focusCurrentlyPlaying(scrollProxy: scrollProxy, animated: false)
-                        }
-                    }
-
-                    // store.lastError 原来只在右侧详情页里渲染(见 detailView)——批量删完
-                    // selectedKeys 清空、右侧变回空占位,「写入本地记录文件失败」和「重启
-                    // 引擎失败」两条就都没有宿主视图了。后者尤其要命:引擎没重启
-                    // 成功时它内存里还持有整份旧缓存,下次它自己存盘就会把刚删的条目整体写回
-                    // 磁盘(见 EnrichCacheStore 顶部注释),用户看到的是"删了一批、过一会儿又
-                    // 全回来了",而全程零提示。这条横幅挂在列表下面,跟选中状态无关、永远在。
-                    if let error = store.lastError {
-                        Divider()
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.thinMaterial)
-                    }
-                }
-                // 坐标空间挂在这里(不是表头上):表头的拖拽手势和列表每一行都要在同一个空间
-                // 里报坐标,才能让分隔线对齐到行内容的真实列边界。见 LyricsColumnHeaderSpace。
-                .coordinateSpace(.named(LyricsColumnHeaderSpace.name))
-                .onPreferenceChange(RowContentBoundsKey.self) { bounds in
-                    if let bounds { rowContentBounds = bounds }
-                }
-                // 搜索框本身已经不是原生 .searchable 了(换成 searchBar 手写行,
-                // 见该属性声明处注释:原生 .sidebar 搜索框的 .onSubmit(of: .search) 实测在
-                // 这扇窗口里按回车没反应,而且搜索按钮挪到输入框右边、输入框
-                // 相应缩短——原生搜索框不支持这种自定义布局,只能手写)。
-                .navigationTitle(L10n.t("歌词管理"))
-                .navigationSubtitle(String(format: L10n.t("%@ / %@ 首"), "\(selectableFiltered.count)", "\(store.summaries.count)"))
-                .toolbar {
-                    ToolbarItem {
-                        Button(action: refreshWithFeedback) {
-                            Label(showRefreshedFeedback ? L10n.t("已刷新") : L10n.t("刷新"),
-                                  systemImage: showRefreshedFeedback ? "checkmark" : "arrow.clockwise")
-                        }
-                    }
-                    ToolbarItem {
-                        // 跟开窗时自动定位复用同一个 focusCurrentlyPlaying,只是这次带动画:
-                        // 用户正看着列表点的这个按钮,滚动过程本身就是"往哪儿跳了"的反馈。
-                        Button {
-                            focusCurrentlyPlaying(scrollProxy: scrollProxy)
-                        } label: {
-                            Label(L10n.t("回到当前播放"), systemImage: "location.fill")
-                        }
-                    }
-                    ToolbarItem {
-                        // 常驻 + 空选时置灰,不做"选中才出现"——按钮凭空插进来会把旁边几个
-                        // 工具栏项整排挤位移,而 Mac 上(邮件的废纸篓按钮)的惯例本来就是
-                        // 常驻置灰。文案固定不带数字,避免每次改选中都抖动。
-                        //
-                        // 快捷键取 ⌘⌫ 而不是裸 ⌫:惯例上裸 ⌫ 是给"删除可撤销/进废纸篓"用的
-                        // (邮件删完 ⌘Z 能回来),⌘⌫ 才是给不可逆或直接动文件系统的删除用的
-                        // (Finder 移到废纸篓、照片删除),而这里两条都占——没有撤销,还真的
-                        // unlink lyrics/ 下的文件。更实际的理由是:.keyboardShortcut 挂在按钮上
-                        // 是**窗口级**快捷键,跟焦点在哪无关,绑裸 ⌫ 会把这个窗口里搜索框和三个
-                        // 歌词文本框的退格键全抢掉——在搜索框里退一个字符就弹出删除确认。
-                        // .disabled 让空选时按 ⌘⌫ 毫无反应,天然挡住误触。
-                        Button {
-                            // 窗口级快捷键会先于文本框拿到 ⌘⌫:焦点在搜索框或歌词编辑框里时,这一下是「删到行首」,
-                            // 替文本框做完就返回,别弹删除确认。
-                            if let text = NSApp.keyWindow?.firstResponder as? NSTextView,
-                               NSApp.currentEvent?.type == .keyDown {
-                                text.deleteToBeginningOfLine(nil)
-                                return
-                            }
-                            requestDelete(selectedKeys)
-                        } label: {
-                            Label(showDeletedFeedback ? L10n.t("已删除") : L10n.t("删除记录"),
-                                  systemImage: showDeletedFeedback ? "checkmark" : "trash")
-                        }
-                        .disabled(selectedVisibleKeys.isEmpty)
-                        .keyboardShortcut(.delete, modifiers: .command)
-                    }
-                    ToolbarItem {
-                        fillSweepToolbarMenu
-                    }
-                    ToolbarItem {
-                        // 缓存占用查看 + 一键清空——这份缓存设计上"解析一次永久保留",
-                        // 之前只能在下面列表里逐条删,没有总大小展示、也没有批量清空的入口。
-                        //
-                        // 只用 `Label(cacheSizeText, systemImage)` 当 Menu 的标签不够:
-                        // macOS 工具栏里的 Label **默认只画图标、把标题整个丢掉**(跟
-                        // MenuBarMenu.swift 里"下拉菜单默认不画 Label 图标"是相反方向的同一类
-                        // 默认行为),数字不会真的出现在界面上,工具栏上
-                        // 只有一个硬盘图标 + 展开箭头。补 .labelStyle(.titleAndIcon) 让标题真的
-                        // 画出来。
-                        //
-                        // 菜单里再放一行"共 N 条,占用 X":用户点开这个菜单本来就是想看占用,而且
-                        // 这一行紧贴着"清空全部缓存"这个不可撤销的操作,让人在点下去之前先看清
-                        // 自己要删掉多少东西。
-                        Menu {
-                            Section {
-                                Button(role: .destructive) {
-                                    showClearAllConfirm = true
-                                } label: {
-                                    Label(L10n.t("清空全部缓存"), systemImage: "trash")
-                                }
-                            } header: {
-                                Text(String(format: L10n.t("共 %d 条，占用 %@"),
-                                            store.summaries.count, cacheSizeText))
-                            }
-                            // 时间轴校正值单独一段、单独一个清空入口:它跟歌词内容存在两个
-                            // 完全不同的地方(UserDefaults vs 缓存 JSON + lyrics/ 文件夹),
-                            // 清哪一个都不该连带另一个 —— 校正值是用户一句句听出来的,
-                            // 比"下次播放会自动重新解析"的歌词内容宝贵得多。
-                            Section {
-                                Button(role: .destructive) {
-                                    showClearOffsetsConfirm = true
-                                } label: {
-                                    Label(L10n.t("清空全部时间轴校正"), systemImage: "timer")
-                                }
-                                .disabled(offsets.trackOffsetCount == 0)
-                            } header: {
-                                Text(String(format: L10n.t("已校准 %d 首歌的歌词时间轴"),
-                                            offsets.trackOffsetCount))
-                            }
-                            // 电台那一层再单独一段:它跟上面那份是两个成因 ——
-                            // 上面修的是"这份歌词自己的时间轴不准",这里修的是"电台的元数据比
-                            // 声音晚"(见 LyricsOffsetStore.radioOffsets)。清哪一个都不该连带另一个。
-                            // 整段只在真的调过时才出现:没用过电台的人不需要多看一段说明。
-                            if offsets.radioOffsetCount > 0 {
-                                Section {
-                                    Button(role: .destructive) {
-                                        showClearRadioOffsetsConfirm = true
-                                    } label: {
-                                        Label(L10n.t("清空全部电台校正"), systemImage: "dot.radiowaves.left.and.right")
-                                    }
-                                } header: {
-                                    Text(String(format: L10n.t("已校正 %d 首歌在电台上的时间轴"),
-                                                offsets.radioOffsetCount))
-                                }
-                            }
-                            // 清空/批量删除之前自动打的快照,就地给一个恢复入口。
-                            //
-                            // 为什么必须在**同一个菜单**里:这两个不可撤销的按钮就在上面两段,
-                            // 手滑之后第一反应是回到刚才点错的地方找后悔药。放进设置页的
-                            // 「配置备份」里(那是"换机器"的语境)等于让人在最慌的时候去猜。
-                            //
-                            // 列表现读、不缓存:上面那颗「清空全部缓存」刚打的那份必须立刻
-                            // 出现在这里。
-                            let snapshots = LyricsBackupStore.autoSnapshots()
-                            if !snapshots.isEmpty {
-                                Section {
-                                    ForEach(snapshots) { snapshot in
-                                        Button {
-                                            pendingRestoreSnapshot = snapshot
-                                            showRestoreSnapshotConfirm = true
-                                        } label: {
-                                            // 纯排版,不进 L10n —— 两侧都是已本地化好的
-                                            // 片段(DateFormatter / ByteCountFormatter),
-                                            // 加一条只有括号的翻译条目没有意义。
-                                            Label("\(Self.snapshotDateText(snapshot.date))（\(Self.byteText(snapshot.bytes))）",
-                                                  systemImage: "clock.arrow.circlepath")
-                                        }
-                                    }
-                                } header: {
-                                    Text(L10n.t("从自动备份恢复"))
-                                }
-                            }
-                        } label: {
-                            Label(cacheSizeText, systemImage: "internaldrive")
-                                .labelStyle(.titleAndIcon)
-                        }
-                        // 光看一个数字说不清算的是什么——说明它同时含缓存 JSON 和已导出的
-                        // lyrics/ 文件夹(见 EnrichCacheStore.totalSizeBytes)。
-                        .help(L10n.t("歌词缓存文件，加上已导出的 .lrc 歌词文件夹，合计占用的磁盘空间"))
-                    }
-                }
-                // 去掉系统自动加的「隐藏边栏」按钮。
-                //
-                // NavigationSplitView 会自己往工具栏塞这一颗,而这个窗口的两栏是"歌曲列表 +
-                // 选中那首的详情",不是"导航栏 + 内容" —— 把列表整个折叠起来之后剩下的详情页
-                // 没有任何切歌入口,是个走不出去的状态。实测点了直接卡死。
-                //
-                // 不是靠隐藏来回避卡死:这个窗口本来就不该有折叠侧栏这个动作,按钮存在本身
-                // 就是 NavigationSplitView 的默认行为漏出来的,不是设计。
-                .toolbar(removing: .sidebarToggle)
-                // 列表这一栏(歌名/歌手/专辑/来源四列)给个够宽的默认/理想宽度——不然
-                // NavigationSplitView 默认分给侧栏的宽度偏窄,歌名(尤其是带 feat./remix
-                // 后缀的长标题)会被裁成省略号。630pt 能让歌名基本完整露出来,拿来当
-                // ideal 默认值。
-                .navigationSplitViewColumnWidth(min: 480, ideal: 630, max: 900)
-                .confirmationDialog(
-                    L10n.t("确定要清空全部歌词缓存吗？"),
-                    isPresented: $showClearAllConfirm,
-                    titleVisibility: .visible
-                ) {
-                    Button(L10n.t("清空全部缓存"), role: .destructive) {
-                        Task {
-                            await store.clearAll()
-                            selectedKeys.removeAll()
-                        }
-                    }
-                    Button(L10n.t("取消"), role: .cancel) {}
-                } message: {
-                    // 文案从"无法撤销"改成"会先自动备份":clearAll 动手之前
-                    // 一定先打一份快照(EnrichCacheStore.clearAll)。 不能改成"随时可以
-                    // 恢复"——快照只保留最近 3 份、库本来是空的时候压根打不出来,承诺过头
-                    // 比不承诺更危险。
-                    Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录，包括你手动编辑、联网搜索采纳过的内容，已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份，能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析"), store.summaries.count))
+                    detailColumn
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
                 // 窗口开着期间换歌就跟着重新定位——不然停留在"开窗那一刻播的那首",见
                 // LyricsManagerNowPlayingObserver 类头注。首次挂载时 trackSignature 已经是
                 // 当前播放那首(CombineLatest3 订阅即发一次),不会跟 pendingAutoFocus 那次
-                // 开窗定位重复触发;这里只在**后续**换歌时才会再跑一次。挂在这里(还在
-                // ScrollViewReader 的 scrollProxy 作用域内)而不是外层 NavigationSplitView
-                // 的修饰符链上——那边已经出了 scrollProxy 的可见范围。
+                // 开窗定位重复触发;这里只在**后续**换歌时才会再跑一次。挂在 ScrollViewReader 里面:
+                // focusCurrentlyPlaying 要用 scrollProxy。
                 .onChange(of: nowPlaying.trackSignature) { _, _ in
                     // 必须先刷占位行再定位——focusCurrentlyPlaying 里"占位行也能被定位到"
                     // 那道判断读的是 placeholderSummary,换歌那一刻它还是上一首的,先刷新
                     // 才能让新歌(如果也在搜索中)被正确定位到。
                     refreshPlaceholder()
-                    // 正在改歌词(有没保存的改动)或多选了一批时不抢选中:定位会把选中整个换成新歌,编辑框随之重载,
-                    // 敲的内容没有任何提示就没了;选好的一批也会被换成一行。用户想看新歌时点「定位到当前播放」。
-                    guard !isEditorDirty, selectedKeys.count <= 1 else { return }
-                    focusCurrentlyPlaying(scrollProxy: scrollProxy)
+                    let previous = nowPlayingKey
+                    refreshNowPlayingKey()
+                    // 选中的正是上一首正在放的歌(或什么都没选)才跟着换,点了别的歌就不动;列表不滚动(见 11 章决策 64)。
+                    // 正在改歌词或多选了一批时也不动:选中整个换成新歌,编辑缓冲随之重载,敲的内容没有任何提示就没了。
+                    // 搜索候选歌词、解析决策面板开着时也不动:面板读的是选中那首,跟着换会改掉查询词、重新搜索,采纳也会
+                    // 写到新歌上(见 11 章决策 86)。
+                    let followsPlayback = selectedKeys.isEmpty || previous.map { selectedKeys == [$0] } == true
+                    guard followsPlayback, !isEditorDirty, editMode == .preview, !showSearchSheet, !showDecisionSheet else { return }
+                    focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false)
                 }
                 // 窗口开着期间引擎一直在写缓存:占位行等它写完才能「顶替」成真实条目,补空扫描每条
                 // 搜完都会改文件,平时也会给已有的歌补译文、加新歌。换歌 / reload 都不会在这些时刻自动
@@ -1719,13 +1900,13 @@ struct LyricsManagerView: View {
                 // (windowSurface)时整个停掉,重新看得见时从头来一遍(先按指纹读一次,再接着轮询)。
                 .task(id: windowSurface.isVisible) {
                     guard windowSurface.isVisible else { return }
-                    // 两份状态文件先读,再重读缓存:后读的话扫描明明在跑,工具栏头几秒显示的是空闲的「补搜歌词」。
+                    // 两份状态文件先读,再重读缓存:后读的话扫描明明在跑,进度卡头几秒是空着的。
                     fillSweepStatus = LyricsFillSweep.current
                     fullScanState = LyricsFullScan.current
                     await store.reload(onlyIfChanged: true)
                     refreshPlaceholder()
                     while !Task.isCancelled {
-                        // 扫描跑着时 2 秒一次(进度文件每条都推进,工具栏那颗按钮要跟着动),刚点了补搜、
+                        // 扫描跑着时 2 秒一次(进度文件每条都推进,进度卡要跟着动),刚点了自动匹配、
                         // 等引擎接手那几秒 1 秒一次,没在跑就 5 秒。
                         let interval: Double = fillSweepPending ? 1 : (fillSweepStatus?.running == true ? 2 : 5)
                         try? await Task.sleep(for: .seconds(interval))
@@ -1751,36 +1932,19 @@ struct LyricsManagerView: View {
                     }
                 }
             }
-        } detail: {
-            Group {
-                if let key = singleSelectedKey, let summary = store.summaries.first(where: { $0.key == key }) {
-                    detailView(key: key, summary: summary)
-                } else if let placeholder = placeholderSummary, singleSelectedKey == placeholder.key {
-                    // 占位行没有对应的 raw 条目,不能走 detailView 那整套编辑/删除/重新自动匹配——
-                    // 那些操作全部直接读写 raw[key],喂一个不存在的 key 进去没有意义。给一个
-                    // 干净的只读说明就够了,等引擎写完缓存,下一次 reload 会让这一行自然
-                    // 变成真的一行,到时候点开就是正常的 detailView。
-                    placeholderDetailView(placeholder)
-                } else if selectedKeys.count > 1 {
-                    batchSelectionPanel
-                } else {
-                    ContentUnavailableView(L10n.t("选择左侧一首歌"), systemImage: "text.quote")
-                }
-            }
-            // NavigationSplitView 在 macOS 上会把侧栏那条 .navigationTitle 顺带在
-            // detail 分栏顶部再画一遍(独立于真正的原生标题栏,两者都在,是重复渲染
-            // 不是原生标题栏本身)——用户对照方案A细化稿反馈"既然左边
-            // brandHeader 已经有了,右边这个可以删掉"。给 detail 分支单独设一个空
-            // 标题,盖掉这层继承来的重复,不影响侧栏那条 .navigationTitle 继续控制
-            // 真正的窗口标题栏文字。
-            .navigationTitle("")
         }
-        .frame(minWidth: 780, idealWidth: 1040, minHeight: 540, idealHeight: 640)
-        // 零尺寸探针拿真实 NSWindow 交给 windowFrame——放哪一层都行(只借视图树把
-        // NSView 挂进窗口,不参与布局),挂在这里离上面 .frame 最近,读起来是同一件事。
+        // 标题栏透明、内容铺到顶(场景挂 .windowStyle(.hiddenTitleBar)),红绿灯落在侧栏左上角。
+        .ignoresSafeArea()
+        .background(Color(nsColor: .textBackgroundColor))
+        .frame(minWidth: Self.minimumWindowSize.width, idealWidth: 1360,
+               minHeight: Self.minimumWindowSize.height, idealHeight: 820)
+        // 撑高标题栏(有工具栏时 52pt),红绿灯落在离左上角约 19pt 处、正好在侧栏圆角里。见 EmptyUnifiedToolbar。
+        .background(EmptyUnifiedToolbar())
+        // 零尺寸探针拿真实 NSWindow 交给 windowFrame——只借视图树把 NSView 挂进窗口,不参与布局。
         .background(LyricsManagerWindowCapture(controller: windowFrame, surface: windowSurface).frame(width: 0, height: 0))
-        // 刻意挂在最外层 NavigationSplitView 上 —— 跟侧栏那条链上的「清空全部缓存」、
-        // List 上的「删除」分处三个不同层级。同一条修饰符链上叠多个呈现修饰符历史上有
+        .background(shortcutButtons)
+        // 刻意挂在最外层 —— 跟侧栏上的「清空全部缓存」、List 上的「删除」、详情那一栏的放弃修改
+        // 分处不同层级。同一条修饰符链上叠多个呈现修饰符历史上有
         // 互相顶掉的问题(见那两处各自的注释),分层挂就不用去论证"这个版本会不会冲突"。
         .confirmationDialog(
             L10n.t("确定要清空全部歌词时间轴校正吗？"),
@@ -1790,16 +1954,16 @@ struct LyricsManagerView: View {
             Button(L10n.t("清空全部时间轴校正"), role: .destructive) {
                 LyricsOffsetStore.shared.clearAllTrackOffsets()
                 PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
-                // 列表的偏移列、「仅人工修正」筛选的已校准判定都是预算进 summaries 的,跟单条调偏移一样要显式重建;
-                // 详情页输入框也归零,不然还显示旧值,这时点「应用」会把刚清掉的值写回去。
+                // 「已校准」胶囊的计数和筛选按 summaries 的代数缓存,跟单条调偏移一样要显式重建;
+                // 详情页输入框也归零,不然还显示旧值,这时回车会把刚清掉的值写回去。
                 store.rebuildSummaries()
                 editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0)
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(String(format: L10n.t("这会清掉你为 %d 首歌手动调出来的歌词时间轴校正值，无法撤销。歌词内容本身不受影响；设置里的「时间轴偏移」也不会被清掉。清掉之后，这些歌会重新交给后台自动更新歌词源"), offsets.trackOffsetCount))
+            Text(String(format: L10n.t("将清除 %d 首歌曲的手动时间轴校正，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源"), offsets.trackOffsetCount))
         }
-        // 工具栏「补搜歌词」菜单里的「全量重新扫库」。文案、待扫首数与预计时长跟设置页那一行共用同一份
+        // 侧栏「⋯」菜单里的「全量重新扫库」。文案、待扫首数与预计时长跟设置页那一行共用同一份
         // (LyricsLibraryStatsPanel 的几个静态函数),两个入口说的数不能分叉。
         .confirmationDialog(
             L10n.t("全量重新扫库？"),
@@ -1826,11 +1990,11 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(String(format: L10n.t("这会清掉你在电台上为 %d 首歌调出来的时间轴校正，无法撤销。这些校正只在放电台时生效，清掉不影响你正常播放这些歌时的歌词"), offsets.radioOffsetCount))
+            Text(String(format: L10n.t("将清除 %d 首歌曲的电台时间轴校正，此操作无法撤销。这些校正仅在播放电台时生效，清除后不影响正常播放时的歌词"), offsets.radioOffsetCount))
         }
         // 恢复确认。跟上面两个确认弹窗一样各挂各的层级,不叠在同一条修饰符链上。
         .confirmationDialog(
-            L10n.t("确定要从这份备份恢复歌词库吗？"),
+            L10n.t("确定要从此备份恢复歌词库吗？"),
             isPresented: $showRestoreSnapshotConfirm,
             titleVisibility: .visible
         ) {
@@ -1840,7 +2004,7 @@ struct LyricsManagerView: View {
                 guard let snapshot = pendingRestoreSnapshot else { return }
                 Task {
                     restoreSnapshotResult = await store.restoreFromAutoSnapshot(snapshot)
-                        ?? L10n.t("这份备份读不出来")
+                        ?? L10n.t("无法读取这份备份")
                     pendingRestoreSnapshot = nil
                 }
             }
@@ -1849,7 +2013,7 @@ struct LyricsManagerView: View {
             // 说清楚它**不是**"回到那一刻的状态":铺文件是覆盖+新增,不删除备份里没有的
             // 条目(restore 走的是 LyricsBackupArchive.plan,只有 added/overwritten 两类)。
             // 用户以为是整体回滚、结果发现之后新解析的歌还在,那是另一种惊吓。
-            Text(L10n.t("备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。铺好之后会马上收进缓存，不用重启"))
+            Text(L10n.t("备份中的歌词文件将写回歌词文件夹：同名文件会被覆盖，缺少的文件会补齐；备份之后新增的歌曲不受影响。恢复后立即生效，无需重启"))
         }
         .alert(L10n.t("恢复歌词库"), isPresented: Binding(
             get: { restoreSnapshotResult != nil },
@@ -1897,6 +2061,51 @@ struct LyricsManagerView: View {
             // 下次开窗才会重新定位一次。
             pendingAutoFocus = true
         }
+        .onChange(of: store.summariesGeneration) { _, _ in refreshNowPlayingKey() }
+        .onChange(of: placeholderSummary?.key) { _, _ in refreshNowPlayingKey() }
+        // 「自动匹配完了」那句在进度卡上留一会儿就收起。
+        .task(id: fillSweepStatus?.finishedAt) {
+            guard let finished = fillSweepStatus?.finishedAt else { return }
+            let age = Date().timeIntervalSince1970 - Double(finished)
+            if age < Self.sweepReceiptSeconds {
+                try? await Task.sleep(for: .seconds(Self.sweepReceiptSeconds - age))
+                guard !Task.isCancelled else { return }
+            }
+            dismissedSweepReceipt = finished
+        }
+    }
+
+    /// 窗口最小尺寸:侧栏最窄 440、右边至少 480,加上侧栏外边距。
+    private static let minimumWindowSize = CGSize(width: 940, height: 620)
+
+    /// 不画出来的几颗按钮,只为接窗口级快捷键:⌘F 聚焦搜索、⌘⌫ 删除选中、⌘E 编辑歌词。
+    private var shortcutButtons: some View {
+        ZStack {
+            Button("") { searchFieldFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+            // 快捷键取 ⌘⌫ 而不是裸 ⌫:.keyboardShortcut 是**窗口级**快捷键,跟焦点在哪无关,绑裸 ⌫ 会把搜索框和
+            // 歌词编辑格子的退格键全抢掉。空选时禁用,按了毫无反应。
+            Button("") { deleteSelectionShortcut() }
+                .keyboardShortcut(.delete, modifiers: .command)
+                .disabled(selectedVisibleKeys.isEmpty)
+            Button("") { beginLineEditing() }
+                .keyboardShortcut("e", modifiers: .command)
+                .disabled(!canEditLyrics)
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
+    }
+
+    private func deleteSelectionShortcut() {
+        // 窗口级快捷键会先于文本框拿到 ⌘⌫:焦点在搜索框或歌词编辑框里时,这一下是「删到行首」,
+        // 替文本框做完就返回,别弹删除确认。
+        if let text = NSApp.keyWindow?.firstResponder as? NSTextView,
+           NSApp.currentEvent?.type == .keyDown {
+            text.deleteToBeginningOfLine(nil)
+            return
+        }
+        requestDelete(selectedKeys)
     }
 
     private func refreshWithFeedback() {
@@ -1932,14 +2141,14 @@ struct LyricsManagerView: View {
     // 下次播放会重新解析),属于决策信息,值得在确认这一刻单独点出来。
     private var batchDeleteMessage: String {
         if pendingDeleteKeys.count == 1 {
-            return L10n.t("已导出到本地的歌词文件也会一并删除，下次播放这首歌会重新走一遍匹配解析，不保证一定能找到一样的歌词")
+            return L10n.t("已导出的歌词文件将一并删除。再次播放这首歌曲时会重新匹配，结果可能不同")
         }
         let pending = Set(pendingDeleteKeys)
         let manual = store.summaries.filter { pending.contains($0.key) && $0.isManual }.count
         if manual > 0 {
-            return String(format: L10n.t("其中 %@ 条是你手动修正过的，删掉之后找不回来。已导出到本地的歌词文件也会一并删除，且无法撤销。下次播放这些歌会重新走一遍匹配解析，不保证能找到一样的歌词"), "\(manual)")
+            return String(format: L10n.t("其中 %@ 条经过人工修正，删除后无法恢复。已导出的歌词文件将一并删除，此操作无法撤销。再次播放这些歌曲时会重新匹配，结果可能不同"), "\(manual)")
         }
-        return L10n.t("已导出到本地的歌词文件也会一并删除，且无法撤销。下次播放这些歌会重新走一遍匹配解析，不保证能找到一样的歌词")
+        return L10n.t("已导出的歌词文件将一并删除，此操作无法撤销。再次播放这些歌曲时会重新匹配，结果可能不同")
     }
 
     private func performPendingDelete() {
@@ -1961,13 +2170,14 @@ struct LyricsManagerView: View {
         }
     }
 
-    // 多选时右侧显示什么:只放"确认我选中的就是我以为的那批" + 一个够明确的删除按钮。
-    // 不放歌名清单(左侧列表就是权威视图)、不放编辑器、不放占用空间——算这批的真实体积要对
-    // lyrics/ 目录做 4N 次 stat,而"删歌词"本来也不是为了腾空间,工具栏那个菜单标题已经是
-    // 总大小了。
+    // 多选时右侧:先确认「选中的就是我以为的那批」(叠起来的封面、首数、各档数量、清单),再给批量能做的那几样。
+    // 不放编辑器、不放占用空间——算这批的真实体积要对 lyrics/ 目录做 4N 次 stat,而"删歌词"本来也不是为了腾空间。
     private var batchSelectionPanel: some View {
-        let victims = Set(selectedVisibleKeys)
+        let ordered = selectedVisibleKeys
+        let victims = Set(ordered)
         let picked = store.summaries.filter { victims.contains($0.key) }
+        let byKey = Dictionary(picked.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        let pickedInOrder = ordered.compactMap { byKey[$0] }
         let manual = picked.filter(\.isManual).count
         let wordTiming = picked.filter(\.hasWordTiming).count
         // 「无歌词」这颗只数**真的缺**的:确证过的纯音乐、有纯文本兜底的都不该算进去,
@@ -1975,214 +2185,306 @@ struct LyricsManagerView: View {
         // 「源里有歌、无词」同理单独一颗,跟行上的徽章一一对应。
         let noLyrics = picked.filter { !$0.hasLyrics && !$0.isInstrumental && !$0.hasPlainTextFallback }
         // 「最近一轮零应答」再切一档,顺序必须跟行徽章的判定链一致
-        // (零应答 → 源里有歌无词 → 真的没有),否则面板上的数字跟行上的徽章又会互相矛盾 ——
-        // 那正是把「源里有歌、无词」单独拎一颗出来时立的规矩。
+        // (零应答 → 源里有歌无词 → 真的没有),否则面板上的数字跟行上的徽章又会互相矛盾。
         let noResponder = noLyrics.filter(\.lastRoundHadNoResponder).count
         let indexed = noLyrics.filter { !$0.lastRoundHadNoResponder && $0.knownOnSources }.count
         let missing = noLyrics.count - indexed - noResponder
-        // 「重试选中的无歌词条目」喂给引擎的 key,口径见 EnrichCacheStore.isFillSweepRetryable。
+        // 「重新自动匹配选中的…」喂给引擎的 key,口径见 EnrichCacheStore.isFillSweepRetryable。
         let retryable = picked.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
-        return VStack(spacing: 14) {
-            Image(systemName: "checklist")
-                .font(.system(size: 40))
-                .foregroundStyle(.secondary)
-            Text(String(format: L10n.t("已选择 %@ 首"), "\(picked.count)"))
-                .font(.title2.weight(.semibold))
-            // 三个统计各自独立成词条,不在运行时拼成一句长句(同 batchDeleteMessage 的理由);
-            // 为 0 的那项整个不显示,不写"0 首"。
-            HStack(spacing: 8) {
-                if manual > 0 {
-                    InfoChip(icon: "pencil.circle.fill", text: String(format: L10n.t("人工修正 %@ 首"), "\(manual)"), tint: .orange)
-                }
-                if wordTiming > 0 {
-                    InfoChip(icon: "text.word.spacing", text: String(format: L10n.t("逐字时间轴 %@ 首"), "\(wordTiming)"), tint: .blue)
-                }
-                if missing > 0 {
-                    InfoChip(icon: "text.badge.xmark", text: String(format: L10n.t("无歌词 %@ 首"), "\(missing)"), tint: .red)
-                }
-                if noResponder > 0 {
-                    // 跟行徽章一一对应的第三颗。排在「源里有歌、无词」前面,
-                    // 顺序与判定链一致。
-                    InfoChip(icon: "antenna.radiowaves.left.and.right.slash",
-                             text: String(format: L10n.t("无源应答 %@ 首"), "\(noResponder)"), tint: .secondary)
-                }
-                if indexed > 0 {
-                    InfoChip(icon: "music.note", text: String(format: L10n.t("源里有歌、无词 %@ 首"), "\(indexed)"), tint: .secondary)
-                }
-            }
-            if manual > 0 {
-                Text(L10n.t("人工修正过的歌词删掉之后找不回来"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            // 多选的另一条动线:筛出「仅无歌词」→ 全选 → 让引擎现在就把这批
-            // 重搜一遍,不用等每首歌各自再被播到。走 LyricsFillSweep 请求文件,进度在工具栏那颗
-            // 「补搜歌词」上显示。一次只允许一轮在跑,跑着的时候置灰。
-            if !retryable.isEmpty {
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Spacer()
                 Button {
-                    if LyricsFillSweep.request(keys: retryable) { fillSweepPending = true; fillSweepPendingIsFull = false }
+                    selectedKeys.removeAll()
                 } label: {
-                    Label(String(format: L10n.t("补搜选中的 %@ 首"), "\(retryable.count)"),
-                          systemImage: "arrow.triangle.2.circlepath")
+                    Label(L10n.t("取消选择"), systemImage: "xmark")
                 }
-                .buttonStyle(.bordered)
-                .disabled(fillSweepStatus?.running == true || fillSweepPending)
+                .keyboardShortcut(.cancelAction)
+                .settingsGlassButtons()
             }
-            Button(role: .destructive) {
-                requestDelete(selectedKeys)
-            } label: {
-                Label(String(format: L10n.t("删除选中的 %@ 条"), "\(picked.count)"), systemImage: "trash")
+            .frame(height: 52)
+            .background(WindowDragHandle())
+            HStack(alignment: .center, spacing: 22) {
+                LyricsManagerStackedCovers(urls: pickedInOrder.prefix(4).map(\.coverURL))
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(format: L10n.t("已选择 %@ 首"), "\(picked.count)"))
+                        .font(.system(size: 28, weight: .bold))
+                    // 几个统计各自独立成词条,不在运行时拼成一句长句;为 0 的那项整个不显示。
+                    SettingsFlowRow(spacing: 6) {
+                        if manual > 0 {
+                            InfoChip(icon: "pencil.circle.fill", text: String(format: L10n.t("人工修正 %@ 首"), "\(manual)"), tint: .secondary)
+                        }
+                        if wordTiming > 0 {
+                            InfoChip(icon: "text.word.spacing", text: String(format: L10n.t("逐字时间轴 %@ 首"), "\(wordTiming)"), tint: .secondary)
+                        }
+                        if missing > 0 {
+                            InfoChip(icon: "text.badge.xmark", text: String(format: L10n.t("无歌词 %@ 首"), "\(missing)"), tint: .secondary)
+                        }
+                        if noResponder > 0 {
+                            InfoChip(icon: "antenna.radiowaves.left.and.right.slash",
+                                     text: String(format: L10n.t("无源应答 %@ 首"), "\(noResponder)"), tint: .secondary)
+                        }
+                        if indexed > 0 {
+                            InfoChip(icon: "music.note", text: String(format: L10n.t("已收录、无歌词 %@ 首"), "\(indexed)"), tint: .secondary)
+                        }
+                    }
+                    if manual > 0 {
+                        Text(L10n.t("人工修正过的歌词删除后无法恢复"))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.borderedProminent)
-            .padding(.top, 4)
-            Button(L10n.t("取消选择")) { selectedKeys.removeAll() }
-                .buttonStyle(.link)
+            .padding(.top, 8)
+            HStack(spacing: 10) {
+                // 让引擎现在就把这批里没词的重新匹配一遍,不用等每首歌各自再被播到。走 LyricsFillSweep 请求文件,
+                // 进度在侧栏底部那张卡上。一次只允许一轮在跑,跑着的时候置灰。
+                if !retryable.isEmpty {
+                    Button {
+                        requestFillSweep(retryable)
+                    } label: {
+                        Label(String(format: L10n.t("重新自动匹配选中的 %@ 首"), "\(retryable.count)"),
+                              systemImage: "wand.and.stars")
+                    }
+                    .settingsProminentGlassButton(tint: .accentColor)
+                    .disabled(fillSweepStatus?.running == true || fillSweepPending)
+                }
+                Group {
+                    Button {
+                        markInstrumental(ordered)
+                    } label: {
+                        Label(L10n.t("全部标为纯音乐"), systemImage: "pianokeys")
+                    }
+                    .disabled(markingInstrumental)
+                    Button(role: .destructive) {
+                        requestDelete(selectedKeys)
+                    } label: {
+                        Label(String(format: L10n.t("删除选中的 %@ 条"), "\(picked.count)"), systemImage: "trash")
+                            .foregroundStyle(.red)
+                    }
+                }
+                .settingsGlassButtons()
+            }
+            .controlSize(.large)
+            .padding(.top, 22)
+            Divider().padding(.top, 22)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(pickedInOrder) { summary in
+                        batchRow(summary)
+                    }
+                }
+                .padding(.top, 10)
+                .padding(.bottom, 30)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(24)
+        .padding(.leading, 30)
+        .padding(.trailing, 22)
     }
 
-    /// 工具栏「补搜歌词」:让引擎现在就把没歌词的存量条目重搜一遍,不用等
-    /// 每首歌各自再被播到(补空路径设计上只在重播时触发,见 lyrimuse-engine/lyricsfillsweep.go 头注)。
-    /// 两个入口:全库、或当前筛选出来的那批(只在筛选真的缩小了范围时才出现,免得两个数字一样
-    /// 的按钮并排)。跑着的时候**图标本身**换成一个确定进度的圆环 + 「3/82」——macOS 工具栏
-    /// 对 Label 只画图标、把标题整个丢掉(隔壁「占用」那颗的注释记着同一件事),进度
-    /// 写在标题里等于没显示;菜单里只剩「停止」——一次只允许一轮。
-    /// 上一轮的结果留在菜单里当收据:搜了几首、补出几首,不然点完只看到列表里几行悄悄变了。
-    private var fillSweepToolbarMenu: some View {
+    private func batchRow(_ summary: EnrichCacheStore.Summary) -> some View {
+        HStack(spacing: 11) {
+            LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,
+                               size: 32, radius: 6)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(summary.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                Text(summary.shownArtist)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if summary.isManual {
+                Image(systemName: "pencil.circle.fill")
+                    .foregroundStyle(.orange)
+                    .help(L10n.t("已人工修正"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+    }
+
+    /// 侧栏「⋯」菜单里的东西:自动匹配缺失的歌词,占用与清理,从自动备份恢复。
+    @ViewBuilder
+    private var libraryMenu: some View {
+        autoMatchMenuSections
+        storageMenuSections
+    }
+
+    /// 「自动匹配缺失歌词」:让引擎现在就把没歌词的存量条目重新匹配一遍,不用等每首歌各自再被播到(补空路径设计上
+    /// 只在重播时触发,见 lyrimuse-engine/lyricsfillsweep.go 头注)。两个入口:全库、或当前筛选出来的那批(只在筛选
+    /// 真的缩小了范围时才出现,免得两个数字一样的项并排);另一节是「全量重新扫库…」。跑着的时候这里是这一轮的详情和
+    /// 「停止」——一次只允许一轮;侧栏底部那张进度卡说的是同一轮。
+    /// 上一轮的结果留在菜单里当收据:搜了几首、找到几首,不然点完只看到列表里几行悄悄变了。
+    @ViewBuilder
+    private var autoMatchMenuSections: some View {
         let status = fillSweepStatus
         let running = status?.running == true
         let retryableAll = retryableAllKeys
         let retryableVisible = retryableVisibleKeys
-        return Menu {
-            // 菜单照 macOS 菜单的写法:菜单项是动作(动词开头,弹确认框的带「…」),状态是菜单顶上 / 底下
-            // 各一两行灰字(Time Machine 那种「最近备份：…」),规则说明放进悬停提示和确认框,不占菜单行。
-            if let status, running {
-                // 这一轮**不一定**是补空重试:「全量重新扫库」复用同一条通道(状态文件、
-                // 单轮互斥、取消都共用,见 lyrimuse-engine/lyricsfullscan.go 头注),所以文案都得
-                // 按 isFullScan 分流 —— 全量跑着的时候说「停止补搜」「正在补搜」,说的跟做的就不是一回事。
-                let isFull = status.isFullScan
-                // 顶上是此刻在做什么(标题)+ 进度与结果分布 + 大约还要多久;文字跟设置页那两行的进度详情共用
-                // (FillSweepProgressText)。
+        // 菜单照 macOS 菜单的写法:菜单项是动作(动词开头,弹确认框的带「…」),状态是菜单顶上 / 底下
+        // 各一两行灰字(Time Machine 那种「最近备份：…」),规则说明放进悬停提示和确认框,不占菜单行。
+        if let status, running {
+            // 这一轮**不一定**是自动匹配:「全量重新扫库」复用同一条通道(状态文件、
+            // 单轮互斥、取消都共用,见 lyrimuse-engine/lyricsfullscan.go 头注),所以文案都得
+            // 按 isFullScan 分流。
+            let isFull = status.isFullScan
+            // 顶上是此刻在做什么(标题)+ 进度与结果分布 + 大约还要多久;文字跟设置页那两行的进度详情共用
+            // (FillSweepProgressText)。
+            Section {
+                ForEach(FillSweepProgressText.lines(status, fallbackSecondsPerTrack: isFull
+                        ? fullScanFallbackSecondsPerTrack : FillSweepProgressText.fillFallbackSecondsPerTrack),
+                        id: \.self) { Text($0) }
+            } header: {
+                Text(FillSweepProgressText.title(status))
+            }
+            // 最近几首:结果只用图标说,行里只放「歌名 — 歌手」。
+            if let recent = status.recent, !recent.isEmpty {
                 Section {
-                    ForEach(FillSweepProgressText.lines(status, fallbackSecondsPerTrack: isFull
-                            ? fullScanFallbackSecondsPerTrack : FillSweepProgressText.fillFallbackSecondsPerTrack),
-                            id: \.self) { Text($0) }
+                    ForEach(Array(recent.enumerated()), id: \.offset) { _, item in
+                        Label(LyricsFillSweep.displayName(key: item.key),
+                              systemImage: FillSweepProgressText.recentSymbol(item, isFullScan: isFull))
+                    }
                 } header: {
-                    Text(FillSweepProgressText.title(status))
+                    Text(L10n.t("最近完成"))
                 }
-                // 最近几首:结果只用图标说,行里只放「歌名 — 歌手」。
-                if let recent = status.recent, !recent.isEmpty {
-                    Section {
-                        ForEach(Array(recent.enumerated()), id: \.offset) { _, item in
-                            Label(LyricsFillSweep.displayName(key: item.key),
-                                  systemImage: FillSweepProgressText.recentSymbol(item, isFullScan: isFull))
-                        }
-                    } header: {
-                        Text(L10n.t("最近完成"))
-                    }
+            }
+            Section {
+                Button(role: .destructive) {
+                    LyricsFillSweep.requestCancel()
+                } label: {
+                    Label(isFull ? L10n.t("停止扫库") : L10n.t("停止自动匹配"),
+                          systemImage: "stop.circle")
                 }
-                Section {
-                    Button(role: .destructive) {
-                        LyricsFillSweep.requestCancel()
+            }
+        } else {
+            // 窄档:只搜没词的。数量写进动作里(「自动匹配 165 首缺失的歌词」)。规则(逐首、间隔、跳过哪些)放悬停提示;
+            // 这里点出来的是手动那一轮,间隔是引擎的 lyricsManualSweepGap,改那边记得改提示。
+            Section {
+                Button {
+                    if LyricsFillSweep.request(keys: []) { fillSweepPending = true; fillSweepPendingIsFull = false }
+                } label: {
+                    Label(String(format: L10n.t("自动匹配 %@ 首缺失的歌词"), "\(retryableAll.count)"),
+                          systemImage: "wand.and.stars")
+                }
+                .disabled(retryableAll.isEmpty || fillSweepPending)
+                .help(L10n.t("逐首联网搜索，每首间隔约 5 秒；跳过纯音乐和人工修正过的歌曲"))
+                // 只靠搜索框缩小范围也算(hasActiveFilters 不含关键词)。
+                if (hasActiveFilters || !committedSearchText.isEmpty) && retryableVisible.count != retryableAll.count {
+                    Button {
+                        if LyricsFillSweep.request(keys: retryableVisible) { fillSweepPending = true; fillSweepPendingIsFull = false }
                     } label: {
-                        Label(isFull ? L10n.t("停止扫库") : L10n.t("停止补搜"),
-                              systemImage: "stop.circle")
+                        Label(String(format: L10n.t("仅自动匹配筛选出的 %@ 首"), "\(retryableVisible.count)"),
+                              systemImage: "line.3.horizontal.decrease.circle")
                     }
+                    .disabled(retryableVisible.isEmpty || fillSweepPending)
+                    .help(L10n.t("逐首联网搜索，每首间隔约 5 秒；跳过纯音乐和人工修正过的歌曲"))
                 }
-            } else {
-                // 窄档:只搜没词的。数量写进动作里(「补搜 165 首缺失的歌词」),不另起标题 —— 工具栏按钮
-                // 本身就叫「补搜歌词」。筛选那一项只在筛选真的缩小了范围时出现,免得两个数字一样的项并排。
-                // 规则(逐首、间隔、跳过哪些)放悬停提示;这里点出来的是手动那一轮,间隔是引擎的
-                // lyricsManualSweepGap,改那边记得改提示。
+            }
+            // 宽档:连已有歌词的也重新选一遍(设置页「歌词库」那一行的同一个入口)。弹确认框,所以带「…」;
+            // 范围说明、待扫首数和预计时长都在确认框里。引擎还没数过待扫首数时不给这个入口(同设置页那一行)。
+            if fullScanState?.pending != nil {
                 Section {
                     Button {
-                        if LyricsFillSweep.request(keys: []) { fillSweepPending = true; fillSweepPendingIsFull = false }
+                        confirmFullScan = true
                     } label: {
-                        Label(String(format: L10n.t("补搜 %@ 首缺失的歌词"), "\(retryableAll.count)"),
-                              systemImage: "text.magnifyingglass")
+                        Label(L10n.t("全量重新扫库…"), systemImage: "arrow.clockwise")
                     }
-                    .disabled(retryableAll.isEmpty || fillSweepPending)
-                    .help(L10n.t("逐首联网搜索，每首间隔约 5 秒；会跳过纯音乐和手动修正过的歌词"))
-                    // 只靠搜索框缩小范围也算(hasActiveFilters 不含关键词)。
-                    if (hasActiveFilters || !committedSearchText.isEmpty) && retryableVisible.count != retryableAll.count {
-                        Button {
-                            if LyricsFillSweep.request(keys: retryableVisible) { fillSweepPending = true; fillSweepPendingIsFull = false }
-                        } label: {
-                            Label(String(format: L10n.t("仅补搜筛选出的 %@ 首"), "\(retryableVisible.count)"),
-                                  systemImage: "line.3.horizontal.decrease.circle")
-                        }
-                        .disabled(retryableVisible.isEmpty || fillSweepPending)
-                        .help(L10n.t("逐首联网搜索，每首间隔约 5 秒；会跳过纯音乐和手动修正过的歌词"))
-                    }
-                }
-                // 宽档:连已有歌词的也重新选一遍(设置页「歌词库」那一行的同一个入口)。弹确认框,所以带「…」;
-                // 范围说明、待扫首数和预计时长都在确认框里。引擎还没数过待扫首数时不给这个入口(同设置页那一行)。
-                if fullScanState?.pending != nil {
-                    Section {
-                        Button {
-                            confirmFullScan = true
-                        } label: {
-                            Label(L10n.t("全量重新扫库…"), systemImage: "arrow.clockwise")
-                        }
-                        .disabled(fillSweepPending)
-                        .help(L10n.t("连已经有歌词的也重新过一遍；人工修正过的、校准过时间轴的、纯音乐的不动"))
-                    }
-                }
-                // 上一轮补搜的收据,一行灰字。全量扫库那一轮的收据不在这里给:两轮共用同一份状态文件,而全量的
-                // done/filled 是整场累计的几千首,放进「补搜」菜单会被读成补搜搜了几千首(设置页那一行同一道判断)。
-                // 一首都没搜的那一轮也不给,除非是断网停下的 —— 那时要说清楚为什么停。
-                if let status, status.finishedAt != nil, !status.isFullScan,
-                   status.done > 0 || status.isOffline {
-                    Section {
-                        Text(String(format: L10n.t("上次补搜 %1$@ 首，补全 %2$@ 首"), "\(status.done)", "\(status.filled)"))
-                        // 停下的两种情形另说一句,免得"搜了 12 首"被当成全部。
-                        if status.isOffline {
-                            Text(L10n.t("因网络不通已停下"))
-                        } else if status.cancelled == true {
-                            Text(L10n.t("已被手动停止"))
-                        }
-                    }
+                    .disabled(fillSweepPending)
+                    .help(L10n.t("已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外"))
                 }
             }
-        } label: {
-            if let status, running {
-                // 不用 Label:工具栏会把 Label 缩成只剩图标。自己拼一个 HStack,圆环就是图标位,
-                // 「3/82」紧跟着——两个都是进度,少了哪个都不完整。total 兜到 ≥1,免得 0/0 的
-                // 那一瞬间(状态文件刚写出、候选还没数完)让 ProgressView 拿到 NaN。
-                HStack(spacing: 4) {
-                    ProgressView(value: Double(status.done), total: Double(max(status.total, 1)))
-                        .progressViewStyle(.circular)
-                        .controlSize(.small)
-                    Text("\(status.done)/\(status.total)")
-                        .font(.caption)
-                        .monospacedDigit()
+            // 上一轮自动匹配的收据,一行灰字。全量扫库那一轮的收据不在这里给:两轮共用同一份状态文件,而全量的
+            // done/filled 是整场累计的几千首,放在这里会被读成自动匹配搜了几千首(设置页那一行同一道判断)。
+            // 一首都没搜的那一轮也不给,除非是断网停下的 —— 那时要说清楚为什么停。
+            if let status, status.finishedAt != nil, !status.isFullScan,
+               status.done > 0 || status.isOffline {
+                Section {
+                    Text(String(format: L10n.t("上次自动匹配 %1$@ 首，找到 %2$@ 首"), "\(status.done)", "\(status.filled)"))
+                    // 停下的两种情形另说一句,免得"搜了 12 首"被当成全部。
+                    if status.isOffline {
+                        Text(L10n.t("因网络不可用已停止"))
+                    } else if status.cancelled == true {
+                        Text(L10n.t("已手动停止"))
+                    }
                 }
-                // 全量扫库复用这条通道,说「重试中」就不对了 —— 那一档用中性的「扫描中」
-                // (跟设置页「歌词库」那两行同一个串,不另起翻译)。同 .help 那句。
-                .accessibilityLabel(String(
-                    format: status.isFullScan ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("补搜中 %1$@/%2$@"),
-                    "\(status.done)", "\(status.total)"))
-            } else if fillSweepPending {
-                // 点了、引擎还没接手:先转起来,别让人以为没点上。
-                HStack(spacing: 4) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(fillSweepPendingIsFull ? L10n.t("全量重新扫库") : L10n.t("正在准备补搜…"))
-                        .font(.caption)
-                }
-            } else {
-                Label(L10n.t("补搜歌词"), systemImage: "arrow.triangle.2.circlepath")
-                    .labelStyle(.titleAndIcon)
             }
         }
-        .help(running
-              ? (status?.isOffline == true
-                 ? L10n.t("网络不通，稍后重试…")
-                 : String(format: status?.isFullScan == true
-                          ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("补搜中 %1$@/%2$@"),
-                          "\(status?.done ?? 0)", "\(status?.total ?? 0)"))
-              : L10n.t("立即联网补搜缺失的歌词，不必等歌曲再次播放"))
+    }
+
+    /// 占用与清理:清空全部缓存、清空时间轴校正(单曲 / 电台两层),以及清空或批量删除之前自动打的快照。
+    @ViewBuilder
+    private var storageMenuSections: some View {
+        // 「共 N 条，占用 X」紧贴着「清空全部缓存」这个不可撤销的操作,让人在点下去之前先看清自己要删掉多少东西。
+        Section {
+            let cleanup = cleanupKeys
+            Button {
+                pendingCleanupKeys = cleanup
+                showCleanupConfirm = true
+            } label: {
+                Label(cleanup.isEmpty ? L10n.t("没有无效记录")
+                                      : String(format: L10n.t("清理 %@ 条无效记录…"), cleanup.count.formatted()),
+                      systemImage: "sparkles")
+            }
+            .disabled(cleanup.isEmpty)
+            Button(role: .destructive) {
+                showClearAllConfirm = true
+            } label: {
+                Label(L10n.t("清空全部缓存"), systemImage: "trash")
+            }
+        } header: {
+            Text(String(format: L10n.t("共 %d 条，占用 %@"),
+                        store.summaries.count, cacheSizeText))
+        }
+        // 时间轴校正值单独一段、单独一个清空入口:它跟歌词内容存在两个完全不同的地方
+        // (UserDefaults vs 缓存 JSON + lyrics/ 文件夹),清哪一个都不该连带另一个。
+        Section {
+            Button(role: .destructive) {
+                showClearOffsetsConfirm = true
+            } label: {
+                Label(L10n.t("清空全部时间轴校正"), systemImage: "timer")
+            }
+            .disabled(offsets.trackOffsetCount == 0)
+        } header: {
+            Text(String(format: L10n.t("已校准 %d 首歌的歌词时间轴"),
+                        offsets.trackOffsetCount))
+        }
+        // 电台那一层再单独一段:上面修的是"这份歌词自己的时间轴不准",这里修的是"电台的元数据比
+        // 声音晚"(见 LyricsOffsetStore.radioOffsets)。整段只在真的调过时才出现。
+        if offsets.radioOffsetCount > 0 {
+            Section {
+                Button(role: .destructive) {
+                    showClearRadioOffsetsConfirm = true
+                } label: {
+                    Label(L10n.t("清空全部电台校正"), systemImage: "dot.radiowaves.left.and.right")
+                }
+            } header: {
+                Text(String(format: L10n.t("已校正 %d 首歌在电台上的时间轴"),
+                            offsets.radioOffsetCount))
+            }
+        }
+        // 清空/批量删除之前自动打的快照,就地给一个恢复入口:必须在**同一个菜单**里,这两个不可撤销的按钮就在
+        // 上面两段,手滑之后第一反应是回到刚才点错的地方找后悔药。列表现读、不缓存:刚打的那份必须立刻出现在这里。
+        let snapshots = LyricsBackupStore.autoSnapshots()
+        if !snapshots.isEmpty {
+            Section {
+                ForEach(snapshots) { snapshot in
+                    Button {
+                        pendingRestoreSnapshot = snapshot
+                        showRestoreSnapshotConfirm = true
+                    } label: {
+                        // 纯排版,不进 L10n —— 两侧都是已本地化好的片段(DateFormatter / ByteCountFormatter)。
+                        Label("\(Self.snapshotDateText(snapshot.date))（\(Self.byteText(snapshot.bytes))）",
+                              systemImage: "clock.arrow.circlepath")
+                    }
+                }
+            } header: {
+                Text(L10n.t("从自动备份恢复"))
+            }
+        }
     }
 
     /// 全量扫库还没跑完一首时估剩余时长用的每首秒数(引擎发布的值,没有时是设置页同一个兜底)。
@@ -2228,7 +2530,7 @@ struct LyricsManagerView: View {
     //
     // 修法是在 Swift 侧合成一条**不落盘、不进 raw**的临时行,只在这个视图内部存在,展示层
     // 尽量复用现有的 Summary/筛选/排序管线(而不是另起一套"占位行专用渲染"),这样它天然
-    // 能被搜索框/筛选/排序接住,也天然会被"回到当前播放"定位到——见下面几处对
+    // 能被搜索框/筛选/排序接住,也天然会被「定位」找到——见下面几处对
     // `placeholderSummary` 的接线点。**不**在引擎侧提前写占位:那会把"只保留有结果
     // 的解析"这条数据完整性设计复杂化,还要处理"占位条目 vs 真实条目"两套生命周期同时存在
     // 于同一份持久化文件里的一致性问题,风险明显更高,收益(仅仅是省下这个 Swift 侧的合成
@@ -2255,16 +2557,17 @@ struct LyricsManagerView: View {
             key: key,
             artist: playback.artist,
             canonicalArtist: "",
+            inferredArtist: "",
             durationSecs: Double(playback.currentDurationMs ?? 0) / 1000,
             title: playback.title,
             album: playback.album,
             displayAlbum: displayAlbum,
             isListedMV: false,
+            coverURL: nil,
             lyricsSource: "",
             hasWordTiming: false,
             isManual: false,
             sourceChoice: "",
-            offsetMs: 0,
             lyricsTrSource: "",
             hasTranslation: false,
             hasRomanization: false,
@@ -2291,8 +2594,8 @@ struct LyricsManagerView: View {
         )
     }
 
-    // 选中并滚动到当前正在播放的这首歌(如果它已经被缓存过)——开窗时自动跑一次
-    // (见 pendingAutoFocus),工具栏"回到当前播放"按钮手动跑。key 跟
+    // 选中当前正在播放的这首歌(如果它已经被缓存过),scroll 时再把列表滚过去——开窗、窗口开着期间换歌只选中
+    // (见 pendingAutoFocus、trackSignature 那条),侧栏「正在播放」那一行的「定位」才滚动。key 跟
     // EnrichCacheStore.splitKey 用的是同一套 "歌手|歌名|专辑" 拼法,PlaybackCoordinator
     // 转发的 artist/title/album 本来就来自 media-control/relay,跟引擎当初写入
     // 缓存时用的是同一份数据,能精确对上。找不到对应缓存条目时静默不做任何事,不弹提示——
@@ -2303,7 +2606,7 @@ struct LyricsManagerView: View {
     // 计时器),整个窗口订阅它会导致 body 跟着每秒重算 20 次,把手动点选/刷新按钮的
     // 交互闷在这阵持续重渲染里,表现成"点了跟没点一样"。这里只需要调用那一刻的快照,
     // 普通函数内直接访问单例属性即可,不用建立订阅。
-    private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, animated: Bool = true) {
+    private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, scroll: Bool = true) {
         let playback = PlaybackCoordinator.shared
         // key 必须走 EnrichCacheKeys.normalizedKey —— 那是缓存 key 在 Swift 侧的**唯一
         // 构造点**(逐字节镜像引擎的 enrichKey)。手拼 "artist|title|album" 会漏掉
@@ -2337,36 +2640,28 @@ struct LyricsManagerView: View {
             guard let match = candidates.lazy.compactMap({ store.key(matchingLoose: $0) }).first else { return }
             key = match
         }
-        // 整体替换成这一条、不是追加:"回到当前播放"的语义是聚焦到这首歌。追加的话用户点完
-        // 之后工具栏删除按钮上还挂着之前选的一堆,极易误删。
+        // 整体替换成这一条、不是追加:「定位」的语义是聚焦到这首歌。追加的话用户点完
+        // 之后 ⌘⌫ 删的还是之前选的一堆,极易误删。
         selectedKeys = [key]
+        guard scroll else { return }
+        centerListRow(key, scrollProxy: scrollProxy)
+    }
+
+    /// 把选中的那一首滚到列表中间;多选时取当前顺序里排在最前的那一首。没选中、或者选中的不在当前列表里就不动。
+    private func revealSelection(scrollProxy: ScrollViewProxy) {
+        guard !selectedKeys.isEmpty,
+              let key = sortedFiltered.first(where: { selectedKeys.contains($0.key) })?.key else { return }
+        centerListRow(key, scrollProxy: scrollProxy)
+    }
+
+    /// 把这一行滚到列表中间。补一发校正:List 的行高是懒量的,没被滚到过的行一直按估算高度算。列表几千条、目标又在视口外
+    /// 老远时,一次 scrollTo 按估算落点走,停下来的位置差着一截;等这一轮布局按真实行高走完之后再定一次位。0.35s 比默认
+    /// 动画略长,让第一发滚完再校正;校正给一个很短的动画,已经居中时是空操作。
+    private func centerListRow(_ key: String, scrollProxy: ScrollViewProxy) {
         DispatchQueue.main.async {
-            if animated {
-                withAnimation { scrollProxy.scrollTo(key, anchor: .center) }
-                // 补一发校正:跟下面开窗那条是**同一个**根因——
-                // List 的行高是懒量的,没被滚到过的行一直按估算高度算。列表几千条、目标又
-                // 在视口外老远时,一次 scrollTo 按估算落点走,停下来的位置差着一截 —— 而
-                // 「点第二次就好了」恰恰是这个机制的自证:第一次已经把目标附近那些行量出了
-                // 真实高度,第二次才按真高度算得准。所以这里补的不是"再滚一次",是"等这一轮
-                // 布局按真实行高走完之后再定一次位"。
-                //
-                // 0.35s 比默认动画(约 0.25-0.3s)略长一点,让第一发滚完再校正;校正这一发给
-                // 一个很短的动画而不是硬跳 —— 落点本来就只差几行,120ms 的缓动看起来是
-                // "停稳"而不是"又跳了一下"。已经居中的话它是空操作,不会有任何可见变化。
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    withAnimation(.easeOut(duration: 0.12)) {
-                        scrollProxy.scrollTo(key, anchor: .center)
-                    }
-                }
-            } else {
-                scrollProxy.scrollTo(key, anchor: .center)
-                // 开窗那一次要补一发。实测(临时文件日志量 NSScrollView 的
-                // documentVisibleRect + NSTableView.rect(ofRow:)):冷启动第一次滚的时候
-                // List 还在陆续量后面那些行的真实高度(行高先按 24 估、量完是 31,
-                // documentView 高度从 2639 变到 2800),按当时的行高算出来的落点差了两三行、
-                // 没能真的居中。等这一轮布局走完再按最终行高定一次位,居中误差归零。
-                // 不带动画,所以这次补正在视觉上就是"一开窗就已经在那儿"。
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation { scrollProxy.scrollTo(key, anchor: .center) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeOut(duration: 0.12)) {
                     scrollProxy.scrollTo(key, anchor: .center)
                 }
             }
@@ -2380,18 +2675,37 @@ struct LyricsManagerView: View {
     // 「停止搜索」按钮:这段等待没有上限(见 cancelPlaceholderSearch 的注释),没有这颗
     // 按钮用户只能干等。
     private func placeholderDetailView(_ summary: EnrichCacheStore.Summary) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            headerTitleBlock(summary)
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear
+                .frame(height: 52)
+                .background(WindowDragHandle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(summary.title)
+                    .font(.system(size: 28, weight: .bold))
+                    .lineLimit(2)
+                Text(summary.artist)
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if !summary.displayAlbum.isEmpty {
+                    Text(summary.displayAlbum)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
             ContentUnavailableView {
                 Label(L10n.t("正在搜索歌词…"), systemImage: "magnifyingglass")
             } description: {
-                Text(L10n.t("这首歌第一次播放，正在联网搜索歌词，完成后会自动显示，不需要手动刷新。"))
+                Text(L10n.t("首次播放，正在联网搜索歌词，完成后将自动显示"))
             } actions: {
                 Button(L10n.t("停止搜索")) { cancelPlaceholderSearch() }
+                    .settingsGlassButtons()
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(20)
+        .padding(.leading, 30)
+        .padding(.trailing, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -2427,192 +2741,219 @@ struct LyricsManagerView: View {
         try? key.write(to: url, atomically: true, encoding: .utf8)
     }
 
+    // MARK: - 详情
+
+    /// 右边:单曲详情、搜索中的占位、多选的批量面板,或者什么都没选时的空状态。
+    @ViewBuilder
+    private var detailColumn: some View {
+        Group {
+            if let key = singleSelectedKey, let summary = store.summaries.first(where: { $0.key == key }) {
+                detailView(key: key, summary: summary)
+            } else if let placeholder = placeholderSummary, singleSelectedKey == placeholder.key {
+                // 占位行没有对应的 raw 条目,不能走 detailView 那整套编辑/删除/重新自动匹配——
+                // 那些操作全部直接读写 raw[key]。等引擎写完缓存,下一次 reload 会让这一行自然变成真的一行。
+                placeholderDetailView(placeholder)
+            } else if selectedKeys.count > 1 {
+                batchSelectionPanel
+            } else {
+                VStack(spacing: 0) {
+                    Color.clear
+                        .frame(height: 52)
+                        .background(WindowDragHandle())
+                    ContentUnavailableView(L10n.t("从左侧选择一首歌曲"), systemImage: "text.quote")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        // 跟侧栏的「清空全部缓存」、List 上的「删除」、根上那几个确认框分处不同层级,不叠在同一条修饰符链上。
+        .confirmationDialog(
+            L10n.t("要放弃对歌词的修改吗？"),
+            isPresented: $showDiscardEditConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.t("放弃修改"), role: .destructive) { discardEdits() }
+            Button(L10n.t("继续编辑"), role: .cancel) {}
+        }
+        .alert(unsavedEditTitle, isPresented: $showUnsavedEditAlert) {
+            Button(L10n.t("保存")) { saveThenSwitch() }
+            Button(L10n.t("不保存"), role: .destructive) {
+                let next = pendingSelection
+                pendingSelection = nil
+                discardEdits()
+                if let next { selectedKeys = next }
+            }
+            Button(L10n.t("取消"), role: .cancel) { pendingSelection = nil }
+        } message: {
+            Text(L10n.t("切换到其他歌曲前是否保存修改？"))
+        }
+    }
+
+    private var unsavedEditTitle: String {
+        let title = store.summaries.first(where: { $0.key == editingKey })?.title ?? ""
+        return String(format: L10n.t("「%@」有未保存的修改"), title)
+    }
+
+    private func saveThenSwitch() {
+        let next = pendingSelection
+        pendingSelection = nil
+        guard let key = editingKey, let summary = store.summaries.first(where: { $0.key == key }) else { return }
+        Task {
+            guard await saveEdits(key: key, summary: summary) else { return }
+            endEditing()
+            if let next { selectedKeys = next }
+        }
+    }
+
     @ViewBuilder
     private func detailView(key: String, summary: EnrichCacheStore.Summary) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header(summary)
-                // 故意**不**放进 header 里的 actionTileGrid 那组方块:header 用的是
-                // ViewThatFits(in: .horizontal),而它比的是理想宽度 —— 混进一句长文案会把
-                // "标题和方块同一行"那个候选的理想宽度撑爆,方块组从此永久掉到第二行,而且
-                // 转圈出现/消失会让整个顶部跳一下。放在 header 外面只影响竖向高度。
-                rematchStatusRow(key: key, summary: summary)
-                infoStrip(summary)
-                offsetSection(summary)
-
-                if loadedYRC.isEmpty {
-                    editorSection(title: L10n.t("歌词（LRC）"), icon: "text.alignleft", text: $editedLyricsBody, minHeight: 220, monospaced: true, showCopyButton: true)
-                        // 两条 onChange 互不打圈,理由见 LyricsBodyEdit 头注:外部写进来的 editedLyrics(换曲 / 采纳候选 /
-                        // 重新匹配)才重算正文;编辑框自己拼回去的那次(值恰好等于 reassembled)跳过,不然用户敲的回车会被归一化吃掉。
-                        .onChange(of: editedLyrics, initial: true) { _, raw in
-                            if raw == lyricsBodyEdit.reassembled(body: editedLyricsBody) { return }
-                            lyricsBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
-                            editedLyricsBody = lyricsBodyEdit.body
-                        }
-                        .onChange(of: editedLyricsBody) { _, newBody in
-                            let full = lyricsBodyEdit.reassembled(body: newBody)
-                            if full != editedLyrics { editedLyrics = full }
-                        }
-                } else {
-                    // 显示用的是逐字里的字,所以逐字歌词改的是逐字拼出来的每一行,保存时只改字、套回逐字(见 actionsRow)。
-                    wordTimingHint
-                    editorSection(title: L10n.t("歌词（逐字）"), icon: "text.word.spacing", text: $editedWordBody, minHeight: 220, monospaced: true, showCopyButton: true)
-                        // 同上那对 onChange。
-                        .onChange(of: editedWordText, initial: true) { _, raw in
-                            if raw == wordBodyEdit.reassembled(body: editedWordBody) { return }
-                            wordBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
-                            editedWordBody = wordBodyEdit.body
-                        }
-                        .onChange(of: editedWordBody) { _, newBody in
-                            let full = wordBodyEdit.reassembled(body: newBody)
-                            if full != editedWordText { editedWordText = full }
-                        }
-                }
-                editorSection(title: L10n.t("译文"), icon: "character.book.closed", text: $editedTrBody, minHeight: 70, monospaced: false)
-                    .onChange(of: editedTr, initial: true) { _, raw in
-                        if raw == trBodyEdit.reassembled(body: editedTrBody) { return }
-                        trBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
-                        editedTrBody = trBodyEdit.body
-                    }
-                    .onChange(of: editedTrBody) { _, newBody in
-                        let full = trBodyEdit.reassembled(body: newBody)
-                        if full != editedTr { editedTr = full }
-                    }
-                editorSection(title: L10n.t("读音"), icon: "textformat.abc", text: $editedRomaBody, minHeight: 70, monospaced: false, latinIcon: true)
-                    .onChange(of: editedRoma, initial: true) { _, raw in
-                        if raw == romaBodyEdit.reassembled(body: editedRomaBody) { return }
-                        romaBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
-                        editedRomaBody = romaBodyEdit.body
-                    }
-                    .onChange(of: editedRomaBody) { _, newBody in
-                        let full = romaBodyEdit.reassembled(body: newBody)
-                        if full != editedRoma { editedRoma = full }
-                    }
-
-                if let error = store.lastError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                        .font(.caption)
-                }
-                if detailIncomplete {
-                    Label(L10n.t("这首的歌词正文读不回来（歌词文件缺失或损坏），为免覆盖盘上的内容，这里暂时不能保存修改。可以用「联网搜索候选歌词」重新采纳一份"),
-                          systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .font(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                actionsRow(key: key, summary: summary)
+        songPage(key: key, summary: summary)
+            .onAppear { loadDetail(key: key) }
+            // 引擎期间改了这首(补了机翻、重新打分换了词、别处采纳了候选):用户没动过编辑缓冲就跟着换成盘上的新内容,
+            // 免得看着旧的、存的时候又拿旧的比。动过就不碰,保存时再按格合并(见 saveEdits)。
+            // 正文读不回来的那首不跟:每次重读都要在主线程上把整份主缓存再解一遍去碰运气,重新选中它再试。
+            .onChange(of: store.summariesGeneration) { _, _ in
+                if editingKey == key, !isEditorDirty, !detailIncomplete { loadDetail(key: key) }
             }
-            .padding(20)
-        }
-        .onAppear { loadDetail(key: key) }
-        // 引擎期间改了这首(补了机翻、重新打分换了词、别处采纳了候选):用户没动过编辑框就跟着换成盘上的新内容,
-        // 免得看着旧的、存的时候又拿旧的比。动过就不碰,保存时再按格合并(见保存按钮)。
-        // 正文读不回来的那首不跟:每次重读都要在主线程上把整份主缓存再解一遍去碰运气,重新选中它再试。
-        .onChange(of: store.summariesGeneration) { _, _ in
-            if editingKey == key, !isEditorDirty, !detailIncomplete { loadDetail(key: key) }
-        }
-        .onChange(of: key) { _, newKey in
-            store.dismissEditError()
-            loadDetail(key: newKey)
-            // 换歌就把上一首的进行中/结果状态收掉,并叫引擎停掉那一轮(它的结果已经没人要了)。
-            // rematchGeneration 换代顺带让在飞的那一轮的轮询和收尾全部失效。
-            if rematchRunningKey != nil {
-                rematchGeneration += 1
-                rematchRunningKey = nil
-                if let id = rematchRequestID { LyricsRematch.cancel(id: id) }
+            .onChange(of: key) { _, newKey in
+                store.dismissEditError()
+                endEditing()
+                loadDetail(key: newKey)
+                // 换歌就把上一首的进行中/结果状态收掉,并叫引擎停掉那一轮(它的结果已经没人要了)。
+                // rematchGeneration 换代顺带让在飞的那一轮的轮询和收尾全部失效。
+                if rematchRunningKey != nil {
+                    rematchGeneration += 1
+                    rematchRunningKey = nil
+                    if let id = rematchRequestID { LyricsRematch.cancel(id: id) }
+                }
+                rematchResult = nil
             }
-            rematchResult = nil
-        }
-        .sheet(isPresented: $showDecisionSheet) {
-            // 按钮只在 hasDecision 时出现;完整结构懒解码 —— 只在打开弹窗这一刻按 key
-            // 解(原来 rebuild 时全量急算,见 Summary.hasDecision 注释)。
-            // 两槽都解:latest=最近一次评估,applied=当前歌词的出处(分槽语义见
-            // lyrimuse-engine/decision.go;老条目只有前者,弹窗 init 里自己退化)。
-            let latest = store.decodedDecision(for: key)
-            let applied = store.decodedAppliedDecision(for: key)
-            if latest != nil || applied != nil {
-                LyricsDecisionSheet(summary: summary, latest: latest, applied: applied)
+            // 编辑用的正文 ↔ 完整原文,四对两条 onChange 互不打圈,理由见 LyricsBodyEdit 头注:外部写进来的完整原文
+            // (换曲 / 采纳候选 / 重新匹配)才重算正文;正文拼回去的那次(值恰好等于 reassembled)跳过,不然用户敲的
+            // 回车会被归一化吃掉。
+            .onChange(of: editedLyrics, initial: true) { _, raw in
+                if raw == lyricsBodyEdit.reassembled(body: editedLyricsBody) { return }
+                lyricsBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
+                editedLyricsBody = lyricsBodyEdit.body
             }
-        }
-        .sheet(isPresented: $showSearchSheet) {
-            // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
-            // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
-            LyricsSearchSheet(
-                artist: summary.artist, title: summary.title, album: summary.displayAlbum,
-                currentSource: summary.lyricsSource,
-                // 「当前使用」双判据要的正文指纹。store.raw 是私有的,跟另外两个入口一样走
-                // EnrichCacheReader.lookup(store 刚 persist 过的就是这份文件),三处口径一致。
-                currentFingerprint: EnrichCacheReader.lookup(artist: summary.artist, title: summary.title, album: summary.album)
-                    .map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 },
-                durationSecs: summary.durationSecs,
-                isMarkedInstrumental: summary.isInstrumental,
-                onSetInstrumental: { value in await store.setInstrumental(key: key, value) },
-                onAutoMatch: { progress in
-                    // 跟详情页「重新自动匹配」同一条路、同一个收尾:列表重读,换了词换掉编辑框,结论挂在详情页那一行
-                    // (面板换了词会关掉,关掉之后看得到)。
-                    guard let line = await LyricsRematchRunner.run(key: key, onProgress: progress) else { return nil }
-                    await store.reload(onlyIfChanged: true)
-                    finishRematch(key: key, line: line)
-                    return line
+            .onChange(of: editedLyricsBody) { _, newBody in
+                let full = lyricsBodyEdit.reassembled(body: newBody)
+                if full != editedLyrics { editedLyrics = full }
+            }
+            .onChange(of: editedWordText, initial: true) { _, raw in
+                if raw == wordBodyEdit.reassembled(body: editedWordBody) { return }
+                wordBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
+                editedWordBody = wordBodyEdit.body
+            }
+            .onChange(of: editedWordBody) { _, newBody in
+                let full = wordBodyEdit.reassembled(body: newBody)
+                if full != editedWordText { editedWordText = full }
+            }
+            .onChange(of: editedTr, initial: true) { _, raw in
+                if raw == trBodyEdit.reassembled(body: editedTrBody) { return }
+                trBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
+                editedTrBody = trBodyEdit.body
+            }
+            .onChange(of: editedTrBody) { _, newBody in
+                let full = trBodyEdit.reassembled(body: newBody)
+                if full != editedTr { editedTr = full }
+            }
+            .onChange(of: editedRoma, initial: true) { _, raw in
+                if raw == romaBodyEdit.reassembled(body: editedRomaBody) { return }
+                romaBodyEdit = LyricsBodyEdit(lyrics: raw, title: summary.title, artist: summary.artist)
+                editedRomaBody = romaBodyEdit.body
+            }
+            .onChange(of: editedRomaBody) { _, newBody in
+                let full = romaBodyEdit.reassembled(body: newBody)
+                if full != editedRoma { editedRoma = full }
+            }
+            .sheet(isPresented: $showDecisionSheet) {
+                // 按钮只在 hasDecision 时出现;完整结构懒解码 —— 只在打开弹窗这一刻按 key
+                // 解(原来 rebuild 时全量急算,见 Summary.hasDecision 注释)。
+                // 两槽都解:latest=最近一次评估,applied=当前歌词的出处(分槽语义见
+                // lyrimuse-engine/decision.go;老条目只有前者,弹窗 init 里自己退化)。
+                let latest = store.decodedDecision(for: key)
+                let applied = store.decodedAppliedDecision(for: key)
+                if latest != nil || applied != nil {
+                    LyricsDecisionSheet(summary: summary, latest: latest, applied: applied)
                 }
-            ) { candidate in
-                // 仅纯文本的候选走完全独立的一条路——不写 editedLyrics/
-                // editedTr/editedRoma(那三个编辑框是给带时间戳的 LRC 内容准备的,纯文本
-                // 塞进去只会让用户以为能像平时一样调 offset/看逐字,其实什么都不对得上)、
-                // 不 refreshOffsetState(offset 的整套机制建立在"对内容做 SHA256 指纹"上,
-                // 纯文本没有时间戳、没有这个概念)、不经 saveEdit 的 markManual/sourceChoice
-                // 这些"带时间戳歌词"专属的字段。见 EnrichCacheStore.savePlainTextEdit 头注。
-                guard !candidate.isPlainTextOnly else {
-                    let saved = await store.savePlainTextEdit(
-                        key: key, plainLyrics: candidate.lyrics, source: candidate.source)
-                    if saved { flashSaveEditFeedback() }
-                    return saved
-                }
-                if editingKey == key {
-                    editedLyrics = candidate.lyrics
-                    editedTr = candidate.lyricsTr
-                    editedRoma = candidate.lyricsRoma
-                }
-                // 「采纳候选」要不要顺带冻结这首歌,由 `manualPickLocksLyrics` 决定 ——
-                // 而**两种状态都不写** lyrics_source_choice(空串 = 显式清掉)。
-                //
-                // 这里曾有第三态:开关关着时记下"选了哪个源",自愈路径照常跑
-                // 但被约束在该源内(引擎侧 pickLyricCandidatePreferring)。当时的想法
-                // 是把"我手改过正文"和"我不同意这次选源"拆成强弱两级约束。
-                //
-                // 用户看到设置里写出来的说明后当场否掉了这个中间态:他要的
-                // 两态是「关 = 之后所有自动更新/优化照常调整这首歌,**不限制源**;
-                // 开 = 就定在这份歌词上不动」。中间那档除了不是他想要的,本身也讲不清楚
-                // —— 它是一个看不见的约束,只能靠歌词管理里事后一枚 pin 徽章解释"为什么
-                // 这首歌一直是这个源"。于是关态改成什么痕迹都不留;存量缓存里那 6 条
-                // lyrics_source_choice 也一并清掉了(清理记录见 docs/features/11)。
-                //
-                // 直接编辑正文那条路径(「保存修改」)**永远**置 manual_lyrics,不受这个
-                // 开关影响——那份内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
-                let saved = await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
-                                                 roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                                                 source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
-                                                 sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
-                guard saved else {
-                    // 没存上:编辑框和偏移退回盘上那份。留着候选的话,下一次 ⌘S 会把它当手改存进去并锁定。
-                    // 这期间切到了别的歌就不动 —— 编辑框已经是那一首的了。
+            }
+            .sheet(isPresented: $showSearchSheet) {
+                // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
+                // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
+                LyricsSearchSheet(
+                    artist: summary.artist, title: summary.title, album: summary.displayAlbum,
+                    currentSource: summary.lyricsSource,
+                    // 「当前使用」双判据要的正文指纹。store.raw 是私有的,跟另外两个入口一样走
+                    // EnrichCacheReader.lookup(store 刚 persist 过的就是这份文件),三处口径一致。
+                    currentFingerprint: EnrichCacheReader.lookup(artist: summary.artist, title: summary.title, album: summary.album)
+                        .map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 },
+                    durationSecs: summary.durationSecs,
+                    isMarkedInstrumental: summary.isInstrumental,
+                    onSetInstrumental: { value in await store.setInstrumental(key: key, value) },
+                    onAutoMatch: { progress in
+                        // 跟详情页「重新自动匹配」同一条路、同一个收尾:列表重读,换了词换掉编辑框,结论挂在详情页那一行
+                        // (面板换了词会关掉,关掉之后看得到)。
+                        guard let line = await LyricsRematchRunner.run(key: key, onProgress: progress) else { return nil }
+                        await store.reload(onlyIfChanged: true)
+                        finishRematch(key: key, line: line)
+                        return line
+                    }
+                ) { candidate in
+                    // 仅纯文本的候选走完全独立的一条路——不写 editedLyrics/
+                    // editedTr/editedRoma(那三个编辑框是给带时间戳的 LRC 内容准备的,纯文本
+                    // 塞进去只会让用户以为能像平时一样调 offset/看逐字,其实什么都不对得上)、
+                    // 不 refreshOffsetState(offset 的整套机制建立在"对内容做 SHA256 指纹"上,
+                    // 纯文本没有时间戳、没有这个概念)、不经 saveEdit 的 markManual/sourceChoice
+                    // 这些"带时间戳歌词"专属的字段。见 EnrichCacheStore.savePlainTextEdit 头注。
+                    guard !candidate.isPlainTextOnly else {
+                        let saved = await store.savePlainTextEdit(
+                            key: key, plainLyrics: candidate.lyrics, source: candidate.source)
+                        if saved { flashSaveEditFeedback() }
+                        return saved
+                    }
+                    if editingKey == key {
+                        editedLyrics = candidate.lyrics
+                        editedTr = candidate.lyricsTr
+                        editedRoma = candidate.lyricsRoma
+                    }
+                    // 「采纳候选」要不要顺带冻结这首歌,由 `manualPickLocksLyrics` 决定 ——
+                    // 而**两种状态都不写** lyrics_source_choice(空串 = 显式清掉)。
+                    //
+                    // 这里曾有第三态:开关关着时记下"选了哪个源",自愈路径照常跑
+                    // 但被约束在该源内(引擎侧 pickLyricCandidatePreferring)。当时的想法
+                    // 是把"我手改过正文"和"我不同意这次选源"拆成强弱两级约束。
+                    //
+                    // 用户看到设置里写出来的说明后当场否掉了这个中间态:他要的
+                    // 两态是「关 = 之后所有自动更新/优化照常调整这首歌,**不限制源**;
+                    // 开 = 就定在这份歌词上不动」。中间那档除了不是他想要的,本身也讲不清楚
+                    // —— 它是一个看不见的约束,只能靠歌词管理里事后一枚 pin 徽章解释"为什么
+                    // 这首歌一直是这个源"。于是关态改成什么痕迹都不留;存量缓存里那 6 条
+                    // lyrics_source_choice 也一并清掉了(清理记录见 docs/features/11)。
+                    //
+                    // 直接编辑正文那条路径(「保存修改」)**永远**置 manual_lyrics,不受这个
+                    // 开关影响——那份内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
+                    let saved = await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
+                                                     roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
+                                                     source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
+                                                     sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
+                    guard saved else {
+                        // 没存上:编辑框和偏移退回盘上那份。留着候选的话,下一次 ⌘S 会把它当手改存进去并锁定。
+                        // 这期间切到了别的歌就不动 —— 编辑框已经是那一首的了。
+                        if editingKey == key { loadDetail(key: key) }
+                        return false
+                    }
+                    // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——输入框要显示"新内容对应的
+                    // 偏移值"。按盘上刚落下的那份重载(不再算未保存);这期间切到了别的歌就不动。
                     if editingKey == key { loadDetail(key: key) }
-                    return false
+                    // 补上——采纳候选之前点了就直接关闭弹窗,真正的保存+重启
+                    // 引擎在后台异步跑,用户看不到任何进度,失败时只能在下面
+                    // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
+                    // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
+                    // 叠加两套反馈互相矛盾)。
+                    flashSaveEditFeedback()
+                    return true
                 }
-                // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——输入框要显示"新内容对应的
-                // 偏移值"。按盘上刚落下的那份重载(不再算未保存);这期间切到了别的歌就不动。
-                if editingKey == key { loadDetail(key: key) }
-                // 补上——采纳候选之前点了就直接关闭弹窗,真正的保存+重启
-                // 引擎在后台异步跑,用户看不到任何进度,失败时只能在下面
-                // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
-                // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
-                // 叠加两套反馈互相矛盾)。
-                flashSaveEditFeedback()
-                return true
             }
-        }
     }
 
     /// 采纳候选成功后闪一下「已保存」—— 跟「保存修改」同一个反馈机制(showSaveEditFeedback)。
@@ -2625,227 +2966,586 @@ struct LyricsManagerView: View {
             withAnimation { showSaveEditFeedback = false }
         }
     }
-
-    /// 详情页顶部:左边歌名/歌手/专辑,右边四个常用操作。
-    ///
-    /// 操作区是固定尺寸图标方块 2×2 网格(`actionTileGrid`)。方块网格不受文案长度影响
-    /// (英文文案比中文长一截,如 "Resolution decision / Auto re-match / Search Online
-    /// for Lyrics / Delete Saved Lyrics")——每块固定 `ActionTile.size` 宽高,标签超长就
-    /// `.lineLimit(2)` 截断,4 块的**总宽度是常量**,
-    /// 跟中文/英文/任何语言都无关,所以这里只需要「标题和网格并排」/「标题在上、网格在下」
-    /// 两种候选就够了,不再需要"网格自己再折两排"那一档。
-    private func header(_ summary: EnrichCacheStore.Summary) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top) {
-                headerTitleBlock(summary)
-                Spacer(minLength: 12)
-                actionTileGrid(summary)
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                headerTitleBlock(summary)
-                actionTileGrid(summary)
-            }
-        }
-    }
-
-    private func headerTitleBlock(_ summary: EnrichCacheStore.Summary) -> some View {
-        // 三个 lineLimit 是兜底,不是主要防线(主要防线是上面那两种布局)。留着的理由:
-        // 万一以后有人往这一行再塞一个按钮、或者出现某种极端窄的容器,把两种布局都挤穿,
-        // 有行数上限至少只是被截断,不会退化成一字一行的竖排长龙。上限给得很宽松 ——
-        // 按钮挪到第二行之后标题有整个面板宽度可用,正常内容根本碰不到。
-        VStack(alignment: .leading, spacing: 3) {
-            Text(summary.title).font(.title2.weight(.bold)).lineLimit(3)
-            Text(summary.artist).font(.title3).foregroundStyle(.secondary).lineLimit(2)
-            if !summary.displayAlbum.isEmpty || summary.isListedMV {
-                Text(summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum)).font(.callout).foregroundStyle(.tertiary)
-                    .lineLimit(2)
-            }
-        }
-    }
-
-    /// 「解析决策」只在有存档时才出现（老条目没有），LazyVGrid 按行主序自动补位——
-    /// 3 块时第 4 格自然留空，不会把其余三块的位置往前顶或重新洗牌，这正是"位置稳定"
-    /// 这条要求要的效果:少一块只是网格右下角空一格，不是整组重新排列。
-    private func actionTileGrid(_ summary: EnrichCacheStore.Summary) -> some View {
-        LazyVGrid(
-            columns: [GridItem(.fixed(ActionTile.size.width), spacing: 8),
-                      GridItem(.fixed(ActionTile.size.width), spacing: 8)],
-            spacing: 8
-        ) {
-            if summary.hasDecision {
-                ActionTile(icon: "list.number", title: L10n.t("解析决策"),
-                           help: L10n.t("当初为什么选了这份歌词：当时的候选、得分与拒绝原因")) {
-                    showDecisionSheet = true
+    /// 一首歌的详情页:头部铺封面氛围,下面是概况,再往下按这首的情况是预览 / 编辑、缺歌词的说明、纯音乐或纯文本。
+    private func songPage(key: String, summary: EnrichCacheStore.Summary) -> some View {
+        ZStack(alignment: .top) {
+            // 正在放的这首用播放器给的那张封面:随时都在,也比缓存里的缩略图清楚。
+            LyricsManagerAmbience(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil)
+            VStack(alignment: .leading, spacing: 0) {
+                detailTopBar(summary)
+                headerBlock(summary)
+                factsRow(summary)
+                    .padding(.top, 16)
+                // 故意不放进顶上那排按钮:一句长文案会把按钮排挤窄,转圈出现/消失也会让整排跳一下。
+                if rematchRunningKey == key || rematchResult?.key == key {
+                    rematchStatusRow(key: key, summary: summary)
+                        .padding(.top, 10)
                 }
+                pageBody(key: key, summary: summary)
             }
-            // 「重新自动匹配」——请引擎按自动解析那套规则重跑一轮、直接采用算法选出的那一份。
-            // 文案刻意不写「智能」:「智能算法」在这个产品里是设置页「匹配算法」的一个具体
-            // 档位(另一档是「顺序优先」),写上去对选了顺序优先的用户就是在说谎(真正的
-            // 冠军由引擎按用户选的那一档算)。补搜 / 全量扫库跑着时置灰:引擎那时不接。
-            ActionTile(icon: "wand.and.stars", title: L10n.t("重新自动匹配"),
-                       help: L10n.t("重新联网跑一遍匹配，直接采用算法选出的那一份，不用自己挑；跟设置里的「匹配算法」一致"),
-                       disabled: rematchRunningKey != nil || fillSweepStatus?.running == true || fillSweepPending) {
+            .padding(.leading, 30)
+            .padding(.trailing, 22)
+        }
+        .overlay(alignment: .bottom) {
+            if editMode != .preview {
+                saveBar(key: key, summary: summary)
+                    .padding(.horizontal, 30)
+                    .padding(.bottom, 22)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: editMode)
+    }
+
+    /// 右上角那排按钮。放不下时收成只有图标(悬停说明、无障碍标签照留)。背后垫拖拽区:这一行在标题栏那一截里。
+    private func detailTopBar(_ summary: EnrichCacheStore.Summary) -> some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            ViewThatFits(in: .horizontal) {
+                topBarButtons(summary, iconOnly: false)
+                topBarButtons(summary, iconOnly: true)
+            }
+        }
+        .frame(height: 52)
+        .background(WindowDragHandle())
+    }
+
+    private func topBarButtons(_ summary: EnrichCacheStore.Summary, iconOnly: Bool) -> some View {
+        HStack(spacing: 8) {
+            // 「重新自动匹配」——请引擎按自动解析那套规则重跑一轮、直接采用算法选出的那一份。文案刻意不写「智能」:
+            // 那是设置页「匹配算法」的一个具体档位,真正的冠军由引擎按用户选的那一档算。编辑中、自动匹配在跑时点不了。
+            Button {
                 Task { await runRematch(key: summary.key) }
+            } label: {
+                topBarLabel(L10n.t("重新自动匹配"), icon: "wand.and.stars", iconOnly: iconOnly)
             }
-            // 自动匹配飞行途中不开这个弹窗:在弹窗里采纳的那份会让这一轮作废(引擎见到期间改过就不写),
-            // 结论那一句跟弹窗里的回声说的不是同一件事。
-            ActionTile(icon: "magnifyingglass", title: L10n.t("联网搜索候选歌词"),
-                       help: L10n.t("联网搜索候选歌词"), disabled: rematchRunningKey != nil) {
+            .disabled(rematchBlocked || editMode != .preview)
+            .help(L10n.t("重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」"))
+            // 自动匹配飞行途中不开这个弹窗:在弹窗里采纳的那份会让这一轮作废(引擎见到期间改过就不写)。
+            Button {
                 showSearchSheet = true
+            } label: {
+                topBarLabel(L10n.t("搜索候选歌词"), icon: "magnifyingglass", iconOnly: iconOnly)
             }
-            // 「标为纯音乐」/「取消纯音乐标记」:有没有歌词都能标。标上之后各处不显示歌词,引擎也不再自动搜;
-            // 歌词留在条目里,撤掉就回来(见 EnrichCacheStore.setInstrumental)。搜索候选歌词面板标题栏有同一对动作。
-            if summary.isInstrumental {
-                ActionTile(icon: "pianokeys.inverse", title: L10n.t("取消纯音乐标记"),
-                           help: L10n.t("撤回「纯音乐」标记：有歌词的恢复显示，没有歌词的重新回到自动补搜的队列")) {
-                    Task { await store.setInstrumental(key: summary.key, false) }
+            .disabled(rematchRunningKey != nil || editMode != .preview)
+            .help(L10n.t("联网搜索候选歌词"))
+            // 「解析决策」只在有存档时才出现(老条目没有)。
+            if summary.hasDecision {
+                Button {
+                    showDecisionSheet = true
+                } label: {
+                    topBarLabel(L10n.t("解析决策"), icon: "list.number", iconOnly: iconOnly)
                 }
-            } else {
-                ActionTile(icon: "pianokeys", title: L10n.t("标为纯音乐"),
-                           help: L10n.t("按纯音乐处理：各处不显示歌词，也不再自动搜歌词；已有的歌词会留着，取消标记就恢复")) {
-                    Task { await store.setInstrumental(key: summary.key, true) }
-                }
+                .help(L10n.t("查看选用这份歌词的依据：当时的候选、得分与淘汰原因"))
             }
-            // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
-            // 只留一处弹窗,文案/统计/快照逻辑不会两处漂移。
-            ActionTile(icon: "trash", title: L10n.t("删除本地记录"),
-                       help: L10n.t("删除本地记录"), destructive: true) {
-                requestDelete([summary.key])
-            }
+            moreMenuButton(summary)
         }
+        .settingsGlassButtons()
         .fixedSize()
     }
 
-    private func infoStrip(_ summary: EnrichCacheStore.Summary) -> some View {
-        HStack(spacing: 8) {
-            InfoChip(
-                icon: "arrow.down.circle",
-                text: sourceDisplayName(summary.lyricsSource),
-                tint: sourceColor(summary.lyricsSource)
-            )
-            // 跟列表那颗同名徽章同一个坑:hasWordTiming 在"完全没有歌词"时也是
-            // false,不加 hasLyrics 这道闸的话,无歌词的条目也会显示一个看起来像真结论
-            // 的"整行歌词"——下面 `!summary.hasLyrics` 那组分支才是这种情况该显示的内容。
-            if summary.hasLyrics {
-                InfoChip(
-                    icon: summary.hasWordTiming ? "text.word.spacing" : "text.alignleft",
-                    text: summary.hasWordTiming ? L10n.t("逐字时间轴") : L10n.t("整行时间轴"),
-                    tint: summary.hasWordTiming ? .blue : .secondary
-                )
+    /// 右上角「⋯」,跟旁边的玻璃按钮同高同样式(见 11 章决策 68)。
+    private func moreMenuButton(_ summary: EnrichCacheStore.Summary) -> some View {
+        Menu {
+            detailMoreMenu(summary)
+        } label: {
+            Text(Image(systemName: "ellipsis"))
+        }
+        .menuIndicator(.hidden)
+        .settingsGlassMenu()
+        .accessibilityLabel(L10n.t("更多"))
+        .help(L10n.t("更多"))
+    }
+
+    @ViewBuilder
+    private func topBarLabel(_ title: String, icon: String, iconOnly: Bool) -> some View {
+        if iconOnly {
+            Image(systemName: icon)
+                .accessibilityLabel(title)
+        } else {
+            Label(title, systemImage: icon)
+        }
+    }
+
+    /// 「⋯」:标 / 撤纯音乐、拷贝歌名与歌手、以文本方式编辑、用外部编辑器改、在访达中显示,删除。
+    @ViewBuilder
+    private func detailMoreMenu(_ summary: EnrichCacheStore.Summary) -> some View {
+        // 「标为纯音乐」/「取消纯音乐标记」:有没有歌词都能标。标上之后各处不显示歌词,引擎也不再自动搜;
+        // 歌词留在条目里,撤掉就回来(见 EnrichCacheStore.setInstrumental)。搜索候选歌词面板标题栏有同一对动作。
+        if summary.isInstrumental {
+            Button(L10n.t("取消纯音乐标记")) { Task { await store.setInstrumental(key: summary.key, false) } }
+                .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，没有歌词的重新加入自动匹配队列"))
+        } else {
+            Button(L10n.t("标为纯音乐")) { Task { await store.setInstrumental(key: summary.key, true) } }
+                .help(L10n.t("按纯音乐处理：不再显示歌词，也不再自动搜索；现有歌词会保留，取消标记后恢复"))
+        }
+        Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
+        if summary.hasLyrics && !summary.isInstrumental {
+            Divider()
+            Button(L10n.t("以文本方式编辑")) { beginTextEditing() }
+                .disabled(!(canEditLyrics || editMode == .lines))
+            Button(L10n.t("在外部编辑器中编辑歌词")) {
+                LyricsExternalEditor.shared.open(artist: summary.artist, title: summary.title, album: summary.album)
+            }
+            Button(L10n.t("在访达中显示歌词文件")) { revealLyricsFile(summary.key) }
+        }
+        Divider()
+        Button(L10n.t("删除本地记录…"), role: .destructive) { requestDelete([summary.key]) }
+    }
+
+    /// 封面 + 歌名 / 歌手 / 专辑 + 一排标签。
+    private func headerBlock(_ summary: EnrichCacheStore.Summary) -> some View {
+        HStack(alignment: .top, spacing: 20) {
+            LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,
+                               size: 128, radius: 14)
+                .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(summary.title)
+                    .font(.system(size: 28, weight: .bold))
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+                Text(summary.shownArtist.isEmpty ? L10n.t("未知歌手") : summary.shownArtist)
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .help(summary.artist.isEmpty && !summary.inferredArtist.isEmpty ? L10n.t("播放器未提供歌手，按歌名和时长推断") : "")
+                if !summary.displayAlbum.isEmpty || summary.isListedMV {
+                    Text(summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum))
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                headerTags(summary)
+                    .padding(.top, 8)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// 正在播放、来源、逐字 / 整行、译文、读音、人工修正、已校准,没词的那几档。来源用全局那份 sourceColor,其余标签的颜色读
+    /// LyricsFeatureTint,跟列表行、搜索候选歌词面板同一份(见 11 章决策 79)。
+    private func headerTags(_ summary: EnrichCacheStore.Summary) -> some View {
+        SettingsFlowRow(spacing: 6) {
+            if summary.key == nowPlayingKey {
+                LyricsManagerTag(icon: "waveform", text: L10n.t("正在播放"), tint: .accentColor)
+            }
+            if !summary.lyricsSource.isEmpty {
+                LyricsManagerTag(icon: "arrow.down.circle", text: sourceDisplayName(summary.lyricsSource),
+                                 tint: sourceColor(summary.lyricsSource))
+            }
+            // hasWordTiming 在"完全没有歌词"时也是 false,不加 hasLyrics 这道闸的话无歌词的条目会显示一个像真结论的「整行时间轴」。
+            if summary.hasLyrics && !summary.isInstrumental {
+                LyricsManagerTag(icon: summary.hasWordTiming ? "text.word.spacing" : "text.alignleft",
+                                 text: summary.hasWordTiming ? L10n.t("逐字时间轴") : L10n.t("整行时间轴"),
+                                 tint: summary.hasWordTiming ? LyricsFeatureTint.wordTiming : .secondary)
+            }
+            // 机翻的译文单独标出来,不让它冒充歌词源自带的社区翻译。
+            if summary.hasTranslation {
+                if summary.lyricsTrSource == LyricsTranslationSource.machineSentinel {
+                    LyricsManagerTag(icon: "character.book.closed", text: L10n.t("机器翻译"), tint: LyricsFeatureTint.machineTranslation)
+                } else {
+                    LyricsManagerTag(icon: "character.book.closed", text: L10n.t("译文"), tint: LyricsFeatureTint.translation)
+                }
+            }
+            if summary.hasRomanization {
+                LyricsManagerTag(icon: "textformat.abc", text: L10n.t("读音"), tint: LyricsFeatureTint.romanization, latinIcon: true)
             }
             if summary.isManual {
-                InfoChip(icon: "pencil.circle.fill", text: L10n.t("人工修正"), tint: .orange)
+                LyricsManagerTag(icon: "pencil.circle.fill", text: L10n.t("人工修正"), tint: LyricsFeatureTint.manual)
             }
-            // 「来源已选定」= 用户在「联网搜索候选歌词」里挑过一次源。跟
-            // 「人工修正」分开显示,因为它们的约束强度差一个量级:那个一票否决全部自动路径,
-            // 这个只把重选**约束在这个源内** —— 打分改进、这个源后来给出逐字,照样能升上来。
-            // 之所以也必须标出来,理由跟「已校准」一样:它同样是一个看不见的约束,不说清楚
-            // 的话"为什么这首歌一直是这个源"查不出来。解除办法是那颗「重新自动匹配」。
-            //
-            // 这枚徽章**永远不会亮**:这个字段没有写入方了,而且引擎
-            // 每次启动都会把存量清空并转成 manual_pick_sha(见 manualpickmigrate.go)。
-            // 留着纯粹是因为"删掉这套机制"是一次独立的清理(字段 + preferring 函数 + 单测 +
-            // 详情面板和列表两枚徽章),不该混进改开关语义那次改动;留着也不产生任何行为
-            // 差异。要删就跟引擎侧一起整套删。
+            // 「来源已选定」:这个字段已经没有写入方,引擎每次启动都会把存量转成 manual_pick_sha;读取侧整套跟引擎一起删,
+            // 在那之前照常显示。
             if !summary.sourceChoice.isEmpty {
-                InfoChip(icon: "pin.circle.fill",
-                         text: String(format: L10n.t("来源已选定：%@"),
-                                      sourceDisplayName(summary.sourceChoice)),
-                         tint: .indigo)
+                LyricsManagerTag(icon: "pin.circle.fill",
+                                 text: String(format: L10n.t("来源已选定：%@"), sourceDisplayName(summary.sourceChoice)),
+                                 tint: LyricsFeatureTint.sourceChoice)
             }
-            // 「已校准」= 用户手动调过这首歌的时间轴偏移。必须显式标出来,因为它带一个
-            // **看不见的副作用**:引擎从此不再自动给这首歌重选歌词源(见
-            // LyricsPinStore)。不说清楚的话,"为什么这首歌不跟着升级了"是个查不出来的状态。
+            // 「已校准」带一个看不见的副作用:引擎从此不再自动给这首歌重选歌词源(见 LyricsPinStore),必须显式标出来。
             if pins.isPinned(summary.key) {
-                InfoChip(icon: "timer", text: L10n.t("已校准"), tint: .teal)
-            }
-            // 机翻的译文单独标出来,不让它冒充歌词源自带的社区翻译 —— 跟"人工修正"徽章
-            // 同一个原则:凡是"这份内容是哪来的"能影响用户判断的,就如实说。
-            if summary.hasTranslation
-                && summary.lyricsTrSource == LyricsTranslationSource.machineSentinel {
-                InfoChip(icon: "character.book.closed", text: L10n.t("机器翻译"), tint: .purple)
+                LyricsManagerTag(icon: "timer", text: L10n.t("已校准"), tint: LyricsFeatureTint.pinned)
             }
             // 标了纯音乐的条目存着歌词也显示「纯音乐」,跟列表行同一口径(各处按纯音乐显示,见 LyricsKind.instrumental)。
             if !summary.hasLyrics || summary.isInstrumental {
-                // 图标跟歌词窗口的纯音乐占位保持一致(waveform),颜色也从红色降成中性。
                 if summary.isInstrumental {
-                    InfoChip(icon: "waveform", text: L10n.t("纯音乐"), tint: .secondary)
+                    LyricsManagerTag(icon: "waveform", text: L10n.t("纯音乐"))
                 } else if summary.hasPlainTextFallback {
-                    // 加,理由同 isInstrumental 那档:有纯文本兜底不是"什么都
-                    // 没有",不该跟真的一条候选都没有共用刺眼的红色。
-                    InfoChip(icon: "text.quote", text: L10n.t("仅纯文本"), tint: .orange)
+                    LyricsManagerTag(icon: "text.quote", text: L10n.t("仅纯文本"), tint: LyricsFeatureTint.plainTextOnly)
                 } else if summary.lastRoundHadNoResponder {
-                    // 加:详情页地方宽,写完整句子。排序理由同列表那处。
-                    InfoChip(icon: "antenna.radiowaves.left.and.right.slash",
-                             text: L10n.t("这一轮没有源应答"), tint: .secondary)
+                    LyricsManagerTag(icon: "antenna.radiowaves.left.and.right.slash", text: L10n.t("本轮无歌词源应答"))
                 } else if summary.knownOnSources {
-                    // 加:网易云/QQ 曲库里有这首歌、只是没人挂词(多是刚发行的独立
-                    // 作品)。这不是"我们没搜到",是"词还不存在"——中性色,别当故障报。
-                    // 判据见 Summary.knownOnSources。
-                    InfoChip(icon: "music.note", text: L10n.t("源里有歌、无词"), tint: .secondary)
+                    LyricsManagerTag(icon: "music.note", text: L10n.t("已收录、无歌词"))
                 } else {
-                    InfoChip(icon: "text.badge.xmark", text: L10n.t("无歌词"), tint: .red)
+                    LyricsManagerTag(icon: "text.badge.xmark", text: L10n.t("无歌词"), tint: LyricsFeatureTint.noLyrics)
                 }
             }
-            Spacer()
         }
     }
 
-    // 单曲歌词时间轴偏移——跟菜单栏"歌词时间轴"(边听边点着调)是同一份数据
-    // (LyricsOffsetStore),这里是给想直接敲一个精确数值的场景用的输入框,不用先听
-    // 一遍再一点点试。回车或点"应用"才真正写入+让当前播放立刻生效,不是敲一个字符
-    // 就实时应用(半个数字、负号打到一半时不该被当成有效值提交)。
-    private func offsetSection(_ summary: EnrichCacheStore.Summary) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-        HStack(spacing: 8) {
-            Label(L10n.t("歌词时间轴偏移"), systemImage: "timer")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            TextField("0.0", text: $editedOffsetSeconds)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 64)
-                .multilineTextAlignment(.trailing)
-                .onSubmit { applyOffsetEdit(summary) }
-            Text(L10n.t("秒"))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Button(L10n.t("应用")) { applyOffsetEdit(summary) }
-            if LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary)) != 0 {
-                Button(L10n.t("重置")) { resetOffsetEdit(summary) }
+    /// 头部下面那行概况:时长、歌词更新时间(没词的写解析时间)、当初几个源应答选了谁(见 11 章决策 76)。
+    private func factsRow(_ summary: EnrichCacheStore.Summary) -> some View {
+        SettingsFlowRow(spacing: 18) {
+            if summary.durationSecs > 0 {
+                LyricsManagerFact(icon: "clock",
+                                  text: String(format: L10n.t("时长 %@"), Self.durationText(summary.durationSecs)))
             }
-            Spacer()
-            Text(L10n.t("正数=提前显示，负数=延后显示"))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            if let updated = summary.lyricsUpdatedAt {
+                LyricsManagerFact(icon: "arrow.clockwise",
+                                  text: String(format: L10n.t("歌词更新于 %@"), Self.dayText(updated)))
+            } else if let resolved = summary.resolvedAt {
+                LyricsManagerFact(icon: "calendar", text: String(format: L10n.t("上次解析于 %@"), Self.dayText(resolved)))
+            }
+            // 这个数为 0 是老条目没这个字段,不是"零个源应答",不显示。
+            if summary.hasDecision, summary.hasLyrics, summary.sourcesRespondedCount > 0, !summary.lyricsSource.isEmpty {
+                LyricsManagerFact(icon: "checkmark.seal",
+                                  text: String(format: L10n.t("解析时 %1$@ 个源应答，选用「%2$@」"),
+                                               "\(summary.sourcesRespondedCount)", sourceDisplayName(summary.lyricsSource)))
+            }
         }
+    }
+
+    private static func durationText(_ seconds: Double) -> String {
+        let total = Int(seconds.rounded())
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// 「10 月 6 日」这种写法,不是今年的带上年份;跟界面语言走。
+    private static func dayText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = L10n.locale
+        let sameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
+        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "MMMd" : "yMMMd")
+        return formatter.string(from: date)
+    }
+
+    /// 头部以下:有词的是控制行 + 预览 / 编辑;纯音乐、只有纯文本、缺歌词的各有一页说明。
+    @ViewBuilder
+    private func pageBody(key: String, summary: EnrichCacheStore.Summary) -> some View {
+        if summary.isInstrumental {
+            Divider().padding(.top, 18)
+            instrumentalState(summary)
+        } else if !summary.hasLyrics {
+            Divider().padding(.top, 18)
+            if summary.hasPlainTextFallback {
+                plainTextState(summary)
+            } else {
+                missingState(summary)
+            }
+        } else {
+            controlsRow(summary)
+                .padding(.top, 16)
+            notices(summary)
+            Divider().padding(.top, 14)
+            lyricsArea(summary)
+        }
+    }
+
+    /// 时间轴偏移、原文 / 译文 / 读音、跟随播放,右边「编辑歌词」。放不下时左边那几样折行。
+    private func controlsRow(_ summary: EnrichCacheStore.Summary) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            SettingsFlowRow(spacing: 10) {
+                LyricsManagerOffsetControl(
+                    text: $editedOffsetSeconds,
+                    isNonZero: LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary)) != 0,
+                    stepText: AppSettings.formattedSeconds(ms: AppSettings.shared.lyricsOffsetStepMs),
+                    onStep: { direction in nudgeOffset(summary, direction: direction) },
+                    onSubmit: { applyOffsetEdit(summary) },
+                    onReset: { resetOffsetEdit(summary) })
+                    .disabled(editMode != .preview)
+                LyricsManagerModePicker(mode: $displayMode,
+                                        shown: effectiveDisplayMode(summary),
+                                        isAvailable: { isDisplayModeAvailable($0, summary) },
+                                        unavailableHelp: unavailableModeHelp)
+                if summary.key == nowPlayingKey && editMode == .preview {
+                    Button {
+                        followPlayback.toggle()
+                    } label: {
+                        Label(L10n.t("跟随播放"), systemImage: "dot.radiowaves.left.and.right")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(followPlayback ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.06)))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(followPlayback ? Color.accentColor : Color.secondary)
+                    .help(L10n.t("高亮当前句并保持在可见范围内；手动滚动时暂停，再次点按可恢复"))
+                }
+            }
+            Spacer(minLength: 8)
+            if editMode == .preview {
+                Button {
+                    beginLineEditing()
+                } label: {
+                    Label(L10n.t("编辑歌词"), systemImage: "pencil")
+                }
+                .settingsGlassButtons()
+                .disabled(!canEditLyrics)
+                .fixedSize()
+            } else {
+                LyricsManagerTag(icon: "pencil", text: L10n.t("编辑中"), tint: .secondary)
+            }
+        }
+    }
+
+    /// 控制行下面几句要紧的话:已校准的后果、正文读不回来、写入失败、刚保存时逐字时间按字数分配了几句。
+    @ViewBuilder
+    private func notices(_ summary: EnrichCacheStore.Summary) -> some View {
         // 校准过之后行为会变,就在动手的地方说清楚 —— 别让用户事后去猜。
         if pins.isPinned(summary.key) {
-            Text(L10n.t("已校准的歌不再自动更换歌词源：后台一换歌词内容，这个校正值就会失效。把偏移改回 0 即解除"))
-                .font(.caption2)
+            Text(L10n.t("已校准的歌曲不再自动更换歌词源，以免歌词变化后校正失效。将偏移设回 0 即可解除"))
+                .font(.caption)
                 .foregroundStyle(.secondary)
+                .padding(.top, 8)
         }
+        if detailIncomplete {
+            Label(L10n.t("无法读取这首歌曲的歌词内容（歌词文件缺失或损坏）。为避免覆盖磁盘上的内容，暂时无法保存修改。可通过「搜索候选歌词」重新采纳"),
+                  systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
         }
-        // 卡片化(视觉细化)：这一块本来是裸露的一行控件+一行说明，直接贴在
-        // 上下相邻内容之间，跟旁边 infoStrip 的徽章行、wordTimingHint 的提示横幅比显得
-        // 没有边界感。加一层跟 wordTimingHint 同量级的圆角卡片背景，形状语言统一。
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.primary.opacity(0.06)))
+        if let error = store.lastError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .font(.caption)
+                .padding(.top, 8)
+        }
+        if let saveEditNote {
+            Text(saveEditNote)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 8)
+        }
     }
 
-    private var wordTimingHint: some View {
-        Label(
-            L10n.t("逐字歌词只改字：每个字原来的时间不变；新加的句子、改了时间戳的句子按字数分配时间"),
-            systemImage: "info.circle"
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(10)
+    @ViewBuilder
+    private func lyricsArea(_ summary: EnrichCacheStore.Summary) -> some View {
+        switch editMode {
+        case .preview:
+            let nowPlayingThis = summary.key == nowPlayingKey
+            LyricsManagerPreviewList(
+                rows: shownRows(summary),
+                mode: effectiveDisplayMode(summary),
+                isNowPlaying: nowPlayingThis,
+                follow: $followPlayback,
+                canSeek: nowPlayingThis && PlaybackCoordinator.shared.acceptsSeek,
+                onSeek: { seek(toLyricsMs: $0) })
+            .id(summary.key)
+        case .lines:
+            lineEditor(summary)
+        case .text:
+            textEditors(summary)
+        }
+    }
+
+    /// 这首有没有这一档:译文看有没有译文,读音看缓存里有没有、或者歌词里有没有设置里开着读音的那几种字。
+    private func isDisplayModeAvailable(_ mode: LyricsManagerDisplayMode, _ summary: EnrichCacheStore.Summary) -> Bool {
+        switch mode {
+        case .original: return true
+        case .translation: return summary.hasTranslation
+        case .romanization: return romanizationAvailable
+        }
+    }
+
+    private func unavailableModeHelp(_ mode: LyricsManagerDisplayMode) -> String {
+        switch mode {
+        case .original: return ""
+        case .translation: return L10n.t("这首歌曲没有译文")
+        case .romanization:
+            return romanizationOffInSettings ? L10n.t("这首歌曲的语言未在设置的「标注读音的语言」中开启") : L10n.t("这首歌曲没有读音")
+        }
+    }
+
+    /// 选的那一档这首没有时按「原文」显示,选择本身不改,换到有的歌又回来。
+    private func effectiveDisplayMode(_ summary: EnrichCacheStore.Summary) -> LyricsManagerDisplayMode {
+        isDisplayModeAvailable(displayMode, summary) ? displayMode : .original
+    }
+
+    private func shownRows(_ summary: EnrichCacheStore.Summary) -> [LyricsPreviewRow] {
+        effectiveDisplayMode(summary) == .romanization ? romanizedRows : previewRows
+    }
+
+    /// 预览的两份行都走播放引擎(LyricsPreviewText.rows),跟歌词窗口显示的同一批。带读音那份用缓存里存的读音,加上按设置里
+    /// 开着的文字种类现算的;「原文 + 读音」能不能点就看它有没有一句读音。输入没变就不重算:列表每重读一次都会走到这里。
+    private func refreshPreviewRows(key: String, summary: EnrichCacheStore.Summary, lyrics: String, tr: String, roma: String) {
+        let scripts = LocalPlaybackSource.shared.romanizationScripts
+        let inputs = [key, lyrics, tr, roma, String(scripts.rawValue)]
+        guard inputs != previewInputs else { return }
+        previewInputs = inputs
+        previewRows = LyricsPreviewText.rows(lyrics: lyrics, translation: tr, title: summary.title, artist: summary.artist)
+        let mayRomanize = summary.hasRomanization || LyricsPreviewText.mayHaveRomanization(lyrics, scripts: scripts)
+        romanizedRows = mayRomanize
+            ? LyricsPreviewText.rows(lyrics: lyrics, translation: tr, romanization: roma, romanizationScripts: scripts,
+                                     title: summary.title, artist: summary.artist)
+            : []
+        romanizationAvailable = romanizedRows.contains { !($0.romanization ?? "").isEmpty }
+        romanizationOffInSettings = !romanizationAvailable && (summary.hasRomanization
+            || LyricsPreviewText.mayHaveRomanization(lyrics, scripts: [.japanese, .korean, .chinese, .cantonese]))
+    }
+
+    /// 从这一句开始播放。减去当前歌词偏移:引擎判定当前句时把偏移加到播放位置上,不减回去跳过去会落在隔壁行(同歌词窗口点一行)。
+    private func seek(toLyricsMs ms: Int) {
+        PlaybackCoordinator.shared.seek(toMs: max(0, ms - PlaybackCoordinator.shared.currentLyricsOffsetMs))
+    }
+
+    // MARK: - 编辑
+
+    /// 有词、不是纯音乐、正文读得回来、还没在编辑时才能进编辑。
+    private var canEditLyrics: Bool {
+        guard editMode == .preview, !detailIncomplete, let key = singleSelectedKey, key == editingKey,
+              let summary = store.summaries.first(where: { $0.key == key }) else { return false }
+        return summary.hasLyrics && !summary.isInstrumental
+    }
+
+    private func captureEditBase() {
+        guard let key = editingKey else { return }
+        editBase = EditBase(key: key, main: loadedYRC.isEmpty ? editedLyricsBody : editedWordBody,
+                            tr: editedTrBody, roma: editedRomaBody)
+    }
+
+    /// 「编辑歌词」/ ⌘E:逐句格子。
+    private func beginLineEditing() {
+        guard canEditLyrics else { return }
+        captureEditBase()
+        editMode = .lines
+    }
+
+    /// 「⋯ → 以文本方式编辑」:整段改(粘贴替换整份、加句、删句时用),跟逐句格子改的是同一份。
+    private func beginTextEditing() {
+        guard canEditLyrics || editMode == .lines else { return }
+        if editBase == nil { captureEditBase() }
+        editMode = .text
+    }
+
+    /// Esc / 「放弃修改」:改过就先问一句,没改过直接退出编辑。
+    private func requestDiscardEdits() {
+        if isEditorDirty {
+            showDiscardEditConfirm = true
+        } else {
+            endEditing()
+        }
+    }
+
+    private func discardEdits() {
+        if let key = editingKey { loadDetail(key: key) }
+        endEditing()
+    }
+
+    private func endEditing() {
+        editMode = .preview
+        editBase = nil
+        focusedLine = nil
+    }
+
+    @ViewBuilder
+    private func lineEditor(_ summary: EnrichCacheStore.Summary) -> some View {
+        let wordTimed = !loadedYRC.isEmpty
+        let mainBody = wordTimed ? editedWordBody : editedLyricsBody
+        let mode = effectiveDisplayMode(summary)
+        // 读音只编辑缓存里存着的那份;现算出来的读音不在条目里,改不了。
+        let secondaryBody: String? = mode == .translation ? editedTrBody : (mode == .romanization && !editedRoma.isEmpty ? editedRomaBody : nil)
+        let secondaryBaseBody: String? = mode == .translation ? editBase?.tr : (mode == .romanization ? editBase?.roma : nil)
+        VStack(alignment: .leading, spacing: 0) {
+            editorBar(hint: wordTimed ? L10n.t("逐字歌词仅修改文字，每个字保留原有时间；新增或修改了时间戳的句子按字数分配时间")
+                                      : L10n.t("点按时间可修改此句的时间戳"),
+                      icon: wordTimed ? "lock.fill" : "info.circle",
+                      switchTitle: L10n.t("以文本方式编辑"), onSwitch: beginTextEditing)
+                .padding(.top, 12)
+            LyricsManagerLineEditor(
+                main: LyricsEditableLines(body: mainBody),
+                mainBase: LyricsEditableLines(body: editBase?.main ?? mainBody),
+                secondary: secondaryBody.map { LyricsEditableLines(body: $0) },
+                secondaryBase: secondaryBaseBody.map { LyricsEditableLines(body: $0) },
+                timeLocked: wordTimed,
+                onMainText: { index, text in setMainLine(index, text: text, wordTimed: wordTimed) },
+                onMainStamps: { index, stamps in setMainLine(index, stamps: stamps, wordTimed: wordTimed) },
+                onSecondaryText: { index, text in setSecondaryLine(index, text: text, mode: mode) },
+                onRevert: { index in revertLine(index, wordTimed: wordTimed) },
+                focus: $focusedLine,
+                isNowPlaying: summary.key == nowPlayingKey)
+        }
+    }
+
+    private func setMainLine(_ index: Int, text: String? = nil, stamps: String? = nil, wordTimed: Bool) {
+        if wordTimed {
+            editedWordBody = LyricsEditableLines(body: editedWordBody).replacing(index, stamps: stamps, text: text).joined
+        } else {
+            editedLyricsBody = LyricsEditableLines(body: editedLyricsBody).replacing(index, stamps: stamps, text: text).joined
+        }
+    }
+
+    private func setSecondaryLine(_ index: Int, text: String, mode: LyricsManagerDisplayMode) {
+        switch mode {
+        case .translation:
+            editedTrBody = LyricsEditableLines(body: editedTrBody).replacing(index, text: text).joined
+        case .romanization:
+            editedRomaBody = LyricsEditableLines(body: editedRomaBody).replacing(index, text: text).joined
+        case .original:
+            break
+        }
+    }
+
+    /// 「还原」:这一句的正文,和挂在它下面的译文、读音,改回打开编辑时的样子。
+    private func revertLine(_ index: Int, wordTimed: Bool) {
+        guard let base = editBase else { return }
+        let mainBase = LyricsEditableLines(body: base.main)
+        let current = LyricsEditableLines(body: wordTimed ? editedWordBody : editedLyricsBody)
+        guard mainBase.lines.indices.contains(index), current.lines.indices.contains(index) else { return }
+        let original = mainBase.lines[index]
+        let reverted = current.replacing(index, stamps: original.stamps, text: original.text).joined
+        if wordTimed { editedWordBody = reverted } else { editedLyricsBody = reverted }
+        guard let time = original.timeMs else { return }
+        editedTrBody = Self.revertSecondary(editedTrBody, base: base.tr, timeMs: time)
+        editedRomaBody = Self.revertSecondary(editedRomaBody, base: base.roma, timeMs: time)
+    }
+
+    private static func revertSecondary(_ body: String, base: String, timeMs: Int) -> String {
+        let current = LyricsEditableLines(body: body)
+        let original = LyricsEditableLines(body: base)
+        guard let index = current.index(matching: timeMs), let baseIndex = original.index(matching: timeMs) else { return body }
+        let line = original.lines[baseIndex]
+        return current.replacing(index, stamps: line.stamps, text: line.text).joined
+    }
+
+    /// 编辑区顶上那一条:左边一句说明,右边切到另一种编辑方式。逐句格子和整段文本两边同一个样子(见 11 章决策 68)。
+    private func editorBar(hint: String, icon: String, switchTitle: String, onSwitch: @escaping () -> Void) -> some View {
+        HStack(spacing: 12) {
+            Label(hint, systemImage: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button(switchTitle, action: onSwitch)
+                .buttonStyle(.link)
+                .font(.system(size: 12, weight: .medium))
+                .fixedSize()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-        // 描边（视觉细化）：原来只有一层淡蓝底色，跟页面背景在浅色模式下
-        // 对比度本来就低，加一圈同色系描边让这块"提示卡片"的边界更肯定。
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.18)))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.04)))
+    }
+
+    /// 整段文本编辑:歌词(整行 LRC,或逐字拼出来的每一行)、译文、读音各一个框。
+    private func textEditors(_ summary: EnrichCacheStore.Summary) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                editorBar(hint: loadedYRC.isEmpty ? L10n.t("整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳")
+                                                  : L10n.t("逐字歌词仅修改文字，每个字保留原有时间；新增或修改了时间戳的句子按字数分配时间"),
+                          icon: loadedYRC.isEmpty ? "info.circle" : "lock.fill",
+                          switchTitle: L10n.t("回到逐句编辑"), onSwitch: { editMode = .lines })
+                if loadedYRC.isEmpty {
+                    editorSection(title: L10n.t("歌词（LRC）"), icon: "text.alignleft", text: $editedLyricsBody, minHeight: 260, monospaced: true, showCopyButton: true)
+                } else {
+                    editorSection(title: L10n.t("歌词（逐字）"), icon: "text.word.spacing", text: $editedWordBody, minHeight: 260, monospaced: true, showCopyButton: true)
+                }
+                editorSection(title: L10n.t("译文"), icon: "character.book.closed", text: $editedTrBody, minHeight: 90, monospaced: false)
+                editorSection(title: L10n.t("读音"), icon: "textformat.abc", text: $editedRomaBody, minHeight: 90, monospaced: false, latinIcon: true)
+            }
+            .padding(.top, 14)
+            .padding(.bottom, 120)
+        }
     }
 
     /// latinIcon:图标必须画成拉丁字母才说得通(「罗马音」),理由见 LatinIconLabel。
@@ -2890,73 +3590,292 @@ struct LyricsManagerView: View {
                 .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
         }
     }
-
-    private func actionsRow(key: String, summary: EnrichCacheStore.Summary) -> some View {
-        HStack(spacing: 10) {
+    /// 底部浮着的保存条:改了几处、快捷键,「放弃修改」(没改过时是「完成」)和「保存修改」。
+    private func saveBar(key: String, summary: EnrichCacheStore.Summary) -> some View {
+        let changes = editChangeCount
+        return HStack(spacing: 12) {
+            Image(systemName: "pencil.circle.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(Color.accentColor)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(changes > 0 ? String(format: L10n.t("已修改 %@ 处"), "\(changes)") : L10n.t("尚未修改"))
+                    .font(.system(size: 13, weight: .semibold))
+                // 整段文本里方向键是移动光标,不提示换句。
+                Text(editMode == .text ? L10n.t("⌘S 保存 · Esc 放弃") : L10n.t("⌘S 保存 · Esc 放弃 · ↑↓ 换句"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            Button(isEditorDirty ? L10n.t("放弃修改") : L10n.t("完成")) { requestDiscardEdits() }
+                .keyboardShortcut(.cancelAction)
+                .settingsGlassButtons()
             Button {
                 Task {
-                    // 用户没动的那几格交**盘上此刻**的值,不交编辑框里的:编辑框是打开这一页时载入的,这期间
-                    // 引擎可能补了机翻、重新打分换了更好的词;三格原样交回去会把那些新内容盖掉(连同译文记录)。
-                    let disk = store.detail(for: key)
-                    guard disk.complete, editingKey == key else { return }
-                    var lyrics = editedLyrics != loadedLyrics ? editedLyrics : disk.lyrics
-                    let tr = editedTr != loadedTr ? editedTr : disk.tr
-                    let roma = editedRoma != loadedRoma ? editedRoma : disk.roma
-                    // 逐字歌词改了字:以载入时那份逐字为底套回去,整行歌词里对得上的行跟着换(LyricsWordTimingEdit)。
-                    var yrc: String?
-                    var word: LyricsWordTimingEdit.Result?
-                    if !loadedYRC.isEmpty, editedWordText != loadedWordText {
-                        let result = LyricsWordTimingEdit.apply(edited: editedWordText, yrc: loadedYRC, lrc: lyrics)
-                        yrc = result.yrc
-                        lyrics = result.lrc
-                        word = result
-                    }
-                    let before = (lyrics: persistedLyricsForOffset, yrc: persistedYRCForOffset)
-                    // 没存上就到此为止:红字横幅已经在说,编辑框里用户敲的内容原样留着,别闪「已保存」。
-                    guard await store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc) else { return }
-                    // 存的过程中切到了别的歌:编辑框和偏移已经是那一首的了,别用这首的结果去改。
-                    guard editingKey == key else { return }
-                    // 只改了字、时间轴没动:单曲偏移按正文指纹存,搬到新正文下,不然调好的偏移看着像没了。
-                    let after = store.detail(for: key)
-                    if word?.timingUnchanged ?? (yrc == nil && LyricsWordTimingEdit.sameLineTimes(before.lyrics, after.lyrics)) {
-                        carryOffset(summary, from: before, to: (after.lyrics, after.yrc))
-                    }
-                    // 编辑框换成刚落盘的权威内容(不再算未保存);歌词内容可能改了,offset 的 key(内容指纹)也跟着
-                    // 变,loadDetail 顺带按盘上那份重算偏移状态。
-                    loadDetail(key: key)
-                    if let estimated = word?.estimatedLines, estimated > 0 {
-                        let note = String(format: L10n.t("%@ 句是新加的或改了时间戳，逐字时间按字数分配"), "\(estimated)")
-                        saveEditNote = note
-                        Task {
-                            try? await Task.sleep(for: .seconds(5))
-                            if saveEditNote == note { withAnimation { saveEditNote = nil } }
-                        }
-                    }
-                    withAnimation { showSaveEditFeedback = true }
-                    try? await Task.sleep(for: .seconds(1))
-                    withAnimation { showSaveEditFeedback = false }
+                    guard await saveEdits(key: key, summary: summary) else { return }
+                    endEditing()
                 }
             } label: {
                 Label(showSaveEditFeedback ? L10n.t("已保存") : L10n.t("保存修改"),
                       systemImage: showSaveEditFeedback ? "checkmark" : "square.and.arrow.down")
             }
-            .buttonStyle(.borderedProminent)
             .keyboardShortcut("s", modifiers: .command)
-            .disabled(detailIncomplete)
-            if let saveEditNote {
-                Text(saveEditNote)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+            .settingsProminentGlassButton(tint: .accentColor)
+            .disabled(detailIncomplete || !isEditorDirty)
+        }
+        .controlSize(.large)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 680)
+        // 不用液态玻璃:它太通透,滚到下面的歌词会透出来糊成一片。跟侧栏自动匹配进度卡同一套底(见 11 章决策 68)。
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color(nsColor: .textBackgroundColor).opacity(0.94)))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.14), radius: 14, y: 4)
+    }
+
+    /// 改了几处:正文、译文、读音里跟打开编辑时不一样的句数加起来。
+    private var editChangeCount: Int {
+        guard let base = editBase else { return 0 }
+        let main = LyricsEditableLines(body: loadedYRC.isEmpty ? editedLyricsBody : editedWordBody)
+            .changedIndices(from: LyricsEditableLines(body: base.main)).count
+        let tr = LyricsEditableLines(body: editedTrBody).changedIndices(from: LyricsEditableLines(body: base.tr)).count
+        let roma = LyricsEditableLines(body: editedRomaBody).changedIndices(from: LyricsEditableLines(body: base.roma)).count
+        return main + tr + roma
+    }
+
+    /// 「保存修改」。存好了返回 true(调用方据此退出编辑);没存上编辑缓冲原样留着,红字横幅已经在说。
+    private func saveEdits(key: String, summary: EnrichCacheStore.Summary) async -> Bool {
+        // 用户没动的那几格交**盘上此刻**的值,不交编辑缓冲里的:编辑缓冲是打开这一页时载入的,这期间
+        // 引擎可能补了机翻、重新打分换了更好的词;三格原样交回去会把那些新内容盖掉(连同译文记录)。
+        let disk = store.detail(for: key)
+        guard disk.complete, editingKey == key else { return false }
+        var lyrics = editedLyrics != loadedLyrics ? editedLyrics : disk.lyrics
+        let tr = editedTr != loadedTr ? editedTr : disk.tr
+        let roma = editedRoma != loadedRoma ? editedRoma : disk.roma
+        // 逐字歌词改了字:以载入时那份逐字为底套回去,整行歌词里对得上的行跟着换(LyricsWordTimingEdit)。
+        var yrc: String?
+        var word: LyricsWordTimingEdit.Result?
+        if !loadedYRC.isEmpty, editedWordText != loadedWordText {
+            let result = LyricsWordTimingEdit.apply(edited: editedWordText, yrc: loadedYRC, lrc: lyrics)
+            yrc = result.yrc
+            lyrics = result.lrc
+            word = result
+        }
+        let before = (lyrics: persistedLyricsForOffset, yrc: persistedYRCForOffset)
+        // 没存上就到此为止:红字横幅已经在说,编辑缓冲里用户敲的内容原样留着,别闪「已保存」。
+        guard await store.saveEdit(key: key, lyrics: lyrics, tr: tr, roma: roma, yrc: yrc) else { return false }
+        // 存的过程中切到了别的歌:编辑缓冲和偏移已经是那一首的了,别用这首的结果去改。
+        guard editingKey == key else { return true }
+        // 只改了字、时间轴没动:单曲偏移按正文指纹存,搬到新正文下,不然调好的偏移看着像没了。
+        let after = store.detail(for: key)
+        if word?.timingUnchanged ?? (yrc == nil && LyricsWordTimingEdit.sameLineTimes(before.lyrics, after.lyrics)) {
+            carryOffset(summary, from: before, to: (after.lyrics, after.yrc))
+        }
+        // 编辑缓冲换成刚落盘的权威内容(不再算未保存);歌词内容可能改了,offset 的 key(内容指纹)也跟着
+        // 变,loadDetail 顺带按盘上那份重算偏移状态。
+        loadDetail(key: key)
+        if let estimated = word?.estimatedLines, estimated > 0 {
+            let note = String(format: L10n.t("%@ 句为新增或修改了时间戳，已按字数分配逐字时间"), "\(estimated)")
+            saveEditNote = note
+            Task {
+                try? await Task.sleep(for: .seconds(5))
+                if saveEditNote == note { withAnimation { saveEditNote = nil } }
             }
+        }
+        flashSaveEditFeedback()
+        return true
+    }
 
-            // 去掉了「移除逐字时间轴」按钮。它做的事是把这条的逐字
-            // 数据清空、好让主歌词文本框可编辑,但那个入口本身的收益很薄:逐字时间轴是这套
-            // 打分里最值钱的东西(400 分),而清掉之后想找回更准的版本要靠重新解析、很可能
-            // 又抓到同一份。想换歌词走「联网搜索候选歌词」那条路更直接。
-            // EnrichCacheStore.removeWordTiming 暂时留着(见那边注释),没有调用方。
+    /// 时间轴偏移 − / +:按设置里的步长在当前值上加减,跟敲一个数回车走同一条写入路径。
+    private func nudgeOffset(_ summary: EnrichCacheStore.Summary, direction: Int) {
+        let current = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary))
+        editedOffsetSeconds = AppSettings.formattedSeconds(ms: current + direction * AppSettings.shared.lyricsOffsetStepMs)
+        applyOffsetEdit(summary)
+    }
 
-            Spacer()
+    // MARK: - 没有歌词时的几页
+
+    /// 缺歌词:为什么没词、下一步做什么。三个出口:重新自动匹配(最常用)、搜索候选歌词、标为纯音乐。
+    private func missingState(_ summary: EnrichCacheStore.Summary) -> some View {
+        let reason = MissingReason(summary)
+        return VStack(spacing: 14) {
+            Image(systemName: reason.icon)
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(.secondary)
+            Text(reason.title)
+                .font(.system(size: 19, weight: .semibold))
+            Text(reason.explanation(resolvedAt: summary.resolvedAt.map(Self.dayText)))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 470)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 10) {
+                Button {
+                    Task { await runRematch(key: summary.key) }
+                } label: {
+                    Label(L10n.t("重新自动匹配"), systemImage: "wand.and.stars")
+                }
+                .settingsProminentGlassButton(tint: .accentColor)
+                .disabled(rematchBlocked)
+                Group {
+                    Button {
+                        showSearchSheet = true
+                    } label: {
+                        Label(L10n.t("搜索候选歌词"), systemImage: "magnifyingglass")
+                    }
+                    .disabled(rematchRunningKey != nil)
+                    Button {
+                        Task { await store.setInstrumental(key: summary.key, true) }
+                    } label: {
+                        Label(L10n.t("标为纯音乐"), systemImage: "pianokeys")
+                    }
+                }
+                .settingsGlassButtons()
+            }
+            .controlSize(.large)
+            .padding(.top, 6)
+            if summary.lastRoundHadNoResponder {
+                noResponderBatchLine(summary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 56)
+    }
+
+    /// 没词的三种原因(纯音乐、只有纯文本的另有一页),判定顺序跟列表行的标签一致。
+    private enum MissingReason {
+        case noResponder
+        case indexed
+        case none
+
+        init(_ summary: EnrichCacheStore.Summary) {
+            if summary.lastRoundHadNoResponder {
+                self = .noResponder
+            } else if summary.knownOnSources {
+                self = .indexed
+            } else {
+                self = .none
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .noResponder: return "antenna.radiowaves.left.and.right.slash"
+            case .indexed: return "music.note"
+            case .none: return "text.badge.xmark"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .noResponder: return L10n.t("本轮无歌词源应答")
+            case .indexed: return L10n.t("歌词源已收录这首歌曲，但暂无歌词")
+            case .none: return L10n.t("未找到歌词")
+            }
+        }
+
+        func explanation(resolvedAt day: String?) -> String {
+            switch self {
+            case .noResponder:
+                if let day {
+                    return String(format: L10n.t("%@解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。重新自动匹配通常可以找到"), day)
+                }
+                return L10n.t("上次解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。重新自动匹配通常可以找到")
+            case .indexed:
+                return L10n.t("网易云音乐或 QQ 音乐已收录这首歌曲，但尚未提供歌词，新发行的歌曲常见这种情况。重新匹配效果有限，可搜索候选歌词或稍后再试")
+            case .none:
+                return L10n.t("已搜索的歌词源均未提供这首歌曲的歌词。可搜索候选歌词手动选择；若为纯音乐，可标为纯音乐")
+            }
+        }
+    }
+
+    /// 「无源应答」那一页底下一行:同样没有源应答的还有几首,一起自动匹配;已经在跑就说进度在哪。
+    @ViewBuilder
+    private func noResponderBatchLine(_ summary: EnrichCacheStore.Summary) -> some View {
+        if fillSweepStatus?.running == true || fillSweepPending {
+            Text(L10n.t("自动匹配正在进行，可在左下角查看进度"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            let keys = store.summaries.filter { $0.lastRoundHadNoResponder && EnrichCacheStore.isFillSweepRetryable($0) }
+                .map(\.key)
+            let others = keys.filter { $0 != summary.key }.count
+            if others > 0 {
+                Button(String(format: L10n.t("另有 %@ 首歌曲无源应答 · 全部自动匹配"), "\(others)")) {
+                    requestFillSweep(keys)
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+            }
+        }
+    }
+
+    /// 标了纯音乐:各处不显示歌词、不再自动搜;有词的话词还留着,取消标记就回来。
+    private func instrumentalState(_ summary: EnrichCacheStore.Summary) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: "waveform")
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(.secondary)
+            Text(L10n.t("纯音乐"))
+                .font(.system(size: 19, weight: .semibold))
+            Text(summary.hasLyrics
+                 ? L10n.t("不再显示这首歌曲的歌词，也不再自动搜索。歌词仍会保留，取消标记后恢复显示")
+                 : L10n.t("不再显示这首歌曲的歌词，也不再自动搜索"))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 470)
+            HStack(spacing: 10) {
+                Button {
+                    Task { await store.setInstrumental(key: summary.key, false) }
+                } label: {
+                    Label(L10n.t("取消纯音乐标记"), systemImage: "pianokeys.inverse")
+                }
+                .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，没有歌词的重新加入自动匹配队列"))
+                Button {
+                    showSearchSheet = true
+                } label: {
+                    Label(L10n.t("搜索候选歌词"), systemImage: "magnifyingglass")
+                }
+                .disabled(rematchRunningKey != nil)
+            }
+            .settingsGlassButtons()
+            .controlSize(.large)
+            .padding(.top, 6)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 56)
+    }
+
+    /// 只有纯文本兜底(没有时间轴):照常显示文本,顶上一句话加「搜索候选歌词」。
+    private func plainTextState(_ summary: EnrichCacheStore.Summary) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Label(L10n.t("这首歌曲只有纯文本歌词，没有时间轴。可搜索带时间轴的歌词"), systemImage: "text.quote")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Button {
+                    showSearchSheet = true
+                } label: {
+                    Label(L10n.t("搜索候选歌词"), systemImage: "magnifyingglass")
+                }
+                .settingsGlassButtons()
+                .disabled(rematchRunningKey != nil)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.04)))
+            .padding(.top, 14)
+            ScrollView {
+                Text(plainLyricsText)
+                    .font(.system(size: 15))
+                    .lineSpacing(6)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 14)
+                    .padding(.bottom, 40)
+            }
         }
     }
 
@@ -3027,6 +3946,8 @@ struct LyricsManagerView: View {
         saveEditNote = nil
         if let summary = store.summaries.first(where: { $0.key == key }) {
             refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
+            refreshPreviewRows(key: key, summary: summary, lyrics: d.lyrics, tr: d.tr, roma: d.roma)
+            plainLyricsText = !summary.hasLyrics && summary.hasPlainTextFallback ? store.plainLyrics(for: key) : ""
         }
     }
 
@@ -3073,8 +3994,8 @@ struct LyricsManagerView: View {
         LyricsOffsetStore.shared.setOffset(ms, forKey: currentOffsetKey(summary), pinKey: summary.key)
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: ms)
         PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
-        // 偏移改在 LyricsOffsetStore 里,不是这里的 raw 字典——summaries 里预算好的
-        // offsetMs 和「仅人工修正」筛选的已校准判定都不会自己跟着变,得显式重建一次。
+        // 校准名单跟着偏移变(LyricsPinStore),不在这里的 raw 字典里——「已校准」胶囊的计数和筛选按 summaries 的代数缓存,
+        // 不会自己重算,得显式重建一次。
         store.rebuildSummaries()
     }
 
@@ -3083,78 +4004,6 @@ struct LyricsManagerView: View {
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0)
         PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
         store.rebuildSummaries()
-    }
-}
-
-// 列表"来源"列的展示——之前是裸文字直接染色(见 sourceColor),在这种密集
-// 列表里五颜六色的整词文字看着比较粗糙,跟这个窗口别处已经在用的胶囊徽章风格
-// (InfoChip,详情页顶部那几个"QQ音乐/逐字时间轴"小标签)不一致。改成同一路子的迷你
-// 胶囊徽章——只是详情页 InfoChip 是给单独一行的大标签设计的(图标+文字+较大内边距),
-// 这里要塞进列表一整列、还要跟其它 9 行对齐,用更紧凑的内边距/字号,不带图标(色块本身
-// 已经足够跟旁边几种来源区分,加图标在这么窄的列里反而显得挤)。
-private struct SourceBadge: View {
-    let source: String
-    // 行被选中时系统会铺一层高饱和度蓝底(backgroundProminence 变成 .increased)——固定的
-    // 品牌色(浅绿/浅红背景+同色系文字)跟这层蓝底混在一起,深浅都对不上,糊成一团看不清
-    // 跟 AccountLinkingTab.swift 的 DestinationStatusLabel
-    // 同一个思路:选中时退回系统的 .primary(会跟着蓝底自动换成白色,天然清晰),不铺蓝底
-    // 的正常状态才用来源自己的品牌色,保持"一眼看出是哪个来源"这个设计意图不变。
-    @Environment(\.backgroundProminence) private var backgroundProminence
-    private var dimmed: Bool { backgroundProminence == .increased }
-
-    var body: some View {
-        Text(sourceDisplayName(source))
-            .font(.caption2.weight(.medium))
-            .lineLimit(1)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .foregroundStyle(dimmed ? .primary : sourceColor(source))
-            .background(dimmed ? Color.primary.opacity(0.18) : sourceColor(source).opacity(0.12), in: Capsule())
-    }
-}
-
-// 详情页顶部四个操作(解析决策/重新自动匹配/联网搜索候选歌词/删除本地记录)的固定尺寸
-// 图标方块。图标在上、短标签在下,尺寸固定(见下面 Self.size),标签超长时 .lineLimit(2)
-// 截断 + .help() 兜底完整文案,不撑宽整行。
-private struct ActionTile: View {
-    // 尺寸挂在这个类型自己身上(而不是 LyricsManagerView 那边)：Swift 的 private 是
-    // 按"所在声明"限定作用域,不是按文件——LyricsManagerView 里的 private 常量,这个
-    // 同文件但不同类型的 struct 是拿不到的。actionTileGrid 那边要用同一个宽度算
-    // GridItem,直接读 ActionTile.size。
-    static let size = CGSize(width: 92, height: 54)
-
-    let icon: String
-    let title: String
-    let help: String
-    var destructive: Bool = false
-    var disabled: Bool = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                Text(title)
-                    .font(.system(size: 9.5, weight: .medium))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-            }
-            .foregroundStyle(destructive ? Color.red : Color.secondary)
-            .frame(width: Self.size.width, height: Self.size.height)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(destructive ? Color.red.opacity(0.08) : Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(destructive ? Color.red.opacity(0.22) : Color.primary.opacity(0.08))
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.4 : 1)
-        .help(help)
     }
 }
 
@@ -3172,180 +4021,5 @@ struct InfoChip: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(tint.opacity(0.12), in: Capsule())
-    }
-}
-
-private struct LyricsManagerRow: View {
-    let summary: EnrichCacheStore.Summary
-    // 同一张专辑在不同条目里原始大小写可能不一致(见 LyricsManagerView.albumDisplayNames
-    // 的注释),这里传入调用方算好的统一展示文案,而不是自己再拿 summary.album 原样显示。
-    // 跟 albumDisplayName 同一个道理:展示用的歌手名由外面算好传进来(优先 canonical),
-    // 行视图自己不重复那套判断。
-    let artistDisplayName: String
-    let albumDisplayName: String
-    // 列宽由调用方传入(而不是各自读单例):表头和每一行必须拿到**同一组**值才对得齐,
-    // 而调用方那份已经过 fitted 收敛(窗口变窄时的临时等比缩放),行这边不能绕过它。
-    let widths: LyricsColumnWidths
-    // 「偏移」列固定宽度、不进 LyricsColumnWidths(见 LyricsManagerView.offsetColumnWidth
-    // 的注释),但表头和行仍然要用同一个值才对得齐,所以照样由调用方传入。
-    let offsetColumnWidth: CGFloat
-    // 每个标记一个固定宽度的槽位,没有对应状态时放**透明占位**而不是整个不渲染 ——
-    // 槽位数和宽度对每一行都一样,配合下面把整组推到歌名列尾,所有行的标记就落在同一条
-    // 竖线上。
-    //
-    // 之前这组图标是紧跟在标题文字后面的,于是 x 位置随标题长短浮动,一列
-    // 看下来参差不齐。固定槽位只能保证组**内部**对齐,保证不了组
-    // 跟组之间 —— 那要靠 Spacer 把整组顶到列尾。
-    private static let badgeIconWidth: CGFloat = 16
-
-    // 这四个标记跟"搜索候选歌词"弹窗、详情页编辑区**共用同一组图标和配色**(蓝=逐字、
-    // 绿=译文、紫=罗马音、橙=人工修正),用户在三个地方看到的是同一套语言。
-    //
-    // 译文/罗马音是补上的:值一直在缓存里(实测这台机器 11 条里 10 条有译文、
-    // 1 条有罗马音),详情页和搜索弹窗都显示,唯独列表看不出来。
-    @ViewBuilder
-    private func badge(_ systemName: String, tint: Color, on: Bool, help: String,
-                       forceLatinIcon: Bool = false) -> some View {
-        Image(systemName: systemName)
-            // textformat.abc 会跟着 locale 变成"甲乙丙"(中文)/"あいう"(日文),用在
-            // 罗马音上正好跟含义相反 —— 钉成拉丁变体,理由见 LatinIconLabel。
-            .environment(\.locale, forceLatinIcon ? Locale(identifier: "en") : .current)
-            .foregroundStyle(tint)
-            .font(.caption2)
-            .frame(width: Self.badgeIconWidth)
-            .opacity(on ? 1 : 0)
-            // 没这个状态时连提示也别弹,否则鼠标划过一片透明占位会冒出一堆解释
-            .help(on ? help : "")
-            .accessibilityHidden(!on)
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(summary.title)
-                        .font(.body.weight(.medium))
-                        .lineLimit(1)
-                    // 把标记整组顶到歌名列的尾部 —— 这一步才是"几行之间对得齐"的关键。
-                    // minLength 留 8pt,标题长到顶格时也不会跟标记挤在一起。
-                    Spacer(minLength: 8)
-                    // 「正在搜索」占位行(去掉转圈,只留文字):人工修正/逐字/
-                    // 译文/罗马音这些字段此刻全是默认值,显示成"关"跟真的查出来是关是两件事,
-                    // 干脆一个标记都不给——下面副标题那行的"搜索歌词中…"已经说明白了状态,
-                    // 这几个字已经够,不需要再加一个转圈。
-                    if !summary.isSearching {
-                        badge("pencil.circle.fill", tint: .orange, on: summary.isManual,
-                              help: L10n.t("人工修正过"))
-                        // 「来源已选定」= 用户在「联网搜索候选歌词」里挑过一次源,
-                        // 跟上面「人工修正」是两件事——那个一票否决全部自动路径,这个只把
-                        // 重选约束在这个源内(见详情面板同名 InfoChip 的注释)。这个约束
-                        // 只在展开详情才看得到还不够,列表本身也要有提示,否则容易让人
-                        // 误以为"选了却什么都没记住"。图标/颜色跟详情面板那颗
-                        // 保持一致,help 文案里带上具体选的是哪个源。
-                        badge("pin.circle.fill", tint: .indigo, on: !summary.sourceChoice.isEmpty,
-                              help: String(format: L10n.t("来源已选定：%@"),
-                                           sourceDisplayName(summary.sourceChoice)))
-                        // on 不能写死 true:hasWordTiming 在"完全没有歌词"时也是 false,
-                        // 会跟"整行时间戳"撞成同一个默认值——之前就是这么把"无歌词"的行也
-                        // 画上了一个看起来很像真结论的"整行时间戳"图标。真正的判据是
-                        // hasLyrics(有没有正文,不管是不是逐字),同一行下方的红色"无歌词"
-                        // 文案用的也是这个字段,两处必须口径一致。
-                        badge(summary.hasWordTiming ? "text.word.spacing" : "text.alignleft",
-                              tint: summary.hasWordTiming ? .blue : .secondary, on: summary.hasLyrics,
-                              help: summary.hasWordTiming ? L10n.t("逐字时间轴") : L10n.t("整行时间轴"))
-                        // 加机译/源自带区分:颜色跟详情页顶部的 InfoChip(见下方
-                        // "机器翻译"那颗紫色小方块)统一,列表原来不管来源一律绿色,详情页却早就用
-                        // 紫色标机译——同一份数据在两个地方讲两套语言。图标形状(书本)跟旁边罗马音
-                        // 的 textformat.abc 已经不同,共用紫色不会认错是哪个标记。
-                        badge("character.book.closed",
-                              tint: summary.lyricsTrSource == LyricsTranslationSource.machineSentinel ? .purple : .green,
-                              on: summary.hasTranslation,
-                              help: summary.lyricsTrSource == LyricsTranslationSource.machineSentinel
-                                  ? L10n.t("译文（机器翻译）") : L10n.t("译文（歌词源自带）"))
-                        badge("textformat.abc", tint: .purple, on: summary.hasRomanization,
-                              help: L10n.t("读音"), forceLatinIcon: true)
-                    }
-                }
-                if summary.isSearching {
-                    // 不能落进下面 !hasLyrics 那个分支:占位行的 hasLyrics/isInstrumental
-                    // 都是默认值 false,会显示成刺眼的红色"无歌词"——那是"确认没有"的结论,
-                    // 而这里连问都还没问完,两者不能混为一谈(正是这次要修的问题本身)。
-                    Text(L10n.t("搜索歌词中…")).font(.caption2).foregroundStyle(.secondary)
-                } else if !summary.hasLyrics || summary.isInstrumental {
-                    // 标了纯音乐(引擎确证或用户手标)的不算"缺东西":同一格显示中性色的「纯音乐」,别用红色报警。
-                    // 条目里存着歌词也显示它,歌词徽章照留(各处按纯音乐显示,见 LyricsKind.instrumental)。
-                    if summary.isInstrumental {
-                        Text(L10n.t("纯音乐")).font(.caption2).foregroundStyle(.secondary)
-                    } else if summary.hasPlainTextFallback {
-                        // 加:有纯文本兜底(「歌词窗口」已经在展示了)不是
-                        // "什么都没有",不该跟真的一条候选都没有共用刺眼的红色。
-                        Text(L10n.t("仅纯文本")).font(.caption2).foregroundStyle(.orange)
-                    } else if summary.lastRoundHadNoResponder {
-                        // 最近一轮**一个源都没应答**(那一刻网络全挂,
-                        // 决策 48 的形态)。必须排在 knownOnSources 之前 —— 本机 142 条空条目里
-                        // 69 条两者同时为真,而那一档说的是"词还不存在、只能等",在这一轮压根
-                        // 没人应答时是一句它没资格下的结论。判据见 Summary.lastRoundHadNoResponder。
-                        Text(L10n.t("无源应答")).font(.caption2).foregroundStyle(.secondary)
-                            .help(L10n.t("最近一轮解析时一个歌词源都没有应答（多半是那一刻网络不通），不是「这首歌没有词」。会自动重搜，也可以用工具栏「补搜歌词」立刻重来"))
-                    } else if summary.knownOnSources {
-                        // 加,跟详情页 infoStrip 同一档:源里有歌、没人挂词,
-                        // 不是故障,中性色。
-                        Text(L10n.t("源里有歌、无词")).font(.caption2).foregroundStyle(.secondary)
-                    } else {
-                        Text(L10n.t("无歌词")).font(.caption2).foregroundStyle(.red)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(artistDisplayName)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(width: widths.artist, alignment: .leading)
-
-            Text(albumDisplayName)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(width: widths.album, alignment: .leading)
-
-            // 「来源」「偏移」两列在搜索中都还没有意义(没有来源、没有偏移可言)——留白
-            // 而不是显示 SourceBadge("")/"0.0",那两种都会被误读成"已经查清楚了、结果
-            // 就是空/零",跟"还没查完"是两个不同的结论。
-            if summary.isSearching {
-                Color.clear.frame(width: widths.source, alignment: .leading)
-                Color.clear.frame(width: offsetColumnWidth, alignment: .leading)
-            } else {
-                // 只画来源徽章。"这份当初有几个源应答"不在列表里露出:那个数完整展开的
-                // 地方是详情页「解析决策」弹窗第一行「本轮应答的源」,列表这一列再挂一个
-                // 孤立数字只是把同一件事说两遍。要按它排序仍走「排序 → 应答源最少」。
-                SourceBadge(source: summary.lyricsSource)
-                    .frame(width: widths.source, alignment: .leading)
-
-                // 时间轴校正值,正数=提前显示、负数=延后显示(跟详情页「歌词时间轴偏移」
-                // 输入框旁边那句说明同一个语义)。没调过/没歌词都会算成 0,展示上不特殊区分——
-                // "0.0" 本身就如实说明了"没有偏移"。
-                Text(AppSettings.signedSeconds(ms: summary.offsetMs))
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(width: offsetColumnWidth, alignment: .leading)
-            }
-        }
-        .padding(.vertical, 3)
-        // 让整行(含上下 3pt 内边距)都算命中这一行。不加的话在内边距上右键会被判成"点在
-        // 空白处",而 contextMenu(forSelectionType:) 在空白处给的是空集 → 菜单不出现,
-        // 表现成"右键有时候没反应"。
-        .contentShape(Rectangle())
-        // 把这一行内容的实际左右边界报给上层,表头照它对齐(见 RowContentBoundsKey 注释)。
-        // 放在 .background 里,不影响布局。
-        .background(
-            GeometryReader { g in
-                let f = g.frame(in: .named(LyricsColumnHeaderSpace.name))
-                Color.clear.preference(key: RowContentBoundsKey.self,
-                                       value: RowContentBounds(minX: f.minX, maxX: f.maxX))
-            }
-        )
     }
 }

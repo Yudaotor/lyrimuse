@@ -128,7 +128,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
     /// **必须严格小于 `verdictMaxAge`**,selftest 钉着。之前 `kickIfNeeded`
     /// 直接拿 `verdictMaxAge` 当跳过条件(两个 60),跟 `YouTubeMusicAdProbe` 当时是同一个洞:
     /// 可读期与再探间隔同时到点,age 跨过 60 的那一拍必然「刚过期读到 nil + 这一拍才开始异步
-    /// 重探」,`gate` fail-closed 把快照整条丢掉,三个展示面一起塌成"没有在播放"。
+    /// 重探」,`gate` fail-closed 把快照整条丢掉,三个展示面一起塌成"未在播放"。
     /// 完整的机制推导、真机日志与"Go 侧为什么不用跟着改"都写在
     /// `YouTubeMusicAdProbe.songRefreshInterval` 上,那边是主场,这里不复述。
     ///

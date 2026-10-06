@@ -33,14 +33,14 @@ struct LocalCacheAccessHelp: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Label(String(format: L10n.t("%@ 的歌词缓存读不到"), source.displayName),
+            Label(String(format: L10n.t("无法读取 %@ 的歌词缓存"), source.displayName),
                   systemImage: "lock.circle.fill")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.orange)
-            Text(String(format: L10n.t("%@ 把歌词缓存放在受系统保护的目录里。授权「完全磁盘访问权限」之后，本机已经有的逐字歌词可以直接用，省去每次联网搜索。"),
+            Text(String(format: L10n.t("%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索。"),
                         source.displayName))
                 .fixedSize(horizontal: false, vertical: true)
-            Text(L10n.t("授权对已经在运行的歌词引擎不生效。在系统设置里勾上之后，回到这里点一下「重启歌词引擎」。"))
+            Text(L10n.t("授权不会作用于已在运行的歌词引擎。在系统设置中勾选后，请回到此处点按「重启歌词引擎」。"))
                 .fixedSize(horizontal: false, vertical: true)
             switch phase {
             case .waiting:
@@ -48,12 +48,12 @@ struct LocalCacheAccessHelp: View {
                 // 不说清楚的话用户会以为按钮没反应、反复点。
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
-                    Text(L10n.t("正在重启歌词引擎，它要把歌词缓存重新读一遍，通常要一两分钟…"))
+                    Text(L10n.t("正在重启歌词引擎，需要重新读取歌词缓存，通常需要一到两分钟…"))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 2)
             case .stillDenied:
-                Text(L10n.t("歌词引擎已经重启过了，这个源还是读不到。到系统设置的「完全磁盘访问权限」里确认一下 Lyrimuse 那一项是开着的。"))
+                Text(L10n.t("歌词引擎已重启，但仍无法读取此源。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。"))
                     .foregroundStyle(Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
                 actions

@@ -181,7 +181,7 @@ final class LastfmSpotifyLinkMonitor: ObservableObject {
         guard await UnknownPlayerNotifier.shared.ensureAuthorized() else { return }
         let content = UNMutableNotificationContent()
         content.title = "Last.fm"
-        content.body = L10n.t("与 Spotify 的连接已过期，Spotify 上放的歌没有记到 Last.fm") + "\n" + L10n.t("点这里到设置里查看")
+        content.body = L10n.t("与 Spotify 的连接已过期，Spotify 上播放的歌曲未记录到 Last.fm") + "\n" + L10n.t("点按此处前往设置查看")
         content.categoryIdentifier = Self.categoryID
         content.threadIdentifier = Self.categoryID
         content.sound = .default
@@ -199,8 +199,8 @@ extension LastfmSpotifyLink.PlayersRowHint {
     /// 那一行建议的标题。
     var headline: String {
         switch self {
-        case .doubleScrobble: return L10n.t("Spotify 每首会记两次")
-        case .expiredWhileExcluded: return L10n.t("Spotify 上放的歌没有记到 Last.fm")
+        case .doubleScrobble: return L10n.t("Spotify 的每首歌曲会被记录两次")
+        case .expiredWhileExcluded: return L10n.t("Spotify 上播放的歌曲未记录到 Last.fm")
         }
     }
 }

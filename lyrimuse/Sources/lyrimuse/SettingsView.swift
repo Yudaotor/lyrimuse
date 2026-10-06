@@ -426,7 +426,7 @@ struct SettingsView: View {
     @ViewBuilder private var settingsSearchResultsSection: some View {
         let hits = settingsSearchHits
         if hits.isEmpty {
-            Text(L10n.t("没有找到匹配的设置"))
+            Text(L10n.t("未找到匹配的设置"))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1101,7 +1101,7 @@ private struct LyricsSettingsTab: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(String(format: L10n.t("读不到 %@ 的歌词缓存，点击看怎么处理"), source.displayName))
+            .help(String(format: L10n.t("无法读取 %@ 的歌词缓存，点按查看处理方法"), source.displayName))
             .popover(
                 isPresented: Binding(
                     get: { localCacheHelpSource == source },
@@ -1135,7 +1135,7 @@ private struct LyricsSettingsTab: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(String(format: L10n.t("%@ 最近不太正常，点击看详情"), source.displayName))
+            .help(String(format: L10n.t("%@ 近期运行异常，点按查看详情"), source.displayName))
             .popover(
                 isPresented: Binding(
                     get: { sourceHealthHelpSource == source },
@@ -1240,10 +1240,10 @@ private struct LyricsSettingsTab: View {
         formatter.timeStyle = .none
         let date = formatter.string(from: expiresAt)
         if appleMusic.isRejected {
-            return L10n.t("Apple Music 登录已失效（过期或被吊销），需要重新连接")
+            return L10n.t("Apple Music 登录已失效（已过期或被撤销），请重新连接")
         }
         if expiresAt.timeIntervalSinceNow <= 0 {
-            return L10n.t("登录已过期，需要重新连接")
+            return L10n.t("登录已过期，请重新连接")
         }
         // storefront 可能还是空的(登录时没等到 itua cookie),引擎首次取词时会问
         // Apple 补上。这里显示成「—」而不是猜一个区,免得用户看到一个错的区域码。
@@ -1260,8 +1260,8 @@ private struct LyricsSettingsTab: View {
     /// 可以省掉那个"这是在说哪一档"的前缀 —— 右边 radio 已经标明了。
     private var matchingModeSubtitle: String {
         switch features.lyricsSourceMode {
-        case .smart: return L10n.t("给每个来源打分，取分最高的")
-        case .priority: return L10n.t("不打分，按下面的顺序取第一个有结果的来源")
+        case .smart: return L10n.t("为每个歌词源评分，选用最高分的结果")
+        case .priority: return L10n.t("不进行评分，按下方顺序采用第一个有结果的来源")
         }
     }
 
@@ -1329,7 +1329,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "arrow.triangle.2.circlepath",
                 title: L10n.t("跟进算法升级"),
-                help: L10n.t("开（默认）：匹配算法或打分规则更新后，后台会重新评估已有歌词，可能换成更合适的一份\n关：一旦定下来就不再自动更换；首次解析、手动重搜和手动编辑不受影响")
+                help: L10n.t("开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsAutoUpgrade },
@@ -1379,7 +1379,7 @@ private struct LyricsSettingsTab: View {
                 //
                 // 这行字必须跟 `manualPickLocksLyrics` 的真实两态逐字对得上。以后改这个开关的
                 // 行为,这行字要一起改。
-                help: L10n.t("关（默认）：只换这一次，以后自动重搜或打分变化仍可能换掉\n开：锁住这首歌的歌词，自动匹配不再碰它\n打开时，之前手动选过的歌一并锁定（已被自动换掉的除外）")
+                help: L10n.t("关（默认）：仅本次更换，之后的自动搜索或评分变化仍可能替换\n开：锁定这首歌曲的歌词，自动匹配不再更改\n开启时，之前手动选定的歌曲一并锁定（已被自动替换的除外）")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.manualPickLocksLyrics },
@@ -1404,7 +1404,7 @@ private struct LyricsSettingsTab: View {
                         if manualPickLockBusy {
                             ProgressView().controlSize(.small)
                         }
-                        Text(manualPickLockNotice ?? L10n.t("正在检查已经手动选定过的歌…"))
+                        Text(manualPickLockNotice ?? L10n.t("正在检查已手动选定的歌曲…"))
                     }
                 }
             }
@@ -1413,12 +1413,12 @@ private struct LyricsSettingsTab: View {
         // 8 秒后还会自动收回去,跳两次)。
         .animation(.easeInOut(duration: 0.18), value: manualPickLockBusy)
         .animation(.easeInOut(duration: 0.18), value: manualPickLockNotice)
-        .alert(L10n.t("要把之前锁定的歌一并解锁吗？"), isPresented: $showManualPickUnlockConfirm) {
+        .alert(L10n.t("要同时解锁之前锁定的歌曲吗？"), isPresented: $showManualPickUnlockConfirm) {
             // 「保持锁定」也要给回执 —— 用户刚被问了一个问题,选完却什么都没变化的话,
             // 分不清"我的选择生效了"还是"这个按钮没反应"。
             Button(L10n.t("保持锁定"), role: .cancel) {
                 showManualPickLockNotice(String(
-                    format: L10n.t("%@ 首保持锁定；从现在起手动选定的歌不再自动锁定"),
+                    format: L10n.t("%@ 首保持锁定；此后手动选定的歌曲不再自动锁定"),
                     "\(pendingManualUnlockCount)"))
             }
             Button(L10n.t("一并解锁")) {
@@ -1435,7 +1435,7 @@ private struct LyricsSettingsTab: View {
             }
         } message: {
             Text(String(
-                format: L10n.t("有 %@ 首歌是因为这个开关被锁定的。解锁后它们会重新接受自动重搜和打分改进；你手动编辑过正文的歌不受影响，始终保持锁定"),
+                format: L10n.t("有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定"),
                 "\(pendingManualUnlockCount)"))
         }
         // 顺序列表拖拽排序的几何基础(见 priorityRow / priorityDragGesture):行中线与指针位移都在这个命名坐标
@@ -1468,7 +1468,7 @@ private struct LyricsSettingsTab: View {
                 manualPickLockBusy = false
                 // 关掉:有东西可解锁才问,问完由 alert 那两个按钮各自给回执。
                 guard stats.targets > 0 else {
-                    showManualPickLockNotice(L10n.t("从现在起，手动选定的歌不再自动锁定"))
+                    showManualPickLockNotice(L10n.t("此后手动选定的歌曲不再自动锁定"))
                     return
                 }
                 pendingManualUnlockCount = stats.targets
@@ -1485,19 +1485,19 @@ private struct LyricsSettingsTab: View {
                 showManualPickLockNotice(store.lastError ?? L10n.t("同步失败"))
             } else if changed > 0 {
                 showManualPickLockNotice(String(
-                    format: L10n.t("已锁定 %@ 首之前手动选定的歌；从现在起选定的会直接锁定"),
+                    format: L10n.t("已锁定之前手动选定的 %@ 首歌曲；此后选定的歌曲将直接锁定"),
                     "\(changed)"))
             } else if stats.picked == 0 {
                 // 绝大多数人(以及这个功能刚上线时的所有人)会落在这一支。必须说清楚"不是
                 // 坏了,是还没有可追溯的对象",并且告诉他从现在起会怎样。
-                showManualPickLockNotice(L10n.t("还没有手动选定过歌词；从现在起你选定的都会直接锁定"))
+                showManualPickLockNotice(L10n.t("尚未手动选定过歌词；此后选定的歌词将直接锁定"))
             } else if stats.stillOriginal == 0 {
                 showManualPickLockNotice(String(
-                    format: L10n.t("之前手动选定的 %@ 首，歌词后来都被自动更新过，已经不是你当初选的那一份，所以没有锁定"),
+                    format: L10n.t("之前手动选定的 %@ 首歌曲，歌词已被自动更新，不再是当初选定的版本，因此未锁定"),
                     "\(stats.picked)"))
             } else {
                 showManualPickLockNotice(String(
-                    format: L10n.t("之前手动选定的 %@ 首已经都是锁定状态"), "\(stats.stillOriginal)"))
+                    format: L10n.t("之前手动选定的 %@ 首均已锁定"), "\(stats.stillOriginal)"))
             }
         }
     }
@@ -1832,7 +1832,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "globe",
                 title: L10n.t("译文语言"),
-                help: L10n.t("要哪种语言的译文。悬浮歌词、歌词窗口等显不显示译文，在「歌词显示」里分别设置")
+                help: L10n.t("选择译文的语言。悬浮歌词、歌词窗口等是否显示译文，可在「歌词显示」中分别设置")
             ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsTranslationLanguage },
@@ -1849,7 +1849,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "character.book.closed",
                 title: L10n.t("系统兜底翻译"),
-                help: L10n.t("歌词源没带译文时补充")
+                help: L10n.t("歌词源未提供译文时补充")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsMachineTranslation },
@@ -1894,7 +1894,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "character.bubble",
                 title: L10n.t("繁简转换"),
-                help: L10n.t("把中文歌词统一显示成简体或繁体")
+                help: L10n.t("将中文歌词统一显示为简体或繁体")
             ) {
                 Picker("", selection: Binding(
                     get: { settings.lyricsChineseVariant },
@@ -1920,29 +1920,29 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "textformat.alt",
                 title: L10n.t("标注读音的语言"),
-                help: L10n.t("给哪些语言的歌词标读音。悬浮歌词、歌词窗口等显不显示读音，在「歌词显示」里分别设置")
+                help: L10n.t("选择为哪些语言的歌词标注读音。悬浮歌词、歌词窗口等是否显示读音，可在「歌词显示」中分别设置")
             ) {
                 HStack(spacing: 12) {
                     romanizationToggle(
                         L10n.t("日语"), .japanese,
-                        help: L10n.t("只对判定为日语的歌词生效，例如 こんにちは → konnichiwa"))
+                        help: L10n.t("仅对识别为日语的歌词生效，例如 こんにちは → konnichiwa"))
                     romanizationToggle(
                         L10n.t("韩语"), .korean,
-                        help: L10n.t("只对判定为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo"))
+                        help: L10n.t("仅对识别为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo"))
                     romanizationToggle(
                         L10n.t("普通话"), .chinese,
-                        help: L10n.t("只对判定为普通话的歌词生效，例如 你好 → nǐ hǎo"))
+                        help: L10n.t("仅对识别为普通话的歌词生效，例如 你好 → nǐ hǎo"))
                     romanizationToggle(
                         L10n.t("粤语"), .cantonese,
-                        help: L10n.t("只对判定为粤语的歌词生效，用的是粤拼（Jyutping）方案，例如 你好 → nei5 hou2"))
+                        help: L10n.t("仅对识别为粤语的歌词生效，采用粤拼（Jyutping）方案，例如 你好 → nei5 hou2"))
                 }
             }
             CardDivider()
             // 下面两项跟繁简 / 罗马音同样双写:AppSettings 持久化,LocalPlaybackSource 让当前这首立刻重新加载。
             SettingsRow(
                 icon: "rectangle.split.2x1",
-                title: L10n.t("长句拆开"),
-                help: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏上放不下一行的句子，按各自的宽度拆成几段先后显示，每一行都不换行、不滚动；歌词窗口仍然一句一行")
+                title: L10n.t("长句拆分"),
+                help: L10n.t("在悬浮歌词、灵动岛、菜单栏和触控栏上，一行显示不下的句子会按各自宽度拆分为多段依次显示，不换行也不滚动；歌词窗口仍按一句一行显示")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.splitLongLyricLines },
@@ -1953,7 +1953,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "rectangle.compress.vertical",
                 title: L10n.t("短句合并"),
-                help: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏上连续几句很短的歌词合成一句显示，合完放得下一行才合；触控栏比较宽，不要求很短，相邻几句放得下、合完不超过 5 秒就合；歌词窗口仍然一句一行")
+                help: L10n.t("在悬浮歌词、灵动岛、菜单栏和触控栏上，连续的短句会合并为一句显示，仅在合并后能在一行内显示时合并；触控栏较宽，相邻几句能放下且合计不超过 5 秒即可合并；歌词窗口仍按一句一行显示")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.mergeShortLyricLines },
@@ -1988,7 +1988,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "timer",
                 title: L10n.t("时间轴偏移"),
-                help: L10n.t("正数＝歌词提前，负数＝歌词延后")
+                help: L10n.t("正值：歌词提前；负值：歌词延后")
             ) {
                 HStack(spacing: 8) {
                     Picker("", selection: $offsetScope) {
@@ -2057,7 +2057,7 @@ private struct LyricsSettingsTab: View {
                 .font(.system(size: 11, weight: .medium))
                 .controlSize(.small)
                 .settingsGlassButtons()
-                .help(L10n.t("查看、编辑、重搜已缓存的歌词"))
+                .help(L10n.t("查看、编辑和重新搜索已缓存的歌词"))
             }
             CardDivider()
             // 统计块 + 译文 / 罗马音两条从属行都在这个 View 里。数据全部来自 EnrichCacheStore 里
@@ -2098,7 +2098,7 @@ private struct LyricsSettingsTab: View {
         return SettingsRow(
             icon: "folder",
             title: L10n.t("歌词文件夹"),
-            help: L10n.t("换文件夹后，旧文件不会自动搬过去")
+            help: L10n.t("更换文件夹后，现有文件不会自动迁移")
         ) {
             HStack(spacing: 8) {
                 Text((url.path as NSString).abbreviatingWithTildeInPath)
@@ -2123,7 +2123,7 @@ private struct LyricsSettingsTab: View {
                         }
                     } catch {
                         let alert = NSAlert()
-                        alert.messageText = String(format: L10n.t("打不开这个文件夹：%@"), url.path)
+                        alert.messageText = String(format: L10n.t("无法打开此文件夹：%@"), url.path)
                         alert.informativeText = error.localizedDescription
                         alert.runModal()
                     }
@@ -2362,7 +2362,7 @@ private struct AppearanceSettingsTab: View {
                 // 最后一段「歌词窗口」没有开关,靠快捷键/菜单按需打开,所以副标题要把它分开讲。
                 // 写「可同时开」不写「可同时开启」:多一个字就把末尾的「开」单独折到第二行(13pt 下这 29 字
                 // 约 375pt,副标题限宽 380)。
-                subtitle: L10n.t("悬浮歌词、灵动岛、菜单栏、触控栏可同时开，歌词窗口随用随开")
+                subtitle: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口按需打开")
                 // 这里**不要**再写 showsHeader: false:六个分类里只有这一页没有 22pt 大标题会显得
                 // 不一致。省下来的纵向空间由窗口高度补(见 SettingsView 的 .frame:minHeight 520 /
                 // idealHeight 720),保证桌面悬浮歌词的开关能落在首屏。
@@ -2482,7 +2482,7 @@ private struct AppearanceSettingsTab: View {
             modeToggleCard(
                 icon: SurfaceGlyph.notch.rawValue,
                 title: L10n.t("灵动岛歌词"),
-                subtitle: L10n.t("紧凑地贴着屏幕顶部的刘海显示"),
+                subtitle: L10n.t("紧贴屏幕顶部的刘海显示"),
                 isOn: Binding(
                     get: { settings.notchOverlayEnabled },
                     set: { NotchLyricsWindowController.shared.setVisible($0) }))
@@ -2519,16 +2519,16 @@ private struct AppearanceSettingsTab: View {
                     icon: SurfaceGlyph.touchBar.rawValue,
                     title: L10n.t("触控栏歌词"),
                     subtitle: TouchBarPrivateAPI.isAvailable
-                        ? L10n.t("功能栏里会出现 Lyrimuse 图标，轻点展开歌词")
-                        : L10n.t("这台 Mac 的系统里找不到触控栏的系统接口，打开也不会生效"),
+                        ? L10n.t("在功能栏中显示 Lyrimuse 图标，轻点即可展开歌词")
+                        : L10n.t("本机系统未提供触控栏接口，开启后不会生效"),
                     isOn: $settings.showLyricsInTouchBar)
                 TouchBarAllSettingsDrawer()
             } else {
                 // 这台 Mac 此刻没有触控栏(真机没有,Xcode 的触控栏模拟器也没开):只放这一张说明卡,工具栏、开关和抽屉都不出现
                 // —— 拨了也不会生效。开关存着的值不动。
                 SettingsCard {
-                    SettingsRow(icon: "info.circle", title: L10n.t("这台 Mac 没有触控栏"),
-                                subtitle: L10n.t("触控栏歌词只能在带触控栏的 MacBook Pro 上使用")) {
+                    SettingsRow(icon: "info.circle", title: L10n.t("此 Mac 未配备触控栏"),
+                                subtitle: L10n.t("触控栏歌词仅适用于配备触控栏的 MacBook Pro")) {
                         EmptyView()
                     }
                 }
@@ -2612,8 +2612,8 @@ private struct AppearanceSettingsTab: View {
     /// 那句读起来像"把窗口大小恢复默认"。窗口的大小和位置本来就不归这颗按钮管,也写明。
     private var lyricsWindowResetScope: String {
         lyricsWindowPreviewShowsMini
-            ? L10n.t("只恢复迷你尺寸这一套，完整尺寸和窗口大小不动")
-            : L10n.t("只恢复完整尺寸这一套，迷你尺寸和窗口大小不动")
+            ? L10n.t("仅恢复迷你尺寸的设置，完整尺寸和窗口大小保持不变")
+            : L10n.t("仅恢复完整尺寸的设置，迷你尺寸和窗口大小保持不变")
     }
 
     /// 抽屉里的「恢复默认」:动作跟工具栏「重置 ▾」是同一个函数,标题 / 副标题也同一份。
@@ -2872,7 +2872,7 @@ private struct AppearanceSettingsTab: View {
         SettingsRow(
             icon: "arrow.left.and.right",
             title: L10n.t("宽度"),
-            help: L10n.t("顶部信息这一块占窗口宽度的百分比；文字放不下时末尾显示省略号")
+            help: L10n.t("顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号")
         ) {
             HStack(spacing: 8) {
                 SteppedSlider(value: Binding(
@@ -2895,7 +2895,7 @@ private struct AppearanceSettingsTab: View {
         SettingsRow(
             icon: "arrow.up.and.down",
             title: L10n.t("高度"),
-            help: L10n.t("顶部信息这一块占窗口高度的百分比（按歌名、歌手、时间三行都开着算），字号和封面跟着等比缩放")
+            help: L10n.t("顶部信息区占窗口高度的百分比（按歌名、歌手、时间三行均显示计算），字号与封面等比缩放")
         ) {
             HStack(spacing: 8) {
                 SteppedSlider(value: Binding(
@@ -3061,7 +3061,7 @@ private struct AppearanceSettingsTab: View {
                 CardDivider()
                 SettingsSubRow(
                     title: L10n.t("玻璃浓淡"),
-                    help: L10n.t("毛玻璃折射的是窗口背后的桌面，所以这一档下窗口本身是透明的")
+                    help: L10n.t("毛玻璃效果折射窗口后方的桌面，因此在此模式下窗口本身为透明")
                 ) {
                     Picker("", selection: glass) {
                         ForEach(OverlayGlassIntensity.allCases, id: \.self) { level in
@@ -3107,7 +3107,7 @@ private struct AppearanceSettingsTab: View {
                 SettingsRow(
                     icon: "textformat.size",
                     title: L10n.t("字号"),
-                    help: L10n.t("这是上限：窗口够大时按这个值，拖小了字会跟着变小以免挤出窗外")
+                    help: L10n.t("此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口")
                 ) {
                     HStack(spacing: 8) {
                         // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点。
@@ -3146,8 +3146,8 @@ private struct AppearanceSettingsTab: View {
                 // 迷你的顶部信息和控制条跟歌词紧挨成一块,文字色一起走(LyricsWindowView.miniPrimaryColor);
                 // 完整尺寸只管歌词。说明按尺寸分开写,别合成一句。
                 help: fontSize != nil
-                    ? L10n.t("作用于歌词、顶部信息和控制条；「自动」会按背景亮度在浅色和深色之间切换")
-                    : L10n.t("仅作用于歌词；「自动」会按背景亮度在浅色和深色之间切换")
+                    ? L10n.t("作用于歌词、顶部信息和控制条；「自动」根据背景亮度在浅色与深色之间切换")
+                    : L10n.t("仅作用于歌词；「自动」根据背景亮度在浅色与深色之间切换")
             ) {
                 Picker("", selection: textColorMode) {
                     Text(L10n.t("自动")).tag(LyricsWindowTextColorMode.auto)
@@ -3194,7 +3194,7 @@ private struct AppearanceSettingsTab: View {
                 SettingsRow(
                     icon: "rectangle.split.1x2",
                     title: L10n.t("歌词布局"),
-                    help: L10n.t("单行：只显示当前句。\n双行：显示当前句和下一句。\n多行：像完整尺寸那样整页滚动显示歌词。")
+                    help: L10n.t("单行：仅显示当前句。\n双行：显示当前句和下一句。\n多行：与完整尺寸相同，整页滚动显示歌词。")
                 ) {
                     SettingsSegmentedControl(
                         selection: miniLyricsLayout,
@@ -3209,7 +3209,7 @@ private struct AppearanceSettingsTab: View {
                     SettingsRow(
                         icon: "arrow.left.and.right.text.vertical",
                         title: L10n.t("长句处理"),
-                        help: L10n.t("换行（默认）：一行放不下就折到下一行。\n滚动：每行只占一行高，放不下的横向滚动；这一句有逐字时间轴时跟着唱到哪滚到哪。")
+                        help: L10n.t("换行（默认）：一行显示不下时折行显示。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。")
                     ) {
                         SettingsSegmentedControl(
                             selection: lineOverflow,
@@ -3375,14 +3375,14 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     var help: String? {
         switch self {
         case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词。")
-        case .karaoke: return L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
+        case .karaoke: return L10n.t("逐字歌词随演唱逐字高亮；没有逐字数据的歌曲整行高亮")
         case .hideInFullScreen: return L10n.t("灵动岛所在屏幕有 App 全屏时隐藏")
         case .listenMilestones:
-            return L10n.t("某首歌听满 100、1,000… 次，或累计听满 1,000、5,000… 次时，灵动岛展开庆祝。需连接 Last.fm")
+            return L10n.t("单曲收听达到 100、1,000… 次，或累计收听达到 1,000、5,000… 次时，灵动岛展开庆祝。需连接 Last.fm")
         case .trackDrop:
-            return L10n.t("换歌时新歌名从刘海下方滑出，几秒后收回")
+            return L10n.t("切歌时新歌名从刘海下方滑出，数秒后收回")
         case .expandedShowsQuickActions:
-            return L10n.t("展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。")
+            return L10n.t("展开时在曲目信息右侧显示四个按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。")
         default: return nil
         }
     }
@@ -3469,7 +3469,7 @@ private struct NotchListenMilestonesRow: View {
         let item = NotchBehaviorItem.listenMilestones
         SettingsRow(icon: item.icon, title: item.title, help: item.help) {
             HStack(spacing: 8) {
-                Button(L10n.t("试一下")) { ListenMilestoneCenter.shared.preview() }
+                Button(L10n.t("试用")) { ListenMilestoneCenter.shared.preview() }
                     .controlSize(.small)
                     .disabled(!settings.notchOverlayEnabled || !settings.notchListenMilestones)
                 Toggle("", isOn: item.binding)
@@ -3531,7 +3531,7 @@ private struct NotchLyricsAlignmentRow: View {
             icon: "text.alignleft",
             title: L10n.t("对齐方式"),
             // 「自动」那一档按什么走也写在这条 help 里(菜单栏那一行用的是另一条词条)。
-            help: L10n.t("只影响装得下的短句：它在歌词行里靠哪边。「自动」按对唱声部走：谁唱靠谁那边、合唱居中，没有对唱信息就靠左。放不下的句子会横向滚动，没有多余空间，对齐不起作用")
+            help: L10n.t("仅影响能完整显示的短句在歌词行中的位置。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左。显示不下的句子会横向滚动，对齐设置对其无效")
         ) {
             LyricsAlignmentSegmentedControl(selection: $settings.notchLyricsAlignment,
                                             options: LyricsRestingAlignment.notchOptions)
@@ -3556,7 +3556,7 @@ private struct LyricSecondaryLineRow: View {
         SettingsRow(
             icon: "text.append",
             title: L10n.t("副行"),
-            help: L10n.t("主歌词下方多显示一行，行高不变。译文和读音显示的是当前句，下一句显示接下来那句；选「下一句」时展开区不再重复显示下一句预览")
+            help: L10n.t("在主歌词下方增加一行，行高不变。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览")
         ) {
             Picker("", selection: $settings.notchSecondaryLine) {
                 ForEach(LyricSecondaryLine.allCases, id: \.self) { option in
@@ -3638,7 +3638,7 @@ struct NotchFontSettingsRows: View {
     }
 
     private var sizeHelp: String {
-        String(format: L10n.t("只调主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定 %@pt，只跟随字体与粗细"),
+        String(format: L10n.t("仅调整主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重"),
                "\(Int(NotchLyricRowMetrics.mainFontSizeRange.lowerBound))",
                "\(Int(NotchLyricRowMetrics.mainFontSizeRange.upperBound))",
                "\(Int(NotchLyricRowMetrics.secondaryFontSize))")
@@ -3653,7 +3653,7 @@ struct NotchFontSettingsRows: View {
             SettingsRow(
                 icon: "bold",
                 title: L10n.t("粗细"),
-                help: L10n.t("主行的笔画粗细；副行和展开时的下一句预览比它细一档")
+                help: L10n.t("主行的字重；副行和展开时的下一句预览比主行细一档")
             ) {
                 Picker("", selection: $settings.notchFontWeight) {
                     ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
@@ -3709,7 +3709,7 @@ struct NotchExpandedSettingsRows: View {
             SettingsRow(
                 icon: "person.text.rectangle",
                 title: L10n.t("曲目信息"),
-                help: L10n.t("展开时在歌词行上方多一块曲目信息，四项各自独立；全关则这一块不占位置。")
+                help: L10n.t("展开时在歌词行上方显示曲目信息，四项可分别开关；全部关闭时不占用空间。")
             )
             CardDivider()
             NotchBehaviorToggleSubRow(item: .expandedShowsArtwork)
@@ -3845,7 +3845,7 @@ private struct MotionCoverCacheRow: View {
         SettingsRow(
             icon: "internaldrive",
             title: L10n.t("动态封面缓存"),
-            help: L10n.t("已下载的动态封面占用的磁盘空间；清除后再看到时会重新下载")
+            help: L10n.t("已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载")
         ) {
             HStack(spacing: 10) {
                 Text(usage.map(EnrichCacheStore.byteText) ?? "—")
@@ -4262,7 +4262,7 @@ private struct YouTubeMusicAutoSkipRow: View {
         SettingsRow(
             icon: "forward.end",
             title: L10n.t("自动跳过 YouTube Music 广告"),
-            help: L10n.t("出现「跳过」按钮时替你按下，不能跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 在后台标签页时会短暂切过去再切回，你正在用的浏览器窗口不受影响。")
+            help: L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时会短暂切换过去再切回，当前使用的浏览器窗口不受影响。")
         ) {
             Toggle("", isOn: Binding(
                 get: { settings.youTubeMusicAutoSkipAds },
@@ -4275,7 +4275,7 @@ private struct YouTubeMusicAutoSkipRow: View {
         }
         if settings.youTubeMusicAutoSkipAds && !AccessibilitySkipPress.isTrusted {
             SettingsNote {
-                Text(L10n.t("还没有「辅助功能」权限，自动跳过不会生效。如果之前授权过、这里仍然出现，到系统设置里把 Lyrimuse 那一项取消再勾上。"))
+                Text(L10n.t("尚未获得「辅助功能」权限，自动跳过不会生效。如已授权但仍显示此提示，请在系统设置中将 Lyrimuse 取消勾选后重新勾选。"))
                 Button(L10n.t("打开系统设置")) {
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                         NSWorkspace.shared.open(url)
@@ -4404,7 +4404,7 @@ private struct PlayerSettingsTab: View {
             // 文案最后半句("取消勾选它")不能砍,那正是这一行存在的理由。
             if stores.players.contains(.auto) {
                 SettingsNote {
-                    Text(L10n.t("「自动识别」开着时会认出所有已知和你信任过的播放器，上面的勾选暂不生效。想只认其中几个，取消勾选它。"))
+                    Text(L10n.t("开启「自动识别」时，将识别所有已知和已信任的播放器，上方的勾选暂不生效。如只需识别部分播放器，请取消勾选此项。"))
                 }
             }
         }
@@ -4447,7 +4447,7 @@ private struct PlayerSettingsTab: View {
                     iconImage: AppIconResolver.icon(forBundleID: seen.bundleID),
                     title: FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID) ?? seen.bundleID,
                     subtitle: unknownPlayerSubtitle(seen),
-                    help: L10n.t("信任之后它跟内置播放器完全同权：显示歌词，也会记进收听历史")
+                    help: L10n.t("信任后与内置播放器相同：显示歌词，并计入收听记录")
                 ) {
                     Button(L10n.t("加入信任列表")) {
                         Task { await FeatureSettingsStore.shared.trust(bundleID: seen.bundleID) }
@@ -4487,7 +4487,7 @@ private struct PlayerSettingsTab: View {
     private func unknownPlayerSubtitle(_ seen: MediaControlClient.UngatedNowPlaying) -> String {
         let what = [seen.artist, seen.title].filter { !$0.isEmpty }.joined(separator: " - ")
         if what.isEmpty { return seen.bundleID }
-        return seen.bundleID + " · " + String(format: L10n.t("正在放：%@"), what)
+        return seen.bundleID + " · " + String(format: L10n.t("正在播放：%@"), what)
     }
 
     @ViewBuilder
@@ -4520,12 +4520,12 @@ private struct PlayerSettingsTab: View {
             // 否则它看起来像一个用途不明的入口。有信任项时那几格本身就说明了一切,不再重复。
             if stores.trustedPlayers.isEmpty {
                 SettingsNote {
-                    Text(L10n.t("加进来的应用跟内置播放器同权：它在播什么就显示什么，也计入收听记录。加错了随时移除。"))
+                    Text(L10n.t("添加的应用与内置播放器相同：显示其正在播放的内容，并计入收听记录。可随时移除。"))
                 }
             }
         }
         .alert(
-            L10n.t("没能添加"),
+            L10n.t("无法添加"),
             isPresented: Binding(
                 get: { trustedPlayerPickerError != nil },
                 set: { if !$0 { trustedPlayerPickerError = nil } })
@@ -4588,7 +4588,7 @@ private struct PlayerSettingsTab: View {
             .choiceCardChrome(isSelected: false)
         }
         .buttonStyle(.plain)
-        .help(L10n.t("从「应用程序」里挑一个——不用等它正在播放"))
+        .help(L10n.t("从「应用程序」中选择，无需等待其开始播放"))
         // 手挂高亮:这一条在设置搜索目录里有登记(`SettingsSearchCatalog` 的
         // 「添加播放器…」),而自动挂高亮+滚进视野的是 `SettingsRow`/`SettingsCardHeader`
         // 那几个组件 —— 这里是一格自绘的卡片,不挂的话搜到它只会跳到这一页、既不高亮也不滚动。
@@ -4671,10 +4671,10 @@ private struct PlayerSettingsTab: View {
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.prompt = L10n.t("选择")
-        panel.message = L10n.t("挑一个你想让 Lyrimuse 当作播放器的应用")
+        panel.message = L10n.t("选择要让 Lyrimuse 视为播放器的应用")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let bundleID = Bundle(url: url)?.bundleIdentifier else {
-            trustedPlayerPickerError = L10n.t("读不出这个应用的标识，换一个试试。")
+            trustedPlayerPickerError = L10n.t("无法读取该应用的标识，请选择其他应用。")
             return
         }
         // 用 Finder 显示的那个名字(本地化过、跟用户在「应用程序」里看到的一致),
@@ -4686,13 +4686,13 @@ private struct PlayerSettingsTab: View {
             selfBundleID: Bundle.main.bundleIdentifier
         ) {
         case .itself:
-            trustedPlayerPickerError = L10n.t("这就是 Lyrimuse 自己。")
+            trustedPlayerPickerError = L10n.t("这是 Lyrimuse 本身。")
         case .builtin(let player):
             trustedPlayerPickerError = String(
-                format: L10n.t("「%@」已经是内置播放器了，在上面那张「播放器」卡里勾选它就行。"),
+                format: L10n.t("「%@」已是内置播放器，在上方「播放器」卡片中勾选即可。"),
                 player.displayName)
         case .alreadyTrusted:
-            trustedPlayerPickerError = String(format: L10n.t("「%@」已经在这个列表里了。"), name)
+            trustedPlayerPickerError = String(format: L10n.t("「%@」已在列表中。"), name)
         case .addable:
             Task { await FeatureSettingsStore.shared.trust(bundleID: bundleID) }
         }
@@ -4961,7 +4961,7 @@ private struct PlayerSettingsTab: View {
             SettingsCard {
                 SettingsCardHeader(
                     title: L10n.t("网页播放器"),
-                    help: L10n.t("网页播放器不会主动汇报精确进度，切歌后需要这个开关才能立刻校准。")
+                    help: L10n.t("网页播放器不会主动报告精确进度，开启此选项可在切歌后立即校准。")
                 )
                 SettingsRawRow {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
@@ -4982,7 +4982,7 @@ private struct PlayerSettingsTab: View {
             // 而 supportedPlatforms 有好几个 —— 每张小卡各挂一个 `.alert` 绑同一个状态,
             // 一次失败会同时触发多个弹窗。
             .alert(
-                L10n.t("这个应用用不了"),
+                L10n.t("无法使用该应用"),
                 isPresented: Binding(
                     get: { browserPickerError != nil },
                     set: { if !$0 { browserPickerError = nil } })
@@ -5119,8 +5119,8 @@ private struct PlayerSettingsTab: View {
         }
         .buttonStyle(.plain)
         .help(browserSetupIncomplete(bundleID: bundleID)
-              ? L10n.t("还没配置完，点开看看还差什么")
-              : L10n.t("已配置好，点开可查看或移除"))
+              ? L10n.t("配置尚未完成，点按查看缺少的项目")
+              : L10n.t("已配置，点按可查看或移除"))
         .popover(isPresented: Binding(
             get: { expandedBrowserBundleID == bundleID && expandedBrowserPlatformID == platformID },
             set: { if !$0 { expandedBrowserBundleID = nil; expandedBrowserPlatformID = nil } }
@@ -5194,7 +5194,7 @@ private struct PlayerSettingsTab: View {
                 //
                 // 单独一行、不并进上面那句路径:那句是"点哪",这句是"点完还要做什么",混在一起
                 // 读者会以为是同一步的补充说明而略过 —— 而略过的代价正是那种"我明明开了却不 work"。
-                Text(L10n.t("勾完要退出并重新打开这个浏览器才生效——这个开关只在浏览器启动时读一次。"))
+                Text(L10n.t("勾选后需退出并重新打开浏览器才能生效，此选项仅在浏览器启动时读取。"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -5328,13 +5328,13 @@ private struct PlayerSettingsTab: View {
         switch r {
         case .ok:
             if switchDisabled {
-                return L10n.t("✓ 此刻驱动得动——但这是重启前的暂时状态：上面那个开关已经被关掉，重启后就会失效")
+                return L10n.t("✓ 当前可用，但仅在浏览器重启前有效：上述选项已关闭，重启后将失效")
             }
-            return L10n.t("✓ 已生效——这个浏览器现在可以被驱动了")
-        case .noTab: return L10n.t("这个浏览器没在运行，或者一个标签页都没开——打开它并随便开一个网页，再检测一次")
-        case .blocked: return L10n.t("还没生效：浏览器回绝了执行 JavaScript 的请求，按上面那条路径再确认一下开关勾上了没有")
-        case .noReply: return L10n.t("还没生效：浏览器收下了请求却一直没回应，多半是那个开关还没勾上（有的浏览器不报错、直接不回）。按上面那条路径再确认一下")
-        case .failed(let msg): return String(format: L10n.t("检测没通过：%@"), msg)
+            return L10n.t("✓ 已生效，Lyrimuse 现在可以控制此浏览器")
+        case .noTab: return L10n.t("此浏览器未运行，或没有打开任何标签页。请打开浏览器并载入任意网页后再次检测")
+        case .blocked: return L10n.t("尚未生效：浏览器拒绝了执行 JavaScript 的请求，请按上述路径确认该选项已勾选")
+        case .noReply: return L10n.t("尚未生效：浏览器收到请求但未响应，可能是该选项尚未勾选（部分浏览器不报错，而是不作响应）。请按上述路径再次确认")
+        case .failed(let msg): return String(format: L10n.t("检测未通过：%@"), msg)
         }
     }
 
@@ -5356,7 +5356,7 @@ private struct PlayerSettingsTab: View {
             // 失效 —— 那是一次已经排好队的、必然到来的失效,正是最该提前告诉用户的事。
             // 别改成「以实测为准」,方向是反的。
             if browserJSProvenWorking(bundleID: bundleID) {
-                return L10n.t("这个开关已经被关掉了——现在还能用，只是因为该浏览器还没重启；重启后就会失效")
+                return L10n.t("该选项已关闭。当前仍可使用是因为浏览器尚未重启，重启后将失效")
             }
             return L10n.t("未开启")
         case .unknown:
@@ -5366,7 +5366,7 @@ private struct PlayerSettingsTab: View {
             if let at = stores.browserJSVerifiedAt[bundleID] {
                 return String(format: L10n.t("上次检测通过（%@）"), SettingsDateText.relative(at))
             }
-            return L10n.t("无法确认状态（读不到该浏览器的配置文件）")
+            return L10n.t("无法确认状态（无法读取该浏览器的配置文件）")
         case .unsupported: return ""
         }
     }
@@ -5432,17 +5432,17 @@ private struct PlayerSettingsTab: View {
         case "com.google.Chrome":
             // **别把"Chrome 自己的帮助文案写错了"那段考据加进用户文案里** —— 那是给维护者
             // 看的,写在 `browserManualEnableHint` 的头注里就够了;用户要的只是"点哪"。
-            return L10n.t("在 Chrome 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。")
+            return L10n.t("在 Chrome 菜单栏中依次选择「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。")
         case "com.microsoft.edgemac":
-            return L10n.t("在 Edge 菜单栏依次打开「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。")
+            return L10n.t("在 Edge 菜单栏中依次选择「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。")
         case "com.brave.Browser":
-            return L10n.t("在 Brave 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。")
+            return L10n.t("在 Brave 菜单栏中依次选择「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。")
         case "company.thebrowser.Browser":
-            return L10n.t("在 Arc 菜单栏依次打开「View → Developer → Allow JavaScript from Apple Events」。Arc 的这几个菜单项在中文系统下也是英文。")
+            return L10n.t("在 Arc 菜单栏中依次选择「View → Developer → Allow JavaScript from Apple Events」。Arc 的这些菜单项在中文系统下也显示为英文。")
         case "com.apple.Safari":
-            return L10n.t("Safari 在设置里，不在菜单栏：先到「Safari 浏览器 → 设置 → 高级」勾上「显示网页开发者功能」，设置里就会多出「开发」一栏，在那里勾上「允许Apple事件中的JavaScript」。")
+            return L10n.t("Safari 的此选项位于设置中：先在「Safari 浏览器 → 设置 → 高级」中勾选「显示网页开发者功能」，设置中随即出现「开发」面板，再在其中勾选「允许Apple事件中的JavaScript」。")
         default:
-            return L10n.t("到该浏览器的开发者菜单里打开「允许 Apple 事件中的 JavaScript」。")
+            return L10n.t("在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」。")
         }
     }
 
@@ -5473,9 +5473,9 @@ private struct PlayerSettingsTab: View {
             // 区分"此刻查到的已授权"和"上次自检时证明过" —— 后者不该冒充当下的读数。
             return live ? L10n.t("系统自动化授权：已授权")
                         : L10n.t("系统自动化授权：上次检测时已授权")
-        case .denied: return L10n.t("系统自动化授权：已拒绝，需要在系统设置里打开")
+        case .denied: return L10n.t("系统自动化授权：已拒绝，需在系统设置中开启")
         case .notDetermined: return L10n.t("系统自动化授权：尚未授权")
-        case nil: return L10n.t("系统自动化授权：这个浏览器没在运行，查不到当前状态")
+        case nil: return L10n.t("系统自动化授权：此浏览器未运行，无法获取当前状态")
         }
     }
 
@@ -5524,7 +5524,7 @@ private struct PlayerSettingsTab: View {
                 // 卡头这句是这张卡在设置搜索里的**唯一锚点**(行标题是 `player.displayName`、
                 // 不是字面量,扫不到也没法登记),改它要同步改 `SettingsSearchCatalog` 那一条。
                 SettingsCardHeader(title: L10n.t("自动化权限"),
-                                   help: L10n.t("没有它读不准播放进度，也控制不了播放"))
+                                   help: L10n.t("未授权时无法准确读取播放进度，也无法控制播放"))
                 ForEach(Array(targets.enumerated()), id: \.element) { index, player in
                     if index > 0 { CardDivider() }
                     SettingsRow(
@@ -5637,7 +5637,7 @@ private struct PlayerSettingsTab: View {
                 title: L10n.t("歌词引擎"),
                 // 同 permissionCard:副标题只留状态,职责说明进「?」。
                 subtitle: engineStatusCaption,
-                help: L10n.t("读取播放状态、抓歌词和封面")
+                help: L10n.t("读取播放状态，获取歌词和封面")
             ) {
                 // 只有「启用」,没有「停用」:这个服务停掉之后 App 就是个空壳(读不到播放状态、
                 // 不解析歌词、不写缓存),界面上每一处都不再更新,而用户很难把"什么都不动了"跟
@@ -5653,7 +5653,7 @@ private struct PlayerSettingsTab: View {
             if engineEnableFailed {
                 CardDivider()
                 SettingsNote {
-                    Text(L10n.t("启用失败，可能是权限或系统限制导致歌词引擎没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
+                    Text(L10n.t("启用失败，可能是权限或系统限制导致歌词引擎未能正常启动。导出诊断信息可查看具体原因，也便于反馈问题"))
                     DiagnosticsExportButton(title: L10n.t("导出诊断…"))
                 }
             }
@@ -5669,7 +5669,7 @@ private struct PlayerSettingsTab: View {
             if case .unavailable(let message) = stores.mediaControlState {
                 CardDivider()
                 SettingsNote {
-                    Text(L10n.t("系统的媒体信息通道在这台机器上用不了，播放状态会读不到。绕开它的只有一种配置：关掉「自动识别」、只勾 Apple Music；其余配置都要经这条通道读。"))
+                    Text(L10n.t("系统媒体信息通道在本机不可用，可能无法读取播放状态。仅有一种配置可绕过该通道：关闭「自动识别」并只勾选 Apple Music；其他配置均需通过该通道读取。"))
                     Text(message)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -5686,7 +5686,7 @@ private struct PlayerSettingsTab: View {
             if let mismatch = engineVersionMismatch {
                 CardDivider()
                 SettingsNote {
-                    Text(L10n.t("这个版本打包时漏了同步歌词引擎的版本号。不影响功能，歌词引擎的实际代码跟 App 是同一个版本，不需要你做任何处理"))
+                    Text(L10n.t("此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作"))
                     Text("App \(mismatch.appVersion) · \(L10n.t("歌词引擎")) \(mismatch.engineVersion)")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -5728,12 +5728,12 @@ private struct PlayerSettingsTab: View {
         SettingsCard {
             SettingsCardHeader(
                 title: L10n.t("播放器联动"),
-                help: L10n.t("每一项都按播放器单独勾选，只列出选了的播放器；选了「自动识别」时再加上这台 Mac 上装了的"))
+                help: L10n.t("每项均按播放器分别勾选，仅列出已选择的播放器；选择「自动识别」时，还会列出本机已安装的播放器"))
             CardDivider()
             PlayerLinkageRow(
                 icon: "arrow.up.forward.app",
                 title: L10n.t("打开 Lyrimuse 时启动"),
-                help: L10n.t("Lyrimuse 启动时把勾选的播放器一起打开，已经在跑的不动，也不抢焦点"),
+                help: L10n.t("Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点"),
                 candidates: linkageCandidates,
                 chosen: stores.launchPlayersOnLyrimuseOpen
             ) { AppSettings.shared.launchPlayersOnLyrimuseOpen = $0 }
@@ -5741,7 +5741,7 @@ private struct PlayerSettingsTab: View {
             PlayerLinkageRow(
                 icon: "arrow.down.app",
                 title: L10n.t("跟随播放器启动"),
-                help: L10n.t("检测到播放器打开时自动拉起 Lyrimuse"),
+                help: L10n.t("检测到播放器打开时自动启动 Lyrimuse"),
                 candidates: linkageCandidates,
                 chosen: stores.launchLyrimuseOnPlayers
             ) { chosen in
@@ -5752,7 +5752,7 @@ private struct PlayerSettingsTab: View {
             PlayerLinkageRow(
                 icon: "power",
                 title: L10n.t("跟随播放器退出"),
-                help: L10n.t("勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时，等它们关掉再退"),
+                help: L10n.t("勾选的播放器全部退出 5 秒后，Lyrimuse 随之退出；期间如有播放器重新打开则取消。设置、歌词管理或歌词窗口打开时，会等其关闭后再退出"),
                 candidates: linkageCandidates,
                 chosen: stores.quitWithPlayers
             ) { AppSettings.shared.quitWithPlayers = $0 }
@@ -5892,7 +5892,7 @@ private struct GeneralSettingsTab: View {
             title: L10n.t("通用"),
             // 副标题砍短:原句 33 字在 900pt 窗口里折行,「台 Mac」三个字孤零零掉到
             // 第二行。这一行只用回答"这页管什么",不用把每一项都点一遍 —— 下面的卡头本来就在点。
-            subtitle: L10n.t("菜单栏图标、语言与启动，以及备份搬家")
+            subtitle: L10n.t("菜单栏图标、语言与启动，以及备份与迁移")
         ) {
             // **这一页没有预览**:菜单栏就在屏幕顶上,选哪款抬头就看得见,不需要在设置页里
             // 再仿一条。别把仿菜单栏的 MenuBarIconStage 那套加回来。
@@ -5932,7 +5932,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "figure.dance",
                     title: L10n.t("随播放律动"),
-                    help: L10n.t("播放时图标动起来，暂停即静止")
+                    help: L10n.t("播放时图标显示动画，暂停时静止")
                 ) {
                     Toggle("", isOn: $settings.menuBarIconAnimates)
                 }
@@ -5940,7 +5940,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "macwindow",
                     title: L10n.t("在 Dock 中显示"),
-                    help: L10n.t("关闭后只保留菜单栏图标，不占 Dock 位置")
+                    help: L10n.t("关闭后仅显示菜单栏图标，不在 Dock 中显示")
                 ) {
                     Toggle("", isOn: $settings.showInDock)
                 }
@@ -5969,7 +5969,7 @@ private struct GeneralSettingsTab: View {
                 }
                 if loginItemNeedsApproval {
                     SettingsNote {
-                        Text(L10n.t("「系统设置 › 通用 › 登录项」里关掉了 Lyrimuse，要开机启动得在那里重新打开"))
+                        Text(L10n.t("Lyrimuse 已在「系统设置 › 通用 › 登录项」中关闭，如需开机启动，请在该处重新开启"))
                         Button(L10n.t("打开系统设置")) { LoginItemManager.shared.openSystemSettings() }
                     }
                 }
@@ -5986,13 +5986,13 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "bell.badge",
                     title: L10n.t("换歌时显示通知"),
-                    help: L10n.t("换歌时弹一条系统通知：封面、歌名、歌手和专辑")
+                    help: L10n.t("切歌时显示系统通知，包含封面、歌名、歌手和专辑")
                 ) {
                     Toggle("", isOn: $settings.nowPlayingNotifications)
                 }
                 if settings.nowPlayingNotifications, nowPlayingNotificationsDenied {
                     SettingsNote {
-                        Text(L10n.t("「系统设置 › 通知」里关掉了 Lyrimuse 的通知，要在那里重新打开"))
+                        Text(L10n.t("Lyrimuse 的通知已在「系统设置 › 通知」中关闭，请在该处重新开启"))
                         Button(L10n.t("打开系统设置")) {
                             if let url = URL(string:
                                 "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
@@ -6038,7 +6038,7 @@ private struct GeneralSettingsTab: View {
                     Menu {
                         Button(L10n.t("更换备份文件夹…")) { chooseBackupFolder() }
                         if ICloudConfigStore.usingCustomFolder {
-                            Button(L10n.t("改回 iCloud")) {
+                            Button(L10n.t("切换回 iCloud")) {
                                 ICloudConfigStore.setCustomFolder(nil)
                                 iCloudSnapshot = ICloudConfigStore.latestSnapshot()
                             }
@@ -6085,7 +6085,7 @@ private struct GeneralSettingsTab: View {
                             } else {
                                 Text(iCloudSnapshot == nil
                                     ? (ICloudConfigStore.usingCustomFolder
-                                        ? L10n.t("存一份") : L10n.t("存到 iCloud"))
+                                        ? L10n.t("保存副本") : L10n.t("保存到 iCloud"))
                                     : L10n.t("更新备份"))
                             }
                         }
@@ -6100,7 +6100,7 @@ private struct GeneralSettingsTab: View {
                             // 这颗叫「恢复这份」不叫「导入…」:它直接恢复**副标题里说的那一份**
                             // (不开面板),而下面「设置文件」那行的「导入…」是开文件选择器;两条路的
                             // 文件面板默认目录还是同一个 iCloud 文件夹,同名会更难分辨。
-                            Button(L10n.t("恢复这份")) { importFromICloud() }
+                            Button(L10n.t("恢复此备份")) { importFromICloud() }
                                 .disabled(!ICloudConfigStore.isAvailable || iCloudBusy)
                         }
                     }
@@ -6127,8 +6127,8 @@ private struct GeneralSettingsTab: View {
                     //
                     // 副标题不能说"含账号凭证与歌词库":歌词库根本不在这个文件里 —— 它是单独的第二
                     // 个文件,而这正是用户最容易漏拷的东西。
-                    subtitle: L10n.t("含明文凭证；导入会覆盖全部设置并重启"),
-                    help: L10n.t("歌词库是同名的第二个文件，搬家时两个都要拷。\n凭证别发给别人；导入连已连接的账号、播放数据发往的地址一起覆盖")
+                    subtitle: L10n.t("包含明文凭证；导入将覆盖全部设置并重启"),
+                    help: L10n.t("歌词库为同名的第二个文件，迁移时需同时拷贝。\n请勿分享凭证；导入会同时覆盖已连接的账号和播放数据的发送地址")
                 ) {
                     HStack(spacing: 8) {
                         Button(L10n.t("导出…")) { showExportConfigWarning = true }
@@ -6146,9 +6146,9 @@ private struct GeneralSettingsTab: View {
             // 这个 alert 必须带 message 说清风险:存到 iCloud 才是把明文 token 推上 Apple
             // 服务器和你所有设备的那一步(write 设的 0600 权限过了同步就不作数),风险比本地
             // 导出更高,文案不能反而更轻。
-            .alert(L10n.t("确定要存到 iCloud 吗？"), isPresented: $showICloudExportWarning) {
+            .alert(L10n.t("要保存到 iCloud 吗？"), isPresented: $showICloudExportWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("存到 iCloud")) {
+                Button(L10n.t("保存到 iCloud")) {
                     // Task 包一层:歌词归档要读几千个文件 + 压缩,不能卡在 alert 的按钮里
                     // (buildArchive 内部已经把重活扔进 detached task,这里只是别同步等)。
                     Task { @MainActor in
@@ -6159,7 +6159,7 @@ private struct GeneralSettingsTab: View {
                         guard let data = ConfigPortability.buildExportData() else { return }
                         let name = ConfigPortability.suggestedFilename()
                         guard ICloudConfigStore.write(data, filename: name) != nil else {
-                            iCloudMessage = L10n.t("写入 iCloud 失败，可以改用下面的「导出…」存成文件")
+                            iCloudMessage = L10n.t("写入 iCloud 失败，可改用下方的「导出…」保存为文件")
                             return
                         }
                         // 歌词库单独一份 sidecar(同名同时间戳,只把 -Config- 换成 -Lyrics-)。
@@ -6169,11 +6169,11 @@ private struct GeneralSettingsTab: View {
                         if let archive = await LyricsBackupStore.buildArchive() {
                             let lyricsName = LyricsBackupArchive.sidecarName(forConfigName: name)
                             if ICloudConfigStore.write(archive, filename: lyricsName) == nil {
-                                note = L10n.t("设置已存好，但歌词库那一份没写成功")
+                                note = L10n.t("设置已保存，但歌词库文件写入失败")
                             }
                         } else if !LyricsBackupStore.hasNoLyricsFiles() {
                             // 有歌词却没打成包:跟「导出到文件」那条路说同一句,别照样显示「已保存」。
-                            note = L10n.t("设置已存好，但歌词库那一份没写成功")
+                            note = L10n.t("设置已保存，但歌词库文件写入失败")
                         }
                         // **这里不做任何自动清理,备份想攒多少份就多少份**。
                         //
@@ -6232,7 +6232,7 @@ private struct GeneralSettingsTab: View {
                             guard let archive = await LyricsBackupStore.buildArchive() else {
                                 // 歌词库本来就是空的(新用户)不算失败,不提示。
                                 if !LyricsBackupStore.hasNoLyricsFiles() {
-                                    configMessage = L10n.t("设置已导出；歌词库这次没打包成功，只有设置那一个文件")
+                                    configMessage = L10n.t("设置已导出；歌词库打包失败，仅导出了设置文件")
                                 }
                                 return
                             }
@@ -6243,17 +6243,17 @@ private struct GeneralSettingsTab: View {
                                 // 必须把"旁边还有第二个文件"说出来:静默写的话,用户只会拷走自己在
                                 // 面板里选中的那一个 —— 到新机器导入时找不到兄弟包,按设计"一个歌词文件
                                 // 都不动",于是歌词**静默全丢**。
-                                configMessage = String(format: L10n.t("已导出两个文件：设置和歌词库（%@）。搬到新电脑时两个都要拷"), sidecarName)
+                                configMessage = String(format: L10n.t("已导出两个文件：设置和歌词库（%@）。迁移到新 Mac 时需同时拷贝"), sidecarName)
                             } catch {
-                                configMessage = L10n.t("设置已导出；歌词库那份写盘失败，只有设置那一个文件")
+                                configMessage = L10n.t("设置已导出；歌词库写入失败，仅导出了设置文件")
                             }
                         }
                     }
                 }
             } message: {
-                Text(L10n.t("导出的文件包含账号登录凭证和密钥，妥善保管，不要发给别人。歌词库会另外存成同名的第二个文件，搬家时两个都要拷"))
+                Text(L10n.t("导出的文件包含账号凭证和密钥，请妥善保管，切勿分享。歌词库会另存为同名的第二个文件，迁移时需同时拷贝两个文件"))
             }
-            .alert(L10n.t("确定要导入这份设置吗？"), isPresented: $showImportConfigConfirm) {
+            .alert(L10n.t("确定要导入此设置文件吗？"), isPresented: $showImportConfigConfirm) {
                 Button(L10n.t("取消"), role: .cancel) {}
                 // Task 包一层:importData 现在要等引擎重新读到新配置才返回(见那边
                 // 的注释),而 restartApp() 必须排在它后面 —— 一旦 terminate,没跑完的
@@ -6270,7 +6270,7 @@ private struct GeneralSettingsTab: View {
                             // 失败就地报错、**不重启**。歌词恢复和 adoptFolder 也一并跳过:配置都没写进去,
                             // 单独铺歌词/改备份目录只会留下一个半吊子状态。
                             guard await ConfigPortability.importData(data) else {
-                                configMessage = L10n.t("导入失败：这个文件不是 Lyrimuse 的设置备份，或者已经损坏。当前设置没有被改动")
+                                configMessage = L10n.t("导入失败：该文件不是 Lyrimuse 的设置备份，或已损坏。当前设置未更改")
                                 return
                             }
                             // 歌词必须排在 importData **之后**:歌词目录是
@@ -6288,7 +6288,7 @@ private struct GeneralSettingsTab: View {
                             // 用户会以为全部导入成功。其余部分已经生效,可以再导一次。
                             let failed = ConfigPortability.lastImportFailures
                             guard failed.isEmpty else {
-                                configMessage = String(format: L10n.t("有部分设置没能写入（%@），其余已导入。可以再导入一次，或检查配置文件夹的写入权限"),
+                                configMessage = String(format: L10n.t("部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限"),
                                                        failed.joined(separator: ", "))
                                 return
                             }
@@ -6309,10 +6309,10 @@ private struct GeneralSettingsTab: View {
                 // 歌词那句只在真有 sidecar 时才加 —— 没有的时候提一句"不含歌词"只会让人
                 // 以为哪里出错了。两句都是完整句子,不在运行时拼半句。
                 if pendingImportLyrics != nil {
-                    Text(String(format: L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址；同一份备份里的 %@ 个歌词文件也会一并恢复（同名的会被覆盖）。完成后立即重启 Lyrimuse 使其生效"),
+                    Text(String(format: L10n.t("将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址；同一备份中的 %@ 个歌词文件也会一并恢复（同名文件将被覆盖）。完成后立即重启 Lyrimuse 使其生效"),
                                 "\(pendingImportLyricsCount)"))
                 } else {
-                    Text(L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse 使其生效"))
+                    Text(L10n.t("将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址，并立即重启 Lyrimuse 使其生效"))
                 }
             }
 
@@ -6342,7 +6342,7 @@ private struct GeneralSettingsTab: View {
                     }
                 }
             } message: {
-                Text(L10n.t("这会清除本机所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。iCloud 里那份备份和已经导出的文件都不受影响；两样都没有的话，建议先备份一份"))
+                Text(L10n.t("将清除本机所有账号令牌、密钥和个人设置，恢复为初始安装状态（下次启动时将重新显示设置引导），此操作无法撤销。iCloud 中的备份和已导出的文件不受影响；如两者均没有，建议先进行备份"))
             }
         }
         .id(L10n.current)
@@ -6376,9 +6376,9 @@ private struct GeneralSettingsTab: View {
             // 的话改成报位置 —— 那时"换 Mac 时读回来"能不能成立取决于用户挑的是不是一个
             // 会同步的目录,不该由我们替他打这个包票。
             guard ICloudConfigStore.usingCustomFolder else {
-                return L10n.t("存一份到 iCloud，换 Mac 时直接读回来")
+                return L10n.t("保存到 iCloud，更换 Mac 时可直接恢复")
             }
-            return String(format: L10n.t("备份到「%@」，还没存过"), ICloudConfigStore.folderURL.lastPathComponent)
+            return String(format: L10n.t("将备份到「%@」，尚无备份"), ICloudConfigStore.folderURL.lastPathComponent)
         }
         let when = SettingsDateText.mediumShort(snap.exportedAt ?? snap.modifiedAt)
         let base: String
@@ -6401,7 +6401,7 @@ private struct GeneralSettingsTab: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = L10n.t("选择")
-        panel.message = L10n.t("选一个会自动同步的文件夹（Dropbox、坚果云、OneDrive 等），换 Mac 时在那台机器上指向同一个文件夹即可")
+        panel.message = L10n.t("选择一个自动同步的文件夹（Dropbox、坚果云、OneDrive 等），更换 Mac 后指向同一文件夹即可")
         panel.directoryURL = ICloudConfigStore.preparedFolderURL()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         ICloudConfigStore.setCustomFolder(url)
@@ -6448,7 +6448,7 @@ private struct GeneralSettingsTab: View {
                 (try? Data(contentsOf: url), try? Data(contentsOf: sidecar))
             }.value
             guard let data = read else {
-                configMessage = L10n.t("这个文件不是 Lyrimuse 的设置备份，没有导入")
+                configMessage = L10n.t("该文件不是 Lyrimuse 的设置备份，未导入")
                 return
             }
             // 长得像不像我们的导出包:顶层是个对象、且带 appSettings 或 config 之一。
@@ -6459,7 +6459,7 @@ private struct GeneralSettingsTab: View {
                 return obj["appSettings"] != nil || obj["config"] != nil || obj["version"] != nil
             }()
             guard looksLikeExport else {
-                configMessage = L10n.t("这个文件不是 Lyrimuse 的设置备份，没有导入")
+                configMessage = L10n.t("该文件不是 Lyrimuse 的设置备份，未导入")
                 return
             }
             configMessage = nil
@@ -6497,10 +6497,10 @@ private struct GeneralSettingsTab: View {
             case .data(let d):
                 data = d
             case .downloading:
-                iCloudMessage = L10n.t("正在从 iCloud 下载这份备份，下载完再点一次「恢复这份」")
+                iCloudMessage = L10n.t("正在从 iCloud 下载这份备份，下载完成后请再次点按「恢复此备份」")
                 return
             case .unavailable:
-                iCloudMessage = L10n.t("读不到这份备份：可能没开 iCloud Drive，或者这个文件夹不在同步")
+                iCloudMessage = L10n.t("无法读取这份备份：可能未开启 iCloud Drive，或该文件夹未同步")
                 return
             }
             pendingImportData = data
@@ -6532,7 +6532,7 @@ private struct ShortcutsSettingsTab: View {
         // "响一声"、没有任何文字提示,必须写出来。
         SettingsPage(
             title: L10n.t("快捷键"),
-            subtitle: L10n.t("在任何 App 里都能触发，需搭配 ⌘ ⌥ ⌃ 之一")
+            subtitle: L10n.t("可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一")
         ) {
             // 四张卡按语义分:「切换显示形态」和「打开某扇窗」是两类动作,16 项挤一张卡里
             // 会有十来行,找不到自己要的那一条。
@@ -6765,7 +6765,7 @@ private struct AboutSettingsTab: View {
             Text(LyrimuseIdentity.displayName)
                 .font(.system(size: 24, weight: .bold))
             versionChip
-            Text(L10n.t("Lyric × Muse——把你的歌词交给音乐女神吧"))
+            Text(L10n.t("Lyric × Muse——把歌词交给音乐女神"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -6800,7 +6800,7 @@ private struct AboutSettingsTab: View {
             .padding(.top, 8)
             // 这一行是唯一一处"求 star"的地方,所以常显而不是收进 help 气泡 —— 藏进悬停提示就没人
             // 会看到了。前半句用"鼓励"不用"支持":末尾已经有"谢谢支持",两个"支持"挤在同一行里撞词。
-            Text(L10n.t("开源免费，你的 ⭐ 是最大的鼓励，谢谢支持"))
+            Text(L10n.t("免费开源，感谢你的 ⭐ 支持"))
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
         }
@@ -6839,7 +6839,7 @@ private struct AboutSettingsTab: View {
             .overlay(Capsule().strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
-        .help(L10n.t("点击拷贝版本信息，反馈问题时贴上"))
+        .help(L10n.t("点按拷贝版本信息，便于反馈问题"))
         .animation(.easeInOut(duration: 0.15), value: versionCopied)
     }
 
@@ -6893,7 +6893,7 @@ private struct AboutSettingsTab: View {
             return String(format: update.downloaded ? L10n.t("%@ 已下载，点击安装") : L10n.t("有新版本 %@"),
                           update.version)
         }
-        guard let date = updater.lastUpdateCheckDate else { return L10n.t("还没有检查过更新") }
+        guard let date = updater.lastUpdateCheckDate else { return L10n.t("尚未检查更新") }
         let formatter = DateFormatter()
         // 跟界面语言走,不跟系统 Locale(理由见 L10n.locale 的注释)。
         formatter.locale = L10n.locale
@@ -6978,7 +6978,7 @@ private struct AboutSettingsTab: View {
                 icon: "doc.text.magnifyingglass",
                 title: L10n.t("导出诊断"),
                 subtitle: L10n.t("反馈问题时请附上：打包日志、崩溃记录与运行状态，已移除账号凭据和本机用户名"),
-                help: L10n.t("生成一个 .zip 文件，其中会保留最近播放的曲目名与本机文件路径，公开发布前可以先解压查看")
+                help: L10n.t("生成 .zip 文件，其中包含最近播放的曲目名称与本机文件路径，公开发布前建议先解压检查")
             ) {
                 DiagnosticsExportButton(title: L10n.t("导出…"))
             }
@@ -6989,7 +6989,7 @@ private struct AboutSettingsTab: View {
             SettingsRow(
                 icon: "doc.plaintext",
                 title: L10n.t("运行日志"),
-                subtitle: String(format: L10n.t("%@ · 供自行排查；反馈问题请用上方的「导出诊断」，信息更完整"),
+                subtitle: String(format: L10n.t("%@ · 供自行排查；反馈问题请使用上方的「导出诊断」，信息更完整"),
                                  "~/Library/Logs/" + LyrimuseIdentity.current.logFileName),
                 help: L10n.t("歌词引擎的原始日志，文件较大时会自动归档为 .old；App 界面的日志写入系统日志，可在「控制台」中按 me.yudaotor.lyrimuse 筛选")
             ) {

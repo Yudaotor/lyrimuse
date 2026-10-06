@@ -78,7 +78,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
         /// 放行,但**标成广告**。
         ///
         /// 不能整段丢掉(跟广告一起 `reject`):一段 30 秒广告期间灵动岛/悬浮窗会整个
-        /// 塌成"没有在播放",广告完了再弹回来,而不是像 Spotify 那样安静地显示「广告中」。
+        /// 塌成"未在播放",广告完了再弹回来,而不是像 Spotify 那样安静地显示「广告中」。
         ///
         /// **放行不等于会被记录**:Swift 侧一行 scrobble 都不发(`track.scrobble` /
         /// `submit-listens` 全在引擎的 lastfm.go / lb.go)。判定写进播放状态的 ad 标记,
@@ -205,7 +205,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// `now playing`(正好是这 60 秒缓存到期后的第一轮)。也就是说同一个 key 下判定会从 ad 翻成
     /// song,"按曲目身份缓存是安全的"这条前提对 MV 不成立。**可读有效期仍是 60 秒**(读到一个
     /// 稍旧的 ad 判定总好过读到 nil —— nil 会让 `gate` fail-closed 把快照整条丢掉、广告中途
-    /// UI 塌成"没有在播放"),但**再探一次的间隔**按判定分档,见 `refreshInterval(for:)`。
+    /// UI 塌成"未在播放"),但**再探一次的间隔**按判定分档,见 `refreshInterval(for:)`。
     public static let verdictMaxAge: TimeInterval = 60
     /// 判定是**广告**时,多久之后就该再问一次页面。广告一条只有 5～30 秒,前贴片放完页面就是
     /// 歌了 —— 5 秒一探,ad→song 的翻转最多晚 5 秒被看到(外加一次 ~0.2 秒的 AppleEvent 往返),
@@ -220,7 +220,7 @@ public final class YouTubeMusicAdProbe: @unchecked Sendable {
     /// 对歌档**根本没有窄窗**:可读期与再探间隔同时到点,age 跨过 60 的那一拍必然同时满足
     /// ①`cachedReading` 刚过期返回 nil、②这一拍才开始**异步**重探(结果这一拍拿不到),
     /// 于是 `gate` fail-closed → 快照整条丢掉 → `clearIfWasPlaying()` → 三个展示面一起塌成
-    /// "没有在播放"。也就是说**一首 album 为空的歌,每 60 秒就掉一次真空期**,不是只在
+    /// "未在播放"。也就是说**一首 album 为空的歌,每 60 秒就掉一次真空期**,不是只在
     /// 换曲/广告边界 —— "广告之后几秒没有歌曲信息"只是最显眼的那一次。
     ///
     /// 真机日志坐实(Safari 播 YT Music,`音樂頑童 - teachme` 那一首 253 秒):

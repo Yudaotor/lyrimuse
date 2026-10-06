@@ -49,7 +49,7 @@ struct ConfigFileDamageBanner: View {
                     // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分符号有 CJK 变体)。
                     .environment(\.locale, Locale(identifier: "en"))
             }
-            Text(L10n.t("修好文件后重新打开 Lyrimuse；或放弃这份文件，用当前界面上的值重建（原文件会改名保留，不会删除）。"))
+            Text(L10n.t("修复文件后重新打开 Lyrimuse；或舍弃此文件，用当前界面上的值重建（原文件将重命名保留，不会删除）。"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -63,7 +63,7 @@ struct ConfigFileDamageBanner: View {
                 Button(L10n.t("在访达中显示")) {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
                 }
-                Button(L10n.t("放弃坏文件并重建")) {
+                Button(L10n.t("舍弃损坏的文件并重建")) {
                     busy = true
                     Task {
                         _ = await discard()

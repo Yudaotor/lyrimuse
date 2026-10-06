@@ -653,11 +653,11 @@ private struct MenuBarPanelView: View {
         }
         return HStack(spacing: 9) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("没有在播放"))
+                Text(L10n.t("未在播放"))
                     .font(.system(size: 12, weight: .semibold))
                 // 不点名播放器:这里指的是停播前最后用的那家,而用户往往勾了好几家,点名读起来像只有
                 // 那一家才行;句子也得短到这一行放得下(同迷你窗停播页那句)。
-                Text(L10n.t("放一首歌，歌词会自动出现"))
+                Text(L10n.t("播放歌曲后，歌词将自动显示"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
             }

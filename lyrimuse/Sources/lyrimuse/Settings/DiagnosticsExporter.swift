@@ -72,7 +72,7 @@ enum DiagnosticsExporter {
             let modified = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
             guard let modified, modified >= startedAt.addingTimeInterval(-1) else {
                 let alert = NSAlert()
-                alert.messageText = L10n.t("诊断没能导出，请换个位置再试")
+                alert.messageText = L10n.t("诊断信息导出失败，请选择其他位置后重试")
                 alert.runModal()
                 return
             }

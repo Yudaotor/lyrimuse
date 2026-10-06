@@ -145,7 +145,7 @@ struct FontFamilyPicker: View {
                         row(family: family, label: family)
                     }
                     if filtered.isEmpty && filteredCustomFonts.isEmpty {
-                        Text(L10n.t("没有匹配的字体"))
+                        Text(L10n.t("无匹配的字体"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
@@ -216,7 +216,7 @@ struct FontFamilyPicker: View {
         case .allImported:
             return
         case .allUnreadable:
-            importError = L10n.t("导入失败：读不到所选文件，可能还没下载到本机或没有读取权限")
+            importError = L10n.t("导入失败：无法读取所选文件，可能尚未下载到本机或没有读取权限")
         case .allFailed:
             importError = L10n.t("导入失败：不是有效的 .ttf / .otf 字体文件")
         case .someFailed(let n):
@@ -290,7 +290,7 @@ private struct ImportedFontRow: View {
             .font(.caption)
             .opacity(isHovered ? 1 : 0)
             .allowsHitTesting(isHovered)
-            .help(L10n.t("删除这款导入的字体（不可恢复）"))
+            .help(L10n.t("删除此导入的字体（不可恢复）"))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)

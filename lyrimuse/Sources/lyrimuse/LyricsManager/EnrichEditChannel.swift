@@ -87,12 +87,12 @@ enum EnrichEditChannel {
         // 这时报失败,改动过后照样生效。
         if (try? FileManager.default.removeItem(at: request)) != nil {
             logger.error("enrich edit: engine did not pick up the request within \(Int(resultTimeout), privacy: .public)s")
-            return Result(ok: false, changed: 0, error: L10n.t("歌词引擎没有响应"), errorIsLocalized: true)
+            return Result(ok: false, changed: 0, error: L10n.t("歌词引擎无响应"), errorIsLocalized: true)
         }
         logger.notice("enrich edit: engine is still executing the request, waiting for it")
         if let answer = await waitForResult(result, timeout: executingTimeout) { return answer }
         logger.error("enrich edit: engine did not finish within \(Int(resultTimeout + executingTimeout), privacy: .public)s")
-        return Result(ok: false, changed: 0, error: L10n.t("歌词引擎没有响应"), errorIsLocalized: true)
+        return Result(ok: false, changed: 0, error: L10n.t("歌词引擎无响应"), errorIsLocalized: true)
     }
 
     private static func waitForResult(_ url: URL, timeout: TimeInterval) async -> Result? {
@@ -121,11 +121,11 @@ enum EnrichEditChannel {
                                           timeout: resultTimeout + executingTimeout,
                                           environment: LyrimusePaths.engineProcessEnvironment()) else {
             logger.error("enrich edit: launching engine failed")
-            return Result(ok: false, changed: 0, error: L10n.t("歌词引擎没有响应"), errorIsLocalized: true)
+            return Result(ok: false, changed: 0, error: L10n.t("歌词引擎无响应"), errorIsLocalized: true)
         }
         if run.timedOut {
             logger.error("enrich edit: apply-enrich-edit timed out")
-            return Result(ok: false, changed: 0, error: L10n.t("歌词引擎没有响应"), errorIsLocalized: true)
+            return Result(ok: false, changed: 0, error: L10n.t("歌词引擎无响应"), errorIsLocalized: true)
         }
         // 结果是 stdout 最后一行 JSON;前面可能有日志行。
         let lastLine = String(decoding: run.stdout, as: UTF8.self)

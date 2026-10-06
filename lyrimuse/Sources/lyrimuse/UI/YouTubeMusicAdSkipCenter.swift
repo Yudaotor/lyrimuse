@@ -184,17 +184,17 @@ final class YouTubeMusicAdSkipCenter: ObservableObject {
         case .skipped?:
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         case .notYetSkippable(let seconds)?:
-            let text = seconds.map { String(format: L10n.t("%@ 秒后可跳过"), String($0)) } ?? L10n.t("这条广告还不能跳过")
+            let text = seconds.map { String(format: L10n.t("%@ 秒后可跳过"), String($0)) } ?? L10n.t("此广告暂不可跳过")
             NotchTransientCenter.shared.show(.init(icon: "forward.end", text: text, progress: nil))
         case .needsAccessibility?:
             AccessibilitySkipPress.promptForTrust()
             NotchTransientCenter.shared.show(.init(icon: "hand.raised", text: L10n.t("跳过广告需要「辅助功能」权限"), progress: nil),
                                              for: 2.4)
         case .tabNotFrontmost?:
-            NotchTransientCenter.shared.show(.init(icon: "macwindow", text: L10n.t("把 YouTube Music 标签页切到前面再试"), progress: nil),
+            NotchTransientCenter.shared.show(.init(icon: "macwindow", text: L10n.t("请将 YouTube Music 标签页切换到前台后重试"), progress: nil),
                                              for: 2.4)
         case .clickedNoEffect?, .notFound?, nil:
-            NotchTransientCenter.shared.show(.init(icon: "megaphone", text: L10n.t("没能跳过这条广告"), progress: nil))
+            NotchTransientCenter.shared.show(.init(icon: "megaphone", text: L10n.t("未能跳过此广告"), progress: nil))
         }
     }
 }

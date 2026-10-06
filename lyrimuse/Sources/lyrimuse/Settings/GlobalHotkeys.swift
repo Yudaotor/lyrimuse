@@ -105,7 +105,7 @@ enum GlobalHotkeys {
             // 按中还是不适用。补一条说明,理由跟下面偏移那两个键一样:全局
             // 快捷键最忌讳"按了没动静"。
             guard AppSettings.shared.classicOverlayEnabled else {
-                flashHint(icon: "lock.slash", text: L10n.t("锁定位置只对桌面悬浮歌词有效"))
+                flashHint(icon: "lock.slash", text: L10n.t("锁定位置仅对桌面悬浮歌词有效"))
                 return
             }
             let overlay = LyricsOverlayWindowController.shared

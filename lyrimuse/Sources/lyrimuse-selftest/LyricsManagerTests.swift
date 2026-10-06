@@ -1,149 +1,147 @@
 import LyrimuseCore
 import Foundation
 
-// 歌词管理:列宽 / 写回合并 / 备份归档 / 重匹配 / 锁定 / 排序。
+// 歌词管理:侧栏筛选与搜索 / 逐句编辑 / 写回合并 / 备份归档 / 重匹配 / 锁定 / 排序。
 // 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计
 // 数不中断)。要开新的一组见 main.swift 顶部说明。
 
 @MainActor
 func runLyricsManagerTests() {
-    // ---- LyricsColumnWidths: 「歌词管理」可拖拽列宽的夹值逻辑 ----
-    //
-    // 三条分隔条语义不对称:第 0 条(歌名|歌手)左边是弹性的歌名列,只能改「歌手」、由歌名被动
-    // 吸收;第 1/2 条是标准的"此消彼长、总宽不变"。夹值要同时守住三件事:每列不低于自己的下限、
-    // 歌名不低于 minTitle、单列不超过 maxColumn。
-
+    // ---- 侧栏:状态胶囊(LyricsManagerStatus)、宽度(LyricsManagerSidebarWidth)、搜索相关度与高亮 ----
     do {
-        let W = LyricsColumnWidths.self
-        let d = W.defaults
-        // 一组够宽、好心算的输入。(调用方现在传的是"行内容宽度 + 三个列间距",chrome = 24;
-        // 这里取 48 只是为了让下面几条上下限的算术好对,纯函数对 chrome 取值没有假设。)
-        let total: CGFloat = 630, chrome: CGFloat = 48
-
-        // 第 0 条:边界右移 = 歌名变宽 → 歌手变窄(减号方向不能搞反)
-        expectEqual(
-            W.dragged(from: d, divider: 0, dx: 20, totalWidth: total, chrome: chrome).artist,
-            d.artist - 20, "列宽: 拖第0条向右 → 歌手变窄(歌名吸收)"
-        )
-        expectEqual(
-            W.dragged(from: d, divider: 0, dx: -20, totalWidth: total, chrome: chrome).artist,
-            d.artist + 20, "列宽: 拖第0条向左 → 歌手变宽"
-        )
-        // 第 0 条只动歌手,不该碰专辑/来源
-        do {
-            let r = W.dragged(from: d, divider: 0, dx: 30, totalWidth: total, chrome: chrome)
-            expectEqual(r.album, d.album, "列宽: 拖第0条不影响专辑")
-            expectEqual(r.source, d.source, "列宽: 拖第0条不影响来源")
+        typealias S = LyricsManagerStatus
+        func facts(_ kind: LyricsKind, manual: Bool = false, pinned: Bool = false) -> S.Facts {
+            S.Facts(kind: kind, isManual: manual, isPinned: pinned)
         }
-        // 下限:再怎么拖也不低于 minColumn
-        expectEqual(
-            W.dragged(from: d, divider: 0, dx: 9999, totalWidth: total, chrome: chrome).artist,
-            W.minColumn, "列宽: 第0条拖到底停在列下限"
-        )
-        // 上限:歌名必须留住 minTitle —— 630-48-140-110-84 = 248,但单列上限 280 更宽松,取 248
-        expectEqual(
-            W.dragged(from: d, divider: 0, dx: -9999, totalWidth: total, chrome: chrome).artist,
-            total - chrome - W.minTitle - d.album - d.source, "列宽: 第0条反向拖到底时歌名仍保住 minTitle"
-        )
-        // 可用宽度很小时上下限打角:结果必须仍 >= minColumn(不能返回比下限还小的值)
-        expectEqual(
-            W.dragged(from: d, divider: 0, dx: -9999, totalWidth: 200, chrome: chrome).artist >= W.minColumn,
-            true, "列宽: 可用宽度过小时不返回小于下限的值"
-        )
-        // 还没量到可用宽度(totalWidth = 0,首帧或列表一行都没有)时仍然要拖得动:照常算
-        // room 会得到负数,clamp 里 hi < lo 直接返回下限,表现成"一拖歌手就弹到最窄"
-        expectEqual(
-            W.dragged(from: d, divider: 0, dx: -20, totalWidth: 0, chrome: chrome).artist,
-            d.artist + 20, "列宽: 尚未量到宽度时第0条仍按位移变宽"
-        )
+        expectEqual(S.missing.matches(facts(.none)), true, "状态胶囊: 没词算缺歌词")
+        expectEqual(S.missing.matches(facts(.plainText)), false, "状态胶囊: 有纯文本兜底的不算缺歌词")
+        expectEqual(S.missing.matches(facts(.instrumental)), false, "状态胶囊: 纯音乐不算缺歌词")
+        expectEqual(S.instrumental.matches(facts(.instrumental)) && !S.instrumental.matches(facts(.none)), true,
+                    "状态胶囊: 纯音乐按成色阶梯")
+        expectEqual(S.adjusted.matches(facts(.wordByWord, manual: true))
+                    && S.adjusted.matches(facts(.lineByLine, pinned: true))
+                    && !S.adjusted.matches(facts(.lineByLine)), true,
+                    "状态胶囊: 改过歌词、调过时间轴偏移都算手动调整")
+        let counts = S.counts([facts(.none), facts(.none, pinned: true), facts(.plainText),
+                               facts(.instrumental, manual: true)])
+        expectEqual([counts[.all], counts[.missing], counts[.instrumental], counts[.adjusted]], [4, 2, 1, 2],
+                    "状态胶囊: 计数一遍扫完,各档互不干扰")
+
+        typealias C = LyricsManagerCleanup
+        expectEqual(C.isInvalid(artist: "", kind: .none, isManual: false, isPinned: false, durationSecs: 30), true,
+                    "清理无效记录: 没歌手、没歌词的算")
+        expectEqual(C.isInvalid(artist: "热可可", kind: .none, isManual: false, isPinned: false, durationSecs: 7381), true,
+                    "清理无效记录: 超过 20 分钟、没歌词的算")
+        expectEqual(C.isInvalid(artist: "Prince", kind: .none, isManual: false, isPinned: false, durationSecs: 240), false,
+                    "清理无效记录: 有歌手、长度正常的不算")
+        expectEqual(C.isInvalid(artist: "Artist", kind: .none, isManual: false, isPinned: false, durationSecs: 1199), false,
+                    "清理无效记录: 不到 20 分钟不算")
+        expectEqual(C.isInvalid(artist: "", kind: .lineByLine, isManual: false, isPinned: false, durationSecs: 200)
+                    || C.isInvalid(artist: "", kind: .plainText, isManual: false, isPinned: false, durationSecs: 200)
+                    || C.isInvalid(artist: "", kind: .instrumental, isManual: false, isPinned: false, durationSecs: 30), false,
+                    "清理无效记录: 有歌词、有纯文本、标了纯音乐的不算")
+        expectEqual(C.isInvalid(artist: "", kind: .none, isManual: true, isPinned: false, durationSecs: 30)
+                    || C.isInvalid(artist: "", kind: .none, isManual: false, isPinned: true, durationSecs: 30), false,
+                    "清理无效记录: 人工修正、校准过时间轴的不算")
+
+        typealias W = LyricsManagerSidebarWidth
+        expectEqual(W.clamped(300), W.minimum, "侧栏宽度: 不窄于下限")
+        expectEqual(W.clamped(900), W.maximum, "侧栏宽度: 不宽于上限")
+        expectEqual(W.clamped(.nan), W.standard, "侧栏宽度: 坏值回到默认")
+        expectEqual(W.shown(stored: 600, windowWidth: 1460, inset: 10), 600, "侧栏宽度: 窗口够宽就照存的画")
+        expectEqual(W.shown(stored: 600, windowWidth: 1000, inset: 10), 510, "侧栏宽度: 窗口窄时给右边留出最小宽度")
+        expectEqual(W.shown(stored: 600, windowWidth: 800, inset: 10), W.minimum, "侧栏宽度: 再窄也不小于下限")
+
+        typealias Q = LyricsManagerSearch
+        expectEqual(Q.relevance(query: "you", title: "you are not alone", artists: ["michael jackson"], album: "history"), 0,
+                    "相关度: 歌名开头命中最靠前")
+        expectEqual(Q.relevance(query: "alone", title: "you are not alone", artists: [], album: ""), 1, "相关度: 歌名里命中")
+        expectEqual(Q.relevance(query: "jack", title: "thriller", artists: ["mj", "michael jackson"], album: "thriller"), 2,
+                    "相关度: 歌手命中(原始写法或官方名)")
+        expectEqual(Q.relevance(query: "history", title: "scream", artists: ["michael jackson"], album: "history"), 3,
+                    "相关度: 专辑命中")
+        expectEqual(Q.relevance(query: "xyz", title: "scream", artists: [], album: ""), nil, "相关度: 都不命中为 nil")
+        let text = "Not Alone · not alone"
+        expectEqual(Q.matchRanges(of: "not alone", in: text).map { String(text[$0]) }, ["Not Alone", "not alone"],
+                    "高亮: 不分大小写、每一处都标")
+        expectEqual(Q.matchRanges(of: "", in: text).count, 0, "高亮: 没在搜不标")
     }
 
+    // ---- 逐句编辑(LyricsEditableLines)----
     do {
-        let W = LyricsColumnWidths.self
-        let d = W.defaults
-        let total: CGFloat = 630, chrome: CGFloat = 48
-
-        // 第 1 条(歌手|专辑):此消彼长,两列之和不变 → 歌名宽度完全不受影响
-        do {
-            let r = W.dragged(from: d, divider: 1, dx: 25, totalWidth: total, chrome: chrome)
-            expectEqual(r.artist, d.artist + 25, "列宽: 拖第1条向右 → 歌手变宽")
-            expectEqual(r.album, d.album - 25, "列宽: 拖第1条向右 → 专辑同量变窄")
-            expectEqual(r.artist + r.album, d.artist + d.album, "列宽: 第1条保持两列总宽不变(歌名不受影响)")
-            expectEqual(r.source, d.source, "列宽: 拖第1条不影响来源")
-        }
-        // 第 1 条拖到底:专辑落到下限,总宽仍不变
-        do {
-            let r = W.dragged(from: d, divider: 1, dx: 9999, totalWidth: total, chrome: chrome)
-            expectEqual(r.album, W.minColumn, "列宽: 第1条拖到底时专辑停在下限")
-            expectEqual(r.artist + r.album, d.artist + d.album, "列宽: 第1条拖到底仍保持总宽不变")
-        }
-        // 第 2 条(专辑|来源):来源列有更高的下限(要放得下胶囊徽章)
-        do {
-            let r = W.dragged(from: d, divider: 2, dx: 9999, totalWidth: total, chrome: chrome)
-            expectEqual(r.source, W.minSourceColumn, "列宽: 第2条拖到底时来源停在它专属的更高下限")
-            expectEqual(r.album + r.source, d.album + d.source, "列宽: 第2条拖到底仍保持总宽不变")
-        }
+        let body = "[00:01.00]第一句\n[00:05.50][01:20.00]第二句  \n\n没有时间戳的一行\n[00:09.123]第三句"
+        let lines = LyricsEditableLines(body: body)
+        expectEqual(lines.joined, body, "逐句编辑: 没改时拼回去逐字节相同")
+        expectEqual(lines.lines.map(\.stamps), ["[00:01.00]", "[00:05.50][01:20.00]", "", "", "[00:09.123]"],
+                    "逐句编辑: 行首的时间戳原样拆出来,连写的算一组")
+        expectEqual(lines.lines.map(\.timeMs), [1000, 5500, nil, nil, 9123], "逐句编辑: 第一个时间戳的毫秒数")
+        expectEqual(lines.lines[1].text, "第二句  ", "逐句编辑: 文字原样(含行尾空白)")
+        expectEqual(lines.lines[2].isBlank, true, "逐句编辑: 空行")
+        let edited = lines.replacing(0, text: "第一句改")
+        expectEqual(edited.joined, "[00:01.00]第一句改\n[00:05.50][01:20.00]第二句  \n\n没有时间戳的一行\n[00:09.123]第三句",
+                    "逐句编辑: 只换那一句的文字")
+        expectEqual(edited.changedIndices(from: lines), [0], "逐句编辑: 改过的行")
+        expectEqual(lines.replacing(9, text: "x"), lines, "逐句编辑: 下标越界原样返回")
+        expectEqual(LyricsEditableLines(body: "[ar:歌手]\n[00:01]a").lines.map(\.stamps), ["", "[00:01]"],
+                    "逐句编辑: 元信息标签不当时间戳")
+        expectEqual(LyricsEditableLines.isValidStamps("[01:02.03]") && !LyricsEditableLines.isValidStamps("[01:02.03]x")
+                    && !LyricsEditableLines.isValidStamps("[1:75.00]") && !LyricsEditableLines.isValidStamps(""), true,
+                    "逐句编辑: 时间戳校验")
+        let tr = LyricsEditableLines(body: "[00:01.00]first\n[00:05.52]second")
+        expectEqual(tr.index(matching: 1000), 0, "逐句编辑: 译文按时间挂到对应那一句")
+        expectEqual(tr.index(matching: 5500), 1, "逐句编辑: 差几十毫秒以内也挂得上")
+        expectEqual(tr.index(matching: 9000), nil, "逐句编辑: 对不上就不挂")
     }
 
+    // ---- 预览:当前句、读音 ----
     do {
-        let W = LyricsColumnWidths.self
-        let chrome: CGFloat = 48
-        // fitted:窗口够宽时原样返回,不动用户存下来的值
-        expectEqual(W.fitted(W.defaults, totalWidth: 900, chrome: chrome), W.defaults, "列宽: 窗口够宽时 fitted 原样返回")
-        // headerWidth 还没量到(0)时也原样返回,首帧不会算出奇怪的宽度
-        expectEqual(W.fitted(W.defaults, totalWidth: 0, chrome: chrome), W.defaults, "列宽: 尚未量到宽度时 fitted 不做收敛")
-        // 三列都拖得很宽之后把窗口拖窄:必须等比收敛到"歌名刚好还有 minTitle"
-        do {
-            let wide = LyricsColumnWidths(artist: 240, album: 240, source: 200)
-            let r = W.fitted(wide, totalWidth: 600, chrome: chrome)
-            expectEqual(r.total <= 600 - chrome - W.minTitle + 0.001, true, "列宽: 变窄后收敛到歌名保住 minTitle")
-            expectEqual(r.artist >= W.minColumn && r.album >= W.minColumn && r.source >= W.minSourceColumn,
-                        true, "列宽: 收敛后每列仍不低于各自下限")
-        }
-        // 极窄到连三列下限都塞不下 → 全部回落下限(宁可挤窄歌名,也不让某列消失)
-        do {
-            let r = W.fitted(W.defaults, totalWidth: 240, chrome: chrome)
-            expectEqual(r, LyricsColumnWidths(artist: W.minColumn, album: W.minColumn, source: W.minSourceColumn),
-                        "列宽: 极窄时全部回落到各列下限")
-        }
-    }
-
-    // 「列宽拖不动」的回归。
-    //
-    // 现场:侧栏实际渲染宽度约 725pt、行内容占 [11.5, 725],UserDefaults 里存的是
-    // 56 / 137.66796875 / 70,而截图逐像素量出来专辑列只有 56 —— 三列被恒定钳在各自下限,
-    // 往哪个方向拖都纹丝不动(拖动其实写进去了,只是渲染这一步把它抹平成同一组常量)。
-    //
-    // 根因不在这几个纯函数里,而在调用方喂进来的宽度:当时 totalWidth 取自另一个 @State
-    // (表头 .background 里 GeometryReader + onChange 量的 headerWidth),它停在首帧的窄值
-    // ≤218pt 再没更新过。现在只剩 rowContentBounds 一个几何输入(走 PreferenceKey,布局
-    // 每跑一遍都重报)。下面两条把"同一份数据、两种宽度"的结果各自钉死,免得以后再冒出
-    // 第二个测量、又悄悄退回这个状态。
-    do {
-        let W = LyricsColumnWidths.self
-        let stored = LyricsColumnWidths(artist: 56, album: 137.66796875, source: 70)
-        let floors = LyricsColumnWidths(artist: W.minColumn, album: W.minColumn, source: W.minSourceColumn)
-
-        // 修好之后:宽度取自行内容边界(725 - 11.5 ≈ 713),chrome 只剩三个 8pt 列间距
-        expectEqual(W.fitted(stored, totalWidth: 713, chrome: 8 * 3), stored,
-                    "列宽: 按行内容宽度算时,存下来的列宽原样渲染")
-        // 出问题时:宽度停在首帧的 218pt,budget 掉到三列下限之和以下 → 恒定输出下限,
-        // 存进去的值完全影响不了画面,也就是用户看到的"拖不动"
-        expectEqual(W.fitted(stored, totalWidth: 218, chrome: 36), floors,
-                    "列宽: 宽度测量失效时会被钳成常量(记录当时的错误现象)")
-    }
-
-    do {
-        let W = LyricsColumnWidths.self
-        // sanitized:挡住手改 UserDefaults / 老版本残留写进来的非法值,整组退回默认
-        expectEqual(W.sanitized(W.defaults), W.defaults, "列宽: 合法值原样通过")
-        expectEqual(W.sanitized(LyricsColumnWidths(artist: 0, album: 110, source: 84)), W.defaults, "列宽: 0 宽度整组退回默认")
-        expectEqual(W.sanitized(LyricsColumnWidths(artist: -50, album: 110, source: 84)), W.defaults, "列宽: 负宽度整组退回默认")
-        expectEqual(W.sanitized(LyricsColumnWidths(artist: 5000, album: 110, source: 84)), W.defaults, "列宽: 超过单列上限整组退回默认")
-        expectEqual(W.sanitized(LyricsColumnWidths(artist: .nan, album: 110, source: 84)), W.defaults, "列宽: NaN 整组退回默认")
-        expectEqual(W.sanitized(LyricsColumnWidths(artist: .infinity, album: 110, source: 84)), W.defaults, "列宽: 无穷大整组退回默认")
-        // 来源列卡在普通下限与它专属下限之间(56~70)也算非法 —— 徽章会被截断
-        expectEqual(W.sanitized(LyricsColumnWidths(artist: 96, album: 110, source: 60)), W.defaults, "列宽: 来源列低于专属下限整组退回默认")
+        expectEqual(LyricsPreviewText.currentRow(times: [1000, nil, 5000, 9000], lineTimeMs: 5000), 2, "预览当前句: 时间相同的那一行")
+        expectEqual(LyricsPreviewText.currentRow(times: [1000, 5000, 9000], lineTimeMs: 4990), 1, "预览当前句: 差几毫秒也认")
+        expectEqual(LyricsPreviewText.currentRow(times: [1000, 5000], lineTimeMs: 500), nil, "预览当前句: 还没到第一句")
+        let chorusTimes: [Int?] = [169_380, 172_740, 189_660]
+        let chorusTexts = ["Too many times before", "And her heart is", "Too many times before"]
+        expectEqual(LyricsPreviewText.currentRow(times: chorusTimes, texts: chorusTexts, lineTimeMs: 172_360,
+                                                 lineText: "And her heart is"), 1,
+                    "预览当前句: 逐字比整行早零点几秒时按字找到这一行,不落在上一行")
+        expectEqual(LyricsPreviewText.currentRow(times: chorusTimes, texts: chorusTexts, lineTimeMs: 189_280,
+                                                 lineText: "too many times, before"), 2,
+                    "预览当前句: 副歌重复时取时间最近的那一行,不分大小写和标点")
+        expectEqual(LyricsPreviewText.currentRow(times: chorusTimes, texts: chorusTexts, lineTimeMs: 172_360,
+                                                 lineText: "Something else"), 0,
+                    "预览当前句: 字对不上时退回按时间找")
+        func word(_ text: String, _ startMs: Int) -> SyncedLyricWord { SyncedLyricWord(text: text, startMs: startMs, durationMs: 100) }
+        let spaced = LyricsPreviewText.karaokeSegments(text: "Hello world", words: [word("Hello ", 0), word("world", 500)])
+        expectEqual(spaced?.map(\.text), ["Hello ", "world"], "逐字染色: 词自带空格")
+        let syllables = LyricsPreviewText.karaokeSegments(
+            text: "Hello world", words: [word("Hel", 0), word("lo", 200), word("world", 500)])
+        expectEqual(syllables?.map(\.text), ["Hel", "lo ", "world"], "逐字染色: 词里没有空格时,空白算进前一个字")
+        expectEqual(syllables?.map(\.startMs), [0, 200, 500], "逐字染色: 每段带唱它的那个字的起点")
+        expectEqual(LyricsPreviewText.karaokeSegments(text: " 你好", words: [word("你", 0), word("好", 300)])?.map(\.text),
+                    [" 你", "好"], "逐字染色: 行首空白算进第一个字")
+        let mixed = "Baby, 你 好"
+        let mixedSegments = LyricsPreviewText.karaokeSegments(
+            text: mixed, words: [word("Baby,", 0), word(" ", 100), word("你", 200), word("好", 300)])
+        expectEqual(mixedSegments?.map(\.text).joined(), mixed, "逐字染色: 各段拼起来就是这一行的正文")
+        expectEqual(mixedSegments?.count, 3, "逐字染色: 只有空白的词不单成一段")
+        expectEqual(LyricsPreviewText.karaokeSegments(text: "你好吗", words: [word("你", 0), word("好", 300)]) == nil, true,
+                    "逐字染色: 正文多出字就不铺")
+        expectEqual(LyricsPreviewText.karaokeSegments(text: "你好", words: [word("你", 0), word("好", 300), word("吗", 600)]) == nil,
+                    true, "逐字染色: 逐字多出字就不铺")
+        expectEqual(LyricsPreviewText.karaokeSegments(text: "你好", words: [word("你", 0), word("们", 300)]) == nil, true,
+                    "逐字染色: 字不一样就不铺")
+        expectEqual(LyricsPreviewText.karaokeSegments(text: "", words: [word("你", 0)]) == nil, true, "逐字染色: 空行不铺")
+        expectEqual(LyricsPreviewText.karaokeSegments(text: "I won't say", words: [word("I ", 0), word("Won’t ", 100), word("say", 200)])?
+                        .map(\.text), ["I ", "won't ", "say"], "逐字染色: 标点、引号和大小写不一样也铺,段里用预览的写法")
+        expectEqual(LyricsPreviewText.mayHaveRomanization("こんにちは", scripts: [.japanese]), true, "读音能不能点: 假名")
+        expectEqual(LyricsPreviewText.mayHaveRomanization("안녕", scripts: [.japanese]), false, "读音能不能点: 没开韩文就不算谚文")
+        expectEqual(LyricsPreviewText.mayHaveRomanization("Hello", scripts: .default), false, "读音能不能点: 拉丁字母")
+        let rows = LyricsPreviewText.rows(lyrics: "[00:01.00]こんにちは\n[00:03.00]さようなら", translation: "",
+                                          romanization: "[00:01.00]konnichiwa\n[00:03.00]sayounara",
+                                          romanizationScripts: [.japanese])
+        expectEqual(rows.map(\.romanization), ["konnichiwa", "sayounara"], "预览读音: 缓存里存的读音挂到对应那一句")
+        expectEqual(LyricsPreviewText.rows(lyrics: "[00:01.00]こんにちは", translation: "",
+                                           romanization: "[00:01.00]konnichiwa").map(\.romanization),
+                    [nil], "预览读音: 没传文字种类时不挂(搜索候选歌词面板)")
     }
 
     // ---- 歌词库备份归档(LyricsBackupArchive)----
@@ -449,12 +447,13 @@ func runLyricsManagerTests() {
         expectEqual(codes.count, 12, "重新匹配: 从 lyricsrematch.go 读出全部结论码(守卫自身没跑空)")
         expectEqual(codes.filter { M.Outcome(rawValue: $0) == nil }, [], "重新匹配: 引擎的结论码 App 都认得")
 
-        // 补搜 / 全量扫库跑着时按钮置灰:引擎那时不接。
+        // 自动匹配 / 全量扫库跑着时按钮置灰:引擎那时不接。
         let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerView.swift"),
             encoding: .utf8)) ?? ""
-        expectEqual(view.contains("disabled: rematchRunningKey != nil || fillSweepStatus?.running == true || fillSweepPending"), true,
-                    "重新匹配: 补搜 / 全量扫库跑着时按钮置灰")
+        expectEqual(view.contains("rematchRunningKey != nil || fillSweepStatus?.running == true || fillSweepPending")
+                    && view.contains(".disabled(rematchBlocked || editMode != .preview)"), true,
+                    "重新匹配: 自动匹配 / 全量扫库跑着时按钮置灰")
     }
 
     // ---- 「手动选定歌词后锁定」开关的追溯判据(ManualPickLock) ----
@@ -1159,6 +1158,34 @@ func runLyricsManagerTests() {
                     "零应答: 九源全应答自然不算")
     }
 
+    // ---- 最近一次解析时刻(EnrichLookupTime)----
+    //
+    // 记录用 JSONSerialization 解(整数是 NSNumber),跟 EnrichCacheStore 读缓存同一条路。
+    do {
+        typealias T = EnrichLookupTime
+        func entry(_ json: String) -> [String: Any] {
+            ((try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]) ?? [:]
+        }
+        expectEqual(T.latest(in: entry(#"{"ts":1790399265,"lyrics_fill_ts":1791263741}"#))?.timeIntervalSince1970, 1791263741,
+                    "解析时刻: 没词的歌补搜过(手动重新自动匹配也写 lyrics_fill_ts)就取补搜那次,不是首次解析的 ts")
+        expectEqual(T.latest(in: entry(#"{"ts":1790399265,"lyrics_retry_ts":1790500000,"lyrics_rescore_ts":1790600000}"#))?.timeIntervalSince1970,
+                    1790600000, "解析时刻: 升级重试、重评谁晚取谁")
+        expectEqual(T.latest(in: entry(#"{"ts":1790399265}"#))?.timeIntervalSince1970, 1790399265,
+                    "解析时刻: 只解析过一次就是 ts")
+        expectEqual(T.latest(in: entry(#"{"ts":0}"#)), nil, "解析时刻: 全是 0 或缺失为 nil")
+        let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        if let enrich = try? String(contentsOfFile: repoRoot.appendingPathComponent("lyrimuse-engine/enrich.go").path,
+                                    encoding: .utf8) {
+            for field in T.fields {
+                expectEqual(enrich.contains("json:\"\(field)\"") || enrich.contains("json:\"\(field),omitempty\""), true,
+                            "解析时刻: \(field) 要跟引擎 enrichEntry 的 JSON 标签一致,改名不会编译失败,只会让日期停在旧值")
+            }
+        } else {
+            expectEqual(true, false, "解析时刻: 读不到 lyrimuse-engine/enrich.go(路径挪了?)")
+        }
+    }
+
     // ---- 补空扫描通道(LyricsFillSweep)----
     //
     // 请求文件的形状是引擎侧 parseLyricsFillRequest 的契约:一行 "all" 或每行一个 key;
@@ -1573,7 +1600,7 @@ func runLyricsManagerTests() {
         expectEqual(view.contains("LyricsFillSweep.changesVisibleRows(previous: previous, current: sweep)"), true,
                     "列表刷新: 扫描跑着时只在补出一首 / 一轮开始或结束时紧跟,别改回「在跑就每拍重读」")
         expectEqual(view.contains("if let status, status.finishedAt != nil, !status.isFullScan,"), true,
-                    "补搜收据: 工具栏菜单不拿全量扫库那一轮的累计数当补搜收据")
+                    "补搜收据: 侧栏「⋯」菜单不拿全量扫库那一轮的累计数当补搜收据")
         let sweepGo = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse-engine/lyricsfillsweep.go"), encoding: .utf8)) ?? ""
@@ -1602,8 +1629,8 @@ func runLyricsManagerTests() {
                     && sheet.contains("title: LyricsManagerSearch.query(title),")
                     && sheet.contains("album: LyricsManagerSearch.query(album),"),
                     true, "搜索候选歌词: 歌名 / 歌手 / 专辑去掉首尾空白再交出去搜")
-        expectEqual(view.contains(".disabled(LyricsManagerSearch.query(searchText) == committedSearchText)"), true,
-                    "搜索框: 只多了首尾空格时搜索按钮仍是禁用(没有新东西要查)")
+        expectEqual(view.contains("try? await Task.sleep(for: .milliseconds(150))") && view.contains("searchCommitTask?.cancel()"),
+                    true, "搜索框: 边打边筛,停手 150 毫秒才真的过滤一次")
         expectEqual(view.contains("if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {"), true,
                     "搜索框: 删到只剩空格就回到全量列表")
         expectEqual(view.contains("await store.reload(onlyIfChanged: true)\n        guard generation == rematchGeneration else { return }\n        finishRematch(key: key, line: line)"),

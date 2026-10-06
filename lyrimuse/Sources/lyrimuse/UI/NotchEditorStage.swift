@@ -1530,7 +1530,7 @@ struct NotchShowLyricsRow: View {
         SettingsRow(
             icon: "text.alignleft",
             title: L10n.t("显示歌词"),
-            help: L10n.t("关掉后稳态只保留刘海那条高度，不显示歌词；指向展开时播放控制、进度条、下一句预览仍照常显示。")
+            help: L10n.t("关闭后，常态下仅保留刘海高度，不显示歌词；指针悬停展开时，播放控制、进度条和下一句预览仍照常显示。")
         ) {
             Toggle("", isOn: $settings.notchShowLyrics)
         }
@@ -1928,7 +1928,7 @@ struct NotchScreenPopover: View {
     var body: some View {
         SettingsPopoverShell(
             title: L10n.t("屏幕"),
-            help: L10n.t("「自动」选带刘海的那块；「全部屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」"),
+            help: L10n.t("「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开后自动恢复为「自动」"),
             width: 300
         ) {
             NotchScreenSettingsRows(onScreenChange: onScreenChange)

@@ -89,7 +89,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
     /// 悬浮歌词和灵动岛各渲染一次。
     var help: String? {
         switch self {
-        case .duringScreenCapture: return L10n.t("截图、录屏、共享屏幕都拍不到，你照常看得见")
+        case .duringScreenCapture: return L10n.t("截屏、录屏和屏幕共享均无法捕捉，但你仍可正常看到")
         case .whenNotPlaying: return nil
         }
     }

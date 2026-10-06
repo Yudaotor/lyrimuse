@@ -183,7 +183,7 @@ final class UnknownPlayerNotifier: NSObject {
         let content = UNMutableNotificationContent()
         content.title = L10n.t("检测到新的播放器")
         content.subtitle = name
-        content.body = what.map { String(format: L10n.t("正在放：%@"), $0) } ?? seen.bundleID
+        content.body = what.map { String(format: L10n.t("正在播放：%@"), $0) } ?? seen.bundleID
         content.categoryIdentifier = Self.categoryID
         content.userInfo = [Self.bundleIDKey: seen.bundleID]
         // 同一个 App 多个未信任播放器时在通知中心归一组,不刷屏

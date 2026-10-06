@@ -36,6 +36,9 @@ struct LyrimuseApp: App {
         Window(L10n.t("歌词管理"), id: "lyrics-manager") {
             LyricsManagerView()
         }
+        // 标题栏透明、内容铺到顶:红绿灯落在歌词管理的浮动侧栏里。别改成在 NSWindow 上手设,理由见
+        // SheetWindowAffordances.swift 的 EmptyUnifiedToolbar。
+        .windowStyle(.hiddenTitleBar)
         // 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立小窗——故意跟"歌词窗口"
         // 分开开:点了只弹这一个搜索页面,不需要连带拉起完整的歌词窗口。
         Window(L10n.t("搜索歌词…"), id: "lyrics-quick-search") {

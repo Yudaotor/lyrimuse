@@ -79,7 +79,7 @@ enum ICloudConfigStore {
     /// iCloud,于是他有两个半份备份,而且哪一份是新的取决于他上次点的是哪台机器。
     ///
     /// 来源恰好就是默认的 iCloud 目录时,清掉自选值而不是把 iCloud 路径存成"自选" ——
-    /// 后者会让 UI 显示成"备份文件夹"、菜单里冒出一个没意义的"改回 iCloud"。
+    /// 后者会让 UI 显示成"备份文件夹"、菜单里冒出一个没意义的"切换回 iCloud"。
     static func adoptFolder(_ sourceFolder: URL) {
         let cloudDefault = cloudDocsURL.appendingPathComponent("Lyrimuse").standardizedFileURL
         let source = sourceFolder.standardizedFileURL

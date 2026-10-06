@@ -259,7 +259,7 @@ struct LastfmStatsSection: View {
 
     private var chartCard: some View {
         SettingsCard {
-            collapsibleHeader(icon: "chart.bar", title: L10n.t("听得最多"),
+            collapsibleHeader(icon: "chart.bar", title: L10n.t("收听最多"),
                               collapsed: $chartCollapsed,
                               accessory: chartCollapsed ? nil : AnyView(chartRowsPicker)) {
                 // 收起后分段/时段选择器既看不到内容也改不了什么,藏起来
@@ -298,7 +298,7 @@ struct LastfmStatsSection: View {
             CardDivider()
             if let entries = stats.chart(kind, period) {
                 if entries.isEmpty {
-                    placeholderRow(L10n.t("这个时段还没有记录"))
+                    placeholderRow(L10n.t("此时段暂无记录"))
                 } else {
                     let window = stats.chartWindow(kind, period)
                     chartList(Array(entries.prefix(chartVisibleRows)), showMovement: (window?.listens ?? 0) > 0)
@@ -396,7 +396,7 @@ struct LastfmStatsSection: View {
                 // 只有第 1 页的结果:歌是完整结果的前几首,可能不够数。还在取就说一声;取失败了给重试。
                 if batch?.partial == true, top.tracks.count < limit {
                     if loading {
-                        Text(L10n.t("正在读取其余的歌…"))
+                        Text(L10n.t("正在读取其余歌曲…"))
                             .font(.system(size: 10.5)).foregroundStyle(.secondary)
                             .padding(.leading, indent + 24).padding(.vertical, 3)
                     } else if stats.artistTracksFailed.contains(period.rawValue) {
@@ -421,7 +421,7 @@ struct LastfmStatsSection: View {
                 }
                 .padding(.leading, indent + 24).padding(.vertical, 4)
             } else {
-                Text(L10n.t("这段时间的歌曲榜里没有这位歌手的歌"))
+                Text(L10n.t("此期间的歌曲排行中无该歌手的歌曲"))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .padding(.leading, indent + 24).padding(.vertical, 4)
             }
@@ -715,14 +715,14 @@ struct LastfmStatsSection: View {
                     .help(String(format: L10n.t("比上一期下降 %@ 名"), movement?.stepText ?? ""))
             case .same?:
                 Text("–").foregroundStyle(.tertiary)
-                    .help(L10n.t("名次跟上一期一样"))
+                    .help(L10n.t("名次与上一期相同"))
             case .new?:
                 Text(L10n.t("新"))
                     .font(.system(size: 9.5, weight: .medium))
                     .foregroundStyle(Color.accentColor)
                     .padding(.horizontal, 4)
                     .background(Color.accentColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 4))
-                    .help(L10n.t("上一期没进榜"))
+                    .help(L10n.t("上一期未上榜"))
             case nil:
                 Color.clear
             }
@@ -741,7 +741,7 @@ struct LastfmStatsSection: View {
         let to = window.to.formatted(style)
         let text = window.listens > 0
             ? String(format: L10n.t("对比 %@ – %@"), from, to)
-            : String(format: L10n.t("上一期（%@ – %@）没有收听记录，不显示升降"), from, to)
+            : String(format: L10n.t("上一期（%@ – %@）无收听记录，不显示排名变化"), from, to)
         return chartFootnote(text).padding(.bottom, 8)
     }
 
@@ -835,7 +835,7 @@ struct LastfmStatsSection: View {
                     .font(.caption)
                     .foregroundStyle(stats.baselineFailed ? .quaternary : .tertiary)
                     .help(stats.baselineFailed
-                          ? String(format: L10n.t("上次刷新没有成功，显示的是 %@ 的内容"), Self.absolute(at))
+                          ? String(format: L10n.t("上次刷新失败，当前显示 %@ 的内容"), Self.absolute(at))
                           : String(format: L10n.t("上次刷新：%@"), Self.absolute(at)))
                 }
                 // 手动刷新。轮询最慢要等两分钟,而"刚听完一首歌想立刻看到它"正是这张卡
@@ -865,7 +865,7 @@ struct LastfmStatsSection: View {
                 if stats.baselineFailed {
                     retryRow { stats.refreshBaseline() }
                 } else {
-                    placeholderRow(L10n.t("还没有 scrobble 记录"))
+                    placeholderRow(L10n.t("暂无 Scrobble 记录"))
                 }
             } else {
                 // LazyVStack:展开到 100 行时行视图和封面按需实例化,不一口气全建
@@ -1075,8 +1075,8 @@ struct LastfmStatsSection: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help(expanded ? L10n.t("收起") : String(format: L10n.t("连续听了 %d 次，点一下展开每一次"), count))
-        .accessibilityLabel(String(format: L10n.t("连续听了 %d 次，点一下展开每一次"), count))
+        .help(expanded ? L10n.t("收起") : String(format: L10n.t("连续收听 %d 次，点按展开每一次"), count))
+        .accessibilityLabel(String(format: L10n.t("连续收听 %d 次，点按展开每一次"), count))
         .accessibilityValue(expanded ? L10n.t("展开") : L10n.t("收起"))
     }
 
@@ -1267,12 +1267,12 @@ struct LastfmStatsSection: View {
                         // 当天为空时结果是放宽到 ±3 天的"那一周"(见 OnThisDayPlanner),句子要说清楚。
                         subtitle: o.isWeek
                             ? (o.yearsAgo == 1
-                                ? String(format: L10n.t("去年的这一周听了 %@ 次，最常循环的是这几首"), "\(o.total)")
-                                : String(format: L10n.t("%1$@ 年前的这一周听了 %2$@ 次，最常循环的是这几首"),
+                                ? String(format: L10n.t("去年这一周收听 %@ 次，循环最多的是以下歌曲"), "\(o.total)")
+                                : String(format: L10n.t("%1$@ 年前的这一周收听 %2$@ 次，循环最多的是以下歌曲"),
                                          "\(o.yearsAgo)", "\(o.total)"))
                             : (o.yearsAgo == 1
-                                ? String(format: L10n.t("去年今天听了 %@ 次，最常循环的是这几首"), "\(o.total)")
-                                : String(format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首"),
+                                ? String(format: L10n.t("去年今天收听 %@ 次，循环最多的是以下歌曲"), "\(o.total)")
+                                : String(format: L10n.t("%1$@ 年前的今天收听 %2$@ 次，循环最多的是以下歌曲"),
                                          "\(o.yearsAgo)", "\(o.total)")),
                         collapsed: $onThisDayCollapsed
                     ) {
@@ -1321,7 +1321,7 @@ struct LastfmStatsSection: View {
                             .buttonStyle(.plain)
                             .rowHoverHighlight()
                             .help(entry.lastPlayed.map {
-                                String(format: L10n.t("那天最后一次：%@"), Self.absolute($0))
+                                String(format: L10n.t("当天最后一次收听：%@"), Self.absolute($0))
                             } ?? "")
                         }
                     }
@@ -1337,14 +1337,14 @@ struct LastfmStatsSection: View {
                                 // .loaded 不该走到这一支(有内容就进上面那支了);真到了也当
                                 // "正在取"处理,不要空白。
                                 ProgressView().controlSize(.small)
-                                Text(L10n.t("正在查那年今日…"))
+                                Text(L10n.t("正在查询那年今日…"))
                                     .foregroundStyle(.secondary)
                             case .empty:
-                                Label(L10n.t("过去三年的今天和那几周都没有收听记录"),
+                                Label(L10n.t("过去三年的今天及前后一周均无收听记录"),
                                       systemImage: "calendar.badge.exclamationmark")
                                     .foregroundStyle(.secondary)
                             case .failed:
-                                Label(L10n.t("没能取到那年今日——Last.fm 没有响应"),
+                                Label(L10n.t("无法获取「那年今日」：Last.fm 未响应"),
                                       systemImage: "exclamationmark.triangle")
                                     .foregroundStyle(.secondary)
                                 Spacer()
@@ -1429,7 +1429,7 @@ struct LastfmStatsSection: View {
                 SettingsRawRow(insetToText: true) {
                     HStack(spacing: 8) {
                         if stats.dailyFullSyncing { ProgressView().controlSize(.small) }
-                        Text(L10n.t("首次同步历史之后，这里会出现你的收听足迹"))
+                        Text(L10n.t("首次同步历史记录后，将在此显示收听足迹"))
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
@@ -1465,7 +1465,7 @@ struct LastfmStatsSection: View {
                                       } ?? L10n.t("今年至今"))
                         if let total = stats.overview?.total, total > 0 {
                             let next = ListeningMilestones.nextMilestone(total: total)
-                            footprintCell(value: String(format: L10n.t("还差 %@ 首"), next.remaining.formatted()),
+                            footprintCell(value: String(format: L10n.t("还需 %@ 首"), next.remaining.formatted()),
                                           label: String(format: L10n.t("到第 %@ 次 scrobble"), next.target.formatted()))
                         }
                     }
@@ -1485,7 +1485,7 @@ struct LastfmStatsSection: View {
                 SettingsRawRow(insetToText: true) {
                     HStack(spacing: 8) {
                         if stats.dailyFullSyncing { ProgressView().controlSize(.small) }
-                        Text(L10n.t("首次同步历史之后，这里会出现你的收听时段"))
+                        Text(L10n.t("首次同步历史记录后，将在此显示收听时段"))
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
@@ -1515,8 +1515,8 @@ struct LastfmStatsSection: View {
     /// 引擎后台汇总(artistregions.go),这里只读。首轮还没算出来时 LastfmArtistRegionsView 自己显示一句说明。
     private var artistRegionsCard: some View {
         SettingsCard {
-            collapsibleHeader(icon: "globe.asia.australia", title: L10n.t("歌手来自哪里"),
-                              help: L10n.t("按 MusicBrainz 登记的所属国家或地区统计，不是出生地"),
+            collapsibleHeader(icon: "globe.asia.australia", title: L10n.t("歌手地区分布"),
+                              help: L10n.t("按 MusicBrainz 登记的所属国家或地区统计，而非出生地"),
                               collapsed: $regionsCollapsed) {
                 if !regionsCollapsed {
                     SettingsSegmentedControlHashable(

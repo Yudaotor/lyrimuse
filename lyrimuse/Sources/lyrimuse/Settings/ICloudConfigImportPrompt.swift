@@ -66,11 +66,11 @@ enum ICloudConfigImportPrompt {
             let lyricsCount = lyricsData == nil ? 0 : (await LyricsBackupStore.peek(lyricsData!)?.files ?? 0)
 
             let alert = NSAlert()
-            alert.messageText = L10n.t("在 iCloud 里发现一份 Lyrimuse 备份")
+            alert.messageText = L10n.t("在 iCloud 中发现 Lyrimuse 备份")
             let lyricsLine = lyricsCount > 0
-                ? String(format: L10n.t("其中含 %@ 个歌词文件，会一并恢复。"), "\(lyricsCount)")
+                ? String(format: L10n.t("其中包含 %@ 个歌词文件，将一并恢复。"), "\(lyricsCount)")
                 : ""
-            alert.informativeText = detail + L10n.t("导入会带上账号和所有个人设置，随后重启 Lyrimuse。") + lyricsLine
+            alert.informativeText = detail + L10n.t("导入将包含账号和所有个人设置，完成后重启 Lyrimuse。") + lyricsLine
             alert.addButton(withTitle: L10n.t("导入并重启"))
             alert.addButton(withTitle: L10n.t("跳过"))
             // .accessory 策略的 App 不会自动抢到前台,不激活的话这个弹窗可能压在别的
