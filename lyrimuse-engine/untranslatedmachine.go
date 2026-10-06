@@ -31,19 +31,26 @@ func dropUntranslatedLines(lyrics, tr, target string) (string, bool) {
 	return strings.TrimRight(b.String(), "\n"), true
 }
 
-// dropUnneededLines 删掉机翻译文里原文那一行现在不用翻的行(lineNeedsTranslation 为假,先剥演唱者标签,跟
-// selectTranslationWork 同一套),按时间戳对到原文行:同一时间戳有几行原文时,有一行要翻就留着;对不上原文的行不动。
-// 没有要删的行时返回 (原文, false);删完一行不剩返回空串。
-func dropUnneededLines(lyrics, tr, target string) (string, bool) {
-	speakers := lyricSpeakerLabels(lyrics)
-	needed := map[string]bool{}
-	for _, l := range parseLRCLines(lyrics) {
-		needed[l.tag] = needed[l.tag] || lineNeedsTranslation(withoutSpeakerLabel(l.text, speakers), target)
+// dropUnneededLines 删掉机翻译文里现在不会再送翻的行:按时间戳对到原文行,那个时间戳上没有一行会被送翻选行
+// (selectTranslationWork,歌名、歌手取自 key)选中就删,不用翻的文字、抬头、署名、拟声词、唱名都在里面。同一时间戳有几行
+// 原文时,有一行会送翻就留着;对不上原文的行不动。没有要删的行时返回 (原文, false);删完一行不剩返回空串。
+func dropUnneededLines(key, lyrics, tr, target string) (string, bool) {
+	artist, title, _ := splitEnrichKey(key)
+	work := selectTranslationWork(lyrics, target, artist, title)
+	sent := map[string]bool{}
+	for _, occ := range work.occurrences {
+		for _, i := range occ {
+			sent[work.lines[i].tag] = true
+		}
+	}
+	present := map[string]bool{}
+	for _, l := range work.lines {
+		present[l.tag] = true
 	}
 	var b strings.Builder
 	changed := false
 	for _, l := range parseLRCLines(tr) {
-		if need, ok := needed[l.tag]; ok && !need {
+		if present[l.tag] && !sent[l.tag] {
 			changed = true
 			continue
 		}
@@ -61,7 +68,7 @@ func dropUnneededLines(lyrics, tr, target string) (string, bool) {
 // 这种行。
 func migrateUntranslatedMachineLines() {
 	migrateMachineTranslationLines(migrationUntranslatedMachineLines, migrationUntranslatedMachineLinesVersion,
-		dropUntranslatedLines, "left untranslated")
+		func(_, lyrics, tr, target string) (string, bool) { return dropUntranslatedLines(lyrics, tr, target) }, "left untranslated")
 }
 
 // migrateUnneededMachineLines 对存量机翻跑一遍 dropUnneededLines。新翻的在送翻选行(selectTranslationWork)就不收这种行。
@@ -73,7 +80,7 @@ func migrateUnneededMachineLines() {
 // migrateMachineTranslationLines 对存量机翻(lyrics_tr_source = machine、记了语言的)逐条跑 drop;社区译文不动。运行期
 // 在源头就不再产生这些行,所以带水位、只跑一次。位置(main.go):夹在 importLyricsFromFiles 与 exportLyricsFiles 之间,
 // 删空的连同语言、来源一起清掉,由 export 删掉 .tr.lrc。
-func migrateMachineTranslationLines(name string, version int, drop func(lyrics, tr, target string) (string, bool), what string) {
+func migrateMachineTranslationLines(name string, version int, drop func(key, lyrics, tr, target string) (string, bool), what string) {
 	scope := migrationScopeOf(name, version)
 	if scope.skip() {
 		return
@@ -84,7 +91,7 @@ func migrateMachineTranslationLines(name string, version int, drop func(lyrics, 
 		if e.LyricsTrSource != lyricsTrSourceMachine || e.LyricsTr == "" || e.LyricsTrLang == "" {
 			continue
 		}
-		tr, ok := drop(e.Lyrics, e.LyricsTr, myMemoryLangCode(e.LyricsTrLang))
+		tr, ok := drop(k, e.Lyrics, e.LyricsTr, myMemoryLangCode(e.LyricsTrLang))
 		if !ok {
 			continue
 		}

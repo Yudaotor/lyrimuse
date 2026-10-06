@@ -251,6 +251,10 @@ func TestTranslationSkipLines(t *testing.T) {
 		"Mastering Engineer: Dale Becker，",
 		"Vocal Producer: Someone",
 		"Woo woo", "Oh-oh-oh-oh", "Wu ～", "Ooh", "Yeah oh oh oh oh", "Whoa", "Na na na", "Mm",
+		"Doo", "(Ooh) Doo-doo-doo-doo",
+		// 唱名三种以上,或者只有 do / doo
+		"Re So So Si Do Si La", "So, fa, mi, re, la, so, mi, re, do", "Sol Sol Ti Sol Sol La Do", "Do-Re-Mi",
+		"Do-do-do-do", "do do do do do do", "(Doo-doo-doo-do-doo-doo-doo-doo)",
 	}
 	for _, s := range skip {
 		if !isTranslationSkipLine(s, speakers) {
@@ -265,6 +269,8 @@ func TestTranslationSkipLines(t *testing.T) {
 		"So tell me baby what're you waiting for?",
 		"Turn it up",
 		"No no no",
+		// 一两种唱名是真歌词;do 后面跟着别的词也是
+		"So", "Si, si, si", "So la la", "Do", "Do ya, do ya?", "Doo-wop",
 	}
 	for _, s := range keep {
 		if isTranslationSkipLine(s, speakers) {

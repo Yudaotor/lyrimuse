@@ -55,12 +55,17 @@ var translationHanCreditRe = regexp.MustCompile(`^[\p{Han}/、&＆]{1,16}[\s\x{3
 // 角色词枚举,不放开成"任意拉丁词 + 冒号":`Oh :` `Baby:` 这种形状在真歌词里出得来。
 var translationLatinCreditRe = regexp.MustCompile(`(?i)^(?:[a-z&.]+\s+){0,3}(?:engineers?|producers?|mastering|mastered|mixing|mixed|mix|recording|recorded|arrangers?|arrangement|composers?|lyricists?|programming|programmed|vocals?|guitars?|bass|drums|keyboards?|piano|strings|a&r|publishers?)(?:\s+by)?\s*[:：]`)
 
-// translationVocableRe 一个拟声词(Oh / Ooh / Woo / Wu / Yeah / La / Na / Hey / Whoa / Mm ……)。
-var translationVocableRe = regexp.MustCompile(`^(?:o+h*|w+o+h*|w+u+|w+h+o+a+h*|y+e+a*h*|y+a+y*|l+a+|n+a+|d+a+|h+e+y+|h+a+|a+h+|u+h+|m{2,}|h+m+|w+o+w+|h+o+|e+h+)$`)
+// translationVocableRe 一个拟声词(Oh / Ooh / Woo / Wu / Yeah / La / Na / Doo / Hey / Whoa / Mm ……)。
+var translationVocableRe = regexp.MustCompile(`^(?:o+h*|w+o+h*|w+u+|w+h+o+a+h*|y+e+a*h*|y+a+y*|l+a+|n+a+|d+a+|d+o{2,}|h+e+y+|h+a+|a+h+|u+h+|m{2,}|h+m+|w+o+w+|h+o+|e+h+)$`)
+
+// lowerLetterWords 按非字母切词、转小写。
+func lowerLetterWords(text string) []string {
+	return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) })
+}
 
 // isVocableLine:整行只有拟声词(「Woo woo」「Oh-oh-oh-oh」「Wu ～」),没有可翻的内容。
 func isVocableLine(text string) bool {
-	words := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) })
+	words := lowerLetterWords(text)
 	if len(words) == 0 {
 		return false
 	}
@@ -72,9 +77,29 @@ func isVocableLine(text string) bool {
 	return true
 }
 
+// translationSolfege 唱名。
+var translationSolfege = map[string]bool{"do": true, "re": true, "mi": true, "fa": true, "so": true, "sol": true, "la": true, "si": true, "ti": true}
+
+// isSolfegeLine:整行是唱名(「Re So So Si Do Si La」),或者只有 do / doo 而且不止一个(「Do-do-do-do」)。唱名要三种以上:
+// 一两种的是真歌词(「So」「Si, si」);「Do ya, do ya?」里有别的词,不算。见 10 章决策 39。
+func isSolfegeLine(text string) bool {
+	words := lowerLetterWords(text)
+	if len(words) < 2 {
+		return false
+	}
+	kinds := map[string]bool{}
+	solfege, scat := true, true
+	for _, w := range words {
+		solfege = solfege && translationSolfege[w]
+		scat = scat && strings.TrimRight(w, "o") == "d"
+		kinds[w] = true
+	}
+	return scat || solfege && len(kinds) >= 3
+}
+
 // isTranslationSkipLine:这一行不送去翻。演唱者标签(男：/女：)开头的是真歌词,两条署名规则都不拿它当署名。
 func isTranslationSkipLine(text string, speakers map[string]bool) bool {
-	if isRelaxedCreditLine(text, speakers) || isVocableLine(text) {
+	if isRelaxedCreditLine(text, speakers) || isVocableLine(text) || isSolfegeLine(text) {
 		return true
 	}
 	if len(speakers) > 0 {

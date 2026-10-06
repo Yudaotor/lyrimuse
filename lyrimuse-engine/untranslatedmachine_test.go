@@ -253,27 +253,37 @@ func TestMigrateUntranslatedMachineLinesIsWired(t *testing.T) {
 	}
 }
 
-const unneededLyrics = "[00:01.00]跟着我Flow\n[00:02.00]It represent my heart\n[00:03.00]男：Khalil\n" +
-	"[00:04.00]女：你在哪里\n[00:05.00]声音是交流的媒介\n[00:05.00]A collage of vibrations\n[00:06.00]Chinese lady 我爱你"
+const unneededKey = "方大同|Gotta Make A Change|"
 
-// 按时间戳对到原文行,删掉原文那一行现在不用翻的;演唱者标签先剥掉再判;同一时间戳有一行要翻就留着;
-// 对不上原文的行不动;没有要删的原样返回,一行不剩返回空串。
+const unneededLyrics = "[00:00.50]Gotta Make A Change - 方大同\n[00:01.00]跟着我Flow\n[00:02.00]It represent my heart\n" +
+	"[00:03.00]男：Khalil\n[00:04.00]女：你在哪里\n[00:05.00]声音是交流的媒介\n[00:05.00]A collage of vibrations\n" +
+	"[00:06.00]Chinese lady 我爱你\n[00:07.00]Oh-oh-oh\n[00:08.00]Re So So Si Do Si La\n[00:09.00]Mastering Engineer: Dale Becker\n" +
+	"[00:10.00]It represent my heart"
+
+// 按时间戳对到原文行,删掉送翻选行现在不会选的(汉字为主的混排行、抬头、拟声词、唱名、署名);演唱者标签先剥掉再判;
+// 同一时间戳有一行会送翻就留着;对不上原文的行不动;没有要删的原样返回,一行不剩返回空串。
 func TestDropUnneededLines(t *testing.T) {
-	tr := "[00:01.00]跟着我流程\n[00:02.00]它代表我的心\n[00:03.00]哈利勒\n[00:05.00]振动的拼贴画\n" +
-		"[00:06.00]中国女士我爱你\n[00:09.00]对不上原文的行"
-	want := "[00:02.00]它代表我的心\n[00:03.00]哈利勒\n[00:05.00]振动的拼贴画\n[00:09.00]对不上原文的行"
-	if got, ok := dropUnneededLines(unneededLyrics, tr, "zh-CN"); !ok || got != want {
+	tr := "[00:00.50]必须做出改变 - 方大同\n[00:01.00]跟着我流程\n[00:02.00]它代表我的心\n[00:03.00]哈利勒\n" +
+		"[00:05.00]振动的拼贴画\n[00:06.00]中国女士我爱你\n[00:07.00]哦哦哦\n[00:08.00]Re So So Si C 西拉\n" +
+		"[00:09.00]母带工程师：Dale Becker\n[00:10.00]它代表我的心\n[00:12.00]对不上原文的行"
+	want := "[00:02.00]它代表我的心\n[00:03.00]哈利勒\n[00:05.00]振动的拼贴画\n[00:10.00]它代表我的心\n[00:12.00]对不上原文的行"
+	if got, ok := dropUnneededLines(unneededKey, unneededLyrics, tr, "zh-CN"); !ok || got != want {
 		t.Fatalf("got %v %q, want %q", ok, got, want)
 	}
-	if got, ok := dropUnneededLines(unneededLyrics, want, "zh-CN"); ok || got != want {
+	if got, ok := dropUnneededLines(unneededKey, unneededLyrics, want, "zh-CN"); ok || got != want {
 		t.Errorf("没有要删的该原样返回: %v %q", ok, got)
 	}
 	none := "[00:01.00]跟着我流程\n[00:06.00]中国女士我爱你"
-	if got, ok := dropUnneededLines(unneededLyrics, none, "zh-CN"); !ok || got != "" {
+	if got, ok := dropUnneededLines(unneededKey, unneededLyrics, none, "zh-CN"); !ok || got != "" {
 		t.Errorf("一行不剩该返回空串: %v %q", ok, got)
 	}
-	if got, ok := dropUnneededLines(unneededLyrics, none, "en"); ok || got != none {
+	if got, ok := dropUnneededLines(unneededKey, unneededLyrics, none, "en"); ok || got != none {
 		t.Errorf("目标是英文时汉字为主的行要翻,不该删: %v %q", ok, got)
+	}
+	// 抬头按 key 里的歌名认:换一个歌名,那一行就是要翻的英文行
+	header := "[00:00.50]必须做出改变 - 方大同"
+	if got, ok := dropUnneededLines("方大同|Flow|", unneededLyrics, header, "zh-CN"); ok || got != header {
+		t.Errorf("歌名对不上时抬头那一行照常要翻: %v %q", ok, got)
 	}
 }
 
@@ -290,9 +300,13 @@ func TestMigrateUnneededMachineLines(t *testing.T) {
 		"b|emptied|":   {Lyrics: unneededLyrics, LyricsTr: allMixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
 		"c|community|": {Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrLang: "zh"},
 		"d|no-lang|":   {Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrSource: lyricsTrSourceMachine},
+		unneededKey:    {Lyrics: unneededLyrics, LyricsTr: "[00:00.50]必须做出改变 - 方大同\n" + mixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
 	}
 	enrichMu.Unlock()
 	migrateUnneededMachineLines()
+	if e := enrichCache[unneededKey]; e.LyricsTr != "[00:02.00]它代表我的心" {
+		t.Errorf("抬头按条目自己的歌名认,译文该删掉: %+v", e)
+	}
 	if e := enrichCache["a|machine|"]; e.LyricsTr != "[00:02.00]它代表我的心" || e.LyricsTrSource != lyricsTrSourceMachine || e.LyricsTrLang != "zh-CN" {
 		t.Errorf("机翻里汉字为主的那行该删掉: %+v", e)
 	}
