@@ -56,6 +56,7 @@ struct WrappedKaraokeRows: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: WrappedKaraokeRowsView, context: Context) -> CGSize? {
         let geo = WrappedKaraokeRowsView.Geometry(spec: spec, width: proposal.width.flatMap { $0.isFinite ? $0 : nil })
         if proposal.width.map({ $0.isFinite }) == true {
+            nsView.sizedWidth = proposal.width
             // 跟 `WrapLayout.placeSubviews` 同一个时机的等价物:悬浮窗读热区的那条 GeometryReader
             // 在这一行定尺寸之后才求值,这里先写好,不必等 AppKit 那一趟 layout。
             nsView.report(geo)
@@ -133,6 +134,8 @@ final class WrappedKaraokeRowsView: NSView {
 
     var contentRectSink: WrapContentRectSink?
     var sinkOwner: AnyHashable?
+    /// 最近一次 `sizeThatFits` 收到的有限提议宽度,画的时候按它折行(见 `WrapLayoutMath.drawWidth`)。
+    var sizedWidth: CGFloat?
 
     private var spec: WrappedKaraokeRows.Spec?
     private var nowMs: (() -> Int)?
@@ -173,7 +176,7 @@ final class WrappedKaraokeRowsView: NSView {
 
     private func layoutRows(nowMs: Int) {
         guard let spec, bounds.width > 0 else { return }
-        var geo = Geometry(spec: spec, width: bounds.width)
+        var geo = Geometry(spec: spec, width: WrapLayoutMath.drawWidth(sized: sizedWidth, bounds: bounds.width))
         geo.alignment = spec.rowAlignment
         report(geo)
 

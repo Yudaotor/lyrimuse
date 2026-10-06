@@ -215,6 +215,13 @@ public enum WrapLayoutMath {
         return CGRect(x: x, y: bounds.minY, width: min(widest, bounds.width), height: height)
     }
 
+    /// 画的时候按多宽折行。`sizeThatFits` 定高度时用的是提议宽度 `sized`,视图真正放下去的 `bounds` 被对齐到像素;
+    /// 两者只差这一点(不到 1pt)时按 `sized` 折,画出来的行数才是高度里算进去的行数(见 04 章决策 45)。
+    public static func drawWidth(sized: CGFloat?, bounds: CGFloat) -> CGFloat {
+        guard let sized, abs(sized - bounds) < 1 else { return bounds }
+        return sized
+    }
+
     /// 没有宽度约束时的兜底尺寸:全部铺成一行。理论上走不到——调用方所在的 VStack 总会
     /// 给一个有限宽度。
     public static func unconstrainedSize(sizes: [CGSize], horizontalSpacing: CGFloat) -> CGSize {

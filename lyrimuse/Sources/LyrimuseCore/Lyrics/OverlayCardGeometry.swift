@@ -79,6 +79,10 @@ public enum OverlayCardGeometry {
         }
     }
 
+    /// 留白让开之后,内容宽比自然宽多留的这一截。正好等于自然宽时,排版把视图尺寸对齐到像素会少零点几点,
+    /// 贴满一行的句子末尾那个词就被挤到第二行(见 04 章决策 45)。
+    public static let elasticFitMargin: CGFloat = 2
+
     /// 两侧留白的**弹性系数** —— 留白只占"这一行本来就用不到"的那部分宽度。
     ///
     /// `cardInsets` 给的是理想留白。真按它缩进,可用宽度就少了那么多,于是一行还没填满就
@@ -86,8 +90,10 @@ public enum OverlayCardGeometry {
     /// (`naturalContentWidth`)算出真正的富余,留白最多只吃掉富余那么多:
     ///
     ///   - 富余 ≥ 理想留白 → k == 1,留白照留(短句仍从舞台边起笔,排版逐像素不变);
-    ///   - 富余 < 理想留白 → k 按比例退,文字正好顶到远侧边缘;
+    ///   - 富余 < 理想留白 → k 按比例退,文字顶到离远侧边缘还有 `elasticFitMargin` 的地方;
     ///   - 一行装不下(富余 ≤ 0)→ k == 0,留白整份让开,换行前先把整宽吃满。
+    ///
+    /// 富余 = 可用宽 − 自然宽 − `elasticFitMargin`。
     ///
     /// **判据是"这一行填没填满",不是"会不会多折一行"**。两者不等价:一句话不管让不让
     /// 留白都要折成两行,但让开之后第一行能多装一个词、右边那截空白才填得上 —— 按行数判
@@ -102,7 +108,7 @@ public enum OverlayCardGeometry {
         // 时间走的就是这一支。
         guard totalInset > 0.5 else { return 1 }
         guard availableWidth > 0 else { return 0 }
-        let slack = availableWidth - max(0, naturalContentWidth)
+        let slack = availableWidth - max(0, naturalContentWidth) - elasticFitMargin
         guard slack > 0 else { return 0 }
         return min(1, slack / totalInset)
     }

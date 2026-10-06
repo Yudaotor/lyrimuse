@@ -560,14 +560,16 @@ func runOverlayTests() {
         // 短句:富余 126 比理想留白 39 还多,留白照留(排版逐像素不变)。
         expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 400), 1,
                     "弹性留白: 短句留白照留")
-        // 富余正好等于理想留白:还是全留,文字正好顶到远侧边缘。
-        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 487), 1,
+        // 富余(扣掉 2pt 余量)正好等于理想留白:还是全留。
+        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 485), 1,
                     "弹性留白: 富余正好够时全留")
 
-        // 富余不够一整份:按比例退,文字仍然正好顶到远侧边缘、一个像素不浪费。
+        // 富余不够一整份:按比例退,内容宽比自然宽多出 2pt 余量,对齐到像素也不会少到折行边界以下。
         let k1 = G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 500)
-        expectEqual(k1, 26.0 / 39, "弹性留白: 富余不够时按比例退")
-        expectEqual(526 - 39 * k1, 500, "弹性留白: 退完之后内容宽正好等于自然宽")
+        expectEqual(k1, 24.0 / 39, "弹性留白: 富余不够时按比例退")
+        expectEqual(526 - 39 * k1, 502, "弹性留白: 退完之后内容宽比自然宽多 2pt")
+        expectEqual(G.elasticInsetScale(totalInset: 39, availableWidth: 526, naturalContentWidth: 525), 0,
+                    "弹性留白: 富余不到 2pt 余量也整份让开")
 
         // 一行装不下:留白整份让开,换行前先把整宽吃满。**这一条就是"左侧都没满就换行了"**
         // 的修法 —— 按行数判的旧判据在这里会判成 1(让不让都是两行),空白留着不填。
@@ -583,8 +585,8 @@ func runOverlayTests() {
                     "弹性留白: 可用宽 0 时全让")
         // 留白比可用宽还大:照样只吃富余那么多,内容宽正好落在自然宽上,不会被缩成负数。
         let k2 = G.elasticInsetScale(totalInset: 600, availableWidth: 526, naturalContentWidth: 100)
-        expectEqual(k2, 426.0 / 600, "弹性留白: 留白超过可用宽时也只吃掉富余")
-        expectEqual(526 - 600 * k2, 100, "弹性留白: 超大留白下内容宽仍等于自然宽")
+        expectEqual(k2, 424.0 / 600, "弹性留白: 留白超过可用宽时也只吃掉富余")
+        expectEqual(526 - 600 * k2, 102, "弹性留白: 超大留白下内容宽仍比自然宽多 2pt")
 
         // 控制排跟着同一份系数走 —— 让开多少按钮排就让开多少,不变式仍是"只比卡片多一份内边距"。
         let unit = LyricDuetLayout.insets(for: .leading, availableWidth: 526, fontSize: 36).trailing
@@ -789,6 +791,21 @@ func runOverlayTests() {
                     [[0]], "WrapLayout: 单个超宽元素独占一行,不能被丢掉")
         expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(10), sz(500), sz(10)], maxWidth: 100, horizontalSpacing: 0)),
                     [[0], [1], [2]], "WrapLayout: 超宽元素夹在中间也不丢")
+
+        // 画的时候按多宽折行:跟定高度时的提议宽度只差像素对齐那一点,就按提议宽度折。
+        expectEqual(WrapLayoutMath.drawWidth(sized: 261.1, bounds: 260.5), 261.1, "折行宽: 只差像素对齐那一点时按定高度那次的宽度")
+        expectEqual(WrapLayoutMath.drawWidth(sized: 261.1, bounds: 300), 300, "折行宽: 真换了宽度就按实际宽度")
+        expectEqual(WrapLayoutMath.drawWidth(sized: nil, bounds: 260.5), 260.5, "折行宽: 没量过就按实际宽度")
+        // 8 个 32pt 的字、两侧各 2.4pt 描边预留:按提议宽度折是一行,按对齐后少 0.6pt 的宽度折是两行(高度只留了一行,
+        // 多出来那行就压到下面);按 drawWidth 折跟定高度时一样是一行。
+        let eight = Array(repeating: sz(32), count: 8)
+        expectEqual(WrapLayoutMath.rows(sizes: eight, maxWidth: 261.1 - 4.8, horizontalSpacing: 0).count, 1,
+                    "折行宽: 定高度时按提议宽度折成一行")
+        expectEqual(WrapLayoutMath.rows(sizes: eight, maxWidth: 260.5 - 4.8, horizontalSpacing: 0).count, 2,
+                    "折行宽: 按对齐后的宽度会多折一行")
+        expectEqual(WrapLayoutMath.rows(sizes: eight, maxWidth: WrapLayoutMath.drawWidth(sized: 261.1, bounds: 260.5) - 4.8,
+                                        horizontalSpacing: 0).count, 1,
+                    "折行宽: 按 drawWidth 折,画出来的行数跟定高度时一样")
 
         // 空输入不该炸，也不该造出一个空行。
         expectEqual(WrapLayoutMath.rows(sizes: [], maxWidth: 100, horizontalSpacing: 0).count, 0,
@@ -1602,6 +1619,10 @@ func runOverlayTests() {
         expectEqual(overlayWindow.contains("override func scrollWheel(with event: NSEvent) {\n        onScrollWheel?()")
                     && controller.contains("panel.onScrollWheel = { [weak self] in self?.yieldPointerCaptureToScroll() }"),
                     true, "悬浮接线: 接管期间收到滚轮就让开,同一手势后面的滚动到下层")
+        let karaokeRows = src("WrappedKaraokeRows.swift")
+        expectEqual(karaokeRows.contains("nsView.sizedWidth = proposal.width")
+                    && karaokeRows.contains("var geo = Geometry(spec: spec, width: WrapLayoutMath.drawWidth(sized: sizedWidth, bounds: bounds.width))"),
+                    true, "悬浮接线: 逐字折行按定高度时的提议宽度画,行数跟留出的高度一致")
     }
 
     // ---- UI 共用组件那一批的接线(契约) ----

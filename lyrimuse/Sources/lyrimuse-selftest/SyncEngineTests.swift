@@ -438,6 +438,16 @@ func runSyncEngineTests() {
                     "对唱留白: 合唱行贴满一行时,让完留白还放得下")
         expectEqual(chorusWrapWidth(natural: packedLine) < packedLine, true,
                     "对唱留白: 富余漏算描边预留时留白会挤掉末尾的字(上一条防的就是这个)")
+        // 合唱行放得下、富余又不够一整份留白时,内容宽对齐到像素少掉 1pt 也还放得下:正好卡在自然宽上的话,
+        // 排版少零点几点就把末尾那个词挤到第二行(8 个 32.21pt 的字是实测会折的那一句,见 04 章决策 45)。
+        var tipped: [CGFloat] = []
+        for tenth in 1500...3550 {
+            let lineWidth = CGFloat(tenth) / 10
+            if chorusWrapWidth(natural: lineWidth + overlayStroke * 2) - 1 < lineWidth { tipped.append(lineWidth) }
+        }
+        expectEqual(tipped, [], "对唱留白: 合唱行行宽 150~355pt,内容宽对齐到像素少 1pt 也放得下")
+        expectEqual(chorusWrapWidth(natural: 32.21 * 8 + overlayStroke * 2) - 1 >= 32.21 * 8, true,
+                    "对唱留白: 402pt 窗 / 34pt 字号下 8 个字的合唱行不再把末尾的词折下去")
         let overlayViewSrc = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/LyricsOverlayView.swift"),
             encoding: .utf8)) ?? ""
