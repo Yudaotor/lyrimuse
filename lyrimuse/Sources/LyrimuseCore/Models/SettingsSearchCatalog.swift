@@ -212,7 +212,6 @@ public enum SettingsSearchCatalog {
         lyrics("translation", "翻译语言包", kw: ["下载", "语言包", "Apple 翻译"]),
         // ---- 歌词 › 调整 ----
         lyrics("display", "繁简转换", kw: ["繁体", "简体", "OpenCC"]),
-        // 「内容」浮层里那行「标注的语言 ›」按这个标题键跳过来(RomanizationScriptsLinkRow),改标题要连着改那边。
         lyrics("display", "标注读音的语言", alt: ["标注的语言"],
                kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音", "罗马字", "注音", "发音"]),
         lyrics("display", "长句拆开", kw: ["长句", "拆分", "断句", "换行", "折行", "滚动", "跑马灯", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),

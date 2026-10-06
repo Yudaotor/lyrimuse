@@ -237,11 +237,18 @@ func runSettingsSearchTests() {
                 "设置搜索: 源码里每个设置行标题都在目录里(新加了行就到 Core SettingsSearchCatalog 登记,或写进白名单)")
     let staleAllowlist = intentionallyUnindexed.filter { scannedTitles[$0] == nil }.sorted()
     expectEqual(staleAllowlist, [], "设置搜索: 白名单里的每一项都还真的存在于源码里")
-    // 「内容」浮层里「标注的语言 ›」按标题键跳到「歌词 › 调整」那一行:目录里这一条只能有一条,跳转写的键也得是它。
-    expectEqual(entries.filter { $0.titleKey == "标注读音的语言" }.map { $0.sectionValue ?? "" }, ["display"],
-                "设置搜索: 「标注读音的语言」在目录里恰好一条、落在「调整」分段")
-    expectEqual(source("UI/OverlayStyleSettingsRows.swift").contains(#"revealEntry(titleKey: "标注读音的语言")"#), true,
-                "设置搜索: 「标注的语言 ›」跳转用的键跟目录那一条一致")
+    // 两处「内容」浮层不放标读音的语言:那是所有展示面共用的设置,只在「歌词 › 调整 › 标注读音的语言」设(04 章决策 47)。
+    func memberBody(_ text: String, after marker: String) -> String {
+        guard let start = text.range(of: marker) else { return "" }
+        let rest = text[start.upperBound...]
+        return String(rest[..<(rest.range(of: "\n    }\n")?.lowerBound ?? rest.endIndex)])
+    }
+    let contentRows = [
+        memberBody(source("UI/OverlayStyleSettingsRows.swift"), after: "struct OverlayContentSettingsRows: View {"),
+        memberBody(source("SettingsView.swift"), after: "private var lyricsWindowContentRows: some View {"),
+    ]
+    expectEqual(contentRows.map { $0.contains("L10n.t(\"读音\")") && !$0.localizedCaseInsensitiveContains("romanizationScripts") && !$0.contains("标注") },
+                [true, true], "设置搜索: 两处「内容」浮层不放「标注读音的语言」")
     // 「内容」组按段各登记一遍:上面那条覆盖检查按标题判,两段都有「读音」「译文」,漏登记一段它看不出来。
     func contentGroupTitles(_ section: String) -> Set<String> {
         Set(entries.filter { $0.sectionValue == section && $0.pathKeys.last == "内容" }.map(\.titleKey))

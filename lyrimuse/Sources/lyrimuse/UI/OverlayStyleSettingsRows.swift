@@ -224,8 +224,8 @@ struct OverlayTextSettingsRows: View {
 /// 「内容」那一组:主行下面画哪几行 —— 读音 / 译文 / 下一句,按卡片里从上到下的顺序。
 ///
 /// 读音、译文是悬浮歌词自己那一份(`overlayShowRomanization` / `overlayShowTranslation`),不连带歌词窗口;
-/// 给哪些语言标读音是歌词内容本身的设置、所有展示面共用,这里只给一行跳过去的链接(`RomanizationScriptsLinkRow`),
-/// 不另放一份语言开关。「下一句」归这里不归「排版」:它讲的是显示哪些内容,不是怎么排。见 04 章决策 42。
+/// 给哪些语言标读音是歌词内容本身的设置、所有展示面共用,只在「歌词 › 调整 › 标注读音的语言」里设,这里不放
+/// (04 章决策 47)。「下一句」归这里不归「排版」:它讲的是显示哪些内容,不是怎么排。见 04 章决策 42。
 @MainActor
 struct OverlayContentSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -234,10 +234,6 @@ struct OverlayContentSettingsRows: View {
         VStack(spacing: 0) {
             SettingsRow(icon: "textformat.alt", title: L10n.t("读音")) {
                 Toggle("", isOn: $settings.overlayShowRomanization)
-            }
-            if settings.overlayShowRomanization {
-                CardDivider()
-                RomanizationScriptsLinkRow()
             }
             CardDivider()
             SettingsRow(icon: "text.bubble", title: L10n.t("译文")) {
@@ -248,39 +244,6 @@ struct OverlayContentSettingsRows: View {
                 Toggle("", isOn: $settings.showNextLinePreview)
             }
         }
-    }
-}
-
-/// 「内容」里「读音」下面那一行:报当前给哪些语言标读音,点了跳到「歌词 › 调整 › 标注读音的语言」去改
-/// (经设置搜索那套路由:写分段 → 翻面板 → 高亮)。悬浮歌词和歌词窗口两处「内容」共用。
-/// 跳转按目录里的标题键找那一行,改那一行的标题要连着改这里的键(selftest 钉着)。
-@MainActor
-struct RomanizationScriptsLinkRow: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    var body: some View {
-        SettingsSubRow(title: L10n.t("标注的语言")) {
-            Button {
-                SettingsSearchRouter.shared.revealEntry(titleKey: "标注读音的语言")
-            } label: {
-                HStack(spacing: 3) {
-                    Text(summary)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-            }
-            .buttonStyle(.link)
-        }
-    }
-
-    private var summary: String {
-        let scripts = settings.romanizationScripts
-        var names: [String] = []
-        if scripts.contains(.japanese) { names.append(L10n.t("日语")) }
-        if scripts.contains(.korean) { names.append(L10n.t("韩语")) }
-        if scripts.contains(.chinese) { names.append(L10n.t("普通话")) }
-        if scripts.contains(.cantonese) { names.append(L10n.t("粤语")) }
-        return names.isEmpty ? L10n.t("全部关闭") : ListFormatter.localizedString(byJoining: names)
     }
 }
 

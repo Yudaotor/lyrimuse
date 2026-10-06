@@ -1892,7 +1892,6 @@ private struct LyricsSettingsTab: View {
             // 显不显示读音是各展示面自己的开关,在「歌词显示」里(04 章决策 42)。
             // 四个选项一律写**语言名**(标题问的就是语言),标成什么方案(罗马字 / 拼音 / 粤拼)
             // 放在各自的悬停说明里 —— 语言名和方案名混排,读的人得先分清哪几个是语言、哪几个是写法。
-            // 「内容」浮层里那行「标注的语言 ›」按这一行的标题键跳过来,改标题要连着改那边(RomanizationScriptsLinkRow)。
             SettingsRow(
                 icon: "textformat.alt",
                 title: L10n.t("标注读音的语言"),
@@ -2777,14 +2776,11 @@ private struct AppearanceSettingsTab: View {
 
     /// 「内容」那几行(工具栏浮层与抽屉同一份):歌词窗口完整、迷你共用这一份读音 / 译文
     /// (`showRomanization` / `showTranslation`),跟悬浮歌词那份各管各的,见 04 章决策 42。
+    /// 给哪些语言标读音只在「歌词 › 调整 › 标注读音的语言」里设,这里不放(04 章决策 47)。
     @ViewBuilder
     private var lyricsWindowContentRows: some View {
         SettingsRow(icon: "textformat.alt", title: L10n.t("读音")) {
             Toggle("", isOn: $settings.showRomanization)
-        }
-        if settings.showRomanization {
-            CardDivider()
-            RomanizationScriptsLinkRow()
         }
         CardDivider()
         SettingsRow(icon: "text.bubble", title: L10n.t("译文")) {
