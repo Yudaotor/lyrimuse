@@ -2036,6 +2036,23 @@ func runSourceContractTests() {
                         "全局快捷键: 菜单开始跟踪时关掉 KeyboardShortcuts")
             expectEqual(hk.contains("NSMenu.didEndTrackingNotification") && hk.contains("KeyboardShortcuts.isEnabled = true"), true,
                         "全局快捷键: 菜单结束跟踪时恢复")
+            // 灵动岛、悬浮歌词都没开时回声另外交给触控栏和菜单栏歌词(14 章决策 60)。漏了不报错,只表现成只用这两样的人按键没回声;
+            // 菜单栏那条要是走了 present 就是为一条提示重建状态项,提示期间 refresh 不早退就会被下一拍换回歌词。
+            expectEqual(hk.contains("guard !settings.notchOverlayEnabled, !settings.classicOverlayEnabled else { return }\n"
+                                    + "        TouchBarLyricsController.shared.flashHint(text, seconds: hintSeconds)\n"
+                                    + "        MenuBarStatusItem.shared.flashHint(text, seconds: hintSeconds)"), true,
+                        "全局快捷键: 灵动岛、悬浮歌词都没开时回声交给触控栏和菜单栏歌词")
+            let touchBar = read("TouchBar/TouchBarLyricsController.swift") ?? ""
+            expectEqual(touchBar.contains("guard enabled, bar.isVisible else { return }\n        hint = (text, PlaybackCoordinator.shared.lyricsTimelineMs())")
+                            && touchBar.contains("lyricsView.apply(spec: TouchBarLyricsCell.hintSpec(hint.text, row), nowMs: nowMs)"), true,
+                        "全局快捷键: 触控栏展开着时歌词那一格换成回声")
+            let menuBar = read("MenuBar/MenuBarStatusItem.swift") ?? ""
+            let menuHint = menuBar.components(separatedBy: "    func flashHint(_ text: String, seconds: TimeInterval) {").dropFirst().first?
+                .components(separatedBy: "\n    }\n").first ?? ""
+            expectEqual(!menuHint.isEmpty && !menuHint.contains("present(")
+                            && menuHint.contains("showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing, icon: icon)")
+                            && menuBar.contains("guard !hoverControlsEngaged, !hintActive else { return }"), true,
+                        "全局快捷键: 菜单栏回声按此刻的槽宽画、不重建状态项,提示期间 refresh 早退")
         }
         // 字号范围只有一份:设置页浮层和菜单栏面板两根滑杆都读它。
         for rel in ["UI/OverlayStyleSettingsRows.swift", "MenuBar/MenuBarPanelQuickSettings.swift"] {

@@ -991,6 +991,9 @@ final class MenuBarStatusItem: NSObject {
     private var hoverInside = false
     /// 正在接管中:歌词收掉、三个键画着、refresh() 早退。
     private var hoverControlsEngaged = false
+    /// 快捷键回声(`flashHint`)占着歌词槽的这段时间 `refresh()` 早退,到点补一次。
+    private var hintActive = false
+    private var hintTask: Task<Void, Never>?
 
     /// 进出都**不等**:指针一进来当场换成三个键,一离开当场变回歌词。
     ///
@@ -1187,7 +1190,8 @@ final class MenuBarStatusItem: NSObject {
         // 歌词和几何都停在接管那一刻,退出接管时 evaluateHoverEngagement 补一次 refresh()
         // 把这段时间的变化一次性落地(跟面板开着期间挡下几何变化同一个模型)。
         // 中间那个键的 ⏸/▶ 不靠这条路更新 —— 它有自己的订阅(isPlayingSmoothed)。
-        guard !hoverControlsEngaged else { return }
+        // 快捷键回声占着歌词槽时同理,到点 `flashHint` 那边补一次。
+        guard !hoverControlsEngaged, !hintActive else { return }
         let settings = AppSettings.shared
         let coordinator = PlaybackCoordinator.shared
         // 单行展示面取 compactLine(唱完就切走,见 CompactLyricLead)。
@@ -1399,14 +1403,43 @@ final class MenuBarStatusItem: NSObject {
             of: next, font: MenuBarMarqueeRenderer.mainFont(for: next, twoRows: rowState.twoRows))
     }
 
+    /// 快捷键回声(灵动岛、悬浮歌词都没开时,见 `GlobalHotkeys.flashHint`):歌词槽此刻在显示歌词时,按此刻的槽宽单行画
+    /// 这一行,`seconds` 秒后 refresh 换回歌词。不改槽宽:为一条一秒多的提示重建状态项不值,还会占掉重建配额(见 `present`
+    /// 头注)。槽此刻是图标(没在显示歌词)、悬停三键接管着时不画(14 章决策 60)。
+    func flashHint(_ text: String, seconds: TimeInterval) {
+        guard started, !hoverControlsEngaged, displayClass == "text" || displayClass == "fixed",
+              let item = statusItem, let button = item.button else { return }
+        let icon = lyricsIconBadge()
+        let usable = usableLyricsWidth(item, icon: icon)
+        guard usable > 0 else { return }
+        let font = MenuBarMarqueeRenderer.mainFont(for: text, twoRows: false)
+        guard case .fixed(let lineText, let win, let pacing) = MenuBarMarqueeRenderer.presentation(
+            for: text, windowWidth: usable, dwellSeconds: nil, leadInSeconds: 0, widthMode: .fixed, font: font)
+        else { return }
+        hintActive = true
+        rowState = RowState(kind: .off, secondaryText: nil, mainFont: font)
+        showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing, icon: icon)
+        hintTask?.cancel()
+        hintTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled, let self else { return }
+            self.hintActive = false
+            self.refresh()
+        }
+    }
+
+    /// 此刻这个歌词槽里文字能用的宽:当前槽宽扣掉内边距和图标那一块(`renderInterimLyrics`、`flashHint` 共用)。
+    private func usableLyricsWidth(_ item: NSStatusItem, icon: MenuBarScrollingLabel.IconBadge?) -> CGFloat {
+        item.length - Self.lyricsSlotPadding - MenuBarProgressIcon.reservedWidth(for: icon?.style)
+    }
+
     private func renderInterimLyrics(_ button: NSStatusBarButton, text: String) {
         guard displayClass == "text" || displayClass == "fixed", let item = statusItem else { return }
         // 图标占的那一块要先扣掉:item.length 是**当前**(还没让改的)槽宽,歌词能用的只有
         // 剩下那截。扣错的方向是安全的那一侧 —— 用户刚打开这个开关时当前槽还没让出图标的
         // 位置,这里扣了之后歌词只是画窄一点点,总比画出格子外压到邻居头上强。
         let icon = lyricsIconBadge()
-        let usable = item.length - Self.lyricsSlotPadding
-            - MenuBarProgressIcon.reservedWidth(for: icon?.style)
+        let usable = usableLyricsWidth(item, icon: icon)
         guard usable > 0 else { return }
         // widthMode 固定传 .fixed:过渡期间槽宽就是钉死的(它正是"还没让改"的那个宽),
         // 按固定宽语义排版;等重建后 refresh 会按用户真实的模式/宽度重画。

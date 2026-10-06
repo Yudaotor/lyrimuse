@@ -259,6 +259,11 @@ enum TouchBarLyricsCell {
         return spec
     }
 
+    /// 快捷键回声那一行(`TouchBarLyricsController.flashHint`):歌词色、整行一个颜色,放不下时按固定速度滚,对齐同歌名那几档。
+    static func hintSpec(_ text: String, _ inputs: Inputs) -> OverlayScrollingLyricRow.Spec {
+        pacedSpec(text, color: inputs.color, dwellMs: nil, alignment: side(inputs.alignment, duetSide: nil), inputs)
+    }
+
     /// 整行一个颜色、从 `inputs.startMs` 起按显示时长配速滚动的一行(同悬浮歌词 `pacedLayerRow`:整行当一个词)。
     /// - Parameter dwellMs: 这一行会显示多久;nil 或短得算不出来时按固定速度。
     static func pacedSpec(_ text: String, color: NSColor, dwellMs: Int?, alignment: LyricDuet.Side,

@@ -308,15 +308,25 @@ enum GlobalHotkeys {
     /// 加。在这之前这里只发 `NotchTransientCenter`,而那条横幅只有灵动岛
     /// 渲染(`NotchLyricsView` 里的 `NotchTransientHost` 是它全仓唯一的消费者)——于是
     /// **只开桌面悬浮歌词的用户按快捷键是完全没有反馈的**,偏移调到哪了只能靠盯着歌词
-    /// 猜。两边都发、各自按自己开没开决定显不显示,不需要在这里判断"该给谁"。
+    /// 猜。两边都发、各自按自己开没开决定显不显示,不需要在这里判断"该给谁"。两个都没开时另外交给触控栏和
+    /// 菜单栏歌词(14 章决策 60)。
     ///
     /// 碰 `LyricsOverlayWindowController.shared` 之前**必须**先判
     /// `classicOverlayEnabled`:那是个 static let,光读一下属性就会 init() 把窗口建出来
     /// 并常驻显示(这个坑本文件顶部 registerAll 的注释里已经记过一次,这里是同一条)。
     static func flashHint(icon: String, text: String) {
-        NotchTransientCenter.shared.show(.init(icon: icon, text: text, progress: nil))
-        if AppSettings.shared.classicOverlayEnabled {
+        NotchTransientCenter.shared.show(.init(icon: icon, text: text, progress: nil), for: hintSeconds)
+        let settings = AppSettings.shared
+        if settings.classicOverlayEnabled {
             LyricsOverlayWindowController.shared.flashTransientHint(text)
         }
+        // 灵动岛、悬浮歌词都没开时,同一条提示交给触控栏(展开着时)和菜单栏歌词;有一个开着就不发,
+        // 那两处是回声的主场,别的面再闪一遍是噪音(14 章决策 60)。
+        guard !settings.notchOverlayEnabled, !settings.classicOverlayEnabled else { return }
+        TouchBarLyricsController.shared.flashHint(text, seconds: hintSeconds)
+        MenuBarStatusItem.shared.flashHint(text, seconds: hintSeconds)
     }
+
+    /// 快捷键回声显示多久:灵动岛横幅、触控栏、菜单栏歌词同一个数。
+    static let hintSeconds: TimeInterval = 1.4
 }

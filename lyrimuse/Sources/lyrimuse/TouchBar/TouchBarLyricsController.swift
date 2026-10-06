@@ -80,6 +80,9 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private var measuredUnderEstimate: Double?
     /// 这一次展开是不是占满整条(隐藏功能栏)的。这种展开收起后要把功能栏图标重新露一次面,见 `visibilityChanged`。
     private var presentedFullWidth = false
+    /// 快捷键回声(`flashHint`):这一行和它从歌词时间轴哪一刻起显示;nil = 没有。
+    private var hint: (text: String, startMs: Int)?
+    private var hintTask: Task<Void, Never>?
 
     private let bar = NSTouchBar()
     private let trayItem = NSCustomTouchBarItem(identifier: Item.tray)
@@ -291,6 +294,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             visibilityObservation = nil
             playbackObservers = []
             presentedFullWidth = false
+            hintTask?.cancel()
+            hint = nil
             TouchBarPrivateAPI.dismissSystemModal(bar)
             TouchBarPrivateAPI.setInControlStrip(trayItem, false)
             displayStart = TouchBarDisplayStart()
@@ -361,6 +366,22 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         }
         logger.notice("[TouchBarLyricsController.toggleFromHotkey] \(String(describing: action), privacy: .public)")
         return action
+    }
+
+    /// 快捷键回声(灵动岛、悬浮歌词都没开时,见 `GlobalHotkeys.flashHint`):展开着时歌词那一格换成这一行,副行藏起来,
+    /// `seconds` 秒后换回歌词。收着时不画。
+    func flashHint(_ text: String, seconds: TimeInterval) {
+        guard enabled, bar.isVisible else { return }
+        hint = (text, PlaybackCoordinator.shared.lyricsTimelineMs())
+        hintTask?.cancel()
+        hintTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            // 被下一条提示顶掉时 sleep 照样返回,别让旧的这条把新提示清掉。
+            guard !Task.isCancelled else { return }
+            self?.hint = nil
+            self?.refresh()
+        }
+        refresh()
     }
 
     @objc private func escapeTapped() {
@@ -462,6 +483,14 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                                                  coverAccent: coverAccent),
             karaoke: settings.touchBarLyricsKaraoke,
             alignment: settings.touchBarLyricsAlignment)
+        if let hint {
+            var row = inputs
+            row.startMs = hint.startMs
+            lyricsView.isHidden = false
+            lyricsView.apply(spec: TouchBarLyricsCell.hintSpec(hint.text, row), nowMs: nowMs)
+            secondaryView.isHidden = true
+            return
+        }
         guard let spec = TouchBarLyricsCell.spec(for: content, inputs) else {
             lyricsView.isHidden = true
             secondaryView.isHidden = true
