@@ -19,6 +19,7 @@ enum TouchBarPrivateAPI {
     private typealias SetPresence = @convention(c) (NSString, Bool) -> Void
     private typealias SetFlag = @convention(c) (Bool) -> Void
     private typealias GetMainTouchBar = @convention(c) () -> UnsafeMutableRawPointer?
+    private typealias WantsEscOverrides = @convention(c) (UnsafeMutableRawPointer) -> Bool
     private typealias StatusChangeHandler = @convention(block) () -> Void
     private typealias RegisterStatusChange = @convention(c) (StatusChangeHandler) -> Void
 
@@ -139,6 +140,26 @@ enum TouchBarPrivateAPI {
     static func touchBarReported() -> Bool? {
         guard let e = presenceEntries else { return nil }
         return e.getMainTouchBar() != nil
+    }
+
+    /// `DFRTouchBarWantsEscOverrides(touchBar)`:这块触控栏左端有没有一颗能让 App 换掉的虚拟 Esc 键。跟上面几组分开查,
+    /// 缺了只是不补 esc 键(`TouchBarEscapeKey`)。
+    private static let wantsEscOverrides: WantsEscOverrides? = {
+        guard let framework = dlopen("/System/Library/PrivateFrameworks/DFRFoundation.framework/DFRFoundation", RTLD_LAZY),
+              let symbol = dlsym(framework, "DFRTouchBarWantsEscOverrides")
+        else {
+            logger.error("[TouchBarPrivateAPI] missing escape key entry point")
+            return nil
+        }
+        return unsafeBitCast(symbol, to: WantsEscOverrides.self)
+    }()
+
+    /// 系统此刻的主触控栏左端是不是一颗虚拟 Esc 键(1st generation 是,2nd generation 是实体键);查不了时 nil。
+    /// 框架里就是「触控栏样式 ≠ 3」:1st generation 样式 2、2nd generation 样式 3(见 17 章决策 36)。同
+    /// `touchBarReported`,只在 ControlStrip 在跑时调。
+    static func touchBarHasEscapeKey() -> Bool? {
+        guard let e = presenceEntries, let wants = wantsEscOverrides, let main = e.getMainTouchBar() else { return nil }
+        return wants(main)
     }
 
     /// 注册触控栏出现 / 消失的回调,`handler` 在框架自己的队列里被调。注册不了时返回 false。

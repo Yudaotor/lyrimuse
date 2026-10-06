@@ -20,6 +20,9 @@ final class TouchBarAvailability: ObservableObject {
     static let controlStripBundleID = "com.apple.controlstrip"
 
     @Published private(set) var isPresent = false
+    /// 这块触控栏左端是不是一颗虚拟 Esc 键(1st generation 是,2nd generation 是实体键),跟 `isPresent` 一起判;
+    /// 没有触控栏时 false。是的话展开歌词时左端补一颗自己的 esc 键(`TouchBarEscapeKey`,见 17 章决策 36)。
+    @Published private(set) var hasEscapeKey = false
     private var started = false
     private var controlStripRunning = false
     private var statusCallbackRegistered = false
@@ -48,6 +51,11 @@ final class TouchBarAvailability: ObservableObject {
         let present = TouchBarPresence.isPresent(
             controlStripRunning: controlStripRunning,
             touchBarReported: controlStripRunning ? TouchBarPrivateAPI.touchBarReported() : nil)
+        let escapeKey = present && (TouchBarPrivateAPI.touchBarHasEscapeKey() ?? false)
+        if escapeKey != hasEscapeKey {
+            hasEscapeKey = escapeKey
+            logger.notice("[TouchBarAvailability.reevaluate] escapeKey=\(escapeKey)")
+        }
         guard present != isPresent else { return }
         isPresent = present
         logger.notice("[TouchBarAvailability.reevaluate] present=\(present) controlStrip=\(self.controlStripRunning)")

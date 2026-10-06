@@ -188,6 +188,16 @@ func runTouchBarTests() {
                     "触控栏版面: 隐藏功能栏时封面 + 三键都在")
         expectEqual(S.lyricsWidth(showsArtwork: false, showsControls: false, hidesControlStrip: true), 940,
                     "触控栏版面: 隐藏功能栏时两样都藏起")
+        // 1st generation(左端是虚拟 Esc 键,17 章决策 36):前面多一个 Esc 那一格(自己的 esc 键连同后面的间距),收起键
+        // 一直跟在后面。模拟器实测:默认展开时跟 2nd generation 一样宽,隐藏功能栏时整条 1085pt。
+        expectEqual(S.lyricsWidth(showsArtwork: true, showsControls: true, escapeKey: true), 393,
+                    "触控栏版面: 1st generation 默认展开、封面 + 三键都在")
+        expectEqual(S.lyricsWidth(showsArtwork: true, showsControls: true, hidesControlStrip: true, escapeKey: true), 713,
+                    "触控栏版面: 1st generation 隐藏功能栏、封面 + 三键都在")
+        expectEqual(S.lyricsWidth(showsArtwork: false, showsControls: false, escapeKey: true), 621,
+                    "触控栏版面: 1st generation 默认展开、两样都藏起")
+        expectEqual(S.lyricsWidth(showsArtwork: false, showsControls: false, hidesControlStrip: true, escapeKey: true), 941,
+                    "触控栏版面: 1st generation 隐藏功能栏、两样都藏起")
 
         // 副行:译文最清楚、读音次之、下一句最淡(同灵动岛副行那三档),不显示是 0。
         expectEqual(S.secondaryRowOpacity(for: .off), 0, "触控栏副行: 不显示时不透明度是 0")
@@ -309,6 +319,10 @@ func runTouchBarTests() {
                     "触控栏收起键: 本 App 在前台时系统不给 ✕,放自己的")
         expectEqual(Slot.showsCollapseKey(fullWidth: false, appIsActive: false, canMinimize: true), false,
                     "触控栏收起键: 在后台、不占满整条时用系统的 ✕")
+        expectEqual(Slot.showsCollapseKey(fullWidth: false, appIsActive: false, replacesEscapeKey: true, canMinimize: true),
+                    true, "触控栏收起键: 1st generation 左端换成自己的 esc 键时系统的 ✕ 跟着没了,放自己的")
+        expectEqual(Slot.showsCollapseKey(fullWidth: false, appIsActive: false, replacesEscapeKey: true, canMinimize: false),
+                    false, "触控栏收起键: 收起的系统入口缺了就不放")
         expectEqual([true, false].allSatisfy { fullWidth in
             [true, false].allSatisfy { !Slot.showsCollapseKey(fullWidth: fullWidth, appIsActive: $0, canMinimize: false) }
         }, true, "触控栏收起键: 收起的系统入口缺了就不放")
@@ -410,7 +424,8 @@ func runTouchBarTests() {
         let privateNames = ["addSystemTrayItem", "removeSystemTrayItem", "presentSystemModalTouchBar",
                             "dismissSystemModalTouchBar", "DFRElementSetControlStripPresenceForIdentifier",
                             "DFRSystemModalShowsCloseBoxWhenFrontMost", "DFRTouchBarGetMain",
-                            "DFRRegisterStatusChangeCallback", "DFRFoundation", "minimizeSystemModalTouchBar"]
+                            "DFRRegisterStatusChangeCallback", "DFRFoundation", "minimizeSystemModalTouchBar",
+                            "DFRTouchBarWantsEscOverrides"]
         let home = "TouchBar/TouchBarPrivateAPI.swift"
         var scanned = 0
         var strays: [String] = []
@@ -670,5 +685,35 @@ func runTouchBarTests() {
                        "if settings.touchBarSecondaryLine.showsSecondaryRow {"] {
             expectEqual(quick.contains(needle), true, "触控栏面板: 快捷设置里有 \(needle)")
         }
+    }
+
+    // 1st generation 触控栏的 esc 键(17 章决策 36):判据只在有触控栏时问;排法里带上它,左端那一格用
+    // escapeKeyReplacementItemIdentifier 放进去、只在收得起来时放、放了就带上自己的收起键;按下去先看辅助功能权限再发 Esc。
+    // 漏一处都不报错:要么 2nd generation 上也冒出一颗 esc,要么 1st generation 上照旧没有 Esc,要么没授权时按了没反应。
+    do {
+        let controller = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsController.swift")) ?? ""
+        let availability = code(appDir.appendingPathComponent("TouchBar/TouchBarAvailability.swift")) ?? ""
+        let escape = code(appDir.appendingPathComponent("TouchBar/TouchBarEscapeKey.swift")) ?? ""
+        expectEqual(availability.contains("let escapeKey = present && (TouchBarPrivateAPI.touchBarHasEscapeKey() ?? false)"),
+                    true, "触控栏 esc 键: 只在有触控栏时问左端是不是虚拟 Esc 键")
+        expectEqual(controller.contains("availability.$hasEscapeKey")
+                        && controller.contains("let escapeKey = hasEscapeKey && TouchBarPrivateAPI.supportsHidingControlStrip")
+                        && controller.contains("replacesEscapeKey: escapeKey,")
+                        && controller.contains("bar.escapeKeyReplacementItemIdentifier = new.escapeKey ? Item.escape : nil")
+                        && controller.contains("case Item.escape:\n            item.view = escapeButton"), true,
+                    "触控栏 esc 键: 1st generation 上放进左端 Esc 那一格,收得起来时才放,放了就带上自己的收起键")
+        expectEqual(controller.contains("escapeKey: escapeKey)"), true, "触控栏 esc 键: 估算宽带上 Esc 那一格")
+        if let guardAt = escape.range(of: "guard AccessibilitySkipPress.isTrusted else {"),
+           let postAt = escape.range(of: ".post(tap: .cghidEventTap)") {
+            expectEqual(guardAt.lowerBound < postAt.lowerBound
+                            && escape.contains("AccessibilityPermission.shared.handleAction()"), true,
+                        "触控栏 esc 键: 先看辅助功能权限,没授权就去要、这一下不发")
+        } else {
+            expectEqual(false, true, "触控栏 esc 键: 按下去先看权限再发 Esc")
+        }
+        expectEqual(escape.contains("private static let keyCode: CGKeyCode = 0x35")
+                        && escape.contains("for keyDown in [true, false] {")
+                        && escape.contains("TouchBarLyricsStyle.escapeKeyWidth"), true,
+                    "触控栏 esc 键: 发 kVK_Escape 的按下 + 抬起,键宽同系统那颗")
     }
 }

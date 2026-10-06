@@ -71,9 +71,29 @@ public enum TouchBarLyricsStyle {
     /// 三键加设置键那一项(4 × 44 的分段控件,实测 182pt;只有三键时是 136pt)连同它后面的间距。
     public static let controlsSlot: Double = 190
 
-    /// 歌词那一格分到的宽:收起键、封面、三键之后剩下的全给它。
-    public static func lyricsWidth(showsArtwork: Bool, showsControls: Bool, hidesControlStrip: Bool = false) -> Double {
-        (hidesControlStrip ? fullWidthModalWidth : systemModalWidth) - firstItemX
+    // MARK: - 1st generation:左端是一颗虚拟 Esc 键(实测)
+    //
+    // 左端 0~80pt 是系统的 Esc 那一格。系统模态条一展开就占掉它(默认展开时换成系统的 ✕,隐藏功能栏时整条盖住);
+    // App 用 `escapeKeyReplacementItemIdentifier` 放回自己那颗 esc 键之后,两种展开方式下都是 esc 键贴左缘、收起键
+    // 从 80pt 起排,封面、三键、歌词的左缘一样。Xcode 触控栏模拟器 1st generation 实测,见 17 章决策 36。
+
+    /// App 自己那颗 esc 键的宽,同系统的 Esc 键。
+    public static let escapeKeyWidth: Double = 64
+    /// 系统的 Esc 那一格:esc 键连同它后面的间距(系统定的 16pt)。
+    public static let escapeSlotWidth: Double = 80
+    /// 1st generation 上系统模态条给 App 的那一块(从左缘算起,Esc 那一格也在里面)。
+    public static let systemModalWidthWithEscapeKey: Double = 765
+    /// 1st generation 上隐藏功能栏时系统模态条的宽:整条触控栏。
+    public static let fullWidthModalWidthWithEscapeKey: Double = 1085
+
+    /// 歌词那一格分到的宽:收起键、封面、三键之后剩下的全给它。`escapeKey`(1st generation,左端放了自己的 esc 键)时
+    /// 前面多一个 Esc 那一格。
+    public static func lyricsWidth(showsArtwork: Bool, showsControls: Bool, hidesControlStrip: Bool = false,
+                                   escapeKey: Bool = false) -> Double {
+        let modal = escapeKey
+            ? (hidesControlStrip ? fullWidthModalWidthWithEscapeKey : systemModalWidthWithEscapeKey)
+            : (hidesControlStrip ? fullWidthModalWidth : systemModalWidth)
+        return modal - (escapeKey ? escapeSlotWidth : 0) - firstItemX
             - (showsArtwork ? artworkSlot : 0) - (showsControls ? controlsSlot : 0)
     }
 }

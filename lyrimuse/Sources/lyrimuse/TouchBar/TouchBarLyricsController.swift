@@ -12,6 +12,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// 换成喇叭(`TouchBarLyricsCell.artworkTile`)。展开态是系统
 /// 模态条,不管哪个 App 在前台都显示,左端的 ✕ 收回成图标;系统不给 ✕ 的时候 —— 开了「展开时隐藏功能栏」(展开条占满
 /// 整条触控栏)、或者本 App 在前台 —— 左端换成 App 自己那颗样子相同的收起键(`TouchBarSlot.showsCollapseKey`)。
+/// 1st generation 触控栏(左端是一颗虚拟 Esc 键)上,展开条会占掉系统的 Esc,左端那一格放回一颗自己的 esc 键
+/// (`TouchBarEscapeKey`,见 17 章决策 36),收起键跟在它后面。
 /// 在设置里打开开关的那一下直接展开,App 启动时只放图标。
 /// 系统入口见 `TouchBarPrivateAPI`。这台 Mac 此刻没有触控栏时(`TouchBarAvailability`)开关开着也不启用,
 /// 触控栏出现 / 消失时跟着启停。
@@ -34,6 +36,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         static let artwork = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.artwork")
         static let controls = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.controls")
         static let lyrics = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.lyrics")
+        /// 1st generation 上放进左端 Esc 那一格的 esc 键(`escapeKeyReplacementItemIdentifier`),不在 `TouchBarSlot` 的排法里。
+        static let escape = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.escape")
 
         static func identifier(for slot: TouchBarSlot) -> NSTouchBarItem.Identifier {
             switch slot {
@@ -45,15 +49,19 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         }
     }
 
-    /// 展开态的排法:从左到右排哪几项,展开条占不占满整条(开了「展开时隐藏功能栏」、系统入口也在)。
+    /// 展开态的排法:从左到右排哪几项,展开条占不占满整条(开了「展开时隐藏功能栏」、系统入口也在),左端 Esc 那一格
+    /// 放不放自己的 esc 键(1st generation 触控栏、收得起来时)。
     private struct Layout: Equatable {
         var slots: [TouchBarSlot]
         var fullWidth: Bool
+        var escapeKey: Bool
 
-        /// 这种排法下歌词那一格分到的宽(估算)。收起键(系统的 ✕ 或自己那一颗)算在 `TouchBarLyricsStyle.firstItemX` 里,不另进账。
+        /// 这种排法下歌词那一格分到的宽(估算)。收起键(系统的 ✕ 或自己那一颗)算在 `TouchBarLyricsStyle.firstItemX` 里,不另进账;
+        /// esc 键那一格另算。
         var estimatedLyricsWidth: Double {
             TouchBarLyricsStyle.lyricsWidth(showsArtwork: slots.contains(.artwork),
-                                            showsControls: slots.contains(.controls), hidesControlStrip: fullWidth)
+                                            showsControls: slots.contains(.controls), hidesControlStrip: fullWidth,
+                                            escapeKey: escapeKey)
         }
     }
 
@@ -65,7 +73,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private var widthObserver: AnyCancellable?
     private var refreshScheduled = false
     /// 展开态此刻的排法(`setLayout` 记下)。按估算报歌词那一格的宽时读它:在 sink 里回读 AppSettings 拿到的是旧值。
-    private var layout = Layout(slots: [], fullWidth: false)
+    private var layout = Layout(slots: [], fullWidth: false, escapeKey: false)
     /// 量到的宽是在哪种排法下量的(那时的估算宽)。收着的时候系统不重排,这一格的 frame 停在上次摆着时的宽,
     /// 排法变了(估算宽对不上)就先不认它,见 `reportLyricsWidth`。
     private var measuredUnderEstimate: Double?
@@ -75,7 +83,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private lazy var trayButton = NSButton(
         image: MenuBarIconStyle.cachedImage(for: AppSettings.shared.menuBarIconStyle),
         target: self, action: #selector(trayTapped))
-    /// 隐藏功能栏时左端那颗收起键:系统这时不给 ✕,换成样子相同的这一颗,按下去收回成功能栏图标。
+    /// 系统不给 ✕ 时左端那颗收起键(`TouchBarSlot.showsCollapseKey`):样子同系统的 ✕,按下去收回成功能栏图标。
     private lazy var collapseButton: NSButton = {
         let button = NSButton(image: TouchBarLyricsCell.collapseImage(), target: self, action: #selector(collapseTapped))
         button.isBordered = false
@@ -83,6 +91,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         button.translatesAutoresizingMaskIntoConstraints = false
         return button
     }()
+    /// 1st generation 上左端那颗 esc 键:展开条占掉了系统的 Esc,放回同样的一颗(`TouchBarEscapeKey`)。
+    private lazy var escapeButton = TouchBarEscapeKey.makeButton(target: self, action: #selector(escapeTapped))
     /// 封面那一格:按下去打开歌词窗口(同灵动岛的封面键)。图跟着 `updateArtwork` 换,广告期间是喇叭、没曲目时是音符,照样能按。
     private lazy var artworkButton: NSButton = {
         let button = NSButton(image: TouchBarLyricsCell.placeholderArtwork, target: self, action: #selector(artworkTapped))
@@ -151,20 +161,23 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 },
             settings.$menuBarIconStyle.dropFirst().removeDuplicates()
                 .sink { [weak self] in self?.trayButton.image = MenuBarIconStyle.cachedImage(for: $0) },
-            Publishers.CombineLatest3(
+            Publishers.CombineLatest4(
                 Publishers.CombineLatest4(settings.$touchBarShowsArtwork, settings.$touchBarArtworkSide,
                                           settings.$touchBarShowsControls, settings.$touchBarControlsSide),
-                settings.$touchBarHidesControlStrip, Self.appIsActive())
+                settings.$touchBarHidesControlStrip, Self.appIsActive(), availability.$hasEscapeKey)
                 // 隐藏功能栏只在系统入口在时才算数,不然左端会同时有系统的 ✕ 和这颗收起键。
-                .map { items, hides, active in
+                .map { items, hides, active, hasEscapeKey in
                     let fullWidth = hides && TouchBarPrivateAPI.supportsHidingControlStrip
+                    // 1st generation:左端 Esc 那一格放自己的 esc 键,系统的 ✕ 跟着没了、收起靠自己那一颗,所以收不起来
+                    // (入口缺了)时不放。
+                    let escapeKey = hasEscapeKey && TouchBarPrivateAPI.supportsHidingControlStrip
                     let collapse = TouchBarSlot.showsCollapseKey(
-                        fullWidth: fullWidth, appIsActive: active,
+                        fullWidth: fullWidth, appIsActive: active, replacesEscapeKey: escapeKey,
                         canMinimize: TouchBarPrivateAPI.supportsHidingControlStrip)
                     return Layout(slots: TouchBarSlot.order(artworkSide: items.1, controlsSide: items.3,
                                                             showsArtwork: items.0, showsControls: items.2,
                                                             showsCollapseKey: collapse),
-                                  fullWidth: fullWidth)
+                                  fullWidth: fullWidth, escapeKey: escapeKey)
                 }
                 .removeDuplicates()
                 .sink { [weak self] in self?.setLayout($0) },
@@ -200,6 +213,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     /// 收着时系统不重排,按新排法的估算宽先报上(`reportLyricsWidth`)。
     private func setLayout(_ new: Layout) {
         layout = new
+        bar.escapeKeyReplacementItemIdentifier = new.escapeKey ? Item.escape : nil
         bar.defaultItemIdentifiers = new.slots.map(Item.identifier(for:))
         if !bar.isVisible { reportLyricsWidth() }
     }
@@ -316,6 +330,10 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
 
     @objc private func collapseTapped() {
         TouchBarPrivateAPI.minimizeSystemModal(bar)
+    }
+
+    @objc private func escapeTapped() {
+        TouchBarEscapeKey.press()
     }
 
     /// 封面那一格:打开歌词窗口,跟灵动岛的封面键、菜单栏菜单和快捷键同一个入口。
@@ -457,6 +475,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         switch identifier {
         case Item.collapse:
             item.view = collapseButton
+        case Item.escape:
+            item.view = escapeButton
         case Item.artwork:
             item.view = artworkButton
             item.visibilityPriority = .low
