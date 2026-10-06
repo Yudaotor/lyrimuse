@@ -558,6 +558,14 @@ struct LyricsManagerView: View {
     // 多选,支持 Cmd 点选/Shift 连选。
     // 三态由 selectedKeys.count 决定:0 = 空占位,1 = 单曲详情页,≥2 = 批量操作面板。
     @State private var selectedKeys: Set<String> = []
+    // 列表(SongList)绑的是这一份,跟 selectedKeys 在 songList 上互相同步,拦截见 listSelectionChanged。放在 @State 里、
+    // 不当 @StateObject:列表报上来时只有列表那一层重算。别改成 @State 的 Set 再 onChange(of:) 它 —— body 读了它,
+    // 每换一次选中整个窗口的 body 要多算一遍;也别换成 Binding(get:set:) 闭包绑定 —— 列表被 == 挡住不重算时,代码里改的
+    // 选中(开窗定位、跟着换歌、全选、删除后收敛)到不了表格。
+    @State private var listSelection = SongListSelection()
+    // 选中、列表有键盘焦点的那几行,各行自己读(见 SongList)。放在 @State 里、不当 @StateObject:它一变,整个窗口的
+    // body 不用跟着重算。
+    @State private var listEmphasis = SongListEmphasis()
     // 待删 key 的**快照**。删除确认弹窗一律只读这一份,绝不在弹窗回调里现读 selectedKeys:
     // 弹窗弹出时 List 会失去 first responder,已知会出现 selection 被系统清空的情况,现读
     // 可能读到空集(什么都没删、用户以为删了)或读到中途被改过的集合。
@@ -762,7 +770,11 @@ struct LyricsManagerView: View {
     // (锚点见 EnrichCacheStore.albumDisplayMap 的注释)。展示歌手名同样下沉(Summary.displayArtist)。
 
     private func albumDisplay(_ album: String) -> String {
-        store.albumDisplayMap[toSimplified(album).lowercased()] ?? album
+        Self.albumDisplay(album, in: store.albumDisplayMap)
+    }
+
+    private static func albumDisplay(_ album: String, in map: [String: String]) -> String {
+        map[toSimplified(album).lowercased()] ?? album
     }
 
     /// filtered 的缓存盒。@State 里包一个引用类型,让下面的计算属性能在 body 求值过程中
@@ -1199,7 +1211,7 @@ struct LyricsManagerView: View {
         let shown = pendingCleanupKeys.prefix(6)
         var lines = [L10n.t("这些记录没有歌词，且没有歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。"), ""]
         for key in shown {
-            let title = store.summaries.first(where: { $0.key == key })?.title ?? ""
+            let title = store.summary(forKey: key)?.title ?? ""
             lines.append(title.isEmpty ? key : title)
         }
         if pendingCleanupKeys.count > shown.count {
@@ -1542,18 +1554,24 @@ struct LyricsManagerView: View {
         .help(sortsByRelevance ? L10n.t("搜索时默认按相关度排序：歌名开头匹配的优先，其次是歌名、歌手、专辑中匹配的") : "")
     }
 
-    /// 列表的选中。编辑里有没保存的改动时,点别的歌先问一句(保存 / 不保存 / 取消),这时选中先不换。
-    private var listSelection: Binding<Set<String>> {
-        Binding(
-            get: { selectedKeys },
-            set: { newValue in
-                if isEditorDirty, newValue != selectedKeys {
-                    pendingSelection = newValue
-                    showUnsavedEditAlert = true
-                    return
-                }
-                selectedKeys = newValue
-            })
+    /// 列表报上来的选中。编辑里有没保存的改动时,点别的歌先问一句(保存 / 不保存 / 取消),这时选中先不换,列表退回原来那几首。
+    private func listSelectionChanged(_ keys: Set<String>) {
+        guard keys != selectedKeys else { return }
+        if isEditorDirty {
+            pendingSelection = keys
+            showUnsavedEditAlert = true
+            // 这时还在列表那一次赋值的发布当中(@Published 在赋值之前发),当场改回去会被那次赋值盖掉,推到下一拍。
+            DispatchQueue.main.async {
+                if listSelection.keys != selectedKeys { listSelection.keys = selectedKeys }
+            }
+            return
+        }
+        selectedKeys = keys
+    }
+
+    /// 强调色跟着选中和键盘焦点走:列表没焦点时选中行是灰底,照常彩色。
+    private func refreshListEmphasis() {
+        listEmphasis.update(windowFrame.listHasKeyFocus ? selectedKeys : [])
     }
 
     /// 选中这一首;编辑里有没保存的改动、要换到别的歌时先问一句,问的时候返回 false(这一下的动作不做)。
@@ -1568,31 +1586,23 @@ struct LyricsManagerView: View {
     }
 
     private func songList(scrollProxy: ScrollViewProxy) -> some View {
-        List(selection: listSelection) {
-            if groupByAlbum {
-                // 组头当作一行不能选中的条目,跟歌排在同一层 ForEach 里。别写成 Section 里再套 ForEach:List 每次比对都要
-                // 从第一组数起找第 i 行,上万首、几千组时插一条占位行就要卡几秒(见 11 章决策 70)。
-                ForEach(albumEntries) { entry in
-                    switch entry {
-                    case let .header(group):
-                        LyricsManagerAlbumHeader(album: group.album, artist: group.artist, count: group.items.count)
-                            // 行高跟歌曲行一样(内容 48 + .inset 自带的 8),估算行高才准;组头贴着下面那组歌。
-                            .frame(height: Self.listRowHeight - 8, alignment: .bottom)
-                            .selectionDisabled()
-                            .listRowSeparator(.hidden)
-                    case let .song(summary):
-                        songRow(summary)
-                    }
-                }
-            } else {
-                ForEach(sortedFiltered) { songRow($0) }
-            }
-        }
-        // 用 .inset 不用 .sidebar:.sidebar 会把行里的字画淡,在玻璃侧栏上读起来像灰掉了。
-        .listStyle(.inset)
-        // 估算行高必须等于实际行高:没滚到过的行按它算,默认的 24 比实际小一半多,几千首时 scrollTo 落点差上百行(见 11 章决策 62)。
-        .environment(\.defaultMinListRowHeight, Self.listRowHeight)
-        .scrollContentBackground(.hidden)
+        SongList(rows: SongRows(entries: groupByAlbum ? .grouped(albumEntries) : .flat(sortedFiltered),
+                                query: committedSearchText,
+                                nowPlayingKey: nowPlayingKey,
+                                nowPlayingArtwork: nowPlaying.artwork,
+                                pins: pins.pins,
+                                albumDisplayMap: store.albumDisplayMap,
+                                language: languageSettings.appLanguage,
+                                emphasis: listEmphasis),
+                 selection: listSelection,
+                 // 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
+                 // 从空白处唤出菜单时 keys 是空集(即使当前有选中项也一样);图省事读
+                 // selectedKeys 就会变成"右键点空白 → 菜单显示『删除 8 条』 → 删掉 8 条
+                 // 根本不在右键位置的条目"。空白处只给「全选」。
+                 // 右键点某个未被选中的行时系统会把选中收敛到那一行、keys 就是那一行;
+                 // 右键点已选中区内任一行则 keys 是整个选区。
+                 menu: { keys in listMenu(keys) })
+        .equatable()
         // 首次开窗、summaries 还没任何内容时叠一个"正在加载"提示,不让空 List 看着像一片白屏。
         // 用 .overlay 而不是拿 if/else 把 List 整个换掉:下面 .onAppear(真正触发 reload() 的地方)要挂在一直存在的 List 上。
         .overlay {
@@ -1607,16 +1617,6 @@ struct LyricsManagerView: View {
                 emptyListState
             }
         }
-        // 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
-        // 从空白处唤出菜单时 keys 是空集(即使当前有选中项也一样);图省事读
-        // selectedKeys 就会变成"右键点空白 → 菜单显示『删除 8 条』 → 删掉 8 条
-        // 根本不在右键位置的条目"。空白处只给「全选」。
-        // 右键点某个未被选中的行时系统会把选中收敛到那一行、keys 就是那一行;
-        // 右键点已选中区内任一行则 keys 是整个选区。
-        // 不传 primaryAction:macOS 上它绑的是双击,这个列表双击目前没有语义。
-        .contextMenu(forSelectionType: String.self) { keys in
-            listMenu(keys)
-        }
         // 筛选条件一变就把选中项收敛到当前可见集合。用 formIntersection 而不是
         // 无条件清空:用户只是微调搜索词时保住已有选择更符合预期。
         .onChange(of: filterToken) { _, _ in
@@ -1625,6 +1625,12 @@ struct LyricsManagerView: View {
         // 换分组、换排序之后每一行的位置都变了,滚回选中的那一首(见 11 章决策 75)。
         .onChange(of: groupByAlbum) { _, _ in revealSelection(scrollProxy: scrollProxy) }
         .onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }
+        .onReceive(listSelection.$keys) { keys in listSelectionChanged(keys) }
+        .onChange(of: selectedKeys) { _, keys in
+            if listSelection.keys != keys { listSelection.keys = keys }
+            refreshListEmphasis()
+        }
+        .onChange(of: windowFrame.listHasKeyFocus) { _, _ in refreshListEmphasis() }
         // 删除确认弹窗挂在 List 上——不能挂在 detailView 里(多选时右侧渲染的是批量
         // 面板、detailView 根本不在视图树里,置 isPresented 会静默无效),也故意不跟
         // 「清空全部缓存」那个弹窗挂在同一条修饰符链上:SwiftUI 对同一条链上叠加
@@ -1649,6 +1655,7 @@ struct LyricsManagerView: View {
             if showBatchDeleteConfirm { Text(batchDeleteMessage) }
         }
         .onAppear {
+            refreshListEmphasis()
             // reload 必须先于定位——刚打开窗口时 summaries 可能还是上次
             // 关闭时的旧内容(或空的),定位逻辑要按最新磁盘内容匹配当前
             // 播放的这首歌。reload() 是 async(读文件+解析在后台线程,避免
@@ -1675,17 +1682,145 @@ struct LyricsManagerView: View {
         }
     }
 
-    private func songRow(_ summary: EnrichCacheStore.Summary) -> some View {
-        LyricsManagerSongRow(
-            summary: summary,
-            albumDisplayName: summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum),
-            query: committedSearchText,
-            isNowPlaying: summary.key == nowPlayingKey,
-            isPinned: pins.isPinned(summary.key),
-            isEmphasized: windowFrame.listHasKeyFocus && selectedKeys.contains(summary.key),
-            artwork: summary.key == nowPlayingKey ? nowPlaying.artwork : nil)
-        .tag(summary.key)
-        .listRowSeparator(.hidden)
+    /// 侧栏的歌曲列表,单独一个视图、按 == 比对。外层 body 里任何一个状态变了都要整个重算(换选中、编辑格子每敲一个字、
+    /// 自动匹配的进度),列表要是跟着重算,上万行的行闭包全部重跑、整表重新比对。== 只比画在行上的东西;选中强调各行
+    /// 自己读 emphasis,别再从这一层把选中传进行里(见 11 章决策 89)。
+    private struct SongList<Menu: View>: View, Equatable {
+        let rows: SongRows
+        @ObservedObject var selection: SongListSelection
+        let menu: (Set<String>) -> Menu
+
+        static func == (a: Self, b: Self) -> Bool {
+            a.rows == b.rows && a.selection === b.selection
+        }
+
+        var body: some View {
+            List(selection: $selection.keys) {
+                rows
+            }
+            // 用 .inset 不用 .sidebar:.sidebar 会把行里的字画淡,在玻璃侧栏上读起来像灰掉了。
+            .listStyle(.inset)
+            // 估算行高必须等于实际行高:没滚到过的行按它算,默认的 24 比实际小一半多,几千首时 scrollTo 落点差上百行(见 11 章决策 62)。
+            .environment(\.defaultMinListRowHeight, LyricsManagerView.listRowHeight)
+            .scrollContentBackground(.hidden)
+            // 不传 primaryAction:macOS 上它绑的是双击,这个列表双击目前没有语义。
+            .contextMenu(forSelectionType: String.self) { keys in menu(keys) }
+        }
+    }
+
+    /// 列表里的行(ForEach 那一层)。单独一个视图:SongList 观察着选中、每换一次选中都重算,ForEach 写在那一层的话
+    /// 它跟着重建,分组时上万行的行闭包又要全部重跑一遍。这一层没有选中、没有闭包,比对相等就整个跳过。
+    /// 别给它加 .equatable():EquatableView 夹在 List 和 ForEach 中间,列表一行都选不中(见 11 章决策 89)。
+    private struct SongRows: View, Equatable {
+        enum Entries {
+            case flat([EnrichCacheStore.Summary])
+            case grouped([AlbumListEntry])
+
+            /// 同一份数组(缓存盒里取出来的那份)才算没变,不逐条比。
+            func isSameArray(as other: Entries) -> Bool {
+                switch (self, other) {
+                case let (.flat(a), .flat(b)): return Self.sameStorage(a, b)
+                case let (.grouped(a), .grouped(b)): return Self.sameStorage(a, b)
+                default: return false
+                }
+            }
+
+            private static func sameStorage<T>(_ a: [T], _ b: [T]) -> Bool {
+                a.count == b.count && a.withUnsafeBufferPointer { pa in b.withUnsafeBufferPointer { pa.baseAddress == $0.baseAddress } }
+            }
+        }
+
+        let entries: Entries
+        let query: String
+        let nowPlayingKey: String?
+        let nowPlayingArtwork: NSImage?
+        let pins: [String: Int]
+        /// 跟 summaries 一起重建:它变了,entries 一定也换了一份,== 里不另外比。
+        let albumDisplayMap: [String: String]
+        /// 行里的字是现取的界面语言,切换语言时整张表重画。
+        let language: String
+        let emphasis: SongListEmphasis
+
+        static func == (a: Self, b: Self) -> Bool {
+            a.entries.isSameArray(as: b.entries) && a.query == b.query && a.nowPlayingKey == b.nowPlayingKey
+                && a.nowPlayingArtwork === b.nowPlayingArtwork && a.pins == b.pins && a.language == b.language
+                && a.emphasis === b.emphasis
+        }
+
+        var body: some View {
+            switch entries {
+            case let .grouped(albumEntries):
+                // 组头当作一行不能选中的条目,跟歌排在同一层 ForEach 里。别写成 Section 里再套 ForEach:List 每次比对都要
+                // 从第一组数起找第 i 行,上万首、几千组时插一条占位行就要卡几秒(见 11 章决策 70)。
+                ForEach(albumEntries) { entry in
+                    switch entry {
+                    case let .header(group):
+                        LyricsManagerAlbumHeader(album: group.album, artist: group.artist, count: group.items.count)
+                            // 行高跟歌曲行一样(内容 48 + .inset 自带的 8),估算行高才准;组头贴着下面那组歌。
+                            .frame(height: LyricsManagerView.listRowHeight - 8, alignment: .bottom)
+                            .selectionDisabled()
+                            .listRowSeparator(.hidden)
+                    case let .song(summary):
+                        row(summary)
+                    }
+                }
+            case let .flat(summaries):
+                ForEach(summaries) { row($0) }
+            }
+        }
+
+        private func row(_ summary: EnrichCacheStore.Summary) -> some View {
+            SongListRow(
+                summary: summary,
+                albumDisplayName: summary.isListedMV ? L10n.t("MV")
+                    : LyricsManagerView.albumDisplay(summary.displayAlbum, in: albumDisplayMap),
+                query: query,
+                isNowPlaying: summary.key == nowPlayingKey,
+                isPinned: pins[summary.key] != nil,
+                artwork: summary.key == nowPlayingKey ? nowPlayingArtwork : nil,
+                emphasis: emphasis)
+            .tag(summary.key)
+            .listRowSeparator(.hidden)
+        }
+    }
+
+    /// 列表的一行。强调色自己从 emphasis 读:换选中时屏幕上那几行重算这一层,里面那层(LyricsManagerSongRow)只有强调
+    /// 真的变了的一两行重画。
+    private struct SongListRow: View {
+        let summary: EnrichCacheStore.Summary
+        let albumDisplayName: String
+        let query: String
+        let isNowPlaying: Bool
+        let isPinned: Bool
+        let artwork: NSImage?
+        @ObservedObject var emphasis: SongListEmphasis
+
+        var body: some View {
+            LyricsManagerSongRow(
+                summary: summary,
+                albumDisplayName: albumDisplayName,
+                query: query,
+                isNowPlaying: isNowPlaying,
+                isPinned: isPinned,
+                isEmphasized: emphasis.keys.contains(summary.key),
+                artwork: artwork)
+        }
+    }
+
+    /// 列表那一份选中(见 listSelection)。
+    @MainActor
+    private final class SongListSelection: ObservableObject {
+        @Published var keys: Set<String> = []
+    }
+
+    /// 选中、列表有键盘焦点的那几行(见 LyricsManagerSongRow.isEmphasized)。集合真的变了才发布。
+    @MainActor
+    private final class SongListEmphasis: ObservableObject {
+        @Published private(set) var keys: Set<String> = []
+
+        func update(_ keys: Set<String>) {
+            if keys != self.keys { self.keys = keys }
+        }
     }
 
     /// 列表的右键菜单:空白处是「全选」,一首是这首的全部操作,几首是批量能做的那几样。
@@ -1699,7 +1834,7 @@ struct LyricsManagerView: View {
                     selectedKeys = Set(selectableFiltered.map(\.key))
                 }
             }
-        } else if visible.count == 1, let summary = store.summaries.first(where: { $0.key == visible[0] }) {
+        } else if visible.count == 1, let summary = store.summary(forKey: visible[0]) {
             singleItemMenu(summary)
         } else if !visible.isEmpty {
             multiItemMenu(visible)
@@ -2130,7 +2265,7 @@ struct LyricsManagerView: View {
     // 那些行本来就正高亮着,弹窗再列一遍是重复且更难读(Finder/照片/邮件都是只给数量)。
     private var batchDeleteTitle: String {
         if pendingDeleteKeys.count == 1,
-           let summary = store.summaries.first(where: { $0.key == pendingDeleteKeys[0] }) {
+           let summary = store.summary(forKey: pendingDeleteKeys[0]) {
             return String(format: L10n.t("确定要删除「%@ - %@」的本地记录吗？"), summary.artist, summary.title)
         }
         return String(format: L10n.t("确定要删除选中的 %@ 条本地记录吗？"), "\(pendingDeleteKeys.count)")
@@ -2747,7 +2882,7 @@ struct LyricsManagerView: View {
     @ViewBuilder
     private var detailColumn: some View {
         Group {
-            if let key = singleSelectedKey, let summary = store.summaries.first(where: { $0.key == key }) {
+            if let key = singleSelectedKey, let summary = store.summary(forKey: key) {
                 detailView(key: key, summary: summary)
             } else if let placeholder = placeholderSummary, singleSelectedKey == placeholder.key {
                 // 占位行没有对应的 raw 条目,不能走 detailView 那整套编辑/删除/重新自动匹配——
@@ -2789,14 +2924,14 @@ struct LyricsManagerView: View {
     }
 
     private var unsavedEditTitle: String {
-        let title = store.summaries.first(where: { $0.key == editingKey })?.title ?? ""
+        let title = editingKey.flatMap { store.summary(forKey: $0) }?.title ?? ""
         return String(format: L10n.t("「%@」有未保存的修改"), title)
     }
 
     private func saveThenSwitch() {
         let next = pendingSelection
         pendingSelection = nil
-        guard let key = editingKey, let summary = store.summaries.first(where: { $0.key == key }) else { return }
+        guard let key = editingKey, let summary = store.summary(forKey: key) else { return }
         Task {
             guard await saveEdits(key: key, summary: summary) else { return }
             endEditing()
@@ -3394,7 +3529,7 @@ struct LyricsManagerView: View {
     /// 有词、不是纯音乐、正文读得回来、还没在编辑时才能进编辑。
     private var canEditLyrics: Bool {
         guard editMode == .preview, !detailIncomplete, let key = singleSelectedKey, key == editingKey,
-              let summary = store.summaries.first(where: { $0.key == key }) else { return false }
+              let summary = store.summary(forKey: key) else { return false }
         return summary.hasLyrics && !summary.isInstrumental
     }
 
@@ -3944,7 +4079,7 @@ struct LyricsManagerView: View {
         loadedWordText = loadedYRC.isEmpty ? "" : LyricsWordTimingEdit.editableText(yrc: loadedYRC)
         editedWordText = loadedWordText
         saveEditNote = nil
-        if let summary = store.summaries.first(where: { $0.key == key }) {
+        if let summary = store.summary(forKey: key) {
             refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
             refreshPreviewRows(key: key, summary: summary, lyrics: d.lyrics, tr: d.tr, roma: d.roma)
             plainLyricsText = !summary.hasLyrics && summary.hasPlainTextFallback ? store.plainLyrics(for: key) : ""

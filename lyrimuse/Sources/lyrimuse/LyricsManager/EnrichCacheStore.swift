@@ -193,6 +193,8 @@ public final class EnrichCacheStore: ObservableObject {
     /// 占位行每 5 秒核对一次、「回到当前播放」精确对不上时都要按宽松 key 找;逐条现算要对全库八千多个 key
     /// 各做一次繁简转换,放在主线程上。
     private var looseKeyIndex: [String: String] = [:]
+    /// key 到它在 summaries 里的下标,随 summaries 一起重建(见 summary(forKey:))。
+    private var summaryIndex: [String: Int] = [:]
     /// 读盘失败(缓存读不出、正文补不回):下一次读成功就清。
     @Published private var loadError: String?
     /// 写入失败(保存、删除、清空没做成):只在下一次写成功、或调用方 `dismissEditError()` 时清 ——
@@ -435,6 +437,7 @@ public final class EnrichCacheStore: ObservableObject {
         var distinctArtists: [String]
         var distinctAlbums: [String]
         var looseKeyIndex: [String: String] = [:]
+        var summaryIndex: [String: Int] = [:]
         /// 条目里出现过、但不在 `LyricsSource` 里的来源:播放器自带的那份歌词(KKBOX、Spotify)。
         var extraSources: [String] = []
     }
@@ -449,6 +452,7 @@ public final class EnrichCacheStore: ObservableObject {
         distinctArtists = bundle.distinctArtists
         distinctAlbums = bundle.distinctAlbums
         looseKeyIndex = bundle.looseKeyIndex
+        summaryIndex = bundle.summaryIndex
         if extraSources != bundle.extraSources { extraSources = bundle.extraSources }
     }
 
@@ -768,9 +772,12 @@ public final class EnrichCacheStore: ObservableObject {
         var artistMap: [String: String] = [:]
         var looseIndex: [String: String] = [:]
         looseIndex.reserveCapacity(items.count)
+        var summaryIndex: [String: Int] = [:]
+        summaryIndex.reserveCapacity(items.count)
         let knownSources = Set(LyricsSource.allCases.map(\.rawValue))
         var extraSources: Set<String> = []
-        for s in items {
+        for (index, s) in items.enumerated() {
+            summaryIndex[s.key] = index
             if !s.lyricsSource.isEmpty, !knownSources.contains(s.lyricsSource) { extraSources.insert(s.lyricsSource) }
             let loose = EnrichCacheKeys.looseKey(s.key)
             if looseIndex[loose] == nil { looseIndex[loose] = s.key }
@@ -786,6 +793,7 @@ public final class EnrichCacheStore: ObservableObject {
             distinctArtists: Array(Set(artistMap.values)).sorted(),
             distinctAlbums: Array(Set(albumMap.values)).sorted(),
             looseKeyIndex: looseIndex,
+            summaryIndex: summaryIndex,
             extraSources: extraSources.sorted()
         )
     }
@@ -821,6 +829,13 @@ public final class EnrichCacheStore: ObservableObject {
     /// 列表里跟这个 key 宽松相等(大小写 / 空格 / 繁简不同)的第一条,没有就 nil。
     func key(matchingLoose key: String) -> String? {
         looseKeyIndex[EnrichCacheKeys.looseKey(key)]
+    }
+
+    /// key 正好是这个的那一条,没有就 nil。别换成 summaries.first(where:):上万条时每找一次都把条目逐个复制一遍,
+    /// 歌词管理的 body 每算一次要找好几回。
+    func summary(forKey key: String) -> Summary? {
+        guard let index = summaryIndex[key], summaries.indices.contains(index) else { return nil }
+        return summaries[index]
     }
 
     /// 懒解码某条的解析决策记录 —— 只在打开「解析决策」弹窗那一刻按 key 解一条,

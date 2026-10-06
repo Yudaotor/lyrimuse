@@ -3729,7 +3729,8 @@ func runSourceContractTests() {
                     && manager.contains(".onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }"), true,
                     "歌词管理: 换分组、换排序之后滚回选中的那一首")
         // 正在放的那首在列表行、多选清单里跟详情页头部一样用播放器给的封面(11 章决策 78)。
-        expectEqual(manager.contains("artwork: summary.key == nowPlayingKey ? nowPlaying.artwork : nil)")
+        expectEqual(manager.contains("artwork: summary.key == nowPlayingKey ? nowPlayingArtwork : nil,")
+                    && manager.contains("nowPlayingArtwork: nowPlaying.artwork,")
                     && manager.contains("LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,\n                               size: 32, radius: 6)")
                     && managerParts.contains("LyricsManagerCover(url: summary.coverURL, image: artwork, size: 40, radius: 7)"), true,
                     "歌词管理: 正在放的那首在列表里用播放器给的封面")
@@ -3749,9 +3750,24 @@ func runSourceContractTests() {
         expectEqual(manager.contains("guard followsPlayback, !isEditorDirty, editMode == .preview, !showSearchSheet, !showDecisionSheet else { return }"),
                     true, "歌词管理: 搜索候选歌词、解析决策面板开着时换歌不跟随")
         // 列表的估算行高等于实际行高,scrollTo 才落得准(11 章决策 62)。
-        expectEqual(manager.contains(".environment(\\.defaultMinListRowHeight, Self.listRowHeight)")
+        expectEqual(manager.contains(".environment(\\.defaultMinListRowHeight, LyricsManagerView.listRowHeight)")
                     && manager.contains("private static let listRowHeight: CGFloat = 56"), true,
                     "歌词管理: 列表的估算行高设成实际行高")
+        // 列表是按 == 比对的子视图,行自己读强调色;列表那份选中放在外层不订阅的对象里、外层 onReceive 它:闭包绑定下代码里改的
+        // 选中到不了表格,外层 onChange(of:) 一份 @State 则每换一次选中 body 多算一遍。按 key 找条目走索引(11 章决策 89)。
+        let songListSource = (manager.components(separatedBy: "private struct SongList<Menu: View>: View, Equatable {").dropFirst().first ?? "")
+            .components(separatedBy: "/// 列表的一行。").first ?? ""
+        expectEqual(!songListSource.isEmpty
+                    && manager.contains("menu: { keys in listMenu(keys) })\n        .equatable()")
+                    && manager.contains("selection: listSelection,")
+                    && manager.contains(".onReceive(listSelection.$keys) { keys in listSelectionChanged(keys) }")
+                    && songListSource.contains("List(selection: $selection.keys) {\n                rows\n            }")
+                    && songListSource.contains("private struct SongRows: View, Equatable {")
+                    && !songListSource.contains("selectedKeys")
+                    && manager.contains("isEmphasized: emphasis.keys.contains(summary.key),")
+                    && !manager.contains("List(selection: Binding(")
+                    && !manager.contains("store.summaries.first(where:"), true,
+                    "歌词管理: 列表是按 == 比对的子视图,行自己读强调色,选中放在外层不订阅的对象里")
     }
 
     // ---- 设置页顶层分类记忆----
