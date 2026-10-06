@@ -1654,7 +1654,7 @@ func runSourceContractTests() {
             expectEqual(lwv.contains("DispatchQueue.main.async {\n            if let window = view.window {\n                controller.attach(window)"), false,
                         "歌词窗口: 别改回下一拍才 attach")
             // 恢复完整尺寸时把系统按场景 id 存的那份 frame 也改写掉,否则它后套用、把窗口摆回迷你尺寸
-            // (07 章决策 55)。名字必须跟 App.swift 的 Window 场景 id 一致。
+            // (07 章决策 88)。名字必须跟 App.swift 的 Window 场景 id 一致。
             expectEqual(lwv.contains("window.saveFrame(usingName: Self.sceneFrameAutosaveName)")
                         && lwv.contains("private static let sceneFrameAutosaveName = \"lyrics-window\""), true,
                         "歌词窗口: 恢复尺寸时同步系统那份 frame")

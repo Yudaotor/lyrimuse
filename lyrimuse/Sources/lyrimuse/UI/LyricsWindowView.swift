@@ -531,7 +531,7 @@ private final class LyricsWindowController: ObservableObject {
         window.setFrame(WindowFrameFit.clamp(saved, into: screen.visibleFrame), display: false)
         // 系统自己也按场景 id 存了一份 frame(`NSWindow Frame lyrics-window`),而且在我们恢复之后才
         // 套用 —— 它不分迷你与否,迷你期间照存。不改写它的话,完整布局打开时窗口会先被我们摆成完整
-        // 尺寸、再被它摆回迷你尺寸,成了一扇迷你大小的完整布局窗(07 章决策 55)。
+        // 尺寸、再被它摆回迷你尺寸,成了一扇迷你大小的完整布局窗(07 章决策 88)。
         // 这里把它改写成刚恢复的完整 frame,两份一致,谁后套用都一样;要进迷你由调用方随后再切(决策 72)。
         window.saveFrame(usingName: Self.sceneFrameAutosaveName)
         return true
