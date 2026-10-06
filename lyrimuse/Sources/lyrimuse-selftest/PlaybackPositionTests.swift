@@ -711,6 +711,103 @@ func runPlaybackPositionTests() {
                         "切歌补偿: 越过新标题自己那份")
             expectEqual(MC.correctsFromResetAnchor(bundleID: PlaybackPlayer.kugou.bundleIdentifier), true, "切歌补偿: 酷狗开")
             expectEqual(MC.correctsFromResetAnchor(bundleID: PlaybackPlayer.soda.bundleIdentifier), false, "切歌补偿: 别的播放器不开")
+
+            // 试听段从歌曲中间放起(未登录时会员歌只放 60 秒):旧标题下先到的那份带着下一首的时长,位置是片段起点。
+            // 真机四次(时间戳取末几位):I Could Be the One 从 39.8s、Payphone 从 53.1s、Last Christmas 从 18.06s、Boys 从约 55s 放起。
+            let icbto = MC.ResetAnchor(title: "Beautiful", elapsed: 40.033, timestamp: at(35.581503), nextTrackDuration: 226.22)
+            expectEqual(ms(MC.resetAnchorStartCorrection(resets: [icbto], title: "I Could Be the One (LP版)", elapsed: 40.465,
+                                                         timestamp: at(36.134480), duration: 226.22)), 0.121,
+                        "切歌补偿: 中段试听 I Could Be the One 补 0.121")
+            let payphone = MC.ResetAnchor(title: "I Could Be the One (LP版)", elapsed: 53.131, timestamp: at(95.430114),
+                                          nextTrackDuration: 231.497)
+            expectEqual(ms(MC.resetAnchorStartCorrection(resets: [payphone], title: "Payphone", elapsed: 53.250,
+                                                         timestamp: at(96.083558), duration: 231.497)), 0.534,
+                        "切歌补偿: 中段试听 Payphone 补 0.534")
+            let christmas = MC.ResetAnchor(title: "Innocence", elapsed: 18.059999, timestamp: at(215.548694),
+                                           nextTrackDuration: 203.702)
+            expectEqual(ms(MC.resetAnchorStartCorrection(resets: [christmas], title: "Last Christmas", elapsed: 18.221,
+                                                         timestamp: at(216.253157), duration: 203.702)), 0.543,
+                        "切歌补偿: 中段试听 Last Christmas 补 0.543")
+            let boys = MC.ResetAnchor(title: "Pretty Stranger", elapsed: 54.826, timestamp: at(395.788154), nextTrackDuration: 162.795)
+            expectEqual(ms(MC.resetAnchorStartCorrection(resets: [boys], title: "Boys", elapsed: 55.083999,
+                                                         timestamp: at(396.577715), duration: 162.795)), 0.532,
+                        "切歌补偿: 中段试听 Boys 补 0.532")
+            // 从头放的那种同样带着时长,照补(Innocence:旧标题 Payphone 下 0.037,新标题 0.219999)
+            let innocence = MC.ResetAnchor(title: "Payphone", elapsed: 0.037, timestamp: at(155.489699), nextTrackDuration: 233.038)
+            expectEqual(ms(MC.resetAnchorStartCorrection(resets: [innocence], title: "Innocence", elapsed: 0.219999,
+                                                         timestamp: at(156.209333), duration: 233.038)), 0.537,
+                        "切歌补偿: 带时长的归零锚点照补")
+            // 时长对不上就不是同一首,不补;这份锚点没报时长时退回按位置判(中段起播的位置早过了 3s)
+            expectEqual(MC.resetAnchorStartCorrection(resets: [payphone], title: "Last Christmas", elapsed: 53.250,
+                                                      timestamp: at(96.083558), duration: 203.702), nil,
+                        "切歌补偿: 时长对不上不补")
+            expectEqual(MC.resetAnchorStartCorrection(resets: [payphone], title: "Payphone", elapsed: 53.250,
+                                                      timestamp: at(96.083558), duration: nil), nil,
+                        "切歌补偿: 没报时长、位置过了 3s 不补")
+            // 没带时长的老一种候选锚点,中段位置照旧不补
+            expectEqual(MC.resetAnchorStartCorrection(resets: [MC.ResetAnchor(title: "I Could Be the One (LP版)", elapsed: 53.131,
+                                                                              timestamp: at(95.430114))],
+                                                      title: "Payphone", elapsed: 53.250, timestamp: at(96.083558), duration: 231.497), nil,
+                        "切歌补偿: 没带时长的候选锚点只认开头 3s")
+            // 带时长的候选锚点也只在 3s 窗口内有效
+            expectEqual(MC.resetAnchorStartCorrection(resets: [payphone], title: "Payphone", elapsed: 57.0,
+                                                      timestamp: at(99.5), duration: 231.497), nil,
+                        "切歌补偿: 带时长的候选锚点超出窗口不补")
+
+            // 认「下一首的第一份」:标题跟上一份锚点相同、时长变了
+            expectEqual(MC.nextTrackDurationUnderOldTitle(previousTitle: "I Could Be the One (LP版)", previousDuration: 226.22,
+                                                          title: "I Could Be the One (LP版)", duration: 231.497), 231.497,
+                        "下一首锚点: 标题没换、时长换了")
+            expectEqual(MC.nextTrackDurationUnderOldTitle(previousTitle: "Payphone", previousDuration: 231.497,
+                                                          title: "Payphone", duration: 231.497), nil,
+                        "下一首锚点: 时长没变(暂停 / 恢复 / 循环)不算")
+            expectEqual(MC.nextTrackDurationUnderOldTitle(previousTitle: "Payphone", previousDuration: 231.497,
+                                                          title: "Payphone", duration: 231.2), nil,
+                        "下一首锚点: 时长差不到 0.5s 不算")
+            expectEqual(MC.nextTrackDurationUnderOldTitle(previousTitle: "I Could Be the One (LP版)", previousDuration: 226.22,
+                                                          title: "Payphone", duration: 231.497), nil,
+                        "下一首锚点: 标题已经换了(新标题自己那份)不算")
+            expectEqual(MC.nextTrackDurationUnderOldTitle(previousTitle: nil, previousDuration: nil,
+                                                          title: "Payphone", duration: 231.497), nil,
+                        "下一首锚点: 刚起来、没有上一份不算")
+
+            // 事件流合并状态带上时长:旧标题下那一行 diff 只带时长 / 位置 / 时间戳
+            let kugouFull = Data(#"{"type":"data","diff":false,"payload":{"title":"Payphone","artist":"Maroon 5","bundleIdentifier":"com.kugou.mac.Music","elapsedTimeMicros":53250000,"timestampEpochMicros":1791302096083558,"durationMicros":231497000,"playbackRate":1,"playing":true}}"#.utf8)
+            let kugouReset = Data(#"{"type":"data","diff":true,"payload":{"contentItemIdentifier":"X","elapsedTimeMicros":37000,"timestampEpochMicros":1791302155489699,"durationMicros":233038000}}"#.utf8)
+            let k1 = MediaControlStreamWatcher.digest(line: kugouFull, merged: [:], arrivedAt: at(96.1))
+            let k2 = MediaControlStreamWatcher.digest(line: kugouReset, merged: k1.merged, arrivedAt: at(155.5))
+            expectEqual((k1.merged["duration"] as? NSNumber)?.doubleValue, 231.497, "digest: 合并状态记下时长")
+            expectEqual((k2.merged["duration"] as? NSNumber)?.doubleValue, 233.038, "digest: diff 里的新时长并进去")
+            expectEqual(k2.merged["title"] as? String, "Payphone", "digest: 那一行标题还是上一首的")
+            expectEqual(MC.nextTrackDurationUnderOldTitle(
+                previousTitle: k1.merged["title"] as? String, previousDuration: (k1.merged["duration"] as? NSNumber)?.doubleValue,
+                title: k2.merged["title"] as? String, duration: (k2.merged["duration"] as? NSNumber)?.doubleValue), 233.038,
+                        "下一首锚点: 两行真实载荷串起来认得出")
+
+            // App 重启后接回:锚点身份逐字一致才用上一个进程记下的量
+            let kugouID = PlaybackPlayer.kugou.bundleIdentifier
+            let key = MC.anchorKey(artist: "Maroon 5、Wiz Khalifa", title: "Payphone", elapsedTime: 53.25, timestamp: "@1791302096083558")
+            let kept = AnchorStartCorrectionRecord(bundleID: kugouID, anchorKey: key, correctionSecs: 0.534, writtenAtMs: 1_791_302_096_400)
+            expectEqual(MC.restoredStartCorrection(record: kept, bundleID: kugouID, anchorKey: key), 0.534,
+                        "重启接回: 同一个锚点接着补")
+            let resumed = MC.anchorKey(artist: "Maroon 5、Wiz Khalifa", title: "Payphone", elapsedTime: 80.112, timestamp: "@1791302130000000")
+            expectEqual(MC.restoredStartCorrection(record: kept, bundleID: kugouID, anchorKey: resumed), nil,
+                        "重启接回: 锚点变了(暂停 / 拖动后重发)不接")
+            expectEqual(MC.restoredStartCorrection(record: kept, bundleID: PlaybackPlayer.spotify.bundleIdentifier, anchorKey: key), nil,
+                        "重启接回: 别的播放器不接")
+            expectEqual(MC.restoredStartCorrection(record: nil, bundleID: kugouID, anchorKey: key), nil, "重启接回: 没有记录不接")
+            let tooBig = AnchorStartCorrectionRecord(bundleID: kugouID, anchorKey: key, correctionSecs: 2.0, writtenAtMs: 1)
+            expectEqual(MC.restoredStartCorrection(record: tooBig, bundleID: kugouID, anchorKey: key), nil,
+                        "重启接回: 量超出补偿范围不接")
+            let encoded = (try? AnchorStartCorrectionFile.encode(kept)).flatMap { String(data: $0, encoding: .utf8) }
+            expectEqual(encoded,
+                        #"{"anchor_key":""# + key + #"","bundle_id":"com.kugou.mac.Music","correction_secs":0.534,"written_at_ms":1791302096400}"#,
+                        "重启接回: 文件键名 / 键序固定")
+            expectEqual((try? AnchorStartCorrectionFile.encode(kept)).flatMap(AnchorStartCorrectionFile.decode), kept,
+                        "重启接回: 写出去读得回来")
+            expectEqual(AnchorStartCorrectionFile.decode(Data("not json".utf8)), nil, "重启接回: 坏文件当没有")
+            expectEqual(AnchorStartCorrectionFile.fileName, "lyrimuse-anchor-start-correction.json",
+                        "重启接回: 文件名不变(App 重启后要读回上一个进程写的那份)")
         }
         expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .noisyFloored, bundleID: nil), false,
                     "gapless 领先: 认不出播放器不校正")

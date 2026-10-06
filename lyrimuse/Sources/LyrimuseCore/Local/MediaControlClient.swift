@@ -2168,13 +2168,14 @@ public enum MediaControlClient {
         return position <= duration + rateOnlyPlayingOverrunSecs ? true : playing
     }
 
-    // ---- 自然切歌:归零锚点先于新曲目信息到 ----
+    // ---- 切歌:旧标题下先到的那份锚点 ----
     //
-    // 酷狗自然切到下一首时,先在**上一首的标题下**发一份位置归零的锚点(elapsed ≤ 0.2),0.6~1s 后
-    // 标题才换过来,新标题下的锚点多数比真实起播晚 ~0.5s、之后播放中不再重发。归零那份是准的
-    // (与暂停冻结值反推的起播时刻差 0.04~0.05s),新标题那份整首歌恒偏慢。数据见 02 章「酷狗自然切歌」。
+    // 酷狗切到下一首时(整首放完、试听段到点),先在**上一首的标题下**发下一首的第一份锚点:带着下一首的
+    // 时长,位置是这一段的起点(从头放 ~0,试听段从歌曲中间放起就是片段起点)。0.6~1s 后标题才换过来,
+    // 新标题下的锚点多数比真实起播晚 ~0.5s、之后播放中不再重发。旧标题那份是准的,新标题那份整段恒偏慢。
+    // 数据见 02 章「酷狗自然切歌」与决策 104。
     private static let resetAnchorLock = NSLock()
-    /// 最近几份归零锚点。只留一份不够:新标题下紧跟着的那份位置同样很小,会把旧标题那份顶掉。
+    /// 最近几份候选锚点。只留一份不够:新标题下紧跟着的那份位置同样很小,会把旧标题那份顶掉。
     nonisolated(unsafe) private static var recentResetAnchors: [ResetAnchor] = []
     private static let recentResetAnchorLimit = 4
 
@@ -2182,20 +2183,26 @@ public enum MediaControlClient {
         public var title: String
         public var elapsed: Double
         public var timestamp: Date
-        public init(title: String, elapsed: Double, timestamp: Date) {
+        /// 这份锚点带着的下一首时长:标题没换、时长先换了的那份才有(见 `nextTrackDurationUnderOldTitle`);
+        /// nil = 按位置归零认的。
+        public var nextTrackDuration: Double?
+        public init(title: String, elapsed: Double, timestamp: Date, nextTrackDuration: Double? = nil) {
             self.title = title
             self.elapsed = elapsed
             self.timestamp = timestamp
+            self.nextTrackDuration = nextTrackDuration
         }
     }
 
-    /// 位置不超过这么多才算一份归零锚点。
+    /// 没带下一首时长的锚点,位置不超过这么多才算一份归零锚点。
     public nonisolated static let resetAnchorMaxElapsed: Double = 1.0
-    /// 新标题的锚点离归零锚点多久之内、位置不超过多少,才按归零锚点的起播时刻算。
+    /// 新标题的锚点离候选锚点多久之内,才按候选锚点的起播时刻算;候选锚点是按位置归零认的,新锚点的位置也不能超过这么多。
     public nonisolated static let resetAnchorWindowSecs: TimeInterval = 3
     /// 两份锚点推出的起播时刻至少差这么多才补(再小就是锚点本身的抖动);超过上限说明不是同一次起播。
     public nonisolated static let resetAnchorMinCorrectionSecs: Double = 0.05
     public nonisolated static let resetAnchorMaxCorrectionSecs: Double = 1.5
+    /// 时长差在这个以内算同一个值。
+    public nonisolated static let resetAnchorDurationToleranceSecs: Double = 0.5
 
     nonisolated(unsafe) private static var lastLoggedStartCorrectionKey: String?
     /// 同一个锚点只记一行。
@@ -2212,11 +2219,26 @@ public enum MediaControlClient {
         bundleID == PlaybackPlayer.kugou.bundleIdentifier
     }
 
-    /// stream watcher 报告:这一行带着锚点。位置归零的记下来,供之后换了标题的那份锚点对照。
-    nonisolated static func noteAnchorForReset(title: String?, elapsed: Double?, timestamp: Date?) {
-        guard let title, !title.isEmpty, let elapsed, elapsed <= resetAnchorMaxElapsed, let timestamp else { return }
+    /// 一份锚点是不是下一首的第一份:标题跟上一份锚点相同,时长却变了。是就返回这个新时长。纯函数,selftest 直接覆盖。
+    public nonisolated static func nextTrackDurationUnderOldTitle(
+        previousTitle: String?, previousDuration: Double?, title: String?, duration: Double?
+    ) -> Double? {
+        guard let title, !title.isEmpty, title == previousTitle, let duration, let previousDuration,
+              abs(duration - previousDuration) > resetAnchorDurationToleranceSecs
+        else { return nil }
+        return duration
+    }
+
+    /// stream watcher 报告:这一行带着锚点。位置归零的、带着下一首时长的(`nextTrackDuration`)记下来,
+    /// 供之后换了标题的那份锚点对照。
+    nonisolated static func noteAnchorForReset(title: String?, elapsed: Double?, timestamp: Date?,
+                                               nextTrackDuration: Double? = nil) {
+        guard let title, !title.isEmpty, let elapsed, let timestamp,
+              elapsed <= resetAnchorMaxElapsed || nextTrackDuration != nil
+        else { return }
         resetAnchorLock.lock()
-        recentResetAnchors.append(ResetAnchor(title: title, elapsed: elapsed, timestamp: timestamp))
+        recentResetAnchors.append(ResetAnchor(title: title, elapsed: elapsed, timestamp: timestamp,
+                                              nextTrackDuration: nextTrackDuration))
         if recentResetAnchors.count > recentResetAnchorLimit { recentResetAnchors.removeFirst() }
         resetAnchorLock.unlock()
     }
@@ -2227,22 +2249,78 @@ public enum MediaControlClient {
         return recentResetAnchors
     }
 
-    /// 新标题这份锚点该往前补多少秒(= 它推出的起播时刻比归零锚点推出的晚多少)。纯函数,selftest 直接覆盖。
+    /// 新标题这份锚点该往前补多少秒(= 它推出的起播时刻比候选锚点推出的晚多少)。纯函数,selftest 直接覆盖。
     ///
-    /// 对照的是最近一份**标题不同**的归零锚点:同一个标题下的归零是单曲循环回绕(或新标题自己那份),
-    /// 那份锚点本身就准。
+    /// 对照的是最近一份**标题不同**的候选锚点:同一个标题下的归零是单曲循环回绕(或新标题自己那份),
+    /// 那份锚点本身就准。候选锚点带着下一首时长时,这份锚点的时长(`duration`)对得上才是同一首,位置不限
+    /// (试听段可以从歌曲中间放起),对不上不补;没带时长的,这份锚点的位置不超过 `resetAnchorWindowSecs` 才补。
     public nonisolated static func resetAnchorStartCorrection(
-        resets: [ResetAnchor], title: String?, elapsed: Double?, timestamp: Date?
+        resets: [ResetAnchor], title: String?, elapsed: Double?, timestamp: Date?, duration: Double? = nil
     ) -> Double? {
-        guard let title, let elapsed, elapsed <= resetAnchorWindowSecs, let timestamp,
+        guard let title, let elapsed, let timestamp,
               let reset = resets.last(where: { $0.title != title })
         else { return nil }
+        if let next = reset.nextTrackDuration, let duration {
+            guard abs(duration - next) <= resetAnchorDurationToleranceSecs else { return nil }
+        } else {
+            guard elapsed <= resetAnchorWindowSecs else { return nil }
+        }
         let gap = timestamp.timeIntervalSince(reset.timestamp)
         guard gap >= 0, gap <= resetAnchorWindowSecs else { return nil }
         let correction = (timestamp.timeIntervalSince1970 - elapsed)
             - (reset.timestamp.timeIntervalSince1970 - reset.elapsed)
         guard correction > resetAnchorMinCorrectionSecs, correction <= resetAnchorMaxCorrectionSecs else { return nil }
         return correction
+    }
+
+    // ---- 补过的锚点,App 重启后接着补 ----
+    //
+    // 候选锚点只在内存里,新标题那份晚的锚点播放中又不重发:补过一次就把锚点身份和补的量记进文件,
+    // App 重启后同一个锚点接着补;锚点一变(暂停、拖动、换歌)就对不上了。见 02 章决策 104。
+    nonisolated(unsafe) private static var persistedStartCorrection: AnchorStartCorrectionRecord?
+    nonisolated(unsafe) private static var persistedStartCorrectionLoaded = false
+
+    /// 这一拍补上的量记下来;同一个锚点只写一次。
+    private nonisolated static func rememberStartCorrection(_ correction: Double, anchorKey: String,
+                                                            bundleID: String, now: Date) {
+        resetAnchorLock.lock()
+        loadPersistedStartCorrectionLocked()
+        guard persistedStartCorrection?.anchorKey != anchorKey else {
+            resetAnchorLock.unlock()
+            return
+        }
+        let record = AnchorStartCorrectionRecord(
+            bundleID: bundleID, anchorKey: anchorKey, correctionSecs: correction,
+            writtenAtMs: Int64(now.timeIntervalSince1970 * 1000))
+        persistedStartCorrection = record
+        resetAnchorLock.unlock()
+        AnchorStartCorrectionFile.write(record)
+    }
+
+    /// 上一个进程给这个锚点补过的量。
+    private nonisolated static func restoredStartCorrection(bundleID: String?, anchorKey: String) -> Double? {
+        resetAnchorLock.lock()
+        defer { resetAnchorLock.unlock() }
+        loadPersistedStartCorrectionLocked()
+        return restoredStartCorrection(record: persistedStartCorrection, bundleID: bundleID, anchorKey: anchorKey)
+    }
+
+    /// 调用方持有 `resetAnchorLock`。文件只读一次,之后以内存里这份为准。
+    private nonisolated static func loadPersistedStartCorrectionLocked() {
+        guard !persistedStartCorrectionLoaded else { return }
+        persistedStartCorrectionLoaded = true
+        persistedStartCorrection = AnchorStartCorrectionFile.read()
+    }
+
+    /// 记下的那份能不能用在这个锚点上:同一个播放器、锚点身份逐字一致、量在补偿范围内。纯函数,selftest 直接覆盖。
+    public nonisolated static func restoredStartCorrection(
+        record: AnchorStartCorrectionRecord?, bundleID: String?, anchorKey: String
+    ) -> Double? {
+        guard let record, record.bundleID == bundleID, record.anchorKey == anchorKey,
+              record.correctionSecs > resetAnchorMinCorrectionSecs,
+              record.correctionSecs <= resetAnchorMaxCorrectionSecs
+        else { return nil }
+        return record.correctionSecs
     }
 
     // ---- 暂停中发布的锚点:真正开始计时的时刻 ----
@@ -2556,14 +2634,26 @@ public enum MediaControlClient {
             pauseObservedAt: Self.lastPauseObservedAt(),
             playbackStartedAt: Self.startsPausedAnchorOnPlay(bundleID: raw.bundleIdentifier)
                 ? Self.playbackStart(forAnchorKey: anchorKey) : nil)
-        // 自然切歌时新标题的锚点晚打了,按先到的那份归零锚点的起播时刻补回来(见 resetAnchorStartCorrection)。
-        let startCorrection: Double? = playing == true && Self.correctsFromResetAnchor(bundleID: raw.bundleIdentifier)
+        // 切歌时新标题的锚点晚打了,按旧标题下先到的那份候选锚点的起播时刻补回来(见 resetAnchorStartCorrection);
+        // 这一拍没有候选锚点(App 中途重启过)时,同一个锚点用上一个进程记下的量(见 restoredStartCorrection)。
+        let correctsStart = playing == true && Self.correctsFromResetAnchor(bundleID: raw.bundleIdentifier)
+        let liveStartCorrection: Double? = correctsStart
             ? Self.resetAnchorStartCorrection(
-                resets: Self.currentResetAnchors(), title: raw.title, elapsed: raw.elapsedTime, timestamp: timestampDate)
+                resets: Self.currentResetAnchors(), title: raw.title, elapsed: raw.elapsedTime, timestamp: timestampDate,
+                duration: raw.duration)
             : nil
+        let restoredCorrection: Double? = correctsStart && liveStartCorrection == nil
+            ? Self.restoredStartCorrection(bundleID: raw.bundleIdentifier, anchorKey: anchorKey)
+            : nil
+        let startCorrection = liveStartCorrection ?? restoredCorrection
         let elapsed = liveElapsed.map { $0 + (startCorrection ?? 0) }
+        if let liveStartCorrection {
+            Self.rememberStartCorrection(liveStartCorrection, anchorKey: anchorKey,
+                                         bundleID: raw.bundleIdentifier ?? "", now: sampledAt)
+        }
         if let startCorrection, Self.noteStartCorrectionLogged(anchorKey: anchorKey) {
-            logger.notice("natural advance anchor late: \(raw.title ?? "", privacy: .public) raw=\(raw.elapsedTime ?? -1, format: .fixed(precision: 3)) → +\(startCorrection, format: .fixed(precision: 3))s from the reset anchor")
+            let from = liveStartCorrection != nil ? "the reset anchor" : "the record kept across restart"
+            logger.notice("natural advance anchor late: \(raw.title ?? "", privacy: .public) raw=\(raw.elapsedTime ?? -1, format: .fixed(precision: 3)) → +\(startCorrection, format: .fixed(precision: 3))s from \(from, privacy: .public)")
         }
         if playing == true, let elapsed {
             Self.rememberPlayingPosition(elapsed, forTrack: trackKey, at: sampledAt)

@@ -219,9 +219,13 @@ public final class MediaControlStreamWatcher {
 
     /// stream 输出里"当前 Now Playing"的合并状态:`diff:false` 的行整份替换,`diff:true` 的行
     /// 只带变化的字段。只留拼锚点身份要用的四个键(artist/title/elapsedTime/timestamp),外加判暂停
-    /// 信号要用的 bundleIdentifier(见 `digest` 里的 `playingFromRate`),别的字段一概不存 —— 见文件头
-    /// 那段"唯一的例外"。
+    /// 信号要用的 bundleIdentifier(见 `digest` 里的 `playingFromRate`)、认「这份锚点带着下一首时长」
+    /// 要用的 duration(见 `lastAnchorTitle`),别的字段一概不存 —— 见文件头那段"唯一的例外"。
     private var mergedPayload: [String: Any] = [:]
+    /// 上一份锚点的标题与时长:下一份锚点标题没变、时长变了,就是下一首的第一份
+    /// (见 `MediaControlClient.nextTrackDurationUnderOldTitle`)。
+    private var lastAnchorTitle: String?
+    private var lastAnchorDuration: Double?
 
     private func consume(_ chunk: Data, arrivedAt: Date) {
         guard !stopped else { return }
@@ -265,10 +269,17 @@ public final class MediaControlStreamWatcher {
                 // 同一行里 playing 与锚点一起到时,以这一行为准(上面已经更新过 lastPlaying)。
                 MediaControlClient.noteAnchorPublished(anchorKey: key, whilePaused: lastPlaying == false, at: arrivedAt)
                 if MediaControlClient.correctsFromResetAnchor(bundleID: digest.merged["bundleIdentifier"] as? String) {
+                    let title = digest.merged["title"] as? String
+                    let duration = (digest.merged["duration"] as? NSNumber)?.doubleValue
                     MediaControlClient.noteAnchorForReset(
-                        title: digest.merged["title"] as? String,
+                        title: title,
                         elapsed: (digest.merged["elapsedTime"] as? NSNumber)?.doubleValue,
-                        timestamp: MediaControlClient.parseTimestamp(digest.merged["timestamp"] as? String))
+                        timestamp: MediaControlClient.parseTimestamp(digest.merged["timestamp"] as? String),
+                        nextTrackDuration: MediaControlClient.nextTrackDurationUnderOldTitle(
+                            previousTitle: lastAnchorTitle, previousDuration: lastAnchorDuration,
+                            title: title, duration: duration))
+                    lastAnchorTitle = title
+                    lastAnchorDuration = duration
                 }
                 // 每个新锚点一行(换歌/暂停/恢复才有),不是每拍都打。年龄是"到达时锚点整秒时间戳
                 // 已经多老",tight 与否就看它。
@@ -307,7 +318,7 @@ public final class MediaControlStreamWatcher {
         let payload = MediaControlMicros.normalized(rawPayload)
         let isDiff = object["diff"] as? Bool ?? false
         var next: [String: Any] = isDiff ? merged : [:]
-        for key in ["artist", "title", "elapsedTime", "timestamp", "bundleIdentifier"] where payload.keys.contains(key) {
+        for key in ["artist", "title", "elapsedTime", "timestamp", "bundleIdentifier", "duration"] where payload.keys.contains(key) {
             if payload[key] is NSNull {
                 next.removeValue(forKey: key)
             } else {
