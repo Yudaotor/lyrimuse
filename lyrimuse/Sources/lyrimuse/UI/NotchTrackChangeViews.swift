@@ -174,22 +174,47 @@ struct NotchArtworkRef: Equatable {
 }
 
 /// 两张封面是不是同一张画面(`ArtworkFingerprint`)。指纹按图对象缓存最近几张:每次换歌最多算两三张,
-/// 每张要把整张图解一遍再缩到 8×8。
+/// 每张要把整张图解一遍再缩到 8×8,所以新图一到就先在后台算(`prefetch`)。
 @MainActor
 enum NotchArtworkFingerprints {
     private static var cache: [(image: NSImage, print: ArtworkFingerprint?)] = []
+    /// 正在后台算的图。持有强引用:`ObjectIdentifier` 在对象释放后会被新对象复用。
+    private static var pending: [ObjectIdentifier: NSImage] = [:]
 
     static func same(_ lhs: NotchArtworkRef, _ rhs: NotchArtworkRef) -> Bool {
         guard let a = fingerprint(lhs.image), let b = fingerprint(rhs.image) else { return false }
         return a.isSamePicture(as: b)
     }
 
+    /// 新图一到就调:指纹在后台算好放进缓存,真要翻的那一刻(揭晓新歌、歌名掉下来同一拍)直接命中,
+    /// 不在下拉动画开头那几帧里缩图(05 章决策 70)。主线程只取一次 CGImage;还没算完就走 `fingerprint`
+    /// 当场算,结果一样。
+    static func prefetch(_ image: NSImage) {
+        let id = ObjectIdentifier(image)
+        guard pending[id] == nil, !cache.contains(where: { $0.image === image }),
+              let source = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        pending[id] = image
+        Task.detached(priority: .userInitiated) {
+            let made = ArtworkFingerprint(image: source)
+            await MainActor.run { store(made, for: id) }
+        }
+    }
+
+    private static func store(_ made: ArtworkFingerprint?, for id: ObjectIdentifier) {
+        guard let image = pending.removeValue(forKey: id), !cache.contains(where: { $0.image === image }) else { return }
+        remember(image, made)
+    }
+
     private static func fingerprint(_ image: NSImage) -> ArtworkFingerprint? {
         if let hit = cache.first(where: { $0.image === image }) { return hit.print }
         let made = image.cgImage(forProposedRect: nil, context: nil, hints: nil).flatMap { ArtworkFingerprint(image: $0) }
-        cache.insert((image, made), at: 0)
-        if cache.count > 4 { cache.removeLast(cache.count - 4) }
+        remember(image, made)
         return made
+    }
+
+    private static func remember(_ image: NSImage, _ print: ArtworkFingerprint?) {
+        cache.insert((image, print), at: 0)
+        if cache.count > 4 { cache.removeLast(cache.count - 4) }
     }
 }
 
@@ -297,6 +322,7 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: alignment)
         .onChange(of: input) { old, new in
+            prefetchArtwork()
             react(from: old, to: new)
         }
         .task(id: planner.recheckAt) {
@@ -322,6 +348,14 @@ struct NotchEarArtworkFlip<Artwork: View, AdIcon: View>: View {
         case .empty: return .empty
         case .adIcon: return .adIcon
         case .artwork(let ref): return .artwork(ObjectIdentifier(ref.image))
+        }
+    }
+
+    /// 新图一到就在后台先把翻牌要用的指纹和小封面算好(05 章决策 70),揭晓时直接命中缓存。
+    private func prefetchArtwork() {
+        for image in [artworkImage, highResImage, overrideImage].compactMap({ $0 }) {
+            NotchArtworkFingerprints.prefetch(image)
+            ArtworkThumbnailCache.prefetch(image)
         }
     }
 

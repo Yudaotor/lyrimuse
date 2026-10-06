@@ -63,6 +63,23 @@ func runSourceContractTests() {
         }
     }
 
+    // 换歌翻牌用的封面指纹、耳朵里的小封面在后台先算好,不在下拉动画开头那几帧里把整张图缩小(05 章决策 70)。
+    do {
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        func read(_ name: String) -> String {
+            (try? String(contentsOfFile: ui.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
+        }
+        let cache = read("ArtworkThumbnailCache.swift"), flip = read("NotchTrackChangeViews.swift")
+        expectEqual(cache.contains("static func prefetch(_ image: NSImage)") && cache.contains("Task.detached(priority: .userInitiated)")
+                        && cache.contains("private static let sourceLimit = 3"), true,
+                    "封面预算: 小封面缓存在后台按最近要过的尺寸先缩,源图留 3 张")
+        expectEqual(flip.contains("static func prefetch(_ image: NSImage)") && flip.contains("Task.detached(priority: .userInitiated)"), true,
+                    "封面预算: 翻牌指纹在后台先算")
+        expectEqual(flip.contains(".onChange(of: input) { old, new in\n            prefetchArtwork()\n            react(from: old, to: new)"), true,
+                    "封面预算: 翻牌视图输入一变先排上后台预算,再走翻牌规划")
+    }
+
     // 待机页「刚才在听」的封面:取数那一刻主缓存还没解码完时,歌词经「正在放的这一条」拿得到、封面拿不到,
     // 卡片又只在换歌时取一次 —— 有词没图一直挂到下一首。两头都要守:查封面也看那份快照,卡片在缓存换了内容时补封面。
     do {
