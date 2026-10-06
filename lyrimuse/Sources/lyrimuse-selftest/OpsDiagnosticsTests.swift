@@ -1240,6 +1240,65 @@ func runOpsDiagnosticsTests() {
                     "主歌词不常驻(契约): 引擎写主歌词是 omitempty,精简条目里有这个键就有词")
     }
 
+    // ---- 缓存索引增量采纳(15 章决策 25)----
+    do {
+        typealias D = EnrichIndexDiff
+        func data(_ s: String) -> Data { Data(s.utf8) }
+        let tricky = D.fingerprints(of: data(#" { "a" : {"x":1} , "b\"q":{"y":"\"}"},"k\\":{"v":"a\\"},"c":[1,{"z":"]"}] }"# + "\n"))
+        expectEqual(tricky.map { Set($0.keys.values) }, ["a", "b\"q", "k\\", "c"],
+                    "增量采纳: 切分认得转义引号、连着的反斜杠、嵌套、空白,key 按 JSON 解码")
+        expectEqual(D.fingerprints(of: data("{}"))?.values.count, 0, "增量采纳: 空对象切出 0 条")
+        for (bad, what) in [(#"{"a":{}"#, "截断"), (#"{"a":{}}x"#, "尾部多出字节"), (#"{"a" {}}"#, "少了冒号"),
+                            (#"{"a&b":{},"a\u0026b":{}}"#, "两条 key 解码后相同")] {
+            expectEqual(D.fingerprints(of: data(bad)) == nil, true, "增量采纳: \(what) → 切不开,只能整份解")
+        }
+
+        let a = #"{"x|1|a":{"lyrics":"l","body_crc":5,"cover_url":"c1","duration_secs":100},"x|2|a":{"cover_url":"c2","spotify_url":"s"},"# +
+            #""x|3|a":{"duration_secs":200},"y\u0026z|4|":{"ts":1}}"#
+        let base = D.full(data(a))
+        expectEqual(base?.fingerprints != nil, true, "增量采纳: 基线整份解码并算出校验值表")
+        if let base, let baseFP = base.fingerprints {
+        let b = #"{"x|1|a":{"body_crc":5,"cover_url":"c1","duration_secs":100},"x|2|a":{"cover_url":"c2","spotify_url":"s2"},"# +
+            #""y\u0026z|4|":{"ts":1},"x|5|a":{"ts":3}}"#
+        let inc = D.incremental(data(b), entries: base.entries, fingerprints: baseFP)
+        let full = D.full(data(b))
+        expectEqual(inc?.changedKeys, ["x|1|a", "x|2|a", "x|3|a", "x|5|a"], "增量采纳: 改了 / 新增 / 删掉的 key 都认出来")
+        expectEqual(inc?.fingerprints != nil && inc?.fingerprints == full?.fingerprints, true,
+                    "增量采纳: 校验值表跟整份解码算出来的一样")
+        expectEqual(inc.map { Set($0.entries.keys) }, full.map { Set($0.entries.keys) }, "增量采纳: 条目集合跟整份解码一样")
+        expectEqual(inc?.entries["y&z|4|"] === base.entries["y&z|4|"], true, "增量采纳: 没变的条目沿用原来那个实例,不重新解")
+        expectEqual(inc?.entries["x|1|a"]?.hasLyrics, false, "增量采纳: 变了的条目按新的一版解")
+        expectEqual(inc.map { [$0.derivedInputsChanged, $0.aliasInputsChanged] }, [true, true], "增量采纳: 有增删时派生索引和别名表都要重建")
+
+        func onlyChange(_ from: String, _ to: String) -> D.Refresh? {
+            D.incremental(data(a.replacingOccurrences(of: from, with: to)), entries: base.entries, fingerprints: baseFP)
+        }
+        let spotify = onlyChange(#""spotify_url":"s""#, #""spotify_url":"s9""#)
+        expectEqual(spotify.map { [$0.derivedInputsChanged, $0.aliasInputsChanged] }, [false, false],
+                    "增量采纳: 只改了 App 不读的字段,派生索引和别名表都沿用")
+        let cover = onlyChange(#""cover_url":"c2""#, #""cover_url":"c9""#)
+        expectEqual(cover.map { [$0.derivedInputsChanged, $0.aliasInputsChanged] }, [true, false],
+                    "增量采纳: 改了封面,只重建派生索引")
+        let duration = onlyChange(#""duration_secs":200"#, #""duration_secs":201"#)
+        expectEqual(duration.map { [$0.derivedInputsChanged, $0.aliasInputsChanged] }, [false, true],
+                    "增量采纳: 改了时长,只作废别名表")
+        expectEqual(D.refresh(data(#"{"a":"#), entries: base.entries, fingerprints: baseFP) == nil, true,
+                    "增量采纳: 新的一版切不开、整份也解不开 → nil,保留旧缓存")
+        expectEqual(D.refresh(data(b), entries: nil, fingerprints: nil).map { $0.changedKeys == nil }, true,
+                    "增量采纳: 没有上一版就整份解")
+        }
+
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(reader, contain: "EnrichIndexDiff.refresh($0, entries: base.entries, fingerprints: base.fingerprints)"),
+                    true, "增量采纳(契约): 后台刷新先试增量")
+        expectEqual(sourceBytes(reader, contain: "if refresh.changedKeys != nil, contentGeneration != base.generation { return }"), true,
+                    "增量采纳(契约): 增量结果回主线程时换过代就作废")
+        expectEqual(sourceBytes(reader, contain: "if aliasInputsChanged { cachedAliasTables = nil; aliasTablesGeneration += 1 }"), true,
+                    "增量采纳(契约): 别名表只在输入变了时作废")
+    }
+
     // ---- build.sh 装完必须确认进程真换了----
     //
     // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本

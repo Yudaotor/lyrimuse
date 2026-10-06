@@ -385,6 +385,10 @@ public enum EnrichCacheReader {
     // 宽松匹配索引(looseKey → 组内代表 key,挑法见 betterEntry),跟 cachedEntries 同寿命、惰性
     // 构建 —— 见 looseIndex。
     private static var cachedLooseIndex: [String: String]?
+    /// 已解码那一版每条的校验值(见 EnrichIndexDiff),下一版只解码变了的那几条。跟 cachedEntries 同寿命。
+    private static var cachedFingerprints: EnrichIndexDiff.Fingerprints?
+    /// 已解码内容的代号:每采纳一版、每清空一次都加一。增量结果是按某一代算的,回主线程时换过代就作废。
+    private static var contentGeneration = 0
     // 后台解码的世代号:kick 时占位,完成回主线程时对得上才采纳(reloadSoon 与内存压力让出
     // 会推进世代号,把在飞的旧结果作废)。inFlightGeneration nil = 没有在飞的后台解码。
     private static var decodeGeneration = 0
@@ -1474,6 +1478,8 @@ public enum EnrichCacheReader {
     // 其余一律后台:包括「歌词管理」改完之后的重读(reloadSoon)—— 精简索引已经 32MB,release 构建
     // 实测同步解一次 125~200ms,四个展示面一起卡;以及内存压力让出之后的重建(见 isRebuilding)。
     // 解码失败(文件损坏/半写状态)保留旧缓存不清空——下一拍 mtime 仍不等,自然重试。
+    // 后台那一步手上有已解码那一版的校验值表时只解码变了的那几条(EnrichIndexDiff),派生索引和别名表只在各自的输入变了时
+    // 重建,见 15 章决策 25。
 
     /// 「当前已解码内容」对应的文件 mtime。给 apply() 当重灌触发键(见上面那段注释)。
     /// 单条快照比它新时取快照的 mtime:快照一落盘就触发重灌,不等整份写完。
@@ -1525,6 +1531,7 @@ public enum EnrichCacheReader {
             // 文件被删了(几乎只发生在手动清理):同步清空,行为与旧实现一致。
             cachedMTime = nil
             cachedEntries = nil
+            cachedFingerprints = nil; contentGeneration += 1
             cachedCoverIndex = nil
             cachedAlbumCoverIndex = nil
             cachedLooseIndex = nil
@@ -1600,9 +1607,16 @@ public enum EnrichCacheReader {
             cachedAlbumCoverIndex = nil
             cachedLooseIndex = nil
             cachedAliasTables = nil; aliasTablesGeneration += 1
+            cachedFingerprints = nil; contentGeneration += 1
             return
         }
         adopt(entries: all, mtime: mtime, fromIndex: source.isIndex)
+        // 校验值表在后台按同一份映射算,算好时还是这一代才收下
+        let gen = contentGeneration
+        Task.detached(priority: .utility) {
+            let fingerprints = EnrichIndexDiff.fingerprints(of: data)
+            await MainActor.run { if contentGeneration == gen { cachedFingerprints = fingerprints } }
+        }
     }
 
     private static func kickBackgroundDecode() {
@@ -1618,26 +1632,35 @@ public enum EnrichCacheReader {
         let url = source.url
         let fromIndex = source.isIndex
         let memos = (loose: looseKeyMemo, title: titleCoverKeyMemo, album: albumCoverKeyMemo, name: nameLooseKeyMemo)
+        // 手上有已解码的那一版和它的校验值表就只解码变了的那几条(见 EnrichIndexDiff),做不了再整份解
+        let base = (entries: cachedEntries, fingerprints: cachedFingerprints, generation: contentGeneration)
         Task.detached(priority: .utility) {
             let mtime = mtime(of: url)
-            let decoded: [String: EnrichCacheEntry]? = (try? Data(contentsOf: url, options: .mappedIfSafe))
-                .flatMap { try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: $0) }
-            // 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes)
-            let derived = decoded.map {
-                buildDerivedIndexes($0, looseKeyMemo: memos.loose, titleCoverKeyMemo: memos.title,
-                                    albumCoverKeyMemo: memos.album, nameLooseKeyMemo: memos.name)
+            let refresh = (try? Data(contentsOf: url, options: .mappedIfSafe)).flatMap {
+                EnrichIndexDiff.refresh($0, entries: base.entries, fingerprints: base.fingerprints)
+            }
+            // 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes);输入没变就沿用手上那份
+            let derived = refresh.flatMap { r in
+                r.derivedInputsChanged
+                    ? buildDerivedIndexes(r.entries, looseKeyMemo: memos.loose, titleCoverKeyMemo: memos.title,
+                                          albumCoverKeyMemo: memos.album, nameLooseKeyMemo: memos.name)
+                    : nil
             }
             await MainActor.run {
                 if inFlightGeneration == gen { inFlightGeneration = nil }
                 guard gen == decodeGeneration else { return } // 被 reloadSoon/压力清空顶掉
-                guard let decoded else {
+                guard let refresh else {
                     // 失败保留旧缓存;记下这一版,文件变了才再试。解不开的是索引就作废这一版索引,下一次改读主缓存
                     // (同同步那条路)。
                     failedDecodeMTime = mtime
                     if fromIndex, let mtime { indexRejectedAt = mtime; failedDecodeMTime = nil }
                     return
                 }
-                adopt(entries: decoded, mtime: mtime, fromIndex: fromIndex, notify: true, derived: derived)
+                // 增量是按 base 那一代算的,中间换过代(冷启动解完、压力让出)就作废,下一拍重来
+                if refresh.changedKeys != nil, contentGeneration != base.generation { return }
+                adopt(entries: refresh.entries, mtime: mtime, fromIndex: fromIndex, notify: true,
+                      derived: derived.map(DerivedUpdate.replace) ?? .keep, fingerprints: refresh.fingerprints,
+                      aliasInputsChanged: refresh.aliasInputsChanged)
             }
         }
     }
@@ -1656,9 +1679,17 @@ public enum EnrichCacheReader {
     /// 明显变慢(对抗核实抓出的口径差)。钩子只在真的采纳了新内容时调。
     public static var onContentAdopted: (() -> Void)?
 
-    /// `derived`:后台解码时按这份内容建好的派生索引。同步那条路(冷启动)不带,三份索引留空、要用时再建。
+    /// 派生索引在这次采纳里怎么办:换成后台按新内容建好的、作废(要用时再建)、或者沿用(输入没变,见 EnrichIndexDiff)。
+    private enum DerivedUpdate {
+        case replace(DerivedIndexes)
+        case invalidate
+        case keep
+    }
+
+    /// `derived`:同步那条路(冷启动)不带,三份索引留空、要用时再建。`aliasInputsChanged` 为 false 时别名表沿用。
     private static func adopt(entries: [String: EnrichCacheEntry], mtime: Date?, fromIndex: Bool = false,
-                              notify: Bool = false, derived: DerivedIndexes? = nil) {
+                              notify: Bool = false, derived: DerivedUpdate = .invalidate,
+                              fingerprints: EnrichIndexDiff.Fingerprints? = nil, aliasInputsChanged: Bool = true) {
         // 换指针是 O(1),**丢掉上一份不是**:这份字典是从上百 MB 的 JSON 解出来的,
         // 几十万条 `EnrichCacheEntry` 要逐条析构。直接赋值的话这笔析构就落在主线程上
         // (profile 里长这样:adopt 到 _DictionaryStorage.deinit 到 destroy for
@@ -1666,27 +1697,47 @@ public enum EnrichCacheReader {
         // 先把旧引用接住,交给后台队列去释放 —— 主线程这边只剩换指针。
         let previous = cachedEntries
         // 换下来的旧索引和旧记忆表各有九千多条,同理交给后台释放
-        let previousDerived = (cachedCoverIndex, cachedAlbumCoverIndex, cachedLooseIndex,
-                               derived == nil ? nil : (looseKeyMemo, titleCoverKeyMemo, albumCoverKeyMemo, nameLooseKeyMemo))
+        let previousDerived: ([String: String]?, [String: String]?, [String: String]?,
+                              ([String: String], [String: CoverIndexKeys], [String: CoverIndexKeys], [String: String])?)?
+        switch derived {
+        case .replace:
+            previousDerived = (cachedCoverIndex, cachedAlbumCoverIndex, cachedLooseIndex,
+                               (looseKeyMemo, titleCoverKeyMemo, albumCoverKeyMemo, nameLooseKeyMemo))
+        case .invalidate:
+            previousDerived = (cachedCoverIndex, cachedAlbumCoverIndex, cachedLooseIndex, nil)
+        case .keep:
+            previousDerived = nil
+        }
         cachedMTime = mtime
         cachedEntries = entries
+        cachedFingerprints = fingerprints
+        contentGeneration += 1
         cachedFromIndex = fromIndex
         cachedBody = nil
-        // 内容换了,派生索引跟着换:后台已经按新内容建好的直接用,没有的作废、下次要用时再建
-        cachedCoverIndex = derived?.covers
-        cachedAlbumCoverIndex = derived?.albumCovers
-        cachedLooseIndex = derived?.loose
-        if let derived {
-            looseKeyMemo = derived.looseKeyMemo
-            titleCoverKeyMemo = derived.titleCoverKeyMemo
-            albumCoverKeyMemo = derived.albumCoverKeyMemo
-            nameLooseKeyMemo = derived.nameLooseKeyMemo
+        // 内容换了,派生索引跟着换:后台已经按新内容建好的直接用,输入没变的沿用,其余作废、下次要用时再建
+        switch derived {
+        case .replace(let d):
+            cachedCoverIndex = d.covers
+            cachedAlbumCoverIndex = d.albumCovers
+            cachedLooseIndex = d.loose
+            looseKeyMemo = d.looseKeyMemo
+            titleCoverKeyMemo = d.titleCoverKeyMemo
+            albumCoverKeyMemo = d.albumCoverKeyMemo
+            nameLooseKeyMemo = d.nameLooseKeyMemo
+        case .invalidate:
+            cachedCoverIndex = nil
+            cachedAlbumCoverIndex = nil
+            cachedLooseIndex = nil
+        case .keep:
+            break
         }
-        cachedAliasTables = nil; aliasTablesGeneration += 1
+        if aliasInputsChanged { cachedAliasTables = nil; aliasTablesGeneration += 1 }
         if previous != nil {
             DispatchQueue.global(qos: .utility).async { withExtendedLifetime(previous) {} }
         }
-        DispatchQueue.global(qos: .utility).async { withExtendedLifetime(previousDerived) {} }
+        if let previousDerived {
+            DispatchQueue.global(qos: .utility).async { withExtendedLifetime(previousDerived) {} }
+        }
         if notify { onContentAdopted?() }
     }
 
@@ -1712,6 +1763,7 @@ public enum EnrichCacheReader {
                 cachedAlbumCoverIndex = nil
                 cachedLooseIndex = nil
                 cachedAliasTables = nil; aliasTablesGeneration += 1
+                cachedFingerprints = nil; contentGeneration += 1
             }
         }
         source.resume()

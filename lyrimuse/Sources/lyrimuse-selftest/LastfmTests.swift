@@ -2215,11 +2215,11 @@ func runLastfmTests() {
         let reader = (try? String(contentsOf: base.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
                                   encoding: .utf8)) ?? ""
         expectEqual(reader.isEmpty, false, "派生索引(契约): 读到源码")
-        expectEqual(reader.contains("// 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes)\n            let derived = decoded.map {"),
+        expectEqual(reader.contains("// 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes);输入没变就沿用手上那份\n            let derived = refresh.flatMap { r in"),
                     true, "派生索引(契约): 后台解码那一路顺带建索引")
-        expectEqual(reader.contains("adopt(entries: decoded, mtime: mtime, fromIndex: fromIndex, notify: true, derived: derived)"), true,
-                    "派生索引(契约): 采纳新内容时连同建好的索引一起换上")
-        expectEqual(reader.contains("cachedCoverIndex = derived?.covers\n        cachedAlbumCoverIndex = derived?.albumCovers\n        cachedLooseIndex = derived?.loose"),
+        expectEqual(reader.contains("derived: derived.map(DerivedUpdate.replace) ?? .keep, fingerprints: refresh.fingerprints,"), true,
+                    "派生索引(契约): 采纳新内容时连同建好的索引一起换上(输入没变的沿用)")
+        expectEqual(reader.contains("case .replace(let d):\n            cachedCoverIndex = d.covers\n            cachedAlbumCoverIndex = d.albumCovers\n            cachedLooseIndex = d.loose"),
                     true, "派生索引(契约): 换上的就是后台建的那三份,不在主线程作废重建")
     }
 
