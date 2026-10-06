@@ -553,13 +553,14 @@ struct SettingsView: View {
                 SettingsSearchField(text: $settingsSearchText, focused: $settingsSearchFocused,
                                     onSubmit: openFirstSettingsSearchResult)
             }
-            // 侧栏宽度跟着系统设置的侧栏(约 215~240pt):顶上多了身份区,用户名要放得下。
-            .navigationSplitViewColumnWidth(min: 180, ideal: 205, max: 240)
             // 去掉 NavigationSplitView 自动塞进工具栏的那颗"隐藏边栏"按钮:这个窗口的
             // 侧边栏就是它唯一的导航方式,收起来之后整扇窗口只剩内容、没有任何切换分类的
-            // 入口,是个只会把人卡住的开关。窗口本身也不可缩放(见 .frame 那一处),不存在
-            // "屏幕太窄需要腾地方"这种要收起侧边栏的场景。
+            // 入口,是个只会把人卡住的开关。拖分隔线也收不起来,见 SettingsSidebarCollapseGuard。
             .toolbar(removing: .sidebarToggle)
+            // 宽度放得下当前语言里最长的那一行(sidebarWidth)。这个修饰符必须是这一列最外层的那个:排在
+            // .toolbar(removing:) 前面会整个失效,侧栏退回 AppKit 默认的最窄 140、不限宽,首次打开只有约 144pt。见 14 章决策 58。
+            .navigationSplitViewColumnWidth(min: sidebarWidth, ideal: sidebarWidth,
+                                            max: max(sidebarWidth, SettingsSidebarWidth.designMaxWidth))
         } detail: {
             Group {
                 switch selection {
@@ -620,7 +621,9 @@ struct SettingsView: View {
         // `Settings` 场景,尺寸由 macOS 自动存档,idealHeight 只在没有存档时(首次打开 / 重置)
         // 说了算 —— 已经存在的窗口只会被 minHeight 顶上来。所以这一档不能按"别比头部还矮"那种
         // 下限来定,要顶到那张总开关卡整张露出来之上才算数。
-        .frame(minWidth: 760, idealWidth: 860, minHeight: 690, idealHeight: 720)
+        //
+        // 侧栏比设计宽度(205)宽出来多少(英文),窗口的最窄和默认宽度就加多少,右边内容区的宽度不跟着变窄。
+        .frame(minWidth: 760 + sidebarExtraWidth, idealWidth: 860 + sidebarExtraWidth, minHeight: 690, idealHeight: 720)
         // 设置搜索的两路信号只在这扇窗口的子树里有值;别处复用行组件拿到的是默认值,不受影响。
         .environment(\.settingsSearchHighlightedTitles, searchRouter.highlightedTitles)
         .environment(\.settingsSearchPendingDrawer, searchRouter.pendingDrawer)
@@ -717,6 +720,24 @@ struct SettingsView: View {
         }
         .tag(SettingsSidebarItem.tab(tab))
     }
+
+    /// 侧栏宽度:放得下当前语言里每一行的文字,不低于 205(SettingsSidebarWidth)。行的文字跟各行视图用的是同一处;
+    /// 身份区的用户名是用户自己的数据,不算在内。「播放器」按带警告徽标算,徽标冒出来时宽度不跳。
+    private var sidebarWidth: CGFloat {
+        var rows: [SettingsSidebarWidth.Row] = SettingsTab.allCases.map {
+            $0 == .player ? .labelWithBadge($0.title) : .label($0.title)
+        }
+        rows.append(.label(LinkedPlatformsRow.title))
+        rows += AccountDestination.allCases.filter(\.livesInLabs).map { .account($0.title) }
+        rows += [.badge(SoftwareUpdateSidebarRow.title), .badge(LastfmSuggestionsSidebarRow.title),
+                 .identityTitle(LastfmIdentityRow.connectTitle),
+                 .identitySubtitle(LastfmIdentityRow.connectSubtitle), .identitySubtitle(LastfmIdentityRow.connectedSubtitle)]
+        return SettingsSidebarWidth.fitting(
+            rows, sizeMode: UserDefaults.standard.integer(forKey: SettingsSidebarWidth.sizeModeDefaultsKey))
+    }
+
+    /// 侧栏比设计宽度宽出来的部分。
+    private var sidebarExtraWidth: CGFloat { sidebarWidth - SettingsSidebarWidth.designWidth }
 
     private var selectedCategoryTitle: String {
         switch selection {
@@ -7089,12 +7110,15 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
     private final class WindowHookView: NSView {
         var onWindow: ((NSWindow) -> Void)?
         private weak var configured: NSWindow?
+        /// 侧栏收不起来(SettingsSidebarCollapseGuard)。跟着这个视图活,窗口关了一起没。
+        private let sidebarGuard = SettingsSidebarCollapseGuard()
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window, window !== configured else { return }
             configured = window
             onWindow?(window)
+            sidebarGuard.attach(to: window)
         }
     }
 }

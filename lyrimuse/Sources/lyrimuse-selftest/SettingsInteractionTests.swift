@@ -1,3 +1,4 @@
+import AppKit
 import LyrimuseCore
 import Foundation
 
@@ -621,5 +622,61 @@ func runSettingsInteractionTests() {
                     "设置深链(契约): 每个账号路径在 App 侧都映射到一个账号页")
         expectEqual(appSource("AppDelegate.swift").contains("SettingsDeepLink(path: url.path).flatMap(SettingsSidebarItem.init(deepLink:))"), true,
                     "设置深链(契约): URL 回调按路径翻页")
+    }
+
+    // ---- 设置窗侧栏:宽度放得下当前语言最长的那一行、收不起来(见 14 章决策 58) ----
+    do {
+        typealias W = SettingsSidebarWidth
+        let zh: [W.Row] = [.label("歌词"), .labelWithBadge("播放器"), .label("歌词显示"), .label("快捷键"), .label("通用"),
+                           .label("关于"), .label("关联平台"), .account("ListenBrainz"), .account("网页推送"),
+                           .account("推送提醒"), .badge("有软件更新可用"), .badge("Last.fm 账号建议"),
+                           .identityTitle("连接 Last.fm"), .identitySubtitle("同步收听记录"),
+                           .identitySubtitle("Last.fm 账号")]
+        let en: [W.Row] = [.label("Lyrics"), .labelWithBadge("Player"), .label("Lyrics Display"),
+                           .label("Keyboard Shortcuts"), .label("General"), .label("About"), .label("Linked Platforms"),
+                           .account("ListenBrainz"), .account("Web Push"), .account("Push Alerts"),
+                           .badge("Software Update Available"), .badge("Last.fm Account Suggestions"),
+                           .identityTitle("Connect Last.fm"), .identitySubtitle("Scrobble your listens"),
+                           .identitySubtitle("Last.fm Account")]
+        func width(_ text: String, _ size: CGFloat) -> CGFloat {
+            (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: size)]).width
+        }
+        expectEqual(W.fitting([], sizeMode: 0), W.designWidth, "设置侧栏宽度: 没有行时是设计宽度")
+        expectEqual(W.fitting(zh, sizeMode: 0), W.designWidth, "设置侧栏宽度: 中文每行都放得下,照旧 205")
+        let enWidth = W.fitting(en, sizeMode: 0)
+        expectEqual(enWidth > W.designMaxWidth, true, "设置侧栏宽度: 英文最长那行比原来能拖到的最宽还宽")
+        // 图标行:文字从 40pt 起、右边留 16pt;带徽标的行:文字从 16pt 起,后面 8 + 4 + 8 + 18 + 16。另留 2pt 再取整。
+        let long = "Experimental Feature Toggles"
+        expectEqual(W.fitting([.label(long)], sizeMode: 0), (40 + width(long, 13) + 16 + 2).rounded(.up),
+                    "设置侧栏宽度: 图标行 = 40 + 文字 + 16")
+        expectEqual(W.fitting([.badge("Last.fm Account Suggestions")], sizeMode: 0),
+                    (16 + width("Last.fm Account Suggestions", 13) + 38 + 16 + 2).rounded(.up),
+                    "设置侧栏宽度: 带徽标的行 = 16 + 文字 + 38 + 16")
+        expectEqual(enWidth, W.fitting([.badge("Last.fm Account Suggestions")], sizeMode: 0),
+                    "设置侧栏宽度: 英文由最长那行(Last.fm Account Suggestions)定")
+        expectEqual(W.fitting([.label(long)], sizeMode: 3), (44 + width(long, 15) + 16 + 2).rounded(.up),
+                    "设置侧栏宽度: 侧栏「大」档图标行文字 15pt、从 44pt 起")
+        expectEqual(W.fitting([.label(long)], sizeMode: 1), W.fitting([.label(long)], sizeMode: 0),
+                    "设置侧栏宽度: 小档按中档算")
+        expectEqual(W.fitting(en + [.label("Lyrics Display and Everything Else")], sizeMode: 0) >= enWidth, true,
+                    "设置侧栏宽度: 多一行只会更宽")
+
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func appSource(_ name: String) -> String {
+            (try? String(contentsOf: appDir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let settingsView = appSource("SettingsView.swift")
+        let toolbarAt = settingsView.range(of: ".toolbar(removing: .sidebarToggle)")?.lowerBound
+        let widthAt = settingsView.range(of: ".navigationSplitViewColumnWidth(min: sidebarWidth, ideal: sidebarWidth,")?.lowerBound
+        expectEqual(toolbarAt.flatMap { t in widthAt.map { t < $0 } }, true,
+                    "设置侧栏宽度(契约): 宽度修饰符排在 .toolbar(removing: .sidebarToggle) 后面,排在前面整个失效")
+        expectEqual(settingsView.contains("minWidth: 760 + sidebarExtraWidth, idealWidth: 860 + sidebarExtraWidth"), true,
+                    "设置侧栏宽度(契约): 窗口最窄 / 默认宽度跟着侧栏加宽")
+        expectEqual(settingsView.contains("sidebarGuard.attach(to: window)"), true, "设置侧栏(契约): 窗口挂上来时装上「收不起来」")
+        let chrome = appSource("Settings/SettingsSidebarChrome.swift")
+        expectEqual(chrome.contains("item.canCollapse = false") && chrome.contains("item?.isCollapsed = false")
+                        && chrome.contains("NSSplitView.didResizeSubviewsNotification"), true,
+                    "设置侧栏(契约): 不能收起、收着的展开、分栏每次重新布局再设一遍")
     }
 }

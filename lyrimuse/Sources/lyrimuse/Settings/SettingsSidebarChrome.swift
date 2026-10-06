@@ -36,6 +36,10 @@ struct LastfmIdentityRow: View {
     @ObservedObject private var languageSettings = AppSettings.shared
 
     static let avatarSize: CGFloat = 36
+    /// 这一行的几种文字。侧栏宽度按它们算(SettingsSidebarWidth),跟下面 body 用的是同一处;用户名是用户自己的数据,不算。
+    static var connectTitle: String { L10n.t("连接 Last.fm") }
+    static var connectSubtitle: String { L10n.t("同步收听记录") }
+    static var connectedSubtitle: String { L10n.t("Last.fm 账号") }
 
     private var connected: Bool { !config.lastfmScrobbleSessionKey.isEmpty }
     private var name: String { lastfmDisplayName(config: config) }
@@ -45,11 +49,11 @@ struct LastfmIdentityRow: View {
             avatar
                 .frame(width: Self.avatarSize, height: Self.avatarSize)
             VStack(alignment: .leading, spacing: 1) {
-                Text(connected && !name.isEmpty ? name : L10n.t("连接 Last.fm"))
+                Text(connected && !name.isEmpty ? name : Self.connectTitle)
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(connected ? L10n.t("Last.fm 账号") : L10n.t("同步收听记录"))
+                Text(connected ? Self.connectedSubtitle : Self.connectSubtitle)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -100,10 +104,12 @@ struct LinkedPlatformsRow: View {
     @ObservedObject private var languageSettings = AppSettings.shared
 
     static let circleSize: CGFloat = 20
+    /// 侧栏宽度按它算(SettingsSidebarWidth)。
+    static var title: String { L10n.t("关联平台") }
 
     var body: some View {
         Label {
-            Text(L10n.t("关联平台"))
+            Text(Self.title)
                 .lineLimit(1)
         } icon: {
             HStack(spacing: -Self.circleSize * 0.3) {
@@ -123,9 +129,12 @@ struct LinkedPlatformsRow: View {
 struct SoftwareUpdateSidebarRow: View {
     @ObservedObject private var languageSettings = AppSettings.shared
 
+    /// 侧栏宽度按它算(SettingsSidebarWidth)。
+    static var title: String { L10n.t("有软件更新可用") }
+
     var body: some View {
         HStack(spacing: 8) {
-            Text(L10n.t("有软件更新可用"))
+            Text(Self.title)
                 .font(.system(size: 13))
                 .lineLimit(1)
             Spacer(minLength: 4)
@@ -145,9 +154,12 @@ struct LastfmSuggestionsSidebarRow: View {
     let count: Int
     @ObservedObject private var languageSettings = AppSettings.shared
 
+    /// 侧栏宽度按它算(SettingsSidebarWidth)。
+    static var title: String { L10n.t("Last.fm 账号建议") }
+
     var body: some View {
         HStack(spacing: 8) {
-            Text(L10n.t("Last.fm 账号建议"))
+            Text(Self.title)
                 .font(.system(size: 13))
                 .lineLimit(1)
             Spacer(minLength: 4)
@@ -156,6 +168,59 @@ struct LastfmSuggestionsSidebarRow: View {
         .padding(.vertical, 3)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - 侧栏收不起来
+
+/// 设置窗的侧栏不许收起:它是这扇窗唯一的导航,收起后界面里没有地方能把它拿回来(工具栏的边栏开关去掉了,App 也没有
+/// 「显示边栏」菜单),而收起的状态系统会存进偏好(`NSSplitView Subview Frames …`),重启也还是收着。所以把
+/// NavigationSplitView 底下侧栏那一项设成不能收起(往左拖到最窄就停),已经收着的当场展开。SwiftUI 改这一列的宽度区间
+/// (切界面语言)时会把 canCollapse 改回 true,所以分栏每次重新布局都再设一遍。见 14 章决策 58。
+@MainActor
+final class SettingsSidebarCollapseGuard: NSObject {
+    private weak var item: NSSplitViewItem?
+
+    /// 窗口挂上来时调。侧栏那一列可能还没进窗口,找不到就下一拍再找,最多 maxAttempts 次。
+    func attach(to window: NSWindow, attempt: Int = 0) {
+        guard let content = window.contentView, let (split, item) = Self.sidebar(in: content) else {
+            guard attempt < Self.maxAttempts else { return }
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, let window else { return }
+                self.attach(to: window, attempt: attempt + 1)
+            }
+            return
+        }
+        self.item = item
+        NotificationCenter.default.removeObserver(self, name: NSSplitView.didResizeSubviewsNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(splitViewDidResize(_:)),
+                                               name: NSSplitView.didResizeSubviewsNotification, object: split)
+        enforce()
+    }
+
+    @objc private func splitViewDidResize(_ notification: Notification) {
+        enforce()
+    }
+
+    private func enforce() {
+        guard let item else { return }
+        if item.canCollapse { item.canCollapse = false }
+        // 在分栏自己的布局回调里直接展开会重入,挪到下一拍。
+        if item.isCollapsed { DispatchQueue.main.async { [weak item] in item?.isCollapsed = false } }
+    }
+
+    private static let maxAttempts = 10
+
+    /// 窗口里 NavigationSplitView 的分栏和它的侧栏那一项:分栏的代理是 NSSplitViewController,第一项是 sidebar。
+    private static func sidebar(in view: NSView) -> (NSSplitView, NSSplitViewItem)? {
+        if let split = view as? NSSplitView, let controller = split.delegate as? NSSplitViewController,
+           let first = controller.splitViewItems.first, first.behavior == .sidebar {
+            return (split, first)
+        }
+        for sub in view.subviews {
+            if let found = sidebar(in: sub) { return found }
+        }
+        return nil
     }
 }
 
