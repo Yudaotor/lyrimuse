@@ -575,6 +575,20 @@ func runTouchBarTests() {
         // 预览:整条按真实大小画(1:1),比内容列宽出来的部分左右滑动看,不再整体缩小。
         expectEqual(preview.contains("return ScrollView(.horizontal) {") && !preview.contains(".scaleEffect("), true,
                     "触控栏: 预览整条按真实大小画、左右滑动看")
+        // 预览上的可点区域(17 章决策 38):歌词那一格开「歌词」,封面、三键、收起键、功能栏开「布局」,浮层同工具栏那一份;
+        // 那一排用 padding 摆位置(浮层认布局 frame、不认 offset)。漏了不报错,只表现成点了没反应、或浮层弹在别处。
+        expectEqual(preview.contains("case lyrics, artwork, controls, collapse, controlStrip")
+                        && preview.contains("var group: TouchBarSettingsGroup { self == .lyrics ? .lyrics : .layout }")
+                        && preview.contains("spot.group.popoverContent()")
+                        && preview.contains(".environment(\\.colorScheme, colorScheme)")
+                        && preview.contains(".padding(.leading, CGFloat(TouchBarLyricsStyle.firstItemX))")
+                        && !preview.contains(".offset(x: CGFloat(TouchBarLyricsStyle.firstItemX))"), true,
+                    "触控栏预览: 点歌词开「歌词」,点封面 / 三键 / 收起键 / 功能栏开「布局」")
+        for spot in ["lyrics", "artwork", "controls", "collapse", "controlStrip"] {
+            expectEqual(preview.contains(".overlay { hotspot(.\(spot)) }"), true, "触控栏预览: \(spot) 那一块挂了可点区域")
+        }
+        let toolbarSource = code(appDir.appendingPathComponent("UI/TouchBarSettingsRows.swift")) ?? ""
+        expectEqual(toolbarSource.contains("group.popoverContent()"), true, "触控栏: 工具栏和预览弹同一份浮层")
         // 对齐方式:「自动」按每一行的对唱声部落成方向(同灵动岛),本体和预览都把设置传进规格。
         let cellSource = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsCell.swift")) ?? ""
         expectEqual(cellSource.contains("switch alignment.resolved(duetSide: duetSide) {"), true,

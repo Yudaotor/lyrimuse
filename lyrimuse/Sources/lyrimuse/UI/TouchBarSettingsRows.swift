@@ -3,7 +3,8 @@ import SwiftUI
 
 // 「歌词显示 › 触控栏」那一段的编辑台:预览上面一排工具栏(歌词 / 样式 / 布局三个浮层 + 「重置 ▾」),预览下面是总开关卡和
 // 默认折叠的「全部设置」抽屉。浮层和抽屉装配同一份行视图(`TouchBarLyricsRows` / `TouchBarStyleRows` / `TouchBarLayoutRows`),
-// 三组的顺序和标题两边一致。预览不可交互,工具栏照歌词窗口那一段摆在预览上面。
+// 三组的顺序和标题两边一致。预览上点歌词那一格、封面、三键这些也能打开对应的浮层(`TouchBarPreviewStage`,弹的是同一份
+// `TouchBarSettingsGroup.popoverContent`),工具栏照歌词窗口那一段摆在预览上面。
 
 /// 工具栏的三个入口,也是抽屉里三组的顺序。
 enum TouchBarSettingsGroup: CaseIterable {
@@ -24,6 +25,19 @@ enum TouchBarSettingsGroup: CaseIterable {
         case .lyrics: return "text.alignleft"
         case .style: return "paintpalette"
         case .layout: return "rectangle.split.3x1"
+        }
+    }
+}
+
+extension TouchBarSettingsGroup {
+    /// 这一组的浮层:工具栏那颗按钮和预览上对应的那块可点区域(`TouchBarPreviewStage`)弹的是同一份。
+    /// 浮层宽度按内容估、宁宽勿窄(`SettingsPopoverShell.width` 那条)。没离屏量过,要收紧先量。
+    @MainActor @ViewBuilder
+    func popoverContent() -> some View {
+        switch self {
+        case .lyrics: SettingsPopoverShell(title: title, width: 460) { TouchBarLyricsRows() }
+        case .style: SettingsPopoverShell(title: title, width: 400) { TouchBarStyleRows() }
+        case .layout: SettingsPopoverShell(title: title, width: 440) { TouchBarLayoutRows() }
         }
     }
 }
@@ -239,17 +253,7 @@ struct TouchBarEditorToolbar: View {
             set: { shown in
                 if shown { popover = group } else if popover == group { popover = nil }
             }), arrowEdge: .bottom) {
-            popoverContent(for: group)
-        }
-    }
-
-    /// 浮层宽度按内容估、宁宽勿窄(`SettingsPopoverShell.width` 那条)。没离屏量过,要收紧先量。
-    @ViewBuilder
-    private func popoverContent(for group: TouchBarSettingsGroup) -> some View {
-        switch group {
-        case .lyrics: SettingsPopoverShell(title: group.title, width: 460) { TouchBarLyricsRows() }
-        case .style: SettingsPopoverShell(title: group.title, width: 400) { TouchBarStyleRows() }
-        case .layout: SettingsPopoverShell(title: group.title, width: 440) { TouchBarLayoutRows() }
+            group.popoverContent()
         }
     }
 

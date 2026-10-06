@@ -3097,7 +3097,7 @@ func runSourceContractTests() {
         expectEqual(touchBarFile.isEmpty, false, "抽屉镜像(触控栏): 宿主文件读得到(读不到 = 路径挪了)")
         let touchBarGroups = enumCases("enum TouchBarSettingsGroup: CaseIterable {", in: touchBarFile)
         let touchBarPopovers = captures(#"case \.(\w+): SettingsPopoverShell\([^\n]*\{ (TouchBar\w+Rows)\(\) \}"#,
-                                        in: body("private func popoverContent(for group: TouchBarSettingsGroup) -> some View {", in: touchBarFile))
+                                        in: body("func popoverContent() -> some View {", in: touchBarFile))
         expectEqual(touchBarGroups.isEmpty, false, "抽屉镜像(触控栏): 认得出工具栏入口的枚举")
         expectEqual(Set(touchBarPopovers.map { $0[0] }), touchBarGroups,
                     "抽屉镜像(触控栏): 每个工具栏入口的浮层都是一份 TouchBarXxxRows")

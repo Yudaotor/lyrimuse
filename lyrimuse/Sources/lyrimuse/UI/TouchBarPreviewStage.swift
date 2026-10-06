@@ -17,7 +17,8 @@ import SwiftUI
 /// 卡拉OK效果 / 跟随封面 / 副行改了这里当场跟着变;副行开着时两行的落点同本体(`TouchBarLyricsStyle` 的两行那一节)。
 /// 在放歌时演真实的这一句;没在放歌时是示例句(同悬浮歌词编辑台那组自我说明的句子,副行开着也有字看),只画最终
 /// 颜色、不演逐字染色(全仓预览的原则,见 `SectionPreviewBars` 头注)。设置窗口看不见时停表(`previewHostVisible`)。
-/// 不收事件:三键点不动,预览不该能操作真实播放。
+/// 三键点不动(预览不该能操作真实播放)。上面叠了几块可点区域:歌词那一格打开「歌词」浮层,封面、三键、收起键、右边的
+/// 功能栏打开「布局」浮层,跟工具栏那几颗按钮弹的是同一份(`TouchBarSettingsGroup.popoverContent`)。见 17 章决策 38。
 struct TouchBarPreviewStage: View {
     /// 整条触控栏(模拟器 2nd generation 实拍量的):给 App 的那一块 + 间隙 + 收起的功能栏 + 右端留白。
     private static let barSize = CGSize(width: 1015, height: TouchBarLyricsCell.barHeight)
@@ -43,6 +44,32 @@ struct TouchBarPreviewStage: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var feed = TouchBarPreviewFeed()
     @Environment(\.previewHostVisible) private var previewHostVisible
+    /// 设置窗口自己的深浅色。预览那一块固定画成深色(触控栏本来就是黑的),从那里弹出的浮层要换回这个。
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var hoveredHotspot: Hotspot?
+    @State private var presentedHotspot: Hotspot?
+
+    /// 预览上能点的几块:歌词那一格开「歌词」,封面、三键、收起键、右边的功能栏开「布局」。「样式」管整条的颜色,
+    /// 没有单独一块,从工具栏进。
+    private enum Hotspot: Hashable {
+        case lyrics, artwork, controls, collapse, controlStrip
+
+        var group: TouchBarSettingsGroup { self == .lyrics ? .lyrics : .layout }
+
+        /// 旁白读的那一句。封面、三键这几块开的是同一组浮层,前面带上这一块的名字才分得清;歌词那一格跟浮层同名,不重复。
+        var accessibilityLabel: String {
+            let open = String(format: L10n.t("打开「%@」设置"), group.title)
+            let region: String?
+            switch self {
+            case .lyrics: region = nil
+            case .artwork: region = L10n.t("封面")
+            case .controls: region = L10n.t("播放控制")
+            case .collapse: region = L10n.t("收起")
+            case .controlStrip: region = L10n.t("系统功能栏")
+            }
+            return region.map { "\($0) · \(open)" } ?? open
+        }
+    }
 
     var body: some View {
         let snapshot = feed.snapshot
@@ -81,10 +108,10 @@ struct TouchBarPreviewStage: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(height: SectionPreviewMetrics.captionHeight)
+                .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity)
         .onAppear { feed.restart() }
-        .accessibilityHidden(true)
     }
 
     /// 示例句带上译文和读音(下一句在 `body` 里给),副行切到哪一档都有字。
@@ -110,7 +137,6 @@ struct TouchBarPreviewStage: View {
                 .padding(Self.deckPadding)
                 .frame(width: size.width, height: size.height)
                 .background(deck)
-                .allowsHitTesting(false)
         }
         .scrollIndicators(.visible)
         .fixedSize(horizontal: false, vertical: true)
@@ -136,14 +162,23 @@ struct TouchBarPreviewStage: View {
         return ZStack(alignment: .leading) {
             closeBox
                 .offset(x: TouchBarLyricsCell.closeBoxCenterX - TouchBarLyricsCell.closeBoxDiameter / 2)
+                .accessibilityHidden(true)
+            // 收起键那一段的可点区域:宽同自己那颗收起键,贴左缘。
+            Color.clear
+                .frame(width: CGFloat(TouchBarLyricsStyle.collapseItemWidth), height: Self.barSize.height)
+                .overlay { hotspot(.collapse) }
             HStack(spacing: TouchBarLyricsCell.itemSpacing) {
                 ForEach(slots, id: \.self) { slot in
                     item(slot, rows: rows, lyricsWidth: lyricsWidth, snapshot: snapshot)
                 }
             }
-            .offset(x: CGFloat(TouchBarLyricsStyle.firstItemX))
+            // 用 padding 不用 offset 摆到第一项的位置:浮层认的是布局 frame,offset 是几何效果、挪不动它
+            // (同 `LyricsWindowPreviewStage` 那块顶部信息)。
+            .padding(.leading, CGFloat(TouchBarLyricsStyle.firstItemX))
             if !hidesStrip {
                 controlStrip
+                    .accessibilityHidden(true)
+                    .overlay { hotspot(.controlStrip) }
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.trailing, Self.stripTrailingInset)
             }
@@ -161,11 +196,18 @@ struct TouchBarPreviewStage: View {
             EmptyView()
         case .artwork:
             artwork(snapshot.artwork)
+                .accessibilityHidden(true)
+                .overlay { hotspot(.artwork) }
         case .controls:
             controls(playing: snapshot.isPlaying)
+                .accessibilityHidden(true)
+                .overlay { hotspot(.controls) }
         case .lyrics:
             lyricCell(rows)
                 .frame(width: lyricsWidth, height: Self.barSize.height, alignment: .topLeading)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .overlay { hotspot(.lyrics) }
         }
     }
 
@@ -194,6 +236,51 @@ struct TouchBarPreviewStage: View {
         } else {
             Color.clear
         }
+    }
+
+    /// 一块可点区域:平时透明,悬停描一圈白色虚线细框 + 一层极淡的白底,指针换成手形;点一下在这一块下面弹出对应那一组的
+    /// 浮层。线型、透明度、圆角同灵动岛编辑台的可点区域(`NotchEditorStage.hotspotView`),白色不跟深浅色走:它压在黑色
+    /// 的触控栏上。框往外扩 3pt,不压在键钮的边上;相邻两项隔 8pt,扩完还留着缝。
+    private func hotspot(_ spot: Hotspot) -> some View {
+        let lit = hoveredHotspot == spot || presentedHotspot == spot
+        return RoundedRectangle(cornerRadius: 6)
+            .fill(Color.white.opacity(lit ? 0.07 : 0))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.white.opacity(lit ? 0.7 : 0),
+                                  style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .padding(-3)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside {
+                    hoveredHotspot = spot
+                    NSCursor.pointingHand.push()
+                } else {
+                    if hoveredHotspot == spot { hoveredHotspot = nil }
+                    NSCursor.pop()
+                }
+            }
+            // 指针还停在上面时这块被拿掉(关掉封面 / 三键、切换隐藏功能栏),离开事件不会来:在这里把手形指针弹掉。
+            .onDisappear {
+                if hoveredHotspot == spot {
+                    hoveredHotspot = nil
+                    NSCursor.pop()
+                }
+            }
+            .onTapGesture { presentedHotspot = spot }
+            .animation(.easeOut(duration: 0.12), value: lit)
+            .popover(isPresented: Binding(
+                get: { presentedHotspot == spot },
+                set: { shown in if !shown, presentedHotspot == spot { presentedHotspot = nil } }),
+                     arrowEdge: .bottom) {
+                // 浮层随挂它的视图继承环境:不换回窗口的深浅色,浮层里的字按深色画成浅色、底却是窗口的浅色,读不清。
+                spot.group.popoverContent()
+                    .environment(\.colorScheme, colorScheme)
+            }
+            .accessibilityElement()
+            .accessibilityLabel(spot.accessibilityLabel)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { presentedHotspot = spot }
     }
 
     private var closeBox: some View {
