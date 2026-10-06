@@ -62,6 +62,8 @@ enum ConfigPortability {
     ///   不同,原样还原可能把悬浮窗放到屏幕外——用户会以为"悬浮歌词开了但不显示"。
     /// - `overlayPositionOrigin`:上面那个键的旧版本,现在只读不写、供一次性迁移用,
     ///   同样是绝对坐标。
+    /// - `overlayControlsBelowCard`:存位置那一刻控制排在卡片上方还是下方,跟 `overlayPositionTop`
+    ///   配对才有意义,一起留在这台机器。
     /// - `notchScreenID`:灵动岛显示在哪块屏幕上,存的是屏幕身份串。这个 ID 在新机器上
     ///   一定解析不出对应屏幕(设置页为此专门有一档"已断开的屏幕"占位)。
     ///
@@ -92,6 +94,7 @@ enum ConfigPortability {
         "np:overlayStyle",
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",
+        "np:overlayControlsBelowCard",
         "np:notchScreenID",
         // 歌词窗口的位置/尺寸与它所在的那块屏幕。判据跟上面
         // np:overlayPosition* 一字不差:存的是绝对屏幕坐标 + 一块具体显示器的 UUID,

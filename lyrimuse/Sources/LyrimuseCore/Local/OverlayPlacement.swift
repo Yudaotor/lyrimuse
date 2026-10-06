@@ -189,4 +189,52 @@ public enum OverlayPlacement {
         let newHeight = min(rawHeight, maxHeight ?? rawHeight)
         return CGRect(x: current.minX, y: top - newHeight, width: current.width, height: newHeight)
     }
+
+    // MARK: - 控制排在卡片上方还是下方(「自由」模式)
+
+    /// 控制排槽位的高度:胶囊 30 + 离卡片 4 + 离窗口边 4。`LyricsOverlayView.controlsSlot` 按它定高;
+    /// 槽位从卡片上方挪到下方时卡片在窗口里正好上移这么多,窗口反向挪同样的量卡片才不动,两处必须是同一个数。
+    public static let controlsSlotHeight: CGFloat = 38
+
+    /// 卡片顶边(屏幕坐标,y 向上)。槽位在上方时卡片在窗口顶边往下一个槽位。
+    public static func cardTop(windowTop: CGFloat, controlsBelow: Bool) -> CGFloat {
+        controlsBelow ? windowTop : windowTop - controlsSlotHeight
+    }
+
+    /// 卡片顶边落在 `cardTop` 时窗口顶边该在哪儿。
+    public static func windowTop(cardTop: CGFloat, controlsBelow: Bool) -> CGFloat {
+        controlsBelow ? cardTop : cardTop + controlsSlotHeight
+    }
+
+    /// 控制排该不该放到卡片下方:卡片上方放不下整个槽位(槽位会伸进可见区顶边以上、被菜单栏盖住)时放下方。
+    /// 按卡片顶边判,别按窗口顶边判:那样卡片离菜单栏不到一个槽位的位置停不住(见 04 章决策 41)。
+    public static func controlsBelowCard(cardTop: CGFloat, visibleTop: CGFloat) -> Bool {
+        cardTop + controlsSlotHeight > visibleTop + 0.5
+    }
+
+    // MARK: - 松手护位(「自由」模式拖动)
+
+    /// 拖动松手那一刻窗口的 x 和顶边。松手后系统会接着挪窗口(拖进菜单栏松手被摆到屏幕正中、拖到屏幕边缘
+    /// 被平铺,窗口行为标志关不掉),`holdSeconds` 之内被挪走就挪回这里(见 04 章决策 41)。
+    public struct ReleaseAnchor: Equatable {
+        public static let holdSeconds: CFTimeInterval = 0.8
+        public let x: CGFloat
+        public let top: CGFloat
+        public let until: CFTimeInterval
+
+        public init(frame: CGRect, now: CFTimeInterval) {
+            x = frame.minX
+            top = frame.maxY
+            until = now + Self.holdSeconds
+        }
+
+        public func expired(at now: CFTimeInterval) -> Bool { now > until }
+
+        /// 窗口被挪走了就返回该挪回去的 origin,没挪返回 nil。只比 x 和顶边:换行变高守顶边,不算挪动;
+        /// 挪回时按窗口当前的高度守顶边。
+        public func restoredOrigin(for frame: CGRect) -> CGPoint? {
+            guard abs(frame.minX - x) > 0.5 || abs(frame.maxY - top) > 0.5 else { return nil }
+            return CGPoint(x: x, y: top - frame.height)
+        }
+    }
 }

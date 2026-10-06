@@ -20,6 +20,9 @@ import os
 private let overlayPositionKey = "np:overlayPositionTop" // "x,顶边y" 字符串
 // 旧键只读不写,给一次性迁移用(见 savedAnchor)。
 private let overlayPositionLegacyOriginKey = "np:overlayPositionOrigin" // 旧:"x,左下角y"
+// 存位置那一刻控制排在卡片下方(true)还是上方。跟顶边一起才定得出卡片在哪:同一个窗口顶边,
+// 翻没翻对应两个差一个槽位的卡片位置。没存过时按窗口顶边推,见 savedControlsBelow。
+private let overlayControlsBelowKey = "np:overlayControlsBelowCard"
 // isVisible 的持久化在并进了 AppSettings.classicOverlayEnabled(原来这里有
 // 一个私有的 np:overlayVisible,跟设置页那个开关是同一件事的两个真值,详见 setVisible(_:)
 // 和 AppSettings.init() 里的迁移注释),所以这里不再有自己的 visible key。
@@ -111,11 +114,10 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 视图最近一次上报的内容高度(`updateHeight` 收到的原值)。「底部居中」下内容贴着窗口底边放,
     /// 热区换算要用它算内容块离窗口顶边多远(`OverlayControlHitTest.contentTopInset`);贴顶时用不着。
     private var lastContentHeight: CGFloat = 0
-    /// 控制排该不该画在卡片**下方**(而不是常规的上方)。「顶部居中」预设恒真;「自由」拖动时
-    /// 由 `recomputeControlsBelowCard()` 按窗口实际位置动态算——控制排画在上方会让它的顶边
-    /// 越过可见区顶边(= 被真实菜单栏挡住,层级比这个 `.floating` 悬浮窗高,盖住的部分既看
-    /// 不见也点不到)时才翻面,让卡片本身能贴到可见区顶边、控制排仍留在够得着的地方。见
-    /// `recomputeControlsBelowCard()` 头注。
+    /// 控制排该不该画在卡片**下方**(而不是常规的上方)。「顶部居中」预设恒真;「自由」模式下
+    /// 由 `recomputeControlsBelowCard()` 按卡片位置算——卡片上方放不下整个槽位(会伸进可见区顶边
+    /// 以上,被真实菜单栏挡住,层级比这个 `.floating` 悬浮窗高,盖住的部分既看不见也点不到)时才
+    /// 翻面,让卡片本身能贴到可见区顶边、控制排仍留在够得着的地方。见 `recomputeControlsBelowCard()` 头注。
     @Published private(set) var controlsBelowCard = false
     /// 悬停时露不露出那排播放控制按钮——真值在 `AppSettings.overlayShowHoverControls`
     /// (⚙ 菜单/设置页「悬停控制条」都写它),这里是**滞后**生效的镜像:控制排此刻正显示着
@@ -278,6 +280,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var lyricsHotZoneRaw: CGRect?
 
     private let longPressThresholdSecs: TimeInterval = 0.35
+    /// 系统接手拖窗口之后(performDrag 当场返回、窗口由系统跟着鼠标挪)每帧查一次左键松没松,松了才收尾。
+    private var dragReleasePoll: Timer?
+    /// 开拖前换了布局时,等这么久再交给系统拖窗口:够新布局画出来、挪过的窗口位置落到系统那边(一两帧)。
+    private let dragStartRenderDelay: TimeInterval = 0.05
+    /// 换好布局、等着开始拖的那一小会儿;`cancelPendingPress` 会作废它。
+    private var dragStartTimer: Timer?
+    /// 系统拖窗口期间,左键还按着时最后看到的窗口位置。松手以它为准:松手之后系统还会接着挪窗口
+    /// (见 `dragReleaseAnchor`),认出松手那一刻窗口可能已经被挪走了几帧。
+    private var dragFrameWhilePressed: NSRect?
+    /// 松手护位(见 `OverlayPlacement.ReleaseAnchor`)。自己挪窗口的入口(再拖一次、拖宽度、设宽度、换位置模式、
+    /// 屏幕变了)先清掉它,不然会被当成系统挪动挪回去。
+    private var dragReleaseAnchor: OverlayPlacement.ReleaseAnchor?
     // 按下之后到长按计时器触发之前,鼠标移动超过这个距离就当成"这是想让点击/拖拽
     // 穿透到下层 App 的普通手势",取消长按判定,不武装拖动。
     private let dragMoveTolerance: CGFloat = 4
@@ -302,6 +316,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 存的位置在当前显示器配置下一块屏都看不见(外接屏拔了/睡了)时,上面那个落点是临时
         // 借主屏摆的 —— 标记成"借来的",这次运行不许把它写回磁盘,那块屏回来自己回去。
         isBorrowingScreen = placement.wasRescued
+        controlsBelowCard = Self.savedControlsBelow(windowFrame: panel.frame)
         recomputeControlsBelowCard()
 
         // 拖动改由长按手势接管(见 handleGlobalMouseEvent),原生"点背景就拖"不再使用;
@@ -399,9 +414,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             forName: NSWindow.didMoveNotification, object: panel, queue: .main
         ) { [weak self] _ in
             // queue: .main 已经保证这个闭包在主线程被调用,同样不需要 Task 跳转
-            // (理由跟 installMouseMonitors 那处一致)。另外拖动中 setFrameOrigin
-            // 每帧都会触发这个通知,而拖动结束时 handleMouseEvent 的 .leftMouseUp
-            // 分支已经显式存过一次最终位置——正在拖动("武装"中)时这里的重复调度
+            // (理由跟 installMouseMonitors 那处一致)。另外拖动中窗口每挪一帧
+            // 都会触发这个通知,而拖动结束时 finishArmedDrag 已经显式存过一次
+            // 最终位置——正在拖动("武装"中)时这里的重复调度
             // 只是白白每帧都 invalidate+新建一个 Timer,跳过它减轻拖动路径上的负担。
             //
             // 程序性 resize 动画(setFrameAnimated:换行变高/宽度滑杆)同样每动画帧发
@@ -409,8 +424,25 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             // 算的,不需要经通知回存;最终落点由 setFrameAnimated 的完成回调统一存一次。
             MainActor.assumeIsolated {
                 guard let self else { return }
-                // 拖动中(武装)、程序性 resize 动画都会逐帧触发这个通知(见上面两段注释)——
-                // 翻不翻面要跟手,这里不受下面那条"跳过重复调度"的门槛限制。
+                if self.isDragArmed {
+                    if NSEvent.pressedMouseButtons & 1 != 0 {
+                        self.dragFrameWhilePressed = panel.frame
+                    } else if self.dragReleasePoll != nil {
+                        // 左键已经松了、轮询还没认出来:这一帧是系统在挪,当场收尾、挪回松手的位置。
+                        self.finishArmedDrag()
+                        return
+                    }
+                }
+                if let anchor = self.dragReleaseAnchor {
+                    if anchor.expired(at: CACurrentMediaTime()) {
+                        self.dragReleaseAnchor = nil
+                    } else if let origin = anchor.restoredOrigin(for: panel.frame) {
+                        panel.setFrameOrigin(origin)
+                        return
+                    }
+                }
+                // 拖动中、程序性 resize 动画里不翻面(判据自己会跳过,见 recomputeControlsBelowCard);
+                // 别的挪动(屏幕参数变了、系统搬窗口)要当场重判,不受下面那条"跳过重复调度"的门槛限制。
                 self.recomputeControlsBelowCard()
                 guard !self.isDragArmed, self.animatingTargetFrame == nil else { return }
                 self.scheduleSavePosition(.windowMoved)
@@ -587,11 +619,10 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 槽位(见 `LyricsOverlayView.body` 头注第 3 条),窗口整体高度不变;所以这里只看
     /// `window.frame`,不用等 `updateHeight` 参与。
     ///
-    /// 「自由」模式下的判据:控制排若画在卡片上方,它的顶边就是**整扇窗**的顶边(内容贴着窗口
-    /// 锚边放)——一旦这个顶边达到或超过窗口所在那块屏的可见区顶边(= 菜单栏底边),控制排就
-    /// 会被真实菜单栏盖住(那层级比 `.floating` 悬浮窗高,盖住的部分既看不见也点不到,拖不动
-    /// 也点不了)。这时翻到卡片下方——卡片本身贴到可见区顶边,控制排让到卡片下面、仍在够
-    /// 得着的地方。一块屏都不沾时不翻(没有可信的边界可判)。
+    /// 「自由」模式下按**卡片**位置判(`OverlayPlacement.controlsBelowCard`):卡片上方放不下整个槽位就翻到
+    /// 下方。翻面时窗口反向挪一个槽位,卡片停在原处。拖动中不判(拖动全程控制排在卡片下方,松手时
+    /// `armDragIfStillPressed` 再判一次);程序性 resize 动画中也不判(卡片顶边不动)。一块屏都不沾时不动
+    /// (没有可信的边界可判)。
     private func recomputeControlsBelowCard() {
         guard let window else { return }
         switch placementMode {
@@ -600,11 +631,42 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         case .bottomCenter:
             controlsBelowCard = false
         case .free:
-            guard let visible = Self.hostVisibleFrame(of: window.frame) else {
-                controlsBelowCard = false
-                return
-            }
-            controlsBelowCard = window.frame.maxY >= visible.maxY - 0.5
+            guard !isDragArmed, animatingTargetFrame == nil,
+                  let visible = Self.hostVisibleFrame(of: window.frame) else { return }
+            let cardTop = OverlayPlacement.cardTop(windowTop: window.frame.maxY, controlsBelow: controlsBelowCard)
+            let below = OverlayPlacement.controlsBelowCard(cardTop: cardTop, visibleTop: visible.maxY)
+            setControlsBelowCard(below, keepingCardIn: window)
+        }
+    }
+
+    /// 把控制排换到卡片上方或下方,窗口反向挪一个槽位,卡片停在原处。
+    private func setControlsBelowCard(_ below: Bool, keepingCardIn window: NSWindow) {
+        guard below != controlsBelowCard else { return }
+        let frame = window.frame
+        let cardTop = OverlayPlacement.cardTop(windowTop: frame.maxY, controlsBelow: controlsBelowCard)
+        // 换布局和挪窗口等下一次窗口刷新一起上屏,中间不露出卡片跳一格的那一帧。
+        window.disableScreenUpdatesUntilFlush()
+        controlsBelowCard = below
+        let top = OverlayPlacement.windowTop(cardTop: cardTop, controlsBelow: below)
+        window.setFrameOrigin(NSPoint(x: frame.minX, y: top - frame.height))
+    }
+
+    /// 盘上存的翻面状态。没存过(旧版本留下的位置)时按窗口顶边有没有碰到可见区顶边推 —— 跟旧版本
+    /// 摆出来的一样,而且对同一个卡片位置跟 `OverlayPlacement.controlsBelowCard` 结论相同,升级后位置不变。
+    private static func savedControlsBelow(windowFrame: NSRect) -> Bool {
+        if let saved = UserDefaults.standard.object(forKey: overlayControlsBelowKey) as? Bool { return saved }
+        guard let visible = hostVisibleFrame(of: windowFrame) else { return false }
+        return windowFrame.maxY >= visible.maxY - 0.5
+    }
+
+    /// 把当前位置连同翻面状态写盘;值没变就不写(CFPreferences 的一次写路径不便宜)。
+    private func persistPosition(_ frame: NSRect) {
+        let value = "\(frame.origin.x),\(frame.maxY)"
+        if UserDefaults.standard.string(forKey: overlayPositionKey) != value {
+            UserDefaults.standard.set(value, forKey: overlayPositionKey)
+        }
+        if UserDefaults.standard.object(forKey: overlayControlsBelowKey) as? Bool != controlsBelowCard {
+            UserDefaults.standard.set(controlsBelowCard, forKey: overlayControlsBelowKey)
         }
     }
 
@@ -696,6 +758,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 适应,固定左边界的话,拖到屏幕右侧的窗口调宽后容易被推出屏幕外。
     func setWidth(_ width: CGFloat) {
         guard let window else { return }
+        dragReleaseAnchor = nil
         let current = baseFrame(of: window)
         let centerX = current.origin.x + current.width / 2
         // 按中心点算出的新左右边界同样需要夹回屏幕可见区域——实测排查坐实:
@@ -756,7 +819,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         globalMouseMonitor = nil
         localMouseMonitor = nil
         // 卸载这一刻可能正悬停/长按到一半 —— 跟 setLocked 的清理口径一致,不留残留状态。
-        // 已武装的拖动不受影响:performDrag 是同步阻塞调用,跑着的时候到不了这里。
+        // 系统正在拖的话(左键没松),cancelPendingPress 会停掉等松手的轮询、把控制排按规则放回去。
         cancelPendingPress()
         setAdjustingWidth(false)
         clearControlsHoverState()
@@ -1078,6 +1141,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             }
             if isAdjustingWidth, let edge = OverlayWidthDrag.edge(at: localPoint, windowSize: frame.size) {
                 cancelPendingPress()
+                dragReleaseAnchor = nil
                 widthDrag = (edge, loc.x, baseFrame(of: window))
                 captureEdge(window)
                 return
@@ -1118,9 +1182,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 applyWidthDrag(drag, mouseX: loc.x, window: window)
                 return
             }
-            // 武装之后整段拖动都交给 armDragIfStillPressed 里的 performDrag 原生处理
-            // (那是一个同步阻塞调用,函数返回时拖动已经结束)——这里只需要在"还没
-            // 武装"这段时间处理"移动太多就取消长按判定"。
+            // 武装之后整段拖动都交给系统(performDrag),直到左键松开都算武装——这里只需要
+            // 在"还没武装"这段时间处理"移动太多就取消长按判定"。
             guard !isDragArmed, let start = pressStartLocation else { return }
             let moved = hypot(loc.x - start.x, loc.y - start.y)
             if placementMode.isPreset {
@@ -1147,9 +1210,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 }
                 return
             }
-            // 已经武装的情况下,这个 mouseUp 早被 performDrag 内部的原生跟踪循环
-            // 自己消费掉了,armDragIfStillPressed 会在 performDrag 返回后做收尾;
-            // 这里只需要处理"还没到长按阈值就松手"这种提前取消的情况。
+            // 已经武装的情况下,松手的收尾由 startArmedDrag 盯着左键做(系统拖窗口时这个
+            // mouseUp 不一定送到这里);这里只需要处理"还没到长按阈值就松手"这种提前取消的情况。
             guard !isDragArmed else { return }
             cancelPendingPress()
 
@@ -1173,8 +1235,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // WindowServer 从下一次事件派发起就会把这次手势剩余的 dragged/up 事件判给这个
     // 窗口),再拿一个就地合成、时间戳为当下的 mouseDown 事件喂给 performDrag,把
     // 剩下的拖动过程完全交给 WindowServer 原生处理(跟原来"点背景直接拖"完全同一套
-    // 机制,跟手不卡顿)。performDrag 是同步阻塞调用,内部有自己的事件循环,一直等到
-    // 物理左键松开才返回——所以这个函数直到用户松手才会执行到最后,返回后统一收尾。
+    // 机制,跟手不卡顿)。performDrag 不一定等到松手才返回:系统接手拖窗口时它当场返回,
+    // 松手要自己盯着左键等(见 startArmedDrag)。
     private func armDragIfStillPressed() {
         // NSEvent.pressedMouseButtons 的 bit 0 对应左键——计时器触发这一刻鼠标左键
         // 必须还按着,否则说明 mouseUp 抢在计时器前面到了,不武装拖动。
@@ -1190,12 +1252,39 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             return
         }
         isDragArmed = true
+        dragReleaseAnchor = nil
         window.ignoresMouseEvents = false
-        defer {
-            window.ignoresMouseEvents = true
-            cancelPendingPress()
+        // 拖动全程控制排放在卡片下方,卡片就是窗口顶边:系统拖窗口时把窗口顶边挡在菜单栏底边,卡片正好
+        // 贴到菜单栏,离菜单栏多远都跟手。换过去时窗口下挪一格、卡片不动;松手再按落点判。
+        // 换布局要挪窗口:等新布局画出来、窗口位置落到系统那边再开拖。马上开拖的话,系统按挪之前的
+        // 位置算抓取点,一拖卡片就错开一格。
+        if placementMode == .free, !controlsBelowCard {
+            setControlsBelowCard(true, keepingCardIn: window)
+            let timer = Timer(timeInterval: dragStartRenderDelay, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.dragStartTimer = nil
+                    self?.startArmedDrag()
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            dragStartTimer = timer
+            return
         }
+        startArmedDrag()
+    }
 
+    /// 把这次按住交给系统拖窗口。系统接手之后 performDrag 当场返回、窗口由系统跟着鼠标挪,拖动还没完:
+    /// 武装状态一直留到左键松开(期间不翻面、不存位置),松开才按落点放控制排、存位置(`finishArmedDrag`)。
+    private func startArmedDrag() {
+        guard let window else { return }
+        // 等新布局画出来的那一小会儿里松了手或被取消:不拖,控制排按规则放回去。
+        guard isDragArmed, NSEvent.pressedMouseButtons & 1 != 0 else {
+            window.ignoresMouseEvents = true
+            isDragArmed = false
+            recomputeControlsBelowCard()
+            cancelPendingPress()
+            return
+        }
         guard let syntheticDown = NSEvent.mouseEvent(
             with: .leftMouseDown,
             location: window.mouseLocationOutsideOfEventStream,
@@ -1206,19 +1295,54 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             eventNumber: 0,
             clickCount: 1,
             pressure: 1
-        ) else { return }
+        ) else {
+            window.ignoresMouseEvents = true
+            isDragArmed = false
+            recomputeControlsBelowCard()
+            cancelPendingPress()
+            return
+        }
 
+        dragFrameWhilePressed = window.frame
         window.performDrag(with: syntheticDown)
+        guard NSEvent.pressedMouseButtons & 1 != 0 else {
+            finishArmedDrag()
+            return
+        }
+        // 松手后窗口不再动时靠它认出松手;松手后系统接着挪窗口的话,didMove 观察者先认出来。
+        let poll = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard NSEvent.pressedMouseButtons & 1 == 0 else { return }
+                self?.finishArmedDrag()
+            }
+        }
+        RunLoop.main.add(poll, forMode: .common)
+        dragReleasePoll = poll
+    }
+
+    /// 拖动结束:窗口恢复点击穿透,按落点放控制排,存这一次的最终落点。
+    private func finishArmedDrag() {
+        dragReleasePoll?.invalidate()
+        dragReleasePoll = nil
+        guard let window else {
+            cancelPendingPress()
+            return
+        }
+        window.ignoresMouseEvents = true
         // 实测把窗口拖到了哪儿,那就是新的锚点 —— 哪怕这次是在借来的屏上拖的,也从此
         // 以它为准(清掉标记,下面这次写盘才生效)。
         isBorrowingScreen = false
-        // performDrag 返回 = 这次拖动已经结束(正常松手,或者被系统提前打断),把
-        // 最终落点存下来——原来"武装期间跳过 moveObserver 里的 scheduleSavePosition"
-        // 那条 guard(见 init() 里的 didMoveNotification 观察者)在这里同样适用,拖动
-        // 过程中的中间位置不需要重复存,只存这一次最终结果。
-        UserDefaults.standard.set(
-            "\(window.frame.origin.x),\(window.frame.maxY)", forKey: overlayPositionKey
-        )
+        isDragArmed = false
+        // 落点以左键还按着时最后看到的位置为准,松手之后系统挪的那几帧不算。
+        let released = OverlayPlacement.ReleaseAnchor(frame: dragFrameWhilePressed ?? window.frame, now: CACurrentMediaTime())
+        dragFrameWhilePressed = nil
+        if let origin = released.restoredOrigin(for: window.frame) { window.setFrameOrigin(origin) }
+        // 拖动中没有翻面,卡片停在松手的地方:先按落点判一次(要翻就连窗口一起挪,卡片不动)。
+        recomputeControlsBelowCard()
+        dragReleaseAnchor = OverlayPlacement.ReleaseAnchor(frame: window.frame, now: CACurrentMediaTime())
+        // 拖动中的中间位置不存(武装期间 didMove 观察者跳过 scheduleSavePosition),只存这一次最终落点。
+        persistPosition(window.frame)
+        cancelPendingPress()
     }
 
     /// 预设模式下拖动被拒的反馈:槽位胶囊 + 抖动,2.4 秒后收回(比 flashTransientHint 的 1.6 秒长——
@@ -1321,6 +1445,20 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         pressStartLocation = nil
         isDragArmed = false
         presetDragRejectedThisPress = false
+        // 布局已经为这次拖动换过、还没开始拖,或者系统还在拖(左键没松)时被叫到(锁定、隐藏):
+        // 作废这次拖动,窗口恢复点击穿透,控制排按规则放回去。
+        if let pending = dragStartTimer {
+            pending.invalidate()
+            dragStartTimer = nil
+            window?.ignoresMouseEvents = true
+            recomputeControlsBelowCard()
+        }
+        if let poll = dragReleasePoll {
+            poll.invalidate()
+            dragReleasePoll = nil
+            window?.ignoresMouseEvents = true
+            recomputeControlsBelowCard()
+        }
     }
 
     // 屏幕配置变化后对一次账。判断/夹取的几何都在 OverlayPlacement(LyrimuseCore)里,
@@ -1339,6 +1477,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 累积出来的。
     private func reconcilePlacementWithScreens() {
         guard let window else { return }
+        dragReleaseAnchor = nil
         let screens = Self.allVisibleFrames()
         // 改分辨率、切菜单栏自动隐藏、Dock 换边时窗口不一定挪,但它离菜单栏还有多远变了:控制排该放卡片上方
         // 还是下方要重判,不然可能被菜单栏盖住。(窗口真挪了的话 didMove 那边还会再判一次,判等所以无妨。)
@@ -1361,6 +1500,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                     != OverlayPlacement.hostVisibleFrame(of: home, screens: screens)
             if isBorrowingScreen || (isPositionLocked && movedToAnotherScreen) {
                 isBorrowingScreen = false
+                // 锚点的顶边要配上存它时的翻面状态,卡片才回到原来的位置。
+                controlsBelowCard = Self.savedControlsBelow(windowFrame: home)
                 window.setFrameOrigin(home.origin)
                 return
             }
@@ -1413,6 +1554,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func applyPlacementMode(_ mode: OverlayPlacementMode) {
         guard mode != placementMode else { return }
         placementMode = mode
+        dragReleaseAnchor = nil
         recomputeControlsBelowCard()
         guard let window else { return }
         // 贴顶 / 贴底换了,内容块在窗口里的位置就换了;上报的内容坐标不会因此重发,得主动重算
@@ -1466,12 +1608,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         let t = Timer(timeInterval: 0.3, repeats: false) { [weak self] _ in
             // 排队这 0.3 秒里可能刚进了借屏(显示器没了、系统搬了窗口):到点再核一次。
             guard let self, !self.isBorrowingScreen, let frame = self.window?.frame else { return }
-            let value = "\(frame.origin.x),\(frame.maxY)"
-            // 值没变就别写 —— CFPreferences 的一次写路径不便宜,而高度动画结束后 x/顶边
-            // 恰恰都是不变量,原来每次换行都会落一笔跟盘上完全相同的字符串。
-            if UserDefaults.standard.string(forKey: overlayPositionKey) != value {
-                UserDefaults.standard.set(value, forKey: overlayPositionKey)
-            }
+            // 值没变就别写 —— 高度动画结束后 x/顶边恰恰都是不变量,不然每次换行都会落一笔跟盘上
+            // 完全相同的字符串。
+            self.persistPosition(frame)
         }
         RunLoop.main.add(t, forMode: .common)
         moveDebounceTimer = t

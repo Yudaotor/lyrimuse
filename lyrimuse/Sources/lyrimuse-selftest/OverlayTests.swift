@@ -1112,6 +1112,53 @@ func runOverlayTests() {
         expectEqual(onExternal?.midX, external.midX, "位置预设: 外接屏上按外接屏居中")
         expectEqual(onExternal?.minY, 956 + 12, "位置预设: 外接屏上贴外接屏的底边")
 
+        // 「自由」模式控制排放卡片上方还是下方,按卡片位置判:卡片上方放得下整个槽位才放上方。
+        let slot = OverlayPlacement.controlsSlotHeight
+        expectEqual(slot, 38, "控制排翻面: 槽位高 = 胶囊 30 + 上下各 4")
+        expectEqual(OverlayPlacement.controlsBelowCard(cardTop: screen.maxY - slot, visibleTop: screen.maxY), false,
+                    "控制排翻面: 卡片上方正好放得下一个槽位时放上方")
+        expectEqual(OverlayPlacement.controlsBelowCard(cardTop: screen.maxY - slot + 1, visibleTop: screen.maxY), true,
+                    "控制排翻面: 卡片上方差 1pt 放不下时放下方")
+        expectEqual(OverlayPlacement.controlsBelowCard(cardTop: screen.maxY + 10, visibleTop: screen.maxY), true,
+                    "控制排翻面: 卡片伸进菜单栏时放下方")
+        // 卡片离可见区顶边 0~60pt 每个位置都停得住:按卡片定好上下、换算出窗口顶边,卡片顶边原样回来,
+        // 槽位放上方时不伸进菜单栏。
+        var stuckGaps: [CGFloat] = []
+        for gap in stride(from: CGFloat(0), through: 60, by: 0.5) {
+            let card = screen.maxY - gap
+            let below = OverlayPlacement.controlsBelowCard(cardTop: card, visibleTop: screen.maxY)
+            let windowTop = OverlayPlacement.windowTop(cardTop: card, controlsBelow: below)
+            if OverlayPlacement.cardTop(windowTop: windowTop, controlsBelow: below) != card
+                || (!below && windowTop > screen.maxY + 0.5) { stuckGaps.append(gap) }
+        }
+        expectEqual(stuckGaps, [], "控制排翻面: 卡片离菜单栏 0~60pt 的每个位置都停得住")
+        // 旧版本按窗口顶边判(碰到可见区顶边就翻)存下的位置,按新判据算上下一样:升级后卡片不挪。
+        var flippedOnUpgrade: [CGFloat] = []
+        for offset in stride(from: CGFloat(-60), through: 80, by: 0.5) {
+            let windowTop = screen.maxY - offset
+            let oldBelow = windowTop >= screen.maxY - 0.5
+            let card = OverlayPlacement.cardTop(windowTop: windowTop, controlsBelow: oldBelow)
+            if OverlayPlacement.controlsBelowCard(cardTop: card, visibleTop: screen.maxY) != oldBelow {
+                flippedOnUpgrade.append(offset)
+            }
+        }
+        expectEqual(flippedOnUpgrade, [], "控制排翻面: 旧版本存下的位置按新判据算,上下不变")
+
+        // 松手护位:松手后系统把窗口挪走(拖进菜单栏松手被摆到屏幕正中)就挪回松手的位置。
+        let released = CGRect(x: 1100, y: screen.maxY - 120, width: 900, height: 120)
+        let anchor = OverlayPlacement.ReleaseAnchor(frame: released, now: 10)
+        expectEqual(anchor.restoredOrigin(for: released), nil, "松手护位: 没挪不动")
+        expectEqual(anchor.restoredOrigin(for: CGRect(x: 1100.4, y: released.minY - 0.4, width: 900, height: 120)), nil,
+                    "松手护位: 亚像素不算挪动")
+        expectEqual(anchor.restoredOrigin(for: CGRect(x: 1100, y: released.minY - 40, width: 900, height: 160)), nil,
+                    "松手护位: 换行变高守顶边,不算挪动")
+        expectEqual(anchor.restoredOrigin(for: CGRect(x: 1100, y: released.minY - 5, width: 900, height: 120)),
+                    CGPoint(x: 1100, y: released.minY), "松手护位: 系统往下挪了一点(摆到正中的第一帧)也挪回去")
+        expectEqual(anchor.restoredOrigin(for: CGRect(x: 585, y: 300, width: 900, height: 160)),
+                    CGPoint(x: 1100, y: screen.maxY - 160), "松手护位: 被摆到正中时挪回去,按当前高度守顶边")
+        expectEqual(anchor.expired(at: 10.5), false, "松手护位: 系统那段挪窗口的动画(松手后约 0.35 秒)全程都管")
+        expectEqual(anchor.expired(at: 11), true, "松手护位: 一秒后不再管")
+
         // 增高:守顶边向下长(现状,逐字对得上 updateHeight 原逻辑)。
         let topFrame = top!
         let grownDown = OverlayPlacement.grownFrame(
@@ -1485,6 +1532,59 @@ func runOverlayTests() {
                     "悬浮接线: 锚点那块屏不在了就算借屏,并作废已排队的落盘")
         expectEqual(view.contains("!surfaceVisible") && controller.contains("didChangeOcclusionStateNotification"), true,
                     "悬浮接线: 看不见时停表")
+        expectEqual(controller.contains("let below = OverlayPlacement.controlsBelowCard(cardTop: cardTop, visibleTop: visible.maxY)"),
+                    true, "悬浮接线: 「自由」模式控制排翻不翻按卡片位置判")
+        expectEqual(controller.contains("guard !isDragArmed, animatingTargetFrame == nil,"), true,
+                    "悬浮接线: 拖动中不翻面,卡片全程跟手")
+        let preDrag = controller.range(of: "if placementMode == .free, !controlsBelowCard {\n            setControlsBelowCard(true, keepingCardIn: window)")
+        let dragCall = controller.range(of: "window.performDrag(with: syntheticDown)")
+        expectEqual(preDrag != nil && dragCall != nil && preDrag!.lowerBound < dragCall!.lowerBound, true,
+                    "悬浮接线: 开始拖之前控制排换到卡片下方,卡片能一路贴到菜单栏")
+        expectEqual(view.contains("adjustingWidth: overlayController.isAdjustingWidth) && !overlayController.isDragArmed"), true,
+                    "悬浮接线: 拖动中不显示控制排")
+        expectEqual(controller.contains(
+            "window.performDrag(with: syntheticDown)\n        guard NSEvent.pressedMouseButtons & 1 != 0 else {\n            finishArmedDrag()"),
+                    true, "悬浮接线: performDrag 当场返回时等左键松开才收尾,不在开拖那一刻收尾")
+        expectEqual(controller.contains("dragReleasePoll = poll"), true, "悬浮接线: 系统接手拖动后轮询左键松没松")
+        expectEqual(controller.contains("dragFrameWhilePressed = window.frame\n        window.performDrag(with: syntheticDown)")
+                    && controller.contains("if NSEvent.pressedMouseButtons & 1 != 0 {\n                        self.dragFrameWhilePressed = panel.frame"),
+                    true, "悬浮接线: 拖动中记下左键还按着时的窗口位置")
+        expectEqual(controller.contains(
+            "} else if self.dragReleasePoll != nil {\n                        // 左键已经松了、轮询还没认出来:这一帧是系统在挪,当场收尾、挪回松手的位置。\n                        self.finishArmedDrag()"),
+                    true, "悬浮接线: 松手后系统一挪窗口就收尾,不等轮询")
+        expectEqual(controller.contains(
+            "let released = OverlayPlacement.ReleaseAnchor(frame: dragFrameWhilePressed ?? window.frame, now: CACurrentMediaTime())")
+                    && controller.contains("if let origin = released.restoredOrigin(for: window.frame) { window.setFrameOrigin(origin) }"),
+                    true, "悬浮接线: 落点以左键还按着时的位置为准,认出松手前系统挪的那几帧挪回去")
+        expectEqual(controller.contains("dragReleaseAnchor = OverlayPlacement.ReleaseAnchor(frame: window.frame, now: CACurrentMediaTime())"),
+                    true, "悬浮接线: 松手时记下窗口的 x 和顶边")
+        expectEqual(controller.contains(
+            "} else if let origin = anchor.restoredOrigin(for: panel.frame) {\n                        panel.setFrameOrigin(origin)"),
+                    true, "悬浮接线: 松手后系统接着挪窗口(拖进菜单栏摆到正中、贴边平铺)时挪回松手的位置")
+        for (site, what) in [
+            ("isDragArmed = true\n        dragReleaseAnchor = nil", "再拖一次"),
+            ("dragReleaseAnchor = nil\n                widthDrag = (edge, loc.x, baseFrame(of: window))", "拖宽度"),
+            ("func setWidth(_ width: CGFloat) {\n        guard let window else { return }\n        dragReleaseAnchor = nil", "设宽度"),
+            ("placementMode = mode\n        dragReleaseAnchor = nil", "换位置模式"),
+            ("private func reconcilePlacementWithScreens() {\n        guard let window else { return }\n        dragReleaseAnchor = nil",
+             "屏幕变了"),
+        ] {
+            expectEqual(controller.contains(site), true, "悬浮接线: \(what)时先作废松手护位,不被当成系统挪动挪回去")
+        }
+        expectEqual(controller.contains(
+            "setControlsBelowCard(true, keepingCardIn: window)\n            let timer = Timer(timeInterval: dragStartRenderDelay, repeats: false)"),
+                    true, "悬浮接线: 开拖前换了布局就等它画出来、窗口位置落到系统那边再拖")
+        expectEqual(controller.contains("if let pending = dragStartTimer {\n            pending.invalidate()"), true,
+                    "悬浮接线: 等着开拖时被取消,作废这次拖动并放回控制排")
+        expectEqual(controller.contains("if let poll = dragReleasePoll {\n            poll.invalidate()"), true,
+                    "悬浮接线: 拖动中被锁定或隐藏时停掉等松手的轮询,放回控制排")
+        expectEqual(controller.contains(
+            "recomputeControlsBelowCard()\n        dragReleaseAnchor = OverlayPlacement.ReleaseAnchor(frame: window.frame, now: CACurrentMediaTime())"),
+                    true, "悬浮接线: 松手时按卡片落点判一次,判完再记护位")
+        expectEqual(controller.contains("window.setFrameOrigin(NSPoint(x: frame.minX, y: top - frame.height))"), true,
+                    "悬浮接线: 翻面时窗口反向挪一个槽位,卡片不动")
+        expectEqual(view.contains(".frame(height: OverlayPlacement.controlsSlotHeight)"), true,
+                    "悬浮接线: 控制排那一格按 controlsSlotHeight 定高,跟翻面补偿同一个数")
     }
 
     // ---- UI 共用组件那一批的接线(契约) ----

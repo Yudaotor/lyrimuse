@@ -456,12 +456,13 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     // 就地展开:控制器侧 `handleMouseEvent` 的 `controlsShown` 要跟这里**逐字同一条** ——
     // 它决定收不收回点击穿透、点击分发到哪颗按钮。两边长歪就是"看不见却挡手"或
     // "看得见点不动"。加「悬停控制条」开关时合并的。
+    /// 拖动中不显示:那时点不了,而且拖动全程控制排换在卡片下方(见 `LyricsOverlayWindowController.armDragIfStillPressed`)。
     private var controlsVisible: Bool {
         OverlayControlHitTest.controlsShown(
             hovering: overlayController.isHoveringForControls,
             positionLocked: playback.lockPosition,
             hoverControlsEnabled: overlayController.showHoverControls,
-            adjustingWidth: overlayController.isAdjustingWidth)
+            adjustingWidth: overlayController.isAdjustingWidth) && !overlayController.isDragArmed
     }
 
     /// 「指针划过时让开」的当前不透明度。
@@ -509,10 +510,10 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         //    借歌词卡片的背景。放外面还有个实际好处 —— 常驻槽位那块空白落在卡片之外,
         //    "深色卡片/浅色卡片"这类有可见背景的主题不会在卡片顶部多出一条空带。
         //
-        // 3) **例外:槽位放到卡片下方**——「顶部居中」预设恒如此;自由拖动时,槽位若还在上面
-        //    会被拖到超出可见区顶边(= 被真实菜单栏挡住,层级比这扇 `.floating` 悬浮窗高,
-        //    盖住的部分既看不见也点不到),这时也翻到下面,让卡片能贴到可见区顶边、槽位仍留在
-        //    够得着的地方。判据在 `LyricsOverlayWindowController.controlsBelowCard`。
+        // 3) **例外:槽位放到卡片下方**——「顶部居中」预设恒如此;「自由」模式下卡片上方放不下
+        //    整个槽位(会伸进可见区顶边以上、被真实菜单栏挡住,层级比这扇 `.floating` 悬浮窗高,
+        //    盖住的部分既看不见也点不到)时也放下面,让卡片能贴到可见区顶边、槽位仍留在够得着的
+        //    地方。判据在 `LyricsOverlayWindowController.controlsBelowCard`。
         //    「底部居中」保持上方不动(守底边,贴 Dock,上面本来就有富余空间)。锁定态解锁
         //    提示跟着同一个槽位走。
         VStack(spacing: 0) {
@@ -660,6 +661,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         //  为了能翻面挪到了这里)。
         .padding(controlsSlotBelow ? .bottom : .top, 4)
         .padding(controlsSlotBelow ? .top : .bottom, 4)
+        // 整格高度钉在 OverlayPlacement.controlsSlotHeight:「自由」模式翻面时窗口按这个数反向挪,卡片才不动。
+        .frame(height: OverlayPlacement.controlsSlotHeight)
         // 横向跟着歌词块走 —— 这一格若只吃外层 `VStack(spacing: 0)` 默认的 `.center` 对齐,
         // 而歌词卡片自己是 `.frame(maxWidth:.infinity, alignment: duetFrameAlignment)`,
         // 对唱歌把歌词甩到右半边时,按钮排还会钉在整扇窗正中,差出大半个窗宽。普通歌看
