@@ -581,12 +581,27 @@ func runTouchBarTests() {
                         && preview.contains("var group: TouchBarSettingsGroup { self == .lyrics ? .lyrics : .layout }")
                         && preview.contains("spot.group.popoverContent()")
                         && preview.contains(".environment(\\.colorScheme, colorScheme)")
-                        && preview.contains(".padding(.leading, CGFloat(TouchBarLyricsStyle.firstItemX))")
+                        && preview.contains(".padding(.leading, escapeSlot + CGFloat(TouchBarLyricsStyle.firstItemX))")
                         && !preview.contains(".offset(x: CGFloat(TouchBarLyricsStyle.firstItemX))"), true,
                     "触控栏预览: 点歌词开「歌词」,点封面 / 三键 / 收起键 / 功能栏开「布局」")
         for spot in ["lyrics", "artwork", "controls", "collapse", "controlStrip"] {
             expectEqual(preview.contains(".overlay { hotspot(.\(spot)) }"), true, "触控栏预览: \(spot) 那一块挂了可点区域")
         }
+        // 预览按这台 Mac 的触控栏画(17 章决策 39):判据跟本体放不放 esc 键是同一条;第一代时整条加宽、左端先画 esc 键,
+        // 收起键和后面那一排往右挪 Esc 那一格,歌词那一格的宽按第一代算。没有触控栏的 Mac 上判据恒为 false,照第二代画。
+        // 漏一处不报错,只表现成第一代上预览跟真机对不上(左端少一颗 esc,或者歌词那一格宽了 / 窄了)。
+        let escapePredicate = "hasEscapeKey && TouchBarPrivateAPI.supportsHidingControlStrip"
+        expectEqual(preview.contains("@ObservedObject private var touchBar = TouchBarAvailability.shared")
+                        && preview.contains("let escapeKey = touchBar." + escapePredicate)
+                        && controller.contains("let escapeKey = " + escapePredicate), true,
+                    "触控栏预览: 第一代的判据跟本体放 esc 键那一条一样")
+        expectEqual(preview.contains("hidesControlStrip: hidesStrip, escapeKey: escapeKey))")
+                        && preview.contains("if escapeKey {\n                escapeKeyCap")
+                        && preview.contains(".offset(x: escapeSlot + TouchBarLyricsCell.closeBoxCenterX")
+                        && preview.contains(".overlay { hotspot(.collapse) }\n                .padding(.leading, escapeSlot)")
+                        && preview.contains(".frame(width: Self.barWidth(escapeKey: escapeKey), height: Self.barSize.height")
+                        && preview.contains("CGFloat(TouchBarLyricsStyle.fullWidthModalWidthWithEscapeKey - TouchBarLyricsStyle.fullWidthModalWidth)"),
+                    true, "触控栏预览: 第一代整条加宽、左端先画 esc 键、收起键和后面那一排往右挪、歌词宽按第一代算")
         let toolbarSource = code(appDir.appendingPathComponent("UI/TouchBarSettingsRows.swift")) ?? ""
         expectEqual(toolbarSource.contains("group.popoverContent()"), true, "触控栏: 工具栏和预览弹同一份浮层")
         // 对齐方式:「自动」按每一行的对唱声部落成方向(同灵动岛),本体和预览都把设置传进规格。

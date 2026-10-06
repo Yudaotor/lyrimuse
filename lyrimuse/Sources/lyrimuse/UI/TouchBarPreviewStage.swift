@@ -10,7 +10,9 @@ import SwiftUI
 /// 封面和三键各自的「位置」排(跟本体同一份 `TouchBarSlot.order`),封面 / 三键跟着「显示封面」「显示播放控制」出没、
 /// 让出来的宽度归歌词,封面那一格贴哪张图也跟本体同一份(`TouchBarLyricsCell.artworkTile`,广告期间是喇叭);右边是收起的系统功能栏(默认那四颗:亮度、音量、静音、Siri),只是参照物。开了「展开时隐藏功能栏」时
 /// 右边那排不画,歌词那一格放宽到整条(`fullWidthModalWidth`),左端照画收起键 —— 本体那时(还有本 App 在前台时)
-/// 用的是 App 自己那颗,样子跟系统的一样。
+/// 用的是 App 自己那颗,样子跟系统的一样。这台 Mac 的触控栏是第一代(左端是一颗虚拟 Esc 键)时照第一代画:整条宽出
+/// 81pt,左端先画本体放回去的那颗 esc 键,收起键和后面那一排跟着往右挪 Esc 那一格,歌词那一格的宽按第一代算;第二代、
+/// 没有触控栏的 Mac 照第二代画。见 17 章决策 39。
 ///
 /// 歌词那一格就是触控栏本体那一格:同一个图层行、同一份规格(`TouchBarLyricsCell.spec` / `secondarySpec`),歌词也是
 /// 本体那一份(`touchBarLyrics`,按真触控栏那一格量到的宽度断句,不按这里的估算宽),字号 /
@@ -22,6 +24,9 @@ import SwiftUI
 struct TouchBarPreviewStage: View {
     /// 整条触控栏(模拟器 2nd generation 实拍量的):给 App 的那一块 + 间隙 + 收起的功能栏 + 右端留白。
     private static let barSize = CGSize(width: 1015, height: TouchBarLyricsCell.barHeight)
+    /// 第一代触控栏(左端是虚拟 Esc 键)比第二代宽出来的那一截:整条 1085pt 对 1004pt(`TouchBarLyricsStyle` 的实测值)。
+    private static let firstGenerationExtraWidth =
+        CGFloat(TouchBarLyricsStyle.fullWidthModalWidthWithEscapeKey - TouchBarLyricsStyle.fullWidthModalWidth)
     /// 收起的功能栏:左端一格窄的展开箭头 + 四颗键(实拍量的宽),右端离触控栏边缘 10pt。
     private static let stripChevronWidth: CGFloat = 15
     private static let stripButtonWidth: CGFloat = 57
@@ -36,12 +41,17 @@ struct TouchBarPreviewStage: View {
     private static let buttonFill = Color(white: 0.22)
     /// 圆角跟设置卡片同一档,同 `LyricsWindowPreviewStage`。
     private static let stageCornerRadius: CGFloat = 12
-    private static var contentSize: CGSize {
+    /// 整条的宽:第一代比第二代多 `firstGenerationExtraWidth`。
+    private static func barWidth(escapeKey: Bool) -> CGFloat {
+        barSize.width + (escapeKey ? firstGenerationExtraWidth : 0)
+    }
+    private static func contentSize(escapeKey: Bool) -> CGSize {
         let margin = glassInset + deckPadding
-        return CGSize(width: barSize.width + margin * 2, height: barSize.height + margin * 2)
+        return CGSize(width: barWidth(escapeKey: escapeKey) + margin * 2, height: barSize.height + margin * 2)
     }
 
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var touchBar = TouchBarAvailability.shared
     @StateObject private var feed = TouchBarPreviewFeed()
     @Environment(\.previewHostVisible) private var previewHostVisible
     /// 设置窗口自己的深浅色。预览那一块固定画成深色(触控栏本来就是黑的),从那里弹出的浮层要换回这个。
@@ -79,9 +89,11 @@ struct TouchBarPreviewStage: View {
         let font = TouchBarLyricsCell.mainFont(fontSize: settings.touchBarLyricsFontSize, secondary: snapshot.secondary)
         // 隐藏功能栏只在系统入口在时才算数,同本体。
         let hidesStrip = settings.touchBarHidesControlStrip && TouchBarPrivateAPI.supportsHidingControlStrip
+        // 第一代触控栏(左端是虚拟 Esc 键)照第一代画,判据同本体放不放 esc 键;第二代、没有触控栏的 Mac 照第二代画。
+        let escapeKey = touchBar.hasEscapeKey && TouchBarPrivateAPI.supportsHidingControlStrip
         let lyricsWidth = CGFloat(TouchBarLyricsStyle.lyricsWidth(showsArtwork: settings.touchBarShowsArtwork,
                                                                   showsControls: settings.touchBarShowsControls,
-                                                                  hidesControlStrip: hidesStrip))
+                                                                  hidesControlStrip: hidesStrip, escapeKey: escapeKey))
         let inputs = TouchBarLyricsCell.Inputs(
             startMs: snapshot.startMs, dwellMs: snapshot.dwellMs, isPlaying: snapshot.isPlaying,
             timingEpoch: snapshot.timingEpoch, rate: snapshot.rate, font: font,
@@ -103,7 +115,7 @@ struct TouchBarPreviewStage: View {
         } ?? false
         let rows = LyricRows(main: spec, secondary: secondarySpec, twoRows: snapshot.secondary.showsSecondaryRow)
         return VStack(spacing: SectionPreviewMetrics.captionSpacing) {
-            stage(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, snapshot: snapshot)
+            stage(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, escapeKey: escapeKey, snapshot: snapshot)
             Text(scrolls ? L10n.t("预览 · 左右滑动看整条 · 本句会横向滚动") : L10n.t("预览 · 左右滑动看整条"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -127,13 +139,13 @@ struct TouchBarPreviewStage: View {
         var twoRows: Bool
     }
 
-    private func stage(rows: LyricRows, lyricsWidth: CGFloat, hidesStrip: Bool,
+    private func stage(rows: LyricRows, lyricsWidth: CGFloat, hidesStrip: Bool, escapeKey: Bool,
                        snapshot: TouchBarPreviewFeed.Snapshot) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.stageCornerRadius, style: .continuous)
-        let size = Self.contentSize
+        let size = Self.contentSize(escapeKey: escapeKey)
         // 横向滚动条常显:触控板下系统默认只在滑动时露出滚动条,不显示的话看不出这一条能滑。
         return ScrollView(.horizontal) {
-            bar(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, snapshot: snapshot)
+            bar(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, escapeKey: escapeKey, snapshot: snapshot)
                 .padding(Self.deckPadding)
                 .frame(width: size.width, height: size.height)
                 .background(deck)
@@ -151,22 +163,30 @@ struct TouchBarPreviewStage: View {
         LinearGradient(colors: [Color(white: 0.27), Color(white: 0.19)], startPoint: .top, endPoint: .bottom)
     }
 
-    /// 1:1 的那一条触控栏,连同四周那圈黑玻璃。
-    private func bar(rows: LyricRows, lyricsWidth: CGFloat, hidesStrip: Bool,
+    /// 1:1 的那一条触控栏,连同四周那圈黑玻璃。`escapeKey`(第一代)时左端先是那颗 esc 键,收起键和后面那一排往右挪
+    /// Esc 那一格(`TouchBarLyricsStyle.escapeSlotWidth`)。
+    private func bar(rows: LyricRows, lyricsWidth: CGFloat, hidesStrip: Bool, escapeKey: Bool,
                      snapshot: TouchBarPreviewFeed.Snapshot) -> some View {
+        let escapeSlot = escapeKey ? CGFloat(TouchBarLyricsStyle.escapeSlotWidth) : 0
         // 收起键一直画在同一个位置(系统的 ✕,或者本体自己那颗样子相同的),不进下面这一排。
         let slots = TouchBarSlot.order(
             artworkSide: settings.touchBarArtworkSide, controlsSide: settings.touchBarControlsSide,
             showsArtwork: settings.touchBarShowsArtwork, showsControls: settings.touchBarShowsControls,
             showsCollapseKey: false)
         return ZStack(alignment: .leading) {
+            if escapeKey {
+                // 第一代:本体放回 Esc 那一格的那颗 esc 键,贴左缘。只是参照物,没有可调的设置,不开浮层。
+                escapeKeyCap
+                    .accessibilityHidden(true)
+            }
             closeBox
-                .offset(x: TouchBarLyricsCell.closeBoxCenterX - TouchBarLyricsCell.closeBoxDiameter / 2)
+                .offset(x: escapeSlot + TouchBarLyricsCell.closeBoxCenterX - TouchBarLyricsCell.closeBoxDiameter / 2)
                 .accessibilityHidden(true)
-            // 收起键那一段的可点区域:宽同自己那颗收起键,贴左缘。
+            // 收起键那一段的可点区域:宽同自己那颗收起键,贴左缘(第一代跟在 esc 键后面)。
             Color.clear
                 .frame(width: CGFloat(TouchBarLyricsStyle.collapseItemWidth), height: Self.barSize.height)
                 .overlay { hotspot(.collapse) }
+                .padding(.leading, escapeSlot)
             HStack(spacing: TouchBarLyricsCell.itemSpacing) {
                 ForEach(slots, id: \.self) { slot in
                     item(slot, rows: rows, lyricsWidth: lyricsWidth, snapshot: snapshot)
@@ -174,7 +194,7 @@ struct TouchBarPreviewStage: View {
             }
             // 用 padding 不用 offset 摆到第一项的位置:浮层认的是布局 frame,offset 是几何效果、挪不动它
             // (同 `LyricsWindowPreviewStage` 那块顶部信息)。
-            .padding(.leading, CGFloat(TouchBarLyricsStyle.firstItemX))
+            .padding(.leading, escapeSlot + CGFloat(TouchBarLyricsStyle.firstItemX))
             if !hidesStrip {
                 controlStrip
                     .accessibilityHidden(true)
@@ -183,7 +203,7 @@ struct TouchBarPreviewStage: View {
                     .padding(.trailing, Self.stripTrailingInset)
             }
         }
-        .frame(width: Self.barSize.width, height: Self.barSize.height, alignment: .leading)
+        .frame(width: Self.barWidth(escapeKey: escapeKey), height: Self.barSize.height, alignment: .leading)
         .padding(Self.glassInset)
         .background(RoundedRectangle(cornerRadius: Self.glassCornerRadius, style: .continuous).fill(Color.black))
     }
@@ -290,6 +310,16 @@ struct TouchBarPreviewStage: View {
                 .font(.system(size: TouchBarLyricsCell.closeBoxSymbolSize, weight: .bold))
                 .foregroundStyle(.black))
             .frame(width: TouchBarLyricsCell.closeBoxDiameter, height: TouchBarLyricsCell.closeBoxDiameter)
+    }
+
+    /// 第一代触控栏左端那颗 esc 键(本体放回 Esc 那一格的 `TouchBarEscapeKey`):宽同系统那颗,键帽写「esc」、不分语言,
+    /// 底色同三键那一块。
+    private var escapeKeyCap: some View {
+        Text(verbatim: "esc")
+            .font(.system(size: 15))
+            .foregroundStyle(.white.opacity(0.9))
+            .frame(width: CGFloat(TouchBarLyricsStyle.escapeKeyWidth), height: Self.barSize.height)
+            .background(RoundedRectangle(cornerRadius: Self.buttonCornerRadius, style: .continuous).fill(Self.buttonFill))
     }
 
     /// 收起的系统功能栏,只是参照物:箭头 + 亮度 / 音量 / 静音 / Siri。
