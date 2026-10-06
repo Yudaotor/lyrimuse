@@ -1634,9 +1634,9 @@ func runSourceContractTests() {
             expectEqual(lwv.contains("playback.miniLyricsLayout == .list && !playback.allLines.isEmpty && !lyricsOnHold"), true,
                         "迷你多行: 没有同步歌词 / 口白、广告期间退回两行那套(列表的占位按大窗口尺寸画)")
             // 迷你「单行」:下一句按布局筛过再交给 reel(判据在 MiniLyricsSelection.showsNextLine)。
-            expectEqual(lwv.contains("next: lyricsOnHold ? nil : miniReelNextLine,"), true,
+            expectEqual(lwv.contains("next: lyricsOnHold ? nil : miniReelNextLine(after: slot),"), true,
                         "迷你单行: reel 的下一句走 miniReelNextLine,不直接用 miniNextLine")
-            expectEqual(lwv.contains("guard MiniLyricsSelection.showsNextLine(layout: playback.miniLyricsLayout,"), true,
+            expectEqual(lwv.contains("guard MiniLyricsSelection.showsNextLine(layout: playback.miniLyricsLayout) else { return nil }"), true,
                         "迷你单行: miniReelNextLine 按当前布局判要不要画下一句")
             if let settingsView = read("SettingsView.swift") {
                 expectEqual(settingsView.contains("if miniLyricsLayout.wrappedValue != .list, let lineOverflow {"), true,

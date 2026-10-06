@@ -603,22 +603,58 @@ func runLyricsWindowTests() {
         expectEqual(L.twoLines.rawValue, "compact", "迷你布局: 双行的存盘值固定是 compact")
         expectEqual(L(rawValue: "compact"), .twoLines, "迷你布局: 已存的 compact 读出来是双行")
         expectEqual(L(rawValue: "list"), .list, "迷你布局: 已存的 list 读出来还是多行")
-        expectEqual(M.showsNextLine(layout: .oneLine, hasCurrentLine: true, inGap: false), false,
-                    "迷你单行: 有当前句就只画当前句")
-        expectEqual(M.showsNextLine(layout: .oneLine, hasCurrentLine: false, inGap: true), false,
-                    "迷你单行: 前奏 / 间奏那一格是三颗点,不补下一句")
-        expectEqual(M.showsNextLine(layout: .oneLine, hasCurrentLine: true, inGap: true), false,
-                    "迷你单行: 句间间奏也不补")
-        expectEqual(M.showsNextLine(layout: .oneLine, hasCurrentLine: false, inGap: false), true,
-                    "迷你单行: 还没唱到第一句、又没有前奏三点时用下一句顶上,不留空白")
-        for current in [true, false] {
-            for gap in [true, false] {
-                expectEqual(M.showsNextLine(layout: .twoLines, hasCurrentLine: current, inGap: gap), true,
-                            "迷你双行: 下一句恒画(current=\(current) gap=\(gap))")
-                expectEqual(M.showsNextLine(layout: .list, hasCurrentLine: current, inGap: gap), true,
-                            "迷你多行退回两行那套时照两行画(current=\(current) gap=\(gap))")
-            }
+        expectEqual(M.showsNextLine(layout: .oneLine), false, "迷你单行: 不画下一句那一行(那一格空着时由接下来那一句占住)")
+        expectEqual(M.showsNextLine(layout: .twoLines), true, "迷你双行: 下一句恒画")
+        expectEqual(M.showsNextLine(layout: .list), true, "迷你多行退回两行那套时照两行画")
+        // 当前那一格(07 章决策 126,单行 / 双行同一份):空着的那几刻由接下来那一句以开唱前的样子占住,到点只开始唱。
+        // 间奏点:前奏(-1)和第 3 句之后各一个。
+        func slot(_ current: Int?, scroll: Int?, inGap: Bool = false, markers: [Int] = [-1, 3]) -> M.Slot? {
+            M.slot(currentLineIndex: current, scrollLineIndex: scroll, lineCount: 10, inGap: inGap,
+                   gapMarkerIndices: markers)
         }
+        expectEqual(slot(nil, scroll: nil, inGap: true), nil, "迷你当前那一格: 前奏三颗点亮着时是点")
+        expectEqual(slot(nil, scroll: 0), M.Slot(index: 0, upcoming: true),
+                    "迷你当前那一格: 前奏点熄灭后到开唱,第一句以开唱前的样子占住")
+        expectEqual(slot(nil, scroll: nil, markers: [3]), M.Slot(index: 0, upcoming: true),
+                    "迷你当前那一格: 短到不配三颗点的前奏,也是第一句占住")
+        expectEqual(slot(0, scroll: 0), M.Slot(index: 0, upcoming: false), "迷你当前那一格: 开唱后是当前句(同一句,只是开始唱)")
+        expectEqual(slot(3, scroll: 3), M.Slot(index: 3, upcoming: false), "迷你当前那一格: 间奏点亮起之前还是当前句")
+        expectEqual(slot(3, scroll: 3, inGap: true), nil, "迷你当前那一格: 间奏三颗点亮着时是点")
+        expectEqual(slot(3, scroll: 4), M.Slot(index: 4, upcoming: true),
+                    "迷你当前那一格: 间奏点熄灭后到下一句开唱,下一句占住,不再把唱完的上一句亮一次")
+        expectEqual(slot(5, scroll: 6), M.Slot(index: 5, upcoming: false),
+                    "迷你当前那一格: 没有间奏点的短间隙,上一句照旧留到下一句开唱")
+        expectEqual(slot(9, scroll: 9, markers: [9]), M.Slot(index: 9, upcoming: false), "迷你当前那一格: 最后一句后面没有下一句可顶")
+        expectEqual(slot(12, scroll: 12), nil, "迷你当前那一格: 越界下标(换歌瞬间)不取")
+        expectEqual(M.slot(currentLineIndex: nil, scrollLineIndex: nil, lineCount: 0, inGap: false, gapMarkerIndices: []),
+                    nil, "迷你当前那一格: 没有歌词时空着")
+        // 双行下面那一句跟着当前那一格走;那一格是三颗点时,是点后面要唱的那一句。
+        expectEqual(M.nextIndex(after: M.Slot(index: 3, upcoming: false), currentLineIndex: 3, lineCount: 10), 4,
+                    "迷你双行: 唱着第 3 句时下面是第 4 句")
+        expectEqual(M.nextIndex(after: M.Slot(index: 4, upcoming: true), currentLineIndex: 3, lineCount: 10), 5,
+                    "迷你双行: 间奏点熄灭后第 4 句占住那一格,下面是第 5 句")
+        expectEqual(M.nextIndex(after: M.Slot(index: 0, upcoming: true), currentLineIndex: nil, lineCount: 10), 1,
+                    "迷你双行: 前奏结束后第一句占住那一格,下面是第二句")
+        expectEqual(M.nextIndex(after: nil, currentLineIndex: 3, lineCount: 10), 4, "迷你双行: 间奏三颗点下面是点后面要唱的那一句")
+        expectEqual(M.nextIndex(after: nil, currentLineIndex: nil, lineCount: 10), 0, "迷你双行: 前奏三颗点下面是第一句")
+        expectEqual(M.nextIndex(after: M.Slot(index: 9, upcoming: false), currentLineIndex: 9, lineCount: 10), nil,
+                    "迷你双行: 最后一句下面没有")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(window, contain: "current: slot.map { lyricLines[$0.index] },\n                currentIsUpcoming: slot?.upcoming ?? false,\n"
+                                + "                next: lyricsOnHold ? nil : miniReelNextLine(after: slot),"),
+                    true, "迷你当前那一格接线: reel 的当前那一格走 miniReelSlot、带上是不是还没开唱,下一行跟着它走")
+        expectEqual(sourceBytes(window, contain: "return MiniLyricsSelection.slot(currentLineIndex: playback.currentLineIndex,\n"
+                                + "                                        scrollLineIndex: playback.scrollLineIndex,"),
+                    true, "迷你当前那一格接线: 单行 / 双行都按 Core 的 slot 选,带上滚动锚")
+        expectEqual(sourceBytes(window, contain: "fillSettled: row.role == .current && !currentIsUpcoming && fillSettled,")
+                    && sourceBytes(window, contain: "paused: !isPlaying || (!currentIsUpcoming && fillSettled)),"), true,
+                    "迷你当前那一格接线: 还没开唱的那一句不拿引擎的定格(否则画成已唱完)")
+        let reelBody = window.components(separatedBy: "private struct MiniLyricsReel: View, Equatable {").dropFirst().first?
+            .components(separatedBy: "private struct MiniReelRowBox: Layout {").first ?? ""
+        expectEqual(!reelBody.isEmpty && !reelBody.contains("windowDimOpacity) : color")
+                    && reelBody.components(separatedBy: ".foregroundStyle(color)\n                .lyricTypesetting(row.line.line.plainText)").count - 1 == 2,
+                    true, "迷你当前那一格接线: 整行歌词(含卡拉OK关着)开唱前不压暗,到点不会先灰再亮")
     }
 
     // MARK: - 迷你尺寸的「卡拉OK效果」(07 章决策 116)

@@ -2023,6 +2023,7 @@ struct LyricsWindowView: View {
     /// 逐词要给每个词留出读音的宽度,在 460pt 宽里会把一句话挤成两三行,而迷你统共就这么高。
     @ViewBuilder
     private func miniLyrics(fontSize: CGFloat) -> some View {
+        let slot = miniReelSlot
         VStack(spacing: fontSize * 0.34) {
             if let gap = miniCurrentGap, !lyricsOnHold {
                 // 间奏:三颗呼吸点**顶替**当前行的位置(完整布局是把它插在滚动列表里对应那一行
@@ -2056,13 +2057,14 @@ struct LyricsWindowView: View {
                                        size: fontSize * 0.62, weight: .medium))
                     .foregroundStyle(miniSecondaryColor)
             }
-            // 当前行 + 下一行(「单行」只在当前那一格空着时才补下一句,见 miniReelNextLine)。
+            // 当前那一格 + 下一行(「单行」不画下一行;那一格画哪一句见 miniReelSlot,下一行跟着它走)。
             // 控制条浮出来时下一行**照常显示**(它下面那格已经给控制条预留好了,
             // 见 miniDeckReserve);悬停进出不许摘掉或挪动它 —— 摘掉是一次真重排,当前行会上下弹。
             // 口白、广告期间当前行 / 下一行都不给(见 lyricsOnHold;完整布局的同款闸见 rightPane)。
             MiniLyricsReel(
-                current: miniCurrentGap == nil && !lyricsOnHold ? miniCurrentLine : nil,
-                next: lyricsOnHold ? nil : miniReelNextLine,
+                current: slot.map { lyricLines[$0.index] },
+                currentIsUpcoming: slot?.upcoming ?? false,
+                next: lyricsOnHold ? nil : miniReelNextLine(after: slot),
                 fontSize: fontSize,
                 fontFamily: activeFontFamily,
                 weight: playback.miniFontWeight,
@@ -2362,7 +2364,7 @@ struct LyricsWindowView: View {
         return playback.lyricsGapMarkers.first { $0.index == idx }
     }
 
-    /// 当前行 / 下一行。`currentLineIndex` 为 nil(还没唱到第一句)时,把第一句当"下一行"预告。
+    /// 引擎此刻的当前句,还没唱到第一句时为 nil。reel 当前那一格画哪一句见 `miniReelSlot`。
     private var miniCurrentLine: LyricsWindowLine? {
         let lines = lyricLines
         return MiniLyricsSelection.currentIndex(currentLineIndex: playback.currentLineIndex, lineCount: lines.count)
@@ -2387,19 +2389,22 @@ struct LyricsWindowView: View {
         return paused &+ PlaybackCoordinator.shared.currentLyricsOffsetMs
     }
 
-    private var miniNextLine: LyricsWindowLine? {
+    /// 交给 reel 的下一句:「单行」不画;「双行」是当前那一格那一句的再下一句,三颗点亮着时是点后面要唱的那一句。
+    private func miniReelNextLine(after slot: MiniLyricsSelection.Slot?) -> LyricsWindowLine? {
+        guard MiniLyricsSelection.showsNextLine(layout: playback.miniLyricsLayout) else { return nil }
         let lines = lyricLines
-        return MiniLyricsSelection.nextIndex(currentLineIndex: playback.currentLineIndex, lineCount: lines.count)
+        return MiniLyricsSelection.nextIndex(after: slot, currentLineIndex: playback.currentLineIndex, lineCount: lines.count)
             .map { lines[$0] }
     }
 
-    /// 交给 reel 的下一句:按「歌词布局」那一档筛过的 `miniNextLine`。
-    private var miniReelNextLine: LyricsWindowLine? {
-        guard MiniLyricsSelection.showsNextLine(layout: playback.miniLyricsLayout,
-                                                hasCurrentLine: miniCurrentLine != nil,
-                                                inGap: miniCurrentGap != nil)
-        else { return nil }
-        return miniNextLine
+    /// 交给 reel 的当前那一格(`MiniLyricsSelection.slot`,单行 / 双行同一份):空着的那几刻由接下来那一句
+    /// 以开唱前的样子占住(07 章决策 126)。三颗点亮着、口白 / 广告期间都不给。
+    private var miniReelSlot: MiniLyricsSelection.Slot? {
+        guard !lyricsOnHold else { return nil }
+        return MiniLyricsSelection.slot(currentLineIndex: playback.currentLineIndex,
+                                        scrollLineIndex: playback.scrollLineIndex,
+                                        lineCount: lyricLines.count, inGap: miniCurrentGap != nil,
+                                        gapMarkerIndices: playback.lyricsGapMarkers.map(\.index))
     }
 
     /// 文字色跟完整布局同一条判据(`lyricTextColor` / `lyricSecondaryTextColor`,它们自己会先看
@@ -5392,10 +5397,15 @@ private struct MiniHeaderMetrics {
 ///    不做结构替换 —— 结构一换就是"虚一下重建"(07 章决策 11 同一个坑)。
 /// 3. **大小靠缩放,不靠改字号**:两行都按当前行字号、当前行宽度排版,下一行只是整体缩到
 ///    `nextScale`。所以下一行显示的就是它升格之后的折行样子,升格时不重新折行。
+/// 4. **当前那一格可以是还没开唱的那一句**(`currentIsUpcoming`,07 章决策 126):照当前行画。逐字行时间没到,
+///    字全在没唱到的那档,开唱时同一个视图开始填色、尺寸不变;整行歌词照当前行的亮度画,别压暗 —— 它没有
+///    填色可走,压暗了到点就是一次「先灰再亮」。
 ///
 /// Equatable:窗口 body 每次重算都会把它重建一遍,只比较值输入才挡得住(同完整布局 LyricsLineRow)。
 private struct MiniLyricsReel: View, Equatable {
     let current: LyricsWindowLine?
+    /// `current` 是还没开唱、提前占住那一格的那一句(见第 4 条)。引擎给的定格只属于真正的当前行,不给它。
+    var currentIsUpcoming = false
     let next: LyricsWindowLine?
     let fontSize: CGFloat
     let fontFamily: String
@@ -5547,8 +5557,8 @@ private struct MiniLyricsReel: View, Equatable {
                     romaFillColor: NSColor(color.opacity(0.75)),
                     strokeColor: nil,
                     alignment: .center,
-                    // 跟换行模式那条逐字填色的时钟同一条停表判据。
-                    paused: !isPlaying || fillSettled),
+                    // 跟换行模式那条逐字填色的时钟同一条停表判据(还没开唱的那一句不拿定格)。
+                    paused: !isPlaying || (!currentIsUpcoming && fillSettled)),
                 // 位置基准同 KaraokeLineText:锚点外推 ?? 暂停冻结位置,再叠歌词时间轴偏移。
                 nowMs: {
                     (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: Date())
@@ -5576,8 +5586,9 @@ private struct MiniLyricsReel: View, Equatable {
                 base: color,
                 isActive: row.role == .current,
                 isPlaying: isPlaying,
-                // settled 是引擎按染色当前行算的,只挂当前行;挂到下一行会把它画成"已唱完"。
-                fillSettled: row.role == .current && fillSettled,
+                // settled 是引擎按染色当前行算的,只挂真正的当前行;挂到下一行或还没开唱的那一句,
+                // 会把它画成"已唱完"。
+                fillSettled: row.role == .current && !currentIsUpcoming && fillSettled,
                 fontSize: fontSize,
                 romaFontSize: fontSize * 0.54,
                 fontFamily: fontFamily,

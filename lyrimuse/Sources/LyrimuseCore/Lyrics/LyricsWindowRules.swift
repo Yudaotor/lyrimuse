@@ -172,17 +172,48 @@ public enum MiniLyricsSelection {
         return j >= 0 && j < lineCount ? j : nil
     }
 
-    /// 这一刻要不要画下一句。
-    ///
-    /// 「单行」只在那一格空着时才让下一句顶上:有当前句就只画当前句;间奏 / 前奏里那一格是三颗点,
-    /// 也不再补一句。剩下"还没唱到第一句、前奏又短到不配三颗点"那几秒,不补的话整块歌词区是空的。
-    /// 「多行」走到这里说明退回了两行那套(没有同步歌词 / 电台口白),照两行画。
-    public static func showsNextLine(layout: LyricsWindowMiniLyricsLayout,
-                                     hasCurrentLine: Bool, inGap: Bool) -> Bool {
-        switch layout {
-        case .oneLine: return !hasCurrentLine && !inGap
-        case .twoLines, .list: return true
+    /// 这一刻要不要画下一句。「单行」从不画:那一格空着的时候由接下来那一句占住(`slot`),
+    /// 间奏 / 前奏里那一格是三颗点。「多行」走到这里说明退回了两行那套(没有同步歌词 / 电台口白),照两行画。
+    public static func showsNextLine(layout: LyricsWindowMiniLyricsLayout) -> Bool {
+        layout != .oneLine
+    }
+
+    /// 当前那一格画的那一句。`upcoming` = 还没开唱的那一句提前占住这一格:照当前行的尺寸画、
+    /// 还没开始唱,到点直接开始填色,尺寸不变(07 章决策 126)。
+    public struct Slot: Equatable {
+        public let index: Int
+        public let upcoming: Bool
+
+        public init(index: Int, upcoming: Bool) {
+            self.index = index
+            self.upcoming = upcoming
         }
+    }
+
+    /// 当前那一格此刻画哪一句(单行 / 双行同一份);三颗点亮着时那一格是点,返回 nil。`gapMarkerIndices` 是
+    /// 歌词窗口那份间奏点的下标(`LyricsGapMarker.index`,-1 = 前奏)。
+    ///
+    /// 有当前句就画当前句;两种时候画接下来那一句(`upcoming`):
+    /// - 还没唱到第一句:短到不配三颗点的前奏,以及长前奏三颗点熄灭后到开唱那 `GapRule.leadMs`;
+    /// - 间奏点熄灭后到下一句开唱那 `leadMs`:`scrollLineIndex` 已经领先一句,引擎的当前行却还停在上一句,
+    ///   不顶上的话唱完的上一句会再亮一次。
+    /// 没有间奏点的短间隙不算:那时 `scrollLineIndex` 也会领先(逐字歌词唱完即滚),上一句照旧留到下一句开唱。
+    public static func slot(currentLineIndex: Int?, scrollLineIndex: Int?, lineCount: Int,
+                            inGap: Bool, gapMarkerIndices: [Int]) -> Slot? {
+        guard !inGap, lineCount > 0 else { return nil }
+        guard let current = currentLineIndex else { return Slot(index: 0, upcoming: true) }
+        guard current >= 0, current < lineCount else { return nil }
+        if scrollLineIndex == current + 1, current + 1 < lineCount, gapMarkerIndices.contains(current) {
+            return Slot(index: current + 1, upcoming: true)
+        }
+        return Slot(index: current, upcoming: false)
+    }
+
+    /// 「双行」下面那一句:当前那一格那一句的再下一句;那一格是三颗点时,是点后面要唱的那一句。
+    public static func nextIndex(after slot: Slot?, currentLineIndex: Int?, lineCount: Int) -> Int? {
+        guard let slot else { return nextIndex(currentLineIndex: currentLineIndex, lineCount: lineCount) }
+        let next = slot.index + 1
+        return next < lineCount ? next : nil
     }
 
     /// 这一行下面挂不挂罗马音 / 译文。当前句挂;下一句只在没有当前句陪着时挂 —— 前奏 / 间奏里那一格是三颗点,
