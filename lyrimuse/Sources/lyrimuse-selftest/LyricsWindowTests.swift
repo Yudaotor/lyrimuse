@@ -660,7 +660,7 @@ func runLyricsWindowTests() {
                     "迷你卡拉OK接线: 列表不直接画 allLines")
         expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowMiniLyricsKaraoke) as? Bool) ?? true"),
                     true, "迷你卡拉OK: 没存过时默认开")
-        expectEqual(sourceBytes(settingsView, contain: "miniKaraoke: $settings.lyricsWindowMiniLyricsKaraoke)")
+        expectEqual(sourceBytes(settingsView, contain: "miniKaraoke: $settings.lyricsWindowMiniLyricsKaraoke")
                     && sourceBytes(settingsView, contain: "Toggle(\"\", isOn: miniKaraoke)"), true,
                     "迷你卡拉OK: 「布局」浮层摆这颗开关")
         expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniLyricsKaraoke = true"), true, "迷你卡拉OK: 「重置」恢复成开")
@@ -668,6 +668,97 @@ func runLyricsWindowTests() {
                                                 secondary: { $0.keywords + $0.pathKeys })
         expectEqual(hits.contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.pathKeys.last == "布局" },
                     true, "迷你卡拉OK: 设置搜索搜得到,落在歌词窗口的「布局」")
+    }
+
+    // MARK: - 迷你的粗细、已唱颜色,切换迷你 / 完整尺寸的快捷键(07 章决策 117)
+    do {
+        typealias W = OverlayFontWeight
+        expectEqual(W.bold.lighter(by: W.lyricsWindowRomanizationSteps), .medium, "迷你粗细: 默认档推出的读音还是原来的稍粗")
+        expectEqual(W.bold.lighter(by: W.lyricsWindowTranslationSteps), .semibold, "迷你粗细: 默认档推出的译文还是原来的较粗")
+        expectEqual(W.regular.lighter(by: W.lyricsWindowRomanizationSteps), .light, "迷你粗细: 细档推出的读音夹在最细")
+
+        typealias F = LyricsWindowKaraokeFill
+        expectEqual(F.allCases, [.text, .artwork, .custom], "已唱颜色: 三档顺序 跟随文字颜色 → 跟随封面 → 自定义颜色")
+        expectEqual(F(rawValue: "artwork"), .artwork, "已唱颜色: 存盘值")
+        func luma(_ c: (r: Double, g: Double, b: Double)) -> Double { 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b }
+        let navy = F.accent(r: 0.05, g: 0.08, b: 0.45, darkBackdrop: true)
+        expectEqual(luma(navy) >= 0.62 - 1e-9, true, "已唱颜色: 深底时把深色封面色调亮到感知亮度下限以上")
+        let lifted = LocalPlaybackSource.brightenedAccent(r: 0.05, g: 0.08, b: 0.45)
+        let notch = LocalPlaybackSource.accentForDarkBackdrop(r: lifted.r, g: lifted.g, b: lifted.b)
+        expectEqual(navy == notch, true, "已唱颜色: 深底时跟灵动岛同一套调法")
+        let pale = F.accent(r: 0.98, g: 0.92, b: 0.55, darkBackdrop: false)
+        let paleContrast = LocalPlaybackSource.contrastRatio(
+            LocalPlaybackSource.relativeLuminance(r: pale.r, g: pale.g, b: pale.b), 1)
+        expectEqual(paleContrast >= 2.99, true, "已唱颜色: 浅底时把浅色封面色压暗到跟白底对比度够 3")
+        let deep = F.accent(r: 0.15, g: 0.10, b: 0.30, darkBackdrop: false)
+        expectEqual(deep == (r: 0.15, g: 0.10, b: 0.30), true, "已唱颜色: 浅底时本来就够深的颜色原样")
+
+        typealias T = LyricsWindowMiniToggle
+        expectEqual(T.targetIsMini(windowOpen: false, isMini: false), true, "切换迷你快捷键: 窗口没开就开成迷你")
+        expectEqual(T.targetIsMini(windowOpen: false, isMini: true), true, "切换迷你快捷键: 没开时不管上次是什么形态都开成迷你")
+        expectEqual(T.targetIsMini(windowOpen: true, isMini: false), true, "切换迷你快捷键: 完整尺寸开着就切成迷你")
+        expectEqual(T.targetIsMini(windowOpen: true, isMini: true), false, "切换迷你快捷键: 迷你开着就切回完整尺寸")
+
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let layerRows = source("lyrimuse/UI/LyricsLayerListRow.swift")
+        let settingsView = source("lyrimuse/SettingsView.swift")
+        let appSettings = source("lyrimuse/Settings/AppSettings.swift")
+        let hotkeys = source("lyrimuse/Settings/GlobalHotkeys.swift")
+        let reel = window.components(separatedBy: "private struct MiniLyricsReel: View, Equatable {").dropFirst().first?
+            .components(separatedBy: "private struct MiniReelRowBox: Layout {").first ?? ""
+        expectEqual(!reel.isEmpty && !reel.contains("weight: .bold") && !reel.contains("weight: .medium")
+                    && !reel.contains("weight: .semibold"), true, "迷你粗细接线: reel 里没有写死的字重")
+        expectEqual(sourceBytes(window, contain: "weight: playback.miniFontWeight,\n"), true, "迷你粗细接线: reel 拿迷你那一档")
+        expectEqual(window.components(separatedBy: "weight: showsMiniLayout ? playback.miniFontWeight : .bold").count - 1, 2,
+                    "迷你粗细接线: 多行的 SwiftUI 列表和图层版列表都按迷你那一档画,完整尺寸恒加粗")
+        expectEqual(sourceBytes(window, contain: "fontFamily: fontFamily,\n            weight: weight))"), true,
+                    "迷你粗细接线: 逐字行的排版缓存键带上粗细")
+        expectEqual(sourceBytes(layerRows, contain: "main = style.font(style.fontSize, style.weight)"), true,
+                    "迷你粗细接线: 图层版列表的正文按 style.weight")
+        expectEqual(sourceBytes(window, contain: "if let fill, !forceFilled {"), true, "已唱颜色接线: 非当前行不用填色颜色")
+        expectEqual(sourceBytes(window, contain: "fillColor: NSColor(fill ?? color),"), true, "已唱颜色接线: 滚动档当前行按填色颜色")
+        expectEqual(sourceBytes(window, contain: "fill: showsMiniLayout ? miniKaraokeFillColor : nil")
+                    && sourceBytes(window, contain: "fillColor: showsMiniLayout ? miniKaraokeFillColor.map { NSColor($0) } : nil"),
+                    true, "已唱颜色接线: 多行两份列表只在迷你时带填色颜色")
+        expectEqual(layerRows.components(separatedBy: "e.setActive(true)").count - 1, 3,
+                    "已唱颜色接线: 图层版当前行(在播 / 停着 / 定格)换上已唱色")
+        expectEqual(layerRows.components(separatedBy: "e.setActive(false)").count - 1, 1, "已唱颜色接线: 图层版非当前行换回文字颜色")
+        expectEqual(sourceBytes(layerRows, contain: "\"colors\": NSNull()"), true, "已唱颜色接线: 换色不做隐式动画")
+        expectEqual(sourceBytes(window, contain: ".map { system, highRes in highRes ?? system }"), true,
+                    "已唱颜色接线: 跟随封面取高清替代那份的均值色,没有才用系统那份")
+        expectEqual(sourceBytes(window, contain: "case .systemPrimary: return colorScheme == .dark"), true,
+                    "已唱颜色接线: 文字色跟随系统时按此刻的深浅外观判断底色")
+        expectEqual(sourceBytes(settingsView, contain: "Picker(\"\", selection: fontWeight) {")
+                    && sourceBytes(settingsView, contain: "Menu(LyricsWindowKaraokeFillLabel.text(for: karaokeFill.wrappedValue)) {"),
+                    true, "迷你粗细 / 已唱颜色: 「字体」「文字颜色」浮层里摆这两行")
+        expectEqual(sourceBytes(appSettings, contain: ".flatMap(OverlayFontWeight.init(rawValue:)) ?? .bold\n        lyricsWindowMiniKaraokeFill"),
+                    true, "迷你粗细: 没存过时默认加粗")
+        expectEqual(sourceBytes(appSettings, contain: ".flatMap(LyricsWindowKaraokeFill.init(rawValue:)) ?? .text"), true,
+                    "已唱颜色: 没存过时跟随文字颜色")
+        expectEqual(sourceBytes(settingsView, contain: "fontWeight: $settings.lyricsWindowMiniFontWeight,")
+                    && sourceBytes(settingsView, contain: "karaokeFill: $settings.lyricsWindowMiniKaraokeFill,"), true,
+                    "迷你粗细 / 已唱颜色: 设置页只在迷你那一套传这两颗")
+        expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniFontWeight = .bold\n            s.lyricsWindowMiniKaraokeFill = .text\n"),
+                    true, "迷你粗细 / 已唱颜色: 「重置」恢复默认")
+        expectEqual(sourceBytes(hotkeys, contain: ".openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey,")
+                    && sourceBytes(hotkeys, contain: "case .toggleLyricsWindowMiniHotkey: return L10n.t(\"切换迷你 / 完整尺寸\")")
+                    && sourceBytes(hotkeys, contain: "LyricsWindowSession.requestForm(mini: LyricsWindowMiniToggle.targetIsMini("),
+                    true, "切换迷你快捷键: 登记进撞键清单、有标题、按开没开切形态")
+        expectEqual(sourceBytes(settingsView, contain: "ShortcutRecorderControl(name: .toggleLyricsWindowMiniHotkey)"), true,
+                    "切换迷你快捷键: 快捷键页有这一行")
+        func hits(_ q: String) -> [SettingsSearchEntry] {
+            SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: q, title: { $0.titleKey },
+                                         secondary: { $0.keywords + $0.pathKeys })
+        }
+        expectEqual(hits("粗细").contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue }, true,
+                    "迷你粗细: 设置搜索搜得到歌词窗口那一条")
+        expectEqual(hits("已唱颜色").contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue }, true,
+                    "已唱颜色: 设置搜索搜得到")
+        expectEqual(hits("切换迷你").contains { $0.titleKey == "切换迷你 / 完整尺寸" }, true, "切换迷你快捷键: 设置搜索搜得到")
     }
 
     // MARK: - 窗口位置恢复

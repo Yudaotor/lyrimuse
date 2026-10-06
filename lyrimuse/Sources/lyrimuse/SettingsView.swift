@@ -2672,7 +2672,8 @@ private struct AppearanceSettingsTab: View {
             var summary = FontFamilyPicker.displayName(
                 for: mini ? settings.lyricsWindowMiniFontFamily : settings.lyricsWindowFontFamily)
             if mini {
-                summary += " " + String(format: L10n.t("%@pt"), "\(Int(settings.lyricsWindowMiniFontSize))")
+                summary += " " + settings.lyricsWindowMiniFontWeight.displayName
+                    + " " + String(format: L10n.t("%@pt"), "\(Int(settings.lyricsWindowMiniFontSize))")
             }
             return EditorToolbarButtonLabel(icon: "textformat", title: L10n.t("字体"), summary: summary)
         case .layout:
@@ -2905,7 +2906,12 @@ private struct AppearanceSettingsTab: View {
                 fontSize: $settings.lyricsWindowMiniFontSize,
                 lineOverflow: $settings.lyricsWindowMiniLineOverflow,
                 miniLyricsLayout: $settings.lyricsWindowMiniLyricsLayout,
-                miniKaraoke: $settings.lyricsWindowMiniLyricsKaraoke)
+                miniKaraoke: $settings.lyricsWindowMiniLyricsKaraoke,
+                fontWeight: $settings.lyricsWindowMiniFontWeight,
+                karaokeFill: $settings.lyricsWindowMiniKaraokeFill,
+                karaokeFillColor: Binding(
+                    get: { settings.lyricsWindowMiniKaraokeFillColor },
+                    set: { settings.lyricsWindowMiniKaraokeFillColorHex = $0.hexStringWithAlpha }))
         } else {
             lyricsWindowAppearanceRowsImpl(
                 part: part,
@@ -2947,7 +2953,11 @@ private struct AppearanceSettingsTab: View {
         /// 同样只有迷你尺寸传:完整尺寸本来就是整页列表。
         miniLyricsLayout: Binding<LyricsWindowMiniLyricsLayout>? = nil,
         /// 同样只有迷你尺寸传:完整尺寸始终逐字,不给开关(07 章决策 116)。
-        miniKaraoke: Binding<Bool>? = nil
+        miniKaraoke: Binding<Bool>? = nil,
+        /// 以下三个同样只有迷你尺寸传:完整尺寸恒加粗、已唱端恒跟文字颜色(07 章决策 117)。
+        fontWeight: Binding<OverlayFontWeight>? = nil,
+        karaokeFill: Binding<LyricsWindowKaraokeFill>? = nil,
+        karaokeFillColor: Binding<Color>? = nil
     ) -> some View {
         switch part {
         case .background:
@@ -3050,6 +3060,28 @@ private struct AppearanceSettingsTab: View {
                     AppColorPicker(selection: textColor)
                 }
             }
+            // 一行下拉,选「自定义颜色」时旁边露出取色器(同悬浮歌词「未唱到的颜色」),不另起子行:「全部设置」抽屉的外观卡里
+            // 已经有「颜色」「指定颜色」两个子行。
+            if let karaokeFill, let karaokeFillColor {
+                CardDivider()
+                SettingsRow(
+                    icon: "paintbrush.pointed",
+                    title: L10n.t("已唱颜色"),
+                    help: L10n.t("逐字填色时唱过的部分用这个颜色；没唱到的部分和其它行仍用文字颜色。关掉「卡拉OK效果」时不起作用")
+                ) {
+                    HStack(spacing: 8) {
+                        Menu(LyricsWindowKaraokeFillLabel.text(for: karaokeFill.wrappedValue)) {
+                            ForEach(LyricsWindowKaraokeFill.allCases, id: \.self) { mode in
+                                Button(LyricsWindowKaraokeFillLabel.text(for: mode)) { karaokeFill.wrappedValue = mode }
+                            }
+                        }
+                        .fixedSize()
+                        if karaokeFill.wrappedValue == .custom {
+                            AppColorPicker(selection: karaokeFillColor)
+                        }
+                    }
+                }
+            }
         case .font:
             // 字号不给配:这扇窗的字号是跟着窗口尺寸算出来的(完整走 lyricFontSize、迷你走
             // miniFontSize),再给一根滑杆就是让两套规则打架 —— 拖窗口会把用户调好的数悄悄改掉。
@@ -3062,6 +3094,20 @@ private struct AppearanceSettingsTab: View {
                     : L10n.t("仅作用于歌词；字号随窗口大小自动调整")
             ) {
                 FontFamilyPicker(selection: font)
+            }
+            // 排在字体和字号之间,同悬浮歌词:粗细是「这个字体族的哪一个粗细」。选的是正文那一档,读音 / 译文跟着细。
+            if let fontWeight {
+                CardDivider()
+                SettingsRow(icon: "bold", title: L10n.t("粗细")) {
+                    Picker("", selection: fontWeight) {
+                        ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
+                            Text(weight.displayName).tag(weight)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
             }
             if let fontSize {
                 CardDivider()
@@ -3720,6 +3766,17 @@ struct NotchBehaviorPopover: View {
 // MARK: - 歌词窗口「全部设置」抽屉
 
 /// 「歌词窗口」外观行分成的三块(见 `SettingsView.lyricsWindowAppearanceRowsImpl`)。
+/// 「已唱颜色」各档的名字:下拉标题和菜单项共用一份(07 章决策 117)。
+enum LyricsWindowKaraokeFillLabel {
+    static func text(for fill: LyricsWindowKaraokeFill) -> String {
+        switch fill {
+        case .text: return L10n.t("跟随文字颜色")
+        case .artwork: return L10n.t("跟随封面")
+        case .custom: return L10n.t("自定义颜色")
+        }
+    }
+}
+
 enum LyricsWindowAppearancePart {
     case background
     case textColor
@@ -3792,6 +3849,9 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniLineOverflow = .wrap
             s.lyricsWindowMiniLyricsLayout = .twoLines
             s.lyricsWindowMiniLyricsKaraoke = true
+            s.lyricsWindowMiniFontWeight = .bold
+            s.lyricsWindowMiniKaraokeFill = .text
+            s.lyricsWindowMiniKaraokeFillColorHex = AppSettings.defaultLyricsWindowMiniKaraokeFillColorHex
             s.lyricsWindowMiniHeaderFields = .default
             s.lyricsWindowMiniShowsCover = true
             s.lyricsWindowMiniShowsTime = true
@@ -6465,6 +6525,10 @@ private struct ShortcutsSettingsTab: View {
                 CardDivider()
                 SettingsRow(icon: "text.quote", title: L10n.t("打开歌词窗口")) {
                     ShortcutRecorderControl(name: .openLyricsWindowHotkey)
+                }
+                CardDivider()
+                SettingsRow(icon: "pip.enter", title: L10n.t("切换迷你 / 完整尺寸")) {
+                    ShortcutRecorderControl(name: .toggleLyricsWindowMiniHotkey)
                 }
                 CardDivider()
                 SettingsRow(

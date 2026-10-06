@@ -7,13 +7,14 @@ import LyrimuseCore
 // 发 AppleScript 指令,复用已经拿到的自动化权限(见 MusicAutomationPermission)。
 //
 // 默认不预置任何按键组合——KeyboardShortcuts.Recorder 不预注册默认值时本来就是空的
-// "点击录制"状态,下面这 16 个快捷键全部必须用户自己在设置里主动录制才会生效,不会有
+// "点击录制"状态,下面这 17 个快捷键全部必须用户自己在设置里主动录制才会生效,不会有
 // 按键在用户不知情下被这个 App 抢占。
 extension KeyboardShortcuts.Name {
     static let toggleOverlay = Self("toggleOverlay")
     static let toggleLockPosition = Self("toggleLockPosition")
     static let openLyricsManagerHotkey = Self("openLyricsManagerHotkey")
     static let openLyricsWindowHotkey = Self("openLyricsWindowHotkey")
+    static let toggleLyricsWindowMiniHotkey = Self("toggleLyricsWindowMiniHotkey")
     static let openSettingsHotkey = Self("openSettingsHotkey")
     static let playPauseHotkey = Self("playPauseHotkey")
     static let nextTrackHotkey = Self("nextTrackHotkey")
@@ -42,7 +43,7 @@ extension KeyboardShortcuts.Name {
     /// 是 struct 不是 enum,也没有办法在运行时反射出"一共声明了几个"来跟这份清单对账。
     static let allLyrimuseNames: [Self] = [
         .toggleOverlay, .toggleLockPosition, .openLyricsManagerHotkey,
-        .openLyricsWindowHotkey, .openSettingsHotkey, .playPauseHotkey,
+        .openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey, .openSettingsHotkey, .playPauseHotkey,
         .nextTrackHotkey, .previousTrackHotkey, .lyricsAdvanceHotkey, .lyricsDelayHotkey,
         .lyricsQuickSearchHotkey, .toggleTranslationHotkey, .toggleRomanizationHotkey,
         .toggleNotchOverlayHotkey, .toggleMenuBarLyricsHotkey, .lyricsOffsetResetHotkey,
@@ -61,6 +62,7 @@ extension KeyboardShortcuts.Name {
         case .toggleLockPosition: return L10n.t("锁定/解锁位置")
         case .openLyricsManagerHotkey: return L10n.t("打开歌词管理")
         case .openLyricsWindowHotkey: return L10n.t("打开歌词窗口")
+        case .toggleLyricsWindowMiniHotkey: return L10n.t("切换迷你 / 完整尺寸")
         case .openSettingsHotkey: return L10n.t("打开设置")
         case .playPauseHotkey: return L10n.t("播放/暂停")
         case .nextTrackHotkey: return L10n.t("下一首")
@@ -122,6 +124,14 @@ enum GlobalHotkeys {
             AppActions.shared.openLyricsManager?()
         }
         KeyboardShortcuts.onKeyUp(for: .openLyricsWindowHotkey) {
+            AppActions.shared.openLyricsWindow?()
+        }
+        // 开着就切到另一种形态,没开就直接开成迷你(07 章决策 117)。开着时窗口控制器收 requestForm 的通知当场切。
+        KeyboardShortcuts.onKeyUp(for: .toggleLyricsWindowMiniHotkey) {
+            let defaults = UserDefaults.standard
+            LyricsWindowSession.requestForm(mini: LyricsWindowMiniToggle.targetIsMini(
+                windowOpen: defaults.bool(forKey: LyricsWindowSession.openKey),
+                isMini: defaults.bool(forKey: LyricsWindowSession.miniModeKey)))
             AppActions.shared.openLyricsWindow?()
         }
         KeyboardShortcuts.onKeyUp(for: .openSettingsHotkey) {

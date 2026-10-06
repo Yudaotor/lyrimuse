@@ -39553,6 +39553,98 @@
           }
         }
       }
+    },
+    "切换迷你 / 完整尺寸" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch Mini / Full Size"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换迷你 / 完整尺寸"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切換迷你 / 完整尺寸"
+          }
+        }
+      }
+    },
+    "已唱颜色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sung Color"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已唱颜色"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已唱顏色"
+          }
+        }
+      }
+    },
+    "跟随文字颜色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Match Text Color"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟随文字颜色"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟隨文字顏色"
+          }
+        }
+      }
+    },
+    "逐字填色时唱过的部分用这个颜色；没唱到的部分和其它行仍用文字颜色。关掉「卡拉OK效果」时不起作用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The part already sung takes this color as lyrics fill word by word. Unsung words and other lines keep the text color. Has no effect when Karaoke Effect is off."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "逐字填色时唱过的部分用这个颜色；没唱到的部分和其它行仍用文字颜色。关掉「卡拉OK效果」时不起作用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "逐字填色時唱過的部分用這個顏色；沒唱到的部分和其他行仍用文字顏色。關掉「卡拉OK效果」時不起作用"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

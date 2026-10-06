@@ -33,6 +33,12 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var allLines: [LyricsWindowLine] = []
     /// 迷你尺寸画的那份行:「卡拉OK效果」关着时压成整行(`MiniLyricsSelection.lines`)。行数、id、时间跟 `allLines` 一样。
     @Published private(set) var miniLines: [LyricsWindowLine] = []
+    /// 迷你尺寸歌词的粗细、已唱颜色(见 AppSettings 同名那几项,07 章决策 117)。
+    @Published private(set) var miniFontWeight: OverlayFontWeight = .bold
+    @Published private(set) var miniKaraokeFill: LyricsWindowKaraokeFill = .text
+    @Published private(set) var miniKaraokeFillColor = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
+    /// 封面均值色(十六进制,高清替代那份优先),「已唱颜色 › 跟随封面」用。
+    @Published private(set) var coverAverageHex: String?
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
     /// 同一批间奏点按 index 建好的字典,跟 lyricsGapMarkers 同一拍更新(那边发通知)。列表每行都要查一次,
     /// 在视图里现建的话每行都是一次整表重建。
@@ -131,6 +137,17 @@ private final class WindowPlayback: ObservableObject {
             Publishers.CombineLatest(p.$allLines.removeDuplicates(), s.$lyricsWindowMiniLyricsKaraoke.removeDuplicates())
                 .map { MiniLyricsSelection.lines($0, karaoke: $1) }
                 .sink { [weak self] in self?.miniLines = $0 },
+            s.$lyricsWindowMiniFontWeight.removeDuplicates().sink { [weak self] in self?.miniFontWeight = $0 },
+            s.$lyricsWindowMiniKaraokeFill.removeDuplicates().sink { [weak self] in self?.miniKaraokeFill = $0 },
+            // 颜色从参数 hex 现算,理由同下面文字色那条(@Published 是 willSet 语义)。
+            s.$lyricsWindowMiniKaraokeFillColorHex.removeDuplicates().sink { [weak self] hex in
+                self?.miniKaraokeFillColor = Color(
+                    hexWithAlpha: hex, fallback: AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback)
+            },
+            Publishers.CombineLatest(LocalPlaybackSource.shared.$artworkAverageHex, p.$highResAverageHex)
+                .map { system, highRes in highRes ?? system }
+                .removeDuplicates()
+                .sink { [weak self] in self?.coverAverageHex = $0 },
             p.$lyricsGapMarkers.removeDuplicates().sink { [weak self] markers in
                 // 先写字典再写 @Published:通知发出去时字典已经是新的。index 按理不重复,重复了留第一个,不崩。
                 self?.lyricsGapMarkersByIndex = Dictionary(markers.map { ($0.index, $0) }, uniquingKeysWith: { a, _ in a })
@@ -1624,6 +1641,32 @@ struct LyricsWindowView: View {
     /// 时间一样,只按下标 / id / 时间取的地方用哪份都行;要画逐字的地方必须取这一份(见 07 章决策 116)。
     private var lyricLines: [LyricsWindowLine] { showsMiniLayout ? playback.miniLines : playback.allLines }
 
+    /// 迷你逐字填色时已唱那一端的颜色,nil = 跟文字颜色(`LyricsWindowKaraokeFill`,07 章决策 117)。
+    private var miniKaraokeFillColor: Color? {
+        switch playback.miniKaraokeFill {
+        case .text: return nil
+        case .custom: return playback.miniKaraokeFillColor
+        case .artwork:
+            guard let hex = playback.coverAverageHex, let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
+            let a = LyricsWindowKaraokeFill.accent(r: ns.redComponent, g: ns.greenComponent, b: ns.blueComponent,
+                                                   darkBackdrop: lyricTextIsLight)
+            return Color(.sRGB, red: a.r, green: a.g, blue: a.b)
+        }
+    }
+
+    /// 歌词正文色是不是浅色(底色深):「跟随系统」那一档按此刻的深浅外观,自定义色按相对亮度。
+    private var lyricTextIsLight: Bool {
+        switch activeTextColorMode.tone(hasArtworkBackground: hasArtworkBackground) {
+        case .white: return true
+        case .dark: return false
+        case .systemPrimary: return colorScheme == .dark
+        case .custom:
+            guard let c = NSColor(activeCustomTextColor).usingColorSpace(.sRGB) else { return true }
+            return LocalPlaybackSource.relativeLuminance(r: c.redComponent, g: c.greenComponent, b: c.blueComponent)
+                > LyricsWindowKaraokeFill.lightTextLuminance
+        }
+    }
+
     /// 迷你「多行」列表左右留白。完整布局单列时是 44,迷你窄得多,收到 20(同两行那套的左右边距)。
     private static let miniListHorizontalInset: CGFloat = 20
 
@@ -1950,8 +1993,10 @@ struct LyricsWindowView: View {
                 next: lyricsOnHold ? nil : miniReelNextLine,
                 fontSize: fontSize,
                 fontFamily: activeFontFamily,
+                weight: playback.miniFontWeight,
                 color: miniPrimaryColor,
                 secondaryColor: miniSecondaryColor,
+                fill: miniKaraokeFillColor,
                 showRomanization: playback.showRomanization,
                 showTranslation: playback.showTranslation,
                 lineOverflow: playback.miniLineOverflow,
@@ -2997,7 +3042,9 @@ struct LyricsWindowView: View {
                                 PlaybackCoordinator.shared.seek(toMs: max(0, item.timeMs - PlaybackCoordinator.shared.currentLyricsOffsetMs))
                             },
                             stagger: lineStagger,
-                            staggers: staggerAnchor.map { abs(index - $0) <= staggerReach } ?? true
+                            staggers: staggerAnchor.map { abs(index - $0) <= staggerReach } ?? true,
+                            weight: showsMiniLayout ? playback.miniFontWeight : .bold,
+                            fill: showsMiniLayout ? miniKaraokeFillColor : nil
                         )
                         .equatable()
                         .id(item.id)
@@ -3112,7 +3159,9 @@ struct LyricsWindowView: View {
                              secondaryColor: NSColor(lyricSecondaryTextColor),
                              showRomanization: playback.showRomanization, showTranslation: playback.showTranslation,
                              centered: centered, wordRise: wordRise, reduceMotion: reduceMotion,
-                             duetInsetUnit: duetInsetUnit, scale: displayScale),
+                             duetInsetUnit: duetInsetUnit, scale: displayScale,
+                             weight: showsMiniLayout ? playback.miniFontWeight : .bold,
+                             fillColor: showsMiniLayout ? miniKaraokeFillColor.map { NSColor($0) } : nil),
                 lineSpacing: lyricLineSpacing, showsScrollIndicator: !centered, leading: leading, trailing: trailing,
                 onArtwork: hasArtworkBackground, suspendsBlur: windowController.isLiveResizing,
                 currentLineIndex: playback.currentLineIndex, scrollLineIndex: playback.scrollLineIndex,
@@ -4864,6 +4913,9 @@ private struct LyricsLineRow: View, Equatable {
     /// 离滚动锚够近、换句时跟着错开(07 章决策 109)。离得远的行挂 `LyricsLineStaggerModel.inert`:换句那一下不跟着重算,
     /// 错开期间不逐帧刷新。
     var staggers: Bool = true
+    /// 正文的粗细、当前行唱过那一端的颜色:迷你「多行」才传,完整尺寸恒加粗、跟文字颜色(07 章决策 117)。
+    var weight: OverlayFontWeight = .bold
+    var fill: Color? = nil
 
     static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
         // item 比整行而不只比 id:id 只保证同一首、同一份歌词正文,译文 / 罗马音 / 逐字是后补进来的,
@@ -4893,6 +4945,8 @@ private struct LyricsLineRow: View, Equatable {
             // 表现同上面字体那条:"改了没反应,要滚一下或换首歌才生效"。
             && a.textColor == b.textColor
             && a.secondaryColor == b.secondaryColor
+            && a.weight == b.weight
+            && a.fill == b.fill
             && a.showRomanization == b.showRomanization
             && a.showTranslation == b.showTranslation
             && a.reduceMotion == b.reduceMotion
@@ -5013,12 +5067,14 @@ private struct LyricsLineRow: View, Equatable {
                 Text(roma)
                     // 复用悬浮歌词那条字体解析(空 family 走系统、装不上兜底系统),
                     // 名字带 overlay 只是它最早的出处,逻辑是通用的 —— 别再复制一份。
-                    .font(.overlayFont(familyName: fontFamily, size: romaFontSize, weight: .medium))
+                    .font(.overlayFont(familyName: fontFamily, size: romaFontSize,
+                                       weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)))
                     .foregroundStyle(secondaryTextColor)
             }
             if showTranslation, let tr = item.line.translation {
                 Text(tr)
-                    .font(.overlayFont(familyName: fontFamily, size: translationFontSize, weight: .semibold))
+                    .font(.overlayFont(familyName: fontFamily, size: translationFontSize,
+                                       weight: weight.lighter(by: OverlayFontWeight.lyricsWindowTranslationSteps)))
                     .lyricTypesetting(tr, translation: true)
                     .foregroundStyle(secondaryTextColor)
                     .padding(.top, fontSize * Self.translationExtraGap)
@@ -5095,11 +5151,13 @@ private struct LyricsLineRow: View, Equatable {
                 rowAlignment: rowAlignment,
                 rises: wordRise,
                 raisedWhenInactive: wordsSung,
-                pausedMs: pausedMs
+                pausedMs: pausedMs,
+                weight: weight,
+                fill: fill
             )
         } else {
             Text(item.line.plainText ?? "")
-                .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold))
+                .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                 .foregroundStyle(base)
                 .lyricTypesetting(item.line.plainText)
         }
@@ -5197,8 +5255,12 @@ private struct MiniLyricsReel: View, Equatable {
     let next: LyricsWindowLine?
     let fontSize: CGFloat
     let fontFamily: String
+    /// 正文的粗细,读音 / 译文按 `OverlayFontWeight.lyricsWindow*Steps` 跟着细(07 章决策 117)。
+    let weight: OverlayFontWeight
     let color: Color
     let secondaryColor: Color
+    /// 当前行唱过那一端的颜色,nil = 跟 `color`。
+    let fill: Color?
     let showRomanization: Bool
     let showTranslation: Bool
     /// 换行 / 滚动。滚动时每一行(含译文、罗马音)都只占一行高,放不下的横向滚动;带逐字时间轴的
@@ -5265,11 +5327,12 @@ private struct MiniLyricsReel: View, Equatable {
                 lineText(row)
                 if subLines, showRomanization,
                    let roma = row.line.line.romanization, !roma.isEmpty {
-                    subLine(roma, size: fontSize * 0.54, weight: .medium)
+                    subLine(roma, size: fontSize * 0.54, weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps))
                 }
                 if subLines, showTranslation,
                    let tr = row.line.line.translation, !tr.isEmpty {
-                    subLine(tr, size: fontSize * 0.61, weight: .semibold, translation: true)
+                    subLine(tr, size: fontSize * 0.61, weight: weight.lighter(by: OverlayFontWeight.lyricsWindowTranslationSteps),
+                            translation: true)
                 }
             }
             .scaleEffect(scale, anchor: .top)
@@ -5322,7 +5385,7 @@ private struct MiniLyricsReel: View, Equatable {
     /// 结构(跑马灯 → 图层),那一下是淡入淡出,跟着升格的动画一起走。
     @ViewBuilder
     private func scrollingLineText(_ row: Row) -> some View {
-        let font = NSFont.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold)
+        let font = NSFont.overlayFont(familyName: fontFamily, size: fontSize, weight: weight)
         let height = Self.scrollLineHeight(font)
         if row.role == .current, let words = row.line.line.words {
             let unsung = NSColor(color.opacity(WordKaraokeGradient.windowDimOpacity))
@@ -5332,9 +5395,10 @@ private struct MiniLyricsReel: View, Equatable {
                     words: words,
                     groups: nil,
                     font: font,
-                    romaFont: .overlayFont(familyName: fontFamily, size: fontSize * 0.54, weight: .medium),
+                    romaFont: .overlayFont(familyName: fontFamily, size: fontSize * 0.54,
+                                           weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)),
                     baseColor: unsung,
-                    fillColor: NSColor(color),
+                    fillColor: NSColor(fill ?? color),
                     romaBaseColor: unsung,
                     romaFillColor: NSColor(color.opacity(0.75)),
                     strokeColor: nil,
@@ -5351,7 +5415,7 @@ private struct MiniLyricsReel: View, Equatable {
             .frame(height: height)
         } else {
             Text(row.line.line.plainText ?? "")
-                .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold))
+                .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                 .foregroundStyle(color)
                 .lyricTypesetting(row.line.line.plainText)
                 .overlayLineFit(.scroll)
@@ -5378,12 +5442,14 @@ private struct MiniLyricsReel: View, Equatable {
                 rowAlignment: .center,
                 // 迷你窗不做逐字上浮:两行挤在一小块里,字一抬一抬只显得在晃。
                 rises: false,
-                pausedMs: row.role == .current ? pausedMs : nil
+                pausedMs: row.role == .current ? pausedMs : nil,
+                weight: weight,
+                fill: fill
             )
             .multilineTextAlignment(.center)
         } else {
             Text(row.line.line.plainText ?? "")
-                .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: .bold))
+                .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
                 .foregroundStyle(color)
                 .lyricTypesetting(row.line.line.plainText)
                 .multilineTextAlignment(.center)
@@ -5444,6 +5510,10 @@ private struct KaraokeLineText: View {
     var raisedWhenInactive: Bool = false
     /// 暂停时的时间基准,原样交给每个字(见 KaraokeWordText.pausedMs)。
     var pausedMs: Int? = nil
+    /// 正文的粗细(迷你尺寸可调,完整尺寸恒加粗)。逐词读音按 `OverlayFontWeight.lyricsWindowRomanizationSteps` 跟着细。
+    var weight: OverlayFontWeight = .bold
+    /// 当前行唱过那一端的颜色,nil = 跟 `base`(见 KaraokeWordText.fill)。
+    var fill: Color? = nil
 
     /// WrapLayout 的内容身份:行文本/字号/字体族/罗马音形态都没变时,
     /// 布局回合跳过整行 CoreText 重新测宽(见 WrapLayout.Cache 守卫注释)。
@@ -5460,7 +5530,8 @@ private struct KaraokeLineText: View {
             hasGroups: groups?.isEmpty == false,
             fontSize: fontSize,
             romaFontSize: romaFontSize,
-            fontFamily: fontFamily))
+            fontFamily: fontFamily,
+            weight: weight))
     }
 
     private struct WindowLineKey: Hashable {
@@ -5469,6 +5540,8 @@ private struct KaraokeLineText: View {
         let fontSize: CGFloat
         let romaFontSize: CGFloat
         let fontFamily: String
+        /// 粗细也改每个词的宽度,同字体族那条理由。
+        let weight: OverlayFontWeight
     }
 
     var body: some View {
@@ -5554,7 +5627,7 @@ private struct KaraokeLineText: View {
                                 KaraokeWordText(word: g.words[i], base: base, isPlaying: isPlaying,
                                                 isLive: isLive(g.words[i], atMs: coarseMs),
                                                 staticDate: coarseDate,
-                                                fontSize: fontSize, fontFamily: fontFamily,
+                                                fontSize: fontSize, fontFamily: fontFamily, weight: weight,
                                                 reduceMotion: reduceMotion,
                                                 displayScale: displayScale,
                                                 rises: rises,
@@ -5563,7 +5636,8 @@ private struct KaraokeLineText: View {
                                                 forceFilled: !isActive,
                                                 raisedAtRest: !isActive && raisedWhenInactive,
                                                 lineSettled: fillSettled,
-                                                pausedMs: pausedMs)
+                                                pausedMs: pausedMs,
+                                                fill: fill)
                             }
                         }
                         // 这一行已经在走逐词罗马音(外层 groups 非空),每一组都要占住这一行读音的高度,
@@ -5581,7 +5655,8 @@ private struct KaraokeLineText: View {
                             base: base.opacity(0.75), isPlaying: isPlaying,
                             isLive: isLive(romaWord, atMs: coarseMs),
                             staticDate: coarseDate,
-                            fontSize: romaFontSize, fontFamily: fontFamily, weight: .medium,
+                            fontSize: romaFontSize, fontFamily: fontFamily,
+                            weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps),
                             reduceMotion: reduceMotion, displayScale: displayScale,
                             rises: false, // 读音不跟着抬,只有正文的字会浮起来
                             forceFilled: !isActive,
@@ -5601,7 +5676,7 @@ private struct KaraokeLineText: View {
                 ForEach(words.indices, id: \.self) { i in
                     KaraokeWordText(word: words[i], base: base, isPlaying: isPlaying,
                                     isLive: isLive(words[i], atMs: coarseMs, emphasis: spans[i]), staticDate: coarseDate,
-                                    fontSize: fontSize, fontFamily: fontFamily,
+                                    fontSize: fontSize, fontFamily: fontFamily, weight: weight,
                                     reduceMotion: reduceMotion,
                                     displayScale: displayScale,
                                     rises: rises,
@@ -5613,7 +5688,8 @@ private struct KaraokeLineText: View {
                                     emphasis: spans[i],
                                     emphasisAnchor: anchors[i],
                                     emphasisSlot: slots[i],
-                                    pausedMs: pausedMs)
+                                    pausedMs: pausedMs,
+                                    fill: fill)
                 }
             }
         }
@@ -5675,6 +5751,8 @@ private struct KaraokeWordText: View {
     /// 它只是让这个字"输入变了":暂停时两级时钟都停着,暂停中拖进度 / 调偏移若不改任何输入,
     /// 这个字就不重算,填色停在拖之前的位置。
     var pausedMs: Int? = nil
+    /// 当前行唱过那一端的颜色(迷你的「已唱颜色」),nil = 跟 `base`。
+    var fill: Color? = nil
 
     /// 强调辉光的模糊半径,按字号取比例。
     private static let emphasisGlowRadiusEm: CGFloat = 0.12
@@ -5683,9 +5761,14 @@ private struct KaraokeWordText: View {
     /// 取 1.0 的话 left=1−band<1,右缘 band 段会被淡到半强度(排程式那轮修掉的隐藏 bug)。
     private static let settledFraction = 1 + KaraokeFill.wordEdgeSoftenBand
 
-    /// 未唱端用歌词窗口那一档(07 章决策 89)。
+    /// 未唱端用歌词窗口那一档(07 章决策 89)。有 `fill` 时已唱端换成它、未唱端仍按 `base` 压暗;非当前行(forceFilled)
+    /// 一律画 `base`,不然唱过、没唱的行都会整行变成填色颜色(07 章决策 117)。
     private var palette: WordKaraokeGradient.Palette {
-        WordKaraokeGradient.palette(fg: base, dimOpacity: WordKaraokeGradient.windowDimOpacity)
+        let dim = WordKaraokeGradient.windowDimOpacity
+        if let fill, !forceFilled {
+            return WordKaraokeGradient.palette(fg: fill, unsungColor: base.opacity(dim), dimOpacity: dim)
+        }
+        return WordKaraokeGradient.palette(fg: base, dimOpacity: dim)
     }
 
     /// 上浮高度(`KaraokeLift.amplitudeEm` 个字号),收到整数个设备像素防 1x 屏重采样发糊。

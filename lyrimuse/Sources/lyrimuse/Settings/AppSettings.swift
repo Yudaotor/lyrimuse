@@ -326,6 +326,9 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowMiniLineOverflow = "np:lyricsWindowMiniLineOverflow"
         static let lyricsWindowMiniLyricsLayout = "np:lyricsWindowMiniLyricsLayout"
         static let lyricsWindowMiniLyricsKaraoke = "np:lyricsWindowMiniLyricsKaraoke"
+        static let lyricsWindowMiniFontWeight = "np:lyricsWindowMiniFontWeight"
+        static let lyricsWindowMiniKaraokeFill = "np:lyricsWindowMiniKaraokeFill"
+        static let lyricsWindowMiniKaraokeFillColorHex = "np:lyricsWindowMiniKaraokeFillColorHex"
         static let lyricsWindowMiniShowsControls = "np:lyricsWindowMiniShowsControls"
         static let lyricsWindowTextColorMode = "np:lyricsWindowTextColorMode"
         static let lyricsWindowTextColorHex = "np:lyricsWindowTextColorHex"
@@ -1341,6 +1344,26 @@ final class AppSettings: ObservableObject {
     @Published var lyricsWindowMiniLyricsKaraoke: Bool {
         didSet { defaults.set(lyricsWindowMiniLyricsKaraoke, forKey: Keys.lyricsWindowMiniLyricsKaraoke) }
     }
+    /// 迷你尺寸歌词的粗细:选的是正文那一档,读音 / 译文按 `OverlayFontWeight.lyricsWindow*Steps` 跟着细;完整尺寸恒加粗,
+    /// 没有这一项(见 07 章决策 117)。
+    @Published var lyricsWindowMiniFontWeight: OverlayFontWeight {
+        didSet { defaults.set(lyricsWindowMiniFontWeight.rawValue, forKey: Keys.lyricsWindowMiniFontWeight) }
+    }
+    /// 迷你尺寸逐字填色时已唱那一端的颜色,见 `LyricsWindowKaraokeFill`(07 章决策 117)。
+    @Published var lyricsWindowMiniKaraokeFill: LyricsWindowKaraokeFill {
+        didSet { defaults.set(lyricsWindowMiniKaraokeFill.rawValue, forKey: Keys.lyricsWindowMiniKaraokeFill) }
+    }
+    /// 「已唱颜色 › 自定义颜色」那一色(`custom` 档才读)。
+    @Published var lyricsWindowMiniKaraokeFillColorHex: String {
+        didSet {
+            defaults.set(lyricsWindowMiniKaraokeFillColorHex, forKey: Keys.lyricsWindowMiniKaraokeFillColorHex)
+            lyricsWindowMiniKaraokeFillColor = Color(hexWithAlpha: lyricsWindowMiniKaraokeFillColorHex,
+                                                     fallback: Self.defaultLyricsWindowMiniKaraokeFillColorFallback)
+        }
+    }
+    private(set) var lyricsWindowMiniKaraokeFillColor: Color = AppSettings.defaultLyricsWindowMiniKaraokeFillColorFallback
+    static let defaultLyricsWindowMiniKaraokeFillColorHex = "#FC3C44FF"
+    static let defaultLyricsWindowMiniKaraokeFillColorFallback = Color(red: 0.988, green: 0.235, blue: 0.267)
     /// 迷你窗鼠标移上去要不要浮出那条控制条(走带三键 / 音量 / 歌词时间轴)。
     ///
     /// 给一颗开关而不是"想不要就别把鼠标放上去":这扇小窗常年钉在角落,指针路过它是常事,
@@ -2134,6 +2157,16 @@ final class AppSettings: ObservableObject {
             .flatMap(LyricsWindowMiniLyricsLayout.init(rawValue:)) ?? .twoLines
         // 默认开:迷你的歌词本来就逐字填色,升级上来的人不变。
         lyricsWindowMiniLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowMiniLyricsKaraoke) as? Bool) ?? true
+        // 默认加粗、跟随文字颜色:迷你的歌词一直是这样画的,升级上来的人不变。
+        lyricsWindowMiniFontWeight = defaults.string(forKey: Keys.lyricsWindowMiniFontWeight)
+            .flatMap(OverlayFontWeight.init(rawValue:)) ?? .bold
+        lyricsWindowMiniKaraokeFill = defaults.string(forKey: Keys.lyricsWindowMiniKaraokeFill)
+            .flatMap(LyricsWindowKaraokeFill.init(rawValue:)) ?? .text
+        let miniFillHex = defaults.string(forKey: Keys.lyricsWindowMiniKaraokeFillColorHex)
+            ?? Self.defaultLyricsWindowMiniKaraokeFillColorHex
+        lyricsWindowMiniKaraokeFillColorHex = miniFillHex
+        lyricsWindowMiniKaraokeFillColor = Color(hexWithAlpha: miniFillHex,
+                                                 fallback: Self.defaultLyricsWindowMiniKaraokeFillColorFallback)
         lyricsWindowMiniShowsControls =
             (defaults.object(forKey: Keys.lyricsWindowMiniShowsControls) as? Bool) ?? true
         lyricsWindowTextColorMode = defaults.string(forKey: Keys.lyricsWindowTextColorMode)

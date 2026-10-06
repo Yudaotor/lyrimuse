@@ -378,6 +378,7 @@
 "分数 %@ · %@ 行" = "Score %@ · %@ lines";
 "分母为当前启用的 %d 个源；较早的条目当时可用的源可能更少" = "The denominator is the %d sources enabled now; older entries may have had fewer available at the time";
 "分项合计 %1$d，按下限计为 %2$d" = "Terms add up to %1$d; floored at %2$d";
+"切换迷你 / 完整尺寸" = "Switch Mini / Full Size";
 "划过让开" = "Move Aside on Hover";
 "列表播放" = "Play in Order";
 "刚刚" = "just now";
@@ -653,6 +654,7 @@
 "已取消纯音乐标记" = "Instrumental mark removed";
 "已唱到的颜色" = "Sung Color";
 "已唱到部分的颜色，也是歌词旁那枚图标上进度涨上来那一截的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮" = "The color of the sung part — and of the risen portion of the progress icon beside the lyrics. Follows the system accent color by default (brightened on a dark menu bar); a custom color is used as-is, with no brightening.";
+"已唱颜色" = "Sung Color";
 "已在 Last.fm 上喜欢" = "Loved on Last.fm";
 "已在「%@」里打开。写好存盘后自动套用：带时间戳的存成同步歌词，不带的存成纯文本" = "Opened in %@. Save when you're done: lines with timestamps become synced lyrics, text without them is saved as plain text.";
 "已在「%@」里打开。逐字歌词只改字，每行开头的时间别动，存盘后自动套用" = "Opened in %@. For word-timed lyrics, change only the words and keep the time at the start of each line; saving applies the changes.";
@@ -1555,6 +1557,7 @@
 "跟随封面" = "Follow Cover Art";
 "跟随播放器启动" = "Launch when your player opens";
 "跟随播放器退出" = "Quit With Player";
+"跟随文字颜色" = "Match Text Color";
 "跟随系统" = "Follow System";
 "跟随系统语言" = "Follow System Language";
 "跳动音条" = "Dancing Bars";
@@ -1715,6 +1718,7 @@
 "选择左侧的设置分类" = "Select a Settings Category on the Left";
 "透明" = "Transparent";
 "逐字" = "Word-timed";
+"逐字填色时唱过的部分用这个颜色；没唱到的部分和其它行仍用文字颜色。关掉「卡拉OK效果」时不起作用" = "The part already sung takes this color as lyrics fill word by word. Unsung words and other lines keep the text color. Has no effect when Karaoke Effect is off.";
 "逐字时间轴" = "Word timing";
 "逐字时间轴 %@ 首" = "%@ with word timing";
 "逐字时间轴本来赢在这上面，但另一个候选的标题更吻合查询词——大概率是另一次录音（比如不同现场版）的逐字版本，时间轴细不代表轴对得上这次播放" = "Word timing was what put this candidate ahead, but another candidate matches the query title better — most likely this is the word-timed version of a different recording (a live take, say), and fine-grained timing does not mean the timing lines up with what is playing now";

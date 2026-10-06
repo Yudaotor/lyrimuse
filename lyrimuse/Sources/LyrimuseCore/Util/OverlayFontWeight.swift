@@ -84,4 +84,12 @@ public enum OverlayFontWeight: String, CaseIterable, Sendable {
     /// selftest 钉着"默认档 semibold 推出 medium"。灵动岛只有这一个差值 —— 它没有罗马音 / 译文各自的行,
     /// 副行四选一里显示的是哪种内容都同一档。
     public static let notchSecondarySteps = 1
+
+    // MARK: - 歌词窗口
+
+    /// 歌词窗口迷你尺寸的读音 / 译文比正文细几档(迷你「字体」浮层的「粗细」只选正文那一档,见 07 章决策 117)。
+    /// 差值取自加设置之前的硬编码关系:正文 bold(9)/ 读音 medium(6)/ 译文 semibold(8),在阶梯上正好差 2 / 1 档;
+    /// selftest 钉着"默认档 bold 推出 medium / semibold"。
+    public static let lyricsWindowRomanizationSteps = 2
+    public static let lyricsWindowTranslationSteps = 1
 }

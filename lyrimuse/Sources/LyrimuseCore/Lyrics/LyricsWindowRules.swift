@@ -144,6 +144,13 @@ public enum LyricsWindowDepth {
     }
 }
 
+/// 「切换迷你 / 完整尺寸」那个全局快捷键要切成哪种形态:窗口开着就换成另一种,没开就直接开成迷你(07 章决策 117)。
+public enum LyricsWindowMiniToggle {
+    public static func targetIsMini(windowOpen: Bool, isMini: Bool) -> Bool {
+        windowOpen ? !isMini : true
+    }
+}
+
 /// 迷你「单行 / 双行」那套显示哪几句。
 public enum MiniLyricsSelection {
     /// 迷你尺寸画的那份行。「卡拉OK效果」(`np:lyricsWindowMiniLyricsKaraoke`)关着时每行压成整行(`SyncedLyricLine.lineLevel`,

@@ -26,6 +26,10 @@ final class LyricsLayerElement {
     /// 放大绕着的点,元素自己的单位坐标(同 `KaraokeWordText.emphasisAnchor`)。
     let anchor: CGPoint
     private let gradientWidth: CGFloat
+    /// 非当前行 / 当前行的渐变色:已唱端分别是文字颜色和当前行用的已唱色(迷你的「已唱颜色」,07 章决策 117)。
+    private let restColors: [CGColor]
+    private let activeColors: [CGColor]
+    private var showsActiveColors = false
 
     static let fillKey = "lyrimuse.layer-list.fill"
     static let liftKey = "lyrimuse.layer-list.lift"
@@ -38,10 +42,12 @@ final class LyricsLayerElement {
         fillDurationMs = plan.fillDurationMs
         motion = plan.motion
         anchor = plan.anchor
+        restColors = [plan.sung, plan.sung, plan.unsung, plan.unsung]
+        activeColors = [plan.activeSung, plan.activeSung, plan.unsung, plan.unsung]
         let pad = LyricsLayerListText.pad
         gradientWidth = 3 * frame.width + 4 * pad
         let noActions: [String: CAAction] = ["position": NSNull(), "bounds": NSNull(), "transform": NSNull(),
-                                             "opacity": NSNull(), "contents": NSNull()]
+                                             "opacity": NSNull(), "contents": NSNull(), "colors": NSNull()]
         container.actions = noActions
         container.anchorPoint = anchor
         container.bounds = CGRect(origin: .zero, size: frame.size)
@@ -59,7 +65,7 @@ final class LyricsLayerElement {
         gradient.startPoint = CGPoint(x: 0, y: 0.5)
         gradient.endPoint = CGPoint(x: 1, y: 0.5)
         let band = KaraokeFill.wordEdgeSoftenBand * Double(frame.width) / Double(gradientWidth)
-        gradient.colors = [plan.sung, plan.sung, plan.unsung, plan.unsung]
+        gradient.colors = restColors
         gradient.locations = [0, NSNumber(value: 0.5 - band), NSNumber(value: 0.5 + band), 1]
         gradient.bounds = CGRect(x: 0, y: 0, width: gradientWidth, height: frame.height + 2 * pad)
         fill.addSublayer(gradient)
@@ -91,6 +97,13 @@ final class LyricsLayerElement {
 
     func setFill(center: Double) {
         gradient.position = CGPoint(x: gradientX(center: center), y: -LyricsLayerListText.pad)
+    }
+
+    /// 当前行换上 `activeColors`,其它行换回 `restColors`。
+    func setActive(_ active: Bool) {
+        guard active != showsActiveColors else { return }
+        showsActiveColors = active
+        gradient.colors = active ? activeColors : restColors
     }
 
     /// 画成某一刻的静态样子(停着、定格、非当前行):摘掉动画、直接落值。
@@ -174,6 +187,10 @@ struct LyricsLayerRowStyle: Equatable, @unchecked Sendable {
     var reduceMotion: Bool
     var duetInsetUnit: CGFloat
     var scale: CGFloat
+    /// 正文的粗细,读音 / 译文按 `OverlayFontWeight.lyricsWindow*Steps` 跟着细(迷你「多行」可调,完整尺寸恒加粗)。
+    var weight: OverlayFontWeight = .bold
+    /// 当前行唱过那一端的颜色(迷你的「已唱颜色」),nil = 跟 `textColor`。
+    var fillColor: NSColor? = nil
 
     /// 背景人声的字号(正文的倍数)和整行透明度,同 SwiftUI 版 `LyricsLineRow`。
     static let backgroundScale: CGFloat = 0.61
@@ -208,24 +225,30 @@ struct LyricsLayerRowInk: @unchecked Sendable {
     let footerNames: NSFont
     let text: CGColor
     let secondary: CGColor
+    /// 当前行逐字填色的已唱色:迷你的「已唱颜色」,没设时就是 `text`。
+    let activeText: CGColor
     /// 末尾创作者行的标签(「创作者：」)和名单分隔号,按界面语言取。
     let footerLabel: String
     let footerSeparator: String
 
     @MainActor
     init(style: LyricsLayerRowStyle, appearance: NSAppearance) {
-        main = style.font(style.fontSize, .bold)
-        background = style.font(style.fontSize * LyricsLayerRowStyle.backgroundScale, .bold)
-        roma = style.font(style.romaFontSize, .medium)
-        translation = style.font(style.translationFontSize, .semibold)
+        main = style.font(style.fontSize, style.weight)
+        background = style.font(style.fontSize * LyricsLayerRowStyle.backgroundScale, style.weight)
+        roma = style.font(style.romaFontSize, style.weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps))
+        translation = style.font(style.translationFontSize,
+                                 style.weight.lighter(by: OverlayFontWeight.lyricsWindowTranslationSteps))
         footerNames = style.font(style.fontSize, .regular)
-        var text = style.textColor.cgColor, secondary = style.secondaryColor.cgColor
+        let active = style.fillColor ?? style.textColor
+        var text = style.textColor.cgColor, secondary = style.secondaryColor.cgColor, activeText = active.cgColor
         appearance.performAsCurrentDrawingAppearance {
             text = style.textColor.cgColor
             secondary = style.secondaryColor.cgColor
+            activeText = active.cgColor
         }
         self.text = text
         self.secondary = secondary
+        self.activeText = activeText
         footerLabel = L10n.t("创作者：")
         footerSeparator = L10n.t("、")
     }
@@ -245,6 +268,8 @@ struct LyricsLayerRowPlan: @unchecked Sendable {
         var glow: CGImage?
         var sung: CGColor
         var unsung: CGColor
+        /// 当前行用的已唱色(迷你的「已唱颜色」);没设时跟 `sung` 一样。
+        var activeSung: CGColor
         var fillStartMs: Int
         var fillDurationMs: Int
         var motion: LyricsLayerTiming.Motion?
@@ -336,6 +361,7 @@ final class LyricsLayerRow {
     func showRest(raised: Bool, style: LyricsLayerRowStyle) {
         let lifted = LyricsLayerTiming.Pose(lift: style.riseAmplitude, scale: 1, glow: 0)
         for e in elements {
+            e.setActive(false)
             e.setStatic(center: LyricsLayerTiming.sungCenter, pose: raised && e.motion != nil ? lifted : .rest)
         }
     }
@@ -343,6 +369,7 @@ final class LyricsLayerRow {
     /// 当前行停着(暂停、窗口看不见):画成 `atMs` 那一刻的样子。
     func showFrozen(atMs ms: Int) {
         for e in elements {
+            e.setActive(true)
             e.setStatic(center: LyricsLayerTiming.fillCenter(startMs: e.fillStartMs, durationMs: e.fillDurationMs, atMs: ms),
                         pose: e.motion?.pose(atMs: Double(ms)) ?? .rest)
         }
@@ -352,13 +379,17 @@ final class LyricsLayerRow {
     func showSettled(style: LyricsLayerRowStyle) {
         let lifted = LyricsLayerTiming.Pose(lift: style.riseAmplitude, scale: 1, glow: 0)
         for e in elements {
+            e.setActive(true)
             e.setStatic(center: LyricsLayerTiming.sungCenter, pose: e.motion != nil ? lifted : .rest)
         }
     }
 
     /// 当前行在播:从此刻起按时间轴装动画。
     func play(nowMs: Int, rate: Double, mediaNow: CFTimeInterval, frameRange: CAFrameRateRange) {
-        for e in elements { e.install(nowMs: nowMs, rate: rate, mediaNow: mediaNow, frameRange: frameRange) }
+        for e in elements {
+            e.setActive(true)
+            e.install(nowMs: nowMs, rate: rate, mediaNow: mediaNow, frameRange: frameRange)
+        }
     }
 }
 
@@ -380,7 +411,7 @@ extension LyricsLayerRowPlan {
         let perWordRoma = style.showRomanization && line.wordGroups?.isEmpty == false && line.words != nil
         if let words = line.words, !words.isEmpty {
             let block = wordBlock(words: words, groups: perWordRoma ? line.wordGroups : nil, font: ink.main,
-                                  romaFont: ink.roma, color: ink.text, rises: style.rises,
+                                  romaFont: ink.roma, color: ink.text, activeColor: ink.activeText, rises: style.rises,
                                   origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,
                                   silhouettes: silhouettes)
             elements += block.elements
@@ -395,7 +426,7 @@ extension LyricsLayerRowPlan {
         if style.wordRise, let bg = backgroundDisplayWords(line.backgroundWords) {
             y += LyricsLayerRowStyle.blockSpacing
             let block = wordBlock(words: bg, groups: nil, font: ink.background, romaFont: ink.roma, color: ink.text,
-                                  rises: false, origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,
+                                  activeColor: ink.text, rises: false, origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,
                                   silhouettes: silhouettes)
             background = block.elements
             y += block.height
@@ -520,7 +551,7 @@ extension LyricsLayerRowPlan {
     /// 逐字的那一块(正文或背景人声):按宽度折行(`WrapLayoutMath`,同 SwiftUI 版 `WrapLayout`)、每个 token 一个元素。
     /// 开了逐词罗马音时折行单位是一组(字 + 读音一列),列宽取字和读音里更宽的那个。
     private static func wordBlock(words: [SyncedLyricWord], groups: [SyncedLyricWordGroup]?, font: NSFont, romaFont: NSFont,
-                                  color: CGColor, rises: Bool, origin: CGPoint, width: CGFloat,
+                                  color: CGColor, activeColor: CGColor, rises: Bool, origin: CGPoint, width: CGFloat,
                                   side: LyricDuet.Side, style: LyricsLayerRowStyle,
                                   silhouettes: LyricsLayerListText.Silhouettes) -> (elements: [Element], height: CGFloat) {
         let dim = CGFloat(WordKaraokeGradient.windowDimOpacity)
@@ -568,7 +599,7 @@ extension LyricsLayerRowPlan {
                 let m = wordMetrics[i]
                 let frame = CGRect(x: x, y: p.origin.y + (unit.mainHeight - m.height) / 2, width: m.width, height: m.height)
                 elements += tokenElements(words[i], metrics: m, frame: frame, font: font, sung: color, unsung: unsung,
-                                          rises: rises, emphasis: spans[i], slot: slots[i], anchor: anchors[i], style: style,
+                                          activeSung: activeColor, rises: rises, emphasis: spans[i], slot: slots[i], anchor: anchors[i], style: style,
                                           silhouettes: silhouettes)
                 x += m.width
             }
@@ -578,7 +609,7 @@ extension LyricsLayerRowPlan {
                     frame: frame,
                     silhouette: LyricsLayerListText.silhouette(roma.text, font: romaFont, translation: false,
                                                                metrics: roma.metrics, scale: style.scale, in: silhouettes),
-                    glow: nil, sung: romaColor, unsung: romaUnsung,
+                    glow: nil, sung: romaColor, unsung: romaUnsung, activeSung: romaColor,
                     fillStartMs: roma.startMs, fillDurationMs: roma.durationMs, motion: nil,
                     anchor: CGPoint(x: 0.5, y: 0.5), hidden: !roma.visible))
             }
@@ -590,7 +621,7 @@ extension LyricsLayerRowPlan {
     /// 一个 token 的元素:平常一个;长音强调逐字形错开时每个可见字形一个,每个字形画一份只显示自己那个字形的剪影,
     /// 位置照整段排好的原样(同 `SingleGlyphRenderer`)。
     private static func tokenElements(_ word: SyncedLyricWord, metrics m: LyricsLayerListText.Metrics, frame: CGRect,
-                                      font: NSFont, sung: CGColor, unsung: CGColor, rises: Bool,
+                                      font: NSFont, sung: CGColor, unsung: CGColor, activeSung: CGColor, rises: Bool,
                                       emphasis: LyricsWordEmphasis.Span?, slot: LyricsWordEmphasis.GlyphSlot?,
                                       anchor: CGPoint, style: LyricsLayerRowStyle,
                                       silhouettes: LyricsLayerListText.Silhouettes) -> [Element] {
@@ -607,7 +638,8 @@ extension LyricsLayerRowPlan {
                     return Element(
                         frame: frame, silhouette: silhouette,
                         glow: silhouette.flatMap { LyricsLayerListText.glow($0, radius: glowRadius, scale: style.scale) },
-                        sung: sung, unsung: unsung, fillStartMs: word.startMs, fillDurationMs: word.durationMs,
+                        sung: sung, unsung: unsung, activeSung: activeSung,
+                        fillStartMs: word.startMs, fillDurationMs: word.durationMs,
                         motion: LyricsLayerTiming.Motion(riseStartMs: window.startMs, amplitude: amplitude,
                                                          emphasis: emphasis, glyph: (index, slot.count)),
                         anchor: anchor, hidden: false)
@@ -618,7 +650,8 @@ extension LyricsLayerRowPlan {
             frame: frame,
             silhouette: LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m, scale: style.scale,
                                                        in: silhouettes),
-            glow: nil, sung: sung, unsung: unsung, fillStartMs: word.startMs, fillDurationMs: word.durationMs,
+            glow: nil, sung: sung, unsung: unsung, activeSung: activeSung,
+            fillStartMs: word.startMs, fillDurationMs: word.durationMs,
             motion: rises ? LyricsLayerTiming.Motion(riseStartMs: Double(word.startMs), amplitude: amplitude) : nil,
             anchor: anchor, hidden: false)]
     }
