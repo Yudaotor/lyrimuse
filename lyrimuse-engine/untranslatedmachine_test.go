@@ -48,8 +48,8 @@ func TestDropUntranslated(t *testing.T) {
 	}
 }
 
-const pseudoMixedLRC = "[00:01.00]誰來救救我 save me from the night\n[00:02.00]Thank you, my dear friend\n" +
-	"[00:03.00]Don't you worry 我就在你身邊"
+const pseudoMixedLRC = "[00:01.00]誰來救救我 save me from the lonely night\n[00:02.00]Thank you, my dear friend\n" +
+	"[00:03.00]Don't you ever worry about me 我在你身邊"
 
 // pseudoGoogle:混排行只转简体、英文原样留着,纯英文行真翻。
 func pseudoGoogle(t *testing.T, sent *[]string) {
@@ -110,24 +110,24 @@ func TestGooglePseudoTranslationsGoToMyMemory(t *testing.T) {
 		out := make([]string, len(lines))
 		for i, l := range lines {
 			out[i] = fakeTranslated("记:", l)
-			if l == "I'm here 妳在這裡" {
+			if l == "I'm here for you tonight 妳在這裡" {
 				out[i] = toSimplified(l)
 			}
 		}
 		body, _ := jsonEscape(strings.Join(out, "\n"))
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
 	})
-	lrc := pseudoMixedLRC + "\n[00:04.00]I'm here 妳在這裡"
+	lrc := pseudoMixedLRC + "\n[00:04.00]I'm here for you tonight 妳在這裡"
 	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "zh-CN", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantAsked := []string{"誰來救救我 save me from the night", "Don't you worry 我就在你身邊", "I'm here 妳在這裡"}
+	wantAsked := []string{"誰來救救我 save me from the lonely night", "Don't you ever worry about me 我在你身邊", "I'm here for you tonight 妳在這裡"}
 	if !reflect.DeepEqual(asked, wantAsked) {
 		t.Errorf("MyMemory 该收到只转了简体的那三行: %q", asked)
 	}
 	if !strings.Contains(res.lrc, "[00:02.00]"+fakeTranslated("谷:", "Thank you, my dear friend")) ||
-		!strings.Contains(res.lrc, "[00:01.00]"+fakeTranslated("记:", "誰來救救我 save me from the night")) ||
+		!strings.Contains(res.lrc, "[00:01.00]"+fakeTranslated("记:", "誰來救救我 save me from the lonely night")) ||
 		strings.Contains(res.lrc, "[00:04.00]") || res.engines != "google=1 mymemory=2" {
 		t.Fatalf("engines=%q\n%s", res.engines, res.lrc)
 	}
@@ -233,7 +233,7 @@ func TestMigrateUntranslatedMachineLines(t *testing.T) {
 	}
 }
 
-// 接线:夹在 importLyricsFromFiles 与 exportLyricsFiles 之间。
+// 接线:两道都夹在 importLyricsFromFiles 与 exportLyricsFiles 之间。
 func TestMigrateUntranslatedMachineLinesIsWired(t *testing.T) {
 	data, err := os.ReadFile("main.go")
 	if err != nil {
@@ -241,9 +241,80 @@ func TestMigrateUntranslatedMachineLinesIsWired(t *testing.T) {
 	}
 	src := string(data)
 	imp := strings.Index(src, `startupStep("importLyricsFromFiles"`)
-	mig := strings.Index(src, `startupStep("migrateUntranslatedMachineLines", migrateUntranslatedMachineLines)`)
 	exp := strings.Index(src, `startupStep("exportLyricsFiles", exportLyricsFiles)`)
-	if imp < 0 || mig < 0 || exp < 0 || !(imp < mig && mig < exp) {
-		t.Fatalf("迁移要夹在 import 与 export 之间: import=%d migrate=%d export=%d", imp, mig, exp)
+	for _, step := range []string{
+		`startupStep("migrateUntranslatedMachineLines", migrateUntranslatedMachineLines)`,
+		`startupStep("migrateUnneededMachineLines", migrateUnneededMachineLines)`,
+	} {
+		mig := strings.Index(src, step)
+		if imp < 0 || mig < 0 || exp < 0 || !(imp < mig && mig < exp) {
+			t.Fatalf("%s 要夹在 import 与 export 之间: import=%d migrate=%d export=%d", step, imp, mig, exp)
+		}
+	}
+}
+
+const unneededLyrics = "[00:01.00]跟着我Flow\n[00:02.00]It represent my heart\n[00:03.00]男：Khalil\n" +
+	"[00:04.00]女：你在哪里\n[00:05.00]声音是交流的媒介\n[00:05.00]A collage of vibrations\n[00:06.00]Chinese lady 我爱你"
+
+// 按时间戳对到原文行,删掉原文那一行现在不用翻的;演唱者标签先剥掉再判;同一时间戳有一行要翻就留着;
+// 对不上原文的行不动;没有要删的原样返回,一行不剩返回空串。
+func TestDropUnneededLines(t *testing.T) {
+	tr := "[00:01.00]跟着我流程\n[00:02.00]它代表我的心\n[00:03.00]哈利勒\n[00:05.00]振动的拼贴画\n" +
+		"[00:06.00]中国女士我爱你\n[00:09.00]对不上原文的行"
+	want := "[00:02.00]它代表我的心\n[00:03.00]哈利勒\n[00:05.00]振动的拼贴画\n[00:09.00]对不上原文的行"
+	if got, ok := dropUnneededLines(unneededLyrics, tr, "zh-CN"); !ok || got != want {
+		t.Fatalf("got %v %q, want %q", ok, got, want)
+	}
+	if got, ok := dropUnneededLines(unneededLyrics, want, "zh-CN"); ok || got != want {
+		t.Errorf("没有要删的该原样返回: %v %q", ok, got)
+	}
+	none := "[00:01.00]跟着我流程\n[00:06.00]中国女士我爱你"
+	if got, ok := dropUnneededLines(unneededLyrics, none, "zh-CN"); !ok || got != "" {
+		t.Errorf("一行不剩该返回空串: %v %q", ok, got)
+	}
+	if got, ok := dropUnneededLines(unneededLyrics, none, "en"); ok || got != none {
+		t.Errorf("目标是英文时汉字为主的行要翻,不该删: %v %q", ok, got)
+	}
+}
+
+// 存量迁移:只动记了语言的机翻;删空的连语言、来源一起清掉;带水位,只跑一次。
+func TestMigrateUnneededMachineLines(t *testing.T) {
+	withTempMigrationState(t)
+	withTempDecisionCache(t)
+	mixed := "[00:01.00]跟着我流程\n[00:02.00]它代表我的心"
+	allMixed := "[00:01.00]跟着我流程\n[00:06.00]中国女士我爱你"
+	enrichMu.Lock()
+	enrichPath = ""
+	enrichCache = map[string]enrichEntry{
+		"a|machine|":   {Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
+		"b|emptied|":   {Lyrics: unneededLyrics, LyricsTr: allMixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"},
+		"c|community|": {Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrLang: "zh"},
+		"d|no-lang|":   {Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrSource: lyricsTrSourceMachine},
+	}
+	enrichMu.Unlock()
+	migrateUnneededMachineLines()
+	if e := enrichCache["a|machine|"]; e.LyricsTr != "[00:02.00]它代表我的心" || e.LyricsTrSource != lyricsTrSourceMachine || e.LyricsTrLang != "zh-CN" {
+		t.Errorf("机翻里汉字为主的那行该删掉: %+v", e)
+	}
+	if e := enrichCache["b|emptied|"]; e.LyricsTr != "" || e.LyricsTrSource != "" || e.LyricsTrLang != "" {
+		t.Errorf("删空的连语言、来源一起清: %+v", e)
+	}
+	if e := enrichCache["c|community|"]; e.LyricsTr != mixed {
+		t.Errorf("社区译文不动: %+v", e)
+	}
+	if e := enrichCache["d|no-lang|"]; e.LyricsTr != mixed {
+		t.Errorf("没记语言的不动: %+v", e)
+	}
+	enrichMu.Lock()
+	enrichCache["e|later|"] = enrichEntry{Lyrics: unneededLyrics, LyricsTr: mixed, LyricsTrSource: lyricsTrSourceMachine, LyricsTrLang: "zh-CN"}
+	enrichMu.Unlock()
+	migrateUnneededMachineLines()
+	if e := enrichCache["e|later|"]; e.LyricsTr != mixed {
+		t.Errorf("有水位之后不再全库重扫: %+v", e)
+	}
+	invalidateMigrationState("test")
+	migrateUnneededMachineLines()
+	if e := enrichCache["e|later|"]; e.LyricsTr == mixed {
+		t.Errorf("水位作废后照常扫: %+v", e)
 	}
 }

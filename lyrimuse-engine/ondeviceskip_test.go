@@ -91,8 +91,19 @@ func TestOnDeviceParentDeadlineIsNotRemembered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	translateOnDeviceByScript(ctx, "zh-CN", onDeviceSkipTexts, make([]string, len(onDeviceSkipTexts)))
-	if onDeviceSkips.skipping(dominantScript(onDeviceSkipTexts[0]), appleLangCode("zh-CN"), time.Now()) {
+	if onDeviceSkips.skipping(translationScript(onDeviceSkipTexts[0]), appleLangCode("zh-CN"), time.Now()) {
 		t.Fatal("整首到点不是端上这一组的问题,不该被记住")
+	}
+}
+
+// 记「走不通」用的文字系统跟分组同一个口径:汉字为主的混排行记在汉字名下。
+func TestOnDeviceSkipKeyFollowsTranslationScript(t *testing.T) {
+	useFakeOnDevice(t, func(context.Context, string, []string) ([]string, error) {
+		return nil, errOnDevicePackMissing
+	})
+	translateOnDeviceByScript(context.Background(), "en", []string{"跟着我Flow"}, make([]string, 1))
+	if !onDeviceSkips.skipping(scriptHan, appleLangCode("en"), time.Now()) {
+		t.Fatal("汉字为主的混排行该记在汉字名下")
 	}
 }
 
@@ -100,7 +111,7 @@ func TestOnDeviceSkipExpires(t *testing.T) {
 	onDeviceSkips.reset()
 	t.Cleanup(onDeviceSkips.reset)
 	t0 := time.Unix(1_800_000_000, 0)
-	latin := dominantScript("hello")
+	latin := translationScript("hello")
 	onDeviceSkips.note(latin, "zh-Hans", t0)
 	if !onDeviceSkips.skipping(latin, "zh-Hans", t0.Add(onDeviceSkipFor-time.Minute)) {
 		t.Fatal("记住期间应当跳过")
@@ -111,7 +122,7 @@ func TestOnDeviceSkipExpires(t *testing.T) {
 	if onDeviceSkips.skipping(latin, "ja", t0) {
 		t.Fatal("别的目标语言不受影响")
 	}
-	if onDeviceSkips.skipping(dominantScript("你好"), "zh-Hans", t0) {
+	if onDeviceSkips.skipping(translationScript("你好"), "zh-Hans", t0) {
 		t.Fatal("别的文字系统不受影响")
 	}
 }

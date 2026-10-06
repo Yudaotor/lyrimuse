@@ -88,6 +88,11 @@ func TestLineNeedsTranslation(t *testing.T) {
 		{"中文行 + 目标中文:不用翻", "我们的时光 一起走过的日子", "zh-CN", false},
 		// 行内混排:这一行主体是汉字,翻它只会把已经看得懂的一行再抄一遍
 		{"行内混排、主体中文:不用翻", "我们的时光 baby 一起走过", "zh-CN", false},
+		// 英文按词、汉字按字比(translationScript):字母比汉字多、词不比汉字多的照样算中文行
+		{"混排行、英文词比汉字少:不用翻", "跟着我Flow", "zh-CN", false},
+		{"混排行、持平(带撇号的算一个词):不用翻", "I don't wanna 被设定", "zh-CN", false},
+		{"混排行、英文词比汉字多:要翻", "This is my 味道", "zh-CN", true},
+		{"目标是英文时,汉字为主的混排行要翻", "跟着我Flow", "en", true},
 		// 这条是这次修的那个 bug 的核心:整行英文必须翻。原来的整首判定看的是
 		// "汉字占全曲多数",于是华语歌里这样的副歌整首被跳过。
 		{"整行英文:要翻", "It represent my heart!", "zh-CN", true},
@@ -101,6 +106,31 @@ func TestLineNeedsTranslation(t *testing.T) {
 		if got := lineNeedsTranslation(c.text, c.target); got != c.want {
 			t.Errorf("%s: lineNeedsTranslation(%q, %q) = %v, want %v",
 				c.name, c.text, c.target, got, c.want)
+		}
+	}
+}
+
+// 送翻按词数比:拉丁、西里尔按空格分的词算(词里的撇号不断词),别的文字按字算;有假名就是假名;持平算汉字。
+func TestTranslationScript(t *testing.T) {
+	for _, c := range []struct {
+		text string
+		want lyricScript
+	}{
+		{"跟着我Flow", scriptHan},
+		{"Chinese lady 我爱你", scriptHan},
+		{"I don't wanna 被设定", scriptHan},
+		{"I don’t wanna 被设定", scriptHan},
+		{"rock 'n' roll 我", scriptLatin},
+		{"This is my 味道", scriptLatin},
+		{"Сердце 我的心", scriptHan},
+		{"Я тебя люблю 爱", scriptCyrillic},
+		{"タバコのflavorがした", scriptKana},
+		{"사랑해 baby", scriptHangul},
+		{"OK", scriptLatin},
+		{"♪ 1 2 3", scriptNone},
+	} {
+		if got := translationScript(c.text); got != c.want {
+			t.Errorf("translationScript(%q) = %v, want %v", c.text, got, c.want)
 		}
 	}
 }
@@ -128,25 +158,23 @@ func TestAnyLineNeedsTranslationMixedSong(t *testing.T) {
 	if hasTranslatableLines(inline, "zh-CN", "", "") {
 		t.Error("行内混排(每行汉字仍占多数)不该触发翻译")
 	}
-	// 已知边界(不是 bug,是 dominantScript 的口径):混排行里**拉丁字母比汉字还多**时
-	// 会被判成需要翻,比如「说好不哭 oh yeah」(4 汉字 vs 6 字母)。翻出来是把已经看得懂的
-	// 中文再抄一遍,略显冗余但不影响原文;要治得给 dominantScript 换更细的判据(比如按
-	// 词而不是按字符计权),那是另一件事。这里把行为钉住,免得以后当成回归改错方向。
-	latinHeavy := "[00:01.00]说好不哭 oh yeah\n"
-	if !hasTranslatableLines(latinHeavy, "zh-CN", "", "") {
-		t.Error("拉丁字母多于汉字的混排行:当前口径是判成需要翻(见上面注释)")
+	// 字母比汉字多、词不比汉字多的混排行(「说好不哭 oh yeah」4 个汉字、6 个字母、2 个词)同样不该触发:
+	// 英文按词、汉字按字比,见 10 章决策 38。
+	latinHeavy := "[00:01.00]说好不哭 oh yeah\n[00:05.00]跟着我Flow\n"
+	if hasTranslatableLines(latinHeavy, "zh-CN", "", "") {
+		t.Error("英文词不比汉字多的混排行不该触发翻译")
 	}
 }
 
-// 署名行不该被送去翻译:它们拉丁字母常比汉字多(「编曲 : Edward Chan/方大同」),
-// dominantScript 会判成 latin。展示端本来就会过滤掉这些行,翻它们等于白烧配额,
+// 署名行不该被送去翻译:它们英文常比汉字多(「编曲 : Edward Chan/Derrick Sepnio」),
+// 会算成拉丁文行。展示端本来就会过滤掉这些行,翻它们等于白烧配额,
 // 还会拉高 assembleTranslationLRC 的 attempted 分母、把整份译文推向"作废"阈值。
 //
 // 同时守住反面:说话人标签后面跟的是**真歌词**,不能一起剔掉 —— 那会让对唱歌的
 // 英文行永远没译文。靠 isCreditLineWithSpeakers 的豁免名单分开。
 func TestTranslationSkipsCreditLinesButKeepsSpeakerLines(t *testing.T) {
 	lyrics := "[00:00.00] 作词 : 孙仪\n" +
-		"[00:02.00] 编曲 : Edward Chan/方大同\n" +
+		"[00:02.00] 编曲 : Edward Chan/Derrick Sepnio\n" +
 		"[00:16.73]你问我爱你有多深\n" +
 		"[01:02.00]It represent my heart!\n" +
 		"[01:06.00]男：It represent my heart!\n" +
@@ -160,12 +188,12 @@ func TestTranslationSkipsCreditLinesButKeepsSpeakerLines(t *testing.T) {
 		send bool // 是否该送去翻(target=zh-CN)
 	}
 	cases := []want{
-		{"作词 : 孙仪", false},                 // 署名行,而且汉字为主
-		{"编曲 : Edward Chan/方大同", false},    // 署名行,拉丁为主 —— 这条是本次修的
-		{"你问我爱你有多深", false},                // 中文歌词,不用翻
-		{"It represent my heart!", true},   // 英文歌词,要翻
-		{"男：It represent my heart!", true}, // 说话人标签 + 英文歌词,要翻
-		{"女：你问我爱你有多深", false},              // 说话人标签 + 中文歌词,不用翻
+		{"作词 : 孙仪", false},                         // 署名行,而且汉字为主
+		{"编曲 : Edward Chan/Derrick Sepnio", false}, // 署名行,英文词比汉字多
+		{"你问我爱你有多深", false},                        // 中文歌词,不用翻
+		{"It represent my heart!", true},           // 英文歌词,要翻
+		{"男：It represent my heart!", true},         // 说话人标签 + 英文歌词,要翻
+		{"女：你问我爱你有多深", false},                      // 说话人标签 + 中文歌词,不用翻
 	}
 	for _, c := range cases {
 		isCredit := isCreditLineWithSpeakers(c.text, speakers)
@@ -175,6 +203,18 @@ func TestTranslationSkipsCreditLinesButKeepsSpeakerLines(t *testing.T) {
 			t.Errorf("%q: 送翻=%v(credit=%v needs=%v), 期望 %v",
 				c.text, got, isCredit, needs, c.send)
 		}
+	}
+}
+
+// 演唱者标签不送去翻:先剥掉再判要不要翻、再去重(「v1：」「v2：」后面是同一句就只送一次)。
+func TestSelectTranslationWorkStripsSpeakerLabels(t *testing.T) {
+	lrc := "[00:01.00]v1：Make a little space\n[00:02.00]v2：Make a little space\n[00:03.00]男：Khalil\n[00:04.00]女：你在哪里\n"
+	work := selectTranslationWork(lrc, "zh-CN", "", "")
+	if got := fmt.Sprintf("%q", work.uniqueTexts); got != `["Make a little space" "Khalil"]` {
+		t.Fatalf("uniqueTexts = %s", got)
+	}
+	if fmt.Sprint(work.occurrences) != "[[0 1] [2]]" || work.attempted != 3 {
+		t.Fatalf("occurrences = %v, attempted = %d", work.occurrences, work.attempted)
 	}
 }
 

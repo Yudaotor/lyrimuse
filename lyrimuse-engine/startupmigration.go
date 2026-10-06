@@ -92,6 +92,10 @@ const (
 	// 就不收,运行期不再产生。改了 lineTranslated 的判据就 +1。
 	migrationUntranslatedMachineLines        = "untranslated_machine_lines"
 	migrationUntranslatedMachineLinesVersion = 1
+	// migrationUnneededMachineLines:存量机翻里原文那一行现在不用翻的行(untranslatedmachine.go dropUnneededLines)。
+	// 新翻的在送翻选行就不收,运行期不再产生。改了 lineNeedsTranslation / translationScript 的判据就 +1。
+	migrationUnneededMachineLines        = "unneeded_machine_lines"
+	migrationUnneededMachineLinesVersion = 1
 	// migrationLegacyKoreanRoma:存量里早先预生成的韩文罗马音(ICU 逐字母转写)换成按读音的(koreanroma.go)。
 	// 运行期新生成的已经是按读音的,运行期不再产生。改了「是不是旧版」的判据就 +1。
 	migrationLegacyKoreanRoma        = "legacy_korean_roma"

@@ -175,6 +175,11 @@ func TestGroupTextsByScript(t *testing.T) {
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("got %v want %v", got, want)
 	}
+	// 跟选行同一个口径:汉字为主的混排行跟中文行一组,不跟英文行一组。
+	got = groupTextsByScript([]string{"跟着我Flow", "Kick back", "我爱你"})
+	if want := [][]int{{0, 2}, {1}}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("混排行分组: got %v want %v", got, want)
+	}
 }
 
 // 抬头判据追平 Swift 侧:繁简、多歌手、双语歌名(含 Apple Music 的「 - 版本」尾巴)、歌手名在括号里。
@@ -271,6 +276,7 @@ func TestTranslationSkipLines(t *testing.T) {
 // 中文歌里外文只剩抬头 / 署名 / 拟声行时,整首判成"没东西可翻",不起机翻、不烧重试额度。
 func TestChineseSongWithOnlyNoiseLinesHasNothingToTranslate(t *testing.T) {
 	lrc := "[00:00.00]熊猫 - 江语晨 (Jessie Chiang)\n[00:05.00]母带后期处理工程师：黄文萱@Purring Sound Studio\n" +
+		"[00:06.00]Mastering Engineer: Dale Becker\n" +
 		"[00:10.00]我想要一只熊猫\n[00:15.00]陪我看月亮\n[00:20.00]Woo woo\n"
 	if hasTranslatableLines(lrc, "zh-CN", "江語晨 (Jessie Chiang)", "熊貓") {
 		t.Fatalf("送翻筛选: %q", selectTranslationWork(lrc, "zh-CN", "江語晨 (Jessie Chiang)", "熊貓").uniqueTexts)

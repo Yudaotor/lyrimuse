@@ -97,13 +97,13 @@ func TestLyricHeaderLineTagged(t *testing.T) {
 		}
 	}
 	// 送翻选行读同一份标签:播放器报的歌名、歌手都是另一种语种时,按标签认出抬头、不送翻;去掉标签就认不出,照旧送。
-	body := "[00:00.50]黑白 - 方大同 (Khalil Fong)\n[00:02.00]I wanna see you\n"
-	tagged := selectTranslationWork("[ti:黑白]\n[ar:方大同]\n"+body, "zh-CN", "Khalil Fong", "Black & White").uniqueTexts
+	body := "[00:00.50]Black and White - Khalil Fong\n[00:02.00]I wanna see you\n"
+	tagged := selectTranslationWork("[ti:Black and White]\n[ar:Khalil Fong]\n"+body, "zh-CN", "方大同", "黑白").uniqueTexts
 	if len(tagged) != 1 || tagged[0] != "I wanna see you" {
 		t.Errorf("抬头不该送翻,实际 %q", tagged)
 	}
-	untagged := selectTranslationWork(body, "zh-CN", "Khalil Fong", "Black & White").uniqueTexts
-	if len(untagged) != 2 || untagged[0] != "黑白 - 方大同 (Khalil Fong)" {
+	untagged := selectTranslationWork(body, "zh-CN", "方大同", "黑白").uniqueTexts
+	if len(untagged) != 2 || untagged[0] != "Black and White - Khalil Fong" {
 		t.Errorf("对照: 不带标签时抬头照旧送翻,实际 %q", untagged)
 	}
 }

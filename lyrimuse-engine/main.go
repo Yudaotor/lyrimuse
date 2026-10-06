@@ -350,6 +350,8 @@ func main() {
 	startupStep("migrateTranslationNotices", migrateTranslationNotices)
 	// 存量机翻里外文原样没动的行(见 untranslatedmachine.go),同样夹在 import 与 export 之间。
 	startupStep("migrateUntranslatedMachineLines", migrateUntranslatedMachineLines)
+	// 存量机翻里原文那一行现在不用翻的行(见 untranslatedmachine.go dropUnneededLines),位置同上。
+	startupStep("migrateUnneededMachineLines", migrateUnneededMachineLines)
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
 	startupStep("invalidateStaleTranslations", func() { invalidateStaleTranslations() })

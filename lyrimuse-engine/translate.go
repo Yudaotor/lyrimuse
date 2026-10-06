@@ -136,7 +136,7 @@ func chunkLinesByBytes(texts []string, maxBytes int) [][]string {
 //     省配额的意图一样达到,而且更准);
 //   - machineTranslateLRCWithBase 内部本来就是逐行挑行、翻完按下标散回去的
 //     (没送去翻的行留空串),那套逻辑一直是对的,只是被这道整首闸挡在门外没机会跑。
-// 逐行判据是 dominantScript:「我们的时光 baby 一起走过」主体是汉字 到 不翻;
+// 逐行判据是 translationScript:「我们的时光 baby 一起走过」主体是汉字 到 不翻;
 // 「It represent my heart!」主体是拉丁 到 翻。行内混排和整行外语,这才分得开。
 
 // looksChinese 判断一段文本是不是中文。只认中文这一种语言 —— 判别只是个兜底,用在
@@ -285,6 +285,38 @@ func dominantScript(s string) lyricScript {
 			counts[sc]++
 		}
 	}
+	return majorScript(counts)
+}
+
+// translationScript 是送翻用的 dominantScript:拉丁、西里尔、阿拉伯这几种用空格分词的文字一个词算一个(词里的
+// 撇号不断词,don't 是一个词),别的文字照旧一个字算一个;持平按 scriptOrder 算汉字。别改回按字母数:「跟着我Flow」
+// 3 个汉字、4 个字母,会算成英文行、整行送翻(见 10 章决策 38)。送翻选行与端上翻译分组用它,判整首语种这类别的
+// 用处仍用 dominantScript。
+func translationScript(s string) lyricScript {
+	counts := map[lyricScript]int{}
+	word := scriptNone // 正在数的这个词是哪种文字;不在词里时是 scriptNone
+	for _, r := range s {
+		sc := runeScript(r)
+		switch {
+		case sc == scriptLatin || sc == scriptCyrillic || sc == scriptArabic:
+			if sc != word {
+				counts[sc]++
+			}
+			word = sc
+		case word != scriptNone && (r == '\'' || r == '’'):
+			// 词里的撇号:不断词、不计数
+		default:
+			if sc != scriptNone {
+				counts[sc]++
+			}
+			word = scriptNone
+		}
+	}
+	return majorScript(counts)
+}
+
+// majorScript 取计数最多的文字系统,有假名就是假名;平手按 scriptOrder 取排在前面的。
+func majorScript(counts map[lyricScript]int) lyricScript {
 	if counts[scriptKana] > 0 {
 		return scriptKana
 	}
@@ -318,9 +350,9 @@ func targetScripts(target string) []lyricScript {
 	}
 }
 
-// lineNeedsTranslation:这一行还需不需要翻成 target。
+// lineNeedsTranslation:这一行还需不需要翻成 target(这一行算哪种文字见 translationScript)。
 func lineNeedsTranslation(text, target string) bool {
-	s := dominantScript(text)
+	s := translationScript(text)
 	if s == scriptNone {
 		return false // 纯符号/数字,没什么可翻
 	}
@@ -416,8 +448,8 @@ func selectTranslationWork(lyrics, target, artist, title string) translationWork
 	}
 	// 只把"跟目标语言不是同一套文字"的行送去翻,理由见 dominantScript 那一段。
 	//
-	// 署名行先剔掉:`[00:02.000] 编曲: Edward Chan/方大同` 这种行拉丁字母
-	// 比汉字多,dominantScript 判成 latin,于是被当歌词送去翻。三个后果:展示端本来就会
+	// 署名行先剔掉:`[00:02.000] 母带: Chris Gehringer @ Sterling Sound` 这种行英文词
+	// 比汉字多,算成拉丁文行,于是被当歌词送去翻。三个后果:展示端本来就会
 	// 用 creditLinePattern 把它过滤掉(白翻)、退到 MyMemory 的机器白烧配额、而且它会拉高
 	// 下面 assembleTranslationLRC 的 attempted 分母 —— 署名行占比高的短歌可能因此撞上
 	// "written*3 < attempted" 那道阈值、整份译文被判作废。
@@ -455,9 +487,7 @@ func selectTranslationWork(lyrics, target, artist, title string) translationWork
 	// 展示端本来就整行丢掉,不需要译文。
 	if len(speakers) > 0 {
 		for i := range lines {
-			if label, rest, ok := lyricSplitLabel(lines[i].text); ok && speakers[label] {
-				lines[i].text = rest
-			}
+			lines[i].text = withoutSpeakerLabel(lines[i].text, speakers)
 		}
 	}
 	seen := map[string]int{}
@@ -491,6 +521,14 @@ func selectTranslationWork(lyrics, target, artist, title string) translationWork
 		occurrences = append(occurrences, []int{i})
 	}
 	return translationWork{lines: lines, uniqueTexts: uniqueTexts, occurrences: occurrences, attempted: totalAttempted}
+}
+
+// withoutSpeakerLabel 剥掉行首的演唱者标签(speakers 是 lyricSpeakerLabels 认出的那些),别的原样返回。
+func withoutSpeakerLabel(text string, speakers map[string]bool) string {
+	if label, rest, ok := lyricSplitLabel(text); ok && speakers[label] {
+		return rest
+	}
+	return text
 }
 
 // machineTranslateLRCWithBase 是 machineTranslateLRC 的可注入版本,baseURL 为空时用 MyMemory 正式端点。
@@ -617,7 +655,7 @@ func translateOnDeviceFor(ctx context.Context, target string, texts []string, id
 	return pending
 }
 
-// translateOnDeviceByScript 按文字系统(dominantScript)把 texts 分组,每组单独送端上翻译;翻成的写进 out,
+// translateOnDeviceByScript 按文字系统(translationScript)把 texts 分组,每组单独送端上翻译;翻成的写进 out,
 // 返回整组没翻成的下标(升序)。
 //
 // 分组是因为 helper 对整批只识别一个源语言:日文夹英文的歌整批认成日文,英文行原样退回;整份又能过
@@ -628,7 +666,7 @@ func translateOnDeviceByScript(ctx context.Context, target string, texts []strin
 	lang := appleLangCode(target)
 	for _, group := range groupTextsByScript(texts) {
 		// 这一组最近走不通(语言包没装 / 限时内没答复):直接交给网络,见 onDeviceSkips。
-		script := dominantScript(texts[group[0]])
+		script := translationScript(texts[group[0]])
 		if onDeviceSkips.skipping(script, lang, time.Now()) {
 			pending = append(pending, group...)
 			continue
@@ -663,12 +701,12 @@ func translateOnDeviceByScript(ctx context.Context, target string, texts []strin
 	return pending
 }
 
-// groupTextsByScript 按 dominantScript 分组,组按首次出现的次序排,组内保持原顺序。
+// groupTextsByScript 按 translationScript 分组(跟选行同一个口径),组按首次出现的次序排,组内保持原顺序。
 func groupTextsByScript(texts []string) [][]int {
 	var groups [][]int
 	at := map[lyricScript]int{}
 	for i, t := range texts {
-		s := dominantScript(t)
+		s := translationScript(t)
 		g, ok := at[s]
 		if !ok {
 			g = len(groups)

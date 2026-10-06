@@ -20,7 +20,7 @@ func TestNeedsTranslationBackfillSkipsCreditOnlyForeignLines(t *testing.T) {
 	featuresRef().LyricsTranslationLanguage = "zh"
 
 	key := enrichKey("方大同", "南音", "Soulboy")
-	creditOnly := enrichEntry{Lyrics: "[00:00.50]南音 - 方大同\n[00:01.00]制作人 : 方大同/Edward Chan/Charles Lee\n" +
+	creditOnly := enrichEntry{Lyrics: "[00:00.50]南音 - 方大同\n[00:01.00]制作人 : Edward Chan/Charles Lee/Derrick Sepnio\n" +
 		"[00:10.00]让我们唱一首南音\n[00:15.00]慢慢地走"}
 	if needsTranslationBackfill(creditOnly, key) {
 		t.Fatal("外文只有署名行时不该起机翻")
