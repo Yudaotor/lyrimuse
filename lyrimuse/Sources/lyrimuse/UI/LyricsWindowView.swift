@@ -291,6 +291,18 @@ enum LyricsWindowSession {
         formRequest = nil
         return request.isFresh(now: now) ? request.mini : nil
     }
+
+    /// 启动时照原样重开(`shouldReopenAtLaunch`)不激活 App:先置这个标记再开窗,窗口第一次 attach 时取走,
+    /// `orderFrontRegardless()` 摆到最前、不当 key(07 章决策 123)。
+    @MainActor private static var restoringAtLaunch = false
+
+    @MainActor static func markRestoringAtLaunch() { restoringAtLaunch = true }
+
+    /// 取一次就清掉。
+    @MainActor static func takeRestoringAtLaunch() -> Bool {
+        defer { restoringAtLaunch = false }
+        return restoringAtLaunch
+    }
 }
 
 /// 垫在标题栏视图里的一块占位:`mouseDownCanMoveWindow` 为 false,系统就不在这块起拖窗;`hitTest` 返回 nil,
@@ -844,6 +856,9 @@ private final class LyricsWindowController: ObservableObject {
             UserDefaults.standard.set(requested, forKey: LyricsWindowSession.miniModeKey)
         }
         if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }
+        // 启动时照原样重开的那一次:App 没有激活,orderFront 摆不到别的 App 的窗口前面,这里摆到最前,
+        // 不当 key、不切前台(07 章决策 123)。
+        if LyricsWindowSession.takeRestoringAtLaunch() { window.orderFrontRegardless() }
         if let formRequestObserver { NotificationCenter.default.removeObserver(formRequestObserver) }
         // 窗口已经开着时点「设置 › 打开」:当场切到预览那个形态。没开着就留给上屏那一刻(见遮挡观察者)。
         formRequestObserver = NotificationCenter.default.addObserver(

@@ -2180,7 +2180,18 @@ func runSourceContractTests() {
                 if let actions = read("MenuBar/MenuBarSceneActions.swift") {
                     expectEqual(actions.contains("if settings.hasCompletedOnboarding, LyricsWindowSession.shouldReopenAtLaunch {"), true,
                                 "歌词窗口重开: 启动时上次开着就再开,引导没走完不开")
+                    // 启动重开不激活 App(07 章决策 123):先标记再直接开窗,手动打开的入口照旧先激活。
+                    expectEqual(actions.contains("LyricsWindowSession.markRestoringAtLaunch()\n                            openWindowAction(id: \"lyrics-window\")"), true,
+                                "歌词窗口重开: 启动时先置标记、再直接开窗")
+                    expectEqual(actions.contains("LyricsWindowSession.shouldReopenAtLaunch {\n                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {\n                        AppActions.shared.openLyricsWindow?()"), false,
+                                "歌词窗口重开: 启动时不走先激活 App 的 openLyricsWindow")
+                    expectEqual(actions.contains("AppActions.shared.openLyricsWindow = {\n                    NSApp.activate(ignoringOtherApps: true)\n                    openWindowAction(id: \"lyrics-window\")"), true,
+                                "歌词窗口: 菜单、快捷键这些手动打开的入口照旧先激活 App")
                 }
+                expectEqual(view.contains("if LyricsWindowSession.takeRestoringAtLaunch() { window.orderFrontRegardless() }"), true,
+                            "歌词窗口重开: 启动重开那一次在首次 attach 里摆到最前、不激活")
+                expectEqual(view.contains("defer { restoringAtLaunch = false }\n        return restoringAtLaunch"), true,
+                            "歌词窗口重开: 启动重开的标记取一次就清掉")
                 if let exit = read("AppExit.swift") {
                     expectEqual(exit.contains("isTerminating = true\n        let reason = pendingReason"), true,
                                 "歌词窗口重开: 进退出流程第一件事就置 isTerminating")
