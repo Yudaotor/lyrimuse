@@ -20,7 +20,7 @@ import (
 // 再补下一条;连续 coverSweepOfflineLimit 条都这样就停下这一遍,coverSweepOfflineRetry 后再来。
 
 const (
-	coverSweepInitialDelay = 10 * time.Minute
+	coverSweepInitialDelay = 2 * time.Minute
 	coverSweepInterval     = 6 * time.Hour
 	coverSweepOfflineRetry = 10 * time.Minute
 	coverSweepOfflineLimit = 5
