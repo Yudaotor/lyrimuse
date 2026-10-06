@@ -791,6 +791,13 @@ func runPlaybackPositionTests() {
                             "起播领先: 通知是很久以前的 → 拖动")
                 expectEqual(LocalPlaybackSource.spotifyJumpKind(raw: 90.5, playingFromStartNoticeAt: t, now: t.addingTimeInterval(0.4)), .seek,
                             "起播领先: 跳到曲中 → 拖动")
+                // Spotify 加载慢:通知和读数会晚到 ~3s(真机第一笔读数 3.276)。
+                expectEqual(LocalPlaybackSource.spotifyJumpKind(raw: 3.276, playingFromStartNoticeAt: t, now: t.addingTimeInterval(0.3)), .fresh,
+                            "起播领先: 通知晚到、刚到不久就读到 3.3s → 仍是重新起播")
+                expectEqual(LocalPlaybackSource.spotifyJumpKind(raw: 3.3, playingFromStartNoticeAt: t, now: t.addingTimeInterval(3.3)), .fresh,
+                            "起播领先: 通知准时、读数晚 3.3s 才读到 → 仍是重新起播")
+                expectEqual(LocalPlaybackSource.spotifyJumpKind(raw: 7.0, playingFromStartNoticeAt: t, now: t.addingTimeInterval(0.5)), .seek,
+                            "起播领先: 落点在曲首 6s 以后 → 拖动")
             }
             expectEqual(LocalPlaybackSource.spotifyStartLeadPrior(.seek), 0.45, "起播领先: 播放中拖动 先验 0.45")
             expectEqual(LocalPlaybackSource.spotifyStartLeadPrior(.gapless), 0.66, "起播领先: 预载无缝换歌 先验 0.66(实测 0.49~0.73 的均值)")

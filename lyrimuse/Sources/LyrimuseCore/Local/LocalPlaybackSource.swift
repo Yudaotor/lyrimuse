@@ -862,8 +862,11 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 两者在读数上一模一样(同曲、位置回到 ~0),领先量却差一截(重新起播同 fresh ~0.25,拖动 ~0.45~0.5)。
     /// 能分开它们的是 Spotify 的分布式通知:重新起播(点同一首 / `play track`)先后发 `Stopped` 与
     /// `Playing, Playback Position 0`,拖动一条都不发。数据见 02 章「Spotify 重新起播」。
-    public nonisolated static let spotifyRestartNoticeWindowSecs: TimeInterval = 3
-    public nonisolated static let spotifyRestartMaxRawSecs: Double = 3
+    ///
+    /// 两道窗口都按 Spotify 加载慢留余量:负载高时通知和读数会晚到 ~3s,这一拍读到的已经是 3.3s 左右。
+    /// 别收回 3s:那样会把这种重新起播判成拖动,那一首到第一次暂停前一直慢 ~0.2s(见 02 章决策 101)。
+    public nonisolated static let spotifyRestartNoticeWindowSecs: TimeInterval = 6
+    public nonisolated static let spotifyRestartMaxRawSecs: Double = 6
     public nonisolated static func spotifyJumpKind(raw: Double, playingFromStartNoticeAt: Date?, now: Date) -> SpotifyStartKind {
         guard raw <= spotifyRestartMaxRawSecs, let noticeAt = playingFromStartNoticeAt else { return .seek }
         let age = now.timeIntervalSince(noticeAt)
@@ -1993,7 +1996,11 @@ public final class LocalPlaybackSource: ObservableObject {
                 let kind = Self.spotifyJumpKind(
                     raw: rawReported, playingFromStartNoticeAt: spotifyPlayingFromStartNoticeAt, now: now)
                 let lead = spotifyStartLead(kind)
-                logger.notice("spotify start lead: kind=\(kind.rawValue, privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
+                // 带上从头播放的通知是多久前到的:分没分出重新起播(spotifyJumpKind)靠它核。
+                let noticeNote = spotifyPlayingFromStartNoticeAt.map {
+                    String(format: ", restart notice %.3fs ago", now.timeIntervalSince($0))
+                } ?? ", no restart notice"
+                logger.notice("spotify start lead: kind=\(kind.rawValue, privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3))\(noticeNote, privacy: .public))")
                 setReportedBias(lead, anchorElapsed: nil, startKind: kind)
                 trackPosSeconds = rawReported - lead
             }
