@@ -3768,6 +3768,11 @@ func runSourceContractTests() {
                     && !manager.contains("List(selection: Binding(")
                     && !manager.contains("store.summaries.first(where:"), true,
                     "歌词管理: 列表是按 == 比对的子视图,行自己读强调色,选中放在外层不订阅的对象里")
+        // 代码里改了选中,下一拍按数据把表格的选中整份对一遍:SwiftUI 取消不掉屏幕外那行旧选中(11 章决策 91)。
+        expectEqual(manager.contains("listSelection.keys = keys\n                // 代码里改的选中:等列表这一拍按它同步完,再把表格对一遍。\n                DispatchQueue.main.async { alignTableSelection() }")
+                    && manager.contains("guard table.numberOfRows == keys.count else { return }")
+                    && manager.contains("selectedKeys.contains(keys[$0]) }), byExtendingSelection: false)"), true,
+                    "歌词管理: 代码里改了选中,表格上留着的旧选中按数据清掉")
     }
 
     // ---- 设置页顶层分类记忆----

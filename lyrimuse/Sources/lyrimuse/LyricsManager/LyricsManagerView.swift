@@ -447,6 +447,12 @@ private final class LyricsManagerWindowFramePersistence: ObservableObject {
         window.makeFirstResponder(table)
     }
 
+    /// 窗口里那张列表的表格。
+    var listTable: NSTableView? {
+        guard let window else { return nil }
+        return Self.firstTable(in: window.contentView)
+    }
+
     private static func firstTable(in view: NSView?) -> NSTableView? {
         guard let view else { return nil }
         if let table = view as? NSTableView { return table }
@@ -1574,6 +1580,18 @@ struct LyricsManagerView: View {
         listEmphasis.update(windowFrame.listHasKeyFocus ? selectedKeys : [])
     }
 
+    /// 代码里改了选中之后,表格上的选中按数据重新对一遍。SwiftUI 把选中同步到表格时只管滚到过的行:屏幕外那行旧选中
+    /// 它取消不掉,滚回去还亮着,再 ⌘ 点选会被一起选进来。列表第 i 行就是数据里第 i 条(组头也算一行),对不上就整份换掉;
+    /// 行数对不上(列表还没换成新数据)就不动(见 11 章决策 91)。
+    private func alignTableSelection() {
+        guard let table = windowFrame.listTable else { return }
+        let keys: [String] = groupByAlbum ? albumEntries.map(\.id) : sortedFiltered.map(\.key)
+        guard table.numberOfRows == keys.count else { return }
+        let current = table.selectedRowIndexes
+        if current.count == selectedKeys.count, current.allSatisfy({ selectedKeys.contains(keys[$0]) }) { return }
+        table.selectRowIndexes(IndexSet(keys.indices.filter { selectedKeys.contains(keys[$0]) }), byExtendingSelection: false)
+    }
+
     /// 选中这一首;编辑里有没保存的改动、要换到别的歌时先问一句,问的时候返回 false(这一下的动作不做)。
     private func select(_ key: String) -> Bool {
         if isEditorDirty, editingKey != key {
@@ -1627,7 +1645,11 @@ struct LyricsManagerView: View {
         .onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }
         .onReceive(listSelection.$keys) { keys in listSelectionChanged(keys) }
         .onChange(of: selectedKeys) { _, keys in
-            if listSelection.keys != keys { listSelection.keys = keys }
+            if listSelection.keys != keys {
+                listSelection.keys = keys
+                // 代码里改的选中:等列表这一拍按它同步完,再把表格对一遍。
+                DispatchQueue.main.async { alignTableSelection() }
+            }
             refreshListEmphasis()
         }
         .onChange(of: windowFrame.listHasKeyFocus) { _, _ in refreshListEmphasis() }
