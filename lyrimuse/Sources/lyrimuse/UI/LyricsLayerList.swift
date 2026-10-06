@@ -96,6 +96,8 @@ final class LyricsLayerListView: NSView {
     private var building: (key: BuildKey, ticket: BuildTicket)?
     /// 各行是不是按眼下这份歌词建的(歌词换了、新的一张还在后台画时为假):为假时不动各行、不认悬停和点按。
     private var rowsCurrent = false
+    /// 字形剪影,跟着这张表走。每次建表一代,装好之后只留这一代用到的:前几首歌、拖窗口时中间那几档字号画的都不留。
+    private let silhouettes = GenerationCache<LyricsLayerListText.SilhouetteKey, CGImage?>()
     private var deferredApply: DispatchWorkItem?
     /// 换句位移动画的键序号:几笔叠着走,每一笔一个键,不互相顶掉。
     private var shiftSerial = 0
@@ -301,6 +303,7 @@ final class LyricsLayerListView: NSView {
         lastRebuild = CACurrentMediaTime()
         let started = lastRebuild
         let ink = LyricsLayerRowInk(style: key.style, appearance: effectiveAppearance)
+        let pass = LyricsLayerListText.Silhouettes(cache: silhouettes, generation: silhouettes.nextGeneration())
         DispatchQueue.global(qos: .userInitiated).async {
             let lines = key.lines
             var plans = [LyricsLayerRowPlan?](repeating: nil, count: lines.count)
@@ -308,7 +311,7 @@ final class LyricsLayerListView: NSView {
                 DispatchQueue.concurrentPerform(iterations: lines.count) { i in
                     guard !ticket.isCancelled else { return }
                     out[i] = LyricsLayerRowPlan.line(index: i, line: lines[i].line, width: key.columnWidth,
-                                                     style: key.style, ink: ink)
+                                                     style: key.style, ink: ink, silhouettes: pass)
                 }
             }
             let footer = lines.isEmpty || ticket.isCancelled ? nil
@@ -318,11 +321,14 @@ final class LyricsLayerListView: NSView {
                 guard let self, !ticket.isCancelled, self.building?.ticket === ticket else { return }
                 let installStart = CACurrentMediaTime()
                 self.building = nil
-                self.install(plans.compactMap { $0 }, footer: footer, key: key)
+                let built = plans.compactMap { $0 }
+                self.install(built, footer: footer, key: key)
+                self.silhouettes.keep(generation: pass.generation)
                 if let spec = self.spec { self.apply(spec, force: true) }
                 let elements = self.rows.reduce(0) { $0 + $1.elements.count }
                 let installMs = (CACurrentMediaTime() - installStart) * 1000
-                Self.log.debug("rebuilt \(self.rows.count, privacy: .public) rows, \(elements, privacy: .public) elements: plan \(planMs, format: .fixed(precision: 1), privacy: .public) ms in background, install \(installMs, format: .fixed(precision: 1), privacy: .public) ms")
+                let bitmapMB = Double(LyricsLayerRowPlan.bitmapBytes(built + [footer].compactMap { $0 })) / 1_048_576
+                Self.log.debug("rebuilt \(self.rows.count, privacy: .public) rows, \(elements, privacy: .public) elements, bitmaps \(bitmapMB, format: .fixed(precision: 1), privacy: .public) MB: plan \(planMs, format: .fixed(precision: 1), privacy: .public) ms in background, install \(installMs, format: .fixed(precision: 1), privacy: .public) ms")
             }
         }
     }

@@ -257,7 +257,8 @@ struct LyricsLayerRowPlan: @unchecked Sendable {
     struct Picture {
         var frame: CGRect
         var image: CGImage
-        var contentsScale: CGFloat
+        /// 非 nil:`image` 是单通道遮罩,图层涂这个颜色;nil:`image` 自带颜色(含彩色字形的那几段)。
+        var tint: CGColor?
     }
 
     var kind: Kind
@@ -298,10 +299,20 @@ final class LyricsLayerRow {
         layer.masksToBounds = false
         for p in plan.pictures {
             let l = CALayer()
-            l.actions = ["position": NSNull(), "bounds": NSNull(), "contents": NSNull()]
+            l.actions = ["position": NSNull(), "bounds": NSNull(), "contents": NSNull(), "backgroundColor": NSNull()]
             l.frame = p.frame
-            l.contents = p.image
-            l.contentsScale = p.contentsScale
+            if let tint = p.tint {
+                let mask = CALayer()
+                mask.actions = ["position": NSNull(), "bounds": NSNull(), "contents": NSNull()]
+                mask.frame = l.bounds
+                mask.contents = p.image
+                mask.contentsScale = scale
+                l.backgroundColor = tint
+                l.mask = mask
+            } else {
+                l.contents = p.image
+                l.contentsScale = scale
+            }
             layer.addSublayer(l)
         }
         let main = plan.elements.map { LyricsLayerElement($0, scale: scale) }
@@ -356,7 +367,7 @@ final class LyricsLayerRow {
 extension LyricsLayerRowPlan {
     /// 一句歌词排成一行。`width` 是这一列的宽(对唱留白在里面扣)。
     static func line(index: Int, line: SyncedLyricLine, width: CGFloat, style: LyricsLayerRowStyle,
-                     ink: LyricsLayerRowInk) -> LyricsLayerRowPlan {
+                     ink: LyricsLayerRowInk, silhouettes: LyricsLayerListText.Silhouettes) -> LyricsLayerRowPlan {
         let side = line.side ?? (style.centered ? .center : .leading)
         let insets = duetInsets(line.side, unit: style.duetInsetUnit)
         let blockX = insets.leading
@@ -370,20 +381,22 @@ extension LyricsLayerRowPlan {
         if let words = line.words, !words.isEmpty {
             let block = wordBlock(words: words, groups: perWordRoma ? line.wordGroups : nil, font: ink.main,
                                   romaFont: ink.roma, color: ink.text, rises: style.rises,
-                                  origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style)
+                                  origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,
+                                  silhouettes: silhouettes)
             elements += block.elements
             textFrame = CGRect(x: blockX, y: y, width: blockW, height: block.height)
             y += block.height
         } else if let para = paragraph(line.plainText ?? line.mainText ?? "", font: ink.main, color: ink.text,
                                        translation: false, width: blockW, side: side, scale: style.scale) {
-            pictures.append(placed(para, x: blockX, y: y))
-            textFrame = CGRect(x: blockX, y: y, width: blockW, height: para.size.height)
-            y += para.size.height
+            pictures += placed(para, x: blockX, y: y)
+            textFrame = CGRect(x: blockX, y: y, width: blockW, height: para.text.height)
+            y += para.text.height
         }
         if style.wordRise, let bg = backgroundDisplayWords(line.backgroundWords) {
             y += LyricsLayerRowStyle.blockSpacing
             let block = wordBlock(words: bg, groups: nil, font: ink.background, romaFont: ink.roma, color: ink.text,
-                                  rises: false, origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style)
+                                  rises: false, origin: CGPoint(x: blockX, y: y), width: blockW, side: side, style: style,
+                                  silhouettes: silhouettes)
             background = block.elements
             y += block.height
         }
@@ -391,15 +404,15 @@ extension LyricsLayerRowPlan {
            let para = paragraph(roma, font: ink.roma, color: ink.secondary, translation: false, width: blockW,
                                 side: side, scale: style.scale) {
             y += LyricsLayerRowStyle.blockSpacing
-            pictures.append(placed(para, x: blockX, y: y))
-            y += para.size.height
+            pictures += placed(para, x: blockX, y: y)
+            y += para.text.height
         }
         if style.showTranslation, let tr = line.translation, !tr.isEmpty,
            let para = paragraph(tr, font: ink.translation, color: ink.secondary, translation: true, width: blockW,
                                 side: side, scale: style.scale) {
             y += LyricsLayerRowStyle.blockSpacing + style.fontSize * LyricsLayerRowStyle.translationExtraGap
-            pictures.append(placed(para, x: blockX, y: y))
-            y += para.size.height
+            pictures += placed(para, x: blockX, y: y)
+            y += para.text.height
         }
         return LyricsLayerRowPlan(kind: .line(index), size: CGSize(width: width, height: max(1, y)), elements: elements,
                                   background: background, pictures: pictures, textFrame: textFrame,
@@ -417,10 +430,31 @@ extension LyricsLayerRowPlan {
         text.append(NSAttributedString(
             string: list,
             attributes: LyricTypesetting.attributes([.font: ink.footerNames, .foregroundColor: color], for: list, translation: false)))
-        guard let image = LyricsLayerListText.paragraph(text, width: width, alignment: .left, scale: style.scale) else { return nil }
-        return LyricsLayerRowPlan(kind: .footer, size: CGSize(width: width, height: image.size.height), elements: [], background: [],
-                                  pictures: [placed(image, x: 0, y: 0)], textFrame: CGRect(origin: .zero, size: image.size),
+        let masked = !LyricsLayerListText.hasColorGlyphs(text)
+        guard let para = LyricsLayerListText.paragraph(text, width: width, alignment: .left, mask: masked, scale: style.scale)
+        else { return nil }
+        return LyricsLayerRowPlan(kind: .footer, size: CGSize(width: width, height: para.height), elements: [], background: [],
+                                  pictures: placed((para, masked ? ink.text : nil), x: 0, y: 0),
+                                  textFrame: CGRect(x: 0, y: 0, width: width, height: para.height),
                                   accessibilityText: ink.footerLabel + list)
+    }
+
+    /// 这几行用到的位图一共多少字节(同一张图只算一次),给建表的调试日志用。
+    static func bitmapBytes(_ plans: [LyricsLayerRowPlan]) -> Int {
+        var seen = Set<ObjectIdentifier>()
+        var total = 0
+        func add(_ image: CGImage?) {
+            guard let image, seen.insert(ObjectIdentifier(image)).inserted else { return }
+            total += image.bytesPerRow * image.height
+        }
+        for plan in plans {
+            for e in plan.elements + plan.background {
+                add(e.silhouette)
+                add(e.glow)
+            }
+            for p in plan.pictures { add(p.image) }
+        }
+        return total
     }
 
     private static func duetInsets(_ side: LyricDuet.Side?, unit: CGFloat) -> (leading: CGFloat, trailing: CGFloat) {
@@ -464,26 +498,31 @@ extension LyricsLayerRowPlan {
         return words.isEmpty ? nil : words
     }
 
+    /// 一种颜色的一段字:画成遮罩、`tint` 是那个颜色;含彩色字形时画成 RGBA、`tint` 为 nil。
     private static func paragraph(_ text: String, font: NSFont, color: CGColor, translation: Bool, width: CGFloat,
-                                  side: LyricDuet.Side, scale: CGFloat) -> (image: CGImage, size: CGSize)? {
+                                  side: LyricDuet.Side, scale: CGFloat) -> (text: LyricsLayerListText.Paragraph, tint: CGColor?)? {
         guard !text.isEmpty else { return nil }
         let attrs = LyricTypesetting.attributes([.font: font, .foregroundColor: NSColor(cgColor: color) ?? .white],
                                                 for: text, translation: translation)
-        return LyricsLayerListText.paragraph(NSAttributedString(string: text, attributes: attrs), width: width,
-                                             alignment: textAlignment(side), scale: scale)
+        let string = NSAttributedString(string: text, attributes: attrs)
+        let masked = !LyricsLayerListText.hasColorGlyphs(string)
+        guard let para = LyricsLayerListText.paragraph(string, width: width, alignment: textAlignment(side), mask: masked,
+                                                       scale: scale) else { return nil }
+        return (para, masked ? color : nil)
     }
 
-    private static func placed(_ p: (image: CGImage, size: CGSize), x: CGFloat, y: CGFloat) -> Picture {
-        let pad = LyricsLayerListText.pad
-        return Picture(frame: CGRect(x: x - pad, y: y - pad, width: p.size.width + 2 * pad, height: p.size.height + 2 * pad),
-                       image: p.image, contentsScale: CGFloat(p.image.width) / (p.size.width + 2 * pad))
+    /// 文字框左上角放在 (x, y) 时这段字的图;整段是空白时没有图。
+    private static func placed(_ p: (text: LyricsLayerListText.Paragraph, tint: CGColor?), x: CGFloat, y: CGFloat) -> [Picture] {
+        guard let image = p.text.image else { return [] }
+        return [Picture(frame: p.text.frame.offsetBy(dx: x, dy: y), image: image, tint: p.tint)]
     }
 
     /// 逐字的那一块(正文或背景人声):按宽度折行(`WrapLayoutMath`,同 SwiftUI 版 `WrapLayout`)、每个 token 一个元素。
     /// 开了逐词罗马音时折行单位是一组(字 + 读音一列),列宽取字和读音里更宽的那个。
     private static func wordBlock(words: [SyncedLyricWord], groups: [SyncedLyricWordGroup]?, font: NSFont, romaFont: NSFont,
                                   color: CGColor, rises: Bool, origin: CGPoint, width: CGFloat,
-                                  side: LyricDuet.Side, style: LyricsLayerRowStyle) -> (elements: [Element], height: CGFloat) {
+                                  side: LyricDuet.Side, style: LyricsLayerRowStyle,
+                                  silhouettes: LyricsLayerListText.Silhouettes) -> (elements: [Element], height: CGFloat) {
         let dim = CGFloat(WordKaraokeGradient.windowDimOpacity)
         let unsung = color.copy(alpha: color.alpha * dim) ?? color
         let romaColor = color.copy(alpha: color.alpha * 0.75) ?? color
@@ -529,7 +568,8 @@ extension LyricsLayerRowPlan {
                 let m = wordMetrics[i]
                 let frame = CGRect(x: x, y: p.origin.y + (unit.mainHeight - m.height) / 2, width: m.width, height: m.height)
                 elements += tokenElements(words[i], metrics: m, frame: frame, font: font, sung: color, unsung: unsung,
-                                          rises: rises, emphasis: spans[i], slot: slots[i], anchor: anchors[i], style: style)
+                                          rises: rises, emphasis: spans[i], slot: slots[i], anchor: anchors[i], style: style,
+                                          silhouettes: silhouettes)
                 x += m.width
             }
             if let roma = unit.roma {
@@ -537,7 +577,7 @@ extension LyricsLayerRowPlan {
                 elements.append(Element(
                     frame: frame,
                     silhouette: LyricsLayerListText.silhouette(roma.text, font: romaFont, translation: false,
-                                                               metrics: roma.metrics, scale: style.scale),
+                                                               metrics: roma.metrics, scale: style.scale, in: silhouettes),
                     glow: nil, sung: romaColor, unsung: romaUnsung,
                     fillStartMs: roma.startMs, fillDurationMs: roma.durationMs, motion: nil,
                     anchor: CGPoint(x: 0.5, y: 0.5), hidden: !roma.visible))
@@ -552,7 +592,8 @@ extension LyricsLayerRowPlan {
     private static func tokenElements(_ word: SyncedLyricWord, metrics m: LyricsLayerListText.Metrics, frame: CGRect,
                                       font: NSFont, sung: CGColor, unsung: CGColor, rises: Bool,
                                       emphasis: LyricsWordEmphasis.Span?, slot: LyricsWordEmphasis.GlyphSlot?,
-                                      anchor: CGPoint, style: LyricsLayerRowStyle) -> [Element] {
+                                      anchor: CGPoint, style: LyricsLayerRowStyle,
+                                      silhouettes: LyricsLayerListText.Silhouettes) -> [Element] {
         let amplitude = style.riseAmplitude
         if rises, let emphasis, let slot {
             let count = LyricsWordEmphasis.glyphCount(word.text)
@@ -562,7 +603,7 @@ extension LyricsLayerRowPlan {
                     let index = slot.offset + k
                     let window = LyricsWordEmphasis.glyphWindow(for: emphasis, glyph: index, of: slot.count)
                     let silhouette = LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m,
-                                                                    glyph: k, scale: style.scale)
+                                                                    glyph: k, scale: style.scale, in: silhouettes)
                     return Element(
                         frame: frame, silhouette: silhouette,
                         glow: silhouette.flatMap { LyricsLayerListText.glow($0, radius: glowRadius, scale: style.scale) },
@@ -575,7 +616,8 @@ extension LyricsLayerRowPlan {
         }
         return [Element(
             frame: frame,
-            silhouette: LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m, scale: style.scale),
+            silhouette: LyricsLayerListText.silhouette(word.text, font: font, translation: false, metrics: m, scale: style.scale,
+                                                       in: silhouettes),
             glow: nil, sung: sung, unsung: unsung, fillStartMs: word.startMs, fillDurationMs: word.durationMs,
             motion: rises ? LyricsLayerTiming.Motion(riseStartMs: Double(word.startMs), amplitude: amplitude) : nil,
             anchor: anchor, hidden: false)]

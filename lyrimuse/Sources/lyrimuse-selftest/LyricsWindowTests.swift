@@ -358,10 +358,69 @@ func runLyricsWindowTests() {
                     "图层列表(契约): 建表的排版、画字在后台按行并行算 —— 放回主线程,换歌那一下要卡两三百毫秒")
         expectEqual(sourceBytes(list, contain: "guard rowsCurrent else { return }"), true,
                     "图层列表(契约): 新歌词那张还在后台画时,不拿新下标去动旧的那张")
-        expectEqual(sourceBytes(text, contain: "vImageBoxConvolve_ARGB8888"), true,
+        expectEqual(sourceBytes(text, contain: "vImageBoxConvolve_Planar8"), true,
                     "图层列表(契约): 辉光在 CPU 上糊 —— 走 Core Image 要排 GPU 的队,整首歌并行也快不了")
+        expectEqual(sourceBytes(text, contain: "bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue"), true,
+                    "图层列表(契约): 剪影、辉光、单色的整段字画成单通道遮罩 —— 画成 RGBA 一首歌的位图大四倍,App 一份、渲染服务再拷一份")
+        expectEqual(sourceBytes(list, contain: "self.silhouettes.keep(generation: pass.generation)"), true,
+                    "图层列表(契约): 剪影装好之后只留这一次建表用到的 —— 不清的话前几首歌的、拖窗口时每一档字号的都攒着")
+        expectEqual(sourceBytes(text, contain: ".cropping(to:"), false,
+                    "图层列表(契约): 整段字裁空白要拷进新图 —— 只取子图的话底下还是整张,不省内存")
         expectEqual(sourceBytes(text, contain: "@MainActor"), false,
                     "图层列表(契约): 画字、量字不绑主线程 —— 后台建表要调")
+    }
+
+    // MARK: - 按代留的缓存(图层列表的字形剪影用,GenerationCache)
+    do {
+        let cache = GenerationCache<String, Int>()
+        var made = 0
+        func get(_ key: String, _ gen: Int) -> Int {
+            cache.value(for: key, generation: gen) {
+                made += 1
+                return made
+            }
+        }
+        let g1 = cache.nextGeneration()
+        expectEqual(get("a", g1), 1, "按代缓存: 没有就现做")
+        expectEqual(get("a", g1), 1, "按代缓存: 同一个 key 再查拿到同一个值,不重做")
+        expectEqual(get("b", g1), 2, "按代缓存: 别的 key 另做")
+        let g2 = cache.nextGeneration()
+        expectEqual(g2 > g1, true, "按代缓存: 代号递增")
+        expectEqual(get("a", g2), 1, "按代缓存: 新一代查到上一代的照样复用")
+        expectEqual(get("c", g2), 3, "按代缓存: 新一代新做的")
+        cache.keep(generation: g2)
+        expectEqual(cache.count, 2, "按代缓存: 只留这一代碰过的(a、c),上一代没再碰的 b 放掉")
+        let g3 = cache.nextGeneration()
+        expectEqual(get("b", g3), 4, "按代缓存: 放掉的再要就重做")
+        cache.keep(generation: g2)
+        expectEqual(cache.count, 3, "按代缓存: 留的是这一代和更晚碰过的")
+    }
+
+    // MARK: - 位图里有墨迹的列(BitmapInk,图层列表裁整段字左右空白用)
+    do {
+        func ink(_ pixels: [UInt8], width: Int, height: Int, bpp: Int, alpha: Int, rowPad: Int = 0) -> Range<Int>? {
+            pixels.withUnsafeBytes {
+                BitmapInk.columns(in: $0, width: width, height: height, bytesPerRow: width * bpp + rowPad,
+                                  bytesPerPixel: bpp, alphaOffset: alpha)
+            }
+        }
+        var a8 = [UInt8](repeating: 0, count: 10 * 3)
+        a8[1 * 10 + 3] = 40
+        a8[2 * 10 + 6] = 1
+        expectEqual(ink(a8, width: 10, height: 3, bpp: 1, alpha: 0), 3..<7, "墨迹列: 单通道取各行并起来的头尾")
+        expectEqual(ink([UInt8](repeating: 0, count: 30), width: 10, height: 3, bpp: 1, alpha: 0), nil, "墨迹列: 全透明没有")
+        var rgba = [UInt8](repeating: 0, count: 4 * 5 * 2)
+        rgba[(1 * 5 + 2) * 4 + 0] = 255
+        expectEqual(ink(rgba, width: 5, height: 2, bpp: 4, alpha: 3), nil, "墨迹列: RGBA 只看透明度,颜色通道有值不算")
+        rgba[(1 * 5 + 2) * 4 + 3] = 9
+        rgba[(0 * 5 + 4) * 4 + 3] = 9
+        expectEqual(ink(rgba, width: 5, height: 2, bpp: 4, alpha: 3), 2..<5, "墨迹列: RGBA 按透明度那一字节")
+        var padded = [UInt8](repeating: 0, count: (4 + 2) * 2)
+        padded[4] = 7
+        expectEqual(ink(padded, width: 4, height: 2, bpp: 1, alpha: 0, rowPad: 2), nil, "墨迹列: 行尾补齐的字节不算")
+        padded[6 + 1] = 7
+        expectEqual(ink(padded, width: 4, height: 2, bpp: 1, alpha: 0, rowPad: 2), 1..<2, "墨迹列: 第二行按行跨度找")
+        expectEqual(ink([1, 2], width: 4, height: 2, bpp: 1, alpha: 0), nil, "墨迹列: 字节数不够整张的不读")
     }
 
     // MARK: - 过渡的时间轴扣掉主线程卡住的那段(FrameStall,07 章决策 108)
