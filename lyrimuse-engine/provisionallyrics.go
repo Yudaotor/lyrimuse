@@ -14,12 +14,18 @@ import (
 //
 // 首轮一个可用候选都没有时不回调,也不消耗这一次:救急轮(标题拆分 / 翻唱者 / 别名救急)
 // 进到递归调用里拿到结果时,由递归那一层的补查轮入口回调。
+//
+// 正在播的这首还可能在首轮中途就先上屏一次(showEarly,见 earlylyrics.go)。那样的话首轮收齐时
+// 只有挑出来的跟先上屏的那份不同才再回调,同一个 ctx 上合计至多两次。
 type provisionalLyricsKey struct{}
 
 type provisionalLyricsHook struct {
 	mu    sync.Mutex
 	fired bool
-	fn    func(neteaseInfo, []scoredLyricCandidateResult)
+	// early:首轮中途已经先上屏过,shownSource / shownLyrics 是那一份;rechecked:首轮收齐后已经比过一次。
+	early, rechecked         bool
+	shownSource, shownLyrics string
+	fn                       func(neteaseInfo, []scoredLyricCandidateResult)
 }
 
 // withProvisionalLyrics 挂回调。fn 在检索 goroutine 里同步执行,只该做提交这种快操作。
@@ -27,18 +33,45 @@ func withProvisionalLyrics(ctx context.Context, fn func(neteaseInfo, []scoredLyr
 	return context.WithValue(ctx, provisionalLyricsKey{}, &provisionalLyricsHook{fn: fn})
 }
 
-// notifyProvisionalLyrics 在每个补查轮的入口调用。同一个 ctx 上的回调至多触发一次。
+// showEarly 由 earlyLyricsWatch 在首轮中途调用:同一个 ctx 上至多一次,而且只在还没有回调过时。picked 是 results 挑出来的那份。
+func (h *provisionalLyricsHook) showEarly(ctx context.Context, ne neteaseInfo, results []scoredLyricCandidateResult,
+	picked *scoredLyricCandidateResult) bool {
+	if ctx.Err() != nil || picked == nil {
+		return false
+	}
+	h.mu.Lock()
+	if h.fired {
+		h.mu.Unlock()
+		return false
+	}
+	h.fired, h.early = true, true
+	h.shownSource, h.shownLyrics = picked.Source, picked.Lyrics
+	h.mu.Unlock()
+	h.fn(ne, results)
+	return true
+}
+
+// notifyProvisionalLyrics 在每个补查轮的入口调用。没先上屏过时至多回调一次;首轮中途先上屏过时,
+// 第一次调用比一下挑出来的是不是还是那一份(源与正文),不同才回调,之后不再回调。
 func notifyProvisionalLyrics(ctx context.Context, ne neteaseInfo, results []scoredLyricCandidateResult) {
 	h, _ := ctx.Value(provisionalLyricsKey{}).(*provisionalLyricsHook)
 	if h == nil || ctx.Err() != nil || !hasUsableLyricCandidate(results) {
 		return
 	}
 	h.mu.Lock()
-	if h.fired {
+	switch {
+	case !h.fired:
+		h.fired = true
+	case h.early && !h.rechecked:
+		h.rechecked = true
+		if p := pickLyricCandidate(results); p == nil || p.Source == h.shownSource && p.Lyrics == h.shownLyrics {
+			h.mu.Unlock()
+			return
+		}
+	default:
 		h.mu.Unlock()
 		return
 	}
-	h.fired = true
 	h.mu.Unlock()
 	h.fn(ne, results)
 }
@@ -107,8 +140,8 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	return e, picked
 }
 
-// earlyCommitLog 给「歌词先上屏」那个回调记日志。首轮先上屏也走同一个回调,一首歌通常回调两次、两次多半是
-// 同一份:第一次、或来源换了的那一次落 Info,同一来源的第二次落 Debug。回调可能来自检索的并发协程,加锁。
+// earlyCommitLog 给「歌词先上屏」那个回调记日志。首轮先上屏(首轮中途或收齐时)也走同一个回调,一首歌回调一到三次、
+// 多半是同一份:第一次、或来源换了的那一次落 Info,同一来源的落 Debug。回调可能来自检索的并发协程,加锁。
 type earlyCommitLog struct {
 	mu     sync.Mutex
 	source string

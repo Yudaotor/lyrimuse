@@ -892,7 +892,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 不挂在 run() 的进程级 ctx 下面:进程整体退出时这些 goroutine 反正会跟着
 		// 主进程一起消失,不需要额外传导那层取消;这里只需要"能单独取消某一个 key"
 		// 这一件事。
-		cancelCtx, cancel := context.WithCancel(withYouTubeMusicVideoID(context.Background(), kasetVideoID))
+		// 解析的是正在播的这首时,首轮里歌词可以先上屏(见 earlylyrics.go);判据按原样标签的 hintKey,poller 记在播那首用的就是它。
+		cancelCtx, cancel := context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), hintKey))
 		enrichCancelFuncs[key] = cancel
 		go resolveEnrichAsync(cancelCtx, key, artist, title, album, bundleID, durationSecs, isNewTrack)
 	}
@@ -2943,8 +2944,9 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 那条分支 —— 它存在的唯一理由是"歌词关着、但封面和跳转链接还得要"。
 	roundCtx, round := withLyricSourceRound(ctx)
 	roundCtx, queries := withLyricQueryLog(roundCtx)
-	// 首轮先上屏(见 provisionallyrics.go):首轮挑得出歌词、还要接着跑补查轮时,先把首轮的结果提交一份。
-	// shownFirst:先上屏的那一份用的是哪个源,给最终定案那行决策日志用(见 lyricsEntryFromScored)。
+	// 首轮先上屏(见 provisionallyrics.go):首轮挑得出歌词、还要接着跑补查轮时,先把首轮的结果提交一份;正在播的这首
+	// 还可能在首轮中途就先上屏(见 earlylyrics.go),回调最多来两次。
+	// shownFirst:最早上屏的那一份用的是哪个源,给最终定案那行决策日志用(见 lyricsEntryFromScored)。
 	var shownMu sync.Mutex
 	var shownFirst string
 	if onLyrics != nil {
@@ -2956,7 +2958,9 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 				p.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
 				timer.mark("build")
 				shownMu.Lock()
-				shownFirst = picked.Source
+				if shownFirst == "" {
+					shownFirst = picked.Source
+				}
 				shownMu.Unlock()
 				onLyrics(p)
 				timer.mark("commit")
@@ -5220,6 +5224,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		return true
 	}
+	// 首轮中途先上屏(见 earlylyrics.go):只有首次解析正在播的这首、第一轮才有,别的情况是 nil,下面几处都是空操作。
+	// 它不在等的时候别为它打分:自动解析不要中间结果,每到一个源整份重打分是白算(见 09 章决策 94)。
+	earlyWatch := newEarlyLyricsWatch(ctx, artist, title)
 collect:
 	for !allLyricSourcesBack() {
 		select {
@@ -5229,9 +5236,16 @@ collect:
 			if lyricSourceResultTap != nil {
 				lyricSourceResultTap(r)
 			}
-			if onUpdate != nil {
-				onUpdate(raw["netease"].ne, scoreAndSort(), enabledDone(), totalSources)
+			if onUpdate != nil || earlyWatch.active() {
+				scored := scoreAndSort()
+				if onUpdate != nil {
+					onUpdate(raw["netease"].ne, scored, enabledDone(), totalSources)
+				}
+				earlyWatch.observe(raw["netease"].ne, scored, doneSources)
 			}
+		case <-earlyWatch.graceC():
+			earlyWatch.endGrace()
+			earlyWatch.observe(raw["netease"].ne, scoreAndSort(), doneSources)
 		case <-deadline:
 			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/%d sources back", lyricSearchDeadline, artist, title, enabledDone(), totalSources)
 			break collect
@@ -5242,6 +5256,7 @@ collect:
 			break collect
 		}
 	}
+	earlyWatch.finish(enabledDone(), totalSources)
 
 	return raw["netease"].ne, scoreAndSort()
 }
