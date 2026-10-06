@@ -499,15 +499,15 @@ final class PlaybackCoordinator: ObservableObject {
     // 覆盖了"用户在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
     @Published private(set) var isFavorited: Bool?
 
-    /// 播放模式(列表/随机/单曲循环)。只有 Apple Music、Spotify(只有随机)、Kaset 有 —— media-control 走的
+    /// 播放模式(列表/随机/列表循环/单曲循环)。只有 Apple Music、Spotify、Kaset 有 —— media-control 走的
     /// 系统级 MediaRemote 没有这个概念 —— 所以 nil 同样表示"这个播放器根本没有这回事",
     /// 按钮据此整个不显示。刷新时机也跟"喜欢"共用(换歌 / 窗口出现 / App 回到前台):
     /// 用户可能在 Music.app 里自己改了模式,我们没有任何事件能收到,只能在这几个时机回读。
     @Published private(set) var playbackMode: MusicPlaybackController.MusicPlaybackMode?
-    /// `playbackMode` 读自 / 写给哪个播放器(模式为 nil 时也是 nil)。灵动岛的随机 / 循环键只认随机、循环都齐的播放器
-    /// (Apple Music、Kaset,`MusicPlaybackController.supportsRepeatOne`),靠它区分。两者只经 `applyPlaybackMode` 一起赋值,
-    /// 别单独改其中一个。
-    @Published private(set) var playbackModePlayer: PlaybackPlayer?
+    /// 这个播放器此刻能切哪几档(随机 / 列表循环 / 单曲循环;模式为 nil 时为空)。随机、循环两颗键各按它显示,
+    /// 循环键按有没有单曲循环走三态或两态;灵动岛展开区的两颗键只在随机、循环都能切时出现。跟 `playbackMode`
+    /// 只经 `applyPlaybackMode` 一起赋值,别单独改其中一个。
+    @Published private(set) var playbackModeOptions: MusicPlaybackController.PlaybackModeOptions = []
 
     /// 用户动作序号,"喜欢"和"播放模式"各一份。
     ///
@@ -590,7 +590,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     private func clearExtendedControls() {
         if isFavorited != nil { isFavorited = nil }
-        applyPlaybackMode(nil, player: nil)
+        applyPlaybackMode(nil)
         if soundVolume != nil { soundVolume = nil }
     }
 
@@ -621,7 +621,7 @@ final class PlaybackCoordinator: ObservableObject {
                     if self.isFavorited != value { self.isFavorited = value }
                 }
                 if self.playbackModeActionSeq == modeSeq {
-                    self.applyPlaybackMode(state.mode, player: player)
+                    self.applyPlaybackMode(state.mode)
                 }
                 if self.volumeActionSeq == volSeq, self.soundVolume != state.volume {
                     self.soundVolume = state.volume
@@ -659,7 +659,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// 重新读一次播放模式。跟 refreshFavorited 同一套前置判断和后台线程约定。
     func refreshPlaybackMode() {
         guard let player = extendedControlPlayer else {
-            applyPlaybackMode(nil, player: nil)
+            applyPlaybackMode(nil)
             return
         }
         let seq = playbackModeActionSeq
@@ -668,7 +668,7 @@ final class PlaybackCoordinator: ObservableObject {
                 ? MusicPlaybackController.playbackMode(for: player) : nil
             await MainActor.run { [weak self] in
                 guard let self, self.playbackModeActionSeq == seq else { return }
-                self.applyPlaybackMode(value, player: player)
+                self.applyPlaybackMode(value)
             }
         }
     }
@@ -756,26 +756,19 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 点一下切到下一档模式。跟 toggleFavorited 一样先乐观更新再回读,以实际结果为准。
     func cyclePlaybackMode() {
-        guard let player = extendedControlPlayer else { return }
-        // Spotify 的档位只有 列表 与 随机:它的脚本字典里 repeating 是布尔,够不到"单曲循环"
-        // (见 MusicPlaybackMode.next(allowsRepeatOne:))。
+        guard extendedControlPlayer != nil else { return }
+        // 够不到单曲循环的播放器(Spotify)只在 列表 与 随机 之间倒(见 MusicPlaybackMode.next(allowsRepeatOne:))。
         let target = (playbackMode ?? .list)
-            .next(allowsRepeatOne: MusicPlaybackController.supportsRepeatOne(player))
+            .next(allowsRepeatOne: playbackModeOptions.contains(.repeatOne))
         setPlaybackMode(target)
     }
 
-    /// `playbackMode` 与 `playbackModePlayer` 的唯一写入点。判等再写,两个都是 @Published。
-    private func applyPlaybackMode(_ mode: MusicPlaybackController.MusicPlaybackMode?, player: PlaybackPlayer?) {
-        let owner = mode == nil ? nil : player
+    /// `playbackMode` 与 `playbackModeOptions` 的唯一写入点。判等再写,两个都是 @Published。
+    private func applyPlaybackMode(_ state: MusicPlaybackController.PlaybackModeState?) {
+        let mode = state?.mode
+        let options = state?.options ?? []
         if playbackMode != mode { playbackMode = mode }
-        if playbackModePlayer != owner { playbackModePlayer = owner }
-    }
-
-    /// 当前播放器够不够得到「单曲循环」档(Spotify 的脚本接口只有 repeating 布尔,够不到)。
-    /// 歌词窗口的「循环」按钮读不到这一档时整颗不显示,别摆一个落不了地的开关。
-    var playbackModeSupportsRepeatOne: Bool {
-        guard let player = extendedControlPlayer else { return false }
-        return MusicPlaybackController.supportsRepeatOne(player)
+        if playbackModeOptions != options { playbackModeOptions = options }
     }
 
     /// 直接设到某一档(歌词窗口按 Apple Music 排布把三态拆成「随机/循环」两颗
@@ -783,13 +776,10 @@ final class PlaybackCoordinator: ObservableObject {
     /// 跟 cyclePlaybackMode 完全同一套取舍。
     func setPlaybackMode(_ target: MusicPlaybackController.MusicPlaybackMode) {
         guard let player = extendedControlPlayer else { return }
-        // 播放器够不到的档位静默降为列表,别让乐观更新画出一个永远写不进去的图标。
-        // (repeatAll 跟 repeatOne 同一道闸:Spotify 的 repeating 布尔写得进读不回。)
-        let resolved: MusicPlaybackController.MusicPlaybackMode =
-            ((target == .repeatOne || target == .repeatAll)
-                && !MusicPlaybackController.supportsRepeatOne(player))
-            ? .list : target
-        applyPlaybackMode(resolved, player: player)
+        // 播放器此刻够不到的档位静默降为列表,别让乐观更新画出一个永远写不进去的图标。
+        let options = playbackModeOptions
+        let resolved: MusicPlaybackController.MusicPlaybackMode = options.allows(target) ? target : .list
+        applyPlaybackMode(MusicPlaybackController.PlaybackModeState(mode: resolved, options: options))
         playbackModeActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
             if player == .appleMusic,

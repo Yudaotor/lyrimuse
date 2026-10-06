@@ -7,6 +7,18 @@ import Foundation
 
 @MainActor
 func runSourceContractTests() {
+    // 歌词窗口播控排两侧的随机 / 循环格:按钮不显示时照样占着定宽,主三键居中;两颗键各按播放器此刻能切哪几档显示。
+    do {
+        let window = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(window.contains("        ZStack {\n            if shown {\n                Button(action: action) {"), true,
+                    "歌词窗口播控排: 随机 / 循环那一格外层是 ZStack,按钮不显示时定宽不塌")
+        expectEqual(window.contains("shown: playback.playbackMode != nil && playback.playbackModeOptions.contains(.shuffle),")
+                        && window.contains("shown: mode != nil && options.contains(.repeatAll),")
+                        && window.contains("(mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne))"), true,
+                    "歌词窗口播控排: 随机、循环各按能切哪几档显示,循环键按有没有单曲循环走三态 / 两态")
+    }
+
     // 换歌后要及时做的去抖挂主队列(01 章决策 11):Combine 挂 RunLoop.main 的计时器只在默认模式走,菜单栏菜单开着时不触发。
     do {
         let appSources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -452,8 +464,10 @@ func runSourceContractTests() {
         if let mpc = code(core.appendingPathComponent("MusicPlaybackController.swift")) {
             expectEqual(count(mpc, "shuffling enabled") >= 2, true,
                         "Spotify 随机闸: extendedControlsState 与 spotifyModePartScript 两段脚本都要读 shuffling enabled(现 \(count(mpc, "shuffling enabled")) 处)")
-            expectEqual(count(mpc, "spotifyPlaybackMode(fromModePart") >= 3, true,
-                        "Spotify 随机闸: 声明 + extendedControlsState + playbackMode(for:) 两条回读都要走同一个解析(现 \(count(mpc, "spotifyPlaybackMode(fromModePart")) 处)")
+            expectEqual(count(mpc, "spotifyPlaybackState(fromModePart") >= 3, true,
+                        "Spotify 随机 / 循环闸: 声明 + extendedControlsState + playbackMode(for:) 两条回读都要走同一个解析(现 \(count(mpc, "spotifyPlaybackState(fromModePart")) 处)")
+            expectEqual(count(mpc, "repeating enabled") >= 2, true,
+                        "Spotify 循环闸: extendedControlsState 与 spotifyModePartScript 两段脚本都要读 repeating enabled(现 \(count(mpc, "repeating enabled")) 处)")
             expectEqual(mpc.contains("public static func spotifyCurrentTrackURI()"), true,
                         "Spotify 深链: MusicPlaybackController 要有 spotifyCurrentTrackURI()")
         } else {
@@ -1857,14 +1871,14 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "悬浮调宽: 读不到 UI/LyricsOverlayWindowController.swift")
         }
-        // 灵动岛展开区的随机 / 循环键只在随机、循环都齐的播放器(Apple Music、Kaset)在播时出现;模式与它的来源播放器必须一起赋值。
+        // 灵动岛展开区的随机 / 循环键只在这个播放器此刻随机、循环都能切时出现;模式与能切哪几档必须一起赋值。
         if let notch = read("UI/NotchLyricsView.swift"), let coordinator = read("PlaybackCoordinator.swift") {
-            expectEqual(notch.contains(".map { mode, player in player.map(MusicPlaybackController.supportsRepeatOne) == true ? mode : nil }"),
-                        true, "灵动岛模式键: 只认读自随机、循环都齐的播放器(Apple Music、Kaset)的播放模式")
+            expectEqual(notch.contains(".map { mode, options in options.isSuperset(of: [.shuffle, .repeatAll]) ? mode : nil }"),
+                        true, "灵动岛模式键: 只在随机、循环都能切时给出播放模式")
             expectEqual(coordinator.components(separatedBy: "playbackMode = ").count - 1, 1,
-                        "灵动岛模式键: playbackMode 只在 applyPlaybackMode 里赋值(跟 playbackModePlayer 一起)")
-            expectEqual(coordinator.components(separatedBy: "playbackModePlayer = ").count - 1, 1,
-                        "灵动岛模式键: playbackModePlayer 只在 applyPlaybackMode 里赋值")
+                        "灵动岛模式键: playbackMode 只在 applyPlaybackMode 里赋值(跟 playbackModeOptions 一起)")
+            expectEqual(coordinator.components(separatedBy: "playbackModeOptions = ").count - 1, 1,
+                        "灵动岛模式键: playbackModeOptions 只在 applyPlaybackMode 里赋值")
         } else {
             expectEqual(true, false, "灵动岛模式键: 读不到 NotchLyricsView.swift / PlaybackCoordinator.swift")
         }

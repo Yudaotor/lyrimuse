@@ -332,6 +332,48 @@ public enum MusicPlaybackController {
             case .repeatAll: return allowsRepeatOne ? .repeatOne : .list
             }
         }
+
+        /// 循环键点一下之后的档位:关 → 列表循环 → 单曲循环 → 关;够不到单曲循环的播放器(Spotify)列表循环之后直接回关。
+        /// 随机开着时点循环,也从列表循环起(两颗键互斥)。
+        public func nextRepeat(allowsRepeatOne: Bool) -> MusicPlaybackMode {
+            switch self {
+            case .repeatAll: return allowsRepeatOne ? .repeatOne : .list
+            case .repeatOne: return .list
+            case .list, .shuffle: return .repeatAll
+            }
+        }
+    }
+
+    /// 这个播放器此刻能切到哪几档(列表一直能)。Apple Music、Kaset 三样都有;Spotify 看它自己报的能力位
+    /// (`shuffling enabled` / `repeating enabled`,跟账号和播放上下文走),单曲循环一律没有 —— 脚本里 `repeating` 只是开关。
+    public struct PlaybackModeOptions: OptionSet, Hashable, Sendable {
+        public let rawValue: Int
+        public init(rawValue: Int) { self.rawValue = rawValue }
+        public static let shuffle = PlaybackModeOptions(rawValue: 1 << 0)
+        public static let repeatAll = PlaybackModeOptions(rawValue: 1 << 1)
+        public static let repeatOne = PlaybackModeOptions(rawValue: 1 << 2)
+        public static let all: PlaybackModeOptions = [.shuffle, .repeatAll, .repeatOne]
+
+        /// 能不能切到这一档。
+        public func allows(_ mode: MusicPlaybackMode) -> Bool {
+            switch mode {
+            case .list: return true
+            case .shuffle: return contains(.shuffle)
+            case .repeatAll: return contains(.repeatAll)
+            case .repeatOne: return contains(.repeatOne)
+            }
+        }
+    }
+
+    /// 读回来的播放模式,连同这个播放器此刻能切哪几档。
+    public struct PlaybackModeState: Equatable, Sendable {
+        public let mode: MusicPlaybackMode
+        public let options: PlaybackModeOptions
+
+        public init(mode: MusicPlaybackMode, options: PlaybackModeOptions) {
+            self.mode = mode
+            self.options = options
+        }
     }
 
     /// 这个播放器支不支持「播放模式 / 音量」这两组扩展控制。
@@ -455,9 +497,9 @@ public enum MusicPlaybackController {
 
         """#
 
-    /// Spotify 的模式段脚本:`shuffling;shuffling enabled` 两截。后者是"这个账号 / 播放上下文
-    /// 允不允许随机",解析见 spotifyPlaybackMode(fromModePart:)。两截各自包 try,`shuffling enabled` 读不出来
-    /// 时默认 "true" —— 只在它**明确**说不允许时才隐藏随机键。extendedControlsState 的合并脚本里嵌的是同一段。
+    /// Spotify 的模式段脚本:`shuffling;shuffling enabled;repeating;repeating enabled` 四截。两个 `… enabled` 是"这个账号 /
+    /// 播放上下文允不允许改",解析见 spotifyPlaybackState(fromModePart:)。每截各自包 try,两个能力位读不出来时默认 "true" ——
+    /// 只在它**明确**说不允许时才隐藏那颗键。extendedControlsState 的合并脚本里嵌的是同一段。
     private static let spotifyModePartScript = #"""
         tell application "Spotify"
             set modePart to "nil"
@@ -468,14 +510,22 @@ public enum MusicPlaybackController {
             try
                 set gatePart to (shuffling enabled as text)
             end try
-            return modePart & ";" & gatePart
+            set repeatPart to "nil"
+            try
+                set repeatPart to (repeating as text)
+            end try
+            set repeatGatePart to "true"
+            try
+                set repeatGatePart to (repeating enabled as text)
+            end try
+            return modePart & ";" & gatePart & ";" & repeatPart & ";" & repeatGatePart
         end tell
         """#
 
     /// 换歌时三项后台回读(喜欢/播放模式/音量)的合并结果。
     public struct ExtendedControlsState {
         public let favorited: Bool?
-        public let mode: MusicPlaybackMode?
+        public let mode: PlaybackModeState?
         public let volume: Int?
         public static let empty = ExtendedControlsState(favorited: nil, mode: nil, volume: nil)
     }
@@ -515,8 +565,8 @@ public enum MusicPlaybackController {
                 end tell
                 """#
         case .spotify:
-            // 模式段两截 `shuffling;shuffling enabled`(与 spotifyModePartScript 同一段逻辑):
-            // 后者为 false 时随机键整颗不显示,解析见 spotifyPlaybackMode(fromModePart:)。
+            // 模式段四截 `shuffling;shuffling enabled;repeating;repeating enabled`(与 spotifyModePartScript 同一段逻辑):
+            // 两个能力位哪个为 false,对应那颗键就不显示,解析见 spotifyPlaybackState(fromModePart:)。
             script = spotifyRunningGuard + #"""
                 tell application "Spotify"
                     set modePart to "nil"
@@ -527,17 +577,26 @@ public enum MusicPlaybackController {
                     try
                         set gatePart to (shuffling enabled as text)
                     end try
+                    set repeatPart to "nil"
+                    try
+                        set repeatPart to (repeating as text)
+                    end try
+                    set repeatGatePart to "true"
+                    try
+                        set repeatGatePart to (repeating enabled as text)
+                    end try
                     set volPart to "nil"
                     try
                         set volPart to (sound volume as text)
                     end try
-                    return "nil|" & modePart & ";" & gatePart & "|" & volPart
+                    return "nil|" & modePart & ";" & gatePart & ";" & repeatPart & ";" & repeatGatePart & "|" & volPart
                 end tell
                 """#
         case .kaset:
             guard let c = kasetControls() else { return .empty }
             return ExtendedControlsState(favorited: includeFavorited ? c.liked : nil,
-                                         mode: kasetPlaybackMode(shuffling: c.shuffling, repeating: c.repeating),
+                                         mode: kasetPlaybackMode(shuffling: c.shuffling, repeating: c.repeating)
+                                             .map { PlaybackModeState(mode: $0, options: .all) },
                                          volume: c.volume)
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
@@ -556,57 +615,66 @@ public enum MusicPlaybackController {
             // "missing value"/"nil" 等一律当读不出来 —— 与 favoritedState 的 default: continue 同口径。
             if parts[0] == "true" { favorited = true } else if parts[0] == "false" { favorited = false }
         }
-        var mode: MusicPlaybackMode?
+        var mode: PlaybackModeState?
         switch player {
         case .appleMusic:
             // 与 playbackMode(for:) 的解析同一套优先级:单曲循环 > 随机 > 列表循环 > 列表。
             let m = parts[1].split(separator: ";")
             if m.count == 2 {
+                let parsed: MusicPlaybackMode
                 if m[1] == "one" {
-                    mode = .repeatOne
+                    parsed = .repeatOne
                 } else if m[0] == "true" {
-                    mode = .shuffle
+                    parsed = .shuffle
                 } else if m[1] == "all" {
-                    mode = .repeatAll
+                    parsed = .repeatAll
                 } else {
-                    mode = .list
+                    parsed = .list
                 }
+                mode = PlaybackModeState(mode: parsed, options: .all)
             }
         case .spotify:
-            mode = spotifyPlaybackMode(fromModePart: parts[1])
+            mode = spotifyPlaybackState(fromModePart: parts[1])
         default:
             break
         }
         return ExtendedControlsState(favorited: favorited, mode: mode, volume: Int(parts[2]))
     }
 
-    /// Spotify 的模式段 `shuffling;shuffling enabled` → 档位。纯函数,selftest 直接覆盖。
+    /// Spotify 的模式段 `shuffling;shuffling enabled;repeating;repeating enabled` → 档位 + 能切哪几档。纯函数,selftest 直接覆盖。
     ///
-    /// `shuffling enabled` 为 false = 这个账号 / 播放上下文不允许随机(用户的 Free 账号真机实测:
-    /// `set shuffling to true` 被接受、退出码 0,读回仍是 false,Spotify 自己界面上的随机键同样点不动)——
-    /// 我们那颗随机键点了没反应还乐观地亮起来,是摆了一个落不了地的开关。这时返回 nil,调用方按"读不到模式"
-    /// 处理、整颗不显示:Spotify 上模式组只有随机这一颗(循环键本来就不显示,supportsRepeatOne=false),
-    /// "不可用"与"读不到"的 UI 结局完全相同,不值得再开一个状态位穿过 ExtendedControlsState /
-    /// PlaybackCoordinator / 视图三层。第二截缺失(老形态只有一截)或读不出来当 true —— 只在它**明确**说
-    /// 不允许时才隐藏。
-    public static func spotifyPlaybackMode(fromModePart part: String) -> MusicPlaybackMode? {
+    /// 两个 `… enabled` 是 Spotify 告诉脚本"这个账号 / 播放上下文允不允许改":为 false 时写入被接受、值却不变,
+    /// Spotify 自己界面上的那颗键同样点不动(02 章决策 31)—— 对应那颗键不显示,别摆一个落不了地的开关。
+    /// 能力位缺失或读不出来当允许,只在它**明确**说不时才隐藏;`repeating` 读不出来(老形态只有两截)当没有循环。
+    /// 两样都切不了时返回 nil,调用方按"读不到模式"处理、整组不显示。档位优先级同 Apple Music:随机 > 列表循环 > 列表
+    /// (`repeating` 只是开关,当作列表循环)。
+    public static func spotifyPlaybackState(fromModePart part: String) -> PlaybackModeState? {
         let fields = part.split(separator: ";", omittingEmptySubsequences: false)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        guard let shuffling = fields.first else { return nil }
-        if fields.count >= 2, fields[1] == "false" { return nil }
-        switch shuffling {
-        case "true": return .shuffle
-        case "false": return .list
-        default: return nil
+        func field(_ i: Int) -> String? { i < fields.count ? fields[i] : nil }
+        guard let shuffling = field(0), shuffling == "true" || shuffling == "false" else { return nil }
+        var options: PlaybackModeOptions = []
+        if field(1) != "false" { options.insert(.shuffle) }
+        let repeating = field(2)
+        if repeating == "true" || repeating == "false", field(3) != "false" { options.insert(.repeatAll) }
+        guard !options.isEmpty else { return nil }
+        let mode: MusicPlaybackMode
+        if shuffling == "true", options.contains(.shuffle) {
+            mode = .shuffle
+        } else if repeating == "true", options.contains(.repeatAll) {
+            mode = .repeatAll
+        } else {
+            mode = .list
         }
+        return PlaybackModeState(mode: mode, options: options)
     }
 
-    /// 读当前播放模式。不是 Apple Music / 没权限 / 读不出来时返回 nil,调用方据此不显示按钮。
+    /// 读当前播放模式,连同这个播放器此刻能切哪几档。不支持 / 没权限 / 读不出来时返回 nil,调用方据此不显示按钮。
     ///
     /// 两个属性一次脚本读回来,不发两趟 —— 每趟都是一个 osascript 子进程。
     ///
     /// 会阻塞到子进程结束,**不要在主线程调用**。
-    public static func playbackMode(for player: PlaybackPlayer) -> MusicPlaybackMode? {
+    public static func playbackMode(for player: PlaybackPlayer) -> PlaybackModeState? {
         switch player {
         case .appleMusic:
             guard let out = runAppleScriptCapturing(
@@ -614,21 +682,26 @@ public enum MusicPlaybackController {
             ) else { return nil }
             let parts = out.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ",")
             guard parts.count == 2 else { return nil }
-            if parts[1] == "one" { return .repeatOne }
-            if parts[0] == "true" { return .shuffle }
-            if parts[1] == "all" { return .repeatAll }
-            return .list
+            let mode: MusicPlaybackMode
+            if parts[1] == "one" {
+                mode = .repeatOne
+            } else if parts[0] == "true" {
+                mode = .shuffle
+            } else if parts[1] == "all" {
+                mode = .repeatAll
+            } else {
+                mode = .list
+            }
+            return PlaybackModeState(mode: mode, options: .all)
         case .spotify:
-            // 只读 shuffling(外加它允不允许改,见 spotifyPlaybackMode(fromModePart:)):repeating 是
-            // 布尔,映射不到「单曲循环」,而它开着与否不该影响这颗按钮显示的档位(用户可能在 Spotify
-            // 里自己开了整张循环,那不是我们这三档里的任何一档,按「列表」显示才是诚实的)。
             // 与 extendedControlsState 的 Spotify 分支同一段模式脚本、同一个解析 —— 两条回读路径
             // 不能对同一状态给出不同答案。空串(Spotify 没在跑)第一截是 "" → nil。
             guard let out = runAppleScriptCapturing(spotifyRunningGuard + spotifyModePartScript) else { return nil }
-            return spotifyPlaybackMode(fromModePart: out.trimmingCharacters(in: .whitespacesAndNewlines))
+            return spotifyPlaybackState(fromModePart: out.trimmingCharacters(in: .whitespacesAndNewlines))
         case .kaset:
             guard let c = kasetControls() else { return nil }
             return kasetPlaybackMode(shuffling: c.shuffling, repeating: c.repeating)
+                .map { PlaybackModeState(mode: $0, options: .all) }
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -686,19 +759,18 @@ public enum MusicPlaybackController {
             }
             return runAppleScriptCapturing(script) != nil
         case .spotify:
-            // 只动 shuffling,`repeating` 一概不碰 —— 跟 Apple Music 分支里"不顺手改
-            // song repeat"同一个原则:用户可能在 Spotify 里特意开着整张循环,那是他的设置,
-            // 切随机/顺序不该把它顺手关掉。
-            guard mode != .repeatOne, mode != .repeatAll else {
-                // 走不到:UI 的循环键在 Spotify 上整颗不显示(supportsRepeatOne=false;
-                // repeating 布尔虽能写但读不回,乐观态会漂)。万一真被调到,返回 false
-                // 让调用方回读纠正,而不是悄悄按别的档执行。
-                return false
+            // 跟 Apple Music 分支同一个互斥约定:点亮循环就关掉随机,点亮随机不碰循环。Spotify 没有单曲循环那一档,循环键
+            // 从列表循环直接回到关,所以回到列表时两样一起关 —— 用户在 Spotify 里同时开着随机和循环、在这边关随机时,循环也
+            // 跟着关(这边两颗键互斥,不会同时亮)。单曲循环够不到:返回 false 让调用方回读纠正,不悄悄按别的档执行。
+            let body: String
+            switch mode {
+            case .list: body = "set shuffling to false\nset repeating to false"
+            case .shuffle: body = "set shuffling to true"
+            case .repeatAll: body = "set shuffling to false\nset repeating to true"
+            case .repeatOne: return false
             }
             return runAppleScriptCapturing(
-                spotifyRunningGuard
-                    + #"tell application "Spotify" to set shuffling to "#
-                    + (mode == .shuffle ? "true" : "false")
+                spotifyRunningGuard + "tell application \"Spotify\"\n" + body + "\nend tell"
             ) != nil
         case .kaset:
             return runKasetJXACapturing(kasetPlaybackModeScript(for: mode)) == "ok"

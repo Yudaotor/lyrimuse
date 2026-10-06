@@ -108,18 +108,46 @@ func runSpotifyNativeTests() {
         expectEqual(SpotifyURI.deepLink(""), nil, "深链: 空串 → nil")
     }
 
-    // ---- MusicPlaybackController.spotifyPlaybackMode(fromModePart:):随机键的可用性闸----
+    // ---- MusicPlaybackController.spotifyPlaybackState(fromModePart:):随机 / 循环两颗键的可用性闸 ----
     do {
         typealias M = MusicPlaybackController
-        expectEqual(M.spotifyPlaybackMode(fromModePart: "true;true"), .shuffle, "随机闸: 开着且允许 → 随机")
-        expectEqual(M.spotifyPlaybackMode(fromModePart: "false;true"), .list, "随机闸: 关着且允许 → 列表")
-        expectEqual(M.spotifyPlaybackMode(fromModePart: "false;false"), nil, "随机闸: 不允许随机 → nil,随机键整颗不显示")
-        expectEqual(M.spotifyPlaybackMode(fromModePart: "true;false"), nil, "随机闸: 就算读到开着,不允许改也不显示")
-        expectEqual(M.spotifyPlaybackMode(fromModePart: "true"), .shuffle, "随机闸: 老形态只有一截,默认允许")
-        expectEqual(M.spotifyPlaybackMode(fromModePart: "false;nil"), .list, "随机闸: 第二截读不出来当允许 —— 只在明确说不时才隐藏")
-        expectEqual(M.spotifyPlaybackMode(fromModePart: "nil;true"), nil, "随机闸: 第一截读不出来 → nil")
-        expectEqual(M.spotifyPlaybackMode(fromModePart: ""), nil, "随机闸: 空串(Spotify 没在跑)→ nil")
-        expectEqual(M.spotifyPlaybackMode(fromModePart: " true ; true "), .shuffle, "随机闸: 两截各自剔空白")
+        func mode(_ part: String) -> M.MusicPlaybackMode? { M.spotifyPlaybackState(fromModePart: part)?.mode }
+        func options(_ part: String) -> M.PlaybackModeOptions? { M.spotifyPlaybackState(fromModePart: part)?.options }
+        expectEqual(mode("true;true"), .shuffle, "随机闸: 开着且允许 → 随机")
+        expectEqual(mode("false;true"), .list, "随机闸: 关着且允许 → 列表")
+        expectEqual(mode("false;false"), nil, "随机闸: 不允许随机(也没有循环那两截)→ nil,整组不显示")
+        expectEqual(mode("true;false"), nil, "随机闸: 就算读到开着,不允许改也不显示")
+        expectEqual(mode("true"), .shuffle, "随机闸: 老形态只有一截,默认允许")
+        expectEqual(mode("false;nil"), .list, "随机闸: 第二截读不出来当允许 —— 只在明确说不时才隐藏")
+        expectEqual(mode("nil;true"), nil, "随机闸: 第一截读不出来 → nil")
+        expectEqual(mode(""), nil, "随机闸: 空串(Spotify 没在跑)→ nil")
+        expectEqual(mode(" true ; true "), .shuffle, "随机闸: 两截各自剔空白")
+        expectEqual(options("false;true"), M.PlaybackModeOptions([.shuffle]), "循环闸: 老形态没有循环那两截 → 只有随机")
+        expectEqual(mode("false;true;true;true"), .repeatAll, "循环闸: 循环开着且允许 → 列表循环")
+        expectEqual(options("false;true;true;true"), M.PlaybackModeOptions([.shuffle, .repeatAll]),
+                    "循环闸: 两样都允许 → 随机、列表循环,没有单曲循环")
+        expectEqual(mode("true;true;true;true"), .shuffle, "循环闸: 随机和循环都开着 → 随机(优先级同 Apple Music)")
+        expectEqual(mode("false;true;true;false"), .list, "循环闸: 循环开着但不允许改 → 按列表显示")
+        expectEqual(options("false;true;true;false"), M.PlaybackModeOptions([.shuffle]), "循环闸: 不允许改循环 → 循环键不显示")
+        expectEqual(options("false;false;false;true"), M.PlaybackModeOptions([.repeatAll]), "循环闸: 只允许改循环 → 随机键不显示")
+        expectEqual(mode("true;false;false;true"), .list, "循环闸: 随机开着但不允许改、循环允许 → 按列表显示")
+        expectEqual(options("false;true;nil;true"), M.PlaybackModeOptions([.shuffle]), "循环闸: repeating 读不出来 → 当没有循环")
+        expectEqual(mode("false;false;false;false"), nil, "循环闸: 两样都不允许 → nil,整组不显示")
+    }
+
+    // ---- 循环键下一档、能切哪几档 ----
+    do {
+        typealias Mode = MusicPlaybackController.MusicPlaybackMode
+        typealias O = MusicPlaybackController.PlaybackModeOptions
+        expectEqual([Mode.list, .shuffle, .repeatAll, .repeatOne].map { $0.nextRepeat(allowsRepeatOne: true) },
+                    [Mode.repeatAll, .repeatAll, .repeatOne, .list], "循环键(有单曲循环): 关 → 列表循环 → 单曲循环 → 关")
+        expectEqual([Mode.list, .shuffle, .repeatAll].map { $0.nextRepeat(allowsRepeatOne: false) },
+                    [Mode.repeatAll, .repeatAll, .list], "循环键(没有单曲循环): 关 ↔ 列表循环")
+        expectEqual([Mode.list, .shuffle, .repeatAll, .repeatOne].map { O([.shuffle, .repeatAll]).allows($0) },
+                    [true, true, true, false], "能切哪几档: Spotify 两样都允许时够不到单曲循环")
+        expectEqual([Mode.list, .shuffle, .repeatAll, .repeatOne].map { O.all.allows($0) }, [true, true, true, true],
+                    "能切哪几档: Apple Music / Kaset 四档都能切")
+        expectEqual(O([]).allows(.list), true, "能切哪几档: 列表一直能切")
     }
 }
 

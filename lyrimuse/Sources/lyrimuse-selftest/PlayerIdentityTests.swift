@@ -611,7 +611,7 @@ func runPlayerIdentityTests() {
             ("adaptedSnapshot", body("private static func adaptedSnapshot(", in: client), .appleScriptSnapshot),
             ("extendedControlsState", body("public static func extendedControlsState(", in: controller), .extendedControls),
             ("playbackMode(for:)",
-             body("public static func playbackMode(for player: PlaybackPlayer) -> MusicPlaybackMode? {", in: controller),
+             body("public static func playbackMode(for player: PlaybackPlayer) -> PlaybackModeState? {", in: controller),
              .extendedControls),
             ("setPlaybackMode(_:for:)",
              body("public static func setPlaybackMode(_ mode: MusicPlaybackMode, for player: PlaybackPlayer) -> Bool {",

@@ -233,9 +233,11 @@ private final class NotchPlayback: ObservableObject {
     /// 实际生效的歌词时间轴**总**偏移(单曲 + 全局基准 + MV / LRC 自带,`PlaybackCoordinator.currentLyricsOffsetMs`)。
     /// 只订单曲那一项的话,改全局基准或 MV 偏移时逐字填色和音浪都不重排,要等换行才对上。
     @Published private(set) var lyricsOffsetMs: Int = 0
-    /// 展开区随机 / 循环两颗键读的播放模式。只在模式读自随机、循环都齐的播放器(Apple Music、Kaset,
-    /// `MusicPlaybackController.supportsRepeatOne`)时非 nil,只有随机的 Spotify 和别的播放器一律 nil,两颗键据此整个不画。
+    /// 展开区随机 / 循环两颗键读的播放模式。只在这个播放器此刻随机、循环都能切(`PlaybackCoordinator.playbackModeOptions`)
+    /// 时非 nil,只能切一样的(比如不允许改循环的 Spotify)和别的播放器一律 nil,两颗键据此整个不画。
     @Published private(set) var fullPlaybackMode: MusicPlaybackController.MusicPlaybackMode?
+    /// 循环键走不走「单曲循环」那一档(Spotify 没有,两态)。
+    @Published private(set) var playbackModeAllowsRepeatOne = false
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -284,10 +286,12 @@ private final class NotchPlayback: ObservableObject {
             s.$notchSecondaryLine.removeDuplicates().sink { [weak self] in self?.secondaryLine = $0 },
             p.$notchLyrics.map(\.nextText).removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
             p.$notchLyrics.map(\.nextSide).removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
-            Publishers.CombineLatest(p.$playbackMode, p.$playbackModePlayer)
-                .map { mode, player in player.map(MusicPlaybackController.supportsRepeatOne) == true ? mode : nil }
+            Publishers.CombineLatest(p.$playbackMode, p.$playbackModeOptions)
+                .map { mode, options in options.isSuperset(of: [.shuffle, .repeatAll]) ? mode : nil }
                 .removeDuplicates()
                 .sink { [weak self] in self?.fullPlaybackMode = $0 },
+            p.$playbackModeOptions.map { $0.contains(.repeatOne) }.removeDuplicates()
+                .sink { [weak self] in self?.playbackModeAllowsRepeatOne = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
@@ -2324,7 +2328,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // `NotchChromeSource.expandedShowsControls` 的注释(不是唯一入口,`NotchEarModule`
             // 本来就有「播放控制」这个选项)。
             //
-            // 随机、循环都齐的播放器(Apple Music、Kaset)在播时左右两端再加随机 / 循环(歌词窗口同款排布),两颗等宽,
+            // 随机、循环此刻都能切的播放器在播时左右两端再加随机 / 循环(歌词窗口同款排布),两颗等宽,
             // 三键仍居中。
             if controller.expandedShowsControls {
                 HStack(spacing: 0) {
@@ -2674,17 +2678,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
     }
 
-    /// 循环:关 → 列表循环 → 单曲循环 → 关,跟歌词窗口 `repeatButton` 同一套三态。
+    /// 循环:关 → 列表循环 → 单曲循环 → 关;没有单曲循环的播放器两态。跟歌词窗口 `repeatButton` 同一套。
     private func repeatButton(_ mode: MusicPlaybackController.MusicPlaybackMode) -> some View {
         modeButton(mode == .repeatOne ? "repeat.1" : "repeat",
                    active: mode == .repeatOne || mode == .repeatAll) {
-            let next: MusicPlaybackController.MusicPlaybackMode
-            switch mode {
-            case .repeatAll: next = .repeatOne
-            case .repeatOne: next = .list
-            default: next = .repeatAll
-            }
-            PlaybackCoordinator.shared.setPlaybackMode(next)
+            PlaybackCoordinator.shared.setPlaybackMode(
+                mode.nextRepeat(allowsRepeatOne: playback.playbackModeAllowsRepeatOne))
         }
     }
 

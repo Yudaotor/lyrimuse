@@ -55,6 +55,7 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var currentDurationMs: Int?
     @Published private(set) var isFavorited: Bool?
     @Published private(set) var playbackMode: MusicPlaybackController.MusicPlaybackMode?
+    @Published private(set) var playbackModeOptions: MusicPlaybackController.PlaybackModeOptions = []
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
@@ -150,6 +151,7 @@ private final class WindowPlayback: ObservableObject {
             p.$currentDurationMs.removeDuplicates().sink { [weak self] in self?.currentDurationMs = $0 },
             p.$isFavorited.removeDuplicates().sink { [weak self] in self?.isFavorited = $0 },
             p.$playbackMode.removeDuplicates().sink { [weak self] in self?.playbackMode = $0 },
+            p.$playbackModeOptions.removeDuplicates().sink { [weak self] in self?.playbackModeOptions = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
@@ -4335,45 +4337,42 @@ struct LyricsWindowView: View {
     /// (完全对齐 AM;此前是一颗三态循环切换的「播放模式」钮 +
     /// 最右一颗心,收藏挪去了标题旁,见 titleSideButtons)。
     ///
-    /// 底层仍是三态 playbackMode,两颗**互斥**:点亮随机=shuffle、点亮循环=repeatOne、
-    /// 都不亮=list。AM 里随机和循环可以同时开,但脚本接口只有三态 —— 宁可少一个组合,
-    /// 也不摆一个落不了地的开关。读不到模式(非 AM/Spotify、没权限)时不显示;定宽占位
-    /// 保住播放键居中(两侧异步读出,不占位按钮排会在窗口打开后错开一瞬)。
+    /// 底层仍是一个 playbackMode,两颗**互斥**:点亮随机=shuffle、点亮循环=列表循环 / 单曲循环、
+    /// 都不亮=list。AM 里随机和循环可以同时开,但这边只摆一档 —— 宁可少一个组合,
+    /// 也不摆一个落不了地的开关。读不到模式、或这个播放器此刻切不到随机(`playbackModeOptions`)时不显示;
+    /// 不显示时照样占着定宽那一格,主三键始终居中(两侧异步读出,不占位按钮排会在窗口打开后错开一瞬)。
     private var shuffleButton: some View {
         modeToggleButton(icon: "shuffle",
                          active: playback.playbackMode == .shuffle,
-                         shown: playback.playbackMode != nil,
+                         shown: playback.playbackMode != nil && playback.playbackModeOptions.contains(.shuffle),
                          label: L10n.t("随机播放")) {
             PlaybackCoordinator.shared.setPlaybackMode(playback.playbackMode == .shuffle ? .list : .shuffle)
         }
     }
 
-    /// 循环键三态(对齐 AM):关 → 列表循环(亮 repeat) → 单曲循环(亮
-    /// repeat.1) → 关。此前只有 关与单曲 两态,而且 Music.app 的 song repeat=all 被解析
-    /// 塌缩成「列表」 —— 用户开着整张循环,这颗键却是灰的,也没法从 UI 点出这一档。
-    /// Spotify 够不到(repeating 布尔且读不回),这颗整个不显示、只占位。
+    /// 循环键(对齐 AM):关 → 列表循环(亮 repeat) → 单曲循环(亮 repeat.1) → 关;够不到单曲循环的播放器
+    /// (Spotify,脚本里 `repeating` 只是开关)两态:关 ↔ 循环。这个播放器此刻切不到循环(`playbackModeOptions`)
+    /// 时不显示、只占位。
     private var repeatButton: some View {
         let mode = playback.playbackMode
+        let options = playback.playbackModeOptions
         return modeToggleButton(
             icon: mode == .repeatOne ? "repeat.1" : "repeat",
             active: mode == .repeatOne || mode == .repeatAll,
-            shown: mode != nil && PlaybackCoordinator.shared.playbackModeSupportsRepeatOne,
+            shown: mode != nil && options.contains(.repeatAll),
             label: L10n.t("循环播放")
         ) {
-            let next: MusicPlaybackController.MusicPlaybackMode
-            switch mode {
-            case .repeatAll: next = .repeatOne
-            case .repeatOne: next = .list
-            default: next = .repeatAll
-            }
-            PlaybackCoordinator.shared.setPlaybackMode(next)
+            PlaybackCoordinator.shared.setPlaybackMode(
+                (mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne)))
         }
     }
 
     /// 点亮态:AM 同款「亮图标 + 一圈淡胶囊底」;熄灭态半透明。
     private func modeToggleButton(icon: String, active: Bool, shown: Bool, label: String,
                                   action: @escaping () -> Void) -> some View {
-        Group {
+        // 外层必须是 ZStack,别写成 Group:挂在 Group 上的修饰符是分给里面每个子视图的,按钮不显示时 Group 里什么都没有,
+        // 下面那个定宽也跟着没了,这一格塌成 0,主三键被另一侧推偏半格。
+        ZStack {
             if shown {
                 Button(action: action) {
                     Image(systemName: icon)
