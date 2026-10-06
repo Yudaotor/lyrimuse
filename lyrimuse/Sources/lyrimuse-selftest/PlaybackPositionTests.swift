@@ -1058,6 +1058,13 @@ func runPlaybackPositionTests() {
                     "resumeSeed: 上界本身也要被硬上限封顶")
     }
 
+    do {
+        // 有「恢复播放」信号时上界就是它的年龄、不封顶:看到恢复晚了 5.6s,冻结 8.043、读数 13.989。
+        let seed = LocalPlaybackSource.resumeSeedSeconds(
+            reported: 13.989, frozen: 8.043, maxForwardSecs: 5.597, capSecs: .infinity)
+        expectEqual((seed * 1000).rounded() / 1000, 13.640, "resumeSeed: 按恢复信号的年龄当上界、不封顶")
+    }
+
     // ---- servoDecision 第三档:Spotify(cleanExtrapolated,拆档) ----
     //
     // 背景(实测 140+ 样本):Spotify 的 elapsedTimeNow 稳态偏差 ±0.05s、比 QQ 音乐干净

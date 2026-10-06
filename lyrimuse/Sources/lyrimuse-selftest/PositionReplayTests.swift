@@ -91,6 +91,7 @@ func runPositionReplayTests() {
     replaySpotifyAfterAd()
     replaySpotifySameTrackJump()
     replaySpotifyStartLeadMigration()
+    replaySpotifyLateResume()
     replaySafariResumeStall()
     replaySafariFloorReadingIgnored()
     replaySafariPreciseReadingOverNaturalBias()
@@ -292,6 +293,41 @@ private func replaySpotifySameTrackJump() {
     expectEqual(near(rig.source.replayReportedBiasSecs, 0.45, 0.001), true,
                 "回放·Spotify 同曲拖动: 按 seek 扣 0.45(实际 \(String(format: "%.3f", rig.source.replayReportedBiasSecs)))")
     expectEqual(near(rig.shown(at: at(10)), 90.5 - 0.45), true, "回放·Spotify 同曲拖动: 屏上 = 自己的钟 − 0.45")
+}
+
+/// 恢复播放看到晚了:暂停在 8.043,恢复信号先到,5.6s 后轮询才看到在播(media-control 卡满超时那一种)。
+/// 按恢复信号的年龄播种、量出恢复领先,下一拍不当成拖动。
+@MainActor
+private func replaySpotifyLateResume() {
+    let rig = ReplayRig("spotify-late-resume")
+    defer { rig.tearDown() }
+    rig.tick(spotify("APT.", artist: "ROSÉ", raw: 4.0, duration: 169.9), at: at(0))
+    rig.tick(spotify("APT.", artist: "ROSÉ", raw: 6.0, duration: 169.9), at: at(2))
+    rig.source.replayPlayerStateEvent(at: at(4.0), freeze: true)
+    rig.tick(spotify("APT.", artist: "ROSÉ", raw: 8.043, duration: 169.9, playing: false), at: at(4.3))
+    rig.source.replayResumeSignal(at: at(20))
+    let lead = 0.349
+    func raw(_ t: Double) -> Double { 8.043 + (t - 20) + lead }
+    rig.tick(spotify("APT.", artist: "ROSÉ", raw: raw(25.597), duration: 169.9), at: at(25.597))
+    expectEqual(near(rig.shown(at: at(25.597)), 13.640, 0.01), true,
+                "回放·Spotify 恢复看到晚了: 按恢复信号的年龄播种(实际 \(rig.shown(at: at(25.597)).map { String(format: "%.3f", $0) } ?? "nil"))")
+    expectEqual(near(rig.source.replayReportedBiasSecs, lead, 0.01), true,
+                "回放·Spotify 恢复看到晚了: 量出恢复领先 0.349(实际 \(String(format: "%.3f", rig.source.replayReportedBiasSecs)))")
+    rig.tick(spotify("APT.", artist: "ROSÉ", raw: raw(25.959), duration: 169.9), at: at(25.959))
+    expectEqual(near(rig.source.replayReportedBiasSecs, lead, 0.01), true, "回放·Spotify 恢复看到晚了: 下一拍不当成拖动、偏置不变")
+    expectEqual(near(rig.shown(at: at(25.959)), raw(25.959) - lead), true, "回放·Spotify 恢复看到晚了: 屏上 = 自己的钟 − 恢复领先")
+
+    // 对照:没收到恢复信号、只有暂停那一刻的旧信号(轮询自己发现的恢复),照旧最多往前补 2 秒、不量恢复领先。
+    let control = ReplayRig("spotify-late-resume-control")
+    defer { control.tearDown() }
+    control.tick(spotify("APT.", artist: "ROSÉ", raw: 4.0, duration: 169.9), at: at(0))
+    control.tick(spotify("APT.", artist: "ROSÉ", raw: 6.0, duration: 169.9), at: at(2))
+    control.source.replayPlayerStateEvent(at: at(4.0), freeze: true)
+    control.tick(spotify("APT.", artist: "ROSÉ", raw: 8.043, duration: 169.9, playing: false), at: at(4.3))
+    control.tick(spotify("APT.", artist: "ROSÉ", raw: raw(25.597), duration: 169.9), at: at(25.597))
+    expectEqual(near(control.shown(at: at(25.597)), 8.043 + LocalPlaybackSource.resumeMaxForwardCapSecs, 0.01), true,
+                "回放·Spotify 恢复看到晚了(对照): 没有恢复信号照旧封顶 2 秒")
+    expectEqual(control.source.replayReportedBiasSecs, 0, "回放·Spotify 恢复看到晚了(对照): 没有恢复信号不量恢复领先")
 }
 
 /// 旧版本学的表:fresh 混着别的起播方式的样本,读表那一刻作废、退回先验,它的样本数一起清掉;别的档原样保留。

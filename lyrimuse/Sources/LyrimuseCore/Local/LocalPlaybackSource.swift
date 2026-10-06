@@ -446,6 +446,9 @@ public final class LocalPlaybackSource: ObservableObject {
     private var posErrEMA: Double = 0
     /// 最近一次"播放器说状态变了"的信号到达时刻(只记真状态信号,不记纯锚点刷新)。
     private var posStateSignalAt: Date?
+    /// 最近一次「恢复播放」信号的到达时刻(媒体事件流报 playing:true,Spotify / Apple Music 通知报 Playing)。
+    /// 播放 → 暂停那一拍清掉,留下来的一定晚于这次暂停,见 resumeSignalAge。
+    private var posResumeSignalAt: Date?
 
     /// 这一拍的「恢复信号」还算不算数:只认几秒之内到的。靠轮询(暂停档 6 秒一拍)发现恢复时,手上那个是暂停那一刻的
     /// 旧信号,拿它的年龄当前跳上界,会把起点砍到「暂停值 + 两秒多」,那一拍最多落后约 4 秒;这种时候跟拿不到信号
@@ -458,6 +461,16 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 恢复信号到轮询看到恢复实测 0.31~0.43s(见 resumeSeedSeconds),去抖 250ms 另算,留足余量。
     public nonisolated static let resumeSignalMaxAgeSecs: TimeInterval = 3
+
+    /// 「恢复播放」信号(posResumeSignalAt)的年龄。它晚于这次暂停,恢复不可能早于它:轮询看到恢复晚了多久
+    /// (media-control 卡住、主线程忙),都能拿它当前跳上界、拿「冻结值 + 它的年龄」当真声量恢复领先量。
+    /// 不像 freshResumeSignalAge 只认几秒之内 —— 那个分不清最近的信号是暂停还是恢复(见 02 章决策 102)。纯函数,selftest 覆盖。
+    public nonisolated static func resumeSignalAge(resumeSignalAt: Date?, now: Date) -> TimeInterval? {
+        guard let resumeSignalAt else { return nil }
+        let age = now.timeIntervalSince(resumeSignalAt)
+        return age >= 0 && age <= resumeSignalMaxTrustSecs ? age : nil
+    }
+    public nonisolated static let resumeSignalMaxTrustSecs: TimeInterval = 60
     // nonisolated:被 shouldProbeLateAnchor(nonisolated 纯函数)引用,不可变 Sendable。
     private nonisolated static let seekJumpToleranceSecs = 2.0
     /// 已经为哪个锚点问过「晚锚点」确认(见 shouldProbeLateAnchor)。坏锚点在位期间偏差每拍都在,
@@ -672,11 +685,13 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// 落后或小幅超前**原样采信**:播放器真报了个新位置(暂停中拖动、跨曲恢复)就该听它,
     /// 这道闸只砍"不可能发生的前跳"。
+    ///
+    /// - capSecs: 上界的封顶。拿到「恢复播放」那种信号(见 resumeSignalAge)时传 `.infinity`:那时上界本身就是真的。
     public nonisolated static func resumeSeedSeconds(
-        reported: Double, frozen: Double?, maxForwardSecs: Double
+        reported: Double, frozen: Double?, maxForwardSecs: Double, capSecs: Double = resumeMaxForwardCapSecs
     ) -> Double {
         guard let frozen else { return reported }
-        let ceiling = frozen + min(max(0, maxForwardSecs), resumeMaxForwardCapSecs)
+        let ceiling = frozen + min(max(0, maxForwardSecs), capSecs)
         return reported > ceiling ? ceiling : reported
     }
 
@@ -1833,15 +1848,18 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 空转污染过,不能原样采信 —— 削掉"不可能发生的前跳",见 resumeSeedSeconds。
                 // 读数不会超前声音的播放器原样采信(resumeReadingNeverLeads)。
                 let freshSignalAge = Self.freshResumeSignalAge(signalAt: posStateSignalAt, now: now)
-                let sinceSignal = freshSignalAge ?? Self.resumeMaxForwardCapSecs
+                // 「恢复播放」那种信号晚于这次暂停:看到恢复晚了也拿它当上界、不封顶(见 resumeSignalAge)。
+                let resumeSignalAge = Self.resumeSignalAge(resumeSignalAt: posResumeSignalAt, now: now)
+                let sinceSignal = resumeSignalAge ?? freshSignalAge ?? Self.resumeMaxForwardCapSecs
                 trackPosSeconds = Self.resumeReadingNeverLeads(bundleID: lastSnapshot?.bundleIdentifier)
                     ? reported
                     : Self.resumeSeedSeconds(
                         reported: reported,
                         frozen: pausedPositionMs.map { Double($0) / 1000 },
-                        maxForwardSecs: sinceSignal)
+                        maxForwardSecs: sinceSignal,
+                        capSecs: resumeSignalAge == nil ? Self.resumeMaxForwardCapSecs : .infinity)
                 // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):播种值就是真声,差值折进偏置。
-                if gaplessLeadBundleID != nil, anchorElapsedTime == nil, freshSignalAge != nil,
+                if gaplessLeadBundleID != nil, anchorElapsedTime == nil, resumeSignalAge != nil || freshSignalAge != nil,
                    pausedPositionMs != nil,
                    let lead = Self.resumeLead(raw: rawReported, seed: trackPosSeconds) {
                     logger.notice("resume lead: seed \(self.trackPosSeconds, format: .fixed(precision: 3))s, player clock leads audio by \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
@@ -2135,6 +2153,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 回放:Spotify「Playing、位置 ≈0」通知到达的时刻(线上由通知观察者记,见 spotifyJumpKind)。
     public func replaySpotifyPlayingFromStartNotice(at date: Date) { spotifyPlayingFromStartNoticeAt = date }
 
+    /// 回放:一条「恢复播放」信号到达(线上是 handlePlayerInfoChanged 的 resumeSignal)。
+    public func replayResumeSignal(at date: Date) {
+        posStateSignalAt = date
+        posResumeSignalAt = date
+    }
+
     /// 回放:此刻屏上的位置(播放中按锚点外推,暂停时是冻结位置)。
     public func replayPositionMs(at now: Date) -> Int? {
         anchor?.extrapolatedPositionMs(now: now) ?? pausedPositionMs
@@ -2254,8 +2278,9 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         guard playerInfoObserver == nil else { return }
         let center = DistributedNotificationCenter.default()
-        let handler: (Notification) -> Void = { [weak self] _ in
-            MainActor.assumeIsolated { self?.handlePlayerInfoChanged() }
+        let handler: (Notification) -> Void = { [weak self] note in
+            let playing = (note.userInfo?["Player State"] as? String) == "Playing"
+            MainActor.assumeIsolated { self?.handlePlayerInfoChanged(resumeSignal: playing) }
         }
         playerInfoObserver = center.addObserver(
             forName: NSNotification.Name("com.apple.Music.playerInfo"),
@@ -2270,13 +2295,14 @@ public final class LocalPlaybackSource: ObservableObject {
                 // "提前 poll 一次"的信号。userInfo 在主队列上读,跟下面 handler 同一条路。
                 let hint = SpotifyNotificationHint(userInfo: note.userInfo)
                 if let hint { MediaControlClient.noteSpotifyNotice(hint) }
-                let playingFromStart = (note.userInfo?["Player State"] as? String) == "Playing"
+                let playing = (note.userInfo?["Player State"] as? String) == "Playing"
+                let playingFromStart = playing
                     && ((note.userInfo?["Playback Position"] as? NSNumber)?.doubleValue ?? .infinity) < 1
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     if let hint, self.spotifyNotificationHint != hint { self.spotifyNotificationHint = hint }
                     if playingFromStart { self.spotifyPlayingFromStartNoticeAt = Date() }
-                    self.handlePlayerInfoChanged()
+                    self.handlePlayerInfoChanged(resumeSignal: playing)
                 }
             }
     }
@@ -2289,7 +2315,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let watcher = MediaControlStreamWatcher { [weak self] pauseSignal, resumeSignal in
             MainActor.assumeIsolated {
                 self?.handlePlayerInfoChanged(freezeExtrapolation: pauseSignal,
-                                              stateSignal: pauseSignal || resumeSignal)
+                                              stateSignal: pauseSignal || resumeSignal,
+                                              resumeSignal: resumeSignal)
             }
         }
         streamWatcher = watcher
@@ -2334,10 +2361,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 照旧冻;media-control 事件流不一样,它连锚点刷新也发,而把当前歌词行塞进署名字段的
     /// 播放器**每唱一句就刷新一次锚点** —— 那种信号按状态变化处理,就是每句开头顿一下。
     private func handlePlayerInfoChanged(freezeExtrapolation: Bool = true,
-                                        stateSignal: Bool = true) {
+                                        stateSignal: Bool = true,
+                                        resumeSignal: Bool = false) {
         // 记时刻和冻结外推是**两件事**:冻结只认暂停(纯锚点刷新冻了就是每句一顿),
         // 而"状态什么时候变的"这个上界,暂停和恢复都要记。
         if stateSignal { posStateSignalAt = Date() }
+        if resumeSignal { posResumeSignalAt = Date() }
         if freezeExtrapolation { freezeExtrapolationUntilNextPoll() }
         pendingNotificationPoll?.cancel()
         pendingNotificationPoll = Task { @MainActor [weak self] in
@@ -3649,6 +3678,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 还在往前跑的外推值 —— 两种形态的"暂停跳变"成因不同,一起记下来。
                 pauseShownMs = anchor.extrapolatedPositionMs(now: now)
                 pauseAnchorWasFrozenByEvent = anchor.rate == 0
+                // 之前的恢复信号作废:恢复那一拍只认这次暂停之后到的(见 resumeSignalAge)。
+                posResumeSignalAt = nil
                 self.anchor = nil
                 if let shown = pauseShownMs, let stale = snapshot.anchorElapsedTime,
                    Self.pauseAnchorIsStale(bundleID: snapshot.bundleIdentifier, frozenByEvent: pauseAnchorWasFrozenByEvent,

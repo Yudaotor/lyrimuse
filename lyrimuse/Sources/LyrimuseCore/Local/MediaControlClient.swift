@@ -42,6 +42,19 @@ public enum MediaControlClient {
     /// 状态查询的超时。这是 2 秒一轮的热路径,正常几十毫秒就回来;它卡住,悬浮歌词
     /// 就跟着停住,所以这道闸比别处都要紧。
     static let snapshotTimeout: TimeInterval = 5
+    /// 上一份被接受的快照来自有 AppleScript 字典的播放器(Apple Music / Spotify / Kaset)时用这个短的:这一拍 media-control
+    /// 回不来,焦点回退(snapshotAfterFocusLost)直接问播放器自己就是真值,不用干等满 snapshotTimeout(见 02 章决策 102)。
+    static let snapshotTimeoutWithAppleScriptFallback: TimeInterval = 2
+    /// 状态查询用时满这么久就记一行(超时也记):卡在这里的那几秒悬浮歌词是停着的,之后的回退又不留别的痕迹。
+    static let slowSnapshotLogSecs: TimeInterval = 1
+
+    /// 这一拍状态查询用哪个超时。纯函数,selftest 覆盖。
+    public static func pollSnapshotTimeout(fallbackPlayer: PlaybackPlayer?) -> TimeInterval {
+        switch fallbackPlayer {
+        case .appleMusic?, .spotify?, .kaset?: return snapshotTimeoutWithAppleScriptFallback
+        default: return snapshotTimeout
+        }
+    }
     /// 取封面的超时给得宽一些 —— 封面 base64 有几百 KB,而且它不在每轮都跑。
     static let artworkTimeout: TimeInterval = 10
 
@@ -2457,10 +2470,19 @@ public enum MediaControlClient {
         // RawPayload 换算回原名。
         //
         // 这是 2 秒一轮的热路径 —— 它卡住,悬浮歌词就停住。超时是这里最要紧的东西。
-        guard let r = ProcessRunner.run(
-            binaryPath, ["get", "--now", "--no-artwork", "--micros"], timeout: snapshotTimeout),
-            r.succeeded
-        else {
+        appleMusicFocusLock.lock()
+        let fallbackPlayer = lastAcceptedDirectQueryPlayer
+        appleMusicFocusLock.unlock()
+        let timeout = pollSnapshotTimeout(fallbackPlayer: fallbackPlayer)
+        let started = Date()
+        let result = ProcessRunner.run(
+            binaryPath, ["get", "--now", "--no-artwork", "--micros"], timeout: timeout)
+        let took = Date().timeIntervalSince(started)
+        let timedOut = result?.timedOut == true
+        if took >= slowSnapshotLogSecs || timedOut {
+            logger.notice("media-control get took \(took, format: .fixed(precision: 2))s (timeout \(timeout, format: .fixed(precision: 0))s, timed out \(timedOut))")
+        }
+        guard let r = result, r.succeeded else {
             setSnapshotFailure(.mediaControlUnavailable)
             noteChannelExec(succeeded: false)
             return nil

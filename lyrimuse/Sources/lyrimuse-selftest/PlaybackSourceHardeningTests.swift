@@ -79,6 +79,17 @@ private func playbackStateTests() {
     expectEqual(P.freshResumeSignalAge(signalAt: t0, now: t0.addingTimeInterval(40)), nil,
                 "恢复信号: 靠轮询发现恢复时手上是暂停那一刻的旧信号 → 当没拿到,不拿它砍起点")
     expectEqual(P.freshResumeSignalAge(signalAt: nil, now: t0), nil, "恢复信号: 没有信号")
+    // 「恢复播放」那一份晚于这次暂停,轮询晚了多久都照用(真机 media-control 卡满超时,晚了 5.6s)。
+    expectEqual(P.resumeSignalAge(resumeSignalAt: t0, now: t0.addingTimeInterval(5.597)).map { abs($0 - 5.597) < 0.001 }, true,
+                "恢复信号: 只记恢复的那一份,晚了 5.6s 照用")
+    expectEqual(P.resumeSignalAge(resumeSignalAt: t0, now: t0.addingTimeInterval(61)), nil, "恢复信号: 超过一分钟的不认")
+    expectEqual(P.resumeSignalAge(resumeSignalAt: t0, now: t0.addingTimeInterval(-1)), nil, "恢复信号: 时刻在后的不认")
+    expectEqual(P.resumeSignalAge(resumeSignalAt: nil, now: t0), nil, "恢复信号: 没有恢复信号")
+    expectEqual(M.pollSnapshotTimeout(fallbackPlayer: .spotify), 2, "状态查询超时: Spotify 卡住 2s 就改问它的 AppleScript")
+    expectEqual(M.pollSnapshotTimeout(fallbackPlayer: .appleMusic), 2, "状态查询超时: Apple Music 同上")
+    expectEqual(M.pollSnapshotTimeout(fallbackPlayer: .kaset), 2, "状态查询超时: Kaset 同上")
+    expectEqual(M.pollSnapshotTimeout(fallbackPlayer: .qqMusic), 5, "状态查询超时: 没有 AppleScript 字典的照旧 5s")
+    expectEqual(M.pollSnapshotTimeout(fallbackPlayer: nil), 5, "状态查询超时: 还没接受过快照照旧 5s")
 }
 
 /// 在播但头一拍没有时长(网页 / 汽水换歌常这样):那一拍不记账,下一拍有了时长按换歌处理 —— 学到的锚点滞后照样预置。
