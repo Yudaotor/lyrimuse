@@ -1,16 +1,30 @@
 import CoreGraphics
 import Foundation
 
-/// 换歌翻牌里从刘海掉出来的那一条:新歌的歌名 + 歌手。`id` 每次换歌递增,视图按它做「旧的收回去、新的掉下来」。
+/// 换歌翻牌里从刘海掉出来的那一条:新歌的歌名 + 歌手。`id` 每次揭晓递增。
 public struct NotchTrackDrop: Equatable, Sendable {
+    /// 被新的一条从条子里推出去的那条(`NotchTrackDropRules.replaced`)。
+    public struct Replaced: Equatable, Sendable {
+        public let title: String
+        public let artist: String
+
+        public init(title: String, artist: String) {
+            self.title = title
+            self.artist = artist
+        }
+    }
+
     public let id: Int
     public let title: String
     public let artist: String
+    /// 揭晓时条子里还露着的那条,这一条把它推出去;nil = 条子是收着的,这一条跟着条子拉出来。
+    public let replacing: Replaced?
 
-    public init(id: Int, title: String, artist: String) {
+    public init(id: Int, title: String, artist: String, replacing: Replaced? = nil) {
         self.id = id
         self.title = title
         self.artist = artist
+        self.replacing = replacing
     }
 }
 
@@ -18,6 +32,23 @@ public struct NotchTrackDrop: Equatable, Sendable {
 public enum NotchTrackDropRules {
     /// 歌名停多久。
     public static let holdDuration: Duration = .milliseconds(2_800)
+
+    /// 收回开始后这么久以内,条子里那条还没缩进顶行底下;这期间揭晓的新歌名照停着时换歌处理,把它推出去。
+    public static let replaceWindow: TimeInterval = 0.15
+
+    /// 揭晓新歌名时条子里还露着的那条:正停着的(`showing`),或刚开始收回、还不到 `replaceWindow` 的
+    /// (`cleared` 是最近收掉的那条,`clearedAt` 是收的时刻)。
+    public static func replaced(showing: NotchTrackDrop?, cleared: NotchTrackDrop?, clearedAt: Date?,
+                                now: Date) -> NotchTrackDrop.Replaced? {
+        if let showing { return NotchTrackDrop.Replaced(title: showing.title, artist: showing.artist) }
+        guard let cleared, let clearedAt, now.timeIntervalSince(clearedAt) < replaceWindow else { return nil }
+        return NotchTrackDrop.Replaced(title: cleared.title, artist: cleared.artist)
+    }
+
+    /// 条子拉开 `progress`(0 收着、1 拉满,弹簧会略过 1)时字的不透明度:刚露头那一截是淡的,拉开四分之三起全显。
+    public static func revealOpacity(progress: Double) -> Double {
+        min(1, max(0, (progress - 0.05) / 0.7))
+    }
 
     /// 一首曲目的身份:歌名 + 歌手,广告单独一类(广告结束回到同名的歌也算换了一首)。
     public static func key(title: String, artist: String, isAdBreak: Bool) -> String {

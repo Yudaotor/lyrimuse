@@ -641,6 +641,22 @@ func runNotchTests() {
                     "换歌翻牌: 广告结束回到歌掉(哪怕跟广告同名)")
         expectEqual(DR.shouldDrop(previousKey: songA, title: "", artist: "周杰伦", isAdBreak: false), false,
                     "换歌翻牌: 没有歌名不掉")
+        // 换歌翻牌:揭晓时条子里还露着的那条被新的推出去;收回开始超过 replaceWindow 就当条子收着。
+        let shownDrop = NotchTrackDrop(id: 1, title: "晴天", artist: "周杰伦")
+        let clearedAt = Date(timeIntervalSince1970: 500)
+        let pushedOut = NotchTrackDrop.Replaced(title: "晴天", artist: "周杰伦")
+        expectEqual(DR.replaced(showing: shownDrop, cleared: nil, clearedAt: nil, now: clearedAt), pushedOut,
+                    "换歌翻牌: 停着时又换了一首,新的把旧的推出去")
+        expectEqual(DR.replaced(showing: nil, cleared: shownDrop, clearedAt: clearedAt, now: clearedAt + 0.1), pushedOut,
+                    "换歌翻牌: 刚开始收回(还没缩进顶行)时揭晓,照推出去处理")
+        expectEqual(DR.replaced(showing: nil, cleared: shownDrop, clearedAt: clearedAt, now: clearedAt + DR.replaceWindow + 0.01), nil,
+                    "换歌翻牌: 收回超过 replaceWindow,条子当收着,新的跟着条子拉出来")
+        expectEqual(DR.replaced(showing: nil, cleared: nil, clearedAt: nil, now: clearedAt), nil,
+                    "换歌翻牌: 条子从没露过,新的跟着条子拉出来")
+        expectEqual(DR.revealOpacity(progress: 0), 0, "换歌翻牌: 条子收着时字透明")
+        expectEqual(abs(DR.revealOpacity(progress: 0.4) - 0.5) < 1e-9, true, "换歌翻牌: 拉开不到一半时字半透明")
+        expectEqual(DR.revealOpacity(progress: 0.8), 1, "换歌翻牌: 拉开四分之三起字全显")
+        expectEqual(DR.revealOpacity(progress: 1.04), 1, "换歌翻牌: 弹簧略过拉满时不透明度不超过 1")
         // 换歌翻牌:声音还没走起来(加载、前贴片广告)时先不判,走起来那一拍按那时的曲目判。每拍是(歌名, 广告, 在等开播)。
         func dropOutcomes(_ ticks: [(String, Bool, Bool)]) -> [NotchTrackDropTracker.Outcome] {
             var tracker = NotchTrackDropTracker()
@@ -1053,8 +1069,18 @@ func runNotchTests() {
             let dropSrc = src("NotchTrackChangeViews.swift")
             expectEqual(dropSrc.contains("Image(systemName: \"music.note\")")
                         && dropSrc.contains(".foregroundStyle(.white.opacity(0.96))")
-                        && dropSrc.contains(".opacity(drop == nil ? 0 : 1)"), true,
+                        && dropSrc.contains("scrim.modifier(NotchTrackDropReveal(progress: progress, travel: 0))"), true,
                         "换歌翻牌契约: 歌名白字、颜色只给音符,暗晕只在有歌名时出现")
+            expectEqual(rootSrc.contains("if controller.trackDrop != nil {\n            return NotchTrackDropStrip.revealAnimation")
+                        && rootSrc.contains("if wasDropping {\n            return NotchTrackDropStrip.retractAnimation")
+                        && rootSrc.contains(".onChange(of: controller.trackDrop != nil) { _, dropping in wasDropping = dropping }")
+                        && dropSrc.contains(".animation(animated ? (drop == nil ? Self.retractAnimation : Self.revealAnimation)")
+                        && dropSrc.contains(".modifier(NotchTrackDropReveal(progress: progress, travel: animated ? height : 0))"), true,
+                        "换歌翻牌契约: 歌名条和卡片高度走同一对弹簧,字的位置只看条子拉开多少")
+            expectEqual(ctrlSrc.contains("NotchTrackDropRules.replaced(showing: trackDrop, cleared: clearedTrackDrop?.drop,")
+                        && ctrlSrc.contains("clearedTrackDrop = (shown, Date())")
+                        && dropSrc.contains("NotchTrackDropRoll(drop: drop ?? lastShown, travel: height, animated: animated)"), true,
+                        "换歌翻牌契约: 收回时接着画刚才那条;停着时换歌,新的把旧的推出去")
             expectEqual(v.contains("playback.notchCardStyle == .coverArt ? (playback.vividAccent ?? .white) : .white"), true,
                         "换歌翻牌契约: 音符只在「跟随封面」风格下取封面色,其余风格白")
             let coordinatorSrc = (try? String(contentsOf: uiDir.deletingLastPathComponent()

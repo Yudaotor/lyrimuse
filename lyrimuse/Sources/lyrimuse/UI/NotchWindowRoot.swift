@@ -36,12 +36,15 @@ struct NotchWindowRoot: View {
     @State private var hoveringCard = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 三条弹簧,按"正在做哪件事"选:
+    /// 弹簧按"正在做哪件事"选:
     ///
     ///  - **收起**(播放停了,歌词行卷回顶行):`dampingFraction 1.0` —— 临界阻尼、**不回弹**。
     ///    收起时哪怕一点点回弹,看着都像"没收干净又弹出来一截",特别扎眼。
     ///  - **展开**(hover 进来):`interactiveSpring 0.38 / 0.8` —— 对鼠标的直接反馈,要跟手。
     ///  - **hover 移开**(收回稳态):`0.38 / 0.9`,不下探,理由见下。
+    ///  - **换歌翻牌**(关着歌词行时卡片为掉出来的歌名长一截 / 缩回去):跟歌名条同一对弹簧
+    ///    (`NotchTrackDropStrip.revealAnimation` / `retractAnimation`),字的下沿才一直贴着卡片下沿;
+    ///    缩回去那一下靠 `wasDropping` 认,跟 hover 移开同一个办法。
     ///  - **其余**(开始播放弹出):`0.42 / 0.8`,留一点点过冲。
     ///
     /// **hover 移开**(单独一档):`.animation(_:value)` 是在值**变化后**用新状态
@@ -71,6 +74,12 @@ struct NotchWindowRoot: View {
         if wasExpanded {
             return .spring(response: 0.38, dampingFraction: 0.9)
         }
+        if controller.trackDrop != nil {
+            return NotchTrackDropStrip.revealAnimation
+        }
+        if wasDropping {
+            return NotchTrackDropStrip.retractAnimation
+        }
         return .spring(response: 0.42, dampingFraction: 0.8)
     }
 
@@ -79,6 +88,8 @@ struct NotchWindowRoot: View {
     /// 还是 true,cardAnimation 据此选临界阻尼那条)→ body 之后 onChange 才把它写成 false
     /// (那次写入只改这个 @State,cardHeight/cardWidth 没变,不会再起一条动画)。
     @State private var wasExpanded = false
+    /// 上一次 body 见到的「有没有掉出来的歌名」,只给 cardAnimation 认「歌名条刚收回去」用(同 `wasExpanded`)。
+    @State private var wasDropping = false
 
     /// 卡片宽度:收起态(没在播放)缩到「刘海 + 左右各一小段耳朵」。
     ///
@@ -233,6 +244,7 @@ struct NotchWindowRoot: View {
             .animation(cardAnimation, value: controller.isCollapsed)
             .animation(vanishAnimation, value: controller.isVanished)
             .onChange(of: controller.isExpanded) { _, expanded in wasExpanded = expanded }
+            .onChange(of: controller.trackDrop != nil) { _, dropping in wasDropping = dropping }
             // 窗口收走(看不见)时把边沿记忆也清掉,跟控制器那边的 resetHoverAfterHide 配对:不清的话下次露面
             // 指针正好在卡片上,移动时不再有「进入」这条边沿,卡片就一直不展开。
             .onChange(of: controller.isSurfaceVisible) { _, visible in

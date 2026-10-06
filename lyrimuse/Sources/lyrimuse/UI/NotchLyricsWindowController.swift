@@ -339,6 +339,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var trackDropTracker = NotchTrackDropTracker()
     private var trackDropGeneration = 0
     private var trackDropClearTask: Task<Void, Never>?
+    /// 最近收掉的那条和收的时刻:收回刚开始时揭晓的新歌名要把它推出去(`NotchTrackDropRules.replaced`)。
+    private var clearedTrackDrop: (drop: NotchTrackDrop, at: Date)?
     /// 歌名掉下来和耳朵里的封面翻过来对到同一拍(`NotchTrackRevealGate`)。
     private var revealGate = NotchTrackRevealGate()
     private var revealWaitTask: Task<Void, Never>?
@@ -904,7 +906,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let waitedMs = Int(Date().timeIntervalSince(track.since) * 1000)
         Self.trackDropLog.notice("track drop: shown for \(track.artist, privacy: .public) - \(track.title, privacy: .public), waited \(waitedMs)ms for the cover")
         trackDropGeneration &+= 1
-        trackDrop = NotchTrackDrop(id: trackDropGeneration, title: track.title, artist: PlaybackCoordinator.shared.displayArtist)
+        let replacing = NotchTrackDropRules.replaced(showing: trackDrop, cleared: clearedTrackDrop?.drop,
+                                                     clearedAt: clearedTrackDrop?.at, now: Date())
+        trackDrop = NotchTrackDrop(id: trackDropGeneration, title: track.title, artist: PlaybackCoordinator.shared.displayArtist,
+                                   replacing: replacing)
         trackDropClearTask?.cancel()
         trackDropClearTask = Task { [weak self] in
             try? await Task.sleep(for: NotchTrackDropRules.holdDuration)
@@ -948,7 +953,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private func clearTrackDrop() {
         trackDropClearTask?.cancel()
         trackDropClearTask = nil
-        if trackDrop != nil { trackDrop = nil }
+        if let shown = trackDrop {
+            clearedTrackDrop = (shown, Date())
+            trackDrop = nil
+        }
     }
 
     /// 「发现新播放器」主动提醒的开 / 关(来自 NotchUnknownPlayerPrompt.isAlerting 的 sink)。
