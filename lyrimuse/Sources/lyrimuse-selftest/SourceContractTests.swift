@@ -17,6 +17,10 @@ func runSourceContractTests() {
                         && window.contains("shown: mode != nil && options.contains(.repeatAll),")
                         && window.contains("(mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne))"), true,
                     "歌词窗口播控排: 随机、循环各按能切哪几档显示,循环键按有没有单曲循环走三态 / 两态")
+        expectEqual(window.contains("                .help(label)\n")
+                        && window.contains(".accessibilityLabel(label)\n                .accessibilityAddTraits(active ? .isSelected : [])")
+                        && window.contains("label: mode == .repeatOne ? L10n.t(\"单曲循环\") : L10n.t(\"循环播放\")"), true,
+                    "歌词窗口播控排: 随机 / 循环键的读屏名跟悬停提示同一串(单曲循环时读「单曲循环」),点亮时带「已选择」")
     }
 
     // 换歌后要及时做的去抖挂主队列(01 章决策 11):Combine 挂 RunLoop.main 的计时器只在默认模式走,菜单栏菜单开着时不触发。

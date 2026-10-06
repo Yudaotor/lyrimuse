@@ -4441,7 +4441,7 @@ struct LyricsWindowView: View {
             icon: mode == .repeatOne ? "repeat.1" : "repeat",
             active: mode == .repeatOne || mode == .repeatAll,
             shown: mode != nil && options.contains(.repeatAll),
-            label: L10n.t("循环播放")
+            label: mode == .repeatOne ? L10n.t("单曲循环") : L10n.t("循环播放")
         ) {
             PlaybackCoordinator.shared.setPlaybackMode(
                 (mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne)))
@@ -4473,6 +4473,9 @@ struct LyricsWindowView: View {
                         .contentShape(Capsule())
                 }
                 .help(label)
+                // 读屏名要显式给:不给的话 VoiceOver 读符号自带的描述,跟键的作用对不上(repeat 读作「重复播放一首」),也不跟界面语言走。
+                .accessibilityLabel(label)
+                .accessibilityAddTraits(active ? .isSelected : [])
             }
         }
         // 定宽=字号+8:这个占位框才是随机/循环字形横向落点的真正旋钮 —— 字形在框内居中,
