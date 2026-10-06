@@ -1223,6 +1223,76 @@ func runCoverArtTests() {
         }
     }
 
+    // ---- 网易云云盘歌:占位图登记、那一首放行高清替代、歌手 / 专辑位兜底(见 03 章决策 32) ----
+    do {
+        expectEqual(KnownPlaceholderArtwork.entries.contains {
+            $0.player == "com.netease.163music" && $0.byteCount == 2345
+                && $0.sha256Hex == "eaaca16f077893e67c4481a8ad11e2069995d1ebe678a21ecb720597ea665a63"
+        }, true, "云盘歌: 网易云那张灰底红音符登记在案")
+
+        typealias G = CoverArtReplacementGate
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300, systemArtworkIsPlaceholder: true), .playerHasNoArtwork,
+                    "云盘歌: 这一首只推了占位图,高清替代按「播放器没有封面」放行")
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300), nil,
+                    "云盘歌: 真的没有封面(没认出占位图)时照旧不找替代")
+        expectEqual(G.reason(width: 640, height: 640, lowResThreshold: 300, systemArtworkIsPlaceholder: true), .playerHasNoArtwork,
+                    "云盘歌: 这一首推的是占位图时,系统那份(留着的上一首封面)再大也不作数")
+        expectEqual(G.reason(width: 640, height: 640, lowResThreshold: 300), nil, "云盘歌: 没认出占位图时,够大的真封面照旧不动")
+
+        typealias I = InferredTrackIdentity
+        let identified = I(artist: "周杰伦", album: "八度空间")
+        expectEqual(I.displayArtist(playerArtist: "", display: "", inferred: identified), "周杰伦",
+                    "云盘歌: 播放器没报歌手时显示认出来的")
+        expectEqual(I.displayArtist(playerArtist: "孙燕姿", display: "孙燕姿", inferred: identified), "孙燕姿",
+                    "云盘歌: 播放器报了歌手就照旧")
+        expectEqual(I.displayArtist(playerArtist: "某句歌词", display: "", inferred: identified), "",
+                    "云盘歌: 播放器报了歌手、只是判成不可信没显示时不补(只补根本没报歌手的)")
+        expectEqual(I.displayArtist(playerArtist: "", display: "", inferred: nil), "", "云盘歌: 没认出来就空着")
+        expectEqual(I.displayArtist(playerArtist: " ", display: "", inferred: I(artist: "", album: "八度空间")), "",
+                    "云盘歌: 认出来的没有歌手就空着")
+        expectEqual(I.displayAlbum(playerAlbum: "", display: "", inferred: identified), "八度空间",
+                    "云盘歌: 播放器没报专辑时显示认出来的")
+        expectEqual(I.displayAlbum(playerAlbum: "", display: "MV", inferred: identified), "MV",
+                    "云盘歌: 专辑位本来就有要显示的字(MV、YouTube Music 登记的专辑)时照旧")
+        expectEqual(I.displayAlbum(playerAlbum: "叶惠美", display: "叶惠美", inferred: identified), "叶惠美",
+                    "云盘歌: 播放器报了专辑就照旧")
+
+        func inferred(_ json: String) -> InferredTrackIdentity? {
+            (try? JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8))).flatMap(EnrichCacheReader.inferredIdentity(in:))
+        }
+        expectEqual(inferred(#"{"inferred_artist":"周杰伦","inferred_album":"八度空间"}"#), identified,
+                    "云盘歌: 读出缓存条目里引擎认出来的歌手和专辑")
+        expectEqual(inferred(#"{"inferred_artist":"周杰伦"}"#), I(artist: "周杰伦", album: ""), "云盘歌: 只认出歌手时专辑位空着")
+        expectEqual(inferred(#"{"inferred_artist":"","inferred_album":"八度空间"}"#), nil, "云盘歌: 没认出歌手不算认出来")
+        expectEqual(inferred(#"{"lyrics":"[00:01.00]a"}"#), nil, "云盘歌: 条目里没有这两个字段")
+
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let coordinator = source("lyrimuse/PlaybackCoordinator.swift")
+        let playback = source("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(coordinator.contains("systemArtworkIsPlaceholder: LocalPlaybackSource.shared.artworkIsPlaceholder"), true,
+                    "云盘歌接线: 高清替代问这一首是不是只推了占位图")
+        expectEqual(coordinator.contains("s.$artworkIsPlaceholder\n                .removeDuplicates()\n                .filter { $0 }"), true,
+                    "云盘歌接线: 认出占位图时补查一次高清封面")
+        expectEqual(coordinator.components(separatedBy: "self?.refreshInferredIdentity()").count - 1, 2,
+                    "云盘歌接线: 换歌、缓存内容变了两个时机都重读认出来的歌手 / 专辑")
+        expectEqual(coordinator.contains("InferredTrackIdentity.displayArtist(")
+                    && coordinator.contains("InferredTrackIdentity.displayAlbum(")
+                    && coordinator.components(separatedBy: "inferred: inferred)").count - 1 == 2, true,
+                    "云盘歌接线: 歌手位、专辑位都接上兜底")
+        expectEqual(playback.contains("holdingPrevious = true\n                self.artworkIsPlaceholder = true"), true,
+                    "云盘歌接线: 认出占位图时记下这一首")
+        expectEqual(playback.contains("if artworkIsPlaceholder { artworkIsPlaceholder = false }\n                clearMusicVideoTimeline()"), true,
+                    "云盘歌接线: 换歌时清掉占位标记")
+        expectEqual(playback.components(separatedBy: "self.artworkIsPlaceholder = false").count - 1, 3,
+                    "云盘歌接线: 首轮换上真封面、确认循环换上或等到这首的封面时都清掉占位标记")
+        expectEqual(coordinator.contains("if let applied = highResCoverApplied, applied.url == url, let shown = highResArtworkImage, shown === applied.image { return }")
+                    && coordinator.contains("self?.highResCoverApplied = (url, image)"), true,
+                    "高清替代接线: 铺着的就是这一张时不撤了重铺(留着的旧封面到期清掉那一刻不闪)")
+    }
+
     // ---- 专辑简介:专辑 ID 解析 + 专辑页解析 ----
     do {
         typealias N = AlbumEditorialNotes

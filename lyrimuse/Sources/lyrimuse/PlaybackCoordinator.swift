@@ -69,6 +69,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 界面上专辑位显示的字,判据见 `LocalPlaybackSource.displayAlbum`(播放器报的 → YouTube Music 上登记的 →「MV」)。
     /// 只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
     @Published private(set) var displayAlbum: String = ""
+    /// 播放器没报歌手时引擎认出来的歌手 / 专辑,给上面两个显示位兜底(`InferredTrackIdentity`,见 03 章决策 32)。
+    @Published private var inferredIdentity: InferredTrackIdentity?
     @Published private(set) var isPlayingNow: Bool = false
     /// 播放器说在放、声音还没走起来,见 `LocalPlaybackSource.isWaitingToPlay`。
     @Published private(set) var isWaitingToPlay: Bool = false
@@ -866,21 +868,28 @@ final class PlaybackCoordinator: ObservableObject {
                                 .map { _ in () }.prepend(()).eraseToAnyPublisher()
                             : Just(()).eraseToAnyPublisher()
                     }
-                    .switchToLatest()
+                    .switchToLatest(),
+                $inferredIdentity
             )
-                .map { artist, title, _ in
-                    PlayerArtistFix.displayArtist(
-                        bundle: LocalPlaybackSource.shared.lastResolvedBundleID,
-                        title: title, artist: artist)
+                .map { artist, title, _, inferred in
+                    InferredTrackIdentity.displayArtist(
+                        playerArtist: artist,
+                        display: PlayerArtistFix.displayArtist(
+                            bundle: LocalPlaybackSource.shared.lastResolvedBundleID,
+                            title: title, artist: artist),
+                        inferred: inferred)
                 }
                 .removeDuplicates()
                 .assign(to: \.displayArtist, on: self),
             s.$album.assign(to: \.album, on: self),
             s.$youtubeMusicAlbum.assign(to: \.youtubeMusicAlbum, on: self),
             s.$album.combineLatest(s.$youtubeMusicAlbum, s.$isMusicVideo, s.$youtubeMusicIsMV)
-                .map { album, listed, isMusicVideo, listedMV in
-                    LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo || listedMV,
-                                                     musicVideoLabel: L10n.t("MV"))
+                .combineLatest($inferredIdentity)
+                .map { fields, inferred in
+                    let (album, listed, isMusicVideo, listedMV) = fields
+                    let display = LocalPlaybackSource.displayAlbum(album: album, youtubeMusicAlbum: listed, isMusicVideo: isMusicVideo || listedMV,
+                                                                   musicVideoLabel: L10n.t("MV"))
+                    return InferredTrackIdentity.displayAlbum(playerAlbum: album, display: display, inferred: inferred)
                 }
                 .removeDuplicates()
                 .assign(to: \.displayAlbum, on: self),
@@ -947,6 +956,7 @@ final class PlaybackCoordinator: ObservableObject {
             Publishers.CombineLatest4(s.$title, s.$artist, s.$album, s.$artworkData)
                 .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
                 .sink { [weak self] _, _, _, _ in
+                    self?.refreshInferredIdentity()
                     self?.refreshHighResCover()
                     // 动态封面挂同一个时机、同一个理由(避开 willSet、300ms 用户无感),
                     // 不另起一条 debounce。
@@ -964,10 +974,17 @@ final class PlaybackCoordinator: ObservableObject {
             // 必须 onlyIfMissing —— refreshHighResCover 开头会 clearHighRes(),已经拿到
             // 高清图时再跑一遍就是"清空→重设",而 highResArtworkImage 挂着 0.5s 交叉淡入,
             // 表现成封面每隔几秒闪一下。而引擎写缓存是常态(每解析一首歌都写)。
+            // 认出占位图那一刻封面字节不一定变(上一首本来就没有封面),上面那条不会触发:这里补查一次(见 03 章决策 32)。
+            s.$artworkIsPlaceholder
+                .removeDuplicates()
+                .filter { $0 }
+                .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+                .sink { [weak self] _ in self?.refreshHighResCover(onlyIfMissing: true) },
             s.$enrichContentVersion
                 .dropFirst() // 启动时那一次不是"新解析出来的",换歌那条路已经覆盖
                 .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
                 .sink { [weak self] _ in
+                    self?.refreshInferredIdentity()
                     self?.refreshHighResCover(onlyIfMissing: true)
                     // 动态封面同样需要这条补查路 —— 它读的是引擎写的同一份 enrich 缓存,
                     // 第一次听的歌在换歌后 300ms 那一次必然查空(解析要好几秒)。
@@ -1584,7 +1601,16 @@ final class PlaybackCoordinator: ObservableObject {
                                                  bundleID: String?) -> CoverArtReplacementGate.Reason? {
         CoverArtReplacementGate.reason(
             width: systemSize.width, height: systemSize.height, lowResThreshold: lowResArtworkThreshold,
-            systemNeverHasArtwork: CoverArtReplacementGate.systemNeverHasArtwork(bundleID: bundleID))
+            systemNeverHasArtwork: CoverArtReplacementGate.systemNeverHasArtwork(bundleID: bundleID),
+            systemArtworkIsPlaceholder: LocalPlaybackSource.shared.artworkIsPlaceholder)
+    }
+
+    /// 播放器没报歌手时,读引擎认出来的歌手 / 专辑(见 `inferredIdentity`)。换歌、缓存内容变了时重读,跟高清封面同一个时机。
+    private func refreshInferredIdentity() {
+        let s = LocalPlaybackSource.shared
+        let next = s.artist.isEmpty && !s.title.isEmpty
+            ? EnrichCacheReader.inferredIdentity(artist: s.artist, title: s.title, album: s.album) : nil
+        if inferredIdentity != next { inferredIdentity = next }
     }
 
     /// 界面上的封面会不会换成高清替代:系统那份太小、不是封面的形状,或播放器从不报封面。换歌通知按它决定
@@ -1600,6 +1626,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 上一次成功换上去的那个图床地址 —— 同一地址不重复下载、不闪:refreshHighResCover 因 artworkData
     /// 重发而清空高清图之后,那条路会按同一地址从内存缓存原样放回去。换歌(地址变 nil)时清。
     private var spotifyCoverAppliedURL: URL?
+    /// `refreshHighResCover` 铺上去的那张高清替代:地址和图。撤掉高清图时一起清。
+    private var highResCoverApplied: (url: URL, image: NSImage)?
 
     /// 给当前曲目找一张比系统那份更大的封面。见 highResArtworkImage 的注释。
     ///
@@ -1627,6 +1655,7 @@ final class PlaybackCoordinator: ObservableObject {
             if highResArtworkImage != nil { highResArtworkImage = nil }
             if highResArtworkThumbnail != nil { highResArtworkThumbnail = nil }
             if highResAverageHex != nil { highResAverageHex = nil }
+            highResCoverApplied = nil
         }
         guard !title.isEmpty else {
             clearHighRes()
@@ -1656,6 +1685,8 @@ final class PlaybackCoordinator: ObservableObject {
             return
         }
         let url = EnrichCacheReader.nativeSizedCoverURL(cached)
+        // 铺着的就是这张(同一首的系统封面换了、留着的旧封面到期清掉):不撤了重铺,撤掉再挂回来,0.5s 交叉淡入会让封面闪一下。
+        if let applied = highResCoverApplied, applied.url == url, let shown = highResArtworkImage, shown === applied.image { return }
         // 上一首的高清图必须立刻撤掉:留着的话换歌后到新图下载完之间会显示上一首的封面,
         // 比"先小图后变清晰"糟得多。均值色跟图同进退。
         clearHighRes()
@@ -1691,6 +1722,7 @@ final class PlaybackCoordinator: ObservableObject {
             self?.highResArtworkImage = image
             self?.highResArtworkThumbnail = thumbnail
             self?.highResAverageHex = hex
+            self?.highResCoverApplied = (url, image)
         }
     }
 

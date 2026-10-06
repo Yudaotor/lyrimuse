@@ -16,7 +16,8 @@ public enum CoverArtReplacementGate {
         case lowRes
         /// 系统那份不是封面的形状:播放器上报的根本不是专辑图(YouTube Music MV 给的 16:9 视频缩略图)。
         case notCoverShaped
-        /// 这个播放器从不往系统里报封面(`systemNeverHasArtwork`),系统那份恒为空:缓存里匹配到的那张就是唯一能显示的。
+        /// 这个播放器从不往系统里报封面(`systemNeverHasArtwork`),或者这一首它只推了登记在案的占位图
+        /// (`KnownPlaceholderArtwork`,没当封面用,系统那份是空的或上一首留下的):缓存里匹配到的那张就是唯一能显示的。
         case playerHasNoArtwork
     }
 
@@ -60,9 +61,14 @@ public enum CoverArtReplacementGate {
     /// 系统那份封面要不要找替代。nil = 不找:没有图(该显示占位音符,不该悄悄换成缓存匹配出来
     /// 的另一张;从不报封面的播放器除外,见 `systemNeverHasArtwork`),或者系统那份本来就是一张够大的
     /// 方形封面(Apple Music 之类,权威图不动)。形状先于尺寸判:一张 1280×720 的视频帧再大也不是封面。
+    /// `systemArtworkIsPlaceholder`:这一首播放器推的是登记在案的占位图(见 03 章决策 32)。这时系统那份要么是空的、
+    /// 要么是留着的上一首的封面,尺寸都不作数,一律按「播放器没有封面」找替代。
     public static func reason(width: Int, height: Int, lowResThreshold: Int,
-                              systemNeverHasArtwork: Bool = false) -> Reason? {
-        guard width > 0, height > 0 else { return systemNeverHasArtwork ? .playerHasNoArtwork : nil }
+                              systemNeverHasArtwork: Bool = false, systemArtworkIsPlaceholder: Bool = false) -> Reason? {
+        if systemArtworkIsPlaceholder { return .playerHasNoArtwork }
+        guard width > 0, height > 0 else {
+            return systemNeverHasArtwork ? .playerHasNoArtwork : nil
+        }
         if !isCoverShaped(width: width, height: height) { return .notCoverShaped }
         if width <= lowResThreshold { return .lowRes }
         return nil

@@ -198,6 +198,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // 提前统一成一个"够亮"的值,等于替桌面那一侧做了错误的决定。各自的处理放在
     // PlaybackCoordinator,那里才知道自己是哪个面。
     @Published public private(set) var artworkAverageHex: String?
+    /// 这一首播放器推的是登记在案的占位图(`KnownPlaceholderArtwork`),没当封面用。高清替代据此把它当成「播放器没有
+    /// 封面」,去缓存里找按这首自己的身份解析出来的那张(见 03 章决策 32)。换歌、换上真封面时清掉。
+    @Published public private(set) var artworkIsPlaceholder = false
     /// Spotify 原生客户端这首歌在 Spotify 图床上的封面地址(AppleScript `artwork url`,640 档),由
     /// `SpotifyPositionProbe` 开播 2.5s 后那次脚本顺带带回来(经 noteSpotifyArtwork 落到这里,
     /// 先核对还是这首)。换歌 / 停播置 nil;Spotify 网页版由 BrowserPositionProbe 从页面带回同一格式的地址
@@ -3293,6 +3296,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
                 if webPageArtworkURL != nil { webPageArtworkURL = nil }
                 if webPageVideoFrameURL != nil { webPageVideoFrameURL = nil }
+                if artworkIsPlaceholder { artworkIsPlaceholder = false }
                 clearMusicVideoTimeline()
             }
             lastKey = key
@@ -4350,6 +4354,7 @@ public final class LocalPlaybackSource: ObservableObject {
             } else if let data, KnownPlaceholderArtwork.isPlaceholder(data) {
                 logger.notice("artwork placeholder recognized: bytes=\(data.count), keeping previous cover")
                 holdingPrevious = true
+                self.artworkIsPlaceholder = true
             }
             if holdingPrevious {
                 // 清旧封面由确认循环在 artworkHoldLimit 那一档做;兜底任务只防子进程卡死(确认循环跑不下去),
@@ -4366,6 +4371,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 定案才取色(后台),丢弃路径一次都不算。
                 let averageHex = await hexFor(data)
                 guard expectedKey == self.lastKey else { return }
+                if data != nil, self.artworkIsPlaceholder { self.artworkIsPlaceholder = false }
                 self.artworkData = data
                 self.artworkAverageHex = averageHex
                 self.noteRadioStationArtwork(data, forKey: expectedKey)
@@ -4389,6 +4395,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 if holdingPrevious, let confirmData = confirm.data, let confirmKey = confirm.payloadKey,
                    Self.artworkKeyMatches(confirmKey, expectedKey), confirmData == self.artworkData {
                     holdingPrevious = false
+                    if self.artworkIsPlaceholder { self.artworkIsPlaceholder = false }
                     self.artworkStaleTimeoutTask?.cancel()
                     self.artworkStaleTimeoutTask = nil
                     continue
@@ -4420,6 +4427,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 兜底任务要一起撤:留着旧封面那条路上它还在倒数,不撤的话几秒后会把刚换上的真封面清掉。
                 self.artworkStaleTimeoutTask?.cancel()
                 self.artworkStaleTimeoutTask = nil
+                if self.artworkIsPlaceholder { self.artworkIsPlaceholder = false }
                 self.artworkData = confirmData
                 self.artworkAverageHex = confirmHex
                 self.noteRadioStationArtwork(confirmData, forKey: expectedKey)

@@ -100,6 +100,9 @@ public struct EnrichCacheEntry: Decodable, Sendable {
     // 粤语和普通话(汉字一样),得靠引擎那边已经判出来的这个字段。
     // 才第一次被 Swift 侧读取,此前完全没人解码它。
     let songLanguage: String?
+    /// 播放器没报歌手时,引擎按「歌名 + 时长」认出来的歌手和专辑(lyrimuse-engine/inferredidentity.go)。只给界面显示用。
+    let inferredArtist: String?
+    let inferredAlbum: String?
     // plainLyrics:才被读取——"搜索候选歌词"弹窗采纳一条"仅纯文本"候选时
     // (见 lyrimuse target 的 EnrichCacheStore.savePlainTextEdit)写的独立字段,跟 lyrics
     // 不是一回事:这个没有时间戳,只给"歌词窗口"当静态兜底用。引擎侧
@@ -169,6 +172,8 @@ public struct EnrichCacheEntry: Decodable, Sendable {
         case youtubeMusicAlbum = "youtube_music_album"
         case youtubeMusicMV = "youtube_music_mv"
         case songLanguage = "song_language"
+        case inferredArtist = "inferred_artist"
+        case inferredAlbum = "inferred_album"
         case plainLyrics = "plain_lyrics"
         case durationSecs = "duration_secs"
         case resolvedDurationSecs = "resolved_duration_secs"
@@ -780,6 +785,20 @@ public enum EnrichCacheReader {
         guard let all = loadEntries() else { return nil }
         if let s = matchedEntry(key, in: all)?.coverURL, let url = URL(string: s) { return url }
         return nil
+    }
+
+    /// 播放器没报歌手时引擎认出来的歌手 / 专辑(见 03 章决策 32)。查法同 `albumMatchedCoverURL`;条目里没有为 nil。
+    public static func inferredIdentity(artist: String, title: String, album: String) -> InferredTrackIdentity? {
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        if let fresh = freshPlayingEntry(forKey: key) { return inferredIdentity(in: fresh) }
+        guard let all = loadEntries(), let entry = matchedEntry(key, in: all) else { return nil }
+        return inferredIdentity(in: entry)
+    }
+
+    /// 一条缓存条目里引擎认出来的歌手 / 专辑;没认出歌手为 nil。纯函数,selftest 覆盖。
+    public static func inferredIdentity(in entry: EnrichCacheEntry) -> InferredTrackIdentity? {
+        guard let artist = entry.inferredArtist, !artist.isEmpty else { return nil }
+        return InferredTrackIdentity(artist: artist, album: entry.inferredAlbum ?? "")
     }
 
     /// 各播放器自己给这首记下的封面地址(引擎从播放器本机数据里读的,见 lyrimuse-engine/playercover.go),键是播放器

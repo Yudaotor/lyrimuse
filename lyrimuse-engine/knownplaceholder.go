@@ -23,6 +23,7 @@ type knownPlaceholder struct {
 
 var knownPlaceholderArtwork = []knownPlaceholder{
 	{byteCount: 35427, sha256Hex: "56301adc2c97955b3af286bb51f109cab83278da94b9bdb101374159fc866996", player: "com.kugou.mac.Music"},
+	{byteCount: 2345, sha256Hex: "eaaca16f077893e67c4481a8ad11e2069995d1ebe678a21ecb720597ea665a63", player: "com.netease.163music"},
 }
 
 // isKnownPlaceholderCoverURL:设备封面落盘的文件名是内容 SHA-256 的前 8 字节(见 saveDeviceArtwork),

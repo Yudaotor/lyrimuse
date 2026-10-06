@@ -230,6 +230,10 @@ type enrichEntry struct {
 	// 就是这么标的，天然贴合"能识别就用中文名"的诉求，不需要额外维护中英文对照表)。
 	// 识别不出时留空，lbMeta 原样使用本地(Apple Music)标签，不瞎猜。
 	CanonicalArtist string `json:"canonical_artist,omitempty"`
+	// InferredArtist / InferredAlbum:播放器没报歌手时按「歌名 + 时长」认出来的歌手和专辑(inferredidentity.go)。
+	// 给 App 显示、找封面、拼链接用;不进 fields(),打卡照旧按播放器报的。
+	InferredArtist string `json:"inferred_artist,omitempty"`
+	InferredAlbum  string `json:"inferred_album,omitempty"`
 	// CoverSource/LyricsSource 记录封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"/"amll"…),
 	// 供网页页脚如实展示(而不是写死"来自网易云"——封面/歌词各自可能来自不同平台,或者
 	// 干脆哪个平台都没有)。
@@ -833,12 +837,15 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			go applyDeviceCoverUpgrade(context.Background(), key, artist, title, album, bundleID)
 		} else if (needsPeripheralBackfill(e, artist, album) ||
 			(coverNeedsHintCheck(e, album, coverAlbum) && peripheralBackfillWindowOpen(e)) ||
+			(inferredIdentityWorthBackfill(e, artist, title, durationSecs) && peripheralBackfillWindowOpen(e)) ||
 			(motionCoverWorthBackfill(e, artist, title, album) && peripheralBackfillWindowOpen(e))) && !enrichInflight[key] {
 			// 第二个条件:播放器没报专辑、回填出的专辑名跟现有封面完全不沾边 —— 首次解析时没有
 			// 专辑名可用、Apple 第一条合集就此冻结,这条给它一次按回填专辑重选的机会(见
 			// coverNeedsHintCheck)。
 			//
-			// 第三个条件:动态封面是后加的字段,存量条目一个都没有 —— 跟第二条同构地挂在这里、
+			// 第三个条件:播放器没报歌手、还没认出是谁的(inferredIdentityWorthBackfill),同样挂在这里、共用上限与节流。
+			//
+			// 第四个条件:动态封面是后加的字段,存量条目一个都没有 —— 跟第二条同构地挂在这里、
 			// 共用同一套上限与节流,而**不是**塞进 needsPeripheralBackfill:那个函数被四个测试文件
 			// 按三参数签名调着,为一条判据改签名不值得。三态判据见 motionCoverWorthBackfill。
 			enrichInflight[key] = true
@@ -2860,6 +2867,10 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	if e.CanonicalArtist == "" {
 		e.CanonicalArtist = fresh.CanonicalArtist
 	}
+	// 这一轮认出了播放器没报的歌手就换上(专辑跟着这一轮的);认不出不清旧的。
+	if fresh.InferredArtist != "" {
+		e.InferredArtist, e.InferredAlbum = fresh.InferredArtist, fresh.InferredAlbum
+	}
 	if e.DurationSecs <= 0 {
 		e.DurationSecs = fresh.DurationSecs
 	}
@@ -3051,6 +3062,14 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	// 标签)。这是**想要的方向** —— 按曲目匹配去猜歌手身份本来就是弱证据,宁可不归一,
 	// 也不要把错的名字写进缓存(它还会经 EnrichCacheStore 显示在「歌词管理」窗口里)。
 	e.CanonicalArtist = canonicalArtistViaMusicBrainz(ctx, artist)
+	// 播放器没报歌手:找封面、拼链接改用按「歌名 + 时长」认出来的那位(inferredidentity.go)。
+	lookupArtist := artist
+	if artist == "" {
+		if id, ok := inferIdentityByTitle(ctx, title, durationSecs); ok {
+			e.InferredArtist, e.InferredAlbum = id.artist, id.album
+			lookupArtist = id.artist
+		}
+	}
 	// Apple Music/iTunes Search 的匹配结果下面 e.AppleURL 也要用,这里提前算出来复用同一份
 	// (appleMusicMatchCached 本身按 key 缓存,提前调不会多打一次请求)。
 	//
@@ -3070,7 +3089,7 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	//
 	// MV 标题(parseVideoTitle):曲库按视频标题搜不到,封面按拆出来的「演唱者 / 歌名」查、时长当未知(MV 比
 	// 录音室版长)。翻唱 / 特辑不拆:查不到就没有封面,不拿原唱的封面顶(03 章)。
-	coverArtist, coverTitle, coverDuration := artist, title, durationSecs
+	coverArtist, coverTitle, coverDuration := lookupArtist, title, durationSecs
 	if v := parseVideoTitle(artist, title); v.Kind == videoTitleMusicVideo {
 		coverArtist, coverTitle = v.Artist, v.Song
 		if v.DurationUnknown {
@@ -3141,7 +3160,7 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	// 收录的那条记录,专辑名文本上对得上,挂的封面却是另一款合集版,跟同专辑其它曲目
 	// 实际的单张封面是两张图)。
 	if coverAlbum != "" && albumScore(e.CoverAlbum, coverAlbum) < 200 {
-		if url, source, albumVerified := siblingAlbumCover(artist, title, coverAlbum); url != "" {
+		if url, source, albumVerified := siblingAlbumCover(lookupArtist, title, coverAlbum); url != "" {
 			e.CoverURL, e.CoverSource = url, source
 			// cover_album 只在**借来的那张图自己就核实过归属**时才盖(见 siblingAlbumCover
 			// 头注):借一张不认领归属的 qq 图、却盖上本地专辑名,等于凭空造出一条"归属已核实"
@@ -3200,20 +3219,24 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 		// 歌词源全部重查一遍。理由与前两次同类事故见那里的注释。
 		e.AccentColor = dominantColor(ctx, e.CoverURL)
 	}
+	// 认出来的歌手对应的专辑:QQ 那条没报的话用挑封面时那个专辑名(播放器没报专辑时是按署名 + 曲名 + 时长回填的)。
+	if e.InferredArtist != "" && e.InferredAlbum == "" {
+		e.InferredAlbum = coverAlbum
+	}
 	// 各平台单曲跳转链接。Apple Music:有已校验的目录锚点就用它的页面(appleCatalogLinkFor),没有才用上面封面兜底那步
 	// 按歌名搜出来的 appleMatch(同一个 key 缓存,不是重新发请求);QQ 经 smartbox;Spotify 搜索链接。
 	e.AppleURL = appleMatch.url
 	if u := appleCatalogLinkFor(artist, title, album, durationSecs); u != "" {
 		e.AppleURL = u
 	}
-	e.QQURL = qqMusicURL(ctx, artist, title, album, durationSecs)
+	e.QQURL = qqMusicURL(ctx, lookupArtist, title, album, durationSecs)
 	// 顺手把专辑/歌手 mid 一起拿到,不用等下一轮外围回填(首次解析本来就在打一堆请求,
 	// 多这一个不影响体感;拿不到就留空,菜单那两行自己会隐藏)。
 	e.QQAlbumMid, e.QQSingerMid = qqSongCatalogMids(ctx, qqMidFromURL(e.QQURL))
 	if title != "" {
-		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
+		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(lookupArtist+" "+title)
 	}
-	e.fillMotionCover(ctx, artist, title, album)
+	e.fillMotionCover(ctx, lookupArtist, title, album)
 	return e
 }
 
