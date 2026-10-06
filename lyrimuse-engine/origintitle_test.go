@@ -446,7 +446,7 @@ func TestOriginTitleRoundIsWired(t *testing.T) {
 	}
 	src := string(b)
 	for _, n := range []string{
-		"\t} else {\n\t\t// 可用源已经够数、走不到上面的标题反查时,缺着的源可能只是拿罗马字的本地曲名搜不到原文登记的这首歌,见 originTitleRound。\n\t\tne, results = originTitleRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)\n\t}\n\t// 按 ISRC 补取",
+		"\t} else {\n\t\t// 可用源已经够数、走不到上面的标题反查时,缺着的源可能只是拿罗马字的本地曲名搜不到原文登记的这首歌,见 originTitleRound。\n\t\tne, results = originTitleRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)\n\t}\n\t// 还缺着的源换一种曲名写法再问一次",
 		"titleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\ttrustedRecordingISRC(artist, title, album, durationSecs, results))",
 	} {
 		if !strings.Contains(src, n) {

@@ -22,6 +22,9 @@ func TestSearchQueryFields(t *testing.T) {
 		{[3]string{"林宥嘉", "⽩", "王"}, [3]string{"林宥嘉", "白", "王"}},
 		{[3]string{"宇多田ヒカル", "⽇曜日", ""}, [3]string{"宇多田ヒカル", "日曜日", ""}},
 		{[3]string{"陳嘉樺", "傀 - 張藝謀<影>電影主題曲", "傀 - 張藝謀<影>電影主題曲"}, [3]string{"陈嘉桦", "傀", "傀"}},
+		{[3]string{"Taeb2", "Can\u2032t We Just Love?", ""}, [3]string{"Taeb2", "Can't We Just Love?", ""}},
+		{[3]string{"NEXZ", "SAUCIN\u2032", "SAUCIN\u00b4 - EP"}, [3]string{"NEXZ", "SAUCIN'", "SAUCIN' - EP"}},
+		{[3]string{"Artist", "Don`t Stop", ""}, [3]string{"Artist", "Don't Stop", ""}},
 	}
 	for _, c := range cases {
 		a, ti, al := searchQueryFields(c.in[0], c.in[1], c.in[2])

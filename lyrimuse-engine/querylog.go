@@ -51,6 +51,8 @@ const (
 	lyricQueryReasonTitleStorefront = "title-from-apple-storefront"
 	// 标题反查:「英文名 中文名」两段式的双语曲名只拿中文那段去搜,见 bilingualTitleHanPart。
 	lyricQueryReasonTitleBilingual = "title-bilingual"
+	// 曲名变体:还缺着的源换一种曲名写法再问一次,见 titleVariantRound。
+	lyricQueryReasonTitleVariant = "title-variant"
 	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
 	lyricQueryReasonISRC = "isrc-from-applemusic"
 )
@@ -103,6 +105,7 @@ func lyricQueryReasons() []string {
 		lyricQueryReasonTitleSearch,
 		lyricQueryReasonTitleStorefront,
 		lyricQueryReasonTitleBilingual,
+		lyricQueryReasonTitleVariant,
 		lyricQueryReasonISRC,
 	}
 }

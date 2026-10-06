@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"unicode"
 )
 
@@ -10,11 +11,13 @@ import (
 // 「夢」转成「梦」之后,按原文精确匹配的源(LRCLIB 的 /api/get、Deezer 的搜索)整个落空,国内几家存的也是
 // 日文原文。判据按整首歌而不是逐栏:歌名是纯汉字的日文歌(歌手带假名)歌名也不能转。见 09 章决策 124。
 // 两种写法都先把同形异码字换回标准字(foldHanLookalikes),歌名、专辑名去掉「 - 電影《Y》主題曲」这类宣传尾段
-// (withoutPromoTitleTail):各源曲库存的是标准字、多数只登记歌名本身。见 09 章决策 189。
+// (withoutPromoTitleTail):各源曲库存的是标准字、多数只登记歌名本身。见 09 章决策 189。撇号的几种误用写法换成「'」
+// (foldQuoteLookalikes),见 09 章决策 191。
 //
 // 只管发请求用的查询词;缓存 key、候选比对(normLoose 里的 toSimplified)不走这里。
 func searchQueryFields(artist, title, album string) (string, string, string) {
 	artist, title, album = foldHanLookalikes(artist), foldHanLookalikes(title), foldHanLookalikes(album)
+	artist, title, album = foldQuoteLookalikes(artist), foldQuoteLookalikes(title), foldQuoteLookalikes(album)
 	title, album = withoutPromoTitleTail(title), withoutPromoTitleTail(album)
 	if containsKana(artist) || containsKana(title) || containsKana(album) {
 		return composeNFC(artist), composeNFC(title), composeNFC(album)
@@ -39,6 +42,14 @@ func withSearchQueryOriginal(ctx context.Context, artist, title, album string) c
 func searchQueryOriginalFrom(ctx context.Context) (artist, title, album string, ok bool) {
 	v, ok := ctx.Value(searchQueryOriginalKey{}).([3]string)
 	return v[0], v[1], v[2], ok
+}
+
+// quoteLookalikes:被当成撇号打进标签的几个字符 —— 角分号 U+2032、反角分号 U+2035、尖音符 U+00B4、反引号、修饰字母撇号 U+02BC。
+var quoteLookalikes = strings.NewReplacer("\u2032", "'", "\u2035", "'", "\u00b4", "'", "`", "'", "\u02bc", "'")
+
+// foldQuoteLookalikes 把 quoteLookalikes 换成「'」:按字面搜的源(Apple Music 等)拿「Can\u2032t」搜不到「Can't」。
+func foldQuoteLookalikes(s string) string {
+	return quoteLookalikes.Replace(s)
 }
 
 // lyricIdentityFields:按播放器原样标签记下的东西(播放时的平台曲目 ID、由它换来的 ISRC、本机客户端的歌词缓存、

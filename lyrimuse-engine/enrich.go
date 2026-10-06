@@ -3922,6 +3922,8 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		// 可用源已经够数、走不到上面的标题反查时,缺着的源可能只是拿罗马字的本地曲名搜不到原文登记的这首歌,见 originTitleRound。
 		ne, results = originTitleRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)
 	}
+	// 还缺着的源换一种曲名写法再问一次,见 titleVariantRound。
+	ne, results = titleVariantRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)
 	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿已被认可的 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
 	// 放在所有轮次之后:别名轮可能才让 Apple Music 查到这首(曲库里署名跟本地不同)。
 	if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != "" {
