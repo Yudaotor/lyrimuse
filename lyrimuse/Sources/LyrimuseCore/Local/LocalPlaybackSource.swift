@@ -2975,14 +2975,14 @@ public final class LocalPlaybackSource: ObservableObject {
             let tornCurrent = self.title.isEmpty ? nil : self.lastSnapshot.map(TornTrackHold.Fields.init)
             switch self.tornHold.decide(current: tornCurrent, next: TornTrackHold.Fields(snapshot), now: Date()) {
             case .holdStarted:
-                logger.notice("now playing: holding \(snapshot.title ?? "", privacy: .public) — only the title changed (artist/album/duration unchanged)")
+                logger.notice("now playing: holding \(snapshot.title ?? "", privacy: .public) — torn snapshot (the title changed, the rest or the duration is still the previous track's)")
                 self.adjustPollCadence()
                 return
             case .holding:
                 self.adjustPollCadence()
                 return
             case .released:
-                logger.notice("now playing: releasing \(snapshot.title ?? "", privacy: .public) after \(Int(TornTrackHold.maxHold))s — the title-only change persisted")
+                logger.notice("now playing: releasing \(snapshot.title ?? "", privacy: .public) after \(Int(TornTrackHold.maxHold))s — the torn shape persisted")
             case .accept:
                 break
             }

@@ -749,9 +749,16 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 命中的条目时长跟这次播放差太多——key 撞车,其实是两首不同录音,见
 		// resolveEnrichKeyForDuration 的注释。换成消歧变体 key,不覆盖已有数据。
 		if rk, re, rok := resolveEnrichKeyForDuration(enrichCache, key, durationSecs); rk != key {
+			// 要另开的那一位还空着:时长连续稳定之前先不建,这一拍返回空(见 durationVariantSteadyLocked)。
+			if !rok && !durationVariantSteadyLocked(key, durationSecs, time.Now()) {
+				enrichMu.Unlock()
+				return nil
+			}
 			log.Printf("enrich: %q duration mismatch (cached %.1fs vs actual %.1fs), using variant %q",
 				key, e.DurationSecs, durationSecs, rk)
 			key, e, ok = rk, re, rok
+		} else {
+			delete(durationVariantSeen, key)
 		}
 	}
 	if ok {

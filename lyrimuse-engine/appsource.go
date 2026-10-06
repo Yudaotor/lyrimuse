@@ -18,6 +18,7 @@ import (
 //   - 署名纠正:App 报的原始标签照样逐拍喂给 kugouFixedArtist / trustedFixedTrack;引擎发布的纠正比 App
 //     套用的新(applied_fix_rev 落后)时,身份用引擎这一拍的结论,其余时候用 App 的。
 //   - 汽水试听段:照样查、照样发布;已经查到而 App 报的仍是试听段长度时,本地先换回整首口径。
+//   - 网易云试听:时长换回整首;网易云不给试听段的起点,位置照旧(见 neteasetrial.go)。
 //   - Apple 目录锚点:按 App 带来的目录曲目 ID 核对并记下目录 ID;电台的曲长只认目录(没有就是 0),
 //     其余曲目有权威曲长就覆盖。
 //   - 广告:只认 App 的结论(isAdBreak 只看 appReportedAd);Spotify 曲目 ID 用 App 带来的那个。
@@ -39,15 +40,18 @@ type appPlaybackJudge struct {
 	fixRev func() int64
 	// sodaPreview:汽水试听段。known=true 时给出起点与整首时长;pending = 还在后台查。
 	sodaPreview func(bundle, title, artist, album string, duration float64) (startSecs, fullSecs float64, known, pending bool)
+	// neteaseTrial:网易云试听,是的话给出整首时长(见 neteasetrial.go)。
+	neteaseTrial func(bundle, title, artist, album string, duration float64) (fullSecs float64, ok bool)
 	// catalog:Apple 目录锚点,核对通过时 ok=true;durationSecs 可能为 0(目录不报时长)。
 	catalog func(bundle string, trackID int64, trackNumber int, artist, title, album string) (durationSecs float64, ok bool)
 }
 
 var liveAppPlaybackJudge = appPlaybackJudge{
-	fixedTrack:  liveAppFixedTrack,
-	fixRev:      currentPlayerArtistFixRev,
-	sodaPreview: liveAppSodaPreview,
-	catalog:     liveAppCatalog,
+	fixedTrack:   liveAppFixedTrack,
+	fixRev:       currentPlayerArtistFixRev,
+	sodaPreview:  liveAppSodaPreview,
+	neteaseTrial: liveNeteaseTrialFull,
+	catalog:      liveAppCatalog,
 }
 
 // searchAppPlaybackJudge:search-lyrics 用的判定。同 liveAppPlaybackJudge,只是不查汽水试听段 —— 那一步会联网、
@@ -160,6 +164,9 @@ func appPlaybackTickFor(rec appStateRecord, prev appPlaybackMarks, now time.Time
 		}
 	} else {
 		s.SodaPreviewPending = pending
+	}
+	if full, ok := j.neteaseTrial(rec.Player, t.Raw.Title, t.Raw.Artist, t.Raw.Album, s.Duration); ok {
+		s.Duration, s.ReportedDuration = full, full
 	}
 	catalogDuration := 0.0
 	if t.CatalogTrackID != nil {

@@ -18,7 +18,8 @@ func plainAppJudge() appPlaybackJudge {
 		sodaPreview: func(string, string, string, string, float64) (float64, float64, bool, bool) {
 			return 0, 0, false, false
 		},
-		catalog: func(string, int64, int, string, string, string) (float64, bool) { return 0, false },
+		neteaseTrial: func(string, string, string, string, float64) (float64, bool) { return 0, false },
+		catalog:      func(string, int64, int, string, string, string) (float64, bool) { return 0, false },
 	}
 }
 
@@ -376,5 +377,30 @@ func TestAppPlaybackTickClampsPositionToDuration(t *testing.T) {
 	rec.Track.DurationSecs, rec.Track.CatalogTrackID = nil, nil
 	if tick, _ := appPlaybackTickFor(rec, appPlaybackMarks{}, at.Add(100*time.Second), plainAppJudge()); tick.snap.Position <= 190 {
 		t.Fatalf("没有曲长不截: %.3f", tick.snap.Position)
+	}
+}
+
+// 网易云试听:这一拍的时长换回整首,位置照旧(网易云不给试听段起点)。
+func TestAppPlaybackTickNeteaseTrial(t *testing.T) {
+	j := plainAppJudge()
+	j.neteaseTrial = func(bundle, title, artist, album string, d float64) (float64, bool) {
+		if bundle == neteaseMusicBundleID && d == 30 {
+			return 212.8, true
+		}
+		return 0, false
+	}
+	now := time.Unix(1_800_000_000, 0)
+	rec := appSourceRec(1, 1, 1, "月亮代表我的心", now)
+	rec.Player = neteaseMusicBundleID
+	d := 30.0
+	rec.Track.DurationSecs = &d
+	tick, _ := appPlaybackTickFor(rec, appPlaybackMarks{}, now, j)
+	if tick.snap.Duration != 212.8 || tick.snap.ReportedDuration != 212.8 || tick.snap.Position != 10 {
+		t.Fatalf("试听: duration=%v reported=%v position=%v, want 212.8 212.8 10", tick.snap.Duration, tick.snap.ReportedDuration, tick.snap.Position)
+	}
+	rec.Player = "com.apple.Music"
+	tick, _ = appPlaybackTickFor(rec, appPlaybackMarks{}, now, j)
+	if tick.snap.Duration != 30 {
+		t.Fatalf("别的播放器不换: duration=%v", tick.snap.Duration)
 	}
 }

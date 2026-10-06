@@ -155,6 +155,35 @@ func runPlaybackStateTests() {
     var kasetAfter = kasetBefore
     kasetAfter.title = "Children of the Sun 太陽之子"
     expectEqual(T.isTorn(current: kasetBefore, next: kasetAfter), false, "撕裂快照: Kaset 的快照整份读来,改名不按住")
+    // 网易云换歌时第一份快照带着上一首的时长:歌名、歌手、专辑都换了,时长逐位不变。
+    let neteaseBefore = T.Fields(title: "鸽子", artist: "宋冬野", album: "安和桥北",
+                                 bundle: PlaybackPlayer.netease.bundleIdentifier, duration: 246.06, isRadio: false)
+    let neteaseLag = T.Fields(title: "把你的外套留在深巷", artist: "郭顶", album: "飞行器的执行周期",
+                              bundle: PlaybackPlayer.netease.bundleIdentifier, duration: 246.06, isRadio: false)
+    expectEqual(T.isTorn(current: neteaseBefore, next: neteaseLag), true, "撕裂快照: 网易云换了歌、时长还是上一首的")
+    var neteaseReal = neteaseLag
+    neteaseReal.duration = 201.6
+    expectEqual(T.isTorn(current: neteaseBefore, next: neteaseReal), false, "撕裂快照: 网易云时长跟上来就是真换歌")
+    var appleBefore = neteaseBefore
+    appleBefore.bundle = "com.apple.Music"
+    var appleLag = neteaseLag
+    appleLag.bundle = "com.apple.Music"
+    expectEqual(T.isTorn(current: appleBefore, next: appleLag), false, "撕裂快照: 只有时长没跟上的这一种只认网易云")
+    var neteaseNoDuration = neteaseBefore
+    neteaseNoDuration.duration = 0
+    var neteaseLagNoDuration = neteaseLag
+    neteaseLagNoDuration.duration = 0
+    expectEqual(T.isTorn(current: neteaseNoDuration, next: neteaseLagNoDuration), false, "撕裂快照: 上一首没报时长不判")
+    let trialA = T.Fields(title: "Faded", artist: "Alan Walker/Iselin Solheim", album: "BRIT Awards 2017",
+                          bundle: PlaybackPlayer.netease.bundleIdentifier, duration: 30, isRadio: false)
+    let trialB = T.Fields(title: "说好不哭", artist: "周杰伦", album: "说好不哭",
+                          bundle: PlaybackPlayer.netease.bundleIdentifier, duration: 30, isRadio: false)
+    expectEqual(T.isTorn(current: trialA, next: trialB), false, "撕裂快照: 网易云连着两首试听、时长相同不判")
+    var neteaseHold = T()
+    expectEqual(neteaseHold.decide(current: neteaseBefore, next: neteaseLag, now: t0), .holdStarted,
+                "撕裂快照: 网易云时长没跟上先按住")
+    expectEqual(neteaseHold.decide(current: neteaseBefore, next: neteaseReal, now: t0.addingTimeInterval(0.7)), .accept,
+                "撕裂快照: 网易云时长跟上来立即采纳")
     var kasetHold = T()
     expectEqual(kasetHold.decide(current: kasetBefore, next: kasetAfter, now: t0), .accept, "撕裂快照: Kaset 改名当场采纳")
     var hold = T()
