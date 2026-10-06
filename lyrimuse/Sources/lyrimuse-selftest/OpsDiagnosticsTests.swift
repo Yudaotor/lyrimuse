@@ -1119,6 +1119,22 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    // ---- 常驻内存:整份解析歌词缓存按映射读文件,Info.plist 关掉 malloc 的大块缓存(15 章决策 22)----
+    do {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
+                                  encoding: .utf8)) ?? ""
+        let build = (try? String(contentsOf: sources.deletingLastPathComponent().appendingPathComponent("build.sh"),
+                                 encoding: .utf8)) ?? ""
+        expectEqual(reader.isEmpty || build.isEmpty, false, "常驻内存(契约): 读到源码")
+        expectEqual(sourceBytes(reader, contain: "Data(contentsOf: source.url, options: .mappedIfSafe)"), true,
+                    "常驻内存(契约): 同步整份解析按映射读 —— 读进堆的话每解一次多一份几十 MB 的拷贝")
+        expectEqual(sourceBytes(reader, contain: "(try? Data(contentsOf: url, options: .mappedIfSafe))"), true,
+                    "常驻内存(契约): 后台整份解析按映射读")
+        expectEqual(sourceBytes(build, contain: "<key>LSEnvironment</key>\n    <dict>\n        <key>MallocLargeCache</key>\n        <string>0</string>"), true,
+                    "常驻内存(契约): Info.plist 关掉 malloc 的大块缓存 —— 不关的话解完索引释放的大块攒着算进占用")
+    }
+
     // ---- build.sh 装完必须确认进程真换了----
     //
     // `open -g` 撞上 LaunchServices 单实例时只会**激活**旧实例、不起新二进制,而此前脚本

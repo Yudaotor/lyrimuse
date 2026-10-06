@@ -1442,7 +1442,8 @@ public enum EnrichCacheReader {
         let mtime = source.mtime
         // 同一版文件上次就没解开:不再每拍在主线程把几十 MB 重读重解一遍,等文件变了再试。
         if let mtime, mtime == failedDecodeMTime { return }
-        guard let data = try? Data(contentsOf: source.url),
+        // 整份按映射读,几十 MB 的文件内容不拷进堆(见 15 章决策 22)。引擎换这份文件一律是新文件改名过来,不会原地截断。
+        guard let data = try? Data(contentsOf: source.url, options: .mappedIfSafe),
               let all = try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: data)
         else {
             failedDecodeMTime = mtime
@@ -1473,7 +1474,7 @@ public enum EnrichCacheReader {
         let memos = (loose: looseKeyMemo, title: titleCoverKeyMemo, album: albumCoverKeyMemo, name: nameLooseKeyMemo)
         Task.detached(priority: .utility) {
             let mtime = mtime(of: url)
-            let decoded: [String: EnrichCacheEntry]? = (try? Data(contentsOf: url))
+            let decoded: [String: EnrichCacheEntry]? = (try? Data(contentsOf: url, options: .mappedIfSafe))
                 .flatMap { try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: $0) }
             // 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes)
             let derived = decoded.map {

@@ -777,6 +777,14 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <!-- 关掉 libmalloc 的大块缓存:释放的大块(重解歌词缓存索引留下的几十 MB 缓冲)当场还给系统,
+         不在进程里攒着算进占用。只在经 LaunchServices 启动时生效(open、登录项、更新后重启),
+         不认这个变量的系统上没有效果。见 15 章决策 22。 -->
+    <key>LSEnvironment</key>
+    <dict>
+        <key>MallocLargeCache</key>
+        <string>0</string>
+    </dict>
     <!-- 「发现新播放器」那条通知带两个按钮(加入信任列表/忽略),而默认的 banner 样式
          5 秒就自动消失、按钮要悬停才露出来。alert 样式常驻不走、按钮直接可见。
          这是 legacy NSUserNotification 时代的键、只决定该 App 通知样式的**初始默认值**
