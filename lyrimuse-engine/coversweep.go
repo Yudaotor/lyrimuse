@@ -18,6 +18,8 @@ import (
 // 每条最多在这里补一次:补过一次 PeripheralRetryCount 就不是 0 了,之后照旧等播放时再试。
 // 一条补完一个请求都没成功时不算补过(见 backfillPeripheralFields 记次数那一行),等 coverSweepOfflineWait
 // 再补下一条;连续 coverSweepOfflineLimit 条都这样就停下这一遍,coverSweepOfflineRetry 后再来。
+// 补一条不当场存盘:每补完 coverSweepSaveEvery 条、以及一遍收尾时存一次(App 每次存盘都要整份重读缓存);
+// 正在播的那首照常当场存。
 
 const (
 	coverSweepInitialDelay = 2 * time.Minute
@@ -28,6 +30,7 @@ const (
 	coverSweepOfflineWait  = 75 * time.Second
 	coverSweepYieldPoll    = 2 * time.Second
 	coverSweepYieldMax     = 5 * time.Minute
+	coverSweepSaveEvery    = 10
 )
 
 var (
@@ -41,7 +44,21 @@ var (
 	// coverSweepBackfill 补一条;coverSweepNetworkRound 观察这一条发出去的请求成没成。单测都换成假的。
 	coverSweepBackfill     = backfillPeripheralFields
 	coverSweepNetworkRound = beginNetworkRound
+	// coverSweepSave 把攒着的改动存盘。单测换成计数。
+	coverSweepSave = requestEnrichSave
 )
+
+type coverSweepDeferSaveKey struct{}
+
+// withCoverSweepDeferredSave 标记这一条的存盘由 runCoverSweep 攒着做,backfillPeripheralFields 见到就不当场存。
+func withCoverSweepDeferredSave(ctx context.Context) context.Context {
+	return context.WithValue(ctx, coverSweepDeferSaveKey{}, true)
+}
+
+func coverSweepSaveDeferred(ctx context.Context) bool {
+	v, _ := ctx.Value(coverSweepDeferSaveKey{}).(bool)
+	return v
+}
 
 // startCoverSweeper 由 run() 单开一个 goroutine,ctx 取消时退出。
 func startCoverSweeper(ctx context.Context) {
@@ -75,7 +92,7 @@ func runCoverSweep(ctx context.Context) coverSweepPass {
 		return pass
 	}
 	slog.Info("cover sweep: start", "candidates", len(keys))
-	offlineStreak := 0
+	offlineStreak, unsaved := 0, 0
 	var wait time.Duration
 	for _, key := range keys {
 		if wait > 0 {
@@ -86,7 +103,8 @@ func runCoverSweep(ctx context.Context) coverSweepPass {
 			break
 		}
 		wait = coverSweepGap
-		switch coverSweepOne(ctx, key) {
+		outcome := coverSweepOne(ctx, key)
+		switch outcome {
 		case coverSweepSkipped:
 			pass.skipped++
 			wait = 0
@@ -100,11 +118,21 @@ func runCoverSweep(ctx context.Context) coverSweepPass {
 			offlineStreak++
 			wait = coverSweepOfflineWait
 		}
+		// 没跳过的这条改过条目(补上了封面,或者推进了补全的节流时刻 / 次数)。
+		if outcome != coverSweepSkipped {
+			if unsaved++; unsaved >= coverSweepSaveEvery {
+				coverSweepSave()
+				unsaved = 0
+			}
+		}
 		if offlineStreak >= coverSweepOfflineLimit {
 			pass.offline = true
 			slog.Warn("cover sweep: no request got through, stopping this pass", "streak", offlineStreak, "key", key)
 			break
 		}
+	}
+	if unsaved > 0 {
+		coverSweepSave()
 	}
 	slog.Info("cover sweep: done", "candidates", pass.candidates, "filled", pass.filled, "missed", pass.missed,
 		"skipped", pass.skipped, "offline", pass.offline)
@@ -193,7 +221,7 @@ func coverSweepOne(ctx context.Context, key string) coverSweepOutcome {
 	enrichMu.Unlock()
 	round := coverSweepNetworkRound()
 	// 同步跑:backfillPeripheralFields 自己清 enrichInflight、落盘、通知重推。
-	coverSweepBackfill(withBackgroundOutbound(ctx), key, artist, coverSweepTitle(title), album, dur)
+	coverSweepBackfill(withCoverSweepDeferredSave(withBackgroundOutbound(ctx)), key, artist, coverSweepTitle(title), album, dur)
 	attempts, failures := round()
 	enrichMu.Lock()
 	filled := enrichCache[key].CoverURL != ""

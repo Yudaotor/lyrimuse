@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -13,20 +14,20 @@ import (
 type coverSweepCall struct {
 	key, artist, title, album string
 	dur                       float64
-	background                bool
+	background, deferredSave  bool
 }
 
 // withCoverSweepFakes 换掉补一条、观察请求和等待:每补一条先调 onBackfill(可以改缓存),再按 rounds 依次报这一条的
 // (请求数, 失败数),报完了沿用最后一个。返回记下的调用与等待时长。
 func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key string)) (*[]coverSweepCall, *[]time.Duration) {
 	t.Helper()
-	savedBackfill, savedRound, savedWait := coverSweepBackfill, coverSweepNetworkRound, coverSweepWait
+	savedBackfill, savedRound, savedWait, savedSave := coverSweepBackfill, coverSweepNetworkRound, coverSweepWait, coverSweepSave
 	enrichMu.Lock()
 	savedInflight := enrichInflight
 	enrichInflight = map[string]bool{}
 	enrichMu.Unlock()
 	t.Cleanup(func() {
-		coverSweepBackfill, coverSweepNetworkRound, coverSweepWait = savedBackfill, savedRound, savedWait
+		coverSweepBackfill, coverSweepNetworkRound, coverSweepWait, coverSweepSave = savedBackfill, savedRound, savedWait, savedSave
 		enrichMu.Lock()
 		enrichInflight = savedInflight
 		enrichMu.Unlock()
@@ -34,8 +35,9 @@ func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key st
 	var calls []coverSweepCall
 	var waits []time.Duration
 	coverSweepWait = func(_ context.Context, d time.Duration) { waits = append(waits, d) }
+	coverSweepSave = func() {}
 	coverSweepBackfill = func(ctx context.Context, key, artist, title, album string, dur float64) {
-		calls = append(calls, coverSweepCall{key, artist, title, album, dur, isBackgroundOutbound(ctx)})
+		calls = append(calls, coverSweepCall{key, artist, title, album, dur, isBackgroundOutbound(ctx), coverSweepSaveDeferred(ctx)})
 		if onBackfill != nil {
 			onBackfill(key)
 		}
@@ -113,8 +115,8 @@ func TestCoverSweepRunsEachCandidateOnce(t *testing.T) {
 	})
 	pass := runCoverSweep(context.Background())
 	wantCalls := []coverSweepCall{
-		{"A|Gone|Al", "A", "Gone", "Al", 180, true},
-		{"A|Song~dur2|Al", "A", "Song", "Al", 200, true},
+		{"A|Gone|Al", "A", "Gone", "Al", 180, true, true},
+		{"A|Song~dur2|Al", "A", "Song", "Al", 200, true, true},
 	}
 	if !reflect.DeepEqual(*calls, wantCalls) {
 		t.Fatalf("调用 = %+v, 要 %+v", *calls, wantCalls)
@@ -124,6 +126,36 @@ func TestCoverSweepRunsEachCandidateOnce(t *testing.T) {
 	}
 	if want := []time.Duration{coverSweepGap}; !reflect.DeepEqual(*waits, want) {
 		t.Errorf("等待 = %v, 要 %v", *waits, want)
+	}
+}
+
+// 补一条不当场存盘(交给 backfillPeripheralFields 的 ctx 带着标记),每补完 coverSweepSaveEvery 条存一次,收尾再存剩下的;
+// 轮到时不用补的不算。
+func TestCoverSweepBatchesSaves(t *testing.T) {
+	entries := map[string]enrichEntry{}
+	for i := 0; i < 2*coverSweepSaveEvery+3; i++ {
+		entries[fmt.Sprintf("A|%02d|X", i)] = enrichEntry{Lyrics: coverSweepLyrics}
+	}
+	entries["A|01a|X"] = enrichEntry{Lyrics: coverSweepLyrics}
+	withEnrichCache(t, entries)
+	var savesAt []int
+	calls, _ := withCoverSweepFakes(t, [][2]int32{{3, 0}}, func(key string) {
+		if key == "A|00|X" {
+			coverSweepSetCover("A|01a|X")
+		}
+	})
+	coverSweepSave = func() { savesAt = append(savesAt, len(*calls)) }
+	pass := runCoverSweep(context.Background())
+	if pass.skipped != 1 || len(*calls) != 2*coverSweepSaveEvery+3 {
+		t.Fatalf("补了 %d 条, %+v", len(*calls), pass)
+	}
+	if want := []int{coverSweepSaveEvery, 2 * coverSweepSaveEvery, 2*coverSweepSaveEvery + 3}; !reflect.DeepEqual(savesAt, want) {
+		t.Errorf("存盘时机(当时补到第几条) = %v, 要 %v", savesAt, want)
+	}
+	for _, c := range *calls {
+		if !c.deferredSave {
+			t.Fatalf("%s 没带上「先别存」的标记", c.key)
+		}
 	}
 }
 
@@ -204,6 +236,9 @@ func TestBackfillPeripheralFieldsCountsOnlyReachedRounds(t *testing.T) {
 	}
 	if strings.Count(body, "e.PeripheralRetryCount++") != 1 {
 		t.Error("PeripheralRetryCount 只该在那一处加")
+	}
+	if !strings.Contains(body, "!coverSweepSaveDeferred(ctx) || (cur != nil && *cur == key) {\n\t\t// 后台补封面那一遍攒着存") {
+		t.Error("后台补封面带着「先别存」标记时不当场存盘,正在播的那首除外")
 	}
 }
 

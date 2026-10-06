@@ -2894,7 +2894,8 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 		// 收下了歌词:正在播的这首当场落盘(同首次解析),并导出歌词文件。
 		commitEnrichSave(key)
 		exportLyricsFilesFor(key)
-	} else {
+	} else if cur := enrichPlayingKey.Load(); !coverSweepSaveDeferred(ctx) || (cur != nil && *cur == key) {
+		// 后台补封面那一遍攒着存(见 coversweep.go);正在播的这首照常当场存。
 		requestEnrichSave()
 	}
 	if enrichNotify != nil {
