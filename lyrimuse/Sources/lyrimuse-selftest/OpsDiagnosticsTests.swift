@@ -547,6 +547,9 @@ func runOpsDiagnosticsTests() {
         expectEqual(explicit?.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines), "[on]",
                     "ProcessRunner: 传了 environment 就真的传进子进程")
 
+        // 超时定时器的优先级不能低于轮询队列(userInitiated),否则系统很忙时到点了也杀不掉(02 章决策 105)。
+        expectEqual(ProcessRunner.timerQoS, .userInitiated, "ProcessRunner: 超时定时器挂 userInitiated")
+
         // 不理 SIGTERM 的子进程(osascript 等授权弹窗时就是这样):超时后补 SIGKILL,不能一直卡着。
         let stubbornStart = Date()
         let stubborn = ProcessRunner.run("/bin/sh", ["-c", "trap '' TERM; exec /bin/sleep 30"], timeout: 0.3)
