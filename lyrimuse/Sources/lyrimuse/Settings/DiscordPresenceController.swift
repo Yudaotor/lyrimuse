@@ -97,7 +97,8 @@ final class DiscordPresenceController: ObservableObject {
             signal(playback.$title), signal(playback.$artist), signal(playback.$displayArtist),
             signal(playback.$displayAlbum), signal(playback.$isPlayingSmoothed), signal(playback.$anchor),
             signal(playback.$isCurrentTrackAdBreak), signal(playback.$isRadioTalkBreak),
-            signal(source.$spotifyArtworkURL), signal(source.$webPageArtworkURL), signal(source.$enrichContentVersion),
+            signal(source.$spotifyArtworkURL), signal(source.$webPageArtworkURL), signal(source.$webPageVideoFrameURL),
+            signal(source.$enrichContentVersion),
             signal(ConfigStore.shared.$stateRelayURL),
             signal(settings.$discordPresenceEnabled), signal(settings.$discordStatusDisplay),
             signal(settings.$discordKeepWhenPaused), signal(settings.$discordExcludedBundles),
@@ -409,10 +410,12 @@ final class DiscordPresenceController: ObservableObject {
         let artistURL: URL?
         /// 第 1 档:当前播放器自己给的封面地址。
         let ownCover: URL?
-        /// 第 4 档:同一首在别的播放器记下的、缓存里认专辑的封面。
+        /// 第 4 档:设备封面在网上的同一张图、同一首在别的播放器记下的、缓存里认专辑的封面。
         let localCover: URL?
         /// 要联网的那几档;第 1 档有了、或者没有一样能查时为 nil。
         let coverRequest: PresenceCover.Request?
+        /// 第 6 档:放的是视频(Kaset、YouTube Music 网页版)、没有专辑图时这支视频的截图;第 1 档有了为 nil。
+        let videoFrame: URL?
         /// 这首在 `coverLookups` 里的键。
         let coverKey: String
     }
@@ -422,12 +425,14 @@ final class DiscordPresenceController: ObservableObject {
         let webPlatform = PlaybackCoordinator.shared.resolvedWebPlatformID
         let kasetCover = source.kasetArtworkURL
         let kasetVideo = source.kasetVideoID
+        let videoFrame = source.kasetVideoFrameURL ?? source.webPageVideoFrameURL
         let appleTrackID = source.appleCatalogTrackID
         let relayBase = ConfigStore.shared.stateRelayURL
         let key = [reportedBundleID ?? "", webPlatform ?? "", source.artist, source.title, source.album,
                    source.enrichContentVersion.map { String($0.timeIntervalSince1970) } ?? "",
                    source.spotifyArtworkURL?.absoluteString ?? "", kasetCover?.absoluteString ?? "", kasetVideo ?? "",
-                   source.webPageArtworkURL?.absoluteString ?? "", appleTrackID.map { String($0) } ?? "", relayBase]
+                   source.webPageArtworkURL?.absoluteString ?? "", videoFrame?.absoluteString ?? "",
+                   appleTrackID.map { String($0) } ?? "", relayBase]
             .joined(separator: "\n")
         if let extras, extras.key == key { return extras }
         let links = EnrichCacheReader.platformLinks(artist: source.artist, title: source.title, album: source.album)
@@ -439,7 +444,9 @@ final class DiscordPresenceController: ObservableObject {
         // 缓存里的 cover_url 常是设备直送、存在本机的文件:不是 https 的不直接用,只拿来换中继上的地址。
         let cached = EnrichCacheReader.albumMatchedCoverURL(artist: source.artist, title: source.title, album: source.album)
         let otherPlayer = playerCovers.filter { $0.key != reportedBundleID }.sorted { $0.key < $1.key }.first?.value
-        let local = otherPlayer ?? (cached?.scheme?.lowercased() == "https" ? cached : nil)
+        // 设备封面在网上的同一张图排最前:引擎核对过它跟缓存里这张设备封面是同一张图,没配中继也用得上。
+        let publicCopy = EnrichCacheReader.publicCoverURL(artist: source.artist, title: source.title, album: source.album)
+        let local = publicCopy ?? otherPlayer ?? (cached?.scheme?.lowercased() == "https" ? cached : nil)
         var request: PresenceCover.Request?
         if own == nil {
             let region = Locale.current.region?.identifier
@@ -457,7 +464,7 @@ final class DiscordPresenceController: ObservableObject {
         let fresh = TrackExtras(
             key: key, songURL: song,
             artistURL: links?.artistWebLink(forPlayerBundleID: reportedBundleID, webPlatformID: webPlatform),
-            ownCover: own, localCover: local, coverRequest: request,
+            ownCover: own, localCover: local, coverRequest: request, videoFrame: own == nil ? videoFrame : nil,
             coverKey: [reportedBundleID ?? "", source.artist, source.title, source.album].joined(separator: "\n"))
         extras = fresh
         return fresh
@@ -473,7 +480,8 @@ final class DiscordPresenceController: ObservableObject {
                 startCoverLookup(key: extras.coverKey, request: request)
             }
         }
-        return PresenceCover.pick(own: extras.ownCover, hit: coverLookups[extras.coverKey]?.hit, local: extras.localCover)
+        return PresenceCover.pick(own: extras.ownCover, hit: coverLookups[extras.coverKey]?.hit, local: extras.localCover,
+                                  videoFrame: extras.videoFrame)
     }
 
     /// 这首的封面还在查、没超过 `coverWait`:到这个时刻之前先不发。

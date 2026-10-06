@@ -449,6 +449,8 @@ public enum MediaControlClient {
     private static var kasetWebAdLoggedVideoID: String?
     /// 最近一次读到的那首(曲目身份同快照的 `identityKey`)能当封面用的地址(`KasetPlayerInfo.coverArtworkURL`)。
     private static var kasetLastArtwork: (trackKey: String, url: URL)?
+    /// 同上那首没有能当封面用的地址时,这支视频的截图(`KasetPlayerInfo.videoFrameURL`),只给 Discord 状态兜底。
+    private static var kasetLastVideoFrame: (trackKey: String, url: URL)?
     /// 最近下载的那张封面,同一个地址不重下(换歌后的取图会重试、复核好几次)。
     private static var kasetArtworkCache: (url: URL, data: Data)?
     /// 记下的内嵌网页那份会话(这一首的 videoId、记下的时刻)和它跟 Kaset 读数对账的进度(`KasetPlayerInfo.webClockStep`)。
@@ -519,8 +521,12 @@ public enum MediaControlClient {
                                                 clockPosition: clockPosition)
         // 封面先用队列里这一格入队时那张(专辑图),没有才用读数里的;视频截图不当封面。
         let artwork = KasetPlayerInfo.coverArtworkURL(steady.first?.artworkURL) ?? KasetPlayerInfo.coverArtworkURL(reading.artworkURL)
+        // 没有专辑图(放的是视频)时记下视频截图,只给 Discord 状态兜底,App 里不用。
+        let frame = artwork == nil
+            ? KasetPlayerInfo.videoFrameURL(videoID: reading.videoID, reportedArtwork: reading.artworkURL) : nil
         kasetLock.lock()
         kasetLastArtwork = artwork.map { (snapshot.identityKey, $0) }
+        kasetLastVideoFrame = frame.map { (snapshot.identityKey, $0) }
         kasetLastMove = KasetPlayerInfo.nextMove(after: kasetLastMove, reading: reading, at: readAt)
         kasetLastVideo = reading.videoID.map { (snapshot.trackKey, $0) }
         kasetLock.unlock()
@@ -551,6 +557,16 @@ public enum MediaControlClient {
         kasetLock.lock()
         defer { kasetLock.unlock() }
         guard let last = kasetLastArtwork, last.trackKey.compare(key, options: [.caseInsensitive]) == .orderedSame
+        else { return nil }
+        return last.url
+    }
+
+    /// Kaset 这首(按快照的 `identityKey` 认)放的是视频、没有能当封面用的地址时,这支视频的截图地址;只给 Discord 状态兜底。
+    /// 最近一次读到的不是这首、或这首有专辑图为 nil。
+    public static func kasetVideoFrameURL(forTrackKey key: String) -> URL? {
+        kasetLock.lock()
+        defer { kasetLock.unlock() }
+        guard let last = kasetLastVideoFrame, last.trackKey.compare(key, options: [.caseInsensitive]) == .orderedSame
         else { return nil }
         return last.url
     }

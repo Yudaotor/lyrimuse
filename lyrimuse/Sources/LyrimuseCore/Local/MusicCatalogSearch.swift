@@ -184,8 +184,12 @@ public enum MusicCatalogSearch {
     /// 专辑对得上的优先(实测这一步很值:只取第一条时《NOW YOU SEE ME (Live)》
     /// 会拿到录音室版《周杰伦的床边故事》、《青花瓷 (Live)》会拿到魔天伦演唱会,30 首里有
     /// 5 首被这一步纠正回正确的那张)。专辑名走 `foldTitle` 归一,跟歌名同一套。
+    ///
+    /// `albumMatches` 是判「专辑对得上」的尺子(参数依次是要的专辑、候选的专辑),nil 时按 `foldTitle` 逐字相等(「最近记录」
+    /// 那条用这个);Discord 状态那条传 `PresenceCover.sameAlbum`(不计 Explicit / Clean、Apple 加的 - Single / - EP、标点)。
     public static func pickArtwork(_ items: [Item], title: String, artist: String,
-                                   album: String?) -> ArtworkMatch? {
+                                   album: String?,
+                                   albumMatches: ((_ wanted: String, _ candidate: String) -> Bool)? = nil) -> ArtworkMatch? {
         let want = PlayCountFold.familyKey(artist: artist, title: title)
         let wantAlbum = album.map { PlayCountFold.foldTitle($0) } ?? ""
         var fallback: ArtworkMatch?
@@ -194,7 +198,10 @@ public enum MusicCatalogSearch {
                   PlayCountFold.familyKey(artist: itemArtist, title: itemTitle) == want,
                   let url = upscaleArtwork(item.artworkUrl100)
             else { continue }
-            if !wantAlbum.isEmpty, PlayCountFold.foldTitle(item.collectionName ?? "") == wantAlbum {
+            let albumMatched = !wantAlbum.isEmpty
+                && (albumMatches.map { $0(album ?? "", item.collectionName ?? "") }
+                    ?? (PlayCountFold.foldTitle(item.collectionName ?? "") == wantAlbum))
+            if albumMatched {
                 return ArtworkMatch(url: url, confidence: .albumMatch,
                                     matchedAlbum: item.collectionName)
             }
@@ -222,19 +229,21 @@ public enum MusicCatalogSearch {
 
     /// 把一次响应归成 `ArtworkLookup`。纯函数,selftest 钉住。
     public static func artworkLookup(status: Int?, data: Data, title: String, artist: String,
-                                     album: String?) -> ArtworkLookup {
+                                     album: String?,
+                                     albumMatches: ((_ wanted: String, _ candidate: String) -> Bool)? = nil) -> ArtworkLookup {
         guard status == 200, let decoded = try? JSONDecoder().decode(Response.self, from: data)
         else { return .unreached }
-        if let hit = pickArtwork(decoded.results, title: title, artist: artist, album: album) {
+        if let hit = pickArtwork(decoded.results, title: title, artist: artist, album: album, albumMatches: albumMatches) {
             return .found(hit)
         }
         return .noMatch
     }
 
     /// 按 歌手+歌名 查 iTunes,挑一张能对上的封面。挑不出是 `.noMatch`(不留退路)。店面按 storefronts(primary:)
-    /// 依次问,一条都搜不到才换下一个。后台批量调用,`ITunesSearchGate` 退避期间不发请求。
+    /// 依次问,一条都搜不到才换下一个。后台批量调用,`ITunesSearchGate` 退避期间不发请求。`albumMatches` 见 `pickArtwork`。
     public static func resolveArtwork(title: String, artist: String, album: String?,
                                       storefront: String,
+                                      albumMatches: ((_ wanted: String, _ candidate: String) -> Bool)? = nil,
                                       gate: ITunesSearchGate = .shared) async -> ArtworkLookup {
         for store in storefronts(primary: storefront) {
             guard !gate.coolingDown(),
@@ -242,7 +251,8 @@ public enum MusicCatalogSearch {
                   let (status, data) = await fetch(url, gate: gate)
             else { return .unreached }
             if shouldTryNextStorefront(status: status, data: data) { continue }
-            return artworkLookup(status: status, data: data, title: title, artist: artist, album: album)
+            return artworkLookup(status: status, data: data, title: title, artist: artist, album: album,
+                                 albumMatches: albumMatches)
         }
         return .noMatch
     }

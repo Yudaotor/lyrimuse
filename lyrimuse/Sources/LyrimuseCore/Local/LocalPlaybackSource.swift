@@ -208,6 +208,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// YouTube Music 网页版页面上这首的专辑图地址,浏览器位置探针顺带读到的(还是这首才收,见 noteWebPageArtwork)。
     /// 换歌 / 停播置 nil。只给 App 外面用(Discord 状态的封面),界面不用它。
     @Published public private(set) var webPageArtworkURL: URL?
+    /// YouTube Music 网页版放的是视频、页面上没有专辑图时,这支视频的截图地址(`KasetPlayerInfo.videoFrameURL`,还是这首才收,
+    /// 见 noteWebPageVideoFrame)。换歌 / 停播置 nil。只给 Discord 状态兜底,界面不用它。
+    @Published public private(set) var webPageVideoFrameURL: URL?
     // "歌词窗口"进度条用(随 Apple Music 风格重做补上):暂停时 anchor 会被
     // 置 nil(见 apply() 的 else 分支),进度条如果只认 anchor,一暂停就整个没有位置可
     // 显示。暂停态 media-control/AppleScript 的 elapsedTime 本身就是精确的冻结位置,
@@ -388,6 +391,13 @@ public final class LocalPlaybackSource: ObservableObject {
     public var kasetArtworkURL: URL? {
         guard lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier else { return nil }
         return MediaControlClient.kasetArtworkURL(forTrackKey: lastKey)
+    }
+
+    /// 当前这首 Kaset 放的是视频、没有专辑图时,这支视频的截图地址;在放的不是 Kaset、这首有专辑图、或还没读到为 nil。
+    /// 只给 Discord 状态兜底(`KasetPlayerInfo.videoFrameURL`)。
+    public var kasetVideoFrameURL: URL? {
+        guard lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier else { return nil }
+        return MediaControlClient.kasetVideoFrameURL(forTrackKey: lastKey)
     }
 
     /// 当前这首在 Apple Music 曲库里的曲目 ID(系统会话报的);在放的不是 Apple Music、或系统没报为 nil。
@@ -1469,6 +1479,12 @@ public final class LocalPlaybackSource: ObservableObject {
         if webPageArtworkURL != url { webPageArtworkURL = url }
     }
 
+    /// 浏览器位置探针带回 YouTube Music 网页版这支视频的截图(页面上没有专辑图时才有);还是这首才收(同 noteSpotifyArtwork)。
+    public func noteWebPageVideoFrame(url: URL, forKey key: String) {
+        guard lastSnapshot?.trackKey == key else { return }
+        if webPageVideoFrameURL != url { webPageVideoFrameURL = url }
+    }
+
     /// 网页播放器交出的视频身份:是 MV(`MusicVideoTimeline.isMusicVideoType`)时按 `noteMusicVideo` 换算时间轴。
     public func noteBrowserVideo(_ video: BrowserPositionProbe.VideoIdentity, forKey key: String) {
         guard MusicVideoTimeline.isMusicVideoType(video.musicVideoType) else { return }
@@ -2182,6 +2198,10 @@ public final class LocalPlaybackSource: ObservableObject {
         BrowserPositionProbe.shared.setPageArtworkSink { [weak self] key, url in
             Task { @MainActor [weak self] in self?.noteWebPageArtwork(url: url, forKey: key) }
         }
+        // 放的是视频、页面上没有专辑图时的视频截图,只给 Discord 状态兜底(见 webPageVideoFrameURL)。
+        BrowserPositionProbe.shared.setPageVideoFrameSink { [weak self] key, url in
+            Task { @MainActor [weak self] in self?.noteWebPageVideoFrame(url: url, forKey: key) }
+        }
         // 同一次探针顺带读到的视频身份:是 MV 时按 SponsorBlock 片段换算时间轴(见 noteBrowserVideo)。
         BrowserPositionProbe.shared.setVideoSink { [weak self] key, video in
             Task { @MainActor [weak self] in self?.noteBrowserVideo(video, forKey: key) }
@@ -2750,6 +2770,7 @@ public final class LocalPlaybackSource: ObservableObject {
             artworkAverageHex = nil
             if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
             if webPageArtworkURL != nil { webPageArtworkURL = nil }
+            if webPageVideoFrameURL != nil { webPageVideoFrameURL = nil }
             clearMusicVideoTimeline()
             pausedPositionMs = nil
             currentDurationMs = nil
@@ -3271,6 +3292,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 上一首的图床地址跟着换歌走;新地址要等探针 2.5s 后带回来(见 spotifyArtworkURL)。
                 if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
                 if webPageArtworkURL != nil { webPageArtworkURL = nil }
+                if webPageVideoFrameURL != nil { webPageVideoFrameURL = nil }
                 clearMusicVideoTimeline()
             }
             lastKey = key

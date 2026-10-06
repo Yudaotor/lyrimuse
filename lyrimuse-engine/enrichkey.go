@@ -158,6 +158,8 @@ func betterEnrichEntry(a, b enrichEntry, aKey, bKey string) bool {
 func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 	if winner.CoverURL == "" {
 		winner.CoverURL, winner.CoverSource = loser.CoverURL, loser.CoverSource
+		// 设备封面在网上的同一张图跟着这张封面走(它只对记下时那张封面作数,见 enrichEntry.PublicCoverFor)。
+		winner.PublicCoverURL, winner.PublicCoverFor = loser.PublicCoverURL, loser.PublicCoverFor
 	}
 	if winner.AccentColor == "" {
 		winner.AccentColor = loser.AccentColor

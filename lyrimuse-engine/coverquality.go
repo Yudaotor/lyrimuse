@@ -482,3 +482,35 @@ func deviceCoverOverridesCandidate(ctx context.Context, deviceCoverURL, candidat
 	}
 	return override
 }
+
+// devicePublicCover:设备封面顶掉一个远程候选时,两张是同一张图就返回候选地址,记成这张设备封面在网上的同一张图
+// (enrichEntry.PublicCoverURL);不是同一张、候选不是 https、哪张取不到都返回空。
+//
+// 为什么要它:设备封面存在本机,离开这台机器打不开。Discord 状态这类 App 外面的地方要公网地址,原来只能靠用户自己配的
+// 网页中继(大部分用户不会配),没配的只能退回按专辑 ID / 歌名去 Apple 目录里猜,猜不到就没图、猜到的也可能是另一张发行。
+// 而换上设备封面时顶掉的那个网易云 / QQ / Apple 地址常常就是同一张图 —— 地址原来就在手里,只是被覆盖掉了。
+//
+// 只认"同一张图"(coverImagesLikelySame),不认"同一张专辑":远程候选是另一张图时(Immortal 那一档,身份优先留下了
+// 设备封面),给出去的就不是 App 里显示的那张了。deviceCoverDecision 的"够清晰"那一档不取候选,这里要多取一次远程图
+// (loadCoverImage 取的是缩图:网易云 64px、QQ 300px),每首只在换上设备封面那一刻取一次。
+//
+// 包级变量,理由同 deviceCoverUpgradable:让碰到这条路的单测换成桩,不发真实请求。
+var devicePublicCover = func(ctx context.Context, deviceCoverURL, candidateURL string) string {
+	if !strings.HasPrefix(candidateURL, "https://") {
+		return ""
+	}
+	return devicePublicCoverDecision(loadCoverImage(ctx, deviceCoverURL), candidateURL,
+		func(u string) image.Image { return loadCoverImage(ctx, u) })
+}
+
+// devicePublicCoverDecision 是 devicePublicCover 的可测实现,取图注入进来,同 deviceCoverDecision。
+func devicePublicCoverDecision(deviceImg image.Image, candidateURL string, loadImage func(string) image.Image) string {
+	if deviceImg == nil || !strings.HasPrefix(candidateURL, "https://") {
+		return ""
+	}
+	cand := loadImage(candidateURL)
+	if cand == nil || !coverImagesLikelySame(deviceImg, cand) {
+		return ""
+	}
+	return candidateURL
+}

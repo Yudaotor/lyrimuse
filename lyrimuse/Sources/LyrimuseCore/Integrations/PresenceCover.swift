@@ -47,8 +47,11 @@ public enum RelayArtwork {
 ///    Amazon 是引擎从它们本机数据里读到、记在缓存条目里的);
 /// 2. 本机那张封面在网页中继上的地址(跟 App 里显示的是同一张,配了中继、中继上已经有才算);
 /// 3. 当前是 Apple Music 时按系统给的曲库曲目 ID 问 iTunes;
-/// 4. 同一首在别的播放器记下的、缓存里认专辑的封面(调用方给);
-/// 5. 按缓存里 Apple Music 链接的专辑 ID 问 iTunes,再按歌手 + 歌名搜、只认专辑对得上的。
+/// 4. 本机封面在网上的同一张图(引擎换上本机封面时核对过是同一张,见 `EnrichCacheReader.publicCoverURL`)、同一首在别的
+///    播放器记下的、缓存里认专辑的封面(调用方给);
+/// 5. 按缓存里 Apple Music 链接的专辑 ID 问 iTunes(专辑得对得上正在放的,见 `anchoredAlbumMatches`),再按歌手 + 歌名搜、
+///    只认专辑对得上的(`sameAlbum`);
+/// 6. 放的是视频(Kaset、YouTube Music 网页版)、前面都没有时,这支视频的截图(调用方给,`KasetPlayerInfo.videoFrameURL`)。
 /// 2、3、5 要联网,在 `lookUp` 里;都没有时调用方用应用里上传的图。
 public enum PresenceCover {
     public enum Tier: Sendable, Equatable {
@@ -71,10 +74,62 @@ public enum PresenceCover {
         }
     }
 
-    public static func pick(own: URL?, hit: Hit?, local: URL?) -> URL? {
+    /// `videoFrame`:放的是视频时这支视频的截图,只在别的都没有时用 —— 有方形专辑图就用专辑图。
+    public static func pick(own: URL?, hit: Hit?, local: URL?, videoFrame: URL? = nil) -> URL? {
         if let own { return own }
         if let hit, hit.tier.beatsLocal { return hit.url }
-        return local ?? hit?.url
+        return local ?? hit?.url ?? videoFrame
+    }
+
+    // MARK: - 专辑对不对得上
+
+    /// 比专辑名用的形状:先去掉不改变封面的标记(版本标记 Explicit / Clean,Apple 给单曲、EP 加的 - Single / - EP),再按
+    /// `PlayCountFold.foldTitle` 折叠(繁简、大小写、空格、Remaster 这类目录学尾巴、中英双语名只留一种),最后只留字母和数字
+    /// (标点两边写法不一:`HIStory: PAST, PRESENT…` / `HIStory - PAST, PRESENT…`)。纯函数,selftest 覆盖。
+    public static func albumIdentity(_ album: String) -> String {
+        var s = album
+        var stripped = true
+        while stripped {
+            stripped = false
+            for pattern in neutralAlbumMarkers {
+                if let r = s.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+                    s.removeSubrange(r)
+                    stripped = true
+                }
+            }
+        }
+        let folded = PlayCountFold.foldTitle(s)
+        return String(String.UnicodeScalarView(folded.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
+    }
+
+    /// 专辑名末尾不改变封面的标记:`[Explicit]` / `(Clean)` / `[Explicit Version]` 这类版本标记,Apple 加的 ` - Single` / ` - EP`。
+    private static let neutralAlbumMarkers = [#"\s*[\[(](explicit|clean)( version)?[\])]\s*$"#, #"\s+-\s+(single|ep)\s*$"#]
+
+    /// 两个专辑名算不算同一张:`albumIdentity` 相等。`: The Encore`、`(Deluxe)`、`(Gold)` 这类版本差异算不同 —— 那常是另一张
+    /// 封面。第 5 档按歌名搜时挑结果用(`MusicCatalogSearch.pickArtwork` 的 `albumMatches`)。纯函数,selftest 覆盖。
+    public static func sameAlbum(_ a: String, _ b: String) -> Bool {
+        let identity = albumIdentity(a)
+        return !identity.isEmpty && identity == albumIdentity(b)
+    }
+
+    /// 第 5 档按缓存里 Apple Music 链接的专辑 ID 取到的那张(`catalog`),跟正在放的专辑对不对得上。链接是引擎按歌名、署名、
+    /// 时长对出来的,偶尔锚到同一首歌的另一张发行,封面就跟播放器里的不是一张(实测 Taylor Swift《Wood》放的是
+    /// The Encore 版,链接锚在标准版)。对不上就当没找到,接着按歌名搜。
+    ///
+    /// 正在放的没报专辑:比不了,算对得上。`sameAlbum` 算对得上;一边只有拉丁字母、一边带中日韩文字也比不了,信链接 ——
+    /// 中国区店面给中文专辑名、播放器给英文名(`Timeless` / `可啦思刻`、`Hello Goodbye` / `再见你好吗`),本机缓存里
+    /// 有链接的 1646 首实测这一类 11 首,都是同一张专辑。纯函数,selftest 覆盖。
+    public static func anchoredAlbumMatches(playing: String, catalog: String?) -> Bool {
+        let playing = playing.trimmingCharacters(in: .whitespaces)
+        if playing.isEmpty { return true }
+        guard let catalog = catalog?.trimmingCharacters(in: .whitespaces), !catalog.isEmpty else { return false }
+        if sameAlbum(playing, catalog) { return true }
+        return (isLatinOnly(playing) && LyricsWordEmphasis.containsCJK(catalog))
+            || (isLatinOnly(catalog) && LyricsWordEmphasis.containsCJK(playing))
+    }
+
+    private static func isLatinOnly(_ s: String) -> Bool {
+        !LyricsWordEmphasis.containsCJK(s) && s.unicodeScalars.contains { CharacterSet.letters.contains($0) }
     }
 
     /// 要联网那几档用的东西。没有一样能查的时候调用方别发起(`isEmpty`)。
@@ -129,14 +184,18 @@ public enum PresenceCover {
         guard request.wantsFallback else { return (nil, relayMissing) }
         if let ref = request.albumRef {
             switch await MusicCatalogSearch.albumArtwork(albumID: ref.id, storefronts: request.albumStorefronts) {
-            case .found(let match): return (Hit(url: match.url, tier: .appleAlbum), relayMissing)
+            case .found(let match) where anchoredAlbumMatches(playing: request.album, catalog: match.matchedAlbum):
+                return (Hit(url: match.url, tier: .appleAlbum), relayMissing)
+            case .found:
+                // 链接锚到了同一首歌的另一张发行:当没找到,接着按歌名搜。
+                break
             case .unreached: return (nil, relayMissing)
             case .noMatch: break
             }
         }
         let lookup = await MusicCatalogSearch.resolveArtwork(
             title: request.title, artist: request.artist, album: request.album.isEmpty ? nil : request.album,
-            storefront: request.searchStorefront)
+            storefront: request.searchStorefront, albumMatches: sameAlbum)
         guard let match = lookup.match, match.confidence == .albumMatch || request.album.isEmpty else {
             return (nil, relayMissing)
         }

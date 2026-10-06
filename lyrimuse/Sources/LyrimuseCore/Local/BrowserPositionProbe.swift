@@ -504,6 +504,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// YouTube Music 网页版放的是视频、页面上没有专辑图时,这支视频的截图(`Reading.videoFrameURL`)的去向,只给 Discord 状态
+    /// 兜底。同 pageArtworkSink:LocalPlaybackSource 启动时挂上,同一把锁下读写。
+    private var pageVideoFrameSink: (@Sendable (_ key: String, _ url: URL) -> Void)?
+
+    public func setPageVideoFrameSink(_ sink: @escaping @Sendable (_ key: String, _ url: URL) -> Void) {
+        lock.lock()
+        pageVideoFrameSink = sink
+        lock.unlock()
+    }
+
     /// 页面顺带交出的视频身份的去向(见 youtubeMusicScript 第五段)。同 artworkSink:由 LocalPlaybackSource
     /// 启动时挂上,没挂就丢掉,同一把锁下读写。
     private var videoSink: (@Sendable (_ key: String, _ video: VideoIdentity) -> Void)?
@@ -942,6 +952,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // sink 自己只是派一个 Task,不阻塞,在锁下调无妨。
         if let art = hit.artworkURL {
             if hit.platformID == "youtubeMusic" { pageArtworkSink?(key, art) } else { artworkSink?(key, art) }
+        } else if hit.platformID == "youtubeMusic", let frame = hit.videoFrameURL {
+            pageVideoFrameSink?(key, frame)
         }
         if let video = hit.video { videoSink?(key, video) }
     }
@@ -1085,6 +1097,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let artworkURL: URL?
         let precise: PreciseReading?
         let video: VideoIdentity?
+        /// 没有封面地址、放的是视频时这支视频的截图(见 `Reading.videoFrameURL`)。
+        let videoFrameURL: URL?
     }
 
     private static func probeAdvancing(
@@ -1123,7 +1137,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         for rule in siteRules where platformIDs.contains(rule.platformID) {
             if let reading = probe(bundleID: bundleID, family: family, rule: rule, expectedDuration: expectedDuration) {
                 return ProbeHit(seconds: reading.seconds, platformID: rule.platformID,
-                                artworkURL: reading.artworkURL, precise: reading.precise, video: reading.video)
+                                artworkURL: reading.artworkURL, precise: reading.precise, video: reading.video,
+                                videoFrameURL: reading.videoFrameURL)
             }
         }
         return nil
@@ -1333,11 +1348,16 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         public let artworkURL: URL?
         public let precise: PreciseReading?
         public let video: VideoIdentity?
-        public init(seconds: Double, artworkURL: URL?, precise: PreciseReading? = nil, video: VideoIdentity? = nil) {
+        /// 没有封面地址(放的是视频,第三段是视频截图)、又认出了视频身份时,这支视频的截图(`KasetPlayerInfo.videoFrameURL`),
+        /// 只给 Discord 状态兜底。
+        public let videoFrameURL: URL?
+        public init(seconds: Double, artworkURL: URL?, precise: PreciseReading? = nil, video: VideoIdentity? = nil,
+                    videoFrameURL: URL? = nil) {
             self.seconds = seconds
             self.artworkURL = artworkURL
             self.precise = precise
             self.video = video
+            self.videoFrameURL = videoFrameURL
         }
     }
 
@@ -1374,7 +1394,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     /// 解析规则(从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>[|@<currentTime>,<epochMs>[|#<videoId>,<type>]]]`。
     /// 第二段非 "0"(暂停 / "NOTFOUND")整条作废、不猜;第三段可选,只认 Spotify 图床形状的地址
-    /// (`SpotifyArtworkURL.parse`)和 YouTube Music 曲库的方形专辑图(`KasetPlayerInfo.coverArtworkURL`),别的一律 nil;第四段可选,是 YouTube Music 的精确读数,形状不对就当没有、
+    /// (`SpotifyArtworkURL.parse`)和 YouTube Music 曲库的方形专辑图(`KasetPlayerInfo.coverArtworkURL`),别的一律 nil(不是专辑图、
+    /// 又认出了第五段的视频身份时,另给这支视频的截图 `videoFrameURL`,只给 Discord 状态兜底);第四段可选,是 YouTube Music 的精确读数,形状不对就当没有、
     /// 整秒读数照旧成立。纯函数,selftest 直接覆盖。
     public static func parseReading(fromOsascriptOutput raw: String) -> Reading? {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1395,6 +1416,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
             }
         }
         let video = parts.count >= 5 ? parseVideoIdentity(parts[4]) : nil
-        return Reading(seconds: seconds, artworkURL: artwork, precise: precise, video: video)
+        let frame = artwork == nil && video != nil
+            ? KasetPlayerInfo.videoFrameURL(videoID: video?.videoID, reportedArtwork: parts.count >= 3 ? String(parts[2]) : nil)
+            : nil
+        return Reading(seconds: seconds, artworkURL: artwork, precise: precise, video: video, videoFrameURL: frame)
     }
 }

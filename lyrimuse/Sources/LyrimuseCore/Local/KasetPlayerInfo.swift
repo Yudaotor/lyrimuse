@@ -529,6 +529,20 @@ public enum KasetPlayerInfo {
         return components.url
     }
 
+    /// 这支视频的截图地址,只给 App 外面用:放的是视频(MV、用户上传的视频)、没有方形专辑图时,Discord 状态的大图拿它兜底;
+    /// App 里照旧不当封面(见 `coverArtworkURL`)。报来的封面就是这支视频的截图(`i.ytimg.com/vi/<videoId>/…`)时照用 ——
+    /// 播放条上正显示着,一定取得到;没报、或报的是别的视频的(换歌那一拍播放条上还是上一首的截图),按 videoId 拼
+    /// `hqdefault.jpg`,每支公开视频都有这一档。videoId 不是 YouTube 的 11 位形状时为 nil。纯函数,selftest 覆盖。
+    public static func videoFrameURL(videoID: String?, reportedArtwork: String?) -> URL? {
+        guard let id = videoID, id.count == 11,
+              id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else { return nil }
+        if let raw = reportedArtwork, let url = URL(string: raw), url.scheme == "https",
+           url.host?.lowercased() == "i.ytimg.com", url.path.hasPrefix("/vi/\(id)/") {
+            return url
+        }
+        return URL(string: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg")
+    }
+
     /// 两份时长(网页 video 的、队列里登记的)差出这么多秒以上,放的就不是登记的那一版(元数据是整数秒)。
     public static let musicVideoLengthTolerance: TimeInterval = 3
 

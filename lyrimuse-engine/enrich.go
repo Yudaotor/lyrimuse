@@ -419,6 +419,14 @@ type enrichEntry struct {
 	// 不动这里。只有 App 读(给 Discord 这类 App 外面的地方挑封面),不进 fields()。
 	PlayerCovers map[string]string `json:"player_covers,omitempty"`
 
+	// PublicCoverURL / PublicCoverFor:设备封面在网上的同一张图。设备封面(CoverSource == "device")存在本机,离开这台机器
+	// 打不开;换上它时顶掉的远程候选(网易云 / QQ / Apple 的 https 地址)跟它核对过是同一张图,就把那个地址记在
+	// PublicCoverURL,PublicCoverFor 记当时那张设备封面的地址(见 devicePublicCover)。只有 App 读(没配网页中继时给 Discord
+	// 状态挑封面),不进 fields()。App 只在 PublicCoverFor 等于现在的 CoverURL 时认:封面换过,旧记录自动作废,改封面的
+	// 那十来处不用逐个清它。
+	PublicCoverURL string `json:"public_cover_url,omitempty"`
+	PublicCoverFor string `json:"public_cover_for,omitempty"`
+
 	// YouTubeMusicAlbum:用 Kaset 放这首歌时,按 YouTube Music 的登记判出来的专辑(见 kasetalbum.go)。给 App 界面、上送,
 	// 以及播放器没报专辑时搜歌词用(见 lyricsSearchAlbum;Kaset 报的专辑那一栏放歌单时是歌单名,不用),不进缓存 key。
 	YouTubeMusicAlbum string `json:"youtube_music_album,omitempty"`
@@ -2592,6 +2600,8 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	if !deviceCoverOverridesCandidate(ctx, deviceCoverURL, existing.CoverURL) {
 		return false
 	}
+	// 顶掉的候选跟设备封面是同一张图时留下它的地址,给 App 外面用(见 devicePublicCover)。要取远程图,在锁外做。
+	public := devicePublicCover(ctx, deviceCoverURL, existing.CoverURL)
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if !ok || enrichProvisional[key] || e.CoverURL == deviceCoverURL {
@@ -2601,6 +2611,9 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 		return false
 	}
 	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = deviceCoverURL, "device", album, accent
+	if public != "" {
+		e.PublicCoverURL, e.PublicCoverFor = public, deviceCoverURL
+	}
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()
@@ -2719,6 +2732,12 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	if pre.CoverSource == "device" && fresh.CoverURL != "" {
 		preDeviceURL, preUpgradable = pre.CoverURL, deviceCoverUpgradable(pre.CoverURL, fresh.CoverURL)
 	}
+	// 留下来的设备封面还没记网上的同一张图时,拿这一轮的远程候选核对一次(见 devicePublicCover):换上设备封面那一刻没记的
+	// 存量条目靠这里补。只在本来就要补外围的时候顺带做,不为它新开补全。
+	prePublic := ""
+	if preDeviceURL != "" && !preUpgradable && pre.PublicCoverFor != preDeviceURL {
+		prePublic = devicePublicCover(ctx, preDeviceURL, fresh.CoverURL)
+	}
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if !ok {
@@ -2739,6 +2758,10 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	}) {
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
 			fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
+	}
+	// 只在封面还是核对的那张设备封面时记(这期间换了封面,这份核对就不算数)。
+	if prePublic != "" && e.CoverURL == preDeviceURL {
+		e.PublicCoverURL, e.PublicCoverFor = prePublic, preDeviceURL
 	}
 	// 动态封面校验的结论只对 fresh.CoverURL 有效,见 motionCoverFreshResultAppliesTo。
 	motionCheckMatchesRetainedCover := motionCoverFreshResultAppliesTo(e.CoverURL, fresh)
@@ -3104,6 +3127,10 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 		// 这种情形反过来),而是"两张图是不是同一张"——同一张就拿高清那份,不一样就身份
 		// 优先。完整判据表见 coverquality.go 头注。
 		if deviceCoverOverridesCandidate(ctx, deviceCoverURL, e.CoverURL) {
+			// 顶掉的候选跟设备封面是同一张图时留下它的地址,给 App 外面用(见 devicePublicCover)。
+			if public := devicePublicCover(ctx, deviceCoverURL, e.CoverURL); public != "" {
+				e.PublicCoverURL, e.PublicCoverFor = public, deviceCoverURL
+			}
 			e.CoverURL, e.CoverSource, e.CoverAlbum = deviceCoverURL, "device", album
 		}
 	}

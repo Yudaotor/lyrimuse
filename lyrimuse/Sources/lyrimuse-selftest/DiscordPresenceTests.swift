@@ -788,6 +788,88 @@ private func checkDiscordCover() {
     expectEqual(ytm?.video?.videoID, "e-ORhEE9VVg", "Discord 封面: 第三段带了专辑图,后面两段照旧解")
     expectEqual(P.parseReading(fromOsascriptOutput: "57|0|https://i.ytimg.com/vi/e-ORhEE9VVg/sddefault.jpg||")?.artworkURL, nil,
                 "Discord 封面: MV 的视频截图不当封面")
+
+    // ---- 放的是视频:没有专辑图时用这支视频的截图兜底(Kaset、YouTube Music 网页版) ----
+    typealias K = KasetPlayerInfo
+    let shot = "https://i.ytimg.com/vi/aGsrg1NO1cM/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3k6"
+    expectEqual(K.videoFrameURL(videoID: "aGsrg1NO1cM", reportedArtwork: shot)?.absoluteString, shot,
+                "Discord 封面(视频): 报来的就是这支视频的截图,照用")
+    expectEqual(K.videoFrameURL(videoID: "aGsrg1NO1cM", reportedArtwork: "https://i.ytimg.com/vi/ZLldhJXp7iw/hq720.jpg")?.absoluteString,
+                "https://i.ytimg.com/vi/aGsrg1NO1cM/hqdefault.jpg", "Discord 封面(视频): 上一首的截图不用,按 videoId 拼")
+    expectEqual(K.videoFrameURL(videoID: "aGsrg1NO1cM", reportedArtwork: nil)?.absoluteString,
+                "https://i.ytimg.com/vi/aGsrg1NO1cM/hqdefault.jpg", "Discord 封面(视频): 没报截图按 videoId 拼")
+    expectEqual(K.videoFrameURL(videoID: "aGsrg1NO1cM", reportedArtwork: "http://i.ytimg.com/vi/aGsrg1NO1cM/hqdefault.jpg")?.absoluteString,
+                "https://i.ytimg.com/vi/aGsrg1NO1cM/hqdefault.jpg", "Discord 封面(视频): 不是 https 的不照用")
+    expectEqual(K.videoFrameURL(videoID: "aGsrg1NO1c", reportedArtwork: shot), nil, "Discord 封面(视频): videoId 不是 11 位不给")
+    expectEqual(K.videoFrameURL(videoID: nil, reportedArtwork: shot), nil, "Discord 封面(视频): 没有 videoId 不给")
+    let mv = P.parseReading(fromOsascriptOutput:
+        "57|0|https://i.ytimg.com/vi/e-ORhEE9VVg/sddefault.jpg|@57.1,1790000000000|#e-ORhEE9VVg,MUSIC_VIDEO_TYPE_OMV")
+    expectEqual(mv?.artworkURL, nil, "Discord 封面(视频): 网页版放 MV,截图仍不当封面")
+    expectEqual(mv?.videoFrameURL?.absoluteString, "https://i.ytimg.com/vi/e-ORhEE9VVg/sddefault.jpg",
+                "Discord 封面(视频): 网页版放 MV,截图留给 Discord 兜底")
+    expectEqual(ytm?.videoFrameURL, nil, "Discord 封面(视频): 有专辑图就不另给截图")
+    expectEqual(P.parseReading(fromOsascriptOutput: "57|0|https://i.ytimg.com/vi/e-ORhEE9VVg/sddefault.jpg||")?.videoFrameURL, nil,
+                "Discord 封面(视频): 认不出视频身份不给截图")
+    let frame = URL(string: "https://i.ytimg.com/vi/e-ORhEE9VVg/hq720.jpg")!
+    expectEqual(C.pick(own: nil, hit: nil, local: nil, videoFrame: frame), frame, "Discord 封面(视频): 别的都没有时用视频截图")
+    expectEqual(C.pick(own: nil, hit: nil, local: local, videoFrame: frame), local, "Discord 封面(视频): 有专辑图就不用截图")
+    expectEqual(C.pick(own: nil, hit: searchHit, local: nil, videoFrame: frame), searchHit.url,
+                "Discord 封面(视频): 按歌名搜到的专辑图排在截图前面")
+    expectEqual(C.pick(own: own, hit: nil, local: nil, videoFrame: frame), own, "Discord 封面(视频): 播放器自己给的排在截图前面")
+
+    // ---- 第 5 档的专辑核对:按专辑 ID 取到的得是正在放的那张,按歌名搜时同一把尺子 ----
+    expectEqual(C.sameAlbum("petal [Clean]", "petal"), true, "Discord 封面(专辑): Clean / Explicit 不算另一张")
+    expectEqual(C.sameAlbum("The Great Divide: The Last Of The Bugs [Explicit]", "The Great Divide: The Last Of The Bugs"), true,
+                "Discord 封面(专辑): 末尾的 [Explicit] 不算另一张")
+    expectEqual(C.sameAlbum("Choosin' Texas", "Choosin' Texas - Single"), true, "Discord 封面(专辑): Apple 加的 - Single 不算另一张")
+    expectEqual(C.sameAlbum("HIStory: PAST, PRESENT AND FUTURE, BOOK I", "HIStory - PAST, PRESENT AND FUTURE - BOOK I"), true,
+                "Discord 封面(专辑): 标点写法不一不算另一张")
+    expectEqual(C.sameAlbum("聖誕之吻", "圣诞之吻 - Single"), true, "Discord 封面(专辑): 繁简、- Single 都不算")
+    expectEqual(C.sameAlbum("The Life of a Showgirl: The Encore [Explicit]", "The Life of a Showgirl"), false,
+                "Discord 封面(专辑): The Encore 是另一张发行")
+    expectEqual(C.sameAlbum("XSCAPE", "XSCAPE (Deluxe)"), false, "Discord 封面(专辑): 豪华版算另一张")
+    expectEqual(C.sameAlbum("", ""), false, "Discord 封面(专辑): 两边都空不算对得上")
+    expectEqual(C.anchoredAlbumMatches(playing: "The Life of a Showgirl: The Encore [Explicit]", catalog: "The Life of a Showgirl"), false,
+                "Discord 封面(专辑): 链接锚到标准版,放的是 The Encore,当没找到")
+    expectEqual(C.anchoredAlbumMatches(playing: "大灌篮 电影原声带", catalog: "周杰伦2007世界巡回演唱会"), false,
+                "Discord 封面(专辑): 链接锚到另一张专辑,当没找到")
+    expectEqual(C.anchoredAlbumMatches(playing: "乐之路", catalog: "Live Again: 陶喆 小人物狂想曲 (现场专辑)"), false,
+                "Discord 封面(专辑): 两边都带中文就照常比")
+    expectEqual(C.anchoredAlbumMatches(playing: "Timeless", catalog: "可啦思刻"), true,
+                "Discord 封面(专辑): 一边英文名、一边中文名比不了,信链接")
+    expectEqual(C.anchoredAlbumMatches(playing: "再見你好嗎 Hello Goodbye", catalog: "再见你好吗"), true,
+                "Discord 封面(专辑): 中英双语名对得上中文名")
+    expectEqual(C.anchoredAlbumMatches(playing: "petal [Explicit]", catalog: "petal"), true, "Discord 封面(专辑): 写法差异照样认")
+    expectEqual(C.anchoredAlbumMatches(playing: "", catalog: "The Life of a Showgirl"), true, "Discord 封面(专辑): 没报专辑比不了,信链接")
+    expectEqual(C.anchoredAlbumMatches(playing: "Timeless", catalog: nil), false, "Discord 封面(专辑): 目录没给专辑名不认")
+    typealias M = MusicCatalogSearch
+    func song(_ album: String, _ art: String) -> M.Item {
+        M.Item(trackName: "Wood", artistName: "Taylor Swift", collectionName: album,
+               trackViewUrl: nil, artistViewUrl: nil, collectionViewUrl: nil, artworkUrl100: art)
+    }
+    let editions = [song("The Life of a Showgirl", "https://is1-ssl.mzstatic.com/std/100x100bb.jpg"),
+                    song("The Life of a Showgirl: The Encore", "https://is1-ssl.mzstatic.com/encore/100x100bb.jpg")]
+    let encore = M.pickArtwork(editions, title: "Wood", artist: "Taylor Swift",
+                               album: "The Life of a Showgirl: The Encore [Explicit]", albumMatches: C.sameAlbum)
+    expectEqual(encore?.url.absoluteString, "https://is1-ssl.mzstatic.com/encore/600x600bb.jpg",
+                "Discord 封面(专辑): 按歌名搜时挑对得上的那一版")
+    expectEqual(encore?.confidence == .albumMatch, true, "Discord 封面(专辑): 写法差异不影响算专辑对得上")
+    expectEqual(M.pickArtwork(editions, title: "Wood", artist: "Taylor Swift",
+                              album: "The Life of a Showgirl: The Encore [Explicit]")?.confidence == .trackOnly, true,
+                "Discord 封面(专辑): 不传尺子时照旧逐字比(最近记录那条不受影响)")
+
+    // ---- 设备封面在网上的同一张图:记下时核对的那张设备封面还是现在的封面才作数 ----
+    func entry(_ json: String) -> EnrichCacheEntry? { try? JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8)) }
+    let device = "file:///x/.config/lyrimuse/artwork/0ee35579d4f15def.jpg"
+    let pinned = entry(#"{"cover_url":"\#(device)","cover_source":"device","public_cover_url":"https://p1.music.126.net/a.jpg","public_cover_for":"\#(device)"}"#)
+    expectEqual(pinned.flatMap(EnrichCacheReader.validPublicCover)?.absoluteString, "https://p1.music.126.net/a.jpg",
+                "Discord 封面(公网同图): 核对的就是现在这张设备封面,作数")
+    let moved = entry(#"{"cover_url":"file:///x/.config/lyrimuse/artwork/1111111111111111.jpg","public_cover_url":"https://p1.music.126.net/a.jpg","public_cover_for":"\#(device)"}"#)
+    expectEqual(moved.flatMap(EnrichCacheReader.validPublicCover), nil, "Discord 封面(公网同图): 封面换过了,旧记录不作数")
+    let plain = entry(#"{"cover_url":"\#(device)","public_cover_url":"http://p1.music.126.net/a.jpg","public_cover_for":"\#(device)"}"#)
+    expectEqual(plain.flatMap(EnrichCacheReader.validPublicCover), nil, "Discord 封面(公网同图): 不是 https 的不用")
+    let unpinned = entry(#"{"cover_url":"\#(device)","public_cover_url":"https://p1.music.126.net/a.jpg"}"#)
+    expectEqual(unpinned.flatMap(EnrichCacheReader.validPublicCover), nil, "Discord 封面(公网同图): 没记核对的是哪张不用")
 }
 
 private func checkDiscordWiring() {
@@ -804,9 +886,21 @@ private func checkDiscordWiring() {
                    "signal(settings.$discordPresenceEnabled)", "signal(settings.$discordStatusDisplay)",
                    "signal(settings.$discordKeepWhenPaused)", "signal(settings.$discordExcludedBundles)",
                    "signal(settings.$discordBadge)", "badge: settings.discordBadge", "hiddenUntil: hiddenUntil",
-                   "links?.artistWebLink(forPlayerBundleID: reportedBundleID", "hit?.artistPage"] {
+                   "links?.artistWebLink(forPlayerBundleID: reportedBundleID", "hit?.artistPage",
+                   "signal(source.$webPageVideoFrameURL)", "source.kasetVideoFrameURL ?? source.webPageVideoFrameURL",
+                   "videoFrame: extras.videoFrame", "EnrichCacheReader.publicCoverURL(artist: source.artist"] {
         expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 控制器盯着 \(needle)")
     }
+    let playbackSource = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
+    expectEqual(sourceBytes(playbackSource, contain: "BrowserPositionProbe.shared.setPageVideoFrameSink"), true,
+                "Discord(接线): 网页版的视频截图接到播放源")
+    expectEqual(playbackSource.components(separatedBy: "if webPageVideoFrameURL != nil { webPageVideoFrameURL = nil }").count - 1, 2,
+                "Discord(接线): 网页版的视频截图停播、换歌时清掉")
+    let presenceCover = code("LyrimuseCore/Integrations/PresenceCover.swift")
+    expectEqual(sourceBytes(presenceCover, contain: "albumMatches: sameAlbum"), true, "Discord(接线): 按歌名搜时用同一把专辑尺子")
+    expectEqual(sourceBytes(presenceCover,
+                            contain: "case .found(let match) where anchoredAlbumMatches(playing: request.album, catalog: match.matchedAlbum)"),
+                true, "Discord(接线): 按专辑 ID 取到的先核对专辑,对不上接着搜")
     expectEqual(sourceBytes(controller, contain: "link.disconnect(clearing: true)"), true, "Discord(接线): 关掉时清空并断开")
     expectEqual(sourceBytes(controller, contain: "discordExcludedBundles.contains(host)"), true,
                 "Discord(接线): 排除的播放器按宿主 App 判")

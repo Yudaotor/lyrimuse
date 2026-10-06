@@ -86,6 +86,10 @@ public struct EnrichCacheEntry: Decodable, Sendable {
     let youtubeMusicURL: String?
     // 各播放器自己给这首记下的封面地址(引擎的 enrichEntry.PlayerCovers,键是播放器 bundle id)。只喂 playerCoverURLs。
     let playerCovers: [String: String]?
+    // 设备封面在网上的同一张图(引擎的 enrichEntry.PublicCoverURL / PublicCoverFor):引擎换上设备封面时核对过跟远程那张是
+    // 同一张图,记下远程地址和当时那张设备封面的地址。只喂 validPublicCover。
+    let publicCoverURL: String?
+    let publicCoverFor: String?
     // YouTube Music 给这首的音轨版本登记的专辑(引擎的 enrichEntry.YouTubeMusicAlbum,用 Kaset 放这首时存的)。
     // 只喂界面专辑位(LocalPlaybackSource.youtubeMusicAlbum)。
     let youtubeMusicAlbum: String?
@@ -160,6 +164,8 @@ public struct EnrichCacheEntry: Decodable, Sendable {
         case amazonURL = "amazon_url"
         case youtubeMusicURL = "youtube_music_url"
         case playerCovers = "player_covers"
+        case publicCoverURL = "public_cover_url"
+        case publicCoverFor = "public_cover_for"
         case youtubeMusicAlbum = "youtube_music_album"
         case youtubeMusicMV = "youtube_music_mv"
         case songLanguage = "song_language"
@@ -792,6 +798,29 @@ public enum EnrichCacheReader {
             if let url = URL(string: raw), url.scheme?.lowercased() == "https" { out[bundleID] = url }
         }
         return out
+    }
+
+    /// 这首的设备封面在网上的同一张图(公网 https),给 Discord 状态这类 App 外面的地方用:设备封面存在本机,离开这台机器打不开,
+    /// 没配网页中继的用户靠这张。引擎换上设备封面时核对过是同一张图才记(lyrimuse-engine 的 devicePublicCover)。查法同
+    /// `playerCoverURLs`;没有、或已经不作数(`validPublicCover`)为 nil。
+    public static func publicCoverURL(artist: String, title: String, album: String) -> URL? {
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        let entry: EnrichCacheEntry?
+        if let fresh = freshPlayingEntry(forKey: key) {
+            entry = fresh
+        } else {
+            guard let all = loadEntries() else { return nil }
+            entry = matchedEntry(key, in: all)
+        }
+        return entry.flatMap(validPublicCover)
+    }
+
+    /// 条目里记的「设备封面在网上的同一张图」还作不作数:记下时核对的那张设备封面就是这一条现在的封面(换过封面的,旧记录
+    /// 自动作废,不用每处改封面的地方都去清它),地址是 https。纯函数,selftest 覆盖。
+    public nonisolated static func validPublicCover(_ entry: EnrichCacheEntry) -> URL? {
+        guard let raw = entry.publicCoverURL, let pinned = entry.publicCoverFor, !pinned.isEmpty, pinned == entry.coverURL,
+              let url = URL(string: raw), url.scheme?.lowercased() == "https" else { return nil }
+        return url
     }
 
     /// 这一行的**动态封面**:master m3u8 + 静态首帧模板,两个都可能为空。

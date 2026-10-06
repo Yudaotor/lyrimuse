@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"image/color"
+	"strings"
 	"testing"
 )
 
@@ -264,5 +265,70 @@ func TestMinEdge(t *testing.T) {
 	}
 	if got := minEdge(nil); got != 0 {
 		t.Errorf("minEdge(nil) 该是 0, got %d", got)
+	}
+}
+
+// 设备封面在网上的同一张图:只认同一张图,候选得是 https,哪张取不到都不给。
+func TestDevicePublicCoverDecision(t *testing.T) {
+	const candidate = "https://p1.music.126.net/abc/123.jpg"
+	load := func(img image.Image) func(string) image.Image { return func(string) image.Image { return img } }
+	if got := devicePublicCoverDecision(synthCover(600, 1), candidate, load(synthCover(800, 1))); got != candidate {
+		t.Errorf("同一张图(分辨率不同)该记下候选地址, got %q", got)
+	}
+	if got := devicePublicCoverDecision(synthCover(600, 1), candidate, load(synthCover(800, 4))); got != "" {
+		t.Errorf("另一张图不能当成这张设备封面在网上的同一张图, got %q", got)
+	}
+	if got := devicePublicCoverDecision(synthCover(600, 1), "http://p1.music.126.net/abc/123.jpg", load(synthCover(800, 1))); got != "" {
+		t.Errorf("不是 https 的不给, got %q", got)
+	}
+	if got := devicePublicCoverDecision(synthCover(600, 1), deviceArtworkURLPrefix+"/tmp/artwork/0ee35579d4f15def.jpg",
+		load(synthCover(800, 1))); got != "" {
+		t.Errorf("本机文件不是公网地址, got %q", got)
+	}
+	if got := devicePublicCoverDecision(nil, candidate, load(synthCover(800, 1))); got != "" {
+		t.Errorf("设备封面解不出来不给, got %q", got)
+	}
+	if got := devicePublicCoverDecision(synthCover(600, 1), candidate, load(nil)); got != "" {
+		t.Errorf("候选取不到不给, got %q", got)
+	}
+}
+
+// 公网同图跟着封面走:合并条目时胜者借了落选那条的封面,这一份一起借;胜者有自己的封面就不动。
+// 两处要取远程图的核对都在拿 enrichMu 之前做(锁里只认结果,同 deviceCoverUpgradable 那条约定)。
+func TestDevicePublicCoverFollowsCover(t *testing.T) {
+	const device = deviceArtworkURLPrefix + "/x/artwork/0ee35579d4f15def.jpg"
+	const public = "https://p1.music.126.net/abc/123.jpg"
+	loser := enrichEntry{CoverURL: device, CoverSource: "device", PublicCoverURL: public, PublicCoverFor: device}
+	if got := mergePeripheralInto(enrichEntry{}, loser); got.PublicCoverURL != public || got.PublicCoverFor != device {
+		t.Errorf("借了落选那条的封面,公网同图要一起借: %+v", got)
+	}
+	winner := enrichEntry{CoverURL: "https://y.qq.com/music/photo_new/T002R800x800M000x.jpg", CoverSource: "qq"}
+	if got := mergePeripheralInto(winner, loser); got.PublicCoverURL != "" || got.PublicCoverFor != "" {
+		t.Errorf("胜者有自己的封面,不借落选那条的公网同图: %+v", got)
+	}
+
+	src := string(mustRead(t, "enrich.go"))
+	for _, c := range []struct{ fn, call, then string }{
+		{"func deviceCoverUpgradePass(", "public := devicePublicCover(ctx, deviceCoverURL, existing.CoverURL)", "enrichMu.Lock()"},
+		{"func backfillPeripheralFields(", "prePublic = devicePublicCover(ctx, preDeviceURL, fresh.CoverURL)", "enrichMu.Lock()"},
+	} {
+		start := strings.Index(src, c.fn)
+		if start < 0 {
+			t.Fatalf("找不到 %s", c.fn)
+		}
+		body := src[start:]
+		body = body[:strings.Index(body, "\n}\n")]
+		at := strings.Index(body, c.call)
+		if at < 0 {
+			t.Errorf("%s 里要核对公网同图: %s", c.fn, c.call)
+			continue
+		}
+		before := body[:at]
+		if strings.LastIndex(before, "enrichMu.Lock()") > strings.LastIndex(before, "enrichMu.Unlock()") {
+			t.Errorf("%s 里的 devicePublicCover 要在 enrichMu 外面调(要取远程图)", c.fn)
+		}
+		if !strings.Contains(body[at:], c.then) {
+			t.Errorf("%s 里核对完才拿锁写", c.fn)
+		}
 	}
 }
