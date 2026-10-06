@@ -1473,6 +1473,9 @@ struct LyricsWindowView: View {
             if previewMode { windowController.setPreviewHostVisible(visible) }
         }
         .onDisappear { if !previewMode { AuxiliaryWindowActivation.windowDidDisappear("lyrics-window") } }
+        // lyrimuse://lyrics-window/search:窗口刚建出来读信箱,已经开着收 subject(见 AppActions.requestLyricsWindowSearch)。
+        .onAppear { consumeLyricsWindowSearchRequest() }
+        .onReceive(AppActions.shared.lyricsWindowSearchRequests) { consumeLyricsWindowSearchRequest() }
         // 专辑简介:这扇窗开着时每次换歌预取,入口才能按「有没有简介」决定可不可点。预览不登记。
         .onAppear { if !previewMode { EditorialNotesStore.shared.retain() } }
         .onDisappear { if !previewMode { EditorialNotesStore.shared.release() } }
@@ -3933,6 +3936,15 @@ struct LyricsWindowView: View {
     /// title/artist/album/currentDurationMs 各开一条独立的 Combine 订阅转发,见
     /// WindowPlayback.init)——只隔一层转发更直接,跟 LyricsManagerView.refreshPlaceholder
     /// 已有的写法一致。
+    /// `lyrimuse://lyrics-window/search` 的落点:跟点「搜索歌词…」一样弹面板。预览不接;迷你尺寸、没在播放时只清掉信箱:
+    /// 面板的 `.sheet` 只挂在完整版面上,迷你时设了上下文,面板会等切回完整尺寸才突然弹出来。
+    private func consumeLyricsWindowSearchRequest() {
+        guard !previewMode, AppActions.shared.pendingLyricsWindowSearch else { return }
+        AppActions.shared.pendingLyricsWindowSearch = false
+        guard !showsMiniLayout, !playback.title.isEmpty else { return }
+        openLyricsSearch()
+    }
+
     private func openLyricsSearch() {
         let p = PlaybackCoordinator.shared
         let artist = p.artist, title = p.title, album = p.album

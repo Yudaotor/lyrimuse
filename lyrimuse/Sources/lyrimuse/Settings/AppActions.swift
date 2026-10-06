@@ -34,6 +34,16 @@ final class AppActions {
     /// 看到当前这首歌"。
     let quickSearchRefreshRequests = PassthroughSubject<Void, Never>()
 
+    /// 歌词窗口里弹「搜索候选歌词」面板的请求(`lyrimuse://lyrics-window/search`)。跟设置那一对同样两条路:信箱管
+    /// 「歌词窗口还没建出来」(LyricsWindowView 的 `.onAppear` 读),subject 管「已经开着」;都走 `requestLyricsWindowSearch()`。
+    var pendingLyricsWindowSearch = false
+    let lyricsWindowSearchRequests = PassthroughSubject<Void, Never>()
+
+    func requestLyricsWindowSearch() {
+        pendingLyricsWindowSearch = true
+        lyricsWindowSearchRequests.send()
+    }
+
     // 新增:Onboarding 的 Last.fm 介绍步骤想直接跳到设置窗口的 Last.fm
     // 详情页,而不是打开设置后还要用户自己再点一次侧边栏。SettingsView 自己管理
     // `selection` 这份 @State,外部没有别的办法在它已经存在的情况下改写这份状态——
