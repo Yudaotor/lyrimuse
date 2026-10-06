@@ -74,8 +74,8 @@ final class LineLayoutBudgets {
 
     private static func fontKey(_ font: NSFont) -> [AnyHashable] { [font.fontName, font.pointSize] }
 
-    /// 悬浮歌词:每一行的宽 = 窗宽 − 卡片两侧内边距 − 描边两侧预留。对唱行的声部指示条挂在内边距里,不占这份宽
-    /// (见 04 章决策 40)。下一句换人唱时用主行字号(nextLinePreviewFont),所以按主行和预览两种字号里宽的那个量。
+    /// 悬浮歌词:每一行的宽 = 窗宽 − 卡片两侧内边距 − 描边两侧预留,对唱行也一样。下一句换人唱时用主行字号
+    /// (nextLinePreviewFont),所以按主行和预览两种字号里宽的那个量。
     private static func reportOverlay(width: CGFloat, fonts: OverlayNSFonts, stroke: Bool,
                                       translation: Bool, romanization: Bool, preview: Bool) {
         let strokeInset = stroke ? LyricsTextStrokeMetrics.inset : 0

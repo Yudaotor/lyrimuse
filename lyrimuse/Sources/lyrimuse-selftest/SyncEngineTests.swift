@@ -393,7 +393,7 @@ func runSyncEngineTests() {
         expectEqual(shortLine?.plainText, "Oh", "按宽度断句: 主行放得下时不为译文拆词")
         expectEqual(shortLine?.translation, "这是一句特…", "按宽度断句: 断不开就截断译文")
 
-        // 对唱行跟普通行同宽:声部指示条挂在文字外面,不占断句预算(见 04 章决策 40)。
+        // 对唱行跟普通行同宽:断句预算不按声部让宽。
         let duetWords = [SyncedLyricWord(text: "abcdef ", startMs: 1000, durationMs: 1000),
                          SyncedLyricWord(text: "ghij", startMs: 2000, durationMs: 1000)]
         func duetLine(_ side: LyricDuet.Side?) -> [LyricsSegmenter.Line] {
@@ -454,9 +454,6 @@ func runSyncEngineTests() {
         expectEqual(overlayViewSrc.contains("widest = max(widest, LyricsSegmenter.mainWidth(")
                     && overlayViewSrc.contains("return widest + strokeInset * 2\n"),
                     true, "对唱留白契约: 卡片「不换行要多宽」按断句同一个主行量法,并加上描边预留")
-        expectEqual(overlayViewSrc.contains("content().overlay(alignment: side == .leading ? .topLeading : .topTrailing)")
-                    && !overlayViewSrc.contains("HStack(spacing: 7)"), true,
-                    "对唱指示条契约: 竖条用 overlay 挂在文字外面,不跟文字排进同一个 HStack")
 
         // 主行一个字切不开、译文放不下:主行整句一段,译文截断到放得下。
         let oneChar = LyricsSyncEngine()

@@ -109,7 +109,7 @@ enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
 // `np:menuBarLyricsAlignment` / `np:notchLyricsAlignment`。
 //
 // 跟悬浮歌词的 `OverlayDuetAlignmentOverride` **不是**一回事,别合并:那边的非自动选项还会
-// 连带关掉声部指示圆点和两侧内缩(见那个类型的头注)。这个类型只管"有空位时靠哪边",不碰任何
+// 连带关掉两侧内缩(见那个类型的头注)。这个类型只管"有空位时靠哪边",不碰任何
 // 装饰;rawValue 恰好同名只是方便,不是耦合。
 //
 // **「自动」(`automatic`)**:按这一句的对唱声部(`SyncedLyricLine.side`,Core 的 `LyricDuet`

@@ -4,8 +4,7 @@ import LyrimuseCore
 
 /// 悬浮歌词卡片的尺寸常量。放在非泛型类型上,卡片外的代码(LineLayoutBudgets)也能引用。
 enum OverlayMetrics {
-    /// lyricsCard 的水平内边距。算可用宽度要减掉它。对唱行的声部指示条挂在这里面
-    /// (`OverlayCardGeometry.SpeakerBar.reach` 加描边那圈要比它小)。
+    /// lyricsCard 的水平内边距。算可用宽度要减掉它。
     static let cardHorizontalPadding: CGFloat = 20
     /// lyricsCard 的上下内边距。上边比下边少:第一行的行框在字顶上方自带一截空白(ascender 高过字形),
     /// 两边给一样多时上沿看起来比下沿空。那截空白别靠压行高去省,高过汉字的字形会被裁。见 04 章决策 46。
@@ -704,9 +703,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// (nil = 没有演唱者标记的普通歌,兜底居中);非自动模式下**每一行**(不管有没有
     /// 真实声部信息)都固定成用户选的那个方向。
     ///
-    /// 不要把这个值传进 withSpeakerIndicator/duetInsets——
-    /// 那两处要的是"要不要展示对唱装饰",跟"往哪边对齐"是两件事,非自动模式下前者必须
-    /// 保持关闭(见 duetDecorationSide)。
+    /// 不要把这个值传进 duetInsets —— 那里要的是"对唱留白按哪个声部算",跟"往哪边对齐"是两件事,
+    /// 非自动模式下留白必须归零(见 `OverlayDuetAlignmentOverride.effectiveDecorationSide`)。
     private var duetSide: LyricDuet.Side {
         playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: line?.side)
     }
@@ -718,20 +716,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 男声"All night"底下)。同样套过对齐方式覆盖,理由跟 duetSide 一致。
     private var nextLineDuetSide: LyricDuet.Side {
         playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: playback.nextLineSide)
-    }
-
-    /// 对唱装饰(两侧内缩 + 声部指示条)该用哪个声部——跟上面两个"对齐方向"用的值是
-    /// 两件事:自动模式下原样等价(nil 兜底成 .center,装饰照旧不出现);**非自动模式下
-    /// 强制视为没有对唱信息**,不管真实声部是什么,两侧内缩归零、指示条不显示。
-    ///
-    /// 这是 issue 里"始终保持在同一个位置"真正需要的那一半:光把上面两个对齐值锁死,
-    /// 留着这两处装饰继续按真实声部算,文字块还是会因为内缩量变化而轻微跳(见
-    /// OverlayDuetAlignmentOverride 声明处注释),必须一并锁死才行。
-    private var duetDecorationSide: LyricDuet.Side {
-        playback.duetAlignmentOverride.effectiveDecorationSide(realSide: line?.side) ?? .center
-    }
-    private var nextLineDecorationSide: LyricDuet.Side {
-        playback.duetAlignmentOverride.effectiveDecorationSide(realSide: playback.nextLineSide) ?? .center
     }
 
     /// 控制排(播放控制胶囊 / 锁定态的解锁按钮)算横向落点时用的**原始**声部。
@@ -756,7 +740,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// `controlsInsets` 两处都读它,别只改一处。
     private var controlsFollowLyrics: Bool { !playback.backgroundIsVisible }
 
-    /// 这张卡里最宽的那一行**不换行的话要多宽**。声部指示条挂在文字外面,不算在内。
+    /// 这张卡里最宽的那一行**不换行的话要多宽**。
     ///
     /// 直接量文字,不经过布局(见 `OverlayNaturalWidth` 头注:在自定义 `Layout` 里对整棵
     /// 卡片子树发无约束试探,会让主歌词行真的按"不换行"摆出来、冲出卡片被窗口裁掉)。
@@ -874,39 +858,6 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     private var duetAlignment: HorizontalAlignment { horizontalAlignment(for: duetSide) }
 
     private var duetTextAlignment: TextAlignment { textAlignment(for: duetSide) }
-
-    /// 对唱行在文字靠边那一侧的外面挂一根细竖条,标出这句是哪一边在唱(见 04 章决策 40)。竖条用 overlay 挂上去、
-    /// 往外偏 `SpeakerBar.reach`,落在卡片左右内边距里,不参与排版:文字、罗马音、译文能用的宽度跟没有对唱信息时
-    /// 一样,断句预算也不为它让宽。
-    ///
-    /// 颜色跟这一行字同色(`displayForegroundColor`),`opacity` 给下一句预览那份更淡的;描边开着时竖条外面也套
-    /// 一圈描边色,跟字一样在什么桌面上都看得见。竖条对着第一行字的中线(`font` 是这一行用的字号),折成几行只标
-    /// 第一行。
-    ///
-    /// side 为 `.center`(没有对唱信息,或者合唱)时原样返回 content:普通歌的排版必须逐像素不变,合唱不属于任何
-    /// 一边。调用点传**装饰声部**(`duetDecorationSide` / `nextLineDecorationSide`),不是对齐方向。
-    @ViewBuilder
-    private func withSpeakerIndicator<V: View>(side: LyricDuet.Side, font: NSFont, opacity: Double,
-                                               @ViewBuilder content: () -> V) -> some View {
-        if side != .center {
-            let height = OverlayCardGeometry.SpeakerBar.height(fontSize: font.pointSize)
-            let reach = OverlayCardGeometry.SpeakerBar.reach
-            content().overlay(alignment: side == .leading ? .topLeading : .topTrailing) {
-                Capsule()
-                    .fill(playback.displayForegroundColor)
-                    .frame(width: OverlayCardGeometry.SpeakerBar.width, height: height)
-                    .background {
-                        if playback.textStrokeEnabled {
-                            Capsule().fill(playback.textStrokeColor).padding(-LyricsTextStrokeMetrics.inset)
-                        }
-                    }
-                    .opacity(opacity)
-                    .offset(x: side == .leading ? -reach : reach, y: (playback.scrollRowHeight(font) - height) / 2)
-            }
-        } else {
-            content()
-        }
-    }
 
     /// 给 `.frame(maxWidth:alignment:)` 用的二维对齐。
     ///
@@ -1221,10 +1172,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 行与行之间的间距由各行自己的 `.padding(.top:)` 给(读音 / 译文 / 下一句各一项,见 OverlayRowSpacing),
         // VStack 自己不加,不然两份叠在一起。
         VStack(alignment: duetAlignment, spacing: 0) {
-            withSpeakerIndicator(side: duetDecorationSide, font: playback.overlayNSFonts.main, opacity: 1) {
-                reportingMainLineRect(mainLine)
-            }
-            .reportsContentRow(.main, in: contentRowRectsSpace)
+            reportingMainLineRect(mainLine)
+                .reportsContentRow(.main, in: contentRowRectsSpace)
             // 罗马音在**歌词下面、译文上面**。从歌词上面挪下来 —— 歌词窗口
             // (LyricsWindowView)早就是这个顺序了,这里是漏改的那一处,同一首歌只要解析不出
             // 词组就会跳到上面显示,四种组合里唯一的异类。
@@ -1358,16 +1307,14 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // reportingTextRect(...) 的返回值上、而不是塞进它的参数里,是为了不
             // 打乱 reportingTextRect 量出来的文字矩形(它要量的是文字本身的紧凑
             // 边界,不是撑满整行之后的边界,见 reportingMainLineRect 同一处理由)。
-            withSpeakerIndicator(side: nextLineDecorationSide, font: nextLinePreviewNSFont, opacity: 0.4) {
-                reportingTextRect(nextLinePreviewContent(next))
-            }
-            .frame(maxWidth: .infinity, alignment: frameAlignment(for: nextLineDuetSide))
-            .multilineTextAlignment(textAlignment(for: nextLineDuetSide))
-            // 补偿到"下一句自己真正的" insets,理由见 nextLineInsetsDelta 的注释——
-            // 不这样做的话,下一句只是在当前行的缩进基础上尽量靠边,换演唱者时轮到它
-            // 变成当前行的那一刻,缩进会重新按它自己的声部算,位置就会跳一下。
-            .padding(.leading, nextLineInsetsDelta.leading)
-            .padding(.trailing, nextLineInsetsDelta.trailing)
+            reportingTextRect(nextLinePreviewContent(next))
+                .frame(maxWidth: .infinity, alignment: frameAlignment(for: nextLineDuetSide))
+                .multilineTextAlignment(textAlignment(for: nextLineDuetSide))
+                // 补偿到"下一句自己真正的" insets,理由见 nextLineInsetsDelta 的注释——
+                // 不这样做的话,下一句只是在当前行的缩进基础上尽量靠边,换演唱者时轮到它
+                // 变成当前行的那一刻,缩进会重新按它自己的声部算,位置就会跳一下。
+                .padding(.leading, nextLineInsetsDelta.leading)
+                .padding(.trailing, nextLineInsetsDelta.trailing)
         }
     }
 
