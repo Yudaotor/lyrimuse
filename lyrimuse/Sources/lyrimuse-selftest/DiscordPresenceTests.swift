@@ -1047,6 +1047,13 @@ private func checkDiscordWiring() {
                    ".frame(width: size * Self.decorationScale, height: size * Self.decorationScale)"] {
         expectEqual(sourceBytes(preview, contain: needle), true, "Discord(接线): 预览两处头像压上头像框 \(needle)")
     }
+    // 成员名单的示例好友里有作者 Yudaotor,头像是随包的那张鸭子图;名单人数跟着是 4。
+    for needle in ["friendRow(name: \"Yudaotor\"", "image: Self.yudaotorAvatar", "forResource: \"YudaotorAvatar\", ofType: \"png\"",
+                   "L10n.t(\"在线 — %d\"), 4)"] {
+        expectEqual(sourceBytes(preview, contain: needle), true, "Discord(接线): 示例好友里有作者 \(needle)")
+    }
+    expectEqual(FileManager.default.fileExists(atPath: sourcesRoot.appendingPathComponent("lyrimuse/Resources/YudaotorAvatar.png").path),
+                true, "Discord(接线): 作者头像随包(Resources/YudaotorAvatar.png)")
     // 预览里的图标(角标放大 1.22 倍,大图 60pt,头像占位 64pt)都得是预先画好的一组位图:按需绘制的图 SwiftUI 只按布局
     // 尺寸画一次,放大就糊;随包的 PNG 整张直接缩小满是锯齿。
     let resolver = code("lyrimuse/Settings/AppIconResolver.swift")

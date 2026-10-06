@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-/// Discord 页顶上的预览,画成 Discord 桌面版深色主题的一角:右边服务器成员名单(两位示例好友夹着你,你那一行头像、名字,
+/// Discord 页顶上的预览,画成 Discord 桌面版深色主题的一角:右边服务器成员名单(示例好友夹着你,最后一位是作者 Yudaotor;你那一行头像、名字,
 /// 下面是绿色音符加「名字下面显示」选的那一项),左边是别人点开你时从名单旁弹出的资料卡(横幅、头像、名字、用户名,「当前动态」
 /// 里「正在听 应用名」、封面、歌名、歌手、专辑、进度)。尺寸、字号、颜色见 12 章决策 36;资料卡上半截按比例缩小过。内容就是此刻
 /// 会发出去的那一份(`DiscordPresence.activity`);没在放歌、或者这首不会显示时用一份示例。不联网:封面用 App 手上那张,没有公网
@@ -158,10 +158,11 @@ struct DiscordPresencePreview: View {
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Palette.window))
     }
 
-    /// 成员名单那一栏:分组标题「在线 — 3」(实测 14pt 中粗),两位示例好友(变淡)夹着你,你那一行带点开资料卡时的选中底色。
+    /// 成员名单那一栏:分组标题「在线 — 4」(实测 14pt 中粗),示例好友(变淡)夹着你,你那一行带点开资料卡时的选中底色。
+    /// 最后一位是 Lyrimuse 的作者 Yudaotor,头像用作者 Discord 上那只鸭子(`yudaotorAvatar`),见 12 章决策 60。
     private func memberList(_ model: Model) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(String(format: L10n.t("在线 — %d"), 3))
+            Text(String(format: L10n.t("在线 — %d"), 4))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Palette.memberText)
                 .frame(height: 18)
@@ -172,9 +173,16 @@ struct DiscordPresencePreview: View {
             memberRow(model)
                 .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Palette.selectedRow))
             friendRow(name: "Ryan", tint: Color(red: 0.42, green: 0.40, blue: 0.36), status: nil)
+            friendRow(name: "Yudaotor", tint: Color(red: 0.40, green: 0.40, blue: 0.42), image: Self.yudaotorAvatar, status: nil)
         }
         .lineLimit(1)
     }
+
+    /// 作者 Discord 上的头像(那只鸭子),随 App 打包成 `YudaotorAvatar.png`,预先画成一组位图。直接 `swift build` 跑、没走
+    /// build.sh 打包时取不到,退回首字母圆。
+    private static let yudaotorAvatar: NSImage? = Bundle.main.path(forResource: "YudaotorAvatar", ofType: "png")
+        .flatMap { NSImage(contentsOfFile: $0) }
+        .map { AppIconResolver.prerendered($0) }
 
     /// 成员名单里你那一行:头像带在线点,名字,下面一行是绿色音符加状态文字,没有「正在听」三个字。
     private func memberRow(_ model: Model) -> some View {
@@ -201,15 +209,25 @@ struct DiscordPresencePreview: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 示例好友:灰色圆头像写首字母,名字下面可有一行状态,整行变淡,一看就知道是陪衬。
-    private func friendRow(name: String, tint: Color, status: String?) -> some View {
+    /// 示例好友:有头像图画头像,没有就是灰色圆写首字母;名字下面可有一行状态,整行变淡,一看就知道是陪衬。
+    private func friendRow(name: String, tint: Color, image: NSImage? = nil, status: String?) -> some View {
         HStack(spacing: 12) {
-            Text(String(name.prefix(1)))
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(tint))
-                .overlay(alignment: .bottomTrailing) { onlineDot(size: 10, ring: Palette.window) }
+            Group {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Text(String(name.prefix(1)))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(tint)
+                }
+            }
+            .frame(width: 32, height: 32)
+            .clipShape(Circle())
+            .overlay(alignment: .bottomTrailing) { onlineDot(size: 10, ring: Palette.window) }
             VStack(alignment: .leading, spacing: 0) {
                 Text(name)
                     .font(.system(size: 16, weight: .medium))
