@@ -386,6 +386,16 @@ public enum DiscordPresence {
             timestamps: timestamps)
     }
 
+    /// Discord 拒收了这一份时补发的精简版:去掉歌名、歌手上的链接和大图、小图(连带它们的悬停文字和链接),文字和时间照旧。
+    /// 被拒多半是哪个链接或哪张图它不认,精简版至少还能显示歌名、歌手。
+    public static func withoutLinksAndImages(_ activity: DiscordActivity) -> DiscordActivity {
+        var plain = activity
+        plain.detailsURL = nil
+        plain.stateURL = nil
+        plain.assets = nil
+        return plain
+    }
+
     /// 按 Discord 的长度限制收拾一段文本:去掉首尾空白,超长截到上限(留一位给省略号,不切开一个字),不够两位补空格。
     public static func fitted(_ text: String) -> String {
         var result = trimmed(text)

@@ -222,6 +222,11 @@ public final class DiscordIPCConnection {
         case rejected(code: Int, message: String)
         /// 连接断了、读写出错或超时。连接已经关掉。
         case disconnected(String)
+
+        var isRejection: Bool {
+            if case .rejected = self { return true }
+            return false
+        }
     }
 
     /// 连上的那个套接字。
@@ -244,15 +249,25 @@ public final class DiscordIPCConnection {
         close()
     }
 
-    /// 依次试 `paths`,返回第一个连得上、握手成功的。都连不上抛 `unavailable`;连上了但握手被拒抛 `rejected`。
+    /// 依次试 `paths`,返回第一个连得上、握手成功的。某个号握手不成(同时开着正式版和测试版、别的程序占了这个号、那边卡住了)
+    /// 就接着试下一个。都连不上抛 `unavailable`;连上过但握手都不成时抛被拒的那个(多半是应用 ID 不对),没有被拒的抛第一个原因。
     public static func connect(paths: [String], clientID: String, timeout: TimeInterval) throws -> DiscordIPCConnection {
+        var failure: Failure?
         for path in paths {
             guard let fd = openSocket(path, timeout: timeout) else { continue }
             let connection = DiscordIPCConnection(fd: fd, path: path, clientID: clientID)
-            connection.user = try connection.handshake(clientID: clientID, timeout: timeout)
-            return connection
+            do {
+                connection.user = try connection.handshake(clientID: clientID, timeout: timeout)
+                return connection
+            } catch let error as Failure {
+                connection.close()
+                if failure == nil || (error.isRejection && failure?.isRejection == false) { failure = error }
+            } catch {
+                connection.close()
+                if failure == nil { failure = .disconnected("\(error)") }
+            }
         }
-        throw Failure.unavailable
+        throw failure ?? Failure.unavailable
     }
 
     /// 发一条 SET_ACTIVITY(nil = 清掉)并等它的回执。

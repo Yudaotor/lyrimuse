@@ -63,8 +63,8 @@ final class DiscordPresenceController: ObservableObject {
         log: { message in discordLogger.notice("\(message, privacy: .public)") })
     private var gate = DiscordPresenceGate()
     private var observers: [AnyCancellable] = []
-    /// 这一段暂停从什么时候开始;在放时为 nil。
-    private var pausedSince: Date?
+    /// 这一段暂停从什么时候开始;在放时为 nil。预览按它判暂停宽限期。
+    private(set) var pausedSince: Date?
     /// 当前播放器归哪个 Discord 应用(`DiscordPresence.applicationID(forBundleID:webPlatformID:)`);连接、重连都按它。
     private var applicationID = DiscordPresence.applicationID
     /// 关掉一次加一,之前发出去的回执晚到时认得出来、不再算数。
@@ -166,6 +166,13 @@ final class DiscordPresenceController: ObservableObject {
                 Task { @MainActor in self?.sendFinished(delivered: delivered, generation: sentGeneration) }
             }
         }
+    }
+
+    /// Discord 上现在挂着的那一份:连着时最近一次交给 Discord 的;清空过、这条连接上还没发过、没连上为 nil。
+    /// 预览在暂停宽限期里画它:那段时间 Discord 上还是暂停前发出去的那份。
+    var sentActivity: DiscordActivity? {
+        guard case .connected = status, case .some(let sent) = gate.lastSent else { return nil }
+        return sent
     }
 
     private func sendFinished(delivered: Bool, generation sentGeneration: Int) {
@@ -470,41 +477,53 @@ final class DiscordPresenceController: ObservableObject {
         return fresh
     }
 
-    /// 这首用哪张封面。要联网的那几档只在连上 Discord 之后发起,一首只跑一次;中继上暂时还没有的过一会儿再问。
+    /// 这首用哪张封面。要联网的那几档只在连上 Discord 之后发起,查到了或者问成了却没有,这一首就不再查;没问成的
+    /// (iTunes 冷却中、超时、限流)到 `CoverLookup.retryAt` 再查一轮;中继上暂时还没有的过一会儿再问。
     /// `lookingUp` 为 false 时只用已经查到的。
     private func coverURL(for extras: TrackExtras, now: Date, lookingUp: Bool) -> URL? {
         if lookingUp, extras.ownCover == nil, let request = extras.coverRequest, case .connected = status {
             if let lookup = coverLookups[extras.coverKey] {
-                recheckRelayIfDue(lookup, relay: request.relayURL, now: now)
+                if lookup.finished, lookup.hit == nil, let retryAt = lookup.retryAt, now >= retryAt {
+                    startCoverLookup(key: extras.coverKey, request: request, attempt: lookup.attempt + 1)
+                } else {
+                    recheckRelayIfDue(lookup, relay: request.relayURL, now: now)
+                }
             } else {
-                startCoverLookup(key: extras.coverKey, request: request)
+                startCoverLookup(key: extras.coverKey, request: request, attempt: 0)
             }
         }
         return PresenceCover.pick(own: extras.ownCover, hit: coverLookups[extras.coverKey]?.hit, local: extras.localCover,
                                   videoFrame: extras.videoFrame)
     }
 
-    /// 这首的封面还在查、没超过 `coverWait`:到这个时刻之前先不发。
+    /// 这首的封面第一轮还在查、没超过 `coverWait`:到这个时刻之前先不发。补查的那几轮不等:这一首早就发过了。
     private func coverPendingUntil(now: Date) -> Date? {
-        guard let extras, extras.ownCover == nil, let lookup = coverLookups[extras.coverKey], !lookup.finished else {
+        guard let extras, extras.ownCover == nil, let lookup = coverLookups[extras.coverKey], !lookup.finished,
+              lookup.attempt == 0 else {
             return nil
         }
         let until = lookup.startedAt.addingTimeInterval(Self.coverWait)
         return until > now ? until : nil
     }
 
-    private func startCoverLookup(key: String, request: PresenceCover.Request) {
+    /// `attempt`:这一首第几轮查(第一轮是 0)。补查那一轮整条换掉上一轮的记录。
+    private func startCoverLookup(key: String, request: PresenceCover.Request, attempt: Int) {
         if coverLookups.count >= 300 {
             coverLookups = coverLookups.filter { !$0.value.finished }
         }
-        let lookup = CoverLookup(relayURL: request.relayURL)
+        let lookup = CoverLookup(relayURL: request.relayURL, attempt: attempt)
         coverLookups[key] = lookup
         Task { [weak self] in
             let result = await PresenceCover.lookUp(request)
             lookup.finished = true
             if lookup.hit == nil { lookup.hit = result.hit }
             if result.relayMissing { lookup.relayRecheckAt = Date().addingTimeInterval(Self.relayRecheckInterval) }
-            discordLogger.debug("cover lookup \(result.hit.map { "\($0.tier)" } ?? "none", privacy: .public)")
+            if result.unreached, lookup.hit == nil {
+                lookup.retryAt = PresenceCover.retryAt(attempt: attempt, now: Date(),
+                                                       cooldownEnds: ITunesSearchGate.shared.cooldownEnds())
+            }
+            let outcome = result.hit.map { "\($0.tier)" } ?? (result.unreached ? "unreached" : "none")
+            discordLogger.debug("cover lookup #\(attempt, privacy: .public) \(outcome, privacy: .public)")
             self?.refresh()
         }
     }
@@ -545,9 +564,14 @@ final class DiscordPresenceController: ObservableObject {
         var relayRecheckAt: Date?
         var relayChecksLeft = DiscordPresenceController.relayRechecks
         var relayChecking = false
+        /// 这一首第几轮查(第一轮是 0)。
+        let attempt: Int
+        /// 这一轮没问成(不是那边没有)时,到这个时刻再查一轮(`PresenceCover.retryAt`)。
+        var retryAt: Date?
 
-        init(relayURL: URL?) {
+        init(relayURL: URL?, attempt: Int) {
             self.relayURL = relayURL
+            self.attempt = attempt
         }
     }
 }

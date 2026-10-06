@@ -49,8 +49,8 @@ struct DiscordPresencePreview: View {
     private struct Model {
         let activity: DiscordActivity
         let application: DiscordPresence.Application
-        /// 有公网封面时用 App 手上那张;nil = 跟 Discord 一样显示应用图标。
-        let artwork: NSImage?
+        /// Discord 状态里那张大图的地址(只给真在放的歌);nil = 跟 Discord 一样显示应用图标(示例那份、没有封面时)。
+        let coverURL: URL?
         let progress: (elapsedMs: Int64, totalMs: Int64)?
         /// 只有开始时间时底下那一行的时长(暂停后保留的那份恒为 0)。
         let elapsed: Int64?
@@ -78,14 +78,22 @@ struct DiscordPresencePreview: View {
     private func makeModel(now: Date) -> Model {
         let playback = PlaybackCoordinator.shared
         let live = discord.previewTrack(now: now)
-        let pausedKept = live != nil && !playback.isPlayingSmoothed && settings.discordKeepWhenPaused
+        let paused = live != nil && !playback.isPlayingSmoothed
+        // 暂停后头 `pauseGrace` 秒 Discord 上还是暂停前发出去的那份(同 `DiscordPresence.intent`),过了才换成暂停的那份或清掉。
+        let inGrace = paused && discord.pausedSince.map { now.timeIntervalSince($0) < DiscordPresence.pauseGrace } == true
+        let pausedKept = paused && !inGrace && settings.discordKeepWhenPaused
         let track = live ?? sampleTrack
-        let activity = pausedKept
-            ? DiscordPresence.pausedActivity(track, statusLine: settings.discordStatusDisplay, now: now,
-                                             pausedText: L10n.t("已暂停"), pausedNameFormat: L10n.t("%@（已暂停）"))
-            : DiscordPresence.activity(track, statusLine: settings.discordStatusDisplay, now: now,
-                                       smallImage: DiscordPresence.smallImage(for: settings.discordBadge,
-                                                                              applicationID: track.applicationID))
+        let activity: DiscordActivity
+        if inGrace, let sent = discord.sentActivity {
+            activity = sent
+        } else if pausedKept {
+            activity = DiscordPresence.pausedActivity(track, statusLine: settings.discordStatusDisplay, now: now,
+                                                      pausedText: L10n.t("已暂停"), pausedNameFormat: L10n.t("%@（已暂停）"))
+        } else {
+            activity = DiscordPresence.activity(track, statusLine: settings.discordStatusDisplay, now: now,
+                                                smallImage: DiscordPresence.smallImage(for: settings.discordBadge,
+                                                                                       applicationID: track.applicationID))
+        }
         let caption: String
         if !settings.discordPresenceEnabled {
             caption = L10n.t("预览 · 开关关着，Discord 上不会显示")
@@ -101,7 +109,7 @@ struct DiscordPresencePreview: View {
         return Model(
             activity: activity,
             application: DiscordPresence.application(forApplicationID: activity.applicationID),
-            artwork: live != nil && activity.assets != nil ? playback.highResArtworkImage ?? playback.artworkImage : nil,
+            coverURL: live != nil ? activity.assets.flatMap { URL(string: $0.largeImage) } : nil,
             progress: DiscordPresence.progress(of: activity, now: now),
             elapsed: DiscordPresence.elapsed(of: activity, now: now),
             caption: caption)
@@ -340,11 +348,11 @@ struct DiscordPresencePreview: View {
             .overlay(alignment: .bottomTrailing) { onlineDot(size: size * 0.3125, ring: Palette.window) }
     }
 
+    /// 画 Discord 拿到的那个地址:跟 App 里显示的不一定是同一张(视频截图、按歌名匹配到的目录图)。取不到时跟 Discord 一样
+    /// 显示应用图标。
     @ViewBuilder private func largeImage(_ model: Model) -> some View {
-        if let artwork = model.artwork {
-            Image(nsImage: artwork)
-                .resizable()
-                .scaledToFill()
+        if let url = model.coverURL {
+            CachedImage(url: url) { applicationIcon(model, size: 60) }
         } else {
             applicationIcon(model, size: 60)
         }

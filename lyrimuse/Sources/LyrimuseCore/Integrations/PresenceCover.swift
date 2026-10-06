@@ -165,41 +165,62 @@ public enum PresenceCover {
     }
 
     /// 按第 2、3、5 档的顺序查。`relayMissing`:中继上还没有这张(引擎在播放后才传),调用方过一会儿再问一次中继。
-    /// 中继和曲目 ID 那两档同时问:中继上有这张也要曲目 ID 那份回包里的歌手页(`Hit.artistPage`)。
-    public static func lookUp(_ request: Request) async -> (hit: Hit?, relayMissing: Bool) {
+    /// `unreached`:没查到,而且有一档没问成(iTunes 冷却中、超时、限流,中继连不上)—— 不是「那边没有」,调用方过一会儿
+    /// 再查(`retryAt`)。中继和曲目 ID 那两档同时问:中继上有这张也要曲目 ID 那份回包里的歌手页(`Hit.artistPage`)。
+    /// `gate` 是 iTunes 的退避闸门,selftest 换成自己的(冷却中的闸门让各档当场没问成,不发请求)。
+    public static func lookUp(_ request: Request,
+                              gate: ITunesSearchGate = .shared) async -> (hit: Hit?, relayMissing: Bool, unreached: Bool) {
         async let relayState = relayExists(request.relayURL)
-        async let trackMatch = appleTrackMatch(request)
+        async let trackState = appleTrackLookup(request, gate: gate)
         var relayMissing = false
-        let artistPage = await trackMatch?.artistPage
+        var unreached = false
+        let track = await trackState
+        let artistPage = track?.match?.artistPage
         if let relay = request.relayURL {
             switch await relayState {
-            case true?: return (Hit(url: relay, tier: .relay, artistPage: artistPage), false)
+            case true?: return (Hit(url: relay, tier: .relay, artistPage: artistPage), false, false)
             case false?: relayMissing = true
-            case nil: break
+            case nil: unreached = true
             }
         }
-        if let match = await trackMatch {
-            return (Hit(url: match.url, tier: .appleTrack, artistPage: artistPage), relayMissing)
+        if let match = track?.match {
+            return (Hit(url: match.url, tier: .appleTrack, artistPage: artistPage), relayMissing, false)
         }
-        guard request.wantsFallback else { return (nil, relayMissing) }
+        if case .unreached? = track { unreached = true }
+        guard request.wantsFallback else { return (nil, relayMissing, unreached) }
         if let ref = request.albumRef {
-            switch await MusicCatalogSearch.albumArtwork(albumID: ref.id, storefronts: request.albumStorefronts) {
+            switch await MusicCatalogSearch.albumArtwork(albumID: ref.id, storefronts: request.albumStorefronts, gate: gate) {
             case .found(let match) where anchoredAlbumMatches(playing: request.album, catalog: match.matchedAlbum):
-                return (Hit(url: match.url, tier: .appleAlbum), relayMissing)
+                return (Hit(url: match.url, tier: .appleAlbum), relayMissing, false)
             case .found:
                 // 链接锚到了同一首歌的另一张发行:当没找到,接着按歌名搜。
                 break
-            case .unreached: return (nil, relayMissing)
+            case .unreached: return (nil, relayMissing, true)
             case .noMatch: break
             }
         }
         let lookup = await MusicCatalogSearch.resolveArtwork(
             title: request.title, artist: request.artist, album: request.album.isEmpty ? nil : request.album,
-            storefront: request.searchStorefront, albumMatches: sameAlbum)
+            storefront: request.searchStorefront, albumMatches: sameAlbum, gate: gate)
+        if case .unreached = lookup { return (nil, relayMissing, true) }
         guard let match = lookup.match, match.confidence == .albumMatch || request.album.isEmpty else {
-            return (nil, relayMissing)
+            return (nil, relayMissing, unreached)
         }
-        return (Hit(url: match.url, tier: .search), relayMissing)
+        return (Hit(url: match.url, tier: .search), relayMissing, false)
+    }
+
+    /// 没问成之后第一次再问隔多久;之后每次翻倍,最长 `retryMaxDelay`。
+    public static let retryBaseDelay: TimeInterval = 20
+    public static let retryMaxDelay: TimeInterval = 300
+
+    /// `lookUp` 报没问成时,这一首什么时候再查:`attempt` 是这一首已经查过几轮(第一轮是 0),隔 `retryBaseDelay` 起、每轮
+    /// 翻倍、最长 `retryMaxDelay`;iTunes 还在冷却(`cooldownEnds`,`ITunesSearchGate.cooldownEnds`)就等到冷却结束。
+    /// 纯函数,selftest 覆盖。
+    public static func retryAt(attempt: Int, now: Date, cooldownEnds: Date?) -> Date {
+        let delay = min(retryBaseDelay * pow(2, Double(min(max(0, attempt), 16))), retryMaxDelay)
+        let earliest = now.addingTimeInterval(delay)
+        guard let cooldownEnds, cooldownEnds > earliest else { return earliest }
+        return cooldownEnds
     }
 
     private static func relayExists(_ url: URL?) async -> Bool? {
@@ -207,9 +228,10 @@ public enum PresenceCover {
         return await RelayArtwork.exists(url)
     }
 
-    private static func appleTrackMatch(_ request: Request) async -> MusicCatalogSearch.ArtworkMatch? {
+    /// 按曲目 ID 问 iTunes 的结局;没有曲目 ID 时为 nil(这一档不问)。
+    private static func appleTrackLookup(_ request: Request, gate: ITunesSearchGate) async -> MusicCatalogSearch.ArtworkLookup? {
         guard let id = request.appleTrackID else { return nil }
-        return await MusicCatalogSearch.trackArtwork(trackID: id, storefronts: request.trackStorefronts).match
+        return await MusicCatalogSearch.trackArtwork(trackID: id, storefronts: request.trackStorefronts, gate: gate)
     }
 
     /// 按曲目 ID 查时依次问的店面:系统地区在前,美区兜底;小写、去重。

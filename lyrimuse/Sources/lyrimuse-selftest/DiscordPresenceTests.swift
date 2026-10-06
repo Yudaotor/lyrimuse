@@ -458,7 +458,9 @@ private final class FakeDiscord: @unchecked Sendable {
     private var stopped = false
     private var handshake: Handshake
     private var failNext: (code: Int, message: String)?
+    private var failRemaining = 0
     private var lines: [String] = []
+    private var keySets: [[String]] = []
 
     init?(handshake: Handshake) {
         directory = FileManager.default.temporaryDirectory
@@ -483,8 +485,15 @@ private final class FakeDiscord: @unchecked Sendable {
 
     var records: [String] { lock.withLock { lines } }
 
-    func failNextCommand(code: Int, message: String) {
-        lock.withLock { failNext = (code, message) }
+    /// 收到的每份 activity 带了哪些字段(排好序),看补发的那份去没去掉链接和图片。
+    var activityKeys: [[String]] { lock.withLock { keySets } }
+
+    /// 接下来 `times` 条命令都回错误。
+    func failNextCommand(code: Int, message: String, times: Int = 1) {
+        lock.withLock {
+            failNext = (code, message)
+            failRemaining = times
+        }
     }
 
     /// 主动发一个心跳。
@@ -562,11 +571,14 @@ private final class FakeDiscord: @unchecked Sendable {
             let nonce = object["nonce"] as? String ?? ""
             if let activity = args["activity"] as? [String: Any] {
                 record("set pid=\(args["pid"] ?? "") details=\(activity["details"] ?? "")")
+                lock.withLock { keySets.append(activity.keys.sorted()) }
             } else {
                 record("clear pid=\(args["pid"] ?? "")")
             }
             let failure = lock.withLock { () -> (code: Int, message: String)? in
-                defer { failNext = nil }
+                guard failRemaining > 0, let failNext else { return nil }
+                failRemaining -= 1
+                if failRemaining == 0 { self.failNext = nil }
                 return failNext
             }
             if let failure {
@@ -683,6 +695,26 @@ private func checkDiscordConnection() {
         }
         refusing.stop()
     }
+    if let refusing = FakeDiscord(handshake: .reject(code: 4000, message: "Invalid Client ID")),
+       let second = FakeDiscord(handshake: .accept(user: "second")) {
+        do {
+            let fallback = try DiscordIPCConnection.connect(paths: [refusing.path, second.path], clientID: "123", timeout: timeout)
+            expectEqual(fallback.path, second.path, "Discord 连接: 前一个号握手被拒,接着连下一个")
+            expectEqual(fallback.user?.username, "second", "Discord 连接: 连上的是后一个号的账号")
+            fallback.close()
+        } catch {
+            expectEqual("\(error)", "", "Discord 连接: 前一个号握手被拒,接着连下一个")
+        }
+        do {
+            _ = try DiscordIPCConnection.connect(paths: [refusing.path, missing], clientID: "0", timeout: timeout)
+            expectEqual(false, true, "Discord 连接: 能连上的号都握手被拒时抛错")
+        } catch {
+            expectEqual(error as? DiscordIPCConnection.Failure, .rejected(code: 4000, message: "Invalid Client ID"),
+                        "Discord 连接: 能连上的号都握手被拒时报被拒")
+        }
+        refusing.stop()
+        second.stop()
+    }
 
     // ---- 后台连接:按需连接、断了重连 ----
     let statuses = Recorder<DiscordPresenceLink.Status>()
@@ -734,6 +766,38 @@ private func checkDiscordConnection() {
     expectEqual(results.all, [true, true, true, true, true, false], "Discord 后台连接: 每份的结果,连不上时 false")
     link.disconnect(clearing: true)
     link.waitUntilIdle()
+
+    // ---- 后台连接:Discord 拒收某一份,去掉链接和图片补发一次 ----
+    guard let picky = FakeDiscord(handshake: .accept(user: "tester")) else { return }
+    defer { picky.stop() }
+    let pickyResults = Recorder<Bool>()
+    let pickyStatuses = Recorder<DiscordPresenceLink.Status>()
+    let pickyLink = DiscordPresenceLink(socketPaths: { [picky.path] }, timeout: timeout, onStatus: { pickyStatuses.append($0) })
+    let rich = DiscordPresence.activity(sampleTrack(position: nil), statusLine: .title, now: nil, smallImage: .lyrimuse)
+    picky.failNextCommand(code: 4002, message: "invalid asset")
+    pickyLink.send(rich) { pickyResults.append($0) }
+    pickyLink.waitUntilIdle()
+    let sent = picky.activityKeys
+    expectEqual(sent.count, 2, "Discord 后台连接: 被拒之后补发一次")
+    expectEqual(sent.first.map { $0.contains("assets") && $0.contains("details_url") && $0.contains("state_url") }, true,
+                "Discord 后台连接: 先发的那份带链接和图片")
+    expectEqual(sent.last.map { !$0.contains("assets") && !$0.contains("details_url") && !$0.contains("state_url") }, true,
+                "Discord 后台连接: 补发的精简版去掉链接和图片")
+    expectEqual(sent.last.map { $0.contains("details") && $0.contains("state") }, true, "Discord 后台连接: 精简版留着歌名、歌手")
+    picky.failNextCommand(code: 4002, message: "invalid", times: 2)
+    pickyLink.send(rich) { pickyResults.append($0) }
+    pickyLink.waitUntilIdle()
+    expectEqual(picky.activityKeys.count, 4, "Discord 后台连接: 精简版也被拒就不再补发")
+    let plain = DiscordPresence.withoutLinksAndImages(rich)
+    picky.failNextCommand(code: 4002, message: "invalid")
+    pickyLink.send(plain) { pickyResults.append($0) }
+    pickyLink.waitUntilIdle()
+    expectEqual(picky.activityKeys.count, 5, "Discord 后台连接: 本来就没有链接和图片的,被拒了不补发")
+    expectEqual(pickyResults.all, [true, true, true], "Discord 后台连接: 被拒不算断线,不让调用方重交")
+    expectEqual(pickyStatuses.all, [.connected(user: DiscordUser(id: "1", username: "tester"))],
+                "Discord 后台连接: 被拒之后连接照旧")
+    pickyLink.disconnect(clearing: false)
+    pickyLink.waitUntilIdle()
 }
 
 private func checkDiscordCover() {
@@ -778,6 +842,35 @@ private func checkDiscordCover() {
     var trackOnly = nothing
     trackOnly.appleTrackID = 1633408818
     expectEqual(trackOnly.isEmpty, false, "Discord 封面: 有曲目 ID 就查")
+
+    // ---- lookUp 分得清「没问成」:iTunes 冷却中时各档当场没问成(不发请求),报 unreached ----
+    let cooling = ITunesSearchGate(store: nil)
+    cooling.note(status: 429, retryAfter: "120", now: Date())
+    func blockedLookUp(_ request: C.Request) -> (hit: C.Hit?, relayMissing: Bool, unreached: Bool) {
+        final class Box: @unchecked Sendable { var result: (hit: C.Hit?, relayMissing: Bool, unreached: Bool) = (nil, false, false) }
+        let box = Box()
+        let sem = DispatchSemaphore(value: 0)
+        Task.detached {
+            box.result = await C.lookUp(request, gate: cooling)
+            sem.signal()
+        }
+        sem.wait()
+        return box.result
+    }
+    var viaTrack = trackOnly
+    viaTrack.trackStorefronts = ["us"]
+    let trackResult = blockedLookUp(viaTrack)
+    expectEqual(trackResult.hit == nil && trackResult.unreached, true, "Discord 封面(补查): 曲目 ID 那档没问成报 unreached")
+    var viaAlbum = nothing
+    viaAlbum.albumRef = AlbumEditorialNotes.AlbumRef(id: 1633408719, storefront: "us")
+    viaAlbum.albumStorefronts = ["us"]
+    viaAlbum.album = "地表最强"
+    viaAlbum.wantsFallback = true
+    expectEqual(blockedLookUp(viaAlbum).unreached, true, "Discord 封面(补查): 专辑 ID 那档没问成报 unreached")
+    var viaSearch = nothing
+    viaSearch.wantsFallback = true
+    expectEqual(blockedLookUp(viaSearch).unreached, true, "Discord 封面(补查): 按歌名搜那档没问成报 unreached")
+    expectEqual(blockedLookUp(nothing).unreached, false, "Discord 封面(补查): 没有要联网的档不算没问成")
 
     // ---- YouTube Music 网页版页面上的专辑图(浏览器探针第三段) ----
     typealias P = BrowserPositionProbe
@@ -858,6 +951,28 @@ private func checkDiscordCover() {
                               album: "The Life of a Showgirl: The Encore [Explicit]")?.confidence == .trackOnly, true,
                 "Discord 封面(专辑): 不传尺子时照旧逐字比(最近记录那条不受影响)")
 
+    // ---- 联网那几档没问成:到点再查 ----
+    let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+    expectEqual(C.retryAt(attempt: 0, now: t0, cooldownEnds: nil), t0.addingTimeInterval(20), "Discord 封面(补查): 第一次隔 20 秒")
+    expectEqual(C.retryAt(attempt: 2, now: t0, cooldownEnds: nil), t0.addingTimeInterval(80), "Discord 封面(补查): 每轮翻倍")
+    expectEqual(C.retryAt(attempt: 9, now: t0, cooldownEnds: nil), t0.addingTimeInterval(300), "Discord 封面(补查): 最长 5 分钟")
+    expectEqual(C.retryAt(attempt: -1, now: t0, cooldownEnds: nil), t0.addingTimeInterval(20), "Discord 封面(补查): 负数当第一轮")
+    expectEqual(C.retryAt(attempt: 0, now: t0, cooldownEnds: t0.addingTimeInterval(90)), t0.addingTimeInterval(90),
+                "Discord 封面(补查): iTunes 还在冷却就等冷却结束")
+    expectEqual(C.retryAt(attempt: 0, now: t0, cooldownEnds: t0.addingTimeInterval(5)), t0.addingTimeInterval(20),
+                "Discord 封面(补查): 冷却先结束就按间隔")
+    let gate = ITunesSearchGate(store: nil)
+    expectEqual(gate.cooldownEnds(now: t0), nil, "Discord 封面(补查): 没在冷却")
+    gate.note(status: 403, retryAfter: nil, now: t0)
+    expectEqual(gate.cooldownEnds(now: t0), t0.addingTimeInterval(30), "Discord 封面(补查): 403 冷却 30 秒,报出结束时刻")
+    expectEqual(gate.cooldownEnds(now: t0.addingTimeInterval(31)), nil, "Discord 封面(补查): 冷却过了为 nil")
+    let full = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: t0, smallImage: .lyrimuse)
+    let stripped = DiscordPresence.withoutLinksAndImages(full)
+    expectEqual(stripped.assets == nil && stripped.detailsURL == nil && stripped.stateURL == nil, true,
+                "Discord 精简版: 去掉链接和大图小图")
+    expectEqual(stripped.details == full.details && stripped.state == full.state && stripped.timestamps == full.timestamps
+                && stripped.name == full.name, true, "Discord 精简版: 文字和时间照旧")
+
     // ---- 设备封面在网上的同一张图:记下时核对的那张设备封面还是现在的封面才作数 ----
     func entry(_ json: String) -> EnrichCacheEntry? { try? JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8)) }
     let device = "file:///x/.config/lyrimuse/artwork/0ee35579d4f15def.jpg"
@@ -890,6 +1005,14 @@ private func checkDiscordWiring() {
                    "signal(source.$webPageVideoFrameURL)", "source.kasetVideoFrameURL ?? source.webPageVideoFrameURL",
                    "videoFrame: extras.videoFrame", "EnrichCacheReader.publicCoverURL(artist: source.artist"] {
         expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 控制器盯着 \(needle)")
+    }
+    for needle in ["if lookup.finished, lookup.hit == nil, let retryAt = lookup.retryAt, now >= retryAt {",
+                   "attempt: lookup.attempt + 1", "ITunesSearchGate.shared.cooldownEnds()", "lookup.attempt == 0"] {
+        expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 没问成的封面到点再查 \(needle)")
+    }
+    let preview = code("lyrimuse/Settings/DiscordPresencePreview.swift")
+    for needle in ["discord.sentActivity", "now.timeIntervalSince($0) < DiscordPresence.pauseGrace", "CachedImage(url: url)"] {
+        expectEqual(sourceBytes(preview, contain: needle), true, "Discord(接线): 预览照 Discord 实际显示的画 \(needle)")
     }
     let playbackSource = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
     expectEqual(sourceBytes(playbackSource, contain: "BrowserPositionProbe.shared.setPageVideoFrameSink"), true,

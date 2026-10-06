@@ -55,6 +55,15 @@ public final class ITunesSearchGate: @unchecked Sendable {
         return store?.activeUntil(OutboundCooldowns.itunesSearchKey, now: now) != nil
     }
 
+    /// 退避到几点:本进程的窗口和跟引擎共享的窗口取晚的那个;没在退避为 nil。没问成的查询据此定什么时候再问。
+    public func cooldownEnds(now: Date = Date()) -> Date? {
+        lock.lock()
+        let local = until
+        lock.unlock()
+        let shared = store?.activeUntil(OutboundCooldowns.itunesSearchKey, now: now)
+        return [local, shared].compactMap { $0 }.filter { $0 > now }.max()
+    }
+
     public func note(status: Int, retryAfter: String?, now: Date = Date()) {
         lock.lock()
         until = ITunesSearchBackoff.until(status: status, retryAfter: retryAfter, now: now, current: until)

@@ -33,8 +33,8 @@ public final class DiscordPresenceLink: @unchecked Sendable {
 
     /// 发这一份(nil = 清掉)。没连上就按它的应用先连;连着的不是它的应用就断开、按它的应用重连 —— Discord 随连接断开清掉
     /// 原来那个应用的状态,这时不报「断开」。没连上时的清空什么都不做,Discord 那边本来就没有这个进程的状态。
-    /// 回调在内部队列上:true = Discord 收下了,或者拒收了这一份(只记日志,原样重发也是一样的结果);
-    /// false = 没连上或连接断了,调用方过一会儿再交。
+    /// 回调在内部队列上:true = Discord 收下了;或者拒收了这一份、补发的精简版(去掉链接和图片)收下了;或者精简版也拒收
+    /// (只记日志,原样重发也是一样的结果)。false = 没连上或连接断了,调用方过一会儿再交。
     public func send(_ activity: DiscordActivity?, completion: @escaping @Sendable (Bool) -> Void = { _ in }) {
         queue.async { completion(self.deliver(activity)) }
     }
@@ -84,9 +84,28 @@ public final class DiscordPresenceLink: @unchecked Sendable {
         return attempt(activity)
     }
 
-    /// 在当前连接上发一次。false = 连接断了,已经丢掉。每次都记进对外请求审计日志:内容经 Discord 发出去。
+    /// 在当前连接上发一次。false = 连接断了,已经丢掉。Discord 拒收这一份时去掉链接和图片补发一次精简版
+    /// (`DiscordPresence.withoutLinksAndImages`),精简版也被拒就算了(只记日志,原样重发也是一样的结果)。
     private func attempt(_ activity: DiscordActivity?) -> Bool {
         guard let connection else { return false }
+        switch push(activity, on: connection) {
+        case .delivered:
+            return true
+        case .lost:
+            return false
+        case .refused:
+            guard let activity else { return true }
+            let plain = DiscordPresence.withoutLinksAndImages(activity)
+            guard plain != activity else { return true }
+            log("resending without links and images")
+            return push(plain, on: connection) != .lost
+        }
+    }
+
+    private enum Outcome { case delivered, refused, lost }
+
+    /// 发一次,看 Discord 收没收。每次都记进对外请求审计日志:内容经 Discord 发出去。连接断了的已经丢掉。
+    private func push(_ activity: DiscordActivity?, on connection: DiscordIPCConnection) -> Outcome {
         let started = Date()
         let operation = activity == nil ? "clear-activity" : "set-activity"
         func audit(_ error: Error?) {
@@ -97,15 +116,15 @@ public final class DiscordPresenceLink: @unchecked Sendable {
         do {
             try connection.setActivity(activity, pid: pid, timeout: timeout)
             audit(nil)
-            return true
+            return .delivered
         } catch DiscordIPCConnection.Failure.rejected(let code, let message) {
             audit(DiscordIPCConnection.Failure.rejected(code: code, message: message))
             log("activity refused code=\(code) message=\(message)")
-            return true
+            return .refused
         } catch {
             audit(error)
             drop(reason: "\(error)")
-            return false
+            return .lost
         }
     }
 
