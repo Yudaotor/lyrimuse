@@ -234,6 +234,8 @@ func main() {
 	//  同源加权的判据不该是"用户勾了哪些播放器",而是"**这一刻在放的是哪个**"——现在由
 	//  trackEnrichment 每首歌按 bundleID 设一次,见 match.go 里 nativeLyricSources 的注释。
 	//  顺带,原注释那句"换播放器本来就要重启引擎"对多选年代也不成立了。)
+	// 回收目标降到 GOGC=50(gctune.go),赶在加载缓存之前:加载那一下的临时分配最多。
+	tuneDaemonGC()
 	// 曲目元信息缓存落盘在 config 同目录，重启后不重解析同一首歌。
 	loadEnrichCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cache.json"))
 	// 按歌手(不是按曲目)缓存的 MusicBrainz 中文别名查询结果,同目录下单独一份文件——
