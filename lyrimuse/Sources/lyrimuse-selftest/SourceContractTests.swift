@@ -2229,7 +2229,7 @@ func runSourceContractTests() {
                     expectEqual(actions.contains("if settings.hasCompletedOnboarding, LyricsWindowSession.shouldReopenAtLaunch {"), true,
                                 "歌词窗口重开: 启动时上次开着就再开,引导没走完不开")
                     // 启动重开不激活 App(07 章决策 123):先标记再直接开窗,手动打开的入口照旧先激活。
-                    expectEqual(actions.contains("LyricsWindowSession.markRestoringAtLaunch()\n                            openWindowAction(id: \"lyrics-window\")"), true,
+                    expectEqual(actions.contains("LyricsWindowSession.markRestoringAtLaunch()\n                        openWindowAction(id: \"lyrics-window\")"), true,
                                 "歌词窗口重开: 启动时先置标记、再直接开窗")
                     expectEqual(actions.contains("LyricsWindowSession.shouldReopenAtLaunch {\n                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {\n                        AppActions.shared.openLyricsWindow?()"), false,
                                 "歌词窗口重开: 启动时不走先激活 App 的 openLyricsWindow")

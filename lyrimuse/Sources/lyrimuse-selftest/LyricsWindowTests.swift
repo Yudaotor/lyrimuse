@@ -13,6 +13,7 @@ private func r3(_ x: CGFloat) -> Double { r3(Double(x)) }
 @MainActor
 func runLyricsWindowTests() {
     checkLyricsWindowHoverFade()
+    checkLyricsWindowLaunchRestore()
     // ---- 歌词窗口的空格 / ← / → ----
     do {
         print("\n== 歌词窗口按键 ==")

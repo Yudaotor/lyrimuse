@@ -272,6 +272,9 @@ enum LyricsWindowSession {
 
     static var shouldReopenAtLaunch: Bool { UserDefaults.standard.bool(forKey: openKey) }
 
+    /// 此刻那扇歌词窗口(控制器 attach 新窗口时登记)。启动重开靠它核对窗口真的上了屏(`LyricsWindowLaunchRestorer`)。
+    @MainActor static weak var window: NSWindow?
+
     /// 「设置 › 歌词窗口 › 打开」要的形态(时效见 `LyricsWindowFormRequest`)。窗口还没建出来时
     /// 由首次 attach 取走;已经开着 / 关了再开时由窗口控制器收通知或等窗口上屏后取走。
     @MainActor private static var formRequest: LyricsWindowFormRequest?
@@ -862,6 +865,7 @@ private final class LyricsWindowController: ObservableObject {
             return
         }
         self.window = window
+        LyricsWindowSession.window = window
         MainActor.assumeIsolated { transportKeys.install(on: window) }
         MainActor.assumeIsolated { hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }
         UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)

@@ -135,15 +135,14 @@ private struct SceneActionRegistrar: View {
                 // 是因为它们永远是用户手动点出来的、那时候 App 早已完全启动稳定。加一个
                 // 不长的延迟,让启动流程先跑完再发起,就能稳定弹出来。
                 // 上次退出时歌词窗口开着,就照原样再开出来(迷你与否由窗口自己接着,见 LyricsWindowSession)。
-                // 同一个启动时序坑,同样等 0.5 秒;引导没走完时不开,别跟引导窗抢。
+                // 同一个启动时序坑,首开同样等 0.5 秒;开了核对窗口上没上屏,没上屏再开(07 章决策 124)。
+                // 引导没走完时不开,别跟引导窗抢。
                 // 不走 openLyricsWindow:那条先激活 App,装机 / 重启时会把键盘焦点从用户正在用的 App 抢过来。
                 // 窗口由 attach 取走标记后 orderFrontRegardless 摆出来(07 章决策 123)。
                 if settings.hasCompletedOnboarding, LyricsWindowSession.shouldReopenAtLaunch {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        MainActor.assumeIsolated {
-                            LyricsWindowSession.markRestoringAtLaunch()
-                            openWindowAction(id: "lyrics-window")
-                        }
+                    LyricsWindowLaunchRestorer.start {
+                        LyricsWindowSession.markRestoringAtLaunch()
+                        openWindowAction(id: "lyrics-window")
                     }
                 }
                 if !settings.hasCompletedOnboarding {
