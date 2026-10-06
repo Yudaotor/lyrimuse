@@ -1026,6 +1026,22 @@ private func checkDiscordWiring() {
                    "if live != nil, let shown = discord.shownOnDiscord(insteadOf: activity) {", "} else if live == nil || refused {"] {
         expectEqual(sourceBytes(preview, contain: needle), true, "Discord(接线): 预览照 Discord 实际显示的画 \(needle)")
     }
+    // 预览里的图标(角标放大 1.22 倍,大图 60pt,头像占位 64pt)都得是预先画好的一组位图:按需绘制的图 SwiftUI 只按布局
+    // 尺寸画一次,放大就糊;随包的 PNG 整张直接缩小满是锯齿。
+    let resolver = code("lyrimuse/Settings/AppIconResolver.swift")
+    let webIcons = code("lyrimuse/Settings/WebPlatformIcon.swift")
+    let accounts = code("lyrimuse/AccountLinkingTab.swift")
+    expectEqual(sourceBytes(resolver, contain: "isFullBleed(loaded) ? fittedToIconGrid(loaded) : prerendered(loaded)")
+                    && sourceBytes(resolver, contain: "return prerendered(size: NSSize(width: side, height: side)) {"), true,
+                "Discord(接线): 播放器的随包图标和铺满的图标预先画成位图")
+    expectEqual(sourceBytes(webIcons, contain: "return AppIconResolver.prerendered(image)")
+                    && sourceBytes(webIcons, contain: "return AppIconResolver.prerendered(size: size) {"), true,
+                "Discord(接线): YouTube Music、Spotify 网页版的图标预先画成位图")
+    expectEqual(accounts.components(separatedBy: "return AppIconResolver.prerendered(image)").count - 1, 3,
+                "Discord(接线): Discord、Last.fm、ListenBrainz 的品牌图预先画成位图")
+    for (path, source) in [("AppIconResolver", resolver), ("WebPlatformIcon", webIcons)] {
+        expectEqual(sourceBytes(source, contain: "flipped: false) {"), false, "Discord(接线): \(path) 不用按需绘制的图")
+    }
     let playbackSource = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
     expectEqual(sourceBytes(playbackSource, contain: "BrowserPositionProbe.shared.setPageVideoFrameSink"), true,
                 "Discord(接线): 网页版的视频截图接到播放源")

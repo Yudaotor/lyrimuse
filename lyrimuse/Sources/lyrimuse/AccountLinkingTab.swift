@@ -229,13 +229,14 @@ func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 20, cor
 }
 
 // Discord 品牌图(蓝紫底 + 白色标志),标志矢量取自 Simple Icons(CC0)。整张不透明,圆角由调用方裁。
+// 这里的三张品牌图都预先画成一组位图(`AppIconResolver.prerendered`),整张 512 直接缩到二三十像素满是锯齿。
 private let discordBadgeImage: NSImage = {
     guard let path = Bundle.main.path(forResource: "DiscordIcon", ofType: "png"),
           let image = NSImage(contentsOfFile: path) else {
         // 没走 build.sh 打包(直接 swift build 跑)时找不到资源,退回 SF Symbol。
         return NSImage(systemSymbolName: "bubble.left.and.bubble.right.fill", accessibilityDescription: nil) ?? NSImage()
     }
-    return image
+    return AppIconResolver.prerendered(image)
 }()
 
 // 真实的 Last.fm 品牌图标(红底+白色"scrobble"符号),取代之前拿 SF Symbol 循环箭头
@@ -258,7 +259,7 @@ private let listenBrainzBadgeImage: NSImage = {
         return NSImage(
             systemSymbolName: "waveform.circle.fill", accessibilityDescription: nil) ?? NSImage()
     }
-    return image
+    return AppIconResolver.prerendered(image)
 }()
 
 // 不加 private:菜单栏面板底栏那一项(见 MenuBarPanel.footer)也要用同一张品牌图 ——
@@ -292,7 +293,7 @@ let lastfmBadgeImage: NSImage = {
         // 不让图标位置裸奔成空白。
         return NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil) ?? NSImage()
     }
-    return image
+    return AppIconResolver.prerendered(image)
 }()
 
 // 抽成自由函数而不是 AccountLinkingTab 的实例方法——侧边栏行(AccountSidebarRow)和

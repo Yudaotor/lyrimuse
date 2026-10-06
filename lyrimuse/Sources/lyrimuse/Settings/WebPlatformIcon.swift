@@ -30,14 +30,15 @@ enum WebPlatformIcon {
     }
 
     /// 图片取自本机 `/Applications/Spotify.app` 的 `AppIcon.icns`(用 sips 转成
-    /// 1024×1024 PNG),跟 `YouTubeMusicIcon.png` 同规格同来路 —— 不去网上抓品牌资源。
+    /// 1024×1024 PNG),跟 `YouTubeMusicIcon.png` 同规格同来路 —— 不去网上抓品牌资源。预先画成一组位图
+    /// (`AppIconResolver.prerendered`),整张直接缩到几十像素满是锯齿。
     private static let spotifyIcon: NSImage = {
         guard let path = Bundle.main.path(forResource: "SpotifyIcon", ofType: "png"),
               let image = NSImage(contentsOfFile: path)
         else {
             return NSImage(systemSymbolName: "play.circle.fill", accessibilityDescription: nil) ?? NSImage()
         }
-        return image
+        return AppIconResolver.prerendered(image)
     }()
 
     private static let youtubeMusicIcon: NSImage = {
@@ -72,10 +73,9 @@ enum WebPlatformIcon {
     /// 地方用 `platformIcon("youtubeMusic")` 又会退回镂空。垫白这件事属于这张图本身。
     ///
     /// **不改磁盘上那份 PNG**,保持素材跟 Simple Icons 原样一致(来路可查,同
-    /// `SpotifyIcon.png` 的纪律);垫白只发生在运行时。用 `NSImage(size:flipped:drawingHandler:)`
-    /// 而不是 `lockFocus()` 烤成位图:前者保持分辨率无关(按实际需要的尺寸重画),后者会把
-    /// 图钉死在一个像素尺寸上。`NSColor.white` 是固定的白,不是 `labelColor` 那种会跟外观翻转的
-    /// 语义色——这正是这次要的"固定"。
+    /// `SpotifyIcon.png` 的纪律);垫白只发生在运行时,画成 `AppIconResolver.prerendered` 那一组
+    /// 位图(不用按需绘制的图、也不只烤一张,理由见那里)。`NSColor.white` 是固定的白,不是
+    /// `labelColor` 那种会跟外观翻转的语义色,所以可以先画好,深浅外观下都是白的。
     ///
     /// 只有 YouTube Music 需要这一步:`SpotifyIcon.png` 取自本机 `.app` 的 `AppIcon.icns`,
     /// 图形内部整片不透明(实测中心 alpha = 1),没有镂空可漏。
@@ -85,12 +85,11 @@ enum WebPlatformIcon {
         }
         let size = image.size
         guard size.width > 0, size.height > 0 else { return image }
-        return NSImage(size: size, flipped: false) { rect in
+        return AppIconResolver.prerendered(size: size) { rect in
             NSColor.white.setFill()
             let inset = min(rect.width, rect.height) * 0.08
             NSBezierPath(ovalIn: rect.insetBy(dx: inset, dy: inset)).fill()
             image.draw(in: rect)
-            return true
         }
     }
 }

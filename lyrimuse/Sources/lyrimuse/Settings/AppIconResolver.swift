@@ -60,13 +60,48 @@ enum AppIconResolver {
         let side: CGFloat = 1024, body: CGFloat = 824
         let rect = CGRect(x: (side - body) / 2, y: (side - body) / 2, width: body, height: body)
         let clip = RoundedRectangle(cornerRadius: 185.4, style: .continuous).path(in: rect).cgPath
-        return NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
-            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+        return prerendered(size: NSSize(width: side, height: side)) { _ in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return }
             ctx.addPath(clip)
             ctx.clip()
             image.draw(in: rect)
-            return true
         }
+    }
+
+    /// 把一张图预先画成 16～512 像素的一组位图(点尺寸都是 `size`),显示时按实际像素挑最接近的那张。
+    ///
+    /// 不用按需绘制的 `NSImage(size:flipped:drawingHandler:)`:SwiftUI 只按布局尺寸把它画一次(24pt 画成 48×48
+    /// 像素),`scaleEffect` 放大的是这张小图,Discord 预览里放大 1.22 倍的播放器角标就糊了。也不直接用随包那张
+    /// 512 或 1024 像素的 PNG:缩到几十像素满是锯齿。最大 512 像素,够画到 256pt;这些图标最大画到 64pt。
+    /// 画布用 Display P3:广色域的图(系统给的 App 图标就是)画进 sRGB 会发灰。
+    nonisolated static func prerendered(size: NSSize, draw: (CGRect) -> Void) -> NSImage {
+        let image = NSImage(size: size)
+        let longest = max(size.width, size.height)
+        guard longest > 0, let space = CGColorSpace(name: CGColorSpace.displayP3) else { return image }
+        for pixels in [16, 32, 64, 128, 256, 512] {
+            let scale = CGFloat(pixels) / longest
+            guard let context = CGContext(
+                data: nil, width: max(1, Int((size.width * scale).rounded())),
+                height: max(1, Int((size.height * scale).rounded())), bitsPerComponent: 8, bytesPerRow: 0,
+                space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { continue }
+            context.scaleBy(x: scale, y: scale)
+            context.interpolationQuality = .high
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+            draw(CGRect(origin: .zero, size: size))
+            NSGraphicsContext.restoreGraphicsState()
+            guard let cgImage = context.makeImage() else { continue }
+            let rep = NSBitmapImageRep(cgImage: cgImage)
+            rep.size = size
+            image.addRepresentation(rep)
+        }
+        return image
+    }
+
+    /// 随包的品牌图(Contents/Resources/ 里的 PNG)照原样预先画好,见上一个函数。
+    nonisolated static func prerendered(_ image: NSImage) -> NSImage {
+        prerendered(size: image.size) { image.draw(in: $0) }
     }
 
     /// 装不了 App 就没图标可查时的兜底:随 App 一起打包的静态品牌图。
@@ -90,7 +125,7 @@ enum AppIconResolver {
         guard let path = Bundle.main.path(forResource: name, ofType: "png"),
               let loaded = NSImage(contentsOfFile: path) else { return nil }
         // 打包图取自那个 App 的 icns,铺满的那种(AmazonMusicIcon)同样按图标网格摆,跟装了时一个样子。
-        let image = isFullBleed(loaded) ? fittedToIconGrid(loaded) : loaded
+        let image = isFullBleed(loaded) ? fittedToIconGrid(loaded) : prerendered(loaded)
         cache[key] = image
         return image
     }
