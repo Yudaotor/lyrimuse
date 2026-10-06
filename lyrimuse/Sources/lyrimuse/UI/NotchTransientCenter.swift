@@ -16,7 +16,7 @@ final class NotchTransientCenter: ObservableObject {
     static let shared = NotchTransientCenter()
 
     struct Banner: Equatable {
-        /// SF Symbol 名。
+        /// SF Symbol 名,或 `SurfaceGlyph` 的名字(自画的灵动岛 / 触控栏图标)。
         var icon: String
         var text: String
         /// 0...1;给 nil 就不画那根细条(纯文字提示用)。
@@ -50,8 +50,7 @@ struct NotchTransientRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: banner.icon)
-                .font(.system(size: 12, weight: .semibold))
+            SymbolImage(name: banner.icon, size: 12, weight: .semibold)
                 .foregroundStyle(tint)
                 // 图标宽度随符号变化(speaker.slash 比 speaker.wave.2 窄),不钉死宽度的话
                 // 音量从 0 拖到 100 的过程中文字会左右挪。

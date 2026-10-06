@@ -112,6 +112,8 @@ public enum SettingsSearchCatalog {
     public static let touchBarSectionValue = "touchBar"
     /// 那一段总开关的标题。没有触控栏的 Mac 上设置搜索只留这一条(落到「这台 Mac 没有触控栏」那张说明卡)。
     public static let touchBarToggleTitleKey = "触控栏歌词"
+    /// 「快捷键」页「展开/收起触控栏歌词」那一行的标题。那一行只在有触控栏时出现,没有触控栏时设置搜索不收这一条。
+    public static let touchBarHotkeyTitleKey = "展开/收起触控栏歌词"
 
     /// 面包屑里不是 L10n 键的品牌名(AccountDestination.title 对这几个直接返回字面量)。守卫核
     /// 键是否在 catalog 里时跳过它们。
@@ -419,6 +421,7 @@ public enum SettingsSearchCatalog {
         shortcut("显示/隐藏悬浮歌词", kw: ["悬浮歌词", "开关"]),
         shortcut("显示/隐藏灵动岛歌词", kw: ["灵动岛", "开关"]),
         shortcut("显示/隐藏菜单栏歌词", kw: ["菜单栏", "开关"]),
+        shortcut(touchBarHotkeyTitleKey, kw: ["触控栏", "Touch Bar", "功能栏", "展开", "收起", "开关"]),
         shortcut("锁定/解锁位置", kw: ["锁定", "位置"]),
         shortcut("显示/隐藏译文", kw: ["译文", "翻译"]),
         shortcut("显示/隐藏读音", kw: ["罗马音", "发音", "拼音", "粤拼"]),

@@ -7,7 +7,7 @@ import LyrimuseCore
 // 展开态从左到右排哪几项(`TouchBarSlot.order`)、隐藏功能栏时的宽度、广告期间封面那一格贴喇叭、按触控栏这一格的宽度断句;
 // 私有入口只在 `TouchBar/TouchBarPrivateAPI.swift` 一个文件里、App 启动时起控制器、开关和十项设置在「歌词显示」页
 // 自己那一段(「触控栏」)里、控制器都接上了;这台 Mac 有没有触控栏的判据(`TouchBarPresence`)和它在设置页 / 搜索 /
-// 控制器三处的接线;菜单栏左键面板第二排那一格「触控栏歌词」。
+// 控制器三处的接线;菜单栏左键面板第二排那一格「触控栏歌词」;全局快捷键「展开/收起触控栏歌词」。
 // 由 main.swift 的注册表按组调用。
 
 func runTouchBarTests() {
@@ -328,6 +328,26 @@ func runTouchBarTests() {
         }, true, "触控栏收起键: 收起的系统入口缺了就不放")
         expectEqual(TouchBarSide.allCases.map(\.rawValue), ["leading", "trailing"],
                     "触控栏排列: rawValue 是存量配置的一部分,别动")
+    }
+
+    // ---- 快捷键「展开/收起触控栏歌词」:照此刻看不看得见来翻,总开关关着先打开;没有触控栏、取不到系统入口时只说明 ----
+    do {
+        typealias Action = TouchBarHotkeyAction
+        let bools = [true, false]
+        expectEqual(bools.allSatisfy { available in bools.allSatisfy { on in bools.allSatisfy { visible in
+            Action.resolve(touchBarPresent: false, entryPointsAvailable: available, switchOn: on, visible: visible)
+                == .noTouchBar
+        } } }, true, "触控栏快捷键: 没有触控栏时只说明,不碰开关")
+        expectEqual(bools.allSatisfy { on in bools.allSatisfy { visible in
+            Action.resolve(touchBarPresent: true, entryPointsAvailable: false, switchOn: on, visible: visible)
+                == .unavailable
+        } }, true, "触控栏快捷键: 取不到触控栏的系统入口时只说明,不去拨开关")
+        expectEqual(Action.resolve(touchBarPresent: true, entryPointsAvailable: true, switchOn: false, visible: false),
+                    .turnOn, "触控栏快捷键: 总开关关着就打开(打开那一下当场展开)")
+        expectEqual(Action.resolve(touchBarPresent: true, entryPointsAvailable: true, switchOn: true, visible: true),
+                    .collapse, "触控栏快捷键: 看得见就收起")
+        expectEqual(Action.resolve(touchBarPresent: true, entryPointsAvailable: true, switchOn: true, visible: false),
+                    .expand, "触控栏快捷键: 开着、看不见时展开,不去翻总开关")
     }
 
     // ---- 按宽度断句:触控栏是第四个断句的面,按它自己报的宽拆长句、并短句;没报宽度时一句一句换 ----
@@ -749,5 +769,45 @@ func runTouchBarTests() {
                         && escape.contains("for keyDown in [true, false] {")
                         && escape.contains("TouchBarLyricsStyle.escapeKeyWidth"), true,
                     "触控栏 esc 键: 发 kVK_Escape 的按下 + 抬起,键宽同系统那颗")
+    }
+
+    // 快捷键「展开/收起触控栏歌词」(17 章决策 40):登记进撞键检查和标题表,按下去交给控制器、做了哪一件都回声;控制器照判定做,
+    // 收起走 ✕ 那个入口;设置页那一行和设置搜索那一条只在有触控栏时出现;灵动岛提示条画得出自画的触控栏图标。漏一处都不报错:
+    // 要么撞键查不出、提示里露出内部标识符,要么按下去翻成了总开关,要么没有触控栏的 Mac 上冒出一行录了没用的键。
+    do {
+        let hotkeys = code(appDir.appendingPathComponent("Settings/GlobalHotkeys.swift")) ?? ""
+        let controller = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsController.swift")) ?? ""
+        let settingsView = code(appDir.appendingPathComponent("SettingsView.swift")) ?? ""
+        let search = code(appDir.appendingPathComponent("Settings/SettingsSearch.swift")) ?? ""
+        let notchHint = code(appDir.appendingPathComponent("UI/NotchTransientCenter.swift")) ?? ""
+        expectEqual(hotkeys.contains("static let toggleTouchBarLyricsHotkey = Self(\"toggleTouchBarLyricsHotkey\")")
+                        && hotkeys.contains(".toggleMenuBarLyricsHotkey, .toggleTouchBarLyricsHotkey,")
+                        && hotkeys.contains("case .toggleTouchBarLyricsHotkey: return L10n.t(\"展开/收起触控栏歌词\")"), true,
+                    "触控栏快捷键: 登记进撞键检查,标题跟设置页那一行一致")
+        expectEqual(hotkeys.contains("switch TouchBarLyricsController.shared.toggleFromHotkey() {")
+                        && hotkeys.contains("case .noTouchBar: text = L10n.t(\"此 Mac 未配备触控栏\")")
+                        && hotkeys.contains("case .turnOn, .expand: text = L10n.t(\"已展开触控栏歌词\")")
+                        && hotkeys.contains("flashHint(icon: SurfaceGlyph.touchBar.rawValue, text: text)"), true,
+                    "触控栏快捷键: 按下去交给控制器,做了哪一件都回声")
+        expectEqual(controller.contains("let action = TouchBarHotkeyAction.resolve(")
+                        && controller.contains("touchBarPresent: TouchBarAvailability.shared.isPresent, entryPointsAvailable: TouchBarPrivateAPI.isAvailable,")
+                        && controller.contains("switchOn: settings.showLyricsInTouchBar, visible: bar.isVisible)"), true,
+                    "触控栏快捷键: 控制器按此刻有没有触控栏、有没有系统入口、开关和看不看得见判定")
+        expectEqual(controller.contains("case .turnOn:\n            settings.showLyricsInTouchBar = true")
+                        && controller.contains("case .expand:\n            presentLyrics(hidingControlStrip: settings.touchBarHidesControlStrip)")
+                        && controller.contains("case .collapse:\n            if TouchBarPrivateAPI.supportsHidingControlStrip {\n"
+                                               + "                TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
+                    "触控栏快捷键: 关着就打开开关(订阅当场展开),收着就展开,看得见就照 ✕ 收起")
+        expectEqual(settingsView.contains("if touchBar.isPresent {\n                    CardDivider()\n"
+                                          + "                    SettingsRow(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t(\"展开/收起触控栏歌词\")) {\n"
+                                          + "                        ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)"), true,
+                    "触控栏快捷键: 设置页那一行只在有触控栏时出现")
+        expectEqual(search.contains("$0.entry.titleKey != SettingsSearchCatalog.touchBarHotkeyTitleKey)"), true,
+                    "触控栏快捷键: 没有触控栏时设置搜索不收这一条")
+        expectEqual(SettingsSearchCatalog.entries.filter { $0.titleKey == SettingsSearchCatalog.touchBarHotkeyTitleKey }
+                        .map(\.destination), [.tab("shortcuts")], "触控栏快捷键: 设置搜索里有这一条,落在「快捷键」页")
+        expectEqual(notchHint.contains("SymbolImage(name: banner.icon, size: 12, weight: .semibold)")
+                        && !notchHint.contains("Image(systemName: banner.icon)"), true,
+                    "触控栏快捷键: 灵动岛提示条的图标位画得出自画的触控栏图标")
     }
 }

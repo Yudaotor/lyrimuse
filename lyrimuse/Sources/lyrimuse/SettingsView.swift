@@ -6523,6 +6523,7 @@ private struct GeneralSettingsTab: View {
 // 内容量比「通用」其它几块加起来还多,所以是独立分类。
 private struct ShortcutsSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var touchBar = TouchBarAvailability.shared
 
     var body: some View {
         // "至少需要搭配 ⌘/⌥/⌃ 中一个"这条限制对本页每一个录制框都成立,所以写在页面说明里
@@ -6547,6 +6548,13 @@ private struct ShortcutsSettingsTab: View {
                 CardDivider()
                 SettingsRow(icon: "menubar.rectangle", title: L10n.t("显示/隐藏菜单栏歌词")) {
                     ShortcutRecorderControl(name: .toggleMenuBarLyricsHotkey)
+                }
+                // 只在这台 Mac 此刻有触控栏时出现,同菜单栏「快速开关」那一项;设置搜索跟着收放(17 章决策 40)。
+                if touchBar.isPresent {
+                    CardDivider()
+                    SettingsRow(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t("展开/收起触控栏歌词")) {
+                        ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)
+                    }
                 }
                 CardDivider()
                 SettingsRow(icon: "lock", title: L10n.t("锁定/解锁位置")) {

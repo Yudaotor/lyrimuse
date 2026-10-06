@@ -47,10 +47,13 @@ final class SettingsSearchIndex {
 
     func search(_ query: String) -> [SettingsSearchHit] {
         // 这台 Mac 此刻没有触控栏时,「歌词显示 › 触控栏」那一段只有一张说明卡:留着「触控栏歌词」那一条(搜到之后
-        // 落到说明卡上),那几项配置不进结果 —— 点过去找不到对应的行。
+        // 落到说明卡上),那几项配置和「快捷键」页「展开/收起触控栏歌词」那一行(没有触控栏时不出现)不进结果 ——
+        // 点过去找不到对应的行。
         let showsTouchBarRows = TouchBarAvailability.shared.isPresent
         let all = hits().filter {
-            showsTouchBarRows || $0.entry.sectionValue != SettingsSearchCatalog.touchBarSectionValue
+            showsTouchBarRows
+                || ($0.entry.sectionValue != SettingsSearchCatalog.touchBarSectionValue
+                    && $0.entry.titleKey != SettingsSearchCatalog.touchBarHotkeyTitleKey)
                 || $0.entry.titleKey == SettingsSearchCatalog.touchBarToggleTitleKey
         }
         return SettingsSearchMatcher.ranked(all, query: query, title: { $0.title }, secondary: { $0.secondary })

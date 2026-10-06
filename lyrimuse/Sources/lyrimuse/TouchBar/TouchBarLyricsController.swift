@@ -15,6 +15,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// 1st generation 触控栏(左端是一颗虚拟 Esc 键)上,展开条会占掉系统的 Esc,左端那一格放回一颗自己的 esc 键
 /// (`TouchBarEscapeKey`,见 17 章决策 36),收起键跟在它后面。
 /// 在设置里打开开关的那一下直接展开,App 启动时只放图标。
+/// 全局快捷键「展开/收起触控栏歌词」照此刻看不看得见来展开 / 收起,关着时先打开(`toggleFromHotkey`)。
 /// 系统入口见 `TouchBarPrivateAPI`。这台 Mac 此刻没有触控栏时(`TouchBarAvailability`)开关开着也不启用,
 /// 触控栏出现 / 消失时跟着启停。
 ///
@@ -330,6 +331,32 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
 
     @objc private func collapseTapped() {
         TouchBarPrivateAPI.minimizeSystemModal(bar)
+    }
+
+    /// 全局快捷键「展开/收起触控栏歌词」:照 `TouchBarHotkeyAction` 做一件,做了哪一件交给调用方回声。
+    func toggleFromHotkey() -> TouchBarHotkeyAction {
+        let settings = AppSettings.shared
+        let action = TouchBarHotkeyAction.resolve(
+            touchBarPresent: TouchBarAvailability.shared.isPresent, entryPointsAvailable: TouchBarPrivateAPI.isAvailable,
+            switchOn: settings.showLyricsInTouchBar, visible: bar.isVisible)
+        switch action {
+        case .noTouchBar, .unavailable:
+            break
+        case .turnOn:
+            // 盯着开关的那条订阅启用控制器,打开那一下当场展开。
+            settings.showLyricsInTouchBar = true
+        case .expand:
+            presentLyrics(hidingControlStrip: settings.touchBarHidesControlStrip)
+        case .collapse:
+            // 同 ✕ 和自己那颗收起键;收起的入口缺了的系统上只能撤掉展开条。
+            if TouchBarPrivateAPI.supportsHidingControlStrip {
+                TouchBarPrivateAPI.minimizeSystemModal(bar)
+            } else {
+                TouchBarPrivateAPI.dismissSystemModal(bar)
+            }
+        }
+        logger.notice("[TouchBarLyricsController.toggleFromHotkey] \(String(describing: action), privacy: .public)")
+        return action
     }
 
     @objc private func escapeTapped() {

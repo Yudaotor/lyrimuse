@@ -7,7 +7,7 @@ import LyrimuseCore
 // 发 AppleScript 指令,复用已经拿到的自动化权限(见 MusicAutomationPermission)。
 //
 // 默认不预置任何按键组合——KeyboardShortcuts.Recorder 不预注册默认值时本来就是空的
-// "点击录制"状态,下面这 17 个快捷键全部必须用户自己在设置里主动录制才会生效,不会有
+// "点击录制"状态,下面这 18 个快捷键全部必须用户自己在设置里主动录制才会生效,不会有
 // 按键在用户不知情下被这个 App 抢占。
 extension KeyboardShortcuts.Name {
     static let toggleOverlay = Self("toggleOverlay")
@@ -29,6 +29,8 @@ extension KeyboardShortcuts.Name {
     static let toggleNotchOverlayHotkey = Self("toggleNotchOverlayHotkey")
     static let toggleMenuBarLyricsHotkey = Self("toggleMenuBarLyricsHotkey")
     static let lyricsOffsetResetHotkey = Self("lyricsOffsetResetHotkey")
+    // 设置页那一行只在这台 Mac 此刻有触控栏时出现(17 章决策 40)。
+    static let toggleTouchBarLyricsHotkey = Self("toggleTouchBarLyricsHotkey")
 
     /// 全部全局快捷键。撞键检查(见 ShortcutConflict)要遍历它——`KeyboardShortcuts.Name`
     /// 是个 struct 不是 enum,拿不到自动的 allCases,只能手工维护。
@@ -46,7 +48,7 @@ extension KeyboardShortcuts.Name {
         .openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey, .openSettingsHotkey, .playPauseHotkey,
         .nextTrackHotkey, .previousTrackHotkey, .lyricsAdvanceHotkey, .lyricsDelayHotkey,
         .lyricsQuickSearchHotkey, .toggleTranslationHotkey, .toggleRomanizationHotkey,
-        .toggleNotchOverlayHotkey, .toggleMenuBarLyricsHotkey, .lyricsOffsetResetHotkey,
+        .toggleNotchOverlayHotkey, .toggleMenuBarLyricsHotkey, .toggleTouchBarLyricsHotkey, .lyricsOffsetResetHotkey,
     ]
 
     /// 给用户看的动作名。撞键提示要说"这个组合已经给了『歌词提前』",光报
@@ -74,6 +76,7 @@ extension KeyboardShortcuts.Name {
         case .toggleRomanizationHotkey: return L10n.t("显示/隐藏读音")
         case .toggleNotchOverlayHotkey: return L10n.t("显示/隐藏灵动岛歌词")
         case .toggleMenuBarLyricsHotkey: return L10n.t("显示/隐藏菜单栏歌词")
+        case .toggleTouchBarLyricsHotkey: return L10n.t("展开/收起触控栏歌词")
         case .lyricsOffsetResetHotkey: return L10n.t("歌词偏移归零")
         default: return name.rawValue
         }
@@ -245,6 +248,18 @@ enum GlobalHotkeys {
             flashHint(icon: "menubar.rectangle",
                       text: on ? L10n.t("已显示菜单栏歌词") : L10n.t("已隐藏菜单栏歌词"))
         }
+        // 触控栏歌词:照此刻看不看得见来展开 / 收起,总开关关着就先打开;别改成翻总开关(17 章决策 40)。
+        // 没有触控栏、系统没有触控栏接口时按了不会有任何变化,同样回声说明。
+        KeyboardShortcuts.onKeyUp(for: .toggleTouchBarLyricsHotkey) {
+            let text: String
+            switch TouchBarLyricsController.shared.toggleFromHotkey() {
+            case .noTouchBar: text = L10n.t("此 Mac 未配备触控栏")
+            case .unavailable: text = L10n.t("本机系统未提供触控栏接口")
+            case .turnOn, .expand: text = L10n.t("已展开触控栏歌词")
+            case .collapse: text = L10n.t("已收起触控栏歌词")
+            }
+            flashHint(icon: SurfaceGlyph.touchBar.rawValue, text: text)
+        }
 
         // 见 allLyrimuseNames 注释:登记了名字却忘了写标题时,撞键提示会把内部标识符
         // 端给用户。这里只能查出这一半(另一半"压根没登记"没有办法自动发现)。
@@ -266,7 +281,7 @@ enum GlobalHotkeys {
     /// 队列里全是 mouseMoved,这一取一塞抢掉菜单自己的事件处理,表现是指针在菜单里移动时高亮
     /// 一顿一顿。`isEnabled = false` 走库里 `updateEventHandler()` 的禁用分支,那个观察者随之停掉;
     /// 两边收同一对通知,谁先谁后最终状态都一样。代价是菜单开着时全局快捷键不响应,跟系统原生
-    /// 菜单的行为一致;这 16 个快捷键里没有要在菜单打开时触发的(没有「开关菜单」这一类)。
+    /// 菜单的行为一致;这些快捷键里没有要在菜单打开时触发的(没有「开关菜单」这一类)。
     /// 升级到带上游修复的版本需要 swift-tools 6.2,且 2.x 用了本机编不过的宏,见 Package.swift。
     private static func pauseWhileMenuTracking() {
         guard menuTrackingObservers.isEmpty else { return }

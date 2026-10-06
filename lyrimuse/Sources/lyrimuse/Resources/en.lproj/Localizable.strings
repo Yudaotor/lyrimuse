@@ -662,6 +662,7 @@
 "居中" = "Center";
 "屏幕" = "Display";
 "展开" = "Expand";
+"展开/收起触控栏歌词" = "Expand/Collapse Touch Bar Lyrics";
 "展开圆角" = "Expanded Corners";
 "展开宽度" = "Expanded Width";
 "展开态" = "Expanded State";
@@ -714,6 +715,7 @@
 "已导出的歌词文件将一并删除。再次播放这首歌曲时会重新匹配，结果可能不同" = "Its exported lyrics file is deleted too. The song is matched again the next time it plays, and the result may differ";
 "已导出的歌词文件将一并删除，此操作无法撤销。再次播放这些歌曲时会重新匹配，结果可能不同" = "Their exported lyrics files are deleted too, and this can't be undone. These songs are matched again the next time they play, and the results may differ";
 "已展开" = "Expanded";
+"已展开触控栏歌词" = "Touch Bar lyrics expanded";
 "已应用编辑器中的修改" = "Applied the changes from the editor";
 "已开启" = "Enabled";
 "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" = "Restored %d lyrics files (%d added, %d overwritten)";
@@ -729,6 +731,7 @@
 "已播时长" = "Elapsed";
 "已收录、无歌词" = "Indexed, No Lyrics";
 "已收录、无歌词 %@ 首" = "%@ indexed, no lyrics";
+"已收起触控栏歌词" = "Touch Bar lyrics collapsed";
 "已改用自定义位置" = "Using a custom location";
 "已断开的屏幕" = "Disconnected display";
 "已是最新版本" = "Up to date";
@@ -1148,6 +1151,7 @@
 "本地有 %@ 首待补交的记录" = "%@ listens saved locally, waiting to be submitted";
 "本地歌名无检索结果，经「%@」查得正式曲名。" = "The local title returned nothing; the official title was found via “%@”.";
 "本机学到的署名" = "Credit learned on this Mac";
+"本机系统未提供触控栏接口" = "This Mac's system doesn't provide the Touch Bar interfaces";
 "本机系统未提供触控栏接口，开启后不会生效" = "This Mac's system doesn't provide the Touch Bar interfaces this needs, so turning it on has no effect";
 "本机设置，无法撤销" = "This Mac only; can't be undone";
 "本条" = "This entry";
