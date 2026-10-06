@@ -283,8 +283,9 @@ struct DiscordAvatarImage: View {
     }
 }
 
-/// 身份区 Discord 那一行的头像。连上 Discord 时按握手拿到的账号取一次(`DiscordUser.avatarURL`),只在内存里缓存一张,
-/// 不落盘、不加 UserDefaults 键;失败后 10 分钟内不重试。下载记进 NetworkAuditLog。
+/// 身份区 Discord 那一行的头像,以及 Discord 页预览里的头像框。连上 Discord 时按握手拿到的账号各取一次
+/// (`DiscordUser.avatarURL`、`avatarDecorationURL`),只在内存里缓存,不落盘、不加 UserDefaults 键;失败后 10 分钟内
+/// 不重试。下载记进 NetworkAuditLog。
 @MainActor
 final class DiscordAvatarStore: ObservableObject {
     static let shared = DiscordAvatarStore()
@@ -292,10 +293,13 @@ final class DiscordAvatarStore: ObservableObject {
     @Published private(set) var image: NSImage?
     /// 头像的平均色:没设横幅的人,Discord 用头像的主色画资料卡横幅,预览照这个画。
     @Published private(set) var averageColor: NSColor?
+    /// 头像框:Discord 上戴着才有,预先画成一组位图(`AppIconResolver.prerendered`);摘掉以后清空。
+    @Published private(set) var decoration: NSImage?
 
-    private var loadedURL: URL?
-    private var lastAttempt: Date?
-    private var inflight: Task<Void, Never>?
+    private enum Kind { case avatar, decoration }
+    private var loadedURL: [Kind: URL] = [:]
+    private var lastAttempt: [Kind: Date] = [:]
+    private var inflight: [Kind: Task<Void, Never>] = [:]
     private var statusObserver: AnyCancellable?
     private static let retryInterval: TimeInterval = 600
 
@@ -303,28 +307,48 @@ final class DiscordAvatarStore: ObservableObject {
         statusObserver = DiscordPresenceController.shared.$status
             .sink { [weak self] status in
                 guard case .connected(let user?) = status else { return }
-                self?.load(user.avatarURL())
+                self?.load(user.avatarURL(), .avatar)
+                self?.load(user.avatarDecorationURL(), .decoration)
             }
     }
 
-    private func load(_ url: URL?) {
-        guard let url else { return }
-        if url == loadedURL {
-            if image != nil || inflight != nil { return }
-            if let last = lastAttempt, Date().timeIntervalSince(last) < Self.retryInterval { return }
-        } else {
-            inflight?.cancel()
-            image = nil
-            averageColor = nil
+    private func load(_ url: URL?, _ kind: Kind) {
+        // 没地址就清掉旧的:头像框没戴、或者摘掉了(头像总有地址,没传过头像时是默认头像)。
+        guard let url else {
+            inflight[kind]?.cancel()
+            inflight[kind] = nil
+            loadedURL[kind] = nil
+            apply(nil, kind)
+            return
         }
-        loadedURL = url
-        lastAttempt = Date()
-        inflight = Task { [weak self] in
-            let fetched = await Self.download(url)
-            guard let self, !Task.isCancelled, self.loadedURL == url else { return }
-            self.image = fetched
-            self.averageColor = fetched.flatMap(Self.averageColor(of:))
-            self.inflight = nil
+        if url == loadedURL[kind] {
+            if loaded(kind) || inflight[kind] != nil { return }
+            if let last = lastAttempt[kind], Date().timeIntervalSince(last) < Self.retryInterval { return }
+        } else {
+            inflight[kind]?.cancel()
+            apply(nil, kind)
+        }
+        loadedURL[kind] = url
+        lastAttempt[kind] = Date()
+        inflight[kind] = Task { [weak self] in
+            let fetched = await Self.download(url, operation: kind == .avatar ? "avatar" : "avatar-decoration")
+            guard let self, !Task.isCancelled, self.loadedURL[kind] == url else { return }
+            self.apply(fetched, kind)
+            self.inflight[kind] = nil
+        }
+    }
+
+    private func loaded(_ kind: Kind) -> Bool {
+        kind == .avatar ? image != nil : decoration != nil
+    }
+
+    private func apply(_ fetched: NSImage?, _ kind: Kind) {
+        switch kind {
+        case .avatar:
+            image = fetched
+            averageColor = fetched.flatMap(Self.averageColor(of:))
+        case .decoration:
+            decoration = fetched.map(AppIconResolver.prerendered)
         }
     }
 
@@ -348,19 +372,19 @@ final class DiscordAvatarStore: ObservableObject {
                        alpha: 1)
     }
 
-    private static func download(_ url: URL) async -> NSImage? {
+    private static func download(_ url: URL, operation: String) async -> NSImage? {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
         let start = Date()
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            NetworkAuditLog.record(service: "discord", operation: "avatar", host: url.host ?? "",
+            NetworkAuditLog.record(service: "discord", operation: operation, host: url.host ?? "",
                                    statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
             guard status == 200 else { return nil }
             return NSImage(data: data)
         } catch {
-            NetworkAuditLog.record(service: "discord", operation: "avatar", host: url.host ?? "",
+            NetworkAuditLog.record(service: "discord", operation: operation, host: url.host ?? "",
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
             return nil
         }

@@ -6,8 +6,8 @@ import SwiftUI
 /// 下面是绿色音符加「名字下面显示」选的那一项),左边是别人点开你时从名单旁弹出的资料卡(横幅、头像、名字、用户名,「当前动态」
 /// 里「正在听 应用名」、封面、歌名、歌手、专辑、进度)。尺寸、字号、颜色见 12 章决策 36;资料卡上半截按比例缩小过。内容就是此刻
 /// 会发出去的那一份(`DiscordPresence.activity`);没在放歌、或者这首不会显示时用一份示例。不联网:封面用 App 手上那张,没有公网
-/// 封面时跟 Discord 一样显示应用图标;头像用 `DiscordAvatarStore` 已经取到的那张,横幅用它的平均色。画面不随开关、暂停、
-/// 暂时隐藏变淡,这些情况只写在下面那行说明里。设置窗口看不见时停表。
+/// 封面时跟 Discord 一样显示应用图标;头像和头像框(戴着才有)用 `DiscordAvatarStore` 已经取到的那张,横幅用头像的平均色。
+/// 画面不随开关、暂停、暂时隐藏变淡,这些情况只写在下面那行说明里。设置窗口看不见时停表。
 struct DiscordPresencePreview: View {
     @ObservedObject private var discord = DiscordPresenceController.shared
     @ObservedObject private var avatars = DiscordAvatarStore.shared
@@ -41,6 +41,8 @@ struct DiscordPresencePreview: View {
     private static let bannerHeight: CGFloat = 60
     private static let popoutAvatar: CGFloat = 64
     private static let popoutAvatarRing: CGFloat = 5
+    /// 头像框的边长是头像的 1.2 倍、跟头像同心(Discord 的画法,Decor 的头像框素材规范写的同一个比例),见 12 章决策 58。
+    private static let decorationScale: CGFloat = 1.2
     /// 资料卡最高时(活动那一块有专辑、有进度条)的高度。舞台按最高的留位置,暂停时进度条没了页面也不跳。
     private static let popoutTallestHeight: CGFloat = 300
     /// 小图跟封面之间那一圈弹窗底色的宽度。
@@ -233,6 +235,7 @@ struct DiscordPresencePreview: View {
                 .fill(bannerColor)
                 .frame(height: Self.bannerHeight)
             DiscordAvatarImage(size: Self.popoutAvatar)
+                .overlay { avatarDecoration(size: Self.popoutAvatar) }
                 .padding(Self.popoutAvatarRing)
                 .background(Circle().fill(Palette.popout))
                 .overlay(alignment: .bottomTrailing) {
@@ -350,7 +353,18 @@ struct DiscordPresencePreview: View {
 
     private func avatar(size: CGFloat) -> some View {
         DiscordAvatarImage(size: size)
+            .overlay { avatarDecoration(size: size) }
             .overlay(alignment: .bottomTrailing) { onlineDot(size: size * 0.3125, ring: Palette.window) }
+    }
+
+    /// 头像框:连上、而且 Discord 上戴着头像框才画。压在头像上、在线点下面,超出头像的那一圈不裁。
+    @ViewBuilder private func avatarDecoration(size: CGFloat) -> some View {
+        if case .connected = discord.status, let decoration = avatars.decoration {
+            Image(nsImage: decoration)
+                .resizable()
+                .frame(width: size * Self.decorationScale, height: size * Self.decorationScale)
+                .allowsHitTesting(false)
+        }
     }
 
     /// 画 Discord 拿到的那个地址:跟 App 里显示的不一定是同一张(视频截图、按歌名匹配到的目录图)。取不到时跟 Discord 一样

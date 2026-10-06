@@ -85,6 +85,11 @@ private func checkDiscordWire() {
                 "Discord 回包: 账号没有 ID 当没有")
     expectEqual(reply(.frame, "{\"cmd\":\"DISPATCH\",\"evt\":\"READY\",\"data\":{\"v\":1}}"), .ready(user: nil),
                 "Discord 回包: READY 没有用户也算握手成功")
+    expectEqual(reply(.frame, "{\"cmd\":\"DISPATCH\",\"evt\":\"READY\",\"data\":{\"user\":{\"id\":\"3\",\"username\":\"u\",\"avatar_decoration_data\":{\"asset\":\"a_fed43ab12698df65902ba06727e20c0e\",\"sku_id\":\"1144058844004233369\"}}}}"),
+                .ready(user: DiscordUser(id: "3", username: "u", avatarDecoration: "a_fed43ab12698df65902ba06727e20c0e")),
+                "Discord 回包: READY 带头像框")
+    expectEqual(reply(.frame, "{\"cmd\":\"DISPATCH\",\"evt\":\"READY\",\"data\":{\"user\":{\"id\":\"3\",\"username\":\"u\",\"avatar_decoration_data\":null}}}"),
+                .ready(user: DiscordUser(id: "3", username: "u")), "Discord 回包: 没戴头像框时 Discord 给 null")
     expectEqual(reply(.frame, "{\"cmd\":\"SET_ACTIVITY\",\"evt\":\"ERROR\",\"nonce\":\"3\",\"data\":{\"code\":4000,\"message\":\"bad\"}}"),
                 .error(nonce: "3", code: 4000, message: "bad"), "Discord 回包: 命令被拒")
     expectEqual(reply(.frame, "{\"cmd\":\"SET_ACTIVITY\",\"evt\":null,\"nonce\":\"4\",\"data\":{}}"), .ack(nonce: "4"),
@@ -110,6 +115,12 @@ private func checkDiscordWire() {
     expectEqual(DiscordUser(id: "1", username: "u", avatar: "../x").avatarURL()?.absoluteString,
                 "https://cdn.discordapp.com/embed/avatars/0.png", "Discord 账号: 头像哈希格式不对当没有,不拼进地址")
     expectEqual(DiscordUser(id: "12a", username: "u", avatar: hash).avatarURL(), nil, "Discord 账号: ID 不是纯数字不给地址")
+    expectEqual(DiscordUser(id: "1", username: "u", avatarDecoration: "a_" + hash).avatarDecorationURL()?.absoluteString,
+                "https://cdn.discordapp.com/avatar-decoration-presets/a_\(hash).png?size=160&passthrough=false",
+                "Discord 账号: 头像框取静态的一帧")
+    expectEqual(DiscordUser(id: "1", username: "u").avatarDecorationURL(), nil, "Discord 账号: 没戴头像框不给地址")
+    expectEqual(DiscordUser(id: "1", username: "u", avatarDecoration: "../x").avatarDecorationURL(), nil,
+                "Discord 账号: 头像框哈希格式不对当没有,不拼进地址")
 
     // ---- 设置页预览 ----
     let previewNow = Date(timeIntervalSince1970: 2_000_000)
@@ -1025,6 +1036,16 @@ private func checkDiscordWiring() {
     for needle in ["discord.sentActivity", "now.timeIntervalSince($0) < DiscordPresence.pauseGrace", "CachedImage(url: url)",
                    "if live != nil, let shown = discord.shownOnDiscord(insteadOf: activity) {", "} else if live == nil || refused {"] {
         expectEqual(sourceBytes(preview, contain: needle), true, "Discord(接线): 预览照 Discord 实际显示的画 \(needle)")
+    }
+    // 头像框:连上时跟头像一起取,预览里资料卡和成员名单两处头像都压上,在线点在它上面。
+    let avatarStore = code("lyrimuse/Settings/SettingsSidebarChrome.swift")
+    for needle in ["self?.load(user.avatarDecorationURL(), .decoration)", "decoration = fetched.map(AppIconResolver.prerendered)"] {
+        expectEqual(sourceBytes(avatarStore, contain: needle), true, "Discord(接线): 连上时取头像框 \(needle)")
+    }
+    for needle in ["DiscordAvatarImage(size: Self.popoutAvatar)\n                .overlay { avatarDecoration(size: Self.popoutAvatar) }",
+                   "DiscordAvatarImage(size: size)\n            .overlay { avatarDecoration(size: size) }\n            .overlay(alignment: .bottomTrailing) { onlineDot(",
+                   ".frame(width: size * Self.decorationScale, height: size * Self.decorationScale)"] {
+        expectEqual(sourceBytes(preview, contain: needle), true, "Discord(接线): 预览两处头像压上头像框 \(needle)")
     }
     // 预览里的图标(角标放大 1.22 倍,大图 60pt,头像占位 64pt)都得是预先画好的一组位图:按需绘制的图 SwiftUI 只按布局
     // 尺寸画一次,放大就糊;随包的 PNG 整张直接缩小满是锯齿。

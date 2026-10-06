@@ -145,8 +145,10 @@ public enum DiscordIPC {
             (object?[key] as? String).flatMap { $0.isEmpty ? nil : $0 }
         }
         guard let id = text("id"), let username = text("username") else { return nil }
+        let decoration = ((object?["avatar_decoration_data"] as? [String: Any])?["asset"] as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
         return DiscordUser(id: id, username: username, globalName: text("global_name"), avatar: text("avatar"),
-                           discriminator: text("discriminator"))
+                           discriminator: text("discriminator"), avatarDecoration: decoration)
     }
 
     // MARK: - 套接字位置
@@ -175,14 +177,17 @@ public struct DiscordUser: Equatable, Sendable {
     public let avatar: String?
     /// 旧用户名体系的四位编号;新用户名体系是 "0"。
     public let discriminator: String?
+    /// 头像框的图(`avatar_decoration_data.asset`);没戴头像框时 Discord 给 null,这里为 nil。
+    public let avatarDecoration: String?
 
     public init(id: String, username: String, globalName: String? = nil, avatar: String? = nil,
-                discriminator: String? = nil) {
+                discriminator: String? = nil, avatarDecoration: String? = nil) {
         self.id = id
         self.username = username
         self.globalName = globalName
         self.avatar = avatar
         self.discriminator = discriminator
+        self.avatarDecoration = avatarDecoration
     }
 
     /// 界面上写的名字:有显示名用显示名,没有用用户名。
@@ -199,6 +204,13 @@ public struct DiscordUser: Equatable, Sendable {
             return URL(string: "https://cdn.discordapp.com/avatars/\(id)/\(avatar).png?size=\(size)")
         }
         return URL(string: "https://cdn.discordapp.com/embed/avatars/\(defaultAvatarIndex).png")
+    }
+
+    /// 头像框在 Discord 公开 CDN 上的地址,取静态的一帧(`passthrough=false`;不带它返回 288 像素的动图,不管 size)。
+    /// 没戴头像框、或者哈希不是 Discord 的格式(同头像)时为 nil。
+    public func avatarDecorationURL(size: Int = 160) -> URL? {
+        guard let avatarDecoration, Self.isAvatarHash(avatarDecoration) else { return nil }
+        return URL(string: "https://cdn.discordapp.com/avatar-decoration-presets/\(avatarDecoration).png?size=\(size)&passthrough=false")
     }
 
     /// 默认头像的编号:新用户名体系按 ID 右移 22 位再模 6,旧体系按四位编号模 5。
