@@ -552,7 +552,10 @@ func TestHostGuardEndpointCircuitIgnoresFailuresWhileOpen(t *testing.T) {
 // 端到端:QQ 主搜索回 200 但 code 非 0(服务端拒绝)也按失败计,5 次之后不再发;code 0 的查无不算。
 func TestQQClientSearchCodeRejectionTripsEndpoint(t *testing.T) {
 	savedGuard, savedBreaker, savedTransport := sharedHostGuard(), sharedLyricSourceBreaker(), sharedLyricSourceTransport()
-	setSharedHostGuard(newHostGuard(time.Now))
+	// 这里锁的是跳闸计数,不是限速:令牌给足,连发十几次不用排队等。
+	guard := newHostGuard(time.Now)
+	guard.rateFor = func(string) hostRate { return hostRate{perSec: 1000, burst: 1000} }
+	setSharedHostGuard(guard)
 	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
 	t.Cleanup(func() {
 		setSharedHostGuard(savedGuard)

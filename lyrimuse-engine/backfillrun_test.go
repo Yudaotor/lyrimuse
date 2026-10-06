@@ -31,8 +31,9 @@ type backfillRunEnv struct {
 // setUpBackfillRun 里 reply 拿到这次请求按下标顺序排好的 timestamp,返回响应体或传输层错误。
 func setUpBackfillRun(t *testing.T, reply func(ts []string) (string, error)) *backfillRunEnv {
 	t.Helper()
-	savedLog, savedNudge := listenLogPath, lastfmFeedNudgePath
-	t.Cleanup(func() { listenLogPath, lastfmFeedNudgePath = savedLog, savedNudge })
+	savedLog, savedNudge, savedPause := listenLogPath, lastfmFeedNudgePath, backfillBatchPause
+	t.Cleanup(func() { listenLogPath, lastfmFeedNudgePath, backfillBatchPause = savedLog, savedNudge, savedPause })
+	backfillBatchPause = 0
 	dir := t.TempDir()
 	listenLogPath = filepath.Join(dir, "listens.jsonl")
 	lastfmFeedNudgePath = filepath.Join(dir, "feed-nudge")

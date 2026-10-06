@@ -43,6 +43,9 @@ func TestMain(m *testing.M) {
 	ytmusicQueueScript = func(string) (appQueryTracks, bool) { return appQueryTracks{}, false }
 	spotifyWebQueueScript = func(string) (appQueryTracks, bool) { return appQueryTracks{}, false }
 	browserQueueRetryDelay = 0
+	// 网易云、MusicBrainz 两家的请求间隔:单测里连发的是假服务器,按真实间隔等只会拖慢整套;测节流本身的用例自己设。
+	neteaseMinIntervalBetweenCalls = 0
+	musicbrainzMinIntervalBetweenCalls = 0
 	// 网络翻译的 Google 那一家默认指向真实端点;单测一律跳过,免得经 machineTranslateLRC
 	// 的用例真的外发请求、还让 MyMemory 假服务器收不到请求。测它的用例自己指向假服务器。
 	googleTranslateEndpoint = ""

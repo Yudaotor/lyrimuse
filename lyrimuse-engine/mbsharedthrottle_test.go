@@ -26,6 +26,9 @@ func TestMusicbrainzPauseFor(t *testing.T) {
 // 共享窗口:别的进程把「下一个请求最早什么时候发」推到了几百毫秒后 → 等一小会儿就发;推得很远(503 停手)→ 这次不发。
 // 发之前自己也把窗口往后推一个间隔。
 func TestMusicbrainzThrottleHonorsSharedWindow(t *testing.T) {
+	savedInterval := musicbrainzMinIntervalBetweenCalls
+	musicbrainzMinIntervalBetweenCalls = 60 * time.Millisecond
+	t.Cleanup(func() { musicbrainzMinIntervalBetweenCalls = savedInterval })
 	useTempSharedCooldown(t)
 	musicbrainzRateMu.Lock()
 	musicbrainzLastCall = time.Time{}

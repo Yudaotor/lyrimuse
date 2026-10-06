@@ -14,9 +14,12 @@ import (
 func TestNeteaseThrottle(t *testing.T) {
 	savedCall := neteaseLastCall
 	savedCooldown := neteaseCooldownUntil
+	savedInterval := neteaseMinIntervalBetweenCalls
+	neteaseMinIntervalBetweenCalls = 60 * time.Millisecond
 	t.Cleanup(func() {
 		neteaseLastCall = savedCall
 		neteaseCooldownUntil = savedCooldown
+		neteaseMinIntervalBetweenCalls = savedInterval
 	})
 	resetCooldowns := func() { neteaseCooldownUntil = map[string]time.Time{} }
 

@@ -210,6 +210,8 @@ func TestLRCLIBGetPlainOrMismatchFallsThroughToSearch(t *testing.T) {
 		}
 		return http.StatusNotFound, ""
 	})
+	// 几组用例连发十来次 lrclib 请求,限速不是这里要测的:给上面装的那个限速器把令牌给足。
+	sharedHostGuard().rateFor = func(string) hostRate { return hostRate{perSec: 1000, burst: 1000} }
 	searchHit := `[{"trackName":"Song","artistName":"Artist","albumName":"Album","duration":200,"syncedLyrics":"` + synced + `"}]`
 	cases := []struct {
 		name      string

@@ -27,24 +27,24 @@ func TestWaitPrefetchResolved(t *testing.T) {
 	enrichInflight[key] = true
 	enrichMu.Unlock()
 	go func() {
-		time.Sleep(600 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		enrichMu.Lock()
 		delete(enrichInflight, key)
 		enrichMu.Unlock()
 	}()
 	start = time.Now()
 	waitPrefetchResolved(key)
-	if d := time.Since(start); d < 500*time.Millisecond || d > 2*time.Second {
+	if d := time.Since(start); d < 100*time.Millisecond || d > 2*time.Second {
 		t.Fatalf("应当等到上一首解析结束才返回,等了 %s", d)
 	}
 
-	prefetchResolveMaxWait = 400 * time.Millisecond
+	prefetchResolveMaxWait = 150 * time.Millisecond
 	enrichMu.Lock()
 	enrichInflight[key] = true
 	enrichMu.Unlock()
 	start = time.Now()
 	waitPrefetchResolved(key)
-	if d := time.Since(start); d < 400*time.Millisecond || d > 1500*time.Millisecond {
+	if d := time.Since(start); d < 150*time.Millisecond || d > 1500*time.Millisecond {
 		t.Fatalf("上一首卡住时到上限就该返回,等了 %s", d)
 	}
 }

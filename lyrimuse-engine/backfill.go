@@ -42,14 +42,16 @@ import (
 const (
 	// track.scrobble 官方上限:一次最多 50 条。
 	backfillBatchSize = 50
-	// 批间隔。官方 TOS 明确警告"持续每秒多次调用可能导致账号被停用",这里给足余量。
-	backfillBatchPause = 2 * time.Second
 	// Last.fm 接受的最大回溯时长。官方文档没给确切数字,社区与本仓库既有注释一致指向
 	// 两周;取 13 天留一天余量,宁可少补也不要发出去被静默忽略、还占掉一次尝试。
 	backfillMaxAge = 13 * 24 * time.Hour
 	// 单批请求超时。超时**不重发**(见文件头),所以给得比常规调用宽松些。
 	backfillRequestTimeout = 30 * time.Second
 )
+
+// backfillBatchPause:批间隔。官方 TOS 明确警告"持续每秒多次调用可能导致账号被停用",这里给足余量。
+// 变量只为单测能调成 0。
+var backfillBatchPause = 2 * time.Second
 
 // backfillItem 是待补清单里的一条,给"未连接"那一栏按歌名列出来用。
 //

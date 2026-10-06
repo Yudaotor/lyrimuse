@@ -7,6 +7,10 @@ import "testing"
 // artistIdentityFn 注入假函数测,不碰网络。
 func TestMergeAliasedArtistsIdentity(t *testing.T) {
 	noID := func(string, string) mbArtistIdentity { return mbArtistIdentity{} }
+	// 下面登记的名字之外,用例里出现的歌手名同样不许联网查中文名:只读缓存。
+	savedCacheOnly := artistCanonicalCacheOnly
+	artistCanonicalCacheOnly = true
+	t.Cleanup(func() { artistCanonicalCacheOnly = savedCacheOnly })
 
 	// 隔离 resolveGenericArtistCanonicalName 会打的真实网络请求(MusicBrainz/QQ)——这组
 	// 用例注入了假的 mbid 解析器(noID/resolve),测的是"名字键"合并信号跟 mbid 信号

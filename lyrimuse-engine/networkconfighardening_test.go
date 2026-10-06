@@ -323,7 +323,7 @@ func TestDoHLookupSingleFlight(t *testing.T) {
 // 调用方的 ctx 先结束了就不再等(查询在后台照常完成、写进缓存)。
 func TestDoHLookupHonorsCallerContext(t *testing.T) {
 	withDoHEndpoint(t, func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(time.Second)
+		time.Sleep(200 * time.Millisecond)
 		w.Write([]byte(`{"Answer":[{"type":1,"data":"5.6.7.8"}]}`))
 	}, "slow.doh.test")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

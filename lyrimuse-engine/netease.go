@@ -115,7 +115,8 @@ var (
 // musicbrainzThrottle(musicbrainz.go)同一个模式。间隔选得比 MB 的 1.1s 短很多——网易云
 // 容忍的请求量本身就远比 MB 官方限速(1 req/s)宽松,没必要把正常搜索拖得太慢,只要把
 // 最密集的那段峰值削掉,让同一次搜索里连续几个重试轮之间留出呼吸空间。
-const neteaseMinIntervalBetweenCalls = 250 * time.Millisecond
+// 测试里由 TestMain 调成 0,测节流本身的用例自己设。
+var neteaseMinIntervalBetweenCalls = 250 * time.Millisecond
 
 // neteaseBlockCooldown:加——探测到网易云在 body 里拒绝请求(限流/风控,
 // 见下面 neteaseReportBlocked)之后,这个端点桶要退避多久才再放行。之前完全没有这一层:
