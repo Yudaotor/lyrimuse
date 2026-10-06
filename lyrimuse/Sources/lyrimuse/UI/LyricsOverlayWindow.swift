@@ -33,11 +33,11 @@ final class LyricsOverlayWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    // 滚轮**不再需要**任何特殊处理:ignoresMouseEvents 现在恒为 true(唯一例外是长按拖动
-    // 武装期间),窗口压根收不到滚轮事件,窗口服务器直接把它派给下层窗口。
-    //
-    // 原来这里有一个 scrollWheel 覆写(丢掉事件 + 把穿透设回 true)和配套的
-    // isDragArmedProvider / onScrollWheelSwallowed 两条接线,都是为了缓解「胶囊热区吞滚轮」;
-    // 病根(按指针位置翻转穿透)删掉之后它们一并没有存在意义了。详见
-    // LyricsOverlayWindowController 里「点击穿透 + 悬停热区 + 长按拖动」那一节。
+    /// 指针停在按钮 / 歌词文字上时窗口收回了点击穿透,滚轮会落到这里:交给控制器还原穿透,这一格丢掉,
+    /// 同一手势后面的滚动直接到下层(见 `LyricsOverlayWindowController.yieldPointerCaptureToScroll`)。
+    var onScrollWheel: (@MainActor () -> Void)?
+
+    override func scrollWheel(with event: NSEvent) {
+        onScrollWheel?()
+    }
 }

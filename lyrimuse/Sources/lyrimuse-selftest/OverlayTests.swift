@@ -1585,6 +1585,23 @@ func runOverlayTests() {
                     "悬浮接线: 翻面时窗口反向挪一个槽位,卡片不动")
         expectEqual(view.contains(".frame(height: OverlayPlacement.controlsSlotHeight)"), true,
                     "悬浮接线: 控制排那一格按 controlsSlotHeight 定高,跟翻面补偿同一个数")
+        let overlayWindow = src("LyricsOverlayWindow.swift")
+        expectEqual(controller.contains(
+            "setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked\n                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress)"),
+                    true, "悬浮接线: 「拖动前先长按」关着时指针停在歌词文字上先接住点击,按下和拖动都不漏给下层")
+        expectEqual(controller.contains("guard !edgeCaptured, !controlCaptured, !lyricsCaptured, !isDragArmed else { return }"), true,
+                    "悬浮接线: 歌词文字接管着时不还原穿透")
+        expectEqual(controller.contains("restorePointerCaptureAfterDrag()\n        // 实测把窗口拖到了哪儿")
+                    && !controller.contains("ignoresMouseEvents = true\n            isDragArmed = false")
+                    && !controller.contains("ignoresMouseEvents = true\n            recomputeControlsBelowCard()"),
+                    true, "悬浮接线: 拖完或拖动作废时按接管状态还原,指针还在字上就接着接住")
+        expectEqual(controller.contains("controlCaptured = false\n        lyricsCaptured = false"), true,
+                    "悬浮接线: 锁定时一并放掉歌词文字的接管")
+        expectEqual(controller.components(separatedBy: "setControlCapture(false)\n        setLyricsCapture(false)\n    }").count - 1, 2,
+                    "悬浮接线: 悬停态清零、滚轮让开时按钮和歌词文字两处接管一起还原")
+        expectEqual(overlayWindow.contains("override func scrollWheel(with event: NSEvent) {\n        onScrollWheel?()")
+                    && controller.contains("panel.onScrollWheel = { [weak self] in self?.yieldPointerCaptureToScroll() }"),
+                    true, "悬浮接线: 接管期间收到滚轮就让开,同一手势后面的滚动到下层")
     }
 
     // ---- UI 共用组件那一批的接线(契约) ----

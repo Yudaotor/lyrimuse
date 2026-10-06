@@ -213,11 +213,14 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     ///
     /// 加第四个(`hoveredControl`,按钮悬停高亮)—— 它更需要这条收口:留一份陈旧
     /// 的 id 就是"控制排都藏起来了,某颗按钮底下还亮着一圈高亮"。
+    ///
+    /// 按钮和歌词文字两处收回的点击穿透也在这里还原。
     private func clearControlsHoverState() {
         if isHoveringForControls { isHoveringForControls = false }
         if isHoveringControlPill { isHoveringControlPill = false }
         if hoveredControl != nil { hoveredControl = nil }
         setControlCapture(false)
+        setLyricsCapture(false)
     }
 
     /// 指针停在一颗看得见的按钮上时,这扇窗临时收回点击穿透(同边缘的 `captureEdge`)。
@@ -226,7 +229,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 系统已经派给了下层 App:点播放 / 关闭 / ⚙ 时下层窗口同时挨了这一下(被激活、点中链接或按钮;
     /// 「按住歌词立即拖」开着时还会收到半截手势)。收回穿透之后这次点击只到我们自己的窗口,由本地监听器
     /// 照旧分发(控件不是 SwiftUI Button,不会触发两遍)。代价只在按钮那几块矩形上:指针停在按钮上时
-    /// 滚轮滚不到下层,其余地方照旧穿透。
+    /// 滚轮的第一格到不了下层(见 `yieldPointerCaptureToScroll`),其余地方照旧穿透。
     private var controlCaptured = false
 
     private func setControlCapture(_ on: Bool) {
@@ -240,10 +243,38 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         }
     }
 
-    /// 边缘和按钮两处都没在接管、也没在拖时,还原点击穿透。
+    /// 「拖动前先长按」关着时歌词文字就是拖动把手:指针停在字上,这扇窗同样临时收回点击穿透。穿透着的话,
+    /// 按下那一刻系统已经把这一下派给了下层窗口,之后整段拖动和松手下层也都收得到。代价是单击文字不再
+    /// 穿透到下层(见 04 章决策 44)。
+    private var lyricsCaptured = false
+
+    private func setLyricsCapture(_ on: Bool) {
+        guard on != lyricsCaptured, let window else { return }
+        lyricsCaptured = on
+        if on {
+            window.acceptsMouseMovedEvents = true
+            if !isDragArmed { window.ignoresMouseEvents = false }
+        } else {
+            restorePassthroughIfIdle()
+        }
+    }
+
+    /// 收回穿透期间滚轮会落到这扇窗(`LyricsOverlayWindow.onScrollWheel`):还原穿透,同一手势后面的滚动
+    /// 直接到下层;指针再移动时照常重新接住。
+    private func yieldPointerCaptureToScroll() {
+        setControlCapture(false)
+        setLyricsCapture(false)
+    }
+
+    /// 边缘、按钮、歌词文字三处都没在接管、也没在拖时,还原点击穿透。
     private func restorePassthroughIfIdle() {
-        guard !edgeCaptured, !controlCaptured, !isDragArmed else { return }
+        guard !edgeCaptured, !controlCaptured, !lyricsCaptured, !isDragArmed else { return }
         window?.ignoresMouseEvents = true
+    }
+
+    /// 拖完或拖动作废:指针还停在按钮、歌词文字或可拖的边上就接着接住,不然还原穿透。
+    private func restorePointerCaptureAfterDrag() {
+        window?.ignoresMouseEvents = !(edgeCaptured || controlCaptured || lyricsCaptured)
     }
 
     private var globalMouseMonitor: Any?
@@ -320,9 +351,10 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         recomputeControlsBelowCard()
 
         // 拖动改由长按手势接管(见 handleGlobalMouseEvent),原生"点背景就拖"不再使用;
-        // 点击穿透常年开启,只有悬停到播放控制按钮胶囊那个热区时才会被临时收回。
+        // 点击穿透常年开启,只有指针停在按钮、歌词文字、可拖的边上时才临时收回。
         panel.isMovableByWindowBackground = false
         panel.ignoresMouseEvents = true
+        panel.onScrollWheel = { [weak self] in self?.yieldPointerCaptureToScroll() }
 
         let hosting = NSHostingView(rootView: LyricsOverlayView(
             overlayController: self,
@@ -547,6 +579,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         isPositionLocked = locked
         window?.isMovableByWindowBackground = false
         controlCaptured = false
+        lyricsCaptured = false
         window?.ignoresMouseEvents = true
         if locked {
             // 锁定这一刻可能正悬停/正长按/正拖到一半,全部清零,不留任何残留状态。
@@ -1118,16 +1151,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             if isHoveringLyrics != insideLyrics {
                 isHoveringLyrics = insideLyrics
             }
+            // 判据跟下面 .leftMouseDown 立刻武装那条一致:热区还没上报上来时按下退回长按,也就不接。
+            setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked
+                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress)
             if isAdjustingWidth, widthDrag == nil {
                 let onEdge = hit == nil
                     && OverlayWidthDrag.edge(at: localPoint, windowSize: frame.size) != nil
                 if onEdge { captureEdge(window) } else { releaseEdgeCapture() }
             }
-            // 这里**不再**碰 ignoresMouseEvents。它恒为 true,唯一例外是长按拖动武装期间
-            // (armDragIfStillPressed 为 performDrag 临时收回 false)。胶囊上的点击改由下面
-            // .leftMouseDown 分支按各按钮矩形自己分发 —— 理由见本节顶部那段:
-            // ignoresMouseEvents 是整窗 × 所有事件的一个布尔量,点击要它 false、滚轮要它
-            // true,同一时刻只能满足一个,按位置翻转必然让其中一方受害。
+            // 穿透只在指针停在看得见的按钮(setControlCapture)、歌词文字(setLyricsCapture)、调整宽度时
+            // 可拖的边(captureEdge)上,以及拖动武装期间收回,别处恒穿透。ignoresMouseEvents 是整窗 ×
+            // 所有事件的一个布尔量,点击要它 false、滚轮要它 true:收回的地方滚轮靠
+            // yieldPointerCaptureToScroll 让开。胶囊上的点击由下面 .leftMouseDown 分支按各按钮矩形分发。
 
         case .leftMouseDown:
             // (排查"点击按钮正下方生效"时这里挂过一条逐次点击的 .error 级探针日志,
@@ -1279,7 +1314,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         guard let window else { return }
         // 等新布局画出来的那一小会儿里松了手或被取消:不拖,控制排按规则放回去。
         guard isDragArmed, NSEvent.pressedMouseButtons & 1 != 0 else {
-            window.ignoresMouseEvents = true
+            restorePointerCaptureAfterDrag()
             isDragArmed = false
             recomputeControlsBelowCard()
             cancelPendingPress()
@@ -1296,7 +1331,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             clickCount: 1,
             pressure: 1
         ) else {
-            window.ignoresMouseEvents = true
+            restorePointerCaptureAfterDrag()
             isDragArmed = false
             recomputeControlsBelowCard()
             cancelPendingPress()
@@ -1320,7 +1355,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         dragReleasePoll = poll
     }
 
-    /// 拖动结束:窗口恢复点击穿透,按落点放控制排,存这一次的最终落点。
+    /// 拖动结束:按此刻的接管状态还原点击穿透,按落点放控制排,存这一次的最终落点。
     private func finishArmedDrag() {
         dragReleasePoll?.invalidate()
         dragReleasePoll = nil
@@ -1328,7 +1363,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             cancelPendingPress()
             return
         }
-        window.ignoresMouseEvents = true
+        restorePointerCaptureAfterDrag()
         // 实测把窗口拖到了哪儿,那就是新的锚点 —— 哪怕这次是在借来的屏上拖的,也从此
         // 以它为准(清掉标记,下面这次写盘才生效)。
         isBorrowingScreen = false
@@ -1446,17 +1481,17 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         isDragArmed = false
         presetDragRejectedThisPress = false
         // 布局已经为这次拖动换过、还没开始拖,或者系统还在拖(左键没松)时被叫到(锁定、隐藏):
-        // 作废这次拖动,窗口恢复点击穿透,控制排按规则放回去。
+        // 作废这次拖动,按此刻的接管状态还原点击穿透,控制排按规则放回去。
         if let pending = dragStartTimer {
             pending.invalidate()
             dragStartTimer = nil
-            window?.ignoresMouseEvents = true
+            restorePointerCaptureAfterDrag()
             recomputeControlsBelowCard()
         }
         if let poll = dragReleasePoll {
             poll.invalidate()
             dragReleasePoll = nil
-            window?.ignoresMouseEvents = true
+            restorePointerCaptureAfterDrag()
             recomputeControlsBelowCard()
         }
     }
