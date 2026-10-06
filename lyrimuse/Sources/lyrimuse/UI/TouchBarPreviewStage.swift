@@ -4,7 +4,8 @@ import LyrimuseCore
 import SwiftUI
 
 /// 「歌词显示 › 触控栏」那一段的预览:一整条触控栏(展开成系统模态条时的样子),按真实尺寸(1:1)画,比内容列宽出来的
-/// 部分左右滑动看 —— 整条缩进内容列只有约 0.57 倍,字小得看不清(见 17 章决策 26)。版面照 Xcode 触控栏模拟器里实拍的样子:
+/// 部分左右滑动看 —— 整条缩进内容列只有约 0.57 倍,字小得看不清(见 17 章决策 26)。亮的那一条四周围一圈黑玻璃
+/// (`glassInset`),封面、三键这些本来就顶满 30pt 的项不直接贴着键盘面(见 17 章决策 34)。版面照 Xcode 触控栏模拟器里实拍的样子:
 /// 左边是给 App 的那一块(`TouchBarLyricsStyle.systemModalWidth`),最左是收起键(✕),后面封面、三键、歌词那一格按
 /// 封面和三键各自的「位置」排(跟本体同一份 `TouchBarSlot.order`),封面 / 三键跟着「显示封面」「显示播放控制」出没、
 /// 让出来的宽度归歌词,封面那一格贴哪张图也跟本体同一份(`TouchBarLyricsCell.artworkTile`,广告期间是喇叭);右边是收起的系统功能栏(默认那四颗:亮度、音量、静音、Siri),只是参照物。开了「展开时隐藏功能栏」时
@@ -24,16 +25,19 @@ struct TouchBarPreviewStage: View {
     private static let stripChevronWidth: CGFloat = 15
     private static let stripButtonWidth: CGFloat = 57
     private static let stripTrailingInset: CGFloat = 10
-    /// 触控栏四周露出来的那一圈键盘面。
+    /// 亮的那一条(`barSize`)四周那圈黑玻璃的宽。
+    private static let glassInset: CGFloat = 5
+    private static let glassCornerRadius: CGFloat = 10
+    /// 黑玻璃四周露出来的那一圈键盘面。
     private static let deckPadding: CGFloat = 18
-    private static let barCornerRadius: CGFloat = 7
     private static let buttonCornerRadius: CGFloat = 6
     /// 键钮的底色(收起键、三键那一块)。
     private static let buttonFill = Color(white: 0.22)
     /// 圆角跟设置卡片同一档,同 `LyricsWindowPreviewStage`。
     private static let stageCornerRadius: CGFloat = 12
     private static var contentSize: CGSize {
-        CGSize(width: barSize.width + deckPadding * 2, height: barSize.height + deckPadding * 2)
+        let margin = glassInset + deckPadding
+        return CGSize(width: barSize.width + margin * 2, height: barSize.height + margin * 2)
     }
 
     @ObservedObject private var settings = AppSettings.shared
@@ -121,7 +125,7 @@ struct TouchBarPreviewStage: View {
         LinearGradient(colors: [Color(white: 0.27), Color(white: 0.19)], startPoint: .top, endPoint: .bottom)
     }
 
-    /// 1:1 的那一条触控栏。
+    /// 1:1 的那一条触控栏,连同四周那圈黑玻璃。
     private func bar(rows: LyricRows, lyricsWidth: CGFloat, hidesStrip: Bool,
                      snapshot: TouchBarPreviewFeed.Snapshot) -> some View {
         // 收起键两种模式都画在同一个位置(隐藏功能栏时本体左端是 App 自己那颗),不进下面这一排。
@@ -146,7 +150,8 @@ struct TouchBarPreviewStage: View {
             }
         }
         .frame(width: Self.barSize.width, height: Self.barSize.height, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: Self.barCornerRadius, style: .continuous).fill(Color.black))
+        .padding(Self.glassInset)
+        .background(RoundedRectangle(cornerRadius: Self.glassCornerRadius, style: .continuous).fill(Color.black))
     }
 
     @ViewBuilder
