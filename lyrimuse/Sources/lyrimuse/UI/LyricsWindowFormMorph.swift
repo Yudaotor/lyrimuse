@@ -82,12 +82,13 @@ final class LyricsWindowFormMorph {
             return
         }
         let levelBefore = window.level
-        let overlay = MorphOverlay(frame: Plan.overlayFrame(from: start, to: target), level: levelBefore, scale: scale)
+        let wasKey = window.isKeyWindow
+        let overlay = MorphOverlay(frame: Plan.overlayFrame(from: start, to: target), level: levelBefore, scale: scale,
+                                   keyShadow: wasKey)
         overlay.show(old, at: start, cornerRadius: Self.cornerRadius(of: old, scale: scale))
         CATransaction.flush()
         await Self.pause(Self.settleFrames)
 
-        let wasKey = window.isKeyWindow
         window.level = Self.hiddenLevel
         let begin = CACurrentMediaTime()
         overlay.animate(to: target, duration: Plan.duration,
@@ -214,7 +215,7 @@ private final class MorphOverlay {
     private let newImage = CALayer()
     private var radius = LyricsWindowFormMorphPlan.fallbackCornerRadius
 
-    init(frame: NSRect, level: NSWindow.Level, scale: CGFloat) {
+    init(frame: NSRect, level: NSWindow.Level, scale: CGFloat, keyShadow: Bool) {
         let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -235,11 +236,12 @@ private final class MorphOverlay {
             layer.position = .zero
             layer.contentsScale = scale
         }
-        // 阴影照系统窗口的样子:偏下,往下拖得比往上长。
+        // 阴影照系统窗口阴影:焦点窗口大而深、往下偏得多,非焦点窗口小而浅(数值见 07 章决策 125)。
+        // 切换那一刻真窗口是哪种就照哪种画,卡片跟真窗口换上换下那一下阴影不跳。
         card.shadowColor = NSColor.black.cgColor
-        card.shadowOpacity = 0.3
-        card.shadowRadius = 14
-        card.shadowOffset = CGSize(width: 0, height: -8)
+        card.shadowOpacity = keyShadow ? 0.42 : 0.22
+        card.shadowRadius = keyShadow ? 20 : 8
+        card.shadowOffset = CGSize(width: 0, height: keyShadow ? -16 : -7)
         clip.masksToBounds = true
         for image in [oldImage, newImage] { image.contentsGravity = .resizeAspectFill }
         newImage.opacity = 0
