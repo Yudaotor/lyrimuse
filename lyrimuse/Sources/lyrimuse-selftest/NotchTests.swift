@@ -1081,6 +1081,9 @@ func runNotchTests() {
                         && ctrlSrc.contains("clearedTrackDrop = (shown, Date())")
                         && dropSrc.contains("NotchTrackDropRoll(drop: drop ?? lastShown, travel: height, animated: animated)"), true,
                         "换歌翻牌契约: 收回时接着画刚才那条;停着时换歌,新的把旧的推出去")
+            expectEqual(dropSrc.contains("Text(Image(systemName: \"music.note\"))")
+                        && dropSrc.contains("trigger: drop?.replacing == nil ? -1 : drop?.id ?? -1"), true,
+                        "换歌翻牌契约: 音符包在 Text 里跟歌名一起收;关键帧只在推出旧行时跑")
             expectEqual(ctrlSrc.contains(".debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)\n        .sink { [weak self] title, artist, isAd, isWaiting in"), true,
                         "换歌翻牌契约: 掉歌名前的去抖挂主队列,菜单栏菜单开着时也照常走")
             expectEqual(v.contains("playback.notchCardStyle == .coverArt ? (playback.vividAccent ?? .white) : .white"), true,

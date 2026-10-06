@@ -62,7 +62,9 @@ struct NotchTrackDropStrip: View {
     /// 歌名、歌手各自按需截断:一个短一个长时短的那个整个留着,两个都长时各让一半;音符和圆点不截。
     private func line(title: String, artist: String) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: "music.note")
+            // 音符用 Text 包着画,别写成单独的 Image(systemName:):单独的符号图在这棵树里跟着整行往上收、离条子上沿三四 pt 时
+            // 会整枚不画(歌名照常),包进 Text 就跟歌名一起走(见 05 章决策 68)。
+            Text(Image(systemName: "music.note"))
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(noteTint)
                 .animation(.easeInOut(duration: 0.35), value: noteTint)
@@ -109,8 +111,8 @@ private struct NotchTrackDropReveal: ViewModifier, Animatable {
     }
 }
 
-/// 停着时又换了一首(`NotchTrackDrop.replacing`):旧的往下掉出去,新的稍后从顶上落进来。`drop` 换一条播一遍;
-/// 不是替换的那几次(条子拉出来、缩回去)停在终态、只换字。两条都按 `id` 换身份、不做过渡,换字不会叠出上一条的残影。
+/// 停着时又换了一首(`NotchTrackDrop.replacing`):旧的往下掉出去,新的稍后从顶上落进来。只在带着 `replacing` 的那条换上来时
+/// 播一遍;条子拉出来、缩回去时不跑关键帧、只换字。两条都按 `id` 换身份、不做过渡,换字不会叠出上一条的残影。
 private struct NotchTrackDropRoll<Line: View>: View {
     let drop: NotchTrackDrop?
     /// 新的那条从多高落下来(条子高)。
@@ -122,7 +124,8 @@ private struct NotchTrackDropRoll<Line: View>: View {
     private static var fall: CGFloat { 7 }
 
     var body: some View {
-        KeyframeAnimator(initialValue: NotchTrackDropRollState.settled, trigger: drop?.id) { roll in
+        // 只在推出旧行时触发:关键帧跑着时内容每一帧都要重建一遍(见 05 章决策 68)。
+        KeyframeAnimator(initialValue: NotchTrackDropRollState.settled, trigger: drop?.replacing == nil ? -1 : drop?.id ?? -1) { roll in
             ZStack {
                 if let drop, let gone = drop.replacing {
                     line(gone.title, gone.artist)
