@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
 )
 
-// 查询词:日文歌(任一栏带假名)三栏原样,不把「夢」转成「梦」;中文照旧繁转简;中文人名的间隔号「・」不算假名。
+// 查询词:日文歌(任一栏带假名)不繁转简,不把「夢」转成「梦」;中文照旧繁转简;中文人名的间隔号「・」不算假名。
+// 两种都先把同形异码字换回标准字、去掉歌名和专辑名的宣传尾段。
 func TestSearchQueryFields(t *testing.T) {
 	cases := []struct {
 		in, want [3]string
@@ -16,6 +18,10 @@ func TestSearchQueryFields(t *testing.T) {
 		{[3]string{"周杰倫", "晴天", "葉惠美"}, [3]string{"周杰伦", "晴天", "叶惠美"}},
 		{[3]string{"麥可・傑克森", "顫慄", ""}, [3]string{"麦可・杰克森", "颤栗", ""}},
 		{[3]string{"Utada", "First Love", ""}, [3]string{"Utada", "First Love", ""}},
+		{[3]string{"周杰倫", "給我ㄧ首歌的時間", ""}, [3]string{"周杰伦", "给我一首歌的时间", ""}},
+		{[3]string{"林宥嘉", "⽩", "王"}, [3]string{"林宥嘉", "白", "王"}},
+		{[3]string{"宇多田ヒカル", "⽇曜日", ""}, [3]string{"宇多田ヒカル", "日曜日", ""}},
+		{[3]string{"陳嘉樺", "傀 - 張藝謀<影>電影主題曲", "傀 - 張藝謀<影>電影主題曲"}, [3]string{"陈嘉桦", "傀", "傀"}},
 	}
 	for _, c := range cases {
 		a, ti, al := searchQueryFields(c.in[0], c.in[1], c.in[2])
@@ -44,5 +50,13 @@ func TestSearchQueryFieldsIsWired(t *testing.T) {
 		if strings.Contains(string(b), "toSimplified(title), toSimplified(album)") {
 			t.Errorf("%s 还在直接把三栏 toSimplified 了再发查询", file)
 		}
+	}
+}
+
+// 同形异码字换掉之后,原样写法照旧记下来,给按原样收录的源多试一种。
+func TestSearchQueryOriginalKeepsHanLookalikes(t *testing.T) {
+	a, ti, al, ok := searchQueryOriginalFrom(withSearchQueryOriginal(context.Background(), "林宥嘉", "⽩", "王"))
+	if !ok || a != "林宥嘉" || ti != "⽩" || al != "王" {
+		t.Errorf("searchQueryOriginalFrom = %q %q %q %v, want 林宥嘉 ⽩ 王 true", a, ti, al, ok)
 	}
 }

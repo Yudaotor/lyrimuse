@@ -49,6 +49,8 @@ const (
 	// 标题反查:Apple 原产地商店的规范曲名。前两条都拿**本地标题**当输入,
 	// 本地标题本身是罗马字/被本地化过的时候它们结构上就够不到,见 appleStorefrontCanonicalTitle。
 	lyricQueryReasonTitleStorefront = "title-from-apple-storefront"
+	// 标题反查:「英文名 中文名」两段式的双语曲名只拿中文那段去搜,见 bilingualTitleHanPart。
+	lyricQueryReasonTitleBilingual = "title-bilingual"
 	// 按 ISRC 补取:还缺着的 deezer / musixmatch 拿 Apple Music 候选报的 ISRC 直取,见 isrcretry.go。
 	lyricQueryReasonISRC = "isrc-from-applemusic"
 )
@@ -88,7 +90,7 @@ func lyricQueryOrigins() []string {
 	}
 }
 
-// lyricQueryReasons 是上面那九条(不含首轮的空串)的清单,给测试用。
+// lyricQueryReasons 是上面全部来路(不含首轮的空串)的清单,给测试用。
 func lyricQueryReasons() []string {
 	return []string{
 		lyricQueryReasonTitleSplit,
@@ -100,6 +102,7 @@ func lyricQueryReasons() []string {
 		lyricQueryReasonTitleAlbum,
 		lyricQueryReasonTitleSearch,
 		lyricQueryReasonTitleStorefront,
+		lyricQueryReasonTitleBilingual,
 		lyricQueryReasonISRC,
 	}
 }

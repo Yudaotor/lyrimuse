@@ -1077,6 +1077,7 @@
 "标注的语言" = "Languages";
 "标题反查：Apple 原产地商店" = "Title lookup: Apple home storefront";
 "标题反查：专辑曲目表" = "Title lookup: album track list";
+"标题反查：去掉歌名里的英文" = "Title lookup: English part dropped";
 "标题反查：歌手泛搜" = "Title lookup: artist-wide search";
 "标题吻合" = "Title match";
 "标题吻合度更高的候选存在，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";

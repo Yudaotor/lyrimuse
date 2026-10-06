@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // normalizeHanCompat 把歌词里跟标准汉字同形、编码不同的字换回标准字:CJK 部首补充(U+2E80–2EFF)、
 // 康熙部首(U+2F00–2FDF)、CJK 兼容表意文字(U+F900–FAFF)。署名行判定先过它,「制作⼈：」才认得出。
@@ -18,6 +21,22 @@ func normalizeHanCompat(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// foldHanLookalikes 把查询词里跟标准汉字同形的字换回标准字:normalizeHanCompat 那三段,外加紧挨着汉字的注音符号
+// 「ㄧ」(U+3127)换成「一」。不挨着汉字的注音不动。见 09 章决策 189。
+func foldHanLookalikes(s string) string {
+	s = normalizeHanCompat(s)
+	if !strings.ContainsRune(s, 'ㄧ') {
+		return s
+	}
+	rs := []rune(s)
+	for i, r := range rs {
+		if r == 'ㄧ' && ((i > 0 && unicode.Is(unicode.Han, rs[i-1])) || (i+1 < len(rs) && unicode.Is(unicode.Han, rs[i+1]))) {
+			rs[i] = '一'
+		}
+	}
+	return string(rs)
 }
 
 func hanCompatInRange(r rune) bool {

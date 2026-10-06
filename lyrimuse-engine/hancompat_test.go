@@ -45,3 +45,21 @@ func TestIsCreditLineHanCompat(t *testing.T) {
 		t.Errorf("isRelaxedCreditLine 没认出同形异码字的署名行")
 	}
 }
+
+func TestFoldHanLookalikes(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"給我ㄧ首歌的時間", "給我一首歌的時間"},
+		{"ㄧ起走", "一起走"},
+		{"走ㄧ", "走一"},
+		{"⽩", "白"},
+		{"ㄅㄆㄇ ㄧ", "ㄅㄆㄇ ㄧ"},
+		{"ㄧ", "ㄧ"},
+		{"Song ㄧ", "Song ㄧ"},
+		{"plain", "plain"},
+	}
+	for _, c := range cases {
+		if got := foldHanLookalikes(c.in); got != c.want {
+			t.Errorf("foldHanLookalikes(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

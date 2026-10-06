@@ -9,9 +9,13 @@ import (
 // 拿繁体标签去搜整个查不到)。三栏里任何一栏带假名就当日文歌,三栏都原样送出:日文汉字不是繁体中文,
 // 「夢」转成「梦」之后,按原文精确匹配的源(LRCLIB 的 /api/get、Deezer 的搜索)整个落空,国内几家存的也是
 // 日文原文。判据按整首歌而不是逐栏:歌名是纯汉字的日文歌(歌手带假名)歌名也不能转。见 09 章决策 124。
+// 两种写法都先把同形异码字换回标准字(foldHanLookalikes),歌名、专辑名去掉「 - 電影《Y》主題曲」这类宣传尾段
+// (withoutPromoTitleTail):各源曲库存的是标准字、多数只登记歌名本身。见 09 章决策 189。
 //
 // 只管发请求用的查询词;缓存 key、候选比对(normLoose 里的 toSimplified)不走这里。
 func searchQueryFields(artist, title, album string) (string, string, string) {
+	artist, title, album = foldHanLookalikes(artist), foldHanLookalikes(title), foldHanLookalikes(album)
+	title, album = withoutPromoTitleTail(title), withoutPromoTitleTail(album)
 	if containsKana(artist) || containsKana(title) || containsKana(album) {
 		return composeNFC(artist), composeNFC(title), composeNFC(album)
 	}

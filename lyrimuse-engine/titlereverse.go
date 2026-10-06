@@ -4,13 +4,27 @@ import (
 	"context"
 	"log"
 	"slices"
+	"strings"
+	"unicode"
 )
 
 // titleReverseLookup:标题反查轮的「查出更正后的曲名」这一步 —— 同专辑曲目表、歌手泛搜、Apple 原产地商店三路反查,
 // 挑出更正后的曲名、来路(retryMethod,同时是查询原因)和用哪个署名去查。都没查到返回空。samples 是
 // lyricSamplesForStorefront(results),原产地商店那一路拿它核对是不是同一首;isrc 是这条录音的 ISRC
 // (trustedRecordingISRC),区服遍历给不出原产地曲名时拿它查。
+//
+// 曲名里自带正式写法的两种形状直接改写、不联网反查,也不再走后面三路:「歌手『歌名』」取引号里的歌名
+// (quotedSongAfterArtist),「English Name 中文名」这种英文在前的双语曲名取中文那段(bilingualTitleHanPart)。
+// 见 09 章决策 189。
 func titleReverseLookup(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) (correctedTitle, retryMethod, titleArtist string) {
+	if song := quotedSongAfterArtist(artist, title); song != "" {
+		log.Printf("lyrics: title-reverse-lookup: quoted song %q in title %q -> corrected=%q", song, title, song)
+		return song, lyricQueryReasonTitleSplit, artist
+	}
+	if part := bilingualTitleHanPart(artist, title); part != "" {
+		log.Printf("lyrics: title-reverse-lookup: bilingual title %q -> corrected=%q", title, part)
+		return part, lyricQueryReasonTitleBilingual, artist
+	}
 	titleArtists := []string{artist}
 	if aliases := retryArtistIdentities(ctx, artist); len(aliases) > 0 && normLoose(aliases[0]) != normLoose(artist) {
 		titleArtists = append(titleArtists, aliases[0])
@@ -88,6 +102,101 @@ type titleReverseSpec struct {
 	fetched                   bool
 	ne                        neteaseInfo
 	results                   []scoredLyricCandidateResult
+}
+
+// bilingualTitleHanPart:曲名是整齐的两段 —— 前一段拉丁字母、后一段汉字,空格隔开 —— 时返回汉字那段,否则返回空串。
+// 拉丁段只有字母和词内标点、至少两个字母、不是版本词,最后一个词不是合作署名词(feat. / with / x …);
+// 汉字段至少两个汉字、不是歌手名。带括号、引号、破折号、斜杠、数字的曲名一律不认。
+// 中文在前的不认:那种形状里英文常是整句曲名的一部分。见 09 章决策 189。
+func bilingualTitleHanPart(artist, title string) string {
+	t := cleanMediaTag(title)
+	if t == "" || strings.ContainsAny(t, bilingualTitleRejectRunes) {
+		return ""
+	}
+	fields := strings.Fields(t)
+	kinds := make([]bool, len(fields)) // true = 汉字段的词
+	switches := 0
+	for i, f := range fields {
+		switch {
+		case bilingualLatinWord(f):
+		case bilingualHanWord(f):
+			kinds[i] = true
+		default:
+			return ""
+		}
+		if i > 0 && kinds[i] != kinds[i-1] {
+			switches++
+		}
+	}
+	if switches != 1 || kinds[0] {
+		return ""
+	}
+	var latin, han []string
+	for i, f := range fields {
+		if kinds[i] {
+			han = append(han, f)
+		} else {
+			latin = append(latin, f)
+		}
+	}
+	if bilingualCreditWords[strings.ToLower(strings.Trim(latin[len(latin)-1], ".,"))] {
+		return ""
+	}
+	latinPart, hanPart := strings.Join(latin, " "), strings.Join(han, " ")
+	if countRunes(latinPart, isASCIILetter) < 2 || countRunes(hanPart, isHanRune) < 2 ||
+		len(titleVersionTags("("+latinPart+")")) > 0 || normLoose(hanPart) == normLoose(cleanMediaTag(artist)) {
+		return ""
+	}
+	return hanPart
+}
+
+const bilingualTitleRejectRunes = "()（）[]［］【】{}<>《》〈〉「」『』\"“”-–—/／|｜:：0123456789０１２３４５６７８９"
+
+// bilingualCreditWords:拉丁段以它结尾时汉字段是署名(「… feat. 某某」),不是曲名的另一种写法。
+var bilingualCreditWords = map[string]bool{
+	"feat": true, "ft": true, "featuring": true, "with": true, "x": true, "vs": true, "by": true, "prod": true, "and": true, "&": true,
+}
+
+// bilingualLatinWord:拉丁段的一个词 —— ASCII 字母,夹着撇号、句点、逗号、感叹号、问号、&。
+func bilingualLatinWord(f string) bool {
+	letters := 0
+	for _, r := range f {
+		switch {
+		case isASCIILetter(r):
+			letters++
+		case strings.ContainsRune("'’.,!?&", r):
+		default:
+			return false
+		}
+	}
+	return letters > 0 || f == "&"
+}
+
+// bilingualHanWord:汉字段的一个词 —— 汉字、假名、长音符、间隔号和中文标点,至少一个汉字。
+func bilingualHanWord(f string) bool {
+	has := false
+	for _, r := range f {
+		switch {
+		case isHanRune(r):
+			has = true
+		case unicode.In(r, unicode.Hiragana, unicode.Katakana), strings.ContainsRune("ー・·，、！？。…～", r):
+		default:
+			return false
+		}
+	}
+	return has
+}
+
+func isHanRune(r rune) bool { return unicode.Is(unicode.Han, r) }
+
+func countRunes(s string, f func(rune) bool) int {
+	n := 0
+	for _, r := range s {
+		if f(r) {
+			n++
+		}
+	}
+	return n
 }
 
 func startTitleReverseSpec(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) *titleReverseSpec {

@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // 歌名里「 - 尾段」的写法:汽水、QQ 的曲库(「X - Album Version」「X - Explicit Ver.」)和一部分本地标签
 // (「X - 电视剧《Y》主题曲」「X - Bonus」)用它放限定词或宣传语,别的源多用括号。
@@ -22,6 +25,20 @@ func dashTailHead(name string) string {
 	head, _, ok := dashTailSplit(strings.TrimSpace(name))
 	if !ok {
 		return ""
+	}
+	return head
+}
+
+// promoTitleTailRe:宣传尾段的标志词 ——「主題曲」「插曲」「片尾曲」「宣傳曲」这一族。
+var promoTitleTailRe = regexp.MustCompile(`(?:主題|主题|插|片尾|片頭|片头|宣傳|宣传|推廣|推广|印象|概念|廣告|广告|代言|應援|应援|形象|單元|单元)曲`)
+
+// withoutPromoTitleTail 去掉最后一个「 - 」后面的宣传尾段(「X - 電影《Y》主題曲」→「X」),只认带
+// promoTitleTailRe 标志词、不止标志词本身、也没有版本词(titleVersionTags)的尾段,别的原样返回。见 09 章决策 189。
+func withoutPromoTitleTail(name string) string {
+	head, tail, ok := dashTailSplit(strings.TrimSpace(name))
+	if !ok || !promoTitleTailRe.MatchString(tail) || promoTitleTailRe.ReplaceAllString(tail, "") == "" ||
+		len(titleVersionTags("("+tail+")")) > 0 {
+		return name
 	}
 	return head
 }

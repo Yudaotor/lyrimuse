@@ -192,6 +192,32 @@ func splitVideoTitle(artist, t string) (performer, song string) {
 	return artist, t
 }
 
+// quotedSongAfterArtist:曲名是「歌手『歌名』」这个形状时返回引号里的歌名,否则返回空串。引号前那段按
+// videoTitlePerformer 清理后要跟播放器报的歌手 normLoose 全等,引号后面除了 MV 标记不能有别的字。
+// 引号的认法同 splitVideoTitle(videoTitleQuoted)。见 09 章决策 189。
+func quotedSongAfterArtist(artist, title string) string {
+	a := normLoose(cleanMediaTag(artist))
+	if a == "" {
+		return ""
+	}
+	t := cleanMediaTag(title)
+	if cleaned, ok, _ := stripVideoTitleMarkers(t); ok {
+		t = cleaned
+	}
+	for _, re := range videoTitleQuoted {
+		loc := re.FindStringSubmatchIndex(t)
+		if loc == nil {
+			continue
+		}
+		song := strings.TrimSpace(t[loc[2]:loc[3]])
+		if normLoose(song) == "" || strings.Trim(t[loc[1]:], " -–—|:：_") != "" || normLoose(videoTitlePerformer(t[:loc[0]])) != a {
+			return ""
+		}
+		return song
+	}
+	return ""
+}
+
 // videoTitlePerformer 清理演唱者段:去掉首尾的分隔符(含「IU(아이유) _ 'Blueming'」里的下划线)和结尾的括号别名。
 func videoTitlePerformer(s string) string {
 	const seps = " -–—|:：_"

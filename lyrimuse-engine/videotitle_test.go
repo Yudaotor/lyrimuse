@@ -167,3 +167,27 @@ func TestVideoTitleTrackVideoAndDualNamePerformer(t *testing.T) {
 		}
 	}
 }
+
+func TestQuotedSongAfterArtist(t *testing.T) {
+	cases := []struct{ artist, title, want string }{
+		{"BUMP OF CHICKEN", "BUMP OF CHICKEN『天体観測』", "天体観測"},
+		{"Stray Kids", "Stray Kids “PARTY’S NOT OVER”", "PARTY’S NOT OVER"},
+		{"WooSung", "WOOSUNG – 'Phase Me' MV", "Phase Me"},
+		{"Mr.Children", "Mr.Children 「しるし」 MUSIC VIDEO", "しるし"},
+		{"BTS", "BTS (방탄소년단) ‘Merry Go Round’ Official MV", "Merry Go Round"},
+		// 引号前面不是播放器报的歌手
+		{"1theK", "IU 'Blueming' MV", ""},
+		{"BUMP OF CHICKEN", "『天体観測』", ""},
+		// 引号后面还有别的字
+		{"BUMP OF CHICKEN", "BUMP OF CHICKEN『天体観測』(Live)", ""},
+		{"BUMP OF CHICKEN", "BUMP OF CHICKEN『天体観測』 弾き語り", ""},
+		// 撇号不是引号
+		{"Artist", "Artist don't stop", ""},
+		{"", "『天体観測』", ""},
+	}
+	for _, c := range cases {
+		if got := quotedSongAfterArtist(c.artist, c.title); got != c.want {
+			t.Errorf("quotedSongAfterArtist(%q, %q) = %q, want %q", c.artist, c.title, got, c.want)
+		}
+	}
+}

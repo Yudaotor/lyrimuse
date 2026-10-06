@@ -61,3 +61,51 @@ func TestTitleReverseSpecIsWired(t *testing.T) {
 		}
 	}
 }
+
+func TestBilingualTitleHanPart(t *testing.T) {
+	cases := []struct{ artist, title, want string }{
+		{"周杰伦", "Children of the Sun 太陽之子", "太陽之子"},
+		{"周杰伦", "Gold Rush Town 淘金小鎮", "淘金小鎮"},
+		{"曹格", "Supermarket 超级市场", "超级市场"},
+		{"卢广仲", "Que te pasa 你在干嘛？", "你在干嘛？"},
+		// 中文在前不认
+		{"丁世光", "日出 The Dawn", ""},
+		{"茄子蛋", "请问你敢欲做我的 Girlfriend?", ""},
+		// 拉丁段是版本词 / 以合作署名词结尾
+		{"周杰伦", "Remix 稻香", ""},
+		{"某歌手", "Love Song feat. 周杰伦", ""},
+		{"某歌手", "Love Song x 周杰伦", ""},
+		// 汉字段只有一个字 / 就是歌手名
+		{"某歌手", "I Love 你", ""},
+		{"周杰伦", "Jay 周杰伦", ""},
+		// 括号、破折号、数字、多于两段
+		{"周杰伦", "Children of the Sun 太陽之子 (Live)", ""},
+		{"某歌手", "Hello - 你好", ""},
+		{"某歌手", "Room 1203 房间", ""},
+		{"某歌手", "One 一二 Two 三四", ""},
+		// 只有一种文字
+		{"某歌手", "太陽之子", ""},
+		{"某歌手", "Children of the Sun", ""},
+		{"某歌手", "", ""},
+	}
+	for _, c := range cases {
+		if got := bilingualTitleHanPart(c.artist, c.title); got != c.want {
+			t.Errorf("bilingualTitleHanPart(%q, %q) = %q, want %q", c.artist, c.title, got, c.want)
+		}
+	}
+}
+
+// 曲名自带正式写法的两种形状不联网:ctx 已取消,走到联网反查就什么都拿不到。
+func TestTitleReverseLookupRewritesWithoutNetwork(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, c := range []struct{ artist, title, want, method string }{
+		{"BUMP OF CHICKEN", "BUMP OF CHICKEN『天体観測』", "天体観測", lyricQueryReasonTitleSplit},
+		{"周杰伦", "Children of the Sun 太陽之子", "太陽之子", lyricQueryReasonTitleBilingual},
+	} {
+		got, method, titleArtist := titleReverseLookup(ctx, c.artist, c.title, "", 272, nil, "")
+		if got != c.want || method != c.method || titleArtist != c.artist {
+			t.Errorf("titleReverseLookup(%q, %q) = %q %q %q, want %q %q %q", c.artist, c.title, got, method, titleArtist, c.want, c.method, c.artist)
+		}
+	}
+}

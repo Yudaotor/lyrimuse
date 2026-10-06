@@ -112,6 +112,7 @@ struct LyricsDecisionSheet: View {
         case "title-from-album": return L10n.t("标题反查：专辑曲目表")
         case "title-from-artist-search": return L10n.t("标题反查：歌手泛搜")
         case "title-from-apple-storefront": return L10n.t("标题反查：Apple 原产地商店")
+        case "title-bilingual": return L10n.t("标题反查：去掉歌名里的英文")
         case "isrc-from-applemusic": return L10n.t("按 ISRC 补查未应答的源")
         default: return reason ?? ""
         }

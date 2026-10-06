@@ -30099,6 +30099,23 @@
         }
       }
     },
+    "标题反查：去掉歌名里的英文" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title lookup: English part dropped"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "標題反查：去掉歌名裡的英文"
+          }
+        }
+      }
+    },
     "应答" : {
       "extractionState" : "manual",
       "localizations" : {

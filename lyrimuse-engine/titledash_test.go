@@ -37,3 +37,24 @@ func TestDashTailHead(t *testing.T) {
 		}
 	}
 }
+
+func TestWithoutPromoTitleTail(t *testing.T) {
+	for in, want := range map[string]string{
+		"什麼歌 - 電影<捉妖記2>主題曲":            "什麼歌",
+		"翅膀 - 我可能不會愛你片尾曲":              "翅膀",
+		"親密愛人 - 《梅艷芳ANITA》電影宣傳曲":       "親密愛人",
+		"說分手的人也會難過 - 影集《接招吧！製作人》單元曲":   "說分手的人也會難過",
+		"此刻永遠 - 中文版 - 電影《那張照片裡的我們》主題曲": "此刻永遠 - 中文版",
+		// 尾段只有标志词本身、带版本词、不是宣传语:原样
+		"愛情 - 插曲":                 "愛情 - 插曲",
+		"晴天 - 演唱會主題曲 (Live)":      "晴天 - 演唱會主題曲 (Live)",
+		"Sorry - Live":            "Sorry - Live",
+		"Musiq Soulchild - Buddy": "Musiq Soulchild - Buddy",
+		"主題曲":                     "主題曲",
+		"":                        "",
+	} {
+		if got := withoutPromoTitleTail(in); got != want {
+			t.Errorf("withoutPromoTitleTail(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
