@@ -844,6 +844,14 @@ func runLyricsManagerTests() {
                         "当前使用契约: 宿主给的来源变了,面板记的采纳结果让位")
             expectEqual(sheet.contains(".onChange(of: currentFingerprint) { _, _ in\n            appliedSource = nil"), true,
                         "当前使用契约: 宿主给的指纹变了,面板记的采纳结果让位")
+            // 选中的就是在用的那一份时,采用按钮只说明状态、点不了(11 章决策 55)。
+            expectEqual(sheet.contains("if isCurrentCandidate(c) { return L10n.t(\"当前使用\") }"), true,
+                        "当前使用契约: 选中在用的那份时,采用按钮写「当前使用」")
+            expectEqual(sheet.contains(".disabled(isCurrentCandidate(c))"), true,
+                        "当前使用契约: 选中在用的那份时,采用按钮点不了")
+            // 面板按 defaultSize 打开,标题行的按钮放得下(11 章决策 56)。
+            expectEqual(sheet.contains("idealWidth: Self.defaultSize.width") && sheet.contains("idealHeight: Self.defaultSize.height"),
+                        true, "面板尺寸: 打开时按 defaultSize,不是挤在最小尺寸里")
         }
         // 指纹本身是 ManualPickLock 的既有口径:时间戳全变、CRLF、词不变 → 相同。
         let a = ManualPickLock.fingerprint(lyrics: "[00:01.00]你好\n[00:05.00]世界")

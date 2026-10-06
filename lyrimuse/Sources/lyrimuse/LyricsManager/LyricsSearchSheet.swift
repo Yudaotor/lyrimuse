@@ -50,6 +50,9 @@ struct LyricsSearchSheet: View {
     /// 窗口 / sheet 能拖到的最小内容尺寸。宽:侧栏连外边距约 404pt,右边预览至少留 ~400pt;高:独立小窗里侧栏
     /// 上半截(红绿灯那一截 + 查询卡 + 按钮 + 表头)约 240pt,剩下的放得下三条候选。独立小窗的宿主在面板出来之前也用这一对。
     static let minimumSize = CGSize(width: 800, height: 580)
+    /// 打开时的尺寸:右侧标题行的三颗按钮连同采纳后的回声放得下(宽度怎么量的见 11 章决策 56)。sheet 按它开,
+    /// 独立小窗第一次开也按它,之后窗口自己记尺寸。
+    static let defaultSize = CGSize(width: 1040, height: 680)
     /// 侧栏宽度,固定、不能拖。
     private static let sidebarWidth: CGFloat = 396
     /// 侧栏离窗口边缘的距离。
@@ -517,8 +520,8 @@ struct LyricsSearchSheet: View {
         // 独立小窗的标题栏是透明的(场景挂 .windowStyle(.hiddenTitleBar)),内容铺到最顶上,红绿灯压在侧栏
         // 顶部那一截里;sheet 没有标题栏,这句不改什么。
         .ignoresSafeArea()
-        .frame(minWidth: Self.minimumSize.width, maxWidth: .infinity,
-               minHeight: Self.minimumSize.height, maxHeight: .infinity)
+        .frame(minWidth: Self.minimumSize.width, idealWidth: Self.defaultSize.width, maxWidth: .infinity,
+               minHeight: Self.minimumSize.height, idealHeight: Self.defaultSize.height, maxHeight: .infinity)
         // 从歌词管理 / 歌词窗口弹出的这张是 sheet,AppKit 给 sheet 的默认 styleMask 里没有 .resizable,
         // 窗口边缘对拖拽完全没反应:这颗探针把标志插回去,同时把最小尺寸写进窗口(同 WindowDragHandle
         // 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 要带 maxWidth / maxHeight: .infinity,
@@ -1007,6 +1010,8 @@ struct LyricsSearchSheet: View {
 
     private func applyButtonTitle(for c: LyricsSearchService.Candidate) -> String {
         if applyingSource == c.source { return L10n.t("正在采用…") }
+        // 选中的就是这首现在在用的那一份:按钮只说明状态,另挂 .disabled(isCurrentCandidate(c)) 点不了(11 章决策 55)。
+        if isCurrentCandidate(c) { return L10n.t("当前使用") }
         // 按钮文案跟着"这条候选到底能干什么"走——加:纯文本那条采纳后不会像别的
         // 候选一样逐字/逐行跟播放同步,措辞不该让人以为跟别的候选是同一回事。
         return c.isPlainTextOnly ? L10n.t("采纳为静态文本") : L10n.t("采用此候选")
@@ -1255,8 +1260,9 @@ struct LyricsSearchSheet: View {
                     Task { await apply(c) }
                 }
                 .controlSize(.large)
-                .settingsProminentGlassButton(tint: .accentColor)
+                .settingsProminentGlassButton(tint: isCurrentCandidate(c) ? Color.secondary : .accentColor)
                 .disabled(applyingSource != nil || settingInstrumental || autoMatching)
+                .disabled(isCurrentCandidate(c))
             }
             .padding(.horizontal, 24)
             .padding(.top, 4)
