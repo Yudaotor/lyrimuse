@@ -20,6 +20,9 @@ import SwiftUI
 //
 // 鼠标命中:布局时把「文字实际占据的矩形」写进 `WrapContentRectSink`(同 `WrapLayout` 的约定,
 // owner 用调用方给的那一行的身份),悬浮窗的「划过让开」/ 控制排热区照旧读它。
+//
+// 换句时各行的长图在后台画(`OverlayRowRaster`),整句几行画好后在同一拍里一起换上(行数增减也在这一刻);
+// 画好之前各行原样显示上一句。只是暂停 / 恢复 / 重锚这类不换图的变化当场处理,第一次出现时当场画。见 04 章决策 50。
 struct WrappedKaraokeRows: NSViewRepresentable {
     struct Spec: Equatable {
         var lineKey: String
@@ -144,6 +147,25 @@ final class WrappedKaraokeRowsView: NSView {
     private var nowMs: (() -> Int)?
     private var rowViews: [OverlayLyricScrollView] = []
 
+    /// 一行要显示成什么:落点和规格。
+    private struct RowTarget {
+        var frame: CGRect
+        var spec: OverlayScrollingLyricRow.Spec
+    }
+
+    /// 后台在画的那一句:各行的目标和排版。画好之前各行原样显示上一句。
+    private struct PendingRows {
+        var generation: Int
+        var targets: [RowTarget]
+        var geometries: [OverlayRowGeometry]
+    }
+
+    private var pending: PendingRows?
+    private var renderGeneration = 0
+    /// 一句的几行在一个任务里依次画完,再一起回主线程。
+    private static let rasterQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.wrapped-rows-raster",
+                                                   qos: .userInteractive)
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -183,35 +205,95 @@ final class WrappedKaraokeRowsView: NSView {
         geo.alignment = spec.rowAlignment
         report(geo)
 
-        while rowViews.count < geo.rows.count {
+        let scale = window?.backingScaleFactor ?? 2
+        let targets = geo.rows.enumerated().map { i, row in
+            RowTarget(frame: rowFrame(row, index: i, geo: geo, alignment: spec.rowAlignment, scale: scale),
+                      spec: rowSpec(spec, row: row, index: i))
+        }
+        // 每一行装着的都已经是要的长图:只更新落点与时机(暂停 / 恢复 / 重锚都靠这条重装动画)。
+        if targets.count == rowViews.count, zip(rowViews, targets).allSatisfy({ $0.showsImages(of: $1.spec) }) {
+            pending = nil
+            for (view, target) in zip(rowViews, targets) {
+                if view.frame != target.frame { view.frame = target.frame }
+                view.nowProvider = self.nowMs
+                view.apply(spec: target.spec, nowMs: nowMs)
+            }
+            return
+        }
+        // 后台在画的就是这几张长图:记下最新的落点与时机,画好时照它装。
+        if let p = pending, p.targets.count == targets.count,
+           zip(p.targets, targets).allSatisfy({ OverlayLyricScrollView.sameImages($0.spec, $1.spec) }) {
+            pending?.targets = targets
+            return
+        }
+        let geometries = targets.map { OverlayLyricScrollView.geometry(spec: $0.spec, scale: scale) }
+        // 一行都还没有(刚出现):当场画,不留一拍空白。
+        if rowViews.isEmpty {
+            pending = nil
+            let images = zip(geometries, targets).map { OverlayRowRaster.render($0, spec: $1.spec) }
+            install(targets, geometries: geometries, images: images, nowMs: nowMs)
+            return
+        }
+        renderGeneration &+= 1
+        let generation = renderGeneration
+        pending = PendingRows(generation: generation, targets: targets, geometries: geometries)
+        let batch = RowRasterBatch(items: zip(geometries, targets).map { ($0, $1.spec) })
+        // 后台任务只拿弱引用:视图在画的这段时间里被拆掉时,最后一次释放不能落在出图队列上。
+        let owner = WeakRowsView(self)
+        Self.rasterQueue.async {
+            let result = RowRasterResult(images: batch.items.map { OverlayRowRaster.render($0.0, spec: $0.1) })
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { owner.view?.finishRender(generation: generation, images: result.images) }
+            }
+        }
+    }
+
+    /// 后台画好了:还是最新的那一句就整句换上,否则丢掉(更新的一句已经在画)。
+    private func finishRender(generation: Int, images: [OverlayRowImages]) {
+        guard let p = pending, p.generation == generation, p.targets.count == images.count else { return }
+        pending = nil
+        // 画的这段时间里窗口换到了比例不同的屏:按新比例重排重画。
+        if let scale = window?.backingScaleFactor, p.geometries.contains(where: { $0.scale != scale }) {
+            if let nowMs { layoutRows(nowMs: nowMs()) }
+            return
+        }
+        install(p.targets, geometries: p.geometries, images: images, nowMs: nowMs?() ?? 0)
+    }
+
+    /// 按目标行数增减行视图,逐行换上长图、摆位、重装动画。
+    private func install(_ targets: [RowTarget], geometries: [OverlayRowGeometry],
+                         images: [OverlayRowImages], nowMs: Int) {
+        while rowViews.count < targets.count {
             let v = OverlayLyricScrollView()
             addSubview(v)
             rowViews.append(v)
         }
-        while rowViews.count > geo.rows.count {
+        while rowViews.count > targets.count {
             rowViews.removeLast().removeFromSuperview()
         }
-
-        for (i, row) in geo.rows.enumerated() {
-            let slack = max(0, geo.wrapWidth - row.width)
-            var indent: CGFloat
-            switch spec.rowAlignment {
-            case .leading: indent = 0
-            case .trailing: indent = slack
-            case .center: indent = slack / 2
-            }
-            // 行框落在整像素上,理由同 `OverlayLyricScrollView.pixelAligned`。
-            let scale = window?.backingScaleFactor ?? 2
-            indent = (indent * scale).rounded() / scale
-            // 行框 = 这一行的长图(含四周描边预留)再宽 1pt:图层行判「装得下」用的是 `<=`,留 1pt
-            // 余量免得浮点误差把它判成要滚。长图按 .leading 静置,多出来那 1pt 落在右边、是透明的。
-            let frame = CGRect(x: indent, y: CGFloat(i) * geo.pitch,
-                               width: row.width + 2 * geo.inset + 1, height: geo.pitch + 2 * geo.inset)
+        for (i, target) in targets.enumerated() {
             let view = rowViews[i]
-            if view.frame != frame { view.frame = frame }
+            if view.frame != target.frame { view.frame = target.frame }
             view.nowProvider = self.nowMs
-            view.apply(spec: rowSpec(spec, row: row, index: i), nowMs: nowMs)
+            view.install(spec: target.spec, geometry: geometries[i], images: images[i], nowMs: nowMs)
         }
+    }
+
+    private func rowFrame(_ row: WrapLayoutMath.Row, index: Int, geo: Geometry,
+                          alignment: WrapLayoutMath.RowAlignment, scale: CGFloat) -> CGRect {
+        let slack = max(0, geo.wrapWidth - row.width)
+        var indent: CGFloat
+        switch alignment {
+        case .leading: indent = 0
+        case .trailing: indent = slack
+        case .center: indent = slack / 2
+        }
+        // 行框落在整像素上,理由同 `OverlayLyricScrollView.pixelAligned`。
+        indent = (indent * scale).rounded() / scale
+        // 行框 = 这一行的长图(含四周描边预留)再宽 1pt:图层行判「装得下」用的是 `<=`,留 1pt
+        // 余量免得浮点误差把它判成要滚。长图按 .leading 静置,多出来那 1pt 落在右边、是透明的。
+        return CGRect(x: indent, y: CGFloat(index) * geo.pitch,
+                      width: row.width + 2 * geo.inset + 1, height: geo.pitch + 2 * geo.inset)
     }
 
     private func rowSpec(_ spec: WrappedKaraokeRows.Spec, row: WrapLayoutMath.Row, index: Int) -> OverlayScrollingLyricRow.Spec {
@@ -234,4 +316,20 @@ final class WrappedKaraokeRowsView: NSView {
             timingEpoch: spec.timingEpoch,
             rate: spec.rate)
     }
+}
+
+/// 交给出图队列的一句(几行的排版和规格)。里面的 NSFont / NSColor 是不可变对象,只读不写。
+private struct RowRasterBatch: @unchecked Sendable {
+    var items: [(OverlayRowGeometry, OverlayScrollingLyricRow.Spec)]
+}
+
+/// 出图队列画好的几行。
+private struct RowRasterResult: @unchecked Sendable {
+    var images: [OverlayRowImages]
+}
+
+/// 出图任务对行视图的弱引用,只在主线程上解引用。
+private final class WeakRowsView: @unchecked Sendable {
+    weak var view: WrappedKaraokeRowsView?
+    init(_ view: WrappedKaraokeRowsView) { self.view = view }
 }

@@ -1888,8 +1888,9 @@ func runSourceContractTests() {
                         "图层滚动行: 静置位置按此刻的滚动偏移取")
             expectEqual(row.contains("restingX - pixelAligned(offset)"), true, "图层滚动行: 静置时减去此刻的偏移")
             // 位图像素数跟图层点尺寸 × 比例对不上,或长图停在半像素上,Core Animation 都会重采样,1x 屏上整行发糊。
-            expectEqual(row.contains("boxHeight = Self.alignedUp(") && row.contains("imageWidth = Self.alignedUp(boxWidth, scale: scale)")
-                        && row.contains("Int((imageWidth * scale).rounded(.up))"), true,
+            expectEqual(row.contains("boxHeight: alignedUp(blockHeight + 2 * inset, scale: scale)")
+                        && row.contains("imageWidth: alignedUp(r.boxWidth, scale: scale)")
+                        && row.contains("Int((g.imageWidth * g.scale).rounded(.up))"), true,
                         "图层滚动行: 位图宽高对齐到整像素,贴图不拉伸")
             expectEqual(row.contains("let restingX = pixelAligned(") && row.contains("pixelAligned((bounds.height - boxHeight) / 2)"), true,
                         "图层滚动行: 静置落点对齐到整像素")
@@ -1983,6 +1984,30 @@ func runSourceContractTests() {
                     "可点区域: 各行矩形的 reduce 是合并,别的分支报的空表冲不掉量到的")
         expectEqual(read("UI/LyricsOverlayWindowController.swift").contains("contentRowRectsSpace"), false,
                     "可点区域: 真窗口不量各行矩形")
+    }
+
+    // ---- 悬浮歌词换句时在后台出图(04 章决策 50)----
+    //
+    // 换行模式的几行长图交给出图队列画、画好整句一起换上。退回主线程画、或者出图任务强引用行视图,都不会报错。
+    do {
+        let ui = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        func read(_ name: String) -> String {
+            (try? String(contentsOfFile: ui.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
+        }
+        let wrap = read("WrappedKaraokeRows.swift")
+        let row = read("OverlayScrollingLyricRow.swift")
+        expectEqual(wrap.contains("Self.rasterQueue.async {")
+                        && wrap.contains("batch.items.map { OverlayRowRaster.render($0.0, spec: $0.1) }"), true,
+                    "后台出图: 换句时几行的长图在出图队列上画")
+        expectEqual(wrap.contains("let owner = WeakRowsView(self)")
+                        && wrap.contains("owner.view?.finishRender(generation: generation, images: result.images)"), true,
+                    "后台出图: 出图任务只拿弱引用,画好回主线程按世代号装")
+        expectEqual(wrap.contains("if rowViews.isEmpty {") && wrap.contains("$0.showsImages(of: $1.spec)"), true,
+                    "后台出图: 第一次出现当场画,不换图的变化走快路径")
+        expectEqual(row.contains("enum OverlayRowRaster {") && !row.contains("    private func drawText("), true,
+                    "后台出图: 三张长图在不碰视图状态的 OverlayRowRaster 里画,行视图自己不再画")
     }
 
     // ---- 日文汉字修回的接线----

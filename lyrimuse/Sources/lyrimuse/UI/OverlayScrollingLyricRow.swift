@@ -103,10 +103,6 @@ final class OverlayLyricScrollView: NSView {
     private static let baseBoundsKey = "lyrimuse.overlay-karaoke-base-bounds"
     /// 重装动画的漂移门(毫秒):动画在跑、且"动画此刻推到哪"与新时钟之差小于它时不打断。
     private static let resyncToleranceMs = 250
-    /// 位图一律按 sRGB 画、按 sRGB 标记 —— 跟 SwiftUI 那条路同一套色彩管理,两种模式同一个
-    /// 颜色值在屏幕上才是同一个颜色(用 DeviceRGB 的话宽色域屏上会偏色)。
-    private static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-    private static let ciContext = CIContext(options: [.cacheIntermediates: false])
 
     private let contentLayer = CALayer()
     private let strokeLayer = CALayer()
@@ -234,7 +230,7 @@ final class OverlayLyricScrollView: NSView {
 
     /// 两份输入画出来的长图是不是同一张 —— 除了 `paused` / `pacedWindow` / `timingEpoch` 全都一样。这几项只影响
     /// 动画,不重画位图。
-    private static func sameImages(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> Bool {
+    static func sameImages(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> Bool {
         var a = a
         a.paused = b.paused
         a.pacedWindow = b.pacedWindow
@@ -274,33 +270,80 @@ final class OverlayLyricScrollView: NSView {
     }
 
     private func rebuildImages(spec: OverlayScrollingLyricRow.Spec) {
-        let scale = bitmapScale
-        bleed = spec.shadow.map { ceil($0.radius * 2 + abs($0.offsetY)) } ?? 0
-        inset = (spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset) + bleed
-        mainHeight = Self.textHeight(spec.font)
-        romaHeight = spec.groups == nil ? 0 : Self.textHeight(spec.romaFont)
-        romaGap = spec.groups == nil ? 0 : spec.romaGap
+        let geometry = Self.geometry(spec: spec, scale: bitmapScale)
+        adopt(geometry, images: OverlayRowRaster.render(geometry, spec: spec))
+    }
+
+    /// 按 `spec` 排好一行长图:四周预留、行高、逐词 / 逐组落点、长图总宽、阅读路径。量宽查
+    /// `MenuBarMarqueeRenderer` 的缓存,只在主线程调;画图交给 `OverlayRowRaster`。
+    static func geometry(spec: OverlayScrollingLyricRow.Spec, scale: CGFloat) -> OverlayRowGeometry {
+        let bleed = spec.shadow.map { ceil($0.radius * 2 + abs($0.offsetY)) } ?? 0
+        let inset = (spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset) + bleed
+        let mainHeight = textHeight(spec.font)
+        let romaHeight = spec.groups == nil ? 0 : textHeight(spec.romaFont)
+        let romaGap = spec.groups == nil ? 0 : spec.romaGap
         // 高和宽都对齐到整像素(见 `imageWidth`):位图像素数跟图层点尺寸 × 比例对不上时,Core Animation
         // 按 .resize 把整张图缩放一点点贴上去,每个字都被重采样,1x 屏上整行发糊。
-        let textHeight = OverlayRowLayout.blockHeight(
+        let blockHeight = OverlayRowLayout.blockHeight(
             main: mainHeight, roma: spec.groups == nil ? nil : romaHeight, romaGap: romaGap)
-        boxHeight = Self.alignedUp(textHeight + 2 * inset, scale: scale)
-        layOut(spec: spec)
-        imageWidth = Self.alignedUp(boxWidth, scale: scale)
-        baseTextLayer.contents = drawText(spec: spec, main: spec.baseColor, roma: spec.romaBaseColor, scale: scale)
-        fillTextLayer.contents = drawText(spec: spec, main: spec.fillColor, roma: spec.romaFillColor, scale: scale)
-        strokeLayer.contents = spec.strokeColor.flatMap { drawStroke(spec: spec, color: $0, scale: scale) }
-        for l in [strokeLayer, baseTextLayer, fillTextLayer] {
-            l.contentsScale = scale
-            l.position = .zero
-            l.bounds = CGRect(x: 0, y: 0, width: imageWidth, height: boxHeight)
-        }
+        // 逐词 / 逐组排版:每个词的起止 x、罗马音每段的落点、长图总宽。规则在 Core 的
+        // `OverlayRowLayout`(selftest 钉着),这里只把字体测宽喂进去。
+        let r = OverlayRowLayout.layOut(
+            words: spec.words, groups: spec.groups, inset: inset,
+            strokeInset: spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset,
+            measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
+            measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
         // 阅读位置按"不含预留"的坐标算、再整体平移 inset:否则开头那一截填色边界会先在左侧预留里
         // 空走一段(followReadingPath 的首点 x 恒为 0)。
         // 配速行没有阅读位置:不填色,滚动在 `place` 里按显示窗口另算。
-        readingPath = spec.pacedWindow != nil ? [] : MenuBarMarquee.followReadingPath(
-            words: flatWords, wordEndXs: wordEndXs.map { $0 - inset })
+        let readingPath = spec.pacedWindow != nil ? [] : MenuBarMarquee.followReadingPath(
+            words: r.flatWords, wordEndXs: r.wordEndXs.map { $0 - inset })
             .map { MenuBarMarquee.KaraokeFillPoint(ms: $0.ms, x: $0.x + inset) }
+        return OverlayRowGeometry(
+            scale: scale, bleed: bleed, inset: inset,
+            mainHeight: mainHeight, romaHeight: romaHeight, romaGap: romaGap,
+            boxWidth: r.boxWidth, boxHeight: alignedUp(blockHeight + 2 * inset, scale: scale),
+            imageWidth: alignedUp(r.boxWidth, scale: scale),
+            wordStartXs: r.wordStartXs, wordEndXs: r.wordEndXs, romaPlacements: r.romaPlacements,
+            flatWords: r.flatWords, readingPath: readingPath)
+    }
+
+    /// 换上排好、画好的一行。不动动画,摆位交给 `place`。
+    private func adopt(_ g: OverlayRowGeometry, images: OverlayRowImages) {
+        bleed = g.bleed
+        inset = g.inset
+        mainHeight = g.mainHeight
+        romaHeight = g.romaHeight
+        romaGap = g.romaGap
+        boxWidth = g.boxWidth
+        boxHeight = g.boxHeight
+        imageWidth = g.imageWidth
+        wordStartXs = g.wordStartXs
+        wordEndXs = g.wordEndXs
+        romaPlacements = g.romaPlacements
+        flatWords = g.flatWords
+        readingPath = g.readingPath
+        baseTextLayer.contents = images.base
+        fillTextLayer.contents = images.fill
+        strokeLayer.contents = images.stroke
+        for l in [strokeLayer, baseTextLayer, fillTextLayer] {
+            l.contentsScale = g.scale
+            l.position = .zero
+            l.bounds = CGRect(x: 0, y: 0, width: g.imageWidth, height: g.boxHeight)
+        }
+    }
+
+    /// 换上在别处(后台)画好的一行,并按 `nowMs` 重新摆位、重装动画。`geometry` 和 `images` 必须是按 `next` 排、画的。
+    func install(spec next: OverlayScrollingLyricRow.Spec, geometry: OverlayRowGeometry,
+                 images: OverlayRowImages, nowMs: Int) {
+        spec = next
+        adopt(geometry, images: images)
+        place(nowMs: nowMs, reinstall: true)
+    }
+
+    /// 装着的长图就是 `next` 要的那一份(时机可以不同)。
+    func showsImages(of next: OverlayScrollingLyricRow.Spec) -> Bool {
+        spec.map { Self.sameImages($0, next) } ?? false
     }
 
     private static func alignedUp(_ v: CGFloat, scale: CGFloat) -> CGFloat {
@@ -311,111 +354,6 @@ final class OverlayLyricScrollView: NSView {
     private func pixelAligned(_ v: CGFloat) -> CGFloat {
         let scale = bitmapScale
         return (v * scale).rounded() / scale
-    }
-
-    /// 逐词 / 逐组排版:每个词的起止 x、罗马音每段的落点、长图总宽。规则在 Core 的
-    /// `OverlayRowLayout`(selftest 钉着),这里只把字体测宽喂进去。
-    private func layOut(spec: OverlayScrollingLyricRow.Spec) {
-        let r = OverlayRowLayout.layOut(
-            words: spec.words, groups: spec.groups, inset: inset,
-            strokeInset: spec.strokeColor == nil ? 0 : LyricsTextStrokeMetrics.inset,
-            measureMain: { MenuBarMarqueeRenderer.width(of: $0, font: spec.font, translation: spec.translation) },
-            measureRoma: { MenuBarMarqueeRenderer.width(of: $0, font: spec.romaFont) })
-        wordStartXs = r.wordStartXs
-        wordEndXs = r.wordEndXs
-        romaPlacements = r.romaPlacements
-        flatWords = r.flatWords
-        boxWidth = r.boxWidth
-    }
-
-    /// 一张空白长图的绘制上下文(sRGB、预乘 alpha、已按 scale 缩放到点坐标)。
-    private func makeContext(scale: CGFloat) -> CGContext? {
-        let pxW = Int((imageWidth * scale).rounded(.up))
-        let pxH = Int((boxHeight * scale).rounded(.up))
-        guard pxW > 0, pxH > 0,
-              let ctx = CGContext(data: nil, width: pxW, height: pxH, bitsPerComponent: 8,
-                                  bytesPerRow: pxW * 4, space: Self.colorSpace,
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return nil }
-        ctx.scaleBy(x: scale, y: scale)
-        return ctx
-    }
-
-    /// 整行字(不含描边)。
-    /// `withShadow`:两张字图带上 `spec.shadow`;描边的剪影不带(否则阴影也会被阈值成描边)。
-    private func drawText(spec: OverlayScrollingLyricRow.Spec,
-                          main: NSColor, roma: NSColor, scale: CGFloat, withShadow: Bool = true) -> CGImage? {
-        guard let ctx = makeContext(scale: scale) else { return nil }
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-        // flipped: false → 原点在左下、y 向上。主行在上、罗马音在下(同 SwiftUI 那边 VStack 的顺序),中间隔
-        // `romaGap`;各自在自己那一格里底部留 1pt;整块再往里让出一圈 inset。
-        let mainY = inset + romaHeight + romaGap + 1
-        let romaY = inset + 1
-        var mainAttrs: [NSAttributedString.Key: Any] = [.font: spec.font, .foregroundColor: main]
-        var romaAttrs: [NSAttributedString.Key: Any] = [.font: spec.romaFont, .foregroundColor: roma]
-        if withShadow, let s = spec.shadow {
-            // 位图坐标 y 向上,SwiftUI 的 offsetY 正值是往下,这里取反。阴影按每一笔的 alpha 投 ——
-            // 跟 SwiftUI 那边 `.compositingGroup().shadow` 一样,半透明的未唱字投出来的阴影也跟着淡。
-            let shadow = NSShadow()
-            shadow.shadowColor = s.color
-            shadow.shadowBlurRadius = s.radius
-            shadow.shadowOffset = NSSize(width: 0, height: -s.offsetY)
-            mainAttrs[.shadow] = shadow
-            romaAttrs[.shadow] = shadow
-        }
-        // 排字语言逐词判、跟上面量宽度同一口径(见 `LyricTypesetting`)。
-        for (i, w) in flatWords.enumerated() where i < wordStartXs.count {
-            (w.text as NSString).draw(at: NSPoint(x: wordStartXs[i], y: mainY),
-                                      withAttributes: LyricTypesetting.attributes(mainAttrs, for: w.text,
-                                                                                  translation: spec.translation))
-        }
-        for r in romaPlacements {
-            (r.text as NSString).draw(at: NSPoint(x: r.x, y: romaY), withAttributes: romaAttrs)
-        }
-        NSGraphicsContext.restoreGraphicsState()
-        return ctx.makeImage()
-    }
-
-    /// 描边:剪影高斯模糊 σ = width,透明度按 `LyricsTextStrokeMetrics.alphaRamp` 拉成实心轮廓、
-    /// 再乘描边色 —— 跟 `OptionalTextStroke`(Canvas `.colorMatrix` + `.blur(radius:)`)同一个算法、
-    /// 同一组参数。模糊结果裁回长图范围,对应那边 Canvas 裁在"内容 + inset"之内。
-    private func drawStroke(spec: OverlayScrollingLyricRow.Spec, color: NSColor, scale: CGFloat) -> CGImage? {
-        guard let silhouette = drawText(spec: spec, main: .black, roma: .black, scale: scale, withShadow: false),
-              let rgb = color.usingColorSpace(.sRGB) else { return nil }
-        let source = CIImage(cgImage: silhouette)
-        // 拉伸在 CoreImage 的浮点中间结果上做:外沿那段透明度只有百分之几,先落成 8 位就只剩几级。
-        let ramp = LyricsTextStrokeMetrics.alphaRamp(scale: scale)
-        let k = CGFloat(1 / (ramp.hi - ramp.lo))
-        let zero = CIVector(x: 0, y: 0, z: 0, w: 0)
-        let mask = source.clampedToExtent()
-            .applyingGaussianBlur(sigma: LyricsTextStrokeMetrics.width * scale)
-            .cropped(to: source.extent)
-            .applyingFilter("CIColorMatrix", parameters: [
-                "inputRVector": zero, "inputGVector": zero, "inputBVector": zero,
-                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: k),
-                "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: -CGFloat(ramp.lo) * k),
-            ])
-            .applyingFilter("CIColorClamp")
-        guard let soft = Self.ciContext.createCGImage(mask, from: source.extent, format: .RGBA8,
-                                                      colorSpace: Self.colorSpace),
-              let ctx = CGContext(data: nil, width: soft.width, height: soft.height, bitsPerComponent: 8,
-                                  bytesPerRow: soft.width * 4, space: Self.colorSpace,
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let data = ctx.data
-        else { return nil }
-        ctx.draw(soft, in: CGRect(x: 0, y: 0, width: soft.width, height: soft.height))
-        // 预乘 alpha:每个分量 = 描边色(已预乘)× mask。
-        let alpha = rgb.alphaComponent
-        let fill = [rgb.redComponent * alpha, rgb.greenComponent * alpha, rgb.blueComponent * alpha, alpha]
-            .map { Float(min(max($0, 0), 1)) }
-        let count = soft.width * soft.height * 4
-        let px = data.bindMemory(to: UInt8.self, capacity: count)
-        for i in stride(from: 0, to: count, by: 4) {
-            let m = Float(px[i + 3])
-            for c in 0..<4 { px[i + c] = UInt8((fill[c] * m).rounded()) }
-        }
-        return ctx.makeImage()
     }
 
     // MARK: - 摆位与动画
@@ -564,5 +502,138 @@ final class OverlayLyricScrollView: NSView {
         move.fillMode = .forwards
         move.isRemovedOnCompletion = false
         contentLayer.add(move, forKey: Self.scrollKey)
+    }
+}
+
+/// 一行长图的排版结果(`OverlayLyricScrollView.geometry` 在主线程算)。画图、摆位都按它,不各自再量。
+struct OverlayRowGeometry {
+    var scale: CGFloat
+    var bleed: CGFloat
+    var inset: CGFloat
+    var mainHeight: CGFloat
+    var romaHeight: CGFloat
+    var romaGap: CGFloat
+    var boxWidth: CGFloat
+    var boxHeight: CGFloat
+    var imageWidth: CGFloat
+    var wordStartXs: [CGFloat]
+    var wordEndXs: [CGFloat]
+    var romaPlacements: [OverlayRowLayout.RomaPlacement]
+    var flatWords: [SyncedLyricWord]
+    var readingPath: [MenuBarMarquee.KaraokeFillPoint]
+}
+
+/// 一行的三张长图。
+struct OverlayRowImages {
+    var base: CGImage?
+    var fill: CGImage?
+    var stroke: CGImage?
+}
+
+/// 把排好的一行画成基础色、强调色、描边三张长图。只读 `geometry` 和 `spec`,不碰任何视图状态,哪个线程都能调
+/// (悬浮歌词换句时在后台画,见 `WrappedKaraokeRowsView`)。
+enum OverlayRowRaster {
+    /// 位图一律按 sRGB 画、按 sRGB 标记 —— 跟 SwiftUI 那条路同一套色彩管理,两种模式同一个
+    /// 颜色值在屏幕上才是同一个颜色(用 DeviceRGB 的话宽色域屏上会偏色)。
+    static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    static let ciContext = CIContext(options: [.cacheIntermediates: false])
+
+    static func render(_ g: OverlayRowGeometry, spec: OverlayScrollingLyricRow.Spec) -> OverlayRowImages {
+        OverlayRowImages(
+            base: drawText(g, spec: spec, main: spec.baseColor, roma: spec.romaBaseColor),
+            fill: drawText(g, spec: spec, main: spec.fillColor, roma: spec.romaFillColor),
+            stroke: spec.strokeColor.flatMap { drawStroke(g, spec: spec, color: $0) })
+    }
+
+    /// 一张空白长图的绘制上下文(sRGB、预乘 alpha、已按 scale 缩放到点坐标)。
+    private static func makeContext(_ g: OverlayRowGeometry) -> CGContext? {
+        let pxW = Int((g.imageWidth * g.scale).rounded(.up))
+        let pxH = Int((g.boxHeight * g.scale).rounded(.up))
+        guard pxW > 0, pxH > 0,
+              let ctx = CGContext(data: nil, width: pxW, height: pxH, bitsPerComponent: 8,
+                                  bytesPerRow: pxW * 4, space: colorSpace,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        ctx.scaleBy(x: g.scale, y: g.scale)
+        return ctx
+    }
+
+    /// 整行字(不含描边)。
+    /// `withShadow`:两张字图带上 `spec.shadow`;描边的剪影不带(否则阴影也会被阈值成描边)。
+    private static func drawText(_ g: OverlayRowGeometry, spec: OverlayScrollingLyricRow.Spec,
+                                 main: NSColor, roma: NSColor, withShadow: Bool = true) -> CGImage? {
+        guard let ctx = makeContext(g) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        // flipped: false → 原点在左下、y 向上。主行在上、罗马音在下(同 SwiftUI 那边 VStack 的顺序),中间隔
+        // `romaGap`;各自在自己那一格里底部留 1pt;整块再往里让出一圈 inset。
+        let mainY = g.inset + g.romaHeight + g.romaGap + 1
+        let romaY = g.inset + 1
+        var mainAttrs: [NSAttributedString.Key: Any] = [.font: spec.font, .foregroundColor: main]
+        var romaAttrs: [NSAttributedString.Key: Any] = [.font: spec.romaFont, .foregroundColor: roma]
+        if withShadow, let s = spec.shadow {
+            // 位图坐标 y 向上,SwiftUI 的 offsetY 正值是往下,这里取反。阴影按每一笔的 alpha 投 ——
+            // 跟 SwiftUI 那边 `.compositingGroup().shadow` 一样,半透明的未唱字投出来的阴影也跟着淡。
+            let shadow = NSShadow()
+            shadow.shadowColor = s.color
+            shadow.shadowBlurRadius = s.radius
+            shadow.shadowOffset = NSSize(width: 0, height: -s.offsetY)
+            mainAttrs[.shadow] = shadow
+            romaAttrs[.shadow] = shadow
+        }
+        // 排字语言逐词判、跟上面量宽度同一口径(见 `LyricTypesetting`)。
+        for (i, w) in g.flatWords.enumerated() where i < g.wordStartXs.count {
+            (w.text as NSString).draw(at: NSPoint(x: g.wordStartXs[i], y: mainY),
+                                      withAttributes: LyricTypesetting.attributes(mainAttrs, for: w.text,
+                                                                                  translation: spec.translation))
+        }
+        for r in g.romaPlacements {
+            (r.text as NSString).draw(at: NSPoint(x: r.x, y: romaY), withAttributes: romaAttrs)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        return ctx.makeImage()
+    }
+
+    /// 描边:剪影高斯模糊 σ = width,透明度按 `LyricsTextStrokeMetrics.alphaRamp` 拉成实心轮廓、
+    /// 再乘描边色 —— 跟 `OptionalTextStroke`(Canvas `.colorMatrix` + `.blur(radius:)`)同一个算法、
+    /// 同一组参数。模糊结果裁回长图范围,对应那边 Canvas 裁在"内容 + inset"之内。
+    private static func drawStroke(_ g: OverlayRowGeometry, spec: OverlayScrollingLyricRow.Spec,
+                                   color: NSColor) -> CGImage? {
+        let scale = g.scale
+        guard let silhouette = drawText(g, spec: spec, main: .black, roma: .black, withShadow: false),
+              let rgb = color.usingColorSpace(.sRGB) else { return nil }
+        let source = CIImage(cgImage: silhouette)
+        // 拉伸在 CoreImage 的浮点中间结果上做:外沿那段透明度只有百分之几,先落成 8 位就只剩几级。
+        let ramp = LyricsTextStrokeMetrics.alphaRamp(scale: scale)
+        let k = CGFloat(1 / (ramp.hi - ramp.lo))
+        let zero = CIVector(x: 0, y: 0, z: 0, w: 0)
+        let mask = source.clampedToExtent()
+            .applyingGaussianBlur(sigma: LyricsTextStrokeMetrics.width * scale)
+            .cropped(to: source.extent)
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": zero, "inputGVector": zero, "inputBVector": zero,
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: k),
+                "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: -CGFloat(ramp.lo) * k),
+            ])
+            .applyingFilter("CIColorClamp")
+        guard let soft = ciContext.createCGImage(mask, from: source.extent, format: .RGBA8,
+                                                 colorSpace: colorSpace),
+              let ctx = CGContext(data: nil, width: soft.width, height: soft.height, bitsPerComponent: 8,
+                                  bytesPerRow: soft.width * 4, space: colorSpace,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let data = ctx.data
+        else { return nil }
+        ctx.draw(soft, in: CGRect(x: 0, y: 0, width: soft.width, height: soft.height))
+        // 预乘 alpha:每个分量 = 描边色(已预乘)× mask。
+        let alpha = rgb.alphaComponent
+        let fill = [rgb.redComponent * alpha, rgb.greenComponent * alpha, rgb.blueComponent * alpha, alpha]
+            .map { Float(min(max($0, 0), 1)) }
+        let count = soft.width * soft.height * 4
+        let px = data.bindMemory(to: UInt8.self, capacity: count)
+        for i in stride(from: 0, to: count, by: 4) {
+            let m = Float(px[i + 3])
+            for c in 0..<4 { px[i + c] = UInt8((fill[c] * m).rounded()) }
+        }
+        return ctx.makeImage()
     }
 }

@@ -817,7 +817,7 @@ func runOverlayTests() {
         let wrapped = src("WrappedKaraokeRows.swift")
         expectEqual([view, scroll, wrapped].allSatisfy { $0.contains("OverlayRowLayout.blockHeight(") }, true,
                     "行间距接线: 位图高、换行模式行距、滚动模式行框都按 blockHeight 算")
-        expectEqual(scroll.contains("let mainY = inset + romaHeight + romaGap + 1"), true,
+        expectEqual(scroll.contains("let mainY = g.inset + g.romaHeight + g.romaGap + 1"), true,
                     "行间距接线: 图层行的主行跟读音之间隔出读音间距")
         expectEqual(view.contains("VStack(alignment: duetAlignment, spacing: 0)"), true,
                     "行间距接线: 卡片的 VStack 不加间距,不然跟各行自己的间距叠在一起")
