@@ -785,7 +785,7 @@ func runTouchBarTests() {
                         && hotkeys.contains("case .toggleTouchBarLyricsHotkey: return L10n.t(\"展开/收起触控栏歌词\")"), true,
                     "触控栏快捷键: 登记进撞键检查,标题跟设置页那一行一致")
         expectEqual(hotkeys.contains("switch TouchBarLyricsController.shared.toggleFromHotkey() {")
-                        && hotkeys.contains("case .noTouchBar: text = L10n.t(\"此 Mac 未配备触控栏\")")
+                        && hotkeys.contains("case .noTouchBar: text = L10n.t(\"未检测到触控栏\")")
                         && hotkeys.contains("case .turnOn, .expand: text = L10n.t(\"已展开触控栏歌词\")")
                         && hotkeys.contains("flashHint(icon: SurfaceGlyph.touchBar.rawValue, text: text)"), true,
                     "触控栏快捷键: 按下去交给控制器,做了哪一件都回声")

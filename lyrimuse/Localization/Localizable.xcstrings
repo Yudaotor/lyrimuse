@@ -40728,7 +40728,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This Mac's system doesn't provide the Touch Bar interfaces"
+            "value" : "Touch Bar API unavailable"
           }
         },
         "zh-Hans" : {
@@ -40741,6 +40741,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本機系統未提供觸控列介面"
+          }
+        }
+      }
+    },
+    "未检测到触控栏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Touch Bar detected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未检测到触控栏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未偵測到觸控列"
           }
         }
       }

@@ -1132,6 +1132,7 @@
 "未授权时无法准确读取播放进度，也无法控制播放" = "Without it, the playback position drifts and the controls do nothing";
 "未授权时，播放进度可能不准确，歌词上的播放控制也无法使用" = "Without it, playback progress may drift and the playback controls on the lyrics won’t work";
 "未查到" = "Unknown";
+"未检测到触控栏" = "No Touch Bar detected";
 "未演唱部分的文字颜色。默认跟随系统：自动适配浅色 / 深色菜单栏，打开菜单时自动反白" = "Color of the not-yet-sung text. Defaults to system: adapts to light/dark menu bars and inverts while the menu is open";
 "未知专辑" = "Unknown Album";
 "未知歌手" = "Unknown Artist";
@@ -1149,7 +1150,7 @@
 "本地有 %@ 首待补交的记录" = "%@ listens saved locally, waiting to be submitted";
 "本地歌名无检索结果，经「%@」查得正式曲名。" = "The local title returned nothing; the official title was found via “%@”.";
 "本机学到的署名" = "Credit learned on this Mac";
-"本机系统未提供触控栏接口" = "This Mac's system doesn't provide the Touch Bar interfaces";
+"本机系统未提供触控栏接口" = "Touch Bar API unavailable";
 "本机系统未提供触控栏接口，开启后不会生效" = "This Mac's system doesn't provide the Touch Bar interfaces this needs, so turning it on has no effect";
 "本机设置，无法撤销" = "This Mac only; can't be undone";
 "本条" = "This entry";

@@ -253,7 +253,7 @@ enum GlobalHotkeys {
         KeyboardShortcuts.onKeyUp(for: .toggleTouchBarLyricsHotkey) {
             let text: String
             switch TouchBarLyricsController.shared.toggleFromHotkey() {
-            case .noTouchBar: text = L10n.t("此 Mac 未配备触控栏")
+            case .noTouchBar: text = L10n.t("未检测到触控栏")
             case .unavailable: text = L10n.t("本机系统未提供触控栏接口")
             case .turnOn, .expand: text = L10n.t("已展开触控栏歌词")
             case .collapse: text = L10n.t("已收起触控栏歌词")
