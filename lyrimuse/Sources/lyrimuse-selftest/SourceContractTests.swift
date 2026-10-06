@@ -3602,6 +3602,12 @@ func runSourceContractTests() {
         expectEqual(sheet.components(separatedBy: "L10n.t(\"正在查询各个歌词源…\")").count - 1 == 1
                     && sheet.contains("Text((candidates.isEmpty ? L10n.t(\"正在查询各个歌词源…\") : L10n.t(\"其他歌词源仍在搜索中…\"))"), true,
                     "搜索候选歌词: 搜索进度只在侧栏那一行,右边还没有候选时空着")
+        // 来源名、来源色走全局 sourceDisplayName / sourceColor:本地歌词那几家不在 LyricsSource 里(11 章决策 88)。
+        expectEqual(!sheet.contains("LyricsSource(rawValue:")
+                    && sheet.contains("let tint = sourceColor(source)\n        return Text(sourceDisplayName(source))")
+                    && sheet.contains("let name = sourceDisplayName(c.source)")
+                    && sheet.contains("let anchor = sourceDisplayName(duplicate.anchor)"), true,
+                    "搜索候选歌词: 来源名和来源色走全局那一份,Spotify / Amazon Music / KKBOX 不露小写的原始 id")
         // 表头、徽标一打开就在,进度那一行搜完也留着高度:别再等第一行才冒出来(用户:「不要页面发生跳动」)。
         expectEqual(!sheet.contains("if sourcesTotal > 0 || !candidates.isEmpty {")
                     && !sheet.contains("if sourcesTotal > 0 {\n            Button {\n                showSourceAvailability = true")

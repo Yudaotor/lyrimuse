@@ -1044,7 +1044,7 @@ struct LyricsSearchSheet: View {
             return
         }
         if saved {
-            let name = LyricsSource(rawValue: c.source)?.displayName ?? c.source
+            let name = sourceDisplayName(c.source)
             showApplyFeedback(String(format: L10n.t("已采用 %@ 的歌词"), name), ok: true)
         } else {
             showApplyFeedback(L10n.t("保存失败，请重试"), ok: false)
@@ -1435,7 +1435,7 @@ struct LyricsSearchSheet: View {
                     // 写「文字相同」;逐字时间与译文不比,所以不写「完全相同」,悬停说明把口径讲清。**只标注不隐藏**——
                     // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学。灰色:它是"这条跟别人重复"的
                     // 提示,不是加分项。
-                    let anchor = LyricsSource(rawValue: duplicate.anchor)?.displayName ?? duplicate.anchor
+                    let anchor = sourceDisplayName(duplicate.anchor)
                     characteristicBadge(
                         String(format: duplicate.sameTimeline ? L10n.t("歌词内容与 %@ 相同") : L10n.t("歌词文字与 %@ 相同"),
                                anchor),
@@ -1469,10 +1469,11 @@ struct LyricsSearchSheet: View {
             || showsSource || duplicate != nil || isCurrent
     }
 
+    /// 名字和颜色走全局那一份:Spotify、Amazon Music、KKBOX 的本地歌词不在 `LyricsSource` 里,别改回按枚举取名
+    /// (取不到就露出小写的原始 id)。
     private func sourceBadge(_ source: String) -> some View {
-        let known = LyricsSource(rawValue: source)
-        let tint = known?.color ?? .secondary
-        return Text(known?.displayName ?? source)
+        let tint = sourceColor(source)
+        return Text(sourceDisplayName(source))
             .foregroundStyle(tint)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
