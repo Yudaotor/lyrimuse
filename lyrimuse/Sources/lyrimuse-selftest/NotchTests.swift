@@ -1831,6 +1831,11 @@ func runNotchTests() {
                     "专辑简介契约: 灵动岛展开态点专辑名开 / 关浮框")
         expectEqual(view.contains("tappable: !playback.artist.isEmpty) { controller.toggleEditorial(.artist) }"), true,
                     "歌手简介契约: 灵动岛展开态点歌手名开 / 关浮框")
+        expectEqual(view.contains("NotchEditorialLine(kind: .song, text: metadataText(.title), tint: accentOrWhite,")
+                    && view.contains("tappable: !playback.title.isEmpty && radioTalkStation == nil) { controller.toggleEditorial(.song) }"), true,
+                    "歌曲简介契约: 灵动岛展开态点歌名开 / 关浮框,电台口白(这一行是台名)时不接")
+        expectEqual(view.contains(".accessibilityLabel(kind.openHint)"), true,
+                    "歌曲简介契约: 灵动岛那三行的读屏标签按类型给(不是专辑就当歌手的二选一)")
         expectEqual(view.contains("let clickable = tappable && !text.isEmpty && store.card(kind) != nil"), true,
                     "简介契约: 灵动岛的歌手名 / 专辑名只在这首有对应简介时可点")
         expectEqual(controller.contains("let expanded = cardHovered || editorialHovered"), true,
@@ -1845,8 +1850,8 @@ func runNotchTests() {
                     "简介契约: 再点同一个专辑名 / 歌手名 = 关(按下已经关掉,松手不重开)")
         expectEqual(panelSrc.contains("if event.timestamp != eventTime { MainActor.assumeIsolated { self?.forgetOwnerClick() } }"), true,
                     "简介契约: 那笔记录只对这一下点击有效(先点空白、再点专辑名要能重新打开)")
-        expectEqual(controller.contains("map { visible, album, artist in visible && (album || artist) }"), true,
-                    "简介契约: 灵动岛开着、头部画歌手名或专辑名时才登记预取")
+        expectEqual(controller.contains("map { visible, album, artist, title in visible && (album || artist || title) }"), true,
+                    "简介契约: 灵动岛开着、头部画歌名、歌手名或专辑名时才登记预取")
         expectEqual(stage.contains("func toggleEditorial(_ kind: EditorialCard.Kind) {}"), true,
                     "专辑简介契约: 编辑台预览里是空实现,不从预览弹真浮框")
         expectEqual(controller.contains("NotchEditorialPanel.shared.toggle(card: card, cardFrame: frame, owner: window)"), true,
@@ -1855,11 +1860,19 @@ func runNotchTests() {
                     "专辑简介契约: 歌词窗口「⋯」菜单只在这首有专辑简介时出现「显示专辑简介」")
         expectEqual(window.contains("if editorial.artist != nil {\n                MoreMenuRow(title: L10n.t(\"显示歌手简介\"))"), true,
                     "歌手简介契约: 歌词窗口「⋯」菜单只在这首有歌手简介时出现「显示歌手简介」")
+        expectEqual(window.contains("if editorial.song != nil {\n                MoreMenuRow(title: L10n.t(\"显示歌曲简介\")) {\n                    closeMoreMenu()\n                    openEditorialPanel(.song)"), true,
+                    "歌曲简介契约: 歌词窗口「⋯」菜单只在这首有歌曲简介时出现「显示歌曲简介」")
+        expectEqual(window.contains("EditorialLinkText(text: displayTitle, available: songNotes,")
+                    && window.contains(".allowsHitTesting(songNotes)")
+                    && window.contains("editorial.song != nil && !playback.isCurrentTrackAdBreak && radioTalkStation == nil"), true,
+                    "歌曲简介契约: 歌词窗口点歌名看歌曲简介;没有简介、广告、电台口白时歌名照旧不接鼠标")
+        expectEqual(window.contains("part.field == .title && radioTalkStation == nil ? .song : nil"), true,
+                    "歌曲简介契约: 迷你尺寸顶部的歌名也能点开歌曲简介,电台口白(台名)时不接")
         expectEqual(window.contains(".onTapGesture { if available { action() } }")
                     && window.contains("EditorialLinkText(text: text, available: editorial.card(kind) != nil,"), true,
                     "简介契约: 歌词窗口「歌手 — 专辑」两段各自只在有对应简介时接点击")
-        expectEqual(window.components(separatedBy: "EditorialLinkText(text:").count - 1, 2,
-                    "简介契约: 完整布局「歌手 — 专辑」与迷你顶部都用同一个可点文字组件(悬停手形光标 + 下划线)")
+        expectEqual(window.components(separatedBy: "EditorialLinkText(text:").count - 1, 3,
+                    "简介契约: 完整布局的歌名、「歌手 — 专辑」与迷你顶部都用同一个可点文字组件(悬停手形光标 + 下划线)")
         expectEqual(window.contains("NSCursor.pointingHand.push()") && window.contains("NSCursor.pop()")
                     && window.contains(".onDisappear {\n                if cursorPushed {"), true,
                     "简介契约: 手形光标成对 push / pop,视图消失时也还回去")
@@ -1874,14 +1887,14 @@ func runNotchTests() {
                     "专辑简介契约: 歌词窗口开着才预取,设置页预览不算")
         expectEqual(store.components(separatedBy: "AlbumEditorialNotes.fetchAlbumPage(").count - 1, 1,
                     "简介契约: 专辑页只有一处发请求")
-        expectEqual(store.contains("album = nil\n            fallbackAlbum(track)\n            resolveArtistFromSiblings(track)"), true,
-                    "歌手简介契约: 这首没有 Apple 链接时,专辑退 Last.fm、歌手从同歌手的别的专辑页找")
+        expectEqual(store.contains("album = nil\n            fallback(.album, track)\n            resolveArtistFromSiblings(track)"), true,
+                    "歌手简介契约: 这首没有 Apple 链接时,专辑退兜底(网易云 / Last.fm)、歌手从同歌手的别的专辑页找")
         expectEqual(store.contains("Timer") || store.contains("Task.sleep"), false,
                     "专辑简介契约: 只在换歌 / 消费方来要时取,不轮询")
         expectEqual(store.contains("guard demand > 0, !track.title.isEmpty else {"), true,
                     "专辑简介契约: 没有消费方挂着时一个请求都不发")
-        expectEqual(store.components(separatedBy: "guard self.currentKey == track.key else { return self.refreshCurrent() }").count - 1, 4,
-                    "简介契约: 专辑页 / 同歌手专辑页 / 歌手页 / Last.fm 回来时已经换歌,都按当前曲目重查(同专辑连切时新歌不会整首拿不到)")
+        expectEqual(store.components(separatedBy: "guard self.currentKey == track.key else { return self.refreshCurrent() }").count - 1, 10,
+                    "简介契约: 专辑页 / 同歌手专辑页 / 歌手页 / Last.fm / 网易云歌手介绍 / 网易云专辑介绍 / QQ 歌曲简介 / 汽水 / YouTube Music 歌手介绍(问通、问不通各一处)回来时已经换歌,都按当前曲目重查(同专辑连切时新歌不会整首拿不到)")
         expectEqual(store.contains("guard self.currentKey == track.key else { return self.refreshCurrent() }\n            self.artist = card"), true,
                     "简介契约: 歌手页回来时已经换歌,同样按当前曲目重查")
         expectEqual(store.contains("appleAlbumRefs(forArtist: track.artist, limit: 3)")

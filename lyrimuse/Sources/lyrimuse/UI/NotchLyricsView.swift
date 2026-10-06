@@ -721,7 +721,7 @@ protocol NotchChromeSource: ObservableObject {
     /// 快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。真窗口走 `setVisible(false)`(跟设置页开关、菜单栏
     /// 面板同一个唯一入口),预览里是空实现 —— 预览卡整块 `allowsHitTesting(false)`,本来也点不到。
     func closeFromQuickAction()
-    /// 展开态头部点专辑名 / 歌手名:开 / 关 / 切换简介浮框(`NotchEditorialPanel`)。预览里是空实现,理由同上。
+    /// 展开态头部点歌名 / 专辑名 / 歌手名:开 / 关 / 切换简介浮框(`NotchEditorialPanel`)。预览里是空实现,理由同上。
     func toggleEditorial(_ kind: EditorialCard.Kind)
 }
 
@@ -2459,10 +2459,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     private var trackInfoTextStack: some View {
         let fields = controller.trackInfoShowsTrackFields
         return VStack(alignment: .leading, spacing: NotchMetrics.trackInfoLineSpacing) {
+            // 歌名能点开歌曲简介;电台口白期间这一行是台名,不接。
             if fields && controller.expandedTrackInfoShowsTitle {
-                Text(metadataText(.title))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(accentOrWhite.opacity(0.9))
+                NotchEditorialLine(kind: .song, text: metadataText(.title), tint: accentOrWhite,
+                                   font: .system(size: 12, weight: .semibold), restingOpacity: 0.9, hoverOpacity: 1,
+                                   tappable: !playback.title.isEmpty && radioTalkStation == nil) { controller.toggleEditorial(.song) }
             }
             if fields && controller.expandedTrackInfoShowsArtist {
                 NotchEditorialLine(kind: .artist, text: metadataText(.artist), tint: accentOrWhite,
@@ -3645,7 +3646,7 @@ private struct NotchLayerActiveReader<Content: View>: View {
     var body: some View { content(active) }
 }
 
-/// 展开态头部的歌手名 / 专辑名那一行。当前曲目有对应的简介(`EditorialNotesStore`)才接点击,指针移上去字色
+/// 展开态头部的歌名 / 歌手名 / 专辑名那一行。当前曲目有对应的简介(`EditorialNotesStore`)才接点击,指针移上去字色
 /// 提亮;没有简介时就是一行字,不给任何「能点」的暗示。
 private struct NotchEditorialLine: View {
     @ObservedObject private var store = EditorialNotesStore.shared
@@ -3655,7 +3656,7 @@ private struct NotchEditorialLine: View {
     let font: Font
     let restingOpacity: Double
     let hoverOpacity: Double
-    /// 有歌手名 / 专辑名、不在广告里。
+    /// 有歌名 / 歌手名 / 专辑名、不在广告里(歌名还要不在电台口白里)。
     let tappable: Bool
     let action: () -> Void
     @State private var hovered = false
@@ -3669,7 +3670,7 @@ private struct NotchEditorialLine: View {
             Button(action: action) { label }
                 .buttonStyle(.plain)
                 .onHover { hovered = $0 }
-                .accessibilityLabel(L10n.t(kind == .album ? "查看专辑简介" : "查看歌手简介"))
+                .accessibilityLabel(kind.openHint)
         } else {
             label
         }

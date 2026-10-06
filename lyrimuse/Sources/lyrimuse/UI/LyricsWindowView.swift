@@ -1253,10 +1253,11 @@ struct LyricsWindowView: View {
     @State private var showsMoreMenu = false
     /// 「显示简介」面板(「⋯」菜单项之一):与菜单同锚点、同玻璃样式。
     @State private var showsInfoPanel = false
-    /// 专辑简介 / 歌手简介面板开着的是哪一类(nil = 没开)。「⋯ › 显示专辑简介 / 显示歌手简介」或点「歌手 — 专辑」
-    /// 那一行的对应一段打开,与「显示简介」同锚点同样式。只在当前这首有对应简介时能打开;简介没了(换歌)就关。
+    /// 歌曲简介 / 专辑简介 / 歌手简介面板开着的是哪一类(nil = 没开)。「⋯ › 显示歌曲简介 / 显示歌手简介 / 显示专辑简介」、
+    /// 点歌名或点「歌手 — 专辑」那一行的对应一段打开,与「显示简介」同锚点同样式。只在当前这首有对应简介时能打开;
+    /// 简介没了(换歌)就关。
     @State private var editorialPanel: EditorialCard.Kind?
-    /// 迷你尺寸里点歌手 / 专辑弹出的简介(系统 popover,挂在顶部那组文字上)。迷你窗里没有「⋯」那个锚点。
+    /// 迷你尺寸里点歌名 / 歌手 / 专辑弹出的简介(系统 popover,挂在顶部那组文字上)。迷你窗里没有「⋯」那个锚点。
     @State private var miniEditorialKind: EditorialCard.Kind?
     @ObservedObject private var editorial = EditorialNotesStore.shared
     /// 「你的常听」榜单面板(Last.fm 系列 #7)。
@@ -1872,14 +1873,17 @@ struct LyricsWindowView: View {
         }
     }
 
-    /// 迷你头部的一段。歌手 / 专辑在这首有对应简介时可点(弹 popover),歌名和其余情况就是字。
+    /// 迷你头部的一段。歌名 / 歌手 / 专辑在这首有对应简介时可点(弹 popover),其余情况就是字。电台口白期间歌名那一格
+    /// 摆的是台名,不接。
     @ViewBuilder
     private func miniHeaderPart(_ part: LyricsWindowMiniHeaderFields.Part, color: Color) -> some View {
-        let kind: EditorialCard.Kind? = part.field == .artist ? .artist : part.field == .album ? .album : nil
+        let kind: EditorialCard.Kind? = part.field == .artist ? .artist
+            : part.field == .album ? .album
+            : part.field == .title && radioTalkStation == nil ? .song : nil
         if let kind {
             EditorialLinkText(text: part.value, available: editorial.card(kind) != nil,
                               restColor: color, hoverColor: miniPrimaryColor,
-                              hint: L10n.t(kind == .album ? "查看专辑简介" : "查看歌手简介")) {
+                              hint: kind.openHint) {
                 guard editorial.card(kind) != nil else { return }
                 miniEditorialKind = kind
             }
@@ -3339,17 +3343,24 @@ struct LyricsWindowView: View {
             //
             // 两行的可见区左缘跟封面、进度条齐:停着时第一个字贴着左缘、不淡;滚起来左端渐隐带随滚出去的距离长出来,
             // 到 24pt 封顶;右端溢出时渐隐(07 章决策 114)。滚动交给图层(`LayerMarquee`),窗口看不见时停在开头。
+            //
+            // 这首有歌曲简介时歌名能点开它(同下面「歌手 — 专辑」那一行:光标进来就停住滚动,链接落在看到的位置上);
+            // 没有时这一行没有可点的东西,不接鼠标、也不停滚动,点在上面照旧能拖窗口。
+            let songNotes = titleOpensSongNotes
             LayerMarquee(id: displayTitle,
                          edgeFadeWidth: Self.trackInfoTrailingFade,
                          leadingFadeWidth: Self.trackInfoLeadingFade,
-                         isActive: windowController.isSurfaceVisible) {
-                Text(displayTitle)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(primaryTextColor)
+                         isActive: windowController.isSurfaceVisible,
+                         pausesOnHover: songNotes) {
+                EditorialLinkText(text: displayTitle, available: songNotes,
+                                  restColor: primaryTextColor, hoverColor: primaryTextColor,
+                                  hint: EditorialCard.Kind.song.openHint) {
+                    openEditorialPanel(.song)
+                }
+                .font(.system(size: 17, weight: .semibold))
             }
             .frame(height: 22)
-            // 歌名这一行没有可点的东西,不接鼠标。
-            .allowsHitTesting(false)
+            .allowsHitTesting(songNotes)
             // 歌手 / 专辑能点开简介:光标进了这一行就停住滚动,链接落在看到的位置上。
             LayerMarquee(id: displayArtistAlbum,
                          edgeFadeWidth: Self.trackInfoTrailingFade,
@@ -3506,6 +3517,12 @@ struct LyricsWindowView: View {
             MoreMenuRow(title: L10n.t("显示简介")) {
                 closeMoreMenu()
                 openInfoPanel()
+            }
+            if editorial.song != nil {
+                MoreMenuRow(title: L10n.t("显示歌曲简介")) {
+                    closeMoreMenu()
+                    openEditorialPanel(.song)
+                }
             }
             if editorial.artist != nil {
                 MoreMenuRow(title: L10n.t("显示歌手简介")) {
@@ -3777,7 +3794,7 @@ struct LyricsWindowView: View {
         }
     }
 
-    /// 专辑简介 / 歌手简介面板。正文由 `EditorialNotesStore` 在换歌时预取好,没有就不打开。
+    /// 歌曲简介 / 专辑简介 / 歌手简介面板。正文由 `EditorialNotesStore` 在换歌时预取好,没有就不打开。
     private func openEditorialPanel(_ kind: EditorialCard.Kind) {
         guard editorial.card(kind) != nil else { return }
         withAnimation(.easeOut(duration: 0.12)) {
@@ -4099,7 +4116,7 @@ struct LyricsWindowView: View {
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
     }
 
-    /// 专辑简介 / 歌手简介面板:与「显示简介」同一套玻璃样式,内容是共用的 `EditorialNotesContent`。
+    /// 歌曲简介 / 专辑简介 / 歌手简介面板:与「显示简介」同一套玻璃样式,内容是共用的 `EditorialNotesContent`。
     private func editorialPanelView(_ card: EditorialCard) -> some View {
         EditorialNotesContent(card: card, primary: primaryTextColor, secondary: secondaryTextColor, maxTextHeight: 260)
             .padding(14)
@@ -4223,9 +4240,15 @@ struct LyricsWindowView: View {
     private func editorialSegment(_ text: String, kind: EditorialCard.Kind) -> some View {
         EditorialLinkText(text: text, available: editorial.card(kind) != nil,
                           restColor: secondaryTextColor, hoverColor: primaryTextColor,
-                          hint: L10n.t(kind == .album ? "查看专辑简介" : "查看歌手简介")) {
+                          hint: kind.openHint) {
             openEditorialPanel(kind)
         }
+    }
+
+    /// 歌名那一行能不能点开歌曲简介:这首有歌曲简介,而且这一行摆的确实是这首的歌名 —— 广告时摆的是「广告中」,
+    /// 电台口白时摆的是台名(`displayTitle`)。
+    private var titleOpensSongNotes: Bool {
+        editorial.song != nil && !playback.isCurrentTrackAdBreak && radioTalkStation == nil
     }
 
     /// 广告插播时第二行**留空**,不展示广告物料的歌手/专辑名(跟灵动岛一致)。这不是多余的

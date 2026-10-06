@@ -119,7 +119,7 @@ final class LastfmStatsService: ObservableObject {
     /// 当前凭据对应的 Last.fm 用户名;没有可用凭据时为 nil。
     var credentialUser: String? { credentials?.user }
 
-    /// 简介兜底(`EditorialNotesStore`)的一次资料查询:`album.getInfo` / `artist.getInfo`,走同一条限速与退避通道。
+    /// 简介兜底(`EditorialNotesStore`)的一次资料查询:`album.getInfo` / `artist.getInfo` / `track.getInfo`,走同一条限速与退避通道。
     /// 没连 Last.fm 账号返回 nil。`notFound` = Last.fm 明确没有这个条目(error 6)。
     func fetchEditorialInfo(method: String, extra: [String: String]) async -> (json: [String: Any]?, notFound: Bool)? {
         guard let cred = credentials else { return nil }

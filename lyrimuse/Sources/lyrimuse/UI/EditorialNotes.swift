@@ -4,11 +4,38 @@ import LyrimuseCore
 import OSLog
 import SwiftUI
 
-/// 专辑简介 / 歌手简介的一张卡片:标题 + 副标题 + 若干「标签:值」+ 正文。
+/// 专辑简介 / 歌手简介 / 歌曲简介的一张卡片:标题 + 副标题 + 若干「标签:值」+ 正文。
 struct EditorialCard: Equatable {
-    enum Kind: Equatable { case album, artist }
-    /// 正文从哪来。Last.fm 的是 CC BY-SA 授权的用户百科,卡片底部要注明出处。
-    enum Source: Equatable { case appleMusic, lastfm }
+    enum Kind: Equatable {
+        case album, artist, song
+
+        /// 能点开这一类简介的那段文字给辅助功能的提示。
+        var openHint: String {
+            switch self {
+            case .album: return L10n.t("查看专辑简介")
+            case .artist: return L10n.t("查看歌手简介")
+            case .song: return L10n.t("查看歌曲简介")
+            }
+        }
+    }
+
+    /// 正文从哪来。Last.fm 的是 CC BY-SA 授权的用户百科,YouTube Music 给的是维基百科条目(同样 CC BY-SA),网易云、QQ 音乐、
+    /// 汽水音乐的是它们家的介绍,这几种卡片底部都注明出处。
+    enum Source: Equatable {
+        case appleMusic, lastfm, netease, qqMusic, soda, youtubeMusic
+
+        /// 卡片底部那一行出处;Apple Music 的不注明。YouTube Music 那一路的正文是维基百科的,注明维基百科。
+        var attribution: String? {
+            switch self {
+            case .appleMusic: return nil
+            case .lastfm: return L10n.t("来自 Last.fm")
+            case .netease: return L10n.t("来自网易云音乐")
+            case .qqMusic: return L10n.t("来自 QQ 音乐")
+            case .soda: return L10n.t("来自汽水音乐")
+            case .youtubeMusic: return L10n.t("来自维基百科")
+            }
+        }
+    }
 
     struct Fact: Equatable, Hashable {
         let label: String
@@ -23,8 +50,8 @@ struct EditorialCard: Equatable {
     var source: Source = .appleMusic
 }
 
-/// 当前曲目的 Apple Music 专辑简介与歌手简介(灵动岛展开态点专辑名 / 歌手名、歌词窗口点「歌手 — 专辑」
-/// 那一行的两段、「⋯ › 显示专辑简介 / 显示歌手简介」)。
+/// 当前曲目的专辑简介、歌手简介与歌曲简介(灵动岛展开态点歌名 / 专辑名 / 歌手名、歌词窗口点歌名和「歌手 — 专辑」
+/// 那一行的两段、「⋯ › 显示歌曲简介 / 显示歌手简介 / 显示专辑简介」)。
 ///
 /// 入口**只在有简介时可点**,所以要在点之前就知道:有消费方挂着(`retain`)时,每次换歌(停稳 0.6s 后)预取。
 ///   - 专辑:专辑 ID 取自 enrich 缓存里的 `apple_music_url`,请求专辑公开页一次,同时拿到简介和署名歌手。先问
@@ -35,6 +62,15 @@ struct EditorialCard: Equatable {
 /// **Apple Music 明确没有时退到 Last.fm**(`album.getInfo` 的 wiki / `artist.getInfo` 的 bio,见 `LastfmEditorialInfo`):
 /// 只在 Apple 那条路**确定**没有(没有专辑链接 / 公开页没有简介 / 歌手页没有简介 / 同歌手的专辑都对不上)时才问,
 /// Apple 请求失败或 enrich 缓存还没加载好不算;要连着 Last.fm 账号(用它的 API key)。按「歌手|专辑」「歌手」记结论。
+/// **另有网易云一路**(`NeteaseEditorialInfo`):这首在缓存里的网易云歌曲页 → 歌曲详情里的署名和所在专辑 → 歌手介绍 /
+/// 专辑介绍(专辑要跟正在放的对得上)。只在中文界面问(它的介绍只有中文),排在 Last.fm 前面;前一个明确没有才问下一个,
+/// 没问成就停在那儿,下次再试。按歌曲 ID、歌手 ID、专辑 ID 记结论。
+/// **还有汽水音乐、YouTube Music 两路**:用汽水放过的歌,缓存里有汽水给的专辑 / 歌手 ID,直接取它的介绍(`SodaEditorialInfo`,
+/// 只在中文界面问、排在网易云前面);YouTube Music 的专辑 / 歌手介绍是维基百科条目,按界面语言给、没有时退英文
+/// (`YouTubeMusicEditorialInfo`),所有界面语言都问,排在 Last.fm 前面。中文界面:汽水 → 网易云 → YouTube Music → Last.fm;
+/// 别的界面:YouTube Music → Last.fm。按分享页地址、专辑 ID / 「歌手|专辑」、频道 ID 记结论。
+/// **歌曲简介没有 Apple 那一档**(Apple Music 不给单曲写介绍):中文界面先问 QQ 音乐(`QQSongInfo`,这首在缓存里的
+/// QQ 歌曲页 → 歌曲详情里的「简介」),再问 Last.fm `track.getInfo`;别的界面只问 Last.fm。按 songmid、「歌手|歌名」记结论。
 /// 专辑按专辑 ID、歌手按歌手 ID 记住结果,同一个只取一次;所有店面都 404 记成「没有」,本次运行不再问;
 /// 网络失败 / 页面形状不对不记,下次换歌 / 消费方再来时重试。同一张专辑 / 同一位歌手在飞时不重复发,
 /// 请求回来时已经换歌,就按此刻在放的曲目再查一次(命中刚记下的结果,不多发请求)。
@@ -45,12 +81,17 @@ final class EditorialNotesStore: ObservableObject {
     /// 真正发请求、拿到结论时各一行 notice;缓存命中与跳过走 debug,展开灵动岛不落盘。
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "editorial")
 
-    /// 当前曲目的专辑 / 歌手简介。nil = 没有 / 还没取到;入口可不可点只看它。
+    /// 当前曲目的专辑 / 歌手 / 歌曲简介。nil = 没有 / 还没取到;入口可不可点只看它。
     @Published private(set) var album: EditorialCard?
     @Published private(set) var artist: EditorialCard?
+    @Published private(set) var song: EditorialCard?
 
     func card(_ kind: EditorialCard.Kind) -> EditorialCard? {
-        kind == .album ? album : artist
+        switch kind {
+        case .album: return album
+        case .artist: return artist
+        case .song: return song
+        }
     }
 
     /// 取到的专辑页与给出它的店面。
@@ -91,6 +132,7 @@ final class EditorialNotesStore: ObservableObject {
                 self.currentKey = t.key
                 self.album = nil
                 self.artist = nil
+                self.song = nil
             }
             .store(in: &cancellables)
         track
@@ -134,12 +176,15 @@ final class EditorialNotesStore: ObservableObject {
             return
         }
         currentKey = track.key
+        // 歌曲简介没有 Apple 那一档,直接走兜底链(结论都记着,重查时同步命中,不闪)。
+        song = nil
+        fallback(.song, track)
         // enrich 缓存在主线程读(同歌词窗口「⋯」菜单的平台链接):缓存加载好之后是 µs 级。
         guard let ref = EnrichCacheReader.appleAlbumRef(artist: track.artist, title: track.title,
                                                         album: track.album) else {
             Self.logger.debug("no apple album for current track; artist via siblings")
             album = nil
-            fallbackAlbum(track)
+            fallback(.album, track)
             resolveArtistFromSiblings(track)
             return
         }
@@ -150,7 +195,7 @@ final class EditorialNotesStore: ObservableObject {
                 EditorialCard(kind: .album, title: $0.title.isEmpty ? track.album : $0.title,
                               subtitle: $0.subtitle, facts: [], text: $0.text)
             }
-            if self.album == nil { self.fallbackAlbum(track) }
+            if self.album == nil { self.fallback(.album, track) }
             if let fetched, let link = AlbumEditorialNotes.pickArtist(fetched.page.artists, localArtist: track.artist) {
                 self.loadArtist(ResolvedArtist(link: link, storefront: fetched.storefront), for: track)
             } else {
@@ -172,7 +217,7 @@ final class EditorialNotesStore: ObservableObject {
                 loadArtist(known, for: track)
             } else {
                 artist = nil
-                fallbackArtist(track)
+                fallback(.artist, track)
             }
             return
         }
@@ -193,7 +238,7 @@ final class EditorialNotesStore: ObservableObject {
             artistLinks[name] = .some(nil)
             if currentKey == track.key {
                 artist = nil
-                fallbackArtist(track)
+                fallback(.artist, track)
             }
             return
         }
@@ -245,7 +290,7 @@ final class EditorialNotesStore: ObservableObject {
         let link = resolved.link
         if let cached = artistCards[link.id] {
             artist = cached
-            if cached == nil { fallbackArtist(track) }
+            if cached == nil { fallback(.artist, track) }
             return
         }
         guard !artistsInFlight.contains(link.id) else { return }
@@ -265,7 +310,7 @@ final class EditorialNotesStore: ObservableObject {
             self.artistCards[link.id] = card
             guard self.currentKey == track.key else { return self.refreshCurrent() }
             self.artist = card
-            if card == nil { self.fallbackArtist(track) }
+            if card == nil { self.fallback(.artist, track) }
         }
     }
 
@@ -293,39 +338,109 @@ final class EditorialNotesStore: ObservableObject {
         return EditorialCard(kind: .artist, title: name, subtitle: "", facts: rows, text: bio)
     }
 
-    // MARK: - Last.fm 兜底
+    // MARK: - 兜底(Apple Music 明确没有时)
 
-    /// 按「album|歌手|专辑」「artist|歌手」(`cleanTag`)记结论;值为 nil = Last.fm 明确没有。
-    private var lastfmCards: [String: EditorialCard?] = [:]
-    private var lastfmInFlight: Set<String> = []
+    /// Apple Music 明确没有这张专辑 / 这位歌手的简介:中文界面依次问汽水、网易云、YouTube Music、Last.fm;别的界面问
+    /// YouTube Music、Last.fm(汽水、网易云的介绍只有中文,`NeteaseEditorialInfo.isUsable`;YouTube Music 按界面语言给)。
+    /// 歌曲简介没有 Apple 那一档:中文界面先问 QQ 音乐、
+    /// 再问 Last.fm;别的界面只问 Last.fm(QQ 的简介同样只有中文)。
+    private func fallback(_ kind: EditorialCard.Kind, _ track: Track) {
+        let language = L10n.current
+        let order: [EditorialCard.Source]
+        switch kind {
+        case .album, .artist:
+            order = NeteaseEditorialInfo.isUsable(uiLanguage: language)
+                ? [.soda, .netease, .youtubeMusic, .lastfm] : [.youtubeMusic, .lastfm]
+        case .song:
+            order = QQSongInfo.isUsable(uiLanguage: language) ? [.qqMusic, .lastfm] : [.lastfm]
+        }
+        fallback(kind, track, via: order[...])
+    }
 
-    private func fallbackAlbum(_ track: Track) {
-        let artistName = track.artist, albumName = track.album
-        guard !artistName.isEmpty, !albumName.isEmpty else { return }
-        let key = "album|\(EnrichCacheKeys.cleanTag(artistName))|\(EnrichCacheKeys.cleanTag(albumName))"
-        lastfmCard(key: key, method: "album.getInfo", extra: ["artist": artistName, "album": albumName], for: track,
-                   parse: LastfmEditorialInfo.albumWiki(from:)) { text in
-            EditorialCard(kind: .album, title: albumName, subtitle: artistName, facts: [], text: text, source: .lastfm)
-        } apply: { [weak self] card in
-            if self?.album == nil { self?.album = card }
+    /// 前一个来源明确没有才问下一个;没问成(网络、限流、形状不对)那个来源不回调,链条停在这儿,下次换歌 / 消费方再来时重试。
+    /// 没连 Last.fm 账号就跳过它(问不了,不是没问成)。取到的卡片只在那一栏还空着时放上去。
+    private func fallback(_ kind: EditorialCard.Kind, _ track: Track, via sources: ArraySlice<EditorialCard.Source>) {
+        guard let source = sources.first else { return }
+        let next: (EditorialCard?) -> Void = { [weak self] card in
+            guard let self else { return }
+            guard let card else { return self.fallback(kind, track, via: sources.dropFirst()) }
+            switch kind {
+            case .album: if self.album == nil { self.album = card }
+            case .artist: if self.artist == nil { self.artist = card }
+            case .song: if self.song == nil { self.song = card }
+            }
+        }
+        switch (source, kind) {
+        case (.lastfm, _) where !LastfmStatsService.shared.isConnected:
+            fallback(kind, track, via: sources.dropFirst())
+        case (.lastfm, .album): lastfmAlbum(track, then: next)
+        case (.lastfm, .artist): lastfmArtist(track, then: next)
+        case (.lastfm, .song): lastfmSong(track, then: next)
+        case (.netease, .album): neteaseAlbum(track, then: next)
+        case (.netease, .artist): neteaseArtist(track, then: next)
+        case (.qqMusic, .song): qqSong(track, then: next)
+        case (.soda, .album): sodaAlbum(track, then: next)
+        case (.soda, .artist): sodaArtist(track, then: next)
+        case (.youtubeMusic, .album): youtubeMusicAlbum(track, then: next)
+        case (.youtubeMusic, .artist): youtubeMusicArtist(track, then: next)
+        // 这一类在这个来源上没有(网易云、汽水、YouTube Music 不给单曲写介绍,QQ 这一路只问歌曲),Apple Music 在兜底链之前就问过了。
+        case (.netease, .song), (.soda, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist), (.appleMusic, _):
+            fallback(kind, track, via: sources.dropFirst())
         }
     }
 
-    private func fallbackArtist(_ track: Track) {
+    // MARK: - Last.fm
+
+    /// 按「album|歌手|专辑」「artist|歌手」「track|歌手|歌名」(`cleanTag`)记结论;值为 nil = Last.fm 明确没有。
+    private var lastfmCards: [String: EditorialCard?] = [:]
+    private var lastfmInFlight: Set<String> = []
+
+    private func lastfmAlbum(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let artistName = track.artist, albumName = track.album
+        guard !artistName.isEmpty, !albumName.isEmpty else { return then(nil) }
+        let key = "album|\(EnrichCacheKeys.cleanTag(artistName))|\(EnrichCacheKeys.cleanTag(albumName))"
+        lastfmCard(key: key, method: "album.getInfo", variants: [["artist": artistName, "album": albumName]], for: track,
+                   parse: LastfmEditorialInfo.albumWiki(from:)) { text in
+            EditorialCard(kind: .album, title: albumName, subtitle: artistName, facts: [], text: text, source: .lastfm)
+        } apply: { card in
+            then(card)
+        }
+    }
+
+    private func lastfmArtist(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
         let artistName = track.artist
-        guard !artistName.isEmpty else { return }
+        guard !artistName.isEmpty else { return then(nil) }
         let key = "artist|\(EnrichCacheKeys.cleanTag(artistName))"
-        lastfmCard(key: key, method: "artist.getInfo", extra: ["artist": artistName], for: track,
+        lastfmCard(key: key, method: "artist.getInfo", variants: [["artist": artistName]], for: track,
                    parse: LastfmEditorialInfo.artistBio(from:)) { text in
             EditorialCard(kind: .artist, title: artistName, subtitle: "", facts: [], text: text, source: .lastfm)
-        } apply: { [weak self] card in
-            if self?.artist == nil { self?.artist = card }
+        } apply: { card in
+            then(card)
+        }
+    }
+
+    /// 歌曲:`track.getInfo` 的 wiki。多人署名的歌按完整署名没有正文时,再按第一位歌手问一次(`ArtistCredit.primary`):
+    /// Last.fm 的单曲百科多挂在主唱名下(实测《The Life of a Showgirl》按「Taylor Swift & Sabrina Carpenter」没有、
+    /// 按「Taylor Swift」有),「Selena Gomez & The Scene」这类组合名又只有按完整署名才有 —— 所以完整署名先问。
+    private func lastfmSong(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let artistName = track.artist, title = track.title
+        guard !artistName.isEmpty, !title.isEmpty else { return then(nil) }
+        var variants = [["artist": artistName, "track": title]]
+        if let primary = ArtistCredit.primary(artistName), primary != artistName {
+            variants.append(["artist": primary, "track": title])
+        }
+        let key = "track|\(EnrichCacheKeys.cleanTag(artistName))|\(EnrichCacheKeys.cleanTag(title))"
+        lastfmCard(key: key, method: "track.getInfo", variants: variants, for: track,
+                   parse: LastfmEditorialInfo.trackWiki(from:)) { text in
+            EditorialCard(kind: .song, title: title, subtitle: artistName, facts: [], text: text, source: .lastfm)
+        } apply: { card in
+            then(card)
         }
     }
 
     /// 记过结论就地套用;没有就问一次。回来时已经换歌,按当前曲目重查(命中刚记下的结论,不多发请求)。
     /// 失败(没连 Last.fm 账号 / 网络 / 形状不对)不记,下次换歌 / 消费方再来时重试。
-    private func lastfmCard(key: String, method: String, extra: [String: String], for track: Track,
+    private func lastfmCard(key: String, method: String, variants: [[String: String]], for track: Track,
                             parse: @escaping ([String: Any]) -> LastfmEditorialInfo.Parsed?,
                             make: @escaping (String) -> EditorialCard,
                             apply: @escaping (EditorialCard?) -> Void) {
@@ -338,7 +453,7 @@ final class EditorialNotesStore: ObservableObject {
         let lang = LastfmEditorialInfo.preferredLang(uiLanguage: L10n.current)
         Self.logger.notice("lastfm fallback \(method, privacy: .public) lang \(lang ?? "default", privacy: .public)")
         Task { [weak self] in
-            let text = await Self.lastfmText(method: method, extra: extra, lang: lang, parse: parse)
+            let text = await Self.lastfmText(method: method, variants: variants, lang: lang, parse: parse)
             guard let self else { return }
             self.lastfmInFlight.remove(key)
             guard let text else { return }
@@ -350,20 +465,409 @@ final class EditorialNotesStore: ObservableObject {
         }
     }
 
-    /// nil = 没问成;"" = Last.fm 明确没有。先问 `lang`(中文界面),正文为空再问默认那份。
-    private static func lastfmText(method: String, extra: [String: String], lang: String?,
+    /// nil = 没问成;"" = Last.fm 明确没有。参数按组依次问,前一组明确没有(没有这个条目、或者条目没有正文)才问下一组;
+    /// 每组先问 `lang`(中文界面),正文为空再问默认那份。
+    private static func lastfmText(method: String, variants: [[String: String]], lang: String?,
                                    parse: ([String: Any]) -> LastfmEditorialInfo.Parsed?) async -> String? {
         let langs: [String?] = lang.map { [$0, nil] } ?? [nil]
-        for candidate in langs {
-            var params = extra
-            params["autocorrect"] = "1"
-            if let candidate { params["lang"] = candidate }
-            guard let result = await LastfmStatsService.shared.fetchEditorialInfo(method: method, extra: params) else { return nil }
-            if result.notFound { return "" }
-            guard let json = result.json, let parsed = parse(json) else { return nil }
+        for extra in variants {
+            for candidate in langs {
+                var params = extra
+                params["autocorrect"] = "1"
+                if let candidate { params["lang"] = candidate }
+                guard let result = await LastfmStatsService.shared.fetchEditorialInfo(method: method, extra: params) else { return nil }
+                if result.notFound { break }
+                guard let json = result.json, let parsed = parse(json) else { return nil }
+                if case .text(let text) = parsed { return text }
+            }
+        }
+        return ""
+    }
+
+    // MARK: - 汽水音乐
+
+    /// 汽水分享页地址 → 名字 + 介绍(正文已按界面转好繁简;正文为 nil = 汽水明确没有)。
+    private var sodaIntros: [URL: SodaEditorialInfo.Intro] = [:]
+    private var sodaInFlight: Set<URL> = []
+
+    /// 专辑:缓存里这首的汽水专辑页(用汽水放过才有,ID 是汽水给的)→ 专辑介绍。卡片标题、副标题用播放器报的专辑名和歌手。
+    /// 没有汽水专辑页、汽水没有介绍都算明确没有,回调 nil 交给下一个来源;没问成不回调。
+    private func sodaAlbum(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        guard let page = links?.sodaAlbum, !track.album.isEmpty else { return then(nil) }
+        withSodaIntro(page, for: track) { intro in
+            then(intro.text.map {
+                EditorialCard(kind: .album, title: track.album, subtitle: track.artist, facts: [], text: $0, source: .soda)
+            })
+        }
+    }
+
+    /// 歌手:缓存里这首的汽水歌手页 → 歌手介绍。卡片标题用汽水写的歌手名(没有才用播放器报的)。
+    private func sodaArtist(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        guard let page = links?.sodaArtist else { return then(nil) }
+        withSodaIntro(page, for: track) { intro in
+            then(intro.text.map {
+                EditorialCard(kind: .artist, title: intro.name ?? track.artist, subtitle: "", facts: [], text: $0, source: .soda)
+            })
+        }
+    }
+
+    /// 这一页的介绍:记过就地回调;没有就问一次。回来时已经换歌,按当前曲目重查(命中刚记下的,不多发请求)。
+    /// 繁体界面转成繁体(`SodaEditorialInfo.localized`)。
+    private func withSodaIntro(_ page: URL, for track: Track, _ body: @escaping (SodaEditorialInfo.Intro) -> Void) {
+        if let known = sodaIntros[page] { return body(known) }
+        guard !sodaInFlight.contains(page) else { return }
+        sodaInFlight.insert(page)
+        let language = L10n.current
+        Self.logger.notice("soda intro \(page.absoluteString, privacy: .public)")
+        Task { [weak self] in
+            let fetched = await Task.detached(priority: .utility) {
+                await SodaEditorialInfo.fetchIntro(page: page)
+            }.value
+            guard let self else { return }
+            self.sodaInFlight.remove(page)
+            guard let fetched else { return }
+            let intro = SodaEditorialInfo.Intro(name: fetched.name,
+                                                text: fetched.text.map { SodaEditorialInfo.localized($0, uiLanguage: language) })
+            self.sodaIntros[page] = intro
+            Self.logger.notice("soda intro \(page.absoluteString, privacy: .public): \(intro.text.map { "\($0.count) chars" } ?? "none", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            body(intro)
+        }
+    }
+
+    // MARK: - YouTube Music(维基百科)
+
+    /// 一张专辑在 YouTube Music 上的结论:维基介绍(界面语言那版,没有时英文版;都没有为 nil)和署名歌手。
+    private struct YouTubeMusicAlbum: Sendable {
+        let description: String?
+        let artists: [YouTubeMusicEditorialInfo.Artist]
+    }
+
+    /// 一次专辑查询问成了;`album` 为 nil = 搜不到对得上的专辑。
+    private struct YouTubeMusicAlbumLookup: Sendable {
+        let album: YouTubeMusicAlbum?
+    }
+
+    /// 「界面语言|专辑 ID」或「界面语言|search|歌手|专辑」→ 这张专辑;值为 nil = 搜过了,没有对得上的专辑。
+    private var youtubeMusicAlbums: [String: YouTubeMusicAlbum?] = [:]
+    /// 在飞的专辑查询 → 等它的那几路(各记着是为哪首要的)。专辑、歌手两路都要它(歌手 ID 从专辑页的署名来),同网易云的
+    /// 歌曲详情:后到的那一路排队等,不丢。
+    private var youtubeMusicAlbumWaiters: [String: [(key: String, body: (YouTubeMusicAlbum?) -> Void)]] = [:]
+    /// 「界面语言|频道 ID」→ 歌手的维基介绍;值为 nil = 明确没有。
+    private var youtubeMusicArtistTexts: [String: String?] = [:]
+    private var youtubeMusicArtistsInFlight: Set<String> = []
+    /// YouTube Music 上一次问不通的时刻。国内网络常年连不上 YouTube:照别的来源「没问成就停在那儿」的规矩,这一路会把排在
+    /// 后面的 Last.fm 永远挡住,每次重查还要等满超时。所以它问不通时这一轮当没有、交给下一个来源(不记结论),之后
+    /// `youtubeMusicRetryAfter` 内都不再问;过了再试,问通了清掉。
+    private var youtubeMusicUnreachableSince: Date?
+    private static let youtubeMusicRetryAfter: TimeInterval = 600
+
+    /// 还在问不通之后的冷却期里。
+    private var youtubeMusicCoolingDown: Bool {
+        guard let since = youtubeMusicUnreachableSince else { return false }
+        return Date().timeIntervalSince(since) < Self.youtubeMusicRetryAfter
+    }
+
+    /// 专辑:这张专辑在 YouTube Music 上的维基介绍。卡片标题、副标题用播放器报的专辑名和歌手。没有对得上的专辑、没有维基
+    /// 介绍都算明确没有,回调 nil 交给下一个来源;没问成不回调。
+    private func youtubeMusicAlbum(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        withYouTubeMusicAlbum(track) { album in
+            then(album?.description.map {
+                EditorialCard(kind: .album, title: track.album, subtitle: track.artist, facts: [], text: $0, source: .youtubeMusic)
+            })
+        }
+    }
+
+    /// 歌手:缓存里播放器给的歌手 ID(用 Kaset / YouTube Music 网页版放的);没有就取对上的那张专辑页署名里的这位
+    /// (名字对不上时,专辑只有一位署名就是他,同 Apple 那一路)→ 歌手页的维基介绍。不单独按名字搜歌手。
+    private func youtubeMusicArtist(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        if let channel = YouTubeMusicEditorialInfo.channelID(fromArtistPage: links?.youtubeMusicArtist) {
+            return withYouTubeMusicArtistText(channel, for: track) { text in
+                then(text.map {
+                    EditorialCard(kind: .artist, title: track.artist, subtitle: "", facts: [], text: $0, source: .youtubeMusic)
+                })
+            }
+        }
+        withYouTubeMusicAlbum(track) { [weak self] album in
+            let credits = album?.artists ?? []
+            guard let artist = credits.first(where: { YouTubeMusicEditorialInfo.artistMatches($0.name, playingArtist: track.artist) })
+                ?? (credits.count == 1 ? credits[0] : nil) else { return then(nil) }
+            self?.withYouTubeMusicArtistText(artist.channelID, for: track) { text in
+                then(text.map {
+                    EditorialCard(kind: .artist, title: artist.name, subtitle: "", facts: [], text: $0, source: .youtubeMusic)
+                })
+            }
+        }
+    }
+
+    /// 这首的专辑在 YouTube Music 上的结论:记过就地回调;在飞就排进等它的队;都没有就查一次 —— 缓存里有播放器给的专辑 ID
+    /// 就直接取专辑页,没有就按「歌手 专辑」搜(`YouTubeMusicEditorialInfo.pickAlbum`)。没有专辑名、搜不到对得上的都回调 nil
+    /// (明确没有);没问成不回调。回来时队里有为别的曲目要的(已经换歌),按当前曲目重查,否则挨个回调。
+    private func withYouTubeMusicAlbum(_ track: Track, _ body: @escaping (YouTubeMusicAlbum?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        let knownID = YouTubeMusicEditorialInfo.browseID(fromAlbumPage: links?.youtubeMusicAlbum)
+        guard knownID != nil || (!track.album.isEmpty && !track.artist.isEmpty), !youtubeMusicCoolingDown else { return body(nil) }
+        let hl = YouTubeMusicEditorialInfo.descriptionHL(uiLanguage: L10n.current)
+        let key = hl + "|" + (knownID ?? "search|\(EnrichCacheKeys.cleanTag(track.artist))|\(EnrichCacheKeys.cleanTag(track.album))")
+        if let known = youtubeMusicAlbums[key] { return body(known) }
+        let waiter = (key: track.key, body: body)
+        guard youtubeMusicAlbumWaiters[key] == nil else {
+            youtubeMusicAlbumWaiters[key]?.append(waiter)
+            return
+        }
+        youtubeMusicAlbumWaiters[key] = [waiter]
+        let artist = track.artist, album = track.album
+        Self.logger.notice("youtube music album \(knownID ?? "via search", privacy: .public) hl \(hl, privacy: .public)")
+        Task { [weak self] in
+            let lookup = await Task.detached(priority: .utility) {
+                await Self.lookUpYouTubeMusicAlbum(knownID: knownID, artist: artist, album: album, hl: hl)
+            }.value
+            guard let self else { return }
+            let waiting = self.youtubeMusicAlbumWaiters.removeValue(forKey: key) ?? []
+            if let lookup {
+                self.youtubeMusicUnreachableSince = nil
+                self.youtubeMusicAlbums[key] = .some(lookup.album)
+                Self.logger.notice("youtube music album: \(lookup.album.map { "\($0.description?.count ?? 0) chars, \($0.artists.count) artists" } ?? "no match", privacy: .public)")
+            } else {
+                self.youtubeMusicUnreachableSince = Date()
+                Self.logger.notice("youtube music album unreachable; skipping youtube music for a while")
+            }
+            guard waiting.allSatisfy({ $0.key == self.currentKey }) else { return self.refreshCurrent() }
+            waiting.forEach { $0.body(lookup?.album) }
+        }
+    }
+
+    /// 查一张专辑:有专辑 ID 直接取专辑页;没有就按「歌手 专辑」搜,搜索的界面语言按歌手名的文字取(`searchHL`),
+    /// 对不上再按日文搜一次(`retryHL`)。专辑页按界面语言取,没有维基介绍再取英文版的介绍。nil = 哪一步没问成。
+    nonisolated private static func lookUpYouTubeMusicAlbum(knownID: String?, artist: String, album: String,
+                                                            hl: String) async -> YouTubeMusicAlbumLookup? {
+        var browseID = knownID
+        if browseID == nil {
+            var searchHL = YouTubeMusicEditorialInfo.searchHL(artist: artist, album: album)
+            for attempt in 0..<2 {
+                guard let hits = await YouTubeMusicEditorialInfo.searchAlbums(query: artist + " " + album, hl: searchHL)
+                else { return nil }
+                browseID = YouTubeMusicEditorialInfo.pickAlbum(hits, playingAlbum: album, playingArtist: artist)?.browseID
+                guard browseID == nil, attempt == 0,
+                      let retry = YouTubeMusicEditorialInfo.retryHL(firstHL: searchHL, hits: hits, playingArtist: artist)
+                else { break }
+                searchHL = retry
+            }
+        }
+        guard let browseID else { return YouTubeMusicAlbumLookup(album: nil) }
+        guard let page = await YouTubeMusicEditorialInfo.fetchAlbumPage(browseID: browseID, hl: hl) else { return nil }
+        var description = page.description
+        if description == nil, hl != "en" {
+            guard let english = await YouTubeMusicEditorialInfo.fetchAlbumPage(browseID: browseID, hl: "en") else { return nil }
+            description = english.description
+        }
+        return YouTubeMusicAlbumLookup(album: YouTubeMusicAlbum(description: description, artists: page.artists))
+    }
+
+    /// 歌手页的维基介绍:记过就地回调;没有就问一次。回来时已经换歌,按当前曲目重查(命中刚记下的,不多发请求)。
+    private func withYouTubeMusicArtistText(_ channelID: String, for track: Track, then: @escaping (String?) -> Void) {
+        let hl = YouTubeMusicEditorialInfo.descriptionHL(uiLanguage: L10n.current)
+        let key = hl + "|" + channelID
+        if let known = youtubeMusicArtistTexts[key] { return then(known) }
+        guard !youtubeMusicCoolingDown else { return then(nil) }
+        guard !youtubeMusicArtistsInFlight.contains(key) else { return }
+        youtubeMusicArtistsInFlight.insert(key)
+        Self.logger.notice("youtube music artist \(channelID, privacy: .public) hl \(hl, privacy: .public)")
+        Task { [weak self] in
+            let fetched = await Task.detached(priority: .utility) {
+                await Self.youTubeMusicArtistText(channelID: channelID, hl: hl)
+            }.value
+            guard let self else { return }
+            self.youtubeMusicArtistsInFlight.remove(key)
+            guard let fetched else {
+                self.youtubeMusicUnreachableSince = Date()
+                Self.logger.notice("youtube music artist unreachable; skipping youtube music for a while")
+                guard self.currentKey == track.key else { return self.refreshCurrent() }
+                return then(nil)
+            }
+            self.youtubeMusicUnreachableSince = nil
+            let text = fetched.isEmpty ? nil : fetched
+            self.youtubeMusicArtistTexts[key] = .some(text)
+            Self.logger.notice("youtube music artist \(channelID, privacy: .public): \(text.map { "\($0.count) chars" } ?? "none", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            then(text)
+        }
+    }
+
+    /// nil = 没问成;"" = 明确没有(界面语言那版、英文版都没有维基介绍 —— 英文界面常是频道自己的宣传语,不算)。
+    nonisolated private static func youTubeMusicArtistText(channelID: String, hl: String) async -> String? {
+        for lang in hl == "en" ? ["en"] : [hl, "en"] {
+            guard let parsed = await YouTubeMusicEditorialInfo.fetchArtistDescription(channelID: channelID, hl: lang)
+            else { return nil }
             if case .text(let text) = parsed { return text }
         }
         return ""
+    }
+
+    // MARK: - QQ 音乐
+
+    /// QQ 歌曲 mid → 简介正文(已按界面转好繁简);值为 nil = QQ 明确没有这首的简介。
+    private var qqSongTexts: [String: String?] = [:]
+    private var qqSongsInFlight: Set<String> = []
+
+    /// 歌曲:缓存里这首的 QQ 音乐歌曲页 → 歌曲详情里的「简介」。卡片标题、副标题用播放器报的歌名和歌手。缓存里没有
+    /// QQ 歌曲页(搜索页兜底不算)、QQ 没有这首或者没有简介都算明确没有,回调 nil 交给下一个来源;没问成不回调。
+    private func qqSong(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        guard let mid = links?.qqSong.flatMap({ PlatformLinks.qqSongMID(songPage: $0.absoluteString) }) else { return then(nil) }
+        withQQSongText(mid: mid, for: track) { text in
+            then(text.map {
+                EditorialCard(kind: .song, title: track.title, subtitle: track.artist, facts: [], text: $0, source: .qqMusic)
+            })
+        }
+    }
+
+    /// 这首的简介:记过就地回调;没有就问一次。回来时已经换歌,按当前曲目重查(命中刚记下的,不多发请求)。
+    /// 繁体界面转成繁体(`QQSongInfo.localized`)。
+    private func withQQSongText(mid: String, for track: Track, then: @escaping (String?) -> Void) {
+        if let known = qqSongTexts[mid] { return then(known) }
+        guard !qqSongsInFlight.contains(mid) else { return }
+        qqSongsInFlight.insert(mid)
+        let language = L10n.current
+        Self.logger.notice("qq intro for song \(mid, privacy: .public)")
+        Task { [weak self] in
+            let parsed = await Task.detached(priority: .utility) {
+                await QQSongInfo.fetchIntro(songMID: mid)
+            }.value
+            guard let self else { return }
+            self.qqSongsInFlight.remove(mid)
+            guard let parsed else { return }
+            var text: String?
+            if case .text(let raw) = parsed { text = QQSongInfo.localized(raw, uiLanguage: language) }
+            self.qqSongTexts[mid] = .some(text)
+            Self.logger.notice("qq intro \(mid, privacy: .public): \(text.map { "\($0.count) chars" } ?? "none", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            then(text)
+        }
+    }
+
+    // MARK: - 网易云
+
+    /// 网易云歌曲 ID → 歌曲详情(署名 + 所在专辑);专辑、歌手两路都用,同一首只问一次。
+    private var neteaseSongs: [Int64: NeteaseEditorialInfo.Song] = [:]
+    /// 在飞的歌曲详情 → 等它的那几路,各记着是为哪首要的。换歌后专辑、歌手常一前一后退到网易云要同一首,后到的那路
+    /// 排队等它:照别的请求那样「在飞就不回调」,那一路就停在半路,这首的另一张卡片出不来。
+    private var neteaseSongWaiters: [Int64: [(key: String, body: (NeteaseEditorialInfo.Song) -> Void)]] = [:]
+    /// 网易云歌手 ID → 简介卡片;值为 nil = 网易云明确没有这位的介绍。
+    private var neteaseCards: [Int64: EditorialCard?] = [:]
+    /// 网易云专辑 ID → 介绍正文(已按界面转好繁简);值为 nil = 网易云明确没有这张的介绍。
+    private var neteaseAlbumTexts: [Int64: String?] = [:]
+    private var neteaseArtistsInFlight: Set<Int64> = []
+    private var neteaseAlbumsInFlight: Set<Int64> = []
+
+    /// 缓存里这首的网易云歌曲 ID;没有网易云歌曲页为 nil。
+    private func neteaseSongID(_ track: Track) -> Int64? {
+        let links = EnrichCacheReader.platformLinks(artist: track.artist, title: track.title, album: track.album)
+        return NeteaseEditorialInfo.songID(fromSongPage: links?.neteaseSong)
+    }
+
+    /// 歌手:歌曲详情里的署名,挑对上当前歌手的那一位(同 Apple 那一路,`AlbumEditorialNotes.pickArtist`)→ 他的介绍。
+    /// 缓存里没有网易云歌曲页、署名对不上、网易云没有介绍都算明确没有,回调 nil 交给下一个来源;没问成不回调。
+    private func neteaseArtist(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        guard let songID = neteaseSongID(track) else { return then(nil) }
+        withNeteaseSong(songID: songID, for: track) { [weak self] song in
+            guard let link = AlbumEditorialNotes.pickArtist(song.artists, localArtist: track.artist) else { return then(nil) }
+            self?.withNeteaseCard(link, for: track, then: then)
+        }
+    }
+
+    /// 专辑:歌曲详情里的所在专辑,要跟正在放的对得上(`NeteaseEditorialInfo.Album.matches`)→ 它的介绍。卡片的标题、
+    /// 副标题用播放器报的专辑名和歌手,同 Last.fm 那一路。缓存里没有网易云歌曲页、专辑对不上、网易云没有介绍都算明确没有,
+    /// 回调 nil 交给下一个来源;没问成不回调。
+    private func neteaseAlbum(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
+        guard let songID = neteaseSongID(track) else { return then(nil) }
+        withNeteaseSong(songID: songID, for: track) { [weak self] song in
+            guard let album = song.album, album.matches(playing: track.album) else { return then(nil) }
+            self?.withNeteaseAlbumText(album, for: track) { text in
+                then(text.map {
+                    EditorialCard(kind: .album, title: track.album, subtitle: track.artist, facts: [], text: $0, source: .netease)
+                })
+            }
+        }
+    }
+
+    /// 这首的歌曲详情:记过就地回调;在飞就排进等它的队;都没有就问一次。回来时队里有为别的曲目要的(已经换歌),
+    /// 就按当前曲目重查(命中刚记下的,不多发请求),否则挨个回调。
+    private func withNeteaseSong(songID: Int64, for track: Track,
+                                 _ body: @escaping (NeteaseEditorialInfo.Song) -> Void) {
+        if let known = neteaseSongs[songID] { return body(known) }
+        let waiter = (key: track.key, body: body)
+        guard neteaseSongWaiters[songID] == nil else {
+            neteaseSongWaiters[songID]?.append(waiter)
+            return
+        }
+        neteaseSongWaiters[songID] = [waiter]
+        Self.logger.notice("netease song detail \(songID, privacy: .public)")
+        Task { [weak self] in
+            let song = await Task.detached(priority: .utility) {
+                await NeteaseEditorialInfo.fetchSong(songID: songID)
+            }.value
+            guard let self else { return }
+            let waiting = self.neteaseSongWaiters.removeValue(forKey: songID) ?? []
+            guard let song else { return }
+            self.neteaseSongs[songID] = song
+            guard waiting.allSatisfy({ $0.key == self.currentKey }) else { return self.refreshCurrent() }
+            waiting.forEach { $0.body(song) }
+        }
+    }
+
+    /// 这张专辑的介绍:记过就地回调;没有就问一次。繁体界面转成繁体(`NeteaseEditorialInfo.localized`)。
+    private func withNeteaseAlbumText(_ album: NeteaseEditorialInfo.Album, for track: Track,
+                                      then: @escaping (String?) -> Void) {
+        if let known = neteaseAlbumTexts[album.id] { return then(known) }
+        guard !neteaseAlbumsInFlight.contains(album.id) else { return }
+        neteaseAlbumsInFlight.insert(album.id)
+        let albumID = album.id, language = L10n.current
+        Self.logger.notice("netease description for album \(albumID, privacy: .public)")
+        Task { [weak self] in
+            let parsed = await Task.detached(priority: .utility) {
+                await NeteaseEditorialInfo.fetchAlbumDescription(albumID: albumID)
+            }.value
+            guard let self else { return }
+            self.neteaseAlbumsInFlight.remove(albumID)
+            guard let parsed else { return }
+            var text: String?
+            if case .text(let raw) = parsed { text = NeteaseEditorialInfo.localized(raw, uiLanguage: language) }
+            self.neteaseAlbumTexts[albumID] = .some(text)
+            Self.logger.notice("netease description \(albumID, privacy: .public): \(text.map { "\($0.count) chars" } ?? "none", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            then(text)
+        }
+    }
+
+    /// 这位歌手的介绍:记过就地回调;没有就问一次。繁体界面转成繁体(`NeteaseEditorialInfo.localized`)。
+    private func withNeteaseCard(_ link: AlbumEditorialNotes.ArtistLink, for track: Track,
+                                 then: @escaping (EditorialCard?) -> Void) {
+        if let known = neteaseCards[link.id] { return then(known) }
+        guard !neteaseArtistsInFlight.contains(link.id) else { return }
+        neteaseArtistsInFlight.insert(link.id)
+        let language = L10n.current
+        Self.logger.notice("netease introduction for artist \(link.id, privacy: .public)")
+        Task { [weak self] in
+            let parsed = await Task.detached(priority: .utility) {
+                await NeteaseEditorialInfo.fetchIntroduction(artistID: link.id)
+            }.value
+            guard let self else { return }
+            self.neteaseArtistsInFlight.remove(link.id)
+            guard let parsed else { return }
+            var card: EditorialCard?
+            if case .text(let text) = parsed {
+                card = EditorialCard(kind: .artist, title: link.name, subtitle: "", facts: [],
+                                     text: NeteaseEditorialInfo.localized(text, uiLanguage: language), source: .netease)
+            }
+            self.neteaseCards[link.id] = .some(card)
+            Self.logger.notice("netease introduction \(link.id, privacy: .public): \(card.map { "\($0.text.count) chars" } ?? "none", privacy: .public)")
+            guard self.currentKey == track.key else { return self.refreshCurrent() }
+            then(card)
+        }
     }
 
     /// 系统地区,跟「前往专辑」同一口径。店面的最终顺序见 `AlbumEditorialNotes.storefronts`。
@@ -421,9 +925,9 @@ struct EditorialNotesContent: View {
             } else {
                 paragraph(card.text)
             }
-            // Last.fm 的正文是 CC BY-SA 授权的用户百科,出处必须注明。
-            if card.source == .lastfm {
-                Text(L10n.t("来自 Last.fm"))
+            // Last.fm 的正文是 CC BY-SA 授权的用户百科,出处必须注明;网易云、QQ 音乐的是它们家的介绍,同样注明。
+            if let attribution = card.source.attribution {
+                Text(attribution)
                     .font(.system(size: 10))
                     .foregroundStyle(secondary)
             }

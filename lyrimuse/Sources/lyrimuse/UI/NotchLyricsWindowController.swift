@@ -622,8 +622,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.expandedShowsQuickActions = shows
             self?.recomputeGeometry(animate: false, expandedShowsQuickActions: shows)
         }
-        editorialDemandObserver = $isVisible.combineLatest($expandedTrackInfoShowsAlbum, $expandedTrackInfoShowsArtist)
-            .map { visible, album, artist in visible && (album || artist) }
+        editorialDemandObserver = $isVisible
+            .combineLatest($expandedTrackInfoShowsAlbum, $expandedTrackInfoShowsArtist, $expandedTrackInfoShowsTitle)
+            .map { visible, album, artist, title in visible && (album || artist || title) }
             .removeDuplicates()
             .sink { [weak self] wants in self?.setEditorialDemand(wants) }
 
@@ -643,7 +644,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         setVisible(false)
     }
 
-    /// 展开态头部点专辑名 / 歌手名。卡片从屏幕顶边垂下来、水平居中,所以卡片在屏幕上的矩形按窗口顶边与
+    /// 展开态头部点歌名 / 专辑名 / 歌手名。卡片从屏幕顶边垂下来、水平居中,所以卡片在屏幕上的矩形按窗口顶边与
     /// 卡片宽高直接算。这一类没有简介时什么都不做(入口本来也不可点)。
     func toggleEditorial(_ kind: EditorialCard.Kind) {
         guard let window, let card = EditorialNotesStore.shared.card(kind) else { return }
@@ -655,7 +656,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         }
     }
 
-    /// 灵动岛开着且头部画歌手名或专辑名时,向 `EditorialNotesStore` 登记要预取(入口只在有简介时可点,
+    /// 灵动岛开着且头部画歌名、歌手名或专辑名时,向 `EditorialNotesStore` 登记要预取(入口只在有简介时可点,
     /// 得提前知道)。
     private var holdsEditorialDemand = false
     private var editorialDemandObserver: AnyCancellable?

@@ -547,8 +547,8 @@ func runLyricsWindowTests() {
         let marquee = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LayerMarquee.swift"),
                                    encoding: .utf8)) ?? ""
         expectEqual(window.isEmpty || marquee.isEmpty, false, "图层跑马灯(契约): 读到源码")
-        expectEqual(sourceBytes(window, contain: "LayerMarquee(id: displayTitle,\n                         edgeFadeWidth: Self.trackInfoTrailingFade,\n                         leadingFadeWidth: Self.trackInfoLeadingFade,\n                         isActive: windowController.isSurfaceVisible) {"),
-                    true, "图层跑马灯(契约): 歌名走图层、按窗口可见性停 —— SwiftUI 跑马灯在这扇窗里每帧要完整渲染两次")
+        expectEqual(sourceBytes(window, contain: "LayerMarquee(id: displayTitle,\n                         edgeFadeWidth: Self.trackInfoTrailingFade,\n                         leadingFadeWidth: Self.trackInfoLeadingFade,\n                         isActive: windowController.isSurfaceVisible,\n                         pausesOnHover: songNotes) {"),
+                    true, "图层跑马灯(契约): 歌名走图层、按窗口可见性停(有歌曲简介、歌名能点时悬停停住) —— SwiftUI 跑马灯在这扇窗里每帧要完整渲染两次")
         expectEqual(sourceBytes(window, contain: "LayerMarquee(id: displayArtistAlbum,\n                         edgeFadeWidth: Self.trackInfoTrailingFade,\n                         leadingFadeWidth: Self.trackInfoLeadingFade,\n                         isActive: windowController.isSurfaceVisible,\n                         pausesOnHover: true) {"),
                     true, "图层跑马灯(契约): 副标题走图层、悬停时停住 —— 里面的歌手 / 专辑链接要落在看到的位置上")
         expectEqual(sourceBytes(marquee, contain: "animation.repeatCount = .infinity"), true,

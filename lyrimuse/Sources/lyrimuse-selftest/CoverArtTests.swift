@@ -1503,16 +1503,373 @@ func runCoverArtTests() {
         let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let store = (try? String(contentsOf: ui.appendingPathComponent("lyrimuse/UI/EditorialNotes.swift"), encoding: .utf8)) ?? ""
         let service = (try? String(contentsOf: ui.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"), encoding: .utf8)) ?? ""
-        expectEqual(store.components(separatedBy: "fallbackAlbum(track)").count - 1, 2,
-                    "简介兜底契约: 专辑两处退 Last.fm —— 没有 Apple 专辑链接、公开页没有简介")
-        expectEqual(store.components(separatedBy: "fallbackArtist(track)").count - 1, 4,
-                    "简介兜底契约: 歌手四处退 Last.fm —— 记过找不到、同歌手专辑都对不上、缓存命中没简介、请求回来没简介")
+        expectEqual(store.components(separatedBy: "fallback(.album, track)").count - 1, 2,
+                    "简介兜底契约: 专辑两处退兜底(网易云 / Last.fm)—— 没有 Apple 专辑链接、公开页没有简介")
+        expectEqual(store.components(separatedBy: "fallback(.artist, track)").count - 1, 4,
+                    "简介兜底契约: 歌手四处退兜底(网易云 / Last.fm)—— 记过找不到、同歌手专辑都对不上、缓存命中没简介、请求回来没简介")
         expectEqual(store.contains("Self.logger.debug(\"siblings: enrich cache not loaded yet\")\n            artist = nil\n            return"), true,
                     "简介兜底契约: enrich 缓存还没加载好不算「没有」,不退 Last.fm")
-        expectEqual(store.contains("if card.source == .lastfm {\n                Text(L10n.t(\"来自 Last.fm\"))"), true,
-                    "简介兜底契约: Last.fm 的卡片注明出处(CC BY-SA)")
+        expectEqual(store.contains("if let attribution = card.source.attribution {\n                Text(attribution)")
+                    && store.contains("case .appleMusic: return nil\n            case .lastfm: return L10n.t(\"来自 Last.fm\")\n            case .netease: return L10n.t(\"来自网易云音乐\")\n            case .qqMusic: return L10n.t(\"来自 QQ 音乐\")\n            case .soda: return L10n.t(\"来自汽水音乐\")\n            case .youtubeMusic: return L10n.t(\"来自维基百科\")"),
+                    true, "简介兜底契约: Last.fm(CC BY-SA)、网易云、QQ 音乐、汽水的卡片注明出处,YouTube Music 那一路注明维基百科,Apple Music 的不注")
         expectEqual(service.contains("return await requestDetailed(method: method, cred: cred, extra: extra, priority: .interactive)"), true,
                     "简介兜底契约: 查询走 LastfmStatsService 那条带限速与退避的通道")
+    }
+
+    // ---- 歌手 / 专辑简介的网易云来源:缓存里的网易云歌曲页 → 署名 / 所在专辑 → 介绍 ----
+    do {
+        typealias E = NeteaseEditorialInfo
+        func data(_ s: String) -> Data { Data(s.utf8) }
+        expectEqual(E.songID(fromSongPage: URL(string: "https://music.163.com/song?id=1962165963")), 1962165963,
+                    "网易云简介: 歌曲页取歌曲 ID")
+        expectEqual(E.songID(fromSongPage: URL(string: "https://music.163.com/#/song?id=185910")), 185910,
+                    "网易云简介: 带 #/ 的歌曲页也认")
+        expectEqual(E.songID(fromSongPage: URL(string: "https://music.163.com/search?s=x")), nil, "网易云简介: 不是歌曲页不认")
+        expectEqual(E.songID(fromSongPage: URL(string: "https://example.com/song?id=1")), nil, "网易云简介: 别的域名不认")
+        expectEqual(E.songID(fromSongPage: nil), nil, "网易云简介: 缓存里没有网易云歌曲页")
+        expectEqual(E.songDetailURL(songID: 1962165963)?.absoluteString,
+                    "https://music.163.com/api/song/detail?ids=%5B1962165963%5D", "网易云简介: 歌曲详情地址")
+        expectEqual(E.introductionURL(artistID: 6452)?.absoluteString,
+                    "https://music.163.com/api/artist/introduction?id=6452", "网易云简介: 歌手介绍地址")
+
+        let detail = data(#"{"songs":[{"name":"说好不哭","id":1962165963,"artists":[{"id":6452,"name":"周杰伦"},{"id":1875,"name":"五月天 阿信"},{"id":0,"name":"占位"}]}],"code":200}"#)
+        let expectedCredits: [AlbumEditorialNotes.ArtistLink] = [.init(name: "周杰伦", id: 6452), .init(name: "五月天 阿信", id: 1875)]
+        expectEqual(E.song(fromDetail: detail)?.artists, expectedCredits, "网易云简介: 署名按顺序取,ID 为 0 的占位不算(实测《说好不哭》)")
+        expectEqual(E.song(fromDetail: data(#"{"songs":[],"equalizers":{},"code":200}"#)), E.Song(artists: [], album: nil),
+                    "网易云简介: 没有这首 = 没有署名也没有专辑(明确没有,实测)")
+        expectEqual(E.song(fromDetail: data(#"{"code":-460,"message":"Cheating"}"#)), nil, "网易云简介: 风控 = 没问成")
+        expectEqual(E.song(fromDetail: data("not json")), nil, "网易云简介: 形状不对 = 没问成")
+        expectEqual(AlbumEditorialNotes.pickArtist(expectedCredits, localArtist: "周杰伦 & 五月天 阿信")?.id, 6452,
+                    "网易云简介: 合唱挑署名里对得上的第一位")
+        expectEqual(AlbumEditorialNotes.pickArtist(expectedCredits, localArtist: "Jay Chou")?.id, nil,
+                    "网易云简介: 多位署名都对不上不猜")
+
+        let intro = data(#"{"briefDesc":"圈住那个9（圈9、WineQ），本名史兆怡。\n\n  2013年，获得广东省音乐术科省状元。  \n","introduction":[],"count":0,"code":200}"#)
+        expectEqual(E.introduction(from: intro), .text("圈住那个9（圈9、WineQ），本名史兆怡。\n\n2013年，获得广东省音乐术科省状元。"),
+                    "网易云简介: 总述按段收拾 —— 去掉首尾空白和空行,段与段之间空一行")
+        let long = String(repeating: "长", count: 2001)
+        let sectionsOnly = data(#"{"briefDesc":" ","introduction":[{"ti":"代表作品","txt":"晴天、七里香"},{"ti":"演艺经历","txt":"\#(long)"}],"code":200}"#)
+        expectEqual(E.introduction(from: sectionsOnly), .text("代表作品\n晴天、七里香"), "网易云简介: 总述是空的才用分段,上千字的长段不放")
+        expectEqual(E.introduction(from: data(#"{"briefDesc":"","introduction":[],"code":200}"#)), E.Parsed.none,
+                    "网易云简介: 总述、分段都空 = 明确没有")
+        expectEqual(E.introduction(from: data(#"{"code":404}"#)), E.Parsed.none, "网易云简介: 没有这位歌手(code 404)= 明确没有(实测)")
+        expectEqual(E.introduction(from: data(#"{"code":-460,"message":"Cheating"}"#)), nil, "网易云简介: 风控 = 没问成(不记结论)")
+
+        expectEqual(E.isUsable(uiLanguage: "zh-hans"), true, "网易云简介: 简体中文界面问网易云")
+        expectEqual(E.isUsable(uiLanguage: "zh-hant"), true, "网易云简介: 繁体中文界面也问")
+        expectEqual(E.isUsable(uiLanguage: "en"), false, "网易云简介: 英文界面不问(介绍只有中文)")
+        expectEqual(E.isUsable(uiLanguage: "ja"), false, "网易云简介: 别的非中文界面也不问")
+        expectEqual(E.localized("周杰伦出生于台湾", uiLanguage: "zh-hans"), "周杰伦出生于台湾", "网易云简介: 简体界面原样")
+        expectEqual(E.localized("周杰伦出生于台湾", uiLanguage: "zh-hant").contains("倫"), true, "网易云简介: 繁体界面转成繁体")
+        expectEqual(E.localized("周杰伦", uiLanguage: "en"), "周杰伦", "网易云简介: 英文界面原样")
+
+        // 专辑:歌曲详情里带着所在专辑(ID、名字、别名);介绍在专辑页的 description(歌曲详情里那份是空的,实测)。
+        expectEqual(E.albumURL(albumID: 147779282)?.absoluteString, "https://music.163.com/api/v1/album/147779282",
+                    "网易云专辑: 专辑页地址(v1 端点,老端点常被风控)")
+        let detailWithAlbum = data(#"{"songs":[{"name":"说好不哭","id":1962165963,"artists":[{"id":6452,"name":"周杰伦"}],"album":{"id":147779282,"name":"最伟大的作品","alias":["Greatest Works of Art"],"transName":null,"description":""}}],"code":200}"#)
+        let greatest = E.Album(id: 147779282, name: "最伟大的作品", aliases: ["Greatest Works of Art"])
+        expectEqual(E.song(fromDetail: detailWithAlbum)?.album, greatest, "网易云专辑: 歌曲详情取所在专辑和别名,transName 是 null 不算(实测)")
+        expectEqual(E.song(fromDetail: data(#"{"songs":[{"id":1,"artists":[],"album":{"id":0,"name":""}}],"code":200}"#))?.album, nil,
+                    "网易云专辑: 专辑 ID 为 0 = 没有专辑")
+        expectEqual(E.song(fromDetail: data(#"{"songs":[{"id":1,"artists":[],"album":{"id":5,"name":"A","alias":[" "],"transName":"B"}}],"code":200}"#))?.album?.aliases,
+                    ["B"], "网易云专辑: 空白别名不算,transName 也当别名")
+
+        expectEqual(greatest.matches(playing: "最偉大的作品"), true, "网易云专辑: 繁简不算差别")
+        expectEqual(greatest.matches(playing: "Greatest Works of Art"), true, "网易云专辑: 别名对上也算(美区店面给英文名)")
+        expectEqual(greatest.matches(playing: ""), false, "网易云专辑: 没报专辑名比不了,算对不上")
+        expectEqual(E.Album(id: 1, name: "后青春期的诗").matches(playing: "後 青春期的詩"), true, "网易云专辑: 空格、繁简都折掉(实测五月天)")
+        expectEqual(E.Album(id: 1, name: "It's Ū").matches(playing: "It's Ū - Single"), true, "网易云专辑: Apple 加的 - Single 不算差别(实测)")
+        expectEqual(E.Album(id: 1, name: "SOS").matches(playing: "SOS Deluxe: LANA"), false, "网易云专辑: 同一首挂在另一版(豪华版)上算对不上")
+        expectEqual(E.Album(id: 1, name: "大雨", aliases: ["滚石40 滚石撞乐队 40团拚经典 （原唱:娃娃）"])
+                        .matches(playing: "滾石40 滾石撞樂隊 40團拚經典 - 大雨"), false,
+                    "网易云专辑: 网易云挂的是单曲、正在放的是合辑,对不上(实测 deca joins)")
+
+        let albumPage = data(#"{"album":{"id":147779282,"name":"最伟大的作品","description":"当一件伟大的作品被创作出来时\n艺术家并不会知道\n\n\n终于等到\r\n周杰伦\n\u3000\u3000专辑共收录12首  \n\n","briefDesc":""},"code":200}"#)
+        expectEqual(E.albumDescription(from: albumPage), .text("当一件伟大的作品被创作出来时\n艺术家并不会知道\n\n终于等到\n周杰伦\n专辑共收录12首"),
+                    "网易云专辑: 介绍保留分行 —— 每行去掉首尾空白(含全角缩进),连续空行并成一个,\\r\\n 不多出空行")
+        expectEqual(E.albumDescription(from: data(#"{"album":{"description":"","briefDesc":"短介绍"},"code":200}"#)), .text("短介绍"),
+                    "网易云专辑: description 空了才用 briefDesc")
+        expectEqual(E.albumDescription(from: data(#"{"album":{"description":" \n ","briefDesc":""},"code":200}"#)), E.Parsed.none,
+                    "网易云专辑: 介绍是空的 = 明确没有(欧美专辑常见,实测)")
+        expectEqual(E.albumDescription(from: data(#"{"resourceState":false,"code":404}"#)), E.Parsed.none,
+                    "网易云专辑: 没有这张专辑(code 404)= 明确没有(实测)")
+        expectEqual(E.albumDescription(from: data(#"{"code":-462,"message":"需要行为验证码验证"}"#)), nil,
+                    "网易云专辑: 风控 = 没问成(不记结论;老端点实测 -462)")
+        expectEqual(E.albumDescription(from: data(#"{"code":200}"#)), nil, "网易云专辑: 没有 album 字段 = 形状不对")
+
+        // 源码契约:网易云在兜底链里、中文界面在前,专辑、歌手都有;没连 Last.fm 跳过它;没问成不往下走;只按歌曲页拿歌手和专辑、
+        // 不按名字搜;专辑要对得上;两路同时要同一首的歌曲详情时后到的排队等。
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let store = (try? String(contentsOf: ui.appendingPathComponent("lyrimuse/UI/EditorialNotes.swift"), encoding: .utf8)) ?? ""
+        for (needle, label) in [
+            ("? [.soda, .netease, .youtubeMusic, .lastfm] : [.youtubeMusic, .lastfm]",
+             "中文界面汽水、网易云、YouTube Music 排在 Last.fm 前面,别的界面不问汽水和网易云"),
+            ("case (.lastfm, _) where !LastfmStatsService.shared.isConnected:\n            fallback(kind, track, via: sources.dropFirst())",
+             "没连 Last.fm 账号就跳过它"),
+            ("guard let card else { return self.fallback(kind, track, via: sources.dropFirst()) }", "前一个明确没有才问下一个"),
+            ("case (.netease, .album): neteaseAlbum(track, then: next)\n        case (.netease, .artist): neteaseArtist(track, then: next)",
+             "专辑、歌手都有网易云这一路"),
+            ("guard let song else { return }", "歌曲详情没问成不往下走"),
+            ("NeteaseEditorialInfo.songID(fromSongPage: links?.neteaseSong)", "歌手、专辑只从这首的网易云歌曲页来"),
+            ("guard let album = song.album, album.matches(playing: track.album) else { return then(nil) }",
+             "专辑要跟正在放的对得上,对不上交给下一个来源"),
+            ("guard neteaseSongWaiters[songID] == nil else {\n            neteaseSongWaiters[songID]?.append(waiter)\n            return",
+             "歌曲详情在飞时,后到的那一路排队等,不丢"),
+            ("guard waiting.allSatisfy({ $0.key == self.currentKey }) else { return self.refreshCurrent() }\n            waiting.forEach { $0.body(song) }",
+             "歌曲详情回来时已经换歌就按当前曲目重查,否则挨个回调"),
+            ("EditorialCard(kind: .album, title: track.album, subtitle: track.artist, facts: [], text: $0, source: .netease)",
+             "专辑卡片用播放器报的名字,注明来自网易云"),
+        ] {
+            expectEqual(store.contains(needle), true, "网易云简介契约: \(label)")
+        }
+        expectEqual(store.components(separatedBy: "guard let parsed else { return }").count - 1, 3,
+                    "网易云简介契约: 歌手介绍、专辑介绍(以及 QQ 的歌曲简介)没问成都不往下走")
+    }
+
+    // ---- 歌曲简介:没有 Apple 那一档;中文界面 QQ 音乐 → Last.fm,别的界面只问 Last.fm ----
+    do {
+        typealias Q = QQSongInfo
+        func data(_ s: String) -> Data { Data(s.utf8) }
+        func json(_ s: String) -> [String: Any] { (try? JSONSerialization.jsonObject(with: Data(s.utf8))) as? [String: Any] ?? [:] }
+
+        let body = Q.detailBody(songMID: "002s70oC2k2VbG").flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let songinfo = body?["songinfo"] as? [String: Any]
+        expectEqual(songinfo?["module"] as? String, "music.pf_song_detail_svr", "QQ 歌曲简介: 请求的是歌曲详情模块")
+        expectEqual(songinfo?["method"] as? String, "get_song_detail_yqq", "QQ 歌曲简介: 方法名")
+        expectEqual((songinfo?["param"] as? [String: Any])?["song_mid"] as? String, "002s70oC2k2VbG", "QQ 歌曲简介: 按缓存里的 songmid 问")
+        expectEqual(Q.detailBody(songMID: "不是 mid"), nil, "QQ 歌曲简介: 不像 songmid 的不拼请求")
+        expectEqual(Q.gatewayURL.absoluteString, "https://u.y.qq.com/cgi-bin/musicu.fcg", "QQ 歌曲简介: 客户端网关地址")
+
+        let liang = data(#"{"code":0,"songinfo":{"code":0,"data":{"track_info":{"name":"梯田"},"info":{"genre":{"title":"歌曲流派","content":[{"value":"Pop"}]},"intro":{"title":"简介","type":"SPECIAL_DISPLAY","content":[{"id":0,"value":"  《梯田》这首歌曲周杰伦首创以原住民的合唱。\r\n\n\n歌词诙谐幽默。 "}]}}}}}"#)
+        expectEqual(Q.intro(fromDetail: liang), .text("《梯田》这首歌曲周杰伦首创以原住民的合唱。\n\n歌词诙谐幽默。"),
+                    "QQ 歌曲简介: 取 info.intro 的正文,保留分行(实测《梯田》的形状),别的栏(流派)不要")
+        let twoParts = data(#"{"code":0,"songinfo":{"code":0,"data":{"info":{"intro":{"content":[{"value":"第一段"},{"value":" "},{"value":"第二段"}]}}}}}"#)
+        expectEqual(Q.intro(fromDetail: twoParts), .text("第一段\n\n第二段"), "QQ 歌曲简介: 多段之间空一行,空段不算")
+        expectEqual(Q.intro(fromDetail: data(#"{"code":0,"songinfo":{"code":0,"data":{"info":{"company":{"content":[{"value":"相信音乐"}]}}}}}"#)),
+                    Q.Parsed.none, "QQ 歌曲简介: info 里没有 intro = 这首没有简介(多数歌是这样)")
+        expectEqual(Q.intro(fromDetail: data(#"{"code":0,"songinfo":{"code":404,"data":{"info":{},"track_info":{"id":0,"name":""}}}}"#)),
+                    Q.Parsed.none, "QQ 歌曲简介: songinfo.code 404 = 没有这首(实测)")
+        expectEqual(Q.intro(fromDetail: data(#"{"code":0,"songinfo":{"code":500001,"data":{}}}"#)), nil, "QQ 歌曲简介: 别的错误码 = 没问成")
+        expectEqual(Q.intro(fromDetail: data(#"{"code":-100}"#)), nil, "QQ 歌曲简介: 顶层出错 = 没问成")
+        expectEqual(Q.intro(fromDetail: data("<html>")), nil, "QQ 歌曲简介: 形状不对 = 没问成")
+        expectEqual(Q.isUsable(uiLanguage: "zh-hans") && Q.isUsable(uiLanguage: "zh-hant"), true, "QQ 歌曲简介: 中文界面问")
+        expectEqual(Q.isUsable(uiLanguage: "en") || Q.isUsable(uiLanguage: "ja"), false, "QQ 歌曲简介: 别的界面不问(简介只有中文)")
+        expectEqual(Q.localized("这首歌曲", uiLanguage: "zh-hant"), "這首歌曲", "QQ 歌曲简介: 繁体界面转成繁体")
+        expectEqual(Q.localized("这首歌曲", uiLanguage: "zh-hans"), "这首歌曲", "QQ 歌曲简介: 简体界面原样")
+
+        typealias L = LastfmEditorialInfo
+        let trackJSON = json(#"{"track":{"name":"Anti-Hero","wiki":{"published":"21 Oct 2022","summary":"s","content":"\"Anti-Hero\" is a song by Taylor Swift. <a href=\"x\">Read more on Last.fm</a>."}}}"#)
+        expectEqual(L.trackWiki(from: trackJSON), .text("\"Anti-Hero\" is a song by Taylor Swift."), "Last.fm 歌曲: 取 wiki.content")
+        expectEqual(L.trackWiki(from: json(#"{"track":{"name":"晴天","listeners":"1"}}"#)), L.Parsed.none,
+                    "Last.fm 歌曲: 没有 wiki 字段 = 这首没有介绍(实测《晴天》)")
+        expectEqual(L.trackWiki(from: json(#"{"album":{}}"#)), nil, "Last.fm 歌曲: 形状不对是 nil")
+        expectEqual(ArtistCredit.primary("Taylor Swift & Sabrina Carpenter"), "Taylor Swift",
+                    "Last.fm 歌曲: 多人署名能拆出第一位(按完整署名没有正文时再按它问)")
+
+        // 源码契约:歌曲没有 Apple 那一档、每次重查都走兜底链;中文界面 QQ 在前;QQ 只按缓存里的歌曲页问;Last.fm 先完整署名、
+        // 再第一位;某一组没有这个条目就换下一组;回来时已经换歌按当前曲目重查。
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let store = (try? String(contentsOf: ui.appendingPathComponent("lyrimuse/UI/EditorialNotes.swift"), encoding: .utf8)) ?? ""
+        for (needle, label) in [
+            ("song = nil\n        fallback(.song, track)", "每次重查都从兜底链起(没有 Apple 那一档)"),
+            ("order = QQSongInfo.isUsable(uiLanguage: language) ? [.qqMusic, .lastfm] : [.lastfm]", "中文界面 QQ 排在 Last.fm 前面,别的界面不问 QQ"),
+            ("case (.qqMusic, .song): qqSong(track, then: next)", "歌曲有 QQ 这一路"),
+            ("case (.lastfm, .song): lastfmSong(track, then: next)", "歌曲有 Last.fm 这一路"),
+            ("case (.netease, .song), (.soda, .song), (.youtubeMusic, .song), (.qqMusic, .album), (.qqMusic, .artist), (.appleMusic, _):\n            fallback(kind, track, via: sources.dropFirst())",
+             "某一类在某个来源上没有就直接问下一个"),
+            ("guard let mid = links?.qqSong.flatMap({ PlatformLinks.qqSongMID(songPage: $0.absoluteString) }) else { return then(nil) }",
+             "QQ 只按缓存里这首的歌曲页问(搜索页兜底不算),没有就交给下一个来源"),
+            ("if let primary = ArtistCredit.primary(artistName), primary != artistName {\n            variants.append([\"artist\": primary, \"track\": title])",
+             "多人署名再按第一位问一次"),
+            ("if result.notFound { break }", "某一组没有这个条目就换下一组,不当成整首没有"),
+            ("EditorialCard(kind: .song, title: track.title, subtitle: track.artist, facts: [], text: $0, source: .qqMusic)",
+             "QQ 的卡片注明来自 QQ 音乐"),
+            ("case .song: if self.song == nil { self.song = card }", "取到的歌曲简介只在还空着时放上去"),
+        ] {
+            expectEqual(store.contains(needle), true, "歌曲简介契约: \(label)")
+        }
+    }
+
+    // ---- 专辑 / 歌手简介的 YouTube Music(维基百科)一路:按界面语言取,所有界面都问 ----
+    do {
+        typealias Y = YouTubeMusicEditorialInfo
+        func data(_ s: String) -> Data { Data(s.utf8) }
+        func jsonObject(_ d: Data?) -> [String: Any] { d.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:] }
+
+        expectEqual(Y.descriptionHL(uiLanguage: "zh-hans"), "zh-CN", "YouTube Music 简介: 简体界面要简体中文维基")
+        expectEqual(Y.descriptionHL(uiLanguage: "zh-hant"), "zh-TW", "YouTube Music 简介: 繁体界面要繁体中文维基")
+        expectEqual(Y.descriptionHL(uiLanguage: "en"), "en", "YouTube Music 简介: 英文界面要英文维基")
+
+        expectEqual(Y.searchHL(artist: "周杰伦", album: "最伟大的作品"), "zh-CN", "YouTube Music 搜索: 简体汉字歌手按简体中文搜")
+        expectEqual(Y.searchHL(artist: "周杰倫", album: "最偉大的作品"), "zh-TW", "YouTube Music 搜索: 繁体汉字歌手按繁体中文搜")
+        expectEqual(Y.searchHL(artist: "宇多田ヒカル", album: "BADモード"), "ja", "YouTube Music 搜索: 有假名按日文搜")
+        expectEqual(Y.searchHL(artist: "아이유", album: "LILAC"), "ko", "YouTube Music 搜索: 谚文按韩文搜")
+        expectEqual(Y.searchHL(artist: "Taylor Swift", album: "Midnights"), nil, "YouTube Music 搜索: 拉丁字母歌手不带界面语言")
+        expectEqual(Y.searchHL(artist: "五月天 (Mayday)", album: "後 青春期的詩"), nil, "YouTube Music 搜索: 拉丁字母多于汉字时同引擎不带")
+        expectEqual(Y.searchHL(artist: "米津玄師", album: "STRAY SHEEP"), "zh-TW", "YouTube Music 搜索: 汉字名的日本歌手头一次按中文搜(同引擎)")
+
+        let romanized = [Y.AlbumHit(browseID: "MPREb_a", title: "STRAY SHEEP", artists: [.init(name: "Kenshi Yonezu", channelID: "UCx")])]
+        expectEqual(Y.retryHL(firstHL: "zh-TW", hits: romanized, playingArtist: "米津玄師"), "ja",
+                    "YouTube Music 搜索: 按中文搜回罗马字名(Kenshi Yonezu)、一位都对不上 → 换日文再搜(实测)")
+        let named = [Y.AlbumHit(browseID: "MPREb_b", title: "自傳", artists: [.init(name: "五月天 (Mayday)", channelID: "UCy")])]
+        expectEqual(Y.retryHL(firstHL: "zh-CN", hits: named, playingArtist: "五月天"), nil,
+                    "YouTube Music 搜索: 歌手对得上、只是没有这张专辑,不换日文再搜")
+        expectEqual(Y.retryHL(firstHL: nil, hits: [], playingArtist: "Taylor Swift"), nil, "YouTube Music 搜索: 不是按中文搜的不重搜")
+        expectEqual(Y.retryHL(firstHL: "ja", hits: [], playingArtist: "米津玄師"), nil, "YouTube Music 搜索: 已经是日文不再重搜")
+
+        let search = jsonObject(Y.searchBody(query: "Taylor Swift Midnights", hl: nil, now: Date(timeIntervalSince1970: 1_790_000_000)))
+        let client = ((search["context"] as? [String: Any])?["client"] as? [String: Any]) ?? [:]
+        expectEqual(search["query"] as? String, "Taylor Swift Midnights", "YouTube Music 搜索: 按「歌手 专辑」搜")
+        expectEqual(search["params"] as? String, "EgWKAQIYAWoMEA4QChADEAQQCRAF", "YouTube Music 搜索: 只搜专辑")
+        expectEqual(client["clientName"] as? String, "WEB_REMIX", "YouTube Music 请求: 网页客户端身份")
+        expectEqual(client["hl"] == nil, true, "YouTube Music 请求: 不带界面语言时不放 hl")
+        let browse = jsonObject(Y.browseBody(browseID: "MPREb_z0ABWl3jaT0", hl: "zh-TW"))
+        expectEqual(browse["browseId"] as? String, "MPREb_z0ABWl3jaT0", "YouTube Music 请求: 按专辑 ID 取专辑页")
+        expectEqual(((browse["context"] as? [String: Any])?["client"] as? [String: Any])?["hl"] as? String, "zh-TW",
+                    "YouTube Music 请求: 取介绍按界面语言")
+
+        func item(_ id: String, _ title: String, _ kind: String, _ artists: [(String, String)]) -> String {
+            let runs = [#"{"text":"\#(kind)"}"#, #"{"text":" • "}"#]
+                + artists.map { #"{"text":"\#($0.0)","navigationEndpoint":{"browseEndpoint":{"browseId":"\#($0.1)"}}}"# }
+                + [#"{"text":" • "}"#, #"{"text":"2022"}"#]
+            return #"{"musicResponsiveListItemRenderer":{"navigationEndpoint":{"browseEndpoint":{"browseId":"\#(id)"}},"flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"\#(title)"}]}}},{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[\#(runs.joined(separator: ","))]}}}]}}"#
+        }
+        let searchPage = data(#"{"contents":{"tabbedSearchResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicShelfRenderer":{"contents":["#
+            + [item("MPREb_til", "Midnights (The Til Dawn Edition)", "Album", [("Taylor Swift", "UCPC0L1d253x-KuMNwa05TpA")]),
+               item("MPREb_z0ABWl3jaT0", "Midnights", "Album", [("Taylor Swift", "UCPC0L1d253x-KuMNwa05TpA")]),
+               item("VLsomething", "Midnights playlist", "Playlist", []),
+               item("MPREb_3am", "Midnights (3am Edition)", "Album", [("Taylor Swift", "UCPC0L1d253x-KuMNwa05TpA")])].joined(separator: ",")
+            + "]}}]}}}}]}}}")
+        let hits = Y.albumHits(fromSearch: searchPage) ?? []
+        expectEqual(hits.map(\.browseID), ["MPREb_til", "MPREb_z0ABWl3jaT0", "MPREb_3am"], "YouTube Music 搜索: 只认 MPREb_ 开头的专辑,按给的顺序")
+        expectEqual(hits.first?.artists, [Y.Artist(name: "Taylor Swift", channelID: "UCPC0L1d253x-KuMNwa05TpA")],
+                    "YouTube Music 搜索: 署名取第二列里链到频道的那几段")
+        expectEqual(Y.albumHits(fromSearch: data("[]")), nil, "YouTube Music 搜索: 不是 JSON 对象 = 没问成")
+        expectEqual(Y.albumHits(fromSearch: data(#"{"contents":{}}"#)), [], "YouTube Music 搜索: 一条都没有 = 明确没有")
+        expectEqual(Y.pickAlbum(hits, playingAlbum: "Midnights", playingArtist: "Taylor Swift")?.browseID, "MPREb_z0ABWl3jaT0",
+                    "YouTube Music 搜索: 挑专辑名对得上的那张,版本不同的(3am / Til Dawn)不要")
+        expectEqual(Y.pickAlbum(hits, playingAlbum: "Midnights", playingArtist: "Lana Del Rey")?.browseID, nil,
+                    "YouTube Music 搜索: 署名对不上不要")
+        expectEqual(Y.pickAlbum([.init(browseID: "MPREb_g", title: "最偉大的作品", artists: [.init(name: "周杰倫", channelID: "UCj")])],
+                                playingAlbum: "最伟大的作品", playingArtist: "周杰伦")?.browseID, "MPREb_g",
+                    "YouTube Music 搜索: 专辑名、歌手名的繁简不算差别(实测)")
+        expectEqual(Y.pickAlbum([.init(browseID: "MPREb_h", title: "後 . 青春期的詩", artists: [.init(name: "五月天 (Mayday)", channelID: "UCm")])],
+                                playingAlbum: "後 青春期的詩", playingArtist: "五月天 (Mayday)")?.browseID, "MPREb_h",
+                    "YouTube Music 搜索: 标点不同的专辑名算同一张(实测)")
+
+        expectEqual(Y.artistMatches("田馥甄 Hebe Tien", playingArtist: "田馥甄"), true, "YouTube Music 署名: 带英文名也算(实测)")
+        expectEqual(Y.artistMatches("Taylor Swift", playingArtist: "Taylor Swift & Sabrina Carpenter"), true, "YouTube Music 署名: 合唱里有这位就算")
+        expectEqual(Y.artistMatches("Kenshi Yonezu", playingArtist: "米津玄師"), false, "YouTube Music 署名: 罗马字名对不上汉字名")
+        expectEqual(Y.artistMatches("A", playingArtist: "ABBA"), false, "YouTube Music 署名: 单个字母不算包含")
+        expectEqual(Y.artistMatches("", playingArtist: "x"), false, "YouTube Music 署名: 空名字不算")
+
+        func wikiRuns(_ body: String, _ trailer: String, _ link: String, _ tail: [String]) -> String {
+            let rest = tail.map { #"{"text":"\#($0)"}"# }.joined(separator: ",")
+            let body = body.replacingOccurrences(of: "\n", with: #"\n"#)
+            return #"[{"text":"\#(body)\n\n\#(trailer)"},{"text":"\#(link)","navigationEndpoint":{"urlEndpoint":{"url":"https://www.youtube.com/redirect"}}}"#
+                + (rest.isEmpty ? "" : "," + rest) + "]"
+        }
+        func albumPageJSON(_ runs: String) -> Data {
+            data(#"{"contents":{"twoColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicResponsiveHeaderRenderer":{"title":{"runs":[{"text":"Midnights"}]},"straplineTextOne":{"runs":[{"text":"Taylor Swift","navigationEndpoint":{"browseEndpoint":{"browseId":"UCPC0L1d253x-KuMNwa05TpA"}}}]},"description":{"musicDescriptionShelfRenderer":{"description":{"runs":"#
+                 + runs + "}}}}}]}}}}]}}}")
+        }
+        let zhPage = Y.albumPage(from: albumPageJSON(wikiRuns("《午夜》是美国创作歌手泰勒·斯威夫特的第十张录音室专辑。\n\n她自2023年3月举行了“时代巡回演唱会”。",
+                                                             "来自“Wikipedia”(", "https://zh.wikipedia.org/zh-cn/午夜_(专辑...",
+                                                             [" Commons Attribution CC-BY-SA 3.0”(", ")"])))
+        expectEqual(zhPage?.description, "《午夜》是美国创作歌手泰勒·斯威夫特的第十张录音室专辑。\n\n她自2023年3月举行了“时代巡回演唱会”。",
+                    "YouTube Music 专辑页: 维基介绍去掉最后那段出处(简体中文的写法,实测)")
+        expectEqual(zhPage?.artists, [Y.Artist(name: "Taylor Swift", channelID: "UCPC0L1d253x-KuMNwa05TpA")],
+                    "YouTube Music 专辑页: 署名取头部歌手那一行的频道链接")
+        let runsJSON: (String) -> [[String: Any]] = { (try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [[String: Any]] ?? [] }
+        expectEqual(Y.wikipediaText(fromRuns: runsJSON(wikiRuns("Midnights is the tenth studio album.", "From Wikipedia (",
+                                                                "https://en.wikipedia.org/wiki/Midnights", [") under Creative Commons", ")"]))),
+                    "Midnights is the tenth studio album.", "YouTube Music 专辑页: 英文出处同样去掉(实测)")
+        expectEqual(Y.wikipediaText(fromRuns: runsJSON(wikiRuns("《午夜》是泰勒絲的第十張專輯。", "資料來源為 Wikipedia (",
+                                                                "https://zh.wikipedia.org/zh-tw/午夜_(专辑...", [") 使用"]))),
+                    "《午夜》是泰勒絲的第十張專輯。", "YouTube Music 专辑页: 繁体中文的出处写法也去掉(实测)")
+        expectEqual(Y.wikipediaText(fromRuns: runsJSON(wikiRuns("『ミッドナイツ』は10枚目のアルバム。", "引用元: Wikipedia（",
+                                                                "https://ja.wikipedia.org/wiki/ミッドナイツ_...", [" Commons Attribution CC-BY-SA 3.0 （"]))),
+                    "『ミッドナイツ』は10枚目のアルバム。", "YouTube Music 专辑页: 日文的出处写法也去掉(实测)")
+        let blurb = runsJSON(#"[{"text":"baby, that’s show business for you. New album The Life of a Showgirl. Out October 3\n"},{"text":"https://Taylor.lnk.to/TSTheLifeofaSho...","navigationEndpoint":{"urlEndpoint":{"url":"x"}}}]"#)
+        expectEqual(Y.wikipediaText(fromRuns: blurb), nil, "YouTube Music 歌手页: 频道自己的宣传语(没有维基出处)不算简介(实测 Taylor Swift 英文页)")
+        expectEqual(Y.albumPage(from: data(#"{"responseContext":{},"trackingParams":"x","microformat":{}}"#)),
+                    Y.AlbumPage(description: nil, artists: []), "YouTube Music 专辑页: 没有 contents = 专辑不存在(HTTP 照样 200,实测)")
+        expectEqual(Y.albumPage(from: data("<html>")), nil, "YouTube Music 专辑页: 形状不对 = 没问成")
+        let artistWiki = data(#"{"contents":{"singleColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicDescriptionShelfRenderer":{"header":{"runs":[{"text":"关于"}]},"description":{"runs":"#
+            + wikiRuns("方大同，美籍香港创作男歌手。", "来自“Wikipedia”(", "https://zh.wikipedia.org/zh-cn/方大同", [")"]) + "}}}]}}}}]}}}")
+        expectEqual(Y.artistDescription(from: artistWiki), .text("方大同，美籍香港创作男歌手。"), "YouTube Music 歌手页: 取维基介绍")
+        let artistBlurb = data(#"{"contents":{"singleColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicDescriptionShelfRenderer":{"description":{"runs":[{"text":"New album out now"}]}}}]}}}}]}}}"#)
+        expectEqual(Y.artistDescription(from: artistBlurb), Y.Parsed.none, "YouTube Music 歌手页: 只有宣传语 = 明确没有,交给下一个来源")
+        expectEqual(Y.artistDescription(from: data(#"{"responseContext":{}}"#)), Y.Parsed.none, "YouTube Music 歌手页: 频道不存在 = 明确没有")
+        expectEqual(Y.artistDescription(from: data("[")), nil, "YouTube Music 歌手页: 形状不对 = 没问成")
+
+        expectEqual(Y.browseID(fromAlbumPage: URL(string: "https://music.youtube.com/browse/MPREb_z0ABWl3jaT0")), "MPREb_z0ABWl3jaT0",
+                    "YouTube Music: 缓存里播放器给的专辑页取专辑 ID")
+        expectEqual(Y.browseID(fromAlbumPage: URL(string: "https://music.youtube.com/browse/VLPLxxx")), nil, "YouTube Music: 不是专辑的 browse 不认")
+        expectEqual(Y.channelID(fromArtistPage: URL(string: "https://music.youtube.com/channel/UCPC0L1d253x-KuMNwa05TpA")),
+                    "UCPC0L1d253x-KuMNwa05TpA", "YouTube Music: 缓存里播放器给的歌手页取频道 ID")
+        expectEqual(Y.channelID(fromArtistPage: URL(string: "https://example.com/channel/UCx")), nil, "YouTube Music: 别的域名不认")
+
+        // 汽水:用汽水放过的歌,缓存里的分享页 → 介绍
+        typealias S = SodaEditorialInfo
+        expectEqual(S.pageKind(of: URL(string: "https://music.douyin.com/qishui/share/album?album_id=7687934888654342145")!), .album,
+                    "汽水简介: 专辑分享页")
+        expectEqual(S.pageKind(of: URL(string: "https://music.douyin.com/qishui/share/artist?artist_id=6841932444073986049")!), .artist,
+                    "汽水简介: 歌手分享页")
+        expectEqual(S.pageKind(of: URL(string: "https://music.douyin.com/qishui/share/track?track_id=1")!), nil, "汽水简介: 单曲页不认")
+        let routed = S.routerData(fromPage: data(#"<script>window._ROUTER_DATA = {"a":"x}{\"y","b":{"c":1}};window.other = {"d":2}</script>"#))
+        expectEqual(routed?["a"] as? String, "x}{\"y", "汽水简介: 页面数据按括号配对切出来,字符串里的括号和转义引号不算")
+        expectEqual((routed?["b"] as? [String: Any])?["c"] as? Int, 1, "汽水简介: 页面数据的嵌套对象完整")
+        expectEqual(routed?["d"] == nil, true, "汽水简介: 后面别的脚本不混进来")
+        expectEqual(S.routerData(fromPage: data("<html>没有页面数据</html>")) == nil, true, "汽水简介: 没有页面数据")
+        func sodaPage(_ loader: String) -> Data { data("<html><script>_ROUTER_DATA = {\"loaderData\":" + loader + "}</script></html>") }
+        let albumPage = sodaPage(#"{"album_layout":null,"album_page":{"albumInfo":{"id":"7687934888654342145","name":"要去什么地方","intro":"『你啊 就别再烦恼啦』\n去吧去吧，别再烦恼了  \n\n\n田馥甄第六张全新专辑"}}}"#)
+        expectEqual(S.intro(fromPage: albumPage, kind: .album), S.Intro(name: "要去什么地方", text: "『你啊 就别再烦恼啦』\n去吧去吧，别再烦恼了\n\n田馥甄第六张全新专辑"),
+                    "汽水简介: 专辑介绍保留分行(实测《要去什么地方》的形状)")
+        expectEqual(S.intro(fromPage: sodaPage(#"{"album_page":{"albumInfo":{"id":"1","name":"未知专辑","hasError":true}}}"#), kind: .album),
+                    S.Intro(name: nil, text: nil), "汽水简介: 专辑不存在(hasError,HTTP 照样 200,实测)= 明确没有")
+        expectEqual(S.intro(fromPage: sodaPage(#"{"album_page":{"albumInfo":{"id":"2","name":"x","intro":" "}}}"#), kind: .album)?.text, nil,
+                    "汽水简介: 介绍是空的 = 明确没有")
+        let artistPage = sodaPage(#"{"artist_page":{"artistInfo":{"name":"田馥甄","artist_profile":{"intro":"中国台湾女歌手、演员，华语女子演唱组合S.H.E成员之一。"}}}}"#)
+        expectEqual(S.intro(fromPage: artistPage, kind: .artist), S.Intro(name: "田馥甄", text: "中国台湾女歌手、演员，华语女子演唱组合S.H.E成员之一。"),
+                    "汽水简介: 歌手页取汽水写的歌手名和介绍(实测田馥甄)")
+        expectEqual(S.intro(fromPage: artistPage, kind: .album) == nil, true, "汽水简介: 页面类型对不上 = 形状不对")
+        expectEqual(S.isUsable(uiLanguage: "zh-hans") && S.isUsable(uiLanguage: "zh-hant") && !S.isUsable(uiLanguage: "en"), true,
+                    "汽水简介: 只在中文界面问(介绍只有中文)")
+        expectEqual(S.localized("这张专辑", uiLanguage: "zh-hant"), "這張專輯", "汽水简介: 繁体界面转成繁体")
+
+        // 源码契约:汽水只按缓存里的分享页问;YouTube Music 先用播放器给的 ID、没有才搜,两路共用一次专辑查询(后到的排队),
+        // 歌手从对上的专辑页署名里来、不按名字搜;界面语言那版没有退英文版。
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let store = (try? String(contentsOf: ui.appendingPathComponent("lyrimuse/UI/EditorialNotes.swift"), encoding: .utf8)) ?? ""
+        for (needle, label) in [
+            ("case (.soda, .album): sodaAlbum(track, then: next)\n        case (.soda, .artist): sodaArtist(track, then: next)", "专辑、歌手都有汽水这一路"),
+            ("case (.youtubeMusic, .album): youtubeMusicAlbum(track, then: next)\n        case (.youtubeMusic, .artist): youtubeMusicArtist(track, then: next)",
+             "专辑、歌手都有 YouTube Music 这一路"),
+            ("guard let page = links?.sodaAlbum, !track.album.isEmpty else { return then(nil) }", "汽水专辑只按缓存里的分享页问(用汽水放过才有)"),
+            ("guard let page = links?.sodaArtist else { return then(nil) }", "汽水歌手只按缓存里的分享页问"),
+            ("let knownID = YouTubeMusicEditorialInfo.browseID(fromAlbumPage: links?.youtubeMusicAlbum)", "YouTube Music 专辑先用播放器给的 ID"),
+            ("if let channel = YouTubeMusicEditorialInfo.channelID(fromArtistPage: links?.youtubeMusicArtist) {", "YouTube Music 歌手先用播放器给的 ID"),
+            ("guard youtubeMusicAlbumWaiters[key] == nil else {\n            youtubeMusicAlbumWaiters[key]?.append(waiter)\n            return",
+             "专辑查询在飞时,后到的那一路排队等,不丢"),
+            ("?? (credits.count == 1 ? credits[0] : nil) else { return then(nil) }", "歌手从对上的专辑页署名里来,不按名字搜"),
+            ("if description == nil, hl != \"en\" {", "专辑介绍界面语言那版没有就退英文版"),
+            ("for lang in hl == \"en\" ? [\"en\"] : [hl, \"en\"] {", "歌手介绍界面语言那版没有就退英文版"),
+            ("browseID = YouTubeMusicEditorialInfo.pickAlbum(hits, playingAlbum: album, playingArtist: artist)?.browseID",
+             "搜到的专辑要专辑名、歌手都对得上"),
+            ("private static let youtubeMusicRetryAfter: TimeInterval = 600", "YouTube Music 问不通后 10 分钟内不再问"),
+            ("guard knownID != nil || (!track.album.isEmpty && !track.artist.isEmpty), !youtubeMusicCoolingDown else { return body(nil) }",
+             "专辑:冷却期里当没有,交给下一个来源(国内连不上 YouTube 时不把 Last.fm 挡住)"),
+            ("guard !youtubeMusicCoolingDown else { return then(nil) }", "歌手:冷却期里当没有,交给下一个来源"),
+            ("waiting.forEach { $0.body(lookup?.album) }", "专辑查询问不通时,等它的几路也往下走(不记结论)"),
+        ] {
+            expectEqual(store.contains(needle), true, "YouTube Music / 汽水简介契约: \(label)")
+        }
+        expectEqual(store.contains("searchArtist"), false, "YouTube Music / 汽水简介契约: 不按名字搜歌手")
+        expectEqual(store.components(separatedBy: "self.youtubeMusicUnreachableSince = Date()").count - 1, 2,
+                    "YouTube Music / 汽水简介契约: 专辑查询、歌手介绍问不通都记下时刻,开始冷却")
+        expectEqual(store.components(separatedBy: "self.youtubeMusicUnreachableSince = nil").count - 1, 2,
+                    "YouTube Music / 汽水简介契约: 问通了清掉冷却")
     }
 
     // ---- 缩略图下载:用到多大就向图床要多大、哪种失败马上再试 ----

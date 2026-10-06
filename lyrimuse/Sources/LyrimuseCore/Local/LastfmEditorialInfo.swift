@@ -1,6 +1,7 @@
 import Foundation
 
-/// Apple Music 没有专辑简介 / 歌手简介时的兜底:Last.fm 官方接口 `album.getInfo` 的 `wiki`、`artist.getInfo` 的 `bio`
+/// Apple Music 没有专辑简介 / 歌手简介时的兜底:Last.fm 官方接口 `album.getInfo` 的 `wiki`、`artist.getInfo` 的 `bio`;
+/// 歌曲简介(Apple Music 不给单曲写介绍)用 `track.getInfo` 的 `wiki`
 /// (纯函数,selftest 钉着;请求走 App 侧 `LastfmStatsService` 那条带限速与退避的通道)。
 ///
 /// 正文是 Last.fm 用户编写的百科,按 CC BY-SA 授权 —— 展示时要注明出处(简介卡片底部「来自 Last.fm」)。
@@ -31,6 +32,13 @@ public enum LastfmEditorialInfo {
     public static func albumWiki(from json: [String: Any]) -> Parsed? {
         guard let album = json["album"] as? [String: Any] else { return nil }
         guard let wiki = album["wiki"] as? [String: Any] else { return Parsed.none }
+        return body(wiki)
+    }
+
+    /// `track.getInfo` 的响应 → 歌曲介绍。没有 `wiki` 字段就是没有介绍(抽样外文歌 24 首里 10 首有,中文歌 16 首里 1 首)。
+    public static func trackWiki(from json: [String: Any]) -> Parsed? {
+        guard let track = json["track"] as? [String: Any] else { return nil }
+        guard let wiki = track["wiki"] as? [String: Any] else { return Parsed.none }
         return body(wiki)
     }
 
