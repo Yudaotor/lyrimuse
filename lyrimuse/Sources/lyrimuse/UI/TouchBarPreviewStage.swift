@@ -9,8 +9,8 @@ import SwiftUI
 /// 左边是给 App 的那一块(`TouchBarLyricsStyle.systemModalWidth`),最左是收起键(✕),后面封面、三键、歌词那一格按
 /// 封面和三键各自的「位置」排(跟本体同一份 `TouchBarSlot.order`),封面 / 三键跟着「显示封面」「显示播放控制」出没、
 /// 让出来的宽度归歌词,封面那一格贴哪张图也跟本体同一份(`TouchBarLyricsCell.artworkTile`,广告期间是喇叭);右边是收起的系统功能栏(默认那四颗:亮度、音量、静音、Siri),只是参照物。开了「展开时隐藏功能栏」时
-/// 右边那排不画,歌词那一格放宽到整条(`fullWidthModalWidth`),左端照画收起键 —— 本体那时用的是 App 自己那颗,样子
-/// 跟系统的一样。
+/// 右边那排不画,歌词那一格放宽到整条(`fullWidthModalWidth`),左端照画收起键 —— 本体那时(还有本 App 在前台时)
+/// 用的是 App 自己那颗,样子跟系统的一样。
 ///
 /// 歌词那一格就是触控栏本体那一格:同一个图层行、同一份规格(`TouchBarLyricsCell.spec` / `secondarySpec`),歌词也是
 /// 本体那一份(`touchBarLyrics`,按真触控栏那一格量到的宽度断句,不按这里的估算宽),字号 /
@@ -128,12 +128,11 @@ struct TouchBarPreviewStage: View {
     /// 1:1 的那一条触控栏,连同四周那圈黑玻璃。
     private func bar(rows: LyricRows, lyricsWidth: CGFloat, hidesStrip: Bool,
                      snapshot: TouchBarPreviewFeed.Snapshot) -> some View {
-        // 收起键两种模式都画在同一个位置(隐藏功能栏时本体左端是 App 自己那颗),不进下面这一排。
+        // 收起键一直画在同一个位置(系统的 ✕,或者本体自己那颗样子相同的),不进下面这一排。
         let slots = TouchBarSlot.order(
             artworkSide: settings.touchBarArtworkSide, controlsSide: settings.touchBarControlsSide,
             showsArtwork: settings.touchBarShowsArtwork, showsControls: settings.touchBarShowsControls,
-            hidesControlStrip: hidesStrip)
-            .filter { $0 != .collapse }
+            showsCollapseKey: false)
         return ZStack(alignment: .leading) {
             closeBox
                 .offset(x: TouchBarLyricsCell.closeBoxCenterX - TouchBarLyricsCell.closeBoxDiameter / 2)
@@ -329,7 +328,8 @@ final class TouchBarPreviewFeed: ObservableObject {
         let p = PlaybackCoordinator.shared
         let secondary = AppSettings.shared.touchBarSecondaryLine
         let content = TouchBarLyricsCell.content(p, secondary: secondary)
-        start.update(content: content, lineIndex: p.currentLineIndex, nowMs: p.lyricsTimelineMs())
+        start.update(content: content, lineIndex: TouchBarLyricsCell.displayedLineIndex(p, secondary: secondary),
+                     nowMs: p.lyricsTimelineMs())
         let next = Snapshot(
             content: content, secondary: secondary,
             nextLineText: p.touchBarLyrics.nextText, nextLineSide: p.touchBarLyrics.nextSide,

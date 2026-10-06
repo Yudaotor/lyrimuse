@@ -92,7 +92,8 @@ public struct TouchBarDisplayStart: Equatable {
     public init() {}
 
     /// 换了一档、或者行下标变了(连着两句同样的词也各从头滚),从此刻算起;往回拖进度、拖到起点之前时,
-    /// 起点跟着挪到此刻(不然要干等到原来那一刻才开始滚)。
+    /// 起点跟着挪到此刻(不然要干等到原来那一刻才开始滚)。行下标认主行显示的那一句(单行时是提前亮出的那一句,
+    /// 见 `SurfaceLyrics.compactLineIndex`),不认正在唱的那一行:不然提前亮出的那句开唱时会被当成又换了一句。
     public mutating func update(content: TouchBarLyricsContent, lineIndex: Int?, nowMs: Int) {
         if content != self.content || lineIndex != self.lineIndex {
             self.content = content

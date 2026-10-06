@@ -113,6 +113,37 @@ func runTouchBarTests() {
         expectEqual(start.sinceMs, 13_000, "显示起点: 同样的词换了行下标也从头算")
     }
 
+    // ---- 显示起点认主行显示的那一句的下标:提前亮出的那一句开唱时,正在唱的下标往前走一格,显示的那一句的不动 ----
+    do {
+        // 第 1 句 12000 唱完、第 2 句 12100 开唱(进了提前量窗口就亮出第 2 句);第 2 句 14100 唱完、第 3 句 30000 才开唱
+        // (中间先停 tailHoldMs、再换成占位、最后 5 秒亮出第 3 句)。
+        let yrc = "[10000,2000](10000,2000,0)first line\n"
+            + "[12100,2000](12100,2000,0)second line\n"
+            + "[30000,2000](30000,2000,0)third line\n"
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, lineBreaks: .all)
+        let revealed = engine.surfaceTick(.touchBar, atMs: 12_050)
+        let singing = engine.surfaceTick(.touchBar, atMs: 12_500)
+        expectEqual(revealed.compactLine?.plainText, "second line", "显示的那一句下标: 提前量窗口里亮出下一句")
+        expectEqual([revealed.lineIndex, revealed.compactLineIndex], [0, 1],
+                    "显示的那一句下标: 提前量窗口里正在唱的还是上一句,显示的是下一句")
+        expectEqual([singing.lineIndex, singing.compactLineIndex], [1, 1], "显示的那一句下标: 开唱后两个下标对上")
+        let intro = engine.surfaceTick(.touchBar, atMs: 5_000)
+        expectEqual(intro.lineIndex == nil && intro.compactLineIndex == nil, true,
+                    "显示的那一句下标: 还没到第一句时两个都没有")
+        let gap = engine.surfaceTick(.touchBar, atMs: 20_000)
+        expectEqual(gap.compactPlaceholder && gap.lineIndex == 1 && gap.compactLineIndex == nil, true,
+                    "显示的那一句下标: 长间奏里显示占位时没有")
+        func content(_ tick: LyricsSyncEngine.SurfaceLyrics) -> TouchBarLyricsContent {
+            TouchBarLyricsContent.resolve(compactLine: tick.compactLine, showsPlaceholder: tick.compactPlaceholder,
+                                          title: "", artist: "", isAdBreak: false)
+        }
+        var start = TouchBarDisplayStart()
+        start.update(content: content(revealed), lineIndex: revealed.compactLineIndex, nowMs: 12_050)
+        start.update(content: content(singing), lineIndex: singing.compactLineIndex, nowMs: 12_500)
+        expectEqual(start.sinceMs, 12_050, "显示起点: 提前亮出的那一句开唱时不从头算(按显示时长配速的滚动不重来)")
+    }
+
     // ---- 有没有触控栏:ControlStrip 没在跑就没有;在跑再看系统报告的主触控栏,查不了按有算 ----
     do {
         typealias P = TouchBarPresence
@@ -248,12 +279,12 @@ func runTouchBarTests() {
                     "触控栏两行: 主行 g / y 的下伸碰不到副行的字(\(min(secondaryCJK.top, secondaryLatin.top) - mainLatin.bottom))")
     }
 
-    // ---- 展开态从左到右:封面、三键各自摆在歌词哪一边;同一边上封面在三键左边;关掉的那项拿掉;隐藏功能栏时最左边加收起键 ----
+    // ---- 展开态从左到右:封面、三键各自摆在歌词哪一边;同一边上封面在三键左边;关掉的那项拿掉;系统不给 ✕ 时最左边加自己的收起键 ----
     do {
         func order(_ artworkSide: TouchBarSide, _ controlsSide: TouchBarSide, artwork: Bool = true,
-                   controls: Bool = true, hides: Bool = false) -> [TouchBarSlot] {
+                   controls: Bool = true, collapse: Bool = false) -> [TouchBarSlot] {
             TouchBarSlot.order(artworkSide: artworkSide, controlsSide: controlsSide,
-                               showsArtwork: artwork, showsControls: controls, hidesControlStrip: hides)
+                               showsArtwork: artwork, showsControls: controls, showsCollapseKey: collapse)
         }
         expectEqual(order(.leading, .leading), [.artwork, .controls, .lyrics],
                     "触控栏排列: 都在左边(默认,加这两项之前的排法)")
@@ -266,10 +297,21 @@ func runTouchBarTests() {
         let sides = TouchBarSide.allCases.flatMap { a in TouchBarSide.allCases.map { (a, $0) } }
         expectEqual(sides.allSatisfy { order($0.0, $0.1, artwork: false, controls: false) == [.lyrics] }, true,
                     "触控栏排列: 两样都关掉时只剩歌词")
-        expectEqual(sides.allSatisfy { order($0.0, $0.1, hides: true).first == .collapse }, true,
-                    "触控栏排列: 隐藏功能栏时最左边是收起键")
+        expectEqual(sides.allSatisfy { order($0.0, $0.1, collapse: true).first == .collapse }, true,
+                    "触控栏排列: 要自己的收起键时它在最左边")
         expectEqual(sides.allSatisfy { !order($0.0, $0.1).contains(.collapse) }, true,
-                    "触控栏排列: 不隐藏功能栏时没有自己的收起键(用系统的 ✕)")
+                    "触控栏排列: 不要时没有自己的收起键(用系统的 ✕)")
+        // 系统不给 ✕ 的两种情形放自己的:占满整条(隐藏功能栏)、本 App 在前台(模拟器实测,见 17 章)。
+        typealias Slot = TouchBarSlot
+        expectEqual(Slot.showsCollapseKey(fullWidth: true, appIsActive: false, canMinimize: true), true,
+                    "触控栏收起键: 占满整条时系统不给 ✕,放自己的")
+        expectEqual(Slot.showsCollapseKey(fullWidth: false, appIsActive: true, canMinimize: true), true,
+                    "触控栏收起键: 本 App 在前台时系统不给 ✕,放自己的")
+        expectEqual(Slot.showsCollapseKey(fullWidth: false, appIsActive: false, canMinimize: true), false,
+                    "触控栏收起键: 在后台、不占满整条时用系统的 ✕")
+        expectEqual([true, false].allSatisfy { fullWidth in
+            [true, false].allSatisfy { !Slot.showsCollapseKey(fullWidth: fullWidth, appIsActive: $0, canMinimize: false) }
+        }, true, "触控栏收起键: 收起的系统入口缺了就不放")
         expectEqual(TouchBarSide.allCases.map(\.rawValue), ["leading", "trailing"],
                     "触控栏排列: rawValue 是存量配置的一部分,别动")
     }
@@ -540,9 +582,15 @@ func runTouchBarTests() {
             expectEqual(text.contains("p.touchBarLyrics.nextText") && text.contains("p.touchBarLyrics.nextSide"), true,
                         "触控栏断句: \(name)副行的「下一句」也读断好的那一份")
         }
-        expectEqual(controller.contains("LineLayoutBudgets.shared.setTouchBarWidth(measured)")
+        expectEqual(controller.contains("LineLayoutBudgets.shared.setTouchBarWidth(width)")
+                        && controller.contains("let width = measured > 0 && measuredUnderEstimate == estimate ? measured : CGFloat(estimate)")
                         && controller.contains("LineLayoutBudgets.shared.setTouchBarWidth(0)"), true,
-                    "触控栏断句: 控制器报这一格量到的宽,没启用时报 0")
+                    "触控栏断句: 控制器报这一格量到的宽(量的时候是这种排法才算),没启用时报 0")
+        // 收起时这一格从窗口里拿下来,frame 停在上次摆着时的宽:收着时改了排法先报估算宽,摆上去(看得见、在窗口里)
+        // 才认量到的。漏了不报错,只表现成收着时拨了「显示封面」之类,下次展开头一下按旧宽度断句。
+        expectEqual(controller.contains("if measured > 0, bar.isVisible, lyricsContainer.window != nil { measuredUnderEstimate = estimate }")
+                        && controller.contains("if !bar.isVisible { reportLyricsWidth() }"), true,
+                    "触控栏断句: 收着时改了排法先报估算宽,摆上去才认量到的")
         let budgets = code(appDir.appendingPathComponent("UI/LineLayoutBudgets.swift")) ?? ""
         expectEqual(budgets.contains("report(.touchBar, LineLayoutBudget(")
                         && budgets.contains("TouchBarLyricsCell.mainFont(fontSize: fontSize, secondary: kind)")
@@ -562,6 +610,21 @@ func runTouchBarTests() {
         // 隐藏功能栏时系统不给 ✕:自己那颗收起键要接上「收起」,展开着的时候切换要按新的方式重新展开。
         expectEqual(controller.contains("TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
                     "触控栏: 自己那颗收起键收回成功能栏图标")
+        // 本 App 在前台时系统模态条也不画 ✕(「前台时给 ✕」那个开关实测传什么都一样):排法跟着激活 / 失活变,前台时
+        // 左端放自己那颗;那个开关明确传 false。漏了不报错,只表现成开着设置 / 歌词窗口时展开条收不起来。
+        expectEqual(controller.contains("TouchBarSlot.showsCollapseKey(")
+                        && controller.contains("fullWidth: fullWidth, appIsActive: active,")
+                        && controller.contains("center.publisher(for: NSApplication.didBecomeActiveNotification)")
+                        && controller.contains("center.publisher(for: NSApplication.didResignActiveNotification)"), true,
+                    "触控栏: 本 App 在前台时左端放自己的收起键,跟着激活 / 失活变")
+        expectEqual(controller.contains("TouchBarPrivateAPI.showCloseBoxWhenFrontmost(false)")
+                        && !controller.contains("showCloseBoxWhenFrontmost(true)"), true,
+                    "触控栏: 「前台时给 ✕」明确传 false,不跟自己那颗收起键同时出现")
+        for (name, text) in [("预览", preview), ("控制器", controller)] {
+            expectEqual(text.contains("lineIndex: TouchBarLyricsCell.displayedLineIndex(p, secondary: secondary)")
+                            && !text.contains("p.currentLineIndex"), true,
+                        "触控栏: \(name)记显示起点认主行显示的那一句的下标")
+        }
         expectEqual(controller.contains("hidingControlStrip: AppSettings.shared.touchBarHidesControlStrip")
                         && controller.contains("representIfVisible(hidingControlStrip:"), true,
                     "触控栏: 展开时按「展开时隐藏功能栏」选方式,展开着切换时重新展开")

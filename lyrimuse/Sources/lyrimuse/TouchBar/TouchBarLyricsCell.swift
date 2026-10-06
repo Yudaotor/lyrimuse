@@ -127,6 +127,14 @@ enum TouchBarLyricsCell {
         return secondary.showsSecondaryRow ? lyrics.lineWindow?.dwellMs : (lyrics.compactDwellMs ?? lyrics.lineWindow?.dwellMs)
     }
 
+    /// 主行这一句在触控栏这个面的段里的下标,判「换了一句、从头算显示起点」认它(`TouchBarDisplayStart`):单行时是
+    /// 提前亮出的那一句的,副行开着时是正在唱的这一段的。拿正在唱的那一行的下标判的话,提前亮出的那句真正开唱时
+    /// 下标往前走一格,会被当成又换了一句,按显示时长配速的滚动从头再滚一遍。
+    static func displayedLineIndex(_ p: PlaybackCoordinator, secondary: LyricSecondaryLine) -> Int? {
+        let lyrics = p.touchBarLyrics
+        return secondary.showsSecondaryRow ? lyrics.lineIndex : lyrics.compactLineIndex
+    }
+
     /// 歌词那一格跟着变的播放状态。本体和预览订同一批:漏一项不报错,只表现成那一项变了这一格不跟。
     static func playbackChanges(_ p: PlaybackCoordinator) -> [AnyPublisher<Void, Never>] {
         [signal(p.$touchBarLyrics), signal(p.$rawGapWindow), signal(p.$lyricsGapMarkers),

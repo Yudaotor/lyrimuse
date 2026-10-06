@@ -10,8 +10,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// 开着时功能栏里常驻一枚图标(菜单栏图标当前选的那一款),轻点展开成整条触控栏:封面(按下去打开歌词窗口)、上一首 / 播放暂停 /
 /// 下一首(旁边一颗设置键,打开设置里这一段)、这一句歌词,封面和三键各自摆在歌词哪一边听它们各自的「位置」(Core `TouchBarSlot.order`);广告期间封面那一格
 /// 换成喇叭(`TouchBarLyricsCell.artworkTile`)。展开态是系统
-/// 模态条,不管哪个 App 在前台都显示,左端的 ✕ 收回成图标;开了「展开时隐藏功能栏」时展开条占满整条触控栏,
-/// 系统不给 ✕,左端换成 App 自己那颗样子相同的收起键。在设置里打开开关的那一下直接展开,App 启动时只放图标。
+/// 模态条,不管哪个 App 在前台都显示,左端的 ✕ 收回成图标;系统不给 ✕ 的时候 —— 开了「展开时隐藏功能栏」(展开条占满
+/// 整条触控栏)、或者本 App 在前台 —— 左端换成 App 自己那颗样子相同的收起键(`TouchBarSlot.showsCollapseKey`)。
+/// 在设置里打开开关的那一下直接展开,App 启动时只放图标。
 /// 系统入口见 `TouchBarPrivateAPI`。这台 Mac 此刻没有触控栏时(`TouchBarAvailability`)开关开着也不启用,
 /// 触控栏出现 / 消失时跟着启停。
 ///
@@ -44,6 +45,18 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         }
     }
 
+    /// 展开态的排法:从左到右排哪几项,展开条占不占满整条(开了「展开时隐藏功能栏」、系统入口也在)。
+    private struct Layout: Equatable {
+        var slots: [TouchBarSlot]
+        var fullWidth: Bool
+
+        /// 这种排法下歌词那一格分到的宽(估算)。收起键(系统的 ✕ 或自己那一颗)算在 `TouchBarLyricsStyle.firstItemX` 里,不另进账。
+        var estimatedLyricsWidth: Double {
+            TouchBarLyricsStyle.lyricsWidth(showsArtwork: slots.contains(.artwork),
+                                            showsControls: slots.contains(.controls), hidesControlStrip: fullWidth)
+        }
+    }
+
     private var started = false
     private var enabled = false
     private var settingsObservers: [AnyCancellable] = []
@@ -51,6 +64,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private var visibilityObservation: NSKeyValueObservation?
     private var widthObserver: AnyCancellable?
     private var refreshScheduled = false
+    /// 展开态此刻的排法(`setLayout` 记下)。按估算报歌词那一格的宽时读它:在 sink 里回读 AppSettings 拿到的是旧值。
+    private var layout = Layout(slots: [], fullWidth: false)
+    /// 量到的宽是在哪种排法下量的(那时的估算宽)。收着的时候系统不重排,这一格的 frame 停在上次摆着时的宽,
+    /// 排法变了(估算宽对不上)就先不认它,见 `reportLyricsWidth`。
+    private var measuredUnderEstimate: Double?
 
     private let bar = NSTouchBar()
     private let trayItem = NSCustomTouchBarItem(identifier: Item.tray)
@@ -114,7 +132,6 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         let settings = AppSettings.shared
         let availability = TouchBarAvailability.shared
         availability.start()
-        setEnabled(settings.showLyricsInTouchBar && availability.isPresent, presentNow: false)
         // 歌词那一格的宽变了(系统重排、隐藏功能栏、封面 / 三键出没)就重报给按宽度断句。
         lyricsContainer.postsFrameChangedNotifications = true
         widthObserver = NotificationCenter.default
@@ -134,18 +151,23 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 },
             settings.$menuBarIconStyle.dropFirst().removeDuplicates()
                 .sink { [weak self] in self?.trayButton.image = MenuBarIconStyle.cachedImage(for: $0) },
-            Publishers.CombineLatest(
+            Publishers.CombineLatest3(
                 Publishers.CombineLatest4(settings.$touchBarShowsArtwork, settings.$touchBarArtworkSide,
                                           settings.$touchBarShowsControls, settings.$touchBarControlsSide),
-                settings.$touchBarHidesControlStrip)
+                settings.$touchBarHidesControlStrip, Self.appIsActive())
                 // 隐藏功能栏只在系统入口在时才算数,不然左端会同时有系统的 ✕ 和这颗收起键。
-                .map { items, hides in
-                    TouchBarSlot.order(artworkSide: items.1, controlsSide: items.3,
-                                       showsArtwork: items.0, showsControls: items.2,
-                                       hidesControlStrip: hides && TouchBarPrivateAPI.supportsHidingControlStrip)
+                .map { items, hides, active in
+                    let fullWidth = hides && TouchBarPrivateAPI.supportsHidingControlStrip
+                    let collapse = TouchBarSlot.showsCollapseKey(
+                        fullWidth: fullWidth, appIsActive: active,
+                        canMinimize: TouchBarPrivateAPI.supportsHidingControlStrip)
+                    return Layout(slots: TouchBarSlot.order(artworkSide: items.1, controlsSide: items.3,
+                                                            showsArtwork: items.0, showsControls: items.2,
+                                                            showsCollapseKey: collapse),
+                                  fullWidth: fullWidth)
                 }
                 .removeDuplicates()
-                .sink { [weak self] in self?.setItems($0) },
+                .sink { [weak self] in self?.setLayout($0) },
             // 展开着的时候切换「展开时隐藏功能栏」:按新的方式重新展开一次,当场生效。
             settings.$touchBarHidesControlStrip.dropFirst().removeDuplicates()
                 .sink { [weak self] hides in self?.representIfVisible(hidingControlStrip: hides) },
@@ -161,11 +183,25 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             settings.$touchBarLyricsAlignment.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
         ]
+        setEnabled(settings.showLyricsInTouchBar && availability.isPresent, presentNow: false)
     }
 
-    /// 展开态从左到右排哪几项。展开着的时候改了,系统当场重排;让出来的宽度歌词那一格自己填上。
-    private func setItems(_ slots: [TouchBarSlot]) {
-        bar.defaultItemIdentifiers = slots.map(Item.identifier(for:))
+    /// 本 App 在不在前台:订阅那一刻的,之后跟着激活 / 失活变。
+    private static func appIsActive() -> AnyPublisher<Bool, Never> {
+        let center = NotificationCenter.default
+        return Publishers.Merge(
+            center.publisher(for: NSApplication.didBecomeActiveNotification).map { _ in true },
+            center.publisher(for: NSApplication.didResignActiveNotification).map { _ in false })
+            .prepend(NSApp.isActive)
+            .eraseToAnyPublisher()
+    }
+
+    /// 展开态的排法。展开着的时候改了,系统当场重排,让出来的宽度歌词那一格自己填上,frame 一变就重报宽;
+    /// 收着时系统不重排,按新排法的估算宽先报上(`reportLyricsWidth`)。
+    private func setLayout(_ new: Layout) {
+        layout = new
+        bar.defaultItemIdentifiers = new.slots.map(Item.identifier(for:))
+        if !bar.isVisible { reportLyricsWidth() }
     }
 
     /// 一行 / 两行:主行那一格占满整条高(位图垂直居中),或者挪到上面那一格(`TouchBarLyricsStyle.twoRowMain*`)。
@@ -223,7 +259,9 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         }
         enabled = on
         if on {
-            TouchBarPrivateAPI.showCloseBoxWhenFrontmost(true)
+            // 前台时左端的收起键由 App 自己放(`TouchBarSlot.showsCollapseKey`)。这个开关实测传什么都不给 ✕,
+            // 明确传 false:万一哪一版系统上它管用,也不会跟自己那一颗同时出现。
+            TouchBarPrivateAPI.showCloseBoxWhenFrontmost(false)
             TouchBarPrivateAPI.setInControlStrip(trayItem, true)
             observePlayback()
             visibilityObservation = bar.observe(\.isVisible, options: [.new]) { _, _ in
@@ -244,22 +282,20 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     }
 
     /// 歌词那一格的宽报给按宽度断句(`LineLayoutBudgets.setTouchBarWidth`)。真触控栏上这个宽由系统按功能栏此刻占多宽
-    /// 来分,只能量;还没摆上过触控栏(宽是 0)时先报默认版面的估算宽(`TouchBarLyricsStyle.lyricsWidth`),摆上之后
-    /// 换成量到的。没启用时报 0,不按这一格断句。
+    /// 来分,只能量:摆在触控栏上(看得见、在它的窗口里)时量到的就是此刻的。收起时这一格从窗口里拿下来,frame 停在
+    /// 上次摆着时的宽,收着时排法变了(封面 / 三键出没、隐藏功能栏)它就不对了 —— 还没摆上过(宽是 0)、或者量的时候
+    /// 不是这种排法,先报这种排法的估算宽(`Layout.estimatedLyricsWidth`),摆上之后换成量到的。没启用时报 0,
+    /// 不按这一格断句。
     private func reportLyricsWidth() {
         guard enabled else {
             LineLayoutBudgets.shared.setTouchBarWidth(0)
             return
         }
+        let estimate = layout.estimatedLyricsWidth
         let measured = lyricsContainer.frame.width
-        if measured > 0 {
-            LineLayoutBudgets.shared.setTouchBarWidth(measured)
-            return
-        }
-        let s = AppSettings.shared
-        LineLayoutBudgets.shared.setTouchBarWidth(CGFloat(TouchBarLyricsStyle.lyricsWidth(
-            showsArtwork: s.touchBarShowsArtwork, showsControls: s.touchBarShowsControls,
-            hidesControlStrip: s.touchBarHidesControlStrip && TouchBarPrivateAPI.supportsHidingControlStrip)))
+        if measured > 0, bar.isVisible, lyricsContainer.window != nil { measuredUnderEstimate = estimate }
+        let width = measured > 0 && measuredUnderEstimate == estimate ? measured : CGFloat(estimate)
+        LineLayoutBudgets.shared.setTouchBarWidth(width)
     }
 
     private func presentLyrics(hidingControlStrip: Bool) {
@@ -311,6 +347,9 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         let visible = bar.isVisible
         logger.notice("[TouchBarLyricsController.visibilityChanged] visible=\(visible)")
         guard visible else { return }
+        // 展开时系统先发「看得见了」、再把这一格放回窗口重排(frame 一变还会再报);这一拍要是已经排好了,量到的
+        // 宽就此作数 —— 收着时排法变过、排好后宽又碰巧没变的话,不会再有 frame 变化来换掉估算宽。
+        reportLyricsWidth()
         displayStart.restartIfNotLyric(nowMs: PlaybackCoordinator.shared.lyricsTimelineMs())
         refresh()
     }
@@ -352,7 +391,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         let content = TouchBarLyricsCell.content(p, secondary: secondary)
         updateArtwork(TouchBarLyricsCell.artworkTile(p, content: content))
         let nowMs = p.lyricsTimelineMs()
-        displayStart.update(content: content, lineIndex: p.currentLineIndex, nowMs: nowMs)
+        displayStart.update(content: content, lineIndex: TouchBarLyricsCell.displayedLineIndex(p, secondary: secondary),
+                            nowMs: nowMs)
         guard bar.isVisible else { return }
         let inputs = TouchBarLyricsCell.Inputs(
             startMs: displayStart.sinceMs, dwellMs: TouchBarLyricsCell.dwellMs(p, secondary: secondary),

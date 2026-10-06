@@ -2834,6 +2834,11 @@ public final class LyricsSyncEngine {
         public var compactPlaceholder = false
         public var compactDwellMs: Int?
         public var compactLeadInMs: Int?
+        /// 正在唱的那一段(`line`)在这个面的段里的下标;还没到第一句为 nil。
+        public var lineIndex: Int?
+        /// 「要显示的那一句」(`compactLine`)在这个面的段里的下标:提前亮出下一句时比 `lineIndex` 大一,占位、没有时为 nil。
+        /// 判「显示的换了一句」认它:拿 `lineIndex` 判的话,提前亮出的那句开唱时会被当成又换了一句。
+        public var compactLineIndex: Int?
         public var nextText: String?
         public var nextSide: LyricDuet.Side?
         public var nextRomanization: String?
@@ -3058,12 +3063,14 @@ public final class LyricsSyncEngine {
         }
         var out = SurfaceLyrics()
         out.line = k >= 0 ? segmentLine(surface, k) : nil
+        out.lineIndex = k >= 0 ? k : nil
         out.lineWindow = LyricDisplayWindow.of(index: k >= 0 ? k : nil, starts: starts, trackDurationMs: trackEndMs)
         switch CompactLyricLead.resolve(activeIdx: k, posMs: posMs,
                                         lineEndMs: segmentSungEndMs(surface, k),
                                         nextStartMs: segmentStart(surface, k + 1)) {
         case .line(let i):
             out.compactLine = i >= 0 ? segmentLine(surface, i) : nil
+            out.compactLineIndex = i >= 0 ? i : nil
             out.compactDwellMs = segmentStart(surface, i).flatMap { start in
                 CompactLyricLead.displayDurationMs(
                     prevLineEndMs: segmentSungEndMs(surface, i - 1), startMs: start,

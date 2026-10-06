@@ -9,8 +9,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// Pock 用的也是这一套)。
 ///
 /// 符号运行时查找(同 `BackgroundCursor`)。六个缺任何一个就整体不可用:`isAvailable` 为 false,各入口什么都不做,
-/// 日志里点名缺的是哪几个;设置页「触控栏」那一段据此提示开关不会生效。「展开时隐藏功能栏」另要两个类方法,
-/// 单独查(`supportsHidingControlStrip`),缺了只是那一项不生效。
+/// 日志里点名缺的是哪几个;设置页「触控栏」那一段据此提示开关不会生效。「展开时隐藏功能栏」和 App 自己的收起键
+/// 另要两个类方法,单独查(`supportsHidingControlStrip`),缺了只是这两样没有。
 @MainActor
 enum TouchBarPrivateAPI {
     private typealias ClassMethod1 = @convention(c) (AnyObject, Selector, AnyObject) -> Void
@@ -37,7 +37,8 @@ enum TouchBarPrivateAPI {
         /// `+[NSTouchBar presentSystemModalTouchBar:systemTrayItemIdentifier:]` / `dismissSystemModalTouchBar:`。
         let presentModal: ClassCall<ClassMethod2>
         let dismissModal: ClassCall<ClassMethod1>
-        /// `DFRSystemModalShowsCloseBoxWhenFrontMost(flag)`:本 App 在前台时,系统模态条左端也给收起的 ✕。
+        /// `DFRSystemModalShowsCloseBoxWhenFrontMost(flag)`:照名字是「本 App 在前台时,系统模态条左端也给收起的 ✕」。
+        /// Xcode 触控栏模拟器上实测传 true / false、在什么时候传都一样:发起的 App 在前台时不给,转到后台就给。
         let setCloseBoxWhenFrontmost: SetFlag
     }
 
@@ -83,7 +84,8 @@ enum TouchBarPrivateAPI {
         /// `+[NSTouchBar presentSystemModalTouchBar:placement:systemTrayItemIdentifier:]`:placement 传 1 时展开条占满
         /// 整条触控栏,功能栏和系统左端的 ✕ 一起收起;传 0 跟不带这个参数的那一个一样(Xcode 触控栏模拟器实测)。
         let presentPlaced: ClassCall<PresentPlaced>
-        /// `+[NSTouchBar minimizeSystemModalTouchBar:]`:收回成功能栏里那一项,同系统的 ✕。
+        /// `+[NSTouchBar minimizeSystemModalTouchBar:]`:收回成功能栏里那一项,同系统的 ✕。两种展开方式都管用
+        /// (不占满整条时也是,模拟器实测)。
         let minimize: ClassCall<ClassMethod1>
     }
 
@@ -106,7 +108,8 @@ enum TouchBarPrivateAPI {
                                 call: unsafeBitCast(method_getImplementation(minimize), to: ClassMethod1.self)))
     }()
 
-    /// 能不能「展开时隐藏功能栏」:那两个入口在、常规的六个也在。
+    /// 能不能「展开时隐藏功能栏」、放 App 自己的收起键(收起靠 `minimizeSystemModalTouchBar:`):那两个入口在、
+    /// 常规的六个也在。
     static var supportsHidingControlStrip: Bool { entries != nil && fullWidthEntries != nil }
 
     /// 查「这台 Mac 此刻有没有触控栏」的两个入口,跟上面那六个分开:缺了它们只是判不了(`TouchBarPresence`
@@ -176,7 +179,8 @@ enum TouchBarPrivateAPI {
                             trayIdentifier.rawValue as NSString)
     }
 
-    /// 收回成功能栏里那一项(同系统的 ✕)。只在隐藏功能栏、左端是 App 自己的收起键时用得到。
+    /// 收回成功能栏里那一项(同系统的 ✕)。左端是 App 自己的收起键时用得到(隐藏功能栏、本 App 在前台,
+    /// 见 `TouchBarSlot.showsCollapseKey`)。
     static func minimizeSystemModal(_ bar: NSTouchBar) {
         guard let f = fullWidthEntries else { return }
         f.minimize.call(NSTouchBar.self as AnyObject, f.minimize.selector, bar)
