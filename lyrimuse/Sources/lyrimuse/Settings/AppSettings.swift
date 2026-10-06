@@ -556,11 +556,11 @@ final class AppSettings: ObservableObject {
     static let defaultMenuBarSecondaryLine = LyricSecondaryLine.nextLine
 
     // 「歌词显示 › 触控栏」那一段十项的默认值:`init()` 的 fallback 和 `TouchBarStyleDefaults.restoreDefaults()` 读同一组。
-    // 字号的默认值在 Core(`TouchBarLyricsStyle.defaultFontSize`)。取值见 17 章决策 31。
+    // 字号的默认值在 Core(`TouchBarLyricsStyle.defaultFontSize`)。取值见 17 章决策 31、33。
     static let defaultTouchBarLyricsKaraoke = true
     static let defaultTouchBarLyricsFollowsCover = true
-    static let defaultTouchBarShowsArtwork = true
-    static let defaultTouchBarShowsControls = true
+    static let defaultTouchBarShowsArtwork = false
+    static let defaultTouchBarShowsControls = false
     static let defaultTouchBarSecondaryLine = LyricSecondaryLine.nextLine
     static let defaultTouchBarArtworkSide = TouchBarSide.leading
     static let defaultTouchBarControlsSide = TouchBarSide.leading
