@@ -12,6 +12,7 @@ private func r3(_ x: CGFloat) -> Double { r3(Double(x)) }
 
 @MainActor
 func runLyricsWindowTests() {
+    checkLyricsWindowHoverFade()
     // ---- 歌词窗口的空格 / ← / → ----
     do {
         print("\n== 歌词窗口按键 ==")
@@ -767,6 +768,10 @@ func runLyricsWindowTests() {
         let settingsView = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/SettingsView.swift"), encoding: .utf8)) ?? ""
         expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.background)\n                lyricsWindowToolbarButton(.text)\n"),
                     true, "设置分组: 工具栏第一行是背景、文字")
+        expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.text)\n                if lyricsWindowPreviewShowsMini {\n"
+                                + "                    lyricsWindowToolbarButton(.behavior)\n                } else {\n"
+                                + "                    lyricsWindowToolbarGhost(.content)\n"),
+                    true, "设置分组: 第一行第三格迷你是行为、完整留隐形占位")
         expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.content)\n                if lyricsWindowPreviewShowsMini {\n"
                                 + "                    lyricsWindowToolbarButton(.layout)\n                    lyricsWindowToolbarButton(.info)"),
                     true, "设置分组: 迷你第二行是内容、布局、顶部信息")
@@ -775,6 +780,11 @@ func runLyricsWindowTests() {
                                 + "                SettingsCardHeader(title: L10n.t(\"文字\"))\n                CardDivider()\n"
                                 + "                lyricsWindowAppearanceRows(.text)"),
                     true, "设置分组: 抽屉按背景、文字分组,跟工具栏同名")
+        expectEqual(sourceBytes(settingsView, contain: "lyricsWindowAppearanceRows(.text)\n                CardDivider()\n"
+                                + "                if lyricsWindowPreviewShowsMini {\n"
+                                + "                    SettingsCardHeader(title: L10n.t(\"行为\"))\n                    CardDivider()\n"
+                                + "                    lyricsWindowBehaviorRows\n"),
+                    true, "设置分组: 抽屉里迷你在文字后面是行为,跟工具栏同序")
         let textPart = settingsView.components(separatedBy: "        case .text:\n            // 排法同悬浮歌词「文字」浮层").dropFirst().first?
             .components(separatedBy: "        case .layout:\n            if let miniLyricsLayout {").first ?? ""
         let positions = ["字体", "粗细", "字号", "卡拉OK效果", "文字颜色", "已唱颜色"].map { title in
@@ -785,7 +795,8 @@ func runLyricsWindowTests() {
                     "设置分组: 「文字」里按字体、粗细、字号、卡拉OK效果、文字颜色、已唱颜色排")
         let layoutPart = settingsView.components(separatedBy: "        case .layout:\n            if let miniLyricsLayout {").dropFirst().first?
             .components(separatedBy: "    /// 迷你顶部那一行的某一样勾没勾。").first ?? ""
-        expectEqual(!layoutPart.isEmpty && !layoutPart.contains("卡拉OK效果"), true, "设置分组: 「布局」只剩歌词布局、长句处理")
+        expectEqual(!layoutPart.isEmpty && !layoutPart.contains("卡拉OK效果") && !layoutPart.contains("lyricsWindowMiniFadeOnHover"), true,
+                    "设置分组: 「布局」只剩歌词布局、长句处理")
         func group(_ title: String) -> String? {
             SettingsSearchCatalog.entries.first {
                 $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.titleKey == title
@@ -796,6 +807,7 @@ func runLyricsWindowTests() {
         expectEqual(["字体", "粗细", "字号", "卡拉OK效果", "文字颜色", "指定颜色", "已唱颜色"].map(group),
                     Array(repeating: Optional("文字"), count: 7), "设置分组: 搜索里文字那几样归「文字」")
         expectEqual(["歌词布局", "长句处理"].map(group), [Optional("布局"), Optional("布局")], "设置分组: 搜索里歌词布局、长句处理归「布局」")
+        expectEqual(group("悬浮淡化"), Optional("行为"), "设置分组: 搜索里悬浮淡化归「行为」")
     }
 
     // MARK: - 窗口位置恢复

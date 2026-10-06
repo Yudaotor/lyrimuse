@@ -1716,9 +1716,9 @@ func runSourceContractTests() {
                         "窗口动作胶囊: 图标走带悬停态的按钮样式")
             expectEqual(lwv.contains("                    .padding(-inset)\n            }\n            .contentShape(Rectangle().inset(by: -inset))"), true,
                         "悬停底块: 画在 background 里向外扩、命中区跟着扩,不挤开邻居")
-            // 迷你控制条三颗胶囊里的键也要有悬停态(播控 / 喇叭 / 歌词时间轴 ±)。
-            expectEqual(lwv.components(separatedBy: ".modifier(miniDeckHover)").count - 1, 3,
-                        "迷你控制条: 上一首 / 播放暂停 / 下一首 三颗都挂悬停底块")
+            // 迷你控制条里的键也要有悬停态(播控 / 喇叭 / 歌词时间轴 ± / 设置)。
+            expectEqual(lwv.components(separatedBy: ".modifier(miniDeckHover)").count - 1, 4,
+                        "迷你控制条: 上一首 / 播放暂停 / 下一首 / 设置 四颗都挂悬停底块")
             expectEqual(lwv.contains(".buttonStyle(WindowActionButtonStyle(onArtwork: hasArtworkBackground, inset: 0, cornerRadius: 6))"), true,
                         "迷你控制条: 歌词时间轴 ± 有悬停 / 按下态")
             expectEqual(lwv.contains(".buttonStyle(WindowActionButtonStyle(onArtwork: onArtwork, inset: 4))"), true,
@@ -1772,6 +1772,36 @@ func runSourceContractTests() {
                         "窗口控件: 别换回「横杠夹箭头」那颗,Apple 自家 App 里看不懂它管什么")
             expectEqual(lwv.components(separatedBy: ".font(Self.windowActionIconFont)").count - 1, 4,
                         "窗口控件: 四个图标位(置顶/全屏/控制条/迷你)都走同一个字号字重常量")
+            // 迷你窗那颗「设置…」在底部控制条最右(07 章决策 121),不在右上角胶囊里;
+            // 点了翻到 设置 › 歌词显示 › 歌词窗口,预览停在迷你尺寸。
+            if let r = lwv.range(of: "private func windowActionsCapsule() -> some View {") {
+                let capsule = String(lwv[r.upperBound...].prefix(2500))
+                expectEqual(capsule.contains("openMiniWindowSettings()"), false,
+                            "窗口控件: 「设置…」不在右上角胶囊里")
+            } else {
+                expectEqual(true, false, "窗口控件(契约): 读不到 windowActionsCapsule(改名了?)")
+            }
+            if let r = lwv.range(of: "private var miniDeck: some View {") {
+                let deck = String(lwv[r.upperBound...].prefix(400))
+                expectEqual(deck.contains("miniOffsetPill\n            miniSettingsButton\n        }"), true,
+                            "窗口控件: 「设置…」排在迷你控制条最右,歌词时间轴那颗后面")
+            } else {
+                expectEqual(true, false, "窗口控件(契约): 读不到 miniDeck(改名了?)")
+            }
+            if let r = lwv.range(of: "private func openMiniWindowSettings() {") {
+                let body = String(lwv[r.upperBound...].prefix(600))
+                let steps = ["forKey: LyricsSurface.appearanceSectionStorageKey)",
+                             "UserDefaults.standard.set(true, forKey: LyricsWindowPreviewStage.showsMiniStorageKey)",
+                             "AppActions.shared.requestSettings(.tab(.appearance))",
+                             "AppActions.shared.openSettings?()"]
+                let positions = steps.compactMap { body.range(of: $0)?.lowerBound }
+                expectEqual(positions.count == steps.count && zip(positions, positions.dropFirst()).allSatisfy { $0.0 < $0.1 }, true,
+                            "窗口控件: 「设置…」先写分段键和迷你预览、再请求「歌词显示」、最后打开设置窗口")
+                expectEqual(body.contains("UserDefaults.standard.set(SettingsSearchCatalog.lyricsWindowSectionValue,"), true,
+                            "窗口控件: 分段取值读 Core 常量,别抄 \"lyricsWindow\" 字面量")
+            } else {
+                expectEqual(true, false, "窗口控件(契约): 读不到 openMiniWindowSettings(改名了?)")
+            }
         } else {
             expectEqual(true, false, "文字颜色: 读不到 UI/LyricsWindowView.swift(路径挪了?)")
         }

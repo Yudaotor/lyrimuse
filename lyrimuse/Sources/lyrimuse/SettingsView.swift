@@ -2573,6 +2573,12 @@ private struct AppearanceSettingsTab: View {
                 CardDivider()
                 lyricsWindowAppearanceRows(.text)
                 CardDivider()
+                if lyricsWindowPreviewShowsMini {
+                    SettingsCardHeader(title: L10n.t("行为"))
+                    CardDivider()
+                    lyricsWindowBehaviorRows
+                    CardDivider()
+                }
                 SettingsCardHeader(title: L10n.t("内容"))
                 CardDivider()
                 lyricsWindowContentRows
@@ -2629,17 +2635,22 @@ private struct AppearanceSettingsTab: View {
     /// 只管当前尺寸),动作本体是 `LyricsWindowStyleDefaults.restoreDefaults(mini:)`,作用范围那句
     /// 见 `lyricsWindowResetScope`。
     ///
+    /// 第一行是「背景」「文字」,第三格迷你是「行为」、完整是一格隐藏占位;
     /// 第二行打头是「内容」(两种尺寸共用一份),后面迷你是「布局」「顶部信息」、完整是「封面」+ 一格隐藏占位;
     /// 隐藏占位 + `EditorToolbarResetReserve`
     /// 让它跟第一行的胶囊同宽(按钮宽度是一行之内平分出来的,理由同 `MenuBarEditorStage.toolbarRow2`)。
     private var lyricsWindowToolbar: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // 第一行管长什么样(背景 · 文字),第二行管窗口里摆什么(内容 · 布局 · 顶部信息 / 封面);空位用隐形占位撑住,
+            // 第一行:背景 · 文字 · 行为(只有迷你有),第二行管窗口里摆什么(内容 · 布局 · 顶部信息 / 封面);空位用隐形占位撑住,
             // 两行三列对齐。分组跟「全部设置」抽屉的卡、设置搜索的分组同名(07 章决策 119)。
             HStack(spacing: 8) {
                 lyricsWindowToolbarButton(.background)
                 lyricsWindowToolbarButton(.text)
-                lyricsWindowToolbarGhost(.content)
+                if lyricsWindowPreviewShowsMini {
+                    lyricsWindowToolbarButton(.behavior)
+                } else {
+                    lyricsWindowToolbarGhost(.content)
+                }
                 Spacer(minLength: 8)
                 Menu {
                     Button(L10n.t("恢复默认")) {
@@ -2691,6 +2702,13 @@ private struct AppearanceSettingsTab: View {
                     + " " + String(format: L10n.t("%@pt"), "\(Int(settings.lyricsWindowMiniFontSize))")
             }
             return EditorToolbarButtonLabel(icon: "textformat", title: L10n.t("文字"), summary: summary)
+        case .behavior:
+            // 图标、摘要写法同悬浮歌词「行为」那颗(`OverlayEditorStage.behaviorSummary`)。
+            return EditorToolbarButtonLabel(
+                icon: "switch.2", title: L10n.t("行为"),
+                summary: SettingsToggleSummary.text([
+                    (title: L10n.t("悬浮淡化"), isOn: settings.lyricsWindowMiniFadeOnHover),
+                ]))
         case .layout:
             // 「单行 / 双行」档下长句处理改成了滚动才追加 —— 默认值不报,跟菜单栏「布局」摘要同一条规则。
             var summary = LyricsWindowMiniLyricsLayoutLabel.text(for: settings.lyricsWindowMiniLyricsLayout)
@@ -2765,6 +2783,10 @@ private struct AppearanceSettingsTab: View {
             SettingsPopoverShell(title: L10n.t("文字"), width: 440) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.text) }
             }
+        case .behavior:
+            SettingsPopoverShell(title: L10n.t("行为"), width: 360) {
+                VStack(spacing: 0) { lyricsWindowBehaviorRows }
+            }
         case .layout:
             SettingsPopoverShell(title: L10n.t("布局"), width: 440) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.layout) }
@@ -2783,6 +2805,15 @@ private struct AppearanceSettingsTab: View {
                     VStack(spacing: 0) { lyricsWindowCoverRows }
                 }
             }
+        }
+    }
+
+    /// 「行为」那几行(工具栏浮层与抽屉同一份),只有迷你有(07 章决策 118)。标题、图标跟悬浮歌词「行为」里那颗
+    /// (`OverlayBehaviorItem.fadeOnHover`)一样,两处一起改。
+    @ViewBuilder
+    private var lyricsWindowBehaviorRows: some View {
+        SettingsRow(icon: "cursorarrow.motionlines", title: L10n.t("悬浮淡化")) {
+            Toggle("", isOn: $settings.lyricsWindowMiniFadeOnHover)
         }
     }
 
@@ -3861,6 +3892,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniFontSize = AppSettings.defaultLyricsWindowMiniFontSize
             s.lyricsWindowMiniLineOverflow = .wrap
             s.lyricsWindowMiniLyricsLayout = .twoLines
+            s.lyricsWindowMiniFadeOnHover = false
             s.lyricsWindowMiniLyricsKaraoke = true
             s.lyricsWindowMiniFontWeight = .bold
             s.lyricsWindowMiniKaraokeFill = .text
@@ -3884,10 +3916,11 @@ enum LyricsWindowStyleDefaults {
     }
 }
 
-/// 「歌词窗口」工具栏的胶囊。`info` 按尺寸是「顶部信息」(迷你)或「封面」(完整);`layout` 只有迷你有。
+/// 「歌词窗口」工具栏的胶囊。`info` 按尺寸是「顶部信息」(迷你)或「封面」(完整);`behavior`、`layout` 只有迷你有。
 enum LyricsWindowToolbarItem: Equatable {
     case background
     case text
+    case behavior
     case content
     case layout
     case info

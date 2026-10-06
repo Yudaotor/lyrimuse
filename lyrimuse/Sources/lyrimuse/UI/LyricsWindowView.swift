@@ -360,6 +360,8 @@ private final class LyricsWindowController: ObservableObject {
     private var coverageMonitor: WindowCoverageMonitor?
     /// 空格 / ← / → 三个按键(`LyricsWindowTransportKeys`),attach 时装上。
     private let transportKeys = LyricsWindowTransportKeys()
+    /// 迷你窗「悬浮淡化」(`LyricsWindowHoverFade`),窗口第一次 attach 时接上。
+    private let hoverFade = LyricsWindowHoverFade()
 
     private func refreshSurfaceVisible() {
         let visible = occlusionVisible && !coveredByOthers
@@ -370,6 +372,11 @@ private final class LyricsWindowController: ObservableObject {
     /// 见 `LyricsWindowView.previewMode` 那条 onChange。真窗口别调。
     func setPreviewHostVisible(_ visible: Bool) {
         if isSurfaceVisible != visible { isSurfaceVisible = visible }
+    }
+
+    /// 迷你窗的悬停进出(`MiniWindowHoverTracker` 报上来),交给「悬浮淡化」。
+    func setMiniHovered(_ hovered: Bool) {
+        MainActor.assumeIsolated { hoverFade.setHovered(hovered) }
     }
 
     /// 迷你尺寸。
@@ -856,6 +863,7 @@ private final class LyricsWindowController: ObservableObject {
         }
         self.window = window
         MainActor.assumeIsolated { transportKeys.install(on: window) }
+        MainActor.assumeIsolated { hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }
         UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
         // 打开 / 关闭不要系统那套缩放淡入淡出:窗口直接出现、直接消失(07 章决策 51)。
         window.animationBehavior = .none
@@ -973,6 +981,7 @@ private final class LyricsWindowController: ObservableObject {
             MainActor.assumeIsolated {
                 self?.flushPendingPersistFrame()
                 if !AppExit.isTerminating { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }
+                self?.hoverFade.windowClosed()
                 self?.forceExit()
                 self?.coverageMonitor?.stop()
                 self?.coverageMonitor = nil
@@ -1657,7 +1666,18 @@ struct LyricsWindowView: View {
                         .animation(.easeOut(duration: 0.15), value: miniHovered)
                 }
             }
+            .overlay { miniHoverTracker }
             .onHover { miniHovered = $0 }
+        }
+    }
+
+    /// 迷你窗的悬停跟踪,报给「悬浮淡化」(07 章决策 118):铺满整扇窗,标题栏那一条也算。预览里不摆:预览不是一扇窗。
+    @ViewBuilder
+    private var miniHoverTracker: some View {
+        if !previewMode {
+            MiniWindowHoverTracker { windowController.setMiniHovered($0) }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
         }
     }
 
@@ -2179,7 +2199,7 @@ struct LyricsWindowView: View {
         hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10)
     }
 
-    /// 悬停时露出来的控制条:走带三键 · 音量 · 歌词时间轴微调。
+    /// 悬停时露出来的控制条:走带三键 · 音量 · 歌词时间轴微调,最右一颗「设置…」(去设置页的入口,07 章决策 121)。
     ///
     /// **收哪三样的判据:按一下就完事、不存盘的"这一刻的播放动作"。**背景 / 字体 / 字号那些
     /// "这扇窗长什么样"的旋钮一律不收 —— 它们在设置页里而且**迷你和完整各存一套**,搬一份
@@ -2192,8 +2212,26 @@ struct LyricsWindowView: View {
                                 showsOutputMenu: .constant(false),
                                 compact: true)
             miniOffsetPill
+            miniSettingsButton
         }
         .frame(height: Self.miniDeckHeight)
+    }
+
+    /// 迷你窗的「设置…」:控制条最右一颗(07 章决策 121)。完整尺寸那一颗在左栏「…」旁边(见 titleSideButtons),
+    /// 迷你窗是单列、没有左栏。跟走带那颗胶囊同一套玻璃、悬停底块和图标色,高度跟控制条一致;落点见 openMiniWindowSettings。
+    private var miniSettingsButton: some View {
+        Button { openMiniWindowSettings() } label: {
+            Image(systemName: "gearshape").font(.system(size: 13))
+                .modifier(miniDeckHover)
+        }
+        // 文案复用菜单栏右键菜单那一句「设置…」,同一个本地化键,不必新增翻译。
+        .help(L10n.t("设置…"))
+        .accessibilityLabel(L10n.t("设置…"))
+        .buttonStyle(TransportButtonStyle(reduceMotion: reduceMotion))
+        .foregroundStyle(miniPrimaryColor)
+        .frame(width: 22, height: 22)
+        .padding(6)
+        .clearGlassCapsule(rim: miniCapsuleRim)
     }
 
     private var miniTransportPill: some View {
@@ -4474,6 +4512,19 @@ struct LyricsWindowView: View {
         .padding(.vertical, 7)
         .clearGlassCapsule(
             rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
+    }
+
+    /// 迷你控制条那颗「设置…」:直接翻到 设置 › 歌词显示 › 歌词窗口,预览停在迷你尺寸 —— 从迷你窗点进来,
+    /// 要调的就是迷你这一套(两种尺寸各存一份配置,见 LyricsWindowPreviewStage.showsMiniStorageKey)。
+    /// 翻页三步照抄悬浮歌词的「更多设置…」(`OverlayQuickSettingsMenu.openMoreSettings`):先写分段键
+    /// (设置页那边是 @AppStorage,窗口开着也当场跟着翻),再请求侧栏停在「歌词显示」,最后打开窗口。
+    /// `openSettings` 自带 `NSApp.activate`,见 titleSideButtons 里完整尺寸那颗的注释。
+    private func openMiniWindowSettings() {
+        UserDefaults.standard.set(SettingsSearchCatalog.lyricsWindowSectionValue,
+                                  forKey: LyricsSurface.appearanceSectionStorageKey)
+        UserDefaults.standard.set(true, forKey: LyricsWindowPreviewStage.showsMiniStorageKey)
+        AppActions.shared.requestSettings(.tab(.appearance))
+        AppActions.shared.openSettings?()
     }
 
 

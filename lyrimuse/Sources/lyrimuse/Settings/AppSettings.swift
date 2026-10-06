@@ -330,6 +330,7 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowMiniKaraokeFill = "np:lyricsWindowMiniKaraokeFill"
         static let lyricsWindowMiniKaraokeFillColorHex = "np:lyricsWindowMiniKaraokeFillColorHex"
         static let lyricsWindowMiniShowsControls = "np:lyricsWindowMiniShowsControls"
+        static let lyricsWindowMiniFadeOnHover = "np:lyricsWindowMiniFadeOnHover"
         static let lyricsWindowTextColorMode = "np:lyricsWindowTextColorMode"
         static let lyricsWindowTextColorHex = "np:lyricsWindowTextColorHex"
         static let lyricsWindowMiniTextColorMode = "np:lyricsWindowMiniTextColorMode"
@@ -1371,6 +1372,11 @@ final class AppSettings: ObservableObject {
     @Published var lyricsWindowMiniShowsControls: Bool {
         didSet { defaults.set(lyricsWindowMiniShowsControls, forKey: Keys.lyricsWindowMiniShowsControls) }
     }
+    /// 迷你窗「悬浮淡化」:指针一进窗要不要整扇窗变透明(07 章决策 118)。默认关,同悬浮歌词那颗。
+    /// 开关在设置页迷你「行为」里,「重置」恢复成关。
+    @Published var lyricsWindowMiniFadeOnHover: Bool {
+        didSet { defaults.set(lyricsWindowMiniFadeOnHover, forKey: Keys.lyricsWindowMiniFadeOnHover) }
+    }
     /// 歌词文字色怎么定(完整 / 迷你各一套,同这一族其余外观设置)。判据与边界见
     /// `LyricsWindowTextColorMode`;`.custom` 档才读下面那个 hex。
     @Published var lyricsWindowTextColorMode: LyricsWindowTextColorMode {
@@ -2169,6 +2175,7 @@ final class AppSettings: ObservableObject {
                                                  fallback: Self.defaultLyricsWindowMiniKaraokeFillColorFallback)
         lyricsWindowMiniShowsControls =
             (defaults.object(forKey: Keys.lyricsWindowMiniShowsControls) as? Bool) ?? true
+        lyricsWindowMiniFadeOnHover = (defaults.object(forKey: Keys.lyricsWindowMiniFadeOnHover) as? Bool) ?? false
         lyricsWindowTextColorMode = defaults.string(forKey: Keys.lyricsWindowTextColorMode)
             .flatMap(LyricsWindowTextColorMode.init(rawValue:)) ?? .auto
         lyricsWindowTextColorHex = defaults.string(forKey: Keys.lyricsWindowTextColorHex)
