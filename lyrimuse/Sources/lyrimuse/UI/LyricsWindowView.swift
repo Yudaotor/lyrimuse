@@ -31,6 +31,8 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var overlappingLineIndices: [Int] = []
     @Published private(set) var currentGapIndex: Int?
     @Published private(set) var allLines: [LyricsWindowLine] = []
+    /// 迷你尺寸画的那份行:「卡拉OK效果」关着时压成整行(`MiniLyricsSelection.lines`)。行数、id、时间跟 `allLines` 一样。
+    @Published private(set) var miniLines: [LyricsWindowLine] = []
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
     /// 同一批间奏点按 index 建好的字典,跟 lyricsGapMarkers 同一拍更新(那边发通知)。列表每行都要查一次,
     /// 在视图里现建的话每行都是一次整表重建。
@@ -126,6 +128,9 @@ private final class WindowPlayback: ObservableObject {
             p.$overlappingLineIndices.removeDuplicates().sink { [weak self] in self?.overlappingLineIndices = $0 },
             p.$currentGapIndex.removeDuplicates().sink { [weak self] in self?.currentGapIndex = $0 },
             p.$allLines.removeDuplicates().sink { [weak self] in self?.allLines = $0 },
+            Publishers.CombineLatest(p.$allLines.removeDuplicates(), s.$lyricsWindowMiniLyricsKaraoke.removeDuplicates())
+                .map { MiniLyricsSelection.lines($0, karaoke: $1) }
+                .sink { [weak self] in self?.miniLines = $0 },
             p.$lyricsGapMarkers.removeDuplicates().sink { [weak self] markers in
                 // 先写字典再写 @Published:通知发出去时字典已经是新的。index 按理不重复,重复了留第一个,不崩。
                 self?.lyricsGapMarkersByIndex = Dictionary(markers.map { ($0.index, $0) }, uniquingKeysWith: { a, _ in a })
@@ -1615,6 +1620,10 @@ struct LyricsWindowView: View {
     /// 身份的播放器,allLines 已经是正片的)。台名、「口白」这类口白专用的显示仍按 isRadioTalkBreak。
     private var lyricsOnHold: Bool { playback.isRadioTalkBreak || playback.isCurrentTrackAdBreak }
 
+    /// 歌词区画的那份行:迷你尺寸是 `miniLines`(「卡拉OK效果」关着时压成整行),完整尺寸是 `allLines`。两份的行数、id、
+    /// 时间一样,只按下标 / id / 时间取的地方用哪份都行;要画逐字的地方必须取这一份(见 07 章决策 116)。
+    private var lyricLines: [LyricsWindowLine] { showsMiniLayout ? playback.miniLines : playback.allLines }
+
     /// 迷你「多行」列表左右留白。完整布局单列时是 44,迷你窄得多,收到 20(同两行那套的左右边距)。
     private static let miniListHorizontalInset: CGFloat = 20
 
@@ -2216,9 +2225,9 @@ struct LyricsWindowView: View {
 
     /// 当前行 / 下一行。`currentLineIndex` 为 nil(还没唱到第一句)时,把第一句当"下一行"预告。
     private var miniCurrentLine: LyricsWindowLine? {
-        MiniLyricsSelection.currentIndex(currentLineIndex: playback.currentLineIndex,
-                                         lineCount: playback.allLines.count)
-            .map { playback.allLines[$0] }
+        let lines = lyricLines
+        return MiniLyricsSelection.currentIndex(currentLineIndex: playback.currentLineIndex, lineCount: lines.count)
+            .map { lines[$0] }
     }
 
     /// 播放时间基准的指纹:重新锚定(拖进度、位置校正)、暂停位置、歌词时间轴偏移任一变了就变。
@@ -2240,9 +2249,9 @@ struct LyricsWindowView: View {
     }
 
     private var miniNextLine: LyricsWindowLine? {
-        MiniLyricsSelection.nextIndex(currentLineIndex: playback.currentLineIndex,
-                                      lineCount: playback.allLines.count)
-            .map { playback.allLines[$0] }
+        let lines = lyricLines
+        return MiniLyricsSelection.nextIndex(currentLineIndex: playback.currentLineIndex, lineCount: lines.count)
+            .map { lines[$0] }
     }
 
     /// 交给 reel 的下一句:按「歌词布局」那一档筛过的 `miniNextLine`。
@@ -2928,7 +2937,7 @@ struct LyricsWindowView: View {
                     let staggerAnchor = playback.scrollLineIndex ?? playback.currentLineIndex
                     let staggerReach = LyricsLineStagger.reachRows(viewportHeight: Double(lyricsViewportHeight),
                                                                    fontSize: Double(lyricFontSize))
-                    ForEach(Array(playback.allLines.enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(lyricLines.enumerated()), id: \.element.id) { index, item in
                         // .equatable():没有它,**每一行**都会跟着整页 body 重算一遍 —— 稳定播放期间主线程
                         // 曾有 ~22% 的时间耗在 NSHostingView.layout → ViewGraphRootValueUpdater.render 里,
                         // 栈里能看到 ForEachChild.updateValue → lineView,也就是几十行全在重建。
@@ -3095,7 +3104,7 @@ struct LyricsWindowView: View {
     private func layerLyricsList(leading: CGFloat, trailing: CGFloat, centered: Bool, wordRise: Bool) -> some View {
         LyricsLayerList(
             spec: .init(
-                lines: playback.allLines,
+                lines: lyricLines,
                 gapMarkers: playback.lyricsGapMarkersByIndex,
                 songwriters: centered ? [] : playback.songwriters,
                 style: .init(fontSize: lyricFontSize, romaFontSize: romaFontSize, translationFontSize: translationFontSize,

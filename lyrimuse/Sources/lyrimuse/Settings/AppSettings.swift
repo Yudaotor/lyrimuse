@@ -325,6 +325,7 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowMiniShowsCover = "np:lyricsWindowMiniShowsCover"
         static let lyricsWindowMiniLineOverflow = "np:lyricsWindowMiniLineOverflow"
         static let lyricsWindowMiniLyricsLayout = "np:lyricsWindowMiniLyricsLayout"
+        static let lyricsWindowMiniLyricsKaraoke = "np:lyricsWindowMiniLyricsKaraoke"
         static let lyricsWindowMiniShowsControls = "np:lyricsWindowMiniShowsControls"
         static let lyricsWindowTextColorMode = "np:lyricsWindowTextColorMode"
         static let lyricsWindowTextColorHex = "np:lyricsWindowTextColorHex"
@@ -577,7 +578,8 @@ final class AppSettings: ObservableObject {
     ///
     /// 按形态各一颗(悬浮歌词 →「文字」浮层,灵动岛 →「歌词行」浮层,菜单栏 → 既有的
     /// `menuBarLyricsKaraoke`):卡拉OK是某个面怎么画的问题,跟繁简 / 罗马音那类改歌词内容本身的
-    /// 设置不是一类,所以不做成引擎层的全局开关。歌词窗口**始终**逐字、不给开关。
+    /// 设置不是一类,所以不做成引擎层的全局开关。歌词窗口完整尺寸**始终**逐字、不给开关,迷你尺寸是
+    /// `lyricsWindowMiniLyricsKaraoke`。
     ///
     /// didSet 只写 UserDefaults;生效靠各展示面的 playback 模型订阅这个 @Published 重新压行,
     /// 见 `OverlayPlayback` / `NotchPlayback` 的 `currentLine` 订阅。
@@ -1333,6 +1335,11 @@ final class AppSettings: ObservableObject {
     /// 迷你窗中间的歌词排成单行、双行还是整页列表(多行),见 `LyricsWindowMiniLyricsLayout`。
     @Published var lyricsWindowMiniLyricsLayout: LyricsWindowMiniLyricsLayout {
         didSet { defaults.set(lyricsWindowMiniLyricsLayout.rawValue, forKey: Keys.lyricsWindowMiniLyricsLayout) }
+    }
+    /// 迷你尺寸的「卡拉OK效果」:关掉时迷你那份歌词压成整行高亮(`MiniLyricsSelection.lines`),单行 / 双行 / 多行一样;
+    /// 完整尺寸始终逐字,没有这一项(见 07 章决策 116)。生效靠歌词窗口的 `WindowPlayback.miniLines` 订阅它重新压行。
+    @Published var lyricsWindowMiniLyricsKaraoke: Bool {
+        didSet { defaults.set(lyricsWindowMiniLyricsKaraoke, forKey: Keys.lyricsWindowMiniLyricsKaraoke) }
     }
     /// 迷你窗鼠标移上去要不要浮出那条控制条(走带三键 / 音量 / 歌词时间轴)。
     ///
@@ -2125,6 +2132,8 @@ final class AppSettings: ObservableObject {
         // 默认 .twoLines(存盘值 compact):两行是迷你窗一直以来的样子,升级上来的人不变。
         lyricsWindowMiniLyricsLayout = defaults.string(forKey: Keys.lyricsWindowMiniLyricsLayout)
             .flatMap(LyricsWindowMiniLyricsLayout.init(rawValue:)) ?? .twoLines
+        // 默认开:迷你的歌词本来就逐字填色,升级上来的人不变。
+        lyricsWindowMiniLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowMiniLyricsKaraoke) as? Bool) ?? true
         lyricsWindowMiniShowsControls =
             (defaults.object(forKey: Keys.lyricsWindowMiniShowsControls) as? Bool) ?? true
         lyricsWindowTextColorMode = defaults.string(forKey: Keys.lyricsWindowTextColorMode)

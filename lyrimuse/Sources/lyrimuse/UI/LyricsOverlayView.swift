@@ -160,7 +160,7 @@ private final class OverlayPlayback: ObservableObject {
             // 「卡拉OK效果」关着时把行压成整行(`SyncedLyricLine.lineLevel`):这一面的
             // 逐字填色、逐词罗马音标注都在下游按 `line.words` / `line.wordGroups` 走,压成整行之后
             // 它们自然走"这首歌没有逐字数据"那条路,渲染分支一处不用改。开关翻面也会重新发一次
-            // 当前行,所以正在显示的那句当场变(不用等换行)。歌词窗口不经这里、始终逐字。
+            // 当前行,所以正在显示的那句当场变(不用等换行)。歌词窗口不经这里(迷你尺寸另有一颗)。
             // 这一面自己的那一份(按悬浮歌词的宽度断句,见 LocalPlaybackSource.overlayLyrics):当前句、下一句预览、
             // 当前句的显示窗口都从这里取,别混用逐行的 currentLine / nextLine*。
             Publishers.CombineLatest(p.$overlayLyrics.map(\.line), s.$overlayLyricsKaraoke)

@@ -146,6 +146,12 @@ public enum LyricsWindowDepth {
 
 /// 迷你「单行 / 双行」那套显示哪几句。
 public enum MiniLyricsSelection {
+    /// 迷你尺寸画的那份行。「卡拉OK效果」(`np:lyricsWindowMiniLyricsKaraoke`)关着时每行压成整行(`SyncedLyricLine.lineLevel`,
+    /// 去掉逐字和逐词读音),id、时间、译文、读音不变;开着原样返回。完整尺寸始终逐字,不经这里(见 07 章决策 116)。
+    public static func lines(_ lines: [LyricsWindowLine], karaoke: Bool) -> [LyricsWindowLine] {
+        karaoke ? lines : lines.map { LyricsWindowLine(id: $0.id, timeMs: $0.timeMs, line: $0.line.lineLevel) }
+    }
+
     /// 当前行:引擎给的下标有效才有。
     public static func currentIndex(currentLineIndex: Int?, lineCount: Int) -> Int? {
         guard let i = currentLineIndex, i >= 0, i < lineCount else { return nil }

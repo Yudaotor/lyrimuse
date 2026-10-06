@@ -241,7 +241,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // (之前这里有一个全局的"卡拉OK效果"开关:关掉就让引擎不解析逐字数据,四个
     //  展示面一起退成整行高亮。已撤:引擎始终解析逐字数据,"要不要逐字填色"改成悬浮歌词 /
     //  灵动岛 / 菜单栏各自的开关,由各展示面在自己的消费点上把 `SyncedLyricLine` 压成整行
-    //  (`SyncedLyricLine.lineLevel`);歌词窗口始终逐字。见 AppSettings.overlayLyricsKaraoke。)
+    //  (`SyncedLyricLine.lineLevel`);歌词窗口迷你尺寸另有一颗、完整尺寸始终逐字。见 AppSettings.overlayLyricsKaraoke。)
     /// 要给哪几种文字标罗马音。改了立刻重新加载当前这首 —— 这道开关同时管服务端字段和
     /// 客户端兜底(见 LyricsSyncEngine.romanizationText 那道 guard)。
     @Published public var romanizationScripts: RomanizationScripts = .default {

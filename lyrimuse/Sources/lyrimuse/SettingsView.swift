@@ -1849,7 +1849,7 @@ private struct LyricsSettingsTab: View {
     // 「调整」这一段只放**改歌词内容本身**的三项:繁简 / 罗马音 / 时间轴偏移 —— 四个展示面
     // 看到的是同一份结果。「卡拉OK效果」不在这里:它讲的是"某个面怎么画",按「歌词显示」那一页
     // "按形态分"的结构拆成悬浮歌词 / 灵动岛 / 菜单栏各一颗(`overlayLyricsKaraoke` /
-    // `notchLyricsKaraoke` / `menuBarLyricsKaraoke`),歌词窗口始终逐字。「双行显示」同理,
+    // `notchLyricsKaraoke` / `menuBarLyricsKaraoke`),歌词窗口迷你尺寸另有一颗、完整尺寸始终逐字。「双行显示」同理,
     // 在悬浮歌词的「排版」里。
     private var displayCard: some View {
         SettingsCard {
@@ -2904,7 +2904,8 @@ private struct AppearanceSettingsTab: View {
                 font: $settings.lyricsWindowMiniFontFamily,
                 fontSize: $settings.lyricsWindowMiniFontSize,
                 lineOverflow: $settings.lyricsWindowMiniLineOverflow,
-                miniLyricsLayout: $settings.lyricsWindowMiniLyricsLayout)
+                miniLyricsLayout: $settings.lyricsWindowMiniLyricsLayout,
+                miniKaraoke: $settings.lyricsWindowMiniLyricsKaraoke)
         } else {
             lyricsWindowAppearanceRowsImpl(
                 part: part,
@@ -2944,7 +2945,9 @@ private struct AppearanceSettingsTab: View {
         /// 同样只有迷你尺寸传:完整尺寸是一整页正文,恒换行。
         lineOverflow: Binding<OverlayLineOverflow>? = nil,
         /// 同样只有迷你尺寸传:完整尺寸本来就是整页列表。
-        miniLyricsLayout: Binding<LyricsWindowMiniLyricsLayout>? = nil
+        miniLyricsLayout: Binding<LyricsWindowMiniLyricsLayout>? = nil,
+        /// 同样只有迷你尺寸传:完整尺寸始终逐字,不给开关(07 章决策 116)。
+        miniKaraoke: Binding<Bool>? = nil
     ) -> some View {
         switch part {
         case .background:
@@ -3112,6 +3115,13 @@ private struct AppearanceSettingsTab: View {
                             options: OverlayLineOverflow.allCases,
                             label: OverlayLineOverflowLabel.text(for:)
                         )
+                    }
+                }
+                // 三档布局都摆:多行那份整页列表同样按这颗画。生效链路见 AppSettings.lyricsWindowMiniLyricsKaraoke。
+                if let miniKaraoke {
+                    CardDivider()
+                    SettingsRow(icon: "sparkles", title: L10n.t("卡拉OK效果")) {
+                        Toggle("", isOn: miniKaraoke)
                     }
                 }
             }
@@ -3781,6 +3791,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniFontSize = AppSettings.defaultLyricsWindowMiniFontSize
             s.lyricsWindowMiniLineOverflow = .wrap
             s.lyricsWindowMiniLyricsLayout = .twoLines
+            s.lyricsWindowMiniLyricsKaraoke = true
             s.lyricsWindowMiniHeaderFields = .default
             s.lyricsWindowMiniShowsCover = true
             s.lyricsWindowMiniShowsTime = true

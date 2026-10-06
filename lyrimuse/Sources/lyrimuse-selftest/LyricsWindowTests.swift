@@ -619,6 +619,57 @@ func runLyricsWindowTests() {
         }
     }
 
+    // MARK: - 迷你尺寸的「卡拉OK效果」(07 章决策 116)
+    do {
+        typealias M = MiniLyricsSelection
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: "[00:01.00]说好的\n[00:03.00]幸福呢\n", lyricsTr: "[00:01.00]promised\n", lyricsRoma: "",
+                    lyricsYRC: "[1000,1500](1000,500,0)说(1500,500,0)好(2000,500,0)的\n[3000,1500](3000,700,0)幸福(3700,800,0)呢\n")
+        let timed = engine.allLines(idPrefix: "t")
+        expectEqual(timed.count == 2 && timed.allSatisfy { $0.line.words != nil }, true, "迷你卡拉OK: 样本两行都带逐字时间轴")
+        expectEqual(M.lines(timed, karaoke: true), timed, "迷你卡拉OK: 开着原样")
+        let flat = M.lines(timed, karaoke: false)
+        expectEqual(flat.allSatisfy { $0.line.words == nil && $0.line.wordGroups == nil }, true,
+                    "迷你卡拉OK: 关着压成整行,去掉逐字和逐词读音")
+        expectEqual(flat.map(\.id), timed.map(\.id), "迷你卡拉OK: 压行不改 id")
+        expectEqual(flat.map(\.timeMs), timed.map(\.timeMs), "迷你卡拉OK: 压行不改时间")
+        expectEqual(flat.map(\.line.plainText), timed.map(\.line.plainText), "迷你卡拉OK: 压行不改正文")
+        expectEqual(flat.map(\.line.translation), timed.map(\.line.translation), "迷你卡拉OK: 译文留着")
+        expectEqual(flat.first?.line.translation, "promised", "迷你卡拉OK: 样本的译文对上了第一句")
+        let plain = LyricsSyncEngine()
+        plain.load(lyrics: "[00:01.00]说好的\n[00:03.00]幸福呢\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+        let lineOnly = plain.allLines(idPrefix: "p")
+        expectEqual(M.lines(lineOnly, karaoke: false), lineOnly, "迷你卡拉OK: 本来就没有逐字数据的行原样")
+
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        let settingsView = source("lyrimuse/SettingsView.swift")
+        let appSettings = source("lyrimuse/Settings/AppSettings.swift")
+        expectEqual(sourceBytes(window, contain: "Publishers.CombineLatest(p.$allLines.removeDuplicates(), s.$lyricsWindowMiniLyricsKaraoke.removeDuplicates())\n                .map { MiniLyricsSelection.lines($0, karaoke: $1) }"),
+                    true, "迷你卡拉OK接线: 窗口模型按开关算迷你那份行")
+        expectEqual(sourceBytes(window, contain: "private var lyricLines: [LyricsWindowLine] { showsMiniLayout ? playback.miniLines : playback.allLines }"),
+                    true, "迷你卡拉OK接线: 迷你取 miniLines、完整取 allLines")
+        expectEqual(window.components(separatedBy: "let lines = lyricLines\n").count - 1, 2, "迷你卡拉OK接线: 当前句、下一句都从 lyricLines 取")
+        expectEqual(sourceBytes(window, contain: "ForEach(Array(lyricLines.enumerated()), id: \\.element.id)")
+                    && sourceBytes(window, contain: "lines: lyricLines,"), true,
+                    "迷你卡拉OK接线: 多行的 SwiftUI 列表和图层版列表都画 lyricLines")
+        expectEqual(sourceBytes(window, contain: "ForEach(Array(playback.allLines.enumerated())"), false,
+                    "迷你卡拉OK接线: 列表不直接画 allLines")
+        expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowMiniLyricsKaraoke) as? Bool) ?? true"),
+                    true, "迷你卡拉OK: 没存过时默认开")
+        expectEqual(sourceBytes(settingsView, contain: "miniKaraoke: $settings.lyricsWindowMiniLyricsKaraoke)")
+                    && sourceBytes(settingsView, contain: "Toggle(\"\", isOn: miniKaraoke)"), true,
+                    "迷你卡拉OK: 「布局」浮层摆这颗开关")
+        expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniLyricsKaraoke = true"), true, "迷你卡拉OK: 「重置」恢复成开")
+        let hits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "卡拉OK效果", title: { $0.titleKey },
+                                                secondary: { $0.keywords + $0.pathKeys })
+        expectEqual(hits.contains { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue && $0.pathKeys.last == "布局" },
+                    true, "迷你卡拉OK: 设置搜索搜得到,落在歌词窗口的「布局」")
+    }
+
     // MARK: - 窗口位置恢复
     do {
         let visible = CGRect(x: 0, y: 25, width: 1440, height: 875)
