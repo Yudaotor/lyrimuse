@@ -4581,6 +4581,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			source: spotifyLocalLyricsSource, lyrics: spl.lyr,
 			sourceReportedDurationSecs: spl.srcDur,
 			title:                      spl.matchTitle, artist: spl.matchArtist, album: spl.matchAlbum,
+			cover: spl.matchCover,
 		})
 	}
 	if !amll.empty() {

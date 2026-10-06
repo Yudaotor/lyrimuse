@@ -399,6 +399,7 @@ func spotifyLocalLyricsFor(artist, title, album string) (lyricSourceResult, bool
 			r.srcDur = m.seconds
 		}
 	}
+	r.matchCover = spotifyLocalCover(id)
 	return r, true
 }
 
