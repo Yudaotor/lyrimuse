@@ -592,4 +592,34 @@ func runSettingsInteractionTests() {
         expectEqual(packRow.contains("raw = features.systemLanguage") && !packRow.contains("Locale.current.language"), true,
                     "系统语言(契约): 语言包那一行按同一个系统语言算目标")
     }
+
+    // ---- SettingsDeepLink ----
+    do {
+        print("\n== 设置深链 lyrimuse://settings/<路径> ==")
+        typealias D = SettingsDeepLink
+        expectEqual(D(path: "/lyrics"), .tab("lyrics"), "设置深链: 顶层分类")
+        expectEqual(D(path: "/About"), .tab("about"), "设置深链: 大小写不敏感")
+        expectEqual(D(path: "/account/lastfm"), .account(.lastfm), "设置深链: 账号页")
+        expectEqual(D(path: "/account/relay/"), .account(.relay), "设置深链: 末尾斜杠照认")
+        expectEqual(D(path: "/account/discord"), .account(.discord), "设置深链: Discord 页")
+        expectEqual(D(path: "/software-update"), .softwareUpdate, "设置深链: 软件更新页")
+        expectEqual(D(path: "/lastfm-suggestions"), .lastfmSuggestions, "设置深链: Last.fm 账号建议页")
+        expectEqual(D(path: ""), nil, "设置深链: 没有路径 → nil(只开窗口)")
+        expectEqual(D(path: "/account"), nil, "设置深链: 只有 account → nil")
+        expectEqual(D(path: "/account/spotify"), nil, "设置深链: 不存在的账号 → nil")
+        expectEqual(D(path: "/lyrics/extra"), nil, "设置深链: 多出来的段 → nil")
+
+        let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func appSource(_ name: String) -> String {
+            (try? String(contentsOf: appDir.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        let settingsView = appSource("SettingsView.swift")
+        expectEqual(settingsView.contains("case " + D.tabNames.joined(separator: ", ") + "\n"), true,
+                    "设置深链(契约): tabNames 与 SettingsTab 的 case 逐个一致、顺序相同")
+        expectEqual(D.Account.allCases.allSatisfy { settingsView.contains("case .\($0.rawValue): self = .account(") }, true,
+                    "设置深链(契约): 每个账号路径在 App 侧都映射到一个账号页")
+        expectEqual(appSource("AppDelegate.swift").contains("SettingsDeepLink(path: url.path).flatMap(SettingsSidebarItem.init(deepLink:))"), true,
+                    "设置深链(契约): URL 回调按路径翻页")
+    }
 }

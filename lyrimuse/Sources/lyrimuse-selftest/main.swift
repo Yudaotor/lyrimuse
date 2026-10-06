@@ -67,7 +67,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "idle-page", summary: "停播页:第 N 次听换算 / 收听总览 / 选句 / 平台链接", run: runIdlePageTests),
     TestGroup(name: "identity", summary: "变体身份与落盘路径:正式 / Dev 两套名字、配置目录、日志、传给引擎的环境变量", run: runIdentityTests),
     TestGroup(name: "update-channel", summary: "更新频道:版本号 / 构建号(与 build-version.sh 交叉校验)/ Release 列表 / 测试版该读哪份 appcast", run: runUpdateChannelTests),
-    TestGroup(name: "settings-ui", summary: "设置页交互纯逻辑:顺序优先列表拖拽排序(滞回 / 让位 / 写回)/ 导入字体 / 配置包自报信息 / 系统语言(样例与引擎共用)", run: runSettingsInteractionTests),
+    TestGroup(name: "settings-ui", summary: "设置页交互纯逻辑:顺序优先列表拖拽排序(滞回 / 让位 / 写回)/ 导入字体 / 配置包自报信息 / 系统语言(样例与引擎共用)/ 设置深链", run: runSettingsInteractionTests),
     TestGroup(name: "settings-search", summary: "设置搜索:目录 ↔ 源码调用点 ↔ catalog 三方对账 / 匹配排序", run: runSettingsSearchTests),
     TestGroup(name: "onboarding", summary: "首启引导:步骤序列 / 翻页防越界 / 锁与收尾 / 体检清单 / 收尾页顺序 / 撒花几何", run: runOnboardingTests),
     TestGroup(name: "contracts", summary: "跨文件契约(多数靠 #filePath 扫源码文本):设置页分段 / 本地化 / 滑杆 / 封面口径 / 灵动岛对齐 / 引导页", run: runSourceContractTests),

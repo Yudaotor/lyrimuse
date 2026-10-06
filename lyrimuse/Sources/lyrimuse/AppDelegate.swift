@@ -120,10 +120,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // 两种用途(按 host 分流):
-        //   lyrimuse://settings/software-update → 把设置窗口翻到「软件更新」页(仿系统设置的
-        //     x-apple.systempreferences: 深链;发版说明 / 支持回复里可以直接给这个链接,也是本机核对那一页
-        //     外观的唯一非点按入口);带 ?check=1 则顺手发起一次检查(支持回复里「点这个链接检查更新」)。
-        //     settings 下别的路径暂无定义,只打开设置窗口。
+        //   lyrimuse://settings/<路径> → 把设置窗口翻到那一页(仿系统设置的 x-apple.systempreferences: 深链;
+        //     发版说明 / 支持回复里可以直接给链接,也是本机不点界面核对某一页外观的入口)。路径表见 Core
+        //     `SettingsDeepLink`;software-update 带 ?check=1 则顺手发起一次检查(支持回复里「点这个链接检查更新」)。
+        //     认不出的路径只打开设置窗口。
         //   其它(lyrimuse://lastfm-auth-callback)→ Last.fm 授权回跳,原样。
         if url.host == "settings" {
             if url.path == "/software-update" {
@@ -135,6 +135,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     SparkleUpdaterManager.shared.showUpdatePage()
                 }
             } else {
+                if let item = SettingsDeepLink(path: url.path).flatMap(SettingsSidebarItem.init(deepLink:)) {
+                    AppActions.shared.requestSettings(item)
+                }
                 AppActions.shared.openSettings?()
             }
             return

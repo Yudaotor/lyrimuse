@@ -210,6 +210,27 @@ enum SettingsSidebarItem: Hashable {
     case lastfmSuggestions
 }
 
+extension SettingsSidebarItem {
+    /// `lyrimuse://settings/<路径>` → 侧栏目的地。路径表在 Core `SettingsDeepLink`。
+    init?(deepLink: SettingsDeepLink) {
+        switch deepLink {
+        case .tab(let name):
+            guard let tab = SettingsTab(rawValue: name) else { return nil }
+            self = .tab(tab)
+        case .account(let account):
+            switch account {
+            case .listenbrainz: self = .account(.listenBrainz)
+            case .lastfm: self = .account(.lastfm)
+            case .relay: self = .account(.stateRelay)
+            case .bark: self = .account(.bark)
+            case .discord: self = .account(.discord)
+            }
+        case .softwareUpdate: self = .softwareUpdate
+        case .lastfmSuggestions: self = .lastfmSuggestions
+        }
+    }
+}
+
 /// 设置窗里的"一个位置" = 顶层面板 + 这一页当前停在哪个二级分段(没有分段的页是 nil)。
 ///
 /// 前进 / 后退按这个粒度记账。**页内那几个分段在用户眼里跟换页是同一件事**(「歌词」的
