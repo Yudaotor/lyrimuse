@@ -231,6 +231,10 @@ func isCreditOnlyLRC(lrc string) bool {
 // 正文共识(lyricConsensusBody)剔署名行、时长端点不剔,两处口径本就该一致。演唱者标签
 // (男：/女：)不算署名,理由见 lyricspeaker.go。
 //
+// 段落标记行(「[Outro]」「(Instrumental)」「【间奏】」)和只有符号的行(「♪」「…」)同样跳过(isLyricMarkerLine):
+// 也是没有歌词正文的时间戳,却能把一份早早唱完的歌词撑进「时长吻合」,批内别的候选随之丢掉印证和共识分。
+// 见 09 章决策 198。
+//
 // 取的是**所有**够格行里**所有**时间戳的最大值,不是最后一行的最后一个:网易云有「一行挂多个时间戳」的
 // 压缩 LRC(重复的副歌只写一次),行内时间戳还可能是倒序的(`[02:40.82][01:15.68]`),最后一个物理行
 // 也不一定是最晚唱的那句。只看最后一行会把曲末算早几十秒,时长项白吃一大截。
@@ -243,7 +247,7 @@ func lastLRCTimestampSecs(lrc string) (float64, bool) {
 			continue
 		}
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
-		if text == "" || isRelaxedCreditLine(text, speakers) {
+		if text == "" || isRelaxedCreditLine(text, speakers) || isLyricMarkerLine(text) {
 			continue
 		}
 		for _, m := range matches {
