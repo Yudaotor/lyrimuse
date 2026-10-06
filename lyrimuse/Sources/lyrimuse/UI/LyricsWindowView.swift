@@ -1717,8 +1717,12 @@ struct LyricsWindowView: View {
         case .custom: return playback.miniKaraokeFillColor
         case .artwork:
             guard let hex = playback.coverAverageHex, let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
-            let a = LyricsWindowKaraokeFill.accent(r: ns.redComponent, g: ns.greenComponent, b: ns.blueComponent,
-                                                   darkBackdrop: lyricTextIsLight)
+            // 封面是中性色(纯灰、纯白、近黑)时退回系统强调色(07 章决策 127)。
+            let system = NSColor.controlAccentColor.usingColorSpace(.sRGB)
+            let a = LyricsWindowKaraokeFill.accent(
+                r: ns.redComponent, g: ns.greenComponent, b: ns.blueComponent, darkBackdrop: lyricTextIsLight,
+                fallback: system.map { (r: $0.redComponent, g: $0.greenComponent, b: $0.blueComponent) }
+                    ?? LyricsWindowKaraokeFill.neutralFallback)
             return Color(.sRGB, red: a.r, green: a.g, blue: a.b)
         }
     }

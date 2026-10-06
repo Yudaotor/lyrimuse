@@ -730,6 +730,35 @@ func runLyricsWindowTests() {
         expectEqual(paleContrast >= 2.99, true, "已唱颜色: 浅底时把浅色封面色压暗到跟白底对比度够 3")
         let deep = F.accent(r: 0.15, g: 0.10, b: 0.30, darkBackdrop: false)
         expectEqual(deep == (r: 0.15, g: 0.10, b: 0.30), true, "已唱颜色: 浅底时本来就够深的颜色原样")
+        // 浅色、灰色封面补彩度(07 章决策 127)。
+        let cream = (r: 0xE8 / 255.0, g: 0xDC / 255.0, b: 0xC8 / 255.0)
+        let creamHue = F.lab(r: cream.r, g: cream.g, b: cream.b).hue
+        let creamDark = F.accent(r: cream.r, g: cream.g, b: cream.b, darkBackdrop: true)
+        let creamDarkLab = F.lab(r: creamDark.r, g: creamDark.g, b: creamDark.b)
+        expectEqual(creamDarkLab.chroma >= F.minChroma - 0.5, true, "已唱颜色: 深底时米白封面的颜色把彩度抬到下限")
+        expectEqual(abs(creamDarkLab.hue - creamHue) < 3, true, "已唱颜色: 抬彩度保留封面的色调")
+        expectEqual(luma(creamDark) >= 0.62 - 1e-9, true, "已唱颜色: 抬完彩度仍在感知亮度下限以上")
+        let creamLight = F.accent(r: cream.r, g: cream.g, b: cream.b, darkBackdrop: false)
+        let creamLightLab = F.lab(r: creamLight.r, g: creamLight.g, b: creamLight.b)
+        let creamDimmed = LocalPlaybackSource.accentAgainstStroke(
+            r: cream.r, g: cream.g, b: cream.b, strokeR: 1, strokeG: 1, strokeB: 1)
+        expectEqual(creamLightLab.chroma >= F.minChroma - 0.5, true, "已唱颜色: 浅底时米白封面压暗后同样抬彩度")
+        expectEqual(abs(creamLightLab.l - F.lab(r: creamDimmed.r, g: creamDimmed.g, b: creamDimmed.b).l) < 0.5, true,
+                    "已唱颜色: 抬彩度不动明度(跟白底的对比度不变)")
+        let systemBlue = (r: 0.0, g: 0x7A / 255.0, b: 1.0)
+        let neutralGray = F.accent(r: 0.78, g: 0.78, b: 0.78, darkBackdrop: true, fallback: systemBlue)
+        expectEqual(neutralGray == F.accent(r: systemBlue.r, g: systemBlue.g, b: systemBlue.b, darkBackdrop: true), true,
+                    "已唱颜色: 中性封面退回系统强调色")
+        expectEqual(F.accent(r: 0.01, g: 0.01, b: 0.02, darkBackdrop: true, fallback: systemBlue) == neutralGray, true,
+                    "已唱颜色: 近黑封面同样退回系统强调色")
+        let red = F.neutralFallback
+        expectEqual(F.accent(r: 0.78, g: 0.78, b: 0.78, darkBackdrop: true, fallback: (r: 0.55, g: 0.55, b: 0.55))
+                    == F.accent(r: red.r, g: red.g, b: red.b, darkBackdrop: true), true,
+                    "已唱颜色: 系统强调色也是中性(石墨)时用默认红")
+        let rose = F.accent(r: 0.784, g: 0.196, b: 0.196, darkBackdrop: true)
+        let roseLifted = LocalPlaybackSource.brightenedAccent(r: 0.784, g: 0.196, b: 0.196)
+        expectEqual(rose == LocalPlaybackSource.accentForDarkBackdrop(r: roseLifted.r, g: roseLifted.g, b: roseLifted.b),
+                    true, "已唱颜色: 本来有颜色的封面原样不动")
 
         typealias T = LyricsWindowMiniToggle
         expectEqual(T.targetIsMini(windowOpen: false, isMini: false), true, "切换迷你快捷键: 窗口没开就开成迷你")
@@ -768,6 +797,9 @@ func runLyricsWindowTests() {
         expectEqual(sourceBytes(layerRows, contain: "\"colors\": NSNull()"), true, "已唱颜色接线: 换色不做隐式动画")
         expectEqual(sourceBytes(window, contain: ".map { system, highRes in highRes ?? system }"), true,
                     "已唱颜色接线: 跟随封面取高清替代那份的均值色,没有才用系统那份")
+        expectEqual(sourceBytes(window, contain: "let system = NSColor.controlAccentColor.usingColorSpace(.sRGB)")
+                    && sourceBytes(window, contain: "fallback: system.map { (r: $0.redComponent, g: $0.greenComponent, b: $0.blueComponent) }"),
+                    true, "已唱颜色接线: 中性封面退回的是系统强调色")
         expectEqual(sourceBytes(window, contain: "case .systemPrimary: return colorScheme == .dark"), true,
                     "已唱颜色接线: 文字色跟随系统时按此刻的深浅外观判断底色")
         expectEqual(sourceBytes(settingsView, contain: "Picker(\"\", selection: fontWeight) {")
