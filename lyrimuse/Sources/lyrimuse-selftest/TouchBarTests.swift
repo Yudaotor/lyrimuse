@@ -7,7 +7,7 @@ import LyrimuseCore
 // 展开态从左到右排哪几项(`TouchBarSlot.order`)、隐藏功能栏时的宽度、广告期间封面那一格贴喇叭、按触控栏这一格的宽度断句;
 // 私有入口只在 `TouchBar/TouchBarPrivateAPI.swift` 一个文件里、App 启动时起控制器、开关和十项设置在「歌词显示」页
 // 自己那一段(「触控栏」)里、控制器都接上了;这台 Mac 有没有触控栏的判据(`TouchBarPresence`)和它在设置页 / 搜索 /
-// 控制器三处的接线;菜单栏左键面板第二排那一格「触控栏歌词」;全局快捷键「展开/收起触控栏歌词」。
+// 控制器三处的接线;菜单栏左键面板第二排那一格「触控栏歌词」;全局快捷键「展开/收起触控栏歌词」;占满整条的展开收起后功能栏图标重新露面。
 // 由 main.swift 的注册表按组调用。
 
 func runTouchBarTests() {
@@ -809,5 +809,26 @@ func runTouchBarTests() {
         expectEqual(notchHint.contains("SymbolImage(name: banner.icon, size: 12, weight: .semibold)")
                         && !notchHint.contains("Image(systemName: banner.icon)"), true,
                     "触控栏快捷键: 灵动岛提示条的图标位画得出自画的触控栏图标")
+    }
+
+    // 占满整条的展开收起后把功能栏图标重新露一次面(17 章决策 42):展开时按实际用的方式记下,收起时只在占满整条时做,
+    // 先藏再露。漏了不报错,只表现成放歌时收起之后功能栏那一格是系统的「正在播放」、Lyrimuse 图标点不回来。
+    do {
+        let controller = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsController.swift")) ?? ""
+        let api = code(appDir.appendingPathComponent("TouchBar/TouchBarPrivateAPI.swift")) ?? ""
+        expectEqual(controller.contains("presentedFullWidth = hidingControlStrip && TouchBarPrivateAPI.supportsHidingControlStrip\n"
+                                        + "        TouchBarPrivateAPI.presentSystemModal("), true,
+                    "功能栏图标: 展开时按实际用的方式记下是不是占满整条")
+        expectEqual(controller.contains("guard visible else {\n            if presentedFullWidth {\n"
+                                        + "                presentedFullWidth = false\n"
+                                        + "                TouchBarPrivateAPI.reassertInControlStrip(trayItem)"), true,
+                    "功能栏图标: 收起时只在占满整条展开过时重新露面")
+        if let r = api.range(of: "static func reassertInControlStrip(") {
+            expectEqual(String(api[r.upperBound...].prefix(400))
+                            .contains("e.setPresence(identifier, false)\n        e.setPresence(identifier, true)"), true,
+                        "功能栏图标: 重新露面是先藏再露")
+        } else {
+            expectEqual(false, true, "功能栏图标: TouchBarPrivateAPI 里有 reassertInControlStrip")
+        }
     }
 }

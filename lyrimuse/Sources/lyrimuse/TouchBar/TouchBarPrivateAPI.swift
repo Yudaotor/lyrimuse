@@ -185,6 +185,16 @@ enum TouchBarPrivateAPI {
         logger.notice("[TouchBarPrivateAPI.setInControlStrip] \(item.identifier.rawValue, privacy: .public) present=\(present)")
     }
 
+    /// 已登记的那一项重新露一次面:先藏再露。占满整条的展开条收起后功能栏重新排,放歌时这一项那一格会给系统的
+    /// 「正在播放」;重新露面的那一项排回去(17 章决策 42)。
+    static func reassertInControlStrip(_ item: NSTouchBarItem) {
+        guard let e = entries else { return }
+        let identifier = item.identifier.rawValue as NSString
+        e.setPresence(identifier, false)
+        e.setPresence(identifier, true)
+        logger.notice("[TouchBarPrivateAPI.reassertInControlStrip] \(item.identifier.rawValue, privacy: .public)")
+    }
+
     /// 把 `bar` 当系统模态条展开,收起时缩回 `trayIdentifier` 那一项。不管哪个 App 在前台都显示。
     /// `hidingControlStrip` 为 true 时占满整条触控栏(功能栏和系统的 ✕ 一起收起,收起键要 App 自己给);
     /// 入口缺了就照常展开。

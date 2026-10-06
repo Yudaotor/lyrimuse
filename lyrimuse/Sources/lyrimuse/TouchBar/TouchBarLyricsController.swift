@@ -78,6 +78,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     /// 量到的宽是在哪种排法下量的(那时的估算宽)。收着的时候系统不重排,这一格的 frame 停在上次摆着时的宽,
     /// 排法变了(估算宽对不上)就先不认它,见 `reportLyricsWidth`。
     private var measuredUnderEstimate: Double?
+    /// 这一次展开是不是占满整条(隐藏功能栏)的。这种展开收起后要把功能栏图标重新露一次面,见 `visibilityChanged`。
+    private var presentedFullWidth = false
 
     private let bar = NSTouchBar()
     private let trayItem = NSCustomTouchBarItem(identifier: Item.tray)
@@ -288,6 +290,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         } else {
             visibilityObservation = nil
             playbackObservers = []
+            presentedFullWidth = false
             TouchBarPrivateAPI.dismissSystemModal(bar)
             TouchBarPrivateAPI.setInControlStrip(trayItem, false)
             displayStart = TouchBarDisplayStart()
@@ -314,6 +317,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     }
 
     private func presentLyrics(hidingControlStrip: Bool) {
+        presentedFullWidth = hidingControlStrip && TouchBarPrivateAPI.supportsHidingControlStrip
         TouchBarPrivateAPI.presentSystemModal(bar, trayIdentifier: Item.tray, hidingControlStrip: hidingControlStrip)
     }
 
@@ -391,7 +395,15 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         guard enabled else { return }
         let visible = bar.isVisible
         logger.notice("[TouchBarLyricsController.visibilityChanged] visible=\(visible)")
-        guard visible else { return }
+        guard visible else {
+            // 占满整条的展开收起后功能栏重新排,放歌时 Lyrimuse 那一格会给系统的「正在播放」、图标点不回来;
+            // 重新露一次面就排回去。普通方式展开的收起后图标还在,不动(17 章决策 42)。
+            if presentedFullWidth {
+                presentedFullWidth = false
+                TouchBarPrivateAPI.reassertInControlStrip(trayItem)
+            }
+            return
+        }
         // 展开时系统先发「看得见了」、再把这一格放回窗口重排(frame 一变还会再报);这一拍要是已经排好了,量到的
         // 宽就此作数 —— 收着时排法变过、排好后宽又碰巧没变的话,不会再有 frame 变化来换掉估算宽。
         reportLyricsWidth()
