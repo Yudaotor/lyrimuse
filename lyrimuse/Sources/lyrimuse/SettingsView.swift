@@ -453,6 +453,10 @@ struct SettingsView: View {
         if let key = entry.sectionKey, let value = entry.sectionValue {
             UserDefaults.standard.set(value, forKey: key)
         }
+        // 「歌词窗口」那一段只在一种尺寸的预览下才有的行:预览先切到那个尺寸,行才在页面上(14 章决策 56)。
+        if let mini = entry.lyricsWindowMini {
+            UserDefaults.standard.set(mini, forKey: LyricsWindowPreviewStage.showsMiniStorageKey)
+        }
         switch entry.destination {
         case .tab(let raw):
             if let tab = SettingsTab(rawValue: raw) { selection = .tab(tab) }

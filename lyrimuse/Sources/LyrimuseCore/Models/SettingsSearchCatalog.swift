@@ -46,10 +46,14 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
     public let subtitleKey: String?
     public let keywords: [String]
     public let pathKeys: [String]
+    /// 「歌词显示 › 歌词窗口」那一段里这一行只在哪个尺寸的预览下才有:true = 只有迷你、false = 只有完整、
+    /// nil = 两种都有(或不在那一段)。命中时 App 先把预览切到那个尺寸,行才在页面上(14 章决策 56)。
+    public let lyricsWindowMini: Bool?
 
     public init(destination: Destination, sectionKey: String? = nil, sectionValue: String? = nil,
                 drawer: LyricsSurface? = nil, titleKey: String, alternateTitleKeys: [String] = [],
-                subtitleKey: String? = nil, keywords: [String] = [], pathKeys: [String]) {
+                subtitleKey: String? = nil, keywords: [String] = [], pathKeys: [String],
+                lyricsWindowMini: Bool? = nil) {
         self.destination = destination
         self.sectionKey = sectionKey
         self.sectionValue = sectionValue
@@ -59,6 +63,7 @@ public struct SettingsSearchEntry: Hashable, Sendable, Identifiable {
         self.subtitleKey = subtitleKey
         self.keywords = keywords
         self.pathKeys = pathKeys
+        self.lyricsWindowMini = lyricsWindowMini
     }
 
     public var id: String {
@@ -93,6 +98,14 @@ public enum SettingsSearchCatalog {
     /// 「歌词显示」页第四段「歌词窗口」的分段取值(`AppearanceSettingsTab.Section.lyricsWindow`)。
     /// 前三段的取值来自 `LyricsSurface`,这一段没有对应的形态,所以单独在这里定义一份。
     public static let lyricsWindowSectionValue = "lyricsWindow"
+    /// 「歌词窗口」那一段只在迷你预览下才有的行(按标题):完整尺寸那一套外观行不传字号、粗细、卡拉OK、已唱颜色、
+    /// 长句处理、歌词布局这些绑定,「布局」「行为」「顶部信息」三组也只在迷你装配。设置页加了这类行要来这里登记。
+    public static let lyricsWindowMiniOnlyTitles: Set<String> = [
+        "字号", "粗细", "卡拉OK效果", "已唱颜色", "歌词布局", "长句处理", "悬浮淡化",
+        "歌名", "歌手", "专辑", "封面", "时间", "宽度", "高度",
+    ]
+    /// 只在完整预览下才有的行:「封面」那一组。
+    public static let lyricsWindowFullOnlyTitles: Set<String> = ["动态封面", "动态封面缓存"]
 
     /// 「歌词显示」页「触控栏」那一段的分段取值(`AppearanceSettingsTab.Section.touchBar`)。跟歌词窗口一样
     /// 不是一个 `LyricsSurface`(见 `touchBar(_:sub:kw:)`),单独定义一份。
@@ -145,13 +158,16 @@ public enum SettingsSearchCatalog {
     /// (歌词窗口没有常驻开关,进不了那个枚举),分段取值只能直接写字面量;selftest 拿
     /// `AppearanceSettingsTab.Section` 的源码枚举核它。这一段的「全部设置」抽屉不靠 `drawer`
     /// 字段展开(那个字段是 `LyricsSurface` 类型),靠行高亮信号,见 `LyricsWindowAllSettingsDrawer`。
+    /// 只在一种尺寸下才有的行按两份名单标上 `lyricsWindowMini`。
     private static func lyricsWindow(_ title: String, sub: String? = nil, kw: [String] = [],
                                      group: String? = nil) -> SettingsSearchEntry {
         SettingsSearchEntry(destination: .tab("appearance"),
                             sectionKey: LyricsSurface.appearanceSectionStorageKey,
                             sectionValue: lyricsWindowSectionValue,
                             titleKey: title, subtitleKey: sub, keywords: kw,
-                            pathKeys: ["歌词显示", "歌词窗口"] + (group.map { [$0] } ?? []))
+                            pathKeys: ["歌词显示", "歌词窗口"] + (group.map { [$0] } ?? []),
+                            lyricsWindowMini: lyricsWindowMiniOnlyTitles.contains(title) ? true
+                                : lyricsWindowFullOnlyTitles.contains(title) ? false : nil)
     }
 
     /// 「歌词显示 › 触控栏」那一段。跟 `lyricsWindow` 同理不是一个 `LyricsSurface`:触控栏有常驻开关、也按宽度断句

@@ -287,4 +287,52 @@ func runSettingsSearchTests() {
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
     expectEqual(qqHits.map(\.titleKey).contains("播放器"), true, "目录: 搜「QQ」也能落到「播放器」卡")
+
+    // 「歌词窗口」那一段只在一种尺寸的预览下才有的行(14 章决策 56):命中时预览先切过去。
+    let lyricsWindowEntries = entries.filter { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue }
+    let miniOnly = SettingsSearchCatalog.lyricsWindowMiniOnlyTitles
+    let fullOnly = SettingsSearchCatalog.lyricsWindowFullOnlyTitles
+    expectEqual(Set(lyricsWindowEntries.filter { $0.lyricsWindowMini == true }.map(\.titleKey)), miniOnly,
+                "歌词窗口尺寸: 只有迷你的那几行在目录里标了迷你")
+    expectEqual(Set(lyricsWindowEntries.filter { $0.lyricsWindowMini == false }.map(\.titleKey)), fullOnly,
+                "歌词窗口尺寸: 只有完整的那几行在目录里标了完整")
+    expectEqual(entries.filter { $0.sectionValue != SettingsSearchCatalog.lyricsWindowSectionValue && $0.lyricsWindowMini != nil }.count,
+                0, "歌词窗口尺寸: 别的段不带这个标记")
+    let lyricsWindowTitles = Set(lyricsWindowEntries.map(\.titleKey))
+    expectEqual(miniOnly.union(fullOnly).subtracting(lyricsWindowTitles).sorted(), [],
+                "歌词窗口尺寸: 两份名单里的标题都在目录的歌词窗口那一段(改了名名单会落空)")
+    expectEqual(miniOnly.intersection(fullOnly).sorted(), [], "歌词窗口尺寸: 两份名单不重叠")
+    // 设置页里只在一种尺寸下才画的几组,行标题都得在对应名单里:新加一行忘了登记会红。
+    let settingsSource = source("SettingsView.swift")
+    func block(from start: String, to end: String) -> String {
+        guard let s = settingsSource.range(of: start),
+              let e = settingsSource.range(of: end, range: s.upperBound..<settingsSource.endIndex) else { return "" }
+        return String(settingsSource[s.upperBound..<e.lowerBound])
+    }
+    func rowTitles(_ text: String) -> Set<String> { Set(text.matches(of: titlePattern).map { String($0.1) }) }
+    let miniBlocks = [
+        block(from: "    private var lyricsWindowMiniHeaderRows: some View {", to: "\n    }\n"),
+        block(from: "        case .layout:\n            if let miniLyricsLayout {", to: "    /// 迷你顶部那一行的某一样勾没勾。"),
+        block(from: "    private var lyricsWindowBehaviorRows: some View {", to: "\n    }\n"),
+    ]
+    let fullBlocks = [
+        block(from: "    private var lyricsWindowCoverRows: some View {", to: "\n    }\n"),
+        block(from: "private struct MotionCoverCacheRow: View {", to: "\n}\n"),
+    ]
+    expectEqual(miniBlocks.allSatisfy { !$0.isEmpty } && fullBlocks.allSatisfy { !$0.isEmpty }, true,
+                "歌词窗口尺寸(契约): 认得出设置页里只在一种尺寸下才画的几组(认不出 = 改名了,先改这里)")
+    let miniBlockTitles = miniBlocks.reduce(into: Set<String>()) { $0.formUnion(rowTitles($1)) }
+    let fullBlockTitles = fullBlocks.reduce(into: Set<String>()) { $0.formUnion(rowTitles($1)) }
+    expectEqual(miniBlockTitles.isEmpty || fullBlockTitles.isEmpty, false, "歌词窗口尺寸(契约): 那几组里扫得到行标题")
+    expectEqual(miniBlockTitles.subtracting(miniOnly).sorted(), [], "歌词窗口尺寸: 顶部信息、布局、行为三组的行都登记为只有迷你")
+    expectEqual(fullBlockTitles.subtracting(fullOnly).sorted(), [], "歌词窗口尺寸: 封面那一组的行都登记为只有完整")
+    // 文字那一组里迷你独有的四行,靠完整尺寸那一支不传它们的绑定:真要让完整尺寸也有,名单得跟着改。
+    let fullBranch = block(from: "        } else {\n            lyricsWindowAppearanceRowsImpl(", to: "\n        }\n")
+    expectEqual(!fullBranch.isEmpty && ["fontSize:", "fontWeight:", "miniKaraoke:", "karaokeFill:", "lineOverflow:", "miniLyricsLayout:"]
+                    .allSatisfy { !fullBranch.contains($0) }, true,
+                "歌词窗口尺寸: 完整尺寸那一支外观行不传迷你独有的那几样绑定")
+    // 跳转那一段:写完分段键、翻面板之前,把预览切到这一行所在的尺寸。
+    let jump = block(from: "    private func openSettingsSearchHit(_ hit: SettingsSearchHit) {", to: "        searchRouter.reveal(hit)")
+    expectEqual(sourceBytes(jump, contain: "if let mini = entry.lyricsWindowMini {\n            UserDefaults.standard.set(mini, forKey: LyricsWindowPreviewStage.showsMiniStorageKey)\n        }\n        switch entry.destination {"),
+                true, "歌词窗口尺寸: 命中时先切预览尺寸,再翻面板")
 }
