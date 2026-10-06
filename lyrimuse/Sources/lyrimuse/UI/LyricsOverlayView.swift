@@ -201,8 +201,9 @@ private final class OverlayPlayback: ObservableObject {
             s.$lockPosition.removeDuplicates().sink { [weak self] in self?.lockPosition = $0 },
             s.$overlayFadeOnHover.removeDuplicates().sink { [weak self] in self?.fadeOnHover = $0 },
             s.$overlayPlacementMode.removeDuplicates().sink { [weak self] in self?.placementMode = $0 },
-            s.$showRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
-            s.$showTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
+            // 悬浮歌词自己那份读音 / 译文(歌词窗口那份是 showRomanization / showTranslation),见 04 章决策 42。
+            s.$overlayShowRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
+            s.$overlayShowTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
             s.$showNextLinePreview.removeDuplicates().sink { [weak self] in self?.showNextLinePreview = $0 },
             s.$overlayDuetAlignmentOverride.removeDuplicates().sink { [weak self] in self?.duetAlignmentOverride = $0 },
             s.$overlayLineOverflow.removeDuplicates().sink { [weak self] in self?.lineOverflow = $0 },

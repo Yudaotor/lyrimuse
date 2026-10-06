@@ -861,14 +861,15 @@ struct OnboardingView: View {
     /// 「歌词怎么显示」页的下半部分:译文与罗马音。这是这个 App 对中日韩听众最核心的能力之一
     /// (设置里「歌词 → 译文/效果」整整两卡),介绍性质、不锁「下一步」。
     ///
-    /// 这里只放**两个总开关**,不放"标注的语言"那一排。那几个走的是
+    /// 这里只放「显示译文」「显示读音」两个开关,不放"标注读音的语言"那一排。那几个走的是
     /// `romanizationScripts` 的**双写**(AppSettings 持久化 + LocalPlaybackSource 让当前这首
     /// 歌立刻重新解析,见 SettingsView.romanizationToggle 的头注),只写一边就会出"改了要等
     /// 下一首才生效"这种错位 —— 引导页照抄一份等于给那条约束开第二个漂移点。默认值
     /// (`RomanizationScripts.defaultScripts(chineseUI:)`,跟界面语言走)对绝大多数人本来就是对的,细调留给设置页。
     ///
-    /// 两个总开关只管悬浮歌词和歌词窗口;灵动岛、菜单栏和触控栏的译文 / 罗马音走各自的「副行」
-    /// (`LyricSecondaryLine`),不受这两个开关影响,页脚那句据此写(触控栏只在这台 Mac 有触控栏时提)。
+    /// 两个开关同时设悬浮歌词和歌词窗口两份(之后在「歌词显示」里各自改,见 `overlayAndWindow`);灵动岛、菜单栏
+    /// 和触控栏的译文 / 罗马音走各自的「副行」(`LyricSecondaryLine`),不受这两个开关影响,页脚那句据此写
+    /// (触控栏只在这台 Mac 有触控栏时提)。
     private var lyricsExtrasSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
@@ -876,14 +877,14 @@ struct OnboardingView: View {
                     icon: "text.bubble",
                     title: L10n.t("显示译文"),
                     subtitle: L10n.t("歌词下面并排显示一行译文"),
-                    isOn: $settings.showTranslation)
+                    isOn: overlayAndWindow(\.overlayShowTranslation, \.showTranslation))
                 toggleRow(
                     icon: "textformat.alt",
                     title: L10n.t("显示读音"),
                     subtitle: settings.romanizationScripts.contains(.chinese)
                         ? L10n.t("日文、韩文、中文、粤语默认都会标注，可在设置里按语言关闭")
                         : L10n.t("日文、韩文、粤语默认会标注，中文拼音可在设置里打开"),
-                    isOn: $settings.showRomanization)
+                    isOn: overlayAndWindow(\.overlayShowRomanization, \.showRomanization))
             }
             Text(touchBar.isPresent
                  ? L10n.t("这两个开关管悬浮歌词和歌词窗口；灵动岛、菜单栏、触控栏各在「副行」里选译文或读音")
@@ -1021,6 +1022,13 @@ struct OnboardingView: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
         }
+    }
+
+    /// 引导页的「显示译文」「显示读音」一次设悬浮歌词和歌词窗口两份(04 章决策 42),读悬浮歌词那份。
+    private func overlayAndWindow(_ overlay: ReferenceWritableKeyPath<AppSettings, Bool>,
+                                  _ window: ReferenceWritableKeyPath<AppSettings, Bool>) -> Binding<Bool> {
+        Binding(get: { settings[keyPath: overlay] },
+                set: { settings[keyPath: overlay] = $0; settings[keyPath: window] = $0 })
     }
 
     /// 带 SF Symbol 的一行开关。`displayModeRow` 是它的姐妹 —— 那边左边是手绘示意图,因为

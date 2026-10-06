@@ -311,8 +311,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 判据本体抽成了纯函数 `supportsChineseVariant(lyrics:translation:translationVisible:)`。
     @Published public private(set) var currentLyricsSupportsChineseVariant = false
 
-    /// 译文有没有在屏幕上 —— 镜像 App 层的 `AppSettings.showTranslation`
-    /// (Core 够不到 AppSettings,由 AppDelegate 订阅推进来)。
+    /// 悬浮歌词上有没有译文 —— 镜像 App 层的 `AppSettings.overlayShowTranslation`
+    /// (Core 够不到 AppSettings,由 AppDelegate 订阅推进来)。看悬浮歌词那份是因为下面那条判据只给
+    /// 悬浮歌词 ⚙ 菜单用。
     ///
     /// 这个开关**不参与歌词装载**:译文转不转由 `chineseVariant` 决定,关掉它只是不画
     /// 那一行,引擎侧照常转(见 reloadCurrentLyrics 里的 `variant.converted(lyricsTr)`)。

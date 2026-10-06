@@ -212,10 +212,10 @@
 "不到 1 分钟" = "under a minute";
 "不到 1 小时" = "under an hour";
 "不可用：%@" = "Unusable: %@";
+"不含内容、排版、行为、位置和宽度" = "Content, layout, behavior, position and width are left alone";
 "不含宽度和总开关" = "Width and the master toggle are left alone";
 "不含宽度和锁定位置" = "Width and locked position are left alone";
 "不含总开关" = "The master toggle is left alone";
-"不含排版、行为、位置和宽度" = "Layout, behavior, position and width are left alone";
 "不打分，按下面的顺序取第一个有结果的来源" = "No scoring — takes the first source below that returns lyrics";
 "不是带时间戳的歌词" = "Not timestamped lyrics";
 "不显示" = "Nothing";
@@ -355,6 +355,7 @@
 "其它源仍在搜索中…" = "Still searching other sources…";
 "其它源印证了结束点" = "End time corroborated";
 "其它源照常在找，一首歌只要有别家找得到，歌词就不受影响。这些数字只在这台 Mac 上统计。" = "Other sources keep searching — as long as one of them has a song, its lyrics aren't affected. These numbers are only counted on this Mac.";
+"内容" = "Content";
 "内容获印证" = "Content corroborated";
 "内部数据不是合法 JSON，已放弃保存" = "The data isn't valid JSON, so nothing was saved";
 "写入 config.json 失败：%@" = "Couldn't write config.json: %@";
@@ -444,8 +445,6 @@
 "去连接" = "Connect";
 "去配置「%@」" = "Configure “%@”";
 "双行" = "Two Lines";
-"双行显示" = "Two-Line Display";
-"双行歌词" = "Two-Line Lyrics";
 "双语歌名" = "Bilingual title";
 "反馈与社区" = "Feedback & Community";
 "反馈问题" = "Report an Issue";
@@ -934,7 +933,6 @@
 "日文、韩文、粤语默认会标注，中文拼音可在设置里打开" = "Japanese, Korean and Cantonese are annotated by default; turn on Mandarin pinyin in Settings";
 "日文歌词自带读音，同水平候选间优先" = "Japanese lyrics with romanization; preferred among otherwise-equal candidates";
 "日语" = "Japanese";
-"日语、韩语标成罗马字，普通话标成拼音，粤语标成粤拼" = "Japanese and Korean get romaji, Mandarin gets pinyin, Cantonese gets Jyutping";
 "旧版评分规则" = "Older scoring rules";
 "时长" = "Duration";
 "时长不符" = "Duration mismatch";
@@ -1075,6 +1073,7 @@
 "查询词：%@" = "Query: %@";
 "标为纯音乐" = "Mark as Instrumental";
 "标注的语言" = "Languages";
+"标注读音的语言" = "Romanization Languages";
 "标题反查：Apple 原产地商店" = "Title lookup: Apple home storefront";
 "标题反查：专辑曲目表" = "Title lookup: album track list";
 "标题反查：去掉歌名里的英文" = "Title lookup: English part dropped";
@@ -1354,8 +1353,6 @@
 "签名密钥（可选）" = "Signature Secret (Optional)";
 "简体" = "Simplified";
 "简体中文" = "简体中文";
-"管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文" = "Applies to Desktop Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation in their own “Second Line” setting";
-"管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择读音" = "Applies to Desktop Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick romanization in their own “Second Line” setting";
 "管理" = "Library";
 "管理…" = "Manage…";
 "类型" = "Genre";
@@ -1391,6 +1388,7 @@
 "经典白字" = "Classic White";
 "经典黑字" = "Classic Black";
 "结束点获印证" = "End time corroborated";
+"给哪些语言的歌词标读音。悬浮歌词、歌词窗口等显不显示读音，在「歌词显示」里分别设置" = "Which languages get romanization. Whether Floating Lyrics, the Lyrics Window and the others show it is set for each one in Lyrics Display";
 "给当前配色起个名字" = "Name these colors";
 "给每个来源打分，取分最高的" = "Scores every source and keeps the best match";
 "统计" = "Stats";
@@ -1480,6 +1478,7 @@
 "装好并登录后会自动连上；网页版和手机版连不了" = "Connects automatically once it's installed and you're signed in. The web and mobile apps can't connect.";
 "要先把网页端部署好并拿到访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端" = "Deploy the web app first and get an access token. Setup steps are in the project README: https://github.com/Yudaotor/lyrimuse";
 "要删除已下载的语言包，请到「系统设置 › 通用 › 语言与地区 › 翻译语言」" = "To remove a downloaded language pack, go to System Settings › General › Language & Region › Translation Languages";
+"要哪种语言的译文。悬浮歌词、歌词窗口等显不显示译文，在「歌词显示」里分别设置" = "The language you want translations in. Whether Floating Lyrics, the Lyrics Window and the others show them is set for each one in Lyrics Display";
 "要把之前锁定的歌一并解锁吗？" = "Unlock the songs locked earlier?";
 "解析 Last.fm 响应失败" = "Couldn't read the response from Last.fm";
 "解析决策" = "Resolution decision";

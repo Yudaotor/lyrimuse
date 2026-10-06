@@ -194,18 +194,23 @@ enum GlobalHotkeys {
         }
         // 译文/发音两个显示开关。都带回声——它们改的是"看得见的东西",但如果当下这首歌
         // 压根没有译文/没有注音,画面不会有任何变化,没有提示就分不清是没按中还是没内容。
+        // 悬浮歌词、歌词窗口各有一份(04 章决策 42),快捷键两份一起切:有一处开着就都关,都关着就都开。
         KeyboardShortcuts.onKeyUp(for: .toggleTranslationHotkey) {
-            let on = !AppSettings.shared.showTranslation
-            AppSettings.shared.showTranslation = on
+            let s = AppSettings.shared
+            let on = !(s.overlayShowTranslation || s.showTranslation)
+            s.overlayShowTranslation = on
+            s.showTranslation = on
             flashHint(icon: on ? "character.book.closed" : "character.book.closed.fill",
                       text: on ? L10n.t("已显示译文") : L10n.t("已隐藏译文"))
         }
-        // 绑的是**总开关** `showRomanization`,不是在 拼音/粤拼/日文/韩文 之间轮换
+        // 绑的是两面的「读音」开关,不是在 拼音/粤拼/日文/韩文 之间轮换
         // (「应该改为开关罗马音的功能而不是切换」)。
         // 分语言那四个勾选留在设置页,它们是"配置",不是随手按的东西。
         KeyboardShortcuts.onKeyUp(for: .toggleRomanizationHotkey) {
-            let on = !AppSettings.shared.showRomanization
-            AppSettings.shared.showRomanization = on
+            let s = AppSettings.shared
+            let on = !(s.overlayShowRomanization || s.showRomanization)
+            s.overlayShowRomanization = on
+            s.showRomanization = on
             flashHint(icon: "textformat.abc",
                       text: on ? L10n.t("已显示读音") : L10n.t("已隐藏读音"))
         }

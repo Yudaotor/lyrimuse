@@ -1802,18 +1802,12 @@ private struct LyricsSettingsTab: View {
 
     private var translationCard: some View {
         SettingsCard {
-            // 顺序是一条链:要不要显示译文 → 要哪种语言 → 没有译文时兜底 → 兜底要的语言包。
-            SettingsRow(
-                icon: "text.bubble",
-                title: L10n.t("显示译文"),
-                help: L10n.t("管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文")
-            ) {
-                Toggle("", isOn: $settings.showTranslation)
-            }
-            CardDivider()
+            // 顺序是一条链:要哪种语言 → 没有译文时兜底 → 兜底要的语言包。显不显示译文是各展示面自己的开关,
+            // 在「歌词显示」里(04 章决策 42)。
             SettingsRow(
                 icon: "globe",
-                title: L10n.t("译文语言")
+                title: L10n.t("译文语言"),
+                help: L10n.t("要哪种语言的译文。悬浮歌词、歌词窗口等显不显示译文，在「歌词显示」里分别设置")
             ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsTranslationLanguage },
@@ -1893,42 +1887,31 @@ private struct LyricsSettingsTab: View {
             }
             CardDivider()
             }
+            // 按语言分别开关 —— 同一个人对不同语言的需求常常是相反的:听日文歌要罗马字
+            // 才跟得上,听中文歌完全不需要拼音。这一行只决定哪些语言产出读音、所有展示面共用;
+            // 显不显示读音是各展示面自己的开关,在「歌词显示」里(04 章决策 42)。
+            // 四个选项一律写**语言名**(标题问的就是语言),标成什么方案(罗马字 / 拼音 / 粤拼)
+            // 放在各自的悬停说明里 —— 语言名和方案名混排,读的人得先分清哪几个是语言、哪几个是写法。
+            // 「内容」浮层里那行「标注的语言 ›」按这一行的标题键跳过来,改标题要连着改那边(RomanizationScriptsLinkRow)。
             SettingsRow(
                 icon: "textformat.alt",
-                title: L10n.t("显示读音"),
-                help: L10n.t("管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择读音")
+                title: L10n.t("标注读音的语言"),
+                help: L10n.t("给哪些语言的歌词标读音。悬浮歌词、歌词窗口等显不显示读音，在「歌词显示」里分别设置")
             ) {
-                Toggle("", isOn: $settings.showRomanization)
-            }
-            // 按语言分别开关 —— 同一个人对不同语言的需求常常是相反的:听日文歌要罗马字
-            // 才跟得上,听中文歌完全不需要拼音。总开关关着时这几行没有意义,收起来。
-            if settings.showRomanization {
-                CardDivider()
-                // 这一项是"显示读音"的附属项,所以用子行(缩进 + 左边那条竖线)而不是主行:
-                // 两者都用 SettingsRow 的话长得一模一样,看不出谁属于谁。
-                // 四个选项一律写**语言名**(标题问的就是语言),标成什么方案(罗马字 / 拼音 / 粤拼)
-                // 放在各自的悬停说明里 —— 语言名和方案名混排,读的人得先分清哪几个是语言、哪几个是写法。
-                SettingsSubRow(
-                    title: L10n.t("标注的语言")
-                ) {
-                    HStack(spacing: 12) {
-                        romanizationToggle(
-                            L10n.t("日语"), .japanese,
-                            help: L10n.t("只对判定为日语的歌词生效，例如 こんにちは → konnichiwa"))
-                        romanizationToggle(
-                            L10n.t("韩语"), .korean,
-                            help: L10n.t("只对判定为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo"))
-                        romanizationToggle(
-                            L10n.t("普通话"), .chinese,
-                            help: L10n.t("只对判定为普通话的歌词生效，例如 你好 → nǐ hǎo"))
-                        romanizationToggle(
-                            L10n.t("粤语"), .cantonese,
-                            help: L10n.t("只对判定为粤语的歌词生效，用的是粤拼（Jyutping）方案，例如 你好 → nei5 hou2"))
-                    }
+                HStack(spacing: 12) {
+                    romanizationToggle(
+                        L10n.t("日语"), .japanese,
+                        help: L10n.t("只对判定为日语的歌词生效，例如 こんにちは → konnichiwa"))
+                    romanizationToggle(
+                        L10n.t("韩语"), .korean,
+                        help: L10n.t("只对判定为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo"))
+                    romanizationToggle(
+                        L10n.t("普通话"), .chinese,
+                        help: L10n.t("只对判定为普通话的歌词生效，例如 你好 → nǐ hǎo"))
+                    romanizationToggle(
+                        L10n.t("粤语"), .cantonese,
+                        help: L10n.t("只对判定为粤语的歌词生效，用的是粤拼（Jyutping）方案，例如 你好 → nei5 hou2"))
                 }
-                // 放进悬停说明而不是常驻副标题 —— 四个语言开关各自已经带了更具体的 help,
-                // 行上再顶一句概括是重复的噪声。
-                .help(L10n.t("日语、韩语标成罗马字，普通话标成拼音，粤语标成粤拼"))
             }
             CardDivider()
             // 下面两项跟繁简 / 罗马音同样双写:AppSettings 持久化,LocalPlaybackSource 让当前这首立刻重新加载。
@@ -2570,6 +2553,10 @@ private struct AppearanceSettingsTab: View {
                 CardDivider()
                 lyricsWindowAppearanceRows(.font)
                 CardDivider()
+                SettingsCardHeader(title: L10n.t("内容"))
+                CardDivider()
+                lyricsWindowContentRows
+                CardDivider()
                 if lyricsWindowPreviewShowsMini {
                     SettingsCardHeader(title: L10n.t("布局"))
                     CardDivider()
@@ -2622,7 +2609,8 @@ private struct AppearanceSettingsTab: View {
     /// 只管当前尺寸),动作本体是 `LyricsWindowStyleDefaults.restoreDefaults(mini:)`,作用范围那句
     /// 见 `lyricsWindowResetScope`。
     ///
-    /// 第二行迷你是「布局」「顶部信息」两颗、完整是「封面」一颗;隐藏占位 + `EditorToolbarResetReserve`
+    /// 第二行打头是「内容」(两种尺寸共用一份),后面迷你是「布局」「顶部信息」、完整是「封面」+ 一格隐藏占位;
+    /// 隐藏占位 + `EditorToolbarResetReserve`
     /// 让它跟第一行的胶囊同宽(按钮宽度是一行之内平分出来的,理由同 `MenuBarEditorStage.toolbarRow2`)。
     private var lyricsWindowToolbar: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2644,14 +2632,14 @@ private struct AppearanceSettingsTab: View {
                 .fixedSize()
             }
             HStack(spacing: 8) {
+                lyricsWindowToolbarButton(.content)
                 if lyricsWindowPreviewShowsMini {
                     lyricsWindowToolbarButton(.layout)
                     lyricsWindowToolbarButton(.info)
                 } else {
                     lyricsWindowToolbarButton(.info)
-                    lyricsWindowToolbarGhost(.textColor)
+                    lyricsWindowToolbarGhost(.font)
                 }
-                lyricsWindowToolbarGhost(.font)
                 Spacer(minLength: 8)
                 EditorToolbarResetReserve()
             }
@@ -2695,6 +2683,13 @@ private struct AppearanceSettingsTab: View {
                 summary += " · " + OverlayLineOverflowLabel.text(for: .scroll)
             }
             return EditorToolbarButtonLabel(icon: "rectangle.split.1x2", title: L10n.t("布局"), summary: summary)
+        case .content:
+            return EditorToolbarButtonLabel(
+                icon: "checklist", title: L10n.t("内容"),
+                summary: SettingsToggleSummary.text([
+                    (title: L10n.t("读音"), isOn: settings.showRomanization),
+                    (title: L10n.t("译文"), isOn: settings.showTranslation),
+                ]))
         case .info:
             if mini {
                 let fields = settings.lyricsWindowMiniHeaderFields
@@ -2763,6 +2758,10 @@ private struct AppearanceSettingsTab: View {
             SettingsPopoverShell(title: L10n.t("布局"), width: 440) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.layout) }
             }
+        case .content:
+            SettingsPopoverShell(title: L10n.t("内容"), width: 400) {
+                VStack(spacing: 0) { lyricsWindowContentRows }
+            }
         case .info:
             if lyricsWindowPreviewShowsMini {
                 SettingsPopoverShell(title: L10n.t("顶部信息"), width: 360) {
@@ -2773,6 +2772,23 @@ private struct AppearanceSettingsTab: View {
                     VStack(spacing: 0) { lyricsWindowCoverRows }
                 }
             }
+        }
+    }
+
+    /// 「内容」那几行(工具栏浮层与抽屉同一份):歌词窗口完整、迷你共用这一份读音 / 译文
+    /// (`showRomanization` / `showTranslation`),跟悬浮歌词那份各管各的,见 04 章决策 42。
+    @ViewBuilder
+    private var lyricsWindowContentRows: some View {
+        SettingsRow(icon: "textformat.alt", title: L10n.t("读音")) {
+            Toggle("", isOn: $settings.showRomanization)
+        }
+        if settings.showRomanization {
+            CardDivider()
+            RomanizationScriptsLinkRow()
+        }
+        CardDivider()
+        SettingsRow(icon: "text.bubble", title: L10n.t("译文")) {
+            Toggle("", isOn: $settings.showTranslation)
         }
     }
 
@@ -3793,6 +3809,7 @@ enum LyricsWindowToolbarItem: Equatable {
     case background
     case textColor
     case font
+    case content
     case layout
     case info
 }

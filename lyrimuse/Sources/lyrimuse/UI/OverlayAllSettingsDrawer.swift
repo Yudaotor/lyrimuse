@@ -12,10 +12,10 @@ import SwiftUI
 // 「桌面悬浮歌词」总开关**不收进来**。它是这一段的主开关,收进折叠区等于"要先展开
 // 才能开这个形态";它留在编辑台正下方那张 modeToggleCard 里常驻可见。
 //
-// 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏五个入口一一
-// 对应**(主题 → 文字 → 背景 → 排版 → 宽度 → 行为 → 恢复默认)。别给抽屉另起一套分组名:
+// 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏各个入口一一
+// 对应**(主题 → 文字 → 背景 → 内容 → 排版 → 宽度 → 行为 → 位置 → 恢复默认)。别给抽屉另起一套分组名:
 // 用户是按工具栏的记忆到抽屉里找的,对不上名就会落空:
-//   - 主题 / 文字 / 背景 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
+//   - 主题 / 文字 / 背景 / 内容 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
 // 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
 //     文字层和背景层,拆分判据见那个文件里 OverlayBackgroundSettingsRows 的头注;
 //     「跟随封面」从「文字」组挪进「主题」组,理由见 OverlayThemeSettingsRows 头注
@@ -56,6 +56,8 @@ struct OverlayAllSettingsDrawer: View {
                 textGroup
                 CardDivider()
                 backgroundGroup
+                CardDivider()
+                contentGroup
                 CardDivider()
                 layoutGroup
                 CardDivider()
@@ -156,7 +158,16 @@ struct OverlayAllSettingsDrawer: View {
         }
     }
 
-    /// 从「文字」里拆出来的第二组(用户判断:双行显示和对齐方式是排版、不是字形,
+    /// 跟工具栏「内容」浮层同名、同一份视图。
+    private var contentGroup: some View {
+        Group {
+            SettingsCardHeader(title: L10n.t("内容"))
+            CardDivider()
+            OverlayContentSettingsRows()
+        }
+    }
+
+    /// 从「文字」里拆出来的一组(对齐方式和长句处理是排版、不是字形,
     /// 拆的判据见 OverlayLayoutSettingsRows)。抽屉这边跟着拆,是因为抽屉的职责是"工具栏那
     /// 几个浮层的全量兜底通路" —— 浮层分了三组、抽屉还并成两组的话,同一批设置在两个宿主里
     /// 分组不一样,用户按浮层的记忆到抽屉里找会落空。
@@ -239,8 +250,7 @@ struct OverlayAllSettingsDrawer: View {
     /// 标题和副标题合起来是这颗按钮的**作用范围声明**,两个入口都要带,不是装饰。
     /// 两句都改过,因为老那两句合起来在说谎:标题「恢复默认文字与配色」+ 副标题
     /// 「不含宽度和锁定位置」会让人理解成"除这两样之外都恢复",而实际上它只写 9 个字段,
-    /// 「排版」「行为」两个浮层里的 6 项(双行显示 / 对齐方式 / 长按拖动 / 悬浮淡化 /
-    /// 截屏录屏时隐藏 / 暂停无播放时隐藏)一个都不碰。
+    /// 「内容」「排版」「行为」「位置」几个浮层里的项一个都不碰。
     /// 现在标题念**它真正覆盖的那三个浮层**、副标题念**没覆盖的**,跟菜单栏那颗同一个句式
     /// (见 MenuBarStyleDefaults 头注)。 功能本身没改 —— 排版和行为该不该纳入是产品取舍,
     /// 不是这次要顺手动的东西。
@@ -248,7 +258,7 @@ struct OverlayAllSettingsDrawer: View {
         SettingsRow(
             icon: "arrow.uturn.backward",
             title: L10n.t("恢复默认"),
-            subtitle: L10n.t("不含排版、行为、位置和宽度")
+            subtitle: L10n.t("不含内容、排版、行为、位置和宽度")
         ) {
             Button(L10n.t("恢复")) { OverlayStyleDefaults.restoreTextAndColors() }
         }

@@ -207,14 +207,14 @@ public enum SettingsSearchCatalog {
         lyrics("fetch", "预解析待播曲目", kw: ["预解析", "提前解析", "待播", "专辑", "队列", "播放列表", "下一首"]),
         lyrics("fetch", "锁定手选歌词", kw: ["手动选定", "锁定"]),
         // ---- 歌词 › 译文 ----
-        lyrics("translation", "显示译文", kw: ["翻译"]),
         lyrics("translation", "译文语言", kw: ["翻译", "语言"]),
         lyrics("translation", "系统兜底翻译", kw: ["机翻", "Google", "MyMemory", "翻译"]),
         lyrics("translation", "翻译语言包", kw: ["下载", "语言包", "Apple 翻译"]),
         // ---- 歌词 › 调整 ----
         lyrics("display", "繁简转换", kw: ["繁体", "简体", "OpenCC"]),
-        lyrics("display", "显示读音", kw: ["罗马音", "罗马字", "注音", "拼音", "粤拼", "发音"]),
-        lyrics("display", "标注的语言", kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音"]),
+        // 「内容」浮层里那行「标注的语言 ›」按这个标题键跳过来(RomanizationScriptsLinkRow),改标题要连着改那边。
+        lyrics("display", "标注读音的语言", alt: ["标注的语言"],
+               kw: ["日语", "韩语", "普通话", "粤语", "中文", "拼音", "粤拼", "读音", "罗马音", "罗马字", "注音", "发音"]),
         lyrics("display", "长句拆开", kw: ["长句", "拆分", "断句", "换行", "折行", "滚动", "跑马灯", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
         lyrics("display", "短句合并", kw: ["短句", "合并", "断句", "频繁", "闪", "宽度", "悬浮歌词", "灵动岛", "菜单栏", "触控栏"]),
         lyrics("display", "时间轴偏移", kw: ["全局", "歌词偏移", "提前", "延后", "校准", "同步", "延迟"]),
@@ -260,7 +260,9 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "背景颜色", kw: ["背景", "透明"], group: "背景"),
         surface(.overlay, "毛玻璃背景", kw: ["模糊", "玻璃", "blur"], group: "背景"),
         surface(.overlay, "玻璃浓淡", kw: ["模糊", "玻璃", "毛玻璃", "浓淡", "blur", "强度", "薄", "厚", "材质"], group: "背景"),
-        surface(.overlay, "双行显示", kw: ["两行", "副行", "下一句"], group: "排版"),
+        surface(.overlay, "读音", kw: ["罗马音", "罗马字", "注音", "拼音", "粤拼", "发音", "显示读音"], group: "内容"),
+        surface(.overlay, "译文", kw: ["翻译", "显示译文"], group: "内容"),
+        surface(.overlay, "下一句", kw: ["双行显示", "双行歌词", "两行", "副行"], group: "内容"),
         surface(.overlay, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "排版"),
         surface(.overlay, "长句处理", kw: ["换行", "滚动", "跑马灯", "折行", "长句", "太长"], group: "排版"),
         surface(.overlay, "宽度", kw: ["窗口宽度", "pt"]),
@@ -272,7 +274,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放"], group: "行为"),
         // 「位置」自成一组(工具栏第二行第三颗 / 抽屉「位置」组),标题就是组名,不带 group。
         surface(.overlay, "位置", kw: ["自由", "顶部居中", "底部居中", "Dock", "预设", "对齐"]),
-        surface(.overlay, "恢复默认", sub: "不含排版、行为、位置和宽度", kw: ["重置"]),
+        surface(.overlay, "恢复默认", sub: "不含内容、排版、行为、位置和宽度", kw: ["重置"]),
 
         // ---- 歌词显示 › 灵动岛 ----
         surface(.notch, "灵动岛歌词", sub: "紧凑地贴着屏幕顶部的刘海显示", kw: ["开关", "刘海", "总开关"], inDrawer: false),
@@ -363,6 +365,8 @@ public enum SettingsSearchCatalog {
         lyricsWindow("指定颜色", kw: ["文字颜色", "自定义", "颜色"], group: "外观"),
         lyricsWindow("字体", sub: "歌词窗口的歌词字体（正文、译文、读音）",
                      kw: ["字体", "字型", "font", "歌词窗口"], group: "外观"),
+        lyricsWindow("读音", kw: ["罗马音", "罗马字", "注音", "拼音", "粤拼", "发音", "显示读音"], group: "内容"),
+        lyricsWindow("译文", kw: ["翻译", "显示译文"], group: "内容"),
         lyricsWindow("歌名", sub: "迷你尺寸顶部显示歌名／歌手／专辑",
                      kw: ["顶部信息", "标题", "迷你"], group: "顶部信息"),
         lyricsWindow("歌手", kw: ["顶部信息", "艺人", "迷你"], group: "顶部信息"),

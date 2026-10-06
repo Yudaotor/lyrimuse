@@ -56,6 +56,11 @@ final class SettingsSearchIndex {
         return SettingsSearchMatcher.ranked(all, query: query, title: { $0.title }, secondary: { $0.secondary })
     }
 
+    /// 目录里标题键为 `titleKey` 的那一条(本地化好的);不止一条时取第一条。
+    func hit(titleKey: String) -> SettingsSearchHit? {
+        hits().first { $0.entry.titleKey == titleKey }
+    }
+
     private func hits() -> [SettingsSearchHit] {
         let language = L10n.current
         if let cached, cached.language == language { return cached.hits }
@@ -130,6 +135,20 @@ final class SettingsSearchRouter: ObservableObject {
         let drawerWork = DispatchWorkItem { [weak self] in self?.pendingDrawer = nil }
         clearDrawer = drawerWork
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: drawerWork)
+    }
+
+    /// 从设置窗里别的地方跳到目录里的某一行:写分段 → 翻面板 → 高亮,同搜索命中那一套
+    /// (SettingsView.openSettingsSearchHit,那边是私有的;翻面板这里走 AppActions.requestSettings,
+    /// 窗口开着时当场生效)。只处理落在某个设置分类里的条目。
+    func revealEntry(titleKey: String) {
+        guard let hit = SettingsSearchIndex.shared.hit(titleKey: titleKey) else { return }
+        let entry = hit.entry
+        if let key = entry.sectionKey, let value = entry.sectionValue {
+            UserDefaults.standard.set(value, forKey: key)
+        }
+        guard case .tab(let raw) = entry.destination, let tab = SettingsTab(rawValue: raw) else { return }
+        AppActions.shared.requestSettings(.tab(tab))
+        reveal(hit)
     }
 
     func consumeDrawer(_ surface: LyricsSurface) {

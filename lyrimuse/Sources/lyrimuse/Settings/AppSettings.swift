@@ -197,6 +197,9 @@ final class AppSettings: ObservableObject {
         static let mergeShortLyricLines = "np:mergeShortLyricLines"
         static let romanizationScripts = "np:romanizationScripts"
         static let showTranslation = "np:showTranslation"
+        static let overlayShowRomanization = "np:overlayShowRomanization"
+        static let overlayShowTranslation = "np:overlayShowTranslation"
+        static let overlayContentTogglesMigrated = "np:overlayContentTogglesMigrated"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
         /// 布尔年代的旧键,只在 init() 里读一次做迁移(已登记进 ConfigPortability.obsoleteDefaultsKeys)。
         static let launchMusicOnLyrimuseOpen = "np:launchMusicOnLyrimuseOpen"
@@ -641,6 +644,9 @@ final class AppSettings: ObservableObject {
     @Published var lyricsChineseVariant: ChineseVariant {
         didSet { defaults.set(lyricsChineseVariant.rawValue, forKey: Keys.lyricsChineseVariant) }
     }
+    /// 歌词窗口(完整 / 迷你共用)显不显示读音:罗马音行与逐词注音。悬浮歌词那份是 `overlayShowRomanization`,
+    /// 灵动岛 / 菜单栏 / 触控栏在各自的「副行」里选。键名 `np:showRomanization` 不带歌词窗口前缀,改名等于丢掉
+    /// 老用户的设置,别动。见 04 章决策 42。
     @Published var showRomanization: Bool {
         didSet { defaults.set(showRomanization, forKey: Keys.showRomanization) }
     }
@@ -656,8 +662,9 @@ final class AppSettings: ObservableObject {
 
     /// 要给哪几种文字标罗马音(日文/韩文/中文各自可开关)。存 OptionSet 的 rawValue。
     ///
-    /// 跟 showRomanization 是两层:那个是"显不显示罗马音这一行"的总开关,这个决定
-    /// **哪些语言**会产出罗马音。总开关关掉时这里的选择不起作用,但也不会被清掉。
+    /// 跟各展示面的「读音」开关是两层:那些管"画不画读音这一行"(悬浮歌词 `overlayShowRomanization`、
+    /// 歌词窗口 `showRomanization`、灵动岛 / 菜单栏 / 触控栏的副行),这个决定**哪些语言**会产出读音,
+    /// 所有展示面共用一份。哪一面关着读音,这里的选择对那一面不起作用,但也不会被清掉。
     @Published var romanizationScripts: RomanizationScripts {
         didSet {
             // 跟随界面语言换默认值时不落盘:没落盘 = 用户没手动改过,下次切语言或重启还按语言算。
@@ -665,8 +672,19 @@ final class AppSettings: ObservableObject {
             defaults.set(romanizationScripts.rawValue, forKey: Keys.romanizationScripts)
         }
     }
+    /// 歌词窗口(完整 / 迷你共用)显不显示译文。悬浮歌词那份是 `overlayShowTranslation`;键名同 `showRomanization`
+    /// 那条,别动。
     @Published var showTranslation: Bool {
         didSet { defaults.set(showTranslation, forKey: Keys.showTranslation) }
+    }
+    /// 悬浮歌词显不显示读音 / 译文,跟歌词窗口那份(`showRomanization` / `showTranslation`)各管各的。
+    /// 默认值跟歌词窗口那份同一套(读音开、译文按读不读中文),迁移规则见 init 里 `overlayContentTogglesMigrated`
+    /// 那一段。见 04 章决策 42。
+    @Published var overlayShowRomanization: Bool {
+        didSet { defaults.set(overlayShowRomanization, forKey: Keys.overlayShowRomanization) }
+    }
+    @Published var overlayShowTranslation: Bool {
+        didSet { defaults.set(overlayShowTranslation, forKey: Keys.overlayShowTranslation) }
     }
     @Published var launchAtLoginEnabled: Bool {
         didSet {
@@ -1851,6 +1869,18 @@ final class AppSettings: ObservableObject {
         // 这个开关"的默认值——已经手动开过/关过的人,defaults.object(forKey:) 能读到
         // 已持久化的值,不会被默认值的变化覆盖。
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? Self.userReadsChinese
+        // 悬浮歌词那份读音 / 译文:第一次跑到这里时,歌词窗口那份存过值的照抄一次、打上标记,之后两份各管各的。
+        // 别写成"没存过就读歌词窗口那份":没碰过悬浮歌词开关的人改了歌词窗口,下次启动悬浮歌词也会跟着变。
+        if !defaults.bool(forKey: Keys.overlayContentTogglesMigrated) {
+            for (window, overlay) in [(Keys.showRomanization, Keys.overlayShowRomanization),
+                                      (Keys.showTranslation, Keys.overlayShowTranslation)]
+            where defaults.object(forKey: overlay) == nil {
+                if let stored = defaults.object(forKey: window) as? Bool { defaults.set(stored, forKey: overlay) }
+            }
+            defaults.set(true, forKey: Keys.overlayContentTogglesMigrated)
+        }
+        overlayShowRomanization = (defaults.object(forKey: Keys.overlayShowRomanization) as? Bool) ?? true
+        overlayShowTranslation = (defaults.object(forKey: Keys.overlayShowTranslation) as? Bool) ?? Self.userReadsChinese
         // 默认开。 只改这个兜底值是**不够**的:init() 里的赋值不触发 didSet,而真正去
         // 注册登录项的是 didSet 里那句 LoginItemManager.setEnabled —— 光改这里会变成
         // "开关显示开着、系统里其实没注册"的假象。补的那一步在

@@ -221,43 +221,80 @@ struct OverlayTextSettingsRows: View {
 
 // MARK: - 排版
 
-/// 「排版」那一组:双行显示 / 对齐方式。
+/// 「内容」那一组:主行下面画哪几行 —— 读音 / 译文 / 下一句,按卡片里从上到下的顺序。
 ///
-/// 从「文字」里拆出来。「双行显示不应该挂在这个文字里面吧,是否应该是
-/// 一个独立的开关呢;还有这个对齐方式也是,不应该是子选项吧」。判据:字体、字号讲的是**字
-/// 长什么样**,而「双行显示」讲的是**显示几行内容**、「对齐方式」讲的是**摆在哪一侧**,后
-/// 两者是版面不是字形 —— 挤在「文字」里靠的只是"都跟文字有关"这种最粗的相关性,那条相关性
-/// 把整页设置都能装进去。
+/// 读音、译文是悬浮歌词自己那一份(`overlayShowRomanization` / `overlayShowTranslation`),不连带歌词窗口;
+/// 给哪些语言标读音是歌词内容本身的设置、所有展示面共用,这里只给一行跳过去的链接(`RomanizationScriptsLinkRow`),
+/// 不另放一份语言开关。「下一句」归这里不归「排版」:它讲的是显示哪些内容,不是怎么排。见 04 章决策 42。
+@MainActor
+struct OverlayContentSettingsRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SettingsRow(icon: "textformat.alt", title: L10n.t("读音")) {
+                Toggle("", isOn: $settings.overlayShowRomanization)
+            }
+            if settings.overlayShowRomanization {
+                CardDivider()
+                RomanizationScriptsLinkRow()
+            }
+            CardDivider()
+            SettingsRow(icon: "text.bubble", title: L10n.t("译文")) {
+                Toggle("", isOn: $settings.overlayShowTranslation)
+            }
+            CardDivider()
+            SettingsRow(icon: "rectangle.grid.1x2", title: L10n.t("下一句")) {
+                Toggle("", isOn: $settings.showNextLinePreview)
+            }
+        }
+    }
+}
+
+/// 「内容」里「读音」下面那一行:报当前给哪些语言标读音,点了跳到「歌词 › 调整 › 标注读音的语言」去改
+/// (经设置搜索那套路由:写分段 → 翻面板 → 高亮)。悬浮歌词和歌词窗口两处「内容」共用。
+/// 跳转按目录里的标题键找那一行,改那一行的标题要连着改这里的键(selftest 钉着)。
+@MainActor
+struct RomanizationScriptsLinkRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsSubRow(title: L10n.t("标注的语言")) {
+            Button {
+                SettingsSearchRouter.shared.revealEntry(titleKey: "标注读音的语言")
+            } label: {
+                HStack(spacing: 3) {
+                    Text(summary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+            }
+            .buttonStyle(.link)
+        }
+    }
+
+    private var summary: String {
+        let scripts = settings.romanizationScripts
+        var names: [String] = []
+        if scripts.contains(.japanese) { names.append(L10n.t("日语")) }
+        if scripts.contains(.korean) { names.append(L10n.t("韩语")) }
+        if scripts.contains(.chinese) { names.append(L10n.t("普通话")) }
+        if scripts.contains(.cantonese) { names.append(L10n.t("粤语")) }
+        return names.isEmpty ? L10n.t("全部关闭") : ListFormatter.localizedString(byJoining: names)
+    }
+}
+
+/// 「排版」那一组:对齐方式 / 长句处理 —— 摆在哪一侧、放不下怎么办,是版面不是字形,不挤在「文字」里。
+/// 显示哪几行是「内容」那一组的事(`OverlayContentSettingsRows`)。
 ///
-/// 两项**平级**,都用 `SettingsRow`,不用 `SettingsSubRow`(缩进的子行样式)——对齐
-/// 对单行同样生效,关掉双行显示之后它照旧起作用,不是双行显示的从属选项。子行的缩进本身
-/// 就是一句话("这是上一行的子选项"),这里没有这层关系就不该用。
+/// 两项**平级**,都用 `SettingsRow`,不用 `SettingsSubRow`(缩进的子行样式):子行的缩进本身就是一句话
+/// ("这是上一行的子选项"),这里没有这层关系就不该用。
 @MainActor
 struct OverlayLayoutSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         VStack(spacing: 0) {
-            // 归在这张卡而不是「歌词」页的「效果」段。判据跟这张卡收编
-            // 字体/配色时用的是同一条(见 SettingsView.classicOverlayCard 上方注释):全仓
-            // 核对消费方,只对这一种展示方式生效的就归到这一段。这个开关的消费方只有
-            // LyricsOverlayView,而它原来所在的「效果」段其余三项(卡拉OK/繁简/罗马音)
-            // 全是跨形态生效的,它夹在那里是唯一的异类。
-            //
-            // 挪过来之后原先那句 help("这个开关只影响「桌面悬浮歌词」…")就不必留了 ——
-            // 那句话当初是**位置不对的补丁**(注释原话:开着灵动岛的人打开它没反应,会以为
-            // 开关坏了);现在所在分段自己说明了生效面。
-            //
-            // 副标题「在当前句下方多显示一句」按删了:标题里的"双行"
-            // 已经把"下面再显示一句"讲完了,同一句话说两遍只是把行撑高。
-            //
-            // 图标从 `text.aligncenter` 换成 `rectangle.grid.1x2`:那个图标画的
-            // 是"居中对齐",紧挨着下面真正的「对齐方式」一行时会被读成对齐设置;两格叠起来
-            // 的方块讲的才是这一行的事 —— 显示几行。
-            SettingsRow(icon: "rectangle.grid.1x2", title: L10n.t("双行显示")) {
-                Toggle("", isOn: $settings.showNextLinePreview)
-            }
-            CardDivider()
             // 多人声部歌词默认按演唱者自动在左/右/居中
             // 之间切换(仿 Apple Music 的 Duet View),但对贴在桌面上的固定悬浮窗来说,
             // 位置来回跳会影响阅读体验——这一项让用户强制固定到一个方向,忽略声部信息。
@@ -769,16 +806,25 @@ enum OverlayStyleSummary {
             ? L10n.t("纯色") : L10n.t("透明")
     }
 
-    /// 例:「双行 · 自动」。两项都报 —— 排版浮层里总共就这两项,摘要少报一项等于让人为了
+    /// 例:「自动 · 换行」。「排版」浮层里两项都报(对齐方式 / 长句处理) —— 摘要少报一项等于让人为了
     /// 确认另一项再点开一次浮层,那这截摘要就白给了。
     ///
-    /// 对齐那一截复用分段控件的同一份标签(`OverlayAlignmentSegmentedControl.label(for:)`),
+    /// 两截都复用控件的同一份标签(`OverlayAlignmentSegmentedControl.label(for:)` / `OverlayLineOverflowLabel`),
     /// 不在这里另写一套短名:控件里选中的是「左对齐」、摘要里却写「左」,是同一个值两种叫法。
     static var layout: String {
         let settings = AppSettings.shared
-        let lines = settings.showNextLinePreview ? L10n.t("双行") : L10n.t("单行")
         let alignment = OverlayAlignmentSegmentedControl.label(for: settings.overlayDuetAlignmentOverride)
-        return "\(lines) · \(alignment)"
+        return "\(alignment) · \(OverlayLineOverflowLabel.text(for: settings.overlayLineOverflow))"
+    }
+
+    /// 「内容」按钮的摘要:读音 / 译文 / 下一句开着哪几项(全开报「全部开启」、全关报「全部关闭」)。
+    static var content: String {
+        let settings = AppSettings.shared
+        return SettingsToggleSummary.text([
+            (title: L10n.t("读音"), isOn: settings.overlayShowRomanization),
+            (title: L10n.t("译文"), isOn: settings.overlayShowTranslation),
+            (title: L10n.t("下一句"), isOn: settings.showNextLinePreview),
+        ])
     }
 }
 

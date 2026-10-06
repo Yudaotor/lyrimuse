@@ -1904,6 +1904,44 @@ func runSourceContractTests() {
         }
     }
 
+    // ---- 悬浮歌词 / 歌词窗口的读音、译文各管各的(04 章决策 42)----
+    //
+    // 悬浮歌词读 overlayShow*,歌词窗口读 show*。哪一处接错了都是静默的:开关照样能拨,只是改了这一面、动的是另一面。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String {
+            (try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let overlay = read("UI/LyricsOverlayView.swift")
+        expectEqual(overlay.contains("s.$overlayShowRomanization") && overlay.contains("s.$overlayShowTranslation")
+                        && !overlay.contains("s.$showRomanization") && !overlay.contains("s.$showTranslation"), true,
+                    "内容开关: 悬浮歌词视图订阅它自己那份读音 / 译文")
+        expectEqual(read("UI/LineLayoutBudgets.swift").contains("s.$overlayShowTranslation, s.$overlayShowRomanization"), true,
+                    "内容开关: 悬浮歌词的断句预算按它自己那份算行")
+        let menu = read("UI/OverlayQuickSettingsMenu.swift")
+        expectEqual(menu.contains("AppSettings.shared.overlayShowTranslation.toggle()")
+                        && menu.contains("AppSettings.shared.overlayShowRomanization.toggle()")
+                        && !menu.contains("AppSettings.shared.showTranslation")
+                        && !menu.contains("AppSettings.shared.showRomanization"), true,
+                    "内容开关: ⚙ 菜单改悬浮歌词那份,不连带歌词窗口")
+        let window = read("UI/LyricsWindowView.swift")
+        expectEqual(window.contains("s.$showRomanization") && window.contains("s.$showTranslation")
+                        && !window.contains("overlayShowRomanization") && !window.contains("overlayShowTranslation"), true,
+                    "内容开关: 歌词窗口读它自己那份")
+        expectEqual(read("AppDelegate.swift").contains("settings.$overlayShowTranslation"), true,
+                    "内容开关: 「简繁转换」露不露看悬浮歌词那份译文(只有悬浮歌词 ⚙ 菜单用这条判据)")
+        let hotkeys = read("Settings/GlobalHotkeys.swift")
+        expectEqual(hotkeys.contains("s.overlayShowTranslation = on") && hotkeys.contains("s.showTranslation = on")
+                        && hotkeys.contains("s.overlayShowRomanization = on") && hotkeys.contains("s.showRomanization = on"), true,
+                    "内容开关: 全局快捷键两份一起切")
+        let model = read("Settings/AppSettings.swift")
+        expectEqual(model.contains("if !defaults.bool(forKey: Keys.overlayContentTogglesMigrated) {")
+                        && model.contains("defaults.set(true, forKey: Keys.overlayContentTogglesMigrated)"), true,
+                    "内容开关: 悬浮歌词那份只在第一次从歌词窗口那份抄一次,之后不再继承")
+    }
+
     // ---- 日文汉字修回的接线----
     //
     // `JapaneseKanjiRepair` 的规则有 selftest 钉着(romanization 组),这里守的是它**接在哪**:正文和

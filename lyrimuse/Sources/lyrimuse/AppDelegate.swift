@@ -234,18 +234,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LocalPlaybackSource.shared.splitsLongLyricLines = settings.splitLongLyricLines
         LocalPlaybackSource.shared.mergesShortLyricLines = settings.mergeShortLyricLines
         LineLayoutBudgets.shared.start()
-        // 「显示翻译」也得让 Core 知道 —— 它**不是**给歌词装载用的(译文转不转由
-        // chineseVariant 决定,跟这个开关无关),而是给「简繁转换」那一项的显隐判据用:
-        // 译文没在屏幕上时,把一首日文歌的中文机翻转成繁体是一次看不见的改动,那一项就不该
-        // 出现(见 LocalPlaybackSource.currentLyricsSupportsChineseVariant 的注释)。
+        // 悬浮歌词的「译文」也得让 Core 知道 —— 它**不是**给歌词装载用的(译文转不转由
+        // chineseVariant 决定,跟这个开关无关),而是给悬浮歌词 ⚙ 菜单里「简繁转换」那一项的显隐判据用:
+        // 译文没在悬浮歌词上时,把一首日文歌的中文机翻转成繁体是一次看不见的改动,那一项就不该
+        // 出现(见 LocalPlaybackSource.currentLyricsSupportsChineseVariant 的注释)。那个菜单只在悬浮歌词上,
+        // 所以看的是悬浮歌词那份,不是歌词窗口的 showTranslation(04 章决策 42)。
         //
-        // 这一项用**订阅**而不是像上面几行那样赋一次值:它有三个写入点(设置页的开关、
-        // 歌词窗口「⋯」菜单里的显示/隐藏翻译、全局快捷键 GlobalHotkeys),双写模式漏掉
+        // 这一项用**订阅**而不是像上面几行那样赋一次值:它有好几个写入点(「内容」浮层、
+        // ⚙ 菜单、全局快捷键 GlobalHotkeys、引导页),双写模式漏掉
         // 任何一个都会让判据停在旧值。@Published 在订阅那一刻会先发一次当前值,所以
         // "启动时推一次"也被它一并覆盖了,不需要再单独赋一遍。
         // 闭包里用**参数**、不回头读 AppSettings:@Published 是 willSet 时机发布,那一刻
         // 属性还是旧值(同 startObservingVolumeBannerPreference 上那条注释)。
-        settings.$showTranslation
+        settings.$overlayShowTranslation
             .sink { on in
                 MainActor.assumeIsolated { LocalPlaybackSource.shared.showsTranslation = on }
             }

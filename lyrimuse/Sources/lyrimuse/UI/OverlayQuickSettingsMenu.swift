@@ -62,16 +62,15 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         if LocalPlaybackSource.shared.currentLyricsSupportsChineseVariant {
             menu.addItem(submenu(L10n.t("繁简转换"), symbol: "character.bubble", menu: chineseVariantMenu(settings)))
         }
-        // 图标跟设置页「歌词显示」里「显示译文」/「显示罗马音」两行同一份(text.bubble /
-        // textformat.alt),写的也是同一个 AppSettings 值——设置页那两行标题带「显示」二字,
-        // 这里跟「双行歌词」同一套简短命名(打钩本身已经表达了"显示/不显示")。
+        // 这三项跟设置页「歌词显示 › 悬浮歌词」的「内容」浮层同名、同图标、写同一个值(悬浮歌词自己那份,
+        // 不连带歌词窗口,见 04 章决策 42)。
         menu.addItem(toggle(L10n.t("译文"), symbol: "text.bubble",
-                            on: settings.showTranslation,
+                            on: settings.overlayShowTranslation,
                             action: #selector(toggleShowTranslation)))
         menu.addItem(toggle(L10n.t("读音"), symbol: "textformat.alt",
-                            on: settings.showRomanization,
+                            on: settings.overlayShowRomanization,
                             action: #selector(toggleShowRomanization)))
-        menu.addItem(toggle(L10n.t("双行歌词"), symbol: "text.aligncenter",
+        menu.addItem(toggle(L10n.t("下一句"), symbol: "rectangle.grid.1x2",
                             on: settings.showNextLinePreview,
                             action: #selector(toggleNextLinePreview)))
         // 关掉这一项时**不会**当场把控制排从指针底下抽走——这颗菜单本身就挂在控制排上,
@@ -226,15 +225,14 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         AppSettings.shared.showNextLinePreview.toggle()
     }
 
-    /// 写的是设置页「显示译文」同一个值——别处已经生效的地方(歌词窗口/灵动岛)会跟着一起变,
-    /// 不是悬浮歌词私有的开关。
+    /// 悬浮歌词自己那份译文,歌词窗口不跟着变。
     @objc private func toggleShowTranslation() {
-        AppSettings.shared.showTranslation.toggle()
+        AppSettings.shared.overlayShowTranslation.toggle()
     }
 
-    /// 同上,写的是「显示罗马音」那个总开关。
+    /// 同上,悬浮歌词自己那份读音。
     @objc private func toggleShowRomanization() {
-        AppSettings.shared.showRomanization.toggle()
+        AppSettings.shared.overlayShowRomanization.toggle()
     }
 
     @objc private func toggleShowHoverControls() {

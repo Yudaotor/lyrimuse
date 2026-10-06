@@ -7047,46 +7047,6 @@
         }
       }
     },
-    "双行显示" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Two-Line Display"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "双行显示"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "雙行顯示"
-          }
-        }
-      }
-    },
-    "双行歌词" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Two-Line Lyrics"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "雙行歌詞"
-          }
-        }
-      }
-    },
     "反馈问题" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13183,29 +13143,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "日文"
-          }
-        }
-      }
-    },
-    "日语、韩语标成罗马字，普通话标成拼音，粤语标成粤拼" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Japanese and Korean get romaji, Mandarin gets pinyin, Cantonese gets Jyutping"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "日语、韩语标成罗马字，普通话标成拼音，粤语标成粤拼"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "日文、韓文標成羅馬字，國語標成拼音，粵語標成粵拼"
           }
         }
       }
@@ -28101,52 +28038,6 @@
         }
       }
     },
-    "管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies to Desktop Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation in their own “Second Line” setting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择译文"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "管桌面浮動歌詞和歌詞視窗；動態島和選單列在各自的「副行」裡選擇譯文"
-          }
-        }
-      }
-    },
-    "管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择读音" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Applies to Desktop Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick romanization in their own “Second Line” setting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "管桌面悬浮歌词和歌词窗口；灵动岛和菜单栏在各自的「副行」里选择读音"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "管桌面浮動歌詞和歌詞視窗；動態島和選單列在各自的「副行」裡選擇讀音"
-          }
-        }
-      }
-    },
     "网页播放器不会主动汇报精确进度，切歌后需要这个开关才能立刻校准。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28290,29 +28181,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「自動識別」開啟時會認出所有已知和你信任過的播放器，上面的勾選暫不生效。想只認其中幾個，請取消勾選它。"
-          }
-        }
-      }
-    },
-    "不含排版、行为、位置和宽度" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Layout, behavior, position and width are left alone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不含排版、行为、位置和宽度"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不含排版、行為、位置和寬度"
           }
         }
       }
@@ -39481,6 +39349,121 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更多歌詞操作"
+          }
+        }
+      }
+    },
+    "内容" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Content"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内容"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "內容"
+          }
+        }
+      }
+    },
+    "标注读音的语言" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Romanization Languages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标注读音的语言"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "標註讀音的語言"
+          }
+        }
+      }
+    },
+    "不含内容、排版、行为、位置和宽度" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Content, layout, behavior, position and width are left alone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不含内容、排版、行为、位置和宽度"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不含內容、排版、行為、位置和寬度"
+          }
+        }
+      }
+    },
+    "给哪些语言的歌词标读音。悬浮歌词、歌词窗口等显不显示读音，在「歌词显示」里分别设置" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Which languages get romanization. Whether Floating Lyrics, the Lyrics Window and the others show it is set for each one in Lyrics Display"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "给哪些语言的歌词标读音。悬浮歌词、歌词窗口等显不显示读音，在「歌词显示」里分别设置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "給哪些語言的歌詞標讀音。浮動歌詞、歌詞視窗等顯不顯示讀音，在「歌詞顯示」裡分別設定"
+          }
+        }
+      }
+    },
+    "要哪种语言的译文。悬浮歌词、歌词窗口等显不显示译文，在「歌词显示」里分别设置" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The language you want translations in. Whether Floating Lyrics, the Lyrics Window and the others show them is set for each one in Lyrics Display"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要哪种语言的译文。悬浮歌词、歌词窗口等显不显示译文，在「歌词显示」里分别设置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要哪種語言的譯文。浮動歌詞、歌詞視窗等顯不顯示譯文，在「歌詞顯示」裡分別設定"
           }
         }
       }

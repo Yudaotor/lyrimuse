@@ -160,7 +160,7 @@ func runSettingsSearchTests() {
         // 「背景」不在这儿:歌词窗口那一段有一行真的叫这个名字、已登记在目录里,而这张白名单
         // 跟目录必须不相交(下面那条断言)。悬浮歌词抽屉里同名的那个组标题因此顺带被目录覆盖 ——
         // 搜「背景」会落到歌词窗口那一行,不再是查无此项。
-        "主题", "文字", "排版", "行为",                              // 悬浮歌词抽屉的组标题
+        "主题", "文字", "内容", "排版", "行为",                      // 悬浮歌词抽屉的组标题(「内容」也是歌词窗口抽屉的卡头)
         // 「封面」同「背景」:迷你「顶部信息」里有一行真的叫这个名字、已登记在目录里,
         // 所以完整尺寸那张同名卡头顺带被目录覆盖,不能再留在白名单里(两者必须不相交)。
         "外观", "顶部信息", "布局",                               // 歌词显示 › 歌词窗口 的卡头
@@ -237,6 +237,19 @@ func runSettingsSearchTests() {
                 "设置搜索: 源码里每个设置行标题都在目录里(新加了行就到 Core SettingsSearchCatalog 登记,或写进白名单)")
     let staleAllowlist = intentionallyUnindexed.filter { scannedTitles[$0] == nil }.sorted()
     expectEqual(staleAllowlist, [], "设置搜索: 白名单里的每一项都还真的存在于源码里")
+    // 「内容」浮层里「标注的语言 ›」按标题键跳到「歌词 › 调整」那一行:目录里这一条只能有一条,跳转写的键也得是它。
+    expectEqual(entries.filter { $0.titleKey == "标注读音的语言" }.map { $0.sectionValue ?? "" }, ["display"],
+                "设置搜索: 「标注读音的语言」在目录里恰好一条、落在「调整」分段")
+    expectEqual(source("UI/OverlayStyleSettingsRows.swift").contains(#"revealEntry(titleKey: "标注读音的语言")"#), true,
+                "设置搜索: 「标注的语言 ›」跳转用的键跟目录那一条一致")
+    // 「内容」组按段各登记一遍:上面那条覆盖检查按标题判,两段都有「读音」「译文」,漏登记一段它看不出来。
+    func contentGroupTitles(_ section: String) -> Set<String> {
+        Set(entries.filter { $0.sectionValue == section && $0.pathKeys.last == "内容" }.map(\.titleKey))
+    }
+    expectEqual(contentGroupTitles(LyricsSurface.overlay.appearanceSectionRawValue), ["读音", "译文", "下一句"],
+                "设置搜索: 悬浮歌词「内容」三行都登记在悬浮歌词那一段")
+    expectEqual(contentGroupTitles(SettingsSearchCatalog.lyricsWindowSectionValue), ["读音", "译文"],
+                "设置搜索: 歌词窗口「内容」两行都登记在歌词窗口那一段")
     let allowlistedButIndexed = intentionallyUnindexed.filter { indexedTitles.contains($0) }.sorted()
     expectEqual(allowlistedButIndexed, [], "设置搜索: 白名单与目录不重叠")
 

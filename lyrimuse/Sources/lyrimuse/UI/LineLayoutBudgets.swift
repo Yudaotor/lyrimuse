@@ -28,7 +28,7 @@ final class LineLayoutBudgets {
         // 闭包里只用参数,别回头读 AppSettings:@Published 在 willSet 时发布,那一刻存储属性还是旧值。
         subs = [
             Publishers.CombineLatest3(s.$overlayWidth, s.$overlayNSFonts, s.$textStrokeEnabled)
-                .combineLatest(Publishers.CombineLatest3(s.$showTranslation, s.$showRomanization,
+                .combineLatest(Publishers.CombineLatest3(s.$overlayShowTranslation, s.$overlayShowRomanization,
                                                          s.$showNextLinePreview))
                 .sink { a, b in
                     let (width, fonts, stroke) = a

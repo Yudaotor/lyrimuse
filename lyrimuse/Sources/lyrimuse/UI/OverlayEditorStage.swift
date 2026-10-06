@@ -430,7 +430,7 @@ struct OverlayEditorStage: View {
                 // 是作用范围声明、不能"可能没显示出来"。
                 // 两句都改过(老那两句合起来在说谎),理由见抽屉里那份
                 // `OverlayAllSettingsDrawer.resetRow` 的头注 —— **两个入口必须一字不差**。
-                Text(L10n.t("不含排版、行为、位置和宽度"))
+                Text(L10n.t("不含内容、排版、行为、位置和宽度"))
             } label: {
                 Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
             }
@@ -441,7 +441,7 @@ struct OverlayEditorStage: View {
         .padding(.horizontal, 2)
     }
 
-    /// 工具栏第二行:「排版」+「行为」。
+    /// 工具栏第二行:「内容」「排版」「行为」「位置」。
     ///
     /// 「你帮我和灵动岛设置页一样处理,放到上面的小按钮里面,点了出现下拉框」——
     /// 在此之前这三项(锁定位置 / 长按拖动 / 悬浮淡化)加上并进来的两行自动隐藏是编辑台
@@ -455,16 +455,21 @@ struct OverlayEditorStage: View {
     /// **又多了一颗**:「配色」拆成「主题」+「背景」之后第一行变四颗、按那笔
     /// 横向账必然超,于是把「排版」也挪下来。两颗仍然远低于第一行量到的三颗 535pt,不用重量。
     ///
-    /// 这一行**不再是纯"设一次就不动"的项**了:「排版」(双行显示 / 对齐方式)在编辑台上
+    /// 这一行**不再是纯"设一次就不动"的项**了:「内容」「排版」在编辑台上
     /// 是看得见的。分行的依据从"看不看得见"退成了**横向预算**,如实记在这里 —— 别照着
     /// 「第二行 = 看不见的项」这个已经不成立的印象去重排。真要恢复那条语义,得先解决第一行
     /// 装不下四颗的问题(比如把摘要限宽从 140 收窄再离屏重量一遍),那是另一次改动。
     private var toolbarRow2: some View {
         HStack(spacing: 8) {
-            // 新增。「双行显示不应该挂在这个文字里面吧,是否应该是一个
-            // 独立的开关呢;还有这个对齐方式也是,不应该是子选项吧」—— 那两项讲的是排几行、
-            // 摆哪边,是版面不是字形,于是从「文字」里拆出来单开一个入口(拆的判据写在
-            // OverlayLayoutSettingsRows 上面)。图标 `text.justify` 就是设计稿里那个「≣」。
+            // 「内容」:主行下面画哪几行(读音 / 译文 / 下一句),见 OverlayContentSettingsRows。
+            toolbarButton(
+                icon: "checklist",
+                title: L10n.t("内容"),
+                summary: OverlayStyleSummary.content,
+                target: .content
+            )
+            // 「排版」:摆哪边、放不下怎么办,是版面不是字形(判据写在 OverlayLayoutSettingsRows 上面)。
+            // 图标 `text.justify` 就是设计稿里那个「≣」。
             toolbarButton(
                 icon: "text.justify",
                 title: L10n.t("排版"),
@@ -537,7 +542,7 @@ struct OverlayEditorStage: View {
 
     // MARK: - 浮层
 
-    /// 六个浮层都从**舞台上沿往上**弹,盖住的是工具栏和页面标题,不碰预览(04 章决策 34)。
+    /// 七个浮层都从**舞台上沿往上**弹,盖住的是工具栏和页面标题,不碰预览(04 章决策 34)。
     ///
     /// 挂在按钮上往下弹会正好压在舞台上;NSPopover 在首选方向放不下时会自己翻到对面,所以高度必须
     /// 封顶在"舞台上沿到屏幕可用区顶"这段距离里(`StageTopProbe`,点开那一刻现量),内容更高就在浮层里
@@ -562,6 +567,7 @@ struct OverlayEditorStage: View {
         case theme
         case text
         case background
+        case content
         case layout
         case behavior
         case placement
@@ -571,6 +577,7 @@ struct OverlayEditorStage: View {
             case .theme: return L10n.t("主题")
             case .text: return L10n.t("文字")
             case .background: return L10n.t("背景")
+            case .content: return L10n.t("内容")
             case .layout: return L10n.t("排版")
             case .behavior: return L10n.t("行为")
             case .placement: return L10n.t("位置")
@@ -584,7 +591,7 @@ struct OverlayEditorStage: View {
             case .theme: return 720
             case .text: return 380
             case .layout: return 460
-            case .background, .behavior, .placement: return 420
+            case .background, .content, .behavior, .placement: return 420
             }
         }
     }
@@ -605,6 +612,7 @@ struct OverlayEditorStage: View {
         case .theme: OverlayThemeSettingsRows()
         case .text: OverlayTextSettingsRows()
         case .background: OverlayBackgroundSettingsRows()
+        case .content: OverlayContentSettingsRows()
         case .layout: OverlayLayoutSettingsRows()
         case .behavior: OverlayBehaviorSettingsRows()
         case .placement: OverlayPlacementSettingsRows()
