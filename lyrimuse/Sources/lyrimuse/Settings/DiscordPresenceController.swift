@@ -69,7 +69,12 @@ final class DiscordPresenceController: ObservableObject {
     private var applicationID = DiscordPresence.applicationID
     /// 关掉一次加一,之前发出去的回执晚到时认得出来、不再算数。
     private var generation = 0
+    /// 最近一份交给 Discord 的(`wanted`)和它实际显示的(`shown`:原样收下的、被拒后补发的精简版,或者都被拒、清掉了的 nil)。
+    /// 节流判重认交出去的那份(不然被拒的那份每 4 秒重发一次),预览照实际显示的画。没连上、连接断了为 nil。
+    private var delivered: (wanted: DiscordActivity?, shown: DiscordActivity?)?
     private var wakeTask: Task<Void, Never>?
+    /// 当前这首的封面有到点要做的事(没问成的到点重查、中继上还没有的到点再问)时,到点叫一次刷新(`scheduleCoverWake`)。
+    private var coverWakeTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var fastConnectTask: Task<Void, Never>?
     private var extras: TrackExtras?
@@ -142,6 +147,12 @@ final class DiscordPresenceController: ObservableObject {
             link.connectIfNeeded(clientID: applicationID)
         }
         startRetryLoop()
+        if track != nil {
+            scheduleCoverWake(now: now)
+        } else {
+            coverWakeTask?.cancel()
+            coverWakeTask = nil
+        }
         if track != nil, let until = coverPendingUntil(now: now) {
             wake(at: until)
             return
@@ -163,22 +174,42 @@ final class DiscordPresenceController: ObservableObject {
             gate.didSend(activity, at: now)
             discordLogger.debug("presence \(activity == nil ? "clear" : "show", privacy: .public)")
             let sentGeneration = generation
-            link.send(activity) { [weak self] delivered in
-                Task { @MainActor in self?.sendFinished(delivered: delivered, generation: sentGeneration) }
+            link.send(activity) { [weak self] delivery in
+                Task { @MainActor in self?.sendFinished(delivery, wanted: activity, generation: sentGeneration) }
             }
         }
     }
 
-    /// Discord 上现在挂着的那一份:连着时最近一次交给 Discord 的;清空过、这条连接上还没发过、没连上为 nil。
-    /// 预览在暂停宽限期里画它:那段时间 Discord 上还是暂停前发出去的那份。
+    /// Discord 上现在挂着的那一份:连着时最近一次交给 Discord 的,被拒过的按它实际显示的(补发的精简版;都被拒、清掉了为 nil);
+    /// 清空过、这条连接上还没发过、没连上为 nil。预览在暂停宽限期里画它:那段时间 Discord 上还是暂停前发出去的那份。
     var sentActivity: DiscordActivity? {
         guard case .connected = status, case .some(let sent) = gate.lastSent else { return nil }
+        if let delivered, DiscordPresenceGate.sameContent(delivered.wanted, sent) { return delivered.shown }
         return sent
     }
 
-    private func sendFinished(delivered: Bool, generation sentGeneration: Int) {
-        guard !delivered, sentGeneration == generation else { return }
-        gate.forget()
+    /// 这一份交给 Discord 时被拒过:返回它实际显示的那份(补发的精简版;都被拒、清掉了是 `.some(nil)`)。没被拒、或者最近
+    /// 交出去的不是这一份时为 nil,照它本身画。预览用。
+    func shownOnDiscord(insteadOf activity: DiscordActivity) -> DiscordActivity?? {
+        guard case .connected = status, let delivered, delivered.shown != delivered.wanted,
+              DiscordPresenceGate.sameContent(delivered.wanted, activity) else { return nil }
+        return .some(delivered.shown)
+    }
+
+    /// 连接层回报这一份的结局。被拒过的记下实际显示的那份;断了的忘掉上次发的,连上后重发。
+    private func sendFinished(_ delivery: DiscordPresenceLink.Delivery, wanted: DiscordActivity?,
+                              generation sentGeneration: Int) {
+        guard sentGeneration == generation else { return }
+        switch delivery {
+        case .shown(let shown):
+            delivered = (wanted, shown)
+            if shown != wanted {
+                discordLogger.notice("presence refused, Discord shows \(shown == nil ? "nothing" : "the plain version", privacy: .public)")
+            }
+        case .lost:
+            delivered = nil
+            gate.forget()
+        }
     }
 
     private func linkStatusChanged(_ linkStatus: DiscordPresenceLink.Status) {
@@ -194,11 +225,13 @@ final class DiscordPresenceController: ObservableObject {
             refresh()
         case .disconnected:
             gate.forget()
+            delivered = nil
             status = .waiting(desktopWaiting())
             // 连着的时候断了(Discord 退出或重启):马上重连一次,重启的话不用等下一拍。
             if wasConnected { link.connectIfNeeded(clientID: applicationID) }
         case .rejected:
             gate.forget()
+            delivered = nil
             status = .refused
         }
     }
@@ -210,10 +243,13 @@ final class DiscordPresenceController: ObservableObject {
         fastConnectTask = nil
         wakeTask?.cancel()
         wakeTask = nil
+        coverWakeTask?.cancel()
+        coverWakeTask = nil
         guard status != .off else { return }
         generation += 1
         link.disconnect(clearing: true)
         gate = DiscordPresenceGate()
+        delivered = nil
         status = .off
     }
 
@@ -507,6 +543,28 @@ final class DiscordPresenceController: ObservableObject {
         return until > now ? until : nil
     }
 
+    /// 当前这首的封面有到点要做的事 —— 没问成的那一轮到点重查(`CoverLookup.retryAt`)、中继上还没有的到点再问
+    /// (`relayRecheckAt`)—— 时,到点叫一次刷新,不靠 30 秒那一拍顺带(那样要晚到最多 30 秒)。只看还没到点的:到了点的
+    /// 这一拍 `coverURL` 已经办了。没连上、这首自己给了封面、没有要联网的那几档时不叫。
+    private func scheduleCoverWake(now: Date) {
+        coverWakeTask?.cancel()
+        coverWakeTask = nil
+        guard case .connected = status, let extras, extras.ownCover == nil, let request = extras.coverRequest,
+              let lookup = coverLookups[extras.coverKey], lookup.finished else { return }
+        var due: [Date] = []
+        if lookup.hit == nil, let retryAt = lookup.retryAt { due.append(retryAt) }
+        if request.relayURL != nil, lookup.hit?.tier != .relay, !lookup.relayChecking, lookup.relayChecksLeft > 0,
+           let recheck = lookup.relayRecheckAt {
+            due.append(recheck)
+        }
+        guard let at = due.filter({ $0 > now }).min() else { return }
+        coverWakeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, at.timeIntervalSinceNow) + 0.05))
+            guard !Task.isCancelled else { return }
+            self?.refresh()
+        }
+    }
+
     /// `attempt`:这一首第几轮查(第一轮是 0)。补查那一轮整条换掉上一轮的记录。
     private func startCoverLookup(key: String, request: PresenceCover.Request, attempt: Int) {
         if coverLookups.count >= 300 {
@@ -547,8 +605,12 @@ final class DiscordPresenceController: ObservableObject {
                 lookup.hit = PresenceCover.Hit(url: relay, tier: .relay, artistPage: lookup.hit?.artistPage)
                 lookup.relayRecheckAt = nil
                 self?.refresh()
+            } else if found == false {
+                lookup.relayRecheckAt = Date().addingTimeInterval(Self.relayRecheckInterval)
+                // 到点再问一次:刷新那一拍按它安排唤醒(`scheduleCoverWake`)。
+                self?.refresh()
             } else {
-                lookup.relayRecheckAt = found == false ? Date().addingTimeInterval(Self.relayRecheckInterval) : nil
+                lookup.relayRecheckAt = nil
             }
         }
     }

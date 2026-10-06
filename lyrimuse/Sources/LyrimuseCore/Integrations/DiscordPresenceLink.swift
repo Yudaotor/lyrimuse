@@ -31,11 +31,19 @@ public final class DiscordPresenceLink: @unchecked Sendable {
         self.log = log
     }
 
+    /// 交进来的那一份最后怎样了。
+    public enum Delivery: Equatable, Sendable {
+        /// Discord 此刻显示的是这一份:原样收下的;拒收后补发、收下了的精简版(去掉链接和图片);或者精简版也被拒、
+        /// 补发了清空,这时为 nil。被拒不算断线,调用方不用重交 —— 原样重发也是一样的结果。
+        case shown(DiscordActivity?)
+        /// 没连上或连接断了,调用方过一会儿再交。
+        case lost
+    }
+
     /// 发这一份(nil = 清掉)。没连上就按它的应用先连;连着的不是它的应用就断开、按它的应用重连 —— Discord 随连接断开清掉
     /// 原来那个应用的状态,这时不报「断开」。没连上时的清空什么都不做,Discord 那边本来就没有这个进程的状态。
-    /// 回调在内部队列上:true = Discord 收下了;或者拒收了这一份、补发的精简版(去掉链接和图片)收下了;或者精简版也拒收
-    /// (只记日志,原样重发也是一样的结果)。false = 没连上或连接断了,调用方过一会儿再交。
-    public func send(_ activity: DiscordActivity?, completion: @escaping @Sendable (Bool) -> Void = { _ in }) {
+    /// 回调在内部队列上,带着 Discord 此刻实际显示的是哪一份(`Delivery`)。
+    public func send(_ activity: DiscordActivity?, completion: @escaping @Sendable (Delivery) -> Void = { _ in }) {
         queue.async { completion(self.deliver(activity)) }
     }
 
@@ -68,37 +76,47 @@ public final class DiscordPresenceLink: @unchecked Sendable {
 
     // MARK: - 队列上
 
-    private func deliver(_ activity: DiscordActivity?) -> Bool {
+    private func deliver(_ activity: DiscordActivity?) -> Delivery {
         if let activity, let current = connection, current.clientID != activity.applicationID {
             current.close()
             connection = nil
             log("switching to application \(activity.applicationID)")
         }
         if connection == nil {
-            guard let activity else { return true }
-            guard connect(clientID: activity.applicationID) else { return false }
+            guard let activity else { return .shown(nil) }
+            guard connect(clientID: activity.applicationID) else { return .lost }
         }
-        if attempt(activity) { return true }
+        let first = attempt(activity)
+        guard first == .lost else { return first }
         // 连接断了(多半是 Discord 重启过):重连一次再发,不用等下一轮。
-        guard let activity, connect(clientID: activity.applicationID) else { return false }
+        guard let activity, connect(clientID: activity.applicationID) else { return .lost }
         return attempt(activity)
     }
 
-    /// 在当前连接上发一次。false = 连接断了,已经丢掉。Discord 拒收这一份时去掉链接和图片补发一次精简版
-    /// (`DiscordPresence.withoutLinksAndImages`),精简版也被拒就算了(只记日志,原样重发也是一样的结果)。
-    private func attempt(_ activity: DiscordActivity?) -> Bool {
-        guard let connection else { return false }
+    /// 在当前连接上发一次。`.lost` = 连接断了,已经丢掉。Discord 拒收这一份时去掉链接和图片补发一次精简版
+    /// (`DiscordPresence.withoutLinksAndImages`);精简版也被拒、或者本来就没有链接和图片时补发一次清空 —— 被拒的命令
+    /// 不改 Discord 上的状态,不清的话这一首放完之前好友看到的都是上一首。
+    private func attempt(_ activity: DiscordActivity?) -> Delivery {
+        guard let connection else { return .lost }
         switch push(activity, on: connection) {
         case .delivered:
-            return true
+            return .shown(activity)
         case .lost:
-            return false
+            return .lost
         case .refused:
-            guard let activity else { return true }
+            // 清空被拒没见过;真遇到了也没有更退一步的办法,当清掉了。
+            guard let activity else { return .shown(nil) }
             let plain = DiscordPresence.withoutLinksAndImages(activity)
-            guard plain != activity else { return true }
-            log("resending without links and images")
-            return push(plain, on: connection) != .lost
+            if plain != activity {
+                log("resending without links and images")
+                switch push(plain, on: connection) {
+                case .delivered: return .shown(plain)
+                case .lost: return .lost
+                case .refused: break
+                }
+            }
+            log("clearing after the activity was refused")
+            return push(nil, on: connection) == .lost ? .lost : .shown(nil)
         }
     }
 

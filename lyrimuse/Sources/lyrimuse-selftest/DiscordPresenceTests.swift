@@ -235,7 +235,8 @@ private func checkDiscordActivity() {
                 "Discord activity: 超长链接不给(截断的链接会让整条被拒)")
 
     // ---- 文本长度 ----
-    expectEqual(DiscordPresence.fitted("雨"), "雨 ", "Discord 文本: 不够两位补空格")
+    expectEqual(DiscordPresence.fitted("雨"), "雨\u{200B}",
+                "Discord 文本: 不够两位补零宽空格(补普通空格的话,Discord 去掉首尾空白再校验就还是不够两位)")
     expectEqual(DiscordPresence.fitted("  hello \n"), "hello", "Discord 文本: 去掉首尾空白")
     expectEqual(DiscordPresence.fitted("😀"), "😀", "Discord 文本: 一个 emoji 已经占两位")
     let long = DiscordPresence.fitted(String(repeating: "长", count: 200))
@@ -727,7 +728,7 @@ private func checkDiscordConnection() {
     var trackB = trackA
     trackB.applicationID = "456"
     let activityB = DiscordPresence.activity(trackB, statusLine: .title, now: nil)
-    link.send(nil) { results.append($0) }
+    link.send(nil) { results.append($0 != .lost) }
     link.waitUntilIdle()
     expectEqual(statuses.all, [], "Discord 后台连接: 没连着时清空不去连")
     link.connectIfNeeded(clientID: "123")
@@ -735,11 +736,11 @@ private func checkDiscordConnection() {
     expectEqual(statuses.all, [.connected(user: DiscordUser(id: "1", username: "tester"))], "Discord 后台连接: 先连上、不发东西")
     expectEqual(server.records.last, "handshake client_id=123 v=1", "Discord 后台连接: 只握手")
     link.connectIfNeeded(clientID: "123")
-    link.send(activityA) { results.append($0) }
+    link.send(activityA) { results.append($0 != .lost) }
     link.waitUntilIdle()
     expectEqual(statuses.all, [.connected(user: DiscordUser(id: "1", username: "tester"))], "Discord 后台连接: 连着时不重连")
     let pid = ProcessInfo.processInfo.processIdentifier
-    link.send(activityB) { results.append($0) }
+    link.send(activityB) { results.append($0 != .lost) }
     link.waitUntilIdle()
     expectEqual(Array(server.records.suffix(2)), ["handshake client_id=456 v=1", "set pid=\(pid) details=晴天"],
                 "Discord 后台连接: 换了播放器就换那个应用重连再发")
@@ -750,17 +751,17 @@ private func checkDiscordConnection() {
     link.check()
     link.waitUntilIdle()
     expectEqual(statuses.all.last, .disconnected, "Discord 后台连接: 定时检查发现断开")
-    link.send(activity) { results.append($0) }
+    link.send(activity) { results.append($0 != .lost) }
     link.waitUntilIdle()
     expectEqual(statuses.all.last, .connected(user: DiscordUser(id: "1", username: "tester")), "Discord 后台连接: 下一份重连后发出")
     server.dropClient()
-    link.send(activity) { results.append($0) }
+    link.send(activity) { results.append($0 != .lost) }
     link.waitUntilIdle()
     expectEqual(server.records.last, "set pid=\(ProcessInfo.processInfo.processIdentifier) details=晴天",
                 "Discord 后台连接: 发送时才发现断了,当场重连再发")
     server.stop()
     link.check()
-    link.send(activity) { results.append($0) }
+    link.send(activity) { results.append($0 != .lost) }
     link.waitUntilIdle()
     expectEqual(statuses.all.last, .disconnected, "Discord 后台连接: Discord 退出后报没连上")
     expectEqual(results.all, [true, true, true, true, true, false], "Discord 后台连接: 每份的结果,连不上时 false")
@@ -770,7 +771,7 @@ private func checkDiscordConnection() {
     // ---- 后台连接:Discord 拒收某一份,去掉链接和图片补发一次 ----
     guard let picky = FakeDiscord(handshake: .accept(user: "tester")) else { return }
     defer { picky.stop() }
-    let pickyResults = Recorder<Bool>()
+    let pickyResults = Recorder<DiscordPresenceLink.Delivery>()
     let pickyStatuses = Recorder<DiscordPresenceLink.Status>()
     let pickyLink = DiscordPresenceLink(socketPaths: { [picky.path] }, timeout: timeout, onStatus: { pickyStatuses.append($0) })
     let rich = DiscordPresence.activity(sampleTrack(position: nil), statusLine: .title, now: nil, smallImage: .lyrimuse)
@@ -788,12 +789,15 @@ private func checkDiscordConnection() {
     pickyLink.send(rich) { pickyResults.append($0) }
     pickyLink.waitUntilIdle()
     expectEqual(picky.activityKeys.count, 4, "Discord 后台连接: 精简版也被拒就不再补发")
+    expectEqual(picky.records.last, "clear pid=\(pid)", "Discord 后台连接: 精简版也被拒就补发清空,不让 Discord 挂着上一首")
     let plain = DiscordPresence.withoutLinksAndImages(rich)
     picky.failNextCommand(code: 4002, message: "invalid")
     pickyLink.send(plain) { pickyResults.append($0) }
     pickyLink.waitUntilIdle()
-    expectEqual(picky.activityKeys.count, 5, "Discord 后台连接: 本来就没有链接和图片的,被拒了不补发")
-    expectEqual(pickyResults.all, [true, true, true], "Discord 后台连接: 被拒不算断线,不让调用方重交")
+    expectEqual(picky.activityKeys.count, 5, "Discord 后台连接: 本来就没有链接和图片的,被拒了不补发精简版")
+    expectEqual(picky.records.last, "clear pid=\(pid)", "Discord 后台连接: 本来就没有链接和图片的,被拒了直接补发清空")
+    expectEqual(pickyResults.all, [.shown(plain), .shown(nil), .shown(nil)],
+                "Discord 后台连接: 回报 Discord 实际显示的那份(精简版 / 清空),被拒不算断线、不让调用方重交")
     expectEqual(pickyStatuses.all, [.connected(user: DiscordUser(id: "1", username: "tester"))],
                 "Discord 后台连接: 被拒之后连接照旧")
     pickyLink.disconnect(clearing: false)
@@ -1007,11 +1011,19 @@ private func checkDiscordWiring() {
         expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 控制器盯着 \(needle)")
     }
     for needle in ["if lookup.finished, lookup.hit == nil, let retryAt = lookup.retryAt, now >= retryAt {",
-                   "attempt: lookup.attempt + 1", "ITunesSearchGate.shared.cooldownEnds()", "lookup.attempt == 0"] {
+                   "attempt: lookup.attempt + 1", "ITunesSearchGate.shared.cooldownEnds()", "lookup.attempt == 0",
+                   "        if track != nil {\n            scheduleCoverWake(now: now)",
+                   "guard let at = due.filter({ $0 > now }).min() else { return }", "coverWakeTask = Task { [weak self] in"] {
         expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 没问成的封面到点再查 \(needle)")
     }
+    for needle in ["Task { @MainActor in self?.sendFinished(delivery, wanted: activity, generation: sentGeneration) }",
+                   "            delivered = (wanted, shown)",
+                   "if let delivered, DiscordPresenceGate.sameContent(delivered.wanted, sent) { return delivered.shown }"] {
+        expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 记下 Discord 实际显示的那份 \(needle)")
+    }
     let preview = code("lyrimuse/Settings/DiscordPresencePreview.swift")
-    for needle in ["discord.sentActivity", "now.timeIntervalSince($0) < DiscordPresence.pauseGrace", "CachedImage(url: url)"] {
+    for needle in ["discord.sentActivity", "now.timeIntervalSince($0) < DiscordPresence.pauseGrace", "CachedImage(url: url)",
+                   "if live != nil, let shown = discord.shownOnDiscord(insteadOf: activity) {", "} else if live == nil || refused {"] {
         expectEqual(sourceBytes(preview, contain: needle), true, "Discord(接线): 预览照 Discord 实际显示的画 \(needle)")
     }
     let playbackSource = code("LyrimuseCore/Local/LocalPlaybackSource.swift")

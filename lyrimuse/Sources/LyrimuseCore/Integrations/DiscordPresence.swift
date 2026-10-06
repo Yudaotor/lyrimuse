@@ -396,7 +396,8 @@ public enum DiscordPresence {
         return plain
     }
 
-    /// 按 Discord 的长度限制收拾一段文本:去掉首尾空白,超长截到上限(留一位给省略号,不切开一个字),不够两位补空格。
+    /// 按 Discord 的长度限制收拾一段文本:去掉首尾空白,超长截到上限(留一位给省略号,不切开一个字),不够两位补零宽空格
+    /// (U+200B,看不见;补普通空格的话,Discord 校验前要是也去掉首尾空白,单个字的歌名照样不够两位、整条被拒)。
     public static func fitted(_ text: String) -> String {
         var result = trimmed(text)
         if result.utf16.count > textLengthRange.upperBound {
@@ -411,7 +412,7 @@ public enum DiscordPresence {
             result = kept + "…"
         }
         while result.utf16.count < textLengthRange.lowerBound {
-            result += " "
+            result += "\u{200B}"
         }
         return result
     }

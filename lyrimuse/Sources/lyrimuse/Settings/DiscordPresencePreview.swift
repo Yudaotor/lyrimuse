@@ -83,7 +83,7 @@ struct DiscordPresencePreview: View {
         let inGrace = paused && discord.pausedSince.map { now.timeIntervalSince($0) < DiscordPresence.pauseGrace } == true
         let pausedKept = paused && !inGrace && settings.discordKeepWhenPaused
         let track = live ?? sampleTrack
-        let activity: DiscordActivity
+        var activity: DiscordActivity
         if inGrace, let sent = discord.sentActivity {
             activity = sent
         } else if pausedKept {
@@ -94,12 +94,17 @@ struct DiscordPresencePreview: View {
                                                 smallImage: DiscordPresence.smallImage(for: settings.discordBadge,
                                                                                        applicationID: track.applicationID))
         }
+        // 这一份 Discord 拒收过:照它实际显示的画(补发的精简版没有封面和链接);都被拒、清掉了的照常画,说明里写这首不会显示。
+        var refused = false
+        if live != nil, let shown = discord.shownOnDiscord(insteadOf: activity) {
+            if let shown { activity = shown } else { refused = true }
+        }
         let caption: String
         if !settings.discordPresenceEnabled {
             caption = L10n.t("预览 · 开关关着，Discord 上不会显示")
         } else if let hiddenUntil = discord.hiddenUntil {
             caption = String(format: L10n.t("预览 · 已暂时隐藏，%@ 恢复"), DiscordPresenceController.restoreTimeText(hiddenUntil))
-        } else if live == nil {
+        } else if live == nil || refused {
             caption = playback.title.isEmpty ? L10n.t("预览 · 没在放歌，先用示例") : L10n.t("预览 · 现在这首不会显示到 Discord")
         } else if !playback.isPlayingSmoothed && !settings.discordKeepWhenPaused {
             caption = String(format: L10n.t("预览 · 暂停 %d 秒后从 Discord 上清掉"), Int(DiscordPresence.pauseGrace))
