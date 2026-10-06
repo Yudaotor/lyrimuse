@@ -1665,7 +1665,6 @@ func (p *poller) readAppPlayback() (now time.Time, reanchored, loopRestart bool)
 func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reanchored, loopRestart bool) {
 	if !t.tracked {
 		p.curStale, p.curHeld = true, false
-		noteAppReportedAd(snapshot{}, false)
 		p.appSpotifyTrackID = ""
 		if p.nullStreak == 0 {
 			p.nullSince = now
@@ -1673,6 +1672,9 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 		p.nullStreak++
 		if nullStreakMeansStopped(p.nullStreak, p.nullSince, now) {
 			p.cur = snapshot{}
+			// 广告标记跟着留下的那一首走,p.cur 清空时才清。别在空拍一来就清:App 卡住超过 appStateFreshness 时
+			// 引擎进待机、p.cur 还留着那首广告,标记先没了的话补歌词会把广告当歌搜、写进缓存(见 02 章决策 99)。
+			noteAppReportedAd(snapshot{}, false)
 		}
 		return false, false
 	}

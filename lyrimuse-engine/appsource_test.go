@@ -237,6 +237,30 @@ func TestApplyAppPlaybackTickNullStreak(t *testing.T) {
 	}
 }
 
+// App 判成广告的那一首,App 状态过期(空拍)、p.cur 还留着的那几拍里照样认是广告;按停播确认清空 p.cur 时一起不认。
+func TestApplyAppPlaybackTickKeepsAdFlagWhileTrackRetained(t *testing.T) {
+	t.Cleanup(func() { noteAppReportedAd(snapshot{}, false) })
+	p := &poller{ctx: context.Background(), cfg: &config{}}
+	t0 := time.Unix(1_790_000_000, 0)
+	tick, _ := appPlaybackTickFor(appSourceRec(7, 1, 1, "Stream October 14, only on Disney+", t0), appPlaybackMarks{}, t0, plainAppJudge())
+	tick.ad = true
+	p.applyAppPlaybackTick(t0, tick)
+	ad := p.cur
+	if !isAdBreak(ad.Bundle, ad.Artist, ad.Title, ad.Album) {
+		t.Fatal("the App flagged this track as an ad")
+	}
+	p.applyAppPlaybackTick(t0.Add(time.Second), appPlaybackTick{})
+	p.applyAppPlaybackTick(t0.Add(2*time.Second), appPlaybackTick{})
+	if p.cur.key() != ad.key() || !isAdBreak(ad.Bundle, ad.Artist, ad.Title, ad.Album) {
+		t.Fatalf("while the stale App state leaves the ad on p.cur it must stay an ad: cur=%+v", p.cur)
+	}
+	p.applyAppPlaybackTick(t0.Add(3*time.Second), appPlaybackTick{})
+	p.applyAppPlaybackTick(t0.Add(time.Second+nullClearMinWait), appPlaybackTick{})
+	if p.cur.key() != "" || isAdBreak(ad.Bundle, ad.Artist, ad.Title, ad.Album) {
+		t.Fatalf("once p.cur is cleared the ad flag goes with it: cur=%+v", p.cur)
+	}
+}
+
 func writeAppStateFile(t *testing.T, path string, rec appStateRecord) {
 	t.Helper()
 	b, err := json.Marshal(rec)
