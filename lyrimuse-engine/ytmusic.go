@@ -577,7 +577,8 @@ func ytmusicSearchSongItems(ctx context.Context, artist, title, album string) ([
 			c["hl"] = hl
 		}
 	}
-	body["query"] = strings.TrimSpace(artist + " " + title)
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
+	body["query"] = strings.TrimSpace(artist + " " + lyricQueryTitle(title))
 	body["params"] = ytmusicSongsFilterParams
 	raw, err := ytmusicPost(ctx, "search", body, ytmusicCachedVisitorID())
 	if err != nil {

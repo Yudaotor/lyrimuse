@@ -239,7 +239,8 @@ func (t deezerTrack) cover() string {
 
 // deezerSearch 打公开搜索接口。不需要认证 —— 这是 Deezer 自己文档化的 API。
 func deezerSearch(ctx context.Context, artist, title string) ([]deezerTrack, error) {
-	q := strings.TrimSpace(artist + " " + title)
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
+	q := strings.TrimSpace(artist + " " + lyricQueryTitle(title))
 	u := deezerSearchAPI + "?limit=10&q=" + neturl.QueryEscape(q)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -571,7 +572,8 @@ func deezerSearchLanguage(s string) string {
 
 // deezerGraphQLSearch 用 GraphQL 搜索。请求没成 / 回了错误(除了部分结果带的零星错误)都返回 err,调用方退回公开搜索。
 func deezerGraphQLSearch(ctx context.Context, artist, title string) ([]deezerSearchHit, error) {
-	q := strings.TrimSpace(artist + " " + title)
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
+	q := strings.TrimSpace(artist + " " + lyricQueryTitle(title))
 	data, errs, err := deezerPipeQuery(ctx, "SearchTracks", deezerSearchQuery, map[string]any{"query": q, "first": deezerSearchFirst}, deezerSearchLanguage(q))
 	if err != nil {
 		return nil, err

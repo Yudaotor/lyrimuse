@@ -355,9 +355,9 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 	// 搜索词逐个 variant 试,先命中先用(顺序由 searchTitleVariants 定,跟设置走)。带括号的标题在酷狗
 	// 上不会返回空、而是回一串该歌手的热门歌,所以"搜砸了"表现为 pickKugouSearchCandidate
 	// 一条都收不下,不是 kugouGet 报错——必须靠 chosen==nil 才能发现,不能只在 err != nil
-	// 时才换词。详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)不受影响:实测
-	// 同一个 hash 下 keyword 带不带括号返回的候选完全一致,身份是 hash 认的。
-	var chosen *kugouSong
+	// 时才换词。详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)身份是 hash 认的,keyword 照样
+	// 去掉编号那几层(lyricQueryTitle):带着重录年份这类后缀,同一个 hash 也可能一条候选都不回。
+	var chosen, held *kugouSong
 	var pool []kugouSong
 	searched := false
 	for _, q := range searchTitleVariants(title) {
@@ -371,6 +371,14 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 			lyricSearchItemsTap("kugou", artist, title, album, durationSecs, primary)
 		}
 		chosen = pickKugouSearchCandidate(primary, artist, title, album, durationSecs)
+		// 歌名带编号时完整歌名排在最前面(searchTitleVariants);它搜回来挑中的那条自报时长对不上时先记着,接着试去掉编号的
+		// 写法,都没有更合适的再用它。
+		if chosen != nil && hasStrongTitleIdentifier(title) && !sourceDurationFits(durationSecs, chosen.Duration) {
+			if held == nil {
+				held = chosen
+			}
+			chosen = nil
+		}
 		if chosen != nil {
 			break
 		}
@@ -378,6 +386,9 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 	}
 	if chosen == nil {
 		chosen = kugouFallbackSong(pool, artist, title, album, durationSecs)
+	}
+	if chosen == nil {
+		chosen = held
 	}
 	if chosen == nil {
 		if !searched {
@@ -392,8 +403,9 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 	var kr struct {
 		Candidates []kugouLyricCandidate `json:"candidates"`
 	}
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
 	krcURL := fmt.Sprintf("http://krcs.kugou.com/search?ver=1&man=yes&client=mobi&keyword=%s&duration=%d&hash=%s",
-		kugouEscape(artist+" - "+title), durMs, chosen.Hash)
+		kugouEscape(artist+" - "+lyricQueryTitle(title)), durMs, chosen.Hash)
 	if err := kugouGet(ctx, krcURL, &kr); err != nil {
 		return kugouResult{}
 	}
@@ -483,8 +495,9 @@ func kugouKeywordLyric(ctx context.Context, artist, title string, durationSecs f
 	var kr struct {
 		Candidates []kugouLyricCandidate `json:"candidates"`
 	}
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
 	u := fmt.Sprintf("http://krcs.kugou.com/search?ver=1&man=yes&client=pc&keyword=%s&duration=%d&hash=",
-		kugouEscape(artist+" - "+title), int64(durationSecs*1000))
+		kugouEscape(artist+" - "+lyricQueryTitle(title)), int64(durationSecs*1000))
 	if err := kugouGet(ctx, u, &kr); err != nil {
 		return kugouResult{}
 	}
@@ -531,8 +544,8 @@ func kugouKeywordCandidate(cands []kugouLyricCandidate, artist, title string, du
 // 摘出来。
 //
 // 排序键(闸门原样保留,只改"过闸之后信谁"):
-//  1. 标题档位:normLoose 精确同名 > 剥括号后相等 > 其它过闸形态(跟 QQ 专辑维度路线
-//     resolveQQMatchViaAlbum 的三档完全同构);
+//  1. 标题档位:编号也对得上的同名(lyricTitleSameNumber,本地歌名带编号时才有)> 逐字同名(lyricTitleSameName)
+//     > 剥括号后相等 > 其它过闸形态(跟 QQ 专辑维度路线 resolveQQMatchViaAlbum 的档位完全同构);
 //  2. 同档位比 albumScore(200 精确 / 100 包含 / token 数,见 match.go);
 //  3. 再同分比时长贴近度(本地或候选缺时长的当 +Inf,排最后);
 //  4. 全都打平保持原序(搜索相关性排序,= 改动前的行为)。
@@ -580,11 +593,11 @@ func kugouOriginalGate(s *kugouSong, artist, title, album string, durationSecs f
 // 返回选中那条的 byTriangle。
 func kugouRankSongs(songs []kugouSong, title, album string, durationSecs float64, accept func(s *kugouSong) (ok, byTriangle bool)) (*kugouSong, bool) {
 	const (
-		tierExact = iota
+		tierSameNumber = iota
+		tierExact
 		tierStripped
 		tierAccepted
 	)
-	nt := normLoose(title)
 	st := normLoose(stripParens(title))
 	var best *kugouSong
 	bestTier, bestAlbum := 0, 0
@@ -601,7 +614,9 @@ func kugouRankSongs(songs []kugouSong, title, album string, durationSecs float64
 		}
 		tier := tierAccepted
 		switch {
-		case normLoose(s.SongName) == nt:
+		case lyricTitleSameNumber(s.SongName, title):
+			tier = tierSameNumber
+		case lyricTitleSameName(s.SongName, title):
 			tier = tierExact
 		case normLoose(stripParens(s.SongName)) == st:
 			tier = tierStripped

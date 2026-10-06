@@ -108,7 +108,8 @@ func kuwoCoverURL(short string) string {
 // kuwoSearch 请求搜索端点(Referer 必须是 www.kuwo.cn,跟歌词端点的 Referer 不同,
 // 见 kuwoFetchLyric 那边——写错会被拒)。`vipver=1` 不能去掉,见文件头注。
 func kuwoSearch(ctx context.Context, artist, title string) ([]kuwoSearchItem, error) {
-	q := strings.TrimSpace(title + " " + artist)
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
+	q := strings.TrimSpace(lyricQueryTitle(title) + " " + artist)
 	var items []kuwoSearchItem
 	err := tryEach(ctx, kuwoSearchEndpoints, func(endpoint string) error {
 		got, err := kuwoSearchAt(ctx, endpoint, q)

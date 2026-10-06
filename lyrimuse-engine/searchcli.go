@@ -209,9 +209,12 @@ func runSearchLyricsCLI(args []string) {
 	// 用 Kaset 放过的歌,lyricfind 按缓存里存的 YouTube Music 歌曲页取(ytmusicVideoLyric),跟自动解析同一个口径。
 	enrichMu.Lock()
 	searchCtx = withCachedYouTubeMusicVideoIDLocked(searchCtx, enrichKey(*artist, *title, *album))
+	storedSearchTitle := enrichCache[enrichKey(*artist, *title, *album)].LyricsSearchTitle
 	enrichMu.Unlock()
 	// 这首在缓存里有条目时,学署名同样不拿它自己的署名给它当别名。
 	searchCtx = withLearnedAliasSelf(searchCtx, enrichKey(*artist, *title, *album))
+	// 条目里记着带编号的歌名时,跟自动解析一样交给各歌词源(见 withLyricSourceTitle);改过歌名再搜的对不上 key,不带。
+	searchCtx = withLyricSourceTitle(searchCtx, lyricSearchTitleOrStored(searchCtx, storedSearchTitle, *title), *artist, *title, *album)
 	_, results := scoredLyricCandidatesStreaming(searchCtx, sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在

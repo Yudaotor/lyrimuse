@@ -632,7 +632,8 @@ func sodaCandidateScore(item sodaSearchItem, artist, title, album string, durati
 
 // sodaSearch 按 sodaSearchHosts 逐个主机发一次搜索请求;只有没问成才换下一个。
 func sodaSearch(ctx context.Context, artist, title string) ([]sodaSearchItem, error) {
-	q := strings.TrimSpace(strings.TrimSpace(artist) + " " + strings.TrimSpace(title))
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
+	q := strings.TrimSpace(strings.TrimSpace(artist) + " " + strings.TrimSpace(lyricQueryTitle(title)))
 	if q == "" {
 		return nil, nil
 	}

@@ -55,8 +55,12 @@ func foldQuoteLookalikes(s string) string {
 // lyricIdentityFields:按播放器原样标签记下的东西(播放时的平台曲目 ID、由它换来的 ISRC、本机客户端的歌词缓存、
 // 缓存条目里存的 ID)拿哪组写法去查。这一轮问的就是归一化之前那组标签(手上三栏正好是它们经 searchQueryFields
 // 改写的结果)时用原样那组;换了身份的轮次(别名、拆分、标题反查)或 ctx 上没记原样写法时用手上这组。
-// 只管这类查找,发给歌词源的查询词照旧用手上这组。见 09 章决策 190。
+// 只管这类查找,发给歌词源的查询词照旧用手上这组。见 09 章决策 190。手上的歌名是交给各歌词源的带编号那一份
+// (lyricSourceTitleFor)时先换回 key 里的歌名:这类查找按 key 里的歌名记。
 func lyricIdentityFields(ctx context.Context, artist, title, album string) (string, string, string) {
+	if t := normEnrichTitle(title); t != title && lyricSourceTitleFor(ctx, t) == title {
+		title = t
+	}
 	oa, ot, oal, ok := searchQueryOriginalFrom(ctx)
 	if !ok {
 		return artist, title, album

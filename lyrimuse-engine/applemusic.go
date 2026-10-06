@@ -748,7 +748,8 @@ func applemusicAPIGetAt(ctx context.Context, base, path, devToken, userToken str
 // applemusicSearch 在 storefront 这个区搜候选,lang 非空时按这种语言回名字(l 参数,必须是这个区支持的,
 // 不支持的 Apple 静默照默认语言答)。只需要 developer token。
 func applemusicSearch(ctx context.Context, storefront, lang, artist, title, devToken string) ([]applemusicSong, error) {
-	q := strings.TrimSpace(artist + " " + title)
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
+	q := strings.TrimSpace(artist + " " + lyricQueryTitle(title))
 	path := neturl.PathEscape(storefront) + "/search?types=songs&limit=10&term=" + neturl.QueryEscape(q)
 	if lang != "" {
 		path += "&l=" + neturl.QueryEscape(lang)

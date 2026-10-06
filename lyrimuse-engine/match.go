@@ -1606,9 +1606,8 @@ const (
 // 里没有歌手项),所以放宽歌手闸不需要 lyricsScoringVersion +1。
 func lyricRecordingTriangleMatches(candTitle, candAlbum string, candDurationSecs float64,
 	localTitle, localAlbum string, localDurationSecs float64) bool {
-	// ① 标题:逐字同名。
-	nct, nlt := normLoose(candTitle), normLoose(localTitle)
-	if nct == "" || nlt == "" || nct != nlt {
+	// ① 标题:逐字同名(本地歌名带编号时见 lyricTitleSameName)。
+	if normLoose(candTitle) == "" || normLoose(localTitle) == "" || !lyricTitleSameName(candTitle, localTitle) {
 		return false
 	}
 	// ② 时长:两边都得有,且差在容差内。这是仿冒号抄不动的那一样,整条防线的主力。
@@ -2196,6 +2195,8 @@ func stripBrackets(s string, open, closing func(rune) bool) string {
 //	② 其余(remaster/deluxe/feat./bonus/Taylor's Version… —— 同一次录音的不同发行,
 //	   **故意不在** distinctRecordingVersionTags 里,见那边注释)→ **裸标题优先**。
 //	   这一档才是收益来源,见下面两条实测。
+//	③ 括号里是明说第几个的编号(#6、Part 2、第3集、某年重录,见 hasStrongTitleIdentifier)→ **原样标题优先**:
+//	   系列曲各家几乎都连编号登记,先拿裸标题去搜,回来的常是同系列别的号。
 //
 // 另一种写法始终保留作**兜底**,只在前一条一无所获时才发第二次请求,所以两个方向的
 // 收益都拿得到:
@@ -2232,7 +2233,7 @@ func searchTitleVariants(title string) []string {
 	if len(stripped) == 0 {
 		return []string{title}
 	}
-	if len(titleVersionTags(title)) > 0 {
+	if len(titleVersionTags(title)) > 0 || hasStrongTitleIdentifier(title) {
 		return append([]string{title}, stripped...)
 	}
 	return append(stripped, title)
@@ -3340,6 +3341,8 @@ func liveAlbumIdentityConflict(localArtist, localTitle, localAlbum, candTitle, c
 //	⑤ 本地歌名在括号外带合作署名(「X featuring Y」「X feat. Y」「X - ft. Y」):两边各自去掉括号段、
 //	   再去掉括号外那一段署名之后相等。只看本地歌名带不带:本地没带、候选带的照旧不认。见 stripTitleFeatCredit。
 //
+// 例外:两边带着同一类编号、值不同(「#6」对「#11」、「Part 1」对「Part 2」)时上面哪条都不认,见 titleIdentifiersConflict。
+//
 // **绝不认任意的双向子串包含**。那是之前 kugou/QQ/Musixmatch/netease 的
 // 做法,是个定时炸弹:"Real Love" 本来就是 "Real Love Baby" 的子串,查 "love" 能命中
 // 同歌手的 "Real Love",时长又常在容差内,于是把另一首歌的歌词当成这一首。lrclib 早就
@@ -3367,6 +3370,9 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 	}
 	if nc == nl {
 		return true
+	}
+	if titleIdentifiersConflict(localTitle, candidateTitle) {
+		return false
 	}
 	sc, sl := normLoose(stripParens(candidateTitle)), normLoose(stripParens(localTitle))
 	if sc != "" && sl != "" && sc == sl {

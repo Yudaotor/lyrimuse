@@ -71,22 +71,35 @@ func enrichKey(artist, title, album string) string {
 	return cleanMediaTag(artist) + "|" + normEnrichTitle(title) + "|" + cleanMediaTag(album)
 }
 
-// normEnrichTitle 反复剥掉结尾的译名括号,碰到版本标记就停手。
+// normEnrichTitle 反复剥掉结尾的译名括号,碰到版本标记就停手。搜歌词、挑候选用的歌名另见 lyricSearchTitle。
+func normEnrichTitle(title string) string {
+	return trimTrailingBrackets(title, enrichKeyKeepsBracket)
+}
+
+// enrichKeyKeepsBracket:这段括号(inner 不带括号本身)里有版本标记,整段保留。
+func enrichKeyKeepsBracket(inner string) bool {
+	inner = strings.ToLower(inner)
+	for _, w := range enrichKeyVersionWords {
+		if strings.Contains(inner, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// trimTrailingBrackets 从结尾一层层剥括号,keep 说这一层要留就停。
 //
 // 循环而不是只剥一次:`歌名（译名）[Explicit]` 这种两层的写法真实存在。剥到空串就整个放弃
 // —— 有些曲目的歌名**本身**就是一对括号(`(Interlude)`),剥完什么都不剩的结果显然是错的。
-func normEnrichTitle(title string) string {
+func trimTrailingBrackets(title string, keep func(inner string) bool) string {
 	t := cleanMediaTag(title)
 	for {
 		m := enrichKeyTrailingBracket.FindStringSubmatchIndex(t)
 		if m == nil {
 			return t
 		}
-		inner := strings.ToLower(t[m[2]:m[3]])
-		for _, w := range enrichKeyVersionWords {
-			if strings.Contains(inner, w) {
-				return t // 版本标记,保留整段括号
-			}
+		if keep(t[m[2]:m[3]]) {
+			return t
 		}
 		stripped := strings.TrimSpace(t[:m[0]])
 		if stripped == "" {

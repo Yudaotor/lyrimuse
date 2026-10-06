@@ -428,12 +428,11 @@ func qqSearchNeedsSmartboxSupplement(items []qqSearchItem, title string) bool {
 	if len(items) == 0 {
 		return true
 	}
-	want := normLoose(title)
-	if want == "" {
+	if normLoose(title) == "" {
 		return true
 	}
 	for _, it := range items {
-		if normLoose(it.Name) == want {
+		if lyricTitleSameName(it.Name, title) {
 			return false
 		}
 	}
@@ -826,9 +825,9 @@ func qqCoverFallback(ctx context.Context, artist, title, album string) (cover, c
 			!artistMatches(it.Singer, artist) {
 			continue
 		}
-		// exact:name 与 title loose 相等,跟 resolveQQMusicMatch 的 exact 同一含义。
+		// exact / sameNumber 跟 resolveQQMusicMatch 的同一含义。
 		cands = append(cands, qqCand{mid: it.Mid, title: it.Name, artist: it.Singer, album: it.Album,
-			interval: it.Interval, exact: normLoose(it.Name) == normLoose(title)})
+			interval: it.Interval, exact: lyricTitleSameName(it.Name, title), sameNumber: lyricTitleSameNumber(it.Name, title)})
 	}
 	tryCand := func(c qqCand) (string, string, bool) {
 		cover, singer := qqSongCoverAndSinger(ctx, c.mid)
@@ -908,7 +907,8 @@ type qqCand struct {
 	mid, title, artist string
 	album              string  // 搜索结果自带的专辑名(client_search_cp 路线才有),空=要另外查
 	interval           float64 // 搜索结果自带的官方时长(秒),0=没给
-	exact              bool    // name 与 title loose 相等 → 规范版,避开 纯音乐/串烧/live 变体
+	exact              bool    // name 与 title 逐字同名(lyricTitleSameName)→ 规范版,避开 纯音乐/串烧/live 变体
+	sameNumber         bool    // 本地歌名带编号,name 带着同一个号(lyricTitleSameNumber),排在只是 exact 的前面
 }
 
 // qqCollectCandidates 按标题闸 + 身份闸把搜索结果筛成候选,并把搜索结果自带的
@@ -923,7 +923,7 @@ func qqCollectCandidates(items []qqSearchItem, artist, title string, strict bool
 		cs = append(cs, qqCand{
 			mid: it.Mid, title: it.Name, artist: it.Singer,
 			album: it.Album, interval: it.Interval,
-			exact: normLoose(it.Name) == normLoose(title),
+			exact: lyricTitleSameName(it.Name, title), sameNumber: lyricTitleSameNumber(it.Name, title),
 		})
 	}
 	return cs
@@ -996,7 +996,7 @@ func qqDashTailCandidates(items []qqSearchItem, title, album string, durationSec
 		}
 		if ok {
 			cs = append(cs, qqCand{mid: it.Mid, title: it.Name, artist: it.Singer, album: it.Album, interval: it.Interval,
-				exact: normLoose(it.Name) == normLoose(title)})
+				exact: lyricTitleSameName(it.Name, title), sameNumber: lyricTitleSameNumber(it.Name, title)})
 		}
 	}
 	return cs
@@ -1136,16 +1136,17 @@ func qqMatchFromCand(c qqCand, unreliable bool) qqMusicMatch {
 // qqPickCandidate 在候选里挑冠军。两档优先级,同档取先出现的那条(搜索接口按相关度
 // 排序,首条通常是规范版):
 //
-//	① 标题精确同名 —— 避开 纯音乐/串烧/live 这类变体,权重最高;
+//	① 标题精确同名 —— 避开 纯音乐/串烧/live 这类变体,权重最高;本地歌名带编号时,编号也对得上的(sameNumber)
+//	   排在只是精确同名的前面;
 //	② 署名恰好是同一组人 —— 只作同档内的 tiebreak,区分独唱/合唱,见 qqCreditSetEqual。
 //
 // qqPickCandidateWithAlbum 是 resolveQQMusicMatch 里"有本地专辑名"那一档的挑选:按 albumScore
-// 去重、标题精确同名 > 专辑分 > 署名同组人。原是那个函数里的内联循环,原样提成纯函数
+// 去重、编号也对得上 > 标题精确同名 > 专辑分 > 署名同组人。原是那个函数里的内联循环,原样提成纯函数
 // (lookupAlbum 是"候选没自带专辑名时去查一次"的注入点,生产传 qqSongAlbum,检索层金标传恒空),
 // 理由同 enrich.go 的 rankLyricSourceResults:测试跑生产同一份代码。返回 haveBest=false 表示
 // 没有任何候选够格(专辑对不上且标题也非精确同名)。
 func qqPickCandidateWithAlbum(cands []qqCand, artist, album string, durationSecs float64, lookupAlbum func(mid string) string) (best qqCand, haveBest bool, bestScore int) {
-	bestExact, bestCreditEq, bestFits := false, false, false
+	bestSameNumber, bestExact, bestCreditEq, bestFits := false, false, false, false
 	// 条数上限只约束**需要额外发一次详情请求**的候选(上限的初衷就是别为一首歌
 	// 反复打详情接口)。client_search_cp 路线的专辑名是搜索结果自带的、不花请求,
 	// 全部参与比较——这个上限当年是照着 smartbox"短而紧"的候选表定的,套在一次回
@@ -1174,13 +1175,14 @@ func qqPickCandidateWithAlbum(cands []qqCand, artist, album string, durationSecs
 		fits := sourceDurationFits(durationSecs, c.interval)
 		better := !haveBest ||
 			(fits && !bestFits) ||
-			(fits == bestFits && ((c.exact && !bestExact) ||
-				(c.exact == bestExact && sc > bestScore) ||
-				(c.exact == bestExact && sc == bestScore && creditEq && !bestCreditEq)))
+			(fits == bestFits && ((c.sameNumber && !bestSameNumber) ||
+				(c.sameNumber == bestSameNumber && ((c.exact && !bestExact) ||
+					(c.exact == bestExact && sc > bestScore) ||
+					(c.exact == bestExact && sc == bestScore && creditEq && !bestCreditEq)))))
 		if better {
 			best = c
 			best.album = candAlbum // 自带为空时这里装的是刚查到的那个,别丢回去
-			haveBest, bestScore, bestExact, bestCreditEq, bestFits = true, sc, c.exact, creditEq, fits
+			haveBest, bestScore, bestSameNumber, bestExact, bestCreditEq, bestFits = true, sc, c.sameNumber, c.exact, creditEq, fits
 		}
 	}
 	return best, haveBest, bestScore
@@ -1197,9 +1199,12 @@ func qqPickCandidate(cands []qqCand, artist string, durationSecs float64) (qqCan
 		if c.exact {
 			rank += 2
 		}
+		if c.sameNumber {
+			rank += 4
+		}
 		// 自报曲长对得上的一组整体压在对不上的一组之上(见 sourceDurationFits)。
 		if sourceDurationFits(durationSecs, c.interval) {
-			rank += 4
+			rank += 8
 		}
 		if !haveBest || rank > bestRank {
 			best, haveBest, bestRank = c, true, rank
@@ -1410,7 +1415,8 @@ func qqAlbumIdentityQuery(artist, album string) string {
 // 第二个返回值 false = 没挑出来,调用方照旧放弃整条专辑路线。
 func pickQQAlbumTrack(songs []qqAlbumSong, artist, title string) (qqAlbumSong, bool) {
 	const (
-		tierExact = iota
+		tierSameNumber = iota
+		tierExact
 		tierStripped
 		tierAccepted
 	)
@@ -1419,7 +1425,6 @@ func pickQQAlbumTrack(songs []qqAlbumSong, artist, title string) (qqAlbumSong, b
 		tier int
 	}
 	var matched []qqTieredAlbumSong
-	nt := normLoose(title)
 	st := normLoose(stripParens(title))
 	for _, s := range songs {
 		if !lyricTitleAccepted(s.name, title) {
@@ -1430,7 +1435,9 @@ func pickQQAlbumTrack(songs []qqAlbumSong, artist, title string) (qqAlbumSong, b
 		}
 		tier := tierAccepted
 		switch {
-		case normLoose(s.name) == nt:
+		case lyricTitleSameNumber(s.name, title):
+			tier = tierSameNumber
+		case lyricTitleSameName(s.name, title):
 			tier = tierExact
 		case normLoose(stripParens(s.name)) == st:
 			tier = tierStripped

@@ -267,6 +267,9 @@ type enrichEntry struct {
 	// 最近一轮歌词评估拿去当专辑搜索、打分的 YouTube Music 登记专辑(播放器没报专辑时才有,见 lyricsSearchAlbum)。
 	// 跟 YouTubeMusicAlbum 对不上就带着登记专辑重搜一次,见 listedAlbumLyricsWorthRecheck。
 	LyricsListedAlbum string `json:"lyrics_listed_album,omitempty"`
+	// 交给各歌词源去搜、去挑候选的歌名(lyricSearchTitle),只在跟 key 里的歌名不同时记:播放器报的歌名带编号这类括号,
+	// key 剥掉了。后台补搜、重打分、手动重新匹配、手动搜索手上只有 key,读它把编号带回去(见 lyricSearchTitleOrStored)。
+	LyricsSearchTitle string `json:"lyrics_search_title,omitempty"`
 	// 最近一轮歌词评估按哪个 videoId 问了 Kaset 自家那个源(lyricfind 按 videoId 取那一版,MV 换成配对的音轨版本,见
 	// kasetNativeLyricsVideoID)。跟这首现在该问的对不上就带着 videoId 重搜一次,见 kasetLyricsWorthRecheck。
 	LyricsNativeVideoID string `json:"lyrics_native_video_id,omitempty"`
@@ -705,11 +708,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// 下面标题归一之后再补查一次。另一把锁(appleCatalogMu),在取 enrichMu 之前取。
 	anchorLink := appleCatalogLinkFor(artist, title, album, durationSecs)
 	// 归一化后的标题不只用来算 key,后面所有搜索调用(peripheral backfill/首次解析/升级
-	// 重试/重打分)也要用它。enrichKey 内部会把结尾这种非版本标记的括号剥掉(林潔心
-	// 《想逃避(22)》算出的 key 标题是"想逃避"),如果只拿它算 key、发去歌词源的搜索请求还用
-	// 原始"想逃避（22）",八个源会全部搜不到、lyrics_decision.applied 恒为 false;而「歌词
-	// 管理」手动搜索弹窗初始填的标题来自拆开缓存 key(已经剥过),换成"想逃避"酷狗立刻命中。
-	// 两条路径必须用同一份查询词。
+	// 重试/重打分)也要用它:各源曲库多半不带结尾那种非版本标记的括号,带着它原样去搜常常
+	// 整轮落空;「歌词管理」手动搜索弹窗初始填的标题来自拆开缓存 key(已经剥过),两条路径
+	// 必须用同一份查询词。例外是明说第几个的编号(searchTitle,见 lyricSearchTitle):经 ctx
+	// 交给各歌词源去搜、去挑候选,见 09 章决策 196。
+	searchTitle := lyricSearchTitle(title)
 	title = normEnrichTitle(title)
 	if anchorLink == "" {
 		anchorLink = appleCatalogLinkFor(artist, title, album, durationSecs)
@@ -801,6 +804,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		if applyPlayerCatalogIDsLocked(&e, bundleID, catalogIDs) {
 			spotifyHintDirty = true
 		}
+		if st := lyricSearchTitleWorthStoring(searchTitle, title); st != "" && e.LyricsSearchTitle != st {
+			e.LyricsSearchTitle = st
+			spotifyHintDirty = true
+		}
 		if spotifyHintDirty {
 			enrichCache[key] = e
 			enrichDirty = true
@@ -850,21 +857,21 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 共用同一套上限与节流,而**不是**塞进 needsPeripheralBackfill:那个函数被四个测试文件
 			// 按三参数签名调着,为一条判据改签名不值得。三态判据见 motionCoverWorthBackfill。
 			enrichInflight[key] = true
-			go backfillPeripheralFields(context.Background(), key, artist, title, album, durationSecs)
+			go backfillPeripheralFields(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
 		} else if needsLyricsFirstFill(e) && !enrichInflight[key] {
 			// "条目已存在但一条歌词都没有" —— 少了这条,一首歌搜砸一次就永久卡住,见
 			// needsLyricsFirstFill 的注释。排在下面两条前面无所谓先后:那两条对空歌词条目都
 			// 直接 return false。
 			enrichInflight[key] = true
-			go retryLyricsUpgrade(context.Background(), key, artist, title, album, durationSecs, true)
+			go retryLyricsUpgrade(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs, true)
 		} else if needsLyricsRescore(e, pinned, features().LyricsAutoUpgrade) && !enrichInflight[key] {
 			enrichInflight[key] = true
-			go rescoreLyrics(context.Background(), key, artist, title, album, durationSecs)
+			go rescoreLyrics(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
 		} else if recheck.due() && !enrichInflight[key] {
 			// 已经有词、值得再全源搜一轮:这一刻成立的理由这一轮全部带上(见 lyricsRecheck)。
 			recheck.consumeLocked(key)
 			enrichInflight[key] = true
-			go retryLyricsUpgradeWith(context.Background(), key, artist, title, album, durationSecs, false,
+			go retryLyricsUpgradeWith(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs, false,
 				lyricsRescoreOpts{reasons: recheck.String()})
 		} else if needsBackgroundVocalsBackfill(e) && !enrichInflight[key] && bgBackfillOnce(key) {
 			// 存量 amll / applemusic 条目补背景人声,只重取那一个源、不动正文(见 bgbackfill.go)。
@@ -909,6 +916,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 这一件事。
 		// 解析的是正在播的这首时,首轮里歌词可以先上屏(见 earlylyrics.go);判据按原样标签的 hintKey,poller 记在播那首用的就是它。
 		cancelCtx, cancel := context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), hintKey))
+		cancelCtx = withLyricSearchTitle(cancelCtx, searchTitle)
 		enrichCancelFuncs[key] = cancel
 		go resolveEnrichAsync(cancelCtx, key, artist, title, album, bundleID, durationSecs, isNewTrack)
 	}
@@ -1686,6 +1694,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
 	listed := enrichCache[key].YouTubeMusicAlbum
+	storedSearchTitle := enrichCache[key].LyricsSearchTitle
 	stamp := enrichEditStampLocked()
 	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
@@ -1697,6 +1706,8 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 传进来的 ctx 可以取消。
 	roundCtx, round := withLyricSourceRound(ctx)
 	roundCtx, queries := withLyricQueryLog(roundCtx)
+	// 交给各歌词源的歌名带上编号:ctx 上挂着的,或条目里记下的(见 lyricSearchTitleOrStored)。
+	roundCtx = withLyricSourceTitle(roundCtx, lyricSearchTitleOrStored(ctx, storedSearchTitle, title), artist, title, searchAlbum)
 	// 查询词跟首次解析一样先归一化(见 searchQueryFields);缓存 key、决策记录仍用原样标签。
 	qa, qt, qal := searchQueryFields(artist, title, searchAlbum)
 	_, scored := scoredLyricCandidatesStreaming(withSearchQueryOriginal(roundCtx, artist, title, searchAlbum), qa, qt, qal, durationSecs, opts.onUpdate())
@@ -2035,6 +2046,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	sourceChoice := opts.sourceChoice(enrichCache[key].LyricsSourceChoice)
 	startLyrics := enrichCache[key].Lyrics
 	listed := enrichCache[key].YouTubeMusicAlbum
+	storedSearchTitle := enrichCache[key].LyricsSearchTitle
 	stamp := enrichEditStampLocked()
 	ctx = withCachedYouTubeMusicVideoIDLocked(ctx, key)
 	enrichMu.Unlock()
@@ -2046,6 +2058,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 传进来的 ctx 可以取消。
 	roundCtx, round := withLyricSourceRound(ctx)
 	roundCtx, queries := withLyricQueryLog(roundCtx)
+	// 交给各歌词源的歌名同 retryLyricsUpgrade。
+	roundCtx = withLyricSourceTitle(roundCtx, lyricSearchTitleOrStored(ctx, storedSearchTitle, title), artist, title, searchAlbum)
 	// 查询词同 retryLyricsUpgrade。
 	qa, qt, qal := searchQueryFields(artist, title, searchAlbum)
 	_, scored := scoredLyricCandidatesStreaming(withSearchQueryOriginal(roundCtx, artist, title, searchAlbum), qa, qt, qal, durationSecs, opts.onUpdate())
@@ -2389,6 +2403,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		if ctx.Err() != nil {
 			return
 		}
+		p.LyricsSearchTitle = lyricSearchTitleToStore(ctx, title)
 		enrichMu.Lock()
 		applySpotifyTrackIDHintLocked(key, &p)
 		enrichProvisional[key] = true
@@ -2409,6 +2424,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		log.Printf("lyrics: showing Amazon Music's cached lyrics for %q while the sources resolve", key)
 	}
 	e := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, deviceCoverURL, early, lyricsDecisionPathFirstResolve)
+	e.LyricsSearchTitle = lyricSearchTitleToStore(ctx, title)
 	// 首次解析:换曲那一拍 poller 留下的 Spotify 曲目 ID 一并写进条目(见 spotifytrack.go)。首次解析的 key
 	// 就是原始 key(canonical 命中的话走的是上面缓存命中那条路),直接按它查。
 	enrichMu.Lock()
@@ -2936,6 +2952,8 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// trackEnrichment 里用原始、未转换的 artist/title/album 构造,必须跟 Apple Music
 	// 原始标签保持逐字节一致,否则同一首歌反复播放会对不上同一条缓存记录)。
 	ctx = withSearchQueryOriginal(ctx, artist, title, searchAlbum)
+	// 交给各歌词源的歌名带上编号(见 withLyricSourceTitle);封面、链接、打分照旧用 title。
+	ctx = withLyricSourceTitle(ctx, lyricSearchTitleFor(ctx, title), artist, title, searchAlbum)
 	artist, title, searchAlbum = searchQueryFields(artist, title, searchAlbum)
 	// 报了专辑时 searchAlbum 就是归一化过的它。
 	if album != "" {
@@ -4925,6 +4943,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	defer cancel()
 	// 播放时的平台曲目 ID、本机客户端歌词按播放器原样标签记,用这一组查;查询词照旧用 artist / title / album。
 	idArtist, idTitle, idAlbum := lyricIdentityFields(ctx, artist, title, album)
+	// 交给各歌词源去搜、去挑候选的歌名:播放器报的歌名带编号时是带着编号的那一份(见 withLyricSourceTitle);
+	// ISRC、平台曲目 ID、打分照旧用 title。
+	srcTitle := lyricSourceTitleFor(ctx, title)
 	// 缓冲开到"每个 goroutine 都能不阻塞地放下自己那一份"= 源数(每个源一个 goroutine)。同样不写
 	// 字面量:下面那个 collect 循环就是栽在字面量跟源数脱钩上的。
 	resultsCh := make(chan lyricSourceResult, len(lyricSourceNames))
@@ -4983,7 +5004,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			resultsCh <- lyricSourceResult{source: "netease"}
 			return
 		}
-		info := neteaseLookup(ctx, artist, title, album, durationSecs)
+		info := neteaseLookup(ctx, artist, srcTitle, album, durationSecs)
 		if info.SongID > 0 {
 			neteaseIDCh <- strconv.FormatInt(info.SongID, 10)
 		} else {
@@ -5002,7 +5023,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 前面的一步单独阻塞;resolveTrackEnrichment 那边为封面/跳转链接另外调用
 		// qqMusicURL 时会命中这里可能已经写热的缓存,反过来也一样,谁先算出来谁写
 		// 缓存,不要求哪边一定在前(两者共用同一份 qqURLCache,见 qq.go)。
-		match := qqMusicMatchCached(ctx, artist, title, album, durationSecs)
+		match := qqMusicMatchCached(ctx, artist, srcTitle, album, durationSecs)
 		qqMid := qqMidFromURL(match.url)
 		// 曲目 ID 一到手就交给 amll,不等下面取词:amll 只要 ID,等取词就是白等。
 		qqIDCh <- qqMid
@@ -5021,7 +5042,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响整行歌词——
 			// 见 qq.go 顶部注释。同一份响应还带中文译文/罗马音两轨(见 qqQRCLyric 注释),
 			// 时间戳与 qqLyric 的整行歌词逐行一致。
-			qrc := qqQRCLyric(ctx, qqMid, artist, title, album, durationSecs)
+			qrc := qqQRCLyric(ctx, qqMid, artist, srcTitle, album, durationSecs)
 			// qqCover:qqMid 这时已经是经过身份闸校验过的那首歌,不需要像 qqCoverFallback
 			// (resolveTrackEnrichment 那条独立的封面兜底路径)那样另外核对 singer,直接取
 			// cover 即可。查不到就留空(候选不拿别的封面兜底,见 rankLyricSourceResults)。
@@ -5073,7 +5094,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		appleCatalogID, spotifyTrackID := playbackTrackIDsFor(idArtist, idTitle, idAlbum)
 		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, amllQuery{
 			neteaseID: neteaseID, qqID: qqID, appleCatalogID: appleCatalogID, spotifyTrackID: spotifyTrackID,
-			isrc: lyricSourceISRC(ctx, artist, title, album), artist: artist, title: title, album: album,
+			isrc: lyricSourceISRC(ctx, artist, title, album), artist: artist, title: srcTitle, album: album,
 			durationSecs: durationSecs, translationLang: features().LyricsTranslationLanguage,
 		})}
 	}()
@@ -5096,7 +5117,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			resultsCh <- lyricSourceResult{source: "kugou"}
 			return
 		case lyricSourceSkipCooling:
-			if r, ok := kugouLocalLyric(artist, title, album, durationSecs); ok {
+			if r, ok := kugouLocalLyric(artist, srcTitle, album, durationSecs); ok {
 				resultsCh <- kugouSourceResult(r)
 				return
 			}
@@ -5105,14 +5126,14 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			resultsCh <- lyricSourceResult{source: "kugou"}
 			return
 		}
-		resultsCh <- kugouSourceResult(kugouLyric(ctx, artist, title, album, durationSecs))
+		resultsCh <- kugouSourceResult(kugouLyric(ctx, artist, srcTitle, album, durationSecs))
 	}()
 	go func() {
 		if skipSource("lrclib") {
 			resultsCh <- lyricSourceResult{source: "lrclib"}
 			return
 		}
-		r := lrclibLyric(ctx, artist, title, album, durationSecs)
+		r := lrclibLyric(ctx, artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "lrclib", lyr: r.lyrics, yrc: r.yrc, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental, plainOnly: r.plainOnly}
 	}()
 	go func() {
@@ -5129,7 +5150,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			appleID, spotifyID := musixmatchTrackIDsFor(idArtist, idTitle, idAlbum)
 			mxCtx = withMusixmatchPlaybackIDs(ctx, appleID, spotifyID)
 		}
-		r := musixmatchLyric(mxCtx, artist, title, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
+		r := musixmatchLyric(mxCtx, artist, srcTitle, durationSecs, features().LyricsTranslationLanguage, lyricSourceISRC(ctx, artist, title, album))
 		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, instrumental: r.instrumental, performers: r.performers}
 	}()
 	go func() {
@@ -5139,7 +5160,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// ytmusicLyric 检索机制上是"查 YouTube Music",但对外只暴露真正是 LyricFind 的
 		// 那部分(见 ytmusic.go 头注的过滤理由)——source 因此标 "lyricfind" 不是 "ytmusic"。
-		r := ytmusicLyric(ctx, artist, title, album, durationSecs)
+		r := ytmusicLyric(ctx, artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "lyricfind", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {
@@ -5147,7 +5168,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			resultsCh <- lyricSourceResult{source: "kuwo"}
 			return
 		}
-		r := kuwoLyric(ctx, artist, title, album, durationSecs)
+		r := kuwoLyric(ctx, artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "kuwo", lyr: r.lyrics, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
 	}()
 	go func() {
@@ -5156,7 +5177,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			return
 		}
 		// 独立检索(不等任何其它源的 ID),同 kuwo;tr 是 trcUrl 拉回来的中文译文,多数曲目为空。
-		r := miguLyric(ctx, artist, title, album, durationSecs)
+		r := miguLyric(ctx, artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "migu", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
 	}()
 	go func() {
@@ -5169,7 +5190,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		//
 		// isrc 有值时(Spotify 原生客户端在播、且它缓存里记了这条录音,见 spotifyisrc.go)
 		// 走 /track/isrc: 直取,跳过搜索与名称打分——那是录音级身份,比名字硬。
-		r := deezerLyric(ctx, artist, title, album, durationSecs, lyricSourceISRC(ctx, artist, title, album))
+		r := deezerLyric(ctx, artist, srcTitle, album, durationSecs, lyricSourceISRC(ctx, artist, title, album))
 		resultsCh <- lyricSourceResult{source: "deezer", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly}
 	}()
 	go func() {
@@ -5184,7 +5205,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// Music.app 自己的歌词缓存,拿到官方逐字 + 官方译文,见 applemusiclocal.go。
 		// isrc 有值时(同 deezer 那路)先按 ISRC 直取这条录音,再按名字搜。
 		appleID, _ := playbackTrackIDsFor(idArtist, idTitle, idAlbum)
-		r := applemusicLyric(ctx, artist, title, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
+		r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
 	}()
 	go func() {
@@ -5193,7 +5214,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			return
 		}
 		// 曲目 id 先取汽水客户端的播放队列缓存,拿不到再按歌手 + 歌名搜索(见 soda.go 头注)。取词走无签名的 seo_track。
-		r, noLyrics := sodaLyric(ctx, artist, title, album, durationSecs)
+		r, noLyrics := sodaLyric(ctx, artist, srcTitle, album, durationSecs)
 		resultsCh <- lyricSourceResult{source: "soda", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, identityFromLocalClient: r.fromLocalClient}
 	}()
 

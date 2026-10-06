@@ -215,7 +215,8 @@ func miguPickImg(items []miguImgItem) string {
 // oh well」20 条全是她的旧歌,单搜「oh well」第二条就是它),所以再补一次只用歌名。补搜的结果照样过
 // miguCandidateScore 的歌名 / 歌手 / 专辑闸。见 09 章决策 127。
 func miguSearchQueries(artist, title string) []string {
-	title = strings.TrimSpace(title)
+	// 搜索词里歌名带编号时去掉带编号的那几层,见 lyricQueryTitle。
+	title = strings.TrimSpace(lyricQueryTitle(title))
 	combined := strings.TrimSpace(artist + " " + title)
 	if combined == title || title == "" {
 		return []string{combined}
@@ -378,15 +379,14 @@ const miguAliasDurationTolerance = 0.03
 // 或拼音、咪咕登记的是中文原名(「Love Love Love」对「爱爱爱」)。别名有时挂的是别的歌(现场版的别名写着另一首的名字),
 // 所以比 miguCandidateScore 严:本地时长已知、估出的时长差 miguAliasDurationTolerance 以内;歌手闸、版本闸照旧。见 09 章决策 155。
 func miguAliasCandidate(item miguSearchItem, artist, title, album string, durationSecs float64) bool {
-	want := normLoose(title)
-	if want == "" || strings.TrimSpace(item.LyricURL) == "" || !durationsWithin(item.durationSecs(), durationSecs, miguAliasDurationTolerance) {
+	if normLoose(title) == "" || strings.TrimSpace(item.LyricURL) == "" || !durationsWithin(item.durationSecs(), durationSecs, miguAliasDurationTolerance) {
 		return false
 	}
 	if !lyricSourceArtistMatches(item.artistName(), artist) || versionTagsMismatch(title, album, item.Name, item.albumName()) {
 		return false
 	}
 	for _, a := range item.aliasNames() {
-		if normLoose(a) == want {
+		if lyricTitleSameName(a, title) {
 			return true
 		}
 	}

@@ -571,7 +571,7 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 		s  *neSearchSong
 		sc int
 	}
-	var exactCands, looseCands []cand
+	var numberCands, exactCands, looseCands []cand
 	for i := range songs {
 		s := &songs[i]
 		if !lyricTitleAccepted(s.Name, title) {
@@ -588,9 +588,12 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 			continue
 		}
 		sc := albumScore(s.Album.Name, album)
-		if normLoose(s.Name) == normLoose(title) {
+		switch {
+		case lyricTitleSameNumber(s.Name, title):
+			numberCands = append(numberCands, cand{s, sc})
+		case lyricTitleSameName(s.Name, title):
 			exactCands = append(exactCands, cand{s, sc})
-		} else {
+		default:
 			looseCands = append(looseCands, cand{s, sc})
 		}
 	}
@@ -610,7 +613,7 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 	// 不是"大家都差不多");③锚定候选唯一(两条都满足①且专辑分打平 → 有歧义,放弃)。
 	// durationSecs 未知(=0,预取路径)时整档关闭,行为与旧版逐字节一致。
 	if durationSecs > 0 {
-		all := append(append([]cand{}, exactCands...), looseCands...)
+		all := append(append(append([]cand{}, numberCands...), exactCands...), looseCands...)
 		var anchor *neSearchSong
 		anchorSc := -1
 		for _, c := range all {
@@ -662,6 +665,12 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 	// exactCands 内部因"有歧义+都对不上专辑"被 bestOf 拒绝返回 nil;但 looseCands 里
 	// 那条真正官方专辑版本(标题带"(Remaster)"等后缀、专辑分却明确对得上)本来是能唯一
 	// 确定的,不该因为 exactCands 抢先返回 nil 就被连带放弃。
+	// 本地歌名带编号时,编号也对得上的同名候选(lyricTitleSameNumber)先挑;挑不出来再照常看逐字同名。
+	if len(numberCands) > 0 {
+		if c := bestOf(numberCands, false); c != nil {
+			return c
+		}
+	}
 	if len(exactCands) > 0 {
 		if c := bestOf(exactCands, false); c != nil {
 			return c
@@ -857,7 +866,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		n := 0
 		for i := range songs {
 			s := &songs[i]
-			if normLoose(s.Name) != normLoose(title) || albumScore(s.Album.Name, album) < 200 || len(s.Artists) != 1 {
+			if !lyricTitleSameName(s.Name, title) || albumScore(s.Album.Name, album) < 200 || len(s.Artists) != 1 {
 				continue
 			}
 			n++
