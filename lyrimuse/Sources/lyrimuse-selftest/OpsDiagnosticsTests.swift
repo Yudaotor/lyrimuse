@@ -1316,8 +1316,9 @@ func runOpsDiagnosticsTests() {
                     true, "增量采纳(契约): 后台刷新先试增量")
         expectEqual(sourceBytes(reader, contain: "if refresh.changedKeys != nil, contentGeneration != base.generation { return }"), true,
                     "增量采纳(契约): 增量结果回主线程时换过代就作废")
-        expectEqual(sourceBytes(reader, contain: "if aliasInputsChanged { cachedAliasTables = nil; aliasTablesGeneration += 1 }"), true,
-                    "增量采纳(契约): 别名表只在输入变了时作废")
+        expectEqual(sourceBytes(reader, contain:
+                        "if aliasInputsChanged || (cachedAliasTables != nil && ArtistIdentityCaches.stamp() != aliasCachesStamp) {"),
+                    true, "增量采纳(契约): 别名表只在输入变了时作废(条目里的别名输入,或者引擎那三份 MusicBrainz 缓存)")
     }
 
     // ---- 正在播的那首整份存盘也攒着(15 章决策 26)----

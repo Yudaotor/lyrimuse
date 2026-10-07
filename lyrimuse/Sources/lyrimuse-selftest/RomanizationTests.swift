@@ -415,6 +415,20 @@ func runRomanizationTests() {
                     "词组级转换要对(不是无脑逐字)")
         expectEqual(ChineseVariant.traditional.converted("只有你"), "只有你",
                     "「只」在这里不该被转成「隻」")
+        // 纠正词组表命中处逐字覆盖 ICU 的结果,原文、译文必须等长:不等长会写错位置,落在行尾还会越界
+        let variantSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Lyrics/ChineseVariantConversion.swift"), encoding: .utf8)) ?? ""
+        let phraseBlock = variantSource.range(of: "private static let phrasePairs: [(String, String)] = [").flatMap { start in
+            variantSource[start.upperBound...].range(of: "\n    ]").map { String(variantSource[start.upperBound..<$0.lowerBound]) }
+        } ?? ""
+        let phrasePairs = (try? NSRegularExpression(pattern: #"\("([^"]+)", "([^"]+)"\)"#))?
+            .matches(in: phraseBlock, range: NSRange(phraseBlock.startIndex..., in: phraseBlock))
+            .compactMap { m -> (String, String)? in
+                guard let a = Range(m.range(at: 1), in: phraseBlock), let b = Range(m.range(at: 2), in: phraseBlock) else { return nil }
+                return (String(phraseBlock[a]), String(phraseBlock[b]))
+            } ?? []
+        expectEqual(phrasePairs.count > 200 && phrasePairs.allSatisfy { $0.0.unicodeScalars.count == $0.1.unicodeScalars.count },
+                    true, "繁体纠正词组表: 每一条原文跟繁体等长(读得到整张表)")
         // 拉丁字母不受影响
         expectEqual(ChineseVariant.traditional.converted("First Love"), "First Love",
                     "英文原样返回")

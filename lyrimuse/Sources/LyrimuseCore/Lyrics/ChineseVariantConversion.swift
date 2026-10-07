@@ -210,8 +210,11 @@ enum ChineseVariantConversion {
     ]
 
     // 表先标成 [(String, String)] 再 map:直接在字面量上 .map 时编译器要反推每个字面量的类型,类型检查一秒多。
-    private static let phrases: [Phrase] = phrasePairs.map { pair in
-        Phrase(from: Array(pair.0.unicodeScalars), to: Array(pair.1.unicodeScalars), notBefore: notBefore[pair.0])
+    // 不等长的那条不收(selftest 钉着整张表等长):命中处是逐字覆盖,原文、译文字数不一样会写错位置,落在行尾还会越界。
+    private static let phrases: [Phrase] = phrasePairs.compactMap { pair in
+        let from = Array(pair.0.unicodeScalars), to = Array(pair.1.unicodeScalars)
+        guard from.count == to.count else { return nil }
+        return Phrase(from: from, to: to, notBefore: notBefore[pair.0])
     }
 
     // MARK: 简体

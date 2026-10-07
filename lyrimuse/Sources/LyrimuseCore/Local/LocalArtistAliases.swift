@@ -161,23 +161,47 @@ public enum LocalArtistAliases {
 }
 
 /// 读引擎的三份 MusicBrainz 歌手缓存(纯读盘、解 JSON,失败给空表)。放在 Core 是因为
-/// EnrichCacheReader 同样在 Core 读盘;selftest 不碰它,只测 LocalArtistAliases.derive 的纯函数部分。
+/// EnrichCacheReader 同样在 Core 读盘;selftest 不测读盘,测 LocalArtistAliases.derive 的纯函数部分和 `stamp`。
 public enum ArtistIdentityCaches {
+    static let aliasFileName = "lyrimuse-artist-alias-cache.json"
+    static let identityFileName = "lyrimuse-artist-identity-cache.json"
+    static let primaryFileName = "lyrimuse-artist-primary-cache.json"
+
     public static func load(configDir: URL = LyrimusePaths.configDir) -> LocalArtistAliases.MusicBrainzCaches {
         var out = LocalArtistAliases.MusicBrainzCaches()
-        if let data = try? Data(contentsOf: configDir.appendingPathComponent("lyrimuse-artist-alias-cache.json")),
+        if let data = try? Data(contentsOf: configDir.appendingPathComponent(aliasFileName)),
            let m = try? JSONDecoder().decode([String: String].self, from: data) {
             out.aliasCache = m
         }
         struct Identity: Decodable { var zh: String? }
-        if let data = try? Data(contentsOf: configDir.appendingPathComponent("lyrimuse-artist-identity-cache.json")),
+        if let data = try? Data(contentsOf: configDir.appendingPathComponent(identityFileName)),
            let m = try? JSONDecoder().decode([String: Identity].self, from: data) {
             out.identityZh = m.compactMapValues { $0.zh }.filter { !$0.value.isEmpty }
         }
-        if let data = try? Data(contentsOf: configDir.appendingPathComponent("lyrimuse-artist-primary-cache.json")),
+        if let data = try? Data(contentsOf: configDir.appendingPathComponent(primaryFileName)),
            let m = try? JSONDecoder().decode([String: [String]].self, from: data) {
             out.primaryAliases = m
         }
         return out
+    }
+
+    /// 三份缓存各自的修改时间和大小,没有的那份记空。别名表算好之后它们变了就得重算(见 EnrichCacheReader.adopt):
+    /// 引擎的歌手身份核对、Top 歌手统计这类后台任务只写这三份,不碰歌词缓存的条目。
+    public struct Stamp: Equatable, Sendable {
+        fileprivate let files: [File?]
+
+        fileprivate struct File: Equatable, Sendable {
+            let modified: Date
+            let size: Int
+        }
+    }
+
+    /// 看一眼三份缓存(三次 stat,不读内容)。
+    public static func stamp(configDir: URL = LyrimusePaths.configDir) -> Stamp {
+        Stamp(files: [aliasFileName, identityFileName, primaryFileName].map { name in
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: configDir.appendingPathComponent(name).path),
+                  let modified = attrs[.modificationDate] as? Date else { return nil }
+            return Stamp.File(modified: modified, size: (attrs[.size] as? NSNumber)?.intValue ?? 0)
+        })
     }
 }

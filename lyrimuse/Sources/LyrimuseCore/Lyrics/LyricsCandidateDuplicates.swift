@@ -89,8 +89,14 @@ public enum LyricsCandidateDuplicates {
         guard parts.count == 2, let minutes = Int(parts[0]), minutes >= 0,
               parts[1].first?.isASCII == true, parts[1].first?.isNumber == true,
               let seconds = Double(parts[1]), seconds >= 0 else { return nil }
-        return Int(((Double(minutes) * 60 + seconds) * 1000).rounded())
+        // 候选来自网络:`[00:1e400]` 解出无穷大、十几位的分钟数乘上去超出 Int,直接转 Int 会崩。超出一天的不当时间戳。
+        let ms = ((Double(minutes) * 60 + seconds) * 1000).rounded()
+        guard ms.isFinite, ms <= maxTimestampMs else { return nil }
+        return Int(ms)
     }
+
+    /// 认作时间戳的上限:一天。
+    private static let maxTimestampMs = 24.0 * 3600 * 1000
 
     /// 「当前使用」的双判据:来源相同**且**词相同。任一侧拿不到指纹(这首歌还没有正文 / 候选
     /// 没有词)时退回只比来源——没有证据说它不是,不能因为拿不到证据就把徽章摘掉。

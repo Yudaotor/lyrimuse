@@ -839,6 +839,9 @@ func runLyricsManagerTests() {
         expectEqual(D.lineTimestamps(timed), [[11130], [12000, 65500], []], "每行时间: 剥标签、空行不算、一行几个时间都记")
         expectEqual(D.lineTimestamps(timed).count, ManualPickLock.canonicalLyrics(timed).split(separator: "\n").count,
                     "每行时间: 行数跟只取词的规整结果一致")
+        // 候选来自网络:解出无穷大、乘出来超过 Int 的时间标签不当时间戳(原来直接转 Int 会崩)
+        expectEqual(D.lineTimestamps("[00:1e400]甲\n[9999999999999999:00]乙\n[00:99999999999999999]丙\n[00:01.50]丁"),
+                    [[], [], [], [1500]], "每行时间: 畸形的时间标签不算时间戳,也不崩")
         expectEqual(D.sameTimeline([[11134], [12000]], [[11130], [12000]]), true, "每行时间: 毫秒和百分秒写法的取整差算一样")
         expectEqual(D.sameTimeline([[11141]], [[11130]]), false, "每行时间: 差出 10 毫秒就不一样")
         expectEqual(D.sameTimeline([[1000, 2000]], [[1000]]), false, "每行时间: 一行挂的时间个数不同就不一样")

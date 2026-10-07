@@ -145,6 +145,10 @@ func runLyricsEditTests() {
     expectEqual(LyricsWordTimingEdit.sameLineTimes("[00:01.00]a\n[00:02.00]b", "[00:01.00]甲\n[00:02.00]乙")
                 && !LyricsWordTimingEdit.sameLineTimes("[00:01.00]a\n[00:02.00]b", "[00:01.00]a\n[00:02.50]b"), true,
                 "只改字: 整行歌词时间戳没动才算只改字")
+    // 分钟写成十几位的畸形时间标签不当时间戳(原来乘上去整数溢出、直接崩);三位数的分钟照常认
+    expectEqual(LyricsWordTimingEdit.sameLineTimes("[999999999999999:00.00]甲\n[100:00.00]乙", "[999999999999999:00.00]丙\n[100:00.00]丁")
+                && !LyricsWordTimingEdit.sameLineTimes("[100:00.00]乙", "[100:00.01]乙"), true,
+                "只改字: 十几位分钟的时间标签不当时间戳、不崩;三位数分钟照常认")
 
     // 文件头标签(外部编辑器摊开的工作副本开头就有)不算没时间戳的行
     let tagged = LyricsWordTimingEdit.apply(edited: "[ti:一个人一支灯]\n[offset:0]\n\n" + view, yrc: yrc, lrc: lrc)

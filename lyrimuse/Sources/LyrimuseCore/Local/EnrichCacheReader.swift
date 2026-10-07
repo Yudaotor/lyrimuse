@@ -1421,10 +1421,13 @@ public enum EnrichCacheReader {
     public static var localAliasTablesIfComputed: LocalAliasTables? { cachedAliasTables }
     private static var cachedAliasTables: LocalAliasTables?
     private static var aliasTablesGeneration = 0
+    /// 算 `cachedAliasTables` 那一刻引擎三份 MusicBrainz 缓存的样子;采纳新一版缓存时它们变了,别名表也作废(见 adopt)。
+    private static var aliasCachesStamp: ArtistIdentityCaches.Stamp?
     /// 上一轮 E2 比对用到的、剥好的正文(按 key + body_crc 记),下一轮只剥新的(见 `EnrichTitleAliases.StoredBodies`)。
     private static var aliasLyricsBodies: [EnrichTitleAliases.LyricsRef: String] = [:]
 
-    /// 在后台算两张表,算完缓存并返回。跟 cachedEntries 同寿命(内容一变就作废)。
+    /// 在后台算两张表,算完缓存并返回。跟 cachedEntries 同寿命(采纳新一版时别名输入变了、或者引擎那三份 MusicBrainz
+    /// 缓存变了就作废,见 adopt)。
     ///
     /// 为什么必须后台:E2 要对同一歌手名下英文/中文两侧的歌词正文做二元组比对,几百条条目一轮几十
     /// 毫秒,而 enrich 缓存在播放中每隔几秒就会变一次(引擎落歌词/译文/封面),放主线程就撞
@@ -1439,6 +1442,8 @@ public enum EnrichCacheReader {
         aliasTablesGeneration += 1
         let gen = aliasTablesGeneration
         let entries = all
+        // 先看再读:看完、读之前它们又变了的话,记下的是旧样子,下一次采纳时照样会重算。
+        let cachesStamp = ArtistIdentityCaches.stamp()
         let caches = ArtistIdentityCaches.load()
         let remembered = aliasLyricsBodies
         let dir = bodiesDir
@@ -1469,7 +1474,10 @@ public enum EnrichCacheReader {
             return (tables, bodies.used)
         }.value
         aliasLyricsBodies = used
-        if gen == aliasTablesGeneration, cachedEntries != nil { cachedAliasTables = tables }
+        if gen == aliasTablesGeneration, cachedEntries != nil {
+            cachedAliasTables = tables
+            aliasCachesStamp = cachesStamp
+        }
         return tables
     }
 
@@ -1765,7 +1773,11 @@ public enum EnrichCacheReader {
         case .keep:
             break
         }
-        if aliasInputsChanged { cachedAliasTables = nil; aliasTablesGeneration += 1 }
+        // 别名表还读引擎那三份 MusicBrainz 缓存:歌手身份核对、Top 歌手统计这类后台任务只写它们、不碰条目,
+        // 只按条目判的话,它们的更新要等下一首新歌入库、整份重解或重启才接得住。
+        if aliasInputsChanged || (cachedAliasTables != nil && ArtistIdentityCaches.stamp() != aliasCachesStamp) {
+            cachedAliasTables = nil; aliasTablesGeneration += 1
+        }
         if previous != nil {
             DispatchQueue.global(qos: .utility).async { withExtendedLifetime(previous) {} }
         }

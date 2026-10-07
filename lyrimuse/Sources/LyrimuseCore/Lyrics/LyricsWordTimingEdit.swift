@@ -371,7 +371,8 @@ public enum LyricsWordTimingEdit {
         var rest = Substring(line)
         while let m = stampRegex.firstMatch(in: String(rest), range: NSRange(location: 0, length: (String(rest) as NSString).length)) {
             let s = String(rest) as NSString
-            let minutes = Int(s.substring(with: m.range(at: 1))) ?? 0
+            // 分钟的位数不限的话,十几位的分钟数乘上去整数溢出、直接崩。歌词里没有上千分钟的时间戳,到这儿就当正文。
+            guard let minutes = Int(s.substring(with: m.range(at: 1))), minutes < 1000 else { break }
             let seconds = Int(s.substring(with: m.range(at: 2))) ?? 0
             var frac = m.range(at: 3).location == NSNotFound ? "" : s.substring(with: m.range(at: 3))
             while frac.count < 3 { frac += "0" }
