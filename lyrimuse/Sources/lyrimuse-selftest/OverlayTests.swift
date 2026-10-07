@@ -163,7 +163,7 @@ func runOverlayTests() {
         expectEqual(H.hoveredControl(at: onPlay, in: [:], insideWindow: true, positionLocked: false,
                                      hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 没有上报矩形时一颗都不亮")
-        // 锁定态下解锁键自己也要过 hoverControlsEnabled 这一闸——「悬停控制条」
+        // 锁定态下解锁键自己也要过 hoverControlsEnabled 这一闸——「悬停时显示控制条」
         // 关掉时那一格压根不画,矩形却仍会无条件上报,不拦住就是"高亮一颗没画出来的按钮"。
         expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: true,
                                      hoverControlsEnabled: false) == nil,
@@ -1403,9 +1403,9 @@ func runOverlayTests() {
     // ---- OverlayControlHitTest.controlsShown / unlockPillShown: 控制排 / 解锁提示
     //      该不该露出来(加开关,让解锁提示也接上开关) ----
     //
-    // 这条判据以前散在两处(View 的 controlsVisible、控制器的 controlsShown),加「悬停控制条」
+    // 这条判据以前散在两处(View 的 controlsVisible、控制器的 controlsShown),加「悬停时显示控制条」
     // 开关时合并进 Core。这一组守的是合并后**两处等价**,以及两支(播放控制排 / 解锁提示)
-    // 在「悬停控制条」开关下的表现。
+    // 在「悬停时显示控制条」开关下的表现。
     do {
         let H = OverlayControlHitTest.self
 
@@ -1419,7 +1419,7 @@ func runOverlayTests() {
         expectEqual(H.unlockPillShown(hovering: true, positionLocked: true, hoverControlsEnabled: true),
                     true, "解锁提示: 开关开 + 悬停 + 锁定 → 显示")
 
-        // ② 正题:开关关掉后,播放控制排 / 解锁提示都不显示——「悬停控制条」
+        // ② 正题:开关关掉后,播放控制排 / 解锁提示都不显示——「悬停时显示控制条」
         //    关掉时锁定态也不该在悬浮窗上冒出解锁图标,那本身就是开关没生效的表现;窗口之外还有
         //    菜单栏面板/菜单/全局热键三条解锁出路,不会把用户困住(见 unlockPillShown 声明处)。
         var shownWhileOff = 0
@@ -1451,13 +1451,13 @@ func runOverlayTests() {
         }
         expectEqual(bothTrue, 0, "控制排与解锁提示在 8 种组合下互斥(同一个槽位)")
 
-        // ④ 「调整宽度」模式:不悬停也显示;锁定、关掉「悬停控制条」时照样不显示。
+        // ④ 「调整宽度」模式:不悬停也显示;锁定、关掉「悬停时显示控制条」时照样不显示。
         expectEqual(H.controlsShown(hovering: false, positionLocked: false, hoverControlsEnabled: true, adjustingWidth: true),
                     true, "控制排: 调整宽度模式下不悬停也显示")
         expectEqual(H.controlsShown(hovering: false, positionLocked: true, hoverControlsEnabled: true, adjustingWidth: true),
                     false, "控制排: 调整宽度模式也压不过锁定")
         expectEqual(H.controlsShown(hovering: true, positionLocked: false, hoverControlsEnabled: false, adjustingWidth: true),
-                    false, "控制排: 调整宽度模式也压不过「悬停控制条」关掉")
+                    false, "控制排: 调整宽度模式也压不过「悬停时显示控制条」关掉")
     }
 
     // MARK: - 悬浮歌词:拖窗口边缘改宽度(OverlayWidthDrag)
@@ -1678,7 +1678,7 @@ func runOverlayTests() {
         let overlayWindow = src("LyricsOverlayWindow.swift")
         expectEqual(controller.contains(
             "setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked\n                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress)"),
-                    true, "悬浮接线: 「拖动前先长按」关着时指针停在歌词文字上先接住点击,按下和拖动都不漏给下层")
+                    true, "悬浮接线: 「长按拖动」关着时指针停在歌词文字上先接住点击,按下和拖动都不漏给下层")
         expectEqual(controller.contains("guard !edgeCaptured, !controlCaptured, !lyricsCaptured, !isDragArmed else { return }"), true,
                     "悬浮接线: 歌词文字接管着时不还原穿透")
         expectEqual(controller.contains("restorePointerCaptureAfterDrag()\n        // 实测把窗口拖到了哪儿")

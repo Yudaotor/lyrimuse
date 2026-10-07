@@ -949,7 +949,7 @@ struct OnboardingView: View {
                     title: L10n.t("灵动岛歌词"),
                     subtitle: hasNotchedScreen
                         ? L10n.t("紧贴屏幕顶部的刘海显示")
-                        : L10n.t("这台 Mac 没有刘海，将显示在屏幕顶部中央"),
+                        : L10n.t("这台 Mac 无刘海，将显示在屏幕顶部中央"),
                     isOn: Binding(
                         get: { settings.notchOverlayEnabled },
                         set: { NotchLyricsWindowController.shared.setVisible($0) }))
@@ -980,8 +980,8 @@ struct OnboardingView: View {
                     icon: "info.circle.fill",
                     tint: .secondary,
                     text: touchBar.isPresent
-                        ? L10n.t("当前没有播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示")
-                        : L10n.t("当前没有播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示"))
+                        ? L10n.t("当前未在播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示")
+                        : L10n.t("当前未在播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示"))
             }
             Divider()
             lyricsExtrasSection
@@ -1276,7 +1276,7 @@ struct OnboardingView: View {
                 Group {
                     switch state {
                     case .notPlaying:
-                        Button(L10n.t("已在播放但没有显示？请检查所选的播放器")) { jump(to: .playerChoice) }
+                        Button(L10n.t("已在播放但未显示歌词？请检查所选的播放器")) { jump(to: .playerChoice) }
                             .buttonStyle(.link)
                     case .noLyrics:
                         Button(L10n.t("前往歌词管理手动查找")) { AppActions.shared.openLyricsManager?() }

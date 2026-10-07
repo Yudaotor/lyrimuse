@@ -221,7 +221,7 @@ public enum SettingsSearchCatalog {
                                       "LyricFind", "酷我音乐", "咪咕音乐", "Deezer", "Apple Music", "汽水音乐",
                                       "测试", "顺序"]),
         lyrics("fetch", "匹配算法", kw: ["智能", "顺序优先", "打分"]),
-        lyrics("fetch", "跟进算法升级", kw: ["重打分", "自动升级"]),
+        lyrics("fetch", "随匹配算法更新重新选择", kw: ["重打分", "自动升级"]),
         lyrics("fetch", "预解析待播曲目", kw: ["预解析", "提前解析", "待播", "专辑", "队列", "播放列表", "下一首"]),
         lyrics("fetch", "锁定手选歌词", kw: ["手动选定", "锁定"]),
         // ---- 歌词 › 译文 ----
@@ -238,7 +238,7 @@ public enum SettingsSearchCatalog {
         // ---- 歌词 › 管理 ----
         lyrics("manage", "歌词库", kw: ["歌词管理", "统计", "缓存"]),
         lyrics("manage", "自动匹配缺失歌词", kw: ["重新扫描", "重搜", "补空", "没有歌词", "暂无", "缺失"]),
-        lyrics("manage", "全量重新扫库", kw: ["重新扫描", "重搜", "全量", "扫库", "升级", "跟进算法"]),
+        lyrics("manage", "重新匹配整个歌词库", kw: ["重新扫描", "重搜", "全量", "扫库", "升级", "跟进算法"]),
         lyrics("manage", "歌词文件夹", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
 
         // ---- 播放器 ----
@@ -273,7 +273,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "文字颜色", kw: ["字色", "颜色", "跟随封面"], group: "文字"),
         surface(.overlay, "文字描边", kw: ["描边", "outline"], group: "文字"),
         surface(.overlay, "描边颜色", kw: ["描边"], group: "文字"),
-        surface(.overlay, "未唱到的颜色", kw: ["卡拉OK", "未唱", "未唱颜色", "逐字", "karaoke", "跟随封面"], group: "文字"),
+        surface(.overlay, "未唱颜色", kw: ["卡拉OK", "未唱", "未唱颜色", "逐字", "karaoke", "跟随封面"], group: "文字"),
         surface(.overlay, "背景颜色", kw: ["背景", "透明"], group: "背景"),
         surface(.overlay, "毛玻璃背景", kw: ["模糊", "玻璃", "blur"], group: "背景"),
         surface(.overlay, "玻璃浓淡", kw: ["模糊", "玻璃", "毛玻璃", "浓淡", "blur", "强度", "薄", "厚", "材质"], group: "背景"),
@@ -289,7 +289,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "锁定位置", kw: ["锁定", "拖动"], group: "行为"),
         surface(.overlay, "长按拖动", kw: ["拖动", "长按"], group: "行为"),
         surface(.overlay, "悬浮淡化", kw: ["鼠标", "指针", "淡出", "让开"], group: "行为"),
-        surface(.overlay, "悬停控制条", kw: ["鼠标", "指针", "悬停", "控制", "按钮", "菜单", "工具栏"], group: "行为"),
+        surface(.overlay, "悬停时显示控制条", kw: ["鼠标", "指针", "悬停", "控制", "按钮", "菜单", "工具栏"], group: "行为"),
         surface(.overlay, "截屏时隐藏", kw: ["截图", "录屏", "会议", "共享屏幕", "防截屏"], group: "行为"),
         surface(.overlay, "暂停时隐藏", kw: ["自动隐藏", "暂停", "没在播放"], group: "行为"),
         // 「位置」自成一组(工具栏第二行第三颗 / 抽屉「位置」组),标题就是组名,不带 group。
@@ -337,8 +337,8 @@ public enum SettingsSearchCatalog {
         surface(.menuBar, "副行", kw: ["下一句", "译文", "读音", "罗马音", "双排", "两行"], group: "布局"),
         surface(.menuBar, "歌词旁的图标", kw: ["进度图标", "图标"], group: "布局"),
         surface(.menuBar, "卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "配色"),
-        surface(.menuBar, "文字颜色", alt: ["未唱到的颜色"], kw: ["字色", "颜色", "跟随系统"], group: "配色"),
-        surface(.menuBar, "已唱到的颜色", kw: ["染色", "高亮色"], group: "配色"),
+        surface(.menuBar, "文字颜色", alt: ["未唱颜色"], kw: ["字色", "颜色", "跟随系统"], group: "配色"),
+        surface(.menuBar, "已唱颜色", kw: ["染色", "高亮色"], group: "配色"),
         surface(.menuBar, "字体", kw: ["字体族", "font"], group: "字体"),
         surface(.menuBar, "粗细", kw: ["字重", "weight"], group: "字体"),
         surface(.menuBar, "字号", kw: ["大小", "font size"], group: "字体"),

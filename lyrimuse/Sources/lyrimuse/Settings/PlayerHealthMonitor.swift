@@ -130,9 +130,9 @@ final class PlayerHealthMonitor: ObservableObject {
             return String(format: L10n.t("%@ 的自动化权限被拒绝，无法读取播放状态"), names(automationDeniedPlayers))
         case .engineNotRunning: return L10n.t("歌词引擎未运行，歌词不会更新")
         case .fullDiskAccessDenied:
-            return String(format: L10n.t("没有完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(fullDiskAccessDeniedPlayers))
+            return String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(fullDiskAccessDeniedPlayers))
         case .accessibilityMissing:
-            return String(format: L10n.t("没有辅助功能权限，无法校准 %@ 的播放进度"), names(accessibilityMissingPlayers))
+            return String(format: L10n.t("未获得辅助功能权限，无法校准 %@ 的播放进度"), names(accessibilityMissingPlayers))
         }
     }
 

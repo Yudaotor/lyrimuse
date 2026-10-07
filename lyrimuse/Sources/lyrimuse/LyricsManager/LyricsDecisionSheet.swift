@@ -67,7 +67,7 @@ struct LyricsDecisionSheet: View {
     private func pathLabel(_ decision: LyricsResolutionDecision) -> String {
         switch decision.path {
         case "first-resolve": return L10n.t("首次解析")
-        case "upgrade": return L10n.t("升级重试")
+        case "upgrade": return L10n.t("尝试更优歌词")
         case "rescore": return L10n.t("评分规则更新后重选")
         // 「当初一条歌词都没搜到、后来又试了一次」那条路径(引擎的
         // needsLyricsFirstFill)。跟「升级重试」分开显示:那个是"本来有、想换更好的",

@@ -214,7 +214,7 @@ final class LyricsExternalEditor {
         case .unchanged:
             sessions[session.key]?.reference = text
             Self.record(text, for: session.url)
-            notes.post(.info, title: title, text: L10n.t("没有需要保存的更改"))
+            notes.post(.info, title: title, text: L10n.t("无可保存的更改"))
         case .empty:
             notes.post(.warning, title: title, text: L10n.t("文件中尚无歌词，未保存"))
         case .missingTimestamps:
@@ -225,7 +225,7 @@ final class LyricsExternalEditor {
                 done.append(String(format: L10n.t("%@ 句为新增或修改了时间戳，已按字数分配逐字时间"), "\(result.estimatedLines)"))
             }
             if result.skippedLines > 0 {
-                done.append(String(format: L10n.plural("%@ 行没有时间戳，未写入逐字歌词", count: result.skippedLines), "\(result.skippedLines)"))
+                done.append(String(format: L10n.plural("%@ 行无时间戳，未写入逐字歌词", count: result.skippedLines), "\(result.skippedLines)"))
             }
             save(text, session: session, done: done, carriesOffsetTo: result.timingUnchanged ? (lyrics: result.lrc, yrc: result.yrc) : nil) {
                 await EnrichCacheStore.shared.saveEdit(key: session.key, lyrics: result.lrc, tr: stored?.lyricsTr ?? "",

@@ -400,7 +400,7 @@ struct PendingListensPanel: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(L10n.t("待推送的收听"))
+            Text(L10n.t("待补交的收听"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(secondaryTextColor)
             Spacer(minLength: 0)
@@ -427,7 +427,7 @@ struct PendingListensPanel: View {
 
     @ViewBuilder private var content: some View {
         if items.isEmpty {
-            Text(L10n.t("本地暂无待推送的收听记录"))
+            Text(L10n.t("本地暂无待补交的收听记录"))
                 .font(.system(size: 12))
                 .foregroundStyle(tertiaryTextColor)
                 .padding(.vertical, 16)

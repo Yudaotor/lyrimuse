@@ -4,18 +4,18 @@ import SwiftUI
 /// 自动匹配 / 全量扫库跑着时的进度详情。「歌词管理」侧栏「⋯」菜单、底部进度卡和设置页「歌词库」那两行的
 /// 进度圆环(点开是 `FillSweepProgressDetail`)共用这一份文字 —— 几处说的是同一轮扫描,各写一遍迟早说成两样。
 ///
-/// 每一句都要先看 `isFullScan`:「全量重新扫库」复用自动匹配那条通道(状态文件、单轮互斥、取消都共用,
+/// 每一句都要先看 `isFullScan`:「重新匹配整个歌词库」复用自动匹配那条通道(状态文件、单轮互斥、取消都共用,
 /// 见 lyrimuse-engine/lyricsfullscan.go 头注),全量跑着时说「正在自动匹配」,说的跟做的就不是一回事。
 enum FillSweepProgressText {
     /// 此刻在做什么。上一首一个歌词源都没连上时引擎在原地等网络,那时说这个,不说「正在搜索」。
     /// 两首之间(自动匹配隔几秒才搜下一首)没有「当前这首」:搜过至少一首就说在等下一首,一首都没搜就还在准备。
-    /// 全量那一轮的兜底走现成的「全量重新扫库」,不另起一句只露脸一瞬的翻译串。
+    /// 全量那一轮的兜底走现成的「重新匹配整个歌词库」,不另起一句只露脸一瞬的翻译串。
     static func title(_ status: LyricsFillSweep.Info) -> String {
         if status.isOffline { return L10n.t("网络不可用，稍后重试…") }
         if let current = status.current {
             return String(format: L10n.t("正在搜索：%@"), LyricsFillSweep.displayName(key: current))
         }
-        if status.isFullScan { return L10n.t("全量重新扫库") }
+        if status.isFullScan { return L10n.t("重新匹配整个歌词库") }
         return status.done > 0 ? L10n.t("等待下一首…") : L10n.t("正在准备自动匹配…")
     }
 

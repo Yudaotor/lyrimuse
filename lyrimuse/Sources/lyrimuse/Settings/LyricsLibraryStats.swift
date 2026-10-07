@@ -167,9 +167,9 @@ struct LyricsLibraryStatsPanel: View {
     // 「歌词管理」窗口里同一份状态另有自己的一份 @State,两处各自轮询同一个文件,不共享——
     // 两扇窗口生命周期独立,共享一个 ObservableObject 只会多一个单例订阅面。
     @State private var fillSweepStatus: LyricsFillSweep.Info?
-    // 引擎公布的「全量重新扫库」状态(待跟进的条数 + 有没有一轮没跑完),同一个
+    // 引擎公布的「重新匹配整个歌词库」状态(待跟进的条数 + 有没有一轮没跑完),同一个
     // .task 一起轮询。nil、或者引擎还没数过待跟进的条数(`pending` 为 nil)时
-    // 「N 首待跟进」给不出来,整行藏掉(同 LyricsLibrarySizeLabel 那条"算不出来就什么都
+    // 「N 首待重新匹配」给不出来,整行藏掉(同 LyricsLibrarySizeLabel 那条"算不出来就什么都
     // 不显示"的规矩,摆一个猜出来的数字比不摆更糟)。
     @State private var fullScanState: LyricsFullScan.State?
     @State private var confirmFullScan = false
@@ -222,7 +222,7 @@ struct LyricsLibraryStatsPanel: View {
                     statsBlock(counts)
                 }
                 CardDivider()
-                // 「自动匹配缺失歌词」「全量重新扫库」是同一条通道的窄档和宽档,排在一起、长得一样。
+                // 「自动匹配缺失歌词」「重新匹配整个歌词库」是同一条通道的窄档和宽档,排在一起、长得一样。
                 fillSweepRow()
                 // 分隔线画在这一族的里面 —— 整行在引擎还没公布过打分版本号时会整个
                 // 消失,分隔线留在外面就会变成两条紧挨着的线。
@@ -277,7 +277,7 @@ struct LyricsLibraryStatsPanel: View {
         // 条目** —— 前两点用户点之前有权知道,第三点是这个功能跟隔壁「重新扫描」的本质区别
         // (那颗只碰空条目,点错了最坏也就是白费点网络)。
         .confirmationDialog(
-            L10n.t("全量重新扫库？"),
+            L10n.t("重新匹配整个歌词库？"),
             isPresented: $confirmFullScan,
             titleVisibility: .visible
         ) {
@@ -411,7 +411,7 @@ struct LyricsLibraryStatsPanel: View {
     /// 让引擎现在就把没有歌词的条目重搜一遍 —— 跟「歌词管理」侧栏「⋯」里的「自动匹配缺失歌词」
     /// 是同一条通道(`LyricsFillSweep`,见第 09 章「补空扫描」)。
     ///
-    /// 跟下面「全量重新扫库」**逐项对称**(标题 + ⓘ + 待办数 + 「开始」)。两者是同一件事的窄档
+    /// 跟下面「重新匹配整个歌词库」**逐项对称**(标题 + ⓘ + 待办数 + 「开始」)。两者是同一件事的窄档
     /// 和宽档 —— 让采集服务跑一轮扫描,区别只在范围,而范围本身是包含关系:待搜那批正是待跟进
     /// 那批的第 0 层。两行长得一样,这层关系才读得出来。
     ///
@@ -420,7 +420,7 @@ struct LyricsLibraryStatsPanel: View {
     /// (本机 65 vs 74);两个口径不同的数并排摆着只会让人以为其中一个是错的,再拿 ⓘ 去解释也救不回来。
     /// 按钮上的口径是"真会被搜的条数",这一点别为了让两个数一致去改。
     ///
-    /// 进度和收据都必须先判 `isFullScan`:「全量重新扫库」为了跨重启续跑复用了这条通道
+    /// 进度和收据都必须先判 `isFullScan`:「重新匹配整个歌词库」为了跨重启续跑复用了这条通道
     /// (见 lyrimuse-engine/lyricsfullscan.go 头注),两轮共用**同一份** `lyrimuse-lyrics-fill-status.json`。
     /// 不判的话,全量在跑时这一行会照着那份状态画出跟下面那行逐字重复的「扫描中 42/5318 + 停止」。
     private func fillSweepRow() -> some View {
@@ -434,7 +434,7 @@ struct LyricsLibraryStatsPanel: View {
             icon: "text.magnifyingglass",
             title: L10n.t("自动匹配缺失歌词"),
             subtitle: Self.sweepReceipt(status),
-            help: L10n.t("自动匹配范围：没有歌词或只有纯文本的歌曲；纯音乐和人工修正过的歌曲除外")
+            help: L10n.t("自动匹配范围：无歌词或仅有纯文本的歌曲；纯音乐和人工修正过的歌曲除外")
         ) {
             HStack(spacing: 10) {
                 if sweepRunning, let status {
@@ -463,7 +463,7 @@ struct LyricsLibraryStatsPanel: View {
                     }
                         .controlSize(.small)
                         .fixedSize()
-                        // 全量那一轮跑着的时候也置灰,跟「全量重新扫库」那颗「开始」对称:引擎
+                        // 全量那一轮跑着的时候也置灰,跟「重新匹配整个歌词库」那颗「开始」对称:引擎
                         // 一次只允许一轮在跑(runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
                         .disabled(retryable == 0 || running || fillSweepStarting)
                         .help(running
@@ -480,7 +480,7 @@ struct LyricsLibraryStatsPanel: View {
     ///
     /// 一首都没搜的那一轮**也不给**。「上次:搜了 0 首,补出 0 首」两个数都是 0,占着一行
     /// 副标题却一个字的信息都没有(库里当时没有可搜的条目,或者刚点下就被停了);这一行本来
-    /// 就该跟「全量重新扫库」等高,凭空多出来的那一行还把两行的对称打破了。
+    /// 就该跟「重新匹配整个歌词库」等高,凭空多出来的那一行还把两行的对称打破了。
     ///
     /// 断网停下的那一轮例外:要说清楚它为什么停了,不然看起来像是搜完了、都没有词。
     private static func sweepReceipt(_ status: LyricsFillSweep.Info?) -> String? {
@@ -563,14 +563,14 @@ struct LyricsLibraryStatsPanel: View {
         Self.fullScanConfirmMessage(pending: fullScanState?.pending ?? 0, secondsPerTrack: secondsPerTrack)
     }
 
-    /// 「全量重新扫库？」确认框的正文,两个入口共用。
+    /// 「重新匹配整个歌词库？」确认框的正文,两个入口共用。
     static func fullScanConfirmMessage(pending: Int, secondsPerTrack: Double) -> String {
         String(
             format: L10n.plural("共 %1$@ 首，预计%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失", count: pending),
             format(pending), hoursText(pending, secondsPerTrack: secondsPerTrack))
     }
 
-    /// 「全量重新扫库」这一行。引擎没公布过待跟进的条数(还没起来过 / 还没数完第一遍)时整行
+    /// 「重新匹配整个歌词库」这一行。引擎没公布过待跟进的条数(还没起来过 / 还没数完第一遍)时整行
     /// 不出现 —— 摆一个猜出来的数字比不摆更糟。「N 首」是引擎按它的分层规则数的,跟隔壁
     /// 「自动匹配缺失歌词」的数是包含关系:全量的第 0 层是那一批的子集。
     ///
@@ -586,7 +586,7 @@ struct LyricsLibraryStatsPanel: View {
             let fullRunning = running && status?.isFullScan == true
             SettingsRow(
                 icon: "arrow.clockwise",
-                title: L10n.t("全量重新扫库"),
+                title: L10n.t("重新匹配整个歌词库"),
                 help: L10n.t("已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外")
             ) {
                 HStack(spacing: 10) {
@@ -597,8 +597,8 @@ struct LyricsLibraryStatsPanel: View {
                             .fixedSize()
                     } else {
                         Text(pending > 0
-                             ? String(format: L10n.t("%@ 首待跟进"), Self.format(pending))
-                             : L10n.t("已全部跟进"))
+                             ? String(format: L10n.t("%@ 首待重新匹配"), Self.format(pending))
+                             : L10n.t("无待重新匹配的歌曲"))
                             .font(.system(size: 11))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)

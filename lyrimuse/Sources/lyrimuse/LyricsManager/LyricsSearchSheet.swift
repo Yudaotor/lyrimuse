@@ -604,7 +604,7 @@ struct LyricsSearchSheet: View {
                 answered: Self.allLyricSourceNames.filter(respondedSources.contains).map(sourceDisplayName)
                     .joined(separator: L10n.t("、"))))
         } label: {
-            Label(L10n.t("找不到对的歌词？在 GitHub 反馈"), systemImage: "exclamationmark.bubble")
+            Label(L10n.t("找不到正确的歌词？在 GitHub 反馈"), systemImage: "exclamationmark.bubble")
         }
         .buttonStyle(.link)
         .font(.callout)
@@ -847,7 +847,7 @@ struct LyricsSearchSheet: View {
                 // 补上——跟下面"真的查了但没有"分开展示,别让用户以为这首歌
                 // 真没有网络歌词、白白灰心,其实只是网络本身有问题,重试大概率能查到。
                 ContentUnavailableView {
-                    Label(L10n.t("网络可能不可用"), systemImage: "wifi.slash")
+                    Label(L10n.t("无法连接任何歌词源"), systemImage: "wifi.slash")
                 } description: {
                     Text(L10n.t("所有已启用的歌词源请求均失败，可能是网络连接问题，并不代表这首歌曲没有歌词。检查网络后可点按下方的「重试」"))
                 } actions: {
@@ -885,7 +885,7 @@ struct LyricsSearchSheet: View {
                             // 有源明确说这首是纯音乐 —— 比"其余源未返回候选"更确定的结论,不能被这个
                             // 分支盖掉(评审指出的顺序问题:纯音乐分支排在后面,一旦有源没连上就永远
                             // 到不了)。复用纯音乐分支那句 key。
-                            Text(L10n.t("有歌词源将这首歌曲标记为纯音乐，没有可用的歌词候选"))
+                            Text(L10n.t("有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词"))
                         } else if !tracksFoundNoLyrics.isEmpty {
                             // 同上那个顺序问题,新增的"有歌没词"分支一模一样地中招:
                             // 网易云命中了曲目没词、同时 Musixmatch 因为限流没连上,用户看到的会是
@@ -905,7 +905,7 @@ struct LyricsSearchSheet: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if instrumental {
-                // 排在"网络可能不可用"之后、笼统兜底之前:这是比"真没搜到"更确定的结论——
+                // 排在"无法连接任何歌词源"之后、笼统兜底之前:这是比"真没搜到"更确定的结论——
                 // 至少一个源明确断言过"这首歌没有词"(见 instrumental 声明处注释),不是
                 // 九个源都交白卷说不出理由,不该跟那种情况共用同一句轻描淡写的"没找到"。
                 // 文案复用「重新自动匹配」toast 三分支(LyricsManagerView.swift)已经在用的
@@ -913,7 +913,7 @@ struct LyricsSearchSheet: View {
                 ContentUnavailableView {
                     Label(L10n.t("纯音乐"), systemImage: "waveform")
                 } description: {
-                    Text(L10n.t("有歌词源将这首歌曲标记为纯音乐，没有可用的歌词候选"))
+                    Text(L10n.t("有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词"))
                 } actions: {
                     markInstrumentalAction
                 }
@@ -1120,8 +1120,8 @@ struct LyricsSearchSheet: View {
                          systemImage: markedInstrumental ? "pianokeys.inverse" : "pianokeys", iconOnly: iconOnly)
         }
         .help(markedInstrumental
-              ? L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，没有歌词的重新加入自动匹配队列")
-              : L10n.t("按纯音乐处理：不再显示歌词，也不再自动搜索；现有歌词会保留，取消标记后恢复"))
+              ? L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列")
+              : L10n.t("按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复"))
         .disabled(settingInstrumental || applyingSource != nil || autoMatching)
         .settingsGlassButtons(inSheet: presentedAsSheet)
         .fixedSize()
@@ -1194,7 +1194,7 @@ struct LyricsSearchSheet: View {
     @ViewBuilder
     private var instrumentalBanner: some View {
         if markedInstrumental {
-            Label(L10n.t("已标为纯音乐：不再显示这首歌曲的歌词，也不再自动搜索。采用任一候选将取消标记"),
+            Label(L10n.t("已标为纯音乐：不显示歌词，也不会自动搜索。采用任一候选将取消标记"),
                   systemImage: "pianokeys.inverse")
                 .font(.callout)
                 .padding(10)
@@ -1300,7 +1300,7 @@ struct LyricsSearchSheet: View {
                 .padding(.top, 12)
             if c.isPlainTextOnly {
                 Label(
-                    L10n.t("这份歌词没有时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮"),
+                    L10n.t("这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮"),
                     systemImage: "info.circle"
                 )
                 .font(.caption)

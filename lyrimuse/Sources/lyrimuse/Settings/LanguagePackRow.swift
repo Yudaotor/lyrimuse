@@ -421,10 +421,10 @@ struct LanguagePackRow: View {
             // 一次只下一个:系统 sheet 本来就是模态的,这里置灰只是把"为什么现在点不动"
             // 画出来。转圈的那一格不置灰,不然转轴也跟着变淡。
             .disabled(downloading != nil && !isDownloading)
-            .help(isDownloading ? L10n.t("下载中…") : L10n.t("点击下载"))
+            .help(isDownloading ? L10n.t("下载中…") : L10n.t("点按下载"))
             .onHover { hoveredCode = $0 ? code : (hoveredCode == code ? nil : hoveredCode) }
             .animation(.easeOut(duration: 0.12), value: hovered)
-            .accessibilityLabel(String(format: L10n.t("%@，点击下载"), name))
+            .accessibilityLabel(String(format: L10n.t("%@，点按下载"), name))
         }
     }
 }

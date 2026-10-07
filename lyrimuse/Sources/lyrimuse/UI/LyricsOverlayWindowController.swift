@@ -120,7 +120,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 翻面,让卡片本身能贴到可见区顶边、控制排仍留在够得着的地方。见 `recomputeControlsBelowCard()` 头注。
     @Published private(set) var controlsBelowCard = false
     /// 悬停时露不露出那排播放控制按钮——真值在 `AppSettings.overlayShowHoverControls`
-    /// (⚙ 菜单/设置页「悬停控制条」都写它),这里是**滞后**生效的镜像:控制排此刻正显示着
+    /// (⚙ 菜单/设置页「悬停时显示控制条」都写它),这里是**滞后**生效的镜像:控制排此刻正显示着
     /// (指针悬停中)的时候关掉这个开关,不会把控制排从指针底下当场抽走——那正是用户在
     /// ⚙ 菜单里点这一项时的处境,菜单本身就挂在控制排上,当场收回等于点完这一下整排
     /// (连同刚点过的这个菜单入口)从指针下面消失。改成等这次悬停结束(指针移开、控制排
@@ -150,7 +150,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 矩形,见 `OverlayControlHitTest.chromeHoverHit`。
     @Published private(set) var isHoveringForControls: Bool = false {
         didSet {
-            // 「悬停控制条」关掉这一下要**滞后**生效,见 `showHoverControls` 声明处注释——
+            // 「悬停时显示控制条」关掉这一下要**滞后**生效,见 `showHoverControls` 声明处注释——
             // 这里只认"从悬停变成没悬停"这一次跳变,把攒着的新值放进去。
             guard oldValue, !isHoveringForControls, let pending = pendingShowHoverControls else { return }
             pendingShowHoverControls = nil
@@ -179,7 +179,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     @Published private(set) var isDragArmed: Bool = false
     /// 「调整宽度」模式:控制排那颗键开 / 关。开着时拖窗口左右边缘改宽度(`OverlayWidthDrag`),
     /// 背景透明时视图用虚线框出窗口边界,控制排一直露着。不持久化;锁定、窗口藏起来、
-    /// 关掉「悬停控制条」都会退出(见 `setAdjustingWidth`)。
+    /// 关掉「悬停时显示控制条」都会退出(见 `setAdjustingWidth`)。
     @Published private(set) var isAdjustingWidth = false
     /// 正在拖的那一下:哪条边、按下时指针的 x、按下时的窗口 frame。
     private var widthDrag: (edge: OverlayWidthDrag.Edge, startX: CGFloat, startFrame: NSRect)?
@@ -243,7 +243,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         }
     }
 
-    /// 「拖动前先长按」关着时歌词文字就是拖动把手:指针停在字上,这扇窗同样临时收回点击穿透。穿透着的话,
+    /// 「长按拖动」关着时歌词文字就是拖动把手:指针停在字上,这扇窗同样临时收回点击穿透。穿透着的话,
     /// 按下那一刻系统已经把这一下派给了下层窗口,之后整段拖动和松手下层也都收得到。代价是单击文字不再
     /// 穿透到下层(见 04 章决策 44)。
     private var lyricsCaptured = false
@@ -410,7 +410,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 self?.applyPlacementMode(mode)
             }
 
-        // 「悬停控制条」——sink 里只用收到的参数值(同上一条理由)。滞后生效的判断
+        // 「悬停时显示控制条」——sink 里只用收到的参数值(同上一条理由)。滞后生效的判断
         // (悬停中就先攒着,等 isHoveringForControls 的 didSet 在悬停结束时取用)见
         // `showHoverControls` 声明处注释。
         showHoverControlsObserver = AppSettings.shared.$overlayShowHoverControls
@@ -832,8 +832,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func syncMouseMonitors() {
         // 之前这里按 `!isPositionLocked || overlayFadeOnHover` 决定要不要装,
         // 理由是"锁定时这套手势整个用不上"——但那个前提现在不成立了:锁定态 hover 要露出
-        // "解锁"提示(见 LyricsOverlayView.unlockPill),这件事跟"划过让开"开关无关,是
-        // 常驻功能。原来的判据会让**没开"划过让开"的锁定用户**监听器整体卸掉,
+        // "解锁"提示(见 LyricsOverlayView.unlockPill),这件事跟"鼠标经过时避开"开关无关,是
+        // 常驻功能。原来的判据会让**没开"鼠标经过时避开"的锁定用户**监听器整体卸掉,
         // handleMouseEvent 压根不会被调用,isHoveringForControls 永远不更新,解锁提示
         // 因此永远不出现(实测坐实的真 bug,不是理论推演)。现在只要窗口可见就装 ——
         // 悬停追踪从"锁定态下的可选功能"变成了"锁定态下也必需的功能"。
@@ -990,7 +990,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 同 updateControlsHotZone 的坐标换算,只是换算的是歌词文字那块矩形。
     ///
     /// 为什么单独一套而不复用窗口 frame:窗口比文字大得多 —— 上下有卡片内边距和播放控制
-    /// 槽位、左右是 WrapLayout 撑满留下的空白。原来「划过让开」用 window.frame.contains,
+    /// 槽位、左右是 WrapLayout 撑满留下的空白。原来「鼠标经过时避开」用 window.frame.contains,
     /// 指针在歌词**附近**(上下左右的空白处)就会触发淡出,现象是的正是这个。
     private func updateLyricsHotZone(_ rect: CGRect) {
         lyricsHotZoneRaw = rect == .zero ? nil : rect
@@ -1047,7 +1047,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private func handleMouseEvent(type: NSEvent.EventType) {
         guard let window, !isQuickMenuOpen else { return }
         // 锁定位置 = 停用整套手势(悬停控制排 + 长按拖动)。两个例外都不受这条限制:
-        // ① .mouseMoved——「划过让开」需要它维护 isHoveringForControls,而那件事跟"能不能
+        // ① .mouseMoved——「鼠标经过时避开」需要它维护 isHoveringForControls,而那件事跟"能不能
         //    拖动窗口"无关,控制排不会因此露出来(下面 controlsShown 那行有
         //    `&& !lockPosition` 守着);
         // ② .leftMouseDown 命中"解锁"提示(参考 QQ 音乐补的,见
@@ -1096,7 +1096,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 不加这层的话没显示时那块区域也会挡住点击穿透 —— 变成"看不见却挡手"。
         // 判据本体在 Core,跟 `LyricsOverlayView.controlsVisible` **共用同一个函数** ——
         // 那边管 opacity / allowsHitTesting,这边管点击穿透与按钮分发,两边长歪就是
-        // "看不见却挡手"或"看得见点不动"(加「悬停控制条」开关时合并)。
+        // "看不见却挡手"或"看得见点不动"(加「悬停时显示控制条」开关时合并)。
         let controlsShown = OverlayControlHitTest.controlsShown(
             hovering: isHoveringForControls,
             positionLocked: AppSettings.shared.lockPosition,
@@ -1195,7 +1195,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             }
             pressStartLocation = loc
             longPressTimer?.invalidate()
-            // 「拖动前先长按」关掉时:压在**歌词文字**上就立刻武装,压在四周空白上什么都不做
+            // 「长按拖动」关掉时:压在**歌词文字**上就立刻武装,压在四周空白上什么都不做
             // (那次点击照旧穿透到桌面)。长按这道门原本是必须的 —— 窗口常年点击穿透,
             // "按下就拖"会让整个窗口区域都吃掉点击;精准歌词热区(lyricsHotZoneLocal)落地后
             // 有了更准的判据,不必再用时长去区分"想拖窗口"和"想点桌面"。

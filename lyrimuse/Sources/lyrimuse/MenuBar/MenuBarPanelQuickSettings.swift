@@ -375,7 +375,7 @@ struct PanelQuickSettings: View {
                          options: Array(OverlayDuetAlignmentOverride.allCases),
                          label: OverlayAlignmentSegmentedControl.label(for:))
             toggleRow(L10n.t("锁定位置"),
-                      help: L10n.t("解锁后点按将穿透到桌面；拖动方式见设置中的「拖动前先长按」"),
+                      help: L10n.t("解锁后点按将穿透到桌面；拖动方式见设置中的「长按拖动」"),
                       isOn: Binding(
                         get: { settings.lockPosition },
                         set: { newValue in

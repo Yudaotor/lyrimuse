@@ -122,7 +122,7 @@ struct OverlayTextSettingsRows: View {
             SettingsRow(
                 icon: "sparkles",
                 title: L10n.t("卡拉OK效果"),
-                help: L10n.t("逐字歌词随演唱逐字高亮；没有逐字数据的歌曲整行高亮")
+                help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮")
             ) {
                 Toggle("", isOn: $settings.overlayLyricsKaraoke)
             }
@@ -162,7 +162,7 @@ struct OverlayTextSettingsRows: View {
             // 不会产生任何视觉效果的设置项没有意义。
             if settings.overlayLyricsKaraoke {
                 CardDivider()
-                SettingsRow(icon: "circle.lefthalf.filled", title: L10n.t("未唱到的颜色")) {
+                SettingsRow(icon: "circle.lefthalf.filled", title: L10n.t("未唱颜色")) {
                     colorModeMenu(
                         follows: $settings.karaokeUnsungFollowsCoverArt,
                         color: Binding(

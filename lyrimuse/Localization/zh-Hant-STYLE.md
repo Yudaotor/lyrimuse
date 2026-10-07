@@ -79,8 +79,11 @@
 | 用户名 / 小组件 / 模块 / 算法 | 使用者名稱 / 小工具 / 模組 / 演算法 | |
 | 访达 | Finder | Apple 不翻 |
 
-浏览器菜单要写**该浏览器 zh-TW 界面上的实际名称**：Chrome / Edge 是「檢視 → 開發人員」，
-Safari 是「Safari → 設定 → 進階」「顯示網頁開發者功能」「開發」选单；Arc 保持英文。
+浏览器菜单要写**该浏览器 zh-TW 界面上的实际名称**（从各浏览器自带的语言包核对过，别照搬简体的结构直译）：
+Chrome / Brave 是「顯示方式 → 開發人員選項 → 允許 Apple 事件的 JavaScript」；
+Edge 是「檢視 → 開發人員 → 從 Apple Events 允許 JavaScript」；
+Safari 是「Safari → 設定 → 進階」勾「顯示網頁開發者功能」，再到「開發者」一栏勾「允許來自Apple Event的JavaScript」
+（Safari 原文没有空格，照抄）；Arc 保持英文。
 
 ## 字级细节（ICU 转换会漏的）
 

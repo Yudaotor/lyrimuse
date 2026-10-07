@@ -378,7 +378,7 @@ struct MenuBarLyricsIconRow: View {
         SettingsRow(
             icon: "chart.bar.fill",
             title: L10n.t("歌词旁的图标"),
-            help: L10n.t("在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱到」颜色，其余使用「未唱到」颜色。仅在显示歌词时出现。")
+            help: L10n.t("在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。")
         ) {
             SettingsSegmentedControlHashable(
                 selection: $settings.menuBarLyricsIconPosition,
@@ -431,7 +431,7 @@ struct MenuBarTitleFallbackRow: View {
         SettingsRow(
             icon: "music.note.list",
             title: L10n.t("无歌词时显示歌名"),
-            help: L10n.t("歌曲没有歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示")
+            help: L10n.t("歌曲无歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示")
         ) {
             Toggle("", isOn: $settings.menuBarShowsTitleWhenNoLyrics)
         }
@@ -591,7 +591,7 @@ struct MenuBarWidthModeRow: View {
         // 恒无效果的控件比不摆更糟。完整判据见 LyricsRestingAlignment 头注。
         //
         // 用 if 整行不渲染、不用 .disabled:这一段的既有做法就是"不适用就不显示"(见
-        // MenuBarColorRows 里「已唱到的颜色」那行跟着染色开关显隐),灰着摆在那儿会让人
+        // MenuBarColorRows 里「已唱颜色」那行跟着染色开关显隐),灰着摆在那儿会让人
         // 去猜"要满足什么条件才能点"。
         if settings.menuBarLyricsWidthMode == .fixed {
             CardDivider()
@@ -815,14 +815,14 @@ struct MenuBarColorRows: View {
             SettingsRow(
                 icon: "textformat",
                 // 标题跟着上面那个开关走,因为这一行管的范围**真的会变**:染色关着时它就是
-                // 整条歌词的颜色(叫「未唱到的颜色」会莫名其妙——什么都不会被"唱到"),开着时
+                // 整条歌词的颜色(叫「未唱颜色」会莫名其妙——什么都不会被"唱到"),开着时
                 // 它只管未唱到那半截。
                 //
                 // 两个都是既有说法:关态复用「文字颜色」(跟悬浮歌词那行同一个键,
                 // OverlayStyleSettingsRows),开态用下面那行的对称说法。 正因为共用,
                 // **别去改「文字颜色」那个键的值** —— 那会连带把悬浮歌词那一行也改掉。
                 title: settings.menuBarLyricsKaraoke
-                    ? L10n.t("未唱到的颜色") : L10n.t("文字颜色"),
+                    ? L10n.t("未唱颜色") : L10n.t("文字颜色"),
                 help: L10n.t("未演唱部分的文字颜色。默认跟随系统：自动适配浅色 / 深色菜单栏，打开菜单时自动反白")
             ) {
                 HStack(spacing: 8) {
@@ -852,10 +852,10 @@ struct MenuBarColorRows: View {
                 CardDivider()
                 SettingsRow(
                     icon: "paintpalette.fill",
-                    // 「染色颜色」→「已唱到的颜色」:原来那个词组自己打结("染色"已经含"色"),
+                    // 「染色颜色」→「已唱颜色」:原来那个词组自己打结("染色"已经含"色"),
                     // 而且没说清染的是哪一半。它的 help 一直写着"已唱到部分的颜色" —— 标题
-                    // 直接用 help 里那句话,跟上面「未唱到的颜色」成对。
-                    title: L10n.t("已唱到的颜色"),
+                    // 直接用 help 里那句话,跟上面「未唱颜色」成对。
+                    title: L10n.t("已唱颜色"),
                     help: L10n.t("已演唱部分的颜色，也用于歌词旁进度图标的已播放部分。默认跟随系统强调色（深色菜单栏下自动提亮）；自定义后按原色显示，不再自动提亮")
                 ) {
                     HStack(spacing: 8) {

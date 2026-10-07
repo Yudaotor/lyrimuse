@@ -701,12 +701,12 @@ struct LyricsManagerView: View {
     // 点了自动匹配、引擎还没接手的那几秒(LyricsFillSweep.isPending):按钮置灰、进度卡先转起来,
     // 免得用户以为没点上再点一次。由点击处置 true,轮询按 isPending 清掉。
     @State private var fillSweepPending = false
-    /// 点下去的是不是「全量重新扫库」:接手前那几秒进度卡上说哪一句。
+    /// 点下去的是不是「重新匹配整个歌词库」:接手前那几秒进度卡上说哪一句。
     @State private var fillSweepPendingIsFull = false
     /// 进度卡上「自动匹配完了」那句说过了的那一轮(按结束时刻认),说过就收起。
     @State private var dismissedSweepReceipt: Int64?
     /// 引擎公布的全量扫库状态(打分版本号、有没有一轮没跑完);nil = 引擎还没起来过或版本太老,
-    /// 那时「全量重新扫库」入口不出现(同设置页那一行)。跟自动匹配进度同一个轮询节拍读,开销是一次 stat。
+    /// 那时「重新匹配整个歌词库」入口不出现(同设置页那一行)。跟自动匹配进度同一个轮询节拍读,开销是一次 stat。
     @State private var fullScanState: LyricsFullScan.State?
     @State private var confirmFullScan = false
     /// 上一次「闲时」问磁盘的时刻,见 `LyricsManagerRefresh`。
@@ -1129,7 +1129,7 @@ struct LyricsManagerView: View {
         let searching = !committedSearchText.isEmpty
         if hasActiveFilters || searching {
             ContentUnavailableView {
-                Label(L10n.t("没有符合条件的歌曲"), systemImage: "line.3.horizontal.decrease.circle")
+                Label(L10n.t("无符合条件的歌曲"), systemImage: "line.3.horizontal.decrease.circle")
             } description: {
                 Text(L10n.t("请尝试其他筛选条件或关键词"))
             } actions: {
@@ -1262,7 +1262,7 @@ struct LyricsManagerView: View {
     /// 清理确认框的正文:判据和不受影响的几类,下面列出前几条的歌名。
     private var cleanupMessage: String {
         let shown = pendingCleanupKeys.prefix(6)
-        var lines = [L10n.t("这些记录没有歌词，且没有歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。"), ""]
+        var lines = [L10n.t("这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。"), ""]
         for key in shown {
             let title = store.summary(forKey: key)?.title ?? ""
             lines.append(title.isEmpty ? key : title)
@@ -1728,7 +1728,7 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            // 同「全量重新扫库」那处:只在确认框开着时算。
+            // 同「重新匹配整个歌词库」那处:只在确认框开着时算。
             if showBatchDeleteConfirm { Text(batchDeleteMessage) }
         }
         .onAppear {
@@ -2181,11 +2181,11 @@ struct LyricsManagerView: View {
         // 分处不同层级。同一条修饰符链上叠多个呈现修饰符历史上有
         // 互相顶掉的问题(见那两处各自的注释),分层挂就不用去论证"这个版本会不会冲突"。
         .confirmationDialog(
-            L10n.t("确定要清空全部歌词时间轴校正吗？"),
+            L10n.t("确定要清空全部歌词时间轴校准吗？"),
             isPresented: $showClearOffsetsConfirm,
             titleVisibility: .visible
         ) {
-            Button(L10n.t("清空全部时间轴校正"), role: .destructive) {
+            Button(L10n.t("清空全部时间轴校准"), role: .destructive) {
                 LyricsOffsetStore.shared.clearAllTrackOffsets()
                 PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
                 // 详情页输入框也归零,不然还显示旧值,这时回车会把刚清掉的值写回去。
@@ -2193,12 +2193,12 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(String(format: L10n.plural("将清除 %d 首歌曲的手动时间轴校正，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源", count: offsets.trackOffsetCount), offsets.trackOffsetCount))
+            Text(String(format: L10n.plural("将清除 %d 首歌曲的手动时间轴校准，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源", count: offsets.trackOffsetCount), offsets.trackOffsetCount))
         }
-        // 侧栏「⋯」菜单里的「全量重新扫库」。文案、待扫首数与预计时长跟设置页那一行共用同一份
+        // 侧栏「⋯」菜单里的「重新匹配整个歌词库」。文案、待扫首数与预计时长跟设置页那一行共用同一份
         // (LyricsLibraryStatsPanel 的几个静态函数),两个入口说的数不能分叉。
         .confirmationDialog(
-            L10n.t("全量重新扫库？"),
+            L10n.t("重新匹配整个歌词库？"),
             isPresented: $confirmFullScan,
             titleVisibility: .visible
         ) {
@@ -2212,17 +2212,17 @@ struct LyricsManagerView: View {
         }
         // 电台校准的清空确认。同样单独挂一层,理由见上面那条。
         .confirmationDialog(
-            L10n.t("确定要清空全部电台校正吗？"),
+            L10n.t("确定要清空全部电台校准吗？"),
             isPresented: $showClearRadioOffsetsConfirm,
             titleVisibility: .visible
         ) {
-            Button(L10n.t("清空全部电台校正"), role: .destructive) {
+            Button(L10n.t("清空全部电台校准"), role: .destructive) {
                 LyricsOffsetStore.shared.clearAllRadioOffsets()
                 PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(String(format: L10n.plural("将清除 %d 首歌曲的电台时间轴校正，此操作无法撤销。这些校正仅在播放电台时生效，清除后不影响正常播放时的歌词", count: offsets.radioOffsetCount), offsets.radioOffsetCount))
+            Text(String(format: L10n.plural("将清除 %d 首歌曲的电台时间轴校准，此操作无法撤销。这些校准仅在播放电台时生效，清除后不影响正常播放时的歌词", count: offsets.radioOffsetCount), offsets.radioOffsetCount))
         }
         // 恢复确认。跟上面两个确认弹窗一样各挂各的层级,不叠在同一条修饰符链上。
         .confirmationDialog(
@@ -2378,7 +2378,7 @@ struct LyricsManagerView: View {
         let pending = Set(pendingDeleteKeys)
         let manual = store.summaries.filter { pending.contains($0.key) && $0.isManual }.count
         if manual > 0 {
-            return String(format: L10n.t("其中 %@ 条经过人工修正，删除后无法恢复。已导出的歌词文件将一并删除，此操作无法撤销。再次播放这些歌曲时会重新匹配，结果可能不同"), "\(manual)")
+            return String(format: L10n.t("已导出的歌词文件将一并删除，此操作无法撤销；其中 %@ 条经过人工修正。再次播放这些歌曲时会重新匹配，结果可能不同"), "\(manual)")
         }
         return L10n.t("已导出的歌词文件将一并删除，此操作无法撤销。再次播放这些歌曲时会重新匹配，结果可能不同")
     }
@@ -2548,7 +2548,7 @@ struct LyricsManagerView: View {
 
     /// 「自动匹配缺失歌词」:让引擎现在就把没歌词的存量条目重新匹配一遍,不用等每首歌各自再被播到(补空路径设计上
     /// 只在重播时触发,见 lyrimuse-engine/lyricsfillsweep.go 头注)。两个入口:全库、或当前筛选出来的那批(只在筛选
-    /// 真的缩小了范围时才出现,免得两个数字一样的项并排);另一节是「全量重新扫库…」。跑着的时候这里是这一轮的详情和
+    /// 真的缩小了范围时才出现,免得两个数字一样的项并排);另一节是「重新匹配整个歌词库…」。跑着的时候这里是这一轮的详情和
     /// 「停止」——一次只允许一轮;侧栏底部那张进度卡说的是同一轮。
     /// 上一轮的结果留在菜单里当收据:搜了几首、找到几首,不然点完只看到列表里几行悄悄变了。
     @ViewBuilder
@@ -2560,7 +2560,7 @@ struct LyricsManagerView: View {
         // 菜单照 macOS 菜单的写法:菜单项是动作(动词开头,弹确认框的带「…」),状态是菜单顶上 / 底下
         // 各一两行灰字(Time Machine 那种「最近备份：…」),规则说明放进悬停提示和确认框,不占菜单行。
         if let status, running {
-            // 这一轮**不一定**是自动匹配:「全量重新扫库」复用同一条通道(状态文件、
+            // 这一轮**不一定**是自动匹配:「重新匹配整个歌词库」复用同一条通道(状态文件、
             // 单轮互斥、取消都共用,见 lyrimuse-engine/lyricsfullscan.go 头注),所以文案都得
             // 按 isFullScan 分流。
             let isFull = status.isFullScan
@@ -2588,7 +2588,7 @@ struct LyricsManagerView: View {
                 Button(role: .destructive) {
                     LyricsFillSweep.requestCancel()
                 } label: {
-                    Label(isFull ? L10n.t("停止扫库") : L10n.t("停止自动匹配"),
+                    Label(isFull ? L10n.t("停止重新匹配") : L10n.t("停止自动匹配"),
                           systemImage: "stop.circle")
                 }
             }
@@ -2623,7 +2623,7 @@ struct LyricsManagerView: View {
                     Button {
                         confirmFullScan = true
                     } label: {
-                        Label(L10n.t("全量重新扫库…"), systemImage: "arrow.clockwise")
+                        Label(L10n.t("重新匹配整个歌词库…"), systemImage: "arrow.clockwise")
                     }
                     .disabled(fillSweepPending)
                     .help(L10n.t("已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外"))
@@ -2657,7 +2657,7 @@ struct LyricsManagerView: View {
                 pendingCleanupKeys = cleanup
                 showCleanupConfirm = true
             } label: {
-                Label(cleanup.isEmpty ? L10n.t("没有无效记录")
+                Label(cleanup.isEmpty ? L10n.t("未发现无效记录")
                                       : String(format: L10n.plural("清理 %@ 条无效记录…", count: cleanup.count), cleanup.count.formatted()),
                       systemImage: "sparkles")
             }
@@ -2677,7 +2677,7 @@ struct LyricsManagerView: View {
             Button(role: .destructive) {
                 showClearOffsetsConfirm = true
             } label: {
-                Label(L10n.t("清空全部时间轴校正"), systemImage: "timer")
+                Label(L10n.t("清空全部时间轴校准"), systemImage: "timer")
             }
             .disabled(offsets.trackOffsetCount == 0)
         } header: {
@@ -2691,10 +2691,10 @@ struct LyricsManagerView: View {
                 Button(role: .destructive) {
                     showClearRadioOffsetsConfirm = true
                 } label: {
-                    Label(L10n.t("清空全部电台校正"), systemImage: "dot.radiowaves.left.and.right")
+                    Label(L10n.t("清空全部电台校准"), systemImage: "dot.radiowaves.left.and.right")
                 }
             } header: {
-                Text(String(format: L10n.plural("已校正 %d 首歌在电台上的时间轴", count: offsets.radioOffsetCount),
+                Text(String(format: L10n.plural("已校准 %d 首歌在电台上的时间轴", count: offsets.radioOffsetCount),
                             offsets.radioOffsetCount))
             }
         }
@@ -2724,7 +2724,7 @@ struct LyricsManagerView: View {
         LyricsLibraryStatsPanel.fullScanSecondsPerTrack(fullScanState)
     }
 
-    /// 「全量重新扫库？」确认框正文。首数是引擎数好发布的(`LyricsFullScan.State.pending`)。
+    /// 「重新匹配整个歌词库？」确认框正文。首数是引擎数好发布的(`LyricsFullScan.State.pending`)。
     private var fullScanConfirmMessage: String {
         guard let state = fullScanState else { return "" }
         return LyricsLibraryStatsPanel.fullScanConfirmMessage(
@@ -3308,10 +3308,10 @@ struct LyricsManagerView: View {
         // 歌词留在条目里,撤掉就回来(见 EnrichCacheStore.setInstrumental)。搜索候选歌词面板标题栏有同一对动作。
         if summary.isInstrumental {
             Button(L10n.t("取消纯音乐标记")) { Task { await store.setInstrumental(key: summary.key, false) } }
-                .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，没有歌词的重新加入自动匹配队列"))
+                .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列"))
         } else {
             Button(L10n.t("标为纯音乐")) { Task { await store.setInstrumental(key: summary.key, true) } }
-                .help(L10n.t("按纯音乐处理：不再显示歌词，也不再自动搜索；现有歌词会保留，取消标记后恢复"))
+                .help(L10n.t("按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复"))
         }
         Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
         if summary.hasLyrics && !summary.isInstrumental {
@@ -3526,7 +3526,7 @@ struct LyricsManagerView: View {
     private func notices(_ summary: EnrichCacheStore.Summary) -> some View {
         // 校准过之后行为会变,就在动手的地方说清楚 —— 别让用户事后去猜。
         if pins.isPinned(summary.key) {
-            Text(L10n.t("已校准的歌曲不再自动更换歌词源，以免歌词变化后校正失效。将偏移设回 0 即可解除"))
+            Text(L10n.t("已校准的歌曲不再自动更换歌词源，以免歌词变化后校准失效。将偏移设回 0 即可解除"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.top, 8)
@@ -3585,9 +3585,9 @@ struct LyricsManagerView: View {
     private func unavailableModeHelp(_ mode: LyricsManagerDisplayMode) -> String {
         switch mode {
         case .original: return ""
-        case .translation: return L10n.t("这首歌曲没有译文")
+        case .translation: return L10n.t("这首歌曲无译文")
         case .romanization:
-            return romanizationOffInSettings ? L10n.t("这首歌曲的语言未在设置的「标注读音的语言」中开启") : L10n.t("这首歌曲没有读音")
+            return romanizationOffInSettings ? L10n.t("这首歌曲的语言未在设置的「标注读音的语言」中开启") : L10n.t("这首歌曲无读音")
         }
     }
 
@@ -4059,11 +4059,11 @@ struct LyricsManagerView: View {
             Image(systemName: "waveform")
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(.secondary)
-            Text(L10n.t("纯音乐"))
+            Text(L10n.t("已标为纯音乐"))
                 .font(.system(size: 19, weight: .semibold))
             Text(summary.hasLyrics
-                 ? L10n.t("不再显示这首歌曲的歌词，也不再自动搜索。歌词仍会保留，取消标记后恢复显示")
-                 : L10n.t("不再显示这首歌曲的歌词，也不再自动搜索"))
+                 ? L10n.t("各处显示为纯音乐，不会自动搜索歌词。原有歌词仍会保留，取消标记即可恢复")
+                 : L10n.t("各处显示为纯音乐，不会自动搜索歌词"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -4072,9 +4072,9 @@ struct LyricsManagerView: View {
                 Button {
                     Task { await store.setInstrumental(key: summary.key, false) }
                 } label: {
-                    Label(L10n.t("取消纯音乐标记"), systemImage: "pianokeys.inverse")
+                    Label(L10n.t("取消标记"), systemImage: "pianokeys.inverse")
                 }
-                .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，没有歌词的重新加入自动匹配队列"))
+                .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列"))
                 Button {
                     openSearchSheet(summary)
                 } label: {
@@ -4094,7 +4094,7 @@ struct LyricsManagerView: View {
     private func plainTextState(_ summary: EnrichCacheStore.Summary) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                Label(L10n.t("这首歌曲只有纯文本歌词，没有时间轴。可搜索带时间轴的歌词"), systemImage: "text.quote")
+                Label(L10n.t("这首歌曲仅有纯文本歌词，无时间轴。可搜索带时间轴的歌词"), systemImage: "text.quote")
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)

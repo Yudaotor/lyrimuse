@@ -3,7 +3,7 @@ import LyrimuseCore
 import OSLog
 import UserNotifications
 
-/// 「自动匹配缺失歌词」与「全量重新扫库」跑完时的系统通知,说一句结果。
+/// 「自动匹配缺失歌词」与「重新匹配整个歌词库」跑完时的系统通知,说一句结果。
 ///
 /// 引擎是 launchd 常驻的命令行进程,没有通知权限;它只把进度写进状态文件
 /// (`LyricsFillSweep`),这里常驻盯着那份文件,看到一轮收尾就投递。弹不弹、弹哪一种由
@@ -85,19 +85,19 @@ final class LyricsSweepNotifier {
         case let .fillDone(done, filled, missed, skipped):
             return (L10n.t("自动匹配完成"),
                     done == 0
-                        ? L10n.t("没有需要自动匹配的歌曲")
+                        ? L10n.t("无需自动匹配的歌曲")
                         : String(format: L10n.plural("共 %1$@ 首：找到 %2$@，未找到 %3$@，跳过 %4$@", count: done),
                                  "\(done)", "\(filled)", "\(missed)", "\(skipped)"))
         case let .fillOffline(done, filled):
             return (L10n.t("自动匹配已停止"),
                     String(format: L10n.plural("网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止", count: done), "\(done)", "\(filled)"))
         case let .fullDone(done, filled):
-            return (L10n.t("全量重新扫库完成"),
+            return (L10n.t("重新匹配整个歌词库已完成"),
                     done == 0
-                        ? L10n.t("已全部跟进")
+                        ? L10n.t("无待重新匹配的歌曲")
                         : String(format: L10n.plural("共检查 %1$@ 首，更新 %2$@ 首", count: done), "\(done)", "\(filled)"))
         case .fullOffline:
-            return (L10n.t("全量重新扫库已暂停"), L10n.t("网络不可用，已暂停，稍后将自动继续"))
+            return (L10n.t("重新匹配整个歌词库已暂停"), L10n.t("网络不可用，已暂停，稍后将自动继续"))
         }
     }
 }

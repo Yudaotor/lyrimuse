@@ -598,7 +598,7 @@ struct AccountLinkingTab: View {
                 Button(String(format: L10n.t("前往配置「%@」"), target.title)) { onJumpToAccount(target) }
                 Button(L10n.t("取消"), role: .cancel) {}
             } else {
-                Button(L10n.t("好的"), role: .cancel) {}
+                Button(L10n.t("好"), role: .cancel) {}
             }
         } message: { alert in
             Text(alert.message)
@@ -841,7 +841,7 @@ struct AccountLinkingTab: View {
                     Text(L10n.t("同步服务地址"))
                     HelpButton(
                         text: L10n.t("使用 Cloudflare Worker + KV 自行搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。也可不自建：配置「ListenBrainz」后，网页同样能显示「正在播放」，两者配置其一即可。效果截图与完整搭建步骤见该仓库的 README"),
-                        docTitle: L10n.t("查看效果 + 教程 →"),
+                        docTitle: L10n.t("查看效果与教程 →"),
                         // 指向 Yudaotor/nowplaying-workers 仓库自己的 README(#readme 锚点,
                         // GitHub 会自动渲染仓库首页那份)。
                         docURL: URL(string: "https://github.com/Yudaotor/nowplaying-workers#readme")!
@@ -1041,7 +1041,7 @@ struct AccountLinkingTab: View {
                     // "本地攒了些什么"清单。
                     if lastfmConnected {
                         if backfill.busy { ProgressView().controlSize(.small) }
-                        Button(L10n.t("补提交")) { backfill.runBackfill() }
+                        Button(L10n.t("补交")) { backfill.runBackfill() }
                             .disabled(backfill.busy || items.isEmpty)
                     }
                 }
@@ -1085,7 +1085,7 @@ struct AccountLinkingTab: View {
     /// - `abortedReason` 从加进 Outcome 那天起就**没有任何显示面** —— 限流(29)、凭据失效、
     ///   服务端拒收整批全走它,用户同样什么都看不到。
     private func backfillRunResultText() -> String? {
-        if backfill.lastRunFailed { return L10n.t("补提交未完成，请稍后重试") }
+        if backfill.lastRunFailed { return L10n.t("补交未完成，请稍后重试") }
         guard let last = backfill.lastRun else { return nil }
         // 无条件先报「已补 N 条」,0 也报。用户要的是"我点的那一下到底发生了什么",
         // 而"一条都没补上"同样是一个答案 —— 原来这里要求三项之和 > 0 才出声,
@@ -1295,7 +1295,7 @@ struct AccountLinkingTab: View {
                     icon: "music.note.list",
                     title: L10n.t("Scrobble 的播放器"),
                     note: L10n.t("仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。"),
-                    allOffSummary: L10n.t("全部不 scrobble"),
+                    allOffSummary: L10n.t("不 Scrobble 任何播放器"),
                     choices: playerBundleChoices,
                     excluded: features.lastfmExcludedBundles
                 ) { bundleID, on in
@@ -2119,7 +2119,7 @@ struct AccountLinkingTab: View {
             Label(error, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption).foregroundStyle(.red)
         } else if let lastSavedAt {
-            Text(String(format: L10n.t("上次保存：%@ · 歌词引擎已重启"), lastSavedAt.formatted(date: .omitted, time: .shortened)))
+            Text(String(format: L10n.t("上次保存：%@"), lastSavedAt.formatted(date: .omitted, time: .shortened)))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -2190,7 +2190,7 @@ private struct PendingListenRow: View {
             // 藏起来的时候必须同时不接受点击 —— 否则清单右侧会有一条看不见却挡手
             // 的区域。
             .allowsHitTesting(isHovered && !busy)
-            .help(L10n.t("从待补提交清单中移除此条（不可恢复）"))
+            .help(L10n.t("从待补交清单中移除此条（不可恢复）"))
         }
         .contentShape(Rectangle())
         .onHover { inside in isHovered = inside }

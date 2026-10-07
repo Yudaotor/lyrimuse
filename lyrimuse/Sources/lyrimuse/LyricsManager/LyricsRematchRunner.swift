@@ -82,15 +82,15 @@ enum LyricsRematchRunner {
             return String(format: L10n.t("本轮未找到逐字歌词，保留现有的「%@」（逐字），以免丢失逐字时间轴"),
                           sourceDisplayName(previous))
         case .instrumental:
-            return L10n.t("有歌词源将这首歌曲标记为纯音乐，没有可用的歌词候选")
+            return L10n.t("有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词")
         case .plainText:
             return L10n.t("未找到带时间戳的版本，已自动采用纯文本歌词（可在「歌词窗口」中查看）")
         case .noCandidate:
-            return L10n.t("本轮没有可用的候选，保留现有歌词")
+            return L10n.t("本轮无可用候选，保留现有歌词")
         case .offline:
             return L10n.t("网络可能不可用，本轮未找到任何候选")
         case .busy:
-            return L10n.t("这首歌曲正在搜索，或「自动匹配缺失歌词」/「全量重新扫库」正在进行，请稍后重试")
+            return L10n.t("这首歌曲正在搜索，或「自动匹配缺失歌词」/「重新匹配整个歌词库」正在进行，请稍后重试")
         case .missing:
             return L10n.t("这首歌曲已不在歌词库中")
         case .edited:

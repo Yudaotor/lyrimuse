@@ -89,7 +89,7 @@ public enum OverlayControlHitTest {
     ///     的 `unlockPill` / `playbackControls` 两个分支),别的矩形要么压根没上报、要么是上
     ///     一轮布局的残留 —— 残留矩形亮起来就是"高亮浮在一颗看不见的按钮上"。
     ///  ③ 锁定态下 `unlockPill` 自己还要再过 `hoverControlsEnabled` 这一闸(
-    ///     见 `unlockPillShown`)——「悬停控制条」关掉时那一格压根不画,矩形却仍会无条件
+    ///     见 `unlockPillShown`)——「悬停时显示控制条」关掉时那一格压根不画,矩形却仍会无条件
     ///     上报(同 ② 的道理),不补这一闸就是同一种"高亮一颗没画出来的按钮"。
     public static func hoveredControl(
         at point: CGPoint, in rects: [OverlayControlID: CGRect],
@@ -107,7 +107,7 @@ public enum OverlayControlHitTest {
     ///
     /// 在此之前 `isHoveringForControls` 的判据是 `window.frame.contains(鼠标)` —— **整扇窗**。
     /// 窗口比字大得多(上下有卡片内边距和控制排槽位、左右是 `WrapLayout` 撑满留下的空白),
-    /// 指针从窗口边缘那圈空白扫过就会把整排按钮叫出来。跟 「划过让开」收紧成
+    /// 指针从窗口边缘那圈空白扫过就会把整排按钮叫出来。跟 「鼠标经过时避开」收紧成
     /// `isHoveringLyrics` 是同一个病根,只是当时只收了那一半。
     ///
     /// 收紧后的区域 = 歌词文字矩形 ∪ 控制排胶囊热区 ∪ 各按钮矩形,取**包围盒**。三件事都要:
@@ -178,7 +178,7 @@ public enum OverlayControlHitTest {
     ///   - `LyricsOverlayWindowController.handleMouseEvent` 里的 `controlsShown` ——
     ///     收不收回点击穿透(`insideHotZone`)、要不要把 `.leftMouseDown` 分发到按钮。
     /// 两处一旦长歪,表现就是「看不见却挡手」或「看得见点不动」——这个文件的调用点注释里
-    /// 记过前者。加「悬停控制条」开关时两处都要加同一个条件,正好合并成一处。
+    /// 记过前者。加「悬停时显示控制条」开关时两处都要加同一个条件,正好合并成一处。
     ///
     /// **解锁提示(`unlockPill`)不走这条判据**,它有自己的 `unlockPillShown`(见下)——
     /// 两者的条件互斥(`positionLocked` 取反),合并成一个分支容易写反。

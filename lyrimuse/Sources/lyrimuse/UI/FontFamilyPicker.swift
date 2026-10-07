@@ -216,11 +216,11 @@ struct FontFamilyPicker: View {
         case .allImported:
             return
         case .allUnreadable:
-            importError = L10n.t("导入失败：无法读取所选文件，可能尚未下载到本机或没有读取权限")
+            importError = L10n.t("导入失败：无法读取所选文件，可能尚未下载到本机或无读取权限")
         case .allFailed:
             importError = L10n.t("导入失败：不是有效的 .ttf / .otf 字体文件")
         case .someFailed(let n):
-            importError = String(format: L10n.t("%@ 个文件导入失败，其余已导入"), "\(n)")
+            importError = String(format: L10n.plural("%@ 个文件导入失败，其余已导入", count: n), "\(n)")
         }
     }
 

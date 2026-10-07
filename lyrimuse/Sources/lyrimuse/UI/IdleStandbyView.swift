@@ -414,7 +414,7 @@ private struct IdleOverviewCard: View {
         let s = series
         let dates = IdleListeningStats.days(endingAt: Date(), days: Self.sparkDays)
         if let hi = hoverIndex, s.indices.contains(hi), dates.indices.contains(hi) {
-            return String(format: L10n.plural("%1$@ · %2$@ 首", count: s[hi]),
+            return String(format: L10n.plural("%1$@ · %2$@ 次", count: s[hi]),
                           Self.dayFormatter.string(from: dates[hi]), Self.grouped(s[hi]))
         }
         guard let peak = s.max(), peak > 0,

@@ -1990,7 +1990,7 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "悬浮滚动: 读不到 UI/LyricsOverlayView.swift(路径挪了?)")
         }
-        // 「调整宽度」模式在锁定、窗口藏起来、关掉「悬停控制条」时都得退出 —— 漏一处就会留下一圈
+        // 「调整宽度」模式在锁定、窗口藏起来、关掉「悬停时显示控制条」时都得退出 —— 漏一处就会留下一圈
         // 虚线,或者一条没人能收回的点击穿透缺口。
         if let ctrl = read("UI/LyricsOverlayWindowController.swift") {
             if let a = ctrl.range(of: "func setLocked("), let b = ctrl.range(of: "private func maybeShowDragHintOnFirstUnlock") {
@@ -2006,7 +2006,7 @@ func runSourceContractTests() {
                 expectEqual(true, false, "悬浮调宽: 找不到 removeMouseMonitors(改名了?)")
             }
             expectEqual(ctrl.contains("if !newValue { self.setAdjustingWidth(false) }"), true,
-                        "悬浮调宽: 关掉「悬停控制条」时退出调整宽度模式")
+                        "悬浮调宽: 关掉「悬停时显示控制条」时退出调整宽度模式")
             expectEqual(ctrl.components(separatedBy: "window?.ignoresMouseEvents = true").count - 1 >= 1
                         && ctrl.contains("private func releaseEdgeCapture()"), true,
                         "悬浮调宽: 边缘捕获有统一的还原入口")

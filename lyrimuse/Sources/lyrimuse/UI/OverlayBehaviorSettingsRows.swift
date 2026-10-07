@@ -3,7 +3,7 @@ import SwiftUI
 
 // 「歌词显示 → 悬浮歌词」那几个**行为**项(锁定位置 / 拖动前先长按 / 划过让开 / 悬停控制条)
 // 的唯一一份实现,(编辑台第三步)从 SettingsView 的「窗口」卡里抽出来。
-// (加第四项「悬停控制条」;在那之前这里一直是三项,下面几处注释里的"三项"
+// (加第四项「悬停时显示控制条」;在那之前这里一直是三项,下面几处注释里的"三项"
 //  已随之改口 —— `allCases` 的项数不是不变量,"自动隐藏那两行不进这个枚举"才是。)
 //
 // 为什么抽:跟 OverlayStyleSettingsRows 同一个理由 —— 这三项现在有**两个**宿主:
@@ -24,9 +24,9 @@ import SwiftUI
 // 所得"的(文字/配色/排版)排第一行,行为项自己占第二行。
 //
 // (第十步按做了一次纯删除:栏标题旁那句「这些改动在编辑台上看不出来,
-//  所以留在这儿」、「锁定位置」那格的小字、「拖动前先长按」的副标题、以及「划过让开」旁边
+//  所以留在这儿」、「锁定位置」那格的小字、「长按拖动」的副标题、以及「鼠标经过时避开」旁边
 //  那颗「预演」按钮,全部删掉。分栏这件事本身没变,只是不再用文案把理由写在界面上。
-//  紧接着的第十二步又删掉了最后一句 ——「划过让开」的副标题「鼠标移到悬浮歌词上时它会淡
+//  紧接着的第十二步又删掉了最后一句 ——「鼠标经过时避开」的副标题「鼠标移到悬浮歌词上时它会淡
 //  下去,移开恢复」。三项到此一句常显说明都不剩,`subtitle` 那个属性连同两个宿主里消费它
 //  的分支一起清掉了:一个恒为 nil 的属性只会让下一个人以为"这里还能配一句"。「锁定位置」
 //  的 ⓘ 帮助气泡**保留**,它交代的是解锁后点击会穿到桌面上,不是装饰。)
@@ -83,14 +83,14 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
         case .lockPosition: return L10n.t("锁定位置")
         case .dragNeedsLongPress: return L10n.t("长按拖动")
         case .fadeOnHover: return L10n.t("悬浮淡化")
-        case .showHoverControls: return L10n.t("悬停控制条")
+        case .showHoverControls: return L10n.t("悬停时显示控制条")
         }
     }
 
 
     // (第十步之前这里还有一个 `barCaption`:行为栏那一格底下的小字。两项直接返回 `subtitle`,
     //  「锁定位置」另配一句「锁上后编辑台左下角会出现锁标」——它在卡片里本来就没有副标题,
-    //  行为栏那一格空着会显得像漏了一句。把那句和「拖动前先长按」的副标题一起删掉,
+    //  行为栏那一格空着会显得像漏了一句。把那句和「长按拖动」的副标题一起删掉,
     // 剩下的两项直接读 `subtitle` 就够了,这个属性没有存在理由了。 锁标本身**保留**,
     //  见 OverlayEditorStage.lockBadge。)
 
@@ -108,7 +108,7 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
     ///  `UI/AutoHideSettingsRows.swift` 头注那条核心不变量读反 —— 那条说"`.shared` 只准出现在
     ///  set: 闭包里、必须带 `xxxEnabled` 守卫",而这里曾经写着"同族的行为项没有守卫"。)
     ///
-    /// 「拖动前先长按」没有 WindowController 那一句:它是纯持久化项,长按判定每次鼠标事件
+    /// 「长按拖动」没有 WindowController 那一句:它是纯持久化项,长按判定每次鼠标事件
     /// 现读 AppSettings(handleGlobalMouseEvent),不需要谁去"应用"一次。
     @MainActor
     var binding: Binding<Bool> {

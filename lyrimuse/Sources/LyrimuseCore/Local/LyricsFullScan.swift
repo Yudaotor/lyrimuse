@@ -1,6 +1,6 @@
 import Foundation
 
-/// App 与引擎的「全量重新扫库」状态通道(见 lyrimuse-engine/lyricsfullscan.go 头注)。
+/// App 与引擎的「重新匹配整个歌词库」状态通道(见 lyrimuse-engine/lyricsfullscan.go 头注)。
 ///
 /// ## 这件事跟「补空扫描」的关系
 ///
@@ -36,7 +36,7 @@ public enum LyricsFullScan {
         /// 0 = 这份文件是老引擎写的(Go 那边带 omitempty),调用方退回自己的兜底值。
         public let secondsPerTrack: Int
         /// 这一刻真会被全量扫库挑中的条数,引擎数好发布(`publishLyricsFullScanPending`),界面上
-        /// 「N 首待跟进」就是它。nil = 还没数过,界面不显示数字;0 = 已全部跟进。
+        /// 「N 首待重新匹配」就是它。nil = 还没数过,界面不显示数字;0 = 已全部跟进。
         public let pending: Int?
 
         enum CodingKeys: String, CodingKey {

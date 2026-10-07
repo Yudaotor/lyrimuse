@@ -204,7 +204,7 @@ struct LastfmStatsSection: View {
                 // 算法必须一致,否则用户在设置页和待机页会看到两个不同的「近 7 天」。
                 statCell(value: weekValue, label: L10n.t("近 7 天"))
                 Divider().padding(.vertical, 10)
-                statCell(value: stats.overview?.total, label: L10n.t("总 scrobble"))
+                statCell(value: stats.overview?.total, label: L10n.t("总 Scrobble"))
             }
             // 首次连接的后台引导同步。数字/最近记录本身不依赖这轮扫描
             // (轻请求,见 LastfmStatsService 的说明),这里只是说明"热力图/次数合并
@@ -431,7 +431,7 @@ struct LastfmStatsSection: View {
                 if let top, limit < 10, top.tracks.count > limit {
                     Button(L10n.t("显示 10 首")) { artistShowsTen.insert(e.name) }.buttonStyle(.link)
                 }
-                Button(L10n.t("在 Last.fm 打开") + " ↗") {
+                Button(L10n.t("在 Last.fm 上打开") + " ↗") {
                     if let url = Self.lastfmURL(kind: .artists, entry: e) { NSWorkspace.shared.open(url) }
                 }
                 .buttonStyle(.link)
@@ -1467,21 +1467,21 @@ struct LastfmStatsSection: View {
                                           label: String(format: L10n.t("自 %@ 起"), Self.dayLabel(first)))
                         }
                         footprintCell(value: String(format: L10n.plural("%@ 天", count: sum.recordedDays), sum.recordedDays.formatted()),
-                                      label: String(format: L10n.t("有记录 · 日均 %@ 首"), (avg?.average ?? 0).formatted()))
+                                      label: String(format: L10n.t("有记录 · 日均 %@ 次"), (avg?.average ?? 0).formatted()))
                         if let peak = sum.peak {
-                            footprintCell(value: String(format: L10n.plural("%@ 首", count: peak.count), peak.count.formatted()),
+                            footprintCell(value: String(format: L10n.plural("%@ 次收听", count: peak.count), peak.count.formatted()),
                                           label: String(format: L10n.t("单日最高 · %@"), Self.dayLabel(peak.day)))
                         }
                         footprintCell(value: String(format: L10n.plural("%@ 天", count: sum.currentStreak), sum.currentStreak.formatted()),
                                       label: String(format: L10n.plural("当前连续 · 最长 %@ 天", count: sum.longestStreak), sum.longestStreak.formatted()))
-                        footprintCell(value: String(format: L10n.plural("%@ 首", count: sum.yearToDate), sum.yearToDate.formatted()),
+                        footprintCell(value: String(format: L10n.plural("%@ 次收听", count: sum.yearToDate), sum.yearToDate.formatted()),
                                       label: sum.priorYearSameSpan.map {
-                                          String(format: L10n.t("今年至今 · %1$@ 年同期 %2$@ 首"), "\($0.year)", $0.count.formatted())
+                                          String(format: L10n.t("今年至今 · %1$@ 年同期 %2$@ 次"), "\($0.year)", $0.count.formatted())
                                       } ?? L10n.t("今年至今"))
                         if let total = stats.overview?.total, total > 0 {
                             let next = ListeningMilestones.nextMilestone(total: total)
-                            footprintCell(value: String(format: L10n.t("还需 %@ 首"), next.remaining.formatted()),
-                                          label: String(format: L10n.t("到第 %@ 次 scrobble"), next.target.formatted()))
+                            footprintCell(value: String(format: L10n.t("还需 %@ 次"), next.remaining.formatted()),
+                                          label: String(format: L10n.t("到第 %@ 次 Scrobble"), next.target.formatted()))
                         }
                     }
                     .padding(.vertical, 6)

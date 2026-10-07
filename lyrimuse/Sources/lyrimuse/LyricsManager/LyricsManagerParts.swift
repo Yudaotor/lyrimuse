@@ -510,7 +510,7 @@ struct LyricsManagerSweepCard: View {
             }
             Spacer(minLength: 6)
             if case let .running(status) = phase {
-                Button(status.isFullScan ? L10n.t("停止扫库") : L10n.t("停止"), action: onStop)
+                Button(status.isFullScan ? L10n.t("停止重新匹配") : L10n.t("停止"), action: onStop)
                     .controlSize(.small)
                     .fixedSize()
             }
@@ -556,7 +556,7 @@ struct LyricsManagerSweepCard: View {
     private var title: String {
         switch phase {
         case let .preparing(full):
-            return full ? L10n.t("全量重新扫库") : L10n.t("正在准备自动匹配…")
+            return full ? L10n.t("重新匹配整个歌词库") : L10n.t("正在准备自动匹配…")
         case let .running(status):
             return String(format: status.isFullScan ? L10n.t("扫描中 %1$@/%2$@") : L10n.t("自动匹配中 %1$@/%2$@"),
                           status.done.formatted(), status.total.formatted())

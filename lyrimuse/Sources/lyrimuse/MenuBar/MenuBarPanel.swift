@@ -447,7 +447,7 @@ private struct MenuBarPanelView: View {
             }
             HStack(spacing: 9) {
                 // 不带副文字(去掉「点击打开」):钮块本来就是按钮,
-                // "点击打开"是同义反复,去掉后跟第一排三个形态格的高度也更齐。
+                // "点按打开"是同义反复,去掉后跟第一排三个形态格的高度也更齐。
                 //
                 // 这一格**也能翻面**:短按照旧开窗,长按 / 右键翻到它自己的快捷设置
                 // (背景样式 / 渐变方向 / 动态封面)。符号和标题都从 PanelQuickTarget 取,
@@ -1013,7 +1013,7 @@ private struct MenuBarPanelView: View {
         if let update = pendingUpdate {
             footerItem(
                 // 两个 L10n.t 分开写:三目塞进 L10n.t 里,文案守卫(parity 脚本 / selftest)扫不到字面量。
-                title: String(format: update.downloaded ? L10n.t("%@ 已下载，点击安装") : L10n.t("有新版本 %@"),
+                title: String(format: update.downloaded ? L10n.t("%@ 已下载，点按安装") : L10n.t("有新版本 %@"),
                               update.version),
                 tint: .accentColor, help: L10n.t("打开软件更新"),
                 icon: { Image(systemName: "arrow.down.circle.fill").font(.system(size: 10.5)) }
@@ -1345,7 +1345,7 @@ private struct PanelProgressSection: View {
             content
                 .contentShape(Rectangle())
                 .onTapGesture { if enabled { action() } }
-                .modifier(OptionalHelp(text: enabled ? L10n.t("点击归零") : nil))
+                .modifier(OptionalHelp(text: enabled ? L10n.t("点按归零") : nil))
         }
     }
 

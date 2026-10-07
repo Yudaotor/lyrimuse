@@ -169,7 +169,7 @@ final class LyricsSearchService {
             case "album": return L10n.t("该源匹配到的专辑与本地专辑一致，版本很可能正确（最高 150）")
             case "titleMatch": return L10n.t("完全同名 120 · 仅括号差异 60 · 中英双语同名 30")
             case "consensus": return L10n.t("歌词内容与其他歌词源高度一致（2 家及以上 250 · 1 家 150），版本不符的候选不计")
-            case "translation": return L10n.t("自带可用的中文译文，同水平候选间优先")
+            case "translation": return L10n.t("自带当前译文语言的可用译文，同水平候选间优先")
             case "romanization": return L10n.t("日文歌词自带读音，同水平候选间优先")
             case "versionTags": return L10n.t("歌名、专辑名或歌词文件头标注的版本（Live / Remix / Demo / Club Mix 等）与本地歌曲不符")
             case "sourceDurationOff":

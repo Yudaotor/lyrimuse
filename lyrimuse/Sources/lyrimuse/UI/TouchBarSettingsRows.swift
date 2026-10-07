@@ -107,7 +107,7 @@ struct TouchBarStyleRows: View {
             SettingsRow(
                 icon: "sparkles",
                 title: L10n.t("卡拉OK效果"),
-                help: L10n.t("逐字歌词随演唱逐字高亮；没有逐字数据的歌曲整行高亮")
+                help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮")
             ) {
                 Toggle("", isOn: $settings.touchBarLyricsKaraoke)
             }

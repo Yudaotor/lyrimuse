@@ -469,7 +469,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     // 判据本体在 Core(`OverlayControlHitTest.controlsShown`,有 selftest),不要在这里
     // 就地展开:控制器侧 `handleMouseEvent` 的 `controlsShown` 要跟这里**逐字同一条** ——
     // 它决定收不收回点击穿透、点击分发到哪颗按钮。两边长歪就是"看不见却挡手"或
-    // "看得见点不动"。加「悬停控制条」开关时合并的。
+    // "看得见点不动"。加「悬停时显示控制条」开关时合并的。
     /// 拖动中不显示:那时点不了,而且拖动全程控制排换在卡片下方(见 `LyricsOverlayWindowController.armDragIfStillPressed`)。
     private var controlsVisible: Bool {
         OverlayControlHitTest.controlsShown(
@@ -1407,7 +1407,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 锁定态 hover 时是否露出"解锁"提示。判据本体在 Core(`OverlayControlHitTest
     /// .unlockPillShown`,有 selftest),跟 `controlsVisible` 一样不要在这里就地展开——
     /// 控制器侧 `handleMouseEvent`/`hoveredControl` 要用**同一条**,长歪就是"看不见却挡手"
-    /// 或"看得见点不动"。接了 `showHoverControls`:「悬停控制条」关掉时,
+    /// 或"看得见点不动"。接了 `showHoverControls`:「悬停时显示控制条」关掉时,
     /// 锁定态也不再露出这颗图标——解锁还有菜单栏面板/菜单/全局热键三条路,不会把用户
     /// 困住,理由见 `unlockPillShown` 声明处。
     private var unlockPillVisible: Bool {

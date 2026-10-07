@@ -3268,7 +3268,7 @@ private struct NotchScrubber: View {
                     guard canReset else { return }
                     PlaybackCoordinator.shared.resetLyricsOffset()
                 }
-                .modifier(OptionalHelp(text: canReset ? L10n.t("点击归零") : nil))
+                .modifier(OptionalHelp(text: canReset ? L10n.t("点按归零") : nil))
         }
     }
 

@@ -1351,7 +1351,7 @@ private struct LyricsSettingsTab: View {
             // 这行 help 的两句就是照那两处的真实行为写的,改那边记得回来改这里。
             SettingsRow(
                 icon: "arrow.triangle.2.circlepath",
-                title: L10n.t("跟进算法升级"),
+                title: L10n.t("随匹配算法更新重新选择"),
                 help: L10n.t("开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响")
             ) {
                 Toggle("", isOn: Binding(
@@ -2323,7 +2323,7 @@ private struct AppearanceSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
     /// 这台 Mac 此刻有没有触控栏:没有时「触控栏」那一段照样在,点进去只有一张「这台 Mac 没有触控栏」的说明卡。
     @ObservedObject private var touchBar = TouchBarAvailability.shared
-    // (灵动岛「显示在哪块屏幕」的选项快照和「所有屏幕」哨兵 tag 在 NotchEditorStage.swift
+    // (灵动岛「显示于」的选项快照和「所有屏幕」哨兵 tag 在 NotchEditorStage.swift
     //  的 NotchScreenSettingsRows —— 只有那一处在用。)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -3190,14 +3190,14 @@ private struct AppearanceSettingsTab: View {
                     AppColorPicker(selection: textColor)
                 }
             }
-            // 一行下拉,选「自定义颜色」时旁边露出取色器(同悬浮歌词「未唱到的颜色」),不另起子行:上面文字颜色已经有一个
+            // 一行下拉,选「自定义颜色」时旁边露出取色器(同悬浮歌词「未唱颜色」),不另起子行:上面文字颜色已经有一个
             // 「指定颜色」子行,再来一个同名的分不清。
             if let karaokeFill, let karaokeFillColor {
                 CardDivider()
                 SettingsRow(
                     icon: "paintbrush.pointed",
                     title: L10n.t("已唱颜色"),
-                    help: L10n.t("逐字填色时唱过的部分用这个颜色；没唱到的部分和其它行仍用文字颜色。关掉「卡拉OK效果」时不起作用")
+                    help: L10n.t("逐字填色时已唱部分使用此颜色；未唱部分和其他行仍使用文字颜色。关闭「卡拉OK效果」时无效")
                 ) {
                     HStack(spacing: 8) {
                         Menu(LyricsWindowKaraokeFillLabel.text(for: karaokeFill.wrappedValue)) {
@@ -3323,7 +3323,7 @@ private struct AppearanceSettingsTab: View {
 /// 「副行 · 下一句」讲的是同一件事。`AppSettings` 的键名仍是 `notchExpanded*`(持久化格式,
 /// 不随 UI 挪动迁移)。
 ///
-/// 「显示音浪」**不在这个枚举里**:它带一个从属的"贴哪只耳朵",宿主是左右耳浮层顶部那行开关
+/// 「显示音浪」**不在这个枚举里**:它带一个从属的"贴靠的一侧",宿主是左右耳浮层顶部那行开关
 /// (`NotchEarSettingsRows`,`NotchEditorStage.swift`),不要顺手挪进来。
 enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     case showLyrics
@@ -3398,7 +3398,7 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     var help: String? {
         switch self {
         case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词。")
-        case .karaoke: return L10n.t("逐字歌词随演唱逐字高亮；没有逐字数据的歌曲整行高亮")
+        case .karaoke: return L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮")
         case .hideInFullScreen: return L10n.t("灵动岛所在屏幕有 App 全屏时隐藏")
         case .listenMilestones:
             return L10n.t("单曲收听达到 100、1,000… 次，或累计收听达到 1,000、5,000… 次时，灵动岛展开庆祝。需连接 Last.fm")
@@ -3606,7 +3606,7 @@ private struct NotchLyricRowHeightRow: View {
         SettingsRow(
             icon: "arrow.up.and.down",
             title: L10n.t("高度"),
-            help: L10n.t("歌词行的高度，平时和展开时一样。默认刚好放得下文字（开着副行时更高），可以调高")
+            help: L10n.t("歌词行的高度，常态与展开时相同。默认恰好容纳文字（开启副行时更高），可调高")
         ) {
             HStack(spacing: 8) {
                 SteppedSlider(value: Binding(
@@ -4245,7 +4245,7 @@ private struct NotchAllSettingsDrawer: View {
 
 // 「显示音浪」在设置页里的唯一入口是左右耳浮层 / 抽屉左右耳组顶部那一行开关
 // (`NotchEarSettingsRows`,`NotchEditorStage.swift`)。别在这里另起一张合并了开关 +
-// 「贴哪只耳朵」分段选择器的卡 —— 那是同一对状态(`notchShowsEqualizer` /
+// 「贴靠的一侧」分段选择器的卡 —— 那是同一对状态(`notchShowsEqualizer` /
 // `notchEqualizerEar`)的第二种控件、第二个位置。落点的来龙去脉见 05 章「编辑台改造」。
 
 // 「播放器」分类:播放器选择/权限/常驻服务/App 联动这几块全部围绕"选哪个播放器、能不能
@@ -5105,7 +5105,7 @@ private struct PlayerSettingsTab: View {
         //
         // **只是不显示,配对记录原样留在 `browserPlatformPairs` 里** —— 装回来自动恢复,
         // 用户不用重配。这跟「指定的屏幕拔掉后自动回落到自动、偏好保留、插回来即恢复」
-        // 是同一个口径(见 05-notch.md「显示在哪块屏幕」),不是新发明的处置方式。
+        // 是同一个口径(见 05-notch.md「显示于」),不是新发明的处置方式。
         // 也因此**不要**顺手在这里 `unpairBrowser` 去"清理" —— 那会把用户的配置替他删掉。
         let pairedBundleIDs = (stores.browserPlatformPairs[platform.id] ?? [])
             .filter { BrowserAutomationPermission.isInstalled(bundleID: $0) }
@@ -5387,7 +5387,7 @@ private struct PlayerSettingsTab: View {
                 return L10n.t("✓ 当前可用，但仅在浏览器重启前有效：上述选项已关闭，重启后将失效")
             }
             return L10n.t("✓ 已生效，Lyrimuse 现在可以控制此浏览器")
-        case .noTab: return L10n.t("此浏览器未运行，或没有打开任何标签页。请打开浏览器并载入任意网页后再次检测")
+        case .noTab: return L10n.t("此浏览器未运行，或未打开任何标签页。请打开浏览器并载入任意网页后再次检测")
         case .blocked: return L10n.t("尚未生效：浏览器拒绝了执行 JavaScript 的请求，请按上述路径确认该选项已勾选")
         case .noReply: return L10n.t("尚未生效：浏览器收到请求但未响应，可能是该选项尚未勾选（部分浏览器不报错，而是不作响应）。请按上述路径再次确认")
         case .failed(let msg): return String(format: L10n.t("检测未通过：%@"), msg)
@@ -5496,7 +5496,7 @@ private struct PlayerSettingsTab: View {
         case "company.thebrowser.Browser":
             return L10n.t("在 Arc 菜单栏中依次选择「View → Developer → Allow JavaScript from Apple Events」。Arc 的这些菜单项在中文系统下也显示为英文。")
         case "com.apple.Safari":
-            return L10n.t("Safari 的此选项位于设置中：先在「Safari 浏览器 → 设置 → 高级」中勾选「显示网页开发者功能」，设置中随即出现「开发」面板，再在其中勾选「允许Apple事件中的JavaScript」。")
+            return L10n.t("Safari 的此选项位于设置中：先在「Safari 浏览器 → 设置 → 高级」中勾选「显示网页开发者功能」，设置中随即出现「开发者」面板，再在其中勾选「允许Apple事件中的JavaScript」。")
         default:
             return L10n.t("在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」。")
         }
@@ -6952,7 +6952,7 @@ private struct AboutSettingsTab: View {
     private var updateSubtitle: String {
         if let update = updater.shownItem {
             // 两个 L10n.t 分开写:三目塞进 L10n.t 里,文案守卫(parity 脚本 / selftest)扫不到字面量。
-            return String(format: update.downloaded ? L10n.t("%@ 已下载，点击安装") : L10n.t("有新版本 %@"),
+            return String(format: update.downloaded ? L10n.t("%@ 已下载，点按安装") : L10n.t("有新版本 %@"),
                           update.version)
         }
         guard let date = updater.lastUpdateCheckDate else { return L10n.t("尚未检查更新") }
@@ -6981,7 +6981,7 @@ private struct AboutSettingsTab: View {
                     Button { FeedbackReporter.openEmail() } label: { Image(systemName: "envelope") }
                         .buttonStyle(.borderless)
                         .foregroundStyle(.secondary)
-                        .help(String(format: L10n.t("没有 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址"), FeedbackLinks.feedbackEmail))
+                        .help(String(format: L10n.t("无 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址"), FeedbackLinks.feedbackEmail))
                         .accessibilityLabel(L10n.t("邮件反馈"))
                         .contextMenu {
                             Button(L10n.t("拷贝邮箱地址")) { FeedbackReporter.copyEmailAddress() }

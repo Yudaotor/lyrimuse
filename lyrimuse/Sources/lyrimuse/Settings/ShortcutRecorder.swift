@@ -53,7 +53,7 @@ final class ShortcutRecorderButton: NSButton {
         if let windowResignObserver { NotificationCenter.default.removeObserver(windowResignObserver) }
     }
 
-    // 固定宽度——不同状态下的文案("点击录制"/"请按下快捷键…"/某个具体组合符号串)
+    // 固定宽度——不同状态下的文案("点按录制"/"请按下快捷键…"/某个具体组合符号串)
     // 长度差异很大,不固定宽度的话这一列 7 行会随录制状态跳来跳去。
     override var intrinsicContentSize: CGSize {
         var size = super.intrinsicContentSize
@@ -186,7 +186,7 @@ final class ShortcutRecorderButton: NSButton {
             title = "\(shortcut)"
             clearButton?.isHidden = false
         } else {
-            title = L10n.t("点击录制")
+            title = L10n.t("点按录制")
             clearButton?.isHidden = true
         }
     }
@@ -219,13 +219,13 @@ private final class ShortcutRecorderContainerView: NSView {
 
         super.init(frame: .zero)
 
-        // 录制按钮必须拒绝被拉伸——现象是"点击录制"那颗胶囊被拉成了
+        // 录制按钮必须拒绝被拉伸——现象是"点按录制"那颗胶囊被拉成了
         // 铺满整行的长条:这个容器在 Form(.formStyle(.grouped))的 LabeledContent
         // 尾部内容位里,SwiftUI 会为它提出一个远比按钮实际需要的宽度,而下面这层
         // NSStackView 原来把 leading/trailing 都钉死在容器边缘,容器多宽、stack 就被
         // 撑多宽,recordButton 是 stack 里唯一没有固定宽度的排列子视图,于是把多出来的
         // 空间全部吃成了自己的拉伸——只固定 trailing(贴住行的右边缘,视觉上跟以前
-        // "点击录制"紧贴右侧同一个位置),leading 只做"不小于"的下限,再显式把
+        // "点按录制"紧贴右侧同一个位置),leading 只做"不小于"的下限,再显式把
         // recordButton 的水平 hugging/压缩阻力都提到 required,双重保证它只会保持
         // 自己文字需要的宽度,不会被撑开。
         recordButton.setContentHuggingPriority(.required, for: .horizontal)

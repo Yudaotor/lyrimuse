@@ -195,7 +195,7 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     ///
     /// 可重入,有**两个**触发源:
     ///   - 插拔显示器(didChangeScreenParametersNotification);
-    /// - 用户在「屏幕」浮层里改了「显示在哪块屏幕」。 第二条之前是**漏的**
+    /// - 用户在「屏幕」浮层里改了「显示于」。 第二条之前是**漏的**
     ///     —— 钉条只订了通知,于是从"内建屏"换到一块没有刘海的外接屏之后,预览里的刘海空当
     ///     和让位高度还是旧屏的。编辑台把刘海本身也画出来了(见 notchCutout),这个陈旧值
     ///     会直接表现成"画了一个那块屏根本没有的刘海",所以必须补上。

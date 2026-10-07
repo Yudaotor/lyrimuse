@@ -76,7 +76,7 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         // 关掉这一项时**不会**当场把控制排从指针底下抽走——这颗菜单本身就挂在控制排上,
         // 当场收回等于连刚点过的这个入口一起消失。真正生效被推迟到这次悬停结束那一刻,
         // 见 LyricsOverlayWindowController.showHoverControls 声明处。
-        menu.addItem(toggle(L10n.t("悬停控制条"), symbol: "playpause.circle",
+        menu.addItem(toggle(L10n.t("悬停时显示控制条"), symbol: "playpause.circle",
                             on: settings.overlayShowHoverControls,
                             action: #selector(toggleShowHoverControls)))
         menu.addItem(submenu(L10n.t("配色主题"), symbol: "paintpalette", menu: colorThemeMenu(settings)))
@@ -185,9 +185,9 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
 
     private var offsetMenuTitle: String {
         let ms = PlaybackCoordinator.shared.trackLyricsOffsetMs
-        guard ms != 0 else { return L10n.t("歌词进度") }
+        guard ms != 0 else { return L10n.t("时间轴偏移") }
         let sign = ms > 0 ? "+" : ""
-        return "\(L10n.t("歌词进度"))(\(sign)\(AppSettings.formattedSeconds(ms: ms))s)"
+        return "\(L10n.t("时间轴偏移"))(\(sign)\(AppSettings.formattedSeconds(ms: ms))s)"
     }
 
     // MARK: - 菜单项工厂(同 MenuBarStatusMenu 的写法)

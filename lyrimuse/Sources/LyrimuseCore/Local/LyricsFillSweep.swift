@@ -7,7 +7,7 @@ import Foundation
 ///   - 请求:往 `lyrimuse-lyrics-fill-request.txt` 写一份纯文本(一行 `all` / 一行 `full` /
 ///     一行 `cancel` / 每行一个缓存 key),引擎 2 秒内读到就消费掉(删文件)并开一轮——
 ///     形制同「停止搜索」那份 `lyrimuse-enrich-cancel-request.txt`
-///     (LyricsManagerView.cancelPlaceholderSearch)。`full` 是「全量重新扫库」,范围比 `all`
+///     (LyricsManagerView.cancelPlaceholderSearch)。`full` 是「重新匹配整个歌词库」,范围比 `all`
 ///     大得多,见 `LyricsFullScan` 与引擎的 lyricsfullscan.go。
 ///   - 进度:引擎把这一轮的进度写到 `lyrimuse-lyrics-fill-status.json`,这里按 mtime 读
 ///     (同 EngineStatus)。文件不存在 = 这个进程还没跑过任何一轮。
@@ -18,7 +18,7 @@ public enum LyricsFillSweep {
     public struct Info: Decodable, Equatable, Sendable {
         public let running: Bool
         public let manual: Bool
-        /// 这一轮是「全量重新扫库」而不是补空。
+        /// 这一轮是「重新匹配整个歌词库」而不是补空。
         ///
         /// 可选而不是 `Bool`:引擎那边带 `omitempty`,补空那一轮压根不会写这个键 ——
         /// 声明成非可选会让**所有**补空进度解码失败(整个进度条哑掉),而不是读成 false。
@@ -190,7 +190,7 @@ public enum LyricsFillSweep {
         write(requestBody(keys: keys), startsRound: true)
     }
 
-    /// 要一轮「全量重新扫库」。范围、分层与跨重启续跑全在引擎侧(lyricsfullscan.go),
+    /// 要一轮「重新匹配整个歌词库」。范围、分层与跨重启续跑全在引擎侧(lyricsfullscan.go),
     /// 这里只负责写下那个动词 —— 候选是**跑的那一刻**现算的,App 不预先把几千个 key 列进
     /// 请求文件:那份列表在一两天的扫描期间会不断过时(歌被播到就自己升级了)。
     @discardableResult

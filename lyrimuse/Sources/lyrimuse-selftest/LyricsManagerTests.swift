@@ -1360,7 +1360,7 @@ func runLyricsManagerTests() {
         // 老引擎的文件里没有这个键(omitempty),必须读成 0 让调用方退回兜底,
         // 而不是让整份文件解不开 —— 那会连版本号一起丢掉,整行界面消失。
         expectEqual(idle?.secondsPerTrack, 0, "全量状态: 老引擎没这个键时读成 0,不是解码失败")
-        // 待跟进的条数:0 是「已全部跟进」,键不在是「还没数过」(界面不显示数字),两者要分得开。
+        // 待跟进的条数:0 是「无待重新匹配的歌曲」,键不在是「还没数过」(界面不显示数字),两者要分得开。
         let counted = try? JSONDecoder().decode(F.State.self, from: Data("""
         {"scoringVersion":19,"updatedAt":1789500000,"pending":5472}
         """.utf8))
