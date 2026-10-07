@@ -882,6 +882,8 @@ func runSourceContractTests() {
                             "缓存直读: 强制重读别再是同步解码")
                 expectEqual(reader.contains("guard !isRebuilding else { return nil }"), true,
                             "缓存直读: 压力让出后正在重建时 loadEntries 不许同步解")
+                expectEqual(reader.contains("makeMemoryPressureSource(eventMask: [.critical], queue: .main)"), true,
+                            "缓存直读: 只在内存「严重」时让出缓存,警告级别不让(见 15 章决策 28)")
                 if let r = lps.range(of: "public func forceReloadLyricsForCurrentTrack() {") {
                     let body = lps[r.upperBound...].prefix(700)
                     expectEqual(body.contains("EnrichCacheReader.reloadSoon()"), true,

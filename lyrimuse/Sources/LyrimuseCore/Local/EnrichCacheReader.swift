@@ -1771,13 +1771,14 @@ public enum EnrichCacheReader {
     /// 当前 1 个 key)。清空 = 回到冷启动态,下一拍 poll 同步重建。 如实说明让出的
     /// 时效(对抗核实订正):**有快照在轮询**的状态下,下一拍(2-10s)就会冷启动式重建,
     /// 让出只有一拍;真正长效的让出发生在**空闲态**(无播放时 poll 是 10s 档且 lookup
-    /// 不消费)。压力事件罕见,一次 ~40ms 重建换周期性让出仍是划算的。
+    /// 不消费)。只订「严重」:警告级别并不罕见,让出的十几 MB 一拍之后就重建回来,重建还要临时多占内存;
+    /// 别把 `.warning` 加回来。见 15 章决策 28。
     /// 世代号必须一并推进:不推进的话,清空瞬间还在飞的后台解码回来会把刚让出的缓存
     /// 原样灌回,极端时序(清空→冷路径同步解到新版→更旧的在飞结果后到)还会把内容
     /// 倒退一版(对抗核实抓出的竞态)。
     public static func installMemoryPressureRelief() {
         guard memoryPressureSource == nil else { return }
-        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.critical], queue: .main)
         source.setEventHandler {
             MainActor.assumeIsolated {
                 decodeGeneration += 1
