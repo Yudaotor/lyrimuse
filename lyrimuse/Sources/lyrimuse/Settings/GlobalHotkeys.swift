@@ -184,10 +184,7 @@ enum GlobalHotkeys {
         // 里 LyricsSyncEngine 的匹配位置),随时可用。步长现读 AppSettings(用户在设置里
         // 可调,不是写死的常量),跟 MenuBarMenu.swift 里"歌词时间轴"菜单的两个按钮共用
         // 同一个值,菜单/快捷键两条路径调出来的手感一致。
-        // 改完偏移在灵动岛上闪一条"歌词 +0.5s"。在这之前按这两个键是**完全无反馈**的:
-        // 偏移是否生效只能靠盯着歌词自己感觉,连按几下更是数不清累计到了多少。
-        // 只有灵动岛这一种展示形态会显示(提示条挂在那张卡片上);只开桌面悬浮歌词的
-        // 用户仍然没有反馈,那边没有可以借用的稳态区域,要做得单开一个 HUD 窗口。
+        // 改完偏移闪一条「歌词偏移 +0.50s」(累计值,不是这一下的步长),显示在哪见 flashHint。
         KeyboardShortcuts.onKeyUp(for: .lyricsAdvanceHotkey) {
             showOffsetBanner(PlaybackCoordinator.shared.nudgeLyricsOffset(by: AppSettings.shared.lyricsOffsetStepMs))
         }
@@ -305,11 +302,9 @@ enum GlobalHotkeys {
 
     /// 把一条操作回声送到**用户实际开着的那个展示形态**上。
     ///
-    /// 加。在这之前这里只发 `NotchTransientCenter`,而那条横幅只有灵动岛
-    /// 渲染(`NotchLyricsView` 里的 `NotchTransientHost` 是它全仓唯一的消费者)——于是
-    /// **只开桌面悬浮歌词的用户按快捷键是完全没有反馈的**,偏移调到哪了只能靠盯着歌词
-    /// 猜。两边都发、各自按自己开没开决定显不显示,不需要在这里判断"该给谁"。两个都没开时另外交给触控栏和
-    /// 菜单栏歌词(14 章决策 60)。
+    /// 灵动岛(`NotchTransientCenter`,消费者是 `NotchLyricsView` 里的 `NotchTransientHost`)和悬浮歌词两边都发,
+    /// 各自按自己开没开决定显不显示,这里不判断"该给谁"。两个都没开时交给触控栏(展开着时)和菜单栏歌词(槽里正显示
+    /// 歌词时);这两处也没在显示,这条回声就没有地方出现(14 章决策 60)。
     ///
     /// 碰 `LyricsOverlayWindowController.shared` 之前**必须**先判
     /// `classicOverlayEnabled`:那是个 static let,光读一下属性就会 init() 把窗口建出来
