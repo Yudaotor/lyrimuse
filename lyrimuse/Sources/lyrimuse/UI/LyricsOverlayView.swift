@@ -1185,7 +1185,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // VStack 自己不加,不然两份叠在一起。
         VStack(alignment: duetAlignment, spacing: 0) {
             OverlayLineChangeSlot(enabled: animatesLineChange, id: mainSlotID, matched: line != nil,
-                                  namespace: lineChangeSpace, alignment: duetFrameAlignment, insertion: mainRowInsertion) {
+                                  namespace: lineChangeSpace, alignment: duetFrameAlignment, insertion: mainRowInsertion,
+                                  removal: OverlayLineChangeTransitions.quickOut) {
                 reportingMainLineRect(mainLine)
                     .reportsContentRow(.main, in: contentRowRectsSpace)
             }
@@ -1321,26 +1322,27 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                                         scale: main > 0 ? nextLinePreviewNSFont.pointSize / main : 1)
     }
 
-    /// 新主句怎么进场:上一拍下一句跟它同号,就从下一句的字号和不透明度起步(位置由 matchedGeometryEffect 给);
+    /// 新主句怎么进场:上一拍下一句跟它同号,就从下一句的字号起步、一开始就是实的(位置由 matchedGeometryEffect 给);
     /// 否则(跳句、拖进度、没开下一句)原地淡入。
     private var mainRowInsertion: AnyTransition {
         guard let last = lineChangeMemory.lastNextRow, last.id == mainSlotID else { return .opacity }
         let anchor = UnitPoint(x: duetFrameAlignment.horizontal == .leading ? 0
                                   : (duetFrameAlignment.horizontal == .trailing ? 1 : 0.5),
                                y: 0.5)
-        return .modifier(active: OverlayLineRiseEffect(scale: last.scale, opacity: OverlayLineChangeSlot<EmptyView>.nextLineOpacity,
-                                                       anchor: anchor),
-                         identity: OverlayLineRiseEffect(scale: 1, opacity: 1, anchor: anchor))
+        return .modifier(active: OverlayLineRiseEffect(scale: last.scale, anchor: anchor),
+                         identity: OverlayLineRiseEffect(scale: 1, anchor: anchor))
     }
 
     private func lineChangeFadeSlot<V: View>(@ViewBuilder _ row: () -> V) -> OverlayLineChangeSlot<V> {
         OverlayLineChangeSlot(enabled: animatesLineChange, id: mainSlotID, matched: false, namespace: lineChangeSpace,
-                              alignment: duetFrameAlignment, insertion: .opacity, content: row)
+                              alignment: duetFrameAlignment, insertion: OverlayLineChangeTransitions.lateIn,
+                              removal: OverlayLineChangeTransitions.instantOut, content: row)
     }
 
     private func nextLineSlot<V: View>(@ViewBuilder _ row: () -> V) -> OverlayLineChangeSlot<V> {
         OverlayLineChangeSlot(enabled: animatesLineChange, id: nextSlotID, matched: true, namespace: lineChangeSpace,
-                              alignment: frameAlignment(for: nextLineDuetSide), insertion: .opacity, content: row)
+                              alignment: frameAlignment(for: nextLineDuetSide), insertion: OverlayLineChangeTransitions.lateIn,
+                              removal: OverlayLineChangeTransitions.instantOut, content: row)
     }
 
     /// 罗马音那一行——抽成独立视图是为了在 `lyricsCardContent` 里按 `line == nil` 换序
@@ -2183,22 +2185,20 @@ private final class OverlayLineChangeMemory {
     var lastNextRow: OverlayLineChangeNextRow?
 }
 
-/// 换句动画的一格:开着时这一行按编号换身份,新旧两份叠在同一格里,旧的原地淡出、新的按 `insertion` 进场;
+/// 换句动画的一格:开着时这一行按编号换身份,新旧两份叠在同一格里,旧的按 `removal` 退场、新的按 `insertion` 进场;
 /// `matched` 的行(主句、下一句)按编号在命名空间里配对,旧下一句和新主句同号,新主句从旧下一句的位置挪上来。
 /// 配对的行撑满整宽、按自己的对齐摆,两头的位置才只差在竖直方向。关着时原样返回。
 ///
 /// 必须是存着行内容的 View,别写成 ViewModifier:修饰符的 `Content` 是指向当前内容的代理,换句时正在淡出的旧那一份
 /// 会跟着画成新句子。
 private struct OverlayLineChangeSlot<Content: View>: View {
-    /// 下一句预览的不透明度,跟 `nextLinePreviewContent` 那一行的颜色同一个值。
-    static var nextLineOpacity: Double { 0.4 }
-
     let enabled: Bool
     let id: String
     let matched: Bool
     let namespace: Namespace.ID
     let alignment: Alignment
     let insertion: AnyTransition
+    let removal: AnyTransition
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -2206,7 +2206,7 @@ private struct OverlayLineChangeSlot<Content: View>: View {
             ZStack(alignment: Alignment(horizontal: alignment.horizontal, vertical: .top)) {
                 paired
                     .id(id)
-                    .transition(.asymmetric(insertion: insertion, removal: .opacity))
+                    .transition(.asymmetric(insertion: insertion, removal: removal))
             }
         } else {
             content
@@ -2225,16 +2225,22 @@ private struct OverlayLineChangeSlot<Content: View>: View {
     }
 }
 
-/// 新主句从下一句接上来时的起步样子:按下一句的字号比例缩着、不透明度同下一句。放大用的是按主句字号画好的那一份,
-/// 一路是缩小显示,字不会糊。
+/// 新主句从下一句接上来时的起步样子:按下一句的字号比例缩着。放大用的是按主句字号画好的那一份,一路是缩小显示,字不会糊。
 private struct OverlayLineRiseEffect: ViewModifier {
     let scale: CGFloat
-    let opacity: Double
     let anchor: UnitPoint
 
     func body(content: Content) -> some View {
-        content.scaleEffect(scale, anchor: anchor).opacity(opacity)
+        content.scaleEffect(scale, anchor: anchor)
     }
+}
+
+/// 换句动画里各行的进退场。走上来的那行路上不能有东西挡着:旧的读音、译文、下一句当场收掉,新的等那一行走到位、
+/// 后半程才淡入;旧主句 0.12 秒淡完,走上来的那行进的是空位。几行同时半透明叠着就会糊成一团(见 04 章决策 52)。
+private enum OverlayLineChangeTransitions {
+    static let instantOut = AnyTransition.opacity.animation(.linear(duration: 0.01))
+    static let quickOut = AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+    static let lateIn = AnyTransition.opacity.animation(.easeOut(duration: 0.12).delay(0.13))
 }
 
 /// 换句动画开着时:主句那一格的编号一变就按 LyricsX 的时长和缓动过渡,并在每拍之后记下下一句那一行。关着时原样返回。
