@@ -1101,6 +1101,15 @@ func runLyricsManagerTests() {
                     "取胜者: 并列最高分时认存档里的 winner,而不是数组顺序")
         expectEqual(V.champion(among: tie, winner: "netease")?.source, "kugou",
                     "取胜者: winner 不在并列最高分里就退回最高分那条(qq/kugou 同分,按源名定序)")
+        let instrumentalMarker = LyricsScoredCandidate(source: "netease", score: -1, terms: [], instrumental: true)
+        expectEqual(V.champion(among: tie + [instrumentalMarker], winner: nil)?.source, nil,
+                    "取胜者: 没有 winner、有纯音乐标记 → 按纯音乐处理,没有冠军")
+        expectEqual(V.build(candidates: tie + [instrumentalMarker], winner: nil), nil,
+                    "判词: 按纯音乐处理时不出判词")
+        expectEqual(V.champion(among: tie + [instrumentalMarker], winner: "qq")?.source, "qq",
+                    "取胜者: 有 winner 时照常认它")
+        expectEqual(V.champion(among: tie, winner: nil)?.source, "kugou",
+                    "取胜者: 没有 winner、也没有纯音乐标记 → 照旧退回最高分那条")
 
         // 差在多项上 → .multiple,**什么都不说**。此前实测否掉过一版「一句话解释凭什么赢」:
         // 只有 13.2% 的对局存在单一强势维度能真的解释分差,其余硬写一句就是编。

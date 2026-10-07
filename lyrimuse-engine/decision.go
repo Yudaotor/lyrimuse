@@ -132,6 +132,8 @@ type lyricsDecisionCandidate struct {
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
 	HasWordTiming              bool    `json:"has_word_timing,omitempty"`
 	Instrumental               bool    `json:"instrumental,omitempty"`
+	// PlayerInstrumental:见 scoredLyricCandidateResult 同名字段。解析决策面板拿它说明「其余候选为什么都没采用」。
+	PlayerInstrumental bool `json:"player_instrumental,omitempty"`
 	// BakedTranslationLines:见 scoredLyricCandidateResult 同名字段。
 	BakedTranslationLines int `json:"baked_translation_lines,omitempty"`
 	// ConsensusPeers:这条候选的正文跟**哪些**其它源高度一致。
@@ -222,6 +224,7 @@ func newLyricsDecision(
 			SourceReportedDurationSecs: c.SourceReportedDurationSecs,
 			HasWordTiming:              c.HasWordTiming,
 			Instrumental:               c.Instrumental,
+			PlayerInstrumental:         c.PlayerInstrumental,
 			BakedTranslationLines:      c.BakedTranslationLines,
 			ConsensusPeers:             c.ConsensusPeers,
 		})

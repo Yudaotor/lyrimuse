@@ -1327,6 +1327,9 @@ struct LyricsResolutionDecision: Decodable {
         let sourceReportedDurationSecs: Double?
         let hasWordTiming: Bool?
         let instrumental: Bool?
+        /// 这条纯音乐标记是正在放的播放器自己给的(引擎的 `player_instrumental`):有它时其余候选都没采用。
+        /// **老存档里没有这个字段**,恒为 nil。
+        let playerInstrumental: Bool?
         /// 这条候选的正文跟**哪些**其它源高度一致。
         /// 打分那一行 `consensus +250/+150` 只说了"有几家印证",答不出"跟谁"——而
         /// "冠亚军这两份到底是不是同一份词"正是复盘微弱分差时唯一要问的问题。

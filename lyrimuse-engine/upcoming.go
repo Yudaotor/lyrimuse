@@ -267,7 +267,7 @@ func queueUpcomingEnrich(tracks []upcomingTrack, gen uint64) {
 		// (「（合作音乐人:X）」这类)原样发给歌词源会全部落空,落下的空条目正好占着播放时的 key。
 		// 解析完接着排机翻,播到时译文已经在缓存里(见 translatestart.go)。videoId 只有 Kaset 的待播带,
 		// 换名重搜时用它问 YouTube Music 登记的原名(见 ytmusiccredit.go)。
-		go resolveEnrichAsync(withBackgroundOutbound(withLyricSearchTitle(withTranslateAfterResolve(withYouTubeMusicVideoID(context.Background(), t.videoID)), lyricSearchTitle(t.title))), key, t.artist, normEnrichTitle(t.title), t.album, "", t.duration, false)
+		go resolveEnrichAsync(withBackgroundOutbound(withPlayerQueueTrack(withLyricSearchTitle(withTranslateAfterResolve(withYouTubeMusicVideoID(context.Background(), t.videoID)), lyricSearchTitle(t.title)))), key, t.artist, normEnrichTitle(t.title), t.album, "", t.duration, false)
 	}
 	// 正常路径也打一行 —— 同专辑那条路当初只在"超上限被跳过"时打日志,于是"预取到底跑没跑"
 	// 完全不可观测,排查时卡在过这一点上。

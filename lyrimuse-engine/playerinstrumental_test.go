@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 const playerTestLRC = "[00:01.00]第一句歌词在这里\n[00:05.00]第二句歌词在这里\n[00:09.00]第三句歌词在这里\n" +
@@ -18,7 +21,12 @@ func playingFor(t *testing.T, player string) {
 	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
 }
 
+// rankForPlayerTest:按「解析的是正在放的那首」打分(收集循环给每份结果填 forPlayingTrack)。
 func rankForPlayerTest(raw map[string]lyricSourceResult) []scoredLyricCandidateResult {
+	for k, r := range raw {
+		r.forPlayingTrack = true
+		raw[k] = r
+	}
 	return rankLyricSourceResults("歌手", "歌名", "", 25, raw)
 }
 
@@ -79,6 +87,82 @@ func TestPlayerInstrumentalNeedsThePlayingPlayerAndLocalIdentity(t *testing.T) {
 				t.Fatalf("别的源有词时照常用词,得到 %v", got)
 			}
 		})
+	}
+}
+
+func TestPlayerInstrumentalOnlyForThePlayingTrack(t *testing.T) {
+	playingFor(t, playerNetease)
+	raw := map[string]lyricSourceResult{
+		"netease": {source: "netease", ne: neteaseInfo{FromLocalClient: true, NoVocals: true, SongID: 1}},
+		"kugou":   kugouWithLyrics(),
+	}
+	scored := rankLyricSourceResults("歌手", "歌名", "", 25, raw)
+	if playerSaysInstrumental(scored) {
+		t.Fatal("解析的不是在放的那首(补空扫描、全量扫库、专辑预取、手动搜索):播放器的信号不算")
+	}
+	if got := pickLyricCandidate(scored); got == nil || got.Source != "kugou" {
+		t.Fatalf("只剩搜出来的信号时别的源的词照常用,得到 %v", got)
+	}
+	bg := withBackgroundOutbound(context.Background())
+	for _, c := range []struct {
+		name string
+		ctx  context.Context
+		want bool
+	}{
+		{"在放的那首", context.Background(), true},
+		{"后台批量(补空、扫库、专辑预取)", bg, false},
+		{"待播队列", withPlayerQueueTrack(bg), true},
+		{"手动搜索 / 手动重新匹配", withManualLyricSearch(context.Background()), false},
+	} {
+		if got := playerSignalApplies(c.ctx); got != c.want {
+			t.Errorf("%s: playerSignalApplies = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestPlayerInstrumentalYieldsToPlayersOwnPlainLyrics(t *testing.T) {
+	playingFor(t, playerQQMusic)
+	own := lyricSourceResult{source: "qq", noVocals: true, identityFromLocalClient: true, lyr: "第一句歌词\n第二句歌词\n第三句歌词", plainOnly: true}
+	if scored := rankForPlayerTest(map[string]lyricSourceResult{"qq": own, "kugou": kugouWithLyrics()}); playerSaysInstrumental(scored) {
+		t.Fatal("播放器自己有这一条的纯文本歌词(伴奏版):不该标纯音乐")
+	}
+}
+
+func TestEarlyLyricsHoldsForNativeWhenPlayerHintsNoVocals(t *testing.T) {
+	isolateEarlyLyricsState(t)
+	earlyLyricsGrace = 20 * time.Millisecond
+	noteEnrichPlayingKey("A|T|Al")
+	playingFor(t, playerNetease)
+	var calls []string
+	record := func(_ neteaseInfo, r []scoredLyricCandidateResult) {
+		calls = append(calls, pickLyricCandidate(r).Source)
+	}
+	lineOnly := []scoredLyricCandidateResult{earlyCand("kugou", earlyTermTitle, earlyTermDur, earlyTermLines)}
+	for _, hold := range []bool{true, false} {
+		calls = nil
+		w := newEarlyLyricsWatch(withProvisionalLyrics(withEarlyLyricsTarget(context.Background(), "A|T|Al"), record), "A", "T")
+		w.holdForNative = hold
+		w.observe(neteaseInfo{}, lineOnly, map[string]bool{"kugou": true})
+		select {
+		case <-w.graceC():
+		case <-time.After(2 * time.Second):
+			t.Fatal("宽限计时没到点")
+		}
+		w.endGrace()
+		w.observe(neteaseInfo{}, lineOnly, map[string]bool{"kugou": true})
+		if hold && len(calls) != 0 {
+			t.Fatalf("本机数据说没有人声、网易云还没回话:宽限期到了也不先上屏,得到 %v", calls)
+		}
+		if !hold && !slices.Equal(calls, []string{"kugou"}) {
+			t.Fatalf("没有这个提示时照旧等满就上,得到 %v", calls)
+		}
+		if hold {
+			w.observe(neteaseInfo{}, lineOnly, map[string]bool{"kugou": true, "netease": true})
+			if !slices.Equal(calls, []string{"kugou"}) {
+				t.Fatalf("网易云回话、没带纯音乐标记:照常先上屏,得到 %v", calls)
+			}
+		}
+		w.finish(2, 2)
 	}
 }
 
@@ -156,6 +240,21 @@ func TestMergeKeepsPlayerInstrumentalMarker(t *testing.T) {
 	out := mergeLyricCandidateRounds("歌手", "歌名", "", 25, []scoredLyricCandidateResult{searched}, []scoredLyricCandidateResult{player, rejected})
 	if !playerSaysInstrumental(out) {
 		t.Fatalf("播放器的标记压过先到的搜出来的标记;同源只有判废的候选时标记留着,得到 %+v", out)
+	}
+}
+
+// 解析决策存档要带上「这条标记是播放器给的」,面板才说得清其余候选为什么都没采用。
+func TestDecisionKeepsPlayerInstrumentalMarker(t *testing.T) {
+	scored := []scoredLyricCandidateResult{{Source: "kugou", Score: 300}, {Source: "netease", Score: -1, Instrumental: true, PlayerInstrumental: true}}
+	d := buildLyricsDecision(lyricsDecisionPathFirstResolve, "歌手", "歌名", "", 25, scored, nil, false)
+	found := false
+	for _, c := range d.Candidates {
+		if c.Source == "netease" {
+			found = c.Instrumental && c.PlayerInstrumental
+		}
+	}
+	if d.Winner != "" || !found {
+		t.Fatalf("没有冠军,标记那行带着 player_instrumental:winner=%q candidates=%+v", d.Winner, d.Candidates)
 	}
 }
 
@@ -239,6 +338,40 @@ func TestApplemusicCatalogNoVocals(t *testing.T) {
 	}
 }
 
+func TestApplemusicCatalogNoVocalsWithoutAccountStorefront(t *testing.T) {
+	withApplemusicCreds(t, "")
+	applemusicNoVocalsMu.Lock()
+	saved := applemusicNoVocalsCache
+	applemusicNoVocalsCache = map[string]bool{}
+	applemusicNoVocalsMu.Unlock()
+	t.Cleanup(func() {
+		applemusicNoVocalsMu.Lock()
+		applemusicNoVocalsCache = saved
+		applemusicNoVocalsMu.Unlock()
+	})
+	var asked []string
+	withLRCLIBFake(t, func(r *http.Request) (int, http.Header, string) {
+		asked = append(asked, r.URL.Path)
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/v1/catalog/cn/songs/7"):
+			return http.StatusOK, nil, `{"data":[{"id":"7","attributes":{"audioLocale":"zxx"}}]}`
+		case strings.HasSuffix(r.URL.Path, "/v1/catalog/us/songs/8"):
+			return http.StatusOK, nil, `{"data":[{"id":"8","attributes":{"audioLocale":"en-US"}}]}`
+		}
+		return http.StatusNotFound, nil, ""
+	})
+	if !applemusicCatalogNoVocals(qqRoundCtx(), "7") {
+		t.Fatalf("美区查不到、国区查到 zxx:没有人声,问过 %v", asked)
+	}
+	asked = nil
+	if applemusicCatalogNoVocals(qqRoundCtx(), "8") || len(asked) != 1 {
+		t.Fatalf("美区查到了就不再问国区,问过 %v", asked)
+	}
+	if applemusicCatalogNoVocals(qqRoundCtx(), "9") {
+		t.Fatal("两个区都查不到:算有人声")
+	}
+}
+
 // 接线守卫:各源把「没有人声」带进原始应答,播放器说是纯音乐时检索不再换身份重搜。
 func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 	enrich := string(mustRead(t, "enrich.go"))
@@ -248,11 +381,15 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 		"language: r.language, noVocals: r.noVocals,",
 		"noVocals := r.fromLocalClient && sodaLocalInstrumental(artist, srcTitle, album, durationSecs)",
 		"trackFoundNoLyrics: noLyrics, noVocals: noVocals,",
-		"appleNoVocals := r.lyrics == \"\" && appleID != \"\" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)",
+		"appleNoVocals := forPlaying && r.lyrics == \"\" && appleID != \"\" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)",
 		"lyricSourceResult{noVocals: appleNoVocals, source: \"applemusic\",",
 		"identityFromLocalClient: r.fromLocalClient || appleNoVocals}",
-		"if playingPlayer() == playerSpotify && spotifyLocalNoVocals(spotifyTrackIDHintFor(idArtist, idTitle)) {",
 		"if src := playerInstrumentalSource(raw, results); src != \"\" {",
+		"forPlaying := playerSignalApplies(ctx)",
+		"r.forPlayingTrack = forPlaying\n\t\t\traw[r.source] = r",
+		"if forPlaying && playingPlayer() == playerSpotify && spotifyLocalNoVocals(",
+		"earlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)",
+		"if !turnedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {",
 	} {
 		if !strings.Contains(enrich, n) {
 			t.Errorf("enrich.go 缺 %q", n)
@@ -266,5 +403,8 @@ func TestPlayerInstrumentalSignalsAreWired(t *testing.T) {
 	}
 	if !strings.Contains(string(mustRead(t, "kugou.go")), "r.noVocals = chosen.TransParam.Language == kugouLanguagePureMusic") {
 		t.Error("kugou.go 挑中曲目之后要记下它的语种是不是纯音乐")
+	}
+	if !strings.Contains(string(mustRead(t, "upcoming.go")), "go resolveEnrichAsync(withBackgroundOutbound(withPlayerQueueTrack(") {
+		t.Error("待播队列预取要标成正在放的播放器的队列(withPlayerQueueTrack),播放器的信号才对它们成立")
 	}
 }

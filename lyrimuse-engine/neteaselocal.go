@@ -240,22 +240,27 @@ func pickNeteaseLocalEntry(entries []neteaseLocalTrack, album string, durationSe
 	return best, found
 }
 
-// neteaseLocalSong 在网易云客户端的本地曲库里找这首歌,命中时返回一条可以直接当作
-// pick() 结果用的 neSearchSong。第二个返回值 false = 没命中,调用方照常走搜索。
-func neteaseLocalSong(ctx context.Context, artist, title, album string, durationSecs float64) (neSearchSong, bool) {
+// neteaseLocalEntry 在网易云客户端的本地曲库里挑这首歌的那条记录,不打日志(neteaseLocalSong 命中时才记一行)。
+func neteaseLocalEntry(ctx context.Context, artist, title, album string, durationSecs float64) (neteaseLocalTrack, bool) {
 	key := neteaseLocalKey(artist, title)
 	if key == "" {
 		// 歌手名缺失时不做"只按歌名"兜底:本机跨歌手同名 23 组,这条路径的价值就是不靠猜。
-		return neSearchSong{}, false
+		return neteaseLocalTrack{}, false
 	}
 	neteaseLocalMu.Lock()
 	refreshNeteaseLocalIndexLocked(ctx)
 	ents := append([]neteaseLocalTrack(nil), neteaseLocalIndex[key]...)
 	neteaseLocalMu.Unlock()
 	if len(ents) == 0 {
-		return neSearchSong{}, false
+		return neteaseLocalTrack{}, false
 	}
-	t, ok := pickNeteaseLocalEntry(ents, album, durationSecs)
+	return pickNeteaseLocalEntry(ents, album, durationSecs)
+}
+
+// neteaseLocalSong 在网易云客户端的本地曲库里找这首歌,命中时返回一条可以直接当作
+// pick() 结果用的 neSearchSong。第二个返回值 false = 没命中,调用方照常走搜索。
+func neteaseLocalSong(ctx context.Context, artist, title, album string, durationSecs float64) (neSearchSong, bool) {
+	t, ok := neteaseLocalEntry(ctx, artist, title, album, durationSecs)
 	if !ok {
 		return neSearchSong{}, false
 	}

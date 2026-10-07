@@ -1234,7 +1234,9 @@ struct LyricsDecisionSheet: View {
                     Spacer(minLength: 0)
                 }
                 if isInstrumental {
-                    Text(L10n.t("该源标记此曲为纯音乐，未参与评分"))
+                    Text(c.playerInstrumental == true
+                         ? L10n.t("当前播放器标记此曲为纯音乐，其余候选都不采用")
+                         : L10n.t("该源标记此曲为纯音乐，未参与评分"))
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)

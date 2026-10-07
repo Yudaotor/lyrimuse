@@ -48,6 +48,8 @@ func TestResolveNeteaseInfoPlaceholderAndNoVocals(t *testing.T) {
 	placeholderLyric := `{"code":200,"pureMusic":true,"lrc":{"lyric":` + jsonQuoteForTest(placeholderSpacedCredits) + `}}`
 	realLyric := `{"code":200,"lrc":{"lyric":` + jsonQuoteForTest("[00:01.00]第一句\n[00:05.00]第二句\n[00:09.00]第三句\n[00:13.00]第四句\n") + `}}`
 	creditOnly := `{"code":200,"lrc":{"lyric":` + jsonQuoteForTest("[00:00.00] 作曲 : 甲\n[00:01.00] 编曲 : 乙\n") + `}}`
+	// 三行以上的署名过得了 isTimedLRC:没有 pureMusic 时也不能当歌词交出去,不然标记发不出来。
+	longCredits := `{"code":200,"lrc":{"lyric":` + jsonQuoteForTest("[00:00.00] 作曲 : 甲\n[00:01.00] 编曲 : 乙\n[00:02.00] 吉他 : 丙\n[00:03.00] 母带 : 丁\n") + `}}`
 	for _, c := range []struct {
 		name         string
 		mark         int64
@@ -60,6 +62,7 @@ func TestResolveNeteaseInfoPlaceholderAndNoVocals(t *testing.T) {
 		{"纯音乐占位带职员表:不交歌词", 0, placeholderLyric, false, true, false, false},
 		{"无人声位 + 只有署名:判纯音乐依据,不报平台缺词", neteaseMarkNoVocals | 1<<13, creditOnly, false, false, true, false},
 		{"无人声位 + 真歌词(伴奏版):歌词照交", neteaseMarkNoVocals, realLyric, true, false, true, false},
+		{"无人声位 + 三行以上的署名、没有 pureMusic:不交歌词", neteaseMarkNoVocals, longCredits, false, false, true, false},
 		{"别的位:不算无人声", 1 << 29, creditOnly, false, false, false, true},
 	} {
 		withNeteaseFake(t, func(target string) (int, string) {
@@ -74,7 +77,8 @@ func TestResolveNeteaseInfoPlaceholderAndNoVocals(t *testing.T) {
 			return http.StatusNotFound, ""
 		})
 		info := resolveNeteaseInfo(qqRoundCtx(), "陈奕迅", "浮夸", "U87", 283.5)
-		if (info.Lyrics != "") != c.wantLyrics || info.PureMusic != c.wantPure || info.NoVocals != c.wantNoVocals || info.TrackFoundNoLyrics != c.wantFound {
+		if (info.Lyrics != "") != c.wantLyrics || info.PureMusic != c.wantPure || info.NoVocals != c.wantNoVocals || info.TrackFoundNoLyrics != c.wantFound ||
+			(c.lyric == longCredits && info.PlainLyrics != "") {
 			t.Errorf("%s: lyrics=%q pure=%v noVocals=%v found=%v", c.name, info.Lyrics, info.PureMusic, info.NoVocals, info.TrackFoundNoLyrics)
 		}
 	}

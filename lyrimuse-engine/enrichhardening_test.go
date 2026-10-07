@@ -14,7 +14,7 @@ import (
 func TestRetryFallbacksOnlyForEntriesWithoutLyrics(t *testing.T) {
 	src := string(mustRead(t, "enrich.go"))
 	for _, needle := range []string{
-		"if picked == nil && e.autoMarksInstrumental() && (e.Lyrics == \"\" || playerSaysInstrumental(scored)) {",
+		"if picked == nil && e.autoMarksInstrumental() && (e.Lyrics == \"\" || (playerSaysInstrumental(scored) && sourceChoice == \"\" && !opts.manual)) {",
 		"if picked == nil && !e.Instrumental && e.PlainLyrics == \"\" && e.Lyrics == \"\" {",
 	} {
 		if !strings.Contains(src, needle) {

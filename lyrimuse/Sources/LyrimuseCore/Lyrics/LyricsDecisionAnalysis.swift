@@ -161,12 +161,16 @@ public enum LyricsVerdictBuilder {
 
     /// 谁是冠军。存档里的 `winner` **是**当时真正被采用的那一条,所以优先认它 ——
     /// 但只在它确实是并列最高分时(真平局那 134 场里引擎挑的就是其中之一),
-    /// 否则退回分数最高的那条,保证分差不会是负数。
+    /// 否则退回分数最高的那条,保证分差不会是负数。存档里没有 `winner`、又有一条纯音乐标记时没有冠军:
+    /// 那一轮按纯音乐处理,一条都没采用(播放器自己说是纯音乐时,分数再高也不用),别把最高分那条说成胜者。
     ///
     /// 判词和候选表**必须**用同一个判据,所以抽成公共函数:两处各写一份迟早漂开,
     /// 而漂开的后果是界面上戴皇冠的那条跟判词里说的"胜者"不是同一个。
     public static func champion(among candidates: [LyricsScoredCandidate],
                                 winner: String?) -> LyricsScoredCandidate? {
+        if (winner ?? "").isEmpty, candidates.contains(where: \.isInstrumentalMarker) {
+            return nil
+        }
         let order = ranked(candidates)
         guard let top = order.first else { return nil }
         return order.first { $0.source == winner && $0.score == top.score } ?? top

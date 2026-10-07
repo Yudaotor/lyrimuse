@@ -370,7 +370,7 @@ func TestEarlyLyricsIsWired(t *testing.T) {
 	}
 	src := string(data)
 	for _, needle := range []string{
-		"\tearlyWatch := newEarlyLyricsWatch(ctx, artist, title)\ncollect:\n",
+		"\tearlyWatch := newEarlyLyricsWatch(ctx, artist, title)\n\tif earlyWatch != nil && forPlaying {\n\t\tearlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)\n\t}\ncollect:\n",
 		"\t\t\tif onUpdate != nil || earlyWatch.active() {\n\t\t\t\tscored := scoreAndSort()\n",
 		"\t\t\t\tearlyWatch.observe(raw[\"netease\"].ne, scored, doneSources)\n",
 		"\t\tcase <-earlyWatch.graceC():\n\t\t\tearlyWatch.endGrace()\n\t\t\tearlyWatch.observe(raw[\"netease\"].ne, scoreAndSort(), doneSources)\n",

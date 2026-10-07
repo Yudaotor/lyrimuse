@@ -1124,8 +1124,9 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	//
 	// 两个接口对没词的曲目给的都是只有署名的正文(v1 是 JSON 署名行,换回老接口写法之后同形,实测)。
 	info.TrackFoundNoLyrics = id > 0 && lyricFetchOK && isCreditOnlyLRC(lrc) && !info.PureMusic && !info.NoVocals
-	// 判成纯音乐、正文又只有署名和占位时不交歌词,见 neteaseInfo.PureMusic。
-	if isTimedLRC(lrc) && !(info.PureMusic && isCreditOnlyLRC(lrc)) {
+	// 判成纯音乐或没有人声、正文又只有署名和占位时不交歌词,见 neteaseInfo.PureMusic。
+	creditOnlyInstrumental := (info.PureMusic || info.NoVocals) && isCreditOnlyLRC(lrc)
+	if isTimedLRC(lrc) && !creditOnlyInstrumental {
 		info.Lyrics = lrc
 		if isTimedLRC(tr) {
 			info.Trans = tr

@@ -1905,10 +1905,13 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// hasRealFromMarkerSource 已经挡住同源那种,这里再挡跨源那种)。
 	// 条目本来就有歌词(升级重试)时也不看:时长对不上的重试里候选全被判掉、只剩一条纯音乐标记,
 	// 会给一首明明有逐行歌词的歌打上「纯音乐」,之后扫库、补空、外围补收都跳过它。
-	// 例外是播放器自己给的标记(playerSaysInstrumental):它说的就是正在放的这一条,词留在条目里,撤标就回来。
-	if picked == nil && e.autoMarksInstrumental() && (e.Lyrics == "" || playerSaysInstrumental(scored)) {
+	// 例外是播放器自己给的标记(playerSaysInstrumental):它说的就是正在放的这一条,词留在条目里,撤标就回来。用户选定了来源、
+	// 手动重新匹配的不按它改,同重评那条(rescoreTurnsInstrumental 的调用处)。
+	turnedInstrumental := false
+	if picked == nil && e.autoMarksInstrumental() && (e.Lyrics == "" || (playerSaysInstrumental(scored) && sourceChoice == "" && !opts.manual)) {
 		if ok, src := instrumentalFromScored(scored, artist, title, album, durationSecs); ok {
 			e.Instrumental = true
+			turnedInstrumental = true
 			markedInstrumental = e.Lyrics != ""
 			log.Printf("lyrics: %s marked instrumental by %s (no lyrics from any source)", key, src)
 		}
@@ -1934,8 +1937,8 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		}
 	}
 	// 跟首次解析同一条「同一段录音、评分高的兄弟赢」(判据见 crossalbum.go),不挂的话
-	// cross-album-reuse 对齐过的组会在这两条路径上各自重选、又长出分歧。
-	if adoptCrossAlbumSiblingLyrics(key, &e) {
+	// cross-album-reuse 对齐过的组会在这两条路径上各自重选、又长出分歧。刚按纯音乐处理的不换词,同重评那条。
+	if !turnedInstrumental && adoptCrossAlbumSiblingLyrics(key, &e) {
 		lyricsChanged = true
 	}
 	refreshSpeakers(&e, scored)
@@ -3519,12 +3522,13 @@ func playerSaysInstrumental(scored []scoredLyricCandidateResult) bool {
 }
 
 // playerInstrumentalSource:正在放的播放器自己说这一条没有人声、它自己又没给出能用的歌词时,返回它自家的歌词源名,否则空串。
-// 身份必须来自播放器的本地数据(同同源加权的准入,见 lyricCandidate.identityFromLocalClient),搜出来的不算。播放器自己有这一条的
-// 歌词(有词的伴奏版)时照常用歌词。见 09 章决策 210。
+// 身份必须来自播放器的本地数据(同同源加权的准入,见 lyricCandidate.identityFromLocalClient),搜出来的不算;解析的得是它在放的这首
+// 或它的待播队列(forPlayingTrack,见 playerSignalApplies)。播放器自己有这一条的歌词(有词的伴奏版,只有不带时间戳的也算)时照常用歌词。
+// 见 09 章决策 210。
 func playerInstrumentalSource(raw map[string]lyricSourceResult, results []scoredLyricCandidateResult) string {
 	for _, src := range []string{lyricSourceNetease, lyricSourceQQ, lyricSourceSoda, lyricSourceAppleMusic, spotifyLocalLyricsSource} {
 		r, ok := raw[src]
-		if !ok || !playerOwnsLyricSource(src) {
+		if !ok || !r.forPlayingTrack || !playerOwnsLyricSource(src) {
 			continue
 		}
 		claims, local := r.noVocals || r.instrumental, r.identityFromLocalClient
@@ -3535,7 +3539,7 @@ func playerInstrumentalSource(raw map[string]lyricSourceResult, results []scored
 			continue
 		}
 		for _, c := range results {
-			if c.Source == src && c.Score >= 0 {
+			if c.Source == src && !c.Instrumental && (c.Score >= 0 || c.PlainTextOnly) {
 				return ""
 			}
 		}
@@ -4545,6 +4549,9 @@ type lyricSourceResult struct {
 	// noVocals:这个源给的曲目信息说这一条没有人声(QQ 语种「纯音乐」、酷狗语种「纯音乐」、汽水 vocal==2、Apple audioLocale zxx、
 	// Spotify 演唱语言 zxx)。伴奏版也带它,所以本身不等于「没有歌词」;怎么用见 playerInstrumentalSource 与 instrumentalMarker。
 	noVocals bool
+	// forPlayingTrack:这次解析的是正在放的那首或它的待播队列(playerSignalApplies),收集循环统一填。只有它为真时,播放器自己的
+	// 信号才算数(playerInstrumentalSource)。
+	forPlayingTrack bool
 }
 
 // lyricSourceResultTap 只给测试用(默认 nil,生产永远不设):fetchScoredLyricCandidatesStreaming
@@ -5108,6 +5115,8 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 缓冲开到"每个 goroutine 都能不阻塞地放下自己那一份"= 源数(每个源一个 goroutine)。同样不写
 	// 字面量:下面那个 collect 循环就是栽在字面量跟源数脱钩上的。
 	resultsCh := make(chan lyricSourceResult, len(lyricSourceNames))
+	// 播放器自己的纯音乐信号能不能用:只对在放的那首和它的待播队列(见 playerSignalApplies)。
+	forPlaying := playerSignalApplies(ctx)
 
 	// 记下"这一组词真的问出去了"(见 querylog.go)。放在这里而不是五个重试轮各写一遍:
 	// 这里是所有轮次唯一的实际发起点,漏不掉也不会重复。来路与"只问这几个源"的名单都从
@@ -5368,7 +5377,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		appleID, _ := playbackTrackIDsFor(idArtist, idTitle, idAlbum)
 		r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
 		// 正在用 Apple Music 放、它自己没给这一条的歌词时,问一次这条录音有没有人声(播放器自己的信号,见 playerInstrumentalSource)。
-		appleNoVocals := r.lyrics == "" && appleID != "" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)
+		appleNoVocals := forPlaying && r.lyrics == "" && appleID != "" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)
 		resultsCh <- lyricSourceResult{noVocals: appleNoVocals, source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient || appleNoVocals}
 	}()
 	go func() {
@@ -5400,9 +5409,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			raw[spotifyLocalLyricsSource] = r
 		}
 		// 正在用 Spotify 放时,换曲那一拍记下的曲目在它元数据缓存里没有人声:播放器自己的信号(见 playerInstrumentalSource)。
-		if playingPlayer() == playerSpotify && spotifyLocalNoVocals(spotifyTrackIDHintFor(idArtist, idTitle)) {
+		if forPlaying && playingPlayer() == playerSpotify && spotifyLocalNoVocals(spotifyTrackIDHintFor(idArtist, idTitle)) {
 			r := raw[spotifyLocalLyricsSource]
-			r.source, r.noVocals, r.identityFromLocalClient = spotifyLocalLyricsSource, true, true
+			r.source, r.noVocals, r.identityFromLocalClient, r.forPlayingTrack = spotifyLocalLyricsSource, true, true, true
 			raw[spotifyLocalLyricsSource] = r
 		}
 		// Amazon Music 本地歌词同 KKBOX:正用它放歌时读,按 ASIN 认这首(见 amazonlibrary.go)。
@@ -5454,11 +5463,15 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 首轮中途先上屏(见 earlylyrics.go):只有首次解析正在播的这首、第一轮才有,别的情况是 nil,下面几处都是空操作。
 	// 它不在等的时候别为它打分:自动解析不要中间结果,每到一个源整份重打分是白算(见 09 章决策 94)。
 	earlyWatch := newEarlyLyricsWatch(ctx, artist, title)
+	if earlyWatch != nil && forPlaying {
+		earlyWatch.holdForNative = playerLocalNoVocalsHint(artist, srcTitle, album, durationSecs)
+	}
 collect:
 	for !allLyricSourcesBack() {
 		select {
 		case r := <-resultsCh:
 			doneSources[r.source] = true
+			r.forPlayingTrack = forPlaying
 			raw[r.source] = r
 			if lyricSourceResultTap != nil {
 				lyricSourceResultTap(r)

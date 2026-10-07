@@ -27238,6 +27238,23 @@
         }
       }
     },
+    "当前播放器标记此曲为纯音乐，其余候选都不采用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your player marks this track as instrumental, so no candidate was used"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前播放器標記此曲為純音樂，其餘候選都不採用"
+          }
+        }
+      }
+    },
     "将清除 %d 首歌曲的电台时间轴校准，此操作无法撤销。这些校准仅在播放电台时生效，清除后不影响正常播放时的歌词" : {
       "extractionState" : "manual",
       "localizations" : {

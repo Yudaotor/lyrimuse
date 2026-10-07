@@ -827,6 +827,7 @@
 "当前使用" = "In use";
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
+"当前播放器标记此曲为纯音乐，其余候选都不采用" = "Your player marks this track as instrumental, so no candidate was used";
 "当前播放的是 DJ Mix 专辑中的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）。这类曲目截取自整场演出，前后带有过渡，长度与原版不同，原版歌词的时间轴无法对齐，且没有歌词源收录混音版的时间轴" = "You’re playing one segment of a DJ Mix album (the track is tagged [Mixed], the album (DJ Mix)) — it’s cut out of a full set, with transitions on either side and a length that doesn’t match the original, so the original lyrics’ timeline can’t line up. And no source carries a timeline for the mixed version.";
 "当前播放的是伴奏版（歌名或专辑标着伴奏 / 纯音乐 / Instrumental），没有人声，人声版歌词不采用，按纯音乐显示" = "This is an instrumental version (its title or album says Instrumental), so it has no vocals; vocal lyrics are not used and it is shown as instrumental";
 "当前无正在播放的歌曲" = "Nothing Is Playing";

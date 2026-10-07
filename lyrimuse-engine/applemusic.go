@@ -1402,7 +1402,8 @@ var (
 )
 
 // applemusicCatalogNoVocals:这条 Apple 目录曲目的 audioLocale 是不是 zxx(ISO 639-2「无语言内容」),即没有人声。
-// 只要 developer token,不要账号;商店区用账号所在区,没连账号时用 us。按目录 id 缓存,没问成的不缓存。见 09 章决策 210。
+// 只要 developer token,不要账号;商店区用账号所在区,没连账号时不知道 Music.app 在哪个区,先问 us、查不到再问 cn,都查不到算有人声。
+// 按目录 id 缓存,没问成的不缓存。见 09 章决策 210。
 func applemusicCatalogNoVocals(ctx context.Context, catalogID string) bool {
 	if catalogID == "" {
 		return false
@@ -1417,27 +1418,31 @@ func applemusicCatalogNoVocals(ctx context.Context, catalogID string) bool {
 	if dev == "" {
 		return false
 	}
-	_, storefront := applemusicLoadUserToken()
-	if storefront == "" {
-		storefront = "us"
-	}
-	raw, status, err := applemusicAPIGet(ctx, storefront+"/songs/"+neturl.PathEscape(catalogID), dev, "")
-	if err != nil || (status != http.StatusOK && status != http.StatusNotFound) {
-		return false
-	}
-	var out struct {
-		Data []struct {
-			Attributes struct {
-				AudioLocale string `json:"audioLocale"`
-			} `json:"attributes"`
-		} `json:"data"`
+	storefronts := []string{"us", "cn"}
+	if _, storefront := applemusicLoadUserToken(); storefront != "" {
+		storefronts = []string{storefront}
 	}
 	v := false
-	if status == http.StatusOK {
+	for _, storefront := range storefronts {
+		raw, status, err := applemusicAPIGet(ctx, storefront+"/songs/"+neturl.PathEscape(catalogID), dev, "")
+		if err != nil || (status != http.StatusOK && status != http.StatusNotFound) {
+			return false
+		}
+		if status == http.StatusNotFound {
+			continue
+		}
+		var out struct {
+			Data []struct {
+				Attributes struct {
+					AudioLocale string `json:"audioLocale"`
+				} `json:"attributes"`
+			} `json:"data"`
+		}
 		if json.Unmarshal(raw, &out) != nil {
 			return false
 		}
 		v = len(out.Data) > 0 && out.Data[0].Attributes.AudioLocale == "zxx"
+		break
 	}
 	applemusicNoVocalsMu.Lock()
 	if len(applemusicNoVocalsCache) >= 512 {
