@@ -3556,6 +3556,11 @@ func runSourceContractTests() {
             }
             expectEqual(coordinator.contains("if found.identityVerified {"), true,
                         "动态封面身份核验: refreshMotionCover 要据这一位跳过终审")
+            // 终审用的封面指纹在后台算(03 章决策 34):放回主线程不报错,只表现成换歌那一下掉几帧。
+            expectEqual(coordinator.contains("let reference = await Task.detached(priority: .utility) {\n"
+                                             + "                referenceImage.map(CoverFingerprint.reference(of:))")
+                            && coordinator.components(separatedBy: "CoverFingerprint.reference(of:)").count == 2, true,
+                        "动态封面: 终审用的封面指纹只在后台那个闭包里算")
         } else {
             expectEqual(true, false, "动态封面身份核验: 读不到 enrich.go / motionrecheckcli.go / EnrichCacheReader.swift / PlaybackCoordinator.swift(路径挪了?)")
         }

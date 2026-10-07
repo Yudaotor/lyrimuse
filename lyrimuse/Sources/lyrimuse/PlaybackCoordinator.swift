@@ -1795,16 +1795,22 @@ final class PlaybackCoordinator: ObservableObject {
         // "动画画面像不像封面",跟引擎的首帧比对是同一个代理判据;身份核验之所以存在,
         // 正是因为这个判据对"Apple 把同一张封面做成另一种呈现"必然判错(满幅原图 vs 带标题的
         // 方版、上色版 vs 压银浮雕版)。再拿它终审一次,就是把刚确认的身份原样否掉。
-        let reference: CoverFingerprint.Reference?
+        //
+        // 主线程只取一次 CGImage,指纹放到后台算:整图、去边各 64 次 CIAreaAverage,在主线程上换歌那一下要占
+        // 一百多毫秒(03 章决策 34)。
+        let referenceImage: CGImage?
         if found.identityVerified {
-            reference = nil
+            referenceImage = nil
         } else {
-            reference = (highResArtworkImage ?? artworkImage)?
+            referenceImage = (highResArtworkImage ?? artworkImage)?
                 .cgImage(forProposedRect: nil, context: nil, hints: nil)
-                .map(CoverFingerprint.reference(of:))
         }
         clear()
         motionCoverTask = Task { [weak self] in
+            let reference = await Task.detached(priority: .utility) {
+                referenceImage.map(CoverFingerprint.reference(of:))
+            }.value
+            guard !Task.isCancelled else { return }
             let file = await MotionCoverStore.shared.prepare(master: found.master, reference: reference)
             guard let file, !Task.isCancelled else { return }
             // 下载期间换歌了 —— 这份是上一首的。
