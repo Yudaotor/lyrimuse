@@ -2679,6 +2679,87 @@ func runSourceContractTests() {
         // docs/features 整个目录不在 = 本地-only 的文档没被检出(CI 上就是这样),这一项跳过。
     }
 
+    // ---- 反馈链接 ----
+    //
+    // 反馈要打开的链接(见 14 章决策 57、59)。钉四件事:① 选择页带版本、系统、播放器,空的不带,「+」编成 %2B(不然到
+    // GitHub 那边成了空格);② 歌词类表单直接打开,歌曲信息带齐;③ 邮件写给反馈邮箱,正文末尾带版本;④ App 带的参数名都是
+    // 仓库里那张表单的字段 id,「关于」页、菜单栏右键菜单、歌词搜索面板都走 FeedbackReporter。
+    do {
+        func query(_ url: URL) -> [String: String] {
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            return Dictionary(items.map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { first, _ in first })
+        }
+        let env = FeedbackLinks.Environment(appVersion: "1.9.0 (Apple Silicon)", macOSVersion: "27.0.1", player: "QQ 音乐")
+        let chooser = FeedbackLinks.newIssueURL(env)
+        expectEqual(chooser.path, "/Yudaotor/lyrimuse/issues/new/choose", "反馈链接: 进 issue 模板选择页")
+        expectEqual(query(chooser), ["version": "1.9.0 (Apple Silicon)", "macos": "27.0.1", "player": "QQ 音乐"],
+                    "反馈链接: 版本、系统、播放器按表单字段 id 带上,原样解得回来")
+        let bare = FeedbackLinks.newIssueURL(.init(appVersion: "1.9.0 (Intel)", macOSVersion: "14.6.1"))
+        expectEqual(Set(query(bare).keys), ["version", "macos"], "反馈链接: 播放器为空时不带")
+        let plus = FeedbackLinks.newIssueURL(.init(appVersion: "1.9.0", macOSVersion: "26.0", player: "Player+"))
+        expectEqual(plus.absoluteString.contains("player=Player%2B"), true, "反馈链接: 「+」编成 %2B")
+        let lyrics = FeedbackLinks.lyricsIssueURL(.init(song: "Flavor", artist: "Khalil Fong", source: "汽水音乐",
+                                                        answered: "汽水音乐、酷我音乐"), environment: env)
+        expectEqual(lyrics.path, "/Yudaotor/lyrimuse/issues/new", "反馈链接: 歌词类表单不经选择页")
+        expectEqual(query(lyrics), ["template": "2-lyrics.yml", "title": "[Lyrics] Title: Flavor · Artist: Khalil Fong", "song": "Flavor",
+                                    "artist": "Khalil Fong", "player": "QQ 音乐", "source": "汽水音乐",
+                                    "answered": "汽水音乐、酷我音乐", "version": "1.9.0 (Apple Silicon)"],
+                    "反馈链接: 歌词类表单带齐歌曲信息,空的专辑不带")
+        let withAlbum = FeedbackLinks.lyricsIssueURL(.init(song: "Flavor", artist: "Khalil Fong", album: "JOURNEY TO THE WEST"),
+                                                     environment: env)
+        expectEqual(query(withAlbum)["title"], "[Lyrics] Title: Flavor · Artist: Khalil Fong · Album: JOURNEY TO THE WEST",
+                    "反馈链接: 有专辑时标题带 Album 那一段")
+        let playerRequest = FeedbackLinks.playerRequestURL(env)
+        expectEqual(query(playerRequest), ["template": "3-player.yml", "version": "1.9.0 (Apple Silicon)"],
+                    "反馈链接: 播放器请求直接打开那张表单,带上版本")
+        let mail = FeedbackLinks.emailURL(subject: "Lyrimuse 反馈", environment: env)
+        expectEqual(mail.absoluteString.hasPrefix("mailto:yudaotor@qq.com?"), true, "反馈链接: 邮件写给反馈邮箱")
+        expectEqual(query(mail)["subject"], "Lyrimuse 反馈", "反馈链接: 邮件主题原样带上")
+        expectEqual(query(mail)["body"]?.hasSuffix("Lyrimuse 1.9.0 (Apple Silicon) · macOS 27.0.1 · QQ 音乐"), true,
+                    "反馈链接: 邮件正文末尾带版本、系统、播放器")
+        expectEqual(FeedbackLinks.helpURL.absoluteString, "https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a",
+                    "反馈链接: 使用求助进讨论区问答分类")
+        expectEqual(FeedbackLinks.macOSVersionString(OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 1)),
+                    "27.0.1", "反馈链接: 系统版本号三段")
+
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let templates = packageDir.deletingLastPathComponent().appendingPathComponent(".github/ISSUE_TEMPLATE")
+        func formText(_ name: String) -> String {
+            (try? String(contentsOf: templates.appendingPathComponent(name), encoding: .utf8)) ?? ""
+        }
+        func formIDs(_ name: String) -> Set<String> {
+            Set(formText(name).split(separator: "\n").compactMap { line -> String? in
+                let t = line.trimmingCharacters(in: .whitespaces)
+                return t.hasPrefix("id: ") ? String(t.dropFirst(4)) : nil
+            })
+        }
+        let chooserParams = Set(query(chooser).keys)
+        let bugIDs = formIDs("1-bug.yml")
+        expectEqual(chooserParams.subtracting(bugIDs), [], "反馈链接: 选择页带的参数都是「问题反馈」表单的字段 id")
+        let lyricsParams = Set(query(lyrics).keys).subtracting(["template", "title"])
+        expectEqual(lyricsParams.subtracting(formIDs(FeedbackLinks.lyricsTemplate)), [],
+                    "反馈链接: 歌词类表单带的参数都是那张表单的字段 id")
+        let playerParams = Set(query(playerRequest).keys).subtracting(["template"])
+        expectEqual(playerParams.subtracting(formIDs(FeedbackLinks.playerRequestTemplate)), [],
+                    "反馈链接: 播放器请求带的参数都是那张表单的字段 id")
+        expectEqual(sourceBytes(formText(FeedbackLinks.lyricsTemplate), contain: "title: \"\(FeedbackLinks.lyricsTitlePrefix)\""), true,
+                    "反馈链接: 歌词类表单的标题前缀跟 App 填的一致")
+
+        let appDir = packageDir.appendingPathComponent("Sources/lyrimuse")
+        func read(_ rel: String) -> String { (try? String(contentsOf: appDir.appendingPathComponent(rel), encoding: .utf8)) ?? "" }
+        let settingsSrc = read("SettingsView.swift")
+        expectEqual(sourceBytes(settingsSrc, contain: "FeedbackReporter.openNewIssue()")
+                    && sourceBytes(settingsSrc, contain: "FeedbackReporter.openEmail()")
+                    && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "FeedbackReporter.openNewIssue()")
+                    && sourceBytes(read("LyricsManager/LyricsSearchSheet.swift"), contain: "FeedbackReporter.openLyricsIssue(")
+                    && sourceBytes(read("Settings/PlayerPicker.swift"), contain: "FeedbackLinks.playerRequestURL(FeedbackReporter.environment())"),
+                    true, "反馈链接: 「关于」页、菜单栏右键菜单、歌词搜索面板、选播放器弹层都走 FeedbackReporter")
+        expectEqual(sourceBytes(settingsSrc, contain: "lyrimuse/issues\")!")
+                    || sourceBytes(settingsSrc, contain: "discussions/categories/ideas"), false,
+                    "反馈链接: 设置页不再自己拼 issue 列表 / 想法分类的链接")
+    }
+
     // ---- 使用与版权说明 / 第三方许可----
     //
     // 说明正文只在 README 维护(中英各一节),App 里两处入口(设置「关于」页两行、引导欢迎页一句)都只是

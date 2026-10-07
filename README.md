@@ -297,6 +297,14 @@ The same check, run from Terminal:
 
 </details>
 
+## Feedback
+
+- **Problems and ideas**: in the app, open Settings › About › **Report an Issue**, or right-click the menu bar icon and choose **Report an Issue…**. It opens a new GitHub issue with your version, macOS and current player already filled in; pick the kind of report: bug, lyrics missing or wrong, player request, or feature request.
+- **Wrong lyrics for one song**: open **Search for Lyrics** for that song in the **Lyrics Manager** and click **Can't find the right lyrics? Report it on GitHub** at the bottom left. The song details and what each lyrics source returned come along.
+- **Questions**: ask in the [Q&A category](https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a) of Discussions.
+- **No GitHub account**: email yudaotor@qq.com. The envelope button on the **Report an Issue** row in Settings › About fills in your version and macOS.
+- **Security issues**: report them privately as described in [SECURITY.md](SECURITY.md), not in a public issue.
+
 ## Uninstalling
 
 Dragging `Lyrimuse.app` to the Trash is **not** enough. The lyrics engine (process name `lyrimuse-engine`) is

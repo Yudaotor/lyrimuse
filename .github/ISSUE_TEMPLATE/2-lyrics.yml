@@ -1,0 +1,60 @@
+name: "Lyrics missing or wrong · 歌词搜不到或不对"
+description: "Missing lyrics, wrong song, bad timing, wrong translation or reading · 搜不到、搜错歌、时间不准、译文或读音不对"
+title: "[Lyrics] "
+labels: ["lyrics"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You can try another candidate in Lyrics Manager › Search for Lyrics first. Opening this form from "Can't find the right lyrics?" there fills in the song details.
+        可以先在 歌词管理 › 搜索候选歌词 里换一份试试。从那里点按「找不到对的歌词？」进来时，下面的歌曲信息已自动填好。
+  - type: input
+    id: song
+    attributes:
+      label: "Title · 歌名"
+    validations:
+      required: true
+  - type: input
+    id: artist
+    attributes:
+      label: "Artist · 歌手"
+    validations:
+      required: true
+  - type: input
+    id: album
+    attributes:
+      label: "Album · 专辑"
+  - type: input
+    id: player
+    attributes:
+      label: "Player · 播放器"
+      description: "Filled in from the app. Edit it if it's wrong. · 从 App 里打开时已按最近使用的播放器填好，不对可直接修改。"
+  - type: input
+    id: problem
+    attributes:
+      label: "What's wrong · 哪里不对"
+      placeholder: "e.g. no lyrics, wrong song, 2 s early, wrong translation / 例如：搜不到歌词、搜到的不是这首歌、整体快了 2 秒、译文不对"
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: "Current source · 现在用的歌词来源"
+  - type: input
+    id: answered
+    attributes:
+      label: "Sources that answered · 有结果的来源"
+  - type: textarea
+    id: details
+    attributes:
+      label: "Details · 补充说明"
+      placeholder: "e.g. which line goes wrong, how many seconds off, or a link to the correct lyrics / 例如从哪一句开始不对、快了几秒；知道哪里有正确的歌词也可以贴上链接"
+  - type: upload
+    id: screenshots
+    attributes:
+      label: "Screenshots · 截图"
+      description: "Optional · 可选"
+  - type: input
+    id: version
+    attributes:
+      label: "Lyrimuse version · Lyrimuse 版本"

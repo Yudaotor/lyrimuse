@@ -585,12 +585,31 @@ struct LyricsSearchSheet: View {
             searchActions
             candidatesHeader
             candidatesSection
+            reportLyricsLink
         }
         .padding(.horizontal, 12)
         .padding(.top, standaloneWindow ? 0 : 12)
         // 列表滚到底时别把行画到侧栏圆角外面。
         .clipShape(RoundedRectangle(cornerRadius: Self.panelCornerRadius, style: .continuous))
         .settingsCardBackground(cornerRadius: Self.panelCornerRadius, inSheet: presentedAsSheet)
+    }
+
+    /// 「找不到对的歌词？」:打开 GitHub 的歌词类 issue 表单,歌名、歌手、专辑、现在用的来源、这一轮返回了候选的来源已经
+    /// 填好(见 14 章决策 59)。歌曲信息用打开面板时那首歌的,不用改过的查询词。
+    private var reportLyricsLink: some View {
+        Button {
+            FeedbackReporter.openLyricsIssue(FeedbackLinks.LyricsReport(
+                song: originalTitle, artist: originalArtist, album: originalAlbum,
+                source: currentSource.flatMap { $0.isEmpty ? nil : sourceDisplayName($0) } ?? "",
+                answered: Self.allLyricSourceNames.filter(respondedSources.contains).map(sourceDisplayName)
+                    .joined(separator: L10n.t("、"))))
+        } label: {
+            Label(L10n.t("找不到对的歌词？在 GitHub 反馈"), systemImage: "exclamationmark.bubble")
+        }
+        .buttonStyle(.link)
+        .font(.callout)
+        .padding(.horizontal, 4)
+        .padding(.bottom, 10)
     }
 
     // 三个可编辑的查询维度——默认展示这首歌本身的元数据,.task(id:) 直接拿这三个初始值发起搜索;

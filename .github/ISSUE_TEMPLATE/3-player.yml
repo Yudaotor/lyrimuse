@@ -1,0 +1,38 @@
+name: "Player request · 想支持一个播放器"
+description: "A player Lyrimuse doesn't support yet · 还没内置的播放器"
+title: "Player request: "
+labels: ["player"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Built-in players are listed in Settings › Player. For other players, try adding them to the trusted list there first.
+        已内置的播放器见 设置 › 播放器。还没内置的，可以先在那里把它加入信任列表试试。
+  - type: input
+    id: name
+    attributes:
+      label: "Player name · 播放器名称"
+      placeholder: "e.g. LX Music / 例如：LX Music"
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: "Download or website · 下载或官网链接"
+      placeholder: "https://"
+    validations:
+      required: true
+  - type: input
+    id: kind
+    attributes:
+      label: "Type · 是哪种"
+      placeholder: "e.g. native Mac app, Mac App Store, web player / 例如：Mac 原生 App、Mac App Store、网页版、iPhone / iPad 版"
+  - type: input
+    id: membership
+    attributes:
+      label: "Membership · 需要会员吗"
+      placeholder: "e.g. free, or a subscription is needed for full playback / 例如：免费即可收听、需要会员才能完整播放"
+  - type: input
+    id: version
+    attributes:
+      label: "Lyrimuse version · Lyrimuse 版本"

@@ -296,6 +296,14 @@ LyricsX 最后一个版本是 2022 年 4 月的 v1.6.3，支持 macOS 10.11 及�
 
 </details>
 
+## 反馈
+
+- **问题和建议**：在 App 里打开设置 › 关于 › 反馈问题，或者右键点按菜单栏图标，选择「反馈问题…」。会打开 GitHub 的新建 issue 页面，版本、系统和正在用的播放器已经填好，选一类填写就行：问题反馈、歌词搜不到或不对、想支持一个播放器、功能建议。
+- **某首歌的歌词不对**：在歌词管理里打开这首歌的「搜索候选歌词」，点左下角的「找不到对的歌词？在 GitHub 反馈」，歌名、歌手、专辑和各歌词源的结果会一起带上。
+- **使用上的疑问**：到讨论区的[问答分类](https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a)提问。
+- **没有 GitHub 账号**：发邮件到 yudaotor@qq.com。设置 › 关于 里「反馈问题」那一行的邮件图标会自动附上版本和系统信息。
+- **安全问题**：按 [SECURITY.md](SECURITY.md) 里的方式私下报告，不要公开提 issue。
+
 ## 卸载
 
 把 `Lyrimuse.app` 拖进废纸篓**是不够的**。歌词引擎（进程名 `lyrimuse-engine`）在 launchd 里注册的是 `KeepAlive`

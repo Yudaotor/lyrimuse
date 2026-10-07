@@ -175,6 +175,9 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         // 给权限)也得有入口。
         menu.addItem(action(L10n.t("重新运行引导…"), symbol: "sparkles",
                             selector: #selector(rerunOnboarding)))
+        // 跟设置「关于」页的「反馈问题」同一个入口,见 FeedbackReporter。
+        menu.addItem(action(L10n.t("反馈问题…"), symbol: "exclamationmark.bubble",
+                            selector: #selector(reportIssue)))
         menu.addItem(action(L10n.t("关于 Lyrimuse"), symbol: "info.circle",
                             selector: #selector(openAbout)))
         menu.addItem(.separator())
@@ -287,6 +290,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     @objc private func openLyricsWindow() { AppActions.shared.openLyricsWindow?() }
     @objc private func rerunOnboarding() { AppActions.shared.openOnboarding?() }
     @objc private func resolveAutomationAlert() { AutomationAlertMonitor.shared.resolve() }
+    @objc private func reportIssue() { FeedbackReporter.openNewIssue() }
 
     @objc private func openAbout() {
         // 直接跳到设置窗口的"关于"分类,复用 Onboarding 的 Last.fm 步骤已经在用的同一套

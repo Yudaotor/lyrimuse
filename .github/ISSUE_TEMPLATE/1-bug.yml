@@ -1,0 +1,59 @@
+name: "Bug report · 问题反馈"
+description: "Something is broken or looks wrong · 哪里坏了、显示不对、卡顿耗电"
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. For missing or wrong lyrics, use the lyrics form instead.
+        提交前请先搜索已有的 issue，有相同的问题请在那一条下补充。歌词搜不到或不对，请改用「歌词搜不到或不对」。
+  - type: textarea
+    id: what
+    attributes:
+      label: "What happened · 出了什么问题"
+      placeholder: "e.g. The unlock button does nothing after the overlay is locked / 例如：悬浮歌词锁定后，点按解锁按钮没有反应"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to reproduce · 复现步骤"
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: upload
+    id: screenshots
+    attributes:
+      label: "Screenshots · 截图或录屏"
+      description: "Optional · 可选"
+  - type: input
+    id: version
+    attributes:
+      label: "Lyrimuse version · Lyrimuse 版本"
+      description: "Settings › About, click the version to copy it. Filled in when opened from the app. · 设置 › 关于，点按版本号即可复制；从 App 里打开时已自动填好。"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: "macOS version · macOS 版本"
+    validations:
+      required: true
+  - type: input
+    id: player
+    attributes:
+      label: "Player · 在用的播放器"
+      description: "Filled in from the app. Edit it if it's wrong. · 从 App 里打开时已按最近使用的播放器填好，不对可直接修改。"
+  - type: markdown
+    attributes:
+      value: |
+        <details>
+        <summary>Attach diagnostics if needed · 需要时可附上诊断包</summary>
+
+        Settings › About › Export Diagnostics creates a .zip. Drag it into the "What happened" box above. It contains recently played track names and local file paths, and issues are public, so check it first if that matters to you.
+
+        在 设置 › 关于 › 导出诊断 中生成 .zip，拖进上方「出了什么问题」的输入框即可。诊断包里有最近播放的歌曲名称和本机文件路径，issue 公开可见，介意的话请先解压检查。
+
+        </details>

@@ -1164,6 +1164,11 @@ struct OnboardingView: View {
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // 文案里点名了菜单栏右键菜单的「反馈问题…」,改那一项的名字要连这句一起改。
+            Text(L10n.t("遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

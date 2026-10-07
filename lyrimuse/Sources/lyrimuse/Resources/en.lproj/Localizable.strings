@@ -96,8 +96,6 @@
 "Discord 拒绝连接" = "Discord refused the connection";
 "Discord 未打开" = "Discord isn't open";
 "GPL-3.0" = "GPL-3.0";
-"GitHub Discussions" = "GitHub Discussions";
-"GitHub Issues" = "GitHub Issues";
 "GitHub Star 数" = "GitHub stars";
 "GitHub 仓库" = "GitHub Repository";
 "Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 中也未勾选 Spotify。" = "Last.fm's connection to Spotify expired on %@, and Spotify isn't checked in Lyrimuse either.";
@@ -111,6 +109,7 @@
 "Lyric × Muse——把歌词交给音乐女神" = "Lyric × Muse — hand your lyrics to the Muse";
 "LyricFind（经由 YouTube Music 检索）" = "LyricFind (searched via YouTube Music)";
 "Lyrimuse" = "Lyrimuse";
+"Lyrimuse 反馈" = "Lyrimuse Feedback";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
 "Lyrimuse 已在「系统设置 › 通用 › 登录项」中关闭，如需开机启动，请在该处重新开启" = "Lyrimuse is turned off in System Settings › General › Login Items. Turn it back on there to open at login";
@@ -311,6 +310,7 @@
 "你" = "You";
 "你的常听" = "Your top plays";
 "使用 Cloudflare Worker + KV 自行搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。也可不自建：配置「ListenBrainz」后，网页同样能显示「正在播放」，两者配置其一即可。效果截图与完整搭建步骤见该仓库的 README" = "A state-worker service you host yourself on Cloudflare Workers + KV (separate public repo: Yudaotor/nowplaying-workers). Self-hosting is optional: connecting “ListenBrainz” also lets the web page fall back to showing “Now Playing”, and either one alone is enough. That repo's own README has screenshots and full setup steps";
+"使用求助" = "Get Help";
 "例如 https://yourdomain.com/api/state" = "e.g. https://yourdomain.com/api/state";
 "保存" = "Save";
 "保存修改" = "Save Changes";
@@ -478,8 +478,9 @@
 "去年这一周收听 %@ 次，循环最多的是以下歌曲" = "Last year, this week you listened %@ times — these looped the most";
 "双行" = "Two Lines";
 "双语歌名" = "Bilingual title";
-"反馈与社区" = "Feedback & Community";
+"反馈" = "Feedback";
 "反馈问题" = "Report an Issue";
+"反馈问题…" = "Report an Issue…";
 "反馈问题时请附上：打包日志、崩溃记录与运行状态，已移除账号凭据和本机用户名" = "Attach this when reporting a problem: logs, crash reports and app state in one file, with account credentials and your Mac user name removed";
 "发布于 %@" = "Released %@";
 "发送给 Last.fm 的歌手名和歌名。\n智能：使用 Last.fm 上收听人数最多的写法，未找到时按原样发送；专辑名去除「 - Single」「 - EP」后缀。\n自定义：分别设置歌名和歌手。\n原始：按播放器报告的标签原样发送。" = "The artist and track names sent to Last.fm.\nSmart: switches to the most-listened spelling on Last.fm; sent as-is when there is no match. Album names drop the “ - Single” / “ - EP” suffix.\nCustom: choose for the track title and the artist separately.\nRaw: exactly what the player reports.";
@@ -542,6 +543,8 @@
 "在 Dock 中显示" = "Show in Dock";
 "在 Edge 菜单栏中依次选择「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。" = "In Edge’s menu bar: View → Developer → Allow JavaScript from Apple Events.";
 "在 GitHub 提 issue" = "Request it on GitHub";
+"在 GitHub 新建 issue，自动附带版本、系统与播放器信息" = "Opens a new GitHub issue with your version, macOS and player filled in";
+"在 GitHub 讨论区的问答分类中提问" = "Ask in the Q&A category of GitHub Discussions";
 "在 KKBOX 中显示" = "Show in KKBOX";
 "在 KKBOX 中显示专辑" = "Show Album in KKBOX";
 "在 KKBOX 中显示歌手" = "Show Artist in KKBOX";
@@ -852,7 +855,6 @@
 "悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口按需打开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
 "悬浮歌词宽度" = "Overlay lyrics width";
 "悬浮淡化" = "Fade on hover";
-"想法与建议" = "Ideas & Suggestions";
 "成立时间" = "Formed";
 "我已完成授权，继续" = "I've Authorized";
 "我的配色主题" = "My Themes";
@@ -882,6 +884,7 @@
 "打开该浏览器" = "Open Browser";
 "打开软件更新" = "Open Software Update";
 "扫描中 %1$@/%2$@" = "Scanning %1$@/%2$@";
+"找不到对的歌词？在 GitHub 反馈" = "Can't find the right lyrics? Report it on GitHub";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
 "拖动前先长按" = "Long-press before dragging";
@@ -1363,6 +1366,7 @@
 "汽水音乐歌手页" = "Soda Music artist page";
 "汽水音乐歌曲页" = "Soda Music song page";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲没有歌词，通常会在后续版本中修复" = "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it";
+"没有 GitHub 账号时，可发送邮件至 %@" = "No GitHub account? Email %@";
 "没有完全磁盘访问权限，无法读取 %@ 的本机歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
 "没有无效记录" = "No Invalid Entries";
 "没有符合条件的歌曲" = "No Matching Songs";
@@ -1794,8 +1798,10 @@
 "通用" = "General";
 "通知" = "Notifications";
 "通知平台" = "Notification Platform";
+"遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」" = "If something goes wrong, right-click the menu bar icon and choose “Report an Issue…”";
 "那年今日" = "On This Day";
 "那年今日 · %1$@ 年前收听 %2$@ 首" = "On this day · %2$@ plays %1$@ year(s) ago";
+"邮件反馈" = "Email Feedback";
 "部分写法未能获取" = "Some spellings couldn't be loaded";
 "部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限" = "Some settings couldn't be written (%@); the rest were imported. Try importing again, or check that the config folder is writable.";
 "配置尚未完成，点按查看缺少的项目" = "Setup isn’t finished — click to see what’s left";

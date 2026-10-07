@@ -6693,7 +6693,7 @@ private struct ShortcutsSettingsTab: View {
 // "什么版本、什么芯片、什么系统")、一句 tagline、两颗胶囊按钮(咖啡、GitHub 带 star 数)和
 // 那句求 star 的话 —— 不用滚动就能到达这一页最常用的两个动作。
 //
-// 卡片按意图分四张并加 SettingsCardHeader:更新 / 反馈与社区 / 许可与版权 / 诊断与数据。
+// 卡片按意图分四张并加 SettingsCardHeader:更新 / 反馈 / 许可与版权 / 诊断与数据。
 // 每张两三行,标题行 12pt 次要色把层级拉开,跟别的页同一套规则;每一行都有副标题,不点进去
 // 也知道会到哪里。 别摊回一张八行的长卡 —— 更新开关、外链、法律说明三种不相干的东西混在
 // 一起、没有任何分组标签,读者只能从上往下扫。
@@ -6758,7 +6758,7 @@ private struct AboutSettingsTab: View {
             #if canImport(Sparkle)
             updateCard
             #endif
-            communityCard
+            feedbackCard
             legalCard
             diagnosticsCard
             Text("© 2026 Yudaotor · GPL-3.0")
@@ -6855,7 +6855,7 @@ private struct AboutSettingsTab: View {
                     Text(String(format: L10n.t("版本 %@"), versionString))
                     Text("·")
                         .foregroundStyle(.tertiary)
-                    Text(Self.architectureName)
+                    Text(FeedbackLinks.architectureName)
                 }
             }
             .font(.system(size: 11, weight: .medium))
@@ -6872,19 +6872,9 @@ private struct AboutSettingsTab: View {
         .animation(.easeInOut(duration: 0.15), value: versionCopied)
     }
 
-    /// 芯片架构的产品名(不本地化:Apple 自己的界面里这两个词也不翻)。universal 包在两种机器上跑的是
-    /// 各自原生那一半,所以编译期判断就是运行期事实。
-    private static var architectureName: String {
-        #if arch(arm64)
-        return "Apple Silicon"
-        #else
-        return "Intel"
-        #endif
-    }
-
     private func copyVersionInfo() {
-        let os = ProcessInfo.processInfo.operatingSystemVersion
-        let text = "Lyrimuse \(versionString) (\(Self.architectureName)) · macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
+        let os = FeedbackLinks.macOSVersionString(ProcessInfo.processInfo.operatingSystemVersion)
+        let text = "Lyrimuse \(versionString) (\(FeedbackLinks.architectureName)) · macOS \(os)"
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         versionCopied = true
@@ -6932,31 +6922,34 @@ private struct AboutSettingsTab: View {
         return String(format: L10n.t("上次检查：%@"), formatter.string(from: date))
     }
 
-    private var communityCard: some View {
+    /// 「反馈问题」进 issue 模板选择页,版本、系统、播放器已经填好,反馈的类型在那里选;「前往」左边一颗邮件图标给没有 GitHub
+    /// 账号的人,邮箱写在悬停提示里。「使用求助」进讨论区的问答分类。反馈问题和邮件都走 `FeedbackReporter`,菜单栏右键菜单的
+    /// 「反馈问题…」也是,见 14 章决策 57、59。
+    private var feedbackCard: some View {
         SettingsCard {
-            SettingsCardHeader(title: L10n.t("反馈与社区"))
+            SettingsCardHeader(title: L10n.t("反馈"))
             CardDivider()
             SettingsRow(
                 icon: "exclamationmark.bubble",
                 title: L10n.t("反馈问题"),
-                subtitle: L10n.t("GitHub Issues")
+                subtitle: L10n.t("在 GitHub 新建 issue，自动附带版本、系统与播放器信息")
             ) {
-                Button(L10n.t("前往")) {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
+                HStack(spacing: 10) {
+                    Button { FeedbackReporter.openEmail() } label: { Image(systemName: "envelope") }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .help(String(format: L10n.t("没有 GitHub 账号时，可发送邮件至 %@"), FeedbackLinks.feedbackEmail))
+                        .accessibilityLabel(L10n.t("邮件反馈"))
+                    Button(L10n.t("前往")) { FeedbackReporter.openNewIssue() }
                 }
             }
             CardDivider()
-            // 跟上面"反馈问题"(Issues,追踪 bug 修复状态)分开:这里收想法/新功能建议,走 GitHub
-            // Discussions 的 Ideas 分类。选它而不是另起一套表单/第三方服务:零额外基建(仓库自带),
-            // 自带点赞投票和评论,还能让同一个想法别被重复提好几遍。
             SettingsRow(
-                icon: "lightbulb",
-                title: L10n.t("想法与建议"),
-                subtitle: L10n.t("GitHub Discussions")
+                icon: "questionmark.bubble",
+                title: L10n.t("使用求助"),
+                subtitle: L10n.t("在 GitHub 讨论区的问答分类中提问")
             ) {
-                Button(L10n.t("前往")) {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/discussions/categories/ideas")!)
-                }
+                Button(L10n.t("前往")) { NSWorkspace.shared.open(FeedbackLinks.helpURL) }
             }
         }
     }

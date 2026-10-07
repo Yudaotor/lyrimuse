@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Questions · 使用求助"
+    url: "https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a"
+    about: "Ask how to set things up in Discussions · 不清楚怎么设置、想问问题，请到讨论区的问答分类"
+  - name: "Security issue · 安全问题"
+    url: "https://github.com/Yudaotor/lyrimuse/security/advisories/new"
+    about: "Report privately instead of opening a public issue · 请私下报告，不要公开提交 issue"
