@@ -638,7 +638,7 @@ struct OnboardingView: View {
         return VStack(alignment: .leading, spacing: 14) {
             Text(L10n.t("启用歌词引擎与权限"))
                 .font(.title2.bold())
-            Text(L10n.t("歌词引擎为必需组件；权限建议开启，不开启也可使用"))
+            Text(L10n.t("请启用歌词引擎，并开启以下权限；未开启的权限只影响对应功能"))
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 0) {
                 setupRow(icon: engineIcon, tint: engineTint, title: L10n.t("歌词引擎"),
@@ -786,8 +786,15 @@ struct OnboardingView: View {
     /// 别写「不上传」:开了网页中继时当前歌词会推到用户自己的服务器。
     private func permissionBenefitNote(_ fdaTargets: [PlaybackPlayer], _ axTargets: [PlaybackPlayer]) -> String? {
         var lines: [String] = []
-        if !automationTargets.isEmpty {
-            lines.append(L10n.t("自动化权限可让播放进度更准确，并可在歌词上直接控制播放"))
+        let refineTargets = automationTargets.filter { $0.automationUse == .refinesProgress }
+        if !refineTargets.isEmpty {
+            lines.append(String(format: L10n.t("自动化权限可让%@的播放进度更准确，并可在歌词上直接控制播放"),
+                                automation.playerNames(refineTargets)))
+        }
+        let trackTargets = automationTargets.filter { $0.automationUse == .readsTrack }
+        if !trackTargets.isEmpty {
+            lines.append(String(format: L10n.t("自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放"),
+                                automation.playerNames(trackTargets)))
         }
         if !fdaTargets.isEmpty {
             lines.append(String(format: L10n.t("完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列"),
@@ -905,8 +912,8 @@ struct OnboardingView: View {
     // 也可以一个都不开),所以这里是几个独立开关,不是单选 Picker。触控栏那一行只在这台 Mac
     // 有触控栏时出现,开关直接绑设置:`TouchBarLyricsController` 自己订阅 `showLyricsInTouchBar`
     // 启停,所以下面第 1、2 条(两个窗口控制器)管不到它,第 3 条(不替用户预选)同样适用。
-    // 见 17 章决策 32。"歌词窗口"刻意不放进来:它没有任何持久化开关,在向导里打开只会弹一扇窗
-    // 盖住向导本身,而且下次启动不保留 —— 在这里承诺它等于承诺一个不存在的偏好。
+    // 见 17 章决策 32。"歌词窗口"刻意不放进来:它不是常驻的显示方式,而是一扇按需打开的窗口
+    // (下次启动按上次退出时开没开重开),在向导里打开只会弹一扇窗盖住向导本身。
     //
     // 三条必须守住的写法约束:
     // 1) 关着的那个形态,渲染路径上连 `.shared` 都不能碰 —— 两个窗口控制器都是
@@ -1454,14 +1461,29 @@ struct OnboardingView: View {
         }
     }
 
+    /// 辅助功能、自动化两项按用途说(`accessibilityUse` / `automationUse`),跟上一页那几句对得上。
     private func recommendedBenefit(_ kind: OnboardingFlow.ReadinessKind) -> String {
         switch kind {
         case .fullDiskAccess:
-            return L10n.t("建议开启，以获得更多功能：直接使用本机已有的歌词，并提前准备下一首")
+            return L10n.t("请开启此权限，以便直接使用本机已有的歌词，并提前准备下一首")
         case .accessibility:
-            return L10n.t("建议开启，以获得更多功能：自动连播时播放进度更准确")
+            let targets = accessibilityTargets
+            let progress = targets.filter { $0.accessibilityUse == .calibratesProgress }
+            let playMode = targets.filter { $0.accessibilityUse == .switchesPlayMode }
+            if progress.isEmpty {
+                return String(format: L10n.t("请开启此权限，以显示%@的随机、循环键"),
+                              accessibility.playerNames(playMode))
+            }
+            if playMode.isEmpty {
+                return String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确"),
+                              accessibility.playerNames(progress))
+            }
+            return String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环键"),
+                          accessibility.playerNames(progress), accessibility.playerNames(playMode))
+        case .automation(let player) where player.automationUse == .readsTrack:
+            return L10n.t("请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放")
         default:
-            return L10n.t("建议开启，以获得更多功能：播放进度更准确，并可在歌词上直接控制播放")
+            return L10n.t("请开启此权限，让播放进度更准确，并可在歌词上直接控制播放")
         }
     }
 

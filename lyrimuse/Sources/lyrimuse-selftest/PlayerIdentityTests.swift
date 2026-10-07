@@ -798,6 +798,8 @@ func runPlayerIdentityTests() {
                     "辅助功能判据: 读界面的 Amazon Music、按菜单切模式的 QQ 音乐(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse), [.switchesPlayMode, .calibratesProgress],
                     "辅助功能判据: QQ 音乐是切模式、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
+        expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse), [.refinesProgress, .refinesProgress, .readsTrack],
+                    "自动化判据: Apple Music、Spotify 只让进度更准,Kaset 的曲目整份靠它,引导页和设置页的说明按这个分开写")
         expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .amazonMusic], "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")

@@ -845,9 +845,6 @@
 "延后" = "Delay";
 "延后 %@ 秒显示" = "Show %@s later";
 "建议" = "Suggestions";
-"建议开启，以获得更多功能：播放进度更准确，并可在歌词上直接控制播放" = "Recommended for more features: more accurate progress, and playback controls right on the lyrics";
-"建议开启，以获得更多功能：直接使用本机已有的歌词，并提前准备下一首" = "Recommended for more features: use lyrics already on this Mac and get the next song ready ahead of time";
-"建议开启，以获得更多功能：自动连播时播放进度更准确" = "Recommended for more features: more accurate playback position during autoplay";
 "开启「自动识别」时，将识别所有已知和已信任的播放器，上方的勾选暂不生效。如只需识别部分播放器，请取消勾选此项。" = "“Auto-detect” recognizes every known and trusted player, so the checkboxes above have no effect right now. Untick it to recognize only the ones you pick";
 "开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享。" = "When on, the song you're playing shows on your Discord profile and in your friends list. If friends can't see it, go to User Settings › Activity Privacy in Discord and turn on activity sharing.";
 "开始" = "Start";
@@ -1192,7 +1189,9 @@
 "未找到要使用的播放器？" = "Don't see your player?";
 "未找到这首歌曲的歌词" = "No lyrics found for this song";
 "未授权" = "Not Requested";
+"未授权时无法准确识别%@正在播放的歌曲，也无法控制播放" = "Without it, the song %@ is playing can't be identified reliably, and the controls do nothing";
 "未授权时无法准确读取播放进度，也无法控制播放" = "Without it, the playback position drifts and the controls do nothing";
+"未授权时无法准确读取播放进度，也无法控制播放；%@正在播放的歌曲也可能识别不准" = "Without it, the playback position drifts and the controls do nothing; the song %@ is playing may also be misidentified";
 "未授权时，播放进度可能不准确，歌词上的播放控制也无法使用" = "Without it, playback progress may drift and the playback controls on the lyrics won’t work";
 "未查到" = "Unknown";
 "未检测到触控栏" = "No Touch Bar detected";
@@ -1312,7 +1311,6 @@
 "歌词库正在刷新，请稍后重试" = "The lyrics library is refreshing. Try again in a moment";
 "歌词延后" = "Delay Lyrics";
 "歌词引擎" = "Lyrics Engine";
-"歌词引擎为必需组件；权限建议开启，不开启也可使用" = "The lyrics engine is required; the permissions are recommended but optional";
 "歌词引擎尚未启用，本次引导未完成，下次启动时将再次显示" = "The lyrics engine isn't enabled yet, so this doesn't count as finishing setup — you'll be asked again next launch";
 "歌词引擎已停用，更改将在下次启用时生效" = "The lyrics engine is turned off. The change takes effect when it is turned on again.";
 "歌词引擎已重启，但仍无法读取。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。" = "The lyrics engine has restarted and still can’t read them. Check that Lyrimuse is switched on under Full Disk Access in System Settings.";
@@ -1613,7 +1611,8 @@
 "自动" = "Automatic";
 "自动下载并安装" = "Download and Install Automatically";
 "自动化权限" = "Automation Permission";
-"自动化权限可让播放进度更准确，并可在歌词上直接控制播放" = "Automation access keeps playback progress accurate and lets you control playback right from the lyrics";
+"自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放" = "Automation access lets Lyrimuse tell which song %@ is playing and lets you control playback right from the lyrics";
+"自动化权限可让%@的播放进度更准确，并可在歌词上直接控制播放" = "Automation access keeps %@'s playback progress accurate and lets you control playback right from the lyrics";
 "自动匹配 %@ 首缺失的歌词" = "Auto-Match Lyrics for %@ Missing Songs";
 "自动匹配 %@ 首缺失的歌词#one" = "Auto-Match Lyrics for %@ Missing Song";
 "自动匹配中 %1$@/%2$@" = "Auto-matching %1$@/%2$@";
@@ -1718,10 +1717,17 @@
 "请先填写 API Key" = "API Key is required";
 "请先填写 Secret" = "Secret is required";
 "请先播放一首歌曲，再选择「搜索歌词…」" = "Start playing a song, then choose “Search Lyrics…” again.";
+"请启用歌词引擎，并开启以下权限；未开启的权限只影响对应功能" = "Turn on the lyrics engine and the permissions below; a permission left off only affects its own feature";
 "请在系统设置的「完全磁盘访问权限」中开启 Lyrimuse（如列表中没有，请点按「+」添加），然后回到此处点按「重启歌词引擎」。授权不会作用于已在运行的歌词引擎。" = "Turn on Lyrimuse under Full Disk Access in System Settings (if it isn’t listed, click “+” to add it), then come back and click Restart Lyrics Engine. Access doesn’t reach a lyrics engine that’s already running.";
 "请在系统设置的「辅助功能」中开启 Lyrimuse。如已授权但此处仍显示未授权，请将 Lyrimuse 取消勾选后重新勾选。" = "Turn on Lyrimuse under Accessibility in System Settings. If you granted it before and it still shows as not granted, uncheck Lyrimuse there and check it again.";
 "请将 YouTube Music 标签页切换到前台后重试" = "Bring the YouTube Music tab to the front and try again";
 "请尝试其他筛选条件或关键词" = "Try different filters or search terms.";
+"请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放" = "Turn this on so the playing song is recognized correctly, with playback controls right on the lyrics";
+"请开启此权限，以便直接使用本机已有的歌词，并提前准备下一首" = "Turn this on to use lyrics already on this Mac and get the next song ready ahead of time";
+"请开启此权限，以显示%@的随机、循环键" = "Turn this on to show shuffle and repeat buttons for %@";
+"请开启此权限，让%@自动连播时的播放进度更准确" = "Turn this on to keep %@'s playback position accurate during autoplay";
+"请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环键" = "Turn this on to keep %@'s playback position accurate during autoplay and show shuffle and repeat buttons for %@";
+"请开启此权限，让播放进度更准确，并可在歌词上直接控制播放" = "Turn this on for more accurate progress and playback controls right on the lyrics";
 "请打开 Discord" = "Discord needs to be open";
 "请按下快捷键…" = "Type Shortcut…";
 "请播放一首歌曲" = "Play a song to try it";

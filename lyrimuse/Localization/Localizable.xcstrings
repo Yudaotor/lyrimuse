@@ -32319,6 +32319,52 @@
         }
       }
     },
+    "未授权时无法准确识别%@正在播放的歌曲，也无法控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Without it, the song %@ is playing can't be identified reliably, and the controls do nothing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未授权时无法准确识别%@正在播放的歌曲，也无法控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未授權時無法準確識別%@正在播放的歌曲，也無法控制播放"
+          }
+        }
+      }
+    },
+    "未授权时无法准确读取播放进度，也无法控制播放；%@正在播放的歌曲也可能识别不准" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Without it, the playback position drifts and the controls do nothing; the song %@ is playing may also be misidentified"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未授权时无法准确读取播放进度，也无法控制播放；%@正在播放的歌曲也可能识别不准"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未授權時無法準確讀取播放進度，也無法控制播放；%@正在播放的歌曲也可能識別不準"
+          }
+        }
+      }
+    },
     "%@ 自动化权限" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33383,48 +33429,71 @@
         }
       }
     },
-    "建议开启，以获得更多功能：直接使用本机已有的歌词，并提前准备下一首" : {
+    "请开启此权限，以便直接使用本机已有的歌词，并提前准备下一首" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recommended for more features: use lyrics already on this Mac and get the next song ready ahead of time"
+            "value" : "Turn this on to use lyrics already on this Mac and get the next song ready ahead of time"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "建议开启，以获得更多功能：直接使用本机已有的歌词，并提前准备下一首"
+            "value" : "请开启此权限，以便直接使用本机已有的歌词，并提前准备下一首"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "建議開啟，以取得更多功能：直接使用本機已有的歌詞，並提前準備下一首"
+            "value" : "請開啟此權限，以便直接使用本機已有的歌詞，並提前準備下一首"
           }
         }
       }
     },
-    "建议开启，以获得更多功能：播放进度更准确，并可在歌词上直接控制播放" : {
+    "请开启此权限，让播放进度更准确，并可在歌词上直接控制播放" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recommended for more features: more accurate progress, and playback controls right on the lyrics"
+            "value" : "Turn this on for more accurate progress and playback controls right on the lyrics"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "建议开启，以获得更多功能：播放进度更准确，并可在歌词上直接控制播放"
+            "value" : "请开启此权限，让播放进度更准确，并可在歌词上直接控制播放"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "建議開啟，以取得更多功能：播放進度更準確，並可在歌詞上直接控制播放"
+            "value" : "請開啟此權限，讓播放進度更準確，並可在歌詞上直接控制播放"
+          }
+        }
+      }
+    },
+    "请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn this on so the playing song is recognized correctly, with playback controls right on the lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以便準確識別正在播放的歌曲，並可在歌詞上直接控制播放"
           }
         }
       }
@@ -33889,25 +33958,25 @@
         }
       }
     },
-    "歌词引擎为必需组件；权限建议开启，不开启也可使用" : {
+    "请启用歌词引擎，并开启以下权限；未开启的权限只影响对应功能" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The lyrics engine is required; the permissions are recommended but optional"
+            "value" : "Turn on the lyrics engine and the permissions below; a permission left off only affects its own feature"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "歌词引擎为必需组件；权限建议开启，不开启也可使用"
+            "value" : "请启用歌词引擎，并开启以下权限；未开启的权限只影响对应功能"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "歌詞引擎為必要元件；權限建議開啟，不開啟也可使用"
+            "value" : "請啟用歌詞引擎，並開啟以下權限；未開啟的權限只影響對應功能"
           }
         }
       }
@@ -33958,25 +34027,48 @@
         }
       }
     },
-    "自动化权限可让播放进度更准确，并可在歌词上直接控制播放" : {
+    "自动化权限可让%@的播放进度更准确，并可在歌词上直接控制播放" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Automation access keeps playback progress accurate and lets you control playback right from the lyrics"
+            "value" : "Automation access keeps %@'s playback progress accurate and lets you control playback right from the lyrics"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "自动化权限可让播放进度更准确，并可在歌词上直接控制播放"
+            "value" : "自动化权限可让%@的播放进度更准确，并可在歌词上直接控制播放"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "自動化權限可讓播放進度更準確，並可在歌詞上直接控制播放"
+            "value" : "自動化權限可讓%@的播放進度更準確，並可在歌詞上直接控制播放"
+          }
+        }
+      }
+    },
+    "自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automation access lets Lyrimuse tell which song %@ is playing and lets you control playback right from the lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動化權限可讓 Lyrimuse 準確識別%@正在播放的歌曲，並可在歌詞上直接控制播放"
           }
         }
       }
@@ -36101,19 +36193,71 @@
         }
       }
     },
-    "建议开启，以获得更多功能：自动连播时播放进度更准确" : {
+    "请开启此权限，让%@自动连播时的播放进度更准确" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recommended for more features: more accurate playback position during autoplay"
+            "value" : "Turn this on to keep %@'s playback position accurate during autoplay"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，让%@自动连播时的播放进度更准确"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "建議開啟，以取得更多功能：自動連播時播放進度更準確"
+            "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確"
+          }
+        }
+      }
+    },
+    "请开启此权限，以显示%@的随机、循环键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn this on to show shuffle and repeat buttons for %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，以显示%@的随机、循环键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以顯示%@的隨機、循環鍵"
+          }
+        }
+      }
+    },
+    "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn this on to keep %@'s playback position accurate during autoplay and show shuffle and repeat buttons for %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確，並顯示%@的隨機、循環鍵"
           }
         }
       }

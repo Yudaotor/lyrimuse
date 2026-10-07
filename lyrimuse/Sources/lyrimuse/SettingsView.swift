@@ -5582,7 +5582,7 @@ private struct PlayerSettingsTab: View {
                 // 卡头这句是这张卡在设置搜索里的**唯一锚点**(行标题是 `player.displayName`、
                 // 不是字面量,扫不到也没法登记),改它要同步改 `SettingsSearchCatalog` 那一条。
                 SettingsCardHeader(title: L10n.t("自动化权限"),
-                                   help: L10n.t("未授权时无法准确读取播放进度，也无法控制播放"))
+                                   help: automation.unauthorizedHelp(targets))
                 ForEach(Array(targets.enumerated()), id: \.element) { index, player in
                     if index > 0 { CardDivider() }
                     SettingsRow(

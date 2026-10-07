@@ -150,6 +150,23 @@ final class PlayerAutomationPermissions: ObservableObject {
 
     // MARK: - 两个界面共用的措辞
 
+    /// 「Apple Music 和 Spotify」—— 说明文字里替哪几家要。拼接走 `ListFormatter`(见 `SettingsToggleSummary` 头注)。
+    func playerNames(_ players: [PlaybackPlayer]) -> String {
+        ListFormatter.localizedString(byJoining: players.map(\.displayName))
+    }
+
+    /// 设置页那张卡卡头「?」里的一句,按用途(`PlaybackPlayer.automationUse`)分开说:
+    /// 只让进度更准的那几家没授权照样认得出曲目,曲目整份靠它的那几家没授权就认不准在放哪首。
+    func unauthorizedHelp(_ players: [PlaybackPlayer]) -> String {
+        let tracks = players.filter { $0.automationUse == .readsTrack }
+        guard !tracks.isEmpty else { return L10n.t("未授权时无法准确读取播放进度，也无法控制播放") }
+        if tracks.count == players.count {
+            return String(format: L10n.t("未授权时无法准确识别%@正在播放的歌曲，也无法控制播放"), playerNames(tracks))
+        }
+        return String(format: L10n.t("未授权时无法准确读取播放进度，也无法控制播放；%@正在播放的歌曲也可能识别不准"),
+                      playerNames(tracks))
+    }
+
     func actionTitle(_ player: PlaybackPlayer) -> String {
         status(player) == .notDetermined ? L10n.t("请求权限") : L10n.t("打开系统设置")
     }
