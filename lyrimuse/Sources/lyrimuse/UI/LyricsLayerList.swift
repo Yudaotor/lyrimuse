@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import LyrimuseCore
 import OSLog
 import QuartzCore
@@ -38,6 +39,8 @@ struct LyricsLayerList: NSViewRepresentable {
     }
 
     let spec: Spec
+    /// 歌词窗口的「闲置隐藏」:指示条跟着按钮组一起淡入淡出(07 章决策 129)。引用类型,不进 `Spec`。
+    var chromeFade: LyricsWindowChromeFade?
     /// 此刻的播放位置(歌词时间轴毫秒,含歌词偏移)。装动画、对表时各读一次。
     let nowMs: () -> Int
     let onTapLine: (Int) -> Void
@@ -47,6 +50,7 @@ struct LyricsLayerList: NSViewRepresentable {
     func updateNSView(_ view: LyricsLayerListView, context: Context) {
         view.nowProvider = nowMs
         view.onTapLine = onTapLine
+        view.bindChromeFade(chromeFade)
         view.apply(spec)
     }
 }
@@ -102,6 +106,8 @@ final class LyricsLayerListView: NSView {
     /// 换句位移动画的键序号:几笔叠着走,每一笔一个键,不互相顶掉。
     private var shiftSerial = 0
     private var trackingArea: NSTrackingArea?
+    private weak var boundChromeFade: LyricsWindowChromeFade?
+    private var chromeFadeObserver: AnyCancellable?
 
     private struct BuildKey: Equatable, @unchecked Sendable {
         var lines: [LyricsWindowLine]
@@ -727,6 +733,34 @@ final class LyricsLayerListView: NSView {
         thumb.bounds = CGRect(x: 0, y: 0, width: 12, height: thumbH)
         thumb.position = CGPoint(x: centerX, y: topInset + (trackH - thumbH) * f + thumbH / 2)
         CATransaction.commit()
+    }
+
+    /// 指示条跟着歌词窗口的「闲置隐藏」淡入淡出(07 章决策 129)。动的是两层的 `opacity`,`isHidden` 仍归 `updateIndicator`。
+    func bindChromeFade(_ fade: LyricsWindowChromeFade?) {
+        guard fade !== boundChromeFade else { return }
+        boundChromeFade = fade
+        chromeFadeObserver = fade?.$visible.removeDuplicates().sink { [weak self] visible in
+            self?.fadeIndicator(visible: visible)
+        }
+        if fade == nil { fadeIndicator(visible: true) }
+    }
+
+    private func fadeIndicator(visible: Bool) {
+        let target: Float = visible ? 1 : 0
+        for layer in [track, thumb] {
+            let from = layer.presentation()?.opacity ?? layer.opacity
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.opacity = target
+            CATransaction.commit()
+            guard from != target else { continue }
+            let a = CABasicAnimation(keyPath: "opacity")
+            a.fromValue = from
+            a.toValue = target
+            a.duration = visible ? LyricsWindowChromeIdle.fadeInSeconds : LyricsWindowChromeIdle.fadeOutSeconds
+            a.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(a, forKey: "lyrimuse.layer-list.indicator-fade")
+        }
     }
 
     /// 换句那一下滑块沿各行景深那条弹簧补间过去(同 SwiftUI 版指示条换句时的补间),用户自己滚时直接跟手。

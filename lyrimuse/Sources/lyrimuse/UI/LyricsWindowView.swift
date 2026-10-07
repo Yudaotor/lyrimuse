@@ -369,6 +369,11 @@ private final class LyricsWindowController: ObservableObject {
     private let transportKeys = LyricsWindowTransportKeys()
     /// 迷你窗「悬浮淡化」(`LyricsWindowHoverFade`),窗口第一次 attach 时接上。
     private let hoverFade = LyricsWindowHoverFade()
+    /// 完整布局的「闲置隐藏」(`LyricsWindowChromeFade`),窗口第一次 attach 时接上;红绿灯也跟着它收。
+    let chromeFade = LyricsWindowChromeFade()
+    /// `chromeFade` 此刻收着。另存一份:`@Published` 在写入之前就通知,订阅里回读 `visible` 读到的是旧值。
+    private var chromeHidden = false
+    private var chromeFadeObserver: AnyCancellable?
 
     private func refreshSurfaceVisible() {
         let visible = occlusionVisible && !coveredByOthers
@@ -744,11 +749,12 @@ private final class LyricsWindowController: ObservableObject {
     ///   * **伪全屏**(`isActive`):全屏本来就不该有窗口按钮。
     ///   * **失焦**:这扇窗大部分时间是"放在旁边看着"的,不是在操作的那一扇 —— 三颗彩色圆点在
     ///     它不活跃时只是噪点。系统默认是变灰不是消失,这里是刻意的偏好。
+    ///   * **闲置**(`chromeFade`,完整布局):指针静止或离开窗口时跟按钮组一起收,见 07 章决策 129。
     ///   * **迷你**:只留关闭和最小化,绿键单独藏 —— 迷你窗要"放大/进全屏"跟它存在的意义相反,
     ///     右上角胶囊里的全屏键在迷你时也是收起来的,同一个理由。
     private func updateTrafficLightVisibility() {
         guard let window else { return }
-        let hidden = isActive || !window.isKeyWindow
+        let hidden = isActive || !window.isKeyWindow || (chromeHidden && !isMini)
         for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             let hide = hidden || (type == .zoomButton && isMini)
             if let button = window.standardWindowButton(type), button.isHidden != hide {
@@ -863,6 +869,7 @@ private final class LyricsWindowController: ObservableObject {
             // 同一扇窗关掉再开:关窗时遮挡检测已经停了(closeObserver),这里补回来,其余观察者都还挂着。
             if coverageMonitor == nil, window.isVisible { startCoverageMonitor(window) }
             markOpenIfVisible(window)
+            MainActor.assumeIsolated { chromeFade.reveal() }
             if LyricsWindowSession.hasPendingFormRequest {
                 DispatchQueue.main.async { [weak self] in self?.applyFormRequest() }
             }
@@ -872,6 +879,11 @@ private final class LyricsWindowController: ObservableObject {
         LyricsWindowSession.window = window
         MainActor.assumeIsolated { transportKeys.install(on: window) }
         MainActor.assumeIsolated { hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }
+        MainActor.assumeIsolated { chromeFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }
+        chromeFadeObserver = chromeFade.$visible.removeDuplicates().sink { [weak self] visible in
+            self?.chromeHidden = !visible
+            self?.updateTrafficLightVisibility()
+        }
         UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)
         // 打开 / 关闭不要系统那套缩放淡入淡出:窗口直接出现、直接消失(07 章决策 51)。
         window.animationBehavior = .none
@@ -990,6 +1002,7 @@ private final class LyricsWindowController: ObservableObject {
                 self?.flushPendingPersistFrame()
                 if !AppExit.isTerminating { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }
                 self?.hoverFade.windowClosed()
+                self?.chromeFade.windowClosed()
                 self?.forceExit()
                 self?.coverageMonitor?.stop()
                 self?.coverageMonitor = nil
@@ -1706,6 +1719,11 @@ struct LyricsWindowView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         }
+    }
+
+    /// 按钮弹出来的面板开着:按钮组不收(`LyricsWindowChromeFade.setPanelsOpen`)。
+    private var chromePanelsOpen: Bool {
+        showsTranslationMenu || showsOutputMenu || showsMoreMenu || showsInfoPanel || editorialPanel != nil || showsChartsPanel
     }
 
     /// 迷你窗的停播页。版式与三种数据情形见 `MiniIdleStandby`(IdleStandbyView.swift);
@@ -2587,6 +2605,7 @@ struct LyricsWindowView: View {
                         // 系统在那里直接认领拖窗(07 章决策 14),滑杆不连窗口一起拖靠的是标题栏里跟胶囊
                         // 重叠那一块垫的占位(07 章决策 92)。
                         .offset(y: -geo.safeAreaInsets.top + 8)
+                        .lyricsWindowChromeFade(windowController.chromeFade, group: "volume")
                     }
                 }
                 .overlay(alignment: .topLeading) {
@@ -2601,6 +2620,7 @@ struct LyricsWindowView: View {
                         windowActionsCapsule()
                             .padding(.leading, 102)
                             .offset(y: -geo.safeAreaInsets.top + 8)
+                            .lyricsWindowChromeFade(windowController.chromeFade, group: "window")
                     }
                 }
                 // 「…」的 AM 式自绘菜单:锚在按钮上方、右缘对齐按钮右缘(AM 的菜单就悬在那两颗圆钮
@@ -2769,6 +2789,7 @@ struct LyricsWindowView: View {
                     }
                     .padding(.trailing, 10)
                     .padding(.bottom, 11)
+                    .lyricsWindowChromeFade(windowController.chromeFade, group: "lyrics")
                 }
                 // 那排按钮发起的动作说的那一句(重新匹配的进度和结论、外部编辑器的回执),悬在那排上方。
                 .overlay(alignment: .bottomTrailing) {
@@ -2827,6 +2848,7 @@ struct LyricsWindowView: View {
                         Color.clear.allowsHitTesting(false).onAppear { showsOutputMenu = false }
                     }
                 }
+                .onChange(of: chromePanelsOpen) { _, open in windowController.chromeFade.setPanelsOpen(open) }
             }
             // 「搜索歌词…」:歌词管理的联网搜索面板独立调起(它自包含,写回 key 由这里
             // 持有,见 LyricsSearchContext)。用 sheet(item:) 而不是 isPresented:上下文
@@ -3268,6 +3290,7 @@ struct LyricsWindowView: View {
                         // 53:滑块宽 12,右缘落在 53、中心 59 —— AM 实测中心距窗右缘 59pt。
                         .padding(.trailing, 53)
                         .allowsHitTesting(false)
+                        .lyricsWindowChromeFade(windowController.chromeFade, group: "scroll")
                 }
             }
         }
@@ -3298,6 +3321,7 @@ struct LyricsWindowView: View {
                 timingEpoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
                                                   offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs),
                 rate: playback.anchor?.rate ?? 1),
+            chromeFade: windowController.chromeFade,
             nowMs: { PlaybackCoordinator.shared.lyricsTimelineMs() },
             onTapLine: { index in
                 guard playback.allLines.indices.contains(index) else { return }
