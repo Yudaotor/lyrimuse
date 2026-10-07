@@ -1996,7 +1996,6 @@ func runSourceContractTests() {
             // 换句动画(04 章决策 52):开关关着、或开了「减弱动态效果」时一层都不包;开着时旧下一句和新主句按编号配对,
             // 只配位置,0.25 秒 cubic-bezier(0.4, 0, 0.2, 1);主句从上一拍下一句的字号和不透明度起步。
             expectEqual(view.contains("private var animatesLineChange: Bool { playback.lineChangeAnimation && !reduceMotion }")
-                        && view.contains(".matchedGeometryEffect(id: id, in: namespace, properties: .position)")
                         && view.contains("Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.25)")
                         && view.contains("private var nextSlotID: String { \"line\\((playback.lineIndex ?? -1) + 1)\" }")
                         && view.contains("guard let last = lineChangeMemory.lastNextRow, last.id == mainSlotID else { return .opacity }"), true,
@@ -2005,10 +2004,13 @@ func runSourceContractTests() {
             expectEqual(view.contains("static let instantOut = AnyTransition.opacity.animation(.linear(duration: 0.01))")
                         && view.contains("static let quickOut = AnyTransition.opacity.animation(.easeOut(duration: 0.12))")
                         && view.contains("static let lateIn = AnyTransition.opacity.animation(.easeOut(duration: 0.12).delay(0.13))")
-                        && view.contains("insertion: mainRowInsertion,\n                                  removal: OverlayLineChangeTransitions.quickOut"), true,
+                        && view.contains("insertion: mainRowInsertion,\n                              removal: OverlayLineChangeTransitions.quickOut"), true,
                         "悬浮换句动画: 旧的读音 / 译文 / 下一句当场收掉、新的后半程淡入,旧主句 0.12 秒淡完")
-            expectEqual(view.components(separatedBy: ".transition(OverlayLineChangeTransitions.rowGroup)").count - 1, 2,
-                        "悬浮换句动画: 前奏 / 间奏前后换序时,两组各自按同样的进退场切换(不落回默认淡入淡出)")
+            // 读音、译文跟着自己那一句走:开着时只有两格(这一句 / 下一句),按顶边配对,不再一行一格各自进退场。
+            expectEqual(view.contains("            if animatesLineChange {\n                lineChangeRows\n            } else {")
+                        && view.contains(".matchedGeometryEffect(id: id, in: namespace, properties: .position, anchor: .top)")
+                        && view.components(separatedBy: "OverlayLineChangeSlot(enabled: true, id: ").count - 1 == 2, true,
+                        "悬浮换句动画: 开着时卡片里只有这一句 / 下一句两格,读音和译文随所在那句一起走")
             // 默认 loops = true 是给灵动岛歌名那类常驻标签的;歌词行滚一遍停在句尾,等换句才归零。
             expectEqual(view.contains("MarqueeText(id: id, restingAlignment: alignment, loops: false)"), true,
                         "悬浮滚动: overlayScroll 的跑马灯必须 loops: false(否则滚完一行又跳回开头)")

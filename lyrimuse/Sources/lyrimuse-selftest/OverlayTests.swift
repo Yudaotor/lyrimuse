@@ -837,8 +837,11 @@ func runOverlayTests() {
             (".reportsContentRow(.translation, in: contentRowRectsSpace)", ".padding(.top, CGFloat(rowSpacing.translation))"),
             (".reportsContentRow(.nextLine, in: contentRowRectsSpace)", ".padding(.top, CGFloat(rowSpacing.nextLine))"),
         ]
+        // 按去掉缩进之后的文本数:关着换句动画时两种行序各一处,开着时那两格里读音、译文又各一处(下一句的间距挂在格子外面)。
+        let flatView = view.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.drop(while: { $0 == " " }) }.joined(separator: "\n")
         for (report, padding) in rows {
-            expectEqual(view.components(separatedBy: report + "\n                " + padding).count - 1, 2,
+            expectEqual(flatView.components(separatedBy: report + "\n" + padding).count - 1 >= 2, true,
                         "行间距接线: 两种行序下这一行都在上报矩形之后加自己的间距(" + padding + ")")
         }
         expectEqual(view.contains("VStack(alignment: .leading, spacing: rowSpacing.perWordReadingGap)"), true,

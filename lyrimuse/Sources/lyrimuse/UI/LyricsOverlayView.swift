@@ -1184,61 +1184,57 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 行与行之间的间距由各行自己的 `.padding(.top:)` 给(读音 / 译文 / 下一句各一项,见 OverlayRowSpacing),
         // VStack 自己不加,不然两份叠在一起。
         VStack(alignment: duetAlignment, spacing: 0) {
-            OverlayLineChangeSlot(enabled: animatesLineChange, id: mainSlotID, matched: line != nil,
-                                  namespace: lineChangeSpace, alignment: duetFrameAlignment, insertion: mainRowInsertion,
-                                  removal: OverlayLineChangeTransitions.quickOut) {
+            if animatesLineChange {
+                lineChangeRows
+            } else {
                 reportingMainLineRect(mainLine)
                     .reportsContentRow(.main, in: contentRowRectsSpace)
-            }
-            // 罗马音在**歌词下面、译文上面**。从歌词上面挪下来 —— 歌词窗口
-            // (LyricsWindowView)早就是这个顺序了,这里是漏改的那一处,同一首歌只要解析不出
-            // 词组就会跳到上面显示,四种组合里唯一的异类。
-            //
-            // 为什么是下面(调研结论):这里标的是**罗马字/音译**,不是注音。注音(furigana、
-            // 拼音)是给"认得这套字、只是不确定读音"的读者用的,绑到单个字符,惯例在上方
-            // (CSS ruby-position 默认 over);而音译是给"根本不认得这套字"的人跟着唱的,
-            // 是一条跟译文并列的平行文本行,惯例在下方 —— 维基百科 Furigana 条目里唯一提到
-            // 罗马字位置的例子(西武铁道站牌)也是把罗马字放在汉字下面。
-            //
-            // 四种语言统一放下面,不按语言分叉:① 韩文压根没有 ruby 传统(W3C 那份 ruby 文档
-            // 从头到尾没提韩文 —— 谚文本身表音,韩国读者不需要注音),没有"上方"惯例可继承;
-            // ② 中文拼音**作为注音**惯例确实在上方,但这里是音译,不是注音;③ K-pop 中日韩英
-            // 混唱很常见,位置随语言变会让同一屏内上下不一致。
-            //
-            // 有逐词标注(perWordRomanization)时,读音已经标在每个词的正下方了,这一整行
-            // 就不再重复一遍。
-            // line 为 nil 时(前奏/间奏「•••」下方没有当前行陪衬)退到 nextLineRomanization——
-            // 那句其实是接下来的第一句本身,该按正常行的规格展示,不是"预览小字没有罗马音"
-            // 那条既有限制的例外,是同一份数据换了个取值来源。
-            //
-            // 三行(罗马音/译文/下一句预览)的先后顺序**不是恒定的**,取决于 `line` 是否
-            // 为 nil——`nextLinePreviewRow` 在这两种状态下扮演的角色完全不同:
-            //  - `line` 不为 nil(正常唱着的一行):它是**另一句**、跟当前行无关的小字预览,
-            //    该照旧排在"当前行→当前行罗马音→当前行译文"**之后**。
-            //  - `line` 为 nil(前奏/间奏「•••」下方):`romanizationRowText`/`translationRowText`
-            //    退到的正是 `nextLinePreviewRow` 展示的**同一句**,而且用的是 mainFont 整行
-            //    大小(见 nextLinePreviewFont)、俨然就是这段时间里的"伪正文"——它必须排在
-            //    自己的罗马音/译文**前面**,跟任何一句正常行"正文→罗马音→译文"同一个顺序;
-            //    维持原顺序的话,读到的是"译文在前、原文在后",倒着念——截图实测复现过
-            //    这个倒序。
-            //
-            // 换句动画开着时两种顺序各包一个 VStack、叠在同一个 ZStack 里:换序那一拍新旧两组交叠着过渡,
-            // 不在外层 VStack 里上下排成两份。整组的进退场跟单行一样(旧的当场收掉、新的后半程淡入),
-            // 不能落回默认的淡入淡出:旧译文会拖着残影跟新的叠在一起。关着时原样排在外层 VStack 里。
-            if animatesLineChange {
-                ZStack(alignment: Alignment(horizontal: duetAlignment, vertical: .top)) {
-                    if line == nil {
-                        VStack(alignment: duetAlignment, spacing: 0) { secondaryRowsAfterGap }
-                            .transition(OverlayLineChangeTransitions.rowGroup)
-                    } else {
-                        VStack(alignment: duetAlignment, spacing: 0) { secondaryRows }
-                            .transition(OverlayLineChangeTransitions.rowGroup)
-                    }
+                // 罗马音在**歌词下面、译文上面**。从歌词上面挪下来 —— 歌词窗口
+                // (LyricsWindowView)早就是这个顺序了,这里是漏改的那一处,同一首歌只要解析不出
+                // 词组就会跳到上面显示,四种组合里唯一的异类。
+                //
+                // 为什么是下面(调研结论):这里标的是**罗马字/音译**,不是注音。注音(furigana、
+                // 拼音)是给"认得这套字、只是不确定读音"的读者用的,绑到单个字符,惯例在上方
+                // (CSS ruby-position 默认 over);而音译是给"根本不认得这套字"的人跟着唱的,
+                // 是一条跟译文并列的平行文本行,惯例在下方 —— 维基百科 Furigana 条目里唯一提到
+                // 罗马字位置的例子(西武铁道站牌)也是把罗马字放在汉字下面。
+                //
+                // 四种语言统一放下面,不按语言分叉:① 韩文压根没有 ruby 传统(W3C 那份 ruby 文档
+                // 从头到尾没提韩文 —— 谚文本身表音,韩国读者不需要注音),没有"上方"惯例可继承;
+                // ② 中文拼音**作为注音**惯例确实在上方,但这里是音译,不是注音;③ K-pop 中日韩英
+                // 混唱很常见,位置随语言变会让同一屏内上下不一致。
+                //
+                // 有逐词标注(perWordRomanization)时,读音已经标在每个词的正下方了,这一整行
+                // 就不再重复一遍。
+                // line 为 nil 时(前奏/间奏「•••」下方没有当前行陪衬)退到 nextLineRomanization——
+                // 那句其实是接下来的第一句本身,该按正常行的规格展示,不是"预览小字没有罗马音"
+                // 那条既有限制的例外,是同一份数据换了个取值来源。
+                //
+                // 三行(罗马音/译文/下一句预览)的先后顺序**不是恒定的**,取决于 `line` 是否
+                // 为 nil——`nextLinePreviewRow` 在这两种状态下扮演的角色完全不同:
+                //  - `line` 不为 nil(正常唱着的一行):它是**另一句**、跟当前行无关的小字预览,
+                //    该照旧排在"当前行→当前行罗马音→当前行译文"**之后**。
+                //  - `line` 为 nil(前奏/间奏「•••」下方):`romanizationRowText`/`translationRowText`
+                //    退到的正是 `nextLinePreviewRow` 展示的**同一句**,而且用的是 mainFont 整行
+                //    大小(见 nextLinePreviewFont)、俨然就是这段时间里的"伪正文"——它必须排在
+                //    自己的罗马音/译文**前面**,跟任何一句正常行"正文→罗马音→译文"同一个顺序;
+                //    维持原顺序的话,读到的是"译文在前、原文在后",倒着念——截图实测复现过
+                //    这个倒序。
+                if line == nil {
+                    nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.nextLine))
+                    romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.romanization))
+                    translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.translation))
+                } else {
+                    romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.romanization))
+                    translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.translation))
+                    nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.nextLine))
                 }
-            } else if line == nil {
-                secondaryRowsAfterGap
-            } else {
-                secondaryRows
             }
             // 补上——第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后
             // 自动消失,只弹一次(见 LyricsOverlayWindowController.hasShownDragHintKey
@@ -1272,36 +1268,39 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                                              nextRow: nextRowNow, memory: lineChangeMemory))
     }
 
-    /// 正常唱着时主句下面的三行:读音 → 译文 → 下一句预览。
-    @ViewBuilder private var secondaryRows: some View {
-        lineChangeFadeSlot {
-            romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
-                .padding(.top, CGFloat(rowSpacing.romanization))
+    /// 换句动画开着时卡片里的两格(见 04 章决策 52)。读音、译文跟着自己那一句走:第一格是这一句(主句 → 读音 → 译文;
+    /// 前奏 / 间奏时是「•••」),第二格是下一句(前奏 / 间奏时是接下来那句,连同它的读音、译文)。两格按编号配对、
+    /// 按顶边对齐,新的一句整块从上一拍下一句的位置走上来,旧的一句整块原地淡出,译文不会先消失再冒出来。
+    @ViewBuilder private var lineChangeRows: some View {
+        OverlayLineChangeSlot(enabled: true, id: mainSlotID, matched: true, namespace: lineChangeSpace,
+                              alignment: duetFrameAlignment, insertion: mainRowInsertion,
+                              removal: OverlayLineChangeTransitions.quickOut) {
+            VStack(alignment: duetAlignment, spacing: 0) {
+                reportingMainLineRect(mainLine)
+                    .reportsContentRow(.main, in: contentRowRectsSpace)
+                if line != nil {
+                    romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.romanization))
+                    translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.translation))
+                }
+            }
         }
-        lineChangeFadeSlot {
-            translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
-                .padding(.top, CGFloat(rowSpacing.translation))
+        OverlayLineChangeSlot(enabled: true, id: nextSlotID, matched: true, namespace: lineChangeSpace,
+                              alignment: frameAlignment(for: nextLineDuetSide), insertion: OverlayLineChangeTransitions.lateIn,
+                              removal: OverlayLineChangeTransitions.instantOut) {
+            VStack(alignment: duetAlignment, spacing: 0) {
+                nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                if line == nil {
+                    romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.romanization))
+                    translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                        .padding(.top, CGFloat(rowSpacing.translation))
+                }
+            }
         }
-        nextLineSlot {
-            nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
-                .padding(.top, CGFloat(rowSpacing.nextLine))
-        }
-    }
-
-    /// 前奏 / 间奏「•••」下面的三行:接下来那句排在它自己的读音、译文前面(理由见 `lyricsCardContent` 里那段)。
-    @ViewBuilder private var secondaryRowsAfterGap: some View {
-        nextLineSlot {
-            nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
-                .padding(.top, CGFloat(rowSpacing.nextLine))
-        }
-        lineChangeFadeSlot {
-            romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
-                .padding(.top, CGFloat(rowSpacing.romanization))
-        }
-        lineChangeFadeSlot {
-            translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
-                .padding(.top, CGFloat(rowSpacing.translation))
-        }
+        // 间距挂在格子外面:格子的顶边就是字的顶边,配对时两头的字才对得齐。
+        .padding(.top, CGFloat(rowSpacing.nextLine))
     }
 
     // MARK: - 换句动画(见 04 章决策 52)
@@ -1325,27 +1324,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                                         scale: main > 0 ? nextLinePreviewNSFont.pointSize / main : 1)
     }
 
-    /// 新主句怎么进场:上一拍下一句跟它同号,就从下一句的字号起步、一开始就是实的(位置由 matchedGeometryEffect 给);
-    /// 否则(跳句、拖进度、没开下一句)原地淡入。
+    /// 新的一句怎么进场:上一拍下一句跟它同号,就从下一句的字号起步、一开始就是实的(位置由 matchedGeometryEffect 给,
+    /// 按顶边对齐、按顶边缩放,读音和译文跟着主句一起);否则(跳句、拖进度、没开下一句)原地淡入。
     private var mainRowInsertion: AnyTransition {
         guard let last = lineChangeMemory.lastNextRow, last.id == mainSlotID else { return .opacity }
         let anchor = UnitPoint(x: duetFrameAlignment.horizontal == .leading ? 0
                                   : (duetFrameAlignment.horizontal == .trailing ? 1 : 0.5),
-                               y: 0.5)
+                               y: 0)
         return .modifier(active: OverlayLineRiseEffect(scale: last.scale, anchor: anchor),
                          identity: OverlayLineRiseEffect(scale: 1, anchor: anchor))
-    }
-
-    private func lineChangeFadeSlot<V: View>(@ViewBuilder _ row: () -> V) -> OverlayLineChangeSlot<V> {
-        OverlayLineChangeSlot(enabled: animatesLineChange, id: mainSlotID, matched: false, namespace: lineChangeSpace,
-                              alignment: duetFrameAlignment, insertion: OverlayLineChangeTransitions.lateIn,
-                              removal: OverlayLineChangeTransitions.instantOut, content: row)
-    }
-
-    private func nextLineSlot<V: View>(@ViewBuilder _ row: () -> V) -> OverlayLineChangeSlot<V> {
-        OverlayLineChangeSlot(enabled: animatesLineChange, id: nextSlotID, matched: true, namespace: lineChangeSpace,
-                              alignment: frameAlignment(for: nextLineDuetSide), insertion: OverlayLineChangeTransitions.lateIn,
-                              removal: OverlayLineChangeTransitions.instantOut, content: row)
     }
 
     /// 罗马音那一行——抽成独立视图是为了在 `lyricsCardContent` 里按 `line == nil` 换序
@@ -2190,7 +2177,7 @@ private final class OverlayLineChangeMemory {
 
 /// 换句动画的一格:开着时这一行按编号换身份,新旧两份叠在同一格里,旧的按 `removal` 退场、新的按 `insertion` 进场;
 /// `matched` 的行(主句、下一句)按编号在命名空间里配对,旧下一句和新主句同号,新主句从旧下一句的位置挪上来。
-/// 配对的行撑满整宽、按自己的对齐摆,两头的位置才只差在竖直方向。关着时原样返回。
+/// 配对的格撑满整宽、按自己的对齐摆、按顶边配,两头的位置才只差在竖直方向。关着时原样返回。
 ///
 /// 必须是存着行内容的 View,别写成 ViewModifier:修饰符的 `Content` 是指向当前内容的代理,换句时正在淡出的旧那一份
 /// 会跟着画成新句子。
@@ -2221,7 +2208,7 @@ private struct OverlayLineChangeSlot<Content: View>: View {
         if matched {
             content
                 .frame(maxWidth: .infinity, alignment: alignment)
-                .matchedGeometryEffect(id: id, in: namespace, properties: .position)
+                .matchedGeometryEffect(id: id, in: namespace, properties: .position, anchor: .top)
         } else {
             content
         }
@@ -2238,14 +2225,12 @@ private struct OverlayLineRiseEffect: ViewModifier {
     }
 }
 
-/// 换句动画里各行的进退场。走上来的那行路上不能有东西挡着:旧的读音、译文、下一句当场收掉,新的等那一行走到位、
-/// 后半程才淡入;旧主句 0.12 秒淡完,走上来的那行进的是空位。几行同时半透明叠着就会糊成一团(见 04 章决策 52)。
+/// 换句动画里两格的进退场。旧的一句(连同读音、译文)0.12 秒淡完,走上来的那一句进的是空位;旧的下一句当场收掉,
+/// 新的下一句等那一句走到位、后半程才淡入。几行同时半透明叠着就会糊成一团(见 04 章决策 52)。
 private enum OverlayLineChangeTransitions {
     static let instantOut = AnyTransition.opacity.animation(.linear(duration: 0.01))
     static let quickOut = AnyTransition.opacity.animation(.easeOut(duration: 0.12))
     static let lateIn = AnyTransition.opacity.animation(.easeOut(duration: 0.12).delay(0.13))
-    /// 前奏 / 间奏前后换序时,主句下面那一整组的进退场。
-    static let rowGroup = AnyTransition.asymmetric(insertion: lateIn, removal: instantOut)
 }
 
 /// 换句动画开着时:主句那一格的编号一变就按 LyricsX 的时长和缓动过渡,并在每拍之后记下下一句那一行。关着时原样返回。
