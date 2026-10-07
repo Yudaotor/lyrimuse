@@ -619,6 +619,7 @@ private final class LyricsWindowController: ObservableObject {
                 // 尺寸排一帧(挤成一团)再跳到大窗。迷你那档尺寸下限(300×110)不挡放大。
                 if let target { window.setFrame(target, display: false, animate: false) }
                 isMini = false
+                Self.enforceSpaceBehavior(window, mini: false)
                 UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)
                 updateTrafficLightVisibility()
                 DispatchQueue.main.async { [weak self] in
@@ -641,6 +642,7 @@ private final class LyricsWindowController: ObservableObject {
                 guard let self else { return done() }
                 frameBeforeMini = window.frame
                 isMini = true
+                Self.enforceSpaceBehavior(window, mini: true)
                 UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)
                 updateTrafficLightVisibility()
                 // 迷你**默认置顶**:这一档就是"缩成一条放在旁边看"的形态,被别的窗口一盖就等于没开。
@@ -710,14 +712,18 @@ private final class LyricsWindowController: ObservableObject {
         NSApp.addWindowsItem(window, title: window.title, filename: false)
     }
 
-    /// 缺才写(写入后自身即满足条件,不会自激);见 attach() 里的守护注释。
-    private static func enforceFullScreenCapability(_ window: NSWindow) {
+    /// 窗口的 Space / 全屏属性跟着形态走:完整尺寸能进原生全屏;迷你尺寸在每个桌面都出现、能浮在别的 App 的全屏上,
+    /// 不能进全屏(迷你藏了全屏键,全屏时也不能切迷你)。缺才写(写入后自身即满足条件,不会自激);见 attach() 里的守护
+    /// 注释与 07 章决策 131。
+    private static func enforceSpaceBehavior(_ window: NSWindow, mini: Bool) {
+        let wanted: NSWindow.CollectionBehavior = mini ? [.canJoinAllSpaces, .fullScreenAuxiliary] : [.fullScreenPrimary]
+        let unwanted: NSWindow.CollectionBehavior = mini
+            ? [.fullScreenPrimary, .fullScreenNone, .moveToActiveSpace]
+            : [.fullScreenNone, .fullScreenAuxiliary, .canJoinAllSpaces]
         var behavior = window.collectionBehavior
-        guard behavior.contains(.fullScreenNone) || behavior.contains(.fullScreenAuxiliary)
-            || !behavior.contains(.fullScreenPrimary) else { return }
-        behavior.remove(.fullScreenNone)
-        behavior.remove(.fullScreenAuxiliary)
-        behavior.insert(.fullScreenPrimary)
+        guard !behavior.isSuperset(of: wanted) || !behavior.isDisjoint(with: unwanted) else { return }
+        behavior.subtract(unwanted)
+        behavior.formUnion(wanted)
         window.collectionBehavior = behavior
     }
 
@@ -894,7 +900,7 @@ private final class LyricsWindowController: ObservableObject {
         // 实测右上角按钮(toggle 前刚补过标志)能进真全屏,绿键(用系统当下的标志)却
         // 还是 zoom。挂 didUpdate(每个绘制周期)做**持续守护**,回调只查一个位、缺了
         // 才写,写入本身也满足守卫条件,不会自激。
-        Self.enforceFullScreenCapability(window)
+        Self.enforceSpaceBehavior(window, mini: isMini)
         enforceTrafficLightPosition(window)
         updateTrafficLightVisibility()
         addToWindowsMenu(window)
@@ -989,7 +995,7 @@ private final class LyricsWindowController: ObservableObject {
         ) { [weak self] note in
             guard let win = note.object as? NSWindow else { return }
             MainActor.assumeIsolated {
-                Self.enforceFullScreenCapability(win)
+                Self.enforceSpaceBehavior(win, mini: self?.isMini ?? false)
                 self?.enforceTrafficLightPosition(win)
                 self?.placeVolumeDragHole(win)
             }
@@ -1134,7 +1140,7 @@ private final class LyricsWindowController: ObservableObject {
         // 伪全屏只留给拿不到那个修饰符的老系统兜底。
         if #available(macOS 15.0, *), let window {
             // 进全屏前再补一次(didUpdate 守护之外的双保险,幂等)。
-            Self.enforceFullScreenCapability(window)
+            Self.enforceSpaceBehavior(window, mini: isMini)
             window.toggleFullScreen(nil)
             return
         }
@@ -4553,12 +4559,12 @@ struct LyricsWindowView: View {
                 .help(L10n.t(playback.miniShowsControls ? "不再悬停显示播放控制" : "悬停显示播放控制"))
                 .accessibilityLabel(L10n.t(playback.miniShowsControls ? "不再悬停显示播放控制" : "悬停显示播放控制"))
             }
-            // 迷你尺寸用画中画那对符号:「缩成一扇小窗」在 Apple 的播放器语汇里就是 pip
-            // (Apple Music 全屏歌词页、QuickTime、Safari 视频控件同款),跟全屏那对斜箭头分得开。
+            // 迷你尺寸用「缩小 / 放大窗口」那对符号,跟全屏那对斜箭头、悬停控制条那颗长方形分得开。别用画中画符号:
+            // 看着像系统画中画(独立浮窗、点了不抢焦点),这扇窗做不到(07 章决策 131)。
             Button {
                 windowController.toggleMini(animated: true)
             } label: {
-                Image(systemName: showsMiniLayout ? "pip.exit" : "pip.enter")
+                Image(systemName: showsMiniLayout ? "square.resize.up" : "square.resize.down")
                     .font(Self.windowActionIconFont)
                     .frame(width: Self.windowActionIconWidth)
             }
