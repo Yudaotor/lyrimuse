@@ -30,7 +30,7 @@ import (
 // 只统计两类失败:http.Client.Do 本身返回错误(DNS/连接/TLS/超时——请求根本没发出去或
 // 没拿到响应)和 5xx;429 单独按 Retry-After 处理。任何拿到响应且状态码 < 500 的请求都算
 // 一次成功,**当场解除冷却**(冷却档位另算,见下一段)——4xx 一律不算:那是各源自己的业务判定(网易云 body 里的 405、
-// Musixmatch 的 401 hint=captcha 都已各自处理),也刻意**不**把
+// Musixmatch 的 401 hint=captcha 都已各自处理,后者由它自己调 noteBlocked 暂停,见「反爬拦截」一节),也刻意**不**把
 // 401/402/403 当成长期粘性冷却的理由——对没有凭据的源来说,反爬 403 那样处理会让该源永久缺席、界面还不提示。
 //
 // 三条护栏(理由见 09 章第 41 条):
@@ -77,7 +77,30 @@ const (
 	lyricSourceCooldownReasonNetwork     = "network"
 	lyricSourceCooldownReasonServerError = "http_5xx"
 	lyricSourceCooldownReasonRateLimited = "http_429"
+	// lyricSourceCooldownReasonBlocked:被对方的反爬拦下(见下面「反爬拦截」一节),不是出错。
+	lyricSourceCooldownReasonBlocked = "blocked"
 )
+
+// ---- 反爬拦截:按源暂停,15 分钟起翻倍 ----
+//
+// Musixmatch 拦一台机器时,对它的每个数据请求都回 HTTP 200 + `status_code:401, hint:"captcha"`,两台主机、
+// 直连和走代理都一样,刚换的 token 也照样被拒。上面那套熔断看的是 HTTP 层,这种应答算成功、一档都不跳 ——
+// 不单独处理的话每一轮照发、每一轮被拒,整段时间一首词都给不出,还可能把封禁拖得更久。认得出这种应答的
+// 只有源自己(musixmatch.go 解应答头),由它调 noteBlocked。
+//
+// 跟上面的冷却分开存,两条理由:① 拦截应答本身是 HTTP 200,observeWith 的 default 分支会把同一个源的冷却
+// 当场撤掉;② 上面的档位离上次跳闸 10 分钟就归零,而这里一档就 15 分钟,放在一起永远升不上去。
+// 所以这份状态只认两个入口:noteBlocked(又被拦了)和 clearBlocked(数据接口正经答了一次 200)。
+// 冷却期内再被拦(之前在飞的请求)不升档、不续期,同上面那条「余震」规矩。
+var lyricSourceBlockSchedule = []time.Duration{
+	15 * time.Minute, 30 * time.Minute, time.Hour, 2 * time.Hour, 4 * time.Hour,
+}
+
+type lyricSourceBlockState struct {
+	until time.Time
+	// tier:已经被拦过几轮,下一次被拦取第几档。只由 clearBlocked 归零。
+	tier int
+}
 
 type lyricSourceBreakerState struct {
 	until       time.Time
@@ -99,6 +122,8 @@ type lyricSourceBreaker struct {
 	transport map[string]*lyricSourceTransportState
 	// endpointOK:源 到 端点键(guardEndpointKey)到 最近一次拿到非 5xx 响应的时刻。
 	endpointOK map[string]map[string]time.Time
+	// blocked:被反爬拦下的源,见上面「反爬拦截」一节。
+	blocked map[string]*lyricSourceBlockState
 }
 
 func newLyricSourceBreaker(now func() time.Time) *lyricSourceBreaker {
@@ -107,7 +132,73 @@ func newLyricSourceBreaker(now func() time.Time) *lyricSourceBreaker {
 		state:      map[string]*lyricSourceBreakerState{},
 		transport:  map[string]*lyricSourceTransportState{},
 		endpointOK: map[string]map[string]time.Time{},
+		blocked:    map[string]*lyricSourceBlockState{},
 	}
+}
+
+// noteBlocked:source 的应答说这台机器被它的反爬拦下了。不在暂停期内就按档位暂停并升一档,返回 true;
+// 已经在暂停期内(之前在飞的请求带回来的)什么都不做。
+func (b *lyricSourceBreaker) noteBlocked(source string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := b.now()
+	bs := b.blocked[source]
+	if bs == nil {
+		bs = &lyricSourceBlockState{}
+		b.blocked[source] = bs
+	}
+	if bs.until.After(now) {
+		return false
+	}
+	idx := min(bs.tier, len(lyricSourceBlockSchedule)-1)
+	bs.tier++
+	bs.until = now.Add(lyricSourceBlockSchedule[idx])
+	log.Printf("lyrics: source %s blocked by its anti-bot check, pausing it for %s (reason=%s trip=%d)",
+		source, lyricSourceBlockSchedule[idx], lyricSourceCooldownReasonBlocked, bs.tier)
+	noteLyricSourceTrip(source, lyricSourceCooldownReasonBlocked)
+	return true
+}
+
+// clearBlocked:source 的数据接口正经答了一次,撤掉暂停、档位归零。
+func (b *lyricSourceBreaker) clearBlocked(source string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	bs := b.blocked[source]
+	if bs == nil {
+		return
+	}
+	delete(b.blocked, source)
+	log.Printf("lyrics: source %s answered normally again, anti-bot pause cleared (trips=%d)", source, bs.tier)
+}
+
+// blockedFor:source 还要暂停多久;没在暂停期内返回 0, false。
+func (b *lyricSourceBreaker) blockedFor(source string) (time.Duration, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.blockedForLocked(source, b.now())
+}
+
+func (b *lyricSourceBreaker) blockedForLocked(source string, now time.Time) (time.Duration, bool) {
+	bs := b.blocked[source]
+	if bs == nil || !bs.until.After(now) {
+		return 0, false
+	}
+	return bs.until.Sub(now), true
+}
+
+// cooldownReason:source 这会儿为什么不能问(lyricSourceCooldownReason*);能问返回空串。反爬暂停排在前面:
+// 它更长,也更说明问题。给各源近况统计记「被跳过的那几轮是什么原因」用。
+func (b *lyricSourceBreaker) cooldownReason(source string) string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := b.now()
+	if _, ok := b.blockedForLocked(source, now); ok {
+		return lyricSourceCooldownReasonBlocked
+	}
+	if st := b.state[source]; st != nil && st.until.After(now) {
+		return st.reason
+	}
+	return ""
 }
 
 // lyricSourceBreakerSharedPtr 是常驻采集器用的那一份(进程级)。经 sharedLyricSourceBreaker / setSharedLyricSourceBreaker 读写,
@@ -340,8 +431,15 @@ func (b *lyricSourceBreaker) planRound(sources []string, enabled func(string) bo
 		if isEnabled {
 			enabledTotal++
 		}
+		var left time.Duration
 		if st := b.state[s]; st != nil && st.until.After(now) {
-			plan[s] = st.until.Sub(now)
+			left = st.until.Sub(now)
+		}
+		if d, ok := b.blockedForLocked(s, now); ok && d > left {
+			left = d
+		}
+		if left > 0 {
+			plan[s] = left
 			if isEnabled {
 				enabledCooling++
 			}
@@ -372,15 +470,19 @@ var anyLyricSourceCooling = func(sources []string) bool {
 	return false
 }
 
-// coolingDown 只读地回答某个源现在是不是在冷却中(给诊断/测试用)。
+// coolingDown 只读地回答某个源现在是不是在冷却中(反爬暂停也算),给诊断/测试用。
 func (b *lyricSourceBreaker) coolingDown(source string) (time.Duration, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	st := b.state[source]
-	if st == nil || !st.until.After(b.now()) {
-		return 0, false
+	now := b.now()
+	var left time.Duration
+	if st := b.state[source]; st != nil && st.until.After(now) {
+		left = st.until.Sub(now)
 	}
-	return st.until.Sub(b.now()), true
+	if d, ok := b.blockedForLocked(source, now); ok && d > left {
+		left = d
+	}
+	return left, left > 0
 }
 
 // ---- 把"这一轮跳过了谁"从 fetchScoredLyricCandidatesStreaming 传回给写缓存的那几层 ----

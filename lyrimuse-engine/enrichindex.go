@@ -450,6 +450,27 @@ func writeFileAtomic(path string, b []byte) error {
 	return nil
 }
 
+// removeStaleWriteTemps 删掉写 path 时(writeFileAtomic,或同样拿 `<文件名>.tmp.*` 起临时文件的保存)留下、
+// 超过 olderThan 的临时文件:进程在改名之前没了(被杀、退出时没等写完、断电)就会留一个。只认这个文件名起的
+// 临时文件,别的一概不碰。返回删了几个、腾出多少字节。
+func removeStaleWriteTemps(path string, olderThan time.Duration) (removed int, freed int64) {
+	matches, err := filepath.Glob(filepath.Join(filepath.Dir(path), filepath.Base(path)+".tmp.*"))
+	if err != nil {
+		return 0, 0
+	}
+	for _, m := range matches {
+		info, err := os.Stat(m)
+		if err != nil || info.IsDir() || time.Since(info.ModTime()) < olderThan {
+			continue
+		}
+		if os.Remove(m) == nil {
+			removed++
+			freed += info.Size()
+		}
+	}
+	return removed, freed
+}
+
 // enrichIndexOutdated 索引是 body_fields 出现之前写的(有校验值、没有位图):App 不拿它当精简快照,得重写。
 func enrichIndexOutdated(path string) bool {
 	b, err := os.ReadFile(path)

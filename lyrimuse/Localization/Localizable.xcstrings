@@ -35583,6 +35583,40 @@
         }
       }
     },
+    "%@ 拒绝了这台 Mac 的请求" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is refusing requests from this Mac"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 拒絕了這台 Mac 的請求"
+          }
+        }
+      }
+    },
+    "%@ 突然不再返回歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has suddenly stopped returning lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 突然不再回傳歌詞"
+          }
+        }
+      }
+    },
     "最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，而 %2$@ 仅在其中 %3$d%% 提供了歌词。可能是其接口发生变化，或请求被拦截。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -35600,19 +35634,19 @@
         }
       }
     },
-    "最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词，平时为 %4$d%%。" : {
+    "最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词；按这几天所听歌曲的语种构成，平时约为 %4$d%%。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups; %2$@ returned lyrics in %3$d%% of them, compared with %4$d%% usually."
+            "value" : "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups; %2$@ returned lyrics in %3$d%% of them. Given the languages of the songs played these days, it usually manages about %4$d%%."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最近 3 天的 %1$d 次查詢中，同類曲庫至少有兩家找到了歌詞，%2$@ 在其中 %3$d%% 提供了歌詞，平時為 %4$d%%。"
+            "value" : "最近 3 天的 %1$d 次查詢中，同類曲庫至少有兩家找到了歌詞，%2$@ 在其中 %3$d%% 提供了歌詞；按這幾天所聽歌曲的語種構成，平時約為 %4$d%%。"
           }
         }
       }
@@ -35647,6 +35681,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最近 2 天有 %1$d%% 的查詢因無法連線 %2$@ 而跳過，%3$@ 也是如此。多個源同時無法連線，通常是這台 Mac 無法連上這些網站（例如需要開啟代理），而非歌詞源本身故障。"
+          }
+        }
+      }
+    },
+    "%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookups went without it. It's paused for now and will be retried automatically."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 的反爬限制擋下了這台 Mac 的請求，最近有 %2$d 次查詢因此未使用它。已暫時停用，稍後將自動重試。"
+          }
+        }
+      }
+    },
+    "最近连续 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 一次也没有提供；按它平时的收录情况，本该提供约 %3$d 次。可能是其接口发生变化，或请求被拦截。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the last %1$d lookups in a row, at least two other sources of the same kind found lyrics, but %2$@ returned none; going by its usual coverage it should have returned about %3$d. Its API may have changed, or its requests are being blocked."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近連續 %1$d 次查詢中，同類曲庫至少有兩家找到了歌詞，%2$@ 一次也沒有提供；按它平時的收錄情況，本該提供約 %3$d 次。可能是其介面發生變化，或請求被攔截。"
           }
         }
       }

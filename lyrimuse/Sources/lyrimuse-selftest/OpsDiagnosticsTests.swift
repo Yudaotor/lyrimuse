@@ -735,12 +735,15 @@ func runOpsDiagnosticsTests() {
               {"source":"deezer","enabled":true,"rounds":40,"responded":30,"won":10,"alert":"below_usual","peer_rate":0.25,"peer_rounds":120,"usual_rate":0.5},
               {"source":"musixmatch","enabled":true,"rounds":40,"alert":"network","skip_rate":0.9,"network_peers":["lyricfind","deezer"]},
               {"source":"qq","enabled":true,"rounds":80,"responded":70,"won":40},
-              {"source":"soda","enabled":true,"rounds":10,"alert":"some_future_kind"}
-             ]}
+              {"source":"soda","enabled":true,"rounds":10,"alert":"some_future_kind"},
+              {"source":"lrclib","enabled":true,"rounds":50,"alert":"blocked","streak":25,"blocked_rounds":20},
+              {"source":"lyricfind","enabled":true,"rounds":60,"alert":"stopped","streak":20,"expected_hits":18}
+             ],
+             "recent":{"lrclib":[{"t":1000,"s":"blocked"}]}}
             """#
         let state = try? JSONDecoder().decode(H.State.self, from: Data(json.utf8))
         let now = Date(timeIntervalSince1970: 1000 + 3600)
-        expectEqual(state?.summary.count, 5, "歌词源近况: 摘要整段解得出来,逐日计数不解也不报错")
+        expectEqual(state?.summary.count, 7, "歌词源近况: 摘要整段解得出来,逐日计数和逐轮记录不解也不报错")
         expectEqual(H.attention(for: "kuwo", state: state, now: now)?.alert, .barely, "歌词源近况: 报了异常的源要提醒")
         expectEqual(H.attention(for: "kuwo", state: state, now: now)?.peerRounds, 60, "歌词源近况: 带着说明文字要用的次数")
         expectEqual(H.attention(for: "deezer", state: state, now: now)?.usualRate, 0.5, "歌词源近况: 比平时少那一档带着平时的比例")
@@ -748,7 +751,13 @@ func runOpsDiagnosticsTests() {
                     "歌词源近况: 网络那一档带着一起连不上的源")
         expectEqual(H.attention(for: "qq", state: state, now: now) == nil, true, "歌词源近况: 没有异常不提醒")
         expectEqual(H.attention(for: "soda", state: state, now: now) == nil, true, "歌词源近况: 认不得的判定按没有异常处理")
-        expectEqual(H.attention(for: "lrclib", state: state, now: now) == nil, true, "歌词源近况: 摘要里没有这个源不提醒")
+        expectEqual(H.attention(for: "lrclib", state: state, now: now)?.alert, .blocked, "歌词源近况: 被反爬拦下那一档")
+        expectEqual(H.attention(for: "lrclib", state: state, now: now)?.blockedRounds, 20, "歌词源近况: 被拦那一档带着没问它的次数")
+        expectEqual(H.attention(for: "lyricfind", state: state, now: now)?.alert, .stopped, "歌词源近况: 突然不给了那一档")
+        expectEqual(H.attention(for: "lyricfind", state: state, now: now)?.streak, 20, "歌词源近况: 突然不给了带着连续次数")
+        expectEqual(H.attention(for: "lyricfind", state: state, now: now)?.expectedHits, 18, "歌词源近况: 突然不给了带着本该给出的次数")
+        expectEqual(H.attention(for: "kuwo", state: state, now: now)?.streak, 0, "歌词源近况: 老版本引擎没写的新字段按 0 解")
+        expectEqual(H.attention(for: "migu", state: state, now: now) == nil, true, "歌词源近况: 摘要里没有这个源不提醒")
         expectEqual(H.attention(for: "kuwo", state: nil, now: now) == nil, true, "歌词源近况: 没有统计文件不提醒")
         expectEqual(H.attention(for: "kuwo", state: state, now: Date(timeIntervalSince1970: 1000 + H.staleAfter)) != nil, true,
                     "歌词源近况: 刚好两天还提醒")
@@ -767,7 +776,7 @@ func runOpsDiagnosticsTests() {
         expectEqual(H.staleAfter, 48 * 3600, "歌词源近况: App 侧过期阈值是两天")
         expectEqual(sourceBytes(engine, contain: "lyricSourceStatsStaleAfter = 48 * time.Hour"), true,
                     "歌词源近况: 引擎侧过期阈值也是两天")
-        for alert in [H.Alert.barely, .belowUsual, .cooling, .network] {
+        for alert in [H.Alert.barely, .belowUsual, .cooling, .network, .blocked, .stopped] {
             expectEqual(sourceBytes(engine, contain: "= \"\(alert.rawValue)\""), true,
                         "歌词源近况: 引擎写的判定取值里有 \(alert.rawValue)")
         }

@@ -62,9 +62,13 @@ func withMxmHosts(t *testing.T) (primary, backup *mxmHost, advance func(time.Dur
 		musixmatchHostMu.Unlock()
 	}
 	resetHosts()
+	// 熔断器也换一份:答 captcha 会让它暂停整个源(sourcebreaker.go「反爬拦截」),别带进后面的测试。
+	savedBreaker := sharedLyricSourceBreaker()
+	setSharedLyricSourceBreaker(newLyricSourceBreaker(time.Now))
 	t.Cleanup(func() {
 		musixmatchBases, musixmatchHostNow = savedBases, savedNow
 		resetHosts()
+		setSharedLyricSourceBreaker(savedBreaker)
 	})
 	return primary, backup, func(d time.Duration) { now = now.Add(d) }
 }
@@ -110,6 +114,11 @@ func TestMusixmatchAnsweredRequestDoesNotSwitchHost(t *testing.T) {
 		primary.answer(reply)
 		_, _ = musixmatchDo(context.Background(), "track.get", neturl.Values{})
 		mxmCallCounts(t, primary, backup, int32(i+1), 0, fmt.Sprintf("第 %d 种应答", i+1))
+		// captcha 另外会暂停整个源(见 musixmatchblock_test.go);这里只看换不换主机,撤掉接着问。
+		if _, blocked := sharedLyricSourceBreaker().blockedFor("musixmatch"); blocked != (i == 1) {
+			t.Fatalf("第 %d 种应答之后 blocked = %v", i+1, blocked)
+		}
+		sharedLyricSourceBreaker().clearBlocked("musixmatch")
 	}
 }
 

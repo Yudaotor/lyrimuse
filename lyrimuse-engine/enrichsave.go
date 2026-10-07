@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"log"
-	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -310,24 +308,7 @@ func removeStaleEnrichTemps() {
 	if enrichPath == "" {
 		return
 	}
-	pattern := filepath.Join(filepath.Dir(enrichPath), filepath.Base(enrichPath)+".tmp.*")
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		return
-	}
-	var removed int
-	var freed int64
-	for _, m := range matches {
-		info, err := os.Stat(m)
-		if err != nil || info.IsDir() || time.Since(info.ModTime()) < staleEnrichTempAge {
-			continue
-		}
-		if os.Remove(m) == nil {
-			removed++
-			freed += info.Size()
-		}
-	}
-	if removed > 0 {
+	if removed, freed := removeStaleWriteTemps(enrichPath, staleEnrichTempAge); removed > 0 {
 		log.Printf("enrich cache: removed %d stale save temp file(s), %d MB freed", removed, freed>>20)
 	}
 }

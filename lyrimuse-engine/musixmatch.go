@@ -129,20 +129,37 @@ var musixmatchAnySuccess atomic.Bool
 
 func musixmatchSawSuccessNow() bool { return musixmatchAnySuccess.Load() }
 
-// musixmatchHeaderStatus 取应答 message.header.status_code,解不开是 0。
-func musixmatchHeaderStatus(body []byte) int {
+// musixmatchHeaderOf 取应答 message.header 的 status_code 和 hint,解不开是 0 和空串。
+func musixmatchHeaderOf(body []byte) (status int, hint string) {
 	var out struct {
 		Message struct {
 			Header struct {
-				StatusCode int `json:"status_code"`
+				StatusCode int    `json:"status_code"`
+				Hint       string `json:"hint"`
 			} `json:"header"`
 		} `json:"message"`
 	}
 	if json.Unmarshal(body, &out) != nil {
-		return 0
+		return 0, ""
 	}
-	return out.Message.Header.StatusCode
+	return out.Message.Header.StatusCode, out.Message.Header.Hint
 }
+
+// musixmatchHeaderStatus 取应答 message.header.status_code,解不开是 0。
+func musixmatchHeaderStatus(body []byte) int {
+	status, _ := musixmatchHeaderOf(body)
+	return status
+}
+
+// musixmatchBlockedByCaptcha:应答是反爬拦截(401 + hint=captcha)。数据接口回这个是这台机器被拦了,不是 token
+// 的事:刚换的 token 照样被拒,别为它去换 token(token.get 一样被拦),见 sourcebreaker.go「反爬拦截」。
+func musixmatchBlockedByCaptcha(body []byte) bool {
+	status, hint := musixmatchHeaderOf(body)
+	return status == 401 && hint == "captcha"
+}
+
+// errMusixmatchBlocked:被反爬拦着的那段时间里,musixmatchDo 不发请求、直接返回它。
+var errMusixmatchBlocked = errors.New("paused after being blocked by its anti-bot check")
 
 func musixmatchSetLastFailureReason(reason string) {
 	musixmatchLastFailureMu.Lock()
@@ -679,6 +696,11 @@ func musixmatchHTTPClient() *http.Client {
 // 主机按 musixmatchHostOrder 的顺序试:这台没问成(musixmatchDoAt 报错,且 musixmatchHostFailed)才换下一台,
 // 答了就停 —— 包括答 404、答 captcha。
 func musixmatchDo(ctx context.Context, action string, params neturl.Values) ([]byte, error) {
+	// 被反爬拦着的这段时间一个请求都不发,token.get 也不发:再撞只会让封禁更久(sourcebreaker.go「反爬拦截」)。
+	// 到期之后的第一个请求就是试探,答 200 撤掉暂停,还被拦就按下一档再停。
+	if left, blocked := sharedLyricSourceBreaker().blockedFor("musixmatch"); blocked {
+		return nil, fmt.Errorf("musixmatch %s: %w, %s left", action, errMusixmatchBlocked, left.Round(time.Second))
+	}
 	var usedToken string
 	if action != "token.get" {
 		if token := musixmatchEnsureToken(ctx); token != "" {
@@ -718,11 +740,19 @@ func musixmatchDo(ctx context.Context, action string, params neturl.Values) ([]b
 	if usedToken != "" && musixmatchRejectsToken(body) {
 		musixmatchRejectToken(usedToken)
 	}
-	if action != "token.get" && musixmatchHeaderStatus(body) == 200 {
-		musixmatchAnySuccess.Store(true)
-		// 答上来了就撤掉早先记下的失败原因:它在常驻进程里别无清除之处,留着会让别名重查
-		// (lyricSourcesWorthAliasRetry)在进程余下的生命周期里一直跳过这个源 —— 一次限流、一次断网就够了。
-		musixmatchSetLastFailureReason("")
+	if action != "token.get" {
+		switch {
+		case musixmatchHeaderStatus(body) == 200:
+			musixmatchAnySuccess.Store(true)
+			// 答上来了就撤掉早先记下的失败原因:它在常驻进程里别无清除之处,留着会让别名重查
+			// (lyricSourcesWorthAliasRetry)在进程余下的生命周期里一直跳过这个源 —— 一次限流、一次断网就够了。
+			musixmatchSetLastFailureReason("")
+			sharedLyricSourceBreaker().clearBlocked("musixmatch")
+		case musixmatchBlockedByCaptcha(body):
+			// 失败原因跟 token.get 被拒同一个代码:对用户来说是同一件事,都是被它的反爬拦了。
+			musixmatchSetLastFailureReason(lyricFailureReasonMusixmatchRateLimited)
+			sharedLyricSourceBreaker().noteBlocked("musixmatch")
+		}
 	}
 	return body, nil
 }

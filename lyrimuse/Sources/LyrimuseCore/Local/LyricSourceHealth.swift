@@ -15,6 +15,10 @@ public enum LyricSourceHealth {
         case cooling
         /// 冷却原因是网络错误,而且同时还有别的源也这样。
         case network
+        /// 没问它的那些轮大半是因为被它的反爬拦下了(引擎已暂停它,到点自动再试)。
+        case blocked
+        /// 最近连续一段里一首词都没给,按它平时的收录这不该发生。
+        case stopped
     }
 
     public struct Summary: Decodable, Equatable, Sendable {
@@ -31,11 +35,18 @@ public enum LyricSourceHealth {
         public let usualRate: Double
         public let skipRate: Double
         public let networkPeers: [String]
+        /// `stopped`(和按最近几轮判的 `blocked`):最近连续多少次查询它一首都没给。
+        public let streak: Int
+        /// `stopped`:按它平时的收录,这一段本该给出几次。
+        public let expectedHits: Int
+        /// `blocked`:因为被反爬拦下而没问它的查询次数。
+        public let blockedRounds: Int
 
         enum CodingKeys: String, CodingKey {
             case source, enabled, rounds, responded, won, alert
             case peerRate = "peer_rate", peerRounds = "peer_rounds", usualRate = "usual_rate"
             case skipRate = "skip_rate", networkPeers = "network_peers"
+            case streak, expectedHits = "expected_hits", blockedRounds = "blocked_rounds"
         }
 
         public init(from decoder: Decoder) throws {
@@ -51,12 +62,16 @@ public enum LyricSourceHealth {
             usualRate = try c.decodeIfPresent(Double.self, forKey: .usualRate) ?? 0
             skipRate = try c.decodeIfPresent(Double.self, forKey: .skipRate) ?? 0
             networkPeers = try c.decodeIfPresent([String].self, forKey: .networkPeers) ?? []
+            streak = try c.decodeIfPresent(Int.self, forKey: .streak) ?? 0
+            expectedHits = try c.decodeIfPresent(Int.self, forKey: .expectedHits) ?? 0
+            blockedRounds = try c.decodeIfPresent(Int.self, forKey: .blockedRounds) ?? 0
         }
 
         public init(
             source: String, enabled: Bool = true, rounds: Int = 0, responded: Int = 0, won: Int = 0,
             alert: Alert? = nil, peerRate: Double = 0, peerRounds: Int = 0, usualRate: Double = 0,
-            skipRate: Double = 0, networkPeers: [String] = []
+            skipRate: Double = 0, networkPeers: [String] = [], streak: Int = 0, expectedHits: Int = 0,
+            blockedRounds: Int = 0
         ) {
             self.source = source
             self.enabled = enabled
@@ -69,6 +84,9 @@ public enum LyricSourceHealth {
             self.usualRate = usualRate
             self.skipRate = skipRate
             self.networkPeers = networkPeers
+            self.streak = streak
+            self.expectedHits = expectedHits
+            self.blockedRounds = blockedRounds
         }
     }
 

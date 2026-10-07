@@ -15,6 +15,7 @@
 "%1$@ 年前的今天听了 %2$@ 次，循环最多的是《%3$@》" = "%1$@ years ago today: %2$@ plays, most on repeat: %3$@";
 "%1$@ 年前的今天收听 %2$@ 次，循环最多的是以下歌曲" = "%1$@ years ago today: %2$@ plays, most on repeat";
 "%1$@ 年前的这一周收听 %2$@ 次，循环最多的是以下歌曲" = "%1$@ years ago, this week you listened %2$@ times — these looped the most";
+"%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookups went without it. It's paused for now and will be retried automatically.";
 "%1$@ 首来自歌词源，%2$@ 首为机器翻译" = "%1$@ from the source, %2$@ machine-translated";
 "%1$@ 首源自带 · %2$@ 首机翻" = "%1$@ from source · %2$@ machine-translated";
 "%1$@–%2$@ 点 · %3$@ 次" = "%1$@:00–%2$@:00 · %3$@ plays";
@@ -37,6 +38,7 @@
 "%@ 已下载，点击安装" = "%@ downloaded, click to install";
 "%@ 已匹配到该曲目，无歌词文本" = "%@ matched this track; no lyrics text";
 "%@ 张专辑" = "%@ albums";
+"%@ 拒绝了这台 Mac 的请求" = "%@ is refusing requests from this Mac";
 "%@ 月" = "%@";
 "%@ 条状态未知，不会自动重试" = "%@ with unknown status — not retried automatically";
 "%@ 条被 Last.fm 拒绝" = "%@ rejected by Last.fm";
@@ -49,6 +51,7 @@
 "%@ 种写法" = "%@ spellings";
 "%@ 秒" = "%@s";
 "%@ 秒后可跳过" = "Skippable in %@s";
+"%@ 突然不再返回歌词" = "%@ has suddenly stopped returning lyrics";
 "%@ 自动化权限" = "%@ automation permission";
 "%@ 行没有时间戳，未写入逐字歌词" = "%@ lines without timestamps weren't added to the word-timed lyrics";
 "%@ 近期几乎未返回歌词" = "%@ has found almost no lyrics lately";
@@ -1100,13 +1103,14 @@
 "最大宽度" = "Max Width";
 "最近 2 天有 %1$d%% 的查询因无法连接 %2$@ 而跳过，%3$@ 也是如此。多个源同时无法连接，通常是这台 Mac 无法访问这些网站（例如需要开启代理），而非歌词源本身故障。" = "In the last 2 days, %2$@ was skipped in %1$d%% of lookups because it couldn't be reached, and so were %3$@. When several sources fail at once, this Mac most likely can't reach those sites (for example, a proxy is needed), rather than the sources being broken.";
 "最近 2 天有 %1$d%% 的查询未使用 %2$@：该源连续出错，已被暂时停用，稍后将自动恢复。" = "In the last 2 days, %2$@ was left out of %1$d%% of lookups: after repeated errors it was paused for a while. It resumes on its own.";
-"最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词，平时为 %4$d%%。" = "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups; %2$@ returned lyrics in %3$d%% of them, compared with %4$d%% usually.";
+"最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词；按这几天所听歌曲的语种构成，平时约为 %4$d%%。" = "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups; %2$@ returned lyrics in %3$d%% of them. Given the languages of the songs played these days, it usually manages about %4$d%%.";
 "最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，而 %2$@ 仅在其中 %3$d%% 提供了歌词。可能是其接口发生变化，或请求被拦截。" = "In the last 3 days, at least two other sources of the same kind found lyrics in %1$d lookups, but %2$@ returned lyrics in only %3$d%% of them. Its API may have changed, or its requests are being blocked.";
 "最近一次解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。稍后会自动重试，也可立即重新自动匹配" = "No lyrics source responded during the last lookup, possibly because the network was unavailable; it doesn't mean the song has no lyrics. It will be retried automatically, or you can auto re-match now";
 "最近一次评估" = "Latest evaluation";
 "最近完成" = "Recently Finished";
 "最近播放" = "Recently played";
 "最近记录" = "Recent Scrobbles";
+"最近连续 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 一次也没有提供；按它平时的收录情况，本该提供约 %3$d 次。可能是其接口发生变化，或请求被拦截。" = "In the last %1$d lookups in a row, at least two other sources of the same kind found lyrics, but %2$@ returned none; going by its usual coverage it should have returned about %3$d. Its API may have changed, or its requests are being blocked.";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ songs are locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust them again; songs whose lyrics you edited by hand are unaffected and stay locked";
 "有新版本 %@" = "Update available: %@";
 "有歌词源将这首歌曲标记为纯音乐，没有可用的歌词候选" = "A lyrics source marks this song as instrumental; no usable lyrics candidate";

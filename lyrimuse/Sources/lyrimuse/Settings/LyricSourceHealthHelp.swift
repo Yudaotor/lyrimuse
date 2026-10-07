@@ -36,6 +36,8 @@ struct LyricSourceHealthHelp: View {
         case .barely: return String(format: L10n.t("%@ 近期几乎未返回歌词"), name)
         case .belowUsual: return String(format: L10n.t("%@ 近期找到的歌词明显少于平时"), name)
         case .cooling: return String(format: L10n.t("%@ 近期频繁出错"), name)
+        case .blocked: return String(format: L10n.t("%@ 拒绝了这台 Mac 的请求"), name)
+        case .stopped: return String(format: L10n.t("%@ 突然不再返回歌词"), name)
         case .network, nil: return String(format: L10n.t("%@ 近期频繁无法连接"), name)
         }
     }
@@ -49,11 +51,18 @@ struct LyricSourceHealthHelp: View {
             return String(format: L10n.t("最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，而 %2$@ 仅在其中 %3$d%% 提供了歌词。可能是其接口发生变化，或请求被拦截。"),
                           summary.peerRounds, name, peerRate)
         case .belowUsual:
-            return String(format: L10n.t("最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词，平时为 %4$d%%。"),
+            // 「平时」是引擎按这几天两类歌(中日韩文 / 其他)各占多少现算的,不是这个源过去的总比例。
+            return String(format: L10n.t("最近 3 天的 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 在其中 %3$d%% 提供了歌词；按这几天所听歌曲的语种构成，平时约为 %4$d%%。"),
                           summary.peerRounds, name, peerRate, LyricSourceHealth.percent(summary.usualRate))
         case .cooling:
             return String(format: L10n.t("最近 2 天有 %1$d%% 的查询未使用 %2$@：该源连续出错，已被暂时停用，稍后将自动恢复。"),
                           skipRate, name)
+        case .blocked:
+            return String(format: L10n.t("%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。"),
+                          name, summary.blockedRounds)
+        case .stopped:
+            return String(format: L10n.t("最近连续 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 一次也没有提供；按它平时的收录情况，本该提供约 %3$d 次。可能是其接口发生变化，或请求被拦截。"),
+                          summary.streak, name, summary.expectedHits)
         case .network, nil:
             let peers = summary.networkPeers.map(sourceDisplayName).joined(separator: L10n.t("、"))
             return String(format: L10n.t("最近 2 天有 %1$d%% 的查询因无法连接 %2$@ 而跳过，%3$@ 也是如此。多个源同时无法连接，通常是这台 Mac 无法访问这些网站（例如需要开启代理），而非歌词源本身故障。"),

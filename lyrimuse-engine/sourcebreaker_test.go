@@ -533,3 +533,73 @@ func TestLyricSourceBreakerIgnoresSingleEndpoint5xxWhenSiblingHealthy(t *testing
 		t.Fatal("不知道端点(observe)时按整个源算")
 	}
 }
+
+// 反爬拦截:按源暂停,15 分钟起翻倍、封顶 4 小时;暂停期内再被拦不升档不续期;HTTP 层的正常应答(拦截本身就是
+// HTTP 200)撤不掉它,只有数据接口正经答一次(clearBlocked)才撤、档位归零。
+func TestLyricSourceBreakerBlockedPausesAndBacksOff(t *testing.T) {
+	b, clk := newTestBreaker()
+	if !b.noteBlocked("musixmatch") {
+		t.Fatal("第一次被拦应当暂停")
+	}
+	if d, ok := b.blockedFor("musixmatch"); !ok || d != 15*time.Minute {
+		t.Fatalf("第一档应暂停 15 分钟,实际 %v %s", ok, d)
+	}
+	clk.advance(time.Minute)
+	if b.noteBlocked("musixmatch") {
+		t.Fatal("暂停期内又被拦(之前在飞的请求)不该再算一次")
+	}
+	b.observe("apic-appmobile.musixmatch.com", nil, 200, "")
+	if d, ok := b.blockedFor("musixmatch"); !ok || d != 14*time.Minute {
+		t.Fatalf("不升档、不续期,HTTP 200 也撤不掉:实际 %v %s", ok, d)
+	}
+	if d, cooling := b.coolingDown("musixmatch"); !cooling || d != 14*time.Minute {
+		t.Fatalf("coolingDown 应当算上暂停,实际 %v %s", cooling, d)
+	}
+	if r := b.cooldownReason("musixmatch"); r != lyricSourceCooldownReasonBlocked {
+		t.Fatalf("原因 = %q, want blocked", r)
+	}
+	if plan := b.planRound(lyricSourceNames, func(string) bool { return true }); plan["musixmatch"] != 14*time.Minute || len(plan) != 1 {
+		t.Fatalf("这一轮应只跳过 musixmatch,实际 %v", plan)
+	}
+	for _, want := range []time.Duration{30 * time.Minute, time.Hour, 2 * time.Hour, 4 * time.Hour, 4 * time.Hour} {
+		d, _ := b.blockedFor("musixmatch")
+		clk.advance(d)
+		if _, ok := b.blockedFor("musixmatch"); ok {
+			t.Fatal("到期后应当放一个请求出去试探")
+		}
+		b.noteBlocked("musixmatch")
+		if got, _ := b.blockedFor("musixmatch"); got != want {
+			t.Fatalf("试探还被拦应升到 %s,实际 %s", want, got)
+		}
+	}
+	b.clearBlocked("musixmatch")
+	if _, ok := b.blockedFor("musixmatch"); ok {
+		t.Fatal("正经答一次之后应当撤掉暂停")
+	}
+	if r := b.cooldownReason("musixmatch"); r != "" {
+		t.Fatalf("撤掉之后原因 = %q, want 空", r)
+	}
+	b.noteBlocked("musixmatch")
+	if d, _ := b.blockedFor("musixmatch"); d != 15*time.Minute {
+		t.Fatalf("撤掉之后档位归零,再被拦从 15 分钟起,实际 %s", d)
+	}
+}
+
+// cooldownReason:被拦排在前面;普通冷却报跳闸原因;冷却过了是空串。
+func TestLyricSourceBreakerCooldownReason(t *testing.T) {
+	b, clk := newTestBreaker()
+	b.observe("lrclib.net", errProbeDial, 0, "")
+	b.observe("lrclib.net", errProbeDial, 0, "")
+	if r := b.cooldownReason("lrclib"); r != lyricSourceCooldownReasonNetwork {
+		t.Fatalf("网络冷却原因 = %q", r)
+	}
+	b.noteBlocked("lrclib")
+	if r := b.cooldownReason("lrclib"); r != lyricSourceCooldownReasonBlocked {
+		t.Fatalf("同时被拦时原因 = %q, want blocked", r)
+	}
+	b.clearBlocked("lrclib")
+	clk.advance(time.Minute)
+	if r := b.cooldownReason("lrclib"); r != "" {
+		t.Fatalf("冷却过了原因 = %q, want 空", r)
+	}
+}
