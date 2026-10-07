@@ -388,6 +388,9 @@ func main() {
 	// App 读的精简索引里也带封面地址。
 	startupStep("migrateNeteaseCoverURLs", migrateNeteaseCoverURLs)
 	startupStep("migrateManualPickMarks", migrateManualPickMarks)
+	// 正文只有纯音乐占位的存量条目标上纯音乐(见 instrumentalplaceholder.go)。只打标、不改正文;排在
+	// migrateManualPickMarks 之后,它补记的手动选定留痕这一步要看。
+	startupStep("migrateInstrumentalPlaceholders", migrateInstrumentalPlaceholders)
 	startupStep("exportLyricsFiles", exportLyricsFiles)
 	// 判决记录的候选明细挪到旁路目录(decisionstore.go)。必须在 migrateSodaCoverURLs 之后:那道迁移扫的是
 	// 内存里候选的 cover_url,拆完就扫不到了。

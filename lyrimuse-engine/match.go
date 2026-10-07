@@ -165,10 +165,10 @@ var copyrightLabelRe = regexp.MustCompile(`(?i)^(OP|SP|OA|SA)[\s\x{3000}]*[:：]
 // isRelaxedCreditLine 是 isCreditLineWithSpeakers 多认上面两种排版的版本。
 //
 // 两套判据是**故意**分开的,别合并成一套:
-//   - 严格版(isCreditLine / isCreditLineWithSpeakers)喂着**共识比对**、纯音乐判定、内嵌
+//   - 严格版(isCreditLine / isCreditLineWithSpeakers)喂着**共识比对**、只剩署名的判废、内嵌
 //     译文对齐 —— 那几处误判的代价是整份歌词被判废或对错行,宁可漏也不能多杀。
-//   - 宽松版只喂**翻译选行**和**曲长端点**,这两处误判的代价小得多:多跳一行 = 少翻一句 /
-//     曲长端点往前挪一句。
+//   - 宽松版只喂**翻译选行**、**曲长端点**和**纯音乐占位判定**。前两处误判的代价小得多:多跳一行 = 少翻一句 /
+//     曲长端点往前挪一句;占位判定先要有一行「纯音乐」占位,多认一种署名排版不会把真歌词判成纯音乐。
 //
 // 演唱者标签(男：/女：)的豁免两套都走,理由见 lyricspeaker.go。
 func isRelaxedCreditLine(text string, speakers map[string]bool) bool {

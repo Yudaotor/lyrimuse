@@ -49,13 +49,17 @@ type neteaseInfo struct {
 	AlbumID int64
 	// PureMusic:网易云明确说这首歌是**纯音乐**。
 	//
-	// 歌词接口对纯音乐会在顶层给 `pureMusic: true`,正文则是「作曲 : X」+
-	// 「纯音乐,请欣赏」两行占位(实测 LoL 原声带 id=30431011)。这两行过不了
-	// isTimedLRC 的三行门槛,所以 Lyrics 留空、网易云连一条候选都不产生 —— 而
+	// 歌词接口对纯音乐会在顶层给 `pureMusic: true`,正文则是署名行(作曲、吉他、母带、OP/SP……)加一行
+	// 「纯音乐,请欣赏」占位。正文只有署名和占位时不存进 Lyrics(署名多的占位过得了 isTimedLRC 的三行门槛,
+	// 存进去 instrumentalMarker 就认不出来),网易云不产生候选 —— 而
 	// "查过了、确实没有词"和"这首本来就没有词"在 UI 上是两句不同的话(「无歌词」vs
 	// 「纯音乐」)。这个字段就是把后者那个明确结论带出来,跟 lrclib 的 instrumental
 	// 标记汇到同一处(见 enrich.go 的 instrumentalMarker)。
 	PureMusic bool
+	// NoVocals:网易云曲目信息里 mark 带「无人声」位(neteaseMarkNoVocals)。纯音乐和伴奏版都带它,所以只在网易云
+	// 没交出歌词时当纯音乐依据(instrumentalMarker);有歌词的伴奏版照常用歌词。跟 PureMusic 一样和
+	// TrackFoundNoLyrics 互斥。抽样数据见 09 章决策 208。
+	NoVocals bool
 	// TrackFoundNoLyrics:网易云**曲库里有这首歌**(pick 选中了一条曲目),但歌词接口
 	// 回的正文是空的 —— 平台上还没有歌词文本。
 	//
@@ -426,7 +430,7 @@ func withholdImpersonatorRiddenIdentity(artist string, info neteaseInfo) netease
 	// 它们等于把放行歌词之后唯一的把关依据也一起拿走。Album 虽然也参与封面选源,但那条
 	// 路径以 Cover 非空为前提(见 enrich.go 里 e.CoverAlbum 的写入),Cover 已经扣掉了。
 	//
-	// PureMusic 不留:纯音乐标记是"这首歌本来就没词"的结论,由它写进条目会挡掉后续重搜
+	// PureMusic / NoVocals 不留:纯音乐标记是"这首歌本来就没词"的结论,由它写进条目会挡掉后续重搜
 	// (见 needsLyricsFirstFill),而这类艺人的曲库记录本身就不可信,不该拿它下这种结论。
 	//
 	// SongID 留下:它跟 Lyrics/Trans/Roma/YRC 同属**歌词族**。这个函数开头那段注释自己
@@ -516,8 +520,9 @@ func isInstrumentalPlaceholderLyric(lrc string) bool {
 			hasPlaceholder = true
 			continue
 		}
-		// 署名行(作曲/作词/编曲…)允许共存 —— 纯音乐条目基本都带一行作曲。
-		if isCreditLine(body) {
+		// 署名行(作曲/作词/编曲…)允许共存 —— 纯音乐条目基本都带一行作曲。用宽松版:`吉他 : X`、`OP : X` 这类排版
+		// 严格版认不出,会让带完整职员表的占位判不成纯音乐。
+		if isRelaxedCreditLine(body, nil) {
 			continue
 		}
 		return false // 有真正的歌词内容
@@ -559,7 +564,12 @@ type neSearchSong struct {
 	} `json:"album"`
 	// Duration:搜索结果自带的曲长(毫秒)。透传给候选,不参与本文件内的任何挑选逻辑。
 	Duration float64 `json:"duration"`
+	// Mark:曲目属性位。只读 neteaseMarkNoVocals 这一位,见 neteaseInfo.NoVocals。
+	Mark int64 `json:"mark"`
 }
+
+// neteaseMarkNoVocals 是曲目 mark 里的「无人声」位。搜索接口、/api/v3/song/detail 和本地客户端曲库里是同一个字段。
+const neteaseMarkNoVocals = 1 << 17
 
 // neteasePickSong 从一批搜索结果里挑出"就是本地这首歌"的那条;挑不出返回 nil。原是
 // resolveNeteaseInfo 里的 pick 闭包,原样提成包级纯函数,让检索层金标
@@ -983,6 +993,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		AlbumID:         chosen.Album.ID,
 		DurationSecs:    chosen.Duration / 1000,
 		FromLocalClient: fromLocalClient,
+		NoVocals:        chosen.Mark&neteaseMarkNoVocals != 0,
 	}
 	if lyricOnly {
 		info.SongURL, info.AlbumID, info.Artist = "", 0, nameOnlyArtist
@@ -1109,11 +1120,12 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 那种情况平台**是有词的**,只是这条链路用不上它(自动兜底那路会按 plainTextFallback
 	// 采纳,见 enrich.go),报成"平台没有歌词"是错的。
 	//
-	// !info.PureMusic:纯音乐是另一个更强的结论,由 instrumentalMarker 那条路负责,两者互斥。
+	// !info.PureMusic / !info.NoVocals:纯音乐是另一个更强的结论,由 instrumentalMarker 那条路负责,两者互斥。
 	//
 	// 两个接口对没词的曲目给的都是只有署名的正文(v1 是 JSON 署名行,换回老接口写法之后同形,实测)。
-	info.TrackFoundNoLyrics = id > 0 && lyricFetchOK && isCreditOnlyLRC(lrc) && !info.PureMusic
-	if isTimedLRC(lrc) {
+	info.TrackFoundNoLyrics = id > 0 && lyricFetchOK && isCreditOnlyLRC(lrc) && !info.PureMusic && !info.NoVocals
+	// 判成纯音乐、正文又只有署名和占位时不交歌词,见 neteaseInfo.PureMusic。
+	if isTimedLRC(lrc) && !(info.PureMusic && isCreditOnlyLRC(lrc)) {
 		info.Lyrics = lrc
 		if isTimedLRC(tr) {
 			info.Trans = tr

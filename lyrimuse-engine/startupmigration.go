@@ -109,6 +109,10 @@ const (
 	// 新抓的在候选装配处就摘,运行期不再产生。改了 splitSharedStampTranslation 的判据就 +1。
 	migrationKuwoSharedStampTranslation        = "kuwo_shared_stamp_translation"
 	migrationKuwoSharedStampTranslationVersion = 1
+	// migrationInstrumentalPlaceholder:存量里正文只有纯音乐占位和署名的条目标上纯音乐(instrumentalplaceholder.go)。
+	// 新解析的在打分时判废(isCreditOnlyLRC),运行期不再产生。改了 isInstrumentalPlaceholderLyric 的判据就 +1。
+	migrationInstrumentalPlaceholder        = "instrumental_placeholder"
+	migrationInstrumentalPlaceholderVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

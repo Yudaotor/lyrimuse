@@ -3468,11 +3468,12 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 }
 
 // lyricCandidateUsable 给出「这一条能不能当冠军」的判定:分数不为负;这一轮有纯音乐标记时,吃过版本不符扣分的
-// 也不算 —— 标记说这首没有词,这份词是给别的版本做的(见 09 章决策 194)。同版本的歌词照常以正文为准。
+// 也不算 —— 标记说这首没有词,这份词是给别的版本做的(见 09 章决策 194)。末句超过曲长的同理,词比这段录音还长
+// (见 09 章决策 208)。同版本、没超长的歌词照常以正文为准。
 func lyricCandidateUsable(scored []scoredLyricCandidateResult) func(scoredLyricCandidateResult) bool {
 	instrumental := scoredHasInstrumentalMarker(scored)
 	return func(c scoredLyricCandidateResult) bool {
-		return c.Score >= 0 && !(instrumental && c.hasScoreTerm(scoreTermVersionTags))
+		return c.Score >= 0 && !(instrumental && (c.hasScoreTerm(scoreTermVersionTags) || c.hasScoreTerm(scoreTermDurationOvershoot)))
 	}
 }
 
@@ -4718,7 +4719,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// 「无歌词」而不是「纯音乐」:界面上看起来像失败,还要每 24 小时(退避后翻倍)白搜
 		// 一轮全部源。排在网易云之前只是因为 QQ 这句话是**明文断言**、语义比"正文只有占位"更硬。
 		instrumentalMarker = &scoredLyricCandidateResult{Source: "qq", Score: -1, Instrumental: true}
-	} else if ne.Lyrics == "" && ne.PureMusic {
+	} else if ne.Lyrics == "" && (ne.PureMusic || ne.NoVocals) {
 		// 网易云那一路同款。典型案例:LoL 原声带 The Music of League of Legends Vol.1
 		// 十几首 —— lrclib 压根没有(五源全空、responded 是空的),而网易云**匹配上了歌**
 		// (封面/单曲链接都给了)、歌词接口也明确回了 pureMusic=true。lrclib 优先只是因为

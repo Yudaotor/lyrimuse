@@ -95,6 +95,7 @@ type neteaseLocalTrack struct {
 		PicURL string `json:"picUrl"`
 	} `json:"album"`
 	Duration float64 `json:"duration"` // 毫秒
+	Mark     int64   `json:"mark"`     // 见 neSearchSong.Mark
 }
 
 type neteaseLocalRow struct {
@@ -258,7 +259,7 @@ func neteaseLocalSong(ctx context.Context, artist, title, album string, duration
 	if !ok {
 		return neSearchSong{}, false
 	}
-	song := neSearchSong{ID: int64(t.ID), Name: t.Name, Duration: t.Duration}
+	song := neSearchSong{ID: int64(t.ID), Name: t.Name, Duration: t.Duration, Mark: t.Mark}
 	song.Album.ID, song.Album.Name = int64(t.Album.ID), t.Album.Name
 	for _, a := range t.Artists {
 		song.Artists = append(song.Artists, struct {
