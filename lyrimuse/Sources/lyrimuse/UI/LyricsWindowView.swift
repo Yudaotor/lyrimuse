@@ -4694,12 +4694,12 @@ struct LyricsWindowView: View {
                 .help(L10n.t(playback.miniShowsControls ? "不再悬停显示播放控制" : "悬停显示播放控制"))
                 .accessibilityLabel(L10n.t(playback.miniShowsControls ? "不再悬停显示播放控制" : "悬停显示播放控制"))
             }
-            // 迷你尺寸用「缩小 / 放大窗口」那对符号,跟全屏那对斜箭头、悬停控制条那颗长方形分得开。别用画中画符号:
-            // 看着像系统画中画(独立浮窗、点了不抢焦点),这扇窗做不到(07 章决策 131)。
+            // 迷你尺寸用「窗口缩到角落 / 填满」那对符号,跟全屏那对斜箭头、悬停控制条那颗长方形分得开。别用画中画符号:
+            // 看着像系统画中画,点了以为会得到一扇系统的画中画窗(07 章决策 131、137)。
             Button {
                 windowController.toggleMini(animated: true)
             } label: {
-                Image(systemName: showsMiniLayout ? "square.resize.up" : "square.resize.down")
+                Image(systemName: showsMiniLayout ? "rectangle.inset.filled" : "rectangle.inset.bottomright.filled")
                     .font(Self.windowActionIconFont)
                     .frame(width: Self.windowActionIconWidth)
             }

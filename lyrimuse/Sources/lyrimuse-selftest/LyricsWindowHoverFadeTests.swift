@@ -34,6 +34,11 @@ func checkLyricsWindowHoverFade() {
     let settingsView = source("lyrimuse/SettingsView.swift")
     expectEqual(sourceBytes(fade, contain: "[.mouseEnteredAndExited, .activeAlways, .inVisibleRect]"), true,
                 "迷你悬浮淡化: 跟踪区带 .activeAlways,Lyrimuse 不在前台也报")
+    expectEqual(sourceBytes(fade, contain: "guard let window, let host = window.contentView?.superview else { return }")
+                && sourceBytes(fade, contain: "host.addTrackingArea(area)")
+                && sourceBytes(fade, contain: "report(NSRect(origin: .zero, size: window.frame.size).contains(window.mouseLocationOutsideOfEventStream))")
+                && !sourceBytes(fade, contain: "override func updateTrackingAreas()"), true,
+                "迷你悬停: 跟踪区挂在整扇窗最外层,标题栏那一条也算;挂上时指针已在窗里就当场报(07 章决策 137)")
     expectEqual(sourceBytes(fade, contain: "override func hitTest(_ point: NSPoint) -> NSView? { nil }"), true,
                 "迷你悬浮淡化: 跟踪视图不接点击,点按照常落到下面的控件上")
     expectEqual(sourceBytes(fade, contain: "window.animator().alphaValue = target"), true,

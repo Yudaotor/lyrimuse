@@ -3,7 +3,7 @@ import Combine
 import LyrimuseCore
 import SwiftUI
 
-/// 迷你窗的悬停跟踪,报给「悬浮淡化」(`LyricsWindowHoverFade`)。铺满整扇迷你窗(含标题栏那一条)。
+/// 迷你窗的悬停跟踪,报给「悬浮淡化」(`LyricsWindowHoverFade`)和迷你面板的红绿灯。管整扇迷你窗(含标题栏那一条)。
 ///
 /// 用 AppKit 跟踪区、选项带 `.activeAlways`,不用 SwiftUI `.onHover`:后者只在 Lyrimuse 是当前 App 时才报,
 /// 而迷你窗最常见的用法是浮在别的 App 上面。只跟踪、不接点击(`hitTest` 返回 nil),点按照常落到下面的控件上。
@@ -24,13 +24,30 @@ struct MiniWindowHoverTracker: NSViewRepresentable {
         var onChange: ((Bool) -> Void)?
         private var inside = false
 
+        /// 跟踪区挂在整扇窗最外层(内容视图的父视图,含标题栏那一条),不挂在自己身上:这个视图在 SwiftUI 内容里,
+        /// 盖不到窗口最上面那一条,指针一进标题栏就报「离开」(07 章决策 137)。
+        private weak var frameView: NSView?
+        private var frameArea: NSTrackingArea?
+
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-            trackingAreas.forEach(removeTrackingArea)
-            addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-                                           owner: self))
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            installFrameTracking()
+        }
+
+        private func installFrameTracking() {
+            if let frameArea, let frameView { frameView.removeTrackingArea(frameArea) }
+            frameArea = nil
+            frameView = nil
+            guard let window, let host = window.contentView?.superview else { return }
+            let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                      owner: self)
+            host.addTrackingArea(area)
+            frameArea = area
+            frameView = host
+            // 挂上那一刻指针已经在窗里:跟踪区不补这一下「进入」。
+            report(NSRect(origin: .zero, size: window.frame.size).contains(window.mouseLocationOutsideOfEventStream))
         }
 
         override func mouseEntered(with event: NSEvent) { report(true) }
@@ -39,7 +56,12 @@ struct MiniWindowHoverTracker: NSViewRepresentable {
         // 拆掉时指针可能还在窗里(切回完整尺寸、关窗):不补一个「离开」,窗口会一直淡着。
         override func viewWillMove(toWindow newWindow: NSWindow?) {
             super.viewWillMove(toWindow: newWindow)
-            if newWindow == nil { report(false) }
+            if newWindow == nil {
+                if let frameArea, let frameView { frameView.removeTrackingArea(frameArea) }
+                frameArea = nil
+                frameView = nil
+                report(false)
+            }
         }
 
         private func report(_ value: Bool) {

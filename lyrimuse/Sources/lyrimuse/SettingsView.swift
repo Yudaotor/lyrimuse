@@ -6650,7 +6650,7 @@ private struct ShortcutsSettingsTab: View {
                     ShortcutRecorderControl(name: .openLyricsWindowHotkey)
                 }
                 CardDivider()
-                SettingsRow(icon: "square.resize.down", title: L10n.t("切换迷你 / 完整尺寸")) {
+                SettingsRow(icon: "rectangle.inset.bottomright.filled", title: L10n.t("切换迷你 / 完整尺寸")) {
                     ShortcutRecorderControl(name: .toggleLyricsWindowMiniHotkey)
                 }
                 CardDivider()

@@ -1846,9 +1846,9 @@ func runSourceContractTests() {
             expectEqual(lwv.contains("private func miniCoverSide(_ m: MiniHeaderMetrics) -> CGFloat"), true,
                         "迷你封面: 边长按开着几行算出来,不靠 SwiftUI 撑开(撑开就没法预先重采样)")
             // 右上角窗口控件:迷你切换用画中画那对符号,三颗共用同一字号字重。
-            expectEqual(lwv.contains("showsMiniLayout ? \"square.resize.up\" : \"square.resize.down\"")
+            expectEqual(lwv.contains("showsMiniLayout ? \"rectangle.inset.filled\" : \"rectangle.inset.bottomright.filled\"")
                         && !lwv.contains("\"pip.enter\"") && !lwv.contains("\"pip.exit\""), true,
-                        "窗口控件: 迷你切换用「缩小 / 放大窗口」那对符号,不用画中画符号(07 章决策 131)")
+                        "窗口控件: 迷你切换用「窗口缩到角落 / 填满」那对符号,不用画中画符号(07 章决策 131、137)")
             // 迷你尺寸在每个桌面都出现、能浮在别的 App 的全屏上;完整尺寸照旧能进原生全屏。持续守护和切换那一拍都按形态补(07 章决策 131)。
             expectEqual(lwv.contains("case (true, true):\n            wanted = [.canJoinAllSpaces, .fullScreenAuxiliary]")
                         && lwv.contains("case (false, _):\n            wanted = [.fullScreenPrimary]")
