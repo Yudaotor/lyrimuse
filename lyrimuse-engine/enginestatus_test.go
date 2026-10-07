@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"testing"
 )
 
-// 常驻采集器里必须用 per-round 的差值。networkLooksDown() 读的是进程启动以来的累计值，
+// 常驻采集器里必须按这一轮自己的请求判(withNetworkRound)。networkLooksDown() 读的是进程启动以来的累计值，
 // 一旦早期有过成功，failures==attempts 就永远不成立 —— 开机有网、后来断网，它一路报正常。
 func TestNetworkRoundIsRelativeNotCumulative(t *testing.T) {
 	a0 := atomic.LoadInt32(&networkAttemptCount)
@@ -25,14 +29,24 @@ func TestNetworkRoundIsRelativeNotCumulative(t *testing.T) {
 		t.Fatal("前提不对：全成功时累计判据不该报不通")
 	}
 
-	// 现在断网：这一轮三次全失败。
-	round := beginNetworkRound()
-	atomic.AddInt32(&networkAttemptCount, 3)
-	atomic.AddInt32(&networkFailureCount, 3)
+	// 现在断网：这一轮三次全失败（连一个已经关掉的本地端口）。
+	dead := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	deadURL := dead.URL
+	dead.Close()
+	ctx, round := withNetworkRound(context.Background())
+	for i := 0; i < 3; i++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, deadURL+"/"+strconv.Itoa(i), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp, err := doHTTPTracked(http.DefaultClient, req); err == nil {
+			resp.Body.Close()
+		}
+	}
 
 	attempts, failures := round()
 	if attempts != 3 || failures != 3 {
-		t.Fatalf("差值算错: attempts=%d failures=%d", attempts, failures)
+		t.Fatalf("这一轮算错: attempts=%d failures=%d", attempts, failures)
 	}
 	if !roundLooksNetworkDown(attempts, failures) {
 		t.Error("这一轮全失败，应该判为网络不通")

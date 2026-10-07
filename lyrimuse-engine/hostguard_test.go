@@ -256,8 +256,8 @@ func TestDoHTTPTrackedGuardedRequestNeverSent(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	stat := beginNetworkRound()
-	_, err = doHTTPTracked(cli, mustReq(t, context.Background(), http.MethodGet, "https://api.example.org/v1/thing"))
+	ctx, stat := withNetworkRound(context.Background())
+	_, err = doHTTPTracked(cli, mustReq(t, ctx, http.MethodGet, "https://api.example.org/v1/thing"))
 	if !errors.Is(err, errHostGuarded) {
 		t.Fatalf("429 窗口内该在本地拦下: %v", err)
 	}

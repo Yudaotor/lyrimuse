@@ -116,8 +116,12 @@ var localPlayerCovers = func(artist, title, album string, durationSecs float64) 
 	return out
 }
 
-// coverCandidate:一张拿来跟小设备封面比的封面,和换上之后记成的来源。
-type coverCandidate struct{ url, source string }
+// coverCandidate:一张拿来跟小设备封面比的封面,和换上之后记成的来源。vouched:它是这首歌的封面由播放器担保(播放器自己给的、
+// 本机播放器数据里按歌名记着的),歌词判决里各源候选自带的不算,见 deviceCoverDecision 的同名参数。
+type coverCandidate struct {
+	url, source string
+	vouched     bool
+}
 
 // decisionCoverCandidatesMax:各源候选自带的封面最多比这么多张(每张要取一次缩图)。
 const decisionCoverCandidatesMax = 6
@@ -138,7 +142,7 @@ func decisionCandidateCovers(key string, d *lyricsDecision) []coverCandidate {
 		if !candidateCoverURLOK(c.CoverURL) || slices.ContainsFunc(out, func(x coverCandidate) bool { return x.url == c.CoverURL }) {
 			continue
 		}
-		if out = append(out, coverCandidate{c.CoverURL, c.Source}); len(out) == decisionCoverCandidatesMax {
+		if out = append(out, coverCandidate{url: c.CoverURL, source: c.Source}); len(out) == decisionCoverCandidatesMax {
 			break
 		}
 	}
@@ -193,7 +197,8 @@ func candidateCoverAlbumFits(candidateAlbum, album string) bool {
 
 // upgradeSmallDeviceCover:存量的小设备封面(deviceCoverURL)换成同一张图的清晰版 —— 依次试 ctx 上这一拍在放的播放器给的、
 // 本机播放器数据里按歌名记着的(localPlayerCovers)、这首歌词判决里各源候选自带的(decisionCandidateCovers),头一张跟设备
-// 封面是同一张图、更清晰的就用,判据同 playerCoverOverDevice。前两种记成 player,候选的记成那个源。返回换没换。
+// 封面是同一张图、更清晰的就用,判据同 playerCoverOverDevice;歌词判决里的候选不担保是这首歌,补边设备图那一档也只认同一张图
+// (deviceCoverDecision 的 vouched)。前两种记成 player,候选的记成那个源。返回换没换。
 // trackEnrichment 换歌那一拍和后台补封面(coversweep.go)用;调用方先占上 enrichInflight,这里收工时放掉。
 func upgradeSmallDeviceCover(ctx context.Context, key, deviceCoverURL, artist, title, album string,
 	durationSecs float64) bool {
@@ -203,25 +208,25 @@ func upgradeSmallDeviceCover(ctx context.Context, key, deviceCoverURL, artist, t
 		enrichMu.Unlock()
 	}()
 	var candidates []coverCandidate
-	add := func(url, source string) {
-		if url != "" && !slices.ContainsFunc(candidates, func(c coverCandidate) bool { return c.url == url }) {
-			candidates = append(candidates, coverCandidate{url, source})
+	add := func(c coverCandidate) {
+		if c.url != "" && !slices.ContainsFunc(candidates, func(x coverCandidate) bool { return x.url == c.url }) {
+			candidates = append(candidates, c)
 		}
 	}
-	add(playerCoverFor(ctx), "player")
+	add(coverCandidate{url: playerCoverFor(ctx), source: "player", vouched: true})
 	for _, c := range localPlayerCovers(artist, title, album, durationSecs) {
-		add(playerCoverDisplayURL(c), "player")
+		add(coverCandidate{url: playerCoverDisplayURL(c), source: "player", vouched: true})
 	}
 	enrichMu.Lock()
 	decision := enrichCache[key].LyricsDecision
 	enrichMu.Unlock()
 	for _, c := range decisionCandidateCovers(key, decision) {
-		add(c.url, c.source)
+		add(c)
 	}
 	var chosen coverCandidate
 	for _, c := range candidates {
 		if playerCoverOverDeviceWith(c.url, deviceCoverURL, "", func(device, candidate string) bool {
-			return deviceCoverOverridesCandidate(ctx, device, candidate)
+			return deviceCoverOverrides(ctx, device, candidate, c.vouched)
 		}) != "" {
 			chosen = c
 			break

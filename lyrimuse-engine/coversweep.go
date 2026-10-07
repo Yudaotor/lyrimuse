@@ -17,8 +17,8 @@ import (
 // coverSweepGap;轮到一条时有别的歌在解析(enrichInflight 非空)先等它,最多等 coverSweepYieldMax。
 // 每条最多在这里补一次:补过一次 PeripheralRetryCount 就不是 0 了,之后照旧等播放时再试。例外是补法换了一版
 // (coverMissingRetryRules 加一):按旧版补过的缺封面条目不管补过几次、到没到外围补全的上限,都再补一次。见 03 章决策 38。
-// 一条补完一个请求都没成功时不算补过(见 backfillPeripheralFields 记次数那一行),等 coverSweepOfflineWait
-// 再补下一条;连续 coverSweepOfflineLimit 条都这样就停下这一遍,coverSweepOfflineRetry 后再来。
+// 一条补完自己发的请求一个都没成功时不算补过(只数这一条的,见 withNetworkRound 与 backfillPeripheralFields 记次数那一行),
+// 等 coverSweepOfflineWait 再补下一条;连续 coverSweepOfflineLimit 条都这样就停下这一遍,coverSweepOfflineRetry 后再来。
 // 补一条不当场存盘:每补完 coverSweepSaveEvery 条、以及一遍收尾时要一次存盘,这一次也跟别的歌的改动一样攒着、
 // 最多 enrichBackgroundSaveDelay 写(App 每次存盘都要整份重读缓存,见 enrichsave.go);正在播的那首照常当场存。
 //
@@ -57,9 +57,10 @@ var (
 		case <-time.After(d):
 		}
 	}
-	// coverSweepBackfill 补一条;coverSweepNetworkRound 观察这一条发出去的请求成没成。单测都换成假的。
+	// coverSweepBackfill 补一条;coverSweepNetworkRound 给这一条开一轮观察,只数经它返回的 ctx 发出去的请求(别处的请求混进来
+	// 会把没问成的条目记成补过)。单测都换成假的。
 	coverSweepBackfill     = backfillPeripheralFields
-	coverSweepNetworkRound = beginNetworkRound
+	coverSweepNetworkRound = withNetworkRound
 	// coverSweepUpgradeLocal 在本机播放器数据、歌词判决的各源候选里给小设备封面找清晰版。单测换成假的。
 	coverSweepUpgradeLocal = upgradeSmallDeviceCover
 	// coverSweepSave 把攒着的改动存盘。单测换成计数。
@@ -94,10 +95,11 @@ func startCoverSweeper(ctx context.Context) {
 	}
 }
 
-// coverSweepPass 是一遍的结果。offline:连续 coverSweepOfflineLimit 条一个请求都没成功,这一遍提前停下了。
+// coverSweepPass 是一遍的结果。offlineItems:一个请求都没成功的条数;offline:连续 coverSweepOfflineLimit 条这样,这一遍
+// 提前停下了。
 type coverSweepPass struct {
-	candidates, filled, upgraded, missed, skipped int
-	offline                                       bool
+	candidates, filled, upgraded, missed, skipped, offlineItems int
+	offline                                                     bool
 }
 
 // runCoverSweep 跑一遍:先补没封面的,再核小设备封面。
@@ -149,6 +151,7 @@ func runCoverSweep(ctx context.Context) coverSweepPass {
 			pass.missed++
 			offlineStreak = 0
 		case coverSweepOffline:
+			pass.offlineItems++
 			offlineStreak++
 			wait = coverSweepOfflineWait
 		}
@@ -169,7 +172,7 @@ func runCoverSweep(ctx context.Context) coverSweepPass {
 		coverSweepSave()
 	}
 	slog.Info("cover sweep: done", "candidates", pass.candidates, "filled", pass.filled, "upgraded", pass.upgraded,
-		"missed", pass.missed, "skipped", pass.skipped, "offline", pass.offline)
+		"missed", pass.missed, "skipped", pass.skipped, "offline_items", pass.offlineItems, "offline", pass.offline)
 	return pass
 }
 
@@ -332,14 +335,20 @@ func coverSweepUpgradeOne(ctx context.Context, key string) coverSweepOutcome {
 	deviceURL, remote := e.CoverURL, peripheralBackfillWindowOpen(e)
 	enrichInflight[key] = true
 	enrichMu.Unlock()
-	bctx := withCoverSweepDeferredSave(withBackgroundOutbound(ctx))
-	round := coverSweepNetworkRound()
+	bctx, round := coverSweepNetworkRound(withCoverSweepDeferredSave(withBackgroundOutbound(ctx)))
 	// 两步都自己放掉 enrichInflight;第二步之前重新占上。
 	upgraded := coverSweepUpgradeLocal(bctx, key, deviceURL, artist, coverSweepTitle(title), album, dur)
 	if !upgraded && remote {
 		enrichMu.Lock()
-		enrichInflight[key] = true
+		taken := enrichInflight[key]
+		if !taken {
+			enrichInflight[key] = true
+		}
 		enrichMu.Unlock()
+		if taken {
+			// 第一步放掉之后别处(换歌那一拍、预取)已经占上了这一条:交给它,这一遍不记核过。
+			return coverSweepSkipped
+		}
 		coverSweepBackfill(bctx, key, artist, coverSweepTitle(title), album, dur)
 	}
 	attempts, failures := round()
@@ -375,9 +384,9 @@ func coverSweepOne(ctx context.Context, key string) coverSweepOutcome {
 	}
 	enrichInflight[key] = true
 	enrichMu.Unlock()
-	round := coverSweepNetworkRound()
+	bctx, round := coverSweepNetworkRound(withCoverSweepDeferredSave(withBackgroundOutbound(ctx)))
 	// 同步跑:backfillPeripheralFields 自己清 enrichInflight、落盘、通知重推。
-	coverSweepBackfill(withCoverSweepDeferredSave(withBackgroundOutbound(ctx)), key, artist, coverSweepTitle(title), album, dur)
+	coverSweepBackfill(bctx, key, artist, coverSweepTitle(title), album, dur)
 	attempts, failures := round()
 	enrichMu.Lock()
 	defer enrichMu.Unlock()

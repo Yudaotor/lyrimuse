@@ -466,3 +466,36 @@ func TestAPICallSummary_CanceledAndRollupBySource(t *testing.T) {
 	}
 	flushAPICallSummaries(time.Now(), true)
 }
+
+// withNetworkRound 只数经它的 ctx 发出去的请求:别处的成功(中继推送、收听上送)混不进来;里层的请求外层同样计入;调用方
+// 自己取消的不记。后台补封面、外围补全拿它记账(这一条算不算试过)。
+func TestWithNetworkRoundCountsOnlyItsOwnRequests(t *testing.T) {
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer ok.Close()
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	deadURL := dead.URL
+	dead.Close()
+	get := func(ctx context.Context, url string) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp, err := doHTTPTracked(http.DefaultClient, req); err == nil {
+			resp.Body.Close()
+		}
+	}
+	outer, outerRound := withNetworkRound(context.Background())
+	inner, innerRound := withNetworkRound(outer)
+	get(inner, deadURL+"/a")
+	get(context.Background(), ok.URL+"/other")
+	get(outer, ok.URL+"/b")
+	canceled, cancel := context.WithCancel(inner)
+	cancel()
+	get(canceled, ok.URL+"/c")
+	if a, f := innerRound(); a != 1 || f != 1 {
+		t.Errorf("里层: attempts=%d failures=%d, 要 1/1", a, f)
+	}
+	if a, f := outerRound(); a != 2 || f != 1 {
+		t.Errorf("外层: attempts=%d failures=%d, 要 2/1", a, f)
+	}
+}

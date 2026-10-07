@@ -244,3 +244,29 @@ func TestCoverSweepUpgradeOfflineNotRecorded(t *testing.T) {
 		t.Errorf("断网那一条不该记成核过: %d", ts)
 	}
 }
+
+// 第一步放掉在途标记之后别处(换歌那一拍、预取)已经占上了这一条:第二步不再占、不走外围补全,这一遍不记核过。
+func TestCoverSweepUpgradeYieldsWhenTakenBetweenSteps(t *testing.T) {
+	resetCoverEdgeMemo(t)
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|x|X": {CoverSource: "device", CoverURL: writeCoverFile(t, t.TempDir(), "1.jpg", synthCover(150, 1))},
+	})
+	calls, _ := withCoverSweepFakes(t, [][2]int32{{2, 0}}, nil)
+	saved := coverSweepUpgradeLocal
+	t.Cleanup(func() { coverSweepUpgradeLocal = saved })
+	coverSweepUpgradeLocal = func(_ context.Context, key, _, _, _, _ string, _ float64) bool {
+		enrichMu.Lock()
+		defer enrichMu.Unlock()
+		enrichInflight[key] = true // 放掉之后马上被别处占上
+		return false
+	}
+	pass := runCoverSweep(context.Background())
+	if len(*calls) != 0 || pass.skipped != 1 {
+		t.Errorf("别处占着时不该再走外围补全: 补了 %d 条, %+v", len(*calls), pass)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if ts := enrichCache["A|x|X"].CoverUpgradeCheckTS; ts != 0 {
+		t.Errorf("没核成的不该记成核过: %d", ts)
+	}
+}

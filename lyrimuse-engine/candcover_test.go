@@ -121,6 +121,40 @@ func TestUpgradeSmallDeviceCoverFromDecisionCandidates(t *testing.T) {
 	}
 }
 
+// 补边的小设备封面(汽水那种上下白边):歌词判决里的候选不担保是这首歌,不是同一张图就不换;播放器自己给的照旧让它让位。
+func TestUpgradeSmallLetterboxedDeviceCover(t *testing.T) {
+	isolateEnrichCache(t)
+	resetCoverEdgeMemo(t)
+	saved := candidateCoverURLOK
+	candidateCoverURLOK = func(u string) bool { return strings.HasPrefix(u, deviceArtworkURLPrefix) }
+	t.Cleanup(func() { candidateCoverURLOK = saved })
+	dir := t.TempDir()
+	device := writeCoverFile(t, dir, "device.jpg", letterboxedCover(150, 114, 1))
+	other := writeCoverFile(t, dir, "o/800x800.jpg", synthCover(800, 2))
+	if coverURLIntendedEdge(other) != 800 {
+		t.Skipf("临时目录路径里带着别的 NxN 片段: %q", dir)
+	}
+	const key = "甲|乙|丙"
+	run := func(ctx context.Context, cands ...lyricsDecisionCandidate) enrichEntry {
+		enrichMu.Lock()
+		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", Lyrics: "[00:01.00]x",
+			LyricsDecision: &lyricsDecision{Winner: "lrclib", Candidates: cands}}
+		enrichInflight[key] = true
+		enrichMu.Unlock()
+		upgradeSmallDeviceCover(ctx, key, device, "甲", "乙", "丙", 0)
+		enrichMu.Lock()
+		defer enrichMu.Unlock()
+		return enrichCache[key]
+	}
+	stranger := lyricsDecisionCandidate{Source: "kugou", Score: -1, Artist: "别人", Title: "另一首", CoverURL: other}
+	if e := run(context.Background(), lyricsDecisionCandidate{Source: "lrclib", Score: 300}, stranger); e.CoverURL != device {
+		t.Errorf("判决里另一首歌的封面不是同一张图:留着补边的设备封面,得到 %+v", e)
+	}
+	if e := run(withPlayerCover(context.Background(), other)); e.CoverURL != other || e.CoverSource != "player" {
+		t.Errorf("播放器自己给的照旧让补边的设备封面让位,得到 %+v", e)
+	}
+}
+
 // 后台补封面开头不联网补一轮:没封面、存着的判决里胜出的那个源自带封面且专辑逐字对上的补上,别的不动。
 func TestCoverSweepFillsFromLyricsWinner(t *testing.T) {
 	dec := func(album, cover string) *lyricsDecision {

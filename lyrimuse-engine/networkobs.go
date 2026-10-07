@@ -94,6 +94,7 @@ func doHTTPTrackedOnce(cli *http.Client, req *http.Request) (*http.Response, err
 	tr := trace
 	traceMu.Unlock()
 	atomic.AddInt32(&networkAttemptCount, 1)
+	noteNetworkRoundOutcome(req.Context(), err)
 	// 审计里标识"打的是哪个接口":HTTP 方法 + host + path(+ Last.fm 的 method 参数)。
 	// 同时是汇总的分组键。
 	target := req.Method + " " + req.URL.Host + req.URL.Path
@@ -424,22 +425,49 @@ func networkLooksDown() bool {
 	return attempts >= 3 && failures == attempts
 }
 
-// beginNetworkRound 开始一轮观察,返回的函数给出"从这一刻到调用它为止"的网络成败。
+// withNetworkRound 开始一轮只数自己请求的观察:经返回的 ctx 发出去的请求(doHTTPTracked,等到别人那次合并结果的也算)
+// 才计入,返回的函数给出到调用它为止的成败。
 //
 // 上面那个 networkLooksDown() **不能**用在常驻采集器里,只对一次性子命令成立:
 // 它读的是进程启动以来的累计值,而 `failures == attempts` 这个条件只要进程早期有过
 // 任何一次成功就永远不再成立 —— 开机时有网、后来断网,它一路报"网络正常"。
 // 一次性 CLI 跑完就退出,累计值天然等于"这一次的",所以那边没问题。
 //
-// 并发说明:专辑预取会同时解析多首歌,别人的成功会混进这个差值里。方向是安全的 ——
-// 混入成功只会让 failures < attempts,导致**漏报**(该说没网时没说),不会误报
-// (把有网说成没网)。对一个界面提示来说,宁可漏报。
-func beginNetworkRound() func() (attempts, failures int32) {
-	a0 := atomic.LoadInt32(&networkAttemptCount)
-	f0 := atomic.LoadInt32(&networkFailureCount)
-	return func() (int32, int32) {
-		return atomic.LoadInt32(&networkAttemptCount) - a0,
-			atomic.LoadInt32(&networkFailureCount) - f0
+// 也不能拿全进程计数的差值代替:别的 goroutine 的请求(中继推送、收听上送、专辑预取并发解析的别的歌)一直在成功,
+// 混进来以后一个请求都没问成的这一轮也会被当成「查过了」—— 首次解析把它落成「暂无歌词」(24 小时后才再试)、
+// 后台补封面把它记成补过。
+// 可以嵌套,里层的请求外层同样计入。
+func withNetworkRound(ctx context.Context) (context.Context, func() (attempts, failures int32)) {
+	r := &networkRound{parent: networkRoundFrom(ctx)}
+	return context.WithValue(ctx, networkRoundKey{}, r), func() (int32, int32) {
+		return r.attempts.Load(), r.failures.Load()
+	}
+}
+
+type networkRoundKey struct{}
+
+// networkRound:withNetworkRound 开的一轮。parent 是外面那一层,计数一路往上记。
+type networkRound struct {
+	parent             *networkRound
+	attempts, failures atomic.Int32
+}
+
+func networkRoundFrom(ctx context.Context) *networkRound {
+	r, _ := ctx.Value(networkRoundKey{}).(*networkRound)
+	return r
+}
+
+// noteNetworkRoundOutcome 把一个请求记进 ctx 上的每一层观察(err 非空算失败)。调用方自己取消的不记:它没成也没败,
+// 记成成功会把一个请求都没问成的一轮当成问过。
+func noteNetworkRoundOutcome(ctx context.Context, err error) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	for r := networkRoundFrom(ctx); r != nil; r = r.parent {
+		r.attempts.Add(1)
+		if err != nil {
+			r.failures.Add(1)
+		}
 	}
 }
 

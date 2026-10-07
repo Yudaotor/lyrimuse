@@ -320,7 +320,8 @@ func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int
 }
 
 // lbHTTPClient:ListenBrainz 提交用的 client,先直连、不通再走 macOS 系统代理(proxyFallbackClient)。这台机器上
-// api.listenbrainz.org 直连时常连不上(超时),经系统代理是通的;直连通的时候一个包都不经过代理。
+// api.listenbrainz.org 直连时常连不上(超时),经系统代理是通的;直连通的时候一个包都不经过代理。直连只限建连那几秒
+// (proxyFallbackTransport.attemptDirect):LB 慢的时候三五秒才回,那不算直连不通,等满 submitOnce 自己的时限。
 func lbHTTPClient() *http.Client { return proxyFallbackClient() }
 
 // submitOnce does one submit-listens POST with its own timeout. It returns the

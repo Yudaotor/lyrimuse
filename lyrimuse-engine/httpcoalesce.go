@@ -77,11 +77,13 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 		}
 		if c.shared {
 			noteCoalescedReached(req, c.resp.StatusCode)
+			noteNetworkRoundOutcome(req.Context(), nil)
 			return coalescedResponse(c, req), nil
 		}
 		// 发出去的那个被它自己的 ctx 取消了、或者响应不能共享(太大):自己的 ctx 还活着就重来一遍 ——
 		// 仍走合并,几个一起重发的只发一次。
 		if c.err != nil && !c.leaderCanceled {
+			noteNetworkRoundOutcome(req.Context(), c.err)
 			return nil, c.err
 		}
 		return doHTTPTracked(cli, req)

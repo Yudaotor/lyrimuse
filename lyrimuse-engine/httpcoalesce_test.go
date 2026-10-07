@@ -155,3 +155,28 @@ func TestHTTPCoalesceFollowerRetriesWhenLeaderCancelled(t *testing.T) {
 		t.Fatalf("应当发了 2 次(被取消的 + 自己重发的): %d", n)
 	}
 }
+
+// 等到别人那次合并结果的请求也记进自己那一轮(withNetworkRound):它没真发请求,不记的话一轮里问成的恰好都是等结果的那几个时,
+// 这一轮会被当成一个请求都没成。
+func TestHTTPCoalesceFollowerCountsInItsNetworkRound(t *testing.T) {
+	srv, hits := withCoalesceTestServer(t, 150*time.Millisecond)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := coalesceGet(t, context.Background(), srv.URL+"/lyric?id=7", nil); err != nil {
+			t.Error(err)
+		}
+	}()
+	waitCoalesceHits(t, hits, 1)
+	ctx, round := withNetworkRound(context.Background())
+	if _, err := coalesceGet(t, ctx, srv.URL+"/lyric?id=7", nil); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	if n := atomic.LoadInt32(hits); n != 1 {
+		t.Fatalf("应当合并成一次请求: %d", n)
+	}
+	if a, f := round(); a != 1 || f != 0 {
+		t.Errorf("等到合并结果的那个要记成这一轮成功一次: attempts=%d failures=%d", a, f)
+	}
+}

@@ -116,67 +116,75 @@ func TestDeviceCoverDecision(t *testing.T) {
 	}
 
 	// ① 设备封面够清晰 → 直接顶掉,且**不取图**(快路径)
-	if ov, why := deviceCoverDecision(synthCover(600, 1), neteaseBig, 800, neverLoad); !ov {
+	if ov, why := deviceCoverDecision(synthCover(600, 1), neteaseBig, 800, neverLoad, true); !ov {
 		t.Errorf("够清晰的设备封面该顶掉候选, why=%s", why)
 	}
 	// 边界:正好等于门槛也算够清晰
-	if ov, _ := deviceCoverDecision(synthCover(deviceCoverTrustedMinEdge, 1), neteaseBig, 800, neverLoad); !ov {
+	if ov, _ := deviceCoverDecision(synthCover(deviceCoverTrustedMinEdge, 1), neteaseBig, 800, neverLoad, true); !ov {
 		t.Error("边长正好等于门槛该算够清晰")
 	}
 
 	// ② 没有远程候选 → 顶掉(没有更好的选择),不取图
-	if ov, _ := deviceCoverDecision(synthCover(120, 1), "", 0, neverLoad); !ov {
+	if ov, _ := deviceCoverDecision(synthCover(120, 1), "", 0, neverLoad, true); !ov {
 		t.Error("没有候选时该用设备封面")
 	}
-	if ov, _ := deviceCoverDecision(synthCover(120, 1), "   ", 0, neverLoad); !ov {
+	if ov, _ := deviceCoverDecision(synthCover(120, 1), "   ", 0, neverLoad, true); !ov {
 		t.Error("候选是纯空白时该用设备封面")
 	}
 
 	// ③ 候选尺寸认不出来 → 保守顶掉(证不出它更好),不取图
-	if ov, why := deviceCoverDecision(synthCover(120, 1), "https://example.com/c.jpg", 0, neverLoad); !ov {
+	if ov, why := deviceCoverDecision(synthCover(120, 1), "https://example.com/c.jpg", 0, neverLoad, true); !ov {
 		t.Errorf("候选尺寸认不出时该保留设备封面, why=%s", why)
 	}
 
 	// ④ 候选不比设备图大 → 顶掉,不取图
-	if ov, _ := deviceCoverDecision(synthCover(120, 1), neteaseBig, 120, neverLoad); !ov {
+	if ov, _ := deviceCoverDecision(synthCover(120, 1), neteaseBig, 120, neverLoad, true); !ov {
 		t.Error("候选跟设备图一样大时该保留设备封面")
 	}
-	if ov, _ := deviceCoverDecision(synthCover(120, 1), neteaseBig, 64, neverLoad); !ov {
+	if ov, _ := deviceCoverDecision(synthCover(120, 1), neteaseBig, 64, neverLoad, true); !ov {
 		t.Error("候选比设备图小时该保留设备封面")
 	}
 
 	// ⑤ 候选更大 + **同一张图** → 让位给高清候选。这就是《24K Magic》那一档。
-	ov, why := deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(synthCover(800, 1)))
+	ov, why := deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(synthCover(800, 1)), true)
 	if ov {
 		t.Errorf("同一张图时该改用更清晰的候选, why=%s", why)
 	}
 
 	// ⑥ 候选更大但**不是同一张** → 保留设备封面。 Immortal 那一档:设备那张小但对,
 	//    候选那张大但挂错了。这条断言就是那个 bug 的回归测试。
-	ov, why = deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(synthCover(800, 4)))
+	ov, why = deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(synthCover(800, 4)), true)
 	if !ov {
 		t.Errorf("候选是另一张图时必须保留设备封面(否则 Immortal 那个 bug 复发), why=%s", why)
 	}
 
 	// ⑦ 候选取不到/解不出来 → 顶掉(退回改动前的行为)
-	if ov, _ := deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(nil)); !ov {
+	if ov, _ := deviceCoverDecision(synthCover(120, 1), neteaseBig, 800, load(nil), true); !ov {
 		t.Error("候选取不到时该保留设备封面")
 	}
 
 	// ⑧ 设备图本身解不出来 → 不顶掉(别拿一张解不出来的图换掉好候选)
-	if ov, _ := deviceCoverDecision(nil, neteaseBig, 800, neverLoad); ov {
+	if ov, _ := deviceCoverDecision(nil, neteaseBig, 800, neverLoad, true); ov {
 		t.Error("设备图解不出来时不该顶掉候选")
 	}
 
 	// ⑨ 设备图是把长方形图补白成的"方形"(汽水音乐那档)到 让位给方形的远程候选,哪怕
 	//    内容指纹对不上(构图不同,同一张专辑实测距离 28)。
-	if ov, why := deviceCoverDecision(letterboxedCover(150, 114, 4), neteaseBig, 800, load(synthCover(800, 1))); ov {
+	if ov, why := deviceCoverDecision(letterboxedCover(150, 114, 4), neteaseBig, 800, load(synthCover(800, 1)), true); ov {
 		t.Errorf("补边的长方形设备图该让位给方形候选, why=%s", why)
 	}
 	// 候选自己也不是方形 到 不走这一支(两边都不是封面形状,没有更可信的一方),交回指纹判。
 	// 候选用左右补边,免得两边的白边重合到一起、把指纹比成"同一张"。
-	if ov, _ := deviceCoverDecision(letterboxedCover(150, 114, 4), neteaseBig, 800, load(pillarboxedCover(800, 600, 1))); !ov {
+	if ov, _ := deviceCoverDecision(letterboxedCover(150, 114, 4), neteaseBig, 800, load(pillarboxedCover(800, 600, 1)), true); !ov {
 		t.Error("候选同样不是方形时不该走补边这一支")
+	}
+
+	// ⑩ 候选不担保是这首歌(歌词判决里别的源的候选):补边这一支不走,只认同一张图。
+	if ov, why := deviceCoverDecision(letterboxedCover(150, 114, 4), neteaseBig, 800, load(synthCover(800, 1)), false); !ov {
+		t.Errorf("不担保的候选是另一张图,补边的设备图也该留着, why=%s", why)
+	}
+	if ov, why := deviceCoverDecision(letterboxedCover(150, 114, 4), neteaseBig, 800, load(letterboxedCover(800, 608, 4)), false); ov {
+		t.Errorf("不担保的候选跟设备图是同一张、更大,该让位, why=%s", why)
 	}
 }
 

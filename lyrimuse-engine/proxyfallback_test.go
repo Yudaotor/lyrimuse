@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
@@ -454,4 +455,130 @@ func TestProxyFallbackBodyReadableAfterRoundTrip(t *testing.T) {
 	}
 	// 重复 Close 不能 panic(sync.Once 保护 cancel)。
 	_ = resp.Body.Close()
+}
+
+// ---- 直连预算只管建连(attemptDirect) ----
+
+// delayedServer 每个请求等 delay 再回 200 和 body。
+func delayedServer(t *testing.T, delay time.Duration, body string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(delay)
+		io.WriteString(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// 连上了、服务器自己处理得慢(ListenBrainz 慢的时候三五秒才回):不算直连不通,不经代理再发一遍,也不钉到代理上。
+func TestProxyFallbackSlowServerAfterConnectStaysDirect(t *testing.T) {
+	newFallbackTestEnv(t)
+	srv := delayedServer(t, 200*time.Millisecond, "slow")
+	viaProxy := &stubRoundTripper{body: "proxy"}
+	tr := &proxyFallbackTransport{direct: &http.Transport{}, viaProxy: viaProxy, directBudget: 50 * time.Millisecond}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL+"/1/submit-listens", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("连上了只是慢,该等它回, err=%v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "slow" || viaProxy.calls != 0 {
+		t.Errorf("body=%q、代理 %d 次,要直连拿到、不碰代理", body, viaProxy.calls)
+	}
+	if loadProxyFallbackHint(req.URL.Hostname()) {
+		t.Error("慢不是不通,不该记成要走代理")
+	}
+}
+
+// 连接建不起来(黑洞):预算到点照旧转代理。直连那次报的是「到期」,不是「调用方取消」(doHTTPTracked 把后者当不算数)。
+func TestProxyFallbackConnectBudgetStillFallsBack(t *testing.T) {
+	newFallbackTestEnv(t)
+	blackHole := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}
+	viaProxy := &stubRoundTripper{body: "proxy"}
+	tr := &proxyFallbackTransport{direct: blackHole, viaProxy: viaProxy, directBudget: 50 * time.Millisecond}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	newReq := func() *http.Request {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://blackhole.invalid/x", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return req
+	}
+	start := time.Now()
+	if _, err := tr.attemptDirect(newReq(), true); !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) ||
+		time.Since(start) > 2*time.Second {
+		t.Fatalf("建连预算到点要报到期: err=%v,用时 %s", err, time.Since(start))
+	}
+	resp, err := tr.RoundTrip(newReq())
+	if err != nil {
+		t.Fatalf("直连建不起连接时该被代理救回来, err=%v", err)
+	}
+	resp.Body.Close()
+	if viaProxy.calls != 1 {
+		t.Errorf("代理 %d 次,要 1 次", viaProxy.calls)
+	}
+}
+
+// 调用方没设时限:照旧整段请求限预算(不让连上了却不回话的服务器把调用方一直挂着),到点转代理。
+func TestProxyFallbackNoDeadlineKeepsWholeRequestBudget(t *testing.T) {
+	newFallbackTestEnv(t)
+	srv := delayedServer(t, 300*time.Millisecond, "slow")
+	viaProxy := &stubRoundTripper{body: "proxy"}
+	tr := &proxyFallbackTransport{direct: &http.Transport{}, viaProxy: viaProxy, directBudget: 50 * time.Millisecond}
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "proxy" || viaProxy.calls != 1 {
+		t.Errorf("body=%q、代理 %d 次,没设时限的请求要按整段预算掐、转代理", body, viaProxy.calls)
+	}
+}
+
+// 没有可用的系统代理:直连没有退路,不另设预算 —— 建连慢一点(丢包重传)也等它。
+func TestProxyFallbackNoProxyDirectHasNoBudget(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	resetSystemProxyCacheForTest()
+	t.Cleanup(resetSystemProxyCacheForTest)
+	systemProxyMu.Lock()
+	systemProxyValue, systemProxyReadAt = nil, time.Now()
+	systemProxyMu.Unlock()
+	srv := delayedServer(t, 0, "ok")
+	slowDial := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		time.Sleep(150 * time.Millisecond)
+		var d net.Dialer
+		return d.DialContext(ctx, network, addr)
+	}}
+	viaProxy := &stubRoundTripper{body: "proxy"}
+	tr := &proxyFallbackTransport{direct: slowDial, viaProxy: viaProxy, directBudget: 50 * time.Millisecond}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/x", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("没有代理可退时不该掐直连, err=%v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "ok" || viaProxy.calls != 0 {
+		t.Errorf("body=%q、代理 %d 次", body, viaProxy.calls)
+	}
 }

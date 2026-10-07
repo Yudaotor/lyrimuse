@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,7 +29,8 @@ import (
 const (
 	// proxyFallbackDirectBudget:直连探路预算。黑洞的特征是 SYN 石沉大海 —— 量
 	// 到的三次侥幸成功都落在 1.3s / 3.4s(SYN 重传之后),而路通的时候 TCP+TLS 全程 <1s。
-	// 3 秒足够分辨这两种,又不至于在慢网络上把"只是有点慢"误判成"被打掉了"。
+	// 3 秒足够分辨这两种,又不至于在慢网络上把"只是有点慢"误判成"被打掉了"。调用方有时限时只算到拿到连接为止,
+	// 服务器处理得慢不算(见 attemptDirect)。
 	proxyFallbackDirectBudget = 3 * time.Second
 	// proxyFallbackProxyBudget:走代理的预算。实测经本机 Clash 打 token.get 是 6.5s
 	// (代理要先把自己那条出境链路建起来),给 10s 留足余量。
@@ -68,6 +72,9 @@ type proxyFallbackTransport struct {
 	// 记一个具体的失败原因 —— 设置页那颗「测试」按钮会把它翻成人话显示出来。可以为 nil。
 	onBlocked func()
 
+	// directBudget:直连探路的预算,零值 = proxyFallbackDirectBudget。只有单测改短。
+	directBudget time.Duration
+
 	mu          sync.Mutex
 	stickyUntil time.Time
 	// hintChecked:这个进程里已经看过磁盘提示里有没有这台主机的连续失败计数(见 RoundTrip 直连成功那一支)。
@@ -77,9 +84,9 @@ type proxyFallbackTransport struct {
 func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// 带 body 且**不能重放**的请求不做 fallback:重试要 req.Clone,而 Clone 不复制 body,
 	// 第二次拨过去会是一个空 body 的请求 —— 那种失败比不重试更难查。能重放的(有 GetBody,
-	// http.NewRequest 拿 bytes.Reader / strings.Reader 建的都有)每次尝试取一份新 body,见 attempt。
+	// http.NewRequest 拿 bytes.Reader / strings.Reader 建的都有)每次尝试取一份新 body,见 proxyFallbackSend。
 	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
-		return t.attempt(t.direct, req, proxyFallbackDirectBudget)
+		return t.attemptDirect(req, false)
 	}
 
 	host := req.URL.Hostname()
@@ -99,7 +106,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		// 不清的话会一直往一个死代理上撞,而直连说不定早就恢复了。
 		t.clearSticky(host)
 		log.Printf("proxy: %s failed via proxy (%v), clearing sticky proxy and retrying direct", host, err)
-		resp, err = t.attempt(t.direct, req, proxyFallbackDirectBudget)
+		resp, err = t.attemptDirect(req, false)
 		if err != nil {
 			t.reportBlocked()
 		}
@@ -107,7 +114,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 	}
 
 	directStart := time.Now()
-	resp, directErr := t.attempt(t.direct, req, proxyFallbackDirectBudget)
+	resp, directErr := t.attemptDirect(req, !systemProxyKnownAbsent())
 	directElapsed := time.Since(directStart)
 	if directErr == nil {
 		// 窗口到期、重新探直连通了:连续失败次数清零,下次再被打掉从 10 分钟重新算。粘性要是上一个进程
@@ -148,32 +155,74 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 	return resp, nil
 }
 
-// attempt 跑一次 RoundTrip,并给它单独一份预算。
+// attempt 跑一次 RoundTrip,并给它单独一份预算(整段请求,含读响应体)。
 //
 // 预算必须落在**每次尝试**上,不能靠 http.Client.Timeout —— 那是把直连和代理两次尝试
 // 算进同一个预算里,直连一超时就没钱给代理重试了,fallback 等于没加。dohHTTPClient 因此
 // 刻意不设 Client.Timeout,头注里也写着别加回去。
 func (t *proxyFallbackTransport) attempt(rt http.RoundTripper, req *http.Request, budget time.Duration) (*http.Response, error) {
 	ctx, cancel := context.WithTimeout(req.Context(), budget)
+	return proxyFallbackSend(ctx, rt, req, cancel)
+}
+
+// attemptDirect 跑一次直连。fallback:直连不通时后面还有代理可退。
+//
+// 直连的预算只为判「直连通不通」,而不通的样子是连接建不起来(SYN 石沉大海、TLS 握手卡住):
+//   - 调用方 ctx 上有时限、后面有代理可退:预算只管到拿到连接为止,拿到就停表。之后服务器自己处理得慢(ListenBrainz
+//     慢的时候三五秒才回)交给调用方的时限 —— 那不是直连被打掉,按整段请求掐表的话会把同一个请求经代理再发一遍,
+//     还把这台主机钉到代理上(最长 6 小时)。
+//   - 有时限、没有代理可退(没有可用的系统代理、代理失败后回直连那一次、body 不能重放):不另设预算,早掐只会更差。
+//   - 调用方没设时限:照旧整段请求限一个预算,不让连上了却一直不回话的服务器把调用方挂着。
+func (t *proxyFallbackTransport) attemptDirect(req *http.Request, fallback bool) (*http.Response, error) {
+	budget := t.directBudget
+	if budget <= 0 {
+		budget = proxyFallbackDirectBudget
+	}
+	if _, ok := req.Context().Deadline(); !ok {
+		return t.attempt(t.direct, req, budget)
+	}
+	if !fallback {
+		return proxyFallbackSend(req.Context(), t.direct, req, func() {})
+	}
+	ctx, cancel := context.WithCancel(req.Context())
+	var expired atomic.Bool
+	timer := time.AfterFunc(budget, func() {
+		expired.Store(true)
+		cancel()
+	})
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { timer.Stop() }})
+	resp, err := proxyFallbackSend(ctx, t.direct, req, func() {
+		timer.Stop()
+		cancel()
+	})
+	if err != nil && expired.Load() && req.Context().Err() == nil {
+		// 预算是拿 cancel 掐的,原样往上报就成了「调用方自己取消」,doHTTPTracked 会把它当成不算数的取消。
+		return nil, fmt.Errorf("no connection within %s: %w", budget, context.DeadlineExceeded)
+	}
+	return resp, err
+}
+
+// proxyFallbackSend 拿 ctx 发一份 req 的副本,能重放的 body 每次取新的一份。release 在出错时、或调用方关掉响应体时调一次。
+func proxyFallbackSend(ctx context.Context, rt http.RoundTripper, req *http.Request, release func()) (*http.Response, error) {
 	clone := req.Clone(ctx)
 	if req.GetBody != nil {
 		body, err := req.GetBody()
 		if err != nil {
-			cancel()
+			release()
 			return nil, err
 		}
 		clone.Body = body
 	}
 	resp, err := rt.RoundTrip(clone)
 	if err != nil {
-		cancel()
+		release()
 		return nil, err
 	}
-	// cancel 不能在这里调:ctx 一取消,还没读的 resp.Body 立刻断流(表现是调用方
+	// release 不能在这里调:ctx 一取消,还没读的 resp.Body 立刻断流(表现是调用方
 	// io.ReadAll 拿到 "context canceled",看起来像服务器提前关了连接)。挂到 Body 上,
 	// 等调用方 Close 了再释放 —— 这是 net/http 自己对付 Client.Timeout 的办法
 	// (cancelTimerBody),不是这里发明的写法。
-	resp.Body = &proxyFallbackBody{ReadCloser: resp.Body, cancel: cancel}
+	resp.Body = &proxyFallbackBody{ReadCloser: resp.Body, cancel: release}
 	return resp, nil
 }
 

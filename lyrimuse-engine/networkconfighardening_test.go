@@ -238,15 +238,19 @@ func TestNoteCoalescedReachedMarksRound(t *testing.T) {
 func TestNetworkFailureCountIgnoresCanceled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
-	done := beginNetworkRound()
-	ctx, cancel := context.WithCancel(context.Background())
+	f0 := atomic.LoadInt32(&networkFailureCount)
+	roundCtx, round := withNetworkRound(context.Background())
+	ctx, cancel := context.WithCancel(roundCtx)
 	cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
 	if _, err := doHTTPTrackedOnce(http.DefaultClient, req); err == nil {
 		t.Fatal("取消了的请求应当失败")
 	}
-	if _, failures := done(); failures != 0 {
-		t.Fatalf("取消不该计成失败: %d", failures)
+	if n := atomic.LoadInt32(&networkFailureCount) - f0; n != 0 {
+		t.Fatalf("取消不该计成失败: %d", n)
+	}
+	if attempts, failures := round(); attempts != 0 || failures != 0 {
+		t.Fatalf("取消的请求不计入这一轮: attempts=%d failures=%d", attempts, failures)
 	}
 }
 

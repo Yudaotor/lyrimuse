@@ -83,6 +83,15 @@ func systemProxyURL() *neturl.URL {
 	return u
 }
 
+// systemProxyKnownAbsent:上一次读到的是「没有可用的系统代理」,而且还在 systemProxyCacheTTL 之内。只看缓存、不去读设置
+// 也不探活:给每个请求开头的判断用(直连还要不要留退路,见 proxyFallbackTransport.attemptDirect),不在请求路径上多起
+// scutil。缓存空着或过期算「不知道」,返回 false。
+func systemProxyKnownAbsent() bool {
+	systemProxyMu.Lock()
+	defer systemProxyMu.Unlock()
+	return systemProxyValue == nil && !systemProxyReadAt.IsZero() && time.Since(systemProxyReadAt) < systemProxyCacheTTL
+}
+
 // readSystemProxyURL:环境变量优先,没有再问 scutil。
 //
 // 环境变量排在前面是因为它更"显式":从终端手动跑引擎子命令、或者哪天在 launchd

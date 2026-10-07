@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
@@ -45,9 +47,9 @@ func withCoverSweepFakes(t *testing.T, rounds [][2]int32, onBackfill func(key st
 		delete(enrichInflight, key)
 		enrichMu.Unlock()
 	}
-	coverSweepNetworkRound = func() func() (int32, int32) {
+	coverSweepNetworkRound = func(ctx context.Context) (context.Context, func() (int32, int32)) {
 		r := rounds[min(len(calls), len(rounds)-1)]
-		return func() (int32, int32) { return r[0], r[1] }
+		return ctx, func() (int32, int32) { return r[0], r[1] }
 	}
 	return &calls, &waits
 }
@@ -171,8 +173,9 @@ func TestCoverSweepStopsAfterOfflineStreak(t *testing.T) {
 	withEnrichCache(t, entries)
 	calls, waits := withCoverSweepFakes(t, [][2]int32{{3, 3}, {0, 0}, {5, 5}, {2, 2}, {4, 4}}, nil)
 	pass := runCoverSweep(context.Background())
-	if len(*calls) != coverSweepOfflineLimit || !pass.offline {
-		t.Fatalf("补了 %d 条、offline=%v,要补 %d 条后停下", len(*calls), pass.offline, coverSweepOfflineLimit)
+	if len(*calls) != coverSweepOfflineLimit || !pass.offline || pass.offlineItems != coverSweepOfflineLimit {
+		t.Fatalf("补了 %d 条、offline=%v、没问成的 %d 条,要补 %d 条后停下", len(*calls), pass.offline, pass.offlineItems,
+			coverSweepOfflineLimit)
 	}
 	want := []time.Duration{coverSweepOfflineWait, coverSweepOfflineWait, coverSweepOfflineWait, coverSweepOfflineWait}
 	if !reflect.DeepEqual(*waits, want) {
@@ -183,6 +186,46 @@ func TestCoverSweepStopsAfterOfflineStreak(t *testing.T) {
 	calls, _ = withCoverSweepFakes(t, [][2]int32{{3, 3}, {3, 3}, {3, 3}, {3, 3}, {3, 1}, {3, 3}, {3, 3}}, nil)
 	if pass := runCoverSweep(context.Background()); pass.offline || len(*calls) != len(entries) || pass.missed != 1 {
 		t.Errorf("中间成了一条就该重新数: 补了 %d 条, %+v", len(*calls), pass)
+	}
+}
+
+// 一条补完成没成只数它自己发的请求:自己的全失败、同一时刻别处(中继推送)成功了一个,这一条照样算没问成,不记补法版本。
+func TestCoverSweepCountsOnlyItsOwnRequests(t *testing.T) {
+	productionRound := coverSweepNetworkRound // 下面的假实现会换掉它,先留一份正式那个
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer ok.Close()
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	deadURL := dead.URL
+	dead.Close()
+	get := func(ctx context.Context, url string) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp, err := doHTTPTracked(http.DefaultClient, req); err == nil {
+			resp.Body.Close()
+		}
+	}
+	for _, c := range []struct {
+		name, own string
+		want      coverSweepOutcome
+	}{
+		{"自己的全失败", deadURL, coverSweepOffline},
+		{"自己的有成功", ok.URL, coverSweepMissed},
+	} {
+		withEnrichCache(t, map[string]enrichEntry{"A|1|X": {Lyrics: coverSweepLyrics}})
+		withCoverSweepFakes(t, [][2]int32{{0, 0}}, nil)
+		coverSweepNetworkRound = productionRound
+		coverSweepBackfill = func(ctx context.Context, key, _, _, _ string, _ float64) {
+			get(ctx, c.own+"/cover")
+			get(context.Background(), ok.URL+"/relay") // 别处的请求
+			enrichMu.Lock()
+			delete(enrichInflight, key)
+			enrichMu.Unlock()
+		}
+		if got := coverSweepOne(context.Background(), "A|1|X"); got != c.want {
+			t.Errorf("%s: 结果 %d,要 %d", c.name, got, c.want)
+		}
 	}
 }
 
@@ -251,10 +294,10 @@ func TestBackfillPeripheralFieldsCountsOnlyReachedRounds(t *testing.T) {
 	if end := strings.Index(body, "\n}\n"); end >= 0 {
 		body = body[:end]
 	}
-	begin := strings.Index(body, "networkRound := beginNetworkRound()")
+	begin := strings.Index(body, "ctx, networkRound := withNetworkRound(ctx)")
 	resolve := strings.Index(body, "resolveTrackEnrichment(")
 	if begin < 0 || resolve < 0 || begin > resolve {
-		t.Error("要在发请求之前开始观察这一轮(networkRound := beginNetworkRound())")
+		t.Error("要在发请求之前开始观察这一轮,而且只数这一轮自己的请求(ctx, networkRound := withNetworkRound(ctx))")
 	}
 	if !strings.Contains(body, "if attempts, failures := networkRound(); lyricsRoundConfirmsNoResult(attempts, failures) {\n\t\te.PeripheralRetryCount++") {
 		t.Error("PeripheralRetryCount 只在这一轮有请求成功时才加")

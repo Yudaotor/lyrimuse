@@ -347,14 +347,14 @@ func fetchAppleAlbumHintCandidates(ctx context.Context, artist, title string, du
 }
 
 // fetchAppleAlbumHintCandidatesTracked 在 fetchAppleAlbumHintCandidates 外面包一轮网络观察(networkobs.go 的
-// beginNetworkRound),多回答一个问题:这次的空结果算不算数(Rocky 查《One Last Kiss》首播无词时发现直连
+// withNetworkRound,只数这一次查询自己发的请求),多回答一个问题:这次的空结果算不算数(Rocky 查《One Last Kiss》首播无词时发现直连
 // DNS 挂过 36 秒,顺带暴露这里的同款问题)。itunesSearch 把 DNS 失败 / 超时 / ctx 取消统统吞成空切片,原来一律记
 // miss,appleAlbumHintMaxMisses=2 之后这首歌的专辑回填就在进程生命周期内永久关闭 —— 网络抖两下,王子那首 MV 的
 // 封面又会退回「Apple 第一条合集」那个 03 章决策 16 刚修掉的形态。
 //
 // concluded 为 false 时调用方只清在途标记、不记 miss,下次换到这首歌照常再问。
 func fetchAppleAlbumHintCandidatesTracked(ctx context.Context, artist, title string, durationSecs float64) (cands []albumHintCandidate, concluded bool) {
-	end := beginNetworkRound()
+	ctx, end := withNetworkRound(ctx)
 	cands = fetchAppleAlbumHintCandidates(ctx, artist, title, durationSecs)
 	attempts, failures := end()
 	return cands, appleAlbumHintQueryConcluded(len(cands), attempts, failures)

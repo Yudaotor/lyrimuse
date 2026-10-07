@@ -410,9 +410,12 @@ func atoiSafe(s string) int {
 // candidateEdge 由调用方给:URL 里写着的(coverURLIntendedEdge),读不出时量原图的图头(coverActualEdge);
 // 不从 loadImage 的结果量 —— 那是降采样过的缩图,理由见 coverURLIntendedEdge 的注释。loadImage 注入进来只为让这条规则跑得了单测:判据本身
 // 不该为了测试去发真实 HTTP 请求。
+//
+// vouched:候选是不是这首歌有担保 —— 按这首歌的文字匹配出来的、播放器自己给的算。补边设备图那一档不比两张图是不是同一张,
+// 只对有担保的候选成立;歌词判决里各源候选自带的封面(upgradeSmallDeviceCover,不看那条候选是不是这首歌)只认同一张图。
 func deviceCoverDecision(
 	deviceImg image.Image, candidateURL string, candidateEdge int,
-	loadImage func(string) image.Image,
+	loadImage func(string) image.Image, vouched bool,
 ) (override bool, reason string) {
 	if deviceImg == nil {
 		// 解不出来的设备图压根不该走到这儿(deviceCoverURLIfFresh 落盘之前核过解得开),
@@ -442,8 +445,8 @@ func deviceCoverDecision(
 	// (汽水音乐实测 150×150、上下白边、中间 150×114),它不是封面本来的样子,不能当"这首歌封面
 	// 身份"的证据 —— 远程候选自己是正常的方形封面就让位。指纹在这里帮不上:这类图的构图跟正方形
 	// 原封面不同,同一张专辑实测距离 28,离阈值 10 很远。《Immortal》那一档不受影响:那张设备图
-	// 是正常的正方形,走不进这一支。
-	if coverContentLetterboxed(deviceImg) && !coverContentSkewed(cand) {
+	// 是正常的正方形,走不进这一支。这一支不比身份,候选是不是这首歌得有担保(vouched)。
+	if vouched && coverContentLetterboxed(deviceImg) && !coverContentSkewed(cand) {
 		return false, "设备封面是补边的长方形图,改用远程候选"
 	}
 	if coverImagesLikelySame(deviceImg, cand) {
@@ -470,8 +473,13 @@ var deviceCoverUpgradable = func(deviceCoverURL, candidateURL string) bool {
 	return !deviceCoverOverridesCandidate(context.Background(), deviceCoverURL, candidateURL)
 }
 
-// deviceCoverOverridesCandidate 是 resolveTrackEnrichment 用的入口:真的去取图。
+// deviceCoverOverridesCandidate 是 resolveTrackEnrichment 用的入口:真的去取图。候选是这首歌有担保(见 deviceCoverDecision)。
 func deviceCoverOverridesCandidate(ctx context.Context, deviceCoverURL, candidateURL string) bool {
+	return deviceCoverOverrides(ctx, deviceCoverURL, candidateURL, true)
+}
+
+// deviceCoverOverrides:设备封面该不该顶掉候选,真的去取图。vouched 见 deviceCoverDecision。
+func deviceCoverOverrides(ctx context.Context, deviceCoverURL, candidateURL string, vouched bool) bool {
 	deviceImg := loadCoverImage(ctx, deviceCoverURL)
 	candidateEdge := coverURLIntendedEdge(candidateURL)
 	// 地址里读不出尺寸、设备封面又小到要比的时候,量一次候选图的实际尺寸(见 coverActualEdge)。
@@ -481,7 +489,7 @@ func deviceCoverOverridesCandidate(ctx context.Context, deviceCoverURL, candidat
 	}
 	override, reason := deviceCoverDecision(
 		deviceImg, candidateURL, candidateEdge,
-		func(u string) image.Image { return loadCoverImage(ctx, u) })
+		func(u string) image.Image { return loadCoverImage(ctx, u) }, vouched)
 	if !override {
 		// 只在"没有顶掉"时记一句 —— 那是这次修复真正生效的时刻,而且很罕见,不会刷屏。
 		log.Printf("cover: device artwork %dpx yields to remote candidate %dpx (%s)",

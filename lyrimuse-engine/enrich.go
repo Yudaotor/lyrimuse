@@ -2461,9 +2461,10 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		enrichMu.Unlock()
 	}()
 	// 观察这一轮的网络成败 —— 全空时要能区分"查过了,这首歌没有"和"根本没查成"。
-	// 必须用 per-round 的差值,不能用 networkLooksDown():那个读的是进程启动以来的累计
-	// 值,在常驻采集器里一旦早期有过成功就永远报"正常"(见 networkobs.go)。
-	roundStat := beginNetworkRound()
+	// 必须用 per-round 的计数,不能用 networkLooksDown():那个读的是进程启动以来的累计
+	// 值,在常驻采集器里一旦早期有过成功就永远报"正常"(见 networkobs.go)。只数这一首自己发的(withNetworkRound):
+	// 专辑预取并发解析的别的歌、中继推送、收听上送的成功混进来,一个请求都没问成的这首也会被判成「查过了没有」。
+	ctx, roundStat := withNetworkRound(ctx)
 	deviceCoverURL := deviceCoverURLIfFresh(ctx, isNewTrack, bundleID, artist, title)
 	if deviceCoverURL != "" {
 		// 这一刻设备推的可能还是它自己的占位图(见 deviceCoverSettleDelays)。首次解析走不到
@@ -2854,8 +2855,9 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	}()
 	// ctx:播放时那一处没有"停止"入口(补的是**已存在**条目的外围字段,不是首次搜索的占位行),
 	// 传 context.Background();后台补封面(coversweep.go)传进来的那个进程退出时取消。
-	// 这一轮有没有一个请求成功,决定记不记一次补全次数(见下面 PeripheralRetryCount 那一行)。
-	networkRound := beginNetworkRound()
+	// 这一轮自己发的请求有没有一个成功,决定记不记一次补全次数(见下面 PeripheralRetryCount 那一行)。只数经这个 ctx
+	// 发出去的(withNetworkRound):放歌时中继、收听上送这些请求一直在成功,混进来的话断网也会被记成补过一次。
+	ctx, networkRound := withNetworkRound(ctx)
 	if skipLyrics {
 		ctx = withPeripheralOnly(ctx)
 	}
@@ -2997,7 +2999,7 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	// 只推自己那个节流时间戳。**不要**去动 e.TS —— 那是这条记录的解析时刻,歌词重搜拿它
 	// 当起算点,推它等于每补一次外围字段就把歌词重搜往后拖 10 分钟(见 TS 字段的注释)。
 	e.PeripheralTS = time.Now().Unix()
-	// 补没补上都记一次,上限靠它生效(见 peripheralBackfillMaxAttempts);一个请求都没成功的这一轮
+	// 补没补上都记一次,上限靠它生效(见 peripheralBackfillMaxAttempts);这一轮自己的请求一个都没成功
 	// (断网、全被熔断跳过或被本地出站闸挡下)不记。见 09 章决策 195。
 	if attempts, failures := networkRound(); lyricsRoundConfirmsNoResult(attempts, failures) {
 		e.PeripheralRetryCount++
