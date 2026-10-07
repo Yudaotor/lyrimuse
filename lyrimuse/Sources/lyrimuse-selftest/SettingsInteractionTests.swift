@@ -660,6 +660,22 @@ func runSettingsInteractionTests() {
                     "设置侧栏宽度: 小档按中档算")
         expectEqual(W.fitting(en + [.label("Lyrics Display and Everything Else")], sizeMode: 0) >= enWidth, true,
                     "设置侧栏宽度: 多一行只会更宽")
+        expectEqual(W.maxWidth(W.designWidth), W.designMaxWidth, "设置侧栏宽度: 中文最宽拖到 240")
+        expectEqual(W.maxWidth(enWidth), enWidth, "设置侧栏宽度: 英文比 240 宽,最宽就是它本身(拖不动)")
+        expectEqual(W.windowMinWidth(W.designWidth), 780, "设置窗最窄: 中文 = 侧栏最宽 240 + 540")
+        expectEqual(W.windowMinWidth(enWidth), enWidth + 540, "设置窗最窄: 英文 = 侧栏 + 540")
+        expectEqual([W.designWidth, enWidth].allSatisfy { W.windowMinWidth($0) - W.maxWidth($0) - 40 >= 499 }, true,
+                    "设置窗最窄: 侧栏拉到最宽时灵动岛编辑台的舞台仍有 499")
+        expectEqual(W.widthToRestore(lastDefault: nil, currentDefault: W.designWidth), nil,
+                    "设置侧栏宽度: 没记过上次的默认宽度时不动")
+        expectEqual(W.widthToRestore(lastDefault: W.designWidth, currentDefault: W.designWidth), nil,
+                    "设置侧栏宽度: 默认宽度没变时不动,用户拖出来的宽度照旧")
+        expectEqual(W.widthToRestore(lastDefault: enWidth, currentDefault: W.designWidth), W.designWidth,
+                    "设置侧栏宽度: 英文切回中文放回 205,不停在 240")
+        expectEqual(W.widthToRestore(lastDefault: W.designWidth, currentDefault: enWidth), enWidth,
+                    "设置侧栏宽度: 中文切到英文放回英文的默认宽度")
+        expectEqual(W.lastDefaultWidthKey.hasPrefix("np:"), false,
+                    "设置侧栏宽度: 上次的默认宽度不跟着配置导出(不用 np: 前缀)")
 
         let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse")
@@ -671,12 +687,20 @@ func runSettingsInteractionTests() {
         let widthAt = settingsView.range(of: ".navigationSplitViewColumnWidth(min: sidebarWidth, ideal: sidebarWidth,")?.lowerBound
         expectEqual(toolbarAt.flatMap { t in widthAt.map { t < $0 } }, true,
                     "设置侧栏宽度(契约): 宽度修饰符排在 .toolbar(removing: .sidebarToggle) 后面,排在前面整个失效")
-        expectEqual(settingsView.contains("minWidth: 760 + sidebarExtraWidth, idealWidth: 860 + sidebarExtraWidth"), true,
-                    "设置侧栏宽度(契约): 窗口最窄 / 默认宽度跟着侧栏加宽")
+        expectEqual(settingsView.contains("minWidth: SettingsSidebarWidth.windowMinWidth(sidebarWidth), idealWidth: 860 + sidebarExtraWidth"),
+                    true, "设置侧栏宽度(契约): 窗口最窄 = 侧栏最宽 + 540、默认宽度跟着侧栏加宽")
+        expectEqual(settingsView.contains("max: SettingsSidebarWidth.maxWidth(sidebarWidth))"), true,
+                    "设置侧栏宽度(契约): 侧栏最宽跟窗口最窄用同一个 maxWidth")
         expectEqual(settingsView.contains("sidebarGuard.attach(to: window)"), true, "设置侧栏(契约): 窗口挂上来时装上「收不起来」")
         let chrome = appSource("Settings/SettingsSidebarChrome.swift")
         expectEqual(chrome.contains("item.canCollapse = false") && chrome.contains("item?.isCollapsed = false")
                         && chrome.contains("NSSplitView.didResizeSubviewsNotification"), true,
                     "设置侧栏(契约): 不能收起、收着的展开、分栏每次重新布局再设一遍")
+        expectEqual(settingsView.contains("SettingsWindowConfigurator(surface: windowSurface, sidebarDefaultWidth: sidebarWidth)")
+                        && settingsView.contains("(nsView as? WindowHookView)?.setSidebarDefaultWidth(sidebarDefaultWidth)"), true,
+                    "设置侧栏(契约): 侧栏的默认宽度每次更新都交给守卫")
+        expectEqual(chrome.contains("SettingsSidebarWidth.widthToRestore(lastDefault: last, currentDefault: width)")
+                        && chrome.contains("split.setPosition(target, ofDividerAt: 0)"), true,
+                    "设置侧栏(契约): 默认宽度变了就把侧栏放回新的默认宽度")
     }
 }

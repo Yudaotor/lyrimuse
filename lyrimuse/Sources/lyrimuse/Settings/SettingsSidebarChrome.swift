@@ -176,10 +176,19 @@ struct LastfmSuggestionsSidebarRow: View {
 /// 设置窗的侧栏不许收起:它是这扇窗唯一的导航,收起后界面里没有地方能把它拿回来(工具栏的边栏开关去掉了,App 也没有
 /// 「显示边栏」菜单),而收起的状态系统会存进偏好(`NSSplitView Subview Frames …`),重启也还是收着。所以把
 /// NavigationSplitView 底下侧栏那一项设成不能收起(往左拖到最窄就停),已经收着的当场展开。SwiftUI 改这一列的宽度区间
-/// (切界面语言)时会把 canCollapse 改回 true,所以分栏每次重新布局都再设一遍。见 14 章决策 58。
+/// (切界面语言)时会把 canCollapse 改回 true,所以分栏每次重新布局都再设一遍。
+///
+/// 侧栏的默认宽度变了(切界面语言、系统「侧栏图标大小」换档)时把侧栏放回新的默认宽度,不然分栏存档里上一种语言的宽度
+/// 会卡在新区间的边上(英文 250 切回中文停在 240)。默认宽度没变时不动,用户拖出来的宽度照旧。见 14 章决策 58。
 @MainActor
 final class SettingsSidebarCollapseGuard: NSObject {
+    private weak var split: NSSplitView?
     private weak var item: NSSplitViewItem?
+    /// 侧栏现在的默认宽度(SettingsView.sidebarWidth),SettingsWindowConfigurator 每次更新都传进来。
+    private var defaultWidth: CGFloat?
+    /// 等着放回的宽度。SwiftUI 把新的宽度区间交给分栏可能比这一拍晚,没放到位就等分栏下次重新布局再放,最多 maxAttempts 次。
+    private var pendingWidth: CGFloat?
+    private var pendingAttempts = 0
 
     /// 窗口挂上来时调。侧栏那一列可能还没进窗口,找不到就下一拍再找,最多 maxAttempts 次。
     func attach(to window: NSWindow, attempt: Int = 0) {
@@ -191,15 +200,25 @@ final class SettingsSidebarCollapseGuard: NSObject {
             }
             return
         }
+        self.split = split
         self.item = item
         NotificationCenter.default.removeObserver(self, name: NSSplitView.didResizeSubviewsNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(splitViewDidResize(_:)),
                                                name: NSSplitView.didResizeSubviewsNotification, object: split)
         enforce()
+        restoreIfDefaultChanged()
+    }
+
+    /// 侧栏现在的默认宽度。跟上一次记下的不一样,就把侧栏放回这个宽度。
+    func setDefaultWidth(_ width: CGFloat) {
+        guard width != defaultWidth else { return }
+        defaultWidth = width
+        restoreIfDefaultChanged()
     }
 
     @objc private func splitViewDidResize(_ notification: Notification) {
         enforce()
+        if pendingWidth != nil { DispatchQueue.main.async { [weak self] in self?.applyPendingWidth() } }
     }
 
     private func enforce() {
@@ -207,6 +226,26 @@ final class SettingsSidebarCollapseGuard: NSObject {
         if item.canCollapse { item.canCollapse = false }
         // 在分栏自己的布局回调里直接展开会重入,挪到下一拍。
         if item.isCollapsed { DispatchQueue.main.async { [weak item] in item?.isCollapsed = false } }
+    }
+
+    /// 窗口挂上来之前不比也不记:那时放不了,挂上来再比。
+    private func restoreIfDefaultChanged() {
+        guard split != nil, let width = defaultWidth else { return }
+        let defaults = UserDefaults.standard
+        let last = (defaults.object(forKey: SettingsSidebarWidth.lastDefaultWidthKey) as? Double).map { CGFloat($0) }
+        defaults.set(Double(width), forKey: SettingsSidebarWidth.lastDefaultWidthKey)
+        guard let target = SettingsSidebarWidth.widthToRestore(lastDefault: last, currentDefault: width) else { return }
+        pendingWidth = target
+        pendingAttempts = 0
+        // SwiftUI 在这次更新里才把新的宽度区间交给分栏,挪到下一拍再放,不然会被旧区间截住。
+        DispatchQueue.main.async { [weak self] in self?.applyPendingWidth() }
+    }
+
+    private func applyPendingWidth() {
+        guard let split, let target = pendingWidth, let sidebar = split.arrangedSubviews.first else { return }
+        if sidebar.frame.width != target { split.setPosition(target, ofDividerAt: 0) }
+        pendingAttempts += 1
+        if sidebar.frame.width == target || pendingAttempts >= Self.maxAttempts { pendingWidth = nil }
     }
 
     private static let maxAttempts = 10

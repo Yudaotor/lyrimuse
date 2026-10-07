@@ -39,9 +39,9 @@ import SwiftUI
 // 卡片宽度上限就是 `widthRange.upperBound`(耳朵下限最高的一档 ≈ notchWidth + 150 ≈ 330–350,够不着,
 // 封顶的是区间本身)。
 //
-// **舞台放不下 800**:舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40),侧边栏可拖到 220
-// (`.navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)`)、窗口可拖到 `minWidth` 760
-// (SettingsWindowConfigurator 往 styleMask 里插了 `.resizable`),两样推到极限时舞台只有约 499pt。
+// **舞台放不下 800**:舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40)。侧边栏能拉到最宽(中文 240,英文固定
+// 250)、窗口能拖到最窄(侧栏最宽 + 540,`SettingsSidebarWidth.windowMinWidth`;SettingsWindowConfigurator 往 styleMask
+// 里插了 `.resizable`),两样推到极限时舞台约 499pt。
 // 缩放之后卡片永远不会比舞台宽,但舞台的裁切形状仍要是**顶直角**底圆角(见 stage 里那段):卡片
 // 恰好等宽时每侧余量是 0,顶上带圆角就会把卡片两个顶部直角削圆。
 //
@@ -553,8 +553,8 @@ struct NotchEditorStage: View {
     /// 「重置」范围是"风格 + 左右耳 + 屏幕 + 全部内容开关"
     /// (`NotchStyleDefaults.restoreDefaults()`),不是只重置「风格」这一项。
     ///
-    /// 横向够不够:这一条的可用宽度就是卡片列宽(窗口按 idealWidth 860 打开时 600pt,
-    /// 拖到 minWidth 760 时约 530pt,再窄约 499pt)。**四个**入口都带摘要,最坏情况
+    /// 横向够不够:这一条的可用宽度就是卡片列宽(窗口按默认宽度打开时 600pt,窗口拖到最窄时约 535pt,
+    /// 侧栏再拉到最宽约 499pt,见 SettingsSidebarWidth.windowMinWidth)。**四个**入口都带摘要,最坏情况
     /// 是「屏幕」那截报一个很长的显示器名(`screen.localizedName`,例如 "内建视网膜显示器"
     /// 或 "DELL U2723QE"),所以摘要那截跟悬浮歌词那边一样限宽 140 + 单行 + 尾部省略 +
     /// `.layoutPriority(-1)`(见 `EditorToolbarButtonLabel`)—— 挤不下时**先压摘要、标题始终完整**。
@@ -927,10 +927,9 @@ struct NotchEditorStage: View {
         //   ② 几何:卡片在舞台里**顶对齐**,顶角是直角。舞台如果在顶上带 12pt 圆角,只要每侧
         //      余量小于 12pt,卡片那两个顶部直角就会落进圆弧要削掉的那块里被削圆 —— 而"1:1
         //      还原它贴在屏幕上沿的样子"正是这块画布的卖点。余量小于 12pt 是**够得着**的:
-        //      舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40),而侧边栏可以拖到 220
-        //      (`.navigationSplitViewColumnWidth(min:170, ideal:190, max:220)`)、窗口可以拖到
-        //      minWidth 760,那时舞台只有约 499pt;卡片比舞台宽时整组按 previewScale 缩到恰好
-        //      等宽,余量正好是 0。
+        //      舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40),侧边栏拉到最宽、窗口拖到最窄
+        //      (SettingsSidebarWidth.windowMinWidth)时舞台约 499pt;卡片比舞台宽时整组按 previewScale
+        //      缩到恰好等宽,余量正好是 0。
         .clipShape(NotchHangingShape(bottomCornerRadius: 12))
         // 舞台自己那条发丝描边画在裁切**之后**:壁纸铺满整块舞台,压在底板上会把它整个盖住,
         // 而这条边是舞台跟设置页之间唯一的分界。透明度 0.12 —— 它描在一张照片上,更淡的档位

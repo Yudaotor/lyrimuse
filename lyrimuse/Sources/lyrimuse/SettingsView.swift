@@ -560,7 +560,7 @@ struct SettingsView: View {
             // 宽度放得下当前语言里最长的那一行(sidebarWidth)。这个修饰符必须是这一列最外层的那个:排在
             // .toolbar(removing:) 前面会整个失效,侧栏退回 AppKit 默认的最窄 140、不限宽,首次打开只有约 144pt。见 14 章决策 58。
             .navigationSplitViewColumnWidth(min: sidebarWidth, ideal: sidebarWidth,
-                                            max: max(sidebarWidth, SettingsSidebarWidth.designMaxWidth))
+                                            max: SettingsSidebarWidth.maxWidth(sidebarWidth))
         } detail: {
             Group {
                 switch selection {
@@ -622,15 +622,17 @@ struct SettingsView: View {
         // 说了算 —— 已经存在的窗口只会被 minHeight 顶上来。所以这一档不能按"别比头部还矮"那种
         // 下限来定,要顶到那张总开关卡整张露出来之上才算数。
         //
-        // 侧栏比设计宽度(205)宽出来多少(英文),窗口的最窄和默认宽度就加多少,右边内容区的宽度不跟着变窄。
-        .frame(minWidth: 760 + sidebarExtraWidth, idealWidth: 860 + sidebarExtraWidth, minHeight: 690, idealHeight: 720)
+        // 侧栏比设计宽度(205)宽出来多少(英文),窗口的默认宽度就加多少,右边内容区的宽度不跟着变窄。最窄宽度是侧栏
+        // 拉到最宽再加 540(SettingsSidebarWidth.windowMinWidth):灵动岛编辑台的舞台在窗口最窄时还要有 499。
+        .frame(minWidth: SettingsSidebarWidth.windowMinWidth(sidebarWidth), idealWidth: 860 + sidebarExtraWidth,
+               minHeight: 690, idealHeight: 720)
         // 设置搜索的两路信号只在这扇窗口的子树里有值;别处复用行组件拿到的是默认值,不受影响。
         .environment(\.settingsSearchHighlightedTitles, searchRouter.highlightedTitles)
         .environment(\.settingsSearchPendingDrawer, searchRouter.pendingDrawer)
         .environment(\.previewHostVisible, windowSurface.isVisible)
         // 播放器页那张引擎状态卡直接用它发布的状态,不再自己每 2 秒起一次 launchctl。
         .environmentObject(playerHealth)
-        .background(SettingsWindowConfigurator(surface: windowSurface))
+        .background(SettingsWindowConfigurator(surface: windowSurface, sidebarDefaultWidth: sidebarWidth))
         // 见 AppActions.pendingSettingsSelection 注释——Onboarding 的 Last.fm 步骤
         // 借这个信箱指定"这次打开设置窗口要直接停在哪个分类",这里读一次就清空,不影响
         // 之后用户正常打开设置窗口(默认回到上次停留的顶层分类,见 SettingsTab.restoredLastTab)。
@@ -7110,9 +7112,12 @@ private struct AboutSettingsTab: View {
 struct SettingsWindowConfigurator: NSViewRepresentable {
     /// 顺带把窗口交给它盯可见性(预览停表用)。跟 styleMask 无关,只是这里是唯一拿得到 NSWindow 的地方。
     let surface: SettingsWindowSurface
+    /// 侧栏现在的默认宽度(SettingsView.sidebarWidth)。变了就把侧栏放回这个宽度,见 SettingsSidebarCollapseGuard。
+    let sidebarDefaultWidth: CGFloat
 
     func makeNSView(context: Context) -> NSView {
         let view = WindowHookView()
+        view.setSidebarDefaultWidth(sidebarDefaultWidth)
         // 视图刚建好时还没挂进窗口,在它真正挂进窗口那一刻(viewDidMoveToWindow)再配。原来是推迟到下一个
         // runloop 取一次 view.window、拿不到就放弃 —— 那一拍还没挂上的话窗口拉不大、黄灯是灰的、预览停表也不接。
         view.onWindow = { window in
@@ -7133,7 +7138,9 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? WindowHookView)?.setSidebarDefaultWidth(sidebarDefaultWidth)
+    }
 
     /// 挂进窗口时回调一次;同一个窗口只配一次(窗口关了再开会重新挂进来)。
     private final class WindowHookView: NSView {
@@ -7141,6 +7148,10 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         private weak var configured: NSWindow?
         /// 侧栏收不起来(SettingsSidebarCollapseGuard)。跟着这个视图活,窗口关了一起没。
         private let sidebarGuard = SettingsSidebarCollapseGuard()
+
+        func setSidebarDefaultWidth(_ width: CGFloat) {
+            sidebarGuard.setDefaultWidth(width)
+        }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()

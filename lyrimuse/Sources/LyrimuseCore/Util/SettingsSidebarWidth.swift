@@ -26,8 +26,27 @@ public enum SettingsSidebarWidth {
     public static let designWidth: CGFloat = 205
     /// 能拖到的最宽;放得下要的宽度比它还宽时,侧栏就固定在那个宽度。
     public static let designMaxWidth: CGFloat = 240
+    /// 侧栏拉到最宽时右边内容区至少留这么宽:灵动岛编辑台的舞台 = 内容区 − 40,要 ≥ 499(NotchEditorStage 工具栏那段
+    /// 横向账是按 499 量的,再窄四个入口的标题会被截)。
+    public static let minDetailWidth: CGFloat = 540
     /// 系统「侧栏图标大小」的全局偏好:1 小 / 2 中 / 3 大,没设过读到 0(中档)。
     public static let sizeModeDefaultsKey = "NSTableViewDefaultSizeMode"
+
+    /// 侧栏能拖到的最宽:fitting 的结果比 designMaxWidth 还宽时就是它本身。
+    public static func maxWidth(_ width: CGFloat) -> CGFloat { max(width, designMaxWidth) }
+
+    /// 设置窗最窄多宽:侧栏拉到最宽 + minDetailWidth(中文 780、英文 790)。
+    public static func windowMinWidth(_ width: CGFloat) -> CGFloat { maxWidth(width) + minDetailWidth }
+
+    /// 侧栏上一次按哪个默认宽度排的。不用 `np:` 前缀:那是配置导出的白名单,这是这台机器上的界面状态,不该跟着配置搬家。
+    public static let lastDefaultWidthKey = "settings:sidebarDefaultWidth"
+
+    /// 侧栏该放回的宽度:默认宽度(切界面语言、系统「侧栏图标大小」换档会变)跟上一次记下的不一样时是新的默认宽度;
+    /// 一样、或者还没记过时是 nil(不动,用户拖出来的宽度照旧)。
+    public static func widthToRestore(lastDefault: CGFloat?, currentDefault: CGFloat) -> CGFloat? {
+        guard let lastDefault, lastDefault != currentDefault else { return nil }
+        return currentDefault
+    }
 
     /// 放得下 rows 里每一行的宽度,不低于 designWidth。sizeMode 是 sizeModeDefaultsKey 的值;小档按中档算(只会宽一点)。
     public static func fitting(_ rows: [Row], sizeMode: Int) -> CGFloat {
