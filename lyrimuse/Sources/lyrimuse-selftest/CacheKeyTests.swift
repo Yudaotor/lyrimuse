@@ -128,6 +128,11 @@ func runCacheKeyTests() {
                     "列表摘要(契约): 引用类型,筛选、排序、分组的几份结果不各自复制整条")
         expectEqual(storeSource.contains("for key in raw.pickedKeys { hydrate(key, fallbackToMainCache: false) }"), true,
                     "整份快照(契约): 锁定开关比主歌词前先从正文小文件补回(主歌词只在小文件里)")
+        let settingsSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/SettingsView.swift"), encoding: .utf8)) ?? ""
+        expectEqual(settingsSource.contains("let count = await store.manualPickLockCount(false) ?? stats.targets")
+                        && storeSource.contains("EnrichEditChannel.send(\"count_manual_lock\", [\"value\": locking])"), true,
+                    "整份快照(契约): 关锁定开关先问引擎会解锁几首(这边正文小文件读不回的会漏数),问不到才用这边数的")
         let rawSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/EnrichRawSnapshot.swift"), encoding: .utf8)) ?? ""
         expectEqual(rawSource.contains("data[key] = bytes.withUnsafeBytes { Data($0) }"), true,

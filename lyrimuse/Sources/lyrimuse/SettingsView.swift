@@ -1488,13 +1488,15 @@ private struct LyricsSettingsTab: View {
             let stats = store.manualPickLockStats(locking: locking)
 
             guard locking else {
+                // 关掉:有东西可解锁才问,问完由 alert 那两个按钮各自给回执。几首以引擎数的为准:这边比主歌词靠正文小文件,
+                // 小文件读不回的那几首会被当成「已被换掉」漏数,数成 0 就不问了,那几首一直锁着。问不到引擎才用这边数的。
+                let count = await store.manualPickLockCount(false) ?? stats.targets
                 manualPickLockBusy = false
-                // 关掉:有东西可解锁才问,问完由 alert 那两个按钮各自给回执。
-                guard stats.targets > 0 else {
+                guard count > 0 else {
                     showManualPickLockNotice(L10n.t("此后手动选定的歌曲不再自动锁定"))
                     return
                 }
-                pendingManualUnlockCount = stats.targets
+                pendingManualUnlockCount = count
                 showManualPickUnlockConfirm = true
                 return
             }

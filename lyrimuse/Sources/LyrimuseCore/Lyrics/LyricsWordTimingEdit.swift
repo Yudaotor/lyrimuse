@@ -54,13 +54,14 @@ public enum LyricsWordTimingEdit {
             edits.append(EditedLine(ms: stamps.times[0], text: String(text[stamps.end...])))
         }
 
-        // 时间戳(按显示的精度)和字都一样的行没动;时间戳一样、字不一样的配成改字;剩下的新行估时间,剩下的旧行删掉。
+        // 时间戳(按显示的精度)和字都一样的行没动,行尾空白不算(编辑器存盘时常顺手删掉,屏幕上看不出来);时间戳一样、
+        // 字不一样的配成改字;剩下的新行估时间,剩下的旧行删掉。
         var used = [Bool](repeating: false, count: old.count)
         var plan = [Plan?](repeating: nil, count: edits.count)
         var exact: [String: [Int]] = [:]
-        for (i, o) in old.enumerated() { exact[stamp(o.startMs) + "\u{1}" + o.text, default: []].append(i) }
+        for (i, o) in old.enumerated() { exact[stamp(o.startMs) + "\u{1}" + trimmingTrailingWhitespace(o.text), default: []].append(i) }
         for (j, e) in edits.enumerated() {
-            let k = stamp(e.ms) + "\u{1}" + e.text
+            let k = stamp(e.ms) + "\u{1}" + trimmingTrailingWhitespace(e.text)
             if let i = exact[k]?.first {
                 exact[k]?.removeFirst()
                 used[i] = true
@@ -380,6 +381,15 @@ public enum LyricsWordTimingEdit {
         }
         guard !times.isEmpty else { return nil }
         return (times, rest.startIndex)
+    }
+
+    /// 去掉行尾的空白(空格、制表符、`\r`、全角空格这类)。
+    static func trimmingTrailingWhitespace(_ text: String) -> String {
+        var end = text.endIndex
+        while end > text.startIndex, text[text.index(before: end)].isWhitespace {
+            end = text.index(before: end)
+        }
+        return String(text[..<end])
     }
 
     /// 跟导出口径一样的 `[mm:ss.xx]`。

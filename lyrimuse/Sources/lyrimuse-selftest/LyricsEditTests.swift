@@ -150,6 +150,17 @@ func runLyricsEditTests() {
     let tagged = LyricsWordTimingEdit.apply(edited: "[ti:一个人一支灯]\n[offset:0]\n\n" + view, yrc: yrc, lrc: lrc)
     expectEqual(tagged.skippedLines == 0 && tagged.yrc == yrc && tagged.lrc == lrc, true, "只改字: [ti:] 这类文件头不算没时间戳的行")
 
+    // 行尾空白不算改过(编辑器存盘时常顺手删掉):只差行尾空格的行原样留着,连那个空格;真改了字的行照常算改动
+    let spaced = "[1000,2000](1000,1000,0)Hello (2000,1000,0)world \n[4000,2000](4000,1000,0)second (5000,1000,0)line"
+    expectEqual(LyricsWordTimingEdit.editableText(yrc: spaced), "[00:01.00]Hello world \n[00:04.00]second line",
+                "只改字: 行尾的空格照样摊开")
+    let trimmedSave = LyricsWordTimingEdit.apply(edited: "[00:01.00]Hello world\n[00:04.00]second line\n", yrc: spaced, lrc: "")
+    expectEqual(trimmedSave.yrc == spaced && trimmedSave.changedLines + trimmedSave.estimatedLines + trimmedSave.removedLines == 0,
+                true, "只改字: 只删了行尾空格、补了末尾换行,不算改动")
+    let editedBeside = LyricsWordTimingEdit.apply(edited: "[00:01.00]Hello world\n[00:04.00]2nd line\n", yrc: spaced, lrc: "")
+    expectEqual(editedBeside.changedLines == 1 && editedBeside.yrc.hasPrefix("[1000,2000](1000,1000,0)Hello (2000,1000,0)world \n"),
+                true, "只改字: 改了别的行时,只差行尾空格的那一行原样留着")
+
     runLyricsExternalEditTests(yrc: yrc, lrc: lrc)
 }
 
@@ -205,6 +216,14 @@ func runLyricsExternalEditTests(yrc: String, lrc: String) {
                 "外部编辑: 不是文件头的方括号行留着")
     expectEqual(E.decide(edited: "第一句\r\n第二句\r\n", base: none), .plain("第一句\n第二句"), "外部编辑: 纯文本行尾的 \\r 去掉")
 
+    // 编辑器存盘时补上末尾的换行、删掉行尾空格(Vim、Zed 默认都这样):不算改过,不然什么都没动也会存成人工修正、锁住
+    let noFinalNewline = E.Content(lyrics: "[00:01.00]第一句 \n[00:02.00]第二句")
+    expectEqual([E.decide(edited: "[00:01.00]第一句\n[00:02.00]第二句\n", base: noFinalNewline),
+                 E.decide(edited: "[ti:t]\n\n第一句  \n第二句\n\n", base: plain)],
+                [.unchanged, .unchanged], "外部编辑: 只补了末尾换行、删了行尾空格不算改过")
+    expectEqual(E.decide(edited: "[00:01.00]第一句\n[00:02.00]第二句改\n", base: noFinalNewline),
+                .lines("[00:01.00]第一句\n[00:02.00]第二句改\n"), "外部编辑: 真改了字照存")
+
     expectEqual([E.fileAction(existing: nil, fresh: "a", recorded: nil),
                  E.fileAction(existing: "a", fresh: "a", recorded: nil),
                  E.fileAction(existing: "old", fresh: "a", recorded: E.fingerprint("old")),
@@ -231,6 +250,10 @@ func runLyricsExternalEditTests(yrc: String, lrc: String) {
                 && actions.contains("if stored.manualLyrics {") && actions.contains("if stored.instrumental {")
                 && actions.contains("} else if playback.trackLyricsOffsetMs != 0 {"), true,
                 "外部编辑(接法): 图标带悬停提示和辅助功能名称;重新匹配走同一个 runner,手改 / 纯音乐 / 校准过的先确认")
+    let runner = read("lyrimuse/LyricsManager/LyricsRematchRunner.swift")
+    expectEqual(runner.contains("do { try await Task.sleep(nanoseconds: 400_000_000) } catch { return nil }")
+                && !runner.contains("try? await Task.sleep"), true,
+                "重新匹配(接法): 等结论时任务被取消就返回,不吞掉取消、在主线程上空转")
     expectEqual(actions.contains("Image(systemName: \"chevron.up\")")
                 && actions.contains("if menu.isOpen {\n                menuPanel")
                 && actions.contains("Button(\"\", action: openEditor)\n                .keyboardShortcut(\"e\", modifiers: .command)")

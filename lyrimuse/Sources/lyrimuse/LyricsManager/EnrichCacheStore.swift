@@ -1016,7 +1016,8 @@ public final class EnrichCacheStore: ObservableObject {
         public var picked = 0
         /// 其中内容仍是当初选定那一份的。
         public var stillOriginal = 0
-        /// 这次真会被改动的(内容还在 + 锁定状态跟目标相反)。
+        /// 这次真会被改动的(内容还在 + 锁定状态跟目标相反)。按这边读得到的正文算,正文小文件读不回的那几条算不进来;
+        /// 要准数问引擎(`manualPickLockCount`)。
         public var targets = 0
     }
 
@@ -1041,24 +1042,16 @@ public final class EnrichCacheStore: ObservableObject {
         return stats
     }
 
-    /// 「手动选定歌词后锁定」开关翻面时,受影响的 key。判据本身是 ManualPickLock.shouldFlip
-    /// (纯函数,摆在 LyrimuseCore 里好让 selftest 够得着,见那个文件的头注);这里只负责
-    /// 把缓存条目的字段喂进去。
-    public func manualPickLockTargets(locking: Bool) -> [String] {
-        hydratePicked()
-        return raw.pickedKeys.compactMap { key in
-            guard let entry = raw[key] else { return nil }
-            return ManualPickLock.shouldFlip(
-                sha: entry["manual_pick_sha"] as? String,
-                lyrics: entry["lyrics"] as? String ?? "",
-                isLocked: (entry["manual_lyrics"] as? Bool) ?? false,
-                locking: locking
-            ) ? key : nil
-        }
+    /// 开关翻到 `locking` 时引擎会改几首,只数不改(引擎侧 count_manual_lock,跟 set_manual_lock 挑的是同一批)。
+    /// 判据要逐条比主歌词,这边主歌词只在正文小文件里,小文件缺了、坏了就比不了,`manualPickLockStats` 会把那几条
+    /// 算成「已被换掉」;引擎手上是完整的。问不到引擎(没响应、缓存没读进来)时 nil。
+    public func manualPickLockCount(_ locking: Bool) async -> Int? {
+        let result = await EnrichEditChannel.send("count_manual_lock", ["value": locking])
+        return result.ok ? result.changed : nil
     }
 
-    /// 把上面那批 key 的 `manual_lyrics` 批量翻成 `locking`。挑哪几首、连 .lrc 文件头一起重写,
-    /// 都由引擎按同一判据做(见引擎侧 set_manual_lock)。
+    /// 把有选定指纹、内容还是当初那一份的几首的 `manual_lyrics` 批量翻成 `locking`。挑哪几首、连 .lrc 文件头一起重写,
+    /// 都由引擎按 ManualPickLock.shouldFlip 同一判据做(见引擎侧 set_manual_lock)。
     /// - Returns: `ok` = 引擎那边真的写成了(失败原因在 `lastError`);`changed` = 改了几首。
     ///   调用方必须先看 `ok`:写失败时 `changed` 也是 0,只看它会把失败说成「已经都是锁定状态」。
     @discardableResult

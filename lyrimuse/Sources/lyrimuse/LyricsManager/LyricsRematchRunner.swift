@@ -6,14 +6,15 @@ import SwiftUI
 /// 由引擎选,换不换、写哪些字段跟后台重评是同一个函数(11 章决策 46)。
 @MainActor
 enum LyricsRematchRunner {
-    /// 发请求、等结论。`isCurrent` 返回 false(调用方已经换代:换了歌、又点了一次)时返回 nil;引擎那一轮不在这里
-    /// 叫停,要叫停的调用方拿自己的 `id` 去 `LyricsRematch.cancel`。请求写不出去、引擎丢了这一轮都给 `.failed`。
+    /// 发请求、等结论。`isCurrent` 返回 false(调用方已经换代:换了歌、又点了一次)或者所在的任务被取消时返回 nil;
+    /// 引擎那一轮不在这里叫停,要叫停的调用方拿自己的 `id` 去 `LyricsRematch.cancel`。请求写不出去、引擎丢了这一轮都给 `.failed`。
     static func run(key: String, id: String = UUID().uuidString, isCurrent: () -> Bool = { true },
                     onProgress: (_ sourcesDone: Int, _ sourcesTotal: Int) -> Void) async -> LyricsRematch.Line? {
         guard LyricsRematch.request(id: id, key: key) else { return .failed }
         let requestedAt = Date()
         while true {
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            // 别写成 try?:任务被取消之后 sleep 立刻抛错,吞掉的话这个循环不再让出主线程,一直空转到引擎那一轮结束。
+            do { try await Task.sleep(nanoseconds: 400_000_000) } catch { return nil }
             guard isCurrent() else { return nil }
             switch LyricsRematch.phase(id: id, status: LyricsRematch.current, requestedAt: requestedAt, now: Date()) {
             case .waiting:

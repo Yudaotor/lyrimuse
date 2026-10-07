@@ -98,7 +98,7 @@ type enrichEditRequest struct {
 	PlainLyrics       string `json:"plain_lyrics,omitempty"`
 	PlainLyricsSource string `json:"plain_lyrics_source,omitempty"`
 
-	// set_instrumental / set_manual_lock
+	// set_instrumental / set_manual_lock / count_manual_lock
 	Value bool `json:"value,omitempty"`
 }
 
@@ -134,6 +134,14 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 	}
 	var out enrichEditOutcome
 	switch req.Op {
+	case "count_manual_lock":
+		// 只数不改:锁定开关翻面前 App 拿它问会改几首(解锁之前要先问一句)。判据要逐条比主歌词,App 那边主歌词
+		// 只在正文小文件里,小文件缺了就比不了;引擎手上是完整的。
+		enrichMu.Lock()
+		res.Changed = len(manualLockFlipsLocked(req.Value))
+		enrichMu.Unlock()
+		res.OK = true
+		return res
 	case "adopt_restore":
 		out = adoptRestoreEdit()
 	default:
@@ -253,16 +261,12 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		}
 		return enrichEditOutcome{changed: changed}
 	case "set_manual_lock":
-		var flipped []string
-		for k, e := range enrichCache {
-			if !manualPickShouldFlip(e.ManualPickSHA, e.Lyrics, e.ManualLyrics, req.Value) {
-				continue
-			}
+		flipped := manualLockFlipsLocked(req.Value)
+		for _, k := range flipped {
+			e := enrichCache[k]
 			e.ManualLyrics = req.Value
 			enrichCache[k] = e
-			flipped = append(flipped, k)
 		}
-		sort.Strings(flipped)
 		// 导出的 .lrc 文件头里那行 [manual:1] 是这个标记的第二份存档,importLyricsFromFiles 会拿它把缓存
 		// 改回去,所以这几首的文件要一起重写。
 		return enrichEditOutcome{changed: len(flipped), exports: flipped}
@@ -377,6 +381,19 @@ func sameLineHeads(a, b string) bool {
 // 他选的那一份还在(指纹对得上),而且当前锁定状态跟目标相反。跟 Swift 侧 ManualPickLock.shouldFlip 同一判据。
 func manualPickShouldFlip(sha, lyrics string, isLocked, locking bool) bool {
 	return sha != "" && sha == manualPickFingerprint(lyrics) && isLocked != locking
+}
+
+// manualLockFlipsLocked:开关翻到 locking 时要跟着翻的 key,按字典序。set_manual_lock 翻的、count_manual_lock 数的都是这一份。
+// 调用方持 enrichMu。
+func manualLockFlipsLocked(locking bool) []string {
+	var keys []string
+	for k, e := range enrichCache {
+		if manualPickShouldFlip(e.ManualPickSHA, e.Lyrics, e.ManualLyrics, locking) {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // cancelInFlightEnrichLocked 取消这个 key 还在飞的解析,免得它搜完把刚做的改动盖掉。调用方持 enrichMu。

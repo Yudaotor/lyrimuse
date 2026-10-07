@@ -87,14 +87,26 @@ public enum LyricsExternalEdit {
             let result = LyricsWordTimingEdit.apply(edited: edited, yrc: base.yrc, lrc: base.lyrics)
             return result.changedLines + result.estimatedLines + result.removedLines == 0 ? .unchanged : .word(result)
         case .lineTimed:
-            if edited == base.lyrics { return .unchanged }
+            if sameIgnoringTrailingWhitespace(edited, base.lyrics) { return .unchanged }
             if !timed, hasTimedLines(base.lyrics) { return .missingTimestamps }
             return .lines(edited)
         case .plainText, .empty:
             if timed { return .lines(edited) }
             let body = plainBody(edited)
-            return body == plainBody(base.plain) ? .unchanged : .plain(body)
+            return sameIgnoringTrailingWhitespace(body, plainBody(base.plain)) ? .unchanged : .plain(body)
         }
+    }
+
+    /// 两份文本只差行尾空白和末尾的空行。编辑器存盘时常顺手补上文件末尾的换行、删掉行尾空格(Vim、Zed 默认都这样),
+    /// 这类差别不算改过:算成改过的话,一次什么都没动的保存也会把这首存成人工修正、锁住,还清掉「手动选定」的记号。
+    static func sameIgnoringTrailingWhitespace(_ a: String, _ b: String) -> Bool {
+        trailingWhitespaceTrimmed(a) == trailingWhitespaceTrimmed(b)
+    }
+
+    private static func trailingWhitespaceTrimmed(_ text: String) -> [String] {
+        var out = lines(text).map(LyricsWordTimingEdit.trimmingTrailingWhitespace)
+        while out.last?.isEmpty == true { out.removeLast() }
+        return out
     }
 
     /// 有没有一行剥掉开头的 `[...]`(时间戳、文件头标签)之后还有字。

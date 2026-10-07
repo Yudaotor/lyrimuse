@@ -171,6 +171,40 @@ func TestSetManualLockFlipsOnlyOriginalPicks(t *testing.T) {
 	}
 }
 
+// 只数不改:数出来的就是 set_manual_lock 会翻的那几首;缓存一条不动,也不落盘。
+func TestCountManualLockMatchesSetWithoutChanging(t *testing.T) {
+	picked := "[00:01.00]picked"
+	locked := enrichKey("A", "Locked", "X")
+	unlocked := enrichKey("A", "Unlocked", "X")
+	replaced := enrichKey("A", "Replaced", "X")
+	setUpEnrichEditTest(t, map[string]enrichEntry{
+		locked:   {Lyrics: picked, ManualPickSHA: manualPickFingerprint(picked), ManualLyrics: true},
+		unlocked: {Lyrics: picked, ManualPickSHA: manualPickFingerprint(picked)},
+		replaced: {Lyrics: "[00:01.00]auto upgraded", ManualPickSHA: manualPickFingerprint(picked), ManualLyrics: true},
+	})
+	for _, locking := range []bool{false, true} {
+		if res := applyEnrichEdit(enrichEditRequest{Op: "count_manual_lock", Value: locking}); !res.OK || res.Changed != 1 {
+			t.Errorf("locking=%v: 只有指纹对得上、状态跟目标相反的那一首 res=%+v", locking, res)
+		}
+	}
+	if e, _ := cacheEntry(t, locked); !e.ManualLyrics {
+		t.Error("只数不改:锁着的那首不该被解开")
+	}
+	if e, _ := cacheEntry(t, unlocked); e.ManualLyrics {
+		t.Error("只数不改:没锁的那首不该被锁上")
+	}
+	if _, err := os.Stat(enrichPath); !os.IsNotExist(err) {
+		t.Errorf("只数不改不该存盘 err=%v", err)
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_manual_lock", Value: false}); res.Changed != 1 {
+		t.Errorf("真翻的跟数出来的对不上 changed=%d", res.Changed)
+	}
+	if b, err := os.ReadFile("../lyrimuse/Sources/lyrimuse/LyricsManager/EnrichCacheStore.swift"); err != nil ||
+		!strings.Contains(string(b), `"count_manual_lock"`) {
+		t.Errorf("App 问计数用的 op 名得跟这里一样 err=%v", err)
+	}
+}
+
 // 多选「全部标为纯音乐」一次请求带一串 key:在缓存里的都改,不在的跳过,一首都没改成(要标上)时才报错;单个 key 的行为不变。
 func TestSetInstrumentalAcceptsKeys(t *testing.T) {
 	other := enrichKey("Other", "Song", "Album")
