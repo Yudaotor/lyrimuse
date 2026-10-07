@@ -109,6 +109,9 @@ jobs:
         # 都必须在 THIRD_PARTY_LICENSES 里出现一次。忘补声明在这里红，不是发出去之后才被人指出来。
         run: python3 lyrimuse/scripts/check_third_party_licenses.py
 
+      - name: Per-client 播放状态
+        run: sh scripts/test-nowplaying-clients.sh
+
       - name: Swift selftest
         # 用 `swift build` 再直接执行产物，**不要**用 `swift run`。release.yml 里记着实测
         # 结论：runner 上 `swift run lyrimuse-selftest` 会在 exec 刚构建出来的二进制那一刻

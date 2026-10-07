@@ -143,9 +143,27 @@ func runPlayerIdentityTests() {
             expectEqual(controller.contains("focusFallback: MediaControlClient.focusControlTarget(),\n")
                         && controller.contains("focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())"), true,
                         "控制分派(契约): dispatch 按焦点回退目标与「焦点被占、没有 AppleScript」分派")
-            expectEqual(client.contains("let viaProbe = fallbackActive && !fallbackViaAppleScript")
+            expectEqual(client.contains("fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript")
                         && client.contains("return viaProbe || holdingDroppedSession"), true,
-                        "控制分派(契约): 焦点被占 = 在回退、且不是经 AppleScript 问到的;或者屏上这首是会话被撤后保持出来的")
+                        "控制分派(接线): 查询是否成功与目标是否恢复交给同一保护判据;屏上这首是会话被撤后保持出来的也不发")
+            let successful = MediaControlClient.shouldWithholdFocusControls(
+                fallingBack: true, targetGone: false, viaAppleScript: false)
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                                                             focusHeldElsewhere: successful), Route.withheld,
+                        "失焦查询成功: QQ 控制不能落到浏览器")
+            let failed = MediaControlClient.shouldWithholdFocusControls(
+                fallingBack: false, targetGone: true, viaAppleScript: false)
+            expectEqual(MediaControlClient.nextFocusFallbackPlayer(current: .qqMusic, acceptedBundleID: nil,
+                                                                   fallbackSucceeded: false), nil,
+                        "失焦查询失败: 仍停止后续回退查询,不添加重试状态")
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                                                             focusHeldElsewhere: failed), Route.withheld,
+                        "失焦成功 → 查询失败: 显示宽限期仍拒绝控制,不能把 nil 当焦点恢复")
+            let recovered = MediaControlClient.shouldWithholdFocusControls(
+                fallingBack: false, targetGone: false, viaAppleScript: false)
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                                                             focusHeldElsewhere: recovered), Route.mediaControl,
+                        "接受到可信系统快照: 才解除失败后的控制保护")
             let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
             let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
             expectEqual(coordinator.contains("guard MusicPlaybackController.playPause() else { return }")
