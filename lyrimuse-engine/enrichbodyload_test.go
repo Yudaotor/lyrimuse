@@ -90,11 +90,14 @@ func TestHydrateEnrichBodiesMissingOrDamagedFile(t *testing.T) {
 		t.Errorf("stats = %+v", st)
 	}
 	jay := lean["周杰伦|晴天|叶惠美"]
-	if jay.Lyrics != full["周杰伦|晴天|叶惠美"].Lyrics || jay.LyricsYRC != "" || jay.LyricsTr != "" || jay.BodyCRC != 0 || jay.BodyFields != 0 {
-		t.Errorf("小文件缺失时应该只留主缓存里的主歌词、清掉校验值: %#v", jay)
+	if jay.Lyrics != "" || jay.LyricsYRC != "" || jay.LyricsTr != "" || jay.BodyCRC != 0 || jay.BodyFields != 0 {
+		t.Errorf("小文件缺失时正文(连主歌词)都没有、清掉校验值,等 lyrics/ 导入补回: %#v", jay)
 	}
-	if got := lean["Coldplay|Yellow|Parachutes"].Lyrics; got != full["Coldplay|Yellow|Parachutes"].Lyrics {
-		t.Errorf("损坏的小文件不能顶掉主缓存里的主歌词: %q", got)
+	if got := lean["Coldplay|Yellow|Parachutes"].Lyrics; got != "" {
+		t.Errorf("损坏的小文件不能拿来当正文: %q", got)
+	}
+	if !st.missingSet["周杰伦|晴天|叶惠美"] || !st.missingSet["Coldplay|Yellow|Parachutes"] {
+		t.Errorf("缺失 / 损坏的两首都要记进补回名单: %v", st.missingSet)
 	}
 }
 

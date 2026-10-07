@@ -50,7 +50,7 @@ func runCacheKeyTests() {
         expectEqual(slim["cover_url"] as? String, "https://x/c.jpg", "精简条目: 元数据留着")
         expectEqual(EnrichCacheSlim.presentFields(slim), EnrichCacheSlim.presentFields(full).union(.known),
                     "精简条目: 位图记下有哪几块正文")
-        expectEqual(EnrichCacheSlim.presentFields(full), [.yrc, .tr, .roma, .plain], "精简条目: 完整条目按字段判")
+        expectEqual(EnrichCacheSlim.presentFields(full), [.yrc, .tr, .roma, .plain, .lyrics], "精简条目: 完整条目按字段判")
         let bare: [String: Any] = ["cover_url": "x"]
         expectEqual(EnrichCacheSlim.isSlim(EnrichCacheSlim.slim(bare)), false, "精简条目: 没有正文的不精简")
 
@@ -100,6 +100,50 @@ func runCacheKeyTests() {
         expectEqual(buildAt.flatMap { b in dropAt.map { b < $0 } }, true, "精简条目(契约): 建完摘要才拿掉主歌词")
         expectEqual(storeSource.contains("hasLyrics: EnrichCacheSlim.hasMainLyrics(entry)"), true,
                     "精简条目(契约): 摘要的「有没有词」认标记")
+
+        // 整份快照按条存 JSON 字节,读哪条现解哪条(见 11 章决策 95)。
+        var raw = EnrichRawSnapshot(["a": ["s": "歌", "n": 1.5, "b": true, "arr": ["x"], "obj": ["k": 2]],
+                                     "p": ["manual_pick_sha": "abc", "lyrics": "[00:01.00]x"], "e": ["manual_pick_sha": ""]])
+        let a = raw["a"]
+        expectEqual([a?["s"] as? String == "歌", a?["n"] as? Double == 1.5, a?["b"] as? Bool == true,
+                     a?["arr"] as? [String] == ["x"], (a?["obj"] as? [String: Any])?["k"] as? Int == 2], [true, true, true, true, true],
+                    "整份快照: 字符串、数字、布尔、数组、嵌套字典原样读回")
+        expectEqual([raw.count == 3, raw.contains("a"), !raw.contains("zz"), raw["zz"] == nil], [true, true, true, true],
+                    "整份快照: 条数、有没有、没有的读出 nil")
+        expectEqual(raw.pickedKeys, ["p"], "整份快照: 只记有选定指纹的,空指纹不算")
+        raw["a"] = ["manual_pick_sha": "def"]
+        raw["p"] = ["lyrics": "y"]
+        expectEqual(raw.pickedKeys, ["a"], "整份快照: 改写时选定名单跟着变")
+        raw["a"] = nil
+        expectEqual([raw.contains("a"), raw.pickedKeys.isEmpty], [false, true], "整份快照: 删掉一条,名单里也去掉")
+        var marked: [String: [String: Any]] = ["slim": slim]
+        EnrichCacheSlim.dropMainLyrics(&marked)
+        expectEqual(EnrichRawSnapshot(marked)["slim"]?[EnrichCacheSlim.lyricsInBodyKey] as? Bool, true,
+                    "整份快照: 主歌词拿掉的标记读回来还是布尔")
+        expectEqual(storeSource.contains("private var raw = EnrichRawSnapshot()")
+                        && storeSource.contains("box.raw = EnrichRawSnapshot(obj)")
+                        && storeSource.contains("for entry in raw.pickedEntries {"), true,
+                    "整份快照(契约): 歌词管理按条存字节,锁定开关只看有选定指纹的")
+        expectEqual(storeSource.contains("public final class Summary: Identifiable, Sendable {"), true,
+                    "列表摘要(契约): 引用类型,筛选、排序、分组的几份结果不各自复制整条")
+        expectEqual(storeSource.contains("for key in raw.pickedKeys { hydrate(key, fallbackToMainCache: false) }"), true,
+                    "整份快照(契约): 锁定开关比主歌词前先从正文小文件补回(主歌词只在小文件里)")
+        let rawSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/EnrichRawSnapshot.swift"), encoding: .utf8)) ?? ""
+        expectEqual(rawSource.contains("data[key] = bytes.withUnsafeBytes { Data($0) }"), true,
+                    "整份快照(契约): 按实际长度复制再存,不带 JSONSerialization 的扩容余量")
+
+        // 引擎不再往主缓存里写主歌词:精简条目只有位图的主歌词位(32),主歌词在正文小文件里(见 15 章决策 29)。
+        var noMain = slim
+        noMain.removeValue(forKey: "lyrics")
+        noMain[EnrichCacheSlim.fieldsKey] = NSNumber(value: EnrichCacheSlim.presentFields(slim).union(.lyrics).rawValue)
+        expectEqual([EnrichCacheSlim.hasMainLyrics(noMain), EnrichCacheSlim.hasMainLyrics(bare)], [true, false],
+                    "主歌词只在小文件里: 有没有主歌词认位图的主歌词位")
+        expectEqual(EnrichCacheSlim.hydrate(noMain, body: body)?["lyrics"] as? String, full["lyrics"] as? String,
+                    "主歌词只在小文件里: 补全时连主歌词一起补回,不用标记")
+        expectEqual(EnrichCacheSlim.restoreBodies(noMain, from: full)["lyrics"] as? String, full["lyrics"] as? String,
+                    "主歌词只在小文件里: 从主缓存那条补也补回主歌词")
+        expectEqual(EnrichCacheSlim.presentFields(full).contains(.lyrics), true, "主歌词只在小文件里: 完整条目的位图也记主歌词")
         expectEqual(EnrichCacheSlim.adoptNewerBody(slim, body: stale) == nil, true, "精简条目: 不自洽的小文件不用")
         expectEqual(EnrichCacheSlim.adoptNewerBody(full, body: newer) == nil, true, "精简条目: 完整条目不需要补")
 

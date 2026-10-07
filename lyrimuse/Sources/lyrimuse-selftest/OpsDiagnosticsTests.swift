@@ -1187,10 +1187,12 @@ func runOpsDiagnosticsTests() {
         }
         let leanWith = entry(#"{"lyrics":"[00:01.00]词","body_crc":7,"body_fields":128,"lyrics_score":10}"#)
         let leanWithout = entry(#"{"body_crc":7,"body_fields":129,"lyrics_score":90}"#)
+        let leanBit = entry(#"{"body_crc":7,"body_fields":160,"lyrics_score":90}"#)
         let full = entry(#"{"lyrics":"[00:01.00]词","lyrics_score":10}"#)
         let fullEmpty = entry(#"{"lyrics":"","lyrics_score":10}"#)
         expectEqual([leanWith.hasLyrics, leanWithout.hasLyrics, full.hasLyrics, fullEmpty.hasLyrics], [true, false, true, false],
                     "主歌词不常驻: 精简条目按键在不在判有没有主歌词,完整条目看正文")
+        expectEqual(leanBit.hasLyrics, true, "主歌词不常驻: 主缓存不带主歌词时按位图的主歌词位(32)判")
         expectEqual(EnrichCacheReader.betterEntry(leanWith, leanWithout, "b", "a"), true,
                     "主歌词不常驻: 精简条目没解主歌词,宽松胜者照样是有词的那条(同引擎 betterEnrichEntry)")
 
@@ -1242,7 +1244,8 @@ func runOpsDiagnosticsTests() {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"),
                                   encoding: .utf8)) ?? ""
-        expectEqual(sourceBytes(reader, contain: "} else {\n            lyrics = nil\n            hasLyrics = c.contains(.lyrics)\n        }"),
+        expectEqual(sourceBytes(reader, contain: "} else {\n            lyrics = nil\n")
+                        && sourceBytes(reader, contain: "hasLyrics = c.contains(.lyrics) || fields.map { EnrichCacheSlim.Fields(rawValue: $0).contains(.lyrics) } == true\n        }"),
                     true, "主歌词不常驻(契约): 精简条目不解主歌词")
         expectEqual(sourceBytes(reader, contain: "if let s = playingSnapshot(forExactKey: matchedKey) {"), true,
                     "主歌词不常驻(契约): 正文小文件读不到时拿正在播放快照兜底")

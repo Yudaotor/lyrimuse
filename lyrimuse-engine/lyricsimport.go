@@ -159,7 +159,7 @@ func lyricsFileSuffixOf(name string) string {
 
 // 这次启动的缓存没能完整读进来时,导入不能按「文件没动过就跳过」:跳过的前提是缓存里还是导出时那一份。
 // lyricsImportRestoreAll:主缓存读不出 / 解析不动,从空库起;lyricsImportRestoreKeys:主缓存读进来了,但这几条
-// 的正文小文件缺失或损坏,只剩主歌词。这些条目这一轮让 lyrics/ 里的文件赢,把译文 / 罗马音 / 逐字补回来 ——
+// 的正文小文件缺失或损坏,正文(主歌词也在里面)都没有了。这些条目这一轮让 lyrics/ 里的文件赢,把正文补回来 ——
 // 不然导出看到字段是空的,会把正好存着它们的那几个文件删掉。只对下一次导入有效,用完即清。受 enrichMu 保护。
 var (
 	lyricsImportRestoreAll  bool

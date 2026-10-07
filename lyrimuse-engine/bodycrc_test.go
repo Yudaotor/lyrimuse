@@ -56,7 +56,7 @@ func TestEnrichBodyCRCBackground(t *testing.T) {
 	if enrichBodyCRC(withBG) == enrichBodyCRC(base) {
 		t.Error("背景人声变了校验值没变")
 	}
-	if got := enrichBodyFields(withBG); got != 128|1|16 {
+	if got := enrichBodyFields(withBG); got != 128|1|16|32 {
 		t.Errorf("fields = %d", got)
 	}
 }

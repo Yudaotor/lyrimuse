@@ -37,6 +37,8 @@ public enum EnrichCacheSlim {
         public static let roma = Fields(rawValue: 4)
         public static let plain = Fields(rawValue: 8)
         public static let bg = Fields(rawValue: 16)
+        /// 主歌词。引擎从加这一位起,精简条目不再带 `lyrics`,只在正文小文件里;没有这一位的老索引,精简条目里还带着主歌词。
+        public static let lyrics = Fields(rawValue: 32)
         public static let known = Fields(rawValue: 128)
     }
 
@@ -76,6 +78,7 @@ public enum EnrichCacheSlim {
         if has("lyrics_roma") { f.insert(.roma) }
         if has("plain_lyrics") { f.insert(.plain) }
         if has("lyrics_bg") { f.insert(.bg) }
+        if has("lyrics") { f.insert(.lyrics) }
         return f
     }
 
@@ -92,9 +95,10 @@ public enum EnrichCacheSlim {
         }
     }
 
-    /// 这一条有没有主歌词:字段本身,或者 dropMainLyrics 留下的标记。
+    /// 这一条有没有主歌词:字段本身、dropMainLyrics 留下的标记,或者精简条目位图里的主歌词位。
     public static func hasMainLyrics(_ entry: [String: Any]) -> Bool {
         !((entry["lyrics"] as? String) ?? "").isEmpty || (entry[lyricsInBodyKey] as? Bool) == true
+            || isSlim(entry) && presentFields(entry).contains(.lyrics)
     }
 
     /// 精简一条完整条目;没有正文的原样返回。
@@ -124,8 +128,8 @@ public enum EnrichCacheSlim {
         for (k, v) in pairs {
             if let v, !v.isEmpty { out[k] = v }
         }
-        // 主歌词被 dropMainLyrics 拿掉了:小文件里那份就是它(上面的校验值连主歌词一起算过)。
-        if entry[lyricsInBodyKey] != nil, let lyrics = body.lyrics, !lyrics.isEmpty { out["lyrics"] = lyrics }
+        // 条目里没有主歌词(引擎只写在小文件里,或者被 dropMainLyrics 拿掉了):小文件里那份就是它(上面的校验值连主歌词一起算过)。
+        if ((out["lyrics"] as? String) ?? "").isEmpty, let lyrics = body.lyrics, !lyrics.isEmpty { out["lyrics"] = lyrics }
         return out
     }
 
@@ -163,7 +167,7 @@ public enum EnrichCacheSlim {
         for k in strippedFields {
             if let v = full?[k] as? String, !v.isEmpty { out[k] = v }
         }
-        if entry[lyricsInBodyKey] != nil, let v = full?["lyrics"] as? String, !v.isEmpty { out["lyrics"] = v }
+        if ((out["lyrics"] as? String) ?? "").isEmpty, let v = full?["lyrics"] as? String, !v.isEmpty { out["lyrics"] = v }
         return out
     }
 

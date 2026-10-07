@@ -58,10 +58,10 @@ func TestSaveWritesLeanIndexAndBodies(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := idx["a|t|b"]
-	if got.Lyrics != "[00:01.00]hi" || got.CoverURL != "https://x/c.jpg" || got.BodyCRC == 0 {
-		t.Fatalf("index entry keeps lyrics + metadata + body_crc, got %+v", got)
+	if got.Lyrics != "" || got.CoverURL != "https://x/c.jpg" || got.BodyCRC == 0 {
+		t.Fatalf("index entry keeps metadata + body_crc, main lyrics only in the body file, got %+v", got)
 	}
-	if got.BodyFields != 128|1|2|4|8 {
+	if got.BodyFields != 128|1|2|4|8|32 {
 		t.Fatalf("body_fields = %d", got.BodyFields)
 	}
 	if idx["empty|t|b"].BodyCRC != 0 || idx["empty|t|b"].BodyFields != 0 {
@@ -106,7 +106,7 @@ func TestEnrichBodyCRCMatchesApp(t *testing.T) {
 	if got := enrichBodyCRC(withBG); got != 2392567654 {
 		t.Fatalf("crc(full + bg) = %d", got)
 	}
-	if got := enrichBodyFields(enrichEntry{Lyrics: "x", LyricsTr: "y"}); got != 128|2 {
+	if got := enrichBodyFields(enrichEntry{Lyrics: "x", LyricsTr: "y"}); got != 128|2|32 {
 		t.Fatalf("fields = %d", got)
 	}
 }

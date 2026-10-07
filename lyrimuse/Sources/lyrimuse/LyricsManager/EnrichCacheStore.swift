@@ -17,7 +17,9 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 public final class EnrichCacheStore: ObservableObject {
     public static let shared = EnrichCacheStore()
 
-    public struct Summary: Identifiable {
+    /// 引用类型:筛选、排序、按专辑分组那几份结果数组只存引用,不各自复制整条(一万条时一份就是 5.6 MB)。字段全是 let,
+    /// 别加可变字段。见 11 章决策 95。
+    public final class Summary: Identifiable, Sendable {
         public var id: String { key }
         public let key: String
         public let artist: String
@@ -158,6 +160,76 @@ public final class EnrichCacheStore: ObservableObject {
         let searchTitleLower: String
         let searchAlbumLower: String
 
+        init(
+            key: String,
+            artist: String,
+            canonicalArtist: String,
+            inferredArtist: String,
+            durationSecs: Double,
+            title: String,
+            album: String,
+            displayAlbum: String,
+            isListedMV: Bool,
+            coverURL: URL?,
+            lyricsSource: String,
+            hasWordTiming: Bool,
+            isManual: Bool,
+            sourceChoice: String,
+            lyricsTrSource: String,
+            hasTranslation: Bool,
+            hasRomanization: Bool,
+            hasLyrics: Bool,
+            isInstrumental: Bool,
+            hasPlainTextFallback: Bool,
+            knownOnSources: Bool,
+            lastRoundHadNoResponder: Bool,
+            sourcesRespondedCount: Int,
+            isSearching: Bool,
+            hasDecision: Bool,
+            lyricsUpdatedAt: Date?,
+            resolvedAt: Date?,
+            normPrimaryArtist: String,
+            normAlbum: String,
+            searchArtistLower: String,
+            searchDisplayArtistLower: String,
+            searchTitleLower: String,
+            searchAlbumLower: String
+        ) {
+            self.key = key
+            self.artist = artist
+            self.canonicalArtist = canonicalArtist
+            self.inferredArtist = inferredArtist
+            self.durationSecs = durationSecs
+            self.title = title
+            self.album = album
+            self.displayAlbum = displayAlbum
+            self.isListedMV = isListedMV
+            self.coverURL = coverURL
+            self.lyricsSource = lyricsSource
+            self.hasWordTiming = hasWordTiming
+            self.isManual = isManual
+            self.sourceChoice = sourceChoice
+            self.lyricsTrSource = lyricsTrSource
+            self.hasTranslation = hasTranslation
+            self.hasRomanization = hasRomanization
+            self.hasLyrics = hasLyrics
+            self.isInstrumental = isInstrumental
+            self.hasPlainTextFallback = hasPlainTextFallback
+            self.knownOnSources = knownOnSources
+            self.lastRoundHadNoResponder = lastRoundHadNoResponder
+            self.sourcesRespondedCount = sourcesRespondedCount
+            self.isSearching = isSearching
+            self.hasDecision = hasDecision
+            self.lyricsUpdatedAt = lyricsUpdatedAt
+            self.resolvedAt = resolvedAt
+            self.normPrimaryArtist = normPrimaryArtist
+            self.normAlbum = normAlbum
+            self.searchArtistLower = searchArtistLower
+            self.searchDisplayArtistLower = searchDisplayArtistLower
+            self.searchTitleLower = searchTitleLower
+            self.searchAlbumLower = searchAlbumLower
+        }
+
         /// 只给排序/筛选归并用(normPrimaryArtist、EnrichCacheStore.artistMap→
         /// distinctArtists→筛选下拉),**不再**用于列表逐行渲染的文字——改掉:
         /// 同一个人如果原始标签一时中文一时英文(如"方大同"/"Khalil Fong"),会各自落进
@@ -238,7 +310,7 @@ public final class EnrichCacheStore: ObservableObject {
     // 读取的目录对不上。
     private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
-    private var raw: [String: [String: Any]] = [:]
+    private var raw = EnrichRawSnapshot()
     // true = 内存里没有可用的快照:从没读过、上次读盘失败,或被 `dropSnapshotIfIdle` 清掉了。改动交给引擎
     // 之后据此决定要不要 reload(没人在看就不读)。
     private var isReleased = true
@@ -335,7 +407,7 @@ public final class EnrichCacheStore: ObservableObject {
         if summaries.isEmpty, !isLoading { isLoading = true }
         defer { if isLoading { isLoading = false } }
         final class ResultBox: @unchecked Sendable {
-            var obj: [String: [String: Any]]?
+            var raw: EnrichRawSnapshot?
             var bundle: SummariesBundle?
             var fingerprint: FileFingerprint?
             var parseFailed = false
@@ -370,21 +442,21 @@ public final class EnrichCacheStore: ObservableObject {
             box.buildMS = LyricsManagerBaseline.ms(since: tBuild)
             // 摘要建好了,主歌词不用整份留着(约 40 MB),点开哪一首 hydrate 再从正文小文件补(EnrichCacheSlim.dropMainLyrics)。
             EnrichCacheSlim.dropMainLyrics(&obj)
-            box.obj = obj
+            box.raw = EnrichRawSnapshot(obj)
         }.value
-        if let obj = box.obj, let bundle = box.bundle {
-            raw = obj
+        if let snapshot = box.raw, let bundle = box.bundle {
+            raw = snapshot
             lastLoadedFingerprint = box.fingerprint
             isReleased = false
             if loadError != nil { loadError = nil }
             applySummaries(bundle)
             scheduleReleaseIfUnheld()
             LyricsManagerBaseline.logReload(
-                bytes: box.bytes, count: obj.count,
+                bytes: box.bytes, count: snapshot.count,
                 readMS: box.readMS, parseMS: box.parseMS, buildMS: box.buildMS,
                 totalMS: LyricsManagerBaseline.ms(since: reloadStart))
         } else {
-            raw = [:]
+            raw = EnrichRawSnapshot()
             lastLoadedFingerprint = nil
             // 内存里没有可用快照(见 isReleased 的注释):删除按传入的 key 交给引擎,不按空的 raw 算成「没有可删的」。
             isReleased = true
@@ -508,7 +580,7 @@ public final class EnrichCacheStore: ObservableObject {
         guard !Task.isCancelled, snapshotHolders.isEmpty,
               editsInFlight == 0, !isReleased else { return }
         let count = raw.count
-        raw = [:]
+        raw = EnrichRawSnapshot()
         lastLoadedFingerprint = nil
         isReleased = true
         applySummaries(SummariesBundle(summaries: [], albumDisplayMap: [:], distinctArtists: [], distinctAlbums: []))
@@ -805,7 +877,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// EnrichCacheKeys.looseKey 折算繁简,只有这条独立维护的精确查找漏了这一层)。
     /// 精确命中优先,精确查不到再查宽松索引(`looseKeyIndex`)。
     public func hasEntry(forKey key: String) -> Bool {
-        raw[key] != nil || self.key(matchingLoose: key) != nil
+        raw.contains(key) || self.key(matchingLoose: key) != nil
     }
 
     /// 列表里跟这个 key 宽松相等(大小写 / 空格 / 繁简不同)的第一条,没有就 nil。
@@ -948,9 +1020,15 @@ public final class EnrichCacheStore: ObservableObject {
         public var targets = 0
     }
 
+    /// 锁定开关要逐条比主歌词:有选定指纹的那几条先从正文小文件补成完整条目(主歌词只在小文件里)。
+    private func hydratePicked() {
+        for key in raw.pickedKeys { hydrate(key, fallbackToMainCache: false) }
+    }
+
     public func manualPickLockStats(locking: Bool) -> ManualPickLockStats {
         var stats = ManualPickLockStats()
-        for entry in raw.values {
+        hydratePicked()
+        for entry in raw.pickedEntries {
             let state = ManualPickLock.state(
                 sha: entry["manual_pick_sha"] as? String,
                 lyrics: entry["lyrics"] as? String ?? "")
@@ -967,8 +1045,10 @@ public final class EnrichCacheStore: ObservableObject {
     /// (纯函数,摆在 LyrimuseCore 里好让 selftest 够得着,见那个文件的头注);这里只负责
     /// 把缓存条目的字段喂进去。
     public func manualPickLockTargets(locking: Bool) -> [String] {
-        raw.compactMap { key, entry in
-            ManualPickLock.shouldFlip(
+        hydratePicked()
+        return raw.pickedKeys.compactMap { key in
+            guard let entry = raw[key] else { return nil }
+            return ManualPickLock.shouldFlip(
                 sha: entry["manual_pick_sha"] as? String,
                 lyrics: entry["lyrics"] as? String ?? "",
                 isLocked: (entry["manual_lyrics"] as? Bool) ?? false,

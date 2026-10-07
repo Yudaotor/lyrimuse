@@ -195,19 +195,19 @@ func TestImportRestoresKeysWithMissingBodies(t *testing.T) {
 	exportLyricsFiles()
 	enrichMu.Lock()
 	e := enrichCache[key]
-	e.LyricsTr = ""
+	e.Lyrics, e.LyricsTr = "", ""
 	enrichCache[key] = e
 	enrichMu.Unlock()
 	importLyricsFrom(lyrics, false)
-	if enrichCache[key].LyricsTr != "" {
+	if enrichCache[key].LyricsTr != "" || enrichCache[key].Lyrics != "" {
 		t.Fatal("前提:文件没动过时导入按记录跳过")
 	}
 	enrichMu.Lock()
 	lyricsImportRestoreKeys = map[string]bool{key: true}
 	enrichMu.Unlock()
 	importLyricsFrom(lyrics, false)
-	if got := enrichCache[key].LyricsTr; got != "[00:01.00]译文" {
-		t.Fatalf("正文丢了的条目应当从文件补回: %q", got)
+	if got := enrichCache[key]; got.LyricsTr != "[00:01.00]译文" || got.Lyrics != "[00:01.00]原文" {
+		t.Fatalf("正文丢了的条目应当从文件补回(主歌词也只在正文小文件里,一起补): %q / %q", got.Lyrics, got.LyricsTr)
 	}
 	if lyricsImportRestoreKeys != nil {
 		t.Fatal("补回名单只用一次")

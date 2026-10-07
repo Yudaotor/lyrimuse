@@ -201,7 +201,9 @@ public final class EnrichCacheEntry: Decodable, Sendable {
             hasLyrics = !(lyrics ?? "").isEmpty
         } else {
             lyrics = nil
-            hasLyrics = c.contains(.lyrics)
+            // 老索引的精简条目带着主歌词(按键在不在判);新的只在正文小文件里,看位图的主歌词位。
+            let fields = try c.decodeIfPresent(Int.self, forKey: .bodyFields)
+            hasLyrics = c.contains(.lyrics) || fields.map { EnrichCacheSlim.Fields(rawValue: $0).contains(.lyrics) } == true
         }
         lyricsTr = try c.decodeIfPresent(String.self, forKey: .lyricsTr)
         lyricsRoma = try c.decodeIfPresent(String.self, forKey: .lyricsRoma)

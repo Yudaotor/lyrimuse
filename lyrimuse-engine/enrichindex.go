@@ -24,8 +24,8 @@ import (
 // `lyrimuse-enrich-cache.json`(107 MB)重新 JSONDecoder 一遍 —— 每次 0.5 秒以上的 CPU、外加一份整缓存
 // 大小的临时内存;而换歌、预取后面几首、补译文、换封面都会写盘。可 App 真正要正文的只有一处:
 // `lookup()` 取**当前这首**的歌词;其余几十处只用封面 / 链接 / 时长 / 解析标记这类元数据。主歌词 `lyrics`
-// 留在精简条目里:「歌词管理」(EnrichCacheStore)的批量锁定 / 解锁、偏移指纹要用;App 播放那一侧解码时跳过它,
-// 用到时读正文小文件(15 章决策 24)。
+// 也只在正文小文件里,精简条目用位图 32 记「有主歌词」(App 判有没有词认它);用到主歌词的地方(当前这首、
+// 「歌词管理」点开的那一首和锁定开关比对的那几首)读正文小文件(15 章决策 24、29)。
 //
 // ## 两份文件
 //
@@ -177,7 +177,7 @@ type enrichBody struct {
 	LyricsBG    string `json:"lyrics_bg,omitempty"`
 }
 
-// enrichBodyFields 索引里去掉的几块正文各有没有:1 逐字 / 2 译文 / 4 罗马音 / 8 纯文本 / 16 背景人声,128 恒置位 ——
+// enrichBodyFields 索引里去掉的几块正文各有没有:1 逐字 / 2 译文 / 4 罗马音 / 8 纯文本 / 16 背景人声 / 32 主歌词,128 恒置位 ——
 // App(`EnrichCacheSlim.Fields`)靠「有 body_crc 却没有 body_fields」认出这个字段出现之前写的老索引。
 func enrichBodyFields(e enrichEntry) uint8 {
 	f := uint8(128)
@@ -196,16 +196,19 @@ func enrichBodyFields(e enrichEntry) uint8 {
 	if e.LyricsBG != "" {
 		f |= 16
 	}
+	if e.Lyrics != "" {
+		f |= 32
+	}
 	return f
 }
 
-// leanForIndex 索引里的那一条:去掉几块大正文(逐字 / 译文 / 罗马音 / 纯文本 / 背景人声),记上校验值和位图。主歌词 `lyrics` 留着(本机别名推断、
-// 「歌词管理」的批量锁定和时间轴偏移指纹都要)。没有正文(crc 0)的不记位图。
+// leanForIndex 索引里的那一条:去掉主歌词和几块大正文(逐字 / 译文 / 罗马音 / 纯文本 / 背景人声),记上校验值和位图。
+// 没有正文(crc 0)的不记位图,也不去主歌词(crc 0 时主歌词本来就是空的)。
 func leanForIndex(e enrichEntry, crc uint32) enrichEntry {
 	if crc != 0 {
 		e.BodyFields = enrichBodyFields(e)
 	}
-	e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG = "", "", "", "", ""
+	e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC, e.PlainLyrics, e.LyricsBG = "", "", "", "", "", ""
 	e.BodyCRC = crc
 	return e
 }

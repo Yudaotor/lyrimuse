@@ -40,8 +40,8 @@ func TestLeanSaveRoundTrip(t *testing.T) {
 			t.Fatalf("主缓存不该再带 %s", big)
 		}
 	}
-	if !strings.Contains(string(raw), "故事的小黄花") {
-		t.Fatal("主歌词留在主缓存里")
+	if strings.Contains(string(raw), "故事的小黄花") {
+		t.Fatal("主歌词也只在正文小文件里,主缓存不带")
 	}
 
 	enrichMu.Lock()

@@ -5390,7 +5390,7 @@ func loadEnrichCache(path string) {
 	}
 	// 正文在小文件里的条目补回正文,见 enrichbodyload.go。
 	bodies := hydrateEnrichBodies(m, enrichBodiesDirFor(path))
-	// 正文小文件缺了的那几条只剩主歌词:启动那次导入要让 lyrics/ 里的文件把它们补回来,见 lyricsImportRestoreKeys。
+	// 正文小文件缺了的那几条连主歌词都没有了:启动那次导入要让 lyrics/ 里的文件把它们补回来,见 lyricsImportRestoreKeys。
 	lyricsImportRestoreKeys = bodies.missingSet
 	moveUnreadableBodiesAside(bodies.unreadable)
 	enrichDiskFullFormat = bodies.full > 0

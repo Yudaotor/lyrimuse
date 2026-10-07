@@ -134,8 +134,11 @@ func TestSaveEditPersistsAndExports(t *testing.T) {
 		t.Errorf("导出文件不对 err=%v body=%q", err, body)
 	}
 	disk, err := os.ReadFile(enrichPath)
-	if err != nil || !strings.Contains(string(disk), "hello") {
+	if err != nil || !strings.Contains(string(disk), "Edit Song") {
 		t.Errorf("没存盘 err=%v", err)
+	}
+	if b, _ := readBodyForTest(t, editKey); b.Lyrics != "[00:01.00]hello" {
+		t.Errorf("主歌词存进正文小文件: %q", b.Lyrics)
 	}
 }
 
