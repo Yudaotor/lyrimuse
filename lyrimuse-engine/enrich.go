@@ -1784,17 +1784,21 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 导出只在歌词族字段真的变了的时候做,而且只导这一条(exportLyricsFilesFor):这几条
 	// 路径就算什么都没补上也会推进重试计数/时间戳(那些只要落盘、不涉及 lyrics/ 文件)。
 	lyricsChanged := false
+	// 条目里有词、这一轮改按纯音乐处理:要马上落盘、通知重推(屏上还显示着那份词),但歌词没换,不导出。
+	markedInstrumental := false
 	defer func() {
 		if lyricsChanged {
 			translateAfterLyricsSwapLocked(key)
 		}
 		enrichMu.Unlock()
-		if !lyricsChanged {
+		if !lyricsChanged && !markedInstrumental {
 			requestEnrichBookkeepingSave(key)
 			return
 		}
 		commitEnrichSave(key)
-		exportLyricsFilesFor(key)
+		if lyricsChanged {
+			exportLyricsFilesFor(key)
+		}
 		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,**四条补全路径都要做** —— 漏了
 		// 的话,同一首歌播到中途才补出来的译文要等下一次换歌才会被推出去(译文其实早就翻好、
 		// 也落盘了,只是没人通知)。
@@ -1901,9 +1905,11 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// hasRealFromMarkerSource 已经挡住同源那种,这里再挡跨源那种)。
 	// 条目本来就有歌词(升级重试)时也不看:时长对不上的重试里候选全被判掉、只剩一条纯音乐标记,
 	// 会给一首明明有逐行歌词的歌打上「纯音乐」,之后扫库、补空、外围补收都跳过它。
-	if picked == nil && e.autoMarksInstrumental() && e.Lyrics == "" {
+	// 例外是播放器自己给的标记(playerSaysInstrumental):它说的就是正在放的这一条,词留在条目里,撤标就回来。
+	if picked == nil && e.autoMarksInstrumental() && (e.Lyrics == "" || playerSaysInstrumental(scored)) {
 		if ok, src := instrumentalFromScored(scored, artist, title, album, durationSecs); ok {
 			e.Instrumental = true
+			markedInstrumental = e.Lyrics != ""
 			log.Printf("lyrics: %s marked instrumental by %s (no lyrics from any source)", key, src)
 		}
 	}
@@ -1999,6 +2005,9 @@ func instrumentalFromScored(scored []scoredLyricCandidateResult, artist, title, 
 func rescoreTurnsInstrumental(e enrichEntry, scored []scoredLyricCandidateResult) bool {
 	if e.Lyrics == "" || !e.autoMarksInstrumental() || !scoredHasInstrumentalMarker(scored) {
 		return false
+	}
+	if playerSaysInstrumental(scored) {
+		return true
 	}
 	for _, c := range scored {
 		if !c.Instrumental && c.Source == e.LyricsSource && c.hasScoreTerm(scoreTermVersionTags) {
@@ -3487,11 +3496,58 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 // lyricCandidateUsable 给出「这一条能不能当冠军」的判定:分数不为负;这一轮有纯音乐标记时,吃过版本不符扣分的
 // 也不算 —— 标记说这首没有词,这份词是给别的版本做的(见 09 章决策 194)。末句超过曲长的同理,词比这段录音还长
 // (见 09 章决策 208)。同版本、没超长的歌词照常以正文为准。
+//
+// 纯音乐标记是正在放的播放器自己给的(playerSaysInstrumental)时一条都不算:它说的就是这一条录音,别的源的词只能是别的录音的。
 func lyricCandidateUsable(scored []scoredLyricCandidateResult) func(scoredLyricCandidateResult) bool {
 	instrumental := scoredHasInstrumentalMarker(scored)
+	player := playerSaysInstrumental(scored)
 	return func(c scoredLyricCandidateResult) bool {
-		return c.Score >= 0 && !(instrumental && (c.hasScoreTerm(scoreTermVersionTags) || c.hasScoreTerm(scoreTermDurationOvershoot)))
+		return c.Score >= 0 && !player && !(instrumental && (c.hasScoreTerm(scoreTermVersionTags) || c.hasScoreTerm(scoreTermDurationOvershoot)))
 	}
+}
+
+// playerSaysInstrumental:这一轮的纯音乐标记是不是正在放的播放器自己给的(见 playerInstrumentalSource)。
+func playerSaysInstrumental(scored []scoredLyricCandidateResult) bool {
+	for _, c := range scored {
+		if c.Instrumental && c.PlayerInstrumental {
+			return true
+		}
+	}
+	return false
+}
+
+// playerInstrumentalSource:正在放的播放器自己说这一条没有人声、它自己又没给出能用的歌词时,返回它自家的歌词源名,否则空串。
+// 身份必须来自播放器的本地数据(同同源加权的准入,见 lyricCandidate.identityFromLocalClient),搜出来的不算。播放器自己有这一条的
+// 歌词(有词的伴奏版)时照常用歌词。见 09 章决策 210。
+func playerInstrumentalSource(raw map[string]lyricSourceResult, results []scoredLyricCandidateResult) string {
+	for _, src := range []string{lyricSourceNetease, lyricSourceQQ, lyricSourceSoda, lyricSourceAppleMusic, spotifyLocalLyricsSource} {
+		r, ok := raw[src]
+		if !ok || !playerOwnsLyricSource(src) {
+			continue
+		}
+		claims, local := r.noVocals || r.instrumental, r.identityFromLocalClient
+		if src == lyricSourceNetease {
+			claims, local = r.ne.PureMusic || r.ne.NoVocals, r.ne.FromLocalClient
+		}
+		if !claims || !local {
+			continue
+		}
+		for _, c := range results {
+			if c.Source == src && c.Score >= 0 {
+				return ""
+			}
+		}
+		return src
+	}
+	return ""
+}
+
+// playerOwnsLyricSource:这个歌词源是不是正在放的播放器自家的。Spotify 没有歌词源,它的本地歌词缓存算它自家的。
+func playerOwnsLyricSource(src string) bool {
+	if src == spotifyLocalLyricsSource {
+		return playingPlayer() == playerSpotify
+	}
+	return isNativeLyricSource(src)
 }
 
 // scoredHasInstrumentalMarker:这一轮有没有源明确说这首是纯音乐(搭车的 Score:-1 标记,见 Instrumental 字段)。
@@ -3579,6 +3635,9 @@ type scoredLyricCandidateResult struct {
 	// 这条标记过滤掉,不会当成一条空歌词的候选显示给用户,见 searchcli.go
 	// filterEnabledLyricSources 旁边的过滤。
 	Instrumental bool `json:"instrumental,omitempty"`
+	// PlayerInstrumental:这条纯音乐标记是正在放的播放器自己给的(见 playerInstrumentalSource)。有它时别的源的词一条都不当冠军
+	// (lyricCandidateUsable),合并多轮时也压过搜出来的标记。
+	PlayerInstrumental bool `json:"player_instrumental,omitempty"`
 	// TrackFoundNoLyrics 跟上面 Instrumental 同一个"搭车"套路(Score:-1 的伪候选,手动搜索
 	// 那边过滤掉不显示成候选),传的是另一个结论:**这个源的曲库里有这首歌,但平台上没有
 	// 歌词文本**。来龙去脉见 neteaseInfo.TrackFoundNoLyrics 的头注。
@@ -3657,6 +3716,10 @@ func scoredLyricCandidates(ctx context.Context, artist, title, album string, dur
 // 陆续到达的候选,不会因为切换成了 alias 重试就突然掉回"等全部查完才展示"。
 func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
 	ne, results := fetchScoredLyricCandidatesStreaming(ctx, artist, title, album, durationSecs, onUpdate)
+	// 播放器自己说这一条是纯音乐时不再换身份重搜:搜回来的词一条都不能用(lyricCandidateUsable)。手动搜索照常搜,那是用户要看候选。
+	if playerSaysInstrumental(results) && !manualLyricSearch(ctx) {
+		return ne, results
+	}
 	// 搬运频道形态的身份重入:Safari 播 YT Music 里「音樂頑童」频道上传的
 	// 《Musiq Soulchild - Buddy (Official Video)》,media-control 的 artist 位是频道名、真正的
 	// 歌手写在曲名破折号前面。原身份「音樂頑童 / Musiq Soulchild - Buddy」九个源零候选;下面
@@ -4267,7 +4330,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	noLyrics := map[string]scoredLyricCandidateResult{}
 	take := func(r scoredLyricCandidateResult) bool {
 		if r.Instrumental {
-			if instrumental == nil {
+			if instrumental == nil || (r.PlayerInstrumental && !instrumental.PlayerInstrumental) {
 				rr := r
 				instrumental = &rr
 			}
@@ -4342,7 +4405,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 		r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
 			artist, title, album, durationSecs, cands[i], corroborated[s], len(consensusPeers[s]))
 		r.ConsensusPeers = consensusPeers[s]
-		if instrumental != nil && s == instrumental.Source {
+		if instrumental != nil && s == instrumental.Source && r.Score >= 0 {
 			hasRealFromMarkerSource = true
 		}
 		out = append(out, r)
@@ -4477,6 +4540,9 @@ type lyricSourceResult struct {
 	// netease 那一路不走这个字段,它的事实在 ne.FromLocalClient 上(neteaseInfo 整个
 	// 结构本来就随 lyricSourceResult.ne 传过来,不必再抄一份)。
 	identityFromLocalClient bool
+	// noVocals:这个源给的曲目信息说这一条没有人声(QQ 语种「纯音乐」、酷狗语种「纯音乐」、汽水 vocal==2、Apple audioLocale zxx、
+	// Spotify 演唱语言 zxx)。伴奏版也带它,所以本身不等于「没有歌词」;怎么用见 playerInstrumentalSource 与 instrumentalMarker。
+	noVocals bool
 }
 
 // lyricSourceResultTap 只给测试用(默认 nil,生产永远不设):fetchScoredLyricCandidatesStreaming
@@ -4728,7 +4794,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	var instrumentalMarker *scoredLyricCandidateResult
 	if lrclibLyr == "" && lrclibInstrumental {
 		instrumentalMarker = &scoredLyricCandidateResult{Source: "lrclib", Score: -1, Instrumental: true}
-	} else if qqLyr == "" && qqInstrumental {
+	} else if (qqLyr == "" && qqInstrumental) || (isCreditOnlyLRC(qqLyr) && qq.noVocals) {
 		// QQ 那一路。典型案例:蛋堡《收敛水》第 1 轨「关键字: Intro」(114s 的专辑 intro)
 		// ——网易云只有一行署名(没有 pureMusic 字段)、酷狗 KRC 候选 0 条、LRCLIB 404,
 		// **只有 QQ 明确回了**「此歌曲为没有填词的纯音乐」。 这句话不能在 resolveQQLyric
@@ -4755,6 +4821,11 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		// Musixmatch 上是 has_subtitles=0 且 has_lyrics=0,前两趟的闸门按定义会把它们全筛掉 ——
 		// 没有第三趟,这个分支永远不会被触发。
 		instrumentalMarker = &scoredLyricCandidateResult{Source: "musixmatch", Score: -1, Instrumental: true}
+	} else if isInstrumentalPlaceholderLyric(miguLyr) {
+		// 咪咕对纯音乐回的歌词文件就是一句「此歌曲为纯音乐,请欣赏」,判定同 QQ 的占位。
+		instrumentalMarker = &scoredLyricCandidateResult{Source: "migu", Score: -1, Instrumental: true}
+	} else if isCreditOnlyLRC(kugouLyr) && kugou.noVocals {
+		instrumentalMarker = &scoredLyricCandidateResult{Source: "kugou", Score: -1, Instrumental: true}
 	}
 
 	results := make([]scoredLyricCandidateResult, 0, len(candidates))
@@ -4916,6 +4987,9 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		}
 		results = append(results, r)
 	}
+	if src := playerInstrumentalSource(raw, results); src != "" {
+		instrumentalMarker = &scoredLyricCandidateResult{Source: src, Score: -1, Instrumental: true, PlayerInstrumental: true}
+	}
 	if instrumentalMarker != nil {
 		results = append(results, *instrumentalMarker)
 	}
@@ -5004,7 +5078,7 @@ func kugouSourceResult(r kugouResult) lyricSourceResult {
 	return lyricSourceResult{
 		source: "kugou", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma,
 		matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover,
-		srcDur: r.durationSecs, language: r.language,
+		srcDur: r.durationSecs, language: r.language, noVocals: r.noVocals,
 		identityFromLocalClient: r.fromLocalClient,
 	}
 }
@@ -5156,11 +5230,13 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// language 跟 qqDur 同一个只读缓存、同一条"QRC 那步走通时这里是热的"理由,见上面
 		// qqDur 那行注释——不为它单独发请求。
-		qqLang := qqCanonicalLanguage(qqSongMetaCachedOnly(qqMid).language)
+		qqMeta := qqSongMetaCachedOnly(qqMid)
+		qqLang := qqCanonicalLanguage(qqMeta.language)
+		qqNoVocals := qqMeta.id != 0 && qqMeta.language == qqLanguagePureMusic
 		// trackFoundNoLyrics 还要再过一道 `yrc == ""`:整行接口空、逐字(QRC)接口却拿到了词
 		// 的话,平台**是有歌词的**,只是这两条接口不同步 —— 那时报"平台没有歌词"是错的。
 		// 两套接口完全独立(见 qq.go 顶部注释),不假设它们一定同进同出。交出了纯文本时同样不报。
-		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, trackFoundNoLyrics: qqNoLyrics && yrc == "" && !qqPlainOnly, identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
+		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental, noVocals: qqNoVocals, trackFoundNoLyrics: qqNoLyrics && yrc == "" && !qqPlainOnly, identityFromLocalClient: match.fromLocalLibrary, plainOnly: qqPlainOnly, trackIDs: qqTrackIDs(qqMid)}
 	}()
 	go func() {
 		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时
@@ -5289,7 +5365,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// isrc 有值时(同 deezer 那路)先按 ISRC 直取这条录音,再按名字搜。
 		appleID, _ := playbackTrackIDsFor(idArtist, idTitle, idAlbum)
 		r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))
-		resultsCh <- lyricSourceResult{source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient}
+		// 正在用 Apple Music 放、它自己没给这一条的歌词时,问一次这条录音有没有人声(播放器自己的信号,见 playerInstrumentalSource)。
+		appleNoVocals := r.lyrics == "" && appleID != "" && playingPlayer() == playerAppleMusic && applemusicCatalogNoVocals(ctx, appleID)
+		resultsCh <- lyricSourceResult{noVocals: appleNoVocals, source: "applemusic", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, roma: r.roma, bg: r.bg, songwriters: r.songwriters, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, isrc: r.isrc, plainOnly: r.plainOnly, identityFromLocalClient: r.fromLocalClient || appleNoVocals}
 	}()
 	go func() {
 		if skipSource("soda") {
@@ -5298,7 +5376,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// 曲目 id 先取汽水客户端的播放队列缓存,拿不到再按歌手 + 歌名搜索(见 soda.go 头注)。取词走无签名的 seo_track。
 		r, noLyrics := sodaLyric(ctx, artist, srcTitle, album, durationSecs)
-		resultsCh <- lyricSourceResult{source: "soda", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, identityFromLocalClient: r.fromLocalClient}
+		// 曲目 id 来自汽水客户端的播放队列缓存时,同一份缓存里的 vocal==2 就是这一条没有人声(见 sodalocal.go)。
+		noVocals := r.fromLocalClient && sodaLocalInstrumental(artist, srcTitle, album, durationSecs)
+		resultsCh <- lyricSourceResult{source: "soda", lyr: r.lyrics, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, trackFoundNoLyrics: noLyrics, noVocals: noVocals, identityFromLocalClient: r.fromLocalClient}
 	}()
 
 	// raw:目前为止到手的各源原始应答,按源名存。打分/排序全部下放给
@@ -5315,6 +5395,12 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		}
 		// Spotify 本地歌词同理(Musixmatch 的备用管道,见 spotifylyrics.go),不看当前播放器:按曲目 ID 找得到就放。
 		if r, ok := spotifyLocalLyricsFor(idArtist, idTitle, idAlbum); ok {
+			raw[spotifyLocalLyricsSource] = r
+		}
+		// 正在用 Spotify 放时,换曲那一拍记下的曲目在它元数据缓存里没有人声:播放器自己的信号(见 playerInstrumentalSource)。
+		if playingPlayer() == playerSpotify && spotifyLocalNoVocals(spotifyTrackIDHintFor(idArtist, idTitle)) {
+			r := raw[spotifyLocalLyricsSource]
+			r.source, r.noVocals, r.identityFromLocalClient = spotifyLocalLyricsSource, true, true
 			raw[spotifyLocalLyricsSource] = r
 		}
 		// Amazon Music 本地歌词同 KKBOX:正用它放歌时读,按 ASIN 认这首(见 amazonlibrary.go)。

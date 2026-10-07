@@ -129,6 +129,46 @@ func spotifyParseISRC(v []byte) string {
 }
 
 // spotifyLocalISRC 查这条 Spotify 曲目的 ISRC。第二个返回值 false = 没查到,调用方照常走名称搜索。
+// spotifyTrackLanguageField 是 spotify.metadata.Track 的 language_of_performance(演唱语言,ISO 639 代码,可重复)。
+const spotifyTrackLanguageField = 22
+
+// spotifyLocalNoVocals:Spotify 元数据缓存里这条曲目的演唱语言有 zxx(ISO 639-2「无语言内容」),即没有人声。读不到当没有。
+// 只读本机缓存,不联网。见 09 章决策 210。
+func spotifyLocalNoVocals(trackID string) bool {
+	if len(trackID) != 22 {
+		return false
+	}
+	root := spotifyISRCUsersDir()
+	if root == "" {
+		return false
+	}
+	key := spotifyXmetaKey(spotifyTrackKind, trackID)
+	for _, dir := range spotifyISRCLedgerDirs(root) {
+		if v := ldbGet(dir, [][]byte{key})[string(key)]; v != nil {
+			return spotifyTrackNoVocals(v)
+		}
+	}
+	return false
+}
+
+// spotifyTrackNoVocals 从一条元数据缓存的值里读演唱语言,有 zxx 就是没有人声。
+func spotifyTrackNoVocals(v []byte) bool {
+	val := spotifyFindAny(v, "spotify.metadata.Track", 0)
+	if val == nil {
+		return false
+	}
+	fields, err := pbParse(val)
+	if err != nil {
+		return false
+	}
+	for _, f := range fields {
+		if f.num == spotifyTrackLanguageField && f.wire == 2 && string(f.b) == "zxx" {
+			return true
+		}
+	}
+	return false
+}
+
 func spotifyLocalISRC(trackID string) (string, bool) {
 	if len(trackID) != 22 {
 		return "", false

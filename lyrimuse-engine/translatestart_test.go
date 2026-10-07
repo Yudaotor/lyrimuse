@@ -219,10 +219,10 @@ func TestLyricsSwapPathsTranslateAndWritePlayingEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	enrich := string(b)
-	swap := "\t\tif lyricsChanged {\n\t\t\ttranslateAfterLyricsSwapLocked(key)\n\t\t}\n\t\tenrichMu.Unlock()\n\t\tif !lyricsChanged {\n\t\t\trequestEnrichBookkeepingSave(key)\n\t\t\treturn\n\t\t}\n\t\tcommitEnrichSave(key)\n\t\texportLyricsFilesFor(key)\n"
-	// 重新打分那条还有「只打了纯音乐标记」这一种:同样落盘、通知,但没换词、不导出(见 rescoreTurnsInstrumental)。
-	rescoreSwap := "\t\tif lyricsChanged {\n\t\t\ttranslateAfterLyricsSwapLocked(key)\n\t\t}\n\t\tenrichMu.Unlock()\n\t\tif !lyricsChanged && !markedInstrumental {\n\t\t\trequestEnrichBookkeepingSave(key)\n\t\t\treturn\n\t\t}\n\t\tcommitEnrichSave(key)\n\t\tif lyricsChanged {\n\t\t\texportLyricsFilesFor(key)\n\t\t}\n"
-	for fn, want := range map[string]string{"func retryLyricsUpgradeWith(": swap, "func rescoreLyricsWith(": rescoreSwap} {
+	// 两条路径都还有「条目里有词、只打了纯音乐标记」这一种:同样落盘、通知,但没换词、不导出(见 rescoreTurnsInstrumental /
+	// playerSaysInstrumental)。
+	swap := "\t\tif lyricsChanged {\n\t\t\ttranslateAfterLyricsSwapLocked(key)\n\t\t}\n\t\tenrichMu.Unlock()\n\t\tif !lyricsChanged && !markedInstrumental {\n\t\t\trequestEnrichBookkeepingSave(key)\n\t\t\treturn\n\t\t}\n\t\tcommitEnrichSave(key)\n\t\tif lyricsChanged {\n\t\t\texportLyricsFilesFor(key)\n\t\t}\n"
+	for fn, want := range map[string]string{"func retryLyricsUpgradeWith(": swap, "func rescoreLyricsWith(": swap} {
 		i := strings.Index(enrich, fn)
 		if i < 0 {
 			t.Fatalf("enrich.go 找不到 %s", fn)

@@ -43,6 +43,9 @@ type kugouResult struct {
 	// songLanguageMandarin/songLanguageCantonese,见 kugouCanonicalLanguage。透传用,
 	// 跟 lyricCandidate.language 同一个模式,不参与打分。
 	language string
+	// noVocals:挑中的那一行 trans_param.language 是「纯音乐」(kugouLanguagePureMusic)。只认挑中的那一行:排在后面的同名行
+	// 多是伴奏版。
+	noVocals bool
 	// fromLocalClient:这份歌词读自酷狗客户端自己的缓存(kugouLocalLyric),不是搜索来的。
 	// 透传给 lyricCandidate.identityFromLocalClient,是同源加权的准入条件之一。
 	fromLocalClient bool
@@ -325,6 +328,9 @@ const (
 	kugouSearchPrimaryItems = 10
 )
 
+// kugouLanguagePureMusic 是酷狗 trans_param.language 里的「纯音乐」,见 kugouResult.noVocals。
+const kugouLanguagePureMusic = "纯音乐"
+
 // kugouCanonicalLanguage 把酷狗 trans_param.language 的人类可读字符串折算成
 // lyricCandidate.language 的取值,未识别的取值一律返回空串,不外推。
 func kugouCanonicalLanguage(s string) string {
@@ -405,6 +411,13 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 		}
 		return kugouKeywordLyric(ctx, artist, title, durationSecs, nil)
 	}
+	r := kugouLyricForSong(ctx, artist, title, durationSecs, chosen)
+	r.noVocals = chosen.TransParam.Language == kugouLanguagePureMusic
+	return r
+}
+
+// kugouLyricForSong 取挑中的那一首的歌词:先按 hash 查歌词库,查不到能用的再不带 hash 按关键词查(kugouKeywordLyric)。
+func kugouLyricForSong(ctx context.Context, artist, title string, durationSecs float64, chosen *kugouSong) kugouResult {
 	durMs := int64(chosen.Duration * 1000)
 	if durMs <= 0 && durationSecs > 0 {
 		durMs = int64(durationSecs * 1000)

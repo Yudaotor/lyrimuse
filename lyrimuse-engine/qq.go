@@ -2005,6 +2005,10 @@ func qqTrackIDs(mid string) []string {
 	return []string{mid}
 }
 
+// qqLanguagePureMusic 是 fcg_play_single_song.fcg 的 language 字段里的「纯音乐」。伴奏版也标它,所以只当「没有人声」用,
+// 不当「没有歌词」用(见 09 章决策 210)。
+const qqLanguagePureMusic = 9
+
 // qqCanonicalLanguage 把 fcg_play_single_song.fcg 的 language 数字字段折算成
 // lyricCandidate.language 的取值(songLanguageMandarin/songLanguageCantonese),
 // 未识别的取值(含未实测过的枚举值)一律返回空串,不外推。

@@ -95,7 +95,7 @@ func TestISRCRetryIsWired(t *testing.T) {
 		"isrc:                       r.ISRC,",
 		"lyricSourceISRC(ctx, artist, title, album))\n\t\tresultsCh <- lyricSourceResult{source: \"musixmatch\"",
 		"lyricSourceISRC(ctx, artist, title, album))\n\t\tresultsCh <- lyricSourceResult{source: \"deezer\"",
-		"appleID, lyricSourceISRC(ctx, artist, title, album))\n\t\tresultsCh <- lyricSourceResult{source: \"applemusic\"",
+		"r := applemusicLyric(ctx, artist, srcTitle, album, durationSecs, appleID, lyricSourceISRC(ctx, artist, title, album))",
 		"if isrc, sources := isrcRetryPlan(ctx, results, durationSecs); isrc != \"\" {",
 	} {
 		if !strings.Contains(src, n) {

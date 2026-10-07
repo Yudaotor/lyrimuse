@@ -1396,6 +1396,58 @@ func applemusicLyric(ctx context.Context, artist, title, album string, durationS
 }
 
 // applemusicConnected 供 UI / CLI 判断"用户连过没有"——不发任何网络请求。
+var (
+	applemusicNoVocalsMu    sync.Mutex
+	applemusicNoVocalsCache = map[string]bool{}
+)
+
+// applemusicCatalogNoVocals:这条 Apple 目录曲目的 audioLocale 是不是 zxx(ISO 639-2「无语言内容」),即没有人声。
+// 只要 developer token,不要账号;商店区用账号所在区,没连账号时用 us。按目录 id 缓存,没问成的不缓存。见 09 章决策 210。
+func applemusicCatalogNoVocals(ctx context.Context, catalogID string) bool {
+	if catalogID == "" {
+		return false
+	}
+	applemusicNoVocalsMu.Lock()
+	if v, ok := applemusicNoVocalsCache[catalogID]; ok {
+		applemusicNoVocalsMu.Unlock()
+		return v
+	}
+	applemusicNoVocalsMu.Unlock()
+	dev := applemusicEnsureDeveloperToken(ctx)
+	if dev == "" {
+		return false
+	}
+	_, storefront := applemusicLoadUserToken()
+	if storefront == "" {
+		storefront = "us"
+	}
+	raw, status, err := applemusicAPIGet(ctx, storefront+"/songs/"+neturl.PathEscape(catalogID), dev, "")
+	if err != nil || (status != http.StatusOK && status != http.StatusNotFound) {
+		return false
+	}
+	var out struct {
+		Data []struct {
+			Attributes struct {
+				AudioLocale string `json:"audioLocale"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	v := false
+	if status == http.StatusOK {
+		if json.Unmarshal(raw, &out) != nil {
+			return false
+		}
+		v = len(out.Data) > 0 && out.Data[0].Attributes.AudioLocale == "zxx"
+	}
+	applemusicNoVocalsMu.Lock()
+	if len(applemusicNoVocalsCache) >= 512 {
+		applemusicNoVocalsCache = map[string]bool{}
+	}
+	applemusicNoVocalsCache[catalogID] = v
+	applemusicNoVocalsMu.Unlock()
+	return v
+}
+
 func applemusicConnected() bool {
 	tok, _ := applemusicLoadUserToken()
 	return tok != ""

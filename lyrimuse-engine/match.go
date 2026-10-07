@@ -710,14 +710,18 @@ const (
 var (
 	nativeLyricSourcesMu sync.RWMutex
 	nativeLyricSources   map[string]bool
+	// playingPlayerID:正在播的播放器常量(playerForBundleID 的结果),跟 nativeLyricSources 一起设、同一把锁。
+	playingPlayerID string
 )
 
 // setNativeLyricSourcesForPlayer 按**正在播的** bundle id 设置同源加权的目标。
 // 常驻端每首歌进 trackEnrichment 时调一次;search-lyrics 子命令按 -player 参数调一次。
 func setNativeLyricSourcesForPlayer(bundleID string) {
-	src := playerNativeLyricSource(playerForBundleID(bundleID))
+	player := playerForBundleID(bundleID)
+	src := playerNativeLyricSource(player)
 	nativeLyricSourcesMu.Lock()
 	defer nativeLyricSourcesMu.Unlock()
+	playingPlayerID = player
 	if src == "" {
 		nativeLyricSources = nil
 		return
@@ -740,6 +744,13 @@ func hasNativeLyricSource() bool {
 	nativeLyricSourcesMu.RLock()
 	defer nativeLyricSourcesMu.RUnlock()
 	return len(nativeLyricSources) > 0
+}
+
+// playingPlayer:正在播的播放器常量(见 setNativeLyricSourcesForPlayer),认不出是空串。
+func playingPlayer() string {
+	nativeLyricSourcesMu.RLock()
+	defer nativeLyricSourcesMu.RUnlock()
+	return playingPlayerID
 }
 
 // playerForBundleID 把播放器上报的 bundle id 映射回播放器常量(反查 playerBundleIDs),认不出就返回空串:
