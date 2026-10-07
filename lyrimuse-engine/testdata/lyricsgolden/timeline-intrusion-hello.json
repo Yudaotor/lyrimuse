@@ -158,7 +158,7 @@
     "ranked": [
       {
         "source": "kugou",
-        "score": 1237,
+        "score": 1231,
         "terms": [
           {
             "kind": "duration",
@@ -170,7 +170,7 @@
           },
           {
             "kind": "lines",
-            "points": 38
+            "points": 32
           },
           {
             "kind": "album",
@@ -195,7 +195,7 @@
       },
       {
         "source": "netease",
-        "score": 1211,
+        "score": 1208,
         "terms": [
           {
             "kind": "duration",
@@ -207,7 +207,7 @@
           },
           {
             "kind": "lines",
-            "points": 30
+            "points": 27
           },
           {
             "kind": "album",
@@ -232,7 +232,7 @@
       },
       {
         "source": "applemusic",
-        "score": 1182,
+        "score": 1181,
         "terms": [
           {
             "kind": "duration",
@@ -244,7 +244,7 @@
           },
           {
             "kind": "lines",
-            "points": 34
+            "points": 33
           },
           {
             "kind": "album",
@@ -263,7 +263,7 @@
       },
       {
         "source": "qq",
-        "score": 1147,
+        "score": 1141,
         "terms": [
           {
             "kind": "duration",
@@ -275,7 +275,7 @@
           },
           {
             "kind": "lines",
-            "points": 34
+            "points": 28
           },
           {
             "kind": "album",
@@ -300,7 +300,7 @@
       },
       {
         "source": "lrclib",
-        "score": 788,
+        "score": 786,
         "terms": [
           {
             "kind": "duration",
@@ -308,7 +308,7 @@
           },
           {
             "kind": "lines",
-            "points": 38
+            "points": 36
           },
           {
             "kind": "album",
@@ -326,7 +326,7 @@
       },
       {
         "source": "migu",
-        "score": 754,
+        "score": 751,
         "terms": [
           {
             "kind": "duration",
@@ -334,7 +334,7 @@
           },
           {
             "kind": "lines",
-            "points": 37
+            "points": 34
           },
           {
             "kind": "titleMatch",
@@ -354,7 +354,7 @@
       },
       {
         "source": "musixmatch",
-        "score": 647,
+        "score": 644,
         "terms": [
           {
             "kind": "duration",
@@ -366,7 +366,7 @@
           },
           {
             "kind": "lines",
-            "points": 38
+            "points": 35
           },
           {
             "kind": "album",
@@ -389,7 +389,7 @@
       },
       {
         "source": "deezer",
-        "score": 626,
+        "score": 625,
         "terms": [
           {
             "kind": "duration",
@@ -397,7 +397,7 @@
           },
           {
             "kind": "lines",
-            "points": 31
+            "points": 30
           },
           {
             "kind": "titleMatch",

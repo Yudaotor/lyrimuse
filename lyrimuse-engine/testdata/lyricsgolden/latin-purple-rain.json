@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0.16621880998080335,
     "lyrics_end_secs": 224.3,
     "coverage_pct": 43.05182341650672,
+    "ending_corroborated": true,
     "album_score": 200,
     "live_mismatch": false,
     "cache_agreement": "exact"
@@ -121,7 +122,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1106,
+        "score": 1101,
         "terms": [
           {
             "kind": "corroborated",
@@ -133,7 +134,7 @@
           },
           {
             "kind": "lines",
-            "points": 36
+            "points": 31
           },
           {
             "kind": "album",
@@ -157,8 +158,8 @@
         "translation_lang": "zh"
       },
       {
-        "source": "kugou",
-        "score": 1038,
+        "source": "qq",
+        "score": 1030,
         "terms": [
           {
             "kind": "corroborated",
@@ -170,7 +171,7 @@
           },
           {
             "kind": "lines",
-            "points": 43
+            "points": 35
           },
           {
             "kind": "album",
@@ -194,8 +195,8 @@
         "translation_lang": "zh"
       },
       {
-        "source": "qq",
-        "score": 1037,
+        "source": "kugou",
+        "score": 1030,
         "terms": [
           {
             "kind": "corroborated",
@@ -207,7 +208,7 @@
           },
           {
             "kind": "lines",
-            "points": 42
+            "points": 35
           },
           {
             "kind": "album",
@@ -232,7 +233,7 @@
       },
       {
         "source": "lrclib",
-        "score": 665,
+        "score": 651,
         "terms": [
           {
             "kind": "corroborated",
@@ -240,7 +241,7 @@
           },
           {
             "kind": "lines",
-            "points": 45
+            "points": 31
           },
           {
             "kind": "album",
@@ -258,7 +259,7 @@
       },
       {
         "source": "kuwo",
-        "score": 557,
+        "score": 555,
         "terms": [
           {
             "kind": "corroborated",
@@ -266,7 +267,7 @@
           },
           {
             "kind": "lines",
-            "points": 37
+            "points": 35
           },
           {
             "kind": "titleMatch",

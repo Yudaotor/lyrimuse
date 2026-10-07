@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0.08272022892706077,
     "lyrics_end_secs": 249.41,
     "coverage_pct": 91.2834020062392,
+    "ending_corroborated": false,
     "album_score": 200,
     "live_mismatch": false,
     "cache_agreement": "exact"
@@ -109,7 +110,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1203,
+        "score": 1199,
         "terms": [
           {
             "kind": "duration",
@@ -121,7 +122,7 @@
           },
           {
             "kind": "lines",
-            "points": 53
+            "points": 49
           },
           {
             "kind": "album",
@@ -140,7 +141,7 @@
       },
       {
         "source": "kugou",
-        "score": 1139,
+        "score": 1125,
         "terms": [
           {
             "kind": "duration",
@@ -152,7 +153,7 @@
           },
           {
             "kind": "lines",
-            "points": 87
+            "points": 73
           },
           {
             "kind": "album",
@@ -171,7 +172,7 @@
       },
       {
         "source": "qq",
-        "score": 1117,
+        "score": 1109,
         "terms": [
           {
             "kind": "duration",
@@ -183,7 +184,7 @@
           },
           {
             "kind": "lines",
-            "points": 64
+            "points": 56
           },
           {
             "kind": "album",
@@ -202,7 +203,7 @@
       },
       {
         "source": "lrclib",
-        "score": 645,
+        "score": 642,
         "terms": [
           {
             "kind": "duration",
@@ -210,7 +211,7 @@
           },
           {
             "kind": "lines",
-            "points": 58
+            "points": 55
           },
           {
             "kind": "album",

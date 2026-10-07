@@ -256,35 +256,6 @@ func linesTermPoints(terms []scoreTerm) int {
 // 集合的 Jaccard,`lyricGram3Set` 的头注就写着它"对各源的行切分差异鲁棒",跟行数项量的
 // 东西正交。
 
-// contentLineCount 数"真的在唱的行"。口径跟 lyricConsensusBody 逐条对齐(元信息标签行 /
-// 空行 / 只有演唱者标记的行 / 职员表行都不算),区别只是它数行、那边拼正文 —— 两边必须
-// 同口径,否则"按内容行数打分"这个反事实测的就不是内容行。
-func contentLineCount(lyrics string) int {
-	speakers := lyricSpeakerLabels(lyrics)
-	n := 0
-	for _, line := range splitLyricLines(lyrics) {
-		if isLRCMetaTagLine(line) {
-			continue
-		}
-		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
-		if text == "" {
-			continue
-		}
-		if label, rest, ok := lyricSplitLabel(text); ok && speakers[label] {
-			if rest == "" {
-				continue
-			}
-			n++
-			continue
-		}
-		if isCreditLine(text) {
-			continue
-		}
-		n++
-	}
-	return n
-}
-
 // deltaLinesCap:行数项改成 min(原始行数, cap)。cap 之上一律等分 = 该项退化成常数,
 // 只在"某个候选明显残缺"时才起作用。
 func deltaLinesCap(cap int) func(tr *evalTrack, i int) int {

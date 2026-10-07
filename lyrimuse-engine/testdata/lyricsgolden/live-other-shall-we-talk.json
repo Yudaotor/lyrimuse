@@ -117,7 +117,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1105,
+        "score": 1100,
         "terms": [
           {
             "kind": "duration",
@@ -129,7 +129,7 @@
           },
           {
             "kind": "lines",
-            "points": 65
+            "points": 60
           },
           {
             "kind": "album",
@@ -148,8 +148,8 @@
         "has_romanization": true
       },
       {
-        "source": "kugou",
-        "score": 490,
+        "source": "qq",
+        "score": 482,
         "terms": [
           {
             "kind": "duration",
@@ -161,7 +161,7 @@
           },
           {
             "kind": "lines",
-            "points": 69
+            "points": 61
           },
           {
             "kind": "liveAlbumConflict",
@@ -184,8 +184,8 @@
         "has_romanization": true
       },
       {
-        "source": "qq",
-        "score": 489,
+        "source": "kugou",
+        "score": 482,
         "terms": [
           {
             "kind": "duration",
@@ -197,7 +197,7 @@
           },
           {
             "kind": "lines",
-            "points": 68
+            "points": 61
           },
           {
             "kind": "liveAlbumConflict",
@@ -221,7 +221,7 @@
       },
       {
         "source": "lrclib",
-        "score": 15,
+        "score": 14,
         "terms": [
           {
             "kind": "duration",
@@ -229,7 +229,7 @@
           },
           {
             "kind": "lines",
-            "points": 35
+            "points": 34
           },
           {
             "kind": "liveAlbumConflict",

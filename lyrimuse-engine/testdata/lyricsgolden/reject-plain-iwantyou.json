@@ -113,7 +113,7 @@
     }
   },
   "expect": {
-    "winner": "kugou",
+    "winner": "qq",
     "verdicts": {
       "kugou": "accepted",
       "lrclib": "rejectPlainTextOnly",
@@ -123,8 +123,8 @@
     },
     "ranked": [
       {
-        "source": "kugou",
-        "score": 1273,
+        "source": "qq",
+        "score": 1260,
         "terms": [
           {
             "kind": "duration",
@@ -136,7 +136,7 @@
           },
           {
             "kind": "lines",
-            "points": 83
+            "points": 70
           },
           {
             "kind": "album",
@@ -154,8 +154,8 @@
         "has_word_timing": true
       },
       {
-        "source": "qq",
-        "score": 1267,
+        "source": "kugou",
+        "score": 1260,
         "terms": [
           {
             "kind": "duration",
@@ -167,7 +167,7 @@
           },
           {
             "kind": "lines",
-            "points": 77
+            "points": 70
           },
           {
             "kind": "album",
@@ -186,7 +186,7 @@
       },
       {
         "source": "netease",
-        "score": 1193,
+        "score": 1190,
         "terms": [
           {
             "kind": "duration",
@@ -198,7 +198,7 @@
           },
           {
             "kind": "lines",
-            "points": 60
+            "points": 57
           },
           {
             "kind": "album",
@@ -236,6 +236,6 @@
         ]
       }
     ],
-    "winner_fingerprint": "299f2bc17691250b"
+    "winner_fingerprint": "1eef33d3c422bdc6"
   }
 }

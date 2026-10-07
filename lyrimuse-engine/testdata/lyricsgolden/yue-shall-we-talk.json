@@ -104,7 +104,7 @@
     }
   },
   "expect": {
-    "winner": "kugou",
+    "winner": "qq",
     "verdicts": {
       "kugou": "accepted",
       "lrclib": "accepted",
@@ -113,35 +113,8 @@
     },
     "ranked": [
       {
-        "source": "kugou",
-        "score": 1079,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 227
-          },
-          {
-            "kind": "wordTiming",
-            "points": 400
-          },
-          {
-            "kind": "lines",
-            "points": 82
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ],
-        "has_word_timing": true
-      },
-      {
         "source": "qq",
-        "score": 1073,
+        "score": 1066,
         "terms": [
           {
             "kind": "duration",
@@ -153,7 +126,7 @@
           },
           {
             "kind": "lines",
-            "points": 76
+            "points": 69
           },
           {
             "kind": "titleMatch",
@@ -168,8 +141,35 @@
         "has_romanization": true
       },
       {
+        "source": "kugou",
+        "score": 1066,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 227
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 69
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ],
+        "has_word_timing": true
+      },
+      {
         "source": "lrclib",
-        "score": 621,
+        "score": 620,
         "terms": [
           {
             "kind": "duration",
@@ -177,7 +177,7 @@
           },
           {
             "kind": "lines",
-            "points": 35
+            "points": 34
           },
           {
             "kind": "titleMatch",
@@ -191,7 +191,7 @@
       },
       {
         "source": "netease",
-        "score": 460,
+        "score": 457,
         "terms": [
           {
             "kind": "duration",
@@ -199,7 +199,7 @@
           },
           {
             "kind": "lines",
-            "points": 44
+            "points": 41
           },
           {
             "kind": "album",
@@ -213,6 +213,6 @@
         "has_romanization": true
       }
     ],
-    "winner_fingerprint": "d1a89657bb619808"
+    "winner_fingerprint": "32d1d81f036f7947"
   }
 }

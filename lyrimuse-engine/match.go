@@ -488,11 +488,12 @@ const lyricOvershootToleranceSecs = 5.0
 
 // lyricsScoringVersion 是下面这套打分规则的版本号。
 //
-// **改动 scoreLyricCandidate 的任何一档权重/判定,都必须把这个数 +1。** 缓存是"解析一次
-// 永久保留",每条记着自己是按哪一版规则选出来的(enrichEntry.LyricsScoringVersion);
-// 版本落后的条目会在这首歌下次被播放时后台重搜一轮、按新规则重选(见 needsLyricsRescore)。
-// 忘了 +1 的后果不是报错而是静默失效:新规则只对以后从没听过的歌生效,已经听过的那批
-// 永远停在旧选择上。
+// **改动 scoreLyricCandidate 的任何一档权重/判定,这个数都必须比上一个正式版(最近的 vX.Y.Z tag)里的大。**
+// 已经比它大了就不用再 +1:两个正式版之间只在本机调试,本机缓存里按同一版本号选出来的条目不重选,
+// 要重选就手动再 +1(见 09 章决策 207)。缓存是"解析一次永久保留",每条记着自己是按哪一版规则选出来的
+// (enrichEntry.LyricsScoringVersion);版本落后的条目会在这首歌下次被播放时后台重搜一轮、按新规则重选
+// (见 needsLyricsRescore)。发版时没比上一个正式版大的后果不是报错而是静默失效:新规则只对以后从没听过的歌生效,
+// 已经听过的那批永远停在旧选择上。
 //
 // 当前维度、权重与每一版改动的真实案例/全库回放证据,记在
 // docs/features/09-lyrics-resolution.md 的打分维度表与「设计决策与已知坑」决策日志
@@ -896,11 +897,8 @@ func scoreLyricCandidateDetailed(
 	//
 	// 完全同分时的先后交给**稳定排序 + 候选构造顺序**(见 scoredLyricCandidates 里
 	// candidates 的追加次序),不再用分数假装那是质量判断。
-	lines := len(strings.Split(c.lyrics, "\n"))
-	if lines > 200 {
-		lines = 200
-	}
-	add(scoreTermLines, lines)
+	// 行数只数真的在唱的行(contentLineCount),封顶 200。见 09 章决策 49、207。
+	add(scoreTermLines, min(contentLineCount(c.lyrics), 200))
 	// 版本限定词对不上 → 重扣。理由见 versionMismatchPenalty。判定同时看歌名和**专辑名**,
 	// 理由见 versionTagsMismatch。v8 加一道窄豁免:时长逐位吻合+专辑亲和+多出的限定词
 	// 只是演奏方式(acoustic 家族)时,是同一次录音的命名差异,不是版本差异 —— 见
@@ -3465,6 +3463,34 @@ func lyricConsensusBody(lyrics string) string {
 		b.WriteString(normLoose(text))
 	}
 	return b.String()
+}
+
+// contentLineCount 数"真的在唱的行",给打分的行数项用:元信息标签行、空行、只有演唱者标记的行、职员表行都不算。
+// 口径跟 lyricConsensusBody 逐条对齐,区别只是它数行、那边拼正文,两边要一起改。
+func contentLineCount(lyrics string) int {
+	speakers := lyricSpeakerLabels(lyrics)
+	n := 0
+	for _, line := range splitLyricLines(lyrics) {
+		if isLRCMetaTagLine(line) {
+			continue
+		}
+		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
+		if text == "" {
+			continue
+		}
+		if label, rest, ok := lyricSplitLabel(text); ok && speakers[label] {
+			if rest == "" {
+				continue
+			}
+			n++
+			continue
+		}
+		if isCreditLine(text) {
+			continue
+		}
+		n++
+	}
+	return n
 }
 
 // lyricGram3Set 返回字符 3-gram 集合。用 3-gram 而不是行集合:对各源的行切分差异鲁棒

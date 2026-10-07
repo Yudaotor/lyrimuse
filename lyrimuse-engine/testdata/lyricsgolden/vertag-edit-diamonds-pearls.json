@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0.3589872100832145,
     "lyrics_end_secs": 278.28,
     "coverage_pct": 98.32659942970936,
+    "ending_corroborated": false,
     "album_score": 200,
     "live_mismatch": false,
     "cache_agreement": "differs=0.41 (cache known wrong, see note)"
@@ -114,7 +115,7 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 1319,
+        "score": 1312,
         "terms": [
           {
             "kind": "duration",
@@ -126,7 +127,7 @@
           },
           {
             "kind": "lines",
-            "points": 63
+            "points": 56
           },
           {
             "kind": "album",
@@ -151,7 +152,7 @@
       },
       {
         "source": "lrclib",
-        "score": 856,
+        "score": 852,
         "terms": [
           {
             "kind": "duration",
@@ -159,7 +160,7 @@
           },
           {
             "kind": "lines",
-            "points": 50
+            "points": 46
           },
           {
             "kind": "album",
@@ -177,7 +178,7 @@
       },
       {
         "source": "musixmatch",
-        "score": 782,
+        "score": 778,
         "terms": [
           {
             "kind": "duration",
@@ -185,7 +186,7 @@
           },
           {
             "kind": "lines",
-            "points": 49
+            "points": 45
           },
           {
             "kind": "album",
@@ -203,7 +204,7 @@
       },
       {
         "source": "kugou",
-        "score": 462,
+        "score": 452,
         "terms": [
           {
             "kind": "duration",
@@ -215,7 +216,7 @@
           },
           {
             "kind": "lines",
-            "points": 53
+            "points": 43
           },
           {
             "kind": "versionTags",

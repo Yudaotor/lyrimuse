@@ -181,7 +181,7 @@
       },
       {
         "source": "netease",
-        "score": 1153,
+        "score": 1140,
         "terms": [
           {
             "kind": "duration",
@@ -193,7 +193,7 @@
           },
           {
             "kind": "lines",
-            "points": 38
+            "points": 25
           },
           {
             "kind": "album",
@@ -212,7 +212,7 @@
       },
       {
         "source": "applemusic",
-        "score": 759,
+        "score": 758,
         "terms": [
           {
             "kind": "duration",
@@ -220,7 +220,7 @@
           },
           {
             "kind": "lines",
-            "points": 35
+            "points": 34
           },
           {
             "kind": "album",
@@ -238,7 +238,7 @@
       },
       {
         "source": "lrclib",
-        "score": 745,
+        "score": 744,
         "terms": [
           {
             "kind": "duration",
@@ -246,7 +246,7 @@
           },
           {
             "kind": "lines",
-            "points": 28
+            "points": 27
           },
           {
             "kind": "album",
@@ -263,8 +263,8 @@
         ]
       },
       {
-        "source": "kugou",
-        "score": 561,
+        "source": "qq",
+        "score": 552,
         "terms": [
           {
             "kind": "duration",
@@ -276,7 +276,7 @@
           },
           {
             "kind": "lines",
-            "points": 46
+            "points": 37
           },
           {
             "kind": "album",
@@ -298,8 +298,8 @@
         "has_word_timing": true
       },
       {
-        "source": "qq",
-        "score": 560,
+        "source": "kugou",
+        "score": 552,
         "terms": [
           {
             "kind": "duration",
@@ -311,7 +311,7 @@
           },
           {
             "kind": "lines",
-            "points": 45
+            "points": 37
           },
           {
             "kind": "album",
@@ -334,7 +334,7 @@
       },
       {
         "source": "migu",
-        "score": 6,
+        "score": 2,
         "terms": [
           {
             "kind": "duration",
@@ -342,7 +342,7 @@
           },
           {
             "kind": "lines",
-            "points": 41
+            "points": 37
           },
           {
             "kind": "titleMatch",

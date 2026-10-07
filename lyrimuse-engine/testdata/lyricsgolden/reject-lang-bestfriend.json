@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0,
     "lyrics_end_secs": 255.38,
     "coverage_pct": 97.84674329501915,
+    "ending_corroborated": false,
     "album_score": 100,
     "live_mismatch": false,
     "cache_agreement": "similar=1.00"
@@ -114,7 +115,7 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 1166,
+        "score": 1131,
         "terms": [
           {
             "kind": "duration",
@@ -126,7 +127,7 @@
           },
           {
             "kind": "lines",
-            "points": 89
+            "points": 54
           },
           {
             "kind": "album",
@@ -151,7 +152,7 @@
       },
       {
         "source": "kugou",
-        "score": 1137,
+        "score": 1131,
         "terms": [
           {
             "kind": "duration",
@@ -163,7 +164,7 @@
           },
           {
             "kind": "lines",
-            "points": 60
+            "points": 54
           },
           {
             "kind": "album",

@@ -112,7 +112,7 @@
     }
   },
   "expect": {
-    "winner": "kugou",
+    "winner": "qq",
     "verdicts": {
       "kugou": "accepted",
       "lrclib": "accepted",
@@ -122,8 +122,8 @@
     },
     "ranked": [
       {
-        "source": "kugou",
-        "score": 1082,
+        "source": "qq",
+        "score": 1074,
         "terms": [
           {
             "kind": "corroborated",
@@ -135,7 +135,7 @@
           },
           {
             "kind": "lines",
-            "points": 62
+            "points": 54
           },
           {
             "kind": "album",
@@ -153,8 +153,8 @@
         "has_word_timing": true
       },
       {
-        "source": "qq",
-        "score": 1081,
+        "source": "kugou",
+        "score": 1074,
         "terms": [
           {
             "kind": "corroborated",
@@ -166,7 +166,7 @@
           },
           {
             "kind": "lines",
-            "points": 61
+            "points": 54
           },
           {
             "kind": "album",
@@ -185,7 +185,7 @@
       },
       {
         "source": "netease",
-        "score": 1078,
+        "score": 1073,
         "terms": [
           {
             "kind": "corroborated",
@@ -197,7 +197,7 @@
           },
           {
             "kind": "lines",
-            "points": 58
+            "points": 53
           },
           {
             "kind": "album",
@@ -216,7 +216,7 @@
       },
       {
         "source": "musixmatch",
-        "score": 650,
+        "score": 649,
         "terms": [
           {
             "kind": "corroborated",
@@ -224,7 +224,7 @@
           },
           {
             "kind": "lines",
-            "points": 30
+            "points": 29
           },
           {
             "kind": "album",
@@ -242,7 +242,7 @@
       },
       {
         "source": "lrclib",
-        "score": 643,
+        "score": 640,
         "terms": [
           {
             "kind": "corroborated",
@@ -250,7 +250,7 @@
           },
           {
             "kind": "lines",
-            "points": 23
+            "points": 20
           },
           {
             "kind": "album",
@@ -267,6 +267,6 @@
         ]
       }
     ],
-    "winner_fingerprint": "11c6b0f87280f5b6"
+    "winner_fingerprint": "5c2abfbffd93696b"
   }
 }

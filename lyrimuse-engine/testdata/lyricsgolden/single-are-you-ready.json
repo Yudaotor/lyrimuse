@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0.3372010133286393,
     "lyrics_end_secs": 182.18,
     "coverage_pct": 94.07548559270357,
+    "ending_corroborated": false,
     "album_score": 100,
     "live_mismatch": false,
     "cache_agreement": "exact"
@@ -86,7 +87,7 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 917,
+        "score": 894,
         "terms": [
           {
             "kind": "duration",
@@ -98,7 +99,7 @@
           },
           {
             "kind": "lines",
-            "points": 70
+            "points": 47
           },
           {
             "kind": "album",

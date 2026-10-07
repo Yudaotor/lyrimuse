@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0.47473051085768625,
     "lyrics_end_secs": 253.58,
     "coverage_pct": 99.03921262302764,
+    "ending_corroborated": false,
     "album_score": 200,
     "live_mismatch": false,
     "cache_agreement": "exact"
@@ -121,7 +122,7 @@
     "ranked": [
       {
         "source": "lrclib",
-        "score": 868,
+        "score": 867,
         "terms": [
           {
             "kind": "duration",
@@ -129,7 +130,7 @@
           },
           {
             "kind": "lines",
-            "points": 56
+            "points": 55
           },
           {
             "kind": "album",
@@ -147,7 +148,7 @@
       },
       {
         "source": "netease",
-        "score": 604,
+        "score": 603,
         "terms": [
           {
             "kind": "duration",
@@ -155,7 +156,7 @@
           },
           {
             "kind": "lines",
-            "points": 33
+            "points": 32
           },
           {
             "kind": "album",
@@ -175,7 +176,7 @@
       },
       {
         "source": "musixmatch",
-        "score": 590,
+        "score": 589,
         "terms": [
           {
             "kind": "duration",
@@ -183,7 +184,7 @@
           },
           {
             "kind": "lines",
-            "points": 44
+            "points": 43
           },
           {
             "kind": "titleMatch",
@@ -197,7 +198,7 @@
       },
       {
         "source": "qq",
-        "score": 76,
+        "score": 70,
         "terms": [
           {
             "kind": "durationOvershoot",
@@ -209,7 +210,7 @@
           },
           {
             "kind": "lines",
-            "points": 56
+            "points": 50
           },
           {
             "kind": "album",
@@ -242,7 +243,7 @@
           },
           {
             "kind": "lines",
-            "points": 60
+            "points": 54
           },
           {
             "kind": "titleMatch",

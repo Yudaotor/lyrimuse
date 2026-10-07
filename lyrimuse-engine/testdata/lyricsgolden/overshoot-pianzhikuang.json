@@ -9,6 +9,7 @@
     "source_duration_delta_pct": 0.41142857142857076,
     "lyrics_end_secs": 160.11,
     "coverage_pct": 91.49142857142859,
+    "ending_corroborated": false,
     "album_score": 100,
     "live_mismatch": false,
     "cache_agreement": "exact"
@@ -122,7 +123,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1118,
+        "score": 1100,
         "terms": [
           {
             "kind": "duration",
@@ -134,38 +135,7 @@
           },
           {
             "kind": "lines",
-            "points": 42
-          },
-          {
-            "kind": "album",
-            "points": 75
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ],
-        "has_word_timing": true
-      },
-      {
-        "source": "kugou",
-        "score": 1060,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 173
-          },
-          {
-            "kind": "wordTiming",
-            "points": 400
-          },
-          {
-            "kind": "lines",
-            "points": 42
+            "points": 24
           },
           {
             "kind": "album",
@@ -184,7 +154,7 @@
       },
       {
         "source": "qq",
-        "score": 1059,
+        "score": 1050,
         "terms": [
           {
             "kind": "duration",
@@ -196,7 +166,38 @@
           },
           {
             "kind": "lines",
-            "points": 41
+            "points": 32
+          },
+          {
+            "kind": "album",
+            "points": 75
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ],
+        "has_word_timing": true
+      },
+      {
+        "source": "kugou",
+        "score": 1050,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 173
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 32
           },
           {
             "kind": "album",
@@ -223,7 +224,7 @@
           },
           {
             "kind": "lines",
-            "points": 18
+            "points": 17
           },
           {
             "kind": "versionTags",

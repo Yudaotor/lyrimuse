@@ -6,9 +6,9 @@
     "consensus_peers": 4,
     "title_accepted": true,
     "version_tags_ok": true,
-    "source_duration_delta_pct": 0.1309394349630519,
-    "lyrics_end_secs": 277.09,
-    "coverage_pct": 87.84989838719392,
+    "source_duration_delta_pct": -1,
+    "lyrics_end_secs": 280.4,
+    "coverage_pct": 88.89931613471859,
     "ending_corroborated": false,
     "album_score": 200,
     "live_mismatch": false,
@@ -102,7 +102,7 @@
     }
   },
   "expect": {
-    "winner": "kugou",
+    "winner": "amll",
     "verdicts": {
       "amll": "accepted",
       "kugou": "accepted",
@@ -112,12 +112,12 @@
     },
     "ranked": [
       {
-        "source": "kugou",
-        "score": 1173,
+        "source": "amll",
+        "score": 1163,
         "terms": [
           {
             "kind": "duration",
-            "points": 202
+            "points": 211
           },
           {
             "kind": "wordTiming",
@@ -125,7 +125,7 @@
           },
           {
             "kind": "lines",
-            "points": 51
+            "points": 32
           },
           {
             "kind": "album",
@@ -144,7 +144,7 @@
       },
       {
         "source": "netease",
-        "score": 1170,
+        "score": 1159,
         "terms": [
           {
             "kind": "duration",
@@ -156,7 +156,7 @@
           },
           {
             "kind": "lines",
-            "points": 47
+            "points": 36
           },
           {
             "kind": "album",
@@ -175,7 +175,7 @@
       },
       {
         "source": "qq",
-        "score": 1167,
+        "score": 1159,
         "terms": [
           {
             "kind": "duration",
@@ -187,7 +187,7 @@
           },
           {
             "kind": "lines",
-            "points": 45
+            "points": 37
           },
           {
             "kind": "album",
@@ -205,12 +205,12 @@
         "has_word_timing": true
       },
       {
-        "source": "amll",
-        "score": 1164,
+        "source": "kugou",
+        "score": 1159,
         "terms": [
           {
             "kind": "duration",
-            "points": 211
+            "points": 202
           },
           {
             "kind": "wordTiming",
@@ -218,7 +218,7 @@
           },
           {
             "kind": "lines",
-            "points": 33
+            "points": 37
           },
           {
             "kind": "album",
@@ -237,7 +237,7 @@
       },
       {
         "source": "lrclib",
-        "score": 763,
+        "score": 756,
         "terms": [
           {
             "kind": "duration",
@@ -245,7 +245,7 @@
           },
           {
             "kind": "lines",
-            "points": 42
+            "points": 35
           },
           {
             "kind": "album",
@@ -262,6 +262,6 @@
         ]
       }
     ],
-    "winner_fingerprint": "ba015176fe8467a0"
+    "winner_fingerprint": "0cfc93e59ea186b3"
   }
 }

@@ -121,7 +121,7 @@
     "ranked": [
       {
         "source": "netease",
-        "score": 1147,
+        "score": 1129,
         "terms": [
           {
             "kind": "duration",
@@ -133,7 +133,7 @@
           },
           {
             "kind": "lines",
-            "points": 48
+            "points": 30
           },
           {
             "kind": "album",
@@ -152,7 +152,7 @@
       },
       {
         "source": "kugou",
-        "score": 1110,
+        "score": 1100,
         "terms": [
           {
             "kind": "duration",
@@ -164,7 +164,7 @@
           },
           {
             "kind": "lines",
-            "points": 33
+            "points": 23
           },
           {
             "kind": "album",
@@ -183,7 +183,7 @@
       },
       {
         "source": "lrclib",
-        "score": 597,
+        "score": 591,
         "terms": [
           {
             "kind": "duration",
@@ -191,7 +191,7 @@
           },
           {
             "kind": "lines",
-            "points": 27
+            "points": 21
           },
           {
             "kind": "album",
@@ -225,7 +225,7 @@
           },
           {
             "kind": "lines",
-            "points": 32
+            "points": 22
           },
           {
             "kind": "album",
@@ -256,7 +256,7 @@
           },
           {
             "kind": "lines",
-            "points": 15
+            "points": 14
           },
           {
             "kind": "versionTags",
