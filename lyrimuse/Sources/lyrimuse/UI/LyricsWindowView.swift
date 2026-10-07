@@ -718,6 +718,8 @@ private final class LyricsWindowController: ObservableObject {
     /// 窗口的 Space / 全屏属性跟着形态走:完整尺寸能进原生全屏;迷你尺寸在每个桌面都出现、能浮在别的 App 的全屏上,
     /// 不能进全屏(迷你藏了全屏键,全屏时也不能切迷你)。缺才写(写入后自身即满足条件,不会自激);见 attach() 里的守护
     /// 注释与 07 章决策 131。
+    /// 「浮在别的 App 的全屏上」只在 App 不显示在 Dock 里(`.accessory`)时成立:`.regular` 下普通 NSWindow 带着
+    /// `.fullScreenAuxiliary` 也进不了别人的全屏 Space,只有 NSPanel 进得去。
     private static func enforceSpaceBehavior(_ window: NSWindow, mini: Bool) {
         let wanted: NSWindow.CollectionBehavior = mini ? [.canJoinAllSpaces, .fullScreenAuxiliary] : [.fullScreenPrimary]
         let unwanted: NSWindow.CollectionBehavior = mini
