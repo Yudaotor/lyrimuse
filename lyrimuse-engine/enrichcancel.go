@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -36,6 +37,7 @@ func setEnrichCancelRequestPath(path string) {
 	_ = os.Remove(path)
 }
 
+// 盯不了请求文件所在的目录时多久看一次(平时目录一变就看,见 requestWakeups)。
 // 1s——跟 companionLaunchInterval 同一个量级,给"用户点了停止按钮"这类交互式操作留够
 // 响应感,又不会因为检查本身(一次 os.ReadFile,大多数轮次文件都不存在)有任何可感知的
 // 资源代价。
@@ -47,15 +49,16 @@ func startEnrichCancelWatcher(ctx context.Context) {
 	if enrichCancelRequestPath == "" {
 		return
 	}
-	ticker := time.NewTicker(enrichCancelCheckInterval)
+	writes, ticker := requestWakeups(ctx, filepath.Dir(enrichCancelRequestPath), enrichCancelCheckInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-writes:
 		case <-ticker.C:
-			checkEnrichCancelRequest()
 		}
+		checkEnrichCancelRequest()
 	}
 }
 

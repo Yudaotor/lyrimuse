@@ -351,6 +351,13 @@ func runLyricsWindowTests() {
         let text = source("lyrimuse/UI/LyricsLayerListText.swift")
         let window = source("lyrimuse/UI/LyricsWindowView.swift")
         expectEqual(list.isEmpty || row.isEmpty || text.isEmpty || window.isEmpty, false, "图层列表(契约): 读到源码")
+        expectEqual(sourceBytes(list, contain: """
+                override func viewDidChangeBackingProperties() {
+                    super.viewDidChangeBackingProperties()
+                    guard let scale = window?.backingScaleFactor,
+                          scale != (building?.key.style.scale ?? builtKey?.style.scale) else { return }
+                    discardBuilds()
+            """), true, "图层列表(契约): 倍率回调先比倍率,真变了才整张重建(04 章决策 53)")
         expectEqual(sourceBytes(list, contain: "let visible = (spec?.showsScrollIndicator ?? false) && content > viewH + 4"), true,
                     "图层列表(契约): 指示条只在调用方要的时候画")
         expectEqual(sourceBytes(window, contain: "showsScrollIndicator: !centered"), true,

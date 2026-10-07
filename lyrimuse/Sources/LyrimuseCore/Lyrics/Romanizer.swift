@@ -101,7 +101,18 @@ public enum Romanizer {
     /// 这一行里有没有需要标读音的文字:音译成拉丁字母之后跟原文不一样。英文(带不带重音)、数字、
     /// 标点、全角标点原样穿透,判假;谚文、假名、汉字、西里尔字母、泰文判真。跟 `romanize` 末尾
     /// 那道「输出等于输入就不给」同一个判据。音译失败时判真,不替调用方拦掉什么。
+    /// 全是 ASCII 直接判假、见到假名 / 谚文音节 / 常用汉字直接判真,不建音译器(建一个比判一行贵得多);
+    /// 其余的照旧整行音译比对。
     public static func needsRomanization(_ text: String) -> Bool {
+        var onlyASCII = true
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x09, 0x0A, 0x0D, 0x20...0x7E: continue
+            case 0x3041...0x3096, 0x30A1...0x30FA, 0xAC00...0xD7A3, 0x4E00...0x9FFF: return true
+            default: onlyASCII = false
+            }
+        }
+        if onlyASCII { return false }
         guard let transformed = text.applyingTransform(.toLatin, reverse: false) else { return true }
         return transformed != text
     }

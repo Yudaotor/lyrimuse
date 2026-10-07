@@ -38,9 +38,13 @@ import (
 // 为了让这个延迟再短一点。
 const companionLaunchInterval = 3 * time.Second
 
-// companionCheckInterval 是多久判一次要不要盯(问一次 App 状态,不起进程)。比读进程表的间隔短:App 一变成
-// 不可用,下一次判断就取基准,之后才开的播放器都认得出来。
+// companionCheckInterval 是要盯的时候多久判一次(问一次 App 状态,不起进程),比读进程表的间隔短;盯不了播放状态所在的
+// 目录时一直按它判。App 一变成不可用,下一次判断就取基准,之后才开的播放器都认得出来。
 const companionCheckInterval = time.Second
+
+// companionIdleInterval:不必盯、又盯得了播放状态所在目录时的兜底间隔。App 写状态(含退出时写的那一份)就叫醒判一次,
+// 只有 App 卡死、状态停更这一种要靠它察觉。
+const companionIdleInterval = 5 * time.Second
 
 // companionWatch 是盯播放器启动的状态,只在 startCompanionLaunchWatcher 那一个 goroutine 里用。
 type companionWatch struct {
@@ -58,15 +62,31 @@ type companionWatch struct {
 // startCompanionLaunchWatcher 独立于 poller.go 的主轮询跑,由 run() 用单独的
 // goroutine 启动,ctx 取消时退出。appAvailable 回答 App 此刻可不可用(跟 poller 读的是同一份播放状态)。
 func startCompanionLaunchWatcher(ctx context.Context, appAvailable func() bool) {
-	ticker := time.NewTicker(companionCheckInterval)
+	// 盯播放状态文件所在的配置目录(同 poller.go 那份监听)。
+	writes := make(chan struct{}, 1)
+	watched := watchDirWrites(ctx, configDir(), writes)
+	interval := companionCheckInterval
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	var w companionWatch
 	for {
+		var now time.Time
 		select {
 		case <-ctx.Done():
 			return
-		case now := <-ticker.C:
-			w.check(now, appAvailable())
+		case now = <-ticker.C:
+		case <-writes:
+			now = time.Now()
+		}
+		w.check(now, appAvailable())
+		// sampledAt 非零 = 这一轮要盯(见 step)。
+		next := companionCheckInterval
+		if watched && w.sampledAt.IsZero() {
+			next = companionIdleInterval
+		}
+		if next != interval {
+			interval = next
+			ticker.Reset(interval)
 		}
 	}
 }

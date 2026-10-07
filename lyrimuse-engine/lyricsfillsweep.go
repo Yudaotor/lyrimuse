@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -232,7 +233,7 @@ func startLyricsFillSweeper(ctx context.Context) {
 	// 那一轮是用户点出来的,不该陪着自动补空一起等 10 分钟。见 lyricsfullscan.go「跨重启续跑」。
 	next := time.NewTimer(lyricsFillSweepFirstDelay(lyricsFullScanActive()))
 	defer next.Stop()
-	poll := time.NewTicker(lyricsFillRequestCheckInterval)
+	writes, poll := requestWakeups(ctx, filepath.Dir(lyricsFillRequestPath), lyricsFillRequestCheckInterval)
 	defer poll.Stop()
 	for {
 		select {
@@ -259,19 +260,26 @@ func startLyricsFillSweeper(ctx context.Context) {
 				}
 			}
 			next.Reset(d)
+		case <-writes:
+			handleLyricsFillRequest(ctx)
 		case <-poll.C:
-			publishLyricsFullScanPending()
-			req, ok := readLyricsFillRequest()
-			if !ok {
-				continue
-			}
-			if req.cancel {
-				cancelLyricsFillSweep()
-				continue
-			}
-			go runLyricsFillSweep(ctx, req)
+			handleLyricsFillRequest(ctx)
 		}
 	}
+}
+
+// handleLyricsFillRequest 看一次请求文件:有请求就开一轮,或者停掉正在跑的那一轮。
+func handleLyricsFillRequest(ctx context.Context) {
+	publishLyricsFullScanPending()
+	req, ok := readLyricsFillRequest()
+	if !ok {
+		return
+	}
+	if req.cancel {
+		cancelLyricsFillSweep()
+		return
+	}
+	go runLyricsFillSweep(ctx, req)
 }
 
 // lyricsFillRequest 是请求文件解出来的内容。文件格式(纯文本,App 侧 LyricsManagerView 写):

@@ -18,6 +18,13 @@ func runRomanizationTests() {
     for other in ["아파트", "君の名は", "你好 hello", "Привет", "สวัสดี", "채영이가 random game"] {
         expectEqual(Romanizer.needsRomanization(other), true, "Romanizer.needsRomanization: 非拉丁文字要读音: \(other)")
     }
+    // 不建音译器的那几支(全 ASCII 判假、见到假名 / 谚文音节 / 常用汉字判真)跟整行音译比对是同一个结果。
+    for line in ["Hello my friend", "Don't stop (feat. 123)", "", "  ", "ROSÉ café", "Ｈｅｌｌｏ", "Привет мир",
+                 "君の名前を呼んだ", "明日はきっと晴れる", "사랑해요", "你好世界", "Oh！ yeah～", "カタカナ only",
+                 "Love 愛してる", "Tom & Jerry's", "ゎゐゑ", "ー", "\t♪"] {
+        let viaTransform = line.applyingTransform(.toLatin, reverse: false).map { $0 != line } ?? true
+        expectEqual(Romanizer.needsRomanization(line), viaTransform, "Romanizer.needsRomanization: 跟整行音译比对一致: \(line)")
+    }
 
     // 实测排查坐实的真实 bug 的回归测试:汉字是中文/日文共用的文字系统,
     // Romanizer.romanize 单靠"输出是否等于输入"分不清这两种语言,必须靠假名(日文独有、

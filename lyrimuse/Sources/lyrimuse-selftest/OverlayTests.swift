@@ -796,6 +796,26 @@ func runOverlayTests() {
         expectEqual(L.blockHeight(main: 43, roma: 26, romaGap: -8), 61, "行间距: 负的读音间距让行高变矮")
     }
 
+    // ---- 图层行的倍率回调(契约):SwiftUI 做几何动画时每帧都会调,只在倍率真变了时重画(04 章决策 53) ----
+    do {
+        let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        let row = (try? String(contentsOf: ui.appendingPathComponent("OverlayScrollingLyricRow.swift"), encoding: .utf8)) ?? ""
+        let marker = "override func viewDidChangeBackingProperties() {"
+        let callback = row.range(of: marker).flatMap { start -> String? in
+            let rest = row[start.lowerBound...]
+            return rest.range(of: "\n    }\n").map { String(rest[..<$0.lowerBound]) }
+        } ?? ""
+        expectEqual(callback.isEmpty, false, "倍率回调(契约): 找得到图层行的 viewDidChangeBackingProperties")
+        let guardRange = callback.range(of: "guard let spec, bitmapScale != imageScale else { return }")
+        let rebuildRange = callback.range(of: "rebuildImages(spec: spec)")
+        expectEqual(guardRange != nil && rebuildRange != nil
+                        && guardRange!.lowerBound < rebuildRange!.lowerBound, true,
+                    "倍率回调(契约): 图层行先比倍率、相等就返回,才重画长图")
+        expectEqual(sourceBytes(row, contain: "    private func adopt(_ g: OverlayRowGeometry, images: OverlayRowImages) {\n        imageScale = g.scale\n"),
+                    true, "倍率回调(契约): 换上长图时记下它按哪个倍率画的")
+    }
+
     // ---- 行间距接线(契约):三处行高同一个式子;卡片的 VStack 不另加间距,各行自己加 ----
     do {
         let ui = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

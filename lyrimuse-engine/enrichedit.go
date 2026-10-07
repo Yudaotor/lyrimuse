@@ -20,8 +20,9 @@ import (
 // 两个写入方会互相覆盖:引擎每次存盘都是把整份内存 map 写回去,App 在它背后改盘上的文件,
 // 下一次存盘就被盖掉。所以别在 App 侧再加直接写缓存或歌词文件的路径,新的改动种类照这里加一个 op。
 //
-// 通道:<配置目录>/lyrimuse-enrich-requests/ 下,App 原子写 <id>.json(临时名 + 改名),引擎
-// 每 enrichEditPollInterval 扫一次,按文件名顺序处理,处理完删掉请求、写 <id>.result.json(App 读完删)。
+// 通道:<配置目录>/lyrimuse-enrich-requests/ 下,App 原子写 <id>.json(临时名 + 改名),引擎盯着这个目录、一有变化
+// 就扫一次(盯不了时每 enrichEditPollInterval 扫一次,见 requestWakeups),按文件名顺序处理,处理完删掉请求、
+// 写 <id>.result.json(App 读完删)。
 // 后台服务没在跑时,App 跑 `lyrimuse-engine apply-enrich-edit <请求文件>`,先拿单实例锁再走同一段
 // applyEnrichEdit,结果打到 stdout。
 
@@ -491,20 +492,21 @@ func setEnrichEditDir(dir string) {
 	}
 }
 
-// startEnrichEditWatcher 独立节奏扫请求目录,由 run() 单开 goroutine,ctx 取消时退出。
+// startEnrichEditWatcher 请求目录一变就扫一次,由 run() 单开 goroutine,ctx 取消时退出。
 func startEnrichEditWatcher(ctx context.Context) {
 	if enrichEditDir == "" {
 		return
 	}
-	ticker := time.NewTicker(enrichEditPollInterval)
+	writes, ticker := requestWakeups(ctx, enrichEditDir, enrichEditPollInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-writes:
 		case <-ticker.C:
-			processEnrichEditRequests()
 		}
+		processEnrichEditRequests()
 	}
 }
 

@@ -292,10 +292,7 @@ public enum MediaControlClient {
     // 没有权限时 osascript 会返回非零退出码(而不是抛出 Swift 异常),同样落进
     // `guard terminationStatus == 0` 这条分支,不需要单独处理。
     private static func fetchAppleMusicSnapshot() -> MediaControlSnapshot? {
-        guard let r = ProcessRunner.run(
-            "/usr/bin/osascript", ["-l", "JavaScript", "-e", script],
-            timeout: MusicPlaybackController.appleScriptTimeout),
-            r.succeeded
+        guard let r = runPlayerScript("music", source: script), r.succeeded
         else {
             setSnapshotFailure(.appleScriptUnavailable)
             return nil
@@ -397,10 +394,7 @@ public enum MediaControlClient {
     """
 
     private static func fetchSpotifySnapshot() -> MediaControlSnapshot? {
-        guard let r = ProcessRunner.run(
-            "/usr/bin/osascript", ["-l", "JavaScript", "-e", spotifyScript],
-            timeout: MusicPlaybackController.appleScriptTimeout),
-            r.succeeded
+        guard let r = runPlayerScript("spotify", source: spotifyScript), r.succeeded
         else {
             setSnapshotFailure(.appleScriptUnavailable)
             return nil
@@ -504,10 +498,7 @@ public enum MediaControlClient {
         kasetLock.lock()
         kasetAskedThisRound = true
         kasetLock.unlock()
-        guard let r = ProcessRunner.run(
-            "/usr/bin/osascript", ["-l", "JavaScript", "-e", kasetScript],
-            timeout: MusicPlaybackController.appleScriptTimeout),
-            r.succeeded,
+        guard let r = runPlayerScript("kaset", source: kasetScript), r.succeeded,
             let (raw, readAt) = KasetPlayerInfo.parseScriptOutput(r.stdout, now: Date())
         else { return nil }
         // 不是一首歌:开播时的占位、播客单集(还没问到类型的这一条先按住,见 KasetVideoKind)。这一拍不报它。
@@ -931,8 +922,7 @@ public enum MediaControlClient {
     /// 同一份状态,而这里要的只是一个判据字段。
     private static func probeRadioStationHash() -> String? {
         guard let binaryPath = binaryPath(),
-              let r = ProcessRunner.run(
-                  binaryPath, ["get", "--now", "--no-artwork"], timeout: snapshotTimeout),
+              let r = runGet(["--now", "--no-artwork"], binaryPath: binaryPath, timeout: snapshotTimeout),
               r.succeeded,
               let raw = try? JSONDecoder().decode(RawPayload.self, from: r.stdout)
         else { return nil }
@@ -1026,6 +1016,120 @@ public enum MediaControlClient {
             return nil
         }
         return binaryPath
+    }
+
+    // MARK: - 常驻取数进程(见 02 章决策 111)
+
+    /// 两个常驻脚本进程回答的结束行标记(见 `PersistentScriptServer`)。
+    static let scriptServerEndMarker = "__LYRIMUSE_SCRIPT_END__"
+    /// 常驻取数进程每答这么多次换一个:适配器每答一次,进程涨约 8KB。
+    static let getServerRecycleAfterRequests = 300
+    /// 常驻 osascript 每答这么多次换一个:每答一次,进程涨 24~72KB。
+    static let appleScriptServerRecycleAfterRequests = 100
+
+    /// 常驻取数进程跑的 perl:加载适配框架一次,之后每读到一行请求(适配器的选项名,空格分隔)就按它设好选项环境变量、
+    /// 调一次 `adapter_get_env`(回答由适配器直接写 stdout,跟 `media-control get` 最后调的是同一个函数),再写结束行。
+    /// stdin 读到 EOF 就退出。
+    public static let getServerScript = #"""
+    use strict; use warnings; use DynaLoader;
+    $| = 1;
+    my $framework = shift @ARGV;
+    my ($name) = $framework =~ m{([^/]+)\.framework/?$} or exit 2;
+    my $handle = DynaLoader::dl_load_file("$framework/$name", 0) or exit 3;
+    my $symbol = DynaLoader::dl_find_symbol($handle, 'adapter_get_env') or exit 4;
+    DynaLoader::dl_install_xsub('main::adapter_get', $symbol);
+    while (my $line = <STDIN>) {
+        my %want = map { $_ => 1 } split ' ', $line;
+        for my $option (qw(micros no_artwork now)) {
+            if ($want{$option}) { $ENV{"MEDIAREMOTEADAPTER_OPTION_$option"} = '' }
+            else { delete $ENV{"MEDIAREMOTEADAPTER_OPTION_$option"} }
+        }
+        adapter_get();
+        print "\n\#(scriptServerEndMarker) 0\n";
+    }
+    """#
+
+    static let getServer = PersistentScriptServer(
+        label: "media-control get server", endMarker: scriptServerEndMarker,
+        recycleAfterRequests: getServerRecycleAfterRequests, launch: { getServerLaunch() })
+
+    /// 常驻取数进程的起法:`/usr/bin/perl -e getServerScript <适配框架>`。没走 build.sh 打包、找不到适配框架时为 nil。
+    private static func getServerLaunch() -> PersistentScriptServer.Launch? {
+        guard let binary = binaryPath() else { return nil }
+        let framework = URL(fileURLWithPath: binary).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Frameworks/MediaRemoteAdapter.framework").path
+        guard FileManager.default.fileExists(atPath: framework + "/MediaRemoteAdapter") else { return nil }
+        return .init(executable: "/usr/bin/perl", arguments: ["-e", getServerScript, framework])
+    }
+
+    /// `media-control get` 的参数换成常驻取数进程的请求行(适配器的选项名,`--no-artwork` → `no_artwork`)。只认这三个,
+    /// 带别的参数时为 nil(走子进程)。纯函数,selftest 覆盖。
+    public static func getServerRequest(for arguments: [String]) -> String? {
+        var names: [String] = []
+        for argument in arguments {
+            switch argument {
+            case "--now": names.append("now")
+            case "--no-artwork": names.append("no_artwork")
+            case "--micros": names.append("micros")
+            default: return nil
+            }
+        }
+        return names.joined(separator: " ")
+    }
+
+    /// 跑一次 `media-control get <arguments>`:先问常驻取数进程,这次用不上再起子进程。
+    private static func runGet(_ arguments: [String], binaryPath: String, timeout: TimeInterval) -> ProcessRunner.Result? {
+        if let request = getServerRequest(for: arguments), let result = getServer.request(request, timeout: timeout) {
+            return result
+        }
+        return ProcessRunner.run(binaryPath, ["get"] + arguments, timeout: timeout)
+    }
+
+    /// 常驻 osascript 跑的 JXA:每读到一行请求名(`music` / `spotify` / `kaset`)就跑对应那份快照脚本,把它返回的字符串原样
+    /// 写到 stdout,再写结束行;脚本抛错时状态码为 1。stdin 读到 EOF 就退出。
+    /// JXA 把 NSData 的 `length` 桥成字符串,判 EOF 必须先转数字:写成 `data.length === 0` 永远不成立,EOF 之后空转占满一个核。
+    public static let appleScriptServerScript = """
+    ObjC.import('Foundation');
+    const handlers = {
+        music: () => \(script),
+        spotify: () => \(spotifyScript),
+        kaset: () => \(kasetScript)
+    };
+    const input = $.NSFileHandle.fileHandleWithStandardInput;
+    const output = $.NSFileHandle.fileHandleWithStandardOutput;
+    let pending = '';
+    for (;;) {
+        const data = input.availableData;
+        if (Number(data.length) === 0) break;
+        pending += $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js;
+        let newline;
+        while ((newline = pending.indexOf('\\n')) >= 0) {
+            const name = pending.slice(0, newline).trim();
+            pending = pending.slice(newline + 1);
+            let text = '';
+            let status = 0;
+            try {
+                const result = handlers[name] ? handlers[name]() : '';
+                text = result === undefined || result === null ? '' : String(result);
+            } catch (e) {
+                status = 1;
+            }
+            output.writeData($(text + '\\n\(scriptServerEndMarker) ' + status + '\\n').dataUsingEncoding($.NSUTF8StringEncoding));
+        }
+    }
+    """
+
+    static let appleScriptServer = PersistentScriptServer(
+        label: "osascript snapshot server", endMarker: scriptServerEndMarker,
+        recycleAfterRequests: appleScriptServerRecycleAfterRequests,
+        launch: { .init(executable: "/usr/bin/osascript", arguments: ["-l", "JavaScript", "-e", appleScriptServerScript]) })
+
+    /// 跑一份播放器快照脚本:`name` 是常驻 osascript 里的请求名,`source` 是同一份脚本。先问常驻 osascript,这次用不上
+    /// 再起一个 osascript。
+    private static func runPlayerScript(_ name: String, source: String) -> ProcessRunner.Result? {
+        let timeout = MusicPlaybackController.appleScriptTimeout
+        if let result = appleScriptServer.request(name, timeout: timeout) { return result }
+        return ProcessRunner.run("/usr/bin/osascript", ["-l", "JavaScript", "-e", source], timeout: timeout)
     }
 
     // QQ 音乐/网易云音乐/Spotify 共用这同一份实现,只是要核对的 expectedBundleID
@@ -2686,8 +2790,7 @@ public enum MediaControlClient {
         appleMusicFocusLock.unlock()
         let timeout = pollSnapshotTimeout(fallbackPlayer: fallbackPlayer)
         let started = Date()
-        let result = ProcessRunner.run(
-            binaryPath, ["get", "--now", "--no-artwork", "--micros"], timeout: timeout)
+        let result = runGet(["--now", "--no-artwork", "--micros"], binaryPath: binaryPath, timeout: timeout)
         let took = Date().timeIntervalSince(started)
         let timedOut = result?.timedOut == true
         if took >= slowSnapshotLogSecs || timedOut {

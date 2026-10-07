@@ -17,6 +17,7 @@ func runPlaybackSourceHardeningTests() {
     wiringContracts()
     spotifyConnectMirrorTests()
     nowPlayingNoticeTests()
+    scriptServerTests()
 }
 
 // ---- 轮询单飞 ----
@@ -634,4 +635,112 @@ private func nowPlayingNoticeTests() {
     let coordinator = code("lyrimuse/PlaybackCoordinator.swift")
     expectEqual(coordinator.components(separatedBy: "CoverArtReplacementGate.reason(").count - 1, 1,
                 "换歌通知: 找不找高清替代只在一处判,界面和通知共用")
+}
+
+// ---- 常驻脚本进程(02 章决策 111) ----
+
+@MainActor
+private func scriptServerTests() {
+    typealias P = PersistentScriptServer
+    let marker = "__END__"
+    func text(_ d: Data?) -> String? { d.map { String(decoding: $0, as: UTF8.self) } }
+
+    let whole = P.parseResponse(Data("{\"a\":1}\n\n__END__ 0\nnext".utf8), endMarker: marker)
+    expectEqual(text(whole?.body), "{\"a\":1}\n", "常驻脚本: 结束行之前的是回答")
+    expectEqual(whole?.status, 0, "常驻脚本: 结束行里是状态码")
+    expectEqual(text(whole?.rest), "next", "常驻脚本: 结束行之后的字节留给下一次")
+    expectEqual(P.parseResponse(Data("{\"a\":1}\n__END__ 0".utf8), endMarker: marker) == nil, true,
+                "常驻脚本: 结束行没读完整时还不算答完")
+    expectEqual(P.parseResponse(Data("x\n__END__ 1\n".utf8), endMarker: marker)?.status, 1, "常驻脚本: 非零状态码照传")
+    expectEqual(P.parseResponse(Data("x\n__END__ ?\n".utf8), endMarker: marker)?.status, -1, "常驻脚本: 状态码不是整数按失败")
+    expectEqual(text(P.parseResponse(Data("\n__END__ 0\n".utf8), endMarker: marker)?.body), "", "常驻脚本: 空回答")
+
+    expectEqual(MediaControlClient.getServerRequest(for: ["--now", "--no-artwork", "--micros"]), "now no_artwork micros",
+                "常驻取数: get 的参数换成适配器的选项名")
+    expectEqual(MediaControlClient.getServerRequest(for: []), "", "常驻取数: 不带参数就是空请求")
+    expectEqual(MediaControlClient.getServerRequest(for: ["--now", "--human-readable"]), nil, "常驻取数: 不认的参数走子进程")
+
+    // 假脚本:回答「pid 第几次 请求」;hang 卡住、die 直接退出、fail 回状态码 1。
+    let fake = #"""
+    $| = 1;
+    my $n = 0;
+    while (my $line = <STDIN>) {
+        chomp $line;
+        $n++;
+        sleep 30 if $line eq 'hang';
+        exit 1 if $line eq 'die';
+        my $status = $line eq 'fail' ? 1 : 0;
+        print "$$ $n $line\n__END__ $status\n";
+    }
+    """#
+    func server(recycle: Int) -> P {
+        P(label: "selftest", endMarker: marker, recycleAfterRequests: recycle, disableAfterFailures: 2,
+          launch: { .init(executable: "/usr/bin/perl", arguments: ["-e", fake]) })
+    }
+    func fields(_ r: ProcessRunner.Result?) -> [String] { (text(r?.stdout) ?? "").split(separator: " ").map(String.init) }
+
+    let s = server(recycle: 2)
+    let a = fields(s.request("a", timeout: 5))
+    let b = fields(s.request("b", timeout: 5))
+    expectEqual(a.count == 3 && b.count == 3 && a[0] == b[0] && a[1] == "1" && b[1] == "2", true,
+                "常驻脚本: 两次请求同一个进程答")
+    let c = fields(s.request("c", timeout: 5))
+    expectEqual(c.count == 3 && a.count == 3 && c[0] != a[0] && c[1] == "1" && s.launchCount == 2, true,
+                "常驻脚本: 答满次数换新进程")
+    let failed = s.request("fail", timeout: 5)
+    expectEqual(failed?.status == 1 && failed?.succeeded == false, true, "常驻脚本: 脚本报的状态码照子进程退出码交回")
+    let started = Date()
+    let hung = s.request("hang", timeout: 0.15)
+    let launchesAfterHang = s.launchCount
+    expectEqual(hung?.timedOut == true && Date().timeIntervalSince(started) < 2, true, "常驻脚本: 超时按 timedOut 交回")
+    let afterHang = fields(s.request("d", timeout: 5))
+    expectEqual(afterHang.count == 3 && afterHang[1] == "1" && s.launchCount == launchesAfterHang + 1, true,
+                "常驻脚本: 超时杀掉、下次重开")
+    expectEqual(s.request("x\ny", timeout: 5) == nil, true, "常驻脚本: 请求里带换行不发")
+    s.stop()
+
+    let dying = server(recycle: 100)
+    expectEqual(dying.request("die", timeout: 5) == nil && dying.launchCount == 1, true,
+                "常驻脚本: 半路退出这次交 nil(调用方退回起子进程)")
+    expectEqual(dying.request("die", timeout: 5) == nil && dying.launchCount == 2, true, "常驻脚本: 下一次重开")
+    expectEqual(dying.request("ok", timeout: 5) == nil && dying.launchCount == 2, true,
+                "常驻脚本: 连着失败到上限就停用,停用期间不起进程")
+
+    // 真的 JXA:不认的请求名回空串;关掉 stdin 之后必须自己退出(判 EOF 写错会空转占满一个核)。
+    // 退出后可能还没被收尸,ps 读到 Z 也算退出了。
+    func exited(_ pid: Int32) -> Bool {
+        guard let r = ProcessRunner.run("/bin/ps", ["-o", "stat=", "-p", String(pid)], timeout: 5) else { return false }
+        let stat = r.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return stat.isEmpty || stat.hasPrefix("Z")
+    }
+    let jxa = P(label: "selftest jxa", endMarker: "__LYRIMUSE_SCRIPT_END__", recycleAfterRequests: 100,
+                launch: { .init(executable: "/usr/bin/osascript",
+                                arguments: ["-l", "JavaScript", "-e", MediaControlClient.appleScriptServerScript]) })
+    let unknown = jxa.request("selftest-no-such-player", timeout: 10)
+    expectEqual(unknown?.status == 0 && unknown?.stdout.isEmpty == true, true, "常驻 osascript: 不认的请求名回空串")
+    if let pid = jxa.currentPID {
+        jxa.stop()
+        let deadline = Date().addingTimeInterval(1.5)
+        while !exited(pid), Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+        expectEqual(exited(pid), true, "常驻 osascript: stdin 关掉后自己退出")
+    } else {
+        expectEqual(true, false, "常驻 osascript: 起得来")
+    }
+
+    // perl 那份脚本至少要编得过(真加载适配框架要打包后的 App,不在这里跑)。
+    let syntax = ProcessRunner.run("/usr/bin/perl", ["-c", "-e", MediaControlClient.getServerScript],
+                                   timeout: 10, captureStderr: true)
+    expectEqual(syntax?.succeeded == true && syntax?.stderrText.contains("syntax OK") == true, true,
+                "常驻取数: perl 脚本编得过")
+
+    // 接线:轮询快照、电台探测走 runGet;三家播放器的快照脚本走 runPlayerScript。
+    let client = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift"), encoding: .utf8)) ?? ""
+    for needle in ["runGet([\"--now\", \"--no-artwork\", \"--micros\"], binaryPath: binaryPath, timeout: timeout)",
+                   "runGet([\"--now\", \"--no-artwork\"], binaryPath: binaryPath, timeout: snapshotTimeout)",
+                   "runPlayerScript(\"music\", source: script)",
+                   "runPlayerScript(\"spotify\", source: spotifyScript)",
+                   "runPlayerScript(\"kaset\", source: kasetScript)"] {
+        expectEqual(sourceBytes(client, contain: needle), true, "常驻脚本接线: \(needle)")
+    }
 }

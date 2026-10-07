@@ -118,6 +118,8 @@ final class OverlayLyricScrollView: NSView {
     /// 长图位图的点宽 = `boxWidth` 向上对齐到整像素。放不放得下、滚多远照旧按 `boxWidth` 算;
     /// 位图和贴它的图层都用这个宽,像素数正好等于点宽 × 比例,贴图时不被拉伸重采样。
     private var imageWidth: CGFloat = 0
+    /// 长图位图按哪个倍率画的,0 = 还没画过。
+    private var imageScale: CGFloat = 0
     /// 长图四周的预留 = 描边预留(开着 = `LyricsTextStrokeMetrics.inset`,同 `OptionalTextStroke` 的
     /// padding)+ 阴影出血 `bleed`。
     private var inset: CGFloat = 0
@@ -191,10 +193,11 @@ final class OverlayLyricScrollView: NSView {
         place(nowMs: layoutMs, reinstall: true)
     }
 
-    /// 位图比例跟着**这个视图所在窗口**走,不猜屏(同菜单栏 `menuBarBitmapScale`)。
+    /// 位图比例跟着**这个视图所在窗口**走,不猜屏(同菜单栏 `menuBarBitmapScale`)。SwiftUI 给这个视图做几何动画时
+    /// 每帧都会回调这里(倍率没变也调),倍率跟长图画的时候一样就什么都不做(见 04 章决策 53)。
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
-        guard let spec else { return }
+        guard let spec, bitmapScale != imageScale else { return }
         rebuildImages(spec: spec)
         place(nowMs: layoutMs, reinstall: true)
     }
@@ -310,6 +313,7 @@ final class OverlayLyricScrollView: NSView {
 
     /// 换上排好、画好的一行。不动动画,摆位交给 `place`。
     private func adopt(_ g: OverlayRowGeometry, images: OverlayRowImages) {
+        imageScale = g.scale
         bleed = g.bleed
         inset = g.inset
         mainHeight = g.mainHeight

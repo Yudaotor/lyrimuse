@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -15,7 +16,7 @@ import (
 //
 // 通道,形制同补空扫描(lyricsfillsweep.go 头注):
 //   - 请求 lyricsRematchRequestPath:App 写一份 JSON,{"id","key"} 开一轮,{"id","cancel":true} 停掉那一轮。
-//     这里每 lyricsRematchRequestCheckInterval 看一次,读到就消费掉。
+//     这里盯着请求文件所在的目录,一有变化就看一次(盯不了时每 lyricsRematchRequestCheckInterval 看一次),读到就消费掉。
 //   - 状态 lyricsRematchStatusPath:带着请求的 id。跑着时报几个歌词源回了话,跑完写结论(lyricsRematchResult)。
 //
 // 一次只跑一首。补空扫描 / 全量扫库在跑时不接(两边会抢同一批源的限流额度),这首正在别处搜索时也不接,结论都是 busy;
@@ -209,21 +210,22 @@ func startLyricsRematchWatcher(ctx context.Context) {
 	if lyricsRematchRequestPath == "" {
 		return
 	}
-	poll := time.NewTicker(lyricsRematchRequestCheckInterval)
+	writes, poll := requestWakeups(ctx, filepath.Dir(lyricsRematchRequestPath), lyricsRematchRequestCheckInterval)
 	defer poll.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-writes:
 		case <-poll.C:
-			req, ok := readLyricsRematchRequest()
-			switch {
-			case !ok:
-			case req.Cancel:
-				cancelLyricsRematch(req.ID)
-			default:
-				go runLyricsRematch(ctx, req)
-			}
+		}
+		req, ok := readLyricsRematchRequest()
+		switch {
+		case !ok:
+		case req.Cancel:
+			cancelLyricsRematch(req.ID)
+		default:
+			go runLyricsRematch(ctx, req)
 		}
 	}
 }

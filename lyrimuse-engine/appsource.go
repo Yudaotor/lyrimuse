@@ -25,11 +25,11 @@ import (
 // 起播与重新对齐看序号,只在同一个 App 进程里比:play_seq 增加且身份不变 = 重新起播(单曲循环);
 // anchor_seq 变了、或换了 App 进程 = 位置重新对齐,立即重推网页进度。
 
-// appStateCheckInterval:快速通道的兜底,多久看一次状态文件(一次 stat,变了才读)。平时 App 一写就由目录监听
-// 叫醒(dirwatch.go)。
+// appStateCheckInterval:盯不了状态文件所在目录时,快速通道多久看一次状态文件(一次 stat,变了才读)。平时 App
+// 一写就由目录监听叫醒(dirwatch.go)。
 const appStateCheckInterval = time.Second
 
-// appStateMinGap:目录监听叫醒的两轮之间至少隔这么久。连续拖进度时 App 会接连写好几次,中间的变化由每秒那一拍兜住。
+// appStateMinGap:目录监听叫醒的两轮之间至少隔这么久。连续拖进度时 App 会接连写好几次,没跑的那几次到点补看一次。
 const appStateMinGap = 250 * time.Millisecond
 
 // appPlaybackJudge:读 App 状态时仍由引擎做的判定。单测替换。

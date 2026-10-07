@@ -189,8 +189,12 @@ final class LyricsLayerListView: NSView {
 
     private var laidOutSize: CGSize = .zero
 
+    /// SwiftUI 给这个视图做几何动画时每帧都会回调这里(倍率没变也调):倍率跟在画 / 建好的那一份一样就什么都不做
+    /// (见 04 章决策 53)。
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
+        guard let scale = window?.backingScaleFactor,
+              scale != (building?.key.style.scale ?? builtKey?.style.scale) else { return }
         discardBuilds()
         if let spec { apply(spec, force: true) }
     }

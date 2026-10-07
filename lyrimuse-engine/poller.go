@@ -1759,15 +1759,19 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
-	// 快速通道:App 状态一变就跑一轮,不等主节拍(见 appsource.go)。
-	appTicker := time.NewTicker(appStateCheckInterval)
-	defer appTicker.Stop()
-	// App 一写播放状态就跑一轮:盯着状态文件所在的目录(见 dirwatch.go);盯不了时只剩上面每秒一次的检查。
+	// 快速通道:App 一写播放状态就跑一轮,不等主节拍(见 appsource.go)。盯着状态文件所在的目录(见 dirwatch.go);
+	// 盯不了时退回每 appStateCheckInterval 看一次。
 	appWrites := make(chan struct{}, 1)
+	var appCheck <-chan time.Time
 	if !watchDirWrites(ctx, filepath.Dir(appState.path), appWrites) {
 		warnf("playback source: cannot watch the playback state dir, checking it once a second instead")
+		appTicker := time.NewTicker(appStateCheckInterval)
+		defer appTicker.Stop()
+		appCheck = appTicker.C
 	}
 	var lastWritePoll time.Time
+	// 离上一轮不到 appStateMinGap 的叫醒先不跑,到点补看一次。
+	var appRecheck <-chan time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -1832,13 +1836,25 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			p.poll() // 后台 enrichment 完成,立刻带完整封面/歌词重推一轮
 		case <-ticker.C:
 			p.poll()
-		case <-appTicker.C:
+		case <-appCheck:
 			if p.app.changed(time.Now()) {
 				p.poll()
 			}
 		case <-appWrites:
 			now := time.Now()
-			if now.Sub(lastWritePoll) >= appStateMinGap && p.app.changed(now) {
+			if wait := appStateMinGap - now.Sub(lastWritePoll); wait > 0 {
+				if appRecheck == nil {
+					appRecheck = time.After(wait)
+				}
+				continue
+			}
+			if p.app.changed(now) {
+				lastWritePoll = now
+				p.poll()
+			}
+		case <-appRecheck:
+			appRecheck = nil
+			if now := time.Now(); p.app.changed(now) {
 				lastWritePoll = now
 				p.poll()
 			}

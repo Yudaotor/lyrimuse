@@ -4274,13 +4274,22 @@ public final class LocalPlaybackSource: ObservableObject {
         // 按当前曲目算出来的标识),保证换歌后这里产出的每个 LyricsWindowLine.id 整体
         // 跟上一首歌不同,SwiftUI 的 ForEach 才会做一次干净的整体替换而不是逐行"变形"
         // (见 LyricsWindowLine 类型定义处的注释)。
+        let buildStarted = Date()
         let newAllLines = syncEngine.allLines(idPrefix: currentOffsetKey)
+        let buildTook = Date().timeIntervalSince(buildStarted)
+        // 这一下在主线程上:用时满 slowWindowLinesBuildSecs 就记一行,看得出换歌时卡在这里多久。
+        if buildTook >= Self.slowWindowLinesBuildSecs {
+            logger.notice("lyrics: built \(newAllLines.count) window lines in \(Int(buildTook * 1000))ms")
+        }
         if newAllLines != allLines { allLines = newAllLines }
         // 间奏点跟 allLines 同一时机重算 —— 纯由时间轴决定,同一首歌播放期间不变。
         let newMarkers = syncEngine.gapMarkers()
         if newMarkers != lyricsGapMarkers { lyricsGapMarkers = newMarkers }
         logger.debug("lyrics reloaded: hasContent=\(self.syncEngine.hasContent) found=\(found != nil)")
     }
+
+    /// 换歌时整首歌词行(`allLines`)建了这么久就记一行日志。
+    private static let slowWindowLinesBuildSecs: TimeInterval = 0.05
 
     // 换歌那一刻异步取一次封面图(子进程调用,挪到后台线程,理由跟 poll() 一样)。等
     // 结果回来时如果又换了下一首歌(expectedKey 跟这时的 lastKey 对不上),说明这份图
