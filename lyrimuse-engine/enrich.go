@@ -836,13 +836,19 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			kkboxLyrics: kkboxInfo.lyrics, amazonLyrics: amazonLyricsAvail, spotifyLyrics: spotifyLyricsAvail,
 		})
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
-		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送这一档时才
+		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送 / 播放器自带这两档时才
 		// 起——后一条门槛避免同一首歌每次重播都重新取一遍设备封面(coverSource 一旦
-		// 变成 "device" 就此定案,不再需要每次播放都重新验证,见 applyDeviceCoverUpgrade
+		// 变成 "device" 或 "player" 就此定案,不再需要每次播放都重新验证,见 applyDeviceCoverUpgrade
 		// 头注)。
-		if isNewTrack && e.CoverSource != "device" && !enrichInflight[key] {
+		if isNewTrack && e.CoverSource != "device" && e.CoverSource != "player" && !enrichInflight[key] {
 			enrichInflight[key] = true
-			go applyDeviceCoverUpgrade(context.Background(), key, artist, title, album, bundleID)
+			go applyDeviceCoverUpgrade(withPlayerCover(context.Background(), playerCover), key, artist, title, album, bundleID)
+		} else if isNewTrack && e.CoverSource == "device" && playerCover != "" && !playerCoverUpgradeTried[key] && !enrichInflight[key] {
+			// 存量的小设备封面换成播放器自带的同一张图(见 upgradeDeviceCoverToPlayerCover)。每个条目每次启动只试一次:
+			// 设备封面本来就够清晰的条目每次都会走到这一档,不限次数的话后面的外围补全永远轮不到。
+			playerCoverUpgradeTried[key] = true
+			enrichInflight[key] = true
+			go upgradeDeviceCoverToPlayerCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL, album)
 		} else if (needsPeripheralBackfill(e, artist, album) ||
 			(coverNeedsHintCheck(e, album, coverAlbum) && peripheralBackfillWindowOpen(e)) ||
 			(inferredIdentityWorthBackfill(e, artist, title, durationSecs) && peripheralBackfillWindowOpen(e)) ||
@@ -857,7 +863,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			// 共用同一套上限与节流,而**不是**塞进 needsPeripheralBackfill:那个函数被四个测试文件
 			// 按三参数签名调着,为一条判据改签名不值得。三态判据见 motionCoverWorthBackfill。
 			enrichInflight[key] = true
-			go backfillPeripheralFields(withLyricSearchTitle(context.Background(), searchTitle), key, artist, title, album, durationSecs)
+			go backfillPeripheralFields(withPlayerCover(withLyricSearchTitle(context.Background(), searchTitle), playerCover), key, artist, title, album, durationSecs)
 		} else if needsLyricsFirstFill(e) && !enrichInflight[key] {
 			// "条目已存在但一条歌词都没有" —— 少了这条,一首歌搜砸一次就永久卡住,见
 			// needsLyricsFirstFill 的注释。排在下面两条前面无所谓先后:那两条对空歌词条目都
@@ -917,6 +923,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 解析的是正在播的这首时,首轮里歌词可以先上屏(见 earlylyrics.go);判据按原样标签的 hintKey,poller 记在播那首用的就是它。
 		cancelCtx, cancel := context.WithCancel(withEarlyLyricsTarget(withYouTubeMusicVideoID(context.Background(), kasetVideoID), hintKey))
 		cancelCtx = withLyricSearchTitle(cancelCtx, searchTitle)
+		cancelCtx = withPlayerCover(cancelCtx, playerCover)
 		enrichCancelFuncs[key] = cancel
 		go resolveEnrichAsync(cancelCtx, key, artist, title, album, bundleID, durationSecs, isNewTrack)
 	}
@@ -1081,8 +1088,16 @@ func coverSwapAllowedWith(old, fresh enrichEntry, album string, deviceUpgradable
 	if old.CoverSource == "device" {
 		return deviceUpgradable(old.CoverURL, fresh.CoverURL)
 	}
+	// 播放器自带的封面(player)身份由播放器自己的本机数据保证,补全时按文字匹配出来的结果不换掉它;它自己也只补空着的、
+	// 升级小设备封面(上面那档),不换掉已有的按文字匹配出来的封面。
+	if old.CoverSource == "player" {
+		return false
+	}
 	if old.CoverURL == "" || old.CoverSource == fresh.CoverSource {
 		return true
+	}
+	if fresh.CoverSource == "player" {
+		return false
 	}
 	// 借来的 device 封面。在这条外围自愈路径上 fresh 只可能**靠借**拿到
 	// device 来源(deviceCoverURL 恒传空串,见上面那段),而那一档要求邻居自己的
@@ -1247,9 +1262,9 @@ func hasAlbumVerifiedSiblingCoverLocked(artist, album string) bool {
 // 判据刻意收得很窄 —— "有邻居可借"才算缺。放宽成"qq 档 + cover_album 为空就重查"的话,
 // QQ 正常给对图的那一大类(它从不回传专辑名,cover_album 恒空)会每条白重试满 5 次
 // (peripheralBackfillMaxAttempts)、永远补不上一个补不了的字段,正是 coverNeedsAlbumCheck
-// 当初收窄要避开的成本。device 档自己不用升(身份最硬),直接排除。
+// 当初收窄要避开的成本。device / player 两档自己不用升(身份最硬),直接排除。
 func coverCanUpgradeToVerifiedSiblingLocked(e enrichEntry, artist, album string) bool {
-	if album == "" || e.CoverSource == "device" || e.CoverURL == "" {
+	if album == "" || e.CoverSource == "device" || e.CoverSource == "player" || e.CoverURL == "" {
 		return false
 	}
 	if albumScore(e.CoverAlbum, album) == 200 {
@@ -2626,7 +2641,7 @@ func settleDeviceCover(ctx context.Context, key, artist, title, album, bundleID 
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	enrichMu.Unlock()
-	if ok && e.CoverSource != "device" {
+	if ok && e.CoverSource != "device" && e.CoverSource != "player" {
 		log.Printf("device artwork: no usable artwork from %s for %q within %s, keeping the %q cover",
 			bundleID, key, waited, e.CoverSource)
 	}
@@ -2639,12 +2654,6 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	deviceCoverURL := deviceCoverURLIfFresh(ctx, true, bundleID, artist, title)
 	if deviceCoverURL == "" {
 		return false
-	}
-	// 取色只为网页,没配中继就不算,理由同 resolveTrackEnrichment 里那处。设备封面是
-	// 本地文件、不发 HTTP,但解码 + 逐像素扫描照样是白烧。
-	accent := ""
-	if webRelayConfigured() {
-		accent = dominantColor(ctx, deviceCoverURL)
 	}
 	// 先在锁外把"现有封面"读出来 —— 下面的清晰度判据要发 HTTP 取一次远程候选来比指纹,
 	// 那是几百毫秒的事,绝不能捏着 enrichMu 做(整份缓存的读写都在这把锁上)。
@@ -2662,17 +2671,28 @@ func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bund
 	if !deviceCoverOverridesCandidate(ctx, deviceCoverURL, existing.CoverURL) {
 		return false
 	}
-	// 顶掉的候选跟设备封面是同一张图时留下它的地址,给 App 外面用(见 devicePublicCover)。要取远程图,在锁外做。
-	public := devicePublicCover(ctx, deviceCoverURL, existing.CoverURL)
+	// 设备封面要顶掉现有封面时先看播放器自带的那张:跟设备封面是同一张图、更清晰就用它(见 playerCoverOverDevice)。
+	cover, source, public := deviceCoverURL, "device", ""
+	if pc := playerCoverOverDevice(ctx, deviceCoverURL, existing.CoverURL); pc != "" {
+		cover, source = pc, "player"
+	} else {
+		// 顶掉的候选跟设备封面是同一张图时留下它的地址,给 App 外面用(见 devicePublicCover)。要取远程图,在锁外做。
+		public = devicePublicCover(ctx, deviceCoverURL, existing.CoverURL)
+	}
+	// 取色只为网页,没配中继就不算,理由同 resolveTrackEnrichment 里那处。
+	accent := ""
+	if webRelayConfigured() {
+		accent = dominantColor(ctx, cover)
+	}
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
-	if !ok || enrichProvisional[key] || e.CoverURL == deviceCoverURL {
+	if !ok || enrichProvisional[key] || e.CoverURL == cover {
 		// 这段等待期间条目被"歌词管理"删掉了,或者(竞态)另一路已经写过同一张封面——
 		// 两种情况都不该再写。
 		enrichMu.Unlock()
 		return false
 	}
-	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = deviceCoverURL, "device", album, accent
+	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = cover, source, album, accent
 	if public != "" {
 		e.PublicCoverURL, e.PublicCoverFor = public, deviceCoverURL
 	}
@@ -3196,28 +3216,7 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 			}
 		}
 	}
-	if deviceCoverURL != "" {
-		// 设备直送的封面身份由"读取时刻本身"保证(见本函数参数注释),顶掉上面
-		// 网易云/Apple/QQ/同专辑邻居这一整套按文字匹配择优选出来的结果——不是"再比一次
-		// 谁的分更高",是这件事本身不需要再猜了。CoverAlbum 写本地这份 album(不是任何
-		// 源自己报的专辑名):这份封面从一开始就是照着**这次播放**给的,天然对版。
-		//
-		// 这一顶**不是无条件的**:浏览器 MediaSession 给的封面常常只有 120×120(App 交设备封面的边长
-		// 下限故意压到 64 就是为了不漏掉它们,见 CoverArtReplacementGate.deviceArtworkMinEdge),而歌词窗口
-		// 那张大卡要画到 ~560px —— 同一张专辑其它曲目 800×800、只有标题曲拿到 120×120 时
-		// 就会明显糊。
-		//
-		// 判据不是"谁更大"(那会把"设备那张 120px 是**对的**、远端那张高清是**挂错的**"
-		// 这种情形反过来),而是"两张图是不是同一张"——同一张就拿高清那份,不一样就身份
-		// 优先。完整判据表见 coverquality.go 头注。
-		if deviceCoverOverridesCandidate(ctx, deviceCoverURL, e.CoverURL) {
-			// 顶掉的候选跟设备封面是同一张图时留下它的地址,给 App 外面用(见 devicePublicCover)。
-			if public := devicePublicCover(ctx, deviceCoverURL, e.CoverURL); public != "" {
-				e.PublicCoverURL, e.PublicCoverFor = public, deviceCoverURL
-			}
-			e.CoverURL, e.CoverSource, e.CoverAlbum = deviceCoverURL, "device", album
-		}
-	}
+	applyDeviceOrPlayerCover(ctx, &e, deviceCoverURL, album)
 	if e.CanonicalArtist == "" {
 		// MusicBrainz 那一级没能给出统一歌手名(常见于 title/album 本身就跨语言对不上
 		// 文本的 feat. 曲目)时,改用 resolveGenericArtistCanonicalName(不按曲目、按歌手

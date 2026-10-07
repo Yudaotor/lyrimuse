@@ -1680,29 +1680,38 @@ public enum MediaControlClient {
     // 拿它跟当前曲目比对,不匹配就当"还没更新好"重试,而不是把上一首的封面错挂到新歌上
     // (网易云云盘歌会出现"沿用上一首的封面"这种情况)。
     public static func fetchArtwork(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> (data: Data, mimeType: String, trackKey: String)? {
+        fetchArtworkExplained(players: players).artwork
+    }
+
+    /// 同 `fetchArtwork`,取不到时另外交回一句为什么(英文,进日志;见 `LocalPlaybackSource.artworkMissDescription`)。
+    public static func fetchArtworkExplained(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected)
+        -> (artwork: (data: Data, mimeType: String, trackKey: String)?, miss: String?) {
         // 焦点被别的 App 占走时,封面必须跟快照走**同一条路**。`media-control get --now` 问的是
         // 系统级焦点,这时候它给的是**占用者**那张图(浏览器视频的缩略图)——下游那道 trackKey 守卫
         // 会如实拦下来丢弃,于是歌还在、歌词还在,唯独封面没了。两边不对称就会长这样。
-        if let target = focusFallbackTarget(),
-           let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleIdentifier) {
-            return art
+        var prefix = ""
+        if let target = focusFallbackTarget() {
+            if let art = NowPlayingClientsProbe.artwork(forBundleID: target.bundleIdentifier) { return (art, nil) }
+            prefix = "focus is held elsewhere and \(target.bundleIdentifier) gave no artwork; "
         }
-        guard let binaryPath = binaryPath() else { return nil }
+        guard let binaryPath = binaryPath() else { return (nil, prefix + "media-control is not bundled") }
         // 这次不传 --no-artwork——就是为了要这份数据,所以超时给得比状态查询宽:
         // 封面 base64 有几百 KB。
         guard let r = ProcessRunner.run(
             binaryPath, ["get", "--now"], timeout: artworkTimeout),
             r.succeeded
-        else { return nil }
-        guard let raw = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
-              let bundleID = raw.bundleIdentifier,
-              artworkBundleIDMatches(bundleID, players: players),
-              let base64 = raw.artworkData,
-              let imageData = Data(base64Encoded: base64) else {
-            return nil
+        else { return (nil, prefix + "media-control get --now failed") }
+        guard let raw = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout) else {
+            return (nil, prefix + "the system reports nothing")
         }
-        return (imageData, raw.artworkMimeType ?? "image/jpeg",
-                PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: raw.artist, title: raw.title))
+        guard let bundleID = raw.bundleIdentifier, artworkBundleIDMatches(bundleID, players: players) else {
+            return (nil, prefix + "the system reports \(raw.bundleIdentifier ?? "no player"), which is not accepted")
+        }
+        guard let base64 = raw.artworkData, let imageData = Data(base64Encoded: base64) else {
+            return (nil, prefix + "\(bundleID) reports \(raw.title ?? "") without artwork")
+        }
+        return ((imageData, raw.artworkMimeType ?? "image/jpeg",
+                 PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: raw.artist, title: raw.title)), nil)
     }
 
     // 只取封面相关的这几个字段——跟 RawPayload 是两份独立的 Decodable(理由跟文件顶部

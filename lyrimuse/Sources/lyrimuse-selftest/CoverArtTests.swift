@@ -1286,9 +1286,9 @@ func runCoverArtTests() {
                     "云盘歌接线: 认出占位图时记下这一首")
         expectEqual(playback.contains("if artworkIsPlaceholder { artworkIsPlaceholder = false }\n                clearMusicVideoTimeline()"), true,
                     "云盘歌接线: 换歌时清掉占位标记")
-        expectEqual(playback.components(separatedBy: "self.artworkIsPlaceholder = false").count - 1, 3,
-                    "云盘歌接线: 首轮换上真封面、确认循环换上或等到这首的封面时都清掉占位标记")
-        expectEqual(coordinator.contains("if let applied = highResCoverApplied, applied.url == url, let shown = highResArtworkImage, shown === applied.image { return }")
+        expectEqual(playback.components(separatedBy: "self.artworkIsPlaceholder = false").count - 1, 4,
+                    "云盘歌接线: 首轮换上真封面、确认循环换上或等到这首的封面、晚到的封面补上时都清掉占位标记")
+        expectEqual(coordinator.contains("if let applied = highResCoverApplied, candidates.contains(applied.url), let shown = highResArtworkImage,")
                     && coordinator.contains("self?.highResCoverApplied = (url, image)"), true,
                     "高清替代接线: 铺着的就是这一张时不撤了重铺(留着的旧封面到期清掉那一刻不闪)")
     }
@@ -1913,5 +1913,81 @@ func runCoverArtTests() {
         expectEqual(F.shouldRetry(statusCode: 200, urlErrorCode: nil), false, "缩略图下载: 200 但解码失败不再试")
         expectEqual(F.shouldRetry(statusCode: nil, urlErrorCode: URLError.Code.timedOut.rawValue), true, "缩略图下载: 超时再试")
         expectEqual(F.shouldRetry(statusCode: nil, urlErrorCode: URLError.Code.cancelled.rawValue), false, "缩略图下载: 被取消不再试")
+    }
+
+    // ---- 播放器自带的封面 / 系统封面晚到(03 章决策 33)----
+    do {
+        typealias G = CoverArtReplacementGate
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300, playerHasOwnCover: true), .systemArtworkMissing,
+                    "播放器自带封面: 系统那份还没到时用它")
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300, systemNeverHasArtwork: true, playerHasOwnCover: true),
+                    .playerHasNoArtwork, "播放器自带封面: 从不报封面的播放器照旧先认缓存里那张")
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300, systemArtworkIsPlaceholder: true, playerHasOwnCover: true),
+                    .playerHasNoArtwork, "播放器自带封面: 推占位图的那一首照旧先认缓存里那张")
+        expectEqual(G.accepts(candidateWidth: 1000, candidateHeight: 1000, systemWidth: 0, reason: .systemArtworkMissing), true,
+                    "播放器自带封面: 方形的就换")
+        expectEqual(G.accepts(candidateWidth: 1280, candidateHeight: 720, systemWidth: 0, reason: .systemArtworkMissing), false,
+                    "播放器自带封面: 不是封面形状的不换")
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300), nil, "播放器自带封面: 没有它的照旧显示占位音符")
+        expectEqual(G.reason(width: 150, height: 150, lowResThreshold: 300, playerHasOwnCover: true), .lowRes,
+                    "播放器自带封面: 系统那份到了(太小)照旧按太小找替代")
+        let cached = URL(string: "https://p1.music.126.net/a.jpg")!
+        let own = URL(string: "https://i.kfs.io/album/x/fit/1000x1000.jpg")!
+        expectEqual(G.replacementCandidates(cached: cached, playerOwn: own, reason: .systemArtworkMissing), [own],
+                    "播放器自带封面: 系统那份没有时只认它,缓存里按文字匹配的不顶上去")
+        expectEqual(G.replacementCandidates(cached: cached, playerOwn: nil, reason: .systemArtworkMissing), [URL](),
+                    "播放器自带封面: 系统那份没有、也没有它:不找替代")
+        expectEqual(G.replacementCandidates(cached: cached, playerOwn: own, reason: .lowRes), [cached, own],
+                    "播放器自带封面: 太小时先缓存里那张,不够格再试它")
+        expectEqual(G.replacementCandidates(cached: cached, playerOwn: own, reason: .playerHasNoArtwork), [cached, own],
+                    "播放器自带封面: 从不报封面 / 占位图时先缓存里那张")
+        expectEqual(G.replacementCandidates(cached: own, playerOwn: own, reason: .lowRes), [own],
+                    "播放器自带封面: 同一张只试一次")
+        expectEqual(G.replacementCandidates(cached: nil, playerOwn: own, reason: .notCoverShaped), [own],
+                    "播放器自带封面: 引擎还没解析完时先用它")
+        typealias R = EnrichCacheReader
+        expectEqual(R.nativeSizedCoverURL(URL(string: "https://i.kfs.io/album/global/298971151,0v3/fit/600x600.jpg")!).absoluteString,
+                    "https://i.kfs.io/album/global/298971151,0v3/fit/1000x1000.jpg", "KKBOX 图床: 600 档提到 1000")
+        expectEqual(R.nativeSizedCoverURL(URL(string: "https://i.kfs.io/album/global/298971151,0v3/fit/1500x1500.jpg")!).absoluteString,
+                    "https://i.kfs.io/album/global/298971151,0v3/fit/1500x1500.jpg", "KKBOX 图床: 已经够大的不降")
+        expectEqual(R.nativeSizedCoverURL(URL(string: "https://i.kfs.io/album/global/298971151,0v3/original.jpg")!).absoluteString,
+                    "https://i.kfs.io/album/global/298971151,0v3/original.jpg", "KKBOX 图床: 原图不动")
+        expectEqual(R.nativeSizedCoverURL(URL(string: "https://i.kfs.io.example.com/fit/600x600.jpg")!).absoluteString,
+                    "https://i.kfs.io.example.com/fit/600x600.jpg", "KKBOX 图床: 别的主机不动")
+        typealias S = LocalPlaybackSource
+        expectEqual(S.artworkLateRetryDelay(afterWaiting: 31), 15, "封面晚到: 5 分钟内 15 秒取一次")
+        expectEqual(S.artworkLateRetryDelay(afterWaiting: 299), 15, "封面晚到: 5 分钟内 15 秒取一次(边界)")
+        expectEqual(S.artworkLateRetryDelay(afterWaiting: 300), 60, "封面晚到: 之后 60 秒一次")
+        let png = Data([0x89, 0x50, 0x4E, 0x47])
+        expectEqual(S.artworkMissDescription(data: nil, payloadKey: nil, miss: "the system reports nothing", expectedKey: "a|b"),
+                    "the system reports nothing", "取图失败说明: 取图那边给的原因原样带上")
+        expectEqual(S.artworkMissDescription(data: nil, payloadKey: nil, miss: nil, expectedKey: "a|b"), "no artwork",
+                    "取图失败说明: 没给原因也没有图")
+        expectEqual(S.artworkMissDescription(data: png, payloadKey: "x|y", miss: nil, expectedKey: "a|b"),
+                    "the system cover belongs to x|y", "取图失败说明: 图是别的歌的")
+        expectEqual(S.artworkMissDescription(data: png, payloadKey: "A|B", miss: nil, expectedKey: "a|b"), nil,
+                    "取图失败说明: 是这首的图(大小写不同也算)就是取到了")
+        // 接线契约(扫源码)
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func src(_ rel: String) -> String {
+            (try? String(contentsOfFile: sources.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let lps = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        expectEqual(lps.contains("            while true {\n                let delay = Self.artworkLateRetryDelay(afterWaiting: waited)")
+                        && lps.contains("generation == self.artworkFetchGeneration && expectedKey == self.lastKey && self.artworkData == nil")
+                        && lps.contains("artworkFetchGeneration += 1\n        let generation = artworkFetchGeneration")
+                        && lps.contains("last attempt: \\(lastMiss ?? \"-\", privacy: .public)"), true,
+                    "封面晚到(契约): 二次确认跑完还没封面就接着取,同一首另起一轮就让给它;那条日志带上最后一次为什么没取到")
+        expectEqual(lps.contains("if KnownPlaceholderArtwork.isPlaceholder(data) { return \"the player's built-in placeholder\" }"), true,
+                    "封面晚到(契约): 登记在案的占位图不算取到(网易云云盘歌那张不会晚到时被挂上)")
+        expectEqual(S.artworkMissDescription(data: png, payloadKey: nil, miss: nil, expectedKey: "a|b"),
+                    "the system cover carries no track key", "取图失败说明: 有图但没有曲目标识,不算取到")
+        let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
+        expectEqual(coordinator.contains("playerOwn: playerOwn, reason: reason")
+                        && coordinator.contains("for url in candidates {")
+                        && coordinator.contains("guard let image = loaded else { continue }")
+                        && coordinator.contains("playerHasOwnCover: playerOwn != nil")
+                        && coordinator.contains("playerHasOwnCover: Self.currentPlayerOwnCover() != nil"), true,
+                    "播放器自带封面(契约): 高清替代按顺序试,系统那份没有时认播放器自带的那张")
     }
 }

@@ -1062,6 +1062,9 @@ public enum EnrichCacheReader {
     /// 3000 全 200,999999 才 400)。取 1200 而不是更大:歌词窗口那张卡最大 460pt =
     /// 920px,1200 够用还有余量,2000 那一档一张就 1MB。
     ///
+    /// ④ **KKBOX**:尺寸档也在**路径**里(`…/fit/600x600.jpg`),要多大给多大,超过原图是放大的(实测 600/1000/1500/2000 都给,
+    /// 那张专辑原图 1417);取 1000,引擎当封面用时存的也是这一档(lyrimuse-engine 的 playerCoverDisplayURL)。
+    ///
     /// 为什么开始要动 QQ/Apple(原来这两个源写的是"一个字都不许改"):用户
     /// 报 QQ 音乐的封面很模糊。QQ 音乐客户端往系统 Now Playing 报的封面就是 **300×300**
     /// (实测,见 PlaybackCoordinator.lowResArtworkThreshold),而缓存里那张高清替代图
@@ -1073,7 +1076,25 @@ public enum EnrichCacheReader {
         if let u = neteaseNativeCoverURL(url) { return u }
         if let u = qqUpscaledCoverURL(url) { return u }
         if let u = appleUpscaledCoverURL(url) { return u }
+        if let u = kkboxUpscaledCoverURL(url) { return u }
         return url
+    }
+
+    /// KKBOX 图床取的那一档,见 nativeSizedCoverURL 的④。
+    private static let kkboxCoverTargetEdge = 1000
+
+    /// 把 KKBOX 图床末段的 `fit/<N>x<N>.jpg` 提到 1000。nil = 不是 KKBOX 图床 / 末段不是那个形状 / 已经不小于目标档。
+    private nonisolated static func kkboxUpscaledCoverURL(_ url: URL) -> URL? {
+        guard url.host == "i.kfs.io" else { return nil }
+        let parts = url.path.split(separator: "/")
+        guard parts.count >= 2, parts[parts.count - 2] == "fit",
+              parts[parts.count - 1].range(of: "^[0-9]+x[0-9]+\\.jpg$", options: .regularExpression) != nil
+        else { return nil }
+        let edge = Int(parts[parts.count - 1].prefix { $0.isNumber }) ?? 0
+        guard edge > 0, edge < kkboxCoverTargetEdge else { return nil }
+        let s = url.absoluteString
+        guard let r = s.range(of: "/fit/" + parts[parts.count - 1], options: .backwards) else { return nil }
+        return URL(string: s.replacingCharacters(in: r, with: "/fit/\(kkboxCoverTargetEdge)x\(kkboxCoverTargetEdge).jpg"))
     }
 
     /// QQ 音乐图床的最大边长 —— 再往上是 404,见 nativeSizedCoverURL 的注释。

@@ -472,7 +472,7 @@ func TestLyricSearchTitleIsWired(t *testing.T) {
 	for _, n := range []string{
 		"searchTitle := lyricSearchTitle(title)\n\ttitle = normEnrichTitle(title)",
 		"cancelCtx = withLyricSearchTitle(cancelCtx, searchTitle)",
-		"go backfillPeripheralFields(withLyricSearchTitle(context.Background(), searchTitle),",
+		"go backfillPeripheralFields(withPlayerCover(withLyricSearchTitle(context.Background(), searchTitle), playerCover),",
 		"go retryLyricsUpgrade(withLyricSearchTitle(context.Background(), searchTitle),",
 		"go rescoreLyrics(withLyricSearchTitle(context.Background(), searchTitle),",
 		"go retryLyricsUpgradeWith(withLyricSearchTitle(context.Background(), searchTitle),",

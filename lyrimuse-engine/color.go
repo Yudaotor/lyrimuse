@@ -94,6 +94,9 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 		// 见 qqCoverFallback:网易云曲库缺失该艺人时的兜底封面。
 		small = qqCoverAtEdge(small, "300")
 		referer = "https://y.qq.com/"
+	} else if strings.Contains(coverURL, "i.kfs.io/") {
+		// KKBOX 图床按路径里的 fit 档出图,取色、比指纹 64 档就够。
+		small = kkboxCoverAtEdge(small, "64")
 	}
 	cli := &http.Client{Timeout: 4 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, small, nil)

@@ -19,6 +19,9 @@ public enum CoverArtReplacementGate {
         /// 这个播放器从不往系统里报封面(`systemNeverHasArtwork`),或者这一首它只推了登记在案的占位图
         /// (`KnownPlaceholderArtwork`,没当封面用,系统那份是空的或上一首留下的):缓存里匹配到的那张就是唯一能显示的。
         case playerHasNoArtwork
+        /// 系统那份这一首还没有(KKBOX 刚打开时放的第一首晚了 76 秒才交给系统),引擎从播放器本机数据里读到了它给这首的封面
+        /// (`playerHasOwnCover`):身份由播放器自己保证,替代图只认这一张(`replacementCandidates`)。见 03 章决策 33。
+        case systemArtworkMissing
     }
 
     /// 这个播放器的系统会话里从来没有封面。Kaset:播放中把会话交给 WebKit,那份不带图;它自己发的只有歌名歌手。
@@ -63,28 +66,43 @@ public enum CoverArtReplacementGate {
     /// 方形封面(Apple Music 之类,权威图不动)。形状先于尺寸判:一张 1280×720 的视频帧再大也不是封面。
     /// `systemArtworkIsPlaceholder`:这一首播放器推的是登记在案的占位图(见 03 章决策 32)。这时系统那份要么是空的、
     /// 要么是留着的上一首的封面,尺寸都不作数,一律按「播放器没有封面」找替代。
+    /// `playerHasOwnCover`:引擎从正在放的播放器本机数据里读到了它给这首的封面(`EnrichCacheReader.playerCoverURLs`)。系统那份
+    /// 没有时按 `systemArtworkMissing` 用它。
     public static func reason(width: Int, height: Int, lowResThreshold: Int,
-                              systemNeverHasArtwork: Bool = false, systemArtworkIsPlaceholder: Bool = false) -> Reason? {
+                              systemNeverHasArtwork: Bool = false, systemArtworkIsPlaceholder: Bool = false,
+                              playerHasOwnCover: Bool = false) -> Reason? {
         if systemArtworkIsPlaceholder { return .playerHasNoArtwork }
         guard width > 0, height > 0 else {
-            return systemNeverHasArtwork ? .playerHasNoArtwork : nil
+            if systemNeverHasArtwork { return .playerHasNoArtwork }
+            return playerHasOwnCover ? .systemArtworkMissing : nil
         }
         if !isCoverShaped(width: width, height: height) { return .notCoverShaped }
         if width <= lowResThreshold { return .lowRes }
         return nil
     }
 
+    /// 高清替代按什么顺序试,头一张下载下来够格(`accepts`)的就用。`systemArtworkMissing` 只认播放器自带的那张,缓存里按文字
+    /// 匹配出来的不顶上去;别的先试缓存里那张,不够格(引擎存的就是这张系统小图)再试播放器自带的。纯函数,selftest 覆盖。
+    public static func replacementCandidates(cached: URL?, playerOwn: URL?, reason: Reason) -> [URL] {
+        if reason == .systemArtworkMissing { return playerOwn.map { [$0] } ?? [] }
+        var out: [URL] = []
+        for url in [cached, playerOwn] {
+            if let url, !out.contains(url) { out.append(url) }
+        }
+        return out
+    }
+
     /// 缓存里那张下载回来之后值不值得换上:
     /// - `lowRes`:只有替代图确实比系统那份宽才换(缓存里可能存着一张同样小的图,白换)。
     /// - `notCoverShaped`:换的是**形状**不是分辨率,替代图自己是张方形封面就换 —— 不能再拿
     ///   「比系统那份宽」当门槛,否则 1280×720 的视频帧会把一张 600×600 的真封面挡在外面。
-    /// - `playerHasNoArtwork`:没有系统那份可比,替代图是张方形封面就换。
+    /// - `playerHasNoArtwork` / `systemArtworkMissing`:没有系统那份可比,替代图是张方形封面就换。
     public static func accepts(candidateWidth: Int, candidateHeight: Int,
                                systemWidth: Int, reason: Reason) -> Bool {
         switch reason {
         case .lowRes:
             return candidateWidth > systemWidth
-        case .notCoverShaped, .playerHasNoArtwork:
+        case .notCoverShaped, .playerHasNoArtwork, .systemArtworkMissing:
             return isCoverShaped(width: candidateWidth, height: candidateHeight)
         }
     }

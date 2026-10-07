@@ -4342,7 +4342,29 @@ public final class LocalPlaybackSource: ObservableObject {
         payloadKey.compare(expectedKey, options: [.caseInsensitive]) == .orderedSame
     }
 
+    /// 一次取图为什么没换上(英文,进日志):取图那边给的原因,或者载荷里的图是别的歌的、是登记在案的占位图。取到了这首的图
+    /// 返回 nil。纯函数,selftest 覆盖。
+    public nonisolated static func artworkMissDescription(data: Data?, payloadKey: String?, miss: String?,
+                                                          expectedKey: String) -> String? {
+        if let miss { return miss }
+        guard let data else { return "no artwork" }
+        guard let payloadKey else { return "the system cover carries no track key" }
+        if !artworkKeyMatches(payloadKey, expectedKey) { return "the system cover belongs to \(payloadKey)" }
+        if KnownPlaceholderArtwork.isPlaceholder(data) { return "the player's built-in placeholder" }
+        return nil
+    }
+
+    /// 二次确认那张表跑完、这首还没有系统封面时,隔多久再取一次:5 分钟内 15 秒一次,之后 60 秒一次。纯函数,selftest 覆盖。
+    public nonisolated static func artworkLateRetryDelay(afterWaiting waited: TimeInterval) -> TimeInterval {
+        waited < 300 ? 15 : 60
+    }
+
+    /// 每起一轮取图加一。同一首重新开播(快照断过一拍、切走又切回)会另起一轮,上一轮还在等晚到的封面就让给它。
+    private var artworkFetchGeneration = 0
+
     private func fetchArtworkForCurrentTrack(expectedKey: String) {
+        artworkFetchGeneration += 1
+        let generation = artworkFetchGeneration
         Task {
             // 取图和算平均色都在同一个后台 Task.detached 里做完——两者共用同一份原始
             // 图片字节,没必要为了"少写一个函数"分成两次异步往返各自触发一次 MainActor
@@ -4351,15 +4373,21 @@ public final class LocalPlaybackSource: ObservableObject {
             // 取图不再顺手预算均值色:重试打满 key 不匹配、confirm
             // 拿到相同字节这些**注定丢弃**的路径上,预算的取色纯属白烧;改成确定采纳那一刻
             // 再算一次(仍在后台,见 hexFor)。
-            @MainActor func attempt() async -> (data: Data?, payloadKey: String?) {
+            // miss:没取到图时为什么,进日志(见 artworkMissDescription)。
+            @MainActor func attempt() async -> (data: Data?, payloadKey: String?, miss: String?) {
                 // Kaset 的系统会话里从不带图,封面是它自己报的那张(`MediaControlClient.kasetArtwork`)。每次取都按此刻认下的播放器挑:
                 // 换歌那一拍记在了别的来源名下,后面的重试照样取得到 Kaset 那张(02 章决策 91)。
                 let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier
-                return await Self.runOffPool(Self.artworkQueue) { () -> (Data?, String?) in
-                    let result = fromKaset
-                        ? MediaControlClient.kasetArtwork(forTrackKey: expectedKey) : MediaControlClient.fetchArtwork()
-                    guard let result else { return (nil, nil) }
-                    return (result.data, result.trackKey)
+                return await Self.runOffPool(Self.artworkQueue) { () -> (Data?, String?, String?) in
+                    if fromKaset {
+                        guard let result = MediaControlClient.kasetArtwork(forTrackKey: expectedKey) else {
+                            return (nil, nil, "Kaset's own cover for this track is not read yet")
+                        }
+                        return (result.data, result.trackKey, nil)
+                    }
+                    let fetched = MediaControlClient.fetchArtworkExplained()
+                    guard let result = fetched.artwork else { return (nil, nil, fetched.miss) }
+                    return (result.data, result.trackKey, nil)
                 }
             }
             func hexFor(_ data: Data?) async -> String? {
@@ -4374,7 +4402,7 @@ public final class LocalPlaybackSource: ObservableObject {
                 guard data != nil, let payloadKey else { return false }
                 return Self.artworkKeyMatches(payloadKey, expectedKey)
             }
-            var (data, payloadKey) = await attempt()
+            var (data, payloadKey, miss) = await attempt()
             // 没定案就重试几次。每次重试前都重新核对 expectedKey——期间用户可能又切了
             // 下一首,那就直接放弃这一轮,交给新那一轮自己去取。
             var round = 0
@@ -4385,7 +4413,7 @@ public final class LocalPlaybackSource: ObservableObject {
                     forKey: expectedKey, after: Self.artworkRetryDelays[round] + Self.artworkInFlightBackstop)
                 try? await Task.sleep(for: .seconds(Self.artworkRetryDelays[round]))
                 guard expectedKey == self.lastKey else { return }
-                (data, payloadKey) = await attempt()
+                (data, payloadKey, miss) = await attempt()
                 round += 1
             }
             guard expectedKey == self.lastKey else { return }
@@ -4435,12 +4463,15 @@ public final class LocalPlaybackSource: ObservableObject {
             // 把已经挂好的封面抹掉,更不该让后面几档不再检查(播放器换真图的那一刻正好撞上
             // 一次空载荷,整首歌就再也没有第二次机会了)。
             var waited: TimeInterval = 0
+            var lastMiss = Self.artworkMissDescription(data: data, payloadKey: payloadKey, miss: miss, expectedKey: expectedKey)
             for delay in Self.artworkConfirmDelays {
                 try? await Task.sleep(for: .seconds(delay))
                 waited += delay
                 guard expectedKey == self.lastKey else { return }
                 let confirm = await attempt()
                 guard expectedKey == self.lastKey else { return }
+                lastMiss = Self.artworkMissDescription(data: confirm.data, payloadKey: confirm.payloadKey, miss: confirm.miss,
+                                                       expectedKey: expectedKey)
                 // 留着的旧封面恰好就是这首的(同一张专辑的下一首,字节相同):等到了,别再按期限清掉。
                 if holdingPrevious, let confirmData = confirm.data, let confirmKey = confirm.payloadKey,
                    Self.artworkKeyMatches(confirmKey, expectedKey), confirmData == self.artworkData {
@@ -4483,8 +4514,32 @@ public final class LocalPlaybackSource: ObservableObject {
                 self.noteRadioStationArtwork(confirmData, forKey: expectedKey)
                 return
             }
-            if self.artworkData == nil {
-                logger.notice("artwork: still no matching system cover \(waited, privacy: .public)s after the track change for \(expectedKey, privacy: .public)")
+            // 播放器交给系统的封面可能晚得多(KKBOX 刚打开时放的第一首晚了 76 秒):这首还没有封面就接着隔一阵取一次,
+            // 直到取到或换歌;同一首另起了一轮取图(`artworkFetchGeneration`)就让给那一轮。见 03 章决策 33。
+            @MainActor func stillWaiting() -> Bool {
+                generation == self.artworkFetchGeneration && expectedKey == self.lastKey && self.artworkData == nil
+            }
+            guard stillWaiting() else { return }
+            logger.notice("artwork: still no matching system cover \(waited, privacy: .public)s after the track change for \(expectedKey, privacy: .public); last attempt: \(lastMiss ?? "-", privacy: .public)")
+            while true {
+                let delay = Self.artworkLateRetryDelay(afterWaiting: waited)
+                try? await Task.sleep(for: .seconds(delay))
+                waited += delay
+                guard stillWaiting() else { return }
+                let late = await attempt()
+                guard stillWaiting() else { return }
+                guard let lateData = late.data,
+                      Self.artworkMissDescription(data: late.data, payloadKey: late.payloadKey, miss: late.miss,
+                                                  expectedKey: expectedKey) == nil
+                else { continue }
+                let lateHex = await hexFor(lateData)
+                guard stillWaiting() else { return }
+                logger.notice("artwork: system cover arrived \(waited, privacy: .public)s after the track change for \(expectedKey, privacy: .public): bytes=\(lateData.count)")
+                if self.artworkIsPlaceholder { self.artworkIsPlaceholder = false }
+                self.artworkData = lateData
+                self.artworkAverageHex = lateHex
+                self.noteRadioStationArtwork(lateData, forKey: expectedKey)
+                return
             }
         }
     }

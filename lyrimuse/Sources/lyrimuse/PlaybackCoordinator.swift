@@ -1590,11 +1590,21 @@ final class PlaybackCoordinator: ObservableObject {
     /// 系统这份封面要不要找高清替代(nil = 不找),判据见 `CoverArtReplacementGate.reason`。
     /// `refreshHighResCover` 和 `seeksHighResCover` 共用这一处。
     private static func highResReplacementReason(systemSize: (width: Int, height: Int),
-                                                 bundleID: String?) -> CoverArtReplacementGate.Reason? {
+                                                 bundleID: String?, playerHasOwnCover: Bool) -> CoverArtReplacementGate.Reason? {
         CoverArtReplacementGate.reason(
             width: systemSize.width, height: systemSize.height, lowResThreshold: lowResArtworkThreshold,
             systemNeverHasArtwork: CoverArtReplacementGate.systemNeverHasArtwork(bundleID: bundleID),
-            systemArtworkIsPlaceholder: LocalPlaybackSource.shared.artworkIsPlaceholder)
+            systemArtworkIsPlaceholder: LocalPlaybackSource.shared.artworkIsPlaceholder,
+            playerHasOwnCover: playerHasOwnCover)
+    }
+
+    /// 正在放的这首在当前播放器里自带的封面(引擎从播放器本机数据里读的,见 `EnrichCacheReader.playerCoverURLs`),换成要大图时
+    /// 那一档。没有为 nil。
+    private static func currentPlayerOwnCover() -> URL? {
+        let s = LocalPlaybackSource.shared
+        guard let bundleID = s.lastResolvedBundleID, !s.title.isEmpty else { return nil }
+        return EnrichCacheReader.playerCoverURLs(artist: s.artist, title: s.title, album: s.album)[bundleID]
+            .map(EnrichCacheReader.nativeSizedCoverURL)
     }
 
     /// 播放器没报歌手时,读引擎认出来的歌手 / 专辑(见 `inferredIdentity`)。换歌、缓存内容变了时重读,跟高清封面同一个时机。
@@ -1609,7 +1619,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 要不要等高清替代到货。
     var seeksHighResCover: Bool {
         Self.highResReplacementReason(systemSize: CoverArtReplacementGate.pixelSize(of: artworkData),
-                                      bundleID: LocalPlaybackSource.shared.lastResolvedBundleID) != nil
+                                      bundleID: LocalPlaybackSource.shared.lastResolvedBundleID,
+                                      playerHasOwnCover: Self.currentPlayerOwnCover() != nil) != nil
     }
 
     private var highResCoverTask: Task<Void, Never>?
@@ -1659,7 +1670,9 @@ final class PlaybackCoordinator: ObservableObject {
         // 匹配到的另一张图;从不往系统里报封面的播放器除外,见 CoverArtReplacementGate.systemNeverHasArtwork)就不动。
         // 「不是封面的形状」(YouTube Music MV 的 16:9 视频缩略图)跟「太小」一样要找替代,两条
         // 的后续接受判据不同,见 CoverArtReplacementGate.accepts。
-        guard let reason = Self.highResReplacementReason(systemSize: systemSize, bundleID: s.lastResolvedBundleID) else {
+        let playerOwn = Self.currentPlayerOwnCover()
+        guard let reason = Self.highResReplacementReason(systemSize: systemSize, bundleID: s.lastResolvedBundleID,
+                                                         playerHasOwnCover: playerOwn != nil) else {
             clearHighRes()
             return
         }
@@ -1669,52 +1682,61 @@ final class PlaybackCoordinator: ObservableObject {
         // Now Playing、就是当前真正在播的这一版,没有必要也不应该退这一步——
         // 选错版本的封面会被下面 enrichContentVersion 补查路的 onlyIfMissing 焊死到
         // 换歌之前,详见 albumMatchedCoverURL 的注释。
-        guard let cached = EnrichCacheReader.albumMatchedCoverURL(artist: artist, title: title, album: album) else {
+        // 按顺序试,头一张够格的就用;系统那份还没有时只认播放器自带的那张,见 replacementCandidates。
+        let candidates = CoverArtReplacementGate.replacementCandidates(
+            cached: EnrichCacheReader.albumMatchedCoverURL(artist: artist, title: title, album: album),
+            playerOwn: playerOwn, reason: reason
+        ).map(EnrichCacheReader.nativeSizedCoverURL)
+        guard !candidates.isEmpty else {
             // 这条分支就是「第一次听的歌封面一直糊」的现场:引擎还没解析完。
             // 现在缓存写入会再触发一次补查(见订阅处),所以这里不再是终点。
             logger.debug("highres: no cached cover yet for \(title, privacy: .public) (system=\(systemSize.width, privacy: .public)x\(systemSize.height, privacy: .public)px, reason=\(String(describing: reason), privacy: .public))")
             clearHighRes()
             return
         }
-        let url = EnrichCacheReader.nativeSizedCoverURL(cached)
-        // 铺着的就是这张(同一首的系统封面换了、留着的旧封面到期清掉):不撤了重铺,撤掉再挂回来,0.5s 交叉淡入会让封面闪一下。
-        if let applied = highResCoverApplied, applied.url == url, let shown = highResArtworkImage, shown === applied.image { return }
+        // 铺着的就是其中一张(同一首的系统封面换了、留着的旧封面到期清掉):不撤了重铺,撤掉再挂回来,0.5s 交叉淡入会让封面闪一下。
+        if let applied = highResCoverApplied, candidates.contains(applied.url), let shown = highResArtworkImage,
+           shown === applied.image { return }
         // 上一首的高清图必须立刻撤掉:留着的话换歌后到新图下载完之间会显示上一首的封面,
         // 比"先小图后变清晰"糟得多。均值色跟图同进退。
         clearHighRes()
         highResCoverTask = Task { [weak self] in
-            // 走 App 已有的那套内存缓存(同 URL 并发只发一次请求、命中不闪占位符)。
-            // 原图档:这张要给歌词窗口 920pt@2x 的封面卡当高清替代,不能吃缩略降采样。
-            guard let image = await ImageMemoryCache.shared.load(url, variant: .original),
-                  !Task.isCancelled else { return }
-            // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
-            guard LocalPlaybackSource.shared.title == title else { return }
-            // 太小那条:拿回来的还不如系统那份大就不值得换(缓存里可能存着一张同样小的图);
-            // 形状那条:替代图自己得是张方形封面,不再拿"比系统那份宽"当门槛 —— 换的是形状
-            // 不是分辨率,否则 1280×720 的视频帧会把 600×600 的真封面挡在外面。
-            // 尺寸按像素比(NSImage.pixelWidth / pixelHeight),不能用 size 的点数 —— 带 DPI 标签的图两者相差几倍,
-            // 出处见 CachedImage.swift 里那个 extension 的注释。
-            guard CoverArtReplacementGate.accepts(candidateWidth: image.pixelWidth,
-                                                  candidateHeight: image.pixelHeight,
-                                                  systemWidth: systemPixels, reason: reason) else { return }
-            // 均值色跟图一起给(理由见 highResAverageHex 的注释)。CIAreaAverage 放到
-            // 后台算,跟 LocalPlaybackSource 取图那条路的做法一致,不挡主线程。
-            var hex: String?
-            var thumbnail: NSImage?
-            if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                // 均值色和面板小图同一趟后台算:两个都只依赖这张 CGImage,分两趟就是把同一张
-                // 大图的解码结果多搬一遍。
-                (hex, thumbnail) = await Task.detached {
-                    (LocalPlaybackSource.computeAverageHex(cgImage: cg),
-                     Self.downscaledThumbnail(cg, maxPixel: 256))
-                }.value
+            for url in candidates {
+                // 走 App 已有的那套内存缓存(同 URL 并发只发一次请求、命中不闪占位符)。
+                // 原图档:这张要给歌词窗口 920pt@2x 的封面卡当高清替代,不能吃缩略降采样。
+                let loaded = await ImageMemoryCache.shared.load(url, variant: .original)
+                guard !Task.isCancelled else { return }
+                guard let image = loaded else { continue }
+                // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
+                guard LocalPlaybackSource.shared.title == title else { return }
+                // 太小那条:拿回来的还不如系统那份大就不值得换(缓存里可能存着一张同样小的图);
+                // 形状那条:替代图自己得是张方形封面,不再拿"比系统那份宽"当门槛 —— 换的是形状
+                // 不是分辨率,否则 1280×720 的视频帧会把 600×600 的真封面挡在外面。
+                // 尺寸按像素比(NSImage.pixelWidth / pixelHeight),不能用 size 的点数 —— 带 DPI 标签的图两者相差几倍,
+                // 出处见 CachedImage.swift 里那个 extension 的注释。
+                guard CoverArtReplacementGate.accepts(candidateWidth: image.pixelWidth,
+                                                      candidateHeight: image.pixelHeight,
+                                                      systemWidth: systemPixels, reason: reason) else { continue }
+                // 均值色跟图一起给(理由见 highResAverageHex 的注释)。CIAreaAverage 放到
+                // 后台算,跟 LocalPlaybackSource 取图那条路的做法一致,不挡主线程。
+                var hex: String?
+                var thumbnail: NSImage?
+                if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    // 均值色和面板小图同一趟后台算:两个都只依赖这张 CGImage,分两趟就是把同一张
+                    // 大图的解码结果多搬一遍。
+                    (hex, thumbnail) = await Task.detached {
+                        (LocalPlaybackSource.computeAverageHex(cgImage: cg),
+                         Self.downscaledThumbnail(cg, maxPixel: 256))
+                    }.value
+                }
+                guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
+                logger.debug("highres: swapped in \(image.pixelWidth, privacy: .public)px for \(title, privacy: .public) (system=\(systemSize.width, privacy: .public)x\(systemSize.height, privacy: .public)px, reason=\(String(describing: reason), privacy: .public))")
+                self?.highResArtworkImage = image
+                self?.highResArtworkThumbnail = thumbnail
+                self?.highResAverageHex = hex
+                self?.highResCoverApplied = (url, image)
+                return
             }
-            guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
-            logger.debug("highres: swapped in \(image.pixelWidth, privacy: .public)px for \(title, privacy: .public) (system=\(systemSize.width, privacy: .public)x\(systemSize.height, privacy: .public)px, reason=\(String(describing: reason), privacy: .public))")
-            self?.highResArtworkImage = image
-            self?.highResArtworkThumbnail = thumbnail
-            self?.highResAverageHex = hex
-            self?.highResCoverApplied = (url, image)
         }
     }
 

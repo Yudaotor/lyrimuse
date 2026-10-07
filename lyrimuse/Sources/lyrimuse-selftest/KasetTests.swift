@@ -682,7 +682,9 @@ func runKasetTests() {
                         && client.contains("kasetLastArtwork = artwork.map { (snapshot.identityKey, $0) }")
                         && client.contains(#"NetworkAuditLog.record(service: "image", operation: "kaset.artwork""#)
                         && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
-                            "? MediaControlClient.kasetArtwork(forTrackKey: expectedKey) : MediaControlClient.fetchArtwork()"),
+                            "guard let result = MediaControlClient.kasetArtwork(forTrackKey: expectedKey) else {")
+                        && src("LyrimuseCore/Local/LocalPlaybackSource.swift").contains(
+                            "let fetched = MediaControlClient.fetchArtworkExplained()"),
                     true, "Kaset 契约: 封面用它自己报的那张(队列那张优先),下载记对外请求,取图时按播放器分流")
         let controller = src("LyrimuseCore/Local/MusicPlaybackController.swift")
         expectEqual(controller.contains(#"if (liked() !== \(value)) K.likeTrack();"#)

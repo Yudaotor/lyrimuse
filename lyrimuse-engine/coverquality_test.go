@@ -309,7 +309,7 @@ func TestDevicePublicCoverFollowsCover(t *testing.T) {
 
 	src := string(mustRead(t, "enrich.go"))
 	for _, c := range []struct{ fn, call, then string }{
-		{"func deviceCoverUpgradePass(", "public := devicePublicCover(ctx, deviceCoverURL, existing.CoverURL)", "enrichMu.Lock()"},
+		{"func deviceCoverUpgradePass(", "public = devicePublicCover(ctx, deviceCoverURL, existing.CoverURL)", "enrichMu.Lock()"},
 		{"func backfillPeripheralFields(", "prePublic = devicePublicCover(ctx, preDeviceURL, fresh.CoverURL)", "enrichMu.Lock()"},
 	} {
 		start := strings.Index(src, c.fn)
