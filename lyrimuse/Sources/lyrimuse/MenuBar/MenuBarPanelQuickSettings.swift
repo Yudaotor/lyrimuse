@@ -433,6 +433,12 @@ struct PanelQuickSettings: View {
                         settings.notchFontSize = newValue
                     }
                 ), range: Self.notchFontSizeRange)
+                // 歌词行「高度」,设置页「歌词行」组那根的第二个入口:区间(下界跟着字号和副行现算)和显示值(实际画出来的
+                // 高度)都读 AppSettings 那一份,排在字号后面 —— 字号一变,它的下界当场跟着变,挨着看得出因果。
+                sliderRow(L10n.t("高度"), value: Binding(
+                    get: { Double(settings.notchEffectiveLyricRowHeight) },
+                    set: { settings.setNotchLyricRowHeight(fromSlider: $0) }
+                ), range: settings.notchLyricRowHeightRange)
             }
         case .surface(.menuBar):
             row(L10n.t("宽度模式")) {
@@ -530,7 +536,7 @@ struct PanelQuickSettings: View {
     // MARK: 滑杆区间
 
     /// 灵动岛主行字号的可调区间。真源在 Core(`NotchLyricRowMetrics.mainFontSizeRange`,11…17,
-    /// 上限是"最大字号下两行 + 间距仍塞得进 44pt 行高"倒推出来的),跟设置页「字体」组那根读同一份,
+    /// 上限是"最大字号下两行 + 间距仍塞得进行高上限 44pt"倒推出来的),跟设置页「字体」组那根读同一份,
     /// 别在这里写字面量。提成计算属性是因为 Swift 的区间运算符必须跟左操作数同一行,行内写下来超长。
     private static var notchFontSizeRange: ClosedRange<Double> {
         Double(NotchLyricRowMetrics.mainFontSizeRange.lowerBound)

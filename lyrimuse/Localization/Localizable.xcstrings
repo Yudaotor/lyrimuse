@@ -931,19 +931,19 @@
         }
       }
     },
-    "在主歌词下方增加一行，行高不变。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览" : {
+    "在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览。放不下两行时歌词行会自动加高" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adds one more line under the main lyric without changing the row height. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview"
+            "value" : "Adds one more line under the main lyric. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview. If two lines don't fit, the lyric row grows to fit them"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在主歌詞下方增加一行，行高不變。譯文和讀音對應目前句，「下一句」顯示即將演唱的歌詞；選擇「下一句」時，展開區不再重複顯示下一句預覽"
+            "value" : "在主歌詞下方增加一行。譯文和讀音對應目前句，「下一句」顯示即將演唱的歌詞；選擇「下一句」時，展開區不再重複顯示下一句預覽。放不下兩行時歌詞行會自動加高"
           }
         }
       }
@@ -965,19 +965,19 @@
         }
       }
     },
-    "仅调整主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" : {
+    "仅调整主行，%@～%@pt，放不下时歌词行会自动加高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Main line only, %@–%@pt; the lyric row height stays the same. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight"
+            "value" : "Main line only, %@–%@pt; the lyric row grows if the text no longer fits. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅調整主行，%@～%@pt，歌詞行高度不變；副行和展開時的下一句預覽固定為 %@pt，僅跟隨字體與字重"
+            "value" : "僅調整主行，%@～%@pt，放不下時歌詞行會自動加高；副行和展開時的下一句預覽固定為 %@pt，僅跟隨字體與字重"
           }
         }
       }
@@ -40902,6 +40902,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本機系統未提供觸控列介面"
+          }
+        }
+      }
+    },
+    "歌词行的高度，平时和展开时一样。默认刚好放得下文字（开着副行时更高），可以调高" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How tall the lyric row is, the same at rest and when expanded. By default it just fits the text (taller with the second line on); you can make it taller"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞行的高度，平時和展開時一樣。預設剛好放得下文字（開啟副行時更高），可以調高"
           }
         }
       }

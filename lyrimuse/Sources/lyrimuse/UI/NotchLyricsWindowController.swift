@@ -223,11 +223,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     static func menuBarHeight(of screen: NSScreen) -> CGFloat {
         max(fallbackNotchHeight, screen.frame.maxY - screen.visibleFrame.maxY)
     }
-    // 常显内容行的固定高度(一行歌词 + 3 个播放控制按钮那一行的高度经验取值)——窗口
-    // 总高度 = 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。
-    // 数值本身在 NotchMetrics.compactRowHeight —— 视图那边按同一个数字排版,
-    // 两处各写一份 44 迟早会漂。
-    private static var contentHeight: CGFloat { NotchMetrics.compactRowHeight }
+    /// 歌词行的实际高度(`AppSettings.notchEffectiveLyricRowHeight`)。窗口总高度 = 刘海高(或兜底高度)+ 它 + 展开区上限,
+    /// 视图那边按同一个值排版。由 `lyricRowHeightObserver` 用 sink 参数值算好写进来(@Published 是 willSet 时机,
+    /// 回读 AppSettings 拿到的是旧值),再重算几何。
+    @Published private(set) var lyricRowHeight: CGFloat = AppSettings.shared.notchEffectiveLyricRowHeight
     // 宽度是固定值,不随当前歌词文字宽度动态变化——预期是多大就多大,不会随着歌词
     // 发生变化。数值本身(默认 360)以及用户可调的设置项都定义在 AppSettings.
     // notchContentWidth(这里不重复放一份、避免两处数字不同步)。超长歌词交给
@@ -330,6 +329,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var expandedTrackInfoShowsArtistObserver: AnyCancellable?
     private var expandedTrackInfoShowsAlbumObserver: AnyCancellable?
     private var expandedShowsQuickActionsObserver: AnyCancellable?
+    private var lyricRowHeightObserver: AnyCancellable?
     private var leftEarObserver: AnyCancellable?
     private var rightEarObserver: AnyCancellable?
     private var trackPresenceObserver: AnyCancellable?
@@ -386,7 +386,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     convenience init(pinnedScreenID: String?) {
         // 初始 contentRect 只是占位——真正的尺寸/位置由下面 recomputeGeometry() 按
         // 当前屏幕几何重新算一遍并 setFrame,这里传什么都会被立刻覆盖掉。
-        let placeholder = NSSize(width: AppSettings.shared.notchContentWidth, height: Self.fallbackNotchHeight + Self.contentHeight)
+        let placeholder = NSSize(width: AppSettings.shared.notchContentWidth,
+                                 height: Self.fallbackNotchHeight + AppSettings.shared.notchEffectiveLyricRowHeight)
         let panel = NotchLyricsWindow(contentRect: NSRect(origin: .zero, size: placeholder))
         // 「截屏 / 录屏时隐藏」同理从一开始就按设置来,不然补上之前那一小段录屏拍得到它。
         panel.sharingType = AppSettings.shared.notchHideDuringScreenCapture ? .none : .readWrite
@@ -621,6 +622,21 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         expandedShowsQuickActionsObserver = AppSettings.shared.$notchExpandedShowsQuickActions.removeDuplicates().sink { [weak self] shows in
             self?.expandedShowsQuickActions = shows
             self?.recomputeGeometry(animate: false, expandedShowsQuickActions: shows)
+        }
+        // 歌词行高度:设定值、字号、副行三项合成实际高度(设定值夹到装得下当前文字为止)。窗口高度跟着它,
+        // 必须重算几何;三个值都取 sink 参数(同一个 willSet 坑),先写镜像,recomputeGeometry 再读镜像。
+        lyricRowHeightObserver = Publishers.CombineLatest3(
+            AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine
+        )
+        .map { setting, fontSize, secondary in
+            NotchLyricRowMetrics.effectiveRowHeight(
+                setting: CGFloat(setting), fontSize: CGFloat(fontSize), twoLines: secondary.showsSecondaryRow)
+        }
+        .removeDuplicates()
+        .sink { [weak self] height in
+            guard let self else { return }
+            if self.lyricRowHeight != height { self.lyricRowHeight = height }
+            self.recomputeGeometry(animate: false)
         }
         editorialDemandObserver = $isVisible
             .combineLatest($expandedTrackInfoShowsAlbum, $expandedTrackInfoShowsArtist, $expandedTrackInfoShowsTitle)
@@ -1323,6 +1339,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         NotchEditorialPanel.shared.close(ifOwner: window)
         expandedShowsQuickActionsObserver?.cancel()
         expandedShowsQuickActionsObserver = nil
+        lyricRowHeightObserver?.cancel()
+        lyricRowHeightObserver = nil
         trackPresenceObserver?.cancel()
         trackPresenceObserver = nil
         milestoneObserver?.cancel()
@@ -1425,7 +1443,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 收听里程碑的报喜卡片(顶行 + milestonePanelHeight)在展开区很矮的配置下可能比展开态还高,取两者大的。
         let size = NSSize(
             width: expandedCardWidth,
-            height: max(geo.notchHeight + Self.contentHeight + self.expandedExtraHeight(
+            height: max(geo.notchHeight + lyricRowHeight + self.expandedExtraHeight(
                 expandedShowsNextLine: expandedShowsNextLine,
                 expandedShowsControls: expandedShowsControls,
                 expandedTrackInfoShowsArtwork: expandedTrackInfoShowsArtwork,

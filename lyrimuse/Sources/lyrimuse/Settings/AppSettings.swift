@@ -363,6 +363,7 @@ final class AppSettings: ObservableObject {
         static let notchFontFamilyName = "np:notchFontFamilyName"
         static let notchFontWeight = "np:notchFontWeight"
         static let notchFontSize = "np:notchFontSize"
+        static let notchLyricRowHeight = "np:notchLyricRowHeight"
         static let notchLeftEar = "np:notchLeftEar"
         static let notchRightEar = "np:notchRightEar"
         static let notchScreenID = "np:notchScreenID"
@@ -521,6 +522,9 @@ final class AppSettings: ObservableObject {
     static let defaultNotchFontFamilyName = ""
     static let defaultNotchFontWeight: OverlayFontWeight = .semibold
     static let defaultNotchFontSize = Double(NotchLyricRowMetrics.defaultMainFontSize)
+    /// 灵动岛歌词行高度的默认值:刚好放得下文字(`NotchLyricRowMetrics.minimumRowHeight`,实际高度按字号和副行算,
+    /// 默认字号下副行开着 39、关着 26)。比加这项设置之前的固定 44 矮,升级上来的人卡片会变矮。
+    static let defaultNotchLyricRowHeight = Double(NotchLyricRowMetrics.minimumRowHeight)
 
     // 菜单栏歌词「重置」按钮(编辑台工具栏)要恢复的那一批默认值——宽度模式 + 逐字染色 +
     // 文字/染色两个自定义色,不含 `menuBarLyricsWidth`(宽度,结构性尺寸设置)和
@@ -1559,9 +1563,9 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(notchSecondaryLine.rawValue, forKey: Keys.notchSecondaryLine) }
     }
     /// 灵动岛歌词的字体族 / 粗细 / 字号(设置页灵动岛工具栏第二行「字体」浮层与抽屉「字体」组)。
-    /// 三个都只影响渲染、不影响几何:行高恒 44,字号上限由 `NotchLyricRowMetrics.mainFontSizeRange` 倒推、保证副行
-    /// 开着时两行仍塞得进去,所以跟 `notchLyricsAlignment` 一样走 `NotchPlayback` 现读,不过 `NotchChromeSource`
-    /// 那套高度链路。
+    /// 文字本身走 `NotchPlayback` 现读,跟 `notchLyricsAlignment` 一样;字号上限由 `NotchLyricRowMetrics.mainFontSizeRange`
+    /// 倒推、保证副行开着时两行塞得进行高上限。字号另外决定歌词行高度的下限(`notchEffectiveLyricRowHeight`),
+    /// 那一半是几何,走 `NotchChromeSource.lyricRowHeight`。
     ///
     /// 只管**歌词文字**(主行、副行、展开区「下一句」预览、广告态那一格):耳朵里的歌名 / 歌手模块、曲目信息头部、
     /// 时间和按键是卡片本身的界面,不跟着走 —— 悬浮歌词和菜单栏的字体设置也只管歌词,三个面同一条边界。
@@ -1588,6 +1592,33 @@ final class AppSettings: ObservableObject {
             defaults.set(notchFontSize, forKey: Keys.notchFontSize)
             recomputeNotchFonts()
         }
+    }
+    /// 灵动岛歌词行的高度(pt),上限 `NotchLyricRowMetrics.rowHeight`,默认刚好放得下文字(`defaultNotchLyricRowHeight`)。
+    /// 这里存用户设的原值,实际画多高看 `notchEffectiveLyricRowHeight`;滑杆写回走 `setNotchLyricRowHeight(fromSlider:)`。
+    /// 它改的是几何(卡片、窗口、展开区的位置),所以不走 `NotchPlayback`
+    /// 现读,走 `NotchChromeSource.lyricRowHeight`:真窗口由控制器订阅这一项和字号、副行三项后重算,编辑台的替身现读。
+    @Published var notchLyricRowHeight: Double {
+        didSet { defaults.set(notchLyricRowHeight, forKey: Keys.notchLyricRowHeight) }
+    }
+    /// 歌词行实际画多高:设定值夹到装得下当前字号和副行为止(`NotchLyricRowMetrics.effectiveRowHeight`)。
+    var notchEffectiveLyricRowHeight: CGFloat {
+        NotchLyricRowMetrics.effectiveRowHeight(
+            setting: CGFloat(notchLyricRowHeight), fontSize: CGFloat(notchFontSize),
+            twoLines: notchSecondaryLine.showsSecondaryRow)
+    }
+    /// 「高度」滑杆的可调区间:下界 = 装得下当前字号和副行的最小高度,上界 = 默认值。设置页「歌词行」组和菜单栏
+    /// 快捷设置那两根读这一份;滑杆的显示值用 `notchEffectiveLyricRowHeight`,设定值低于下界时也按实际高度停在下界。
+    var notchLyricRowHeightRange: ClosedRange<Double> {
+        let lower = NotchLyricRowMetrics.contentMinimumRowHeight(
+            fontSize: CGFloat(notchFontSize), twoLines: notchSecondaryLine.showsSecondaryRow)
+        return Double(lower)...Double(NotchLyricRowMetrics.rowHeight)
+    }
+    /// 「高度」滑杆的写回,两根滑杆都走这里:拖到下界存成「刚好放得下」(`NotchLyricRowMetrics.storedRowHeight`),
+    /// 之后开关副行、改字号高度仍跟着最小值走;带相等守卫,拖动中大量等值赋值不白广播、不白重算窗口几何。
+    func setNotchLyricRowHeight(fromSlider value: Double) {
+        let stored = Double(NotchLyricRowMetrics.storedRowHeight(
+            fromSlider: CGFloat(value), fontSize: CGFloat(notchFontSize), twoLines: notchSecondaryLine.showsSecondaryRow))
+        if stored != notchLyricRowHeight { notchLyricRowHeight = stored }
     }
 
     @Published var notchLeftEar: NotchEarModule {
@@ -2234,6 +2265,7 @@ final class AppSettings: ObservableObject {
         notchFontWeight = defaults.string(forKey: Keys.notchFontWeight)
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultNotchFontWeight
         notchFontSize = (defaults.object(forKey: Keys.notchFontSize) as? Double) ?? Self.defaultNotchFontSize
+        notchLyricRowHeight = (defaults.object(forKey: Keys.notchLyricRowHeight) as? Double) ?? Self.defaultNotchLyricRowHeight
         notchLeftEar = defaults.string(forKey: Keys.notchLeftEar)
             .flatMap(NotchEarModule.init(rawValue:)) ?? Self.defaultNotchLeftEar
         notchRightEar = defaults.string(forKey: Keys.notchRightEar)

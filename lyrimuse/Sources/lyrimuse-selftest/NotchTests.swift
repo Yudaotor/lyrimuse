@@ -151,11 +151,11 @@ func runNotchTests() {
     // ---- 没有曲目时的空闲面板(05 章决策 #31)----
     //
     // 窗口恒按「顶行 + 歌词行 + maxHeight」开,而空闲面板是 !hasTrack 时展开唯一长出的一块。它必须
-    // 放得进**最省配置**(下一句预览关、控制键关、头部全关 → maxHeight 只剩进度条 24pt)下的窗口,
+    // 放得进**最省配置**(歌词行调到最矮、下一句预览关、控制键关、头部全关 → maxHeight 只剩进度条 24pt)下的窗口,
     // 否则关了那几个开关的用户 hover 上去面板底部会被窗口边界硬裁。
     do {
         typealias M = NotchExpandedMetrics
-        let roomiestFloor = NotchLyricRowMetrics.rowHeight
+        let roomiestFloor = NotchLyricRowMetrics.minimumRowHeight
             + M.maxHeight(hasLyricPreviewPossible: false, hasControlsPossible: false, trackInfoHeight: 0)
         expectEqual(M.idlePanelHeight <= roomiestFloor, true,
                     "空闲面板: 高度 \(M.idlePanelHeight) 必须放得进最省配置下的窗口(歌词行 + maxHeight = \(roomiestFloor))")
@@ -372,7 +372,7 @@ func runNotchTests() {
                         "副行: 用户开着展开区预览,只有「下一句」把它顶掉(\(secondary.rawValue))")
         }
         typealias R = NotchLyricRowMetrics
-        expectEqual(R.rowHeight, 44, "副行: 稳态歌词行仍是 44(方案二的前提:行高不变)")
+        expectEqual(R.rowHeight, 44, "副行: 歌词行高度的上限仍是 44(加「高度」这项之前的固定高度)")
         expectEqual(R.twoLineStackHeight, 31, "副行: 15 + 3 + 13 = 31")
         expectEqual(R.twoLineStackHeight <= R.rowHeight, true,
                     "副行: 两行叠起来必须塞进行高,否则卡片高度公式要多一个入参")
@@ -396,6 +396,85 @@ func runNotchTests() {
         expectEqual(R.lineHeight(fontSize: 16.6), 19, "字体: 行高先把字号取整再 +2")
         expectEqual(OverlayFontWeight.semibold.lighter(by: OverlayFontWeight.notchSecondarySteps), .medium,
                     "字体: 默认档 semibold 推出的副行粗细 = 改动前硬编码的 medium")
+
+        // 「高度」:上限 44,默认刚好放得下文字;实际高度夹到装得下当前字号和副行为止(上下各留 4pt、不低于换歌歌名条那 26pt)。
+        expectEqual(R.contentMinimumRowHeight(fontSize: 13, twoLines: false), 26,
+                    "高度: 默认字号单行 15 + 8 = 23,不低于歌名条那 26")
+        expectEqual(R.contentMinimumRowHeight(fontSize: 13, twoLines: true), 39, "高度: 默认字号两行 31 + 8 = 39")
+        expectEqual(R.contentMinimumRowHeight(fontSize: 17, twoLines: false), 27, "高度: 最大字号单行 19 + 8 = 27")
+        expectEqual(R.contentMinimumRowHeight(fontSize: 17, twoLines: true), 43, "高度: 最大字号两行 35 + 8 = 43")
+        for size in Int(R.mainFontSizeRange.lowerBound)...Int(R.mainFontSizeRange.upperBound) {
+            for twoLines in [false, true] {
+                let floor = R.contentMinimumRowHeight(fontSize: CGFloat(size), twoLines: twoLines)
+                expectEqual(floor < R.rowHeight, true,
+                            "高度: 任何合法字号下滑杆都还有得调(\(size)pt,两行 \(twoLines),下限 \(floor))")
+            }
+        }
+        expectEqual(R.effectiveRowHeight(setting: R.minimumRowHeight, fontSize: 13, twoLines: true), 39,
+                    "高度: 默认设定(存成最矮)开着副行刚好放得下两行")
+        expectEqual(R.effectiveRowHeight(setting: R.minimumRowHeight, fontSize: 13, twoLines: false), 26,
+                    "高度: 默认设定关着副行刚好放得下一行")
+        expectEqual(R.effectiveRowHeight(setting: R.minimumRowHeight, fontSize: 17, twoLines: true), 43,
+                    "高度: 默认设定跟着字号变高")
+        expectEqual(R.effectiveRowHeight(setting: 44, fontSize: 13, twoLines: true), 44, "高度: 调到最高就是原来的 44")
+        expectEqual(R.effectiveRowHeight(setting: 30, fontSize: 13, twoLines: false), 30, "高度: 单行调到 30 就画 30")
+        expectEqual(R.effectiveRowHeight(setting: 30, fontSize: 13, twoLines: true), 39,
+                    "高度: 设得比两行要的矮时撑回 39,不裁字")
+        expectEqual(R.effectiveRowHeight(setting: 10, fontSize: 13, twoLines: false), 26, "高度: 越界的小值夹回下限")
+        expectEqual(R.effectiveRowHeight(setting: 99, fontSize: 13, twoLines: false), 44, "高度: 越界的大值夹回上限")
+        expectEqual(R.effectiveRowHeight(setting: 30.4, fontSize: 13, twoLines: false), 30, "高度: 按整 pt 画")
+        expectEqual(R.effectiveRowHeight(setting: 30, fontSize: 99, twoLines: true),
+                    R.contentMinimumRowHeight(fontSize: 17, twoLines: true), "高度: 越界字号先夹回再算下限")
+        // 滑杆写回:拖到最底存成「刚好放得下」,之后关掉副行会跟着矮回一行;拖到别处存原值。
+        expectEqual(R.storedRowHeight(fromSlider: 39, fontSize: 13, twoLines: true), R.minimumRowHeight,
+                    "高度: 两行时拖到最底存成跟随最小值,不存 39")
+        expectEqual(R.effectiveRowHeight(setting: R.storedRowHeight(fromSlider: 39, fontSize: 13, twoLines: true),
+                                         fontSize: 13, twoLines: false), 26,
+                    "高度: 拖到最底以后关掉副行,矮回一行的高度")
+        expectEqual(R.storedRowHeight(fromSlider: 40, fontSize: 13, twoLines: true), 40, "高度: 不在最底存原值")
+        expectEqual(R.storedRowHeight(fromSlider: 26, fontSize: 13, twoLines: false), R.minimumRowHeight,
+                    "高度: 单行拖到最底同样存成跟随最小值")
+        expectEqual(R.storedRowHeight(fromSlider: 30.4, fontSize: 13, twoLines: false), 30, "高度: 存整 pt")
+    }
+
+    // 「高度」的接线:真窗口订阅三项设置、窗口高度用实际行高;卡片高度读 chrome 的实际行高;编辑台舞台按上限留高度;
+    // 不再有固定 44 的行高常量(拿它排版会在用户调过高度后跟卡片对不上)。
+    do {
+        let ui = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI")
+        func read(_ name: String) -> String {
+            (try? String(contentsOfFile: ui.appendingPathComponent(name).path, encoding: .utf8)) ?? ""
+        }
+        let controller = read("NotchLyricsWindowController.swift")
+        let view = read("NotchLyricsView.swift")
+        let stage = read("NotchEditorStage.swift")
+        expectEqual(controller.contains(
+            "AppSettings.shared.$notchLyricRowHeight, AppSettings.shared.$notchFontSize, AppSettings.shared.$notchSecondaryLine")
+                    && controller.contains("height: max(geo.notchHeight + lyricRowHeight + self.expandedExtraHeight("), true,
+                    "高度接线: 真窗口订阅行高、字号、副行三项,窗口高度用实际行高")
+        expectEqual(view.contains("var lyricRowHeight: CGFloat { get }")
+                    && view.contains("+ ((showsLyrics || expanded) ? lyricRowHeight"), true,
+                    "高度接线: chrome 给实际行高,卡片高度公式读它")
+        expectEqual(stage.contains("var lyricRowHeight: CGFloat { AppSettings.shared.notchEffectiveLyricRowHeight }")
+                    && stage.contains("chrome.contentTopInset + NotchLyricRowMetrics.rowHeight + NotchMetrics.expandedExtraHeightMax("),
+                    true, "高度接线: 编辑台替身现读实际行高,舞台按上限留高度(拖滑杆时整页不跳)")
+        for (name, source) in [("NotchLyricsView", view), ("NotchEditorStage", stage), ("NotchLyricsWindowController", controller)] {
+            expectEqual(source.isEmpty, false, "高度接线: 读到 \(name).swift")
+            expectEqual(source.contains("compactRowHeight"), false, "高度接线: \(name) 里不再有固定行高常量 compactRowHeight")
+        }
+        // 默认刚好放得下文字;两根滑杆都经同一个写回(拖到最底存成跟随最小值)。
+        let app = ui.deletingLastPathComponent()
+        func readApp(_ rel: String) -> String {
+            (try? String(contentsOfFile: app.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        expectEqual(readApp("Settings/AppSettings.swift")
+                        .contains("static let defaultNotchLyricRowHeight = Double(NotchLyricRowMetrics.minimumRowHeight)"), true,
+                    "高度接线: 默认值存成最矮,实际高度刚好放得下文字")
+        for rel in ["SettingsView.swift", "MenuBar/MenuBarPanelQuickSettings.swift"] {
+            expectEqual(readApp(rel).contains("set: { settings.setNotchLyricRowHeight(fromSlider: $0) }"), true,
+                        "高度接线: \(rel) 的「高度」滑杆经 setNotchLyricRowHeight(fromSlider:) 写回")
+        }
     }
 
     // ---- 灵动岛 hover 命中判定----

@@ -109,6 +109,8 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 不用 @Published 镜像:编辑台自己观察 AppSettings,设置一变整块重画,读到的必然是新值。
     var showsLyrics: Bool { AppSettings.shared.notchShowLyrics }
     var showsLyricsSetting: Bool { AppSettings.shared.notchShowLyrics }
+    /// 歌词行实际高度,同上现读:拖「行高」滑杆时预览卡片跟着变矮(舞台本身按上限留高度,不跟着动,见 `cardAreaHeight`)。
+    var lyricRowHeight: CGFloat { AppSettings.shared.notchEffectiveLyricRowHeight }
     /// 音浪开关/贴哪只耳朵,同上现读设置——预览要如实反映用户正在配的效果。
     ///
     /// 这两项比「显示歌词」更不能钉成常量:它们**同时**决定顶行怎么排
@@ -425,8 +427,10 @@ struct NotchEditorStage: View {
     /// "播放控制键开关"+"曲目信息头部现算高度"三个设置维度(见该函数注释)——这里从
     /// `chrome` 现读,不是钉常量:预览来这儿就是让用户看清楚"这些设置会让展开区变多高",
     /// 钉死的话舞台留白跟真窗口对不上。
+    /// 歌词行这一截**按上限**(`NotchLyricRowMetrics.rowHeight`)留,不跟「行高」走:那是一根滑杆,舞台跟着它变高变矮
+    /// 的话,拖动时下面整页上下跳,「全部设置」抽屉里的那根滑杆还会从指针底下溜走。卡片在舞台里照样按实际行高画。
     private var cardAreaHeight: CGFloat {
-        chrome.contentTopInset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeightMax(
+        chrome.contentTopInset + NotchLyricRowMetrics.rowHeight + NotchMetrics.expandedExtraHeightMax(
             hasLyricPreviewPossible: chrome.expandedShowsNextLine,
             hasControlsPossible: chrome.expandedShowsControls,
             trackInfoHeight: NotchMetrics.expandedTrackInfoHeight(
@@ -720,6 +724,11 @@ struct NotchEditorStage: View {
         // (`NotchLyricRowSettingsRows`),摘要跟浮层说同一套话;没被顶掉就按"只列开着的"。
         if !settings.notchSecondaryLine.hidesExpandedNextLinePreview, settings.notchExpandedShowsNextLine {
             parts.append(NotchBehaviorItem.expandedNextLine.title)
+        }
+        // 「高度」同「对齐方式」那条规则:只在不是默认(刚好放得下文字)时报,报实际画出来的高度,写成「高度 44pt」。
+        let rowHeight = settings.notchEffectiveLyricRowHeight
+        if Double(rowHeight) > settings.notchLyricRowHeightRange.lowerBound {
+            parts.append("\(L10n.t("高度")) \(String(format: L10n.t("%@pt"), "\(Int(rowHeight))"))")
         }
         if settings.notchLyricRowShowsArtwork {
             parts.append("\(NotchEarModule.artwork.displayName) · \(settings.notchLyricRowArtworkPosition.displayName)")
@@ -1141,7 +1150,7 @@ struct NotchEditorStage: View {
     /// `rects` 是**卡片本地、未缩放**坐标(原点卡片左上角),跟 `NotchLyricsView.body` 那棵 VStack
     /// 的排版逐段对应:顶行两只耳朵 → 曲目信息头部(展开且开着才有)→ 歌词行(`showsLyricRow`)
     /// **+ 紧跟着的「下一句预览」**(展开且开着才有)→ 展开区剩下的(进度条 / 播放键)。高度全部取自
-    /// 跟渲染同一份的度量(`contentTopInset` / `expandedTrackInfoHeaderHeight` / `compactRowHeight` /
+    /// 跟渲染同一份的度量(`contentTopInset` / `expandedTrackInfoHeaderHeight` / `lyricRowHeight` /
     /// `NotchExpandedMetrics.lyricPreviewBlock` / `cardHeight`),不另写数字 —— 渲染那边一改这里就跟着对。
     ///
     /// 「下一句预览」划给**歌词行**那块、不划给展开态(「这个框不应该把这个歌词行也包括
@@ -1184,7 +1193,7 @@ struct NotchEditorStage: View {
             y += height
         }
         if chrome.showsLyricRow {
-            var lyricHeight = NotchMetrics.compactRowHeight
+            var lyricHeight = chrome.lyricRowHeight
             // 展开时紧跟在歌词行下面的「下一句预览」并进同一个矩形(理由见类型注释那条提醒)。
             // 它是 expandedContent 的第一个子视图,跟歌词行在布局上是连着的,所以能合成一块。
             if chrome.isExpanded, chrome.showsExpandedLyricPreview {
@@ -1736,6 +1745,8 @@ enum NotchStyleDefaults {
         settings.notchFontFamilyName = AppSettings.defaultNotchFontFamilyName
         settings.notchFontWeight = AppSettings.defaultNotchFontWeight
         settings.notchFontSize = AppSettings.defaultNotchFontSize
+        // 歌词行「高度」同样进重置:按钮自报的排除范围只有「宽度和总开关」,它不在里面。
+        settings.notchLyricRowHeight = AppSettings.defaultNotchLyricRowHeight
         // 「行为」组里那两个自动隐藏开关(补漏)。
         //
         // 它们才从撤掉的那张跨形态「自动隐藏」卡并进灵动岛「行为」组,**并进来时

@@ -3561,7 +3561,8 @@ private struct NotchLyricsAlignmentRow: View {
 }
 
 /// 「副行」那一行:主歌词下方那 11pt 显示什么,四选一(不显示 / 下一句 / 译文 / 罗马音),
-/// 默认「下一句」。行高恒 44、不影响卡片任何尺寸,所以跟「对齐方式」一样是歌词行自己的**顶层**
+/// 默认「下一句」。开着副行时歌词行的高度下限是放得下两行(`NotchLyricRowMetrics.effectiveRowHeight`),
+/// 默认高度就停在这个下限上;关掉又矮回一行的高度。跟「对齐方式」一样是歌词行自己的**顶层**
 /// 设置项(`SettingsRow`,不是从属的 `SettingsSubRow`),顺序紧跟「对齐方式」。
 ///
 /// 控件用下拉(`.pickerStyle(.menu)`)而不是分段控件:四个英文标签(Nothing / Next Line /
@@ -3577,7 +3578,7 @@ private struct LyricSecondaryLineRow: View {
         SettingsRow(
             icon: "text.append",
             title: L10n.t("副行"),
-            help: L10n.t("在主歌词下方增加一行，行高不变。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览")
+            help: L10n.t("在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览。放不下两行时歌词行会自动加高")
         ) {
             Picker("", selection: $settings.notchSecondaryLine) {
                 ForEach(LyricSecondaryLine.allCases, id: \.self) { option in
@@ -3591,11 +3592,41 @@ private struct LyricSecondaryLineRow: View {
     }
 }
 
+/// 「高度」那一行:歌词行的高度,平时和展开时同高,上限 44(`NotchLyricRowMetrics.rowHeight`),默认刚好放得下文字。
+/// 滑杆下界跟着字号和副行现算(`AppSettings.notchLyricRowHeightRange`);设定值低于下界时,滑杆和读数都按实际画出来的
+/// 高度显示(同宽度滑杆「实际宽度 = max(设定值, 耳朵下限)」的口径)。拖动写回走 `setNotchLyricRowHeight(fromSlider:)`:
+/// 拖到最底存成「刚好放得下」,之后开关副行仍跟着最小值走。控件照「字体」组「字号」那一行:`SteppedSlider` 150 + 读数 46。
+@MainActor
+private struct NotchLyricRowHeightRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsRow(
+            icon: "arrow.up.and.down",
+            title: L10n.t("高度"),
+            help: L10n.t("歌词行的高度，平时和展开时一样。默认刚好放得下文字（开着副行时更高），可以调高")
+        ) {
+            HStack(spacing: 8) {
+                SteppedSlider(value: Binding(
+                    get: { Double(settings.notchEffectiveLyricRowHeight) },
+                    set: { settings.setNotchLyricRowHeight(fromSlider: $0) }
+                ), in: settings.notchLyricRowHeightRange, step: 1)
+                    .frame(width: 150)
+                Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchEffectiveLyricRowHeight))"))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 46, alignment: .trailing)
+            }
+        }
+    }
+}
+
 /// 「歌词行」组 —— 工具栏「歌词行」浮层(`NotchLyricRowPopover`)与「全部设置」抽屉
 /// `lyricRowGroup` 调的是这同一份。
 ///
-/// 顺序:显示歌词 →(对齐方式 → 副行 → 展开时预览下一句)→ 卡拉OK效果 → 显示封面(→ 封面位置)。
-/// 先把歌词这一格自己的事说完(显不显示、怎么对齐、下面加哪一行、怎么填色),再说行末那枚封面。
+/// 顺序:显示歌词 →(对齐方式 → 副行 → 展开时预览下一句 → 高度)→ 卡拉OK效果 → 显示封面(→ 封面位置)。
+/// 先把歌词这一格自己的事说完(显不显示、怎么对齐、下面加哪一行、多高、怎么填色),再说行末那枚封面。
+/// 「高度」紧跟「副行」:它的下限跟着副行开没开走,挨着放才看得出为什么拖不下去。
 ///
 /// **「显示歌词」关着时其余整组隐藏**(不是禁用):没有歌词行,"靠哪边 / 副行放什么 / 怎么填色 /
 /// 封面贴哪一行"这些事都没有意义。 唯一的例外是「展开时预览下一句」:它画在展开区、不依赖
@@ -3625,6 +3656,8 @@ struct NotchLyricRowSettingsRows: View {
                     CardDivider()
                     NotchBehaviorToggleSubRow(item: .expandedNextLine)
                 }
+                CardDivider()
+                NotchLyricRowHeightRow()
                 CardDivider()
                 NotchBehaviorToggleRow(item: .karaoke)
                 CardDivider()
@@ -3659,7 +3692,7 @@ struct NotchFontSettingsRows: View {
     }
 
     private var sizeHelp: String {
-        String(format: L10n.t("仅调整主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重"),
+        String(format: L10n.t("仅调整主行，%@～%@pt，放不下时歌词行会自动加高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重"),
                "\(Int(NotchLyricRowMetrics.mainFontSizeRange.lowerBound))",
                "\(Int(NotchLyricRowMetrics.mainFontSizeRange.upperBound))",
                "\(Int(NotchLyricRowMetrics.secondaryFontSize))")

@@ -86,14 +86,42 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
     }
 }
 
-/// 灵动岛稳态歌词行(`NotchMetrics.compactRowHeight` 那 44pt)里两行文字的度量。放在 Core 是为了让
-/// selftest 能钉住"两行加间距 ≤ 行高"这条不变量 —— 一旦有人把副行字号调大到塞不下,卡片高度公式
-/// (`cardHeight`)就得多一个入参,那正是方案二刻意绕开的整片雷区(编辑台舞台常量、出场动画、
-/// 展开区高度上限都挂在它下面),必须在 selftest 里红出来而不是真机上裁字。
+/// 灵动岛歌词行的高度规则和里面两行文字的度量。高度用户可调(`AppSettings.notchLyricRowHeight`,上限 `rowHeight`),
+/// 默认刚好放得下文字;实际高度由 `effectiveRowHeight` 夹到装得下当前文字为止;卡片、窗口、编辑台都读
+/// chrome 给的这个实际值(`NotchChromeSource.lyricRowHeight`)。放在 Core 是为了让 selftest 钉住
+/// "最大字号下两行 + 上下余量 ≤ 行高上限"这条不变量 —— 副行字号或字号上限一旦调大到塞不下,
+/// 必须在 selftest 里红出来而不是真机上裁字。
 /// 菜单栏那一套度量在 `MenuBarLyricRows`(按钮 22pt,约束完全不同,不共用)。
 public enum NotchLyricRowMetrics {
-    /// 稳态歌词行的高度。App 侧 `NotchMetrics.compactRowHeight` 转发这个值。
+    /// 歌词行高度的上限(设置项 `AppSettings.notchLyricRowHeight` 之前的固定高度)。下面的字号上限、
+    /// 编辑台舞台留的高度都按它算。
     public static let rowHeight: CGFloat = 44
+    /// 歌词行最矮到多少:换歌时那条歌名(`NotchMetrics.trackDropHeight`)盖在歌词行上,再矮那一行字就放不下。
+    /// 设定值存成它 = 「刚好放得下文字」:实际高度跟着字号和副行走(默认值就是它,见 `storedRowHeight`)。
+    public static let minimumRowHeight: CGFloat = 26
+    /// 文字上下至少各留多少。字号上限 17 也是按这一条倒推的(见 `mainFontSizeRange`)。
+    public static let minimumVerticalMargin: CGFloat = 4
+
+    /// 这一行装下当前文字要的最小高度:副行开着是两行,关着是主行一行,上下各留 `minimumVerticalMargin`,
+    /// 再不低于 `minimumRowHeight`。
+    public static func contentMinimumRowHeight(fontSize: CGFloat, twoLines: Bool) -> CGFloat {
+        let text = twoLines ? twoLineStackHeight(fontSize: fontSize) : mainLineHeight(fontSize: fontSize)
+        return min(rowHeight, max(minimumRowHeight, text + minimumVerticalMargin * 2))
+    }
+
+    /// 歌词行实际画多高:用户设的值夹进 [装得下当前文字的最小高度, `rowHeight`]。设得比下限矮时按下限画
+    /// (调大字号、打开副行都不会裁字,同宽度设置「实际宽度 = max(设定值, 耳朵下限)」);设定值本身不改,
+    /// 关掉副行又能矮回去。
+    public static func effectiveRowHeight(setting: CGFloat, fontSize: CGFloat, twoLines: Bool) -> CGFloat {
+        min(rowHeight, max(setting.rounded(), contentMinimumRowHeight(fontSize: fontSize, twoLines: twoLines)))
+    }
+
+    /// 「高度」滑杆拖到某一格时该存的设定值:拖到下界(此刻刚好放得下文字的高度)存成 `minimumRowHeight`,意思是
+    /// 「一直刚好放得下」—— 之后开关副行、改字号,高度跟着最小值走;存成那一刻的下界(比如两行的 39)的话,关掉副行
+    /// 还停在 39。拖到别处存原值。
+    public static func storedRowHeight(fromSlider value: CGFloat, fontSize: CGFloat, twoLines: Bool) -> CGFloat {
+        value <= contentMinimumRowHeight(fontSize: fontSize, twoLines: twoLines) ? minimumRowHeight : value.rounded()
+    }
     /// 主行字号。用户可调(设置页灵动岛「字体」组,`AppSettings.notchFontSize`):默认 13 = 加这组
     /// 设置之前的硬编码,范围 11…17。**上限是倒推出来的,不是拍的**:最大字号下两行 + 间距仍要塞进 `rowHeight`
     /// 且上下各留 ≥ 4pt(17 → 19 + 3 + 13 = 35,余 4.5),selftest 钉着这条不变量;想放宽范围先过那条闸。

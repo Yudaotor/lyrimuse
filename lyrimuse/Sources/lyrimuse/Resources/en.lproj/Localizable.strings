@@ -277,7 +277,7 @@
 "仅统计可翻译为当前译文语言的语言；译文语言本身及同一语系的语言不计入，因此数量可能少于「系统设置」中显示的数量。语言包由 macOS 管理，翻译在本机完成" = "Counts only languages that can be translated into the current translation language; the target language itself and languages in the same family are excluded, so the number can be lower than in System Settings. Language packs are managed by macOS and translation runs on this Mac";
 "仅统计已存入缓存、会随歌词文件一同导出的读音。其余歌曲的读音在播放时实时生成，不计入统计" = "Counts only romanization stored in the cache and exported alongside the lyrics files. For other songs it is generated on the fly while playing and is not counted.";
 "仅自动匹配筛选出的 %@ 首" = "Auto-Match Only the %@ Filtered Songs";
-"仅调整主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" = "Main line only, %@–%@pt; the lyric row height stays the same. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
+"仅调整主行，%@～%@pt，放不下时歌词行会自动加高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" = "Main line only, %@–%@pt; the lyric row grows if the text no longer fits. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
 "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停" = "Available on some albums only; pauses in Low Power Mode or with Reduce Motion on";
 "今天" = "Today";
 "今天 %@ 次" = "%@ today";
@@ -556,8 +556,8 @@
 "在 iCloud 中发现 Lyrimuse 备份" = "Found a Lyrimuse backup in iCloud";
 "在 iPhone 上安装 Bark App，首页即显示专属推送地址，拷贝后粘贴到此处即可，无需额外设置" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed";
 "在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录。" = "Unchecks Spotify in Players to Scrobble. Spotify plays on your other devices are still recorded.";
+"在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览。放不下两行时歌词行会自动加高" = "Adds one more line under the main lyric. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview. If two lines don't fit, the lyric row grows to fit them";
 "在主歌词下方增加一行（两行分别为 14pt / 11pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行显示不下时，按该句时长横向滚动。" = "Adds a second line under the lyric (14pt / 11pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. When the second line doesn't fit, it scrolls across over the line's duration.";
-"在主歌词下方增加一行，行高不变。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览" = "Adds one more line under the main lyric without changing the row height. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview";
 "在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，显示不下时末尾渐隐。" = "Adds a second line under the lyric without changing the item's height (10pt / 9pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. The second line never scrolls — its tail fades when it doesn't fit.";
 "在企业微信群中：群设置 → 群机器人 → 添加机器人，创建后拷贝 Webhook 地址，无需额外的签名设置" = "In your WeCom group: Group Settings → Group Bots → Add a Bot, then copy the webhook URL after creating it. No extra signature setup is needed";
 "在其他设备上播放，Last.fm 已收到" = "Playing on another device; Last.fm has received it";
@@ -1282,6 +1282,7 @@
 "歌词类型" = "Lyrics Type";
 "歌词缺失" = "Missing Lyrics";
 "歌词行" = "Lyric Row";
+"歌词行的高度，平时和展开时一样。默认刚好放得下文字（开着副行时更高），可以调高" = "How tall the lyric row is, the same at rest and when expanded. By default it just fits the text (taller with the second line on); you can make it taller";
 "歌词超出曲长" = "Lyrics overshoot track length";
 "歌词进度" = "Lyrics Timing";
 "歌词预览" = "Lyrics";

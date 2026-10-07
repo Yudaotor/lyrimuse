@@ -311,6 +311,7 @@ public enum SettingsSearchCatalog {
         surface(.notch, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "歌词行"),
         surface(.notch, "副行", kw: ["下一句", "译文", "读音", "罗马音", "两行"], group: "歌词行"),
         surface(.notch, "展开时预览下一句", kw: ["下一句", "预览"], group: "歌词行"),
+        surface(.notch, "高度", kw: ["行高", "歌词行高度", "调高", "调矮", "遮挡", "pt"], group: "歌词行"),
         surface(.notch, "卡拉OK效果", kw: ["逐字", "染色", "karaoke"], group: "歌词行"),
         surface(.notch, "显示封面", kw: ["封面缩略图", "专辑图"], group: "歌词行"),
         surface(.notch, "封面位置", kw: ["左侧", "右侧", "封面"], group: "歌词行"),
