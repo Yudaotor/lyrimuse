@@ -1359,6 +1359,7 @@ func expectsCanonicalArtist(artist string) bool {
 //
 // 变音也折叠(foldDiacritics,同 normLoose):「Beyoncé」对「Beyonce」、「Elley Duhé」对「Elley Duhe」是同一个人。
 // 折完仍然逐字节比,不碰标点,防仿冒的精度不变。「々」按前一个字展开(foldIterationMark):中文曲库把「水樹奈々」写成「水树奈奈」。
+// 挨着汉字、假名、谚文的空白和「&」两边的空白不算(artistSpacingKey),最后一档去掉再比。
 func artistMatches(a, b string) bool {
 	na, nb := artistMatchKey(a), artistMatchKey(b)
 	if na == "" || nb == "" {
@@ -1434,6 +1435,10 @@ func artistMatches(a, b string) bool {
 	}
 	if ib := parenAliasNames(nb); ib != "" && artistMatches(na, ib) {
 		return true
+	}
+	// 只差挨着汉字、假名、谚文的空白或「&」两边的空白:去掉再整套比一次,见 artistSpacingKey。
+	if sa, sb := artistSpacingKey(na), artistSpacingKey(nb); sa != na || sb != nb {
+		return artistMatches(sa, sb)
 	}
 	return false
 }
@@ -1551,7 +1556,7 @@ func lyricSourceArtistMatches(candidate, query string) bool {
 	}
 	for _, c := range pc {
 		for _, q := range pq {
-			if c == q {
+			if artistSpacingKey(c) == artistSpacingKey(q) {
 				return true
 			}
 		}

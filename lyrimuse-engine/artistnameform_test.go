@@ -76,6 +76,54 @@ func TestArtistMatchesNameForms(t *testing.T) {
 	}
 }
 
+func TestArtistSpacingKey(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"g.e.m. 邓紫棋", "g.e.m.邓紫棋"},
+		{"米津 玄師", "米津玄師"},
+		{"王\u3000菲", "王菲"},
+		{"아이 유", "아이유"},
+		{"きゃりー ぱみゅぱみゅ", "きゃりーぱみゅぱみゅ"},
+		{"スキマ スイッチ", "スキマスイッチ"},
+		{"khalil fong & fiona sit", "khalil fong&fiona sit"},
+		{"田馥甄 hebe tien", "田馥甄hebe tien"},
+		{"hebe  tien", "hebe  tien"},
+		{"周杰伦", "周杰伦"},
+	} {
+		if got := artistSpacingKey(c.in); got != c.want {
+			t.Errorf("artistSpacingKey(%q) = %q, 要 %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestArtistMatchesIgnoresSpacing(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"G.E.M. 鄧紫棋", "G.E.M.邓紫棋", true},
+		{"米津 玄師", "米津玄師", true},
+		{"Khalil Fong & Fiona Sit", "Khalil Fong&Fiona Sit", true},
+		{"G.E.M. 鄧紫棋 & 林俊傑", "G.E.M.邓紫棋", true},
+		{"周杰伦", "周 杰伦", true},
+		{"周杰伦", "周杰伦 -", false},
+		{"周杰伦", "周杰伦 、", false},
+		{"G.E.M. 鄧紫棋", "G.E.M.", false},
+	}
+	for _, c := range cases {
+		if got := artistMatches(c.a, c.b); got != c.want {
+			t.Errorf("artistMatches(%q, %q) = %v, 要 %v", c.a, c.b, got, c.want)
+		}
+	}
+	// 歌词源采纳闸:两边都是多人名单、按段求交集时,段里的空白按同一个写法比。
+	if !lyricSourceArtistMatches("G.E.M. 鄧紫棋、林俊傑", "G.E.M.邓紫棋 & 王力宏") {
+		t.Error("按段求交集时 G.E.M. 那一段该对上")
+	}
+	// 「中文名 英文名」照旧按空白拆得开(artistMatchKey 不去空白)。
+	if !neteaseArtistMatches("田馥甄", "田馥甄 Hebe Tien") {
+		t.Error("双语署名照旧认汉字那段")
+	}
+}
+
 // 两边都是多人名单、只能按段求交集对上时,段里的「々」同样展开(artistCreditParts 那一处)。
 func TestLyricSourceArtistMatchesIterationMarkParts(t *testing.T) {
 	if !lyricSourceArtistMatches("水树奈奈/歌手甲", "水樹奈々、歌手乙") {

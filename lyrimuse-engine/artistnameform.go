@@ -15,6 +15,40 @@ func artistMatchKey(s string) string {
 	return strings.TrimSpace(strings.ToLower(foldDiacritics(toSimplified(foldIterationMark(s)))))
 }
 
+// artistSpacingKey:artistMatches 最后一档比的写法 —— 挨着汉字、假名、谚文的空白和「&」两边的空白去掉。同一位歌手在
+// 不同曲库里常只差这几处空格:「G.E.M. 鄧紫棋」对「G.E.M.邓紫棋」、「米津 玄師」对「米津玄師」、「A & B」对「A&B」。
+// 只去空白、不碰标点,「周杰伦-」「周杰伦、」这类仿冒号的尾巴照样对不上;拉丁字母之间的空白不动。s 先过 artistMatchKey。
+// 见 09 章决策 200。
+func artistSpacingKey(s string) string {
+	if !strings.ContainsFunc(s, unicode.IsSpace) {
+		return s
+	}
+	rs := []rune(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(rs); {
+		if !unicode.IsSpace(rs[i]) {
+			b.WriteRune(rs[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(rs) && unicode.IsSpace(rs[j]) {
+			j++
+		}
+		if !(i > 0 && spacingDroppedNextTo(rs[i-1])) && !(j < len(rs) && spacingDroppedNextTo(rs[j])) {
+			b.WriteString(string(rs[i:j]))
+		}
+		i = j
+	}
+	return b.String()
+}
+
+// spacingDroppedNextTo:挨着它的空白在 artistSpacingKey 里去掉。
+func spacingDroppedNextTo(r rune) bool {
+	return r == '&' || unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
+}
+
 // foldIterationMark 把跟在汉字后面的「々」换成那个字:中文曲库把「水樹奈々」写成「水树奈奈」、「佐々木」写成
 // 「佐佐木」。别的位置的「々」原样留着。
 func foldIterationMark(s string) string {

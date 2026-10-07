@@ -233,7 +233,7 @@ func TestSodaCandidateScoreRecordingTriangle(t *testing.T) {
 		album  = "摩天动物园"
 		dur    = 271.0
 	)
-	tri := sodaSearchItem{ID: "1", Name: "摩天动物园", Artist: "G.E.M. 邓紫棋", Album: "摩天动物园", Duration: 271.4}
+	tri := sodaSearchItem{ID: "1", Name: "摩天动物园", Artist: "邓紫棋", Album: "摩天动物园", Duration: 271.4}
 	got := sodaCandidateScore(tri, artist, title, album, dur)
 	if got < 0 || got > 50 {
 		t.Fatalf("三角验证收下的候选应在 0~50 分, got %d", got)

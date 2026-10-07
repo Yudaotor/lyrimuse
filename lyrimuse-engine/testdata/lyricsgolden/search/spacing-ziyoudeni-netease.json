@@ -1,0 +1,41 @@
+{
+  "id": "spacing-ziyoudeni-netease",
+  "source": "netease",
+  "note": "歌手只差「G.E.M.」后面那个空格(KKBOX「G.E.M. 鄧紫棋」,网易云 / QQ / 酷狗「G.E.M.邓紫棋」),09 章决策 200",
+  "track": {
+    "artist": "G.E.M. 鄧紫棋",
+    "title": "自由的你",
+    "album": "自由的你"
+  },
+  "captured_at": "2026-10-07",
+  "query": {
+    "artist": "G.E.M. 邓紫棋",
+    "title": "自由的你",
+    "album": "自由的你",
+    "duration_secs": 296.900573
+  },
+  "local_duration_secs": 296.900573,
+  "items": [
+    {
+      "id": "3436855494",
+      "title": "自由的你",
+      "artists": [
+        "G.E.M.邓紫棋"
+      ],
+      "album": "自由的你",
+      "album_id": "398617121",
+      "duration_secs": 296.9
+    }
+  ],
+  "expect": {
+    "picked_id": "3436855494"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.00019299390170972926,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "id": "spacing-ziyoudeni-qq",
+  "source": "qq",
+  "note": "歌手只差「G.E.M.」后面那个空格(KKBOX「G.E.M. 鄧紫棋」,网易云 / QQ / 酷狗「G.E.M.邓紫棋」),09 章决策 200",
+  "track": {
+    "artist": "G.E.M. 鄧紫棋",
+    "title": "自由的你",
+    "album": "自由的你"
+  },
+  "captured_at": "2026-10-07",
+  "query": {
+    "artist": "G.E.M. 邓紫棋",
+    "title": "自由的你",
+    "album": "自由的你",
+    "duration_secs": 296.900573
+  },
+  "local_duration_secs": 296.900573,
+  "items": [
+    {
+      "id": "002qUdaX4ba2ez",
+      "title": "自由的你",
+      "artist": "G.E.M.邓紫棋",
+      "album": "自由的你",
+      "duration_secs": 296
+    },
+    {
+      "id": "003sYHuC3aBd4r",
+      "title": "再见",
+      "artist": "G.E.M.邓紫棋",
+      "album": "新的心跳",
+      "duration_secs": 206
+    },
+    {
+      "id": "0040T0EA00oi4h",
+      "title": "龙卷风",
+      "artist": "G.E.M.邓紫棋",
+      "album": "龙卷风",
+      "duration_secs": 248
+    },
+    {
+      "id": "000Fz7zP3FDuSz",
+      "title": "摩天动物园",
+      "artist": "G.E.M.邓紫棋",
+      "album": "摩天动物园",
+      "duration_secs": 270
+    },
+    {
+      "id": "002E3MtF0IAMMY",
+      "title": "光年之外",
+      "artist": "G.E.M.邓紫棋",
+      "album": "光年之外",
+      "duration_secs": 235
+    },
+    {
+      "id": "004dFFPd4JNv8q",
+      "title": "来自天堂的魔鬼",
+      "artist": "G.E.M.邓紫棋",
+      "album": "新的心跳",
+      "duration_secs": 245
+    },
+    {
+      "id": "003jjoM94WLiTf",
+      "title": "倒数",
+      "artist": "G.E.M.邓紫棋",
+      "album": "另一个童话",
+      "duration_secs": 229
+    },
+    {
+      "id": "001QJyJ32zybEe",
+      "title": "句号",
+      "artist": "G.E.M.邓紫棋",
+      "album": "摩天动物园",
+      "duration_secs": 235
+    },
+    {
+      "id": "002G0sJY2wThyx",
+      "title": "喜欢你",
+      "artist": "G.E.M.邓紫棋",
+      "album": "喜欢你",
+      "duration_secs": 239
+    },
+    {
+      "id": "001NgljR0RUhy1",
+      "title": "唯一",
+      "artist": "G.E.M.邓紫棋",
+      "album": "T.I.M.E.",
+      "duration_secs": 253
+    }
+  ],
+  "expect": {
+    "picked_id": "002qUdaX4ba2ez",
+    "accepted_strict": [
+      "002qUdaX4ba2ez"
+    ],
+    "accepted_loose": [
+      "002qUdaX4ba2ez"
+    ],
+    "picked_no_album": "002qUdaX4ba2ez"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.30332477667532437,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}
