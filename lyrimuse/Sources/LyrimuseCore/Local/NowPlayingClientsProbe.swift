@@ -140,9 +140,9 @@ public enum NowPlayingClientsProbe {
 
     /// 问某个 bundle id 此刻在报什么。拿不到(没装 helper / 超时 / 那个 App 没在报)一律 nil。
     ///
-    /// helper 独立读取同一 client 的播放状态,只在确实播放时按锚点外推;暂停冻结在原始位置。
-    /// 状态未知或查询失败返回 nil,不能用暂停后残留的 PlaybackRate 猜成播放。
-    /// `anchorElapsedTime` 仍携带原始锚点,已知播放器的速率兼容由共享生成配置显式准入。
+    /// 位置已经在 helper 里按锚点外推过,只外推在放的:那个 App 报了暂停 / 停止就停在锚点上,载荷里残留的
+    /// PlaybackRate 不算数;播放状态读不到或说不准时按速率判(nowplaying-clients.m 的 `playingFor`,02 章决策 109)。
+    /// 锚点原值经 `anchorElapsedTime` 带回。`playingFromRate` 的播放器(酷狗)另传 `rate-playing`,报暂停时也按速率判。
     public static func snapshot(forBundleID bundleID: String) -> MediaControlSnapshot? {
         guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
         var arguments = [paths.script, paths.library, bundleID]

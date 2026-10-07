@@ -32,6 +32,9 @@ fi
 echo "==> selftest"
 (cd lyrimuse && swift run lyrimuse-selftest -q)
 
+echo "==> nowplaying-clients 原生测试"
+sh scripts/test-nowplaying-clients.sh
+
 echo "==> Localizable.xcstrings 能解析"
 /usr/bin/python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
   lyrimuse/Localization/Localizable.xcstrings

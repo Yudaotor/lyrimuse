@@ -38,7 +38,7 @@ static void normalizationTests(void) {
     for (NSString *bundle in @[@"com.tencent.QQMusicMac", @"com.netease.163music", @"com.soda.music",
                                @"com.kkbox.electron-app", @"com.amazon.music", @"com.apple.Music", @"com.spotify.client"]) {
         for (uint32_t state = 2; state <= 4; state++) {
-            NSNumber *playing = playingForState(state, @1, NO);
+            NSNumber *playing = @(playingFor(state, @1, NO));
             NSDictionary *out = normalize(raw, bundle, playing, now);
             CHECK([out[@"playing"] isEqual:@NO]);
             CHECK([out[@"elapsedTime"] isEqual:@20]);
@@ -46,7 +46,7 @@ static void normalizationTests(void) {
             CHECK([out[@"bundleIdentifier"] isEqual:bundle]);
         }
     }
-    NSDictionary *out = normalize(raw, @"com.tencent.QQMusicMac", playingForState(1, @1, NO), now);
+    NSDictionary *out = normalize(raw, @"com.tencent.QQMusicMac", @(playingFor(1, @1, NO)), now);
     CHECK([out[@"playing"] isEqual:@YES]);
     CHECK([out[@"elapsedTime"] isEqual:@80]);
     CHECK([out[@"anchorElapsedTime"] isEqual:@20]);
@@ -54,16 +54,21 @@ static void normalizationTests(void) {
     changed[K("PlaybackRate")] = @2;
     CHECK([normalize(changed, @"player", @YES, now)[@"elapsedTime"] isEqual:@140]);
     [changed removeObjectForKey:K("PlaybackRate")];
-    CHECK([normalize(changed, @"player", playingForState(1, nil, NO), now)[@"elapsedTime"] isEqual:@80]);
+    CHECK([normalize(changed, @"player", @(playingFor(1, nil, NO)), now)[@"elapsedTime"] isEqual:@80]);
 
-    // 只有已准入的已知暂停态使用速率兼容;Unknown / Seeking / stopped 不复活。
-    CHECK([playingForState(2, @1, YES) isEqual:@YES]);
-    CHECK([playingForState(2, @0, YES) isEqual:@NO]);
-    CHECK([playingForState(3, @1, YES) isEqual:@NO]);
-    CHECK([playingForState(4, @1, YES) isEqual:@NO]);
-    for (NSNumber *state in @[@0, @5, @99]) {
-        CHECK(playingForState(state.unsignedIntValue, @1, NO) == nil);
-        CHECK(playingForState(state.unsignedIntValue, @1, YES) == nil);
+    // 报在放:速率为 0 是在加载、缓冲,不算在放;没给速率信状态。
+    CHECK(playingFor(1, @1, NO) && playingFor(1, nil, NO) && !playingFor(1, @0, NO));
+    // 只有准入的播放器在报暂停时看速率;停止、中断都不看。
+    CHECK(playingFor(2, @1, YES));
+    CHECK(!playingFor(2, @0, YES) && !playingFor(2, nil, YES));
+    CHECK(!playingFor(3, @1, YES) && !playingFor(4, @1, YES));
+    // 状态说不准(未知、拖动中、别的值)或没读到:只看速率,跟没有状态接口时一样。
+    for (NSNumber *state in @[@0, @5, @99, @(kStateUnavailable)]) {
+        for (NSNumber *compat in @[@NO, @YES]) {
+            CHECK(playingFor(state.unsignedIntValue, @1, compat.boolValue));
+            CHECK(!playingFor(state.unsignedIntValue, @0, compat.boolValue));
+            CHECK(!playingFor(state.unsignedIntValue, nil, compat.boolValue));
+        }
     }
     CHECK(normalize(@{}, @"player", @YES, now) == nil);
     NSString *json = [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:
@@ -76,27 +81,52 @@ static void queryTests(void) {
     fixture = @{K("Title"): @"Song", K("ElapsedTime"): @20, K("PlaybackRate"): @1,
                 K("ArtworkData"): [@"image" dataUsingEncoding:NSUTF8StringEncoding], K("ArtworkMIMEType"): @"image/png"};
     fixtureState = 2;
+    BOOL answered = NO;
     NSDictionary *out = clientSnapshot(expectedClient, @"com.tencent.QQMusicMac", kNoArtwork, NO,
-                                      fakeInfo, fakeState, DISPATCH_TIME_NOW);
-    CHECK([out[@"playing"] isEqual:@NO] && [out[@"elapsedTime"] isEqual:@20]);
+                                      fakeInfo, fakeState, DISPATCH_TIME_NOW, &answered);
+    CHECK([out[@"playing"] isEqual:@NO] && [out[@"elapsedTime"] isEqual:@20] && answered);
     CHECK(stateCalls == 1 && infoCalls == 1);
+    // 状态说不准:照样给出快照,按速率判(载荷里速率是 1)。
     for (NSNumber *state in @[@0, @5, @99]) {
         fixtureState = state.unsignedIntValue;
-        CHECK(clientSnapshot(expectedClient, @"player", kNoArtwork, YES, fakeInfo, fakeState, DISPATCH_TIME_NOW) == nil);
+        out = clientSnapshot(expectedClient, @"player", kNoArtwork, NO, fakeInfo, fakeState, DISPATCH_TIME_NOW, NULL);
+        CHECK([out[@"playing"] isEqual:@YES] && [out[@"title"] isEqual:@"Song"]);
     }
-    int before = infoCalls;
-    CHECK(clientSnapshot(expectedClient, @"player", kNoArtwork, NO, fakeInfo, NULL, DISPATCH_TIME_NOW) == nil);
-    CHECK(infoCalls == before);
-    CHECK(clientSnapshot(expectedClient, @"player", kNoArtwork, NO, fakeInfo, stalledState, DISPATCH_TIME_NOW) == nil);
-    CHECK(clientSnapshot(expectedClient, @"player", kNoArtwork, NO, stalledInfo, fakeState, DISPATCH_TIME_NOW) == nil);
+    // 没有状态接口(老系统)、状态没按时回话:同样按速率判,不丢这一份。
+    out = clientSnapshot(expectedClient, @"player", kNoArtwork, NO, fakeInfo, NULL, DISPATCH_TIME_NOW, NULL);
+    CHECK([out[@"playing"] isEqual:@YES]);
+    out = clientSnapshot(expectedClient, @"player", kNoArtwork, NO, fakeInfo, stalledState, DISPATCH_TIME_NOW, &answered);
+    CHECK([out[@"playing"] isEqual:@YES] && answered);
+    // 元数据没按时回话:没问到,跟「这一份是空的」分开报。
+    answered = YES;
+    CHECK(clientSnapshot(expectedClient, @"player", kNoArtwork, NO, stalledInfo, fakeState, DISPATCH_TIME_NOW, &answered) == nil);
+    CHECK(!answered);
+    NSDictionary *saved = fixture;
+    fixture = nil;
+    CHECK(clientSnapshot(expectedClient, @"player", kNoArtwork, NO, fakeInfo, fakeState, DISPATCH_TIME_NOW, &answered) == nil);
+    CHECK(answered);
+    fixture = saved;
+    // 报暂停而速率残留 1:不在放;准入的播放器照旧按速率算在放。
+    fixtureState = 2;
+    CHECK([clientSnapshot(expectedClient, @"player", kNoArtwork, NO, fakeInfo, fakeState, DISPATCH_TIME_NOW, NULL)[@"playing"] isEqual:@NO]);
+    CHECK([clientSnapshot(expectedClient, @"com.kugou.mac.Music", kNoArtwork, YES, fakeInfo, fakeState, DISPATCH_TIME_NOW, NULL)[@"playing"] isEqual:@YES]);
+    // watch 模式挑会话:报暂停、速率残留 1 的那份不算在放;在放的优先;有一份没按时回话就算这一轮没问到。
+    BOOL ok = NO;
+    CHECK([pickWebSession(@[expectedClient], fakeInfo, fakeState, &ok)[@"playing"] isEqual:@NO] && ok);
+    fixtureState = 1;
+    CHECK([pickWebSession(@[expectedClient, expectedClient], fakeInfo, fakeState, &ok)[@"playing"] isEqual:@YES] && ok);
+    CHECK(pickWebSession(@[expectedClient], stalledInfo, fakeState, &ok) == nil && !ok);
+    CHECK(pickWebSession(@[], fakeInfo, fakeState, &ok) == nil && ok);
+    fixtureState = 2;
+    int before;
 
     // 封面不需要播放状态符号,仍给出同一曲目的图片与 MIMEType。
     before = stateCalls;
-    out = clientSnapshot(expectedClient, @"player", kIncludeArtwork, NO, fakeInfo, NULL, DISPATCH_TIME_NOW);
+    out = clientSnapshot(expectedClient, @"player", kIncludeArtwork, NO, fakeInfo, NULL, DISPATCH_TIME_NOW, NULL);
     CHECK([out[@"artworkData"] isEqual:@"aW1hZ2U="]);
     CHECK([out[@"artworkMimeType"] isEqual:@"image/png"]);
     CHECK([out[@"title"] isEqual:@"Song"]);
-    CHECK(stateCalls == before);
+    CHECK(stateCalls == before && out[@"playing"] == nil);
 }
 
 int main(void) {

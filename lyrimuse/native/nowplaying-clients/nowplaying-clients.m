@@ -10,13 +10,17 @@
 // ⚠️ 别跟 `MRMediaRemoteGetActivePlayerPathsForOrigin` 搞混:那个的 "active" 就是"当选的那一个",
 // 焦点被占时它只返回占用者,目标播放器的 path 直接从列表里消失。能用的是下面这两个。
 //
-// ## 两个接口与它们的签名
+// ## 三个接口与它们的签名
 //
 //   MRMediaRemoteGetNowPlayingClients(queue, ^(NSArray<MRClient *> *))
 //   MRMediaRemoteGetNowPlayingInfoForClient(client, NULL, 0, queue, ^(CFDictionaryRef))
+//   MRMediaRemoteGetPlaybackStateForClient(client, NULL, queue, ^(uint32_t))
 //
 // ⚠️ 第二个是**五个参数**,中间两个传空。三参数版本会当场段错误 —— 这不是猜的:反汇编它的函数
 // 序言,x0~x4 五个寄存器全被保存,x3/x4 还各被送进一次 retain/copy(queue 与 block)。
+//
+// 第三个是这个 App 自己的播放状态码(见 `playingFor`),跟载荷里的 PlaybackRate 是两份独立的读数:播放器暂停以后
+// PlaybackRate 可能还留着 1。四个参数,中间那个传空。
 //
 // ## 为什么必须被 /usr/bin/perl 加载
 //
@@ -83,9 +87,8 @@ typedef void *(*GetLocalOriginFn)(void);
 /// ⚠️ 给不给还取决于**这一刻在放什么**:实测五家都给(汽水音乐 9KB、QQ音乐 113KB、Spotify 107KB、
 /// Apple Music 113KB),但 Spotify **放广告时不给** —— 一开始据此误判成"Spotify 不给封面",
 /// 换成真歌再测就有了。浏览器里的视频也不给。拿不到就是拿不到,调用方照旧退回既有来源。
-/// 状态查询那两段等待(取播放器列表、取单个播放器的信息)各等多久。两个调用方(App 的 NowPlayingClientsProbe、
-/// 引擎的 focusfallback.go)都在 2 秒整体超时后杀掉这个进程,原来每段 3 秒,MediaRemote 一慢这条路就永远拿不到
-/// 结果;两段加起来要留在 2 秒以内。正常一次约 120ms。
+/// 状态查询那两段等待(取播放器列表、取单个播放器的信息和播放状态)各等多久。调用方(App 的 NowPlayingClientsProbe)
+/// 在 2 秒整体超时后杀掉这个进程,两段加起来要留在 2 秒以内。正常一次约 120ms。
 static const int64_t kStateWaitMs = 900;
 /// watch 模式两次查询之间隔多久:在放时要尽快看到暂停;没在放时(暂停着可能一停几个小时)放慢。
 static const useconds_t kWatchIntervalUs = 250000;
@@ -101,19 +104,25 @@ static NSString *K(const char *suffix) {
     return [NSString stringWithFormat:@"kMRMediaRemoteNowPlayingInfo%s", suffix];
 }
 
-/// Unknown / Seeking 不代表暂停,也不能按可能残留的速率猜成播放。
-/// rate-playing 仅供共享播放器表明确准入的暂停态兼容;停止与中断不使用它。
-static NSNumber *playingForState(uint32_t state, NSNumber *rate, BOOL playingFromRate) {
+/// 没读到播放状态(接口取不到、没按时回话)。
+static const uint32_t kStateUnavailable = UINT32_MAX;
+
+/// 这一份算不算在放(见 02 章决策 109)。播放状态码:1 在放、2 暂停、3 停止、4 中断;0 未知、5 拖动中和别的值说不准。
+/// 报了暂停 / 停止 / 中断就不在放,PlaybackRate 残留的 1 不算数。报在放还要速率不是 0(速率为 0 是在加载、缓冲,
+/// 声音没走起来),没给速率时信状态。状态说不准或没读到时只看速率。
+/// playingFromRate 只给共享播放器表准入的播放器(酷狗单曲循环回到开头后报暂停、速率照走,见 02 章决策 44)。
+static BOOL playingFor(uint32_t state, NSNumber *rate, BOOL playingFromRate) {
+    BOOL advancing = rate.doubleValue > 0;
     switch (state) {
-        case 1: return @YES;
-        case 2: return playingFromRate && rate.doubleValue > 0 ? @YES : @NO;
+        case 1: return rate == nil || advancing;
+        case 2: return playingFromRate && advancing;
         case 3:
-        case 4: return @NO;
-        default: return nil;
+        case 4: return NO;
+        default: return advancing;
     }
 }
 
-/// 把同一 client 的元数据与可信状态整理成快照。暂停不外推,不能用残留 PlaybackRate 复活。
+/// 把同一 client 的元数据与 `playingFor` 的结论整理成快照。不在放就不外推。
 /// playing 为 nil 只用于独立封面查询,不生成播放状态。now 可注入,让冻结与外推的测试不依赖墙钟。
 static NSDictionary *normalize(NSDictionary *raw, NSString *bundleID, NSNumber *playing, NSDate *now) {
     if (raw.count == 0) return nil;
@@ -176,32 +185,36 @@ static NSDictionary *withProcess(NSDictionary *one, id client) {
     return out;
 }
 
-/// 元数据与状态并发查询,共用同一个截止时间,避免把两段等待串成超过外层超时的请求。
-/// 封面查询不需要播放状态,不因状态接口缺失而失败。
+/// 元数据与播放状态并发查询,共用同一个截止时间,两段等待串起来不会超过外层超时。元数据没按时回话返回 nil,
+/// answered 置 NO(调用方要分清「没问到」和「这一份是空的」时传它,否则传 NULL);播放状态没读到不算失败,
+/// 按 kStateUnavailable 交给 `playingFor`。封面查询不问播放状态,快照里也没有 playing。
 static NSDictionary *clientSnapshot(id client, NSString *bundleID, long artFlag, BOOL playingFromRate,
                                     GetInfoForClientFn getInfo, GetPlaybackStateForClientFn getState,
-                                    dispatch_time_t deadline) {
+                                    dispatch_time_t deadline, BOOL *answered) {
     BOOL needsState = artFlag == kNoArtwork;
-    if (needsState && !getState) return nil;
+    BOOL askState = needsState && getState;
     dispatch_queue_t queue = dispatch_get_global_queue(0, 0);
-    dispatch_group_t group = dispatch_group_create();
+    dispatch_semaphore_t infoDone = dispatch_semaphore_create(0);
+    dispatch_semaphore_t stateDone = dispatch_semaphore_create(0);
     __block NSDictionary *info = nil;
-    __block uint32_t state = 0;
-    dispatch_group_enter(group);
+    __block uint32_t state = kStateUnavailable;
     getInfo((__bridge void *)client, NULL, artFlag, queue, ^(CFDictionaryRef raw) {
         if (raw) info = [(__bridge NSDictionary *)raw copy];
-        dispatch_group_leave(group);
+        dispatch_semaphore_signal(infoDone);
     });
-    if (needsState) {
-        dispatch_group_enter(group);
+    if (askState) {
         getState((__bridge void *)client, NULL, queue, ^(uint32_t value) {
             state = value;
-            dispatch_group_leave(group);
+            dispatch_semaphore_signal(stateDone);
         });
     }
-    if (dispatch_group_wait(group, deadline) != 0) return nil;
-    NSNumber *playing = needsState ? playingForState(state, info[K("PlaybackRate")], playingFromRate) : nil;
-    if (needsState && !playing) return nil;
+    if (dispatch_semaphore_wait(infoDone, deadline) != 0) {
+        if (answered) *answered = NO;
+        return nil;
+    }
+    if (answered) *answered = YES;
+    uint32_t seen = (askState && dispatch_semaphore_wait(stateDone, deadline) == 0) ? state : kStateUnavailable;
+    NSNumber *playing = needsState ? @(playingFor(seen, info[K("PlaybackRate")], playingFromRate)) : nil;
     return normalize(info, bundleID, playing, [NSDate date]);
 }
 
@@ -254,11 +267,31 @@ static NSDictionary *playbackQueue(void *h, id client, long count) {
     return @{@"items": items};
 }
 
+/// watch 模式一轮里,从负责进程对得上的那几份 WebKit 媒体会话里挑一份,在放的优先。有一份没按时回话就算这一轮没问到
+/// (answered 置 NO,返回 nil);一份都没有返回 nil、answered 为 YES。
+static NSDictionary *pickWebSession(NSArray *candidates, GetInfoForClientFn getInfo, GetPlaybackStateForClientFn getState,
+                                    BOOL *answered) {
+    NSDictionary *pick = nil;
+    for (id c in candidates) {
+        BOOL ok = NO;
+        NSDictionary *one = clientSnapshot(c, kWebMediaBundleID, kNoArtwork, NO, getInfo, getState,
+                                           dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC), &ok);
+        if (!ok) {
+            *answered = NO;
+            return nil;
+        }
+        if (one && (!pick || ([one[@"playing"] boolValue] && ![pick[@"playing"] boolValue]))) pick = one;
+    }
+    *answered = YES;
+    return pick;
+}
+
 /// watch 模式(见头注):进程号每一轮现找(那个 App 重启过也跟得上)。负责进程是它的 WebKit 媒体会话有好几份时在放的优先,
 /// 挑法同 App 的 `KasetPlayerInfo.webMedia`。
 /// 此刻进度(`elapsedTime`)每次都不一样,不输出。这一轮有哪一步没问到就不输出,别把没问到当成会话没了。父进程没了
 /// (被 launchd 收养)就退出。
-static void watchWebSession(GetClientsFn getClients, GetInfoForClientFn getInfo, NSString *ownerBundleID) {
+static void watchWebSession(GetClientsFn getClients, GetInfoForClientFn getInfo, GetPlaybackStateForClientFn getState,
+                            NSString *ownerBundleID) {
     NSString *last = nil;
     BOOL playing = NO;
     while (getppid() != 1) {
@@ -275,24 +308,14 @@ static void watchWebSession(GetClientsFn getClients, GetInfoForClientFn getInfo,
                 id bidObj = ((id (*)(id, SEL))objc_msgSend)(c, sel_getUid("bundleIdentifier"));
                 if ([bidObj isKindOfClass:NSString.class] && [bidObj isEqualToString:ownerBundleID]) owner = clientPID(c);
             }
-            NSDictionary *pick = nil;
+            NSMutableArray *candidates = [NSMutableArray array];
             for (id c in ((answered && owner > 0) ? clients : nil)) {
                 id bidObj = ((id (*)(id, SEL))objc_msgSend)(c, sel_getUid("bundleIdentifier"));
                 if (![bidObj isKindOfClass:NSString.class] || ![bidObj isEqualToString:kWebMediaBundleID]) continue;
                 if (responsiblePID(clientPID(c)) != owner) continue;
-                dispatch_semaphore_t s2 = dispatch_semaphore_create(0);
-                __block NSDictionary *info = nil;
-                getInfo((__bridge void *)c, NULL, kNoArtwork, dispatch_get_global_queue(0, 0), ^(CFDictionaryRef raw) {
-                    if (raw) info = (__bridge_transfer NSDictionary *)CFRetain(raw);
-                    dispatch_semaphore_signal(s2);
-                });
-                if (dispatch_semaphore_wait(s2, dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC)) != 0) {
-                    answered = NO;
-                    break;
-                }
-                NSDictionary *one = normalize(info, bidObj, [info[K("PlaybackRate")] doubleValue] > 0 ? @YES : @NO, [NSDate date]);
-                if (one && (!pick || ([one[@"playing"] boolValue] && ![pick[@"playing"] boolValue]))) pick = one;
+                [candidates addObject:c];
             }
+            NSDictionary *pick = answered ? pickWebSession(candidates, getInfo, getState, &answered) : nil;
             if (answered) {
                 playing = [pick[@"playing"] boolValue];
                 NSMutableDictionary *line = nil;
@@ -358,7 +381,7 @@ void nowplaying_clients(void *my_perl, void *cv) {
         GetPlaybackStateForClientFn getState = (GetPlaybackStateForClientFn)dlsym(h, "MRMediaRemoteGetPlaybackStateForClient");
         if (!getClients || !getInfo) { emit(nil); return; }
         if (watchEnv && watchEnv[0]) {
-            watchWebSession(getClients, getInfo, [NSString stringWithUTF8String:watchEnv]);
+            watchWebSession(getClients, getInfo, getState, [NSString stringWithUTF8String:watchEnv]);
             return;
         }
 
@@ -383,7 +406,7 @@ void nowplaying_clients(void *my_perl, void *cv) {
             }
 
             NSDictionary *one = clientSnapshot(c, bid, artFlag, playingFromRate, getInfo, getState,
-                                              dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC));
+                                              dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC), NULL);
             if (one) [all addObject:withProcess(one, c)];
         }
         emit(want ? (all.firstObject ?: (id)nil) : all);
