@@ -36,6 +36,7 @@ final class MenuBarHoverControlsView: NSView {
     private var highlighted = false
     /// 中间那个键画 ⏸ 还是 ▶。
     private var isPlaying = false
+    private var isWithheld = false
     /// 指针正压在哪个键上(画一层浅底当准星)。
     private var hoveredControl: MenuBarTransportControl?
     /// 三个键落在哪一块里。nil = 整个按钮(没开「歌词旁的图标」时就是这样)。
@@ -94,6 +95,14 @@ final class MenuBarHoverControlsView: NSView {
     func setPlaying(_ on: Bool) {
         guard on != isPlaying else { return }
         isPlaying = on
+        if engaged { needsDisplay = true }
+    }
+
+    /// 播放控制此刻会被拦下(见 `PlaybackCoordinator.playbackControlsWithheldReason`):三个字形画淡。说明弹不了:
+    /// 这颗状态栏按钮的 toolTip 用来显示整句歌词。
+    func setWithheld(_ on: Bool) {
+        guard on != isWithheld else { return }
+        isWithheld = on
         if engaged { needsDisplay = true }
     }
 
@@ -197,7 +206,8 @@ final class MenuBarHoverControlsView: NSView {
             for control in MenuBarTransportControl.allCases {
                 guard let hit = rects[control],
                       let glyph = Self.glyph(for: control, playing: isPlaying) else { continue }
-                glyph.image.draw(in: glyph.box(centeredIn: hit))
+                glyph.image.draw(in: glyph.box(centeredIn: hit), from: .zero, operation: .sourceOver,
+                                 fraction: isWithheld ? PlaybackCoordinator.withheldControlOpacity : 1)
                 tint.set()
                 glyph.box(centeredIn: hit).fill(using: .sourceAtop)
             }

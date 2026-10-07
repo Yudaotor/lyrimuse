@@ -934,6 +934,17 @@ public enum MusicPlaybackController {
         let wasPlaying: Bool
     }
 
+    /// 此刻发播放控制会不会被拦下(`ControlRoute.withheld`)。各展示面据此把上一首 / 播放暂停 / 下一首画灰、悬停时说明原因,
+    /// 判据跟真发指令时是同一个(`currentBaseRoute`)。`LocalPlaybackSource` 每拍轮询收尾时读一次。
+    public static func controlsWithheld() -> Bool { currentBaseRoute() == .withheld }
+
+    /// 播放控制此刻该走哪条路(跳转另按 `seekRoute` 改)。
+    private static func currentBaseRoute() -> ControlRoute {
+        controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
+                     focusFallback: MediaControlClient.focusControlTarget(),
+                     focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())
+    }
+
     /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
     private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?,
                                  mediaControlCommand: String, mediaControlArguments: [String] = []) -> Bool {
@@ -945,9 +956,7 @@ public enum MusicPlaybackController {
     private static func dispatchRoute(appleScript: String, spotifyScript: String, kasetScript: String?,
                                       mediaControlCommand: String, mediaControlArguments: [String] = [],
                                       kasetDirectSeek: KasetDirectSeek? = nil) -> ControlRoute? {
-        let base = controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
-                                focusFallback: MediaControlClient.focusControlTarget(),
-                                focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())
+        let base = currentBaseRoute()
         let route = seekRoute(base, playerIsKaset: kasetDirectSeek != nil)
         switch route {
         case .appleMusicScript:

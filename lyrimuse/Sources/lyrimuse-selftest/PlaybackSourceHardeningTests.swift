@@ -452,6 +452,33 @@ private func wiringContracts() {
     let noteAcceptedBody = body("private static func noteAccepted(bundleID: String) {", in: client)
     expectEqual(noteAcceptedBody.contains("spotifyWebSource = webSource"), true, "Spotify 镜像接线: 每次接受快照都更新网页版来源")
     expectEqual(noteAcceptedBody.contains("fallbackFailureStreak = 0"), true, "焦点回退: 接受了快照,回退的失败拍数清零")
+
+    // 播放控制被拦下时各展示面置灰 + 说明:判据跟真发指令同一个,每拍轮询收尾刷新,六个展示面都接上。
+    let controller = code("LyrimuseCore/Local/MusicPlaybackController.swift")
+    expectEqual(controller.contains("public static func controlsWithheld() -> Bool { currentBaseRoute() == .withheld }")
+                && body("private static func dispatchRoute(", in: controller).contains("let base = currentBaseRoute()"), true,
+                "拦下置灰: 判据跟发指令同一个 currentBaseRoute")
+    let localSource = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
+    expectEqual(body("private func finishPoll() {", in: localSource).contains("refreshPlaybackControlsWithheld()"), true,
+                "拦下置灰: 每拍轮询收尾刷新")
+    let coordinatorSource = code("lyrimuse/PlaybackCoordinator.swift")
+    expectEqual(coordinatorSource.contains("s.$playbackControlsWithheldBundleID.removeDuplicates()")
+                && coordinatorSource.contains(".assign(to: \\.playbackControlsWithheldReason, on: self)"), true,
+                "拦下置灰: 协调器把拦下的播放器换成说明")
+    for (file, needles) in [
+        ("lyrimuse/UI/LyricsWindowView.swift", ["self?.controlsWithheldReason = $0", ".help(playback.controlsWithheldReason ?? L10n.t(\"上一首\"))"]),
+        ("lyrimuse/UI/NotchLyricsView.swift", ["self?.controlsWithheldReason = $0", "WithheldControlHint(key: hintKey", "hintKey: \"transport.next\""]),
+        ("lyrimuse/UI/LyricsOverlayView.swift", ["self?.controlsWithheldReason = $0", "case .next: return playback.controlsWithheldReason ?? L10n.t(\"下一首\")"]),
+        ("lyrimuse/MenuBar/MenuBarPanel.swift", ["self?.controlsWithheldReason = $0", ".help(playback.controlsWithheldReason ?? \"\")"]),
+        ("lyrimuse/MenuBar/MenuBarStatusItem.swift", ["self?.hoverControls.setWithheld(on)"]),
+        ("lyrimuse/TouchBar/TouchBarLyricsController.swift", ["updateTransportEnabled(p.playbackControlsWithheldReason == nil)"]),
+    ] {
+        let text = code(file)
+        expectEqual(needles.allSatisfy { text.contains($0) }, true, "拦下置灰: \(file) 接上了")
+    }
+    let windowText = code("lyrimuse/UI/LyricsWindowView.swift")
+    expectEqual(windowText.components(separatedBy: ".opacity(playback.controlsWithheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity)").count - 1, 2,
+                "拦下置灰: 歌词窗口完整、迷你两排都置灰")
     let focusLost = body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
     expectEqual(focusLost.contains("fallbackFailureStreak = snapshot == nil ? fallbackFailureStreak + 1 : 0")
                 && focusLost.contains("consecutiveFailures: fallbackFailureStreak)"), true,

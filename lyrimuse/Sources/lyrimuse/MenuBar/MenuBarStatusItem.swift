@@ -213,6 +213,9 @@ final class MenuBarStatusItem: NSObject {
         // 图标要在接管期间照样跟得上,所以直接推给那一层自己重画。
         coordinator.$isPlayingSmoothed.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] on in self?.hoverControls.setPlaying(on) }.store(in: &cancellables)
+        // 播放控制此刻会被拦下就把那三个字形画淡(见 PlaybackCoordinator.playbackControlsWithheldReason)。
+        coordinator.$playbackControlsWithheldReason.map { $0 != nil }.removeDuplicates().receive(on: RunLoop.main)
+            .sink { [weak self] on in self?.hoverControls.setWithheld(on) }.store(in: &cancellables)
         // 逐字染色开关:用户就是盯着菜单栏拨的,当前句要立刻上色/褪色。
         settings.$menuBarLyricsKaraoke.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)

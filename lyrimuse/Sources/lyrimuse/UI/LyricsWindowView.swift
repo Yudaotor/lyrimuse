@@ -23,6 +23,8 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var album = ""
     @Published private(set) var displayAlbum = ""
     @Published private(set) var isPlayingNow = false
+    /// 播放控制被拦下时的说明,没拦下是 nil(见 `PlaybackCoordinator.playbackControlsWithheldReason`)。
+    @Published private(set) var controlsWithheldReason: String?
     @Published private(set) var isPlayingSmoothed = false
     @Published private(set) var currentLineIndex: Int?
     /// 滚动锚(AM 式"滚动先于染色"):滚动看它,染色/加粗/虚化仍看
@@ -130,6 +132,7 @@ private final class WindowPlayback: ObservableObject {
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
             p.$displayAlbum.removeDuplicates().sink { [weak self] in self?.displayAlbum = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
+            p.$playbackControlsWithheldReason.removeDuplicates().sink { [weak self] in self?.controlsWithheldReason = $0 },
             p.$isPlayingSmoothed.removeDuplicates().sink { [weak self] in self?.isPlayingSmoothed = $0 },
             p.$currentLineIndex.removeDuplicates().sink { [weak self] in self?.currentLineIndex = $0 },
             p.$scrollLineIndex.removeDuplicates().sink { [weak self] in self?.scrollLineIndex = $0 },
@@ -2297,7 +2300,7 @@ struct LyricsWindowView: View {
                 Image(systemName: "backward.fill").font(.system(size: 12))
                     .modifier(miniDeckHover)
             }
-            .help(L10n.t("上一首"))
+            .help(playback.controlsWithheldReason ?? L10n.t("上一首"))
             .accessibilityLabel(L10n.t("上一首"))
             Button {
                 // 走 coordinator 的乐观回声版,不直接发命令:图标点击即动,不等 0.5~1s 的
@@ -2312,15 +2315,16 @@ struct LyricsWindowView: View {
                     .frame(width: 17)
                     .modifier(miniDeckHover)
             }
-            .help(L10n.t("播放/暂停"))
+            .help(playback.controlsWithheldReason ?? L10n.t("播放/暂停"))
             .accessibilityLabel(L10n.t("播放/暂停"))
             Button { MusicPlaybackController.nextTrack() } label: {
                 Image(systemName: "forward.fill").font(.system(size: 12))
                     .modifier(miniDeckHover)
             }
-            .help(L10n.t("下一首"))
+            .help(playback.controlsWithheldReason ?? L10n.t("下一首"))
             .accessibilityLabel(L10n.t("下一首"))
         }
+        .opacity(playback.controlsWithheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity)
         // AM 式点按反馈:按下快缩、松手弹回。跟完整布局那排五颗同一个 style。
         .buttonStyle(TransportButtonStyle(reduceMotion: reduceMotion))
         .foregroundStyle(miniPrimaryColor)
@@ -4453,7 +4457,7 @@ struct LyricsWindowView: View {
                 Image(systemName: "backward.fill").font(.system(size: ctrl(0.060, 13, 25)))
                     .opacity(Self.skipButtonOpacity)
             }
-            .help(L10n.t("上一首"))
+            .help(playback.controlsWithheldReason ?? L10n.t("上一首"))
             .accessibilityLabel(L10n.t("上一首"))
             Button {
                 // 走 coordinator 的乐观回声版,不直接发命令:封面缩放/图标点击即动,
@@ -4468,7 +4472,7 @@ struct LyricsWindowView: View {
                     .frame(width: ctrl(0.10, 22, 38))
                     .opacity(Self.playButtonOpacity)
             }
-            .help(L10n.t("播放/暂停"))
+            .help(playback.controlsWithheldReason ?? L10n.t("播放/暂停"))
             .accessibilityLabel(L10n.t("播放/暂停"))
             Button {
                 MusicPlaybackController.nextTrack()
@@ -4476,9 +4480,10 @@ struct LyricsWindowView: View {
                 Image(systemName: "forward.fill").font(.system(size: ctrl(0.060, 13, 25)))
                     .opacity(Self.skipButtonOpacity)
             }
-            .help(L10n.t("下一首"))
+            .help(playback.controlsWithheldReason ?? L10n.t("下一首"))
             .accessibilityLabel(L10n.t("下一首"))
             }
+            .opacity(playback.controlsWithheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity)
             Spacer(minLength: 12)
             repeatButton
         }

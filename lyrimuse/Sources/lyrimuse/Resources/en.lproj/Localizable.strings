@@ -1480,6 +1480,8 @@
 "点按时间可修改此句的时间戳" = "Click a time to change that line’s timestamp";
 "点按此处前往设置查看" = "Click to view in Settings";
 "点按此处前往设置重新连接" = "Click to reconnect in Settings";
+"焦点在别的 App 上，暂时控制不了「%@」" = "Can't control %@ while another app holds the playback focus";
+"焦点在别的 App 上，暂时无法控制播放" = "Can't control playback while another app holds the playback focus";
 "版本 %@" = "Version %@";
 "版本不符" = "Version mismatch";
 "版本尾缀写法" = "Version suffix style";

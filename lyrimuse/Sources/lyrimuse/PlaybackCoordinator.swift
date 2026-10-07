@@ -76,6 +76,11 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var isPlayingNow: Bool = false
     /// 播放器说在放、声音还没走起来,见 `LocalPlaybackSource.isWaitingToPlay`。
     @Published private(set) var isWaitingToPlay: Bool = false
+    /// 播放控制此刻被拦下时悬停要说的那句,没拦下是 nil(见 `LocalPlaybackSource.playbackControlsWithheldBundleID`)。
+    /// 各展示面据此把上一首 / 播放暂停 / 下一首画灰(`withheldControlOpacity`)。
+    @Published private(set) var playbackControlsWithheldReason: String?
+    /// 播放控制被拦下时那几颗键的不透明度。
+    static let withheldControlOpacity: Double = 0.35
     // isPlayingNow 的"缓收版":开始播放立刻为 true,停止播放要**静默满宽限期**才变 false。
     //
     // 给"要不要把悬浮窗/灵动岛收起来"这类决策用,不给歌词显示用 —— 歌词该在暂停的一瞬间
@@ -556,6 +561,14 @@ final class PlaybackCoordinator: ObservableObject {
         LocalPlaybackSource.shared.lastResolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier
     }
 
+    /// 播放控制被拦下时的那句说明。认得出播放器就点名(「QQ 音乐」),认不出说「播放」。
+    static func withheldControlsReason(bundleID: String) -> String {
+        guard let player = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) else {
+            return L10n.t("焦点在别的 App 上，暂时无法控制播放")
+        }
+        return String(format: L10n.t("焦点在别的 App 上，暂时控制不了「%@」"), player.displayName)
+    }
+
     /// **这一刻实际在播**的那个播放器。注意不是设置里选的那个 —— 设置可能是"自动识别",
     /// 而这几个控件要按真正在播的那个 App 发指令。
     private var currentPlayer: PlaybackPlayer? {
@@ -894,6 +907,9 @@ final class PlaybackCoordinator: ObservableObject {
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
             s.$isPlayingNow.sink { [weak self] playing in self?.updateSmoothedPlaying(playing) },
             s.$isWaitingToPlay.assign(to: \.isWaitingToPlay, on: self),
+            s.$playbackControlsWithheldBundleID.removeDuplicates()
+                .map { $0.map(PlaybackCoordinator.withheldControlsReason(bundleID:)) }
+                .assign(to: \.playbackControlsWithheldReason, on: self),
             s.$currentLine.sink { [weak self] line in
                 logger.debug("coordinator currentLine updated: hasLine=\(line != nil) hasWords=\(line?.words != nil) hasMainText=\(line?.mainText != nil)")
                 self?.currentLine = line

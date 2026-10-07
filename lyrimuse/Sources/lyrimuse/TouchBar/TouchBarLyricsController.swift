@@ -131,6 +131,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     /// 展开态那三项,建一次留着(触控栏重新展开时会再问代理要)。
     private var items: [NSTouchBarItem.Identifier: NSTouchBarItem] = [:]
     private var playPauseImageName: NSImage.Name?
+    private var transportEnabled = true
     /// 正在显示的那一档从哪一刻起显示。
     private var displayStart = TouchBarDisplayStart()
 
@@ -438,6 +439,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         let p = PlaybackCoordinator.shared
         playbackObservers = [
             Publishers.MergeMany(TouchBarLyricsCell.playbackChanges(p)).sink { [weak self] in self?.scheduleRefresh() },
+            p.$playbackControlsWithheldReason.map { $0 != nil }.removeDuplicates()
+                .sink { [weak self] _ in self?.scheduleRefresh() },
             Publishers.CombineLatest(LocalPlaybackSource.shared.$artworkAverageHex, p.$highResAverageHex)
                 .map { system, highRes in TouchBarLyricsCell.coverAccent(hex: highRes ?? system) }
                 .removeDuplicates()
@@ -465,6 +468,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         let settings = AppSettings.shared
         let secondary = settings.touchBarSecondaryLine
         updatePlayPause(playing: p.isPlayingNow)
+        updateTransportEnabled(p.playbackControlsWithheldReason == nil)
         setRowLayout(twoRows: secondary.showsSecondaryRow)
         let content = TouchBarLyricsCell.content(p, secondary: secondary)
         updateArtwork(TouchBarLyricsCell.artworkTile(p, content: content))
@@ -507,6 +511,13 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         }
         secondaryView.isHidden = false
         secondaryView.apply(spec: row, nowMs: nowMs)
+    }
+
+    /// 播放控制此刻会被拦下时,三键那三段设成不可用(触控栏没有悬停,说明不了原因;设置键照常)。
+    private func updateTransportEnabled(_ enabled: Bool) {
+        guard enabled != transportEnabled else { return }
+        transportEnabled = enabled
+        for segment in 0..<3 { controls.setEnabled(enabled, forSegment: segment) }
     }
 
     private func updatePlayPause(playing: Bool) {

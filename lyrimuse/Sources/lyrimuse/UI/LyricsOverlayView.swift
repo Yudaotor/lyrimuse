@@ -47,6 +47,8 @@ private final class OverlayPlayback: ObservableObject {
     /// 滚动模式下没有逐字时间轴的行、以及当前行的译文 / 罗马音按它配速(`OverlayScrollingLyricRow.PacedWindow`)。
     @Published private(set) var currentLineWindow: OverlayScrollingLyricRow.PacedWindow?
     @Published private(set) var isPlayingNow = false
+    /// 播放控制被拦下时的说明,没拦下是 nil(见 `PlaybackCoordinator.playbackControlsWithheldReason`)。
+    @Published private(set) var controlsWithheldReason: String?
     /// 此刻有没有曲目。false = 停播/播放器没开/刚装好还没放过歌 —— 停播时
     /// `LocalPlaybackSource.clearIfWasPlaying` 会把 title/artist 连同几个"这首歌"的判定一起清空。
     /// 判据照抄灵动岛 `NotchLyricsWindowController.hasTrack`(title 或 artist 非空、或正在广告插播):
@@ -186,6 +188,7 @@ private final class OverlayPlayback: ObservableObject {
                 .removeDuplicates()
                 .sink { [weak self] in self?.nextLineWordGroups = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
+            p.$playbackControlsWithheldReason.removeDuplicates().sink { [weak self] in self?.controlsWithheldReason = $0 },
             // CombineLatest3 而不是三个独立 sink:三个输入要**同时**拿到才能算,独立 sink 里另两个
             // 只能回头读存储属性 —— 正是本文件头注说的 willSet 旧值坑(灵动岛那份同款写法)。
             Publishers.CombineLatest3(p.$title, p.$artist, p.$isCurrentTrackAdBreak)
@@ -1536,9 +1539,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 这排常驻在歌词上方,越小越不挡视线,间距收到 5(跟下面 iconButton 的尺寸收紧
         // 同一个方向)。
         HStack(spacing: 5) {
-            iconButton(.previous, "backward.fill")
-            iconButton(.playPause, playback.isPlayingNow ? "pause.fill" : "play.fill", primary: true)
-            iconButton(.next, "forward.fill")
+            Group {
+                iconButton(.previous, "backward.fill")
+                iconButton(.playPause, playback.isPlayingNow ? "pause.fill" : "play.fill", primary: true)
+                iconButton(.next, "forward.fill")
+            }
+            .opacity(playback.controlsWithheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity)
             // 「喜欢」——对应 Apple Music 里那颗心(脚本字典里的 favorited)、Kaset 里的赞。只有这两个播放器
             // 有这个概念,所以 playback.isFavorited 为 nil(别的播放器/没拿到自动化权限)时整个
             // 按钮不出现,而不是显示一颗永远点不亮的心。跟前面三个播放按钮同属"对当前这首歌
@@ -1598,9 +1604,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     private func controlTooltipText(_ id: OverlayControlID) -> String {
         switch id {
-        case .previous: return L10n.t("上一首")
-        case .playPause: return L10n.t("播放/暂停")
-        case .next: return L10n.t("下一首")
+        case .previous: return playback.controlsWithheldReason ?? L10n.t("上一首")
+        case .playPause: return playback.controlsWithheldReason ?? L10n.t("播放/暂停")
+        case .next: return playback.controlsWithheldReason ?? L10n.t("下一首")
         case .favorite: return playback.isFavorited == true ? L10n.t("取消喜欢") : L10n.t("喜欢")
         case .expandToLyricsWindow: return L10n.t("打开歌词窗口")
         case .adjustWidth: return overlayController.isAdjustingWidth ? L10n.t("完成调整宽度") : L10n.t("调整宽度")

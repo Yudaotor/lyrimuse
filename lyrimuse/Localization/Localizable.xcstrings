@@ -1,6 +1,52 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "焦点在别的 App 上，暂时控制不了「%@」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't control %@ while another app holds the playback focus"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "焦点在别的 App 上，暂时控制不了「%@」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "焦點在別的 App 上，暫時控制不了「%@」"
+          }
+        }
+      }
+    },
+    "焦点在别的 App 上，暂时无法控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't control playback while another app holds the playback focus"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "焦点在别的 App 上，暂时无法控制播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "焦點在別的 App 上，暫時無法控制播放"
+          }
+        }
+      }
+    },
     "歌手地区分布" : {
       "extractionState" : "manual",
       "localizations" : {

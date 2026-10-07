@@ -32,6 +32,8 @@ private final class NotchPlayback: ObservableObject {
     /// 专辑行可不可点(`trackInfoAlbumLine`):键里没专辑、但有 YouTube Music 登记的那张时也算有专辑。
     @Published private(set) var youtubeMusicAlbum = ""
     @Published private(set) var isPlayingNow = false
+    /// 播放控制被拦下时的说明,没拦下是 nil(见 `PlaybackCoordinator.playbackControlsWithheldReason`)。
+    @Published private(set) var controlsWithheldReason: String?
     @Published private(set) var currentLine: SyncedLyricLine?
     /// 歌词行**主行**画哪一句(是合成值,不再直接等于 PlaybackCoordinator 的
     /// compactLine):
@@ -261,6 +263,7 @@ private final class NotchPlayback: ObservableObject {
             p.$displayAlbum.removeDuplicates().sink { [weak self] in self?.displayAlbum = $0 },
             p.$youtubeMusicAlbum.removeDuplicates().sink { [weak self] in self?.youtubeMusicAlbum = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
+            p.$playbackControlsWithheldReason.removeDuplicates().sink { [weak self] in self?.controlsWithheldReason = $0 },
             // 当前句、要显示的那一句、下一句都取灵动岛自己那一份(按这一面的宽度断句,见
             // LocalPlaybackSource.notchLyrics),别混用逐行的 currentLine / compactLine / nextLine*。
             p.$notchLyrics.map(\.line).removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
@@ -2350,15 +2353,15 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         Spacer(minLength: 8)
                     }
                     HStack(spacing: 34) {
-                        controlButton("backward.fill", glyphSize: 11.5, hitSize: 22) {
+                        controlButton("backward.fill", glyphSize: 11.5, hitSize: 22, hintKey: "transport.previous") {
                             MusicPlaybackController.previousTrack()
                         }
                         controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill",
-                                      glyphSize: 14, hitSize: 22) {
+                                      glyphSize: 14, hitSize: 22, hintKey: "transport.playPause") {
                             // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
                             PlaybackCoordinator.shared.userTogglePlayPause()
                         }
-                        controlButton("forward.fill", glyphSize: 11.5, hitSize: 22) {
+                        controlButton("forward.fill", glyphSize: 11.5, hitSize: 22, hintKey: "transport.next") {
                             MusicPlaybackController.nextTrack()
                         }
                     }
@@ -2727,13 +2730,16 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     /// glyphSize/hitSize 显式给时优先(展开卡里的三键要比耳朵里的大一号),
     /// 不给就沿用 primary 的两档旧尺寸(耳朵那一个)。
+    /// `hintKey` 不为 nil 时,播放控制被拦下那段时间悬停弹一句说明(同快捷操作那排的自绘气泡,外面那层要挂
+    /// `QuickActionTooltipOverlay`)。耳朵上那排太窄、放不下气泡,不传。
     private func controlButton(_ systemName: String, primary: Bool = false,
-                               glyphSize: CGFloat? = nil, hitSize: CGFloat? = nil,
+                               glyphSize: CGFloat? = nil, hitSize: CGFloat? = nil, hintKey: String? = nil,
                                action: @escaping () -> Void) -> some View {
         let glyph = glyphSize ?? (primary ? 11 : 9.5)
         let hit = hitSize ?? (primary ? 18 : 15)
+        let withheldReason = playback.controlsWithheldReason
         return NotchIconButton(systemName: systemName, glyphSize: glyph, hitSize: hit,
-                               tint: accentOrWhite, glyphOpacity: 1) {
+                               tint: accentOrWhite, glyphOpacity: withheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity) {
             Task {
                 guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
                     NSSound.beep()
@@ -2743,6 +2749,35 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             }
         }
         .accessibilityLabel(Text(Self.controlAccessibilityName(systemName)))
+        .modifier(WithheldControlHint(key: hintKey, reason: withheldReason, hovered: $hoveredQuickAction))
+    }
+}
+
+/// 灵动岛展开卡那排播放键:播放控制被拦下时悬停弹那句说明(自绘气泡,见 `QuickActionTooltipOverlay`)。key 为 nil 不挂。
+private struct WithheldControlHint: ViewModifier {
+    let key: String?
+    let reason: String?
+    @Binding var hovered: QuickActionHint?
+
+    func body(content: Content) -> some View {
+        if let key {
+            content
+                // 离开时只在记着的还是自己时才清,理由同 `quickActionButton`。
+                .onHover { inside in
+                    if inside, let reason {
+                        hovered = QuickActionHint(key: key, text: reason)
+                    } else if hovered?.key == key {
+                        hovered = nil
+                    }
+                }
+                .onChange(of: reason) { _, newReason in
+                    guard hovered?.key == key else { return }
+                    hovered = newReason.map { QuickActionHint(key: key, text: $0) }
+                }
+                .anchorPreference(key: QuickActionAnchorKey.self, value: .bounds) { [key: $0] }
+        } else {
+            content
+        }
     }
 }
 

@@ -31,6 +31,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、前贴片广告、卡住;目前 Kaset 与 KKBOX 报)。
     /// 灵动岛掉歌名据此等声音走起来再判(`NotchTrackDropTracker`)。
     @Published public private(set) var isWaitingToPlay: Bool = false
+    /// 播放控制此刻会被拦下时,屏上这首是哪个播放器的(bundle id,认不出是空串);不拦下是 nil。判据见
+    /// `MusicPlaybackController.controlsWithheld`,每拍轮询收尾时刷新。
+    @Published public private(set) var playbackControlsWithheldBundleID: String?
     @Published public private(set) var currentLine: SyncedLyricLine?
     @Published public private(set) var nextLineText: String?
     /// 下一行摆在哪一边(见 SyncedLyricLine.side)——**独立于 currentLine?.side**,不能假定
@@ -2927,8 +2930,15 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 一轮 poll 收尾:放开单飞,期间有人要过就立刻补跑。
     private func finishPoll() {
+        refreshPlaybackControlsWithheld()
         syncKasetWebWatch()
         if pollFlight.finish() { poll() }
+    }
+
+    /// 播放控制此刻会不会被拦下,变了才发布。
+    private func refreshPlaybackControlsWithheld() {
+        let withheld = MusicPlaybackController.controlsWithheld() ? (lastResolvedBundleID ?? "") : nil
+        if withheld != playbackControlsWithheldBundleID { playbackControlsWithheldBundleID = withheld }
     }
 
     /// Kaset 是当前播放器(在放、暂停着都算)时盯着它内嵌网页那份会话,换了播放器、停了不盯。每拍轮询收尾调。

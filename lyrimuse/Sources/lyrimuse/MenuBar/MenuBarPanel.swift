@@ -25,6 +25,8 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var displayArtist = ""
     @Published private(set) var displayAlbum = ""
     @Published private(set) var isPlayingNow = false
+    /// 播放控制被拦下时的说明,没拦下是 nil(见 `PlaybackCoordinator.playbackControlsWithheldReason`)。
+    @Published private(set) var controlsWithheldReason: String?
     /// 播放键图标用的乐观状态(点了当场翻,见 PlaybackCoordinator.userTogglePlayPause)。isPlayingNow 要等
     /// 0.5~1 秒回读才翻,容易被当成没点上而连点,媒体层假暂停那几秒还会闪成 ▶。
     @Published private(set) var isPlayingSmoothed = false
@@ -88,6 +90,7 @@ private final class PanelPlayback: ObservableObject {
             p.$displayArtist.removeDuplicates().sink { [weak self] in self?.displayArtist = $0 },
             p.$displayAlbum.removeDuplicates().sink { [weak self] in self?.displayAlbum = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
+            p.$playbackControlsWithheldReason.removeDuplicates().sink { [weak self] in self?.controlsWithheldReason = $0 },
             // 面板只读 compactLine、不读 currentLine:两者每句各变一次、不同步,订后者等于每句多重绘一次整个面板。
             p.$isPlayingSmoothed.removeDuplicates().sink { [weak self] in self?.isPlayingSmoothed = $0 },
             // 面板里那一行歌词跟状态栏项是同一个展示面(菜单栏),吃同一颗「卡拉OK效果」
@@ -855,8 +858,11 @@ private struct MenuBarPanelView: View {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(.primary)
+                .opacity(playback.controlsWithheldReason == nil ? 1 : PlaybackCoordinator.withheldControlOpacity)
                 .frame(width: 30, height: 26)
         }
+        // 播放控制被拦下时说明原因;没拦下时不弹(空串不出提示)。
+        .help(playback.controlsWithheldReason ?? "")
     }
 
 
