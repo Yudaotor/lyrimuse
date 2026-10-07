@@ -1714,6 +1714,10 @@ func runSourceContractTests() {
                 expectEqual(morph.contains("CGWindowLevelForKey(.desktopWindow)) - 1"), true,
                             "变形动画: 真窗口藏在桌面层级以下(透明度为 0 截出来全透明)")
                 expectEqual(morph.contains("accessibilityDisplayShouldReduceMotion"), true, "变形动画: 减弱动态效果时不做")
+                // 07 章决策 128:上沿伸进菜单栏的普通窗口上屏时会被往下推,卡片跟着下移。
+                expectEqual(morph.contains("override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }")
+                                && morph.contains("let window = MorphWindow(contentRect: frame, styleMask: [.borderless]"), true,
+                            "变形动画: 临时窗不让系统往屏内推")
             } else {
                 expectEqual(true, false, "变形动画: 读不到 UI/LyricsWindowFormMorph.swift")
             }

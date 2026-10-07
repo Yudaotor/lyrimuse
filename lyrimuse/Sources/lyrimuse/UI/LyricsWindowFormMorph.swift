@@ -202,6 +202,12 @@ private final class ResumeOnce: @unchecked Sendable {
     }
 }
 
+/// 临时窗本身。上沿伸进菜单栏或屏幕外时,AppKit 上屏会把普通窗口往下推,卡片跟着整体下移、跟真窗口对不上;
+/// 这里原样返回,窗口留在要的位置(伸出去的只是透明的阴影位,07 章决策 128)。
+private final class MorphWindow: NSWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+}
+
 /// 变形动画那扇临时窗:无边框、透明、不接鼠标、不进窗口循环。卡片 = 阴影层 ⊃ 圆角裁切层 ⊃ 旧图 / 新图两层,
 /// 两张图都按卡片尺寸等比铺满(多出来的裁掉)。图层用 AppKit 默认的 y 轴向上坐标,跟屏幕坐标同向,
 /// 换算只减临时窗原点。
@@ -216,7 +222,7 @@ private final class MorphOverlay {
     private var radius = LyricsWindowFormMorphPlan.fallbackCornerRadius
 
     init(frame: NSRect, level: NSWindow.Level, scale: CGFloat, keyShadow: Bool) {
-        let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        let window = MorphWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
