@@ -322,6 +322,35 @@ func adoptBakedTranslation(lyr, tr, yrc string, foreignSong, acceptTr bool) (str
 // 判成了的歌里,单字译文(「我」「噢」)和夹着原文里没有的字母的译文也留在正文里。这里按这个时间戳形状逐行认。
 // 只给酷我用:别的源没见过这种烘法,QQ 有「男：」这种标签行挂在下一句的时间戳上,形状相同、不是译文。见 09 章决策 201。
 
+// kuwoBakedTranslationMinCoverage:摘出来的译文覆盖了要送去机翻的行的这么多,就用它、不交给机翻。
+const kuwoBakedTranslationMinCoverage = 0.8
+
+// kuwoBakedTranslationCovers:目标语言是中文时,酷我摘出来的译文覆盖了这首歌要送去机翻的行(selectTranslationWork)的至少
+// kuwoBakedTranslationMinCoverage。打分那道「可用」(usableValueAdd)对原文是中文的歌、译文不到正文一半的歌一律不认,那是
+// 打分口径,别为这个改它;中文歌里那段外文被歌词自带的人工译文译全了,用它比机翻好。只译了一部分的照旧交给机翻。见 09 章决策 201。
+func kuwoBakedTranslationCovers(lyrics, tr, target, artist, title string) bool {
+	if tr == "" || !strings.HasPrefix(strings.ToLower(target), "zh") {
+		return false
+	}
+	work := selectTranslationWork(lyrics, target, artist, title)
+	if work.attempted == 0 {
+		return false
+	}
+	have := map[string]bool{}
+	for _, l := range parseLRCLines(tr) {
+		have[l.tag] = true
+	}
+	covered := 0
+	for _, idx := range work.occurrences {
+		for _, i := range idx {
+			if have[work.lines[i].tag] {
+				covered++
+			}
+		}
+	}
+	return float64(covered) >= kuwoBakedTranslationMinCoverage*float64(work.attempted)
+}
+
 // sharedStampMinLines:还不知道这首带烘入译文时,至少要认到这么多行(原文是拟声行的不算)才摘。
 const sharedStampMinLines = 4
 
@@ -495,7 +524,7 @@ func mergeBakedTranslationLRC(a, b string) string {
 // 新抓的在候选装配处就摘(adoptKuwoBakedTranslation),运行期不再产生。
 //
 // 只看酷我冠军,手动锁定的(manual_lyrics)不动。已经有歌词自带译文的,说明整首判断当时摘过,剩一行也摘,摘出来的按
-// 时间戳并进去。原来没有译文或者是机翻的,跟候选装配同一道判断(usableValueAdd):摘出来的能用才换上(语言记 zh,
+// 时间戳并进去。原来没有译文或者是机翻的,跟候选装配同一道判断(usableValueAdd,或者 kuwoBakedTranslationCovers):摘出来的能用才换上(语言记 zh,
 // 机翻重试计数一并清掉);不能用时(中文歌里只有一段外文、译文不到正文一半、目标语言不是中文),中文机翻留着:中文行
 // 本来就不送去翻,跟摘干净的正文对得上;别的语言的机翻是按旧正文翻的,摘掉的中文行也翻了、挂在下一句的时间戳上,
 // 清掉交给补翻按新正文重翻。读音一律清掉:酷我没有读音轨,存着的都是引擎按旧正文生成的,摘掉的那行中文的读音会
@@ -522,6 +551,9 @@ func migrateKuwoSharedStampTranslation() {
 		}
 		e.Lyrics = clean
 		usable, _ := usableValueAdd(clean, tr, "zh", "", target)
+		if artist, title, _ := splitEnrichKey(k); !usable {
+			usable = kuwoBakedTranslationCovers(clean, tr, target, artist, title)
+		}
 		switch {
 		case ownTr:
 			e.LyricsTr = mergeBakedTranslationLRC(e.LyricsTr, tr)

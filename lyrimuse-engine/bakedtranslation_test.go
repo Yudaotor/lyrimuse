@@ -396,9 +396,16 @@ func TestMigrateKuwoSharedStampTranslation(t *testing.T) {
 	baked := kuwoStampSample(nil, pairs, 10000, 3000)
 	wantClean, wantTr, _ := splitSharedStampTranslation(baked, false)
 	leftover := "[00:05.00]placeholder line one\n[00:08.00]placeholder line two\n[00:11.00]我\n[00:11.00]placeholder line three"
-	// 中文歌里只有一段外文:摘出来的译文不到正文一半、原文又是中文,候选装配处也不会采纳,中文机翻留着。
+	// 中文歌里只有一段外文、只译了一部分:摘出来的用不上(候选装配处也不会采纳),中文机翻留着。
 	zhSong := kuwoStampSample([]string{"[00:01.00]占位中文原词第一句", "[00:03.00]占位中文原词第二句", "[00:05.00]占位中文原词第三句",
-		"[00:07.00]占位中文原词第四句", "[00:08.00]占位中文原词第五句"}, pairs, 10000, 3000) + "\n[00:26.00]占位中文原词收尾"
+		"[00:07.00]占位中文原词第四句", "[00:08.00]占位中文原词第五句"}, pairs, 10000, 3000) + "\n[00:26.00]占位中文原词收尾" +
+		"\n[00:28.00]placeholder untranslated one\n[00:31.00]placeholder untranslated two"
+	// 中文歌里那段外文被自带译文译全了:用它,不留机翻。
+	zhFull := strings.Join([]string{"[00:01.00]占位中文原词第一句", "[00:05.00]占位中文原词第二句",
+		"[00:09.00]placeholder foreign line one", "[00:12.00]占位译文一", "[00:12.00]placeholder foreign line two",
+		"[00:15.00]占位译文二", "[00:15.00]placeholder foreign line three", "[00:18.00]占位译文三",
+		"[00:18.00]placeholder foreign line four", "[00:21.00]占位译文四", "[00:21.00]占位中文原词第三句"}, "\n")
+	zhFullClean, zhFullTr, _ := splitSharedStampTranslation(zhFull, false)
 	zhMachine := "[00:10.00]机翻一\n[00:13.00]机翻二\n[00:16.00]机翻三\n[00:19.00]机翻四\n[00:22.00]机翻五"
 	zhClean, _, _ := splitSharedStampTranslation(zhSong, false)
 	enrichMu.Lock()
@@ -409,6 +416,8 @@ func TestMigrateKuwoSharedStampTranslation(t *testing.T) {
 	enrichCache["a|own|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: leftover, LyricsTr: "[00:05.00]已有译文", LyricsTrLang: "zh"}
 	enrichCache["a|zhsong|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: zhSong, LyricsTr: zhMachine, LyricsTrSource: "machine",
 		LyricsTrLang: "zh-CN", TranslationRetryCount: 1, LyricsRoma: "[00:05.00]zhan wei"}
+	enrichCache["a|zhfull|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: zhFull, LyricsTr: "[00:09.00]机翻", LyricsTrSource: "machine",
+		LyricsTrLang: "zh-CN", TranslationRetryCount: 1}
 	enrichCache["a|manual|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, ManualLyrics: true}
 	enrichCache["a|qq|b"] = enrichEntry{LyricsSource: "qq", Lyrics: baked}
 	enrichCache["a|pick|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, ManualPickSHA: manualPickFingerprint(baked)}
@@ -434,6 +443,10 @@ func TestMigrateKuwoSharedStampTranslation(t *testing.T) {
 	if zh.Lyrics != zhClean || zh.LyricsTr != zhMachine || zh.LyricsTrSource != "machine" || zh.TranslationRetryCount != 1 ||
 		zh.LyricsRoma != "" {
 		t.Fatalf("摘出来的用不上时中文机翻留着、正文照摘、读音清掉: %+v", zh)
+	}
+	if f := enrichCache["a|zhfull|b"]; f.Lyrics != zhFullClean || f.LyricsTr != zhFullTr || f.LyricsTrSource != "" ||
+		f.LyricsTrLang != "zh" || f.TranslationRetryCount != 0 {
+		t.Fatalf("中文歌里那段外文被自带译文译全了:换成它: %+v", f)
 	}
 	if enrichCache["a|manual|b"].Lyrics != baked || enrichCache["a|qq|b"].Lyrics != baked {
 		t.Fatal("手动锁定的、别的源的不动")
@@ -477,5 +490,26 @@ func TestMigrateKuwoSharedStampTranslationOtherTarget(t *testing.T) {
 	}
 	if e.LyricsTr != "" || e.LyricsTrSource != "" || e.LyricsTrLang != "" || e.TranslationRetryCount != 0 || e.TranslationTS != 0 {
 		t.Fatalf("目标语言不是中文:按旧正文翻的日文机翻清掉、重试计数归零,交给补翻: %+v", e)
+	}
+}
+
+func TestKuwoBakedTranslationCovers(t *testing.T) {
+	lyrics := strings.Join([]string{"[00:01.00]占位中文原词第一句", "[00:09.00]placeholder foreign line one",
+		"[00:12.00]placeholder foreign line two", "[00:15.00]placeholder foreign line three",
+		"[00:18.00]placeholder foreign line four", "[00:21.00]占位中文原词第二句"}, "\n")
+	full := "[00:09.00]占位译文一\n[00:12.00]占位译文二\n[00:15.00]占位译文三\n[00:18.00]占位译文四"
+	part := "[00:09.00]占位译文一\n[00:12.00]占位译文二"
+	if !kuwoBakedTranslationCovers(lyrics, full, "zh", "占位歌手", "占位歌名") {
+		t.Error("要翻的外文行全有自带译文:用它")
+	}
+	if kuwoBakedTranslationCovers(lyrics, part, "zh", "占位歌手", "占位歌名") {
+		t.Error("只译了一半:交给机翻")
+	}
+	if kuwoBakedTranslationCovers(lyrics, full, "ja", "占位歌手", "占位歌名") {
+		t.Error("目标语言不是中文:中文译文用不上")
+	}
+	if kuwoBakedTranslationCovers(lyrics, "", "zh", "占位歌手", "占位歌名") ||
+		kuwoBakedTranslationCovers("[00:01.00]全是中文的一句", "[00:01.00]x", "zh", "占位歌手", "占位歌名") {
+		t.Error("没有译文、或者没有要翻的行:不算")
 	}
 }

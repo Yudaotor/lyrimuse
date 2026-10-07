@@ -4827,8 +4827,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			}
 		case "kuwo":
 			// 酷我自己没有译文轨,这里接的是从正文里摘出来的烘入译文(bakedtranslation.go),
-			// 固定中文,可用性同样由候选装配时的 usableValueAdd 把关。
-			if c.hasUsableTranslation {
+			// 固定中文,可用性同样由候选装配时的 usableValueAdd 把关;中文歌里那段外文被它译全了的也收(kuwoBakedTranslationCovers)。
+			if c.hasUsableTranslation || kuwoBakedTranslationCovers(c.lyrics, kuwoTr, features().LyricsTranslationLanguage, artist, title) {
 				r.LyricsTr = kuwoTr
 				r.LyricsTrLang = "zh"
 			}
