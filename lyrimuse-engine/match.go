@@ -215,6 +215,32 @@ func isCreditOnlyLRC(lrc string) bool {
 	return nonCredit < 3
 }
 
+// lyricsAreCreditsOnly:这份歌词其实是一张职员表(或纯音乐占位),不是一首很短的歌。isCreditOnlyLRC 对「两行真歌词、
+// 一行署名都没有」也判 true(它只管打分时整份拒收);重评决定护不护着当前这份时用这个,另要署名行至少有一行、且不少于
+// 剩下的行。见 09 章决策 209。
+func lyricsAreCreditsOnly(lrc string) bool {
+	if isInstrumentalPlaceholderLyric(lrc) {
+		return true
+	}
+	if !isCreditOnlyLRC(lrc) {
+		return false
+	}
+	speakers := lyricSpeakerLabels(lrc)
+	credit, other := 0, 0
+	for _, l := range splitLyricLines(lrc) {
+		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(l, ""))
+		if text == "" || lrcMetaTagPrefixRe.MatchString(text) {
+			continue
+		}
+		if isCreditLineWithSpeakers(text, speakers) {
+			credit++
+		} else {
+			other++
+		}
+	}
+	return credit > 0 && credit >= other
+}
+
 // lastLRCTimestampSecs 取 LRC 里最后一个"真的带歌词正文"的 [mm:ss.xx] 时间戳、换算成
 // 秒——不能简单取整份文本里最后一个时间戳:有些 LRC 会在真正唱完之后再补一行空白时间戳
 // 单独标记"这首歌到这里才算完"(常见于给尾奏占位),这种行没有对应的歌词正文,选它当
@@ -499,7 +525,7 @@ const lyricOvershootToleranceSecs = 5.0
 // 当前维度、权重与每一版改动的真实案例/全库回放证据,记在
 // docs/features/09-lyrics-resolution.md 的打分维度表与「设计决策与已知坑」决策日志
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
-const lyricsScoringVersion = 27
+const lyricsScoringVersion = 28
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -646,6 +672,9 @@ const (
 	// 只在**本地是混音版、候选不是**时触发(单向):将来真有源收录了 mix 版,那条候选自己
 	// 带同样的标记,两边都认出 continuousMixVersionTag,这道闸对它静默。
 	scoreRejectContinuousMix = "rejectContinuousMix"
+	// scoreRejectInstrumentalTrack:本地是伴奏版(localIsInstrumentalVersion),这条候选却带着整份歌词。伴奏没有人声,
+	// 人声版的词不配,整首按纯音乐处理。见 09 章决策 209。
+	scoreRejectInstrumentalTrack = "rejectInstrumentalTrack"
 )
 
 // nativeLyricSources 是「**这一刻正在播的那个播放器**自家的歌词源」("qq"/"netease"/
@@ -788,6 +817,9 @@ func scoreLyricCandidateDetailed(
 	}
 	if isCreditOnlyLRC(c.lyrics) {
 		return reject(scoreRejectCreditOnly)
+	}
+	if localIsInstrumentalVersion(localTitle, localAlbum) {
+		return reject(scoreRejectInstrumentalTrack)
 	}
 	// 放在所有**内容级**闸(没时间戳/语言不符/只有署名)之后:那几种更根本,一份既没时间戳
 	// 又版本不对的候选该先告诉"没有时间戳"。见 scoreRejectContinuousMix 头注。
@@ -2474,6 +2506,12 @@ const djRemixVersionTag = "dj混音"
 // 的规范键。词表里的 "dj mix"/"continuous mix" 和 isContinuousMixSegment 认出的「[Mixed]」
 // 都折到这一个键上——本地与候选各自认出同一个 key,versionTagsMismatch 的集合比较才生效。
 const continuousMixVersionTag = "dj mix"
+
+// localIsInstrumentalVersion:本地歌名或专辑带伴奏 / 纯音乐 / Instrumental 限定词(规范键 instrumental,见
+// versionTagAliases)。这种曲目没有人声:候选的整份歌词不用,没有候选时按纯音乐标。karaoke 不算在内。见 09 章决策 209。
+func localIsInstrumentalVersion(title, album string) bool {
+	return recordingVersionTags(title, album)["instrumental"]
+}
 
 // isContinuousMixSegment:这一段限定词是不是 Apple Music 的 DJ Mix 专辑给每条曲目加的
 // 「[Mixed]」后缀。

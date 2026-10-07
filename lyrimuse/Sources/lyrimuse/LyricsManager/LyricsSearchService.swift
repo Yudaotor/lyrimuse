@@ -149,6 +149,8 @@ final class LyricsSearchService {
             case "rejectPlainTextOnly": return L10n.t("仅有纯文本，无时间戳")
             // 加,见引擎 match.go 的 scoreRejectContinuousMix 头注。
             case "rejectContinuousMix": return L10n.t("连续混音版，与原版编排不同")
+            // 见引擎 match.go 的 scoreRejectInstrumentalTrack 头注。
+            case "rejectInstrumentalTrack": return L10n.t("伴奏版，不用人声歌词")
             default: return kind
             }
         }
@@ -188,6 +190,8 @@ final class LyricsSearchService {
                 return L10n.t("最后一句的时间与曲长相差 25% 以上，可能是其他版本")
             case "rejectPlainTextOnly":
                 return L10n.t("该源收录了这首歌曲，但只有不带时间戳的纯文本，可在「歌词窗口」中作为静态文字阅读，无法随播放逐字 / 逐行高亮")
+            case "rejectInstrumentalTrack":
+                return L10n.t("当前播放的是伴奏版（歌名或专辑标着伴奏 / 纯音乐 / Instrumental），没有人声，人声版歌词不采用，按纯音乐显示")
             case "rejectContinuousMix":
                 return L10n.t("当前播放的是 DJ Mix 专辑中的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）。这类曲目截取自整场演出，前后带有过渡，长度与原版不同，原版歌词的时间轴无法对齐，且没有歌词源收录混音版的时间轴")
             default: return ""

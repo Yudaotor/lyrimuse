@@ -1,6 +1,52 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "伴奏版，不用人声歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instrumental version, vocal lyrics not used"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "伴奏版，不用人声歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "伴奏版，不用人聲歌詞"
+          }
+        }
+      }
+    },
+    "当前播放的是伴奏版（歌名或专辑标着伴奏 / 纯音乐 / Instrumental），没有人声，人声版歌词不采用，按纯音乐显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is an instrumental version (its title or album says Instrumental), so it has no vocals; vocal lyrics are not used and it is shown as instrumental"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前播放的是伴奏版（歌名或专辑标着伴奏 / 纯音乐 / Instrumental），没有人声，人声版歌词不采用，按纯音乐显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前播放的是伴奏版（歌名或專輯標著伴奏 / 純音樂 / Instrumental），沒有人聲，不採用人聲版歌詞，以純音樂顯示"
+          }
+        }
+      }
+    },
     "焦点在别的 App 上，暂时控制不了「%@」" : {
       "extractionState" : "manual",
       "localizations" : {

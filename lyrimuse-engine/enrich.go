@@ -1987,6 +1987,9 @@ func instrumentalFromScored(scored []scoredLyricCandidateResult, artist, title, 
 	if sodaLocalInstrumental(artist, title, album, durationSecs) {
 		return true, "soda local"
 	}
+	if localIsInstrumentalVersion(title, album) {
+		return true, "instrumental version"
+	}
 	return false, ""
 }
 
@@ -2185,6 +2188,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		return false
 	}
 	before := e
+	// 当前这份只有署名:它不是要护着的歌词,见下面 keep 与纯音乐那一支。
+	currentCreditOnly := lyricsAreCreditsOnly(e.Lyrics)
 	// 换了打分版本后的第一次尝试:旧版本下的计数作废、从零开始(见 LyricsRescoreVersion 注释)。
 	if e.LyricsRescoreVersion != lyricsScoringVersion {
 		e.LyricsRescoreCount = 0
@@ -2218,8 +2223,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 版本标成已追平,needsLyricsRescore 与全量扫库之后还会再选中它。
 	complete := len(skipped) == 0
 	deferred = !decidable || !complete
-	// 冠军换词之前先看当前这份该不该留着,见 rescoreKeeps。
-	keep := decidable && picked != nil && rescoreKeeps(e, scored, picked)
+	// 冠军换词之前先看当前这份该不该留着,见 rescoreKeeps。只有署名的当前这份不留(09 章决策 209)。
+	keep := decidable && picked != nil && !currentCreditOnly && rescoreKeeps(e, scored, picked)
 	if decidable {
 		e.LyricsDecision = buildLyricsDecision(
 			opts.decisionPath(lyricsDecisionPathRescore), artist, title, searchAlbum, durationSecs, scored, picked,
@@ -2248,6 +2253,18 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		markedInstrumental = true
 		log.Printf("lyrics rescore: %s  %s is another version and a source says instrumental, marking instrumental under v%d",
 			key, e.LyricsSource, lyricsScoringVersion)
+	case picked == nil && sourceChoice == "" && e.autoMarksInstrumental() &&
+		(localIsInstrumentalVersion(title, album) || (currentCreditOnly && scoredHasInstrumentalMarker(scored))):
+		// 伴奏版,或当前这份只有署名、这一轮有源说是纯音乐:按纯音乐处理,歌词留在条目里、撤标就回来。手动重新匹配同样走这里。
+		// 见 09 章决策 209。
+		if complete {
+			e.LyricsScoringVersion = lyricsScoringVersion
+		}
+		e.ResolvedDurationSecs = durationSecs
+		e.Instrumental = true
+		markedInstrumental = true
+		log.Printf("lyrics rescore: %s  no usable candidate for an instrumental version or credits-only lyrics, marking instrumental under v%d",
+			key, lyricsScoringVersion)
 	case picked == nil:
 		// 够格判断、但新规则下一个能用的候选都没有(比如全被"超出曲目时长"判掉)。
 		// 保留现有歌词不动 —— 有一份存疑的歌词也好过没有 —— 但版本号照盖:结论已经

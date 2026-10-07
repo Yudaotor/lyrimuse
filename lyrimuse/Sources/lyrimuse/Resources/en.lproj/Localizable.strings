@@ -311,6 +311,7 @@
 "以下播放器尚未安装，可提前选择，安装后自动生效" = "These players aren't installed yet. Select one now and it takes effect once installed.";
 "以文本方式编辑" = "Edit as Text";
 "企业微信" = "WeCom";
+"伴奏版，不用人声歌词" = "Instrumental version, vocal lyrics not used";
 "位于菜单栏" = "In the menu bar";
 "位置" = "Position";
 "位置已固定为「%@」，可在 ⚙ 菜单中更改" = "Position is fixed to “%@” — change it in the ⚙ menu";
@@ -827,6 +828,7 @@
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
 "当前播放的是 DJ Mix 专辑中的一段（歌名带 [Mixed]、专辑带 (DJ Mix)）。这类曲目截取自整场演出，前后带有过渡，长度与原版不同，原版歌词的时间轴无法对齐，且没有歌词源收录混音版的时间轴" = "You’re playing one segment of a DJ Mix album (the track is tagged [Mixed], the album (DJ Mix)) — it’s cut out of a full set, with transitions on either side and a length that doesn’t match the original, so the original lyrics’ timeline can’t line up. And no source carries a timeline for the mixed version.";
+"当前播放的是伴奏版（歌名或专辑标着伴奏 / 纯音乐 / Instrumental），没有人声，人声版歌词不采用，按纯音乐显示" = "This is an instrumental version (its title or album says Instrumental), so it has no vocals; vocal lyrics are not used and it is shown as instrumental";
 "当前无正在播放的歌曲" = "Nothing Is Playing";
 "当前未在播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示" = "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch, Menu Bar and Touch Bar Lyrics only show up once playback starts";
 "当前未在播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示" = "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch Lyrics and Menu Bar Lyrics only show up once playback starts";
