@@ -6886,25 +6886,48 @@
         }
       }
     },
-    "没有 GitHub 账号时，可发送邮件至 %@" : {
+    "没有 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No GitHub account? Email %@"
+            "value" : "No GitHub account? Email %@. Right-click to copy the address."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有 GitHub 账号时，可发送邮件至 %@"
+            "value" : "没有 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "沒有 GitHub 帳號時，可寄送郵件至 %@"
+            "value" : "沒有 GitHub 帳號時，可寄送郵件至 %@；按右鍵可拷貝位址"
+          }
+        }
+      }
+    },
+    "拷贝邮箱地址" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Email Address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝邮箱地址"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷貝電子郵件位址"
           }
         }
       }

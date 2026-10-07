@@ -300,9 +300,9 @@ The same check, run from Terminal:
 ## Feedback
 
 - **Problems and ideas**: in the app, open Settings › About › **Report an Issue**, or right-click the menu bar icon and choose **Report an Issue…**. It opens a new GitHub issue with your version, macOS and current player already filled in; pick the kind of report: bug, lyrics missing or wrong, player request, or feature request.
-- **Wrong lyrics for one song**: open **Search for Lyrics** for that song in the **Lyrics Manager** and click **Can't find the right lyrics? Report it on GitHub** at the bottom left. The song details and what each lyrics source returned come along.
+- **Wrong lyrics for one song**: open **Search for Lyrics** for that song in the **Lyrics Manager** and click **Can't find the right lyrics? Report it on GitHub** at the bottom left. The song details, the lyrics source in use and the sources that returned results come along.
 - **Questions**: ask in the [Q&A category](https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a) of Discussions.
-- **No GitHub account**: email yudaotor@qq.com. The envelope button on the **Report an Issue** row in Settings › About fills in your version and macOS.
+- **No GitHub account**: email yudaotor@qq.com. The envelope button on the **Report an Issue** row in Settings › About fills in your version and macOS; right-click it to copy the address.
 - **Security issues**: report them privately as described in [SECURITY.md](SECURITY.md), not in a public issue.
 
 ## Uninstalling

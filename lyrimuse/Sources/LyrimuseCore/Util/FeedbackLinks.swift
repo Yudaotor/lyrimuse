@@ -52,10 +52,12 @@ public enum FeedbackLinks {
         ])
     }
 
-    /// 直接打开歌词类表单,标题和歌曲信息已经填好。标题是「[Lyrics] Title: 歌名 · Artist: 歌手 · Album: 专辑」,没有专辑时不带最后一段。
+    /// 直接打开歌词类表单,标题和歌曲信息已经填好。标题是「[Lyrics] Title: 歌名 · Artist: 歌手 · Album: 专辑」,空的那一段不带。
     public static func lyricsIssueURL(_ report: LyricsReport, environment: Environment) -> URL {
-        var title = "\(lyricsTitlePrefix)Title: \(report.song) · Artist: \(report.artist)"
-        if !report.album.isEmpty { title += " · Album: \(report.album)" }
+        let parts = [("Title", report.song), ("Artist", report.artist), ("Album", report.album)]
+            .filter { !$0.1.isEmpty }
+            .map { "\($0.0): \($0.1)" }
+        let title = lyricsTitlePrefix + parts.joined(separator: " · ")
         return url(LegalNoticeLinks.repo + "/issues/new", [
             ("template", lyricsTemplate), ("title", title),
             ("song", report.song), ("artist", report.artist), ("album", report.album), ("player", environment.player),
@@ -67,8 +69,8 @@ public enum FeedbackLinks {
     public static let playerRequestTemplate = "3-player.yml"
 
     /// 直接打开播放器请求表单,带上版本(表单里只有这一项要 App 填)。
-    public static func playerRequestURL(_ environment: Environment) -> URL {
-        url(LegalNoticeLinks.repo + "/issues/new", [("template", playerRequestTemplate), ("version", environment.appVersion)])
+    public static func playerRequestURL(appVersion: String) -> URL {
+        url(LegalNoticeLinks.repo + "/issues/new", [("template", playerRequestTemplate), ("version", appVersion)])
     }
 
     /// 写给 `feedbackEmail` 的邮件,正文末尾带一行版本、系统和播放器。
@@ -78,14 +80,28 @@ public enum FeedbackLinks {
         return url("mailto:" + feedbackEmail, [("subject", subject), ("body", "\n\n—\n" + footer)])
     }
 
-    /// 芯片架构的产品名(不本地化:Apple 自己的界面里这两个词也不翻)。universal 包在两种机器上跑的是各自原生
-    /// 那一半,所以编译期判断就是运行期事实。
+    /// 芯片架构的产品名(不本地化:Apple 自己的界面里这几个词也不翻)。universal 包在两种机器上跑的是各自原生那一半;
+    /// 在「显示简介」里勾了「使用 Rosetta 打开」时,Apple Silicon 上跑的是 Intel 那一半,这时写成「Apple Silicon, Rosetta」。
     public static var architectureName: String {
         #if arch(arm64)
-        return "Apple Silicon"
+        let nativeArm64 = true
         #else
-        return "Intel"
+        let nativeArm64 = false
         #endif
+        return architectureName(nativeArm64: nativeArm64, translated: !nativeArm64 && runsUnderRosetta)
+    }
+
+    /// `architectureName` 的判断本体:编译出的是不是 arm64 那一半,这个进程是不是经 Rosetta 转译在跑。
+    public static func architectureName(nativeArm64: Bool, translated: Bool) -> String {
+        if nativeArm64 { return "Apple Silicon" }
+        return translated ? "Apple Silicon, Rosetta" : "Intel"
+    }
+
+    /// 读 `sysctl.proc_translated`;Intel 机器上没有这个键,读不到按没有转译。
+    private static var runsUnderRosetta: Bool {
+        var translated: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        return sysctlbyname("sysctl.proc_translated", &translated, &size, nil, 0) == 0 && translated == 1
     }
 
     /// 「27.0.1」这样的系统版本号。

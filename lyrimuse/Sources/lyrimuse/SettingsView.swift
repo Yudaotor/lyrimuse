@@ -6956,8 +6956,8 @@ private struct AboutSettingsTab: View {
     }
 
     /// 「反馈问题」进 issue 模板选择页,版本、系统、播放器已经填好,反馈的类型在那里选;「前往」左边一颗邮件图标给没有 GitHub
-    /// 账号的人,邮箱写在悬停提示里。「使用求助」进讨论区的问答分类。反馈问题和邮件都走 `FeedbackReporter`,菜单栏右键菜单的
-    /// 「反馈问题…」也是,见 14 章决策 57、59。
+    /// 账号的人,邮箱写在悬停提示里,按右键可拷贝地址。「使用求助」进讨论区的问答分类。反馈问题和邮件都走 `FeedbackReporter`,
+    /// 菜单栏右键菜单的「反馈问题…」也是,见 14 章决策 57、59。
     private var feedbackCard: some View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("反馈"))
@@ -6971,8 +6971,11 @@ private struct AboutSettingsTab: View {
                     Button { FeedbackReporter.openEmail() } label: { Image(systemName: "envelope") }
                         .buttonStyle(.borderless)
                         .foregroundStyle(.secondary)
-                        .help(String(format: L10n.t("没有 GitHub 账号时，可发送邮件至 %@"), FeedbackLinks.feedbackEmail))
+                        .help(String(format: L10n.t("没有 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址"), FeedbackLinks.feedbackEmail))
                         .accessibilityLabel(L10n.t("邮件反馈"))
+                        .contextMenu {
+                            Button(L10n.t("拷贝邮箱地址")) { FeedbackReporter.copyEmailAddress() }
+                        }
                     Button(L10n.t("前往")) { FeedbackReporter.openNewIssue() }
                 }
             }

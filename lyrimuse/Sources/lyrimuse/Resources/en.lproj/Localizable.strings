@@ -893,6 +893,7 @@
 "拷贝" = "Copy";
 "拷贝名称" = "Copy Name";
 "拷贝歌名与歌手" = "Copy Title and Artist";
+"拷贝邮箱地址" = "Copy Email Address";
 "拼音" = "Pinyin";
 "指定颜色" = "Custom Color";
 "指针划过时让开" = "Move Aside on Hover";
@@ -1368,7 +1369,7 @@
 "汽水音乐歌手页" = "Soda Music artist page";
 "汽水音乐歌曲页" = "Soda Music song page";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲没有歌词，通常会在后续版本中修复" = "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it";
-"没有 GitHub 账号时，可发送邮件至 %@" = "No GitHub account? Email %@";
+"没有 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址" = "No GitHub account? Email %@. Right-click to copy the address.";
 "没有完全磁盘访问权限，无法读取 %@ 的本机歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
 "没有无效记录" = "No Invalid Entries";
 "没有符合条件的歌曲" = "No Matching Songs";

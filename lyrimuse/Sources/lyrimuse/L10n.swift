@@ -24,7 +24,7 @@ import LyrimuseCore
 // generate-strings.py 在生成时回退成简体,运行时不需要再兜一层。
 // 要支持更多语言:①在 Resources/ 下加 `<lang>.lproj/Localizable.strings`(文件名小写,
 // 跟打包出来的实际目录名一致),并在 generate-strings.py 的 TARGETS 和 build.sh 的拷贝那两行
-// 登记;②在 `current` 里加一条判断分支返回对应目录名;③`localeIdentifier(for:)` 加映射。
+// 登记;②在 `current` 里加一条判断分支返回对应目录名;③LyrimuseCore `UILanguage` 的 `localeIdentifier(for:)`、`pack(forLocalization:)` 加映射。
 // 查找/兜底逻辑(bundle/t(_:))不用改。
 enum L10n {
     // current/bundle 每次读都重新解析,不用 `static let` 一次性缓存——否则运行期切换
@@ -54,16 +54,6 @@ enum L10n {
         UILanguage.resolve(preferred: preferred)
     }
 
-    // current 映射成系统 API 认的 locale 标识。抽成纯函数是为了让 selftest 能直接覆盖
-    // (locale 本身要读 UserDefaults,测试里不该去动用户的真实设置)。
-    static func localeIdentifier(for lang: String) -> String {
-        switch lang {
-        case "en": return "en"
-        case "zh-hant": return "zh-Hant"
-        default: return "zh-Hans"
-        }
-    }
-
     /// 界面语言对应的 `Locale` —— 给那些**不走 .strings 表、但仍该跟着界面语言变**的系统
     /// API 用,典型是 `Locale.localizedString(forIdentifier:)` 生成的语言名/地区名。
     ///
@@ -75,7 +65,7 @@ enum L10n {
     /// 还是关于用户这个人/这台机器的事实":`AppSettings.userReadsChinese`(这个人读不读中文)
     /// 和译文目标语言的"跟随系统"档(母语可能既非中也非英,而界面只有中英两版)都必须继续
     /// 跟随**系统**语言,换成界面语言反而是 bug。
-    static var locale: Locale { Locale(identifier: localeIdentifier(for: current)) }
+    static var locale: Locale { Locale(identifier: UILanguage.localeIdentifier(for: current)) }
 
     // 轻量缓存——只在 current 真的变化时才重新构造 Bundle(path:),避免每次 L10n.t(_:)
     // 调用都重新命中磁盘路径查找(一次界面渲染里同一个 View 常常连续调好几十次)。语言

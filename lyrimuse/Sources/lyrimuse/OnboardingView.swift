@@ -1164,11 +1164,14 @@ struct OnboardingView: View {
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // 文案里点名了菜单栏右键菜单的「反馈问题…」,改那一项的名字要连这句一起改。
-            Text(L10n.t("遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            // 只在没有要处理的项时出现:有待处理项时再加这一行就超出底栏以上的可见高度(高度账见 14 章决策 57)。
+            // 文案里点名了菜单栏右键菜单的「反馈问题…」,改那一项的名字要连这句一起改(contracts 组「反馈链接」逐语言核对)。
+            if pending.isEmpty {
+                Text(L10n.t("遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

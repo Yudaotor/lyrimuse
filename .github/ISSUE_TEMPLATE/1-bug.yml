@@ -6,8 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please search existing issues first. For missing or wrong lyrics, use the lyrics form instead.
-        提交前请先搜索已有的 issue，有相同的问题请在那一条下补充。歌词搜不到或不对，请改用「歌词搜不到或不对」。
+        Please search existing issues first. For lyrics problems, use the "Lyrics missing or wrong" form instead.
+        提交前请先搜索已有的 issue，有相同的问题请在那一条下补充。歌词方面的问题，请改用「歌词搜不到或不对」表单。
   - type: textarea
     id: what
     attributes:
@@ -26,7 +26,7 @@ body:
   - type: upload
     id: screenshots
     attributes:
-      label: "Screenshots · 截图或录屏"
+      label: "Screenshots or diagnostics · 截图、录屏或诊断包"
       description: "Optional · 可选"
   - type: input
     id: version
@@ -52,8 +52,8 @@ body:
         <details>
         <summary>Attach diagnostics if needed · 需要时可附上诊断包</summary>
 
-        Settings › About › Export Diagnostics creates a .zip. Drag it into the "What happened" box above. It contains recently played track names and local file paths, and issues are public, so check it first if that matters to you.
+        Settings › About › Export Diagnostics creates a .zip. Drag it into "Screenshots or diagnostics" above. It contains recently played track names and local file paths, and issues are public, so check it first if that matters to you.
 
-        在 设置 › 关于 › 导出诊断 中生成 .zip，拖进上方「出了什么问题」的输入框即可。诊断包里有最近播放的歌曲名称和本机文件路径，issue 公开可见，介意的话请先解压检查。
+        在 设置 › 关于 › 导出诊断 中生成 .zip，拖进上方的「截图、录屏或诊断包」即可。诊断包里有最近播放的歌曲名称和本机文件路径，issue 公开可见，介意的话请先解压检查。
 
         </details>

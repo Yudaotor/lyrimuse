@@ -600,7 +600,7 @@ struct LyricsSearchSheet: View {
         Button {
             FeedbackReporter.openLyricsIssue(FeedbackLinks.LyricsReport(
                 song: originalTitle, artist: originalArtist, album: originalAlbum,
-                source: currentSource.flatMap { $0.isEmpty ? nil : sourceDisplayName($0) } ?? "",
+                source: reportedCurrentSource,
                 answered: Self.allLyricSourceNames.filter(respondedSources.contains).map(sourceDisplayName)
                     .joined(separator: L10n.t("、"))))
         } label: {
@@ -610,6 +610,13 @@ struct LyricsSearchSheet: View {
         .font(.callout)
         .padding(.horizontal, 4)
         .padding(.bottom, 10)
+    }
+
+    /// 歌词反馈里「现在用的来源」,跟「当前使用」徽标同一个判据:本次面板里采纳过就是刚采纳的那条;标成纯音乐时这首
+    /// 没有在用的歌词,留空。
+    private var reportedCurrentSource: String {
+        guard !markedInstrumental, let source = effectiveCurrentSource, !source.isEmpty else { return "" }
+        return sourceDisplayName(source)
     }
 
     // 三个可编辑的查询维度——默认展示这首歌本身的元数据,.task(id:) 直接拿这三个初始值发起搜索;

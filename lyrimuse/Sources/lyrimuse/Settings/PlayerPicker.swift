@@ -90,7 +90,7 @@ struct PlayerPicker<Trailing: View>: View {
             HStack(spacing: 4) {
                 Text(L10n.t("未找到要使用的播放器？"))
                     .foregroundStyle(.secondary)
-                Link(L10n.t("在 GitHub 提 issue"), destination: FeedbackLinks.playerRequestURL(FeedbackReporter.environment()))
+                Link(L10n.t("在 GitHub 提 issue"), destination: FeedbackLinks.playerRequestURL(appVersion: FeedbackReporter.appVersion()))
             }
             .font(.callout)
             .fixedSize(horizontal: false, vertical: true)

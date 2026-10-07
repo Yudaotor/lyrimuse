@@ -249,6 +249,12 @@ func runSourceContractTests() {
             expectEqual(UILanguage.resolve(preferred: "EN"), "en", "本地化: 大小写不敏感")
             expectEqual(UILanguage.resolve(preferred: "ja-JP"), "zh-hans", "本地化: 没有对应语言包的系统语言退回开发语言(简体)")
             expectEqual(UILanguage.isTraditionalChineseTag("ja-JP"), false, "本地化: isTraditionalChineseTag 只管 zh 家族")
+            expectEqual(["en", "zh-hans", "zh-hant"].map(UILanguage.localeIdentifier(for:)), ["en", "zh-Hans", "zh-Hant"],
+                        "本地化: 语言包目录名 → locale 标识")
+            expectEqual(["zh_CN", "zh-Hans", "zh", "Chinese", "zh_TW", "zh_HK", "zh-Hant", "en", "en_GB", "English", "Base", "ja", "fr_CA"]
+                            .map { UILanguage.pack(forLocalization: $0) ?? "-" },
+                        ["zh-hans", "zh-hans", "zh-hans", "zh-hans", "zh-hant", "zh-hant", "zh-hant", "en", "en", "en", "-", "-", "-"],
+                        "本地化: 别的 App 的本地化目录名归哪个语言包,别的语言不归")
 
             // ---- 第三条:源码里每一个 L10n.t("字面量") 都必须在 catalog 里 ----
             //
@@ -2685,9 +2691,10 @@ func runSourceContractTests() {
 
     // ---- 反馈链接 ----
     //
-    // 反馈要打开的链接(见 14 章决策 57、59)。钉四件事:① 选择页带版本、系统、播放器,空的不带,「+」编成 %2B(不然到
-    // GitHub 那边成了空格);② 歌词类表单直接打开,歌曲信息带齐;③ 邮件写给反馈邮箱,正文末尾带版本;④ App 带的参数名都是
-    // 仓库里那张表单的字段 id,「关于」页、菜单栏右键菜单、歌词搜索面板都走 FeedbackReporter。
+    // 反馈要打开的链接(见 14 章决策 57、59)。钉五件事:① 选择页带版本、系统、播放器,空的不带,「+」编成 %2B(不然到
+    // GitHub 那边成了空格);② 歌词类表单直接打开,歌曲信息带齐,标题里空的那一段不带;③ 邮件写给反馈邮箱,正文末尾带版本;
+    // ④ App 带的参数名都是仓库里那张表单的字段 id,各入口都走 FeedbackReporter,歌词反馈的来源认面板里刚采纳的那条;
+    // ⑤ 引导收尾页那句点名的菜单项跟菜单栏右键菜单同名。
     do {
         func query(_ url: URL) -> [String: String] {
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -2713,7 +2720,10 @@ func runSourceContractTests() {
                                                      environment: env)
         expectEqual(query(withAlbum)["title"], "[Lyrics] Title: Flavor · Artist: Khalil Fong · Album: JOURNEY TO THE WEST",
                     "反馈链接: 有专辑时标题带 Album 那一段")
-        let playerRequest = FeedbackLinks.playerRequestURL(env)
+        let noArtist = FeedbackLinks.lyricsIssueURL(.init(song: "Flavor", artist: "", album: "JOURNEY TO THE WEST"), environment: env)
+        expectEqual(query(noArtist)["title"], "[Lyrics] Title: Flavor · Album: JOURNEY TO THE WEST",
+                    "反馈链接: 标题里空的那一段不带")
+        let playerRequest = FeedbackLinks.playerRequestURL(appVersion: env.appVersion)
         expectEqual(query(playerRequest), ["template": "3-player.yml", "version": "1.9.0 (Apple Silicon)"],
                     "反馈链接: 播放器请求直接打开那张表单,带上版本")
         let mail = FeedbackLinks.emailURL(subject: "Lyrimuse 反馈", environment: env)
@@ -2725,6 +2735,10 @@ func runSourceContractTests() {
                     "反馈链接: 使用求助进讨论区问答分类")
         expectEqual(FeedbackLinks.macOSVersionString(OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 1)),
                     "27.0.1", "反馈链接: 系统版本号三段")
+        expectEqual([FeedbackLinks.architectureName(nativeArm64: true, translated: false),
+                     FeedbackLinks.architectureName(nativeArm64: false, translated: false),
+                     FeedbackLinks.architectureName(nativeArm64: false, translated: true)],
+                    ["Apple Silicon", "Intel", "Apple Silicon, Rosetta"], "反馈链接: 芯片架构,经 Rosetta 转译时如实写出")
 
         let packageDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -2757,11 +2771,81 @@ func runSourceContractTests() {
                     && sourceBytes(settingsSrc, contain: "FeedbackReporter.openEmail()")
                     && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "FeedbackReporter.openNewIssue()")
                     && sourceBytes(read("LyricsManager/LyricsSearchSheet.swift"), contain: "FeedbackReporter.openLyricsIssue(")
-                    && sourceBytes(read("Settings/PlayerPicker.swift"), contain: "FeedbackLinks.playerRequestURL(FeedbackReporter.environment())"),
+                    && sourceBytes(read("Settings/PlayerPicker.swift"), contain: "FeedbackLinks.playerRequestURL(appVersion: FeedbackReporter.appVersion())"),
                     true, "反馈链接: 「关于」页、菜单栏右键菜单、歌词搜索面板、选播放器弹层都走 FeedbackReporter")
         expectEqual(sourceBytes(settingsSrc, contain: "lyrimuse/issues\")!")
                     || sourceBytes(settingsSrc, contain: "discussions/categories/ideas"), false,
                     "反馈链接: 设置页不再自己拼 issue 列表 / 想法分类的链接")
+        expectEqual(sourceBytes(settingsSrc, contain: "FeedbackReporter.copyEmailAddress()"), true,
+                    "反馈链接: 邮件图标按右键可拷贝地址")
+        let sheetSrc = read("LyricsManager/LyricsSearchSheet.swift")
+        expectEqual(sourceBytes(sheetSrc, contain: "source: reportedCurrentSource,")
+                    && sourceBytes(sheetSrc, contain: "let source = effectiveCurrentSource"), true,
+                    "反馈链接: 歌词反馈带的来源认本次面板里刚采纳的那条,不认打开面板时的快照")
+
+        let hint = "遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」"
+        expectEqual(sourceBytes(read("OnboardingView.swift"), contain: "L10n.t(\"\(hint)\")")
+                    && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "L10n.t(\"反馈问题…\")"), true,
+                    "反馈链接: 引导收尾页那句和菜单栏右键菜单那一项还用这两个键")
+        let catalogData = (try? Data(contentsOf: packageDir.appendingPathComponent("Localization/Localizable.xcstrings"))) ?? Data()
+        let catalogStrings = ((try? JSONSerialization.jsonObject(with: catalogData)) as? [String: Any])?["strings"] as? [String: Any] ?? [:]
+        func localized(_ key: String, _ lang: String) -> String {
+            let units = (catalogStrings[key] as? [String: Any])?["localizations"] as? [String: Any]
+            return ((units?[lang] as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String ?? ""
+        }
+        for lang in ["zh-Hans", "zh-Hant", "en"] {
+            let item = localized("反馈问题…", lang)
+            expectEqual(!item.isEmpty && localized(hint, lang).contains(item), true,
+                        "反馈链接: 引导收尾页那句点名的菜单项跟菜单栏右键菜单同名(\(lang))")
+        }
+    }
+
+    // ---- 第三方 App 名按界面语言取 ----
+    //
+    // 反馈里的播放器名跟界面语言走(见 14 章决策 59)。造三个假的 App 包:带简繁两种名字的、只带简体名的、像系统 App 那样
+    // 把名字放在 InfoPlist.loctable 里的。没有界面那种语言时用 Info.plist 里的原名,不拿别的语言凑数。
+    do {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("lyrimuse-appname-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: dir) }
+        func makeApp(_ raw: String, names: [String: String], loctable: [String: [String: String]]? = nil) -> URL {
+            let app = dir.appendingPathComponent(raw + ".app")
+            let res = app.appendingPathComponent("Contents/Resources")
+            try? fm.createDirectory(at: res, withIntermediateDirectories: true)
+            let info: [String: Any] = ["CFBundleIdentifier": "com.example." + raw, "CFBundleName": raw,
+                                       "CFBundleDisplayName": raw, "CFBundlePackageType": "APPL"]
+            if let data = try? PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0) {
+                try? data.write(to: app.appendingPathComponent("Contents/Info.plist"))
+            }
+            for (loc, name) in names {
+                let lproj = res.appendingPathComponent(loc + ".lproj")
+                try? fm.createDirectory(at: lproj, withIntermediateDirectories: true)
+                if !name.isEmpty {
+                    try? "\"CFBundleDisplayName\" = \"\(name)\";\n".write(to: lproj.appendingPathComponent("InfoPlist.strings"),
+                                                                           atomically: true, encoding: .utf8)
+                }
+            }
+            if let loctable, let data = try? PropertyListSerialization.data(fromPropertyList: loctable, format: .binary, options: 0) {
+                try? data.write(to: res.appendingPathComponent("InfoPlist.loctable"))
+            }
+            return app
+        }
+        let browser = makeApp("Browser", names: ["zh_CN": "浏览器", "zh_TW": "瀏覽器", "en": ""])
+        expectEqual(LocalizedAppName.name(bundleURL: browser, uiLanguage: "zh-hans"), "浏览器", "App 名: 简体界面取简体名")
+        expectEqual(LocalizedAppName.name(bundleURL: browser, uiLanguage: "zh-hant"), "瀏覽器", "App 名: 繁体界面取繁体名")
+        expectEqual(LocalizedAppName.name(bundleURL: browser, uiLanguage: "en"), "Browser", "App 名: 英文界面没有英文名时用原名")
+        let onlyHans = makeApp("OnlyHans", names: ["zh-Hans": "只有简体"])
+        expectEqual(LocalizedAppName.name(bundleURL: onlyHans, uiLanguage: "en"), "OnlyHans",
+                    "App 名: 没有界面那种语言时用原名,不拿简体名凑数")
+        let system = makeApp("SystemApp", names: ["zh_CN": "", "en": ""],
+                             loctable: ["zh_CN": ["CFBundleDisplayName": "系统应用"], "en": ["CFBundleDisplayName": "System App"]])
+        expectEqual(LocalizedAppName.name(bundleURL: system, uiLanguage: "zh-hans"), "系统应用", "App 名: 系统 App 的 loctable 也认")
+        expectEqual(LocalizedAppName.name(bundleURL: system, uiLanguage: "en"), "System App", "App 名: loctable 里按界面语言取")
+        let settingsReporter = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/Settings/FeedbackReporter.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(settingsReporter, contain: "LocalizedAppName.name(bundleURL: url, uiLanguage: L10n.current)")
+                    && !sourceBytes(settingsReporter, contain: "displayName(atPath:"), true,
+                    "App 名: 反馈里取播放器名按界面语言,不用系统语言的 displayName")
     }
 
     // ---- 使用与版权说明 / 第三方许可----
