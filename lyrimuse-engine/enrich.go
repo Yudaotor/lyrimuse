@@ -1831,7 +1831,8 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	if responded := lyricSourcesResponded(scored); len(responded) > 0 {
 		e.LyricsSourcesResponded = responded
 	}
-	e.LyricsSourcesSkipped = round.skippedSources()
+	roundSkipped := round.skippedSources()
+	e.LyricsSourcesSkipped = lyricSourcesSkippedForRetry(roundSkipped)
 	if reached {
 		e.LyricsListedAlbum = listedAlbum
 		e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
@@ -1849,7 +1850,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 无论换没换,这一轮完整评估都值得留证(Applied 区分两种含义,见 decision.go)。
 	e.LyricsDecision = buildLyricsDecision(
 		path, artist, title, searchAlbum, durationSecs, scored, picked, upgraded, opts.logAttrs()...)
-	e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
+	e.LyricsDecision.SourcesSkipped = roundSkipped
 	e.LyricsDecision.QueriesTried = queries.queries()
 	traceLyricsDecision(key, e.LyricsDecision)
 	// 换上了新的、或胜者就是现存这份(分数没严格更高所以没"升级",但等于再次确认了当前
@@ -2195,7 +2196,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		if responded := lyricSourcesResponded(scored); len(responded) > 0 {
 			e.LyricsSourcesResponded = responded
 		}
-		e.LyricsSourcesSkipped = skipped
+		e.LyricsSourcesSkipped = lyricSourcesSkippedForRetry(skipped)
 		if sw := songwritersFromScored(scored); len(sw) > 0 {
 			e.LyricsSongwriters = sw
 		}
@@ -2211,7 +2212,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		e.LyricsDecision = buildLyricsDecision(
 			opts.decisionPath(lyricsDecisionPathRescore), artist, title, searchAlbum, durationSecs, scored, picked,
 			picked != nil && !keep && (picked.Lyrics != e.Lyrics || gainsWordTiming(e, picked)))
-		e.LyricsDecision.SourcesSkipped = e.LyricsSourcesSkipped
+		e.LyricsDecision.SourcesSkipped = skipped
 		e.LyricsDecision.QueriesTried = queries.queries()
 		traceLyricsDecision(key, e.LyricsDecision)
 		// rescore 可判且有胜者:无论内容换没换,这一轮之后当前歌词就是 picked 那份

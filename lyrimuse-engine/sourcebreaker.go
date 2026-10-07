@@ -546,6 +546,26 @@ var anyLyricSourceCooling = func(sources []string) bool {
 	return false
 }
 
+// lyricSourceCooldownLeft:source 还要冷却多久(反爬暂停也算),不在冷却返回 false。写成包级变量给单测替换。
+var lyricSourceCooldownLeft = func(source string) (time.Duration, bool) {
+	return sharedLyricSourceBreaker().coolingDown(source)
+}
+
+// lyricSourcesSkippedForRetry 从这一轮跳过的源里挑出写进条目 LyricsSourcesSkipped 的那几个:剩余冷却超过
+// lyricsFillSkippedRetryInterval 的不留。这份名单说的是「这一轮没搜完整,补搜马上会来」:App 据此不下「暂无歌词」
+// (EnrichCacheLyrics.searchIncomplete),needsLyricsFirstFill 据此提早补搜。决策记录里的跳过名单照记全部,
+// 别把它也换成这一份。见 09 章决策 204。
+func lyricSourcesSkippedForRetry(skipped []string) []string {
+	var out []string
+	for _, s := range skipped {
+		if left, cooling := lyricSourceCooldownLeft(s); cooling && left > lyricsFillSkippedRetryInterval {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
 // coolingDown 只读地回答某个源现在是不是在冷却中(反爬暂停也算),给诊断/测试用。
 func (b *lyricSourceBreaker) coolingDown(source string) (time.Duration, bool) {
 	b.mu.Lock()

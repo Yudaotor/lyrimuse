@@ -104,7 +104,7 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	// 靠"有启用的源这轮没露面"来判断这次结果是不是在信息不全的情况下做的决定。
 	e.LyricsSourcesSeen = lyricSourcesWithCandidates(scored)
 	e.LyricsSourcesResponded = lyricSourcesResponded(scored)
-	e.LyricsSourcesSkipped = skipped
+	e.LyricsSourcesSkipped = lyricSourcesSkippedForRetry(skipped)
 	e.LyricsSongwriters = songwritersFromScored(scored)
 	picked := pickLyricCandidate(scored)
 	e.LyricsDecision = newLyricsDecision(
