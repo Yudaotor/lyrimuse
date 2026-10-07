@@ -598,15 +598,56 @@ func (p *yamlParser) parseBlockScalar(header string, parentIndent int) any {
 		parts = append(parts, line)
 		p.pos++
 	}
-	sep := "\n"
+	// 末尾的空行另算,交给收尾方式(chomping):`-` 一个换行都不留,`+` 全留,不写只留一个(内容为空时一个都不留)。
+	end := len(parts)
+	for end > 0 && parts[end-1] == "" {
+		end--
+	}
+	body, trailing := parts[:end], len(parts)-end
+	text := strings.Join(body, "\n")
 	if header[0] == '>' {
-		sep = " "
+		text = foldYAMLLines(body)
 	}
-	text := strings.Join(parts, sep)
-	if !strings.Contains(header, "-") {
-		text = strings.TrimRight(text, "\n ") + "\n"
+	indicators, _, _ := strings.Cut(header[1:], "#")
+	switch {
+	case strings.Contains(indicators, "-"):
+		return text
+	case strings.Contains(indicators, "+"):
+		if len(body) == 0 {
+			return strings.Repeat("\n", trailing)
+		}
+		return text + "\n" + strings.Repeat("\n", trailing)
+	case len(body) == 0:
+		return ""
 	}
-	return strings.TrimRight(text, " ")
+	return text + "\n"
+}
+
+// foldYAMLLines 按 `>` 的规矩把块标量的行接起来:相邻两行正文之间的换行变空格;中间隔着 n 个空行就是 n 个换行;
+// 缩进比内容更深的行(前面带着空格)前后的换行原样留,不折。开头的空行各算一个换行。
+func foldYAMLLines(lines []string) string {
+	var b strings.Builder
+	started, prevMore, blanks := false, false, 0
+	for _, l := range lines {
+		if l == "" {
+			blanks++
+			continue
+		}
+		more := strings.HasPrefix(l, " ")
+		switch {
+		case !started:
+			b.WriteString(strings.Repeat("\n", blanks))
+		case more || prevMore:
+			b.WriteString(strings.Repeat("\n", blanks+1))
+		case blanks > 0:
+			b.WriteString(strings.Repeat("\n", blanks))
+		default:
+			b.WriteString(" ")
+		}
+		b.WriteString(l)
+		started, prevMore, blanks = true, more, 0
+	}
+	return b.String()
 }
 
 func stripYAMLComment(s string) string {

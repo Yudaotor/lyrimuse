@@ -146,6 +146,39 @@ func TestParseLyricsfileYAMLScalars(t *testing.T) {
 	}
 }
 
+// 块标量的收尾方式和折叠:`-` 不留结尾换行(由空行带来的也不留)、`+` 全留、不写只留一个;`>` 里空行留成换行,
+// 缩进更深的行前后不折;标题后面的注释不算收尾标记。
+func TestParseLyricsfileYAMLBlockScalars(t *testing.T) {
+	doc := "strip: |-\n  a\n  b\n\n\n" +
+		"keep: |+\n  a\n\n\n" +
+		"clip: |\n  a\n\n" +
+		"empty: |\n\n" +
+		"comment: | # a-b\n  a\n" +
+		"fold: >\n  one\n  two\n\n  three\n    more\n  four\n" +
+		"foldstrip: >-\n\n  lead\n  x\n" +
+		"end: 1\n"
+	v, ok := parseLyricsfileYAML(doc)
+	m, _ := v.(map[string]any)
+	if !ok || m == nil {
+		t.Fatalf("应能解析: %v", v)
+	}
+	want := map[string]any{
+		"strip":     "a\nb",
+		"keep":      "a\n\n\n",
+		"clip":      "a\n",
+		"empty":     "",
+		"comment":   "a\n",
+		"fold":      "one two\nthree\n  more\nfour\n",
+		"foldstrip": "\nlead x",
+		"end":       "1",
+	}
+	for k, w := range want {
+		if m[k] != w {
+			t.Errorf("%s = %#v, want %#v", k, m[k], w)
+		}
+	}
+}
+
 // 带逐字的条目:get 拿到的结果里有 yrc;服务端没标 hasWordSync、文档里也没 words 的不解析。
 func TestLRCLIBGetCarriesWordTiming(t *testing.T) {
 	item := func(hasWS bool, doc string) string {

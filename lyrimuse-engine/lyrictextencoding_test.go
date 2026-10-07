@@ -54,3 +54,37 @@ func TestDecodeLyricBytesFallbacks(t *testing.T) {
 		t.Errorf("转不了时该把非法字节换掉: %q %v called=%d", text, ok, called)
 	}
 }
+
+// 只转不合法的那几行:引擎用 UTF-8 写的中文头部(这首歌在歌词文件夹里的身份)原样留,混进来的 GBK 行转对。
+// 整份按 GB18030 转的话,UTF-8 的「方大同」也会被当成 GBK 转成乱码。
+func TestDecodeLyricBytesConvertsOnlyBadLines(t *testing.T) {
+	gbk := []byte{0xb8, 0xe8, 0xc7, 0xfa, 0xc3, 0xfb, ' ', 0xb5, 0xbe, 0xcf, 0xe3} // 「歌曲名 稻香」
+	file := append([]byte("[ar:方大同]\n[ti:苏丽珍]\n[al:爱爱爱]\n\n[00:01.00]"), gbk...)
+	file = append(file, []byte("\r\n[00:02.00]你好")...)
+	text, ok := decodeLyricBytes(file)
+	if !ok || text != "[ar:方大同]\n[ti:苏丽珍]\n[al:爱爱爱]\n\n[00:01.00]歌曲名 稻香\r\n[00:02.00]你好" {
+		t.Fatalf("decodeLyricBytes(混合) = %q, %v", text, ok)
+	}
+	if p := parseLyricsBytes(file); !p.ok || p.artist != "方大同" || p.title != "苏丽珍" || p.album != "爱爱爱" {
+		t.Errorf("头部身份该原样留: %+v", p)
+	}
+}
+
+// 坏行拼在一起只起一次转码;转出来的行数对不上就当没转成,按 json 的口径换掉非法字节。
+func TestDecodeLyricBytesOneConversionForAllBadLines(t *testing.T) {
+	saved := gb18030ToUTF8
+	t.Cleanup(func() { gb18030ToUTF8 = saved })
+	var calls []string
+	gb18030ToUTF8 = func(b []byte) ([]byte, error) {
+		calls = append(calls, string(b))
+		return []byte("一\n二"), nil
+	}
+	text, ok := decodeLyricBytes([]byte("好\n\xb0\n中\n\xb1"))
+	if !ok || text != "好\n一\n中\n二" || len(calls) != 1 || calls[0] != "\xb0\n\xb1" {
+		t.Errorf("text=%q ok=%v calls=%q", text, ok, calls)
+	}
+	gb18030ToUTF8 = func([]byte) ([]byte, error) { return []byte("只有一行"), nil }
+	if text, ok := decodeLyricBytes([]byte("好\n\xb0\n\xb1")); ok || text != "好\n�\n�" {
+		t.Errorf("行数对不上该走兜底: %q %v", text, ok)
+	}
+}
