@@ -168,6 +168,36 @@ func TestSetManualLockFlipsOnlyOriginalPicks(t *testing.T) {
 	}
 }
 
+// 多选「全部标为纯音乐」一次请求带一串 key:在缓存里的都改,不在的跳过,一首都没改成(要标上)时才报错;单个 key 的行为不变。
+func TestSetInstrumentalAcceptsKeys(t *testing.T) {
+	other := enrichKey("Other", "Song", "Album")
+	setUpEnrichEditTest(t, map[string]enrichEntry{
+		editKey: {Lyrics: "[00:01.00]x"},
+		other:   {},
+	})
+	res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Keys: []string{editKey, other, "No|Such|Key"}, Value: true})
+	if !res.OK || res.Changed != 2 {
+		t.Fatalf("在缓存里的两首都该标上、不在的跳过 res=%+v", res)
+	}
+	for _, k := range []string{editKey, other} {
+		if e, _ := cacheEntry(t, k); !e.Instrumental {
+			t.Errorf("%s 没标上", k)
+		}
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Keys: []string{"No|Such|Key"}, Value: true}); res.OK {
+		t.Errorf("一首都不在缓存里时要报错 res=%+v", res)
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Keys: []string{editKey, other}, Value: false}); !res.OK || res.Changed != 2 {
+		t.Errorf("撤标同样一次改完 res=%+v", res)
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Key: "No|Such|Key", Value: true}); res.OK {
+		t.Errorf("单个 key 不在缓存里、要标上时照旧报错 res=%+v", res)
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental"}); res.OK {
+		t.Errorf("没给 key 要报错 res=%+v", res)
+	}
+}
+
 func TestDeleteTrashesFilesAndSkipsUnknownKeys(t *testing.T) {
 	other := enrichKey("Other", "Song", "Album")
 	lyrics, trash := setUpEnrichEditTest(t, map[string]enrichEntry{

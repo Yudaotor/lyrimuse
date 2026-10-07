@@ -8,7 +8,7 @@ import Foundation
 /// 列表发现不了。搬到 Core 之后跟 `EnrichCacheKeys` 同一个待遇:视图层只
 /// 负责把 Summary 映射成 `LyricsSortKey`,规则本身可被 selftest 逐档钉住。
 ///
-/// 视图层的展示枚举(带中文 rawValue 的那个 `LyricsSortOption`)不搬,它绑着 Picker、
+/// 视图层的展示枚举(`LyricsSortOption`)不搬,它绑着 Picker、
 /// 属于 UI;它只把自己翻译成这里的 `LyricsSortOrder`。
 /// 排序需要看的全部字段。视图层从 `EnrichCacheStore.Summary` 一次性映射出来,之后比较器
 /// 只做廉价的字符串/日期比较(Summary 里那几个 norm* 字段本来就是为这个预算好的)。

@@ -3824,7 +3824,7 @@ func runSourceContractTests() {
                     "歌词管理: 状态胶囊全都在侧栏那一行,每一档都在")
         // 逐句编辑也标出正在唱的那一句,找法同预览(11 章决策 81)。
         expectEqual(lineEditorSource.contains("LyricsPreviewText.currentRow(times: indices.map { main.lines[$0].timeMs },")
-                    && lineEditorSource.contains("row(index, isCurrent: index == current)")
+                    && lineEditorSource.contains("row(index, isCurrent: index == current, changed: changed)")
                     && manager.contains("focus: $focusedLine,\n                isNowPlaying: summary.key == nowPlayingKey)"), true,
                     "歌词管理: 逐句编辑标出正在唱的那一句")
         // 换分组、换排序之后滚回选中的那一首(11 章决策 75)。
@@ -3838,7 +3838,7 @@ func runSourceContractTests() {
                     && managerParts.contains("LyricsManagerCover(url: summary.coverURL, image: artwork, size: 40, radius: 7)"), true,
                     "歌词管理: 正在放的那首在列表里用播放器给的封面")
         // 「清理无效记录」按 Core 的判据挑,正在放的那首不算,确认框只在开着时算正文(11 章决策 83)。
-        expectEqual(manager.contains("LyricsManagerCleanup.isInvalid(artist: $0.artist, kind: Self.kind($0), isManual: $0.isManual,")
+        expectEqual(manager.contains("LyricsManagerCleanup.isInvalid(artist: $0.shownArtist, kind: Self.kind($0), isManual: $0.isManual,")
                     && manager.contains("return filteredCache.cleanup.filter { $0 != nowPlayingKey }")
                     && manager.contains("if showCleanupConfirm { Text(cleanupMessage) }"), true,
                     "歌词管理: 清理无效记录按 Core 判据挑,正在放的那首不算")
@@ -3850,8 +3850,20 @@ func runSourceContractTests() {
                     && manager.contains("@AppStorage(\"np:lyricsManagerGroupByAlbum\") private var groupByAlbum = false"), true,
                     "歌词管理: 排序和分组下次开窗照旧")
         // 搜索候选歌词、解析决策面板开着时换歌不跟随,面板的查询词和写回的条目不变(11 章决策 86)。
-        expectEqual(manager.contains("guard followsPlayback, !isEditorDirty, editMode == .preview, !showSearchSheet, !showDecisionSheet else { return }"),
+        expectEqual(manager.contains("guard followsPlayback, !isEditorDirty, editMode == .preview, searchTarget == nil, !showDecisionSheet else { return }"),
                     true, "歌词管理: 搜索候选歌词、解析决策面板开着时换歌不跟随")
+        // 审查之后那几处修法:搜索面板打开那一刻拍下查询词;多选标纯音乐一次请求;编辑中的那一行不受筛选;偏移输入走 Core 的
+        // 解析(nan / inf / 1e20 直接转 Int 会崩);调偏移不再整库重建;逐句编辑一进来就有焦点,静态格子读屏能按(11 章决策 92)。
+        expectEqual(manager.contains(".sheet(item: $searchTarget) { target in")
+                    && !manager.contains("$showSearchSheet")
+                    && manager.contains("await store.setInstrumental(keys: keys, true)")
+                    && manager.contains("if s.key == kept { return true }")
+                    && manager.contains("guard let ms = LyricsOffsetInput.milliseconds(from: editedOffsetSeconds) else {")
+                    && !manager.contains("Int((seconds * 1000).rounded())")
+                    && !manager.contains("rebuildSummaries()")
+                    && lineEditorSource.contains(".onAppear(perform: activateInitialLine)")
+                    && lineEditorSource.contains(".accessibilityAction {"), true,
+                    "歌词管理: 审查之后的修法(搜索面板快照、批量标纯音乐、编辑中的行留在列表、偏移输入、逐句编辑的焦点)")
         // 列表的估算行高等于实际行高,scrollTo 才落得准(11 章决策 62)。
         expectEqual(manager.contains(".environment(\\.defaultMinListRowHeight, LyricsManagerView.listRowHeight)")
                     && manager.contains("private static let listRowHeight: CGFloat = 56"), true,

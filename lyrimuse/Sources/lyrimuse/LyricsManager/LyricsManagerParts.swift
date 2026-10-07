@@ -1053,7 +1053,8 @@ enum LyricsManagerLineFocus: Hashable {
 /// 下面再一格。改过的格子标强调色,行尾「还原」只还原这一句。↑↓ 换句,Tab / ⇧Tab 到下一格 / 上一格。
 ///
 /// 只有正在编辑的那一句是输入框,其余画成同样大小的文字,点上去才换成输入框、光标落在点的那个字上。每句都做成输入框的话
-/// 滚动时边滚边建输入框,主线程开销是文字的三到五倍,会掉帧(见 11 章决策 65)。
+/// 滚动时边滚边建输入框,主线程开销是文字的三到五倍,会掉帧(见 11 章决策 65)。一进来就把光标放进一句,读屏把静态的格子
+/// 当按钮读:只用键盘、读屏也能开始改(见 11 章决策 92)。
 struct LyricsManagerLineEditor: View {
     let main: LyricsEditableLines
     let mainBase: LyricsEditableLines
@@ -1070,6 +1071,9 @@ struct LyricsManagerLineEditor: View {
     @StateObject private var playback = LyricsManagerPlaybackLine()
     @State private var editingStamps: Int?
     @State private var stampDraft = ""
+    @FocusState private var stampFieldFocused: Bool
+    /// 回车时时间戳不合法:接下来那一下失焦不当成「点到别处」,框留着接着改。
+    @State private var stampSubmitRejected = false
     /// 画成输入框的那一句。跟焦点分开记:焦点值先设、输入框随后才出现的话,焦点落不上去(离屏量过),
     /// 所以先把这一句换成输入框,下一拍再给焦点(activate)。
     @State private var activeLine: Int?
@@ -1096,8 +1100,9 @@ struct LyricsManagerLineEditor: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     let current = currentLine
+                    let changed = changedLines
                     ForEach(rows, id: \.self) { index in
-                        row(index, isCurrent: index == current)
+                        row(index, isCurrent: index == current, changed: changed)
                             .id(index)
                     }
                 }
@@ -1114,7 +1119,30 @@ struct LyricsManagerLineEditor: View {
                 if activeLine != field.line { activeLine = field.line }
                 placePendingCaret(in: field)
             }
+            // 焦点离开时间戳输入框(点到别处):合法就照样改上,不合法当没改。
+            .onChange(of: stampFieldFocused) { _, focused in
+                guard !focused, !stampSubmitRejected, let index = editingStamps else { return }
+                if LyricsEditableLines.isValidStamps(stampDraft) { onMainStamps(index, stampDraft) }
+                editingStamps = nil
+            }
+            .onAppear(perform: activateInitialLine)
         }
+    }
+
+    /// 哪几句改过或是新加的(正文、挂在下面的译文 / 读音),按行对齐算,不按下标(见 LyricsEditableLines.alignment)。
+    private var changedLines: (main: Set<Int>, secondary: Set<Int>) {
+        let changedMain = Set(main.changedIndices(from: mainBase))
+        guard let secondary, let secondaryBase else { return (changedMain, []) }
+        return (changedMain, Set(secondary.changedIndices(from: secondaryBase)))
+    }
+
+    /// 一进逐句编辑就把光标放进一句(正在唱的那句,没有就第一句)的句尾:只用键盘也能直接改;放在句尾、不全选,
+    /// 不然一敲就把整句盖掉。
+    private func activateInitialLine() {
+        guard activeLine == nil, let index = currentLine ?? rows.first else { return }
+        let text = main.lines[index].text
+        pendingCaret = (.main(index), (text as NSString).length, text)
+        activate(.main(index))
     }
 
     private func secondaryIndex(for index: Int) -> Int? {
@@ -1122,14 +1150,11 @@ struct LyricsManagerLineEditor: View {
         return secondary.index(matching: t)
     }
 
-    private func row(_ index: Int, isCurrent: Bool) -> some View {
+    private func row(_ index: Int, isCurrent: Bool, changed: (main: Set<Int>, secondary: Set<Int>)) -> some View {
         let line = main.lines[index]
-        let mainChanged = !mainBase.lines.indices.contains(index) || mainBase.lines[index] != line
+        let mainChanged = changed.main.contains(index)
         let sIndex = secondaryIndex(for: index)
-        var secondaryChanged = false
-        if let sIndex, let secondary, let secondaryBase {
-            secondaryChanged = !secondaryBase.lines.indices.contains(sIndex) || secondaryBase.lines[sIndex] != secondary.lines[sIndex]
-        }
+        let secondaryChanged = sIndex.map { changed.secondary.contains($0) } ?? false
         let active = activeLine == index
         return HStack(alignment: .firstTextBaseline, spacing: 18) {
             stampColumn(index: index, line: line, isCurrent: isCurrent)
@@ -1188,10 +1213,16 @@ struct LyricsManagerLineEditor: View {
         if active {
             box
         } else {
+            // 读屏把它当按钮读,按一下跟点一下一样换成输入框(光标在句尾)。
             box
                 .contentShape(shape)
                 .onTapGesture { location in
                     pendingCaret = (field, Self.characterOffset(in: text, size: size, x: location.x - Self.cellInset), text)
+                    activate(field)
+                }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction {
+                    pendingCaret = (field, (text as NSString).length, text)
                     activate(field)
                 }
         }
@@ -1288,11 +1319,22 @@ struct LyricsManagerLineEditor: View {
             .foregroundStyle(isCurrent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
             .help(L10n.t("逐字歌词仅修改文字，时间保持不变"))
         } else if editingStamps == index {
+            // 回车:合法才改上、收起;不合法响一声,留在框里接着改。Esc 放弃。焦点离开见 body 里那条 onChange。
             TextField("", text: $stampDraft)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12).monospacedDigit())
+                .focused($stampFieldFocused)
                 .onSubmit {
-                    if LyricsEditableLines.isValidStamps(stampDraft) { onMainStamps(index, stampDraft) }
+                    guard LyricsEditableLines.isValidStamps(stampDraft) else {
+                        stampSubmitRejected = true
+                        NSSound.beep()
+                        DispatchQueue.main.async {
+                            stampFieldFocused = true
+                            stampSubmitRejected = false
+                        }
+                        return
+                    }
+                    onMainStamps(index, stampDraft)
                     editingStamps = nil
                 }
                 .onExitCommand { editingStamps = nil }
@@ -1300,6 +1342,7 @@ struct LyricsManagerLineEditor: View {
             Button {
                 stampDraft = line.stamps
                 editingStamps = index
+                DispatchQueue.main.async { stampFieldFocused = true }
             } label: {
                 Text(label)
                     .font(.system(size: 13).monospacedDigit())

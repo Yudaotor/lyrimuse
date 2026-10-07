@@ -609,36 +609,6 @@ public final class EnrichCacheStore: ObservableObject {
         return true
     }
 
-    // public:「歌词管理」详情页调过/重置过时间轴偏移之后也要调这个——校准名单在 LyricsPinStore(不是这里的 raw 字典),
-    // 而「已校准」胶囊的计数和筛选按 summaries 的代数缓存,得靠调用方显式喊一次重建才会重算(见 LyricsManagerView.applyOffsetEdit)。
-    ///
-    /// 在后台建:要列举整个歌词目录(上万个文件)再逐条过八千多个条目,放主线程上每调一次偏移就卡一下。
-    /// 建的过程中列表换过一版(reload 读到了新缓存、另一次重建先落地),这一版就作废,按最新的 raw 重建一次。
-    public func rebuildSummaries() {
-        rebuildTask?.cancel()
-        final class Box: @unchecked Sendable {
-            let raw: [String: [String: Any]]
-            var bundle: SummariesBundle?
-            init(raw: [String: [String: Any]]) { self.raw = raw }
-        }
-        let box = Box(raw: raw)
-        let lyricsDir = Self.lyricsDir
-        let startGeneration = summariesGeneration
-        rebuildTask = Task { [weak self] in
-            await Task.detached(priority: .userInitiated) {
-                box.bundle = Self.buildSummaries(from: box.raw, lyricsDir: lyricsDir)
-            }.value
-            guard let self, !Task.isCancelled, let bundle = box.bundle else { return }
-            self.rebuildTask = nil
-            guard self.summariesGeneration == startGeneration else {
-                self.rebuildSummaries()
-                return
-            }
-            self.applySummaries(bundle)
-        }
-    }
-    private var rebuildTask: Task<Void, Never>?
-
     // 排序键必须跟"列表上看到的那套分组"用**同一套归并规则**,否则会出现"显示层合并了、
     // 排序层还按原始写法把同一张专辑劈成两半"。实测撞到:「春游」这张专辑
     // 一半曲目排在列表最上面、一半排在最下面 —— 播放器把它们分别报成 "Leah Dou" / "窦靖童"
@@ -1030,6 +1000,14 @@ public final class EnrichCacheStore: ObservableObject {
     @discardableResult
     public func setInstrumental(key: String, _ value: Bool) async -> Bool {
         await commit("set_instrumental", ["key": key, "value": value]).ok
+    }
+
+    /// 多选「全部标为纯音乐」:一次请求带上全部 key,引擎一次改完,App 也只重读一遍缓存。别逐首调上面那个:每首都要整份
+    /// 重读一次缓存,选几百首要等好几分钟,列表跟着反复重建(见 11 章决策 92)。
+    @discardableResult
+    public func setInstrumental(keys: [String], _ value: Bool) async -> Bool {
+        guard !keys.isEmpty else { return true }
+        return await commit("set_instrumental", ["keys": keys, "value": value]).ok
     }
 
     /// 一条记录会不会被引擎的补空扫描真的拿去搜:没词、没确证纯音乐、没人工

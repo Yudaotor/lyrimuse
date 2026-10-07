@@ -48,7 +48,8 @@ public enum LyricsManagerStatus: String, CaseIterable, Sendable {
 }
 
 /// 「清理无效记录」挑哪些:不是歌、也找不回歌词的那些(广告、播客、有声书)。先要没有歌词(成色落在 `.none`)、没人工修正、
-/// 没校准过时间轴,再满足两条之一:键里没有歌手;或者时长 ≥ `longDurationSecs`(见 11 章决策 83)。
+/// 没校准过时间轴,再满足两条之一:没有歌手(调用方传给人看的那个,播放器没报时用引擎认出来的);或者时长 ≥
+/// `longDurationSecs`(见 11 章决策 83)。
 public enum LyricsManagerCleanup {
     public static let longDurationSecs: Double = 20 * 60
 

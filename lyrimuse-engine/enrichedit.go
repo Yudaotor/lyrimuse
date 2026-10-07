@@ -224,21 +224,34 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		cancelInFlightEnrichLocked(req.Key)
 		return enrichEditOutcome{changed: 1}
 	case "set_instrumental":
-		if req.Key == "" {
+		// 单个 key(详情页、搜索面板)或一串 keys(歌词管理多选「全部标为纯音乐」:一次请求改完,App 只重读一遍缓存)。
+		keys := req.Keys
+		if req.Key != "" {
+			keys = append([]string{req.Key}, keys...)
+		}
+		if len(keys) == 0 {
 			return enrichEditOutcome{err: fmt.Errorf("set_instrumental: empty key")}
 		}
-		e, existed := enrichCache[req.Key]
-		if !existed {
-			// 缓存里还没有这首(刚开播、首轮解析没写回,或者本来就不进缓存的播客):不凭空建条目。建出来的没有解析时刻,
-			// 还会让在飞的首轮解析作废,撤标之后一直停在「搜索中」。撤标本来就没什么可撤;标上回报失败,等条目有了再标。
-			if !req.Value {
-				return enrichEditOutcome{}
+		changed := 0
+		missing := ""
+		for _, k := range keys {
+			e, existed := enrichCache[k]
+			if !existed {
+				// 缓存里还没有这首(刚开播、首轮解析没写回,或者本来就不进缓存的播客):不凭空建条目。建出来的没有解析时刻,
+				// 还会让在飞的首轮解析作废,撤标之后一直停在「搜索中」。撤标本来就没什么可撤;标上的跳过这首,一首都没标上才回报失败。
+				if req.Value && missing == "" {
+					missing = k
+				}
+				continue
 			}
-			return enrichEditOutcome{err: fmt.Errorf("set_instrumental: %q is not in the cache yet", req.Key)}
+			e.Instrumental = req.Value
+			enrichCache[k] = e
+			changed++
 		}
-		e.Instrumental = req.Value
-		enrichCache[req.Key] = e
-		return enrichEditOutcome{changed: 1}
+		if changed == 0 && missing != "" {
+			return enrichEditOutcome{err: fmt.Errorf("set_instrumental: %q is not in the cache yet", missing)}
+		}
+		return enrichEditOutcome{changed: changed}
 	case "set_manual_lock":
 		var flipped []string
 		for k, e := range enrichCache {

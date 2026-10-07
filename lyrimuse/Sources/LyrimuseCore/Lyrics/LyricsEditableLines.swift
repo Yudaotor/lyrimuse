@@ -61,13 +61,70 @@ public struct LyricsEditableLines: Equatable, Sendable {
         return best?.index
     }
 
-    /// 跟 `base` 比,哪几行改过(时间戳或文字有一样不同)。行数不同时,多出来的行也算改过。
+    /// 跟 `base`(打开编辑时那份)比,哪几行改过或是新加的。按 `alignment(to:)` 对行,不按下标。
     public func changedIndices(from base: LyricsEditableLines) -> [Int] {
-        var out: [Int] = []
-        for index in lines.indices {
-            if !base.lines.indices.contains(index) || base.lines[index] != lines[index] { out.append(index) }
+        let map = alignment(to: base)
+        return lines.indices.filter { index in map[index].map { base.lines[$0] != lines[index] } ?? true }
+    }
+
+    /// 跟 `base` 比改了几句:改过的、新加的、删掉的各算一句。
+    public func changeCount(from base: LyricsEditableLines) -> Int {
+        let map = alignment(to: base)
+        let removed = base.lines.count - map.compactMap { $0 }.count
+        return removed + lines.indices.filter { index in map[index].map { base.lines[$0] != lines[index] } ?? true }.count
+    }
+
+    /// 每一行对应 `base` 的第几行,nil = 新加的行。整行(时间戳 + 文字)相同的按最长公共子序列先对上,两段对上的行之间
+    /// 剩下的按先后一一配对(改过的那几句),多出来的是新加的。别按下标对:整段文本里增删过一行,后面每一句都会被当成
+    /// 改过,「还原」也会还原到别的句子上(见 11 章决策 92)。两份都很长、格子数超过 `alignmentCellLimit` 时退回按下标对。
+    public func alignment(to base: LyricsEditableLines) -> [Int?] {
+        let a = lines
+        let b = base.lines
+        let n = a.count
+        let m = b.count
+        guard n * m <= Self.alignmentCellLimit else { return a.indices.map { $0 < m ? $0 : nil } }
+        var lcs = [[Int]](repeating: [Int](repeating: 0, count: m + 1), count: n + 1)
+        for i in stride(from: n - 1, through: 0, by: -1) {
+            for j in stride(from: m - 1, through: 0, by: -1) {
+                lcs[i][j] = a[i] == b[j] ? lcs[i + 1][j + 1] + 1 : max(lcs[i + 1][j], lcs[i][j + 1])
+            }
         }
+        var out = [Int?](repeating: nil, count: n)
+        var gapA: [Int] = []
+        var gapB: [Int] = []
+        func pairGap() {
+            for (ai, bi) in zip(gapA, gapB) { out[ai] = bi }
+            gapA.removeAll()
+            gapB.removeAll()
+        }
+        var i = 0
+        var j = 0
+        while i < n || j < m {
+            if i < n, j < m, a[i] == b[j] {
+                pairGap()
+                out[i] = j
+                i += 1
+                j += 1
+            } else if j < m, i == n || lcs[i][j + 1] >= lcs[i + 1][j] {
+                gapB.append(j)
+                j += 1
+            } else {
+                gapA.append(i)
+                i += 1
+            }
+        }
+        pairGap()
         return out
+    }
+
+    static let alignmentCellLimit = 250_000
+
+    /// 去掉第 `index` 行(「还原」一句打开编辑之后新加的行);下标越界时原样返回。
+    public func removing(_ index: Int) -> LyricsEditableLines {
+        guard lines.indices.contains(index) else { return self }
+        var copy = lines
+        copy.remove(at: index)
+        return LyricsEditableLines(lines: copy)
     }
 
     /// 一段文字是不是只由一个或几个时间戳连写而成(编辑时间戳时校验输入用)。

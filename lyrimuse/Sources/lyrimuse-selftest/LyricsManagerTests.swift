@@ -91,6 +91,34 @@ func runLyricsManagerTests() {
         expectEqual(tr.index(matching: 1000), 0, "逐句编辑: 译文按时间挂到对应那一句")
         expectEqual(tr.index(matching: 5500), 1, "逐句编辑: 差几十毫秒以内也挂得上")
         expectEqual(tr.index(matching: 9000), nil, "逐句编辑: 对不上就不挂")
+        // 整段文本里增删过行之后按行对齐,不按下标比(11 章决策 92)。
+        let base3 = LyricsEditableLines(body: "[00:01.00]a\n[00:02.00]b\n[00:03.00]c")
+        let inserted = LyricsEditableLines(body: "[00:00.50]new\n[00:01.00]a\n[00:02.00]b\n[00:03.00]c")
+        expectEqual(inserted.alignment(to: base3), [nil, 0, 1, 2], "逐句编辑: 开头加一句,后面几句仍对得上")
+        expectEqual(inserted.changedIndices(from: base3), [0], "逐句编辑: 只有新加的那句算改过")
+        expectEqual(inserted.changeCount(from: base3), 1, "逐句编辑: 加一句算改了一处")
+        let deleted = LyricsEditableLines(body: "[00:02.00]b\n[00:03.00]c")
+        expectEqual(deleted.alignment(to: base3), [1, 2], "逐句编辑: 删掉第一句,剩下的对回原来那两句")
+        expectEqual(deleted.changedIndices(from: base3), [], "逐句编辑: 删句不让后面的句子算改过")
+        expectEqual(deleted.changeCount(from: base3), 1, "逐句编辑: 删一句算改了一处")
+        let mixed = LyricsEditableLines(body: "[00:00.50]new\n[00:01.00]a\n[00:02.00]B!\n[00:03.00]c")
+        expectEqual(mixed.alignment(to: base3), [nil, 0, 1, 2], "逐句编辑: 改过的那句跟原来那句配成一对")
+        expectEqual(mixed.changeCount(from: base3), 2, "逐句编辑: 新加一句、改一句算两处")
+        expectEqual(inserted.removing(0), base3, "逐句编辑: 去掉新加的那句就回到原样")
+        expectEqual(base3.removing(7), base3, "逐句编辑: 去掉越界的下标原样返回")
+    }
+
+    // ---- 时间轴偏移输入框(LyricsOffsetInput)----
+    do {
+        typealias O = LyricsOffsetInput
+        expectEqual(O.milliseconds(from: " 1.5 "), 1500, "偏移输入: 秒换成毫秒,首尾空白不算")
+        expectEqual(O.milliseconds(from: "-0.25"), -250, "偏移输入: 负数")
+        expectEqual(O.milliseconds(from: "1,5"), nil, "偏移输入: 解析不了不当 0")
+        expectEqual([O.milliseconds(from: "nan"), O.milliseconds(from: "inf"), O.milliseconds(from: "-infinity"),
+                     O.milliseconds(from: "1e20")], [nil, nil, nil, nil],
+                    "偏移输入: 不是有限数或大到装不进整数的不收(直接转 Int 会崩)")
+        expectEqual(O.milliseconds(from: "600"), 600_000, "偏移输入: 上限本身收")
+        expectEqual(O.milliseconds(from: "600.001"), nil, "偏移输入: 超出 ±10 分钟不收")
     }
 
     // ---- 预览:当前句、读音 ----
