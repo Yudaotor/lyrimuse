@@ -1974,6 +1974,7 @@ func runCoverArtTests() {
         }
         let lps = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
         expectEqual(lps.contains("            while true {\n                let delay = Self.artworkLateRetryDelay(afterWaiting: waited)")
+                        && lps.contains("guard stillWaiting() else { return }\n                // 暂停着不取,恢复播放后接着取。\n                guard self.isPlayingNow else { continue }\n                let late = await attempt()")
                         && lps.contains("generation == self.artworkFetchGeneration && expectedKey == self.lastKey && self.artworkData == nil")
                         && lps.contains("artworkFetchGeneration += 1\n        let generation = artworkFetchGeneration")
                         && lps.contains("last attempt: \\(lastMiss ?? \"-\", privacy: .public)"), true,

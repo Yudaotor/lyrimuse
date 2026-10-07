@@ -4548,6 +4548,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 try? await Task.sleep(for: .seconds(delay))
                 waited += delay
                 guard stillWaiting() else { return }
+                // 暂停着不取,恢复播放后接着取。
+                guard self.isPlayingNow else { continue }
                 let late = await attempt()
                 guard stillWaiting() else { return }
                 guard let lateData = late.data,
