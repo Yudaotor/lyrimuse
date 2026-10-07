@@ -2258,12 +2258,11 @@ struct LyricsWindowView: View {
                 showRomanization: playback.showRomanization,
                 showTranslation: playback.showTranslation,
                 lineOverflow: playback.miniLineOverflow,
-                timing: playback.miniLineOverflow == .scroll ? miniReelTiming : nil,
+                timing: miniReelTiming,
                 isPlaying: playback.isPlayingNow && windowController.isSurfaceVisible,
                 fillSettled: playback.currentLineFillSettled,
                 reduceMotion: reduceMotion,
-                displayScale: displayScale,
-                pausedMs: pausedFillKey
+                displayScale: displayScale
             )
             .equatable()
             .allowsHitTesting(false)
@@ -2556,15 +2555,12 @@ struct LyricsWindowView: View {
             .map { lines[$0] }
     }
 
-    /// 播放时间基准的指纹:重新锚定(拖进度、位置校正)、暂停位置、歌词时间轴偏移任一变了就变。
-    /// 只在滚动档喂给 reel —— 图层版那一行的填色 / 滚动是装好就自己跑的关键帧动画,时间基准变了
-    /// 得有人叫它重对一次;换行档每帧自己读时钟,不需要。
+    /// 交给 reel 里图层那一行的时间基准指纹与播放速率(见 `MiniLyricsReel.timing`)。
     private var miniReelTiming: MiniLyricsReel.Timing {
         MiniLyricsReel.Timing(
-            anchorFetchedAt: playback.anchor?.fetchedAt,
-            anchorProgressMs: playback.anchor?.progressMs,
-            pausedPositionMs: playback.pausedPositionMs,
-            offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs)
+            epoch: LyricsTimingEpoch.of(anchor: playback.anchor, pausedPositionMs: playback.pausedPositionMs,
+                                        offsetMs: PlaybackCoordinator.shared.currentLyricsOffsetMs),
+            rate: playback.anchor?.rate ?? 1)
     }
 
     /// 暂停时逐字填色的时间基准(冻结位置 + 歌词偏移),播放中 nil。只用来让当前行在暂停中
@@ -5593,10 +5589,10 @@ private struct MiniHeaderMetrics {
 // (见 KaraokeLift)。
 /// 迷你窗中间那两行(当前行 + 下一行)。换句**不做动画**,新的一句直接替上来(见 07 章决策 42)。
 ///
-/// 1. **每一行按歌词 id 保持同一个视图**(ForEach 按 id)。换句时下一行那个视图原地升格成当前行,
-///    只翻 isActive,不重建。
-/// 2. **两个位置用同一套渲染结构**(有逐字数据就都走 `KaraokeLineText`,靠 isActive 区分),升格时
-///    不做结构替换 —— 结构一换就是"虚一下重建"(07 章决策 11 同一个坑)。
+/// 1. **每一行按歌词 id 保持同一个视图**(ForEach 按 id)。换句时下一行那一格原地升格成当前行。
+/// 2. **带逐字时间轴的当前行走图层**(`layerKaraokeLine`),下一行是时钟全停的静态排版(`KaraokeLineText`
+///    全填色,或整行 `Text`)。升格时那一行换一次渲染结构:换句不做动画,这一换是直接替上,不会像有动画时那样
+///    「虚一下重建」(07 章决策 11)。
 /// 3. **大小靠缩放,不靠改字号**:两行都按当前行字号、当前行宽度排版,下一行只是整体缩到
 ///    `nextScale`。所以下一行显示的就是它升格之后的折行样子,升格时不重新折行。
 /// 4. **当前那一格可以是还没开唱的那一句**(`currentIsUpcoming`,07 章决策 126):照当前行画。逐字行时间没到,
@@ -5622,27 +5618,24 @@ private struct MiniLyricsReel: View, Equatable {
     /// 换行 / 滚动。滚动时每一行(含译文、罗马音)都只占一行高,放不下的横向滚动;带逐字时间轴的
     /// 当前行走悬浮歌词那条图层版跟唱滚动(`OverlayScrollingLyricRow`),跟着唱到哪滚到哪。
     let lineOverflow: OverlayLineOverflow
-    /// 滚动档的时间基准指纹(换行档恒 nil)。它一变,reel 就重算一次、把新的播放位置交给图层那一行,
-    /// 那一行按漂移判断决定要不要重装动画。少了它,拖进度 / 调歌词偏移之后填色会一直按旧时间跑,
-    /// 直到换句 —— 这层 Equatable 正好把能纠正它的那些重算全挡掉了。
-    let timing: Timing?
+    /// 时间基准的指纹和播放速率,原样交给图层那一行(`timingEpoch` / `rate`,同悬浮歌词)。指纹一变 reel 就重算
+    /// 一次,那一行按新基准重装动画。少了它,拖进度 / 调歌词偏移之后填色会一直按旧时间跑,直到换句 —— 这层
+    /// Equatable 正好把能纠正它的那些重算全挡掉了;只让 reel 重算、不把指纹交进那一行也不够,调一次 200ms 的
+    /// 偏移小于图层行重装的漂移门。
+    let timing: Timing
     let isPlaying: Bool
     let fillSettled: Bool
     let reduceMotion: Bool
     let displayScale: CGFloat
-    /// 暂停时的时间基准,只交给当前行(见 KaraokeWordText.pausedMs)。
-    var pausedMs: Int? = nil
-
     /// 下一行相对当前行的大小(原来下一行字号 = 当前行 × 0.62)。
     static let nextScale: CGFloat = 0.62
     /// 下一行的透明度。颜色两行共用正文色,压暗只靠它。
     static let nextOpacity: Double = 0.55
 
     struct Timing: Equatable {
-        let anchorFetchedAt: Date?
-        let anchorProgressMs: Int?
-        let pausedPositionMs: Int?
-        let offsetMs: Int
+        /// `LyricsTimingEpoch`:重新锚定、暂停位置、歌词时间轴偏移、速率任一变了就变。
+        let epoch: Int
+        let rate: Double
     }
 
     private enum Role { case current, next }
@@ -5732,43 +5725,71 @@ private struct MiniLyricsReel: View, Equatable {
         }
     }
 
-    /// 滚动模式:每一行钉成一行高。
-    ///
-    /// 带逐字时间轴的**当前行**走悬浮歌词那条图层版(整行一张长图交给 CALayer,滚动与填色各一条
-    /// 关键帧动画,跟着唱到哪滚到哪);别改成 `MarqueeText` 包 `KaraokeLineText` —— 悬浮歌词为
-    /// 这件事实测过,SwiftUI 那条会把主线程打满、滚动一顿一顿(04 章「长句处理」)。
-    /// 上一行 / 下一行 / 没有逐字的行画成一行字的跑马灯。代价是下一行升格成当前行时换了一次渲染
-    /// 结构(跑马灯 → 图层),那一下是淡入淡出,跟着升格的动画一起走。
+    /// 带逐字时间轴的当前行:两档都走悬浮歌词那套图层行,填色(滚动档连同滚动)是装好就自己跑的关键帧动画,
+    /// 主线程不按帧参与。滚动档钉成一行、放不下跟着唱到哪滚到哪(`OverlayScrollingLyricRow`);换行档按宽度折成
+    /// 几行(`WrappedKaraokeRows`)。别改回带时钟的 `KaraokeLineText`,滚动档也别拿 `MarqueeText` 包它:那两条
+    /// 每一帧都要整扇窗过一遍更新与布局(见 07 章决策 141,滚动档见 04 章「长句处理」)。
+    @ViewBuilder
+    private func layerKaraokeLine(_ row: Row, words: [SyncedLyricWord]) -> some View {
+        let font = NSFont.overlayFont(familyName: fontFamily, size: fontSize, weight: weight)
+        let romaFont = NSFont.overlayFont(familyName: fontFamily, size: fontSize * 0.54,
+                                          weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps))
+        let unsung = NSColor(color.opacity(WordKaraokeGradient.windowDimOpacity))
+        Group {
+            if lineOverflow == .scroll {
+                OverlayScrollingLyricRow(
+                    spec: .init(
+                        lineKey: row.line.id,
+                        words: words,
+                        groups: nil,
+                        font: font,
+                        romaFont: romaFont,
+                        baseColor: unsung,
+                        fillColor: NSColor(fill ?? color),
+                        romaBaseColor: unsung,
+                        romaFillColor: NSColor(color.opacity(0.75)),
+                        strokeColor: nil,
+                        alignment: .center,
+                        // 还没开唱、提前占住当前那一格的那一句不拿引擎的定格,否则画成已唱完。
+                        paused: !isPlaying || (!currentIsUpcoming && fillSettled),
+                        timingEpoch: timing.epoch,
+                        rate: timing.rate),
+                    nowMs: { PlaybackCoordinator.shared.lyricsTimelineMs() })
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.scrollLineHeight(font))
+            } else {
+                WrappedKaraokeRows(
+                    spec: .init(
+                        lineKey: row.line.id,
+                        words: words,
+                        groups: nil,
+                        font: font,
+                        romaFont: romaFont,
+                        baseColor: unsung,
+                        fillColor: NSColor(fill ?? color),
+                        romaBaseColor: unsung,
+                        romaFillColor: NSColor(color.opacity(0.75)),
+                        strokeColor: nil,
+                        rowAlignment: .center,
+                        paused: !isPlaying || (!currentIsUpcoming && fillSettled),
+                        timingEpoch: timing.epoch,
+                        rate: timing.rate),
+                    nowMs: { PlaybackCoordinator.shared.lyricsTimelineMs() })
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(Text(verbatim: row.line.line.plainText ?? ""))
+    }
+
+    /// 滚动模式:每一行钉成一行高。带逐字时间轴的当前行走图层(`layerKaraokeLine`);下一行、没有逐字的行
+    /// 画成一行字的跑马灯。
     @ViewBuilder
     private func scrollingLineText(_ row: Row) -> some View {
         let font = NSFont.overlayFont(familyName: fontFamily, size: fontSize, weight: weight)
         let height = Self.scrollLineHeight(font)
         if row.role == .current, let words = row.line.line.words {
-            let unsung = NSColor(color.opacity(WordKaraokeGradient.windowDimOpacity))
-            OverlayScrollingLyricRow(
-                spec: .init(
-                    lineKey: row.line.id,
-                    words: words,
-                    groups: nil,
-                    font: font,
-                    romaFont: .overlayFont(familyName: fontFamily, size: fontSize * 0.54,
-                                           weight: weight.lighter(by: OverlayFontWeight.lyricsWindowRomanizationSteps)),
-                    baseColor: unsung,
-                    fillColor: NSColor(fill ?? color),
-                    romaBaseColor: unsung,
-                    romaFillColor: NSColor(color.opacity(0.75)),
-                    strokeColor: nil,
-                    alignment: .center,
-                    // 跟换行模式那条逐字填色的时钟同一条停表判据(还没开唱的那一句不拿定格)。
-                    paused: !isPlaying || (!currentIsUpcoming && fillSettled)),
-                // 位置基准同 KaraokeLineText:锚点外推 ?? 暂停冻结位置,再叠歌词时间轴偏移。
-                nowMs: {
-                    (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: Date())
-                        ?? PlaybackCoordinator.shared.pausedPositionMs ?? 0)
-                        + PlaybackCoordinator.shared.currentLyricsOffsetMs
-                })
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
+            layerKaraokeLine(row, words: words)
         } else {
             Text(row.line.line.plainText ?? "")
                 .font(.overlayFont(familyName: fontFamily, size: fontSize, weight: weight))
@@ -5779,18 +5800,20 @@ private struct MiniLyricsReel: View, Equatable {
         }
     }
 
+    /// 换行模式。带逐字时间轴的当前行走图层(`layerKaraokeLine`);下一行是时钟全停、全填色的 `KaraokeLineText`,
+    /// 折行跟当前行那份图层同一个算法(`WrapLayoutMath.rows`),升格时不重新折行。
     @ViewBuilder
     private func wrappingLineText(_ row: Row) -> some View {
-        if let words = row.line.line.words {
+        if row.role == .current, let words = row.line.line.words {
+            layerKaraokeLine(row, words: words)
+        } else if let words = row.line.line.words {
             KaraokeLineText(
                 words: words,
                 groups: nil,
                 base: color,
-                isActive: row.role == .current,
+                isActive: false,
                 isPlaying: isPlaying,
-                // settled 是引擎按染色当前行算的,只挂真正的当前行;挂到下一行或还没开唱的那一句,
-                // 会把它画成"已唱完"。
-                fillSettled: row.role == .current && !currentIsUpcoming && fillSettled,
+                fillSettled: false,
                 fontSize: fontSize,
                 romaFontSize: fontSize * 0.54,
                 fontFamily: fontFamily,
@@ -5799,7 +5822,7 @@ private struct MiniLyricsReel: View, Equatable {
                 rowAlignment: .center,
                 // 迷你窗不做逐字上浮:两行挤在一小块里,字一抬一抬只显得在晃。
                 rises: false,
-                pausedMs: row.role == .current ? pausedMs : nil,
+                pausedMs: nil,
                 weight: weight,
                 fill: fill
             )

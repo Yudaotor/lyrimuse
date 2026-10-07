@@ -1649,8 +1649,9 @@ func runSourceContractTests() {
             // 外面挡一层 Equatable。
             expectEqual(lwv.contains("private struct MiniLyricsReel: View, Equatable"), true,
                         "迷你歌词: 当前行 + 下一行收进一个 Equatable 子视图")
-            expectEqual(lwv.contains("isActive: row.role == .current,"), true,
-                        "迷你歌词: 下一行也走 KaraokeLineText,升格只翻 isActive、不换渲染结构")
+            expectEqual(lwv.contains("WrappedKaraokeRows(")
+                        && lwv.contains("isActive: false,\n                isPlaying: isPlaying,\n                fillSettled: false,"), true,
+                        "迷你歌词: 换行档带逐字的当前行走图层(WrappedKaraokeRows),下一行是时钟全停的 KaraokeLineText")
             expectEqual(lwv.contains(".scaleEffect(scale, anchor: .top)"), true,
                         "迷你歌词: 下一行靠缩放变小(折行不变),别改回按 0.62 字号排版")
             // 迷你换句不做动画、逐字不上浮(07 章决策 42)。
@@ -1689,8 +1690,10 @@ func runSourceContractTests() {
                         "迷你长句处理: reel 读迷你自己那颗设置,不是悬浮歌词那颗")
             // 图层那一行的填色是装好就自己跑的关键帧动画:时间基准一变(拖进度 / 重锚 / 调偏移)得有人
             // 叫它重对一次,而 reel 那层 Equatable 会把能纠正它的重算全挡掉 —— 所以指纹必须进 reel。
-            expectEqual(lwv.contains("timing: playback.miniLineOverflow == .scroll ? miniReelTiming : nil,"), true,
-                        "迷你长句处理: 滚动档把时间基准指纹喂给 reel(否则拖进度后填色一直按旧时间跑)")
+            expectEqual(lwv.contains("timing: miniReelTiming,"), true,
+                        "迷你长句处理: 两档都把时间基准指纹喂给 reel(否则拖进度后填色一直按旧时间跑)")
+            expectEqual(lwv.components(separatedBy: "timingEpoch: timing.epoch,\n").count - 1, 2,
+                        "迷你长句处理: 指纹交进两档图层行的 Spec(调一次 200ms 的偏移小于图层行的漂移门,只让 reel 重算不够)")
             if let row = read("UI/OverlayScrollingLyricRow.swift") {
                 expectEqual(row.contains("if installedAtMs == nil, let nowProvider { return nowProvider() }"), true,
                             "跟唱滚动行: 首次排版还没装过动画时问真时钟,别拿 predictedMs(恒 0)按整首歌第 0 毫秒装填色")

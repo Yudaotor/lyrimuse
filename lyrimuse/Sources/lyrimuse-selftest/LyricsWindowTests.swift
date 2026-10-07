@@ -715,9 +715,8 @@ func runLyricsWindowTests() {
         expectEqual(sourceBytes(window, contain: "return MiniLyricsSelection.slot(currentLineIndex: playback.currentLineIndex,\n"
                                 + "                                        scrollLineIndex: playback.scrollLineIndex,"),
                     true, "迷你当前那一格接线: 单行 / 双行都按 Core 的 slot 选,带上滚动锚")
-        expectEqual(sourceBytes(window, contain: "fillSettled: row.role == .current && !currentIsUpcoming && fillSettled,")
-                    && sourceBytes(window, contain: "paused: !isPlaying || (!currentIsUpcoming && fillSettled)),"), true,
-                    "迷你当前那一格接线: 还没开唱的那一句不拿引擎的定格(否则画成已唱完)")
+        expectEqual(window.components(separatedBy: "paused: !isPlaying || (!currentIsUpcoming && fillSettled),").count - 1, 2,
+                    "迷你当前那一格接线: 两档图层当前行都是还没开唱的那一句不拿引擎的定格(否则画成已唱完)")
         let reelBody = window.components(separatedBy: "private struct MiniLyricsReel: View, Equatable {").dropFirst().first?
             .components(separatedBy: "private struct MiniReelRowBox: Layout {").first ?? ""
         expectEqual(!reelBody.isEmpty && !reelBody.contains("windowDimOpacity) : color")
