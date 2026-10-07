@@ -1589,34 +1589,41 @@ func runPlayerIdentityTests() {
     // MARK: - PlayerHealth(侧栏「播放器」警告徽标的判定)
     do {
         typealias PH = PlayerHealth
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
+        expectEqual(PH.warnings(.init(automationMissingPlayers: [],
                                       engineServiceEnabled: true, engineRunning: true)),
                     [], "PlayerHealth: 一切正常不报")
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [.appleMusic],
+        expectEqual(PH.warnings(.init(automationMissingPlayers: [.appleMusic],
                                       engineServiceEnabled: true, engineRunning: true)),
-                    [.automationDenied], "PlayerHealth: 有播放器权限被拒 → 报自动化")
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
+                    [.automationMissing], "PlayerHealth: 有播放器权限被拒 → 报自动化")
+        expectEqual(PH.warnings(.init(automationMissingPlayers: [],
                                       engineServiceEnabled: true, engineRunning: false)),
                     [.engineNotRunning], "PlayerHealth: 服务开着却没在跑 → 报采集服务")
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [],
+        expectEqual(PH.warnings(.init(automationMissingPlayers: [],
                                       engineServiceEnabled: false, engineRunning: false)),
                     [], "PlayerHealth: 用户自己关掉服务不算故障")
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [.spotify],
+        expectEqual(PH.warnings(.init(automationMissingPlayers: [.spotify],
                                       engineServiceEnabled: true, engineRunning: false)),
-                    [.engineNotRunning, .automationDenied], "PlayerHealth: 两条都中时采集服务排前面")
+                    [.engineNotRunning, .automationMissing], "PlayerHealth: 两条都中时采集服务排前面")
 
         let allInstalled: (PlaybackPlayer) -> Bool = { _ in true }
         let deniedAll: (PlaybackPlayer) -> Bool = { _ in true }
-        expectEqual(PH.automationDeniedPlayers(selection: [.auto], isInstalled: allInstalled, isDenied: { $0 == .appleMusic }),
+        expectEqual(PH.automationMissingPlayers(selection: [.auto], isInstalled: allInstalled, isMissing: { $0 == .appleMusic }),
                     [.appleMusic], "PlayerHealth: 默认的「自动识别」下 Apple Music 被拒也要报")
-        expectEqual(PH.automationDeniedPlayers(selection: [.spotify], isInstalled: allInstalled, isDenied: deniedAll),
+        expectEqual(PH.automationMissingPlayers(selection: [.spotify], isInstalled: allInstalled, isMissing: deniedAll),
                     [.spotify], "PlayerHealth: 只勾 Spotify 时它被拒要报")
-        expectEqual(PH.automationDeniedPlayers(selection: [.qqMusic, .netease], isInstalled: allInstalled, isDenied: deniedAll),
+        expectEqual(PH.automationMissingPlayers(selection: [.qqMusic, .netease], isInstalled: allInstalled, isMissing: deniedAll),
                     [], "PlayerHealth: 不需要自动化权限的播放器不报")
-        expectEqual(PH.automationDeniedPlayers(selection: [.auto], isInstalled: { $0 == .appleMusic }, isDenied: deniedAll),
+        expectEqual(PH.automationMissingPlayers(selection: [.auto], isInstalled: { $0 == .appleMusic }, isMissing: deniedAll),
                     [.appleMusic], "PlayerHealth: 没装的播放器不报(它给不出权限)")
-        expectEqual(PH.automationDeniedPlayers(selection: [.appleMusic], isInstalled: allInstalled, isDenied: { _ in false }),
+        expectEqual(PH.automationMissingPlayers(selection: [.appleMusic], isInstalled: allInstalled, isMissing: { _ in false }),
                     [], "PlayerHealth: 没被拒不报")
+        typealias G = AutomationAlert.Grant
+        expectEqual(PH.automationIsMissing(G.denied, isRunning: false), true, "PlayerHealth: 自动化被拒,没在运行也报")
+        expectEqual(PH.automationIsMissing(G.undetermined, isRunning: true), true, "PlayerHealth: 在运行却还没授权过 → 报")
+        expectEqual(PH.automationIsMissing(G.undetermined, isRunning: false), false,
+                    "PlayerHealth: 没在运行时 notDetermined 分不出没问过和授权过,不报")
+        expectEqual(PH.automationIsMissing(G.authorized, isRunning: true), false, "PlayerHealth: 已授权不报")
+        expectEqual(PH.automationIsMissing(nil, isRunning: true), false, "PlayerHealth: 查询超时不报")
 
         // 完全磁盘访问 / 辅助功能:只替权限卡摆出来的那几家(需要 ∩ 装了)报;完全磁盘访问只认明确被拒。
         expectEqual(PH.fullDiskAccessDeniedPlayers(visible: [.qqMusic], grant: .denied), [.qqMusic],
@@ -1629,11 +1636,13 @@ func runPlayerIdentityTests() {
         expectEqual(PH.accessibilityMissingPlayers(visible: [.amazonMusic], trusted: true), [], "PlayerHealth: 有辅助功能权限不报")
         expectEqual(PH.accessibilityMissingPlayers(visible: [], trusted: false), [],
                     "PlayerHealth: 没有要读界面的播放器,缺辅助功能也不报")
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [.spotify], engineServiceEnabled: true, engineRunning: false,
+        expectEqual(PH.accessibilityMissingPlayers(visible: [.qqMusic], trusted: false), [.qqMusic],
+                    "PlayerHealth: 用着 QQ 音乐、没有辅助功能权限 → 报(随机、循环键出不来)")
+        expectEqual(PH.warnings(.init(automationMissingPlayers: [.spotify], engineServiceEnabled: true, engineRunning: false,
                                       fullDiskAccessDeniedPlayers: [.qqMusic], accessibilityMissingPlayers: [.amazonMusic])),
-                    [.engineNotRunning, .automationDenied, .fullDiskAccessDenied, .accessibilityMissing],
+                    [.engineNotRunning, .automationMissing, .fullDiskAccessDenied, .accessibilityMissing],
                     "PlayerHealth: 四条都中时按严重程度排")
-        expectEqual(PH.warnings(.init(automationDeniedPlayers: [], engineServiceEnabled: true, engineRunning: true,
+        expectEqual(PH.warnings(.init(automationMissingPlayers: [], engineServiceEnabled: true, engineRunning: true,
                                       accessibilityMissingPlayers: [.amazonMusic])),
                     [.accessibilityMissing], "PlayerHealth: 只缺辅助功能时也亮徽标")
         expectEqual([PlaybackPlayer.qqMusic, .netease, .kugou].allSatisfy(\.needsFullDiskAccess)

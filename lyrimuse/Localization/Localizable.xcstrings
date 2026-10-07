@@ -2579,25 +2579,25 @@
         }
       }
     },
-    "%@ 的自动化权限被拒绝，无法读取播放状态" : {
+    "%@ 的自动化权限未开启，播放状态可能读不准" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Automation permission for %@ denied; playback state cannot be read"
+            "value" : "Automation permission for %@ is off; playback state may be read inaccurately"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 的自动化权限被拒绝，无法读取播放状态"
+            "value" : "%@ 的自动化权限未开启，播放状态可能读不准"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 的自動化權限被拒絕，無法讀取播放狀態"
+            "value" : "%@ 的自動化權限未開啟，播放狀態可能讀取不準"
           }
         }
       }
@@ -2644,6 +2644,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未取得輔助使用權限，無法校正 %@ 的播放進度"
+          }
+        }
+      }
+    },
+    "未获得辅助功能权限，%@ 不显示随机、循环键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Accessibility permission; %@’s shuffle and repeat buttons are hidden"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未获得辅助功能权限，%@ 不显示随机、循环键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得輔助使用權限，%@ 不顯示隨機、循環鍵"
           }
         }
       }

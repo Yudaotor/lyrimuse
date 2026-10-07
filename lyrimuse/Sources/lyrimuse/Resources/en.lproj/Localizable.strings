@@ -58,7 +58,7 @@
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索。" = "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search.";
 "%@ 的歌词缓存和播放队列位于受系统保护的目录中。授权后，可直接使用本机已有的歌词，并提前解析即将播放的歌曲；未授权时仍可联网查找歌词。" = "The lyrics caches and play queues of %@ live in system-protected folders. With access, lyrics already on this Mac can be used directly and upcoming tracks can be resolved ahead of time; without it, lyrics are still found online.";
 "%@ 的自动化权限未开启…" = "%@ Automation Access Is Off…";
-"%@ 的自动化权限被拒绝，无法读取播放状态" = "Automation permission for %@ denied; playback state cannot be read";
+"%@ 的自动化权限未开启，播放状态可能读不准" = "Automation permission for %@ is off; playback state may be read inaccurately";
 "%@ 种写法" = "%@ spellings";
 "%@ 种写法#one" = "%@ spelling";
 "%@ 秒" = "%@s";
@@ -1150,6 +1150,7 @@
 "未能跳过此广告" = "Couldn't skip this ad";
 "未获取" = "Not loaded";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
+"未获得辅助功能权限，%@ 不显示随机、循环键" = "No Accessibility permission; %@’s shuffle and repeat buttons are hidden";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "No Accessibility permission; %@’s progress cannot be calibrated";
 "未获授权" = "Not granted";
 "未运行" = "Not Running";

@@ -6,7 +6,7 @@ import LyrimuseCore
 ///
 /// 播放器页(`PlayerSettingsTab`)自己维护着四个异常态,但都是页面私有 @State、只在那一页可见
 /// 时刷新——用户停在「歌词」页时对"引擎挂了"毫无感知。这里把其中两条**硬故障**提出来,
-/// 外加权限卡里那两项(完全磁盘访问被拒、缺辅助功能),状态源跟权限卡同一份(`FullDiskAccessPermission` /
+/// 外加权限卡里那几项(自动化没开、完全磁盘访问被拒、缺辅助功能),状态源跟权限卡同一份(`FullDiskAccessPermission` /
 /// `AccessibilityPermission`,读的是引擎发布的文件与一次系统调用,主线程直接读),
 /// 设置窗口开着的整个期间都盯着(`SettingsView` 的 onAppear/onDisappear 启停),判定规则在
 /// Core 的 `PlayerHealth`(纯函数,selftest 钉住),这里只负责读值。
@@ -26,8 +26,8 @@ import LyrimuseCore
 @MainActor
 final class PlayerHealthMonitor: ObservableObject {
     @Published private(set) var warnings: [PlayerHealth.Warning] = []
-    /// 自动化权限被拒的那几家,徽标说明里点名用。
-    @Published private(set) var automationDeniedPlayers: [PlaybackPlayer] = []
+    /// 自动化权限没开的那几家,徽标说明里点名用。
+    @Published private(set) var automationMissingPlayers: [PlaybackPlayer] = []
     /// 完全磁盘访问被拒 / 缺辅助功能的那几家,同上。
     @Published private(set) var fullDiskAccessDeniedPlayers: [PlaybackPlayer] = []
     @Published private(set) var accessibilityMissingPlayers: [PlaybackPlayer] = []
@@ -70,11 +70,11 @@ final class PlayerHealthMonitor: ObservableObject {
         guard !refreshInFlight else { return }
         refreshInFlight = true
         // 主线程能直接读的先读好:要查权限的那几家 = 当前选择需要自动化权限的 ∩ 本机装了
-        // (同设置页权限卡那份列表,见 `PlayerHealth.automationDeniedPlayers`)。
+        // (同设置页权限卡那份列表,见 `PlayerHealth.automationMissingPlayers`)。
         let selection = FeatureSettingsStore.shared.players
         let permissions = PlayerAutomationPermissions.shared
-        let targets = PlayerHealth.automationDeniedPlayers(
-            selection: selection, isInstalled: permissions.isInstalled, isDenied: { _ in true })
+        let targets = PlayerHealth.automationMissingPlayers(
+            selection: selection, isInstalled: permissions.isInstalled, isMissing: { _ in true })
         let engineEnabled = AppSettings.shared.engineServiceEnabled
         let fullDisk = FullDiskAccessPermission.shared
         fullDisk.refresh()
@@ -82,10 +82,8 @@ final class PlayerHealthMonitor: ObservableObject {
         let fullDiskDenied = PlayerHealth.fullDiskAccessDeniedPlayers(visible: fullDiskVisible, grant: fullDisk.grant(fullDiskVisible))
         let accessibility = AccessibilityPermission.shared
         accessibility.refresh()
-        // 只替读进度的那几家报:切模式(QQ 音乐)没授权只是不显示随机 / 循环键,不算播放器出了问题。
         let accessibilityMissing = PlayerHealth.accessibilityMissingPlayers(
-            visible: accessibility.visiblePlayers(for: selection).filter { $0.accessibilityUse == .calibratesProgress },
-            trusted: accessibility.trusted)
+            visible: accessibility.visiblePlayers(for: selection), trusted: accessibility.trusted)
         // 两次跨进程的查询都下到后台:launchctl 在 Task.detached 里,AE 权限走
         // `MusicAutomationPermission.status`(专用线程 + 超时,超时当"没被拒");结果回到主 actor
         // 再碰 self。askIfNeeded 必须是 false——这里绝不能弹系统授权框。
@@ -104,22 +102,30 @@ final class PlayerHealthMonitor: ObservableObject {
                 }
                 return (EngineServiceManager.state, now)
             }.value
-            var denied: Set<PlaybackPlayer> = []
+            var missing: Set<PlaybackPlayer> = []
             for player in targets {
-                if await MusicAutomationPermission.status(bundleID: player.bundleIdentifier, askIfNeeded: false) == .denied {
-                    denied.insert(player)
+                let status = await MusicAutomationPermission.status(bundleID: player.bundleIdentifier, askIfNeeded: false)
+                let grant: AutomationAlert.Grant? = switch status {
+                case .authorized: .authorized
+                case .denied: .denied
+                case .notDetermined: .undetermined
+                case nil: nil
+                }
+                if PlayerHealth.automationIsMissing(
+                    grant, isRunning: MusicAutomationPermission.isRunning(bundleID: player.bundleIdentifier)) {
+                    missing.insert(player)
                 }
             }
             guard let self else { return }
             self.refreshInFlight = false
             if let queriedAt { self.lastLaunchdQueryAt = queriedAt }
             if engine != self.engineState { self.engineState = engine }
-            let deniedPlayers = targets.filter { denied.contains($0) }
-            if deniedPlayers != self.automationDeniedPlayers { self.automationDeniedPlayers = deniedPlayers }
+            let missingPlayers = targets.filter { missing.contains($0) }
+            if missingPlayers != self.automationMissingPlayers { self.automationMissingPlayers = missingPlayers }
             if fullDiskDenied != self.fullDiskAccessDeniedPlayers { self.fullDiskAccessDeniedPlayers = fullDiskDenied }
             if accessibilityMissing != self.accessibilityMissingPlayers { self.accessibilityMissingPlayers = accessibilityMissing }
             let latest = PlayerHealth.warnings(.init(
-                automationDeniedPlayers: deniedPlayers,
+                automationMissingPlayers: missingPlayers,
                 engineServiceEnabled: engineEnabled, engineRunning: engine.isRunning,
                 fullDiskAccessDeniedPlayers: fullDiskDenied, accessibilityMissingPlayers: accessibilityMissing))
             if latest != self.warnings { self.warnings = latest }
@@ -128,13 +134,23 @@ final class PlayerHealthMonitor: ObservableObject {
 
     func description(_ warning: PlayerHealth.Warning) -> String {
         switch warning {
-        case .automationDenied:
-            return String(format: L10n.t("%@ 的自动化权限被拒绝，无法读取播放状态"), names(automationDeniedPlayers))
+        case .automationMissing:
+            return String(format: L10n.t("%@ 的自动化权限未开启，播放状态可能读不准"), names(automationMissingPlayers))
         case .engineNotRunning: return L10n.t("歌词引擎未运行，歌词不会更新")
         case .fullDiskAccessDenied:
             return String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(fullDiskAccessDeniedPlayers))
         case .accessibilityMissing:
-            return String(format: L10n.t("未获得辅助功能权限，无法校准 %@ 的播放进度"), names(accessibilityMissingPlayers))
+            // 按用途分开说(`accessibilityUse`):读进度的那几家校准不了,切模式的那几家不显示随机、循环键。
+            var parts: [String] = []
+            let progress = accessibilityMissingPlayers.filter { $0.accessibilityUse == .calibratesProgress }
+            if !progress.isEmpty {
+                parts.append(String(format: L10n.t("未获得辅助功能权限，无法校准 %@ 的播放进度"), names(progress)))
+            }
+            let playMode = accessibilityMissingPlayers.filter { $0.accessibilityUse == .switchesPlayMode }
+            if !playMode.isEmpty {
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环键"), names(playMode)))
+            }
+            return parts.joined(separator: "；")
         }
     }
 
