@@ -52,7 +52,7 @@ brew install --cask lyrimuse
 - **Duets split by singer.** When the source (or an AMLL entry) marks who sings which line, each part is shown on its own instead of two voices mashed into one block.
 - **The Apple Music touches in the Lyrics Window**: background vocals on their own line under the main one, overlapping duet lines lit up together until both finish, and long held English words that swell and glow the way Apple Music does it.
 - **Simplified or Traditional Chinese** for the lyrics, set separately from the app's own language.
-- **Lyrics Manager**, for when you want to tidy up. Browse, edit, delete or search again for any song, delete many at once, and resize the columns. If one song's timing is off, shift just that song. One button retries every song that still has no lyrics, and a full rescan re-picks your whole library with the current matching rules. Anything you fixed by hand is left alone.
+- **Lyrics Manager**, for when you want to tidy up. Browse, edit, delete or search again for any song, delete many at once, and clear out the empty entries that ads and podcasts leave behind. If one song's timing is off, shift just that song. One button retries every song that still has no lyrics, and a full rescan re-picks your whole library with the current matching rules. Anything you fixed by hand is left alone.
 - **Works offline** for any song whose lyrics are already cached.
 
 ### Last.fm listening profile and scrobbling
