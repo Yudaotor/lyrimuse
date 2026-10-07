@@ -382,15 +382,16 @@ public enum MusicPlaybackController {
     /// 这个播放器支不支持「播放模式 / 音量」这两组扩展控制。
     ///
     /// Apple Music 和 Spotify 有可写的 AppleScript 属性,Kaset 有切换随机 / 循环、设音量的命令;QQ 音乐只有模式,走它菜单栏
-    /// 「播放模式」那三项(`QQMusicMenuControl`,要辅助功能权限),没有音量。网易云、酷狗等没有 .sdef(不可脚本化),而
+    /// 「播放模式」那三项(`QQMusicMenuControl`,要辅助功能权限),没有音量;Amazon Music 只有模式,按它播放条上的键、读它的日志
+    /// (`AmazonMusicModeControl`)。网易云、酷狗等没有 .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic
+        player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.next(allowsRepeatOne:)。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .kaset || player == .qqMusic
+        player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐(菜单栏「喜欢歌曲」)。
@@ -609,11 +610,16 @@ public enum MusicPlaybackController {
                                          mode: QQMusicMenuControl.readMode()
                                              .map { PlaybackModeState(mode: $0, options: QQMusicMenuControl.options) },
                                          volume: nil)
+        case .amazonMusic:
+            return ExtendedControlsState(favorited: nil,
+                                         mode: AmazonMusicModeControl.readMode()
+                                             .map { PlaybackModeState(mode: $0, options: AmazonMusicModeControl.options) },
+                                         volume: nil)
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
         // 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
         // shared/players.json:新播放器默认落到这里,跟 supportsExtendedControls 的口径
-        // 一致(Apple Music、Spotify、Kaset、QQ 音乐)。真要给某个新播放器支持,在上面显式加一个 case。
+        // 一致(Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music)。真要给某个新播放器支持,在上面显式加一个 case。
         default:
             return .empty
         }
@@ -715,6 +721,8 @@ public enum MusicPlaybackController {
                 .map { PlaybackModeState(mode: $0, options: .all) }
         case .qqMusic:
             return QQMusicMenuControl.readMode().map { PlaybackModeState(mode: $0, options: QQMusicMenuControl.options) }
+        case .amazonMusic:
+            return AmazonMusicModeControl.readMode().map { PlaybackModeState(mode: $0, options: AmazonMusicModeControl.options) }
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -789,6 +797,8 @@ public enum MusicPlaybackController {
             return runKasetJXACapturing(kasetPlaybackModeScript(for: mode)) == "ok"
         case .qqMusic:
             return QQMusicMenuControl.setMode(mode)
+        case .amazonMusic:
+            return AmazonMusicModeControl.setMode(mode)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
@@ -815,6 +825,8 @@ public enum MusicPlaybackController {
         case .qqMusic:
             // QQ 菜单栏只有一档一档的「音量加 / 音量减」,当前值要另读它的偏好,不接:那颗胶囊对 QQ 不出现。
             return nil
+        case .amazonMusic: // Amazon 只接了随机 / 循环,音量不接。
+            return nil
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -836,7 +848,7 @@ public enum MusicPlaybackController {
                 spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
         case .kaset:
             return runKasetJXACapturing("        K.setVolume(\(v));\n        return \"ok\";") == "ok"
-        case .qqMusic: // 同 soundVolume(for:):QQ 不接音量。
+        case .qqMusic, .amazonMusic: // 同 soundVolume(for:):这两家不接音量。
             return false
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false

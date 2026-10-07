@@ -34404,63 +34404,6 @@
         }
       }
     },
-    "%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度（仅读取，不会点按任何按钮）。不授权也可使用，但自动连播时进度可能偏差一到两秒。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ doesn't report its playback position to the system, so Lyrimuse reads the time shown in its window to keep lyrics in sync (read-only; it never clicks anything). It works without this too, but during autoplay the position can be off by a second or two."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 不向系統報告播放進度，Lyrimuse 會讀取其介面上的播放時間來校正進度（僅讀取，不會按下任何按鈕）。不授權也可使用，但自動連播時進度可能偏差一到兩秒。"
-          }
-        }
-      }
-    },
-    "辅助功能权限可让%@的播放进度更准确，仅读取其界面上的播放时间" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accessibility keeps %@'s playback position accurate; it only reads the time shown in its window"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輔助使用權限可讓%@的播放進度更準確，僅讀取其介面上的播放時間"
-          }
-        }
-      }
-    },
-    "请开启此权限，让%@自动连播时的播放进度更准确" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn this on to keep %@'s playback position accurate during autoplay"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请开启此权限，让%@自动连播时的播放进度更准确"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確"
-          }
-        }
-      }
-    },
     "按 ISRC 补查未应答的源" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -40376,6 +40319,75 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確，並顯示%@的隨機、循環與喜歡鍵"
+          }
+        }
+      }
+    },
+    "%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度；你点随机、循环键时，也会替你按下它播放条上对应的按钮。不授权也可使用，但自动连播时进度可能偏差一到两秒，也不显示这两颗键。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doesn't report its playback position to the system, so Lyrimuse reads the time shown in its window to keep lyrics in sync, and presses its own shuffle or repeat button when you click one of those. It works without this too, but during autoplay the position can be off by a second or two, and those two buttons won't appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度；你点随机、循环键时，也会替你按下它播放条上对应的按钮。不授权也可使用，但自动连播时进度可能偏差一到两秒，也不显示这两颗键。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不向系統報告播放進度，Lyrimuse 會讀取其介面上的播放時間來校正進度；你按隨機、循環鍵時，也會替你按下它播放列上對應的按鈕。不授權也可使用，但自動連播時進度可能偏差一到兩秒，也不顯示這兩顆鍵。"
+          }
+        }
+      }
+    },
+    "辅助功能权限可让%@的播放进度更准确，并显示随机、循环键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility keeps %@'s playback position accurate and shows its shuffle and repeat buttons"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辅助功能权限可让%@的播放进度更准确，并显示随机、循环键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可讓%@的播放進度更準確，並顯示隨機、循環鍵"
+          }
+        }
+      }
+    },
+    "请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn this on to keep %@'s playback position accurate during autoplay and show its shuffle and repeat buttons"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確，並顯示隨機、循環鍵"
           }
         }
       }

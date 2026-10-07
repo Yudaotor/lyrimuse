@@ -32,7 +32,7 @@
 "%@ · 供自行排查；反馈问题请使用上方的「导出诊断」，信息更完整" = "%@ · For your own troubleshooting. To report a problem, use Export Diagnostics above; it includes more";
 "%@ · 登录将在 %@ 过期，建议重新连接" = "%@ · Sign-in expires on %@; reconnecting is recommended";
 "%@ · 纯文本，可直接编辑；外观与快捷键另存于 App 偏好设置，不在此处" = "%@ · Plain text you can edit directly. Appearance and shortcuts are stored in the app’s preferences, not here";
-"%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度（仅读取，不会点按任何按钮）。不授权也可使用，但自动连播时进度可能偏差一到两秒。" = "%@ doesn't report its playback position to the system, so Lyrimuse reads the time shown in its window to keep lyrics in sync (read-only; it never clicks anything). It works without this too, but during autoplay the position can be off by a second or two.";
+"%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度；你点随机、循环键时，也会替你按下它播放条上对应的按钮。不授权也可使用，但自动连播时进度可能偏差一到两秒，也不显示这两颗键。" = "%@ doesn't report its playback position to the system, so Lyrimuse reads the time shown in its window to keep lyrics in sync, and presses its own shuffle or repeat button when you click one of those. It works without this too, but during autoplay the position can be off by a second or two, and those two buttons won't appear.";
 "%@ 个文件导入失败，其余已导入" = "%@ files failed to import; the rest were imported";
 "%@ 个文件导入失败，其余已导入#one" = "%@ file failed to import; the rest were imported";
 "%@ 个歌词源无法连接" = "%@ lyrics sources could not be reached";
@@ -1667,8 +1667,8 @@
 "请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放" = "Turn this on so the playing song is recognized correctly, with playback controls right on the lyrics";
 "请开启此权限，以便直接使用本机已有的歌词，并提前准备下一首" = "Turn this on to use lyrics already on this Mac and get the next song ready ahead of time";
 "请开启此权限，以显示%@的随机、循环与喜欢键" = "Turn this on to show shuffle, repeat and Like buttons for %@";
-"请开启此权限，让%@自动连播时的播放进度更准确" = "Turn this on to keep %@'s playback position accurate during autoplay";
 "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键" = "Turn this on to keep %@'s playback position accurate during autoplay and show shuffle, repeat and Like buttons for %@";
+"请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键" = "Turn this on to keep %@'s playback position accurate during autoplay and show its shuffle and repeat buttons";
 "请开启此权限，让播放进度更准确，并可在歌词上直接控制播放" = "Turn this on for more accurate progress and playback controls right on the lyrics";
 "请打开 Discord" = "Discord needs to be open";
 "请按下快捷键…" = "Type Shortcut…";
@@ -1710,7 +1710,7 @@
 "较粗" = "Semibold";
 "辅助功能权限" = "Accessibility";
 "辅助功能权限可显示%@的随机、循环与喜欢键，点按时会操作其菜单栏" = "Accessibility shows shuffle, repeat and Like buttons for %@; clicking them uses its menu bar";
-"辅助功能权限可让%@的播放进度更准确，仅读取其界面上的播放时间" = "Accessibility keeps %@'s playback position accurate; it only reads the time shown in its window";
+"辅助功能权限可让%@的播放进度更准确，并显示随机、循环键" = "Accessibility keeps %@'s playback position accurate and shows its shuffle and repeat buttons";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";
 "运行日志" = "Activity Log";

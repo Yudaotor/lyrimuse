@@ -563,7 +563,8 @@ func runPlayerIdentityTests() {
                               .snapsToReportedPosition, .stampsCaptureTime, .catalogMenuRows]),
             .spotify: (.spotify, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .resume,
                                   .gaplessLead, .learnsAnchorLag, .catalogMenuRows]),
-            .amazonMusic: (.amazonMusic, [.learnsAnchorLag, .snapsToReportedPosition, .catalogMenuRows]),
+            .amazonMusic: (.amazonMusic, [.extendedControls, .repeatOne, .learnsAnchorLag, .snapsToReportedPosition,
+                                          .catalogMenuRows]),
             .kaset: (.youtubeMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                      .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
                                      .systemNeverHasArtwork, .catalogMenuRows]),
@@ -868,6 +869,35 @@ func runPlayerIdentityTests() {
                     "网页版: 浏览器里放的不是 YouTube Music 不走这里")
         expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "youtubeMusic", isPaired: { _ in false }) == nil, true,
                     "网页版: 没配对 YouTube Music 的浏览器不走这里")
+    }
+
+    // Amazon Music 的随机 / 循环:按它播放条上的键,读回看它自己的日志(AmazonMusicModeControl)。样例行照真机日志。
+    do {
+        typealias A = AmazonMusicModeControl
+        typealias S = AmazonMusicModeControl.Settings
+        let start = "261007:175659 MorphoBrowser : I PlayerSettings : PlayerFlow : CurrentPlayerSettings : audioQuality = STANDARD , "
+            + "function = logCurrentSettings , loudnessNormalization = false , repeat = ALL , shuffle = false , tempo = "
+        let toggled = "261007:175724 MorphoBrowser : I PlayerSettings : PlayerFlow : ToggleRepeatSetting : function = toggleRepeatSetting , "
+            + "repeatSetting = ONE : line 214, "
+        let shuffled = "261007:175812 MorphoBrowser : I PlayerSettings : PlayerFlow : ShuffleChanged : function = setShuffle , shuffle = true : line 152,"
+        expectEqual(A.latestSettings(inLog: start), S(repeatSetting: "ALL", shuffle: false), "Amazon 模式: 开播那一行记下循环和随机")
+        expectEqual(A.latestSettings(inLog: [start, toggled].joined(separator: "\n")), S(repeatSetting: "ONE", shuffle: false),
+                    "Amazon 模式: 后面的切换行盖过开播那一行")
+        expectEqual(A.latestSettings(inLog: [start, shuffled].joined(separator: "\n")).mode, .shuffle, "Amazon 模式: 随机开着读成随机")
+        expectEqual(A.latestSettings(inLog: "no settings here").mode, nil, "Amazon 模式: 日志里没有就读不出来")
+        expectEqual(S(repeatSetting: "ONE", shuffle: true).mode, .repeatOne, "Amazon 模式: 单曲循环优先于随机(同 Apple Music)")
+        expectEqual(S(repeatSetting: "NONE", shuffle: false).mode, .list, "Amazon 模式: 都关是列表")
+        expectEqual(A.presses(from: S(repeatSetting: "ALL", shuffle: false), to: .repeatOne), ["repeat"], "Amazon 模式: 全部 → 单曲按一下")
+        expectEqual(A.presses(from: S(repeatSetting: "ONE", shuffle: false), to: .repeatAll), ["repeat", "repeat"],
+                    "Amazon 模式: 单曲 → 全部要绕一圈(关 → 全部 → 单曲 → 关)")
+        expectEqual(A.presses(from: S(repeatSetting: "ALL", shuffle: true), to: .list), ["shuffle", "repeat", "repeat"],
+                    "Amazon 模式: 回列表关随机、循环按到关")
+        expectEqual(A.presses(from: S(repeatSetting: "ALL", shuffle: false), to: .shuffle), ["shuffle"],
+                    "Amazon 模式: 开随机不动循环")
+        expectEqual(A.presses(from: S(repeatSetting: "ONE", shuffle: false), to: .shuffle), ["shuffle", "repeat"],
+                    "Amazon 模式: 循环是单曲时开随机顺手关掉循环,不然还是读成单曲循环")
+        expectEqual(A.presses(from: S(repeatSetting: "NONE", shuffle: true), to: .repeatAll), ["shuffle", "repeat"],
+                    "Amazon 模式: 点循环关掉随机(两颗键互斥)")
     }
 
     // ---- 播放器网格点一下(设置页与引导页共用 FeatureSettingsStore.togglePlayer)----

@@ -805,7 +805,7 @@ struct OnboardingView: View {
         let pendingAccessibility = accessibility.trusted ? [] : axTargets
         let progressTargets = pendingAccessibility.filter { $0.accessibilityUse == .calibratesProgress }
         if !progressTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可让%@的播放进度更准确，仅读取其界面上的播放时间"),
+            lines.append(String(format: L10n.t("辅助功能权限可让%@的播放进度更准确，并显示随机、循环键"),
                                 accessibility.playerNames(progressTargets)))
         }
         let playModeTargets = pendingAccessibility.filter { $0.accessibilityUse == .switchesPlayMode }
@@ -1478,7 +1478,7 @@ struct OnboardingView: View {
                               accessibility.playerNames(playMode))
             }
             if playMode.isEmpty {
-                return String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确"),
+                return String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键"),
                               accessibility.playerNames(progress))
             }
             return String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键"),

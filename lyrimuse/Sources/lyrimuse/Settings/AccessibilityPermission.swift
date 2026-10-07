@@ -88,14 +88,14 @@ struct AccessibilityPermissionGuide: View {
         }
     }
 
-    /// 「为什么要这项授权」那一句,按用途(`PlaybackPlayer.accessibilityUse`)各说一句:读进度只读不点,切模式会按菜单项。
+    /// 「为什么要这项授权」那一句,按用途(`PlaybackPlayer.accessibilityUse`)各说一句:读进度的那几家顺带按随机 / 循环键,切模式的按菜单项。
     @MainActor
     static func reason(_ players: [PlaybackPlayer]) -> String {
         let model = AccessibilityPermission.shared
         var lines: [String] = []
         let progress = players.filter { $0.accessibilityUse == .calibratesProgress }
         if !progress.isEmpty {
-            lines.append(String(format: L10n.t("%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度（仅读取，不会点按任何按钮）。不授权也可使用，但自动连播时进度可能偏差一到两秒。"),
+            lines.append(String(format: L10n.t("%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度；你点随机、循环键时，也会替你按下它播放条上对应的按钮。不授权也可使用，但自动连播时进度可能偏差一到两秒，也不显示这两颗键。"),
                                 model.playerNames(progress)))
         }
         let playMode = players.filter { $0.accessibilityUse == .switchesPlayMode }
