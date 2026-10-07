@@ -57,7 +57,7 @@ struct LastfmHeatmapView: View {
                     Button(L10n.t("重试")) { stats.refreshDailyCounts() }
                         .controlSize(.small)
                 } else {
-                    Text(String(format: L10n.t("%1$@ 年共 %2$@ 次"), "\(year)", yearTotal.formatted()))
+                    Text(String(format: L10n.plural("%1$@ 年共 %2$@ 次", count: yearTotal), "\(year)", yearTotal.formatted()))
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }
                 Spacer()

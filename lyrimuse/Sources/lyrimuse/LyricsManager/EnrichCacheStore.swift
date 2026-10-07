@@ -1123,7 +1123,7 @@ public final class EnrichCacheStore: ObservableObject {
         guard let result = await LyricsBackupStore.restoreAutoSnapshot(snapshot) else { return nil }
         if !isReleased { await reload() }
         refreshSizeBytes()
-        var lines = [String(format: L10n.t("已恢复 %d 个歌词文件（新增 %d、覆盖 %d）"),
+        var lines = [String(format: L10n.plural("已恢复 %d 个歌词文件（新增 %d、覆盖 %d）", count: result.total),
                             result.total, result.added, result.overwritten)]
         if result.failed > 0 {
             lines.append(String(format: L10n.t("另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间"), result.failed))

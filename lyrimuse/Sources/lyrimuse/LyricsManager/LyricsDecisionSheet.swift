@@ -512,7 +512,7 @@ struct LyricsDecisionSheet: View {
 
         case let .decisiveNegative(term, loser, gap):
             return (String(format: L10n.t("决定性差异：「%@」"), termLabel(term.kind)),
-                    String(format: L10n.t("%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项。"),
+                    String(format: L10n.plural("%1$@ 在此项被扣 %2$d 分，胜者未被扣分，%3$d 分的分差全部来自此项。", count: abs(term.points)),
                            sourceDisplayName(loser), abs(term.points), gap))
 
         case let .tooClose(contenders, corroborated, gap, percent, separator):
@@ -522,7 +522,7 @@ struct LyricsDecisionSheet: View {
             // 跟 .sameLyrics 的分水岭:那边每条候选都拿到了别的源的内容印证,这边没有。
             // 给出**计数**而不是只说「不是每条都有」——读的人眼睛正盯着冠亚两行,
             // 光说"不是每条"很容易读成"这两份不是同一份词",而它们往往恰恰是同一份。
-            detail += " " + String(format: L10n.t("%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致。"),
+            detail += " " + String(format: L10n.plural("%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致。", count: corroborated),
                                    contenders, corroborated)
             // 标题两件事都说全:分差极小 **且** 内容印证不全 —— 后者才是这一档跟
             // .sameLyrics 的分水岭,也是真正值得人工看一眼的原因。
@@ -618,7 +618,7 @@ struct LyricsDecisionSheet: View {
         // 首轮那一组之外还问过什么。只有一组、且就是首轮时不重复印。
         // 跟界面用同一份 digest,拷出去的文本和屏幕上看到的是同一个形状。
         if let digest = queryDigest(decision) {
-            lines.append(String(format: L10n.t("本轮共查询 %d 组"), digest.total))
+            lines.append(String(format: L10n.plural("本轮共查询 %d 组", count: digest.total), digest.total))
             if let t = digest.sharedTitle {
                 lines.append("  " + String(format: L10n.t("歌名始终为「%@」"), t))
             }
@@ -816,11 +816,11 @@ struct LyricsDecisionSheet: View {
         var parts: [String] = []
         let responded = decision.sourcesResponded ?? []
         if !responded.isEmpty {
-            parts.append(String(format: L10n.t("%1$d/%2$d 个源应答"),
+            parts.append(String(format: L10n.plural("%1$d/%2$d 个源应答", count: askedSourceCount(responded)),
                                 responded.count, askedSourceCount(responded)))
         }
         if let digest = queryDigest(decision) {
-            parts.append(String(format: L10n.t("查询 %d 组"), digest.total))
+            parts.append(String(format: L10n.plural("查询 %d 组", count: digest.total), digest.total))
         }
         if let secs = decision.durationSecs, secs > 0 {
             parts.append(String(format: L10n.t("按 %@ 秒校验"), String(format: "%.0f", secs)))
@@ -891,7 +891,7 @@ struct LyricsDecisionSheet: View {
     /// `Winnie (end of me) [Mixed]`)。曲名变过(标题反查轮改写过曲名)时跟首轮那个不等,
     /// 才把它整句说出来 —— 那时候它是真信息,不是复读。
     private func roundsCaption(_ digest: LyricQueryDigest, queryTitle: String?) -> String {
-        var caption = String(format: L10n.t("查询 %d 组"), digest.total)
+        var caption = String(format: L10n.plural("查询 %d 组", count: digest.total), digest.total)
         guard let shared = digest.sharedTitle else { return caption }
         caption += " · " + (shared == trimmedOrNil(queryTitle)
                             ? L10n.t("歌名未变")
@@ -954,7 +954,7 @@ struct LyricsDecisionSheet: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .modifier(PointingHandOnHover())
-            .help(String(format: L10n.t("分母为当前启用的 %d 个源；较早的条目当时可用的源可能更少"), total))
+            .help(String(format: L10n.plural("分母为当前启用的 %d 个源；较早的条目当时可用的源可能更少", count: total), total))
 
             if inputsOpen {
                 VStack(alignment: .leading, spacing: 8) {

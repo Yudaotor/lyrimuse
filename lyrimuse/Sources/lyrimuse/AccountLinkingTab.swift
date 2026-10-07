@@ -1014,7 +1014,7 @@ struct AccountLinkingTab: View {
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 4) {
                             Label(
-                                String(format: L10n.t("本地有 %@ 首待补交的记录"), "\(items.count)"),
+                                String(format: L10n.plural("本地有 %@ 首待补交的记录", count: items.count), "\(items.count)"),
                                 systemImage: "tray.full"
                             )
                             .font(.callout)

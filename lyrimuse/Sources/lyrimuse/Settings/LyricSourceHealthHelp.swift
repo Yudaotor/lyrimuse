@@ -15,7 +15,7 @@ struct LyricSourceHealthHelp: View {
             Text(detail)
                 .fixedSize(horizontal: false, vertical: true)
             if summary.rounds > 0 {
-                Text(String(format: L10n.t("近 7 天：查询 %1$d 次，返回歌词 %2$d%%，被选用 %3$d%%"),
+                Text(String(format: L10n.plural("近 7 天：查询 %1$d 次，返回歌词 %2$d%%，被选用 %3$d%%", count: summary.rounds),
                             summary.rounds,
                             LyricSourceHealth.percent(summary.responded, of: summary.rounds),
                             LyricSourceHealth.percent(summary.won, of: summary.rounds)))
@@ -58,7 +58,7 @@ struct LyricSourceHealthHelp: View {
             return String(format: L10n.t("最近 2 天有 %1$d%% 的查询未使用 %2$@：该源连续出错，已被暂时停用，稍后将自动恢复。"),
                           skipRate, name)
         case .blocked:
-            return String(format: L10n.t("%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。"),
+            return String(format: L10n.plural("%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。", count: summary.blockedRounds),
                           name, summary.blockedRounds)
         case .stopped:
             return String(format: L10n.t("最近连续 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 一次也没有提供；按它平时的收录情况，本该提供约 %3$d 次。可能是其接口发生变化，或请求被拦截。"),

@@ -91,4 +91,17 @@ enum L10n {
     static func t(_ key: String) -> String {
         bundle.localizedString(forKey: key, value: key, table: nil)
     }
+
+    /// 带数量的文案。数量为 1 时取这条的单数变体:catalog 里写成 plural 变体(one / other)的语言,
+    /// generate-strings.py 把 one 那条生成到「键#one」;没有单数变体的语言、别的数量都取键本身那条。
+    /// 格式参数照旧由调用方 String(format:) 填。后缀跟 generate-strings.py 的 PLURAL_ONE_SUFFIX 必须一致。
+    static func plural(_ key: String, count: Int) -> String {
+        if count == 1 {
+            let one = bundle.localizedString(forKey: key + "#one", value: missingValue, table: nil)
+            if one != missingValue { return one }
+        }
+        return t(key)
+    }
+
+    private static let missingValue = "\u{0}"
 }

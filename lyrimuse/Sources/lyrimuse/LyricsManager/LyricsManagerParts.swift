@@ -422,8 +422,7 @@ struct LyricsManagerAlbumHeader: View {
                     .font(.system(size: 11.5))
                     .lineLimit(1)
                 Spacer(minLength: 6)
-                // 英文要分单复数:只有 1 首时用单数那一条(「1 song」),生成的 .strings 不带复数变体。
-                Text(count == 1 ? L10n.t("1 首歌") : String(format: L10n.t("%@ 首歌"), count.formatted()))
+                Text(String(format: L10n.plural("%@ 首歌", count: count), count.formatted()))
                     .font(.system(size: 11))
                     .monospacedDigit()
             }

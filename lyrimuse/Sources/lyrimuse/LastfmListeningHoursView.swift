@@ -93,7 +93,7 @@ struct LastfmListeningHoursView: View {
     }
 
     private func hourBubble(_ h: Int, count: Int) -> some View {
-        Text(String(format: L10n.t("%1$@–%2$@ 点 · %3$@ 次"), "\(h)", "\(h + 1)", count.formatted()))
+        Text(String(format: L10n.plural("%1$@–%2$@ 点 · %3$@ 次", count: count), "\(h)", "\(h + 1)", count.formatted()))
             .font(.caption.weight(.semibold)).monospacedDigit()
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
@@ -126,7 +126,7 @@ struct LastfmListeningHoursView: View {
                         .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                         .frame(width: 52, alignment: .trailing)
                 }
-                .help(String(format: L10n.t("%1$@ · %2$@ 次"), names[d], s.weekdays[d].formatted()))
+                .help(String(format: L10n.plural("%1$@ · %2$@ 次", count: s.weekdays[d]), names[d], s.weekdays[d].formatted()))
             }
         }
         .accessibilityElement(children: .ignore)
@@ -138,7 +138,7 @@ struct LastfmListeningHoursView: View {
             Text(emphasized(L10n.t("收听高峰 %@"), hourText(s.peakHour)))
             Text(emphasized(L10n.t("收听最多 %@"), Self.weekdayNames[s.peakWeekday]))
             Text(emphasized(L10n.t("收听最少 %@"), hourText(s.quietestHour)))
-            Text(String(format: L10n.t("共 %@ 次"), s.total.formatted()))
+            Text(String(format: L10n.plural("共 %@ 次", count: s.total), s.total.formatted()))
             Spacer(minLength: 0)
         }
         .font(.caption)

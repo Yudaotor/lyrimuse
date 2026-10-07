@@ -310,7 +310,7 @@ struct LyricsLibraryStatsPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Self.totalText(counts.total)
-                    .accessibilityLabel(String(format: L10n.t("共 %@ 首"), Self.format(counts.total)))
+                    .accessibilityLabel(String(format: L10n.plural("共 %@ 首", count: counts.total), Self.format(counts.total)))
                 Spacer(minLength: 12)
                 LyricsLibrarySizeLabel()
             }
@@ -377,7 +377,7 @@ struct LyricsLibraryStatsPanel: View {
         let number = Text(format(count))
             .font(.system(size: 20, weight: .semibold))
             .monospacedDigit()
-        let parts = L10n.t("共 %@ 首").components(separatedBy: "%@")
+        let parts = L10n.plural("共 %@ 首", count: count).components(separatedBy: "%@")
         guard parts.count == 2 else { return number }
         let body = Font.system(size: 13)
         return Text(parts[0]).font(body) + number + Text(parts[1]).font(body)
@@ -556,7 +556,7 @@ struct LyricsLibraryStatsPanel: View {
     private static func hoursText(_ tracks: Int, secondsPerTrack: Double) -> String {
         let hours = Int((Double(tracks) * secondsPerTrack / 3600).rounded())
         if hours < 1 { return L10n.t("不足 1 小时") }
-        return String(format: L10n.t("约 %@ 小时"), format(hours))
+        return String(format: L10n.plural("约 %@ 小时", count: hours), format(hours))
     }
 
     private var fullScanConfirmMessage: String {
@@ -566,7 +566,7 @@ struct LyricsLibraryStatsPanel: View {
     /// 「全量重新扫库？」确认框的正文,两个入口共用。
     static func fullScanConfirmMessage(pending: Int, secondsPerTrack: Double) -> String {
         String(
-            format: L10n.t("共 %1$@ 首，预计%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失"),
+            format: L10n.plural("共 %1$@ 首，预计%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失", count: pending),
             format(pending), hoursText(pending, secondsPerTrack: secondsPerTrack))
     }
 

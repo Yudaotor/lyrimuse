@@ -1441,7 +1441,7 @@ private struct LyricsSettingsTab: View {
             // 分不清"我的选择生效了"还是"这个按钮没反应"。
             Button(L10n.t("保持锁定"), role: .cancel) {
                 showManualPickLockNotice(String(
-                    format: L10n.t("%@ 首保持锁定；此后手动选定的歌曲不再自动锁定"),
+                    format: L10n.plural("%@ 首保持锁定；此后手动选定的歌曲不再自动锁定", count: pendingManualUnlockCount),
                     "\(pendingManualUnlockCount)"))
             }
             Button(L10n.t("一并解锁")) {
@@ -1453,12 +1453,12 @@ private struct LyricsSettingsTab: View {
                         showManualPickLockNotice(EnrichCacheStore.shared.lastError ?? L10n.t("同步失败"))
                         return
                     }
-                    showManualPickLockNotice(String(format: L10n.t("已解锁 %@ 首"), "\(result.changed)"))
+                    showManualPickLockNotice(String(format: L10n.plural("已解锁 %@ 首", count: result.changed), "\(result.changed)"))
                 }
             }
         } message: {
             Text(String(
-                format: L10n.t("有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定"),
+                format: L10n.plural("有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定", count: pendingManualUnlockCount),
                 "\(pendingManualUnlockCount)"))
         }
         // 顺序列表拖拽排序的几何基础(见 priorityRow / priorityDragGesture):行中线与指针位移都在这个命名坐标
@@ -1508,7 +1508,7 @@ private struct LyricsSettingsTab: View {
                 showManualPickLockNotice(store.lastError ?? L10n.t("同步失败"))
             } else if changed > 0 {
                 showManualPickLockNotice(String(
-                    format: L10n.t("已锁定之前手动选定的 %@ 首歌曲；此后选定的歌曲将直接锁定"),
+                    format: L10n.plural("已锁定之前手动选定的 %@ 首歌曲；此后选定的歌曲将直接锁定", count: changed),
                     "\(changed)"))
             } else if stats.picked == 0 {
                 // 绝大多数人(以及这个功能刚上线时的所有人)会落在这一支。必须说清楚"不是
@@ -1516,11 +1516,11 @@ private struct LyricsSettingsTab: View {
                 showManualPickLockNotice(L10n.t("尚未手动选定过歌词；此后选定的歌词将直接锁定"))
             } else if stats.stillOriginal == 0 {
                 showManualPickLockNotice(String(
-                    format: L10n.t("之前手动选定的 %@ 首歌曲，歌词已被自动更新，不再是当初选定的版本，因此未锁定"),
+                    format: L10n.plural("之前手动选定的 %@ 首歌曲，歌词已被自动更新，不再是当初选定的版本，因此未锁定", count: stats.picked),
                     "\(stats.picked)"))
             } else {
                 showManualPickLockNotice(String(
-                    format: L10n.t("之前手动选定的 %@ 首均已锁定"), "\(stats.stillOriginal)"))
+                    format: L10n.plural("之前手动选定的 %@ 首均已锁定", count: stats.stillOriginal), "\(stats.stillOriginal)"))
             }
         }
     }
@@ -6373,7 +6373,7 @@ private struct GeneralSettingsTab: View {
                 // 歌词那句只在真有 sidecar 时才加 —— 没有的时候提一句"不含歌词"只会让人
                 // 以为哪里出错了。两句都是完整句子,不在运行时拼半句。
                 if pendingImportLyrics != nil {
-                    Text(String(format: L10n.t("将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址；同一备份中的 %@ 个歌词文件也会一并恢复（同名文件将被覆盖）。完成后立即重启 Lyrimuse 使其生效"),
+                    Text(String(format: L10n.plural("将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址；同一备份中的 %@ 个歌词文件也会一并恢复（同名文件将被覆盖）。完成后立即重启 Lyrimuse 使其生效", count: pendingImportLyricsCount),
                                 "\(pendingImportLyricsCount)"))
                 } else {
                     Text(L10n.t("将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址，并立即重启 Lyrimuse 使其生效"))

@@ -225,7 +225,7 @@ final class LyricsExternalEditor {
                 done.append(String(format: L10n.t("%@ 句为新增或修改了时间戳，已按字数分配逐字时间"), "\(result.estimatedLines)"))
             }
             if result.skippedLines > 0 {
-                done.append(String(format: L10n.t("%@ 行没有时间戳，未写入逐字歌词"), "\(result.skippedLines)"))
+                done.append(String(format: L10n.plural("%@ 行没有时间戳，未写入逐字歌词", count: result.skippedLines), "\(result.skippedLines)"))
             }
             save(text, session: session, done: done, carriesOffsetTo: result.timingUnchanged ? (lyrics: result.lrc, yrc: result.yrc) : nil) {
                 await EnrichCacheStore.shared.saveEdit(key: session.key, lyrics: result.lrc, tr: stored?.lyricsTr ?? "",

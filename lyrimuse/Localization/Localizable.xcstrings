@@ -166,9 +166,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Based on your top %@ artists"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Based on your top %@ artist"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Based on your top %@ artists"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -189,9 +201,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Based on your top %1$@ artists, %2$@ of your plays in this period"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Based on your top %1$@ artist, %2$@ of your plays in this period"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Based on your top %1$@ artists, %2$@ of your plays in this period"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -396,9 +420,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@:00–%2$@:00 · %3$@ plays"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@:00–%2$@:00 · %3$@ play"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@:00–%2$@:00 · %3$@ plays"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -419,9 +455,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ · %2$@ plays"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$@ play"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$@ plays"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -1411,9 +1459,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ plays total"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ play total"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ plays total"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -1434,9 +1494,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ spellings"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ spelling"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ spellings"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -2009,9 +2081,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ · %2$@ plays"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$@ play"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$@ plays"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -2101,9 +2185,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%2$@ plays in %1$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%2$@ play in %1$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%2$@ plays in %1$@"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -2147,9 +2243,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ years ago today: %2$@ plays, most on repeat"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ years ago today: %2$@ play, most on repeat"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ years ago today: %2$@ plays, most on repeat"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -2377,9 +2485,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ song stays locked; from now on, manually picked songs are no longer locked automatically"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -4558,9 +4678,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All %@ songs you picked manually are already locked"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The %@ song you picked manually is already locked"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "All %@ songs you picked manually are already locked"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -4581,9 +4713,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The %@ songs you picked earlier have since been updated automatically — they are no longer the versions you chose, so they were not locked"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The %@ song you picked earlier has since been updated automatically — it is no longer the version you chose, so it was not locked"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The %@ songs you picked earlier have since been updated automatically — they are no longer the versions you chose, so they were not locked"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -4811,9 +4955,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ plays today · %2$@ this week"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ play today · %2$@ this week"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ plays today · %2$@ this week"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -5724,9 +5880,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "It contains %@ lyrics files, which will be restored too. "
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "It contains %@ lyrics file, which will be restored too. "
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "It contains %@ lyrics files, which will be restored too. "
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -5977,9 +6145,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Score %@ · %@ lines"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Score %@ · %@ line"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Score %@ · %@ lines"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -6207,9 +6387,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete %@ Songs"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Delete %@ Song"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Delete %@ Songs"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -6637,9 +6829,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A year ago today: %@ plays, most on repeat"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "A year ago today: %@ play, most on repeat"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "A year ago today: %@ plays, most on repeat"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -9769,9 +9973,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restored %d lyrics files (%d added, %d overwritten)"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Restored %d lyrics file (%d added, %d overwritten)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Restored %d lyrics files (%d added, %d overwritten)"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -10040,9 +10256,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d songs with calibrated timing"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d song with calibrated timing"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d songs with calibrated timing"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -10132,9 +10360,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unlocked %@ songs"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Unlocked %@ song"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Unlocked %@ songs"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -10293,9 +10533,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ Songs Selected"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ Song Selected"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ Songs Selected"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -10447,9 +10699,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Locked %@ songs you had picked manually; from now on, picks are locked right away"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Locked %@ song you had picked manually; from now on, picks are locked right away"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Locked %@ songs you had picked manually; from now on, picks are locked right away"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -10948,9 +11212,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Most played: %1$@ — %2$@ (%3$@ plays)"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Most played: %1$@ — %2$@ (%3$@ play)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Most played: %1$@ — %2$@ (%3$@ plays)"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -12944,9 +13220,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@/day · %2$@ days"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@/day · %2$@ day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@/day · %2$@ days"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -14106,9 +14394,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ songs are locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust them again; songs whose lyrics you edited by hand are unaffected and stay locked"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ song is locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust it again; songs whose lyrics you edited by hand are unaffected and stay locked"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ songs are locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust them again; songs whose lyrics you edited by hand are unaffected and stay locked"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -14405,9 +14705,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ listens saved locally, waiting to be submitted"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ listen saved locally, waiting to be submitted"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ listens saved locally, waiting to be submitted"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -17280,9 +17592,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete %@ selected entries?"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Delete %@ selected entry?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Delete %@ selected entries?"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -21363,9 +21687,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This deletes all %d local records, including lyrics you edited or adopted from candidates, along with their exported lyrics files. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This deletes the %d local record, including lyrics you edited or adopted from candidates, along with its exported lyrics file. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This deletes all %d local records, including lyrics you edited or adopted from candidates, along with their exported lyrics files. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -21386,9 +21722,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This clears the manual timing calibration for %d songs and can't be undone. The lyrics and the Timing Offset setting are unaffected. Afterwards these songs resume automatic lyrics source updates"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This clears the manual timing calibration for %d song and can't be undone. The lyrics and the Timing Offset setting are unaffected. Afterwards the song resumes automatic lyrics source updates"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This clears the manual timing calibration for %d songs and can't be undone. The lyrics and the Timing Offset setting are unaffected. Afterwards these songs resume automatic lyrics source updates"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -21455,9 +21803,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This overwrites every setting, including linked accounts and where playback data is sent; the %@ lyrics files in the same backup are restored too (same-named files are overwritten). Lyrimuse restarts right after"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This overwrites every setting, including linked accounts and where playback data is sent; the %@ lyrics file in the same backup is restored too (a same-named file is overwritten). Lyrimuse restarts right after"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This overwrites every setting, including linked accounts and where playback data is sent; the %@ lyrics files in the same backup are restored too (same-named files are overwritten). Lyrimuse restarts right after"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -22306,9 +22666,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On this day · %2$@ plays %1$@ year(s) ago"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "On this day · %2$@ play %1$@ years ago"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "On this day · %2$@ plays %1$@ years ago"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -22321,6 +22693,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "那年今日 · %1$@ 年前聆聽 %2$@ 首"
+          }
+        }
+      }
+    },
+    "那年今日 · 去年收听 %@ 首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "On this day · %@ play a year ago"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "On this day · %@ plays a year ago"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那年今日 · 去年收听 %@ 首"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那年今日 · 去年聆聽 %@ 首"
           }
         }
       }
@@ -24548,9 +24955,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last year, this week you listened %@ times — these looped the most"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Last year, this week you listened %@ time — these looped the most"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Last year, this week you listened %@ times — these looped the most"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -24571,9 +24990,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ years ago, this week you listened %2$@ times — these looped the most"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ years ago, this week you listened %2$@ time — these looped the most"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ years ago, this week you listened %2$@ times — these looped the most"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -24663,9 +25094,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ days"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ days"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -24732,9 +25175,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ plays"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ play"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ plays"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -24778,9 +25233,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Current streak · longest %@ days"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Current streak · longest %@ day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Current streak · longest %@ days"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -26443,9 +26910,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ songs"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ song"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ songs"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -26562,32 +27041,27 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ songs"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ song"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ songs"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 首歌"
-          }
-        }
-      }
-    },
-    "1 首歌" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 song"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 首歌"
           }
         }
       }
@@ -26779,9 +27253,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ lyric sources could not be reached"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ lyric source could not be reached"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ lyric sources could not be reached"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -27947,9 +28433,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d songs with calibrated radio timing"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d song with calibrated radio timing"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d songs with calibrated radio timing"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -28357,9 +28855,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d query sets this round"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d query set this round"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d query sets this round"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -28442,9 +28952,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This clears the radio timing calibration for %d songs and can't be undone. These calibrations apply only to radio playback, so normal playback is unaffected"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This clears the radio timing calibration for %d song and can't be undone. The calibration applies only to radio playback, so normal playback is unaffected"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This clears the radio timing calibration for %d songs and can't be undone. These calibrations apply only to radio playback, so normal playback is unaffected"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -28600,9 +29122,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ lost %2$d points on this term and the winner did not; the entire %3$d-point gap comes from it."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ lost %2$d point on this term and the winner did not; the entire %3$d-point gap comes from it."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ lost %2$d points on this term and the winner did not; the entire %3$d-point gap comes from it."
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -28634,9 +29168,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$d of %2$d sources answered"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$d of %2$d source answered"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$d of %2$d sources answered"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -28940,9 +29486,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The denominator is the %d sources enabled now; older entries may have had fewer available at the time"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The denominator is the %d source enabled now; older entries may have had fewer available at the time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The denominator is the %d sources enabled now; older entries may have had fewer available at the time"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -29042,9 +29600,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d query sets"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d query set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d query sets"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -29059,9 +29629,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only %2$d of %1$d candidates were corroborated; their lyrics may differ."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Only %2$d of %1$d candidates was corroborated; their lyrics may differ."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Only %2$d of %1$d candidates were corroborated; their lyrics may differ."
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -29914,9 +30496,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ other sources"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ other source"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ other sources"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -29937,9 +30531,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ other sources returned no candidates"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ other source returned no candidates"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ other sources returned no candidates"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -30080,9 +30686,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ songs, about %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ song, about %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ songs, about %2$@. Songs that already have lyrics are re-matched too, except manually edited, timing-calibrated and instrumental songs. You can stop at any time without losing progress"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -30319,9 +30937,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "about %@ hours"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "about %@ hour"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "about %@ hours"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -34375,9 +35005,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@: %2$@ plays"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@: %2$@ play"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@: %2$@ plays"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -34689,9 +35331,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Checked %1$@ songs, updated %2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Checked %1$@ song, updated %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Checked %1$@ songs, updated %2$@"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -35689,9 +36343,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookups went without it. It's paused for now and will be retried automatically."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookup went without it. It's paused for now and will be retried automatically."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookups went without it. It's paused for now and will be retried automatically."
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -35723,9 +36389,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last 7 days: %1$d lookups, lyrics found %2$d%%, chosen %3$d%%"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Last 7 days: %1$d lookup, lyrics found %2$d%%, chosen %3$d%%"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Last 7 days: %1$d lookups, lyrics found %2$d%%, chosen %3$d%%"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -38864,9 +39542,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ lines without timestamps weren't added to the word-timed lyrics"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ line without a timestamp wasn't added to the word-timed lyrics"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ lines without timestamps weren't added to the word-timed lyrics"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -39085,9 +39775,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auto-Match Lyrics for %@ Missing Songs"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Auto-Match Lyrics for %@ Missing Song"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Auto-Match Lyrics for %@ Missing Songs"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -39102,9 +39804,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auto-Match Only the %@ Filtered Songs"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Auto-Match Only the %@ Filtered Song"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Auto-Match Only the %@ Filtered Songs"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -39221,9 +39935,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ songs: %2$@ found, %3$@ not found, %4$@ skipped"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ song: %2$@ found, %3$@ not found, %4$@ skipped"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ songs: %2$@ found, %3$@ not found, %4$@ skipped"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -39238,9 +39964,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No connection: stopped after %1$@ songs, %2$@ found"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No connection: stopped after %1$@ song, %2$@ found"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No connection: stopped after %1$@ songs, %2$@ found"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -39578,9 +40316,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ more songs had no source response · Auto-Match All"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ more song had no source response · Auto-Match All"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ more songs had no source response · Auto-Match All"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -39731,9 +40481,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ sources responded; chose %2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ source responded; chose %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ sources responded; chose %2$@"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -39833,9 +40595,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ changes"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ change"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ changes"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -40784,9 +41558,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clean Up %@ Invalid Entries…"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Clean Up %@ Invalid Entry…"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Clean Up %@ Invalid Entries…"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
@@ -40818,9 +41604,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clean up %@ invalid entries?"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Clean up %@ invalid entry?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Clean up %@ invalid entries?"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {

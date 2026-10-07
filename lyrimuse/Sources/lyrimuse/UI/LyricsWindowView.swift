@@ -7547,18 +7547,21 @@ private struct IdleLastfmSection: View {
         if stats.isConnected {
             VStack(spacing: 12) {
                 if let o = stats.overview, let week = weekValue {
-                    Text(String(format: L10n.t("今天收听 %1$@ 首 · 本周 %2$@ 首"),
+                    Text(String(format: L10n.plural("今天收听 %1$@ 首 · 本周 %2$@ 首", count: o.today),
                                 "\(o.today)", "\(week)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
                 if let day = stats.onThisDay, let top = day.top.first {
                     VStack(spacing: 3) {
-                        Text(String(format: L10n.t("那年今日 · %1$@ 年前收听 %2$@ 首"),
-                                    "\(day.yearsAgo)", "\(day.total)"))
+                        // 一年前单独一句:英文「1 years ago」不通,同 LastfmStatsSection 的那年今日副标题。
+                        Text(day.yearsAgo == 1
+                             ? String(format: L10n.plural("那年今日 · 去年收听 %@ 首", count: day.total), "\(day.total)")
+                             : String(format: L10n.plural("那年今日 · %1$@ 年前收听 %2$@ 首", count: day.total),
+                                      "\(day.yearsAgo)", "\(day.total)"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
-                        Text(String(format: L10n.t("循环最多：《%1$@》— %2$@（%3$@ 次）"),
+                        Text(String(format: L10n.plural("循环最多：《%1$@》— %2$@（%3$@ 次）", count: top.count),
                                     top.track.title, top.track.artist, "\(top.count)"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)

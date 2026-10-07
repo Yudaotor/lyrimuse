@@ -194,21 +194,32 @@ func runSourceContractTests() {
             var out = CatalogPairs()
             for (key, raw) in strings {
                 let localizations = (raw as? [String: Any])?["localizations"] as? [String: Any]
-                func value(_ lang: String) -> String? {
-                    (((localizations?[lang] as? [String: Any])?["stringUnit"]) as? [String: Any])?["value"] as? String
+                func unit(_ node: Any?) -> String? {
+                    ((node as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String
                 }
+                // 写成 plural 变体的语言:值取 other,one 那条生成到「键#one」(同 generate-strings.py 的 forms)。
+                func plural(_ lang: String) -> [String: Any]? {
+                    ((localizations?[lang] as? [String: Any])?["variations"] as? [String: Any])?["plural"] as? [String: Any]
+                }
+                func value(_ lang: String) -> String? {
+                    if let plural = plural(lang) { return unit(plural["other"]) }
+                    return unit(localizations?[lang])
+                }
+                func one(_ lang: String) -> String? { plural(lang).flatMap { unit($0["one"]) } }
                 // 源语言允许省略(值即键,跟 generate-strings.py 同一条规则);英文缺翻译
                 // 必须红 —— 静默回退成中文正是这套守卫要消灭的事故。
                 out.zh[key] = value("zh-Hans") ?? key
                 if let hans = value("zh-Hans"), hans != key { out.staleHans.append(key) }
                 if let hant = value("zh-Hant"), !hant.isEmpty {
                     out.hant[key] = hant
+                    if let o = one("zh-Hant") { out.hant[key + "#one"] = o }
                 } else {
                     out.missingHant.append(key)
                     out.hant[key] = out.zh[key]!
                 }
                 guard let en = value("en"), !en.isEmpty else { return nil }
                 out.en[key] = en
+                if let o = one("en") { out.en[key + "#one"] = o }
             }
             return out
         }
@@ -296,6 +307,25 @@ func runSourceContractTests() {
                         "本地化: 源码扫描到了 L10n.t 调用点(扫到 \(scannedFiles) 个文件、\(literalKeys.count) 个键)")
             expectEqual(literalKeys.subtracting(catalog.zh.keys).sorted(), [],
                         "本地化: 源码用了但 catalog 里没有的键(英文界面会静默显示中文 —— 补进 Localization/Localizable.xcstrings 再跑 generate-strings.py)")
+
+            // L10n.plural 的键:同样要在 catalog 里,而且英文要写了单数变体(没写就跟 L10n.t 一样,数到 1 还是复数)。
+            let pluralPattern = #/L10n\.plural\(\s*"((?:[^"\\]|\\.)*)"\s*,/#
+            var pluralKeys: Set<String> = []
+            if let walker = FileManager.default.enumerator(atPath: uiSources.path) {
+                for case let rel as String in walker where rel.hasSuffix(".swift") {
+                    guard let text = try? String(contentsOfFile: uiSources.appendingPathComponent(rel).path, encoding: .utf8)
+                    else { continue }
+                    for m in text.matches(of: pluralPattern) { pluralKeys.insert(String(m.1)) }
+                }
+            }
+            expectEqual(!pluralKeys.isEmpty, true, "本地化: 源码扫描到了 L10n.plural 调用点(\(pluralKeys.count) 个键)")
+            expectEqual(pluralKeys.subtracting(catalog.zh.keys).sorted(), [],
+                        "本地化: L10n.plural 用了但 catalog 里没有的键")
+            expectEqual(pluralKeys.filter { catalog.en[$0 + "#one"] == nil }.sorted(), [],
+                        "本地化: L10n.plural 的键英文要写 plural 变体(one / other)")
+            let catalogPluralKeys = Set(catalog.en.keys.filter { $0.hasSuffix("#one") }.map { String($0.dropLast(4)) })
+            expectEqual(catalogPluralKeys.subtracting(pluralKeys).sorted(), [],
+                        "本地化: 写了 plural 变体的键要用 L10n.plural 取(用 L10n.t 取不到单数那条)")
         } else {
             expectEqual(true, false,
                         "本地化: catalog/生成物读不出来 —— 文件缺失、en 缺翻译、或生成物有重复键")
@@ -4003,9 +4033,9 @@ func runSourceContractTests() {
         }
         expectEqual(sceneTitles.count >= 4 && titledScenes == Set(sceneTitles), true,
                     "窗口标题: 每扇 Window 场景都挂了跟着界面语言走的 .navigationTitle(缺: \(Set(sceneTitles).subtracting(titledScenes).sorted()))")
-        // 分组标题只有 1 首时用单数那条,英文写「1 song」(14 章决策 61)。
-        expectEqual(managerParts.contains("Text(count == 1 ? L10n.t(\"1 首歌\") : String(format: L10n.t(\"%@ 首歌\"), count.formatted()))"), true,
-                    "歌词管理: 分组标题只有 1 首时用单数文案")
+        // 分组标题按数量分单复数,英文 1 首写「1 song」(14 章决策 61)。
+        expectEqual(managerParts.contains("Text(String(format: L10n.plural(\"%@ 首歌\", count: count), count.formatted()))"), true,
+                    "歌词管理: 分组标题按数量分单复数")
     }
 
     // ---- 设置页顶层分类记忆----

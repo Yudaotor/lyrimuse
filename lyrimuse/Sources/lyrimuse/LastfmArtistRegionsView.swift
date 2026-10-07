@@ -105,9 +105,9 @@ struct LastfmArtistRegionsView: View {
         guard p.topArtists > 0 else { return nil }
         let total = spanTotal()
         guard total > 0, !stats.dailyFullSyncing else {
-            return String(format: L10n.t("按收听最多的前 %@ 位歌手统计"), "\(p.topArtists)")
+            return String(format: L10n.plural("按收听最多的前 %@ 位歌手统计", count: p.topArtists), "\(p.topArtists)")
         }
-        return String(format: L10n.t("按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@"),
+        return String(format: L10n.plural("按收听最多的前 %1$@ 位歌手统计，占此期间收听量的 %2$@", count: p.topArtists),
                       "\(p.topArtists)", Self.percent(min(p.covered, total), of: total))
     }
 

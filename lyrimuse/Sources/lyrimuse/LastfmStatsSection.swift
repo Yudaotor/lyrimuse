@@ -682,7 +682,7 @@ struct LastfmStatsSection: View {
     /// 不写条目数:三种榜都是合并过的,Last.fm 的原始条目数把繁简 / 中英写法各算一条,跟榜单对不上。
     private func chartSummaryText(_ entries: [LastfmStatsService.ChartEntry]) -> String? {
         guard let total = stats.listens(period), total > 0 else { return nil }
-        var parts = [String(format: L10n.t("%1$@ %2$@ 次"), period.displayName, total.formatted())]
+        var parts = [String(format: L10n.plural("%1$@ %2$@ 次", count: total), period.displayName, total.formatted())]
         let top = min(chartVisibleRows, entries.count)
         if let share = ChartSummary.topShare(counts: entries.prefix(top).map(\.playcount), total: total) {
             let format: String
@@ -1282,12 +1282,12 @@ struct LastfmStatsSection: View {
                         // 当天为空时结果是放宽到 ±3 天的"那一周"(见 OnThisDayPlanner),句子要说清楚。
                         subtitle: o.isWeek
                             ? (o.yearsAgo == 1
-                                ? String(format: L10n.t("去年这一周收听 %@ 次，循环最多的是以下歌曲"), "\(o.total)")
-                                : String(format: L10n.t("%1$@ 年前的这一周收听 %2$@ 次，循环最多的是以下歌曲"),
+                                ? String(format: L10n.plural("去年这一周收听 %@ 次，循环最多的是以下歌曲", count: o.total), "\(o.total)")
+                                : String(format: L10n.plural("%1$@ 年前的这一周收听 %2$@ 次，循环最多的是以下歌曲", count: o.total),
                                          "\(o.yearsAgo)", "\(o.total)"))
                             : (o.yearsAgo == 1
-                                ? String(format: L10n.t("去年今天收听 %@ 次，循环最多的是以下歌曲"), "\(o.total)")
-                                : String(format: L10n.t("%1$@ 年前的今天收听 %2$@ 次，循环最多的是以下歌曲"),
+                                ? String(format: L10n.plural("去年今天收听 %@ 次，循环最多的是以下歌曲", count: o.total), "\(o.total)")
+                                : String(format: L10n.plural("%1$@ 年前的今天收听 %2$@ 次，循环最多的是以下歌曲", count: o.total),
                                          "\(o.yearsAgo)", "\(o.total)")),
                         collapsed: $onThisDayCollapsed
                     ) {
@@ -1463,18 +1463,18 @@ struct LastfmStatsSection: View {
                     CardDivider()
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 3), spacing: 0) {
                         if let days = sum.daysSinceFirst, let first = sum.firstDay {
-                            footprintCell(value: String(format: L10n.t("%@ 天"), days.formatted()),
+                            footprintCell(value: String(format: L10n.plural("%@ 天", count: days), days.formatted()),
                                           label: String(format: L10n.t("自 %@ 起"), Self.dayLabel(first)))
                         }
-                        footprintCell(value: String(format: L10n.t("%@ 天"), sum.recordedDays.formatted()),
+                        footprintCell(value: String(format: L10n.plural("%@ 天", count: sum.recordedDays), sum.recordedDays.formatted()),
                                       label: String(format: L10n.t("有记录 · 日均 %@ 首"), (avg?.average ?? 0).formatted()))
                         if let peak = sum.peak {
-                            footprintCell(value: String(format: L10n.t("%@ 首"), peak.count.formatted()),
+                            footprintCell(value: String(format: L10n.plural("%@ 首", count: peak.count), peak.count.formatted()),
                                           label: String(format: L10n.t("单日最高 · %@"), Self.dayLabel(peak.day)))
                         }
-                        footprintCell(value: String(format: L10n.t("%@ 天"), sum.currentStreak.formatted()),
-                                      label: String(format: L10n.t("当前连续 · 最长 %@ 天"), sum.longestStreak.formatted()))
-                        footprintCell(value: String(format: L10n.t("%@ 首"), sum.yearToDate.formatted()),
+                        footprintCell(value: String(format: L10n.plural("%@ 天", count: sum.currentStreak), sum.currentStreak.formatted()),
+                                      label: String(format: L10n.plural("当前连续 · 最长 %@ 天", count: sum.longestStreak), sum.longestStreak.formatted()))
+                        footprintCell(value: String(format: L10n.plural("%@ 首", count: sum.yearToDate), sum.yearToDate.formatted()),
                                       label: sum.priorYearSameSpan.map {
                                           String(format: L10n.t("今年至今 · %1$@ 年同期 %2$@ 首"), "\($0.year)", $0.count.formatted())
                                       } ?? L10n.t("今年至今"))

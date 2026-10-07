@@ -38,7 +38,10 @@ ENTRY = re.compile(r'^\s*"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;', re.
 # L10n.t("字面量") —— 跟 ENTRY 用同一套转义感知,提取出来的形态才跟表里的 key 可比。
 # 参数不是字面量的写法(L10n.t(someVar))匹配不上,自然跳过:那种的 key 只有运行时才知道,
 # 静态查不了。\s* 让跨行写法也能命中。
-CALL = re.compile(r'L10n\.t\(\s*"((?:[^"\\]|\\.)*)"')
+CALL = re.compile(r'L10n\.(?:t|plural)\(\s*"((?:[^"\\]|\\.)*)"')
+# 单数变体的派生键(见 Localization/generate-strings.py 的 PLURAL_ONE_SUFFIX):只出现在写了 plural 变体的那种语言里,
+# 对拍 key 集时不算,另查它的本键在同一张表里。
+PLURAL_ONE_SUFFIX = "#one"
 
 
 def keys_of(path):
@@ -92,6 +95,15 @@ def main():
         tables[lang] = seen
 
     ok = True
+    for lang in list(tables):
+        derived = {k for k in tables[lang] if k.endswith(PLURAL_ONE_SUFFIX)}
+        orphans = sorted(k for k in derived if k[:-len(PLURAL_ONE_SUFFIX)] not in tables[lang])
+        if orphans:
+            ok = False
+            print(f"\n\u2717 {lang} 有单数变体的派生键却没有本键({len(orphans)} 条) —— 生成物只能由 generate-strings.py 生成:")
+            for k in orphans[:20]:
+                print(f"    {k}")
+        tables[lang] = tables[lang] - derived
     only_zh = sorted(tables["zh-hans"] - tables["en"])
     only_en = sorted(tables["en"] - tables["zh-hans"])
     if only_zh:
@@ -110,9 +122,13 @@ def main():
     # 支持的语言都写全。生成物对拍看不出这个(缺译时生成脚本已经拒绝生成),这里直接查真源。
     import json
     catalog = json.loads((ROOT / "Localization/Localizable.xcstrings").read_text(encoding="utf-8"))
+    def has_value(entry, lang):
+        loc = ((entry or {}).get("localizations") or {}).get(lang) or {}
+        node = ((loc.get("variations") or {}).get("plural") or {}).get("other") or loc
+        return bool((node.get("stringUnit") or {}).get("value"))
+
     for lang in ("en", "zh-Hant"):
-        lacking = sorted(k for k, v in (catalog.get("strings") or {}).items()
-                         if not ((((v or {}).get("localizations") or {}).get(lang) or {}).get("stringUnit") or {}).get("value"))
+        lacking = sorted(k for k, v in (catalog.get("strings") or {}).items() if not has_value(v, lang))
         if lacking:
             ok = False
             print(f"\n\u2717 catalog 里 {len(lacking)} 个键缺 {lang} 翻译(新加文案必须三语齐全,繁体规范见 Localization/zh-Hant-STYLE.md):")

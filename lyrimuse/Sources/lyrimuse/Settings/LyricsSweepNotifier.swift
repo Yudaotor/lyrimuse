@@ -86,16 +86,16 @@ final class LyricsSweepNotifier {
             return (L10n.t("自动匹配完成"),
                     done == 0
                         ? L10n.t("没有需要自动匹配的歌曲")
-                        : String(format: L10n.t("共 %1$@ 首：找到 %2$@，未找到 %3$@，跳过 %4$@"),
+                        : String(format: L10n.plural("共 %1$@ 首：找到 %2$@，未找到 %3$@，跳过 %4$@", count: done),
                                  "\(done)", "\(filled)", "\(missed)", "\(skipped)"))
         case let .fillOffline(done, filled):
             return (L10n.t("自动匹配已停止"),
-                    String(format: L10n.t("网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止"), "\(done)", "\(filled)"))
+                    String(format: L10n.plural("网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止", count: done), "\(done)", "\(filled)"))
         case let .fullDone(done, filled):
             return (L10n.t("全量重新扫库完成"),
                     done == 0
                         ? L10n.t("已全部跟进")
-                        : String(format: L10n.t("共检查 %1$@ 首，更新 %2$@ 首"), "\(done)", "\(filled)"))
+                        : String(format: L10n.plural("共检查 %1$@ 首，更新 %2$@ 首", count: done), "\(done)", "\(filled)"))
         case .fullOffline:
             return (L10n.t("全量重新扫库已暂停"), L10n.t("网络不可用，已暂停，稍后将自动继续"))
         }

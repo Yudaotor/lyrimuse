@@ -20,6 +20,7 @@ L10n.t(),Xcode 的自动提取扫不到调用点,不标 manual 的话它会把�
 """
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -37,6 +38,12 @@ TARGETS = {
 # 失败并列出缺的键。加繁体那天曾短暂开过回退,让 1196 条译文写入前树不红;译文齐了就关掉。
 FALLBACK_TO_SOURCE = set()
 OUT_DIR = os.path.join(ROOT, "..", "Sources", "lyrimuse", "Resources")
+# 按数量分单复数:某语言写成 Xcode 的 plural 变体(variations.plural 下 one / other 两条)时,other 写进这个键,
+# one 写进「键 + PLURAL_ONE_SUFFIX」。L10n.plural(_:count:) 数量为 1 时先查后者,查不到(这个语言没分单复数)
+# 用前者。.strings 不带复数规则,所以只认 one / other 两档(英文的规则),数量由调用方传,不看格式参数。
+# 后缀跟 L10n.swift、selftest 本地化守卫、scripts/check_strings_parity.py 三处必须一致。
+PLURAL_ONE_SUFFIX = "#one"
+FORMAT_SPEC = re.compile(r"%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:ll|l|h)?[@dDiuUxXoOfeEgGcCsSpaA%]")
 
 HEADER = """\
 /* 由 Localization/Localizable.xcstrings 生成 —— 不要手改这个文件。
@@ -161,6 +168,40 @@ def check_canonical_form(raw: str, catalog, normalize: bool) -> int:
     return 1
 
 
+def unit_value(node):
+    return ((node or {}).get("stringUnit") or {}).get("value")
+
+
+def forms(entry, lang):
+    """某语言的 (值, 单数值)。写成 plural 变体时值取 other、单数值取 one;没写成变体时单数值是 None。"""
+    loc = ((entry or {}).get("localizations") or {}).get(lang) or {}
+    plural = (loc.get("variations") or {}).get("plural")
+    if plural is None:
+        return unit_value(loc), None
+    return unit_value(plural.get("other")), unit_value(plural.get("one"))
+
+
+def plural_problems(strings, source_lang):
+    """plural 变体写错的地方:源语言不分单复数(值就是键);只认 one / other 两条且都要有;两条的格式符要一样
+    (同一组参数填进哪一条都对得上);派生出来的键不能跟已有的键撞。"""
+    out = []
+    for key, entry in strings.items():
+        if key.endswith(PLURAL_ONE_SUFFIX):
+            out.append(f"{key[:60]}:键不能以 {PLURAL_ONE_SUFFIX} 结尾(那是单数变体的派生键)")
+        for lang, loc in ((entry or {}).get("localizations") or {}).items():
+            plural = ((loc or {}).get("variations") or {}).get("plural")
+            if plural is None:
+                continue
+            other, one = unit_value(plural.get("other")), unit_value(plural.get("one"))
+            if lang == source_lang:
+                out.append(f"{key[:60]}:{lang} 是源语言,值就是键,不写 plural 变体")
+            elif set(plural) != {"one", "other"} or not other or not one:
+                out.append(f"{key[:60]}:{lang} 的 plural 变体要有且只有 one / other 两条")
+            elif sorted(FORMAT_SPEC.findall(one)) != sorted(FORMAT_SPEC.findall(other)):
+                out.append(f"{key[:60]}:{lang} 的 one / other 格式符不一样")
+    return out
+
+
 def escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
 
@@ -190,14 +231,19 @@ def main() -> int:
         if len(stale) > 20:
             print(f"    …还有 {len(stale) - 20} 条", file=sys.stderr)
         return 1
+    problems = plural_problems(strings, catalog["sourceLanguage"])
+    if problems:
+        print(f"\u2717 plural 变体有 {len(problems)} 处写得不对:", file=sys.stderr)
+        for p in problems[:20]:
+            print(f"    {p}", file=sys.stderr)
+        return 1
     for lang, lproj in TARGETS.items():
         lines = [HEADER]
         fallback_count = 0
         missing = []
         for key in sorted(strings):
             entry = strings[key] or {}
-            unit = ((entry.get("localizations") or {}).get(lang) or {}).get("stringUnit") or {}
-            value = unit.get("value")
+            value, one = forms(entry, lang)
             if value is None:
                 # 源语言允许省略(值即键,Xcode 的惯例);其它语言缺翻译就大声失败,
                 # 别静默生成一个回退键 —— 那会让"缺翻译"从可见问题变成隐形问题。
@@ -211,6 +257,8 @@ def main() -> int:
                     missing.append(key)
                     continue
             lines.append(f'"{escape(key)}" = "{escape(value)}";\n')
+            if one is not None:
+                lines.append(f'"{escape(key + PLURAL_ONE_SUFFIX)}" = "{escape(one)}";\n')
         out = os.path.join(OUT_DIR, lproj, "Localizable.strings")
         with open(out, "w", encoding="utf-8") as f:
             f.writelines(lines)

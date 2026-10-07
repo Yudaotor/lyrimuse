@@ -68,7 +68,7 @@ enum ICloudConfigImportPrompt {
             let alert = NSAlert()
             alert.messageText = L10n.t("在 iCloud 中发现 Lyrimuse 备份")
             let lyricsLine = lyricsCount > 0
-                ? String(format: L10n.t("其中包含 %@ 个歌词文件，将一并恢复。"), "\(lyricsCount)")
+                ? String(format: L10n.plural("其中包含 %@ 个歌词文件，将一并恢复。", count: lyricsCount), "\(lyricsCount)")
                 : ""
             alert.informativeText = detail + L10n.t("导入将包含账号和所有个人设置，完成后重启 Lyrimuse。") + lyricsLine
             alert.addButton(withTitle: L10n.t("导入并重启"))

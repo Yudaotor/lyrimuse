@@ -870,7 +870,7 @@ struct LyricsSearchSheet: View {
                 ContentUnavailableView {
                     Label(allUnreachable
                           ? L10n.t("所有歌词源均无法连接")
-                          : String(format: L10n.t("%@ 个歌词源无法连接"), "\(unreachableCount)"),
+                          : String(format: L10n.plural("%@ 个歌词源无法连接", count: unreachableCount), "\(unreachableCount)"),
                           systemImage: "wifi.exclamationmark")
                 } description: {
                     VStack(spacing: 4) {
@@ -897,7 +897,7 @@ struct LyricsSearchSheet: View {
                                 .joined(separator: "、")
                             Text(String(format: L10n.t("%@ 已匹配到该曲目，无歌词文本"), names))
                         } else if !allUnreachable {
-                            Text(String(format: L10n.t("其余 %@ 个源未返回候选"), "\(otherCount)"))
+                            Text(String(format: L10n.plural("其余 %@ 个源未返回候选", count: otherCount), "\(otherCount)"))
                         }
                     }
                 } actions: {
@@ -952,7 +952,7 @@ struct LyricsSearchSheet: View {
                             GridRow {
                                 Text(L10n.t("未返回候选"))
                                     .foregroundStyle(.tertiary)
-                                Text(String(format: L10n.t("其余 %@ 个源"), "\(otherCount)"))
+                                Text(String(format: L10n.plural("其余 %@ 个源", count: otherCount), "\(otherCount)"))
                             }
                         }
                     }
@@ -1513,7 +1513,7 @@ struct LyricsSearchSheet: View {
     /// 跟 741 分不是同一个量级上的东西。
     @ViewBuilder
     private func scoreLine(_ c: LyricsSearchService.Candidate, font: Font) -> some View {
-        let label = Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
+        let label = Text(String(format: L10n.plural("分数 %@ · %@ 行", count: c.lineCount), "\(c.score)", "\(c.lineCount)"))
         Group {
             if c.scoreTerms.isEmpty {
                 // 没有可摊开的明细就别摆一个点了什么都没有的问号。

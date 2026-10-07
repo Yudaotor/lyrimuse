@@ -288,7 +288,7 @@ private struct IdleOverviewCard: View {
         guard !stats.dailyFullSyncing,
               let avg = IdleListeningStats.dailyAverage(dailyCounts: stats.dailyCounts)
         else { return base }
-        return base + " · " + String(format: L10n.t("日均 %1$@ · %2$@ 天"),
+        return base + " · " + String(format: L10n.plural("日均 %1$@ · %2$@ 天", count: avg.days),
                                      "\(avg.average)", "\(avg.days)")
     }
 
@@ -414,7 +414,7 @@ private struct IdleOverviewCard: View {
         let s = series
         let dates = IdleListeningStats.days(endingAt: Date(), days: Self.sparkDays)
         if let hi = hoverIndex, s.indices.contains(hi), dates.indices.contains(hi) {
-            return String(format: L10n.t("%1$@ · %2$@ 首"),
+            return String(format: L10n.plural("%1$@ · %2$@ 首", count: s[hi]),
                           Self.dayFormatter.string(from: dates[hi]), Self.grouped(s[hi]))
         }
         guard let peak = s.max(), peak > 0,

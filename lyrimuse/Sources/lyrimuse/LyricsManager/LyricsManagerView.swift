@@ -1208,7 +1208,7 @@ struct LyricsManagerView: View {
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
             // 不能写成"随时可以恢复"——快照只保留最近 3 份、库本来是空的时候压根打不出来,承诺过头比不承诺更危险。
-            Text(String(format: L10n.t("将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词"), store.summaries.count))
+            Text(String(format: L10n.plural("将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词", count: store.summaries.count), store.summaries.count))
         }
     }
 
@@ -1220,7 +1220,7 @@ struct LyricsManagerView: View {
             Text(L10n.t("歌词管理"))
                 .font(.system(size: 15, weight: .bold))
                 .lineLimit(1)
-            Text(String(format: L10n.t("共 %@ 首"), store.summaries.count.formatted()))
+            Text(String(format: L10n.plural("共 %@ 首", count: store.summaries.count), store.summaries.count.formatted()))
                 .font(.system(size: 12))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
@@ -1248,7 +1248,7 @@ struct LyricsManagerView: View {
         .frame(height: 32)
         // 「清理无效记录」的确认框挂在这一行:侧栏、List、根上各有自己的确认框,不叠在同一条修饰符链上。
         .confirmationDialog(
-            String(format: L10n.t("确定要清理 %@ 条无效记录吗？"), pendingCleanupKeys.count.formatted()),
+            String(format: L10n.plural("确定要清理 %@ 条无效记录吗？", count: pendingCleanupKeys.count), pendingCleanupKeys.count.formatted()),
             isPresented: $showCleanupConfirm,
             titleVisibility: .visible
         ) {
@@ -1975,7 +1975,7 @@ struct LyricsManagerView: View {
         Button(L10n.t("全部标为纯音乐")) { markInstrumental(keys) }
             .disabled(markingInstrumental)
         Divider()
-        Button(String(format: L10n.t("删除选中的 %@ 条"), keys.count.formatted()), role: .destructive) {
+        Button(String(format: L10n.plural("删除选中的 %@ 条", count: keys.count), keys.count.formatted()), role: .destructive) {
             requestDelete(picked)
         }
     }
@@ -2193,7 +2193,7 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(String(format: L10n.t("将清除 %d 首歌曲的手动时间轴校正，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源"), offsets.trackOffsetCount))
+            Text(String(format: L10n.plural("将清除 %d 首歌曲的手动时间轴校正，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源", count: offsets.trackOffsetCount), offsets.trackOffsetCount))
         }
         // 侧栏「⋯」菜单里的「全量重新扫库」。文案、待扫首数与预计时长跟设置页那一行共用同一份
         // (LyricsLibraryStatsPanel 的几个静态函数),两个入口说的数不能分叉。
@@ -2222,7 +2222,7 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(String(format: L10n.t("将清除 %d 首歌曲的电台时间轴校正，此操作无法撤销。这些校正仅在播放电台时生效，清除后不影响正常播放时的歌词"), offsets.radioOffsetCount))
+            Text(String(format: L10n.plural("将清除 %d 首歌曲的电台时间轴校正，此操作无法撤销。这些校正仅在播放电台时生效，清除后不影响正常播放时的歌词", count: offsets.radioOffsetCount), offsets.radioOffsetCount))
         }
         // 恢复确认。跟上面两个确认弹窗一样各挂各的层级,不叠在同一条修饰符链上。
         .confirmationDialog(
@@ -2365,7 +2365,7 @@ struct LyricsManagerView: View {
            let summary = store.summary(forKey: pendingDeleteKeys[0]) {
             return String(format: L10n.t("确定要删除「%@ - %@」的本地记录吗？"), summary.artist, summary.title)
         }
-        return String(format: L10n.t("确定要删除选中的 %@ 条本地记录吗？"), "\(pendingDeleteKeys.count)")
+        return String(format: L10n.plural("确定要删除选中的 %@ 条本地记录吗？", count: pendingDeleteKeys.count), "\(pendingDeleteKeys.count)")
     }
 
     // 三条完整独立的句子,不在运行时拼接——拼出来的句子英文侧语序没法翻。
@@ -2439,7 +2439,7 @@ struct LyricsManagerView: View {
             HStack(alignment: .center, spacing: 22) {
                 LyricsManagerStackedCovers(urls: pickedInOrder.prefix(4).map(\.coverURL))
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(String(format: L10n.t("已选择 %@ 首"), "\(picked.count)"))
+                    Text(String(format: L10n.plural("已选择 %@ 首", count: picked.count), "\(picked.count)"))
                         .font(.system(size: 28, weight: .bold))
                     // 几个统计各自独立成词条,不在运行时拼成一句长句;为 0 的那项整个不显示。
                     SettingsFlowRow(spacing: 6) {
@@ -2492,7 +2492,7 @@ struct LyricsManagerView: View {
                     Button(role: .destructive) {
                         requestDelete(selectedKeys)
                     } label: {
-                        Label(String(format: L10n.t("删除选中的 %@ 条"), "\(picked.count)"), systemImage: "trash")
+                        Label(String(format: L10n.plural("删除选中的 %@ 条", count: picked.count), "\(picked.count)"), systemImage: "trash")
                             .foregroundStyle(.red)
                     }
                 }
@@ -2599,7 +2599,7 @@ struct LyricsManagerView: View {
                 Button {
                     if LyricsFillSweep.request(keys: []) { fillSweepPending = true; fillSweepPendingIsFull = false }
                 } label: {
-                    Label(String(format: L10n.t("自动匹配 %@ 首缺失的歌词"), "\(retryableAll.count)"),
+                    Label(String(format: L10n.plural("自动匹配 %@ 首缺失的歌词", count: retryableAll.count), "\(retryableAll.count)"),
                           systemImage: "wand.and.stars")
                 }
                 .disabled(retryableAll.isEmpty || fillSweepPending)
@@ -2609,7 +2609,7 @@ struct LyricsManagerView: View {
                     Button {
                         if LyricsFillSweep.request(keys: retryableVisible) { fillSweepPending = true; fillSweepPendingIsFull = false }
                     } label: {
-                        Label(String(format: L10n.t("仅自动匹配筛选出的 %@ 首"), "\(retryableVisible.count)"),
+                        Label(String(format: L10n.plural("仅自动匹配筛选出的 %@ 首", count: retryableVisible.count), "\(retryableVisible.count)"),
                               systemImage: "line.3.horizontal.decrease.circle")
                     }
                     .disabled(retryableVisible.isEmpty || fillSweepPending)
@@ -2658,7 +2658,7 @@ struct LyricsManagerView: View {
                 showCleanupConfirm = true
             } label: {
                 Label(cleanup.isEmpty ? L10n.t("没有无效记录")
-                                      : String(format: L10n.t("清理 %@ 条无效记录…"), cleanup.count.formatted()),
+                                      : String(format: L10n.plural("清理 %@ 条无效记录…", count: cleanup.count), cleanup.count.formatted()),
                       systemImage: "sparkles")
             }
             .disabled(cleanup.isEmpty)
@@ -2681,7 +2681,7 @@ struct LyricsManagerView: View {
             }
             .disabled(offsets.trackOffsetCount == 0)
         } header: {
-            Text(String(format: L10n.t("已校准 %d 首歌的歌词时间轴"),
+            Text(String(format: L10n.plural("已校准 %d 首歌的歌词时间轴", count: offsets.trackOffsetCount),
                         offsets.trackOffsetCount))
         }
         // 电台那一层再单独一段:上面修的是"这份歌词自己的时间轴不准",这里修的是"电台的元数据比
@@ -2694,7 +2694,7 @@ struct LyricsManagerView: View {
                     Label(L10n.t("清空全部电台校正"), systemImage: "dot.radiowaves.left.and.right")
                 }
             } header: {
-                Text(String(format: L10n.t("已校正 %d 首歌在电台上的时间轴"),
+                Text(String(format: L10n.plural("已校正 %d 首歌在电台上的时间轴", count: offsets.radioOffsetCount),
                             offsets.radioOffsetCount))
             }
         }
@@ -3431,7 +3431,7 @@ struct LyricsManagerView: View {
             // 这个数为 0 是老条目没这个字段,不是"零个源应答",不显示。
             if summary.hasDecision, summary.hasLyrics, summary.sourcesRespondedCount > 0, !summary.lyricsSource.isEmpty {
                 LyricsManagerFact(icon: "checkmark.seal",
-                                  text: String(format: L10n.t("解析时 %1$@ 个源应答，选用「%2$@」"),
+                                  text: String(format: L10n.plural("解析时 %1$@ 个源应答，选用「%2$@」", count: summary.sourcesRespondedCount),
                                                "\(summary.sourcesRespondedCount)", sourceDisplayName(summary.lyricsSource)))
             }
         }
@@ -3838,7 +3838,7 @@ struct LyricsManagerView: View {
                 .font(.system(size: 18))
                 .foregroundStyle(Color.accentColor)
             VStack(alignment: .leading, spacing: 1) {
-                Text(changes > 0 ? String(format: L10n.t("已修改 %@ 处"), "\(changes)") : L10n.t("尚未修改"))
+                Text(changes > 0 ? String(format: L10n.plural("已修改 %@ 处", count: changes), "\(changes)") : L10n.t("尚未修改"))
                     .font(.system(size: 13, weight: .semibold))
                 // 整段文本里方向键是移动光标,不提示换句。
                 Text(editMode == .text ? L10n.t("⌘S 保存 · Esc 放弃") : L10n.t("⌘S 保存 · Esc 放弃 · ↑↓ 换句"))
@@ -4041,7 +4041,7 @@ struct LyricsManagerView: View {
                 .map(\.key)
             let others = keys.filter { $0 != summary.key }.count
             if others > 0 {
-                Button(String(format: L10n.t("另有 %@ 首歌曲无源应答 · 全部自动匹配"), "\(others)")) {
+                Button(String(format: L10n.plural("另有 %@ 首歌曲无源应答 · 全部自动匹配", count: others), "\(others)")) {
                     requestFillSweep(keys)
                 }
                 .buttonStyle(.link)

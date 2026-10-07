@@ -160,10 +160,10 @@ struct PlayCountBreakdownPopover: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 4) {
-                Text(String(format: L10n.t("共 %@ 次"), "\(b.total)"))
+                Text(String(format: L10n.plural("共 %@ 次", count: b.total), "\(b.total)"))
                 if b.variants.count > 1 {
                     Text("·")
-                    Text(String(format: L10n.t("%@ 种写法"), "\(b.variants.count)"))
+                    Text(String(format: L10n.plural("%@ 种写法", count: b.variants.count), "\(b.variants.count)"))
                 }
             }
             .font(.caption).foregroundStyle(.secondary).monospacedDigit()
