@@ -114,9 +114,10 @@ final class NowPlayingNotifier {
         guard stillPlaying(), await UnknownPlayerNotifier.shared.ensureAuthorized(), !Task.isCancelled else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = title
+        let shownTitle = TrackNameDisplay.cleaned(title)
+        content.title = shownTitle
         content.body = NowPlayingNotice.body(
-            title: title, artist: playback.displayArtist.isEmpty ? artist : playback.displayArtist,
+            title: shownTitle, artist: playback.displayArtist.isEmpty ? artist : playback.displayArtist,
             album: playback.displayAlbum)
         content.categoryIdentifier = Self.categoryID
         content.threadIdentifier = Self.categoryID

@@ -106,7 +106,7 @@ struct MiniIdleStandby: View {
                         HStack(spacing: 12) {
                             coverImage(track, side: 56)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(track.title)
+                                Text(TrackNameDisplay.cleaned(track.title))
                                     .font(.system(size: 15, weight: .semibold))
                                     .lineLimit(1)
                                 Text(track.artist)
@@ -119,7 +119,7 @@ struct MiniIdleStandby: View {
                     }
                     HStack(spacing: 8) {
                         coverImage(track, side: 26)
-                        Text(track.title)
+                        Text(TrackNameDisplay.cleaned(track.title))
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
                         primaryButton
@@ -175,7 +175,7 @@ struct MiniIdleStandby: View {
         let placeholder = ZStack {
             LastfmStatsSection.stableColor(for: track.artist.isEmpty ? track.title : track.artist)
                 .opacity(0.65)
-            Text(String(track.title.prefix(1)))
+            Text(String(TrackNameDisplay.cleaned(track.title).prefix(1)))
                 .font(.system(size: side * 0.45, weight: .light))
                 .foregroundStyle(.white.opacity(0.85))
         }

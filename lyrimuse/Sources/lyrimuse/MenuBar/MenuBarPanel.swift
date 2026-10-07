@@ -20,6 +20,7 @@ import LyrimuseCore
 private final class PanelPlayback: ObservableObject {
     // ---- 来自 PlaybackCoordinator ----
     @Published private(set) var title = ""
+    @Published private(set) var displayTitle = ""
     @Published private(set) var artist = ""
     @Published private(set) var displayArtist = ""
     @Published private(set) var displayAlbum = ""
@@ -80,6 +81,7 @@ private final class PanelPlayback: ObservableObject {
         let s = AppSettings.shared
         subs = [
             p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
+            p.$displayTitle.removeDuplicates().sink { [weak self] in self?.displayTitle = $0 },
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
             // 两份都要:`artist` 给「有没有曲目」那道判断用(它问的是载荷里有没有东西),
             // `displayArtist` 只画在卡片上。判据见 `PlayerArtistFix.displayArtist`。
@@ -499,7 +501,7 @@ private struct MenuBarPanelView: View {
         //
         // 仍然返回一个空串、让这个 Text 留在原地,而不是整行 if 掉:它占着一行行高,
         // 文字块高度不随播放状态跳动,下面那排控制按钮才不会上下弹。
-        return playback.title
+        return playback.displayTitle
     }
 
     /// 广告时歌手/专辑都留空,不展示广告物料的名字(跟灵动岛一致的口径)。不是多余判断:

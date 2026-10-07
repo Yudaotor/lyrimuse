@@ -59,15 +59,17 @@ final class PlaybackCoordinator: ObservableObject {
     static let shared = PlaybackCoordinator()
 
     @Published private(set) var title: String = ""
+    /// 界面上显示的歌名(`TrackNameDisplay.cleaned`)。拿它画界面,别拿它当 key(查缓存 / 拼链接 / 打卡仍用 `title`)。
+    @Published private(set) var displayTitle: String = ""
     @Published private(set) var artist: String = ""
     /// 界面上显示的歌手名。判据见 `PlayerArtistFix.displayArtist` —— 署名不可信的播放器在
-    /// 纠正落地之前是空串。拿它画界面,别拿它当 key(查缓存 / 拼链接 / 打卡仍用 `artist`)。
+    /// 纠正落地之前是空串;画之前过一遍 `TrackNameDisplay.cleaned`。拿它画界面,别拿它当 key(查缓存 / 拼链接 / 打卡仍用 `artist`)。
     @Published private(set) var displayArtist: String = ""
     @Published private(set) var album: String = ""
     /// 播放器没报专辑时 YouTube Music 上登记的那张(见 `LocalPlaybackSource.youtubeMusicAlbum`)。只给界面用。
     @Published private(set) var youtubeMusicAlbum: String = ""
     /// 界面上专辑位显示的字,判据见 `LocalPlaybackSource.displayAlbum`(播放器报的 → YouTube Music 上登记的 →「MV」)。
-    /// 只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
+    /// 同样过一遍 `TrackNameDisplay.cleaned`。只画在界面上 —— 缓存 key、简介、链接一律仍用 `album`。
     @Published private(set) var displayAlbum: String = ""
     /// 播放器没报歌手时引擎认出来的歌手 / 专辑,给上面两个显示位兜底(`InferredTrackIdentity`,见 03 章决策 32)。
     @Published private var inferredIdentity: InferredTrackIdentity?
@@ -831,6 +833,7 @@ final class PlaybackCoordinator: ObservableObject {
         // 要等菜单关了才走,换歌后的高清封面、收藏 / 随机状态都会跟着晚(见 01 章决策 11)。
         cancellables = [
             s.$title.assign(to: \.title, on: self),
+            s.$title.map(TrackNameDisplay.cleaned).removeDuplicates().assign(to: \.displayTitle, on: self),
             // 换歌就重读一次"喜欢"状态。用 title+artist 组合去重而不是只看 title:同名不同
             // 歌手的曲目(翻唱/合辑里很常见)只看 title 会被当成同一首,漏掉一次刷新。
             // 防抖 50ms:LocalPlaybackSource 换歌时 title / artist 是先后分开写的,不压一下会先放出一个
@@ -871,6 +874,7 @@ final class PlaybackCoordinator: ObservableObject {
                             title: title, artist: artist),
                         inferred: inferred)
                 }
+                .map(TrackNameDisplay.cleaned)
                 .removeDuplicates()
                 .assign(to: \.displayArtist, on: self),
             s.$album.assign(to: \.album, on: self),
@@ -883,6 +887,7 @@ final class PlaybackCoordinator: ObservableObject {
                                                                    musicVideoLabel: L10n.t("MV"))
                     return InferredTrackIdentity.displayAlbum(playerAlbum: album, display: display, inferred: inferred)
                 }
+                .map(TrackNameDisplay.cleaned)
                 .removeDuplicates()
                 .assign(to: \.displayAlbum, on: self),
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),

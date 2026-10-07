@@ -1682,7 +1682,7 @@ func runCoverArtTests() {
             ("if let primary = ArtistCredit.primary(artistName), primary != artistName {\n            variants.append([\"artist\": primary, \"track\": title])",
              "多人署名再按第一位问一次"),
             ("if result.notFound { break }", "某一组没有这个条目就换下一组,不当成整首没有"),
-            ("EditorialCard(kind: .song, title: track.title, subtitle: track.artist, facts: [], text: $0, source: .qqMusic)",
+            ("EditorialCard(kind: .song, title: TrackNameDisplay.cleaned(track.title), subtitle: TrackNameDisplay.cleaned(track.artist), facts: [], text: $0, source: .qqMusic)",
              "QQ 的卡片注明来自 QQ 音乐"),
             ("case .song: if self.song == nil { self.song = card }", "取到的歌曲简介只在还空着时放上去"),
         ] {

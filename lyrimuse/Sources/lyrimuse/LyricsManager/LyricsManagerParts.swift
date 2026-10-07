@@ -291,7 +291,7 @@ struct LyricsManagerSongRow: View {
                             .foregroundStyle(emphasized ? Color.primary : Color.accentColor)
                             .accessibilityLabel(L10n.t("正在播放"))
                     }
-                    Text(highlighted(summary.title))
+                    Text(highlighted(summary.shownTitle))
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
                 }
@@ -1353,4 +1353,9 @@ struct LyricsManagerLineEditor: View {
             .help(L10n.t("修改此句的时间戳"))
         }
     }
+}
+
+extension EnrichCacheStore.Summary {
+    /// 列表、详情里歌名那一位(`TrackNameDisplay.cleaned`);key、搜索仍用 `title`。
+    var shownTitle: String { TrackNameDisplay.cleaned(title) }
 }

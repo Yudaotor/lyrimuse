@@ -810,7 +810,7 @@ struct LyricsManagerView: View {
     }
 
     private static func albumDisplay(_ album: String, in map: [String: String]) -> String {
-        map[toSimplified(album).lowercased()] ?? album
+        TrackNameDisplay.cleaned(map[toSimplified(album).lowercased()] ?? album)
     }
 
     /// filtered 的缓存盒。@State 里包一个引用类型,让下面的计算属性能在 body 求值过程中
@@ -2520,7 +2520,7 @@ struct LyricsManagerView: View {
             LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,
                                size: 32, radius: 6)
             VStack(alignment: .leading, spacing: 1) {
-                Text(summary.title)
+                Text(summary.shownTitle)
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
                 Text(summary.shownArtist)
@@ -2912,7 +2912,7 @@ struct LyricsManagerView: View {
                 .frame(height: 52)
                 .background(WindowDragHandle())
             VStack(alignment: .leading, spacing: 4) {
-                Text(summary.title)
+                Text(summary.shownTitle)
                     .font(.system(size: 28, weight: .bold))
                     .lineLimit(2)
                 Text(summary.artist)
@@ -3334,7 +3334,7 @@ struct LyricsManagerView: View {
                                size: 128, radius: 14)
                 .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
             VStack(alignment: .leading, spacing: 4) {
-                Text(summary.title)
+                Text(summary.shownTitle)
                     .font(.system(size: 28, weight: .bold))
                     .lineLimit(2)
                     .textSelection(.enabled)

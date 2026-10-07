@@ -1218,7 +1218,7 @@ final class MenuBarStatusItem: NSObject {
         // 判据与三条边界(暂停不占宽 / 广告不显示 / 没歌名不兜底)都在 Core 的 MenuBarSlotPolicy.displayText,
         // 这里只消费。nil = 照旧收回图标。歌词旁那枚图标开着时兜底文字不带 ♪ 前缀(理由见那个函数)。
         let display = MenuBarSlotPolicy.displayText(
-            lyricText: lyricText, title: coordinator.title,
+            lyricText: lyricText, title: coordinator.displayTitle,
             isPlaying: coordinator.isPlayingNow, isAdBreak: coordinator.isCurrentTrackAdBreak,
             showsTitleWhenNoLyrics: settings.menuBarShowsTitleWhenNoLyrics,
             placeholderGlyph: MenuBarMarqueeRenderer.placeholderGlyph,

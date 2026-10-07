@@ -20,6 +20,7 @@ import os
 private final class NotchPlayback: ObservableObject {
     // ---- 来自 PlaybackCoordinator ----
     @Published private(set) var title = ""
+    @Published private(set) var displayTitle = ""
     @Published private(set) var artist = ""
     /// 画在歌手模块上的那份(署名不可信的播放器在纠正落地前是空串,判据见
     /// `PlayerArtistFix.displayArtist`)。`artist` 留着给广告判定那类拿它当判据的地方。
@@ -251,6 +252,7 @@ private final class NotchPlayback: ObservableObject {
             .map { LyricSecondaryLine.currentLine($0, inMarkedInterlude: $1) }
         subs = [
             p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
+            p.$displayTitle.removeDuplicates().sink { [weak self] in self?.displayTitle = $0 },
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
             p.$displayArtist.removeDuplicates().sink { [weak self] in self?.displayArtist = $0 },
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
@@ -1538,7 +1540,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         case .title:
             if isAd { return L10n.t("广告中") }
             if let station { return station.name }
-            return playback.title.isEmpty ? "♪" : playback.title
+            return playback.displayTitle.isEmpty ? "♪" : playback.displayTitle
         case .artist: return (isAd || station != nil) ? "" : playback.displayArtist
         case .album: return (isAd || station != nil) ? "" : playback.displayAlbum
         // 非文本模块不走这条路(见 earContent 的分发),这里只是把 switch 补齐。

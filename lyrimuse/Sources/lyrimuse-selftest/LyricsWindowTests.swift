@@ -12,6 +12,18 @@ private func r3(_ x: CGFloat) -> Double { r3(Double(x)) }
 
 @MainActor
 func runLyricsWindowTests() {
+    // ---- 歌名显示清洗:汉字 / 假名 / 韩文后的组合包围符号去掉,其余原样 ----
+    do {
+        let mark = "\u{20E0}"
+        expectEqual(TrackNameDisplay.cleaned("琵\(mark) 琶\(mark) 語\(mark)(Bootleg)"), "琵 琶 語(Bootleg)",
+                    "歌名显示: 汉字后的禁止号去掉")
+        expectEqual(TrackNameDisplay.cleaned("あ\u{20DD}ア\u{20DE}한\u{20E4}"), "あア한", "歌名显示: 假名 / 韩文后的包围符号去掉")
+        expectEqual(TrackNameDisplay.cleaned("琵\u{FE0F}\(mark)"), "琵\u{FE0F}", "歌名显示: 隔着变体选择符也认得出前一个字")
+        expectEqual(TrackNameDisplay.cleaned("A\(mark) 0\(mark)"), "A\(mark) 0\(mark)", "歌名显示: 拉丁字母、数字后的照留")
+        expectEqual(TrackNameDisplay.cleaned("1\u{FE0F}\u{20E3} 歌"), "1\u{FE0F}\u{20E3} 歌", "歌名显示: 数字键帽表情不动")
+        expectEqual(TrackNameDisplay.cleaned("晴天"), "晴天", "歌名显示: 没有包围符号原样返回")
+    }
+
     checkLyricsWindowHoverFade()
     checkLyricsWindowLaunchRestore()
     // ---- 歌词窗口的空格 / ← / → ----

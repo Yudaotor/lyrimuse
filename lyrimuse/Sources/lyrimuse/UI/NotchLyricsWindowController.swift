@@ -926,7 +926,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         trackDropGeneration &+= 1
         let replacing = NotchTrackDropRules.replaced(showing: trackDrop, cleared: clearedTrackDrop?.drop,
                                                      clearedAt: clearedTrackDrop?.at, now: Date())
-        trackDrop = NotchTrackDrop(id: trackDropGeneration, title: track.title, artist: PlaybackCoordinator.shared.displayArtist,
+        trackDrop = NotchTrackDrop(id: trackDropGeneration, title: TrackNameDisplay.cleaned(track.title),
+                                   artist: PlaybackCoordinator.shared.displayArtist,
                                    replacing: replacing)
         trackDropClearTask?.cancel()
         trackDropClearTask = Task { [weak self] in

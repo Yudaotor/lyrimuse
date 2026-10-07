@@ -433,7 +433,7 @@ final class EditorialNotesStore: ObservableObject {
         let key = "track|\(EnrichCacheKeys.cleanTag(artistName))|\(EnrichCacheKeys.cleanTag(title))"
         lastfmCard(key: key, method: "track.getInfo", variants: variants, for: track,
                    parse: LastfmEditorialInfo.trackWiki(from:)) { text in
-            EditorialCard(kind: .song, title: title, subtitle: artistName, facts: [], text: text, source: .lastfm)
+            EditorialCard(kind: .song, title: TrackNameDisplay.cleaned(title), subtitle: TrackNameDisplay.cleaned(artistName), facts: [], text: text, source: .lastfm)
         } apply: { card in
             then(card)
         }
@@ -721,7 +721,7 @@ final class EditorialNotesStore: ObservableObject {
         guard let mid = links?.qqSong.flatMap({ PlatformLinks.qqSongMID(songPage: $0.absoluteString) }) else { return then(nil) }
         withQQSongText(mid: mid, for: track) { text in
             then(text.map {
-                EditorialCard(kind: .song, title: track.title, subtitle: track.artist, facts: [], text: $0, source: .qqMusic)
+                EditorialCard(kind: .song, title: TrackNameDisplay.cleaned(track.title), subtitle: TrackNameDisplay.cleaned(track.artist), facts: [], text: $0, source: .qqMusic)
             })
         }
     }

@@ -169,7 +169,7 @@ struct RecentListensPanel: View {
             }
             .frame(width: 26, height: 26)
             .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-            Text("\(track.title) · \(track.artist)")
+            Text("\(TrackNameDisplay.cleaned(track.title)) · \(TrackNameDisplay.cleaned(track.artist))")
                 .font(.system(size: 12.5))
                 .foregroundStyle(primaryTextColor)
                 .lineLimit(1)

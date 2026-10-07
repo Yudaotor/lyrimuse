@@ -15,6 +15,7 @@ import LyrimuseCore
 private final class WindowPlayback: ObservableObject {
     // ---- 来自 PlaybackCoordinator ----
     @Published private(set) var title = ""
+    @Published private(set) var displayTitle = ""
     @Published private(set) var artist = ""
     /// 画在界面上的那份(署名不可信的播放器在纠正落地前是空串,判据见
     /// `PlayerArtistFix.displayArtist`)。`artist` 留着给查缓存 / 拼链接那些拿它当 key 的地方。
@@ -123,6 +124,7 @@ private final class WindowPlayback: ObservableObject {
         let s = AppSettings.shared
         subs = [
             p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
+            p.$displayTitle.removeDuplicates().sink { [weak self] in self?.displayTitle = $0 },
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
             p.$displayArtist.removeDuplicates().sink { [weak self] in self?.displayArtist = $0 },
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
@@ -1916,7 +1918,7 @@ struct LyricsWindowView: View {
         // 口白换成台名:那不是广告,台名就是此刻"在放什么"的答案(同完整布局)。
         if let station = radioTalkStation { return [.init(field: .title, value: station.name)] }
         return playback.miniHeaderFields.visibleParts(
-            title: playback.title, artist: playback.displayArtist, album: playback.displayAlbum)
+            title: playback.displayTitle, artist: playback.displayArtist, album: playback.displayAlbum)
     }
 
     /// 顶部文字最多两行:第一样独占第一行,其余几样用「 — 」合成第二行(Apple Music 迷你播放器
@@ -4348,7 +4350,7 @@ struct LyricsWindowView: View {
         if playback.isCurrentTrackAdBreak { return L10n.t("广告中") }
         // 口白期间换成台名。抓不到台卡就还显示上一首 —— 判据见 RadioStationCard。
         if let station = radioTalkStation { return station.name }
-        return playback.title
+        return playback.displayTitle
     }
 
     /// 口白期间顶替曲目卡的台名 / 台标。抓不到台卡就是 nil,一切照旧。跟灵动岛那份同名同义。
@@ -7562,7 +7564,7 @@ private struct IdleLastfmSection: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
                         Text(String(format: L10n.plural("循环最多：《%1$@》— %2$@（%3$@ 次）", count: top.count),
-                                    top.track.title, top.track.artist, "\(top.count)"))
+                                    TrackNameDisplay.cleaned(top.track.title), TrackNameDisplay.cleaned(top.track.artist), "\(top.count)"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

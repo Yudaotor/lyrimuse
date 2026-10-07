@@ -20,7 +20,9 @@ struct NotchMilestonePanel: View {
     }
 
     private var subtitle: String {
-        milestone.artist.isEmpty ? milestone.title : "\(milestone.title) · \(milestone.artist)"
+        let title = TrackNameDisplay.cleaned(milestone.title)
+        let artist = TrackNameDisplay.cleaned(milestone.artist)
+        return artist.isEmpty ? title : "\(title) · \(artist)"
     }
 
     var body: some View {
