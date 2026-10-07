@@ -3596,8 +3596,11 @@ struct LyricsManagerView: View {
         isDisplayModeAvailable(displayMode, summary) ? displayMode : .original
     }
 
+    /// 还没为这首算好行时给空:换歌那一刻页面先按新歌画一轮、loadDetail 才跑,这时手里的还是上一首的行,
+    /// 预览列表又按 key 重建,拿旧行去建就是整张白建一遍(见 11 章决策 96)。
     private func shownRows(_ summary: EnrichCacheStore.Summary) -> [LyricsPreviewRow] {
-        effectiveDisplayMode(summary) == .romanization ? romanizedRows : previewRows
+        guard previewInputs.first == summary.key else { return [] }
+        return effectiveDisplayMode(summary) == .romanization ? romanizedRows : previewRows
     }
 
     /// 预览的两份行都走播放引擎(LyricsPreviewText.rows),跟歌词窗口显示的同一批。带读音那份用缓存里存的读音,加上按设置里
@@ -4185,10 +4188,24 @@ struct LyricsManagerView: View {
         editedWordText = loadedWordText
         saveEditNote = nil
         if let summary = store.summary(forKey: key) {
+            resetBodyEdits(title: summary.title, artist: summary.artist)
             refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
             refreshPreviewRows(key: key, summary: summary, lyrics: d.lyrics, tr: d.tr, roma: d.roma)
             plainLyricsText = !summary.hasLyrics && summary.hasPlainTextFallback ? store.plainLyrics(for: key) : ""
         }
+    }
+
+    /// 四个编辑框的正文按刚载入的完整原文当场拆好,跟 detailView 里那四对 onChange 拆的是同一份:那几条看到正文已经
+    /// 对得上就直接返回、不再写状态,换歌时整页少算一轮。
+    private func resetBodyEdits(title: String, artist: String) {
+        lyricsBodyEdit = LyricsBodyEdit(lyrics: editedLyrics, title: title, artist: artist)
+        editedLyricsBody = lyricsBodyEdit.body
+        wordBodyEdit = LyricsBodyEdit(lyrics: editedWordText, title: title, artist: artist)
+        editedWordBody = wordBodyEdit.body
+        trBodyEdit = LyricsBodyEdit(lyrics: editedTr, title: title, artist: artist)
+        editedTrBody = trBodyEdit.body
+        romaBodyEdit = LyricsBodyEdit(lyrics: editedRoma, title: title, artist: artist)
+        editedRomaBody = romaBodyEdit.body
     }
 
     // 跟 loadDetail 共用——"保存修改"/采纳联网候选歌词之后也要重新调这个:磁盘上的

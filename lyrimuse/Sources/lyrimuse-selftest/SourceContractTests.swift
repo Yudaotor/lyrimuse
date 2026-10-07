@@ -4020,6 +4020,10 @@ func runSourceContractTests() {
                     && manager.contains("guard table.numberOfRows == keys.count else { return }")
                     && manager.contains("selectedKeys.contains(keys[$0]) }), byExtendingSelection: false)"), true,
                     "歌词管理: 代码里改了选中,表格上留着的旧选中按数据清掉")
+        // 换歌时预览不拿上一首的行去建,编辑框的正文在 loadDetail 里当场拆好(11 章决策 96)。
+        expectEqual(manager.contains("guard previewInputs.first == summary.key else { return [] }")
+                    && manager.contains("            resetBodyEdits(title: summary.title, artist: summary.artist)\n            refreshOffsetState("), true,
+                    "歌词管理: 换歌时预览不用上一首的行,编辑框正文随载入一起拆好")
         // App.swift 里每扇 Window 场景的标题都要另挂一份 .navigationTitle:场景那个标题只在构造时求值一次,切了界面语言不跟着变
         // (14 章决策 61)。
         let sceneTitles = (read("App.swift") ?? "").components(separatedBy: "Window(L10n.t(\"").dropFirst()
