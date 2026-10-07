@@ -346,6 +346,9 @@ func main() {
 	// 存量歌词的换行统一成 LF、去掉开头的 BOM(见 lyriclineendings.go),同样夹在 import 与 export 之间、
 	// 排在 migrateManualPickMarks 之前。
 	startupStep("migrateLyricLineEndings", migrateLyricLineEndings)
+	// 存量酷我正文里还留着的烘入译文行(见 bakedtranslation.go),同样夹在 import 与 export 之间、
+	// 排在 migrateManualPickMarks 之前(它改正文)。
+	startupStep("migrateKuwoSharedStampTranslation", migrateKuwoSharedStampTranslation)
 	// 存量译文里腾讯系塞的版权 / 译者声明行(见 translationnotice.go),同样夹在 import 与 export 之间。
 	startupStep("migrateTranslationNotices", migrateTranslationNotices)
 	// 存量机翻里外文原样没动的行(见 untranslatedmachine.go),同样夹在 import 与 export 之间。

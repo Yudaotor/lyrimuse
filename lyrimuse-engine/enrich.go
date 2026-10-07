@@ -4470,10 +4470,11 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	lfLyr, _, _, bakedLines["lyricfind"] = adoptBakedTranslation(lfLyr, "", "", foreignSong, false)
 	// 酷我对外文歌**系统性**地把中文译文烘在正文里(金标 ko-fallen-angel / latin-purple-rain 里的酷我候选
 	// 128→67 行、71→37 行),摘出来的译文照 qq/kugou 的口径接到译文轨(中文)。
+	// 酷我的译文行挂在下一句的时间戳上,整首判断之后再逐行认一遍(adoptKuwoBakedTranslation)。
 	// 逐字轨**不**传进去:它在 kuwolrcx.go 转换时已去掉译文行,而酷我的译文行跟下一句原文同一个时间戳,
 	// 交给这里按时间删会把原文那行一起删掉。
 	var kuwoTr string
-	kuwoLyr, kuwoTr, _, bakedLines["kuwo"] = adoptBakedTranslation(kuwoLyr, "", "", foreignSong, true)
+	kuwoLyr, kuwoTr, bakedLines["kuwo"] = adoptKuwoBakedTranslation(kuwoLyr, foreignSong)
 	amll.lrc, _, amll.yrc, bakedLines["amll"] = adoptBakedTranslation(amll.lrc, "", amll.yrc, foreignSong, false)
 	var candidates []lyricCandidate
 	if ne.Lyrics != "" {

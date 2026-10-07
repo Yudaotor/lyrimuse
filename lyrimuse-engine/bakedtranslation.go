@@ -1,7 +1,9 @@
 package main
 
 import (
+	"log"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -311,4 +313,236 @@ func adoptBakedTranslation(lyr, tr, yrc string, foreignSong, acceptTr bool) (str
 		tr = bakedTr
 	}
 	return clean, tr, cleanYRC, n
+}
+
+// ---- 酷我:译文行挂在下一句的时间戳上 ----
+//
+// 酷我网页接口的正文里,原文行后面跟一行中文译文,时间戳是**下一句**原文的(见 kuwo.go),所以跟紧接着的那一行
+// 同一个时间戳。上面的整首判断只数纯汉字行、按全曲比例判:译文只覆盖一段外文的中文歌、拟声行多的外文歌都判不成;
+// 判成了的歌里,单字译文(「我」「噢」)和夹着原文里没有的字母的译文也留在正文里。这里按这个时间戳形状逐行认。
+// 只给酷我用:别的源没见过这种烘法,QQ 有「男：」这种标签行挂在下一句的时间戳上,形状相同、不是译文。见 09 章决策 201。
+
+// sharedStampMinLines:还不知道这首带烘入译文时,至少要认到这么多行(原文是拟声行的不算)才摘。
+const sharedStampMinLines = 4
+
+// adoptKuwoBakedTranslation 是酷我候选装配处的入口:先走整首判断,剩下的再逐行认(整首判断摘过的,剩一行也摘)。
+// 返回 (正文, 译文, 摘掉的行数)。逐字轨不经过这里,见 kuwolrcx.go。
+func adoptKuwoBakedTranslation(lyr string, foreignSong bool) (string, string, int) {
+	clean, tr, _, n := adoptBakedTranslation(lyr, "", "", foreignSong, true)
+	rest, more, m := splitSharedStampTranslation(clean, n > 0)
+	if m == 0 {
+		return clean, tr, n
+	}
+	return rest, mergeBakedTranslationLRC(tr, more), n + m
+}
+
+// splitSharedStampTranslation 逐行认酷我烘法的译文行:紧跟在一句外文后面(一句只认一行),时间戳比那句晚、跟后面
+// 紧接着的一行相同,是中文(sharedStampTranslationText)。全曲最后一行带时间戳的,后面没有行可比,只在一串译文
+// 当中才算:它那句外文不是拟声行、紧跟在一行认定的译文后面。中间夹着署名、「男：」这种带字的跳过行就断开。
+// 挂在这个位置上的译文声明(isTranslationNotice)直接丢掉,不进译文。
+//
+// known:已经知道这首带烘入译文(整首判断摘过,或者已有歌词自带的译文),认到一行就摘;否则要有 sharedStampMinLines
+// 行原文不是拟声行、也不是最后一行的:拟声原文后面那行中文也可能是合唱里同时唱的另一句。译文挂回那句外文的
+// 时间戳。不命中时原样返回、n=0。
+func splitSharedStampTranslation(lyrics string, known bool) (cleanLRC, trLRC string, n int) {
+	if lyrics == "" {
+		return lyrics, "", 0
+	}
+	lines := splitLyricLines(lyrics)
+	parsed := make([]bakedLine, len(lines))
+	for i, l := range lines {
+		parsed[i] = classifyBakedLine(l)
+	}
+	// nextAt[i]:i 后面第一行带时间戳的(空的占位行也算),没有是 -1。
+	nextAt := make([]int, len(parsed))
+	next := -1
+	for i := len(parsed) - 1; i >= 0; i-- {
+		nextAt[i] = next
+		if parsed[i].startMs >= 0 {
+			next = i
+		}
+	}
+	owner := make([]int, len(parsed)) // 译文行 → 那句外文的下标;-1 = 不是译文行
+	notice := make([]bool, len(parsed))
+	strong := 0
+	anchor, inRun, prevTaken := -1, false, false
+	for i, bl := range parsed {
+		owner[i] = -1
+		switch bl.class {
+		case bakedLineSkip:
+			if bl.text != "" {
+				anchor, prevTaken = -1, false
+			}
+			continue
+		case bakedLineForeign:
+			anchor, inRun, prevTaken = i, prevTaken && !isVocableLine(bl.text), false
+			continue
+		}
+		prevTaken = false
+		if anchor >= 0 && bl.startMs > parsed[anchor].startMs {
+			j := nextAt[i]
+			if j >= 0 && parsed[j].startMs == bl.startMs || j < 0 && inRun {
+				matched := true
+				switch {
+				case isTranslationNotice(bl.text):
+					notice[i] = true
+				case sharedStampTranslationText(bl.text, parsed[anchor].text):
+					owner[i] = anchor
+				default:
+					matched = false
+				}
+				if matched {
+					n++
+					if j >= 0 && !isVocableLine(parsed[anchor].text) {
+						strong++
+					}
+					anchor, prevTaken = -1, true
+					continue
+				}
+			}
+		}
+		anchor = -1
+	}
+	if n == 0 || !known && strong < sharedStampMinLines {
+		return lyrics, "", 0
+	}
+	var clean, tr []string
+	for i, bl := range parsed {
+		if notice[i] {
+			continue
+		}
+		if a := owner[i]; a >= 0 {
+			tr = append(tr, parsed[a].stamps+bl.text)
+			continue
+		}
+		clean = append(clean, bl.raw)
+	}
+	return strings.Join(clean, "\n"), strings.Join(tr, "\n"), n
+}
+
+// sharedStampTranslationText:text 能不能是 foreign 这句的中文译文。只有汉字(单字也算:「我」「噢」);或者以汉字为主,
+// 夹着的字母词都在原文里(bakedMixedTranslationOf),或者字母不到汉字的一半(「24K纯正魔法即将上演」)。整行只有
+// 「男：」这种标签的不算。
+func sharedStampTranslationText(text, foreign string) bool {
+	if _, rest, ok := lyricSplitLabel(text); ok && rest == "" {
+		return false
+	}
+	han, latin := 0, 0
+	for _, r := range text {
+		switch {
+		case unicode.Is(unicode.Han, r):
+			han++
+		case r < 0x80 && unicode.IsLetter(r):
+			latin++
+		case unicode.Is(unicode.Hiragana, r), unicode.Is(unicode.Katakana, r), unicode.Is(unicode.Hangul, r):
+			return false
+		}
+	}
+	switch {
+	case han == 0:
+		return false
+	case latin == 0:
+		return true
+	default:
+		return 2*latin <= han || bakedMixedTranslationOf(text, foreign)
+	}
+}
+
+// mergeBakedTranslationLRC 把两份译文 LRC 合成一份:同一个时间戳的接成一行,按时间排;不带时间戳的行原样留在最前面。
+func mergeBakedTranslationLRC(a, b string) string {
+	if a == "" {
+		return b
+	}
+	if b == "" {
+		return a
+	}
+	type trLine struct {
+		stamps, text string
+		ms           int
+	}
+	var head []string
+	var lines []trLine
+	at := map[string]int{}
+	for _, src := range []string{a, b} {
+		for _, l := range splitLyricLines(src) {
+			bl := classifyBakedLine(l)
+			if bl.stamps == "" {
+				if strings.TrimSpace(l) != "" {
+					head = append(head, l)
+				}
+				continue
+			}
+			if bl.text == "" {
+				continue
+			}
+			if k, ok := at[bl.stamps]; ok {
+				lines[k].text += " " + bl.text
+				continue
+			}
+			at[bl.stamps] = len(lines)
+			lines = append(lines, trLine{bl.stamps, bl.text, bl.startMs})
+		}
+	}
+	sort.SliceStable(lines, func(i, j int) bool { return lines[i].ms < lines[j].ms })
+	out := head
+	for _, l := range lines {
+		out = append(out, l.stamps+l.text)
+	}
+	return strings.Join(out, "\n")
+}
+
+// migrateKuwoSharedStampTranslation 把存量酷我正文里还留着的烘入译文行逐行摘出来(splitSharedStampTranslation)。
+// 新抓的在候选装配处就摘(adoptKuwoBakedTranslation),运行期不再产生。
+//
+// 只看酷我冠军,手动锁定的(manual_lyrics)不动。已经有歌词自带译文的,说明整首判断当时摘过,剩一行也摘,摘出来的按
+// 时间戳并进去。原来没有译文或者是机翻的,跟候选装配同一道判断(usableValueAdd):摘出来的能用才换上(语言记 zh,
+// 机翻重试计数一并清掉);不能用时(中文歌里只有一段外文、译文不到正文一半、目标语言不是中文),中文机翻留着:中文行
+// 本来就不送去翻,跟摘干净的正文对得上;别的语言的机翻是按旧正文翻的,摘掉的中文行也翻了、挂在下一句的时间戳上,
+// 清掉交给补翻按新正文重翻。读音一律清掉:酷我没有读音轨,存着的都是引擎按旧正文生成的,摘掉的那行中文的读音会
+// 贴到同一个时间戳的下一句上;App 播放时现算,下次解析重新生成。逐字轨不动:酷我的逐字转换时已去掉译文行(kuwolrcx.go)。
+func migrateKuwoSharedStampTranslation() {
+	scope := migrationScopeOf(migrationKuwoSharedStampTranslation, migrationKuwoSharedStampTranslationVersion)
+	if scope.skip() {
+		return
+	}
+	target := features().LyricsTranslationLanguage
+	enrichMu.Lock()
+	fixed := 0
+	for k, e := range scope.entries() {
+		if e.LyricsSource != "kuwo" || e.ManualLyrics {
+			continue
+		}
+		ownTr := e.LyricsTr != "" && e.LyricsTrSource != "machine"
+		clean, tr, n := splitSharedStampTranslation(e.Lyrics, ownTr)
+		if n == 0 {
+			continue
+		}
+		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics) {
+			e.ManualPickSHA = manualPickFingerprint(clean)
+		}
+		e.Lyrics = clean
+		usable, _ := usableValueAdd(clean, tr, "zh", "", target)
+		switch {
+		case ownTr:
+			e.LyricsTr = mergeBakedTranslationLRC(e.LyricsTr, tr)
+		case usable:
+			e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = tr, "zh", ""
+			e.TranslationRetryCount, e.TranslationTS, e.TranslationLang = 0, 0, ""
+		case e.LyricsTrSource == "machine" && !strings.HasPrefix(strings.ToLower(e.LyricsTrLang), "zh"):
+			e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = "", "", ""
+			e.TranslationRetryCount, e.TranslationTS, e.TranslationLang = 0, 0, ""
+		}
+		e.LyricsRoma = ""
+		enrichCache[k] = e
+		fixed++
+	}
+	if fixed > 0 {
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if fixed > 0 {
+		log.Printf("kuwo baked translation migration: moved translation lines out of %d entries", fixed)
+		saveEnrichCache()
+	}
+	markMigrationDone(migrationKuwoSharedStampTranslation, migrationKuwoSharedStampTranslationVersion)
 }

@@ -105,6 +105,10 @@ const (
 	// 已经这样做,不再产生。改了 lacksJyutpingTones 的判据就 +1。
 	migrationTonelessCantoneseRoma        = "toneless_cantonese_roma"
 	migrationTonelessCantoneseRomaVersion = 1
+	// migrationKuwoSharedStampTranslation:存量酷我正文里挂在下一句时间戳上的烘入译文行(bakedtranslation.go)。
+	// 新抓的在候选装配处就摘,运行期不再产生。改了 splitSharedStampTranslation 的判据就 +1。
+	migrationKuwoSharedStampTranslation        = "kuwo_shared_stamp_translation"
+	migrationKuwoSharedStampTranslationVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

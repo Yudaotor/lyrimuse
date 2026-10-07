@@ -196,7 +196,7 @@
       },
       {
         "source": "kuwo",
-        "score": 803,
+        "score": 802,
         "terms": [
           {
             "kind": "duration",
@@ -204,7 +204,7 @@
           },
           {
             "kind": "lines",
-            "points": 67
+            "points": 66
           },
           {
             "kind": "album",

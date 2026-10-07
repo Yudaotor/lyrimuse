@@ -204,3 +204,278 @@ func TestSplitBakedTranslationLeavesNoticeWhenNotBaked(t *testing.T) {
 		t.Errorf("没判定为烘入译文时不该动正文: n=%d clean=%q", n, clean)
 	}
 }
+
+// kuwoStampSample 合成酷我形态的一段(占位文本):每句原文后面跟一行译文,译文挂在下一句原文的时间戳上。
+// pairs 是 {原文, 译文},译文为空就不带译文行;最后一句的译文挂在 start+len(pairs)*step 上,后面没有行。
+func kuwoStampSample(head []string, pairs [][2]string, start, step int) string {
+	l := append([]string{}, head...)
+	for i, p := range pairs {
+		t := start + i*step
+		l = append(l, formatLRCStamp(t)+p[0])
+		if p[1] != "" {
+			l = append(l, formatLRCStamp(t+step)+p[1])
+		}
+	}
+	return strings.Join(l, "\n")
+}
+
+func TestSplitSharedStampTranslationChineseSongWithForeignPart(t *testing.T) {
+	lrc := strings.Join([]string{
+		"[00:00.00]占位歌名 - 占位歌手",
+		"[00:05.00]占位中文原词第一句",
+		"[00:09.00]placeholder foreign line one",
+		"[00:12.00]占位译文一",
+		"[00:12.00]placeholder foreign line two",
+		"[00:15.00]占位译文二",
+		"[00:15.00]placeholder foreign line three",
+		"[00:18.00]占位译文三",
+		"[00:18.00]placeholder foreign line four",
+		"[00:21.00]占位译文四",
+		"[00:21.00]占位中文原词第二句",
+		"[00:21.00]占位中文原词同时唱的一句",
+		"[00:25.00]占位中文原词第三句",
+	}, "\n")
+	clean, tr, n := splitSharedStampTranslation(lrc, false)
+	if n != 4 {
+		t.Fatalf("应摘 4 行译文(含跟中文原词同一个时间戳的段尾那句),实际 %d:\n%s", n, clean)
+	}
+	wantClean := strings.Join([]string{
+		"[00:00.00]占位歌名 - 占位歌手",
+		"[00:05.00]占位中文原词第一句",
+		"[00:09.00]placeholder foreign line one",
+		"[00:12.00]placeholder foreign line two",
+		"[00:15.00]placeholder foreign line three",
+		"[00:18.00]placeholder foreign line four",
+		"[00:21.00]占位中文原词第二句",
+		"[00:21.00]占位中文原词同时唱的一句",
+		"[00:25.00]占位中文原词第三句",
+	}, "\n")
+	if clean != wantClean {
+		t.Errorf("中文原词要全留下(一句外文只认一行译文,后面同时唱的两句不算),只摘译文:\n%s", clean)
+	}
+	wantTr := "[00:09.00]占位译文一\n[00:12.00]占位译文二\n[00:15.00]占位译文三\n[00:18.00]占位译文四"
+	if tr != wantTr {
+		t.Errorf("译文要挂回原文行的时间戳:\n%s", tr)
+	}
+}
+
+func TestSplitSharedStampTranslationTailAndThreshold(t *testing.T) {
+	pairs := [][2]string{
+		{"placeholder line one", "占位译文一"}, {"placeholder line two", "占位译文二"},
+		{"placeholder line three", "占位译文三"}, {"placeholder line four", "占位译文四"},
+	}
+	// 外文段在全曲最后:最后一句的译文后面没有行,也算,但不计入门槛 —— 这里只有 3 行算数。
+	lrc := kuwoStampSample(nil, pairs, 10000, 3000)
+	if _, _, n := splitSharedStampTranslation(lrc, false); n != 0 {
+		t.Fatalf("还不知道带译文时,不到 4 行(最后一行不算)不摘,实际摘了 %d", n)
+	}
+	clean, tr, n := splitSharedStampTranslation(lrc, true)
+	if n != 4 || strings.Contains(clean, "占位译文") || !strings.Contains(tr, "[00:19.00]占位译文四") {
+		t.Fatalf("已知带译文时一行也摘,最后一句挂回 00:19:n=%d\n%s\n---\n%s", n, clean, tr)
+	}
+	pairs = append(pairs, [2]string{"placeholder line five", "占位译文五"})
+	clean, _, n = splitSharedStampTranslation(kuwoStampSample(nil, pairs, 10000, 3000), false)
+	if n != 5 || strings.Contains(clean, "占位译文") {
+		t.Fatalf("够 4 行就摘,最后一行一起摘:n=%d\n%s", n, clean)
+	}
+	// 最后那句外文前面是中文原词、不在一串译文里:收尾那行中文是原词,不摘。
+	lone := kuwoStampSample(nil, pairs[:4], 10000, 3000) + "\n[00:22.00]占位中文原词\n[00:25.00]placeholder lone line" +
+		"\n[00:28.00]占位中文结尾"
+	clean, _, n = splitSharedStampTranslation(lone, false)
+	if n != 4 || !strings.Contains(clean, "[00:28.00]占位中文结尾") || !strings.Contains(clean, "[00:22.00]占位中文原词") {
+		t.Fatalf("不在一串译文里的收尾中文要留着:n=%d\n%s", n, clean)
+	}
+}
+
+func TestSplitSharedStampTranslationMixedAndVocables(t *testing.T) {
+	lrc := strings.Join([]string{
+		"[00:10.00]Placeholder Name walks in",
+		"[00:13.00]Placeholder Name 走进来了",
+		"[00:13.00]Ooh",
+		"[00:14.00]噢",
+		"[00:14.00]placeholder line about gold",
+		"[00:17.00]24K占位译文写满了汉字",
+		"[00:17.00]placeholder line four",
+		"[00:20.00]占位译文四",
+		"[00:20.00]placeholder line five",
+		"[00:23.00]占位译文五",
+		"[00:23.00]placeholder line six",
+		"[00:26.00]Placeholder 第六句的译文",
+		"[00:26.00]Hee hee",
+		"[00:28.00]placeholder ending line",
+	}, "\n")
+	clean, tr, n := splitSharedStampTranslation(lrc, false)
+	if n != 6 {
+		t.Fatalf("夹原文专名的、单字的、夹一个字母的都是译文,应摘 6 行,实际 %d:\n%s", n, clean)
+	}
+	for _, keep := range []string{"[00:13.00]Ooh", "[00:26.00]Hee hee", "[00:28.00]placeholder ending line"} {
+		if !strings.Contains(clean, keep) {
+			t.Errorf("没有译文的原文行要留着:%s\n%s", keep, clean)
+		}
+	}
+	for _, want := range []string{"[00:10.00]Placeholder Name 走进来了", "[00:13.00]噢", "[00:14.00]24K占位译文写满了汉字",
+		"[00:23.00]Placeholder 第六句的译文"} {
+		if !strings.Contains(tr, want) {
+			t.Errorf("译文缺 %s:\n%s", want, tr)
+		}
+	}
+	// 只有拟声原文后面跟着中文时不算数:可能是合唱里同时唱的另一句。
+	vocal := kuwoStampSample(nil, [][2]string{{"Ooh", "占位一"}, {"Yeah", "占位二"}, {"Oh oh", "占位三"},
+		{"Woo", "占位四"}, {"Hey", "占位五"}}, 10000, 3000)
+	if _, _, n := splitSharedStampTranslation(vocal, false); n != 0 {
+		t.Fatalf("原文全是拟声行时不认,实际摘了 %d", n)
+	}
+}
+
+func TestSplitSharedStampTranslationKeepsLabelsDropsNotice(t *testing.T) {
+	lrc := kuwoStampSample([]string{
+		"[00:00.00]Placeholder Song - Someone",
+		"[00:01.40]TME享有本翻译作品的著作权",
+		"[00:01.40]Lyrics by：Someone",
+	}, [][2]string{
+		{"placeholder line one", "占位译文一"}, {"placeholder line two", "占位译文二"},
+		{"placeholder line three", "占位译文三"}, {"placeholder line four", "占位译文四"},
+		{"placeholder call line", ""},
+	}, 10000, 3000) + "\n[00:23.00]男：\n[00:23.00]占位中文原词\n[00:23.00]占位同时唱的一句" +
+		"\n[00:26.00]placeholder another call\n[00:27.00]合 :\n[00:27.00]占位中文原词二"
+	clean, tr, n := splitSharedStampTranslation(lrc, false)
+	if n != 5 {
+		t.Fatalf("4 行译文 + 1 行声明,实际 %d:\n%s", n, clean)
+	}
+	if strings.Contains(clean, "TME") || strings.Contains(tr, "TME") {
+		t.Errorf("译文声明正文、译文里都不该有:\n%s\n---\n%s", clean, tr)
+	}
+	for _, keep := range []string{"[00:23.00]男：", "[00:23.00]占位中文原词", "[00:23.00]占位同时唱的一句",
+		"[00:27.00]合 :", "[00:27.00]占位中文原词二",
+		"[00:01.40]Lyrics by：Someone"} {
+		if !strings.Contains(clean, keep) {
+			t.Errorf("只有标签的行、中文原词、署名行都要留着:%s\n%s", keep, clean)
+		}
+	}
+}
+
+func TestAdoptKuwoBakedTranslationTakesLeftovers(t *testing.T) {
+	var pairs [][2]string
+	for i := 0; i < 10; i++ {
+		zh := "占位中文译文第" + string(rune('一'+i)) + "行"
+		if i == 3 || i == 7 {
+			zh = "我"
+		}
+		pairs = append(pairs, [2]string{"placeholder english line " + string(rune('a'+i)), zh})
+	}
+	lrc := kuwoStampSample([]string{"[00:00.00]Placeholder Song - Someone"}, pairs, 10000, 3000)
+	clean, tr, n := adoptKuwoBakedTranslation(lrc, true)
+	if n != 10 {
+		t.Fatalf("整首判断摘 8 行、剩下两行单字译文逐行摘,共 10 行,实际 %d:\n%s", n, clean)
+	}
+	if strings.Contains(clean, "我") || strings.Contains(clean, "占位中文译文") {
+		t.Errorf("正文里还留着译文:\n%s", clean)
+	}
+	trLines := splitLyricLines(tr)
+	if len(trLines) != 10 || trLines[3] != "[00:19.00]我" || trLines[7] != "[00:31.00]我" {
+		t.Fatalf("两份译文按时间合成一份,单字译文挂回原文时间戳:\n%s", tr)
+	}
+	// 没有烘入译文的照旧原样。
+	plain := kuwoStampSample(nil, [][2]string{{"placeholder line one", ""}, {"placeholder line two", ""}}, 10000, 3000)
+	if c, tr, n := adoptKuwoBakedTranslation(plain, true); n != 0 || c != plain || tr != "" {
+		t.Fatalf("没有译文行时不该动:n=%d", n)
+	}
+}
+
+func TestMigrateKuwoSharedStampTranslation(t *testing.T) {
+	withTempMigrationState(t)
+	withTempDecisionCache(t)
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
+	featuresRef().LyricsTranslationLanguage = "zh"
+	pairs := [][2]string{
+		{"placeholder line one", "占位译文一"}, {"placeholder line two", "占位译文二"},
+		{"placeholder line three", "占位译文三"}, {"placeholder line four", "占位译文四"},
+		{"placeholder line five", "占位译文五"},
+	}
+	baked := kuwoStampSample(nil, pairs, 10000, 3000)
+	wantClean, wantTr, _ := splitSharedStampTranslation(baked, false)
+	leftover := "[00:05.00]placeholder line one\n[00:08.00]placeholder line two\n[00:11.00]我\n[00:11.00]placeholder line three"
+	// 中文歌里只有一段外文:摘出来的译文不到正文一半、原文又是中文,候选装配处也不会采纳,中文机翻留着。
+	zhSong := kuwoStampSample([]string{"[00:01.00]占位中文原词第一句", "[00:03.00]占位中文原词第二句", "[00:05.00]占位中文原词第三句",
+		"[00:07.00]占位中文原词第四句", "[00:08.00]占位中文原词第五句"}, pairs, 10000, 3000) + "\n[00:26.00]占位中文原词收尾"
+	zhMachine := "[00:10.00]机翻一\n[00:13.00]机翻二\n[00:16.00]机翻三\n[00:19.00]机翻四\n[00:22.00]机翻五"
+	zhClean, _, _ := splitSharedStampTranslation(zhSong, false)
+	enrichMu.Lock()
+	enrichPath = ""
+	enrichCache["a|machine|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, LyricsTr: "[00:10.00]机翻占位",
+		LyricsTrSource: "machine", LyricsTrLang: "zh-CN", TranslationRetryCount: 1, TranslationTS: 123,
+		TranslationLang: "zh-CN", LyricsRoma: "[00:10.00]zhan wei", LyricsYRC: "[10000,1000](10000,1000,0)x"}
+	enrichCache["a|own|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: leftover, LyricsTr: "[00:05.00]已有译文", LyricsTrLang: "zh"}
+	enrichCache["a|zhsong|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: zhSong, LyricsTr: zhMachine, LyricsTrSource: "machine",
+		LyricsTrLang: "zh-CN", TranslationRetryCount: 1, LyricsRoma: "[00:05.00]zhan wei"}
+	enrichCache["a|manual|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, ManualLyrics: true}
+	enrichCache["a|qq|b"] = enrichEntry{LyricsSource: "qq", Lyrics: baked}
+	enrichCache["a|pick|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, ManualPickSHA: manualPickFingerprint(baked)}
+	enrichDirty = false
+	enrichMu.Unlock()
+	migrateKuwoSharedStampTranslation()
+
+	e := enrichCache["a|machine|b"]
+	if e.Lyrics != wantClean || e.LyricsTr != wantTr || e.LyricsTrSource != "" || e.LyricsTrLang != "zh" {
+		t.Fatalf("机翻换成摘出来的译文,语言记 zh: %+v", e)
+	}
+	if e.TranslationRetryCount != 0 || e.TranslationTS != 0 || e.TranslationLang != "" || e.LyricsRoma != "" {
+		t.Fatalf("机翻重试计数、读音都清掉: %+v", e)
+	}
+	if e.LyricsYRC != "[10000,1000](10000,1000,0)x" {
+		t.Fatal("逐字轨不动")
+	}
+	own := enrichCache["a|own|b"]
+	if strings.Contains(own.Lyrics, "我") || own.LyricsTr != "[00:05.00]已有译文\n[00:08.00]我" || own.LyricsTrLang != "zh" {
+		t.Fatalf("已有自带译文的剩一行也摘,按时间并进去: %+v", own)
+	}
+	zh := enrichCache["a|zhsong|b"]
+	if zh.Lyrics != zhClean || zh.LyricsTr != zhMachine || zh.LyricsTrSource != "machine" || zh.TranslationRetryCount != 1 ||
+		zh.LyricsRoma != "" {
+		t.Fatalf("摘出来的用不上时中文机翻留着、正文照摘、读音清掉: %+v", zh)
+	}
+	if enrichCache["a|manual|b"].Lyrics != baked || enrichCache["a|qq|b"].Lyrics != baked {
+		t.Fatal("手动锁定的、别的源的不动")
+	}
+	if p := enrichCache["a|pick|b"]; p.Lyrics != wantClean || p.ManualPickSHA != manualPickFingerprint(wantClean) {
+		t.Fatalf("选定留痕跟着新正文: %+v", p)
+	}
+	if !enrichDirty {
+		t.Fatal("改过就置脏")
+	}
+	enrichMu.Lock()
+	enrichCache["a|later|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked}
+	enrichMu.Unlock()
+	migrateKuwoSharedStampTranslation()
+	if enrichCache["a|later|b"].Lyrics != baked {
+		t.Fatal("有水位之后不再跑")
+	}
+}
+
+func TestMigrateKuwoSharedStampTranslationOtherTarget(t *testing.T) {
+	withTempMigrationState(t)
+	withTempDecisionCache(t)
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
+	featuresRef().LyricsTranslationLanguage = "ja"
+	pairs := [][2]string{
+		{"placeholder line one", "占位译文一"}, {"placeholder line two", "占位译文二"},
+		{"placeholder line three", "占位译文三"}, {"placeholder line four", "占位译文四"},
+		{"placeholder line five", "占位译文五"},
+	}
+	baked := kuwoStampSample(nil, pairs, 10000, 3000)
+	enrichMu.Lock()
+	enrichPath = ""
+	enrichCache["a|ja|b"] = enrichEntry{LyricsSource: "kuwo", Lyrics: baked, LyricsTr: "[00:10.00]日本語の占位", LyricsTrSource: "machine",
+		LyricsTrLang: "ja", TranslationRetryCount: 2, TranslationTS: 9, TranslationLang: "ja"}
+	enrichMu.Unlock()
+	migrateKuwoSharedStampTranslation()
+	e := enrichCache["a|ja|b"]
+	if strings.Contains(e.Lyrics, "占位译文") {
+		t.Fatalf("正文照摘: %q", e.Lyrics)
+	}
+	if e.LyricsTr != "" || e.LyricsTrSource != "" || e.LyricsTrLang != "" || e.TranslationRetryCount != 0 || e.TranslationTS != 0 {
+		t.Fatalf("目标语言不是中文:按旧正文翻的日文机翻清掉、重试计数归零,交给补翻: %+v", e)
+	}
+}
