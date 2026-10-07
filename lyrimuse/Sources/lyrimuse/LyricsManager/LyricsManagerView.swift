@@ -2150,6 +2150,9 @@ struct LyricsManagerView: View {
         .background(Color(nsColor: .textBackgroundColor))
         .frame(minWidth: Self.minimumWindowSize.width, idealWidth: 1360,
                minHeight: Self.minimumWindowSize.height, idealHeight: 820)
+        // 窗口标题跟着界面语言走:App.swift 里 Window 的标题只在构造场景时求值一次,body 随 languageSettings 重算时这里
+        // 每次重新应用(同欢迎页)。标题栏藏着,标题出现在 Dock 右键的窗口列表、调度中心和辅助功能里。
+        .navigationTitle(L10n.t("歌词管理"))
         // 撑高标题栏(有工具栏时 52pt),红绿灯落在离左上角约 19pt 处、正好在侧栏圆角里。见 EmptyUnifiedToolbar。
         .background(EmptyUnifiedToolbar())
         // 零尺寸探针拿真实 NSWindow 交给 windowFrame——只借视图树把 NSView 挂进窗口,不参与布局。

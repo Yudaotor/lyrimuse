@@ -3892,6 +3892,22 @@ func runSourceContractTests() {
                     && manager.contains("guard table.numberOfRows == keys.count else { return }")
                     && manager.contains("selectedKeys.contains(keys[$0]) }), byExtendingSelection: false)"), true,
                     "歌词管理: 代码里改了选中,表格上留着的旧选中按数据清掉")
+        // App.swift 里每扇 Window 场景的标题都要另挂一份 .navigationTitle:场景那个标题只在构造时求值一次,切了界面语言不跟着变
+        // (14 章决策 61)。
+        let sceneTitles = (read("App.swift") ?? "").components(separatedBy: "Window(L10n.t(\"").dropFirst()
+            .compactMap { $0.components(separatedBy: "\"), id:").first }
+        var titledScenes: Set<String> = []
+        if let walker = FileManager.default.enumerator(atPath: appSources.path) {
+            for case let rel as String in walker where rel.hasSuffix(".swift") {
+                guard let text = read(rel) else { continue }
+                for title in sceneTitles where text.contains(".navigationTitle(L10n.t(\"\(title)\"))") { titledScenes.insert(title) }
+            }
+        }
+        expectEqual(sceneTitles.count >= 4 && titledScenes == Set(sceneTitles), true,
+                    "窗口标题: 每扇 Window 场景都挂了跟着界面语言走的 .navigationTitle(缺: \(Set(sceneTitles).subtracting(titledScenes).sorted()))")
+        // 分组标题只有 1 首时用单数那条,英文写「1 song」(14 章决策 61)。
+        expectEqual(managerParts.contains("Text(count == 1 ? L10n.t(\"1 首歌\") : String(format: L10n.t(\"%@ 首歌\"), count.formatted()))"), true,
+                    "歌词管理: 分组标题只有 1 首时用单数文案")
     }
 
     // ---- 设置页顶层分类记忆----

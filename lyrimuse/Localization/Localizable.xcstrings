@@ -26552,6 +26552,23 @@
         }
       }
     },
+    "1 首歌" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 song"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 首歌"
+          }
+        }
+      }
+    },
     "已缓存读音" : {
       "extractionState" : "manual",
       "localizations" : {

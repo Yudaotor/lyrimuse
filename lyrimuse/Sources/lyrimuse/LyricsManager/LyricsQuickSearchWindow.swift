@@ -43,6 +43,8 @@ import LyrimuseCore
 // 缓存,直接在 MainActor 上做,没有必要为这一次性读多绕一层线程切换。
 struct LyricsQuickSearchWindow: View {
     @State private var context: Context?
+    // 切换界面语言时重算 body,窗口标题(.navigationTitle)跟着换。经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings。
+    @ObservedObject private var languageSettings = AppLanguageObserver.shared
 
     private struct Context {
         let artist: String
@@ -131,6 +133,8 @@ struct LyricsQuickSearchWindow: View {
         // 开着期间这首的正文可能被后台换掉(播到时升级、重打分),「当前使用」得跟着挪;
         // 只重算来源和指纹,不重搜、不动查询词。
         .onReceive(PlaybackCoordinator.shared.$allLines.dropFirst()) { _ in refreshCurrentMarker() }
+        // 窗口标题跟着界面语言走:App.swift 里 Window 的标题只在构造场景时求值一次(同欢迎页)。
+        .navigationTitle(L10n.t("搜索歌词…"))
     }
 
     /// 正在放的还是面板里这首时,按缓存现状重算「当前使用」要的来源、正文指纹和纯音乐标记。换了歌就不动:

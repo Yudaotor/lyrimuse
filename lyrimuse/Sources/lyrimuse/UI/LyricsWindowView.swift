@@ -1236,6 +1236,21 @@ private struct LyricsWindowCapture: NSViewRepresentable {
         }
     }
 }
+
+/// 歌词窗口的标题:真窗口挂 `.navigationTitle`,设置页里的预览不挂(见 LyricsWindowView.body 里的调用处)。
+private struct LyricsWindowTitle: ViewModifier {
+    let enabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.navigationTitle(L10n.t("歌词窗口"))
+        } else {
+            content
+        }
+    }
+}
+
 //
 // "歌词窗口":正经的标题栏窗口,展示当前歌曲完整歌词并跟随播放
 // 自动滚动高亮当前行——跟悬浮歌词(LyricsOverlayView)/灵动岛歌词(NotchLyricsView)
@@ -1289,6 +1304,8 @@ struct LyricsWindowView: View {
     var previewMini = false
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 WindowPlayback 的注释。
     @StateObject private var playback = WindowPlayback()
+    // 切换界面语言时重算 body(暂停时 playback 不发布,不订阅的话窗口标题和按钮文字停在旧语言)。
+    @ObservedObject private var languageSettings = AppLanguageObserver.shared
     @StateObject private var windowController = LyricsWindowController()
     /// 逐帧时钟,挂在这一份所在的窗口上(`FrameClockHost`),各处 `FrameTimeline` 从环境里取。
     @State private var frameClock = FrameClock()
@@ -1453,6 +1470,9 @@ struct LyricsWindowView: View {
                 LyricsWindowCapture(controller: windowController).frame(width: 0, height: 0)
             }
         }
+        // 窗口标题跟着界面语言走:App.swift 里 Window 的标题只在构造场景时求值一次(同欢迎页)。预览不挂,挂了会把
+        // 设置窗口的标题改掉。
+        .modifier(LyricsWindowTitle(enabled: !previewMode))
         .background(FrameClockHost(clock: frameClock).frame(width: 0, height: 0))
         .environment(\.frameClock, frameClock)
         // 见 AuxiliaryWindowActivation 注释——只记账,不碰 Dock 图标。
