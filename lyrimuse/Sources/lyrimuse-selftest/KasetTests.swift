@@ -519,6 +519,13 @@ func runKasetTests() {
         expectEqual(MediaControlClient.kasetWins(over: other, kaset: kPlaying), true, "Kaset 取舍: 别的暂停着、它在放,换过去")
         expectEqual(MediaControlClient.kasetWins(over: other, kaset: kWaiting), true, "Kaset 取舍: 它正要放(加载 / 广告),换过去")
         expectEqual(MediaControlClient.kasetWins(over: otherPlaying, kaset: kPlaying), false, "Kaset 取舍: 别的在放,听系统的")
+        // 别的播放器在加载下一首(KKBOX 开播那一帧没有歌手,02 章决策 106):这一拍是空的,暂停着的不报,在放 / 正要放才换过去。
+        expectEqual(MediaControlClient.kasetWins(over: nil, kaset: kPaused, otherPlayerLoading: true), false,
+                    "Kaset 取舍: 别的播放器在加载下一首时,暂停着的不报")
+        expectEqual(MediaControlClient.kasetWins(over: nil, kaset: kPlaying, otherPlayerLoading: true), true,
+                    "Kaset 取舍: 别的播放器在加载、它在放,换过去")
+        expectEqual(MediaControlClient.kasetWins(over: nil, kaset: kWaiting, otherPlayerLoading: true), true,
+                    "Kaset 取舍: 别的播放器在加载、它正要放,换过去")
     }
 
     // ---- 封面:系统那份恒为空,用缓存里匹配到的 ----

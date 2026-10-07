@@ -100,6 +100,7 @@ public enum MediaControlClient {
         kasetAskedThisRound = false
         kasetNotSongThisRound = false
         kasetLoadingThisRound = false
+        otherPlayerLoadingThisRound = false
         kasetLock.unlock()
         let raw = rawSnapshot(players: players)
         // 三条路都要过一遍署名纠正:酷狗 3.3.2 把当前这句歌词发布成 artist,而
@@ -151,6 +152,18 @@ public enum MediaControlClient {
             gapHoldingSince = nil
             gapHoldLast = nil
         }
+        return true
+    }
+
+    /// `artistArrivesLate` 的播放器(KKBOX)开播先发一帧没有歌手的(约半秒后补齐):它在加载这一首,焦点没被别人占着。按
+    /// 「在加载」交回空(留着上一首,见 `loadingGraceSeconds`),不去问别家暂停着的会话:焦点回退不问,Kaset 只在放或正要放时
+    /// 才顶上来(`kasetWins`)。见 02 章决策 106。
+    private static func artistNotYetReported(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
+        guard TrustedPlayers.artistNotYetReported(bundleID: bundleID, artist: snapshot.artist) else { return false }
+        setSnapshotFailure(.targetLoading)
+        kasetLock.lock()
+        otherPlayerLoadingThisRound = true
+        kasetLock.unlock()
         return true
     }
 
@@ -451,6 +464,8 @@ public enum MediaControlClient {
     private static var kasetNotSongThisRound = false
     /// 上面那一拍是在加载下一首(开播占位、这一条的类型还在问),不是播客单集:按「在加载」留住上一首(见 02 章决策 92)。
     private static var kasetLoadingThisRound = false
+    /// 这一拍交回空是因为别的播放器在加载下一首(`artistNotYetReported`;入口清零):Kaset 只在放或正要放时才顶上来。
+    private static var otherPlayerLoadingThisRound = false
     /// 认成播客单集时打过日志的那一条(videoId),同一条只打一条。
     private static var kasetPodcastLoggedVideoID: String?
     /// 最近一次读到的那首(曲目身份同快照的 `trackKey`)和它的 videoId,写播放状态用(`kasetVideoID`)。
@@ -762,19 +777,24 @@ public enum MediaControlClient {
         }
         kasetLock.lock()
         let asked = kasetAskedThisRound
+        let otherLoading = otherPlayerLoadingThisRound
         kasetLock.unlock()
         guard !asked,
               !NSRunningApplication.runningApplications(withBundleIdentifier: PlaybackPlayer.kaset.bundleIdentifier).isEmpty,
               let kaset = readKasetSnapshot(),
-              Self.kasetWins(over: found, kaset: kaset)
+              Self.kasetWins(over: found, kaset: kaset, otherPlayerLoading: otherLoading)
         else { return nil }
         return kaset
     }
 
-    /// 别的来源这一拍给出的(nil = 什么都没有)跟 Kaset 自己报的,用哪个。纯函数,selftest 覆盖。
-    public static func kasetWins(over found: MediaControlSnapshot?, kaset: MediaControlSnapshot) -> Bool {
+    /// 别的来源这一拍给出的(nil = 什么都没有)跟 Kaset 自己报的,用哪个。`otherPlayerLoading`:这一拍是空的,是因为别的播放器
+    /// 在加载下一首(`artistNotYetReported`),不是没人在放 —— 这时 Kaset 暂停着的那首不报。纯函数,selftest 覆盖。
+    public static func kasetWins(over found: MediaControlSnapshot?, kaset: MediaControlSnapshot,
+                                 otherPlayerLoading: Bool = false) -> Bool {
         if let found, found.playing == true { return false }
-        return found == nil || kaset.playing == true || kaset.isWaitingToPlay == true
+        let kasetMoving = kaset.playing == true || kaset.isWaitingToPlay == true
+        if found == nil, otherPlayerLoading { return kasetMoving }
+        return found == nil || kasetMoving
     }
 
     // MARK: - 「只勾了 Apple Music」这条路上的电台判据
@@ -1063,8 +1083,9 @@ public enum MediaControlClient {
             return adaptedSnapshot(
                 bundleID: bundleID, mediaControl: snapshotWithProbedAlbum(snapshot))
         }
-        // 勾选的内置播放器也过一次:`artistArrivesLate` 的(KKBOX)开播那一帧还没有歌手,当作还没准备好。
+        // 勾选的内置播放器也过一次:KKBOX 的播客、开播那一帧还没有歌手,都不退回去问别家。
         if artistlessContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
+        if artistNotYetReported(bundleID: bundleID, snapshot: snapshot) { return nil }
         guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
             setSnapshotFailure(.notASong)
             return fallback()
@@ -1490,6 +1511,7 @@ public enum MediaControlClient {
         }
         // KKBOX 在放播客:没在放音乐,不退回去问别家(见 TrustedPlayers.artistlessContent)。
         if artistlessContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
+        if artistNotYetReported(bundleID: bundleID, snapshot: snapshot) { return nil }
         // 信任的未知播放器再过一道"这是不是一首歌"的守卫:歌手名**或专辑名**为空的丢掉
         // (浏览器视频/播客)。见 TrustedPlayers.notASong。
         guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {

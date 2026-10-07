@@ -158,6 +158,13 @@ public enum TrustedPlayers {
     /// 没在放),是本来就没有歌手的非歌曲内容(KKBOX、Amazon Music 的播客单集)。KKBOX 的 title 是 Chromium 拿窗口标题凑的,
     /// 不能当曲名(见 02 章决策 62)。调用方当成「没在放音乐」(`MediaControlClient.artistlessContentNotMusic`)。
     /// 纯函数,selftest 直接覆盖。
+    /// `artistArrivesLate` 的内置播放器(KKBOX)这一帧还没报歌手:开播那一帧(播客那种歌手空、有时长、在放的先由
+    /// `artistlessContent` 认走)。调用方当成「在加载」(`MediaControlClient.artistNotYetReported`)。纯函数,selftest 覆盖。
+    public static func artistNotYetReported(bundleID: String?, artist: String?) -> Bool {
+        guard let bundleID, PlaybackPlayer.builtin(forBundleID: bundleID)?.artistArrivesLate == true else { return false }
+        return (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     public static func artistlessContent(bundleID: String?, artist: String?, duration: Double?, playing: Bool?) -> Bool {
         guard let bundleID, PlaybackPlayer.builtin(forBundleID: bundleID)?.artistlessNotMusic == true else { return false }
         guard (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }

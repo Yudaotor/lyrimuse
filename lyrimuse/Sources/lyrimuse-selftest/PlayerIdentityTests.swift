@@ -364,6 +364,35 @@ func runPlayerIdentityTests() {
         expectEqual(TP.artistlessContent(bundleID: PlaybackPlayer.kugou.bundleIdentifier, artist: "", duration: 200,
                                          playing: true), false,
                     "KKBOX: 只管 artistArrivesLate 的播放器(决策 41)")
+        // 开播那一帧当在加载,不去问别家暂停着的会话(02 章决策 106)。
+        expectEqual(TP.artistNotYetReported(bundleID: kk, artist: ""), true, "KKBOX: 开播那一帧(没有歌手)当在加载")
+        expectEqual(TP.artistNotYetReported(bundleID: kk, artist: "  "), true, "KKBOX: 只有空白也算没报歌手")
+        expectEqual(TP.artistNotYetReported(bundleID: kk, artist: "G.E.M. 鄧紫棋"), false, "KKBOX: 报了歌手照常")
+        expectEqual(TP.artistNotYetReported(bundleID: PlaybackPlayer.kugou.bundleIdentifier, artist: ""), false,
+                    "KKBOX: 开播那一帧只管 artistArrivesLate 的播放器")
+        expectEqual(TP.artistNotYetReported(bundleID: nil, artist: ""), false, "KKBOX: 没有 bundle id 不算")
+        do {
+            let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let client = (try? String(contentsOfFile: sources.appendingPathComponent(
+                "LyrimuseCore/Local/MediaControlClient.swift").path, encoding: .utf8)) ?? ""
+            let check = "if artistNotYetReported(bundleID: bundleID, snapshot: snapshot) { return nil }"
+            let reject = "guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {"
+            // 函数体里最后那道「不是歌 → 问别家」之前先认出开播那一帧(多选那条路前面还有一道只管信任的未知播放器的,碰不到 KKBOX)。
+            func checkedFirst(in fn: String) -> Bool {
+                guard let f = client.range(of: fn) else { return false }
+                let rest = client[f.upperBound...]
+                let body = rest[..<(rest.range(of: "\n    }\n")?.lowerBound ?? rest.endIndex)]
+                guard let c = body.range(of: check), let r = body.range(of: reject, options: .backwards) else { return false }
+                return c.lowerBound < r.lowerBound
+            }
+            expectEqual(checkedFirst(in: "private static func fetchAutoDetectedSnapshot()")
+                            && checkedFirst(in: "private static func fetchMultiSelectedSnapshot("), true,
+                        "KKBOX(契约): 自动识别、多选两条路都先认出开播那一帧,不走「不是歌 → 问别家」")
+            expectEqual(client.contains("setSnapshotFailure(.targetLoading)\n        kasetLock.lock()\n        otherPlayerLoadingThisRound = true")
+                            && client.contains("kasetLoadingThisRound = false\n        otherPlayerLoadingThisRound = false")
+                            && client.contains("Self.kasetWins(over: found, kaset: kaset, otherPlayerLoading: otherLoading)"),
+                        true, "KKBOX(契约): 开播那一帧记成在加载,每拍清零,并告诉 Kaset 那一路")
+        }
 
         // 信任列表里的 KKBOX 升级后挪进播放器选择;勾着自动识别的只从信任列表里拿掉。
         let trustedKK = [kk: "KKBOX", "com.apple.Safari": "Safari"]
