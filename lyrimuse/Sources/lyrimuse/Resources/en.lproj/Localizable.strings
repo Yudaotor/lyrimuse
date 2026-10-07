@@ -15,7 +15,6 @@
 "%1$@ 年 %2$@ 月 %3$@ 日" = "%1$@-%2$@-%3$@";
 "%1$@ 年共 %2$@ 次" = "%2$@ plays in %1$@";
 "%1$@ 年共 %2$@ 次#one" = "%2$@ play in %1$@";
-"%1$@ 年前的今天听了 %2$@ 次，循环最多的是《%3$@》" = "%1$@ years ago today: %2$@ plays, most on repeat: %3$@";
 "%1$@ 年前的今天收听 %2$@ 次，循环最多的是以下歌曲" = "%1$@ years ago today: %2$@ plays, most on repeat";
 "%1$@ 年前的今天收听 %2$@ 次，循环最多的是以下歌曲#one" = "%1$@ years ago today: %2$@ play, most on repeat";
 "%1$@ 年前的这一周收听 %2$@ 次，循环最多的是以下歌曲" = "This week %1$@ years ago: %2$@ plays, most on repeat";
@@ -23,7 +22,6 @@
 "%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookups went without it. It's paused for now and will be retried automatically.";
 "%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。#one" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookup went without it. It's paused for now and will be retried automatically.";
 "%1$@ 首来自歌词源，%2$@ 首为机器翻译" = "%1$@ from the source, %2$@ machine-translated";
-"%1$@ 首源自带 · %2$@ 首机翻" = "%1$@ from source · %2$@ machine-translated";
 "%1$@–%2$@ 点 · %3$@ 次" = "%1$@:00–%2$@:00 · %3$@ plays";
 "%1$@–%2$@ 点 · %3$@ 次#one" = "%1$@:00–%2$@:00 · %3$@ play";
 "%1$d 条候选中仅 %2$d 条获得内容印证，正文未必一致。" = "Only %2$d of %1$d candidates were corroborated; their lyrics may differ.";
@@ -44,12 +42,10 @@
 "%@ 句为新增或修改了时间戳，已按字数分配逐字时间" = "%@ new or retimed lines got their word timing split evenly by length";
 "%@ 天" = "%@ days";
 "%@ 天#one" = "%@ day";
-"%@ 字" = "%@ characters";
 "%@ 导出的备份" = "Backup exported on %@";
 "%@ 小时前更新" = "Updated %@ h ago";
 "%@ 已下载，点按安装" = "%@ downloaded, click to install";
 "%@ 已匹配到该曲目，无歌词文本" = "%@ matched this track; no lyrics text";
-"%@ 张专辑" = "%@ albums";
 "%@ 拒绝了这台 Mac 的请求" = "%@ is refusing requests from this Mac";
 "%@ 月" = "%@";
 "%@ 条状态未知，不会自动重试" = "%@ with unknown status — not retried automatically";
@@ -102,9 +98,6 @@
 "Apple Music" = "Apple Music";
 "Apple Music 登录已失效（已过期或被撤销），请重新连接" = "Your Apple Music sign-in is no longer valid (expired or revoked). Reconnect to continue.";
 "Apple Music 的登录已过期或被吊销（有效期 6 个月，Apple 不提供自动续期），请在「歌词来源」卡片底部重新连接" = "The Apple Music sign-in has expired or been revoked (it lasts 6 months and Apple issues no renewable token) — reconnect at the bottom of the Lyrics Sources card";
-"Apple Music 自动化" = "Apple Music Automation";
-"Apple Music 自动化权限" = "Apple Music automation permission";
-"Apple Music 自动化权限（推荐）" = "Apple Music Automation Permission (recommended)";
 "Apple Music 账号连接" = "Apple Music Account Connection";
 "Apple 各地商店署名" = "Apple storefront credit";
 "Apple 按曲名反查" = "Apple lookup by title";
@@ -118,7 +111,6 @@
 "Discord 未打开" = "Discord isn't open";
 "GPL-3.0" = "GPL-3.0";
 "GitHub Star 数" = "GitHub stars";
-"GitHub 仓库" = "GitHub Repository";
 "Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 中也未勾选 Spotify。" = "Last.fm's connection to Spotify expired on %@, and Spotify isn't checked in Lyrimuse either.";
 "Last.fm 仅接受约两周内的记录，更早的记录无法补交" = "Last.fm only accepts scrobbles from about the last two weeks; older ones can't be filled in";
 "Last.fm 已直接连接 Spotify，Lyrimuse 也在记录，保留其中一方即可。" = "Last.fm is connected to Spotify directly, and Lyrimuse is scrobbling Spotify too. Keep just one.";
@@ -190,10 +182,8 @@
 "一切就绪" = "All Set";
 "一并解锁" = "Unlock Them";
 "一行 1 分，最多 200" = "One point per line, up to 200";
-"一键开启" = "Enable";
 "三" = "W";
 "三连音符" = "Three Notes";
-"上" = "Top";
 "上一期未上榜" = "Not in the previous chart";
 "上一期（%@ – %@）无收听记录，不显示排名变化" = "No scrobbles in the previous period (%@ – %@), so no rank changes";
 "上一步" = "Back";
@@ -216,9 +206,7 @@
 "上次：检查 %1$@ 首后停止，更新 %2$@ 首" = "Last run: stopped after checking %1$@, updated %2$@";
 "上次：检查 %1$@ 首，更新 %2$@ 首" = "Last run: checked %1$@, updated %2$@";
 "上移" = "Move Up";
-"下" = "Bottom";
 "下一句" = "Next Line";
-"下一句歌词预览" = "Next Line Preview";
 "下一句间距" = "Next Line Spacing";
 "下一步" = "Next";
 "下一页" = "Next";
@@ -234,7 +222,6 @@
 "不可用：%@" = "Unusable: %@";
 "不含内容、排版、行为、位置和宽度" = "Content, layout, behavior, position and width are left alone";
 "不含宽度和总开关" = "Width and the master toggle are left alone";
-"不含宽度和锁定位置" = "Width and locked position are left alone";
 "不含总开关" = "The master toggle is left alone";
 "不含时间戳" = "No timestamps";
 "不显示" = "None";
@@ -302,7 +289,6 @@
 "仅调整主行，%@～%@pt，放不下时歌词行会自动加高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" = "Main line only, %@–%@pt; the lyric row grows if the text no longer fits. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
 "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停" = "Available on some albums only; pauses in Low Power Mode or with Reduce Motion on";
 "今天" = "Today";
-"今天 %@ 次" = "%@ today";
 "今天收听 %1$@ 次 · 本周 %2$@ 次" = "%1$@ plays today · %2$@ this week";
 "今天收听 %1$@ 次 · 本周 %2$@ 次#one" = "%1$@ play today · %2$@ this week";
 "今年至今" = "This year so far";
@@ -325,7 +311,6 @@
 "以下播放器尚未安装，可提前选择，安装后自动生效" = "These players aren't installed yet. Select one now and it takes effect once installed.";
 "以文本方式编辑" = "Edit as Text";
 "企业微信" = "WeCom";
-"会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse" = "Overwrites every current setting, including connected accounts and where your playback data is sent, then restarts Lyrimuse";
 "位于菜单栏" = "In the menu bar";
 "位置" = "Position";
 "位置已固定为「%@」，可在 ⚙ 菜单中更改" = "Position is fixed to “%@” — change it in the ⚙ menu";
@@ -402,8 +387,6 @@
 "其余 %@ 个源#one" = "%@ other source";
 "其余 %@ 个源未返回候选" = "%@ other sources returned no candidates";
 "其余 %@ 个源未返回候选#one" = "%@ other source returned no candidates";
-"其它" = "Other";
-"其它源印证了结束点" = "End time corroborated";
 "内容" = "Content";
 "内容获印证" = "Content corroborated";
 "内部数据不是有效的 JSON，已取消保存" = "The data isn't valid JSON, so nothing was saved";
@@ -434,7 +417,6 @@
 "切换迷你 / 完整尺寸" = "Switch Mini / Full Size";
 "切歌时新歌名从刘海下方滑出，数秒后收回" = "On a song change, the new title slides out below the notch for a few seconds";
 "切歌时显示系统通知，包含封面、歌名、歌手和专辑" = "Show a system notification with the artwork, title, artist and album when a new song starts";
-"列表播放" = "Play in Order";
 "刚刚" = "just now";
 "刚刚更新" = "Just updated";
 "创作者：" = "Written by: ";
@@ -525,8 +507,6 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space.";
-"只对悬浮歌词生效" = "Applies to the desktop overlay only";
-"只对灵动岛生效" = "Applies to the notch only";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "右" = "Right";
 "右侧" = "Right";
@@ -558,7 +538,6 @@
 "唯一的差异在于「%@」一项。" = "The only difference is on “%@”.";
 "唯一的差异是胜者在「%1$@」一项多 %2$d 分。" = "The only difference: the winner scored %2$d more on “%1$@”.";
 "喜欢" = "Favorite";
-"回到当前播放" = "Jump to Now Playing";
 "回到逐句编辑" = "Back to Line Editing";
 "因网络不可用已停止" = "Stopped: no connection";
 "固定" = "Fixed";
@@ -577,7 +556,6 @@
 "在 GitHub 提交请求" = "Request it on GitHub";
 "在 GitHub 新建 issue，自动附带版本、系统与播放器信息" = "Opens a new GitHub issue with your version, macOS and player filled in";
 "在 GitHub 讨论区的问答分类中提问" = "Ask in the Q&A category of GitHub Discussions";
-"在 KKBOX 中显示" = "Show in KKBOX";
 "在 KKBOX 中显示专辑" = "Show Album in KKBOX";
 "在 KKBOX 中显示歌手" = "Show Artist in KKBOX";
 "在 Last.fm 上喜欢" = "Love on Last.fm";
@@ -617,7 +595,6 @@
 "备份文件夹…" = "Backup Folder…";
 "复用其他专辑中的同一首歌曲" = "Reused from the same recording on another album";
 "复用同一首歌曲的其他歌手写法" = "Reused from the same song under another artist spelling";
-"外观" = "Appearance";
 "多" = "More";
 "多行" = "Multi-Line";
 "夜幕卡片" = "Night Card";
@@ -626,8 +603,6 @@
 "如需删除已下载的语言包，请前往「系统设置 › 通用 › 语言与地区 › 翻译语言」" = "To remove a downloaded language pack, go to System Settings › General › Language & Region › Translation Languages";
 "字体" = "Font";
 "字号" = "Font Size";
-"字幕" = "Captions";
-"存为新配色主题" = "Save as New Theme";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
 "安装并登录后将自动连接；网页版和手机版不支持连接" = "Connects automatically once it's installed and you're signed in. The web and mobile apps can't connect.";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Exact title 120 · parenthetical-only difference 60 · bilingual same name 30";
@@ -644,21 +619,17 @@
 "对比 %@ – %@" = "Compared with %@ – %@";
 "对齐方式" = "Alignment";
 "导入" = "Import";
-"导入…" = "Import…";
 "导入失败：不是有效的 .ttf / .otf 字体文件" = "Import failed: not a valid .ttf / .otf font file";
 "导入失败：无法读取所选文件，可能尚未下载到本机或无读取权限" = "Import failed: couldn't read the selected file. It may not be downloaded to this Mac, or Lyrimuse can't read it.";
 "导入失败：该文件不是 Lyrimuse 的设置备份，或已损坏。当前设置未更改" = "Import failed: this file is not a Lyrimuse settings backup, or it is corrupted. Your current settings were not changed.";
 "导入字体…" = "Import Font…";
 "导入将包含账号和所有个人设置，完成后重启 Lyrimuse。" = "Importing brings over your accounts and every personal setting, then restarts Lyrimuse.";
 "导入并重启" = "Import and Restart";
-"导入设置" = "Import Settings";
 "导出…" = "Export…";
 "导出失败：%@" = "Export failed: %@";
 "导出时间 %1$@，来自 %2$@。" = "Exported %1$@ from %2$@. ";
 "导出时间 %@。" = "Exported %@. ";
 "导出的文件包含账号凭证和密钥，请妥善保管，切勿分享。歌词库会另存为同名的第二个文件，迁移时需同时拷贝两个文件" = "The exported file contains your account credentials and keys — keep it safe and do not share it. Your lyrics library is written as a second file with a matching name; copy both when migrating.";
-"导出的文件包含账号登录凭证和密钥，妥善保管，不要发给别人" = "The exported file contains your account credentials and keys. Keep it safe and don't send it to anyone";
-"导出设置" = "Export Settings";
 "导出诊断" = "Export Diagnostics";
 "导出诊断…" = "Export Diagnostics…";
 "封面" = "Artwork";
@@ -671,7 +642,6 @@
 "将在退出 Lyrimuse 时安装" = "Will install when Lyrimuse quits";
 "将备份到「%@」，尚无备份" = "Backing up to “%@” — nothing saved yet";
 "将完整的决策记录拷贝到剪贴板（纯文本）" = "Copy the whole decision record to the clipboard as plain text";
-"将当前配色存为新主题…" = "Save Current Colors as New Theme…";
 "将播放记录同步到 Last.fm" = "Syncs what you play to Last.fm";
 "将播放记录同步到 ListenBrainz" = "Syncs what you play to ListenBrainz";
 "将此句恢复为编辑前的内容" = "Revert this line to how it was when editing began";
@@ -713,7 +683,6 @@
 "左侧颜色" = "Left Color";
 "左对齐" = "Left-Aligned";
 "左耳" = "Left Ear";
-"差在：%@" = "Difference: %@";
 "已下载" = "Downloaded";
 "已下载 %@ / %@" = "%@ of %@ downloaded";
 "已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载" = "Disk space used by downloaded animated artwork; anything cleared downloads again the next time it's shown";
@@ -742,7 +711,6 @@
 "已在「设置 → 歌词 → 歌词来源」中关闭，本轮未查询" = "Turned off under Settings → Lyrics → Lyrics Sources; this search did not query it";
 "已在播放但未显示歌词？请检查所选的播放器" = "Already playing but no lyrics? Check the player you picked";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "Last.fm's authorization page is open in your browser. Click “Yes, allow access” there to finish, and you'll be sent back to Lyrimuse automatically. If your browser doesn't come back on its own, use the button below";
-"已在资料库" = "In Library";
 "已安装" = "Installed";
 "已安装但未运行" = "Installed but not running";
 "已安装但未运行（上次退出码 %d）" = "Installed but not running (last exit code %d)";
@@ -836,7 +804,6 @@
 "常规" = "Regular";
 "年度听歌小结" = "Yearly Listening Digest";
 "广告中" = "Ad Break";
-"应用" = "Apply";
 "应用主题前手动调整的配色，点按即可恢复" = "The colors you set before applying a theme. Click to restore them";
 "应答" = "Responded";
 "应答源最少" = "Fewest sources responded";
@@ -856,7 +823,6 @@
 "开源许可证" = "Open-Source License";
 "开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
 "开：短于 30 秒的曲目也会 Scrobble，播放过半即记录。\n关：不记录（Last.fm 官方规则）。" = "On: tracks under 30 seconds are scrobbled too, once half-played.\nOff: they aren't (Last.fm's rule).";
-"引号" = "Quote";
 "当前使用" = "In use";
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
@@ -871,7 +837,6 @@
 "当前连续 · 最长 %@ 天#one" = "Current streak · longest %@ day";
 "当前配色尚未保存，点按保存为主题" = "These colors aren't saved yet. Click to save them as a theme";
 "当天最后一次收听：%@" = "Last played that day: %@";
-"待播清单" = "Playing Next";
 "待补交的收听" = "Pending Scrobbles";
 "循环播放" = "Repeat";
 "循环最多：《%1$@》— %2$@（%3$@ 次）" = "Most played: %1$@ — %2$@ (%3$@ plays)";
@@ -881,7 +846,6 @@
 "快速开关" = "Quick Toggles";
 "总 Scrobble" = "Total scrobbles";
 "总分 %@" = "Total %@";
-"总数" = "Total";
 "恢复" = "Reset";
 "恢复原信息" = "Restore Original Info";
 "恢复显示" = "Show Again";
@@ -889,8 +853,6 @@
 "恢复此备份" = "Restore This Backup";
 "恢复默认" = "Reset to Defaults";
 "恢复默认位置" = "Restore Default Location";
-"恢复默认宽度模式与配色" = "Reset Width Mode and Colors";
-"恢复默认文字与配色" = "Reset Text and Color";
 "悬停时显示控制条" = "Controls on Hover";
 "悬停显示播放控制" = "Show Controls on Hover";
 "悬浮歌词" = "Floating Lyrics";
@@ -909,12 +871,10 @@
 "手动重新匹配" = "Manual re-match";
 "打开" = "Open";
 "打开 %@" = "Open %@";
-"打开 %@ 时启动 Lyrimuse" = "Launch Lyrimuse when %@ opens";
 "打开 Discord" = "Open Discord";
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Connect。" = "Opens the Last.fm website: click Connect next to Spotify Scrobbling.";
 "打开 Last.fm 网站，在「Spotify Scrobbling」一栏点按 Disconnect；之后仅记录这台 Mac 上播放的 Spotify。" = "Opens the Last.fm website: click Disconnect next to Spotify Scrobbling. After that, only Spotify played on this Mac is recorded.";
 "打开 Lyrimuse 时启动" = "Launch When Lyrimuse Opens";
-"打开 Lyrimuse 时启动 %@" = "Launch %@ when Lyrimuse opens";
 "打开 sct.ftqq.com，使用微信扫码登录，首页将显示 SendKey。完整地址为 https://sctapi.ftqq.com/你的SendKey.send，请将完整地址填入上方" = "Go to sct.ftqq.com and log in by scanning the QR code with WeChat — your SendKey will appear on the home page. The full URL is https://sctapi.ftqq.com/YourSendKey.send; paste that whole string above";
 "打开「%@」设置" = "Open %@ settings";
 "打开备份文件夹" = "Open Backup Folder";
@@ -929,7 +889,6 @@
 "找不到正确的歌词？在 GitHub 反馈" = "Can't find the right lyrics? Report it on GitHub";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
-"拖动前先长按" = "Long-press before dragging";
 "拖动调整顺序" = "Drag to reorder";
 "拷贝" = "Copy";
 "拷贝名称" = "Copy Name";
@@ -937,7 +896,6 @@
 "拷贝邮箱地址" = "Copy Email Address";
 "拼音" = "Pinyin";
 "指定颜色" = "Custom Color";
-"指针划过时让开" = "Move Aside on Hover";
 "指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板。" = "Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel.";
 "按 %@ 秒校验" = "Validated against %@s";
 "按 %@ 秒的曲目时长校验" = "Validated against a track length of %@s";
@@ -982,12 +940,10 @@
 "搜索字体" = "Search fonts";
 "搜索时默认按相关度排序：歌名开头匹配的优先，其次是歌名、歌手、专辑中匹配的" = "While searching, results are ranked by relevance: titles that start with the query first, then matches in the title, artist and album";
 "搜索期间这首歌曲被修改过，本轮结果未采用" = "This song was edited while the search ran, so this round's result wasn't applied";
-"搜索歌手/歌名" = "Search Artist/Title";
 "搜索歌手/歌名/专辑" = "Search Artist/Title/Album";
 "搜索歌词" = "Search Lyrics";
 "搜索歌词…" = "Search Lyrics…";
 "搜索歌词中…" = "Searching for lyrics…";
-"搜索设置" = "Search Settings";
 "播放/暂停" = "Play/Pause";
 "播放器" = "Player";
 "播放器未提供歌手，按歌名和时长推断" = "The player didn’t provide an artist; inferred from the title and duration";
@@ -1012,7 +968,6 @@
 "收起面板后生效" = "Takes effect after this panel closes";
 "改过歌词或调过时间轴偏移的歌曲" = "Songs whose lyrics you edited or whose timing offset you adjusted";
 "放弃修改" = "Discard Changes";
-"数据源" = "Data Source";
 "整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳" = "Edit the whole text to paste, add or remove lines; each line starts with its timestamp";
 "整行时间轴" = "Line timing";
 "文件中尚无歌词，未保存" = "The file has no lyrics yet; not saved.";
@@ -1080,25 +1035,19 @@
 "时间轴偏移" = "Timing Offset";
 "时间轴整体偏移" = "Whole timeline offset";
 "昨天" = "Yesterday";
-"显示" = "Show";
 "显示 10 首" = "Show 10 songs";
 "显示/隐藏悬浮歌词" = "Show/Hide Floating Lyrics";
 "显示/隐藏灵动岛歌词" = "Show/Hide Notch Lyrics";
 "显示/隐藏菜单栏歌词" = "Show/Hide Menu Bar Lyrics";
 "显示/隐藏译文" = "Show/Hide Translation";
 "显示/隐藏读音" = "Show/Hide Romanization";
-"显示专辑" = "Show Album";
 "显示专辑简介" = "Show Album Notes";
-"显示于" = "Show On";
 "显示内容" = "What's Shown";
 "显示哪些播放器" = "Players Shown";
 "显示在桌面上" = "Sits on your desktop";
 "显示封面" = "Show Artwork";
 "显示播放控制" = "Show Playback Controls";
-"显示更多" = "Show More";
 "显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
-"显示歌名" = "Show Track Title";
-"显示歌手" = "Show Artist";
 "显示歌手简介" = "Show Artist Bio";
 "显示歌曲简介" = "Show Song Notes";
 "显示歌词" = "Show Lyrics";
@@ -1109,13 +1058,11 @@
 "显示触控栏歌词" = "Show Touch Bar Lyrics";
 "显示译文" = "Show Translation";
 "显示读音" = "Show Romanization";
-"显示音浪" = "Show Audio Wave";
 "普通话" = "Mandarin";
 "智能" = "Smart";
 "智能算法" = "Smart Matching";
 "暂停后" = "When Paused";
 "暂停时收起" = "Shrink When Paused";
-"暂停时缩到最小" = "Shrink When Paused";
 "暂停时隐藏" = "Hide When Paused";
 "暂无" = "None yet";
 "暂无 Scrobble 记录" = "No scrobbles yet";
@@ -1267,7 +1214,6 @@
 "标题反查：歌手泛搜" = "Title lookup: artist-wide search";
 "标题吻合" = "Title match";
 "样式" = "Style";
-"核心设置" = "Core Settings";
 "桌面悬浮歌词" = "Desktop Floating Lyrics";
 "检查中…" = "Checking…";
 "检查更新" = "Check for Updates";
@@ -1359,7 +1305,6 @@
 "正在同步…" = "Syncing…";
 "正在同步历史" = "Syncing history";
 "正在同步历史（%1$@/%2$@ 页）" = "Syncing history (page %1$@ of %2$@)";
-"正在同步历史（%@）" = "Syncing history (%@)";
 "正在启用…" = "Starting…";
 "正在安装…" = "Installing…";
 "正在应用到歌词引擎…" = "Applying to the lyrics engine…";
@@ -1435,7 +1380,6 @@
 "测试中…" = "Testing…";
 "测试失败：%@" = "Couldn't test lyrics sources: %@";
 "测试版更新" = "Beta Updates";
-"浏览器歌词同步" = "Browser Lyric Sync";
 "浓淡" = "Density";
 "深色" = "Dark";
 "深色卡片" = "Dark Card";
@@ -1444,7 +1388,6 @@
 "添加到资料库" = "Add to Library";
 "添加失败" = "Couldn't Add";
 "添加播放器…" = "Add a Player…";
-"添加浏览器" = "Add Browser";
 "添加的应用与内置播放器相同：显示其正在播放的内容，并计入收听记录。可随时移除。" = "An app you add here counts the same as a built-in player: whatever it plays is shown, and it goes into your listening history. Remove it any time.";
 "清理" = "Clean Up";
 "清理 %@ 条无效记录…" = "Clean Up %@ Invalid Entries…";
@@ -1473,7 +1416,6 @@
 "点按图标可打开设置和歌词窗口" = "Click the icon to open Settings and the lyrics window";
 "点按归零" = "Click to reset";
 "点按录制" = "Record Shortcut";
-"点按打开" = "Open";
 "点按拷贝版本信息，便于反馈问题" = "Click to copy the version info, handy when reporting a problem";
 "点按时间可修改此句的时间戳" = "Click a time to change that line’s timestamp";
 "点按此处前往设置查看" = "Click to view in Settings";
@@ -1525,7 +1467,6 @@
 "立即联网自动匹配缺失的歌词，无需等待歌曲再次播放" = "Auto-match missing lyrics online now instead of waiting for each song to play again";
 "立即重启" = "Restart Now";
 "第" = "Page";
-"第 %1$@ / %2$@ 页" = "Page %1$@ of %2$@";
 "第 %1$d 步，共 %2$d 步" = "Step %1$d of %2$d";
 "第 %@ 次" = "Play #%@";
 "第 %@ 次收听" = "Play #%@";
@@ -1602,7 +1543,6 @@
 "置于最顶层" = "Always on Top";
 "署名里的汉字段" = "Han characters in the credit";
 "翻译语言包" = "Translation Languages";
-"耳机" = "Headphones";
 "联网搜索候选歌词" = "Search Online for Lyrics";
 "背景" = "Background";
 "背景颜色" = "Background Color";
@@ -1620,7 +1560,7 @@
 "自动匹配完成，找到 %@ 首" = "Auto-match finished: %@ found";
 "自动匹配已停止" = "Auto-Match Stopped";
 "自动匹配正在进行，可在左下角查看进度" = "Auto-match is in progress; see the bottom left for progress";
-"自动匹配缺失歌词" = "Auto-match missing lyrics";
+"自动匹配缺失歌词" = "Auto-Match Missing Lyrics";
 "自动匹配范围：无歌词或仅有纯文本的歌曲；纯音乐和人工修正过的歌曲除外" = "Auto-matches songs with no lyrics or plain text only. Instrumentals and manually edited songs are left alone.";
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "The automatic backup couldn't be written, so nothing was deleted this time to keep it recoverable. Check your disk space and write access to the config folder, then try again.";
 "自动更新" = "Automatic Updates";
@@ -1679,7 +1619,6 @@
 "许可与版权" = "License & Copyright";
 "设置" = "Settings";
 "设置…" = "Settings…";
-"设置备份" = "Settings Backup";
 "设置已保存，但歌词库文件写入失败" = "Settings saved, but the lyrics library file could not be written";
 "设置已导出；歌词库写入失败，仅导出了设置文件" = "Settings exported; writing the lyrics library failed, so only the settings file was written";
 "设置已导出；歌词库打包失败，仅导出了设置文件" = "Settings exported; the lyrics library could not be packaged this time, so only the settings file was written";
@@ -1745,13 +1684,10 @@
 "调整" = "Adjust";
 "调整宽度" = "Adjust Width";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "After you change any colors, a Custom card appears here. Click it to save them as a theme.";
-"账号" = "Account";
 "账号 Token" = "Account Token";
 "账号信息" = "Account Info";
-"贴靠的一侧" = "Which Ear";
 "超薄" = "Ultra Thin";
 "足迹" = "Footprint";
-"跟随 %@ 启动" = "Launch when %@ opens";
 "跟随「全部播放器」：%@" = "Following “All players”: %@";
 "跟随刘海" = "Match Notch";
 "跟随封面" = "Follow Cover Art";
@@ -1792,8 +1728,6 @@
 "这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar each pick translation or romanization in their own “Second Line”";
 "这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation or romanization in their own “Second Line” setting";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played.";
-"这份歌词定下来时，%1$d 个歌词源里只有 %2$d 个给出了候选（老条目当年的源数可能少于 %1$d）" = "When this was chosen, only %2$d of %1$d lyric sources returned a candidate (older entries may date from a time with fewer than %1$d)";
-"这份歌词定下来时，%1$d 个歌词源里只有 %2$d 个给出了候选（老条目当年的源数可能少于 %1$d）。点击查看是哪几个" = "When this was chosen, only %2$d of %1$d lyric sources returned a candidate (older entries may date from a time with fewer than %1$d). Click to see which";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "These lyrics have no timing. Once adopted they only show as static text in the Lyrics Window, and won't highlight word by word or line by line as the song plays";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";
 "这台 Mac 上未安装的播放器" = "Players not installed on this Mac";
@@ -1803,7 +1737,6 @@
 "这里是下一句歌词示例" = "The next line looks like this";
 "这里是译文示例" = "The translation looks like this";
 "这里是读音示例" = "Romanization looks like this";
-"这首歌在你 Last.fm 上的第几次收听" = "Which play of this track this was in your Last.fm history";
 "这首歌曲为纯音乐" = "This one is instrumental";
 "这首歌曲仅有纯文本歌词，无时间轴。可搜索带时间轴的歌词" = "This song only has plain-text lyrics without timing. You can search for timed lyrics";
 "这首歌曲在 Last.fm 上的收听次序，点按查看合并了哪些写法" = "Which play of this track this was in your Last.fm history. Click to see which spellings were merged";
@@ -1811,7 +1744,7 @@
 "这首歌曲已标为纯音乐，找到歌词后将取消该标记。" = "This song is marked as instrumental; finding lyrics will remove the mark.";
 "这首歌曲无译文" = "No translation for this song";
 "这首歌曲无读音" = "No romanization for this song";
-"这首歌曲正在搜索，或「自动匹配缺失歌词」/「重新匹配整个歌词库」正在进行，请稍后重试" = "This song is being searched right now, or “Auto-match missing lyrics” / “Re-match whole library” is running — try again later";
+"这首歌曲正在搜索，或「自动匹配缺失歌词」/「重新匹配整个歌词库」正在进行，请稍后重试" = "This song is being searched right now, or “Auto-Match Missing Lyrics” / “Re-Match Whole Library” is running — try again later";
 "这首歌曲的歌词经过手动修改或选定，更换后将被覆盖。" = "You edited or picked these lyrics by hand; new ones would replace them.";
 "这首歌曲的语言未在设置的「标注读音的语言」中开启" = "This song’s language is turned off in Settings › Romanization Languages";
 "这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效。" = "You've adjusted this song's lyrics timing (%@); with new lyrics that adjustment may no longer fit.";
@@ -1899,7 +1832,6 @@
 "重新匹配整个歌词库已暂停" = "Library Re-Match Paused";
 "重新匹配整个歌词库？" = "Re-match the whole lyrics library?";
 "重新打开授权页面" = "Reopen Authorization Page";
-"重新扫描（%@ 首）" = "Rescan (%@)";
 "重新搜索" = "Search Again";
 "重新检测" = "Check Again";
 "重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」" = "Match again online and use the result the algorithm picks, following the Matching Algorithm setting";
@@ -1948,8 +1880,6 @@
 "音叉" = "Tuning Fork";
 "音浪" = "Audio Wave";
 "音符" = "Note";
-"音符与双行" = "Note and Two Lines";
-"音符与歌词" = "Note and Lyrics";
 "音频输出" = "Audio Output";
 "顶部信息" = "Header";
 "顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号" = "How much of the window's width the header takes up; text that doesn't fit ends with an ellipsis";
@@ -1959,16 +1889,6 @@
 "顺序优先" = "Priority Order";
 "预发布版本，可能不稳定" = "Pre-release builds; may be unstable";
 "预览" = "Preview";
-"预览 · %@pt" = "Preview · %@pt";
-"预览 · %@pt · 已缩放至 %@%%" = "Preview · %@pt · scaled to %@%%";
-"预览 · %@pt，指向可展开" = "Preview · %@pt — hover to expand";
-"预览 · 上限 %@ 字" = "Preview · %@ character limit";
-"预览 · 上限 %@ 字，本句会横向滚动" = "Preview · %@ character limit — this line scrolls";
-"预览 · 上限 %@ 字，本句已截断" = "Preview · %@ character limit — this line is truncated";
-"预览 · 上限 %@pt" = "Preview · %@pt limit";
-"预览 · 上限 %@pt，本句会横向滚动" = "Preview · %@pt limit — this line scrolls";
-"预览 · 上限 %@pt，本句已截断" = "Preview · %@pt limit — this line is truncated";
-"预览 · 固定宽度 %@pt，本句会横向滚动" = "Preview · fixed %@pt — this line scrolls";
 "预览 · 好友在 Discord 上看到的效果" = "Preview · What friends see on Discord";
 "预览 · 左右滑动查看完整内容" = "Preview · swipe sideways for the whole bar";
 "预览 · 左右滑动查看完整内容 · 本句将横向滚动" = "Preview · swipe sideways for the whole bar · this line scrolls";
@@ -2002,7 +1922,6 @@
 "默认为日文、韩文、中文和粤语标注读音，可在设置中按语言关闭" = "Japanese, Korean, Chinese and Cantonese are all annotated by default; turn any of them off in Settings";
 "默认为日文、韩文和粤语标注读音，普通话拼音可在设置中开启" = "Japanese, Korean and Cantonese are annotated by default; turn on Mandarin pinyin in Settings";
 "默认跟随系统菜单栏，可在 10～16pt 之间调整，16pt 仍在菜单栏项高度内。拖回系统字号处即恢复跟随。" = "Follows the system menu bar by default; adjustable from 10 to 16pt, and 16pt still fits the menu bar item. Drag back to the system size to follow it again.";
-"鼠标经过时避开" = "Move Aside on Hover";
 "（%@）" = " (%@)";
 "（已调）" = " (adjusted)";
 "（未信任，选择后自动信任）" = " (not trusted — choosing it trusts it)";
