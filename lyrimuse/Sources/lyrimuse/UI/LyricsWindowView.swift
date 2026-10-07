@@ -271,6 +271,8 @@ enum LyricsWindowSession {
     static let miniModeKey = "np:lyricsWindowMiniMode"
 
     static var shouldReopenAtLaunch: Bool { UserDefaults.standard.bool(forKey: openKey) }
+    /// 静默启动这次没重开窗口:把「开着」记成没开,「切换迷你」快捷键和下次启动才按实情判断(`LaunchWindowPlan`)。
+    static func forgetOpen() { UserDefaults.standard.set(false, forKey: openKey) }
 
     /// 此刻那扇歌词窗口(控制器 attach 新窗口时登记)。启动重开靠它核对窗口真的上了屏(`LyricsWindowLaunchRestorer`)。
     @MainActor static weak var window: NSWindow?

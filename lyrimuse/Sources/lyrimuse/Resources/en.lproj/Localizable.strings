@@ -523,6 +523,7 @@
 "向 Discord 好友展示正在收听的歌曲" = "Let your Discord friends see what you're listening to";
 "含账号凭据，请勿分享给他人；需要连同外观与快捷键整体迁移时，请使用「备份与迁移」" = "Contains account credentials, so don’t share it. To move everything including appearance and shortcuts, use Backup & Migrate";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态。" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status.";
+"启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。" = "Opens no windows at launch; only the menu bar icon and your lyrics displays remain. Turning it on also turns off Show in Dock.";
 "启用" = "Enable";
 "启用失败，可能是权限或系统限制导致歌词引擎未能正常启动。导出诊断信息可查看具体原因，也便于反馈问题" = "Couldn't enable it — a permission or system restriction may have kept the lyrics engine from starting. Export Diagnostics shows the specific cause and makes it easier to report";
 "启用歌词引擎与权限" = "Engine & Permissions";
@@ -1868,6 +1869,7 @@
 "需要先配置「%@」（%@）" = "Set up “%@” first — %@";
 "霓虹" = "Neon";
 "静音" = "Mute";
+"静默启动" = "Launch Silently";
 "韩语" = "Korean";
 "音叉" = "Tuning Fork";
 "音浪" = "Audio Wave";

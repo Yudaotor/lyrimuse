@@ -4,6 +4,16 @@ import OSLog
 import CoreServices
 import LyrimuseCore
 
+/// 启动阶段:`applicationDidFinishLaunching` 跑完之前为真。设置窗口在这之前开出来,又没人要过它,就是 SwiftUI
+/// 按默认开的,当场关掉(`LaunchWindowPlan.dropsSettingsWindow`,14 章决策 62)。
+@MainActor
+enum LaunchPhase {
+    private(set) static var isLaunching = true
+    /// 启动以来有人要过设置窗口(`MenuBarSceneActions.presentSettings`:菜单、快捷键、深链都走它)。
+    static var settingsRequested = false
+    static func finish() { isLaunching = false }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     // 新增:接住"连接 Last.fm 账号"授权页跳回来的 lyrimuse:// 回调(见
@@ -425,6 +435,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // SUEnableAutomaticChecks 的配置做周期性后台检查,不需要自己维护"查一次/
         // 记录已提示过哪个版本"这套状态(Sparkle 自己管这些)。
         _ = SparkleUpdaterManager.shared
+        // 放到下一拍:启动流程里排在这之后的窗口(SwiftUI 默认开的设置窗口)也还算启动阶段。
+        DispatchQueue.main.async { LaunchPhase.finish() }
     }
 
     // 这个 App 没有传统意义上的"主窗口"(内容是菜单栏图标+悬浮歌词窗口+按需打开的

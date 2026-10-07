@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 import SwiftUI
 
 // `openSettings()` / `openWindow(id:)` 这两个"打开某扇 SwiftUI 窗口"的能力,只能从一个
@@ -55,6 +56,7 @@ enum MenuBarSceneActions {
 
     /// 打开设置窗口。见 mainMenuSettingsItem 上那段说明。
     static func presentSettings(fallback: () -> Void) {
+        LaunchPhase.settingsRequested = true
         NSApp.activate(ignoringOtherApps: true)
         if let item = mainMenuSettingsItem(), let action = item.action,
            NSApp.sendAction(action, to: item.target, from: item) {
@@ -135,18 +137,23 @@ private struct SceneActionRegistrar: View {
                 // 立刻被吞掉,肉眼看不到。"设置…"/"歌词管理…"这两个菜单项没踩到这个坑,
                 // 是因为它们永远是用户手动点出来的、那时候 App 早已完全启动稳定。加一个
                 // 不长的延迟,让启动流程先跑完再发起,就能稳定弹出来。
-                // 上次退出时歌词窗口开着,就照原样再开出来(迷你与否由窗口自己接着,见 LyricsWindowSession)。
-                // 同一个启动时序坑,首开同样等 0.5 秒;开了核对窗口上没上屏,没上屏再开(07 章决策 124)。
-                // 引导没走完时不开,别跟引导窗抢。
+                // 启动时开哪些窗口照 LaunchWindowPlan 办:引导没走完弹引导;上次退出时歌词窗口开着、没开静默启动,
+                // 就照原样再开出来(迷你与否由窗口自己接着,见 LyricsWindowSession);静默启动时一扇都不开(14 章决策 62)。
+                // 歌词窗口:同一个启动时序坑,首开同样等 0.5 秒;开了核对窗口上没上屏,没上屏再开(07 章决策 124)。
                 // 不走 openLyricsWindow:那条先激活 App,装机 / 重启时会把键盘焦点从用户正在用的 App 抢过来。
                 // 窗口由 attach 取走标记后 orderFrontRegardless 摆出来(07 章决策 123)。
-                if settings.hasCompletedOnboarding, LyricsWindowSession.shouldReopenAtLaunch {
+                let plan = LaunchWindowPlan(silentLaunch: settings.silentLaunch,
+                                            hasCompletedOnboarding: settings.hasCompletedOnboarding,
+                                            lyricsWindowWasOpen: LyricsWindowSession.shouldReopenAtLaunch)
+                if plan.reopensLyricsWindow {
                     LyricsWindowLaunchRestorer.start {
                         LyricsWindowSession.markRestoringAtLaunch()
                         openWindowAction(id: "lyrics-window")
                     }
+                } else if plan.forgetsOpenLyricsWindow {
+                    LyricsWindowSession.forgetOpen()
                 }
-                if !settings.hasCompletedOnboarding {
+                if plan.showsOnboarding {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         // 换电脑这条路先走一步:iCloud 里已经有配置就先问要不要导入,导入了
                         // 就重启(引导在重启之后照样走,理由见 ICloudConfigImportPrompt);

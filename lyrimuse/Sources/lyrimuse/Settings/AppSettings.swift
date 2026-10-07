@@ -201,6 +201,7 @@ final class AppSettings: ObservableObject {
         static let overlayShowTranslation = "np:overlayShowTranslation"
         static let overlayContentTogglesMigrated = "np:overlayContentTogglesMigrated"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
+        static let silentLaunch = "np:silentLaunch"
         /// 布尔年代的旧键,只在 init() 里读一次做迁移(已登记进 ConfigPortability.obsoleteDefaultsKeys)。
         static let launchMusicOnLyrimuseOpen = "np:launchMusicOnLyrimuseOpen"
         static let launchPlayersOnLyrimuseOpen = "np:launchPlayersOnLyrimuseOpen"
@@ -698,6 +699,15 @@ final class AppSettings: ObservableObject {
     }
     @Published var overlayShowTranslation: Bool {
         didSet { defaults.set(overlayShowTranslation, forKey: Keys.overlayShowTranslation) }
+    }
+    /// 静默启动:启动时不打开任何窗口,只留菜单栏图标;开机自启和手动打开都一样,已开着的歌词展示照常。
+    /// 启动时开哪些窗口按 Core `LaunchWindowPlan` 判定。默认关。
+    @Published var silentLaunch: Bool {
+        didSet {
+            defaults.set(silentLaunch, forKey: Keys.silentLaunch)
+            // 打开时顺带关掉「在 Dock 中显示」,只留菜单栏图标;之后用户再把 Dock 打开不拦(14 章决策 62)。
+            if silentLaunch, !oldValue { showInDock = false }
+        }
     }
     @Published var launchAtLoginEnabled: Bool {
         didSet {
@@ -1971,6 +1981,7 @@ final class AppSettings: ObservableObject {
         // "开关显示开着、系统里其实没注册"的假象。补的那一步在
         // AppDelegate.applicationDidFinishLaunching 里,两处必须一起看。
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? true
+        silentLaunch = (defaults.object(forKey: Keys.silentLaunch) as? Bool) ?? false
         receiveBetaUpdates = (defaults.object(forKey: Keys.receiveBetaUpdates) as? Bool) ?? false
         youTubeMusicAutoSkipAds = (defaults.object(forKey: Keys.youTubeMusicAutoSkipAds) as? Bool) ?? false
         if let raw = defaults.array(forKey: Keys.launchPlayersOnLyrimuseOpen) as? [String] {

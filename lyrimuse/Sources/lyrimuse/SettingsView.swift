@@ -6029,6 +6029,14 @@ private struct GeneralSettingsTab: View {
                         Button(L10n.t("打开系统设置")) { LoginItemManager.shared.openSystemSettings() }
                     }
                 }
+                CardDivider()
+                SettingsRow(
+                    icon: "rectangle.on.rectangle.slash",
+                    title: L10n.t("静默启动"),
+                    help: L10n.t("启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。")
+                ) {
+                    Toggle("", isOn: $settings.silentLaunch)
+                }
             }
             .onAppear { refreshLoginItemState() }
             // 用户去系统设置里改完切回来,开关和提示当场跟上。
@@ -7134,6 +7142,16 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
             // `.navigation`,放进 `WindowGroup`(默认样式与 `.expanded` 都试过)本来就落在最左;
             // 离线探针窗口把五种 placement 并排摆过一遍,`.navigation` 确实是最左那一档。
             window.toolbarStyle = .unified
+            // 启动流程里 SwiftUI 按默认开出来的这扇当场关掉。先透明、下一拍再关,不闪一下;
+            // 关完把透明度还原,Settings 场景下次可能还用这扇窗(14 章决策 62)。
+            if LaunchWindowPlan.dropsSettingsWindow(launching: LaunchPhase.isLaunching,
+                                                    requested: LaunchPhase.settingsRequested) {
+                window.alphaValue = 0
+                DispatchQueue.main.async {
+                    window.close()
+                    window.alphaValue = 1
+                }
+            }
         }
         return view
     }

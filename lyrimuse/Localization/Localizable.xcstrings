@@ -41036,6 +41036,52 @@
           }
         }
       }
+    },
+    "静默启动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Launch Silently"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "静默启动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "靜默啟動"
+          }
+        }
+      }
+    },
+    "启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens no windows at launch; only the menu bar icon and your lyrics displays remain. Turning it on also turns off Show in Dock."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "啟動時不開啟任何視窗，僅保留選單列圖像和已開啟的歌詞顯示。開啟後會同時關閉「在 Dock 中顯示」。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
