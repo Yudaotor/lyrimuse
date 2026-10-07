@@ -1850,11 +1850,16 @@ func runSourceContractTests() {
                         && !lwv.contains("\"pip.enter\"") && !lwv.contains("\"pip.exit\""), true,
                         "窗口控件: 迷你切换用「缩小 / 放大窗口」那对符号,不用画中画符号(07 章决策 131)")
             // 迷你尺寸在每个桌面都出现、能浮在别的 App 的全屏上;完整尺寸照旧能进原生全屏。持续守护和切换那一拍都按形态补(07 章决策 131)。
-            expectEqual(lwv.contains("let wanted: NSWindow.CollectionBehavior = mini ? [.canJoinAllSpaces, .fullScreenAuxiliary] : [.fullScreenPrimary]")
-                        && lwv.contains("Self.enforceSpaceBehavior(win, mini: self?.isMini ?? false)")
+            expectEqual(lwv.contains("case (true, true):\n            wanted = [.canJoinAllSpaces, .fullScreenAuxiliary]")
+                        && lwv.contains("case (false, _):\n            wanted = [.fullScreenPrimary]")
+                        && lwv.contains("Self.enforceSpaceBehavior(win, mini: self?.isMini ?? false, floating: self?.isAlwaysOnTop ?? false)")
                         && (read("UI/LyricsMiniPanel.swift") ?? "").contains("collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]")
                         && !lwv.contains("enforceFullScreenCapability"), true,
                         "窗口控件: 迷你尺寸跟着切换桌面、浮在别的 App 的全屏上,完整尺寸能进原生全屏")
+            // 迷你不置顶时就是一扇普通窗口:不跨桌面、不进别人的全屏 Space;切置顶当场补(07 章决策 134)。
+            expectEqual(lwv.contains("case (true, false):\n            wanted = []\n            unwanted = [.fullScreenPrimary, .canJoinAllSpaces, .fullScreenAuxiliary]")
+                        && lwv.contains("Self.enforceSpaceBehavior(window, mini: isMini, floating: on)"), true,
+                        "窗口控件: 迷你不置顶时不跨桌面、不浮在全屏上,切置顶当场生效")
             // 迷你是一扇不激活 App 的面板,完整尺寸仍是场景那扇窗,切换是两扇窗交接;入口按形态分流(07 章决策 133)。
             let miniPanel = read("UI/LyricsMiniPanel.swift") ?? ""
             let morph = read("UI/LyricsWindowFormMorph.swift") ?? ""

@@ -779,16 +779,25 @@ private final class LyricsWindowController: ObservableObject {
         NSApp.addWindowsItem(window, title: window.title, filename: false)
     }
 
-    /// 窗口的 Space / 全屏属性跟着形态走:完整尺寸能进原生全屏;迷你尺寸在每个桌面都出现、能浮在别的 App 的全屏上,
-    /// 不能进全屏(迷你藏了全屏键,全屏时也不能切迷你)。缺才写(写入后自身即满足条件,不会自激);见 attach() 里的守护
-    /// 注释与 07 章决策 131。
-    /// 「浮在别的 App 的全屏上」只在 App 不显示在 Dock 里(`.accessory`)时成立:`.regular` 下普通 NSWindow 带着
-    /// `.fullScreenAuxiliary` 也进不了别人的全屏 Space,只有 NSPanel 进得去。
-    private static func enforceSpaceBehavior(_ window: NSWindow, mini: Bool) {
-        let wanted: NSWindow.CollectionBehavior = mini ? [.canJoinAllSpaces, .fullScreenAuxiliary] : [.fullScreenPrimary]
-        let unwanted: NSWindow.CollectionBehavior = mini
-            ? [.fullScreenPrimary, .fullScreenNone, .moveToActiveSpace]
-            : [.fullScreenNone, .fullScreenAuxiliary, .canJoinAllSpaces]
+    /// 窗口的 Space / 全屏属性跟着形态和置顶走:完整尺寸能进原生全屏;迷你置顶时在每个桌面都出现、能浮在别的 App 的全屏上,
+    /// 不置顶时跟普通窗口一样只待在自己那个桌面、不进别人的全屏 Space;迷你都不能进全屏(藏了全屏键,全屏时也不能切迷你)。
+    /// 缺才写(写入后自身即满足条件,不会自激);见 attach() 里的守护注释与 07 章决策 131、134。
+    /// 浮在别的 App 的全屏上只有 NSPanel 做得到:App 显示在 Dock 里(`.regular`)时普通 NSWindow 带着 `.fullScreenAuxiliary`
+    /// 也进不去,迷你所以是面板(决策 133)。
+    private static func enforceSpaceBehavior(_ window: NSWindow, mini: Bool, floating: Bool) {
+        let wanted: NSWindow.CollectionBehavior
+        let unwanted: NSWindow.CollectionBehavior
+        switch (mini, floating) {
+        case (false, _):
+            wanted = [.fullScreenPrimary]
+            unwanted = [.fullScreenNone, .fullScreenAuxiliary, .canJoinAllSpaces]
+        case (true, true):
+            wanted = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            unwanted = [.fullScreenPrimary, .fullScreenNone, .moveToActiveSpace]
+        case (true, false):
+            wanted = []
+            unwanted = [.fullScreenPrimary, .canJoinAllSpaces, .fullScreenAuxiliary]
+        }
         var behavior = window.collectionBehavior
         guard !behavior.isSuperset(of: wanted) || !behavior.isDisjoint(with: unwanted) else { return }
         behavior.subtract(unwanted)
@@ -978,7 +987,7 @@ private final class LyricsWindowController: ObservableObject {
         // 实测右上角按钮(toggle 前刚补过标志)能进真全屏,绿键(用系统当下的标志)却
         // 还是 zoom。挂 didUpdate(每个绘制周期)做**持续守护**,回调只查一个位、缺了
         // 才写,写入本身也满足守卫条件,不会自激。
-        Self.enforceSpaceBehavior(window, mini: isMini)
+        Self.enforceSpaceBehavior(window, mini: isMini, floating: isAlwaysOnTop)
         enforceTrafficLightPosition(window)
         updateTrafficLightVisibility()
         if !isMiniPanel { addToWindowsMenu(window) }
@@ -1080,7 +1089,7 @@ private final class LyricsWindowController: ObservableObject {
         ) { [weak self] note in
             guard let win = note.object as? NSWindow else { return }
             MainActor.assumeIsolated {
-                Self.enforceSpaceBehavior(win, mini: self?.isMini ?? false)
+                Self.enforceSpaceBehavior(win, mini: self?.isMini ?? false, floating: self?.isAlwaysOnTop ?? false)
                 self?.enforceTrafficLightPosition(win)
                 self?.placeVolumeDragHole(win)
             }
@@ -1213,6 +1222,8 @@ private final class LyricsWindowController: ObservableObject {
         let level: NSWindow.Level = on ? .floating : .normal
         // 变形动画期间真窗口藏在桌面层级以下,层级等动画收尾一起还(见 LyricsWindowFormMorph.levelAfterMorph)。
         if formMorph.isRunning { formMorph.levelAfterMorph = level } else { window.level = level }
+        // 迷你跨桌面、浮在全屏上跟着置顶走,当场补,不等下一次 didUpdate(07 章决策 134)。
+        Self.enforceSpaceBehavior(window, mini: isMini, floating: on)
     }
 
     /// 真·原生全屏进行中(自己的 Space、三指横滑)。与伪全屏 isActive 是两个独立状态:
@@ -1228,7 +1239,7 @@ private final class LyricsWindowController: ObservableObject {
         // 伪全屏只留给拿不到那个修饰符的老系统兜底。
         if #available(macOS 15.0, *), let window {
             // 进全屏前再补一次(didUpdate 守护之外的双保险,幂等)。
-            Self.enforceSpaceBehavior(window, mini: isMini)
+            Self.enforceSpaceBehavior(window, mini: isMini, floating: isAlwaysOnTop)
             window.toggleFullScreen(nil)
             return
         }
