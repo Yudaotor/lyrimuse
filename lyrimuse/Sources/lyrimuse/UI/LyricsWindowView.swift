@@ -381,6 +381,7 @@ private final class LyricsWindowController: ObservableObject {
     private func refreshSurfaceVisible() {
         let visible = occlusionVisible && !coveredByOthers
         if isSurfaceVisible != visible { isSurfaceVisible = visible }
+        LyricsWindowHintSurface.visible = visible
     }
 
     /// 设置页预览用:预览这份 controller 从不 attach 窗口,可见性改由宿主(设置窗口)推进来,
@@ -1011,6 +1012,7 @@ private final class LyricsWindowController: ObservableObject {
         ) { [weak self] note in
             MainActor.assumeIsolated {
                 self?.flushPendingPersistFrame()
+                LyricsWindowHintSurface.visible = false
                 if !AppExit.isTerminating { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }
                 self?.hoverFade.windowClosed()
                 self?.chromeFade.windowClosed()
@@ -1702,6 +1704,14 @@ struct LyricsWindowView: View {
                         // 一颗看不见的「下一首」。
                         .allowsHitTesting(miniControlsVisible)
                         .animation(.easeOut(duration: 0.14), value: miniControlsVisible)
+                }
+            }
+            // 说明条(快捷键回声、重新匹配进度这类),摆在底部控制条上方居中。见决策 132。
+            .overlay(alignment: .bottom) {
+                if !previewMode, !isIdle {
+                    LyricsWindowActionCaption(currentTitle: playback.title, onArtwork: hasArtworkBackground)
+                        .frame(maxWidth: min(320, max(160, geo.size.width - 24)))
+                        .padding(.bottom, Self.miniDeckBottomInset + Self.miniDeckHeight + 6)
                 }
             }
             // 窗口控件悬停才露:迷你窗每一寸都是内容,两颗常驻胶囊会把顶部那行标题挤没。

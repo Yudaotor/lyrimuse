@@ -303,8 +303,8 @@ enum GlobalHotkeys {
     /// 把一条操作回声送到**用户实际开着的那个展示形态**上。
     ///
     /// 灵动岛(`NotchTransientCenter`,消费者是 `NotchLyricsView` 里的 `NotchTransientHost`)和悬浮歌词两边都发,
-    /// 各自按自己开没开决定显不显示,这里不判断"该给谁"。两个都没开时交给触控栏(展开着时)和菜单栏歌词(槽里正显示
-    /// 歌词时);这两处也没在显示,这条回声就没有地方出现(14 章决策 60)。
+    /// 各自按自己开没开决定显不显示,这里不判断"该给谁"。两个都没开时交给触控栏(展开着时)、菜单栏歌词(槽里正显示
+    /// 歌词时)和歌词窗口(开着、看得见时,07 章决策 132);这几处都没在显示,这条回声就没有地方出现(14 章决策 60)。
     ///
     /// 碰 `LyricsOverlayWindowController.shared` 之前**必须**先判
     /// `classicOverlayEnabled`:那是个 static let,光读一下属性就会 init() 把窗口建出来
@@ -320,6 +320,9 @@ enum GlobalHotkeys {
         guard !settings.notchOverlayEnabled, !settings.classicOverlayEnabled else { return }
         TouchBarLyricsController.shared.flashHint(text, seconds: hintSeconds)
         MenuBarStatusItem.shared.flashHint(text, seconds: hintSeconds)
+        if LyricsWindowHintSurface.visible {
+            LyricsWindowActionNotes.shared.flashHint(text, symbol: icon, seconds: hintSeconds)
+        }
     }
 
     /// 快捷键回声显示多久:灵动岛横幅、触控栏、菜单栏歌词同一个数。

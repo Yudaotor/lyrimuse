@@ -44,9 +44,21 @@ final class LyricsWindowActionNotes: ObservableObject {
         }
     }
 
+    /// 快捷键回声(`GlobalHotkeys.flashHint`):不带歌名,`seconds` 秒后收掉。见 07 章决策 132。
+    func flashHint(_ text: String, symbol: String, seconds: Double) {
+        post(title: "", text: text, symbol: symbol, tint: .secondary, seconds: seconds)
+    }
+
     func dismiss() {
         note = nil
     }
+}
+
+/// 歌词窗口此刻能不能显示快捷键回声:开着、看得见(被整扇盖住、最小化不算)。窗口那份 controller 推进来、关窗时清掉,
+/// 设置页预览那份不推。见 07 章决策 132。
+@MainActor
+enum LyricsWindowHintSurface {
+    static var visible = false
 }
 
 /// 箭头往上弹的那颗小菜单开没开。胶囊开关它,说明条据此往上让开。
