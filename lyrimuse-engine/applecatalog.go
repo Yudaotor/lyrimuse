@@ -1132,7 +1132,11 @@ func appleTitleSearchIdentities(ctx context.Context, artist, title, album string
 	var out []string
 	allReached := true
 	storefronts := appleStorefrontsFor(artist, title)
-	for i, q := range []string{strings.TrimSpace(artist + " " + title), title} {
+	queries := []string{strings.TrimSpace(artist + " " + title)}
+	if v := appleTitleSearchArtistVariant(artist); v != "" {
+		queries = append(queries, v+" "+title)
+	}
+	for _, q := range append(queries, title) {
 		var results []itunesResult
 		for _, country := range storefronts {
 			rs, reached := itunesSearch(ctx, neturl.QueryEscape(q), country)
@@ -1141,7 +1145,7 @@ func appleTitleSearchIdentities(ctx context.Context, artist, title, album string
 			}
 			results = append(results, rs...)
 		}
-		if out = pickAppleTitleSearchIdentities(results, artist, title, album, durationSecs, i == 1); len(out) > 0 {
+		if out = pickAppleTitleSearchIdentities(results, artist, title, album, durationSecs, q == title); len(out) > 0 {
 			break
 		}
 	}
@@ -1156,6 +1160,20 @@ func appleTitleSearchIdentities(ctx context.Context, artist, title, album string
 		appleTitleSearchIdentityMu.Unlock()
 	}
 	return out
+}
+
+// appleTitleSearchArtistVariant:署名带间隔号(外文译名)、又用「和」连着几个人时(「扎克·埃夫隆和赞达亚」),把「和」换成空格的
+// 写法:iTunes 认不出粘在一起的「埃夫隆和赞达亚」,拆开就搜得到。不是这种形状返回空串。只多一个查询词,挑选的几道门不变。
+// 纯函数。见 09 章决策 205。
+func appleTitleSearchArtistVariant(artist string) string {
+	if !strings.ContainsAny(artist, "·・•") || !strings.Contains(artist, "和") {
+		return ""
+	}
+	v := strings.Join(strings.Fields(strings.ReplaceAll(artist, "和", " ")), " ")
+	if v == "" || v == strings.TrimSpace(artist) {
+		return ""
+	}
+	return v
 }
 
 // pickAppleTitleSearchIdentities 是 appleTitleSearchIdentities 的挑选逻辑,纯函数、可单测:

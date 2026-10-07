@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // 正在播放的 App 自己经 MediaRemote 上送这首歌的封面(浏览器网页播放器也会给——例如 Arc 播
@@ -54,6 +55,55 @@ func deviceCoverURLIfFresh(ctx context.Context, isNewTrack bool, bundleID, artis
 		return ""
 	}
 	return url
+}
+
+// videoFrameURLIfFresh:App 交来的这一首的视频帧落盘,返回 file:// 地址;没有、或者落不了盘返回空串。见 03 章决策 39。
+func videoFrameURLIfFresh(bundleID, artist, title string) string {
+	data, mimeType, ok := appPlaybackVideoFrame(bundleID, artist, title)
+	if !ok {
+		return ""
+	}
+	url, ok := saveDeviceArtwork(data, mimeType)
+	if !ok {
+		return ""
+	}
+	return url
+}
+
+// storeVideoFrame:把视频帧记进条目的 VideoFrameURL。条目还不在、还是提前提交的那份、已经是这张时不写。返回写没写。
+func storeVideoFrame(key, url string) bool {
+	enrichMu.Lock()
+	e, ok := enrichCache[key]
+	if !ok || enrichProvisional[key] || e.VideoFrameURL == url {
+		enrichMu.Unlock()
+		return false
+	}
+	e.VideoFrameURL = url
+	enrichCache[key] = e
+	enrichDirty = true
+	enrichMu.Unlock()
+	requestEnrichSaveFor(key)
+	return true
+}
+
+// noteVideoFrame:取一次 App 交来的视频帧,记进条目。返回记没记。
+func noteVideoFrame(key, bundleID, artist, title string) bool {
+	url := videoFrameURLIfFresh(bundleID, artist, title)
+	return url != "" && storeVideoFrame(key, url)
+}
+
+// settleVideoFrame:首次解析时条目还没落盘,按 deviceCoverSettleDelays 各取一次视频帧,记上就停。
+func settleVideoFrame(ctx context.Context, key, bundleID, artist, title string) {
+	for _, d := range deviceCoverSettleDelays {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(d):
+		}
+		if noteVideoFrame(key, bundleID, artist, title) {
+			return
+		}
+	}
 }
 
 // saveDeviceArtwork 把设备封面字节写到本地,返回 Swift 侧能直接加载的

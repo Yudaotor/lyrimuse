@@ -25,10 +25,7 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 		log.Printf("lyrics: title-reverse-lookup: bilingual title %q -> corrected=%q", title, part)
 		return part, lyricQueryReasonTitleBilingual, artist
 	}
-	titleArtists := []string{artist}
-	if aliases := retryArtistIdentities(ctx, artist); len(aliases) > 0 && normLoose(aliases[0]) != normLoose(artist) {
-		titleArtists = append(titleArtists, aliases[0])
-	}
+	titleArtists := titleReverseArtists(ctx, artist)
 	// 两条反查都跑、比谁的时长误差更小 —— **不是**"哪个先成功就用哪个"。两条各自都有
 	// 例子证明"我更准、对方错":
 	//   ①「Love Love Love」= 方大同《爱爱爱》,本地专辑标"This Love"——retryTitleFromAlbum
@@ -102,6 +99,37 @@ type titleReverseSpec struct {
 	fetched                   bool
 	ne                        neteaseInfo
 	results                   []scoredLyricCandidateResult
+}
+
+// titleReverseAliases:取一个署名的别名(retryArtistIdentities)。单测换成假的。
+var titleReverseAliases = retryArtistIdentities
+
+// titleReverseArtists:标题反查拿哪几个署名去查 —— 原串和它的头一个别名;多人合唱、feat. 署名时再加首歌手和首歌手的头一个
+// 别名(lyricPrimaryQueryArtist:「Khalil Fong feat. Hanggai」原串和它的别名都查不到,「Khalil Fong」的别名「方大同」才按时长
+// 反查出《醉》)。按这个顺序去重。见 09 章决策 205。
+func titleReverseArtists(ctx context.Context, artist string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(s string) {
+		if k := normLoose(s); k != "" && !seen[k] {
+			seen[k] = true
+			out = append(out, s)
+		}
+	}
+	addWithAlias := func(s string) {
+		add(s)
+		if aliases := titleReverseAliases(ctx, s); len(aliases) > 0 {
+			add(aliases[0])
+		}
+	}
+	addWithAlias(artist)
+	if primary := lyricPrimaryQueryArtist(artist); primary != "" {
+		addWithAlias(primary)
+	}
+	if len(out) == 0 {
+		out = append(out, artist)
+	}
+	return out
 }
 
 // bilingualTitleHanPart:曲名是整齐的两段 —— 前一段拉丁字母、后一段汉字,空格隔开 —— 时返回汉字那段,否则返回空串。

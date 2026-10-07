@@ -869,6 +869,8 @@ func runSourceContractTests() {
                let r = psf.range(of: "public func noteArtwork(_ data: Data?) {") {
                 expectEqual(psf[r.upperBound...].prefix(160).contains("guard let data = Self.artworkForEngine(data) else {"), true,
                             "设备封面: 发布当前封面要先过 artworkForEngine")
+                expectEqual(psf[r.upperBound...].prefix(400).contains("if let frame = Self.videoFrameForEngine(data) {"), true,
+                            "设备封面: 不像封面的按视频帧交(videoFrameForEngine)")
             } else {
                 expectEqual(true, false, "设备封面: 读不到 PlaybackStatePublisher.noteArtwork(改名了?)")
             }

@@ -410,6 +410,9 @@ type enrichEntry struct {
 	// CoverMissingRetryRules:后台补封面上一次按哪一版补法补过这条缺封面的(coverMissingRetryRules)。补法多了一道,
 	// 按旧版补过的不管补过几次都再补一次。
 	CoverMissingRetryRules int `json:"cover_missing_retry_rules,omitempty"`
+	// VideoFrameURL:播放这首时 App 交来的视频帧(视频缩略图、竖屏截图这类不像封面的图),落成本机文件。不当封面用:
+	// 引擎照旧按缺封面去找,「歌词管理」只在 cover_url 为空时拿它当缩略图。见 03 章决策 39。
+	VideoFrameURL string `json:"video_frame_url,omitempty"`
 
 	// SpotifyTrackID:Spotify 原生客户端播这首歌时 AppleScript `spotify url` 给的 22 位曲目 ID
 	// (见 spotifytrack.go)。有它就能拼出真链接 open.spotify.com/track/<id>:fields() 里的
@@ -2435,6 +2438,9 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		// 不跟首次解析的 ctx 走:解析一结束 defer 就取消它,而那几档恰恰要在条目落盘**之后**才有事做,
 		// 跟着它走一档都跑不成。三档一共 16 秒、每档都重读条目,自己就是有界的。
 		go settleDeviceCover(context.WithoutCancel(ctx), key, artist, title, album, bundleID)
+	} else if isNewTrack {
+		// 没有设备封面时 App 可能交来的是视频帧:条目落盘之后记下(见 settleVideoFrame)。
+		go settleVideoFrame(context.WithoutCancel(ctx), key, bundleID, artist, title)
 	}
 	// 歌词先上屏:resolveTrackEnrichment 选定歌词后、补外围信息之前回调一次,先提交一份只带
 	// 歌词与网易云封面的条目;下面拿到完整结果后再提交一次,整条覆盖它。
@@ -2678,6 +2684,8 @@ func settleDeviceCover(ctx context.Context, key, artist, title, album, bundleID 
 func deviceCoverUpgradePass(ctx context.Context, key, artist, title, album, bundleID string) bool {
 	deviceCoverURL := deviceCoverURLIfFresh(ctx, true, bundleID, artist, title)
 	if deviceCoverURL == "" {
+		// 交来的可能是视频帧:不当封面,只记下来(见 03 章决策 39)。
+		noteVideoFrame(key, bundleID, artist, title)
 		return false
 	}
 	// 先在锁外把"现有封面"读出来 —— 下面的清晰度判据要发 HTTP 取一次远程候选来比指纹,

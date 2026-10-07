@@ -78,7 +78,12 @@ type appStateArtwork struct {
 	Mime    string `json:"mime"`
 	Bytes   int    `json:"bytes"`
 	PlaySeq int64  `json:"play_seq"`
+	// Kind:空 = 封面;appArtworkKindVideoFrame = 视频帧(App 判成不像封面的那一类,不当封面用,见 03 章决策 39)。
+	Kind string `json:"kind,omitempty"`
 }
+
+// appArtworkKindVideoFrame:App 交来的是视频帧。跟 Swift `PlaybackStateFile.Artwork.videoFrameKind` 是同一个字符串。
+const appArtworkKindVideoFrame = "video_frame"
 
 type appStateRecord struct {
 	Schema         int               `json:"schema"`

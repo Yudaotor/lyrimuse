@@ -270,30 +270,48 @@ func setAppPlaybackArtworkSource(r *appStateReader, artworkPath string) {
 // appPlaybackArtwork:这一首的设备封面,取自 App 写的当前封面文件。ok=false = App 此刻没有这首的封面(换歌那一拍
 // 封面常晚到,settleDeviceCover 之后还会再问)。封面要属于这首(play_seq 相同)、文件校验和与状态里记的一致。
 func appPlaybackArtwork(bundleID, artist, title string) (data []byte, mimeType string, ok bool) {
+	data, mimeType, kind, ok := appPlaybackArtworkOfKind(bundleID, artist, title)
+	if !ok || kind != "" {
+		return nil, "", false
+	}
+	return data, mimeType, true
+}
+
+// appPlaybackVideoFrame:App 这一首交来的视频帧(kind = appArtworkKindVideoFrame),校验同 appPlaybackArtwork。
+func appPlaybackVideoFrame(bundleID, artist, title string) (data []byte, mimeType string, ok bool) {
+	data, mimeType, kind, ok := appPlaybackArtworkOfKind(bundleID, artist, title)
+	if !ok || kind != appArtworkKindVideoFrame {
+		return nil, "", false
+	}
+	return data, mimeType, true
+}
+
+// appPlaybackArtworkOfKind:App 交来的这一首的图和它的 kind,不分封面还是视频帧。
+func appPlaybackArtworkOfKind(bundleID, artist, title string) (data []byte, mimeType, kind string, ok bool) {
 	appPlaybackArtworkMu.Lock()
 	r, path := appPlaybackArtworkReader, appPlaybackArtworkPath
 	appPlaybackArtworkMu.Unlock()
 	if r == nil || path == "" {
-		return nil, "", false
+		return nil, "", "", false
 	}
 	rec, avail := r.read(time.Now())
 	if avail != appStateAvailable {
-		return nil, "", false
+		return nil, "", "", false
 	}
 	if !rec.hasTrack() || rec.Player != bundleID || rec.Track.Artist != artist || rec.Track.Title != title {
-		return nil, "", false
+		return nil, "", "", false
 	}
 	a := rec.Artwork
 	if a == nil || a.PlaySeq != rec.Track.PlaySeq {
-		return nil, "", false
+		return nil, "", "", false
 	}
 	b, err := os.ReadFile(path)
 	if err != nil || len(b) != a.Bytes {
-		return nil, "", false
+		return nil, "", "", false
 	}
 	sum := sha256.Sum256(b)
 	if hex.EncodeToString(sum[:]) != a.SHA256 {
-		return nil, "", false
+		return nil, "", "", false
 	}
-	return b, a.Mime, true
+	return b, a.Mime, a.Kind, true
 }

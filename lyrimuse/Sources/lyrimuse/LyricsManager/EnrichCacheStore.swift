@@ -788,7 +788,7 @@ public final class EnrichCacheStore: ObservableObject {
                 album: parts.album,
                 displayAlbum: displayAlbum,
                 isListedMV: displayAlbum.isEmpty && (entry["youtube_music_mv"] as? Bool ?? false),
-                coverURL: (entry["cover_url"] as? String).flatMap { $0.isEmpty ? nil : URL(string: $0) },
+                coverURL: ManagerCoverURL.from(entry),
                 lyricsSource: entry["lyrics_source"] as? String ?? "",
                 hasWordTiming: bodyFields.contains(.yrc),
                 isManual: entry["manual_lyrics"] as? Bool ?? false,

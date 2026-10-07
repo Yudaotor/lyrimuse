@@ -109,3 +109,22 @@ func TestTitleReverseLookupRewritesWithoutNetwork(t *testing.T) {
 		}
 	}
 }
+
+// 标题反查用的署名:原串和它的别名,合唱 / feat. 署名时再加首歌手和首歌手的别名;去重、保持顺序。
+func TestTitleReverseArtists(t *testing.T) {
+	saved := titleReverseAliases
+	t.Cleanup(func() { titleReverseAliases = saved })
+	aliases := map[string][]string{"Khalil Fong": {"方大同"}, "方大同": {"Khalil Fong"}}
+	titleReverseAliases = func(_ context.Context, a string) []string { return aliases[a] }
+	for in, want := range map[string][]string{
+		"Khalil Fong feat. Hanggai": {"Khalil Fong feat. Hanggai", "Khalil Fong", "方大同"},
+		"方大同":                       {"方大同", "Khalil Fong"},
+		"周杰伦":                       {"周杰伦"},
+		"Khalil Fong & Fiona Sit":   {"Khalil Fong & Fiona Sit", "Khalil Fong", "方大同"},
+	} {
+		got := titleReverseArtists(context.Background(), in)
+		if strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Errorf("titleReverseArtists(%q) = %v, 要 %v", in, got, want)
+		}
+	}
+}

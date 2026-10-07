@@ -14,9 +14,9 @@ import (
 // 接新播放器时它的链接漏了哪一份都不报错,只是那一层悄悄没有这条链接。这里以 enrichEntry 上的字段为准,
 // 每条链接从头走一遍。
 func TestPlatformLinkFieldsReachEveryLayer(t *testing.T) {
-	// 带 _url 但不是歌曲页的:封面、动态封面、设备封面在网上的同一张图各有自己的去处,不归这条管。
+	// 带 _url 但不是歌曲页的:封面、动态封面、设备封面在网上的同一张图、视频帧各有自己的去处,不归这条管。
 	notSongPages := map[string]bool{"cover_url": true, "motion_cover_url": true, "motion_preview_url": true,
-		"public_cover_url": true}
+		"public_cover_url": true, "video_frame_url": true}
 	// App 不读 spotify_url(本地拼的搜索页兜底),Spotify 曲目页由 spotify_track_id 换算(PlatformLinks.spotifySong)。
 	appReads := map[string]string{"spotify_url": "spotify_track_id"}
 

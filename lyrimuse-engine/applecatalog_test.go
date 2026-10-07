@@ -653,3 +653,18 @@ func TestAppleStorefrontArtistCacheDiscardsV1(t *testing.T) {
 		t.Fatalf("v2 回读失败: %v", appleStorefrontArtistCache)
 	}
 }
+
+// 带间隔号的译名用「和」连起来时,多一个把「和」换成空格的查询词;别的形状不加。
+func TestAppleTitleSearchArtistVariant(t *testing.T) {
+	for in, want := range map[string]string{
+		"扎克·埃夫隆和赞达亚": "扎克·埃夫隆 赞达亚",
+		"林隆璇和李聖傑":    "",
+		"謝和弦":        "",
+		"菲尔·科林斯":     "",
+		"":           "",
+	} {
+		if got := appleTitleSearchArtistVariant(in); got != want {
+			t.Errorf("appleTitleSearchArtistVariant(%q) = %q, 要 %q", in, got, want)
+		}
+	}
+}

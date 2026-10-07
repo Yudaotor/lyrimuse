@@ -123,9 +123,14 @@ public enum PlaybackStateFile {
         public var mime: String
         public var bytes: Int
         public var playSeq: Int
+        /// nil = 封面;`videoFrameKind` = 视频帧(不像封面的那一类,引擎不当封面用,见 03 章决策 39)。
+        public var kind: String?
+
+        /// `kind` 的取值:视频帧。引擎 appstate.go 的 `appArtworkKindVideoFrame` 是同一个字符串。
+        public static let videoFrameKind = "video_frame"
 
         enum CodingKeys: String, CodingKey {
-            case sha256, mime, bytes
+            case sha256, mime, bytes, kind
             case playSeq = "play_seq"
         }
     }
@@ -299,8 +304,8 @@ public enum PlaybackStateFile {
         }
 
         /// 记下这一首刚换上的封面(nil = 这首没有封面)。封面带着当时的 `play_seq`,换歌后读方据此认出它属于上一首。
-        public mutating func noteArtwork(sha256: String?, mime: String, bytes: Int) {
-            artwork = sha256.map { Artwork(sha256: $0, mime: mime, bytes: bytes, playSeq: playSeq) }
+        public mutating func noteArtwork(sha256: String?, mime: String, bytes: Int, kind: String? = nil) {
+            artwork = sha256.map { Artwork(sha256: $0, mime: mime, bytes: bytes, playSeq: playSeq, kind: kind) }
         }
 
         public var currentArtwork: Artwork? { artwork }
@@ -403,17 +408,34 @@ public final class PlaybackStatePublisher {
         return CoverArtReplacementGate.isUsableDeviceArtwork(width: size.width, height: size.height) ? data : nil
     }
 
+    /// 交给引擎的视频帧:不像封面、又不是占位小图的那一类(`CoverArtReplacementGate.isVideoFrameArtwork`),转成 JPEG。
+    /// 引擎不当封面用,只在这一首查不到封面时给「歌词管理」当缩略图(见 03 章决策 39)。
+    public nonisolated static func videoFrameForEngine(_ data: Data?) -> Data? {
+        guard let data, !data.isEmpty else { return nil }
+        let size = CoverArtReplacementGate.pixelSize(of: data)
+        guard CoverArtReplacementGate.isVideoFrameArtwork(width: size.width, height: size.height) else { return nil }
+        return CoverArtReplacementGate.jpegData(data)
+    }
+
     /// 这一首换上了新封面(nil = 确认没有封面)。交给引擎的那份(`artworkForEngine`)落到
-    /// `lyrimuse-now-playing-artwork`,状态里记校验和。
+    /// `lyrimuse-now-playing-artwork`,状态里记校验和;不像封面的按视频帧交(`videoFrameForEngine`),状态里标上 kind。
     public func noteArtwork(_ data: Data?) {
         guard !exiting else { return }
         guard let data = Self.artworkForEngine(data) else {
-            tracker.noteArtwork(sha256: nil, mime: "", bytes: 0)
-            republishArtwork()
+            if let frame = Self.videoFrameForEngine(data) {
+                publishArtwork(frame, kind: PlaybackStateFile.Artwork.videoFrameKind)
+            } else {
+                tracker.noteArtwork(sha256: nil, mime: "", bytes: 0)
+                republishArtwork()
+            }
             return
         }
+        publishArtwork(data, kind: nil)
+    }
+
+    private func publishArtwork(_ data: Data, kind: String?) {
         let sha = PlaybackStateFile.sha256Hex(data)
-        tracker.noteArtwork(sha256: sha, mime: PlaybackStateFile.artworkMime(data), bytes: data.count)
+        tracker.noteArtwork(sha256: sha, mime: PlaybackStateFile.artworkMime(data), bytes: data.count, kind: kind)
         if writesEnabled, sink == nil, sha != writtenArtworkSHA {
             writtenArtworkSHA = sha
             let url = PlaybackStateFile.artworkURL

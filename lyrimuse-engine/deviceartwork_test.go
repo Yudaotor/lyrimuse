@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -65,6 +66,54 @@ func TestDeviceCoverURLIfFreshTakesWhatTheAppPublished(t *testing.T) {
 	}
 	if url := deviceCoverURLIfFresh(ctx, true, "com.apple.Music", "Singer", "Song"); url != "" {
 		t.Fatalf("解不开的不用: %q", url)
+	}
+}
+
+// App 标成视频帧的那张不当设备封面;单独落盘、记进条目的 video_frame_url,封面字段不动(03 章决策 39)。
+func TestVideoFrameIsKeptApartFromTheCover(t *testing.T) {
+	savedDir := deviceArtworkDir
+	t.Cleanup(func() { deviceArtworkDir = savedDir })
+	deviceArtworkDir = t.TempDir()
+	dir := t.TempDir()
+	statePath, artPath := filepath.Join(dir, "state.json"), filepath.Join(dir, "artwork")
+	setAppPlaybackArtworkSource(newAppStateReader(statePath), artPath)
+	t.Cleanup(func() { setAppPlaybackArtworkSource(nil, "") })
+	art := makeTestJPEG(t, 32, 18)
+	if err := os.WriteFile(artPath, art, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(art)
+	rec := appSourceRec(os.Getpid(), 4, 1, "Song", time.Now())
+	rec.Seq = 1
+	rec.Artwork = &appStateArtwork{SHA256: hex.EncodeToString(sum[:]), Mime: "image/jpeg", Bytes: len(art), PlaySeq: 4,
+		Kind: appArtworkKindVideoFrame}
+	writeAppStateFile(t, statePath, rec)
+	if url := deviceCoverURLIfFresh(context.Background(), true, "com.apple.Music", "Singer", "Song"); url != "" {
+		t.Fatalf("视频帧不当设备封面: %q", url)
+	}
+	url := videoFrameURLIfFresh("com.apple.Music", "Singer", "Song")
+	if !strings.HasPrefix(url, "file://") {
+		t.Fatalf("视频帧要落盘: %q", url)
+	}
+	const key = "Singer|Song|"
+	withEnrichCache(t, map[string]enrichEntry{key: {Lyrics: "[00:01.00]x"}})
+	if !noteVideoFrame(key, "com.apple.Music", "Singer", "Song") {
+		t.Fatal("条目在缓存里要记上视频帧")
+	}
+	enrichMu.Lock()
+	e := enrichCache[key]
+	enrichMu.Unlock()
+	if e.VideoFrameURL != url || e.CoverURL != "" || e.CoverSource != "" {
+		t.Fatalf("只记视频帧、封面不动: %+v", e)
+	}
+	if noteVideoFrame(key, "com.apple.Music", "Singer", "Song") {
+		t.Error("同一张不重复写")
+	}
+	if noteVideoFrame("Singer|Other|", "com.apple.Music", "Singer", "Song") {
+		t.Error("条目不在缓存里不写")
+	}
+	if b, _ := json.Marshal(e); !strings.Contains(string(b), `"video_frame_url":"`+url+`"`) {
+		t.Errorf("video_frame_url 要落进缓存: %s", b)
 	}
 }
 

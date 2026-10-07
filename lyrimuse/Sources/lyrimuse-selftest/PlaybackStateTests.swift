@@ -244,7 +244,11 @@ func runPlaybackStateTests() {
     publisher.noteArtwork(cover)
     expectEqual(written.count, covered, "写方: 同一张封面不重写")
     publisher.noteArtwork(thumb)
-    expectEqual(written.count == covered + 1 && written.last?.artwork == nil, true, "写方: 不像封面的图按没有封面写")
+    expectEqual(written.count == covered + 1 && written.last?.artwork?.kind == F.Artwork.videoFrameKind, true,
+                "写方: 不像封面的图按视频帧写(03 章决策 39)")
+    expectEqual(written.last?.artwork?.mime, "image/jpeg", "写方: 视频帧转成 JPEG 写")
+    publisher.noteArtwork(nil)
+    expectEqual(written.last?.artwork == nil, true, "写方: 没有图按没有封面写")
 
     publisher.publish(.idle(), now: t0.addingTimeInterval(4))
     expectEqual(written.last?.state, .idle, "写方: 停播写 idle")

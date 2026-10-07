@@ -897,6 +897,33 @@ func runCoverArtTests() {
         expectEqual(PlaybackStatePublisher.artworkForEngine(small), nil, "设备封面: 16×16 按没有封面发")
         expectEqual(PlaybackStatePublisher.artworkForEngine(frame), nil, "设备封面: 视频缩略图按没有封面发")
         expectEqual(PlaybackStatePublisher.artworkForEngine(nil), nil, "设备封面: 没有图还是没有")
+        // 不像封面、又不是占位小图的按视频帧交:转成 JPEG,状态里标 kind(03 章决策 39)。
+        expectEqual(G.isVideoFrameArtwork(width: 320, height: 180), true, "视频帧: 16:9 缩略图算")
+        expectEqual(G.isVideoFrameArtwork(width: 180, height: 320), true, "视频帧: 竖屏截图算")
+        expectEqual(G.isVideoFrameArtwork(width: 120, height: 120), false, "视频帧: 方形是封面,不算")
+        expectEqual(G.isVideoFrameArtwork(width: 100, height: 40), false, "视频帧: 短边不到 64 不算")
+        let frameJPEG = PlaybackStatePublisher.videoFrameForEngine(frame)
+        expectEqual(frameJPEG.map(PlaybackStateFile.artworkMime), "image/jpeg", "视频帧: 转成 JPEG 交")
+        expectEqual(G.pixelSize(of: frameJPEG).width, 320, "视频帧: 尺寸不变")
+        expectEqual(PlaybackStatePublisher.videoFrameForEngine(square), nil, "视频帧: 方形封面不按视频帧交")
+        expectEqual(PlaybackStatePublisher.videoFrameForEngine(small), nil, "视频帧: 占位小图不交")
+        expectEqual(PlaybackStatePublisher.videoFrameForEngine(nil), nil, "视频帧: 没有图还是没有")
+        let framed = try? JSONDecoder().decode(PlaybackStateFile.Artwork.self, from: Data(
+            #"{"sha256":"a","mime":"image/jpeg","bytes":1,"play_seq":2,"kind":"video_frame"}"#.utf8))
+        expectEqual(framed?.kind, PlaybackStateFile.Artwork.videoFrameKind, "视频帧: 状态里的 kind 读得回来")
+        let reencoded = framed.flatMap { try? JSONEncoder().encode($0) }.map { String(decoding: $0, as: UTF8.self) } ?? ""
+        expectEqual(reencoded.contains(#""kind":"video_frame""#), true, "视频帧: kind 写进状态")
+        let cover = try? JSONDecoder().decode(PlaybackStateFile.Artwork.self, from: Data(
+            #"{"sha256":"a","mime":"image/jpeg","bytes":1,"play_seq":2}"#.utf8))
+        let coverJSON = cover.flatMap { try? JSONEncoder().encode($0) }.map { String(decoding: $0, as: UTF8.self) } ?? "kind"
+        expectEqual(cover?.kind == nil && !coverJSON.contains("kind"), true, "视频帧: 封面不带 kind")
+        // 歌词管理的缩略图:有封面用封面,没有用视频帧。
+        let frameURL = "file:///tmp/frame.jpg", coverURL = "https://example.invalid/c.jpg"
+        expectEqual(ManagerCoverURL.from(["cover_url": coverURL, "video_frame_url": frameURL])?.absoluteString, coverURL,
+                    "视频帧: 有封面时用封面")
+        expectEqual(ManagerCoverURL.from(["cover_url": "", "video_frame_url": frameURL])?.absoluteString, frameURL,
+                    "视频帧: 没封面时用视频帧")
+        expectEqual(ManagerCoverURL.from([:]), nil, "视频帧: 都没有为 nil")
     }
 
     // ---- 小封面预先重采样:半调网点缩小不能变成摩尔纹黑斑 ----

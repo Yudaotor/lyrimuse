@@ -50,6 +50,23 @@ public enum CoverArtReplacementGate {
         min(width, height) >= deviceArtworkMinEdge && isCoverShaped(width: width, height: height)
     }
 
+    /// 不像封面、但也不是占位小图:最短边够 `deviceArtworkMinEdge`,形状偏离正方形超过容差(视频缩略图、竖屏截图、横幅)。
+    /// 这一类交给引擎时标成视频帧,不当封面用,见 03 章决策 39。
+    public static func isVideoFrameArtwork(width: Int, height: Int) -> Bool {
+        min(width, height) >= deviceArtworkMinEdge && !isCoverShaped(width: width, height: height)
+    }
+
+    /// 整张图转成 JPEG(质量 0.85)。浏览器交来的视频缩略图常是 TIFF,引擎解不开。读不出来返回 nil。
+    public static func jpegData(_ data: Data) -> Data? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out as CFMutableData, "public.jpeg" as CFString, 1, nil)
+        else { return nil }
+        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        return CGImageDestinationFinalize(dest) ? out as Data : nil
+    }
+
     /// 只读图头取像素宽高(CGImageSource,不解码整图);没有图 / 读不出来返回 (0, 0)。
     public static func pixelSize(of data: Data?) -> (width: Int, height: Int) {
         guard let data,
