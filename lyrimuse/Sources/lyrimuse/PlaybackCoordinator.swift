@@ -593,6 +593,15 @@ final class PlaybackCoordinator: ObservableObject {
         return player
     }
 
+    /// 循环键走浏览器里 YouTube Music 网页版(`YouTubeMusicWebRepeat`)时的那个浏览器,不是就 nil。只在当前播放器不是内置
+    /// 播放器时看(内置的走 `extendedControlPlayer`)。网页版只有循环,没有随机、喜欢、音量。
+    private var youtubeMusicWebTarget: (bundleID: String, family: BrowserAutomationPermission.Family)? {
+        guard currentPlayer == nil else { return nil }
+        return YouTubeMusicWebRepeat.target(
+            reportedBundleID: LocalPlaybackSource.shared.lastResolvedBundleID, webPlatformID: resolvedWebPlatformID,
+            isPaired: { BrowserPositionProbe.shared.isPaired(bundleID: $0, platformID: YouTubeMusicWebRepeat.platformID) })
+    }
+
     /// Apple Music 走 AppleScript 需要"自动化"权限;后台刷新路径上检查它,**绝不弹窗**。
     /// Spotify 不走这个检查:本仓没有针对它的权限探测(读播放位置那条路也没有),权限没给时
     /// 脚本自然失败、读回 nil,按钮不显示 —— 跟"读不出来就不显示"是同一个降级路径。
@@ -616,7 +625,14 @@ final class PlaybackCoordinator: ObservableObject {
     /// 项的回读结果单独作废,不牵连另两项。
     func refreshExtendedControls() {
         guard let player = extendedControlPlayer else {
-            clearExtendedControls()
+            if youtubeMusicWebTarget != nil {
+                // 网页版只有循环键:喜欢、音量清掉,模式单独回读。不先清模式,换歌时循环键不闪一下。
+                if isFavorited != nil { isFavorited = nil }
+                if soundVolume != nil { soundVolume = nil }
+                refreshPlaybackMode()
+            } else {
+                clearExtendedControls()
+            }
             return
         }
         let includeFavorited = MusicPlaybackController.supportsFavorite(player)
@@ -674,6 +690,18 @@ final class PlaybackCoordinator: ObservableObject {
     /// 按钮同一套(见 LyricsOverlayView.controlButton)。
     /// 重新读一次播放模式。跟 refreshFavorited 同一套前置判断和后台线程约定。
     func refreshPlaybackMode() {
+        if extendedControlPlayer == nil, let web = youtubeMusicWebTarget {
+            let seq = playbackModeActionSeq
+            Task.detached(priority: .utility) {
+                let value = YouTubeMusicWebRepeat.readMode(bundleID: web.bundleID, family: web.family)
+                    .map { MusicPlaybackController.PlaybackModeState(mode: $0, options: YouTubeMusicWebRepeat.options) }
+                await MainActor.run { [weak self] in
+                    guard let self, self.playbackModeActionSeq == seq else { return }
+                    self.applyPlaybackMode(value)
+                }
+            }
+            return
+        }
         guard let player = extendedControlPlayer else {
             applyPlaybackMode(nil)
             return
@@ -772,7 +800,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 点一下切到下一档模式。跟 toggleFavorited 一样先乐观更新再回读,以实际结果为准。
     func cyclePlaybackMode() {
-        guard extendedControlPlayer != nil else { return }
+        guard extendedControlPlayer != nil || youtubeMusicWebTarget != nil else { return }
         // 够不到单曲循环的播放器(Spotify)只在 列表 与 随机 之间倒(见 MusicPlaybackMode.next(allowsRepeatOne:))。
         let target = (playbackMode ?? .list)
             .next(allowsRepeatOne: playbackModeOptions.contains(.repeatOne))
@@ -791,6 +819,10 @@ final class PlaybackCoordinator: ObservableObject {
     /// 互斥按钮,要的是"点谁设谁"而不是循环下一档)。乐观更新/权限检查/写成功不回读,
     /// 跟 cyclePlaybackMode 完全同一套取舍。
     func setPlaybackMode(_ target: MusicPlaybackController.MusicPlaybackMode) {
+        if extendedControlPlayer == nil, let web = youtubeMusicWebTarget {
+            setYouTubeMusicWebMode(target, web: web)
+            return
+        }
         guard let player = extendedControlPlayer else { return }
         // 播放器此刻够不到的档位静默降为列表,别让乐观更新画出一个永远写不进去的图标。
         let options = playbackModeOptions
@@ -808,6 +840,19 @@ final class PlaybackCoordinator: ObservableObject {
             // 的注释),这时候读回来的是旧值,只会把刚画对的图标又抹掉。只有写没被接受时
             // 才需要问一遍真实状态,好把乐观更新纠回去。
             guard !wrote else { return }
+            await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
+        }
+    }
+
+    /// 网页版的循环键,取舍同 `setPlaybackMode`:乐观更新、写成了不回读、没写成回读纠正。
+    private func setYouTubeMusicWebMode(_ target: MusicPlaybackController.MusicPlaybackMode,
+                                        web: (bundleID: String, family: BrowserAutomationPermission.Family)) {
+        let options = playbackModeOptions
+        let resolved: MusicPlaybackController.MusicPlaybackMode = options.allows(target) ? target : .list
+        applyPlaybackMode(MusicPlaybackController.PlaybackModeState(mode: resolved, options: options))
+        playbackModeActionSeq &+= 1
+        Task.detached(priority: .userInitiated) {
+            guard !YouTubeMusicWebRepeat.setMode(resolved, bundleID: web.bundleID, family: web.family) else { return }
             await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
         }
     }

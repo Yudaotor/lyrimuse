@@ -834,6 +834,33 @@ func runPlayerIdentityTests() {
                     "循环键: 只能切随机时没有循环键")
     }
 
+    // YouTube Music 网页版的循环键:读写播放条的 repeat-mode 属性,点它自己那颗循环键(YouTubeMusicWebRepeat)。
+    do {
+        typealias Y = YouTubeMusicWebRepeat
+        typealias Mode = MusicPlaybackController.MusicPlaybackMode
+        expectEqual([Y.mode(fromAttribute: "NONE"), Y.mode(fromAttribute: "ALL"), Y.mode(fromAttribute: "one")],
+                    [Mode.list, .repeatAll, .repeatOne], "网页版循环: repeat-mode 三个值对上三档(大小写不论)")
+        expectEqual(Y.parseRead("MODE:ALL\n"), Mode.repeatAll, "网页版循环: 读回 MODE:ALL")
+        expectEqual(Y.parseRead("NOTFOUND"), nil, "网页版循环: 没有页面读不出来")
+        expectEqual(Y.parseSet("SET:ONE"), .set(.repeatOne), "网页版循环: 点过停在单曲循环")
+        expectEqual(Y.parseSet("SKIP:NONE"), .skipped, "网页版循环: 只有暂停的页面时第一轮不点")
+        expectEqual(Y.parseSet("NOTFOUND"), .failed, "网页版循环: 找不到页面算没写成")
+        expectEqual(Y.options.contains(.shuffle), false, "网页版循环: 随机是一次性动作、没有状态,随机键不显示")
+        expectEqual(Y.options.canRepeat, true, "网页版循环: 有循环键")
+        expectEqual(Y.readJS.contains("\"") || Y.setJS(attribute: "ALL", force: true).contains("\""), false,
+                    "网页版循环: 注入的 JS 里没有双引号(要嵌进 AppleScript 字符串)")
+        expectEqual(Y.setJS(attribute: "ALL", force: false).contains("if (true && v && v.paused) return 'PAUSED:SKIP:'"), true,
+                    "网页版循环: 第一轮暂停的页面不点")
+        expectEqual(Y.setJS(attribute: "ALL", force: true).contains("if (false && v && v.paused)"), true,
+                    "网页版循环: 第二轮不管暂停也点")
+        expectEqual(Y.target(reportedBundleID: "com.apple.WebKit.GPU", webPlatformID: "youtubeMusic", isPaired: { _ in true })?.bundleID,
+                    "com.apple.Safari", "网页版循环: Safari 报的媒体进程换成 Safari 本体")
+        expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "spotifyWeb", isPaired: { _ in true }) == nil, true,
+                    "网页版循环: 浏览器里放的不是 YouTube Music 不走这里")
+        expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "youtubeMusic", isPaired: { _ in false }) == nil, true,
+                    "网页版循环: 没配对 YouTube Music 的浏览器不走这里")
+    }
+
     // ---- 播放器网格点一下(设置页与引导页共用 FeatureSettingsStore.togglePlayer)----
     do {
         print("\n== 播放器勾选切换 ==")
