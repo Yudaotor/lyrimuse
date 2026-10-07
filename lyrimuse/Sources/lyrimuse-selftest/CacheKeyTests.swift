@@ -73,6 +73,33 @@ func runCacheKeyTests() {
                     "精简条目: 更新的小文件里没有的正文就是没有,不留旧的")
         expectEqual(adopted.map { EnrichCacheSlim.isSlim($0) }, false, "精简条目: 补完去掉校验值标记")
         expectEqual(adopted?["cover_url"] as? String, "https://x/c.jpg", "精简条目: 元数据以条目为准")
+
+        // 列表摘要建好之后主歌词也拿掉,只留标记;点开时连主歌词一起从小文件补回(见 11 章决策 93)。
+        var snap: [String: [String: Any]] = ["slim": slim, "picked": slim.merging(["manual_pick_sha": "abc"]) { $1 },
+                                             "bare": bare, "noLyrics": EnrichCacheSlim.slim(["lyrics_tr": "[00:01.00]t"])]
+        EnrichCacheSlim.dropMainLyrics(&snap)
+        expectEqual(snap["slim"]?["lyrics"] == nil && snap["slim"]?[EnrichCacheSlim.lyricsInBodyKey] as? Bool == true, true,
+                    "精简条目: 主歌词拿掉、留标记")
+        expectEqual(snap["picked"]?["lyrics"] as? String, "[00:01.00]你好", "精简条目: 手动选定过的留着主歌词(锁定要比它)")
+        expectEqual(snap["bare"].map { NSDictionary(dictionary: $0) }, NSDictionary(dictionary: bare), "精简条目: 不是精简条目的原样")
+        expectEqual(snap["noLyrics"]?[EnrichCacheSlim.lyricsInBodyKey] == nil, true, "精简条目: 没有主歌词的不加标记")
+        expectEqual(["slim", "picked", "bare", "noLyrics"].map { EnrichCacheSlim.hasMainLyrics(snap[$0] ?? [:]) },
+                    [true, true, false, false], "精简条目: 有没有主歌词按字段或标记判")
+        expectEqual(snap["slim"].flatMap { EnrichCacheSlim.hydrate($0, body: body) }.map { NSDictionary(dictionary: $0) },
+                    NSDictionary(dictionary: full), "精简条目: 拿掉主歌词的条目用小文件补回之后跟原条目逐字段相同")
+        expectEqual(snap["slim"].map { NSDictionary(dictionary: EnrichCacheSlim.restoreBodies($0, from: full)) },
+                    NSDictionary(dictionary: full), "精简条目: 从主缓存那条补也补回主歌词、去掉标记")
+        expectEqual(snap["slim"].map { EnrichCacheSlim.stripMarkers($0)[EnrichCacheSlim.lyricsInBodyKey] == nil }, true,
+                    "精简条目: 去标记时一起去掉")
+        // App 侧接线:建完摘要才拿掉主歌词;摘要「有没有词」按字段或标记判。
+        let storeSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/EnrichCacheStore.swift"),
+                                       encoding: .utf8)) ?? ""
+        let buildAt = storeSource.range(of: "box.bundle = Self.buildSummaries(from: obj, lyricsDir: lyricsDir)")?.lowerBound
+        let dropAt = storeSource.range(of: "EnrichCacheSlim.dropMainLyrics(&obj)")?.lowerBound
+        expectEqual(buildAt.flatMap { b in dropAt.map { b < $0 } }, true, "精简条目(契约): 建完摘要才拿掉主歌词")
+        expectEqual(storeSource.contains("hasLyrics: EnrichCacheSlim.hasMainLyrics(entry)"), true,
+                    "精简条目(契约): 摘要的「有没有词」认标记")
         expectEqual(EnrichCacheSlim.adoptNewerBody(slim, body: stale) == nil, true, "精简条目: 不自洽的小文件不用")
         expectEqual(EnrichCacheSlim.adoptNewerBody(full, body: newer) == nil, true, "精简条目: 完整条目不需要补")
 

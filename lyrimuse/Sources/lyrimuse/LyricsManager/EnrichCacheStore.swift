@@ -353,20 +353,24 @@ public final class EnrichCacheStore: ObservableObject {
         let lyricsDir = Self.lyricsDir
         await Task.detached(priority: .userInitiated) {
             box.fingerprint = Self.fileFingerprint(cacheURL)
-            let snapshot = Self.loadSlimSnapshot(cacheURL: cacheURL)
+            var snapshot = Self.loadSlimSnapshot(cacheURL: cacheURL)
             box.readMS = snapshot.readMS
             box.parseMS = snapshot.parseMS
             box.bytes = snapshot.bytes
-            guard let obj = snapshot.obj else {
+            guard var obj = snapshot.obj else {
                 box.parseFailed = snapshot.parseFailed
                 return
             }
-            box.obj = obj
+            // 只留 obj 这一个引用,下面 dropMainLyrics 才是就地改、不复制整份。
+            snapshot.obj = nil
             let tBuild = CFAbsoluteTimeGetCurrent()
             // summaries 的构建+排序也在后台做掉(原来回 MainActor 同步跑,
             // 每次开窗/激活吃几十到一二百 ms 主线程),主线程只收结果赋值。
             box.bundle = Self.buildSummaries(from: obj, lyricsDir: lyricsDir)
             box.buildMS = LyricsManagerBaseline.ms(since: tBuild)
+            // 摘要建好了,主歌词不用整份留着(约 40 MB),点开哪一首 hydrate 再从正文小文件补(EnrichCacheSlim.dropMainLyrics)。
+            EnrichCacheSlim.dropMainLyrics(&obj)
+            box.obj = obj
         }.value
         if let obj = box.obj, let bundle = box.bundle {
             raw = obj
@@ -677,7 +681,6 @@ public final class EnrichCacheStore: ObservableObject {
         var items = raw.keys.compactMap { key -> Summary? in
             guard let parts = Self.splitKey(key) else { return nil }
             let entry = raw[key] ?? [:]
-            let lyrics = entry["lyrics"] as? String ?? ""
             // 四块正文有没有:精简条目看位图(EnrichCacheSlim),不去读正文。
             let bodyFields = EnrichCacheSlim.presentFields(entry)
             let canonical = entry["canonical_artist"] as? String ?? ""
@@ -721,7 +724,7 @@ public final class EnrichCacheStore: ObservableObject {
                 lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
                 hasTranslation: bodyFields.contains(.tr),
                 hasRomanization: bodyFields.contains(.roma),
-                hasLyrics: !lyrics.isEmpty,
+                hasLyrics: EnrichCacheSlim.hasMainLyrics(entry),
                 isInstrumental: entry["instrumental"] as? Bool ?? false,
                 hasPlainTextFallback: bodyFields.contains(.plain),
                 knownOnSources: Self.knownOnSources(entry),

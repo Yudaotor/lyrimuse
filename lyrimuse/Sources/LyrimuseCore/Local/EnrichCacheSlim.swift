@@ -4,7 +4,7 @@ import zlib
 /// 「歌词管理」内存里的**精简条目**:主缓存的一条去掉四块大正文(`lyrics_yrc` / `lyrics_tr` /
 /// `lyrics_roma` / `plain_lyrics`),记上校验值和「有哪几块正文」。形状跟引擎给播放那一侧写的
 /// 精简索引(`lyrimuse-enrich-index.json`,见引擎 enrichindex.go)逐字段一致,所以索引可以直接当
-/// 精简快照用;主歌词 `lyrics` 留着(批量锁定 / 解锁、时间轴偏移的内容指纹都要它)。
+/// 精简快照用。主歌词 `lyrics` 等列表摘要建好之后也拿掉(`dropMainLyrics`),只有带 `manual_pick_sha` 的留着。
 ///
 /// ## 为什么
 ///
@@ -22,6 +22,8 @@ public enum EnrichCacheSlim {
     public static let crcKey = "body_crc"
     public static let fieldsKey = "body_fields"
     public static let bodiesDirectoryName = "lyrimuse-lyrics-bodies"
+    /// 主歌词已经从这一条拿掉、只在正文小文件里的标记(见 dropMainLyrics)。只出现在「歌词管理」的内存快照里,不落盘。
+    public static let lyricsInBodyKey = "lyrics_in_body"
     /// 精简时去掉的几块正文。改这张表要跟引擎 `leanForIndex` 同步。
     public static let strippedFields = ["lyrics_yrc", "lyrics_tr", "lyrics_roma", "plain_lyrics", "lyrics_bg"]
 
@@ -77,6 +79,24 @@ public enum EnrichCacheSlim {
         return f
     }
 
+    /// 列表摘要建好之后,把快照里精简条目的主歌词拿掉,只留 lyricsInBodyKey:正文小文件里有一份一样的,点开哪一首
+    /// hydrate 时补回。整份快照里主歌词约 40 MB。带 `manual_pick_sha` 的留着(「手动选定后锁定」要逐条比主歌词,只有
+    /// 几条);不是精简条目的(没有正文小文件)也留着。就地改:先复制一份的话,整份快照要多占几十 MB。见 11 章决策 93。
+    public static func dropMainLyrics(_ snapshot: inout [String: [String: Any]]) {
+        func droppable(_ entry: [String: Any]) -> Bool {
+            isSlim(entry) && entry["manual_pick_sha"] == nil && !((entry["lyrics"] as? String) ?? "").isEmpty
+        }
+        for i in snapshot.values.indices where droppable(snapshot.values[i]) {
+            snapshot.values[i].removeValue(forKey: "lyrics")
+            snapshot.values[i][lyricsInBodyKey] = true
+        }
+    }
+
+    /// 这一条有没有主歌词:字段本身,或者 dropMainLyrics 留下的标记。
+    public static func hasMainLyrics(_ entry: [String: Any]) -> Bool {
+        !((entry["lyrics"] as? String) ?? "").isEmpty || (entry[lyricsInBodyKey] as? Bool) == true
+    }
+
     /// 精简一条完整条目;没有正文的原样返回。
     public static func slim(_ entry: [String: Any]) -> [String: Any] {
         if isSlim(entry) { return entry }
@@ -104,6 +124,8 @@ public enum EnrichCacheSlim {
         for (k, v) in pairs {
             if let v, !v.isEmpty { out[k] = v }
         }
+        // 主歌词被 dropMainLyrics 拿掉了:小文件里那份就是它(上面的校验值连主歌词一起算过)。
+        if entry[lyricsInBodyKey] != nil, let lyrics = body.lyrics, !lyrics.isEmpty { out["lyrics"] = lyrics }
         return out
     }
 
@@ -141,6 +163,7 @@ public enum EnrichCacheSlim {
         for k in strippedFields {
             if let v = full?[k] as? String, !v.isEmpty { out[k] = v }
         }
+        if entry[lyricsInBodyKey] != nil, let v = full?["lyrics"] as? String, !v.isEmpty { out["lyrics"] = v }
         return out
     }
 
@@ -156,10 +179,11 @@ public enum EnrichCacheSlim {
     }
 
     public static func stripMarkers(_ entry: [String: Any]) -> [String: Any] {
-        guard entry[crcKey] != nil || entry[fieldsKey] != nil else { return entry }
+        guard entry[crcKey] != nil || entry[fieldsKey] != nil || entry[lyricsInBodyKey] != nil else { return entry }
         var out = entry
         out.removeValue(forKey: crcKey)
         out.removeValue(forKey: fieldsKey)
+        out.removeValue(forKey: lyricsInBodyKey)
         return out
     }
 
