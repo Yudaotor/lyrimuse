@@ -365,6 +365,9 @@ public final class PlaybackStatePublisher {
     private let sink: ((Data) -> Void)?
     private let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-state")
     private var lastWriteUptime: TimeInterval?
+    /// 上一次记「状态文件写失败」的时刻(系统运行时长)。磁盘写满、目录没权限时每拍都失败,隔这么久才再记一行。
+    private var lastWriteFailureLogUptime: TimeInterval?
+    private static let writeFailureLogInterval: TimeInterval = 60
 
     private let appPID = getpid()
     private let appStartedAtMs = PlaybackStateFile.millis(Date())
@@ -439,7 +442,14 @@ public final class PlaybackStatePublisher {
         if writesEnabled, sink == nil, sha != writtenArtworkSHA {
             writtenArtworkSHA = sha
             let url = PlaybackStateFile.artworkURL
-            artworkQueue.async { try? data.write(to: url, options: .atomic) }
+            let logger = self.logger
+            artworkQueue.async {
+                do {
+                    try data.write(to: url, options: .atomic)
+                } catch {
+                    logger.error("playback state: artwork write failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
         }
         republishArtwork()
     }
@@ -516,8 +526,16 @@ public final class PlaybackStatePublisher {
         guard let data = PlaybackStateFile.encode(record) else { return }
         if let sink {
             sink(data)
-        } else {
-            try? data.write(to: PlaybackStateFile.url, options: .atomic)
+            return
+        }
+        do {
+            try data.write(to: PlaybackStateFile.url, options: .atomic)
+        } catch {
+            // 写不出去的话引擎 15 秒后判 App 不可用,不记这一行就看不出为什么。
+            let uptime = ProcessInfo.processInfo.systemUptime
+            guard lastWriteFailureLogUptime.map({ uptime - $0 >= Self.writeFailureLogInterval }) ?? true else { return }
+            lastWriteFailureLogUptime = uptime
+            logger.error("playback state: write failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

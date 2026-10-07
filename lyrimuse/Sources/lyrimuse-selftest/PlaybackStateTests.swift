@@ -207,6 +207,10 @@ func runPlaybackStateTests() {
                 "防节能: 活动只免 App Nap(.userInitiatedAllowingIdleSystemSleep)")
     expectEqual(publisherSource.contains("options: .userInitiated,") || publisherSource.contains("idleSystemSleepDisabled"), false,
                 "防节能: 不拦系统空闲睡眠")
+    expectEqual(!publisherSource.contains("try? data.write(")
+                && publisherSource.contains("logger.error(\"playback state: write failed:")
+                && publisherSource.contains("logger.error(\"playback state: artwork write failed:"), true,
+                "写方: 状态文件、封面写不出去要记日志(状态文件一分钟一行),不然引擎判 App 不可用时看不出原因")
 
     // ---- 封面文件的类型与校验和 ----
     expectEqual(F.artworkMime(Data([0xFF, 0xD8, 0xFF, 0xE0, 0, 0])), "image/jpeg", "封面类型: JPEG")
