@@ -163,3 +163,30 @@ func TestSpotifyISRCMultiAccount(t *testing.T) {
 		}
 	}
 }
+
+// 存量补录一次查一批:多账号时先查到的算(同 spotifyLocalISRC);前一个账号有记录、没有 ISRC 的接着看后一个;没有记录、
+// 格式不对的 id 不在结果里。不进单条查找的缓存。
+func TestSpotifyLocalISRCsBatch(t *testing.T) {
+	resetSpotifyISRCCache(t, writeTestSpotifyISRCCache(t,
+		map[string]string{testSpotifyID1: "HKA351401008", testSpotifyID3: ""},
+		map[string]string{testSpotifyID1: "USRC11700001", testSpotifyID2: "USCA20801738", testSpotifyID3: "GBAYE0601498"}))
+	got := spotifyLocalISRCs([]string{testSpotifyID1, testSpotifyID2, testSpotifyID3, "short", "1234567890123456789012"})
+	want := map[string]string{testSpotifyID1: "HKA351401008", testSpotifyID2: "USCA20801738", testSpotifyID3: "GBAYE0601498"}
+	if len(got) != len(want) {
+		t.Fatalf("得到 %v,要 %v", got, want)
+	}
+	for id, code := range want {
+		if got[id] != code {
+			t.Errorf("%s: 得到 %q,要 %q", id, got[id], code)
+		}
+	}
+	spotifyISRCMu.Lock()
+	cached := len(spotifyISRCHits) + len(spotifyISRCMisses)
+	spotifyISRCMu.Unlock()
+	if cached != 0 {
+		t.Errorf("批量查找不该写单条查找的缓存: %d 条", cached)
+	}
+	if got := spotifyLocalISRCs(nil); len(got) != 0 {
+		t.Errorf("没有 id:空结果,得到 %v", got)
+	}
+}

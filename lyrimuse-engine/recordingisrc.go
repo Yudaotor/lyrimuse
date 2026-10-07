@@ -213,11 +213,17 @@ func startRecordingISRCSweep(ctx context.Context) {
 	found := map[string][]string{}
 	settled := map[string]bool{}
 	byStorefront := map[string][]isrcSweepJob{}
+	// Spotify 那几条一次查完:本机库每个账号只扫一遍(见 spotifyLocalISRCs)。
+	var spotifyIDs []string
 	for _, job := range jobs {
 		if job.spotifyID != "" {
-			if code, ok := spotifyLocalISRC(job.spotifyID); ok {
-				found[job.key] = append(found[job.key], code)
-			}
+			spotifyIDs = append(spotifyIDs, job.spotifyID)
+		}
+	}
+	spotifyCodes := spotifyLocalISRCs(spotifyIDs)
+	for _, job := range jobs {
+		if code := spotifyCodes[job.spotifyID]; job.spotifyID != "" && code != "" {
+			found[job.key] = append(found[job.key], code)
 		}
 		if job.appleID == "" {
 			settled[job.key] = true

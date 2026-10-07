@@ -164,6 +164,10 @@ func TestRecordingISRCWiring(t *testing.T) {
 	if !strings.Contains(read("poller.go"), "go startRecordingISRCSweep(ctx)") {
 		t.Error("引擎起来时开存量补扫")
 	}
+	if sweep := read("recordingisrc.go"); !strings.Contains(sweep, "spotifyCodes := spotifyLocalISRCs(spotifyIDs)") ||
+		strings.Contains(sweep, "spotifyLocalISRC(job.") {
+		t.Error("存量补扫的 Spotify 那几条一次查完(spotifyLocalISRCs),别一条一条查")
+	}
 	if !strings.Contains(read("../lyrimuse/Sources/LyrimuseCore/Local/EnrichCacheReader.swift"), "        case isrcs\n") {
 		t.Error("App 解码 isrcs(EnrichCacheReader.swift 的 CodingKeys)")
 	}

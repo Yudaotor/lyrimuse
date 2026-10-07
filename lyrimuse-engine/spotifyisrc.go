@@ -214,6 +214,41 @@ func spotifyLocalISRC(trackID string) (string, bool) {
 	return code, true
 }
 
+// spotifyLocalISRCs:一批曲目各自的 ISRC(查不到的不在结果里),给存量补录(startRecordingISRCSweep)用。读的跟
+// spotifyLocalISRC 是同一份库、同一个先后(多账号时先查到的算),只是每个账号的库只扫一遍、一次带上全部 key:ldbGet
+// 每调一次都要把每个表文件的索引和整个 .log 读一遍,一条一条查,几百条就是几百遍(本机第一次补录 547 条)。
+// 不碰 spotifyLocalISRC 的命中 / 未命中缓存,也不逐条记日志 —— 补录收尾那行汇总里有条数。
+func spotifyLocalISRCs(trackIDs []string) map[string]string {
+	out := map[string]string{}
+	idByKey := map[string]string{}
+	for _, id := range trackIDs {
+		if len(id) == 22 {
+			idByKey[string(spotifyXmetaKey(spotifyTrackKind, id))] = id
+		}
+	}
+	root := spotifyISRCUsersDir()
+	if len(idByKey) == 0 || root == "" {
+		return out
+	}
+	for _, dir := range spotifyISRCLedgerDirs(root) {
+		var keys [][]byte
+		for k, id := range idByKey {
+			if _, done := out[id]; !done {
+				keys = append(keys, []byte(k))
+			}
+		}
+		if len(keys) == 0 {
+			break
+		}
+		for k, v := range ldbGet(dir, keys) {
+			if code := spotifyParseISRC(v); code != "" {
+				out[idByKey[k]] = code
+			}
+		}
+	}
+	return out
+}
+
 // playbackISRC 是给歌词源用的入口:「这次播放的这首歌」的 ISRC,没有就返回空串。
 //
 // 只在 Spotify 原生客户端播放时有值 —— 曲目 ID 由 platformtrackid.go 在换曲那一拍记下,
