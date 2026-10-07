@@ -524,6 +524,9 @@ enum NotchMetrics {
     /// 留着它,下一个人会拿它去排版、在非默认字号下把主行裁掉一截。
     static var secondaryLyricLineHeight: CGFloat { NotchLyricRowMetrics.secondaryLineHeight }
     static var secondaryLineSpacing: CGFloat { NotchLyricRowMetrics.lineSpacing }
+    /// 副行关着时主行往上提的量。行框竖直居中时字的上下留白差不到 1px,可整行阴影朝下
+    /// (下移 1、半径 2),看上去下面更窄;提 1pt 让字连同阴影落在歌词行正中。见 05 章决策 73。
+    static let singleLineOpticalLift: CGFloat = 1
     /// 展开区的最大高度 / 按内容算的实际高度 —— 实现在 LyrimuseCore 的
     /// NotchExpandedMetrics(那边有完整的推导注释和 selftest 断言),这里只是转发,
     /// 让调用点仍然只需要认识 NotchMetrics 这一个入口。
@@ -1991,6 +1994,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             }
         } else {
             mainLyricLine
+                .offset(y: -NotchMetrics.singleLineOpticalLift)
         }
     }
 
