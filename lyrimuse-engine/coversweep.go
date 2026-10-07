@@ -15,7 +15,8 @@ import (
 //
 // 进程起来 coverSweepInitialDelay 后跑一遍,之后每 coverSweepInterval 一遍。一遍里逐条串行,两首之间隔
 // coverSweepGap;轮到一条时有别的歌在解析(enrichInflight 非空)先等它,最多等 coverSweepYieldMax。
-// 每条最多在这里补一次:补过一次 PeripheralRetryCount 就不是 0 了,之后照旧等播放时再试。
+// 每条最多在这里补一次:补过一次 PeripheralRetryCount 就不是 0 了,之后照旧等播放时再试。例外是补法换了一版
+// (coverMissingRetryRules 加一):按旧版补过的缺封面条目不管补过几次、到没到外围补全的上限,都再补一次。见 03 章决策 38。
 // 一条补完一个请求都没成功时不算补过(见 backfillPeripheralFields 记次数那一行),等 coverSweepOfflineWait
 // 再补下一条;连续 coverSweepOfflineLimit 条都这样就停下这一遍,coverSweepOfflineRetry 后再来。
 // 补一条不当场存盘:每补完 coverSweepSaveEvery 条、以及一遍收尾时要一次存盘,这一次也跟别的歌的改动一样攒着、
@@ -43,6 +44,9 @@ const (
 	coverUpgradeRecheckInterval = 30 * 24 * time.Hour
 	// coverUpgradeCheckRules:找清晰版的第几版找法,多了来源就加一(第 2 版加了歌词判决的各源候选,见 03 章决策 36)。
 	coverUpgradeCheckRules = 2
+	// coverMissingRetryRules:缺封面的补法第几版,多了一道补查就加一(第 1 版:双语曲名、判决里的歌手写法、Deezer,
+	// 03 章决策 37;放宽歌词候选自带的封面、去掉 feat. 署名,决策 38)。
+	coverMissingRetryRules = 1
 )
 
 var (
@@ -183,11 +187,17 @@ func coverSweepYield(ctx context.Context) {
 }
 
 // coverSweepEligibleLocked:这一条现在该不该在后台补一次封面。只挑补的时候不重搜歌词的(有词、手改过或标了纯音乐,
-// 同 peripheralBackfillSkipsLyrics),没词的归补空扫描(lyricsfillsweep.go);key 里没有歌手的不补。调用方持有 enrichMu。
+// 同 peripheralBackfillSkipsLyrics),没词的归补空扫描(lyricsfillsweep.go);key 里没有歌手的不补。没补过的按外围补全的
+// 上限和节流;补过的只在补法换了一版时再补一次,只看节流。调用方持有 enrichMu。
 func coverSweepEligibleLocked(key string, e enrichEntry) bool {
 	artist, title, _ := splitEnrichKey(key)
-	return artist != "" && title != "" && e.CoverURL == "" && e.PeripheralRetryCount == 0 &&
-		peripheralBackfillSkipsLyrics(e) && !enrichInflight[key] && peripheralBackfillWindowOpen(e)
+	if artist == "" || title == "" || e.CoverURL != "" || !peripheralBackfillSkipsLyrics(e) || enrichInflight[key] {
+		return false
+	}
+	if e.PeripheralRetryCount == 0 {
+		return peripheralBackfillWindowOpen(e)
+	}
+	return e.CoverMissingRetryRules < coverMissingRetryRules && peripheralBackfillThrottleElapsed(e)
 }
 
 // coverSweepCandidatesLocked 挑出这一遍要补的 key,按歌手、专辑、key 排(同一张专辑的挨着补)。调用方持有 enrichMu。
@@ -370,13 +380,20 @@ func coverSweepOne(ctx context.Context, key string) coverSweepOutcome {
 	coverSweepBackfill(withCoverSweepDeferredSave(withBackgroundOutbound(ctx)), key, artist, coverSweepTitle(title), album, dur)
 	attempts, failures := round()
 	enrichMu.Lock()
-	filled := enrichCache[key].CoverURL != ""
-	enrichMu.Unlock()
-	switch {
-	case filled:
-		return coverSweepFilled
-	case !lyricsRoundConfirmsNoResult(attempts, failures):
+	defer enrichMu.Unlock()
+	cur, ok := enrichCache[key]
+	filled := ok && cur.CoverURL != ""
+	if !filled && !lyricsRoundConfirmsNoResult(attempts, failures) {
 		return coverSweepOffline
+	}
+	// 按这一版补法补过了(一个请求都没成功的不算)。
+	if ok {
+		cur.CoverMissingRetryRules = coverMissingRetryRules
+		enrichCache[key] = cur
+		enrichDirty = true
+	}
+	if filled {
+		return coverSweepFilled
 	}
 	return coverSweepMissed
 }

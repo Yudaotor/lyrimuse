@@ -22,11 +22,13 @@ func TestWinnerCandidateCover(t *testing.T) {
 		d     *lyricsDecision
 		album string
 	}{
-		"专辑对不上":  {d, "半生雪 (DJ版)"},
-		"本地没有专辑": {d, ""},
-		"没有判决":   {nil, "半生雪"},
-		"胜者没封面": {&lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
-			cand("kugou", 900, "半生雪", ""), cand("qq", 800, "半生雪", "https://q/1.jpg")}}, "半生雪"},
+		"专辑多了版本限定词": {d, "半生雪 (DJ版)"},
+		"专辑完全不沾边":   {d, "冬眠"},
+		"没有判决":      {nil, "半生雪"},
+		"胜者没封面、别的源专辑对不上": {&lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
+			cand("kugou", 900, "半生雪", ""), cand("qq", 800, "冬眠", "https://q/1.jpg")}}, "半生雪"},
+		"胜者没封面、别的源负分": {&lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
+			cand("kugou", 900, "半生雪", ""), cand("qq", -1, "半生雪", "https://q/1.jpg")}}, "半生雪"},
 		"胜者封面不是 https": {&lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
 			cand("kugou", 900, "半生雪", "http://k/1.jpg")}}, "半生雪"},
 		"胜者那条被拒": {&lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
@@ -36,6 +38,30 @@ func TestWinnerCandidateCover(t *testing.T) {
 	} {
 		if got, _, _ := winnerCandidateCover(c.d, c.album); got != "" {
 			t.Errorf("%s:不该给,得到 %q", name, got)
+		}
+	}
+}
+
+// 放宽的几种:本地没报专辑、一个专辑名包含另一个且版本限定词一样、胜者没封面时别的源对得上的那条。
+func TestWinnerCandidateCoverLoosened(t *testing.T) {
+	cand := func(source string, score int, album, cover string) lyricsDecisionCandidate {
+		return lyricsDecisionCandidate{Source: source, Score: score, Album: album, CoverURL: cover}
+	}
+	for name, c := range map[string]struct {
+		d                  *lyricsDecision
+		album, cover, from string
+	}{
+		"本地没有专辑": {&lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
+			cand("kugou", 1100, "半生雪", "https://k/1.jpg")}}, "", "https://k/1.jpg", "kugou"},
+		"专辑名包含、没有版本词": {&lyricsDecision{Winner: "kugou", Candidates: []lyricsDecisionCandidate{
+			cand("kugou", 1092, "龙虎门 RAP N' ROLL - Vol.06", "https://k/2.jpg")}}, "RAP N' ROLL", "https://k/2.jpg", "kugou"},
+		"胜者没封面、看后面的源": {&lyricsDecision{Winner: "qq", Candidates: []lyricsDecisionCandidate{
+			cand("qq", 837, "", ""), cand("kugou", 811, "齐天大圣(单曲)", "https://k/3.jpg")}}, "", "https://k/3.jpg", "kugou"},
+		"胜者有封面时不看别的源": {&lyricsDecision{Winner: "qq", Candidates: []lyricsDecisionCandidate{
+			cand("kugou", 1200, "", "https://k/4.jpg"), cand("qq", 1100, "", "https://q/4.jpg")}}, "", "https://q/4.jpg", "qq"},
+	} {
+		if got, src, _ := winnerCandidateCover(c.d, c.album); got != c.cover || src != c.from {
+			t.Errorf("%s:要 %q(%s),得到 %q(%s)", name, c.cover, c.from, got, src)
 		}
 	}
 }

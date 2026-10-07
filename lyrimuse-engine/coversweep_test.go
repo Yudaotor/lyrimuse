@@ -69,7 +69,9 @@ func TestCoverSweepCandidates(t *testing.T) {
 		"A|t1|Y":     {Instrumental: true},
 		"A|t3|Y":     {ManualLyrics: true, Lyrics: coverSweepLyrics},
 		"A|has|Y":    {Lyrics: coverSweepLyrics, CoverURL: "https://c"},
-		"A|tried|Y":  {Lyrics: coverSweepLyrics, PeripheralRetryCount: 1},
+		"A|tried|Y":  {Lyrics: coverSweepLyrics, PeripheralRetryCount: 1, CoverMissingRetryRules: coverMissingRetryRules},
+		"A|old|Y":    {Lyrics: coverSweepLyrics, PeripheralRetryCount: peripheralBackfillMaxAttempts},
+		"A|recent|Y": {Lyrics: coverSweepLyrics, PeripheralRetryCount: 1, PeripheralTS: time.Now().Unix()},
 		"A|nolyr|Y":  {},
 		"|t|Y":       {Lyrics: coverSweepLyrics},
 		"A|fresh|Y":  {Lyrics: coverSweepLyrics, TS: time.Now().Unix()},
@@ -80,9 +82,10 @@ func TestCoverSweepCandidates(t *testing.T) {
 	enrichInflight["A|busy|Y"] = true
 	got := coverSweepCandidatesLocked()
 	enrichMu.Unlock()
-	want := []string{"A|t1|Y", "A|t3|Y", "A|t2|Z", "B|t1|Album"}
+	want := []string{"A|old|Y", "A|t1|Y", "A|t3|Y", "A|t2|Z", "B|t1|Album"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("候选 = %v, 要 %v(有封面、补过、没词、没歌手、刚解析过、正在解析的都不挑;同歌手按专辑排)", got, want)
+		t.Fatalf("候选 = %v, 要 %v(有封面、按这一版补过、没词、没歌手、刚解析过、刚补过、正在解析的都不挑;"+
+			"按旧版补过的不管次数再挑一次;同歌手按专辑排)", got, want)
 	}
 }
 
@@ -180,6 +183,28 @@ func TestCoverSweepStopsAfterOfflineStreak(t *testing.T) {
 	calls, _ = withCoverSweepFakes(t, [][2]int32{{3, 3}, {3, 3}, {3, 3}, {3, 3}, {3, 1}, {3, 3}, {3, 3}}, nil)
 	if pass := runCoverSweep(context.Background()); pass.offline || len(*calls) != len(entries) || pass.missed != 1 {
 		t.Errorf("中间成了一条就该重新数: 补了 %d 条, %+v", len(*calls), pass)
+	}
+}
+
+// 补过一次(补上了、没补上)记下这一版补法;一个请求都没成功的不记,下一遍还挑它。
+func TestCoverSweepRecordsRetryRules(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|Hit|X":  {Lyrics: coverSweepLyrics},
+		"A|Miss|X": {Lyrics: coverSweepLyrics},
+		"A|Off|X":  {Lyrics: coverSweepLyrics},
+	})
+	withCoverSweepFakes(t, [][2]int32{{2, 0}, {2, 0}, {2, 2}}, func(key string) {
+		if key == "A|Hit|X" {
+			coverSweepSetCover(key)
+		}
+	})
+	runCoverSweep(context.Background())
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for key, want := range map[string]int{"A|Hit|X": coverMissingRetryRules, "A|Miss|X": coverMissingRetryRules, "A|Off|X": 0} {
+		if got := enrichCache[key].CoverMissingRetryRules; got != want {
+			t.Errorf("%s:记的补法版本 %d,要 %d", key, got, want)
+		}
 	}
 }
 

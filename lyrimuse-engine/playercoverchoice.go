@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -144,22 +145,50 @@ func decisionCandidateCovers(key string, d *lyricsDecision) []coverCandidate {
 	return out
 }
 
-// winnerCandidateCover:歌词胜出的那个源自带的封面,它报的专辑名跟本地逐字对上(albumScore 200)才给,只认 https;返回封面、
-// 源名、它报的专辑名。三源、同专辑邻居、设备封面、播放器自带的都没给出封面时拿它兜底。见 03 章决策 36。
+// winnerCandidateCover:歌词判决里得了正分的候选自带的封面,只认 https,专辑要对得上(candidateCoverAlbumFits);返回封面、
+// 源名、它报的专辑名。先看胜出的那个源(同源只看排在最前的那条),它没有能用的再按候选顺序看别的源。三源、同专辑邻居、
+// 设备封面、播放器自带的都没给出封面时拿它兜底。见 03 章决策 36、38。
 func winnerCandidateCover(d *lyricsDecision, album string) (cover, source, coverAlbum string) {
-	if d == nil || d.Winner == "" || strings.TrimSpace(album) == "" {
+	if d == nil || d.Winner == "" {
 		return "", "", ""
 	}
+	usable := func(c lyricsDecisionCandidate) bool {
+		return c.Score > 0 && candidateCoverURLOK(c.CoverURL) && candidateCoverAlbumFits(c.Album, album)
+	}
 	for _, c := range d.Candidates {
-		if c.Source != d.Winner || c.Score <= 0 {
+		if c.Source == d.Winner {
+			if usable(c) {
+				return c.CoverURL, c.Source, c.Album
+			}
+			break
+		}
+	}
+	seen := map[string]bool{d.Winner: true}
+	for _, c := range d.Candidates {
+		if seen[c.Source] {
 			continue
 		}
-		if candidateCoverURLOK(c.CoverURL) && albumScore(c.Album, album) == 200 {
+		seen[c.Source] = true
+		if usable(c) {
 			return c.CoverURL, c.Source, c.Album
 		}
-		break
 	}
 	return "", "", ""
+}
+
+// candidateCoverAlbumFits:候选报的专辑能不能当本地这首的专辑:本地没报专辑;逐字对上(albumScore 200);一个包含另一个
+// (100)且两边的版本限定词一样(「半生雪」对「半生雪 (DJ版)」不算)。纯函数。
+func candidateCoverAlbumFits(candidateAlbum, album string) bool {
+	if strings.TrimSpace(album) == "" {
+		return true
+	}
+	switch albumScore(candidateAlbum, album) {
+	case 200:
+		return true
+	case 100:
+		return maps.Equal(titleVersionTags(candidateAlbum), titleVersionTags(album))
+	}
+	return false
 }
 
 // upgradeSmallDeviceCover:存量的小设备封面(deviceCoverURL)换成同一张图的清晰版 —— 依次试 ctx 上这一拍在放的播放器给的、

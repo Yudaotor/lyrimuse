@@ -1,12 +1,17 @@
 package main
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // 网易云 / Apple / QQ 三源和同专辑邻居都没给出封面时的补查,只在封面还空着时跑,按顺序、拿到一张就停:
 //  1. 双语曲名(「Gold Rush Town 淘金小鎮」)拆出的汉字那段 —— 查歌词的标题反查早就这么拆(bilingualTitleHanPart),
 //     曲库按整串搜不到。拆出来的曲名时长当未知:这类标题多半是视频,比录音室版长。
 //  2. 这一轮歌词判决里被认下的候选报的歌手写法(「蒋雪儿Snow.J」),播放器报的写法(「蒋雪儿」)过不了各源的歌手比对。
 //  3. 这首录音的 ISRC 在 Deezer 上那一条的专辑封面,歌手或曲名对得上才用。
+// 第 1、2 步另外试去掉合作署名的写法:歌手取第一位(「Khalil Fong feat. Hanggai」→「Khalil Fong」),曲名去掉 feat. 那段
+// (「Drunken (feat. Hanggai)」→「Drunken」),见决策 38。
 //
 // 写 CoverAlbum 跟三源同一个口径:网易云 / Apple / Deezer 写来源自己报的专辑名,QQ 不回传、写空。见 03 章决策 37。
 
@@ -96,8 +101,15 @@ func retryMissingCover(ctx context.Context, l coverRetryLookups, artist, title, 
 	if han != "" {
 		titles = append(titles, query{title: han})
 	}
+	if t := titleWithoutFeatCredit(title); t != "" {
+		titles = append(titles, query{title: t, duration: durationSecs})
+	}
+	artists := []string{artist}
+	if first := primaryCreditedArtist(artist); first != "" && normLoose(first) != normLoose(artist) {
+		artists = append(artists, first)
+	}
 	var queries []query
-	for _, a := range append([]string{artist}, artistNames...) {
+	for _, a := range append(artists, artistNames...) {
 		for _, t := range titles {
 			if a == artist && t.title == title {
 				continue
@@ -139,6 +151,30 @@ func retryMissingCover(ctx context.Context, l coverRetryLookups, artist, title, 
 		return coverRetryResult{t.cover(), "deezer", t.Album.Title}, true
 	}
 	return coverRetryResult{}, false
+}
+
+// primaryCreditedArtist:署名里的第一位。「X feat. Y」去掉 feat. 那段,「X、Y」「X & Y」取 X(firstCreditedArtist);
+// 只有一位时原样返回。纯函数。
+func primaryCreditedArtist(artist string) string {
+	if s, ok := stripTitleFeatCredit(artist); ok {
+		return strings.TrimSpace(s)
+	}
+	return firstCreditedArtist(artist)
+}
+
+// titleWithoutFeatCredit:曲名里带合作署名(「Drunken (feat. Hanggai)」「Song feat. X」)时去掉那段,不带时返回空串。纯函数。
+func titleWithoutFeatCredit(title string) string {
+	if !titleFeatCreditRe.MatchString(title) {
+		return ""
+	}
+	t := strings.TrimSpace(stripParens(title))
+	if s, ok := stripTitleFeatCredit(t); ok {
+		t = strings.TrimSpace(s)
+	}
+	if t == "" || normLoose(t) == normLoose(title) {
+		return ""
+	}
+	return t
 }
 
 // deezerCoverTrackFits:按 ISRC 取回的那条录音,歌手跟 names 里任意一个对得上,或者曲名跟 title、双语曲名拆出的哪一段对得上。

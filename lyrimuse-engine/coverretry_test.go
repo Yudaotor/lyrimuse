@@ -134,6 +134,42 @@ func TestRetryMissingCoverDeezerNeedsArtistOrTitle(t *testing.T) {
 	}
 }
 
+func TestRetryMissingCoverStripsFeatCredit(t *testing.T) {
+	f := &fakeCoverRetry{have: map[string]string{"apple|Khalil Fong|Drunken": "https://is1-ssl.mzstatic.com/x.jpg"}}
+	r, ok := retryMissingCover(context.Background(), f.lookups(), "Khalil Fong feat. Hanggai", "Drunken (feat. Hanggai)",
+		"JOURNEY TO THE WEST", 266, nil, nil)
+	if !ok || r.url != "https://is1-ssl.mzstatic.com/x.jpg" || r.source != "apple" {
+		t.Fatalf("got %+v ok=%v, calls %v", r, ok, f.calls)
+	}
+}
+
+func TestPrimaryCreditedArtist(t *testing.T) {
+	for in, want := range map[string]string{
+		"Khalil Fong feat. Hanggai": "Khalil Fong",
+		"謝和弦, 王士榛":                  "謝和弦",
+		"周杰伦":                       "周杰伦",
+	} {
+		if got := primaryCreditedArtist(in); got != want {
+			t.Errorf("primaryCreditedArtist(%q) = %q,要 %q", in, got, want)
+		}
+	}
+}
+
+func TestTitleWithoutFeatCredit(t *testing.T) {
+	for in, want := range map[string]string{
+		"Drunken (feat. Hanggai)": "Drunken",
+		"爸爸辛苦了 (feat. 王士榛)":       "爸爸辛苦了",
+		"Song ft. Someone":        "Song",
+		"Feather":                 "",
+		"晴天":                      "",
+		"Gold Rush Town 淘金小鎮":     "",
+	} {
+		if got := titleWithoutFeatCredit(in); got != want {
+			t.Errorf("titleWithoutFeatCredit(%q) = %q,要 %q", in, got, want)
+		}
+	}
+}
+
 func TestRetryMissingCoverNothingToTry(t *testing.T) {
 	f := &fakeCoverRetry{}
 	if _, ok := retryMissingCover(context.Background(), f.lookups(), "周杰伦", "晴天", "叶惠美", 269, nil, nil); ok || len(f.calls) != 0 {

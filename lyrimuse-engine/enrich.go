@@ -407,6 +407,9 @@ type enrichEntry struct {
 	// CoverUpgradeCheckRules:上一次核对时按的是哪一版找法(coverUpgradeCheckRules)。找法多了来源,按旧版本核过的
 	// 不等 30 天,下一遍就重核。
 	CoverUpgradeCheckRules int `json:"cover_upgrade_check_rules,omitempty"`
+	// CoverMissingRetryRules:后台补封面上一次按哪一版补法补过这条缺封面的(coverMissingRetryRules)。补法多了一道,
+	// 按旧版补过的不管补过几次都再补一次。
+	CoverMissingRetryRules int `json:"cover_missing_retry_rules,omitempty"`
 
 	// SpotifyTrackID:Spotify 原生客户端播这首歌时 AppleScript `spotify url` 给的 22 位曲目 ID
 	// (见 spotifytrack.go)。有它就能拼出真链接 open.spotify.com/track/<id>:fields() 里的
@@ -1007,9 +1010,11 @@ func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
 // (enrichPeripheralRetryInterval),needsPeripheralBackfill 与 coverNeedsHintCheck
 // (albumhint.go)两条触发条件共用。
 func peripheralBackfillWindowOpen(e enrichEntry) bool {
-	if e.PeripheralRetryCount >= peripheralBackfillMaxAttempts {
-		return false
-	}
+	return e.PeripheralRetryCount < peripheralBackfillMaxAttempts && peripheralBackfillThrottleElapsed(e)
+}
+
+// peripheralBackfillThrottleElapsed:离上一次外围补全过了 enrichPeripheralRetryInterval,不看次数上限。
+func peripheralBackfillThrottleElapsed(e enrichEntry) bool {
 	base := e.PeripheralTS
 	if base == 0 {
 		base = e.TS // 老条目:拆分之前两者是同一个值
