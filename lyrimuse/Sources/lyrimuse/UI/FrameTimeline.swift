@@ -3,7 +3,7 @@ import LyrimuseCore
 import QuartzCore
 import SwiftUI
 
-/// 歌词窗口的逐帧时钟:一条跟着宿主窗口所在屏幕走的 display link,有人要刷新时才开。
+/// 歌词窗口的逐帧时钟:一条跟着宿主窗口所在屏幕走的 display link,有人要刷新时才开,回调频率按在用的票要的间隔降下来。
 ///
 /// 替代 `TimelineView(.animation)`:进程里有 SwiftUI `ScrollView` 时,`TimelineView(.animation)` 驱动的每一帧要完整
 /// 渲染两次;display link 回调里改一次状态,这一帧只渲染一次(07 章决策 99)。
@@ -17,6 +17,8 @@ final class FrameClock {
     private(set) var stalledSeconds: Double = 0
     /// 上一帧的目标时刻(`CACurrentMediaTime` 时基);时钟停着时 nil。
     private var lastFrame: CFTimeInterval?
+    /// display link 降到的回调频率(Hz);nil = 跟屏幕刷新率走。
+    private var reducedRate: Double?
 
     nonisolated init() {}
 
@@ -39,6 +41,7 @@ final class FrameClock {
         // 从停着恢复时从这一刻算起:恢复它的那次更新把主线程卡住的话,下一帧晚到的那段照样算卡住。
         if idle { lastFrame = nil } else if lastFrame == nil { lastFrame = CACurrentMediaTime() }
         link?.isPaused = idle
+        if !idle { retune(active.allObjects) }
     }
 
     /// 过渡动画(换句错开、景深、滚动指示条)用的时刻:墙钟减去累计卡住的时长(07 章决策 108)。
@@ -59,6 +62,8 @@ final class FrameClock {
             ?? NSScreen.main?.displayLink(target: proxy, selector: selector)
         made?.add(to: .main, forMode: .common)
         link = made
+        reducedRate = nil
+        retune(active.allObjects)
     }
 
     fileprivate func tick(_ link: CADisplayLink) {
@@ -75,6 +80,24 @@ final class FrameClock {
         lastFrame = target
         let date = Date(timeIntervalSinceNow: target - CACurrentMediaTime())
         for ticket in tickets { ticket.advance(to: date) }
+        retune(tickets)
+    }
+
+    /// 按在用的票要的间隔给 display link 降频(判据在 Core 的 `FrameCadence.linkRate`,见 07 章决策 140)。降频后一拍的目标时刻离上一拍正好
+    /// 一个回调间隔,`FrameStall` 按这个间隔判,不会算成卡顿。换到更快的一档时跟从停着恢复一样从这一刻算卡顿:慢档最后一拍的
+    /// 目标时刻还在后面,拿它比会漏掉恢复它的那次更新卡住的时长。
+    private func retune(_ tickets: [FrameTicket]) {
+        guard let link else { return }
+        let display = link.duration > 0
+            ? 1 / link.duration
+            : Double((host?.window?.screen ?? NSScreen.main)?.maximumFramesPerSecond ?? 0)
+        let rate = FrameCadence.linkRate(intervals: tickets.map(\.minimumInterval), displayRate: display)
+        guard rate != reducedRate else { return }
+        let faster = (rate ?? .infinity) > (reducedRate ?? .infinity)
+        if faster, lastFrame != nil { lastFrame = CACurrentMediaTime() }
+        reducedRate = rate
+        link.preferredFrameRateRange = rate.map { CAFrameRateRange(minimum: Float($0), maximum: Float($0), preferred: Float($0)) }
+            ?? .default
     }
 }
 

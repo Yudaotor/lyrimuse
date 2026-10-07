@@ -209,6 +209,48 @@ func runLyricsWindowTests() {
         expectEqual(updates, 4, "节流: 0.25 秒档在 60Hz 屏上每秒刷 4 次")
     }
 
+    // MARK: - 逐帧时钟降频(FrameCadence.linkRate,07 章决策 140)
+    do {
+        typealias C = FrameCadence
+        expectEqual(C.linkRate(intervals: [0.25], displayRate: 60), 4, "降频: 只剩 0.25 秒档时 60Hz 屏上降到 4Hz")
+        expectEqual(C.linkRate(intervals: [0.25, 0.25], displayRate: 120), 4, "降频: 120Hz 屏上同样降到 4Hz")
+        expectEqual(C.linkRate(intervals: [1.0 / 30], displayRate: 60), 30, "降频: 30Hz 档在 60Hz 屏上降到 30Hz")
+        expectEqual(C.linkRate(intervals: [1.0 / 60], displayRate: 120), 60, "降频: 60Hz 档在 120Hz 屏上降到 60Hz")
+        expectEqual(C.linkRate(intervals: [0.25, 1.0 / 60], displayRate: 120), 60, "降频: 120Hz 屏上 4Hz 加 60Hz 降到 60Hz")
+        expectEqual(C.linkRate(intervals: [0.25, 1.0 / 30], displayRate: 120), 60, "降频: 30 帧和 4 帧取公约数 2 帧")
+        expectEqual(C.linkRate(intervals: [0.25, 1.0 / 60], displayRate: 60), nil, "降频: 60Hz 屏上要 60Hz 就是跟屏幕走")
+        expectEqual(C.linkRate(intervals: [0.25, 0], displayRate: 60), nil, "降频: 有要逐帧的(过渡)不降")
+        expectEqual(C.linkRate(intervals: [0.25, 1.0 / 30], displayRate: 60), nil, "降频: 15 帧和 2 帧没有大于 1 的公约数,不降")
+        expectEqual(C.linkRate(intervals: [0.25], displayRate: 75), nil, "降频: 0.25 秒不是整数个 75Hz 帧,不降")
+        expectEqual(C.linkRate(intervals: [], displayRate: 60), nil, "降频: 没有在用的票")
+        expectEqual(C.linkRate(intervals: [0.25], displayRate: 0), nil, "降频: 屏幕刷新率读不到不降")
+        expectEqual(C.linkRate(intervals: [0.25], displayRate: 59.94), 3.996, "降频: 59.94Hz 屏上 0.25 秒按 15 帧算")
+        expectEqual(C.linkRate(intervals: [0.25], displayRate: 1 / 0.0166666), 4, "降频: 帧长读数的零头不改档位")
+        // 降下来之后每一档照旧按自己的间隔准点刷新:10 秒里刷的次数正好是 10 / 间隔
+        let cases: [([Double], Double)] = [([0.25], 60), ([0.25], 120), ([0.25], 144), ([0.25], 59.94),
+                                           ([1.0 / 30], 60), ([0.25, 1.0 / 60], 120), ([0.25, 1.0 / 30], 120)]
+        for (intervals, display) in cases {
+            guard let rate = C.linkRate(intervals: intervals, displayRate: display) else {
+                expectEqual(true, false, "降频: \(intervals) 在 \(display)Hz 屏上应该降")
+                continue
+            }
+            let ticks = Int((rate * 10).rounded())
+            for interval in intervals {
+                var updates = 0
+                var last = -1.0
+                for k in 0..<ticks {
+                    let t = Double(k) / rate
+                    if C.isDue(sinceLast: t - last, minimumInterval: interval) {
+                        updates += 1
+                        last = t
+                    }
+                }
+                let expected = Int((10 / interval).rounded())
+                expectEqual(updates, expected, "降频: \(display)Hz 屏降到 \(rate)Hz 时 \(interval) 秒档 10 秒刷 \(expected) 次")
+            }
+        }
+    }
+
     // MARK: - 各行景深的过渡曲线(LyricsDepthMotion,07 章决策 106)
     do {
         typealias M = LyricsDepthMotion
@@ -290,6 +332,12 @@ func runLyricsWindowTests() {
                     "逐帧时钟(契约): 时钟挂在这一份所在的窗口上")
         expectEqual(sourceBytes(frame, contain: "displayLink(target: proxy, selector: selector)"), true,
                     "逐帧时钟(契约): 时钟是宿主窗口的 display link")
+        expectEqual(sourceBytes(frame, contain: "let rate = FrameCadence.linkRate(intervals: tickets.map(\\.minimumInterval), displayRate: display)"), true,
+                    "逐帧时钟(契约): display link 按在用的票要的间隔降频")
+        expectEqual(frame.components(separatedBy: "retune(").count - 1, 4,
+                    "逐帧时钟(契约): 起链、换票、每一拍都重新定档(三处调用加定义)")
+        expectEqual(sourceBytes(frame, contain: "if faster, lastFrame != nil { lastFrame = CACurrentMediaTime() }"), true,
+                    "逐帧时钟(契约): 换到更快的一档时从这一刻算卡顿 —— 慢档最后一拍的目标时刻还在后面")
     }
 
     // MARK: - 图层列表的时间轴(LyricsLayerTiming)

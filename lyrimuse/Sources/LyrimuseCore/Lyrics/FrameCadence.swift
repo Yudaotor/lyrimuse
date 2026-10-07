@@ -8,6 +8,26 @@ public enum FrameCadence {
     public static func isDue(sinceLast elapsed: Double, minimumInterval: Double) -> Bool {
         elapsed >= minimumInterval - tolerance
     }
+
+    /// display link 该降到多少 Hz 回调;nil = 跟屏幕刷新率走。每个间隔都要能折成整数个屏幕帧(差不到 `tolerance` 的一半,
+    /// 59.94Hz 屏上 0.25 秒按 15 帧算),回调间隔取这些帧数的最大公约数:每个间隔都是它的整数倍,`isDue` 照旧每一拍正好到点。
+    /// 有要逐帧的(间隔 0)、或者哪个间隔折不成整数帧(75Hz 屏上的 0.25 秒)就不降 —— 除不尽时节流要隔一拍才刷。
+    /// 结果保留三位小数:屏幕帧长的读数有微小抖动,同一档不该算成换了一档。
+    public static func linkRate(intervals: [Double], displayRate: Double) -> Double? {
+        guard displayRate > 0, !intervals.isEmpty else { return nil }
+        var step = 0
+        for interval in intervals {
+            let frames = (interval * displayRate).rounded()
+            guard frames >= 1, abs(interval - frames / displayRate) <= tolerance / 2 else { return nil }
+            step = greatestCommonDivisor(step, Int(frames))
+        }
+        guard step > 1 else { return nil }
+        return (displayRate / Double(step) * 1000).rounded() / 1000
+    }
+
+    private static func greatestCommonDivisor(_ a: Int, _ b: Int) -> Int {
+        b == 0 ? a : greatestCommonDivisor(b, a % b)
+    }
 }
 
 /// 主线程卡住、display link 漏掉帧时,过渡动画(歌词窗口的换句错开、景深、滚动指示条)的时间轴要扣掉多少:卡住那段
