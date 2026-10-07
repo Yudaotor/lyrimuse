@@ -18,7 +18,7 @@ func TestLyricsEntryFromScoredDefersHelperRoma(t *testing.T) {
 	t.Cleanup(func() { onDeviceRomanizer = saved })
 
 	scored := []scoredLyricCandidateResult{{Source: "kugou", Score: 900, Lyrics: "[00:01.00]你好世界\n[00:02.00]今天天气很好"}}
-	e, picked := lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "某人", "某歌", "", 200, neteaseInfo{}, scored, nil, nil, false, "")
+	e, picked := lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "某人", "某歌", "", 200, neteaseInfo{}, scored, nil, nil, false, "", nil)
 	if picked == nil || e.Lyrics == "" {
 		t.Fatalf("picked=%v", picked)
 	}

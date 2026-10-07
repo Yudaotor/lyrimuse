@@ -156,17 +156,17 @@ func TestLogLyricsDecisionLine(t *testing.T) {
 	t.Run("先上屏与最终定案合成一行", func(t *testing.T) {
 		scored := []scoredLyricCandidateResult{{Source: "qq", Lyrics: "[00:01.00]a", Score: 900}}
 		if out := capture(func() {
-			lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, scored, nil, nil, true, "")
+			lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, scored, nil, nil, true, "", nil)
 		}); strings.Contains(out, "lyrics decision") {
 			t.Errorf("先上屏那一份不该落 Info: %q", out)
 		}
 		if out := capture(func() {
-			lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, scored, nil, nil, false, "qq")
+			lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, scored, nil, nil, false, "qq", nil)
 		}); !strings.Contains(out, "lyrics decision") || strings.Contains(out, "provisional_winner") {
 			t.Errorf("最终定案要落 Info;胜者跟先上屏的一样时不带 provisional_winner: %q", out)
 		}
 		if out := capture(func() {
-			lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, scored, nil, nil, false, "kugou")
+			lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, scored, nil, nil, false, "kugou", nil)
 		}); !strings.Contains(out, "provisional_winner=kugou") {
 			t.Errorf("先上屏的是另一个源时要带上 provisional_winner: %q", out)
 		}

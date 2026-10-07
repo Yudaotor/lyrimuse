@@ -70,12 +70,12 @@ func TestLyricsEntryFromScoredSongwriters(t *testing.T) {
 		{Source: "qq", Score: 900, Lyrics: "[00:01.00]hi"},
 		{Source: "applemusic", Score: 600, Lyrics: "[00:01.00]hi", Songwriters: []string{"甲", "乙"}},
 	}
-	e, picked := lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, scored, nil, nil, true, "")
+	e, picked := lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, scored, nil, nil, true, "", nil)
 	if picked == nil || picked.Source != "qq" || !reflect.DeepEqual(e.LyricsSongwriters, []string{"甲", "乙"}) {
 		t.Fatalf("picked=%v songwriters=%q", picked, e.LyricsSongwriters)
 	}
 	none := []scoredLyricCandidateResult{{Source: "applemusic", Score: 0, Songwriters: []string{"甲"}}}
-	if e, _ := lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, none, nil, nil, true, ""); !reflect.DeepEqual(e.LyricsSongwriters, []string{"甲"}) {
+	if e, _ := lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "a", "t", "", 0, neteaseInfo{}, none, nil, nil, true, "", nil); !reflect.DeepEqual(e.LyricsSongwriters, []string{"甲"}) {
 		t.Fatalf("没有正文的那一轮: %q", e.LyricsSongwriters)
 	}
 }

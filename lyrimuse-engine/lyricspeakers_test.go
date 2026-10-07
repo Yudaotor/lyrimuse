@@ -306,7 +306,7 @@ func TestLyricsEntryFromScoredSpeakers(t *testing.T) {
 	setFeatureForTest(t, func(f *featureFlags) { f.LyricsSources = map[string]bool{"qq": true, "musixmatch": true} })
 	winner := spkLRC(20000, spkLines...)
 	e, picked := lyricsEntryFromScored(lyricsDecisionPathFirstResolve, "A & B", "Song", "", 60, neteaseInfo{},
-		[]scoredLyricCandidateResult{{Source: "qq", Score: 1100, Lyrics: winner}, spkMx(spkSpans)}, nil, nil, false, "")
+		[]scoredLyricCandidateResult{{Source: "qq", Score: 1100, Lyrics: winner}, spkMx(spkSpans)}, nil, nil, false, "", nil)
 	if picked == nil || picked.Source != "qq" || e.LyricsSpeakers == nil || e.LyricsSpeakers.For != lyricSpeakersFingerprint(winner, "") {
 		t.Fatalf("picked=%v speakers=%+v", picked, e.LyricsSpeakers)
 	}

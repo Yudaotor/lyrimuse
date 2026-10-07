@@ -260,6 +260,18 @@ func TestEarlyLyricsWatch(t *testing.T) {
 		t.Fatalf("收齐后换了一份,该再提交且只提交一次: %v", calls)
 	}
 
+	// 收齐后挑出来的是别的源、内容跟先上屏的一样(只差元信息标签):不再提交。
+	calls = nil
+	ctx = withProvisionalLyrics(target, record)
+	w = newEarlyLyricsWatch(ctx, "A", "T")
+	w.observe(neteaseInfo{}, []scoredLyricCandidateResult{kugou}, map[string]bool{"kugou": true})
+	qqSame := qq
+	qqSame.Lyrics = "[offset:0]\n" + kugou.Lyrics
+	notifyProvisionalLyrics(ctx, neteaseInfo{}, []scoredLyricCandidateResult{qqSame, kugou})
+	if !slices.Equal(calls, []string{"kugou"}) {
+		t.Fatalf("换了个源但内容一样,不该再提交: %v", calls)
+	}
+
 	// 已经回调过(首轮收齐时那一次)之后,中途先上屏不再起作用:同一个 ctx 上合计至多两次。
 	calls = nil
 	ctx = withProvisionalLyrics(target, record)

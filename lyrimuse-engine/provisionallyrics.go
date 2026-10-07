@@ -4,6 +4,9 @@ import (
 	"context"
 	"log"
 	"log/slog"
+	"slices"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -16,16 +19,16 @@ import (
 // 进到递归调用里拿到结果时,由递归那一层的补查轮入口回调。
 //
 // 正在播的这首还可能在首轮中途就先上屏一次(showEarly,见 earlylyrics.go)。那样的话首轮收齐时
-// 只有挑出来的跟先上屏的那份不同才再回调,同一个 ctx 上合计至多两次。
+// 只有挑出来的那份上屏后看得出跟先上屏的不同(sameShownLyrics)才再回调,同一个 ctx 上合计至多两次。
 type provisionalLyricsKey struct{}
 
 type provisionalLyricsHook struct {
 	mu    sync.Mutex
 	fired bool
-	// early:首轮中途已经先上屏过,shownSource / shownLyrics 是那一份;rechecked:首轮收齐后已经比过一次。
-	early, rechecked         bool
-	shownSource, shownLyrics string
-	fn                       func(neteaseInfo, []scoredLyricCandidateResult)
+	// early:首轮中途已经先上屏过,shown 是那一份;rechecked:首轮收齐后已经比过一次。
+	early, rechecked bool
+	shown            scoredLyricCandidateResult
+	fn               func(neteaseInfo, []scoredLyricCandidateResult)
 }
 
 // withProvisionalLyrics 挂回调。fn 在检索 goroutine 里同步执行,只该做提交这种快操作。
@@ -45,14 +48,15 @@ func (h *provisionalLyricsHook) showEarly(ctx context.Context, ne neteaseInfo, r
 		return false
 	}
 	h.fired, h.early = true, true
-	h.shownSource, h.shownLyrics = picked.Source, picked.Lyrics
+	h.shown = *picked
 	h.mu.Unlock()
 	h.fn(ne, results)
 	return true
 }
 
 // notifyProvisionalLyrics 在每个补查轮的入口调用。没先上屏过时至多回调一次;首轮中途先上屏过时,
-// 第一次调用比一下挑出来的是不是还是那一份(源与正文),不同才回调,之后不再回调。
+// 第一次调用比一下挑出来的那份上屏后看不看得出跟先上屏的不同(sameShownLyrics,换了个源但内容一样不算),
+// 不同才回调,之后不再回调。见 09 章决策 203。
 func notifyProvisionalLyrics(ctx context.Context, ne neteaseInfo, results []scoredLyricCandidateResult) {
 	h, _ := ctx.Value(provisionalLyricsKey{}).(*provisionalLyricsHook)
 	if h == nil || ctx.Err() != nil || !hasUsableLyricCandidate(results) {
@@ -64,7 +68,7 @@ func notifyProvisionalLyrics(ctx context.Context, ne neteaseInfo, results []scor
 		h.fired = true
 	case h.early && !h.rechecked:
 		h.rechecked = true
-		if p := pickLyricCandidate(results); p == nil || p.Source == h.shownSource && p.Lyrics == h.shownLyrics {
+		if p := pickLyricCandidate(results); p == nil || sameShownLyrics(*p, h.shown) {
 			h.mu.Unlock()
 			return
 		}
@@ -96,9 +100,12 @@ func neteasePeripheralFields(ne neteaseInfo, durationSecs float64) enrichEntry {
 // 决策日志一首只记一行:provisional(先上屏那一份)落 Debug,它跟最终定案通常一模一样;最终定案时
 // shownFirst 是先上屏那份的源("" = 没有先上屏),跟最终胜者不同就带上 provisional_winner,开头几秒
 // 显示的是另一份歌词这件事照样看得到。
+//
+// onScreen 是最近一次提交上屏的那一份(nil = 没有)。最终定案挑出来的是别的源、上屏后却看不出差别时,
+// 留在屏上那个源(keepShownLyrics),日志带 kept_on_screen_over。
 func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSecs float64, ne neteaseInfo,
 	scored []scoredLyricCandidateResult, skipped []string, queries []lyricQueryRecord,
-	provisional bool, shownFirst string) (enrichEntry, *scoredLyricCandidateResult) {
+	provisional bool, shownFirst string, onScreen *scoredLyricCandidateResult) (enrichEntry, *scoredLyricCandidateResult) {
 	e := neteasePeripheralFields(ne, durationSecs)
 	// 不管选没选中,都记下这一轮到底有哪些源真的给出了可用候选 —— needsLyricsRetry
 	// 靠"有启用的源这轮没露面"来判断这次结果是不是在信息不全的情况下做的决定。
@@ -107,9 +114,15 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	e.LyricsSourcesSkipped = lyricSourcesSkippedForRetry(skipped)
 	e.LyricsSongwriters = songwritersFromScored(scored)
 	picked := pickLyricCandidate(scored)
+	var extra []any
+	if !provisional {
+		if kept := keepShownLyrics(scored, picked, onScreen); kept != picked {
+			extra = append(extra, "kept_on_screen_over", picked.Source)
+			picked = kept
+		}
+	}
 	e.LyricsDecision = newLyricsDecision(
 		decisionPath, artist, title, album, durationSecs, scored, picked, picked != nil)
-	var extra []any
 	if !provisional && shownFirst != "" && (picked == nil || picked.Source != shownFirst) {
 		extra = append(extra, "provisional_winner", shownFirst)
 	}
@@ -161,4 +174,55 @@ func (l *earlyCommitLog) note(key, source string) {
 	default:
 		slog.Debug("lyrics: committed early again, same source", "key", key, "source", source)
 	}
+}
+
+// keepShownLyrics:picked 是另一个源、上屏后却跟 onScreen 看不出差别时,换成 scored 里 onScreen 那个源、
+// 内容也一样的那一条;找不到就照旧用 picked。见 09 章决策 203。
+func keepShownLyrics(scored []scoredLyricCandidateResult, picked, onScreen *scoredLyricCandidateResult) *scoredLyricCandidateResult {
+	if picked == nil || onScreen == nil || picked.Source == onScreen.Source || !sameShownLyrics(*picked, *onScreen) {
+		return picked
+	}
+	usable := lyricCandidateUsable(scored)
+	for i := range scored {
+		if scored[i].Source == onScreen.Source && usable(scored[i]) && sameShownLyrics(scored[i], *onScreen) {
+			return &scored[i]
+		}
+	}
+	return picked
+}
+
+// sameShownLyrics:两份候选上屏后看不看得出差别。整行正文、逐字、译文、罗马音、背景人声逐一按 shownLyricsForm 比,
+// 任何一处不同(时间差 1 毫秒也算)都是不同。
+func sameShownLyrics(a, b scoredLyricCandidateResult) bool {
+	return slices.Equal(shownLyricsForm(a.Lyrics), shownLyricsForm(b.Lyrics)) &&
+		slices.Equal(shownLyricsForm(a.LyricsYRC), shownLyricsForm(b.LyricsYRC)) &&
+		slices.Equal(shownLyricsForm(a.LyricsTr), shownLyricsForm(b.LyricsTr)) &&
+		slices.Equal(shownLyricsForm(a.LyricsRoma), shownLyricsForm(b.LyricsRoma)) &&
+		slices.Equal(shownLyricsForm(a.LyricsBG), shownLyricsForm(b.LyricsBG))
+}
+
+// shownLyricsForm 把一份歌词换成只留上屏看得出的部分:LRC 行的时间标签换算成毫秒(`[00:01.5]` 与 `[00:01.500]` 相同),
+// 逐字行(`[1000,500]…`)原样;[offset:] 不为 0 时单记一项;元信息行(`[ti:]`、`[id:]`)、不带时间的行、行首尾空白都不算。
+func shownLyricsForm(s string) []string {
+	var out []string
+	if off := lrcOffsetTagMs(s); off != 0 {
+		out = append(out, "offset:"+strconv.Itoa(off))
+	}
+	for _, raw := range strings.Split(s, "\n") {
+		line := strings.TrimSpace(raw)
+		if m := lrcLinePattern.FindStringSubmatch(line); m != nil {
+			var b strings.Builder
+			for _, tag := range lrcTimeTagPattern.FindAllString(m[1], -1) {
+				if st := lrcTimestampCaptureRe.FindStringSubmatch(tag); st != nil {
+					b.WriteString("[" + strconv.Itoa(lrcStampMs(st)) + "]")
+				} else {
+					b.WriteString(tag)
+				}
+			}
+			out = append(out, b.String()+strings.TrimSpace(m[2]))
+		} else if len(line) > 1 && line[0] == '[' && line[1] >= '0' && line[1] <= '9' {
+			out = append(out, line)
+		}
+	}
+	return out
 }

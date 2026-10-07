@@ -3047,14 +3047,16 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	roundCtx, queries := withLyricQueryLog(roundCtx)
 	// 首轮先上屏(见 provisionallyrics.go):首轮挑得出歌词、还要接着跑补查轮时,先把首轮的结果提交一份;正在播的这首
 	// 还可能在首轮中途就先上屏(见 earlylyrics.go),回调最多来两次。
-	// shownFirst:最早上屏的那一份用的是哪个源,给最终定案那行决策日志用(见 lyricsEntryFromScored)。
+	// shownFirst:最早上屏的那一份用的是哪个源,给最终定案那行决策日志用;onScreen:最近一次上屏的那一份,
+	// 最终定案跟它看不出差别时留着它(见 lyricsEntryFromScored)。
 	var shownMu sync.Mutex
 	var shownFirst string
+	var onScreen *scoredLyricCandidateResult
 	if onLyrics != nil {
 		roundCtx = withProvisionalLyrics(roundCtx, func(ne neteaseInfo, scored []scoredLyricCandidateResult) {
 			timer := newStepTimer()
 			if p, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
-				round.skippedSources(), queries.queries(), true, ""); picked != nil {
+				round.skippedSources(), queries.queries(), true, "", nil); picked != nil {
 				p.LyricsListedAlbum = listedAlbum
 				p.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
 				timer.mark("build")
@@ -3062,6 +3064,8 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 				if shownFirst == "" {
 					shownFirst = picked.Source
 				}
+				shown := *picked
+				onScreen = &shown
 				shownMu.Unlock()
 				onLyrics(p)
 				timer.mark("commit")
@@ -3083,10 +3087,10 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 决策固化(见 decision.go):首次解析是最要紧的一份 —— 缓存永久保留,这一刻的运气
 	// 就是这首歌以后一直显示的东西,不记下来事后无从复盘。
 	shownMu.Lock()
-	provisionalSource := shownFirst
+	provisionalSource, lastShown := shownFirst, onScreen
 	shownMu.Unlock()
 	e, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
-		round.skippedSources(), queries.queries(), false, provisionalSource)
+		round.skippedSources(), queries.queries(), false, provisionalSource, lastShown)
 	e.LyricsListedAlbum = listedAlbum
 	e.ISRCs = recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, searchAlbum), scored, durationSecs)
 	e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
