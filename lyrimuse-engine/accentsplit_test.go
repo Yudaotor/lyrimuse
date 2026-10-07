@@ -274,6 +274,8 @@ func TestMigrateAccentSplits(t *testing.T) {
 		"h|partial|":  {Lyrics: "[00:01.00]C'est la dernière danse\n[00:05.00]C'est la derni ère fois"},
 		"i|clean-yrc|": {Lyrics: "[00:07.26]Und ein mä rchen voll musik",
 			LyricsYRC: "[7260,1200](7260,200,0)Und (7460,200,0)ein (7660,200,0)mä(7860,200,0)rchen (8060,200,0)voll (8260,200,0)musik"},
+		"j|picked|":       {Lyrics: damaged, ManualPickSHA: manualPickFingerprint(damaged)},
+		"k|picked-stale|": {Lyrics: damaged, ManualPickSHA: "stale"},
 	})
 	enrichMu.Lock()
 	savedPath, savedDirty := enrichPath, enrichDirty
@@ -312,6 +314,12 @@ func TestMigrateAccentSplits(t *testing.T) {
 	}
 	if e := enrichCache["i|clean-yrc|"]; e.Lyrics != "[00:07.26]Und ein märchen voll musik" {
 		t.Errorf("整行坏、逐字好的,拿自己的逐字修整行: %q", e.Lyrics)
+	}
+	if e := enrichCache["j|picked|"]; !strings.Contains(e.Lyrics, "großen") || e.ManualPickSHA != manualPickFingerprint(e.Lyrics) {
+		t.Errorf("原样采纳的候选修完空格还算原样采纳,手动选定的指纹跟着换: %+v", e)
+	}
+	if e := enrichCache["k|picked-stale|"]; !strings.Contains(e.Lyrics, "großen") || e.ManualPickSHA != "stale" {
+		t.Errorf("原本就对不上的手动选定指纹不动: %+v", e)
 	}
 	if !currentAccentCacheWords().has("großen") {
 		t.Error("迁移之后第二级词表该建好")

@@ -374,7 +374,8 @@ func currentAccentCacheWords() accentWordSet {
 }
 
 // migrateAccentSplits 把存量条目修一遍。证据是这条自己的整行与逐字文字,加上第二级证据词表;手改过的条目不碰。
-// 对唱标注按行记,删空格不改行的结构:原先对得上正文的,指纹跟着换成新正文的。
+// 对唱标注按行记,删空格不改行的结构:原先对得上正文的,指纹跟着换成新正文的。手动选定的指纹同理:只删了错插的空格,
+// 还是用户当初采纳的那一份,不换的话「手动选定后锁定」会把它当成已被自动换掉。
 //
 // 位置(main.go):importLyricsFromFiles 之后、exportLyricsFiles 与 migrateManualPickMarks 之前,必须排在
 // migrateYRCWhitespaceTokens 之后 —— 纯空白词条先并进前一个词,repairAccentSplitYRC 才删得到那个空格。
@@ -407,6 +408,9 @@ func migrateAccentSplits() {
 			moved := *sp
 			moved.For = lyricSpeakersFingerprint(lrc, yrc)
 			e.LyricsSpeakers = &moved
+		}
+		if e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics) {
+			e.ManualPickSHA = manualPickFingerprint(lrc)
 		}
 		e.Lyrics, e.LyricsYRC = lrc, yrc
 		enrichCache[k] = e
