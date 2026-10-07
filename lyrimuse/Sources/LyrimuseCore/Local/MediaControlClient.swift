@@ -2354,6 +2354,83 @@ public enum MediaControlClient {
         return record.correctionSecs
     }
 
+    // ---- 跟随重发锚点的播放器:重发断档 = 卡在加载 ----
+    //
+    // KKBOX 在放的时候约每 1.06 秒重发一次锚点;卡在加载(网络慢、缓冲)时照旧报在放、速率 1,只是不再重发。上一份锚点
+    // 过了 `republishOverdueSecs` 还没有下一份,这一拍就当作在加载:位置停在「上一份锚点 + 这段时长」,快照报没在走、
+    // 标 `isWaitingToPlay`,下一份锚点一到就接着走。下一份锚点说明声音其实一直在走的(误报),这首余下部分不再停。
+    // 见 02 章决策 107。
+    private static let republishLock = NSLock()
+    /// 停住时对着的那份锚点(曲目、原始 elapsed、时间戳)。
+    nonisolated(unsafe) private static var republishHeldAnchor: (track: String, elapsed: Double, timestamp: Date)?
+    /// 停住误报过的曲目,这首余下部分不再停。
+    nonisolated(unsafe) private static var republishHoldDisabledTrack: String?
+
+    /// 上一份锚点之后这么久还没有下一份,就当作卡在加载。
+    public nonisolated static let republishOverdueSecs: TimeInterval = 1.5
+    /// 停住之后来的下一份锚点,位置走的比墙钟少不到这么多,就是声音一直在走(误报)。
+    public nonisolated static let republishFalseAlarmToleranceSecs: Double = 0.5
+
+    /// 这一拍该不该按「在加载」停住:该停返回停住的位置,不该为 nil。停住的位置到了曲长就不停。纯函数,selftest 直接覆盖。
+    public nonisolated static func republishOverdueHold(
+        bundleID: String?, playing: Bool?, playbackRate: Double?, anchorElapsed: Double?, anchorTimestamp: Date?,
+        duration: Double?, now: Date
+    ) -> Double? {
+        guard LocalPlaybackSource.followsRepublishedAnchors(bundleID: bundleID), playing == true,
+              let rate = playbackRate, rate > 0, let elapsed = anchorElapsed, let timestamp = anchorTimestamp,
+              now.timeIntervalSince(timestamp) > republishOverdueSecs
+        else { return nil }
+        let held = elapsed + republishOverdueSecs * rate
+        if let duration, duration > 0, held >= duration { return nil }
+        return held
+    }
+
+    /// 停住之后到的这份锚点说明声音其实一直在走:位置走的比墙钟少不到 `republishFalseAlarmToleranceSecs`。纯函数,selftest 直接覆盖。
+    public nonisolated static func republishHoldWasFalseAlarm(
+        heldElapsed: Double, heldTimestamp: Date, nextElapsed: Double, nextTimestamp: Date
+    ) -> Bool {
+        let wall = nextTimestamp.timeIntervalSince(heldTimestamp)
+        return wall > 0 && nextElapsed - heldElapsed >= wall - republishFalseAlarmToleranceSecs
+    }
+
+    /// 这一拍的停住判定(`hold`:停住的位置),以及没停住时下一份锚点最晚该在什么时候到(`dueBy`,到点补查一次)。
+    /// 换了锚点时先核上一次停住是不是误报。
+    private nonisolated static func republishHold(
+        bundleID: String?, trackKey: String, title: String?, playing: Bool?, playbackRate: Double?,
+        anchorElapsed: Double?, anchorTimestamp: Date?, duration: Double?, now: Date
+    ) -> (hold: Double?, dueBy: Date?) {
+        guard LocalPlaybackSource.followsRepublishedAnchors(bundleID: bundleID) else { return (nil, nil) }
+        republishLock.lock()
+        defer { republishLock.unlock() }
+        if let held = republishHeldAnchor, let elapsed = anchorElapsed, let timestamp = anchorTimestamp,
+           held.track != trackKey || timestamp > held.timestamp {
+            republishHeldAnchor = nil
+            if held.track == trackKey {
+                let wall = timestamp.timeIntervalSince(held.timestamp)
+                if republishHoldWasFalseAlarm(heldElapsed: held.elapsed, heldTimestamp: held.timestamp,
+                                              nextElapsed: elapsed, nextTimestamp: timestamp) {
+                    republishHoldDisabledTrack = trackKey
+                    logger.notice("republish hold was a false alarm: \(title ?? "", privacy: .public) moved \(elapsed - held.elapsed, format: .fixed(precision: 3))s in \(wall, format: .fixed(precision: 3))s; not holding again for this track")
+                } else {
+                    logger.notice("republish hold ended: \(title ?? "", privacy: .public) at \(elapsed, format: .fixed(precision: 3)) after \(wall, format: .fixed(precision: 3))s")
+                }
+            }
+        }
+        guard republishHoldDisabledTrack != trackKey else { return (nil, nil) }
+        if let hold = republishOverdueHold(bundleID: bundleID, playing: playing, playbackRate: playbackRate,
+                                           anchorElapsed: anchorElapsed, anchorTimestamp: anchorTimestamp,
+                                           duration: duration, now: now),
+           let elapsed = anchorElapsed, let timestamp = anchorTimestamp {
+            if republishHeldAnchor == nil {
+                logger.notice("republish overdue: holding \(title ?? "", privacy: .public) at \(hold, format: .fixed(precision: 3)) (last anchor \(now.timeIntervalSince(timestamp), format: .fixed(precision: 3))s ago)")
+            }
+            republishHeldAnchor = (trackKey, elapsed, timestamp)
+            return (hold, nil)
+        }
+        guard playing == true, let timestamp = anchorTimestamp else { return (nil, nil) }
+        return (nil, timestamp.addingTimeInterval(republishOverdueSecs))
+    }
+
     // ---- 暂停中发布的锚点:真正开始计时的时刻 ----
     //
     // 网易云换歌时先在「暂停」态把新曲的 `elapsed=0 @ ts` 发出来,0.3~1.1s 后才真正出声,之后**不再
@@ -2677,7 +2754,7 @@ public enum MediaControlClient {
             ? Self.restoredStartCorrection(bundleID: raw.bundleIdentifier, anchorKey: anchorKey)
             : nil
         let startCorrection = liveStartCorrection ?? restoredCorrection
-        let elapsed = liveElapsed.map { $0 + (startCorrection ?? 0) }
+        let readingElapsed = liveElapsed.map { $0 + (startCorrection ?? 0) }
         if let liveStartCorrection {
             Self.rememberStartCorrection(liveStartCorrection, anchorKey: anchorKey,
                                          bundleID: raw.bundleIdentifier ?? "", now: sampledAt)
@@ -2686,9 +2763,15 @@ public enum MediaControlClient {
             let from = liveStartCorrection != nil ? "the reset anchor" : "the record kept across restart"
             logger.notice("natural advance anchor late: \(raw.title ?? "", privacy: .public) raw=\(raw.elapsedTime ?? -1, format: .fixed(precision: 3)) → +\(startCorrection, format: .fixed(precision: 3))s from \(from, privacy: .public)")
         }
-        if playing == true, let elapsed {
-            Self.rememberPlayingPosition(elapsed, forTrack: trackKey, at: sampledAt)
+        // 跟随重发锚点的播放器重发断档了,当作卡在加载、位置停住(见 republishHold)。
+        let republish = Self.republishHold(
+            bundleID: raw.bundleIdentifier, trackKey: trackKey, title: raw.title, playing: playing,
+            playbackRate: raw.playbackRate, anchorElapsed: raw.elapsedTime, anchorTimestamp: timestampDate,
+            duration: raw.duration, now: sampledAt)
+        if playing == true, republish.hold == nil, let readingElapsed {
+            Self.rememberPlayingPosition(readingElapsed, forTrack: trackKey, at: sampledAt)
         }
+        let elapsed = republish.hold ?? readingElapsed
         // 这里**不再**对 Spotify 做 JXA 直查真值的覆盖(移除)。
         // 那条路 08-14 上线、连修三轮(1.64s 恒定偏移、gapless 预载回扣、真值缓存外推)
         // 仍"经常进度不准"——osascript 往返本身有抖动,Spotify 的 playerPosition 在
@@ -2742,8 +2825,8 @@ public enum MediaControlClient {
             album: raw.album,
             duration: raw.duration,
             elapsedTime: amazonPosition ?? radioPosition ?? elapsed,
-            playing: playing,
-            playbackRate: raw.playbackRate,
+            playing: republish.hold == nil ? playing : false,
+            playbackRate: republish.hold == nil ? raw.playbackRate : 0,
             // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
             // MediaControlSnapshot 注释)——调用方(fetchMediaControlSnapshot/
             // fetchAutoDetectedSnapshot)已经各自核实过 bundleID 是它关心的那个,
@@ -2758,6 +2841,8 @@ public enum MediaControlClient {
         // 读到之后主线程可能要等一两百毫秒才处理(换歌那一刻加载封面 / 歌词,实测 0.21s),位置得按读到的时刻
         // 补到处理那一刻(见 MediaControlSnapshot.capturedAt)。只对实测过的播放器开(决策 41)。
         if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil { snapshot.capturedAt = sampledAt }
+        if republish.hold != nil { snapshot.isWaitingToPlay = true }
+        snapshot.republishDueBy = republish.dueBy
         return (snapshot, bundleID)
     }
 

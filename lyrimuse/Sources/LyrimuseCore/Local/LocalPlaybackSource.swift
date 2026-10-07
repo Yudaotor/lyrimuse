@@ -28,7 +28,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// Kaset 这一拍放的是不是视频版另按它的读数认(`KasetPlayerInfo.isMusicVideo`),进的是 `isMusicVideo`。
     @Published public private(set) var youtubeMusicIsMV: Bool = false
     @Published public private(set) var isPlayingNow: Bool = false
-    /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、前贴片广告、卡住;目前只有 Kaset 报)。
+    /// 播放器说在放、声音还没走起来(`MediaControlSnapshot.isWaitingToPlay`:加载、前贴片广告、卡住;目前 Kaset 与 KKBOX 报)。
     /// 灵动岛掉歌名据此等声音走起来再判(`NotchTrackDropTracker`)。
     @Published public private(set) var isWaitingToPlay: Bool = false
     @Published public private(set) var currentLine: SyncedLyricLine?
@@ -2114,6 +2114,25 @@ public final class LocalPlaybackSource: ObservableObject {
     private var pendingNotificationPoll: Task<Void, Never>?
     private static let playerInfoDebounce: Duration = .milliseconds(250)
 
+    /// 跟随重发锚点的播放器下一份锚点最晚该到的时刻一过就补查一次(见 `MediaControlClient.republishHold`):卡在加载时
+    /// 及时停住,不等兜底轮询。每拍新快照重排。
+    private var pendingRepublishCheck: Task<Void, Never>?
+    /// 补查排在到点之后这么久(判据是严格超过)。
+    private static let republishCheckMarginSecs: TimeInterval = 0.05
+
+    private func scheduleRepublishCheck(dueBy: Date?) {
+        pendingRepublishCheck?.cancel()
+        pendingRepublishCheck = nil
+        guard let dueBy else { return }
+        let delay = max(0, dueBy.timeIntervalSinceNow) + Self.republishCheckMarginSecs
+        pendingRepublishCheck = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.pendingRepublishCheck = nil
+            self?.poll()
+        }
+    }
+
     /// 位置状态机的外部依赖(见 PlaybackPositionEnvironment)。
     private let env: PlaybackPositionEnvironment
 
@@ -2194,6 +2213,8 @@ public final class LocalPlaybackSource: ObservableObject {
         AmazonMusicLogWatcher.onPlaybackEvent = nil
         pendingNotificationPoll?.cancel()
         pendingNotificationPoll = nil
+        pendingRepublishCheck?.cancel()
+        pendingRepublishCheck = nil
         stopFastTimer()
     }
 
@@ -3116,6 +3137,7 @@ public final class LocalPlaybackSource: ObservableObject {
             logger.notice("radio track finished=\(finished) card=\(stationCardName != nil) pos=\(snapshot.elapsedTime ?? -1, format: .fixed(precision: 1)) dur=\(snapshot.duration ?? -1, format: .fixed(precision: 1))")
         }
         lastSnapshot = snapshot
+        scheduleRepublishCheck(dueBy: snapshot.republishDueBy)
         // title/artist/album/isPlayingNow 只在真的变化时才赋值——理由跟 fastTick() 里
         // currentLine/nextLineText/currentLineIndex 的既有注释完全一样:这几个都是
         // @Published,Combine 不管新旧值是否相等,只要赋值就会通知订阅者。同一首歌播放期间

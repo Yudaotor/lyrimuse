@@ -100,6 +100,7 @@ func runPositionReplayTests() {
     replayBrowserProbeReopensOnEveryTrackChange()
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
+    replayKKBOXStallHolds()
     replayKasetFollowsWebClock()
     replayKasetResumeTakesReading()
 }
@@ -200,6 +201,30 @@ private func replayKKBOXPauseHoldsUntilPauseAnchor() {
         let settled = rig.source.pausedPositionMs.map { Double($0) / 1000 }
         expectEqual(near(settled, 80.85, 0.001), true, "回放·暂停锚点到了换成它(\(bundle))")
     }
+}
+
+/// KKBOX 卡在加载:每秒重发的锚点断了,`MediaControlClient.republishHold` 交「停住」快照(没在走、位置停在锚点 + 1.5s、
+/// `isWaitingToPlay`)。屏上停在那里,不再往前跑;下一份锚点到了从它接着走,往回只退一小段。
+/// 数字取自真机《自由的你》:4.700 那份之后 7.44s 才到 5.141。
+@MainActor
+private func replayKKBOXStallHolds() {
+    let rig = ReplayRig("kkbox-stall")
+    defer { rig.tearDown() }
+    for i in 0...4 {
+        let t = Double(i) * 1.06
+        rig.tick(mediaControl(kkboxID, "自由的你", anchor: 0.46 + t, elapsed: 0.46 + t, duration: 297, capturedAt: at(t)), at: at(t))
+    }
+    var held = mediaControl(kkboxID, "自由的你", anchor: 4.70, elapsed: 6.20, duration: 297, playing: false, capturedAt: at(5.79))
+    held.isWaitingToPlay = true
+    rig.tick(held, at: at(5.79))
+    let during = rig.shown(at: at(9.0))
+    expectEqual(near(during, 6.20, 0.01), true,
+                "回放·KKBOX 卡在加载: 屏上停在锚点 + 1.5s、不往前跑(\(during.map { String(format: "%.3f", $0) } ?? "nil"))")
+    rig.tick(held, at: at(7.79))
+    rig.tick(mediaControl(kkboxID, "自由的你", anchor: 5.141, elapsed: 5.141, duration: 297, capturedAt: at(11.68)), at: at(11.68))
+    let resumed = rig.shown(at: at(12.68))
+    expectEqual(near(resumed, 6.141, 0.05), true,
+                "回放·KKBOX 卡在加载: 下一份锚点到了从它接着走(\(resumed.map { String(format: "%.3f", $0) } ?? "nil"))")
 }
 
 /// 页面内换歌(YouTube Music 在同一个标签页里切到下一首):新曲头一拍常常还没有时长。

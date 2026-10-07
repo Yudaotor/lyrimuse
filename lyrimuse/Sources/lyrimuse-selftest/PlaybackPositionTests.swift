@@ -809,6 +809,35 @@ func runPlaybackPositionTests() {
             expectEqual(AnchorStartCorrectionFile.fileName, "lyrimuse-anchor-start-correction.json",
                         "重启接回: 文件名不变(App 重启后要读回上一个进程写的那份)")
         }
+
+        // ---- KKBOX 重发断档 = 卡在加载 ----
+        // 真机(《自由的你》):4.700 那份锚点之后 7.44s 才来下一份 5.141,中间声音卡住;正常重发间隔 1.062s。
+        do {
+            typealias MC = MediaControlClient
+            let t0 = Date(timeIntervalSince1970: 1_791_298_808.881322)
+            func ms(_ v: Double?) -> Double? { v.map { ($0 * 1000).rounded() / 1000 } }
+            func hold(_ after: Double, playing: Bool = true, rate: Double = 1,
+                      bundle: String = PlaybackPlayer.kkbox.bundleIdentifier, duration: Double = 297) -> Double? {
+                MC.republishOverdueHold(bundleID: bundle, playing: playing, playbackRate: rate, anchorElapsed: 4.700,
+                                        anchorTimestamp: t0, duration: duration, now: t0.addingTimeInterval(after))
+            }
+            expectEqual(hold(1.2), nil, "重发断档: 正常间隔内(1.2s)不停")
+            expectEqual(ms(hold(1.6)), 6.2, "重发断档: 过了 1.5s 停在锚点 + 1.5s")
+            expectEqual(ms(hold(7.0)), 6.2, "重发断档: 卡多久都停在同一处")
+            expectEqual(hold(2.0, playing: false), nil, "重发断档: 暂停着不归这条管")
+            expectEqual(hold(2.0, rate: 0), nil, "重发断档: 速率 0 不归这条管")
+            expectEqual(hold(2.0, bundle: PlaybackPlayer.kugou.bundleIdentifier), nil, "重发断档: 只对跟随重发锚点的播放器(KKBOX)")
+            expectEqual(hold(2.0, duration: 6.0), nil, "重发断档: 停住的位置到了曲长不停")
+            expectEqual(MC.republishHoldWasFalseAlarm(heldElapsed: 4.700, heldTimestamp: t0, nextElapsed: 5.141,
+                                                       nextTimestamp: t0.addingTimeInterval(7.44)), false,
+                        "重发断档: 7.44s 只走了 0.44s 是真卡住")
+            expectEqual(MC.republishHoldWasFalseAlarm(heldElapsed: 16.202, heldTimestamp: t0, nextElapsed: 18.061,
+                                                       nextTimestamp: t0.addingTimeInterval(1.86)), true,
+                        "重发断档: 1.86s 走了 1.86s 是没按时重发、声音照放(误报)")
+            expectEqual(MC.republishHoldWasFalseAlarm(heldElapsed: 10.0, heldTimestamp: t0, nextElapsed: 13.2,
+                                                       nextTimestamp: t0.addingTimeInterval(4.0)), false,
+                        "重发断档: 少走了 0.8s 算真卡住")
+        }
         expectEqual(LocalPlaybackSource.carriesGaplessLead(tier: .noisyFloored, bundleID: nil), false,
                     "gapless 领先: 认不出播放器不校正")
 

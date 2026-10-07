@@ -48,9 +48,13 @@ public struct MediaControlSnapshot: Decodable {
     public var isMusicVideo: Bool? = nil
     /// 播放器说在放(或正要放),声音却还没走起来:加载、广告、缓冲卡住。这时 `playing` 是 false、位置停着,
     /// `LocalPlaybackSource` 据此把轮询留在播放中的节拍,声音一走起来就接上(这几种时候播放器不一定发系统通知,
-    /// 按暂停档等 6 秒才看得到)。只有 Kaset 的快照填(`KasetPlayerInfo.snapshot`)。`with…` 系列副本不带它:
-    /// 那几条路(署名 / 专辑 / 试听段 / 电台 / 空档保持)都不经过 Kaset。
+    /// 按暂停档等 6 秒才看得到)。Kaset 的快照(`KasetPlayerInfo.snapshot`)和 KKBOX 重发断档时(`MediaControlClient.republishHold`)
+    /// 填。`with…` 系列副本不带它:那几条路(署名 / 专辑 / 试听段 / 电台 / 空档保持)不经过 Kaset;KKBOX 停住的那份经空档保持时
+    /// 只少这个标记,位置照旧停着。
     public var isWaitingToPlay: Bool? = nil
+    /// 跟随重发锚点的播放器(KKBOX)在放时,下一份锚点最晚该到的时刻(`MediaControlClient.republishHold`);`LocalPlaybackSource`
+    /// 到点补查一次。`with…` 系列副本不带它,理由同 `isWaitingToPlay`。
+    public var republishDueBy: Date? = nil
     /// 播放器自己给的广告结论:true = 在放广告,false = 在放正片,nil = 说不上来(或者这个播放器不给)。
     /// 只有 Kaset 的快照填(`KasetPlayerInfo.snapshot`),喂给 `LocalPlaybackSource` 的「广告中」状态机。`with…` 系列副本不带它,
     /// 理由同 `isWaitingToPlay`。
