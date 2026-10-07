@@ -108,7 +108,7 @@ func runPlayerIdentityTests() {
         expectEqual(MusicPlaybackController.supportsRepeatOne(.spotify), false, "能力: Spotify 没有单曲循环")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.appleMusic), true, "能力: Apple Music 支持音量/模式")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.spotify), true, "能力: Spotify 支持音量/模式")
-        expectEqual(MusicPlaybackController.supportsExtendedControls(.qqMusic), false, "能力: QQ音乐不支持")
+        expectEqual(MusicPlaybackController.supportsExtendedControls(.qqMusic), true, "能力: QQ音乐支持模式(菜单栏「播放模式」)")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.netease), false, "能力: 网易云不支持")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.kugou), false, "能力: 酷狗不支持(无 .sdef)")
         expectEqual(MusicPlaybackController.supportsRepeatOne(.kugou), false, "能力: 酷狗没有单曲循环")
@@ -555,7 +555,7 @@ func runPlayerIdentityTests() {
         let table: [PlaybackPlayer: (songLink: PlatformLinks.Platform?, on: Set<On>)] = [
             .appleMusic: (.appleMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                         .favorite, .resume, .learnsAnchorLag, .spatialAudioOffset]),
-            .qqMusic: (.qqMusic, [.learnsAnchorLag, .catalogMenuRows]),
+            .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
             .kugou: (nil, [.lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime]),
             .soda: (.soda, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
@@ -794,13 +794,42 @@ func runPlayerIdentityTests() {
     // 出不出现。每家要不要来自生成字段(shared/players.json),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.amazonMusic],
-                    "辅助功能判据: 要读界面的就 Amazon Music 一家(改 shared/players.json 的 needsAccessibilityPermission)")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.amazonMusic], "辅助功能判据: 纯 auto 按超集算")
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .amazonMusic],
+                    "辅助功能判据: 读界面的 Amazon Music、按菜单切模式的 QQ 音乐(改 shared/players.json 的 needsAccessibilityPermission)")
+        expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse), [.switchesPlayMode, .calibratesProgress],
+                    "辅助功能判据: QQ 音乐是切模式、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .amazonMusic], "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")
         expectEqual(P([.appleMusic, .spotify, .kkbox]).playersNeedingAccessibility, [],
-                    "辅助功能判据: 没勾 Amazon Music 时不出现")
+                    "辅助功能判据: 没勾 Amazon Music、QQ 音乐时不出现")
+    }
+
+    // QQ 音乐的随机 / 循环:菜单栏「播放模式」三项按标题认档位、看勾读当前档(QQMusicMenuControl),循环键两态。
+    do {
+        typealias Q = QQMusicMenuControl
+        typealias Mode = MusicPlaybackController.MusicPlaybackMode
+        expectEqual(Q.mode(forTitle: "顺序播放"), Mode.list, "QQ 播放模式: 顺序播放 = 列表")
+        expectEqual(Q.mode(forTitle: "隨機播放"), Mode.shuffle, "QQ 播放模式: 繁体界面也认")
+        expectEqual(Q.mode(forTitle: "单曲循环"), Mode.repeatOne, "QQ 播放模式: 单曲循环")
+        expectEqual(Q.mode(forTitle: "列表循环"), nil, "QQ 播放模式: 没有列表循环")
+        expectEqual(Q.markedMode([("随机播放", "✓"), ("单曲循环", nil), ("顺序播放", "")]), Mode.shuffle,
+                    "QQ 播放模式: 打勾的那项是当前档")
+        expectEqual(Q.markedMode([("随机播放", nil), ("单曲循环", nil), ("顺序播放", nil)]), nil,
+                    "QQ 播放模式: 都没勾读不出来")
+        expectEqual(Q.markedMode([("打开/关闭歌词", "✓"), ("随机播放", nil)]), nil,
+                    "QQ 播放模式: 认不出两项就不是「播放模式」那个子菜单")
+        expectEqual(Q.options.allows(.repeatAll), false, "QQ 播放模式: 能切的档里没有列表循环")
+        expectEqual(Q.options.canRepeat, true, "QQ 播放模式: 有循环键(单曲循环)")
+        expectEqual(Mode.list.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .repeatOne,
+                    "循环键: 没有列表循环时关 → 单曲循环")
+        expectEqual(Mode.shuffle.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .repeatOne,
+                    "循环键: 没有列表循环时随机开着点循环 → 单曲循环")
+        expectEqual(Mode.repeatOne.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .list,
+                    "循环键: 单曲循环 → 关")
+        expectEqual(Mode.list.nextRepeat(allowsRepeatOne: false), .repeatAll, "循环键: 有列表循环的照旧先到列表循环")
+        expectEqual(MusicPlaybackController.PlaybackModeOptions([.shuffle]).canRepeat, false,
+                    "循环键: 只能切随机时没有循环键")
     }
 
     // ---- 播放器网格点一下(设置页与引导页共用 FeatureSettingsStore.togglePlayer)----

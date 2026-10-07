@@ -219,3 +219,19 @@ public enum AutomationAlert {
         }
     }
 }
+
+extension PlaybackPlayer {
+    /// 「辅助功能」权限替这个播放器做什么。授权说明、体检提示、引导页那一句按它分开写:读进度只读不点,切模式要按菜单项。
+    public enum AccessibilityUse: Sendable {
+        /// 读界面上的播放时间校准进度(Amazon Music,`AmazonMusicUIProbe`),只读。
+        case calibratesProgress
+        /// 读、切菜单栏里的「播放模式」(QQ 音乐,`QQMusicMenuControl`),点随机 / 循环键时会按菜单项。
+        case switchesPlayMode
+    }
+
+    /// 不要这项权限的播放器为 nil(`needsAccessibilityPermission`,源头 shared/players.json)。
+    public var accessibilityUse: AccessibilityUse? {
+        guard needsAccessibilityPermission else { return nil }
+        return self == .qqMusic ? .switchesPlayMode : .calibratesProgress
+    }
+}

@@ -57,6 +57,7 @@
 "%@ 次" = "×%@";
 "%@ 次收听" = "%@ plays";
 "%@ 次收听#one" = "%@ play";
+"%@ 没有脚本接口，Lyrimuse 会通过其菜单栏里的「播放模式」读取和切换随机、循环（只在你点这两颗键时按下对应的菜单项）。不授权也可使用，只是不显示这两颗键。" = "%@ has no scripting interface, so Lyrimuse reads and switches shuffle and repeat through Play Mode in its menu bar (it only presses a menu item when you click one of those two buttons). Lyrimuse works without this permission, but those two buttons won't appear.";
 "%@ 点" = "%@:00";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索。" = "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search.";
 "%@ 的歌词缓存和播放队列位于受系统保护的目录中。授权后，可直接使用本机已有的歌词，并提前解析即将播放的歌曲；未授权时仍可联网查找歌词。" = "The lyrics caches and play queues of %@ live in system-protected folders. With access, lyrics already on this Mac can be used directly and upcoming tracks can be resolved ahead of time; without it, lyrics are still found online.";
@@ -1761,6 +1762,7 @@
 "较上周 %@" = "%@ vs last week";
 "较粗" = "Semibold";
 "辅助功能权限" = "Accessibility";
+"辅助功能权限可显示%@的随机、循环键，点按时会操作其菜单栏" = "Accessibility shows shuffle and repeat buttons for %@; clicking them uses its menu bar";
 "辅助功能权限可让%@的播放进度更准确，仅读取其界面上的播放时间" = "Accessibility keeps %@'s playback position accurate; it only reads the time shown in its window";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";

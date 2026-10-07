@@ -82,8 +82,10 @@ final class PlayerHealthMonitor: ObservableObject {
         let fullDiskDenied = PlayerHealth.fullDiskAccessDeniedPlayers(visible: fullDiskVisible, grant: fullDisk.grant(fullDiskVisible))
         let accessibility = AccessibilityPermission.shared
         accessibility.refresh()
+        // 只替读进度的那几家报:切模式(QQ 音乐)没授权只是不显示随机 / 循环键,不算播放器出了问题。
         let accessibilityMissing = PlayerHealth.accessibilityMissingPlayers(
-            visible: accessibility.visiblePlayers(for: selection), trusted: accessibility.trusted)
+            visible: accessibility.visiblePlayers(for: selection).filter { $0.accessibilityUse == .calibratesProgress },
+            trusted: accessibility.trusted)
         // 两次跨进程的查询都下到后台:launchctl 在 Task.detached 里,AE 权限走
         // `MusicAutomationPermission.status`(专用线程 + 超时,超时当"没被拒");结果回到主 actor
         // 再碰 self。askIfNeeded 必须是 false——这里绝不能弹系统授权框。

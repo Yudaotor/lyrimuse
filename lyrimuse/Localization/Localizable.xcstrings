@@ -41875,6 +41875,52 @@
           }
         }
       }
+    },
+    "%@ 没有脚本接口，Lyrimuse 会通过其菜单栏里的「播放模式」读取和切换随机、循环（只在你点这两颗键时按下对应的菜单项）。不授权也可使用，只是不显示这两颗键。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has no scripting interface, so Lyrimuse reads and switches shuffle and repeat through Play Mode in its menu bar (it only presses a menu item when you click one of those two buttons). Lyrimuse works without this permission, but those two buttons won't appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 没有脚本接口，Lyrimuse 会通过其菜单栏里的「播放模式」读取和切换随机、循环（只在你点这两颗键时按下对应的菜单项）。不授权也可使用，只是不显示这两颗键。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 沒有腳本介面，Lyrimuse 會透過其選單列中的「播放模式」讀取和切換隨機、循環（只在你按這兩顆鍵時按下對應的選單項目）。不授權也可使用，只是不顯示這兩顆鍵。"
+          }
+        }
+      }
+    },
+    "辅助功能权限可显示%@的随机、循环键，点按时会操作其菜单栏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility shows shuffle and repeat buttons for %@; clicking them uses its menu bar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辅助功能权限可显示%@的随机、循环键，点按时会操作其菜单栏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可顯示%@的隨機、循環鍵，按下時會操作其選單列"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

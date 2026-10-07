@@ -841,7 +841,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 展开区的随机 / 循环键(只给随机、循环此刻都能切的播放器)跟播放器对一次表:用户可能在那边自己改过模式,
         // 没有事件通知得到。只在两颗键会出现时读,别的播放器不为这次悬停起脚本子进程。
         if opening, expandedShowsControls,
-           PlaybackCoordinator.shared.playbackModeOptions.isSuperset(of: [.shuffle, .repeatAll]) {
+           PlaybackCoordinator.shared.playbackModeOptions.contains(.shuffle),
+           PlaybackCoordinator.shared.playbackModeOptions.canRepeat {
             PlaybackCoordinator.shared.refreshPlaybackMode()
         }
         if next {

@@ -333,13 +333,13 @@ public enum MusicPlaybackController {
             }
         }
 
-        /// 循环键点一下之后的档位:关 → 列表循环 → 单曲循环 → 关;够不到单曲循环的播放器(Spotify)列表循环之后直接回关。
-        /// 随机开着时点循环,也从列表循环起(两颗键互斥)。
-        public func nextRepeat(allowsRepeatOne: Bool) -> MusicPlaybackMode {
+        /// 循环键点一下之后的档位:关 → 列表循环 → 单曲循环 → 关;够不到单曲循环的播放器(Spotify)列表循环之后直接回关,
+        /// 没有列表循环的播放器(QQ 音乐)关之后直接到单曲循环。随机开着时点循环,也从关的下一档起(两颗键互斥)。
+        public func nextRepeat(allowsRepeatOne: Bool, allowsRepeatAll: Bool = true) -> MusicPlaybackMode {
             switch self {
             case .repeatAll: return allowsRepeatOne ? .repeatOne : .list
             case .repeatOne: return .list
-            case .list, .shuffle: return .repeatAll
+            case .list, .shuffle: return allowsRepeatAll ? .repeatAll : (allowsRepeatOne ? .repeatOne : .list)
             }
         }
     }
@@ -353,6 +353,9 @@ public enum MusicPlaybackController {
         public static let repeatAll = PlaybackModeOptions(rawValue: 1 << 1)
         public static let repeatOne = PlaybackModeOptions(rawValue: 1 << 2)
         public static let all: PlaybackModeOptions = [.shuffle, .repeatAll, .repeatOne]
+
+        /// 有没有循环键:列表循环、单曲循环有一样就有。
+        public var canRepeat: Bool { contains(.repeatAll) || contains(.repeatOne) }
 
         /// 能不能切到这一档。
         public func allows(_ mode: MusicPlaybackMode) -> Bool {
@@ -378,16 +381,16 @@ public enum MusicPlaybackController {
 
     /// 这个播放器支不支持「播放模式 / 音量」这两组扩展控制。
     ///
-    /// Apple Music 和 Spotify 有可写的 AppleScript 属性,Kaset 有切换随机 / 循环、设音量的命令;QQ 音乐/网易云音乐两个
-    /// .app 里根本没有 .sdef(不可脚本化),而 media-control 走的系统级 MediaRemote 只有播放控制、
-    /// 没有音量和模式的概念 —— 对它们只能不显示这些控件。
+    /// Apple Music 和 Spotify 有可写的 AppleScript 属性,Kaset 有切换随机 / 循环、设音量的命令;QQ 音乐只有模式,走它菜单栏
+    /// 「播放模式」那三项(`QQMusicMenuControl`,要辅助功能权限),没有音量。网易云、酷狗等没有 .sdef(不可脚本化),而
+    /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .spotify || player == .kaset
+        player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.next(allowsRepeatOne:)。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .kaset
+        player == .appleMusic || player == .kaset || player == .qqMusic
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)。
@@ -598,11 +601,16 @@ public enum MusicPlaybackController {
                                          mode: kasetPlaybackMode(shuffling: c.shuffling, repeating: c.repeating)
                                              .map { PlaybackModeState(mode: $0, options: .all) },
                                          volume: c.volume)
+        case .qqMusic:
+            return ExtendedControlsState(favorited: nil,
+                                         mode: QQMusicMenuControl.readMode()
+                                             .map { PlaybackModeState(mode: $0, options: QQMusicMenuControl.options) },
+                                         volume: nil)
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
         // 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
         // shared/players.json:新播放器默认落到这里,跟 supportsExtendedControls 的口径
-        // 一致(Apple Music、Spotify、Kaset)。真要给某个新播放器支持,在上面显式加一个 case。
+        // 一致(Apple Music、Spotify、Kaset、QQ 音乐)。真要给某个新播放器支持,在上面显式加一个 case。
         default:
             return .empty
         }
@@ -702,6 +710,8 @@ public enum MusicPlaybackController {
             guard let c = kasetControls() else { return nil }
             return kasetPlaybackMode(shuffling: c.shuffling, repeating: c.repeating)
                 .map { PlaybackModeState(mode: $0, options: .all) }
+        case .qqMusic:
+            return QQMusicMenuControl.readMode().map { PlaybackModeState(mode: $0, options: QQMusicMenuControl.options) }
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -774,6 +784,8 @@ public enum MusicPlaybackController {
             ) != nil
         case .kaset:
             return runKasetJXACapturing(kasetPlaybackModeScript(for: mode)) == "ok"
+        case .qqMusic:
+            return QQMusicMenuControl.setMode(mode)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
@@ -797,6 +809,9 @@ public enum MusicPlaybackController {
             script = spotifyRunningGuard + #"tell application "Spotify" to get sound volume"#
         case .kaset:
             return kasetControls()?.volume
+        case .qqMusic:
+            // QQ 菜单栏只有一档一档的「音量加 / 音量减」,当前值要另读它的偏好,不接:那颗胶囊对 QQ 不出现。
+            return nil
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -818,6 +833,8 @@ public enum MusicPlaybackController {
                 spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
         case .kaset:
             return runKasetJXACapturing("        K.setVolume(\(v));\n        return \"ok\";") == "ok"
+        case .qqMusic: // 同 soundVolume(for:):QQ 不接音量。
+            return false
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }

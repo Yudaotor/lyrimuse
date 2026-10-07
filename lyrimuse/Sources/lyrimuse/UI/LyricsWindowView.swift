@@ -4615,19 +4615,20 @@ struct LyricsWindowView: View {
     }
 
     /// 循环键(对齐 AM):关 → 列表循环(亮 repeat) → 单曲循环(亮 repeat.1) → 关;够不到单曲循环的播放器
-    /// (Spotify,脚本里 `repeating` 只是开关)两态:关 ↔ 循环。这个播放器此刻切不到循环(`playbackModeOptions`)
-    /// 时不显示、只占位。
+    /// (Spotify,脚本里 `repeating` 只是开关)两态:关 ↔ 循环;没有列表循环的(QQ 音乐)两态:关 ↔ 单曲循环。
+    /// 这个播放器此刻切不到循环(`playbackModeOptions`)时不显示、只占位。
     private var repeatButton: some View {
         let mode = playback.playbackMode
         let options = playback.playbackModeOptions
         return modeToggleButton(
             icon: mode == .repeatOne ? "repeat.1" : "repeat",
             active: mode == .repeatOne || mode == .repeatAll,
-            shown: mode != nil && options.contains(.repeatAll),
+            shown: mode != nil && options.canRepeat,
             label: mode == .repeatOne ? L10n.t("单曲循环") : L10n.t("循环播放")
         ) {
             PlaybackCoordinator.shared.setPlaybackMode(
-                (mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne)))
+                (mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne),
+                                           allowsRepeatAll: options.contains(.repeatAll)))
         }
     }
 

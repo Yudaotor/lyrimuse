@@ -239,6 +239,8 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var fullPlaybackMode: MusicPlaybackController.MusicPlaybackMode?
     /// 循环键走不走「单曲循环」那一档(Spotify 没有,两态)。
     @Published private(set) var playbackModeAllowsRepeatOne = false
+    /// 循环键走不走「列表循环」那一档(QQ 音乐没有,两态:关 ↔ 单曲循环)。
+    @Published private(set) var playbackModeAllowsRepeatAll = false
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -289,11 +291,13 @@ private final class NotchPlayback: ObservableObject {
             p.$notchLyrics.map(\.nextText).removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
             p.$notchLyrics.map(\.nextSide).removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
             Publishers.CombineLatest(p.$playbackMode, p.$playbackModeOptions)
-                .map { mode, options in options.isSuperset(of: [.shuffle, .repeatAll]) ? mode : nil }
+                .map { mode, options in options.contains(.shuffle) && options.canRepeat ? mode : nil }
                 .removeDuplicates()
                 .sink { [weak self] in self?.fullPlaybackMode = $0 },
             p.$playbackModeOptions.map { $0.contains(.repeatOne) }.removeDuplicates()
                 .sink { [weak self] in self?.playbackModeAllowsRepeatOne = $0 },
+            p.$playbackModeOptions.map { $0.contains(.repeatAll) }.removeDuplicates()
+                .sink { [weak self] in self?.playbackModeAllowsRepeatAll = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
@@ -2693,7 +2697,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         modeButton(mode == .repeatOne ? "repeat.1" : "repeat",
                    active: mode == .repeatOne || mode == .repeatAll) {
             PlaybackCoordinator.shared.setPlaybackMode(
-                mode.nextRepeat(allowsRepeatOne: playback.playbackModeAllowsRepeatOne))
+                mode.nextRepeat(allowsRepeatOne: playback.playbackModeAllowsRepeatOne,
+                                allowsRepeatAll: playback.playbackModeAllowsRepeatAll))
         }
     }
 

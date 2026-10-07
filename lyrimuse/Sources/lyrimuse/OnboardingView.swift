@@ -793,9 +793,15 @@ struct OnboardingView: View {
             lines.append(String(format: L10n.t("完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列"),
                                 fullDiskAccess.playerNames(fdaTargets)))
         }
-        if !axTargets.isEmpty {
+        let progressTargets = axTargets.filter { $0.accessibilityUse == .calibratesProgress }
+        if !progressTargets.isEmpty {
             lines.append(String(format: L10n.t("辅助功能权限可让%@的播放进度更准确，仅读取其界面上的播放时间"),
-                                accessibility.playerNames(axTargets)))
+                                accessibility.playerNames(progressTargets)))
+        }
+        let playModeTargets = axTargets.filter { $0.accessibilityUse == .switchesPlayMode }
+        if !playModeTargets.isEmpty {
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环键，点按时会操作其菜单栏"),
+                                accessibility.playerNames(playModeTargets)))
         }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }

@@ -14,9 +14,10 @@ func runSourceContractTests() {
         expectEqual(window.contains("        ZStack {\n            if shown {\n                Button(action: action) {"), true,
                     "歌词窗口播控排: 随机 / 循环那一格外层是 ZStack,按钮不显示时定宽不塌")
         expectEqual(window.contains("shown: playback.playbackMode != nil && playback.playbackModeOptions.contains(.shuffle),")
-                        && window.contains("shown: mode != nil && options.contains(.repeatAll),")
-                        && window.contains("(mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne))"), true,
-                    "歌词窗口播控排: 随机、循环各按能切哪几档显示,循环键按有没有单曲循环走三态 / 两态")
+                        && window.contains("shown: mode != nil && options.canRepeat,")
+                        && window.contains("(mode ?? .list).nextRepeat(allowsRepeatOne: options.contains(.repeatOne),\n"
+                                           + "                                           allowsRepeatAll: options.contains(.repeatAll)))"), true,
+                    "歌词窗口播控排: 随机、循环各按能切哪几档显示,循环键按有没有单曲循环 / 列表循环走三态 / 两态")
         expectEqual(window.contains("                .help(label)\n")
                         && window.contains(".accessibilityLabel(label)\n                .accessibilityAddTraits(active ? .isSelected : [])")
                         && window.contains("label: mode == .repeatOne ? L10n.t(\"单曲循环\") : L10n.t(\"循环播放\")"), true,
@@ -2031,7 +2032,7 @@ func runSourceContractTests() {
         }
         // 灵动岛展开区的随机 / 循环键只在这个播放器此刻随机、循环都能切时出现;模式与能切哪几档必须一起赋值。
         if let notch = read("UI/NotchLyricsView.swift"), let coordinator = read("PlaybackCoordinator.swift") {
-            expectEqual(notch.contains(".map { mode, options in options.isSuperset(of: [.shuffle, .repeatAll]) ? mode : nil }"),
+            expectEqual(notch.contains(".map { mode, options in options.contains(.shuffle) && options.canRepeat ? mode : nil }"),
                         true, "灵动岛模式键: 只在随机、循环都能切时给出播放模式")
             expectEqual(coordinator.components(separatedBy: "playbackMode = ").count - 1, 1,
                         "灵动岛模式键: playbackMode 只在 applyPlaybackMode 里赋值(跟 playbackModeOptions 一起)")

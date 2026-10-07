@@ -501,7 +501,7 @@ final class PlaybackCoordinator: ObservableObject {
     // 覆盖了"用户在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
     @Published private(set) var isFavorited: Bool?
 
-    /// 播放模式(列表/随机/列表循环/单曲循环)。只有 Apple Music、Spotify、Kaset 有 —— media-control 走的
+    /// 播放模式(列表/随机/列表循环/单曲循环)。只有 Apple Music、Spotify、Kaset、QQ 音乐有 —— media-control 走的
     /// 系统级 MediaRemote 没有这个概念 —— 所以 nil 同样表示"这个播放器根本没有这回事",
     /// 按钮据此整个不显示。刷新时机也跟"喜欢"共用(换歌 / 窗口出现 / App 回到前台):
     /// 用户可能在 Music.app 里自己改了模式,我们没有任何事件能收到,只能在这几个时机回读。
@@ -566,7 +566,8 @@ final class PlaybackCoordinator: ObservableObject {
     /// 能接受「播放模式 / 音量」这两组扩展控制的当前播放器,不能就是 nil(按钮据此不显示)。
     ///
     /// Apple Music、Spotify、Kaset:Spotify 的 AppleScript 字典里 `sound volume` 和 `shuffling` 是可写属性,Kaset 有切换
-    /// 随机 / 循环、设音量的命令。QQ 音乐/网易云音乐不行 —— 它们的 .app 里根本没有 .sdef。
+    /// 随机 / 循环、设音量的命令。QQ 音乐只有模式(菜单栏「播放模式」,`QQMusicMenuControl`),音量读不到、那颗胶囊不出现。
+    /// 网易云等不行 —— 它们的 .app 里根本没有 .sdef。
     private var extendedControlPlayer: PlaybackPlayer? {
         guard let player = currentPlayer,
               MusicPlaybackController.supportsExtendedControls(player) else { return nil }
