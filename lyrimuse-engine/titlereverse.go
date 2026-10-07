@@ -109,9 +109,15 @@ type titleReverseSpec struct {
 // 汉字段至少两个汉字、不是歌手名。带括号、引号、破折号、斜杠、数字的曲名一律不认。
 // 中文在前的不认:那种形状里英文常是整句曲名的一部分。见 09 章决策 189。
 func bilingualTitleHanPart(artist, title string) string {
+	_, han := bilingualTitleParts(artist, title)
+	return han
+}
+
+// bilingualTitleParts 同 bilingualTitleHanPart,另外返回拉丁字母那段;认不出时两段都是空串。
+func bilingualTitleParts(artist, title string) (latinPart, hanPart string) {
 	t := cleanMediaTag(title)
 	if t == "" || strings.ContainsAny(t, bilingualTitleRejectRunes) {
-		return ""
+		return "", ""
 	}
 	fields := strings.Fields(t)
 	kinds := make([]bool, len(fields)) // true = 汉字段的词
@@ -122,14 +128,14 @@ func bilingualTitleHanPart(artist, title string) string {
 		case bilingualHanWord(f):
 			kinds[i] = true
 		default:
-			return ""
+			return "", ""
 		}
 		if i > 0 && kinds[i] != kinds[i-1] {
 			switches++
 		}
 	}
 	if switches != 1 || kinds[0] {
-		return ""
+		return "", ""
 	}
 	var latin, han []string
 	for i, f := range fields {
@@ -140,14 +146,14 @@ func bilingualTitleHanPart(artist, title string) string {
 		}
 	}
 	if bilingualCreditWords[strings.ToLower(strings.Trim(latin[len(latin)-1], ".,"))] {
-		return ""
+		return "", ""
 	}
-	latinPart, hanPart := strings.Join(latin, " "), strings.Join(han, " ")
+	latinPart, hanPart = strings.Join(latin, " "), strings.Join(han, " ")
 	if countRunes(latinPart, isASCIILetter) < 2 || countRunes(hanPart, isHanRune) < 2 ||
 		len(titleVersionTags("("+latinPart+")")) > 0 || normLoose(hanPart) == normLoose(cleanMediaTag(artist)) {
-		return ""
+		return "", ""
 	}
-	return hanPart
+	return latinPart, hanPart
 }
 
 const bilingualTitleRejectRunes = "()（）[]［］【】{}<>《》〈〉「」『』\"“”-–—/／|｜:：0123456789０１２３４５６７８９"

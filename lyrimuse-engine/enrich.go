@@ -3216,6 +3216,8 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 			}
 		}
 	}
+	// 三源和同专辑邻居都没给出封面:按双语曲名拆出的那段、歌词判决里认下的歌手写法、ISRC 在 Deezer 上的那条补查(coverretry.go)。
+	fillMissingCover(ctx, &e, scored, artist, title, album, durationSecs, coverArtist, coverTitle, coverAlbum, coverDuration)
 	applyDeviceOrPlayerCover(ctx, &e, deviceCoverURL, album)
 	if e.CanonicalArtist == "" {
 		// MusicBrainz 那一级没能给出统一歌手名(常见于 title/album 本身就跨语言对不上
