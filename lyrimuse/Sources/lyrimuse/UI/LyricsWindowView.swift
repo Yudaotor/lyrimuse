@@ -344,13 +344,23 @@ enum LyricsWindowSession {
         fullWindowWaiterID += 1
         let id = fullWindowWaiterID
         fullWindowWaiter = (id, handler)
-        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
-            MainActor.assumeIsolated {
-                guard fullWindowWaiter?.id == id else { return }
-                deliverFullWindow(nil)
+        // 关掉的场景窗再开是复用同一扇,attach 不一定再走一遍:轮询它上没上屏(07 章决策 135)。
+        let deadline = Date().addingTimeInterval(timeout)
+        func poll() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                MainActor.assumeIsolated {
+                    guard fullWindowWaiter?.id == id else { return }
+                    if let scene = sceneWindow, scene.isVisible { return deliverFullWindow(scene) }
+                    if Date() >= deadline { return deliverFullWindow(nil) }
+                    poll()
+                }
             }
         }
+        poll()
     }
+
+    /// 完整尺寸那扇场景窗(控制器 attach 时登记)。SwiftUI 关掉它之后还留着,再开时复用同一扇。
+    @MainActor static weak var sceneWindow: NSWindow?
 
     @MainActor static func deliverFullWindow(_ window: NSWindow?) {
         guard let waiter = fullWindowWaiter else { return }
@@ -703,15 +713,27 @@ private final class LyricsWindowController: ObservableObject {
         let target = Self.fullWindowTarget(on: panel.screen)
         UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)
         isSwitchingForm = true
-        let prepare: @MainActor (@escaping (NSWindow?) -> Void) -> Void = { done in
+        let morphs = animated && LyricsWindowFormMorph.canAnimate(panel, to: target)
+        let prepare: @MainActor (@escaping (NSWindow?) -> Void) -> Void = { [weak self] done in
+            // 这次会复用的那扇(关掉后 SwiftUI 留着):做动画时先藏到桌面以下再让 SwiftUI 摆出来,免得在卡片外面闪一下;
+            // 收尾回到它原来的层级,没开出来就当场还回去(07 章决策 135)。
+            let reused = morphs ? LyricsWindowSession.sceneWindow.flatMap { $0.isVisible ? nil : $0 } : nil
+            let reusedLevel: NSWindow.Level = reused.map {
+                $0.level == LyricsWindowFormMorph.hiddenLevel ? .normal : $0.level
+            } ?? .normal
+            if let reused {
+                self?.formMorph.levelAfterMorph = reusedLevel
+                reused.level = LyricsWindowFormMorph.hiddenLevel
+            }
             LyricsWindowSession.awaitFullWindow { window in
                 if let window, window.frame != target { window.setFrame(target, display: false) }
+                if window == nil, let reused { reused.level = reusedLevel }
                 done(window)
             }
             AppActions.shared.openLyricsWindowScene?()
         }
         let finish: @MainActor (NSWindow) -> Void = { [weak self] _ in self?.closeForHandoff(panel) }
-        if animated, LyricsWindowFormMorph.canAnimate(panel, to: target) {
+        if morphs {
             formMorph.handoff(from: panel, to: target, prepare: prepare, finish: finish,
                               failed: { [weak self] in self?.handoffFailed() })
         } else {
@@ -969,6 +991,8 @@ private final class LyricsWindowController: ObservableObject {
         if isMiniPanel {
             isMini = true
             setAlwaysOnTop(true)
+        } else {
+            LyricsWindowSession.sceneWindow = window
         }
         MainActor.assumeIsolated { transportKeys.install(on: window) }
         MainActor.assumeIsolated { hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }

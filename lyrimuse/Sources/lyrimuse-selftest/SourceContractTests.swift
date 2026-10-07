@@ -1874,6 +1874,14 @@ func runSourceContractTests() {
                         && morph.contains("finish(destination)")
                         && !morph.contains("func run(window:"), true,
                         "迷你面板: 进出迷你是两扇窗交接,变形动画截源窗口和目标窗口")
+            // 反复切换:关掉的源窗口层级要还回去,复用的场景窗靠轮询拿到、先藏再摆出来(07 章决策 135)。
+            expectEqual(morph.contains("finish(destination)\n        // 关掉的源窗口层级还回去")
+                        && morph.contains("        source.level = sourceLevel\n        CATransaction.flush()")
+                        && lwv.contains("if let scene = sceneWindow, scene.isVisible { return deliverFullWindow(scene) }")
+                        && lwv.contains("} else {\n            LyricsWindowSession.sceneWindow = window\n        }")
+                        && lwv.contains("reused.level = LyricsWindowFormMorph.hiddenLevel")
+                        && lwv.contains("if window == nil, let reused { reused.level = reusedLevel }"), true,
+                        "迷你面板: 反复切换时关掉的窗口层级还原、复用的场景窗拿得到")
             expectEqual(lwv.contains("if mini { LyricsMiniPanelHost.show() } else { openScene() }")
                         && lwv.contains("if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }"), true,
                         "迷你面板: 打开入口按形态分流,面板开着、要完整尺寸时交给面板自己切")

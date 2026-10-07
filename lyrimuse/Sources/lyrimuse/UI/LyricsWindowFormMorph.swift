@@ -29,7 +29,7 @@ final class LyricsWindowFormMorph {
     private var isWarming = false
 
     /// 藏真窗口用的层级:桌面图片那一层之下。
-    private static let hiddenLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
+    static let hiddenLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
     /// 预热拿到的过滤器多久内可以直接拿来截第一张(指针移到键上到点下去通常一两秒)。
     private static let warmFilterLifetime: CFTimeInterval = 5
     /// 临时窗上屏、真窗口回到原层级之后,各等这么久再动下一步,不留空帧。
@@ -147,6 +147,8 @@ final class LyricsWindowFormMorph {
         }
         levelAfterMorph = nil
         finish(destination)
+        // 关掉的源窗口层级还回去:SwiftUI 关掉场景窗后留着它,下次开出来复用同一扇,停在桌面以下就看不见了(07 章决策 135)。
+        source.level = sourceLevel
         CATransaction.flush()
         await Self.pause(Self.settleFrames)
         overlay.fadeOut(duration: new == nil ? Plan.fadeOutUnmatched : Plan.fadeOutMatched) { [weak self] in
