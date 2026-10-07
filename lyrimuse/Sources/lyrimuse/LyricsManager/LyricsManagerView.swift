@@ -585,6 +585,8 @@ struct LyricsManagerView: View {
     // 选中、列表有键盘焦点的那几行,各行自己读(见 SongList)。放在 @State 里、不当 @StateObject:它一变,整个窗口的
     // body 不用跟着重算。
     @State private var listEmphasis = SongListEmphasis()
+    // 正在放的那首和它的封面,各行自己读(见 SongListNowPlaying)。放在 @State 里、不当 @StateObject,理由同上。
+    @State private var listNowPlaying = SongListNowPlaying()
     // 待删 key 的**快照**。删除确认弹窗一律只读这一份,绝不在弹窗回调里现读 selectedKeys:
     // 弹窗弹出时 List 会失去 first responder,已知会出现 selection 被系统清空的情况,现读
     // 可能读到空集(什么都没删、用户以为删了)或读到中途被改过的集合。
@@ -1627,6 +1629,11 @@ struct LyricsManagerView: View {
         listEmphasis.update(windowFrame.listHasKeyFocus ? selectedKeys : [])
     }
 
+    /// 列表各行读的那份正在播放(见 SongListNowPlaying),跟 nowPlayingKey 和播放器给的封面对齐。
+    private func syncListNowPlaying() {
+        listNowPlaying.update(key: nowPlayingKey, artwork: nowPlaying.artwork)
+    }
+
     /// 代码里改了选中之后,表格上的选中按数据重新对一遍。SwiftUI 把选中同步到表格时只管滚到过的行:屏幕外那行旧选中
     /// 它取消不掉,滚回去还亮着,再 ⌘ 点选会被一起选进来。列表第 i 行就是数据里第 i 条(组头也算一行),对不上就整份换掉;
     /// 行数对不上(列表还没换成新数据)就不动(见 11 章决策 91)。
@@ -1653,8 +1660,7 @@ struct LyricsManagerView: View {
     private func songList(scrollProxy: ScrollViewProxy) -> some View {
         SongList(rows: SongRows(entries: groupByAlbum ? .grouped(albumEntries) : .flat(sortedFiltered),
                                 query: committedSearchText,
-                                nowPlayingKey: nowPlayingKey,
-                                nowPlayingArtwork: nowPlaying.artwork,
+                                nowPlaying: listNowPlaying,
                                 pins: pins.pins,
                                 albumDisplayMap: store.albumDisplayMap,
                                 language: languageSettings.appLanguage,
@@ -1700,6 +1706,8 @@ struct LyricsManagerView: View {
             refreshListEmphasis()
         }
         .onChange(of: windowFrame.listHasKeyFocus) { _, _ in refreshListEmphasis() }
+        .onChange(of: nowPlayingKey, initial: true) { _, _ in syncListNowPlaying() }
+        .onChange(of: nowPlaying.artwork) { _, _ in syncListNowPlaying() }
         // 删除确认弹窗挂在 List 上——不能挂在 detailView 里(多选时右侧渲染的是批量
         // 面板、detailView 根本不在视图树里,置 isPresented 会静默无效),也故意不跟
         // 「清空全部缓存」那个弹窗挂在同一条修饰符链上:SwiftUI 对同一条链上叠加
@@ -1752,8 +1760,8 @@ struct LyricsManagerView: View {
     }
 
     /// 侧栏的歌曲列表,单独一个视图、按 == 比对。外层 body 里任何一个状态变了都要整个重算(换选中、编辑格子每敲一个字、
-    /// 自动匹配的进度),列表要是跟着重算,上万行的行闭包全部重跑、整表重新比对。== 只比画在行上的东西;选中强调各行
-    /// 自己读 emphasis,别再从这一层把选中传进行里(见 11 章决策 89)。
+    /// 自动匹配的进度),列表要是跟着重算,上万行的行闭包全部重跑、整表重新比对。== 只比画在行上的东西;选中强调、正在播放
+    /// 各行自己读 emphasis、nowPlaying,别再从这一层把选中、正在放的那首传进行里(见 11 章决策 89、94)。
     private struct SongList<Menu: View>: View, Equatable {
         let rows: SongRows
         @ObservedObject var selection: SongListSelection
@@ -1801,8 +1809,8 @@ struct LyricsManagerView: View {
 
         let entries: Entries
         let query: String
-        let nowPlayingKey: String?
-        let nowPlayingArtwork: NSImage?
+        /// 各行自己读,这里只比是不是同一个对象(见 SongListNowPlaying)。
+        let nowPlaying: SongListNowPlaying
         let pins: [String: Int]
         /// 跟 summaries 一起重建:它变了,entries 一定也换了一份,== 里不另外比。
         let albumDisplayMap: [String: String]
@@ -1811,9 +1819,8 @@ struct LyricsManagerView: View {
         let emphasis: SongListEmphasis
 
         static func == (a: Self, b: Self) -> Bool {
-            a.entries.isSameArray(as: b.entries) && a.query == b.query && a.nowPlayingKey == b.nowPlayingKey
-                && a.nowPlayingArtwork === b.nowPlayingArtwork && a.pins == b.pins && a.language == b.language
-                && a.emphasis === b.emphasis
+            a.entries.isSameArray(as: b.entries) && a.query == b.query && a.nowPlaying === b.nowPlaying
+                && a.pins == b.pins && a.language == b.language && a.emphasis === b.emphasis
         }
 
         var body: some View {
@@ -1847,27 +1854,26 @@ struct LyricsManagerView: View {
                 summary: summary,
                 albumDisplayName: summary.isListedMV ? L10n.t("MV") : albumDisplay(summary.displayAlbum),
                 query: query,
-                isNowPlaying: summary.key == nowPlayingKey,
                 isPinned: pins[summary.key] != nil,
-                artwork: summary.key == nowPlayingKey ? nowPlayingArtwork : nil,
-                emphasis: emphasis)
+                emphasis: emphasis,
+                nowPlaying: nowPlaying)
             .tag(summary.key)
             .listRowSeparator(.hidden)
         }
     }
 
-    /// 列表的一行。强调色自己从 emphasis 读:换选中时屏幕上那几行重算这一层,里面那层(LyricsManagerSongRow)只有强调
-    /// 真的变了的一两行重画。
+    /// 列表的一行。强调色、正在播放自己从 emphasis、nowPlaying 读:换选中、换歌时屏幕上那几行重算这一层,里面那层
+    /// (LyricsManagerSongRow)只有真的变了的一两行重画。
     private struct SongListRow: View {
         let summary: EnrichCacheStore.Summary
         let albumDisplayName: String
         let query: String
-        let isNowPlaying: Bool
         let isPinned: Bool
-        let artwork: NSImage?
         @ObservedObject var emphasis: SongListEmphasis
+        @ObservedObject var nowPlaying: SongListNowPlaying
 
         var body: some View {
+            let isNowPlaying = nowPlaying.key == summary.key
             LyricsManagerSongRow(
                 summary: summary,
                 albumDisplayName: albumDisplayName,
@@ -1875,7 +1881,7 @@ struct LyricsManagerView: View {
                 isNowPlaying: isNowPlaying,
                 isPinned: isPinned,
                 isEmphasized: emphasis.keys.contains(summary.key),
-                artwork: artwork)
+                artwork: isNowPlaying ? nowPlaying.artwork : nil)
         }
     }
 
@@ -1892,6 +1898,19 @@ struct LyricsManagerView: View {
 
         func update(_ keys: Set<String>) {
             if keys != self.keys { self.keys = keys }
+        }
+    }
+
+    /// 正在放的那首在列表里是哪一行、播放器给的封面(见 SongListRow)。各行自己读,SongRows 的 == 不带这两样:换歌、
+    /// 封面晚一拍到的时候只有屏幕上那几行重算,不整表重比(见 11 章决策 94)。值真的变了才发布。
+    @MainActor
+    private final class SongListNowPlaying: ObservableObject {
+        @Published private(set) var key: String?
+        @Published private(set) var artwork: NSImage?
+
+        func update(key: String?, artwork: NSImage?) {
+            if key != self.key { self.key = key }
+            if artwork !== self.artwork { self.artwork = artwork }
         }
     }
 

@@ -430,6 +430,15 @@ public final class EnrichCacheStore: ObservableObject {
         return (parts[0], parts[1], parts[2])
     }
 
+    // nonisolated:buildSummaries 在后台构建线程调。JSONSerialization 解出来的非 ASCII 字符串是桥接的 NSString,哈希、
+    // 比较每个字都走一次 objc 消息;key 要当列表 id、选中集合和各个索引的键,在这里整批转成原生。别只转查找的那一方:
+    // 一边原生、一边桥接,相等比较更慢(见 11 章决策 94)。
+    private nonisolated static func nativeKey(_ key: String) -> String {
+        var native = key
+        native.makeContiguousUTF8()
+        return native
+    }
+
     /// summaries 及其派生物(归并字典/筛选下拉候选)的一次性构建结果。
     private struct SummariesBundle {
         var summaries: [Summary]
@@ -682,7 +691,7 @@ public final class EnrichCacheStore: ObservableObject {
             let displayAlbum = listedAlbum.isEmpty && !inferredArtist.isEmpty
                 ? (entry["inferred_album"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "" : listedAlbum
             return Summary(
-                key: key,
+                key: Self.nativeKey(key),
                 artist: parts.artist,
                 canonicalArtist: canonical,
                 inferredArtist: inferredArtist,

@@ -3836,8 +3836,8 @@ func runSourceContractTests() {
                     && manager.contains(".onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }"), true,
                     "歌词管理: 换分组、换排序之后滚回选中的那一首")
         // 正在放的那首在列表行、多选清单里跟详情页头部一样用播放器给的封面(11 章决策 78)。
-        expectEqual(manager.contains("artwork: summary.key == nowPlayingKey ? nowPlayingArtwork : nil,")
-                    && manager.contains("nowPlayingArtwork: nowPlaying.artwork,")
+        expectEqual(manager.contains("artwork: isNowPlaying ? nowPlaying.artwork : nil)")
+                    && manager.contains("listNowPlaying.update(key: nowPlayingKey, artwork: nowPlaying.artwork)")
                     && manager.contains("LyricsManagerCover(url: summary.coverURL, image: summary.key == nowPlayingKey ? nowPlaying.artwork : nil,\n                               size: 32, radius: 6)")
                     && managerParts.contains("LyricsManagerCover(url: summary.coverURL, image: artwork, size: 40, radius: 7)"), true,
                     "歌词管理: 正在放的那首在列表里用播放器给的封面")
@@ -3887,6 +3887,18 @@ func runSourceContractTests() {
                     && !manager.contains("List(selection: Binding(")
                     && !manager.contains("store.summaries.first(where:"), true,
                     "歌词管理: 列表是按 == 比对的子视图,行自己读强调色,选中放在外层不订阅的对象里")
+        // 正在放的那首和它的封面各行自己读,SongRows 的 == 只比是不是同一个对象:换歌、封面晚到时列表不整表重比。条目的 key
+        // 在 buildSummaries 里转成原生字符串,列表 id、选中集合、各个索引整批是原生的(11 章决策 94)。
+        expectEqual(!songListSource.isEmpty
+                    && !songListSource.contains("nowPlayingKey") && !songListSource.contains("nowPlayingArtwork")
+                    && songListSource.contains("a.nowPlaying === b.nowPlaying")
+                    && manager.contains("@ObservedObject var nowPlaying: SongListNowPlaying")
+                    && manager.contains(".onChange(of: nowPlayingKey, initial: true) { _, _ in syncListNowPlaying() }")
+                    && manager.contains(".onChange(of: nowPlaying.artwork) { _, _ in syncListNowPlaying() }"), true,
+                    "歌词管理: 正在放的那首和封面各行自己读,换歌、封面到达时列表不整表重比")
+        expectEqual(storeSource.contains("            return Summary(\n                key: Self.nativeKey(key),\n")
+                    && storeSource.contains("native.makeContiguousUTF8()"), true,
+                    "歌词管理: 条目的 key 转成原生字符串再存")
         // 代码里改了选中,下一拍按数据把表格的选中整份对一遍:SwiftUI 取消不掉屏幕外那行旧选中(11 章决策 91)。
         expectEqual(manager.contains("listSelection.keys = keys\n                // 代码里改的选中:等列表这一拍按它同步完,再把表格对一遍。\n                DispatchQueue.main.async { alignTableSelection() }")
                     && manager.contains("guard table.numberOfRows == keys.count else { return }")
