@@ -781,31 +781,34 @@ struct OnboardingView: View {
         }
     }
 
-    /// 卡片下面那几句:只讲这一轮真的出现了的权限各有什么用。完全磁盘访问那句按引擎实际读的
+    /// 卡片下面那几句:只讲这一轮出现了、**还没开**的权限各有什么用 —— 开好的那几行不再解释,全开了整段不出现。
+    /// 全讲的话,播放器多选、权限行一多,这段会被底栏盖住半句。完全磁盘访问那句按引擎实际读的
     /// 路径写(只读这几家在 ~/Library/Containers 下的歌词缓存与播放队列,localcachefs.go 头注);
     /// 别写「不上传」:开了网页中继时当前歌词会推到用户自己的服务器。
     private func permissionBenefitNote(_ fdaTargets: [PlaybackPlayer], _ axTargets: [PlaybackPlayer]) -> String? {
         var lines: [String] = []
-        let refineTargets = automationTargets.filter { $0.automationUse == .refinesProgress }
+        let pendingAutomation = automationTargets.filter { automation.status($0) != .authorized }
+        let refineTargets = pendingAutomation.filter { $0.automationUse == .refinesProgress }
         if !refineTargets.isEmpty {
             lines.append(String(format: L10n.t("自动化权限可让%@的播放进度更准确，并可在歌词上直接控制播放"),
                                 automation.playerNames(refineTargets)))
         }
-        let trackTargets = automationTargets.filter { $0.automationUse == .readsTrack }
+        let trackTargets = pendingAutomation.filter { $0.automationUse == .readsTrack }
         if !trackTargets.isEmpty {
             lines.append(String(format: L10n.t("自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放"),
                                 automation.playerNames(trackTargets)))
         }
-        if !fdaTargets.isEmpty {
+        if !fdaTargets.isEmpty, fullDiskAccess.grant(fdaTargets) != .granted {
             lines.append(String(format: L10n.t("完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列"),
                                 fullDiskAccess.playerNames(fdaTargets)))
         }
-        let progressTargets = axTargets.filter { $0.accessibilityUse == .calibratesProgress }
+        let pendingAccessibility = accessibility.trusted ? [] : axTargets
+        let progressTargets = pendingAccessibility.filter { $0.accessibilityUse == .calibratesProgress }
         if !progressTargets.isEmpty {
             lines.append(String(format: L10n.t("辅助功能权限可让%@的播放进度更准确，仅读取其界面上的播放时间"),
                                 accessibility.playerNames(progressTargets)))
         }
-        let playModeTargets = axTargets.filter { $0.accessibilityUse == .switchesPlayMode }
+        let playModeTargets = pendingAccessibility.filter { $0.accessibilityUse == .switchesPlayMode }
         if !playModeTargets.isEmpty {
             lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环键，点按时会操作其菜单栏"),
                                 accessibility.playerNames(playModeTargets)))
