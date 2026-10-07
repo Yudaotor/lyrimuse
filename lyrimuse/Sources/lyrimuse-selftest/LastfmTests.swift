@@ -906,6 +906,22 @@ func runLastfmTests() {
                     true, "写法族: 无副题歌名也给字形变体(為/爲)")
     }
 
+    // ---- 有上限的记忆表(PlayCountFold.foldTitle 用它记住折叠结果,见 15 章决策 27) ----
+    do {
+        let memo = BoundedMemo<Int>(limit: 3)
+        var computed = 0
+        func get(_ key: String) -> Int { memo.value(for: key) { computed += 1; return $0.count } }
+        expectEqual([get("a"), get("bb"), get("a")], [1, 2, 1], "记忆表: 结果跟直接算一样")
+        expectEqual(computed, 2, "记忆表: 记过的不再算")
+        expectEqual(memo.count, 2, "记忆表: 记了两条")
+        _ = [get("ccc"), get("dddd")]
+        expectEqual(memo.count <= 3, true, "记忆表: 记满就清空,不超过上限")
+        expectEqual(get("a"), 1, "记忆表: 清空之后照样算对")
+        let titles = ["愛在什麼地方都有（Love Is Everywhere）", "月食 The Weeping Woman", "Song (2014 Remaster)"]
+        expectEqual(titles.map(PlayCountFold.foldTitle), titles.map(PlayCountFold.foldTitle), "记忆表: 折叠歌名第二次跟第一次一样")
+        expectEqual(PlayCountFold.foldMemo.count > 0, true, "记忆表: 折叠歌名记下来了")
+    }
+
     // ---- PlayCountFold:写法索引的折叠键(数据驱动合并的地基) ----
     //
     // 把历史上真实出现过的写法按这个键归族,查次数时按族查——取代猜枚举。断言覆盖实测

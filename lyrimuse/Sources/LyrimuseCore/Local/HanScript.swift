@@ -510,7 +510,16 @@ public enum PlayCountFold {
         return value
     }
 
+    /// foldTitle 的结果按原串记住:它是纯函数(只看输入,词表和繁简变换都是固定的),一次约 20 微秒,大头是繁简变换;
+    /// 别名表(EnrichTitleAliases.derive)每算一轮要把一万多条歌名折好几遍,收听统计也反复折同一批歌名。全库不到一万种
+    /// 写法,上限两万平时清不到。见 15 章决策 27。
+    public static let foldMemo = BoundedMemo<String>(limit: 20_000)
+
     public static func foldTitle(_ title: String) -> String {
+        foldMemo.value(for: title, compute: computeFoldTitle)
+    }
+
+    private static func computeFoldTitle(_ title: String) -> String {
         let n = normalized(title)
         let stripped = stripCatalogNoise(n)
         // 第三批:中文歌名的 Live/Demo 版此前被 R1 当译名收进录音室版
