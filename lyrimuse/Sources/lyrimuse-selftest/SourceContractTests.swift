@@ -1973,6 +1973,8 @@ func runSourceContractTests() {
                         && view.contains("static let lateIn = AnyTransition.opacity.animation(.easeOut(duration: 0.12).delay(0.13))")
                         && view.contains("insertion: mainRowInsertion,\n                                  removal: OverlayLineChangeTransitions.quickOut"), true,
                         "悬浮换句动画: 旧的读音 / 译文 / 下一句当场收掉、新的后半程淡入,旧主句 0.12 秒淡完")
+            expectEqual(view.components(separatedBy: ".transition(OverlayLineChangeTransitions.rowGroup)").count - 1, 2,
+                        "悬浮换句动画: 前奏 / 间奏前后换序时,两组各自按同样的进退场切换(不落回默认淡入淡出)")
             // 默认 loops = true 是给灵动岛歌名那类常驻标签的;歌词行滚一遍停在句尾,等换句才归零。
             expectEqual(view.contains("MarqueeText(id: id, restingAlignment: alignment, loops: false)"), true,
                         "悬浮滚动: overlayScroll 的跑马灯必须 loops: false(否则滚完一行又跳回开头)")

@@ -1223,13 +1223,16 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             //    这个倒序。
             //
             // 换句动画开着时两种顺序各包一个 VStack、叠在同一个 ZStack 里:换序那一拍新旧两组交叠着过渡,
-            // 不在外层 VStack 里上下排成两份。关着时原样排在外层 VStack 里。
+            // 不在外层 VStack 里上下排成两份。整组的进退场跟单行一样(旧的当场收掉、新的后半程淡入),
+            // 不能落回默认的淡入淡出:旧译文会拖着残影跟新的叠在一起。关着时原样排在外层 VStack 里。
             if animatesLineChange {
                 ZStack(alignment: Alignment(horizontal: duetAlignment, vertical: .top)) {
                     if line == nil {
                         VStack(alignment: duetAlignment, spacing: 0) { secondaryRowsAfterGap }
+                            .transition(OverlayLineChangeTransitions.rowGroup)
                     } else {
                         VStack(alignment: duetAlignment, spacing: 0) { secondaryRows }
+                            .transition(OverlayLineChangeTransitions.rowGroup)
                     }
                 }
             } else if line == nil {
@@ -2241,6 +2244,8 @@ private enum OverlayLineChangeTransitions {
     static let instantOut = AnyTransition.opacity.animation(.linear(duration: 0.01))
     static let quickOut = AnyTransition.opacity.animation(.easeOut(duration: 0.12))
     static let lateIn = AnyTransition.opacity.animation(.easeOut(duration: 0.12).delay(0.13))
+    /// 前奏 / 间奏前后换序时,主句下面那一整组的进退场。
+    static let rowGroup = AnyTransition.asymmetric(insertion: lateIn, removal: instantOut)
 }
 
 /// 换句动画开着时:主句那一格的编号一变就按 LyricsX 的时长和缓动过渡,并在每拍之后记下下一句那一行。关着时原样返回。
