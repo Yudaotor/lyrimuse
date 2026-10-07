@@ -13,6 +13,8 @@ final class AppActions {
     var openSettings: (() -> Void)?
     var openLyricsManager: (() -> Void)?
     var openLyricsWindow: (() -> Void)?
+    /// 只开场景那扇完整尺寸的歌词窗口(激活 App),不按形态分流:出迷你时用(07 章决策 133)。别的地方一律走 `openLyricsWindow`。
+    var openLyricsWindowScene: (() -> Void)?
     var openOnboarding: (() -> Void)?
     /// 唤出「搜索歌词…」独立小窗(悬浮窗 ⚙ 快捷菜单用)——**不是**歌词窗口
     /// 那个 `.sheet(item)`(那个要求歌词窗口先开着,"只弹搜索页面,不用

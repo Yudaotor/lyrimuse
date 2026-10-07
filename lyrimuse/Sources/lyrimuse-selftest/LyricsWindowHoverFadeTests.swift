@@ -113,7 +113,7 @@ func checkLyricsWindowChromeIdle() {
                 "闲置隐藏: 图层版歌词列表的指示条也跟着收(SwiftUI 版那一份见上面 scroll 那组)")
     expectEqual(sourceBytes(source("lyrimuse/UI/LyricsLayerList.swift"), contain: "view.bindChromeFade(chromeFade)"), true,
                 "闲置隐藏: 图层版歌词列表接上淡入淡出")
-    expectEqual(sourceBytes(window, contain: "let hidden = isActive || !window.isKeyWindow || (chromeHidden && !isMini)"), true,
+    expectEqual(sourceBytes(window, contain: "let hidden = isActive || inactive || (chromeHidden && !isMini)"), true,
                 "闲置隐藏: 红绿灯跟着收,迷你不管")
     expectEqual(sourceBytes(window, contain: "chromeFade.attach(window, isMini: $isMini.eraseToAnyPublisher())")
                 && sourceBytes(window, contain: "self?.chromeFade.windowClosed()")

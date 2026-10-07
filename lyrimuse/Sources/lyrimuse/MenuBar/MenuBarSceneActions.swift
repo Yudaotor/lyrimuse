@@ -109,7 +109,14 @@ private struct SceneActionRegistrar: View {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindowAction(id: "lyrics-manager")
                 }
+                // 迷你是面板、完整是场景,按要的形态开(07 章决策 133);面板不激活 App。
                 AppActions.shared.openLyricsWindow = {
+                    LyricsWindowSession.open {
+                        NSApp.activate(ignoringOtherApps: true)
+                        openWindowAction(id: "lyrics-window")
+                    }
+                }
+                AppActions.shared.openLyricsWindowScene = {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindowAction(id: "lyrics-window")
                 }
@@ -146,9 +153,14 @@ private struct SceneActionRegistrar: View {
                                             hasCompletedOnboarding: settings.hasCompletedOnboarding,
                                             lyricsWindowWasOpen: LyricsWindowSession.shouldReopenAtLaunch)
                 if plan.reopensLyricsWindow {
+                    // 上次是迷你就直接开面板(不开场景,07 章决策 133)。
                     LyricsWindowLaunchRestorer.start {
-                        LyricsWindowSession.markRestoringAtLaunch()
-                        openWindowAction(id: "lyrics-window")
+                        if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {
+                            LyricsMiniPanelHost.show()
+                        } else {
+                            LyricsWindowSession.markRestoringAtLaunch()
+                            openWindowAction(id: "lyrics-window")
+                        }
                     }
                 } else if plan.forgetsOpenLyricsWindow {
                     LyricsWindowSession.forgetOpen()

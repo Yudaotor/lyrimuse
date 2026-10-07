@@ -2,7 +2,7 @@ import AppKit
 import LyrimuseCore
 import ScreenCaptureKit
 
-/// 进 / 出迷你的变形动画(07 章决策 125)。
+/// 进 / 出迷你的变形动画(07 章决策 125):完整尺寸那扇窗和迷你面板之间交接(决策 133)。
 ///
 /// 真窗口自己不做尺寸动画:它的内容区就是 SwiftUI 的宿主视图,尺寸每变一帧整窗重排一遍,AppKit 的窗口尺寸
 /// 动画本身也是主线程逐帧推,主线程一忙就掉帧。这里另起一扇透明、不接鼠标的临时窗,上面一张卡片:先摆切换前
@@ -63,46 +63,71 @@ final class LyricsWindowFormMorph {
         }
     }
 
-    /// 切到 `target`。`apply` 由调用方实现:改形态、把真窗口一步摆到 `target`,全部做完调它收到的回调。
-    /// 不管动画做不做得成,`apply` 都恰好调一次。
-    func run(window: NSWindow, to target: NSRect, apply: @escaping @MainActor (@escaping () -> Void) -> Void) {
+    /// 从 `source` 交接到另一扇窗,停在 `target`。`prepare` 由调用方实现:把目标窗口摆到 `target`,交回来(交 nil = 没开出来);
+    /// 交回来的窗口由这里藏到桌面以下再上屏、截图、淡入,落地后回到它交回来时的层级。`finish` 在目标窗口接手之后调,由调用方
+    /// 关掉 `source`;没开出来时不调 `finish`,`source` 回到原层级,改调 `failed`。不管动画做不做得成,`prepare` 都恰好调一次。
+    func handoff(from source: NSWindow, to target: NSRect,
+                 prepare: @escaping @MainActor (@escaping (NSWindow?) -> Void) -> Void,
+                 finish: @escaping @MainActor (NSWindow) -> Void,
+                 failed: @escaping @MainActor () -> Void) {
         isRunning = true
         levelAfterMorph = nil
-        Task { await perform(window, target, apply) }
+        Task { await perform(source, target, prepare, finish, failed) }
     }
 
-    private func perform(_ window: NSWindow, _ target: NSRect,
-                         _ apply: @escaping @MainActor (@escaping () -> Void) -> Void) async {
-        let start = window.frame
-        let scale = window.backingScaleFactor
-        guard let old = await capture(window, allowWarm: true, timeout: Plan.firstCaptureTimeout),
-              window.isVisible, window.frame == start else {
+    private func perform(_ source: NSWindow, _ target: NSRect,
+                         _ prepare: @escaping @MainActor (@escaping (NSWindow?) -> Void) -> Void,
+                         _ finish: @escaping @MainActor (NSWindow) -> Void,
+                         _ failed: @escaping @MainActor () -> Void) async {
+        let start = source.frame
+        let scale = source.backingScaleFactor
+        guard let old = await capture(source, allowWarm: true, timeout: Plan.firstCaptureTimeout),
+              source.isVisible, source.frame == start else {
             isRunning = false
-            apply {}
+            prepare { destination in
+                guard let destination else { return failed() }
+                destination.orderFrontRegardless()
+                finish(destination)
+            }
             return
         }
-        let levelBefore = window.level
-        let wasKey = window.isKeyWindow
-        let overlay = MorphOverlay(frame: Plan.overlayFrame(from: start, to: target), level: levelBefore, scale: scale,
+        let sourceLevel = source.level
+        let wasKey = source.isKeyWindow
+        let overlay = MorphOverlay(frame: Plan.overlayFrame(from: start, to: target), level: sourceLevel, scale: scale,
                                    keyShadow: wasKey)
         overlay.show(old, at: start, cornerRadius: Self.cornerRadius(of: old, scale: scale))
         CATransaction.flush()
         await Self.pause(Self.settleFrames)
 
-        window.level = Self.hiddenLevel
+        source.level = Self.hiddenLevel
         let begin = CACurrentMediaTime()
         overlay.animate(to: target, duration: Plan.duration,
                         timing: CAMediaTimingFunction(controlPoints: Plan.curve.0, Plan.curve.1, Plan.curve.2, Plan.curve.3))
         CATransaction.flush()
 
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            Task { @MainActor in apply { done.resume() } }
+        let destination: NSWindow? = await withCheckedContinuation { (done: CheckedContinuation<NSWindow?, Never>) in
+            Task { @MainActor in prepare { done.resume(returning: $0) } }
         }
+        guard let destination else {
+            source.level = sourceLevel
+            overlay.fadeOut(duration: Plan.fadeOutUnmatched) { [weak self] in
+                MainActor.assumeIsolated {
+                    overlay.close()
+                    self?.isRunning = false
+                }
+            }
+            failed()
+            return
+        }
+        // 目标窗口在桌面以下上屏:用户看不见,截得到它的新内容。
+        let destinationLevel = destination.level
+        destination.level = Self.hiddenLevel
+        if !destination.isVisible { destination.orderFrontRegardless() }
         await Self.pause(1.0 / 60)
-        window.contentView?.layoutSubtreeIfNeeded()
-        window.displayIfNeeded()
+        destination.contentView?.layoutSubtreeIfNeeded()
+        destination.displayIfNeeded()
         CATransaction.flush()
-        let new = await capture(window, allowWarm: false, timeout: Plan.secondCaptureTimeout)
+        let new = await capture(destination, allowWarm: false, timeout: Plan.secondCaptureTimeout)
         var landing = begin + Plan.duration
         if let new {
             let now = CACurrentMediaTime()
@@ -114,12 +139,14 @@ final class LyricsWindowFormMorph {
         let wait = landing - CACurrentMediaTime()
         if wait > 0 { await Self.pause(wait) }
 
-        // 真窗口回到原层级(动画期间别处要改的那份优先),此刻它正好在卡片底下、跟新图对齐。
-        if window.isVisible {
-            window.level = levelAfterMorph ?? levelBefore
-            if wasKey { window.makeKey() }
+        // 目标窗口回到它的层级(动画期间别处要改的那份优先),此刻它正好在卡片底下、跟新图对齐;源窗口交给调用方关掉。
+        if destination.isVisible {
+            destination.level = levelAfterMorph ?? destinationLevel
+            // 迷你面板不当 main,也不抢 key。
+            if wasKey, destination.canBecomeMain { destination.makeKey() }
         }
         levelAfterMorph = nil
+        finish(destination)
         CATransaction.flush()
         await Self.pause(Self.settleFrames)
         overlay.fadeOut(duration: new == nil ? Plan.fadeOutUnmatched : Plan.fadeOutMatched) { [weak self] in

@@ -1633,12 +1633,12 @@ func runSourceContractTests() {
                         "迷你窗: 用户拖出来的迷你尺寸单独存一个键")
             expectEqual(lwv.contains("            return\n        }\n        defaults.set(NSStringFromRect(window.frame), forKey: Self.frameKey)"), true,
                         "迷你窗: 迷你期间只存迷你尺寸就返回,不能落到完整窗口那份 frame 上")
-            expectEqual(lwv.contains("let size = self.miniTargetSize(on: window.screen)"), true,
+            expectEqual(lwv.contains("let size = Self.miniTargetSize(on: window.screen)"), true,
                         "迷你窗: 进迷你时先读存过的尺寸(夹在下限与屏幕可见区之间)")
             // 迷你位置:跟完整窗口同一条不变量 —— 先认屏幕,那块屏不在了就不摆旧坐标。
             expectEqual(lwv.contains("let screen = ScreenIdentity.screen(withID: id) else { return nil }"), true,
                         "迷你窗: 恢复位置先认屏幕,屏幕不在了交回默认摆法")
-            expectEqual(lwv.contains("let f = self.restoredMiniFrame(size: size) ?? {"), true,
+            expectEqual(lwv.contains("let target = Self.restoredMiniFrame(size: size) ?? {"), true,
                         "迷你窗: 进迷你时优先回到上次迷你窗待过的位置")
             // 悬停控制条不藏下一行:那一格常驻预留,控制条浮出来谁也不压谁、歌词也不动。
             expectEqual(lwv.contains("Color.clear.frame(height: miniDeckReserve)"), true,
@@ -1739,9 +1739,9 @@ func runSourceContractTests() {
             }
             expectEqual(lwv.contains("window.animationBehavior = .none"), true,
                         "歌词窗口: 打开 / 关闭没有系统缩放淡入淡出")
-            expectEqual(lwv.contains("window.setFrame(target, display: false, animate: false)")
-                        && lwv.contains("window.setFrame(f, display: true, animate: false)"), true,
-                        "歌词窗口: 进出迷你的 setFrame 都是 animate: false")
+            expectEqual(lwv.contains("if let window, window.frame != target { window.setFrame(target, display: false) }")
+                        && !lwv.contains("display: true, animate: true"), true,
+                        "歌词窗口: 进出迷你一步摆到位,窗口自己不做尺寸动画")
             expectEqual(lwv.contains("NSAnimationContext.runAnimationGroup"), false,
                         "歌词窗口: 进出迷你不走 NSAnimationContext 缩放动画")
             // 进出迷你的动画只在临时窗里由 Core Animation 跑:真窗口不做尺寸动画,也不靠 AppKit 在主线程逐帧改 frame(07 章决策 125)。
@@ -1783,7 +1783,8 @@ func runSourceContractTests() {
                         "歌词窗口: 尺寸变化只在不延后时提交")
             expectEqual(lwv.contains("lyricsColumnWidth = w") || lwv.contains("lyricsViewportHeight = h"), false,
                         "歌词窗口: 别改回尺寸一变就直接写字号依据")
-            expectEqual(lwv.contains("guard let window, !isFullScreenActive, !isNativeFullScreenTransition else { return }\n        isSwitchingForm = true"), true,
+            expectEqual(lwv.contains("UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)\n        isSwitchingForm = true")
+                        && lwv.contains("UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)\n        isSwitchingForm = true"), true,
                         "歌词窗口: 进出迷你一开始就进入切换态")
             // 播控排两侧只放随机 / 循环,够不到就空着占位;Last.fm 喜欢只进「⋯」菜单(07 章决策 54)。
             expectEqual(lwv.contains("LastfmLoveTransportButton"), false,
@@ -1836,10 +1837,10 @@ func runSourceContractTests() {
             // 迷你窗:红绿灯只留关闭和最小化;进迷你默认置顶,退出时置顶状态原样还回去。
             expectEqual(lwv.contains("let hide = hidden || (type == .zoomButton && isMini)"), true,
                         "迷你窗: 绿键单独藏起来,只留关闭和最小化")
-            expectEqual(lwv.contains("alwaysOnTopBeforeMini = isAlwaysOnTop"), true,
-                        "迷你窗: 进迷你前先记下置顶状态,退出时还原(完整尺寸默认仍不置顶)")
-            expectEqual(lwv.contains("setAlwaysOnTop(alwaysOnTopBeforeMini ?? false)"), true,
-                        "迷你窗: 退出迷你把置顶还原成进之前那样")
+            expectEqual(lwv.contains("if isMiniPanel {\n            isMini = true\n            setAlwaysOnTop(true)\n        }"), true,
+                        "迷你窗: 迷你面板挂上来就是迷你、默认置顶(07 章决策 133)")
+            expectEqual(lwv.contains("alwaysOnTopBeforeMini"), false,
+                        "迷你窗: 完整尺寸那扇窗的置顶不随切迷你改(两扇窗各管各的)")
             // 封面边长必须是**算出来**的:它要先知道边长才能按像素预先重采样,跟着布局撑开
             // 就只剩运行期缩一条路,而那会把半调网点封面缩出摩尔纹黑斑。
             expectEqual(lwv.contains("private func miniCoverSide(_ m: MiniHeaderMetrics) -> CGFloat"), true,
@@ -1851,10 +1852,30 @@ func runSourceContractTests() {
             // 迷你尺寸在每个桌面都出现、能浮在别的 App 的全屏上;完整尺寸照旧能进原生全屏。持续守护和切换那一拍都按形态补(07 章决策 131)。
             expectEqual(lwv.contains("let wanted: NSWindow.CollectionBehavior = mini ? [.canJoinAllSpaces, .fullScreenAuxiliary] : [.fullScreenPrimary]")
                         && lwv.contains("Self.enforceSpaceBehavior(win, mini: self?.isMini ?? false)")
-                        && lwv.contains("isMini = true\n                Self.enforceSpaceBehavior(window, mini: true)")
-                        && lwv.contains("isMini = false\n                Self.enforceSpaceBehavior(window, mini: false)")
+                        && (read("UI/LyricsMiniPanel.swift") ?? "").contains("collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]")
                         && !lwv.contains("enforceFullScreenCapability"), true,
                         "窗口控件: 迷你尺寸跟着切换桌面、浮在别的 App 的全屏上,完整尺寸能进原生全屏")
+            // 迷你是一扇不激活 App 的面板,完整尺寸仍是场景那扇窗,切换是两扇窗交接;入口按形态分流(07 章决策 133)。
+            let miniPanel = read("UI/LyricsMiniPanel.swift") ?? ""
+            let morph = read("UI/LyricsWindowFormMorph.swift") ?? ""
+            expectEqual(miniPanel.contains(".nonactivatingPanel]") && miniPanel.contains("becomesKeyOnlyIfNeeded = true")
+                        && miniPanel.contains("override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }")
+                        && miniPanel.contains("LyricsMiniHostingView(rootView: LyricsWindowView(hostsMiniPanel: true))"), true,
+                        "迷你面板: 不激活 App、不当 key、认第一下点击,里面挂迷你那一份歌词窗口")
+            expectEqual(lwv.contains("if window is LyricsMiniPanel {\n            switchToFullWindow(from: window, animated: animated)")
+                        && lwv.contains("prepare: { done in done(LyricsMiniPanelHost.make(frame: target)) },")
+                        && lwv.contains("AppActions.shared.openLyricsWindowScene?()")
+                        && morph.contains("destination.level = Self.hiddenLevel")
+                        && morph.contains("finish(destination)")
+                        && !morph.contains("func run(window:"), true,
+                        "迷你面板: 进出迷你是两扇窗交接,变形动画截源窗口和目标窗口")
+            expectEqual(lwv.contains("if mini { LyricsMiniPanelHost.show() } else { openScene() }")
+                        && lwv.contains("if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }"), true,
+                        "迷你面板: 打开入口按形态分流,面板开着、要完整尺寸时交给面板自己切")
+            expectEqual(lwv.contains("let inactive = window is LyricsMiniPanel ? !miniPointerInside : !window.isKeyWindow")
+                        && lwv.contains("if !previewMode, !hostsMiniPanel { AuxiliaryWindowActivation.windowDidAppear(\"lyrics-window\") }")
+                        && lwv.contains("if !isMiniPanel { addToWindowsMenu(window) }"), true,
+                        "迷你面板: 红绿灯跟着指针显隐,不参与 Dock 图标记账、不进窗口菜单")
             expectEqual(lwv.contains("rectangle.compress.vertical"), false,
                         "窗口控件: 别换回「横杠夹箭头」那颗,Apple 自家 App 里看不懂它管什么")
             expectEqual(lwv.components(separatedBy: ".font(Self.windowActionIconFont)").count - 1, 4,
@@ -2318,12 +2339,12 @@ func runSourceContractTests() {
                 expectEqual(view.contains("&& a.suspendsBlur == b.suspendsBlur"), true,
                             "歌词窗口拖动: 行的 Equatable 比较带上 suspendsBlur")
                 // 歌词窗口跨重启接着上次:开着没有、是不是迷你(07 章决策 72)。
-                expectEqual(view.contains("if !AppExit.isTerminating { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }"), true,
-                            "歌词窗口重开: 退出 App 途中的关窗不清「开着」标记")
-                expectEqual(view.contains("if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }"), true,
+                expectEqual(view.contains("if !AppExit.isTerminating, !handoff { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }"), true,
+                            "歌词窗口重开: 退出 App 途中、两扇窗交接时的关窗都不清「开着」标记")
+                expectEqual(view.contains("if !isMiniPanel, UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {\n            DispatchQueue.main.async { [weak self] in self?.toggleMini() }"), true,
                             "歌词窗口重开: 首次 attach 按上次状态进迷你")
                 // 「设置 › 打开」按预览的形态开窗(07 章决策 77)。
-                expectEqual(view.contains("if let requested = LyricsWindowSession.takeFormRequest() {\n            UserDefaults.standard.set(requested, forKey: LyricsWindowSession.miniModeKey)\n        }\n        if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }"), true,
+                expectEqual(view.contains("if !isMiniPanel, let requested = LyricsWindowSession.takeFormRequest() {\n            UserDefaults.standard.set(requested, forKey: LyricsWindowSession.miniModeKey)\n        }\n        // 场景窗在迷你形态下开出来(打开入口已经分流到面板,剩下系统恢复窗口这类路):上屏之后交接给面板。\n        if !isMiniPanel, UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {\n            DispatchQueue.main.async { [weak self] in self?.toggleMini() }"), true,
                             "开窗形态: 首次 attach 先取「设置 › 打开」的请求,再按迷你那个键进不进迷你")
                 expectEqual(view.contains("guard let window, window.isVisible, let requested = LyricsWindowSession.takeFormRequest() else { return }"), true,
                             "开窗形态: 窗口上屏了才取请求(关着时取走了就切不过去)")
@@ -2341,7 +2362,7 @@ func runSourceContractTests() {
                                 "开窗形态: 「打开」先按预览的形态发请求,再开窗")
                 }
                 if let restore = view.range(of: "restorePersistedFrame(window)\n"),
-                   let enterMini = view.range(of: "LyricsWindowSession.miniModeKey) { toggleMini() }") {
+                   let enterMini = view.range(of: "DispatchQueue.main.async { [weak self] in self?.toggleMini() }") {
                     expectEqual(restore.lowerBound < enterMini.lowerBound, true,
                                 "歌词窗口重开: 先恢复完整 frame 再进迷你(退出迷你要回到那份 frame)")
                 }
@@ -2349,11 +2370,11 @@ func runSourceContractTests() {
                     expectEqual(actions.contains("if plan.reopensLyricsWindow {"), true,
                                 "歌词窗口重开: 启动时上次开着就再开,引导没走完、静默启动时不开(LaunchWindowPlan)")
                     // 启动重开不激活 App(07 章决策 123):先标记再直接开窗,手动打开的入口照旧先激活。
-                    expectEqual(actions.contains("LyricsWindowSession.markRestoringAtLaunch()\n                        openWindowAction(id: \"lyrics-window\")"), true,
+                    expectEqual(actions.contains("LyricsMiniPanelHost.show()\n                        } else {\n                            LyricsWindowSession.markRestoringAtLaunch()\n                            openWindowAction(id: \"lyrics-window\")"), true,
                                 "歌词窗口重开: 启动时先置标记、再直接开窗")
                     expectEqual(actions.contains("LyricsWindowSession.shouldReopenAtLaunch {\n                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {\n                        AppActions.shared.openLyricsWindow?()"), false,
                                 "歌词窗口重开: 启动时不走先激活 App 的 openLyricsWindow")
-                    expectEqual(actions.contains("AppActions.shared.openLyricsWindow = {\n                    NSApp.activate(ignoringOtherApps: true)\n                    openWindowAction(id: \"lyrics-window\")"), true,
+                    expectEqual(actions.contains("AppActions.shared.openLyricsWindow = {\n                    LyricsWindowSession.open {\n                        NSApp.activate(ignoringOtherApps: true)\n                        openWindowAction(id: \"lyrics-window\")"), true,
                                 "歌词窗口: 菜单、快捷键这些手动打开的入口照旧先激活 App")
                 }
                 expectEqual(view.contains("if LyricsWindowSession.takeRestoringAtLaunch() { window.orderFrontRegardless() }"), true,

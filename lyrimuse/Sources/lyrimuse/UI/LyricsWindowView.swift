@@ -313,6 +313,50 @@ enum LyricsWindowSession {
         defer { restoringAtLaunch = false }
         return restoringAtLaunch
     }
+
+    /// 打开歌词窗口(菜单、快捷键、Dock、「设置 › 打开」都经 `AppActions.openLyricsWindow` 到这里):迷你是面板、完整是场景,
+    /// 按要的形态开(请求优先,其次上次的形态,07 章决策 133)。面板开着、请求的是完整尺寸:请求已经发了通知,
+    /// 面板自己的控制器收到去切,这里不再开。`openScene` 激活 App 并开场景。
+    @MainActor static func open(scene openScene: () -> Void) {
+        if let panel = LyricsMiniPanelHost.panel, panel.isVisible {
+            if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }
+            panel.orderFrontRegardless()
+            return
+        }
+        if let window, window.isVisible, !(window is LyricsMiniPanel) {
+            openScene()
+            return
+        }
+        let mini = takeFormRequest() ?? UserDefaults.standard.bool(forKey: miniModeKey)
+        UserDefaults.standard.set(mini, forKey: miniModeKey)
+        if mini { LyricsMiniPanelHost.show() } else { openScene() }
+    }
+
+    /// 直接打开迷你面板时摆哪,见 `LyricsWindowController.miniFrameToOpen`。
+    @MainActor static func miniFrameToOpen() -> NSRect { LyricsWindowController.miniFrameToOpen() }
+
+    /// 出迷你时等完整那扇窗挂上来(`LyricsWindowController.switchToFullWindow`):场景窗 attach 时交出来,`timeout` 秒
+    /// 没来交 nil。只认最近一次登记的。
+    @MainActor private static var fullWindowWaiter: (id: Int, handler: (NSWindow?) -> Void)?
+    @MainActor private static var fullWindowWaiterID = 0
+
+    @MainActor static func awaitFullWindow(timeout: TimeInterval = 2, _ handler: @escaping (NSWindow?) -> Void) {
+        fullWindowWaiterID += 1
+        let id = fullWindowWaiterID
+        fullWindowWaiter = (id, handler)
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+            MainActor.assumeIsolated {
+                guard fullWindowWaiter?.id == id else { return }
+                deliverFullWindow(nil)
+            }
+        }
+    }
+
+    @MainActor static func deliverFullWindow(_ window: NSWindow?) {
+        guard let waiter = fullWindowWaiter else { return }
+        fullWindowWaiter = nil
+        waiter.handler(window)
+    }
 }
 
 /// 垫在标题栏视图里的一块占位:`mouseDownCanMoveWindow` 为 false,系统就不在这块起拖窗;`hitTest` 返回 nil,
@@ -393,6 +437,8 @@ private final class LyricsWindowController: ObservableObject {
     /// 迷你窗的悬停进出(`MiniWindowHoverTracker` 报上来),交给「悬浮淡化」。
     func setMiniHovered(_ hovered: Bool) {
         MainActor.assumeIsolated { hoverFade.setHovered(hovered) }
+        miniPointerInside = hovered
+        updateTrafficLightVisibility()
     }
 
     /// 迷你尺寸。
@@ -406,10 +452,10 @@ private final class LyricsWindowController: ObservableObject {
     /// 进 / 出迷你的这一两拍里窗口尺寸和布局分两步换(见 toggleMini),中间态的尺寸不许拿去
     /// 算歌词字号,否则一次切换要把整张列表换字号重排两三遍(07 章决策 53)。
     @Published private(set) var isSwitchingForm = false
-    /// 进迷你之前那份 frame,退出时复原。
-    private var frameBeforeMini: NSRect?
-    /// 进迷你之前是否置顶,退出时复原(迷你默认置顶)。
-    private var alwaysOnTopBeforeMini: Bool?
+    /// 交接里关掉的这扇窗不算用户关窗(见 closeForHandoff 与 closeObserver)。
+    private var handingOff = false
+    /// 指针在迷你面板里:面板不当 key,红绿灯跟着它显隐(见 updateTrafficLightVisibility)。
+    private var miniPointerInside = false
     /// 进 / 出迷你的变形动画(07 章决策 125)。
     private let formMorph = LyricsWindowFormMorph()
 
@@ -427,7 +473,7 @@ private final class LyricsWindowController: ObservableObject {
     /// 上次迷你窗待过的位置,按这次的尺寸摆回去。**先认屏幕**:那块屏不在了就返回 nil,交回
     /// "顶边钉在原位"的默认摆法 —— 跟完整窗口 `restorePersistedFrame` 同一条不变量,绝不拿旧
     /// 坐标往现有屏幕上硬摆。夹进那块屏的可见区(分辨率/缩放可能变过)。
-    private func restoredMiniFrame(size: CGSize) -> NSRect? {
+    static func restoredMiniFrame(size: CGSize) -> NSRect? {
         let defaults = UserDefaults.standard
         guard let raw = defaults.string(forKey: Self.miniOriginKey),
               let id = defaults.string(forKey: Self.miniScreenKey),
@@ -437,11 +483,35 @@ private final class LyricsWindowController: ObservableObject {
     }
 
     /// 这次进迷你用多大:存过就用存的(夹在下限与所在屏可见区之间),没存过用默认。
-    private func miniTargetSize(on screen: NSScreen?) -> CGSize {
+    static func miniTargetSize(on screen: NSScreen?) -> CGSize {
         WindowFrameFit.miniSize(
             saved: UserDefaults.standard.string(forKey: Self.miniSizeKey).map(NSSizeFromString),
             defaultSize: Self.miniSize, minimum: Self.miniMinSize, visible: screen?.visibleFrame.size,
             retiredDefaults: LyricsWindowMiniMetrics.retiredSizes)
+    }
+
+    /// 直接打开迷你面板(没有完整那扇窗可以参照)时摆哪:上次的位置;没存过就贴在主屏可见区右上角。
+    static func miniFrameToOpen() -> NSRect {
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        let size = miniTargetSize(on: screen)
+        if let restored = restoredMiniFrame(size: size) { return restored }
+        let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: size.width + 40, height: size.height + 40)
+        return NSRect(x: visible.maxX - size.width - 20, y: visible.maxY - size.height - 20,
+                      width: size.width, height: size.height)
+    }
+
+    /// 出迷你时完整那扇窗摆哪:上次完整尺寸的位置(那块屏还在,夹进可见区);没有就在 `screen` 上居中、按默认大小。
+    static func fullWindowTarget(on screen: NSScreen?) -> NSRect {
+        let defaults = UserDefaults.standard
+        if let raw = defaults.string(forKey: frameKey), let id = defaults.string(forKey: screenKey),
+           let saved = Optional(NSRectFromString(raw)), saved.width > 0, saved.height > 0,
+           let savedScreen = ScreenIdentity.screen(withID: id) {
+            return WindowFrameFit.clamp(saved, into: savedScreen.visibleFrame)
+        }
+        let visible = (screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1020, height: 660)
+        let size = CGSize(width: min(1020, visible.width), height: min(660, visible.height))
+        return NSRect(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2,
+                      width: size.width, height: size.height)
     }
 
     /// 背景要不要让窗口本体透出去(自定义背景色带了不透明度时)。
@@ -589,86 +659,79 @@ private final class LyricsWindowController: ObservableObject {
         if requested != isMini { toggleMini(animated: animated) }
     }
 
-    /// 进 / 出迷你。真窗口的尺寸**一步跳到位**,布局同一拍换好;`animated` 时由 `formMorph` 另起一扇临时窗,
-    /// 用切换前后两张截图做变形动画盖住这一跳(07 章决策 125)。别改成 `setFrame(animate: true)` /
-    /// `NSAnimationContext` 让真窗口自己缩放:每一帧都会按新尺寸把整张歌词列表重排一遍(决策 47 / 49 / 51 / 53)。
+    /// 进 / 出迷你:完整尺寸是场景那扇窗,迷你是 `LyricsMiniPanel`,切换是两扇窗交接(07 章决策 133)。`animated` 时由
+    /// `formMorph` 用两扇窗的截图做变形动画盖住交接(决策 125)。别改成让真窗口自己做尺寸动画(决策 47 / 49 / 51 / 53)。
     func toggleMini(animated: Bool = false) {
-        // 变形动画没走完时这一下不理:真窗口此刻藏在桌面层级以下,临时窗上摆的是这一次的目标形态。
+        // 变形动画没走完时这一下不理:源窗口此刻藏在桌面层级以下,临时窗上摆的是这一次的目标形态。
         guard !formMorph.isRunning else { return }
-        // 全屏(含进出的过渡)时不切:对一扇全屏窗 setFrame,退出全屏后系统会把它摆回全屏前的
-        // frame,迷你状态和窗口尺寸就对不上了。按钮那边同样置灰。
+        // 全屏(含进出的过渡)时不切,按钮那边同样置灰。
         guard let window, !isFullScreenActive, !isNativeFullScreenTransition else { return }
+        if window is LyricsMiniPanel {
+            switchToFullWindow(from: window, animated: animated)
+        } else {
+            switchToMiniPanel(from: window, animated: animated)
+        }
+    }
+
+    /// 完整 → 迷你:在目标位置建好面板,关掉这扇窗。迷你窗回到上次待的位置;没存过(或那块屏不在了)就顶边钉在原位。
+    private func switchToMiniPanel(from window: NSWindow, animated: Bool) {
+        let size = Self.miniTargetSize(on: window.screen)
+        let target = Self.restoredMiniFrame(size: size) ?? {
+            var f = window.frame
+            // 窗口坐标系原点在左下,缩高度时要把 y 往上提,否则整扇窗会"掉下去"。
+            f.origin.y += f.height - size.height
+            f.size = size
+            return f
+        }()
+        UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)
         isSwitchingForm = true
-        // 目标 frame 先算好(变形动画要知道往哪走),状态全在 apply 里改;不做动画时 apply 当场跑完。
-        let target: NSRect?
-        let apply: @MainActor (@escaping () -> Void) -> Void
-        if isMini {
-            // 迷你期间可能拔了屏 / 改了分辨率:夹进它此刻所在(或最靠近)的那块屏,不往空处摆。
-            target = frameBeforeMini.map { restore in
-                func overlap(_ s: NSScreen) -> CGFloat {
-                    let r = s.frame.intersection(restore)
-                    return r.isNull ? 0 : r.width * r.height
-                }
-                let best = NSScreen.screens.max { overlap($0) < overlap($1) }
-                let screen = best.flatMap { overlap($0) > 0 ? $0 : nil } ?? window.screen ?? NSScreen.main
-                return screen.map { WindowFrameFit.clamp(restore, into: $0.visibleFrame) } ?? restore
-            }
-            apply = { [weak self] done in
-                guard let self else { return done() }
-                // 置顶状态回到进迷你之前那样(迷你默认置顶,见下面进迷你那一支)。
-                setAlwaysOnTop(alwaysOnTopBeforeMini ?? false)
-                alwaysOnTopBeforeMini = nil
-                frameBeforeMini = nil
-                // 先在迷你布局下把 frame 摆到位,再切完整布局:反过来的话完整布局会先按迷你那点
-                // 尺寸排一帧(挤成一团)再跳到大窗。迷你那档尺寸下限(300×110)不挡放大。
-                if let target { window.setFrame(target, display: false, animate: false) }
-                isMini = false
-                Self.enforceSpaceBehavior(window, mini: false)
-                UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)
-                updateTrafficLightVisibility()
-                DispatchQueue.main.async { [weak self] in
-                    self?.isSwitchingForm = false
-                    done()
-                }
-            }
+        let finish: @MainActor (NSWindow) -> Void = { [weak self] _ in self?.closeForHandoff(window) }
+        if animated, LyricsWindowFormMorph.canAnimate(window, to: target) {
+            formMorph.handoff(from: window, to: target,
+                              prepare: { done in done(LyricsMiniPanelHost.make(frame: target)) },
+                              finish: finish, failed: {})
         } else {
-            let size = self.miniTargetSize(on: window.screen)
-            // 回到上次迷你窗待的位置;没存过(或那块屏不在了)就顶边钉在原位。
-            let f = self.restoredMiniFrame(size: size) ?? {
-                var f = window.frame
-                // 窗口坐标系原点在左下,缩高度时要把 y 往上提,否则整扇窗会"掉下去"。
-                f.origin.y += f.height - size.height
-                f.size = size
-                return f
-            }()
-            target = f
-            apply = { [weak self] done in
-                guard let self else { return done() }
-                frameBeforeMini = window.frame
-                isMini = true
-                Self.enforceSpaceBehavior(window, mini: true)
-                UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)
-                updateTrafficLightVisibility()
-                // 迷你**默认置顶**:这一档就是"缩成一条放在旁边看"的形态,被别的窗口一盖就等于没开。
-                // 进之前的状态记下来,退出时原样还回去 —— 完整尺寸那扇窗默认仍不置顶。
-                alwaysOnTopBeforeMini = isAlwaysOnTop
-                setAlwaysOnTop(true)
-                // setFrame 必须等下一拍。窗口的最小尺寸来自 SwiftUI 那层
-                // `.frame(minWidth:minHeight:)`(见 body 根容器),它跟着 isMini 变 —— 而 @Published
-                // 的更新要等 SwiftUI 跑完一轮才落到 NSWindow 的 contentMinSize 上。同一拍里直接
-                // setFrame 会被**旧的**下限(520×480)钳住,表现是"点了迷你,窗口只缩了一点点"。
-                DispatchQueue.main.async { [weak self] in
-                    if let self, self.isMini { window.setFrame(f, display: true, animate: false) }
-                    self?.isSwitchingForm = false
-                    done()
-                }
+            let panel = LyricsMiniPanelHost.make(frame: target)
+            panel.orderFrontRegardless()
+            finish(panel)
+        }
+    }
+
+    /// 迷你 → 完整:开出场景那扇窗(照旧激活 App),摆回上次完整尺寸的位置,关掉面板。场景窗挂上来之前拿不到它,
+    /// 由 `LyricsWindowSession.awaitFullWindow` 等它 attach;没开出来就留着面板、形态记回迷你。
+    private func switchToFullWindow(from panel: NSWindow, animated: Bool) {
+        let target = Self.fullWindowTarget(on: panel.screen)
+        UserDefaults.standard.set(false, forKey: LyricsWindowSession.miniModeKey)
+        isSwitchingForm = true
+        let prepare: @MainActor (@escaping (NSWindow?) -> Void) -> Void = { done in
+            LyricsWindowSession.awaitFullWindow { window in
+                if let window, window.frame != target { window.setFrame(target, display: false) }
+                done(window)
+            }
+            AppActions.shared.openLyricsWindowScene?()
+        }
+        let finish: @MainActor (NSWindow) -> Void = { [weak self] _ in self?.closeForHandoff(panel) }
+        if animated, LyricsWindowFormMorph.canAnimate(panel, to: target) {
+            formMorph.handoff(from: panel, to: target, prepare: prepare, finish: finish,
+                              failed: { [weak self] in self?.handoffFailed() })
+        } else {
+            prepare { [weak self] window in
+                if let window { finish(window) } else { self?.handoffFailed() }
             }
         }
-        if animated, let target, LyricsWindowFormMorph.canAnimate(window, to: target) {
-            formMorph.run(window: window, to: target, apply: apply)
-        } else {
-            apply {}
-        }
+    }
+
+    /// 交接里关掉源窗口:不算用户关窗,「开着」照旧记着(closeObserver 读 `handingOff`)。
+    private func closeForHandoff(_ window: NSWindow) {
+        isSwitchingForm = false
+        handingOff = true
+        window.close()
+    }
+
+    /// 完整那扇窗没开出来:面板留着,形态记回迷你。
+    private func handoffFailed() {
+        isSwitchingForm = false
+        UserDefaults.standard.set(true, forKey: LyricsWindowSession.miniModeKey)
     }
 
     /// 见 `LyricsWindowFormMorph.prewarm`。
@@ -766,7 +829,9 @@ private final class LyricsWindowController: ObservableObject {
     ///     右上角胶囊里的全屏键在迷你时也是收起来的,同一个理由。
     private func updateTrafficLightVisibility() {
         guard let window else { return }
-        let hidden = isActive || !window.isKeyWindow || (chromeHidden && !isMini)
+        // 迷你面板不当 key,红绿灯跟着指针在不在窗上走,否则一直藏着、关不掉(07 章决策 133)。
+        let inactive = window is LyricsMiniPanel ? !miniPointerInside : !window.isKeyWindow
+        let hidden = isActive || inactive || (chromeHidden && !isMini)
         for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             let hide = hidden || (type == .zoomButton && isMini)
             if let button = window.standardWindowButton(type), button.isHidden != hide {
@@ -880,6 +945,7 @@ private final class LyricsWindowController: ObservableObject {
         guard self.window !== window else {
             // 同一扇窗关掉再开:关窗时遮挡检测已经停了(closeObserver),这里补回来,其余观察者都还挂着。
             if coverageMonitor == nil, window.isVisible { startCoverageMonitor(window) }
+            if !(window is LyricsMiniPanel) { LyricsWindowSession.deliverFullWindow(window) }
             markOpenIfVisible(window)
             MainActor.assumeIsolated { chromeFade.reveal() }
             if LyricsWindowSession.hasPendingFormRequest {
@@ -889,6 +955,12 @@ private final class LyricsWindowController: ObservableObject {
         }
         self.window = window
         LyricsWindowSession.window = window
+        // 迷你面板挂上来就是迷你形态,默认置顶;不进窗口菜单、不恢复完整尺寸的 frame、不再按「上次是迷你」切(07 章决策 133)。
+        let isMiniPanel = window is LyricsMiniPanel
+        if isMiniPanel {
+            isMini = true
+            setAlwaysOnTop(true)
+        }
         MainActor.assumeIsolated { transportKeys.install(on: window) }
         MainActor.assumeIsolated { hoverFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }
         MainActor.assumeIsolated { chromeFade.attach(window, isMini: $isMini.eraseToAnyPublisher()) }
@@ -909,20 +981,27 @@ private final class LyricsWindowController: ObservableObject {
         Self.enforceSpaceBehavior(window, mini: isMini)
         enforceTrafficLightPosition(window)
         updateTrafficLightVisibility()
-        addToWindowsMenu(window)
+        if !isMiniPanel { addToWindowsMenu(window) }
         // 窗口本体的不透明度。attach 之前视图就可能已经算出了意图,这里补上。
         applyWindowOpacity()
         // 位置/尺寸/所在屏幕:先恢复一次,再挂上观察者。顺序要紧 —— 反过来的话我们自己那次
         // setFrame 会立刻触发 didMove/didResize、把刚读出来的值原样再写一遍(无害但没意义),
         // 更糟的是恢复失败(屏幕不在了)时会把系统摆的那个默认位置当成用户意图存下来。
-        restorePersistedFrame(window)
+        if !isMiniPanel {
+            restorePersistedFrame(window)
+            // 出迷你时等着这扇窗的那一头(LyricsWindowSession.awaitFullWindow)。赶在窗口第一次显示之前交出去。
+            LyricsWindowSession.deliverFullWindow(window)
+        }
         // 上次是迷你就直接进迷你。放在恢复完整 frame 之后:进迷你记下的"退出迷你时回到哪"
         // 就是刚恢复的那份完整 frame,迷你窗自己的位置尺寸由 toggleMini 按迷你那两个键摆。
         // 「设置 › 打开」指定了形态就按它来(写回同一个键,下次启动也照它)。
-        if let requested = LyricsWindowSession.takeFormRequest() {
+        if !isMiniPanel, let requested = LyricsWindowSession.takeFormRequest() {
             UserDefaults.standard.set(requested, forKey: LyricsWindowSession.miniModeKey)
         }
-        if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) { toggleMini() }
+        // 场景窗在迷你形态下开出来(打开入口已经分流到面板,剩下系统恢复窗口这类路):上屏之后交接给面板。
+        if !isMiniPanel, UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {
+            DispatchQueue.main.async { [weak self] in self?.toggleMini() }
+        }
         // 启动时照原样重开的那一次:App 没有激活,orderFront 摆不到别的 App 的窗口前面,这里摆到最前,
         // 不当 key、不切前台(07 章决策 123)。
         if LyricsWindowSession.takeRestoringAtLaunch() { window.orderFrontRegardless() }
@@ -1013,7 +1092,9 @@ private final class LyricsWindowController: ObservableObject {
             MainActor.assumeIsolated {
                 self?.flushPendingPersistFrame()
                 LyricsWindowHintSurface.visible = false
-                if !AppExit.isTerminating { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }
+                let handoff = self?.handingOff ?? false
+                self?.handingOff = false
+                if !AppExit.isTerminating, !handoff { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }
                 self?.hoverFade.windowClosed()
                 self?.chromeFade.windowClosed()
                 self?.forceExit()
@@ -1331,6 +1412,8 @@ struct LyricsWindowView: View {
     /// 且要有真实 NSWindow 才动得了 —— 预览没有窗口,够不着它。所以另开一个只读入参,
     /// 两者取或(见 showsMiniLayout)。
     var previewMini = false
+    /// 挂在迷你面板里的那一份(`LyricsMiniPanelHost`):恒按迷你布局画,不参与 Dock 图标那套记账(07 章决策 133)。
+    var hostsMiniPanel = false
     // 不整对象订阅 PlaybackCoordinator/AppSettings —— 见 WindowPlayback 的注释。
     @StateObject private var playback = WindowPlayback()
     // 切换界面语言时重算 body(暂停时 playback 不发布,不订阅的话按钮文字停在旧语言)。窗口标题在 LyricsWindowScene 那一层。
@@ -1512,13 +1595,13 @@ struct LyricsWindowView: View {
             windowController.setBackgroundTransparent(transparent)
         }
         // 预览不是"这扇窗打开了",不参与记账(记了会让 Dock 图标跟着设置页开关闪)。
-        .onAppear { if !previewMode { AuxiliaryWindowActivation.windowDidAppear("lyrics-window") } }
+        .onAppear { if !previewMode, !hostsMiniPanel { AuxiliaryWindowActivation.windowDidAppear("lyrics-window") } }
         // 预览的 controller 不 attach 窗口,自己的可见性永远是 true;改用设置窗口的可见性,
         // 逐字时钟 / 间奏三点 / 进度条 / 滚动动画就跟真窗口被遮住时一样停下来。
         .onChange(of: previewHostVisible, initial: true) { _, visible in
             if previewMode { windowController.setPreviewHostVisible(visible) }
         }
-        .onDisappear { if !previewMode { AuxiliaryWindowActivation.windowDidDisappear("lyrics-window") } }
+        .onDisappear { if !previewMode, !hostsMiniPanel { AuxiliaryWindowActivation.windowDidDisappear("lyrics-window") } }
         // lyrimuse://lyrics-window/search:窗口刚建出来读信箱,已经开着收 subject(见 AppActions.requestLyricsWindowSearch)。
         .onAppear { consumeLyricsWindowSearchRequest() }
         .onReceive(AppActions.shared.lyricsWindowSearchRequests) { consumeLyricsWindowSearchRequest() }
@@ -1563,7 +1646,7 @@ struct LyricsWindowView: View {
     // MARK: - 迷你尺寸
 
     /// 这一份此刻该不该画成迷你:真窗口看 controller,预览看入参(见 previewMini)。
-    private var showsMiniLayout: Bool { previewMini || windowController.isMini }
+    private var showsMiniLayout: Bool { previewMini || hostsMiniPanel || windowController.isMini }
 
     // MARK: 按当前形态选那一套外观
     //
