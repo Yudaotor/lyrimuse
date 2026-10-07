@@ -348,6 +348,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var pendingDrop: (title: String, artist: String, since: Date)?
     private var trackIdentityObserver: AnyCancellable?
     private var artworkArrivalObserver: AnyCancellable?
+    /// 灵动岛这一面的歌词行出现了要显示的一句(见 `lyricsLineAppeared`)。
+    private var lyricsLineObserver: AnyCancellable?
     /// 掉歌名的判定日志:换了一首、判成要掉时写一行(掉了,或卡片此刻不显示没掉)。
     private static let trackDropLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "notch-track-drop")
     private var unknownPlayerAlertObserver: AnyCancellable?
@@ -513,6 +515,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             PlaybackCoordinator.shared.$highResArtworkImage.dropFirst().compactMap { $0 }.map { _ in () }
         )
         .sink { [weak self] in self?.artworkArrived() }
+        lyricsLineObserver = PlaybackCoordinator.shared.$notchLyrics
+            .map { $0.compactLine != nil }
+            .removeDuplicates()
+            .sink { [weak self] showing in
+                if showing { self?.lyricsLineAppeared() }
+            }
 
         // 「发现新播放器」的主动提醒(NotchUnknownPlayerPrompt):提醒期间卡片自己撑开、隐藏着的
         // 窗口叫回来,到点收回。同一个 willSet 坑同一个修法:存 sink 参数值。每个实例(含「所有屏幕」的副本)
@@ -904,7 +912,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     /// 揭晓(`NotchTrackRevealGate`):耳朵里的封面这一拍可以翻了;判成要掉的,卡片还放得下就让新歌名掉出来停
-    /// `NotchTrackDropRules.holdDuration`,停的时候又换歌就原地换成新的、重新计时。
+    /// `NotchTrackDropRules.holdDuration`,停的时候又换歌就原地换成新的、重新计时。开着歌词行时歌名条盖在歌词行上,
+    /// 停到第一句出来之前,第一句马上就来就不掉(`NotchTrackDropRules.hold`,见 05 章决策 72)。
     private func applyReveal(_ reveal: NotchTrackRevealGate.Reveal) {
         let track = pendingDrop
         stopRevealWait()
@@ -921,8 +930,19 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             clearTrackDrop()
             return
         }
+        var hold = NotchTrackDropRules.holdSeconds
+        if showsLyrics {
+            let untilLyrics = secondsUntilLyrics()
+            guard let lyricsHold = NotchTrackDropRules.hold(secondsUntilLyrics: untilLyrics) else {
+                let until = untilLyrics.map { String(format: "%.2f", $0) } ?? "?"
+                Self.trackDropLog.notice("track drop: skipped, lyrics start in \(until, privacy: .public)s for \(track.artist, privacy: .public) - \(track.title, privacy: .public)")
+                clearTrackDrop()
+                return
+            }
+            hold = lyricsHold
+        }
         let waitedMs = Int(Date().timeIntervalSince(track.since) * 1000)
-        Self.trackDropLog.notice("track drop: shown for \(track.artist, privacy: .public) - \(track.title, privacy: .public), waited \(waitedMs)ms for the cover")
+        Self.trackDropLog.notice("track drop: shown for \(track.artist, privacy: .public) - \(track.title, privacy: .public), waited \(waitedMs)ms for the cover, hold \(String(format: "%.2f", hold), privacy: .public)s")
         trackDropGeneration &+= 1
         let replacing = NotchTrackDropRules.replaced(showing: trackDrop, cleared: clearedTrackDrop?.drop,
                                                      clearedAt: clearedTrackDrop?.at, now: Date())
@@ -931,13 +951,33 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                                    replacing: replacing)
         trackDropClearTask?.cancel()
         trackDropClearTask = Task { [weak self] in
-            try? await Task.sleep(for: NotchTrackDropRules.holdDuration)
+            try? await Task.sleep(for: .seconds(hold))
             guard !Task.isCancelled else { return }
             self?.clearTrackDrop()
         }
     }
 
     func revealsTrack(_ key: String) -> Bool { revealedTrackKey == key }
+
+    /// 离灵动岛的歌词行显示第一句还有几秒(`NotchTrackDropRules.secondsUntilLyrics`)。
+    private func secondsUntilLyrics() -> TimeInterval? {
+        let playback = PlaybackCoordinator.shared
+        let lyrics = playback.notchLyrics
+        let anchor = playback.anchor
+        return NotchTrackDropRules.secondsUntilLyrics(
+            showingLine: lyrics.compactLine != nil, pastFirstLine: lyrics.lineIndex != nil,
+            firstLineMs: playback.allLines.first?.timeMs,
+            lyricsPositionMs: anchor.map { $0.extrapolatedPositionMs() + playback.currentLyricsOffsetMs },
+            rate: anchor?.rate ?? 0)
+    }
+
+    /// 歌词行出现了要显示的一句(`lyricsLineObserver`):开着歌词行、歌名条正盖在上面就收掉。揭晓时已按第一句的时间算好
+    /// 停多久,这里接住算不准的情形:歌词晚到、拖了进度(见 05 章决策 72)。
+    private func lyricsLineAppeared() {
+        guard showsLyrics, let shown = trackDrop else { return }
+        Self.trackDropLog.notice("track drop: retracted early, lyrics started for \(shown.artist, privacy: .public) - \(shown.title, privacy: .public)")
+        clearTrackDrop()
+    }
 
     /// 判成要掉、封面还没到:等到 `NotchTrackRevealGate.deadline` 还没到就先掉歌名。
     private func scheduleRevealWait() {
@@ -1220,7 +1260,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         return ScreenIdentity.notched ?? NSScreen.screens.first
     }
 
-    // 设置页改完"显示在哪块屏幕"后调这个立刻生效(跟 applyContentWidthSetting 同一个模式)。
+    // 设置页改完"显示于"后调这个立刻生效(跟 applyContentWidthSetting 同一个模式)。
     func applyScreenSetting() {
         recomputeGeometry(animate: false)
         refreshFullScreenCover()
@@ -1352,6 +1392,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         trackIdentityObserver = nil
         artworkArrivalObserver?.cancel()
         artworkArrivalObserver = nil
+        lyricsLineObserver?.cancel()
+        lyricsLineObserver = nil
         revealGate.cancel()
         stopRevealWait()
         clearTrackDrop()

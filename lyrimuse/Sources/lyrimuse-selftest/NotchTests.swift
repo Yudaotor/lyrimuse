@@ -736,6 +736,33 @@ func runNotchTests() {
         expectEqual(abs(DR.revealOpacity(progress: 0.4) - 0.5) < 1e-9, true, "换歌翻牌: 拉开不到一半时字半透明")
         expectEqual(DR.revealOpacity(progress: 0.8), 1, "换歌翻牌: 拉开四分之三起字全显")
         expectEqual(DR.revealOpacity(progress: 1.04), 1, "换歌翻牌: 弹簧略过拉满时不透明度不超过 1")
+        // 换歌翻牌:开着歌词行时歌名停到第一句出来之前,第一句马上就来不掉(05 章决策 72)。
+        func near(_ a: Double?, _ b: Double) -> Bool { a.map { abs($0 - b) < 1e-9 } ?? false }
+        expectEqual(near(DR.holdSeconds, 2.8), true, "换歌翻牌: 停 2.8 秒")
+        expectEqual(near(DR.hold(secondsUntilLyrics: nil), 2.8), true, "换歌翻牌: 算不出离第一句多久,停满")
+        expectEqual(near(DR.hold(secondsUntilLyrics: 12), 2.8), true, "换歌翻牌: 前奏够长,停满")
+        expectEqual(near(DR.hold(secondsUntilLyrics: 2.0), 1.65), true, "换歌翻牌: 第一句前 0.35 秒收")
+        expectEqual(near(DR.hold(secondsUntilLyrics: 1.35), 1.0), true, "换歌翻牌: 刚好能停 1 秒,照掉")
+        expectEqual(DR.hold(secondsUntilLyrics: 1.3) == nil, true, "换歌翻牌: 停不到 1 秒,不掉歌名")
+        expectEqual(DR.hold(secondsUntilLyrics: 0) == nil, true, "换歌翻牌: 歌词行已经在显示一句,不掉歌名")
+        expectEqual(DR.hold(secondsUntilLyrics: -4) == nil, true, "换歌翻牌: 第一句已经唱过,不掉歌名")
+        expectEqual(DR.secondsUntilLyrics(showingLine: true, pastFirstLine: true, firstLineMs: nil, lyricsPositionMs: nil, rate: 0),
+                    0, "离第一句几秒: 正在显示一句是 0")
+        expectEqual(near(DR.secondsUntilLyrics(showingLine: false, pastFirstLine: false, firstLineMs: 3_000,
+                                               lyricsPositionMs: 1_200, rate: 1), 1.8), true,
+                    "离第一句几秒: 第一句时间戳减当前位置")
+        expectEqual(near(DR.secondsUntilLyrics(showingLine: false, pastFirstLine: false, firstLineMs: 3_000,
+                                               lyricsPositionMs: 1_000, rate: 2), 1.0), true,
+                    "离第一句几秒: 按播放速率折算")
+        expectEqual(DR.secondsUntilLyrics(showingLine: false, pastFirstLine: false, firstLineMs: 3_000,
+                                          lyricsPositionMs: 1_000, rate: 0) == nil, true, "离第一句几秒: 没在走,算不出")
+        expectEqual(DR.secondsUntilLyrics(showingLine: false, pastFirstLine: false, firstLineMs: nil,
+                                          lyricsPositionMs: 1_000, rate: 1) == nil, true, "离第一句几秒: 没有带时间戳的歌词,算不出")
+        expectEqual(DR.secondsUntilLyrics(showingLine: false, pastFirstLine: false, firstLineMs: 3_000,
+                                          lyricsPositionMs: nil, rate: 1) == nil, true, "离第一句几秒: 没有播放位置,算不出")
+        expectEqual(DR.secondsUntilLyrics(showingLine: false, pastFirstLine: true, firstLineMs: 3_000,
+                                          lyricsPositionMs: 60_000, rate: 1) == nil, true,
+                    "离第一句几秒: 过了第一句、停在间奏占位上,算不出")
         // 换歌翻牌:声音还没走起来(加载、前贴片广告)时先不判,走起来那一拍按那时的曲目判。每拍是(歌名, 广告, 在等开播)。
         func dropOutcomes(_ ticks: [(String, Bool, Bool)]) -> [NotchTrackDropTracker.Outcome] {
             var tracker = NotchTrackDropTracker()
@@ -1160,6 +1187,12 @@ func runNotchTests() {
                         && ctrlSrc.contains("clearedTrackDrop = (shown, Date())")
                         && dropSrc.contains("NotchTrackDropRoll(drop: drop ?? lastShown, travel: height, animated: animated)"), true,
                         "换歌翻牌契约: 收回时接着画刚才那条;停着时换歌,新的把旧的推出去")
+            expectEqual(ctrlSrc.contains("if showsLyrics {\n            let untilLyrics = secondsUntilLyrics()\n            guard let lyricsHold = NotchTrackDropRules.hold(secondsUntilLyrics: untilLyrics) else {")
+                        && ctrlSrc.contains("try? await Task.sleep(for: .seconds(hold))")
+                        && !ctrlSrc.contains("Task.sleep(for: NotchTrackDropRules.holdDuration)")
+                        && ctrlSrc.contains("PlaybackCoordinator.shared.$notchLyrics\n            .map { $0.compactLine != nil }")
+                        && ctrlSrc.contains("guard showsLyrics, let shown = trackDrop else { return }"), true,
+                        "换歌翻牌契约: 开着歌词行时歌名停到第一句之前、马上开唱不掉,歌词行出现一句就收(05 章决策 72)")
             expectEqual(dropSrc.contains("Text(Image(systemName: \"music.note\"))")
                         && dropSrc.contains("trigger: drop?.replacing == nil ? -1 : drop?.id ?? -1"), true,
                         "换歌翻牌契约: 音符包在 Text 里跟歌名一起收;关键帧只在推出旧行时跑")

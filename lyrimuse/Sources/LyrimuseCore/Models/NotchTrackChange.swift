@@ -32,6 +32,32 @@ public struct NotchTrackDrop: Equatable, Sendable {
 public enum NotchTrackDropRules {
     /// 歌名停多久。
     public static let holdDuration: Duration = .milliseconds(2_800)
+    public static var holdSeconds: TimeInterval {
+        Double(holdDuration.components.seconds) + Double(holdDuration.components.attoseconds) / 1e18
+    }
+
+    /// 开着歌词行时歌名条盖在歌词行上,要在第一句出来之前收干净:收回那对弹簧约 0.32 秒,提前这么多开始收。
+    public static let lyricsRetractLead: TimeInterval = 0.35
+    /// 歌名至少能停这么久才掉;第一句来得比这还早就不掉歌名,封面照翻。
+    public static let minimumHold: TimeInterval = 1.0
+
+    /// 开着歌词行时歌名停多久(秒),nil = 不掉歌名。`secondsUntilLyrics` 见 `secondsUntilLyrics(...)`,算不出来按
+    /// `holdSeconds` 停(见 05 章决策 72)。
+    public static func hold(secondsUntilLyrics: TimeInterval?) -> TimeInterval? {
+        guard let seconds = secondsUntilLyrics else { return holdSeconds }
+        let hold = min(holdSeconds, seconds - lyricsRetractLead)
+        return hold >= minimumHold ? hold : nil
+    }
+
+    /// 离灵动岛的歌词行显示第一句还有几秒:正在显示一句是 0;还没到第一句,按第一句的时间戳(`firstLineMs`,歌词时间轴)
+    /// 和加过歌词偏移的外推位置(`lyricsPositionMs`)算 —— 前奏里第一句不提前亮出(`CompactLyricLead.resolve`),出现的时刻
+    /// 就是它的时间戳。没有带时间戳的歌词、没在走(`rate` ≤ 0)、过了第一句停在间奏占位上,算不出来,返回 nil。
+    public static func secondsUntilLyrics(showingLine: Bool, pastFirstLine: Bool, firstLineMs: Int?,
+                                          lyricsPositionMs: Int?, rate: Double) -> TimeInterval? {
+        if showingLine { return 0 }
+        guard !pastFirstLine, let first = firstLineMs, let position = lyricsPositionMs, rate > 0 else { return nil }
+        return Double(first - position) / 1000 / rate
+    }
 
     /// 收回开始后这么久以内,条子里那条还没缩进顶行底下;这期间揭晓的新歌名照停着时换歌处理,把它推出去。
     public static let replaceWindow: TimeInterval = 0.15
