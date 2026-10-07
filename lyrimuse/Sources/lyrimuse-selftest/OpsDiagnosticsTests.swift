@@ -1294,6 +1294,12 @@ func runOpsDiagnosticsTests() {
         let duration = onlyChange(#""duration_secs":200"#, #""duration_secs":201"#)
         expectEqual(duration.map { [$0.derivedInputsChanged, $0.aliasInputsChanged] }, [false, true],
                     "增量采纳: 改了时长,只作废别名表")
+        let isrc = onlyChange(#""spotify_url":"s""#, #""spotify_url":"s","isrcs":["HKA351501001"]"#)
+        expectEqual(isrc.map { [$0.derivedInputsChanged, $0.aliasInputsChanged] }, [false, true],
+                    "增量采纳: 补上了 ISRC,只作废别名表(歌名别名 E1 认它)")
+        let apple = onlyChange(#""spotify_url":"s""#, #""spotify_url":"s","apple_music_url":"https://music.apple.com/cn/album/x/1?i=2""#)
+        expectEqual(apple.map { [$0.derivedInputsChanged, $0.aliasInputsChanged] }, [false, true],
+                    "增量采纳: Apple 链接变了,只作废别名表(同专辑不同歌曲 id 的否决看它)")
         expectEqual(D.refresh(data(#"{"a":"#), entries: base.entries, fingerprints: baseFP) == nil, true,
                     "增量采纳: 新的一版切不开、整份也解不开 → nil,保留旧缓存")
         expectEqual(D.refresh(data(b), entries: nil, fingerprints: nil).map { $0.changedKeys == nil }, true,

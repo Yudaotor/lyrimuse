@@ -9,16 +9,17 @@ import Foundation
 /// 两条证据路径,任一条成立即产出(结果再过共同的冲突闸):
 ///
 /// **E1 · 同一个歌曲 id**:同一个(合唱归首位、罗马字折中文之后的)歌手名下,两条**不同歌名**的缓存
-/// 条目被歌词解析各自独立地匹配到了**同一个网易云歌曲 id 或同一个 QQ 音乐 songmid**。
+/// 条目被歌词解析各自独立地匹配到了**同一个网易云歌曲 id 或同一个 QQ 音乐 songmid**,或者带着**同一个 ISRC**
+/// (这条录音的国际标准录音编码,引擎记在条目的 isrcs,见 lyrimuse-engine/recordingisrc.go)。见 recordingIDs。
 ///
 /// **E2 · 时长 + 歌词都对得上**(E1 够不着的:早期解析没落平台链接的条目,`Black Hole` / `Small Insects`
 /// / `Write A Song For You` / `Twenty Three` / `Love Love Love` 全是这种):同一歌手名下,两种写法满足
 /// ①都有播放器报的时长且**存在**一对接近——两侧都是毫秒级小数时差 ≤ 0.05 s,任一侧是整秒才放宽到
 /// 0.6 s(理由见 durationsClose:配错词的两首歌时长天然接近,同一份录音却几乎相等);②各自的歌词都**可信**——条目里同时有播放器时长与所配歌词的时长
 /// (`resolved_duration_secs`)时二者差 ≤ 3 s(差得多说明配到了别的歌的词:实测《Weather Report》61 s
-/// 过场曲配上了《天气先生》271 s 的词,光看歌词两首会"完全一样");③歌词正文(去时间戳/署名行/标点
-/// 空白,NFKC + 繁简 + 小写)的词元三元组 Jaccard ≥ 0.6(见 lyricsSimilarity,字符二元组对英文歌词
-/// 完全不管用)。三个条件缺一不可:时长相等在整秒精度下 40%
+/// 过场曲配上了《天气先生》271 s 的词,光看歌词两首会"完全一样");③歌词正文(去时间戳/署名行/对唱声部
+/// 标记/标点空白,NFKC + 繁简 + 小写)对得上:词元三元组 Jaccard ≥ 0.6,或者较短一份的三元组至少八成出现在
+/// 另一份里(见 lyricsMatch;字符二元组对英文歌词完全不管用)。三个条件缺一不可:时长相等在整秒精度下 40%
 /// 的歌都能撞上同歌手的另一首,歌词相同挡不住"配错词",各自单独都不够。满足的写法连边、并查集成类,
 /// 类里选代表(含汉字优先 → 本机条目多 → 字典序),其余都指向它。连边的脚本规则:英文 与 中文随便连;
 /// 同脚本的两个折叠键只在"等长且恰好一个字不同"时连(`为你写的歌` / `为妳写的歌`,你/妳 不在繁简表里;
@@ -32,7 +33,7 @@ import Foundation
 /// 检索落到同一个 id 对**版本**不构成证据);`All for Joy (feat. 关诗敏)` 同理。E2 的中文侧候选还要求
 /// 折叠后不带版本尾缀(`foldTitle(title) == foldTitle(coreTitle)`)—— 别把英文录音室版并进中文 Live 版。
 ///
-/// 四道保守闸(错合并比不合并更糟,沿用发现表那边的取舍):
+/// 四道保守闸(错合并比不合并更糟):
 ///  1. E1 里任一侧折叠后出现 ≥ 2 种歌名 → 这个 id 整组不采纳。中文侧不唯一 = 同一个 id 被匹配给了
 ///     两首不同的中文歌;英文侧不唯一(实测 陶喆 名下 `I Like It (Ballad Version)` 与 `What Is Love`
 ///     落到同一个网易云 id)= 至少有一条解析配错了,而分不清是哪条;
@@ -42,6 +43,9 @@ import Foundation
 ///
 /// E1 只认「英文 → 中文」这个方向(同 id 的中文 与 中文分裂——繁简/括号——本来就由折叠键管,剩下的
 /// 交给 E2);E2 不限方向,见上。搜索页地址(`y.qq.com/n/ryqq/search?w=…`)不是身份,不算 id。
+///
+/// 否决:同一张 Apple 专辑里歌曲 id 不同的两种写法一定是两首(专辑里的英文版和日文版、时长几乎一样的两首歌),
+/// E1、E2 都不连,见 distinctAppleTracks。见 12 章决策 61。
 public enum EnrichTitleAliases {
     public struct Entry {
         public var artist: String
@@ -56,9 +60,14 @@ public enum EnrichTitleAliases {
         public var lyrics: String?
         /// 精简条目不带正文原文,给这一条的正文引用;E2 真要比对时经 `derive` 的 `storedBody` 取。`lyrics` 有值时不看它。
         public var lyricsRef: LyricsRef?
+        /// 缓存里的 `apple_music_url`,只给否决用(distinctAppleTracks)。
+        public var appleMusicURL: String?
+        /// 这条录音的 ISRC,缓存里的 `isrcs`;E1 用。
+        public var isrcs: [String]
 
         public init(artist: String, title: String, neteaseURL: String?, qqMusicURL: String?, durationSecs: Double?,
-                    resolvedDurationSecs: Double? = nil, lyrics: String? = nil, lyricsRef: LyricsRef? = nil) {
+                    resolvedDurationSecs: Double? = nil, lyrics: String? = nil, lyricsRef: LyricsRef? = nil,
+                    appleMusicURL: String? = nil, isrcs: [String] = []) {
             self.artist = artist
             self.title = title
             self.neteaseURL = neteaseURL
@@ -67,6 +76,8 @@ public enum EnrichTitleAliases {
             self.resolvedDurationSecs = resolvedDurationSecs
             self.lyrics = lyrics
             self.lyricsRef = lyricsRef
+            self.appleMusicURL = appleMusicURL
+            self.isrcs = isrcs
         }
     }
 
@@ -115,18 +126,89 @@ public enum EnrichTitleAliases {
     public static let e2DurationTolerance: Double = 0.6
     /// 歌词可信:播放器时长与所配歌词候选时长的最大差值(秒)。
     public static let lyricsTrustTolerance: Double = 3
-    /// E2:歌词正文字符二元组 Jaccard 的下限。
+    /// E2:歌词正文词元三元组 Jaccard 的下限。
     public static let lyricsSimilarityMin: Double = 0.6
+    /// E2 的另一条路:较短一份正文的三元组至少有这么大比例出现在另一份里。一份比另一份多出整段时(念白的逐句
+    /// 译文夹在正文里、开头多一段对白),Jaccard 被多出来的那段拉低,包含度不受影响。见 12 章决策 57。
+    public static let lyricsContainmentMin: Double = 0.8
+    /// 按包含度认时,较短一份至少要有这么多个不同的三元组:满篇重复的短正文只有几个不同的三元组,被别的歌
+    /// 包含不说明是同一首。
+    public static let lyricsContainmentMinShingles = 64
     /// E2:歌词正文剥完之后至少要有这么多词元(汉字一个字一个、英文一个词一个),太短的(过场曲/只有
     /// 署名行)不参与比对。
     public static let lyricsMinTokens = 24
 
-    /// 一条缓存条目里能当身份用的 id,带来源前缀(`netease:2635125902` / `qq:002lChJY23SXj7`)。
+    /// 一条缓存条目里能当身份用的平台歌曲 id,带来源前缀(`netease:2635125902` / `qq:002lChJY23SXj7`)。
     public static func songIDs(neteaseURL: String?, qqMusicURL: String?) -> [String] {
         var out: [String] = []
         if let s = neteaseURL, let id = neteaseSongID(s) { out.append("netease:" + id) }
         if let s = qqMusicURL, let mid = qqSongMid(s) { out.append("qq:" + mid) }
         return out
+    }
+
+    /// E1 认的身份:平台歌曲 id(songIDs)加上这条录音的 ISRC(`isrc:HKA351501001`)。
+    /// 歌手别名推断(LocalArtistAliases)只用 songIDs:合唱的歌两位歌手共用一个 ISRC,拿它推歌手别名会把两个人并成一个。
+    /// Apple 歌曲 id 不在里面:引擎配链接会配到同一首歌的别的版本(Live 版),它经引擎的存量补扫换成带时长闸的 ISRC 再用。
+    public static func recordingIDs(_ e: Entry) -> [String] {
+        var out = songIDs(neteaseURL: e.neteaseURL, qqMusicURL: e.qqMusicURL)
+        for raw in e.isrcs {
+            if let code = normalizedISRC(raw), !out.contains("isrc:" + code) { out.append("isrc:" + code) }
+        }
+        return out
+    }
+
+    /// 跟引擎 normalizeISRC 同一个口径:去掉连字符和空白、转大写;格式不对(国家码两位 + 登记者三位 + 年份两位 + 序号五位)
+    /// 或是占位符样式(后七位是同一个数字)时给 nil。
+    static func normalizedISRC(_ raw: String) -> String? {
+        let code = String(raw.uppercased().filter { $0 != "-" && !$0.isWhitespace })
+        let c = Array(code)
+        guard c.count == 12,
+              c[0..<2].allSatisfy({ $0.isASCII && $0.isLetter }),
+              c[2..<5].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }),
+              c[5...].allSatisfy({ $0.isASCII && $0.isNumber }),
+              Set(c[5...]).count > 1
+        else { return nil }
+        return code
+    }
+
+    /// `https://music.apple.com/cn/album/听/1587171414?i=1587171823` → "1587171823";不是单曲链接 → nil。
+    public static func appleSongID(_ url: String?) -> String? {
+        guard let url, let comps = URLComponents(string: url), comps.host == "music.apple.com",
+              let id = comps.queryItems?.first(where: { $0.name == "i" })?.value,
+              !id.isEmpty, id.allSatisfy({ $0.isASCII && $0.isNumber })
+        else { return nil }
+        return id
+    }
+
+    /// 否决表:同一个歌手键下,同一张 Apple 专辑里歌曲 id 不同的两种写法(折叠键)。键是 `pairKey`。
+    static func distinctAppleTracks(_ entries: [Entry], artistKey: (String) -> String) -> Set<String> {
+        struct AlbumKey: Hashable { let artist: String; let album: Int64 }
+        var tracks: [AlbumKey: [String: Set<String>]] = [:]
+        for e in entries {
+            let title = e.title.trimmingCharacters(in: .whitespaces)
+            guard !e.artist.isEmpty, !title.isEmpty,
+                  let album = AlbumEditorialNotes.albumID(fromAppleMusicURL: e.appleMusicURL),
+                  let track = appleSongID(e.appleMusicURL) else { continue }
+            tracks[AlbumKey(artist: artistKey(e.artist), album: album), default: [:]][track, default: []]
+                .insert(PlayCountFold.foldTitle(title))
+        }
+        var out = Set<String>()
+        for (album, byTrack) in tracks where byTrack.count >= 2 {
+            let ids = byTrack.keys.sorted()
+            for i in ids.indices {
+                for j in ids.indices where j > i {
+                    for a in byTrack[ids[i]]! {
+                        for b in byTrack[ids[j]]! where a != b { out.insert(pairKey(album.artist, a, b)) }
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    /// 否决表的键:歌手键 + 两个折叠键(字典序),两个折叠键谁在前都一样。
+    static func pairKey(_ artistKey: String, _ a: String, _ b: String) -> String {
+        artistKey + "\u{1F}" + min(a, b) + "\u{1F}" + max(a, b)
     }
 
     /// `https://music.163.com/song?id=2635125902`(也接受 `/#/song?id=`)→ "2635125902"。
@@ -162,14 +244,19 @@ public enum EnrichTitleAliases {
 
     // MARK: 歌词正文相似度(E2)
 
-    /// LRC → 可比对的正文:去掉 `[…]` 时间戳/头标签、`<…>` 逐字标签、署名行,再 NFKC + 繁简 + 小写、
+    /// LRC → 可比对的正文:去掉 `[…]` 时间戳/头标签、`<…>` 逐字标签、对唱声部标记、署名行,再 NFKC + 繁简 + 小写、
     /// 只留字母数字(含汉字),拼成一串。
     public static func lyricsBody(_ lrc: String) -> String {
+        let lines = lrc.split(omittingEmptySubsequences: true, whereSeparator: { $0 == "\n" || $0 == "\r" || $0 == "\r\n" }).map {
+            String($0).replacingOccurrences(of: "\\[[^\\]]*\\]", with: "", options: .regularExpression)
+                .replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces)
+        }.filter { !$0.isEmpty }
+        // 声部标记(`v1：` / `合：` / 人名)跟显示同一套剥法:行首标签剥掉,独占一行的标签整行不算。
+        // 标签不是词,每行开头插一个会打断行间的三元组
+        let duet = LyricDuet.plan(lineTexts: lines)
         var out = ""
-        for rawLine in lrc.split(omittingEmptySubsequences: true, whereSeparator: { $0 == "\n" || $0 == "\r" || $0 == "\r\n" }) {
-            var line = String(rawLine)
-            line = line.replacingOccurrences(of: "\\[[^\\]]*\\]", with: "", options: .regularExpression)
-            line = line.replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+        for (line, dropped) in zip(duet.texts, duet.dropped) where !dropped {
             let norm = PlayCountFold.normalized(line).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !norm.isEmpty, !isCreditLine(norm) else { continue }
             // 字母数字之间的空白/标点换成一个空格当分词边界,汉字之间什么都不留(中文歌词本来没空格)
@@ -212,6 +299,18 @@ public enum EnrichTitleAliases {
         let union = ga.union(gb)
         guard !union.isEmpty else { return 0 }
         return Double(ga.intersection(gb).count) / Double(union.count)
+    }
+
+    /// 两份正文(lyricsBody 的输出)是不是同一首歌的词:三元组 Jaccard 过 lyricsSimilarityMin;或者较短一份至少有
+    /// lyricsContainmentMinShingles 个不同的三元组,其中至少 lyricsContainmentMin 出现在另一份里。
+    public static func lyricsMatch(_ a: String, _ b: String) -> Bool {
+        let ga = shingles(lyricsTokens(a)), gb = shingles(lyricsTokens(b))
+        let union = ga.union(gb).count
+        guard union > 0 else { return false }
+        let shared = Double(ga.intersection(gb).count)
+        if shared / Double(union) >= lyricsSimilarityMin { return true }
+        let smaller = min(ga.count, gb.count)
+        return smaller >= lyricsContainmentMinShingles && shared / Double(smaller) >= lyricsContainmentMin
     }
 
     /// 正文(lyricsBody 的输出:已 NFKC + 繁简 + 小写、只剩字母数字汉字)切词元。
@@ -339,7 +438,7 @@ public enum EnrichTitleAliases {
             if isHan { bucket.han = side } else { bucket.nonHan = side }
             buckets[artistKey] = bucket
 
-            for id in songIDs(neteaseURL: e.neteaseURL, qqMusicURL: e.qqMusicURL) {
+            for id in recordingIDs(e) {
                 var byID = idGroups[artistKey] ?? [:]
                 var g = byID[id] ?? IDGroup()
                 if isHan {
@@ -354,10 +453,12 @@ public enum EnrichTitleAliases {
             }
         }
 
+        let distinct = distinctAppleTracks(entries, artistKey: artistKey)
         // 候选:歌手键 → 英文折叠键 → (中文折叠键 → 中文原始写法)。同一英文键攒出 ≥ 2 个不同中文键 → 闸 3 撤。
         var proposals: [String: [String: [String: String]]] = [:]
         func propose(_ artistKey: String, _ engFolded: String, _ hanFolded: String, _ hanRaw: String) {
             guard engFolded != hanFolded else { return } // 闸 4
+            guard !distinct.contains(pairKey(artistKey, engFolded, hanFolded)) else { return }
             var forEng = proposals[artistKey]?[engFolded] ?? [:]
             if let existing = forEng[hanFolded] { if hanRaw < existing { forEng[hanFolded] = hanRaw } }
             else { forEng[hanFolded] = hanRaw }
@@ -376,7 +477,7 @@ public enum EnrichTitleAliases {
             }
         }
 
-        // E2:同一歌手名下,凡「播放器时长差 ≤ 0.6 s 且歌词正文相似 ≥ 0.6」的两种写法连一条边,并查集成类;
+        // E2:同一歌手名下,凡「播放器时长差 ≤ 0.6 s 且歌词正文对得上(lyricsMatch)」的两种写法连一条边,并查集成类;
         // 一个类 = 同一份录音的若干写法(英文名 / 中文名 / 中文的你妳之类折叠键并不到一起的字形差异),
         // 类里选一个代表(含汉字优先 → 本机条目多 → 字典序),其余写法都指向它。不参与:没时长、
         // 没可信歌词、折叠后带版本尾缀(Live/Remix 之类是另一份录音,别被卷进来)。
@@ -408,9 +509,8 @@ public enum EnrichTitleAliases {
                     // 跨脚本(英文 与 中文)随便连;同脚本只连单字差异,见 oneCharVariant
                     guard x.han != y.han || oneCharVariant(x.folded, y.folded) else { continue }
                     guard durationsClose(x.item.durations, y.item.durations, tolerance: e2DurationTolerance) else { continue }
-                    var best = 0.0
-                    for p in bodiesOf(i) { for q in bodiesOf(j) { best = max(best, lyricsSimilarity(p, q)) } }
-                    if best >= lyricsSimilarityMin { uf.union(x.folded, y.folded) }
+                    let ps = bodiesOf(i), qs = bodiesOf(j)
+                    if ps.contains(where: { p in qs.contains { lyricsMatch(p, $0) } }) { uf.union(x.folded, y.folded) }
                 }
             }
             // 分类只收正文够长的成员:没有可比正文的那条连不上边,但它的折叠键可能跟另一侧某个成员相同、

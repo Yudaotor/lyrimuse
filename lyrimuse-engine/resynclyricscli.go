@@ -173,6 +173,7 @@ func runResyncLyrics(keys []string, apply bool) int {
 		if sw := songwritersFromScored(scored); len(sw) > 0 {
 			cur.LyricsSongwriters = sw
 		}
+		cur.ISRCs = mergeRecordingISRCs(cur.ISRCs, recordingISRCsFromScored("", scored, duration))
 		cur.LyricsDecision = buildLyricsDecision(
 			lyricsDecisionPathRescore, artist, title, album, duration, scored, picked, plan.changed())
 		traceLyricsDecision(key, cur.LyricsDecision)

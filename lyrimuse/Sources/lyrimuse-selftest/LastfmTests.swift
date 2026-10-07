@@ -415,14 +415,6 @@ func runLastfmTests() {
         expectEqual(c.waitBeforeRelease(now: t0), 90, "限速队列: 共享窗口没有期限时不动")
         expectEqual(c.waitBeforeRelease(now: t0.addingTimeInterval(100)), 0, "限速队列: 过了冷却期不用等")
 
-        var idle = G()
-        expectEqual(idle.interactiveIdle(for: 30, now: t0), true, "限速队列: 从没有前台请求算安静")
-        idle.enqueue(1, .background, now: t0)
-        expectEqual(idle.interactiveIdle(for: 30, now: t0), true, "限速队列: 后台排队不打断安静")
-        idle.enqueue(2, .interactive, now: t0)
-        expectEqual(idle.interactiveIdle(for: 30, now: t0.addingTimeInterval(29)), false, "限速队列: 前台 30 秒内排过队")
-        expectEqual(idle.interactiveIdle(for: 30, now: t0.addingTimeInterval(30)), true, "限速队列: 满 30 秒才算安静")
-
         // 传输失败退避:连续 3 次才开始冷却;冷却期内再失败不跳级;过了冷却再失败升一级;拿到响应清零。
         var net = G()
         expectEqual(net.noteTransportFailure(now: t0), nil, "传输退避: 第 1 次失败不冷却")
@@ -544,7 +536,6 @@ func runLastfmTests() {
         // 真的折叠键(「第 N 次听」那一把):繁简、合唱归首位、Remaster 尾巴并成一首;Live 版、别人唱的同名歌不并
         PlayCountFold.setLocalArtistAliases([:])
         PlayCountFold.setLocalTitleAliases([:])
-        PlayCountFold.setDiscoveredTitleAliases([:])
         let real = T.merge([r("方大同", "曇花", 71), r("方大同", "昙花", 60), r("方大同", "流沙 - Live", 20), r("方大同", "流沙", 10),
                             r("Michael Jackson", "Bad", 18), r("方大同", "Bad", 73),
                             r("Prince & The Revolution", "Purple Rain", 67), r("Prince", "Purple Rain", 6),
@@ -1259,23 +1250,18 @@ func runLastfmTests() {
                     "查族键: 没被推出别名的歌(Weather Report 61 s 过场曲,时长证伪)不受影响")
     }
 
-    // ---- 歌名别名的两层查找:本机推断表 优先于 自动发现表(setDiscoveredTitleAliases) ----
+    // ---- 歌名别名只查本机推断表(setLocalTitleAliases) ----
     do {
         typealias F = PlayCountFold
-        defer { F.setDiscoveredTitleAliases([:]); F.setLocalTitleAliases([:]) }
+        defer { F.setLocalTitleAliases([:]) }
 
-        F.setDiscoveredTitleAliases(["测试歌手": ["testsong": "测试歌曲"]])
+        F.setLocalTitleAliases(["测试歌手": ["testsong": "测试歌曲"]])
         expectEqual(F.familyKey(artist: "测试歌手", title: "TestSong"),
                     F.familyKey(artist: "测试歌手", title: "测试歌曲"),
-                    "发现表: 注入的映射能让 familyKey 同族")
+                    "本机别名: 注入的映射能让 familyKey 同族")
         expectEqual(F.familyKey(artist: "别的歌手", title: "TestSong"),
                     F.key(artist: "别的歌手", title: "TestSong"),
-                    "发现表: 只在登记的歌手键下生效,不会牵连同名歌名的其它歌手")
-        // 本机推断表(同歌曲 id / 时长+歌词,证据硬)优先于发现表(Last.fm 整秒时长撞相等,弱)
-        F.setLocalTitleAliases(["测试歌手": ["testsong": "另一首歌"]])
-        expectEqual(F.familyKey(artist: "测试歌手", title: "TestSong"),
-                    F.familyKey(artist: "测试歌手", title: "另一首歌"),
-                    "别名查找: 本机推断表与发现表撞键时本机表优先")
+                    "本机别名: 只在登记的歌手键下生效,不会牵连同名歌名的其它歌手")
     }
 
     // MARK: - LastfmRecentFeed(引擎落盘的最近记录 feed)
@@ -1924,6 +1910,47 @@ func runLastfmTests() {
                     "本机别名: 不同歌手不成组")
         expectEqual(A.derive([e("Khalil Fong & 王力宏", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne)]),
                     ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: 合唱首位 + 罗马字别名之后同一桶")
+
+        // ISRC(这条录音的国际标准录音编码)跟平台歌曲 id 一样进 E1:英文写法那条没有网易云 / QQ 的 id,ISRC 跟中文写法相同
+        func r(_ artist: String, _ title: String, isrcs: [String], dur: Double? = nil, apple: String? = nil) -> A.Entry {
+            .init(artist: artist, title: title, neteaseURL: nil, qqMusicURL: nil, durationSecs: dur, appleMusicURL: apple, isrcs: isrcs)
+        }
+        expectEqual(A.recordingIDs(r("方大同", "听", isrcs: ["hka351501001", "HK-A35-15-01001", "ZZZZZ9999999", "bad"])),
+                    ["isrc:HKA351501001"], "本机别名: ISRC 归一(大写、去连字符)、去重,占位符样式和格式不对的不认")
+        expectEqual(A.recordingIDs(.init(artist: "方大同", title: "听", neteaseURL: "https://music.163.com/song?id=431855964",
+                                         qqMusicURL: nil, durationSecs: nil, isrcs: ["HKA351501001"])),
+                    ["netease:431855964", "isrc:HKA351501001"], "本机别名: 平台歌曲 id 在前,ISRC 接在后面")
+        expectEqual(A.derive([r("Khalil Fong", "Listen", isrcs: ["HKA351501001"], dur: 281),
+                              r("方大同", "听", isrcs: ["HKA351501001"], dur: 281.093)]),
+                    ["方大同": ["listen": "听"]], "本机别名: 同一个 ISRC → 英文名并进中文名")
+        expectEqual(A.derive([r("Khalil Fong", "Oasis", isrcs: ["HKC382400008"], dur: 161),
+                              r("方大同", "那沙漠里的水", isrcs: ["QNSM12400583", "HKC382400008"], dur: 161)]),
+                    ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: 一份录音两个 ISRC,有一个对上就认")
+        expectEqual(A.derive([r("方大同", "I Want You Back", isrcs: ["HKI491267110"], dur: 259.613),
+                              r("方大同", "爱立刻", isrcs: ["HKI491267103"], dur: 259.640)]), [:],
+                    "本机别名: ISRC 不同不连(时长只差 0.03 秒的两首歌)")
+        expectEqual(A.derive([r("方大同", "Listen", isrcs: ["HKA351501001"], dur: 281),
+                              r("方大同", "听", isrcs: ["HKA351501001"], dur: 290)]), [:],
+                    "本机别名: ISRC 相同但两边播放器时长差 9 秒 → 不采纳(闸 2)")
+        // 否决:同一张 Apple 专辑里歌曲 id 不同的两种写法一定是两首,ISRC 撞上(脏数据)也不连
+        let badMode = "https://music.apple.com/jp/album/bad-mode/1604335159?i="
+        expectEqual(A.derive([r("宇多田ヒカル", "Find Love", isrcs: ["JPU902200007"], dur: 277.855, apple: badMode + "1604335301"),
+                              r("宇多田ヒカル", "キレイな人", isrcs: ["JPU902200007"], dur: 277.860, apple: badMode + "1604335308")]), [:],
+                    "本机别名: 同一张专辑里歌曲 id 不同 → 不连,哪怕 ISRC 相同")
+        expectEqual(A.derive([r("方大同", "How It Feels", isrcs: ["HKI490867102"], dur: 223,
+                                apple: "https://music.apple.com/us/album/wonderland/272875165?i=272875201"),
+                              r("方大同", "够不够", isrcs: ["HKI490867102"], dur: 223.159,
+                                apple: "https://music.apple.com/cn/album/x/272875165?i=272875201")]),
+                    ["方大同": ["howitfeels": "够不够"]], "本机别名: 同一个 Apple 歌曲 id(商店语言不同、标题不同)不否决")
+        expectEqual(A.appleSongID("https://music.apple.com/cn/album/%E5%90%AC/1587171414?i=1587171823&uo=4"), "1587171823",
+                    "本机别名: Apple 单曲链接里的歌曲 id")
+        expectEqual(A.appleSongID("https://music.apple.com/cn/album/x/1587171414"), nil, "本机别名: 专辑链接没有歌曲 id")
+        expectEqual(A.appleSongID("https://example.com/album/x/1?i=2"), nil, "本机别名: 别的站的链接不认")
+        // 歌手别名推断不用 ISRC:合唱的歌两位歌手共用一个,拿它推歌手别名会把两个人并成一个
+        expectEqual(LocalArtistAliases.derive(caches: .init(), entries: [
+            r("薛凯琪", "四人游", isrcs: ["HKI490667205"]), r("方大同", "四人游", isrcs: ["HKI490667205"]),
+            r("薛凯琪", "合唱二", isrcs: ["HKI490000017"]), r("方大同", "合唱二", isrcs: ["HKI490000017"]),
+        ])["薛凯琪"], nil, "歌手别名: 共用 ISRC 不算证据")
     }
 
     // ---- 歌名别名 E2:时长 + 歌词都对得上(下午,取代手写表 titleAliasesByArtist 的最后一步) ----
@@ -2066,6 +2093,78 @@ func runLastfmTests() {
                               e("某歌手", "爱", dur: 213.586, lyrics: lrcHant),
                               e("某歌手", "アイ", dur: 213.586, lyrics: "[00:01.00]啦啦")]),
                     ["某歌手": ["アイ": "爱"]], "E2: 跟别人共用折叠键、正文不够长的写法不参与选代表")
+        // 对唱声部标记跟显示同一套剥法(LyricDuet.plan):行首的 `v1：` 剥掉,独占一行的 `合：` 整行不算
+        expectEqual(A.lyricsBody("[00:01.00]v1：我在黑洞里 找不到出口\n[00:02.00]合：\n[00:03.00]v2：你说的话 像光一样穿过"),
+                    A.lyricsBody("[00:01.00]我在黑洞里 找不到出口\n[00:03.00]你说的话 像光一样穿过"),
+                    "E2: 正文剥掉对唱声部标记,独占一行的标记整行不算")
+        // 一份比另一份多出整段:念白每句后面夹一行中文译文。Jaccard 被多出来的那段拉低,较短一份几乎全被另一份包含
+        let plain = """
+        [00:10.00]窗外的雨下了一整夜没有停
+        [00:15.00]我把旧照片一张一张翻出来看
+        [00:20.00]那年夏天我们骑车穿过整座城
+        [00:25.00]你在后座唱着跑调的老情歌
+        [00:30.00]路灯把影子拉得很长很长
+        [00:35.00]我说等秋天来了就去看海
+        [00:40.00]Every road we took was leading somewhere
+        [00:45.00]Every song we sang is still in the air
+        [00:50.00]Hold the memory close and never let it fade
+        [00:55.00]Some day we will dance in the summer rain
+        """
+        let interleaved = """
+        [00:10.00]窗外的雨下了一整夜没有停
+        [00:15.00]我把旧照片一张一张翻出来看
+        [00:20.00]那年夏天我们骑车穿过整座城
+        [00:25.00]你在后座唱着跑调的老情歌
+        [00:30.00]路灯把影子拉得很长很长
+        [00:35.00]我说等秋天来了就去看海
+        [00:40.00]Every road we took was leading somewhere
+        [00:45.00]我们走过的每一条路最后都通往某个没去过的地方
+        [00:45.00]Every song we sang is still in the air
+        [00:50.00]我们唱过的每一首歌到现在都还轻轻飘在空气里
+        [00:50.00]Hold the memory close and never let it fade
+        [00:55.00]把这段回忆紧紧抱在怀里永远不要让它褪色
+        [00:55.00]Some day we will dance in the summer rain
+        [01:00.00]总有一天我们会在夏天的大雨里一起跳舞到天亮
+        """
+        expectEqual(A.lyricsSimilarity(A.lyricsBody(plain), A.lyricsBody(interleaved)) < A.lyricsSimilarityMin, true,
+                    "E2: 夹了逐句译文的那份 Jaccard 过不了线")
+        expectEqual(A.lyricsMatch(A.lyricsBody(plain), A.lyricsBody(interleaved)), true,
+                    "E2: 较短一份的三元组八成以上出现在另一份里 → 对得上")
+        expectEqual(A.derive([e("某歌手", "Summer Rain", dur: 281, lyrics: interleaved),
+                              e("某歌手", "夏雨", dur: 281.093, lyrics: plain)]),
+                    ["某歌手": ["summerrain": "夏雨"]], "E2: 一份夹了逐句译文 → 按包含度推出")
+        // 包含度这条路的两道闸:较短一份不同的三元组太少(满篇重复)不认;只共用开头一段,不到八成不认
+        let hook = "[00:01.00]" + Array(repeating: "oh", count: 30).joined(separator: " ")
+        expectEqual(A.derive([e("某歌手", "Oh", dur: 200.5, lyrics: hook),
+                              e("某歌手", "哦", dur: 200.5, lyrics: plain + "\n[01:00.00]oh oh oh oh oh oh")]), [:],
+                    "E2: 满篇重复的短正文被另一份包含 → 不采纳")
+        let sharesOpening = """
+        [00:10.00]窗外的雨下了一整夜没有停
+        [00:15.00]我把旧照片一张一张翻出来看
+        [00:20.00]那年夏天我们骑车穿过整座城
+        [00:25.00]你在后座唱着跑调的老情歌
+        [00:30.00]清晨的站台只剩下我一个人
+        [00:35.00]列车开走以后风吹乱了头发
+        [00:40.00]Morning light is breaking over the station
+        [00:45.00]Every train is leaving with a different destination
+        [00:50.00]I keep the ticket folded in my pocket
+        [00:55.00]Waiting for the day you finally come back home
+        """
+        expectEqual(A.derive([e("某歌手", "Station", dur: 200.5, lyrics: sharesOpening),
+                              e("某歌手", "夏雨", dur: 200.5, lyrics: plain)]), [:],
+                    "E2: 只共用开头一段 → 包含度不到八成,不采纳")
+        // 否决同样管 E2:同一张 Apple 专辑里歌曲 id 不同的两条,时长、歌词全对得上也不连
+        let orangeMoon = "https://music.apple.com/cn/album/x/313404785?i="
+        expectEqual(A.derive([.init(artist: "方大同", title: "Black Hole", neteaseURL: nil, qqMusicURL: nil, durationSecs: 213.586666,
+                                    lyrics: lrcHans, appleMusicURL: orangeMoon + "313404859"),
+                              .init(artist: "方大同", title: "黑洞里", neteaseURL: nil, qqMusicURL: nil, durationSecs: 213.586,
+                                    lyrics: lrcHant, appleMusicURL: orangeMoon + "313404860")]), [:],
+                    "E2: 同一张 Apple 专辑里歌曲 id 不同 → 不连")
+        expectEqual(A.derive([.init(artist: "方大同", title: "Black Hole", neteaseURL: nil, qqMusicURL: nil, durationSecs: 213.586666,
+                                    lyrics: lrcHans, appleMusicURL: orangeMoon + "313404859"),
+                              .init(artist: "方大同", title: "黑洞里", neteaseURL: nil, qqMusicURL: nil, durationSecs: 213.586,
+                                    lyrics: lrcHant, appleMusicURL: orangeMoon + "313404859")]), ["方大同": ["blackhole": "黑洞里"]],
+                    "E2: 同一个 Apple 歌曲 id 不否决")
     }
 
     // ---- 歌手写法归并的通用推断(LocalArtistAliases，取代手写表 romanizedArtistAliases) ----

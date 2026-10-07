@@ -120,7 +120,7 @@ public enum EnrichIndexDiff {
     static func sameAliasInputs(_ a: EnrichCacheEntry, _ b: EnrichCacheEntry) -> Bool {
         a.neteaseURL == b.neteaseURL && a.qqMusicURL == b.qqMusicURL && a.durationSecs == b.durationSecs
             && a.resolvedDurationSecs == b.resolvedDurationSecs && a.hasLyrics == b.hasLyrics && a.bodyCRC == b.bodyCRC
-            && a.lyrics == b.lyrics
+            && a.lyrics == b.lyrics && a.appleMusicURL == b.appleMusicURL && a.isrcs == b.isrcs
     }
 
     // MARK: 切分

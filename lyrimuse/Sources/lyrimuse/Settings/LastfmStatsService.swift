@@ -1085,13 +1085,6 @@ final class LastfmStatsService: ObservableObject {
         titleFormsSaveTask?.cancel()
         try? FileManager.default.removeItem(at: Self.titleFormsURL)
         primaryCreditFamilies = [:]
-        discoverySaveTask?.cancel()
-        try? FileManager.default.removeItem(at: Self.titleAliasDiscoveryURL)
-        discoveredTitleAliases = [:]
-        discoveredDurations = [:]
-        discoveryAttemptedAt = [:]
-        discoveryLoaded = false
-        PlayCountFold.setDiscoveredTitleAliases([:])
         // 这几行是本次补的:换账号/断开时原来完全没清理热力图子系统——
         // dailyCounts 等字段一个都没重置,loadDailySnapshot 又靠 dailyLoaded 守卫"只加载
         // 一次",不清它的话磁盘上的 username 校验形同虚设(根本不会再读盘),上一个账号
@@ -1938,9 +1931,6 @@ final class LastfmStatsService: ObservableObject {
             dailySyncedThrough = syncedThrough
             titleFormsSyncedThrough = syncedThrough
             scheduleTitleFormsSave()
-            // 写法索引刚刷新完,顺手扫一批跨文字写法别名候选——见
-            // discoverTitleAliasesIfNeeded 声明处注释。
-            discoverTitleAliasesIfNeeded()
             saveDailySnapshot()
             if full {
                 historyCheckpoint = nil
@@ -2106,12 +2096,10 @@ final class LastfmStatsService: ObservableObject {
 
     private func loadTitleForms() {
         titleFormsLoaded = true
-        // 发现表跟 titleForms 同生命周期——任何会用到 PlayCountFold.familyKey 的路径
-        // 都先经过 titleFormsLoaded 这道闸(playCountSiblings/insertForm 等),搭这班车
-        // 加载,不用在每个调用点各补一次守卫。
-        if !discoveryLoaded { loadTitleAliasDiscovery() }
-        // 本机 enrich 缓存推出来的第三层别名也搭这班车:必须在下面 rebuildPrimaryCreditFamilies
-        // 之前灌进 PlayCountFold,否则首次建出来的族没有它,要等缓存下一次变化才补上。
+        // 这个文件没有读写方,盘上留着的删掉(12 章决策 61)。
+        try? FileManager.default.removeItem(at: LyrimusePaths.configFile("lyrimuse-lastfm-title-aliases-discovered.json"))
+        // 本机 enrich 缓存推出来的别名表要在下面 rebuildPrimaryCreditFamilies 之前灌进 PlayCountFold,
+        // 否则首次建出来的族没有它,要等缓存下一次变化才补上。
         lastLocalAliasRefreshAt = Date()
         refreshLocalAliases(rebuildFamilies: false)
         guard let cred = credentials,
@@ -2168,290 +2156,6 @@ final class LastfmStatsService: ObservableObject {
                 guard let data = try? JSONEncoder().encode(snap) else { return }
                 try? data.write(to: url, options: .atomic)
             }.value
-        }
-    }
-
-    // MARK: - 写法别名自动发现(动态)
-    //
-    // 背景:PlayCountFold.titleAliasesByArtist 是手工核定的静态表 —— 每条都要走一遍
-    // 「专辑曲目单定位候选→Last.fm 真实播放数交叉验证→时长比对排除假阳性」三步法,
-    // 人工加一条要核实+改代码+重新装机。用户当面问「红色的这些你好像都没
-    // 做好诶,是不能搞成一个通用的逻辑都去覆盖吗,只能这样一个一个加白?」,并明确
-    // 拍板要「后台自动定期扫描、自动应用,不需要界面确认」。
-    //
-    // 原理跟三步法的第③步同源:同一首歌不管用哪种文字写,released 版本的时长
-    // (track.getinfo 的 duration 字段,毫秒)理应完全相等 —— 本会话验证过的真实信号
-    // (Black Hole/黑洞里/黑洞裡 三者都是 214000ms;Weather Report 61 秒 vs 天氣先生
-    // 271 秒那次正是靠这个信号识别出"次数都不小但其实是两首不同的歌")。这里把①②两步
-    // (人工找候选、人工看播放数)省掉,换成算法在"同一个 canonicalArtist 名下,已知写法
-    // 两两比较 duration"——代价是失去了①②提供的人工判断力,理论上存在极小概率假阳性
-    // (同一歌手名下,两首毫秒级同时长的不同歌),这是"自动应用、不要确认弹窗"
-    // 时已经知情接受的取舍,不是没考虑到。为把这个概率压到最低,匹配条件很严格:
-    //  - 只在同一个 canonicalArtist 内比较,不跨歌手;
-    //  - 只在"候选完全不含汉字/假名"(PlayCountFold.hasNoHanLikeChars,即罗马字/译名
-    //    写法)与"含汉字/假名"两组之间比较 —— 不触碰任何已有的简繁/罗马字歌手名折叠
-    //    路径,只处理"歌名本身的跨文字写法"这一类,跟静态表处理的是同一类问题;
-    //  - duration 必须**精确相等**、且非 0(0 = 那个实体没有 duration 数据,见下方
-    //    durationFor 的注释),不设容差;
-    //  - 且候选必须**唯一**——同一个歌手名下,拿这首歌的 duration 去比对全部中文写法,
-    //    命中 ≥2 首就整体跳过、不猜。这条不是纸面推演,是首次真实扫描
-    //    方大同名下数据时当场撞上的:"You Could Be"(225000ms)同时撞上 3 首不同的
-    //    中文写法候选,"Revisited"/"red bean"(都是 236000ms)撞上同一组 4 首 ——
-    //    错合并的代价(两首毫不相干的歌次数被焊在一起,且不容易察觉)远高于"暂时没
-    //    发现"(下次这首歌再被听到时下一轮扫描还会再试)。
-    //
-    // 触发时机:挂在 syncHistoryIfNeeded 每次同步收尾之后(不管首次全量还是 15 分钟
-    // 节流的增量 top-up)——那正是 titleForms/primaryCreditFamilies 刚刷新完、"这个
-    // 歌手名下有没有新写法冒出来"信息最新鲜的时刻,复用现有节流,不必另开一条定时器。
-    // 全程走 .background 优先级排队,不跟前台交互抢限速名额。
-    //
-    // 找到的映射存进 discoveredTitleAliases,通过 PlayCountFold.setDiscoveredTitleAliases
-    // 灌回那个纯函数模块参与 familyKey 计算(静态表优先,这张表兜底,见其声明处注释)。
-    // 一旦命中新映射,立刻 rebuildPrimaryCreditFamilies + 作废受影响家族的 trackPlayCounts
-    // (不用等 24 小时的 playCountVerifiedAt 窗口——这是数据结构本身变了,该立刻生效)。
-
-    /// 发现规则的版本号 —— **改判据就必须 +1**,否则按旧规则采纳的存量别名会被原样沿用,
-    /// 新规则只对以后新扫到的候选生效。
-    ///
-    /// 跟 foldVersion/mergedCountsVersion 是同一类闸门,但作废的东西不同:那两个管折叠键
-    /// 和次数缓存,这个管**已采纳的别名本身**。
-    ///
-    /// 1 → 2:判据从"同歌手 + duration 精确相等 + 候选唯一"收严成再加
-    /// evidenceAgrees(专辑否决 / mbid 放行)+ 反向唯一性。旧规则在这台机器上产出的 19 条
-    /// 里已确认有错(陶喆 `I'm O.K.`/`Runaway` 双双指向《天天》;宇多田「Time」被判成
-    /// 相隔 20 年的「SAKURAドロップス」),必须整批作废重扫。
-    ///
-    /// 作废的是 aliases;durations/albums/mbids 那几张**查询缓存照留**(它们是客观事实,
-    /// 跟判据无关,留着能省掉重扫时的大量请求),attemptedAt 也清掉,否则 30 天重试窗口
-    /// 会让重扫等一个月才开始。
-    private static let discoveryRuleVersion = 2
-
-    struct TitleAliasDiscoverySnapshot: Codable {
-        var username: String
-        /// 老快照没有这个字段,解码时给 nil → 视作版本 1 到 整批作废(正是想要的)。
-        var ruleVersion: Int?
-        /// 跟 durations 同键的专辑名/mbid 缓存(加,证据门槛要用)。
-        /// 老快照没有,给空表即可,下次查到就补上。
-        var albums: [String: String]?
-        var mbids: [String: String]?
-        /// 已确认的映射,结构跟 PlayCountFold.titleAliasesByArtist 一致:
-        /// canonicalArtistKey -> foldedTitle -> 中文歌名原始写法。
-        var aliases: [String: [String: String]]
-        /// 已经查到的 duration(毫秒),按 playCountKey(artist:title:) 存 —— 同一个写法
-        /// 不会被反复问 Last.fm。0 = 查过但那个实体没有 duration,同样缓存不重查。
-        var durations: [String: Int]
-        /// 尝试过的候选(不管有没有配上)→ 上次尝试的时间(uts)。候选 key 是它的
-        /// playCountKey;配不上的候选 discoveryRetryAfter 之内不重试。
-        var attemptedAt: [String: TimeInterval]
-    }
-
-    private static let titleAliasDiscoveryURL = LyrimusePaths.configFile("lyrimuse-lastfm-title-aliases-discovered.json")
-
-    private var discoveredTitleAliases: [String: [String: String]] = [:]
-    private var discoveredDurations: [String: Int] = [:]
-    /// 跟 discoveredDurations 同键(playCountKey),同一次 track.getinfo 顺手存下来的
-    /// 专辑名/mbid —— 证据门槛要用。空串 = 查过但 Last.fm 没给。
-    private var discoveredAlbums: [String: String] = [:]
-    private var discoveredMbids: [String: String] = [:]
-    private var discoveryAttemptedAt: [String: Date] = [:]
-    private var discoveryLoaded = false
-    private var discoveryScanning = false
-    private var discoverySaveTask: Task<Void, Never>?
-
-    /// 配不上的候选多久之后才值得重试——"这个歌手名下一直没有对应的中文写法"大概率
-    /// 是真的没有(纯英文单曲/纯乐器过场曲),不值得每次同步收尾都重查烧限速额度。
-    private static let discoveryRetryAfter: TimeInterval = 30 * 24 * 60 * 60
-    /// 每次扫描最多发起几个**新的** track.getinfo 请求(候选本身 + 候选比对的中文写法,
-    /// 合计;已在 discoveredDurations 里的不算)——一次性打满会跟同一批 syncHistoryIfNeeded
-    /// 里刚发过的一大串请求叠加,候选反正有 30 天冷却,分批扫完全可以接受,不必求快。
-    ///
-    /// 之前这个数(12)实际被用成了**候选数**上限,而每个候选要跟同歌手全部
-    /// 汉字写法逐个比 duration——实测一轮打出 131 个请求(00:10 那一分钟,本机审计日志),
-    /// 跟注释写的完全不是一回事。现在按注释的本意按请求数封顶;预算用完就停,剩下的候选
-    /// 留给下一次 top-up 收尾(15 分钟后),不标"尝试过"。
-    private static let discoveryRequestBudget = 40
-    /// 前台安静多久才开始扫(见 LastfmRateLimiter.interactiveIdle)。
-    private static let discoveryQuietSecs: TimeInterval = 60
-
-    private func loadTitleAliasDiscovery() {
-        discoveryLoaded = true
-        guard let cred = credentials,
-              let data = try? Data(contentsOf: Self.titleAliasDiscoveryURL),
-              let snap = try? JSONDecoder().decode(TitleAliasDiscoverySnapshot.self, from: data),
-              snap.username == cred.user   // 换过账号不吃旧发现结果
-        else { return }
-        // 查询缓存跟判据无关(客观事实),不管版本一律沿用 —— 重扫时能省掉大量请求。
-        discoveredDurations = snap.durations
-        discoveredAlbums = snap.albums ?? [:]
-        discoveredMbids = snap.mbids ?? [:]
-
-        if (snap.ruleVersion ?? 1) == Self.discoveryRuleVersion {
-            discoveredTitleAliases = snap.aliases
-            discoveryAttemptedAt = snap.attemptedAt.mapValues { Date(timeIntervalSince1970: $0) }
-        } else {
-            // 判据变了 到 按旧规则采纳的别名整批作废,attemptedAt 一并清空(不清的话
-            // 30 天重试窗口会让重扫等一个月才开始)。见 discoveryRuleVersion 的注释。
-            logger.notice("title alias discovery: rule version \(snap.ruleVersion ?? 1, privacy: .public) -> \(Self.discoveryRuleVersion, privacy: .public), dropping \(snap.aliases.values.reduce(0) { $0 + $1.count }, privacy: .public) stale alias(es) for rescan")
-            discoveredTitleAliases = [:]
-            discoveryAttemptedAt = [:]
-            // 别名参与 familyKey 到 次数是按族分组算的 到 旧分组的次数缓存必须一起作废,
-            // 否则界面会继续端着按错误分组求和出来的数字。
-            trackPlayCounts = [:]
-            scheduleTitleAliasDiscoverySave()
-        }
-        installDiscoveredTitleAliases()
-    }
-
-    /// 防抖落盘,同 scheduleTitleFormsSave 的取舍(编码+写文件挪出主线程)。
-    private func scheduleTitleAliasDiscoverySave() {
-        discoverySaveTask?.cancel()
-        discoverySaveTask = Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            guard !Task.isCancelled, let cred = credentials else { return }
-            let snap = TitleAliasDiscoverySnapshot(
-                username: cred.user, ruleVersion: Self.discoveryRuleVersion,
-                albums: discoveredAlbums, mbids: discoveredMbids,
-                aliases: discoveredTitleAliases, durations: discoveredDurations,
-                attemptedAt: discoveryAttemptedAt.mapValues { $0.timeIntervalSince1970 })
-            let url = Self.titleAliasDiscoveryURL
-            await Task.detached(priority: .utility) {
-                guard let data = try? JSONEncoder().encode(snap) else { return }
-                try? data.write(to: url, options: .atomic)
-            }.value
-        }
-    }
-
-    /// 扫一批候选。见本节顶部注释的完整原理/取舍。syncHistoryIfNeeded 每次同步收尾后调用。
-    private func discoverTitleAliasesIfNeeded() {
-        guard let cred = credentials, !discoveryScanning else { return }
-        if !discoveryLoaded { loadTitleAliasDiscovery() }
-
-        // primaryCreditFamilies 的每个桶取一个代表写法,按代表写法有没有汉字/假名分成
-        // 两组、按 canonicalArtistKey 归堆——已经被现有折叠机制并到同一个家族的写法,
-        // 压根不会以两个家族的身份同时出现在这里,不需要额外判重。
-        struct FamilyRep { let artist: String; let title: String }
-        var byArtist: [String: (han: [FamilyRep], nonHan: [FamilyRep])] = [:]
-        for forms in primaryCreditFamilies.values {
-            guard let rep = forms.first else { continue }
-            let artistKey = PlayCountFold.canonicalArtistKey(rep.artist)
-            var bucket = byArtist[artistKey] ?? ([], [])
-            let entry = FamilyRep(artist: rep.artist, title: rep.title)
-            if PlayCountFold.hasNoHanLikeChars(rep.title) { bucket.nonHan.append(entry) }
-            else { bucket.han.append(entry) }
-            byArtist[artistKey] = bucket
-        }
-
-        struct Candidate { let artist: String; let title: String; let hanCandidates: [FamilyRep] }
-        var candidates: [Candidate] = []
-        let now = Date()
-        for bucket in byArtist.values {
-            guard !bucket.han.isEmpty else { continue }
-            for nonHan in bucket.nonHan {
-                let attemptKey = Self.playCountKey(artist: nonHan.artist, title: nonHan.title)
-                if let last = discoveryAttemptedAt[attemptKey],
-                   now.timeIntervalSince(last) < Self.discoveryRetryAfter { continue }
-                candidates.append(Candidate(artist: nonHan.artist, title: nonHan.title,
-                                            hanCandidates: bucket.han))
-            }
-        }
-        guard !candidates.isEmpty else { return }
-
-        discoveryScanning = true
-        let epoch = accountEpoch
-        Task {
-            defer { discoveryScanning = false }
-            // 前台还在忙(用户刚翻页/换歌,次数封面还在取)就让路:候选有 30 天冷却、下一次
-            // top-up 15 分钟后又会来,不差这一轮。
-            guard await LastfmRateLimiter.shared.interactiveIdle(for: Self.discoveryQuietSecs) else {
-                logger.debug("title alias discovery: foreground requests not quiet, skipping this round")
-                return
-            }
-            // 按**新请求数**封顶(见 discoveryRequestBudget):已缓存的 duration 不花预算。
-            var requestsLeft = Self.discoveryRequestBudget
-            // 闭包而不是嵌套 func:嵌套 func 不继承 Task 闭包的 MainActor 隔离,读不了
-            // discoveredDurations。
-            let canAfford: (String, String) -> Bool = { artist, title in
-                if self.discoveredDurations[Self.playCountKey(artist: artist, title: title)] != nil { return true }
-                guard requestsLeft > 0 else { return false }
-                requestsLeft -= 1
-                return true
-            }
-            scan: for candidate in candidates {
-                let ownKey = Self.playCountKey(artist: candidate.artist, title: candidate.title)
-                guard canAfford(candidate.artist, candidate.title) else { break }
-                // 这个候选要比对的汉字写法先整体核一遍预算:比到一半没预算了,结论就不完整
-                // (可能漏掉真正的唯一匹配、或误判成唯一),这种情况整个候选留到下一轮,不算尝试过。
-                for han in candidate.hanCandidates where !canAfford(han.artist, han.title) {
-                    break scan
-                }
-                guard let own = await trackFactsFor(artist: candidate.artist, title: candidate.title,
-                                                    cred: cred)
-                else { continue } // 网络失败:这次不算"尝试过",下次同步收尾再试
-                guard epoch == accountEpoch else { return }
-                discoveryAttemptedAt[ownKey] = Date()
-                guard own.duration > 0 else { continue }
-
-                // 这不是纸面上的理论担忧,是真会撞上的:同一位歌手名下,"You Could Be"
-                // (225000ms)可能同时撞上 3 首不同的中文写法,"Revisited"/"red bean"(都是
-                // 236000ms)可能同时撞上同一组 4 首 —— 后者里"紅豆"字面正是"red bean"、
-                // 很可能是对的,但"Revisited"配的是哪一首根本分不清。取第一个匹配等于在
-                // 撞车时做一次接近随机的合并决定 —— 错合并比不合并更糟(错的账两首歌
-                // 全错、比"暂时没发现"更难察觉/回退)。所以候选必须**唯一**才采纳,撞车
-                // (≥2 个候选同时匹配)整体跳过 —— 代价是放过一部分真实存在但暂时没法
-                // 唯一定位的候选(比如"red bean"这类就会被跳过),换来的是绝不错配。
-                // 收严:上面那段"唯一即采纳"的推理本身没错,但它建立在一个
-                // **不成立的前提**上——注释原文说假阳性是"两首**毫秒级**同时长的不同歌",
-                // 所以概率极小。实际上 Last.fm 的 track.getinfo 返回的 duration 就是
-                // **整秒**(实测这台机器 908 条全是 ×1000,不是我们截断的),精度掉了 1000 倍:
-                // 实测 536 首里有 216 首(**40%**)与同歌手的另一首歌时长完全相同,陶喆名下
-                // 光 255 秒就有 5 首。"极小概率"实际是四成,duration 相等几乎不携带信息量。
-                //
-                // 所以 duration 相等**降级成必要条件**,采纳还要过 evidenceAgrees:专辑名
-                // 明确不同就否决(实测宇多田「Time」在 BADモード、被判成 Deep River 的
-                // 「SAKURAドロップス」,差 20 年);mbid 都有且相同则直接放行。
-                var matches: [FamilyRep] = []
-                for han in candidate.hanCandidates {
-                    guard let hanFacts = await trackFactsFor(artist: han.artist, title: han.title, cred: cred),
-                          hanFacts.duration > 0 else { continue }
-                    guard epoch == accountEpoch else { return }
-                    guard hanFacts.duration == own.duration else { continue }
-                    guard Self.evidenceAgrees(own, hanFacts) else { continue }
-                    matches.append(han)
-                }
-                guard matches.count == 1, let matched = matches.first else { continue }
-
-                let artistKey = PlayCountFold.canonicalArtistKey(candidate.artist)
-                let foldedTitle = PlayCountFold.foldTitle(candidate.title)
-
-                // 反向唯一性:上面那道 `matches.count == 1` 只问了
-                // "一个英文写法撞上几个中文写法",**没问**"这个中文写法是不是已经被别的
-                // 英文写法认领过"。实测漏网:陶喆的 `I'm O.K.` 和 `Runaway` 双双被判成
-                // 《天天》,三首不同的歌次数被焊成一个数。同一个目标被第二个来源指向时,
-                // 至少有一条是错的,而我们分不清是哪条 —— 按既有取舍(错合并比不合并更糟)
-                // 两条都不要:撤掉先到的那条,并且都不采纳。
-                if let claimedBy = forArtistClaimants(artistKey: artistKey, target: matched.title),
-                   claimedBy != foldedTitle {
-                    var forArtist = discoveredTitleAliases[artistKey] ?? [:]
-                    forArtist.removeValue(forKey: claimedBy)
-                    discoveredTitleAliases[artistKey] = forArtist
-                    installDiscoveredTitleAliases()
-                    rebuildPrimaryCreditFamilies()
-                    logger.notice("title alias discovery: dropped both claims on one target (reverse collision)")
-                    continue
-                }
-                var forArtist = discoveredTitleAliases[artistKey] ?? [:]
-                forArtist[foldedTitle] = matched.title
-                discoveredTitleAliases[artistKey] = forArtist
-                installDiscoveredTitleAliases()
-                rebuildPrimaryCreditFamilies()
-                let newFamKey = PlayCountFold.familyKey(artist: candidate.artist, title: candidate.title)
-                for form in primaryCreditFamilies[newFamKey] ?? [] {
-                    // 家族变了,合并总数必然变:标过期重取(旧值照显,见 stalePlayCountKeys)。
-                    stalePlayCountKeys.insert(Self.playCountKey(artist: form.artist, title: form.title))
-                }
-            }
-            scheduleTitleAliasDiscoverySave()
-            scheduleSnapshotSave()
         }
     }
 
@@ -2558,59 +2262,6 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    /// 除 duration 之外的独立证据是否支持"这两条是同一首歌"。
-    /// 判据本身(纯函数 + 完整理由 + selftest)在 `TitleAliasEvidence`(LyrimuseCore),
-    /// 这里只是把 TrackFacts 拆开喂进去 —— 沿用这个仓库"纯算术下沉到 Core"的惯例。
-    private static func evidenceAgrees(_ a: TrackFacts, _ b: TrackFacts) -> Bool {
-        TitleAliasEvidence.agrees(mbidA: a.mbid, albumA: a.album, mbidB: b.mbid, albumB: b.album)
-    }
-
-    /// 这个中文写法当前已经被哪个英文写法认领了(没有则 nil)。反向唯一性守卫用。
-    private func forArtistClaimants(artistKey: String, target: String) -> String? {
-        discoveredTitleAliases[artistKey]?.first { $0.value == target }?.key
-    }
-
-    /// 查一次 duration(毫秒),带持久化缓存 —— 同一个写法不会被反复问 Last.fm。
-    /// 0 = 查过但这个实体没有 duration 数据(实测存在,比如"黑洞里"简体这个实体查出来
-    /// 就是 0,同一首歌的繁体"黑洞裡"却有 214000——是已知局限,不是 bug),同样缓存
-    /// 不重查;`nil` = 这次请求本身失败(网络/限速),调用方据此判断要不要算"尝试过"。
-    private func durationFor(artist: String, title: String,
-                             cred: (user: String, key: String)) async -> Int? {
-        await trackFactsFor(artist: artist, title: title, cred: cred)?.duration
-    }
-
-    /// 一次 `track.getinfo` 顺手把**判同一首歌**要用到的几项都取回来。
-    ///
-    /// 从原来只取 duration 扩成这样:光凭 duration 相等判不了同一首歌(见
-    /// discoverTitleAliasesIfNeeded 里的证据门槛)。album/mbid 跟 duration 在同一份响应
-    /// 里,多解析两个字段不额外花请求。
-    private struct TrackFacts {
-        var duration: Int
-        var album: String   // 可能为空(Last.fm 不是每条都有)
-        var mbid: String    // 同上
-    }
-
-    private func trackFactsFor(artist: String, title: String,
-                               cred: (user: String, key: String)) async -> TrackFacts? {
-        let key = Self.playCountKey(artist: artist, title: title)
-        if let d = discoveredDurations[key] {
-            return TrackFacts(duration: d,
-                              album: discoveredAlbums[key] ?? "",
-                              mbid: discoveredMbids[key] ?? "")
-        }
-        guard let json = await request(method: "track.getinfo", cred: cred,
-                                       extra: ["artist": artist, "track": title, "autocorrect": "1"],
-                                       priority: .background)
-        else { return nil }
-        let duration = (dig(json, "track", "duration") as? String).flatMap { Int($0) } ?? 0
-        let album = (dig(json, "track", "album", "title") as? String) ?? ""
-        let mbid = (dig(json, "track", "mbid") as? String) ?? ""
-        discoveredDurations[key] = duration
-        discoveredAlbums[key] = album
-        discoveredMbids[key] = mbid
-        return TrackFacts(duration: duration, album: album, mbid: mbid)
-    }
-
     // MARK: - 快照(stale-while-revalidate)
 
     /// 重启后信息页原来要空窗几秒等五个请求 —— 把上一次的数字/榜单/头像/封面落盘,
@@ -2689,7 +2340,7 @@ final class LastfmStatsService: ObservableObject {
     /// (见 StatsSnapshot.mergedChartVersion)。
     private static let mergedChartVersion = 1
     /// 次数表的口径版本,读写快照两处都用它,见 StatsSnapshot.mergedCountsVersion。
-    private static let mergedCountsVersion = 16
+    private static let mergedCountsVersion = 17
 
     /// 快照里允许持久化的 `fetchedAt` 键。榜单键是 `"\(kind)|\(period)"`,跟 `refreshChart`
     /// 拼法一致。
@@ -4299,7 +3950,7 @@ final class LastfmStatsService: ObservableObject {
             }
     }
 
-    /// 别名表 / 发现表变了:歌曲榜、专辑榜和歌手展开行按手上的原始行在后台重新合并。只有这次运行里取过的才有原始行,
+    /// 别名表变了:歌曲榜、专辑榜和歌手展开行按手上的原始行在后台重新合并。只有这次运行里取过的才有原始行,
     /// 快照里端上来的榜单等下次取数。
     private func remergeCharts() {
         for (key, pool) in chartPools {
@@ -4322,12 +3973,6 @@ final class LastfmStatsService: ObservableObject {
                 self.artistTracks[period] = merged
             }
         }
-    }
-
-    /// 发现表灌进 PlayCountFold,歌曲榜按新表重新合并。灌发现表一律走这里(换账号清空那一处除外:榜单跟着一起清)。
-    private func installDiscoveredTitleAliases() {
-        PlayCountFold.setDiscoveredTitleAliases(discoveredTitleAliases)
-        remergeCharts()
     }
 
     /// 给一批歌曲榜条目补真封面。并发全放开也就 10 个轻量 JSON 请求,Last.fm 的

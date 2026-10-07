@@ -27,7 +27,7 @@ public enum PlayCountFoldReason: String, CaseIterable, Hashable, Codable {
     case artistCredit
     /// 歌手罗马字 / 别名表折到中文本名(David Tao 与 陶喆)
     case artistAlias
-    /// 歌名别名表(静态或自动发现)折到中文本名
+    /// 歌名别名表(本机推断)折到中文本名
     case titleAlias
     /// 上面都对不上、但 familyKey 相等(规则演进后留的缝)—— 原样报出来好排查,不藏
     case other

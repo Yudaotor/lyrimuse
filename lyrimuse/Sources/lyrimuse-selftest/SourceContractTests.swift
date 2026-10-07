@@ -5083,9 +5083,7 @@ func runSourceContractTests() {
                     "Last.fm 榜单: 合并榜与直连都露出 fetchLimit 条,歌曲榜、专辑榜先取 poolLimit 条合并")
         expectEqual(stats.contains("let key: ChartMerge.KeyMemo = pool.kind == .albums ? .albums() : .songs()"), true,
                     "Last.fm 榜单: 专辑榜按同一张专辑、歌曲榜按同一首歌合并")
-        // 歌曲榜跟「第 N 次听」用同一套别名表合并:本机别名表、发现表一变就按原始行重新合并;灌发现表只走统一入口。
-        expectEqual(stats.components(separatedBy: "PlayCountFold.setDiscoveredTitleAliases(discoveredTitleAliases)").count - 1, 1,
-                    "Last.fm 榜单: 灌发现表只在 installDiscoveredTitleAliases 里")
+        // 歌曲榜跟「第 N 次听」用同一套别名表合并:本机别名表一变就按原始行重新合并。
         if let fn = stats.range(of: "private func applyLocalAliases("),
            let end = stats.range(of: "\n    }\n", range: fn.upperBound..<stats.endIndex) {
             expectEqual(stats[fn.lowerBound..<end.lowerBound].contains("remergeCharts()"), true,

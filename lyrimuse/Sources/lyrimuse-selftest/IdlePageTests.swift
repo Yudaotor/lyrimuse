@@ -90,30 +90,6 @@ func runIdlePageTests() {
             dailyCounts: [off(-2): 5], today: today, calendar: cal, dayKey: dayKey) == nil,
                     true, "环比:上一个 7 天为 0 时不给百分比(不显示 ∞/0%)")
 
-        // TitleAliasEvidence:跨语言歌名别名自动发现的证据门槛。
-        // 用例全部取自真实产出的错误,不编数据 —— 判据原来只有"同歌手 + duration 精确相等
-        // + 候选唯一",而 Last.fm 的 duration 是整秒,实测 40% 的歌与同歌手另一首同时长。
-        expectEqual(TitleAliasEvidence.agrees(
-            mbidA: "", albumA: "BADモード",
-            mbidB: "", albumB: "Deep River"), false,
-            "别名证据:专辑明确不同就否决(宇多田「Time」被判成相隔 20 年的「SAKURAドロップス」)")
-        expectEqual(TitleAliasEvidence.agrees(
-            mbidA: "", albumA: "橙月", mbidB: "", albumB: "橙月"), true,
-            "别名证据:专辑相同则放行")
-        expectEqual(TitleAliasEvidence.agrees(
-            mbidA: "", albumA: "", mbidB: "", albumB: "Deep River"), true,
-            "别名证据:专辑缺失时这一档给不出结论,放行(退回 duration+唯一性)")
-        expectEqual(TitleAliasEvidence.agrees(
-            mbidA: "abc-123", albumA: "A", mbidB: "abc-123", albumB: "B"), true,
-            "别名证据:mbid 相同是最强证据,专辑不同也放行(同一 recording 可挂不同发行)")
-        expectEqual(TitleAliasEvidence.agrees(
-            mbidA: "abc-123", albumA: "A", mbidB: "xyz-999", albumB: "B"), false,
-            "别名证据:mbid 不同不构成放行,仍按专辑否决")
-        // 专辑名比较走 foldTitle,不是裸字符串相等 —— 繁简/全半角本来就是同一张专辑。
-        expectEqual(TitleAliasEvidence.agrees(
-            mbidA: "", albumA: "太平盛世", mbidB: "", albumB: "太平盛世 "), true,
-            "别名证据:专辑名按 foldTitle 折叠后比较(空白差异不算不同)")
-
         // lastSevenDays:界面上「近 7 天」的数值从 API 的滚动 168 小时改成
         // 这个自然日对齐口径,为的是跟紧挨着的环比百分比同源(两处显示同一个名字的数字,
         // 口径必须一致)。

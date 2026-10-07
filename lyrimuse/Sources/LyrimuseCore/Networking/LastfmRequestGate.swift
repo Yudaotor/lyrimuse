@@ -16,7 +16,6 @@ public struct LastfmRequestGate {
     private var background: [Int] = []
     /// 限流命中后的冷却期限:下一次放行前先等到这个时刻,整条队列一起退避。
     public private(set) var cooldownUntil: Date = .distantPast
-    private var lastInteractiveAcquire: Date = .distantPast
     private var consecutiveTransportFailures = 0
     private var transportBackoffStep = 0
 
@@ -33,7 +32,6 @@ public struct LastfmRequestGate {
         switch priority {
         case .interactive:
             interactive.append(id)
-            lastInteractiveAcquire = now
         case .background:
             background.append(id)
         }
@@ -89,10 +87,5 @@ public struct LastfmRequestGate {
     /// 此刻放行前还要等多少秒(不在冷却期为 0)。
     public func waitBeforeRelease(now: Date) -> TimeInterval {
         max(0, cooldownUntil.timeIntervalSince(now))
-    }
-
-    /// 过去 `seconds` 秒内没有任何前台请求排过队。
-    public func interactiveIdle(for seconds: TimeInterval, now: Date) -> Bool {
-        now.timeIntervalSince(lastInteractiveAcquire) >= seconds
     }
 }

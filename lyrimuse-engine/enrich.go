@@ -416,6 +416,11 @@ type enrichEntry struct {
 	// 单独成段放在这里(不挤进上面链接那一组)是为了不动那一组的 gofmt 对齐列。
 	SpotifyTrackID string `json:"spotify_track_id,omitempty"`
 
+	// ISRCs:这条录音的 ISRC(一份录音可能被不同发行商各登记一个),App 合并收听写法时按它认同一首,来路和时长闸见
+	// recordingisrc.go。ISRCLookup:存量补 ISRC 时按哪几个 id 补过(isrcLookupKey),id 没变就不再补。都不进 fields()。
+	ISRCs      []string `json:"isrcs,omitempty"`
+	ISRCLookup string   `json:"isrc_lookup,omitempty"`
+
 	// KKBOXURL:用 KKBOX 放这首歌时,它缓存里的单曲详情给的歌曲页(`https://www.kkbox.com/<地区>/<语言>/song/<id>`,
 	// 见 kkboxlyrics.go kkboxPlayingInfoFor)。App 从里面取曲目 id 拼 `kkbox://song/<id>#view` 在 KKBOX 里打开,网页用原样链接。
 	KKBOXURL string `json:"kkbox_url,omitempty"`
@@ -1829,6 +1834,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	if sw := songwritersFromScored(scored); len(sw) > 0 {
 		e.LyricsSongwriters = sw
 	}
+	e.ISRCs = mergeRecordingISRCs(e.ISRCs, recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, album), scored, durationSecs))
 	upgraded := lyricsUpgradeApplies(e, scored, picked, durationSecs)
 	path := lyricsDecisionPathUpgrade
 	if firstFill {
@@ -2188,6 +2194,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		if sw := songwritersFromScored(scored); len(sw) > 0 {
 			e.LyricsSongwriters = sw
 		}
+		e.ISRCs = mergeRecordingISRCs(e.ISRCs, recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, album), scored, durationSecs))
 	}
 	// 有源被跳过(熔断冷却 / 后台暂停)的一轮只算这一版规则下的阶段性结论:照常重选,但不把打分
 	// 版本标成已追平,needsLyricsRescore 与全量扫库之后还会再选中它。
@@ -2925,6 +2932,7 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	if e.CanonicalArtist == "" {
 		e.CanonicalArtist = fresh.CanonicalArtist
 	}
+	e.ISRCs = mergeRecordingISRCs(e.ISRCs, fresh.ISRCs)
 	// 这一轮认出了播放器没报的歌手就换上(专辑跟着这一轮的);认不出不清旧的。
 	if fresh.InferredArtist != "" {
 		e.InferredArtist, e.InferredAlbum = fresh.InferredArtist, fresh.InferredAlbum
@@ -3066,6 +3074,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	e, picked := lyricsEntryFromScored(decisionPath, artist, title, searchAlbum, durationSecs, ne, scored,
 		round.skippedSources(), queries.queries(), false, provisionalSource)
 	e.LyricsListedAlbum = listedAlbum
+	e.ISRCs = recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, searchAlbum), scored, durationSecs)
 	e.LyricsNativeVideoID = kasetNativeLyricsVideoID(ctx, round, scored)
 	// 首次解析这里拿不到 key(它由上层 trackEnrichment 用**未转简体**的原始标签拼),
 	// 用查询词拼一个等价形状 —— trace 是流水账,要的是"能对上是哪首歌",不参与任何查找。

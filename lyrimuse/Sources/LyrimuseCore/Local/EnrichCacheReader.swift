@@ -81,6 +81,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     // 22 位 base62)。解码,只喂 PlatformLinks.spotifySong;缓存里另一个 spotify_url 是
     // 本地拼的搜索页兜底,刻意不读。
     let spotifyTrackID: String?
+    // 这条录音的 ISRC(引擎的 enrichEntry.ISRCs,见 lyrimuse-engine/recordingisrc.go)。只喂歌名别名推断(EnrichTitleAliases)。
+    let isrcs: [String]?
     // KKBOX 歌曲页(引擎的 enrichEntry.KKBOXURL,用 KKBOX 放这首时从它缓存的单曲详情取的)。只喂 PlatformLinks.kkboxSong。
     let kkboxURL: String?
     // Amazon Music 曲目页(引擎的 enrichEntry.AmazonURL,用 Amazon Music 放这首时从它日志里的 ASIN 拼的)。
@@ -168,6 +170,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case youtubeMusicAlbumID = "youtube_music_album_id"
         case youtubeMusicArtistID = "youtube_music_artist_id"
         case spotifyTrackID = "spotify_track_id"
+        case isrcs
         case kkboxURL = "kkbox_url"
         case amazonURL = "amazon_url"
         case youtubeMusicURL = "youtube_music_url"
@@ -232,6 +235,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         youtubeMusicAlbumID = try c.decodeIfPresent(String.self, forKey: .youtubeMusicAlbumID)
         youtubeMusicArtistID = try c.decodeIfPresent(String.self, forKey: .youtubeMusicArtistID)
         spotifyTrackID = try c.decodeIfPresent(String.self, forKey: .spotifyTrackID)
+        isrcs = try c.decodeIfPresent([String].self, forKey: .isrcs)
         kkboxURL = try c.decodeIfPresent(String.self, forKey: .kkboxURL)
         amazonURL = try c.decodeIfPresent(String.self, forKey: .amazonURL)
         youtubeMusicURL = try c.decodeIfPresent(String.self, forKey: .youtubeMusicURL)
@@ -1452,7 +1456,8 @@ public enum EnrichCacheReader {
                                     neteaseURL: entry.neteaseURL, qqMusicURL: entry.qqMusicURL,
                                     durationSecs: entry.durationSecs,
                                     resolvedDurationSecs: entry.resolvedDurationSecs,
-                                    lyrics: entry.lyrics, lyricsRef: ref))
+                                    lyrics: entry.lyrics, lyricsRef: ref,
+                                    appleMusicURL: entry.appleMusicURL, isrcs: entry.isrcs ?? []))
             }
             var bodies = EnrichTitleAliases.StoredBodies(remembered: remembered) { ref in
                 readBody(forKey: ref.key, crc: ref.crc, in: dir)?.lyrics

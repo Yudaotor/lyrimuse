@@ -365,8 +365,7 @@ public enum PlayCountFold {
 
     /// 查「写法族」用的键(第三批):歌手先归**合唱首位**(mergeArtist),
     /// 再把**罗马字写法折到中文本名**(canonicalArtist,本机推断的歌手别名表);歌名走 foldTitle,
-    /// 另外查歌名别名(本机推断表 → 自动发现表,没有手写表)把歌名维度的罗马字/译名
-    /// 也折到中文本名。
+    /// 另外查歌名别名(本机推断表,没有手写表)把歌名维度的罗马字/译名也折到中文本名。
     ///
     /// 三个调用点必须**完全**用这一个函数(LastfmStatsService 的 insertForm /
     /// playCountSiblings、LastfmStatsSection 的 recentRows),不能各自拼
@@ -380,10 +379,7 @@ public enum PlayCountFold {
         let canonArtist = canonicalArtist(artist)
         let artistKey = canonicalArtistKey(canonArtist)
         let foldedTitle = foldTitle(title)
-        // 本机推断表(同歌曲 id / 时长+歌词,证据硬)优先于自动发现表(Last.fm 整秒时长撞相等,弱)。
-        let canonTitle = lookupLocalTitleAlias(artistKey: artistKey, foldedTitle: foldedTitle)
-            ?? lookupDiscoveredTitleAlias(artistKey: artistKey, foldedTitle: foldedTitle)
-            ?? title
+        let canonTitle = lookupLocalTitleAlias(artistKey: artistKey, foldedTitle: foldedTitle) ?? title
         return key(artist: canonArtist, title: canonTitle)
     }
 
@@ -395,10 +391,9 @@ public enum PlayCountFold {
         key(artist: canonicalArtist(artist), title: album)
     }
 
-    /// `familyKey` 拼外层键那一步单独拎出来 —— App 侧的自动发现扫描
-    /// (LastfmStatsService.discoverTitleAliasesIfNeeded)要按「同一个歌手」分组比较
-    /// 候选写法,得用**跟 familyKey 完全同一把尺子**算歌手键,不能自己另写一遍归一逻辑
-    /// (两处稍有出入就会出现"发现表写的键,familyKey 查的时候对不上"的静默失效)。
+    /// `familyKey` 拼外层键那一步单独拎出来 —— 歌名别名推断(EnrichTitleAliases.derive)按「同一个歌手」分桶,
+    /// 得用**跟 familyKey 完全同一把尺子**算歌手键,不能自己另写一遍归一逻辑(两处稍有出入就会出现
+    /// "别名表写的键,familyKey 查的时候对不上"的静默失效)。
     /// 参数接受原始歌手写法即可(内部会先 canonicalArtist),不要求调用方先归一。
     public static func canonicalArtistKey(_ artist: String) -> String {
         stripSpaces(normalized(canonicalArtist(artist)))
@@ -447,7 +442,7 @@ public enum PlayCountFold {
         return value
     }
 
-    /// 歌名维度的别名分三层查(见 familyKey):本机推断表 → 自动发现表。手写的
+    /// 歌名维度的别名只查本机推断表(见 familyKey)。手写的
     /// `titleAliasesByArtist`(方大同 7 条,三步法人工核过)删除——同样是去掉手工表:
     /// 那 7 条现在由 `EnrichTitleAliases.derive` 的 E1(同歌曲 id)/E2(时长 + 歌词都对得上)两条证据
     /// 路径自动推出来(selftest 用它们当回归样本钉住)。当年那张表的三步核实法留下的两条经验仍然有效、
@@ -455,45 +450,11 @@ public enum PlayCountFold {
     /// 当后者;②时长比对不是可选项(`Weather Report` 61 s 过场曲 vs 《天氣先生》271 s,光看歌名/专辑
     /// 序号会误判)。
 
-    /// 自动发现表:为了不再"一个一个加白名单",这里做的是
-    /// 一套自动发现的机制——运行时可增长、持久化在本机的第二张表(算法用 Last.fm 整秒时长比对自动
-    /// 确认,理论上有假阳性 —— 见 discoverTitleAliasesIfNeeded 的注释;实测这台机器上它
-    /// 既没在产出、产出时质量也不可信,所以 familyKey 里它排在本机推断表之后当兜底)。
+    /// 歌名别名:从**本机 enrich 缓存**推出来的「英文/罗马字歌名 → 中文歌名」。
     ///
-    /// 存/取都由 App 侧的 LastfmStatsService 负责(它才有网络请求 + 本机文件读写的能力,
-    /// 这个类型在 LyrimuseCore、selftest 也依赖它,不能牵涉 I/O)——这里只留一个线程安全的
-    /// 内存副本 + 一个查询入口,App 启动加载完发现表后调 `setDiscoveredTitleAliases`
-    /// 灌进来,发现新映射时再调一次覆盖。结构跟本机推断表完全一致:
-    /// 外层键 = `canonicalArtistKey`,内层键 = `foldTitle`,值 = 中文歌名原始写法。
-    private static let discoveredLock = NSLock()
-    nonisolated(unsafe) private static var discoveredTitleAliasesByArtist: [String: [String: String]] = [:]
-
-    public static func setDiscoveredTitleAliases(_ table: [String: [String: String]]) {
-        discoveredLock.lock()
-        discoveredTitleAliasesByArtist = table
-        discoveredLock.unlock()
-    }
-
-    private static func lookupDiscoveredTitleAlias(artistKey: String, foldedTitle: String) -> String? {
-        discoveredLock.lock()
-        let value = discoveredTitleAliasesByArtist[artistKey]?[foldedTitle]
-        discoveredLock.unlock()
-        return value
-    }
-
-    /// 第三层歌名别名:从**本机 enrich 缓存**推出来的「英文/罗马字歌名 → 中文歌名」。
-    ///
-    /// 用户点开方大同《Oasis》的合并明细问「能不能把中文对应的歌名也合并进来」——历史里
-    /// 《那沙漠里的水》是同一首录音。两张既有表都够不着它:静态表要人工核实+改代码装机;
-    /// 发现表靠 Last.fm 整秒 duration 撞相等,实测假阳性极高(那台机器上 14 条采纳里
-    /// 11 条是错的——「Mojito→红模仿」「Melody→中國姑娘」这种),而且它的扫描门(前台安静 60 s
-    /// + 40 个请求的预算)在这台机器上从没让它跑完过一轮。
-    ///
-    /// 而引擎早就替我们做过一件更可靠的事:两种写法各自播放时,歌词解析各自独立地把
-    /// 它们匹配到了**同一个网易云 / QQ 的歌曲 id**(`netease_url` / `qq_music_url` 落在 enrich
-    /// 缓存里)。两次独立检索落到同一个 id,比"时长整秒相等"硬得多,而且零网络、零新请求 ——
-    /// 判定在 EnrichTitleAliases.derive(纯函数,selftest 钉住),App 侧 enrich 缓存一变就重算。
-    /// 查找顺序:静态表 → 发现表 → 这张表;结构与前两张完全一致。
+    /// 证据是引擎替每首播过的歌做过的检索:两种写法各自落到同一个网易云 / QQ 的歌曲 id,或者带着同一个 ISRC,
+    /// 或者时长和歌词都对得上(EnrichTitleAliases.derive,纯函数,selftest 钉住),零网络、零新请求,
+    /// App 侧 enrich 缓存一变就重算。结构:外层键 = `canonicalArtistKey`,内层键 = `foldTitle`,值 = 中文歌名原始写法。
     private static let localLock = NSLock()
     nonisolated(unsafe) private static var localTitleAliasesByArtist: [String: [String: String]] = [:]
 
