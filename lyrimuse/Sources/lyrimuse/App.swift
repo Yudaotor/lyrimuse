@@ -64,9 +64,9 @@ struct LyrimuseApp: App {
             // SwiftUI 每个更新周期都会把标志复写掉,设一次不够)。修饰符仍保留:它是
             // 官方语义的表达,哪个版本 SwiftUI 修好了就能少一层对抗。
             if #available(macOS 15.0, *) {
-                LyricsWindowView().windowFullScreenBehavior(.enabled)
+                LyricsWindowScene().windowFullScreenBehavior(.enabled)
             } else {
-                LyricsWindowView()
+                LyricsWindowScene()
             }
         }
         // AM 式顶部(对齐 Apple Music 视觉):无标题白条,背景一直通到窗顶、
