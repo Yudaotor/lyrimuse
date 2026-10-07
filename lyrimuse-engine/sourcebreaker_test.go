@@ -6,6 +6,9 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -601,5 +604,48 @@ func TestLyricSourceBreakerCooldownReason(t *testing.T) {
 	clk.advance(time.Minute)
 	if r := b.cooldownReason("lrclib"); r != "" {
 		t.Fatalf("冷却过了原因 = %q, want 空", r)
+	}
+}
+
+// 暂停状态存盘:重启(新开一份熔断器读回)后剩余时间和档位接着算;撤销后文件里也没了;到期太久的丢掉;没开存盘不写。
+func TestLyricSourceBreakerBlocksPersistAcrossRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), lyricSourceBlocksFileName)
+	b, clk := newTestBreaker()
+	b.loadBlocks(path)
+	b.noteBlocked("musixmatch")
+	clk.advance(15 * time.Minute)
+	b.noteBlocked("musixmatch") // 第二档 30 分钟
+	clk.advance(10 * time.Minute)
+
+	restarted := newLyricSourceBreaker(clk.now)
+	restarted.loadBlocks(path)
+	if d, ok := restarted.blockedFor("musixmatch"); !ok || d != 20*time.Minute {
+		t.Fatalf("重启后应接着暂停剩下的 20 分钟,实际 %v %s", ok, d)
+	}
+	clk.advance(20 * time.Minute)
+	restarted.noteBlocked("musixmatch")
+	if d, _ := restarted.blockedFor("musixmatch"); d != time.Hour {
+		t.Fatalf("重启后再被拦应接着升到第三档 1 小时,实际 %s", d)
+	}
+	restarted.clearBlocked("musixmatch")
+	again := newLyricSourceBreaker(clk.now)
+	again.loadBlocks(path)
+	if _, ok := again.blockedFor("musixmatch"); ok {
+		t.Fatal("撤销之后文件里不该还有它")
+	}
+
+	again.noteBlocked("lrclib")
+	clk.advance(lyricSourceBlocksForgetAfter + 2*time.Hour)
+	stale := newLyricSourceBreaker(clk.now)
+	stale.loadBlocks(path)
+	stale.noteBlocked("lrclib")
+	if d, _ := stale.blockedFor("lrclib"); d != 15*time.Minute {
+		t.Fatalf("到期超过一天的记录丢掉、档位从头算,实际 %s", d)
+	}
+
+	memOnly, _ := newTestBreaker()
+	memOnly.noteBlocked("deezer")
+	if raw, err := os.ReadFile(path); err != nil || strings.Contains(string(raw), "deezer") {
+		t.Fatalf("没开存盘的熔断器不该写文件: %s %v", raw, err)
 	}
 }

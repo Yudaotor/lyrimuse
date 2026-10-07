@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -102,6 +104,76 @@ type lyricSourceBlockState struct {
 	tier int
 }
 
+// 暂停状态存盘:常驻进程在 run() 开头调 enableLyricSourceBlockPersistence,读回上次存的、之后每次变化都写回。
+// 别只放内存:引擎一重启就从 15 分钟那档重来,装机频繁时每次启动后的第一个请求都去撞一下,一小时能撞六次,
+// 而对方的反爬看的正是请求频率。一次性子命令、单测不开:单测进程要是读到本机真实的「被拦」记录,Musixmatch
+// 的测试会在被拦的机器上莫名其妙地失败。
+const (
+	lyricSourceBlocksFileName = "lyrimuse-source-blocks.json"
+	// lyricSourceBlocksForgetAfter:暂停到期这么久还没再被拦(引擎一直没跑),读回时整条丢掉、档位从头算。
+	lyricSourceBlocksForgetAfter = 24 * time.Hour
+)
+
+type lyricSourceBlockRecord struct {
+	Until int64 `json:"until"`
+	Tier  int   `json:"tier"`
+}
+
+// enableLyricSourceBlockPersistence:给常驻进程那一份熔断器开存盘,并读回上次存的暂停状态。
+func enableLyricSourceBlockPersistence() {
+	path := configFilePath(lyricSourceBlocksFileName)
+	if path == lyricSourceBlocksFileName {
+		return
+	}
+	sharedLyricSourceBreaker().loadBlocks(path)
+}
+
+// loadBlocks 读回 path 里的暂停状态(到期超过 lyricSourceBlocksForgetAfter 的丢掉),此后变化都写回 path。
+func (b *lyricSourceBreaker) loadBlocks(path string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.blocksPath = path
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var saved map[string]lyricSourceBlockRecord
+	if json.Unmarshal(raw, &saved) != nil {
+		log.Printf("lyrics: %s unreadable, ignoring it", path)
+		return
+	}
+	now := b.now()
+	for source, r := range saved {
+		until := time.Unix(r.Until, 0)
+		if now.Sub(until) > lyricSourceBlocksForgetAfter || r.Tier <= 0 {
+			continue
+		}
+		b.blocked[source] = &lyricSourceBlockState{until: until, tier: r.Tier}
+		if until.After(now) {
+			log.Printf("lyrics: source %s still paused after its anti-bot block for %s (trip=%d)",
+				source, until.Sub(now).Round(time.Second), r.Tier)
+		}
+	}
+}
+
+// saveBlocksLocked:开了存盘就把当前暂停状态写回去。调用方持有 b.mu。
+func (b *lyricSourceBreaker) saveBlocksLocked() {
+	if b.blocksPath == "" {
+		return
+	}
+	saved := map[string]lyricSourceBlockRecord{}
+	for source, bs := range b.blocked {
+		saved[source] = lyricSourceBlockRecord{Until: bs.until.Unix(), Tier: bs.tier}
+	}
+	raw, err := json.Marshal(saved)
+	if err == nil {
+		err = writeFileAtomic(b.blocksPath, raw)
+	}
+	if err != nil {
+		log.Printf("lyrics: saving anti-bot pauses to %s: %v", b.blocksPath, err)
+	}
+}
+
 type lyricSourceBreakerState struct {
 	until       time.Time
 	consecutive int
@@ -124,6 +196,8 @@ type lyricSourceBreaker struct {
 	endpointOK map[string]map[string]time.Time
 	// blocked:被反爬拦下的源,见上面「反爬拦截」一节。
 	blocked map[string]*lyricSourceBlockState
+	// blocksPath:暂停状态存在哪;空 = 只放内存(一次性子命令、单测)。见 enableLyricSourceBlockPersistence。
+	blocksPath string
 }
 
 func newLyricSourceBreaker(now func() time.Time) *lyricSourceBreaker {
@@ -155,6 +229,7 @@ func (b *lyricSourceBreaker) noteBlocked(source string) bool {
 	bs.until = now.Add(lyricSourceBlockSchedule[idx])
 	log.Printf("lyrics: source %s blocked by its anti-bot check, pausing it for %s (reason=%s trip=%d)",
 		source, lyricSourceBlockSchedule[idx], lyricSourceCooldownReasonBlocked, bs.tier)
+	b.saveBlocksLocked()
 	noteLyricSourceTrip(source, lyricSourceCooldownReasonBlocked)
 	return true
 }
@@ -168,6 +243,7 @@ func (b *lyricSourceBreaker) clearBlocked(source string) {
 		return
 	}
 	delete(b.blocked, source)
+	b.saveBlocksLocked()
 	log.Printf("lyrics: source %s answered normally again, anti-bot pause cleared (trips=%d)", source, bs.tier)
 }
 
