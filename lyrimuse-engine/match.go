@@ -206,7 +206,8 @@ func isCreditOnlyLRC(lrc string) bool {
 	nonCredit := 0
 	for _, l := range splitLyricLines(lrc) {
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(l, ""))
-		if text == "" || isCreditLineWithSpeakers(text, speakers) {
+		// 元信息标签行(`[ti:]` `[offset:0]`)也不算正文:源常把它们留在正文开头。见 09 章决策 206。
+		if text == "" || lrcMetaTagPrefixRe.MatchString(text) || isCreditLineWithSpeakers(text, speakers) {
 			continue
 		}
 		nonCredit++
