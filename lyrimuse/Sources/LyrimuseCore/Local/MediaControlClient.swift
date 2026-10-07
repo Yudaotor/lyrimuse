@@ -1144,6 +1144,8 @@ public enum MediaControlClient {
     /// 回退已经问过、确认目标播放器不在了(退出 / stopped / 权限没了),之后还没接受过任何快照。这时焦点虽然还被别人占着,
     /// 我们要的那个已经不在放:后面几拍回退入口没有目标可问,失败原因要记成「问不到」,不能停在「焦点被占」那一档挂 300 秒。
     private static var fallbackTargetGone = false
+    /// 回退连着问不到了几拍。问到、或正常路径接受了快照就清零。
+    private static var fallbackFailureStreak = 0
 
     /// 回退入口没有目标可问时,这一拍的失败原因要不要改记。纯函数,selftest 覆盖。
     public static func failureWithoutFallbackTarget(targetConfirmedGone: Bool) -> SnapshotFailure? {
@@ -1172,16 +1174,26 @@ public enum MediaControlClient {
     ///
     /// - Parameter acceptedBundleID: 这一拍**被接受**的快照来自谁(nil = 这一拍没拿到)。
     /// - Parameter fallbackSucceeded: 回退问 Music.app 有没有拿到东西(nil = 这一拍没走回退)。
+    /// - Parameter consecutiveFailures: 回退连着问不到了几拍(含这一拍),只在 fallbackSucceeded 为 false 时看。不传按已到
+    ///   `fallbackRetryLimit` 算。
     public static func nextFocusFallbackPlayer(
-        current: PlaybackPlayer?, acceptedBundleID: String?, fallbackSucceeded: Bool?
+        current: PlaybackPlayer?, acceptedBundleID: String?, fallbackSucceeded: Bool?,
+        consecutiveFailures: Int = MediaControlClient.fallbackRetryLimit
     ) -> PlaybackPlayer? {
         // 正常路径拿到了快照:它是谁说了算 —— 切到没有直查通路的播放器就当场关掉开关。
         if let acceptedBundleID { return directQueryPlayer(forBundleID: acceptedBundleID) }
-        // 走了回退:拿到了就保持(它还在放,焦点被占多久都兜得住),
-        // 拿不到就关掉(播放器退出 / stopped / 权限没了),此后不再为它 fork。
-        if let fallbackSucceeded { return fallbackSucceeded ? current : nil }
+        // 走了回退:拿到了就保持(它还在放,焦点被占多久都兜得住)。拿不到先留着,下一拍接着问:偶尔一拍超时不该把回退
+        // 整个关掉,关掉之后要等它重新拿到焦点才会再问,这期间屏上一直没有歌词。连着问不到 fallbackRetryLimit 拍才关
+        // (播放器退出 / stopped / 权限没了),此后不再为它 fork。
+        if let fallbackSucceeded {
+            return fallbackSucceeded || consecutiveFailures < fallbackRetryLimit ? current : nil
+        }
         return current
     }
+
+    /// 回退连着问不到几拍才放弃那个播放器。跟屏上那首在空快照之后留几拍(`nilSnapshotGrace`)一样:还显示着就接着问,
+    /// 清掉了就不再为它起子进程。
+    public static let fallbackRetryLimit = nilSnapshotGrace
 
     /// 此刻是不是正处在「焦点被别人占走、正靠回退取数」的状态,是的话回退到哪个播放器。
     /// 封面那条路要跟快照对齐,靠的就是它 —— 不然会拿回占用者的图。
@@ -1243,6 +1255,7 @@ public enum MediaControlClient {
             current: lastAcceptedDirectQueryPlayer, acceptedBundleID: bundleID, fallbackSucceeded: nil)
         spotifyWebSource = webSource
         fallbackTargetGone = false
+        fallbackFailureStreak = 0
         let wasFallingBack = fallbackActive
         fallbackActive = false
         appleMusicFocusLock.unlock()
@@ -1378,8 +1391,10 @@ public enum MediaControlClient {
             }
         }
         appleMusicFocusLock.lock()
+        fallbackFailureStreak = snapshot == nil ? fallbackFailureStreak + 1 : 0
         lastAcceptedDirectQueryPlayer = nextFocusFallbackPlayer(
-            current: allowed, acceptedBundleID: nil, fallbackSucceeded: snapshot != nil)
+            current: allowed, acceptedBundleID: nil, fallbackSucceeded: snapshot != nil,
+            consecutiveFailures: fallbackFailureStreak)
         let firstTick = !fallbackActive
         fallbackActive = snapshot != nil
         fallbackTargetGone = snapshot == nil

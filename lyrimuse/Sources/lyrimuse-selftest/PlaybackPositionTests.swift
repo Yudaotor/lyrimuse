@@ -2434,6 +2434,21 @@ func runPlaybackPositionTests() {
         expectEqual(M.nextFocusFallbackPlayer(current: .spotify, acceptedBundleID: nil,
                                               fallbackSucceeded: false), nil,
                     "回退开关: Spotify 的收敛方向一致")
+        // 偶尔一拍问不到(探针超时)先留着,下一拍接着问;连着问不到到上限才关,跟屏上那首清掉是同一拍。
+        expectEqual(M.nextFocusFallbackPlayer(current: .qqMusic, acceptedBundleID: nil,
+                                              fallbackSucceeded: false, consecutiveFailures: 1), .qqMusic,
+                    "回退开关: 头一拍问不到先留着,下一拍接着问")
+        expectEqual(M.nextFocusFallbackPlayer(current: .qqMusic, acceptedBundleID: nil,
+                                              fallbackSucceeded: false, consecutiveFailures: M.fallbackRetryLimit), nil,
+                    "回退开关: 连着问不到到上限就关")
+        expectEqual(M.nextFocusFallbackPlayer(current: .qqMusic, acceptedBundleID: nil,
+                                              fallbackSucceeded: true, consecutiveFailures: M.fallbackRetryLimit), .qqMusic,
+                    "回退开关: 问到了就保持,失败拍数不看")
+        expectEqual(M.fallbackRetryLimit, M.nilSnapshotGrace,
+                    "回退开关: 重试拍数跟屏上那首在空快照之后留几拍一样,不多问也不早放弃")
+        expectEqual(M.nilSnapshotClearsState(consecutiveNilCount: M.fallbackRetryLimit - 1, failure: .appleScriptUnavailable,
+                                             nilStreakSeconds: 0), false,
+                    "回退开关: 还在重试的那几拍,屏上那首不清(回退问不到记的是 appleScriptUnavailable)")
         // 这一拍既没拿到被接受的快照、也没走回退(开关本来就是关的)——维持原样。
         expectEqual(M.nextFocusFallbackPlayer(current: nil, acceptedBundleID: nil,
                                               fallbackSucceeded: nil), nil,

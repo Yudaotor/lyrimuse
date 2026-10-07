@@ -153,9 +153,9 @@ func runPlayerIdentityTests() {
                         "失焦查询成功: QQ 控制不能落到浏览器")
             let failed = MediaControlClient.shouldWithholdFocusControls(
                 fallingBack: false, targetGone: true, viaAppleScript: false)
-            expectEqual(MediaControlClient.nextFocusFallbackPlayer(current: .qqMusic, acceptedBundleID: nil,
-                                                                   fallbackSucceeded: false), nil,
-                        "失焦查询失败: 仍停止后续回退查询,不添加重试状态")
+            expectEqual(MediaControlClient.nextFocusFallbackPlayer(current: .qqMusic, acceptedBundleID: nil, fallbackSucceeded: false,
+                                                                   consecutiveFailures: MediaControlClient.fallbackRetryLimit), nil,
+                        "失焦查询失败: 连着问不到到上限就停止回退查询")
             expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                                                              focusHeldElsewhere: failed), Route.withheld,
                         "失焦成功 → 查询失败: 显示宽限期仍拒绝控制,不能把 nil 当焦点恢复")

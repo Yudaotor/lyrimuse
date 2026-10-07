@@ -8,7 +8,7 @@
 // 当选的那一个。这里取的是全部。
 //
 // ⚠️ 别跟 `MRMediaRemoteGetActivePlayerPathsForOrigin` 搞混:那个的 "active" 就是"当选的那一个",
-// 焦点被占时它只返回占用者,目标播放器的 path 直接从列表里消失。能用的是下面这两个。
+// 焦点被占时它只返回占用者,目标播放器的 path 直接从列表里消失。能用的是下面这几个。
 //
 // ## 三个接口与它们的签名
 //
@@ -90,6 +90,9 @@ typedef void *(*GetLocalOriginFn)(void);
 /// 状态查询那两段等待(取播放器列表、取单个播放器的信息和播放状态)各等多久。调用方(App 的 NowPlayingClientsProbe)
 /// 在 2 秒整体超时后杀掉这个进程,两段加起来要留在 2 秒以内。正常一次约 120ms。
 static const int64_t kStateWaitMs = 900;
+/// 元数据回话之后,播放状态再等多久。两个请求同时发出,正常时状态跟元数据一起回来;状态接口卡住时,列表模式里每个 client
+/// 都等满 kStateWaitMs 会把外层 2 秒的超时撑破(八个 client 就是七秒多)。
+static const int64_t kStateAfterInfoWaitMs = 150;
 /// watch 模式两次查询之间隔多久:在放时要尽快看到暂停;没在放时(暂停着可能一停几个小时)放慢。
 static const useconds_t kWatchIntervalUs = 250000;
 static const useconds_t kWatchIdleIntervalUs = 500000;
@@ -185,14 +188,15 @@ static NSDictionary *withProcess(NSDictionary *one, id client) {
     return out;
 }
 
-/// 元数据与播放状态并发查询,共用同一个截止时间,两段等待串起来不会超过外层超时。元数据没按时回话返回 nil,
-/// answered 置 NO(调用方要分清「没问到」和「这一份是空的」时传它,否则传 NULL);播放状态没读到不算失败,
-/// 按 kStateUnavailable 交给 `playingFor`。封面查询不问播放状态,快照里也没有 playing。
+/// 元数据与播放状态同时问。元数据等到 deadline,没按时回话返回 nil,answered 置 NO(调用方要分清「没问到」和「这一份是空的」
+/// 时传它,否则传 NULL)。播放状态在元数据回话之后最多再等 kStateAfterInfoWaitMs,没读到不算失败,按 kStateUnavailable 交给
+/// `playingFor`;等不到时把 stateStalled 置 YES,同一次查询里后面的 client 不再问(调用方传同一个变量,不需要时传 NULL)。
+/// 封面查询不问播放状态,快照里也没有 playing。
 static NSDictionary *clientSnapshot(id client, NSString *bundleID, long artFlag, BOOL playingFromRate,
                                     GetInfoForClientFn getInfo, GetPlaybackStateForClientFn getState,
-                                    dispatch_time_t deadline, BOOL *answered) {
+                                    dispatch_time_t deadline, BOOL *answered, BOOL *stateStalled) {
     BOOL needsState = artFlag == kNoArtwork;
-    BOOL askState = needsState && getState;
+    BOOL askState = needsState && getState && !(stateStalled && *stateStalled);
     dispatch_queue_t queue = dispatch_get_global_queue(0, 0);
     dispatch_semaphore_t infoDone = dispatch_semaphore_create(0);
     dispatch_semaphore_t stateDone = dispatch_semaphore_create(0);
@@ -213,7 +217,14 @@ static NSDictionary *clientSnapshot(id client, NSString *bundleID, long artFlag,
         return nil;
     }
     if (answered) *answered = YES;
-    uint32_t seen = (askState && dispatch_semaphore_wait(stateDone, deadline) == 0) ? state : kStateUnavailable;
+    uint32_t seen = kStateUnavailable;
+    if (askState) {
+        if (dispatch_semaphore_wait(stateDone, dispatch_time(DISPATCH_TIME_NOW, kStateAfterInfoWaitMs * NSEC_PER_MSEC)) == 0) {
+            seen = state;
+        } else if (stateStalled) {
+            *stateStalled = YES;
+        }
+    }
     NSNumber *playing = needsState ? @(playingFor(seen, info[K("PlaybackRate")], playingFromRate)) : nil;
     return normalize(info, bundleID, playing, [NSDate date]);
 }
@@ -272,10 +283,11 @@ static NSDictionary *playbackQueue(void *h, id client, long count) {
 static NSDictionary *pickWebSession(NSArray *candidates, GetInfoForClientFn getInfo, GetPlaybackStateForClientFn getState,
                                     BOOL *answered) {
     NSDictionary *pick = nil;
+    BOOL stateStalled = NO;
     for (id c in candidates) {
         BOOL ok = NO;
         NSDictionary *one = clientSnapshot(c, kWebMediaBundleID, kNoArtwork, NO, getInfo, getState,
-                                           dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC), &ok);
+                                           dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC), &ok, &stateStalled);
         if (!ok) {
             *answered = NO;
             return nil;
@@ -396,6 +408,7 @@ void nowplaying_clients(void *my_perl, void *cv) {
         }
 
         NSMutableArray *all = [NSMutableArray array];
+        BOOL stateStalled = NO;
         for (id c in clients) {
             id bidObj = ((id (*)(id, SEL))objc_msgSend)(c, sel_getUid("bundleIdentifier"));
             NSString *bid = [bidObj isKindOfClass:NSString.class] ? bidObj : nil;
@@ -406,7 +419,7 @@ void nowplaying_clients(void *my_perl, void *cv) {
             }
 
             NSDictionary *one = clientSnapshot(c, bid, artFlag, playingFromRate, getInfo, getState,
-                                              dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC), NULL);
+                                              dispatch_time(DISPATCH_TIME_NOW, kStateWaitMs * NSEC_PER_MSEC), NULL, &stateStalled);
             if (one) [all addObject:withProcess(one, c)];
         }
         emit(want ? (all.firstObject ?: (id)nil) : all);

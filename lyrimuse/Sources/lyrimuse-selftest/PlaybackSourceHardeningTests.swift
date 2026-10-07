@@ -451,6 +451,11 @@ private func wiringContracts() {
                 "Spotify 镜像接线: 没换成网页版就清掉记录,之后不再问")
     let noteAcceptedBody = body("private static func noteAccepted(bundleID: String) {", in: client)
     expectEqual(noteAcceptedBody.contains("spotifyWebSource = webSource"), true, "Spotify 镜像接线: 每次接受快照都更新网页版来源")
+    expectEqual(noteAcceptedBody.contains("fallbackFailureStreak = 0"), true, "焦点回退: 接受了快照,回退的失败拍数清零")
+    let focusLost = body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
+    expectEqual(focusLost.contains("fallbackFailureStreak = snapshot == nil ? fallbackFailureStreak + 1 : 0")
+                && focusLost.contains("consecutiveFailures: fallbackFailureStreak)"), true,
+                "焦点回退: 问不到时按连着失败的拍数决定关不关,问到就清零")
 
     // 会话在放时被撤(网易云冷启动,02 章决策 96):保持接在两条取快照的入口共用的 heldAcrossPlayerGap;保持出来的那首,播放控制
     // 不发 —— 这时系统焦点是空的或者在别人手里,media-control 的指令会落在焦点上。
