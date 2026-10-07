@@ -225,7 +225,7 @@ extension PlaybackPlayer {
     public enum AccessibilityUse: Sendable {
         /// 读界面上的播放时间校准进度(Amazon Music,`AmazonMusicUIProbe`),只读。
         case calibratesProgress
-        /// 读、切菜单栏里的「播放模式」(QQ 音乐,`QQMusicMenuControl`),点随机 / 循环键时会按菜单项。
+        /// 读、按菜单栏里的「播放模式」「喜欢歌曲」(QQ 音乐,`QQMusicMenuControl`),点随机 / 循环 / 喜欢键时会按菜单项。
         case switchesPlayMode
     }
 

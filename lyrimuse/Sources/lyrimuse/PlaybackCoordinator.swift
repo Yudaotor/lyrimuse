@@ -593,13 +593,37 @@ final class PlaybackCoordinator: ObservableObject {
         return player
     }
 
-    /// 循环键走浏览器里 YouTube Music 网页版(`YouTubeMusicWebRepeat`)时的那个浏览器,不是就 nil。只在当前播放器不是内置
-    /// 播放器时看(内置的走 `extendedControlPlayer`)。网页版只有循环,没有随机、喜欢、音量。
-    private var youtubeMusicWebTarget: (bundleID: String, family: BrowserAutomationPermission.Family)? {
+    /// 循环键、点赞、音量走浏览器里 YouTube Music 网页版(`YouTubeMusicWebControls`)时的那个浏览器,不是就 nil。只在当前播放器
+    /// 不是内置播放器时看(内置的走 `extendedControlPlayer` / `favoritePlayer`)。网页版没有随机。
+    private var youtubeMusicWebTarget: YouTubeMusicWebControls.Target? {
         guard currentPlayer == nil else { return nil }
-        return YouTubeMusicWebRepeat.target(
+        return YouTubeMusicWebControls.target(
             reportedBundleID: LocalPlaybackSource.shared.lastResolvedBundleID, webPlatformID: resolvedWebPlatformID,
-            isPaired: { BrowserPositionProbe.shared.isPaired(bundleID: $0, platformID: YouTubeMusicWebRepeat.platformID) })
+            isPaired: { BrowserPositionProbe.shared.isPaired(bundleID: $0, platformID: YouTubeMusicWebControls.platformID) })
+    }
+
+    /// 网页版三样一次读回,各按自己的动作序号丢弃过期结果(同 `refreshExtendedControls`)。
+    private func refreshYouTubeMusicWeb(_ web: YouTubeMusicWebControls.Target, mode: Bool, favorite: Bool, volume: Bool) {
+        let favSeq = favoritedActionSeq
+        let modeSeq = playbackModeActionSeq
+        let volSeq = volumeActionSeq
+        Task.detached(priority: .utility) {
+            let state = YouTubeMusicWebControls.readState(web)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                if mode, self.playbackModeActionSeq == modeSeq {
+                    self.applyPlaybackMode(state?.mode.map {
+                        MusicPlaybackController.PlaybackModeState(mode: $0, options: YouTubeMusicWebControls.modeOptions)
+                    })
+                }
+                if favorite, self.favoritedActionSeq == favSeq, self.isFavorited != state?.liked {
+                    self.isFavorited = state?.liked
+                }
+                if volume, self.volumeActionSeq == volSeq, self.soundVolume != state?.volume {
+                    self.soundVolume = state?.volume
+                }
+            }
+        }
     }
 
     /// Apple Music 走 AppleScript 需要"自动化"权限;后台刷新路径上检查它,**绝不弹窗**。
@@ -625,11 +649,9 @@ final class PlaybackCoordinator: ObservableObject {
     /// 项的回读结果单独作废,不牵连另两项。
     func refreshExtendedControls() {
         guard let player = extendedControlPlayer else {
-            if youtubeMusicWebTarget != nil {
-                // 网页版只有循环键:喜欢、音量清掉,模式单独回读。不先清模式,换歌时循环键不闪一下。
-                if isFavorited != nil { isFavorited = nil }
-                if soundVolume != nil { soundVolume = nil }
-                refreshPlaybackMode()
+            if let web = youtubeMusicWebTarget {
+                // 不先清,换歌时几颗键不闪一下。
+                refreshYouTubeMusicWeb(web, mode: true, favorite: true, volume: true)
             } else {
                 clearExtendedControls()
             }
@@ -668,7 +690,11 @@ final class PlaybackCoordinator: ObservableObject {
     /// 权限用 askIfNeeded: false 检查 —— 这是个后台刷新,绝不能因为它弹出系统授权对话框。
     func refreshFavorited() {
         guard let player = favoritePlayer else {
-            if isFavorited != nil { isFavorited = nil }
+            if let web = youtubeMusicWebTarget {
+                refreshYouTubeMusicWeb(web, mode: false, favorite: true, volume: false)
+            } else if isFavorited != nil {
+                isFavorited = nil
+            }
             return
         }
         let seq = favoritedActionSeq
@@ -691,15 +717,7 @@ final class PlaybackCoordinator: ObservableObject {
     /// 重新读一次播放模式。跟 refreshFavorited 同一套前置判断和后台线程约定。
     func refreshPlaybackMode() {
         if extendedControlPlayer == nil, let web = youtubeMusicWebTarget {
-            let seq = playbackModeActionSeq
-            Task.detached(priority: .utility) {
-                let value = YouTubeMusicWebRepeat.readMode(bundleID: web.bundleID, family: web.family)
-                    .map { MusicPlaybackController.PlaybackModeState(mode: $0, options: YouTubeMusicWebRepeat.options) }
-                await MainActor.run { [weak self] in
-                    guard let self, self.playbackModeActionSeq == seq else { return }
-                    self.applyPlaybackMode(value)
-                }
-            }
+            refreshYouTubeMusicWeb(web, mode: true, favorite: false, volume: false)
             return
         }
         guard let player = extendedControlPlayer else {
@@ -720,7 +738,11 @@ final class PlaybackCoordinator: ObservableObject {
     /// 重新读一次 Music.app 的音量。跟 refreshFavorited 同一套前置判断与守卫。
     func refreshVolume() {
         guard let player = extendedControlPlayer else {
-            if soundVolume != nil { soundVolume = nil }
+            if let web = youtubeMusicWebTarget {
+                refreshYouTubeMusicWeb(web, mode: false, favorite: false, volume: true)
+            } else if soundVolume != nil {
+                soundVolume = nil
+            }
             return
         }
         let seq = volumeActionSeq
@@ -738,7 +760,14 @@ final class PlaybackCoordinator: ObservableObject {
     /// 拖音量滑杆。跟"喜欢"一样先乐观更新再写回去 —— 滑杆必须跟着手指走,不能等
     /// osascript 往返(实测约 125ms)才动。
     func setVolume(_ value: Int) {
-        guard let player = extendedControlPlayer else { return }
+        let writer: VolumeWriter
+        if let player = extendedControlPlayer {
+            writer = .player(player)
+        } else if let web = youtubeMusicWebTarget {
+            writer = .youtubeMusicWeb(web)
+        } else {
+            return
+        }
         let target = min(100, max(0, value))
         // 先乐观更新:滑杆必须跟着手指走,不能等 osascript 往返(~100ms)才动。
         // 相等守卫:@Published 是 willSet 语义,赋相同的值照样广播 objectWillChange。拖动中
@@ -750,12 +779,18 @@ final class PlaybackCoordinator: ObservableObject {
         volumeActionSeq &+= 1
         // 真正的写入排队,不是每个鼠标事件都起一个子进程 —— 见 pendingVolumeTarget 的注释。
         pendingVolumeTarget = target
-        pumpVolumeWrite(for: player)
+        pumpVolumeWrite(for: writer)
+    }
+
+    /// 音量写给谁:内置播放器走它自己的脚本,YouTube Music 网页版改它页面上的音量条。
+    private enum VolumeWriter: Sendable {
+        case player(PlaybackPlayer)
+        case youtubeMusicWeb(YouTubeMusicWebControls.Target)
     }
 
     /// 把排队的音量值写下去。同一时刻只允许一次在飞;写完如果期间又来了新值,立刻补写一次,
     /// 保证最后松手的那个值一定落地。
-    private func pumpVolumeWrite(for player: PlaybackPlayer) {
+    private func pumpVolumeWrite(for writer: VolumeWriter) {
         guard !volumeWriteInFlight, let target = pendingVolumeTarget else { return }
         pendingVolumeTarget = nil
         volumeWriteInFlight = true
@@ -764,18 +799,23 @@ final class PlaybackCoordinator: ObservableObject {
             // 探测,直接发脚本,失败了走下面的回读纠正。
             // let(不是 var):var 会被下面的 MainActor.run 闭包捕获,Swift 6 模式下直接是错误。
             let ok: Bool
-            if player == .appleMusic,
-               await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
-                ok = false
-            } else {
-                ok = MusicPlaybackController.setSoundVolume(target, for: player)
+            switch writer {
+            case .player(let player):
+                if player == .appleMusic,
+                   await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
+                    ok = false
+                } else {
+                    ok = MusicPlaybackController.setSoundVolume(target, for: player)
+                }
+            case .youtubeMusicWeb(let web):
+                ok = YouTubeMusicWebControls.setVolume(target, web)
             }
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.volumeWriteInFlight = false
                 if self.pendingVolumeTarget != nil {
                     // 拖动还在继续(或刚结束但最后一个值还没写),补写最新的那个。
-                    self.pumpVolumeWrite(for: player)
+                    self.pumpVolumeWrite(for: writer)
                 } else if !ok {
                     // 只有写没被接受时才回读纠正乐观更新。写成功就**不回读**:Music.app 的
                     // getter 滞后于 setter,这时候读回来的是旧值,只会把刚画对的抹掉。
@@ -846,18 +886,29 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 网页版的循环键,取舍同 `setPlaybackMode`:乐观更新、写成了不回读、没写成回读纠正。
     private func setYouTubeMusicWebMode(_ target: MusicPlaybackController.MusicPlaybackMode,
-                                        web: (bundleID: String, family: BrowserAutomationPermission.Family)) {
+                                        web: YouTubeMusicWebControls.Target) {
         let options = playbackModeOptions
         let resolved: MusicPlaybackController.MusicPlaybackMode = options.allows(target) ? target : .list
         applyPlaybackMode(MusicPlaybackController.PlaybackModeState(mode: resolved, options: options))
         playbackModeActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
-            guard !YouTubeMusicWebRepeat.setMode(resolved, bundleID: web.bundleID, family: web.family) else { return }
+            guard !YouTubeMusicWebControls.setMode(resolved, web) else { return }
             await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
         }
     }
 
     func toggleFavorited() {
+        if favoritePlayer == nil, let web = youtubeMusicWebTarget {
+            // 网页版的赞,取舍同下面:乐观更新、写成了不回读、没写成回读纠正。
+            let target = !(isFavorited ?? false)
+            isFavorited = target
+            favoritedActionSeq &+= 1
+            Task.detached(priority: .userInitiated) {
+                guard !YouTubeMusicWebControls.setLiked(target, web) else { return }
+                await MainActor.run { [weak self] in self?.refreshFavorited() }
+            }
+            return
+        }
         guard let player = favoritePlayer else { return }
         let target = !(isFavorited ?? false)
         isFavorited = target

@@ -140,7 +140,7 @@ final class PlayerHealthMonitor: ObservableObject {
         case .fullDiskAccessDenied:
             return String(format: L10n.t("未获得完全磁盘访问权限，无法读取 %@ 的本机歌词"), names(fullDiskAccessDeniedPlayers))
         case .accessibilityMissing:
-            // 按用途分开说(`accessibilityUse`):读进度的那几家校准不了,切模式的那几家不显示随机、循环键。
+            // 按用途分开说(`accessibilityUse`):读进度的那几家校准不了,按菜单项的那几家不显示随机、循环、喜欢键。
             var parts: [String] = []
             let progress = accessibilityMissingPlayers.filter { $0.accessibilityUse == .calibratesProgress }
             if !progress.isEmpty {
@@ -148,7 +148,7 @@ final class PlayerHealthMonitor: ObservableObject {
             }
             let playMode = accessibilityMissingPlayers.filter { $0.accessibilityUse == .switchesPlayMode }
             if !playMode.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环键"), names(playMode)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环与喜欢键"), names(playMode)))
             }
             return parts.joined(separator: "；")
         }

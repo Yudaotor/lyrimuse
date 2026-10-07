@@ -100,7 +100,7 @@ struct AccessibilityPermissionGuide: View {
         }
         let playMode = players.filter { $0.accessibilityUse == .switchesPlayMode }
         if !playMode.isEmpty {
-            lines.append(String(format: L10n.t("%@ 没有脚本接口，Lyrimuse 会通过其菜单栏里的「播放模式」读取和切换随机、循环（只在你点这两颗键时按下对应的菜单项）。不授权也可使用，只是不显示这两颗键。"),
+            lines.append(String(format: L10n.t("%@ 没有脚本接口，Lyrimuse 会通过其菜单栏读取和切换随机、循环与喜欢（只在你点这几颗键时按下对应的菜单项）。不授权也可使用，只是不显示这几颗键。"),
                                 model.playerNames(playMode)))
         }
         return lines.joined(separator: "\n")

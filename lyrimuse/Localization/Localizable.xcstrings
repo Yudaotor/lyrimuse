@@ -2694,29 +2694,6 @@
         }
       }
     },
-    "未获得辅助功能权限，%@ 不显示随机、循环键" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Accessibility permission; %@’s shuffle and repeat buttons are hidden"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未获得辅助功能权限，%@ 不显示随机、循环键"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未取得輔助使用權限，%@ 不顯示隨機、循環鍵"
-          }
-        }
-      }
-    },
     "GitHub Star 数" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -34484,52 +34461,6 @@
         }
       }
     },
-    "请开启此权限，以显示%@的随机、循环键" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn this on to show shuffle and repeat buttons for %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请开启此权限，以显示%@的随机、循环键"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請開啟此權限，以顯示%@的隨機、循環鍵"
-          }
-        }
-      }
-    },
-    "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环键" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn this on to keep %@'s playback position accurate during autoplay and show shuffle and repeat buttons for %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环键"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確，並顯示%@的隨機、循環鍵"
-          }
-        }
-      }
-    },
     "按 ISRC 补查未应答的源" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -40334,48 +40265,117 @@
         }
       }
     },
-    "%@ 没有脚本接口，Lyrimuse 会通过其菜单栏里的「播放模式」读取和切换随机、循环（只在你点这两颗键时按下对应的菜单项）。不授权也可使用，只是不显示这两颗键。" : {
+    "%@ 没有脚本接口，Lyrimuse 会通过其菜单栏读取和切换随机、循环与喜欢（只在你点这几颗键时按下对应的菜单项）。不授权也可使用，只是不显示这几颗键。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ has no scripting interface, so Lyrimuse reads and switches shuffle and repeat through Play Mode in its menu bar (it only presses a menu item when you click one of those two buttons). Lyrimuse works without this permission, but those two buttons won't appear."
+            "value" : "%@ has no scripting interface, so Lyrimuse reads and switches shuffle, repeat and Like through its menu bar (it only presses a menu item when you click one of those buttons). Lyrimuse works without this permission, but those buttons won't appear."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 没有脚本接口，Lyrimuse 会通过其菜单栏里的「播放模式」读取和切换随机、循环（只在你点这两颗键时按下对应的菜单项）。不授权也可使用，只是不显示这两颗键。"
+            "value" : "%@ 没有脚本接口，Lyrimuse 会通过其菜单栏读取和切换随机、循环与喜欢（只在你点这几颗键时按下对应的菜单项）。不授权也可使用，只是不显示这几颗键。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 沒有腳本介面，Lyrimuse 會透過其選單列中的「播放模式」讀取和切換隨機、循環（只在你按這兩顆鍵時按下對應的選單項目）。不授權也可使用，只是不顯示這兩顆鍵。"
+            "value" : "%@ 沒有腳本介面，Lyrimuse 會透過其選單列讀取和切換隨機、循環與喜歡（只在你按這幾顆鍵時按下對應的選單項目）。不授權也可使用，只是不顯示這幾顆鍵。"
           }
         }
       }
     },
-    "辅助功能权限可显示%@的随机、循环键，点按时会操作其菜单栏" : {
+    "辅助功能权限可显示%@的随机、循环与喜欢键，点按时会操作其菜单栏" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Accessibility shows shuffle and repeat buttons for %@; clicking them uses its menu bar"
+            "value" : "Accessibility shows shuffle, repeat and Like buttons for %@; clicking them uses its menu bar"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "辅助功能权限可显示%@的随机、循环键，点按时会操作其菜单栏"
+            "value" : "辅助功能权限可显示%@的随机、循环与喜欢键，点按时会操作其菜单栏"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "輔助使用權限可顯示%@的隨機、循環鍵，按下時會操作其選單列"
+            "value" : "輔助使用權限可顯示%@的隨機、循環與喜歡鍵，按下時會操作其選單列"
+          }
+        }
+      }
+    },
+    "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Accessibility permission; %@’s shuffle, repeat and Like buttons are hidden"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得輔助使用權限，%@ 不顯示隨機、循環與喜歡鍵"
+          }
+        }
+      }
+    },
+    "请开启此权限，以显示%@的随机、循环与喜欢键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn this on to show shuffle, repeat and Like buttons for %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，以显示%@的随机、循环与喜欢键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以顯示%@的隨機、循環與喜歡鍵"
+          }
+        }
+      }
+    },
+    "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn this on to keep %@'s playback position accurate during autoplay and show shuffle, repeat and Like buttons for %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確，並顯示%@的隨機、循環與喜歡鍵"
           }
         }
       }

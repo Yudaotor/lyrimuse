@@ -555,7 +555,7 @@ func runPlayerIdentityTests() {
         let table: [PlaybackPlayer: (songLink: PlatformLinks.Platform?, on: Set<On>)] = [
             .appleMusic: (.appleMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                         .favorite, .resume, .learnsAnchorLag, .spatialAudioOffset]),
-            .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .learnsAnchorLag, .catalogMenuRows]),
+            .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
             .kugou: (nil, [.lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime]),
             .soda: (.soda, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
@@ -823,6 +823,8 @@ func runPlayerIdentityTests() {
                     "QQ 播放模式: 认不出两项就不是「播放模式」那个子菜单")
         expectEqual(Q.options.allows(.repeatAll), false, "QQ 播放模式: 能切的档里没有列表循环")
         expectEqual(Q.options.canRepeat, true, "QQ 播放模式: 有循环键(单曲循环)")
+        expectEqual([Q.favorited(forTitle: "取消喜欢"), Q.favorited(forTitle: "喜歡歌曲"), Q.favorited(forTitle: "播放模式")],
+                    [true, false, nil], "QQ 喜欢: 菜单写「取消喜欢」= 喜欢了,繁体也认,别的项不算")
         expectEqual(Mode.list.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .repeatOne,
                     "循环键: 没有列表循环时关 → 单曲循环")
         expectEqual(Mode.shuffle.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .repeatOne,
@@ -834,31 +836,38 @@ func runPlayerIdentityTests() {
                     "循环键: 只能切随机时没有循环键")
     }
 
-    // YouTube Music 网页版的循环键:读写播放条的 repeat-mode 属性,点它自己那颗循环键(YouTubeMusicWebRepeat)。
+    // YouTube Music 网页版的循环键、点赞、音量:读写它页面上的 repeat-mode / like-status / 音量条(YouTubeMusicWebControls)。
     do {
-        typealias Y = YouTubeMusicWebRepeat
+        typealias Y = YouTubeMusicWebControls
         typealias Mode = MusicPlaybackController.MusicPlaybackMode
         expectEqual([Y.mode(fromAttribute: "NONE"), Y.mode(fromAttribute: "ALL"), Y.mode(fromAttribute: "one")],
-                    [Mode.list, .repeatAll, .repeatOne], "网页版循环: repeat-mode 三个值对上三档(大小写不论)")
-        expectEqual(Y.parseRead("MODE:ALL\n"), Mode.repeatAll, "网页版循环: 读回 MODE:ALL")
-        expectEqual(Y.parseRead("NOTFOUND"), nil, "网页版循环: 没有页面读不出来")
-        expectEqual(Y.parseSet("SET:ONE"), .set(.repeatOne), "网页版循环: 点过停在单曲循环")
-        expectEqual(Y.parseSet("SKIP:NONE"), .skipped, "网页版循环: 只有暂停的页面时第一轮不点")
-        expectEqual(Y.parseSet("NOTFOUND"), .failed, "网页版循环: 找不到页面算没写成")
-        expectEqual(Y.options.contains(.shuffle), false, "网页版循环: 随机是一次性动作、没有状态,随机键不显示")
-        expectEqual(Y.options.canRepeat, true, "网页版循环: 有循环键")
-        expectEqual(Y.readJS.contains("\"") || Y.setJS(attribute: "ALL", force: true).contains("\""), false,
-                    "网页版循环: 注入的 JS 里没有双引号(要嵌进 AppleScript 字符串)")
-        expectEqual(Y.setJS(attribute: "ALL", force: false).contains("if (true && v && v.paused) return 'PAUSED:SKIP:'"), true,
-                    "网页版循环: 第一轮暂停的页面不点")
-        expectEqual(Y.setJS(attribute: "ALL", force: true).contains("if (false && v && v.paused)"), true,
-                    "网页版循环: 第二轮不管暂停也点")
+                    [Mode.list, .repeatAll, .repeatOne], "网页版: repeat-mode 三个值对上三档(大小写不论)")
+        expectEqual([Y.liked(fromStatus: "LIKE"), Y.liked(fromStatus: "DISLIKE"), Y.liked(fromStatus: "INDIFFERENT"), Y.liked(fromStatus: "")],
+                    [true, false, false, nil], "网页版: 赞了才算喜欢,踩过算没赞")
+        expectEqual(Y.parseRead("STATE:ALL|LIKE|37.6\n"), Y.State(mode: .repeatAll, liked: true, volume: 38),
+                    "网页版: 一次读回循环档、赞、音量条")
+        expectEqual(Y.parseRead("STATE:NONE||"), Y.State(mode: .list, liked: nil, volume: nil), "网页版: 读不到的那样为 nil")
+        expectEqual(Y.parseRead("NOTFOUND"), nil, "网页版: 没有页面读不出来")
+        expectEqual(Y.parseSet("SET:ONE"), .set("ONE"), "网页版: 写过回 SET 后面的值")
+        expectEqual(Y.parseSet("SKIP"), .skipped, "网页版: 只有暂停的页面时第一轮不动(模板已去掉 PAUSED: 前缀)")
+        expectEqual(Y.parseSet("NOTFOUND"), .failed, "网页版: 找不到页面算没写成")
+        expectEqual(Y.modeOptions.contains(.shuffle), false, "网页版: 随机是一次性动作、没有状态,随机键不显示")
+        expectEqual(Y.modeOptions.canRepeat, true, "网页版: 有循环键")
+        let scripts = [Y.readJS, Y.setRepeatJS(attribute: "ALL", force: true), Y.setLikeJS(liked: true, force: false),
+                       Y.setVolumeJS(50, force: true)]
+        expectEqual(scripts.contains { $0.contains("\"") }, false, "网页版: 注入的 JS 里没有双引号(要嵌进 AppleScript 字符串)")
+        expectEqual(Y.setLikeJS(liked: true, force: false).contains("if (true && v && v.paused) return 'PAUSED:SKIP';"), true,
+                    "网页版: 第一轮暂停的页面不动")
+        expectEqual(Y.setVolumeJS(50, force: true).contains("if (false && v && v.paused)"), true, "网页版: 第二轮不管暂停也动")
+        expectEqual(Y.setVolumeJS(140, force: true).contains("s.value = 100;"), true, "网页版: 音量夹在 0~100")
+        expectEqual(Y.setVolumeJS(50, force: true).contains("s.dispatchEvent(new Event('change'"), true,
+                    "网页版: 改音量条要发 change 事件,播放器和它记住的音量才一起变")
         expectEqual(Y.target(reportedBundleID: "com.apple.WebKit.GPU", webPlatformID: "youtubeMusic", isPaired: { _ in true })?.bundleID,
-                    "com.apple.Safari", "网页版循环: Safari 报的媒体进程换成 Safari 本体")
+                    "com.apple.Safari", "网页版: Safari 报的媒体进程换成 Safari 本体")
         expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "spotifyWeb", isPaired: { _ in true }) == nil, true,
-                    "网页版循环: 浏览器里放的不是 YouTube Music 不走这里")
+                    "网页版: 浏览器里放的不是 YouTube Music 不走这里")
         expectEqual(Y.target(reportedBundleID: "com.apple.Safari", webPlatformID: "youtubeMusic", isPaired: { _ in false }) == nil, true,
-                    "网页版循环: 没配对 YouTube Music 的浏览器不走这里")
+                    "网页版: 没配对 YouTube Music 的浏览器不走这里")
     }
 
     // ---- 播放器网格点一下(设置页与引导页共用 FeatureSettingsStore.togglePlayer)----
