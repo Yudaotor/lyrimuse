@@ -57,5 +57,7 @@ func TestMain(m *testing.M) {
 	catalogYTMusicAliases = func(context.Context, string, string, float64) ([]string, error) { return nil, nil }
 	// amll 的索引会读配置目录、在后台联网下载;单测一律当作没有索引,要测的用例自己换(setSharedAMLLIndexStore)。
 	setSharedAMLLIndexStore(newAMLLIndexStore("", time.Now))
+	// 本机播放器数据里按歌名记着的封面(KKBOX 缓存、网易云曲库):单测一律当作没有,要测的用例自己换。
+	localPlayerCovers = func(string, string, string, float64) []string { return nil }
 	os.Exit(m.Run())
 }

@@ -401,6 +401,12 @@ type enrichEntry struct {
 	// 老条目没有这个字段(读成 0),此时回退到 TS —— 那正是拆分之前的语义,不会让存量条目
 	// 在升级后一股脑全部立刻重试一遍。
 	PeripheralTS int64 `json:"peripheral_ts,omitempty"`
+	// CoverUpgradeCheckTS:后台补封面上一次核对这张小设备封面能不能换成同一张图的清晰版的时刻(coversweep.go),
+	// 隔 coverUpgradeRecheckInterval 再核。
+	CoverUpgradeCheckTS int64 `json:"cover_upgrade_check_ts,omitempty"`
+	// CoverUpgradeCheckRules:上一次核对时按的是哪一版找法(coverUpgradeCheckRules)。找法多了来源,按旧版本核过的
+	// 不等 30 天,下一遍就重核。
+	CoverUpgradeCheckRules int `json:"cover_upgrade_check_rules,omitempty"`
 
 	// SpotifyTrackID:Spotify 原生客户端播这首歌时 AppleScript `spotify url` 给的 22 位曲目 ID
 	// (见 spotifytrack.go)。有它就能拼出真链接 open.spotify.com/track/<id>:fields() 里的
@@ -843,12 +849,14 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		if isNewTrack && e.CoverSource != "device" && e.CoverSource != "player" && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go applyDeviceCoverUpgrade(withPlayerCover(context.Background(), playerCover), key, artist, title, album, bundleID)
-		} else if isNewTrack && e.CoverSource == "device" && playerCover != "" && !playerCoverUpgradeTried[key] && !enrichInflight[key] {
-			// 存量的小设备封面换成播放器自带的同一张图(见 upgradeDeviceCoverToPlayerCover)。每个条目每次启动只试一次:
-			// 设备封面本来就够清晰的条目每次都会走到这一档,不限次数的话后面的外围补全永远轮不到。
-			playerCoverUpgradeTried[key] = true
+		} else if isNewTrack && e.CoverSource == "device" && !deviceCoverUpgradeTried[key] && !enrichInflight[key] &&
+			deviceCoverSmall(e.CoverURL) {
+			// 存量的小设备封面换成同一张图的清晰版(见 upgradeSmallDeviceCover)。每个条目每次启动只试一次:
+			// 换不成的条目每次都会走到这一档,不限次数的话后面的外围补全(按远程结果再比一次)永远轮不到。
+			deviceCoverUpgradeTried[key] = true
 			enrichInflight[key] = true
-			go upgradeDeviceCoverToPlayerCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL, album)
+			go upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,
+				artist, title, album, durationSecs)
 		} else if (needsPeripheralBackfill(e, artist, album) ||
 			(coverNeedsHintCheck(e, album, coverAlbum) && peripheralBackfillWindowOpen(e)) ||
 			(inferredIdentityWorthBackfill(e, artist, title, durationSecs) && peripheralBackfillWindowOpen(e)) ||
@@ -976,10 +984,14 @@ func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
 	// 用户后来才配中继时,这条判据会自动把存量条目重新算成缺、走既有回填路径补上(自愈);
 	// 只有 PeripheralRetryCount 已经打满的条目补不回来,那批网页上无配色。
 	missingAccent := e.AccentColor == "" && webRelayConfigured()
+	// 设备封面太小(deviceCoverSmall,排在最后:要读本机文件)也算缺:这一轮查到的远程封面跟它是同一张图、更清晰就换上
+	// (backfillPeripheralFields 里 deviceCoverUpgradable 那段)。存这张小图的时候手上常常还没有远程封面可比,之后没有
+	// 别的时机再比一次。
 	missing := missingAccent || e.AppleURL == "" || e.QQURL == "" || missingNeteaseURL ||
 		isQQSearchFallbackURL(e.QQURL) || missingQQMids ||
 		missingCanonical || coverNeedsAlbumCheck(e, album) ||
-		coverCanUpgradeToVerifiedSiblingLocked(e, artist, album)
+		coverCanUpgradeToVerifiedSiblingLocked(e, artist, album) ||
+		(e.CoverSource == "device" && deviceCoverSmall(e.CoverURL))
 	if !missing {
 		return false
 	}
@@ -2811,6 +2823,12 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	enrichMu.Lock()
 	pre := enrichCache[key]
 	enrichMu.Unlock()
+	// 这一轮还是没封面:拿存着的歌词判决里胜出的那个源自带的封面兜底(见 winnerCandidateCover)。要读旁路文件,在拿
+	// enrichMu 之前做。
+	winnerCover, winnerSource, winnerAlbum := "", "", ""
+	if pre.CoverURL == "" && fresh.CoverURL == "" {
+		winnerCover, winnerSource, winnerAlbum = winnerCandidateCover(withDecisionDetails(key, pre.LyricsDecision), album)
+	}
 	preDeviceURL, preUpgradable := "", false
 	if pre.CoverSource == "device" && fresh.CoverURL != "" {
 		preDeviceURL, preUpgradable = pre.CoverURL, deviceCoverUpgradable(pre.CoverURL, fresh.CoverURL)
@@ -2841,6 +2859,9 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	}) {
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
 			fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
+	}
+	if e.CoverURL == "" && winnerCover != "" {
+		e.CoverURL, e.CoverSource, e.CoverAlbum = winnerCover, winnerSource, winnerAlbum
 	}
 	// 只在封面还是核对的那张设备封面时记(这期间换了封面,这份核对就不算数)。
 	if prePublic != "" && e.CoverURL == preDeviceURL {
@@ -3219,6 +3240,12 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	// 三源和同专辑邻居都没给出封面:按双语曲名拆出的那段、歌词判决里认下的歌手写法、ISRC 在 Deezer 上的那条补查(coverretry.go)。
 	fillMissingCover(ctx, &e, scored, artist, title, album, durationSecs, coverArtist, coverTitle, coverAlbum, coverDuration)
 	applyDeviceOrPlayerCover(ctx, &e, deviceCoverURL, album)
+	// 上面都没给出封面:歌词胜出的那个源自带的、专辑逐字对上的那张兜底(见 winnerCandidateCover)。
+	if e.CoverURL == "" {
+		if cover, source, coverAlbum := winnerCandidateCover(e.LyricsDecision, album); cover != "" {
+			e.CoverURL, e.CoverSource, e.CoverAlbum = cover, source, coverAlbum
+		}
+	}
 	if e.CanonicalArtist == "" {
 		// MusicBrainz 那一级没能给出统一歌手名(常见于 title/album 本身就跨语言对不上
 		// 文本的 feat. 曲目)时,改用 resolveGenericArtistCanonicalName(不按曲目、按歌手

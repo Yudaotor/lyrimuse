@@ -80,7 +80,6 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 		return img
 	}
 	small := coverURL
-	referer := "https://music.163.com/"
 	if strings.Contains(coverURL, "music.126.net") || strings.Contains(coverURL, "music.127.net") {
 		if i := strings.Index(small, "?"); i >= 0 {
 			small = small[:i] // 摘掉 ?param= 或 neteaseCoverQuery 那一串
@@ -90,10 +89,8 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 		// 网易云那套 ?param=WxH 对 QQ 域名无效(会被原样忽略),QQ 的尺寸档在**路径**里 ——
 		// 所以降采样要改路径,见 qqCoverAtEdge。存下来的 QQ 封面是 800x800
 		// (歌词窗口那张大卡要的),而取一个主色用不着 800:降回 300 少下 150KB。
-		// Referer 一并给上:QQ 音乐图床按 Referer 防盗链,给错了才可能被拒。
 		// 见 qqCoverFallback:网易云曲库缺失该艺人时的兜底封面。
 		small = qqCoverAtEdge(small, "300")
-		referer = "https://y.qq.com/"
 	} else if strings.Contains(coverURL, "i.kfs.io/") {
 		// KKBOX 图床按路径里的 fit 档出图,取色、比指纹 64 档就够。
 		small = kkboxCoverAtEdge(small, "64")
@@ -103,7 +100,7 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("Referer", referer)
+	req.Header.Set("Referer", coverRequestReferer(coverURL))
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := doHTTPTracked(cli, req)
 	if err != nil {
@@ -122,6 +119,15 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 		return nil
 	}
 	return img
+}
+
+// coverRequestReferer:取封面图时带的 Referer。QQ 音乐图床按 Referer 防盗链,给错了才可能被拒,给 y.qq.com;别的给
+// 网易云的(网易云图床要,别家不看)。loadCoverImage 取缩图、coverActualEdge 量尺寸共用。
+func coverRequestReferer(coverURL string) string {
+	if strings.Contains(coverURL, "qq.com") {
+		return "https://y.qq.com/"
+	}
+	return "https://music.163.com/"
 }
 
 // 封面解码的上限。设备封面来自播放器 / 网页的 MediaSession,远程候选来自各家 CDN,都不是我们控制的:几十 KB 的

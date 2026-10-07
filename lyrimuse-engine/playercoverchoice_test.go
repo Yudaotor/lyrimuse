@@ -154,30 +154,52 @@ func TestUpgradeDeviceCoverToPlayerCover(t *testing.T) {
 		t.Skipf("临时目录路径里带着别的 NxN 片段,读不出尺寸: %q", dir)
 	}
 	const key = "甲|乙|丙"
-	run := func(player string) enrichEntry {
+	var local []string
+	savedLocal := localPlayerCovers
+	t.Cleanup(func() { localPlayerCovers = savedLocal })
+	localPlayerCovers = func(artist, title, album string, _ float64) []string {
+		if artist != "甲" || title != "乙" || album != "丙" {
+			t.Errorf("按这首的歌手、歌名、专辑查本机数据,得到 %q %q %q", artist, title, album)
+		}
+		return local
+	}
+	run := func(player string, locals ...string) (enrichEntry, bool) {
+		local = locals
 		enrichMu.Lock()
 		enrichCache[key] = enrichEntry{CoverURL: device, CoverSource: "device", CoverAlbum: "丙", Lyrics: "[00:01.00]x"}
 		enrichInflight[key] = true
 		enrichMu.Unlock()
-		upgradeDeviceCoverToPlayerCover(withPlayerCover(context.Background(), player), key, device, "丙")
+		changed := upgradeSmallDeviceCover(withPlayerCover(context.Background(), player), key, device, "甲", "乙", "丙", 0)
 		enrichMu.Lock()
 		defer enrichMu.Unlock()
 		if enrichInflight[key] {
 			t.Error("收工要放掉 enrichInflight")
 		}
-		return enrichCache[key]
+		return enrichCache[key], changed
 	}
-	if e := run(same); e.CoverURL != same || e.CoverSource != "player" || e.CoverAlbum != "丙" {
+	if e, ok := run(same); !ok || e.CoverURL != same || e.CoverSource != "player" || e.CoverAlbum != "丙" {
 		t.Errorf("同一张图更清晰:换成播放器的,得到 %+v", e)
 	}
-	if e := run(other); e.CoverURL != device || e.CoverSource != "device" {
+	if e, ok := run(other); ok || e.CoverURL != device || e.CoverSource != "device" {
 		t.Errorf("不是同一张图:留设备封面,得到 %+v", e)
 	}
+	if e, ok := run("", same); !ok || e.CoverURL != same || e.CoverSource != "player" {
+		t.Errorf("这一拍没有播放器给的、本机数据里按歌名记着同一张:换上,得到 %+v", e)
+	}
+	if e, ok := run(other, same); !ok || e.CoverURL != same {
+		t.Errorf("播放器给的不是同一张、本机数据里那张是:换成本机那张,得到 %+v", e)
+	}
+	if e, ok := run("", other); ok || e.CoverSource != "device" {
+		t.Errorf("本机那张也不是同一张:留设备封面,得到 %+v", e)
+	}
 	// 比对期间封面已经换过了:不覆盖。
+	local = nil
 	enrichMu.Lock()
 	enrichCache[key] = enrichEntry{CoverURL: "https://p1.music.126.net/x.jpg?param=800y800", CoverSource: "netease"}
 	enrichMu.Unlock()
-	upgradeDeviceCoverToPlayerCover(withPlayerCover(context.Background(), same), key, device, "丙")
+	if upgradeSmallDeviceCover(withPlayerCover(context.Background(), same), key, device, "甲", "乙", "丙", 0) {
+		t.Error("条目已经不是那张设备封面了,不该算换上")
+	}
 	enrichMu.Lock()
 	got := enrichCache[key]
 	enrichMu.Unlock()
@@ -211,10 +233,13 @@ func TestPlayerCoverIsWired(t *testing.T) {
 		"cancelCtx = withPlayerCover(cancelCtx, playerCover)",
 		"if isNewTrack && e.CoverSource != \"device\" && e.CoverSource != \"player\" && !enrichInflight[key] {",
 		"go applyDeviceCoverUpgrade(withPlayerCover(context.Background(), playerCover), key,",
-		"} else if isNewTrack && e.CoverSource == \"device\" && playerCover != \"\" && !playerCoverUpgradeTried[key] && !enrichInflight[key] {",
-		"playerCoverUpgradeTried[key] = true\n\t\t\tenrichInflight[key] = true\n\t\t\tgo upgradeDeviceCoverToPlayerCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL, album)",
+		"} else if isNewTrack && e.CoverSource == \"device\" && !deviceCoverUpgradeTried[key] && !enrichInflight[key] &&\n\t\t\tdeviceCoverSmall(e.CoverURL) {",
+		"deviceCoverUpgradeTried[key] = true\n\t\t\tenrichInflight[key] = true\n\t\t\tgo upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,\n\t\t\t\tartist, title, album, durationSecs)",
+		"coverCanUpgradeToVerifiedSiblingLocked(e, artist, album) ||\n\t\t(e.CoverSource == \"device\" && deviceCoverSmall(e.CoverURL))",
 		"go backfillPeripheralFields(withPlayerCover(withLyricSearchTitle(context.Background(), searchTitle), playerCover), key,",
-		"applyDeviceOrPlayerCover(ctx, &e, deviceCoverURL, album)",
+		"applyDeviceOrPlayerCover(ctx, &e, deviceCoverURL, album)\n\t// 上面都没给出封面:歌词胜出的那个源自带的、专辑逐字对上的那张兜底(见 winnerCandidateCover)。\n\tif e.CoverURL == \"\" {\n\t\tif cover, source, coverAlbum := winnerCandidateCover(e.LyricsDecision, album); cover != \"\" {",
+		"winnerCover, winnerSource, winnerAlbum = winnerCandidateCover(withDecisionDetails(key, pre.LyricsDecision), album)",
+		"if e.CoverURL == \"\" && winnerCover != \"\" {\n\t\te.CoverURL, e.CoverSource, e.CoverAlbum = winnerCover, winnerSource, winnerAlbum",
 		"if pc := playerCoverOverDevice(ctx, deviceCoverURL, existing.CoverURL); pc != \"\" {\n\t\tcover, source = pc, \"player\"",
 	} {
 		if !strings.Contains(enrich, n) {

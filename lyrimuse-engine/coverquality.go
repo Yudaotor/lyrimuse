@@ -320,7 +320,8 @@ func minEdge(img image.Image) int {
 // 判据恒成立、修复一次都不会触发(实现时真踩了这一脚)。而这三家 CDN 的
 // 目标尺寸本来就明写在 URL 里,读它不用发任何请求。
 //
-// 认不出来返回 0,调用方按"证不出候选更好"保守处理(保留设备封面)。
+// 认不出来返回 0:deviceCoverOverridesCandidate 那时取原图的图头量一次(coverActualEdge),量不出才按"证不出候选
+// 更好"保守处理(保留设备封面)。
 func coverURLIntendedEdge(coverURL string) int {
 	u := strings.TrimSpace(coverURL)
 	if u == "" {
@@ -406,8 +407,8 @@ func atoiSafe(s string) int {
 // deviceCoverDecision 是上面那张表的可测实现:给定设备封面和远程候选,回答"设备封面
 // 该不该顶掉候选",以及一句能进日志的理由。
 //
-// candidateEdge 由调用方从 URL 读出(见 coverURLIntendedEdge),不从 loadImage 的结果
-// 量 —— 理由见那个函数的注释。loadImage 注入进来只为让这条规则跑得了单测:判据本身
+// candidateEdge 由调用方给:URL 里写着的(coverURLIntendedEdge),读不出时量原图的图头(coverActualEdge);
+// 不从 loadImage 的结果量 —— 那是降采样过的缩图,理由见 coverURLIntendedEdge 的注释。loadImage 注入进来只为让这条规则跑得了单测:判据本身
 // 不该为了测试去发真实 HTTP 请求。
 func deviceCoverDecision(
 	deviceImg image.Image, candidateURL string, candidateEdge int,
@@ -426,7 +427,7 @@ func deviceCoverDecision(
 		return true, "没有远程候选"
 	}
 	if candidateEdge <= 0 {
-		// 认不出候选的目标尺寸 → 证不出它更好 → 保守保留设备封面(退回改动前的行为)。
+		// 候选的尺寸读不出也量不出 → 证不出它更好 → 保守保留设备封面。
 		return true, "候选尺寸认不出来"
 	}
 	if candidateEdge <= edge {
@@ -472,13 +473,19 @@ var deviceCoverUpgradable = func(deviceCoverURL, candidateURL string) bool {
 // deviceCoverOverridesCandidate 是 resolveTrackEnrichment 用的入口:真的去取图。
 func deviceCoverOverridesCandidate(ctx context.Context, deviceCoverURL, candidateURL string) bool {
 	deviceImg := loadCoverImage(ctx, deviceCoverURL)
+	candidateEdge := coverURLIntendedEdge(candidateURL)
+	// 地址里读不出尺寸、设备封面又小到要比的时候,量一次候选图的实际尺寸(见 coverActualEdge)。
+	if candidateEdge <= 0 && deviceImg != nil && minEdge(deviceImg) < deviceCoverTrustedMinEdge &&
+		strings.TrimSpace(candidateURL) != "" {
+		candidateEdge = coverActualEdge(ctx, candidateURL)
+	}
 	override, reason := deviceCoverDecision(
-		deviceImg, candidateURL, coverURLIntendedEdge(candidateURL),
+		deviceImg, candidateURL, candidateEdge,
 		func(u string) image.Image { return loadCoverImage(ctx, u) })
 	if !override {
 		// 只在"没有顶掉"时记一句 —— 那是这次修复真正生效的时刻,而且很罕见,不会刷屏。
 		log.Printf("cover: device artwork %dpx yields to remote candidate %dpx (%s)",
-			minEdge(deviceImg), coverURLIntendedEdge(candidateURL), reason)
+			minEdge(deviceImg), candidateEdge, reason)
 	}
 	return override
 }

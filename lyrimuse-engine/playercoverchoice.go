@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"slices"
 	"strings"
 )
 
@@ -12,7 +13,7 @@ import (
 // 但往往比它交给系统的那份清晰(KKBOX 交给系统的恒为 150×150)。三处用它:
 //   - 设备封面要顶掉现有封面时,先看它是不是跟设备封面同一张图、更清晰(playerCoverOverDevice);
 //   - 网易云 / Apple / QQ / 同专辑邻居都没给出封面、设备封面也还没到时,直接用它(applyDeviceOrPlayerCover);
-//   - 存量的小设备封面换成它(upgradeDeviceCoverToPlayerCover)。
+//   - 存量的小设备封面换成它,本机播放器数据里按歌名记着的也算(upgradeSmallDeviceCover)。
 
 // playerCoverDisplayURL:当这首的封面用哪一档。KKBOX 记下的是 600 档(给 App 外面用),要画到歌词窗口的大卡上换成 1000 档:
 // 图床按路径里的 fit 档出图,超过原图是放大的;coverURLIntendedEdge 从「1000x1000」读得出尺寸。别家原样用。
@@ -96,22 +97,111 @@ func applyDeviceOrPlayerCover(ctx context.Context, e *enrichEntry, deviceCoverUR
 	e.CoverURL, e.CoverSource, e.CoverAlbum = deviceCoverURL, "device", album
 }
 
-// playerCoverUpgradeTried:这次启动里哪些条目已经试过把设备封面换成播放器自带的那张(trackEnrichment 换歌那一拍判)。
+// deviceCoverUpgradeTried:这次启动里哪些条目已经试过把小设备封面换成播放器自带的那张(trackEnrichment 换歌那一拍判)。
 // 调用方持有 enrichMu。
-var playerCoverUpgradeTried = map[string]bool{}
+var deviceCoverUpgradeTried = map[string]bool{}
 
-// upgradeDeviceCoverToPlayerCover:存量的设备封面(deviceCoverURL)换成 ctx 上那张播放器自带的封面,判据同
-// playerCoverOverDevice:同一张图、更清晰才换。trackEnrichment 在换歌那一拍起,占着 enrichInflight。
-func upgradeDeviceCoverToPlayerCover(ctx context.Context, key, deviceCoverURL, album string) {
+// localPlayerCovers:本机播放器数据里按歌名记着的这首的封面 —— KKBOX 客户端缓存的单曲详情、网易云客户端曲库,不看现在
+// 哪个播放器在放;都没有返回空。只用来给小设备封面找同一张图的清晰版(upgradeSmallDeviceCover 比过是同一张图
+// 才换)。要读别的 App 的本机文件,调用方不能持着 enrichMu。包级变量:单测换成桩(TestMain 里默认没有)。
+var localPlayerCovers = func(artist, title, album string, durationSecs float64) []string {
+	var out []string
+	if c := kkboxPlayingInfoFor(artist, title, durationSecs).cover; c != "" {
+		out = append(out, c)
+	}
+	if c := neteaseLocalCoverURL(artist, title, album, durationSecs); c != "" {
+		out = append(out, c)
+	}
+	return out
+}
+
+// coverCandidate:一张拿来跟小设备封面比的封面,和换上之后记成的来源。
+type coverCandidate struct{ url, source string }
+
+// decisionCoverCandidatesMax:各源候选自带的封面最多比这么多张(每张要取一次缩图)。
+const decisionCoverCandidatesMax = 6
+
+// candidateCoverURLOK:候选自带的封面地址能不能用 —— 只认 https(这张要存进缓存、给 App 外面用)。包级变量:单测换成认本机文件。
+var candidateCoverURLOK = func(u string) bool { return strings.HasPrefix(u, "https://") }
+
+// decisionCandidateCovers:这首歌词判决里各源候选自带的封面(去重,最多 decisionCoverCandidatesMax 张),来源记各自的源名。
+// 只拿来给小设备封面找同一张图的清晰版:身份由跟设备封面比对保证,不看这条候选是不是这首歌。判决的明细存在旁路文件里时
+// 要读一次文件,调用方不能持着 enrichMu。见 03 章决策 36。
+func decisionCandidateCovers(key string, d *lyricsDecision) []coverCandidate {
+	d = withDecisionDetails(key, d)
+	if d == nil {
+		return nil
+	}
+	var out []coverCandidate
+	for _, c := range d.Candidates {
+		if !candidateCoverURLOK(c.CoverURL) || slices.ContainsFunc(out, func(x coverCandidate) bool { return x.url == c.CoverURL }) {
+			continue
+		}
+		if out = append(out, coverCandidate{c.CoverURL, c.Source}); len(out) == decisionCoverCandidatesMax {
+			break
+		}
+	}
+	return out
+}
+
+// winnerCandidateCover:歌词胜出的那个源自带的封面,它报的专辑名跟本地逐字对上(albumScore 200)才给,只认 https;返回封面、
+// 源名、它报的专辑名。三源、同专辑邻居、设备封面、播放器自带的都没给出封面时拿它兜底。见 03 章决策 36。
+func winnerCandidateCover(d *lyricsDecision, album string) (cover, source, coverAlbum string) {
+	if d == nil || d.Winner == "" || strings.TrimSpace(album) == "" {
+		return "", "", ""
+	}
+	for _, c := range d.Candidates {
+		if c.Source != d.Winner || c.Score <= 0 {
+			continue
+		}
+		if candidateCoverURLOK(c.CoverURL) && albumScore(c.Album, album) == 200 {
+			return c.CoverURL, c.Source, c.Album
+		}
+		break
+	}
+	return "", "", ""
+}
+
+// upgradeSmallDeviceCover:存量的小设备封面(deviceCoverURL)换成同一张图的清晰版 —— 依次试 ctx 上这一拍在放的播放器给的、
+// 本机播放器数据里按歌名记着的(localPlayerCovers)、这首歌词判决里各源候选自带的(decisionCandidateCovers),头一张跟设备
+// 封面是同一张图、更清晰的就用,判据同 playerCoverOverDevice。前两种记成 player,候选的记成那个源。返回换没换。
+// trackEnrichment 换歌那一拍和后台补封面(coversweep.go)用;调用方先占上 enrichInflight,这里收工时放掉。
+func upgradeSmallDeviceCover(ctx context.Context, key, deviceCoverURL, artist, title, album string,
+	durationSecs float64) bool {
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
 		enrichMu.Unlock()
 	}()
-	cover := playerCoverOverDevice(ctx, deviceCoverURL, "")
-	if cover == "" {
-		return
+	var candidates []coverCandidate
+	add := func(url, source string) {
+		if url != "" && !slices.ContainsFunc(candidates, func(c coverCandidate) bool { return c.url == url }) {
+			candidates = append(candidates, coverCandidate{url, source})
+		}
 	}
+	add(playerCoverFor(ctx), "player")
+	for _, c := range localPlayerCovers(artist, title, album, durationSecs) {
+		add(playerCoverDisplayURL(c), "player")
+	}
+	enrichMu.Lock()
+	decision := enrichCache[key].LyricsDecision
+	enrichMu.Unlock()
+	for _, c := range decisionCandidateCovers(key, decision) {
+		add(c.url, c.source)
+	}
+	var chosen coverCandidate
+	for _, c := range candidates {
+		if playerCoverOverDeviceWith(c.url, deviceCoverURL, "", func(device, candidate string) bool {
+			return deviceCoverOverridesCandidate(ctx, device, candidate)
+		}) != "" {
+			chosen = c
+			break
+		}
+	}
+	if chosen.url == "" {
+		return false
+	}
+	cover := chosen.url
 	accent := ""
 	if webRelayConfigured() {
 		accent = dominantColor(ctx, cover)
@@ -121,18 +211,22 @@ func upgradeDeviceCoverToPlayerCover(ctx context.Context, key, deviceCoverURL, a
 	// 这段时间里条目被删了、还在首次解析,或者封面已经换过了:不写。
 	if !ok || enrichProvisional[key] || e.CoverSource != "device" || e.CoverURL != deviceCoverURL {
 		enrichMu.Unlock()
-		return
+		return false
 	}
-	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = cover, "player", album, accent
+	e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor = cover, chosen.source, album, accent
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()
-	requestEnrichSaveFor(key)
-	log.Printf("cover: %q device artwork gives way to the player's own cover %s", key, cover)
+	if cur := enrichPlayingKey.Load(); !coverSweepSaveDeferred(ctx) || (cur != nil && *cur == key) {
+		// 后台补封面那一遍攒着存(见 coversweep.go);正在播的这首照常当场存。
+		requestEnrichSaveFor(key)
+	}
+	log.Printf("cover: %q device artwork gives way to the same picture from %s: %s", key, chosen.source, cover)
 	if enrichNotify != nil {
 		select {
 		case enrichNotify <- struct{}{}:
 		default:
 		}
 	}
+	return true
 }
