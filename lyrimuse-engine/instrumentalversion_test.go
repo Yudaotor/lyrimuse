@@ -112,4 +112,9 @@ func TestRescoreTurnsInstrumental(t *testing.T) {
 	if rescoreTurnsInstrumental(already, []scoredLyricCandidateResult{mismatched, marker}) {
 		t.Errorf("已经标了纯音乐:不重复处理")
 	}
+	cleared := e
+	cleared.InstrumentalCleared = true
+	if rescoreTurnsInstrumental(cleared, []scoredLyricCandidateResult{mismatched, marker}) {
+		t.Errorf("用户撤过纯音乐标记:不再自动标回去")
+	}
 }

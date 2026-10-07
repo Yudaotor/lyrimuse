@@ -390,6 +390,10 @@ type enrichEntry struct {
 	// 自动搜歌词、补附属内容的路径都跳过;条目里留着的歌词不删,撤标就回来。撤标只有两处:用户存进歌词
 	// (applySaveEdit / save_plain_text),手动重新匹配换了词(rematchClearsInstrumental)。
 	Instrumental bool `json:"instrumental,omitempty"`
+	// InstrumentalCleared:用户撤过纯音乐标记(set_instrumental 传 false),等于说了「这首不是纯音乐」。自动加标的
+	// 两条路径(没词条目的补搜、重新打分时那份词是别的版本)看到它就不再标(autoMarksInstrumental);用户重新标上时清掉。
+	// 不记的话撤完标,下一次补搜或打分版本升级后的重评会照着同一个依据再标回去。
+	InstrumentalCleared bool `json:"instrumental_cleared,omitempty"`
 	// TS 是**这条记录当初被解析出来的时刻**,不是任何一种节流时间戳。它只被 needsLyricsRetry
 	// 当作"歌词重搜"6 小时间隔的起算点。
 	//
@@ -1897,7 +1901,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// hasRealFromMarkerSource 已经挡住同源那种,这里再挡跨源那种)。
 	// 条目本来就有歌词(升级重试)时也不看:时长对不上的重试里候选全被判掉、只剩一条纯音乐标记,
 	// 会给一首明明有逐行歌词的歌打上「纯音乐」,之后扫库、补空、外围补收都跳过它。
-	if picked == nil && !e.Instrumental && e.Lyrics == "" {
+	if picked == nil && e.autoMarksInstrumental() && e.Lyrics == "" {
 		if ok, src := instrumentalFromScored(scored, artist, title, album, durationSecs); ok {
 			e.Instrumental = true
 			log.Printf("lyrics: %s marked instrumental by %s (no lyrics from any source)", key, src)
@@ -1988,9 +1992,9 @@ func instrumentalFromScored(scored []scoredLyricCandidateResult, artist, title, 
 
 // rescoreTurnsInstrumental 回答「重新打分时这份歌词该不该改成按纯音乐处理」:这一轮有纯音乐标记,而现有这份歌词的
 // 来源这一轮给的候选被判了版本不符 —— 这份词是给别的版本做的(见 09 章决策 194)。调用方已经确认这一轮没有能用的
-// 候选、用户也没选定过源。
+// 候选、用户也没选定过源。用户撤过标记的不标(autoMarksInstrumental)。
 func rescoreTurnsInstrumental(e enrichEntry, scored []scoredLyricCandidateResult) bool {
-	if e.Lyrics == "" || e.Instrumental || !scoredHasInstrumentalMarker(scored) {
+	if e.Lyrics == "" || !e.autoMarksInstrumental() || !scoredHasInstrumentalMarker(scored) {
 		return false
 	}
 	for _, c := range scored {
@@ -1999,6 +2003,11 @@ func rescoreTurnsInstrumental(e enrichEntry, scored []scoredLyricCandidateResult
 		}
 	}
 	return false
+}
+
+// autoMarksInstrumental:自动路径还能给这一条标纯音乐 —— 眼下没标着,用户也没撤过(InstrumentalCleared)。
+func (e enrichEntry) autoMarksInstrumental() bool {
+	return !e.Instrumental && !e.InstrumentalCleared
 }
 
 // lyricsRescoreMaxAttempts / lyricsRescoreDeferInterval 给"按新打分规则重选"设的上限和节流。

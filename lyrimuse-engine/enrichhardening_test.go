@@ -10,11 +10,11 @@ import (
 	"testing"
 )
 
-// 升级重试不给已有歌词的条目打纯音乐标记 / 挂纯文本兜底。
+// 升级重试不给已有歌词的条目打纯音乐标记 / 挂纯文本兜底;用户撤过纯音乐标记的也不再标(autoMarksInstrumental)。
 func TestRetryFallbacksOnlyForEntriesWithoutLyrics(t *testing.T) {
 	src := string(mustRead(t, "enrich.go"))
 	for _, needle := range []string{
-		"if picked == nil && !e.Instrumental && e.Lyrics == \"\" {",
+		"if picked == nil && e.autoMarksInstrumental() && e.Lyrics == \"\" {",
 		"if picked == nil && !e.Instrumental && e.PlainLyrics == \"\" && e.Lyrics == \"\" {",
 	} {
 		if !strings.Contains(src, needle) {

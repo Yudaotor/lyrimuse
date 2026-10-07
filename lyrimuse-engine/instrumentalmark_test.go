@@ -159,3 +159,28 @@ func TestSetInstrumentalNeedsCachedEntry(t *testing.T) {
 		t.Fatalf("标上之后: %+v", e)
 	}
 }
+
+// 用户撤掉纯音乐标记就记下来,自动加标的路径不再标回去;重新标上时作废。本来没标着的撤标不记。
+func TestSetInstrumentalRemembersUserClear(t *testing.T) {
+	marked := enrichKey("A", "Marked", "X")
+	plain := enrichKey("A", "Plain", "X")
+	setUpEnrichEditTest(t, map[string]enrichEntry{
+		marked: {Lyrics: "[00:01.00]a", Instrumental: true},
+		plain:  {Lyrics: "[00:01.00]b"},
+	})
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Keys: []string{marked, plain}, Value: false}); !res.OK {
+		t.Fatalf("res=%+v", res)
+	}
+	if e, _ := cacheEntry(t, marked); e.Instrumental || !e.InstrumentalCleared || e.autoMarksInstrumental() {
+		t.Errorf("撤掉的标记要记下来、自动路径不再标: %+v", e)
+	}
+	if e, _ := cacheEntry(t, plain); e.InstrumentalCleared {
+		t.Error("本来就没标的,撤标不算用户说过什么")
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Key: marked, Value: true}); !res.OK {
+		t.Fatalf("res=%+v", res)
+	}
+	if e, _ := cacheEntry(t, marked); !e.Instrumental || e.InstrumentalCleared {
+		t.Errorf("重新标上时撤标的记录作废: %+v", e)
+	}
+}

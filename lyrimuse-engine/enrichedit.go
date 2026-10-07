@@ -252,6 +252,13 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 				}
 				continue
 			}
+			// 真撤掉了一个标记就记下「用户说这首不是纯音乐」,自动加标的路径不再标回去;重新标上时作废。
+			switch {
+			case req.Value:
+				e.InstrumentalCleared = false
+			case e.Instrumental:
+				e.InstrumentalCleared = true
+			}
 			e.Instrumental = req.Value
 			enrichCache[k] = e
 			changed++
