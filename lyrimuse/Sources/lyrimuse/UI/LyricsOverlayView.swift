@@ -31,6 +31,8 @@ private final class OverlayPlayback: ObservableObject {
 
     // ---- 来自 PlaybackCoordinator ----
     @Published private(set) var currentLine: SyncedLyricLine?
+    /// 当前句在这一面的段里的下标,还没到第一句为 nil;下一句预览是它加一。换句动画按它给行编号、配对。
+    @Published private(set) var lineIndex: Int?
     @Published private(set) var nextLineText: String?
     // 下一句摆哪一边,见 PlaybackCoordinator 同名属性的注释——独立于 currentLine.side。
     @Published private(set) var nextLineSide: LyricDuet.Side?
@@ -84,6 +86,8 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var showRomanization = true
     @Published private(set) var showTranslation = false
     @Published private(set) var showNextLinePreview = true
+    /// 换句动画(见 AppSettings.overlayLineChangeAnimation)。
+    @Published private(set) var lineChangeAnimation = false
     @Published private(set) var duetAlignmentOverride: OverlayDuetAlignmentOverride = .automatic
     /// 一行放不下时换行还是滚动(见 `OverlayLineOverflow`)。
     @Published private(set) var lineOverflow: OverlayLineOverflow = .wrap
@@ -166,6 +170,7 @@ private final class OverlayPlayback: ObservableObject {
                 .map { line, karaoke in karaoke ? line : line?.lineLevel }
                 .removeDuplicates()
                 .sink { [weak self] in self?.currentLine = $0 },
+            p.$overlayLyrics.map(\.lineIndex).removeDuplicates().sink { [weak self] in self?.lineIndex = $0 },
             p.$overlayLyrics.map(\.nextText).removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
             p.$overlayLyrics.map(\.nextSide).removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
             p.$overlayLyrics.map(\.nextRomanization).removeDuplicates().sink { [weak self] in self?.nextLineRomanization = $0 },
@@ -211,6 +216,7 @@ private final class OverlayPlayback: ObservableObject {
             s.$overlayShowRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
             s.$overlayShowTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
             s.$showNextLinePreview.removeDuplicates().sink { [weak self] in self?.showNextLinePreview = $0 },
+            s.$overlayLineChangeAnimation.removeDuplicates().sink { [weak self] in self?.lineChangeAnimation = $0 },
             s.$overlayDuetAlignmentOverride.removeDuplicates().sink { [weak self] in self?.duetAlignmentOverride = $0 },
             s.$overlayLineOverflow.removeDuplicates().sink { [weak self] in self?.lineOverflow = $0 },
             Publishers.CombineLatest3(s.$overlayRomanizationSpacing, s.$overlayTranslationSpacing, s.$overlayNextLineSpacing)
@@ -424,6 +430,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// **照画** —— 它回答的是"指针现在在哪颗按钮上",是功能反馈,不是装饰(同灵动岛那批
     /// `reduceMotion ? nil : .spring(...)` 的取舍)。
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 换句动画:旧的下一句和新的主句按编号配对的那个命名空间,以及上一拍下一句那一行的编号和字号比例(见 `OverlayLineChangeMemory`)。
+    @Namespace private var lineChangeSpace
+    @State private var lineChangeMemory = OverlayLineChangeMemory()
     /// 设置页编辑台里那一份:设置窗口看不见时跟暂停一样停表(见 PreviewHostVisibility.swift)。
     /// 桌面上那扇真窗读到的恒为 true。
     @Environment(\.previewHostVisible) private var previewHostVisible
@@ -1172,8 +1181,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 行与行之间的间距由各行自己的 `.padding(.top:)` 给(读音 / 译文 / 下一句各一项,见 OverlayRowSpacing),
         // VStack 自己不加,不然两份叠在一起。
         VStack(alignment: duetAlignment, spacing: 0) {
-            reportingMainLineRect(mainLine)
-                .reportsContentRow(.main, in: contentRowRectsSpace)
+            OverlayLineChangeSlot(enabled: animatesLineChange, id: mainSlotID, matched: line != nil,
+                                  namespace: lineChangeSpace, alignment: duetFrameAlignment, insertion: mainRowInsertion) {
+                reportingMainLineRect(mainLine)
+                    .reportsContentRow(.main, in: contentRowRectsSpace)
+            }
             // 罗马音在**歌词下面、译文上面**。从歌词上面挪下来 —— 歌词窗口
             // (LyricsWindowView)早就是这个顺序了,这里是漏改的那一处,同一首歌只要解析不出
             // 词组就会跳到上面显示,四种组合里唯一的异类。
@@ -1205,20 +1217,21 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             //    自己的罗马音/译文**前面**,跟任何一句正常行"正文→罗马音→译文"同一个顺序;
             //    维持原顺序的话,读到的是"译文在前、原文在后",倒着念——截图实测复现过
             //    这个倒序。
-            if line == nil {
-                nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
-                    .padding(.top, CGFloat(rowSpacing.nextLine))
-                romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
-                    .padding(.top, CGFloat(rowSpacing.romanization))
-                translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
-                    .padding(.top, CGFloat(rowSpacing.translation))
+            //
+            // 换句动画开着时两种顺序各包一个 VStack、叠在同一个 ZStack 里:换序那一拍新旧两组交叠着过渡,
+            // 不在外层 VStack 里上下排成两份。关着时原样排在外层 VStack 里。
+            if animatesLineChange {
+                ZStack(alignment: Alignment(horizontal: duetAlignment, vertical: .top)) {
+                    if line == nil {
+                        VStack(alignment: duetAlignment, spacing: 0) { secondaryRowsAfterGap }
+                    } else {
+                        VStack(alignment: duetAlignment, spacing: 0) { secondaryRows }
+                    }
+                }
+            } else if line == nil {
+                secondaryRowsAfterGap
             } else {
-                romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
-                    .padding(.top, CGFloat(rowSpacing.romanization))
-                translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
-                    .padding(.top, CGFloat(rowSpacing.translation))
-                nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
-                    .padding(.top, CGFloat(rowSpacing.nextLine))
+                secondaryRows
             }
             // 补上——第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后
             // 自动消失,只弹一次(见 LyricsOverlayWindowController.hasShownDragHintKey
@@ -1248,6 +1261,83 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 跟原来完全一致——除非「对齐方式」覆盖生效,那时
         // duetSide 会固定成用户选的方向,不带标记的普通歌也会跟着一起改对齐。
         .multilineTextAlignment(duetTextAlignment)
+        .modifier(OverlayLineChangeAnimation(enabled: animatesLineChange, key: mainSlotID,
+                                             nextRow: nextRowNow, memory: lineChangeMemory))
+    }
+
+    /// 正常唱着时主句下面的三行:读音 → 译文 → 下一句预览。
+    @ViewBuilder private var secondaryRows: some View {
+        lineChangeFadeSlot {
+            romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                .padding(.top, CGFloat(rowSpacing.romanization))
+        }
+        lineChangeFadeSlot {
+            translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                .padding(.top, CGFloat(rowSpacing.translation))
+        }
+        nextLineSlot {
+            nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                .padding(.top, CGFloat(rowSpacing.nextLine))
+        }
+    }
+
+    /// 前奏 / 间奏「•••」下面的三行:接下来那句排在它自己的读音、译文前面(理由见 `lyricsCardContent` 里那段)。
+    @ViewBuilder private var secondaryRowsAfterGap: some View {
+        nextLineSlot {
+            nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
+                .padding(.top, CGFloat(rowSpacing.nextLine))
+        }
+        lineChangeFadeSlot {
+            romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                .padding(.top, CGFloat(rowSpacing.romanization))
+        }
+        lineChangeFadeSlot {
+            translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                .padding(.top, CGFloat(rowSpacing.translation))
+        }
+    }
+
+    // MARK: - 换句动画(见 04 章决策 52)
+
+    /// 设置开着、系统没开「减弱动态效果」。
+    private var animatesLineChange: Bool { playback.lineChangeAnimation && !reduceMotion }
+
+    /// 主句那一格的编号:唱着的那句按它在这一面的下标编,「•••」和各种状态文案另起一套,跟句子编号不撞。
+    private var mainSlotID: String {
+        line == nil ? "gap\(playback.lineIndex ?? -1)" : "line\(playback.lineIndex ?? -1)"
+    }
+
+    /// 下一句预览那一格的编号:当前句下标加一。换句之后新主句的编号正好等于上一拍下一句的编号,两者按它配对。
+    private var nextSlotID: String { "line\((playback.lineIndex ?? -1) + 1)" }
+
+    /// 这一拍下一句那一行:有没有显示、编号,以及字号相对主句的比例(新主句从这个比例放大回 1)。
+    private var nextRowNow: OverlayLineChangeNextRow {
+        let shown = playback.showNextLinePreview && nextLineText != nil
+        let main = playback.overlayNSFonts.main.pointSize
+        return OverlayLineChangeNextRow(id: shown ? nextSlotID : nil,
+                                        scale: main > 0 ? nextLinePreviewNSFont.pointSize / main : 1)
+    }
+
+    /// 新主句怎么进场:上一拍下一句跟它同号,就从下一句的字号和不透明度起步(位置由 matchedGeometryEffect 给);
+    /// 否则(跳句、拖进度、没开下一句)原地淡入。
+    private var mainRowInsertion: AnyTransition {
+        guard let last = lineChangeMemory.lastNextRow, last.id == mainSlotID else { return .opacity }
+        let anchor = UnitPoint(x: duetFrameAlignment.horizontal == .leading ? 0
+                                  : (duetFrameAlignment.horizontal == .trailing ? 1 : 0.5),
+                               y: 0.5)
+        return .modifier(active: OverlayLineRiseEffect(scale: last.scale, opacity: OverlayLineChangeSlot<EmptyView>.nextLineOpacity,
+                                                       anchor: anchor),
+                         identity: OverlayLineRiseEffect(scale: 1, opacity: 1, anchor: anchor))
+    }
+
+    private func lineChangeFadeSlot<V: View>(@ViewBuilder _ row: () -> V) -> OverlayLineChangeSlot<V> {
+        OverlayLineChangeSlot(enabled: animatesLineChange, id: mainSlotID, matched: false, namespace: lineChangeSpace,
+                              alignment: duetFrameAlignment, insertion: .opacity, content: row)
+    }
+
+    private func nextLineSlot<V: View>(@ViewBuilder _ row: () -> V) -> OverlayLineChangeSlot<V> {
+        OverlayLineChangeSlot(enabled: animatesLineChange, id: nextSlotID, matched: true, namespace: lineChangeSpace,
+                              alignment: frameAlignment(for: nextLineDuetSide), insertion: .opacity, content: row)
     }
 
     /// 罗马音那一行——抽成独立视图是为了在 `lyricsCardContent` 里按 `line == nil` 换序
@@ -2071,6 +2161,96 @@ private struct LyricsTextRectPreferenceKey: PreferenceKey {
 /// 悬浮歌词卡片里的几行。设置页编辑台按它划可点区域(`OverlayEditorStage.cardHotspots`)。
 enum OverlayContentRow: Hashable {
     case main, romanization, translation, nextLine
+}
+
+// MARK: - 换句动画的几个件
+
+/// 某一拍下一句那一行:编号(没显示为 nil)和字号相对主句的比例。
+private struct OverlayLineChangeNextRow: Equatable {
+    var id: String?
+    var scale: CGFloat
+}
+
+/// 上一拍的下一句那一行。换句那一拍要拿它决定新主句从哪个字号起步,而那一拍里视图读到的已经是新句子的值,
+/// 所以由 onChange 在每拍之后记下来。故意是个引用、不是 @State 值:改它不该再触发一次重画。
+private final class OverlayLineChangeMemory {
+    var lastNextRow: OverlayLineChangeNextRow?
+}
+
+/// 换句动画的一格:开着时这一行按编号换身份,新旧两份叠在同一格里,旧的原地淡出、新的按 `insertion` 进场;
+/// `matched` 的行(主句、下一句)按编号在命名空间里配对,旧下一句和新主句同号,新主句从旧下一句的位置挪上来。
+/// 配对的行撑满整宽、按自己的对齐摆,两头的位置才只差在竖直方向。关着时原样返回。
+///
+/// 必须是存着行内容的 View,别写成 ViewModifier:修饰符的 `Content` 是指向当前内容的代理,换句时正在淡出的旧那一份
+/// 会跟着画成新句子。
+private struct OverlayLineChangeSlot<Content: View>: View {
+    /// 下一句预览的不透明度,跟 `nextLinePreviewContent` 那一行的颜色同一个值。
+    static var nextLineOpacity: Double { 0.4 }
+
+    let enabled: Bool
+    let id: String
+    let matched: Bool
+    let namespace: Namespace.ID
+    let alignment: Alignment
+    let insertion: AnyTransition
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if enabled {
+            ZStack(alignment: Alignment(horizontal: alignment.horizontal, vertical: .top)) {
+                paired
+                    .id(id)
+                    .transition(.asymmetric(insertion: insertion, removal: .opacity))
+            }
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var paired: some View {
+        if matched {
+            content
+                .frame(maxWidth: .infinity, alignment: alignment)
+                .matchedGeometryEffect(id: id, in: namespace, properties: .position)
+        } else {
+            content
+        }
+    }
+}
+
+/// 新主句从下一句接上来时的起步样子:按下一句的字号比例缩着、不透明度同下一句。放大用的是按主句字号画好的那一份,
+/// 一路是缩小显示,字不会糊。
+private struct OverlayLineRiseEffect: ViewModifier {
+    let scale: CGFloat
+    let opacity: Double
+    let anchor: UnitPoint
+
+    func body(content: Content) -> some View {
+        content.scaleEffect(scale, anchor: anchor).opacity(opacity)
+    }
+}
+
+/// 换句动画开着时:主句那一格的编号一变就按 LyricsX 的时长和缓动过渡,并在每拍之后记下下一句那一行。关着时原样返回。
+private struct OverlayLineChangeAnimation: ViewModifier {
+    /// 0.25 秒、cubic-bezier(0.4, 0, 0.2, 1),同 LyricsX `KaraokeLyricsView.displayLrc`。
+    static let animation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.25)
+
+    let enabled: Bool
+    let key: String
+    let nextRow: OverlayLineChangeNextRow
+    let memory: OverlayLineChangeMemory
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .animation(Self.animation, value: key)
+                .onChange(of: nextRow, initial: true) { _, now in memory.lastNextRow = now }
+        } else {
+            content
+        }
+    }
 }
 
 /// 各行矩形的表。reduce 必须合并、不能覆盖:别的分支贡献的默认值(空表)会把已经量到的冲掉,

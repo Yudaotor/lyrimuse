@@ -957,6 +957,8 @@
 "按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复" = "Treat as instrumental: lyrics are hidden and aren’t searched for automatically. Existing lyrics are kept and come back when you unmark it";
 "按翻唱者署名" = "Covering artist from the title";
 "换一句" = "Another line";
+"换句动画" = "Line Transition";
+"换句时，下一句从原来的位置移到当前行；关闭时直接切换" = "When the lyric changes, the next line moves up into place. When off, lines switch instantly";
 "换歌时显示歌名" = "Show Title on Song Change";
 "换歌时显示通知" = "Notify When the Song Changes";
 "换行" = "Wrap";

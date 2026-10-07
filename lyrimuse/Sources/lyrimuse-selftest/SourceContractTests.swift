@@ -1948,6 +1948,14 @@ func runSourceContractTests() {
             try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
         }
         if let view = read("UI/LyricsOverlayView.swift") {
+            // 换句动画(04 章决策 52):开关关着、或开了「减弱动态效果」时一层都不包;开着时旧下一句和新主句按编号配对,
+            // 只配位置,0.25 秒 cubic-bezier(0.4, 0, 0.2, 1);主句从上一拍下一句的字号和不透明度起步。
+            expectEqual(view.contains("private var animatesLineChange: Bool { playback.lineChangeAnimation && !reduceMotion }")
+                        && view.contains(".matchedGeometryEffect(id: id, in: namespace, properties: .position)")
+                        && view.contains("Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.25)")
+                        && view.contains("private var nextSlotID: String { \"line\\((playback.lineIndex ?? -1) + 1)\" }")
+                        && view.contains("guard let last = lineChangeMemory.lastNextRow, last.id == mainSlotID else { return .opacity }"), true,
+                        "悬浮换句动画: 只在开着时包层;下一句与新主句按编号配对上移,新主句从下一句的字号起步")
             // 默认 loops = true 是给灵动岛歌名那类常驻标签的;歌词行滚一遍停在句尾,等换句才归零。
             expectEqual(view.contains("MarqueeText(id: id, restingAlignment: alignment, loops: false)"), true,
                         "悬浮滚动: overlayScroll 的跑马灯必须 loops: false(否则滚完一行又跳回开头)")

@@ -282,6 +282,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "下一句", kw: ["双行显示", "双行歌词", "两行", "副行"], group: "内容"),
         surface(.overlay, "对齐方式", kw: ["居中", "左对齐", "右对齐"], group: "排版"),
         surface(.overlay, "长句处理", kw: ["换行", "滚动", "跑马灯", "折行", "长句", "太长"], group: "排版"),
+        surface(.overlay, "换句动画", kw: ["动画", "过渡", "换行动画", "上移", "LyricsX"], group: "排版"),
         surface(.overlay, "读音间距", kw: ["间距", "行距", "行间距", "距离", "罗马音", "注音", "紧凑"], group: "排版"),
         surface(.overlay, "译文间距", kw: ["间距", "行距", "行间距", "距离", "翻译", "紧凑"], group: "排版"),
         surface(.overlay, "下一句间距", kw: ["间距", "行距", "行间距", "距离", "下一行", "预览", "紧凑"], group: "排版"),

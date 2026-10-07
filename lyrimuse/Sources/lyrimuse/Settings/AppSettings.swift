@@ -219,6 +219,7 @@ final class AppSettings: ObservableObject {
         static let showNextLinePreview = "np:showNextLinePreview"
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let overlayLineOverflow = "np:overlayLineOverflow"
+        static let overlayLineChangeAnimation = "np:overlayLineChangeAnimation"
         static let overlayRomanizationSpacing = "np:overlayRomanizationSpacing"
         static let overlayTranslationSpacing = "np:overlayTranslationSpacing"
         static let overlayNextLineSpacing = "np:overlayNextLineSpacing"
@@ -797,6 +798,10 @@ final class AppSettings: ObservableObject {
     /// `OverlayLineOverflow` 声明处注释。
     @Published var overlayLineOverflow: OverlayLineOverflow {
         didSet { defaults.set(overlayLineOverflow.rawValue, forKey: Keys.overlayLineOverflow) }
+    }
+    /// 悬浮歌词换句时,下一句从它的位置移到当前行(仿 LyricsX)。只有 `LyricsOverlayView` 读它,见 04 章决策 52。
+    @Published var overlayLineChangeAnimation: Bool {
+        didSet { defaults.set(overlayLineChangeAnimation, forKey: Keys.overlayLineChangeAnimation) }
     }
     /// 悬浮歌词卡片里读音 / 译文 / 下一句各自离上一行多远(pt)。存原值,读的地方夹回范围,见 `OverlayRowSpacing`。
     @Published var overlayRomanizationSpacing: Double {
@@ -2017,6 +2022,8 @@ final class AppSettings: ObservableObject {
         // 排版必须逐像素不变。
         overlayLineOverflow = defaults.string(forKey: Keys.overlayLineOverflow)
             .flatMap(OverlayLineOverflow.init(rawValue:)) ?? .wrap
+        // 默认关:换句一直是直接换掉,升级上来的人看到的不变。
+        overlayLineChangeAnimation = (defaults.object(forKey: Keys.overlayLineChangeAnimation) as? Bool) ?? false
         // 默认 4 = 卡片里各行原来的间距,升级上来的人排版不变。
         overlayRomanizationSpacing = (defaults.object(forKey: Keys.overlayRomanizationSpacing) as? Double)
             ?? OverlayRowSpacing.defaultValue

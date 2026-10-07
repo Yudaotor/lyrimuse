@@ -32118,6 +32118,52 @@
         }
       }
     },
+    "换句动画" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line Transition"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换句动画"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "換句動畫"
+          }
+        }
+      }
+    },
+    "换句时，下一句从原来的位置移到当前行；关闭时直接切换" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When the lyric changes, the next line moves up into place. When off, lines switch instantly"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换句时，下一句从原来的位置移到当前行；关闭时直接切换"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "換句時，下一句從原本的位置移到目前這一行；關閉時直接切換"
+          }
+        }
+      }
+    },
     "换行" : {
       "extractionState" : "manual",
       "localizations" : {

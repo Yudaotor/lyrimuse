@@ -818,7 +818,7 @@ func runOverlayTests() {
             (".reportsContentRow(.nextLine, in: contentRowRectsSpace)", ".padding(.top, CGFloat(rowSpacing.nextLine))"),
         ]
         for (report, padding) in rows {
-            expectEqual(view.components(separatedBy: report + "\n                    " + padding).count - 1, 2,
+            expectEqual(view.components(separatedBy: report + "\n                " + padding).count - 1, 2,
                         "行间距接线: 两种行序下这一行都在上报矩形之后加自己的间距(" + padding + ")")
         }
         expectEqual(view.contains("VStack(alignment: .leading, spacing: rowSpacing.perWordReadingGap)"), true,

@@ -292,6 +292,14 @@ struct OverlayLayoutSettingsRows: View {
                     label: OverlayLineOverflowLabel.text(for:)
                 )
             }
+            CardDivider()
+            SettingsRow(
+                icon: "arrow.up.to.line",
+                title: L10n.t("换句动画"),
+                help: L10n.t("换句时，下一句从原来的位置移到当前行；关闭时直接切换")
+            ) {
+                Toggle("", isOn: $settings.overlayLineChangeAnimation)
+            }
             // 主行下面三行各自离上一行多远,按卡片里从上到下的顺序。那一行在「内容」里关着时这一项不起作用,
             // 置灰。范围与默认值见 OverlayRowSpacing(04 章决策 48);拖动中只改临时值,见 OverlayRowSpacingDraft。
             CardDivider()
