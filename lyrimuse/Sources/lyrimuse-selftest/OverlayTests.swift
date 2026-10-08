@@ -1738,7 +1738,7 @@ func runOverlayTests() {
                     "悬浮接线: 控制排那一格按 controlsSlotHeight 定高,跟翻面补偿同一个数")
         let overlayWindow = src("LyricsOverlayWindow.swift")
         expectEqual(controller.contains(
-            "setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked\n                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress)"),
+            "setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked\n                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress\n                             && !clickReplayInFlight)"),
                     true, "悬浮接线: 「长按拖动」关着时指针停在歌词文字上先接住点击,按下和拖动都不漏给下层")
         expectEqual(controller.contains("guard !edgeCaptured, !controlCaptured, !lyricsCaptured, !isDragArmed else { return }"), true,
                     "悬浮接线: 歌词文字接管着时不还原穿透")
@@ -1753,6 +1753,35 @@ func runOverlayTests() {
         expectEqual(overlayWindow.contains("override func scrollWheel(with event: NSEvent) {\n        onScrollWheel?()")
                     && controller.contains("panel.onScrollWheel = { [weak self] in self?.yieldPointerCaptureToScroll() }"),
                     true, "悬浮接线: 接管期间收到滚轮就让开,同一手势后面的滚动到下层")
+        // 按在歌词上拖出一段才开拖,没拖就松手算单击、补发给下层(04 章决策 55)。
+        expectEqual(controller.contains(
+            "pendingLyricsPress = PendingPress(location: loc, modifiers: modifiers, clickCount: clickCount,\n                                                  swallowed: local)\n                return"),
+                    true, "悬浮接线: 按在歌词上先不武装,只记下这一下")
+        expectEqual(controller.contains(
+            "if OverlayClickReplay.isDrag(from: start, to: loc) {\n                    pendingLyricsPress = nil\n                    armDragIfStillPressed()"),
+                    true, "悬浮接线: 拖出一段才武装开拖(这时才描边、换布局)")
+        expectEqual(controller.contains("cancelPendingPress()\n            if let press { replayClickBelow(press, button: .left, upAt: loc) }"),
+                    true, "悬浮接线: 没拖就松手算单击,补发给下层")
+        expectEqual(controller.contains("guard press.swallowed else { return }\n        guard AccessibilitySkipPress.isTrusted else {"),
+                    true, "悬浮接线: 只补发被这扇窗接住的那一下,没有辅助功能权限不发")
+        expectEqual(controller.contains("clickReplayInFlight = true\n        setLyricsCapture(false)"), true,
+                    "悬浮接线: 补发前放掉歌词文字的接管、还原穿透")
+        expectEqual(controller.contains(
+            "if info.replayed {\n            // 自己补发的那一下不是用户的操作,不进手势处理;松开回来了就算补发完。\n            if info.type == .leftMouseUp || info.type == .rightMouseUp { clickReplayLanded() }\n            return\n        }"),
+                    true, "悬浮接线: 监听器跳过自己补发的事件,补发的松开回来才恢复接管")
+        expectEqual(controller.contains("let timer = Timer(timeInterval: OverlayClickReplay.landingTimeout, repeats: false)"), true,
+                    "悬浮接线: 补发的松开没回来也按时恢复接管")
+        expectEqual(controller.contains("pendingRightPress = local && onLyrics && !onControl")
+                    && controller.contains("replayClickBelow(press, button: .right, upAt: loc)")
+                    && controller.contains(".rightMouseDown, .rightMouseUp]"),
+                    true, "悬浮接线: 右键点在歌词上同样补发给下层")
+        expectEqual(controller.contains("pressStartLocation = nil\n        pendingLyricsPress = nil\n        pendingRightPress = nil"), true,
+                    "悬浮接线: 作废这次按下时连待定的单击一起清掉")
+        let compensate = controller.range(
+            of: "window.setFrameOrigin(NSPoint(x: frame.minX + now.x - start.x, y: frame.minY + now.y - start.y))")
+        expectEqual(compensate != nil && dragCall != nil && compensate!.lowerBound < dragCall!.lowerBound, true,
+                    "悬浮接线: 开拖前先把窗口挪过指针已经走出的那一段,卡片不落后")
+        overlayClickReplayChecks()
         let karaokeRows = src("WrappedKaraokeRows.swift")
         expectEqual(karaokeRows.contains("nsView.sizedWidth = proposal.width")
                     && karaokeRows.contains("var geo = Geometry(spec: spec, width: WrapLayoutMath.drawWidth(sized: sizedWidth, bounds: bounds.width))"),

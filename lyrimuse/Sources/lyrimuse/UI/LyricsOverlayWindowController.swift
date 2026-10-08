@@ -4,6 +4,8 @@ import Combine
 import LyrimuseCore
 import os
 
+private let overlayLogger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "overlay")
+
 // 文件级常量(不挂在 @MainActor 类上),避免 Timer 的 @Sendable 闭包里引用
 // MainActor-isolated static let 触发并发检查警告。
 // 位置改成存**顶边**("x,顶边y" 字符串),不再存 AppKit 的左下角 origin。
@@ -259,6 +261,21 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         }
     }
 
+    /// 按在歌词文字上、还没拖出 `OverlayClickReplay.dragStartDistance` 的这一下左键,以及按在歌词文字上的右键。
+    /// 拖出这么远才武装开拖;没拖就松手算单击,被这扇窗接住的那一下补发给下层(`replayClickBelow`)。
+    private struct PendingPress {
+        let location: NSPoint
+        let modifiers: NSEvent.ModifierFlags
+        let clickCount: Int
+        /// 这一下落在了这扇窗上(本地监听器收到的)。穿透着按下的那一下下层已经收到了,不补发。
+        let swallowed: Bool
+    }
+    private var pendingLyricsPress: PendingPress?
+    private var pendingRightPress: PendingPress?
+    /// 补发出去、还没回到监听器的那一下。期间不接住歌词文字:接住的话补发的按下又会落回这扇窗。
+    private var clickReplayInFlight = false
+    private var clickReplayTimeout: Timer?
+
     /// 收回穿透期间滚轮会落到这扇窗(`LyricsOverlayWindow.onScrollWheel`):还原穿透,同一手势后面的滚动
     /// 直接到下层;指针再移动时照常重新接住。
     private func yieldPointerCaptureToScroll() {
@@ -275,6 +292,44 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 拖完或拖动作废:指针还停在按钮、歌词文字或可拖的边上就接着接住,不然还原穿透。
     private func restorePointerCaptureAfterDrag() {
         window?.ignoresMouseEvents = !(edgeCaptured || controlCaptured || lyricsCaptured)
+    }
+
+    /// 被这扇窗接住、没拖起来的那一下单击原样补发给下层窗口(见 04 章决策 55):先放掉歌词文字的接管、还原点击
+    /// 穿透,下一圈运行循环再往系统事件流里发一次按下 + 松开,系统按穿透之后的命中测试派给下层。发鼠标事件要辅助
+    /// 功能权限,没授权时这一下照旧被接住。补发的松开回到监听器(或等满 `landingTimeout`)之前不再接住歌词文字。
+    private func replayClickBelow(_ press: PendingPress, button: CGMouseButton, upAt up: NSPoint) {
+        guard press.swallowed else { return }
+        guard AccessibilitySkipPress.isTrusted else {
+            overlayLogger.notice("[overlay] click on the lyrics kept: accessibility not granted, cannot pass it through")
+            return
+        }
+        clickReplayInFlight = true
+        setLyricsCapture(false)
+        let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        DispatchQueue.main.async {
+            let events = OverlayClickReplay.events(
+                button: button,
+                down: OverlayClickReplay.eventLocation(fromScreen: press.location, primaryScreenHeight: primaryHeight),
+                up: OverlayClickReplay.eventLocation(fromScreen: up, primaryScreenHeight: primaryHeight),
+                clickCount: press.clickCount, flags: OverlayClickReplay.eventFlags(press.modifiers),
+                source: CGEventSource(stateID: .hidSystemState))
+            for event in events { event.post(tap: .cghidEventTap) }
+        }
+        clickReplayTimeout?.invalidate()
+        let timer = Timer(timeInterval: OverlayClickReplay.landingTimeout, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.clickReplayLanded() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        clickReplayTimeout = timer
+    }
+
+    /// 补发的松开回到了监听器(或者等满了):恢复接住歌词文字,按指针此刻的位置重判一次。
+    private func clickReplayLanded() {
+        clickReplayTimeout?.invalidate()
+        clickReplayTimeout = nil
+        guard clickReplayInFlight else { return }
+        clickReplayInFlight = false
+        handleMouseEvent(type: .mouseMoved)
     }
 
     private var globalMouseMonitor: Any?
@@ -860,7 +915,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
     private func installMouseMonitors() {
         guard globalMouseMonitor == nil, localMouseMonitor == nil else { return }
-        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDown, .leftMouseDragged, .leftMouseUp]
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDown, .leftMouseDragged, .leftMouseUp,
+                                           .rightMouseDown, .rightMouseUp]
         // AppKit 保证这两个监听器的回调固定在安装时所在的线程上调用(这里是主线程)——
         // 用 MainActor.assumeIsolated 就地同步处理,不再经过 Task { @MainActor in ... }
         // 的异步跳转。.leftMouseDragged 在拖动时是逐帧高频事件,每个都单开一个 Task 会被
@@ -868,16 +924,43 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 实测就是"拖动有卡顿感"的根因;改成同步调用后窗口位置直接跟事件本身对齐,
         // 不再多一层调度延迟。
         globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
-            let type = event.type
-            MainActor.assumeIsolated { self?.handleMouseEvent(type: type) }
+            let info = MouseEventInfo(event)
+            MainActor.assumeIsolated { self?.receiveMouseEvent(info, local: false) }
         }
         // 本地监听器必须原样把 event 返回,否则会把这次点击整个吞掉,SwiftUI 按钮永远
         // 收不到点击——这里只是"旁听"一下鼠标位置,不是要拦截。
         localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
-            let type = event.type
-            MainActor.assumeIsolated { self?.handleMouseEvent(type: type) }
+            let info = MouseEventInfo(event)
+            MainActor.assumeIsolated { self?.receiveMouseEvent(info, local: true) }
             return event
         }
+    }
+
+    /// 监听器收到一个事件时先抄下的几样(进主线程处理之前)。
+    private struct MouseEventInfo {
+        let type: NSEvent.EventType
+        let clickCount: Int
+        let modifiers: NSEvent.ModifierFlags
+        /// 自己补发出去的那一下(`replayClickBelow`)。
+        let replayed: Bool
+
+        init(_ event: NSEvent) {
+            type = event.type
+            let isPress = [NSEvent.EventType.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp].contains(event.type)
+            clickCount = isPress ? event.clickCount : 0
+            modifiers = event.modifierFlags
+            replayed = OverlayClickReplay.isReplayed(event.cgEvent)
+        }
+    }
+
+    /// `local`:事件落在了这个 App 自己的窗口上(本地监听器),否则是派给别的 App 的(全局监听器)。
+    private func receiveMouseEvent(_ info: MouseEventInfo, local: Bool) {
+        if info.replayed {
+            // 自己补发的那一下不是用户的操作,不进手势处理;松开回来了就算补发完。
+            if info.type == .leftMouseUp || info.type == .rightMouseUp { clickReplayLanded() }
+            return
+        }
+        handleMouseEvent(type: info.type, local: local, clickCount: info.clickCount, modifiers: info.modifiers)
     }
 
     /// 胶囊里每个按钮的**屏幕**矩形。空 = 当前没显示控制排。
@@ -1044,7 +1127,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
 
 
 
-    private func handleMouseEvent(type: NSEvent.EventType) {
+    private func handleMouseEvent(type: NSEvent.EventType, local: Bool = false, clickCount: Int = 1,
+                                  modifiers: NSEvent.ModifierFlags = []) {
         guard let window, !isQuickMenuOpen else { return }
         // 锁定位置 = 停用整套手势(悬停控制排 + 长按拖动)。两个例外都不受这条限制:
         // ① .mouseMoved——「鼠标经过时避开」需要它维护 isHoveringForControls,而那件事跟"能不能
@@ -1153,7 +1237,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             }
             // 判据跟下面 .leftMouseDown 立刻武装那条一致:热区还没上报上来时按下退回长按,也就不接。
             setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked
-                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress)
+                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress
+                             && !clickReplayInFlight)
             if isAdjustingWidth, widthDrag == nil {
                 let onEdge = hit == nil
                     && OverlayWidthDrag.edge(at: localPoint, windowSize: frame.size) != nil
@@ -1195,15 +1280,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             }
             pressStartLocation = loc
             longPressTimer?.invalidate()
-            // 「长按拖动」关掉时:压在**歌词文字**上就立刻武装,压在四周空白上什么都不做
+            // 「长按拖动」关掉时:压在**歌词文字**上拖出一小段就武装,压在四周空白上什么都不做
             // (那次点击照旧穿透到桌面)。长按这道门原本是必须的 —— 窗口常年点击穿透,
             // "按下就拖"会让整个窗口区域都吃掉点击;精准歌词热区(lyricsHotZoneLocal)落地后
             // 有了更准的判据,不必再用时长去区分"想拖窗口"和"想点桌面"。
             // 热区还没上报上来时(刚显示/这一轮没有文字)退回长按,别让"按下就拖"覆盖整窗。
+            // 按下时还分不出单击和拖动:拖出 OverlayClickReplay.dragStartDistance 才武装(.leftMouseDragged),
+            // 不到就松手算单击、补发给下层(.leftMouseUp)。按下就武装的话,单击也会描一圈边、换布局、被吞掉。
             if !AppSettings.shared.overlayDragNeedsLongPress,
                let zone = lyricsHotZoneLocal, zone.contains(localPoint)
             {
-                armDragIfStillPressed()
+                pendingLyricsPress = PendingPress(location: loc, modifiers: modifiers, clickCount: clickCount,
+                                                  swallowed: local)
                 return
             }
             let timer = Timer(timeInterval: longPressThresholdSecs, repeats: false) { [weak self] _ in
@@ -1230,6 +1318,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 }
                 return
             }
+            if pendingLyricsPress != nil {
+                if OverlayClickReplay.isDrag(from: start, to: loc) {
+                    pendingLyricsPress = nil
+                    armDragIfStillPressed()
+                }
+                return
+            }
             if moved > dragMoveTolerance {
                 // 计时器还没到点,鼠标就已经挪动超过容差——这是想穿透到下层的普通拖拽
                 // 手势(比如在桌面拖框选),不是想拖悬浮窗,取消长按判定。
@@ -1246,9 +1341,24 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 return
             }
             // 已经武装的情况下,松手的收尾由 startArmedDrag 盯着左键做(系统拖窗口时这个
-            // mouseUp 不一定送到这里);这里只需要处理"还没到长按阈值就松手"这种提前取消的情况。
+            // mouseUp 不一定送到这里);这里只需要处理"还没到长按阈值就松手"这种提前取消的情况,
+            // 以及按在歌词上没拖起来的单击。
             guard !isDragArmed else { return }
+            let press = pendingLyricsPress
             cancelPendingPress()
+            if let press { replayClickBelow(press, button: .left, upAt: loc) }
+
+        case .rightMouseDown:
+            // 歌词文字接管着点击时右键也落在这扇窗上(这扇窗没有右键菜单):记下,松开时补发给下层。
+            let onLyrics = lyricsHotZoneLocal?.contains(localPoint) ?? false
+            let onControl = OverlayControlHitTest.control(at: localPoint, in: controlRectsLocal) != nil
+            pendingRightPress = local && onLyrics && !onControl
+                ? PendingPress(location: loc, modifiers: modifiers, clickCount: clickCount, swallowed: true) : nil
+
+        case .rightMouseUp:
+            guard let press = pendingRightPress else { return }
+            pendingRightPress = nil
+            replayClickBelow(press, button: .right, upAt: loc)
 
         default:
             break
@@ -1338,6 +1448,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             return
         }
 
+        // 拖出一段才开拖时(按住歌词拖出 dragStartDistance、等新布局那一小会儿),指针已经走在前面:先把窗口挪过
+        // 这一段,系统接手时按下的那一点照旧压在指针底下,不然整段拖动卡片都落后这一截。
+        if let start = pressStartLocation {
+            let now = NSEvent.mouseLocation
+            if abs(now.x - start.x) >= 0.5 || abs(now.y - start.y) >= 0.5 {
+                let frame = window.frame
+                window.setFrameOrigin(NSPoint(x: frame.minX + now.x - start.x, y: frame.minY + now.y - start.y))
+            }
+        }
         dragFrameWhilePressed = window.frame
         window.performDrag(with: syntheticDown)
         guard NSEvent.pressedMouseButtons & 1 != 0 else {
@@ -1478,6 +1597,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         longPressTimer?.invalidate()
         longPressTimer = nil
         pressStartLocation = nil
+        pendingLyricsPress = nil
+        pendingRightPress = nil
         isDragArmed = false
         presetDragRejectedThisPress = false
         // 布局已经为这次拖动换过、还没开始拖,或者系统还在拖(左键没松)时被叫到(锁定、隐藏):
