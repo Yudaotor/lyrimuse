@@ -726,8 +726,7 @@ public enum MusicPlaybackController {
     ///
     /// **写完不要马上回读**。实测坐实:`set shuffle enabled to true` 这段脚本
     /// 正常退出、值也确实写进去了,但另起一个进程去 `get shuffle enabled`,250ms 之后读回来
-    /// 的仍是旧值(再等一会儿才变)。原来那个「点一下切下一档」(cyclePlaybackMode,已删)正是写完就回读,于是那个旧值
-    /// 把已经画出来的正确图标又覆盖回去,表现成"点了要过一会儿才变"。
+    /// 的仍是旧值(再等一会儿才变),写完就回读会把已经画出来的正确图标又覆盖回去。
     /// 既然退出码已经能回答"指令被接受了吗",成功时就不必再问 Music.app 一遍。
     @discardableResult
     public static func setPlaybackMode(_ mode: MusicPlaybackMode, for player: PlaybackPlayer) -> Bool {

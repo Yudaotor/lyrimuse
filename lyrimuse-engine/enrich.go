@@ -1895,8 +1895,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 			e.ManualLyrics, e.LyricsSourceChoice = false, ""
 		}
 	} else if durationSecs > 0 && keepsShownLyricsOver(e, picked) {
-		// 冠军跟现存这份上屏看不出差别,不换词(见 keepsShownLyricsOver)。现存这份也就是给这个时长选的,时长照记:
-		// 不记的话「时长对不上」(durationMismatch)一直成立,会接着白烧升级重试的次数。
+		// 冠军跟现存这份上屏看不出差别时不换词(见 keepsShownLyricsOver),时长照记成这一轮的。
 		log.Printf("lyrics upgrade: %s  keeping %s(%d), %s(%d) shows the same lyrics",
 			key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		e.ResolvedDurationSecs = durationSecs
@@ -2425,8 +2424,8 @@ func rescoreKeeps(e enrichEntry, scored []scoredLyricCandidateResult, picked *sc
 }
 
 // rescoreKeepsLyrics:重评可判、有冠军时当前这份留不留 —— rescoreKeeps,外加冠军换上去屏上看不出差别(keepsShownLyricsOver,
-// 手动重新匹配不算:用户要的就是算法这一轮的结论)。只有署名的当前这份一律不留(09 章决策 209)。锁内正式判一次、锁外按快照
-// 预判一次(prepareSwapTranslation),两处必须调这一个函数。
+// 手动重新匹配不算)。只有署名的当前这份一律不留(09 章决策 209)。锁内正式判一次、锁外按快照预判一次
+// (prepareSwapTranslation),两处必须调这一个函数。
 func rescoreKeepsLyrics(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, manual bool) bool {
 	if picked == nil || lyricsAreCreditsOnly(e.Lyrics) {
 		return false

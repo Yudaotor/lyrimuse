@@ -216,9 +216,7 @@ func lyricsCandidateAddsNothingShown(e enrichEntry, c scoredLyricCandidateResult
 }
 
 // keepsShownLyricsOver:重评、升级重试的冠军跟条目现存这份原文不同,换上去屏上却看不出差别(lyricsCandidateAddsNothingShown)
-// 时留着现存这份。换了的话 App 要整份重新解析,单曲时间轴偏移按歌词原文认(LyricsOffsetStore.trackKey),用户调过的偏移
-// 也对不上了。首次解析留着屏上那份(keepShownLyrics)时分数常比冠军低或者同分,这两处不挡,下次重评 / 升级重试就会把它换回
-// 冠军。原文相同的不归这里管(补逐字、换源记账照旧)。见 09 章决策 203。
+// 时留着现存这份。原文相同的不归这里管(补逐字、换源记账照旧)。见 09 章决策 203。
 func keepsShownLyricsOver(e enrichEntry, picked *scoredLyricCandidateResult) bool {
 	return picked != nil && picked.Lyrics != e.Lyrics && lyricsCandidateAddsNothingShown(e, *picked)
 }

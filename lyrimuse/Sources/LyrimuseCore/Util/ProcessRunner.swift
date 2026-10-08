@@ -36,9 +36,8 @@ public enum ProcessRunner {
     /// 超时发出 SIGTERM 之后,再等多久还没退出就 SIGKILL。
     public static let killGraceSeconds: TimeInterval = 1
 
-    /// 超时与 SIGKILL 宽限两个定时器、并发读 stderr 的那条线挂的队列优先级,不能低于调用方(轮询队列是 userInitiated):
-    /// 系统很忙时低优先级队列会被饿住,到点了也杀不掉;读 stderr 的那条被饿住时调用方等它读完,同样迟迟回不来
-    /// (见 02 章决策 105)。
+    /// 超时与 SIGKILL 宽限两个定时器、并发读 stderr 的那条线挂的队列优先级,不能低于调用方(轮询队列是 userInitiated)。
+    /// 见 02 章决策 105。
     public static let helperQoS: DispatchQoS.QoSClass = .userInitiated
 
     /// 同步跑完一条命令。**会阻塞到子进程结束或超时**,别在主线程上调。

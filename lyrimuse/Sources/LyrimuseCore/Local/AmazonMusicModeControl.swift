@@ -23,9 +23,7 @@ public enum AmazonMusicModeControl {
     /// 一次切换最多按几下:随机一下 + 循环绕一圈三下,再给重按留两下。
     public static let maxPresses = 6
 
-    /// 写入一次只走一个。要按几下是照日志里的当前档算的,两次写入叠在一起时,后一次读到的还是前一次按之前的档,下数就算多了
-    /// (连点两下循环键想要单曲循环:前一次按一下,后一次照「关」算又按两下,绕回关);两边还会互相把对方的
-    /// `AXEnhancedUserInterface` 关掉,让对方找到的键失效。
+    /// 写入一次只走一个:按几下照日志里的当前档算,两次写入不能叠在一起。见 07 章决策 139。
     private static let writeLock = NSLock()
 
     public struct Settings: Equatable, Sendable {
@@ -95,8 +93,7 @@ public enum AmazonMusicModeControl {
         return out
     }
 
-    /// 当前档;没有辅助功能权限、日志读不到为 nil。没权限时按不了键,读得出档也不报:不然两颗键照样出现、点了没反应
-    /// (授权说明写的是「不授权……也不显示这两颗键」)。
+    /// 当前档;没有辅助功能权限(按不了键)、日志读不到为 nil。
     public static func readMode(logPath: String = AmazonMusicLogWatcher.defaultPath) -> MusicPlaybackController.MusicPlaybackMode? {
         guard AXIsProcessTrusted() else { return nil }
         return readSettings(logPath: logPath)?.mode
@@ -114,9 +111,8 @@ public enum AmazonMusicModeControl {
 
     /// 当前的循环设置和随机开关;日志读不到、里面一条设置都没有为 nil。
     ///
-    /// 增量读:记着上次读到的位置和当时的设置,这次只读之后新写的整行 —— 按一下等确认时每 0.1 秒读一次,不能每次重读一大段。
-    /// 第一次读、日志换了(Amazon 每次启动重建一份,看 inode)或变短了,就从最后一个开播行读起:那一行之前的切换都被它盖过。
-    /// 不能只看末尾固定一段:日志一天能长到几 MB,长时间连着放,开播那一行早就滑出去了,读出来是 nil,两颗键在播放中途消失。
+    /// 增量读:记着上次读到的位置和当时的设置,只读之后新写的整行。第一次读、日志换了一份(看 inode)或变短了,就从最后一个
+    /// 开播行读起(它之前的切换都被它盖过);开播行可能在很早以前,不能只看末尾固定一段。
     public static func readSettings(logPath: String, scanChunk: Int = scanChunkBytes) -> Settings? {
         cursorLock.lock()
         defer { cursorLock.unlock() }
@@ -188,9 +184,8 @@ public enum AmazonMusicModeControl {
 
     /// 从 `start` 按到 `target`,返回最后从日志读到的设置(到没到调用方自己比);按不下去、等不到日志确认为 nil。
     ///
-    /// 每按一下等日志确认,没变就重按一次;每一下都照日志里最新的档重新算下一下按什么,不是一开始算好照单按完。
-    /// 重按过的话,头一下可能其实按成了、只是日志晚到,于是多进了一档 —— 收尾时再等一个确认窗口,以最后读到的为准:
-    /// 多进了就跟目标对不上,调用方回读把界面纠正过来。读日志、按键从外面传进来,selftest 用桩模拟按了不生效、日志晚到。
+    /// 每按一下等日志确认,没变就重按一次;每一下都照日志里最新的档算下一下按什么。重按过的话收尾再等一个确认窗口,
+    /// 以最后读到的为准(跟目标对不上时调用方回读)。读日志、按键从外面传进来。
     public static func pressUntilConfirmed(
         from start: Settings, to target: MusicPlaybackController.MusicPlaybackMode,
         polls: Int = Int(confirmWait / confirmPollInterval), pollInterval: TimeInterval = confirmPollInterval,

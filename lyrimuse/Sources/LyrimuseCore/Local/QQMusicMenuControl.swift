@@ -47,8 +47,7 @@ public enum QQMusicMenuControl {
         favoriteItem().flatMap { favorited(forTitle: $0.title) }
     }
 
-    /// 「喜欢」的写入一次只走一个,按下之后等标题翻过来才放。这一项是按一下翻一次,状态只能看标题,而标题要约 1 秒才变:
-    /// 不等的话,点了喜欢马上又取消,第二下读到的还是旧标题,判成「已经是这个状态」不按 —— QQ 里还是喜欢,界面却显示没喜欢。
+    /// 「喜欢」的写入一次只走一个,按下之后等标题翻过来才放。见 07 章决策 138。
     private static let favoriteLock = NSLock()
     /// 按下「喜欢」之后等标题翻过来最多多久(实测 1 秒内)、隔多久看一次。
     static let favoriteConfirmWait: TimeInterval = 2
