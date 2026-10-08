@@ -36,9 +36,10 @@ public enum ProcessRunner {
     /// 超时发出 SIGTERM 之后,再等多久还没退出就 SIGKILL。
     public static let killGraceSeconds: TimeInterval = 1
 
-    /// 超时与 SIGKILL 宽限两个定时器挂的队列优先级,不能低于调用方(轮询队列是 userInitiated):
-    /// 系统很忙时低优先级队列会被饿住,到点了也杀不掉(见 02 章决策 105)。
-    public static let timerQoS: DispatchQoS.QoSClass = .userInitiated
+    /// 超时与 SIGKILL 宽限两个定时器、并发读 stderr 的那条线挂的队列优先级,不能低于调用方(轮询队列是 userInitiated):
+    /// 系统很忙时低优先级队列会被饿住,到点了也杀不掉;读 stderr 的那条被饿住时调用方等它读完,同样迟迟回不来
+    /// (见 02 章决策 105)。
+    public static let helperQoS: DispatchQoS.QoSClass = .userInitiated
 
     /// 同步跑完一条命令。**会阻塞到子进程结束或超时**,别在主线程上调。
     ///
@@ -87,11 +88,11 @@ public enum ProcessRunner {
             // SIGTERM 不一定管用:osascript 在等「自动化」授权弹窗时不理它,这时下面读管道、等退出会一直
             // 卡到用户点掉弹窗(见 02 章决策 63)。宽限过后还在跑就 SIGKILL。
             let pid = process.processIdentifier
-            DispatchQueue.global(qos: timerQoS).asyncAfter(deadline: .now() + killGraceSeconds) {
+            DispatchQueue.global(qos: helperQoS).asyncAfter(deadline: .now() + killGraceSeconds) {
                 if process.isRunning { kill(pid, SIGKILL) }
             }
         }
-        DispatchQueue.global(qos: timerQoS).asyncAfter(deadline: .now() + timeout, execute: killer)
+        DispatchQueue.global(qos: helperQoS).asyncAfter(deadline: .now() + timeout, execute: killer)
 
         // 顺序:先把管道读空,再 waitUntilExit()。反过来的话,子进程写满 64KB 缓冲区
         // 之后会阻塞在 write 上永远不退出,而我们正等着它退出。被 terminate 杀掉时管道
@@ -103,7 +104,7 @@ public enum ProcessRunner {
         let errBox = DataBox()
         let errDone = DispatchSemaphore(value: 0)
         if let errPipe {
-            DispatchQueue.global(qos: .utility).async {
+            DispatchQueue.global(qos: helperQoS).async {
                 errBox.set(errPipe.fileHandleForReading.readDataToEndOfFile())
                 errDone.signal()
             }

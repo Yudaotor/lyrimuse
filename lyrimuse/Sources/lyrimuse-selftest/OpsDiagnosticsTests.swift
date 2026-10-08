@@ -547,8 +547,13 @@ func runOpsDiagnosticsTests() {
         expectEqual(explicit?.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines), "[on]",
                     "ProcessRunner: 传了 environment 就真的传进子进程")
 
-        // 超时定时器的优先级不能低于轮询队列(userInitiated),否则系统很忙时到点了也杀不掉(02 章决策 105)。
-        expectEqual(ProcessRunner.timerQoS, .userInitiated, "ProcessRunner: 超时定时器挂 userInitiated")
+        // 超时定时器、读 stderr 的那条线优先级不能低于轮询队列(userInitiated),否则系统很忙时到点了也杀不掉、
+        // 读不完 stderr 调用方也回不来(02 章决策 105)。
+        expectEqual(ProcessRunner.helperQoS, .userInitiated, "ProcessRunner: 超时定时器与读 stderr 挂 userInitiated")
+        let runnerSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Util/ProcessRunner.swift"), encoding: .utf8)) ?? ""
+        expectEqual(!runnerSource.isEmpty && !runnerSource.contains("qos: .utility"), true,
+                    "ProcessRunner: 没有挂 utility 的辅助任务")
 
         // 不理 SIGTERM 的子进程(osascript 等授权弹窗时就是这样):超时后补 SIGKILL,不能一直卡着。
         let stubbornStart = Date()
