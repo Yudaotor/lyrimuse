@@ -934,6 +934,14 @@ func runPlaybackPositionTests() {
             expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 0.05, clockOverrun: 1.95), false, "起播方式: 钟晚 1.9s → 没预载")
             expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 0.3, clockOverrun: -1.5), false, "起播方式: 旧曲还剩 1.5s 就换了(手动跳歌)→ 不算")
             expectEqual(LocalPlaybackSource.isPreloadedGaplessStart(raw: 0.3, clockOverrun: -120), false, "起播方式: 旧曲远没放完(手动跳歌)→ 不算")
+            // 自然切歌时先归零后换歌名(真机:回绕 11:49:08.618、换歌名 .985,换歌那一拍算出的旧曲越界 −219):沿用回绕那次的判断。
+            let wrapAt = Date(timeIntervalSince1970: 1_791_000_000)
+            expectEqual(LocalPlaybackSource.spotifyRenameFollowsWrap(wrapAt: wrapAt, now: wrapAt.addingTimeInterval(0.367), raw: 0.384), true,
+                        "起播方式: 回绕后 0.37s 换歌名 → 沿用回绕那次的判断")
+            expectEqual(LocalPlaybackSource.spotifyRenameFollowsWrap(wrapAt: wrapAt, now: wrapAt.addingTimeInterval(2.5), raw: 0.384), false,
+                        "起播方式: 回绕过去 2.5s 才换歌 → 另一回事,照常判")
+            expectEqual(LocalPlaybackSource.spotifyRenameFollowsWrap(wrapAt: wrapAt, now: wrapAt.addingTimeInterval(0.4), raw: 30), false,
+                        "起播方式: 新曲读数不在曲首 → 不是这种换歌")
             // 广告放完接着放的那首(真机:广告报 29.99s、29.09 就结束,新曲 raw 0.527、旧曲钟越界 1.05;暂停反推真实领先 0.766):
             // 不管钟接没接上都单独一档,学进 fresh 会把手动点播(真实 0.27)抬到 0.6。
             expectEqual(LocalPlaybackSource.spotifyNaturalStartKind(raw: 0.527, clockOverrun: 1.05, previousWasAd: true), .afterAd,

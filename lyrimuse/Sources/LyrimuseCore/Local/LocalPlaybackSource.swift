@@ -439,6 +439,10 @@ public final class LocalPlaybackSource: ObservableObject {
     private var posTrackingKey = ""
     /// 上一轮那首是不是广告(换歌那一拍它就是"上一首是不是广告",见 spotifyNaturalStartKind)。
     private var posPrevWasAdBreak = false
+    /// Spotify 刚在歌名还没换的时候判过一次「回绕」:什么时刻、判成哪种起播、当时旧曲的钟越界量。自然切歌时 Spotify
+    /// 先把进度归零、0.3~0.4 秒后才换歌名;换歌那一拍旧曲的位置已经被回绕归零,不能再拿来算越界量,沿用这一笔
+    /// (见 spotifyRenameFollowsWrap)。
+    private var spotifyRecentWrap: (at: Date, kind: SpotifyStartKind, clockOverrun: Double)?
     private var posWasPlaying = false
     private var posPrevWall: Date?
     // 上一轮的报告值 —— 冻结检测(isFrozenReport)用它算"这一轮报告值前进了多少"。
@@ -907,6 +911,17 @@ public final class LocalPlaybackSource: ObservableObject {
         if previousWasAd, abs(clockOverrun) <= naturalAdvanceWindowSecs { return .afterAd }
         return isPreloadedGaplessStart(raw: raw, clockOverrun: clockOverrun) ? .gapless : .fresh
     }
+
+    /// 换歌那一拍是不是紧跟着一次回绕:自然切歌时 Spotify 先把进度归零(走单曲循环回绕那一支,按旧曲的钟判过起播方式)、
+    /// 0.3~0.4 秒后才换歌名。换歌那一拍旧曲的位置已经被回绕归零,再拿它算越界量会得到 −219 这种数、判成 fresh,
+    /// 领先量少补 0.2 秒、整首偏快,所以沿用回绕那一次的判断。真单曲循环歌名不变,不经过这里。纯函数,selftest 直接覆盖。
+    /// 见 02 章决策 112。
+    public nonisolated static func spotifyRenameFollowsWrap(wrapAt: Date, now: Date, raw: Double) -> Bool {
+        let age = now.timeIntervalSince(wrapAt)
+        return age >= 0 && age <= spotifyWrapRenameWindowSecs && raw < naturalAdvanceWindowSecs
+    }
+    /// 实测回绕到换歌名 0.33~0.37 秒,留到 2 秒:负载高时这两份快照会晚到。
+    public nonisolated static let spotifyWrapRenameWindowSecs: TimeInterval = 2
 
     /// 换歌那一拍,是不是预载好的无缝换歌。纯函数,selftest 直接覆盖。
     /// - raw: 新曲第一笔读数(它自己的钟)
@@ -1784,7 +1799,14 @@ public final class LocalPlaybackSource: ObservableObject {
                     && anchorElapsedTime == nil
                 var spotifyKind: SpotifyStartKind?
                 var spotifyClockOverrun: Double?
-                if let bundle = gaplessLeadBundleID, bundle == posPrevGaplessLeadBundleID,
+                let recentWrap = spotifyRecentWrap
+                spotifyRecentWrap = nil
+                if isSpotifyPlayerClock, let wrap = recentWrap,
+                   Self.spotifyRenameFollowsWrap(wrapAt: wrap.at, now: now, raw: rawReported) {
+                    spotifyKind = wrap.kind
+                    spotifyClockOverrun = wrap.clockOverrun
+                    logger.notice("spotify rename after wrap: \(now.timeIntervalSince(wrap.at), format: .fixed(precision: 3))s later, keeping kind=\(wrap.kind.rawValue, privacy: .public)")
+                } else if let bundle = gaplessLeadBundleID, bundle == posPrevGaplessLeadBundleID,
                    posWasPlaying, let prevWall = posPrevWall,
                    posPrevDurationSecs > 0 {
                     let overrun = trackPosSeconds
@@ -1978,6 +2000,7 @@ public final class LocalPlaybackSource: ObservableObject {
             let kind: SpotifyStartKind = Self.isPreloadedGaplessStart(raw: rawReported, clockOverrun: clockOverrun) ? .gapless : .fresh
             let lead = spotifyStartLead(kind)
             logger.notice("repeat-one wrap: spotify start lead kind=\(kind.rawValue, privacy: .public) lead \(lead, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)), old clock overrun \(clockOverrun, format: .fixed(precision: 3)))")
+            spotifyRecentWrap = (now, kind, clockOverrun)
             setReportedBias(lead, anchorElapsed: nil, startKind: kind)
             trackPosSeconds = rawReported - lead
             posErrEMA = 0
