@@ -229,7 +229,7 @@ Contributors / 贡献者
   players' lyrics while a browser video holds playback focus (#37)
   感谢 @wutongyuonce 的首次贡献，修复浏览器视频占用播放焦点时已暂停播放器歌词仍在走的问题（#37）
 
-490 commits since v1.9.0.
+491 commits since v1.9.0.
 
 **Full Changelog**: https://github.com/Yudaotor/lyrimuse/compare/v1.9.0...v1.10.0
 

@@ -197,7 +197,9 @@ def render_html(lines: list[str], lang: str) -> str:
             # NSAttributedString(html:) 解析(SoftwareUpdatePage.render),那个解析器把 <ul><li>
             # 转成 NSTextList —— 自带 • 标记和一大段固定缩进,而且不认 list-style 之类的 CSS,
             # 改样式表是拦不住它的。换成段落,标记和缩进就从根上不存在。
-            body.append('<p class="item">' + inline_md(join_wrapped(li)) + "</p>")
+            # 段落开头带一个「• 」字符:「软件更新」页最后交给 SwiftUI Text 显示,段落样式(缩进、段距)
+            # 全被丢掉,一条换行后的续行跟下一条一样顶在左边;续行开头没有圆点,才分得出哪里是新的一条。
+            body.append('<p class="item">• ' + inline_md(join_wrapped(li)) + "</p>")
             li = []
 
     def close_list():
@@ -240,7 +242,7 @@ def render_html(lines: list[str], lang: str) -> str:
             break
         flush_table()
         if first and re.fullmatch(r"v\d+\.\d+\.\d+", stripped):
-            body.append("<h2>" + html.escape(stripped) + "</h2>")
+            # 正文首行的版本号不输出:「软件更新」页卡片标题已经写着「Lyrimuse X.Y.Z」。
             first = False
             continue
         first = False
@@ -269,8 +271,8 @@ def render_html(lines: list[str], lang: str) -> str:
         f'<!DOCTYPE html>\n<html lang="{lang}"><head><meta charset="utf-8"><style>\n'
         "body{font:13px -apple-system,'PingFang SC',sans-serif;line-height:1.55;margin:14px;color:#333}\n"
         "@media(prefers-color-scheme:dark){body{color:#ddd;background:#1e1e1e}a{color:#6cf}}\n"
-        "h2{font-size:17px;margin:0 0 10px}h3{font-size:14px;margin:16px 0 6px}\n"
-        # 不要项目符号、也不要缩进:条目跟它上面的小节标题左边缘对齐。带 disc 的默认样式
+        "h3{font-size:14px;margin:16px 0 6px}\n"
+        # 不要列表自带的项目符号和缩进(条目前的「• 」是正文里的字符):条目跟它上面的小节标题左边缘对齐。带 disc 的默认样式
         # 在 Sparkle 那扇窄弹窗里会把每条推进去一截,点和文字之间还空着一大段,而换行后的续行
         # 又顶回左边,一条条读起来是散的。
         "p.item{margin:3px 0}\n"
