@@ -19,7 +19,7 @@
 
 https://github.com/user-attachments/assets/59250bba-4fb4-452e-a76a-b6c473bd0e97
 
-Lyrimuse is an open-source desktop lyrics app for macOS. It lives in the menu bar and highlights lyrics word by word as the song plays: floating always on top of your windows, in the menu bar, in a Dynamic-Island-style capsule under the notch, or in a full lyrics window. It works with nine players, including Apple Music, Spotify, Amazon Music and the YouTube Music app Kaset, plus web players in your browser, and picks the best match from twelve lyrics sources, with translation and romanization when you want them. It also keeps a Last.fm listening profile and scrobbles your plays.
+Lyrimuse is an open-source desktop lyrics app for macOS. It lives in the menu bar and highlights lyrics word by word as the song plays: floating always on top of your windows, in the menu bar, in a Dynamic-Island-style capsule under the notch, on the Touch Bar, or in a full lyrics window. It works with nine players, including Apple Music, Spotify, Amazon Music and the YouTube Music app Kaset, plus web players in your browser, and picks the best match from twelve lyrics sources, with translation and romanization when you want them. It also keeps a Last.fm listening profile and scrobbles your plays.
 
 **Coming from LyricsX?** It hasn't had a new release since April 2022. Lyrimuse covers what it did, keeps getting updates, and adds support for Chinese-language players, KKBOX, Amazon Music, Kaset and web players. For the details, see the fact-checked [comparison with LyricsX and Lyric Fever](docs/lyrics-apps-comparison.md).
 
@@ -53,6 +53,7 @@ brew install --cask lyrimuse
 - **The Apple Music touches in the Lyrics Window**: background vocals on their own line under the main one, overlapping duet lines lit up together until both finish, and long held English words that swell and glow the way Apple Music does it.
 - **Simplified or Traditional Chinese** for the lyrics, set separately from the app's own language.
 - **Lyrics Manager**, for when you want to tidy up. Browse, edit, delete or search again for any song, delete many at once, and clear out the empty entries that ads and podcasts leave behind. If one song's timing is off, shift just that song. One button retries every song that still has no lyrics, and a full rescan re-picks your whole library with the current matching rules. Anything you fixed by hand is left alone.
+- **Fix lyrics right from the Lyrics Window.** Search for other lyrics, re-match the song, or edit it in your own text editor. Editing word-by-word lyrics changes only the words, so every word keeps its timing.
 - **Works offline** for any song whose lyrics are already cached.
 
 ### Last.fm listening profile and scrobbling
@@ -63,16 +64,18 @@ brew install --cask lyrimuse
 - **You decide when a play counts**: at 50% like Last.fm's default, at 75% or 90%, or only when the song actually finishes. ListenBrainz isn't affected. You can also keep a player out of Last.fm completely, so its plays never show up in your history.
 - **The same history shows up in the Lyrics Window** when nothing's playing, so you get an overview instead of a blank screen (more on that below).
 
-### Floating overlay, menu bar lyrics, Dynamic Island, or a full lyrics window
+### Floating overlay, menu bar lyrics, Dynamic Island, Touch Bar, or a full lyrics window
 - **Use several players, or let it pick.** Apple Music, Spotify and Kaset are read with Automation access. QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, KKBOX and Amazon Music are read through macOS's MediaRemote and need no permission. Turn on any mix in Settings, or leave it on auto-detect and it follows whatever macOS shows as Now Playing.
 - **Apple Music radio works too.** The lyrics keep up with each song on a station. While the host is talking you see the station's name and logo, not the song before. Radio gets its own timing offset, so you can fix a station once and forget about it.
 - **So do players in your browser.** Pair your browser once and YouTube Music or Spotify Web works like any other player, with lyrics synced to the page's own progress bar. A one-click test tells you up front whether the browser can be controlled at all. During an ad the capsule turns black and shows how long is left and which ad of how many this is. YouTube Music ads get a skip button, or can be skipped automatically.
 - **Pick how you want to see it**, any combination or none at all:
   - a desktop overlay you can drag anywhere, or pin to the top center or just above the Dock;
   - a Dynamic-Island-style capsule at the top of the screen, which can show the album art and blur it behind the capsule;
+  - the Touch Bar on a MacBook Pro that has one, with the line scrolling along as it's sung, plus the album art and playback controls if you want them;
   - a resizable Lyrics Window modelled on Apple Music's lyrics page, with two columns, a blurred cover in the background, the whole song scrolling along to the current line, and moving album art when Apple Music has a motion cover for the record.
 - **Menu bar lyrics (text mode).** The current line sits right in the menu bar. Long lines scroll instead of getting cut off halfway (you can switch back to cutting them off). A second row can show the next line, the translation or the romanization, and the capsule can do the same.
 - **Drag the progress bar to seek**, in the Lyrics Window and in the capsule.
+- **Shuffle, repeat, Favorite and volume** right in the Lyrics Window, wherever the player allows it: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in the browser each support some or all of them.
 - **Open the song where it lives** from the "⋯" menu or the info panel. Apple Music opens in the app, Spotify jumps to the track that's playing, and KKBOX opens the song, album or artist in its own app. QQ Music, Soda Music, Spotify, Amazon Music and YouTube Music (when you play it in Kaset) open the song, album or artist page on the web, and NetEase Cloud Music opens the song page. Lyrimuse found the link while fetching lyrics or read it from the player's own data on your Mac, so there's nothing to search.
 - **When nothing's playing**, the Lyrics Window shows today's and this week's totals, an "On This Day" card, and your recent plays with covers, each one linking to its album or artist page in Apple Music.
 - **A mini Lyrics Window**: a small card showing one line, two lines or the full scrolling lyrics, with its own background, text color, font, weight and sung color; word-by-word karaoke can be turned off for it alone.
@@ -87,6 +90,7 @@ brew install --cask lyrimuse
 - **Search in Settings.** Type in the sidebar and it scrolls to the matching row and highlights it, opening a collapsed group if it needs to.
 - **Updates itself.** It checks on its own, or when you ask from the menu bar. Updates install from the Software Update page in Settings, with the release notes and progress right there, and you can opt in to beta builds.
 - **Start together with your players**, set per player and in either direction: open them when Lyrimuse opens, open Lyrimuse when they open, and if you like, quit Lyrimuse once all the players it follows have quit.
+- **Launch Silently** if you'd rather it start with no windows at all, just the menu bar icon.
 - **Moving to a new Mac?** Export your whole setup and import it there. If something goes wrong, there's also a one-click diagnostics export.
 
 ### Optional extras
