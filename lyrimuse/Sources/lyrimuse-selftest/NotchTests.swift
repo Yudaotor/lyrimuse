@@ -1193,6 +1193,9 @@ func runNotchTests() {
                         && ctrlSrc.contains("PlaybackCoordinator.shared.$notchLyrics\n            .map { $0.compactLine != nil }")
                         && ctrlSrc.contains("guard showsLyrics, let shown = trackDrop else { return }"), true,
                         "换歌翻牌契约: 开着歌词行时歌名停到第一句之前、马上开唱不掉,歌词行出现一句就收(05 章决策 72)")
+            expectEqual(v.contains(".foregroundStyle(bubbleTextColor)")
+                        && v.contains("return LocalPlaybackSource.contrastRatio(lum, 0) >= 4.5 ? tint : .white"), true,
+                        "悬浮文案气泡契约: 强调色在黑底上对比度不够时字改用白(05 章决策 74)")
             expectEqual(dropSrc.contains("Text(Image(systemName: \"music.note\"))")
                         && dropSrc.contains("trigger: drop?.replacing == nil ? -1 : drop?.id ?? -1"), true,
                         "换歌翻牌契约: 音符包在 Text 里跟歌名一起收;关键帧只在推出旧行时跑")

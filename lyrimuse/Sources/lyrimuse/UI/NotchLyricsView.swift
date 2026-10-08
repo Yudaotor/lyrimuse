@@ -2895,7 +2895,7 @@ private struct QuickActionTooltipOverlay: ViewModifier {
     private func bubble(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(tint)
+            .foregroundStyle(bubbleTextColor)
             .lineLimit(1)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
@@ -2910,6 +2910,15 @@ private struct QuickActionTooltipOverlay: ViewModifier {
                     )
             )
             .fixedSize()
+    }
+
+    /// 气泡上的字:强调色在黑底上的对比度够正文那一档(≥ 4.5)就用它,不够就用白 —— 封面偏暗时强调色发黑,
+    /// 黑字跟气泡底融在一起(05 章决策 74)。亮度公式同顶行胶囊的 `seamTextColor`。
+    private var bubbleTextColor: Color {
+        guard let ns = NSColor(tint).usingColorSpace(.sRGB) else { return .white }
+        let lum = LocalPlaybackSource.relativeLuminance(
+            r: Double(ns.redComponent), g: Double(ns.greenComponent), b: Double(ns.blueComponent))
+        return LocalPlaybackSource.contrastRatio(lum, 0) >= 4.5 ? tint : .white
     }
 }
 
