@@ -1996,24 +1996,40 @@ func runSourceContractTests() {
             try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
         }
         if let view = read("UI/LyricsOverlayView.swift") {
-            // 换句动画(04 章决策 52):开关关着、或开了「减弱动态效果」时一层都不包;开着时旧下一句和新主句按编号配对,
-            // 只配位置,0.25 秒 cubic-bezier(0.4, 0, 0.2, 1);主句从上一拍下一句的字号和不透明度起步。
+            // 换句动画(样子见 04 章决策 52,做法见 04 章决策 54):开关关着、或开了「减弱动态效果」时不用舞台;开着时两格交给
+            // OverlayLineChangeStage,位移、放大、淡入淡出由它装 Core Animation 动画,卡片上不挂 SwiftUI 的配对 / 过渡动画。
             expectEqual(view.contains("private var animatesLineChange: Bool { playback.lineChangeAnimation && !reduceMotion }")
-                        && view.contains("Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.25)")
+                        && view.contains("            if animatesLineChange {\n                lineChangeRows\n            } else {")
+                        && view.contains("OverlayLineChangeStage(")
                         && view.contains("private var nextSlotID: String { \"line\\((playback.lineIndex ?? -1) + 1)\" }")
-                        && view.contains("guard let last = lineChangeMemory.lastNextRow, last.id == mainSlotID else { return .opacity }"), true,
-                        "悬浮换句动画: 只在开着时包层;下一句与新主句按编号配对上移,新主句从下一句的字号起步")
-            // 走上来的那行路上不挡东西:旧读音、译文、下一句当场收掉,新的后半程才淡入,旧主句 0.12 秒淡完。
-            expectEqual(view.contains("static let instantOut = AnyTransition.opacity.animation(.linear(duration: 0.01))")
-                        && view.contains("static let quickOut = AnyTransition.opacity.animation(.easeOut(duration: 0.12))")
-                        && view.contains("static let lateIn = AnyTransition.opacity.animation(.easeOut(duration: 0.12).delay(0.13))")
-                        && view.contains("insertion: mainRowInsertion,\n                              removal: OverlayLineChangeTransitions.quickOut"), true,
-                        "悬浮换句动画: 旧的读音 / 译文 / 下一句当场收掉、新的后半程淡入,旧主句 0.12 秒淡完")
-            // 读音、译文跟着自己那一句走:开着时只有两格(这一句 / 下一句),按顶边配对,不再一行一格各自进退场。
-            expectEqual(view.contains("            if animatesLineChange {\n                lineChangeRows\n            } else {")
-                        && view.contains(".matchedGeometryEffect(id: id, in: namespace, properties: .position, anchor: .top)")
-                        && view.components(separatedBy: "OverlayLineChangeSlot(enabled: true, id: ").count - 1 == 2, true,
-                        "悬浮换句动画: 开着时卡片里只有这一句 / 下一句两格,读音和译文随所在那句一起走")
+                        && !view.contains("matchedGeometryEffect")
+                        && !view.contains(".animation(Self.animation, value: key)"), true,
+                        "悬浮换句动画: 只在开着时用舞台;卡片上不挂 SwiftUI 的配对 / 过渡动画(每一帧都要整张卡片过一遍更新)")
+            if let stage = read("UI/OverlayLineChangeStage.swift") {
+                // 新主句跟上一拍下一句同号才从它那一格、按它的字号起步,否则原地淡入。
+                expectEqual(stage.contains("if lastNextRow.id == m.id, let oldNext = next, oldNext.id == m.id {")
+                            && stage.contains("pendingEntry = .rise(from: oldNext.view.frame, scale: lastNextRow.scale)")
+                            && stage.contains("pendingEntry = .fade"), true,
+                            "悬浮换句动画: 新主句跟上一拍下一句同号才走上来,否则原地淡入")
+                // 走上来的那行路上不挡东西:旧下一句当场收掉,新的后半程才淡入,旧主句原地淡完。
+                expectEqual(stage.contains("next?.view.removeFromSuperview()\n            next = install(n)")
+                            && stage.contains("lateIn.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + OverlayLineRise.lateInDelay")
+                            && stage.contains("Self.fade(from: 1, to: 0, duration: OverlayLineRise.fadeOutDuration,"), true,
+                            "悬浮换句动画: 旧的下一句当场收掉、新的后半程淡入,旧主句原地淡完")
+                // 舞台不接鼠标;换句前比换句后高时撑住高度,到新主句走完再放开。
+                expectEqual(stage.contains("override func hitTest(_ point: NSPoint) -> NSView? { nil }")
+                            && stage.contains("return CGSize(width: width, height: max(contentHeight(width: width), heldHeight ?? 0))"), true,
+                            "悬浮换句动画: 舞台不接鼠标;换句前更高时撑住高度(不然走上来的那一句起步时被窗口下沿裁掉)")
+            } else {
+                expectEqual(true, false, "悬浮换句动画: 读不到 UI/OverlayLineChangeStage.swift(路径挪了?)")
+            }
+            // 读音、译文跟着自己那一句走:两格(这一句 / 下一句);格子里量的矩形在格子根部接住、清零,由外层按舞台位置发出。
+            // 坐标空间定义在撑满整宽的那一层上,量出来的才是相对格子左上角的(定义在内容自己身上会少算居中 / 靠右的横向偏移)。
+            expectEqual(view.components(separatedBy: "content: AnyView(lineChangeSlot(").count - 1 == 2
+                        && view.contains("content: content().frame(maxWidth: .infinity, alignment: alignment))")
+                        && view.contains(".transformPreference(LyricsTextRectPreferenceKey.self) { $0 = .zero }")
+                        && view.contains(".background(OverlayLineChangeReportEmitter(reports: lineChangeReports, coordinateSpace: overlayCoordSpaceName,"), true,
+                        "悬浮换句动画: 开着时卡片里只有这一句 / 下一句两格;格子撑满整宽后量矩形,接住清零、由外层按舞台位置发出")
             // 默认 loops = true 是给灵动岛歌名那类常驻标签的;歌词行滚一遍停在句尾,等换句才归零。
             expectEqual(view.contains("MarqueeText(id: id, restingAlignment: alignment, loops: false)"), true,
                         "悬浮滚动: overlayScroll 的跑马灯必须 loops: false(否则滚完一行又跳回开头)")

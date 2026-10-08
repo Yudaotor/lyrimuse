@@ -1483,6 +1483,34 @@ func runOverlayTests() {
                     false, "控制排: 调整宽度模式也压不过「悬停时显示控制条」关掉")
     }
 
+    // MARK: - 悬浮歌词:换句动画的起步几何与时序(OverlayLineRise,04 章决策 54)
+    do {
+        typealias R = OverlayLineRise
+        func near(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) < 1e-9 && abs(a.y - b.y) < 1e-9 }
+        let position = CGPoint(x: 0, y: 40)
+        let anchor = CGPoint(x: 200, y: 40)
+        let offset = CGVector(dx: 0, dy: 90)
+        let t = R.startTransform(scale: 0.7, anchor: anchor, position: position, offset: offset)
+        expectEqual(near(R.rendered(anchor, transform: t, position: position), CGPoint(x: 200, y: 130)), true,
+                    "换句起步: 终点顶边上那一点落在上一拍下一句那一格的顶边上")
+        expectEqual(near(R.rendered(CGPoint(x: 0, y: 40), transform: t, position: position), CGPoint(x: 60, y: 130)), true,
+                    "换句起步: 顶边左端按 0.7 倍向那一点收拢")
+        expectEqual(near(R.rendered(CGPoint(x: 200, y: 140), transform: t, position: position), CGPoint(x: 200, y: 200)), true,
+                    "换句起步: 那一点下方的距离也按 0.7 倍缩")
+        let movedAnchor = CGPoint(x: 200, y: 90)
+        let t2 = R.startTransform(scale: 0.7, anchor: anchor, position: movedAnchor, offset: offset)
+        expectEqual(near(R.rendered(anchor, transform: t2, position: movedAnchor), CGPoint(x: 200, y: 130)), true,
+                    "换句起步: 跟图层自己的锚点落在哪无关")
+        expectEqual(R.startTransform(scale: 1, anchor: anchor, position: position, offset: .zero), .identity,
+                    "换句起步: 比例 1、不挪就是恒等")
+        expectEqual(R.duration, 0.25, "换句时序: 走上来 0.25 秒(同 LyricsX)")
+        expectEqual(R.curve.x1 == 0.4 && R.curve.y1 == 0 && R.curve.x2 == 0.2 && R.curve.y2 == 1, true,
+                    "换句时序: cubic-bezier(0.4, 0, 0.2, 1)")
+        expectEqual(R.fadeOutDuration, 0.12, "换句时序: 旧的一句 0.12 秒淡完")
+        expectEqual(abs(R.lateInDelay + R.lateInDuration - R.duration) < 1e-9, true,
+                    "换句时序: 新的下一句在走上来的那一句到位时正好淡完")
+    }
+
     // MARK: - 悬浮歌词:拖窗口边缘改宽度(OverlayWidthDrag)
     do {
         typealias D = OverlayWidthDrag
