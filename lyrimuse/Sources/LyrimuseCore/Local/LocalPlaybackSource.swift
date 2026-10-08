@@ -2629,7 +2629,12 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 把"当前该显示哪一行"这一组发布状态清干净。**只清行,不碰曲目 / 封面 / 时长** ——
     /// 那是 clearIfWasPlaying() 的活(整个停播)。逐个先比再赋:这些都是 @Published,
     /// 无条件赋值会让订阅者每拍重渲染(理由同 apply() 里那段注释)。
+    /// 上一拍选「显示哪一句」用的位置(见 `LineSelectionHold`)。切歌、重载歌词、App 自己发起的跳转、暂停、
+    /// 清空显示时清掉。
+    private var lineSelectionHeldMs: Int?
+
     private func clearLineDisplay() {
+        lineSelectionHeldMs = nil
         if currentLine != nil { currentLine = nil }
         if nextLineText != nil { nextLineText = nil }
         if nextLineSide != nil { nextLineSide = nil }
@@ -2655,6 +2660,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func resolveLinesForPausedPosition() {
+        lineSelectionHeldMs = nil
         guard let frozen = pausedPositionMs, syncEngine.hasContent, !lyricLinesSuppressed else {
             clearLineDisplay()
             return
@@ -2706,7 +2712,10 @@ public final class LocalPlaybackSource: ObservableObject {
         // 但 tickQuery 让下标只算一次、还带单调窗口记忆化,调用方也从四行收敛成一次调用)。
         // "只在真的变化时才赋值"的规则原样保留 —— 这四个是 @Published,SwiftUI 不管新旧值
         // 是否相等,只要赋值就会通知订阅者重新渲染,而绝大多数 tick 其实还是同一行。
-        let r = syncEngine.tickQuery(atMs: pos, trackEndMs: currentDurationMs)
+        // 选句用的位置:小幅往回纠正时停在上一拍那里(见 LineSelectionHold);填色和下一拍的时刻照实际位置。
+        let selectPos = LineSelectionHold.position(raw: pos, held: lineSelectionHeldMs)
+        lineSelectionHeldMs = selectPos
+        let r = syncEngine.tickQuery(atMs: selectPos, trackEndMs: currentDurationMs)
         if r.line != currentLine { currentLine = r.line }
         if r.compactLine != compactLine { compactLine = r.compactLine }
         if r.compactPlaceholder != compactShowsPlaceholder { compactShowsPlaceholder = r.compactPlaceholder }
@@ -2722,7 +2731,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if r.overlappingIndices != overlappingLineIndices { overlappingLineIndices = r.overlappingIndices }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
         if r.rawGapWindow != rawGapWindow { rawGapWindow = r.rawGapWindow }
-        publishSurfaceLyrics(atRawMs: pos)
+        publishSurfaceLyrics(atRawMs: selectPos)
         updateLineFillSettled(line: r.line, index: r.index, atRawMs: pos)
         scheduleNextTick(atRawMs: pos, anchor: anchor)
     }
@@ -3953,6 +3962,7 @@ public final class LocalPlaybackSource: ObservableObject {
                                                        kasetWasPlaying: kasetWasPlaying) else { return }
 
         let now = Date()
+        lineSelectionHeldMs = nil
         noteSeekSent(target: seconds, previous: trackPosSeconds, route: route, at: now)
         // 记下"从哪跳到哪",用来在接下来一小段时间里识别并丢弃 seek 之前采样的陈旧读数。
         lastSeekPrevSecs = trackPosSeconds
@@ -4173,6 +4183,7 @@ public final class LocalPlaybackSource: ObservableObject {
     private var lastReloadSnapshot: LyricsReloadSnapshot?
 
     private func reloadCurrentLyrics() {
+        lineSelectionHeldMs = nil
         guard let snapshot = lastSnapshot else { return }
         let found = EnrichCacheReader.lookup(
             artist: snapshot.artist ?? "",

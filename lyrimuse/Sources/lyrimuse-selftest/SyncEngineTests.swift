@@ -595,6 +595,32 @@ func runSyncEngineTests() {
                     "歌词那一拍(契约): 一次性定时器,不再每 50ms 一拍")
         expectEqual(sourceBytes(playbackSource, contain: "        updateLineFillSettled(line: r.line, index: r.index, atRawMs: pos)\n        scheduleNextTick(atRawMs: pos, anchor: anchor)\n"), true,
                     "歌词那一拍(契约): 每拍结束时按下一个会变的时刻排下一拍")
+        // 选句位置小退保持:每拍选句、各展示面按停住的位置,填色和下一拍按实际位置;几处重置点都清掉。
+        expectEqual(sourceBytes(playbackSource, contain: "let selectPos = LineSelectionHold.position(raw: pos, held: lineSelectionHeldMs)")
+                    && sourceBytes(playbackSource, contain: "let r = syncEngine.tickQuery(atMs: selectPos, trackEndMs: currentDurationMs)")
+                    && sourceBytes(playbackSource, contain: "publishSurfaceLyrics(atRawMs: selectPos)")
+                    && playbackSource.components(separatedBy: "lineSelectionHeldMs = nil").count - 1 == 4, true,
+                    "选句小退保持(契约): fastTick 按停住的位置选句,切歌 / 重载 / 跳转 / 暂停 / 清空时清掉")
+        // 判定本身:往回不超过 800ms 停在上一拍,往回更多或往前照实际位置。
+        expectEqual(LineSelectionHold.position(raw: 1000, held: nil), 1000, "选句小退保持: 没有上一拍时照实际位置")
+        expectEqual(LineSelectionHold.position(raw: 1500, held: 1000), 1500, "选句小退保持: 往前照实际位置")
+        expectEqual(LineSelectionHold.position(raw: 600, held: 1044), 1044, "选句小退保持: 往回 0.44s(开播钟起步晚)停在上一拍")
+        expectEqual(LineSelectionHold.position(raw: 244, held: 1044), 1044, "选句小退保持: 往回正好 800ms 仍停住")
+        expectEqual(LineSelectionHold.position(raw: 243, held: 1044), 243, "选句小退保持: 往回超过 800ms(拖进度)照实际位置")
+        // 一句起点在 900ms:先唱到 1044 亮出这一句,钟往回拉到 592,这一句不收回去;实际位置追过 1044 之后照常走。
+        do {
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: "[00:00.90]first\n[00:03.00]second\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+            var held: Int? = nil
+            var shown: [String?] = []
+            for raw in [500, 1044, 592, 800, 1100, 3100] {
+                let pos = LineSelectionHold.position(raw: raw, held: held)
+                held = pos
+                shown.append(engine.tickQuery(atMs: pos, trackEndMs: nil).line?.plainText)
+            }
+            expectEqual(shown, [nil, "first", "first", "first", "first", "second"],
+                        "选句小退保持: 开播钟往回拉跨过第一句起点时,第一句不收回去")
+        }
         expectEqual(sourceBytes(playbackSource, contain: "var next = syncEngine.nextChangeMs(afterRaw: pos)")
                     && sourceBytes(playbackSource, contain: "let settle = settledThresholdMs - syncEngine.effectiveOffsetMs")
                     && sourceBytes(playbackSource, contain: "if mv.timeline.holdsSong(atVideoMs: pos) {"), true,
