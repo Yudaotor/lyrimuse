@@ -1744,6 +1744,14 @@ func runPlaybackPositionTests() {
         expectEqual(interlude?.offsetMs(atVideoMs: 50_000), -5000, "MV 时间轴: 插段之前只扣片头")
         expectEqual(interlude?.offsetMs(atVideoMs: 105_000), -10000, "MV 时间轴: 插段里歌词停在插段开始那一刻")
         expectEqual(interlude?.offsetMs(atVideoMs: 120_000), -15000, "MV 时间轴: 插段之后整段扣掉")
+        // 歌词那一拍:插段里歌曲时间停着、按插段的节奏走;插段之前把它的起点当一个时刻。片头片尾不算插段。
+        expectEqual(interlude?.holdsSong(atVideoMs: 50_000), false, "MV 时间轴: 插段之前没停")
+        expectEqual(interlude?.holdsSong(atVideoMs: 105_000), true, "MV 时间轴: 插段里停着")
+        expectEqual(interlude?.holdsSong(atVideoMs: 120_000), false, "MV 时间轴: 插段之后不停")
+        expectEqual(interlude?.holdsSong(atVideoMs: 2_000), false, "MV 时间轴: 片头不算停")
+        expectEqual(interlude?.nextHoldStartMs(afterVideoMs: 50_000), 100_000, "MV 时间轴: 下一段插段从 100 秒开始")
+        expectEqual(interlude?.nextHoldStartMs(afterVideoMs: 105_000), nil, "MV 时间轴: 后面没有插段了")
+        expectEqual(blank?.nextHoldStartMs(afterVideoMs: 0), nil, "MV 时间轴: 只有片头片尾时没有插段")
         // Tame Impala MV 的重叠片段合并。
         expectEqual(T.merged([.init(start: 0, end: 78.5), .init(start: 0, end: 1.2), .init(start: 294.8, end: 342.8)],
                              videoDurationSecs: 343).count, 2, "MV 时间轴: 重叠片段合并")

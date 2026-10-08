@@ -551,8 +551,8 @@ final class MenuBarStatusItem: NSObject {
     private static let iconContentHoldSecs: TimeInterval = 3
     /// 建槽之前先给「该显示哪一句 / 多宽」多少时间落定。
     ///
-    /// 120ms ≈ 歌词引擎 `fastTick` 的两拍多(20Hz,50ms 一拍)。实测那两次抢跑分别只差
-    /// **17ms 和 46ms**,一拍就够;取两拍多是留余量,而它的代价只是首句最多晚 120ms 出现 ——
+    /// 歌词那一拍在播放状态变化的同一次 poll 里紧跟着补(`LocalPlaybackSource.apply`)。实测那两次抢跑分别只差
+    /// **17ms 和 46ms**;取 120ms 是留余量,而它的代价只是首句最多晚 120ms 出现 ——
     /// 肉眼无感,远小于"先按错的行建一次、正确宽度再等 3 秒才落地"。
     private static let iconExitSettleSecs: TimeInterval = 0.12
     private var lastRebuildAt = Date.distantPast
@@ -755,7 +755,7 @@ final class MenuBarStatusItem: NSObject {
         //   20:09:05.346  deferred 2.968s -> text(173.29)          —— 配额已烧完 → 落在句中
         //
         // 成因是**两条链路的节奏差**:播放状态一变 `refresh()` 立刻就跑(@Published 直通),
-        // 而"现在该显示第几句"要等歌词引擎 20Hz `fastTick` 的下一拍。于是边界上的第一次
+        // 而"现在该显示第几句"要等歌词那一拍(`fastTick`)。于是边界上的第一次
         // 重建经常是按**还没换过来的那一行**建的,几十毫秒后才发现建错 —— 而那时 3 秒配额
         // 已经花掉,正确的宽度只能推迟落地,正好落在句中。它还会级联:推迟落地把节流起点
         // 往后拖,连累后面本来合格的几次(实测抓到过一串三连)。

@@ -237,7 +237,7 @@ public final class LyricsSyncEngine {
     // 单曲歌词时间轴微调——毫秒,由 LyricsOffsetStore 按当前曲目 key 灌进来(见
     // LocalPlaybackSource 的 reloadCurrentLyrics())。正数=歌词整体提前
     // (显示得比原始时间戳更早),负数=延后,0=不校正。只在这里(匹配的最后一步)统一加
-    // 到查询位置上,activeLine/upcomingLineText 的调用方(20Hz fastTick)完全不用关心
+    // 到查询位置上,activeLine/upcomingLineText 的调用方(fastTick)完全不用关心
     // 这件事,换歌时只要换一次 offsetMs 就对新歌词生效。
     public var offsetMs: Int = 0
 
@@ -1611,7 +1611,7 @@ public final class LyricsSyncEngine {
     /// 早退闸:enrich 缓存是全库单文件,引擎给**别的歌**写盘
     /// (专辑预取/译文回填/重打分)也会 bump mtime,调用方(reloadCurrentLyrics)按 mtime
     /// 失效就会带着一字未变的入参反复调进来 —— 原来每次都全量重跑解析+署名过滤,还把
-    /// romanizer/wordGroup/segments 三个按行缓存无条件清空,让 20Hz 路径和 allLines 再
+    /// romanizer/wordGroup/segments 三个按行缓存无条件清空,让逐拍路径和 allLines 再
     /// 全部重算一遍(日文逐字歌一次 10-40ms 主线程,正撞上 30Hz 填色渲染)。字符串 == 在
     /// 相等时要逐字节比,但几十 KB 也只是 µs 级,相对省下的毫秒级重算完全值得。
     /// 入参全等时**保住**全部缓存——输入相等则派生状态必然相等,比"清了也不会算错"更强。
@@ -2074,16 +2074,16 @@ public final class LyricsSyncEngine {
     // (那一行没有罗马音)交给下面 700ms 容差本身已经算合理的判断。
     //
     // 实测排查坐实的真实性能回归:activeLine(atMs) 由
-    // LocalPlaybackSource.fastTick() 以 20Hz 调用,每次都会重新算一遍这一行的
+    // LocalPlaybackSource.fastTick() 每一拍都调,每次都会重新算一遍这一行的
     // romanization——没有服务端罗马音的歌(比如纯英文歌词)会在每一次 tick 都重新跑一遍
     // Romanizer.romanize() 的 ICU 音译,而不是只在真的换到新的一行时才算一次,导致主线程
-    // 20 次/秒白白做重复的字符串音译运算,表现成"本地悬浮窗/歌词窗口进度肉眼可见地比
+    // 每一拍都白白做重复的字符串音译运算,表现成"本地悬浮窗/歌词窗口进度肉眼可见地比
     // 网页端(走的是完全不同的一套外推逻辑,不受这里影响)慢、跟不上播放进度"。按
-    // plainText 记忆化:同一句歌词文本只在第一次真正算一遍,之后的 19/20 次 tick 直接
+    // plainText 记忆化:同一句歌词文本只在第一次真正算一遍,之后的每一拍直接
     // 命中缓存,不再重复调用这个开销不小的字符串变换。
     private var romanizerFallbackCache: [String: String?] = [:]
 
-    /// 按行缓存「这一行要不要标读音」(见 Romanizer.needsRomanization)。romanizationText 以 20Hz
+    /// 按行缓存「这一行要不要标读音」(见 Romanizer.needsRomanization)。romanizationText 每一拍都
     /// 被调用,ICU 音译不便宜,理由同 romanizerFallbackCache。
     private var needsRomanizationCache: [String: Bool] = [:]
 
@@ -2180,7 +2180,7 @@ public final class LyricsSyncEngine {
     }
 
     // 行文本 → 词组。跟 romanizerFallbackCache 同样按行缓存:同一行在播放期间会被反复
-    // 查询(20Hz 定位 + 每帧填色),分词是纯 CPU 活,不该每次重算。
+    // 查询(逐拍定位 + 每帧填色),分词是纯 CPU 活,不该每次重算。
     private var wordGroupCache: [String: [SyncedLyricWordGroup]?] = [:]
 
     /// 把逐字词按读音分好组,并给每组配上罗马音——日文按分词器的片段边界并组,中文/粤语
@@ -2349,13 +2349,13 @@ public final class LyricsSyncEngine {
         return groups.contains { $0.romanization != nil } ? groups : nil
     }
 
-    // ---- 20Hz 热路径的两级省功(性能审计落地) --------------------------
+    // ---- 逐拍热路径的两级省功(性能审计落地) --------------------------
     //
     // ① 定位扫描提前 break:baseLines/wordLines 都按 timeMs 升序(LRCParser/YRCParser
     //    解析时排序),越过 posMs 之后剩余迭代必然无效,原来的 `for … where` 写法会把
     //    整个数组扫到尾。
     // ② 构建结果按行下标记忆化:activeLine 每次调用都全量重建 SyncedLyricLine(词数组
-    //    map、两次整行字符串拼接、罗马音/译文各一次最近邻扫描),而 fastTick 以 20Hz 调它,
+    //    map、两次整行字符串拼接、罗马音/译文各一次最近邻扫描),而 fastTick 每一拍都调它,
     //    换行几秒才发生一次 —— 约 99% 的 tick 构建完即被调用方的 != 比较丢弃。下标没变
     //    直接返回上一次的同一个实例,构建和深比较(String/Array 共享存储走同一性快路径)
     //    一起塌缩掉。缓存只在 load()(换歌词内容)时失效;offsetMs 只影响"落在哪一行"
@@ -2374,7 +2374,7 @@ public final class LyricsSyncEngine {
     // 单行展示面的「领先行」独立占一个槽:它跟 activeIdx 只在提前量窗口里
     // 不同(下标差 1),共用一个槽的话那段时间里两个下标每 tick 互相踢缓存,上面那段注释
     // 描述的塌缩("约 99% 的 tick 构建完即被丢弃")就整个失效 —— 而 lineAt 的构建正是
-    // tailClamped + wordGroups + 两次最近邻扫描,20Hz 跑两遍是这个仓库栽过的那类
+    // tailClamped + wordGroups + 两次最近邻扫描,每一拍跑两遍是这个仓库栽过的那类
     // 热路径回归。失效点跟上面两组一致(load() 里一起清)。
     private var cachedLeadIdx = Int.min
     private var cachedLeadLine: SyncedLyricLine?
@@ -2486,7 +2486,7 @@ public final class LyricsSyncEngine {
         return line
     }
 
-    /// fastTick(20Hz)的打包查询:当前行/下一句预览/行下标/间奏下标要的是同一个 posMs 的
+    /// fastTick 每一拍的打包查询:当前行/下一句预览/行下标/间奏下标要的是同一个 posMs 的
     /// 同一次定位,原来四个入口各自独立调 activeIndexCorrected 从头扫一遍(
     /// 审计:同一 tick 内 3/4 是纯重复)。这里下标只算一次,几个值一起返回。
     public struct TickResolution {
@@ -2611,6 +2611,46 @@ public final class LyricsSyncEngine {
             nextWordGroups: next.wordGroups,
             gapIndex: gap,
             rawGapWindow: rawGap)
+    }
+
+    /// 播放位置 `rawPosMs` 之后,`tickQuery` 和各展示面 `surfaceTick` 的结果最早可能在哪个播放位置变(毫秒,
+    /// 播放位置时间轴);nil = 往后再也不会变。歌词那一拍按它排下一拍(见 08 章决策 47)。只会早不会晚:两边判据
+    /// 用到的时刻全列在这里,取第一个晚于此刻的 —— 列早了只是白醒一次,漏列一个,那一样就要等别的原因醒来才变。
+    /// 两边的判据加了新的时刻,这里要跟着加(selftest 沿时间轴细扫核对)。
+    public func nextChangeMs(afterRaw rawPosMs: Int) -> Int? {
+        let posMs = rawPosMs + effectiveOffsetMs
+        var best = Int.max
+        func consider(_ t: Int?) {
+            if let t, t > posMs, t < best { best = t }
+        }
+        // CompactLyricLead.resolve 的三个阈值:唱完、唱完再停 tailHoldMs、下一句前 revealMs。
+        func considerLead(end: Int?, next: Int?) {
+            guard let end else { return }
+            consider(end)
+            consider(end + CompactLyricLead.tailHoldMs)
+            if let next { consider(next - CompactLyricLead.revealMs) }
+        }
+        let idx = activeIndexCorrected(posMs)
+        consider(gapLineStartMs(at: idx + 1))
+        for applyMinimum in [true, false] {
+            if let window = gapWindow(after: idx, applyMinimumDuration: applyMinimum) {
+                consider(window.start)
+                consider(window.end)
+            }
+        }
+        // 滚动锚「唱完即滚」用的是这一行唱完的时刻,跟提前量的第一个阈值是同一个。
+        considerLead(end: gapLineEndMs(at: idx), next: gapLineStartMs(at: idx + 1))
+        for j in max(0, idx - 3) ..< max(0, idx) where overlapHoldEndMs.indices.contains(j) {
+            consider(overlapHoldEndMs[j])
+        }
+        for surface in LineBreakSurface.allCases where surfaceBreaks[surface]?.budget != nil {
+            extendSegments(surface, coveringMs: posMs)
+            guard let starts = surfaceBreaks[surface]?.starts, !starts.isEmpty else { continue }
+            let k = Self.segmentIndex(starts: starts, atOrBefore: posMs)
+            consider(segmentStart(surface, k + 1))
+            considerLead(end: segmentSungEndMs(surface, k), next: segmentStart(surface, k + 1))
+        }
+        return best == Int.max ? nil : best - effectiveOffsetMs
     }
 
     /// 滚动锚下标(TickResolution.scrollIndex 的本体):空档里指向下一行,其余时刻等于
@@ -2972,6 +3012,16 @@ public final class LyricsSyncEngine {
         }
     }
 
+    /// 最后一个起点 <= posMs 的段下标,没有为 -1。starts 升序。
+    private static func segmentIndex(starts: [Int], atOrBefore posMs: Int) -> Int {
+        var lo = 0, hi = starts.count - 1, k = -1
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            if starts[mid] <= posMs { k = mid; lo = mid + 1 } else { hi = mid - 1 }
+        }
+        return k
+    }
+
     private func segmentStartMs(_ seg: LyricsSegmenter.Segment) -> Int {
         seg.part?.startMs ?? gapLineStartMs(at: seg.firstLine) ?? 0
     }
@@ -3075,11 +3125,7 @@ public final class LyricsSyncEngine {
         let posMs = rawPosMs + effectiveOffsetMs
         extendSegments(surface, coveringMs: posMs)
         guard let starts = surfaceBreaks[surface]?.starts, !starts.isEmpty else { return .empty }
-        var lo = 0, hi = starts.count - 1, k = -1
-        while lo <= hi {
-            let mid = (lo + hi) / 2
-            if starts[mid] <= posMs { k = mid; lo = mid + 1 } else { hi = mid - 1 }
-        }
+        let k = Self.segmentIndex(starts: starts, atOrBefore: posMs)
         var out = SurfaceLyrics()
         out.line = k >= 0 ? segmentLine(surface, k) : nil
         out.lineIndex = k >= 0 ? k : nil

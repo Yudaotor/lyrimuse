@@ -1345,7 +1345,7 @@ func runMenuBarTests() {
     // ---- 离开图标槽前先让行落定(查「句中重建」查出来的)----
     //
     // 边界(图标槽 与 歌词槽)上,播放状态和歌词引擎是两条链路:前者一变 refresh() 立刻跑,
-    // 后者要等 20Hz fastTick 下一拍。实测那次抢跑只差 **17ms**,却让正确的宽度推迟 2.97s
+    // 后者要等歌词那一拍。实测那次抢跑只差 **17ms**,却让正确的宽度推迟 2.97s
     // 才落地、正好落在句中,还会级联(推迟落地把节流起点往后拖,连累后面本来合格的几次)。
     do {
         let item = URL(fileURLWithPath: #filePath)
@@ -1353,7 +1353,7 @@ func runMenuBarTests() {
             .appendingPathComponent("Sources/lyrimuse/MenuBar/MenuBarStatusItem.swift")
         if let text = try? String(contentsOfFile: item.path, encoding: .utf8) {
             expectEqual(text.contains("static let iconExitSettleSecs: TimeInterval = 0.12"), true,
-                        "落定窗: 120ms ≈ fastTick 两拍多(实测抢跑只差 17ms / 46ms)")
+                        "落定窗: 120ms(实测抢跑只差 17ms / 46ms)")
             expectEqual(text.contains("displayClass == \"icon\" || targetIsProvisional"), true,
                         "落定窗: 两处赛跑都盖住 —— 离开图标槽 + 目标还不作数(占位)")
             // 换歌那一下:「♪ 歌名」占位先按自己的宽建一次,22ms 后下一句的宽才知道,

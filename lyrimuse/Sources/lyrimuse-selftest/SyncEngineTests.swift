@@ -536,6 +536,76 @@ func runSyncEngineTests() {
             }
         }
         expectEqual(fuzzFailures, 0, "按宽度断句: 随机宽度下每一行都放得下")
+        // 歌词那一拍的「下一个会变的时刻」(nextChangeMs,08 章决策 47):只会早不会晚。前奏 6 秒;短间隙;第 4、5 句
+        // 真重叠(主句末字越过下一句 500ms);第 6 句前 9 秒长间奏、背景人声唱到主句之后;三个展示面都窄,
+        // 长句会被拆开、短句会被并起来。第一句句内停顿三处、最后一句中间停 7 秒:拆开的前一段唱完到后一段开唱之间
+        // 各有几个时刻,词首尾相接时它们跟后一段的起点重合、测不出来。整行歌词那首带一个空时间戳(打轴标的
+        // 「到这儿唱完」)。三个展示面都没开时只剩整行那一套时刻,单独跑一遍:开着时展示面的分段时刻会把整行那边漏掉的盖住。
+        let tickYRC = "[6000,3100](6000,300,0)Hello(6300,300,0) there(6800,300,0) this(7100,200,0) is(7600,200,0) a(7800,300,0) rather(8300,300,0) long(8600,300,0) opening(8900,200,0) line\n"
+            + "[9200,600](9200,300,0)Oh(9500,300,0) yeah\n"
+            + "[10000,1200](10000,400,0)Short(10400,400,0) one(10800,400,0) here\n"
+            + "[11500,2000](11500,500,0)Overlap(12000,500,0)ping(12500,1000,0) voice\n"
+            + "[13000,2000](13000,1000,0)Second(14000,1000,0) singer\n"
+            + "[24000,3000](24000,1000,0)After(25000,1000,0) the(26000,1000,0) break\n"
+            + "[29000,3000](29000,1500,0)Last(30500,1500,0) line\n"
+            + "[34000,9500](34000,500,0)Wait(34500,500,0) for(42000,500,0) it(42500,1000,0) now\n"
+        let tickBG = "[24000,3000](26500,1000,0)(the(27500,1000,0) break)\n"
+        let tickLRC = "[00:06.00]First line of the plain song here\n[00:09.00]Second line\n[00:12.00]\n"
+            + "[00:20.00]Third line after a long break here\n[00:25.00]Last\n"
+        func tickEngine(lyrics: String, yrc: String, bg: String, breaks: LineBreakOptions, offset: Int,
+                        surfaces: Bool = true) -> LyricsSyncEngine {
+            let e = LyricsSyncEngine()
+            e.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, lyricsBG: bg, lineBreaks: breaks)
+            e.offsetMs = offset
+            let measure: (String) -> CGFloat = { CGFloat($0.count) * 10 }
+            for (surface, width) in [(LineBreakSurface.overlay, CGFloat(150)), (.notch, 100), (.menuBar, 80)] where surfaces {
+                e.setLayoutBudget(LineLayoutBudget(
+                    key: "w\(width)", main: .init(maxWidth: width, measure: measure),
+                    preview: .init(maxWidth: width, measure: measure),
+                    translation: .init(maxWidth: width, measure: measure)), for: surface)
+            }
+            return e
+        }
+        for offset in [0, 300, -450] {
+            for (name, breaks, surfaces) in [("断句开", LineBreakOptions.all, true), ("断句关", LineBreakOptions.off, true),
+                                             ("展示面都没开", LineBreakOptions.all, false)] {
+                let words = tickEngine(lyrics: "", yrc: tickYRC, bg: tickBG, breaks: breaks, offset: offset, surfaces: surfaces)
+                expectEqual(nextChangeViolations(words, from: -1500, through: 47000, step: 10, trackEndMs: 47000), [],
+                            "下一个会变的时刻(逐字,\(name),偏移 \(offset)): 只会早不会晚")
+                let plain = tickEngine(lyrics: tickLRC, yrc: "", bg: "", breaks: breaks, offset: offset, surfaces: surfaces)
+                expectEqual(nextChangeViolations(plain, from: -1500, through: 33000, step: 10, trackEndMs: 33000), [],
+                            "下一个会变的时刻(整行,\(name),偏移 \(offset)): 只会早不会晚")
+            }
+        }
+        // 醒得少:逐字那首从头到尾按它排拍,醒的次数不到每 50ms 一拍(48.5 秒 970 拍)的十分之一。
+        let sparse = tickEngine(lyrics: "", yrc: tickYRC, bg: tickBG, breaks: .all, offset: 0)
+        var wakes = 0
+        var wakeAt = -1500
+        while let n = sparse.nextChangeMs(afterRaw: wakeAt), n <= 47000 {
+            wakes += 1
+            wakeAt = n
+        }
+        expectEqual(wakes > 0 && wakes < 97, true, "下一个会变的时刻: 逐字那首整首醒 \(wakes) 次(每 50ms 一拍是 970 次)")
+        // 歌词那一拍按「下一个会变的时刻」排(源码契约)。
+        let playbackSource = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift"), encoding: .utf8)) ?? ""
+        expectEqual(playbackSource.isEmpty, false, "歌词那一拍(契约): 读到源码")
+        expectEqual(sourceBytes(playbackSource, contain: "let timer = Timer(timeInterval: seconds, repeats: false)")
+                    && !sourceBytes(playbackSource, contain: "Timer(timeInterval: 1.0 / 20.0, repeats: true)"), true,
+                    "歌词那一拍(契约): 一次性定时器,不再每 50ms 一拍")
+        expectEqual(sourceBytes(playbackSource, contain: "        updateLineFillSettled(line: r.line, index: r.index, atRawMs: pos)\n        scheduleNextTick(atRawMs: pos, anchor: anchor)\n"), true,
+                    "歌词那一拍(契约): 每拍结束时按下一个会变的时刻排下一拍")
+        expectEqual(sourceBytes(playbackSource, contain: "var next = syncEngine.nextChangeMs(afterRaw: pos)")
+                    && sourceBytes(playbackSource, contain: "let settle = settledThresholdMs - syncEngine.effectiveOffsetMs")
+                    && sourceBytes(playbackSource, contain: "if mv.timeline.holdsSong(atVideoMs: pos) {"), true,
+                    "歌词那一拍(契约): 下一拍取引擎的时刻、这一行填完的时刻、MV 插段里的节奏里最早的")
+        expectEqual(sourceBytes(playbackSource, contain: "            fastTick()\n        } else {\n            // 在播、但引擎里没有任何歌词内容"), true,
+                    "歌词那一拍(契约): 每次 poll 按新锚点补一拍(锚点一改,排好的时刻就不准了)")
+        expectEqual(playbackSource.components(separatedBy: "        retickSoon()\n    }").count - 1, 2,
+                    "歌词那一拍(契约): 偏移、展示面宽度变了马上补一拍")
+        if let dir = ProcessInfo.processInfo.environment["LYRIMUSE_NEXTCHANGE_LIBRARY"] {
+            expectEqual(nextChangeLibraryFailures(bodiesDir: dir), 0, "下一个会变的时刻: 全库只会早不会晚")
+        }
         if let dir = ProcessInfo.processInfo.environment["LYRIMUSE_RESEGMENT_BENCH"] {
             resegmentBenchmark(bodiesDir: dir, stride: Int(ProcessInfo.processInfo.environment["LYRIMUSE_RESEGMENT_BENCH_STRIDE"] ?? "") ?? 30)
         }

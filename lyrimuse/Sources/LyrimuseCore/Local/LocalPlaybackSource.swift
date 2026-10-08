@@ -47,7 +47,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 下一行的逐词分组(见 `LyricsSyncEngine.TickResolution.nextWordGroups`):`currentLine` 为 nil
     /// 时悬浮歌词用它把罗马音逐词标在那句底下,跟它变成当前行之后的排版一致。
     @Published public private(set) var nextLineWordGroups: [SyncedLyricWordGroup]?
-    // "歌词窗口"(完整可滚动歌词列表)用——跟 currentLine/nextLineText 同一套 20Hz tick
+    // "歌词窗口"(完整可滚动歌词列表)用——跟 currentLine/nextLineText 同一拍(fastTick)
     // 算出来,只在真的换了行时才重新赋值(见 fastTick())。allLines 换歌时才重新构造一次
     // (reloadCurrentLyrics()),不需要每 tick 重算——歌词内容本身在同一首歌播放期间不变。
     @Published public private(set) var currentLineIndex: Int?
@@ -84,7 +84,7 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var compactLeadInMs: Int?
     @Published public private(set) var allLines: [LyricsWindowLine] = []
     // 歌词间奏点(歌词窗口的「•••」):整首歌的间奏位置换歌时算一次;
-    // "此刻在不在间奏里"跟 currentLineIndex 一样只在真的变化时赋值(20Hz tick 判定)。
+    // "此刻在不在间奏里"跟 currentLineIndex 一样只在真的变化时赋值(歌词那一拍判定)。
     @Published public private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
     @Published public private(set) var currentGapIndex: Int?
     /// `currentGapIndex` 的不设门槛版本——悬浮歌词兜底用(它没有"沿用上一行"这条退路,
@@ -274,6 +274,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if !lyricLinesSuppressed, let pos = anchor?.extrapolatedPositionMs() ?? pausedPositionMs {
             publishSurfaceLyrics(atRawMs: pos)
         }
+        retickSoon()
     }
 
     private func updateMenuBarSongRowWidth() {
@@ -345,7 +346,7 @@ public final class LocalPlaybackSource: ObservableObject {
 
     private let syncEngine = LyricsSyncEngine()
     // 公开给 View 层——逐字填色现在按渲染帧频(TimelineView)从这个锚点直接外推真实
-    // 播放位置现算,不再靠这里的 20Hz tick 把预算好的 fillFraction 塞进 currentLine。
+    // 播放位置现算,不靠这里的 tick 把预算好的 fillFraction 塞进 currentLine。
     @Published public private(set) var anchor: ProgressAnchor?
     private var lastKey = ""
     private var lastSnapshot: MediaControlSnapshot? {
@@ -362,7 +363,7 @@ public final class LocalPlaybackSource: ObservableObject {
     private var musicVideoTimeline: (trackKey: String, timeline: MusicVideoTimeline)?
     /// 已经为哪首歌发起过片段查询(同一首只查一次,换歌清掉)。
     private var musicVideoLookupKey: String?
-    /// 此刻叠进引擎的 MV 偏移(≤ 0),由 20Hz tick 按播放位置刷新,见 refreshMusicVideoOffset。
+    /// 此刻叠进引擎的 MV 偏移(≤ 0),由歌词那一拍按播放位置刷新(插段里 50ms 一拍),见 refreshMusicVideoOffset。
     private var musicVideoOffsetMs = 0
     /// 此刻叠进引擎的空间音频版歌词偏移,由 applyOffsets 按 spatialAudioOffsetMs 现算,见那个函数。
     private var spatialAudioOffsetMs = 0
@@ -2095,6 +2096,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private var pollTimer: Timer?
+    /// 歌词那一拍的一次性定时器,见 `scheduleNextTick`。
     private var fastTimer: Timer?
     private var screenLocked = false
 
@@ -2509,15 +2511,10 @@ public final class LocalPlaybackSource: ObservableObject {
         if desired != currentPollInterval { reschedulePollTimer(interval: desired) }
     }
 
-    // 只在真的需要时(anchor 非 nil,即正在播放)才保持 20Hz 快速 tick 运行——暂停/
-    // 长时间挂起时没有锚点可外推,tick 只会一遍遍把 currentLine/nextLineText 置 nil,
-    // 没必要让计时器继续空转。用 fastTimer == nil 判断"已经在跑了"而不是每次 apply()
-    // 都无条件重建,避免播放中每 2 秒(poll 周期)就重开一次计时器。
-    /// 屏幕锁上时暂停 20Hz 的逐字 tick。
+    /// 屏幕锁上时停掉歌词那一拍。
     ///
-    /// 锁屏时没有任何人在看歌词,而 fastTick 是这个 App 最热的那条路径(逐字填色要 20Hz)。
-    /// 只停这一条:2 秒 poll 必须继续跑,否则锁屏期间听的歌不会被记录、Last.fm /
-    /// ListenBrainz 提交会整段丢失 —— 那是不可恢复的数据,省一点电不值当。
+    /// 锁屏时没有任何人在看歌词。只停这一条:2 秒 poll 必须继续跑,否则锁屏期间听的歌不会被记录、
+    /// Last.fm / ListenBrainz 提交会整段丢失 —— 那是不可恢复的数据,省一点电不值当。
     public func setScreenLocked(_ locked: Bool) {
         guard screenLocked != locked else { return }
         screenLocked = locked
@@ -2525,23 +2522,61 @@ public final class LocalPlaybackSource: ObservableObject {
         if locked {
             stopFastTimer()
         } else if anchor != nil {
-            // 解锁时只在"确实还在播"的前提下恢复,判据跟 apply() 里一致(有锚点才需要外推,
-            // 且引擎里得有歌词内容 —— 没词的空转档见 apply() 末尾那段注释)。
-            if syncEngine.hasContent { ensureFastTimerRunning() }
-            fastTick() // 立刻补一帧,别等下一个 50ms
+            fastTick() // 立刻补一拍,由它排后面的拍
         }
     }
 
-    private func ensureFastTimerRunning() {
-        // 锁屏期间一律不起 —— 否则 apply() 每 2 秒会把刚停掉的计时器又拉起来。
-        guard !screenLocked else { return }
-        guard fastTimer == nil else { return }
-        // 20Hz;必须挂 .common mode,否则菜单打开/拖拽悬浮窗时会停摆。
-        let t = Timer(timeInterval: 1.0 / 20.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.fastTick() }
+    /// 一拍最长隔多久:漏算了某个时刻,那一样最多晚这么久变。
+    private static let maximumTickInterval: TimeInterval = 1
+    /// MV 插段里一拍隔多久:歌曲时间停着、偏移每一刻都在变。
+    private static let holdTickInterval: TimeInterval = 0.05
+    /// 排到某个时刻时多等这一点,醒来时播放位置已经越过它。
+    private static let tickSlack: TimeInterval = 0.002
+    private static let minimumTickInterval: TimeInterval = 0.005
+
+    /// 歌词那一拍不按固定频率走:每拍结束时取引擎给的「下一个会变的时刻」(`LyricsSyncEngine.nextChangeMs`)、
+    /// 这一行填完的时刻、下一段 MV 插段开始的时刻里最早的一个,按播放速率换成墙钟,排一次性定时器(见 08 章决策 47)。
+    /// 锁屏、没有歌词内容时不排。
+    private func scheduleNextTick(atRawMs pos: Int, anchor: ProgressAnchor) {
+        guard !screenLocked, syncEngine.hasContent else {
+            stopFastTimer()
+            return
         }
-        RunLoop.main.add(t, forMode: .common)
-        fastTimer = t
+        var next = syncEngine.nextChangeMs(afterRaw: pos)
+        if !currentLineFillSettled {
+            let settle = settledThresholdMs - syncEngine.effectiveOffsetMs
+            if settle > pos { next = min(next ?? settle, settle) }
+        }
+        var interval = Self.maximumTickInterval
+        if let mv = musicVideoTimeline, mv.trackKey == lastSnapshot?.trackKey {
+            if mv.timeline.holdsSong(atVideoMs: pos) {
+                interval = Self.holdTickInterval
+            } else if let start = mv.timeline.nextHoldStartMs(afterVideoMs: pos) {
+                next = min(next ?? start, start)
+            }
+        }
+        if let next {
+            let rate = anchor.rate > 0 ? anchor.rate : 1
+            interval = min(interval, Double(next - pos) / 1000 / rate + Self.tickSlack)
+        }
+        scheduleTick(after: max(interval, Self.minimumTickInterval))
+    }
+
+    /// 排下一拍,替换掉还没到的那一拍。必须挂 .common mode,否则菜单打开 / 拖拽悬浮窗时不走。
+    private func scheduleTick(after seconds: TimeInterval) {
+        fastTimer?.invalidate()
+        let timer = Timer(timeInterval: seconds, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.fastTick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        fastTimer = timer
+    }
+
+    /// 播放位置之外的输入变了(偏移、歌词内容、展示面宽度):在播的话下一圈运行循环补一拍,由它重排后面的拍。
+    /// 一拍里面也会调到这里(MV 偏移),所以不当场跑。
+    private func retickSoon() {
+        guard anchor != nil, !screenLocked, syncEngine.hasContent, !lyricLinesSuppressed else { return }
+        scheduleTick(after: 0)
     }
 
     private func stopFastTimer() {
@@ -2588,7 +2623,7 @@ public final class LocalPlaybackSource: ObservableObject {
     ///     (判定在 apply 里按真曲长算,见 radioTrackFinished);
     ///   - 广告:前贴片广告跟正片共用身份的播放器(Kaset、YouTube Music 的音乐视频),广告期间载着的已经是正片的
     ///     歌词,不收的话「广告中」下面会提前露出正片的第一句。
-    /// 20Hz 的 tick、暂停时那一次解析、展示面改宽度时那一次发布都先看它。
+    /// 歌词那一拍、暂停时那一次解析、展示面改宽度时那一次发布都先看它。
     private var lyricLinesSuppressed: Bool { radioTrackFinished || isCurrentTrackAdBreak }
 
     /// 把"当前该显示哪一行"这一组发布状态清干净。**只清行,不碰曲目 / 封面 / 时长** ——
@@ -2650,20 +2685,22 @@ public final class LocalPlaybackSource: ObservableObject {
     private func fastTick() {
         if lyricLinesSuppressed {
             clearLineDisplay()
+            stopFastTimer()
             return
         }
         guard let anchor else {
             resolveLinesForPausedPosition()
+            stopFastTimer()
             return
         }
         let pos = anchor.extrapolatedPositionMs()
         refreshMusicVideoOffset(atRawMs: pos)
         // 只在真的换了行/换了下一句预览时才赋值——这两个是 @Published,SwiftUI 不管
         // 新旧值是否相等,只要赋值就会通知订阅者重新渲染。逐字填色已经交给
-        // TimelineView 按渲染帧频现算(不经过这两个属性),这里 20Hz 只是为了判断当前
+        // TimelineView 按渲染帧频现算(不经过这两个属性),这里每一拍只是为了判断当前
         // 该显示哪一行,绝大多数 tick 其实还是同一行——无条件赋值会让悬浮窗所在的
         // LyricsOverlayView(以及任何订阅 PlaybackCoordinator 的其它 View,比如"歌词
-        // 管理"窗口)整个 body 跟着每秒重算 20 次,造成播放期间的卡顿。
+        // 管理"窗口)整个 body 跟着每一拍都重算一遍,造成播放期间的卡顿。
         // 打包查询:当前行/下一句/行下标/间奏下标要的是同一个 pos 的
         // 同一次定位,原来四个入口各自独立扫一遍数组(原注释"这个量级完全可以忽略"没错,
         // 但 tickQuery 让下标只算一次、还带单调窗口记忆化,调用方也从四行收敛成一次调用)。
@@ -2687,6 +2724,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if r.rawGapWindow != rawGapWindow { rawGapWindow = r.rawGapWindow }
         publishSurfaceLyrics(atRawMs: pos)
         updateLineFillSettled(line: r.line, index: r.index, atRawMs: pos)
+        scheduleNextTick(atRawMs: pos, anchor: anchor)
     }
 
     /// 见 currentLineFillSettled 的注释。阈值(该行从哪一毫秒起定格)是纯数值,算法在
@@ -3438,8 +3476,8 @@ public final class LocalPlaybackSource: ObservableObject {
             //
             // 不能无条件三连清空:一按暂停就让悬浮歌词/灵动岛/菜单栏那一行歌词
             // 直接消失、歌词窗口的高亮也没了,会破坏用户按暂停的典型场景——"这句是什么?
-            // 我看一下"。停掉 20Hz 定时器是对的(暂停期间位置不
-            // 再前进,没有必要每秒算 20 次),但"停止推进"跟"清空显示"是两回事。
+            // 我看一下"。停掉歌词那一拍是对的(暂停期间位置不
+            // 再前进,不会再变),但"停止推进"跟"清空显示"是两回事。
             //
             // 暂停态有精确的冻结位置(pausedPositionMs,见上面那段注释:AppleScript 和
             // media-control 在暂停时给的 elapsedTime 都是冻结值),所以直接按这个位置解一
@@ -3447,10 +3485,11 @@ public final class LocalPlaybackSource: ObservableObject {
             stopFastTimer()
             resolveLinesForPausedPosition()
         } else if syncEngine.hasContent {
-            ensureFastTimerRunning()
+            // 每次 poll 都按新锚点补一拍、重排后面的拍:锚点一改,原来排好的时刻就不准了。
+            fastTick()
         } else {
             // 在播、但引擎里没有任何歌词内容(纯音乐/广告/还没解析出来):每一拍 fastTick
-            // 的四个查询都扫空数组、四个守卫全不触发,20Hz 定时器整首歌空转纯属浪费 ——
+            // 的四个查询都扫空数组、四个守卫全不触发,一拍拍空转纯属浪费 ——
             // 暂停(上面)和锁屏(setScreenLocked)都已特判掉这种空转,这里补上"在播但
             // 没词"这一档。先补最后一拍把可能残留的行状态清掉再停表;引擎中途解析
             // 出歌词会改 enrich 文件 mtime,上面 reloadCurrentLyrics 那个分支会让下一轮
@@ -3802,7 +3841,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public func forceReloadLyricsForCurrentTrack() {
         // 刚写的内容在后台解(EnrichCacheReader.reloadSoon;同步解 32MB 的索引要 125~200ms,主线程上
         // 四个展示面一起卡)。解完经 onContentAdopted 捅一次 poll:apply() 见 decodedContentVersion 变了
-        // 就重灌,末尾按有没有内容拉起 / 停掉 20Hz 定时器,暂停态按冻结位置解一次当前行。
+        // 就重灌,末尾按有没有内容补一拍 / 停掉歌词那一拍,暂停态按冻结位置解一次当前行。
         EnrichCacheReader.reloadSoon()
     }
 
@@ -3953,7 +3992,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 暂停态:显示源是 pausedPositionMs(见 apply() 里那段注释),没有锚点可改。
             pausedPositionMs = clampedMs
         }
-        // 歌词高亮跟着立刻走到新位置,不等 20Hz 的下一拍(它本来也会跟上,但那一拍之前
+        // 歌词高亮跟着立刻走到新位置,不等下一拍(排好的下一拍按旧位置算,那一拍之前
         // 屏幕上仍是旧的一句,拖动时看着像没反应)。
         fastTick()
         publishPlaybackState(now: now)
@@ -4057,6 +4096,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 前奏那个间奏点的起点跟着总偏移走(见 LyricsSyncEngine.gapWindow),偏移变了要重算。
         let newMarkers = syncEngine.gapMarkers()
         if newMarkers != lyricsGapMarkers { lyricsGapMarkers = newMarkers }
+        retickSoon()
     }
 
     // 供"歌词管理"窗口的偏移输入框用——那边直接写 LyricsOffsetStore(不经过
@@ -4270,7 +4310,7 @@ public final class LocalPlaybackSource: ObservableObject {
             : []
         if newSongwriters != currentTrackSongwriters { currentTrackSongwriters = newSongwriters }
         // "歌词窗口"的全部行只在换歌词内容这一刻重新构造一次——同一首歌播放期间歌词
-        // 本身不变,不需要每 20Hz tick 都重算。idPrefix 用 currentOffsetKey(已经是
+        // 本身不变,不需要每一拍都重算。idPrefix 用 currentOffsetKey(已经是
         // 按当前曲目算出来的标识),保证换歌后这里产出的每个 LyricsWindowLine.id 整体
         // 跟上一首歌不同,SwiftUI 的 ForEach 才会做一次干净的整体替换而不是逐行"变形"
         // (见 LyricsWindowLine 类型定义处的注释)。

@@ -83,6 +83,24 @@ public struct MusicVideoTimeline: Equatable, Sendable {
         return out
     }
 
+    /// 视频时间 `videoMs` 落在夹在中间的插段里:歌曲时间停着,偏移随视频时间一直在变(片头、片尾的段不算,
+    /// 判据同 `offsetMs`)。
+    public func holdsSong(atVideoMs videoMs: Int) -> Bool {
+        let t = Double(videoMs) / 1000
+        return cuts.contains { isMiddle($0) && t > $0.start && t < $0.end }
+    }
+
+    /// 视频时间 `videoMs` 之后,最早的一段中间插段从哪一刻(视频毫秒)开始;没有为 nil。
+    public func nextHoldStartMs(afterVideoMs videoMs: Int) -> Int? {
+        cuts.lazy.filter { self.isMiddle($0) }
+            .map { Int(($0.start * 1000).rounded(.down)) }
+            .first { $0 > videoMs }
+    }
+
+    private func isMiddle(_ cut: Cut) -> Bool {
+        cut.start > Self.edgeSlackSecs && cut.end < videoDurationSecs - Self.edgeSlackSecs
+    }
+
     /// 播到视频第 `videoMs` 毫秒时叠进歌词引擎的偏移(≤ 0)。歌曲时间 = 视频时间 + 偏移。
     public func offsetMs(atVideoMs videoMs: Int) -> Int {
         let t = Double(videoMs) / 1000

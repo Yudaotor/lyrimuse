@@ -604,7 +604,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
-    /// 锁屏/解锁时暂停或恢复 20Hz 的逐字渲染。
+    /// 锁屏/解锁时暂停或恢复歌词那一拍。
     ///
     /// 这两个通知在 **DistributedNotificationCenter**,不是 NotificationCenter.default
     /// 也不是 NSWorkspace 的那个 —— 挂错地方会静默永不触发。
