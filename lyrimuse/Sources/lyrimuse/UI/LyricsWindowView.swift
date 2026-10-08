@@ -435,7 +435,7 @@ private final class LyricsWindowController: ObservableObject {
     private func refreshSurfaceVisible() {
         let visible = occlusionVisible && !coveredByOthers
         if isSurfaceVisible != visible { isSurfaceVisible = visible }
-        LyricsWindowHintSurface.visible = visible
+        LyricsWindowHintSurface.report(visible, from: self)
     }
 
     /// 设置页预览用:预览这份 controller 从不 attach 窗口,可见性改由宿主(设置窗口)推进来,
@@ -1124,7 +1124,7 @@ private final class LyricsWindowController: ObservableObject {
         ) { [weak self] note in
             MainActor.assumeIsolated {
                 self?.flushPendingPersistFrame()
-                LyricsWindowHintSurface.visible = false
+                if let self { LyricsWindowHintSurface.report(false, from: self) }
                 let handoff = self?.handingOff ?? false
                 self?.handingOff = false
                 if !AppExit.isTerminating, !handoff { UserDefaults.standard.set(false, forKey: LyricsWindowSession.openKey) }

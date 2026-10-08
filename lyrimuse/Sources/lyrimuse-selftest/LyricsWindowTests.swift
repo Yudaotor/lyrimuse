@@ -1227,5 +1227,22 @@ func runLyricsWindowTests() {
         expectEqual(surface.contains("let visible = occlusionVisible && !coveredByOthers"), true,
                     "设置窗口可见性(契约): 系统报可见、且没被整扇盖住才算看得见")
     }
+    // 快捷键回声能不能落到歌词窗口(07 章决策 132):完整那扇和迷你面板各报各的、关窗只撤自己那一条。共用一个布尔、
+    // 关窗就清的话,形态交接时旧窗后关会把新窗刚报的「看得见」抹掉。
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ path: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)) ?? ""
+        }
+        let actions = source("lyrimuse/UI/LyricsWindowActions.swift")
+        let window = source("lyrimuse/UI/LyricsWindowView.swift")
+        expectEqual(actions.contains("private static let visibleOwners = NSHashTable<AnyObject>.weakObjects()")
+                    && actions.contains("static var visible: Bool { !visibleOwners.allObjects.isEmpty }"), true,
+                    "快捷键回声面(契约): 按 controller 记谁看得见,controller 放掉了自动不算")
+        expectEqual(window.contains("LyricsWindowHintSurface.report(visible, from: self)")
+                    && window.contains("if let self { LyricsWindowHintSurface.report(false, from: self) }")
+                    && !window.contains("LyricsWindowHintSurface.visible ="), true,
+                    "快捷键回声面(契约): 可见性变化报自己那一条、关窗只撤自己那一条")
+    }
     checkLyricsWindowFormMorph()
 }

@@ -54,11 +54,19 @@ final class LyricsWindowActionNotes: ObservableObject {
     }
 }
 
-/// 歌词窗口此刻能不能显示快捷键回声:开着、看得见(被整扇盖住、最小化不算)。窗口那份 controller 推进来、关窗时清掉,
-/// 设置页预览那份不推。见 07 章决策 132。
+/// 歌词窗口此刻能不能显示快捷键回声:有一扇开着、看得见(被整扇盖住、最小化不算)。完整那扇和迷你面板各有一份 controller,
+/// 各报各的,关窗时只撤自己那一条:两种形态交接时是新窗先上屏、旧窗后关,共用一个布尔、关窗就清的话,旧窗关的那一下
+/// 会把新窗刚报的「看得见」抹掉,要等新窗下一次遮挡变化才回来。设置页预览那份不报。见 07 章决策 132。
 @MainActor
 enum LyricsWindowHintSurface {
-    static var visible = false
+    /// 报了「看得见」的 controller。弱引用:controller 放掉了就自动不算。
+    private static let visibleOwners = NSHashTable<AnyObject>.weakObjects()
+
+    static var visible: Bool { !visibleOwners.allObjects.isEmpty }
+
+    static func report(_ visible: Bool, from owner: AnyObject) {
+        if visible { visibleOwners.add(owner) } else { visibleOwners.remove(owner) }
+    }
 }
 
 /// 箭头往上弹的那颗小菜单开没开。胶囊开关它,说明条据此往上让开。
