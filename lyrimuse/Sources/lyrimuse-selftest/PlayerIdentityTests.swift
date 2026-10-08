@@ -790,6 +790,32 @@ func runPlayerIdentityTests() {
                     "辅助功能判据: 没勾 Amazon Music、QQ 音乐时不出现")
     }
 
+    // 说明文字里的播放器名单、开关摘要按界面语言拼(`L10n.list`):`ListFormatter.localizedString(byJoining:)` 按系统语言拼,
+    // 界面是英文、系统是中文时拼成「A、B和C」。几条警告之间的分隔符同样走本地化。
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        var offenders: [String] = []
+        var scanned = 0
+        if let walker = FileManager.default.enumerator(atPath: root.path) {
+            for case let rel as String in walker where rel.hasSuffix(".swift") {
+                guard let text = try? String(contentsOfFile: root.appendingPathComponent(rel).path, encoding: .utf8) else { continue }
+                scanned += 1
+                let code = text.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                if code.contains(where: { $0.contains("ListFormatter.localizedString(byJoining:") }) { offenders.append(rel) }
+            }
+        }
+        expectEqual(scanned > 0 && offenders.isEmpty, true,
+                    "列表拼接(契约): 不用按系统语言拼的 ListFormatter.localizedString(扫了 \(scanned) 个文件,违规: \(offenders))")
+        let l10n = (try? String(contentsOfFile: root.appendingPathComponent("L10n.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(l10n.contains("static func list(_ items: [String]) -> String {") && l10n.contains("formatter.locale = locale"), true,
+                    "列表拼接(契约): L10n.list 按界面语言拼")
+        let health = (try? String(contentsOfFile: root.appendingPathComponent("Settings/PlayerHealthMonitor.swift").path,
+                                  encoding: .utf8)) ?? ""
+        expectEqual(health.contains("joined(separator: L10n.t(\"；\"))") && !health.contains("joined(separator: \"；\")"), true,
+                    "列表拼接(契约): 健康提示里几条警告之间的分隔符走本地化")
+    }
+
     // QQ 音乐的随机 / 循环:菜单栏「播放模式」三项按标题认档位、看勾读当前档(QQMusicMenuControl),循环键两态。
     do {
         typealias Q = QQMusicMenuControl

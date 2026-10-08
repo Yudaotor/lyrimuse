@@ -1365,7 +1365,7 @@ struct OnboardingView: View {
         let autoDetect = entries.contains { if case .player(.auto) = $0 { return true } else { return false } }
         let apps = entries.filter { if case .player(.auto) = $0 { return false } else { return true } }
         // 按界面语言拼(「A、B 和 C」/「A, B, and C」),不写死中文顿号。
-        let appNames = ListFormatter.localizedString(byJoining: apps.map(\.displayName))
+        let appNames = L10n.list(apps.map(\.displayName))
         let detail = !autoDetect ? appNames
             : apps.isEmpty ? L10n.t("自动识别正在播放的 App")
             : String(format: L10n.t("自动识别正在播放的 App，以及 %@"), appNames)

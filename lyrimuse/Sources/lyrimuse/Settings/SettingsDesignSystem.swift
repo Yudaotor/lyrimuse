@@ -1027,8 +1027,9 @@ private struct PopoverContentHeightKey: PreferenceKey {
 /// (先在 `NotchEditorStage` 里从 `behaviorLikeSummary` 下沉了一层,同一天悬浮
 ///  歌词那边也要用,于是提到这里;两处的调用点仍然各自决定"要算哪些开关"。)
 ///
-/// 列表拼接必须用 `ListFormatter`(系统 API),别手写分隔符:中文按区域习惯给「、」、
-/// 英文给 ", " / "and",不用为这一个用途单独造一条要翻译的标点字符串。
+/// 列表拼接必须走 `L10n.list`(按界面语言用 `ListFormatter`),别手写分隔符:中文按区域习惯给「、」、
+/// 英文给 ", " / "and",不用为这一个用途单独造一条要翻译的标点字符串。也别用
+/// `ListFormatter.localizedString(byJoining:)`:它按系统语言拼。
 ///
 /// 元组数组**不能**用 key path 简写(`filter(\.isOn)` 编译不过),只能写成闭包。
 enum SettingsToggleSummary {
@@ -1037,7 +1038,7 @@ enum SettingsToggleSummary {
         let onTitles = entries.filter { $0.isOn }.map { $0.title }
         if onTitles.count == entries.count { return L10n.t("全部开启") }
         if onTitles.isEmpty { return L10n.t("全部关闭") }
-        return ListFormatter.localizedString(byJoining: onTitles)
+        return L10n.list(onTitles)
     }
 }
 

@@ -123,10 +123,10 @@ final class FullDiskAccessPermission: ObservableObject {
         }
     }
 
-    /// 「QQ 音乐和酷狗音乐」—— 说明文字里替哪几家要。拼接走 `ListFormatter`(见
+    /// 「QQ 音乐和酷狗音乐」—— 说明文字里替哪几家要。拼接走 `L10n.list`(按界面语言,见
     /// `SettingsToggleSummary` 头注)。
     func playerNames(_ players: [PlaybackPlayer]) -> String {
-        ListFormatter.localizedString(byJoining: players.map(\.displayName))
+        L10n.list(players.map(\.displayName))
     }
 }
 

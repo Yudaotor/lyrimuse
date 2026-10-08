@@ -150,9 +150,9 @@ final class PlayerAutomationPermissions: ObservableObject {
 
     // MARK: - 两个界面共用的措辞
 
-    /// 「Apple Music 和 Spotify」—— 说明文字里替哪几家要。拼接走 `ListFormatter`(见 `SettingsToggleSummary` 头注)。
+    /// 「Apple Music 和 Spotify」—— 说明文字里替哪几家要。拼接走 `L10n.list`(按界面语言,见 `SettingsToggleSummary` 头注)。
     func playerNames(_ players: [PlaybackPlayer]) -> String {
-        ListFormatter.localizedString(byJoining: players.map(\.displayName))
+        L10n.list(players.map(\.displayName))
     }
 
     /// 设置页那张卡卡头「?」里的一句,按用途(`PlaybackPlayer.automationUse`)分开说:

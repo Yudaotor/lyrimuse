@@ -103,5 +103,13 @@ enum L10n {
         return t(key)
     }
 
+    /// 把几样东西拼成句子里的列表(「A、B和C」/ "A, B, and C"),按**界面语言**拼(`locale`)。
+    /// 别用 `ListFormatter.localizedString(byJoining:)`:它按系统语言拼。
+    static func list(_ items: [String]) -> String {
+        let formatter = ListFormatter()
+        formatter.locale = locale
+        return formatter.string(from: items) ?? items.joined(separator: t("、"))
+    }
+
     private static let missingValue = "\u{0}"
 }

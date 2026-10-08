@@ -37,7 +37,8 @@ final class PlayerHealthMonitor: ObservableObject {
     /// 徽标的悬停说明;没有警告时为 nil(侧栏据此决定画不画徽标)。
     var warningText: String? {
         guard !warnings.isEmpty else { return nil }
-        return warnings.map(description).joined(separator: "；")
+        // 分隔符跟着界面语言走(英文是「; 」),别写死全角分号。
+        return warnings.map(description).joined(separator: L10n.t("；"))
     }
 
     private var timer: AnyCancellable?
@@ -150,13 +151,11 @@ final class PlayerHealthMonitor: ObservableObject {
             if !playMode.isEmpty {
                 parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环与喜欢键"), names(playMode)))
             }
-            return parts.joined(separator: "；")
+            return parts.joined(separator: L10n.t("；"))
         }
     }
 
     private func names(_ players: [PlaybackPlayer]) -> String {
-        let formatter = ListFormatter()
-        formatter.locale = L10n.locale
-        return formatter.string(from: players.map(\.displayName)) ?? ""
+        L10n.list(players.map(\.displayName))
     }
 }

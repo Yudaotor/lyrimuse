@@ -60,9 +60,9 @@ final class AccessibilityPermission: ObservableObject {
     var iconName: String { trusted ? "checkmark.circle.fill" : "xmark.circle.fill" }
     var iconColor: Color { trusted ? .green : .orange }
 
-    /// 「Amazon Music」—— 说明文字里替哪几家要。拼接走 `ListFormatter`(见 `SettingsToggleSummary` 头注)。
+    /// 「Amazon Music」—— 说明文字里替哪几家要。拼接走 `L10n.list`(按界面语言,见 `SettingsToggleSummary` 头注)。
     func playerNames(_ players: [PlaybackPlayer]) -> String {
-        ListFormatter.localizedString(byJoining: players.map(\.displayName))
+        L10n.list(players.map(\.displayName))
     }
 }
 

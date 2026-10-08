@@ -272,7 +272,7 @@ struct TouchBarEditorToolbar: View {
             if settings.touchBarLyricsAlignment != AppSettings.defaultTouchBarLyricsAlignment {
                 parts.append(LyricsAlignmentSegmentedControl.label(for: settings.touchBarLyricsAlignment))
             }
-            return ListFormatter.localizedString(byJoining: parts)
+            return L10n.list(parts)
         case .style:
             return SettingsToggleSummary.text([
                 (title: L10n.t("卡拉OK"), isOn: settings.touchBarLyricsKaraoke),
@@ -289,7 +289,7 @@ struct TouchBarEditorToolbar: View {
             }
             if settings.touchBarHidesControlStrip { parts.append(L10n.t("隐藏功能栏")) }
             guard !parts.isEmpty else { return L10n.t("全部关闭") }
-            return ListFormatter.localizedString(byJoining: parts)
+            return L10n.list(parts)
         }
     }
 

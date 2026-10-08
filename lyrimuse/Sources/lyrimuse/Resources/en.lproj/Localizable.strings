@@ -1930,3 +1930,4 @@
 "（已调）" = " (adjusted)";
 "（未信任，选择后自动信任）" = " (not trusted — choosing it trusts it)";
 "（正在播放）" = " (now playing)";
+"；" = "; ";

@@ -734,13 +734,13 @@ struct NotchEditorStage: View {
             parts.append("\(NotchEarModule.artwork.displayName) · \(settings.notchLyricRowArtworkPosition.displayName)")
         }
         guard !parts.isEmpty else { return L10n.t("全部关闭") }
-        return ListFormatter.localizedString(byJoining: parts)
+        return L10n.list(parts)
     }
 
     /// 「行为」/「展开态」按钮摘要:全开/全关给一句概括,部分开着就把开着的那几项标题
     /// 列出来(短则直接读全,长则交给 toolbarButton 摘要那 140pt 限宽 + 尾部省略处理,
     /// 跟「屏幕」按钮遇到长显示器名同一个兜底,不专门为这里再写一套截断逻辑)。列表拼接
-    /// 用 `ListFormatter`(系统 API)而不是手写分隔符——中文按区域习惯给"、"、英文给
+    /// 走 `L10n.list`(按界面语言用 `ListFormatter`)而不是手写分隔符——中文按区域习惯给"、"、英文给
     /// ", "/"and",不用为这一个用途单独造一条要翻译的标点字符串。
     @MainActor
     private func behaviorLikeSummary(_ items: [NotchBehaviorItem]) -> String {
@@ -805,7 +805,7 @@ struct NotchEditorStage: View {
             && settings.notchEqualizerEar == (side == .left ? NotchEqualizerEar.left : .right)
         guard equalizerHere else { return module.displayName }
         if module == NotchEarModule.none { return L10n.t("音浪") }
-        return ListFormatter.localizedString(byJoining: [module.displayName, L10n.t("音浪")])
+        return L10n.list([module.displayName, L10n.t("音浪")])
     }
 
     private func toolbarButton(
