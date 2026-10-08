@@ -2008,9 +2008,15 @@ func runSourceContractTests() {
             if let stage = read("UI/OverlayLineChangeStage.swift") {
                 // 新主句跟上一拍下一句同号才从它那一格、按它的字号起步,否则原地淡入。
                 expectEqual(stage.contains("if lastNextRow.id == m.id, let oldNext = next, oldNext.id == m.id {")
-                            && stage.contains("pendingEntry = .rise(from: oldNext.view.frame, scale: lastNextRow.scale)")
+                            && stage.contains("pendingEntry = .rise(from: oldNext.view.frame, scale: lastNextRow.scale,")
                             && stage.contains("pendingEntry = .fade"), true,
                             "悬浮换句动画: 新主句跟上一拍下一句同号才走上来,否则原地淡入")
+                // 主句下面的读音、译文跟主句同一个变换走上来,另外从透明渐显(起步时常在窗口底边以外,整块实着走会露出被裁掉的半截);
+                // 上一拍下一句那一格本来就带着它们(前奏 / 间奏)时不渐显。
+                expectEqual(stage.contains("tailFades: !lastNextRow.carriesAnnotations)")
+                            && stage.contains("for target in [layer, tailLayer].compactMap({ $0 }) {")
+                            && stage.contains("if tailFades, let tailLayer {"), true,
+                            "悬浮换句动画: 读音、译文跟主句一起走上来、从透明渐显;间奏接回时不渐显")
                 // 走上来的那行路上不挡东西:旧下一句当场收掉,新的后半程才淡入,旧主句原地淡完。
                 expectEqual(stage.contains("next?.view.removeFromSuperview()\n            next = install(n)")
                             && stage.contains("lateIn.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + OverlayLineRise.lateInDelay")

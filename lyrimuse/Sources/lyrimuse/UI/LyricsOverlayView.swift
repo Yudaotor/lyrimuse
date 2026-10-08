@@ -1268,22 +1268,22 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
 
     /// 换句动画开着时卡片里的两格(样子见 04 章决策 52,做法见 04 章决策 54)。读音、译文跟着自己那一句走:第一格是这一句
-    /// (主句 → 读音 → 译文;前奏 / 间奏时是「•••」),第二格是下一句(前奏 / 间奏时是接下来那句,连同它的读音、译文)。
+    /// (主句,下面一块读音 → 译文;前奏 / 间奏时是「•••」),第二格是下一句(前奏 / 间奏时是接下来那句,连同它的读音、译文)。
     /// 两格各在舞台的一个托管视图里,换句的位移、放大、淡入淡出由舞台交给 Core Animation;两格之间的距离也由舞台给,
     /// 格子的顶边就是字的顶边。
     private var lineChangeRows: some View {
         OverlayLineChangeStage(
             main: .init(id: mainSlotID, alignment: duetFrameAlignment.horizontal,
                         content: AnyView(lineChangeSlot(mainSlotID, alignment: duetFrameAlignment) {
+                            reportingMainLineRect(mainLine)
+                                .reportsContentRow(.main, in: contentRowRectsSpace)
+                        }),
+                        tail: line == nil ? nil : AnyView(lineChangeSlot(mainSlotID + "#tail", alignment: duetFrameAlignment) {
                             VStack(alignment: duetAlignment, spacing: 0) {
-                                reportingMainLineRect(mainLine)
-                                    .reportsContentRow(.main, in: contentRowRectsSpace)
-                                if line != nil {
-                                    romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
-                                        .padding(.top, CGFloat(rowSpacing.romanization))
-                                    translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
-                                        .padding(.top, CGFloat(rowSpacing.translation))
-                                }
+                                romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
+                                    .padding(.top, CGFloat(rowSpacing.romanization))
+                                translationRow.reportsContentRow(.translation, in: contentRowRectsSpace)
+                                    .padding(.top, CGFloat(rowSpacing.translation))
                             }
                         })),
             next: .init(id: nextSlotID, alignment: frameAlignment(for: nextLineDuetSide).horizontal,
@@ -1297,7 +1297,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                                         .padding(.top, CGFloat(rowSpacing.translation))
                                 }
                             }
-                        })),
+                        }),
+                        carriesAnnotations: line == nil),
             spacing: CGFloat(rowSpacing.nextLine),
             nextRowID: nextRowNow.id,
             nextRowScale: nextRowNow.scale,
