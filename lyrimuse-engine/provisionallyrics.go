@@ -201,6 +201,28 @@ func sameShownLyrics(a, b scoredLyricCandidateResult) bool {
 		slices.Equal(shownLyricsForm(a.LyricsBG), shownLyricsForm(b.LyricsBG))
 }
 
+// lyricsCandidateAddsNothingShown:把条目现存这份换成候选 c,屏上看不出多了或改了什么 —— 整行正文与时间轴上屏后一样
+// (shownLyricsForm 的口径);逐字、译文、罗马音、背景人声这几份,c 要么没给、要么跟现存那份一样。现存那份多出来的
+// (机翻补的译文、引擎生成的罗马音、c 没给的逐字)不算差别:不换就不会丢。
+func lyricsCandidateAddsNothingShown(e enrichEntry, c scoredLyricCandidateResult) bool {
+	if e.Lyrics == "" || !slices.Equal(shownLyricsForm(e.Lyrics), shownLyricsForm(c.Lyrics)) {
+		return false
+	}
+	covered := func(current, candidate string) bool {
+		return candidate == "" || slices.Equal(shownLyricsForm(current), shownLyricsForm(candidate))
+	}
+	return covered(e.LyricsYRC, c.LyricsYRC) && covered(e.LyricsTr, c.LyricsTr) &&
+		covered(e.LyricsRoma, c.LyricsRoma) && covered(e.LyricsBG, c.LyricsBG)
+}
+
+// keepsShownLyricsOver:重评、升级重试的冠军跟条目现存这份原文不同,换上去屏上却看不出差别(lyricsCandidateAddsNothingShown)
+// 时留着现存这份。换了的话 App 要整份重新解析,单曲时间轴偏移按歌词原文认(LyricsOffsetStore.trackKey),用户调过的偏移
+// 也对不上了。首次解析留着屏上那份(keepShownLyrics)时分数常比冠军低或者同分,这两处不挡,下次重评 / 升级重试就会把它换回
+// 冠军。原文相同的不归这里管(补逐字、换源记账照旧)。见 09 章决策 203。
+func keepsShownLyricsOver(e enrichEntry, picked *scoredLyricCandidateResult) bool {
+	return picked != nil && picked.Lyrics != e.Lyrics && lyricsCandidateAddsNothingShown(e, *picked)
+}
+
 // shownLyricsForm 把一份歌词换成只留上屏看得出的部分:LRC 行的时间标签换算成毫秒(`[00:01.5]` 与 `[00:01.500]` 相同),
 // 逐字行(`[1000,500]…`)原样;[offset:] 不为 0 时单记一项;元信息行(`[ti:]`、`[id:]`)、不带时间的行、行首尾空白都不算。
 func shownLyricsForm(s string) []string {

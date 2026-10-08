@@ -1395,7 +1395,7 @@ func applemusicLyric(ctx context.Context, artist, title, album string, durationS
 	return r
 }
 
-// applemusicConnected 供 UI / CLI 判断"用户连过没有"——不发任何网络请求。
+// applemusicNoVocalsCache:applemusicCatalogNoVocals 按目录 id 记下的结论。
 var (
 	applemusicNoVocalsMu    sync.Mutex
 	applemusicNoVocalsCache = map[string]bool{}
@@ -1453,6 +1453,7 @@ func applemusicCatalogNoVocals(ctx context.Context, catalogID string) bool {
 	return v
 }
 
+// applemusicConnected 供 UI / CLI 判断"用户连过没有"——不发任何网络请求。
 func applemusicConnected() bool {
 	tok, _ := applemusicLoadUserToken()
 	return tok != ""
