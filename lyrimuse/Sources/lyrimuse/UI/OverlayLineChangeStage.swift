@@ -13,19 +13,27 @@ import SwiftUI
 struct OverlayLineChangeStage: NSViewRepresentable {
     struct Slot {
         var id: String
-        /// 这一格内容的横向对齐。
+        /// 这一格内容的横向对齐;新主句以终点那一格顶边上的这一点为中心放大。
         var alignment: HorizontalAlignment
         var content: AnyView
-        /// 这一句那一格:主句下面的读音、译文,单独放一个托管视图,走上来时跟主句同一个平移。
+        /// 这一句那一格:主句下面的读音、译文,单独放一个托管视图。走上来时跟主句同一个变换,另外从透明渐显 ——
+        /// 它起步时落在上一拍下一句的下面,常在窗口底边以外,整块实着走会先露出被裁掉的半截。
         var tail: AnyView? = nil
+        /// 下一句那一格:读音、译文是不是跟着它一起显示着(前奏 / 间奏时)。这样的格子接上来,读音、译文本来就看得见,
+        /// 不再渐显。
+        var carriesAnnotations = false
     }
 
     let main: Slot
     let next: Slot
     /// 下一句那一格的顶边离上一格底边多远。
     let spacing: CGFloat
-    /// 这一拍下一句那一行显示着就是它的编号,没显示为 nil。下一拍新主句跟它同号时从它那一格的位置走上来,否则原地淡入。
+    /// 这一拍下一句那一行:显示着就是它的编号(没显示为 nil),和它字号相对主句的比例。下一拍新主句跟它同号时
+    /// 从这个比例放大回 1,否则原地淡入。
     let nextRowID: String?
+    let nextRowScale: CGFloat
+    /// 这一句那一格走上来时起步的不透明度(`OverlayLineRise.startOpacity`),随走随到 1。
+    let riseStartOpacity: Double
     let reports: OverlayLineChangeReports
     /// 舞台叫 `requestLayout` 时外层换一个值:换句时撑住的高度到点放开,要外层重算一次,SwiftUI 才会重新量尺寸。
     let layoutTick: Int
@@ -36,7 +44,8 @@ struct OverlayLineChangeStage: NSViewRepresentable {
     func updateNSView(_ view: OverlayLineChangeStageView, context: Context) {
         view.reports = reports
         view.requestLayout = requestLayout
-        view.update(main: main, next: next, spacing: spacing, nextRowID: nextRowID)
+        view.update(main: main, next: next, spacing: spacing, nextRowID: nextRowID, nextRowScale: nextRowScale,
+                    riseStartOpacity: riseStartOpacity)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: OverlayLineChangeStageView, context: Context) -> CGSize? {
@@ -112,18 +121,22 @@ final class OverlayLineChangeReports: ObservableObject {
 
 @MainActor
 final class OverlayLineChangeStageView: NSView {
-    /// 一格:编号、托管控制器。高度按宽度缓存,内容一换就清。
+    /// 一格:编号、托管控制器、横向对齐。高度按宽度缓存,内容一换就清。
     @MainActor
     private final class Cell {
         let id: String
         let host: NSHostingController<AnyView>
         /// 主句下面的读音、译文(只有这一句那一格有),摆在 `host` 正下方。
         private(set) var tailHost: NSHostingController<AnyView>?
+        var alignment: HorizontalAlignment
+        var carriesAnnotations: Bool
         private var heights: [CGFloat: CGFloat] = [:]
         private var tailHeights: [CGFloat: CGFloat] = [:]
 
         init(_ slot: OverlayLineChangeStage.Slot) {
             id = slot.id
+            alignment = slot.alignment
+            carriesAnnotations = slot.carriesAnnotations
             host = NSHostingController(rootView: Self.root(slot.content, slot.alignment))
             host.sizingOptions = []
             if let tail = slot.tail { tailHost = Self.makeHost(Self.root(tail, slot.alignment)) }
@@ -135,6 +148,8 @@ final class OverlayLineChangeStageView: NSView {
         var tailID: String { id + "#tail" }
 
         func update(_ slot: OverlayLineChangeStage.Slot) {
+            alignment = slot.alignment
+            carriesAnnotations = slot.carriesAnnotations
             host.rootView = Self.root(slot.content, slot.alignment)
             heights.removeAll()
             tailHeights.removeAll()
@@ -181,9 +196,10 @@ final class OverlayLineChangeStageView: NSView {
 
     /// 换句那一拍排好版之后要装的进场动画。
     private enum Entry {
-        /// 新主句连同读音、译文按主句的样子摆在上一拍下一句那一格(`from`,舞台坐标)的顶边上,只做纵向平移走上来:
-        /// 不缩放、不淡入,读音、译文也不渐显。别加回放大或跟旧下一句交叉淡化,路上看得出两份在替换(见 04 章决策 52)。
-        case rise(from: CGRect)
+        /// 从上一拍下一句那一格(`from`,舞台坐标)按它的字号比例、跟预览一样的亮度起步,走上来、放大到位、变实。只有这一份:
+        /// 旧的下一句当场收掉,别加回跟它叠着交叉淡化,路上看得出两份在替换(见 04 章决策 52)。`tailFades`:读音、译文从透明渐显
+        /// (上一拍下一句那一格没带着它们时)。
+        case rise(from: CGRect, scale: CGFloat, tailFades: Bool)
         /// 原地淡入(跳句、拖进度、换歌、没开下一句)。
         case fade
     }
@@ -194,7 +210,8 @@ final class OverlayLineChangeStageView: NSView {
     private var main: Cell?
     private var next: Cell?
     private var spacing: CGFloat = 0
-    private var lastNextRowID: String?
+    private var lastNextRow: (id: String?, scale: CGFloat, carriesAnnotations: Bool) = (nil, 1, false)
+    private var riseStartOpacity: Double = 1
     private var pendingEntry: Entry?
     private var pendingLateIn = false
     /// 正在淡出、淡完就拆的旧格子。
@@ -222,16 +239,18 @@ final class OverlayLineChangeStageView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     func update(main m: OverlayLineChangeStage.Slot, next n: OverlayLineChangeStage.Slot, spacing: CGFloat,
-                nextRowID: String?) {
+                nextRowID: String?, nextRowScale: CGFloat, riseStartOpacity: Double) {
         let firstUpdate = main == nil
+        self.riseStartOpacity = riseStartOpacity
         let heightBefore = lastWidth > 0 && !firstUpdate ? contentHeight(width: lastWidth) : nil
         self.spacing = spacing
         if let cell = main, cell.id == m.id {
             cell.update(m)
         } else {
             if let old = main {
-                if lastNextRowID == m.id, let oldNext = next, oldNext.id == m.id {
-                    pendingEntry = .rise(from: oldNext.view.frame)
+                if lastNextRow.id == m.id, let oldNext = next, oldNext.id == m.id {
+                    pendingEntry = .rise(from: oldNext.view.frame, scale: lastNextRow.scale,
+                                         tailFades: !lastNextRow.carriesAnnotations)
                 } else {
                     pendingEntry = .fade
                 }
@@ -248,7 +267,7 @@ final class OverlayLineChangeStageView: NSView {
             next = install(n)
             pendingLateIn = !firstUpdate
         }
-        lastNextRowID = nextRowID
+        lastNextRow = (nextRowID, nextRowScale, n.carriesAnnotations)
         needsLayout = true
     }
 
@@ -353,16 +372,27 @@ final class OverlayLineChangeStageView: NSView {
             let flipped = self.layer?.isGeometryFlipped == true
             let tailLayer = main.tailView?.layer
             switch entry {
-            case .rise(let from) where flipped:
-                // 主句和下面的读音、译文是同一个平移:从上一拍下一句那一格的顶边走到终点。
-                let start = CATransform3DMakeTranslation(0, from.minY - mainFrame.minY, 0)
+            case .rise(let from, let scale, let tailFades) where flipped:
+                // 主句和下面的读音、译文是同一个变换:以终点那一格顶边上按对齐取的一点为中心缩放、整体挪到上一拍下一句那里。
+                let anchor = CGPoint(x: mainFrame.minX + mainFrame.width * Self.anchorFraction(main.alignment), y: mainFrame.minY)
+                let offset = CGVector(dx: 0, dy: from.minY - mainFrame.minY)
+                if riseStartOpacity < 1 {
+                    layer.add(Self.fade(from: Float(riseStartOpacity), to: 1, duration: OverlayLineRise.duration,
+                                        curve: Self.riseCurve), forKey: "lineBrighten")
+                }
                 for target in [layer, tailLayer].compactMap({ $0 }) {
+                    let start = OverlayLineRise.startTransform(scale: scale, anchor: anchor, position: target.position,
+                                                               offset: offset)
                     let rise = CABasicAnimation(keyPath: "transform")
-                    rise.fromValue = NSValue(caTransform3D: start)
+                    rise.fromValue = NSValue(caTransform3D: CATransform3DMakeAffineTransform(start))
                     rise.toValue = NSValue(caTransform3D: CATransform3DIdentity)
                     rise.duration = OverlayLineRise.duration
                     rise.timingFunction = Self.riseCurve
                     target.add(rise, forKey: "lineRise")
+                }
+                if tailFades, let tailLayer {
+                    tailLayer.add(Self.fade(from: 0, to: 1, duration: OverlayLineRise.duration, curve: Self.riseCurve),
+                                  forKey: "lineTailFadeIn")
                 }
             case .rise, .fade:
                 for target in [layer, tailLayer].compactMap({ $0 }) {
@@ -378,6 +408,14 @@ final class OverlayLineChangeStageView: NSView {
             lateIn.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + OverlayLineRise.lateInDelay
             lateIn.fillMode = .backwards
             layer.add(lateIn, forKey: "lineLateIn")
+        }
+    }
+
+    private static func anchorFraction(_ alignment: HorizontalAlignment) -> CGFloat {
+        switch alignment {
+        case .leading: return 0
+        case .trailing: return 1
+        default: return 0.5
         }
     }
 

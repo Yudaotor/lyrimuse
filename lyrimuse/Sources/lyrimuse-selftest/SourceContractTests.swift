@@ -1997,7 +1997,7 @@ func runSourceContractTests() {
         }
         if let view = read("UI/LyricsOverlayView.swift") {
             // 换句动画(样子见 04 章决策 52,做法见 04 章决策 54):开关关着、或开了「减弱动态效果」时不用舞台;开着时两格交给
-            // OverlayLineChangeStage,位移、淡入淡出由它装 Core Animation 动画,卡片上不挂 SwiftUI 的配对 / 过渡动画。
+            // OverlayLineChangeStage,位移、放大、淡入淡出由它装 Core Animation 动画,卡片上不挂 SwiftUI 的配对 / 过渡动画。
             expectEqual(view.contains("private var animatesLineChange: Bool { playback.lineChangeAnimation && !reduceMotion }")
                         && view.contains("            if animatesLineChange {\n                lineChangeRows\n            } else {")
                         && view.contains("OverlayLineChangeStage(")
@@ -2006,19 +2006,24 @@ func runSourceContractTests() {
                         && !view.contains(".animation(Self.animation, value: key)"), true,
                         "悬浮换句动画: 只在开着时用舞台;卡片上不挂 SwiftUI 的配对 / 过渡动画(每一帧都要整张卡片过一遍更新)")
             if let stage = read("UI/OverlayLineChangeStage.swift") {
-                // 新主句跟上一拍下一句同号才从它那一格走上来,否则原地淡入。
-                expectEqual(stage.contains("if lastNextRowID == m.id, let oldNext = next, oldNext.id == m.id {")
-                            && stage.contains("pendingEntry = .rise(from: oldNext.view.frame)")
+                // 新主句跟上一拍下一句同号才从它那一格、按它的字号起步,否则原地淡入。
+                expectEqual(stage.contains("if lastNextRow.id == m.id, let oldNext = next, oldNext.id == m.id {")
+                            && stage.contains("pendingEntry = .rise(from: oldNext.view.frame, scale: lastNextRow.scale,")
                             && stage.contains("pendingEntry = .fade"), true,
                             "悬浮换句动画: 新主句跟上一拍下一句同号才走上来,否则原地淡入")
-                // 走上来只做纵向平移:主句和读音、译文同一个平移,不缩放、不交叉淡化、读音译文不渐显(路上看得出两份在替换)。
-                expectEqual(stage.contains("let start = CATransform3DMakeTranslation(0, from.minY - mainFrame.minY, 0)")
-                            && stage.contains("for target in [layer, tailLayer].compactMap({ $0 }) {")
-                            && !stage.contains("CATransform3DMakeScale")
-                            && !stage.contains("CATransform3DMakeAffineTransform")
+                // 走上来的那一句只有一份:按预览的字号、跟预览一样的亮度起步,边走边放大、变实;不跟旧的下一句叠着交叉淡化
+                // (路上看得出两份在替换)。起步亮度按描边、未唱色算,下一句预览的颜色跟它用同一个常量。
+                expectEqual(stage.contains("layer.add(Self.fade(from: Float(riseStartOpacity), to: 1, duration: OverlayLineRise.duration,")
                             && !stage.contains("lineCrossfade")
-                            && !stage.contains("lineTailFadeIn"), true,
-                            "悬浮换句动画: 新主句连同读音、译文只做纵向平移,不缩放、不交叉淡化、不渐显")
+                            && view.contains("riseStartOpacity: OverlayLineRise.startOpacity(")
+                            && view.contains("let color = playback.displayForegroundColor.opacity(OverlayLineRise.previewOpacity)"), true,
+                            "悬浮换句动画: 走上来的那一句按预览的亮度起步、边走边变实,不跟旧下一句交叉淡化")
+                // 主句下面的读音、译文跟主句同一个变换走上来,另外从透明渐显(起步时常在窗口底边以外,整块实着走会露出被裁掉的半截);
+                // 上一拍下一句那一格本来就带着它们(前奏 / 间奏)时不渐显。
+                expectEqual(stage.contains("tailFades: !lastNextRow.carriesAnnotations)")
+                            && stage.contains("for target in [layer, tailLayer].compactMap({ $0 }) {")
+                            && stage.contains("if tailFades, let tailLayer {"), true,
+                            "悬浮换句动画: 读音、译文跟主句一起走上来、从透明渐显;间奏接回时不渐显")
                 // 走上来的那行路上不挡东西:旧下一句当场收掉,新的后半程才淡入,旧主句原地淡完。
                 expectEqual(stage.contains("next?.view.removeFromSuperview()\n            next = install(n)")
                             && stage.contains("lateIn.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + OverlayLineRise.lateInDelay")

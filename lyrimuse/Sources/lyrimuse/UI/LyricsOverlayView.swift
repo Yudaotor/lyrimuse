@@ -1269,7 +1269,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     /// 换句动画开着时卡片里的两格(样子见 04 章决策 52,做法见 04 章决策 54)。读音、译文跟着自己那一句走:第一格是这一句
     /// (主句,下面一块读音 → 译文;前奏 / 间奏时是「•••」),第二格是下一句(前奏 / 间奏时是接下来那句,连同它的读音、译文)。
-    /// 两格各在舞台的一个托管视图里,换句的位移、淡入淡出由舞台交给 Core Animation;两格之间的距离也由舞台给,
+    /// 两格各在舞台的一个托管视图里,换句的位移、放大、淡入淡出由舞台交给 Core Animation;两格之间的距离也由舞台给,
     /// 格子的顶边就是字的顶边。
     private var lineChangeRows: some View {
         OverlayLineChangeStage(
@@ -1297,9 +1297,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                                         .padding(.top, CGFloat(rowSpacing.translation))
                                 }
                             }
-                        })),
+                        }),
+                        carriesAnnotations: line == nil),
             spacing: CGFloat(rowSpacing.nextLine),
-            nextRowID: shownNextSlotID,
+            nextRowID: nextRowNow.id,
+            nextRowScale: nextRowNow.scale,
+            riseStartOpacity: OverlayLineRise.startOpacity(
+                strokeEnabled: playback.textStrokeEnabled,
+                mainUsesUnsungColor: line?.words != nil,
+                unsungAlpha: Double(NSColor(playback.displayKaraokeUnsungColor).usingColorSpace(.sRGB)?.alphaComponent ?? 1)),
             reports: lineChangeReports,
             layoutTick: lineChangeLayoutTick,
             requestLayout: { lineChangeLayoutTick &+= 1 })
@@ -1329,9 +1335,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 下一句预览那一格的编号:当前句下标加一。换句之后新主句的编号正好等于上一拍下一句的编号,两者按它配对。
     private var nextSlotID: String { "line\((playback.lineIndex ?? -1) + 1)" }
 
-    /// 这一拍下一句那一行显示着就是它的编号,没显示为 nil。
-    private var shownNextSlotID: String? {
-        playback.showNextLinePreview && nextLineText != nil ? nextSlotID : nil
+    /// 这一拍下一句那一行:有没有显示、编号,以及字号相对主句的比例(新主句从这个比例放大回 1)。
+    private var nextRowNow: OverlayLineChangeNextRow {
+        let shown = playback.showNextLinePreview && nextLineText != nil
+        let main = playback.overlayNSFonts.main.pointSize
+        return OverlayLineChangeNextRow(id: shown ? nextSlotID : nil,
+                                        scale: main > 0 ? nextLinePreviewNSFont.pointSize / main : 1)
     }
 
     /// 罗马音那一行——抽成独立视图是为了在 `lyricsCardContent` 里按 `line == nil` 换序
@@ -1414,7 +1423,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 图层行(`OverlayRowLayout.layOut`)同一种版式,开唱那一刻只换颜色、不挪位置;整行罗马音那一行随之让位。
     @ViewBuilder
     private func nextLinePreviewContent(_ next: String) -> some View {
-        let color = playback.displayForegroundColor.opacity(0.4)
+        let color = playback.displayForegroundColor.opacity(OverlayLineRise.previewOpacity)
         let still = rowPlan.next?.motion == .still
         if still, let groups = upcomingWordGroups {
             // 逐词列放不下时从开头显示、右边裁掉(列没法打「…」);放得下时交给外层按声部对齐。
@@ -2161,6 +2170,12 @@ enum OverlayContentRow: Hashable {
 }
 
 // MARK: - 换句动画的几个件
+
+/// 某一拍下一句那一行:编号(没显示为 nil)和字号相对主句的比例。
+private struct OverlayLineChangeNextRow: Equatable {
+    var id: String?
+    var scale: CGFloat
+}
 
 /// 换句动画舞台里一格的根。各行量文字矩形用的命名坐标空间在这里重新定义(不跨托管视图);量到的矩形在这里接住、
 /// 清零(偏好会冒到外层,坐标却是格子自己的),交给 `OverlayLineChangeReports` 换算。
