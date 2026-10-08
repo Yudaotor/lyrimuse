@@ -145,16 +145,47 @@ func TestAppleCatalogSearchIdentities(t *testing.T) {
 	}
 }
 
+// withEmptyAppleStorefrontCaches:两份商店缓存换成空的,测完还原。真实网络那两条看的是这一次遍历自己的结论,
+// 不能让之前留下的缓存顶掉。测试进程里缓存路径是空的,不落盘。
+func withEmptyAppleStorefrontCaches(t *testing.T) {
+	t.Helper()
+	appleStorefrontArtistMu.Lock()
+	savedNames := appleStorefrontArtistCache
+	appleStorefrontArtistCache = map[string][]string{}
+	appleStorefrontArtistMu.Unlock()
+	appleStorefrontTitleMu.Lock()
+	savedTitles := appleStorefrontTitleCache
+	appleStorefrontTitleCache = map[string]string{}
+	appleStorefrontTitleMu.Unlock()
+	t.Cleanup(func() {
+		appleStorefrontArtistMu.Lock()
+		appleStorefrontArtistCache = savedNames
+		appleStorefrontArtistMu.Unlock()
+		appleStorefrontTitleMu.Lock()
+		appleStorefrontTitleCache = savedTitles
+		appleStorefrontTitleMu.Unlock()
+	})
+}
+
+// skipUnlessStorefrontsAnswered:这一轮有商店没问成(iTunes 限流 / 超时 / 断连 / 5xx,或者还在上一条留下的冷却里)就跳过,
+// 每个商店都问成了还拿不到期望值才判失败。判据取自这一次遍历本身(appleStorefrontIdentitiesAndTitle 的 complete),
+// 别另发探针问 iTunes 答不答话:探针跟真查询是两条请求。
+func skipUnlessStorefrontsAnswered(t *testing.T, complete bool) {
+	t.Helper()
+	if !complete {
+		t.Skip("iTunes Search 这一轮有商店没问成(限流 / 超时 / 断连),拿不到结论,跳过 —— 这条测试按设计打真实网络")
+	}
+}
+
 // TestAppleStorefrontArtistIdentitiesLive 是真实网络集成测试(加,方大同
 // 《Lovers Policy》案,见 appleStorefrontArtistIdentities 头注)——直接打真实 iTunes
 // Search API,不 mock。跟同包内 TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection
 // 同一个前提:这类"通用查询是否真的通用"的验证,意义就在于打真实的第三方服务,mock 掉
-// 就只是在验证自己写的 mock 数据,证明不了任何事。可能偶发因为该服务限速/网络抖动失败,
-// 跟同包其它真实网络测试(TestRetryArtistIdentitiesUsesMusicBrainzName 等)接受的是
-// 同一类风险。
+// 就只是在验证自己写的 mock 数据,证明不了任何事。iTunes 这一刻没答全时跳过,见 skipUnlessStorefrontsAnswered。
 func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
+	withEmptyAppleStorefrontCaches(t)
 	// US 商店里这首叫「情勝策略」(243.3s):曲名跨文字系统 + 时长对上才放行,见 appleStorefrontTrackMatches。
-	got := appleStorefrontArtistIdentities(context.Background(), "方大同", "Lovers Policy", "15", 243.3, nil)
+	got, _, complete := appleStorefrontIdentitiesAndTitle(context.Background(), "方大同", "Lovers Policy", "15", 243.3, nil)
 	found := false
 	for _, s := range got {
 		if normLoose(s) == normLoose("Khalil Fong") {
@@ -162,6 +193,7 @@ func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
 		}
 	}
 	if !found {
+		skipUnlessStorefrontsAnswered(t, complete)
 		t.Fatalf("应该能从 US 商店拿到 Khalil Fong 这个身份, got %v", got)
 	}
 	if album := ""; appleStorefrontArtistIdentities(context.Background(), "方大同", "Lovers Policy", album, 243.3, nil) != nil {
@@ -179,15 +211,9 @@ func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
 // 两条断言要一起看:拿不到任何新署名,却**必须**拿得到曲名。只断言曲名的话,一旦有人把取
 // 曲名那几行挪回署名去重之后,这个测试照样绿。
 //
-// 跟上面 TestAppleStorefrontArtistIdentitiesLive 同一个前提和同一类风险:真打 iTunes,不 mock。
+// 跟上面 TestAppleStorefrontArtistIdentitiesLive 同一个前提:真打 iTunes,不 mock;这一刻没答全时跳过。
 func TestAppleStorefrontCanonicalTitleLive(t *testing.T) {
-	savedTitles := appleStorefrontTitleCache
-	savedNames := appleStorefrontArtistCache
-	defer func() {
-		appleStorefrontTitleCache, appleStorefrontArtistCache = savedTitles, savedNames
-	}()
-	appleStorefrontTitleCache = map[string]string{}
-	appleStorefrontArtistCache = map[string][]string{}
+	withEmptyAppleStorefrontCaches(t)
 
 	const wantTitle = "クスシキ"
 	// lyricSamples 不能省。问哪些商店由 appleStorefrontsFor 按**文字系统**定,而这首歌
@@ -195,9 +221,10 @@ func TestAppleStorefrontCanonicalTitleLive(t *testing.T) {
 	// enrich.go 传的就是 lyricSamplesForStorefront(results))。这也是这条修复的**前提**:
 	// 九个源一条正文都没给出来时,手上没有任何日文信号,这个死结仍然解不开。
 	samples := []string{"摩訶不思議だ\u3000言霊は誠か\n偽ってる彼奴は\u3000天に堕ちていった"}
-	got := appleStorefrontCanonicalTitle(context.Background(),
+	_, got, complete := appleStorefrontIdentitiesAndTitle(context.Background(),
 		"Mrs. GREEN APPLE", "KUSUSHIKI", "KUSUSHIKI - Single", 188.348, samples)
 	if normLoose(got) != normLoose(wantTitle) {
+		skipUnlessStorefrontsAnswered(t, complete)
 		t.Fatalf("应该能从 JP 商店拿回日文原名 %q, got %q", wantTitle, got)
 	}
 	// 署名这一路什么都拿不到 —— 这个形状下曲名仍然**必须**拿得到,不能被静默丢弃。

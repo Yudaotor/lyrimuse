@@ -95,6 +95,7 @@ func TestAppleStorefrontCachesOnlyCompleteConclusions(t *testing.T) {
 		wantNames       []string
 		wantNamesCached bool
 		wantTitleCached bool
+		wantComplete    bool
 	}{
 		{
 			name:            "美区没问成:查到的署名照记,曲名结论不记",
@@ -117,6 +118,7 @@ func TestAppleStorefrontCachesOnlyCompleteConclusions(t *testing.T) {
 			lookup:          map[string]string{"CN": storefrontTracks("Some Band")},
 			wantNamesCached: true,
 			wantTitleCached: true,
+			wantComplete:    true,
 		},
 	}
 	for _, tc := range cases {
@@ -130,7 +132,11 @@ func TestAppleStorefrontCachesOnlyCompleteConclusions(t *testing.T) {
 				}
 			}
 			withStorefrontFake(t, reply(tc.search), reply(tc.lookup))
-			gotNames, gotTitle := appleStorefrontIdentitiesAndTitle(context.Background(), artist, title, album, 200, nil)
+			gotNames, gotTitle, gotComplete := appleStorefrontIdentitiesAndTitle(context.Background(), artist, title, album, 200, nil)
+			// complete 跟缓存写没写是两回事:美区没问成、中区查到了署名时署名照记,这一轮却不完整。
+			if gotComplete != tc.wantComplete {
+				t.Errorf("这一轮问全了吗 = %v, want %v", gotComplete, tc.wantComplete)
+			}
 			if !reflect.DeepEqual(gotNames, tc.wantNames) || gotTitle != "" {
 				t.Fatalf("返回 %v %q, want %v \"\"", gotNames, gotTitle, tc.wantNames)
 			}

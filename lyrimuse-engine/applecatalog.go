@@ -774,7 +774,7 @@ func saveAppleStorefrontTitleCache() {
 //   - **问哪些商店按文字系统定**(appleStorefrontsFor):基线 CN / US,署名 / 曲名 / 专辑名或首轮歌词正文里出现假名
 //     → JP、谚文 → KR、西里尔 → RU、泰文 → TH、繁体汉字 → TW。日文歌只问 CN / US 是永远找不到原专辑的。
 func appleStorefrontArtistIdentities(ctx context.Context, artist, title, album string, durationSecs float64, lyricSamples []string) []string {
-	names, _ := appleStorefrontIdentitiesAndTitle(ctx, artist, title, album, durationSecs, lyricSamples)
+	names, _, _ := appleStorefrontIdentitiesAndTitle(ctx, artist, title, album, durationSecs, lyricSamples)
 	return names
 }
 
@@ -810,14 +810,15 @@ func appleStorefrontCachedTitle(artist, album, title string) (string, bool) {
 // Search + 可能一次 lookup),是另一笔账,没在这次一起做。TestAppleStorefrontCanonicalTitleLive
 // 的 lyricSamples 参数把这个前提钉在测试里了。
 func appleStorefrontCanonicalTitle(ctx context.Context, artist, title, album string, durationSecs float64, lyricSamples []string) string {
-	_, canonical := appleStorefrontIdentitiesAndTitle(ctx, artist, title, album, durationSecs, lyricSamples)
+	_, canonical, _ := appleStorefrontIdentitiesAndTitle(ctx, artist, title, album, durationSecs, lyricSamples)
 	return canonical
 }
 
-// appleStorefrontIdentitiesAndTitle 是上面两个函数共用的本体:一次商店遍历,两个产物。
-func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album string, durationSecs float64, lyricSamples []string) (names []string, canonicalTitle string) {
+// appleStorefrontIdentitiesAndTitle 是上面两个函数共用的本体:一次商店遍历,两个产物。complete:每个商店都问成了(搜索真的答了、
+// 定位到的专辑真的取到了曲目表),或者两样都直接取自缓存;false 时没拿到的那部分只说明「没问成」,不是「查过、没有」。
+func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album string, durationSecs float64, lyricSamples []string) (names []string, canonicalTitle string, complete bool) {
 	if album == "" {
-		return nil, ""
+		return nil, "", true
 	}
 	// 署名的缓存键按 artist+album(不含 title):决定 iTunes 搜索结果和署名的是这两个,同一张
 	// 专辑不同曲目该共用同一次查询结果,不必逐曲重查。第一首通过曲目核对就等于核实了这张专辑。
@@ -833,7 +834,7 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	// **两样都命中**才能直接回。只有署名缓存(之前存下的,或同专辑另一首歌留下的)
 	// 是不够的 —— 这一首的曲名还没查过,直接回等于把死结原样留着。
 	if namesOK && titleOK {
-		return cachedNames, cachedTitle
+		return cachedNames, cachedTitle, true
 	}
 
 	q := neturl.QueryEscape(artist + " " + album)
@@ -842,8 +843,8 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 	// 同一份录音换了文字写法(appleSameSingleByAnotherName)才收作别名。
 	genericSingle := appleAlbumIsJustTheTitle(album, title)
 	var out []string
-	probed := false  // 至少有一个商店真的定位到了专辑、取过它的曲目表
-	complete := true // 每个商店都问成了(搜索真的答了、定位到的专辑真的取到了曲目表)
+	probed := false // 至少有一个商店真的定位到了专辑、取过它的曲目表
+	complete = true // 每个商店都问成了(搜索真的答了、定位到的专辑真的取到了曲目表)
 	for _, country := range appleStorefrontsFor(append([]string{artist, title, album}, lyricSamples...)...) {
 		bestID, bestScore := int64(0), 0
 		rs, reached := itunesSearch(ctx, q, country)
@@ -913,7 +914,7 @@ func appleStorefrontIdentitiesAndTitle(ctx context.Context, artist, title, album
 		appleStorefrontTitleMu.Unlock()
 		saveAppleStorefrontTitleCache()
 	}
-	return out, canonicalTitle
+	return out, canonicalTitle, complete
 }
 
 // appleStorefrontTrackMatches:挑中的那张专辑里,这一条曲目是不是本地正在放的这首歌。有时长就以时长为主
