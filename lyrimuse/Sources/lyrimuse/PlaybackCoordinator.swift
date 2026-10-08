@@ -838,15 +838,6 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
-    /// 点一下切到下一档模式。跟 toggleFavorited 一样先乐观更新再回读,以实际结果为准。
-    func cyclePlaybackMode() {
-        guard extendedControlPlayer != nil || youtubeMusicWebTarget != nil else { return }
-        // 够不到单曲循环的播放器(Spotify)只在 列表 与 随机 之间倒(见 MusicPlaybackMode.next(allowsRepeatOne:))。
-        let target = (playbackMode ?? .list)
-            .next(allowsRepeatOne: playbackModeOptions.contains(.repeatOne))
-        setPlaybackMode(target)
-    }
-
     /// `playbackMode` 与 `playbackModeOptions` 的唯一写入点。判等再写,两个都是 @Published。
     private func applyPlaybackMode(_ state: MusicPlaybackController.PlaybackModeState?) {
         let mode = state?.mode
@@ -857,7 +848,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 直接设到某一档(歌词窗口按 Apple Music 排布把三态拆成「随机/循环」两颗
     /// 互斥按钮,要的是"点谁设谁"而不是循环下一档)。乐观更新/权限检查/写成功不回读,
-    /// 跟 cyclePlaybackMode 完全同一套取舍。
+    /// 跟 toggleFavorited 完全同一套取舍。
     func setPlaybackMode(_ target: MusicPlaybackController.MusicPlaybackMode) {
         if extendedControlPlayer == nil, let web = youtubeMusicWebTarget {
             setYouTubeMusicWebMode(target, web: web)

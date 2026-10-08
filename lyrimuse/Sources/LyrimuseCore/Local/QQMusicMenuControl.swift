@@ -4,7 +4,8 @@ import Foundation
 
 /// QQ 音乐的随机 / 循环和「喜欢」。它没有脚本接口(无 .sdef),系统媒体遥控的随机 / 循环命令也不接;唯一的通道是它自己菜单栏
 /// 「播放控制」:「播放模式」那三项(顺序播放 / 随机播放 / 单曲循环)读当前档看哪一项打了勾、切换对那一项 `AXPress`;
-/// 「喜欢歌曲」那一项的标题就是状态(喜欢了写「取消喜欢」),按一下翻转,标题 1 秒内跟着变。
+/// 「喜欢歌曲」那一项的标题就是状态(喜欢了写「取消喜欢」),按一下翻转,标题 1 秒内跟着变 —— 所以「喜欢」的写入要排队、
+/// 按完等标题翻过来(见 `setFavorited`)。
 /// 需要「辅助功能」权限,没有就读不到、按钮不显示。见 07 章决策 130、138。
 ///
 /// 按标题认这三项,不按下标、也不认上级菜单的名字(版本更新会挪位置):哪个子菜单里认得出至少两项,就是它。
@@ -46,11 +47,35 @@ public enum QQMusicMenuControl {
         favoriteItem().flatMap { favorited(forTitle: $0.title) }
     }
 
-    /// 设成喜欢 / 不喜欢,返回按没按下去(已经是这个状态算成)。会阻塞,别在主线程调。
+    /// 「喜欢」的写入一次只走一个,按下之后等标题翻过来才放。这一项是按一下翻一次,状态只能看标题,而标题要约 1 秒才变:
+    /// 不等的话,点了喜欢马上又取消,第二下读到的还是旧标题,判成「已经是这个状态」不按 —— QQ 里还是喜欢,界面却显示没喜欢。
+    private static let favoriteLock = NSLock()
+    /// 按下「喜欢」之后等标题翻过来最多多久(实测 1 秒内)、隔多久看一次。
+    static let favoriteConfirmWait: TimeInterval = 2
+    static let favoriteConfirmPollInterval: TimeInterval = 0.1
+
+    /// 设成喜欢 / 不喜欢,返回到没到:已经是这个状态算到;按下去之后标题在 `favoriteConfirmWait` 内翻过来才算到,
+    /// 没翻过来返回 false,调用方回读纠正。会阻塞(最多两秒多),别在主线程调。
     public static func setFavorited(_ value: Bool) -> Bool {
+        favoriteLock.lock()
+        defer { favoriteLock.unlock() }
         guard let item = favoriteItem(), let now = favorited(forTitle: item.title) else { return false }
         if now == value { return true }
-        return AXUIElementPerformAction(item.element, kAXPressAction as CFString) == .success
+        guard AXUIElementPerformAction(item.element, kAXPressAction as CFString) == .success else { return false }
+        // 先读按下的那一项;它读不出来(菜单重建过)再整个找一遍。
+        return waitFor(value, polls: Int(favoriteConfirmWait / favoriteConfirmPollInterval),
+                       interval: favoriteConfirmPollInterval) {
+            (string(item.element, kAXTitleAttribute) ?? favoriteItem()?.title).flatMap(favorited(forTitle:))
+        }
+    }
+
+    /// 每隔 `interval` 读一次,读到 `value` 返回 true;读了 `polls` 次都不是返回 false。selftest 用桩覆盖。
+    public static func waitFor(_ value: Bool, polls: Int, interval: TimeInterval, read: () -> Bool?) -> Bool {
+        for _ in 0..<max(polls, 0) {
+            if interval > 0 { Thread.sleep(forTimeInterval: interval) }
+            if read() == value { return true }
+        }
+        return false
     }
 
     /// 当前档;QQ 没在跑、没有辅助功能权限、找不到那个子菜单时为 nil。会阻塞一次跨进程查询,别在主线程调。

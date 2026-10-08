@@ -102,11 +102,13 @@ public enum YouTubeMusicWebControls {
     }
 
     /// 赞 / 取消赞:跟目标不一样才点「赞」键,回 `SET:<like-status>`。
+    /// 只认 `#button-shape-like`,找不到就回 `NOTFOUND`(调用方回读纠正),不拿渲染器里第一个按钮兜底:那里「踩」排在
+    /// 「赞」前面,它改了 id 之后兜底拿到的就是「踩」,用户点喜欢反而把这首歌踩了。
     public static func setLikeJS(liked: Bool, force: Bool) -> String {
         "(function(){" + setPrologue(force: force) + """
         var lk = bar.querySelector('ytmusic-like-button-renderer');\
         if (!lk) return 'NOTFOUND';\
-        var b = lk.querySelector('#button-shape-like button') || lk.querySelector('button');\
+        var b = lk.querySelector('#button-shape-like button');\
         if (!b) return 'NOTFOUND';\
         if ((lk.getAttribute('like-status') === 'LIKE') !== \(liked ? "true" : "false")) b.click();\
         return 'SET:' + (lk.getAttribute('like-status') || '');\

@@ -318,23 +318,11 @@ public enum MusicPlaybackController {
         /// 我们的循环键却是灰的,还没法从 UI 点出这一档。
         case repeatAll
 
-        /// 下一档。allowsRepeatOne=false 时跳过「单曲循环」,只在 列表 与 随机 之间倒。
-        ///
-        /// Spotify 就是这一档:它的 AppleScript 字典里只有 `repeating`(布尔),够不到
-        /// repeat-one —— 它 App 内部虽然有三态,脚本接口只暴露开/关。与其让按钮点到一个
-        /// 落不了地的档位,不如在这个播放器上就只有两档。
-        public func next(allowsRepeatOne: Bool) -> MusicPlaybackMode {
-            switch self {
-            case .list: return .shuffle
-            case .shuffle: return allowsRepeatOne ? .repeatOne : .list
-            case .repeatOne: return .list
-            // 顺 AM 循环键语义:全部 → 单曲(够不到单曲的播放器直接回列表)。
-            case .repeatAll: return allowsRepeatOne ? .repeatOne : .list
-            }
-        }
-
         /// 循环键点一下之后的档位:关 → 列表循环 → 单曲循环 → 关;够不到单曲循环的播放器(Spotify)列表循环之后直接回关,
         /// 没有列表循环的播放器(QQ 音乐)关之后直接到单曲循环。随机开着时点循环,也从关的下一档起(两颗键互斥)。
+        ///
+        /// Spotify 够不到单曲循环:它的 AppleScript 字典里只有 `repeating`(布尔),App 内部虽然有三态,脚本接口只暴露开/关。
+        /// 与其让按钮点到一个落不了地的档位,不如在这个播放器上就只有两态。
         public func nextRepeat(allowsRepeatOne: Bool, allowsRepeatAll: Bool = true) -> MusicPlaybackMode {
             switch self {
             case .repeatAll: return allowsRepeatOne ? .repeatOne : .list
@@ -389,7 +377,7 @@ public enum MusicPlaybackController {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
     }
 
-    /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.next(allowsRepeatOne:)。
+    /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
     public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic
     }
@@ -738,7 +726,7 @@ public enum MusicPlaybackController {
     ///
     /// **写完不要马上回读**。实测坐实:`set shuffle enabled to true` 这段脚本
     /// 正常退出、值也确实写进去了,但另起一个进程去 `get shuffle enabled`,250ms 之后读回来
-    /// 的仍是旧值(再等一会儿才变)。原来的 cyclePlaybackMode 正是写完就回读,于是那个旧值
+    /// 的仍是旧值(再等一会儿才变)。原来那个「点一下切下一档」(cyclePlaybackMode,已删)正是写完就回读,于是那个旧值
     /// 把已经画出来的正确图标又覆盖回去,表现成"点了要过一会儿才变"。
     /// 既然退出码已经能回答"指令被接受了吗",成功时就不必再问 Music.app 一遍。
     @discardableResult

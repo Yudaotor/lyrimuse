@@ -54,56 +54,38 @@ func runPlayerIdentityTests() {
         }
     }
 
-    // ---- MusicPlaybackMode: 播放模式档位轮换,按播放器有没有「单曲循环」分两套 ----
+    // ---- MusicPlaybackMode: 循环键的档位轮换(nextRepeat),按播放器有哪几档循环分三套 ----
     //
-    // Spotify 的 AppleScript 字典里 `repeating` 只是布尔,够不到 repeat-one —— 所以它的按钮
-    // 只在 列表 与 随机 两档之间倒。轮换必须**闭合**:不管从哪一档起步,反复点下去都要能回到
-    // 原点,否则按钮会卡在一个出不来的档位上。
+    // Apple Music / Kaset / Amazon 关 → 列表循环 → 单曲循环 → 关;Spotify 的 AppleScript 字典里 `repeating` 只是布尔,够不到
+    // 单曲循环,关 ↔ 列表循环;QQ 音乐没有列表循环,关 ↔ 单曲循环。轮换必须**闭合**:从哪一档起步,反复点下去都要能回到原点,
+    // 否则按钮会卡在一个出不来的档位上;也永远不能落到这个播放器没有的那一档。
     do {
         typealias Mode = MusicPlaybackController.MusicPlaybackMode
 
-        // Apple Music:三档循环
-        expectEqual(Mode.list.next(allowsRepeatOne: true), .shuffle, "播放模式: 列表→随机")
-        expectEqual(Mode.shuffle.next(allowsRepeatOne: true), .repeatOne, "播放模式: 随机→单曲")
-        expectEqual(Mode.repeatOne.next(allowsRepeatOne: true), .list, "播放模式: 单曲→列表")
-
-        // 列表循环档(补,AM 循环键三态):全部→单曲;够不到单曲的播放器直接回列表
-        expectEqual(Mode.repeatAll.next(allowsRepeatOne: true), .repeatOne, "播放模式: 全部→单曲")
-        expectEqual(Mode.repeatAll.next(allowsRepeatOne: false), .list, "播放模式(无单曲): 全部→列表")
-
-        // Spotify:跳过单曲那一档
-        expectEqual(Mode.list.next(allowsRepeatOne: false), .shuffle, "播放模式(无单曲): 列表→随机")
-        expectEqual(Mode.shuffle.next(allowsRepeatOne: false), .list, "播放模式(无单曲): 随机→列表")
-        // 起步档位恰好是单曲时(用户在 Apple Music 里开了单曲循环,再切到 Spotify 播放)也要能出来
-        expectEqual(Mode.repeatOne.next(allowsRepeatOne: false), .list, "播放模式(无单曲): 单曲→列表")
-
-        // 轮换闭合:连点下去不能卡在某一档出不来。
-        //
-        // 例外是**只能离开、回不去**的过渡态,它们能一步走掉(上面那些断言)就够了:
-        // ① "单曲档 + 不支持单曲"(用户在 Apple Music 里开着单曲循环、切到 Spotify 播放时
-        //   可能读到它),回不去正是设计意图,不是卡住;把它也算进"必须回到原点"的话,
-        //   断言直接红了,是断言写宽了,不是实现错了。
-        // ② 列表循环档:next() 的老三档轮换不产出它 —— 产出它的是歌词
-        //   窗口循环键自己的三态 switch(关→全部→单曲→关),cyclePlaybackMode 读到它时
-        //   顺 AM 语义走 全部→单曲,不需要转回来。
-        for allows in [true, false] {
+        // 例外是**只能离开、回不去**的过渡态,能一步走掉就够了:随机(循环键不产出它,随机开着时点循环从关的下一档起),
+        // 以及这个播放器没有的那一档(用户在 Apple Music 里开着单曲循环、再切到 Spotify 播放时可能读到)。
+        for (allowsOne, allowsAll) in [(true, true), (false, true), (true, false)] {
             for start in Mode.allCases {
                 var cur = start
                 var seen: [Mode] = []
-                for _ in 0..<4 { cur = cur.next(allowsRepeatOne: allows); seen.append(cur) }
-                let startIsUnreachable = (!allows && start == .repeatOne) || start == .repeatAll
-                if !startIsUnreachable {
+                for _ in 0..<4 {
+                    cur = cur.nextRepeat(allowsRepeatOne: allowsOne, allowsRepeatAll: allowsAll)
+                    seen.append(cur)
+                }
+                let startIsTransient = start == .shuffle || (start == .repeatOne && !allowsOne) || (start == .repeatAll && !allowsAll)
+                if !startIsTransient {
                     expectEqual(seen.contains(start), true,
-                                "播放模式: allowsRepeatOne=\(allows) 从 \(start.rawValue) 起步能转回原点")
+                                "循环键: 单曲=\(allowsOne) 列表循环=\(allowsAll) 从 \(start.rawValue) 起步能转回原点")
                 }
-                if !allows {
-                    expectEqual(seen.contains(.repeatOne), false,
-                                "播放模式: allowsRepeatOne=false 时永远不会落到单曲档")
-                }
+                expectEqual(seen.contains(.repeatOne) && !allowsOne, false,
+                            "循环键: 没有单曲循环的播放器永远不会落到单曲档(列表循环=\(allowsAll),从 \(start.rawValue) 起)")
+                expectEqual(seen.contains(.repeatAll) && !allowsAll, false,
+                            "循环键: 没有列表循环的播放器永远不会落到列表循环(从 \(start.rawValue) 起)")
+                expectEqual(seen.contains(.shuffle), false, "循环键: 循环键从不产出随机(从 \(start.rawValue) 起)")
             }
         }
 
-        // 能力表:只有 Apple Music 有单曲循环;QQ音乐/网易云连扩展控制都没有(两个 .app 无 .sdef)
+        // 能力表:单曲循环按播放器;网易云、酷狗连扩展控制都没有(.app 无 .sdef)
         expectEqual(MusicPlaybackController.supportsRepeatOne(.appleMusic), true, "能力: Apple Music 有单曲循环")
         expectEqual(MusicPlaybackController.supportsRepeatOne(.spotify), false, "能力: Spotify 没有单曲循环")
         expectEqual(MusicPlaybackController.supportsExtendedControls(.appleMusic), true, "能力: Apple Music 支持音量/模式")
@@ -826,6 +808,13 @@ func runPlayerIdentityTests() {
         expectEqual(Q.options.canRepeat, true, "QQ 播放模式: 有循环键(单曲循环)")
         expectEqual([Q.favorited(forTitle: "取消喜欢"), Q.favorited(forTitle: "喜歡歌曲"), Q.favorited(forTitle: "播放模式")],
                     [true, false, nil], "QQ 喜欢: 菜单写「取消喜欢」= 喜欢了,繁体也认,别的项不算")
+        // 按下「喜欢」之后等标题翻过来(约 1 秒才变;不等的话连点第二下读到旧标题,判成已经是这个状态不按)。
+        var titleReads = 0
+        expectEqual(Q.waitFor(true, polls: 5, interval: 0) { titleReads += 1; return titleReads >= 3 }, true,
+                    "QQ 喜欢: 读到翻过来的标题就算到")
+        expectEqual(titleReads, 3, "QQ 喜欢: 读到就停,剩下几次不再读")
+        expectEqual(Q.waitFor(false, polls: 4, interval: 0) { true }, false, "QQ 喜欢: 一直没翻过来算没到(调用方回读)")
+        expectEqual(Q.waitFor(true, polls: 3, interval: 0) { nil }, false, "QQ 喜欢: 读不出标题不算到")
         expectEqual(Mode.list.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .repeatOne,
                     "循环键: 没有列表循环时关 → 单曲循环")
         expectEqual(Mode.shuffle.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .repeatOne,
@@ -859,6 +848,10 @@ func runPlayerIdentityTests() {
         expectEqual(scripts.contains { $0.contains("\"") }, false, "网页版: 注入的 JS 里没有双引号(要嵌进 AppleScript 字符串)")
         expectEqual(Y.setLikeJS(liked: true, force: false).contains("if (true && v && v.paused) return 'PAUSED:SKIP';"), true,
                     "网页版: 第一轮暂停的页面不动")
+        expectEqual(Y.setLikeJS(liked: true, force: false).contains("var b = lk.querySelector('#button-shape-like button');"), true,
+                    "网页版: 点赞只认「赞」键")
+        expectEqual(Y.setLikeJS(liked: false, force: true).contains("lk.querySelector('button')"), false,
+                    "网页版: 找不到「赞」键不拿渲染器里第一个按钮兜底(排在前面的是「踩」)")
         expectEqual(Y.setVolumeJS(50, force: true).contains("if (false && v && v.paused)"), true, "网页版: 第二轮不管暂停也动")
         expectEqual(Y.setVolumeJS(140, force: true).contains("s.value = 100;"), true, "网页版: 音量夹在 0~100")
         expectEqual(Y.setVolumeJS(50, force: true).contains("s.dispatchEvent(new Event('change'"), true,
@@ -898,6 +891,133 @@ func runPlayerIdentityTests() {
                     "Amazon 模式: 循环是单曲时开随机顺手关掉循环,不然还是读成单曲循环")
         expectEqual(A.presses(from: S(repeatSetting: "NONE", shuffle: true), to: .repeatAll), ["shuffle", "repeat"],
                     "Amazon 模式: 点循环关掉随机(两颗键互斥)")
+
+        // 写入:每一下照日志里最新的档算下一下按什么;按了没生效就重按;重按之后日志晚到、多进了一档,以最后读到的为准。
+        // 桩:按键立刻改 Amazon 的真实状态,日志要再读 lag 次才看得到;前 drop 下按了不生效;flipsShuffle 时不管按哪颗都只翻随机。
+        final class FakeAmazon {
+            var real: AmazonMusicModeControl.Settings
+            var logged: AmazonMusicModeControl.Settings
+            var queued: [(left: Int, state: AmazonMusicModeControl.Settings)] = []
+            var drop: Int
+            let lag: Int
+            let flipsShuffle: Bool
+            var pressed: [String] = []
+            init(_ s: AmazonMusicModeControl.Settings, lag: Int = 0, drop: Int = 0, flipsShuffle: Bool = false) {
+                real = s
+                logged = s
+                self.lag = lag
+                self.drop = drop
+                self.flipsShuffle = flipsShuffle
+            }
+            func press(_ button: String) -> Bool {
+                pressed.append(button)
+                if drop > 0 {
+                    drop -= 1
+                    return true
+                }
+                if button == "shuffle" || flipsShuffle {
+                    real.shuffle = !(real.shuffle ?? false)
+                } else {
+                    let cycle = ["NONE", "ALL", "ONE"]
+                    real.repeatSetting = cycle[((cycle.firstIndex(of: real.repeatSetting ?? "NONE") ?? 0) + 1) % cycle.count]
+                }
+                queued.append((left: lag, state: real))
+                return true
+            }
+            func read() -> AmazonMusicModeControl.Settings? {
+                queued = queued.map { (left: $0.left - 1, state: $0.state) }
+                while let first = queued.first, first.left < 0 {
+                    logged = first.state
+                    queued.removeFirst()
+                }
+                return logged
+            }
+        }
+        let off = S(repeatSetting: "NONE", shuffle: false)
+        var amazon = FakeAmazon(off)
+        expectEqual(A.pressUntilConfirmed(from: off, to: .repeatOne, polls: 3, pollInterval: 0, read: amazon.read, press: amazon.press),
+                    S(repeatSetting: "ONE", shuffle: false), "Amazon 写入: 关 → 单曲按两下,每下等日志确认")
+        expectEqual(amazon.pressed, ["repeat", "repeat"], "Amazon 写入: 不多按")
+        // 两次写入叠在一起时后一次读到的是旧档(所以写入要排队);就算起点读旧了,也照日志里的最新档往下按,不照旧档算好的下数按完。
+        amazon = FakeAmazon(S(repeatSetting: "ALL", shuffle: false))
+        expectEqual(A.pressUntilConfirmed(from: off, to: .repeatOne, polls: 3, pollInterval: 0, read: amazon.read, press: amazon.press)?.mode,
+                    .repeatOne, "Amazon 写入: 起点读旧了也停在目标")
+        expectEqual(amazon.pressed, ["repeat"], "Amazon 写入: 照最新的档只按一下(照旧档算会按两下、绕回关)")
+        amazon = FakeAmazon(off, drop: 1)
+        expectEqual(A.pressUntilConfirmed(from: off, to: .repeatAll, polls: 3, pollInterval: 0, read: amazon.read, press: amazon.press),
+                    S(repeatSetting: "ALL", shuffle: false), "Amazon 写入: 头一下没生效,等不到确认就重按")
+        expectEqual(amazon.pressed.count, 2, "Amazon 写入: 重按一次")
+        amazon = FakeAmazon(off, lag: 4)
+        expectEqual(A.pressUntilConfirmed(from: off, to: .repeatAll, polls: 3, pollInterval: 0, read: amazon.read, press: amazon.press)?.mode,
+                    .repeatOne, "Amazon 写入: 头一下其实按成了只是日志晚到,重按多进一档 —— 以最后读到的为准,跟目标对不上,调用方回读")
+        amazon = FakeAmazon(off, drop: 2)
+        expectEqual(A.pressUntilConfirmed(from: off, to: .repeatAll, polls: 3, pollInterval: 0, read: amazon.read, press: amazon.press) == nil,
+                    true, "Amazon 写入: 重按了还是没变化算没写成")
+        expectEqual(A.pressUntilConfirmed(from: off, to: .shuffle, polls: 3, pollInterval: 0, read: { off }, press: { _ in false }) == nil,
+                    true, "Amazon 写入: 找不到键、按不下去算没写成")
+        amazon = FakeAmazon(off, flipsShuffle: true)
+        expectEqual(A.pressUntilConfirmed(from: off, to: .repeatAll, polls: 1, pollInterval: 0, read: amazon.read, press: amazon.press) == nil,
+                    true, "Amazon 写入: 怎么按都到不了目标时按满上限就停")
+        expectEqual(amazon.pressed.count, A.maxPresses, "Amazon 写入: 最多按 maxPresses 下")
+
+        // 读:增量读;开播那一行在多远之前都找得到(被块边界切开也找得到);只读整行;日志换了一份、变短了就重新找。
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("lyrimuse-amazon-mode-\(UUID().uuidString)")
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        let filler = String(repeating: "261007:175700      Browser INF : unrelated renderer chatter that pads the log\n", count: 40)
+        func append(_ text: String, to url: URL) {
+            guard let handle = try? FileHandle(forWritingTo: url) else { return }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(text.utf8))
+            try? handle.close()
+        }
+        let log = dir.appendingPathComponent("AmazonMusic.log")
+        try? Data(("[SystemInfo]\n" + start + "\n" + filler).utf8).write(to: log)
+        expectEqual(A.readSettings(logPath: log.path, scanChunk: 64), S(repeatSetting: "ALL", shuffle: false),
+                    "Amazon 读档: 开播那一行在几十块之前也找得到")
+        append(toggled + "\n", to: log)
+        expectEqual(A.readSettings(logPath: log.path, scanChunk: 64), S(repeatSetting: "ONE", shuffle: false),
+                    "Amazon 读档: 接着读到新写的切换行")
+        let half = shuffled.prefix(shuffled.count - 20)
+        append(String(half), to: log)
+        expectEqual(A.readSettings(logPath: log.path, scanChunk: 64), S(repeatSetting: "ONE", shuffle: false),
+                    "Amazon 读档: 没写完的半行先不读")
+        append(String(shuffled.dropFirst(half.count)) + "\n", to: log)
+        expectEqual(A.readSettings(logPath: log.path, scanChunk: 64), S(repeatSetting: "ONE", shuffle: true),
+                    "Amazon 读档: 写完之后连同前半截一起读")
+        // Amazon 重启会重建一份日志;换了文件或者变短了,之前记的位置不作数。新的那份比上次读到的位置还长(只有 inode 变了),
+        // 原子替换写:新文件在旧文件还在时建出来,inode 一定不同。
+        let restarted = start.replacingOccurrences(of: "repeat = ALL , shuffle = false", with: "repeat = NONE , shuffle = true")
+        try? Data(("[SystemInfo]\n" + restarted + "\n" + filler + filler).utf8).write(to: log, options: .atomic)
+        expectEqual(A.readSettings(logPath: log.path, scanChunk: 64), S(repeatSetting: "NONE", shuffle: true),
+                    "Amazon 读档: 日志换了一份(比上次读到的位置还长),重新找开播那一行")
+        if let handle = try? FileHandle(forWritingTo: log) {
+            try? handle.truncate(atOffset: 0)
+            try? handle.write(contentsOf: Data((start + "\n").utf8))
+            try? handle.close()
+        }
+        expectEqual(A.readSettings(logPath: log.path, scanChunk: 64), S(repeatSetting: "ALL", shuffle: false),
+                    "Amazon 读档: 日志变短了,重新找开播那一行")
+        // 开播标记正好被块边界切开:第一块从标记的第 6 个字节起读,前 5 个字节在下一块里。
+        let split = dir.appendingPathComponent("split.log")
+        let splitText = "[SystemInfo]\n" + start + "\n" + filler
+        try? Data(splitText.utf8).write(to: split)
+        let markerAt = splitText.utf8.count - (splitText.range(of: "CurrentPlayerSettings").map { splitText[$0.lowerBound...].utf8.count } ?? 0)
+        let splitChunk = splitText.utf8.count - (markerAt + 5)
+        // 读数对不对看不出有没有找到标记(找不到会退回从头读,结果一样),所以直接看找到的位置。
+        if let handle = FileHandle(forReadingAtPath: split.path), let end = try? handle.seekToEnd() {
+            expectEqual(A.lastSettingsLineOffset(handle, end: end, chunk: splitChunk), UInt64(markerAt),
+                        "Amazon 读档: 开播标记被块边界切开也找得到,从标记那个字节读起")
+            try? handle.close()
+        } else {
+            expectEqual("split.log 打不开", "", "Amazon 读档: 测试文件可读")
+        }
+        expectEqual(A.readSettings(logPath: split.path, scanChunk: splitChunk),
+                    S(repeatSetting: "ALL", shuffle: false), "Amazon 读档: 标记被切开时读出来的设置")
+        let empty = dir.appendingPathComponent("empty.log")
+        try? Data(("[SystemInfo]\n" + filler).utf8).write(to: empty)
+        expectEqual(A.readSettings(logPath: empty.path, scanChunk: 64) == nil, true, "Amazon 读档: 一条设置都没有读不出来")
     }
 
     // ---- 播放器网格点一下(设置页与引导页共用 FeatureSettingsStore.togglePlayer)----

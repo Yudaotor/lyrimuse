@@ -493,6 +493,20 @@ private func wiringContracts() {
                 "会话在放时被撤: 保持接在 heldAcrossPlayerGap、按进程出声判,保持时记下")
     expectEqual(body("public static func focusHeldByAnotherApp() -> Bool {", in: client).contains("return viaProbe || holdingDroppedSession"),
                 true, "会话在放时被撤: 保持出来的那首,播放控制不发")
+
+    // 按相对量的写入要排队(07 章决策 139、138 补记):Amazon 循环键按一下进一档、QQ「喜欢」按一下翻一次,连点时后一次读到的
+    // 是前一次按之前的状态。行为在 players 组用桩测,这里钉住接线:锁在读状态之前拿,按完等确认。
+    let amazon = code("LyrimuseCore/Local/AmazonMusicModeControl.swift")
+    let amazonSet = body("public static func setMode(", in: amazon)
+    expectEqual(before("writeLock.lock()", "readSettings(logPath: logPath)", in: amazonSet)
+                && amazonSet.contains("pressUntilConfirmed(from: start, to: target"), true,
+                "Amazon 写入: 先排队再读当前档,逐下按、等日志确认")
+    expectEqual(before("guard AXIsProcessTrusted() else { return nil }", "readSettings(logPath: logPath)",
+                       in: body("public static func readMode(", in: amazon)), true,
+                "Amazon 读档: 没有辅助功能权限不报档位,两颗键不出现(按不了)")
+    let qqFavorite = body("public static func setFavorited(_ value: Bool) -> Bool {", in: code("LyrimuseCore/Local/QQMusicMenuControl.swift"))
+    expectEqual(before("favoriteLock.lock()", "favoriteItem()", in: qqFavorite) && qqFavorite.contains("return waitFor(value"), true,
+                "QQ 喜欢: 先排队再读标题,按完等标题翻过来")
 }
 
 // ---- 桌面版 Spotify 的 Connect 镜像 ----
