@@ -139,35 +139,77 @@ func runOverlayTests() {
         let onUnlock = CGPoint(x: 251, y: 209)
         let H = OverlayControlHitTest.self
 
-        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, positionLocked: false,
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, hovering: true, positionLocked: false,
                                      hoverControlsEnabled: true),
                     .playPause, "悬停高亮: 压在播放键上就亮播放键")
         // 窗口常年点击穿透、监听器是全局的:指针早跑到别的 App 上去了照样有事件进来。
-        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: false, positionLocked: false,
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: false, hovering: true, positionLocked: false,
                                      hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 指针不在窗口里就不亮(全局监听器照样会送事件进来)")
         // 锁定态那一格只画得出解锁一颗,别的矩形是上一轮布局的残留。
-        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, positionLocked: true,
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, hovering: true, positionLocked: true,
                                      hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 锁定态不认播放键(那颗此刻根本没画出来)")
-        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: true,
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, hovering: true, positionLocked: true,
                                      hoverControlsEnabled: true),
                     .unlockPill, "悬停高亮: 锁定态只认解锁键")
-        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: false,
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, hovering: true, positionLocked: false,
                                      hoverControlsEnabled: true),
                     .unlockPill, "悬停高亮: 未锁定时解锁键自己也照常(显示与否由上报矩形决定)")
         // 缝里/胶囊外/没上报矩形三种"没压着"都该是 nil,不能留着上一颗亮着。
         expectEqual(H.hoveredControl(at: CGPoint(x: 200, y: 213), in: rects,
-                                     insideWindow: true, positionLocked: false, hoverControlsEnabled: true) == nil,
+                                     insideWindow: true, hovering: true, positionLocked: false, hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 两颗之间的缝里不亮")
-        expectEqual(H.hoveredControl(at: onPlay, in: [:], insideWindow: true, positionLocked: false,
+        expectEqual(H.hoveredControl(at: onPlay, in: [:], insideWindow: true, hovering: true, positionLocked: false,
                                      hoverControlsEnabled: true) == nil,
                     true, "悬停高亮: 没有上报矩形时一颗都不亮")
         // 锁定态下解锁键自己也要过 hoverControlsEnabled 这一闸——「悬停时显示控制条」
         // 关掉时那一格压根不画,矩形却仍会无条件上报,不拦住就是"高亮一颗没画出来的按钮"。
-        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, positionLocked: true,
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, hovering: true, positionLocked: true,
                                      hoverControlsEnabled: false) == nil,
                     true, "悬停高亮: 锁定 + 悬停控制条关掉 → 解锁键也不亮")
+        // 这个结果同时决定整扇窗要不要收回点击穿透。没悬停时控制排是藏着的,按钮矩形却照样上报:
+        // 压在这排看不见的槽位上不能算,否则悬浮窗底下的别的窗口在那块位置一点就被它截走。
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, hovering: false, positionLocked: false,
+                                     hoverControlsEnabled: true) == nil,
+                    true, "悬停高亮: 没悬停、控制排藏着 → 压在播放键槽位上也不算(不接管点击)")
+        expectEqual(H.hoveredControl(at: onUnlock, in: rects, insideWindow: true, hovering: false, positionLocked: true,
+                                     hoverControlsEnabled: true) == nil,
+                    true, "悬停高亮: 锁定且没悬停、解锁键藏着 → 不算")
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, hovering: true, positionLocked: false,
+                                     hoverControlsEnabled: false) == nil,
+                    true, "悬停高亮: 悬停控制条关掉 → 控制排不画,也不算")
+        // 「调整宽度」模式控制排一直露着,不靠悬停。
+        expectEqual(H.hoveredControl(at: onPlay, in: rects, insideWindow: true, hovering: false, positionLocked: false,
+                                     hoverControlsEnabled: true, adjustingWidth: true),
+                    .playPause, "悬停高亮: 调整宽度模式控制排常显 → 没悬停也认")
+        // 判据跟视图画不画控制排是同一个:逐个组合对拍,两边不许长歪。
+        for hovering in [false, true] {
+            for locked in [false, true] {
+                for enabled in [false, true] {
+                    for adjusting in [false, true] {
+                        let shown = locked
+                            ? H.unlockPillShown(hovering: hovering, positionLocked: true, hoverControlsEnabled: enabled)
+                            : H.controlsShown(hovering: hovering, positionLocked: false, hoverControlsEnabled: enabled,
+                                              adjustingWidth: adjusting)
+                        let probe = locked ? onUnlock : onPlay
+                        let got = H.hoveredControl(at: probe, in: rects, insideWindow: true, hovering: hovering,
+                                                   positionLocked: locked, hoverControlsEnabled: enabled,
+                                                   adjustingWidth: adjusting)
+                        expectEqual(got != nil, shown,
+                                    "悬停高亮/对拍: hovering=\(hovering) locked=\(locked) enabled=\(enabled) adjusting=\(adjusting) 跟画不画一致")
+                    }
+                }
+            }
+        }
+        // 悬浮窗把**刚更新过的**悬停态传进来:传错(比如传个常量)单元测试照样绿,所以把调用点也钉住。
+        let controllerSource = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/UI/LyricsOverlayWindowController.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(controllerSource.contains("insideWindow: insideWindow, hovering: isHoveringForControls, positionLocked: isPositionLocked,")
+                        && controllerSource.contains("hoverControlsEnabled: showHoverControls, adjustingWidth: isAdjustingWidth)")
+                        && controllerSource.contains("setControlCapture(nowHovered != nil)"),
+                    true, "悬停高亮(契约): 悬浮窗用当前悬停态 / 调整宽度态求命中,接管点击跟着它走")
     }
 
     // ---- OverlayControlHitTest.chromeHoverZone: 控制排该不该露出来的命中区域 ----

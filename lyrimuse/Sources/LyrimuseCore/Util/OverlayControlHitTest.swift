@@ -82,24 +82,35 @@ public enum OverlayControlHitTest {
     /// 会在**每一次鼠标移动**上求值,所以可见性必须由它自己兜住 —— 画亮一颗其实没显示的按钮
     /// 是"看得见的 bug",画错方向比少画更糟。
     ///
-    /// 两道闸:
+    /// 它同时决定这扇窗要不要**收回点击穿透**(`LyricsOverlayWindowController.setControlCapture`):
+    /// 返回非 nil 时整扇窗不再穿透,这一下点击归悬浮窗。所以"按钮此刻画没画出来"必须在这里判死 ——
+    /// 按钮矩形是无条件上报的(槽位常驻),只比矩形的话,一排看不见的按钮槽位压在别的窗口上,那块
+    /// 位置就点不到下层窗口了。
+    ///
+    /// 几道闸:
     ///  ① 指针不在窗口里就不高亮。窗口常年点击穿透,监听器是**全局**的,指针早跑到别的 App
     ///     上去了照样有事件进来;只比矩形的话,窗口边上那颗按钮会在指针离开之后一直亮着。
     ///  ② 锁定态只认 `unlockPill`。那一格此刻只画得出解锁这一颗(见 `LyricsOverlayView`
     ///     的 `unlockPill` / `playbackControls` 两个分支),别的矩形要么压根没上报、要么是上
     ///     一轮布局的残留 —— 残留矩形亮起来就是"高亮浮在一颗看不见的按钮上"。
-    ///  ③ 锁定态下 `unlockPill` 自己还要再过 `hoverControlsEnabled` 这一闸(
-    ///     见 `unlockPillShown`)——「悬停时显示控制条」关掉时那一格压根不画,矩形却仍会无条件
-    ///     上报(同 ② 的道理),不补这一闸就是同一种"高亮一颗没画出来的按钮"。
+    ///  ③ 按钮得真的露着:未锁定时过 `controlsShown`,锁定时过 `unlockPillShown`(两者都含
+    ///     `hoverControlsEnabled` 和"正在悬停"),跟视图决定画不画用的是同一个判据。没悬停时
+    ///     控制排是藏着的,矩形却照样上报,不拦住就是"看不见却挡手"。
     public static func hoveredControl(
         at point: CGPoint, in rects: [OverlayControlID: CGRect],
-        insideWindow: Bool, positionLocked: Bool, hoverControlsEnabled: Bool
+        insideWindow: Bool, hovering: Bool, positionLocked: Bool, hoverControlsEnabled: Bool,
+        adjustingWidth: Bool = false
     ) -> OverlayControlID? {
         guard insideWindow, let id = control(at: point, in: rects) else { return nil }
         if positionLocked {
-            return id == .unlockPill && hoverControlsEnabled ? id : nil
+            let shown = unlockPillShown(
+                hovering: hovering, positionLocked: true, hoverControlsEnabled: hoverControlsEnabled)
+            return id == .unlockPill && shown ? id : nil
         }
-        return id
+        let shown = controlsShown(
+            hovering: hovering, positionLocked: false, hoverControlsEnabled: hoverControlsEnabled,
+            adjustingWidth: adjustingWidth)
+        return shown ? id : nil
     }
 
     /// 控制排「该不该露出来」的命中区域(「只有当鼠标悬浮到歌词实际范围内,

@@ -1216,17 +1216,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             if isHoveringControlPill != onControlPill {
                 isHoveringControlPill = onControlPill
             }
-            // 按钮悬停高亮。可见性两道闸在 Core 那边,见 hoveredControl 声明处。
+            // 按钮悬停高亮。可见性的几道闸在 Core 那边,见 hoveredControl 声明处;悬停态传的是上面刚
+            // 更新过的那份,跟这一拍视图画不画控制排一致。
             // 只在**真的变了**时候赋值:这是 @Published,每次鼠标移动都写一遍会让整个
             // 悬浮窗按鼠标移动的频率重算 body(移动事件一秒几十上百个)。
             let nowHovered = OverlayControlHitTest.hoveredControl(
                 at: localPoint, in: controlRectsLocal,
-                insideWindow: insideWindow, positionLocked: isPositionLocked,
-                hoverControlsEnabled: showHoverControls)
+                insideWindow: insideWindow, hovering: isHoveringForControls, positionLocked: isPositionLocked,
+                hoverControlsEnabled: showHoverControls, adjustingWidth: isAdjustingWidth)
             if hoveredControl != nowHovered {
                 hoveredControl = nowHovered
             }
-            // 悬停高亮的那一颗就是「看得见、点得到」的按钮(可见性两道闸同上),压在它上面才接管点击。
+            // 悬停高亮的那一颗就是「看得见、点得到」的按钮(可见性的闸同上),压在它上面才接管点击。
             setControlCapture(nowHovered != nil)
             // 歌词命中是**独立**的一套:窗口内 + 压在文字矩形上才算。热区还没上报上来
             // (刚显示、或者这一轮没有任何文字)时退回窗口判定,别让功能整个失灵。
