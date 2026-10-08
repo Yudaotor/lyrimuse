@@ -2371,6 +2371,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                // 播放控制被拦下时那三颗键的说明往上弹,盖在歌词上(同头部快捷操作那排的气泡)。
+                .modifier(QuickActionTooltipOverlay(hovered: hoveredQuickAction,
+                                                    shown: $shownQuickActionTooltip,
+                                                    tint: accentOrWhite, edge: .top))
             }
         }
         .padding(.horizontal, 16)
