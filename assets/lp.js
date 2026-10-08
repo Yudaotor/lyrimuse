@@ -7,7 +7,8 @@
   // One clock drives every live surface: the hero desktop and the app windows on the chapter stages.
   // Elements opt in with data hooks: data-l="main" is the current line, lit word by word (data-scroll follows
   // the singing when it overflows, data-paint="0" is an outline copy); data-l="next" | "prog" | "cur" | "rem";
-  // data-t="title" | "artist" | "album"; data-cover and data-blur take the demo track's artwork.
+  // data-l="dcur" is the Discord card's elapsed time; data-t="title" | "artist" | "album"; data-cover and data-blur
+  // take the demo track's artwork.
   const DEMO = JSON.parse($('demoData').textContent);
   const LINES = DEMO.lines;
   const CHAR_MS = 280, SPACE_MS = 240;
@@ -46,7 +47,10 @@
   const progs = [...document.querySelectorAll('[data-l="prog"]')];
   const curs = [...document.querySelectorAll('[data-l="cur"]')];
   const rems = [...document.querySelectorAll('[data-l="rem"]')];
+  const dcurs = [...document.querySelectorAll('[data-l="dcur"]')];
   const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  // Discord writes the minutes with two digits (01:24)
+  const mmss2 = (ms) => mmss(ms).padStart(5, '0');
 
   // CJK lights one char at a time; a Latin word lights as one unit spread over its letters.
   // The fill uses 82% of the line's real duration and holds for the rest, like the app.
@@ -188,6 +192,7 @@
     progs.forEach((el) => { el.style.width = w; });
     curs.forEach((el) => { el.textContent = mmss(played); });
     rems.forEach((el) => { el.textContent = '-' + mmss(DEMO.songMs - played); });
+    dcurs.forEach((el) => { el.textContent = mmss2(played); });
   }
 
   show(0);
@@ -266,6 +271,9 @@
     thumb.style.width = btn.offsetWidth + 'px';
     thumb.style.transform = `translateX(${btn.offsetLeft}px)`;
     if (animate) { seg.classList.remove('moving'); void seg.offsetWidth; seg.classList.add('moving'); }
+    if (seg.scrollWidth > seg.clientWidth) {
+      seg.scrollTo({ left: btn.offsetLeft - (seg.clientWidth - btn.offsetWidth) / 2, behavior: animate && !reduce ? 'smooth' : 'auto' });
+    }
   };
   shows.forEach((show) => {
     const seg = show.querySelector('.seg');
