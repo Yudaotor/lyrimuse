@@ -160,7 +160,7 @@ final class DiscordPresenceController: ObservableObject {
         let intent = DiscordPresence.intent(track: track, pausedSince: pausedSince,
                                             statusLine: settings.discordStatusDisplay,
                                             keepWhenPaused: settings.discordKeepWhenPaused,
-                                            badge: settings.discordBadge, pausedText: L10n.t("已暂停"),
+                                            badge: settings.discordBadge,
                                             pausedNameFormat: L10n.t("%@（已暂停）"),
                                             hiddenUntil: hiddenUntil, now: now)
         switch gate.decide(intent, now: now) {

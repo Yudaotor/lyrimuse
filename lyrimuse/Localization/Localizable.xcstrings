@@ -36249,29 +36249,6 @@
         }
       }
     },
-    "已暂停" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Paused"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已暂停"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已暫停"
-          }
-        }
-      }
-    },
     "已隐藏，%@ 恢复" : {
       "extractionState" : "manual",
       "localizations" : {

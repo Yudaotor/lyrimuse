@@ -270,8 +270,7 @@ private func checkDiscordActivity() {
                 "Discord 意图: 刚暂停先留着,宽限满了再看")
     expectEqual(intent(sampleTrack(), pausedFor: 10), .clear, "Discord 意图: 暂停满宽限默认清掉")
     expectEqual(intent(sampleTrack(), pausedFor: 10, keep: true),
-                .show(DiscordPresence.pausedActivity(sampleTrack(), statusLine: .title, now: now, pausedText: "Paused",
-                                                     pausedNameFormat: "%@ (Paused)")),
+                .show(DiscordPresence.pausedActivity(sampleTrack(), statusLine: .title, now: now, pausedNameFormat: "%@ (Paused)")),
                 "Discord 意图: 选了暂停时保留,换成不带进度条、带暂停小图的那份")
 }
 
@@ -279,13 +278,11 @@ private func checkDiscordSmallImage() {
     let now = Date(timeIntervalSince1970: 1_000_000)
     let badged = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, smallImage: .lyrimuse)
     expectEqual(badged.assets?.smallImage, DiscordPresence.lyrimuseBadgeURL, "Discord 小图: 角标是 Lyrimuse 应用 Art Assets 里那张")
-    expectEqual(badged.assets?.smallText, "Lyrimuse", "Discord 小图: 角标悬停写 Lyrimuse")
     expectEqual(badged.assets?.smallURL, DiscordPresence.websiteURL, "Discord 小图: 点角标打开官网")
     expectEqual(DiscordPresence.lyrimuseBadgeURL.hasPrefix("https://cdn.discordapp.com/app-assets/" + DiscordPresence.applicationID + "/"),
                 true, "Discord 小图: 角标地址在 Lyrimuse 应用名下,各播放器的应用都能用")
-    let paused = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: nil, smallImage: .paused("已暂停"))
+    let paused = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: nil, smallImage: .paused)
     expectEqual(paused.assets?.smallImage, DiscordPresence.pausedBadgeURL, "Discord 小图: 暂停图标")
-    expectEqual(paused.assets?.smallText, "已暂停", "Discord 小图: 暂停图标悬停写已暂停")
     expectEqual(paused.assets?.smallURL, DiscordPresence.websiteURL, "Discord 小图: 点暂停图标也打开官网")
     var noCover = sampleTrack()
     noCover.coverURL = nil
@@ -296,7 +293,6 @@ private func checkDiscordSmallImage() {
     expectEqual(playerBadged.assets?.smallImage,
                 "https://cdn.discordapp.com/app-icons/" + appleMusicID + "/25a8439ce78331e5e5880499892a70c6.png?size=256",
                 "Discord 小图: 播放器角标是它那个应用的 APP 图标")
-    expectEqual(playerBadged.assets?.smallText, "Apple Music", "Discord 小图: 播放器角标悬停写播放器名")
     expectEqual(playerBadged.assets?.smallURL, DiscordPresence.websiteURL, "Discord 小图: 点播放器角标也打开官网")
     for application in DiscordPresence.Application.allCases {
         let url = DiscordPresence.iconURL(of: application) ?? ""
@@ -314,7 +310,7 @@ private func checkDiscordSmallImage() {
     let json = jsonString(DiscordIPC.setActivity(badged, pid: 1, nonce: "1"))
     expectEqual(sourceBytes(json, contain: "\"small_image\":\"" + DiscordPresence.lyrimuseBadgeURL + "\""),
                 true, "Discord 小图: 字段名 small_image")
-    expectEqual(sourceBytes(json, contain: "\"small_text\":\"Lyrimuse\""), true, "Discord 小图: 字段名 small_text")
+    expectEqual(sourceBytes(json, contain: "\"small_text\""), false, "Discord 小图: 不发 small_text,指着小图不出悬停文字")
     expectEqual(sourceBytes(json, contain: "\"small_url\":"), true, "Discord 小图: 字段名 small_url")
     expectEqual(sourceBytes(jsonString(DiscordIPC.setActivity(paused, pid: 1, nonce: "1")),
                             contain: "\"small_url\":\"" + DiscordPresence.websiteURL + "\""),
@@ -323,7 +319,7 @@ private func checkDiscordSmallImage() {
     func intent(_ track: DiscordPresence.Track?, pausedFor: TimeInterval? = nil, keep: Bool = false,
                 badge: DiscordPresence.Badge = .lyrimuse, hiddenUntil: Date? = nil) -> DiscordPresence.Intent {
         DiscordPresence.intent(track: track, pausedSince: pausedFor.map { now.addingTimeInterval(-$0) }, statusLine: .title,
-                               keepWhenPaused: keep, badge: badge, pausedText: "已暂停", hiddenUntil: hiddenUntil, now: now)
+                               keepWhenPaused: keep, badge: badge, hiddenUntil: hiddenUntil, now: now)
     }
     expectEqual(intent(sampleTrack()), .show(badged), "Discord 意图: 开着角标时在放的那份带角标")
     expectEqual(intent(sampleTrack(), badge: .none), .show(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now)),
@@ -334,7 +330,7 @@ private func checkDiscordSmallImage() {
                 .show(DiscordPresence.activity(appleMusicTrack, statusLine: .title, now: now, smallImage: .player(.appleMusic))),
                 "Discord 意图: 角标选播放器时带当前播放器的图标")
     expectEqual(intent(sampleTrack(), pausedFor: 10, keep: true, badge: .none),
-                .show(DiscordPresence.pausedActivity(sampleTrack(), statusLine: .title, now: now, pausedText: "已暂停",
+                .show(DiscordPresence.pausedActivity(sampleTrack(), statusLine: .title, now: now,
                                                      pausedNameFormat: "%@ (Paused)")),
                 "Discord 意图: 暂停后保留的那份带暂停图标,不受角标设置管")
     expectEqual(intent(sampleTrack(), pausedFor: 3, keep: true), .hold(until: now.addingTimeInterval(7)),
@@ -351,7 +347,7 @@ private func checkDiscordPaused() {
     let nowMs: Int64 = 1_000_000_000
     let hour: Int64 = 3_600_000
     func pausedAt(_ date: Date, _ track: DiscordPresence.Track = sampleTrack()) -> DiscordActivity {
-        DiscordPresence.pausedActivity(track, statusLine: .player, now: date, pausedText: "已暂停", pausedNameFormat: "%@（已暂停）")
+        DiscordPresence.pausedActivity(track, statusLine: .player, now: date, pausedNameFormat: "%@（已暂停）")
     }
     let paused = pausedAt(now)
     expectEqual(paused.name, "Apple Music（已暂停）", "Discord 暂停: 应用名后面加（已暂停）")

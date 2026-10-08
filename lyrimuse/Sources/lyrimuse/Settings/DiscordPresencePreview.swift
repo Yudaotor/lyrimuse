@@ -90,7 +90,7 @@ struct DiscordPresencePreview: View {
             activity = sent
         } else if pausedKept {
             activity = DiscordPresence.pausedActivity(track, statusLine: settings.discordStatusDisplay, now: now,
-                                                      pausedText: L10n.t("已暂停"), pausedNameFormat: L10n.t("%@（已暂停）"))
+                                                      pausedNameFormat: L10n.t("%@（已暂停）"))
         } else {
             activity = DiscordPresence.activity(track, statusLine: settings.discordStatusDisplay, now: now,
                                                 smallImage: DiscordPresence.smallImage(for: settings.discordBadge,
@@ -395,7 +395,7 @@ struct DiscordPresencePreview: View {
         }
     }
 
-    /// 封面右下角的小图:24pt 圆形,压出封面 4pt,外面一圈弹窗底色;有 `small_url` 时能点,指向时出 `small_text`。
+    /// 封面右下角的小图:24pt 圆形,压出封面 4pt,外面一圈弹窗底色;有 `small_url` 时能点。指向时不出悬停文字(不发 `small_text`)。
     @ViewBuilder private func smallImage(_ model: Model) -> some View {
         if let assets = model.activity.assets, let image = assets.smallImage {
             PreviewLink(url: Self.url(assets.smallURL)) { _ in
@@ -405,7 +405,6 @@ struct DiscordPresencePreview: View {
                     .padding(Self.smallImageRing)
                     .background(Circle().fill(Palette.card))
             }
-            .help(assets.smallText ?? "")
             .offset(x: 4 + Self.smallImageRing, y: 4 + Self.smallImageRing)
         }
     }

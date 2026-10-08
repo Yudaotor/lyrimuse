@@ -746,7 +746,6 @@
 "已显示菜单栏歌词" = "Menu bar lyrics shown";
 "已显示译文" = "Translation shown";
 "已显示读音" = "Romanization shown";
-"已暂停" = "Paused";
 "已暂停：授权失效，重新连接后恢复" = "Paused: authorization revoked. Reconnect to resume.";
 "已更换为「%1$@」（%2$@ 分），原为「%3$@」" = "Switched to “%1$@” (%2$@ pts), was “%3$@”";
 "已更新 %@ 首" = "%@ updated";

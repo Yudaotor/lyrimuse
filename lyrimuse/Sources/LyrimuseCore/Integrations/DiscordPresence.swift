@@ -7,18 +7,17 @@ public struct DiscordActivity: Equatable, Sendable, Encodable {
         public var largeImage: String
         public var largeText: String?
         public var largeURL: String?
-        /// 压在大图右下角的小图(`DiscordPresence.SmallImage`),同样是公网图片地址;悬停文字;点了打开的链接。
+        /// 压在大图右下角的小图(`DiscordPresence.SmallImage`),同样是公网图片地址;点了打开的链接。
+        /// 不发 `small_text`:指着小图不出悬停文字(见 12 章决策 62)。`large_text` 不能这样省 —— 卡片上的专辑那一行就是它。
         public var smallImage: String?
-        public var smallText: String?
         public var smallURL: String?
 
         public init(largeImage: String, largeText: String? = nil, largeURL: String? = nil,
-                    smallImage: String? = nil, smallText: String? = nil, smallURL: String? = nil) {
+                    smallImage: String? = nil, smallURL: String? = nil) {
             self.largeImage = largeImage
             self.largeText = largeText
             self.largeURL = largeURL
             self.smallImage = smallImage
-            self.smallText = smallText
             self.smallURL = smallURL
         }
 
@@ -27,7 +26,6 @@ public struct DiscordActivity: Equatable, Sendable, Encodable {
             case largeText = "large_text"
             case largeURL = "large_url"
             case smallImage = "small_image"
-            case smallText = "small_text"
             case smallURL = "small_url"
         }
     }
@@ -172,21 +170,13 @@ public enum DiscordPresence {
     public enum SmallImage: Equatable, Sendable {
         case lyrimuse
         case player(Application)
-        case paused(String)
+        case paused
 
         var image: String? {
             switch self {
             case .lyrimuse: return DiscordPresence.lyrimuseBadgeURL
             case .player(let application): return DiscordPresence.iconURL(of: application)
             case .paused: return DiscordPresence.pausedBadgeURL
-            }
-        }
-
-        var text: String {
-            switch self {
-            case .lyrimuse: return "Lyrimuse"
-            case .player(let application): return application.registeredName
-            case .paused(let text): return text
             }
         }
     }
@@ -322,9 +312,9 @@ public enum DiscordPresence {
 
     /// 暂时隐藏期间(`hiddenUntil` 之前)、track 为 nil(没在放、广告、电台口白、排除的播放器)、没歌名或没歌手时清掉。
     /// 在放时按 `badge` 带角标(`smallImage(for:applicationID:)`)。暂停满 `pauseGrace` 后 `keepWhenPaused` 时换成暂停
-    /// 的那份(`pausedActivity`,暂停小图的悬停文字 `pausedText`,应用名按 `pausedNameFormat` 拼),否则清掉。
+    /// 的那份(`pausedActivity`,应用名按 `pausedNameFormat` 拼),否则清掉。
     public static func intent(track: Track?, pausedSince: Date?, statusLine: StatusLine, keepWhenPaused: Bool,
-                              badge: Badge = .none, pausedText: String = "Paused", pausedNameFormat: String = "%@ (Paused)",
+                              badge: Badge = .none, pausedNameFormat: String = "%@ (Paused)",
                               hiddenUntil: Date? = nil, now: Date) -> Intent {
         if let hiddenUntil, now < hiddenUntil { return .clear }
         guard let track, !trimmed(track.title).isEmpty, !trimmed(track.artist).isEmpty else { return .clear }
@@ -335,17 +325,16 @@ public enum DiscordPresence {
         let graceEnds = pausedSince.addingTimeInterval(pauseGrace)
         if now < graceEnds { return .hold(until: graceEnds) }
         guard keepWhenPaused else { return .clear }
-        return .show(pausedActivity(track, statusLine: statusLine, now: now, pausedText: pausedText,
-                                    pausedNameFormat: pausedNameFormat))
+        return .show(pausedActivity(track, statusLine: statusLine, now: now, pausedNameFormat: pausedNameFormat))
     }
 
     /// 暂停后保留的那份。Discord 没有暂停状态:不带时间戳它写这条状态挂了多久、一直往上走;开始时间在将来时停在 0:00。
     /// 开始时间取「当前这个十二小时段的起点再加一天」,总在十二到二十四小时之后:同一段里内容不变、不重发,跨段重发一次。
     /// 别放得太远,太远 Discord 整条不显示(见 12 章决策 50)。应用名后面加上暂停字样(`pausedNameFormat`,没有播放器名
     /// 时拿应用的注册名去拼),封面角上是暂停图标。
-    public static func pausedActivity(_ track: Track, statusLine: StatusLine, now: Date, pausedText: String,
+    public static func pausedActivity(_ track: Track, statusLine: StatusLine, now: Date,
                                       pausedNameFormat: String) -> DiscordActivity {
-        var paused = activity(track, statusLine: statusLine, now: nil, smallImage: .paused(pausedText))
+        var paused = activity(track, statusLine: statusLine, now: nil, smallImage: .paused)
         let block: Int64 = 12 * 3_600_000
         let nowMs = Int64((now.timeIntervalSince1970 * 1000).rounded())
         paused.timestamps = DiscordActivity.Timestamps(start: nowMs / block * block + 2 * block)
@@ -380,7 +369,6 @@ public enum DiscordPresence {
             assets: cover.map {
                 DiscordActivity.Assets(largeImage: $0, largeText: album.isEmpty ? nil : fitted(album), largeURL: songLink,
                                        smallImage: smallImage?.image,
-                                       smallText: smallImage?.image == nil ? nil : smallImage.map { fitted($0.text) },
                                        smallURL: smallImage?.image == nil ? nil : websiteURL)
             },
             timestamps: timestamps)
