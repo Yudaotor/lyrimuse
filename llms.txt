@@ -2,7 +2,7 @@
 
 > Open-source Mac desktop lyrics, word by word, for Apple Music, Spotify, YouTube Music and six more players: on your desktop, in the notch or the menu bar.
 
-Lyrimuse is an open-source (GPL-3.0) desktop lyrics app for macOS 14 and later, on Apple Silicon and Intel. It highlights lyrics word by word in a floating overlay, a capsule under the notch, the menu bar or a full Lyrics Window, for Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, and YouTube Music or Spotify Web playing in a browser. It scores twelve lyric sources to pick the best match, shows translations and word-by-word readings (pinyin, Cantonese Jyutping, Japanese romaji, Korean romanization), and scrobbles to Last.fm and ListenBrainz. The interface is in English, Simplified Chinese and Traditional Chinese.
+Lyrimuse is an open-source (GPL-3.0) desktop lyrics app for macOS 14 and later, on Apple Silicon and Intel. It highlights lyrics word by word in a floating overlay, a capsule under the notch, the menu bar, the Touch Bar or a full Lyrics Window, for Apple Music, Spotify, Amazon Music, KKBOX, QQ Music, NetEase Cloud Music, Kugou Music, Soda Music, the YouTube Music app Kaset, and YouTube Music or Spotify Web playing in a browser. It scores twelve lyric sources to pick the best match, shows translations and word-by-word readings (pinyin, Cantonese Jyutping, Japanese romaji, Korean romanization), scrobbles to Last.fm and ListenBrainz, and can show what you play on Discord. The interface is in English, Simplified Chinese and Traditional Chinese.
 
 ## Pages
 
