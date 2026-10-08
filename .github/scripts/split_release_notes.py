@@ -233,6 +233,8 @@ def render_html(lines: list[str], lang: str) -> str:
             # 链接都是给 GitHub Release 页看的:应用内的更新说明里点一下就装了,不需要
             # 自己挑包下载。而且 NSAttributedString 不渲染 HTML 表格,它会把表格摊成
             # 「Chip / 芯片」「dmg」「zip」这样一行一格的散行,比没有还糟。
+            # 外部贡献者致谢那一节(「Contributors / 贡献者」)同样只给 Release 页,必须写在
+            # 下载表之后;写到表格前面就会进应用内的更新说明。
             flush_para()
             close_list()
             break
