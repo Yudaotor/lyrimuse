@@ -49,6 +49,8 @@ const (
 	// 标题反查:Apple 原产地商店的规范曲名。前两条都拿**本地标题**当输入,
 	// 本地标题本身是罗马字/被本地化过的时候它们结构上就够不到,见 appleStorefrontCanonicalTitle。
 	lyricQueryReasonTitleStorefront = "title-from-apple-storefront"
+	// 标题反查:拿首轮歌词里的句子去网易云按歌词搜,见 titlelyrics.go。
+	lyricQueryReasonTitleLyrics = "title-from-lyrics"
 	// 标题反查:「英文名 中文名」两段式的双语曲名只拿中文那段去搜,见 bilingualTitleHanPart。
 	lyricQueryReasonTitleBilingual = "title-bilingual"
 	// 曲名变体:还缺着的源换一种曲名写法再问一次,见 titleVariantRound。
@@ -104,6 +106,7 @@ func lyricQueryReasons() []string {
 		lyricQueryReasonTitleAlbum,
 		lyricQueryReasonTitleSearch,
 		lyricQueryReasonTitleStorefront,
+		lyricQueryReasonTitleLyrics,
 		lyricQueryReasonTitleBilingual,
 		lyricQueryReasonTitleVariant,
 		lyricQueryReasonISRC,

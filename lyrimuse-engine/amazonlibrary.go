@@ -118,6 +118,90 @@ func amazonCatalog(asins []string) map[string]amazonCatalogTrack {
 	return out
 }
 
+// ---- 专辑页 / 歌单页的曲目表 ----
+
+// amazonLookupTrack:专辑页、歌单页那份曲目表里的一首。这份表跟单曲的目录记录存在同一组键下(键尾是专辑 / 歌单的
+// ASIN),值里是 `albumList[].tracks[]` / `playlistList[].tracks[]`。单曲那份目录记录不带 ISRC,只有这里带。
+type amazonLookupTrack struct {
+	ASIN       string `json:"asin"`
+	GlobalASIN string `json:"globalAsin"`
+	ISRC       string `json:"isrc"`
+}
+
+type amazonLookupBody struct {
+	AlbumList []struct {
+		Tracks []amazonLookupTrack `json:"tracks"`
+	} `json:"albumList"`
+	PlaylistList []struct {
+		Tracks []amazonLookupTrack `json:"tracks"`
+	} `json:"playlistList"`
+}
+
+// amazonISRCIndexTTL:曲目 ASIN → ISRC 的索引最多隔这么久从目录缓存重建一次(重建要把目录缓存整个读一遍)。
+const amazonISRCIndexTTL = 30 * time.Second
+
+var (
+	amazonISRCIndexMu    sync.Mutex
+	amazonISRCIndex      map[string]string
+	amazonISRCIndexBuilt time.Time
+)
+
+// amazonISRCForASIN:这首(曲目 ASIN)的 ISRC,取自本机缓存里打开 / 播放过的专辑页、歌单页那份曲目表;没见过返回 ""。
+// 从电台、单曲推荐直接放的歌多半没有。
+func amazonISRCForASIN(asin string) string {
+	if asin == "" {
+		return ""
+	}
+	now := time.Now()
+	amazonISRCIndexMu.Lock()
+	defer amazonISRCIndexMu.Unlock()
+	if amazonISRCIndex == nil || now.Sub(amazonISRCIndexBuilt) >= amazonISRCIndexTTL {
+		amazonISRCIndex, amazonISRCIndexBuilt = buildAmazonISRCIndex(), now
+	}
+	return amazonISRCIndex[asin]
+}
+
+// buildAmazonISRCIndex 扫一遍目录缓存,把专辑页、歌单页曲目表里每首的 ASIN 映到它的 ISRC(格式不对的不收,见 normalizeISRC)。
+func buildAmazonISRCIndex() map[string]string {
+	prefix := []byte(amazonCatalogKeyPrefix)
+	out := map[string]string{}
+	add := func(tracks []amazonLookupTrack) {
+		for _, t := range tracks {
+			code := normalizeISRC(t.ISRC)
+			if code == "" {
+				continue
+			}
+			for _, asin := range []string{t.ASIN, t.GlobalASIN} {
+				if asin != "" {
+					out[asin] = code
+				}
+			}
+		}
+	}
+	for _, v := range ldbScan(amazonLocalStorageDir(), func(k []byte) bool { return bytes.HasPrefix(k, prefix) }) {
+		if v.deleted || !bytes.Contains(v.value, []byte(`"isrc"`)) {
+			continue
+		}
+		var body amazonLookupBody
+		if !amazonFirstJSONObject(v.value, &body) {
+			continue
+		}
+		for _, a := range body.AlbumList {
+			add(a.Tracks)
+		}
+		for _, p := range body.PlaylistList {
+			add(p.Tracks)
+		}
+	}
+	return out
+}
+
+// amazonPlaybackISRC:这首(系统报的歌手 / 歌名)在 Amazon Music 里的 ISRC,ASIN 怎么认见 amazonASINFor。
+// 会取 enrichMu(经 amazonASINFor):调用方不能持着它。
+func amazonPlaybackISRC(artist, title string) string {
+	return amazonISRCForASIN(amazonASINFor(artist, title))
+}
+
 // ---- 本地歌词 ----
 
 type amazonLyricsBody struct {

@@ -1537,14 +1537,34 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 	// stripParens(artist):同 neteaseAlbumIDByName 头注,本地艺人标签自带的罗马化别名
 	// 括号(如"溫嵐 (Landy Wen)")原样拼进搜索词会带偏网易云的模糊搜索。
 	q := stripParens(artist) + " " + stripParens(title)
-	type neSearchSong struct {
-		Name     string  `json:"name"`
-		Duration float64 `json:"duration"`
-		Artists  []struct {
-			Name string `json:"name"`
-		} `json:"artists"`
+	songs, reqOK := neteaseSongSearch(ctx, neteaseSearchTypeSong, 30, q)
+	if !reqOK {
+		return "", 0, false
 	}
-	get := func(u string) ([]albumTrack, bool) { // (candidates, requestSucceeded)
+	tracks := neteaseSongsByArtist(songs, []string{artist})
+	return bestAlbumTrackByDurationDetailed(topSearchRanked(tracks, retryTitleFromArtistSearchMaxRank), durationSecs)
+}
+
+// neteaseSearchSong:网易云曲目搜索结果里的一首。按歌名搜(type=1)和按歌词搜(type=1006)回的形状相同。
+type neteaseSearchSong struct {
+	Name     string  `json:"name"`
+	Duration float64 `json:"duration"`
+	Artists  []struct {
+		Name string `json:"name"`
+	} `json:"artists"`
+}
+
+// 网易云曲目搜索的两种查法。
+const (
+	neteaseSearchTypeSong  = 1
+	neteaseSearchTypeLyric = 1006
+)
+
+// neteaseSongSearch:网易云曲目搜索,三个端点依次试,第一个问成的为准;reqOK=false 是都没问成。
+// 限流照样回 HTTP 200,拒绝写在 body 的 code 里,不能当成"零条搜索结果":记日志 + 退避这个端点桶,
+// 405 时额外记具体原因(见 resolveNeteaseInfo 的 get 那段注释)。
+func neteaseSongSearch(ctx context.Context, searchType, limit int, q string) (songs []neteaseSearchSong, reqOK bool) {
+	get := func(u string) ([]neteaseSearchSong, bool) {
 		body, err := neteaseFetchBody(ctx, u, "", 4*time.Second)
 		if err != nil {
 			return nil, false
@@ -1552,9 +1572,6 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 		var probe struct {
 			Code int `json:"code"`
 		}
-		// 跟本文件其它两处网易云调用同一个理由:限流照样回 HTTP 200,拒绝写在 body 的 code
-		// 里,不能当成"零条搜索结果"。记日志 + 退避这个端点桶,405 时额外记具体原因
-		// (见 resolveNeteaseInfo 的 get 那段注释)。
 		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
 			cooldown, streak := neteaseReportRejected(u)
 			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
@@ -1567,43 +1584,48 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 		neteaseReportSuccess(u) // 见 resolveNeteaseInfo 的 get 里同一句的注释
 		var out struct {
 			Result struct {
-				Songs []neSearchSong `json:"songs"`
+				Songs []neteaseSearchSong `json:"songs"`
 			} `json:"result"`
 		}
 		if err := json.Unmarshal(body, &out); err != nil {
 			return nil, false
 		}
-		tracks := make([]albumTrack, 0, len(out.Result.Songs))
-		for _, s := range out.Result.Songs {
-			if s.Name == "" {
-				continue
-			}
-			matched := false
-			for _, a := range s.Artists {
-				if neteaseArtistMatches(a.Name, artist) {
-					matched = true
+		return out.Result.Songs, true
+	}
+	query := fmt.Sprintf("?type=%d&limit=%d&s=%s", searchType, limit, neturl.QueryEscape(q))
+	for _, endpoint := range []string{neteaseSearchEndpointPrimary, neteaseSearchEndpointFallback, neteaseSearchEndpointEapi} {
+		if songs, reqOK = get(endpoint + query); reqOK {
+			return songs, true
+		}
+	}
+	return nil, false
+}
+
+// neteaseSongsByArtist:搜索结果里歌手对得上 artists 其中一个的那些,保持原来的排名顺序;albumTrack.artist 记对上的那个。
+func neteaseSongsByArtist(songs []neteaseSearchSong, artists []string) []albumTrack {
+	tracks := make([]albumTrack, 0, len(songs))
+	for _, s := range songs {
+		if s.Name == "" {
+			continue
+		}
+		matched := ""
+		for _, a := range s.Artists {
+			for _, artist := range artists {
+				if artist != "" && neteaseArtistMatches(a.Name, artist) {
+					matched = artist
 					break
 				}
 			}
-			if !matched {
-				continue
+			if matched != "" {
+				break
 			}
-			tracks = append(tracks, albumTrack{title: s.Name, artist: artist, duration: s.Duration / 1000})
 		}
-		return tracks, true
-	}
-	const query = "?type=1&limit=30&s="
-	var tracks []albumTrack
-	reqOK := false
-	for _, endpoint := range []string{neteaseSearchEndpointPrimary, neteaseSearchEndpointFallback, neteaseSearchEndpointEapi} {
-		if tracks, reqOK = get(endpoint + query + neturl.QueryEscape(q)); reqOK {
-			break
+		if matched == "" {
+			continue
 		}
+		tracks = append(tracks, albumTrack{title: s.Name, artist: matched, duration: s.Duration / 1000})
 	}
-	if !reqOK {
-		return "", 0, false
-	}
-	return bestAlbumTrackByDurationDetailed(topSearchRanked(tracks, retryTitleFromArtistSearchMaxRank), durationSecs)
+	return tracks
 }
 
 // retryTitleFromArtistSearchMaxRank:泛搜回来的 30 条里,只有**排名最靠前的这几条**够格

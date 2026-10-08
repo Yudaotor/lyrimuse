@@ -306,3 +306,57 @@ func TestAmazonCachedASIN(t *testing.T) {
 		}
 	}
 }
+
+// 专辑页 / 歌单页曲目表(跟单曲目录记录同一组键)里每首带 ISRC,单曲那份不带。
+const amazonTestAlbumLookupValue = "\x16\x00\x00\x00\x00\x00\x00\x00serialization::archive\x13\x00\x04\x08\x04\x08\x01\x00\x00\x00" +
+	`{"albumList":[{"asin":"B0TESTALB2","title":"JOURNEY TO THE WEST","tracks":[` +
+	`{"asin":"B0TESTTRK1","globalAsin":"B0TESTGLB1","isrc":"HKC381600015","title":"Stressed","duration":282},` +
+	`{"asin":"B0TESTTRK2","globalAsin":"B0TESTTRK2","isrc":"ZZZZZ9999999","title":"Placeholder","duration":200}]}]}` +
+	"\xe5\x00\x01garbage"
+
+const amazonTestPlaylistLookupValue = "\x16\x00\x00\x00\x00\x00\x00\x00serialization::archive\x13\x00\x04\x08\x04\x08\x01\x00\x00\x00" +
+	`{"albumList":[],"playlistList":[{"asin":"B0TESTPL01","tracks":[` +
+	`{"asin":"B0TESTAAA2","globalAsin":"B0TESTAAA2","isrc":"usum72401234","title":"I Can't Love You Anymore"}]}]}`
+
+func TestAmazonISRCFromLookupEntries(t *testing.T) {
+	localStorage, _ := useTempAmazonData(t)
+	testWriteLog(t, filepath.Join(localStorage, "000016.log"), [][]testLDBEntry{{
+		{key: "*.MusicContent.CacheEntry.PrimeCatalog_KATANA_B0TESTALB2", seq: 9, value: amazonTestAlbumLookupValue},
+		{key: "*.MusicContent.CacheEntry.PrimeCatalog_KATANA_B0TESTPL01", seq: 10, value: amazonTestPlaylistLookupValue},
+	}})
+	reset := func() {
+		amazonISRCIndexMu.Lock()
+		amazonISRCIndex = nil
+		amazonISRCIndexMu.Unlock()
+	}
+	reset()
+	t.Cleanup(reset)
+	for asin, want := range map[string]string{
+		"B0TESTTRK1": "HKC381600015", // 专辑页曲目表,按曲目 ASIN
+		"B0TESTGLB1": "HKC381600015", // 同一首的 globalAsin
+		"B0TESTAAA2": "USUM72401234", // 歌单页曲目表,ISRC 统一转大写
+		"B0TESTTRK2": "",             // 占位符样式的 ISRC 不收
+		"B0TESTALB2": "",             // 专辑自己的 ASIN 不是曲目
+		"":           "",
+	} {
+		if got := amazonISRCForASIN(asin); got != want {
+			t.Errorf("amazonISRCForASIN(%q) = %q, want %q", asin, got, want)
+		}
+	}
+
+	amazonCurrentMu.Lock()
+	saved := amazonCurrentTrack
+	amazonCurrentTrack.artist, amazonCurrentTrack.title, amazonCurrentTrack.trackID = "Khalil Fong", "Stressed", "asin://B0TESTTRK1"
+	amazonCurrentMu.Unlock()
+	t.Cleanup(func() {
+		amazonCurrentMu.Lock()
+		amazonCurrentTrack = saved
+		amazonCurrentMu.Unlock()
+	})
+	if got := playbackISRC("Khalil Fong", "Stressed", "JOURNEY TO THE WEST"); got != "HKC381600015" {
+		t.Errorf("用 Amazon Music 放的这首,播放器给的 ISRC 取它曲目表里记着的: %q", got)
+	}
+	if got := playbackISRC("方大同", "烦", "JTW西游记"); got != "" {
+		t.Errorf("换了身份(别名轮)不再对应这一条录音: %q", got)
+	}
+}

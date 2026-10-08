@@ -26997,6 +26997,23 @@
         }
       }
     },
+    "标题反查：按歌词搜" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title lookup: lyric search"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "標題反查：按歌詞搜尋"
+          }
+        }
+      }
+    },
     "未能跳过此广告" : {
       "localizations" : {
         "en" : {

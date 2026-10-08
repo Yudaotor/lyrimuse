@@ -62,6 +62,10 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 	// 多一次曲库请求)。只认去掉括号部分之后换了文字的(crossScriptBase)。
 	storefrontTitle := titleReverseOriginTitle(ctx, artist, title, album, durationSecs, samples, isrc)
 	storefrontOK := storefrontTitle != ""
+	// 第四条路:按歌词搜(titlelyrics.go)。只在前三条都没查到时问,最多多两次网易云请求。
+	var lyricTitle string
+	var lyricDiff float64
+	lyricOK := false
 
 	switch {
 	// 跨文字系统的改写(罗马字 KUSUSHIKI → 假名「クスシキ」、US 的「情勝策略」→ JP 的
@@ -77,9 +81,14 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 		correctedTitle, retryMethod, titleArtist = albumTitle, "title-from-album", albumWinArtist
 	case searchOK:
 		correctedTitle, retryMethod, titleArtist = searchTitle, "title-from-artist-search", searchWinArtist
+	default:
+		var lyricArtist string
+		if lyricTitle, lyricArtist, lyricDiff, lyricOK = retryTitleFromLyricSearchDetailed(ctx, titleArtists, samples, durationSecs); lyricOK {
+			correctedTitle, retryMethod, titleArtist = lyricTitle, lyricQueryReasonTitleLyrics, lyricArtist
+		}
 	}
-	log.Printf("lyrics: title-reverse-lookup: titleArtists=%v albumTitle=%q albumDiff=%v albumOK=%v albumTitleBacked=%v albumWinArtist=%q searchTitle=%q searchDiff=%v searchOK=%v searchWinArtist=%q storefrontTitle=%q storefrontOK=%v -> corrected=%q method=%q titleArtist=%q",
-		titleArtists, albumTitle, albumDiff, albumOK, albumTitleBacked, albumWinArtist, searchTitle, searchDiff, searchOK, searchWinArtist, storefrontTitle, storefrontOK, correctedTitle, retryMethod, titleArtist)
+	log.Printf("lyrics: title-reverse-lookup: titleArtists=%v albumTitle=%q albumDiff=%v albumOK=%v albumTitleBacked=%v albumWinArtist=%q searchTitle=%q searchDiff=%v searchOK=%v searchWinArtist=%q storefrontTitle=%q storefrontOK=%v lyricTitle=%q lyricDiff=%v lyricOK=%v -> corrected=%q method=%q titleArtist=%q",
+		titleArtists, albumTitle, albumDiff, albumOK, albumTitleBacked, albumWinArtist, searchTitle, searchDiff, searchOK, searchWinArtist, storefrontTitle, storefrontOK, lyricTitle, lyricDiff, lyricOK, correctedTitle, retryMethod, titleArtist)
 	return correctedTitle, retryMethod, titleArtist
 }
 
