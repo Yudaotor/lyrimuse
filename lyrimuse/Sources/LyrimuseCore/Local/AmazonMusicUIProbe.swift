@@ -133,12 +133,20 @@ public enum AmazonMusicUIProbe {
     /// 同步读,阻塞最多 `startWait` + `timeout`,返回这首真实起点(epoch 秒)所在的区间,见 `settledInterval`。别在主线程调。
     /// `timelineOrigin`:日志位置的零点(当前时刻 − `engineTimelinePosition`),给 `plausibleElapsed` 用。`isCurrent`
     /// 每读一次问一下,返回 false(已经换歌)就不读了。
+    /// 切 `AXEnhancedUserInterface` 重建网页树、再从树里读东西的那一段要持这把锁:随机 / 循环键(`AmazonMusicModeControl`)
+    /// 也要切它,两边交错时一边刚建好的树会被另一边的「设回 false」拆掉,读不到时间、按不到键。设回 false 也在锁里做。
+    public static let treeLock = NSLock()
+
     public static func sampleOrigin(pid: pid_t, duration: Double?, timelineOrigin: Date? = nil,
                                     isCurrent: () -> Bool = { true }) -> Result<ClosedRange<Double>, FailureBox> {
         guard AXIsProcessTrusted() else { return .failure(.init(.notTrusted, samples: 0)) }
         let durationText = duration.map { String(Int($0)) } ?? "?"
         let app = AXUIElementCreateApplication(pid)
-        defer { AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse) }
+        defer {
+            treeLock.lock()
+            AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse)
+            treeLock.unlock()
+        }
         var samples: [Sample] = []
         var restarts = 0
         var otherTrack: String?
@@ -151,6 +159,7 @@ public enum AmazonMusicUIProbe {
                 guard sampleToggles < maxSampleToggles else { break }
                 sampleToggles += 1
             }
+            treeLock.lock()
             AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse)
             let toggledAt = Date()
             AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
@@ -160,6 +169,7 @@ public enum AmazonMusicUIProbe {
                 if found.isEmpty { Thread.sleep(forTimeInterval: 0.02) }
             }
             let readAt = Date()
+            treeLock.unlock()
             guard !found.isEmpty else { continue }
             let pairs = found.map(\.pair)
             // 开关之后头一次读到的偶尔还是上次那棵旧树(上一首的时间),跳过接着读,别整次放弃。

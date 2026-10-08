@@ -917,6 +917,13 @@ func runPlayerIdentityTests() {
                     "Amazon 模式: 循环是单曲时开随机顺手关掉循环,不然还是读成单曲循环")
         expectEqual(A.presses(from: S(repeatSetting: "NONE", shuffle: true), to: .repeatAll), ["shuffle", "repeat"],
                     "Amazon 模式: 点循环关掉随机(两颗键互斥)")
+        let local = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Local")
+        let probe = (try? String(contentsOf: local.appendingPathComponent("AmazonMusicUIProbe.swift"), encoding: .utf8)) ?? ""
+        let modes = (try? String(contentsOf: local.appendingPathComponent("AmazonMusicModeControl.swift"), encoding: .utf8)) ?? ""
+        expectEqual(probe.components(separatedBy: "treeLock.lock()").count - 1 >= 2
+                        && modes.contains("AmazonMusicUIProbe.treeLock.lock()"), true,
+                    "Amazon 模式: 读进度和切模式都持同一把锁再切 AXEnhancedUserInterface,别互相拆掉对方刚建好的树")
 
         // 写入:每一下照日志里最新的档算下一下按什么;按了没生效就重按;重按之后日志晚到、多进了一档,以最后读到的为准。
         // 桩:按键立刻改 Amazon 的真实状态,日志要再读 lag 次才看得到;前 drop 下按了不生效;flipsShuffle 时不管按哪颗都只翻随机。

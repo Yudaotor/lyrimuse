@@ -174,7 +174,12 @@ public enum AmazonMusicModeControl {
               let start = readSettings(logPath: logPath) else { return false }
         let ax = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(ax, 1)
-        defer { AXUIElementSetAttributeValue(ax, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse) }
+        // 整段持锁:读进度那边(`AmazonMusicUIProbe.sampleOrigin`)也切这棵树,交错时互相拆掉对方刚建好的树。
+        AmazonMusicUIProbe.treeLock.lock()
+        defer {
+            AXUIElementSetAttributeValue(ax, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse)
+            AmazonMusicUIProbe.treeLock.unlock()
+        }
         let reached = pressUntilConfirmed(from: start, to: target, read: { readSettings(logPath: logPath) }) { button in
             guard let element = rebuiltButton(ax, classToken: button) else { return false }
             return AXUIElementPerformAction(element, kAXPressAction as CFString) == .success
