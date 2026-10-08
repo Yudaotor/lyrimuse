@@ -2299,9 +2299,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             // `showsExpandedLyricPreview` 这一条跟下面 .frame(height:) 里留不留这行的高度
-            // 是**同一个值**(协议扩展里那份),别在这里换成别的判据。
-            if controller.showsExpandedLyricPreview, !nextLineDisplayText.isEmpty {
-                Text(nextLineDisplayText)
+            // 是**同一个值**(协议扩展里那份),别在这里换成别的判据。没有下一句(最后一句)时照样占这一行、
+            // 画一个空格,进度条和控制键不往上挪。见 05 章决策 75。
+            if controller.showsExpandedLyricPreview {
+                Text(nextLineDisplayText.isEmpty ? " " : nextLineDisplayText)
                     // 跟副行同一个派生字体:它俩是同一类"辅助的下一句",字号不随主行变、粗细细一档。
                     .font(playback.secondaryFont)
                     .lyricTypesetting(nextLineDisplayText)

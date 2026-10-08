@@ -610,6 +610,11 @@ func runNotchTests() {
                         "灵动岛接线: 初始化先算几何再建 hostingView")
             expectEqual(initBody.contains("hosting.frame = NSRect(origin: .zero, size: panel.frame.size)"), true,
                         "灵动岛接线: hostingView 按算好的窗口尺寸建,不按占位尺寸")
+            // 展开区下一句那一行跟它留的高度同一个判据:最后一句没有下一句时照样占位,下面的进度条和控制键不上挪。见 05 章决策 75。
+            expectEqual(view.contains("if controller.showsExpandedLyricPreview {\n                Text(nextLineDisplayText.isEmpty ? \" \" : nextLineDisplayText)"),
+                        true, "灵动岛接线: 展开区最后一句时下一句那一行留空占位")
+            expectEqual(view.contains("if controller.showsExpandedLyricPreview, !nextLineDisplayText.isEmpty"), false,
+                        "灵动岛接线: 展开区下一句为空时不再拿掉那一行")
         }
 
         // 跟随封面背景:换图两层交叉淡入,旧图不透明地留在下面 —— 直接换 Image 内容会让旧图当场消失、
