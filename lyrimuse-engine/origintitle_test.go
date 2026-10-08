@@ -69,7 +69,7 @@ func withTestDevToken(t *testing.T) {
 	t.Helper()
 	applemusicDevTokenMu.Lock()
 	savedTok, savedExp := applemusicDevToken, applemusicDevTokenExpires
-	applemusicDevToken, applemusicDevTokenExpires = "test-token", time.Now().Add(24*time.Hour)
+	applemusicDevToken, applemusicDevTokenExpires = "test-token", time.Now().Add(applemusicDevTokenRenewMargin+24*time.Hour)
 	applemusicDevTokenMu.Unlock()
 	t.Cleanup(func() {
 		applemusicDevTokenMu.Lock()
