@@ -2013,15 +2013,22 @@ func runSourceContractTests() {
                             "悬浮换句动画: 新主句跟上一拍下一句同号才走上来,否则原地淡入")
                 // 主句下面的读音、译文跟主句同一个变换走上来,另外从透明渐显(起步时常在窗口底边以外,整块实着走会露出被裁掉的半截);
                 // 上一拍下一句那一格本来就带着它们(前奏 / 间奏)时不渐显。
-                expectEqual(stage.contains("tailFades: !lastNextRow.carriesAnnotations)")
+                expectEqual(stage.contains("tailFades: !lastNextRow.carriesAnnotations, ghost: oldNext)")
                             && stage.contains("for target in [layer, tailLayer].compactMap({ $0 }) {")
                             && stage.contains("if tailFades, let tailLayer {"), true,
                             "悬浮换句动画: 读音、译文跟主句一起走上来、从透明渐显;间奏接回时不渐显")
-                // 走上来的那行路上不挡东西:旧下一句当场收掉,新的后半程才淡入,旧主句原地淡完。
-                expectEqual(stage.contains("next?.view.removeFromSuperview()\n            next = install(n)")
+                // 走上来的那行路上不挡东西:旧下一句当场收掉(要跟着走的那一格除外),新的后半程才淡入,旧主句原地淡完。
+                expectEqual(stage.contains("if let old = next, !Self.isGhost(old, of: pendingEntry) { old.view.removeFromSuperview() }\n            next = install(n)")
                             && stage.contains("lateIn.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + OverlayLineRise.lateInDelay")
                             && stage.contains("Self.fade(from: 1, to: 0, duration: OverlayLineRise.fadeOutDuration,"), true,
                             "悬浮换句动画: 旧的下一句当场收掉、新的后半程淡入,旧主句原地淡完")
+                // 走上来的那一句跟上一拍下一句那一格交叉淡化:旧那格跟着走同一条路(变换互逆)、淡出,新主句淡入,
+                // 样子在路上从预览变成主句,起步那一帧不原地变粗变亮。
+                expectEqual(stage.contains("accompany(ghost, from: from, to: mainFrame, scale: scale)")
+                            && stage.contains("let end = OverlayLineRise.startTransform(scale: 1 / scale, anchor: anchor, position: layer.position,")
+                            && stage.contains("layer.add(Self.fade(from: 0, to: 1, duration: OverlayLineRise.crossfadeDuration, curve: Self.riseCurve),")
+                            && stage.contains("layer.add(Self.fade(from: 1, to: 0, duration: OverlayLineRise.crossfadeDuration, curve: Self.riseCurve),"), true,
+                            "悬浮换句动画: 走上来的那一句跟旧的下一句交叉淡化,样子在路上从预览变成主句")
                 // 舞台不接鼠标;换句前比换句后高时撑住高度,到新主句走完再放开。
                 expectEqual(stage.contains("override func hitTest(_ point: NSPoint) -> NSView? { nil }")
                             && stage.contains("return CGSize(width: width, height: max(contentHeight(width: width), heldHeight ?? 0))"), true,

@@ -194,8 +194,9 @@ final class OverlayLineChangeStageView: NSView {
     /// 换句那一拍排好版之后要装的进场动画。
     private enum Entry {
         /// 从上一拍下一句那一格(`from`,舞台坐标)按它的字号比例起步,走上来、放大到位。`tailFades`:读音、译文从透明渐显
-        /// (上一拍下一句那一格没带着它们时)。
-        case rise(from: CGRect, scale: CGFloat, tailFades: Bool)
+        /// (上一拍下一句那一格没带着它们时)。`ghost`:上一拍下一句那一格(预览样式),跟新主句走同一条路、同时淡出,
+        /// 新主句同时淡入 —— 两份在同一处交叉淡化,这一句的样子在路上从预览变成主句,起步那一帧不会原地变粗变亮。
+        case rise(from: CGRect, scale: CGFloat, tailFades: Bool, ghost: Cell)
         /// 原地淡入(跳句、拖进度、换歌、没开下一句)。
         case fade
     }
@@ -211,6 +212,8 @@ final class OverlayLineChangeStageView: NSView {
     private var pendingLateIn = false
     /// 正在淡出、淡完就拆的旧格子。
     private var retiring: [NSView] = []
+    /// 跟着新主句走、正在淡出的上一拍下一句那一格,走完就拆。留着格子本身,托管控制器在它淡完之前别先释放。
+    private var ghosts: [Cell] = []
     /// 换句前的高度:比换句后高时撑住到新主句走完,不然窗口先变矮、走上来的那一句起步时被下沿裁掉。
     private var heldHeight: CGFloat?
     private var holdGeneration = 0
@@ -242,9 +245,11 @@ final class OverlayLineChangeStageView: NSView {
             cell.update(m)
         } else {
             if let old = main {
+                // 上一次换句的动画还没装上又换了一句:那一次要跟着走的格子没人拆了,这里拆掉。
+                if case .rise(_, _, _, let stale)? = pendingEntry { stale.view.removeFromSuperview() }
                 if lastNextRow.id == m.id, let oldNext = next, oldNext.id == m.id {
                     pendingEntry = .rise(from: oldNext.view.frame, scale: lastNextRow.scale,
-                                         tailFades: !lastNextRow.carriesAnnotations)
+                                         tailFades: !lastNextRow.carriesAnnotations, ghost: oldNext)
                 } else {
                     pendingEntry = .fade
                 }
@@ -256,8 +261,8 @@ final class OverlayLineChangeStageView: NSView {
         if let cell = next, cell.id == n.id {
             cell.update(n)
         } else {
-            // 旧的下一句当场收掉,新的等走上来的那一句到位、后半程才淡入。
-            next?.view.removeFromSuperview()
+            // 旧的下一句当场收掉(要跟着新主句走的那一格除外),新的等走上来的那一句到位、后半程才淡入。
+            if let old = next, !Self.isGhost(old, of: pendingEntry) { old.view.removeFromSuperview() }
             next = install(n)
             pendingLateIn = !firstUpdate
         }
@@ -281,6 +286,8 @@ final class OverlayLineChangeStageView: NSView {
         holdGeneration += 1
         for view in retiring { view.removeFromSuperview() }
         retiring.removeAll()
+        for ghost in ghosts { ghost.view.removeFromSuperview() }
+        ghosts.removeAll()
         main?.view.removeFromSuperview()
         main?.tailView?.removeFromSuperview()
         next?.view.removeFromSuperview()
@@ -366,10 +373,13 @@ final class OverlayLineChangeStageView: NSView {
             let flipped = self.layer?.isGeometryFlipped == true
             let tailLayer = main.tailView?.layer
             switch entry {
-            case .rise(let from, let scale, let tailFades) where flipped:
+            case .rise(let from, let scale, let tailFades, let ghost) where flipped:
                 // 主句和下面的读音、译文是同一个变换:以终点那一格顶边上按对齐取的一点为中心缩放、整体挪到上一拍下一句那里。
                 let anchor = CGPoint(x: mainFrame.minX + mainFrame.width * Self.anchorFraction(main.alignment), y: mainFrame.minY)
                 let offset = CGVector(dx: 0, dy: from.minY - mainFrame.minY)
+                layer.add(Self.fade(from: 0, to: 1, duration: OverlayLineRise.crossfadeDuration, curve: Self.riseCurve),
+                          forKey: "lineCrossfadeIn")
+                accompany(ghost, from: from, to: mainFrame, scale: scale)
                 for target in [layer, tailLayer].compactMap({ $0 }) {
                     let start = OverlayLineRise.startTransform(scale: scale, anchor: anchor, position: target.position,
                                                                offset: offset)
@@ -384,7 +394,13 @@ final class OverlayLineChangeStageView: NSView {
                     tailLayer.add(Self.fade(from: 0, to: 1, duration: OverlayLineRise.tailFadeInDuration, curve: Self.riseCurve),
                                   forKey: "lineTailFadeIn")
                 }
-            case .rise, .fade:
+            case .rise(_, _, _, let ghost):
+                ghost.view.removeFromSuperview()
+                for target in [layer, tailLayer].compactMap({ $0 }) {
+                    target.add(Self.fade(from: 0, to: 1, duration: OverlayLineRise.duration, curve: Self.riseCurve),
+                               forKey: "lineFadeIn")
+                }
+            case .fade:
                 for target in [layer, tailLayer].compactMap({ $0 }) {
                     target.add(Self.fade(from: 0, to: 1, duration: OverlayLineRise.duration, curve: Self.riseCurve),
                                forKey: "lineFadeIn")
@@ -399,6 +415,40 @@ final class OverlayLineChangeStageView: NSView {
             lateIn.fillMode = .backwards
             layer.add(lateIn, forKey: "lineLateIn")
         }
+    }
+
+    /// 上一拍下一句那一格跟着新主句走:从它自己的位置走到新主句终点那一格、按字号比例的倒数放大(跟新主句起步的变换
+    /// 正好互逆),同时淡出,走完拆掉。
+    private func accompany(_ ghost: Cell, from: CGRect, to mainFrame: CGRect, scale: CGFloat) {
+        guard let layer = ghost.view.layer, scale > 0 else {
+            ghost.view.removeFromSuperview()
+            return
+        }
+        let anchor = CGPoint(x: from.minX + from.width * Self.anchorFraction(ghost.alignment), y: from.minY)
+        let end = OverlayLineRise.startTransform(scale: 1 / scale, anchor: anchor, position: layer.position,
+                                                 offset: CGVector(dx: 0, dy: mainFrame.minY - from.minY))
+        let move = CABasicAnimation(keyPath: "transform")
+        move.fromValue = NSValue(caTransform3D: CATransform3DIdentity)
+        move.toValue = NSValue(caTransform3D: CATransform3DMakeAffineTransform(end))
+        move.duration = OverlayLineRise.duration
+        move.timingFunction = Self.riseCurve
+        layer.transform = CATransform3DMakeAffineTransform(end)
+        layer.add(move, forKey: "lineAccompany")
+        ghost.view.alphaValue = 0
+        layer.add(Self.fade(from: 1, to: 0, duration: OverlayLineRise.crossfadeDuration, curve: Self.riseCurve),
+                  forKey: "lineCrossfadeOut")
+        ghosts.append(ghost)
+        DispatchQueue.main.asyncAfter(deadline: .now() + OverlayLineRise.duration) { [weak self] in
+            MainActor.assumeIsolated {
+                ghost.view.removeFromSuperview()
+                self?.ghosts.removeAll { $0 === ghost }
+            }
+        }
+    }
+
+    private static func isGhost(_ cell: Cell, of entry: Entry?) -> Bool {
+        if case .rise(_, _, _, let ghost)? = entry { return ghost === cell }
+        return false
     }
 
     private static func anchorFraction(_ alignment: HorizontalAlignment) -> CGFloat {

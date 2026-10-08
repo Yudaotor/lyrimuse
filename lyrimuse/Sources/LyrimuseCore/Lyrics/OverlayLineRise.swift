@@ -12,6 +12,8 @@ public enum OverlayLineRise {
     public static let lateInDuration: Double = 0.12
     /// 走上来的那一句下面的读音、译文从透明渐显的时长,缓动同走上来那条;走到大半时已经全实。
     public static let tailFadeInDuration: Double = 0.15
+    /// 走上来的那一句跟上一拍下一句那一格交叉淡化的时长(新主句淡入、旧下一句淡出),缓动同走上来那条。
+    public static let crossfadeDuration: Double = 0.15
 
     /// 起步那一刻加在新主句那一格图层上的变换。那一格已经按终点摆好,起步时要看起来是以 `anchor`(终点那一格顶边上
     /// 按对齐取的一点)为中心缩到 `scale`、再整体挪 `offset`(从终点挪到上一拍下一句那一格)。图层变换绕图层自己的
