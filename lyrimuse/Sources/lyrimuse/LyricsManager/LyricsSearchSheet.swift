@@ -975,9 +975,11 @@ struct LyricsSearchSheet: View {
         let plainOnly = entry.lyrics.isEmpty
         let text = plainOnly ? entry.plainLyrics : entry.lyrics
         guard !text.isEmpty else { return nil }
+        // 引擎预生成的读音不算这一版自带的(搜到的同一份候选也不带),预览的「原文 + 读音」照样按设置现算。
+        let roma = plainOnly ? "" : LyricsRomanization.sourceProvidedRomanization(entry.lyricsRoma, lyrics: text)
         return LyricsSearchService.Candidate(
             source: source, lyrics: text,
-            lyricsTr: plainOnly ? "" : entry.lyricsTr, lyricsRoma: plainOnly ? "" : entry.lyricsRoma,
+            lyricsTr: plainOnly ? "" : entry.lyricsTr, lyricsRoma: roma,
             lyricsYRC: plainOnly ? "" : entry.lyricsYRC, lyricsBG: "", lyricsTrLang: "",
             hasWordTiming: !plainOnly && !entry.lyricsYRC.isEmpty, score: 0, scoreTerms: [],
             title: originalTitle, artist: originalArtist, album: originalAlbum,

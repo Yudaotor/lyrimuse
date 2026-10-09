@@ -150,6 +150,19 @@ func runLyricsManagerTests() {
         expectEqual(D.isOff(candidate: 300, song: 260), true, "候选曲长: 差 13.3%(分母取较长那方)算另一个版本,同引擎 12% 门槛")
         expectEqual(D.isOff(candidate: 0, song: 260), false, "候选曲长: 不知道时长不下结论")
         expectEqual([D.clock(271.4), D.clock(59.6), D.clock(3725)], ["4:31", "1:00", "1:02:05"], "候选曲长: 分:秒,一小时以上带小时")
+        let zh = "[00:29.67]风吹乱头发\n[00:32.92]小孩不听话"
+        let generated = LyricsRomanization.romanizeLRC(zh) ?? ""
+        expectEqual(generated.isEmpty, false, "存档读音: 中文正文生成得出读音(守卫自身没跑空)")
+        expectEqual(LyricsRomanization.sourceProvidedRomanization(generated, lyrics: zh), "",
+                    "存档读音: 跟现算逐字一致的是引擎预生成的,不算自带")
+        expectEqual(LyricsRomanization.sourceProvidedRomanization("[00:29.67]feng chui", lyrics: zh), "[00:29.67]feng chui",
+                    "存档读音: 跟现算不一样的是源自带或手改的,留着")
+        expectEqual(LyricsRomanization.sourceProvidedRomanization("", lyrics: zh), "", "存档读音: 没有读音还是空")
+        let storedSheet = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsSearchSheet.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(storedSheet.contains("LyricsRomanization.sourceProvidedRomanization(entry.lyricsRoma, lyrics: text)"), true,
+                    "存档读音: 搜索面板里在用的那一版去掉预生成的读音再标「读音」")
     }
 
     // ---- 预览:当前句、读音 ----

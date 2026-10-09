@@ -54,6 +54,14 @@ public enum LyricsRomanization {
         return out.isEmpty ? nil : out.joined(separator: "\n")
     }
 
+    /// 缓存里的 `lyrics_roma` 去掉引擎按 `romanizeLRC` 预生成的那份(跟现算逐字一致的就是预生成的),剩下的才是歌词源
+    /// 自带或手改的读音;是预生成的返回空串。「搜索候选歌词」里在用的那一版据此标不标「读音」:搜到的同一份候选
+    /// 不带预生成读音,两边口径要一样(见 11 章决策 104)。
+    public static func sourceProvidedRomanization(_ roma: String, lyrics: String) -> String {
+        guard !roma.isEmpty, roma != romanizeLRC(lyrics) else { return "" }
+        return roma
+    }
+
     /// `roma` 是不是旧版韩文读音(ICU `Any-Latin` 逐字母转写)给这份正文算出来的。启动迁移靠它只换掉
     /// 引擎早先预生成的那份,歌词源给的对不上、不动(用户手改过的条目引擎那边整条跳过,不送来判)。
     /// 按含谚文的正文行逐行比:`roma` 里同一串时间标签的那一行跟这一行的 ICU 转写一字不差算一致,比得上的行里
