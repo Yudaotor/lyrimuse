@@ -53,6 +53,8 @@ done
 BUILD_LOCK="$PWD/.build/build.sh.lock"
 # 上一次全部成功的普通装机:源码快照拍下的时刻、装进 /Applications 的那个包(inode)。排队合并用。
 LAST_INSTALL="$PWD/.build/build.sh.last-install"
+# 剥符号之前存下的 dSYM(见下面合并 Swift 切片之后那段)。在工作树里,不在源码快照里。
+DSYM_ROOT="$PWD/.build/dsym"
 mkdir -p "$PWD/.build"
 build_lock_waited=0
 while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
@@ -374,6 +376,19 @@ merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-translate" "${TRANSLATE_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-romanize" "${ROMANIZE_SLICES[@]}"
 
+# 剥符号:swift build release 不剥,符号表和调试映射占主程序一大半(54 MB 里 36 MB)。先用 dsymutil 把调试信息存成
+# dSYM,放 $DSYM_ROOT/<架构>/(整目录覆盖,只留最近一次),崩溃报告里的地址拿它用 atos 还原;dSYM 必须在 strip 之前
+# 生成,剥完就没有调试映射了。去签名再剥:链接器盖的签名会让 strip 每个文件打一句警告,三个文件后面都会重签。
+# 别对 dylib 用不带参数的 strip:那会剥掉导出符号。见 15 章决策 33。
+DSYM_DIR="$DSYM_ROOT/${ARCHES// /-}"
+rm -rf "$DSYM_DIR"
+mkdir -p "$DSYM_DIR"
+for bin in "$FAT_DIR/lyrimuse" "$FAT_DIR/lyrics-translate" "$FAT_DIR/lyrics-romanize"; do
+  dsymutil "$bin" -o "$DSYM_DIR/$(basename "$bin").dSYM"
+  codesign --remove-signature "$bin"
+  strip "$bin"
+done
+
 # 引擎打包进 .app 里(Contents/Resources/$ENGINE_NAME),不要求
 # 用户手动单独构建它——EngineServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
 # 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-engine/build.sh 同款
@@ -412,8 +427,9 @@ for arch in $ARCHES; do
   # LYRIMUSE_GOTOOLCHAIN(包管理器构建用):MacPorts 沙箱禁网,钉住的
   # go1.24.4 若非本机版本会触发工具链下载而失败——port 传 local 用它自带的 go
   # (依赖声明保证 ≥1.24)。默认仍是 go1.24.4(系统 1.21 产物缺 LC_UUID,AMFI 拒签)。
+  # -s -w:不带符号表和 DWARF(约 4.7 MB);pclntab 还在,panic 栈照样有函数名和行号。见 15 章决策 33。
   (cd ../lyrimuse-engine && GOTOOLCHAIN="${LYRIMUSE_GOTOOLCHAIN:-go1.24.4}" GOOS=darwin GOARCH="$goarch" \
-    go build -ldflags "-X main.clientVersion=$APP_VERSION" -o "$out" .)
+    go build -ldflags "-s -w -X main.clientVersion=$APP_VERSION" -o "$out" .)
   ENGINE_SLICES+=("$out")
 done
 merge_slices "$FAT_DIR/$ENGINE_NAME" "${ENGINE_SLICES[@]}"

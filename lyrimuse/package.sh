@@ -203,10 +203,11 @@ for v in "${VARIANTS[@]}"; do
   # 这条底线保住了,美化也能做。
   #
   # 退回路径保留而不是硬性要求装 dmgbuild:出 DMG 这件事本身不该因为少一个 Python 包
-  # 就整个失败,而且两条路径的产物在功能上完全等价(同样的 HFS+/UDZO、同样的 app +
+  # 就整个失败,而且两条路径的产物在功能上完全等价(同样的 HFS+/ULMO、同样的 app +
   # Applications 替身),差的只是观感。
   #
-  # -format UDZO = 只读 + zlib 压缩,分发用 dmg 的常规格式;-fs HFS+ 而不是 APFS,HFS+ 的
+  # -format ULMO = 只读 + LZMA 压缩,比 UDZO(zlib)小约三成,macOS 10.15 起能挂(部署目标 14,见 15 章
+  # 决策 33);-fs HFS+ 而不是 APFS,HFS+ 的
   # 只读压缩镜像兼容面最宽,对一份只用来拖一次的镜像没理由挑 APFS。
   #
   # dmg 本身不签名:这个项目通篇 ad-hoc 签名、没有公证(见 README),给镜像盖一个 ad-hoc 签名
@@ -233,7 +234,7 @@ for v in "${VARIANTS[@]}"; do
     echo "    (没装 dmgbuild,退回纯 hdiutil:产物功能一样,只是没有背景图和图标摆位)"
     ln -s /Applications "$dmgstage/Applications"
     hdiutil create -volname "$volname" -srcfolder "$dmgstage" \
-      -fs HFS+ -format UDZO -ov -quiet "$DIST/$base.dmg"
+      -fs HFS+ -format ULMO -ov -quiet "$DIST/$base.dmg"
   fi
 
   printf "    %-40s %s\n" "$base.zip" "$(human_size "$DIST/$base.zip")"

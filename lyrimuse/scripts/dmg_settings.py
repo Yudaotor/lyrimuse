@@ -6,7 +6,7 @@
 # 自动化,故意不做" —— 这个前提对 dmgbuild 不成立。它直接往镜像里写 .DS_Store
 # (自己实现了那个格式),全程不启动 Finder、不挂 GUI、无副作用。
 #
-# 保持跟原来 hdiutil 完全一致的两个语义:HFS+ 文件系统、UDZO 只读压缩格式。
+# 跟 hdiutil 退回路径一致的两个语义:HFS+ 文件系统、ULMO 只读压缩格式。
 #
 # 由 package.sh 通过环境变量传入:
 #   LYRIMUSE_DMG_APP        要装进去的 .app 路径
@@ -30,7 +30,8 @@ icon = os.path.join(application, "Contents/Resources/AppIcon.icns")
 # dmgbuild 的 `filesystem`/`format` 必须跟 hdiutil 那条路径一致,否则同一个版本
 # 用不用 dmgbuild 出来的产物特性不同(兼容性、体积),那种差异排查起来很费劲。
 filesystem = "HFS+"
-format = "UDZO"
+# ULMO = 只读 + LZMA,比 UDZO(zlib)小约三成;macOS 10.15 起能挂,部署目标是 14。见 15 章决策 33。
+format = "ULMO"
 
 volume_name = os.environ["LYRIMUSE_DMG_VOLNAME"]
 

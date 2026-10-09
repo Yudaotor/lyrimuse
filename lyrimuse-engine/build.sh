@@ -46,8 +46,9 @@ fi
 [ -z "$ENGINE_VERSION" ] && ENGINE_VERSION="dev"
 
 echo "==> building with $TOOLCHAIN (native LC_UUID + valid signature), version $ENGINE_VERSION"
-# -X 只能注入 var,对 const 静默失败——见 main.go clientVersion 那段注释。
-GOTOOLCHAIN="$TOOLCHAIN" go build -ldflags "-X main.clientVersion=$ENGINE_VERSION" -o "$BIN" .
+# -X 只能注入 var,对 const 静默失败——见 main.go clientVersion 那段注释。-s -w 跟 lyrimuse/build.sh 一致,
+# 见 15 章决策 33。
+GOTOOLCHAIN="$TOOLCHAIN" go build -ldflags "-s -w -X main.clientVersion=$ENGINE_VERSION" -o "$BIN" .
 codesign -v "$BIN" && echo "    signature valid"
 
 # 引擎真正被 launchd 管的那份是打包进 Lyrimuse.app 里的那份引擎
