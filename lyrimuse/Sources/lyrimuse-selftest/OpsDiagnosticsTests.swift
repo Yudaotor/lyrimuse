@@ -408,6 +408,8 @@ func runOpsDiagnosticsTests() {
         }
     }
 
+    homeFolderAccessChecks()
+
     // ---- LaunchdPrintParser ----
     //
     // 样本取自在真机上抓的 `launchctl print gui/<uid>/<label>` 实际输出(见

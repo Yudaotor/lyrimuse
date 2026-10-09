@@ -89,6 +89,10 @@ func runHealthcheckCLI(args []string) {
 		add("配置文件", healthOK, "%s", cfgPath)
 	}
 
+	report.Items = append(report.Items,
+		engineServiceHealthItem(parseLaunchdPrint(launchctlPrint(fmt.Sprintf("gui/%d/%s", os.Getuid(), engineLaunchdLabel)))),
+		folderAccessHealthItem(homeFolderTargets(), os.Getuid(), currentUserName()))
+
 	setFeatures(loadFeatureFlags(filepath.Join(configDir, clientName+"-features.json")))
 	enabled := enabledLyricSourceNames()
 	if len(enabled) == 0 {

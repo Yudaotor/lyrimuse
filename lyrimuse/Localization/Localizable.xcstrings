@@ -40425,6 +40425,167 @@
           }
         }
       }
+    },
+    "以下位置 Lyrimuse 无法写入，歌词引擎因此无法启动：" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse can't write to these locations, so the lyrics engine can't start:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以下位置 Lyrimuse 无法写入，歌词引擎因此无法启动："
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以下位置 Lyrimuse 無法寫入，歌詞引擎因此無法啟動："
+          }
+        }
+      }
+    },
+    "%@（属于 %@）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (owned by %@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（属于 %@）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（屬於 %@）"
+          }
+        }
+      }
+    },
+    "%@（没有写入权限）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (no write access)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（没有写入权限）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（沒有寫入權限）"
+          }
+        }
+      }
+    },
+    "%@（其他用户也可修改，系统拒绝加载）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (other users can modify it, so macOS won't load it)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（其他用户也可修改，系统拒绝加载）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（其他使用者也可修改，系統拒絕載入）"
+          }
+        }
+      }
+    },
+    "点按「复制修复命令」，打开「终端」，粘贴后按回车，按提示输入开机密码（输入时不显示字符），然后再点按「启用」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click Copy Fix Command, open Terminal, paste it and press Return, enter your login password when asked (nothing shows as you type), then click Enable."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点按「复制修复命令」，打开「终端」，粘贴后按回车，按提示输入开机密码（输入时不显示字符），然后再点按「启用」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按一下「拷貝修復指令」，打開「終端機」，貼上後按 Return，依提示輸入登入密碼（輸入時不會顯示字元），然後再按一下「啟用」"
+          }
+        }
+      }
+    },
+    "复制修复命令" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Fix Command"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制修复命令"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷貝修復指令"
+          }
+        }
+      }
+    },
+    "已复制" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copied"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已复制"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已拷貝"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

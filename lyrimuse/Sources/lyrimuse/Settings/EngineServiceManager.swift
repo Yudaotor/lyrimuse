@@ -80,6 +80,7 @@ public enum EngineServiceManager {
     /// 不阻塞启动:整段扔进已有的串行队列(它同时保证不会跟设置页/引导页的装卸并发)。
     public static func reconcileAfterLaunch() {
         operationQueue.async {
+            logFolderAccessProblems(context: "launch")
             // 用户自己关掉了后台服务就什么都不做 —— 这里是修"该跑却跑不起来",不是替用户
             // 决定要不要跑。默认值 false 与 AppSettings 一致(没装过就是没装)。
             guard UserDefaults.standard.bool(forKey: enabledKey) else { return }
@@ -96,6 +97,16 @@ public enum EngineServiceManager {
                 "engine reconcile on launch: binaryChanged=\(binaryChanged, privacy: .public) running=\(running, privacy: .public) — reinstalling job")
             install()
         }
+    }
+
+    /// 引擎要写的几处主目录位置有问题时逐条记 error,带上修复命令。启动时和装完仍起不来时各查一次。
+    private static func logFolderAccessProblems(context: String) {
+        let findings = HomeFolderAccess.check()
+        guard !findings.isEmpty else { return }
+        for line in HomeFolderAccess.diagnosticLines(for: findings, checkedCount: HomeFolderAccess.targets.count) {
+            logger.error("\(context, privacy: .public): \(line, privacy: .public)")
+        }
+        logger.error("\(context, privacy: .public): fix with: \(HomeFolderAccess.fixCommand(for: findings), privacy: .public)")
     }
 
     /// install() 结束时记账。只有真的跑起来了才写指纹 —— 装完仍起不来时把它清掉,下次启动
@@ -195,12 +206,24 @@ public enum EngineServiceManager {
 
     private static func install() {
         // 三条成功路径(bootstrap 直接起来 / kickstart 之后起来 / LWCR 重试之后起来)各自
-        // early return,记账放 defer 里一处收口,免得漏掉哪一条。
-        defer { recordInstalledFingerprint() }
+        // early return,记账放 defer 里一处收口,免得漏掉哪一条。装完仍没跑起来时把状态和文件夹问题记下来,
+        // 诊断导出里的 App 日志靠这几行说清卡在哪一步。
+        defer {
+            recordInstalledFingerprint()
+            let finalState = state
+            if !finalState.isRunning {
+                logger.error("install: engine still not running after install, state=\(finalState.description, privacy: .public)")
+                logFolderAccessProblems(context: "install")
+            }
+        }
         // ConfigStore/FeatureSettingsStore 写配置文件、引擎自己写歌词/封面缓存，
         // 都假设这个目录已经存在——AppDelegate 启动时也会保证一次，这里是第二道保险
         // （谁先跑到都行，createDirectory 本身是幂等的）。
-        try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        } catch {
+            logger.error("install: creating the config folder failed: \(String(describing: error), privacy: .public)")
+        }
 
         let logPath = LogFiles.engine.path
         let plist: [String: Any] = [
@@ -220,16 +243,33 @@ public enum EngineServiceManager {
             // ~/.config/lyrimuse-dev 那套)。Go 侧 paths.go 读这两个环境变量,见 LyrimusePaths.engineEnvironment。
             "EnvironmentVariables": LyrimusePaths.engineEnvironment,
         ]
-        guard let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-        else { return }
-        try? FileManager.default.createDirectory(at: plistURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data: Data
+        do {
+            data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        } catch {
+            logger.error("install: serializing the plist failed: \(String(describing: error), privacy: .public)")
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(at: plistURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        } catch {
+            logger.error("install: creating LaunchAgents failed: \(String(describing: error), privacy: .public)")
+        }
 
         // 不管这个 label 之前是怎么装上的（用户手动跑过旧版 README 那段 shell，还是这次
         // 机制自己之前装的），统一先 bootout 再写新 plist、bootstrap——reload 一次总是
         // 安全的，不用分辨来源。
         run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
-        guard (try? data.write(to: plistURL)) != nil else { return }
-        run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", plistURL.path])
+        // 原子写(临时文件 + rename):原文件归别人但目录归自己时照样换得掉。权限显式定成 644:launchd 拒收组或
+        // 其他用户可写的 plist(bootstrap 报 5、不注册),不能指望进程的 umask。
+        do {
+            try data.write(to: plistURL, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: plistURL.path)
+        } catch {
+            logger.error("install: writing the plist failed: \(String(describing: error), privacy: .public)")
+            return
+        }
+        bootstrap()
 
         // plist 里 RunAtLoad=true,所以 bootstrap 本身就会把进程拉起来 —— 实测 78~102ms
         // 就是 running。**不要**在这里跟一句 `kickstart -k`。
@@ -252,8 +292,17 @@ public enum EngineServiceManager {
         // lyrimuse-engine/build.sh、lyrimuse/build.sh 里同款自愈逻辑一致，这里复用同一套
         // 重试思路，不重新发明。
         run("/bin/launchctl", ["bootout", "gui/\(getuid())", plistURL.path])
-        run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", plistURL.path])
+        bootstrap()
         _ = waitUntilRunning()
+    }
+
+    /// `launchctl bootstrap` 这个 job,失败时把退出码和 launchctl 的原话记下来。
+    private static func bootstrap() {
+        let (status, output) = runCapturing(
+            "/bin/launchctl", ["bootstrap", "gui/\(getuid())", plistURL.path], mergeStderr: true)
+        guard status != 0 else { return }
+        let message = output.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " | ")
+        logger.error("install: launchctl bootstrap exited with status \(status, privacy: .public): \(message, privacy: .public)")
     }
 
     /// 轮询等这个 job 真的跑起来。等到了返回 true,超时返回 false。
@@ -290,8 +339,8 @@ public enum EngineServiceManager {
     /// (print 一份 job 约 1.6KB)。`readDataToEndOfFile()` 会一直读到子进程关闭 stdout,
     /// 之后 waitUntilExit 立刻返回。
     ///
-    /// stderr 直接丢进 nullDevice 而不是另开一个 Pipe:同样是"设了不读"的死锁形状,而这里
-    /// 的调用方要的信息退出码已经给全了。
+    /// stderr 默认丢进 nullDevice 而不是另开一个 Pipe:同样是"设了不读"的死锁形状。要 launchctl 报错原话的调用方
+    /// 传 `mergeStderr: true`,stderr 并进同一个管道,一次读完。
     ///
     /// `environment` 传 nil = 继承本进程(launchctl 那些调用点就该如此);spawn **引擎**
     /// 的调用点必须显式传 `LyrimusePaths.engineProcessEnvironment()`,否则子命令会落回默认
@@ -301,7 +350,7 @@ public enum EngineServiceManager {
     /// 这个函数的变量叫 `p`、字面量对不上,于是 execs=0/envs=0 恰好"配平"、漏数了它 ——
     /// 守卫成立靠的是变量名巧合。守卫的匹配已一并放宽成 `.executableURL = URL(fileURLWithPath:`。
     private static func runCapturing(
-        _ path: String, _ args: [String], environment: [String: String]? = nil
+        _ path: String, _ args: [String], environment: [String: String]? = nil, mergeStderr: Bool = false
     ) -> (status: Int32, output: String) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
@@ -309,7 +358,7 @@ public enum EngineServiceManager {
         if let environment { p.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new } }
         let outPipe = Pipe()
         p.standardOutput = outPipe
-        p.standardError = FileHandle.nullDevice
+        p.standardError = mergeStderr ? outPipe : FileHandle.nullDevice
         do {
             try p.run()
             let data = outPipe.fileHandleForReading.readDataToEndOfFile()

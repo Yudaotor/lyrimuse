@@ -83,9 +83,12 @@
 "%@–%@pt" = "%@–%@pt";
 "%@更新" = "Updated %@";
 "%@解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。重新自动匹配通常可以找到" = "No lyrics source responded when this song was looked up on %@, possibly because the network was unavailable; it doesn't mean the song has no lyrics. Auto re-match usually finds them";
+"%@（其他用户也可修改，系统拒绝加载）" = "%@ (other users can modify it, so macOS won't load it)";
+"%@（属于 %@）" = "%@ (owned by %@)";
 "%@（已暂停）" = "%@ (Paused)";
 "%@（推荐）" = "%@ (recommended)";
 "%@（未安装）" = "%@ (not installed)";
+"%@（没有写入权限）" = "%@ (no write access)";
 "%@，已下载" = "%@, downloaded";
 "%@，点按下载" = "%@, click to download";
 "%d 个源的歌词正文相同" = "%d sources returned identical lyrics";
@@ -308,6 +311,7 @@
 "从资料库删除" = "Delete from Library";
 "以上方式可同时开启，请先选择当前需要的，之后可随时在设置中分别开关" = "These can all be on at once — pick what you want for now and change it any time in Settings";
 "以上方式均已关闭，播放时不会显示歌词。可随时通过菜单栏图标重新开启" = "They’re all off, so no lyrics will show while music plays. The menu bar icon is always there — you can turn them back on from it";
+"以下位置 Lyrimuse 无法写入，歌词引擎因此无法启动：" = "Lyrimuse can't write to these locations, so the lyrics engine can't start:";
 "以下播放器尚未安装，可提前选择，安装后自动生效" = "These players aren't installed yet. Select one now and it takes effect once installed.";
 "以文本方式编辑" = "Edit as Text";
 "企业微信" = "WeCom";
@@ -594,6 +598,7 @@
 "备份中的歌词文件将写回歌词文件夹：同名文件会被覆盖，缺少的文件会补齐；备份之后新增的歌曲不受影响。恢复后立即生效，无需重启" = "The lyrics files in the backup are written back to the lyrics folder: files with the same name are overwritten and missing ones are added. Songs added after the backup are not affected. Changes take effect immediately, with no restart needed";
 "备份文件夹" = "Backup Folder";
 "备份文件夹…" = "Backup Folder…";
+"复制修复命令" = "Copy Fix Command";
 "复用其他专辑中的同一首歌曲" = "Reused from the same recording on another album";
 "复用同一首歌曲的其他歌手写法" = "Reused from the same song under another artist spelling";
 "多" = "More";
@@ -712,6 +717,7 @@
 "已在「设置 → 歌词 → 歌词来源」中关闭，本轮未查询" = "Turned off under Settings → Lyrics → Lyrics Sources; this search did not query it";
 "已在播放但未显示歌词？请检查所选的播放器" = "Already playing but no lyrics? Check the player you picked";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "Last.fm's authorization page is open in your browser. Click “Yes, allow access” there to finish, and you'll be sent back to Lyrimuse automatically. If your browser doesn't come back on its own, use the button below";
+"已复制" = "Copied";
 "已安装" = "Installed";
 "已安装但未运行" = "Installed but not running";
 "已安装但未运行（上次退出码 %d）" = "Installed but not running (last exit code %d)";
@@ -1415,6 +1421,7 @@
 "灵动岛展开宽度" = "Notch Card Expanded Width";
 "灵动岛所在屏幕有 App 全屏时隐藏" = "Hides while an app is full screen on its display";
 "灵动岛歌词" = "Notch Lyrics";
+"点按「复制修复命令」，打开「终端」，粘贴后按回车，按提示输入开机密码（输入时不显示字符），然后再点按「启用」" = "Click Copy Fix Command, open Terminal, paste it and press Return, enter your login password when asked (nothing shows as you type), then click Enable.";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Click “Get Started” and let every line light up with the music";
 "点按下载" = "Click to download";
 "点按图标可打开设置和歌词窗口" = "Click the icon to open Settings and the lyrics window";

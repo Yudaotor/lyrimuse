@@ -4367,6 +4367,9 @@ private struct PlayerSettingsTab: View {
     // 提示留着误导下一次操作。没有它的话,点"启用"失败后前台只会看到红叉+"未运行",跟从没
     // 点过一模一样,没有任何具体原因或下一步指引。
     @State private var engineEnableFailed = false
+    // 引擎没在跑时,它要写的位置里不归当前用户或写不进的那几处(HomeFolderAccess)。非空就换成具体原因和修复命令,
+    // 不再只说「可能是权限或系统限制」。
+    @State private var engineFolderFindings: [HomeFolderAccess.Finding] = []
     // App 本体版本 vs 打包进这份 App 的引擎版本是否一致(见
     // EngineServiceManager.bundledEngineVersion 头注)。nil = 一致或没法判断(两种
     // 都不该报警,见 refreshEngineVersionCheck);非 nil 才代表真的查到了不一致,存的是
@@ -5708,7 +5711,12 @@ private struct PlayerSettingsTab: View {
             }
             // 启用失败时给具体指引,不是只把红叉留在原地——这里能提供的具体行动是导出
             // 诊断信息(汇总 App/采集器日志),不是空泛地说"启用失败"。
-            if engineEnableFailed {
+            if !engineState.isRunning, !engineFolderFindings.isEmpty {
+                CardDivider()
+                SettingsNote {
+                    EngineFolderAccessNote(findings: engineFolderFindings)
+                }
+            } else if engineEnableFailed {
                 CardDivider()
                 SettingsNote {
                     Text(L10n.t("启用失败，可能是权限或系统限制导致歌词引擎未能正常启动。导出诊断信息可查看具体原因，也便于反馈问题"))
@@ -5767,9 +5775,11 @@ private struct PlayerSettingsTab: View {
         .onAppear {
             refreshEngineState()
             refreshEngineVersionCheck()
+            refreshEngineFolderFindings()
         }
         .onReceive(playerHealth.$engineState.compactMap { $0 }) { latest in
             if latest != engineState { engineState = latest }
+            refreshEngineFolderFindings()
         }
     }
 
@@ -5860,6 +5870,12 @@ private struct PlayerSettingsTab: View {
     private func refreshEngineState() {
         playerHealth.refresh()
     }
+
+    /// 引擎没在跑时重查一遍 `HomeFolderAccess`,在跑就清空。只是几次 stat,跟着状态心跳查。
+    private func refreshEngineFolderFindings() {
+        let findings = engineState.isRunning ? [] : HomeFolderAccess.check()
+        if findings != engineFolderFindings { engineFolderFindings = findings }
+    }
     /// 查一次"App 本体版本"跟"打包进这份 App 的引擎版本"是否一致(见
     /// EngineServiceManager.bundledEngineVersion 头注)。只在 .onAppear 调一次
     /// (不放进每 2 秒那条心跳),而且真的 spawn 一次子进程,丢到后台线程跑,不阻塞
@@ -5889,6 +5905,7 @@ private struct PlayerSettingsTab: View {
             AppSettings.shared.engineServiceEnabled = true
             let state = await EngineServiceManager.waitForPendingOperations()
             engineState = state
+            refreshEngineFolderFindings()
             isTogglingEngineService = false
             // 只有这一个方向了(见上面按钮处的注释),没跑起来就是失败,直接标红给指引。
             engineEnableFailed = !state.isRunning
