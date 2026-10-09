@@ -34,13 +34,13 @@ brew install --cask lyrimuse
 <img src="docs/images/hero-surfaces.zh-Hant.jpg" alt="Lyrimuse 歌詞顯示形態——歌詞視窗、動態島膠囊、桌面浮動歌詞（逐字填色）、選單列歌詞">
 <p align="center"><sub>四種顯示方式：歌詞視窗、動態島膠囊、逐字填色的桌面浮動歌詞、選單列歌詞</sub></p>
 
-<img src="docs/images/hero-engine.jpg" alt="Lyrimuse 歌詞引擎——歌詞管理、帶評分的手動搜尋、逐首歌的解析決策面板">
+<img src="docs/images/hero-engine.jpg" alt="Lyrimuse 歌詞引擎——歌詞管理、逐首歌的解析決策面板（每個候選都有評分）">
 <p align="center"><sub>歌詞管理、每個結果都有評分的手動搜尋，還有一個面板告訴你這首歌為什麼用了這份歌詞</sub></p>
 
 <img src="docs/images/hero-profile.jpg" alt="Lyrimuse 聆聽檔案——Last.fm 統計、排行榜、閒置聆聽總覽、全年熱力圖">
 <p align="center"><sub>Last.fm 數據和排行榜、沒在播歌時的聆聽總覽，還有一張 GitHub 那樣的全年熱力圖</sub></p>
 
-<img src="docs/images/hero-customize.jpg" alt="Lyrimuse 設定——即時預覽編輯台、播放器多選（含網頁播放器）、選單列下拉選單">
+<img src="docs/images/hero-customize.jpg" alt="Lyrimuse 設定——即時預覽編輯台、播放器多選（含網頁播放器）、觸控列歌詞">
 <p align="center"><sub>每一頁設定都能即時預覽，播放器可以多選（網頁播放器也行），其餘常用操作都在選單列下拉裡</sub></p>
 
 ## 功能特色
