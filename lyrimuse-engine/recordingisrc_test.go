@@ -152,8 +152,13 @@ func TestRecordingISRCWiring(t *testing.T) {
 		return string(b)
 	}
 	enrich := read("enrich.go")
-	if n := strings.Count(enrich, "recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, "); n != 3 {
-		t.Errorf("首次解析、重试升级、重打分三处都收 ISRC,现在 %d 处", n)
+	// 首次解析在锁外直接取;重试升级、重打分在上锁之前取好 sourceISRC、锁里只用它(取 ISRC 要拿 enrichMu)。
+	if n := strings.Count(enrich, "recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, "); n != 1 {
+		t.Errorf("首次解析收 ISRC,现在 %d 处", n)
+	}
+	if n, m := strings.Count(enrich, "sourceISRC := lyricSourceISRC(ctx, artist, title, album)"),
+		strings.Count(enrich, "recordingISRCsFromScored(sourceISRC, scored, durationSecs)"); n != 2 || m != 2 {
+		t.Errorf("重试升级、重打分两处在上锁之前取 ISRC 再收,现在取 %d 处、收 %d 处", n, m)
 	}
 	if !strings.Contains(enrich, "e.ISRCs = mergeRecordingISRCs(e.ISRCs, fresh.ISRCs)") {
 		t.Error("外围补全并进这一轮的 ISRC")

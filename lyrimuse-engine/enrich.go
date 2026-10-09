@@ -1788,6 +1788,8 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
 		return (opts.manual || !e.ManualLyrics) && lyricsUpgradeApplies(e, scored, picked, durationSecs)
 	})
+	// 播放器给的 ISRC 在上锁之前取:取它要拿 enrichMu(经 amazonCachedASIN),别挪进锁里。
+	sourceISRC := lyricSourceISRC(ctx, artist, title, album)
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -1868,7 +1870,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	if sw := songwritersFromScored(scored); len(sw) > 0 {
 		e.LyricsSongwriters = sw
 	}
-	e.ISRCs = mergeRecordingISRCs(e.ISRCs, recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, album), scored, durationSecs))
+	e.ISRCs = mergeRecordingISRCs(e.ISRCs, recordingISRCsFromScored(sourceISRC, scored, durationSecs))
 	upgraded := lyricsUpgradeApplies(e, scored, picked, durationSecs)
 	path := lyricsDecisionPathUpgrade
 	if firstFill {
@@ -2177,6 +2179,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	})
 	// 只打了纯音乐标记(rescoreTurnsInstrumental):要马上落盘、通知重推,但歌词没换,不导出、不补翻。
 	markedInstrumental := false
+	// 同 retryLyricsUpgradeWith:播放器给的 ISRC 在上锁之前取。
+	sourceISRC := lyricSourceISRC(ctx, artist, title, album)
 
 	enrichMu.Lock()
 	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
@@ -2256,7 +2260,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		if sw := songwritersFromScored(scored); len(sw) > 0 {
 			e.LyricsSongwriters = sw
 		}
-		e.ISRCs = mergeRecordingISRCs(e.ISRCs, recordingISRCsFromScored(lyricSourceISRC(ctx, artist, title, album), scored, durationSecs))
+		e.ISRCs = mergeRecordingISRCs(e.ISRCs, recordingISRCsFromScored(sourceISRC, scored, durationSecs))
 	}
 	// 有源被跳过(熔断冷却 / 后台暂停)的一轮只算这一版规则下的阶段性结论:照常重选,但不把打分
 	// 版本标成已追平,needsLyricsRescore 与全量扫库之后还会再选中它。
