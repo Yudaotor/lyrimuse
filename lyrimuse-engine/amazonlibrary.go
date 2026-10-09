@@ -69,11 +69,13 @@ type amazonCatalogTrack struct {
 	HasLyrics bool   `json:"hasLyrics"`
 	Artist    struct {
 		Name string `json:"name"`
+		ASIN string `json:"asin"`
 	} `json:"artist"`
 	Album struct {
 		Name  string `json:"name"`
 		Title string `json:"title"`
 		Image string `json:"image"`
+		ASIN  string `json:"asin"`
 	} `json:"album"`
 }
 
@@ -277,13 +279,8 @@ func amazonTrackIdentity(artist, title string) string {
 // 队列里的取 amazonUpcoming 记下的,都不是就取歌词缓存里记着的曲目页(amazonCachedASIN)。认不出返回 ""。
 // 会取 enrichMu(经 amazonCachedASIN):调用方不能持着它。
 func amazonASINFor(artist, title string) string {
-	amazonCurrentMu.Lock()
-	cur := amazonCurrentTrack
-	amazonCurrentMu.Unlock()
-	if cur.trackID != "" && amazonTrackIdentity(cur.artist, cur.title) == amazonTrackIdentity(artist, title) {
-		if asin, ok := strings.CutPrefix(cur.trackID, "asin://"); ok {
-			return asin
-		}
+	if asin := amazonCurrentASIN(artist, title); asin != "" {
+		return asin
 	}
 	amazonQueueMu.Lock()
 	asin := amazonQueueASINs[amazonTrackIdentity(artist, title)]
@@ -292,6 +289,20 @@ func amazonASINFor(artist, title string) string {
 		return asin
 	}
 	return amazonCachedASIN(artist, title)
+}
+
+// amazonCurrentASIN:App 此刻报的当前曲目就是这首(按 amazonTrackIdentity 比)时它的 ASIN,否则 ""。
+func amazonCurrentASIN(artist, title string) string {
+	amazonCurrentMu.Lock()
+	cur := amazonCurrentTrack
+	amazonCurrentMu.Unlock()
+	if cur.trackID == "" || amazonTrackIdentity(cur.artist, cur.title) != amazonTrackIdentity(artist, title) {
+		return ""
+	}
+	if asin, ok := strings.CutPrefix(cur.trackID, "asin://"); ok {
+		return asin
+	}
+	return ""
 }
 
 // amazonCachedASINs:用 Amazon Music 放过的歌,歌词缓存里记着它的曲目页(AmazonURL),从中认出的 ASIN,按

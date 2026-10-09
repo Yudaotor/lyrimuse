@@ -386,3 +386,52 @@ func TestKasetCatalogIDs(t *testing.T) {
 		t.Errorf("形状不对的专辑页 id 不记: %+v", e)
 	}
 }
+
+// Amazon:同一位歌手、同名的两首收在两张专辑里(单曲与专辑版)。专辑、歌手 id 只认 App 报的当前曲目,目录里这一轨的
+// 专辑名还要跟这一条的专辑对得上;队列按歌手 + 歌名记的 ASIN 不用。
+func TestPlayerCatalogAmazonSameTitleOtherAlbum(t *testing.T) {
+	resetPlayerCatalogMemo(t)
+	dir := t.TempDir()
+	savedLS := amazonLocalStorageOverride
+	amazonLocalStorageOverride = dir
+	amazonCurrentMu.Lock()
+	savedCur := amazonCurrentTrack
+	amazonCurrentMu.Unlock()
+	amazonQueueMu.Lock()
+	savedQueue := amazonQueueASINs
+	amazonQueueASINs = map[string]string{}
+	amazonQueueMu.Unlock()
+	t.Cleanup(func() {
+		amazonLocalStorageOverride = savedLS
+		amazonCurrentMu.Lock()
+		amazonCurrentTrack = savedCur
+		amazonCurrentMu.Unlock()
+		amazonQueueMu.Lock()
+		amazonQueueASINs = savedQueue
+		amazonQueueMu.Unlock()
+	})
+	other := strings.NewReplacer(`"B0TESTAAA2"`, `"B0TESTAAA3"`,
+		`"name":"I Can't Love You Anymore","asin":"B0TESTALB1"`, `"name":"Greatest Hits","asin":"B0TESTALB2"`).Replace(amazonTestCatalogValue)
+	testWriteLog(t, filepath.Join(dir, "000015.log"), [][]testLDBEntry{{
+		{key: amazonCatalogKeyPrefix + "B0TESTAAA2", seq: 5, value: amazonTestCatalogValue},
+		{key: amazonCatalogKeyPrefix + "B0TESTAAA3", seq: 6, value: other},
+	}})
+	const artist, title = "Ella Langley & Morgan Wallen", "I Can't Love You Anymore [Explicit]"
+
+	noteAmazonCurrentTrack(amazonMusicBundleID, artist, title, "asin://B0TESTAAA3")
+	if got, want := playerCatalogIDsFor(amazonMusicBundleID, artist, title, "Greatest Hits", 229), (playerCatalogIDs{album: "B0TESTALB2", artist: "B0TESTART1"}); got != want {
+		t.Errorf("正在放专辑版,记专辑版的 id: got %+v want %+v", got, want)
+	}
+	if got := playerCatalogIDsFor(amazonMusicBundleID, artist, title, "I Can't Love You Anymore", 229); got != (playerCatalogIDs{}) {
+		t.Errorf("当前曲目是专辑版、这一条是单曲:目录里的专辑名对不上,不记: %+v", got)
+	}
+
+	resetPlayerCatalogMemo(t)
+	noteAmazonCurrentTrack(amazonMusicBundleID, artist, title, "")
+	amazonQueueMu.Lock()
+	amazonQueueASINs[amazonTrackIdentity(artist, title)] = "B0TESTAAA2"
+	amazonQueueMu.Unlock()
+	if got := playerCatalogIDsFor(amazonMusicBundleID, artist, title, "I Can't Love You Anymore", 229); got != (playerCatalogIDs{}) {
+		t.Errorf("App 没认出当前曲目时,队列按歌手 + 歌名记的 ASIN 不用: %+v", got)
+	}
+}

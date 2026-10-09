@@ -78,7 +78,7 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 	case kkboxBundleID:
 		ids = scanKKBOXCache(kkboxCacheDir()).catalogIDsFor(artist, title, durationSecs)
 	case amazonMusicBundleID:
-		ids = amazonPlayingCatalogIDs(artist, title)
+		ids = amazonPlayingCatalogIDs(artist, title, album)
 	case spotifyBundleID:
 		ids = spotifyPlayingCatalogIDs(artist, title)
 	}
@@ -276,22 +276,19 @@ func (c kkboxCache) catalogIDsFor(artist, title string, durationSecs float64) pl
 	return playerCatalogIDs{}
 }
 
-// amazonPlayingCatalogIDs:目录缓存里这首(App 报的 ASIN)的 album.asin / artist.asin。
-func amazonPlayingCatalogIDs(artist, title string) playerCatalogIDs {
-	asin := amazonASINFor(artist, title)
+// amazonPlayingCatalogIDs:目录缓存里这首(App 报的当前曲目的 ASIN)的 album.asin / artist.asin。只认 App 报的当前曲目,
+// 别换成 amazonASINFor:它的队列与缓存索引两条退路按歌手 + 歌名认曲目,同名的单曲与专辑版会认到另一条上,把另一张专辑
+// 记到这一条。当前曲目同样只比歌手歌名,所以目录里这一轨的专辑名跟这一条的专辑对不上时也不认(见 07 章决策 143)。
+func amazonPlayingCatalogIDs(artist, title, album string) playerCatalogIDs {
+	asin := amazonCurrentASIN(artist, title)
 	if asin == "" {
 		return playerCatalogIDs{}
 	}
-	key := amazonCatalogKeyPrefix + asin
-	var t struct {
-		Album struct {
-			ASIN string `json:"asin"`
-		} `json:"album"`
-		Artist struct {
-			ASIN string `json:"asin"`
-		} `json:"artist"`
+	t, ok := amazonCatalog([]string{asin})[asin]
+	if !ok {
+		return playerCatalogIDs{}
 	}
-	if !amazonFirstJSONObject(ldbGet(amazonLocalStorageDir(), [][]byte{[]byte(key)})[key], &t) {
+	if name := t.albumName(); album != "" && name != "" && loosenEnrichKey(cleanMediaTag(name)) != loosenEnrichKey(cleanMediaTag(album)) {
 		return playerCatalogIDs{}
 	}
 	return playerCatalogIDs{album: t.Album.ASIN, artist: t.Artist.ASIN}
