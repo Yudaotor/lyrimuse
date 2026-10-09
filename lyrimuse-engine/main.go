@@ -466,6 +466,8 @@ func main() {
 	startArtworkSweep(ctx)
 	// 存量单曲的 Apple 链接按新的单曲判据重核一遍(applelinkrecheck.go),要联网,同样放后台。
 	startAppleSingleLinkRecheck(ctx)
+	// 存量里从本机曲库记下、现在不认的曲目 id 清掉(locallibrarylinks.go),要读别的 App 的本机数据,同样放后台。
+	startLocalLibraryLinkRecheck(ctx)
 	// 存量 Apple 链接换成已校验目录锚点的页面(applecataloglink.go),要联网,同样放后台。
 	startAppleCatalogLinkMigration(ctx)
 	// 存量里早先预生成的韩文罗马音换成按读音的(koreanroma.go),要起 helper 子进程,同样放后台。
