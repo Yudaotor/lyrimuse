@@ -3,9 +3,11 @@
 #
 #   Lyrimuse-v<版本>-macos.zip           arm64-only —— **主包**
 #   Lyrimuse-v<版本>-macos.zip.sha256
+#   Lyrimuse-v<版本>-macos.tar.xz        同上,Sparkle 自动更新用
 #   Lyrimuse-v<版本>-macos.dmg           同上,给手动下载的人
 #   Lyrimuse-v<版本>-macos-intel.zip     universal(arm64 + x86_64)—— 只给 Intel 用户
 #   Lyrimuse-v<版本>-macos-intel.zip.sha256
+#   Lyrimuse-v<版本>-macos-intel.tar.xz
 #   Lyrimuse-v<版本>-macos-intel.dmg
 #
 # 用法:
@@ -17,9 +19,10 @@
 # arm64-only 就彻底没有这个触发条件,顺带下载体积小一半;Intel 用户走单独那份 -intel。
 # 详细来龙去脉见 build.sh 顶部注释。
 #
-# 为什么 zip 和 dmg 都出:zip 有两个消费者不能动 —— appcast.xml 的 <enclosure> 指向它
-# (Sparkle 下载并解开这个 zip 完成自我升级),Homebrew cask 也从同一个 zip 安装。dmg 纯粹
-# 是给"去 Releases 页面手动下载"的人的,观感更像正经的 macOS 分发方式。
+# 为什么同一个包出三种格式:appcast.xml 的 <enclosure> 指向 tar.xz(Sparkle 下载并解开它完成
+# 自我升级;LZMA 比 zip 的 deflate 小三成多,见 15 章决策 34);Homebrew cask 从 zip 安装,它的
+# sha256 取 zip 的 .sha256 资产,所以 zip 照出、文件名不能动;dmg 给"去 Releases 页面手动下载"
+# 的人,观感更像正经的 macOS 分发方式。
 #
 # appcast(两个 item,主包那条带 <sparkle:hardwareRequirements>arm64</...> 子元素)由 release.yml 生成,
 # 形状由 .github/scripts/check_appcast.py 校验,见 docs/releasing.md「流水线的硬约束」。
@@ -194,6 +197,13 @@ for v in "${VARIANTS[@]}"; do
   # (`shasum -a 256 <basename>` 的原样输出),这样用户在同一目录里 `shasum -c` 能直接过。
   (cd "$DIST" && shasum -a 256 "$base.zip" > "$base.zip.sha256")
 
+  # Sparkle 用的 tar.xz。用系统自带的 /usr/bin/tar(bsdtar,内置 liblzma):Sparkle 解包用的也是它,
+  # CI 的 macOS 机器上也不用另装 xz。--no-mac-metadata:不带扩展属性和 ._ 文件,代码签名不依赖它们;
+  # 包内的符号链接(Sparkle.framework 的 Versions/Current、Resources/collector)按链接原样保留。
+  # 不出 .sha256:Sparkle 验的是 EdDSA 签名,没有别的消费者。见 15 章决策 34。
+  /usr/bin/tar --no-mac-metadata --options xz:compression-level=9 \
+    -cJf "$DIST/$base.tar.xz" -C "$(dirname "$app")" Lyrimuse.app
+
   # dmg:优先用 dmgbuild 出"带背景图、图标摆好位置"的窗口,拿不到 dmgbuild 就退回
   # 纯 hdiutil。
   #
@@ -239,6 +249,7 @@ for v in "${VARIANTS[@]}"; do
 
   printf "    %-40s %s\n" "$base.zip" "$(human_size "$DIST/$base.zip")"
   printf "    %-40s %s\n" "$base.zip.sha256" "$(human_size "$DIST/$base.zip.sha256")"
+  printf "    %-40s %s\n" "$base.tar.xz" "$(human_size "$DIST/$base.tar.xz")"
   printf "    %-40s %s\n" "$base.dmg" "$(human_size "$DIST/$base.dmg")"
 done
 

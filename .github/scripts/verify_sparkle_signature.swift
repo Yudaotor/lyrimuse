@@ -1,10 +1,11 @@
-// 用 zip 里 App 自己内置的公钥(Info.plist 的 SUPublicEDKey)验 appcast 要用的 EdDSA 签名。
+// 用更新包里 App 自己内置的公钥(Info.plist 的 SUPublicEDKey)验 appcast 要用的 EdDSA 签名。
+// 更新包是 appcast enclosure 指向的那个归档(.tar.xz,见 docs/features 15 章决策 34);.zip 同样认。
 //
-// 用法: swift .github/scripts/verify_sparkle_signature.swift <zip> <签名(base64)> [<zip> <签名> ...]
+// 用法: swift .github/scripts/verify_sparkle_signature.swift <归档> <签名(base64)> [<归档> <签名> ...]
 //
 // release.yml 在写 appcast 之前、发布之前跑它。签名是 CI 密钥 SPARKLE_PRIVATE_KEY 算的,公钥写死在
 // build.sh 里,两者配不上时 appcast 照样生成、形状校验照样通过,用户那边 Sparkle 验签失败、更新下载不下来,
-// 没有任何报错指向这里。Sparkle 的签名是对整个 zip 字节做的标准 Ed25519,CryptoKit 能直接验。
+// 没有任何报错指向这里。Sparkle 的签名是对整个归档字节做的标准 Ed25519,CryptoKit 能直接验。
 import CryptoKit
 import Foundation
 
@@ -15,11 +16,18 @@ func fail(_ message: String) -> Never {
 
 func embeddedPublicKey(of zip: String) -> String {
     let unzip = Process()
-    unzip.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-    unzip.arguments = ["-p", zip, "Lyrimuse.app/Contents/Info.plist"]
+    let plistPath = "Lyrimuse.app/Contents/Info.plist"
+    if zip.hasSuffix(".zip") {
+        unzip.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        unzip.arguments = ["-p", zip, plistPath]
+    } else {
+        // bsdtar 读包时自己认压缩格式;-O 把这一个成员写到标准输出。
+        unzip.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        unzip.arguments = ["-xOf", zip, plistPath]
+    }
     let pipe = Pipe()
     unzip.standardOutput = pipe
-    do { try unzip.run() } catch { fail("cannot run unzip on \(zip): \(error)") }
+    do { try unzip.run() } catch { fail("cannot read \(plistPath) from \(zip): \(error)") }
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     unzip.waitUntilExit()
     guard unzip.terminationStatus == 0,
@@ -31,7 +39,7 @@ func embeddedPublicKey(of zip: String) -> String {
 
 let args = Array(CommandLine.arguments.dropFirst())
 guard !args.isEmpty, args.count % 2 == 0 else {
-    fail("usage: verify_sparkle_signature.swift <zip> <base64-signature> [<zip> <base64-signature> ...]")
+    fail("usage: verify_sparkle_signature.swift <archive> <base64-signature> [<archive> <base64-signature> ...]")
 }
 var keys: Set<String> = []
 for i in stride(from: 0, to: args.count, by: 2) {
@@ -48,4 +56,4 @@ for i in stride(from: 0, to: args.count, by: 2) {
     }
     print("ok  \(zip)")
 }
-if keys.count != 1 { fail("the zips embed different SUPublicEDKey values: \(keys.sorted())") }
+if keys.count != 1 { fail("the archives embed different SUPublicEDKey values: \(keys.sorted())") }

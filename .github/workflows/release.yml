@@ -235,18 +235,20 @@ jobs:
       # Feed shape (check_appcast.py asserts all of it; the reasons are in docs/releasing.md):
       #   - enclosures point at releases/download/<tag>/, never releases/latest/ (a pre-release is
       #     never latest, so a latest/ link would 404);
-      #   - two items with the same version: #1 the arm64-only zip WITH the
-      #     <sparkle:hardwareRequirements>arm64</...> child element, #2 the -intel zip without it.
+      #   - enclosures are the .tar.xz update archives (about a third smaller than the zips; the zips
+      #     stay for the Homebrew cask and manual downloads -- docs/features chapter 15, decision 34);
+      #   - two items with the same version: #1 the arm64-only archive WITH the
+      #     <sparkle:hardwareRequirements>arm64</...> child element, #2 the -intel archive without it.
       #     Sparkle drops items whose hardware requirement fails, then takes the FIRST of equal
       #     versions, so arm64 must come first; spelled as an <enclosure> attribute it matches
-      #     nothing and hands the arm64 zip to Intel clients;
-      #   - sparkle:version is the numeric CFBundleVersion read back from the zip;
+      #     nothing and hands the arm64 archive to Intel clients;
+      #   - sparkle:version is the numeric CFBundleVersion read back from the archive;
       #   - pre-release items carry <sparkle:channel>beta</sparkle:channel>;
       #   - release notes are split into <description xml:lang="en|zh-Hans"> by
       #     split_release_notes.py (check_release_tag.sh already ran it, so the single-description
       #     fallback is only a safety valve).
       # The private key never touches disk: `sign_update --ed-key-file -` reads it from stdin.
-      # Both signatures are verified against the SUPublicEDKey embedded in each zip before the
+      # Both signatures are verified against the SUPublicEDKey embedded in each archive before the
       # feed is written, so a key that does not pair with build.sh's public key fails here instead
       # of breaking every user's update.
       - name: Generate signed appcast
@@ -268,30 +270,30 @@ jobs:
           fi
           chmod +x "$SIGN_UPDATE"
           VERSION="${{ steps.version.outputs.bundle_version }}"
-          ZIP_NAME="${{ steps.version.outputs.asset_base }}.zip"
-          INTEL_ZIP_NAME="${{ steps.version.outputs.asset_base }}-intel.zip"
-          # A missing zip would otherwise become length="" -- a feed Sparkle silently refuses.
-          for z in "$ZIP_NAME" "$INTEL_ZIP_NAME"; do
+          UPDATE_NAME="${{ steps.version.outputs.asset_base }}.tar.xz"
+          INTEL_UPDATE_NAME="${{ steps.version.outputs.asset_base }}-intel.tar.xz"
+          # A missing archive would otherwise become length="" -- a feed Sparkle silently refuses.
+          for z in "$UPDATE_NAME" "$INTEL_UPDATE_NAME"; do
             if [ ! -f "lyrimuse/dist/$z" ]; then
-              echo "expected release zip missing: lyrimuse/dist/$z" >&2
+              echo "expected update archive missing: lyrimuse/dist/$z" >&2
               exit 1
             fi
           done
           TAG="${{ steps.version.outputs.version }}"
-          BUILD_VERSION="$(unzip -p "lyrimuse/dist/${ZIP_NAME}" 'Lyrimuse.app/Contents/Info.plist' | plutil -extract CFBundleVersion raw -o - -)"
+          BUILD_VERSION="$(/usr/bin/tar -xOf "lyrimuse/dist/${UPDATE_NAME}" 'Lyrimuse.app/Contents/Info.plist' | plutil -extract CFBundleVersion raw -o - -)"
           if [ "$BUILD_VERSION" != "${{ steps.version.outputs.build_version }}" ]; then
-            echo "CFBundleVersion inside the zip ($BUILD_VERSION) != build-version.sh (${{ steps.version.outputs.build_version }})" >&2
+            echo "CFBundleVersion inside the update archive ($BUILD_VERSION) != build-version.sh (${{ steps.version.outputs.build_version }})" >&2
             exit 1
           fi
-          LENGTH=$(stat -f%z "lyrimuse/dist/${ZIP_NAME}")
-          SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${ZIP_NAME}")
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP_NAME}"
-          INTEL_LENGTH=$(stat -f%z "lyrimuse/dist/${INTEL_ZIP_NAME}")
-          INTEL_SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${INTEL_ZIP_NAME}")
-          INTEL_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${INTEL_ZIP_NAME}"
+          LENGTH=$(stat -f%z "lyrimuse/dist/${UPDATE_NAME}")
+          SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${UPDATE_NAME}")
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${UPDATE_NAME}"
+          INTEL_LENGTH=$(stat -f%z "lyrimuse/dist/${INTEL_UPDATE_NAME}")
+          INTEL_SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${INTEL_UPDATE_NAME}")
+          INTEL_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${INTEL_UPDATE_NAME}"
           swift .github/scripts/verify_sparkle_signature.swift \
-            "lyrimuse/dist/${ZIP_NAME}" "$SIGNATURE" \
-            "lyrimuse/dist/${INTEL_ZIP_NAME}" "$INTEL_SIGNATURE"
+            "lyrimuse/dist/${UPDATE_NAME}" "$SIGNATURE" \
+            "lyrimuse/dist/${INTEL_UPDATE_NAME}" "$INTEL_SIGNATURE"
           PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           # Only "]]>" needs handling inside CDATA (split it into two CDATA sections). No embedded
           # heredoc or python here: a flush-left body breaks this YAML block scalar.
@@ -375,12 +377,14 @@ jobs:
           body: ${{ needs.tag.outputs.body }}
           draft: true
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
-          # The unsuffixed zip is arm64-only (what Sparkle and the Homebrew cask use); -intel is
-          # universal. Each ships as a zip (Sparkle / cask) plus a dmg for manual downloads.
+          # The unsuffixed assets are arm64-only; -intel is universal. Each ships as a .tar.xz (the
+          # Sparkle update), a zip (Homebrew cask, hashed by its .sha256) and a dmg for manual downloads.
           files: |
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}.tar.xz
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}.zip
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}.zip.sha256
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}.dmg
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.tar.xz
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip.sha256
             lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.dmg
@@ -402,8 +406,8 @@ jobs:
             echo "::error::release $TAG is not a draft -- refusing to continue" >&2
             exit 1
           fi
-          for f in "lyrimuse/dist/$BASE.zip" "lyrimuse/dist/$BASE.zip.sha256" "lyrimuse/dist/$BASE.dmg" \
-                   "lyrimuse/dist/$BASE-intel.zip" "lyrimuse/dist/$BASE-intel.zip.sha256" "lyrimuse/dist/$BASE-intel.dmg" \
+          for f in "lyrimuse/dist/$BASE.tar.xz" "lyrimuse/dist/$BASE.zip" "lyrimuse/dist/$BASE.zip.sha256" "lyrimuse/dist/$BASE.dmg" \
+                   "lyrimuse/dist/$BASE-intel.tar.xz" "lyrimuse/dist/$BASE-intel.zip" "lyrimuse/dist/$BASE-intel.zip.sha256" "lyrimuse/dist/$BASE-intel.dmg" \
                    appcast.xml; do
             name="$(basename "$f")"
             want="$(stat -f%z "$f")"
@@ -428,7 +432,8 @@ jobs:
         run: |
           TAG="${{ steps.version.outputs.version }}"
           BASE="https://github.com/${{ github.repository }}/releases/download/${TAG}"
-          for name in "${{ steps.version.outputs.asset_base }}.zip" "${{ steps.version.outputs.asset_base }}-intel.zip" appcast.xml; do
+          for name in "${{ steps.version.outputs.asset_base }}.tar.xz" "${{ steps.version.outputs.asset_base }}-intel.tar.xz" \
+                      "${{ steps.version.outputs.asset_base }}.zip" "${{ steps.version.outputs.asset_base }}-intel.zip" appcast.xml; do
             ok=""
             for _ in 1 2 3 4 5 6; do
               if curl -sSfIL --max-time 30 "${BASE}/${name}" -o /dev/null; then ok=1; break; fi

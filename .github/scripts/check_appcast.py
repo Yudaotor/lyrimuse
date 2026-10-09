@@ -14,6 +14,8 @@ appcast 只在**真打 tag** 时才生成得出来,而它错了的表现全是**
                           → 解析通过、匹配不到任何东西,于是把 arm64 包递给每个 Intel
                             客户端 —— 一个在他们机器上根本起不来的包
   - edSignature 或 length 为空 → Sparkle 拒收,用户端仍然只显示"已是最新"
+  - enclosure 指回 zip     → 照样能更新,只是每个用户白下三成多的体积(更新包是 tar.xz,
+                            见 docs/features 15 章决策 34;zip 只给 Homebrew cask 和手动下载)
 
 没有哪一条会让发布流程报错,全靠用户来报"更新没了"。所以在 CI 里当场断言。
 
@@ -36,7 +38,7 @@ matching one" —— 这就是顺序必须 arm64 在前的原因。
 
   --tag             enclosure 必须落在 releases/download/<tag>/ 目录下,**不许**再指 releases/latest/:
                     预发布不是 latest,latest 链接在它的 appcast 里会解析到最新正式版的目录、404。
-  --display-version sparkle:shortVersionString 与 zip 文件名里的版本(Lyrimuse-v<版本>-macos[-intel].zip)。
+  --display-version sparkle:shortVersionString 与更新包文件名里的版本(Lyrimuse-v<版本>-macos[-intel].tar.xz)。
   --build-version   sparkle:version(元素与 enclosure 属性)必须等于它,且是四段纯数字 —— Sparkle 的比较器
                     实测把 "-" 之后全忽略,展示版本不能直接当比较用的版本(见 lyrimuse/scripts/build-version.sh)。
   --prerelease      true 时每个 item 必须带 <sparkle:channel>beta</sparkle:channel>,false 时一个都不许带:
@@ -51,6 +53,8 @@ import xml.etree.ElementTree as ET
 
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 BUILD_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
+# appcast 的 enclosure 指向的更新包格式,跟 lyrimuse/package.sh 产出的那份一致。
+UPDATE_SUFFIX = ".tar.xz"
 
 
 def check(path: str, tag: str | None = None, display_version: str | None = None,
@@ -85,8 +89,8 @@ def check(path: str, tag: str | None = None, display_version: str | None = None,
             problems.append(f"{where} 没有 sparkle:edSignature")
         if not length.isdigit() or int(length) <= 0:
             problems.append(f"{where} length 非法: {length!r}")
-        if not url.endswith(".zip"):
-            problems.append(f"{where} enclosure url 不是 .zip: {url!r}")
+        if not url.endswith(UPDATE_SUFFIX):
+            problems.append(f"{where} enclosure url 不是 {UPDATE_SUFFIX}: {url!r}")
         if "/releases/latest/" in url:
             problems.append(
                 f"{where} enclosure url 指向 releases/latest/ —— 预发布不是 latest,这个链接在它的 appcast 里"
@@ -94,9 +98,9 @@ def check(path: str, tag: str | None = None, display_version: str | None = None,
         if tag and f"/releases/download/{tag}/" not in url:
             problems.append(f"{where} enclosure url 不在 releases/download/{tag}/ 目录下: {url!r}")
         if display_version:
-            expected_name = f"Lyrimuse-v{display_version}-macos{'-intel' if i == 1 else ''}.zip"
+            expected_name = f"Lyrimuse-v{display_version}-macos{'-intel' if i == 1 else ''}{UPDATE_SUFFIX}"
             if not url.endswith("/" + expected_name):
-                problems.append(f"{where} zip 文件名应为 {expected_name},实际 {url.rsplit('/', 1)[-1]!r}")
+                problems.append(f"{where} 更新包文件名应为 {expected_name},实际 {url.rsplit('/', 1)[-1]!r}")
             short = (item.findtext(f"{{{SPARKLE_NS}}}shortVersionString") or "").strip()
             if short != display_version:
                 problems.append(f"{where} sparkle:shortVersionString 应为 {display_version!r},实际 {short!r}")
@@ -120,7 +124,7 @@ def check(path: str, tag: str | None = None, display_version: str | None = None,
             if hw != ["arm64"]:
                 problems.append(
                     f"{where} 必须且只能带一个 hardwareRequirements=arm64,实际 {hw!r}")
-            if "-intel.zip" in url:
+            if "-intel." in url:
                 problems.append(
                     f"{where} 指向了 -intel 包 —— 两个 item 顺序反了。版本号相同时 Sparkle "
                     "取先出现的那个,arm64 用户会开始白下 2 倍大的 universal 包(而且装得上、"
@@ -130,7 +134,7 @@ def check(path: str, tag: str | None = None, display_version: str | None = None,
                 problems.append(
                     f"{where}(intel)不该带 hardwareRequirements,实际 {hw!r} —— "
                     "带了就等于 Intel 客户端把它也剔掉,两个架构都收不到更新")
-            if "-intel.zip" not in url:
+            if "-intel." not in url:
                 problems.append(f"{where} 应指向 -intel 包,实际 {url!r}")
 
     # 两个 item 必须是同一个版本(它们是同一次发布的两种架构,不是两次发布)。
@@ -159,7 +163,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="校验 release.yml 生成的 appcast.xml 形状", add_help=True)
     parser.add_argument("path")
     parser.add_argument("--tag", help="Release 的 tag(vX.Y.Z 或 vX.Y.Z-beta.N),enclosure 必须在它的目录下")
-    parser.add_argument("--display-version", help="展示版本 = tag 去 v,对 shortVersionString 与 zip 文件名")
+    parser.add_argument("--display-version", help="展示版本 = tag 去 v,对 shortVersionString 与更新包文件名")
     parser.add_argument("--build-version", help="四段纯数字构建号,对 sparkle:version")
     parser.add_argument("--prerelease", type=parse_bool, default=None, help="true/false:预发布 item 必须带 beta channel,正式版不许带")
     args = parser.parse_args()

@@ -4466,9 +4466,17 @@ func runSourceContractTests() {
         expectEqual(yml.isEmpty, false, "发布链路: 读得到 release.yml")
         expectEqual(yml.contains("prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}"), true,
                     "发布链路: 含 - 的 tag 标 prerelease(GitHub 的 latest 不含它,正式用户看不见)")
-        expectEqual(yml.contains("releases/latest/download/${ZIP_NAME}"), false, "发布链路: enclosure 不再指 latest(预发布下会 404)")
-        expectEqual(yml.contains("releases/latest/download/${INTEL_ZIP_NAME}"), false, "发布链路: intel enclosure 同样不指 latest")
-        expectEqual(yml.contains("releases/download/${TAG}/${ZIP_NAME}"), true, "发布链路: enclosure 指 tag 自己的目录")
+        expectEqual(yml.contains("releases/latest/download/${"), false, "发布链路: enclosure 不指 latest(预发布下会 404)")
+        expectEqual(yml.contains("releases/download/${TAG}/${UPDATE_NAME}")
+                    && yml.contains("releases/download/${TAG}/${INTEL_UPDATE_NAME}"), true, "发布链路: 两个 enclosure 都指 tag 自己的目录")
+        // 更新包是 tar.xz,zip 只给 Homebrew cask 和手动下载(15 章决策 34):release.yml 签的、appcast 指的是 tar.xz,
+        // package.sh 产出它,check_appcast.py 按它判。
+        expectEqual(yml.contains("UPDATE_NAME=\"${{ steps.version.outputs.asset_base }}.tar.xz\"")
+                    && yml.contains("INTEL_UPDATE_NAME=\"${{ steps.version.outputs.asset_base }}-intel.tar.xz\""), true,
+                    "发布链路: appcast 的更新包是 tar.xz")
+        expectEqual(read("lyrimuse/package.sh").contains("-cJf \"$DIST/$base.tar.xz\""), true, "发布链路: package.sh 产出 tar.xz 更新包")
+        expectEqual(read(".github/scripts/check_appcast.py").contains("UPDATE_SUFFIX = \".tar.xz\""), true,
+                    "发布链路: appcast 自检按 tar.xz 判 enclosure")
         expectEqual(yml.contains("<sparkle:channel>beta</sparkle:channel>"), true, "发布链路: 预发布 item 带 beta channel")
         expectEqual(yml.contains("scripts/build-version.sh"), true, "发布链路: tag 形态与构建号走同一份脚本")
         expectEqual(yml.contains("check_appcast.py appcast.xml --tag"), true, "发布链路: appcast 自检带 tag / 版本 / 预发布参数")
