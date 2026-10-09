@@ -581,16 +581,17 @@ func kugouUpcomingFromSQLite(artist, title string, n int) ([]upcomingTrack, bool
 	if err := json.Unmarshal(trimmed, &rows); err != nil {
 		return nil, false
 	}
-	want := loosenEnrichKey(artist + "|" + title)
-	pos := -1
+	m := newQueueCurrentMatcher(artist, title)
+	levels := make([]queueMatch, len(rows))
 	tracks := make([]upcomingTrack, len(rows))
 	for i, r := range rows {
 		a, ti := kugouUpcomingSplit(r.Name)
 		if s := kugouUpcomingArtist(r.Singer); s != "" {
 			a = s
 		}
-		if pos < 0 && (loosenEnrichKey(a+"|"+ti) == want || r.ShowName != "" && loosenEnrichKey(a+"|"+r.ShowName) == want) {
-			pos = i
+		levels[i] = m.match(a, ti)
+		if r.ShowName != "" {
+			levels[i] = max(levels[i], m.match(a, r.ShowName))
 		}
 		if r.ShowName != "" {
 			ti = r.ShowName
@@ -601,6 +602,7 @@ func kugouUpcomingFromSQLite(artist, title string, n int) ([]upcomingTrack, bool
 		// musicTime 本来就是秒(实测 210),别当毫秒。
 		tracks[i] = upcomingTrack{artist: a, title: ti, album: r.Album, duration: r.Dur}
 	}
+	pos := queueCurrentIndex(len(rows), -1, func(i int) queueMatch { return levels[i] })
 	if pos < 0 {
 		return nil, false
 	}

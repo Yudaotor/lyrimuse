@@ -441,23 +441,16 @@ func qqLoadPlayingList(artist, title string) (qqPlayingList, bool) {
 	if !ok {
 		return qqPlayingList{}, false
 	}
-	want := loosenEnrichKey(artist + "|" + title)
-	isCurrent := func(i int) bool {
+	m := newQueueCurrentMatcher(artist, title)
+	hint := -1
+	if idx, ok := qqDeref(objs, top["LastPlayingIndex"]).(int64); ok && idx >= 0 && idx < int64(len(items)) {
+		hint = int(idx)
+	}
+	pos := queueCurrentIndex(len(items), hint, func(i int) queueMatch {
 		song := qqDeref(objs, items[i])
 		name, _ := qqPlistField(objs, song, "songName").(string)
-		return loosenEnrichKey(qqUpcomingArtist(objs, song)+"|"+name) == want
-	}
-	pos := -1
-	if idx, ok := qqDeref(objs, top["LastPlayingIndex"]).(int64); ok && idx >= 0 && int(idx) < len(items) && isCurrent(int(idx)) {
-		pos = int(idx)
-	} else {
-		for i := range items {
-			if isCurrent(i) {
-				pos = i
-				break
-			}
-		}
-	}
+		return m.match(qqUpcomingArtist(objs, song), name)
+	})
 	if pos < 0 {
 		return qqPlayingList{}, false // 列表里没有此刻在播的这首:归档是上一次播放留下的
 	}

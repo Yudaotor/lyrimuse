@@ -239,3 +239,24 @@ func TestKugouUpcomingUsesShowName(t *testing.T) {
 		t.Error("播放器报的是 showName 时,当前这首也该在队列里定位得到")
 	}
 }
+
+func TestKugouUpcomingMatchesOneOfSeveralSingers(t *testing.T) {
+	writeTestKugouQueue(t, []testKugouSong{
+		{musicName: "甲、乙 - 合作", album: "甲", singers: []string{"甲", "乙"}, seconds: 100},
+		{musicName: "丙 - 下一首", album: "丙", singers: []string{"丙"}, seconds: 200},
+	})
+	got, ok := kugouUpcoming("乙", "合作", 5)
+	if !ok || len(got) != 1 || got[0].title != "下一首" {
+		t.Fatalf("该从合作之后取,得到 ok=%v %+v", ok, got)
+	}
+}
+
+func TestKugouUpcomingSameTitleOtherSingerIsStale(t *testing.T) {
+	writeTestKugouQueue(t, []testKugouSong{
+		{musicName: "乙 - 当前", album: "乙", singers: []string{"乙"}, seconds: 100},
+		{musicName: "丙 - 不该取到", album: "丙", singers: []string{"丙"}, seconds: 200},
+	})
+	if got, ok := kugouUpcoming("甲", "当前", 5); ok {
+		t.Errorf("歌手对不上时该退回兜底,却返回了 %+v", got)
+	}
+}

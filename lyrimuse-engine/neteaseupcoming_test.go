@@ -173,3 +173,39 @@ func TestNeteaseUpcomingRejectsOversizedFile(t *testing.T) {
 		t.Errorf("超过大小上限时该直接放弃")
 	}
 }
+
+func TestNeteaseUpcomingMatchesOneOfSeveralArtists(t *testing.T) {
+	// 多人合作的歌,系统只报了其中一位:按歌名找到、歌手对得上一位就算当前这首。
+	writeTestNeteaseQueue(t, []testNeteaseSong{
+		{title: "合作", album: "甲", artists: []string{"甲", "乙"}, durationMS: 100000},
+		{title: "下一首", album: "丙", artists: []string{"丙"}, durationMS: 200000},
+	})
+	got, ok := neteaseUpcoming("甲", "合作", 5)
+	if want := []string{"下一首"}; !ok || fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("得到 ok=%v %v,期望 %v", ok, neteaseTitles(got), want)
+	}
+}
+
+func TestNeteaseUpcomingSameTitleOtherArtistIsStale(t *testing.T) {
+	// 歌名一样、歌手一位都对不上:是队列停在上一次播放的同名歌,不能当成当前这首。
+	writeTestNeteaseQueue(t, []testNeteaseSong{
+		{title: "当前", album: "乙", artists: []string{"乙"}, durationMS: 100000},
+		{title: "不该取到", album: "丙", artists: []string{"丙"}, durationMS: 200000},
+	})
+	if got, ok := neteaseUpcoming("甲", "当前", 5); ok {
+		t.Errorf("歌手对不上时该退回兜底,却返回了 %+v", got)
+	}
+}
+
+func TestNeteaseUpcomingPrefersExactMatch(t *testing.T) {
+	// 整串对得上的那首优先于只对上一位歌手的同名歌,哪怕后者排在前面。
+	writeTestNeteaseQueue(t, []testNeteaseSong{
+		{title: "当前", album: "甲", artists: []string{"甲", "乙"}, durationMS: 100000},
+		{title: "当前", album: "甲", artists: []string{"甲"}, durationMS: 100000},
+		{title: "之后", album: "丁", artists: []string{"丁"}, durationMS: 200000},
+	})
+	got, _ := neteaseUpcoming("甲", "当前", 1)
+	if want := []string{"之后"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+}

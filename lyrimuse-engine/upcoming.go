@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -272,4 +273,79 @@ func queueUpcomingEnrich(tracks []upcomingTrack, gen uint64) {
 	// 正常路径也打一行 —— 同专辑那条路当初只在"超上限被跳过"时打日志,于是"预取到底跑没跑"
 	// 完全不可观测,排查时卡在过这一点上。
 	log.Printf("upcoming prefetch: %d from queue, %d queued", len(tracks), queued)
+}
+
+// queueMatch 是队列里一条跟此刻在播那首的相符程度,数值越大越可信。
+type queueMatch int
+
+const (
+	queueNoMatch    queueMatch = iota
+	queueLooseMatch            // 歌名对上、歌手至少有一位对上
+	queueExactMatch            // 「歌手|歌名」整串对上
+)
+
+// queueCurrentMatcher 在播放器的本地队列里认出此刻在播的这首(网易云 / QQ 音乐 / 酷狗共用)。
+//
+// 先按「歌手|歌名」整串比;对不上再按歌名比、歌手至少有一位对得上 —— 多人合作的歌,系统「正在播放」
+// 常只报其中一位,整串比永远对不上,整份队列就一首都预取不到(见 09 章决策 220)。歌名一样、
+// 歌手一位都对不上的不算:那多半是队列还停在上一次播放。
+type queueCurrentMatcher struct {
+	want, wantTitle string
+	artists         map[string]bool
+}
+
+func newQueueCurrentMatcher(artist, title string) queueCurrentMatcher {
+	m := queueCurrentMatcher{
+		want:      loosenEnrichKey(artist + "|" + title),
+		wantTitle: loosenEnrichKey(title),
+		artists:   map[string]bool{},
+	}
+	for _, a := range strings.FieldsFunc(artist, isArtistCreditSep) {
+		if k := loosenEnrichKey(strings.TrimSpace(a)); k != "" {
+			m.artists[k] = true
+		}
+	}
+	return m
+}
+
+// match 判队列里的一条。artist 是这一条的整串署名,几位之间用什么分隔都行。
+func (m queueCurrentMatcher) match(artist, title string) queueMatch {
+	if loosenEnrichKey(artist+"|"+title) == m.want {
+		return queueExactMatch
+	}
+	if m.wantTitle == "" || loosenEnrichKey(title) != m.wantTitle {
+		return queueNoMatch
+	}
+	for _, a := range strings.FieldsFunc(artist, isArtistCreditSep) {
+		if m.artists[loosenEnrichKey(strings.TrimSpace(a))] {
+			return queueLooseMatch
+		}
+	}
+	return queueNoMatch
+}
+
+// queueCurrentIndex 在 n 条里找此刻在播的这首,找不到返回 -1。hint 是播放器自己记下的当前位置
+// (没有就传 -1)。整串对上的优先于只对上一位歌手的,哪怕后者排在前面;同一档里 hint 优先,其次取最靠前的。
+func queueCurrentIndex(n, hint int, match func(i int) queueMatch) int {
+	best, bestLevel := -1, queueNoMatch
+	if hint >= 0 && hint < n {
+		if level := match(hint); level == queueExactMatch {
+			return hint
+		} else if level > queueNoMatch {
+			best, bestLevel = hint, level
+		}
+	}
+	for i := 0; i < n; i++ {
+		if i == hint {
+			continue
+		}
+		level := match(i)
+		if level == queueExactMatch {
+			return i
+		}
+		if level > bestLevel {
+			best, bestLevel = i, level
+		}
+	}
+	return best
 }

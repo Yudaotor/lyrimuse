@@ -441,15 +441,12 @@ func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 		}
 		return strings.Join(names, "/")
 	}
-	want := loosenEnrichKey(artist + "|" + title)
-	pos := -1
-	for i := range f.List {
-		if loosenEnrichKey(joinArtists(i)+"|"+f.List[i].Track.Name) == want {
-			pos = i
-			break
-		}
-	}
+	m := newQueueCurrentMatcher(artist, title)
+	pos := queueCurrentIndex(len(f.List), -1, func(i int) queueMatch {
+		return m.match(joinArtists(i), f.List[i].Track.Name)
+	})
 	if pos < 0 {
+		log.Printf("netease upcoming: %q - %q is not in the client's queue (%d tracks)", artist, title, len(f.List))
 		return nil, false
 	}
 	// byRandom[k] = randomOrder 第 k 小的那首的下标;rank[i] = 第 i 首的名次。

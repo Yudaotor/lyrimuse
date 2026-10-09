@@ -360,3 +360,28 @@ func TestAlbumTracksQQUsesQQAlbum(t *testing.T) {
 		t.Errorf("归档里没有当前这首,不该取到: %+v", got)
 	}
 }
+
+func TestQQUpcomingMatchesOneOfSeveralSingers(t *testing.T) {
+	// 多人合作的歌,系统只报了其中一位(且不是第一位):按歌名找到、歌手对得上一位就算当前这首。
+	writeTestQQArchive(t, 0, []testQQSong{
+		{title: "合作", album: "甲", singers: []string{"甲", "乙"}, duration: 100},
+		{title: "下一首", album: "丙", singers: []string{"丙"}, duration: 200},
+	})
+	got, ok := qqUpcoming("乙", "合作", 5)
+	if !ok || len(got) != 1 || got[0].title != "下一首" {
+		t.Fatalf("该从合作之后取,得到 ok=%v %+v", ok, got)
+	}
+}
+
+func TestQQUpcomingPrefersExactOverLooseIndex(t *testing.T) {
+	// LastPlayingIndex 指着一首只对上一位歌手的同名歌,别处有整串对上的:取整串对上的那首。
+	writeTestQQArchive(t, 0, []testQQSong{
+		{title: "当前", album: "甲", singers: []string{"甲", "乙"}, duration: 100},
+		{title: "当前", album: "甲", singers: []string{"甲"}, duration: 100},
+		{title: "之后", album: "丁", singers: []string{"丁"}, duration: 200},
+	})
+	got, _ := qqUpcoming("甲", "当前", 1)
+	if len(got) != 1 || got[0].title != "之后" {
+		t.Fatalf("得到 %+v,期望之后", got)
+	}
+}

@@ -130,17 +130,17 @@ func (s kugouQueueSong) artistAndTitle() (artist, title string) {
 	return prefix, title
 }
 
-// isCurrent:这首是不是此刻在播的那首。singerName 和 musicName 前缀两种署名都认 —— 播放器在
+// currentMatch:这首跟此刻在播的那首对得上几分(见 queueCurrentMatcher)。singerName 和 musicName 前缀两种署名都认 —— 播放器在
 // 署名修正生效前后分别报这两种(见文件头注)。
-func (s kugouQueueSong) isCurrent(artist, title string) bool {
-	want := loosenEnrichKey(artist + "|" + title)
+func (s kugouQueueSong) currentMatch(m queueCurrentMatcher) queueMatch {
 	prefix, t := kugouUpcomingSplit(s.musicName)
+	best := queueNoMatch
 	for _, a := range []string{s.singerName, prefix} {
-		if a != "" && loosenEnrichKey(a+"|"+t) == want {
-			return true
+		if a != "" {
+			best = max(best, m.match(a, t))
 		}
 	}
-	return false
+	return best
 }
 
 // kugouLoadQueue 读 userCurrentPlayList.plist,返回队列与当前这首的位置(-1 = 当前这首不在队列里)。
@@ -187,21 +187,15 @@ func kugouLoadQueue(artist, title string) (list []kugouQueueSong, pos int, handl
 		list = append(list, song)
 	}
 
-	pos = -1
+	// [2] 是客户端记的当前下标;它没跟上这次切歌、或者格式里没有这一项时,在整份队列里找。
+	hint := -1
 	if len(parts) > 2 {
-		if idx, ok := kugouQueueIndex(parts[2]); ok && idx < len(list) && list[idx].isCurrent(artist, title) {
-			pos = idx
+		if idx, ok := kugouQueueIndex(parts[2]); ok {
+			hint = idx
 		}
 	}
-	if pos < 0 {
-		// 指针对不上(文件还没跟上这次切歌,或者格式里没有这一项):在队列里找一次。
-		for i, song := range list {
-			if song.isCurrent(artist, title) {
-				pos = i
-				break
-			}
-		}
-	}
+	m := newQueueCurrentMatcher(artist, title)
+	pos = queueCurrentIndex(len(list), hint, func(i int) queueMatch { return list[i].currentMatch(m) })
 	return list, pos, true
 }
 

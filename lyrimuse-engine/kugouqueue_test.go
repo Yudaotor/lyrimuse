@@ -338,3 +338,17 @@ func TestAlbumTracksKugouUsesKugouAlbum(t *testing.T) {
 		t.Errorf("队列里没有当前这首,不该取到: %+v", got)
 	}
 }
+
+// 当前这首只报了合作者里排在后面的那位:歌名对上、歌手对上一位就认。
+func TestKugouPlistMatchesOneOfSeveralSingers(t *testing.T) {
+	env := newTestKugouPlistEnv(t)
+	env.writeQueue([]testKugouPlistSong{
+		{"少司命、新乐尘符 - 不归人", "少司命、新乐尘符", "AAAA01", 200},
+		{"善宇 - 街角的晚风", "善宇", "AAAA02", 210},
+	}, 1)
+	env.writeLibrary(map[string]*string{"AAAA02": strp("街角的晚风")})
+	got, ok := kugouUpcoming("新乐尘符", "不归人", 5)
+	if !ok || len(got) != 1 || got[0].title != "街角的晚风" {
+		t.Fatalf("该认出不归人并取到下一首,得到 ok=%v %+v", ok, got)
+	}
+}
