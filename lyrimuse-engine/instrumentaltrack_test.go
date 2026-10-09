@@ -60,6 +60,22 @@ func TestInstrumentalFromScoredLocalVersion(t *testing.T) {
 	}
 }
 
+// 伴奏版解析时不检索歌词:先交一份标了纯音乐的条目上屏,返回的条目也标纯音乐、没有决策存档(没搜过)。
+// 传已取消的 ctx,封面和链接那几个请求当场失败,不联网。
+func TestResolveInstrumentalVersionSkipsLyricSearch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var shown []enrichEntry
+	e := resolveTrackEnrichment(ctx, "某测试歌手不存在", "占位曲 (Instrumental)", "", 99, "",
+		func(p enrichEntry) { shown = append(shown, p) }, lyricsDecisionPathFirstResolve)
+	if len(shown) != 1 || !shown[0].Instrumental || shown[0].Lyrics != "" {
+		t.Fatalf("开搜前先上屏一份纯音乐: %+v", shown)
+	}
+	if !e.Instrumental || e.LyricsDecision != nil {
+		t.Errorf("伴奏版直接标纯音乐、不检索: instrumental=%v decision=%+v", e.Instrumental, e.LyricsDecision)
+	}
+}
+
 // rescoreInstrumentalEntry 放一条条目、跑一次重评(manual 时走手动重新匹配那一套),返回跑完的条目和结论。
 func rescoreInstrumentalEntry(t *testing.T, title string, e enrichEntry, manual bool) (enrichEntry, lyricsRematchResult) {
 	t.Helper()

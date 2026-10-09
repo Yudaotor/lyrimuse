@@ -2530,8 +2530,9 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 	}
 	// Amazon Music 开播前就把这首的歌词拉进了本机缓存(按 ASIN 认,见 amazonlibrary.go):先把这份上屏,不等各歌词源 ——
 	// 待播曲目常常认不出歌名、预取不到(见 amazonUpcoming),不垫这一份,开头要空到网络那份回来。选定的那份照常经
-	// early / 最终提交整条覆盖它。只管正在放的这首(isNewTrack),预取的那些不是在放的歌。
-	if p, ok := amazonProvisionalLyrics(isNewTrack, bundleID, artist, title); ok && ctx.Err() == nil {
+	// early / 最终提交整条覆盖它。只管正在放的这首(isNewTrack),预取的那些不是在放的歌。伴奏版不垫,它直接标纯音乐
+	// (instrumentalVersionEnrichment)。
+	if p, ok := amazonProvisionalLyrics(isNewTrack, bundleID, artist, title); ok && ctx.Err() == nil && !localIsInstrumentalVersion(title, album) {
 		enrichMu.Lock()
 		enrichProvisional[key] = true
 		enrichMu.Unlock()
@@ -3152,6 +3153,9 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 		e = neteasePeripheralFields(ne, durationSecs)
 		return finishTrackEnrichment(ctx, e, nil, artist, title, album, durationSecs, deviceCoverURL)
 	}
+	if localIsInstrumentalVersion(title, album) {
+		return instrumentalVersionEnrichment(ctx, artist, title, album, searchAlbum, durationSecs, deviceCoverURL, onLyrics)
+	}
 	ne, scored = scoredLyricCandidates(roundCtx, artist, title, searchAlbum, durationSecs)
 	// 封面/主色/平台跳转链接是基础展示信息,不做成可关闭的开关,以下逻辑无条件执行——
 	// 唯一的例外是上面说的:网易云作为歌词源被关掉时 ne 是空的,这里自然拿不到它的封面和链接。
@@ -3199,6 +3203,25 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 本来就用同一个函数现算兜底,出词那一刻不需要预生成的这份。lyricsEntryFromScored 只做了粤拼。
 	e.maybeGenerateRoma()
 	return finishTrackEnrichment(ctx, e, scored, artist, title, album, durationSecs, deviceCoverURL)
+}
+
+// instrumentalVersionEnrichment:本地歌名或专辑带伴奏 / 纯音乐 / Instrumental 限定词(localIsInstrumentalVersion)时
+// resolveTrackEnrichment 走这里。各源的整份歌词打分时一律判废(scoreRejectInstrumentalTrack),检索只会落到纯音乐,
+// 所以不检索歌词:先交一份标了纯音乐的条目上屏,封面和链接只单查网易云,再走外围字段那一段。手动搜索、重新匹配
+// 不经这里,照常检索。见 09 章决策 216。
+func instrumentalVersionEnrichment(ctx context.Context, artist, title, album, searchAlbum string, durationSecs float64,
+	deviceCoverURL string, onLyrics func(enrichEntry)) enrichEntry {
+	log.Printf("lyrics: %q - %q is an instrumental version, marked instrumental without searching", artist, title)
+	if onLyrics != nil {
+		onLyrics(enrichEntry{Instrumental: true, DurationSecs: durationSecs})
+	}
+	var ne neteaseInfo
+	if lyricSourceEnabled("netease") {
+		ne = neteaseLookup(ctx, artist, title, searchAlbum, durationSecs)
+	}
+	e := neteasePeripheralFields(ne, durationSecs)
+	e.Instrumental = true
+	return finishTrackEnrichment(ctx, e, nil, artist, title, album, durationSecs, deviceCoverURL)
 }
 
 // finishTrackEnrichment 是 resolveTrackEnrichment 选完歌词之后的外围字段那一段(规范歌手名、封面级联、
