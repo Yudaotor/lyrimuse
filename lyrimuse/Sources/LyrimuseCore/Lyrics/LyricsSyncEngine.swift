@@ -511,6 +511,7 @@ public final class LyricsSyncEngine {
             }
             if nonHanOK, !hanOnly.isEmpty { core = String(hanOnly) }
         }
+        if !rest.isEmpty, latinLabel.isEmpty, matchesRoleWordListLabel(hanLabel) { return true }
         // 上限仍然是 10:放宽到 20 会撞既有断言「标签超过 8 字不像职员表」(长句子里嵌一个
         // 角色词就会被当署名)。真正的长标签(「中音萨克斯/次中音萨克斯/上低音萨克斯：」)
         // 交给 matchesNameListCreditShape —— 它有整份 ≥2 行的闸,放宽长度是安全的。
@@ -531,6 +532,23 @@ public final class LyricsSyncEngine {
         guard !latinLabel.isEmpty else { return false }
         let range = NSRange(latinLabel.startIndex..., in: latinLabel)
         return englishRoleNounPattern.firstMatch(in: latinLabel, range: range) != nil
+    }
+
+    /// 一人身兼多职、标签用分隔符串成一长串(「制作人/编曲/混音/母带/其他乐器：」):整串超过
+    /// `matchesRoleWordCredit` 的 10 字上限,但每段都是短标签。≥2 段、每段 1~6 个汉字、至少两段
+    /// 各含一个角色词才认 —— 句子切不出这种形状。只认 `/ ／ 、 & ＆`,不认「和 / 与 / 及」。
+    /// 见 08 章决策 49。
+    private static func matchesRoleWordListLabel(_ hanLabel: String) -> Bool {
+        let parts = hanLabel.components(separatedBy: CharacterSet(charactersIn: "/／、&＆"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count >= 2,
+              parts.allSatisfy({ (1...6).contains($0.count) && $0.unicodeScalars.allSatisfy { $0.properties.isIdeographic } })
+        else { return false }
+        let roleParts = parts.filter { part in
+            let forms = [part, HanScript.sibling(part)].compactMap { $0 }
+            return creditRoleWords.contains { word in forms.contains { $0.contains(word) } }
+        }
+        return roleParts.count >= 2
     }
 
     /// 「这个行首标签本身像不像职员表里的角色名」—— `matchesRoleWordCredit` 的**只看标签**版。

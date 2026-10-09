@@ -600,6 +600,13 @@ func runCreditLineTests() {
         // 同形态的其它写法
         expectEqual(E.matchesRoleWordCredit("作词&作曲：某人"), true, "署名行: 标签含 &")
         expectEqual(E.matchesRoleWordCredit("混音、母带：某人"), true, "署名行: 标签含顿号")
+        // 身兼多职串成一长串:去掉分隔符超过 10 字,按段认。
+        expectEqual(E.matchesRoleWordCredit("制作人/编曲/混音/母带/其他乐器：宫阁@GONG Studio"), true,
+                    "署名行: 多段角色标签超过 10 字")
+        expectEqual(E.matchesRoleWordCredit("我想要的制作/其实就是一首歌：嗯"), false,
+                    "真歌词: 段超过 6 字不按多段标签认")
+        expectEqual(E.matchesRoleWordCredit("今天晚上/明天早上/编曲以后：再说"), false,
+                    "真歌词: 只有一段含角色词")
         expectEqual(E.matchesEnglishCredit("Produced by Someone"), true, "署名行: Produced by")
         expectEqual(E.matchesEnglishCredit("Recorded at Abbey Road"), true, "署名行: Recorded at")
 
