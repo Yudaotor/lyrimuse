@@ -37,7 +37,7 @@ func TestPlanResyncKeepsLocallyGeneratedFields(t *testing.T) {
 	}
 	got3 := applyResync(e, picked3, p3, "zh", "[00:01.00]xin ci")
 	if got3.Lyrics != "[00:01.00]新词" || got3.LyricsTr != "" || got3.LyricsYRC != "" || got3.LyricsRoma != "[00:01.00]xin ci" ||
-		got3.LyricsSource != "kugou" || got3.LyricsScoringVersion != lyricsScoringVersion || got3.SongLanguage != "zh" {
+		got3.LyricsSource != "kugou" || got3.lyricsScoring() != currentLyricsScoring || got3.SongLanguage != "zh" {
 		t.Fatalf("got %+v", got3)
 	}
 }

@@ -41,8 +41,10 @@ type lyricsDecision struct {
 	// "rescore"(打分规则换版后重选)。
 	Path      string `json:"path"`
 	DecidedAt int64  `json:"decided_at"`
-	// 当时用的打分规则版本(lyricsScoringVersion)。跨版本对比 score 没有意义,先看它。
-	ScoringVersion int `json:"scoring_version"`
+	// 当时用的打分规则版本(lyricsScoringVersion)与开发修订号(lyricsScoringRevision)。跨版本对比 score
+	// 没有意义,先看它。
+	ScoringVersion  int `json:"scoring_version"`
+	ScoringRevision int `json:"scoring_revision,omitempty"`
 	// 实际发给各源的查询词(已 toSimplified)和校验用的曲长 —— 决策的完整输入。
 	QueryArtist  string  `json:"query_artist,omitempty"`
 	QueryTitle   string  `json:"query_title,omitempty"`
@@ -197,6 +199,7 @@ func newLyricsDecision(
 		Path:             path,
 		DecidedAt:        time.Now().Unix(),
 		ScoringVersion:   lyricsScoringVersion,
+		ScoringRevision:  lyricsScoringRevision,
 		QueryArtist:      artist,
 		QueryTitle:       title,
 		QueryAlbum:       album,

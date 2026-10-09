@@ -75,7 +75,7 @@ func TestSkippedSourcesForRetryAtEveryWrite(t *testing.T) {
 	enrichMu.Unlock()
 	check("补空", filled)
 	check("重新打分", rescored)
-	if !deferred || rescored.LyricsScoringVersion == lyricsScoringVersion {
+	if !deferred || rescored.lyricsScoring() == currentLyricsScoring {
 		t.Error("重新打分:长冷却的源被跳过,这一轮照旧不算完整(deferred、不追平打分版本)")
 	}
 }

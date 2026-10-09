@@ -53,7 +53,7 @@ func crossAlbumSiblingLyrics(cache map[string]enrichEntry, key string, self enri
 		if k == key || strings.TrimSpace(e.Lyrics) == "" || e.DurationSecs <= 0 {
 			continue
 		}
-		if e.LyricsScore <= bestScore || e.LyricsScoringVersion != self.LyricsScoringVersion {
+		if e.LyricsScore <= bestScore || e.lyricsScoring() != self.lyricsScoring() {
 			continue
 		}
 		a, t, al := splitEnrichKey(k)

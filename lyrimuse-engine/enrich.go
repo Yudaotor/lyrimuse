@@ -303,9 +303,12 @@ type enrichEntry struct {
 	// LyricsRescoreCount/LyricsRescoreTS 是按新规则重选的已尝试次数与上次尝试时间
 	// (见 needsLyricsRescore)。没有这些字段的老条目会读成 0,一律落后于当前版本 ——
 	// 正是想要的:它们确实是按更老的规则选的。
-	LyricsScoringVersion int   `json:"lyrics_scoring_version,omitempty"`
-	LyricsRescoreCount   int   `json:"lyrics_rescore_count,omitempty"`
-	LyricsRescoreTS      int64 `json:"lyrics_rescore_ts,omitempty"`
+	LyricsScoringVersion int `json:"lyrics_scoring_version,omitempty"`
+	// LyricsScoringRevision 是同一主版本下的开发修订号(见 lyricsScoringRevision),跟 LyricsScoringVersion
+	// 一起读写,走 lyricsScoring / stampLyricsScoring。
+	LyricsScoringRevision int   `json:"lyrics_scoring_revision,omitempty"`
+	LyricsRescoreCount    int   `json:"lyrics_rescore_count,omitempty"`
+	LyricsRescoreTS       int64 `json:"lyrics_rescore_ts,omitempty"`
 	// LyricsRescoreVersion 记录上面那几次尝试是**针对哪一版**打分规则做的。
 	// needsLyricsRescore 的次数上限和 1 小时节流只认"针对当前版本"的尝试;版本一升,旧版本下
 	// 用掉的次数就不再算。 别退回"LyricsRescoreCount 从不归零"的终身上限:打分版本连升几次
@@ -313,6 +316,8 @@ type enrichEntry struct {
 	// 更新后会重新评估"。老条目没有这个字段读成 0 ≠ 当前版本 = 计数视同清零 —— 正是想要的:
 	// 冻结的那批自动解冻,不需要迁移。
 	LyricsRescoreVersion int `json:"lyrics_rescore_version,omitempty"`
+	// LyricsRescoreRevision:同上,对应的开发修订号,走 lyricsRescoreScoring / stampLyricsRescore。
+	LyricsRescoreRevision int `json:"lyrics_rescore_revision,omitempty"`
 	// 外围字段补全的已尝试次数,见 needsPeripheralBackfill 的上限说明。
 	PeripheralRetryCount int `json:"peripheral_retry_count,omitempty"`
 	// 解析这条时用的曲目真实时长(秒)。存下来是给"歌词管理"的手动搜索用的:打分里时长
@@ -1511,7 +1516,7 @@ func lyricsUpgradeBaseline(e enrichEntry, scored []scoredLyricCandidateResult) (
 	if e.Lyrics == "" {
 		return 0, true
 	}
-	if e.LyricsScoringVersion == lyricsScoringVersion {
+	if e.lyricsScoring() == currentLyricsScoring {
 		return e.LyricsScore, true
 	}
 	for i := range scored {
@@ -1890,7 +1895,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		e.Lyrics = picked.Lyrics
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
-		e.LyricsScoringVersion = lyricsScoringVersion
+		e.stampLyricsScoring()
 		e.ResolvedDurationSecs = durationSecs
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
@@ -2081,14 +2086,14 @@ func needsLyricsRescore(e enrichEntry, pinned, autoUpgrade bool) bool {
 	if !autoUpgrade {
 		return false
 	}
-	if e.LyricsScoringVersion >= lyricsScoringVersion {
+	if !e.lyricsScoring().before(currentLyricsScoring) {
 		return false
 	}
 	// 次数与节流只认针对**当前**版本的那几次尝试(见 LyricsRescoreVersion 字段注释)。旧版本
 	// 下的计数不算 —— 那几次得出的结论已被新规则作废,不该拿来限制新规则下的重选;本版一次
 	// 都没试过时也不套节流。rescoreLyrics 一跑就会把版本号对齐并从零计数,所以第二次进来
 	// 照常受下面两道闸管,不会一秒内连烧两次。
-	if e.LyricsRescoreVersion != lyricsScoringVersion {
+	if e.lyricsRescoreScoring() != currentLyricsScoring {
 		return true
 	}
 	if e.LyricsRescoreCount >= lyricsRescoreMaxAttempts {
@@ -2225,9 +2230,9 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 当前这份只有署名:它不是要护着的歌词,见下面 keep 与纯音乐那一支。
 	currentCreditOnly := lyricsAreCreditsOnly(e.Lyrics)
 	// 换了打分版本后的第一次尝试:旧版本下的计数作废、从零开始(见 LyricsRescoreVersion 注释)。
-	if e.LyricsRescoreVersion != lyricsScoringVersion {
+	if e.lyricsRescoreScoring() != currentLyricsScoring {
 		e.LyricsRescoreCount = 0
-		e.LyricsRescoreVersion = lyricsScoringVersion
+		e.stampLyricsRescore()
 	}
 	// 一个歌词源都没连上的这一轮不占上限次数,理由同 retryLyricsUpgrade。
 	if reached {
@@ -2284,38 +2289,38 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		// 这一轮有纯音乐标记、没有能用的候选,而现有这份歌词就是被判版本不符的那条:按纯音乐处理。同用户手标,
 		// 歌词留在条目里,撤标就回来。
 		if complete {
-			e.LyricsScoringVersion = lyricsScoringVersion
+			e.stampLyricsScoring()
 		}
 		e.ResolvedDurationSecs = durationSecs
 		e.Instrumental = true
 		markedInstrumental = true
-		log.Printf("lyrics rescore: %s  %s is another version and a source says instrumental, marking instrumental under v%d",
-			key, e.LyricsSource, lyricsScoringVersion)
+		log.Printf("lyrics rescore: %s  %s is another version and a source says instrumental, marking instrumental under v%s",
+			key, e.LyricsSource, currentLyricsScoring)
 	case picked == nil && sourceChoice == "" && e.autoMarksInstrumental() &&
 		(localIsInstrumentalVersion(title, album) || (currentCreditOnly && scoredHasInstrumentalMarker(scored))):
 		// 伴奏版,或当前这份只有署名、这一轮有源说是纯音乐:按纯音乐处理,歌词留在条目里、撤标就回来。手动重新匹配同样走这里。
 		// 见 09 章决策 209。
 		if complete {
-			e.LyricsScoringVersion = lyricsScoringVersion
+			e.stampLyricsScoring()
 		}
 		e.ResolvedDurationSecs = durationSecs
 		e.Instrumental = true
 		markedInstrumental = true
-		log.Printf("lyrics rescore: %s  no usable candidate for an instrumental version or credits-only lyrics, marking instrumental under v%d",
-			key, lyricsScoringVersion)
+		log.Printf("lyrics rescore: %s  no usable candidate for an instrumental version or credits-only lyrics, marking instrumental under v%s",
+			key, currentLyricsScoring)
 	case picked == nil:
 		// 够格判断、但新规则下一个能用的候选都没有(比如全被"超出曲目时长"判掉)。
 		// 保留现有歌词不动 —— 有一份存疑的歌词也好过没有 —— 但版本号照盖:结论已经
 		// 在完整信息下得出过了,再重搜一次也是同样的结果。
 		if complete {
-			e.LyricsScoringVersion = lyricsScoringVersion
+			e.stampLyricsScoring()
 		}
 		e.ResolvedDurationSecs = durationSecs
-		log.Printf("lyrics rescore: %s  no valid candidate under v%d, keeping %s", key, lyricsScoringVersion, e.LyricsSource)
+		log.Printf("lyrics rescore: %s  no valid candidate under v%s, keeping %s", key, currentLyricsScoring, e.LyricsSource)
 	case keep:
 		// 当前这份留着(见 rescoreKeeps),只记这一轮做过。
 		if complete {
-			e.LyricsScoringVersion = lyricsScoringVersion
+			e.stampLyricsScoring()
 		}
 		e.ResolvedDurationSecs = durationSecs
 		switch {
@@ -2335,7 +2340,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 				log.Printf("lyrics rescore: %s  current %s lyrics run off this round's timeline, not keeping them for their word timing",
 					key, e.LyricsSource)
 			}
-			log.Printf("lyrics rescore: %s  %s(v%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScoringVersion, picked.Source, picked.Score)
+			log.Printf("lyrics rescore: %s  %s(v%s) -> %s(%d)", key, e.LyricsSource, e.lyricsScoring(), picked.Source, picked.Score)
 			e.Lyrics = picked.Lyrics
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 			e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion
@@ -2375,7 +2380,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
 		if complete {
-			e.LyricsScoringVersion = lyricsScoringVersion
+			e.stampLyricsScoring()
 		}
 		e.ResolvedDurationSecs = durationSecs
 	}
@@ -2432,7 +2437,7 @@ func lookupPeripheralQQMids(ctx context.Context, key string, fresh enrichEntry) 
 // 候选同轴(rescoreCurrentTimelineOff)的也不比:那一份就是当前这份、只是正文写法变了,它已经参与比较并输了,
 // 存的分数是没扣这一项时打的。
 func rescoreKeepsCurrent(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
-	if picked.Lyrics == e.Lyrics || e.LyricsScoringVersion != lyricsScoringVersion {
+	if picked.Lyrics == e.Lyrics || e.lyricsScoring() != currentLyricsScoring {
 		return false
 	}
 	for i := range scored {

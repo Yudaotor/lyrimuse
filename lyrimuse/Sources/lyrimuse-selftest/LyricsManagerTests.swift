@@ -402,6 +402,9 @@ func runLyricsManagerTests() {
         var a = slot; a.removeValue(forKey: "winner")
         var b = details; b.removeValue(forKey: "winner")
         expectEqual(DecisionSidecar.sameFingerprint(a, b), true, "判决旁路: 缺失的 winner 按空串比")
+        var revised = details
+        revised["scoring_revision"] = NSNumber(value: 1)
+        expectEqual(DecisionSidecar.sameFingerprint(slot, revised), false, "判决旁路: 打分修订号不同算另一轮")
     }
 
     // ---- 「重新自动匹配」的通道与结论(LyricsRematch)----
@@ -1370,7 +1373,12 @@ func runLyricsManagerTests() {
         {"scoringVersion":19,"updatedAt":1789500000}
         """.utf8))
         expectEqual(idle?.scoringVersion, 19, "全量状态: 版本号解出来")
+        expectEqual(idle?.scoringRevision, 0, "全量状态: 修订号缺席(正式版 / 老引擎)读成 0")
         expectEqual(idle?.active, false, "全量状态: active 缺席 = 没有待续的一轮,不是解码失败")
+        let revised = try? JSONDecoder().decode(F.State.self, from: Data("""
+        {"scoringVersion":29,"scoringRevision":1,"updatedAt":1789500000}
+        """.utf8))
+        expectEqual(revised?.scoringRevision, 1, "全量状态: 开发修订号解出来")
         let resuming = try? JSONDecoder().decode(F.State.self, from: Data("""
         {"scoringVersion":19,"active":true,"startedAt":1789500000,"updatedAt":1789600000}
         """.utf8))
@@ -1412,11 +1420,13 @@ func runLyricsManagerTests() {
         expectEqual(cacheStore.contains("fullScanTier") || cacheStore.contains("pollutedKeys")
                     || statsPanel.contains("fullScanPendingCount"), false,
                     "全量待跟进: App 不再按分层规则自己数")
-        // 决策面板的「旧版评分规则」按引擎发布的打分版本号判,App 不写死一份(源码契约)。
+        // 决策面板的「旧版评分规则」按引擎发布的打分版本号判,App 不写死一份;主版本号、开发修订号
+        // 两段一起比(源码契约)。
         let decisionSheet = appSource("LyricsManager/LyricsDecisionSheet.swift")
-        expectEqual(decisionSheet.contains("LyricsFullScan.current?.scoringVersion")
+        expectEqual(decisionSheet.contains("let current = LyricsFullScan.current, current.scoringVersion > 0")
+                    && decisionSheet.contains("(version, decision.scoringRevision ?? 0) < (current.scoringVersion, current.scoringRevision)")
                     && !decisionSheet.contains("currentLyricsScoringVersion"), true,
-                    "旧版评分规则: 按引擎发布的打分版本号判,不写死")
+                    "旧版评分规则: 按引擎发布的打分版本号与修订号判,不写死")
 
         // 请求动词。引擎侧 parseLyricsFillRequest 认的是这一个词,写错一个字母就会被
         // 当成一个不存在的缓存 key、空跑一轮,而且**不报错**。

@@ -30,7 +30,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 		},
 		{
 			name: "版本已是最新:不碰",
-			e:    enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion},
+			e:    enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision},
 			want: false,
 		},
 		{
@@ -47,7 +47,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 			name: "本版次数用尽:不为一次规则升级无限重搜",
 			e: func() enrichEntry {
 				e := stale
-				e.LyricsRescoreCount, e.LyricsRescoreVersion = lyricsRescoreMaxAttempts, lyricsScoringVersion
+				e.LyricsRescoreCount, e.LyricsRescoreVersion, e.LyricsRescoreRevision = lyricsRescoreMaxAttempts, lyricsScoringVersion, lyricsScoringRevision
 				return e
 			}(),
 			want: false,
@@ -56,7 +56,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 			name: "本版差一次到上限:还重选",
 			e: func() enrichEntry {
 				e := stale
-				e.LyricsRescoreCount, e.LyricsRescoreVersion = lyricsRescoreMaxAttempts-1, lyricsScoringVersion
+				e.LyricsRescoreCount, e.LyricsRescoreVersion, e.LyricsRescoreRevision = lyricsRescoreMaxAttempts-1, lyricsScoringVersion, lyricsScoringRevision
 				return e
 			}(),
 			want: true,
@@ -88,7 +88,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 			e: func() enrichEntry {
 				e := stale
 				e.LyricsRescoreCount, e.LyricsRescoreTS = 1, time.Now().Unix()
-				e.LyricsRescoreVersion = lyricsScoringVersion
+				e.LyricsRescoreVersion, e.LyricsRescoreRevision = lyricsScoringVersion, lyricsScoringRevision
 				return e
 			}(),
 			want: false,
@@ -99,7 +99,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 				e := stale
 				e.LyricsRescoreCount = 1
 				e.LyricsRescoreTS = time.Now().Unix() - int64(lyricsRescoreDeferInterval/time.Second) - 1
-				e.LyricsRescoreVersion = lyricsScoringVersion
+				e.LyricsRescoreVersion, e.LyricsRescoreRevision = lyricsScoringVersion, lyricsScoringRevision
 				return e
 			}(),
 			want: true,

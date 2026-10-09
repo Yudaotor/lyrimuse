@@ -49,7 +49,7 @@ func TestLyricsEntryFromScored(t *testing.T) {
 		t.Fatalf("picked=%+v", picked)
 	}
 	if e.Lyrics != "[00:01.00]hi" || e.LyricsSource != "kugou" || e.LyricsScore != 900 || e.LyricsYRC == "" ||
-		e.LyricsScoringVersion != lyricsScoringVersion || e.ResolvedDurationSecs != 200 || e.DurationSecs != 200 {
+		e.lyricsScoring() != currentLyricsScoring || e.ResolvedDurationSecs != 200 || e.DurationSecs != 200 {
 		t.Fatalf("歌词字段: %+v", e)
 	}
 	if e.CoverURL != ne.Cover || e.CoverSource != "netease" || e.CoverAlbum != "A" || e.NeteaseURL != ne.SongURL {

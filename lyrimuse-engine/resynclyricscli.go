@@ -158,9 +158,9 @@ func runResyncLyrics(keys []string, apply bool) int {
 		// 跟 rescoreLyrics 同一份口径:计数按打分版本归零(见 enrichEntry.LyricsRescoreVersion)。
 		// 这条 CLI 不过 needsLyricsRescore 那道上限闸,所以它推进的次数此前可以超过 3
 		// (本机有 2 条计到 4);按版本计之后这几次只影响本版剩余的自动尝试次数。
-		if cur.LyricsRescoreVersion != lyricsScoringVersion {
+		if cur.lyricsRescoreScoring() != currentLyricsScoring {
 			cur.LyricsRescoreCount = 0
-			cur.LyricsRescoreVersion = lyricsScoringVersion
+			cur.stampLyricsRescore()
 		}
 		cur.LyricsRescoreCount++
 		cur.LyricsRescoreTS = time.Now().Unix()
@@ -267,7 +267,7 @@ func applyResync(cur enrichEntry, picked *scoredLyricCandidateResult, p resyncPl
 	cur.applyPregeneratedRoma(preparedRoma)
 	cur.LyricsSource = picked.Source
 	cur.LyricsScore = picked.Score
-	cur.LyricsScoringVersion = lyricsScoringVersion
+	cur.stampLyricsScoring()
 	return cur
 }
 

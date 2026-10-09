@@ -57,13 +57,14 @@ import (
 
 // decisionDetails 是一槽判决的指纹 + 明细。
 type decisionDetails struct {
-	Path           string                    `json:"path"`
-	DecidedAt      int64                     `json:"decided_at"`
-	ScoringVersion int                       `json:"scoring_version"`
-	Winner         string                    `json:"winner,omitempty"`
-	ReusedFrom     string                    `json:"reused_from,omitempty"`
-	Candidates     []lyricsDecisionCandidate `json:"candidates,omitempty"`
-	QueriesTried   []lyricQueryRecord        `json:"queries_tried,omitempty"`
+	Path            string                    `json:"path"`
+	DecidedAt       int64                     `json:"decided_at"`
+	ScoringVersion  int                       `json:"scoring_version"`
+	ScoringRevision int                       `json:"scoring_revision,omitempty"`
+	Winner          string                    `json:"winner,omitempty"`
+	ReusedFrom      string                    `json:"reused_from,omitempty"`
+	Candidates      []lyricsDecisionCandidate `json:"candidates,omitempty"`
+	QueriesTried    []lyricQueryRecord        `json:"queries_tried,omitempty"`
 }
 
 type decisionSidecar struct {
@@ -85,12 +86,12 @@ func hasDecisionDetails(d *lyricsDecision) bool {
 
 func sameDecisionFingerprint(a *decisionDetails, d *lyricsDecision) bool {
 	return a != nil && d != nil && a.Path == d.Path && a.DecidedAt == d.DecidedAt &&
-		a.ScoringVersion == d.ScoringVersion && a.Winner == d.Winner && a.ReusedFrom == d.ReusedFrom
+		a.ScoringVersion == d.ScoringVersion && a.ScoringRevision == d.ScoringRevision && a.Winner == d.Winner && a.ReusedFrom == d.ReusedFrom
 }
 
 func detailsOf(d *lyricsDecision) *decisionDetails {
 	return &decisionDetails{
-		Path: d.Path, DecidedAt: d.DecidedAt, ScoringVersion: d.ScoringVersion,
+		Path: d.Path, DecidedAt: d.DecidedAt, ScoringVersion: d.ScoringVersion, ScoringRevision: d.ScoringRevision,
 		Winner: d.Winner, ReusedFrom: d.ReusedFrom,
 		Candidates: d.Candidates, QueriesTried: d.QueriesTried,
 	}

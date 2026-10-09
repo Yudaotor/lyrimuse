@@ -9,7 +9,7 @@ import (
 func TestAdoptBackfilledLyrics(t *testing.T) {
 	dec := &lyricsDecision{Path: lyricsDecisionPathPeripheral, Applied: true}
 	fresh := enrichEntry{
-		Lyrics: "[00:01.00]hi", LyricsSource: "kugou", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion,
+		Lyrics: "[00:01.00]hi", LyricsSource: "kugou", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 		ResolvedDurationSecs: 200, LyricsTr: "[00:01.00]嗨", LyricsTrLang: "zh", LyricsRoma: "[00:01.00]hai",
 		LyricsYRC: "[1000,500](1000,500,0)hi", SongLanguage: "en",
 		LyricsDecision: dec, LyricsDecisionApplied: dec,
@@ -21,7 +21,7 @@ func TestAdoptBackfilledLyrics(t *testing.T) {
 	if !adoptBackfilledLyrics(&e, fresh) {
 		t.Fatal("空歌词条目该收下")
 	}
-	if e.Lyrics != fresh.Lyrics || e.LyricsSource != "kugou" || e.LyricsScore != 900 || e.LyricsScoringVersion != lyricsScoringVersion ||
+	if e.Lyrics != fresh.Lyrics || e.LyricsSource != "kugou" || e.LyricsScore != 900 || e.lyricsScoring() != currentLyricsScoring ||
 		e.ResolvedDurationSecs != 200 || e.LyricsTr != fresh.LyricsTr || e.LyricsTrLang != "zh" || e.LyricsRoma != fresh.LyricsRoma ||
 		e.LyricsYRC != fresh.LyricsYRC || e.SongLanguage != "en" || e.LyricsDecision != dec || e.LyricsDecisionApplied != dec ||
 		len(e.LyricsSourcesSeen) != 1 || len(e.LyricsSourcesResponded) != 2 || len(e.LyricsSourcesSkipped) != 1 {

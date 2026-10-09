@@ -11,12 +11,12 @@ import LyrimuseCore
 // 它拿的是新鲜正文;决策记录里根本没有正文(引擎侧三条铁律之一,见 decision.go),
 // 也就不存在"从存档采纳"这种操作。
 /// 这份存档是不是用旧版打分规则跑的。当前版本号读引擎发布在全量扫库状态文件里的那个
-/// (`LyricsFullScan.State.scoringVersion`),读不到就不判:宁可不提示,也不拿一个猜来的版本号去比。
-/// 版本号只用来比新旧,不展示给用户(裸编号没有对照、看不出新旧)。
+/// (`LyricsFullScan.State.scoringVersion` / `scoringRevision`),读不到就不判:宁可不提示,也不拿一个猜来的版本号去比。
+/// 主版本号、开发修订号按两段整数比。版本号只用来比新旧,不展示给用户(裸编号没有对照、看不出新旧)。
 private func scoredWithOlderRules(_ decision: LyricsResolutionDecision) -> Bool {
     guard let version = decision.scoringVersion,
-          let current = LyricsFullScan.current?.scoringVersion, current > 0 else { return false }
-    return version < current
+          let current = LyricsFullScan.current, current.scoringVersion > 0 else { return false }
+    return (version, decision.scoringRevision ?? 0) < (current.scoringVersion, current.scoringRevision)
 }
 
 struct LyricsDecisionSheet: View {

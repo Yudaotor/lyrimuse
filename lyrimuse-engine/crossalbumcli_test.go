@@ -261,7 +261,7 @@ func TestApplyCrossAlbumReuseGuards(t *testing.T) {
 
 // 跨专辑复用只跟同一打分版本的兄弟比分数;存量命令优先用打分版本最新的那条。
 func TestCrossAlbumReuseComparesSameScoringVersionOnly(t *testing.T) {
-	self := enrichEntry{Lyrics: "mine", LyricsScore: 700, LyricsScoringVersion: lyricsScoringVersion, DurationSecs: 200}
+	self := enrichEntry{Lyrics: "mine", LyricsScore: 700, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision, DurationSecs: 200}
 	cache := map[string]enrichEntry{
 		"a|t|原版": self,
 		"a|t|典藏": {Lyrics: "inflated", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion - 5, DurationSecs: 200.5},
@@ -269,11 +269,11 @@ func TestCrossAlbumReuseComparesSameScoringVersionOnly(t *testing.T) {
 	if got := crossAlbumSiblingLyrics(cache, "a|t|原版", self); got != "" {
 		t.Fatalf("旧版本的高分不该赢: %q", got)
 	}
-	cache["a|t|典藏"] = enrichEntry{Lyrics: "better", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion, DurationSecs: 200.5}
+	cache["a|t|典藏"] = enrichEntry{Lyrics: "better", LyricsScore: 900, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision, DurationSecs: 200.5}
 	if got := crossAlbumSiblingLyrics(cache, "a|t|原版", self); got != "a|t|典藏" {
 		t.Fatalf("同版本更高分的兄弟应当赢: %q", got)
 	}
-	g := crossAlbumGroup{members: []crossAlbumMember{{key: "old", score: 900, version: 3}, {key: "new", score: 500, version: 24}, {key: "new2", score: 600, version: 24}}}
+	g := crossAlbumGroup{members: []crossAlbumMember{{key: "old", score: 900, version: lyricsScoringStamp{3, 0}}, {key: "new", score: 500, version: lyricsScoringStamp{24, 0}}, {key: "new2", score: 600, version: lyricsScoringStamp{24, 0}}}}
 	if best := g.members[g.bestMember()].key; best != "new2" {
 		t.Fatalf("bestMember = %q, want new2", best)
 	}

@@ -29,7 +29,7 @@ type crossAlbumMember struct {
 	duration float64
 	source   string
 	score    int
-	version  int // LyricsScoringVersion:分数只在同一版本之间比
+	version  lyricsScoringStamp // 分数只在同一版本之间比
 	lines    int
 	lyrics   string
 }
@@ -153,7 +153,7 @@ func (g crossAlbumGroup) bestMember() int {
 	best := 0
 	for i, m := range g.members {
 		b := g.members[best]
-		if m.version > b.version || (m.version == b.version && m.score > b.score) {
+		if b.version.before(m.version) || (m.version == b.version && m.score > b.score) {
 			best = i
 		}
 	}
@@ -222,7 +222,7 @@ func applyCrossAlbumReuse(groups []crossAlbumGroup) (applied, skipped int) {
 			dst.LyricsRoma = src.LyricsRoma
 			dst.LyricsSource = src.LyricsSource
 			dst.LyricsScore = src.LyricsScore
-			dst.LyricsScoringVersion = src.LyricsScoringVersion
+			dst.LyricsScoringVersion, dst.LyricsScoringRevision = src.LyricsScoringVersion, src.LyricsScoringRevision
 			if len(dst.LyricsSongwriters) == 0 {
 				dst.LyricsSongwriters = src.LyricsSongwriters
 			}
@@ -273,7 +273,7 @@ func groupCrossAlbumCandidates(cache map[string]enrichEntry, tolerance float64) 
 			duration: e.DurationSecs,
 			source:   e.LyricsSource,
 			score:    e.LyricsScore,
-			version:  e.LyricsScoringVersion,
+			version:  e.lyricsScoring(),
 			lines:    strings.Count(e.Lyrics, "\n") + 1,
 			lyrics:   e.Lyrics,
 		})

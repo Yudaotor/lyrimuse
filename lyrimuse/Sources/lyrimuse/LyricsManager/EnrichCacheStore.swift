@@ -1261,6 +1261,8 @@ struct LyricsResolutionDecision: Decodable {
     let path: String
     let decidedAt: Int?
     let scoringVersion: Int?
+    /// 同一主版本下的开发修订号(引擎 lyricsScoringRevision),跟 scoringVersion 一起比新旧;nil = 0。
+    let scoringRevision: Int?
     let queryArtist: String?
     let queryTitle: String?
     let queryAlbum: String?

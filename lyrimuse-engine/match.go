@@ -513,19 +513,61 @@ func durationsWithin(a, b, tol float64) bool {
 // 收尾渐弱、时长取整这类正常误差通常在两三秒内,5 秒足够宽松;再多就是标错了。
 const lyricOvershootToleranceSecs = 5.0
 
-// lyricsScoringVersion 是下面这套打分规则的版本号。
+// lyricsScoringVersion 是下面这套打分规则的主版本号,lyricsScoringRevision 是两个正式版之间的开发修订号,
+// 合起来显示成「v29.1」(lyricsScoringStamp)。
 //
-// **改动 scoreLyricCandidate 的任何一档权重/判定,这个数都必须比上一个正式版(最近的 vX.Y.Z tag)里的大。**
-// 已经比它大了就不用再 +1:两个正式版之间只在本机调试,本机缓存里按同一版本号选出来的条目不重选,
-// 要重选就手动再 +1(见 09 章决策 207)。缓存是"解析一次永久保留",每条记着自己是按哪一版规则选出来的
-// (enrichEntry.LyricsScoringVersion);版本落后的条目会在这首歌下次被播放时后台重搜一轮、按新规则重选
-// (见 needsLyricsRescore)。发版时没比上一个正式版大的后果不是报错而是静默失效:新规则只对以后从没听过的歌生效,
-// 已经听过的那批永远停在旧选择上。
+// **改动 scoreLyricCandidate 的任何一档权重/判定:上一个正式版(最近的 vX.Y.Z tag)之后主版本号还没动过的,
+// 开发版只把修订号 +1;发正式版时主版本号比上一个正式版大 1、修订号归零。** 修订号让本机缓存按新规则重选,
+// 用户手上只会出现整数版本。缓存是"解析一次永久保留",每条记着自己是按哪一版规则选出来的
+// (enrichEntry.LyricsScoringVersion / LyricsScoringRevision);版本落后的条目会在这首歌下次被播放时后台重搜一轮、
+// 按新规则重选(见 needsLyricsRescore)。发版时主版本号没比上一个正式版大的后果不是报错而是静默失效:新规则只对
+// 以后从没听过的歌生效,已经听过的那批永远停在旧选择上。见 09 章决策 207、219。
 //
 // 当前维度、权重与每一版改动的真实案例/全库回放证据,记在
 // docs/features/09-lyrics-resolution.md 的打分维度表与「设计决策与已知坑」决策日志
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 29
+
+const lyricsScoringRevision = 1
+
+// lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
+// 不存小数:小数比大小时 29.10 会排在 29.9 前面。
+type lyricsScoringStamp struct{ version, revision int }
+
+var currentLyricsScoring = lyricsScoringStamp{lyricsScoringVersion, lyricsScoringRevision}
+
+// before:s 比 o 早。
+func (s lyricsScoringStamp) before(o lyricsScoringStamp) bool {
+	return s.version < o.version || s.version == o.version && s.revision < o.revision
+}
+
+// String:「29」或「29.1」,给日志看。
+func (s lyricsScoringStamp) String() string {
+	if s.revision == 0 {
+		return strconv.Itoa(s.version)
+	}
+	return strconv.Itoa(s.version) + "." + strconv.Itoa(s.revision)
+}
+
+// lyricsScoring:这条歌词是按哪一版打分规则选出来的。
+func (e enrichEntry) lyricsScoring() lyricsScoringStamp {
+	return lyricsScoringStamp{e.LyricsScoringVersion, e.LyricsScoringRevision}
+}
+
+// stampLyricsScoring:记成按当前打分规则选的。
+func (e *enrichEntry) stampLyricsScoring() {
+	e.LyricsScoringVersion, e.LyricsScoringRevision = lyricsScoringVersion, lyricsScoringRevision
+}
+
+// lyricsRescoreScoring:LyricsRescoreCount 那几次重选尝试是针对哪一版打分规则做的。
+func (e enrichEntry) lyricsRescoreScoring() lyricsScoringStamp {
+	return lyricsScoringStamp{e.LyricsRescoreVersion, e.LyricsRescoreRevision}
+}
+
+// stampLyricsRescore:重选尝试改记到当前打分规则名下。
+func (e *enrichEntry) stampLyricsRescore() {
+	e.LyricsRescoreVersion, e.LyricsRescoreRevision = lyricsScoringVersion, lyricsScoringRevision
+}
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。

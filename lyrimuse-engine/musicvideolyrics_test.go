@@ -71,7 +71,7 @@ func TestLyricsBaselineForUnknownDuration(t *testing.T) {
 		t.Fatal("现存那份的源这一轮没应答,不能拿 0 当基准把它换掉")
 	}
 	// 旧基准的问题:同打分版本时 lyricsUpgradeBaseline 直接用存的 1011 分,按未知时长重打谁都够不着。
-	current.LyricsScoringVersion = lyricsScoringVersion
+	current.stampLyricsScoring()
 	if b, _ := lyricsUpgradeBaseline(current, scored); b != 1011 {
 		t.Fatalf("前提:旧基准就是存的分,得到 %d", b)
 	}

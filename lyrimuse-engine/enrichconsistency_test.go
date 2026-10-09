@@ -31,7 +31,7 @@ func TestFullScanVersionBumpRestartsPass(t *testing.T) {
 		}
 		setLyricsFullScanStatePath(path)
 		got := readLyricsFullScanState()
-		if got.Done != 0 || got.ScoringVersion != lyricsScoringVersion {
+		if got.Done != 0 || (lyricsScoringStamp{got.ScoringVersion, got.ScoringRevision}) != currentLyricsScoring {
 			t.Fatalf("active=%v: 版本变了计数应清零: %+v", active, got)
 		}
 		if active && got.StartedAt <= 100 {
@@ -45,7 +45,7 @@ func TestFullScanVersionBumpRestartsPass(t *testing.T) {
 
 // 重评:当前这份没参与比较、又是这一版规则打的分时,冠军不比它高就不换。
 func TestRescoreKeepsCurrent(t *testing.T) {
-	cur := enrichEntry{Lyrics: "old", LyricsSource: "lrclib", LyricsScore: 820, LyricsScoringVersion: lyricsScoringVersion}
+	cur := enrichEntry{Lyrics: "old", LyricsSource: "lrclib", LyricsScore: 820, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision}
 	winner := &scoredLyricCandidateResult{Source: "migu", Lyrics: "new", Score: 500}
 	other := []scoredLyricCandidateResult{{Source: "lrclib", Lyrics: "another version", Score: -1}, *winner}
 	cases := []struct {

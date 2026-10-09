@@ -132,8 +132,8 @@ func TestUpgradeSwapCarriesTranslationWithoutGap(t *testing.T) {
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
 		Lyrics: "[00:05.00]Old line one\n[00:15.00]Old line two", LyricsSource: "qq", LyricsScore: 10,
-		LyricsScoringVersion: lyricsScoringVersion,
-		LyricsTr:             "[00:05.00]旧译一\n[00:15.00]旧译二", LyricsTrLang: "zh",
+		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
+		LyricsTr: "[00:05.00]旧译一\n[00:15.00]旧译二", LyricsTrLang: "zh",
 	}}
 	enrichMu.Unlock()
 	noteEnrichPlayingKey(key)

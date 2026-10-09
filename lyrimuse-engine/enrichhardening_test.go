@@ -168,7 +168,7 @@ func TestFullScanReleaseAndSkippedOutcome(t *testing.T) {
 		lyricsFullScanMu.Unlock()
 	})
 	path := filepath.Join(t.TempDir(), "fullscan.json")
-	data, _ := json.Marshal(lyricsFullScanState{ScoringVersion: lyricsScoringVersion, Active: true, StartedAt: 1000})
+	data, _ := json.Marshal(lyricsFullScanState{ScoringVersion: lyricsScoringVersion, ScoringRevision: lyricsScoringRevision, Active: true, StartedAt: 1000})
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -22,10 +22,10 @@ func TestLyricsFullScanTier(t *testing.T) {
 	}{
 		{"空条目 → 第 0 层", enrichEntry{}, false, false, 0},
 		{"只有纯文本兜底 → 仍算没词,第 0 层", enrichEntry{PlainLyrics: "text"}, false, false, 0},
-		{"有词没逐字 → 第 1 层", enrichEntry{Lyrics: "[00:01.00]x", LyricsScoringVersion: cur}, false, false, 1},
+		{"有词没逐字 → 第 1 层", enrichEntry{Lyrics: "[00:01.00]x", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision}, false, false, 1},
 		{"有逐字但版本落后 → 第 2 层", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1}, false, false, 2},
 		{"老条目没写过版本号(读成 0)→ 第 2 层", enrichEntry{Lyrics: "x", LyricsYRC: "y"}, false, false, 2},
-		{"有逐字且版本已追平 → 不碰", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur}, false, false, -1},
+		{"有逐字且版本已追平 → 不碰", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision}, false, false, -1},
 		{"版本号比当前还高(降级过)→ 不碰", enrichEntry{Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur + 1}, false, false, -1},
 		{"人工修正过 → 一票否决,哪怕是空条目", enrichEntry{ManualLyrics: true}, false, false, -1},
 		{"确证纯音乐 → 一票否决", enrichEntry{Instrumental: true}, false, false, -1},
@@ -53,11 +53,11 @@ func TestLyricsFullScanCandidatesOrder(t *testing.T) {
 	enrichCache = map[string]enrichEntry{
 		"z|stale yrc|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 3},
 		"a|stale yrc|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
-		"m|line only|":   {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur},
+		"m|line only|":   {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
 		"b|line only|":   {Lyrics: "[00:01.00]x"},
 		"q|empty|":       {},
 		"c|empty|":       {PlainLyrics: "text"},
-		"k|caught up|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur},
+		"k|caught up|":   {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
 		"p|manual|":      {Lyrics: "x", ManualLyrics: true},
 		"i|instrumental": {Instrumental: true},
 	}
@@ -162,9 +162,9 @@ func TestLyricsFullScanPendingPublished(t *testing.T) {
 	}
 	enrichCache = map[string]enrichEntry{
 		"a|empty|":     {},
-		"b|line only|": {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur},
+		"b|line only|": {Lyrics: "[00:01.00]x", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
 		"c|stale|":     {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur - 1},
-		"d|caught up|": {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur},
+		"d|caught up|": {Lyrics: "x", LyricsYRC: "y", LyricsScoringVersion: cur, LyricsScoringRevision: lyricsScoringRevision},
 		"e|manual|":    {ManualLyrics: true},
 	}
 	enrichInflight = map[string]bool{}
@@ -245,8 +245,8 @@ func TestLyricsFullScanActiveMarker(t *testing.T) {
 	// setLyricsFullScanStatePath 必须**建**出文件(App 要从这里读打分版本号),而且不能
 	// 顺手把 Active 清掉。
 	state := readLyricsFullScanState()
-	if state.ScoringVersion != lyricsScoringVersion {
-		t.Errorf("scoringVersion: got %d, want %d", state.ScoringVersion, lyricsScoringVersion)
+	if got := (lyricsScoringStamp{state.ScoringVersion, state.ScoringRevision}); got != currentLyricsScoring {
+		t.Errorf("scoringVersion: got %v, want %v", got, currentLyricsScoring)
 	}
 	if lyricsFullScanActive() {
 		t.Error("全新的状态文件不该带着待续标记")

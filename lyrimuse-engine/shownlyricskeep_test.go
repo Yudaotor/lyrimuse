@@ -70,7 +70,7 @@ func TestRescoreKeepsSameShownLyrics(t *testing.T) {
 	if e.Lyrics != shownSameBody {
 		t.Fatalf("上屏看不出差别,不该换成冠军那份原文: %q", e.Lyrics)
 	}
-	if e.LyricsScoringVersion != lyricsScoringVersion {
+	if e.lyricsScoring() != currentLyricsScoring {
 		t.Error("留着也算这一版规则评过,打分版本要追平")
 	}
 	if e.LyricsDecision == nil || e.LyricsDecision.Applied {
@@ -93,7 +93,7 @@ func TestUpgradeRetryKeepsSameShownLyrics(t *testing.T) {
 		key := enrichKey(artist, title, album)
 		enrichMu.Lock()
 		enrichCache = map[string]enrichEntry{key: {
-			Lyrics: current, LyricsSource: "kugou", LyricsScore: 10, LyricsScoringVersion: lyricsScoringVersion,
+			Lyrics: current, LyricsSource: "kugou", LyricsScore: 10, LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 			ResolvedDurationSecs: 150,
 		}}
 		enrichMu.Unlock()

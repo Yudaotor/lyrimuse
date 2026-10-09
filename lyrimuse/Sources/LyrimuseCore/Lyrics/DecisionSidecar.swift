@@ -58,6 +58,7 @@ public enum DecisionSidecar {
         return str(a, "path") == str(b, "path")
             && num(a, "decided_at") == num(b, "decided_at")
             && num(a, "scoring_version") == num(b, "scoring_version")
+            && num(a, "scoring_revision") == num(b, "scoring_revision")
             && str(a, "winner") == str(b, "winner")
             && str(a, "reused_from") == str(b, "reused_from")
     }

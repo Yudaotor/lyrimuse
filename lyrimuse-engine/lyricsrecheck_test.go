@@ -90,7 +90,7 @@ func TestLyricsRecheckDoesNotRepeatAnIdenticalRound(t *testing.T) {
 	enrichMu.Lock()
 	enrichCache = map[string]enrichEntry{key: {
 		Lyrics: rescoreTestNewBody, LyricsSource: "musixmatch", LyricsScore: 5000, ResolvedDurationSecs: 180,
-		LyricsScoringVersion: lyricsScoringVersion,
+		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 	}}
 	enrichMu.Unlock()
 	var buf bytes.Buffer

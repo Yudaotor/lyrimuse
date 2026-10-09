@@ -21,6 +21,9 @@ public enum LyricsFullScan {
     public struct State: Decodable, Equatable, Sendable {
         /// 写这份文件时引擎的打分规则版本号。
         public let scoringVersion: Int
+        /// 同一主版本下的开发修订号(引擎 `lyricsScoringRevision`),跟 `scoringVersion` 一起比新旧。
+        /// 0 = 正式版,或这份文件是老引擎写的(Go 那边带 omitempty)。
+        public let scoringRevision: Int
         /// 有一轮全量扫库还没跑完,引擎下次启动会接着跑。
         public let active: Bool
         /// 这一轮**最初**是什么时候被请求的(续跑不刷新它)。0 = 没有在跑的一轮。
@@ -40,12 +43,13 @@ public enum LyricsFullScan {
         public let pending: Int?
 
         enum CodingKeys: String, CodingKey {
-            case scoringVersion, active, startedAt, updatedAt, secondsPerTrack, pending
+            case scoringVersion, scoringRevision, active, startedAt, updatedAt, secondsPerTrack, pending
         }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             scoringVersion = try c.decodeIfPresent(Int.self, forKey: .scoringVersion) ?? 0
+            scoringRevision = try c.decodeIfPresent(Int.self, forKey: .scoringRevision) ?? 0
             // active / startedAt 在 Go 那边带 omitempty,没有待续的一轮时整个键都不出现 ——
             // 非可选解码会让这份文件整个解不开,连版本号也一起读不到。
             active = try c.decodeIfPresent(Bool.self, forKey: .active) ?? false
@@ -56,9 +60,10 @@ public enum LyricsFullScan {
             pending = try c.decodeIfPresent(Int.self, forKey: .pending)
         }
 
-        public init(scoringVersion: Int, active: Bool, startedAt: Int64 = 0, updatedAt: Int64 = 0,
+        public init(scoringVersion: Int, scoringRevision: Int = 0, active: Bool, startedAt: Int64 = 0, updatedAt: Int64 = 0,
                     secondsPerTrack: Int = 0, pending: Int? = nil) {
             self.scoringVersion = scoringVersion
+            self.scoringRevision = scoringRevision
             self.active = active
             self.startedAt = startedAt
             self.updatedAt = updatedAt

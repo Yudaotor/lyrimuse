@@ -137,7 +137,7 @@ func lyricsEntryFromScored(decisionPath, artist, title, album string, durationSe
 	e.Lyrics = picked.Lyrics
 	e.LyricsSource = picked.Source
 	e.LyricsScore = picked.Score
-	e.LyricsScoringVersion = lyricsScoringVersion
+	e.stampLyricsScoring()
 	e.ResolvedDurationSecs = durationSecs
 	e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 	e.LyricsBG, e.LyricsBGChecked = picked.LyricsBG, lyricsBGParserVersion

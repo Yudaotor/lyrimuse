@@ -57,7 +57,8 @@ func TestRescoreWouldLoseWordTimingOffTimeline(t *testing.T) {
 	// 当前这份已经是这一版的分(上一轮为逐字留着它时盖的版本号,分数还是旧的),这一轮回来的同一份只是正文写法变了:
 	// 同轴的那份被判整首错开就不拿存的分数比,没被判照旧比。
 	stamped := cur
-	stamped.Lyrics, stamped.LyricsScoringVersion = tlOffLRC(7500)+"\n", lyricsScoringVersion
+	stamped.Lyrics = tlOffLRC(7500) + "\n"
+	stamped.stampLyricsScoring()
 	for _, c := range []struct {
 		name  string
 		other scoredLyricCandidateResult

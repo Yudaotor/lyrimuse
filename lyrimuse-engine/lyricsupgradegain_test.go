@@ -10,7 +10,7 @@ func TestLyricsUpgradeAppliesNeedsMinGain(t *testing.T) {
 		Lyrics:               qqBody,
 		LyricsSource:         "qq",
 		LyricsScore:          1364,
-		LyricsScoringVersion: lyricsScoringVersion,
+		LyricsScoringVersion: lyricsScoringVersion, LyricsScoringRevision: lyricsScoringRevision,
 		ResolvedDurationSecs: 294,
 	}
 	kuwo := scoredLyricCandidateResult{Source: "kuwo", Lyrics: kuwoBody, Score: 1366}

@@ -1244,7 +1244,7 @@ func TestLyricsUpgradeBaselineAcrossScoringVersions(t *testing.T) {
 		t.Error("现存歌词不在本轮候选里时应判为不可比,交给 rescore 收编")
 	}
 	// 版本一致:照旧用存量分
-	e.LyricsScoringVersion = lyricsScoringVersion
+	e.stampLyricsScoring()
 	if base, ok := lyricsUpgradeBaseline(e, scored); !ok || base != 549 {
 		t.Errorf("同版本应直接用存量分 549,实际 base=%d ok=%v", base, ok)
 	}

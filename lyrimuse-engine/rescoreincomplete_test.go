@@ -91,7 +91,7 @@ func TestRescoreWithSkippedSourceDoesNotCatchUpVersion(t *testing.T) {
 	if !strings.HasPrefix(e.Lyrics, "[00:05.00]Brand new first line") {
 		t.Errorf("照常重选,应换上这一轮的新正文,got %q", e.Lyrics)
 	}
-	if e.LyricsScoringVersion == lyricsScoringVersion {
+	if e.lyricsScoring() == currentLyricsScoring {
 		t.Error("有源被跳过时不该把打分版本标成已追平")
 	}
 	if !slices.Equal(e.LyricsSourcesSkipped, []string{"lrclib"}) {
@@ -125,7 +125,7 @@ func TestRescoreKeepsWordTimingOverAPlainWinner(t *testing.T) {
 	if e.Lyrics != oldBody || e.LyricsYRC != oldYRC || e.LyricsSource != "musixmatch" {
 		t.Fatalf("冠军没有逐字时不该换掉有逐字的这份: lyrics=%q yrc=%q", e.Lyrics, e.LyricsYRC)
 	}
-	if e.LyricsScoringVersion != lyricsScoringVersion {
+	if e.lyricsScoring() != currentLyricsScoring {
 		t.Error("留着也算这一版规则评过,打分版本要追平")
 	}
 	if e.LyricsDecision == nil || e.LyricsDecision.Applied {
