@@ -155,12 +155,10 @@ guard args.count == 2 else {
     exit(2)
 }
 let reps = [draw(scale: 1), draw(scale: 2)]
-// 刻意**不**压缩这张 TIFF,尽管裸写出来有 5.2MB。
-//
-// 直觉是"先 LZW 压到 398KB 再放进镜像",实测反了:最终 DMG 用 LZW 背景是 10.58MB,
-// 用未压缩背景是 10.45MB。原因是外层 UDZO 本身就是 zlib —— 一层平渐变它压得极狠,
-// 而 LZW 压过的数据熵已经高了,再压一遍反而挤不动。用户下载的是最终那个 .dmg,
-// 所以以它为准。
+// 刻意**不**压缩这张 TIFF,尽管裸写出来有 5.3MB。用户下载的是最终那个 .dmg,以它为准:
+// 外层 ULMO 是 LZMA,平渐变压得极狠,这张图在镜像里只占约 0.58MB;别改成 LZW 压缩的
+// TIFF(镜像里 0.86MB)或单张 2x PNG(0.97MB,还丢了 1x 那份)—— 压过的数据熵已经高了,
+// 外层再压挤不动。见 15 章决策 33。
 guard let data = NSBitmapImageRep.representationOfImageReps(in: reps, using: .tiff, properties: [:]) else {
     FileHandle.standardError.write("failed to encode tiff\n".data(using: .utf8)!)
     exit(1)
