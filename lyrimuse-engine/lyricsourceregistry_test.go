@@ -343,6 +343,27 @@ func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
 			}
 		}
 	}
+
+	// 功能清单:三种语言写在 shared/feature-list.json 一份里(docs/feature-list*.md 由它生成),三种写法各至少一处。
+	featureList, err := os.ReadFile("../shared/feature-list.json")
+	if err != nil {
+		t.Fatalf("读不到 shared/feature-list.json: %v", err)
+	}
+	for _, r := range readmes {
+		found := 0
+		for _, m := range r.re.FindAllStringSubmatch(string(featureList), -1) {
+			if m[1] == "一" {
+				continue
+			}
+			found++
+			if got := strings.ToLower(m[1]); got != r.want && got != strconv.Itoa(n) {
+				t.Errorf("shared/feature-list.json 里的 %q 写的是 %s,源数量是 %d——改完再跑 scripts/gen-feature-list.py", m[0], m[1], n)
+			}
+		}
+		if found == 0 {
+			t.Errorf("shared/feature-list.json 里认不出写着歌词源数量的地方(按 %s 那种写法)——措辞改了就调这里的正则", r.path)
+		}
+	}
 }
 
 // 热重读不许保留任何字段的旧值:App 侧改设置不再重启引擎(EngineRestartPolicy 已删),

@@ -1,0 +1,1743 @@
+{
+  "about": {
+    "zh-Hans": "Lyrimuse 是 macOS 上的开源（GPL-3.0）逐字歌词 App，支持 macOS 14 及以上、Apple Silicon 和 Intel 芯片。它给 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、Kaset，以及浏览器里的 YouTube Music 和 Spotify 网页版显示逐字同步的歌词：桌面悬浮歌词、灵动岛、菜单栏、触控栏和歌词窗口都能显示，带翻译和读音标注（拼音、粤拼、日语罗马音、韩语罗马字），还能打卡到 Last.fm 和 ListenBrainz、在 Discord 上显示正在听的歌。界面有简体中文、繁体中文和英文。",
+    "en": "Lyrimuse is an open-source (GPL-3.0) Mac app for word-by-word synced lyrics, for macOS 14 or later on Apple Silicon and Intel. It shows lyrics for Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music, Kaset, and YouTube Music or Spotify Web playing in a browser: floating on the desktop, beside the notch, in the menu bar, on the Touch Bar or in a full lyrics window, with translations and romanization (pinyin, Cantonese Jyutping, Japanese romaji, Korean romanization). It scrobbles to Last.fm and ListenBrainz and can show what you play on Discord. The interface is in English, Simplified Chinese and Traditional Chinese.",
+    "zh-Hant": "Lyrimuse 是 macOS 上的開源（GPL-3.0）逐字歌詞 App，支援 macOS 14 以上、Apple Silicon 和 Intel 晶片。它替 Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、Kaset，以及瀏覽器裡的 YouTube Music 和 Spotify 網頁版顯示逐字同步的歌詞：桌面浮動歌詞、動態島、選單列、觸控列和歌詞視窗都能顯示，附翻譯和讀音標註（拼音、粵拼、日文羅馬拼音、韓文羅馬字），還能打卡到 Last.fm 和 ListenBrainz、在 Discord 上顯示正在聽的歌。介面有繁體中文、簡體中文和英文。"
+  },
+  "sections": [
+    {
+      "id": "lyrics",
+      "title": {
+        "zh-Hans": "找歌词",
+        "en": "Finding lyrics",
+        "zh-Hant": "找歌詞"
+      },
+      "features": [
+        {
+          "id": "lyric-sources",
+          "title": {
+            "zh-Hans": "十二个歌词源自动查找",
+            "en": "Twelve lyric sources, searched for you",
+            "zh-Hant": "十二個歌詞來源自動查找"
+          },
+          "desc": {
+            "zh-Hans": "网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音乐和 Apple Music。每个源都可以单独开关、调整顺序，或者测一下现在能不能连上。",
+            "en": "NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, Deezer, AMLL, Soda Music and Apple Music. Each source can be turned off, reordered, or tested to see whether it is reachable right now.",
+            "zh-Hant": "網易雲音樂、QQ 音樂、酷狗、酷我、咪咕、Musixmatch、LRCLIB、LyricFind、Deezer、AMLL、汽水音樂和 Apple Music。每個來源都可以單獨開關、調整順序，或者測試一下現在能不能連上。"
+          },
+          "default": "on",
+          "settings": [
+            [
+              "歌词",
+              "获取",
+              "歌词来源"
+            ]
+          ]
+        },
+        {
+          "id": "apple-music-lyrics",
+          "title": {
+            "zh-Hans": "Apple Music 官方歌词",
+            "en": "Apple Music's own lyrics",
+            "zh-Hant": "Apple Music 官方歌詞"
+          },
+          "desc": {
+            "en": "Connect your Apple Music account under Lyrics Sources to use Apple Music's own lyrics, many of them timed word by word. Needs an Apple Music subscription.",
+            "zh-Hans": "在「歌词来源」里连上 Apple Music 账号以后，就能用 Apple Music 自己的歌词，很多歌带逐字时间轴。需要 Apple Music 订阅。",
+            "zh-Hant": "在「歌詞來源」裡連上 Apple Music 帳號以後，就能用 Apple Music 自己的歌詞，很多歌帶逐字時間軸。需要 Apple Music 訂閱。"
+          },
+          "default": "off",
+          "settings": [
+            [
+              "歌词",
+              "获取",
+              "歌词来源"
+            ]
+          ]
+        },
+        {
+          "id": "matching",
+          "title": {
+            "zh-Hans": "智能匹配",
+            "en": "Smart matching",
+            "zh-Hant": "智慧比對"
+          },
+          "desc": {
+            "zh-Hans": "默认给每个源找到的结果打分，按歌名、歌手、时长和版本（现场版、伴奏等）挑出跟正在放的这首最对得上的一份。也可以改成「顺序优先」：不打分，按你排的顺序用第一个有结果的源。",
+            "en": "By default every result is scored on title, artist, length and version (live, instrumental and so on), and the best fit for the song that is playing wins. You can switch to source order instead: no scoring, the first source in your order that has lyrics is used.",
+            "zh-Hant": "預設替每個來源找到的結果評分，依歌名、歌手、時長和版本（現場版、伴奏等）挑出跟正在播的這首最相符的一份。也可以改成「順序優先」：不評分，依你排的順序用第一個有結果的來源。"
+          },
+          "settings": [
+            [
+              "歌词",
+              "获取",
+              "匹配算法"
+            ]
+          ]
+        },
+        {
+          "id": "auto-upgrade",
+          "title": {
+            "zh-Hans": "匹配规则更新后重新挑选",
+            "en": "Re-pick lyrics when matching improves",
+            "zh-Hant": "比對規則更新後重新挑選"
+          },
+          "desc": {
+            "zh-Hans": "新版本改进了匹配算法或评分规则后，在后台重新评估已经找到的歌词，有更合适的版本就换上。关掉以后歌词定下来就不再自动更换。",
+            "en": "When a new version improves matching or scoring, lyrics you already have are re-checked in the background and replaced if a better version turns up. Turn it off to keep lyrics once they are chosen.",
+            "zh-Hant": "新版本改進了比對演算法或評分規則後，在背景重新評估已經找到的歌詞，有更合適的版本就換上。關掉以後歌詞定下來就不再自動更換。"
+          },
+          "default": "on",
+          "check": {
+            "featureFlag": "lyricsAutoUpgrade"
+          },
+          "settings": [
+            [
+              "歌词",
+              "获取",
+              "随匹配算法更新重新选择"
+            ]
+          ]
+        },
+        {
+          "id": "prefetch",
+          "title": {
+            "zh-Hans": "提前找好下几首的歌词",
+            "en": "Lyrics ready before the next song",
+            "zh-Hant": "提前找好下幾首的歌詞"
+          },
+          "desc": {
+            "zh-Hans": "读播放器的播放队列，提前给接下来要放的几首找好歌词；读不到队列时，先找同一张专辑里的其它歌。QQ 音乐、网易云音乐、酷狗音乐的队列要「完全磁盘访问权限」才能读。",
+            "en": "Reads your player's queue and finds lyrics for the next few songs ahead of time; when there is no queue to read, it works through the rest of the album. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for this.",
+            "zh-Hant": "讀取播放器的播放佇列，提前替接下來要播的幾首找好歌詞；讀不到佇列時，先找同一張專輯裡的其他歌。QQ 音樂、網易雲音樂、酷狗音樂的佇列要「完整磁碟取用權限」才能讀。"
+          },
+          "default": "on",
+          "check": {
+            "featureFlag": "albumPrefetch"
+          },
+          "settings": [
+            [
+              "歌词",
+              "获取",
+              "预解析待播曲目"
+            ],
+            [
+              "播放器",
+              "完全磁盘访问权限"
+            ]
+          ]
+        },
+        {
+          "id": "player-local-lyrics",
+          "title": {
+            "zh-Hans": "直接用播放器存在本机的歌词",
+            "en": "Use the lyrics your player already saved",
+            "zh-Hant": "直接用播放器存在本機的歌詞"
+          },
+          "desc": {
+            "zh-Hans": "QQ 音乐、网易云音乐和酷狗音乐自己下载过的歌词，Lyrimuse 可以直接拿来用，跟播放器显示的是同一版，也更快。需要在系统设置里给 Lyrimuse「完全磁盘访问权限」；不给也能联网查歌词。",
+            "en": "Lyrics that QQ Music, NetEase Cloud Music and Kugou already downloaded can be used directly: the same version the player shows, and faster. This needs Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.",
+            "zh-Hant": "QQ 音樂、網易雲音樂和酷狗音樂自己下載過的歌詞，Lyrimuse 可以直接拿來用，跟播放器顯示的是同一版，也更快。需要在系統設定裡給 Lyrimuse「完整磁碟取用權限」；不給也能連網查歌詞。"
+          },
+          "default": "off",
+          "settings": [
+            [
+              "播放器",
+              "完全磁盘访问权限"
+            ]
+          ]
+        },
+        {
+          "id": "source-health",
+          "title": {
+            "zh-Hans": "歌词源出问题时提醒你",
+            "en": "Warns you when a lyric source misbehaves",
+            "zh-Hant": "歌詞來源出問題時提醒你"
+          },
+          "desc": {
+            "zh-Hans": "某个歌词源最近几乎找不到歌词、比平时少很多、经常出错或连不上时，「歌词来源」里它旁边会出现提醒，点开能看到依据的次数和比例。其它源照常在找，统计只在本机做。",
+            "en": "When a lyric source has lately found almost nothing, far less than usual, or keeps failing or timing out, a warning appears next to it under Lyrics Sources; click it for the numbers behind it. The other sources keep searching, and the counting happens only on your Mac.",
+            "zh-Hant": "某個歌詞來源最近幾乎找不到歌詞、比平時少很多、經常出錯或連不上時，「歌詞來源」裡它旁邊會出現提醒，按一下能看到依據的次數和比例。其他來源照常在找，統計只在本機進行。"
+          },
+          "settings": [
+            [
+              "歌词",
+              "获取",
+              "歌词来源"
+            ]
+          ]
+        },
+        {
+          "id": "lock-hand-picked",
+          "title": {
+            "zh-Hans": "锁定手选歌词",
+            "en": "Lock hand-picked lyrics",
+            "zh-Hant": "鎖定手選歌詞"
+          },
+          "desc": {
+            "zh-Hans": "打开后，你从搜索结果里手动选的歌词会被锁定，以后的自动匹配和重新匹配都不会换掉它。",
+            "en": "When on, lyrics you pick by hand from search results are locked, so later automatic matching and re-matching never replace them.",
+            "zh-Hant": "打開後，你從搜尋結果裡手動選的歌詞會被鎖定，之後的自動比對和重新比對都不會換掉它。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "manualPickLocksLyrics"
+          },
+          "settings": [
+            [
+              "歌词",
+              "获取",
+              "锁定手选歌词"
+            ]
+          ]
+        },
+        {
+          "id": "lyrics-manager",
+          "title": {
+            "zh-Hans": "歌词管理窗口",
+            "en": "Lyrics Manager",
+            "zh-Hant": "歌詞管理視窗"
+          },
+          "desc": {
+            "zh-Hans": "浏览、手改、删除、重新搜索任意一首的歌词，可以多选批量删，广告和播客留下的空记录也能一次清掉。某首歌时间对不上，可以单独给它调偏移。还没找到歌词的歌可以一键全部重试，整个歌词库也能按现在的规则重新匹配一遍，你手改过的不会被动。",
+            "en": "Browse, edit, delete or search again for any song's lyrics, delete in bulk, and clear out the empty entries ads and podcasts leave behind. Give a single song its own timing offset. Retry every song that has no lyrics yet in one go, or re-match the whole library under the current rules; anything you edited by hand is left alone.",
+            "zh-Hant": "瀏覽、手動修改、刪除、重新搜尋任意一首的歌詞，可以多選批次刪除，廣告和 Podcast 留下的空記錄也能一次清掉。某首歌時間對不上，可以單獨替它調整偏移。還沒找到歌詞的歌可以一鍵全部重試，整個歌詞庫也能依現在的規則重新比對一遍，你手動改過的不會被動到。"
+          },
+          "settings": [
+            [
+              "歌词",
+              "管理",
+              "歌词库"
+            ],
+            [
+              "歌词",
+              "管理",
+              "自动匹配缺失歌词"
+            ],
+            [
+              "歌词",
+              "管理",
+              "重新匹配整个歌词库"
+            ],
+            [
+              "快捷键",
+              "打开歌词管理"
+            ]
+          ]
+        },
+        {
+          "id": "fix-lyrics",
+          "title": {
+            "zh-Hans": "当场换歌词、改歌词",
+            "en": "Swap or fix lyrics on the spot",
+            "zh-Hant": "當場換歌詞、改歌詞"
+          },
+          "desc": {
+            "zh-Hans": "在歌词窗口的「⋯」菜单里搜别的歌词、重新自动匹配，或者用你自己的文本编辑器改。改逐字歌词时只改字，每个字的时间不动。",
+            "en": "From the lyrics window's ⋯ menu, search for other lyrics, run matching again, or edit them in your own text editor. Editing word-timed lyrics changes only the words, never their timing.",
+            "zh-Hant": "在歌詞視窗的「⋯」選單裡搜尋別的歌詞、重新自動比對，或者用你自己的文字編輯器修改。改逐字歌詞時只改字，每個字的時間不動。"
+          },
+          "settings": [
+            [
+              "快捷键",
+              "搜索歌词"
+            ]
+          ]
+        },
+        {
+          "id": "offline",
+          "title": {
+            "zh-Hans": "离线也能看，歌词就是 .lrc 文件",
+            "en": "Works offline; lyrics are plain .lrc files",
+            "zh-Hant": "離線也能看，歌詞就是 .lrc 檔案"
+          },
+          "desc": {
+            "zh-Hans": "找到过的歌词都缓存在本机，不联网也能显示。每首都有一份 .lrc，有译文、读音的另有 .tr.lrc 和 .roma.lrc，逐字时间轴存成 .yrc。默认放在 ~/.config/lyrimuse/lyrics/，位置可以改。",
+            "en": "Every lyric found is cached on your Mac and shows without a connection. Each song has an .lrc file, plus .tr.lrc and .roma.lrc for translations and romanization, and word timing in .yrc. They live in ~/.config/lyrimuse/lyrics/ by default, and the folder can be moved.",
+            "zh-Hant": "找到過的歌詞都快取在本機，不連網也能顯示。每首都有一份 .lrc，有譯文、讀音的另有 .tr.lrc 和 .roma.lrc，逐字時間軸存成 .yrc。預設放在 ~/.config/lyrimuse/lyrics/，位置可以更改。"
+          },
+          "settings": [
+            [
+              "歌词",
+              "管理",
+              "歌词文件夹"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "text",
+      "title": {
+        "zh-Hans": "译文、读音与歌词处理",
+        "en": "Translation, romanization and line handling",
+        "zh-Hant": "譯文、讀音與歌詞處理"
+      },
+      "features": [
+        {
+          "id": "translation",
+          "title": {
+            "zh-Hans": "译文",
+            "en": "Translations",
+            "zh-Hant": "譯文"
+          },
+          "desc": {
+            "en": "Translations that come with the lyrics appear under each line. NetEase Cloud Music, QQ Music and Kugou translate into Chinese; Musixmatch and machine translation follow the translation language you pick, from 17. Floating lyrics, the lyrics window, the notch, the menu bar and the Touch Bar each decide whether to show them. Shown by default when your Mac's languages include Chinese.",
+            "zh-Hans": "歌词源自带的译文显示在原文下面。网易云音乐、QQ 音乐、酷狗的译文是中文；Musixmatch 和机器翻译按你选的译文语言来，有 17 种可选。悬浮歌词、歌词窗口、灵动岛、菜单栏、触控栏各自决定显不显示。读中文的用户默认显示。",
+            "zh-Hant": "歌詞來源自帶的譯文顯示在原文下方。網易雲音樂、QQ 音樂、酷狗的譯文是中文；Musixmatch 和機器翻譯按你選的譯文語言來，有 17 種可選。浮動歌詞、歌詞視窗、動態島、選單列、觸控列各自決定顯不顯示。讀中文的使用者預設顯示。"
+          },
+          "settings": [
+            [
+              "歌词",
+              "译文",
+              "译文语言"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "内容",
+              "译文"
+            ],
+            [
+              "快捷键",
+              "显示/隐藏译文"
+            ]
+          ]
+        },
+        {
+          "id": "machine-translation",
+          "title": {
+            "zh-Hans": "没有译文时机器翻译",
+            "en": "Machine translation when there is none",
+            "zh-Hant": "沒有譯文時機器翻譯"
+          },
+          "desc": {
+            "en": "When no source has a translation, the lyrics are translated by machine. On macOS 15 or later with the language downloaded, Apple Translation does it on your Mac and the lyrics stay there; otherwise the lines to translate are sent to Google Translate, then MyMemory. Translation languages are downloaded from the same card.",
+            "zh-Hans": "歌词源没有译文时用机器翻译。macOS 15 及以上、下好了翻译语言包时，用 macOS 自带的 Apple 翻译在本机翻，歌词不出本机；本机翻不了时，把要翻的歌词发给谷歌翻译，再不行用 MyMemory。翻译语言包在这里下载。",
+            "zh-Hant": "歌詞來源沒有譯文時用機器翻譯。macOS 15 以上、下載好翻譯語言包時，用 macOS 內建的 Apple 翻譯在本機翻譯，歌詞不離開本機；本機翻不了時，把要翻的歌詞送到 Google 翻譯，再不行用 MyMemory。翻譯語言包在這裡下載。"
+          },
+          "default": "off",
+          "check": {
+            "featureFlag": "lyricsMachineTranslation"
+          },
+          "settings": [
+            [
+              "歌词",
+              "译文",
+              "系统兜底翻译"
+            ],
+            [
+              "歌词",
+              "译文",
+              "翻译语言包"
+            ]
+          ]
+        },
+        {
+          "id": "romanization",
+          "title": {
+            "zh-Hans": "读音标注",
+            "en": "Romanization",
+            "zh-Hant": "讀音標註"
+          },
+          "desc": {
+            "en": "Japanese romaji, Korean romanization, Mandarin pinyin and Cantonese Jyutping, word by word above the lyrics. Language is judged line by line, so a Japanese line inside a Chinese song is the only one marked. Choose which languages to mark here; with a Chinese interface, pinyin starts off. Each display decides whether to show them.",
+            "zh-Hans": "日语罗马音、韩语罗马字、普通话拼音、粤语粤拼，逐词标在歌词上面。一行一行判断语言：中文歌里夹了一句日文，就只给那一句标。标哪几种语言在这里选，中文界面默认不标普通话拼音。各展示面单独决定显不显示。",
+            "zh-Hant": "日文羅馬拼音、韓文羅馬字、國語拼音、粵語粵拼，逐詞標在歌詞上方。一行一行判斷語言：中文歌裡夾了一句日文，就只替那一句標註。標註哪幾種語言在這裡選，中文介面預設不標國語拼音。各顯示方式單獨決定顯不顯示。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "showRomanization"
+          },
+          "settings": [
+            [
+              "歌词",
+              "调整",
+              "标注读音的语言"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "内容",
+              "读音"
+            ],
+            [
+              "快捷键",
+              "显示/隐藏读音"
+            ]
+          ]
+        },
+        {
+          "id": "chinese-script",
+          "title": {
+            "zh-Hans": "简繁转换",
+            "en": "Simplified or Traditional Chinese",
+            "zh-Hant": "繁簡轉換"
+          },
+          "desc": {
+            "zh-Hans": "把中文歌词统一显示成简体或繁体，跟 App 界面用什么语言无关。",
+            "en": "Shows all Chinese lyrics in Simplified or Traditional characters, whatever language the app itself is in.",
+            "zh-Hant": "把中文歌詞統一顯示成簡體或繁體，跟 App 介面用什麼語言無關。"
+          },
+          "settings": [
+            [
+              "歌词",
+              "调整",
+              "繁简转换"
+            ]
+          ]
+        },
+        {
+          "id": "split-join-lines",
+          "title": {
+            "zh-Hans": "长句拆分、短句合并",
+            "en": "Split long lines, join short ones",
+            "zh-Hant": "長句拆分、短句合併"
+          },
+          "desc": {
+            "zh-Hans": "悬浮歌词、灵动岛、菜单栏和触控栏按自己一行能放多宽，把放不下的长句拆成几句、把一闪而过的短句并成一句。歌词窗口照旧一句一行。两个开关分开。",
+            "en": "Floating lyrics, the notch, the menu bar and the Touch Bar split lines too long for their width and join lines that flash by too quickly, each by its own width. The lyrics window keeps one line per line. Two separate switches.",
+            "zh-Hant": "浮動歌詞、動態島、選單列和觸控列依自己一行能放多寬，把放不下的長句拆成幾句、把一閃而過的短句併成一句。歌詞視窗照舊一句一行。兩個開關分開。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "splitLongLyricLines"
+          },
+          "settings": [
+            [
+              "歌词",
+              "调整",
+              "长句拆分"
+            ],
+            [
+              "歌词",
+              "调整",
+              "短句合并"
+            ]
+          ]
+        },
+        {
+          "id": "timing-offset",
+          "title": {
+            "zh-Hans": "调时间轴",
+            "en": "Timing offset",
+            "zh-Hant": "調整時間軸"
+          },
+          "desc": {
+            "zh-Hans": "歌词整体提前或延后，可以只对某个播放器生效。单首歌在歌词管理里另调；也可以绑快捷键随时提前、延后、归零。",
+            "en": "Move all lyrics earlier or later, optionally for one player only. Single songs get their own offset in the Lyrics Manager, and shortcuts can advance, delay or reset it on the fly.",
+            "zh-Hant": "歌詞整體提前或延後，可以只對某個播放器生效。單首歌在歌詞管理裡另外調整；也可以設定快速鍵隨時提前、延後、歸零。"
+          },
+          "settings": [
+            [
+              "歌词",
+              "调整",
+              "时间轴偏移"
+            ],
+            [
+              "快捷键",
+              "歌词提前"
+            ],
+            [
+              "快捷键",
+              "歌词延后"
+            ],
+            [
+              "快捷键",
+              "歌词偏移归零"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "display",
+      "title": {
+        "zh-Hans": "歌词显示在哪里、长什么样",
+        "en": "Where lyrics appear and how they look",
+        "zh-Hant": "歌詞顯示在哪裡、長什麼樣"
+      },
+      "features": [
+        {
+          "id": "floating-lyrics",
+          "title": {
+            "zh-Hans": "桌面悬浮歌词",
+            "en": "Desktop floating lyrics",
+            "zh-Hant": "桌面浮動歌詞"
+          },
+          "desc": {
+            "zh-Hans": "浮在所有窗口上面、一直置顶的歌词，逐字高亮。拖到哪儿停在哪儿，也可以固定在屏幕顶部居中或 Dock 上方居中。可以同时显示读音、译文和下一句。",
+            "en": "Lyrics floating above every window, always on top, lit up word by word. Leave them wherever you drag them, or pin them to the top centre of the screen or just above the Dock. Romanization, translation and the next line can show alongside.",
+            "zh-Hant": "浮在所有視窗上方、一直置頂的歌詞，逐字亮起。拖移到哪裡就停在哪裡，也可以固定在螢幕頂部置中或 Dock 上方置中。可以同時顯示讀音、譯文和下一句。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "classicOverlayEnabled"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "桌面悬浮歌词"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "位置"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "内容",
+              "下一句"
+            ],
+            [
+              "快捷键",
+              "显示/隐藏悬浮歌词"
+            ]
+          ]
+        },
+        {
+          "id": "notch-lyrics",
+          "title": {
+            "zh-Hans": "灵动岛歌词",
+            "en": "Notch lyrics",
+            "zh-Hant": "動態島歌詞"
+          },
+          "desc": {
+            "en": "A Dynamic Island-style capsule beside the notch at the top of the screen; Macs without a notch and external displays get one too. Each side can show the title, artist, album, artwork, playback controls, or elapsed or remaining time, next to a moving audio wave. Hover to expand it for controls, a seekable progress bar and lyrics timing. During ads it counts down the time left.",
+            "zh-Hans": "贴在屏幕顶部刘海旁的胶囊，没有刘海的 Mac 和外接显示器上也能用。左右两边各放一样：歌名、歌手、专辑、封面、播放控制、已播或剩余时长，旁边是跟着音乐跳的音浪。鼠标移上去展开，有播放控制、进度条和歌词校准。放广告时显示还剩多久。",
+            "zh-Hant": "貼在螢幕頂部瀏海旁的膠囊，沒有瀏海的 Mac 和外接顯示器上也能用。左右兩邊各放一樣：歌名、歌手、專輯、封面、播放控制、已播或剩餘時間，旁邊是跟著音樂跳的音浪。指標移上去就展開，有播放控制、進度列和歌詞校正。播廣告時顯示還剩多久。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "notchOverlayEnabled"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "灵动岛",
+              "灵动岛歌词"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "风格"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "屏幕"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "左耳"
+            ],
+            [
+              "快捷键",
+              "显示/隐藏灵动岛歌词"
+            ]
+          ]
+        },
+        {
+          "id": "menu-bar-lyrics",
+          "title": {
+            "zh-Hans": "菜单栏歌词",
+            "en": "Menu bar lyrics",
+            "zh-Hant": "選單列歌詞"
+          },
+          "desc": {
+            "zh-Hans": "当前这句直接显示在菜单栏上，太长会滚动，不会截成半句。可以多加一行显示下一句、译文或读音。",
+            "en": "The current line right in the menu bar, scrolling when it is too long instead of being cut off. Add a second line for the next line, the translation or romanization.",
+            "zh-Hant": "目前這句直接顯示在選單列上，太長會捲動，不會截成半句。可以多加一行顯示下一句、譯文或讀音。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "showLyricsInMenuBar"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "菜单栏",
+              "菜单栏歌词"
+            ],
+            [
+              "歌词显示",
+              "菜单栏",
+              "布局",
+              "副行"
+            ],
+            [
+              "快捷键",
+              "显示/隐藏菜单栏歌词"
+            ]
+          ]
+        },
+        {
+          "id": "touch-bar-lyrics",
+          "title": {
+            "zh-Hans": "触控栏歌词",
+            "en": "Touch Bar lyrics",
+            "zh-Hant": "觸控列歌詞"
+          },
+          "desc": {
+            "zh-Hans": "带触控栏的 MacBook Pro 上，当前这句在触控栏上跟着唱到的地方滚动，还可以显示封面和播放控制。",
+            "en": "On a MacBook Pro with a Touch Bar, the current line scrolls along as it is sung, with optional artwork and playback controls.",
+            "zh-Hant": "有觸控列的 MacBook Pro 上，目前這句在觸控列上跟著唱到的地方捲動，還可以顯示封面和播放控制。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "showLyricsInTouchBar"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "触控栏",
+              "触控栏歌词"
+            ],
+            [
+              "快捷键",
+              "展开/收起触控栏歌词"
+            ]
+          ]
+        },
+        {
+          "id": "lyrics-window",
+          "title": {
+            "zh-Hans": "歌词窗口",
+            "en": "Lyrics window",
+            "zh-Hant": "歌詞視窗"
+          },
+          "desc": {
+            "zh-Hans": "照着 Apple Music 歌词页做的整页歌词：模糊的封面铺底，整首跟着滚到当前这句；对唱按歌手分开，和声单独一行，拖长音的词会放大发光。背景可以跟随封面、纯色、渐变或毛玻璃。从菜单栏图标或快捷键打开。",
+            "en": "Full-page lyrics modelled on Apple Music's lyrics view: blurred artwork behind, the whole song scrolling to the current line, duets split by singer, background vocals on their own line, held notes that swell and glow. The background can follow the artwork or be solid, a gradient or frosted glass. Open it from the menu bar icon or a shortcut.",
+            "zh-Hant": "照著 Apple Music 歌詞頁做的整頁歌詞：模糊的封面鋪底，整首跟著捲到目前這句；對唱依歌手分開，和聲單獨一行，拖長音的字會放大發光。背景可以跟隨封面、純色、漸層或毛玻璃。從選單列圖像或快速鍵打開。"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "歌词窗口",
+              "歌词窗口"
+            ],
+            [
+              "歌词显示",
+              "歌词窗口",
+              "背景",
+              "背景"
+            ],
+            [
+              "快捷键",
+              "打开歌词窗口"
+            ]
+          ]
+        },
+        {
+          "id": "mini-lyrics-window",
+          "title": {
+            "zh-Hans": "迷你歌词窗口",
+            "en": "Mini lyrics window",
+            "zh-Hant": "迷你歌詞視窗"
+          },
+          "desc": {
+            "zh-Hans": "歌词窗口缩成一张小卡片：只放当前句、加上下一句，或整页滚动。背景、文字颜色、字体、粗细、已唱颜色和顶部的歌名、封面、时间都单独设置。",
+            "en": "The lyrics window shrunk to a small card: just the current line, the current and next line, or a full scrolling page. Background, text colour, font, weight, sung colour and the title, artwork and time at the top are all set separately.",
+            "zh-Hant": "歌詞視窗縮成一張小卡片：只放目前這句、加上下一句，或整頁捲動。背景、文字顏色、字體、粗細、已唱顏色和頂部的歌名、封面、時間都單獨設定。"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "歌词窗口",
+              "布局",
+              "歌词布局"
+            ],
+            [
+              "快捷键",
+              "切换迷你 / 完整尺寸"
+            ]
+          ]
+        },
+        {
+          "id": "animated-artwork",
+          "title": {
+            "zh-Hans": "动态封面",
+            "en": "Animated artwork",
+            "zh-Hant": "動態封面"
+          },
+          "desc": {
+            "en": "Albums with animated artwork on Apple Music move in the full-size lyrics window too. It pauses in Low Power Mode or with Reduce Motion on.",
+            "zh-Hans": "Apple Music 上有动态封面的专辑，完整尺寸的歌词窗口里封面也会动。低电量模式或打开「减弱动态效果」时自动停下。",
+            "zh-Hant": "Apple Music 上有動態封面的專輯，完整尺寸的歌詞視窗裡封面也會動。低電量模式或打開「減少動態效果」時自動停下。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "motionCoverEnabled"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "歌词窗口",
+              "封面",
+              "动态封面"
+            ]
+          ]
+        },
+        {
+          "id": "idle-overview",
+          "title": {
+            "zh-Hans": "没在放歌时的听歌总览",
+            "en": "Listening overview between songs",
+            "zh-Hant": "沒在播歌時的聽歌總覽"
+          },
+          "desc": {
+            "en": "When nothing is playing, the lyrics window shows the last song with a line from its lyrics and a Resume button. With Last.fm connected it also shows how much you listened today, in the last 7 days and in total, a 30-day trend, On This Day and your recent plays with artwork.",
+            "zh-Hans": "没在放歌的时候，歌词窗口显示上次放的那首、从它歌词里挑的一句和「继续播放」。连着 Last.fm 时还显示今天、近 7 天和一共听了多少、近 30 天的走势、「那年今日」和带封面的最近播放。",
+            "zh-Hant": "沒在播歌的時候，歌詞視窗顯示上次播的那首、從它歌詞裡挑的一句和「繼續播放」。連著 Last.fm 時還顯示今天、近 7 天和總共聽了多少、近 30 天的走勢、「那年今日」和帶封面的最近播放。"
+          },
+          "settings": []
+        },
+        {
+          "id": "look",
+          "title": {
+            "zh-Hans": "外观随你改",
+            "en": "Your look",
+            "zh-Hant": "外觀隨你改"
+          },
+          "desc": {
+            "zh-Hans": "字体（跟随系统，或导入自己的 .ttf / .otf）、字号、粗细、文字和背景颜色、描边、毛玻璃背景。悬浮歌词有几套配色主题，也可以把自己调的存成主题；文字颜色可以跟着专辑封面变。",
+            "en": "Font (the system's, or your own .ttf / .otf), size, weight, text and background colours, outline and frosted glass. Floating lyrics come with colour themes and can save your own; text colour can follow the album artwork.",
+            "zh-Hant": "字體（跟隨系統，或匯入自己的 .ttf / .otf）、字級、粗細、文字和背景顏色、描邊、毛玻璃背景。浮動歌詞有幾套配色主題，也可以把自己調的存成主題；文字顏色可以跟著專輯封面變。"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "主题",
+              "配色主题"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "主题",
+              "我的配色主题"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "文字",
+              "字体"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "背景",
+              "毛玻璃背景"
+            ]
+          ]
+        },
+        {
+          "id": "karaoke",
+          "title": {
+            "zh-Hans": "逐字卡拉OK效果",
+            "en": "Word-by-word karaoke fill",
+            "zh-Hant": "逐字卡拉OK效果"
+          },
+          "desc": {
+            "zh-Hans": "唱到哪个字亮到哪个字。悬浮歌词、灵动岛、菜单栏、触控栏和迷你歌词窗口各有一个开关，关掉就整句一起亮。",
+            "en": "Each word lights up as it is sung. Floating lyrics, the notch, the menu bar, the Touch Bar and the mini lyrics window each have their own switch; off means the whole line lights at once.",
+            "zh-Hant": "唱到哪個字亮到哪個字。浮動歌詞、動態島、選單列、觸控列和迷你歌詞視窗各有一個開關，關掉就整句一起亮。"
+          },
+          "default": "on",
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "文字",
+              "卡拉OK效果"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "歌词行",
+              "卡拉OK效果"
+            ],
+            [
+              "歌词显示",
+              "菜单栏",
+              "配色",
+              "卡拉OK效果"
+            ]
+          ]
+        },
+        {
+          "id": "line-transition",
+          "title": {
+            "zh-Hans": "换句动画",
+            "en": "Line transition",
+            "zh-Hant": "換句動畫"
+          },
+          "desc": {
+            "zh-Hans": "悬浮歌词换到下一句时，上一句往上移走、下一句接上来，而不是直接替换。",
+            "en": "When floating lyrics move to the next line, the old line slides up and the new one follows, instead of swapping in place.",
+            "zh-Hant": "浮動歌詞換到下一句時，上一句往上移走、下一句接上來，而不是直接替換。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "overlayLineChangeAnimation"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "排版",
+              "换句动画"
+            ]
+          ]
+        },
+        {
+          "id": "fade-on-hover",
+          "title": {
+            "zh-Hans": "鼠标移上去时变淡",
+            "en": "Fade when the pointer is over it",
+            "zh-Hant": "指標移上去時變淡"
+          },
+          "desc": {
+            "zh-Hans": "鼠标移到悬浮歌词上时它变成半透明，不挡你看下面的东西。迷你歌词窗口另有一个开关。",
+            "en": "Floating lyrics turn see-through while the pointer is over them, so they never block what is underneath. The mini lyrics window has its own switch.",
+            "zh-Hant": "指標移到浮動歌詞上時它變成半透明，不擋你看下面的東西。迷你歌詞視窗另有一個開關。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "overlayFadeOnHover"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "悬浮淡化"
+            ],
+            [
+              "歌词显示",
+              "歌词窗口",
+              "行为",
+              "悬浮淡化"
+            ]
+          ]
+        },
+        {
+          "id": "lock-position",
+          "title": {
+            "zh-Hans": "锁定位置、长按才能拖",
+            "en": "Lock position, long-press to drag",
+            "zh-Hant": "鎖定位置、長按才能拖移"
+          },
+          "desc": {
+            "zh-Hans": "锁定后悬浮歌词不会被拖走；或者改成长按一下才能拖，防止误碰。",
+            "en": "Lock floating lyrics in place, or require a long press before dragging so they never move by accident.",
+            "zh-Hant": "鎖定後浮動歌詞不會被拖走；或者改成長按一下才能拖移，避免誤觸。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "lockPosition"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "锁定位置"
+            ],
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "长按拖动"
+            ],
+            [
+              "快捷键",
+              "锁定/解锁位置"
+            ]
+          ]
+        },
+        {
+          "id": "hover-controls",
+          "title": {
+            "zh-Hans": "鼠标移上去显示控制条",
+            "en": "Controls on hover",
+            "zh-Hant": "指標移上去顯示控制列"
+          },
+          "desc": {
+            "zh-Hans": "鼠标移到悬浮歌词上时出现一排快捷按钮。菜单栏歌词也可以在鼠标移上去时显示播放控制。",
+            "en": "Pointing at floating lyrics brings up a row of quick buttons. Menu bar lyrics can show playback controls on hover too.",
+            "zh-Hant": "指標移到浮動歌詞上時出現一排快捷按鈕。選單列歌詞也可以在指向時顯示播放控制。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "overlayShowHoverControls"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "悬停时显示控制条"
+            ],
+            [
+              "歌词显示",
+              "菜单栏",
+              "行为",
+              "悬停显示播放控制"
+            ]
+          ]
+        },
+        {
+          "id": "hide-in-screenshots",
+          "title": {
+            "zh-Hans": "截屏、录屏、共享屏幕时隐藏",
+            "en": "Hidden from screenshots and screen sharing",
+            "zh-Hant": "螢幕快照、螢幕錄製、螢幕分享時隱藏"
+          },
+          "desc": {
+            "zh-Hans": "截图、录屏或开会共享屏幕时，别人看不到歌词，你自己照样看得见。悬浮歌词和灵动岛各一个开关。",
+            "en": "Screenshots, recordings and shared screens leave the lyrics out while you still see them. Floating lyrics and the notch each have a switch.",
+            "zh-Hant": "螢幕快照、螢幕錄製或開會分享螢幕時，別人看不到歌詞，你自己照樣看得見。浮動歌詞和動態島各一個開關。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "hideDuringScreenCapture"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "截屏时隐藏"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "行为",
+              "截屏时隐藏"
+            ]
+          ]
+        },
+        {
+          "id": "hide-when-paused",
+          "title": {
+            "zh-Hans": "暂停时隐藏或收起",
+            "en": "Hide or shrink when paused",
+            "zh-Hant": "暫停時隱藏或收起"
+          },
+          "desc": {
+            "zh-Hans": "暂停或没在放歌时，悬浮歌词和灵动岛自动隐藏；灵动岛也可以只缩回刘海那么大。",
+            "en": "Floating lyrics and the notch disappear while paused or idle; the notch can instead shrink back to the size of the notch.",
+            "zh-Hant": "暫停或沒在播歌時，浮動歌詞和動態島自動隱藏；動態島也可以只縮回瀏海那麼大。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "hideWhenNotPlaying"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "悬浮歌词",
+              "行为",
+              "暂停时隐藏"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "行为",
+              "暂停时隐藏"
+            ],
+            [
+              "歌词显示",
+              "灵动岛",
+              "行为",
+              "暂停时收起"
+            ]
+          ]
+        },
+        {
+          "id": "hide-in-full-screen",
+          "title": {
+            "zh-Hans": "全屏时隐藏灵动岛",
+            "en": "Notch steps aside in full screen",
+            "zh-Hant": "全螢幕時隱藏動態島"
+          },
+          "desc": {
+            "zh-Hans": "看视频、玩游戏等全屏的时候，灵动岛歌词自动收起。",
+            "en": "Notch lyrics tuck away while a video, game or any app is full screen.",
+            "zh-Hant": "看影片、玩遊戲等全螢幕的時候，動態島歌詞自動收起。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "notchHideInFullScreen"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "灵动岛",
+              "行为",
+              "全屏时隐藏"
+            ]
+          ]
+        },
+        {
+          "id": "title-on-change",
+          "title": {
+            "zh-Hans": "换歌时显示歌名",
+            "en": "Title drops in on song change",
+            "zh-Hant": "換歌時顯示歌名"
+          },
+          "desc": {
+            "zh-Hans": "每次换歌，新歌的歌名和歌手从灵动岛里滑出来，停一会儿再收回。",
+            "en": "Each new song's title and artist slide out of the notch for a moment, then tuck back in.",
+            "zh-Hant": "每次換歌，新歌的歌名和歌手從動態島裡滑出來，停一下再收回。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "notchShowsTrackDrop"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "灵动岛",
+              "行为",
+              "换歌时显示歌名"
+            ]
+          ]
+        },
+        {
+          "id": "listening-milestones",
+          "title": {
+            "zh-Hans": "收听里程碑",
+            "en": "Listening milestones",
+            "zh-Hant": "聆聽里程碑"
+          },
+          "desc": {
+            "en": "When a song reaches its 100th, 1,000th or 10,000th play, or your Last.fm total passes a milestone, the notch opens up to celebrate. Needs Last.fm connected.",
+            "zh-Hans": "某首歌听到第 100、1,000、10,000 次，或者 Last.fm 累计收听跨过一个整数档时，灵动岛撑开报一次喜。要连着 Last.fm。",
+            "zh-Hant": "某首歌聽到第 100、1,000、10,000 次，或者 Last.fm 累計收聽跨過一個整數檔時，動態島撐開報一次喜。要連著 Last.fm。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "notchListenMilestones"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "灵动岛",
+              "行为",
+              "收听里程碑"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "players",
+      "title": {
+        "zh-Hans": "播放器与播放控制",
+        "en": "Players and playback",
+        "zh-Hant": "播放器與播放控制"
+      },
+      "features": [
+        {
+          "id": "players",
+          "title": {
+            "zh-Hans": "九个播放器，可多选或自动识别",
+            "en": "Nine players, pick several or detect automatically",
+            "zh-Hant": "九個播放器，可多選或自動辨識"
+          },
+          "desc": {
+            "zh-Hans": "Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music，以及 YouTube Music 客户端 Kaset。可以同时选几个，也可以留在自动识别，跟着 macOS「正在播放」里的那个走。Apple Music 电台也能用，主播说话时显示电台名和台标。",
+            "en": "Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.",
+            "zh-Hant": "Apple Music、Spotify、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music，以及 YouTube Music 用戶端 Kaset。可以同時選幾個，也可以留在自動辨識，跟著 macOS「正在播放」裡的那個走。Apple Music 電台也能用，主持人說話時顯示電台名稱和台標。"
+          },
+          "settings": [
+            [
+              "播放器",
+              "播放器"
+            ]
+          ]
+        },
+        {
+          "id": "web-players",
+          "title": {
+            "zh-Hans": "浏览器里的 YouTube Music、Spotify 网页版",
+            "en": "YouTube Music and Spotify Web in your browser",
+            "zh-Hant": "瀏覽器裡的 YouTube Music、Spotify 網頁版"
+          },
+          "desc": {
+            "zh-Hans": "把常用的浏览器配对一次，网页里放的歌也有歌词，按网页自己的进度走。带一键自检，先告诉你这个浏览器能不能被控制。放广告时灵动岛会显示还剩多久、这是第几条。",
+            "en": "Pair your browser once and music playing in it gets lyrics too, following the page's own progress. A one-click check tells you first whether that browser can be controlled. During ads the notch shows the time left and which ad it is.",
+            "zh-Hant": "把常用的瀏覽器配對一次，網頁裡播的歌也有歌詞，依網頁自己的進度走。附一鍵自我檢查，先告訴你這個瀏覽器能不能被控制。播廣告時動態島會顯示還剩多久、這是第幾則。"
+          },
+          "default": "off",
+          "settings": [
+            [
+              "播放器",
+              "网页播放器"
+            ]
+          ]
+        },
+        {
+          "id": "skip-youtube-ads",
+          "title": {
+            "zh-Hans": "自动跳过 YouTube Music 广告",
+            "en": "Skip YouTube Music ads automatically",
+            "zh-Hant": "自動略過 YouTube Music 廣告"
+          },
+          "desc": {
+            "zh-Hans": "浏览器里的 YouTube Music 一出现「跳过」按钮就替你点掉。不开也能在灵动岛上手动点跳过。需要「辅助功能」权限。",
+            "en": "YouTube Music in your browser has its ads skipped the moment the Skip button appears. With it off, you can still skip from the notch yourself. Needs the Accessibility permission.",
+            "zh-Hant": "瀏覽器裡的 YouTube Music 一出現「略過」按鈕就替你按掉。不開也能在動態島上手動略過。需要「輔助使用」權限。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "youTubeMusicAutoSkipAds"
+          },
+          "settings": [
+            [
+              "播放器",
+              "网页播放器",
+              "自动跳过 YouTube Music 广告"
+            ],
+            [
+              "播放器",
+              "辅助功能权限"
+            ]
+          ]
+        },
+        {
+          "id": "other-players",
+          "title": {
+            "zh-Hans": "别的播放器也能加",
+            "en": "Add other players",
+            "zh-Hant": "其他播放器也能加入"
+          },
+          "desc": {
+            "zh-Hans": "不在列表里的播放器，可以从「应用程序」里选它加进信任列表；有没见过的播放器在放歌时也会提醒你要不要加。",
+            "en": "Players not on the list can be added to your trusted players from Applications, and Lyrimuse asks when it notices an unfamiliar player making music.",
+            "zh-Hant": "不在列表裡的播放器，可以從「應用程式」裡選它加入信任列表；有沒見過的播放器在播歌時也會提醒你要不要加入。"
+          },
+          "settings": [
+            [
+              "播放器",
+              "已信任的播放器"
+            ],
+            [
+              "播放器",
+              "已信任的播放器",
+              "添加播放器…"
+            ],
+            [
+              "播放器",
+              "新播放器提醒"
+            ]
+          ]
+        },
+        {
+          "id": "permissions",
+          "title": {
+            "zh-Hans": "按需要的权限",
+            "en": "Permissions, only where needed",
+            "zh-Hant": "依需要的權限"
+          },
+          "desc": {
+            "en": "Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration and QQ Music's shuffle, repeat and like buttons need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.",
+            "zh-Hans": "Apple Music、Spotify 和 Kaset 要「自动化」权限才能读播放状态；QQ 音乐、网易云音乐、酷狗音乐要「完全磁盘访问权限」才能用本机歌词和播放队列；Amazon Music 校准进度、QQ 音乐的随机、循环和喜欢键要「辅助功能」权限；浏览器里的网页播放器要给浏览器「自动化」权限，并在浏览器里打开「允许 Apple 事件中的 JavaScript」。其余播放器不需要权限。设置里每一项都标着现在授权了没有。",
+            "zh-Hant": "Apple Music、Spotify 和 Kaset 要「自動化」權限才能讀取播放狀態；QQ 音樂、網易雲音樂、酷狗音樂要「完整磁碟取用權限」才能用本機歌詞和播放佇列；Amazon Music 校正進度、QQ 音樂的隨機、循環和喜歡鍵要「輔助使用」權限；瀏覽器裡的網頁播放器要給瀏覽器「自動化」權限，並在瀏覽器裡打開「允許 Apple 事件的 JavaScript」。其餘播放器不需要權限。設定裡每一項都標著目前授權了沒有。"
+          },
+          "settings": [
+            [
+              "播放器",
+              "自动化权限"
+            ],
+            [
+              "播放器",
+              "完全磁盘访问权限"
+            ],
+            [
+              "播放器",
+              "辅助功能权限"
+            ]
+          ]
+        },
+        {
+          "id": "controls",
+          "title": {
+            "zh-Hans": "播放控制、拖进度条",
+            "en": "Playback controls and seeking",
+            "zh-Hant": "播放控制、拖移進度列"
+          },
+          "desc": {
+            "zh-Hans": "在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖进度条跳转。随机、循环、喜欢和音量看播放器支持：Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music 和浏览器里的 YouTube Music 各支持其中几项或全部。播放、暂停和切歌也能绑全局快捷键。",
+            "en": "Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them. Play, pause and skipping can have global shortcuts.",
+            "zh-Hant": "在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量看播放器支援：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music 和瀏覽器裡的 YouTube Music 各支援其中幾項或全部。播放、暫停和切歌也能設定全域快速鍵。"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "灵动岛",
+              "展开态",
+              "显示播放控制"
+            ],
+            [
+              "快捷键",
+              "播放/暂停"
+            ],
+            [
+              "快捷键",
+              "下一首"
+            ],
+            [
+              "快捷键",
+              "上一首"
+            ]
+          ]
+        },
+        {
+          "id": "song-pages",
+          "title": {
+            "zh-Hans": "一键打开这首歌的页面",
+            "en": "Open the song's page in one click",
+            "zh-Hant": "一鍵打開這首歌的頁面"
+          },
+          "desc": {
+            "en": "One click in the ⋯ menu opens the song, its album or its artist on the platform you are playing from. Apple Music and KKBOX open in their own apps, and Spotify jumps to the song in its app; the rest open on the web: Spotify albums and artists, QQ Music, Soda Music, Amazon Music and YouTube Music. NetEase Cloud Music has the song page only; Kugou has none.",
+            "zh-Hans": "在「⋯」菜单里点一下，打开正在放的这首歌、它的专辑或歌手在这个平台上的页面。Apple Music 和 KKBOX 在自己的 App 里打开，Spotify 的这首歌在它的 App 里打开；其余打开网页：Spotify 的专辑和歌手、QQ 音乐、汽水音乐、Amazon Music 和 YouTube Music。网易云音乐只有歌曲页，酷狗没有。",
+            "zh-Hant": "在「⋯」選單裡按一下，打開正在播的這首歌、它的專輯或歌手在這個平台上的頁面。Apple Music 和 KKBOX 在自己的 App 裡打開，Spotify 的這首歌在它的 App 裡打開；其餘打開網頁：Spotify 的專輯和歌手、QQ 音樂、汽水音樂、Amazon Music 和 YouTube Music。網易雲音樂只有歌曲頁，酷狗沒有。"
+          },
+          "settings": []
+        },
+        {
+          "id": "about-panels",
+          "title": {
+            "zh-Hans": "歌曲、专辑和歌手简介",
+            "en": "Song, album and artist notes",
+            "zh-Hant": "歌曲、專輯和歌手簡介"
+          },
+          "desc": {
+            "en": "Click the title, artist or album in the lyrics window or the expanded notch to read about it. Album and artist notes come from Apple Music first; failing that, from Soda Music and NetEase Cloud Music (Chinese interface only), then Wikipedia via YouTube Music, then Last.fm. Song notes come from QQ Music (Chinese interface only) or Last.fm. Last.fm needs your account connected.",
+            "zh-Hans": "在歌词窗口或展开的灵动岛上点歌名、歌手名、专辑名就能看简介。专辑和歌手简介先找 Apple Music；没有的话，中文界面依次找汽水音乐、网易云音乐，然后是 YouTube Music 上的维基百科介绍，最后是 Last.fm。歌曲简介中文界面先找 QQ 音乐，再找 Last.fm。用 Last.fm 那一路要连着 Last.fm 账号。",
+            "zh-Hant": "在歌詞視窗或展開的動態島上按歌名、歌手名、專輯名就能看簡介。專輯和歌手簡介先找 Apple Music；沒有的話，中文介面依序找汽水音樂、網易雲音樂，然後是 YouTube Music 上的維基百科介紹，最後是 Last.fm。歌曲簡介中文介面先找 QQ 音樂，再找 Last.fm。用 Last.fm 那一路要連著 Last.fm 帳號。"
+          },
+          "settings": []
+        },
+        {
+          "id": "player-linkage",
+          "title": {
+            "zh-Hans": "跟播放器一起启动、一起退出",
+            "en": "Start and quit together with your player",
+            "zh-Hant": "跟播放器一起啟動、一起結束"
+          },
+          "desc": {
+            "zh-Hans": "每个播放器单独设：打开 Lyrimuse 时顺便打开播放器、打开播放器时顺便打开 Lyrimuse，或者在它跟着的播放器都退出以后自己也退出。",
+            "en": "Per player: open the player when Lyrimuse opens, open Lyrimuse when the player opens, or quit Lyrimuse once every player it follows has quit.",
+            "zh-Hant": "每個播放器單獨設定：打開 Lyrimuse 時順便打開播放器、打開播放器時順便打開 Lyrimuse，或者在它跟著的播放器都結束以後自己也結束。"
+          },
+          "default": "off",
+          "settings": [
+            [
+              "播放器",
+              "播放器联动",
+              "打开 Lyrimuse 时启动"
+            ],
+            [
+              "播放器",
+              "播放器联动",
+              "跟随播放器启动"
+            ],
+            [
+              "播放器",
+              "播放器联动",
+              "跟随播放器退出"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "listening",
+      "title": {
+        "zh-Hans": "听歌记录、Last.fm 与分享",
+        "en": "Scrobbling, Last.fm and sharing",
+        "zh-Hant": "聽歌記錄、Last.fm 與分享"
+      },
+      "features": [
+        {
+          "id": "lastfm",
+          "title": {
+            "zh-Hans": "Last.fm 打卡与听歌档案",
+            "en": "Last.fm scrobbling and listening profile",
+            "zh-Hant": "Last.fm 打卡與聽歌檔案"
+          },
+          "desc": {
+            "zh-Hans": "一键连上 Last.fm（不用复制 token）。看今天、近 7 天和一共听了多少，歌手、专辑、歌曲榜单和升降，「足迹」里有全年热力图、收听时段、常听歌手的国家和地区和「那年今日」。最近播放里每首都能点红心。",
+            "en": "Connect Last.fm in one click, no token to copy. See today's, this week's and all-time listening, artist, album and track charts with movement, and Footprints: a year heatmap, listening hours, where your artists come from, and On This Day. Love any recent track with a click.",
+            "zh-Hant": "一鍵連上 Last.fm（不用拷貝權杖）。看今天、近 7 天和總共聽了多少，歌手、專輯、歌曲排行榜和升降，「足跡」裡有全年熱度圖、聆聽時段、常聽歌手的國家和地區和「那年今日」。最近播放裡每首都能按紅心。"
+          },
+          "default": "off",
+          "settings": [
+            [
+              "Last.fm",
+              "设置",
+              "Scrobble 规则"
+            ]
+          ]
+        },
+        {
+          "id": "scrobble-rules",
+          "title": {
+            "zh-Hans": "打卡规则你来定",
+            "en": "Scrobble rules are yours",
+            "zh-Hant": "打卡規則你來定"
+          },
+          "desc": {
+            "zh-Hans": "听到 50%、75%、90% 或整首放完才算一次；短于 30 秒的歌要不要算；默认把合唱署名、简繁写法、「- Single」这类尾巴对齐到 Last.fm 的正式条目，也可以原样发送；还能把某个播放器整个排除在 Last.fm 外面。",
+            "en": "Count a play at 50%, 75%, 90% or only at the end; decide on tracks under 30 seconds; by default featured artists, Chinese script variants and suffixes like “- Single” are matched to Last.fm's catalogue entry, or send everything as is; leave any player out of Last.fm entirely.",
+            "zh-Hant": "聽到 50%、75%、90% 或整首播完才算一次；短於 30 秒的歌要不要算；預設把合唱署名、簡繁寫法、「- Single」這類尾巴對齊到 Last.fm 的正式條目，也可以原樣送出；還能把某個播放器整個排除在 Last.fm 之外。"
+          },
+          "settings": [
+            [
+              "Last.fm",
+              "设置",
+              "Scrobble 时机"
+            ],
+            [
+              "Last.fm",
+              "设置",
+              "短于 30 秒的曲目"
+            ],
+            [
+              "Last.fm",
+              "设置",
+              "匹配模式"
+            ],
+            [
+              "Last.fm",
+              "设置",
+              "Scrobble 的播放器"
+            ]
+          ]
+        },
+        {
+          "id": "local-log",
+          "title": {
+            "zh-Hans": "每次播放先记在本地",
+            "en": "Every play is logged locally first",
+            "zh-Hant": "每次播放先記在本機"
+          },
+          "desc": {
+            "en": "Plays are recorded on your Mac while Last.fm is not connected, or when one fails to send. Once connected, click Backfill under Pending Scrobbles on the Last.fm page; Last.fm only accepts plays from about the last two weeks.",
+            "zh-Hans": "没连 Last.fm 时，或者某次没传上去时，这次播放先记在本机。连上以后，在 Last.fm 页「待补交的收听」里点「补交」传上去；Last.fm 只收大约两周内的记录。",
+            "zh-Hant": "沒連 Last.fm 時，或者某次沒傳上去時，這次播放先記在本機。連上以後，在 Last.fm 頁「待補交的聆聽記錄」裡點「補交」傳上去；Last.fm 只收大約兩週內的記錄。"
+          },
+          "settings": []
+        },
+        {
+          "id": "listenbrainz",
+          "title": {
+            "zh-Hans": "同步到 ListenBrainz",
+            "en": "Scrobble to ListenBrainz too",
+            "zh-Hant": "同步到 ListenBrainz"
+          },
+          "desc": {
+            "zh-Hans": "每次播放用同一份播放状态分别发给 Last.fm 和 ListenBrainz，两边对得上。还可以把 iPhone 上经 Last.fm 记下的播放转进 ListenBrainz。在侧栏默认折叠的「实验室功能」里。",
+            "en": "Each play goes to Last.fm and ListenBrainz from the same reading, so the two agree. Plays your iPhone sends to Last.fm can be copied into ListenBrainz as well. Under Lab Features, which is collapsed in the sidebar by default.",
+            "zh-Hant": "每次播放用同一份播放狀態分別送給 Last.fm 和 ListenBrainz，兩邊對得上。還可以把 iPhone 上經 Last.fm 記下的播放轉進 ListenBrainz。在側邊欄預設收合的「實驗室功能」裡。"
+          },
+          "default": "off",
+          "settings": [
+            [
+              "ListenBrainz",
+              "账号信息"
+            ]
+          ]
+        },
+        {
+          "id": "discord",
+          "title": {
+            "zh-Hans": "在 Discord 上显示正在听的歌",
+            "en": "Show what you're playing on Discord",
+            "zh-Hant": "在 Discord 上顯示正在聽的歌"
+          },
+          "desc": {
+            "zh-Hans": "资料卡和好友列表里显示播放器、歌名、歌手、封面和进度条，点歌名、歌手打开播放器网站上的页面。哪些播放器算、暂停时留不留、封面角上放什么图标都能选，还能暂时隐藏一段时间。",
+            "en": "Your profile and friends list show the player, title, artist, artwork and a progress bar; clicking the title or artist opens the player's web page. Choose which players count, whether it stays while paused and which badge sits on the artwork, or hide it for a while.",
+            "zh-Hant": "個人檔案和好友列表裡顯示播放器、歌名、歌手、封面和進度列，按歌名、歌手打開播放器網站上的頁面。哪些播放器算、暫停時留不留、封面角落放什麼圖像都能選，還能暫時隱藏一段時間。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "discordPresenceEnabled"
+          },
+          "settings": [
+            [
+              "Discord",
+              "在 Discord 上显示"
+            ],
+            [
+              "Discord",
+              "显示哪些播放器"
+            ],
+            [
+              "Discord",
+              "暂停后"
+            ],
+            [
+              "Discord",
+              "暂时隐藏"
+            ]
+          ]
+        },
+        {
+          "id": "now-playing-page",
+          "title": {
+            "zh-Hans": "可分享的「正在听什么」网页",
+            "en": "A shareable now-playing web page",
+            "zh-Hant": "可分享的「正在聽什麼」網頁"
+          },
+          "desc": {
+            "zh-Hans": "一个公开网页，显示你正在听的歌和听歌历史，可以加留言墙、表情回应、访客计数、Top10 歌手榜和黑胶效果。只配好 ListenBrainz 就能显示实时播放和历史，想要更多再照教程部署一个 Cloudflare Worker。在「实验室功能」里。",
+            "en": "A public page with what you are playing and your history, with optional guestbook, reactions, visitor count, top 10 artists and a vinyl look. ListenBrainz alone gives live playback and history; deploy a Cloudflare Worker from the guide for the rest. Under Lab Features.",
+            "zh-Hant": "一個公開網頁，顯示你正在聽的歌和聽歌歷史，可以加留言牆、表情回應、訪客計數、Top10 歌手榜和黑膠效果。只設定好 ListenBrainz 就能顯示即時播放和歷史，想要更多再照教學部署一個 Cloudflare Worker。在「實驗室功能」裡。"
+          },
+          "default": "off",
+          "settings": [
+            [
+              "网页推送",
+              "连接信息"
+            ]
+          ]
+        },
+        {
+          "id": "digests",
+          "title": {
+            "zh-Hans": "日报、周报、月报和年度听歌小结",
+            "en": "Daily, weekly, monthly and yearly listening digests",
+            "zh-Hant": "日報、週報、月報和年度聽歌小結"
+          },
+          "desc": {
+            "zh-Hans": "通过推送发给你，支持 Bark、钉钉、企业微信、Discord、飞书、Server酱和 Telegram。四种各自开关。在「实验室功能」里。",
+            "en": "Sent to you as push notifications through Bark, DingTalk, WeCom, Discord, Feishu, ServerChan or Telegram. Each of the four has its own switch. Under Lab Features.",
+            "zh-Hant": "透過推播送給你，支援 Bark、釘釘、企業微信、Discord、飛書、Server醬和 Telegram。四種各自開關。在「實驗室功能」裡。"
+          },
+          "default": "off",
+          "check": {
+            "featureFlag": "weeklyDigest"
+          },
+          "settings": [
+            [
+              "推送提醒",
+              "提醒"
+            ],
+            [
+              "推送提醒",
+              "每日听歌报告"
+            ],
+            [
+              "推送提醒",
+              "每周听歌小结"
+            ],
+            [
+              "推送提醒",
+              "每月听歌小结"
+            ],
+            [
+              "推送提醒",
+              "年度听歌小结"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "general",
+      "title": {
+        "zh-Hans": "日常使用",
+        "en": "Everyday",
+        "zh-Hant": "日常使用"
+      },
+      "features": [
+        {
+          "id": "onboarding",
+          "title": {
+            "zh-Hans": "首次启动引导",
+            "en": "First-launch setup",
+            "zh-Hant": "首次啟動引導"
+          },
+          "desc": {
+            "zh-Hans": "第一次打开时一步步带你选播放器、配对浏览器、选歌词显示在哪里，并逐项检查需要的权限，缺什么就地补上。",
+            "en": "The first time you open Lyrimuse, it walks you through choosing players, pairing a browser and picking where lyrics appear, and checks each permission you need so you can fix anything missing on the spot.",
+            "zh-Hant": "第一次打開時一步步帶你選播放器、配對瀏覽器、選歌詞顯示在哪裡，並逐項檢查需要的權限，缺什麼就地補上。"
+          },
+          "settings": []
+        },
+        {
+          "id": "language",
+          "title": {
+            "zh-Hans": "简体中文、繁体中文、英文界面",
+            "en": "English, Simplified and Traditional Chinese",
+            "zh-Hant": "簡體中文、繁體中文、英文介面"
+          },
+          "desc": {
+            "zh-Hans": "默认跟随系统，切换马上生效，不用重启。",
+            "en": "Follows your system by default; switching takes effect at once, without a restart.",
+            "zh-Hant": "預設跟隨系統，切換馬上生效，不用重新啟動。"
+          },
+          "settings": [
+            [
+              "通用",
+              "语言与启动",
+              "语言"
+            ]
+          ]
+        },
+        {
+          "id": "shortcuts",
+          "title": {
+            "zh-Hans": "全局快捷键",
+            "en": "Global keyboard shortcuts",
+            "zh-Hant": "全域快速鍵"
+          },
+          "desc": {
+            "zh-Hans": "显示或隐藏各种歌词、开歌词窗口和歌词管理、搜索歌词、调时间轴、播放控制等都能绑。默认一个键都不占。",
+            "en": "Showing or hiding each kind of lyrics, opening the lyrics window and Lyrics Manager, searching, timing and playback can all have shortcuts. None are assigned by default.",
+            "zh-Hant": "顯示或隱藏各種歌詞、打開歌詞視窗和歌詞管理、搜尋歌詞、調整時間軸、播放控制等都能設定。預設一個鍵都不佔用。"
+          },
+          "settings": [
+            [
+              "快捷键",
+              "打开设置"
+            ]
+          ]
+        },
+        {
+          "id": "settings-search",
+          "title": {
+            "zh-Hans": "设置可以搜",
+            "en": "Searchable settings",
+            "zh-Hant": "設定可以搜尋"
+          },
+          "desc": {
+            "zh-Hans": "在设置窗口侧栏顶部打字，直接滚到对应那一项并高亮，折叠着的也会自己展开。中文、英文都能搜。",
+            "en": "Type at the top of the settings sidebar to jump straight to a setting, highlighted, even inside collapsed sections. Search in English or Chinese.",
+            "zh-Hant": "在設定視窗側邊欄頂部輸入，直接捲到對應那一項並亮起，收合著的也會自己展開。中文、英文都能搜尋。"
+          },
+          "settings": []
+        },
+        {
+          "id": "menu-bar-icon",
+          "title": {
+            "zh-Hans": "菜单栏图标",
+            "en": "Menu bar icon",
+            "zh-Hant": "選單列圖像"
+          },
+          "desc": {
+            "zh-Hans": "12 款图标可选，播放时跟着律动、暂停时静止。常用操作都在它的下拉菜单里。",
+            "en": "Twelve icons to choose from, moving with the music while it plays. Everyday actions live in its menu.",
+            "zh-Hant": "12 款圖像可選，播放時跟著律動、暫停時靜止。常用操作都在它的下拉式選單裡。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "menuBarIconAnimates"
+          },
+          "settings": [
+            [
+              "通用",
+              "菜单栏与 Dock",
+              "菜单栏图标"
+            ],
+            [
+              "通用",
+              "菜单栏与 Dock",
+              "随播放律动"
+            ]
+          ]
+        },
+        {
+          "id": "dock-icon",
+          "title": {
+            "zh-Hans": "在 Dock 中显示",
+            "en": "Show in Dock",
+            "zh-Hant": "在 Dock 中顯示"
+          },
+          "desc": {
+            "zh-Hans": "关掉以后只留菜单栏图标。",
+            "en": "Turn it off to keep only the menu bar icon.",
+            "zh-Hant": "關掉以後只留選單列圖像。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "showInDock"
+          },
+          "settings": [
+            [
+              "通用",
+              "菜单栏与 Dock",
+              "在 Dock 中显示"
+            ]
+          ]
+        },
+        {
+          "id": "launch-at-login",
+          "title": {
+            "zh-Hans": "开机启动",
+            "en": "Launch at login",
+            "zh-Hant": "登入時啟動"
+          },
+          "desc": {
+            "zh-Hans": "登录 Mac 时自动打开 Lyrimuse。",
+            "en": "Opens Lyrimuse when you log in to your Mac.",
+            "zh-Hant": "登入 Mac 時自動打開 Lyrimuse。"
+          },
+          "default": "on",
+          "check": {
+            "appSetting": "launchAtLoginEnabled"
+          },
+          "settings": [
+            [
+              "通用",
+              "语言与启动",
+              "开机启动"
+            ]
+          ]
+        },
+        {
+          "id": "silent-launch",
+          "title": {
+            "zh-Hans": "静默启动",
+            "en": "Launch silently",
+            "zh-Hant": "靜默啟動"
+          },
+          "desc": {
+            "zh-Hans": "启动时不弹出任何窗口，只出现菜单栏图标。",
+            "en": "Starts without opening any window, just the menu bar icon.",
+            "zh-Hant": "啟動時不彈出任何視窗，只出現選單列圖像。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "silentLaunch"
+          },
+          "settings": [
+            [
+              "通用",
+              "语言与启动",
+              "静默启动"
+            ]
+          ]
+        },
+        {
+          "id": "song-notifications",
+          "title": {
+            "zh-Hans": "换歌时显示通知",
+            "en": "Notify when the song changes",
+            "zh-Hant": "換歌時顯示通知"
+          },
+          "desc": {
+            "zh-Hans": "每换一首歌，弹一条系统通知。",
+            "en": "A system notification for every new song.",
+            "zh-Hant": "每換一首歌，跳出一則系統通知。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "nowPlayingNotifications"
+          },
+          "settings": [
+            [
+              "通用",
+              "通知",
+              "换歌时显示通知"
+            ]
+          ]
+        },
+        {
+          "id": "backup",
+          "title": {
+            "zh-Hans": "备份设置、换新 Mac",
+            "en": "Back up settings, move to a new Mac",
+            "zh-Hant": "備份設定、換新 Mac"
+          },
+          "desc": {
+            "zh-Hans": "整套设置可以导出成一个文件，默认存进 iCloud 云盘，也可以换个文件夹；新 Mac 第一次打开时在 iCloud 里找到它，会问你要不要导入。",
+            "en": "Export all your settings to one file, saved to iCloud Drive by default or to a folder you choose; when a new Mac first opens Lyrimuse and finds it in iCloud, it offers to import it.",
+            "zh-Hant": "整套設定可以匯出成一個檔案，預設存進 iCloud 雲碟，也可以換個檔案夾；新 Mac 第一次打開時在 iCloud 裡找到它，會問你要不要匯入。"
+          },
+          "settings": [
+            [
+              "通用",
+              "备份与迁移",
+              "iCloud 备份"
+            ],
+            [
+              "通用",
+              "备份与迁移",
+              "设置文件"
+            ]
+          ]
+        },
+        {
+          "id": "updates",
+          "title": {
+            "zh-Hans": "自动更新与测试版",
+            "en": "Automatic updates and betas",
+            "zh-Hant": "自動更新與測試版"
+          },
+          "desc": {
+            "zh-Hans": "自己检查新版本，在「软件更新」页里看说明、安装。想尝鲜可以打开「测试版更新」。",
+            "en": "Checks for new versions by itself; read the notes and install from the Software Update page. Turn on Beta Updates to try new things early.",
+            "zh-Hant": "自己檢查新版本，在「軟體更新」頁裡看說明、安裝。想搶先體驗可以打開「測試版更新」。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "receiveBetaUpdates"
+          },
+          "settings": [
+            [
+              "软件更新",
+              "自动更新",
+              "自动检查"
+            ],
+            [
+              "软件更新",
+              "自动更新",
+              "自动下载并安装"
+            ],
+            [
+              "软件更新",
+              "测试版更新"
+            ]
+          ]
+        },
+        {
+          "id": "diagnostics",
+          "title": {
+            "zh-Hans": "一键导出诊断、反馈问题",
+            "en": "One-click diagnostics and bug reports",
+            "zh-Hant": "一鍵匯出診斷、回報問題"
+          },
+          "desc": {
+            "zh-Hans": "把日志、崩溃记录和运行状态打包成一个文件，账号凭据和本机用户名已经去掉。「反馈问题」会在 GitHub 新建 issue 并自动带上版本、系统和播放器信息。",
+            "en": "Bundles logs, crash reports and app state into one file with credentials and your user name removed. Report an Issue opens a GitHub issue with your version, macOS and player filled in.",
+            "zh-Hant": "把記錄檔、當機報告和執行狀態打包成一個檔案，帳號憑證和本機使用者名稱已經移除。「回報問題」會在 GitHub 新增 issue 並自動附上版本、系統和播放器資訊。"
+          },
+          "settings": [
+            [
+              "关于",
+              "诊断与数据",
+              "导出诊断"
+            ],
+            [
+              "关于",
+              "反馈",
+              "反馈问题"
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -54,6 +54,11 @@ jobs:
         # 同上:两侧的规则表和例句都由那份 JSON 生成,过期或被手改时编译照样过。
         run: python3 scripts/gen-lyric-notices.py --check
 
+      - name: 功能清单与 shared/feature-list.json、设置目录一致
+        # docs/feature-list*.md 由那份 JSON 和 shared/settings-catalog.json 生成;这一步还核对清单引用的设置位置
+        # 都在目录里、写的默认开关跟代码一致。settings-catalog.json 跟代码的一致性由 selftest「settings-search」组核。
+        run: python3 scripts/gen-feature-list.py --check
+
       - name: gofmt
         run: |
           cd lyrimuse-engine

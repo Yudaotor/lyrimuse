@@ -1,0 +1,1812 @@
+{
+  "entries" : [
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "获取"
+      ],
+      "title" : "歌词来源"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "获取"
+      ],
+      "title" : "匹配算法"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "获取"
+      ],
+      "title" : "随匹配算法更新重新选择"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "获取"
+      ],
+      "title" : "预解析待播曲目"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "获取"
+      ],
+      "title" : "锁定手选歌词"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "译文"
+      ],
+      "title" : "译文语言"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "译文"
+      ],
+      "title" : "系统兜底翻译"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "译文"
+      ],
+      "title" : "翻译语言包"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "调整"
+      ],
+      "title" : "繁简转换"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "调整"
+      ],
+      "title" : "标注读音的语言"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "调整"
+      ],
+      "title" : "长句拆分"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "调整"
+      ],
+      "title" : "短句合并"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "调整"
+      ],
+      "title" : "时间轴偏移"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "管理"
+      ],
+      "title" : "歌词库"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "管理"
+      ],
+      "title" : "自动匹配缺失歌词"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "管理"
+      ],
+      "title" : "重新匹配整个歌词库"
+    },
+    {
+      "dest" : "tab:lyrics",
+      "path" : [
+        "歌词",
+        "管理"
+      ],
+      "title" : "歌词文件夹"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "title" : "播放器"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "title" : "网页播放器"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器",
+        "网页播放器"
+      ],
+      "title" : "自动跳过 YouTube Music 广告"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "title" : "已信任的播放器"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器",
+        "已信任的播放器"
+      ],
+      "subtitle" : "从「应用程序」中选择，无需等待其开始播放",
+      "title" : "添加播放器…"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "subtitle" : "系统通知已关闭",
+      "title" : "新播放器提醒"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "title" : "自动化权限"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "title" : "完全磁盘访问权限"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "title" : "辅助功能权限"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "title" : "歌词引擎"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器"
+      ],
+      "title" : "播放器联动"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器",
+        "播放器联动"
+      ],
+      "title" : "打开 Lyrimuse 时启动"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器",
+        "播放器联动"
+      ],
+      "title" : "跟随播放器启动"
+    },
+    {
+      "dest" : "tab:player",
+      "path" : [
+        "播放器",
+        "播放器联动"
+      ],
+      "title" : "跟随播放器退出"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词"
+      ],
+      "title" : "桌面悬浮歌词"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "主题"
+      ],
+      "title" : "配色主题"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "主题"
+      ],
+      "title" : "我的配色主题"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "文字"
+      ],
+      "title" : "字体"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "文字"
+      ],
+      "title" : "粗细"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "文字"
+      ],
+      "title" : "字号"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "文字"
+      ],
+      "title" : "卡拉OK效果"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "文字"
+      ],
+      "title" : "文字颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "文字"
+      ],
+      "title" : "文字描边"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "文字"
+      ],
+      "title" : "描边颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "文字"
+      ],
+      "title" : "未唱颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "背景"
+      ],
+      "title" : "背景颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "背景"
+      ],
+      "title" : "毛玻璃背景"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "背景"
+      ],
+      "title" : "玻璃浓淡"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "内容"
+      ],
+      "title" : "读音"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "内容"
+      ],
+      "title" : "译文"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "内容"
+      ],
+      "title" : "下一句"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "排版"
+      ],
+      "title" : "对齐方式"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "排版"
+      ],
+      "title" : "长句处理"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "排版"
+      ],
+      "title" : "换句动画"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "排版"
+      ],
+      "title" : "读音间距"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "排版"
+      ],
+      "title" : "译文间距"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "排版"
+      ],
+      "title" : "下一句间距"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词"
+      ],
+      "title" : "宽度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "行为"
+      ],
+      "title" : "锁定位置"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "行为"
+      ],
+      "title" : "长按拖动"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "行为"
+      ],
+      "title" : "悬浮淡化"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "行为"
+      ],
+      "title" : "悬停时显示控制条"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "行为"
+      ],
+      "title" : "截屏时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词",
+        "行为"
+      ],
+      "title" : "暂停时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词"
+      ],
+      "title" : "位置"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "悬浮歌词"
+      ],
+      "subtitle" : "不含内容、排版、行为、位置和宽度",
+      "title" : "恢复默认"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛"
+      ],
+      "subtitle" : "紧贴屏幕顶部的刘海显示",
+      "title" : "灵动岛歌词"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛"
+      ],
+      "title" : "风格"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "风格"
+      ],
+      "title" : "圆角"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "风格"
+      ],
+      "title" : "展开圆角"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛"
+      ],
+      "title" : "屏幕"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛"
+      ],
+      "title" : "左耳"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛"
+      ],
+      "title" : "右耳"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "左耳"
+      ],
+      "title" : "音浪"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛"
+      ],
+      "title" : "宽度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛"
+      ],
+      "title" : "展开宽度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "显示歌词"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "对齐方式"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "副行"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "展开时预览下一句"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "高度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "卡拉OK效果"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "显示封面"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "歌词行"
+      ],
+      "title" : "封面位置"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "字体"
+      ],
+      "title" : "字体"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "字体"
+      ],
+      "title" : "粗细"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "字体"
+      ],
+      "title" : "字号"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "展开态"
+      ],
+      "title" : "显示播放控制"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "展开态"
+      ],
+      "title" : "显示歌词校准"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "展开态"
+      ],
+      "title" : "快捷操作"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "展开态"
+      ],
+      "title" : "曲目信息"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "行为"
+      ],
+      "title" : "暂停时收起"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "行为"
+      ],
+      "title" : "截屏时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "行为"
+      ],
+      "title" : "暂停时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "行为"
+      ],
+      "title" : "全屏时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "行为"
+      ],
+      "title" : "收听里程碑"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "行为"
+      ],
+      "title" : "换歌时显示歌名"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛"
+      ],
+      "subtitle" : "不含宽度和总开关",
+      "title" : "恢复默认"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏"
+      ],
+      "title" : "菜单栏歌词"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "布局"
+      ],
+      "title" : "宽度模式"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "布局"
+      ],
+      "title" : "对齐方式"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "布局"
+      ],
+      "title" : "副行"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "布局"
+      ],
+      "title" : "歌词旁的图标"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "配色"
+      ],
+      "title" : "卡拉OK效果"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "配色"
+      ],
+      "title" : "文字颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "配色"
+      ],
+      "title" : "已唱颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "字体"
+      ],
+      "title" : "字体"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "字体"
+      ],
+      "title" : "粗细"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "字体"
+      ],
+      "title" : "字号"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏"
+      ],
+      "title" : "最大宽度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "行为"
+      ],
+      "title" : "悬停显示播放控制"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏",
+        "行为"
+      ],
+      "title" : "无歌词时显示歌名"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "菜单栏"
+      ],
+      "subtitle" : "不含宽度和总开关",
+      "title" : "恢复默认"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏"
+      ],
+      "title" : "触控栏歌词"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "歌词"
+      ],
+      "title" : "副行"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "歌词"
+      ],
+      "title" : "字号"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "歌词"
+      ],
+      "title" : "对齐方式"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "样式"
+      ],
+      "title" : "卡拉OK效果"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "样式"
+      ],
+      "subtitle" : "歌词使用封面的主色，无法获取时使用白色",
+      "title" : "跟随封面"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "布局"
+      ],
+      "title" : "显示封面"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "布局"
+      ],
+      "title" : "封面位置"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "布局"
+      ],
+      "subtitle" : "上一首、播放/暂停、下一首和设置键",
+      "title" : "显示播放控制"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "布局"
+      ],
+      "title" : "播放控制位置"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "布局"
+      ],
+      "subtitle" : "歌词占满整个触控栏；如需使用亮度、音量等系统按键，请先点按左端的 ✕ 收起",
+      "title" : "展开时隐藏功能栏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏",
+        "布局"
+      ],
+      "subtitle" : "触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序",
+      "title" : "系统功能栏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "触控栏"
+      ],
+      "subtitle" : "不含总开关",
+      "title" : "恢复默认"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口"
+      ],
+      "title" : "歌词窗口"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "背景"
+      ],
+      "subtitle" : "歌词窗口的背景：跟随封面／纯色／渐变／毛玻璃",
+      "title" : "背景"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "背景"
+      ],
+      "title" : "方向"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "背景"
+      ],
+      "subtitle" : "毛玻璃的材质浓淡（五档）",
+      "title" : "玻璃浓淡"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "文字"
+      ],
+      "subtitle" : "迷你尺寸的歌词字号上限",
+      "title" : "字号"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "布局"
+      ],
+      "subtitle" : "迷你尺寸中一行显示不下时换行或滚动",
+      "title" : "长句处理"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "布局"
+      ],
+      "subtitle" : "迷你尺寸仅显示当前句、显示当前句与下一句，或与完整尺寸相同整页滚动",
+      "title" : "歌词布局"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "行为"
+      ],
+      "title" : "悬浮淡化"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "文字"
+      ],
+      "title" : "卡拉OK效果"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "文字"
+      ],
+      "subtitle" : "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换",
+      "title" : "文字颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "文字"
+      ],
+      "title" : "指定颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "文字"
+      ],
+      "subtitle" : "歌词窗口的歌词字体（正文、译文、读音）",
+      "title" : "字体"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "文字"
+      ],
+      "title" : "粗细"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "文字"
+      ],
+      "title" : "已唱颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "内容"
+      ],
+      "title" : "读音"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "内容"
+      ],
+      "title" : "译文"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "顶部信息"
+      ],
+      "subtitle" : "迷你尺寸顶部显示歌名／歌手／专辑",
+      "title" : "歌名"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "顶部信息"
+      ],
+      "title" : "歌手"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "顶部信息"
+      ],
+      "title" : "专辑"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "顶部信息"
+      ],
+      "subtitle" : "迷你尺寸顶部信息左侧的封面缩略图",
+      "title" : "封面"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "顶部信息"
+      ],
+      "subtitle" : "迷你尺寸顶部显示已播放时间与歌曲时长",
+      "title" : "时间"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "顶部信息"
+      ],
+      "subtitle" : "迷你尺寸顶部信息占窗口宽度的百分比",
+      "title" : "宽度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : true,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "顶部信息"
+      ],
+      "subtitle" : "迷你尺寸顶部信息占窗口高度的百分比，字号与封面随之缩放",
+      "title" : "高度"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口"
+      ],
+      "title" : "恢复默认"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "背景"
+      ],
+      "title" : "底部颜色"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "封面"
+      ],
+      "subtitle" : "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停",
+      "title" : "动态封面"
+    },
+    {
+      "dest" : "tab:appearance",
+      "lyricsWindowMini" : false,
+      "path" : [
+        "歌词显示",
+        "歌词窗口",
+        "封面"
+      ],
+      "subtitle" : "已下载的动态封面占用的磁盘空间；清除后再次显示时会重新下载",
+      "title" : "动态封面缓存"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "显示/隐藏悬浮歌词"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "显示/隐藏灵动岛歌词"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "显示/隐藏菜单栏歌词"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "展开/收起触控栏歌词"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "锁定/解锁位置"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "显示/隐藏译文"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "显示/隐藏读音"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "打开歌词管理"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "打开歌词窗口"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "切换迷你 / 完整尺寸"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "搜索歌词"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "打开设置"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "歌词提前"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "歌词延后"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "歌词偏移归零"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "subtitle" : "每按一次调整的幅度",
+      "title" : "步长"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "播放/暂停"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "下一首"
+    },
+    {
+      "dest" : "tab:shortcuts",
+      "path" : [
+        "快捷键"
+      ],
+      "title" : "上一首"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "菜单栏与 Dock"
+      ],
+      "title" : "菜单栏图标"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "菜单栏与 Dock"
+      ],
+      "title" : "随播放律动"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "菜单栏与 Dock"
+      ],
+      "title" : "在 Dock 中显示"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "语言与启动"
+      ],
+      "title" : "语言"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "语言与启动"
+      ],
+      "title" : "开机启动"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "语言与启动"
+      ],
+      "title" : "静默启动"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "通知"
+      ],
+      "title" : "换歌时显示通知"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "备份与迁移"
+      ],
+      "title" : "iCloud 备份"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用",
+        "备份与迁移"
+      ],
+      "subtitle" : "包含明文凭证；导入将覆盖全部设置并重启",
+      "title" : "设置文件"
+    },
+    {
+      "dest" : "tab:general",
+      "path" : [
+        "通用"
+      ],
+      "subtitle" : "本机设置，无法撤销",
+      "title" : "清除全部设置"
+    },
+    {
+      "dest" : "softwareUpdate",
+      "path" : [
+        "软件更新"
+      ],
+      "title" : "软件更新"
+    },
+    {
+      "dest" : "softwareUpdate",
+      "path" : [
+        "软件更新",
+        "自动更新"
+      ],
+      "title" : "自动检查"
+    },
+    {
+      "dest" : "softwareUpdate",
+      "path" : [
+        "软件更新",
+        "自动更新"
+      ],
+      "title" : "自动下载并安装"
+    },
+    {
+      "dest" : "softwareUpdate",
+      "path" : [
+        "软件更新"
+      ],
+      "subtitle" : "预发布版本，可能不稳定",
+      "title" : "测试版更新"
+    },
+    {
+      "dest" : "tab:about",
+      "path" : [
+        "关于",
+        "反馈"
+      ],
+      "subtitle" : "在 GitHub 新建 issue，自动附带版本、系统与播放器信息",
+      "title" : "反馈问题"
+    },
+    {
+      "dest" : "tab:about",
+      "path" : [
+        "关于",
+        "反馈"
+      ],
+      "subtitle" : "在 GitHub 讨论区的问答分类中提问",
+      "title" : "使用求助"
+    },
+    {
+      "dest" : "tab:about",
+      "path" : [
+        "关于",
+        "许可与版权"
+      ],
+      "title" : "版权说明"
+    },
+    {
+      "dest" : "tab:about",
+      "path" : [
+        "关于",
+        "许可与版权"
+      ],
+      "subtitle" : "开源组件与词典",
+      "title" : "第三方许可"
+    },
+    {
+      "dest" : "tab:about",
+      "path" : [
+        "关于",
+        "许可与版权"
+      ],
+      "subtitle" : "GPL-3.0",
+      "title" : "开源许可证"
+    },
+    {
+      "dest" : "tab:about",
+      "path" : [
+        "关于",
+        "诊断与数据"
+      ],
+      "subtitle" : "反馈问题时请附上：打包日志、崩溃记录与运行状态，已移除账号凭据和本机用户名",
+      "title" : "导出诊断"
+    },
+    {
+      "dest" : "tab:about",
+      "path" : [
+        "关于",
+        "诊断与数据"
+      ],
+      "title" : "运行日志"
+    },
+    {
+      "dest" : "tab:about",
+      "path" : [
+        "关于",
+        "诊断与数据"
+      ],
+      "title" : "配置文件夹"
+    },
+    {
+      "dest" : "account:listenBrainz",
+      "path" : [
+        "ListenBrainz"
+      ],
+      "title" : "账号信息"
+    },
+    {
+      "dest" : "account:lastfm",
+      "path" : [
+        "Last.fm",
+        "设置"
+      ],
+      "title" : "Scrobble 规则"
+    },
+    {
+      "dest" : "account:lastfm",
+      "path" : [
+        "Last.fm",
+        "设置"
+      ],
+      "title" : "匹配模式"
+    },
+    {
+      "dest" : "account:lastfm",
+      "path" : [
+        "Last.fm",
+        "设置"
+      ],
+      "title" : "歌名"
+    },
+    {
+      "dest" : "account:lastfm",
+      "path" : [
+        "Last.fm",
+        "设置"
+      ],
+      "title" : "歌手"
+    },
+    {
+      "dest" : "account:lastfm",
+      "path" : [
+        "Last.fm",
+        "设置"
+      ],
+      "title" : "Scrobble 时机"
+    },
+    {
+      "dest" : "account:lastfm",
+      "path" : [
+        "Last.fm",
+        "设置"
+      ],
+      "title" : "短于 30 秒的曲目"
+    },
+    {
+      "dest" : "account:lastfm",
+      "path" : [
+        "Last.fm",
+        "设置"
+      ],
+      "title" : "Scrobble 的播放器"
+    },
+    {
+      "dest" : "account:stateRelay",
+      "path" : [
+        "网页推送"
+      ],
+      "title" : "连接信息"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
+      "title" : "提醒"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
+      "title" : "每周听歌小结"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
+      "title" : "每日听歌报告"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
+      "title" : "每月听歌小结"
+    },
+    {
+      "dest" : "account:bark",
+      "path" : [
+        "推送提醒"
+      ],
+      "title" : "年度听歌小结"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "在 Discord 上显示"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "显示内容"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "用户名下方显示"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "封面角标"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "暂停后"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "隐私"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "暂时隐藏"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "显示哪些播放器"
+    }
+  ]
+}

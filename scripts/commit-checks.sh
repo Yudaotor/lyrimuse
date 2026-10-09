@@ -35,6 +35,11 @@ echo "==> selftest"
 echo "==> nowplaying-clients 原生测试"
 sh scripts/test-nowplaying-clients.sh
 
+if [ -f scripts/gen-feature-list.py ]; then
+  echo "==> 功能清单与数据一致"
+  /usr/bin/python3 scripts/gen-feature-list.py --check
+fi
+
 echo "==> Localizable.xcstrings 能解析"
 /usr/bin/python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
   lyrimuse/Localization/Localizable.xcstrings
