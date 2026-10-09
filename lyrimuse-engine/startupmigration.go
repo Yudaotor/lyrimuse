@@ -125,6 +125,7 @@ func loadMigrationState(path string) {
 	migrationRecheck, migrationRecheckKeys = nil, nil
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var got map[string]int

@@ -150,6 +150,7 @@ func winningCandidateArtist(e enrichEntry) string {
 func loadEnrichCacheReadOnly(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var m map[string]enrichEntry

@@ -73,7 +73,7 @@ public final class OutboundCooldownStore: @unchecked Sendable {
                 mtime = nil
             } else if m != mtime {
                 mtime = m
-                cache = (try? Data(contentsOf: url)).map(OutboundCooldowns.decode) ?? [:]
+                cache = FileIO.read(url).map(OutboundCooldowns.decode) ?? [:]
             }
         }
         return OutboundCooldowns.until(cache, key: key, now: now)
@@ -81,21 +81,17 @@ public final class OutboundCooldownStore: @unchecked Sendable {
 
     /// 同 activeUntil,但每次都读文件、不走 1 秒缓存:MusicBrainz 的窗口本身就只有 1.1 秒。
     public func freshUntil(_ key: String, now: Date = Date()) -> Date? {
-        let endpoints = (try? Data(contentsOf: url)).map(OutboundCooldowns.decode) ?? [:]
+        let endpoints = FileIO.read(url).map(OutboundCooldowns.decode) ?? [:]
         return OutboundCooldowns.until(endpoints, key: key, now: now)
     }
 
     public func publish(_ key: String, until: Date, now: Date = Date()) {
         lock.lock()
         defer { lock.unlock() }
-        let existing = (try? Data(contentsOf: url)).map(OutboundCooldowns.decode) ?? [:]
+        let existing = FileIO.read(url).map(OutboundCooldowns.decode) ?? [:]
         let merged = OutboundCooldowns.merge(existing, key: key, until: until, now: now)
         guard let data = OutboundCooldowns.encode(merged) else { return }
-        do {
-            try data.write(to: url, options: .atomic)
-        } catch {
-            return
-        }
+        guard FileIO.write(data, to: url) else { return }
         cache = merged
         readAt = now
         mtime = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date

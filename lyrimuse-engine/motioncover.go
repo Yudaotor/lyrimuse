@@ -119,6 +119,7 @@ func loadMotionCoverCache(path string) {
 	motionCoverMu.Unlock()
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var m map[string]motionCover

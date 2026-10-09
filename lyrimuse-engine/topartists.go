@@ -44,6 +44,7 @@ func (s topArtistsState) load() int64 {
 	}
 	b, err := os.ReadFile(s.path)
 	if err != nil {
+		noteFileErr("read", s.path, err)
 		return 0
 	}
 	var v struct {
@@ -63,7 +64,7 @@ func (s topArtistsState) save(at int64) {
 	if err != nil {
 		return
 	}
-	os.WriteFile(s.path, data, 0o644)
+	noteFileErr("write", s.path, os.WriteFile(s.path, data, 0o644))
 }
 
 // topArtistEntry 是要推给网页的一条记录,只留展示要用的字段。

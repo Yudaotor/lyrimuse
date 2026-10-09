@@ -68,11 +68,7 @@ public enum ProcessRunner {
         let errPipe: Pipe? = captureStderr ? Pipe() : nil
         process.standardError = errPipe ?? FileHandle.nullDevice
 
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
+        guard FileIO.attempt("launch", URL(fileURLWithPath: executable), { try process.run() }) else { return nil }
 
         // 到点就杀。用 DispatchWorkItem 而不是起一个 sleep 线程 —— 正常结束时
         // cancel() 掉,不留悬挂的定时器。

@@ -201,6 +201,7 @@ func applemusicReadTokenFile() (applemusicUserTokenFile, bool) {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return applemusicUserTokenFile{}, false
 	}
 	var f applemusicUserTokenFile
@@ -214,7 +215,9 @@ func applemusicReadStatus() applemusicStatus {
 	var st applemusicStatus
 	if path := applemusicStatusPath(); path != "" {
 		if raw, err := os.ReadFile(path); err == nil {
-			_ = json.Unmarshal(raw, &st)
+			noteFileErr("decode", path, json.Unmarshal(raw, &st))
+		} else {
+			noteFileErr("read", path, err)
 		}
 	}
 	return st
@@ -368,6 +371,7 @@ func applemusicLoadDevTokenFile() string {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return ""
 	}
 	var f applemusicDevTokenFile

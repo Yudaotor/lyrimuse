@@ -93,7 +93,7 @@ public enum PlayerArtistFix {
         }
         if mtime == cachedMTime { return cached }
         cachedMTime = mtime
-        cached = (try? Data(contentsOf: stateURL)).flatMap { try? JSONDecoder().decode(State.self, from: $0) }
+        cached = FileIO.decodeJSON(State.self, from: stateURL)
         return cached
     }
 

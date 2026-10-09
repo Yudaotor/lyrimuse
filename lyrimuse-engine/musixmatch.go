@@ -498,8 +498,10 @@ func musixmatchRejectToken(token string) {
 		if raw, err := os.ReadFile(path); err == nil {
 			var f musixmatchTokenFile
 			if json.Unmarshal(raw, &f) == nil && f.Token == token {
-				_ = os.Remove(path)
+				noteFileErr("remove", path, os.Remove(path))
 			}
+		} else {
+			noteFileErr("read", path, err)
 		}
 	}
 	if dropped {
@@ -563,6 +565,7 @@ func musixmatchLoadTokenFile() string {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return ""
 	}
 	var f musixmatchTokenFile

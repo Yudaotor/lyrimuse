@@ -167,8 +167,8 @@ public enum PlaybackPlayerPreference {
     /// 不需要再处理"选中集合是空的"这种状态(那不是一个合法状态,跟引擎侧
     /// resolvePlayers 的保证对称)。
     public static var selected: Set<PlaybackPlayer> {
-        guard let data = try? Data(contentsOf: featuresURL),
-              let f = try? JSONDecoder().decode(MinimalFeatureFlags.self, from: data) else {
+        guard let data = FileIO.read(featuresURL),
+              let f = FileIO.decodeJSON(MinimalFeatureFlags.self, from: data, source: featuresURL) else {
             return [.auto]
         }
         if let list = f.players, !list.isEmpty {

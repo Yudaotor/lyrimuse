@@ -126,9 +126,10 @@ func loadPlayerVerdictsLocked() map[string]playerVerdict {
 	}
 	raw, err := os.ReadFile(playerVerdictsPath)
 	if err != nil {
+		noteFileErr("read", playerVerdictsPath, err)
 		return out
 	}
-	_ = json.Unmarshal(raw, &out)
+	noteFileErr("decode", playerVerdictsPath, json.Unmarshal(raw, &out))
 	return out
 }
 
@@ -187,10 +188,12 @@ func setPlayerArtistFixPathLocked(path string) (playerArtistFixState, map[string
 func readPlayerArtistFixLocked(path string) playerArtistFixState {
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return playerArtistFixState{}
 	}
 	var prev playerArtistFixState
 	if err := json.Unmarshal(raw, &prev); err != nil {
+		noteFileErr("decode", path, err)
 		return playerArtistFixState{}
 	}
 	return prev

@@ -227,9 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ConfigStore/FeatureSettingsStore 写配置文件、引擎自己写歌词/封面缓存都
         // 假设这个目录已经存在，但谁都不会在写之前 createDirectory——这里无条件、幂等
         // 地建一次，不依赖引导流程是否跑完，第一次启动就先把这个目录建好。
-        try? FileManager.default.createDirectory(
-            at: LyrimusePaths.configDir,
-            withIntermediateDirectories: true)
+        FileIO.createDirectory(LyrimusePaths.configDir)
 
         // 引擎的 launchd job 对账。必须在启动路径上跑,这是 Sparkle 自动更新 /
         // Homebrew cask upgrade / 手动拖 .app 覆盖这三条路唯一的兜底 —— 它们都不经过

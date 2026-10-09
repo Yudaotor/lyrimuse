@@ -84,8 +84,8 @@ public enum RadioStationCardFile {
     }
 
     public static func load() -> RadioStationCard? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(RadioStationCard.self, from: data)
+        guard let data = FileIO.read(url) else { return nil }
+        return FileIO.decodeJSON(RadioStationCard.self, from: data, source: url)
     }
 
     /// 原子写。只在"台卡内容真的变了"时调用(见 LocalPlaybackSource.noteRadioStationCard)——

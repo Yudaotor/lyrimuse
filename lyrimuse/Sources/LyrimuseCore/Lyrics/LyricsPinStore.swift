@@ -135,20 +135,19 @@ public final class LyricsPinStore: ObservableObject {
         guard let data = try? JSONEncoder().encode(file) else { return }
         // 目录理应早就存在(引擎的配置就在这儿),但"用户刚导入过配置/换过机器"这种
         // 情况下第一次写可能撞上目录不在,补一次 createDirectory 比丢掉这次写入划算。
-        try? FileManager.default.createDirectory(
-            at: Self.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileIO.createDirectory(Self.url.deletingLastPathComponent())
         // .atomic:引擎会在任意时刻读这份文件,不能让它读到写一半的内容。
-        try? data.write(to: Self.url, options: [.atomic])
+        FileIO.write(data, to: Self.url)
     }
 
     /// 文件在、却解不开(坏了,或者是以后的版本换了格式):挪到旁边(`<名>.corrupt-<unix 秒>`)再从空开始。
     /// 不挪的话下一次 persist 会拿只含新 pin 的字典整份覆盖它,原来的已校准名单就没了。
     private static func load() -> [String: Int] {
-        guard let data = try? Data(contentsOf: url) else { return [:] }
-        if let file = try? JSONDecoder().decode(File.self, from: data) { return file.pins }
+        guard let data = FileIO.read(url) else { return [:] }
+        if let file = FileIO.decodeJSON(File.self, from: data, source: url) { return file.pins }
         let aside = url.deletingLastPathComponent()
             .appendingPathComponent(url.lastPathComponent + ".corrupt-\(Int(Date().timeIntervalSince1970))")
-        try? FileManager.default.moveItem(at: url, to: aside)
+        FileIO.move(url, to: aside)
         logger.error("pins file could not be decoded, moved aside as \(aside.lastPathComponent, privacy: .public)")
         return [:]
     }

@@ -98,7 +98,7 @@ public enum RadioClockFile {
     }
 
     public static func load() -> RadioClockRecord? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let data = FileIO.read(url) else { return nil }
         return decode(data)
     }
 

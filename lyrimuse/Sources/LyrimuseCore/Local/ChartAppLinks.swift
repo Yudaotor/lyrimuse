@@ -293,8 +293,8 @@ public enum ArtistPlatformPages {
     /// 读本机 MusicBrainz 身份缓存,只取 mbid。文件不在或解析不了返回空表。
     public static func loadMBIDs(configDir: URL = LyrimusePaths.configDir) -> [String: String] {
         struct Identity: Decodable { var mbid: String? }
-        guard let data = try? Data(contentsOf: configDir.appendingPathComponent("lyrimuse-artist-identity-cache.json")),
-              let m = try? JSONDecoder().decode([String: Identity].self, from: data) else { return [:] }
+        guard let data = FileIO.read(configDir.appendingPathComponent("lyrimuse-artist-identity-cache.json")),
+              let m = FileIO.decodeJSON([String: Identity].self, from: data, source: configDir.appendingPathComponent("lyrimuse-artist-identity-cache.json")) else { return [:] }
         return m.compactMapValues { $0.mbid }.filter { !$0.value.isEmpty }
     }
 }
@@ -334,7 +334,7 @@ public struct PlatformPagesCache: Sendable {
     }
 
     public static func load(configDir: URL = LyrimusePaths.configDir) -> PlatformPagesCache {
-        guard let data = try? Data(contentsOf: configDir.appendingPathComponent(fileName)) else { return PlatformPagesCache() }
+        guard let data = FileIO.read(configDir.appendingPathComponent(fileName)) else { return PlatformPagesCache() }
         return parse(data)
     }
 

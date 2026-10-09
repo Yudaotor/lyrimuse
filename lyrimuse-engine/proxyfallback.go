@@ -329,6 +329,7 @@ func readProxyFallbackHint() proxyFallbackHintFile {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return f
 	}
 	var parsed proxyFallbackHintFile

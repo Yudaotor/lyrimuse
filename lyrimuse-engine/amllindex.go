@@ -505,6 +505,7 @@ func fetchAMLLIndexAt(ctx context.Context, base, etag string) (entries []amllInd
 func readAMLLIndexFile(path string) *amllIndex {
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil
 	}
 	var f amllIndexFile

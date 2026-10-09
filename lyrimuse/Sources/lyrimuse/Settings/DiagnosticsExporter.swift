@@ -385,7 +385,7 @@ enum DiagnosticsExporter {
             guard let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
                   modified >= cutoff else { continue }
             scanned += 1
-            guard let data = try? Data(contentsOf: url) else { problems.append("\(name): unreadable"); continue }
+            guard let data = FileIO.read(url) else { problems.append("\(name): unreadable"); continue }
             guard let summary = CrashReportSummary.parse(fileName: name, data: data) else {
                 problems.append("\(name): unparseable"); continue
             }
@@ -407,7 +407,7 @@ enum DiagnosticsExporter {
     }
 
     private static func recentAppStderrLines(maxLines: Int = 100) -> [String] {
-        guard let content = try? String(contentsOf: LogFiles.appStderr, encoding: .utf8) else {
+        guard let content = FileIO.readString(LogFiles.appStderr) else {
             return ["(no \(LogFiles.appStderr.lastPathComponent) yet: the app creates it at launch; a missing file means this build predates the in-process redirect or the Logs folder is not writable)"]
         }
         let all = content.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
@@ -435,7 +435,7 @@ enum DiagnosticsExporter {
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("lyrimuse-diag-\(UUID().uuidString)")
         let staging = root.appendingPathComponent(bundleName, isDirectory: true)
-        guard (try? fm.createDirectory(at: staging, withIntermediateDirectories: true)) != nil else { return }
+        guard FileIO.createDirectory(staging) else { return }
         defer { try? fm.removeItem(at: root) }
 
         let report = (head + logLines(secrets: secrets, currentTrackLines: currentTrackLines))
@@ -466,7 +466,7 @@ enum DiagnosticsExporter {
     ///
     /// 整块脱敏而不是逐行:实测 3MB / 18594 行,整块 258ms、逐行 754ms,产出一模一样。
     private static func fullEngineLogText(secrets: [String: String]) -> String {
-        guard let content = try? String(contentsOf: LogFiles.engine, encoding: .utf8) else {
+        guard let content = FileIO.readString(LogFiles.engine) else {
             return "(could not read \(LogFiles.engine.path))"
         }
         return LogRedactor.redactAll(content, secrets: secrets)
@@ -477,7 +477,7 @@ enum DiagnosticsExporter {
     private static func archivedEngineLogText(secrets: [String: String]) -> String? {
         let url = LogFiles.engine.deletingLastPathComponent()
             .appendingPathComponent(LogFiles.engine.lastPathComponent + ".old")
-        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        guard let content = FileIO.readString(url) else { return nil }
         return LogRedactor.redactAll(content, secrets: secrets)
     }
 
@@ -488,7 +488,7 @@ enum DiagnosticsExporter {
         guard let modified = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date,
               Date().timeIntervalSince(modified) <= TimeInterval(days) * 86_400
         else { return nil }
-        return try? String(contentsOf: url, encoding: .utf8)
+        return FileIO.readString(url)
     }
 
     /// App 侧 24 小时的 os.Logger 记录,同样整份脱敏、不折叠。24 小时不是我们选的 ——
@@ -507,7 +507,7 @@ enum DiagnosticsExporter {
         ) { zipped in
             let fm = FileManager.default
             try? fm.removeItem(at: destination)
-            try? fm.moveItem(at: zipped, to: destination)
+            FileIO.move(zipped, to: destination)
         }
     }
     /// 跑一次引擎的 `healthcheck`,写进报告的那几行。参数、超时和输出格式见 Core `DiagnosticsHealthCheck`;

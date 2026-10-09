@@ -236,6 +236,7 @@ func loadAppleCatalogCache(path string) {
 	appleCatalogMu.Unlock()
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var m map[string]appleCatalogTrack
@@ -609,6 +610,7 @@ func loadAppleStorefrontArtistCache(path string) {
 	appleStorefrontArtistPath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var f appleStorefrontArtistFile
@@ -712,6 +714,7 @@ func loadAppleStorefrontTitleCache(path string) {
 	appleStorefrontTitlePath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var f appleStorefrontTitleFile

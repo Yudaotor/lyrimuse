@@ -268,7 +268,7 @@ enum ConfigPortability {
             ConfigExportMetadata.deviceNameKey: computerName,
         ]
 
-        if let configData = try? Data(contentsOf: configURL),
+        if let configData = FileIO.read(configURL),
            let configObj = try? JSONSerialization.jsonObject(with: configData) {
             bundle["config"] = configObj
         } else {
@@ -276,7 +276,7 @@ enum ConfigPortability {
             // 方便"导出的文件里怎么少了 config 这部分"这类问题的排查。
             logger.notice("buildExportData: no config.json found/parseable at \(configURL.path, privacy: .public)")
         }
-        if let featuresData = try? Data(contentsOf: featuresURL),
+        if let featuresData = FileIO.read(featuresURL),
            let featuresObj = try? JSONSerialization.jsonObject(with: featuresData) {
             // 本机的系统语言是机器状态,不随包走(SystemLanguage)。
             bundle["features"] = SystemLanguage.strippingForExport(featuresObj)

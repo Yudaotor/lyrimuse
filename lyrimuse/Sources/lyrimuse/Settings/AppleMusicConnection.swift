@@ -48,9 +48,9 @@ public final class AppleMusicConnection: ObservableObject {
     /// 重新读盘。连接成功、断开、以及设置页每次出现时都调一次。
     public func refresh() {
         let fileDate = (try? FileManager.default.attributesOfItem(atPath: Self.tokenURL.path))?[.modificationDate] as? Date
-        guard let data = try? Data(contentsOf: Self.tokenURL),
+        guard let data = FileIO.read(Self.tokenURL),
               let info = AppleMusicTokenFile.parse(data, fileDate: fileDate ?? Date(),
-                                                   engineStatus: try? Data(contentsOf: Self.engineStatusURL))
+                                                   engineStatus: FileIO.read(Self.engineStatusURL))
         else {
             tokenInfo = nil
             isRejected = false
@@ -107,7 +107,7 @@ public final class AppleMusicConnection: ObservableObject {
     /// 断开:删掉令牌文件,并清掉 WebView 那份登录态(否则下次点"连接"会直接跳过登录页、
     /// 把同一个账号的令牌又写回来,用户会以为断开没生效)。
     public func disconnect() {
-        try? FileManager.default.removeItem(at: Self.tokenURL)
+        FileIO.remove(Self.tokenURL)
         Self.clearAppleWebsiteData {}
         refresh()
     }
@@ -214,10 +214,9 @@ final class AppleMusicLoginWindowController: NSWindowController, WKNavigationDel
         pollTimer = nil
 
         let payload = AppleMusicTokenFile.payload(token: token, storefront: storefront, savedAt: Date(), expiresAt: expiresAt)
-        do {
-            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
-            try Self.writeCredentialFile(data, to: tokenURL)
-        } catch {
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
+              FileIO.attempt("write", tokenURL, { try Self.writeCredentialFile(data, to: tokenURL) })
+        else {
             // 落盘失败(磁盘满/权限)时当作没连上——宁可让用户再点一次,也不要显示成"已连接"却查不到歌词。
             completion(false)
             close()

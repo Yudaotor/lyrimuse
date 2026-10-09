@@ -172,7 +172,7 @@ public enum LyricsFillSweep {
         }
         if mtime == cachedMTime { return cached }
         cachedMTime = mtime
-        cached = (try? Data(contentsOf: statusURL)).flatMap { try? JSONDecoder().decode(Info.self, from: $0) }
+        cached = FileIO.decodeJSON(Info.self, from: statusURL)
         return cached
     }
 
@@ -205,7 +205,7 @@ public enum LyricsFillSweep {
     }
 
     private static func write(_ body: String, startsRound: Bool) -> Bool {
-        let ok = (try? body.write(to: requestURL, atomically: true, encoding: .utf8)) != nil
+        let ok = FileIO.write(body, to: requestURL)
         lock.lock()
         requestedAt = ok && startsRound ? Date() : nil
         lock.unlock()

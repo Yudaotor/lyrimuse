@@ -147,6 +147,7 @@ func exportLyricsFilesMatching(onlyFolds map[string]bool) {
 		return
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
+		noteFileErr("mkdir", dir, err)
 		return
 	}
 	// 上次之后没人动过、要写的内容也没变的文件不读不写(见 lyricsfilestate.go)。全量导出先把目录列一遍,

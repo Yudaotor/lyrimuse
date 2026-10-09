@@ -354,7 +354,7 @@ public enum AppleMusicDeveloperToken {
 
     /// 还有效的 token;文件不在 / 读不出 / 离过期不到一分钟返回 nil。
     public static func cached(now: Date = Date()) -> String? {
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        guard let data = FileIO.read(fileURL) else { return nil }
         return parse(data, now: now)
     }
 

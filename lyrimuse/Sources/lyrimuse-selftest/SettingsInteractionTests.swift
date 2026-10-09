@@ -492,7 +492,7 @@ func runSettingsInteractionTests() {
         expectEqual(conn.contains("attributes: [.posixPermissions: 0o600]") && conn.contains("rename(tmp.path, url.path)"), true,
                     "Apple Music 连接(契约): 凭据文件从创建起就是 0600")
         expectEqual(conn.contains("expiresAt: tokenCookie.expiresDate"), true, "Apple Music 连接(契约): 记下 cookie 自带的过期时刻")
-        expectEqual(conn.contains("engineStatus: try? Data(contentsOf: Self.engineStatusURL)"), true,
+        expectEqual(conn.contains("engineStatus: FileIO.read(Self.engineStatusURL)"), true,
                     "Apple Music 连接(契约): 读令牌时把引擎的状态文件一起读进来")
     }
 

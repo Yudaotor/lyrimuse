@@ -488,7 +488,7 @@ func trashAllLyricsFiles() {
 func setEnrichEditDir(dir string) {
 	enrichEditDir = dir
 	if dir != "" {
-		_ = os.MkdirAll(dir, 0o700)
+		noteFileErr("mkdir", dir, os.MkdirAll(dir, 0o700))
 	}
 }
 
@@ -541,6 +541,7 @@ func processEnrichEditRequests() {
 		data, err := os.ReadFile(path)
 		_ = os.Remove(path)
 		if err != nil {
+			noteFileErr("read", path, err)
 			continue
 		}
 		id := strings.TrimSuffix(name, ".json")
@@ -551,6 +552,7 @@ func processEnrichEditRequests() {
 		}
 		var req enrichEditRequest
 		if err := json.Unmarshal(data, &req); err != nil {
+			noteFileErr("decode", path, err)
 			res = enrichEditResult{ID: id, Error: "unreadable request: " + err.Error()}
 		} else {
 			req.ID = id

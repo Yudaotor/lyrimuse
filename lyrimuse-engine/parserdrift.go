@@ -67,9 +67,11 @@ func loadParserDriftFile(path string) map[string]parserDriftEntry {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return out
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
+		noteFileErr("decode", path, err)
 		return map[string]parserDriftEntry{}
 	}
 	return out

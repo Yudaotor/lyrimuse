@@ -1241,12 +1241,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     private static func writeTempScript(_ source: String) -> URL? {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyrimuse-browser-probe-\(UUID().uuidString).applescript")
-        do {
-            try source.write(to: url, atomically: true, encoding: .utf8)
-            return url
-        } catch {
-            return nil
-        }
+        return FileIO.write(source, to: url) ? url : nil
     }
 
     /// 「把正在放歌的那枚标签页翻到台前」的 AppleScript。URL 特征与进度探测同一份

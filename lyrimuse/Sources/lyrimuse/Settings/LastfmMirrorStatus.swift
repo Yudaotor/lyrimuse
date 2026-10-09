@@ -32,14 +32,14 @@ enum LastfmMirrorStatus {
         }
         if mtime == cachedMTime { return cached }
         cachedMTime = mtime
-        cached = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Info.self, from: $0) }
+        cached = FileIO.decodeJSON(Info.self, from: url)
         return cached
     }
 
     /// 重新连接成功/主动断开时清掉 —— 旧错误描述的是上一把钥匙,留着会让新连接顶着
     /// 一个不属于它的红标(引擎侧也会在下次成功提交时删,这里是即时反馈)。
     static func clear() {
-        try? FileManager.default.removeItem(at: url)
+        FileIO.remove(url)
         cachedMTime = nil
         cached = nil
         // 红标即时消失,不等观察器的下一跳。两个调用方(重连成功/断开)都在主线程

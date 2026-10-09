@@ -2970,7 +2970,7 @@ struct LyricsManagerView: View {
     private func cancelPlaceholderSearch() {
         guard let key = placeholderSummary?.key else { return }
         let url = LyrimusePaths.configFile("lyrimuse-enrich-cancel-request.txt")
-        try? key.write(to: url, atomically: true, encoding: .utf8)
+        FileIO.write(key, to: url)
     }
 
     // MARK: - 详情

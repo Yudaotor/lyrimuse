@@ -36,7 +36,7 @@ final class RelayPushStatusWatcher: ObservableObject {
         }
         if mtime == cachedMTime { return cached }
         cachedMTime = mtime
-        cached = (try? Data(contentsOf: url)).flatMap(RelayPushStatus.parse)
+        cached = FileIO.read(url).flatMap(RelayPushStatus.parse)
         return cached
     }
 }

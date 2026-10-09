@@ -166,7 +166,7 @@ enum ICloudConfigStore {
     /// 面板会退回上次用过的位置 —— 表现成"我明明设了默认存到 iCloud,怎么还是打开在
     /// 别处"。建不出来(iCloud 目录不可写等)就返回它本身,让面板自己去回退。
     static func preparedFolderURL() -> URL {
-        try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        FileIO.createDirectory(folderURL)
         ensureFolderIcon(at: folderURL)
         return folderURL
     }
@@ -248,7 +248,7 @@ enum ICloudConfigStore {
         //
         // isMaterialized 用的资源属性查询本身不会触发下载(同次实测:已下载 → Current,
         // 逐出后 → NotDownloaded,两次都是立即返回)。
-        if isMaterialized(found.url), let data = try? Data(contentsOf: found.url) {
+        if isMaterialized(found.url), let data = FileIO.read(found.url) {
             let meta = metadata(in: data)
             found.exportedAt = meta.exportedAt
             found.deviceName = meta.deviceName
@@ -339,7 +339,7 @@ enum ICloudConfigStore {
     /// 调用方(启动探测)是 @MainActor 的,`async` 本身并不会让函数体换线程 —— 不显式
     /// 切走的话,读盘仍然发生在主线程上。
     private static func loadOffCallerThread(_ url: URL) async -> Data? {
-        await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
+        await Task.detached(priority: .utility) { FileIO.read(url) }.value
     }
 
     // MARK: - 写

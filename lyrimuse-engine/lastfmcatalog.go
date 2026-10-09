@@ -621,6 +621,7 @@ func (c *lastfmCatalogMatcher) load() {
 	}
 	data, err := os.ReadFile(lastfmCatalogPath)
 	if err != nil {
+		noteFileErr("read", lastfmCatalogPath, err)
 		return // 首次运行没有这个文件是正常的
 	}
 	var m map[string]lastfmCatalogDecision

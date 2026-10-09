@@ -304,12 +304,14 @@ func readLyricsFullScanStateLocked() lyricsFullScanState {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return lyricsFullScanState{}
 	}
 	var state lyricsFullScanState
 	// 解析失败一律当"没有待续的一轮":这份文件坏了最坏的后果是少续一次跑(用户再点一下
 	// 就好),而把坏文件当成 Active=true 会让每次启动都自动开一轮几十小时的全库联网扫描。
 	if err := json.Unmarshal(data, &state); err != nil {
+		noteFileErr("decode", path, err)
 		return lyricsFullScanState{}
 	}
 	return state

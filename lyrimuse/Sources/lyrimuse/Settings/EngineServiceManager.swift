@@ -320,7 +320,7 @@ public enum EngineServiceManager {
 
     private static func uninstall() {
         run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
-        try? FileManager.default.removeItem(at: plistURL)
+        FileIO.remove(plistURL)
         // 卸了就别留指纹:留着的话,用户下次开启服务前如果 App 更新过,reconcile 会拿一个
         // "上次装的是谁"的陈旧记录去比,徒增一次判断歧义。
         UserDefaults.standard.removeObject(forKey: installedFingerprintKey)
@@ -359,13 +359,9 @@ public enum EngineServiceManager {
         let outPipe = Pipe()
         p.standardOutput = outPipe
         p.standardError = mergeStderr ? outPipe : FileHandle.nullDevice
-        do {
-            try p.run()
-            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-            p.waitUntilExit()
-            return (p.terminationStatus, String(data: data, encoding: .utf8) ?? "")
-        } catch {
-            return (-1, "")
-        }
+        guard FileIO.attempt("launch", URL(fileURLWithPath: path), { try p.run() }) else { return (-1, "") }
+        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return (p.terminationStatus, String(data: data, encoding: .utf8) ?? "")
     }
 }

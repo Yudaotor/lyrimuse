@@ -51,6 +51,7 @@ func loadLBRetryLocked() []lbRetryItem {
 	}
 	data, err := os.ReadFile(lbRetryPath)
 	if err != nil {
+		noteFileErr("read", lbRetryPath, err)
 		return nil
 	}
 	var items []lbRetryItem

@@ -86,6 +86,7 @@ func amazonLastStartIsCloudQueue(data []byte) bool {
 func (t *amazonLogTail) poll() {
 	f, err := os.Open(t.path)
 	if err != nil {
+		noteFileErr("read", t.path, err)
 		return
 	}
 	defer f.Close()

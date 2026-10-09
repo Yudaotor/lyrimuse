@@ -88,6 +88,7 @@ func currentLyricSources() map[string]bool {
 func readLyricSources(path string) map[string]bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil
 	}
 	// 只认 lyrics_sources:老配置补新源的迁移标记(xxx_lyrics)只 App 读,补完写进这个列表。

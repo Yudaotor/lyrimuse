@@ -30,8 +30,8 @@ public enum TrustedPlayers {
 
     /// bundle id → 显示名(可能是空串:反查不到 App 名时)。文件不存在/解析失败一律空表。
     public static var current: [String: String] {
-        guard let data = try? Data(contentsOf: featuresURL),
-              let f = try? JSONDecoder().decode(MinimalFeatureFlags.self, from: data),
+        guard let data = FileIO.read(featuresURL),
+              let f = FileIO.decodeJSON(MinimalFeatureFlags.self, from: data, source: featuresURL),
               let map = f.trusted_players
         else { return [:] }
         return map

@@ -98,7 +98,7 @@ enum EnrichEditChannel {
     private static func waitForResult(_ url: URL, timeout: TimeInterval) async -> Result? {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let raw = try? Data(contentsOf: url) {
+            if let raw = FileIO.read(url) {
                 try? FileManager.default.removeItem(at: url)
                 return decode(raw)
             }

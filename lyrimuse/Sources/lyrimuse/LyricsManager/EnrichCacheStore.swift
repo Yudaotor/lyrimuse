@@ -611,7 +611,7 @@ public final class EnrichCacheStore: ObservableObject {
             guard let main = fileFingerprint(cacheURL)?.mtime, let idx = fileFingerprint(indexURL)?.mtime else { break }
             if idx >= main {
                 let tRead = CFAbsoluteTimeGetCurrent()
-                guard let data = try? Data(contentsOf: indexURL) else { break }
+                guard let data = FileIO.read(indexURL) else { break }
                 out.readMS = LyricsManagerBaseline.ms(since: tRead)
                 let tParse = CFAbsoluteTimeGetCurrent()
                 if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]],
@@ -633,7 +633,7 @@ public final class EnrichCacheStore: ObservableObject {
             return out
         }
         let tRead = CFAbsoluteTimeGetCurrent()
-        guard let data = try? Data(contentsOf: cacheURL) else {
+        guard let data = FileIO.read(cacheURL) else {
             return out
         }
         out.readMS = LyricsManagerBaseline.ms(since: tRead)
@@ -651,8 +651,8 @@ public final class EnrichCacheStore: ObservableObject {
     private nonisolated static func loadBody(forKey key: String) -> EnrichCacheBody? {
         let url = LyrimusePaths.configFile(EnrichCacheSlim.bodiesDirectoryName)
             .appendingPathComponent(DecisionSidecar.fileName(forKey: key))
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(EnrichCacheBody.self, from: data)
+        guard let data = FileIO.read(url) else { return nil }
+        return FileIO.decodeJSON(EnrichCacheBody.self, from: data, source: url)
     }
 
     /// 用到这一条的正文之前把它补成完整条目(见 `EnrichCacheSlim`)。先读正文小文件;对不上(引擎还没
@@ -677,7 +677,7 @@ public final class EnrichCacheStore: ObservableObject {
             return false
         }
         logger.notice("hydrate: lyrics body file missing or damaged, reading the main cache")
-        guard let data = try? Data(contentsOf: Self.cacheURL),
+        guard let data = FileIO.read(Self.cacheURL),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
             loadError = L10n.t("读取本地记录文件失败")
             return false

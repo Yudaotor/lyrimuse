@@ -89,6 +89,7 @@ func loadArtworkConfirmed() {
 	}
 	b, err := os.ReadFile(artworkConfirmPath)
 	if err != nil {
+		noteFileErr("read", artworkConfirmPath, err)
 		return // 首次运行,不是错
 	}
 	var f artworkConfirmFile

@@ -139,6 +139,7 @@ func applemusicLocalNameKey(artist, title string) string {
 func scanApplemusicLocalFile(path string, idx map[string]applemusicLocalEntry, byName map[string][]applemusicLocalEntry) {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	// 快速预筛:同目录下绝大多数是封面图等二进制,没必要送进 JSON 解析器。

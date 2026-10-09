@@ -224,6 +224,7 @@ func spotifyLoadLyricsIndexLocked(dir string) {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var f spotifyLyricsIndexFile
@@ -415,6 +416,7 @@ func spotifyLocalLyricsByTrackID(id string) (string, bool) {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return "", false
 	}
 	body, ok := spotifyLyricsBody(raw)

@@ -130,7 +130,7 @@ final class CustomFontStore: ObservableObject {
         for name in font.fileNames {
             let url = directory.appendingPathComponent(name)
             unregister(url)
-            try? fm.removeItem(at: url)
+            FileIO.remove(url)
         }
         refresh()
         guard !isAvailable(font.familyName) else { return }

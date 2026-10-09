@@ -55,6 +55,7 @@ func loadArtistAliasCache(path string) {
 	artistAliasPath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var m map[string]string
@@ -268,6 +269,7 @@ func loadArtistIdentityCache(path string) {
 	artistIdentityPath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var m map[string]mbArtistIdentity
@@ -570,6 +572,7 @@ func loadMBPrimaryNameCache(path string) {
 	mbPrimaryNamePath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var m map[string][]string

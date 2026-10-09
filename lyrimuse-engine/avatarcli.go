@@ -50,7 +50,9 @@ func runArtistAvatarsCLI(args []string) {
 	cache := map[string]avatarCacheEntry{}
 	if data, err := os.ReadFile(cachePath); err == nil {
 		// 解析失败就当没有缓存,重查一遍然后覆盖写 —— 缓存文件坏了不该让功能失效
-		_ = json.Unmarshal(data, &cache)
+		noteFileErr("decode", cachePath, json.Unmarshal(data, &cache))
+	} else {
+		noteFileErr("read", cachePath, err)
 	}
 
 	out := map[string]string{}
@@ -151,7 +153,9 @@ func pruneAvatarCache(m map[string]avatarCacheEntry, now time.Time) {
 func mergeAvatarCache(cachePath string, updated map[string]avatarCacheEntry) map[string]avatarCacheEntry {
 	merged := map[string]avatarCacheEntry{}
 	if data, err := os.ReadFile(cachePath); err == nil {
-		_ = json.Unmarshal(data, &merged)
+		noteFileErr("decode", cachePath, json.Unmarshal(data, &merged))
+	} else {
+		noteFileErr("read", cachePath, err)
 	}
 	for name, entry := range updated {
 		merged[name] = entry

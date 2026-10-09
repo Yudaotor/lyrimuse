@@ -123,6 +123,7 @@ func saveDeviceArtwork(data []byte, mimeType string) (string, bool) {
 		return "file://" + path, true
 	}
 	if err := os.MkdirAll(deviceArtworkDir, 0o755); err != nil {
+		noteFileErr("mkdir", deviceArtworkDir, err)
 		return "", false
 	}
 	// 原子写:「文件已经在就直接复用」,写到一半被杀(引擎一天重启十几次)留下的半截文件之后会一直被当成

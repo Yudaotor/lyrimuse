@@ -111,6 +111,7 @@ func refreshLyricsPinsLocked() {
 func readLyricsPins(path string) map[string]bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil
 	}
 	var f lyricsPinsFile

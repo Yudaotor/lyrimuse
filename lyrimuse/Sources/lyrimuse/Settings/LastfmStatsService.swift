@@ -79,7 +79,7 @@ final class LastfmStatsService: ObservableObject {
         let mtime = (try? FileManager.default.attributesOfItem(atPath: Self.feedURL.path))?[.modificationDate] as? Date
         guard let mtime, mtime != feedMTime else { return }
         feedMTime = mtime
-        guard let data = try? Data(contentsOf: Self.feedURL),
+        guard let data = FileIO.read(Self.feedURL),
               let feed = LastfmRecentFeed.decode(data) else { return }
         ingestFeed(feed)
     }
@@ -456,8 +456,8 @@ final class LastfmStatsService: ObservableObject {
     private func loadRecentPageCache() {
         recentPageCacheLoaded = true
         guard let cred = credentials,
-              let data = try? Data(contentsOf: Self.recentPageCacheURL),
-              let snap = try? JSONDecoder().decode(RecentPageCacheSnapshot.self, from: data),
+              let data = FileIO.read(Self.recentPageCacheURL),
+              let snap = FileIO.decodeJSON(RecentPageCacheSnapshot.self, from: data, source: Self.recentPageCacheURL),
               snap.username == cred.user
         else { return }
         for (k, v) in snap.pages {
@@ -570,7 +570,7 @@ final class LastfmStatsService: ObservableObject {
             let url = Self.recentPageCacheURL
             await Task.detached(priority: .utility) {
                 guard let data = try? JSONEncoder().encode(snap) else { return }
-                try? data.write(to: url, options: .atomic)
+                FileIO.write(data, to: url)
             }.value
         }
     }
@@ -1077,13 +1077,13 @@ final class LastfmStatsService: ObservableObject {
         onThisDayDay = nil
         onThisDayOutcome = .pending
         snapshotSaveTask?.cancel()
-        try? FileManager.default.removeItem(at: Self.snapshotURL)
+        FileIO.remove(Self.snapshotURL)
         titleForms = [:]
         titleFormsSyncedThrough = 0
         titleFormsLoaded = false
         titleFormsLastTopUp = nil
         titleFormsSaveTask?.cancel()
-        try? FileManager.default.removeItem(at: Self.titleFormsURL)
+        FileIO.remove(Self.titleFormsURL)
         primaryCreditFamilies = [:]
         // 这几行是本次补的:换账号/断开时原来完全没清理热力图子系统——
         // dailyCounts 等字段一个都没重置,loadDailySnapshot 又靠 dailyLoaded 守卫"只加载
@@ -1103,10 +1103,10 @@ final class LastfmStatsService: ObservableObject {
         dailySyncFailed = false
         dailySyncProgress = nil
         todayFetched = nil
-        try? FileManager.default.removeItem(at: Self.dailyURL)
+        FileIO.remove(Self.dailyURL)
         historyCheckpoint = nil
         historyCheckpointLoaded = false
-        try? FileManager.default.removeItem(at: Self.historyCheckpointURL)
+        FileIO.remove(Self.historyCheckpointURL)
         bootstrapState = .notStarted
         charts = [:]
         chartWindows = [:]
@@ -1163,7 +1163,7 @@ final class LastfmStatsService: ObservableObject {
         recentPageCacheLoaded = false
         recentPagesPrefetching = false
         recentPageCacheSaveTask?.cancel()
-        try? FileManager.default.removeItem(at: Self.recentPageCacheURL)
+        FileIO.remove(Self.recentPageCacheURL)
         fetchedAt = [:]
         // feed 是引擎的文件、这里不删(它会在配置变化后重启重写);只把"上次读到哪"
         // 清掉,新账号的第一份 feed 到了要能立刻吃进去(username 校验在 ingestFeed)。
@@ -1587,8 +1587,8 @@ final class LastfmStatsService: ObservableObject {
     private func loadDailySnapshot() {
         dailyLoaded = true
         guard let cred = credentials,
-              let data = try? Data(contentsOf: Self.dailyURL),
-              let snap = try? JSONDecoder().decode(DailySnapshot.self, from: data),
+              let data = FileIO.read(Self.dailyURL),
+              let snap = FileIO.decodeJSON(DailySnapshot.self, from: data, source: Self.dailyURL),
               snap.username == cred.user   // 换过账号不吃旧缓存
         else { return }
         dailyCounts = snap.days
@@ -1614,7 +1614,7 @@ final class LastfmStatsService: ObservableObject {
         let snap = DailySnapshot(username: cred.user, syncedThrough: dailySyncedThrough, days: dailyCounts,
                                  hours: hourlyCounts)
         if let data = try? JSONEncoder().encode(snap) {
-            try? data.write(to: Self.dailyURL, options: .atomic)
+            FileIO.write(data, to: Self.dailyURL)
         }
     }
 
@@ -1646,8 +1646,8 @@ final class LastfmStatsService: ObservableObject {
     private func loadHistoryCheckpoint() {
         historyCheckpointLoaded = true
         guard let cred = credentials,
-              let data = try? Data(contentsOf: Self.historyCheckpointURL),
-              let cp = try? JSONDecoder().decode(HistorySyncCheckpoint.self, from: data),
+              let data = FileIO.read(Self.historyCheckpointURL),
+              let cp = FileIO.decodeJSON(HistorySyncCheckpoint.self, from: data, source: Self.historyCheckpointURL),
               cp.username == cred.user
         else { return }
         historyCheckpoint = cp
@@ -1655,10 +1655,10 @@ final class LastfmStatsService: ObservableObject {
 
     private func saveHistoryCheckpoint() {
         guard let cp = historyCheckpoint, let data = try? JSONEncoder().encode(cp) else {
-            try? FileManager.default.removeItem(at: Self.historyCheckpointURL)
+            FileIO.remove(Self.historyCheckpointURL)
             return
         }
-        try? data.write(to: Self.historyCheckpointURL, options: .atomic)
+        FileIO.write(data, to: Self.historyCheckpointURL)
     }
 
     // MARK: - 首次连接后台引导(bootstrap)
@@ -2097,14 +2097,14 @@ final class LastfmStatsService: ObservableObject {
     private func loadTitleForms() {
         titleFormsLoaded = true
         // 这个文件没有读写方,盘上留着的删掉(12 章决策 61)。
-        try? FileManager.default.removeItem(at: LyrimusePaths.configFile("lyrimuse-lastfm-title-aliases-discovered.json"))
+        FileIO.remove(LyrimusePaths.configFile("lyrimuse-lastfm-title-aliases-discovered.json"))
         // 本机 enrich 缓存推出来的别名表要在下面 rebuildPrimaryCreditFamilies 之前灌进 PlayCountFold,
         // 否则首次建出来的族没有它,要等缓存下一次变化才补上。
         lastLocalAliasRefreshAt = Date()
         refreshLocalAliases(rebuildFamilies: false)
         guard let cred = credentials,
-              let data = try? Data(contentsOf: Self.titleFormsURL),
-              let snap = try? JSONDecoder().decode(TitleFormsSnapshot.self, from: data),
+              let data = FileIO.read(Self.titleFormsURL),
+              let snap = FileIO.decodeJSON(TitleFormsSnapshot.self, from: data, source: Self.titleFormsURL),
               snap.username == cred.user   // 换过账号不吃旧索引
         else { return }
         if snap.foldVersion == PlayCountFold.foldVersion {
@@ -2154,7 +2154,7 @@ final class LastfmStatsService: ObservableObject {
             let url = Self.titleFormsURL
             await Task.detached(priority: .utility) {
                 guard let data = try? JSONEncoder().encode(snap) else { return }
-                try? data.write(to: url, options: .atomic)
+                FileIO.write(data, to: url)
             }.value
         }
     }
@@ -2356,8 +2356,8 @@ final class LastfmStatsService: ObservableObject {
     private var snapshotSaveTask: Task<Void, Never>?
 
     private func loadSnapshot() {
-        guard let data = try? Data(contentsOf: Self.snapshotURL),
-              let snap = try? JSONDecoder().decode(StatsSnapshot.self, from: data) else { return }
+        guard let data = FileIO.read(Self.snapshotURL),
+              let snap = FileIO.decodeJSON(StatsSnapshot.self, from: data, source: Self.snapshotURL) else { return }
         // 换过账号就不吃旧快照 —— 那是前任的数据
         guard let cred = credentials, cred.user == snap.username else { return }
         overview = snap.overview
@@ -2444,7 +2444,7 @@ final class LastfmStatsService: ObservableObject {
         let url = LyrimusePaths.configFile(PlatformPagesWanted.fileName)
         Task.detached(priority: .utility) {
             guard let data = wanted.encoded() else { return }
-            try? data.write(to: url, options: .atomic)
+            FileIO.write(data, to: url)
         }
     }
 
@@ -2522,7 +2522,7 @@ final class LastfmStatsService: ObservableObject {
             let url = Self.snapshotURL
             await Task.detached(priority: .utility) {
                 guard let data = try? JSONEncoder().encode(snap) else { return }
-                try? data.write(to: url, options: .atomic)
+                FileIO.write(data, to: url)
             }.value
         }
     }
@@ -2845,7 +2845,7 @@ final class LastfmStatsService: ObservableObject {
         let user = ConfigStore.shared.lastfmUser
         guard version != artistRegionsVersion, !user.isEmpty else { return }
         artistRegionsVersion = version
-        let parsed = (try? Data(contentsOf: url)).map { ArtistRegions.parse($0, user: user) } ?? [:]
+        let parsed = FileIO.read(url).map { ArtistRegions.parse($0, user: user) } ?? [:]
         if parsed != artistRegions { artistRegions = parsed }
     }
 

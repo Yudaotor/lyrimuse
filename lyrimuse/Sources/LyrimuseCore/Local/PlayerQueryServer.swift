@@ -374,8 +374,8 @@ public final class PlayerQueryServer: @unchecked Sendable {
         else { return }
         if let last = lastSignature, last.modified == modified, last.size == size { return }
         lastSignature = (modified, size)
-        guard let data = try? Data(contentsOf: url),
-              let request = try? JSONDecoder().decode(Request.self, from: data),
+        guard let data = FileIO.read(url),
+              let request = FileIO.decodeJSON(Request.self, from: data, source: url),
               request.id != lastHandledID
         else { return }
         let decision = Self.decide(request, now: Date())

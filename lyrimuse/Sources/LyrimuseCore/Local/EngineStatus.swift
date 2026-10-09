@@ -38,7 +38,7 @@ public enum EngineStatus {
         }
         if mtime == cachedMTime { return cached }
         cachedMTime = mtime
-        cached = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Info.self, from: $0) }
+        cached = FileIO.decodeJSON(Info.self, from: url)
         return cached
     }
 

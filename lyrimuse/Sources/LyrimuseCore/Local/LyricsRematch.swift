@@ -170,16 +170,16 @@ public enum LyricsRematch {
     /// 请引擎对 key 跑一轮。返回写文件是否成功。
     @discardableResult
     public static func request(id: String, key: String) -> Bool {
-        (try? requestBody(id: id, key: key).write(to: requestURL, options: .atomic)) != nil
+        FileIO.write(requestBody(id: id, key: key), to: requestURL)
     }
 
     /// 停掉 id 那一轮(详情页换了一首)。那一轮已经跑完时引擎什么都不做。
     public static func cancel(id: String) {
-        try? cancelBody(id: id).write(to: requestURL, options: .atomic)
+        FileIO.write(cancelBody(id: id), to: requestURL)
     }
 
     /// 状态文件此刻的内容;不存在 / 解不开都是 nil。只在等结论时读,文件很小,不做缓存。
     public static var current: Status? {
-        (try? Data(contentsOf: statusURL)).flatMap { try? JSONDecoder().decode(Status.self, from: $0) }
+        FileIO.decodeJSON(Status.self, from: statusURL)
     }
 }

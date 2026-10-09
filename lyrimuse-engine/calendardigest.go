@@ -61,6 +61,7 @@ func (s calendarDigestState) load() string {
 	}
 	b, err := os.ReadFile(s.path)
 	if err != nil {
+		noteFileErr("read", s.path, err)
 		return ""
 	}
 	var v struct {

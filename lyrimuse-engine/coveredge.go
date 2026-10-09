@@ -52,6 +52,7 @@ func measureCoverEdge(ctx context.Context, coverURL string) int {
 	case strings.HasPrefix(coverURL, deviceArtworkURLPrefix):
 		f, err := os.Open(strings.TrimPrefix(coverURL, deviceArtworkURLPrefix))
 		if err != nil {
+			noteFileErr("read", strings.TrimPrefix(coverURL, deviceArtworkURLPrefix), err)
 			return 0
 		}
 		defer f.Close()

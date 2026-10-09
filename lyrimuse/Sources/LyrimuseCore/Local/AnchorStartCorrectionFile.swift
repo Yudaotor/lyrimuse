@@ -45,7 +45,7 @@ public enum AnchorStartCorrectionFile {
 
     /// 不存在 / 解析失败都当没有。
     public static func read() -> AnchorStartCorrectionRecord? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let data = FileIO.read(url) else { return nil }
         return decode(data)
     }
 

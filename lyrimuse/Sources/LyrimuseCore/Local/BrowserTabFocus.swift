@@ -166,11 +166,7 @@ public enum BrowserTabFocus {
     private static func runScript(_ source: String, label: String) -> String? {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyrimuse-\(label)-\(UUID().uuidString).applescript")
-        do {
-            try source.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
-            return nil
-        }
+        guard FileIO.write(source, to: url) else { return nil }
         defer { try? FileManager.default.removeItem(at: url) }
         guard let result = ProcessRunner.run("/usr/bin/osascript", [url.path],
                                              timeout: YouTubeMusicAdProbe.processTimeout),

@@ -233,6 +233,7 @@ func readListenLogRawAt(path string) []listenLogRawLine {
 	}
 	f, err := os.Open(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil // 文件还不存在是正常情况(从没听过歌)
 	}
 	defer f.Close()

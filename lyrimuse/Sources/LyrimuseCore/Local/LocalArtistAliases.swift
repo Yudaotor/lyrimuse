@@ -169,17 +169,17 @@ public enum ArtistIdentityCaches {
 
     public static func load(configDir: URL = LyrimusePaths.configDir) -> LocalArtistAliases.MusicBrainzCaches {
         var out = LocalArtistAliases.MusicBrainzCaches()
-        if let data = try? Data(contentsOf: configDir.appendingPathComponent(aliasFileName)),
-           let m = try? JSONDecoder().decode([String: String].self, from: data) {
+        if let data = FileIO.read(configDir.appendingPathComponent(aliasFileName)),
+           let m = FileIO.decodeJSON([String: String].self, from: data, source: configDir.appendingPathComponent(aliasFileName)) {
             out.aliasCache = m
         }
         struct Identity: Decodable { var zh: String? }
-        if let data = try? Data(contentsOf: configDir.appendingPathComponent(identityFileName)),
-           let m = try? JSONDecoder().decode([String: Identity].self, from: data) {
+        if let data = FileIO.read(configDir.appendingPathComponent(identityFileName)),
+           let m = FileIO.decodeJSON([String: Identity].self, from: data, source: configDir.appendingPathComponent(identityFileName)) {
             out.identityZh = m.compactMapValues { $0.zh }.filter { !$0.value.isEmpty }
         }
-        if let data = try? Data(contentsOf: configDir.appendingPathComponent(primaryFileName)),
-           let m = try? JSONDecoder().decode([String: [String]].self, from: data) {
+        if let data = FileIO.read(configDir.appendingPathComponent(primaryFileName)),
+           let m = FileIO.decodeJSON([String: [String]].self, from: data, source: configDir.appendingPathComponent(primaryFileName)) {
             out.primaryAliases = m
         }
         return out

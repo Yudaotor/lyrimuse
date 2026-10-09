@@ -798,6 +798,7 @@ func scanKKBOXCache(dir string) kkboxCache {
 func kkboxCacheEntryURL(path string, head []byte) *url.URL {
 	f, err := os.Open(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil
 	}
 	n, _ := io.ReadFull(f, head)
@@ -821,6 +822,7 @@ func (e kkboxCacheEntry) body() ([]byte, bool) {
 	}
 	data, err := os.ReadFile(e.file)
 	if err != nil {
+		noteFileErr("read", e.file, err)
 		return nil, false
 	}
 	return chromiumCacheEntryBody(data)

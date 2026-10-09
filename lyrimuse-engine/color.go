@@ -71,6 +71,7 @@ func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 	if strings.HasPrefix(coverURL, deviceArtworkURLPrefix) {
 		data, err := os.ReadFile(strings.TrimPrefix(coverURL, deviceArtworkURLPrefix))
 		if err != nil {
+			noteFileErr("read", strings.TrimPrefix(coverURL, deviceArtworkURLPrefix), err)
 			return nil
 		}
 		img, err := decodeCoverImage(data)

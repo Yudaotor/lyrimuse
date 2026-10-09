@@ -29,6 +29,7 @@ func (s weeklyDigestState) load() int64 {
 	}
 	b, err := os.ReadFile(s.path)
 	if err != nil {
+		noteFileErr("read", s.path, err)
 		return 0
 	}
 	var v struct {

@@ -135,6 +135,7 @@ func (b *lyricSourceBreaker) loadBlocks(path string) {
 	b.blocksPath = path
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var saved map[string]lyricSourceBlockRecord

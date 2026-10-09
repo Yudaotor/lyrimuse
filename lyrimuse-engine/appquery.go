@@ -149,6 +149,7 @@ func askApp(req appQueryRequest, timeout time.Duration) (string, bool) {
 		lastMod, lastSize = info.ModTime(), info.Size()
 		raw, err := os.ReadFile(repPath)
 		if err != nil {
+			noteFileErr("read", repPath, err)
 			continue
 		}
 		var rep appQueryReply

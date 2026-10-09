@@ -571,8 +571,8 @@ public enum EnrichCacheReader {
     /// (引擎先写小文件、再写主缓存),小文件是新的那份,也用(见 `EnrichCacheSlim.adoptNewerBody`)。
     nonisolated static func readBody(forKey key: String, crc: UInt32, in dir: URL) -> EnrichCacheBody? {
         let url = dir.appendingPathComponent(DecisionSidecar.fileName(forKey: key))
-        guard let data = try? Data(contentsOf: url),
-              let body = try? JSONDecoder().decode(EnrichCacheBody.self, from: data),
+        guard let data = FileIO.read(url),
+              let body = FileIO.decodeJSON(EnrichCacheBody.self, from: data, source: url),
               body.crc == crc || EnrichCacheSlim.isSelfConsistent(body) else { return nil }
         return body
     }
@@ -1548,8 +1548,8 @@ public enum EnrichCacheReader {
     private static func playingSnapshot(forExactKey key: String) -> EnrichCacheEntry? {
         guard let mtime = mtime(of: playingEntryURL) else { return nil }
         if let c = cachedPlayingEntry, c.mtime == mtime { return c.key == key ? c.entry : nil }
-        guard let data = try? Data(contentsOf: playingEntryURL),
-              let file = try? JSONDecoder().decode(PlayingEntryFile.self, from: data) else { return nil }
+        guard let data = FileIO.read(playingEntryURL),
+              let file = FileIO.decodeJSON(PlayingEntryFile.self, from: data, source: playingEntryURL) else { return nil }
         cachedPlayingEntry = (mtime, file.key, file.entry)
         return file.key == key ? file.entry : nil
     }
@@ -1559,8 +1559,8 @@ public enum EnrichCacheReader {
         guard let mtime = mtime(of: playingEntryURL) else { return nil }
         if let decoded = cachedMTime, mtime <= decoded { return nil }
         if let c = cachedPlayingEntry, c.mtime == mtime { return (c.key, c.entry, mtime) }
-        guard let data = try? Data(contentsOf: playingEntryURL),
-              let file = try? JSONDecoder().decode(PlayingEntryFile.self, from: data) else { return nil }
+        guard let data = FileIO.read(playingEntryURL),
+              let file = FileIO.decodeJSON(PlayingEntryFile.self, from: data, source: playingEntryURL) else { return nil }
         cachedPlayingEntry = (mtime, file.key, file.entry)
         return (file.key, file.entry, mtime)
     }
@@ -1637,8 +1637,8 @@ public enum EnrichCacheReader {
         if let mtime, mtime == failedDecodeMTime { return }
         lastDecodeKick = ProcessInfo.processInfo.systemUptime
         // 整份按映射读,几十 MB 的文件内容不拷进堆(见 15 章决策 22)。引擎换这份文件一律是新文件改名过来,不会原地截断。
-        guard let data = try? Data(contentsOf: source.url, options: .mappedIfSafe),
-              let all = try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: data)
+        guard let data = FileIO.read(source.url, options: .mappedIfSafe),
+              let all = FileIO.decodeJSON([String: EnrichCacheEntry].self, from: data, source: source.url)
         else {
             failedDecodeMTime = mtime
             // 解不开的是索引就作废这一版索引,下一次改读主缓存(见 currentSource)。
@@ -1678,7 +1678,7 @@ public enum EnrichCacheReader {
         let base = (entries: cachedEntries, fingerprints: cachedFingerprints, generation: contentGeneration)
         Task.detached(priority: .utility) {
             let mtime = mtime(of: url)
-            let refresh = (try? Data(contentsOf: url, options: .mappedIfSafe)).flatMap {
+            let refresh = FileIO.read(url, options: .mappedIfSafe).flatMap {
                 EnrichIndexDiff.refresh($0, entries: base.entries, fingerprints: base.fingerprints)
             }
             // 派生索引也在这里建好,主线程接过去只换指针(见 DerivedIndexes);输入没变就沿用手上那份

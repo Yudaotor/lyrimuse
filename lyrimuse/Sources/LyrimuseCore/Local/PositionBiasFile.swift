@@ -60,8 +60,8 @@ public enum PositionBiasFile {
     /// 读最近一份记录;不存在 / 解析失败都当没有。App 自己只在重启后第一拍读一次
     /// (接着用上一个进程量的偏置,见 `LocalPlaybackSource.restorablePlayerClockBias`)。
     public static func read() -> PositionBiasRecord? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(PositionBiasRecord.self, from: data)
+        guard let data = FileIO.read(url) else { return nil }
+        return FileIO.decodeJSON(PositionBiasRecord.self, from: data, source: url)
     }
 
     /// 原子写(临时文件 + rename),读到的永远是整份。失败只记日志 —— 接不回偏置只是重启后那一首偏一点,

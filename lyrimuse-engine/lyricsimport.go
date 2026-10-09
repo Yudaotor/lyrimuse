@@ -275,6 +275,7 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		for suffix, path := range g.files {
 			data, err := os.ReadFile(path)
 			if err != nil {
+				noteFileErr("read", path, err)
 				continue
 			}
 			if !utf8.Valid(data) {

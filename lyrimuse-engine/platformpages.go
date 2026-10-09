@@ -88,10 +88,12 @@ func loadPlatformPagesCache(path string) {
 	platformPagesPath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var f platformPagesFile
 	if err := json.Unmarshal(data, &f); err != nil {
+		noteFileErr("decode", path, err)
 		return
 	}
 	if f.Artists == nil {
@@ -144,6 +146,7 @@ type platformPagesWantedItem struct {
 func readPlatformPagesWanted(path string) (albums, tracks []lastfmChartEntry) {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil, nil
 	}
 	var w platformPagesWanted

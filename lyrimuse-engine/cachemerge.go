@@ -35,6 +35,7 @@ func exclusiveFileLock(path string) func() {
 func mergeMissingFromDisk[V any](path string, keep map[string]V, usable func(V) bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var disk map[string]V

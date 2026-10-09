@@ -30,6 +30,7 @@ func (s persistedTTLSet) load() (map[int64]bool, bool) {
 	}
 	b, err := os.ReadFile(s.path)
 	if err != nil {
+		noteFileErr("read", s.path, err)
 		return m, false
 	}
 	var arr []int64

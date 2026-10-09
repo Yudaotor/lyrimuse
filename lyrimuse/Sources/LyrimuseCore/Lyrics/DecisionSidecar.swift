@@ -27,7 +27,7 @@ public enum DecisionSidecar {
     /// 读一条的旁路文件;没有 / 解不出来是 nil。
     public static func loadRecord(key: String, directory: URL) -> [String: Any]? {
         let url = directory.appendingPathComponent(fileName(forKey: key))
-        guard let data = try? Data(contentsOf: url),
+        guard let data = FileIO.read(url),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return obj
     }

@@ -360,6 +360,7 @@ func decryptKRCFile(path string) string {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return ""
 	}
 	return decryptKRCBytes(raw)

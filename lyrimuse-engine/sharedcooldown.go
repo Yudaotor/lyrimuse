@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -62,6 +63,7 @@ func setSharedCooldownPath(path string) {
 func readSharedCooldownFile(path string) map[string]float64 {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil
 	}
 	var f sharedCooldownFile
@@ -153,15 +155,23 @@ func publishSharedCooldown(host, key string, until time.Time) {
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
 	if err != nil {
+		noteFileErr("write", path, err)
 		return
 	}
 	tmpName := tmp.Name()
 	_, werr := tmp.Write(data)
 	cerr := tmp.Close()
-	if werr != nil || cerr != nil || os.Rename(tmpName, path) != nil {
+	if err := errors.Join(werr, cerr); err != nil {
 		os.Remove(tmpName)
+		noteFileErr("write", path, err)
 		return
 	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		noteFileErr("write", path, err)
+		return
+	}
+	noteFileErr("write", path, nil)
 	sharedCooldownCache = merged
 	sharedCooldownReadAt = now
 	if st, err := os.Stat(path); err == nil {

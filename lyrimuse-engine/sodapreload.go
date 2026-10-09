@@ -81,6 +81,7 @@ func sodaUpcomingFromPreload(artist, title string, n int, now time.Time) ([]upco
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil, false
 	}
 	res, ok := pickSodaPreloaded(parseSodaPreloads(raw), artist, title, n, now)
@@ -263,6 +264,7 @@ func sodaPreloadIndex() []sodaPreloadedTrack {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil
 	}
 	sodaPreloadIndexMod, sodaPreloadIndexSize = st.ModTime(), st.Size()

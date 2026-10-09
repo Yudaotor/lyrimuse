@@ -117,6 +117,7 @@ func currentLastfmExcludedBundles() map[string]bool {
 func readLastfmExcludedBundles(path string) map[string]bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil
 	}
 	var f struct {

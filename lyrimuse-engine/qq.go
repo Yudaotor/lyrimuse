@@ -636,6 +636,7 @@ func loadQQArtistNameCache(path string) {
 	qqArtistNamePath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var m map[string]string

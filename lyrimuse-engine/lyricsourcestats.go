@@ -653,6 +653,8 @@ func loadLyricSourceStats(path string, now func() time.Time) *lyricSourceStats {
 			log.Printf("lyric source stats: %s unreadable, starting over: %v", path, err)
 			s.data = lyricSourceStatsFile{}
 		}
+	} else {
+		noteFileErr("read", path, err)
 	}
 	if s.data.Days == nil {
 		s.data.Days = map[string]*lyricSourceStatsDay{}
@@ -788,6 +790,7 @@ func (s *lyricSourceStats) save() {
 func readLyricSourceStatsFile() *lyricSourceStatsFile {
 	b, err := os.ReadFile(configFilePath(lyricSourceStatsFileName))
 	if err != nil {
+		noteFileErr("read", configFilePath(lyricSourceStatsFileName), err)
 		return nil
 	}
 	var f lyricSourceStatsFile

@@ -100,6 +100,7 @@ func lyricsFilesOwnedBy(key string) []string {
 			path := filepath.Join(dir, b+suffix)
 			data, err := os.ReadFile(path)
 			if err != nil {
+				noteFileErr("read", path, err)
 				continue
 			}
 			// 按头部认身份,口径同导入(parseLyricsBytes 容忍 CRLF 和 BOM):用户手改成 CRLF 的文件逐字节比对不上,

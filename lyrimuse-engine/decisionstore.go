@@ -144,6 +144,7 @@ func decisionSidecarName(key string) string {
 func readDecisionSidecar(path string) *decisionSidecar {
 	b, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return nil
 	}
 	var rec decisionSidecar

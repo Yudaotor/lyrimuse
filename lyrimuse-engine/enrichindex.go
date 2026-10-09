@@ -223,6 +223,7 @@ func seedEnrichBodyCRCs() {
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var idx map[string]struct {
@@ -433,6 +434,12 @@ func writeEnrichIndex(snapshot map[string]enrichEntry, crcs map[string]uint32) {
 // writeFileAtomic 写临时文件再改名。临时文件名是随机的:常驻进程和一次性命令(App 调的 search-lyrics 等)
 // 会同时保存同一份缓存,固定的 `.tmp` 名会让一方把另一方写到一半的文件改名上位,读取时解析失败、整份缓存悄悄变空。
 func writeFileAtomic(path string, b []byte) error {
+	err := writeFileAtomicUnlogged(path, b)
+	noteFileErr("write", path, err)
+	return err
+}
+
+func writeFileAtomicUnlogged(path string, b []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp.*")
 	if err != nil {
 		return err
@@ -478,6 +485,7 @@ func removeStaleWriteTemps(path string, olderThan time.Duration) (removed int, f
 func enrichIndexOutdated(path string) bool {
 	b, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return true
 	}
 	return bytes.Contains(b, []byte(`"body_crc"`)) && !bytes.Contains(b, []byte(`"body_fields"`))

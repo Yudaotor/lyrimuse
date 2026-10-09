@@ -306,6 +306,7 @@ func appPlaybackArtworkOfKind(bundleID, artist, title string) (data []byte, mime
 		return nil, "", "", false
 	}
 	b, err := os.ReadFile(path)
+	noteFileErr("read", path, err)
 	if err != nil || len(b) != a.Bytes {
 		return nil, "", "", false
 	}

@@ -185,7 +185,7 @@ final class LyricsExternalEditor {
         }
         session.seen = stamp
         sessions[key] = session
-        guard let data = try? Data(contentsOf: session.url) else { return }
+        guard let data = FileIO.read(session.url) else { return }
         guard data.count <= Self.maxBytes else {
             notes.post(.warning, title: session.title, text: L10n.t("文件过大，不像是歌词，未保存"))
             return
@@ -317,7 +317,7 @@ final class LyricsExternalEditor {
     }
 
     private static func readText(_ url: URL) -> String? {
-        (try? Data(contentsOf: url)).flatMap(LyricsExternalEdit.text(from:))
+        FileIO.read(url).flatMap(LyricsExternalEdit.text(from:))
     }
 
     private static func stamp(_ url: URL) -> FileStamp? {
@@ -327,8 +327,8 @@ final class LyricsExternalEditor {
     }
 
     private static func recordedFingerprints() -> [String: String] {
-        guard let data = try? Data(contentsOf: stateURL),
-              let map = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        guard let data = FileIO.read(stateURL),
+              let map = FileIO.decodeJSON([String: String].self, from: data, source: stateURL) else { return [:] }
         return map
     }
 
@@ -336,6 +336,6 @@ final class LyricsExternalEditor {
         var map = recordedFingerprints()
         map[url.lastPathComponent] = LyricsExternalEdit.fingerprint(text)
         guard let data = try? JSONEncoder().encode(map) else { return }
-        try? data.write(to: stateURL, options: .atomic)
+        FileIO.write(data, to: stateURL)
     }
 }

@@ -95,8 +95,8 @@ public enum LyricsBackupArchive {
             guard var entry = value as? [String: Any] else { continue }
             if let bodiesDirectory, EnrichCacheSlim.isSlim(entry) {
                 let url = bodiesDirectory.appendingPathComponent(DecisionSidecar.fileName(forKey: key))
-                if let bodyData = try? Data(contentsOf: url),
-                   let body = try? JSONDecoder().decode(EnrichCacheBody.self, from: bodyData),
+                if let bodyData = FileIO.read(url),
+                   let body = FileIO.decodeJSON(EnrichCacheBody.self, from: bodyData, source: url),
                    let full = EnrichCacheSlim.hydrate(entry, body: body) ?? EnrichCacheSlim.adoptNewerBody(entry, body: body) {
                     entry = full
                 }

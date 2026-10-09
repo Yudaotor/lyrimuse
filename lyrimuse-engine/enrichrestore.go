@@ -63,6 +63,7 @@ const enrichRestoreSuffix = ".applied"
 func adoptEnrichRestore(path string) bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return false // 不存在是绝大多数情况(没在搬家),不是错误
 	}
 	var incoming map[string]map[string]json.RawMessage

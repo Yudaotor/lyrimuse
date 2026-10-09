@@ -6528,7 +6528,7 @@ private struct GeneralSettingsTab: View {
             // 两份都放到后台读:面板默认开在 iCloud 备份文件夹,对还没下载的占位文件直接读会当场下载、卡住调用线程
             // (见 ICloudConfigStore 那条实测),歌词包有好几 MB。
             let (read, lyrics) = await Task.detached(priority: .userInitiated) {
-                (try? Data(contentsOf: url), try? Data(contentsOf: sidecar))
+                (FileIO.read(url), FileIO.read(sidecar))
             }.value
             guard let data = read else {
                 configMessage = L10n.t("该文件不是 Lyrimuse 的设置备份，未导入")

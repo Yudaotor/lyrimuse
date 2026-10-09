@@ -69,7 +69,7 @@ enum LyricsBackupStore {
             var files: [String: String] = [:]
             for name in names {
                 guard LyricsBackupArchive.sanitizedFileName(name) != nil else { continue }
-                guard let text = try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
+                guard let text = FileIO.readString(dir.appendingPathComponent(name))
                 else { continue }
                 files[name] = text
             }
@@ -81,7 +81,7 @@ enum LyricsBackupStore {
             // 读不出来/解不出来只是**少带这一部分**,不让整份备份失败:歌词文件族才是这份
             // sidecar 的主体,为了 meta 把它一起废掉是本末倒置。
             var meta: Data?
-            if let cacheData = try? Data(contentsOf: cacheURL) {
+            if let cacheData = FileIO.read(cacheURL) {
                 meta = LyricsBackupArchive.strippedMeta(
                     fromCacheJSON: cacheData,
                     decisionDirectory: LyrimusePaths.configFile(DecisionSidecar.directoryName),
@@ -149,7 +149,7 @@ enum LyricsBackupStore {
                 logger.warning("restore: archive v\(payload.v) newer than v\(LyricsBackupArchive.payloadVersion)")
             }
             var result = RestoreResult()
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            FileIO.createDirectory(dir)
             let existing = Set((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
             let plan = LyricsBackupArchive.plan(incoming: Array(payload.files.keys), existing: existing)
             result.rejected = plan.rejected.count
@@ -239,7 +239,7 @@ enum LyricsBackupStore {
             return nil
         }
         let dir = autoSnapshotDir
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        FileIO.createDirectory(dir)
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
         let url = dir.appendingPathComponent("auto-\(reason)-\(formatter.string(from: Date())).lyrimusebak")
@@ -281,7 +281,7 @@ enum LyricsBackupStore {
         let snapshots = autoSnapshots()
         guard snapshots.count > autoSnapshotKeepCount else { return }
         for snapshot in snapshots[autoSnapshotKeepCount...] {
-            try? FileManager.default.removeItem(at: snapshot.url)
+            FileIO.remove(snapshot.url)
             logger.notice("autoSnapshot: pruned \(snapshot.url.lastPathComponent, privacy: .public)")
         }
     }
@@ -289,7 +289,7 @@ enum LyricsBackupStore {
     /// 从一份自动快照恢复。走的就是配置导入那条 `restore(from:)`,不另开一套铺盘逻辑
     /// (路径安全那两道闸必须共用)。
     static func restoreAutoSnapshot(_ snapshot: Snapshot) async -> RestoreResult? {
-        guard let data = try? Data(contentsOf: snapshot.url) else {
+        guard let data = FileIO.read(snapshot.url) else {
             logger.error("restoreAutoSnapshot: cannot read \(snapshot.url.lastPathComponent, privacy: .public)")
             return nil
         }

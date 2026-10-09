@@ -90,10 +90,12 @@ func loadArtistRegionsCache(path string) {
 	artistRegionsPath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		noteFileErr("read", path, err)
 		return
 	}
 	var f artistRegionsFile
 	if err := json.Unmarshal(data, &f); err != nil {
+		noteFileErr("decode", path, err)
 		return
 	}
 	if f.Artists == nil {

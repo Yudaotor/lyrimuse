@@ -62,6 +62,7 @@ func loadLfmRetryLocked() []lfmRetryItem {
 	}
 	data, err := os.ReadFile(lfmRetryPath)
 	if err != nil {
+		noteFileErr("read", lfmRetryPath, err)
 		return nil
 	}
 	var items []lfmRetryItem

@@ -21,7 +21,7 @@ enum StandardStreamRedirect {
         installed = true
         guard isatty(STDERR_FILENO) == 0 else { return }
         let url = LogFiles.appStderr
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileIO.createDirectory(url.deletingLastPathComponent())
         let fd = open(url.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
         guard fd >= 0 else { return }
         dup2(fd, STDOUT_FILENO)
