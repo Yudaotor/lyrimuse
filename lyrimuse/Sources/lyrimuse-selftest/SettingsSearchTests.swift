@@ -260,6 +260,32 @@ func runSettingsSearchTests() {
     let allowlistedButIndexed = intentionallyUnindexed.filter { indexedTitles.contains($0) }.sorted()
     expectEqual(allowlistedButIndexed, [], "设置搜索: 白名单与目录不重叠")
 
+    // ---- 导出给功能清单 ----
+    // `scripts/gen-feature-list.py` 读 `shared/settings-catalog.json` 生成功能清单的「全部设置」,这份文件必须跟目录逐字节一致。
+    // 设 LYRIMUSE_WRITE_SETTINGS_CATALOG=1 时改为重写它。
+    let exportURL = sourcesDir.deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("shared/settings-catalog.json")
+    let exportedRows: [[String: Any]] = entries.map { entry in
+        let dest: String
+        switch entry.destination {
+        case .tab(let raw): dest = "tab:\(raw)"
+        case .account(let name): dest = "account:\(name)"
+        case .softwareUpdate: dest = "softwareUpdate"
+        }
+        var row: [String: Any] = ["dest": dest, "path": entry.pathKeys, "title": entry.titleKey]
+        if let subtitle = entry.subtitleKey { row["subtitle"] = subtitle }
+        if let mini = entry.lyricsWindowMini { row["lyricsWindowMini"] = mini }
+        return row
+    }
+    var exported = (try? JSONSerialization.data(withJSONObject: ["entries": exportedRows],
+                                                options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])) ?? Data()
+    exported.append(0x0A)
+    if ProcessInfo.processInfo.environment["LYRIMUSE_WRITE_SETTINGS_CATALOG"] == "1" {
+        try? exported.write(to: exportURL, options: .atomic)
+    }
+    expectEqual(FileManager.default.contents(atPath: exportURL.path) == exported, true,
+                "设置搜索: shared/settings-catalog.json 跟目录一致(不一致就跑 LYRIMUSE_WRITE_SETTINGS_CATALOG=1 swift run lyrimuse-selftest -f settings-search,再跑 python3 scripts/gen-feature-list.py)")
+
     // ---- 4. 匹配器 ----
     expectEqual(SettingsSearchMatcher.rank(query: "字号", title: "字号", secondary: []), 0, "匹配: 标题整体命中 = 0")
     expectEqual(SettingsSearchMatcher.rank(query: "字", title: "字号", secondary: []), 0, "匹配: 标题前缀 = 0")

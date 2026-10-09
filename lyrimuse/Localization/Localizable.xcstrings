@@ -6147,6 +6147,22 @@
         }
       }
     },
+    "列出全部功能、所在位置和默认开关" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every feature, where it is in Settings, and whether it is on by default"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列出全部功能、所在位置和預設開關"
+          }
+        }
+      }
+    },
     "刚刚" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6516,6 +6532,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "剩餘時長"
+          }
+        }
+      }
+    },
+    "功能清单" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feature List"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能清單"
           }
         }
       }

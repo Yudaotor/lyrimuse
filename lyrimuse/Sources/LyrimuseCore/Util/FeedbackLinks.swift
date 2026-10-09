@@ -45,6 +45,18 @@ public enum FeedbackLinks {
     /// 「使用求助」:讨论区的问答分类。
     public static let helpURL = URL(string: LegalNoticeLinks.repo + "/discussions/categories/q-a")!
 
+    /// 「功能清单」:落地页的 features/ 页,按界面语言(`L10n.current` 的取值)开对应的那一份,认不出的值当英文。
+    /// 页面由 `scripts/gen-feature-list.py` 的数据生成,跟 GitHub 上的 docs/feature-list*.md 是同一份,见 14 章决策 68。
+    public static func featureListURL(language: String) -> URL {
+        let dir: String
+        switch language.lowercased() {
+        case "zh-hans": dir = "zh/"
+        case "zh-hant": dir = "zh-Hant/"
+        default: dir = ""
+        }
+        return URL(string: "https://yudaotor.github.io/lyrimuse/" + dir + "features/")!
+    }
+
     /// issue 模板选择页,版本、系统、播放器带在参数里,用户选哪一类都已经填好。
     public static func newIssueURL(_ environment: Environment) -> URL {
         url(LegalNoticeLinks.repo + "/issues/new/choose", [

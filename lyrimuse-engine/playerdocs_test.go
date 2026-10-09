@@ -128,6 +128,24 @@ func TestDocsListEveryPlayer(t *testing.T) {
 		}
 	}
 
+	// 功能清单:三种语言写在 shared/feature-list.json 一份里(docs/feature-list*.md 由它生成),每种写法各核一遍数量。
+	featureList := readText(t, "../shared/feature-list.json")
+	for _, r := range readmes {
+		found := 0
+		for _, m := range r.count.FindAllStringSubmatch(featureList, -1) {
+			if m[1] == "一" {
+				continue
+			}
+			found++
+			if got := strings.ToLower(m[1]); got != r.word(n) && got != strconv.Itoa(n) {
+				t.Errorf("shared/feature-list.json 里的 %q 写的是 %s,播放器数量是 %d——改完再跑 scripts/gen-feature-list.py", m[0], m[1], n)
+			}
+		}
+		if found == 0 {
+			t.Errorf("shared/feature-list.json 里认不出写着播放器数量的地方(按 %s 那种写法)——措辞改了就调这里的正则", r.path)
+		}
+	}
+
 	// llms.txt 的简介行、对比页「支持的播放器」那一行。这两处把「酷狗音乐」写成「酷狗」,名字尾巴上的
 	// 「音乐 / Music」可以省。
 	mentions := func(text, name string) bool {

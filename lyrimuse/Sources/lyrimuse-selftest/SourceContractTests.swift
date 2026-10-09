@@ -2860,6 +2860,10 @@ func runSourceContractTests() {
                     "反馈链接: 邮件正文末尾带版本、系统、播放器")
         expectEqual(FeedbackLinks.helpURL.absoluteString, "https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a",
                     "反馈链接: 使用求助进讨论区问答分类")
+        expectEqual(["en", "zh-hans", "zh-hant", "ja"].map { FeedbackLinks.featureListURL(language: $0).absoluteString },
+                    ["https://yudaotor.github.io/lyrimuse/features/", "https://yudaotor.github.io/lyrimuse/zh/features/",
+                     "https://yudaotor.github.io/lyrimuse/zh-Hant/features/", "https://yudaotor.github.io/lyrimuse/features/"],
+                    "反馈链接: 功能清单按界面语言开落地页对应的那一份,认不出的语言开英文")
         expectEqual(FeedbackLinks.macOSVersionString(OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 1)),
                     "27.0.1", "反馈链接: 系统版本号三段")
         expectEqual([FeedbackLinks.architectureName(nativeArm64: true, translated: false),

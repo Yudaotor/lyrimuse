@@ -422,6 +422,7 @@
 "切换迷你 / 完整尺寸" = "Switch Mini / Full Size";
 "切歌时新歌名从刘海下方滑出，数秒后收回" = "On a song change, the new title slides out below the notch for a few seconds";
 "切歌时显示系统通知，包含封面、歌名、歌手和专辑" = "Show a system notification with the artwork, title, artist and album when a new song starts";
+"列出全部功能、所在位置和默认开关" = "Every feature, where it is in Settings, and whether it is on by default";
 "刚刚" = "just now";
 "刚刚更新" = "Just updated";
 "创作者：" = "Written by: ";
@@ -456,6 +457,7 @@
 "剩余时长" = "Remaining";
 "副行" = "Second Line";
 "功能栏中的图标，轻点即可展开歌词" = "An icon in the Control Strip — tap it to expand the lyrics";
+"功能清单" = "Feature List";
 "加入信任列表" = "Trust This App";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "加粗" = "Bold";

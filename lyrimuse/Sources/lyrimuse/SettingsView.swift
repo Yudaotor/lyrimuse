@@ -7017,6 +7017,14 @@ private struct AboutSettingsTab: View {
             ) {
                 Button(L10n.t("前往")) { NSWorkspace.shared.open(FeedbackLinks.helpURL) }
             }
+            CardDivider()
+            SettingsRow(
+                icon: "list.bullet.rectangle",
+                title: L10n.t("功能清单"),
+                subtitle: L10n.t("列出全部功能、所在位置和默认开关")
+            ) {
+                Button(L10n.t("前往")) { NSWorkspace.shared.open(FeedbackLinks.featureListURL(language: L10n.current)) }
+            }
         }
     }
 

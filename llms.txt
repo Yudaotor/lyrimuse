@@ -9,6 +9,7 @@ Lyrimuse is a free, open-source (GPL-3.0) macOS menu-bar app. It shows word-by-w
 - [README (English)](https://github.com/Yudaotor/lyrimuse/blob/main/README.md): full feature list, installation options (Homebrew, manual download, build from source), FAQ, troubleshooting
 - [README (简体中文)](https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md): 中文版功能列表、安装方式、常见问题、排查
 - [README (繁體中文)](https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md): 繁體中文版功能列表、安裝方式、常見問題、疑難排解
+- [Feature list](https://github.com/Yudaotor/lyrimuse/blob/main/docs/feature-list.md): every feature and every setting, where it lives in Settings and whether it is on or off by default ([简体中文](https://github.com/Yudaotor/lyrimuse/blob/main/docs/feature-list.zh-CN.md), [繁體中文](https://github.com/Yudaotor/lyrimuse/blob/main/docs/feature-list.zh-Hant.md))
 - [How scrobbling works](https://github.com/Yudaotor/lyrimuse/blob/main/docs/scrobbling.md): exactly what gets submitted to Last.fm/ListenBrainz and when ([中文版](https://github.com/Yudaotor/lyrimuse/blob/main/docs/scrobbling.zh-CN.md))
 - [Comparison with LyricsX and Lyric Fever](https://github.com/Yudaotor/lyrimuse/blob/main/docs/lyrics-apps-comparison.md): fact-checked feature/requirements table and where Lyrimuse fits ([中文版](https://github.com/Yudaotor/lyrimuse/blob/main/docs/lyrics-apps-comparison.zh-CN.md))
 - [Changelog](https://github.com/Yudaotor/lyrimuse/blob/main/CHANGELOG.md): bilingual release notes for every published version on one page, newest first

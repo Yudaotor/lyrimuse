@@ -461,6 +461,7 @@ public enum SettingsSearchCatalog {
         softwareUpdate("测试版更新", sub: "预发布版本，可能不稳定", kw: ["beta", "测试版", "预发布"], group: nil),
         about("反馈问题", sub: "在 GitHub 新建 issue，自动附带版本、系统与播放器信息", kw: ["issue", "bug", "反馈", "建议", "github", "邮件", "邮箱", "email"], group: "反馈"),
         about("使用求助", sub: "在 GitHub 讨论区的问答分类中提问", kw: ["discussion", "求助", "提问", "问答", "help"], group: "反馈"),
+        about("功能清单", sub: "列出全部功能、所在位置和默认开关", kw: ["全部功能", "功能列表", "功能介绍", "默认", "设置项", "features"], group: "反馈"),
         about("版权说明", kw: ["版权", "歌词版权"], group: "许可与版权"),
         about("第三方许可", sub: "开源组件与词典", kw: ["许可证", "开源", "license"], group: "许可与版权"),
         about("开源许可证", sub: "GPL-3.0", kw: ["GPL", "许可证", "license"], group: "许可与版权"),
