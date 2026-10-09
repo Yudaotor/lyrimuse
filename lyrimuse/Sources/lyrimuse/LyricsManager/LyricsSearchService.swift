@@ -407,6 +407,19 @@ final class LyricsSearchService {
         }
     }
 
+    /// 一次搜索收尾时写进 App 日志的那一行。没收到任何一行进度(进程一起来就挂了 / 被马上停掉)时各项按空写。
+    fileprivate static func completionSummary(title: String, artist: String, update: RawSearchUpdate?,
+                                              elapsed: TimeInterval, cancelled: Bool, status: Int32) -> String {
+        let responded = update.map { Array(Set($0.candidates.map(\.source))).sorted() } ?? []
+        let reasons = (update?.sourceFailureReasonCodes ?? [:]).sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+        let outcome = cancelled ? "cancelled" : (status == 0 ? "done" : "exited \(status)")
+        return "search-lyrics \(outcome): \"\(artist)\" - \"\(title)\" round=\(update?.round ?? 0) "
+            + "sources=\(update?.sourcesDone ?? 0)/\(update?.sourcesTotal ?? 0) responded=[\(responded.joined(separator: ","))] "
+            + "reasons=[\(reasons.joined(separator: ","))] candidates=\(update?.candidates.count ?? 0) "
+            + "networkDown=\(update?.networkLooksDown ?? false) elapsed=\(String(format: "%.1f", elapsed))s"
+    }
+
     /// 子进程失败时给界面看的一句:stderr 是引擎的整段日志(可能几十行英文,还带时间戳),原样塞进弹窗
     /// 会把「重试」挤出窗口。只取最后一行非空的(出错原因通常在最后)、剥掉 Go log 的时间戳前缀、截到 160 字;
     /// 全文已经进了日志。
@@ -480,8 +493,11 @@ final class LyricsSearchService {
             final class Box: @unchecked Sendable {
                 var outBuffer = Data()
                 var errBuffer = Data()
+                /// 最后一行进度,收尾时写那行汇总用(只在 readQueue 上写,terminationHandler 经 readGroup.wait() 后才读)。
+                var lastUpdate: RawSearchUpdate?
             }
             let box = Box()
+            let startedAt = Date()
             let readQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.search-lyrics.stdout", qos: .utility)
             let readGroup = DispatchGroup()
 
@@ -496,6 +512,7 @@ final class LyricsSearchService {
                         logger.error("search-lyrics: failed to decode a stdout line, skipping")
                         continue
                     }
+                    box.lastUpdate = raw
                     let update = SearchUpdate(
                         candidates: raw.candidates.map(Candidate.init),
                         networkLooksDown: raw.networkLooksDown,
@@ -545,6 +562,12 @@ final class LyricsSearchService {
                 let cancelled = handle.isCancelled
                 let status = proc.terminationStatus
                 let stderrText = String(data: box.errBuffer, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                // 每次搜索一行汇总:哪些源给了候选、没给的源报了什么原因、跑了几轮几秒。手动搜索只搜到两三个源时,
+                // 事后能查到是哪几个源没回、为什么(见 11 章决策 97)。
+                let summary = Self.completionSummary(
+                    title: title, artist: artist, update: box.lastUpdate,
+                    elapsed: Date().timeIntervalSince(startedAt), cancelled: cancelled, status: status)
+                logger.notice("\(summary, privacy: .public)")
                 if !cancelled {
                     if status == 0 {
                         Self.logSourceHealthSignals(box.errBuffer)

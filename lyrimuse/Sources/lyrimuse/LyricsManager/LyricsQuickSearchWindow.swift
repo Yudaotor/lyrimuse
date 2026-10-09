@@ -43,6 +43,8 @@ import LyrimuseCore
 // 缓存,直接在 MainActor 上做,没有必要为这一次性读多绕一层线程切换。
 struct LyricsQuickSearchWindow: View {
     @State private var context: Context?
+    /// 上一次重算「当前使用」时缓存文件的修改时间,见下面那条定时器。
+    @State private var markedCacheMTime: Date?
     // 切换界面语言时重算 body,窗口标题(.navigationTitle)跟着换。经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
 
@@ -133,6 +135,15 @@ struct LyricsQuickSearchWindow: View {
         // 开着期间这首的正文可能被后台换掉(播到时升级、重打分),「当前使用」得跟着挪;
         // 只重算来源和指纹,不重搜、不动查询词。
         .onReceive(PlaybackCoordinator.shared.$allLines.dropFirst()) { _ in refreshCurrentMarker() }
+        // 后台换了来源、正文一字不差(两个源给的是同一份)时,播放侧的歌词行不变、上面那条不触发,「当前使用」会一直
+        // 认着旧来源 —— 打开面板那一刻引擎刚先用了一个源、随后换成另一个,就会一条都标不上。缓存文件一变就重算一次,
+        // 每拍只是一次 stat。见 11 章决策 97。
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            let mtime = EnrichCacheReader.fileModificationDate
+            guard mtime != markedCacheMTime else { return }
+            markedCacheMTime = mtime
+            refreshCurrentMarker()
+        }
         // 窗口标题跟着界面语言走:App.swift 里 Window 的标题只在构造场景时求值一次(同欢迎页)。
         .navigationTitle(L10n.t("搜索歌词…"))
     }
