@@ -222,6 +222,7 @@
 "不保存" = "Don’t Save";
 "不再悬停显示播放控制" = "Stop Showing Playback Controls on Hover";
 "不分组" = "No Grouping";
+"不可用" = "Unusable";
 "不可用：%@" = "Unusable: %@";
 "不含内容、排版、行为、位置和宽度" = "Content, layout, behavior, position and width are left alone";
 "不含宽度和总开关" = "Width and the master toggle are left alone";
@@ -393,6 +394,7 @@
 "其余 %@ 个源未返回候选" = "%@ other sources returned no candidates";
 "其余 %@ 个源未返回候选#one" = "%@ other source returned no candidates";
 "内容" = "Content";
+"内容与其他候选相同" = "Same as another candidate";
 "内容获印证" = "Content corroborated";
 "内部数据不是有效的 JSON，已取消保存" = "The data isn't valid JSON, so nothing was saved";
 "写入 config.json 失败：%@" = "Couldn't write config.json: %@";
@@ -857,6 +859,7 @@
 "循环最多：《%1$@》— %2$@（%3$@ 次）#one" = "Most played: %1$@ — %2$@ (%3$@ play)";
 "快捷操作" = "Quick Actions";
 "快捷键" = "Keyboard Shortcuts";
+"快捷键：⌘↩" = "Shortcut: ⌘↩";
 "快速开关" = "Quick Toggles";
 "总 Scrobble" = "Total scrobbles";
 "总分 %@" = "Total %@";
@@ -957,6 +960,7 @@
 "搜索歌词" = "Search Lyrics";
 "搜索歌词…" = "Search Lyrics…";
 "搜索歌词中…" = "Searching for lyrics…";
+"搜索结果只有现在使用的这一份" = "The search found only the lyrics already in use";
 "播放/暂停" = "Play/Pause";
 "播放器" = "Player";
 "播放器未提供歌手，按歌名和时长推断" = "The player didn’t provide an artist; inferred from the title and duration";
@@ -1285,6 +1289,7 @@
 "歌词文件夹与本地记录文件占用的磁盘空间" = "Disk space used by the lyrics folder and the local records file";
 "歌词文字与 %@ 相同" = "Same lyrics text as %@";
 "歌词文字和每行时间均相同（未比较逐字时间和译文）；该候选仍可能包含其他来源没有的逐字时间轴或译文" = "Same words and line times (word timing and translations aren't compared). This candidate may still carry word timing or a translation the other source lacks";
+"歌词文字和每行时间都与列表中的某条候选相同，也没有多出逐字时间轴、译文或读音" = "Same words and line times as another candidate in the list, with no extra word timing, translation or romanization";
 "歌词文字相同，每行时间不同；该候选仍可能包含其他来源没有的逐字时间轴或译文" = "Same words, different line times. This candidate may still carry word timing or a translation the other source lacks";
 "歌词旁的图标" = "Icon Beside Lyrics";
 "歌词时间轴" = "Lyrics Timing";
@@ -1295,6 +1300,8 @@
 "歌词源可用情况" = "Lyrics Source Status";
 "歌词源已收录这首歌曲，但暂无歌词" = "Listed, but No Lyrics Yet";
 "歌词源未提供译文时补充" = "Fills in where the lyrics source ships none";
+"歌词源标注的曲目时长" = "Track length reported by the lyrics source";
+"歌词源标注的曲目时长，这首歌曲时长 %@" = "Track length reported by the lyrics source. This song is %@.";
 "歌词窗口" = "Lyrics Window";
 "歌词窗口…" = "Lyrics Window…";
 "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换" = "The lyrics window's text color. Auto switches between light and dark based on the background's brightness.";
@@ -1642,6 +1649,7 @@
 "访问令牌" = "Access Token";
 "访问令牌无效，同步服务拒绝了推送" = "The sync server rejected the access token";
 "评估后未更换" = "Evaluated, not replaced";
+"评分时被排除的候选（如无时间戳、语言或时长不符），自动匹配不会选用；仍可预览和采用" = "Candidates excluded during scoring (for example no timestamps, or the wrong language or length). Automatic matching won't pick them, but you can still preview and use them.";
 "评分规则更新后重选" = "Re-picked after a scoring rule update";
 "识别歌曲、查找歌词和封面；仅在本机运行，查找歌词时只发送歌名、歌手等曲目信息" = "Recognizes songs and finds lyrics and artwork. Runs only on this Mac; looking up lyrics sends nothing but track info such as title and artist";
 "诊断与数据" = "Diagnostics & Data";

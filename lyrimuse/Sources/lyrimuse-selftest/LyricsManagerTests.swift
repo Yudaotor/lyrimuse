@@ -121,6 +121,37 @@ func runLyricsManagerTests() {
         expectEqual(O.milliseconds(from: "600.001"), nil, "偏移输入: 超出 ±10 分钟不收")
     }
 
+    // ---- 搜索候选歌词:侧栏分组、源自报曲长 ----
+    do {
+        typealias G = LyricsCandidateGroups
+        typealias M = LyricsCandidateDuplicates.Match
+        func t(_ source: String, excluded: Bool = false, word: Bool = false, tr: Bool = false, roma: Bool = false) -> G.Traits {
+            G.Traits(source: source, excluded: excluded, hasWordTiming: word, hasTranslation: tr, hasRomanization: roma)
+        }
+        let items = [t("qq", word: true, tr: true), t("lrclib"), t("netease", word: true), t("kugou", tr: true, roma: true),
+                     t("musixmatch", excluded: true), t("migu")]
+        let dups: [String: M] = ["lrclib": M(anchor: "qq", sameTimeline: true), "netease": M(anchor: "qq", sameTimeline: true),
+                                 "kugou": M(anchor: "qq", sameTimeline: true), "migu": M(anchor: "qq", sameTimeline: false)]
+        let groups = G.groups(items, duplicates: dups)
+        expectEqual(groups["qq"], .main, "候选分组: 锚本身在正常那一组")
+        expectEqual(groups["lrclib"], .sameAsAnother, "候选分组: 内容相同、没多带东西的收进「内容相同」")
+        expectEqual(groups["netease"], .sameAsAnother, "候选分组: 逐字轨锚也有,不算多带")
+        expectEqual(groups["kugou"], .main, "候选分组: 多带读音的留在列表里")
+        expectEqual(groups["musixmatch"], .excluded, "候选分组: 评分时被排除的收进「不可用」")
+        expectEqual(groups["migu"], .main, "候选分组: 只有文字相同、时间不同的留在列表里(比的就是时间轴)")
+        let anchorExcluded = G.groups([t("a", excluded: true), t("b")], duplicates: ["b": M(anchor: "a", sameTimeline: true)])
+        expectEqual(anchorExcluded["b"], .main, "候选分组: 锚被排除时不收,不然列表里看不到跟它一样的那条")
+        typealias D = LyricsCandidateDuration
+        expectEqual(D.differenceSecs(candidate: 283.4, song: 271.0), 12, "候选曲长: 长多少秒,四舍五入")
+        expectEqual(D.differenceSecs(candidate: 260.0, song: 271.0), -11, "候选曲长: 短为负")
+        expectEqual(D.differenceSecs(candidate: 0, song: 271.0), nil, "候选曲长: 源没给时长不比")
+        expectEqual(D.differenceSecs(candidate: 271.0, song: 0), nil, "候选曲长: 不知道这首多长不比")
+        expectEqual(D.isOff(candidate: 300, song: 266), false, "候选曲长: 差 11.3% 不算另一个版本")
+        expectEqual(D.isOff(candidate: 300, song: 260), true, "候选曲长: 差 13.3%(分母取较长那方)算另一个版本,同引擎 12% 门槛")
+        expectEqual(D.isOff(candidate: 0, song: 260), false, "候选曲长: 不知道时长不下结论")
+        expectEqual([D.clock(271.4), D.clock(59.6), D.clock(3725)], ["4:31", "1:00", "1:02:05"], "候选曲长: 分:秒,一小时以上带小时")
+    }
+
     // ---- 预览:当前句、读音 ----
     do {
         expectEqual(LyricsPreviewText.currentRow(times: [1000, nil, 5000, 9000], lineTimeMs: 5000), 2, "预览当前句: 时间相同的那一行")
@@ -1714,7 +1745,7 @@ func runLyricsManagerTests() {
                     && sheet.contains("EnrichCacheReader.storedEntry(forKey: songKey)")
                     && sheet.contains("if let hit = candidates.first(where: isCurrentCandidate) { return hit }")
                     && sheet.contains("return candidates.filter { $0.id != current.id }")
-                    && sheet.contains("ForEach(searchResults) { c in"),
+                    && sheet.contains("ForEach(layout.main) { c in"),
                     true, "搜索候选歌词: 打开就先摆出缓存里在用的那一版并选中,搜到同一份时换成搜到的那条")
         if let current = sheet.range(of: "            currentSection\n"), let header = sheet.range(of: "            candidatesHeader\n") {
             expectEqual(current.lowerBound < header.lowerBound, true,
@@ -1723,6 +1754,31 @@ func runLyricsManagerTests() {
             expectEqual(false, true, "搜索候选歌词: 侧栏要有「当前使用」那一块和候选表头")
         }
         expectEqual(sheet.contains("Text(\"\\(searchResults.count)\")"), true, "搜索候选歌词: 候选计数只算搜索结果")
+        expectEqual(sheet.contains("let groups = LyricsCandidateGroups.groups(")
+                    && sheet.contains("if layout.sameExpanded {") && sheet.contains("if layout.excludedExpanded {")
+                    && sheet.contains("layout.excludedForced = layout.current == nil && layout.main.isEmpty && layout.same.isEmpty")
+                    && sheet.contains(".onChange(of: selectedSource) { _, _ in revealSelection() }"), true,
+                    "搜索候选歌词: 内容相同、不可用的候选收进折叠组,只剩不可用时那一组一直展开,选中落在收起的组里时展开")
+        expectEqual(sheet.contains("            searchConclusion\n            Spacer(minLength: 0)")
+                    && sheet.contains("if !isSearching, loadError == nil, searchResults.isEmpty, currentShown != nil {"), true,
+                    "搜索候选歌词: 搜完只剩「当前使用」那条时,结论挂在侧栏")
+        expectEqual(sheet.contains("metaLine(c, font: .caption2)") && sheet.contains("metaLine(c, font: .caption)")
+                    && sheet.contains("LyricsCandidateDuration.isOff(candidate: c.sourceDurationSecs, song: durationSecs)"), true,
+                    "搜索候选歌词: 列表和预览都写源自报曲长、跟这首比")
+        expectEqual(sheet.contains(".keyboardShortcut(.return, modifiers: .command)"), true, "搜索候选歌词: ⌘↩ 采用选中的候选")
+        let service = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsSearchService.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(service.contains("case sourceReportedDurationSecs = \"source_reported_duration_secs\"")
+                    && service.contains("sourceDurationSecs: raw.sourceReportedDurationSecs ?? 0"), true,
+                    "搜索候选歌词: 候选带上引擎给的源自报曲长")
+        let parts = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerParts.swift"),
+            encoding: .utf8)) ?? ""
+        expectEqual(parts.contains("static let defaultsKey = \"np:lyricsPreviewDisplayMode\"")
+                    && sheet.contains("@AppStorage(LyricsManagerDisplayMode.defaultsKey) private var displayMode")
+                    && view.contains("@AppStorage(LyricsManagerDisplayMode.defaultsKey) private var displayMode"), true,
+                    "预览显示档位: 歌词管理和搜索候选歌词记在同一个偏好键")
         expectEqual(view.contains("try? await Task.sleep(for: .milliseconds(150))") && view.contains("searchCommitTask?.cancel()"),
                     true, "搜索框: 边打边筛,停手 150 毫秒才真的过滤一次")
         expectEqual(view.contains("if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {"), true,

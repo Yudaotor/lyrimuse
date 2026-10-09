@@ -12,6 +12,9 @@ enum LyricsManagerDisplayMode: String, CaseIterable, Identifiable {
     case translation
     case romanization
 
+    /// 歌词管理详情页和搜索候选歌词的预览共用这一个偏好键,存的是 rawValue。
+    static let defaultsKey = "np:lyricsPreviewDisplayMode"
+
     var id: String { rawValue }
 
     var title: String {

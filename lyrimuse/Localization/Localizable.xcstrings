@@ -40756,6 +40756,190 @@
           }
         }
       }
+    },
+    "搜索结果只有现在使用的这一份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The search found only the lyrics already in use"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索结果只有现在使用的这一份"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜尋結果只有現在使用的這一份"
+          }
+        }
+      }
+    },
+    "内容与其他候选相同" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same as another candidate"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内容与其他候选相同"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "內容與其他候選相同"
+          }
+        }
+      }
+    },
+    "歌词文字和每行时间都与列表中的某条候选相同，也没有多出逐字时间轴、译文或读音" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same words and line times as another candidate in the list, with no extra word timing, translation or romanization"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词文字和每行时间都与列表中的某条候选相同，也没有多出逐字时间轴、译文或读音"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞文字和每行時間都與列表中的某條候選相同，也沒有多出逐字時間軸、譯文或讀音"
+          }
+        }
+      }
+    },
+    "不可用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unusable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不可用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不可用"
+          }
+        }
+      }
+    },
+    "评分时被排除的候选（如无时间戳、语言或时长不符），自动匹配不会选用；仍可预览和采用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Candidates excluded during scoring (for example no timestamps, or the wrong language or length). Automatic matching won't pick them, but you can still preview and use them."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评分时被排除的候选（如无时间戳、语言或时长不符），自动匹配不会选用；仍可预览和采用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "評分時被排除的候選（如無時間戳、語言或時長不符），自動匹配不會選用；仍可預覽和採用"
+          }
+        }
+      }
+    },
+    "歌词源标注的曲目时长，这首歌曲时长 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Track length reported by the lyrics source. This song is %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词源标注的曲目时长，这首歌曲时长 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞來源標註的曲目時長，這首歌曲時長 %@"
+          }
+        }
+      }
+    },
+    "歌词源标注的曲目时长" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Track length reported by the lyrics source"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词源标注的曲目时长"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞來源標註的曲目時長"
+          }
+        }
+      }
+    },
+    "快捷键：⌘↩" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shortcut: ⌘↩"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "快捷键：⌘↩"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "快速鍵：⌘↩"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

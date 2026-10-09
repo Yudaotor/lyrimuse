@@ -766,7 +766,8 @@ struct LyricsManagerView: View {
     /// 打开编辑那一刻的正文,逐句格子据此标哪几句改过、「还原」还原到哪。
     @State private var editBase: EditBase?
     @FocusState private var focusedLine: LyricsManagerLineFocus?
-    @State private var displayMode: LyricsManagerDisplayMode = .translation
+    /// 原文 / 原文 + 译文 / 原文 + 读音,跟搜索候选歌词的预览记在同一个偏好键。
+    @AppStorage(LyricsManagerDisplayMode.defaultsKey) private var displayMode: LyricsManagerDisplayMode = .translation
     @State private var followPlayback = true
     /// 预览的行:不带读音的一份,带读音的一份(「原文 + 读音」那一档)。只在这首的正文、读音或设置里读音的文字种类变了时重算。
     @State private var previewRows: [LyricsPreviewRow] = []
