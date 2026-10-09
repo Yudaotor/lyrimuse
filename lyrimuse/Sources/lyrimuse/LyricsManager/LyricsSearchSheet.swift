@@ -113,8 +113,8 @@ struct LyricsSearchSheet: View {
     // 两个独立维度:可能已经有几条候选摆在那了、但后面的源还没回来。用一个三态 enum
     // 表达不了"进行中 + 已经有部分结果"这个中间状态。
     @State private var candidates: [LyricsSearchService.Candidate] = []
-    /// 这首歌现在缓存里存着的那一版(`isStored`),打开面板就摆在列表最上面、先选中它,其他源接着搜;搜到同一份(来源和
-    /// 正文都一样)就换成搜到的那条,没搜到(手改过、来源是播放器本地歌词、那个源这次没回)就一直留着。见 shownCandidates、11 章决策 99。
+    /// 这首歌现在缓存里存着的那一版(`isStored`),打开面板就摆进「当前使用」那一块、先选中它,其他源接着搜;搜到同一份(来源和
+    /// 正文都一样)就换成搜到的那条,没搜到(手改过、来源是播放器本地歌词、那个源这次没回)就一直留着。见 currentShown、11 章决策 99、100。
     @State private var storedCandidate: LyricsSearchService.Candidate?
     /// 这个面板作为搜索发起方的身份,见 `LyricsSearchService.Owner`。
     @State private var searchOwner = LyricsSearchService.Owner()
@@ -622,6 +622,7 @@ struct LyricsSearchSheet: View {
             }
             queryCard
             searchActions
+            currentSection
             candidatesHeader
             candidatesSection
             reportLyricsLink
@@ -720,7 +721,7 @@ struct LyricsSearchSheet: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(L10n.t("候选"))
                     .font(.headline)
-                Text("\(shownCandidates.count)")
+                Text("\(searchResults.count)")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -743,20 +744,34 @@ struct LyricsSearchSheet: View {
         .padding(.horizontal, 4)
     }
 
-    /// 侧栏下半截。有候选时是列表,中途出错的一行提示挂在列表上面;一个候选都还没有时空着,搜完的结论(报错、
+    /// 「当前使用」那一块:这首现在用的那一版单独摆在候选表头上面,跟搜索结果分开。没有在用的歌词时整块不出。
+    @ViewBuilder
+    private var currentSection: some View {
+        if let current = currentShown {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.t("当前使用"))
+                    .font(.headline)
+                    .padding(.horizontal, 4)
+                candidateRow(current)
+            }
+            .padding(.top, 6)
+        }
+    }
+
+    /// 侧栏下半截。有搜索结果时是列表,中途出错的一行提示挂在列表上面;一条搜索结果都还没有时空着,搜完的结论(报错、
     /// 各种空状态)在右边(detailContent)。
     @ViewBuilder
     private var candidatesSection: some View {
-        if shownCandidates.isEmpty {
+        if let msg = loadError, !shownCandidates.isEmpty {
+            Label(msg, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .lineLimit(2)
+                .padding(.horizontal, 4)
+        }
+        if searchResults.isEmpty {
             Spacer(minLength: 0)
         } else {
-            if let msg = loadError {
-                Label(msg, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .lineLimit(2)
-                    .padding(.horizontal, 4)
-            }
             candidateList
         }
     }
@@ -768,7 +783,7 @@ struct LyricsSearchSheet: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(shownCandidates) { c in
+                    ForEach(searchResults) { c in
                         candidateRow(c)
                             .id(c.id)
                     }
@@ -782,11 +797,23 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 列表里实际摆的:搜索结果,加上缓存里存着的那一版——它是在用的那份、而搜索结果里还没有同一份时排在最上面。
+    /// 「当前使用」那一块摆的:搜索结果里有同一份(来源和正文都一样)就是搜到的那条(带分数),否则是缓存里存着的那一版。
+    private var currentShown: LyricsSearchService.Candidate? {
+        if let hit = candidates.first(where: isCurrentCandidate) { return hit }
+        guard let stored = storedCandidate, isCurrentCandidate(stored) else { return nil }
+        return stored
+    }
+
+    /// 候选列表摆的:这一轮的搜索结果,去掉已经摆进「当前使用」的那条。
+    private var searchResults: [LyricsSearchService.Candidate] {
+        guard let current = currentShown else { return candidates }
+        return candidates.filter { $0.id != current.id }
+    }
+
+    /// 侧栏里能选的全部,按屏上的顺序:「当前使用」那条在前,搜索结果在后。预览与 ↑ / ↓ 换行都按它。
     private var shownCandidates: [LyricsSearchService.Candidate] {
-        guard let stored = storedCandidate, isCurrentCandidate(stored),
-              !candidates.contains(where: isCurrentCandidate) else { return candidates }
-        return [stored] + candidates
+        guard let current = currentShown else { return candidates }
+        return [current] + searchResults
     }
 
     /// 右边预览的那一条:选中的那条,还没选中任何一条时是排第一的。列表里画选中底的也是它。选中的是存着的那一版、

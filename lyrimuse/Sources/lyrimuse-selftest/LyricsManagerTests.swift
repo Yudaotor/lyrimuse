@@ -1697,9 +1697,17 @@ func runLyricsManagerTests() {
         expectEqual(sheet.contains("storedCandidate = makeStoredCandidate()\n        loadError = nil\n")
                     && sheet.contains("selectedSource = shownCandidates.first?.id")
                     && sheet.contains("EnrichCacheReader.storedEntry(forKey: songKey)")
-                    && sheet.contains("!candidates.contains(where: isCurrentCandidate) else { return candidates }")
-                    && sheet.contains("ForEach(shownCandidates) { c in"),
+                    && sheet.contains("if let hit = candidates.first(where: isCurrentCandidate) { return hit }")
+                    && sheet.contains("return candidates.filter { $0.id != current.id }")
+                    && sheet.contains("ForEach(searchResults) { c in"),
                     true, "搜索候选歌词: 打开就先摆出缓存里在用的那一版并选中,搜到同一份时换成搜到的那条")
+        if let current = sheet.range(of: "            currentSection\n"), let header = sheet.range(of: "            candidatesHeader\n") {
+            expectEqual(current.lowerBound < header.lowerBound, true,
+                        "搜索候选歌词: 在用的那一版单独一块,摆在候选表头上面,不混进搜索结果")
+        } else {
+            expectEqual(false, true, "搜索候选歌词: 侧栏要有「当前使用」那一块和候选表头")
+        }
+        expectEqual(sheet.contains("Text(\"\\(searchResults.count)\")"), true, "搜索候选歌词: 候选计数只算搜索结果")
         expectEqual(view.contains("try? await Task.sleep(for: .milliseconds(150))") && view.contains("searchCommitTask?.cancel()"),
                     true, "搜索框: 边打边筛,停手 150 毫秒才真的过滤一次")
         expectEqual(view.contains("if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {"), true,
