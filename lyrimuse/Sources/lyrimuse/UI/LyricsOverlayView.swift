@@ -635,8 +635,14 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 与 body 头注第 3 条。
     private var controlsSlotBelow: Bool { overlayController.controlsBelowCard }
 
+    /// 卡片底边距。背景透明、控制排在卡片下方时为 0:看不见卡片边,这截只是歌词和控制排之间的空白;
+    /// 控制排在上方时卡片底边就是窗口底边,留着它,字的阴影不被窗口裁掉。见 04 章决策 57。
+    private var cardBottomPadding: CGFloat {
+        controlsSlotBelow && !playback.backgroundIsVisible ? 0 : OverlayMetrics.cardBottomPadding
+    }
+
     /// 播放控制排 / 锁定态解锁提示 / 位置已固定提示 三者共用的那一个槽位。常驻、透明度切换,
-    /// 三个状态**等高**(胶囊 30pt + 离卡片 4pt + 离窗口边 4pt),切来切去歌词不跳。
+    /// 三个状态**等高**(胶囊 22pt + 离卡片 4pt + 离窗口边 4pt),切来切去歌词不跳。
     private var controlsSlot: some View {
         // 锁定态下这个槙位换成"解锁"提示,不叠在歌词上面——跟播放控制排共用同一个槙位、同一套"常驻+
         // 透明度切换"处理,理由跟下面播放控制排的注释一致:槙位常驻才能保证歌词位置
@@ -1136,7 +1142,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             .padding(.trailing, duetInsets.trailing * duetInsetScale)
             .padding(.horizontal, OverlayPlayback.cardHorizontalPadding)
             .padding(.top, OverlayMetrics.cardTopPadding)
-            .padding(.bottom, OverlayMetrics.cardBottomPadding)
+            .padding(.bottom, cardBottomPadding)
             .frame(maxWidth: .infinity, alignment: duetFrameAlignment)
             .background(overlayBackground)
             // 长按拖动"武装"后的视觉提示——一圈跟前景色同色的高亮描边,松手/取消立刻淡出。
@@ -1518,16 +1524,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 观感对不齐。改成直接调 `iconButton(.unlockPill, "lock.fill", primary:
     /// true)`——跟 `playbackControls` 里其它按钮**同一个构造函数**,自带同一套
     /// 22pt/19pt 尺寸表、同一条 `ControlRectsPreferenceKey` 矩形上报(下面不再需要单独
-    /// 挂一次 `.background(GeometryReader...)`),外层套的 `.padding(.horizontal, 9)
-    /// .padding(.vertical, 4)` 也跟 `playbackControls` 的胶囊内边距逐字一致——保证的
+    /// 挂一次 `.background(GeometryReader...)`),外层套的 `.padding(.horizontal, 2)`
+    /// 也跟 `playbackControls` 的胶囊内边距逐字一致——保证的
     /// 不是"数字算出来一样",是"用的是同一份代码",两个状态之间不会再有肉眼可辨的差异。
     /// 图标用 `lock.fill`(锁着的锁),跟未锁定时 `iconButton(.lock, "lock.open.fill")`
     /// (开着的锁)对称:开锁图标 = 点了会锁上,锁着图标 = 点了会解锁。不再单独放"解锁"
     /// 文字——这一排其它图标(展开/设置/关闭)也都是纯图标无文字,统一风格。
     private var unlockPill: some View {
         iconButton(.unlockPill, "lock.fill", primary: true)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 2)
             // 玻璃跟着可见性一起关 —— 理由见 overlayCapsuleBackground 那条提醒(不关的话,
             // 设置页编辑台里这块胶囊会穿过外面的 .opacity(0) 显出来)。
             .overlayCapsuleBackground(visible: unlockPillVisible)
@@ -1585,8 +1590,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             iconButton(.lock, "lock.open.fill")
             iconButton(.closeOverlay, "xmark")
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
+        // 胶囊贴着按钮:上下不留边,高度就是播放键的 22pt;左右留 2pt,两端半圆不压到首尾按钮的高亮圆。见 04 章决策 56。
+        .padding(.horizontal, 2)
         // 玻璃必须跟着 controlsVisible 一起关,光靠外面那句 .opacity(controlsVisible ? 1 : 0)
         // 藏不住它 —— 见 overlayCapsuleBackground 那条提醒。
         .overlayCapsuleBackground(visible: controlsVisible)
@@ -1634,7 +1639,7 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
 
     /// 预设模式下拒绝拖动时占据控制排槽位的那条胶囊。
     ///
-    /// 跟 `playbackControls` / `unlockPill` **等高**(内容钉 30pt = 图标按钮 22 + 上下 4),三个状态
+    /// 跟 `playbackControls` / `unlockPill` **等高**(内容钉 22pt = 播放键的高度),三个状态
     /// 在同一个槽位里切换歌词不跳。字用 12pt 半粗、白字压深色胶囊 —— 跟这排按钮同一套底,但比
     /// 图标按钮多一整句话,是这个槽位里最"重"的一个状态;它本来就该抢眼。
     private func placementLockPill(_ text: String) -> some View {
@@ -1646,8 +1651,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .lineLimit(1)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .frame(height: 30)
+        .padding(.horizontal, 10)
+        .frame(height: 22)
         .overlayCapsuleBackground(visible: true)
         .transition(.opacity)
         .accessibilityLabel(text)

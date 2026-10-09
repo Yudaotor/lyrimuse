@@ -190,9 +190,9 @@ public enum OverlayPlacement {
 
     // MARK: - 控制排在卡片上方还是下方(「自由」模式)
 
-    /// 控制排槽位的高度:胶囊 30 + 离卡片 4 + 离窗口边 4。`LyricsOverlayView.controlsSlot` 按它定高;
+    /// 控制排槽位的高度:胶囊 22 + 离卡片 4 + 离窗口边 4。`LyricsOverlayView.controlsSlot` 按它定高;
     /// 槽位从卡片上方挪到下方时卡片在窗口里正好上移这么多,窗口反向挪同样的量卡片才不动,两处必须是同一个数。
-    public static let controlsSlotHeight: CGFloat = 38
+    public static let controlsSlotHeight: CGFloat = 30
 
     /// 卡片顶边(屏幕坐标,y 向上)。槽位在上方时卡片在窗口顶边往下一个槽位。
     public static func cardTop(windowTop: CGFloat, controlsBelow: Bool) -> CGFloat {

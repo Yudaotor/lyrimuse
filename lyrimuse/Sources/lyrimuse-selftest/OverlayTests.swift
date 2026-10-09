@@ -1269,7 +1269,7 @@ func runOverlayTests() {
 
         // 「自由」模式控制排放卡片上方还是下方,按卡片位置判:卡片上方放得下整个槽位才放上方。
         let slot = OverlayPlacement.controlsSlotHeight
-        expectEqual(slot, 38, "控制排翻面: 槽位高 = 胶囊 30 + 上下各 4")
+        expectEqual(slot, 30, "控制排翻面: 槽位高 = 胶囊 22 + 上下各 4")
         expectEqual(OverlayPlacement.controlsBelowCard(cardTop: screen.maxY - slot, visibleTop: screen.maxY), false,
                     "控制排翻面: 卡片上方正好放得下一个槽位时放上方")
         expectEqual(OverlayPlacement.controlsBelowCard(cardTop: screen.maxY - slot + 1, visibleTop: screen.maxY), true,
@@ -1778,6 +1778,9 @@ func runOverlayTests() {
                     "悬浮接线: 翻面时窗口反向挪一个槽位,卡片不动")
         expectEqual(view.contains(".frame(height: OverlayPlacement.controlsSlotHeight)"), true,
                     "悬浮接线: 控制排那一格按 controlsSlotHeight 定高,跟翻面补偿同一个数")
+        expectEqual(view.contains("controlsSlotBelow && !playback.backgroundIsVisible ? 0 : OverlayMetrics.cardBottomPadding")
+                    && view.contains(".padding(.bottom, cardBottomPadding)"), true,
+                    "悬浮接线: 背景透明且控制排在下方时卡片不留底边距,歌词和控制排之间不空一截")
         let overlayWindow = src("LyricsOverlayWindow.swift")
         expectEqual(controller.contains(
             "setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked\n                             && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress\n                             && !clickReplayInFlight)"),
