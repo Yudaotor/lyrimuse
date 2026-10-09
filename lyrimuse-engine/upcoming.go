@@ -76,7 +76,7 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 	case kugouMusicBundleID:
 		return kugouUpcoming(artist, title, n)
 	case neteaseMusicBundleID:
-		return neteaseUpcoming(artist, title, n)
+		return neteaseUpcomingAnyQueue(artist, title, n)
 	case appleMusicBundleID:
 		return appleMusicUpcoming(artist, title, n)
 	case spotifyBundleID:

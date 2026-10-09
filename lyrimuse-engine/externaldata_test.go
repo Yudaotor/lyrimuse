@@ -35,6 +35,7 @@ func TestMain(m *testing.M) {
 	// (QQ / 酷狗旧库 / 网易云这几份也不例外)。
 	qqUpcomingOverride = filepath.Join(missing, "PlayingList.archive")
 	neteaseUpcomingOverride = filepath.Join(missing, "playingList")
+	neteaseFMOverride = filepath.Join(missing, "fmPlay")
 	kugouUpcomingOverride = filepath.Join(missing, "currentPlayList.sqlite")
 	kugouQueuePlistOverride = filepath.Join(missing, "userCurrentPlayList.plist")
 	kugouConfigPlistOverride = filepath.Join(missing, "KugouConfigPlist.plist")
