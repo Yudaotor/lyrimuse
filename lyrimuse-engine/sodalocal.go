@@ -259,8 +259,7 @@ func refreshSodaLocalIndexLocked() {
 }
 
 // pickSodaLocalEntry 在同名同歌手的多条记录里挑一条。判据与 pickQQLocalEntry /
-// pickNeteaseLocalEntry 一致:先过时长闸(sourceDurationFits,12% 口径),全过不了
-// 就不命中;再专辑优先、时长差最小。
+// pickNeteaseLocalEntry 一致:先过 localLibraryEntryFits,全过不了就不命中;再专辑优先、时长差最小。
 //
 // 时长闸在这条路径上尤其要紧:结论是"这首歌没有歌词",按错曲目的代价是用户看到空白。
 func pickSodaLocalEntry(entries []sodaLocalTrack, album string, durationSecs float64) (sodaLocalTrack, bool) {
@@ -268,7 +267,7 @@ func pickSodaLocalEntry(entries []sodaLocalTrack, album string, durationSecs flo
 	var bestScore float64
 	found := false
 	for _, e := range entries {
-		if !sourceDurationFits(durationSecs, float64(e.Duration)/1000) {
+		if !localLibraryEntryFits(album, e.Album.Name, durationSecs, float64(e.Duration)/1000) {
 			continue
 		}
 		score := 0.0

@@ -196,3 +196,64 @@ func TestQueryNeteaseLocalTracksSkipsBadRowsAndEmptyResult(t *testing.T) {
 		t.Fatalf("应当读回 %d 条好记录,得到 %d", len(neteaseLocalTestTracks), len(rows))
 	}
 }
+
+// writeTestNeteaseDBWithHistory 同 writeTestNeteaseDB,另建一张播放历史表 historyTracks(形状同真实的客户端库)。
+func writeTestNeteaseDBWithHistory(t *testing.T, tracks, history []string) string {
+	t.Helper()
+	path := writeTestNeteaseDB(t, tracks)
+	var sb strings.Builder
+	sb.WriteString("CREATE TABLE `historyTracks` (`playtime` BIGINT NULL, `id` VARCHAR(40) NOT NULL, `jsonStr` TEXT NULL, PRIMARY KEY (`id`));\n")
+	for i, j := range history {
+		sb.WriteString(fmt.Sprintf("INSERT INTO historyTracks VALUES (%d,'h%d',%s);\n", 1791547264000+i, i, sqlQuote(j)))
+	}
+	cmd := exec.Command("/usr/bin/sqlite3", path)
+	cmd.Stdin = strings.NewReader(sb.String())
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("建测试库失败: %v %s", err, out)
+	}
+	return path
+}
+
+// 本机曲库里只有另一张专辑的同名曲目:时长未知、或差 3 秒都不认(走搜索);差不到 1 秒(同一份音频收在别的专辑)、
+// 或者播放器没报专辑时才认。
+func TestNeteaseLocalSongOtherAlbumNeedsSameLength(t *testing.T) {
+	resetNeteaseLocalIndex(t, writeTestNeteaseDB(t, []string{
+		neteaseTestTrack("25702068", "董小姐", "宋冬野", "摩登天空7", 313320),
+	}))
+	for _, c := range []struct {
+		album string
+		dur   float64
+		hit   bool
+	}{
+		{"安和桥北", 0, false},
+		{"安和桥北", 310.2, false},
+		{"安和桥北", 313.0, true},
+		{"", 310.2, true},
+		{"摩登天空7", 0, true},
+	} {
+		if _, ok := neteaseLocalSong(context.Background(), "宋冬野", "董小姐", c.album, c.dur); ok != c.hit {
+			t.Errorf("专辑 %q 时长 %v:命中=%v,要 %v", c.album, c.dur, ok, c.hit)
+		}
+	}
+}
+
+// 从搜索结果里点开的歌只进播放历史:索引要把它读进来;两张表都有的同一首只留一条;没有播放历史表时照读 dbTrack。
+func TestNeteaseLocalIndexReadsPlayHistory(t *testing.T) {
+	old := neteaseTestTrack("25702068", "董小姐", "宋冬野", "摩登天空7", 313320)
+	playing := neteaseTestTrack("27646198", "董小姐", "宋冬野", "安和桥北", 310213)
+	resetNeteaseLocalIndex(t, writeTestNeteaseDBWithHistory(t, []string{old}, []string{playing, old}))
+	s, ok := neteaseLocalSong(context.Background(), "宋冬野", "董小姐", "安和桥北", 0)
+	if !ok || s.ID != 27646198 {
+		t.Fatalf("播放历史里正在放的这一版要命中,得到 ok=%v id=%d", ok, s.ID)
+	}
+	neteaseLocalMu.Lock()
+	n := len(neteaseLocalIndex[neteaseLocalKey("宋冬野", "董小姐")])
+	neteaseLocalMu.Unlock()
+	if n != 2 {
+		t.Fatalf("两张表都有的同一首只留一条,索引里该是 2 条,得到 %d", n)
+	}
+	tracks, err := queryNeteaseLocalTracks(context.Background(), writeTestNeteaseDB(t, []string{old}))
+	if err != nil || len(tracks) != 1 {
+		t.Fatalf("没有播放历史表时照读 dbTrack: err=%v n=%d", err, len(tracks))
+	}
+}

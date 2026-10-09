@@ -204,19 +204,36 @@ func refreshQQLocalIndexLocked(ctx context.Context) {
 	}
 }
 
+// localLibraryOtherAlbumSecs:本机曲库里专辑跟播放器报的不一样的那条,时长差不超过它才当成正在放的这一首
+// (同一份音频收在合辑、精选里,两边时长相差在毫秒级)。
+const localLibraryOtherAlbumSecs = 1.0
+
+// localLibraryEntryFits:本机曲库里同名同歌手的一条记录能不能当成正在放的这一首。先过时长闸(sourceDurationFits,
+// 12% 口径);两边专辑都知道又对不上时,还要两边时长都知道、差不超过 localLibraryOtherAlbumSecs。本机曲库收的是
+// 客户端见过的歌,不一定有正在放的这一版,同名的另一版过不了 12% 的闸也照样会被挑中,当成这一首用就是另一版的
+// 歌词、封面和无人声标记(见 09 章决策 221)。网易云、QQ、汽水三家的挑法都先过这一道,改判据三处一起改。
+func localLibraryEntryFits(album, entryAlbum string, durationSecs, entrySecs float64) bool {
+	if !sourceDurationFits(durationSecs, entrySecs) {
+		return false
+	}
+	if album == "" || entryAlbum == "" || normLoose(album) == normLoose(entryAlbum) {
+		return true
+	}
+	return durationSecs > 0 && entrySecs > 0 && math.Abs(durationSecs-entrySecs) <= localLibraryOtherAlbumSecs
+}
+
 // pickQQLocalEntry 在同名同歌手的多条本地记录里挑一条。
 //
-// 先过时长闸(sourceDurationFits,与打分层 sourceDurationOff 同 12% 口径):本地库里同名
-// 不同版本(remix / live / 节选)是真实存在的,给错版本会让逐字歌词的时间轴整首错位——
-// 比"没命中、老实走网络"糟得多。全部过不了闸就**不命中**,宁可白跑一次搜索。
+// 先过 localLibraryEntryFits:本地库里同名不同版本(remix / live / 节选、另一张专辑)是真实存在的,给错版本会让逐字
+// 歌词的时间轴整首错位——比"没命中、老实走网络"糟得多。全部过不了就**不命中**,宁可白跑一次搜索。
 //
-// 过了闸之后:专辑对得上的优先(+1000 足够压过任何时长差),其次时长差最小。
+// 过了之后:专辑对得上的优先(+1000 足够压过任何时长差),其次时长差最小。
 func pickQQLocalEntry(entries []qqLocalEntry, album string, durationSecs float64) (qqLocalEntry, bool) {
 	var best qqLocalEntry
 	var bestScore float64
 	found := false
 	for _, e := range entries {
-		if !sourceDurationFits(durationSecs, e.duration) {
+		if !localLibraryEntryFits(album, e.album, durationSecs, e.duration) {
 			continue
 		}
 		score := 0.0

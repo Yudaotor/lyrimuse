@@ -36,8 +36,9 @@ import (
 // 一次几分钟的限流能让那段时间解析的歌永远缺译文/罗马音(网易云是唯一同时给这两轨的源)。
 // 本地命中时这一整段风险连同挑错版本的风险一起绕开。
 //
-// 不限于"正在用网易云播放":dbTrack 收的是客户端见过的歌(播放历史 62 条、歌单、搜索结果
-// 都会进),734 行远大于播放历史本身。
+// 不限于"正在用网易云播放":dbTrack 收的是客户端见过的歌(歌单、搜索结果都会进),734 行远大于播放历史本身。
+// 从搜索结果里点开播放的歌却只进播放历史 `historyTracks`、不进 dbTrack,而开播那一刻就写进播放历史,所以两张表
+// 一起读(同一首两张表都有时留 dbTrack 那条)。两张表的 jsonStr 是同一种曲目 JSON。
 //
 // 全程 fail-soft:没装网易云 / 库打不开 / 表结构变了 / sqlite3 不在,一律当没命中,
 // 照常走原来的搜索。
@@ -65,6 +66,9 @@ const neteaseLocalMaxRows = 20000
 // dbTrack 一行就是一条完整曲目 JSON,列名本身没有语义(`id` + `jsonStr`),所以这里只取
 // jsonStr,结构交给 neteaseLocalTrack 解。
 const neteaseLocalTracksSQL = "SELECT jsonStr FROM dbTrack WHERE jsonStr <> '' LIMIT 20000"
+
+// neteaseLocalHistorySQL:播放历史表,形状同 dbTrack。老版本客户端没有这张表时查询报错,当作没有,不影响 dbTrack。
+const neteaseLocalHistorySQL = "SELECT jsonStr FROM historyTracks WHERE jsonStr <> '' LIMIT 20000"
 
 // flexID 同时接受 "123" 和 123 两种写法。dbTrack 当前把 id / album.id 写成**字符串**
 // 形态的数字("569213220"),但这是别人的库,换版改成数字形态不该让整条路径失效。
@@ -120,14 +124,38 @@ func neteaseLocalKey(artist, title string) string {
 	return na + "|" + nt
 }
 
-// queryNeteaseLocalTracks 读一次 dbTrack。mode=ro 的理由同 qqlocal.go:拿一致快照、撞锁
+// queryNeteaseLocalTracks 读一次 dbTrack,再读播放历史补上 dbTrack 里没有的曲目。dbTrack 读不了就报错;播放历史
+// 读不了(老版本没有这张表)只用 dbTrack。
+func queryNeteaseLocalTracks(ctx context.Context, dbPath string) ([]neteaseLocalTrack, error) {
+	tracks, err := queryNeteaseLocalTable(ctx, dbPath, neteaseLocalTracksSQL)
+	if err != nil {
+		return nil, err
+	}
+	history, err := queryNeteaseLocalTable(ctx, dbPath, neteaseLocalHistorySQL)
+	if err != nil {
+		return tracks, nil
+	}
+	seen := make(map[flexID]bool, len(tracks))
+	for _, t := range tracks {
+		seen[t.ID] = true
+	}
+	for _, t := range history {
+		if t.ID != 0 && !seen[t.ID] {
+			seen[t.ID] = true
+			tracks = append(tracks, t)
+		}
+	}
+	return tracks, nil
+}
+
+// queryNeteaseLocalTable 跑一条只取 jsonStr 的查询。mode=ro 的理由同 qqlocal.go:拿一致快照、撞锁
 // 就干净失败;该库是 rollback journal 模式(实测 journal_mode=delete,无 -wal/-shm),
 // 只读打开不写任何东西,不会干扰客户端。
-func queryNeteaseLocalTracks(ctx context.Context, dbPath string) ([]neteaseLocalTrack, error) {
+func queryNeteaseLocalTable(ctx context.Context, dbPath, query string) ([]neteaseLocalTrack, error) {
 	ctx, cancel := context.WithTimeout(ctx, neteaseLocalQueryTimeout)
 	defer cancel()
 	uri := (&neturl.URL{Scheme: "file", Path: dbPath, RawQuery: "mode=ro"}).String()
-	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, neteaseLocalTracksSQL).Output()
+	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -216,14 +244,14 @@ func refreshNeteaseLocalIndexLocked(ctx context.Context) {
 }
 
 // pickNeteaseLocalEntry 在同名同歌手的多条本地记录里挑一条。判据与 pickQQLocalEntry
-// 一致:先过时长闸(sourceDurationFits,12% 口径),全过不了就不命中;再专辑优先、时长差最小。
+// 一致:先过 localLibraryEntryFits,全过不了就不命中;再专辑优先、时长差最小。
 // 本机实测 (歌手+歌名) 重复 13 组,比 QQ 那边多,这道闸更要紧。
 func pickNeteaseLocalEntry(entries []neteaseLocalTrack, album string, durationSecs float64) (neteaseLocalTrack, bool) {
 	var best neteaseLocalTrack
 	var bestScore float64
 	found := false
 	for _, e := range entries {
-		if !sourceDurationFits(durationSecs, e.Duration/1000) {
+		if !localLibraryEntryFits(album, e.Album.Name, durationSecs, e.Duration/1000) {
 			continue
 		}
 		score := 0.0
