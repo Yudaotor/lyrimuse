@@ -34,7 +34,7 @@ brew install --cask lyrimuse
 <img src="docs/images/hero-surfaces.jpg" alt="Lyrimuse lyrics surfaces — Apple-Music-style lyrics window, Dynamic-Island-style capsule, floating overlay with word-by-word highlight, menu-bar lyrics">
 <p align="center"><sub>Four ways to show lyrics: the Lyrics Window, the Dynamic-Island-style capsule, the floating overlay with word-by-word highlight, and the menu bar</sub></p>
 
-<img src="docs/images/hero-engine.jpg" alt="Lyrimuse lyrics engine — Lyrics Manager, scored manual search, per-track resolution decision panel">
+<img src="docs/images/hero-engine.jpg" alt="Lyrimuse lyrics engine — Lyrics Manager, per-track resolution decision panel with every candidate scored">
 <p align="center"><sub>Lyrics Manager, manual search with a score on every result, and the panel that shows why a song got the lyrics it got</sub></p>
 
 <img src="docs/images/hero-profile.jpg" alt="Lyrimuse listening profile — Last.fm stats, top charts, idle listening overview, yearly listening heatmap">

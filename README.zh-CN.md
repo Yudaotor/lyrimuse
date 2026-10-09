@@ -34,7 +34,7 @@ brew install --cask lyrimuse
 <img src="docs/images/hero-surfaces.zh-CN.jpg" alt="Lyrimuse 歌词展示形态——歌词窗口、灵动岛胶囊、桌面悬浮歌词（逐字染色）、菜单栏歌词">
 <p align="center"><sub>四种显示方式：歌词窗口、灵动岛胶囊、逐字染色的桌面悬浮歌词、菜单栏歌词</sub></p>
 
-<img src="docs/images/hero-engine.jpg" alt="Lyrimuse 歌词引擎——歌词管理、带打分的手动搜索、逐首歌的解析决策面板">
+<img src="docs/images/hero-engine.jpg" alt="Lyrimuse 歌词引擎——歌词管理、逐首歌的解析决策面板（每个候选都有打分）">
 <p align="center"><sub>歌词管理、给每个结果都打了分的手动搜索，还有一个面板告诉你这首歌为什么用了这份歌词</sub></p>
 
 <img src="docs/images/hero-profile.jpg" alt="Lyrimuse 听歌档案——Last.fm 统计、榜单、空闲听歌总览、全年热力图">
