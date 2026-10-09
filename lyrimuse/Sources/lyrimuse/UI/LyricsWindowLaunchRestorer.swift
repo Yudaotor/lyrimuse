@@ -24,8 +24,10 @@ enum LyricsWindowLaunchRestorer {
     }
 
     private static func step() {
+        // 迷你被「暂停时隐藏」「全屏时隐藏」藏着也算上了屏,不重开(07 章决策 142)。
         let probe = LyricsWindowLaunchRestore.Probe(
-            onScreen: LyricsWindowSession.window.map { $0.isVisible || $0.isMiniaturized } ?? false,
+            onScreen: LyricsMiniPanelAutoHide.shared.isHoldingPanel
+                || (LyricsWindowSession.window.map { $0.isVisible || $0.isMiniaturized } ?? false),
             stillWanted: LyricsWindowSession.shouldReopenAtLaunch && !AppExit.isTerminating)
         switch restore.next(probe) {
         case .open(let checkAfter):

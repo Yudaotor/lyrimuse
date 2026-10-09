@@ -1885,7 +1885,7 @@ func runSourceContractTests() {
                         && lwv.contains("reused.level = LyricsWindowFormMorph.hiddenLevel")
                         && lwv.contains("if window == nil, let reused { reused.level = reusedLevel }"), true,
                         "迷你面板: 反复切换时关掉的窗口层级还原、复用的场景窗拿得到")
-            expectEqual(lwv.contains("if mini { LyricsMiniPanelHost.show() } else { openScene() }")
+            expectEqual(lwv.contains("if mini {\n            LyricsMiniPanelHost.show()\n        } else {\n            LyricsMiniPanelHost.closeHeldPanel()\n            openScene()\n        }")
                         && lwv.contains("if formRequest.map({ !$0.mini && $0.isFresh(now: Date()) }) == true { return }"), true,
                         "迷你面板: 打开入口按形态分流,面板开着、要完整尺寸时交给面板自己切")
             expectEqual(lwv.contains("let inactive = window is LyricsMiniPanel ? !miniPointerInside : !window.isKeyWindow")
@@ -2417,7 +2417,7 @@ func runSourceContractTests() {
                     expectEqual(actions.contains("if plan.reopensLyricsWindow {"), true,
                                 "歌词窗口重开: 启动时上次开着就再开,引导没走完、静默启动时不开(LaunchWindowPlan)")
                     // 启动重开不激活 App(07 章决策 123):先标记再直接开窗,手动打开的入口照旧先激活。
-                    expectEqual(actions.contains("LyricsMiniPanelHost.show()\n                        } else {\n                            LyricsWindowSession.markRestoringAtLaunch()\n                            openWindowAction(id: \"lyrics-window\")"), true,
+                    expectEqual(actions.contains("LyricsMiniPanelHost.show(atLaunch: true)\n                        } else {\n                            LyricsWindowSession.markRestoringAtLaunch()\n                            openWindowAction(id: \"lyrics-window\")"), true,
                                 "歌词窗口重开: 启动时先置标记、再直接开窗")
                     expectEqual(actions.contains("LyricsWindowSession.shouldReopenAtLaunch {\n                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {\n                        AppActions.shared.openLyricsWindow?()"), false,
                                 "歌词窗口重开: 启动时不走先激活 App 的 openLyricsWindow")

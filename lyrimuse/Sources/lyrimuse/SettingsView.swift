@@ -2737,6 +2737,8 @@ private struct AppearanceSettingsTab: View {
                 icon: "switch.2", title: L10n.t("行为"),
                 summary: SettingsToggleSummary.text([
                     (title: L10n.t("悬浮淡化"), isOn: settings.lyricsWindowMiniFadeOnHover),
+                    (title: L10n.t("暂停时隐藏"), isOn: settings.lyricsWindowMiniHideWhenNotPlaying),
+                    (title: L10n.t("全屏时隐藏"), isOn: settings.lyricsWindowMiniHideInFullScreen),
                 ]))
         case .layout:
             // 「单行 / 双行」档下长句处理改成了滚动才追加 —— 默认值不报,跟菜单栏「布局」摘要同一条规则。
@@ -2837,12 +2839,23 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    /// 「行为」那几行(工具栏浮层与抽屉同一份),只有迷你有(07 章决策 118)。标题、图标跟悬浮歌词「行为」里那颗
-    /// (`OverlayBehaviorItem.fadeOnHover`)一样,两处一起改。
+    /// 「行为」那几行(工具栏浮层与抽屉同一份),只有迷你有(07 章决策 118、142)。标题、图标跟悬浮歌词「行为」里那颗
+    /// (`OverlayBehaviorItem.fadeOnHover`、`AutoHideItem.whenNotPlaying`)和灵动岛 `NotchBehaviorItem.hideInFullScreen`
+    /// 一样,几处一起改;值各管各的。
     @ViewBuilder
     private var lyricsWindowBehaviorRows: some View {
         SettingsRow(icon: "cursorarrow.motionlines", title: L10n.t("悬浮淡化")) {
             Toggle("", isOn: $settings.lyricsWindowMiniFadeOnHover)
+        }
+        CardDivider()
+        SettingsRow(icon: "pause.circle", title: L10n.t("暂停时隐藏"),
+                    help: L10n.t("迷你尺寸下，暂停或没有播放时隐藏，开始播放后重新出现")) {
+            Toggle("", isOn: $settings.lyricsWindowMiniHideWhenNotPlaying)
+        }
+        CardDivider()
+        SettingsRow(icon: "arrow.up.left.and.arrow.down.right", title: L10n.t("全屏时隐藏"),
+                    help: L10n.t("迷你尺寸下，所在屏幕有 App 全屏时隐藏")) {
+            Toggle("", isOn: $settings.lyricsWindowMiniHideInFullScreen)
         }
     }
 
@@ -3955,6 +3968,8 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniLineOverflow = .wrap
             s.lyricsWindowMiniLyricsLayout = .twoLines
             s.lyricsWindowMiniFadeOnHover = false
+            s.lyricsWindowMiniHideWhenNotPlaying = false
+            s.lyricsWindowMiniHideInFullScreen = false
             s.lyricsWindowMiniLyricsKaraoke = true
             s.lyricsWindowMiniFontWeight = .bold
             s.lyricsWindowMiniKaraokeFill = .text

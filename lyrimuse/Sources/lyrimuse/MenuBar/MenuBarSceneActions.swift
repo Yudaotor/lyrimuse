@@ -156,7 +156,7 @@ private struct SceneActionRegistrar: View {
                     // 上次是迷你就直接开面板(不开场景,07 章决策 133)。
                     LyricsWindowLaunchRestorer.start {
                         if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {
-                            LyricsMiniPanelHost.show()
+                            LyricsMiniPanelHost.show(atLaunch: true)
                         } else {
                             LyricsWindowSession.markRestoringAtLaunch()
                             openWindowAction(id: "lyrics-window")

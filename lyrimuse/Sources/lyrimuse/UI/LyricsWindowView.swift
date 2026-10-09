@@ -329,7 +329,12 @@ enum LyricsWindowSession {
         }
         let mini = takeFormRequest() ?? UserDefaults.standard.bool(forKey: miniModeKey)
         UserDefaults.standard.set(mini, forKey: miniModeKey)
-        if mini { LyricsMiniPanelHost.show() } else { openScene() }
+        if mini {
+            LyricsMiniPanelHost.show()
+        } else {
+            LyricsMiniPanelHost.closeHeldPanel()
+            openScene()
+        }
     }
 
     /// 直接打开迷你面板时摆哪,见 `LyricsWindowController.miniFrameToOpen`。

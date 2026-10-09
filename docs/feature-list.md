@@ -35,6 +35,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Notch lyrics](#feature-notch-lyrics) | Settings › Lyrics Display › Notch › Notch Lyrics |
 | [Menu bar lyrics](#feature-menu-bar-lyrics) | Settings › Lyrics Display › Menu Bar › Menu Bar Lyrics |
 | [Touch Bar lyrics](#feature-touch-bar-lyrics) | Settings › Lyrics Display › Touch Bar › Touch Bar Lyrics |
+| [Mini window hides when paused or in full screen](#feature-mini-window-auto-hide) | Settings › Lyrics Display › Lyrics Window › Behavior › Hide When Paused |
 | [Line transition](#feature-line-transition) | Settings › Lyrics Display › Floating Lyrics › Layout › Line Transition |
 | [Fade when the pointer is over it](#feature-fade-on-hover) | Settings › Lyrics Display › Floating Lyrics › Behavior › Fade on Hover |
 | [Lock position, long-press to drag](#feature-lock-position) | Settings › Lyrics Display › Floating Lyrics › Behavior › Lock Position |
@@ -286,6 +287,16 @@ The lyrics window shrunk to a small card: just the current line, the current and
 
 - Settings: Lyrics Display › Lyrics Window › Layout › Lyrics Layout
 - Settings: Keyboard Shortcuts › Switch Mini / Full Size
+
+<a id="feature-mini-window-auto-hide"></a>
+
+### Mini window hides when paused or in full screen
+
+The mini window can disappear while paused or idle and come back when playback starts, and step aside while an app is full screen on its display (a video, a game). Each is a separate switch.
+
+- Off by default
+- Settings: Lyrics Display › Lyrics Window › Behavior › Hide When Paused
+- Settings: Lyrics Display › Lyrics Window › Behavior › Hide in Full Screen
 
 <a id="feature-animated-artwork"></a>
 
@@ -681,7 +692,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 214 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 216 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -929,6 +940,8 @@ Every setting in the Settings window, by where it lives: 214 in all. Type a name
 ### Lyrics Display › Lyrics Window › Behavior
 
 - **Fade on Hover** (mini size only)
+- **Hide When Paused** (mini size only)
+- **Hide in Full Screen** (mini size only)
 
 ### Lyrics Display › Lyrics Window › Content
 

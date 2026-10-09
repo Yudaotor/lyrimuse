@@ -1777,6 +1777,8 @@
 "连续收听 %d 次，点按展开每一次" = "Played %d times in a row — click to show each one";
 "连续混音版，与原版编排不同" = "Continuous mix, arranged differently from the original";
 "迷你尺寸" = "Mini Size";
+"迷你尺寸下，所在屏幕有 App 全屏时隐藏" = "In mini size, hides while an app is full screen on its display";
+"迷你尺寸下，暂停或没有播放时隐藏，开始播放后重新出现" = "In mini size, hides while paused or idle and reappears when playback starts";
 "迷你尺寸中一行显示不下时换行或滚动" = "Whether long lines wrap or scroll in the mini size";
 "迷你尺寸仅显示当前句、显示当前句与下一句，或与完整尺寸相同整页滚动" = "Whether the mini size shows just the current line, the current and next line, or a scrolling page like the full size";
 "迷你尺寸的歌词字号上限" = "Ceiling for the mini size's lyrics font size";

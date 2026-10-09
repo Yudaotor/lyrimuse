@@ -40636,6 +40636,40 @@
           }
         }
       }
+    },
+    "迷你尺寸下，暂停或没有播放时隐藏，开始播放后重新出现" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In mini size, hides while paused or idle and reappears when playback starts"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "迷你尺寸下，暫停或沒有播放時隱藏，開始播放後重新出現"
+          }
+        }
+      }
+    },
+    "迷你尺寸下，所在屏幕有 App 全屏时隐藏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In mini size, hides while an app is full screen on its display"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "迷你尺寸下，所在螢幕有 App 全螢幕時隱藏"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

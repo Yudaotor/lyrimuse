@@ -81,7 +81,7 @@ func checkLyricsWindowLaunchRestore() {
                             + "                    // 上次是迷你就直接开面板(不开场景,07 章决策 133)。\n"
                             + "                    LyricsWindowLaunchRestorer.start {\n"
                             + "                        if UserDefaults.standard.bool(forKey: LyricsWindowSession.miniModeKey) {\n"
-                            + "                            LyricsMiniPanelHost.show()\n"
+                            + "                            LyricsMiniPanelHost.show(atLaunch: true)\n"
                             + "                        } else {\n"
                             + "                            LyricsWindowSession.markRestoringAtLaunch()\n"
                             + "                            openWindowAction(id: \"lyrics-window\")\n"
@@ -123,7 +123,7 @@ func checkLyricsWindowLaunchRestore() {
     expectEqual(sourceBytes(restorer, contain: "openLyricsWindow"), false, "启动重开: 重试也不走先激活 App 的 openLyricsWindow")
     expectEqual(sourceBytes(restorer, contain: "if let window = LyricsWindowSession.window {\n            window.orderFrontRegardless()\n        } else {\n            openWindow()\n        }"),
                 true, "启动重开: 窗口建出来了只是没上屏就直接摆到最前,没建出来才再开")
-    expectEqual(sourceBytes(restorer, contain: "onScreen: LyricsWindowSession.window.map { $0.isVisible || $0.isMiniaturized } ?? false,")
+    expectEqual(sourceBytes(restorer, contain: "|| (LyricsWindowSession.window.map { $0.isVisible || $0.isMiniaturized } ?? false),")
                 && sourceBytes(restorer, contain: "stillWanted: LyricsWindowSession.shouldReopenAtLaunch && !AppExit.isTerminating)"),
                 true, "启动重开: 核对用登记的窗口(最小化也算),还该不该开读「开着」那个键和退出标记")
     expectEqual(sourceBytes(window, contain: "        self.window = window\n        LyricsWindowSession.window = window\n"), true,

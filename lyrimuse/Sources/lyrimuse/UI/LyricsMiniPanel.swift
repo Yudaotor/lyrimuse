@@ -55,6 +55,7 @@ enum LyricsMiniPanelHost {
         panel.contentView = host
         panel.setFrame(frame, display: false)
         self.panel = panel
+        LyricsMiniPanelAutoHide.shared.attach(panel)
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: panel, queue: .main
         ) { _ in
@@ -64,16 +65,28 @@ enum LyricsMiniPanelHost {
     }
 
     /// 直接打开迷你(没有完整那扇窗可以参照):上次的位置,没存过就贴在主屏右上角。已经开着就摆到最前。
-    static func show() {
+    /// 被「暂停时隐藏」「全屏时隐藏」藏着的也摆出来(用户要看);`atLaunch` 是启动重开,规则要藏就只建不上屏(07 章决策 142)。
+    static func show(atLaunch: Bool = false) {
         if let panel, panel.isVisible {
             panel.orderFrontRegardless()
             return
         }
-        make(frame: LyricsWindowSession.miniFrameToOpen()).orderFrontRegardless()
+        let panel = make(frame: LyricsWindowSession.miniFrameToOpen())
+        if atLaunch, LyricsMiniPanelAutoHide.shared.holdAtLaunch() { return }
+        LyricsMiniPanelAutoHide.shared.panelShownByUser()
+        panel.orderFrontRegardless()
+    }
+
+    /// 关掉被规则藏着的面板(要开完整尺寸时),免得规则翻回来又亮出一扇迷你、跟完整那扇同在。
+    static func closeHeldPanel() {
+        guard let panel, !panel.isVisible, LyricsMiniPanelAutoHide.shared.isHoldingPanel else { return }
+        LyricsMiniPanelAutoHide.shared.detach()
+        panel.close()
     }
 
     private static func release() {
         guard let panel, !panel.isVisible else { return }
+        LyricsMiniPanelAutoHide.shared.detach()
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
         closeObserver = nil
         panel.contentView = nil

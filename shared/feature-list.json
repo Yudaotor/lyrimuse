@@ -658,6 +658,37 @@
           ]
         },
         {
+          "id": "mini-window-auto-hide",
+          "title": {
+            "zh-Hans": "迷你窗口暂停或全屏时隐藏",
+            "en": "Mini window hides when paused or in full screen",
+            "zh-Hant": "迷你視窗暫停或全螢幕時隱藏"
+          },
+          "desc": {
+            "zh-Hans": "暂停或没在放歌时迷你窗口自动隐藏，开始播放后重新出现；所在屏幕有 App 全屏（看视频、玩游戏）时也可以自动隐藏。两项各自开关。",
+            "en": "The mini window can disappear while paused or idle and come back when playback starts, and step aside while an app is full screen on its display (a video, a game). Each is a separate switch.",
+            "zh-Hant": "暫停或沒在播歌時迷你視窗自動隱藏，開始播放後重新出現；所在螢幕有 App 全螢幕（看影片、玩遊戲）時也可以自動隱藏。兩項各自開關。"
+          },
+          "default": "off",
+          "check": {
+            "appSetting": "lyricsWindowMiniHideWhenNotPlaying"
+          },
+          "settings": [
+            [
+              "歌词显示",
+              "歌词窗口",
+              "行为",
+              "暂停时隐藏"
+            ],
+            [
+              "歌词显示",
+              "歌词窗口",
+              "行为",
+              "全屏时隐藏"
+            ]
+          ]
+        },
+        {
           "id": "animated-artwork",
           "title": {
             "zh-Hans": "动态封面",
