@@ -4021,11 +4021,11 @@ func runSourceContractTests() {
         let karaokeOverlay = (managerParts.components(separatedBy: "private struct LyricsManagerKaraokeOverlay: View").dropFirst().first ?? "")
             .components(separatedBy: "/// 逐字染色那一层里,一段字是第几段").first ?? ""
         expectEqual(previewRow.contains(".overlay(alignment: .topLeading) {")
-                    && previewRow.contains("LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs)")
+                    && previewRow.contains("LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,\n                                                        offsetMs: karaokeOffsetMs)")
                     && karaokeOverlay.contains("FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !isPlaying)")
                     && karaokeOverlay.contains(".textRenderer(LyricsManagerKaraokeRenderer(")
-                    && karaokeOverlay.contains("return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)\n            + coordinator.currentLyricsOffsetMs"),
-                    true, "歌词管理: 预览当前句的逐字染色画在 overlay 里,时间基准含歌词偏移")
+                    && karaokeOverlay.contains("return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)\n            + (offsetMs ?? coordinator.currentLyricsOffsetMs)"),
+                    true, "歌词管理: 预览当前句的逐字染色画在 overlay 里,时间基准含歌词偏移(搜索候选传它自己的偏移)")
         // 标签和小标记的颜色都读 LyricsFeatureTint,跟搜索候选歌词面板同一份,不在调用点各写一份(11 章决策 79)。
         let headerTagsSource = (manager.components(separatedBy: "private func headerTags(").dropFirst().first ?? "")
             .components(separatedBy: "private func factsRow(").first ?? ""

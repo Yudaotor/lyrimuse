@@ -153,11 +153,16 @@ struct LyricsSearchSheet: View {
         func rows(_ c: LyricsSearchService.Candidate, scripts: RomanizationScripts) -> PreviewRows {
             let inputs = [c.lyrics, c.lyricsTr, c.lyricsRoma, c.lyricsYRC, c.title, c.artist, String(scripts.rawValue)]
             if let cached, inputs == self.inputs { return cached }
-            let plain = LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, title: c.title, artist: c.artist)
+            // 当前句逐字染色的字取自这条候选自己的逐字轨(见 11 章决策 101)。
+            func withKaraoke(_ rows: [LyricsPreviewRow]) -> [LyricsPreviewRow] {
+                LyricsPreviewText.attachingKaraoke(rows, lyrics: c.lyrics, yrc: c.lyricsYRC, title: c.title, artist: c.artist)
+            }
+            let plain = withKaraoke(
+                LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, title: c.title, artist: c.artist))
             let mayRomanize = c.hasRomanization || LyricsPreviewText.mayHaveRomanization(c.lyrics, scripts: scripts)
             let romanized = mayRomanize
-                ? LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, romanization: c.lyricsRoma,
-                                         romanizationScripts: scripts, title: c.title, artist: c.artist)
+                ? withKaraoke(LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, romanization: c.lyricsRoma,
+                                                     romanizationScripts: scripts, title: c.title, artist: c.artist))
                 : []
             let hasRomanization = romanized.contains { !($0.romanization ?? "").isEmpty }
             let embedded = LRCParser.parseOffsetMs(c.lyrics)
@@ -1464,8 +1469,8 @@ struct LyricsSearchSheet: View {
     }
 
     /// 预览正文:左边一列时间、右边正文,开着译文 / 读音时排在那一句下面。行取自 `LyricsPreviewText.rows`,
-    /// 跟歌词窗口实际显示的是同一批行(署名过滤、多时间戳展开、译文挂靠都走播放引擎);只读整行 LRC,
-    /// 逐字轨不参与,时间列就是这份 LRC 自己的时间戳。没有时间戳的纯文本候选不画时间列。采纳落盘的仍是
+    /// 跟歌词窗口实际显示的是同一批行(署名过滤、多时间戳展开、译文挂靠都走播放引擎);行取自整行 LRC,
+    /// 时间列就是这份 LRC 自己的时间戳,逐字轨只用来给当前句逐字染色。没有时间戳的纯文本候选不画时间列。采纳落盘的仍是
     /// 候选原始文本,这里只管看(边界见 LyricsPreviewText 头注)。
     ///
     /// 正在放的就是这首时,按这条候选自己的时间轴标出此刻唱到哪一句(`.ownTimeline`),不按在用那份歌词的当前句找字:

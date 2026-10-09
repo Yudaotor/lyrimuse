@@ -166,6 +166,21 @@ func runLyricsManagerTests() {
         expectEqual(LyricsPreviewText.karaokeSegments(text: "", words: [word("你", 0)]) == nil, true, "逐字染色: 空行不铺")
         expectEqual(LyricsPreviewText.karaokeSegments(text: "I won't say", words: [word("I ", 0), word("Won’t ", 100), word("say", 200)])?
                         .map(\.text), ["I ", "won't ", "say"], "逐字染色: 标点、引号和大小写不一样也铺,段里用预览的写法")
+        // 候选自己的逐字轨挂到整行预览上:第二句逐字比整行早 0.35 秒照样挂上,第三句两份写法不同就不挂。
+        let karaokeLRC = "[00:10.00]Hello world\n[00:14.00]你好 世界\n[00:18.00]Good night\n"
+        let karaokeYRC = "[10000,3000](10000,500,0)Hello (10500,800,0)world\n"
+            + "[13650,3000](13650,300,0)你(13950,300,0)好(14250,300,0)世(14550,300,0)界\n"
+            + "[18000,3000](18000,500,0)Good (18500,500,0)evening\n"
+        let karaokeRows = LyricsPreviewText.attachingKaraoke(
+            LyricsPreviewText.rows(lyrics: karaokeLRC, translation: ""), lyrics: karaokeLRC, yrc: karaokeYRC)
+        expectEqual(karaokeRows.map(\.text), ["Hello world", "你好 世界", "Good night"], "候选逐字: 行和时间仍取自整行歌词")
+        expectEqual(karaokeRows.first?.karaoke?.map(\.startMs), [10000, 10500], "候选逐字: 字对得上的那一句挂上逐字段")
+        expectEqual(karaokeRows.dropFirst().first?.karaoke?.map(\.text), ["你", "好 ", "世", "界"],
+                    "候选逐字: 逐字句首早零点几秒也挂上,段按预览的正文切")
+        expectEqual(karaokeRows.last?.karaoke == nil, true, "候选逐字: 两份写法不同的那句不挂,整行高亮")
+        expectEqual(LyricsPreviewText.attachingKaraoke(LyricsPreviewText.rows(lyrics: karaokeLRC, translation: ""),
+                                                       lyrics: karaokeLRC, yrc: "").allSatisfy { $0.karaoke == nil },
+                    true, "候选逐字: 没有逐字轨就都不挂")
         expectEqual(LyricsPreviewText.mayHaveRomanization("こんにちは", scripts: [.japanese]), true, "读音能不能点: 假名")
         expectEqual(LyricsPreviewText.mayHaveRomanization("안녕", scripts: [.japanese]), false, "读音能不能点: 没开韩文就不算谚文")
         expectEqual(LyricsPreviewText.mayHaveRomanization("Hello", scripts: .default), false, "读音能不能点: 拉丁字母")

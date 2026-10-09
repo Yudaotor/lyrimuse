@@ -196,6 +196,8 @@ public struct LyricsPreviewRow: Equatable {
     public let translation: String?
     /// 这一句的读音,跟歌词窗口显示的同一份(源自带的,或按 `romanizationScripts` 现算的);没有为 nil。
     public let romanization: String?
+    /// 这一句在这份歌词自己逐字轨里的逐字段(`LyricsPreviewText.attachingKaraoke`);没有逐字轨、或字对不上时为 nil。
+    public var karaoke: [LyricsKaraokeSegment]?
 
     public init(timeMs: Int?, text: String, translation: String?, romanization: String? = nil) {
         self.timeMs = timeMs
@@ -230,6 +232,32 @@ extension LyricsPreviewText {
         guard !text.isEmpty else { return [] }
         return text.split(separator: "\n", omittingEmptySubsequences: false)
             .map { LyricsPreviewRow(timeMs: nil, text: String($0), translation: nil) }
+    }
+
+    /// 给各行挂上这份歌词自己逐字轨里的逐字段(搜索候选歌词的预览,当前句逐字染色用)。逐字轨按播放引擎同一条路解析
+    /// (时间轴归一化、署名过滤、覆盖率不够时不用逐字),每一行在时间离它 `windowMs` 之内的逐字句里挑字对得上的、
+    /// 最近的那一句(`karaokeSegments`);整行歌词和逐字歌词的句首差零点几秒很常见。逐字时间跟行时间一样是 `[offset:]`
+    /// 校正前的。没有逐字轨、引擎退回整行时原样返回。
+    public static func attachingKaraoke(_ rows: [LyricsPreviewRow], lyrics: String, yrc: String,
+                                        title: String = "", artist: String = "",
+                                        windowMs: Int = 2000) -> [LyricsPreviewRow] {
+        guard !yrc.isEmpty, rows.contains(where: { $0.timeMs != nil }) else { return rows }
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc,
+                    trackTitle: title, trackArtist: artist)
+        let wordLines: [(timeMs: Int, words: [SyncedLyricWord])] = engine.allLines(idPrefix: "").compactMap {
+            guard let words = $0.line.words, !words.isEmpty else { return nil }
+            return ($0.timeMs, words)
+        }
+        guard !wordLines.isEmpty else { return rows }
+        return rows.map { row in
+            guard let time = row.timeMs, !row.text.isEmpty else { return row }
+            let nearby = wordLines.filter { abs($0.timeMs - time) <= windowMs }
+                .sorted { abs($0.timeMs - time) < abs($1.timeMs - time) }
+            var out = row
+            out.karaoke = nearby.lazy.compactMap { karaokeSegments(text: row.text, words: $0.words) }.first
+            return out
+        }
     }
 
     /// 这份歌词里有没有可能标出读音的字(假名、谚文,或者设置里开了中文 / 粤语读音时的汉字)。只用来决定

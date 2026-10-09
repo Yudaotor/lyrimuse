@@ -89,8 +89,8 @@ final class LyricsManagerPlaybackLine: ObservableObject {
 enum LyricsPreviewHighlight: Equatable {
     /// 按正在放的那一句的字找(歌词管理:预览的就是在用的这份),对得上时逐字染色。
     case playingLine
-    /// 按播放位置在这份行自己的时间里找,整行高亮、不逐字染色(搜索候选:候选多半不是在用的那份,要看它的时间轴此刻
-    /// 落在哪一句)。`embeddedOffsetMs` 是这份歌词自带的 `[offset:]`,`isCurrent` 是不是在用的那一份,偏移的算法见
+    /// 按播放位置在这份行自己的时间里找,逐字染色用行上挂的这份歌词自己的逐字段(`LyricsPreviewRow.karaoke`),没有就
+    /// 整行高亮(搜索候选:候选多半不是在用的那份,要看它的时间轴此刻落在哪一句)。`embeddedOffsetMs` 是这份歌词自带的 `[offset:]`,`isCurrent` 是不是在用的那一份,偏移的算法见
     /// LyricsPreviewText.candidateOffsetMs。
     case ownTimeline(embeddedOffsetMs: Int, isCurrent: Bool)
 
@@ -867,6 +867,8 @@ struct LyricsManagerPreviewList: View {
     var body: some View {
         let current = currentIndex
         let karaoke = karaokeSegments(at: current)
+        // 逐字染色的时间基准叠哪份偏移:在用的那份跟播放侧一样,别的候选按它采纳后会生效的算。
+        let karaokeOffset: Int? = highlight == .playingLine ? nil : highlight.offsetMs
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 13) {
@@ -876,6 +878,7 @@ struct LyricsManagerPreviewList: View {
                                                 karaoke: isCurrent ? karaoke : nil,
                                                 isPlaying: isCurrent && playback.isPlaying,
                                                 pausedMs: isCurrent ? playback.pausedMs : nil,
+                                                karaokeOffsetMs: karaokeOffset,
                                                 showsTimeColumn: showsTimeColumn,
                                                 canSeek: canSeek, onSeek: onSeek)
                             .id(index)
@@ -932,9 +935,12 @@ struct LyricsManagerPreviewList: View {
                                             lineTimeMs: current.timeMs, lineText: current.text)
     }
 
-    /// 当前句的逐字段:这首正在放、当前句有逐字时间、跟预览这一行的字对得上时才有(见 11 章决策 71)。
+    /// 当前句的逐字段:这首正在放、当前句有逐字时间、跟预览这一行的字对得上时才有(见 11 章决策 71)。按候选自己的时间轴
+    /// 找行时取这一行挂的、这份歌词自己的逐字段(决策 101)。
     private func karaokeSegments(at index: Int?) -> [LyricsKaraokeSegment]? {
-        guard highlight == .playingLine, let index, let words = playback.current?.words, !words.isEmpty else { return nil }
+        guard let index, rows.indices.contains(index) else { return nil }
+        guard highlight == .playingLine else { return rows[index].karaoke }
+        guard let words = playback.current?.words, !words.isEmpty else { return nil }
         return LyricsPreviewText.karaokeSegments(text: rows[index].text, words: words)
     }
 }
@@ -949,6 +955,8 @@ private struct LyricsManagerPreviewRow: View {
     var isPlaying = false
     /// 暂停时的时间基准,只交给当前句(见 LyricsManagerKaraokeOverlay.pausedMs)。
     var pausedMs: Int? = nil
+    /// 逐字染色叠的偏移,nil = 播放侧的总偏移(见 LyricsManagerKaraokeOverlay.offsetMs)。
+    var karaokeOffsetMs: Int? = nil
     var showsTimeColumn = true
     let canSeek: Bool
     let onSeek: (Int) -> Void
@@ -968,7 +976,8 @@ private struct LyricsManagerPreviewRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .overlay(alignment: .topLeading) {
                         if let segments = shownKaraoke {
-                            LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs)
+                            LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,
+                                                        offsetMs: karaokeOffsetMs)
                         }
                     }
                 if let secondary {
@@ -1056,6 +1065,8 @@ private struct LyricsManagerKaraokeOverlay: View {
     /// 画面不直接用它,照样读协调器;它只是让这一层「输入变了」:暂停时时钟停着,暂停中拖进度、调偏移不改任何输入的话,
     /// 这一层不重画(同 KaraokeWordText.pausedMs)。
     let pausedMs: Int?
+    /// 播放位置叠的偏移;nil = 播放侧的总偏移(预览的就是在用的那份)。搜索候选按 `LyricsPreviewHighlight.offsetMs` 传。
+    var offsetMs: Int? = nil
 
     static let isSupported: Bool = {
         if #available(macOS 15.0, *) { return true }
@@ -1069,7 +1080,7 @@ private struct LyricsManagerKaraokeOverlay: View {
                 text
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
-                    .textRenderer(LyricsManagerKaraokeRenderer(segments: segments, ms: Self.currentMs(at: date)))
+                    .textRenderer(LyricsManagerKaraokeRenderer(segments: segments, ms: Self.currentMs(at: date, offsetMs: offsetMs)))
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.disabled)
             }
@@ -1088,10 +1099,10 @@ private struct LyricsManagerKaraokeOverlay: View {
     }
 
     /// 跟歌词窗口逐字填色同一条时间基准(含歌词偏移);暂停时 anchor 是 nil,退到暂停位置(同 KaraokeWordText)。
-    private static func currentMs(at date: Date) -> Int {
+    private static func currentMs(at date: Date, offsetMs: Int?) -> Int {
         let coordinator = PlaybackCoordinator.shared
         return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)
-            + coordinator.currentLyricsOffsetMs
+            + (offsetMs ?? coordinator.currentLyricsOffsetMs)
     }
 }
 
