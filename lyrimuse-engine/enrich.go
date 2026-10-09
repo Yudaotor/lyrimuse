@@ -2319,7 +2319,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		}
 		e.ResolvedDurationSecs = durationSecs
 		switch {
-		case rescoreWouldLoseWordTiming(e, picked):
+		case rescoreWouldLoseWordTiming(e, scored, picked):
 			log.Printf("lyrics rescore: %s  keeping %s(%d) with word timing, %s(%d) has none this round",
 				key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		case rescoreKeepsCurrent(e, scored, picked):
@@ -2331,6 +2331,10 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		}
 	default:
 		if picked.Lyrics != e.Lyrics {
+			if e.LyricsYRC != "" && picked.LyricsYRC == "" && rescoreCurrentTimelineOff(e, scored) {
+				log.Printf("lyrics rescore: %s  current %s lyrics run off this round's timeline, not keeping them for their word timing",
+					key, e.LyricsSource)
+			}
 			log.Printf("lyrics rescore: %s  %s(v%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScoringVersion, picked.Source, picked.Score)
 			e.Lyrics = picked.Lyrics
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
@@ -2385,7 +2389,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		e.Instrumental = false
 	}
 	opts.finish(lyricsRematchFacts{before: before, after: e, picked: picked, reached: reached, decidable: decidable,
-		keptWordTiming: keep && rescoreWouldLoseWordTiming(before, picked)})
+		keptWordTiming: keep && rescoreWouldLoseWordTiming(before, scored, picked)})
 	enrichCache[key] = e
 	enrichDirty = true
 	return deferred
@@ -2424,7 +2428,9 @@ func lookupPeripheralQQMids(ctx context.Context, key string, fresh enrichEntry) 
 
 // rescoreKeepsCurrent:重评可判(当前歌词的来源这一轮回了话),但回来的不是当前这一份 —— 当前这份没参与这一轮
 // 的比较。它已经是这一版规则下打的分时,两个分数可以比:冠军不比它高就不换(不然一次换了个版本回来的应答就能
-// 让 820 分的词换成 500 分的)。打分版本落后的,旧分数没法比,照原规则让这一轮说了算。
+// 让 820 分的词换成 500 分的)。打分版本落后的,旧分数没法比,照原规则让这一轮说了算。跟这一轮某份被判整首错开的
+// 候选同轴(rescoreCurrentTimelineOff)的也不比:那一份就是当前这份、只是正文写法变了,它已经参与比较并输了,
+// 存的分数是没扣这一项时打的。
 func rescoreKeepsCurrent(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
 	if picked.Lyrics == e.Lyrics || e.LyricsScoringVersion != lyricsScoringVersion {
 		return false
@@ -2434,13 +2440,13 @@ func rescoreKeepsCurrent(e enrichEntry, scored []scoredLyricCandidateResult, pic
 			return false // 当前这份参与了比较,输了就换
 		}
 	}
-	return picked.Score <= e.LyricsScore
+	return !rescoreCurrentTimelineOff(e, scored) && picked.Score <= e.LyricsScore
 }
 
 // rescoreKeeps:重评可判、有冠军时,当前这份要不要留着 —— 它没参与比较而冠军不比它高(rescoreKeepsCurrent),
 // 或者换过去会丢掉逐字(rescoreWouldLoseWordTiming)。
 func rescoreKeeps(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
-	return rescoreKeepsCurrent(e, scored, picked) || rescoreWouldLoseWordTiming(e, picked)
+	return rescoreKeepsCurrent(e, scored, picked) || rescoreWouldLoseWordTiming(e, scored, picked)
 }
 
 // rescoreKeepsLyrics:重评可判、有冠军时当前这份留不留 —— rescoreKeeps,外加冠军换上去屏上看不出差别(keepsShownLyricsOver,
@@ -2494,9 +2500,22 @@ func rescoreCurrentContradicted(current string, scored []scoredLyricCandidateRes
 
 // rescoreWouldLoseWordTiming:冠军是另一份正文、没有逐字,而当前这份有逐字。逐字取决于那个源这一轮有没有把逐字
 // 接口给全,同一首歌这一轮有、下一轮一个都没有很常见;换过去会把卡拉 OK 填色丢掉,而且不可逆。正文相同时不算
-// (那种情形只会补逐字,见 gainsWordTiming)。
-func rescoreWouldLoseWordTiming(e enrichEntry, picked *scoredLyricCandidateResult) bool {
-	return picked.Lyrics != e.Lyrics && e.LyricsYRC != "" && picked.LyricsYRC == ""
+// (那种情形只会补逐字,见 gainsWordTiming);这一轮判了当前这份整首错开时也不算(rescoreCurrentTimelineOff)。
+func rescoreWouldLoseWordTiming(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
+	return picked.Lyrics != e.Lyrics && e.LyricsYRC != "" && picked.LyricsYRC == "" && !rescoreCurrentTimelineOff(e, scored)
+}
+
+// rescoreCurrentTimelineOff:当前这份的时间轴跟这一轮某份扣了 timelineOffset 的候选是同一份(timelinesIdentical),
+// 即这一轮判了它整首错开,它的逐字填色也跟着错开。跟哪一份被扣分的候选都对不上时不算。见 09 章决策 217。
+func rescoreCurrentTimelineOff(e enrichEntry, scored []scoredLyricCandidateResult) bool {
+	current := displayedTimeline(e.Lyrics, e.LyricsYRC)
+	for i := range scored {
+		c := &scored[i]
+		if scoreTermPoints(c.ScoreTerms, scoreTermTimelineOffset) < 0 && timelinesIdentical(current, displayedTimeline(c.Lyrics, c.LyricsYRC)) {
+			return true
+		}
+	}
+	return false
 }
 
 // gainsWordTiming:正文不变时唯一要补写的情况 —— 缓存里没有逐字、这一轮的胜者带了逐字。

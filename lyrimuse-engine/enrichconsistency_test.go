@@ -83,7 +83,7 @@ func TestRescoreWouldLoseWordTiming(t *testing.T) {
 		{"当前这份本来就没有逐字", enrichEntry{Lyrics: "old"}, scoredLyricCandidateResult{Lyrics: "new"}, false},
 	}
 	for _, c := range cases {
-		if got := rescoreWouldLoseWordTiming(c.e, &c.picked); got != c.want {
+		if got := rescoreWouldLoseWordTiming(c.e, nil, &c.picked); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
 	}
