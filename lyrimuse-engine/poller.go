@@ -1756,6 +1756,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startLyricsFillSweeper(ctx)                    // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
 	go startCoverSweeper(ctx)                         // 有词、没封面、外围字段从没补过的条目在后台各补一次,见 coversweep.go 顶部注释
 	go startLyricsRematchWatcher(ctx)                 // 「重新自动匹配」,见 lyricsrematch.go 顶部注释
+	go startSongEntityShadow(ctx)                     // 歌曲实体表在后台建、出诊断报告,见 songentitystore.go
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()

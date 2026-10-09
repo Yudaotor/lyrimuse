@@ -453,6 +453,10 @@ enum DiagnosticsExporter {
         if let stall = recentMainThreadStallSample() {
             files.append((LogFiles.mainThreadStall.lastPathComponent, stall))
         }
+        // 歌曲实体的诊断报告:引擎在后台建实体表时写(lyrimuse-engine/songentitystore.go),还没建过就不带。
+        if let entities = songEntityReportText(secrets: secrets) {
+            files.append(("song-entity-report.txt", entities))
+        }
         let home = fm.homeDirectoryForCurrentUser.path
         for (name, text) in files {
             try? LogRedactor.redactHomePath(text, home: home)
@@ -469,6 +473,13 @@ enum DiagnosticsExporter {
         guard let content = FileIO.readString(LogFiles.engine) else {
             return "(could not read \(LogFiles.engine.path))"
         }
+        return LogRedactor.redactAll(content, secrets: secrets)
+    }
+
+    /// 引擎写的歌曲实体报告(`lyrimuse-song-entity-report.txt`,文件名跟 songentitystore.go 的 songEntityReportPath 一致),
+    /// 同样整份脱敏。还没建过实体表时返回 nil,诊断包里就不出现这一份。
+    private static func songEntityReportText(secrets: [String: String]) -> String? {
+        guard let content = FileIO.readString(LyrimusePaths.configFile("lyrimuse-song-entity-report.txt")) else { return nil }
         return LogRedactor.redactAll(content, secrets: secrets)
     }
 
