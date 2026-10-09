@@ -19,8 +19,3 @@ body:
     attributes:
       label: "Why · 什么场景下会用到"
       placeholder: "What made you want this / 遇到了什么情况才想要这个"
-  - type: textarea
-    id: references
-    attributes:
-      label: "References · 别的软件怎么做的"
-      placeholder: "Links or screenshots / 链接、截图均可"
