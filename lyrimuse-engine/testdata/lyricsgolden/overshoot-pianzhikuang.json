@@ -233,6 +233,10 @@
           {
             "kind": "titleMatch",
             "points": 120
+          },
+          {
+            "kind": "timelineOffset",
+            "points": -600
           }
         ]
       },

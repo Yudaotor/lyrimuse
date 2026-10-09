@@ -6,14 +6,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
-// 候选时间轴整体平移的批级判定(scoreTermTimelineOffset)。判据与参数的全库依据见 09 章决策 82、213。
+// 候选时间轴整体平移的批级判定(scoreTermTimelineOffset)。判据与参数的全库依据见 09 章决策 82、213、218。
 //
-// 锚点 = 自报曲长与本地相差不超过 timelineAnchorDurationToleranceSecs 的候选。两份时间轴按正文
-// LCS 配对后分三类(classifyTimelines):对齐、整体平移(带方向)、判不了。
-//   - 锚点之间有一对平移了 timelineAnchorConflictMs 以上:只有一家落单时判,见 timelineAnchorOutliers;
-//     时长都对得上的几家自己分成两派时,哪派对得上本地判不了,整批不判。
+// 锚点见 timelineAnchorEligible。两份时间轴按正文 LCS 配对后分三类(classifyTimelines):对齐、
+// 整体平移(带方向)、判不了。
+//   - 锚点之间有一对平移了 timelineAnchorConflictMs 以上:有一派来自足够多家时,派外的锚点逐家跟它比,
+//     见 timelineAnchorOutliers;时长都对得上的几家自己分成两派时,哪派对得上本地判不了,整批不判。
 //   - 锚点之间没有冲突时,至少要有一对来自不同信源家族、彼此对齐的锚点;它们与所有跟它们对齐的
 //     锚点组成基准组。
 //   - 非锚点候选与基准组里至少两家同向平移 timelineOffsetPenaltyMs 以上、且不与任何(没被判落单的)
@@ -33,6 +34,10 @@ const (
 	timelineNearMs           = 1000
 	timelineMinShare         = 0.8
 	timelineOffsetPenalty    = 600
+	// 配对时两行算同一句:正文相同,或较短一行至少 timelinePrefixMinRunes 个字、不短于较长一行的
+	// timelinePrefixMinShare,且是较长一行的开头(见 timelineLinesMatch)。
+	timelinePrefixMinRunes = 4
+	timelinePrefixMinShare = 0.3
 	// 锚点之间起冲突时:对齐成一派的锚点至少来自 timelineAnchorOutlierMinFamilies 家(时间轴是同一份的
 	// 几家算一家),落单的那一家至少跟其中 timelineAnchorOutlierMinShifted 家同向平移,才判它错开。
 	timelineAnchorOutlierMinFamilies = 3
@@ -137,19 +142,40 @@ const (
 	timelineShiftedEarlier // a 整体比 b 早
 )
 
-// classifyTimelines 按正文 LCS 配对两份时间轴,判 a 相对 b 是对齐、整体平移 minShiftMs 以上,
-// 还是判不了。
+// timelineAnchorEligible:能当锚点的候选。自报曲长与本地相差不超过 timelineAnchorDurationToleranceSecs,
+// 且没有因为末句跟曲长对不上被扣分(durationOff / durationOvershoot):正文自己说明它不是这一次录音时,
+// 自报的曲长不算数。时间轴的两项批级判定(这里和 applyTimelineIntrusionPenalty)共用。见 09 章决策 218。
+func timelineAnchorEligible(r scoredLyricCandidateResult, durationSecs float64) bool {
+	return r.SourceReportedDurationSecs > 0 &&
+		math.Abs(r.SourceReportedDurationSecs-durationSecs) <= timelineAnchorDurationToleranceSecs &&
+		scoreTermPoints(r.ScoreTerms, scoreTermDurationOff) == 0 &&
+		scoreTermPoints(r.ScoreTerms, scoreTermDurationOvershoot) == 0
+}
+
+// timelineLinesMatch:配对时 a、b 两行算不算同一句。各家分行不同(一句拆成两行、两句并成一行)时,
+// 拆开的第一段跟整句同一时刻开始,按开头相同配上;拆出来的后半段配不上,不参与比较。见 09 章决策 218。
+func timelineLinesMatch(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	short, long := a, b
+	if len(short) > len(long) {
+		short, long = long, short
+	}
+	n := utf8.RuneCountInString(short)
+	return n >= timelinePrefixMinRunes &&
+		float64(n) >= timelinePrefixMinShare*float64(utf8.RuneCountInString(long)) &&
+		strings.HasPrefix(long, short)
+}
+
+// classifyTimelines 按正文 LCS 配对两份时间轴(两行算不算同一句见 timelineLinesMatch),判 a 相对 b
+// 是对齐、整体平移 minShiftMs 以上,还是判不了。
 func classifyTimelines(a, b []timelineLine, minShiftMs int) timelineRelation {
-	an := make([]string, len(a))
-	for i, l := range a {
-		an[i] = l.norm
-	}
-	bn := make([]string, len(b))
-	for i, l := range b {
-		bn[i] = l.norm
-	}
 	var d []int
-	for i, j := range timelineLCSAlign(an, bn) {
+	for i, j := range timelineLCSAlignFunc(len(a), len(b), func(i, j int) bool { return timelineLinesMatch(a[i].norm, b[j].norm) }) {
 		if j >= 0 {
 			d = append(d, a[i].ms-b[j].ms)
 		}
@@ -199,7 +225,7 @@ func applyTimelineOffsetPenalty(results []scoredLyricCandidateResult, durationSe
 			continue
 		}
 		lines[i] = displayedTimeline(r.Lyrics, r.LyricsYRC)
-		if r.SourceReportedDurationSecs > 0 && math.Abs(r.SourceReportedDurationSecs-durationSecs) <= timelineAnchorDurationToleranceSecs {
+		if timelineAnchorEligible(r, durationSecs) {
 			anchors = append(anchors, i)
 		} else {
 			others = append(others, i)
@@ -318,17 +344,18 @@ func timelineAnchorBaseline(results []scoredLyricCandidateResult, lines [][]time
 	return baseline, nil, true
 }
 
-// timelineAnchorOutliers:锚点之间有冲突时,只有「一家落单」这一种局面能判。
+// timelineAnchorOutliers:锚点之间有冲突时,先定基准组,派外的锚点再逐家跟它比。
 //   - 时间轴是同一份的几家算一家(同一信源家族,或逐行同一时刻,见 timelinesIdentical);彼此对齐的锚点连成一派。
 //   - 来自家数最多的那一派要有 timelineAnchorOutlierMinFamilies 家以上、家数不能跟别的派打平,它就是基准组;
 //     基准组内部不能有互相平移的。
 //   - 基准组之外的派只能各是一家(两家以上自己对齐成派 = 分成两派,哪派对得上本地判不了)。
-//   - 落单的锚点要跟基准组里 timelineAnchorOutlierMinShifted 家以上同向平移、不跟任何一家反向;跟基准组
-//     哪家都判不了的不算冲突,留着不动;只跟一家平移的判不了,整批不判。
-//   - 落单的全来自同一家,且都不是跟当前播放器同源的那份(同源歌词是对着这个播放器的音频做的,
-//     它落单说明这一版母带跟别家不同)。
+//   - 派外的锚点跟基准组里 timelineAnchorOutlierMinShifted 家以上同向平移、不跟任何一家反向,判它错开;
+//     跟基准组哪家都判不了、只跟一家平移、两个方向都有的,这一家判不了,留着不动。错开的有几家都照判:
+//     它们彼此也对不上,动摇不了基准组。
+//   - 判错开的里有跟当前播放器同源的那份时整批不判(同源歌词是对着这个播放器的音频做的,
+//     它错开说明这一版母带跟别家不同)。
 //
-// 见 09 章决策 213。
+// 见 09 章决策 213、218。
 func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]timelineLine, anchors []int, rel map[[2]int]timelineRelation) (baseline map[int]bool, outliers []int, ok bool) {
 	family := map[int]int{}
 	camp := map[int]int{}
@@ -395,7 +422,6 @@ func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]time
 			}
 		}
 	}
-	outlierFamily := -1
 	for _, a := range anchors {
 		if baseline[a] {
 			continue
@@ -409,16 +435,8 @@ func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]time
 				earlier[root(family, b)] = true
 			}
 		}
-		switch {
-		case len(later) == 0 && len(earlier) == 0:
+		if len(later) > 0 && len(earlier) > 0 || len(later)+len(earlier) < timelineAnchorOutlierMinShifted {
 			continue
-		case len(later) > 0 && len(earlier) > 0, len(later)+len(earlier) < timelineAnchorOutlierMinShifted:
-			return nil, nil, false
-		}
-		if f := root(family, a); outlierFamily == -1 {
-			outlierFamily = f
-		} else if f != outlierFamily {
-			return nil, nil, false
 		}
 		if scoreTermPoints(results[a].ScoreTerms, scoreTermNativeSource) > 0 {
 			return nil, nil, false

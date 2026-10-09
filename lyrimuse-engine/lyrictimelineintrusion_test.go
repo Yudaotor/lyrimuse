@@ -76,6 +76,24 @@ func TestTimelineIntrusionPenalizesCopiedBlockInBreak(t *testing.T) {
 	}
 }
 
+// 末句跟曲长对不上被扣过分的候选不进参照组:它镜像了同一份错轴,也不会替 Musixmatch 把共同空档填掉
+// (见 09 章决策 218)。轮到判它自己时 Musixmatch 在参照组里、同样填掉了空档,它不扣。
+func TestTimelineIntrusionSkipsDurationOffReferences(t *testing.T) {
+	mirror := tiResult(lyricSourceLRCLIB, 900, 130, tiSong(tiCopiedChorus()...))
+	mirror.ScoreTerms = []scoreTerm{{Kind: scoreTermDurationOff, Points: -500}}
+	results := []scoredLyricCandidateResult{
+		tiResult(lyricSourceMusixmatch, 1247, 130.4, tiSong(tiCopiedChorus()...)),
+		tiResult(lyricSourceKugou, 1237, 130, tiSong()),
+		tiResult(lyricSourceNetease, 1211, 130.1, tiSong()),
+		mirror,
+	}
+	applyTimelineIntrusionPenalty(results, tiLocal)
+	got := tiPenalized(results)
+	if !got[lyricSourceMusixmatch] || len(got) != 1 {
+		t.Fatalf("只有 Musixmatch 该吃 timelineIntrusion,得到 %v", got)
+	}
+}
+
 func TestTimelineIntrusionLeavesUnrelatedLinesAlone(t *testing.T) {
 	cases := map[string][]tiLine{
 		// 各家不收的和声 / ad-lib:正文不是参照组别处的歌词。

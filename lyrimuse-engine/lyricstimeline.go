@@ -293,14 +293,19 @@ const (
 // timelineLCSAlign 返回 texts[i] 对齐到的 heads 下标,没配上是 -1。标准 LCS,相等关系
 // 用 normTimelineText 归一化后比较,空串不参与配对。
 func timelineLCSAlign(tn, hn []string) []int {
-	n, m := len(tn), len(hn)
+	return timelineLCSAlignFunc(len(tn), len(hn), func(i, j int) bool { return tn[i] == hn[j] && tn[i] != "" })
+}
+
+// timelineLCSAlignFunc 是 timelineLCSAlign 的通用形:两边各 n、m 行,match(i, j) 判第 i 行与第 j 行
+// 能不能配成一对,返回每个 i 对齐到的 j,没配上是 -1。
+func timelineLCSAlignFunc(n, m int, match func(i, j int) bool) []int {
 	dp := make([][]int32, n+1)
 	for i := range dp {
 		dp[i] = make([]int32, m+1)
 	}
 	for i := 1; i <= n; i++ {
 		for j := 1; j <= m; j++ {
-			if tn[i-1] == hn[j-1] && tn[i-1] != "" {
+			if match(i-1, j-1) {
 				dp[i][j] = dp[i-1][j-1] + 1
 			} else if dp[i-1][j] >= dp[i][j-1] {
 				dp[i][j] = dp[i-1][j]
@@ -315,7 +320,7 @@ func timelineLCSAlign(tn, hn []string) []int {
 	}
 	i, j := n, m
 	for i > 0 && j > 0 {
-		if tn[i-1] == hn[j-1] && tn[i-1] != "" && dp[i][j] == dp[i-1][j-1]+1 {
+		if match(i-1, j-1) && dp[i][j] == dp[i-1][j-1]+1 {
 			align[i-1] = j - 1
 			i--
 			j--
