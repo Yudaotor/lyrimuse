@@ -1521,15 +1521,26 @@ func lyricsUpgradeBaseline(e enrichEntry, scored []scoredLyricCandidateResult) (
 	return 0, false
 }
 
-// lyricsUpgradeApplies 升级重试这一轮的胜者够不够格换掉现存那份(分数严格更高才换;换上去屏上看不出差别的不换,
-// 见 keepsShownLyricsOver)。锁内正式判一次、锁外按快照预判一次(prepareSwapTranslation),两处必须调这一个函数。
+// lyricsUpgradeMinGain:条目已有歌词时,升级重试的胜者要比基准高出这么多分才换。时长项、行数项每轮会差几分,
+// 门槛要高过这类零头、低于最小的一项实质加分(带译文 +50)。见 09 章决策 212。
+const lyricsUpgradeMinGain = 30
+
+// lyricsUpgradeApplies 升级重试这一轮的胜者够不够格换掉现存那份(没歌词时分数严格更高就填;有歌词时要高出
+// lyricsUpgradeMinGain;换上去屏上看不出差别的不换,见 keepsShownLyricsOver)。锁内正式判一次、锁外按快照预判一次
+// (prepareSwapTranslation),两处必须调这一个函数。
 func lyricsUpgradeApplies(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, durationSecs float64) bool {
 	baseline, comparable := lyricsUpgradeBaseline(e, scored)
 	// 这一轮按「时长未知」打分(MV),现存那份的分数却带着时长那一项:换成它在这一轮里的分再比。
 	if durationSecs <= 0 && e.ResolvedDurationSecs > 0 && e.Lyrics != "" {
 		baseline, comparable = lyricsBaselineForUnknownDuration(e, scored)
 	}
-	return picked != nil && comparable && picked.Score > baseline && !keepsShownLyricsOver(e, picked)
+	if picked == nil || !comparable {
+		return false
+	}
+	if e.Lyrics == "" {
+		return picked.Score > baseline
+	}
+	return picked.Score >= baseline+lyricsUpgradeMinGain && !keepsShownLyricsOver(e, picked)
 }
 
 // durationMismatch:这条歌词当初按 resolved 秒校验,现在真播的版本是 actual 秒 ——
