@@ -1481,8 +1481,21 @@ public enum MediaControlClient {
         // (QQ 音乐 / 网易云 / 酷狗 / 汽水音乐)唯一能问到真相的通路;对 Apple Music / Spotify 则是字典不可用
         // (没装 helper 之外的情况:Music.app 没在跑、自动化权限被收回)时的兜底。
         // Kaset 不走这一级:系统按 bundle id 存着的就是它自己发的那份,换歌后常停在上一首(见 KasetPlayerInfo 头注)。
-        if snapshot == nil, player != .kaset {
-            snapshot = NowPlayingClientsProbe.snapshot(forBundleID: player.bundleIdentifier)
+        if snapshot == nil, player != .kaset,
+           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: player.bundleIdentifier) {
+            snapshot = probed.snapshot
+            let now = Date()
+            if let reading = amazonMusicReading(
+                bundleID: player.bundleIdentifier, trackKey: probed.snapshot.trackKey, title: probed.snapshot.title,
+                metadataTimestamp: probed.anchor.timestamp.map { Date(timeIntervalSince1970: $0) },
+                playing: probed.snapshot.playing == true, pid: probed.anchor.processIdentifier.map { Int($0) },
+                duration: probed.snapshot.duration, now: now) {
+                if reading.staleMetadata {
+                    setSnapshotFailure(.targetNotPlayingMusic)
+                    return nil
+                }
+                snapshot = probed.snapshot.withPlayerClock(reading.position, capturedAt: now)
+            }
         }
         // 回退问到的这一份跟主路径过同一道闸:KKBOX / Amazon 在放播客单集、
         // 开播那一帧还没有歌手的,主路径会挡下,从这里绕进来的却会被当成一首歌去查歌词、换一次曲目身份丢一次封面。
@@ -2931,16 +2944,12 @@ public enum MediaControlClient {
             : nil
         // 报单曲位置的台不顶替:位置与锚点保留系统原值,下游按普通 Apple Music 曲目处理(见 RadioTrackClock.State.perTrack)。
         let radioPosition: Double? = radioClock?.perTrack == true ? nil : radioClock?.position
-        // Amazon Music 不报 elapsedTime:位置换成按它的日志重放出来的,读不到日志时自记时(见 AmazonMusicPlayhead)。
-        // 跟电台同一个理由换在这里:下游拿到的是一份锚点干净的快照。上一次会话留下的旧曲目那一帧不采纳。
+        // Amazon Music 的位置换成按它的日志重放出来的(见 amazonMusicReading)。跟电台同一个理由换在这里:
+        // 下游拿到的是一份锚点干净的快照。上一次会话留下的旧曲目那一帧不采纳。
         var amazonPosition: Double?
-        if bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier, !(raw.title ?? "").isEmpty {
-            let watcher = AmazonMusicLogWatcher.shared
-            watcher.ensureStarted()
-            let reading = watcher.reading(
-                trackKey: trackKey, metadataTimestamp: timestampDate, playing: playing == true,
-                pauseObservedAt: Self.lastPauseObservedAt(), now: sampledAt,
-                pid: raw.processIdentifier.map { pid_t($0) }, duration: raw.duration)
+        if let reading = Self.amazonMusicReading(
+            bundleID: bundleID, trackKey: trackKey, title: raw.title, metadataTimestamp: timestampDate,
+            playing: playing == true, pid: raw.processIdentifier, duration: raw.duration, now: sampledAt) {
             if reading.staleMetadata {
                 setSnapshotFailure(.targetNotPlayingMusic)
                 return nil
@@ -2972,6 +2981,20 @@ public enum MediaControlClient {
         if republish.hold != nil { snapshot.isWaitingToPlay = true }
         snapshot.republishDueBy = republish.dueBy
         return (snapshot, bundleID)
+    }
+
+    /// Amazon Music 不报 elapsedTime:位置按它的日志重放,读不到日志时自记时(见 AmazonMusicPlayhead)。主路径与焦点回退都走这里,
+    /// 回退那份不换的话屏上从 0 重新走(见 02 章决策 113)。不是 Amazon 或没有标题时返回 nil。
+    private static func amazonMusicReading(
+        bundleID: String?, trackKey: String, title: String?, metadataTimestamp: Date?, playing: Bool,
+        pid: Int?, duration: Double?, now: Date
+    ) -> AmazonMusicPlayhead.Reading? {
+        guard bundleID == PlaybackPlayer.amazonMusic.bundleIdentifier, !(title ?? "").isEmpty else { return nil }
+        let watcher = AmazonMusicLogWatcher.shared
+        watcher.ensureStarted()
+        return watcher.reading(
+            trackKey: trackKey, metadataTimestamp: metadataTimestamp, playing: playing,
+            pauseObservedAt: lastPauseObservedAt(), now: now, pid: pid.map { pid_t($0) }, duration: duration)
     }
 
     private static let spotifyNoticeLock = NSLock()

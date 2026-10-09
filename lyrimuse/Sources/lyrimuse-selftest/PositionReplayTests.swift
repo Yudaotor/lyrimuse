@@ -104,6 +104,29 @@ func runPositionReplayTests() {
     replayKasetFollowsWebClock()
     replayKasetResumeTakesReading()
     replayPausedHelperWithResidualRate()
+    replayAmazonFocusFallbackKeepsLogClock()
+}
+
+/// Amazon Music 焦点被别的 App 占走(浏览器里开视频)时,回退按 bundle id 单问到的那份换成日志时钟(`withPlayerClock`),
+/// 屏上接着走;单问那份原样(没有进度)交下去的话,62 秒那拍起屏上从 0 重新走。真值 = 开播后的秒数。
+@MainActor
+private func replayAmazonFocusFallbackKeepsLogClock() {
+    let rig = ReplayRig("amazon-focus-fallback")
+    defer { rig.tearDown() }
+    let amazonID = PlaybackPlayer.amazonMusic.bundleIdentifier
+    func clocked(_ t: Double) -> MediaControlSnapshot {
+        .forReplay(title: "夜曲", artist: "周杰伦", duration: 226, elapsedTime: t, playing: true,
+                   bundleIdentifier: amazonID, anchorElapsedTime: t, capturedAt: at(t))
+    }
+    for t in stride(from: 2.0, through: 60, by: 2) { rig.tick(clocked(t), at: at(t)) }
+    let probed = MediaControlSnapshot.forReplay(
+        title: "夜曲", artist: "周杰伦", duration: 226, elapsedTime: nil, playing: true,
+        bundleIdentifier: amazonID, anchorElapsedTime: nil)
+    for t in stride(from: 62.0, through: 76, by: 2) { rig.tick(probed.withPlayerClock(t, capturedAt: at(t)), at: at(t)) }
+    expectEqual(near(rig.shown(at: at(77)), 77, 0.1), true,
+                "回放·Amazon 焦点回退: 日志时钟那份接着走(\(rig.shown(at: at(77)).map { String(format: "%.3f", $0) } ?? "nil"))")
+    for t in stride(from: 78.0, through: 90, by: 2) { rig.tick(clocked(t), at: at(t)) }
+    expectEqual(near(rig.shown(at: at(91)), 91, 0.1), true, "回放·Amazon 焦点回退: 焦点回来后无缝接上")
 }
 
 /// Kaset 的读数不会超前声音,恢复那一拍原样采信:换歌后先报加载(停在 0),走起来的第一拍已经是 2.67 秒;

@@ -390,4 +390,24 @@ func runAmazonMusicTests() {
         expectEqual(near(paused.position, 36.1), true,
                     "Amazon 暂停: 停表位置跟播放中同一个起点(按日志起点算会多出 0.4 秒,暂停那一下就跳)")
     }
+
+    // ---- 焦点被占时按 bundle id 单问的那份:没有进度,锚点时刻与进程要带回来,位置换成日志时钟 ----
+    do {
+        // helper 对 Amazon 的真机输出:没有 elapsedTime。
+        let probed = #"{"artist":"Jay Chou","isMusicApp":true,"responsibleProcessIdentifier":84619,"title":"In The Name of Father (Live)","bundleIdentifier":"com.amazon.music","duration":225,"album":"Jay Chou The Invincible Concert Tour","playing":true,"timestamp":1791541716.187851,"playbackRate":1,"processIdentifier":84619}"#
+        let decoded = NowPlayingClientsProbe.decodeSnapshot(Data(probed.utf8))
+        expectEqual(decoded?.snapshot.elapsedTime == nil, true, "Amazon 焦点回退: 单问那份确实没有进度")
+        expectEqual(decoded?.anchor.timestamp, 1791541716.187851, "Amazon 焦点回退: 锚点时刻带回来(认日志里这首靠它)")
+        expectEqual(decoded?.anchor.processIdentifier, 84619, "Amazon 焦点回退: 发布进程带回来(界面校准要它)")
+        expectEqual(NowPlayingClientsProbe.decodeSnapshot(Data("null".utf8)) == nil, true, "Amazon 焦点回退: 没在报时解不出")
+        expectEqual(NowPlayingClientsProbe.decodeSnapshot(Data(#"{"title":"","bundleIdentifier":"com.amazon.music"}"#.utf8)) == nil,
+                    true, "Amazon 焦点回退: 标题空的不算")
+        let readAt = Date(timeIntervalSince1970: 1791541760)
+        let clocked = decoded?.snapshot.withPlayerClock(43.2, capturedAt: readAt)
+        expectEqual(clocked?.elapsedTime, 43.2, "Amazon 焦点回退: 位置换成日志时钟那份")
+        expectEqual(clocked?.anchorElapsedTime, 43.2, "Amazon 焦点回退: 锚点一起换,跟主路径同一个形状")
+        expectEqual(clocked?.capturedAt, readAt, "Amazon 焦点回退: 带上读到的时刻,主线程晚处理时补到处理那一刻")
+        expectEqual(clocked?.trackKey, decoded?.snapshot.trackKey, "Amazon 焦点回退: 曲目身份不变")
+        expectEqual(clocked?.playing, true, "Amazon 焦点回退: 播放状态不变")
+    }
 }

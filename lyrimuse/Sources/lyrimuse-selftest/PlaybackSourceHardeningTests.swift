@@ -318,6 +318,18 @@ private func wiringContracts() {
     expectEqual(focus.contains("failureWithoutFallbackTarget(targetConfirmedGone: targetGone)"), true,
                 "焦点回退: 没有回退目标时按「目标确认不在」改失败原因")
     expectEqual(focus.contains("fallbackTargetGone = snapshot == nil"), true, "焦点回退: 回退问不到就记下目标不在")
+    // Amazon 不报进度:单问那份要跟主路径一样换成日志时钟,不然屏上从 0 重新走(见 02 章决策 113)。
+    expectEqual(before("amazonMusicReading(", stateUpdate, in: focus)
+                    && focus.contains("snapshot = probed.snapshot.withPlayerClock(reading.position, capturedAt: now)"), true,
+                "焦点回退: 单问到的 Amazon 换成日志时钟那份位置")
+    if let r = focus.range(of: "if reading.staleMetadata {") {
+        expectEqual(focus[r.upperBound...].prefix(120).contains("setSnapshotFailure(.targetNotPlayingMusic)"), true,
+                    "焦点回退: Amazon 上一次会话的旧曲目跟主路径一样不采纳")
+    } else {
+        expectEqual(false, true, "焦点回退: Amazon 旧曲目那一帧要挡")
+    }
+    let mainAssemble = client.components(separatedBy: "Self.amazonMusicReading(").count - 1
+    expectEqual(mainAssemble, 1, "Amazon 位置: 主路径走同一个 amazonMusicReading,不另写一份")
 
     let verifyAd = body("private func verifySpotifyAdViaAppleScript(forKey key: String) {", in: source)
     expectEqual(verifyAd.contains("self.revertLastTrackAfterAd(key: key)"), true, "广告撤回: AppleScript 晚到确认是广告 → 撤回「上次在听」")

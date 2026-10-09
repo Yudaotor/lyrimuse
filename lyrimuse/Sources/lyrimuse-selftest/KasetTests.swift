@@ -819,7 +819,7 @@ func runKasetTests() {
                     "Kaset 契约: 跳转带上跳转前在不在放、定向发给 Kaset 本体,helper 有 seek 模式")
         expectEqual(playbackSource.contains("                let fromKaset = self.lastResolvedBundleID == PlaybackPlayer.kaset.bundleIdentifier\n                return await Self.runOffPool(Self.artworkQueue)"),
                     true, "Kaset 契约: 封面每次取都按此刻认下的播放器挑")
-        expectEqual(client.contains("if snapshot == nil, player != .kaset {"), true,
+        expectEqual(client.contains("if snapshot == nil, player != .kaset,\n           let probed = NowPlayingClientsProbe.snapshotWithAnchor(forBundleID: player.bundleIdentifier) {"), true,
                     "Kaset 契约: 焦点回退不拿系统按 bundle id 存的那份(换歌后常停在上一首)")
         expectEqual(client.contains("if players.contains(.auto) { return heldAcrossPlayerGap(preferringPlayingKaset(fetchAutoDetectedSnapshot())) }"), true,
                     "Kaset 契约: 自动识别时系统那边没在放就问它")

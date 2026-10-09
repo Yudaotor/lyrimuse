@@ -144,6 +144,19 @@ public enum NowPlayingClientsProbe {
     /// PlaybackRate 不算数;播放状态读不到或说不准时按速率判(nowplaying-clients.m 的 `playingFor`,02 章决策 109)。
     /// 锚点原值经 `anchorElapsedTime` 带回。`playingFromRate` 的播放器(酷狗)另传 `rate-playing`,报暂停时也按速率判。
     public static func snapshot(forBundleID bundleID: String) -> MediaControlSnapshot? {
+        snapshotWithAnchor(forBundleID: bundleID)?.snapshot
+    }
+
+    /// 那份会话的锚点时刻(1970 年起的秒数)与发布它的进程。Amazon Music 不报进度,位置按它的日志重放,
+    /// 认日志里这首对不对得上靠这个时刻(`MediaControlClient.amazonMusicReading`)。
+    public struct SessionAnchor: Decodable, Equatable, Sendable {
+        public let timestamp: Double?
+        public let processIdentifier: Int32?
+    }
+
+    /// 同 `snapshot(forBundleID:)`,另外带回锚点时刻与发布进程。
+    public static func snapshotWithAnchor(forBundleID bundleID: String)
+        -> (snapshot: MediaControlSnapshot, anchor: SessionAnchor)? {
         guard !bundleID.isEmpty, let paths = helperPaths() else { return nil }
         var arguments = [paths.script, paths.library, bundleID]
         if PlaybackPlayer.builtin(forBundleID: bundleID)?.playingFromRate == true {
@@ -153,12 +166,18 @@ public enum NowPlayingClientsProbe {
             "/usr/bin/perl", arguments, timeout: timeout),
             r.succeeded
         else { return nil }
+        return decodeSnapshot(r.stdout)
+    }
+
+    /// 解出 helper 单问那一份的输出。纯函数,selftest 覆盖。
+    public static func decodeSnapshot(_ data: Data) -> (snapshot: MediaControlSnapshot, anchor: SessionAnchor)? {
         // helper 对"那个 App 现在没在报"输出字面量 null,解码失败即视为没有。
-        guard let decoded = try? JSONDecoder().decode(MediaControlSnapshot.self, from: r.stdout) else {
+        guard let decoded = try? JSONDecoder().decode(MediaControlSnapshot.self, from: data),
+              let anchor = try? JSONDecoder().decode(SessionAnchor.self, from: data) else {
             return nil
         }
         // 标题空的一律不算 —— 与 media-control 那条路的准入口径一致。
         guard let title = decoded.title, !title.isEmpty else { return nil }
-        return decoded
+        return (decoded, anchor)
     }
 }
