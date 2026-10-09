@@ -194,11 +194,14 @@ public enum AmazonMusicPlayhead {
             s.paused = false
             if !s.stalled { s.since = t }
         case .seek(let target):
+            // 开播时也会先定位到 0,那一下不算拖动,那时位置还在 0 附近。放过 `seekToStartTolerance` 之后拖回 0
+            // 是真拖动:不当拖动的话 `pristine` 留着,`calibrated` 会把起点换回这首开播时的系统时间戳,拖动被抹掉。
+            let dragged = target > 0 || (engineTimelinePosition(s, at: t) ?? 0) > seekToStartTolerance
             s.base = max(0, target)
             s.since = nil
             s.awaitingStartUntil = (s.paused || s.stalled) ? nil : t.addingTimeInterval(seekStartTimeout)
-            // 开播时也会先定位到 0,那一下不算拖动。拖动会清空输出缓冲,之后按真正出声走,提前量归零。
-            if target > 0 {
+            // 拖动会清空输出缓冲,之后按真正出声走,提前量归零。
+            if dragged {
                 s.pristine = false
                 s.startedNaturally = false
                 s.audibleLead = 0
@@ -304,6 +307,9 @@ public enum AmazonMusicPlayhead {
 
     /// 拖动之后最多等 `kStarting` 这么久。等不到(措辞改了)就按拖动时刻加这么多起表,不让表一直停着。
     public static let seekStartTimeout: TimeInterval = 2
+
+    /// 定位到 0 时位置超过这么多秒才算拖动,不到的是开播时那一下定位。
+    public static let seekToStartTolerance: TimeInterval = 1
 
     /// 系统时间戳就是这首真正出声的时刻,精确到微秒,比日志的秒级行首准。开播之后没暂停、没拖动过,
     /// 而且两者相差不大(同一次开播)时,把起点换成它。

@@ -134,6 +134,24 @@ func runAmazonMusicTests() {
         expectEqual(near(P.position(started, at: at("030012", 0.4)), 61), true, "Amazon 拖动: kStarting 那一刻起表")
     }
 
+    // ---- 拖回 0 ----
+    do {
+        let md = at("030002", 0.25)
+        var s = P.calibrated(P.apply(.trackStarted("asin://B0TESTAAA1"), at: at("030000"), to: P.State()),
+                             metadataTimestamp: md)
+        s = P.apply(.seek(0), at: at("030030"), to: s)
+        s = P.apply(.starting, at: at("030030", 0.3), to: s)
+        expectEqual(s.pristine, false, "Amazon 拖回 0: 放了一阵之后定位到 0 算拖动")
+        expectEqual(near(P.position(P.calibrated(s, metadataTimestamp: md), at: at("030040", 0.3)), 10), true,
+                    "Amazon 拖回 0: 系统时间戳不再把起点换回开播那一刻")
+        var opening = P.apply(.trackStarted("asin://B0TESTAAA1"), at: at("030000"), to: P.State())
+        opening = P.apply(.seek(0), at: at("030000", 0.4), to: opening)
+        opening = P.apply(.starting, at: at("030000", 0.5), to: opening)
+        expectEqual(opening.pristine, true, "Amazon 拖回 0: 开播时那一下定位到 0 不算拖动")
+        expectEqual(near(P.position(P.calibrated(opening, metadataTimestamp: md), at: at("030010")), 7.75), true,
+                    "Amazon 拖回 0: 开播时定位到 0 之后仍按系统时间戳校准起点")
+    }
+
     // ---- 自动连播的提前量 ----
     do {
         var s = P.apply(.endOfStream, at: at("025618", 0.5), to: P.State())
