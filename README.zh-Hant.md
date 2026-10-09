@@ -17,7 +17,7 @@
 
 </div>
 
-https://github.com/user-attachments/assets/bf5bbc7b-39d8-43e4-af9c-a3a4cea35bc4
+https://github.com/user-attachments/assets/f9416bca-8e13-49c0-9295-654130a9b0f9
 
 Lyrimuse 是一款開源的 Mac 桌面歌詞軟體。它待在選單列裡，跟著播放逐字標亮歌詞，可以常駐最上層、浮在所有視窗之上，也可以放進選單列、瀏海下的動態島膠囊、觸控列或完整的歌詞視窗。支援 Apple Music、Spotify、KKBOX、Amazon Music、YouTube Music 播放器 Kaset 等九款播放器和瀏覽器裡的網頁播放器，並從十二個歌詞來源中評分挑選最合適的版本，還能顯示翻譯和讀音。另外還內建 Last.fm 聆聽檔案與播放記錄。
 
