@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // enrichEntry is a track's resolved metadata, persisted permanently once
@@ -2154,6 +2155,10 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 传 false:这条路只对有词的条目跑(needsLyricsRescore 第一行就要求 e.Lyrics != "",全量扫库和手动重新匹配
 	// 都先把没词的分给补空那条路),手上总有一份要保护的词。
 	decidable := rescoreDecidable(scored, currentSource, false)
+	// 当前这份跟这一轮哪一份都对不上:是另一首歌的词,当前来源没应答也可判,换不换也不再看它留不留得住
+	// (见 rescoreCurrentContradicted)。
+	contradicted := rescoreCurrentContradicted(startLyrics, scored, picked)
+	decidable = decidable || contradicted
 	seen := lyricSourcesWithCandidates(scored)
 	// 罗马音兜底在上锁之前算好,同 retryLyricsUpgrade。
 	var preparedRoma string
@@ -2162,7 +2167,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	}
 	// 同 retryLyricsUpgrade:换正文会让正在播的这首丢掉能用的译文时先翻好。判据对着下面 default 分支换正文那一支。
 	preparedTr := prepareSwapTranslation(ctx, key, artist, title, picked, func(e enrichEntry) bool {
-		return (opts.manual || !e.ManualLyrics) && decidable && picked != nil && !rescoreKeepsLyrics(e, scored, picked, opts.manual) &&
+		return (opts.manual || !e.ManualLyrics) && decidable && picked != nil && !rescoreKeepsLyrics(e, scored, picked, opts.manual, contradicted) &&
 			picked.Lyrics != e.Lyrics
 	})
 	// 只打了纯音乐标记(rescoreTurnsInstrumental):要马上落盘、通知重推,但歌词没换,不导出、不补翻。
@@ -2253,7 +2258,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	complete := len(skipped) == 0
 	deferred = !decidable || !complete
 	// 冠军换词之前先看当前这份该不该留着,见 rescoreKeepsLyrics。
-	keep := decidable && picked != nil && rescoreKeepsLyrics(e, scored, picked, opts.manual)
+	keep := decidable && picked != nil && rescoreKeepsLyrics(e, scored, picked, opts.manual, contradicted)
 	if decidable {
 		e.LyricsDecision = buildLyricsDecision(
 			opts.decisionPath(lyricsDecisionPathRescore), artist, title, searchAlbum, durationSecs, scored, picked,
@@ -2266,6 +2271,10 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		if picked != nil && !keep {
 			e.LyricsDecisionApplied = e.LyricsDecision
 		}
+	}
+	if contradicted {
+		log.Printf("lyrics rescore: %s  current lyrics (%s) match none of this round's candidates; %s(%d) is title-matched and corroborated",
+			key, currentSource, picked.Source, picked.Score)
 	}
 	switch {
 	case !decidable:
@@ -2435,13 +2444,52 @@ func rescoreKeeps(e enrichEntry, scored []scoredLyricCandidateResult, picked *sc
 }
 
 // rescoreKeepsLyrics:重评可判、有冠军时当前这份留不留 —— rescoreKeeps,外加冠军换上去屏上看不出差别(keepsShownLyricsOver,
-// 手动重新匹配不算)。只有署名的当前这份一律不留(09 章决策 209)。锁内正式判一次、锁外按快照预判一次
-// (prepareSwapTranslation),两处必须调这一个函数。
-func rescoreKeepsLyrics(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, manual bool) bool {
-	if picked == nil || lyricsAreCreditsOnly(e.Lyrics) {
+// 手动重新匹配不算)。只有署名的当前这份一律不留(09 章决策 209),跟这一轮哪份都对不上的(contradicted,见
+// rescoreCurrentContradicted)也不留。锁内正式判一次、锁外按快照预判一次(prepareSwapTranslation),两处必须调这一个函数。
+func rescoreKeepsLyrics(e enrichEntry, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, manual, contradicted bool) bool {
+	if picked == nil || contradicted || lyricsAreCreditsOnly(e.Lyrics) {
 		return false
 	}
 	return rescoreKeeps(e, scored, picked) || (!manual && keepsShownLyricsOver(e, picked))
+}
+
+// rescoreContradictedMaxSim:当前这份跟这一轮的候选正文 3-gram 相似度都低于它,才算对不上。另一首歌的词在 0.05 以下;
+// 同一段词换了写法(粤语口语字对书面中文)也能低到 0.16,不能算。见 09 章决策 214。
+const rescoreContradictedMaxSim = 0.1
+
+// rescoreCurrentContradicted:当前这份歌词是不是另一首歌的词 —— 这一轮的冠军歌名对得上(titleMatch,含从正文互证
+// 伙伴继承的)、有别家正文印证(consensus)、末句跟曲长对得上且自报曲长没有对不上(duration 有分、没有
+// sourceDurationOff),而当前这份正文跟这一轮每一份可比的候选(正文不短于 lyricConsensusMinBodyRunes,被判负分的
+// 也算)相似度都低于 rescoreContradictedMaxSim,可比的至少两份。成立时当前来源没应答也可判(当初那份多半是搜歪了
+// 才拿到的,换了搜法就再也搜不到它),rescoreKeepsLyrics 也不留它:另一首歌的词没有可保护的,它有逐字、分数没被
+// 比过都不算留的理由。见 09 章决策 214。
+func rescoreCurrentContradicted(current string, scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult) bool {
+	if picked == nil || scoreTermPoints(picked.ScoreTerms, scoreTermTitleMatch) <= 0 ||
+		scoreTermPoints(picked.ScoreTerms, scoreTermConsensus) <= 0 ||
+		scoreTermPoints(picked.ScoreTerms, scoreTermDuration) <= 0 ||
+		scoreTermPoints(picked.ScoreTerms, scoreTermSourceDurationOff) != 0 {
+		return false
+	}
+	body := lyricConsensusBody(current)
+	if utf8.RuneCountInString(body) < lyricConsensusMinBodyRunes {
+		return false
+	}
+	grams := lyricGram3Set(body)
+	comparable := 0
+	for _, c := range scored {
+		if c.Lyrics == "" || c.Instrumental || c.TrackFoundNoLyrics {
+			continue
+		}
+		b := lyricConsensusBody(c.Lyrics)
+		if utf8.RuneCountInString(b) < lyricConsensusMinBodyRunes {
+			continue
+		}
+		if gramJaccard(grams, lyricGram3Set(b)) >= rescoreContradictedMaxSim {
+			return false
+		}
+		comparable++
+	}
+	return comparable >= 2
 }
 
 // rescoreWouldLoseWordTiming:冠军是另一份正文、没有逐字,而当前这份有逐字。逐字取决于那个源这一轮有没有把逐字

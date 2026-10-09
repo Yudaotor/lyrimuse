@@ -277,33 +277,6 @@
         "translation_lang": "zh"
       },
       {
-        "source": "musixmatch",
-        "score": 1133,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 290
-          },
-          {
-            "kind": "wordTiming",
-            "points": 400
-          },
-          {
-            "kind": "lines",
-            "points": 73
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
-          }
-        ],
-        "has_word_timing": true
-      },
-      {
         "source": "lrclib",
         "score": 863,
         "terms": [
@@ -328,6 +301,37 @@
             "points": 250
           }
         ]
+      },
+      {
+        "source": "musixmatch",
+        "score": 533,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 290
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 73
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "timelineOffset",
+            "points": -600
+          }
+        ],
+        "has_word_timing": true
       }
     ],
     "winner_fingerprint": "81120f00461356da"

@@ -49,9 +49,14 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 			(!albumOK || (backed && !albumTitleBacked) || (backed == albumTitleBacked && d < albumDiff)) {
 			albumTitle, albumDiff, albumOK, albumTitleBacked, albumWinArtist = t, d, true, backed, ta
 		}
-		if t, d, ok := retryTitleFromArtistSearchDetailed(ctx, ta, title, durationSecs); ok && (!searchOK || d < searchDiff) {
+		if t, d, ok := titleReverseArtistSearch(ctx, ta, title, durationSecs); ok && (!searchOK || d < searchDiff) {
 			searchTitle, searchDiff, searchOK, searchWinArtist = t, d, true, ta
 		}
+	}
+	// 泛搜只凭时长挑:挑出来的曲名跟本地曲名明摆着是两首歌时不用它(见 titleSearchContradicts)。
+	if searchOK && titleSearchContradicts(title, album, searchTitle) {
+		log.Printf("lyrics: title-reverse-lookup: artist search picked %q for %q by duration only, but the titles share no word; not using it", searchTitle, title)
+		searchOK = false
 	}
 	// 第三条路:Apple 原产地商店的规范曲名。上面两条**都拿本地标题当输入**
 	// (retryTitleFromAlbum 拿它核对时长、retryTitleFromArtistSearch 直接把它拼进搜索词),
@@ -112,6 +117,77 @@ type titleReverseSpec struct {
 
 // titleReverseAliases:取一个署名的别名(retryArtistIdentities)。单测换成假的。
 var titleReverseAliases = retryArtistIdentities
+
+// titleReverseArtistSearch:歌手泛搜那一路(retryTitleFromArtistSearchDetailed)。单测换成假的。
+var titleReverseArtistSearch = retryTitleFromArtistSearchDetailed
+
+// titleSearchContradicts:歌手泛搜只凭时长挑出来的曲名 found 跟本地曲名 title 是不是明摆着两首歌 —— 两边去掉括号段后
+// 都只有拉丁字母,却一个词都不共享(titleSearchWords;一个词是另一个的前缀、且不短于 4 个字母也算共享;去掉空格标点后
+// 一边含另一边也算)。本地专辑名里就有 found 时不算:换歌那一拍播放器还报着上一首的曲名、专辑和时长已经是这一首,
+// 单曲的专辑名常常就是曲名。有一边带汉字、假名、谚文的(英文名对中文原名、罗马字对假名)这里判不了,不算。
+// 见 09 章决策 215。
+func titleSearchContradicts(title, album, found string) bool {
+	local, cand := stripParens(cleanMediaTag(title)), stripParens(found)
+	if !latinOnlyLetters(local) || !latinOnlyLetters(cand) {
+		return false
+	}
+	nl, nc := normLoose(local), normLoose(cand)
+	if nl == "" || nc == "" || strings.Contains(nl, nc) || strings.Contains(nc, nl) {
+		return false
+	}
+	if na := normLoose(album); na != "" && strings.Contains(na, nc) {
+		return false
+	}
+	lw, cw := titleSearchWords(local), titleSearchWords(cand)
+	if len(lw) == 0 || len(cw) == 0 {
+		return false
+	}
+	for _, a := range lw {
+		for _, b := range cw {
+			if a == b || (len(a) >= 4 && strings.HasPrefix(b, a)) || (len(b) >= 4 && strings.HasPrefix(a, b)) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// latinOnlyLetters:s 里有拉丁字母、没有别的文字的字母。
+func latinOnlyLetters(s string) bool {
+	latin := 0
+	for _, r := range s {
+		if !unicode.IsLetter(r) {
+			continue
+		}
+		if !unicode.Is(unicode.Latin, r) {
+			return false
+		}
+		latin++
+	}
+	return latin > 0
+}
+
+// titleSearchWords:曲名切成小写、去变音的词,丢掉单字母和虚词(titleSearchStopWords)。
+func titleSearchWords(s string) []string {
+	var out []string
+	for _, w := range strings.FieldsFunc(foldDiacritics(strings.ToLower(s)), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if len([]rune(w)) >= 2 && !titleSearchStopWords[w] {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// titleSearchStopWords:两个曲名只共享这些词不算共享。
+var titleSearchStopWords = map[string]bool{
+	"the": true, "an": true, "of": true, "in": true, "on": true, "at": true, "to": true, "and": true, "or": true,
+	"for": true, "with": true, "by": true, "from": true, "feat": true, "ft": true, "featuring": true, "vs": true,
+	"my": true, "me": true, "you": true, "your": true, "it": true, "is": true, "be": true, "we": true,
+	"de": true, "la": true, "el": true, "le": true, "les": true, "los": true, "las": true, "di": true, "da": true,
+	"du": true, "des": true, "un": true, "une": true,
+}
 
 // titleReverseArtists:标题反查拿哪几个署名去查 —— 原串和它的头一个别名;多人合唱、feat. 署名时再加首歌手和首歌手的头一个
 // 别名(lyricPrimaryQueryArtist:「Khalil Fong feat. Hanggai」原串和它的别名都查不到,「Khalil Fong」的别名「方大同」才按时长

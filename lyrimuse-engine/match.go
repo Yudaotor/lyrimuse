@@ -525,7 +525,7 @@ const lyricOvershootToleranceSecs = 5.0
 // 当前维度、权重与每一版改动的真实案例/全库回放证据,记在
 // docs/features/09-lyrics-resolution.md 的打分维度表与「设计决策与已知坑」决策日志
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
-const lyricsScoringVersion = 28
+const lyricsScoringVersion = 29
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
