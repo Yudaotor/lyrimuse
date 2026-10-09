@@ -231,3 +231,17 @@
 @media (max-width: 760px) and (prefers-color-scheme: dark) {
   .tbl-wrap { box-shadow: none; }
 }
+
+/* feature list (features/) */
+.doc-sec .fl-meta { list-style: none; margin: -4px 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.doc-sec .fl-meta li { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-3); }
+.doc-sec .fl-meta .fl-on, .doc-sec .fl-meta .fl-off { font-weight: 600; }
+.doc-sec .fl-meta .fl-off { color: var(--brand-ink); }
+.doc-sec .fl-index { padding-left: 1.1em; }
+.doc-sec .fl-index li { font-size: 15px; line-height: 1.65; }
+.doc-sec .fl-index li + li { margin-top: 4px; }
+.tbl-fl tbody th { width: 42%; }
+.tbl-fl tbody th a { color: var(--ink); text-decoration: none; }
+.tbl-fl tbody th a:hover { color: var(--brand-ink); }
+.doc-body > .fl-lede { margin: 18px 0 0; font-size: 16px; line-height: 1.78; color: var(--ink-2); }
+.doc-body > .fl-lede a { color: var(--brand-ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
