@@ -39,6 +39,11 @@ const (
 	// 算同一套词的另一版录音(Demo、带前奏版、Live)。
 	songLyricsShiftMaxSecs  = 2.0
 	songLyricsSpreadMaxSecs = 1.0
+	// songSameLengthSecs / songSameLengthIntegralSecs:两边时长差不超过前者(任一侧是整秒时不超过后者)算时长几乎相等。
+	// 另一版录音的时长跟着变;时长几乎相等时,时间轴错开是其中一份歌词本身错位,专辑名带来的版次词也说的不是这一轨
+	// (见 18 章决策 2)。
+	songSameLengthSecs         = 0.5
+	songSameLengthIntegralSecs = 1.0
 )
 
 var (

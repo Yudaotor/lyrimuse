@@ -28,6 +28,10 @@ func runSongEntitiesCLI(args []string) {
 	entity := fs.String("entity", "", "只列写法键含这段文字的实体:每条写法的字段、实体里的每条边")
 	cpuProfile := fs.String("cpuprofile", "", "建表那一段的 CPU 采样写到这个文件")
 	memProfile := fs.String("memprofile", "", "建表之后的内存分配采样写到这个文件")
+	sample := fs.String("sample", "", "按证据分层抽一份标注集,写到这个目录的 sample.jsonl(放仓库外)")
+	score := fs.String("score", "", "拿标好的标注集(jsonl)对照当前规则算合错率、漏合率")
+	dump := fs.String("dump", "", "把每个实体的写法键写到这个文件(一行一个实体),改规则之前存一份给 -diff 用")
+	diff := fs.String("diff", "", "拿 -dump 存下的那份对照这一次建表,列出新并的实体和拆开的实体")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("song-entities: %v", err)
 	}
@@ -80,7 +84,25 @@ func runSongEntitiesCLI(args []string) {
 		b.writeEntities(os.Stdout, *entity)
 		return
 	}
-	b.report().writeText(os.Stdout, *limit)
+	var err error
+	switch {
+	case *sample != "":
+		var n int
+		if n, err = b.writeLabelSample(*sample); err == nil {
+			log.Printf("song-entities: wrote %d items to %s", n, filepath.Join(*sample, "sample.jsonl"))
+		}
+	case *score != "":
+		err = b.writeLabelScore(*score, os.Stdout)
+	case *dump != "":
+		err = b.writeClusterDump(*dump)
+	case *diff != "":
+		err = b.writeClusterDiff(*diff, os.Stdout)
+	default:
+		b.report().writeText(os.Stdout, *limit)
+	}
+	if err != nil {
+		log.Fatalf("song-entities: %v", err)
+	}
 }
 
 // writeEntities 列出写法键含 needle 的实体:每条写法的字段,实体里的每条边(被否决的标出否决种类)。

@@ -380,12 +380,14 @@ func songIndependentLyricsMatch(x, y *songVariant, dir string) bool {
 //     「同专辑不同曲」。强证据只认两边都是播放器给的:检索会把一条写法配到同一张专辑的别的曲目上,拿它推翻 ISRC
 //     是倒过来了(见 18 章决策 1);
 //   - version:版本词不一致(versionTagsMismatch,不忽略语种)。例外:两边播放器给的 ISRC 相同且时长差不超过
-//     songEntityVersionExceptionSecs,或 sameRecordingDespiteVersionTags 成立;伴奏、纯音乐这类无人声版本词不吃例外;
+//     songEntityVersionExceptionSecs,或 sameRecordingDespiteVersionTags 成立,或只差专辑名带来的版次词且时长几乎相等
+//     (songOnlyAlbumEditionDiffers);伴奏、纯音乐这类无人声版本词不吃例外;
 //   - explicit:删减版与不删减版都标明;
 //   - vocals:一边明确没有人声、一边明确有;
 //   - overshoot:没有时长的写法,歌词末句比对方时长晚 lyricOvershootToleranceSecs 以上;
 //   - lyrics_words / lyrics_timeline(只对中证据):两份正文用词重合低于 songLyricsDifferentWordsMax;或用词重合
-//     不低于 songLyricsSameWordsMin、时间轴按行对上后整体平移或行间离散超过阈值。强证据连着时不否决。
+//     不低于 songLyricsSameWordsMin、时间轴按行对上后整体平移或行间离散超过阈值,两边时长几乎相等时这一条不算
+//     (songSameLength)。强证据连着时不否决。
 func songPairVeto(x, y *songVariant, strong bool, splits map[string]bool) string {
 	if splits[songPairKey(x.key, y.key)] {
 		return "user_split"
@@ -420,7 +422,7 @@ func songPairVeto(x, y *songVariant, strong bool, splits map[string]bool) string
 	if overlap < songLyricsDifferentWordsMax {
 		return "lyrics_words"
 	}
-	if overlap >= songLyricsSameWordsMin {
+	if overlap >= songLyricsSameWordsMin && !songSameLength(x, y) {
 		if shift, spread, ok := songTimelineShift(x.displayedLines(), y.displayedLines()); ok &&
 			(math.Abs(shift) > songLyricsShiftMaxSecs || spread > songLyricsSpreadMaxSecs) {
 			return "lyrics_timeline"
@@ -455,6 +457,9 @@ func songVersionVeto(x, y *songVariant) bool {
 	if x.instrumentalVersion || y.instrumentalVersion {
 		return true
 	}
+	if songSameLength(x, y) && songOnlyAlbumEditionDiffers(x, y) {
+		return false
+	}
 	if songSharePlayerISRC(x, y) {
 		if ok, known := songDurationsWithinGate(x, y); ok && known && math.Abs(x.durationSecs-y.durationSecs) <= songEntityVersionExceptionSecs {
 			return false
@@ -462,6 +467,35 @@ func songVersionVeto(x, y *songVariant) bool {
 	}
 	return !sameRecordingDespiteVersionTags(x.title, x.album, x.durationSecs, y.title, y.album, y.durationSecs) &&
 		!sameRecordingDespiteVersionTags(y.title, y.album, y.durationSecs, x.title, x.album, x.durationSecs)
+}
+
+// songSameLength:两边时长都知道且几乎相等(songSameLengthSecs,任一侧是整秒时 songSameLengthIntegralSecs)。
+func songSameLength(x, y *songVariant) bool {
+	if x.durationSecs <= 0 || y.durationSecs <= 0 {
+		return false
+	}
+	tol := songSameLengthSecs
+	if songIntegralSecs(x.durationSecs) || songIntegralSecs(y.durationSecs) {
+		tol = songSameLengthIntegralSecs
+	}
+	return math.Abs(x.durationSecs-y.durationSecs) <= tol
+}
+
+// songAlbumEditionTags:专辑名里这几种版本词说的是版次:加长版专辑多收几首,混音 EP 连原版一起收。
+var songAlbumEditionTags = map[string]bool{"extended": true, "remix": true}
+
+// songOnlyAlbumEditionDiffers:两边版本词的差别全是专辑名带来的版次词(songAlbumEditionTags),两边歌名里都没有。
+// 删减版与不删减版归 explicit 那条否决。
+func songOnlyAlbumEditionDiffers(x, y *songVariant) bool {
+	inTitles := versionTagsIn(x.title, y.title)
+	for _, p := range [2][2]map[string]bool{{x.versionTags, y.versionTags}, {y.versionTags, x.versionTags}} {
+		for tag := range p[0] {
+			if !p[1][tag] && (!songAlbumEditionTags[tag] || inTitles[tag]) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // songSharePlayerISRC:两边有一个相同的、播放器给的 ISRC。

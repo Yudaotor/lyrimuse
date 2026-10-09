@@ -429,3 +429,63 @@ func TestSongEntityFamilyEdgeShare(t *testing.T) {
 		t.Error("歌名逐字不同、只靠写法族连着,没有旁证,不该进同一个共享组")
 	}
 }
+
+// 时间轴错开的否决只在两边时长有差别时算:时长几乎相等(任一侧整秒时放宽到 1 秒)时是其中一份歌词错位,照并。
+func TestSongEntityTimelineVetoNeedsDifferentLength(t *testing.T) {
+	words := songTestWords("shift", 30)
+	mk := func(dx, dy float64) []songVariant {
+		return []songVariant{
+			songTestVariant("Singer|Song|One", enrichEntry{DurationSecs: dx, Lyrics: songTestLRC(1000, words), LyricsSource: "kugou", ResolvedDurationSecs: dx}, nil),
+			songTestVariant("Singer|Song|Two", enrichEntry{DurationSecs: dy, Lyrics: songTestLRC(6000, words), LyricsSource: "netease", ResolvedDurationSecs: dy}, nil),
+		}
+	}
+	for _, c := range []struct {
+		dx, dy float64
+		same   bool
+	}{
+		{240.0, 240.3, true},
+		{240, 240.9, true},
+		{240.0, 241.5, false},
+	} {
+		b, of := songTestBuild(t, mk(c.dx, c.dy), nil)
+		if got := songTestSame(of, "Singer|Song|One", "Singer|Song|Two"); got != c.same {
+			t.Errorf("时长 %v / %v、歌词错开 5 秒:并=%v,要 %v(否决 %+v)", c.dx, c.dy, got, c.same, b.vetoed)
+		}
+		if !c.same && (len(b.vetoed) == 0 || b.vetoed[0].reason != "lyrics_timeline") {
+			t.Errorf("时长 %v / %v:要按 lyrics_timeline 否决: %+v", c.dx, c.dy, b.vetoed)
+		}
+	}
+}
+
+// 专辑名带来的版次词(加长版专辑、混音 EP)在两边时长几乎相等时不算版本不一致;歌名里的版本词、时长有差别的、
+// 删减版与不删减版照旧否决。
+func TestSongEntityAlbumEditionTags(t *testing.T) {
+	cases := []struct {
+		name string
+		x, y string
+		dy   float64
+		same bool
+	}{
+		{"加长版专辑收的同一轨", "Singer|Track|Heaven", "Singer|Track|Heaven (Extended)", 200.1, true},
+		{"混音 EP 里的原版", "Singer|Track|Track", "Singer|Track|Track (The Remixes) - EP", 200.1, true},
+		{"时长有差别", "Singer|Track|Heaven", "Singer|Track|Heaven (Extended)", 201.5, false},
+		{"删减版与不删减版", "Singer|Track|Petal [Clean]", "Singer|Track|Petal [Explicit]", 200, false},
+	}
+	for _, c := range cases {
+		vs := []songVariant{
+			songTestVariant(c.x, enrichEntry{DurationSecs: 200}, nil),
+			songTestVariant(c.y, enrichEntry{DurationSecs: c.dy}, nil),
+		}
+		b, of := songTestBuild(t, vs, nil)
+		if got := songTestSame(of, c.x, c.y); got != c.same {
+			t.Errorf("%s:并=%v,要 %v(否决 %+v)", c.name, got, c.same, b.vetoed)
+		}
+	}
+	vs := []songVariant{
+		songTestVariant("Singer|Track (Remix)|Heaven", enrichEntry{DurationSecs: 200, SpotifyTrackID: "abcdefghijklmnopqrstuv"}, nil),
+		songTestVariant("Singer|Track|Heaven (Extended)", enrichEntry{DurationSecs: 200.1, SpotifyTrackID: "abcdefghijklmnopqrstuv"}, nil),
+	}
+	if b, of := songTestBuild(t, vs, nil); songTestSame(of, vs[0].key, vs[1].key) || len(b.vetoed) == 0 || b.vetoed[0].reason != "version" {
+		t.Errorf("歌名里的版本词不吃版次词的例外: %+v", b.vetoed)
+	}
+}
