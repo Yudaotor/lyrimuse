@@ -349,6 +349,7 @@ func amazonLocalLyricsFor(artist, title string) (lyricSourceResult, bool) {
 	}
 	if meta, ok := amazonCatalog([]string{asin})[asin]; ok {
 		r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur = meta.Title, meta.Artist.Name, meta.albumName(), meta.durationSecs()
+		r.matchCover = amazonJPEGImage(meta.Album.Image)
 	}
 	return r, true
 }

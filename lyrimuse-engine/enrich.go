@@ -4778,6 +4778,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			source: amazonLocalLyricsSource, lyrics: amz.lyr,
 			sourceReportedDurationSecs: amz.srcDur,
 			title:                      amz.matchTitle, artist: amz.matchArtist, album: amz.matchAlbum,
+			cover:                   amz.matchCover,
 			identityFromLocalClient: amz.identityFromLocalClient,
 		})
 	}

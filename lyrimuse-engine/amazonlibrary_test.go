@@ -19,7 +19,7 @@ const amazonTestLyricsJSON = "\x16\x00\x00\x00\x00\x00\x00\x00serialization::arc
 // 目录缓存的值是 boost 归档,中间夹一个 JSON 对象,后面还跟着二进制尾巴。
 const amazonTestCatalogValue = "\x16\x00\x00\x00\x00\x00\x00\x00serialization::archive\x13\x00\x04\x08\x04\x08\x01\x00\x00\x00" +
 	`{"id":"","uniqueId":"B0TESTAAA2","asin":"B0TESTAAA2","title":"I Can't Love You Anymore [Explicit]","duration":"229","hasLyrics":true,` +
-	`"album":{"name":"I Can't Love You Anymore","asin":"B0TESTALB1"},"artist":{"name":"Ella Langley & Morgan Wallen","asin":"B0TESTART1"}}` +
+	`"album":{"name":"I Can't Love You Anymore","asin":"B0TESTALB1","image":"https://m.media-amazon.com/images/I/5194nbHWBoL._FMwebp_SX500_.jpg"},"artist":{"name":"Ella Langley & Morgan Wallen","asin":"B0TESTART1"}}` +
 	"\xe5\x00\x01garbage"
 
 func useTempAmazonData(t *testing.T) (localStorage, hammer string) {
@@ -169,7 +169,8 @@ func TestAmazonUpcomingAndLocalLyrics(t *testing.T) {
 	setNativeLyricSourcesForPlayer(amazonMusicBundleID)
 	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
 	r, ok := amazonLocalLyricsFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore")
-	if !ok || r.source != amazonLocalLyricsSource || !r.identityFromLocalClient || r.srcDur != 229 || r.matchAlbum == "" {
+	if !ok || r.source != amazonLocalLyricsSource || !r.identityFromLocalClient || r.srcDur != 229 || r.matchAlbum == "" ||
+		r.matchCover != "https://m.media-amazon.com/images/I/5194nbHWBoL._SX500_.jpg" {
 		t.Fatalf("本地歌词: %+v ok=%v", r, ok)
 	}
 	// 开播先上屏的那份:只给正在放的这首,预取的(isNewTrack=false)不垫。
