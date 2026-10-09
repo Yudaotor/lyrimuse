@@ -443,6 +443,8 @@ struct LyricsSearchSheet: View {
     // 上一轮没结束时都能开下一轮。每轮发一个自增序号,进度回调和收尾都先核对自己还是不是最新那一轮,不是就整段丢弃:
     // 不然慢的旧一轮后返回会把新查询词的候选盖掉,还把 isSearching 提前关掉。
     @State private var searchGeneration = 0
+    /// 候选封面的预热:每批候选到达时换成新的一份,换轮次、关面板时取消。
+    @State private var coverPrewarm: Task<Void, Never>?
     @State private var loadError: String?
     /// 这一轮的请求是不是全部失败(引擎侧统计,见 LyricsSearchService.SearchUpdate):一个候选都没有时,据此把
     /// 「网络不通」跟「这首歌没有网络歌词」分开说。
@@ -571,7 +573,10 @@ struct LyricsSearchSheet: View {
         // 它会继续对九个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
         // (search 内的 withTaskCancellationHandler 是第二层,取消幂等,两层谁先到都行)。
         // 只停这个面板自己发起的那一轮,另一扇窗里的搜索、详情页在跑的自动匹配不受影响。
-        .onDisappear { LyricsSearchService.shared.cancelRunning(for: searchOwner) }
+        .onDisappear {
+            LyricsSearchService.shared.cancelRunning(for: searchOwner)
+            coverPrewarm?.cancel()
+        }
     }
 
     // MARK: - 侧栏(查询词 + 候选)
@@ -1818,6 +1823,8 @@ struct LyricsSearchSheet: View {
             return
         }
         candidates = []
+        coverPrewarm?.cancel()
+        coverPrewarm = nil
         storedCandidate = makeStoredCandidate()
         loadError = nil
         // 先选中存着的那一版:搜索结果陆续到达期间右边一直是现在用的歌词。
@@ -1844,6 +1851,10 @@ struct LyricsSearchSheet: View {
                 guard generation == searchGeneration else { return } // 已经有更新的一轮在跑,这批结果作废
                 defer { revealSelection() }
                 candidates = update.candidates
+                // 列表是懒加载的:不预热,封面要等滚到那一行才开始下。上一批的预热先停,新一批按排序从头取图,
+                // 前几张多半就是上一批正在下的,会并进同一个请求。
+                coverPrewarm?.cancel()
+                coverPrewarm = ImageMemoryCache.shared.prewarm(update.candidates.compactMap(\.coverURL))
                 networkLooksDown = update.networkLooksDown
                 instrumental = update.instrumental
                 tracksFoundNoLyrics = update.tracksFoundNoLyrics

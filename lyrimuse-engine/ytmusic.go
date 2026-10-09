@@ -956,7 +956,7 @@ func ytmusicIsLyricFindSource(source string) bool {
 }
 
 // ytmusicOriginalThumbnail:搜索结果的缩略图是 googleusercontent 地址,末尾 `=w120-h120-l90-rj` 这段是
-// 缩放参数,换成 `=s0` 拿原图(实测 2400;更大的请求也封顶在原图)。不是这个图床的地址原样返回。
+// 缩放参数,换成 `=s0` 拿原图(实测 2400～6000;更大的请求也封顶在原图)。不是这个图床的地址原样返回。
 func ytmusicOriginalThumbnail(u string) string {
 	if !strings.Contains(u, ".googleusercontent.com/") {
 		return u

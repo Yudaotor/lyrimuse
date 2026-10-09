@@ -98,14 +98,19 @@ final class ImageMemoryCache {
     ///
     /// 并发压到 4:这些都是本地磁盘缓存命中,不该跟别的启动工作抢带宽/CPU;真要有几张
     /// 没缓存的会走网络,慢一点也无所谓 —— 它只是预热,失败没有任何后果。
-    func prewarm(_ urls: [URL]) {
-        let missing = Array(Set(urls.filter { image(for: $0) == nil }))
-        guard !missing.isEmpty else { return }
-        Task { [weak self] in
+    ///
+    /// 按传入顺序取图(去重后保序),排在前面的先下。取消返回的任务后不再开始新的下载;已经在下的照常下完、
+    /// 写进缓存(同一地址的请求是共享的,别的调用方可能也在等)。
+    @discardableResult
+    func prewarm(_ urls: [URL]) -> Task<Void, Never>? {
+        var seen = Set<URL>()
+        let missing = urls.filter { image(for: $0) == nil && seen.insert($0).inserted }
+        guard !missing.isEmpty else { return nil }
+        return Task { [weak self] in
             await withTaskGroup(of: (URL, NSImage?).self) { group in
                 var index = 0
                 func addNext() {
-                    guard index < missing.count else { return }
+                    guard index < missing.count, !Task.isCancelled else { return }
                     let url = missing[index]
                     index += 1
                     group.addTask { [weak self] in

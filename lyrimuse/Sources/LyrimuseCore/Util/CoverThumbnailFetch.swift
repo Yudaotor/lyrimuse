@@ -14,7 +14,9 @@ public enum CoverThumbnailFetch {
     /// - 酷狗 `/stdmusic/N/`:150 / 240 / 480(0 = 原图);
     /// - 酷我 `/albumcover/N/`:120 / 300 / 500(0 = 原图);
     /// - 汽水(douyinpic)`~tplv-…-resize:W:H`:300 / 600(0:0 = 原图);
-    /// - Musixmatch `_N_N.jpg`:350 / 800(100 是 403)。
+    /// - Musixmatch `_N_N.jpg`:350 / 800(100 是 403);
+    /// - Google 图床(googleusercontent,YouTube Music 借来的封面)末尾 `=s0` / `=wN-hN-…`:换成 `=sN`,任意边长;
+    /// - Deezer `/images/cover/<id>/NxN-…`:任意边长。
     /// 咪咕的地址里没有尺寸,原样。缓存仍按原地址记,这里只换"去哪下"。
     /// 只管缩略档(maxPixel ≤ 512);原图档的地址由调用方自己挑(见 EnrichCacheReader.nativeSizedCoverURL)。
     public static func url(for url: URL, maxPixel: Int) -> URL {
@@ -56,6 +58,14 @@ public enum CoverThumbnailFetch {
         if host == "s.mxmcdn.net" {
             let edge = snap(maxPixel, to: [350, 800])
             return replacingPath(url, comps, path, pattern: #"_\d+_\d+(\.jpg)$"#) { m in "_\(edge)_\(edge)\(m[1])" } ?? url
+        }
+        if isHost(host, "googleusercontent.com") {
+            return replacingPath(url, comps, path, pattern: #"=[A-Za-z0-9-]+$"#) { _ in "=s\(maxPixel)" } ?? url
+        }
+        if isHost(host, "dzcdn.net") {
+            return replacingPath(url, comps, path, pattern: #"^(/images/cover/[0-9a-f]+/)\d+x\d+-"#) { m in
+                "\(m[1])\(maxPixel)x\(maxPixel)-"
+            } ?? url
         }
         return url
     }

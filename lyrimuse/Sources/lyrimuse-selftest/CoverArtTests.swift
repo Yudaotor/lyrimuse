@@ -1923,13 +1923,22 @@ func runCoverArtTests() {
                     "https://p3-luna.douyinpic.com/img/tos-cn/abc~tplv-b829550vbb-resize:300:300.jpg", "缩略图下载: 汽水原图换 300")
         expectEqual(t("https://s.mxmcdn.net/images-storage/albums2/1/125051961_800_800.jpg"),
                     "https://s.mxmcdn.net/images-storage/albums2/1/125051961_350_350.jpg", "缩略图下载: Musixmatch 取 350(100 是 403)")
+        expectEqual(t("https://yt3.googleusercontent.com/KKEMiv9Iul-JvjB=s0"),
+                    "https://yt3.googleusercontent.com/KKEMiv9Iul-JvjB=s256", "缩略图下载: Google 图床原图换 =s256")
+        expectEqual(t("https://lh3.googleusercontent.com/abc_d=w544-h544-l90-rj"),
+                    "https://lh3.googleusercontent.com/abc_d=s256", "缩略图下载: Google 图床带宽高参数的也换 =s256")
+        expectEqual(t("https://cdn-images.dzcdn.net/images/cover/42b95263fc55a7b8095b6805149226c4/1800x1800-000000-80-0-0.jpg"),
+                    "https://cdn-images.dzcdn.net/images/cover/42b95263fc55a7b8095b6805149226c4/256x256-000000-80-0-0.jpg",
+                    "缩略图下载: Deezer 原图换 256")
         // 形状对不上一个字都不改:改错是 404、整张封面消失
         for s in ["https://d.musicapp.migu.cn/data/oss/resource/00/60/ig/9cf9564aff9544f4983d16b25e85d250.webp",
                   "https://evilmusic.126.net/a.jpg?x=1",
                   "https://imge.kugou.com/other/0/1.jpg",
                   "https://is1-ssl.mzstatic.com/image/thumb/Music221/x.rgb.jpg/600x600bb-60.jpg",
                   "https://y.qq.com/music/photo_new/T003R800x800M000003zeVgY4BE7Sk.jpg",
-                  "https://i.scdn.co/image/ab67616d0000b273abc"] {
+                  "https://i.scdn.co/image/ab67616d0000b273abc",
+                  "https://yt3.googleusercontent.com/KKEMiv9IulJvjB",
+                  "https://cdn-images.dzcdn.net/images/artist/42b95263fc55a7b8/1000x1000-000000-80-0-0.jpg"] {
             expectEqual(t(s), s, "缩略图下载: 没实测过的形状原样 —— \(s)")
         }
         expectEqual(F.url(for: URL(string: "https://p1.music.126.net/abc==/1099.jpg?param=600y600")!, maxPixel: 2048).absoluteString,
