@@ -40,7 +40,7 @@ brew install --cask lyrimuse
 <img src="docs/images/hero-profile.jpg" alt="Lyrimuse listening profile — Last.fm stats, top charts, idle listening overview, yearly listening heatmap">
 <p align="center"><sub>Your Last.fm numbers and charts, the overview you see when nothing's playing, and a GitHub-style heatmap of your year</sub></p>
 
-<img src="docs/images/hero-customize.jpg" alt="Lyrimuse settings — live-preview editors, multi-select player picker with web players, menu-bar dropdown">
+<img src="docs/images/hero-customize.jpg" alt="Lyrimuse settings — live-preview editors, multi-select player picker with web players, Touch Bar lyrics">
 <p align="center"><sub>Every settings page has a live preview, you can pick more than one player (web players too), and the menu bar dropdown has the rest</sub></p>
 
 ## Features

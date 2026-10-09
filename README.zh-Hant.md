@@ -40,7 +40,7 @@ brew install --cask lyrimuse
 <img src="docs/images/hero-profile.jpg" alt="Lyrimuse 聆聽檔案——Last.fm 統計、排行榜、閒置聆聽總覽、全年熱力圖">
 <p align="center"><sub>Last.fm 數據和排行榜、沒在播歌時的聆聽總覽，還有一張 GitHub 那樣的全年熱力圖</sub></p>
 
-<img src="docs/images/hero-customize.jpg" alt="Lyrimuse 設定——即時預覽編輯台、播放器多選（含網頁播放器）、選單列下拉選單">
+<img src="docs/images/hero-customize.jpg" alt="Lyrimuse 設定——即時預覽編輯台、播放器多選（含網頁播放器）、觸控列歌詞">
 <p align="center"><sub>每一頁設定都能即時預覽，播放器可以多選（網頁播放器也行），其餘常用操作都在選單列下拉裡</sub></p>
 
 ## 功能特色
