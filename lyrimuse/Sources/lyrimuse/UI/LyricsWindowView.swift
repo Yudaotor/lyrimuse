@@ -2996,7 +2996,7 @@ struct LyricsWindowView: View {
             // 快照即身份,换歌后再开是新的一份。
             .sheet(item: $lyricsSearchContext) { ctx in
                 LyricsSearchSheet(
-                    artist: ctx.artist, title: ctx.title, album: ctx.album,
+                    artist: ctx.artist, title: ctx.title, album: ctx.album, songKey: ctx.key,
                     currentSource: ctx.currentSource, currentFingerprint: ctx.currentFingerprint,
                     durationSecs: ctx.durationSecs,
                     isMarkedInstrumental: ctx.isInstrumental,

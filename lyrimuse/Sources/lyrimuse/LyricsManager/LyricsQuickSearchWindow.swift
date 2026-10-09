@@ -71,7 +71,7 @@ struct LyricsQuickSearchWindow: View {
                     .frame(minWidth: LyricsSearchSheet.minimumSize.width, minHeight: LyricsSearchSheet.minimumSize.height)
             } else if let context {
                 LyricsSearchSheet(
-                    artist: context.artist, title: context.title, album: context.album,
+                    artist: context.artist, title: context.title, album: context.album, songKey: context.key,
                     currentSource: context.currentSource, currentFingerprint: context.currentFingerprint,
                     durationSecs: context.durationSecs, keepsOpenAfterApply: true, standaloneWindow: true,
                     isMarkedInstrumental: context.isInstrumental,

@@ -39410,6 +39410,40 @@
         }
       }
     },
+    "这条候选歌词无译文" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No translation in this candidate"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這條候選歌詞無譯文"
+          }
+        }
+      }
+    },
+    "这条候选歌词无读音" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No romanization in this candidate"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這條候選歌詞無讀音"
+          }
+        }
+      }
+    },
     "逐字歌词仅修改文字，时间保持不变" : {
       "extractionState" : "manual",
       "localizations" : {

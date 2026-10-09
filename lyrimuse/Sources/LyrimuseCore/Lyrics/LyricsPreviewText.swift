@@ -282,6 +282,15 @@ extension LyricsPreviewText {
         return found
     }
 
+    /// 搜索候选歌词的预览按这条候选自己的时间轴找「此刻唱到哪一句」时,播放位置要叠的偏移(正数 = 歌词提前)。在用的
+    /// 就是这一条时照搬播放侧的总偏移;别的候选去掉只属于当前正文的两样:单曲微调(按正文存,换一份正文不带过去)和
+    /// 当前正文自带的 `[offset:]`,换上这条候选自带的 `[offset:]`。全局 / 按播放器的基准和 MV、空间音频那几层留着。
+    public static func candidateOffsetMs(currentTotalMs: Int, currentTrackMs: Int, currentEmbeddedMs: Int,
+                                         candidateEmbeddedMs: Int, isCurrent: Bool) -> Int {
+        if isCurrent { return currentTotalMs }
+        return currentTotalMs - currentTrackMs - currentEmbeddedMs + candidateEmbeddedMs
+    }
+
     /// 时间列的写法:`mm:ss.xx`(百分之一秒截断),跟 LRC 时间戳同一个形状;分钟不封顶。
     public static func timeLabel(_ ms: Int) -> String {
         let t = max(ms, 0)

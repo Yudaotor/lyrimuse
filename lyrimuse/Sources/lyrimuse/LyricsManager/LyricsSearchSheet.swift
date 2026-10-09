@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import LyrimuseCore
 import SwiftUI
 
@@ -23,6 +24,9 @@ struct LyricsSearchSheet: View {
     let originalArtist: String
     let originalTitle: String
     let originalAlbum: String
+    /// 面板为之打开的那一首的缓存 key(跟宿主写回的是同一条)。正在放的就是这首时,预览标出此刻唱到哪一句、能点时间跳过去。
+    /// 三个入口都得传(contracts 组守卫钉着)。
+    let songKey: String
     // 这首歌眼下实际生效的歌词来源(EnrichCacheStore.Summary.lyricsSource,比如"qq")——
     // 默认选中它,而不是"搜索结果里谁先到就选谁":默认选中的
     // 候选应该是眼下正在用的这一份,不是随便哪个候选,不然明明已经在用 QQ 音乐的歌词,
@@ -114,27 +118,55 @@ struct LyricsSearchSheet: View {
     /// 预览区那份按行拆好的正文(`LyricsPreviewText.rows` 要整首走一遍播放引擎),而查询词每敲一个字、
     /// 每到一批候选都会重算 body;选中的候选没变就沿用上一次的结果。
     @State private var previewMemo = PreviewRowsMemo()
+    /// 预览显示原文 / 原文 + 译文 / 原文 + 读音;选中的候选没有那一档时按原文显示,选择本身不改,换到有的候选又回来。
+    @State private var displayMode: LyricsManagerDisplayMode = .translation
+    /// 预览跟着播放滚到当前句(只在正在放的就是这首时有这颗开关),手动滚一下就暂停。
+    @State private var followPlayback = true
+    @StateObject private var nowPlaying = LyricsSearchNowPlaying()
     /// 查询对象(换歌)换了几次,见 apply 里那道守卫。
     @State private var subjectGeneration = 0
     /// 候选列表有没有焦点:点一行时交给它,方向键才换得了行(onMoveCommand)。
     @FocusState private var candidateListFocused: Bool
 
-    private final class PreviewRowsMemo {
-        private var lyrics = ""
-        private var translation = ""
-        private var title = ""
-        private var artist = ""
-        private var cached: [LyricsPreviewRow]?
+    /// 一条候选在预览里要的东西,按候选内容和设置里开着读音的文字种类算一次。
+    private struct PreviewRows {
+        let plain: [LyricsPreviewRow]
+        /// 带读音的那份(候选自带的,加上按设置现算的,跟采纳后歌词窗口显示的一样);这份歌词里没有能标读音的字时是空的。
+        let romanized: [LyricsPreviewRow]
+        let hasTranslation: Bool
+        let hasRomanization: Bool
+        /// 没有读音只是因为设置里没开这种语言(候选自带读音,或者有能标读音的字)。
+        let romanizationOffInSettings: Bool
+        /// 有没有一行带时间;纯文本候选没有,不画时间列、不标当前句。
+        let timed: Bool
+        /// 候选自带的 `[offset:]`,算法同 LyricsSyncEngine.load:先看整行歌词,为 0 再看逐字。
+        let embeddedOffsetMs: Int
+    }
 
-        func rows(_ c: LyricsSearchService.Candidate) -> [LyricsPreviewRow] {
-            if let cached, c.lyrics == lyrics, c.lyricsTr == translation, c.title == title, c.artist == artist {
-                return cached
-            }
-            let rows = LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, title: c.title, artist: c.artist)
-            lyrics = c.lyrics
-            translation = c.lyricsTr
-            title = c.title
-            artist = c.artist
+    private final class PreviewRowsMemo {
+        private var inputs: [String] = []
+        private var cached: PreviewRows?
+
+        func rows(_ c: LyricsSearchService.Candidate, scripts: RomanizationScripts) -> PreviewRows {
+            let inputs = [c.lyrics, c.lyricsTr, c.lyricsRoma, c.lyricsYRC, c.title, c.artist, String(scripts.rawValue)]
+            if let cached, inputs == self.inputs { return cached }
+            let plain = LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, title: c.title, artist: c.artist)
+            let mayRomanize = c.hasRomanization || LyricsPreviewText.mayHaveRomanization(c.lyrics, scripts: scripts)
+            let romanized = mayRomanize
+                ? LyricsPreviewText.rows(lyrics: c.lyrics, translation: c.lyricsTr, romanization: c.lyricsRoma,
+                                         romanizationScripts: scripts, title: c.title, artist: c.artist)
+                : []
+            let hasRomanization = romanized.contains { !($0.romanization ?? "").isEmpty }
+            let embedded = LRCParser.parseOffsetMs(c.lyrics)
+            let rows = PreviewRows(
+                plain: plain, romanized: romanized,
+                hasTranslation: plain.contains { !($0.translation ?? "").isEmpty },
+                hasRomanization: hasRomanization,
+                romanizationOffInSettings: !hasRomanization && (c.hasRomanization
+                    || LyricsPreviewText.mayHaveRomanization(c.lyrics, scripts: [.japanese, .korean, .chinese, .cantonese])),
+                timed: plain.contains { $0.timeMs != nil },
+                embeddedOffsetMs: embedded != 0 ? embedded : LRCParser.parseOffsetMs(c.lyricsYRC))
+            self.inputs = inputs
             cached = rows
             return rows
         }
@@ -468,7 +500,7 @@ struct LyricsSearchSheet: View {
     @State private var title: String
     @State private var album: String
 
-    init(artist: String, title: String, album: String, currentSource: String?, currentFingerprint: String? = nil,
+    init(artist: String, title: String, album: String, songKey: String, currentSource: String?, currentFingerprint: String? = nil,
          durationSecs: Double, keepsOpenAfterApply: Bool = false, standaloneWindow: Bool = false,
          isMarkedInstrumental: Bool, onSetInstrumental: @escaping (Bool) async -> Bool,
          onAutoMatch: @escaping (@escaping (Int, Int) -> Void) async -> LyricsRematch.Line?,
@@ -476,6 +508,7 @@ struct LyricsSearchSheet: View {
         self.originalArtist = artist
         self.originalTitle = title
         self.originalAlbum = album
+        self.songKey = songKey
         self.currentSource = currentSource
         self.currentFingerprint = currentFingerprint
         self.durationSecs = durationSecs
@@ -1308,51 +1341,79 @@ struct LyricsSearchSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
             }
-            lyricsPreview(c)
+            let rows = previewMemo.rows(c, scripts: LocalPlaybackSource.shared.romanizationScripts)
+            if rows.timed {
+                previewControls(rows)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
+            }
+            lyricsPreview(c, rows: rows)
         }
     }
 
-    /// 预览正文:左边一列时间、右边正文,候选带译文时译文排在那一句下面。行取自 `LyricsPreviewText.rows`,
+    /// 正在放的就是面板里这首。
+    private var isSongPlaying: Bool { nowPlaying.key == songKey }
+
+    /// 原文 / 原文 + 译文 / 原文 + 读音(这条候选没有的那一档灰掉,悬停说为什么),正在放这首时再加「跟随播放」。
+    /// 跟歌词管理详情页同一套零件。
+    private func previewControls(_ rows: PreviewRows) -> some View {
+        HStack(spacing: 10) {
+            LyricsManagerModePicker(mode: $displayMode, shown: shownMode(rows),
+                                    isAvailable: { isModeAvailable($0, rows) },
+                                    unavailableHelp: { unavailableModeHelp($0, rows) })
+            if isSongPlaying {
+                LyricsManagerFollowButton(follow: $followPlayback)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func isModeAvailable(_ mode: LyricsManagerDisplayMode, _ rows: PreviewRows) -> Bool {
+        switch mode {
+        case .original: return true
+        case .translation: return rows.hasTranslation
+        case .romanization: return rows.hasRomanization
+        }
+    }
+
+    private func unavailableModeHelp(_ mode: LyricsManagerDisplayMode, _ rows: PreviewRows) -> String {
+        switch mode {
+        case .original: return ""
+        case .translation: return L10n.t("这条候选歌词无译文")
+        case .romanization:
+            return rows.romanizationOffInSettings
+                ? L10n.t("这首歌曲的语言未在设置的「标注读音的语言」中开启") : L10n.t("这条候选歌词无读音")
+        }
+    }
+
+    private func shownMode(_ rows: PreviewRows) -> LyricsManagerDisplayMode {
+        isModeAvailable(displayMode, rows) ? displayMode : .original
+    }
+
+    /// 预览正文:左边一列时间、右边正文,开着译文 / 读音时排在那一句下面。行取自 `LyricsPreviewText.rows`,
     /// 跟歌词窗口实际显示的是同一批行(署名过滤、多时间戳展开、译文挂靠都走播放引擎);只读整行 LRC,
     /// 逐字轨不参与,时间列就是这份 LRC 自己的时间戳。没有时间戳的纯文本候选不画时间列。采纳落盘的仍是
     /// 候选原始文本,这里只管看(边界见 LyricsPreviewText 头注)。
-    private func lyricsPreview(_ c: LyricsSearchService.Candidate) -> some View {
-        let rows = previewMemo.rows(c)
-        let timed = rows.contains { $0.timeMs != nil }
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 7) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    previewRow(row, timed: timed)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 18)
-            .textSelection(.enabled)
-        }
-        // 换一条候选从头看起:要判断的是"第一句对不对、轴准不准"。
+    ///
+    /// 正在放的就是这首时,按这条候选自己的时间轴标出此刻唱到哪一句(`.ownTimeline`),不按在用那份歌词的当前句找字:
+    /// 要比的正是各条候选的轴准不准,而在用的那份可能是错的、也可能没有。点时间从那一句播放。见 11 章决策 98。
+    private func lyricsPreview(_ c: LyricsSearchService.Candidate, rows: PreviewRows) -> some View {
+        let mode = shownMode(rows)
+        let highlight = LyricsPreviewHighlight.ownTimeline(embeddedOffsetMs: rows.embeddedOffsetMs,
+                                                           isCurrent: isCurrentCandidate(c))
+        let playing = isSongPlaying && rows.timed
+        return LyricsManagerPreviewList(
+            rows: mode == .romanization ? rows.romanized : rows.plain,
+            mode: mode,
+            isNowPlaying: playing,
+            follow: $followPlayback,
+            canSeek: playing && PlaybackCoordinator.shared.acceptsSeek,
+            onSeek: { ms in PlaybackCoordinator.shared.seek(toMs: max(0, ms - highlight.offsetMs)) },
+            highlight: highlight,
+            showsTimeColumn: rows.timed,
+            horizontalInset: 24)
+        // 换一条候选重建:没在放这首、或者关了跟随时从头看起,在跟随时直接落到当前句。
         .id(c.source)
-    }
-
-    private func previewRow(_ row: LyricsPreviewRow, timed: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
-            if timed {
-                Text(row.timeMs.map(LyricsPreviewText.timeLabel) ?? "")
-                    .font(.system(size: 11.5).monospacedDigit())
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 60, alignment: .leading)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                // 纯文本里的分段空行要占一行高,别塌成 0。
-                Text(row.text.isEmpty ? " " : row.text)
-                    .font(.system(size: 14))
-                if let translation = row.translation, !translation.isEmpty {
-                    Text(translation)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
     }
 
     // 这个候选实际匹配到的歌名 / 歌手 / 专辑,**各占一行**——不是每个源都能给全,哪一项
@@ -1610,5 +1671,25 @@ struct LyricsSearchSheet: View {
         }
         guard generation == searchGeneration else { return } // 别让旧一轮的收尾把新一轮的"正在搜索"关掉
         isSearching = false
+    }
+}
+
+/// 正在放的那首对应的缓存 key(实际命中优先,没有条目退 normalizedKey,跟三个入口算写回 key 同一套),换歌才变。
+/// 搜索面板拿它跟自己那首比,决定预览要不要标出此刻唱到哪一句。
+@MainActor
+private final class LyricsSearchNowPlaying: ObservableObject {
+    @Published private(set) var key: String?
+    private var sub: AnyCancellable?
+
+    init() {
+        let p = PlaybackCoordinator.shared
+        sub = Publishers.CombineLatest3(p.$artist, p.$title, p.$album)
+            .map { artist, title, album -> String? in
+                guard !artist.isEmpty || !title.isEmpty else { return nil }
+                return EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
+                    ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+            }
+            .removeDuplicates()
+            .sink { [weak self] in self?.key = $0 }
     }
 }

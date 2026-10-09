@@ -3869,7 +3869,7 @@ func runSourceContractTests() {
     // `fromManualPick: true`。这个仓库为"改了两处漏第三处"付过两次代价:补
     // markManual 时漏了歌词窗口那处;发现小窗那处从 08-30 加纯文本候选起就没有
     // 分流。守卫先数清楚调用点(多一处也要红 —— 新入口必须来这里登记,顺便读一遍上面的规矩),
-    // 再逐处查五个记号(加 currentFingerprint:「当前使用」双判据的正文指纹,三处都得传;加 isMarkedInstrumental /
+    // 再逐处查五个记号(加 currentFingerprint:「当前使用」双判据的正文指纹,三处都得传;加 songKey:预览判断面板这首是不是正在放的那首;加 isMarkedInstrumental /
     // onSetInstrumental:面板里标 / 撤纯音乐,按打开面板时那首写回)。只数非注释行:别处的注释会提到 `LyricsSearchSheet(` 让人去 grep。
     do {
         let appSources = URL(fileURLWithPath: #filePath)
@@ -3896,7 +3896,7 @@ func runSourceContractTests() {
                     "采纳候选入口: LyricsSearchSheet 的调用点就这三处(多了/少了都要来这条守卫登记)")
         for rel in callSites.sorted() {
             guard let text = read(rel) else { continue }
-            for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "bg: candidate.lyricsBG", "trLang: candidate.lyricsTrLang", "currentFingerprint:",
+            for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "bg: candidate.lyricsBG", "trLang: candidate.lyricsTrLang", "currentFingerprint:", "songKey:",
                            "isMarkedInstrumental:", "onSetInstrumental:", "setInstrumental(key:",
                            "onAutoMatch:", "LyricsRematchRunner.run(key:"] {
                 expectEqual(text.contains(marker), true, "采纳候选入口: \(rel) 缺 \(marker)")

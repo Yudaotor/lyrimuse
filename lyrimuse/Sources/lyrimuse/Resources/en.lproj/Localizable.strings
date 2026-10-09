@@ -1745,6 +1745,8 @@
 "这台 Mac 上未安装的播放器" = "Players not installed on this Mac";
 "这台 Mac 无刘海，将显示在屏幕顶部中央" = "No notch on this Mac, so it sits at the top center";
 "这是 Lyrimuse 本身。" = "That’s Lyrimuse itself.";
+"这条候选歌词无译文" = "No translation in this candidate";
+"这条候选歌词无读音" = "No romanization in this candidate";
 "这里是一句歌词示例" = "A line of lyrics looks like this";
 "这里是下一句歌词示例" = "The next line looks like this";
 "这里是译文示例" = "The translation looks like this";

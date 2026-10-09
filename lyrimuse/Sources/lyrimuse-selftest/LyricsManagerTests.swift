@@ -126,6 +126,12 @@ func runLyricsManagerTests() {
         expectEqual(LyricsPreviewText.currentRow(times: [1000, nil, 5000, 9000], lineTimeMs: 5000), 2, "预览当前句: 时间相同的那一行")
         expectEqual(LyricsPreviewText.currentRow(times: [1000, 5000, 9000], lineTimeMs: 4990), 1, "预览当前句: 差几毫秒也认")
         expectEqual(LyricsPreviewText.currentRow(times: [1000, 5000], lineTimeMs: 500), nil, "预览当前句: 还没到第一句")
+        expectEqual(LyricsPreviewText.candidateOffsetMs(currentTotalMs: 1700, currentTrackMs: 500, currentEmbeddedMs: 200,
+                                                        candidateEmbeddedMs: 0, isCurrent: true), 1700,
+                    "候选预览偏移: 在用的就是这一条时照搬总偏移")
+        expectEqual(LyricsPreviewText.candidateOffsetMs(currentTotalMs: 1700, currentTrackMs: 500, currentEmbeddedMs: 200,
+                                                        candidateEmbeddedMs: -300, isCurrent: false), 700,
+                    "候选预览偏移: 别的候选去掉单曲微调和当前正文自带的 [offset:],换上候选自己的")
         let chorusTimes: [Int?] = [169_380, 172_740, 189_660]
         let chorusTexts = ["Too many times before", "And her heart is", "Too many times before"]
         expectEqual(LyricsPreviewText.currentRow(times: chorusTimes, texts: chorusTexts, lineTimeMs: 172_360,

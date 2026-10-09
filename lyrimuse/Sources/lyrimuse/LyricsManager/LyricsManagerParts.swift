@@ -85,6 +85,88 @@ final class LyricsManagerPlaybackLine: ObservableObject {
     }
 }
 
+/// 预览里「正在唱的是哪一句」怎么找。
+enum LyricsPreviewHighlight: Equatable {
+    /// 按正在放的那一句的字找(歌词管理:预览的就是在用的这份),对得上时逐字染色。
+    case playingLine
+    /// 按播放位置在这份行自己的时间里找,整行高亮、不逐字染色(搜索候选:候选多半不是在用的那份,要看它的时间轴此刻
+    /// 落在哪一句)。`embeddedOffsetMs` 是这份歌词自带的 `[offset:]`,`isCurrent` 是不是在用的那一份,偏移的算法见
+    /// LyricsPreviewText.candidateOffsetMs。
+    case ownTimeline(embeddedOffsetMs: Int, isCurrent: Bool)
+
+    /// 这一刻播放位置要叠的偏移:`.playingLine` 是播放侧的总偏移,`.ownTimeline` 按 candidateOffsetMs 换算。
+    @MainActor
+    var offsetMs: Int {
+        let p = PlaybackCoordinator.shared
+        switch self {
+        case .playingLine:
+            return p.currentLyricsOffsetMs
+        case let .ownTimeline(embeddedOffsetMs, isCurrent):
+            return LyricsPreviewText.candidateOffsetMs(
+                currentTotalMs: p.currentLyricsOffsetMs, currentTrackMs: p.trackLyricsOffsetMs,
+                currentEmbeddedMs: LocalPlaybackSource.shared.clockSnapshot.lrcOffsetMs,
+                candidateEmbeddedMs: embeddedOffsetMs, isCurrent: isCurrent)
+        }
+    }
+}
+
+/// `.ownTimeline` 那种当前句:每 0.1 秒按播放位置(锚点外推,暂停时取冻结位置)加偏移在行的时间里找一次,行号变了才发布,
+/// 预览列表不跟着每一拍重算。
+@MainActor
+final class LyricsPreviewPositionLine: ObservableObject {
+    @Published private(set) var index: Int?
+    private var times: [Int?] = []
+    private var highlight: LyricsPreviewHighlight = .playingLine
+    private var ticker: AnyCancellable?
+
+    /// 换了行、换了找法、这首开始 / 不再是正在放的那首时调;不在跟时停表、清掉行号。
+    func update(times: [Int?], highlight: LyricsPreviewHighlight, active: Bool) {
+        self.times = times
+        self.highlight = highlight
+        guard active, case .ownTimeline = highlight else {
+            ticker = nil
+            if index != nil { index = nil }
+            return
+        }
+        recompute()
+        if ticker == nil {
+            ticker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+                .sink { [weak self] _ in self?.recompute() }
+        }
+    }
+
+    private func recompute() {
+        let p = PlaybackCoordinator.shared
+        var next: Int?
+        if let position = p.anchor?.extrapolatedPositionMs() ?? p.pausedPositionMs {
+            next = LyricsPreviewText.currentRow(times: times, lineTimeMs: position + highlight.offsetMs)
+        }
+        if next != index { index = next }
+    }
+}
+
+/// 「跟随播放」开关:开着时当前句保持在视野里,手动滚一下就暂停(见 LyricsManagerPreviewList)。
+struct LyricsManagerFollowButton: View {
+    @Binding var follow: Bool
+
+    var body: some View {
+        Button {
+            follow.toggle()
+        } label: {
+            Label(L10n.t("跟随播放"), systemImage: "dot.radiowaves.left.and.right")
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(follow ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.06)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(follow ? Color.accentColor : Color.secondary)
+        .help(L10n.t("高亮当前句并保持在可见范围内；手动滚动时暂停，再次点按可恢复"))
+        .fixedSize()
+    }
+}
+
 /// 封面方块。没有封面地址、或者图还没取到时画一块灰底音符。
 struct LyricsManagerCover: View {
     let url: URL?
@@ -765,14 +847,22 @@ struct LyricsManagerStackedCovers: View {
 
 /// 预览:左边时间、右边正文(开着译文 / 读音时下面再一行)。这首正在放时当前句亮起,有逐字时间的逐字染色;开着
 /// 「跟随播放」就滚到视野里,手动滚一下就暂停跟随;指针停在时间上出现 ▶,点一下从这一句开始播放。
+/// 搜索候选歌词的预览也用它(`highlight: .ownTimeline`,当前句按候选自己的时间轴找)。
 struct LyricsManagerPreviewList: View {
     let rows: [LyricsPreviewRow]
     let mode: LyricsManagerDisplayMode
     let isNowPlaying: Bool
     @Binding var follow: Bool
     let canSeek: Bool
+    /// 参数是这一行的时间(歌词时间轴上的,没减偏移)。
     let onSeek: (Int) -> Void
+    var highlight: LyricsPreviewHighlight = .playingLine
+    /// 没有一行带时间(纯文本)时不留时间列。
+    var showsTimeColumn = true
+    /// 行的左右留白(滚动条仍贴着边)。
+    var horizontalInset: CGFloat = 0
     @StateObject private var playback = LyricsManagerPlaybackLine()
+    @StateObject private var position = LyricsPreviewPositionLine()
 
     var body: some View {
         let current = currentIndex
@@ -786,11 +876,13 @@ struct LyricsManagerPreviewList: View {
                                                 karaoke: isCurrent ? karaoke : nil,
                                                 isPlaying: isCurrent && playback.isPlaying,
                                                 pausedMs: isCurrent ? playback.pausedMs : nil,
+                                                showsTimeColumn: showsTimeColumn,
                                                 canSeek: canSeek, onSeek: onSeek)
                             .id(index)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, horizontalInset)
                 .padding(.top, 14)
                 .padding(.bottom, 60)
             }
@@ -799,9 +891,21 @@ struct LyricsManagerPreviewList: View {
             .onChange(of: follow) { _, _ in scrollToCurrent(proxy, animated: true) }
             // 行换了也重新对一次位:换歌时新歌的行在预览出现之后才算好,切原文 / 译文 / 读音也换行;当前句的值可能没变,
             // 上面那条不会触发,列表就停在按旧行滚到的地方。
-            .onChange(of: rows) { _, _ in scrollToCurrent(proxy, animated: false) }
-            .onAppear { scrollToCurrent(proxy, animated: false) }
+            .onChange(of: rows) { _, _ in
+                updatePosition()
+                scrollToCurrent(proxy, animated: false)
+            }
+            .onChange(of: highlight) { _, _ in updatePosition() }
+            .onChange(of: isNowPlaying) { _, _ in updatePosition() }
+            .onAppear {
+                updatePosition()
+                scrollToCurrent(proxy, animated: false)
+            }
         }
+    }
+
+    private func updatePosition() {
+        position.update(times: rows.map(\.timeMs), highlight: highlight, active: isNowPlaying)
     }
 
     /// 跟随时把当前句滚到中间。还没唱到第一句(前奏,或刚换歌、播放位置还没对上)时回到顶上:当前句变成「没有」时
@@ -819,14 +923,18 @@ struct LyricsManagerPreviewList: View {
 
     /// 当前句是第几行:按字找、找不到按时间(见 LyricsPreviewText.currentRow)。一次 body 只算一次,传给各行。
     private var currentIndex: Int? {
-        guard isNowPlaying, let current = playback.current else { return nil }
+        guard isNowPlaying else { return nil }
+        guard highlight == .playingLine else {
+            return position.index.flatMap { rows.indices.contains($0) ? $0 : nil }
+        }
+        guard let current = playback.current else { return nil }
         return LyricsPreviewText.currentRow(times: rows.map(\.timeMs), texts: rows.map(\.text),
                                             lineTimeMs: current.timeMs, lineText: current.text)
     }
 
     /// 当前句的逐字段:这首正在放、当前句有逐字时间、跟预览这一行的字对得上时才有(见 11 章决策 71)。
     private func karaokeSegments(at index: Int?) -> [LyricsKaraokeSegment]? {
-        guard let index, let words = playback.current?.words, !words.isEmpty else { return nil }
+        guard highlight == .playingLine, let index, let words = playback.current?.words, !words.isEmpty else { return nil }
         return LyricsPreviewText.karaokeSegments(text: rows[index].text, words: words)
     }
 }
@@ -841,14 +949,17 @@ private struct LyricsManagerPreviewRow: View {
     var isPlaying = false
     /// 暂停时的时间基准,只交给当前句(见 LyricsManagerKaraokeOverlay.pausedMs)。
     var pausedMs: Int? = nil
+    var showsTimeColumn = true
     let canSeek: Bool
     let onSeek: (Int) -> Void
     @State private var hovered = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 18) {
-            timeColumn
-                .frame(width: 84, alignment: .trailing)
+            if showsTimeColumn {
+                timeColumn
+                    .frame(width: 84, alignment: .trailing)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 // 逐字染色时这一层整句画成淡的强调色,唱过的部分由 overlay 那层盖上实色;两层同一段字、同一个字号。
                 Text(row.text.isEmpty ? " " : row.text)

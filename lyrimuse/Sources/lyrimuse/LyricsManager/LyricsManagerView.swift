@@ -3115,7 +3115,7 @@ struct LyricsManagerView: View {
                 let key = target.key
                 let live = store.summary(forKey: key)
                 LyricsSearchSheet(
-                    artist: target.artist, title: target.title, album: target.album,
+                    artist: target.artist, title: target.title, album: target.album, songKey: key,
                     currentSource: live?.lyricsSource,
                     // 「当前使用」双判据要的正文指纹。store.raw 是私有的,跟另外两个入口一样走
                     // EnrichCacheReader.lookup(store 刚 persist 过的就是这份文件),三处口径一致。
@@ -3490,19 +3490,7 @@ struct LyricsManagerView: View {
                                         isAvailable: { isDisplayModeAvailable($0, summary) },
                                         unavailableHelp: unavailableModeHelp)
                 if summary.key == nowPlayingKey && editMode == .preview {
-                    Button {
-                        followPlayback.toggle()
-                    } label: {
-                        Label(L10n.t("跟随播放"), systemImage: "dot.radiowaves.left.and.right")
-                            .font(.system(size: 12, weight: .medium))
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(followPlayback ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.06)))
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(followPlayback ? Color.accentColor : Color.secondary)
-                    .help(L10n.t("高亮当前句并保持在可见范围内；手动滚动时暂停，再次点按可恢复"))
+                    LyricsManagerFollowButton(follow: $followPlayback)
                 }
             }
             Spacer(minLength: 8)
