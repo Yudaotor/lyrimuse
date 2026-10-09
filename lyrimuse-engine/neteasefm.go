@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -59,6 +60,11 @@ func neteaseUpcomingAnyQueue(artist, title string, n int) ([]upcomingTrack, bool
 		return neteaseFMUpcoming(artist, title, n)
 	}
 	return nil, false
+}
+
+// neteaseQueueStamp 是两份队列文件的改写时间,任一份重写过就变。
+func neteaseQueueStamp() string {
+	return fmt.Sprintf("%d/%d", fileModTime(neteaseUpcomingPath()).UnixNano(), fileModTime(neteaseFMPath()).UnixNano())
 }
 
 // fileModTime 取不到(不存在、没权限)时返回零值。

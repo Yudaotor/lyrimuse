@@ -1229,6 +1229,10 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.isAd = true
 		log.Printf("ad break detected mid-session: %q - %q", p.cur.Artist, p.cur.Title)
 	}
+	// 播放器的队列在这首歌中途被改写了(网易云「下一首播放」):重读一次,把新排进来的补进预解析。
+	if features().AlbumPrefetch && !p.sess.isAd {
+		refreshUpcomingOnQueueChange(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
+	}
 
 	// Same track: on a play/pause transition, re-announce immediately so the
 	// web progress bar re-anchors on resume or freezes on pause (rate=0),

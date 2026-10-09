@@ -149,6 +149,9 @@ var (
 	// 判据是**当前这首歌**,不是像同专辑那条路那样记专辑名:队列是动态的(用户随时
 	// 会换歌单、汽水的推荐流每次还会续新的),同一条队列里换了首歌就该重新往前看 5 首。
 	lastUpcomingKey string
+	// lastUpcomingStamp 是起那一批时这家播放器队列文件的改写标记(upcomingQueueStamp),同一首歌期间
+	// 标记变了就重读一次队列(refreshUpcomingOnQueueChange)。
+	lastUpcomingStamp string
 	// upcomingGen 每真换一首歌加一。一批预取起下一首之前比一次:用户连跳几首时,上一首那批
 	// 还没排完的不再往下起 —— 那些歌多半不会播了,却跟新的这批抢同一批歌词源。
 	upcomingGen atomic.Uint64
@@ -165,6 +168,7 @@ func prefetchUpcoming(currentArtist, currentTitle, album, bundleID string, durat
 		return // 同一首歌重复触发(暂停恢复、位置校正),上一轮该起的都起过了
 	}
 	lastUpcomingKey = key
+	lastUpcomingStamp = upcomingQueueStamp(bundleID)
 	gen := upcomingGen.Add(1)
 	upcomingMu.Unlock()
 
@@ -185,6 +189,38 @@ func prefetchUpcoming(currentArtist, currentTitle, album, bundleID string, durat
 		}
 		queueUpcomingEnrich(tracks, gen)
 	}()
+}
+
+// upcomingQueueStamp 是这家播放器队列文件此刻的改写标记;"" = 这家不按文件变化重读。
+// 只给「放到一半队列会被改写」的播放器:网易云「下一首播放」把歌插进 playingList 并当场重写这份文件,
+// 不重读的话插进来的歌要等它开播才有人去解析。见 09 章决策 224。
+func upcomingQueueStamp(bundleID string) string {
+	switch bundleID {
+	case neteaseMusicBundleID:
+		return neteaseQueueStamp()
+	}
+	return ""
+}
+
+// refreshUpcomingOnQueueChange 在同一首歌的每一拍调用:这首起过预取、而队列文件在那之后被改写过,就重起一批。
+// 已解析 / 在途的曲目照旧跳过,只有新排进来的那几首会真的去解析。
+func refreshUpcomingOnQueueChange(currentArtist, currentTitle, album, bundleID string, durationSecs float64) {
+	stamp := upcomingQueueStamp(bundleID)
+	if stamp == "" {
+		return
+	}
+	key := enrichKey(currentArtist, currentTitle, album)
+	upcomingMu.Lock()
+	changed := lastUpcomingKey == key && lastUpcomingStamp != stamp
+	if changed {
+		lastUpcomingKey = ""
+	}
+	upcomingMu.Unlock()
+	if !changed {
+		return
+	}
+	log.Printf("upcoming prefetch: the %s queue changed mid-track, reading it again", bundleID)
+	prefetchUpcoming(currentArtist, currentTitle, album, bundleID, durationSecs)
 }
 
 // queueUpcomingEnrich 把这几首丢进后台解析,跟正常路径共用同一套 enrichCache/enrichInflight

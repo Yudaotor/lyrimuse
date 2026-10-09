@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -359,10 +360,18 @@ type neteaseUpcomingFile struct {
 // 但这份列表同时带着两种顺序:数组顺序(顺序播放)与 randomOrder 从小到大(随机播放),
 // 所以看新的一首在哪种顺序里正好是上一首的下一位就知道了。两种都不是(用户手动点了别的歌)
 // 就沿用上一次的结论;还没有结论时两种各取一份。
+//
+// 「下一首播放」把歌插在当前这首后面,整份重写这份文件,还把每一首的 randomOrder 重新随机一遍。重写后的文件
+// 含有上一份的全部曲目、又多出几首时,当作同一份列表插了歌:多出来的记进 inserted,结论和起算位置(按曲目 id
+// 换算)接着用。插进来的歌排在最前面先放,换到它们时不拿来判顺序,往后数也从上一首不是插进来的歌(anchor)
+// 起算、跳过它们。见 09 章决策 224。
 type neteasePlayOrder struct {
-	list string // 文件路径 + mtime + 曲目数
-	pos  int
-	mode neteaseOrderMode
+	path     string
+	list     string // 文件路径 + mtime + 曲目数
+	ids      []string
+	anchor   int // 上一首不是插进来的当前曲目在 ids 里的下标
+	mode     neteaseOrderMode
+	inserted map[string]bool
 }
 
 type neteaseOrderMode int
@@ -378,29 +387,106 @@ var (
 	neteasePlayOrderLast neteasePlayOrder
 )
 
-// neteaseObservePosition 记下这一次的位置,返回此刻按哪种顺序往后数。rank 是 randomOrder 名次。
-func neteaseObservePosition(list string, pos int, rank []int) neteaseOrderMode {
+// neteaseObservePosition 记下这一次的位置,返回此刻按哪种顺序往后数、从哪一首起算,以及哪些曲目是插进来的。
+// rank 是 randomOrder 名次。
+func neteaseObservePosition(path, list string, ids []string, pos int, rank []int) (neteaseOrderMode, int, map[string]bool) {
 	neteasePlayOrderMu.Lock()
 	defer neteasePlayOrderMu.Unlock()
 	prev := neteasePlayOrderLast
-	if prev.list != list {
-		neteasePlayOrderLast = neteasePlayOrder{list: list, pos: pos}
-		return neteaseOrderUnknown
+	anchor := -1
+	var inserted map[string]bool
+	switch {
+	case prev.list == list:
+		anchor, inserted = prev.anchor, prev.inserted
+	case prev.path == path && neteaseQueueGrew(prev.ids, ids):
+		if prev.anchor >= 0 && prev.anchor < len(prev.ids) {
+			anchor = slices.Index(ids, prev.ids[prev.anchor])
+		}
+		old := make(map[string]bool, len(prev.ids))
+		for _, id := range prev.ids {
+			old[id] = true
+		}
+		inserted = make(map[string]bool, len(prev.inserted)+1)
+		for id := range prev.inserted {
+			inserted[id] = true
+		}
+		for _, id := range ids {
+			if id != "" && !old[id] {
+				inserted[id] = true
+			}
+		}
+	default:
+		neteasePlayOrderLast = neteasePlayOrder{path: path, list: list, ids: ids, anchor: pos}
+		return neteaseOrderUnknown, pos, nil
 	}
 	mode := prev.mode
-	switch {
-	case pos == prev.pos:
-	case pos == prev.pos+1:
-		mode = neteaseOrderList
-	case rank[pos] == rank[prev.pos]+1:
-		mode = neteaseOrderShuffle
+	if inserted[ids[pos]] {
+		if anchor < 0 {
+			anchor = pos
+		}
+	} else {
+		from := anchor
+		if from >= 0 && from != pos {
+			switch pos {
+			case neteaseNextInList(ids, inserted, from):
+				mode = neteaseOrderList
+			case neteaseNextInShuffle(ids, inserted, rank, from):
+				mode = neteaseOrderShuffle
+			}
+		}
+		if mode != prev.mode {
+			name := map[neteaseOrderMode]string{neteaseOrderList: "list order", neteaseOrderShuffle: "the shuffle order (randomOrder)"}[mode]
+			log.Printf("netease upcoming: position %d to %d follows %s", from, pos, name)
+		}
+		// 换到了一首不是插进来的歌:插进来的那段已经放过去了。还是同一首(放到一半插了歌)时留着。
+		if from != pos {
+			inserted = nil
+		}
+		anchor = pos
 	}
-	if mode != prev.mode {
-		name := map[neteaseOrderMode]string{neteaseOrderList: "list order", neteaseOrderShuffle: "the shuffle order (randomOrder)"}[mode]
-		log.Printf("netease upcoming: position %d to %d follows %s", prev.pos, pos, name)
+	neteasePlayOrderLast = neteasePlayOrder{path: path, list: list, ids: ids, anchor: anchor, mode: mode, inserted: inserted}
+	return mode, anchor, inserted
+}
+
+// neteaseQueueGrew:after 含有 before 的全部曲目,而且多出了几首(「下一首播放」/「添加到播放列表」重写之后的样子)。
+func neteaseQueueGrew(before, after []string) bool {
+	if len(before) == 0 || len(after) <= len(before) {
+		return false
 	}
-	neteasePlayOrderLast = neteasePlayOrder{list: list, pos: pos, mode: mode}
-	return mode
+	have := make(map[string]bool, len(after))
+	for _, id := range after {
+		have[id] = true
+	}
+	for _, id := range before {
+		if !have[id] {
+			return false
+		}
+	}
+	return true
+}
+
+// neteaseNextInList 是数组顺序里 from 之后第一首不是插进来的;没有返回 -1。
+func neteaseNextInList(ids []string, inserted map[string]bool, from int) int {
+	for i := from + 1; i < len(ids); i++ {
+		if !inserted[ids[i]] {
+			return i
+		}
+	}
+	return -1
+}
+
+// neteaseNextInShuffle 是随机顺序(randomOrder 名次)里 from 之后第一首不是插进来的;没有返回 -1。
+func neteaseNextInShuffle(ids []string, inserted map[string]bool, rank []int, from int) int {
+	best := -1
+	for i := range ids {
+		if inserted[ids[i]] || rank[i] <= rank[from] {
+			continue
+		}
+		if best < 0 || rank[i] < rank[best] {
+			best = i
+		}
+	}
+	return best
 }
 
 // neteaseUpcoming 从网易云的播放队列文件里取接下来会播的几首。
@@ -459,7 +545,11 @@ func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 	for k, i := range byRandom {
 		rank[i] = k
 	}
-	mode := neteaseObservePosition(fmt.Sprintf("%s/%d/%d", path, st.ModTime().UnixNano(), len(f.List)), pos, rank)
+	ids := make([]string, len(f.List))
+	for i := range f.List {
+		ids[i] = f.List[i].Track.ID
+	}
+	mode, anchor, inserted := neteaseObservePosition(path, fmt.Sprintf("%s/%d/%d", path, st.ModTime().UnixNano(), len(f.List)), ids, pos, rank)
 
 	seen := map[int]bool{}
 	res := make([]upcomingTrack, 0, 2*n)
@@ -486,13 +576,19 @@ func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 		})
 	}
 	listOrder := func(yield func(int) bool) {
-		for i := pos + 1; i < len(f.List) && yield(i); i++ {
+		for i := neteaseNextInList(ids, inserted, anchor); i >= 0 && yield(i); i = neteaseNextInList(ids, inserted, i) {
 		}
 	}
 	shuffleOrder := func(yield func(int) bool) {
-		for k := rank[pos] + 1; k < len(byRandom) && yield(byRandom[k]); k++ {
+		for i := neteaseNextInShuffle(ids, inserted, rank, anchor); i >= 0 && yield(i); i = neteaseNextInShuffle(ids, inserted, rank, i) {
 		}
 	}
+	// 插进来的歌连成一段排在当前这首后面,不管顺序还是随机都先放它们。
+	insertedNext := func(yield func(int) bool) {
+		for i := pos + 1; i < len(f.List) && inserted[ids[i]] && yield(i); i++ {
+		}
+	}
+	take(insertedNext)
 	switch mode {
 	case neteaseOrderList:
 		take(listOrder)

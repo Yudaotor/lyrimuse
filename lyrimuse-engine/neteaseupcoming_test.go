@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 type testNeteaseSong struct {
@@ -18,27 +19,8 @@ type testNeteaseSong struct {
 // writeTestNeteaseQueue 造一份跟真实 playingList 同构的队列文件(明文 JSON,无加密)。
 func writeTestNeteaseQueue(t *testing.T, songs []testNeteaseSong) string {
 	t.Helper()
-	list := make([]map[string]any, 0, len(songs))
-	for i, s := range songs {
-		artists := make([]map[string]any, 0, len(s.artists))
-		for _, a := range s.artists {
-			artists = append(artists, map[string]any{"id": "1", "name": a})
-		}
-		list = append(list, map[string]any{
-			"displayOrder": i,
-			"randomOrder":  map[bool]float64{true: float64(i + 1), false: s.randomOrder}[s.randomOrder == 0],
-			"track": map[string]any{
-				"id": "100", "name": s.title, "artists": artists,
-				"album": map[string]any{"name": s.album}, "duration": s.durationMS,
-			},
-		})
-	}
-	body, err := json.Marshal(map[string]any{"list": list})
-	if err != nil {
-		t.Fatalf("造 JSON: %v", err)
-	}
 	path := filepath.Join(t.TempDir(), "playingList")
-	if err := os.WriteFile(path, body, 0o644); err != nil {
+	if err := os.WriteFile(path, testNeteaseQueueBody(t, songs), 0o644); err != nil {
 		t.Fatalf("写测试文件: %v", err)
 	}
 	old := neteaseUpcomingOverride
@@ -53,6 +35,47 @@ func writeTestNeteaseQueue(t *testing.T, songs []testNeteaseSong) string {
 		neteasePlayOrderMu.Unlock()
 	})
 	return path
+}
+
+// rewriteTestNeteaseQueue 像客户端那样整份重写同一个文件(「下一首播放」之后),mtime 往后挪一秒。
+func rewriteTestNeteaseQueue(t *testing.T, path string, songs []testNeteaseSong) {
+	t.Helper()
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("读测试文件: %v", err)
+	}
+	if err := os.WriteFile(path, testNeteaseQueueBody(t, songs), 0o644); err != nil {
+		t.Fatalf("写测试文件: %v", err)
+	}
+	mod := st.ModTime().Add(time.Second)
+	if err := os.Chtimes(path, mod, mod); err != nil {
+		t.Fatalf("改 mtime: %v", err)
+	}
+}
+
+// testNeteaseQueueBody 是队列文件的内容;曲目 id 取歌名,同一首歌在重写前后 id 不变。
+func testNeteaseQueueBody(t *testing.T, songs []testNeteaseSong) []byte {
+	t.Helper()
+	list := make([]map[string]any, 0, len(songs))
+	for i, s := range songs {
+		artists := make([]map[string]any, 0, len(s.artists))
+		for _, a := range s.artists {
+			artists = append(artists, map[string]any{"id": "1", "name": a})
+		}
+		list = append(list, map[string]any{
+			"displayOrder": i,
+			"randomOrder":  map[bool]float64{true: float64(i + 1), false: s.randomOrder}[s.randomOrder == 0],
+			"track": map[string]any{
+				"id": s.title, "name": s.title, "artists": artists,
+				"album": map[string]any{"name": s.album}, "duration": s.durationMS,
+			},
+		})
+	}
+	body, err := json.Marshal(map[string]any{"list": list})
+	if err != nil {
+		t.Fatalf("造 JSON: %v", err)
+	}
+	return body
 }
 
 func TestNeteaseUpcomingLocatesByCurrentTrack(t *testing.T) {
@@ -206,6 +229,77 @@ func TestNeteaseUpcomingPrefersExactMatch(t *testing.T) {
 	})
 	got, _ := neteaseUpcoming("甲", "当前", 1)
 	if want := []string{"之后"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+}
+
+// 「下一首播放」:客户端把歌插在当前这首后面、整份重写,并把 randomOrder 全部重新随机(实测)。
+func testNeteaseInsertedSongs(order []string, random []float64) []testNeteaseSong {
+	songs := make([]testNeteaseSong, len(order))
+	for i, title := range order {
+		songs[i] = testNeteaseSong{title: title, album: "专辑", artists: []string{"甲"}, durationMS: 1000, randomOrder: random[i]}
+	}
+	return songs
+}
+
+// 随机播放中插歌:插进来的歌先放,换到它不推翻随机的结论;它放完接着按随机序从插歌前那首往后数。
+func TestNeteaseUpcomingPutsInsertedTracksFirstInShuffle(t *testing.T) {
+	path := writeTestNeteaseQueue(t, testNeteaseShuffledSongs())
+	neteaseUpcoming("甲", "第5首", 3)
+	neteaseUpcoming("甲", "第2首", 3) // 随机序 第5首 → 第2首:随机
+
+	// 在第2首放到一半时插了两首:最新插的那首紧跟当前这首。randomOrder 整份重新随机。
+	order := []string{"第0首", "第1首", "第2首", "插B", "插A", "第3首", "第4首", "第5首", "第6首", "第7首"}
+	random := []float64{500, 900, 300, 1000, 100, 600, 800, 200, 700, 400}
+	rewriteTestNeteaseQueue(t, path, testNeteaseInsertedSongs(order, random))
+	got, ok := neteaseUpcoming("甲", "第2首", 3)
+	// 插进来的两首在前;随机序(新名次)第2首之后、跳过插进来的:第7首(400)、第0首(500)、第3首(600)。
+	if want := []string{"插B", "插A", "第7首", "第0首", "第3首"}; !ok || fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("插歌后得到 ok=%v %v,期望 %v", ok, neteaseTitles(got), want)
+	}
+
+	// 换到插进来的第一首:数组上正好是下一位,但不能据此改判成顺序播放。
+	got, _ = neteaseUpcoming("甲", "插B", 3)
+	if want := []string{"插A", "第7首", "第0首", "第3首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("放到插进来的歌时得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+	neteaseUpcoming("甲", "插A", 3)
+	// 插进来的放完,回到随机序里第2首的下一位:结论仍是随机,插进来的不再算。
+	got, _ = neteaseUpcoming("甲", "第7首", 2)
+	if want := []string{"第0首", "第3首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("插进来的放完后得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+}
+
+// 顺序播放中插歌(实测):插进来的放完接着放插歌前那首在数组里的下一位。
+func TestNeteaseUpcomingInsertedTracksKeepListOrder(t *testing.T) {
+	path := writeTestNeteaseQueue(t, testNeteaseShuffledSongs())
+	neteaseUpcoming("甲", "第1首", 2)
+	neteaseUpcoming("甲", "第2首", 2) // 数组 第1首 → 第2首:顺序
+	order := []string{"第0首", "第1首", "第2首", "插A", "第3首", "第4首", "第5首", "第6首", "第7首"}
+	random := []float64{500, 900, 300, 100, 600, 800, 200, 700, 400}
+	rewriteTestNeteaseQueue(t, path, testNeteaseInsertedSongs(order, random))
+	got, _ := neteaseUpcoming("甲", "第2首", 2)
+	if want := []string{"插A", "第3首", "第4首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+	neteaseUpcoming("甲", "插A", 2)
+	got, _ = neteaseUpcoming("甲", "第3首", 2)
+	if want := []string{"第4首", "第5首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("插进来的放完后得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+}
+
+// 重写后少了曲目(换了一份列表,不是插歌):从头判,不沿用上一份的结论。
+func TestNeteaseUpcomingNewListIsNotAnInsertion(t *testing.T) {
+	path := writeTestNeteaseQueue(t, testNeteaseShuffledSongs())
+	neteaseUpcoming("甲", "第5首", 3)
+	neteaseUpcoming("甲", "第2首", 3) // 随机
+	order := []string{"第2首", "新甲", "新乙", "新丙"}
+	rewriteTestNeteaseQueue(t, path, testNeteaseInsertedSongs(order, []float64{40, 10, 30, 20}))
+	got, _ := neteaseUpcoming("甲", "第2首", 3)
+	// 没有结论:两种顺序各取,数组里的「新甲」也不算插进来的。
+	if want := []string{"新甲", "新乙", "新丙"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
 		t.Fatalf("得到 %v,期望 %v", neteaseTitles(got), want)
 	}
 }

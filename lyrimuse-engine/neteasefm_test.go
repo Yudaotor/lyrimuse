@@ -131,3 +131,55 @@ func TestNeteasePlayingListNewerWinsWhenBothHaveTheTrack(t *testing.T) {
 		t.Fatalf("两份都有这首时应按最近改写的 playingList 取,得到 %v ok=%v", titlesOf(res), ok)
 	}
 }
+
+func TestRefreshUpcomingOnQueueChangeRereadsOnlyWhenTheFileChanged(t *testing.T) {
+	oldKey, oldStamp := lastUpcomingKey, lastUpcomingStamp
+	t.Cleanup(func() {
+		upcomingMu.Lock()
+		lastUpcomingKey, lastUpcomingStamp = oldKey, oldStamp
+		upcomingMu.Unlock()
+	})
+	upcomingMu.Lock()
+	lastUpcomingKey, lastUpcomingStamp = "", ""
+	upcomingMu.Unlock()
+	stamp := func() string {
+		upcomingMu.Lock()
+		defer upcomingMu.Unlock()
+		return lastUpcomingStamp
+	}
+
+	// 专辑留空:读不到下一首时退回同专辑那条会直接不做,不会真的起解析。
+	prefetchUpcoming("甲", "第一首", "", neteaseMusicBundleID, 0)
+	before := stamp()
+	refreshUpcomingOnQueueChange("甲", "第一首", "", neteaseMusicBundleID, 0)
+	if stamp() != before {
+		t.Fatal("队列文件没变时不该重读")
+	}
+
+	writeTestNeteaseQueue(t, []testNeteaseSong{{title: "第一首", album: "", artists: []string{"甲"}, durationMS: 100000}})
+	refreshUpcomingOnQueueChange("乙", "别的歌", "", neteaseMusicBundleID, 0)
+	if stamp() != before {
+		t.Fatal("不是起过预取的那首歌,不该重读")
+	}
+	refreshUpcomingOnQueueChange("甲", "第一首", "", neteaseMusicBundleID, 0)
+	if stamp() == before || stamp() != neteaseQueueStamp() {
+		t.Fatalf("同一首歌期间队列文件被改写,应重读并记下新标记,得到 %q(原 %q)", stamp(), before)
+	}
+	upcomingMu.Lock()
+	key := lastUpcomingKey
+	upcomingMu.Unlock()
+	if key != enrichKey("甲", "第一首", "") {
+		t.Fatalf("重读后去重键应仍是当前这首,得到 %q", key)
+	}
+
+	upcomingMu.Lock()
+	lastUpcomingKey, lastUpcomingStamp = "", ""
+	upcomingMu.Unlock()
+	refreshUpcomingOnQueueChange("甲", "第一首", "", "com.example.player", 0)
+	upcomingMu.Lock()
+	key = lastUpcomingKey
+	upcomingMu.Unlock()
+	if key != "" {
+		t.Fatal("没有队列文件标记的播放器不该走重读")
+	}
+}
