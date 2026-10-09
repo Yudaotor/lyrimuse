@@ -4333,7 +4333,8 @@ private struct YouTubeMusicAutoSkipRow: View {
         }
         if settings.youTubeMusicAutoSkipAds && !AccessibilitySkipPress.isTrusted {
             SettingsNote {
-                Text(L10n.t("尚未获得「辅助功能」权限，自动跳过不会生效。如已授权但仍显示此提示，请在系统设置中将 Lyrimuse 取消勾选后重新勾选。"))
+                Text(L10n.t("尚未获得「辅助功能」权限，自动跳过不会生效。"))
+                Text(AccessibilityPermission.shared.steps)
                 Button(L10n.t("打开系统设置")) {
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                         NSWorkspace.shared.open(url)
@@ -5676,7 +5677,7 @@ private struct PlayerSettingsTab: View {
                 if !accessibility.trusted {
                     CardDivider()
                     SettingsNote {
-                        AccessibilityPermissionGuide(players: targets)
+                        AccessibilityPermissionGuide()
                     }
                 }
             }

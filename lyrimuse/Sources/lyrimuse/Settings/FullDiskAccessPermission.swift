@@ -27,6 +27,8 @@ final class FullDiskAccessPermission: ObservableObject {
 
     @Published private(set) var state: LocalCacheAccess.State?
     @Published private(set) var restartPhase: RestartPhase = .idle
+    /// 这台机器上授权成功过(`PermissionGrantMemory`)。被拒时据此说「授权已失效」。
+    @Published private(set) var everGranted: Bool
     /// 上一次「重启后台服务」替哪几家等的结论 —— `.stillDenied` 要在它们不再被拒时自己撤掉。
     private var restartTargets: [PlaybackPlayer] = []
 
@@ -37,6 +39,8 @@ final class FullDiskAccessPermission: ObservableObject {
 
     private init() {
         state = LocalCacheAccess.current
+        everGranted = PermissionGrantMemory.everGranted(PermissionGrantMemory.fullDiskAccessKey)
+        noteGranted()
     }
 
     /// 这套选择下要替哪几家说话:需要授权 ∩ 装了。没装的播放器没有容器,引擎不会探它,
@@ -57,9 +61,17 @@ final class FullDiskAccessPermission: ObservableObject {
     func refresh() {
         let latest = LocalCacheAccess.current
         if latest != state { state = latest }
+        noteGranted()
         if restartPhase == .stillDenied, grant(restartTargets) != .denied {
             restartPhase = .idle
         }
+    }
+
+    /// 引擎读得到任意一家,授权就是在生效的,记下来。
+    private func noteGranted() {
+        guard !everGranted, let state, !state.readable.isEmpty else { return }
+        PermissionGrantMemory.record(PermissionGrantMemory.fullDiskAccessKey)
+        everGranted = true
     }
 
     func openSystemSettings() {
@@ -102,7 +114,7 @@ final class FullDiskAccessPermission: ObservableObject {
     func caption(_ players: [PlaybackPlayer]) -> String {
         switch grant(players) {
         case .granted: return L10n.t("已授权")
-        case .denied: return L10n.t("未获授权")
+        case .denied: return everGranted ? L10n.t("授权已失效") : L10n.t("未获授权")
         case .unknown: return L10n.t("尚未确认")
         }
     }
@@ -123,6 +135,15 @@ final class FullDiskAccessPermission: ObservableObject {
         }
     }
 
+    /// 没授权时怎么补,两个界面共用。授权过的直接讲删掉再加回来:失效的那条留在列表里、开关亮着,关了再开不管用。
+    var steps: String {
+        everGranted
+            ? L10n.t("更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加，然后点「重启歌词引擎」。")
+            : L10n.t("在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。")
+    }
+
+    var stillDeniedNote: String { L10n.t("重启后仍无法读取。请确认 Lyrimuse 已打开；已打开时，用「−」移除后再用「+」重新添加。") }
+
     /// 「QQ 音乐和酷狗音乐」—— 说明文字里替哪几家要。拼接走 `L10n.list`(按界面语言,见
     /// `SettingsToggleSummary` 头注)。
     func playerNames(_ players: [PlaybackPlayer]) -> String {
@@ -130,24 +151,18 @@ final class FullDiskAccessPermission: ObservableObject {
     }
 }
 
-/// 没授权时那段说明 + 两个动作。设置页塞进 `SettingsNote`,引导页直接摆,措辞一份。
+/// 设置页没授权时那段:怎么补 + 两个动作。「为什么要这项授权」在行尾的「?」里(`reason`),这里不重复。
 ///
 /// 「打开系统设置」和「重启后台服务」必须并排:TCC 的权限在进程启动那一刻定下,运行中授权
 /// 不会补发给已经在跑的引擎(见第 09 章「kugou 的本地快速路径」)。
 struct FullDiskAccessGuide: View {
     let players: [PlaybackPlayer]
-    /// 要不要先讲一句「为什么要这项授权」。引导页那一步的正文已经讲过,传 false。
-    var showsReason = true
     @ObservedObject private var model = FullDiskAccessPermission.shared
     @ObservedObject private var coordinator = EngineRestartCoordinator.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if showsReason {
-                Text(FullDiskAccessGuide.reason(players))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(L10n.t("请在系统设置的「完全磁盘访问权限」中开启 Lyrimuse（如列表中没有，请点按「+」添加），然后回到此处点按「重启歌词引擎」。授权不会作用于已在运行的歌词引擎。"))
+            Text(model.steps)
                 .fixedSize(horizontal: false, vertical: true)
             switch model.restartPhase {
             case .waiting:
@@ -156,7 +171,7 @@ struct FullDiskAccessGuide: View {
                     Text(L10n.t("正在重启歌词引擎并重新检查授权…"))
                 }
             case .stillDenied:
-                Text(L10n.t("歌词引擎已重启，但仍无法读取。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。"))
+                Text(model.stillDeniedNote)
                     .foregroundStyle(Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
                 actions
@@ -169,7 +184,7 @@ struct FullDiskAccessGuide: View {
     /// 「为什么要这项授权」那一句,引导页正文也用它。
     @MainActor
     static func reason(_ players: [PlaybackPlayer]) -> String {
-        String(format: L10n.t("%@ 的歌词缓存和播放队列位于受系统保护的目录中。授权后，可直接使用本机已有的歌词，并提前解析即将播放的歌曲；未授权时仍可联网查找歌词。"),
+        String(format: L10n.t("%@ 的歌词缓存和播放队列在受保护的目录中。授权后可直接使用本机已有的歌词，并提前解析即将播放的歌曲；不授权也能联网查找歌词。"),
                FullDiskAccessPermission.shared.playerNames(players))
     }
 

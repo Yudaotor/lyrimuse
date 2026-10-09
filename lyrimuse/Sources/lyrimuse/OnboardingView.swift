@@ -738,10 +738,10 @@ struct OnboardingView: View {
                 case .waiting:
                     Text(L10n.t("正在重启歌词引擎并重新检查授权…"))
                 case .stillDenied:
-                    Text(L10n.t("歌词引擎已重启，但仍无法读取。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。"))
+                    Text(fullDiskAccess.stillDeniedNote)
                         .foregroundStyle(Color.orange)
                 case .idle:
-                    Text(L10n.t("授权不会作用于已在运行的歌词引擎。在系统设置中勾选后，请回到此处点按「重启歌词引擎」。"))
+                    Text(fullDiskAccess.steps)
                 }
                 // 歌词引擎没在跑(没装上、被跳过)或者正在装的时候不给这颗按钮:重启一个不存在的服务只会白转圈,
                 // 跟正在进行的安装撞在一起还可能互相杀掉对方刚拉起的进程。
@@ -771,8 +771,8 @@ struct OnboardingView: View {
                     .controlSize(.small)
             }
         }
-        if !accessibility.trusted, accessibility.prompted {
-            Text(L10n.t("请在系统设置的「辅助功能」中开启 Lyrimuse。如已授权但此处仍显示未授权，请将 Lyrimuse 取消勾选后重新勾选。"))
+        if !accessibility.trusted, accessibility.prompted || accessibility.everGranted {
+            Text(accessibility.steps)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

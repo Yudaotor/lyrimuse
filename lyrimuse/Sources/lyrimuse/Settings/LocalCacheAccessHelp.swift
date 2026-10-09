@@ -18,6 +18,7 @@ struct LocalCacheAccessHelp: View {
     let onResolved: () -> Void
 
     @ObservedObject private var coordinator = EngineRestartCoordinator.shared
+    @ObservedObject private var fullDiskAccess = FullDiskAccessPermission.shared
     @State private var phase: Phase = .idle
 
     private enum Phase { case idle, waiting, stillDenied }
@@ -40,7 +41,7 @@ struct LocalCacheAccessHelp: View {
             Text(String(format: L10n.t("%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索。"),
                         source.displayName))
                 .fixedSize(horizontal: false, vertical: true)
-            Text(L10n.t("授权不会作用于已在运行的歌词引擎。在系统设置中勾选后，请回到此处点按「重启歌词引擎」。"))
+            Text(fullDiskAccess.steps)
                 .fixedSize(horizontal: false, vertical: true)
             switch phase {
             case .waiting:
@@ -53,7 +54,7 @@ struct LocalCacheAccessHelp: View {
                 }
                 .padding(.top, 2)
             case .stillDenied:
-                Text(L10n.t("歌词引擎已重启，但仍无法读取此源。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。"))
+                Text(fullDiskAccess.stillDeniedNote)
                     .foregroundStyle(Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
                 actions

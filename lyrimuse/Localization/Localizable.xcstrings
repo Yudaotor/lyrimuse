@@ -1,6 +1,213 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "尚未获得「辅助功能」权限，自动跳过不会生效。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission isn’t granted, so automatic skipping won’t work."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未获得「辅助功能」权限，自动跳过不会生效。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未取得「輔助使用」權限，自動略過不會生效。"
+          }
+        }
+      }
+    },
+    "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−” and add it back with “+”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新後，先前的授權已失效。請在系統設定中用「−」移除 Lyrimuse，再用「+」重新新增。"
+          }
+        }
+      }
+    },
+    "在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on Lyrimuse in System Settings. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在系統設定中開啟 Lyrimuse。開關已開啟卻仍未生效時，請用「−」移除 Lyrimuse，再用「+」重新新增。"
+          }
+        }
+      }
+    },
+    "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加，然后点「重启歌词引擎」。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−”, add it back with “+”, then click Restart Lyrics Engine."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加，然后点「重启歌词引擎」。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新後，先前的授權已失效。請在系統設定中用「−」移除 Lyrimuse，再用「+」重新新增，然後按一下「重新啟動歌詞引擎」。"
+          }
+        }
+      }
+    },
+    "在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on Lyrimuse in System Settings, then click Restart Lyrics Engine. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在系統設定中開啟 Lyrimuse，然後按一下「重新啟動歌詞引擎」。開關已開啟卻仍未生效時，請用「−」移除 Lyrimuse，再用「+」重新新增。"
+          }
+        }
+      }
+    },
+    "重启后仍无法读取。请确认 Lyrimuse 已打开；已打开时，用「−」移除后再用「+」重新添加。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Still can’t read after the restart. Make sure Lyrimuse is turned on; if it is, remove it with “−” and add it back with “+”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重启后仍无法读取。请确认 Lyrimuse 已打开；已打开时，用「−」移除后再用「+」重新添加。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新啟動後仍無法讀取。請確認 Lyrimuse 已開啟；已開啟時，請用「−」移除後再用「+」重新新增。"
+          }
+        }
+      }
+    },
+    "%@ 的歌词缓存和播放队列在受保护的目录中。授权后可直接使用本机已有的歌词，并提前解析即将播放的歌曲；不授权也能联网查找歌词。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ keeps its lyrics cache and play queue in protected folders. With access, lyrics already on this Mac are used directly and upcoming tracks are resolved ahead of time; without it, lyrics are still found online."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的歌词缓存和播放队列在受保护的目录中。授权后可直接使用本机已有的歌词，并提前解析即将播放的歌曲；不授权也能联网查找歌词。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的歌詞快取和播放佇列位於受保護的目錄中。授權後可直接使用本機已有的歌詞，並提前解析即將播放的歌曲；不授權也能連線尋找歌詞。"
+          }
+        }
+      }
+    },
+    "%@ 不向系统报告播放进度。授权后 Lyrimuse 会读取它界面上的播放时间来校准，并在你点随机、循环键时替你按下对应按钮。不授权也能用，但自动连播时进度可能差一两秒，也没有这两颗键。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doesn’t report its playback position, so with access Lyrimuse reads the time shown in its window to stay in sync, and presses its shuffle or repeat button when you click one of those. Without it, the position can be off by a second or two during autoplay, and those two buttons won’t appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不向系统报告播放进度。授权后 Lyrimuse 会读取它界面上的播放时间来校准，并在你点随机、循环键时替你按下对应按钮。不授权也能用，但自动连播时进度可能差一两秒，也没有这两颗键。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不向系統報告播放進度。授權後 Lyrimuse 會讀取其介面上的播放時間來校正，並在你按隨機、循環鍵時替你按下對應按鈕。不授權也能使用，但自動連播時進度可能差一兩秒，也沒有這兩顆鍵。"
+          }
+        }
+      }
+    },
+    "%@ 没有脚本接口。授权后 Lyrimuse 会通过它的菜单读取和切换随机、循环与喜欢。不授权也能用，只是没有这几颗键。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has no scripting interface, so with access Lyrimuse reads and switches shuffle, repeat and Like through its menus. Without it, Lyrimuse still works, but those buttons won’t appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 没有脚本接口。授权后 Lyrimuse 会通过它的菜单读取和切换随机、循环与喜欢。不授权也能用，只是没有这几颗键。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 沒有腳本介面。授權後 Lyrimuse 會透過其選單讀取和切換隨機、循環與喜歡。不授權也能使用，只是沒有這幾顆鍵。"
+          }
+        }
+      }
+    },
     "伴奏版，不用人声歌词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -30810,23 +31017,6 @@
         }
       }
     },
-    "%@ 的歌词缓存和播放队列位于受系统保护的目录中。授权后，可直接使用本机已有的歌词，并提前解析即将播放的歌曲；未授权时仍可联网查找歌词。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The lyrics caches and play queues of %@ live in system-protected folders. With access, lyrics already on this Mac can be used directly and upcoming tracks can be resolved ahead of time; without it, lyrics are still found online."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 的歌詞快取和播放佇列位於受系統保護的目錄中。授權後，可直接使用本機已有的歌詞，並提前解析即將播放的歌曲；未授權時仍可連線尋找歌詞。"
-          }
-        }
-      }
-    },
     "以下播放器尚未安装，可提前选择，安装后自动生效" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -32053,29 +32243,6 @@
         }
       }
     },
-    "授权不会作用于已在运行的歌词引擎。在系统设置中勾选后，请回到此处点按「重启歌词引擎」。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Granting access doesn’t reach a lyrics engine that’s already running. After turning it on in System Settings, come back here and click Restart Lyrics Engine."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "授权不会作用于已在运行的歌词引擎。在系统设置中勾选后，请回到此处点按「重启歌词引擎」。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "授權不會作用於已在執行的歌詞引擎。在系統設定中勾選後，請回到此處按一下「重新啟動歌詞引擎」。"
-          }
-        }
-      }
-    },
     "重启歌词引擎" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -32122,52 +32289,6 @@
         }
       }
     },
-    "歌词引擎已重启，但仍无法读取此源。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The lyrics engine has restarted and this source still can't be read. Check that Lyrimuse is switched on under Full Disk Access in System Settings."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词引擎已重启，但仍无法读取此源。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞引擎已重新啟動，但仍無法讀取此來源。請在系統設定的「完整磁碟取用權限」中確認 Lyrimuse 已開啟。"
-          }
-        }
-      }
-    },
-    "请在系统设置的「完全磁盘访问权限」中开启 Lyrimuse（如列表中没有，请点按「+」添加），然后回到此处点按「重启歌词引擎」。授权不会作用于已在运行的歌词引擎。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn on Lyrimuse under Full Disk Access in System Settings (if it isn’t listed, click “+” to add it), then come back and click Restart Lyrics Engine. Access doesn’t reach a lyrics engine that’s already running."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请在系统设置的「完全磁盘访问权限」中开启 Lyrimuse（如列表中没有，请点按「+」添加），然后回到此处点按「重启歌词引擎」。授权不会作用于已在运行的歌词引擎。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請在系統設定的「完整磁碟取用權限」中開啟 Lyrimuse（如列表中沒有，請按一下「+」新增），然後回到此處按一下「重新啟動歌詞引擎」。授權不會作用於已在執行的歌詞引擎。"
-          }
-        }
-      }
-    },
     "正在重启歌词引擎并重新检查授权…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -32187,29 +32308,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在重新啟動歌詞引擎並重新檢查授權…"
-          }
-        }
-      }
-    },
-    "歌词引擎已重启，但仍无法读取。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The lyrics engine has restarted and still can’t read them. Check that Lyrimuse is switched on under Full Disk Access in System Settings."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词引擎已重启，但仍无法读取。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞引擎已重新啟動，但仍無法讀取。請在系統設定的「完整磁碟取用權限」中確認 Lyrimuse 已開啟。"
           }
         }
       }
@@ -32951,23 +33049,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已自動略過廣告"
-          }
-        }
-      }
-    },
-    "尚未获得「辅助功能」权限，自动跳过不会生效。如已授权但仍显示此提示，请在系统设置中将 Lyrimuse 取消勾选后重新勾选。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accessibility permission isn't granted yet, so automatic skipping won't work. If you granted it before and still see this, turn Lyrimuse off and back on in System Settings."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "尚未取得「輔助使用」權限，自動略過不會生效。如已授權但仍顯示此提示，請在系統設定中將 Lyrimuse 取消勾選後重新勾選。"
           }
         }
       }
@@ -34440,23 +34521,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "輔助使用權限"
-          }
-        }
-      }
-    },
-    "请在系统设置的「辅助功能」中开启 Lyrimuse。如已授权但此处仍显示未授权，请将 Lyrimuse 取消勾选后重新勾选。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn on Lyrimuse under Accessibility in System Settings. If you granted it before and it still shows as not granted, uncheck Lyrimuse there and check it again."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請在系統設定的「輔助使用」中開啟 Lyrimuse。如已授權但此處仍顯示未授權，請將 Lyrimuse 取消勾選後重新勾選。"
           }
         }
       }
@@ -40242,29 +40306,6 @@
         }
       }
     },
-    "%@ 没有脚本接口，Lyrimuse 会通过其菜单栏读取和切换随机、循环与喜欢（只在你点这几颗键时按下对应的菜单项）。不授权也可使用，只是不显示这几颗键。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ has no scripting interface, so Lyrimuse reads and switches shuffle, repeat and Like through its menu bar (it only presses a menu item when you click one of those buttons). Lyrimuse works without this permission, but those buttons won't appear."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 没有脚本接口，Lyrimuse 会通过其菜单栏读取和切换随机、循环与喜欢（只在你点这几颗键时按下对应的菜单项）。不授权也可使用，只是不显示这几颗键。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 沒有腳本介面，Lyrimuse 會透過其選單列讀取和切換隨機、循環與喜歡（只在你按這幾顆鍵時按下對應的選單項目）。不授權也可使用，只是不顯示這幾顆鍵。"
-          }
-        }
-      }
-    },
     "辅助功能权限可显示%@的随机、循环与喜欢键，点按时会操作其菜单栏" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -40353,29 +40394,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確，並顯示%@的隨機、循環與喜歡鍵"
-          }
-        }
-      }
-    },
-    "%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度；你点随机、循环键时，也会替你按下它播放条上对应的按钮。不授权也可使用，但自动连播时进度可能偏差一到两秒，也不显示这两颗键。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ doesn't report its playback position to the system, so Lyrimuse reads the time shown in its window to keep lyrics in sync, and presses its own shuffle or repeat button when you click one of those. It works without this too, but during autoplay the position can be off by a second or two, and those two buttons won't appear."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度；你点随机、循环键时，也会替你按下它播放条上对应的按钮。不授权也可使用，但自动连播时进度可能偏差一到两秒，也不显示这两颗键。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 不向系統報告播放進度，Lyrimuse 會讀取其介面上的播放時間來校正進度；你按隨機、循環鍵時，也會替你按下它播放列上對應的按鈕。不授權也可使用，但自動連播時進度可能偏差一到兩秒，也不顯示這兩顆鍵。"
           }
         }
       }

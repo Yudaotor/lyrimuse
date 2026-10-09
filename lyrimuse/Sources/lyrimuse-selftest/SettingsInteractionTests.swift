@@ -7,6 +7,7 @@ import Foundation
 
 @MainActor
 func runSettingsInteractionTests() {
+    runPermissionGuideContracts()
     // ---- RelayPushStatus:网页推送健康度(样例与引擎 relaystatus_test.go 共用) ----
     do {
         typealias R = RelayPushStatus
@@ -703,4 +704,49 @@ func runSettingsInteractionTests() {
                         && chrome.contains("split.setPosition(target, ofDividerAt: 0)"), true,
                     "设置侧栏(契约): 默认宽度变了就把侧栏放回新的默认宽度")
     }
+}
+
+/// 「完全磁盘访问」「辅助功能」没授权时的说明(14 章决策 67):授权过又失效时说「授权已失效」、讲删掉再加回来;
+/// 设置页、引导页、「歌词来源」卡的锁说明用同一份步骤;授权过的记录是机器状态,不随配置导出。
+private func runPermissionGuideContracts() {
+    let appDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("lyrimuse")
+    func read(_ path: String) -> String {
+        (try? String(contentsOf: appDir.appendingPathComponent(path), encoding: .utf8)) ?? ""
+    }
+    let memory = read("Settings/PermissionGrantMemory.swift")
+    let portability = read("Settings/ConfigPortability.swift")
+    let ax = read("Settings/AccessibilityPermission.swift")
+    let fda = read("Settings/FullDiskAccessPermission.swift")
+    let onboarding = read("OnboardingView.swift")
+    let lockHelp = read("Settings/LocalCacheAccessHelp.swift")
+    let settings = read("SettingsView.swift")
+    let appDelegate = read("AppDelegate.swift")
+    expectEqual([memory, portability, ax, fda, onboarding, lockHelp, settings, appDelegate].allSatisfy { !$0.isEmpty }, true,
+                "权限说明(契约): 读不到源码(路径挪了?)")
+    expectEqual(appDelegate.contains("AccessibilityPermission.shared.refresh()\n        FullDiskAccessPermission.shared.refresh()"), true,
+                "权限说明(契约): 启动时就记授权成功过,不等设置页打开")
+    for key in ["np:fullDiskAccessEverGranted", "np:accessibilityEverGranted"] {
+        expectEqual(memory.contains("\"\(key)\"") && portability.contains("\"\(key)\","), true,
+                    "权限说明(契约): \(key) 是机器状态,导出配置时排除")
+    }
+    expectEqual(ax.contains("trusted ? L10n.t(\"已授权\") : everGranted ? L10n.t(\"授权已失效\")")
+                && ax.contains("if prompted || everGranted {")
+                && ax.contains("guard trusted, !everGranted else { return }"), true,
+                "权限说明(契约): 辅助功能授权过又没了 → 「授权已失效」、按钮直接开系统设置")
+    expectEqual(fda.contains("case .denied: return everGranted ? L10n.t(\"授权已失效\")")
+                && fda.contains("guard !everGranted, let state, !state.readable.isEmpty else { return }"), true,
+                "权限说明(契约): 完全磁盘访问被拒且授权过 → 「授权已失效」;引擎读得到任意一家就记授权过")
+    expectEqual(ax.contains("Text(model.steps)") && fda.contains("Text(model.steps)")
+                && !ax.contains("showsReason") && !fda.contains("showsReason"), true,
+                "权限说明(契约): 设置页那段只讲怎么补,用途在「?」里不重复")
+    expectEqual(onboarding.contains("Text(accessibility.steps)")
+                && onboarding.contains("accessibility.prompted || accessibility.everGranted")
+                && onboarding.contains("Text(fullDiskAccess.steps)")
+                && onboarding.contains("Text(fullDiskAccess.stillDeniedNote)")
+                && lockHelp.contains("Text(fullDiskAccess.steps)")
+                && lockHelp.contains("Text(fullDiskAccess.stillDeniedNote)"), true,
+                "权限说明(契约): 引导页与锁说明用同一份步骤文案")
+    expectEqual([ax, fda, onboarding, lockHelp, settings].contains { $0.contains("取消勾选后重新勾选") }, false,
+                "权限说明(契约): 失效的授权关了再开不管用,别再这么教")
 }

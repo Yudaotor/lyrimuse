@@ -17,9 +17,13 @@ final class AccessibilityPermission: ObservableObject {
 
     @Published private(set) var trusted: Bool
     @Published private(set) var prompted = false
+    /// 这台机器上授权成功过(`PermissionGrantMemory`)。没授权时据此说「授权已失效」、按钮直接开系统设置。
+    @Published private(set) var everGranted: Bool
 
     private init() {
         trusted = AccessibilitySkipPress.isTrusted
+        everGranted = PermissionGrantMemory.everGranted(PermissionGrantMemory.accessibilityKey)
+        noteGranted()
     }
 
     /// 这套选择下要替哪几家说话:需要 ∩ 装了。没装的播放器没有界面可读。
@@ -34,11 +38,19 @@ final class AccessibilityPermission: ObservableObject {
     func refresh() {
         let now = AccessibilitySkipPress.isTrusted
         if now != trusted { trusted = now }
+        noteGranted()
     }
 
-    /// 行尾那颗按钮:没弹过对话框先弹(系统会把 Lyrimuse 加进列表、对话框里自带「打开系统设置」),弹过就直接开设置。
+    private func noteGranted() {
+        guard trusted, !everGranted else { return }
+        PermissionGrantMemory.record(PermissionGrantMemory.accessibilityKey)
+        everGranted = true
+    }
+
+    /// 行尾那颗按钮:没弹过对话框、也没授权过时先弹(系统会把 Lyrimuse 加进列表、对话框里自带「打开系统设置」),
+    /// 否则直接开设置。授权失效时列表里还留着旧的那条,弹对话框不会替换它。
     func handleAction() {
-        if prompted {
+        if prompted || everGranted {
             openSystemSettings()
         } else {
             prompted = true
@@ -55,8 +67,15 @@ final class AccessibilityPermission: ObservableObject {
 
     // MARK: - 两个界面共用的措辞
 
-    var actionTitle: String { prompted ? L10n.t("打开系统设置") : L10n.t("请求权限") }
-    var caption: String { trusted ? L10n.t("已授权") : L10n.t("未获授权") }
+    var actionTitle: String { prompted || everGranted ? L10n.t("打开系统设置") : L10n.t("请求权限") }
+    var caption: String { trusted ? L10n.t("已授权") : everGranted ? L10n.t("授权已失效") : L10n.t("未获授权") }
+
+    /// 没授权时怎么补,两个界面共用。授权过的直接讲删掉再加回来:失效的那条留在列表里、开关亮着,关了再开不管用。
+    var steps: String {
+        everGranted
+            ? L10n.t("更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。")
+            : L10n.t("在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。")
+    }
     var iconName: String { trusted ? "checkmark.circle.fill" : "xmark.circle.fill" }
     var iconColor: Color { trusted ? .green : .orange }
 
@@ -66,20 +85,13 @@ final class AccessibilityPermission: ObservableObject {
     }
 }
 
-/// 没授权时那段说明 + 动作。设置页塞进 `SettingsNote`,引导页直接摆,措辞一份。
+/// 设置页没授权时那段:怎么补 + 动作。「为什么要这项授权」在行尾的「?」里(`reason`),这里不重复。
 struct AccessibilityPermissionGuide: View {
-    let players: [PlaybackPlayer]
-    /// 要不要先讲一句「为什么要这项授权」。引导页那一步卡片下面已经讲过,传 false。
-    var showsReason = true
     @ObservedObject private var model = AccessibilityPermission.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if showsReason {
-                Text(Self.reason(players))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(L10n.t("请在系统设置的「辅助功能」中开启 Lyrimuse。如已授权但此处仍显示未授权，请将 Lyrimuse 取消勾选后重新勾选。"))
+            Text(model.steps)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Button(model.actionTitle) { model.handleAction() }
@@ -95,12 +107,12 @@ struct AccessibilityPermissionGuide: View {
         var lines: [String] = []
         let progress = players.filter { $0.accessibilityUse == .calibratesProgress }
         if !progress.isEmpty {
-            lines.append(String(format: L10n.t("%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度；你点随机、循环键时，也会替你按下它播放条上对应的按钮。不授权也可使用，但自动连播时进度可能偏差一到两秒，也不显示这两颗键。"),
+            lines.append(String(format: L10n.t("%@ 不向系统报告播放进度。授权后 Lyrimuse 会读取它界面上的播放时间来校准，并在你点随机、循环键时替你按下对应按钮。不授权也能用，但自动连播时进度可能差一两秒，也没有这两颗键。"),
                                 model.playerNames(progress)))
         }
         let playMode = players.filter { $0.accessibilityUse == .switchesPlayMode }
         if !playMode.isEmpty {
-            lines.append(String(format: L10n.t("%@ 没有脚本接口，Lyrimuse 会通过其菜单栏读取和切换随机、循环与喜欢（只在你点这几颗键时按下对应的菜单项）。不授权也可使用，只是不显示这几颗键。"),
+            lines.append(String(format: L10n.t("%@ 没有脚本接口。授权后 Lyrimuse 会通过它的菜单读取和切换随机、循环与喜欢。不授权也能用，只是没有这几颗键。"),
                                 model.playerNames(playMode)))
         }
         return lines.joined(separator: "\n")

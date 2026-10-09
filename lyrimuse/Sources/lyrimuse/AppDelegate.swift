@@ -207,6 +207,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 焦点被网页视频这类 App 占着、屏上的播放器又没有 AppleScript 时,播放控制不发(发出去会控到占用者),
         // 给一声提示音说明这次没生效。见 MusicPlaybackController.ControlRoute.withheld。
         MusicPlaybackController.onControlWithheld = { NSSound.beep() }
+        // 两项授权在生效时就记下「授权成功过」(PermissionGrantMemory),之后失效才说得出「授权已失效」;
+        // 不等设置页、引导页打开才记。见 14 章决策 67。
+        AccessibilityPermission.shared.refresh()
+        FullDiskAccessPermission.shared.refresh()
         // 启动后把 Last.fm 信息页那批小图(头像/封面)提前解码进内存:那一页是用户点进
         // 设置才打开的,启动到点进去之间有充足的空窗,预热完再打开就不会闪占位符了
         // (触发点是 LastfmStatsService 首次实例化 → loadSnapshot → prewarm)。

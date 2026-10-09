@@ -32,7 +32,7 @@
 "%@ · 供自行排查；反馈问题请使用上方的「导出诊断」，信息更完整" = "%@ · For your own troubleshooting. To report a problem, use Export Diagnostics above; it includes more";
 "%@ · 登录将在 %@ 过期，建议重新连接" = "%@ · Sign-in expires on %@; reconnecting is recommended";
 "%@ · 纯文本，可直接编辑；外观与快捷键另存于 App 偏好设置，不在此处" = "%@ · Plain text you can edit directly. Appearance and shortcuts are stored in the app’s preferences, not here";
-"%@ 不向系统报告播放进度，Lyrimuse 会读取其界面上的播放时间来校准进度；你点随机、循环键时，也会替你按下它播放条上对应的按钮。不授权也可使用，但自动连播时进度可能偏差一到两秒，也不显示这两颗键。" = "%@ doesn't report its playback position to the system, so Lyrimuse reads the time shown in its window to keep lyrics in sync, and presses its own shuffle or repeat button when you click one of those. It works without this too, but during autoplay the position can be off by a second or two, and those two buttons won't appear.";
+"%@ 不向系统报告播放进度。授权后 Lyrimuse 会读取它界面上的播放时间来校准，并在你点随机、循环键时替你按下对应按钮。不授权也能用，但自动连播时进度可能差一两秒，也没有这两颗键。" = "%@ doesn’t report its playback position, so with access Lyrimuse reads the time shown in its window to stay in sync, and presses its shuffle or repeat button when you click one of those. Without it, the position can be off by a second or two during autoplay, and those two buttons won’t appear.";
 "%@ 个文件导入失败，其余已导入" = "%@ files failed to import; the rest were imported";
 "%@ 个文件导入失败，其余已导入#one" = "%@ file failed to import; the rest were imported";
 "%@ 个歌词源无法连接" = "%@ lyrics sources could not be reached";
@@ -53,10 +53,10 @@
 "%@ 次" = "×%@";
 "%@ 次收听" = "%@ plays";
 "%@ 次收听#one" = "%@ play";
-"%@ 没有脚本接口，Lyrimuse 会通过其菜单栏读取和切换随机、循环与喜欢（只在你点这几颗键时按下对应的菜单项）。不授权也可使用，只是不显示这几颗键。" = "%@ has no scripting interface, so Lyrimuse reads and switches shuffle, repeat and Like through its menu bar (it only presses a menu item when you click one of those buttons). Lyrimuse works without this permission, but those buttons won't appear.";
+"%@ 没有脚本接口。授权后 Lyrimuse 会通过它的菜单读取和切换随机、循环与喜欢。不授权也能用，只是没有这几颗键。" = "%@ has no scripting interface, so with access Lyrimuse reads and switches shuffle, repeat and Like through its menus. Without it, Lyrimuse still works, but those buttons won’t appear.";
 "%@ 点" = "%@:00";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索。" = "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search.";
-"%@ 的歌词缓存和播放队列位于受系统保护的目录中。授权后，可直接使用本机已有的歌词，并提前解析即将播放的歌曲；未授权时仍可联网查找歌词。" = "The lyrics caches and play queues of %@ live in system-protected folders. With access, lyrics already on this Mac can be used directly and upcoming tracks can be resolved ahead of time; without it, lyrics are still found online.";
+"%@ 的歌词缓存和播放队列在受保护的目录中。授权后可直接使用本机已有的歌词，并提前解析即将播放的歌曲；不授权也能联网查找歌词。" = "%@ keeps its lyrics cache and play queue in protected folders. With access, lyrics already on this Mac are used directly and upcoming tracks are resolved ahead of time; without it, lyrics are still found online.";
 "%@ 的自动化权限未开启…" = "%@ Automation Access Is Off…";
 "%@ 的自动化权限未开启，播放状态可能读不准" = "Automation permission for %@ is off; playback state may be read inaccurately";
 "%@ 种写法" = "%@ spellings";
@@ -582,6 +582,8 @@
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在歌词下方显示一行译文" = "Show a line of translation under the lyrics";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
+"在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
+"在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings, then click Restart Lyrics Engine. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
 "在线 — %d" = "Online — %d";
 "在菜单栏中显示一行歌词" = "A single line in the menu bar";
 "在设置中查看 Last.fm" = "View Last.fm in Settings";
@@ -668,7 +670,7 @@
 "尚未生效：浏览器收到请求但未响应，可能是该选项尚未勾选（部分浏览器不报错，而是不作响应）。请按上述路径再次确认" = "Not working yet: the browser took the request but never answered — most likely that switch still isn't ticked (some browsers stay silent instead of reporting an error). Follow the path above and check again";
 "尚未确认" = "Not confirmed yet";
 "尚未缓存任何歌词。播放歌曲后，Lyrimuse 会自动搜索并保存歌词" = "No lyrics cached yet. When you play a song, Lyrimuse finds and saves its lyrics automatically";
-"尚未获得「辅助功能」权限，自动跳过不会生效。如已授权但仍显示此提示，请在系统设置中将 Lyrimuse 取消勾选后重新勾选。" = "Accessibility permission isn't granted yet, so automatic skipping won't work. If you granted it before and still see this, turn Lyrimuse off and back on in System Settings.";
+"尚未获得「辅助功能」权限，自动跳过不会生效。" = "Accessibility permission isn’t granted, so automatic skipping won’t work.";
 "尚未连接 Apple Music。可在「歌词来源」卡片底部点按「连接」登录（需要 Apple Music 订阅）" = "Apple Music is not connected yet — sign in once via Connect at the bottom of the Lyrics Sources card (an Apple Music subscription is required)";
 "尚未连接 Last.fm 账号" = "Last.fm account isn't connected yet";
 "尝试更优歌词" = "Retry for better lyrics";
@@ -928,7 +930,6 @@
 "换行" = "Wrap";
 "换行（默认）：一行显示不下时折行显示。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。" = "Wrap (default): long lines fold onto the next line.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
 "换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。" = "Wrap (default): long lines fold onto the next line and the window grows taller.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
-"授权不会作用于已在运行的歌词引擎。在系统设置中勾选后，请回到此处点按「重启歌词引擎」。" = "Granting access doesn’t reach a lyrics engine that’s already running. After turning it on in System Settings, come back here and click Restart Lyrics Engine.";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复。" = "The authorization may have been revoked on the Last.fm website. Reconnect to resume.";
 "授权已失效" = "Authorization expired";
 "授权已失效，Scrobble 已暂停" = "Authorization revoked — scrobbling paused";
@@ -1095,6 +1096,8 @@
 "更改" = "Change";
 "更改…" = "Change…";
 "更新" = "Updates";
+"更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。" = "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−” and add it back with “+”.";
+"更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加，然后点「重启歌词引擎」。" = "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−”, add it back with “+”, then click Restart Lyrics Engine.";
 "更新备份" = "Update Backup";
 "更新失败" = "Update failed";
 "更新时间 新→旧" = "Updated Newest→Oldest";
@@ -1269,8 +1272,6 @@
 "歌词引擎" = "Lyrics Engine";
 "歌词引擎尚未启用，本次引导未完成，下次启动时将再次显示" = "The lyrics engine isn't enabled yet, so this doesn't count as finishing setup — you'll be asked again next launch";
 "歌词引擎已停用，更改将在下次启用时生效" = "The lyrics engine is turned off. The change takes effect when it is turned on again.";
-"歌词引擎已重启，但仍无法读取。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。" = "The lyrics engine has restarted and still can’t read them. Check that Lyrimuse is switched on under Full Disk Access in System Settings.";
-"歌词引擎已重启，但仍无法读取此源。请在系统设置的「完全磁盘访问权限」中确认 Lyrimuse 已开启。" = "The lyrics engine has restarted and this source still can't be read. Check that Lyrimuse is switched on under Full Disk Access in System Settings.";
 "歌词引擎无响应" = "The lyrics engine didn't respond";
 "歌词引擎未运行，歌词不会更新" = "The lyrics engine isn’t running; lyrics won’t update";
 "歌词引擎本次未能将它们收入缓存，列表中暂时不可见；文件已在歌词文件夹中，歌词引擎下次启动时将自动导入" = "The lyrics engine couldn't add them to the cache this time, so they won't appear in the list yet. The files are already in the lyrics folder and will be imported the next time the lyrics engine starts";
@@ -1668,8 +1669,6 @@
 "请先填写 Secret" = "Secret is required";
 "请先播放一首歌曲，再选择「搜索歌词…」" = "Start playing a song, then choose “Search Lyrics…” again.";
 "请启用歌词引擎，并开启以下权限；未开启的权限只影响对应功能" = "Turn on the lyrics engine and the permissions below; a permission left off only affects its own feature";
-"请在系统设置的「完全磁盘访问权限」中开启 Lyrimuse（如列表中没有，请点按「+」添加），然后回到此处点按「重启歌词引擎」。授权不会作用于已在运行的歌词引擎。" = "Turn on Lyrimuse under Full Disk Access in System Settings (if it isn’t listed, click “+” to add it), then come back and click Restart Lyrics Engine. Access doesn’t reach a lyrics engine that’s already running.";
-"请在系统设置的「辅助功能」中开启 Lyrimuse。如已授权但此处仍显示未授权，请将 Lyrimuse 取消勾选后重新勾选。" = "Turn on Lyrimuse under Accessibility in System Settings. If you granted it before and it still shows as not granted, uncheck Lyrimuse there and check it again.";
 "请将 YouTube Music 标签页切换到前台后重试" = "Bring the YouTube Music tab to the front and try again";
 "请尝试其他筛选条件或关键词" = "Try different filters or search terms.";
 "请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放" = "Turn this on so the playing song is recognized correctly, with playback controls right on the lyrics";
@@ -1834,6 +1833,7 @@
 "酷狗音乐" = "Kugou Music";
 "采用此候选" = "Use This Candidate";
 "采纳为静态文本" = "Adopt as Static Text";
+"重启后仍无法读取。请确认 Lyrimuse 已打开；已打开时，用「−」移除后再用「+」重新添加。" = "Still can’t read after the restart. Make sure Lyrimuse is turned on; if it is, remove it with “−” and add it back with “+”.";
 "重启歌词引擎" = "Restart Lyrics Engine";
 "重命名…" = "Rename…";
 "重新匹配《%@》的歌词？" = "Re-match lyrics for “%@”?";
