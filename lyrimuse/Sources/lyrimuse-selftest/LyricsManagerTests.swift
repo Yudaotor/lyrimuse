@@ -1694,6 +1694,12 @@ func runLyricsManagerTests() {
                     && sheet.contains("title: LyricsManagerSearch.query(title),")
                     && sheet.contains("album: LyricsManagerSearch.query(album),"),
                     true, "搜索候选歌词: 歌名 / 歌手 / 专辑去掉首尾空白再交出去搜")
+        expectEqual(sheet.contains("storedCandidate = makeStoredCandidate()\n        loadError = nil\n")
+                    && sheet.contains("selectedSource = shownCandidates.first?.id")
+                    && sheet.contains("EnrichCacheReader.storedEntry(forKey: songKey)")
+                    && sheet.contains("!candidates.contains(where: isCurrentCandidate) else { return candidates }")
+                    && sheet.contains("ForEach(shownCandidates) { c in"),
+                    true, "搜索候选歌词: 打开就先摆出缓存里在用的那一版并选中,搜到同一份时换成搜到的那条")
         expectEqual(view.contains("try? await Task.sleep(for: .milliseconds(150))") && view.contains("searchCommitTask?.cancel()"),
                     true, "搜索框: 边打边筛,停手 150 毫秒才真的过滤一次")
         expectEqual(view.contains("if LyricsManagerSearch.query(newValue).isEmpty && !committedSearchText.isEmpty {"), true,

@@ -701,6 +701,8 @@
 "已人工修正" = "Manually edited";
 "已保存" = "Saved";
 "已保存为纯文本歌词，仅在歌词窗口中显示" = "Saved as plain-text lyrics, shown only in the Lyrics Window";
+"已保存的版本 · %@ 行" = "Saved version · %@ lines";
+"已保存的版本 · %@ 行#one" = "Saved version · %@ line";
 "已信任的播放器" = "Trusted Players";
 "已修改 %@ 处" = "%@ changes";
 "已修改 %@ 处#one" = "%@ change";
@@ -1759,6 +1761,7 @@
 "这首歌曲无译文" = "No translation for this song";
 "这首歌曲无读音" = "No romanization for this song";
 "这首歌曲正在搜索，或「自动匹配缺失歌词」/「重新匹配整个歌词库」正在进行，请稍后重试" = "This song is being searched right now, or “Auto-Match Missing Lyrics” / “Re-Match Whole Library” is running — try again later";
+"这首歌曲现在使用的歌词，从本机缓存读取，未参与本轮评分。搜索结果中出现同一份时换成那一条" = "The lyrics this song uses now, read from the local cache and not scored in this search. Replaced by the same lyrics once a search result returns them";
 "这首歌曲的歌词经过手动修改或选定，更换后将被覆盖。" = "You edited or picked these lyrics by hand; new ones would replace them.";
 "这首歌曲的语言未在设置的「标注读音的语言」中开启" = "This song’s language is turned off in Settings › Romanization Languages";
 "这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效。" = "You've adjusted this song's lyrics timing (%@); with new lyrics that adjustment may no longer fit.";

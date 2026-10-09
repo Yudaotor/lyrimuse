@@ -223,7 +223,8 @@ final class LyricsSearchService {
     }
 
     struct Candidate: Identifiable, Equatable {
-        var id: String { source }
+        /// 搜索结果一个源一条,按来源认;缓存里存着的那一版另起一个,跟同一来源搜到的那条(可能是另一个版本)不撞。
+        var id: String { isStored ? "stored:" + source : source }
         let source: String
         let lyrics: String
         let lyricsTr: String
@@ -270,6 +271,8 @@ final class LyricsSearchService {
         /// 每一行挂的时间戳(LyricsCandidateDuplicates.lineTimestamps),构造时算一次(理由同 lineCount)。
         /// 跨源同词标注拿它判「每行时间也一样」。
         let timeline: [[Int]]
+        /// 不是这一轮搜到的,是这首歌现在缓存里存着的那一版(搜索面板一打开就先摆出来,没有分数)。
+        var isStored = false
 
         static func countLines(of lyrics: String) -> Int {
             lyrics.replacingOccurrences(of: "\r\n", with: "\n")

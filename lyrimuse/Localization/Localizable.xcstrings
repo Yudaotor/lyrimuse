@@ -6112,6 +6112,58 @@
         }
       }
     },
+    "已保存的版本 · %@ 行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Saved version · %@ line"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Saved version · %@ lines"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已保存的版本 · %@ 行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已儲存的版本 · %@ 行"
+          }
+        }
+      }
+    },
+    "这首歌曲现在使用的歌词，从本机缓存读取，未参与本轮评分。搜索结果中出现同一份时换成那一条" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics this song uses now, read from the local cache and not scored in this search. Replaced by the same lyrics once a search result returns them"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首歌曲現在使用的歌詞，從本機快取讀取，未參與本輪評分。搜尋結果中出現同一份時換成那一條"
+          }
+        }
+      }
+    },
     "分数 %@ · %@ 行" : {
       "extractionState" : "manual",
       "localizations" : {

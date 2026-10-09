@@ -113,6 +113,9 @@ struct LyricsSearchSheet: View {
     // 两个独立维度:可能已经有几条候选摆在那了、但后面的源还没回来。用一个三态 enum
     // 表达不了"进行中 + 已经有部分结果"这个中间状态。
     @State private var candidates: [LyricsSearchService.Candidate] = []
+    /// 这首歌现在缓存里存着的那一版(`isStored`),打开面板就摆在列表最上面、先选中它,其他源接着搜;搜到同一份(来源和
+    /// 正文都一样)就换成搜到的那条,没搜到(手改过、来源是播放器本地歌词、那个源这次没回)就一直留着。见 shownCandidates、11 章决策 99。
+    @State private var storedCandidate: LyricsSearchService.Candidate?
     /// 这个面板作为搜索发起方的身份,见 `LyricsSearchService.Owner`。
     @State private var searchOwner = LyricsSearchService.Owner()
     /// 预览区那份按行拆好的正文(`LyricsPreviewText.rows` 要整首走一遍播放引擎),而查询词每敲一个字、
@@ -475,6 +478,7 @@ struct LyricsSearchSheet: View {
     // 四项全中)、只是平台没有词,而弹窗显示的跟"十二个源都没搜到这首歌"是同一句话——
     // 匹配明明是对的,用户完全看不出来,也无从判断该等还是该自己贴一份。
     @State private var tracksFoundNoLyrics: [LyricsSearchService.TrackFoundNoLyrics] = []
+    /// 选中的候选的 id(搜索结果就是来源名,存着的那一版见 Candidate.id)。
     @State private var selectedSource: String?
     // 候选是陆续到达的(见下面 candidates 那条注释),currentSource 对应的候选不一定在
     // 第一批就到——这个 flag 标记"selectedSource 现在的值是自动选出来的,还是用户自己
@@ -589,10 +593,12 @@ struct LyricsSearchSheet: View {
         .onChange(of: currentSource) { _, _ in
             appliedSource = nil
             appliedFingerprint = nil
+            storedCandidate = makeStoredCandidate()
         }
         .onChange(of: currentFingerprint) { _, _ in
             appliedSource = nil
             appliedFingerprint = nil
+            storedCandidate = makeStoredCandidate()
         }
         .onChange(of: isMarkedInstrumental) { _, _ in instrumentalOverride = nil }
         .task(id: searchSubject) { await load() }
@@ -714,7 +720,7 @@ struct LyricsSearchSheet: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(L10n.t("候选"))
                     .font(.headline)
-                Text("\(candidates.count)")
+                Text("\(shownCandidates.count)")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -741,7 +747,7 @@ struct LyricsSearchSheet: View {
     /// 各种空状态)在右边(detailContent)。
     @ViewBuilder
     private var candidatesSection: some View {
-        if candidates.isEmpty {
+        if shownCandidates.isEmpty {
             Spacer(minLength: 0)
         } else {
             if let msg = loadError {
@@ -762,9 +768,9 @@ struct LyricsSearchSheet: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(candidates) { c in
+                    ForEach(shownCandidates) { c in
                         candidateRow(c)
-                            .id(c.source)
+                            .id(c.id)
                     }
                 }
                 .padding(.bottom, 8)
@@ -776,30 +782,68 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 右边预览的那一条:选中的那条,还没选中任何一条时是排第一的。列表里画选中底的也是它。
+    /// 列表里实际摆的:搜索结果,加上缓存里存着的那一版——它是在用的那份、而搜索结果里还没有同一份时排在最上面。
+    private var shownCandidates: [LyricsSearchService.Candidate] {
+        guard let stored = storedCandidate, isCurrentCandidate(stored),
+              !candidates.contains(where: isCurrentCandidate) else { return candidates }
+        return [stored] + candidates
+    }
+
+    /// 右边预览的那一条:选中的那条,还没选中任何一条时是排第一的。列表里画选中底的也是它。选中的是存着的那一版、
+    /// 而它已经换成搜到的同一份时,落到搜到的那一条上。
     private var previewedCandidate: LyricsSearchService.Candidate? {
-        candidates.first(where: { $0.source == selectedSource }) ?? candidates.first
+        let shown = shownCandidates
+        if let hit = shown.first(where: { $0.id == selectedSource }) { return hit }
+        if selectedSource != nil, selectedSource == storedCandidate?.id,
+           let current = shown.first(where: isCurrentCandidate) {
+            return current
+        }
+        return shown.first
     }
 
     /// 点一行:经 selectedSourceBinding 写回(记下"用户点过",之后不再自动改选),并把焦点交给列表。
-    private func select(_ source: String) {
-        selectedSourceBinding.wrappedValue = source
+    private func select(_ id: String) {
+        selectedSourceBinding.wrappedValue = id
         candidateListFocused = true
     }
 
     /// ↑ / ↓ 换到上一条 / 下一条,跟点选同一条写回路径;滚到刚好露出那一行。
     private func moveSelection(_ direction: MoveCommandDirection, proxy: ScrollViewProxy) {
-        guard let current = candidates.firstIndex(where: { $0.source == previewedCandidate?.source }) else { return }
+        let shown = shownCandidates
+        guard let current = shown.firstIndex(where: { $0.id == previewedCandidate?.id }) else { return }
         let next: Int
         switch direction {
         case .up: next = current - 1
         case .down: next = current + 1
         default: return
         }
-        guard candidates.indices.contains(next) else { return }
-        let source = candidates[next].source
-        selectedSourceBinding.wrappedValue = source
-        proxy.scrollTo(source)
+        guard shown.indices.contains(next) else { return }
+        let id = shown[next].id
+        selectedSourceBinding.wrappedValue = id
+        proxy.scrollTo(id)
+    }
+
+    /// 缓存里这首现在存着的那一版,做成一条候选(没有分数)。条目读不全、标成纯音乐、没有正文、不知道来源时没有。
+    /// 只有纯文本时按纯文本候选摆。
+    private func makeStoredCandidate() -> LyricsSearchService.Candidate? {
+        guard let source = currentSource, !source.isEmpty,
+              let entry = EnrichCacheReader.storedEntry(forKey: songKey), entry.complete, !entry.instrumental
+        else { return nil }
+        let plainOnly = entry.lyrics.isEmpty
+        let text = plainOnly ? entry.plainLyrics : entry.lyrics
+        guard !text.isEmpty else { return nil }
+        return LyricsSearchService.Candidate(
+            source: source, lyrics: text,
+            lyricsTr: plainOnly ? "" : entry.lyricsTr, lyricsRoma: plainOnly ? "" : entry.lyricsRoma,
+            lyricsYRC: plainOnly ? "" : entry.lyricsYRC, lyricsBG: "", lyricsTrLang: "",
+            hasWordTiming: !plainOnly && !entry.lyricsYRC.isEmpty, score: 0, scoreTerms: [],
+            title: originalTitle, artist: originalArtist, album: originalAlbum,
+            coverURL: EnrichCacheReader.coverURL(artist: originalArtist, title: originalTitle, album: originalAlbum),
+            isPlainTextOnly: plainOnly,
+            lineCount: LyricsSearchService.Candidate.countLines(of: text),
+            fingerprint: ManualPickLock.fingerprint(lyrics: text),
+            timeline: LyricsCandidateDuplicates.lineTimestamps(text),
+            isStored: true)
     }
 
     // MARK: - 右侧(标题行 + 预览 / 空状态)
@@ -862,7 +906,7 @@ struct LyricsSearchSheet: View {
     @ViewBuilder
     private var detailContent: some View {
         // 已经收到候选时出错(比如后面的源把子进程带崩了)不整页换成报错:到手的候选照样能挑,报错挪到侧栏列表上方一行。
-        if let msg = loadError, candidates.isEmpty {
+        if let msg = loadError, shownCandidates.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 32))
@@ -871,7 +915,7 @@ struct LyricsSearchSheet: View {
                 Button(L10n.t("重试")) { Task { await load() } }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if candidates.isEmpty {
+        } else if shownCandidates.isEmpty {
             if isSearching {
                 // 还没有候选:右边空着,进度在侧栏(candidatesSection)。占满这一栏,标题行才留在顶上。
                 Color.clear
@@ -1008,7 +1052,7 @@ struct LyricsSearchSheet: View {
     }
 
     private func candidateRow(_ c: LyricsSearchService.Candidate) -> some View {
-        let isSelected = c.source == previewedCandidate?.source
+        let isSelected = c.id == previewedCandidate?.id
         let shape = RoundedRectangle(cornerRadius: 13, style: .continuous)
         // 标签排放在"封面+文字"这一整条 HStack **下面**、贴着整行的左缘(也就是封面的左缘,不是文字的
         // 左缘)——不管这一行标题/歌手·专辑多长、封面下面空多少,标签排永远钉在同一个 x、同一个
@@ -1036,14 +1080,15 @@ struct LyricsSearchSheet: View {
                     .fixedSize()
             }
             // showsSource: false —— 这一处的来源标已经在上面的右上角了,别在标签排里再来一遍。
-            characteristicBadges(c, source: c.source, showsSource: false, isCurrent: isCurrentCandidate(c), duplicate: duplicates[c.source])
+            characteristicBadges(c, source: c.source, showsSource: false, isCurrent: isCurrentCandidate(c),
+                                 duplicate: c.isStored ? nil : duplicates[c.source])
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 10)
         .background(shape.fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear))
         .contentShape(shape)
         // 整行可点;分数旁的问号自己接点击(QuickHelpLabel),子视图的手势先于这里。
-        .onTapGesture { select(c.source) }
+        .onTapGesture { select(c.id) }
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -1328,7 +1373,8 @@ struct LyricsSearchSheet: View {
             // showsSource: true —— 右侧详情**不跟着**把来源挪去右上角:挪的收益是"多行之间对齐、好扫",
             // 而这里永远只有一条候选,没有可对齐的对象;这一行的右上角又被「采用此候选」这颗主按钮占着,
             // 塞个胶囊进去只会跟它抢视线。
-            characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c), duplicate: duplicates[c.source])
+            characteristicBadges(c, source: c.source, showsSource: true, isCurrent: isCurrentCandidate(c),
+                                 duplicate: c.isStored ? nil : duplicates[c.source])
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
             if c.isPlainTextOnly {
@@ -1413,7 +1459,7 @@ struct LyricsSearchSheet: View {
             showsTimeColumn: rows.timed,
             horizontalInset: 24)
         // 换一条候选重建:没在放这首、或者关了跟随时从头看起,在跟随时直接落到当前句。
-        .id(c.source)
+        .id(c.id)
     }
 
     // 这个候选实际匹配到的歌名 / 歌手 / 专辑,**各占一行**——不是每个源都能给全,哪一项
@@ -1574,9 +1620,13 @@ struct LyricsSearchSheet: View {
     /// 跟 741 分不是同一个量级上的东西。
     @ViewBuilder
     private func scoreLine(_ c: LyricsSearchService.Candidate, font: Font) -> some View {
-        let label = Text(String(format: L10n.plural("分数 %@ · %@ 行", count: c.lineCount), "\(c.score)", "\(c.lineCount)"))
+        let label = c.isStored
+            ? Text(String(format: L10n.plural("已保存的版本 · %@ 行", count: c.lineCount), "\(c.lineCount)"))
+            : Text(String(format: L10n.plural("分数 %@ · %@ 行", count: c.lineCount), "\(c.score)", "\(c.lineCount)"))
         Group {
-            if c.scoreTerms.isEmpty {
+            if c.isStored {
+                QuickHelpLabel(text: L10n.t("这首歌曲现在使用的歌词，从本机缓存读取，未参与本轮评分。搜索结果中出现同一份时换成那一条")) { label }
+            } else if c.scoreTerms.isEmpty {
                 // 没有可摊开的明细就别摆一个点了什么都没有的问号。
                 label
             } else {
@@ -1623,8 +1673,10 @@ struct LyricsSearchSheet: View {
             return
         }
         candidates = []
+        storedCandidate = makeStoredCandidate()
         loadError = nil
-        selectedSource = nil
+        // 先选中存着的那一版:搜索结果陆续到达期间右边一直是现在用的歌词。
+        selectedSource = shownCandidates.first?.id
         userPickedSource = false
         networkLooksDown = false
         instrumental = false
@@ -1659,8 +1711,14 @@ struct LyricsSearchSheet: View {
                 // currentSource 为空(比如这首歌还没有任何已生效来源)或它对应的候选
                 // 始终没搜到时,退回"目前排最前"兜底,且只兜底一次(已经选中过东西就不再
                 // 因为"还是没等到 currentSource"而重新改选)。
+                // 存着的那一版先占着选中;搜到同一份(来源和正文都一样)时换到那一条上,同来源但正文不一样
+                // (手改过)时仍停在存着的那一版。
                 guard !userPickedSource else { return }
-                if let current = effectiveCurrentSource, update.candidates.contains(where: { $0.source == current }) {
+                if let current = update.candidates.first(where: isCurrentCandidate) {
+                    selectedSource = current.id
+                } else if let stored = storedCandidate, shownCandidates.first?.id == stored.id {
+                    selectedSource = stored.id
+                } else if let current = effectiveCurrentSource, update.candidates.contains(where: { $0.source == current }) {
                     selectedSource = current
                 } else if selectedSource == nil {
                     selectedSource = update.candidates.first?.source
