@@ -3730,6 +3730,10 @@ type scoredLyricCandidateResult struct {
 	// SourceReportedDurationSecs:源自己声明的曲长(秒),0=该源没给。只透传、不参与打分
 	// ——给下一轮维度评测攒"源报版本同一性"数据(见 lyricCandidate 同名字段)。
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
+	// BorrowedDurationSecs / BorrowedDurationFrom:amll 自己没有曲长,借能认定是同一条录音的那一家报的曲长和那家的源名
+	// (amllCandidateDuration)。只给「搜索候选歌词」显示,不参与打分;别的源、借不到时为空。
+	BorrowedDurationSecs float64 `json:"borrowed_duration_secs,omitempty"`
+	BorrowedDurationFrom string  `json:"borrowed_duration_from,omitempty"`
 	// ISRC:源报的这条录音的 ISRC(applemusic 与 deezer 给),不参与打分。按 ISRC 补取未应答的源、取原产地曲名用,见 isrcretry.go、
 	// origintitle.go。
 	ISRC string `json:"isrc,omitempty"`
@@ -4985,6 +4989,9 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			PlainTextOnly:              c.plainTextOnly,
 			IdentityFromLocalClient:    c.identityFromLocalClient,
 			BakedTranslationLines:      bakedLines[c.source],
+		}
+		if c.source == "amll" {
+			r.BorrowedDurationSecs, r.BorrowedDurationFrom = amllCandidateDuration(amll, ne, qq, am, dz)
 		}
 		r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
 			artist, title, album, durationSecs, c, corroborated[c.source], len(consensusPeers[c.source]))

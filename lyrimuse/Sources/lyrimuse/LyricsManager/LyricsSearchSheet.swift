@@ -1750,7 +1750,7 @@ struct LyricsSearchSheet: View {
     }
 
     /// 「 · 4:31（+12 秒）」:这个源标注的曲长,跟这首差 2 秒以上时写差多少,差到算另一个版本(LyricsCandidateDuration)
-    /// 时标橙。源没给时长时不出。
+    /// 时标橙。源没给时长时不出;借的是同一条录音别家报的(`durationBorrowedFrom`)时悬停说明写是哪家。
     @ViewBuilder
     private func durationLabel(_ c: LyricsSearchService.Candidate, font: Font) -> some View {
         if c.sourceDurationSecs > 0 {
@@ -1759,11 +1759,20 @@ struct LyricsSearchSheet: View {
                 .foregroundStyle(LyricsCandidateDuration.isOff(candidate: c.sourceDurationSecs, song: durationSecs)
                                  ? Color.orange : Color.secondary)
                 .lineLimit(1)
-                .help(durationSecs > 0
-                      ? String(format: L10n.t("歌词源标注的曲目时长，这首歌曲时长 %@"),
-                               LyricsCandidateDuration.clock(durationSecs))
-                      : L10n.t("歌词源标注的曲目时长"))
+                .help(durationHelp(c))
         }
+    }
+
+    private func durationHelp(_ c: LyricsSearchService.Candidate) -> String {
+        let reported = durationSecs > 0
+            ? String(format: L10n.t("歌词源标注的曲目时长，这首歌曲时长 %@"), LyricsCandidateDuration.clock(durationSecs))
+            : L10n.t("歌词源标注的曲目时长")
+        guard !c.durationBorrowedFrom.isEmpty else { return reported }
+        let borrowed = String(format: L10n.t("该歌词源不提供时长，这是同一条录音在 %@ 标注的时长"),
+                              sourceDisplayName(c.durationBorrowedFrom))
+        return durationSecs > 0
+            ? borrowed + "\n" + String(format: L10n.t("这首歌曲时长 %@"), LyricsCandidateDuration.clock(durationSecs))
+            : borrowed
     }
 
     private func durationText(_ c: LyricsSearchService.Candidate) -> String {

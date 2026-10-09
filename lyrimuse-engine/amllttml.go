@@ -124,6 +124,31 @@ func amllCandidateCover(r amllResult, ne neteaseInfo, qq, am, dz lyricSourceResu
 	return ""
 }
 
+// amllCandidateDuration:amll 候选借来显示的曲长和出处(源名)。TTML 的 <body dur> 是末句结束的时间、不是曲长,索引里
+// 也没有时长,所以借同一条录音的那一家报的,认法和先后同 amllCandidateCover。只给「搜索候选歌词」显示,不参与打分。
+// 都对不上时是 0 和空串。
+func amllCandidateDuration(r amllResult, ne neteaseInfo, qq, am, dz lyricSourceResult) (float64, string) {
+	switch {
+	case r.platform == "ncm-lyrics" && ne.DurationSecs > 0:
+		return ne.DurationSecs, "netease"
+	case r.platform == "qq-lyrics" && qq.srcDur > 0:
+		return qq.srcDur, "qq"
+	case ne.DurationSecs > 0 && ne.SongID > 0 && slices.Contains(r.ncmIDs, strconv.FormatInt(ne.SongID, 10)):
+		return ne.DurationSecs, "netease"
+	case qq.srcDur > 0 && slices.ContainsFunc(qq.trackIDs, func(id string) bool { return slices.Contains(r.qqIDs, id) }):
+		return qq.srcDur, "qq"
+	}
+	for _, s := range []struct {
+		name string
+		res  lyricSourceResult
+	}{{"applemusic", am}, {"deezer", dz}} {
+		if s.res.srcDur > 0 && slices.Contains(r.isrcs, normalizeAMLLISRC(s.res.isrc)) {
+			return s.res.srcDur, s.name
+		}
+	}
+	return 0, ""
+}
+
 // ---- TTML 结构 ----
 //
 // 命名空间:ttm = http://www.w3.org/ns/ttml#metadata, xml = XML 内建。

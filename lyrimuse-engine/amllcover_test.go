@@ -116,6 +116,74 @@ func TestRankLyricSourceResultsAMLLBorrowsSameRecordingCover(t *testing.T) {
 	}
 }
 
+// amll 借同一条录音的曲长,认法和先后同借封面;那一家没报时长就接着往下找。
+func TestAMLLCandidateDuration(t *testing.T) {
+	ne := neteaseInfo{DurationSecs: 269.4, SongID: 186016}
+	qq := lyricSourceResult{srcDur: 269, trackIDs: []string{"0039MnYb0qxYhV", "97773"}}
+	am := lyricSourceResult{srcDur: 270.1, isrc: "TWK970300503"}
+	dz := lyricSourceResult{srcDur: 268, isrc: "twk970300503"}
+	var none lyricSourceResult
+	head := amllResult{ncmIDs: []string{"186016"}, qqIDs: []string{"97773"}, isrcs: []string{"TWK970300503"}}
+	on := func(platform string, r amllResult) amllResult {
+		r.platform = platform
+		return r
+	}
+	for _, c := range []struct {
+		name       string
+		r          amllResult
+		ne         neteaseInfo
+		qq, am, dz lyricSourceResult
+		want       float64
+		from       string
+	}{
+		{"按网易云 ID 取回的借网易云", on("ncm-lyrics", amllResult{}), ne, qq, am, dz, 269.4, "netease"},
+		{"按 QQ ID 取回的借 QQ", on("qq-lyrics", amllResult{}), ne, qq, am, dz, 269, "qq"},
+		{"网易云没报时长,借登记了同一数字 ID 的 QQ", on("ncm-lyrics", head), neteaseInfo{SongID: 186016}, qq, am, dz, 269, "qq"},
+		{"QQ 也没报,借 ISRC 对得上的 Apple Music", on("ncm-lyrics", head), neteaseInfo{SongID: 186016}, lyricSourceResult{trackIDs: qq.trackIDs}, am, dz, 270.1, "applemusic"},
+		{"Apple Music 没报,借 ISRC 对得上的 Deezer(写法归一)", on("am-lyrics", amllResult{isrcs: head.isrcs}), neteaseInfo{}, none,
+			lyricSourceResult{isrc: "TWK970300503"}, dz, 268, "deezer"},
+		{"ISRC 对不上不借", on("am-lyrics", amllResult{isrcs: head.isrcs}), neteaseInfo{}, none, lyricSourceResult{srcDur: 270, isrc: "USUG12601721"}, none, 0, ""},
+		{"没有登记、也不是那两家取回的,不借", amllResult{}, ne, qq, am, dz, 0, ""},
+		{"网易云没拿到曲目 ID 时不按 0 去比", amllResult{ncmIDs: []string{"0"}}, neteaseInfo{DurationSecs: 200}, none, none, none, 0, ""},
+	} {
+		if got, from := amllCandidateDuration(c.r, c.ne, c.qq, c.am, c.dz); got != c.want || from != c.from {
+			t.Errorf("%s: got %v/%q want %v/%q", c.name, got, from, c.want, c.from)
+		}
+	}
+}
+
+// 借来的曲长只透传给「搜索候选歌词」,打分照旧当 amll 没有自报时长:借到一个跟本地差很多的也不扣「源自报曲长不符」。
+func TestRankLyricSourceResultsAMLLBorrowedDurationDisplayOnly(t *testing.T) {
+	var lrc strings.Builder
+	for i := 0; i < 20; i++ {
+		lrc.WriteString(formatLRCTime((10+i*10)*1000) + fmt.Sprintf("Line number %d of the song\n", i))
+	}
+	amll := amllResult{lrc: lrc.String(), platform: "ncm-lyrics"}
+	run := func(neDur float64) scoredLyricCandidateResult {
+		raw := map[string]lyricSourceResult{
+			"netease": {source: "netease", ne: neteaseInfo{SongID: 186016, DurationSecs: neDur}},
+			"amll":    {source: "amll", amll: amll},
+		}
+		for _, r := range rankLyricSourceResults("周杰伦", "晴天", "叶惠美", 269, raw) {
+			if r.Source == "amll" {
+				return r
+			}
+		}
+		t.Fatal("没有 amll 候选")
+		return scoredLyricCandidateResult{}
+	}
+	plain, far := run(0), run(400)
+	if far.BorrowedDurationSecs != 400 || far.BorrowedDurationFrom != "netease" || far.SourceReportedDurationSecs != 0 {
+		t.Errorf("借来的曲长只放在 Borrowed 字段: %+v", far)
+	}
+	if plain.BorrowedDurationSecs != 0 || plain.BorrowedDurationFrom != "" {
+		t.Errorf("网易云没报时长时不借: %+v", plain)
+	}
+	if far.Score != plain.Score || len(far.ScoreTerms) != len(plain.ScoreTerms) {
+		t.Errorf("借来的曲长不参与打分: %d %v vs %d %v", far.Score, far.ScoreTerms, plain.Score, plain.ScoreTerms)
+	}
+}
+
 // QQ 的两种 ID:数字 ID 只读单曲详情的缓存,没缓存时只给 songmid,没有 songmid 时什么都不给。
 func TestQQTrackIDs(t *testing.T) {
 	qqSongMetaMu.Lock()

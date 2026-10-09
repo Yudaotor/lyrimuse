@@ -271,8 +271,11 @@ final class LyricsSearchService {
         /// 每一行挂的时间戳(LyricsCandidateDuplicates.lineTimestamps),构造时算一次(理由同 lineCount)。
         /// 跨源同词标注拿它判「每行时间也一样」。
         let timeline: [[Int]]
-        /// 这个源自己标注的曲目时长(秒),0 = 没给。只展示,跟这首歌比(`LyricsCandidateDuration`)。
+        /// 这个源自己标注的曲目时长(秒),0 = 没给。只展示,跟这首歌比(`LyricsCandidateDuration`)。源自己不报、引擎借了
+        /// 同一条录音别家报的(目前只有 amll,见引擎 amllCandidateDuration)也放这里,`durationBorrowedFrom` 记是哪家。
         var sourceDurationSecs: Double = 0
+        /// 时长是借来的时,报这个时长的那一家的源名;源自己报的是空串。
+        var durationBorrowedFrom = ""
         /// 不是这一轮搜到的,是这首歌现在缓存里存着的那一版(搜索面板一打开就先摆出来,没有分数)。
         var isStored = false
 
@@ -653,6 +656,8 @@ private struct RawCandidate: Decodable {
     let coverURL: String?
     let plainTextOnly: Bool?
     let sourceReportedDurationSecs: Double?
+    let borrowedDurationSecs: Double?
+    let borrowedDurationFrom: String?
 
     enum CodingKeys: String, CodingKey {
         case source, lyrics, score, title, artist, album
@@ -666,11 +671,15 @@ private struct RawCandidate: Decodable {
         case coverURL = "cover_url"
         case plainTextOnly = "plain_text_only"
         case sourceReportedDurationSecs = "source_reported_duration_secs"
+        case borrowedDurationSecs = "borrowed_duration_secs"
+        case borrowedDurationFrom = "borrowed_duration_from"
     }
 }
 
 private extension LyricsSearchService.Candidate {
     init(_ raw: RawCandidate) {
+        let reported = raw.sourceReportedDurationSecs ?? 0
+        let borrowed = reported > 0 ? 0 : raw.borrowedDurationSecs ?? 0
         self.init(
             source: raw.source,
             lyrics: raw.lyrics,
@@ -690,7 +699,8 @@ private extension LyricsSearchService.Candidate {
             lineCount: LyricsSearchService.Candidate.countLines(of: raw.lyrics),
             fingerprint: ManualPickLock.fingerprint(lyrics: raw.lyrics),
             timeline: LyricsCandidateDuplicates.lineTimestamps(raw.lyrics),
-            sourceDurationSecs: raw.sourceReportedDurationSecs ?? 0
+            sourceDurationSecs: reported > 0 ? reported : borrowed,
+            durationBorrowedFrom: borrowed > 0 ? raw.borrowedDurationFrom ?? "" : ""
         )
     }
 }

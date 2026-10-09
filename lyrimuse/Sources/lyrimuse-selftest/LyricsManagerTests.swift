@@ -1770,8 +1770,10 @@ func runLyricsManagerTests() {
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsSearchService.swift"),
             encoding: .utf8)) ?? ""
         expectEqual(service.contains("case sourceReportedDurationSecs = \"source_reported_duration_secs\"")
-                    && service.contains("sourceDurationSecs: raw.sourceReportedDurationSecs ?? 0"), true,
-                    "搜索候选歌词: 候选带上引擎给的源自报曲长")
+                    && service.contains("case borrowedDurationSecs = \"borrowed_duration_secs\"")
+                    && service.contains("let borrowed = reported > 0 ? 0 : raw.borrowedDurationSecs ?? 0")
+                    && service.contains("sourceDurationSecs: reported > 0 ? reported : borrowed,"), true,
+                    "搜索候选歌词: 候选带上引擎给的源自报曲长,源自己没报时用借来的(amll),悬停写借自哪家")
         let parts = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lyrimuse/LyricsManager/LyricsManagerParts.swift"),
             encoding: .utf8)) ?? ""

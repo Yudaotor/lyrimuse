@@ -1663,6 +1663,7 @@
 "试用" = "Try It";
 "该候选原本凭逐字时间轴领先，但另一个候选的标题更吻合查询词。它很可能是其他录音（如另一场现场版）的逐字版本，时间轴精细并不代表与当前播放对齐" = "Word timing put this candidate ahead, but another candidate matches the query title better. This is likely the word-timed version of a different recording (such as another live take); fine-grained timing doesn't mean it lines up with what's playing";
 "该文件不是 Lyrimuse 的设置备份，未导入" = "That file is not a Lyrimuse settings backup — nothing was imported";
+"该歌词源不提供时长，这是同一条录音在 %@ 标注的时长" = "This lyrics source doesn't report a length; this is the length %@ reports for the same recording";
 "该源匹配到的专辑与本地专辑一致，版本很可能正确（最高 150）" = "The album this source matched agrees with the local album, so the version is likely right (up to 150)";
 "该源即当前使用的播放器，时间轴基于同一音频母版（+250）" = "This source is the platform you're actually playing on — its timing lines up with the exact same master (+250)";
 "该源收录了这首歌曲，但只有不带时间戳的纯文本，可在「歌词窗口」中作为静态文字阅读，无法随播放逐字 / 逐行高亮" = "This source does have the song, but only as plain text with no timing — you can read it as static text in the Lyrics Window, but it can't highlight word by word or line by line as the song plays";
@@ -1768,6 +1769,7 @@
 "这首歌曲已标为纯音乐，找到歌词后将取消该标记。" = "This song is marked as instrumental; finding lyrics will remove the mark.";
 "这首歌曲无译文" = "No translation for this song";
 "这首歌曲无读音" = "No romanization for this song";
+"这首歌曲时长 %@" = "This song is %@";
 "这首歌曲正在搜索，或「自动匹配缺失歌词」/「重新匹配整个歌词库」正在进行，请稍后重试" = "This song is being searched right now, or “Auto-Match Missing Lyrics” / “Re-Match Whole Library” is running — try again later";
 "这首歌曲现在使用的歌词，从本机缓存读取，未参与本轮评分。搜索结果中出现同一份时换成那一条" = "The lyrics this song uses now, read from the local cache and not scored in this search. Replaced by the same lyrics once a search result returns them";
 "这首歌曲的歌词经过手动修改或选定，更换后将被覆盖。" = "You edited or picked these lyrics by hand; new ones would replace them.";

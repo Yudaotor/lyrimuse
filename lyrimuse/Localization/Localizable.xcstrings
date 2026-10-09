@@ -40940,6 +40940,52 @@
           }
         }
       }
+    },
+    "该歌词源不提供时长，这是同一条录音在 %@ 标注的时长" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This lyrics source doesn't report a length; this is the length %@ reports for the same recording"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该歌词源不提供时长，这是同一条录音在 %@ 标注的时长"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該歌詞來源不提供時長，這是同一條錄音在 %@ 標註的時長"
+          }
+        }
+      }
+    },
+    "这首歌曲时长 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This song is %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这首歌曲时长 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首歌曲時長 %@"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
