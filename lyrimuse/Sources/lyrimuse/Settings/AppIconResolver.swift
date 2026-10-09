@@ -72,7 +72,8 @@ enum AppIconResolver {
     ///
     /// 不用按需绘制的 `NSImage(size:flipped:drawingHandler:)`:SwiftUI 只按布局尺寸把它画一次(24pt 画成 48×48
     /// 像素),`scaleEffect` 放大的是这张小图,Discord 预览里放大 1.22 倍的播放器角标就糊了。也不直接用随包那张
-    /// 512 或 1024 像素的 PNG:缩到几十像素满是锯齿。最大 512 像素,够画到 256pt;这些图标最大画到 64pt。
+    /// 512 像素的 PNG:缩到几十像素满是锯齿。最大 512 像素,够画到 256pt;这些图标最大画到 64pt。随包的 PNG 因此
+    /// 最多 512 见方,再大用不上、只占安装包体积(见 15 章决策 33)。
     /// 画布用 Display P3:广色域的图(系统给的 App 图标就是)画进 sRGB 会发灰。
     nonisolated static func prerendered(size: NSSize, draw: (CGRect) -> Void) -> NSImage {
         let image = NSImage(size: size)
@@ -112,7 +113,7 @@ enum AppIconResolver {
     /// App)当"没图标"处理,退回占位——但这几个播放器的品牌图标本身跟"这台机器装没装"没
     /// 关系,是固定的。跟 `SettingsView.swift` 里 `platformIcon`(YouTube Music/Spotify 网页
     /// 播放器卡)同一个思路、同一批已经打包进 Contents/Resources/ 的 PNG(/
-    /// 那两次的先例:取自本机已安装 App 的 AppIcon.icns,sips 转 1024×1024 PNG,
+    /// 那两次的先例:取自本机已安装 App 的 AppIcon.icns,sips 转 512×512 PNG,
     /// 不是从网上抓的品牌资源)——网易云音乐/酷狗音乐/QQ 音乐这三张是这次新加的
     /// (NeteaseIcon.png/KugouIcon.png/QQMusicIcon.png),Spotify 直接复用已有的
     /// SpotifyIcon.png,不用再拷一份。
