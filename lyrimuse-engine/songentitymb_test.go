@@ -49,8 +49,8 @@ func TestFetchMBRecordings(t *testing.T) {
 	if _, ok := have[codes[99]]; !ok {
 		t.Error("中间被限速的那个号重问之后要记下")
 	}
-	if saves != 2 {
-		t.Errorf("每问成 %d 个落一次盘,应为 2 次,得到 %d", mbRecordingsSaveEvery, saves)
+	if want := 417 / mbRecordingsSaveEvery; saves != want {
+		t.Errorf("每问成 %d 个落一次盘,应为 %d 次,得到 %d", mbRecordingsSaveEvery, want, saves)
 	}
 	if rec := have[codes[0]]; rec.Recording != "r-"+codes[0] || rec.Checked != now.Unix() {
 		t.Errorf("记下录音 id 和问的时刻: %+v", rec)

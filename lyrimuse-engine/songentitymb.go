@@ -24,8 +24,9 @@ const (
 	// mbRecordingsRetry:这一轮没问完(连续被限速)时,隔这么久再接着问,不等到第二天。
 	mbRecordingsRetry   = time.Hour
 	mbRecordingsRecheck = 365 * 24 * time.Hour
-	// mbRecordingsSaveEvery:每问成这么多个号落一次盘,第一轮要一个半小时,中途退出不丢进度。
-	mbRecordingsSaveEvery = 200
+	// mbRecordingsSaveEvery:每问成这么多个号落一次盘,被重启时最多丢这么多。退出那一刻的落盘常赶不上进程结束,不能指望它;
+	// 见 18 章决策 14。
+	mbRecordingsSaveEvery = 20
 	// 被限速(503)或请求失败时退避这么久再问同一个号,连续失败 mbRecordingsMaxFailures 次才停:按 IP 的限速在几十个请求
 	// 之后就会碰上,碰一次就停的话第一轮要拖好多天。
 	mbRecordingsBackoff     = 30 * time.Second
