@@ -333,6 +333,29 @@ func TestNeteaseUpcomingInsertedTracksKeepListOrder(t *testing.T) {
 	}
 }
 
+// 「添加到播放列表」「更多推荐」追加在末尾:是普通的列表成员,放完原来那几首接着放它们,不跳过。
+func TestNeteaseUpcomingAppendedTracksAreListMembers(t *testing.T) {
+	path := writeTestNeteaseQueue(t, testNeteaseShuffledSongs())
+	neteaseUpcoming("甲", "第5首", 3)
+	neteaseUpcoming("甲", "第6首", 3) // 顺序
+	order := []string{"第0首", "第1首", "第2首", "第3首", "第4首", "第5首", "第6首", "第7首", "追加甲", "追加乙"}
+	random := []float64{500, 900, 300, 1000, 100, 600, 800, 200, 700, 400}
+	rewriteTestNeteaseQueue(t, path, testNeteaseInsertedSongs(order, random))
+	got, _ := neteaseUpcoming("甲", "第6首", 3)
+	if want := []string{"第7首", "追加甲", "追加乙"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("末尾追加后得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+	got, _ = neteaseUpcoming("甲", "第7首", 3)
+	if want := []string{"追加甲", "追加乙", "第0首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("放到原来最后一首时得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+	// 换到追加的那首正好是数组下一位:照常判顺序。
+	got, _ = neteaseUpcoming("甲", "追加甲", 3)
+	if want := []string{"追加乙", "第0首", "第1首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("放到追加的歌时得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+}
+
 // 重写后少了曲目(换了一份列表,不是插歌):从头判,不沿用上一份的结论。
 func TestNeteaseUpcomingNewListIsNotAnInsertion(t *testing.T) {
 	path := writeTestNeteaseQueue(t, testNeteaseShuffledSongs())

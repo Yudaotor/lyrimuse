@@ -398,9 +398,10 @@ var neteaseVoiceTypes = map[string]bool{"voice": true, "downloadVoice": true, "l
 // 就沿用上一次的结论;还没有结论时两种各取一份。
 //
 // 「下一首播放」把歌插在当前这首后面,整份重写这份文件,还把每一首的 randomOrder 重新随机一遍。重写后的文件
-// 含有上一份的全部曲目、又多出几首时,当作同一份列表插了歌:多出来的记进 inserted,结论和起算位置(按曲目 id
-// 换算)接着用。插进来的歌排在最前面先放,换到它们时不拿来判顺序,往后数也从上一首不是插进来的歌(anchor)
-// 起算、跳过它们。见 09 章决策 224。
+// 含有上一份的全部曲目、又多出几首时,当作同一份列表加了歌,结论和起算位置(按曲目 id 换算)接着用。紧跟当前这首
+// 连成一段的新歌记进 inserted:插进来的歌排在最前面先放,换到它们时不拿来判顺序,往后数也从上一首不是插进来的歌
+// (anchor)起算、跳过它们。别处多出来的(「添加到播放列表」「更多推荐」追加在末尾)是普通的列表成员。
+// 见 09 章决策 224、229。
 type neteasePlayOrder struct {
 	path     string
 	list     string // 文件路径 + mtime + 曲目数
@@ -446,10 +447,8 @@ func neteaseObservePosition(path, list string, ids []string, pos int, rank []int
 		for id := range prev.inserted {
 			inserted[id] = true
 		}
-		for _, id := range ids {
-			if id != "" && !old[id] {
-				inserted[id] = true
-			}
+		for i := pos + 1; i < len(ids) && ids[i] != "" && (!old[ids[i]] || inserted[ids[i]]); i++ {
+			inserted[ids[i]] = true
 		}
 	default:
 		neteasePlayOrderLast = neteasePlayOrder{path: path, list: list, ids: ids, anchor: pos}
