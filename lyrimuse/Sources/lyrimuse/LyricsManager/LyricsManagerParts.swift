@@ -752,7 +752,8 @@ struct LyricsManagerTag: View {
     }
 }
 
-/// 「原文 / 原文 + 译文 / 原文 + 读音」三选一。这首没有的那一档灰掉,悬停说为什么。
+/// 「原文 / 原文 + 译文 / 原文 + 读音」三选一。这首没有的那一档灰掉,悬停一会儿或点一下弹出为什么
+/// (`UnavailableModeNote`)。
 struct LyricsManagerModePicker: View {
     @Binding var mode: LyricsManagerDisplayMode
     /// 这首实际按哪一档显示:选的那一档这首没有时是「原文」。高亮跟它走,选择本身(mode)不改,换到有的歌又回来。
@@ -765,8 +766,9 @@ struct LyricsManagerModePicker: View {
         HStack(spacing: 0) {
             ForEach(LyricsManagerDisplayMode.allCases) { option in
                 let enabled = isAvailable(option)
+                // 没有的那一档不挂 .disabled:禁用的控件收不到悬停和点击,说明就弹不出来。点了不切档。
                 Button {
-                    mode = option
+                    if enabled { mode = option }
                 } label: {
                     Text(option.title)
                         .padding(.horizontal, 12)
@@ -776,8 +778,7 @@ struct LyricsManagerModePicker: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.55))
-                .disabled(!enabled)
-                .help(enabled ? "" : unavailableHelp(option))
+                .modifier(UnavailableModeNote(text: enabled ? nil : unavailableHelp(option)))
             }
         }
         .font(.system(size: 12, weight: .medium))
@@ -785,6 +786,58 @@ struct LyricsManagerModePicker: View {
         .padding(3)
         .settingsCardBackground(cornerRadius: 16)
         .fixedSize()
+    }
+}
+
+/// 点不了的那一档的说明:悬停 0.5 秒弹出、移开就收,点一下也弹、点别处才收。时序同 `QuickHelpLabel`;不用 `.help()`,
+/// 系统 tooltip 要悬停约两秒才出、点击没反应。text 为 nil(这一档可用)时不弹。
+private struct UnavailableModeNote: ViewModifier {
+    let text: String?
+
+    /// 气泡要给定宽:弹出层按内容的理想宽度排,只给最大宽度的话长句被压成一行、尾巴截掉。一行放得下就按一行的宽度,
+    /// 放不下固定 260 换行。
+    static func bubbleWidth(_ text: String) -> CGFloat {
+        let font = NSFont.preferredFont(forTextStyle: .callout)
+        let oneLine = (text as NSString).size(withAttributes: [.font: font]).width
+        return min(260, ceil(oneLine) + 2)
+    }
+    @State private var isPresented = false
+    @State private var pinnedByClick = false
+    @State private var hoverTask: Task<Void, Never>?
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { inside in
+                guard text != nil else { return }
+                hoverTask?.cancel()
+                hoverTask = Task {
+                    try? await Task.sleep(for: inside ? .milliseconds(500) : .milliseconds(150))
+                    guard !Task.isCancelled else { return }
+                    if inside {
+                        isPresented = true
+                    } else if !pinnedByClick {
+                        isPresented = false
+                    }
+                }
+            }
+            .simultaneousGesture(TapGesture().onEnded {
+                guard text != nil else { return }
+                hoverTask?.cancel()
+                pinnedByClick = true
+                isPresented = true
+            })
+            .popover(isPresented: Binding(get: { isPresented && text != nil }, set: { isPresented = $0 }),
+                     arrowEdge: .bottom) {
+                Text(text ?? "")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: Self.bubbleWidth(text ?? ""), alignment: .leading)
+                    .padding(10)
+            }
+            .onChange(of: isPresented) { _, shown in
+                if !shown { pinnedByClick = false }
+            }
+            .onDisappear { hoverTask?.cancel() }
     }
 }
 
@@ -864,8 +917,17 @@ struct LyricsManagerPreviewList: View {
     var showsTimeColumn = true
     /// 行的左右留白(滚动条仍贴着边)。
     var horizontalInset: CGFloat = 0
+    /// 跟 `rows` 一一对应的对照栏(搜索候选歌词跟当前使用并排时);nil = 单栏。
+    var compare: [LyricsCompareCell]? = nil
+    /// 对照栏那份(当前使用)每一句的时间,按它自己的顺序;对照栏的当前句按它自己的时间轴找(`LyricsCompareCell.currentIndices`)。
+    var compareTimes: [Int?] = []
+    /// 对照栏那份自带的 `[offset:]`。
+    var compareEmbeddedOffsetMs = 0
     @StateObject private var playback = LyricsManagerPlaybackLine()
     @StateObject private var position = LyricsPreviewPositionLine()
+    /// 对照栏的当前句。它就是在用的那份,偏移按在用的算(`isCurrent: true`)。
+    @StateObject private var comparePosition = LyricsPreviewPositionLine()
+    private static let topFadeHeight: CGFloat = 24
 
     var body: some View {
         let current = currentIndex
@@ -883,14 +945,27 @@ struct LyricsManagerPreviewList: View {
                                                 pausedMs: isCurrent ? playback.pausedMs : nil,
                                                 karaokeOffsetMs: karaokeOffset,
                                                 showsTimeColumn: showsTimeColumn,
-                                                canSeek: canSeek, onSeek: onSeek)
+                                                canSeek: canSeek, onSeek: onSeek,
+                                                compare: compare.flatMap { $0.indices.contains(index) ? $0[index] : nil },
+                                                compareCurrentIndex: compare == nil ? nil : comparePosition.index,
+                                                comparePlaying: compare != nil && playback.isPlaying,
+                                                comparePausedMs: compare == nil ? nil : playback.pausedMs)
                             .id(index)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, horizontalInset)
-                .padding(.top, 14)
+                .padding(.top, Self.topFadeHeight)
                 .padding(.bottom, 60)
+            }
+            // 滚上去的行在顶边渐隐,不在上面那排控件底下被齐刷刷切掉半行。渐隐高度等于内容的顶部留白,
+            // 没滚动时第一行完整不受影响。
+            .mask {
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.topFadeHeight)
+                    Color.black
+                }
             }
             .modifier(LyricsManagerPauseFollowOnScroll(follow: $follow))
             .onChange(of: current) { _, _ in scrollToCurrent(proxy, animated: true) }
@@ -902,6 +977,7 @@ struct LyricsManagerPreviewList: View {
                 scrollToCurrent(proxy, animated: false)
             }
             .onChange(of: highlight) { _, _ in updatePosition() }
+            .onChange(of: compareTimes) { _, _ in updatePosition() }
             .onChange(of: isNowPlaying) { _, _ in updatePosition() }
             .onAppear {
                 updatePosition()
@@ -912,6 +988,9 @@ struct LyricsManagerPreviewList: View {
 
     private func updatePosition() {
         position.update(times: rows.map(\.timeMs), highlight: highlight, active: isNowPlaying)
+        comparePosition.update(times: compareTimes,
+                               highlight: .ownTimeline(embeddedOffsetMs: compareEmbeddedOffsetMs, isCurrent: true),
+                               active: isNowPlaying && compare != nil)
     }
 
     /// 跟随时把当前句滚到中间。还没唱到第一句(前奏,或刚换歌、播放位置还没对上)时回到顶上:当前句变成「没有」时
@@ -948,6 +1027,217 @@ struct LyricsManagerPreviewList: View {
     }
 }
 
+/// 对照栏的一格(`LyricsCandidateComparison.Pair` 换成界面要的):右边摆当前使用里跟这一块对上的那几句,只摆在块的
+/// 第一行;同一块后面几行 `continuation`,右边留空。
+struct LyricsCompareCell: Equatable {
+    let currentRows: [LyricsPreviewRow]
+    /// `currentRows` 在当前使用那份里是第几句,跟 `compareTimes` 同一套下标。
+    let currentIndices: [Int]
+    let kind: LyricsCandidateComparison.Kind
+    let continuation: Bool
+    let deltaMs: Int?
+    let candidateMarks: Set<Int>
+    let currentMarks: [Set<Int>]
+}
+
+/// 对照的版式:表头和每一行用同一组宽度,栏才对得齐。
+enum LyricsCompareLayout {
+    static let timeWidth: CGFloat = 84
+    static let spacing: CGFloat = 18
+    static let deltaWidth: CGFloat = 76
+    /// 对照整块最宽这么多、靠左摆:窗口再宽两栏也不再拉开,时间差紧跟在右栏后面,不被推到最右边离它说的那句很远。
+    static let maxWidth: CGFloat = 1_040
+    /// 对不上的字的颜色。
+    static let markColor = Color.orange
+
+    /// 「早 0.52 秒」「晚 1.2 秒」:这条候选比当前使用早 / 晚多少。不到 1 秒写两位小数:门槛是 0.5 秒,一位小数会把
+    /// 0.52 写成「0.5」,跟小结里的「超过 0.5 秒」对不上。
+    static func deltaText(_ deltaMs: Int) -> String {
+        let value = Double(abs(deltaMs)) / 1000
+        let seconds = String(format: value < 1 ? "%.2f" : "%.1f", value)
+        return String(format: deltaMs < 0 ? L10n.t("早 %@ 秒") : L10n.t("晚 %@ 秒"), seconds)
+    }
+
+    /// 行首那道竖线的颜色:改了字橙、只有候选有绿、只有当前有红;字全对得上的(含只是分行不同)不画,不跟真差别抢眼。
+    /// 同一块的几行都画,看得出这几句是一块。
+    static func barColor(_ kind: LyricsCandidateComparison.Kind) -> Color? {
+        switch kind {
+        case .same, .resegmented: return nil
+        case .changed: return Color.orange
+        case .onlyCandidate: return Color.green
+        case .onlyCurrent: return Color.red
+        }
+    }
+
+    /// 把对不上的那几个字(按 `Character` 下标)染成 `markColor`,其余用调用方的颜色。
+    static func marked(_ text: String, marks: Set<Int>) -> AttributedString {
+        var out = AttributedString()
+        for (offset, character) in (text.isEmpty ? " " : text).enumerated() {
+            var piece = AttributedString(String(character))
+            if marks.contains(offset) { piece.foregroundColor = markColor }
+            out += piece
+        }
+        return out
+    }
+}
+
+/// 对照表头:左「来源 选中的候选」、右「✓ 当前使用 来源」,跟侧栏同一套样子(来源胶囊用来源色,「当前使用」是
+/// 实心强调色徽章),一眼对得上侧栏里选中的那行和「当前使用」那块。跟行同一组宽度。
+struct LyricsCompareHeader: View {
+    let candidateSource: String
+    let currentSource: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            columns
+            Divider()
+        }
+        .frame(maxWidth: LyricsCompareLayout.maxWidth, alignment: .leading)
+    }
+
+    private var columns: some View {
+        HStack(spacing: LyricsCompareLayout.spacing) {
+            Color.clear.frame(width: LyricsCompareLayout.timeWidth, height: 1)
+            HStack(spacing: 6) {
+                sourceChip(candidateSource)
+                Text(L10n.t("选中的候选"))
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 6) {
+                Label(L10n.t("当前使用"), systemImage: "checkmark.seal.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.accentColor, in: Capsule())
+                sourceChip(currentSource)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Color.clear.frame(width: LyricsCompareLayout.deltaWidth, height: 1)
+        }
+        .font(.callout.weight(.medium))
+        .lineLimit(1)
+    }
+
+    private func sourceChip(_ source: String) -> some View {
+        let tint = sourceColor(source)
+        return Text(sourceDisplayName(source))
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+/// 对照栏里当前使用那一句:正文(对不上的字标色),开着译文 / 读音时下面再一行,字号跟左边一样,颜色略淡。
+/// 按它自己的时间轴唱到这一句时跟左边一样亮起、有逐字时间就逐字染色(偏移按在用的那份算),不标对不上的字。
+private struct LyricsCompareOtherLine: View {
+    let row: LyricsPreviewRow
+    let mode: LyricsManagerDisplayMode
+    let marks: Set<Int>
+    var isCurrent = false
+    var isPlaying = false
+    var pausedMs: Int? = nil
+
+    var body: some View {
+        if mode == .romanization, let groups = row.romanizationGroups, !groups.isEmpty {
+            LyricsRubyLine(groups: groups, marks: isCurrent ? [] : marks, weight: isCurrent ? .semibold : .regular,
+                           color: isCurrent ? Color.accentColor : Color.primary.opacity(0.78))
+                .textSelection(.enabled)
+        } else {
+            plain
+        }
+    }
+
+    private var plain: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(LyricsCompareLayout.marked(row.text, marks: isCurrent ? [] : marks))
+                .font(.system(size: 16, weight: isCurrent ? .semibold : .regular))
+                .foregroundStyle(textColor)
+                .fixedSize(horizontal: false, vertical: true)
+                .overlay(alignment: .topLeading) {
+                    if let segments = shownKaraoke {
+                        LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs)
+                    }
+                }
+            if let secondary {
+                Text(secondary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    private var secondary: String? {
+        let text: String?
+        switch mode {
+        case .original: text = nil
+        case .translation: text = row.translation
+        case .romanization: text = row.romanization
+        }
+        guard let text, !text.isEmpty else { return nil }
+        return text
+    }
+
+    private var shownKaraoke: [LyricsKaraokeSegment]? {
+        isCurrent && LyricsManagerKaraokeOverlay.isSupported ? row.karaoke : nil
+    }
+
+    private var textColor: Color {
+        if shownKaraoke != nil { return Color.accentColor.opacity(WordKaraokeGradient.dimOpacity) }
+        return isCurrent ? Color.accentColor : Color.primary.opacity(0.78)
+    }
+}
+
+/// 读音标在对应的字下面:一组字一列,字在上、读音在下,放不下时整组折行(同歌词窗口的逐词标注)。`marks` 是整句里
+/// 对不上的字(按 `Character` 下标),按组拆开标色。
+struct LyricsRubyLine: View {
+    let groups: [LyricsRubyGroup]
+    let marks: Set<Int>
+    let weight: Font.Weight
+    let color: Color
+
+    var body: some View {
+        WrapLayout(horizontalSpacing: 3, verticalSpacing: 4, rowAlignment: .leading) {
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
+                VStack(alignment: .center, spacing: 1) {
+                    Text(LyricsCompareLayout.marked(cell.group.text, marks: cell.marks))
+                        .font(.system(size: 16, weight: weight))
+                        .foregroundStyle(color)
+                    Text(cell.group.romanization ?? " ")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .fixedSize()
+            }
+        }
+    }
+
+    /// 每组带上落在它里面的那几个对不上的字(下标换成组内的)。
+    private var cells: [(group: LyricsRubyGroup, marks: Set<Int>)] {
+        var start = 0
+        return groups.map { group in
+            let count = group.text.count
+            let inside = Set(marks.filter { $0 >= start && $0 < start + count }.map { $0 - start })
+            start += count
+            return (group, inside)
+        }
+    }
+}
+
+/// 这一边没有这一句时占位的一道短横。
+private struct LyricsCompareMissingLine: View {
+    var body: some View {
+        Text(verbatim: "—")
+            .font(.system(size: 16))
+            .foregroundStyle(.tertiary)
+    }
+}
+
 /// 预览的一行。悬停状态在行自己身上:指针在时间上移动只重画这一行,不带着整张预览重算。
 private struct LyricsManagerPreviewRow: View {
     let row: LyricsPreviewRow
@@ -963,36 +1253,120 @@ private struct LyricsManagerPreviewRow: View {
     var showsTimeColumn = true
     let canSeek: Bool
     let onSeek: (Int) -> Void
+    var compare: LyricsCompareCell? = nil
+    /// 对照栏(当前使用那份)此刻唱到第几句,按它自己的时间轴。
+    var compareCurrentIndex: Int? = nil
+    /// 对照栏当前句逐字染色要的播放状态(同 `isPlaying` / `pausedMs`,只是不限左边的当前句)。
+    var comparePlaying = false
+    var comparePausedMs: Int? = nil
     @State private var hovered = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 18) {
-            if showsTimeColumn {
-                timeColumn
-                    .frame(width: 84, alignment: .trailing)
+        if let compare {
+            compareBody(compare)
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: LyricsCompareLayout.spacing) {
+                if showsTimeColumn {
+                    timeColumn
+                        .frame(width: LyricsCompareLayout.timeWidth, alignment: .trailing)
+                }
+                mainColumn
+                Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                // 逐字染色时这一层整句画成淡的强调色,唱过的部分由 overlay 那层盖上实色;两层同一段字、同一个字号。
-                Text(row.text.isEmpty ? " " : row.text)
-                    .font(.system(size: 16, weight: isCurrent ? .semibold : .regular))
-                    .foregroundStyle(textColor)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .overlay(alignment: .topLeading) {
-                        if let segments = shownKaraoke {
-                            LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,
-                                                        offsetMs: karaokeOffsetMs)
-                        }
-                    }
-                if let secondary {
-                    Text(secondary)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// 对照时一行四格:时间、这条候选、当前使用、时间差。行首一道竖线说这一块是哪种差别,对不上的字标色,不铺整行底色。
+    private func compareBody(_ cell: LyricsCompareCell) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: LyricsCompareLayout.spacing) {
+            timeColumn
+                .frame(width: LyricsCompareLayout.timeWidth, alignment: .trailing)
+            Group {
+                if cell.kind == .onlyCurrent {
+                    LyricsCompareMissingLine()
+                } else {
+                    mainColumn
                 }
             }
-            .textSelection(.enabled)
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // 同一块的几句排得跟一句换行差不多紧,读着是一段。
+            VStack(alignment: .leading, spacing: 2) {
+                if cell.continuation {
+                    Color.clear.frame(height: 1)
+                } else if cell.currentRows.isEmpty {
+                    LyricsCompareMissingLine()
+                } else {
+                    ForEach(Array(cell.currentRows.enumerated()), id: \.offset) { index, other in
+                        let isCurrentLine = cell.currentIndices.indices.contains(index)
+                            && cell.currentIndices[index] == compareCurrentIndex
+                        LyricsCompareOtherLine(row: other, mode: mode,
+                                               marks: cell.currentMarks.indices.contains(index) ? cell.currentMarks[index] : [],
+                                               isCurrent: isCurrentLine,
+                                               isPlaying: isCurrentLine && comparePlaying,
+                                               pausedMs: isCurrentLine ? comparePausedMs : nil)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if let deltaMs = cell.deltaMs {
+                    Text(LyricsCompareLayout.deltaText(deltaMs))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.orange)
+                } else {
+                    Color.clear.frame(height: 1)
+                }
+            }
+            .frame(width: LyricsCompareLayout.deltaWidth, alignment: .leading)
         }
+        .frame(maxWidth: LyricsCompareLayout.maxWidth, alignment: .leading)
+        .overlay(alignment: .leading) {
+            if let color = LyricsCompareLayout.barColor(cell.kind) {
+                Capsule()
+                    .fill(color)
+                    .frame(width: 3)
+                    .padding(.vertical, -4)
+            }
+        }
+    }
+
+    /// 「原文 + 读音」且这一句分得出读音组时,读音标在对应的字下面(`LyricsRubyLine`);否则正文一行、读音 / 译文排在下面。
+    /// 对字排的那一种当前句整句强调色,不逐字染色:逐字层是按整句一段文字画的,拆成一组一组之后对不上。
+    @ViewBuilder
+    private var mainColumn: some View {
+        if mode == .romanization, let groups = row.romanizationGroups, !groups.isEmpty {
+            LyricsRubyLine(groups: groups, marks: isCurrent ? [] : (compare?.candidateMarks ?? []),
+                           weight: isCurrent ? .semibold : .regular,
+                           color: isCurrent ? Color.accentColor : Color.primary)
+                .textSelection(.enabled)
+        } else {
+            plainColumn
+        }
+    }
+
+    private var plainColumn: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            // 逐字染色时这一层整句画成淡的强调色,唱过的部分由 overlay 那层盖上实色;两层同一段字、同一个字号。
+            // 对照时对不上的字标色(当前句照旧整句强调色,不标)。
+            Text(LyricsCompareLayout.marked(row.text, marks: isCurrent ? [] : (compare?.candidateMarks ?? [])))
+                .font(.system(size: 16, weight: isCurrent ? .semibold : .regular))
+                .foregroundStyle(textColor)
+                .fixedSize(horizontal: false, vertical: true)
+                .overlay(alignment: .topLeading) {
+                    if let segments = shownKaraoke {
+                        LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,
+                                                    offsetMs: karaokeOffsetMs)
+                    }
+                }
+            if let secondary {
+                Text(secondary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .textSelection(.enabled)
     }
 
     private var secondary: String? {

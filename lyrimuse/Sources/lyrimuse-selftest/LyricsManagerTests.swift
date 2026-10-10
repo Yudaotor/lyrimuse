@@ -121,6 +121,113 @@ func runLyricsManagerTests() {
         expectEqual(O.milliseconds(from: "600.001"), nil, "偏移输入: 超出 ±10 分钟不收")
     }
 
+    // ---- 搜索候选歌词:跟当前使用逐字对照 ----
+    do {
+        typealias C = LyricsCandidateComparison
+        func l(_ t: Int?, _ text: String) -> C.Line { C.Line(timeMs: t, text: text) }
+        func kinds(_ pairs: [C.Pair]) -> [C.Kind] { pairs.map(\.kind) }
+
+        let same = C.align(candidate: [l(1000, "Hello, world"), l(5000, "第二句")],
+                           current: [l(1200, "hello world"), l(5100, "第二句")])
+        expectEqual(kinds(same), [.same, .same], "对照: 标点大小写空格不同、时间差 0.5 秒以内算一样")
+        expectEqual(same.map(\.deltaMs), [nil, nil], "对照: 0.5 秒以内不写时间差")
+        expectEqual(C.summary(same).isIdentical, true, "对照: 一样时小结为逐句一致")
+
+        let retimed = C.align(candidate: [l(1800, "第一句")], current: [l(1000, "第一句")])
+        expectEqual(retimed.map(\.deltaMs), [800], "对照: 同一句晚 0.8 秒写时间差,正数是候选晚")
+        expectEqual(kinds(retimed), [.same], "对照: 只是时间差,字仍算一样")
+
+        // 一句长句在另一边拆成三句:字全对得上,归成一块、算分行不同,不算改字也不算多出来的。
+        let split = C.align(candidate: [l(1000, "不要哭"), l(2000, "我最亲爱的人"), l(3000, "我最好的玩伴"), l(9000, "下一句")],
+                            current: [l(1000, "不要哭 我最亲爱的人 我最好的玩伴"), l(9000, "下一句")])
+        expectEqual(kinds(split), [.resegmented, .resegmented, .resegmented, .same], "对照: 分行不同归成一块")
+        expectEqual(split.map(\.current), [[0], [], [], [1]], "对照: 当前那句只摆在块的第一行")
+        expectEqual(split.map(\.continuation), [false, true, true, false], "对照: 块里后面几行是接续")
+        let splitSummary = C.summary(split)
+        expectEqual(splitSummary, C.Summary(resegmented: 1), "对照: 分行不同按块计一处")
+        expectEqual(splitSummary.isIdentical, true, "对照: 只是分行不同仍算一致")
+        let reverseSplit = C.align(candidate: [l(1000, "甲乙丙丁")], current: [l(1000, "甲乙"), l(1500, "丙丁")])
+        expectEqual(reverseSplit.map(\.current), [[0, 1]], "对照: 候选一句对当前两句,两句都摆在右边")
+
+        // 改了字:只标对不上的那几个字(按字符下标,标点不算)。
+        let changed = C.align(candidate: [l(1000, "第一句"), l(5000, "我爱你中国"), l(9000, "第三句")],
+                              current: [l(1000, "第一句"), l(5000, "我爱我中国"), l(9000, "第三句")])
+        expectEqual(kinds(changed), [.same, .changed, .same], "对照: 同一句改了一个字")
+        expectEqual(changed[1].candidateMarks, [2], "对照: 候选里只标改了的那个字")
+        expectEqual(changed[1].currentMarks, [[2]], "对照: 当前那句只标改了的那个字")
+
+        let extra = C.align(candidate: [l(1000, "一二三"), l(3000, "多出来的"), l(9000, "四五六")],
+                            current: [l(1000, "一二三"), l(9000, "四五六")])
+        expectEqual(kinds(extra), [.same, .onlyCandidate, .same], "对照: 只有候选有的一句")
+        let missing = C.align(candidate: [l(1000, "一二三"), l(9000, "四五六")],
+                              current: [l(1000, "一二三"), l(3000, "少了的"), l(9000, "四五六")])
+        expectEqual(kinds(missing), [.same, .onlyCurrent, .same], "对照: 只有当前使用有的一句")
+        expectEqual(missing[1].candidate, nil, "对照: 只有当前有的那一行左边没有下标")
+
+        // 零星一个字对上(「的」)不把两句不相干的串成一块。
+        let weak = C.align(candidate: [l(1000, "春天的花"), l(20000, "夏天")],
+                           current: [l(1000, "春天的花"), l(10000, "秋天的月亮挂在天上"), l(20000, "夏天")])
+        expectEqual(kinds(weak), [.same, .onlyCurrent, .same], "对照: 只对上一个字的句子不连成块")
+
+        // 两句一个字也对不上、时间又隔得远:各算一边多出来的,按时间先后。
+        let far = C.align(candidate: [l(1000, "一二三"), l(20000, "甲乙丙"), l(40000, "四五六")],
+                          current: [l(1000, "一二三"), l(10000, "子丑寅"), l(40000, "四五六")])
+        expectEqual(kinds(far), [.same, .onlyCurrent, .onlyCandidate, .same], "对照: 时间相距超过 2 秒不当成改字")
+
+        // 繁简写法不同:不标字、不算改了字,小结单独记一处。
+        let script = C.align(candidate: [l(1000, "總愛對涼薄的人扯著笑臉"), l(5000, "第二句")],
+                             current: [l(1000, "总爱对凉薄的人扯着笑脸"), l(5000, "第二句")])
+        expectEqual(kinds(script), [.same, .same], "对照: 繁简写法不同不算改字")
+        expectEqual(script[0].candidateMarks, [], "对照: 繁简写法不同不标字")
+        expectEqual(C.summary(script), C.Summary(scriptVariants: 1), "对照: 繁简写法不同在小结里单独记")
+
+        let rows = [LyricsPreviewRow(timeMs: 2000, text: "x", translation: nil)]
+        expectEqual(C.lines(rows, embeddedOffsetMs: 500), [l(1500, "x")], "对照: 时间减去歌词自带的 [offset:]")
+
+        let summary = C.summary(C.align(
+            candidate: [l(1000, "一二三"), l(3000, "多出来的"), l(6000, "我爱你中国"), l(9800, "七八九")],
+            current: [l(1000, "一二三"), l(6000, "我爱我中国"), l(9000, "七八九")]))
+        expectEqual(summary, C.Summary(changed: 1, onlyCandidate: 1, onlyCurrent: 0, retimed: 1),
+                    "对照: 小结按种类计数")
+    }
+
+    // ---- 搜索候选歌词:「内容相同」按显示出来的行比,跟对照同一个标准 ----
+    do {
+        typealias D = LyricsCandidateDuplicates
+        let withCredits = LyricsPreviewText.rows(
+            lyrics: "[00:00.00]作词：甲\n[00:01.00]作曲：乙\n[00:10.00]喔～眼泪轻轻地擦\n[00:15.00]别忘那童年梦话", translation: "")
+        let plain = LyricsPreviewText.rows(lyrics: "[00:10.30]喔眼泪轻轻地擦\n[00:15.20]别忘那童年梦话", translation: "")
+        let a = D.displaySignature(withCredits, embeddedOffsetMs: 0)
+        let b = D.displaySignature(plain, embeddedOffsetMs: 0)
+        expectEqual(a.fingerprint == b.fingerprint && !a.fingerprint.isEmpty, true,
+                    "内容相同: 署名行、标点不同不影响按显示行比")
+        let tolerance = LyricsCandidateComparison.retimeThresholdMs
+        expectEqual(D.firstMatches([("netease", a.fingerprint, a.timeline), ("qq", b.fingerprint, b.timeline)],
+                                   toleranceMs: tolerance),
+                    ["qq": D.Match(anchor: "netease", sameTimeline: true)], "内容相同: 时间差 0.5 秒以内算内容相同")
+        let late = D.displaySignature(
+            LyricsPreviewText.rows(lyrics: "[00:10.90]喔眼泪轻轻地擦\n[00:15.00]别忘那童年梦话", translation: ""),
+            embeddedOffsetMs: 0)
+        expectEqual(D.firstMatches([("netease", a.fingerprint, a.timeline), ("qq", late.fingerprint, late.timeline)],
+                                   toleranceMs: tolerance),
+                    ["qq": D.Match(anchor: "netease", sameTimeline: false)], "内容相同: 差 0.9 秒只算文字相同")
+        expectEqual(D.displaySignature([], embeddedOffsetMs: 0).fingerprint, "", "内容相同: 没有词不当锚")
+    }
+
+    // ---- 预览:读音对到字上 ----
+    do {
+        let rows = LyricsPreviewText.rows(lyrics: "[00:01.00]あの日見渡した渚を\n[00:05.00]Hello world",
+                                          translation: "", romanizationScripts: [.japanese])
+        let ja = rows.first { $0.text.hasPrefix("あの日") }
+        let groups = ja?.romanizationGroups ?? []
+        expectEqual(!groups.isEmpty && groups.map(\.text).joined() == ja?.text, true,
+                    "读音对字: 日文行分出读音组,拼起来就是正文")
+        expectEqual(groups.contains { ($0.romanization ?? "").isEmpty == false }, true, "读音对字: 组上带读音")
+        expectEqual(rows.first { $0.text == "Hello world" }?.romanizationGroups, nil, "读音对字: 没有读音的行不分组")
+        let off = LyricsPreviewText.rows(lyrics: "[00:01.00]あの日見渡した渚を", translation: "")
+        expectEqual(off.first?.romanizationGroups, nil, "读音对字: 不标读音时不分组")
+    }
+
     // ---- 搜索候选歌词:侧栏分组、源自报曲长 ----
     do {
         typealias G = LyricsCandidateGroups
@@ -1770,8 +1877,10 @@ func runLyricsManagerTests() {
         expectEqual(sheet.contains("let groups = LyricsCandidateGroups.groups(")
                     && sheet.contains("if layout.sameExpanded {") && sheet.contains("if layout.excludedExpanded {")
                     && sheet.contains("layout.excludedForced = layout.current == nil && layout.main.isEmpty && layout.same.isEmpty")
-                    && sheet.contains(".onChange(of: selectedSource) { _, _ in revealSelection() }"), true,
+                    && sheet.contains(".onChange(of: selectedSource) { _, _ in\n            revealSelection()"), true,
                     "搜索候选歌词: 内容相同、不可用的候选收进折叠组,只剩不可用时那一组一直展开,选中落在收起的组里时展开")
+        expectEqual(sheet.contains("            revealSelection()\n            followPlayback = true\n        }"), true,
+                    "搜索候选歌词: 换选一条候选时重新跟随播放")
         expectEqual(sheet.contains("            searchConclusion\n            Spacer(minLength: 0)")
                     && sheet.contains("if !isSearching, loadError == nil, searchResults.isEmpty, currentShown != nil {"), true,
                     "搜索候选歌词: 搜完只剩「当前使用」那条时,结论挂在侧栏")

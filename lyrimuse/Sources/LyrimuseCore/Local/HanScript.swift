@@ -37,6 +37,9 @@ public enum HanScript {
         return nil
     }
 
+    /// 转成简体写法(ICU `Hant-Hans`)。只拿来比对,不当显示或 key 的权威写法。
+    public static func simplified(_ s: String) -> String { transform(s, "Hant-Hans") }
+
     private static func transform(_ s: String, _ id: String) -> String {
         let m = NSMutableString(string: s) as CFMutableString
         CFStringTransform(m, nil, id as CFString, false)

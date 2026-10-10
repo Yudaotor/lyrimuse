@@ -198,11 +198,26 @@ public struct LyricsPreviewRow: Equatable {
     public let romanization: String?
     /// 这一句在这份歌词自己逐字轨里的逐字段(`LyricsPreviewText.attachingKaraoke`);没有逐字轨、或字对不上时为 nil。
     public var karaoke: [LyricsKaraokeSegment]?
+    /// 读音对到字上的分组:一组字和标在它下面的读音,拼起来就是 `text`。分不出来时为 nil,读音整行排在下面。
+    public var romanizationGroups: [LyricsRubyGroup]?
 
-    public init(timeMs: Int?, text: String, translation: String?, romanization: String? = nil) {
+    public init(timeMs: Int?, text: String, translation: String?, romanization: String? = nil,
+                romanizationGroups: [LyricsRubyGroup]? = nil) {
         self.timeMs = timeMs
         self.text = text
         self.translation = translation
+        self.romanization = romanization
+        self.romanizationGroups = romanizationGroups
+    }
+}
+
+/// 预览里读音对字的一组:几个字和它们的读音(标点、空格这类没有读音的为 nil)。
+public struct LyricsRubyGroup: Equatable {
+    public let text: String
+    public let romanization: String?
+
+    public init(text: String, romanization: String?) {
+        self.text = text
         self.romanization = romanization
     }
 }
@@ -224,8 +239,15 @@ extension LyricsPreviewText {
         let lines = engine.allLines(idPrefix: "")
         if !lines.isEmpty {
             return lines.map {
-                LyricsPreviewRow(timeMs: $0.timeMs, text: $0.line.plainText ?? "", translation: $0.line.translation,
-                                 romanization: $0.line.romanization)
+                let text = $0.line.plainText ?? ""
+                // 有读音的行顺带按字分组(跟歌词窗口逐词标注同一条路),预览把读音标在对应的字下面。
+                let groups = $0.line.romanization == nil ? nil
+                    : engine.romanizationGroups(lineText: text, timeMs: $0.timeMs)?.map {
+                        LyricsRubyGroup(text: $0.words.map(\.text).joined(), romanization: $0.romanization)
+                    }
+                return LyricsPreviewRow(timeMs: $0.timeMs, text: text, translation: $0.line.translation,
+                                        romanization: $0.line.romanization,
+                                        romanizationGroups: groups.flatMap { $0.map(\.text).joined() == text ? $0 : nil })
             }
         }
         let text = forPreview(lyrics, title: title, artist: artist)

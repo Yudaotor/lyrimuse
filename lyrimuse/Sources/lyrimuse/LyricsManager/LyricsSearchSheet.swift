@@ -115,11 +115,19 @@ struct LyricsSearchSheet: View {
     /// 预览区那份按行拆好的正文(`LyricsPreviewText.rows` 要整首走一遍播放引擎),而查询词每敲一个字、
     /// 每到一批候选都会重算 body;选中的候选没变就沿用上一次的结果。
     @State private var previewMemo = PreviewRowsMemo()
+    /// 当前使用那份的预览行,对照用(`comparison`)。
+    @State private var currentPreviewMemo = PreviewRowsMemo()
+    @State private var displaySignatures = DisplaySignatureMemo()
     /// 预览显示原文 / 原文 + 译文 / 原文 + 读音;选中的候选没有那一档时按原文显示,选择本身不改,换到有的候选又回来。
     /// 跟歌词管理详情页记在同一个偏好键,两边改一处另一处跟着变,下次打开照旧。
     @AppStorage(LyricsManagerDisplayMode.defaultsKey) private var displayMode: LyricsManagerDisplayMode = .translation
-    /// 预览跟着播放滚到当前句(只在正在放的就是这首时有这颗开关),手动滚一下就暂停。
+    /// 预览跟着播放滚到当前句(只在正在放的就是这首时有这颗开关),手动滚一下就暂停;换选一条候选时重新打开。
     @State private var followPlayback = true
+    /// 右侧预览这一栏够不够宽并排对照(`compareMinWidth`)。只记跨没跨过这道线,不记宽度本身:拖窗口边框时宽度每帧
+    /// 都变,记宽度就是整张面板每帧重算一遍。
+    @State private var previewIsWide = false
+    /// 对照结果按两边内容缓存(`comparison`)。
+    @State private var comparisonMemo = ComparisonMemo()
     @StateObject private var nowPlaying = LyricsSearchNowPlaying()
     /// 查询对象(换歌)换了几次,见 apply 里那道守卫。
     @State private var subjectGeneration = 0
@@ -567,7 +575,11 @@ struct LyricsSearchSheet: View {
             storedCandidate = makeStoredCandidate()
         }
         .onChange(of: isMarkedInstrumental) { _, _ in instrumentalOverride = nil }
-        .onChange(of: selectedSource) { _, _ in revealSelection() }
+        // 换看另一条候选时重新跟随播放:手动滚动只暂停当前这一条的跟随,不带到下一条。
+        .onChange(of: selectedSource) { _, _ in
+            revealSelection()
+            followPlayback = true
+        }
         .task(id: searchSubject) { await load() }
         // 关闭/采纳/Esc 任何一条退出路径都把还在跑的引擎子进程停掉 —— 不停的话
         // 它会继续对九个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
@@ -684,32 +696,31 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 候选列表的表头:「候选 N」,右边是歌词源可用情况徽标,下面一行是搜索进度(右边不另放)。整块一打开就在、
-    /// 高度不变:候选陆续到达、搜完收起进度时,下面的列表都不跳。
+    /// 候选列表的表头:「候选 N」,搜索期间同一行接着进度,右边是歌词源可用情况徽标。进度不另起一行:整块高度从打开到
+    /// 搜完都不变,候选陆续到达、搜完收起进度时下面的列表都不跳,搜完也不在表头和第一条候选之间留一截空行。
     private var candidatesHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(L10n.t("候选"))
-                    .font(.headline)
-                Text("\(searchResults.count)")
-                    .font(.headline)
+        HStack(alignment: .center, spacing: 6) {
+            Text(L10n.t("候选"))
+                .font(.headline)
+            Text("\(searchResults.count)")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            // 一条候选都还没到时说「正在查询」,到了几条之后说「其它源仍在搜索」。放不下时截尾,徽标不让位。
+            if isSearching {
+                ProgressView().controlSize(.small)
+                    .padding(.leading, 4)
+                Text((candidates.isEmpty ? L10n.t("正在查询各个歌词源…") : L10n.t("其他歌词源仍在搜索中…"))
+                     + searchProgressSuffix)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                Spacer()
-                sourceAvailabilityBadge
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-            // 一条候选都还没到时说「正在查询」,到了几条之后说「其它源仍在搜索」;搜完这一行留空,高度照留。
-            HStack(spacing: 6) {
-                if isSearching {
-                    ProgressView().controlSize(.small)
-                    Text((candidates.isEmpty ? L10n.t("正在查询各个歌词源…") : L10n.t("其他歌词源仍在搜索中…"))
-                         + searchProgressSuffix)
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 18)
+            Spacer(minLength: 6)
+            sourceAvailabilityBadge
+                .layoutPriority(1)
         }
+        .frame(height: 24)
         .padding(.top, 6)
         .padding(.horizontal, 4)
     }
@@ -1233,11 +1244,32 @@ struct LyricsSearchSheet: View {
             currentSource: effectiveCurrentSource, currentFingerprint: effectiveCurrentFingerprint)
     }
 
-    /// source → 排在它前面、跟它一样的那个源(LyricsCandidateDuplicates.firstMatches)。候选最多九条,
-    /// 每次 body 算一遍不贵;指纹和每行时间都在 Candidate 构造时算好了。
+    /// source → 排在它前面、跟它一样的那个源(LyricsCandidateDuplicates.firstMatches)。按显示出来的行比、时间差
+    /// 0.5 秒以内算一样,跟对照说「逐句一致」同一个标准(`displaySignature`)。候选最多十来条,每条的签名按内容
+    /// 缓存一次(要过一遍播放引擎),之后每次 body 只做比较。
     private var duplicates: [String: LyricsCandidateDuplicates.Match] {
         LyricsCandidateDuplicates.firstMatches(
-            candidates.map { (source: $0.source, fingerprint: $0.fingerprint, timeline: $0.timeline) })
+            candidates.map { c in
+                let signature = displaySignatures.signature(c)
+                return (source: c.source, fingerprint: signature.fingerprint, timeline: signature.timeline)
+            },
+            toleranceMs: LyricsCandidateComparison.retimeThresholdMs)
+    }
+
+    /// 每条候选按显示出来的行算的比对签名,按候选内容缓存。
+    private final class DisplaySignatureMemo {
+        private var cache: [String: (fingerprint: String, timeline: [[Int]])] = [:]
+
+        func signature(_ c: LyricsSearchService.Candidate) -> (fingerprint: String, timeline: [[Int]]) {
+            let key = "\(c.id)|\(c.title)|\(c.artist)|\(c.lyrics.hashValue)|\(c.lyricsYRC.hashValue)"
+            if let hit = cache[key] { return hit }
+            let rows = LyricsPreviewText.rows(lyrics: c.lyrics, translation: "", title: c.title, artist: c.artist)
+            let embedded = LRCParser.parseOffsetMs(c.lyrics)
+            let signature = LyricsCandidateDuplicates.displaySignature(
+                rows, embeddedOffsetMs: embedded != 0 ? embedded : LRCParser.parseOffsetMs(c.lyricsYRC))
+            cache[key] = signature
+            return signature
+        }
     }
 
     private func applyButtonTitle(for c: LyricsSearchService.Candidate) -> String {
@@ -1515,13 +1547,93 @@ struct LyricsSearchSheet: View {
                 .padding(.top, 8)
             }
             let rows = previewMemo.rows(c, scripts: LocalPlaybackSource.shared.romanizationScripts)
+            let comparison = comparison(c, rows: rows)
+            if let comparison {
+                comparisonSummary(comparison.pairs)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+            }
             if rows.timed {
                 previewControls(rows)
                     .padding(.horizontal, 24)
                     .padding(.top, 12)
             }
-            lyricsPreview(c, rows: rows)
+            let sideBySide = comparison != nil && previewIsWide
+            if sideBySide, let current = comparison?.current {
+                LyricsCompareHeader(candidateSource: c.source, currentSource: current.source)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
+            }
+            lyricsPreview(c, rows: rows, comparison: sideBySide ? comparison : nil)
         }
+        .onGeometryChange(for: Bool.self, of: { $0.size.width >= Self.compareMinWidth }) { previewIsWide = $0 }
+    }
+
+    /// 右边预览栏宽到这么多,对照才并排摆(时间、两栏歌词、时间差);窄了只留上面那句对照小结。
+    private static let compareMinWidth: CGFloat = 900
+
+    /// 选中的这条跟当前使用那份的逐句对照。选中的就是当前使用的、没有当前使用的、两边有一边没时间戳时没有。
+    private struct Comparison {
+        let current: LyricsSearchService.Candidate
+        let currentRows: PreviewRows
+        let pairs: [LyricsCandidateComparison.Pair]
+    }
+
+    private func comparison(_ c: LyricsSearchService.Candidate, rows: PreviewRows) -> Comparison? {
+        guard !isCurrentCandidate(c), let current = currentShown, rows.timed else { return nil }
+        let currentRows = currentPreviewMemo.rows(current, scripts: LocalPlaybackSource.shared.romanizationScripts)
+        guard currentRows.timed else { return nil }
+        let pairs = comparisonMemo.pairs(
+            key: [c.id, c.fingerprint, current.id, current.fingerprint,
+                  String(rows.embeddedOffsetMs), String(currentRows.embeddedOffsetMs),
+                  String(rows.plain.count), String(currentRows.plain.count)].joined(separator: "|")
+        ) {
+            LyricsCandidateComparison.align(
+                candidate: LyricsCandidateComparison.lines(rows.plain, embeddedOffsetMs: rows.embeddedOffsetMs),
+                current: LyricsCandidateComparison.lines(currentRows.plain, embeddedOffsetMs: currentRows.embeddedOffsetMs))
+        }
+        return Comparison(current: current, currentRows: currentRows, pairs: pairs)
+    }
+
+    /// 只记最近一对。两份差得多时对齐一次要几十毫秒,面板每次刷新(搜索结果陆续到、在查询框里打字)都重算会卡
+    /// (见 11 章决策 109)。
+    private final class ComparisonMemo {
+        private var key = ""
+        private var cached: [LyricsCandidateComparison.Pair] = []
+
+        func pairs(key: String, compute: () -> [LyricsCandidateComparison.Pair]) -> [LyricsCandidateComparison.Pair] {
+            if key == self.key { return cached }
+            cached = compute()
+            self.key = key
+            return cached
+        }
+    }
+
+    /// 「与当前使用相比：3 处文字不同、多 2 句和 1 处时间相差超过 0.5 秒」;词和时间都一样时说一致,只是分行不同时
+    /// 也说一致、补一句分行不同。分行不同不算差别,有别的差别时不提。繁简写法不同也不算差别(不标字),但采用后
+    /// 显示的字会变,一律提一句。
+    private func comparisonSummary(_ pairs: [LyricsCandidateComparison.Pair]) -> some View {
+        let s = LyricsCandidateComparison.summary(pairs)
+        var parts: [String] = []
+        if s.changed > 0 { parts.append(String(format: L10n.plural("%@ 处文字不同", count: s.changed), "\(s.changed)")) }
+        if s.onlyCandidate > 0 { parts.append(String(format: L10n.plural("多 %@ 句", count: s.onlyCandidate), "\(s.onlyCandidate)")) }
+        if s.onlyCurrent > 0 { parts.append(String(format: L10n.plural("少 %@ 句", count: s.onlyCurrent), "\(s.onlyCurrent)")) }
+        if s.retimed > 0 {
+            parts.append(String(format: L10n.plural("%@ 处时间相差超过 0.5 秒", count: s.retimed), "\(s.retimed)"))
+        }
+        let text: String
+        if parts.isEmpty {
+            text = s.scriptVariants > 0 ? L10n.t("与当前使用的歌词文字一致，只是繁简写法不同")
+                : s.resegmented > 0 ? L10n.t("与当前使用的歌词文字一致，只是分行不同")
+                : L10n.t("与当前使用的歌词逐句一致")
+        } else {
+            if s.scriptVariants > 0 { parts.append(L10n.t("繁简写法不同")) }
+            text = String(format: L10n.t("与当前使用相比：%@"), L10n.list(parts))
+        }
+        return Label(text, systemImage: parts.isEmpty ? "checkmark.circle" : "arrow.left.arrow.right")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// 正在放的就是面板里这首。
@@ -1570,13 +1682,34 @@ struct LyricsSearchSheet: View {
     ///
     /// 正在放的就是这首时,按这条候选自己的时间轴标出此刻唱到哪一句(`.ownTimeline`),不按在用那份歌词的当前句找字:
     /// 要比的正是各条候选的轴准不准,而在用的那份可能是错的、也可能没有。点时间从那一句播放。见 11 章决策 98。
-    private func lyricsPreview(_ c: LyricsSearchService.Candidate, rows: PreviewRows) -> some View {
+    ///
+    /// 并排对照时(`comparison` 非 nil)行按对齐结果排:左边是这条候选那一句(当前使用多出来的那句左边空着、没有时间),
+    /// 右边是当前使用对上的那一句。当前句、跟随、逐字染色、点时间播放都照旧按左边这条候选的时间轴;右边那份按它自己的
+    /// 时间轴另标当前句、逐字染色,两边谁先亮看得出哪份轴准。
+    private func lyricsPreview(_ c: LyricsSearchService.Candidate, rows: PreviewRows,
+                               comparison: Comparison? = nil) -> some View {
         let mode = shownMode(rows)
         let highlight = LyricsPreviewHighlight.ownTimeline(embeddedOffsetMs: rows.embeddedOffsetMs,
                                                            isCurrent: isCurrentCandidate(c))
         let playing = isSongPlaying && rows.timed
+        let own = comparison == nil ? (mode == .romanization ? rows.romanized : rows.plain) : Self.rowsForMode(mode, rows)
+        var shown = own
+        var cells: [LyricsCompareCell]?
+        var compareTimes: [Int?] = []
+        if let comparison {
+            let other = Self.rowsForMode(mode, comparison.currentRows)
+            shown = comparison.pairs.map { pair in
+                pair.candidate.map { own[$0] } ?? LyricsPreviewRow(timeMs: nil, text: "", translation: nil)
+            }
+            cells = comparison.pairs.map { pair in
+                LyricsCompareCell(currentRows: pair.current.map { other[$0] }, currentIndices: pair.current,
+                                  kind: pair.kind, continuation: pair.continuation, deltaMs: pair.deltaMs,
+                                  candidateMarks: pair.candidateMarks, currentMarks: pair.currentMarks)
+            }
+            compareTimes = other.map(\.timeMs)
+        }
         return LyricsManagerPreviewList(
-            rows: mode == .romanization ? rows.romanized : rows.plain,
+            rows: shown,
             mode: mode,
             isNowPlaying: playing,
             follow: $followPlayback,
@@ -1584,9 +1717,17 @@ struct LyricsSearchSheet: View {
             onSeek: { ms in PlaybackCoordinator.shared.seek(toMs: max(0, ms - highlight.offsetMs)) },
             highlight: highlight,
             showsTimeColumn: rows.timed,
-            horizontalInset: 24)
+            horizontalInset: 24,
+            compare: cells,
+            compareTimes: compareTimes,
+            compareEmbeddedOffsetMs: comparison?.currentRows.embeddedOffsetMs ?? 0)
         // 换一条候选重建:没在放这首、或者关了跟随时从头看起,在跟随时直接落到当前句。
         .id(c.id)
+    }
+
+    /// 对照时按显示档取行。读音那份跟原文那份行数不一样时退回原文那份:对照的下标是按原文那份算的。
+    private static func rowsForMode(_ mode: LyricsManagerDisplayMode, _ rows: PreviewRows) -> [LyricsPreviewRow] {
+        mode == .romanization && rows.romanized.count == rows.plain.count ? rows.romanized : rows.plain
     }
 
     // 这个候选实际匹配到的歌名 / 歌手 / 专辑,各占一行;哪一项是空的就不显示那一行,不留空白占位。歌手和专辑别合并成
@@ -1665,8 +1806,11 @@ struct LyricsSearchSheet: View {
                 if c.hasTranslation {
                     characteristicBadge(L10n.t("译文"), "character.book.closed", LyricsFeatureTint.translation)
                 }
+                // 「自带」:标的是歌词源给了读音。预览和歌词窗口里的读音还包括按设置现算的,没这个标记的也可能有读音,
+                // 悬停说清楚,不然看着像标记和预览对不上。
                 if c.hasRomanization {
-                    characteristicBadge(L10n.t("读音"), "textformat.abc", LyricsFeatureTint.romanization, latinIcon: true)
+                    characteristicBadge(L10n.t("自带读音"), "textformat.abc", LyricsFeatureTint.romanization, latinIcon: true)
+                        .help(L10n.t("歌词源自带的读音。没有这个标记的歌词，也会按设置中「标注读音的语言」自动标注"))
                 }
                 // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
                 if showsSource {

@@ -2212,6 +2212,14 @@ public final class LyricsSyncEngine {
     /// 一个词里落进好几个片段时,把这些片段的读音拼起来给这一个词。
     /// `line` 由调用方传入(= words.map(\.text).joined()):activeLine/allLines 本来就要为
     /// romanizationText 拼这一份,这里复用,别再拼第二遍。
+    /// 没有逐字时间的一句按读音分组,给预览把读音对到字上(`LyricsPreviewText.rows`)。每个字当成一个「词」
+    /// (时间是假的,只占位),走跟逐字行同一条 `wordGroups`:怎么分、用哪份读音跟歌词窗口的逐词标注一致。
+    /// 这一行不标读音、或字数跟音节对不上时为 nil。
+    public func romanizationGroups(lineText: String, timeMs: Int) -> [SyncedLyricWordGroup]? {
+        let words = lineText.enumerated().map { SyncedLyricWord(text: String($1), startMs: timeMs + $0, durationMs: 1) }
+        return wordGroups(for: words, line: lineText)
+    }
+
     private func wordGroups(for words: [SyncedLyricWord], line: String) -> [SyncedLyricWordGroup]? {
         guard !words.isEmpty else { return nil }
         // 缓存 key 必须带上时间身份(首词 startMs),不能只按行文本:词组里内嵌**绝对**

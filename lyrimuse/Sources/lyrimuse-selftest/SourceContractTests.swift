@@ -3930,11 +3930,13 @@ func runSourceContractTests() {
                     && sheet.contains("let name = sourceDisplayName(c.source)")
                     && sheet.contains("let anchor = sourceDisplayName(duplicate.anchor)"), true,
                     "搜索候选歌词: 来源名和来源色走全局那一份,Spotify / Amazon Music / KKBOX 不露小写的原始 id")
-        // 表头、徽标一打开就在,进度那一行搜完也留着高度:别再等第一行才冒出来(用户:「不要页面发生跳动」)。
+        // 表头、徽标一打开就在,进度跟「候选 N」同一行、表头定高:搜索中和搜完列表都不跳(用户:「不要页面发生跳动」),
+        // 搜完也不在表头下面留一截空行。别把进度挪回单独一行。
         expectEqual(!sheet.contains("if sourcesTotal > 0 || !candidates.isEmpty {")
                     && !sheet.contains("if sourcesTotal > 0 {\n            Button {\n                showSourceAvailability = true")
-                    && sheet.contains("+ searchProgressSuffix)\n                }\n            }\n            .font(.caption)\n            .foregroundStyle(.secondary)\n            .frame(maxWidth: .infinity, alignment: .leading)\n            .frame(height: 18)"), true,
-                    "搜索候选歌词: 表头和徽标一打开就在,进度那一行高度一直留着,列表不跳")
+                    && sheet.contains("private var candidatesHeader: some View {\n        HStack(alignment: .center, spacing: 6) {")
+                    && sheet.contains("            sourceAvailabilityBadge\n                .layoutPriority(1)\n        }\n        .frame(height: 24)"), true,
+                    "搜索候选歌词: 表头和徽标一打开就在,进度在表头同一行、表头定高,列表不跳也不留空行")
         // 独立小窗(悬浮窗 ⚙)标题栏透明、红灯就是关闭,面板不画「关闭」、Esc 由一颗不可见的按钮接;sheet 没有红灯,
         // 右上角得有「关闭」。透明要靠场景的 .windowStyle(.hiddenTitleBar):手设 titlebarAppearsTransparent 会在窗口
         // 激活时被 SwiftUI 盖回去,顶上留一条模糊底色带。这几样退回去都不会编译报错。
@@ -4021,7 +4023,7 @@ func runSourceContractTests() {
         let karaokeOverlay = (managerParts.components(separatedBy: "private struct LyricsManagerKaraokeOverlay: View").dropFirst().first ?? "")
             .components(separatedBy: "/// 逐字染色那一层里,一段字是第几段").first ?? ""
         expectEqual(previewRow.contains(".overlay(alignment: .topLeading) {")
-                    && previewRow.contains("LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,\n                                                        offsetMs: karaokeOffsetMs)")
+                    && previewRow.contains("LyricsManagerKaraokeOverlay(segments: segments, isPlaying: isPlaying, pausedMs: pausedMs,\n                                                    offsetMs: karaokeOffsetMs)")
                     && karaokeOverlay.contains("FrameTimeline(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !isPlaying)")
                     && karaokeOverlay.contains(".textRenderer(LyricsManagerKaraokeRenderer(")
                     && karaokeOverlay.contains("return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? coordinator.pausedPositionMs ?? 0)\n            + (offsetMs ?? coordinator.currentLyricsOffsetMs)"),

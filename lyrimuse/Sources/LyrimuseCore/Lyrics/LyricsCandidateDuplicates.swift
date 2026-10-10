@@ -36,7 +36,8 @@ public enum LyricsCandidateDuplicates {
     /// 不在结果里 ——徽章挂在后来者身上,指向排在前面的那个;指纹为空(没有词)的候选既不当锚也不被标。
     /// 同一个 source 出现两次时只认第一次(候选本来就一源一条)。
     public static func firstMatches(
-        _ ordered: [(source: String, fingerprint: String, timeline: [[Int]])]
+        _ ordered: [(source: String, fingerprint: String, timeline: [[Int]])],
+        toleranceMs: Int = timelineToleranceMs
     ) -> [String: Match] {
         var seen = Set<String>()
         var earlier: [(source: String, fingerprint: String, timeline: [[Int]])] = []
@@ -44,7 +45,7 @@ public enum LyricsCandidateDuplicates {
         for item in ordered {
             guard !item.fingerprint.isEmpty, !item.source.isEmpty, seen.insert(item.source).inserted else { continue }
             let sameText = earlier.filter { $0.fingerprint == item.fingerprint }
-            if let same = sameText.first(where: { sameTimeline($0.timeline, item.timeline) }) {
+            if let same = sameText.first(where: { sameTimeline($0.timeline, item.timeline, toleranceMs: toleranceMs) }) {
                 out[item.source] = Match(anchor: same.source, sameTimeline: true)
             } else if let first = sameText.first {
                 out[item.source] = Match(anchor: first.source, sameTimeline: false)
@@ -74,14 +75,25 @@ public enum LyricsCandidateDuplicates {
     }
 
     /// 两份词一样的歌词每行时间是不是也一样:行数、每行时间戳的个数都相同,每个时间戳相差不超过
-    /// `timelineToleranceMs`。
-    public static func sameTimeline(_ a: [[Int]], _ b: [[Int]]) -> Bool {
+    /// `toleranceMs`。
+    public static func sameTimeline(_ a: [[Int]], _ b: [[Int]], toleranceMs: Int = timelineToleranceMs) -> Bool {
         guard a.count == b.count else { return false }
         for (x, y) in zip(a, b) {
             guard x.count == y.count else { return false }
-            for (p, q) in zip(x, y) where abs(p - q) > timelineToleranceMs { return false }
+            for (p, q) in zip(x, y) where abs(p - q) > toleranceMs { return false }
         }
         return true
+    }
+
+    /// 按**显示出来的行**算的比对口径,给「搜索候选歌词」侧栏用(配 `firstMatches(_:toleranceMs:)` 传
+    /// `LyricsCandidateComparison.retimeThresholdMs`):跟对照(`LyricsCandidateComparison`)说「逐句一致」是同一个
+    /// 标准 —— 署名、抬头这些显示时过滤掉的行不算,文字只比字母和数字,时间按实际生效的算(减自带 `[offset:]`)。
+    /// 按原文比的话,一家多几行署名、一句多个「～」就判成不一样,对照却说逐句一致。见 11 章决策 108。
+    public static func displaySignature(_ rows: [LyricsPreviewRow], embeddedOffsetMs: Int)
+        -> (fingerprint: String, timeline: [[Int]]) {
+        let keys = rows.map { LyricsCandidateComparison.key($0.text) }
+        guard keys.contains(where: { !$0.isEmpty }) else { return ("", []) }
+        return (keys.joined(separator: "\n"), rows.map { $0.timeMs.map { [$0 - embeddedOffsetMs] } ?? [] })
     }
 
     /// `mm:ss.xx` / `mm:ss.xxx` / `mm:ss` → 毫秒;别的标签(`ti:…`、`offset:…`)返回 nil。
