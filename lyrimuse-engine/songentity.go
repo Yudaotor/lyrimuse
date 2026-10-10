@@ -255,7 +255,13 @@ func (u *songUnion) union(ra, rb int) {
 
 // buildShareGroups:实体内按能单独连共享组的证据边再并一次。被否决过的边不算。
 func (b *songEntityBuild) buildShareGroups() {
-	kinds := map[[2]int]map[string]bool{} // 一对写法之间有哪几种全量(不只计数)的中证据
+	kinds := b.mediumKinds()
+	b.shareOf = b.shareGroups(func(e songEdge) bool { return b.shareEligible(e, kinds) })
+}
+
+// mediumKinds:每一对写法之间有哪几种全量(不只计数)的中证据。被否决过的边不算。
+func (b *songEntityBuild) mediumKinds() map[[2]int]map[string]bool {
+	kinds := map[[2]int]map[string]bool{}
 	for i, e := range b.edges {
 		if b.edgeVeto[i] || e.countOnly || e.strong() {
 			continue
@@ -266,12 +272,16 @@ func (b *songEntityBuild) buildShareGroups() {
 		}
 		kinds[k][e.kind] = true
 	}
+	return kinds
+}
+
+// shareGroups:同一个实体里、eligible 认的没被否决的边把写法连成组,返回每条写法所在组里最小的写法下标。
+func (b *songEntityBuild) shareGroups(eligible func(songEdge) bool) []int {
 	parent := make([]int, len(b.variants))
 	for i := range parent {
 		parent[i] = i
 	}
-	var find func(int) int
-	find = func(x int) int {
+	find := func(x int) int {
 		for parent[x] != x {
 			parent[x] = parent[parent[x]]
 			x = parent[x]
@@ -279,7 +289,7 @@ func (b *songEntityBuild) buildShareGroups() {
 		return x
 	}
 	for i, e := range b.edges {
-		if b.edgeVeto[i] || b.entityOf[e.a] != b.entityOf[e.b] || !b.shareEligible(e, kinds) {
+		if b.edgeVeto[i] || b.entityOf[e.a] != b.entityOf[e.b] || !eligible(e) {
 			continue
 		}
 		ra, rb := find(e.a), find(e.b)
@@ -290,14 +300,16 @@ func (b *songEntityBuild) buildShareGroups() {
 			parent[rb] = ra
 		}
 	}
-	b.shareOf = make([]int, len(b.variants))
+	out := make([]int, len(b.variants))
 	for i := range b.variants {
-		b.shareOf[i] = find(i)
+		out[i] = find(i)
 	}
+	return out
 }
 
 // shareEligible:这条边能不能单独把两条写法连进共享组。强证据、写法族里歌手歌名逐字相同的、时长 + 歌词的可以;
-// 检索配的 id 要有一路独立旁证:同一对写法之间另有一种全量的中证据,或者两边歌词各自独立得来又对得上。
+// 检索配的 id 要有一路旁证:同一对写法之间另有一种全量的中证据(在 kinds 里;传 nil 就不认这一路),或者两边歌词
+// 各自独立得来又对得上。
 func (b *songEntityBuild) shareEligible(e songEdge, kinds map[[2]int]map[string]bool) bool {
 	switch {
 	case e.countOnly:

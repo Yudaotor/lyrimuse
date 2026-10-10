@@ -24,7 +24,8 @@ import (
 //
 // 三层:多写法实体(songLabelEntityQuota 个,只靠中证据连着的、含一中一外写法的优先)、被否决挡下的写法对、单写法实体里
 // 歌名或歌手相近的写法对。顺序按键的哈希取,同一份缓存重跑抽到的一样。另有补抽的层(`-stratum`),各写一个文件,
-// 不动已经标好的那份:isrc 是靠 ISRC 连着、署名或专辑版次不同的写法对。
+// 不动已经标好的那份:isrc 是靠 ISRC 连着、署名或专辑版次不同的写法对;share 是检索 id 只靠另一种中证据进了共享组的
+// 写法对(18 章决策 23)。
 
 const (
 	songLabelEntityQuota = 200
@@ -37,13 +38,16 @@ const (
 	songLabelPerVetoReason = 15
 	// isrc 层:署名不同、专辑版次不同的各最多抽这么多。
 	songLabelISRCPerReason = 60
+	// share 层:每种中证据组合最多抽这么多(本机全部 127 对,够全抽)。
+	songLabelSharePerKinds = 200
 )
 
 // songLabelStrata:`-stratum` 认的补抽层 → 写到的文件名。空串是最初那三层。
-var songLabelStrata = map[string]string{"": "sample.jsonl", "isrc": "sample-isrc.jsonl"}
+var songLabelStrata = map[string]string{"": "sample.jsonl", "isrc": "sample-isrc.jsonl", "share": "sample-share.jsonl"}
 
 // songLabelItem:标注集的一条。标注:entity 层填 same(全是同一份录音)或 mixed 加 wrong(不属于这首的写法键);
-// vetoed、near、isrc 层填 same 或 different;判不了填 unsure。Why 是 isrc 层抽中的原因(credit / edition)。
+// vetoed、near、isrc、share 层填 same 或 different;判不了填 unsure。Why 是 isrc 层抽中的原因(credit / edition)、
+// share 层这一对之间有哪几种中证据。
 type songLabelItem struct {
 	ID       string             `json:"id"`
 	Stratum  string             `json:"stratum"`
@@ -93,9 +97,12 @@ func (b *songEntityBuild) writeLabelSample(dir, stratum string) (int, string, er
 		return 0, "", err
 	}
 	var items []songLabelItem
-	if stratum == "isrc" {
+	switch stratum {
+	case "isrc":
 		items = b.sampleISRC()
-	} else {
+	case "share":
+		items = b.sampleShare()
+	default:
 		items = append(items, b.sampleEntities()...)
 		items = append(items, b.sampleVetoed()...)
 		items = append(items, b.sampleNear()...)
@@ -345,6 +352,46 @@ func (b *songEntityBuild) sampleISRC() []songLabelItem {
 	return out
 }
 
+// sampleShare:检索配的 id 只靠「同一对写法之间另有一种中证据」进了共享组、不认这一路就不在同一个共享组的写法对。
+// 另一种中证据多是写法族边或网易云登记名,跟这条检索 id 出自同一个歌名,不算独立旁证(见 18 章决策 23)。
+func (b *songEntityBuild) sampleShare() []songLabelItem {
+	kinds := b.mediumKinds()
+	strict := b.shareGroups(func(e songEdge) bool { return b.shareEligible(e, nil) })
+	type cand struct {
+		x, y int
+		why  string
+		hash uint64
+	}
+	seen := map[string]bool{}
+	byWhy := map[string][]cand{}
+	for i, e := range b.edges {
+		if b.edgeVeto[i] || b.entityOf[e.a] != b.entityOf[e.b] || strict[e.a] == strict[e.b] || !b.shareEligible(e, kinds) {
+			continue
+		}
+		vx, vy := &b.variants[e.a], &b.variants[e.b]
+		k := songPairKey(vx.key, vy.key)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		why := strings.Join(songSortedKeys(kinds[[2]int{e.a, e.b}]), "+")
+		byWhy[why] = append(byWhy[why], cand{e.a, e.b, why, songLabelHash(k)})
+	}
+	var out []songLabelItem
+	for _, why := range songSortedKeys(byWhy) {
+		cs := byWhy[why]
+		sort.Slice(cs, func(i, j int) bool { return cs[i].hash < cs[j].hash })
+		for _, c := range cs[:min(len(cs), songLabelSharePerKinds)] {
+			out = append(out, songLabelItem{
+				ID: fmt.Sprintf("share-%016x", c.hash), Stratum: "share", Why: c.why,
+				Variants: []songLabelVariant{b.labelVariant(c.x), b.labelVariant(c.y)},
+				Pairs:    []songLabelPair{b.labelPair(c.x, c.y)},
+			})
+		}
+	}
+	return out
+}
+
 // songISRCLabelReason:credit 是署名不同;edition 是专辑版次不同:两边版本词不同,或者专辑名去掉括号、破折号尾巴之后
 // 相同、全名不同(「In The Lonely Hour」与「In The Lonely Hour (10 Year Anniversary Edition)」)。都不是为空,两样都有时
 // 记 credit。
@@ -421,7 +468,7 @@ func (b *songEntityBuild) writeLabelScore(path string, w io.Writer) error {
 		idx[b.variants[i].key] = i
 	}
 	type tally struct{ labeled, bad, unsure, stillBad int }
-	var ent, veto, near, isrc tally
+	var ent, veto, near, isrc, share tally
 	var shareBad, isrcShareBad int
 	var notes []string
 	sc := bufio.NewScanner(f)
@@ -511,6 +558,24 @@ func (b *songEntityBuild) writeLabelScore(path string, w io.Writer) error {
 				}
 			}
 			notes = append(notes, fmt.Sprintf("并错:%s %s ↔ %s(%s,现在%s)%s", it.ID, it.Variants[0].Key, it.Variants[1].Key, it.Why, now, it.Note))
+		case "share":
+			share.labeled++
+			if it.Label == "unsure" {
+				share.unsure++
+				continue
+			}
+			if it.Label != "different" || len(it.Variants) != 2 {
+				continue
+			}
+			share.bad++
+			xi, okx := idx[it.Variants[0].Key]
+			yi, oky := idx[it.Variants[1].Key]
+			now := "已不在同一个共享组"
+			if okx && oky && b.shareOf[xi] == b.shareOf[yi] {
+				share.stillBad++
+				now = "仍在同一个共享组"
+			}
+			notes = append(notes, fmt.Sprintf("并错:%s %s ↔ %s(%s,现在%s)%s", it.ID, it.Variants[0].Key, it.Variants[1].Key, it.Why, now, it.Note))
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -538,6 +603,10 @@ func (b *songEntityBuild) writeLabelScore(path string, w io.Writer) error {
 	if isrc.labeled > 0 {
 		fmt.Fprintf(w, "靠 ISRC 连着、署名或专辑版次不同的写法对:标了 %d 对(判不了 %d),抽样时其实不是同一首 %d 对(%s);现在仍在一起 %d 对,合错率 %s,其中同一个共享组 %d 对\n",
 			isrc.labeled, isrc.unsure, isrc.bad, rate(isrc.bad, isrc.labeled-isrc.unsure), isrc.stillBad, rate(isrc.stillBad, isrc.labeled-isrc.unsure), isrcShareBad)
+	}
+	if share.labeled > 0 {
+		fmt.Fprintf(w, "检索 id 只靠另一种中证据进共享组的写法对:标了 %d 对(判不了 %d),抽样时其实不是同一首 %d 对(%s);现在仍在同一个共享组 %d 对,合错率 %s\n",
+			share.labeled, share.unsure, share.bad, rate(share.bad, share.labeled-share.unsure), share.stillBad, rate(share.stillBad, share.labeled-share.unsure))
 	}
 	sort.Strings(notes)
 	for _, n := range notes {

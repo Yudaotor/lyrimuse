@@ -3,7 +3,9 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -30,7 +32,7 @@ func runSongEntitiesCLI(args []string) {
 	cpuProfile := fs.String("cpuprofile", "", "建表那一段的 CPU 采样写到这个文件")
 	memProfile := fs.String("memprofile", "", "建表之后的内存分配采样写到这个文件")
 	sample := fs.String("sample", "", "按证据分层抽一份标注集,写到这个目录(放仓库外);文件已经存在时不覆盖")
-	stratum := fs.String("stratum", "", "跟 -sample 一起用:只抽这一层补抽的(isrc),写到 sample-<层>.jsonl")
+	stratum := fs.String("stratum", "", "跟 -sample 一起用:只抽这一层补抽的(isrc / share),写到 sample-<层>.jsonl")
 	score := fs.String("score", "", "拿标好的标注集(jsonl)对照当前规则算合错率、漏合率")
 	dump := fs.String("dump", "", "把每个实体的写法键写到这个文件(一行一个实体),改规则之前存一份给 -diff 用")
 	diff := fs.String("diff", "", "拿 -dump 存下的那份对照这一次建表,列出新并的实体和拆开的实体")
@@ -40,6 +42,11 @@ func runSongEntitiesCLI(args []string) {
 	fetchNetease := fs.Bool("fetch-netease-names", false, "建表前先把到期的网易云歌曲 id 补扫进 -netease-names 那个文件(联网)")
 	mbRecordings := fs.String("mb-recordings", "", "MusicBrainz 录音补扫结果的文件(缺省是配置目录里常驻引擎写的那份)")
 	fetchMB := fs.Bool("fetch-mb-recordings", false, "建表前先把到期的号按 MusicBrainz 补扫进 -mb-recordings 那个文件(联网,每秒一次)")
+	sharePlan := fs.String("share-plan", "", "阶段 3 空跑:谁会换词、谁按不变式 6 留着自己那份、哪些单曲偏移会对不上,写到这个文件(只读、不联网)")
+	offsetsPath := fs.String("offsets", "", "跟 -share-plan 一起用:App 单曲偏移的 JSON(defaults read me.yudaotor.lyrimuse np:lyricsOffsetsByTrackJSON 的输出)")
+	shareEval := fs.String("share-eval", "", "阶段 3 正式空跑:要换词的共享组逐个以整首歌重搜一轮(联网),结果边跑边写到这个文件,不写缓存")
+	shareEvalLimit := fs.Int("share-eval-limit", 0, "跟 -share-eval 一起用:只搜前这么多组(0 = 全搜)")
+	shareEvalCandidates := fs.String("share-eval-candidates", "", "跟 -share-eval 一起用:每组这一轮的候选追加进这个文件(jsonl);文件里已有的组不再联网,按存下的候选重算")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("song-entities: %v", err)
 	}
@@ -136,6 +143,32 @@ func runSongEntitiesCLI(args []string) {
 		err = b.writeClusterDump(*dump)
 	case *diff != "":
 		err = b.writeClusterDiff(*diff, os.Stdout)
+	case *sharePlan != "":
+		picked := songPlanPicked(snapshot)
+		offsets := map[string]int{}
+		if *offsetsPath != "" {
+			var data []byte
+			if data, err = os.ReadFile(*offsetsPath); err == nil {
+				err = json.Unmarshal(data, &offsets)
+			}
+		}
+		if err == nil {
+			err = b.writeSharePlanFile(*sharePlan, picked, offsets)
+		}
+	case *shareEval != "":
+		// 跟 search-lyrics 加载同一组旁路缓存(searchcli.go runSearchLyricsCLI),名次才跟常驻引擎的自动决策对得上;两边一起改。
+		loadAppleCatalogCache(filepath.Join(cfgDir, clientName+"-apple-catalog-cache.json"))
+		loadAppleStorefrontArtistCache(filepath.Join(cfgDir, clientName+"-apple-storefront-artist-cache.json"))
+		loadAppleStorefrontTitleCache(filepath.Join(cfgDir, clientName+"-apple-storefront-title-cache.json"))
+		loadQQArtistNameCache(filepath.Join(cfgDir, clientName+"-qq-artist-name-cache.json"))
+		refreshAccentCacheWords()
+		var f *os.File
+		if f, err = os.Create(*shareEval); err == nil {
+			err = b.runShareEvaluation(context.Background(), bufio.NewWriter(f), songPlanPicked(snapshot), *shareEvalLimit, lyricsFillSweepPace(true), *shareEvalCandidates)
+			if cerr := f.Close(); err == nil {
+				err = cerr
+			}
+		}
 	default:
 		b.report().writeText(os.Stdout, *limit)
 	}

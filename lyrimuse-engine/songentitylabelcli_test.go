@@ -93,6 +93,53 @@ func TestSongLabelISRCStratum(t *testing.T) {
 	}
 }
 
+// share 层只抽检索 id 靠「另有一种中证据」进共享组、不认这一路就分开的写法对,Why 记中证据种类;强证据连着的不抽。
+func TestSongLabelShareStratum(t *testing.T) {
+	ne := func(id string, secs float64) enrichEntry {
+		return enrichEntry{DurationSecs: secs, NeteaseURL: "https://music.163.com/song?id=" + id}
+	}
+	reg := func(id, title string) map[string]string { return map[string]string{"netease_song:" + id: title} }
+	vs := []songVariant{
+		songTestVariant("A|Song|Album", ne("1", 200), reg("1", "Song")),
+		songTestVariant("A feat. B|Song|Single", ne("1", 200.3), reg("1", "Song")),
+		songTestVariant("C|Tune|Album", enrichEntry{DurationSecs: 180, ISRCs: []string{"USAAA1100001"}}, nil),
+		songTestVariant("C feat. D|Tune|Single", enrichEntry{DurationSecs: 180.2, ISRCs: []string{"USAAA1100001"}}, nil),
+		songTestVariant("E|Air|Album", enrichEntry{DurationSecs: 150, NeteaseURL: "https://music.163.com/song?id=2", ISRCs: []string{"USAAA1100002"}}, reg("2", "Air")),
+		songTestVariant("E feat. F|Air|Single", enrichEntry{DurationSecs: 150.1, NeteaseURL: "https://music.163.com/song?id=2", ISRCs: []string{"USAAA1100002"}}, reg("2", "Air")),
+	}
+	b, of := songTestBuild(t, vs, nil)
+	idx := map[string]int{}
+	for i := range b.variants {
+		idx[b.variants[i].key] = i
+	}
+	if !songTestSame(of, "A|Song|Album", "A feat. B|Song|Single") || b.shareOf[idx["A|Song|Album"]] != b.shareOf[idx["A feat. B|Song|Single"]] {
+		t.Fatal("前提:网易云 id 加写法族边应当把两条写法连进同一个共享组")
+	}
+	items := b.sampleShare()
+	if len(items) != 1 || items[0].Stratum != "share" || items[0].Why != "family+netease_song" || len(items[0].Pairs) != 1 ||
+		songPairKey(items[0].Variants[0].Key, items[0].Variants[1].Key) != songPairKey("A|Song|Album", "A feat. B|Song|Single") {
+		t.Fatalf("只该抽到靠写法族旁证进组的那一对: %+v", items)
+	}
+	dir := t.TempDir()
+	if n, path, err := b.writeLabelSample(dir, "share"); err != nil || n != 1 || path != filepath.Join(dir, "sample-share.jsonl") {
+		t.Fatalf("writeLabelSample = %d, %q, %v", n, path, err)
+	}
+	var out bytes.Buffer
+	labeled := items[0]
+	labeled.Label = "different"
+	data, _ := json.Marshal(labeled)
+	scorePath := filepath.Join(t.TempDir(), "sample-share.jsonl")
+	if err := os.WriteFile(scorePath, append(data, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.writeLabelScore(scorePath, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "标了 1 对(判不了 0),抽样时其实不是同一首 1 对(100.0%);现在仍在同一个共享组 1 对") {
+		t.Errorf("share 层的数不对:\n%s", out.String())
+	}
+}
+
 // isrc 层标 different 的一对现在仍在一起时算并错;文件里没有的层不报。
 func TestSongLabelScoreISRC(t *testing.T) {
 	vs := []songVariant{
