@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -22,7 +23,8 @@ import (
 // 要逐个过目。
 //
 // 三层:多写法实体(songLabelEntityQuota 个,只靠中证据连着的、含一中一外写法的优先)、被否决挡下的写法对、单写法实体里
-// 歌名或歌手相近的写法对。顺序按键的哈希取,同一份缓存重跑抽到的一样。
+// 歌名或歌手相近的写法对。顺序按键的哈希取,同一份缓存重跑抽到的一样。另有补抽的层(`-stratum`),各写一个文件,
+// 不动已经标好的那份:isrc 是靠 ISRC 连着、署名或专辑版次不同的写法对。
 
 const (
 	songLabelEntityQuota = 200
@@ -33,16 +35,22 @@ const (
 	songLabelCrossQuota      = 50
 	// 被否决的写法对每种否决先各抽这么多,再按哈希补足。
 	songLabelPerVetoReason = 15
+	// isrc 层:署名不同、专辑版次不同的各最多抽这么多。
+	songLabelISRCPerReason = 60
 )
 
+// songLabelStrata:`-stratum` 认的补抽层 → 写到的文件名。空串是最初那三层。
+var songLabelStrata = map[string]string{"": "sample.jsonl", "isrc": "sample-isrc.jsonl"}
+
 // songLabelItem:标注集的一条。标注:entity 层填 same(全是同一份录音)或 mixed 加 wrong(不属于这首的写法键);
-// vetoed、near 层填 same 或 different;判不了填 unsure。
+// vetoed、near、isrc 层填 same 或 different;判不了填 unsure。Why 是 isrc 层抽中的原因(credit / edition)。
 type songLabelItem struct {
 	ID       string             `json:"id"`
 	Stratum  string             `json:"stratum"`
 	Variants []songLabelVariant `json:"variants"`
 	Edges    []string           `json:"edges,omitempty"`
 	Veto     string             `json:"veto,omitempty"`
+	Why      string             `json:"why,omitempty"`
 	Pairs    []songLabelPair    `json:"pairs,omitempty"`
 	Label    string             `json:"label"`
 	Wrong    []string           `json:"wrong,omitempty"`
@@ -74,17 +82,31 @@ func songLabelHash(s string) uint64 {
 	return h.Sum64()
 }
 
-// writeLabelSample 抽样、写出 <dir>/sample.jsonl。
-func (b *songEntityBuild) writeLabelSample(dir string) (int, error) {
+// writeLabelSample 抽 stratum 那一层(songLabelStrata)、写到 dir 下对应的文件,返回条数和路径。文件已经存在时报错、
+// 不覆盖:里面可能是标好的。
+func (b *songEntityBuild) writeLabelSample(dir, stratum string) (int, string, error) {
+	name, ok := songLabelStrata[stratum]
+	if !ok {
+		return 0, "", fmt.Errorf("unknown stratum %q", stratum)
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	var items []songLabelItem
-	items = append(items, b.sampleEntities()...)
-	items = append(items, b.sampleVetoed()...)
-	items = append(items, b.sampleNear()...)
-	path := filepath.Join(dir, "sample.jsonl")
-	f, err := os.Create(path)
+	if stratum == "isrc" {
+		items = b.sampleISRC()
+	} else {
+		items = append(items, b.sampleEntities()...)
+		items = append(items, b.sampleVetoed()...)
+		items = append(items, b.sampleNear()...)
+	}
+	path := filepath.Join(dir, name)
+	n, err := writeLabelItems(path, items)
+	return n, path, err
+}
+
+func writeLabelItems(path string, items []songLabelItem) (int, error) {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return 0, err
 	}
@@ -277,6 +299,69 @@ func (b *songEntityBuild) sampleNear() []songLabelItem {
 	return out
 }
 
+// sampleISRC:同一个实体里、靠一条没被否决的 ISRC 边连着,而且署名不同(一边点名的合作者另一边没写到)或专辑版次不同
+// (songISRCLabelReason)的写法对。合唱重录版记着独唱原版的号就是这一类(18 章决策 4)。
+func (b *songEntityBuild) sampleISRC() []songLabelItem {
+	type cand struct {
+		x, y      int
+		why, isrc string
+		hash      uint64
+	}
+	seen := map[string]bool{}
+	byWhy := map[string][]cand{}
+	for i, e := range b.edges {
+		if b.edgeVeto[i] || e.kind != songIDISRC || b.entityOf[e.a] != b.entityOf[e.b] {
+			continue
+		}
+		vx, vy := &b.variants[e.a], &b.variants[e.b]
+		k := songPairKey(vx.key, vy.key)
+		if seen[k] {
+			continue
+		}
+		why := songISRCLabelReason(vx, vy)
+		if why == "" {
+			continue
+		}
+		seen[k] = true
+		byWhy[why] = append(byWhy[why], cand{e.a, e.b, why, e.value, songLabelHash(k)})
+	}
+	var out []songLabelItem
+	for _, why := range songSortedKeys(byWhy) {
+		cs := byWhy[why]
+		sort.Slice(cs, func(i, j int) bool { return cs[i].hash < cs[j].hash })
+		for _, c := range cs[:min(len(cs), songLabelISRCPerReason)] {
+			it := songLabelItem{
+				ID: fmt.Sprintf("isrc-%016x", c.hash), Stratum: "isrc", Why: c.why,
+				Variants: []songLabelVariant{b.labelVariant(c.x), b.labelVariant(c.y)},
+				Edges:    []string{fmt.Sprintf("%s %s ↔ %s %s", songIDISRC, b.variants[c.x].key, b.variants[c.y].key, c.isrc)},
+				Pairs:    []songLabelPair{b.labelPair(c.x, c.y)},
+			}
+			if b.shareOf[c.x] != b.shareOf[c.y] {
+				it.Edges[0] += " (不在同一个共享组)"
+			}
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// songISRCLabelReason:credit 是署名不同;edition 是专辑版次不同:两边版本词不同,或者专辑名去掉括号、破折号尾巴之后
+// 相同、全名不同(「In The Lonely Hour」与「In The Lonely Hour (10 Year Anniversary Edition)」)。都不是为空,两样都有时
+// 记 credit。
+func songISRCLabelReason(x, y *songVariant) string {
+	if !creditCovers(creditCoArtists(x.artist, x.title), y.artist, y.title) ||
+		!creditCovers(creditCoArtists(y.artist, y.title), x.artist, x.title) {
+		return "credit"
+	}
+	if !maps.Equal(x.versionTags, y.versionTags) {
+		return "edition"
+	}
+	if normLoose(x.album) != normLoose(y.album) && normLoose(songCoreTitle(x.album)) == normLoose(songCoreTitle(y.album)) {
+		return "edition"
+	}
+	return ""
+}
+
 func (b *songEntityBuild) labelVariant(i int) songLabelVariant {
 	v := &b.variants[i]
 	out := songLabelVariant{Key: v.key, DurationSecs: v.durationSecs, LyricsSource: v.lyricsSource}
@@ -336,8 +421,8 @@ func (b *songEntityBuild) writeLabelScore(path string, w io.Writer) error {
 		idx[b.variants[i].key] = i
 	}
 	type tally struct{ labeled, bad, unsure, stillBad int }
-	var ent, veto, near tally
-	var shareBad int
+	var ent, veto, near, isrc tally
+	var shareBad, isrcShareBad int
 	var notes []string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
@@ -404,6 +489,28 @@ func (b *songEntityBuild) writeLabelScore(path string, w io.Writer) error {
 				now = "现在仍分开"
 			}
 			notes = append(notes, fmt.Sprintf("漏合:%s %s ↔ %s(%s)%s", it.ID, it.Variants[0].Key, it.Variants[1].Key, now, it.Note))
+		case "isrc":
+			isrc.labeled++
+			if it.Label == "unsure" {
+				isrc.unsure++
+				continue
+			}
+			if it.Label != "different" || len(it.Variants) != 2 {
+				continue
+			}
+			isrc.bad++
+			xi, okx := idx[it.Variants[0].Key]
+			yi, oky := idx[it.Variants[1].Key]
+			now := "已分开"
+			if okx && oky && b.entityOf[xi] == b.entityOf[yi] {
+				isrc.stillBad++
+				now = "仍在一起"
+				if b.shareOf[xi] == b.shareOf[yi] {
+					isrcShareBad++
+					now += "、同一个共享组"
+				}
+			}
+			notes = append(notes, fmt.Sprintf("并错:%s %s ↔ %s(%s,现在%s)%s", it.ID, it.Variants[0].Key, it.Variants[1].Key, it.Why, now, it.Note))
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -415,12 +522,23 @@ func (b *songEntityBuild) writeLabelScore(path string, w io.Writer) error {
 		}
 		return fmt.Sprintf("%.1f%%", 100*float64(bad)/float64(n))
 	}
-	fmt.Fprintf(w, "多写法实体:标了 %d 个(判不了 %d),抽样时并错 %d 个;现在仍并着 %d 个,合错率 %s,并错的写法跟别的在同一个共享组 %d 个\n",
-		ent.labeled, ent.unsure, ent.bad, ent.stillBad, rate(ent.stillBad, ent.labeled-ent.unsure), shareBad)
-	fmt.Fprintf(w, "被否决的写法对:标了 %d 对(判不了 %d),抽样时其实是同一首 %d 对(%s);现在仍分开 %d 对,漏合率 %s\n",
-		veto.labeled, veto.unsure, veto.bad, rate(veto.bad, veto.labeled-veto.unsure), veto.stillBad, rate(veto.stillBad, veto.labeled-veto.unsure))
-	fmt.Fprintf(w, "相近的单写法对:标了 %d 对(判不了 %d),抽样时其实是同一首 %d 对(%s);现在仍分开 %d 对,漏合率 %s\n",
-		near.labeled, near.unsure, near.bad, rate(near.bad, near.labeled-near.unsure), near.stillBad, rate(near.stillBad, near.labeled-near.unsure))
+	// 文件里没有的层不报。
+	if ent.labeled > 0 {
+		fmt.Fprintf(w, "多写法实体:标了 %d 个(判不了 %d),抽样时并错 %d 个;现在仍并着 %d 个,合错率 %s,并错的写法跟别的在同一个共享组 %d 个\n",
+			ent.labeled, ent.unsure, ent.bad, ent.stillBad, rate(ent.stillBad, ent.labeled-ent.unsure), shareBad)
+	}
+	if veto.labeled > 0 {
+		fmt.Fprintf(w, "被否决的写法对:标了 %d 对(判不了 %d),抽样时其实是同一首 %d 对(%s);现在仍分开 %d 对,漏合率 %s\n",
+			veto.labeled, veto.unsure, veto.bad, rate(veto.bad, veto.labeled-veto.unsure), veto.stillBad, rate(veto.stillBad, veto.labeled-veto.unsure))
+	}
+	if near.labeled > 0 {
+		fmt.Fprintf(w, "相近的单写法对:标了 %d 对(判不了 %d),抽样时其实是同一首 %d 对(%s);现在仍分开 %d 对,漏合率 %s\n",
+			near.labeled, near.unsure, near.bad, rate(near.bad, near.labeled-near.unsure), near.stillBad, rate(near.stillBad, near.labeled-near.unsure))
+	}
+	if isrc.labeled > 0 {
+		fmt.Fprintf(w, "靠 ISRC 连着、署名或专辑版次不同的写法对:标了 %d 对(判不了 %d),抽样时其实不是同一首 %d 对(%s);现在仍在一起 %d 对,合错率 %s,其中同一个共享组 %d 对\n",
+			isrc.labeled, isrc.unsure, isrc.bad, rate(isrc.bad, isrc.labeled-isrc.unsure), isrc.stillBad, rate(isrc.stillBad, isrc.labeled-isrc.unsure), isrcShareBad)
+	}
 	sort.Strings(notes)
 	for _, n := range notes {
 		fmt.Fprintln(w, "  "+n)
