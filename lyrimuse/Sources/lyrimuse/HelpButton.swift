@@ -117,6 +117,57 @@ struct QuickHelpLabel<Content: View>: View {
     }
 }
 
+/// 一颗玻璃小圆钮(默认 ⓘ),悬停或点击弹出一句说明。时序与「点开的一直留着」同 `QuickHelpLabel`。
+/// `warning` 为真时换成橙色感叹号,说明那一处有东西没显示出来、点开看为什么。
+struct GlassInfoButton: View {
+    let text: String
+    var warning = false
+
+    @State private var isPresented = false
+    @State private var pinnedByClick = false
+    @State private var hoverTask: Task<Void, Never>?
+
+    var body: some View {
+        Button {
+            hoverTask?.cancel()
+            pinnedByClick = true
+            isPresented = true
+        } label: {
+            Image(systemName: warning ? "exclamationmark" : "info")
+                .font(.system(size: 9.5, weight: .bold))
+                .foregroundStyle(warning ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .settingsCardBackground(cornerRadius: 11)
+        .accessibilityLabel(text)
+        .onHover { inside in
+            hoverTask?.cancel()
+            hoverTask = Task {
+                try? await Task.sleep(for: .milliseconds(inside ? 500 : 150))
+                guard !Task.isCancelled else { return }
+                if inside {
+                    isPresented = true
+                } else if !pinnedByClick {
+                    isPresented = false
+                }
+            }
+        }
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            Text(text)
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+                .frame(maxWidth: 260, alignment: .leading)
+        }
+        .onChange(of: isPresented) { _, shown in
+            if !shown { pinnedByClick = false }
+        }
+        .onDisappear { hoverTask?.cancel() }
+    }
+}
+
 /// 悬停一会儿在控件下面弹一句说明,移开就收。给点击另有用途、挂不了问号的控件用(选播放器的卡片:点一下是勾选)。
 ///
 /// 不用 `.help()`:系统 tooltip 只在前台 App 的窗口上弹,lyrimuse 是 LSUIElement,设置窗口开着而前台是别的 App

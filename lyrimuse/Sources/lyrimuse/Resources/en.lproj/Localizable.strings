@@ -3,8 +3,6 @@
    然后跑 python3 Localization/generate-strings.py 重新生成,两个文件一起提交。
    selftest 会校验 catalog 与生成物一致。 */
 
-"%1$@ %2$@ 次" = "%1$@: %2$@ plays";
-"%1$@ %2$@ 次#one" = "%1$@: %2$@ play";
 "%1$@ · %2$@ 次" = "%1$@ · %2$@ plays";
 "%1$@ · %2$@ 次#one" = "%1$@ · %2$@ play";
 "%1$@ · 来自 %2$@" = "%1$@ · from %2$@";
@@ -80,6 +78,8 @@
 "%@ 首保持锁定；此后手动选定的歌曲不再自动锁定" = "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically";
 "%@ 首保持锁定；此后手动选定的歌曲不再自动锁定#one" = "%@ song stays locked; from now on, manually picked songs are no longer locked automatically";
 "%@ 首待搜索" = "%@ to search";
+"%@ 首待补交" = "%@ plays to submit";
+"%@ 首待补交#one" = "%@ play to submit";
 "%@ 首待重新匹配" = "%@ to re-match";
 "%@ 首本次无法判断，扫描结束后将重试" = "%@ couldn't be checked this time, will retry at the end";
 "%@ 首歌" = "%@ songs";
@@ -120,7 +120,7 @@
 "GPL-3.0" = "GPL-3.0";
 "GitHub Star 数" = "GitHub stars";
 "Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 中也未勾选 Spotify。" = "Last.fm's connection to Spotify expired on %@, and Spotify isn't checked in Lyrimuse either.";
-"Last.fm 仅接受约两周内的记录，更早的记录无法补交" = "Last.fm only accepts scrobbles from about the last two weeks; older ones can't be filled in";
+"Last.fm 只收两周内的记录" = "Last.fm only accepts plays from the last two weeks";
 "Last.fm 已直接连接 Spotify，Lyrimuse 也在记录，保留其中一方即可。" = "Last.fm is connected to Spotify directly, and Lyrimuse is scrobbling Spotify too. Keep just one.";
 "Last.fm 已确认收到这次播放" = "Last.fm has acknowledged this play";
 "Last.fm 拒绝写入，Scrobble 已暂停，授权可能已在网站上被撤销" = "Last.fm is rejecting scrobbles, so scrobbling is paused. Your authorization may have been revoked on the Last.fm website";
@@ -173,9 +173,6 @@
 "—《%1$@》%2$@" = "— “%1$@” %2$@";
 "⌘S 保存 · Esc 放弃" = "⌘S Save · Esc Discard";
 "⌘S 保存 · Esc 放弃 · ↑↓ 换句" = "⌘S Save · Esc Discard · ↑↓ Next line";
-"① 填写密钥" = "① Enter API Key";
-"② 浏览器授权" = "② Authorize in Browser";
-"③ 完成连接" = "③ Finish Connecting";
 "✓ 已生效，Lyrimuse 现在可以控制此浏览器" = "✓ Working — Lyrimuse can drive this browser now";
 "✓ 当前可用，但仅在浏览器重启前有效：上述选项已关闭，重启后将失效" = "✓ Works right now, but only until this browser restarts: the switch above has been turned off, so it will stop working after a restart.";
 "、" = ", ";
@@ -192,6 +189,7 @@
 "一并解锁" = "Unlock Them";
 "一行 1 分，最多 200" = "One point per line, up to 200";
 "三" = "W";
+"三步，大约一分钟" = "Three steps, about a minute";
 "三连音符" = "Three Notes";
 "上一期未上榜" = "Not in the previous chart";
 "上一期（%@ – %@）无收听记录，不显示排名变化" = "No scrobbles in the previous period (%@ – %@), so no rank changes";
@@ -221,7 +219,6 @@
 "下一步" = "Next";
 "下一页" = "Next";
 "下一首" = "Next Track";
-"下方的「连接」需要使用这对密钥完成授权：请先在 Last.fm 创建应用，获取 API Key 和 Secret" = "Connecting below needs this key pair. Create a Last.fm application first to get an API Key and Secret";
 "下移" = "Move Down";
 "下载 Discord…" = "Download Discord…";
 "下载中…" = "Downloading…";
@@ -304,6 +301,7 @@
 "仅调整主行，%@～%@pt，放不下时歌词行会自动加高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" = "Main line only, %@–%@pt; the lyric row grows if the text no longer fits. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
 "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停" = "Available on some albums only; pauses in Low Power Mode or with Reduce Motion on";
 "今天" = "Today";
+"今天、近 7 天、听得最多的歌手和歌" = "Today, the last 7 days, and your top artists and tracks";
 "今天已听 %@ 次" = "%@ plays today";
 "今天已听 %@ 次#one" = "%@ play today";
 "今天收听 %1$@ 次 · 本周 %2$@ 次" = "%1$@ plays today · %2$@ this week";
@@ -328,6 +326,7 @@
 "以下播放器尚未安装，可提前选择，安装后自动生效" = "These players aren't installed yet. Select one now and it takes effect once installed.";
 "以文本方式编辑" = "Edit as Text";
 "企业微信" = "WeCom";
+"会打开 Last.fm 授权页，点「Yes, allow access」后自动回到这里。" = "Opens the Last.fm authorization page. Click “Yes, allow access” and you'll come straight back here.";
 "伴奏版，不用人声歌词" = "Instrumental version, vocal lyrics not used";
 "位于菜单栏" = "In the menu bar";
 "位置" = "Position";
@@ -417,6 +416,7 @@
 "写入本地记录文件失败，歌词引擎未能执行此次修改" = "Couldn't write the local records file; the lyrics engine couldn't apply this change";
 "写入本地记录文件失败：%@" = "Couldn't write the local records file: %@";
 "决定性差异：「%@」" = "Deciding difference: “%@”";
+"准备密钥" = "Get Your API Keys";
 "减少推荐" = "Suggest Less";
 "出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时会短暂切换过去再切回，当前使用的浏览器窗口不受影响。" = "Presses Skip as soon as it appears; ads that can't be skipped still play. Needs Accessibility permission. If YouTube Music is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you're using.";
 "出生日期" = "Born";
@@ -466,7 +466,6 @@
 "前往开启" = "Turn On";
 "前往歌手" = "Go to Artist";
 "前往歌词管理手动查找" = "Search manually in Lyrics Manager";
-"前往申请" = "Get One";
 "前往连接" = "Connect";
 "前往配置「%@」" = "Configure “%@”";
 "前进" = "Forward";
@@ -504,6 +503,7 @@
 "原文" = "Original";
 "原文 + 译文" = "Original + Translation";
 "原文 + 读音" = "Original + Romanization";
+"去 Last.fm 申请" = "Apply on Last.fm";
 "去年今天收听 %@ 次，循环最多的是以下歌曲" = "A year ago today: %@ plays, most on repeat";
 "去年今天收听 %@ 次，循环最多的是以下歌曲#one" = "A year ago today: %@ play, most on repeat";
 "去年这一周收听 %@ 次，循环最多的是以下歌曲" = "This week last year: %@ plays, most on repeat";
@@ -538,6 +538,7 @@
 "右对齐" = "Right-Aligned";
 "右耳" = "Right Ear";
 "右键点按主题可重命名、用当前配色覆盖或删除" = "Right-click a theme to rename it, overwrite it with the current colors, or delete it";
+"各个播放器里听的歌都会记上" = "Plays from every supported player are logged";
 "各处显示为纯音乐，不会自动搜索歌词" = "Shown as Instrumental everywhere, and lyrics aren’t searched for automatically";
 "各处显示为纯音乐，不会自动搜索歌词。原有歌词仍会保留，取消标记即可恢复" = "Shown as Instrumental everywhere, and lyrics aren’t searched for automatically. The existing lyrics are kept and come back when you unmark it";
 "合唱署名" = "Artist credit";
@@ -602,6 +603,7 @@
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在歌词下方显示一行译文" = "Show a line of translation under the lyrics";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
+"在浏览器里授权" = "Authorize in Your Browser";
 "在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
 "在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings, then click Restart Lyrics Engine. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
 "在线 — %d" = "Online — %d";
@@ -640,13 +642,13 @@
 "完全磁盘访问权限可让%@直接使用本机已有的歌词，仅读取其歌词缓存和播放队列" = "Full Disk Access lets %@ use lyrics already on this Mac — it only reads their own lyrics cache and play queue";
 "完成" = "Done";
 "完成调整宽度" = "Done Adjusting Width";
+"完成，开始 Scrobble" = "Done — Start Scrobbling";
 "完整尺寸" = "Full Size";
 "定位" = "Locate";
 "实验室功能" = "Lab Features";
 "实验性 Beta 功能" = "Experimental beta features";
 "宽度" = "Width";
 "宽度模式" = "Width Mode";
-"对比 %@ – %@" = "Compared with %@ – %@";
 "对齐方式" = "Alignment";
 "导入" = "Import";
 "导入失败：不是有效的 .ttf / .otf 字体文件" = "Import failed: not a valid .ttf / .otf font file";
@@ -754,6 +756,7 @@
 "已导出的歌词文件将一并删除。再次播放这首歌曲时会重新匹配，结果可能不同" = "Its exported lyrics file is deleted too. The song is matched again the next time it plays, and the result may differ";
 "已导出的歌词文件将一并删除，此操作无法撤销。再次播放这些歌曲时会重新匹配，结果可能不同" = "Their exported lyrics files are deleted too, and this can't be undone. These songs are matched again the next time they play, and the results may differ";
 "已导出的歌词文件将一并删除，此操作无法撤销；其中 %@ 条经过人工修正。再次播放这些歌曲时会重新匹配，结果可能不同" = "Their exported lyrics files are deleted too, and this can't be undone; %@ of these were edited manually. These songs are matched again the next time they play, and the results may differ";
+"已就绪" = "Ready";
 "已展开" = "Expanded";
 "已展开触控栏歌词" = "Touch Bar lyrics expanded";
 "已应用编辑器中的修改" = "Applied the changes from the editor";
@@ -849,6 +852,7 @@
 "开启「自动识别」时，将识别所有已知和已信任的播放器，上方的勾选暂不生效。如只需识别部分播放器，请取消勾选此项。" = "“Auto-detect” recognizes every known and trusted player, so the checkboxes above have no effect right now. Untick it to recognize only the ones you pick";
 "开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享。" = "When on, the song you're playing shows on your Discord profile and in your friends list. If friends can't see it, go to User Settings › Activity Privacy in Discord and turn on activity sharing.";
 "开始" = "Start";
+"开始你的听歌档案" = "Start Your Listening History";
 "开始使用" = "Get Started";
 "开始扫描" = "Start Scanning";
 "开机启动" = "Launch at Login";
@@ -915,6 +919,7 @@
 "打开「%@」设置" = "Open %@ settings";
 "打开备份文件夹" = "Open Backup Folder";
 "打开并登录后将自动连接" = "Connects automatically once it's open and you're signed in.";
+"打开授权页" = "Open Authorization Page";
 "打开歌词窗口" = "Open Lyrics Window";
 "打开歌词管理" = "Open Lyrics Manager";
 "打开系统设置" = "Open System Settings";
@@ -959,6 +964,7 @@
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复。" = "The authorization may have been revoked on the Last.fm website. Reconnect to resume.";
 "授权已失效" = "Authorization expired";
 "授权已失效，Scrobble 已暂停" = "Authorization revoked — scrobbling paused";
+"排名升降对比的是上一期（%@ – %@）" = "Rank changes compare with the previous period (%@ – %@)";
 "排序" = "Sort";
 "排版" = "Layout";
 "接收 Lyrimuse 的推送通知" = "Receive push notifications from Lyrimuse";
@@ -1202,10 +1208,10 @@
 "未配置" = "Not set up";
 "未配置（可选）" = "Not configured (optional)";
 "本地暂无待补交的收听记录" = "No scrobbles are waiting locally";
-"本地有 %@ 首待补交的记录" = "%@ listens saved locally, waiting to be submitted";
-"本地有 %@ 首待补交的记录#one" = "%@ listen saved locally, waiting to be submitted";
 "本地歌名无检索结果，经「%@」查得正式曲名。" = "The local title returned nothing; the official title was found via “%@”.";
 "本机学到的署名" = "Credit learned on this Mac";
+"本机已记下 %@ 首" = "%@ plays saved on this Mac";
+"本机已记下 %@ 首#one" = "%@ play saved on this Mac";
 "本机系统未提供触控栏接口" = "Touch Bar API unavailable";
 "本机系统未提供触控栏接口，开启后不会生效" = "This Mac's system doesn't provide the Touch Bar interfaces this needs, so turning it on has no effect";
 "本机设置，无法撤销" = "This Mac only; can't be undone";
@@ -1239,7 +1245,6 @@
 "查看专辑简介" = "View Album Notes";
 "查看发布页面" = "View Release Page";
 "查看官方文档 →" = "View Official Docs →";
-"查看已有应用" = "My Applications";
 "查看效果与教程 →" = "Preview & Setup Guide →";
 "查看歌手简介" = "View Artist Bio";
 "查看歌曲简介" = "View Song Notes";
@@ -1390,7 +1395,6 @@
 "此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口" = "This is a ceiling: the text uses this size when the window is large enough, and shrinks with the window so it never overflows";
 "此为手动修改前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";
 "此后手动选定的歌曲不再自动锁定" = "From now on, manually picked songs are no longer locked automatically";
-"此处可查看已创建应用的 API Key，但无法查看 Secret；如已遗失，可通过「前往申请」重新创建。" = "Shows your existing apps and their API Key, but not the Secret; if it's lost, use Get One to create a new app.";
 "此广告可跳过" = "This ad can be skipped";
 "此广告暂不可跳过" = "This ad can't be skipped yet";
 "此时段暂无记录" = "No scrobbles in this period";
@@ -1470,6 +1474,7 @@
 "点按时间可修改此句的时间戳" = "Click a time to change that line’s timestamp";
 "点按此处前往设置查看" = "Click to view in Settings";
 "点按此处前往设置重新连接" = "Click to reconnect in Settings";
+"热力图、听歌时段、那年今日" = "Heatmap, listening hours and On This Day";
 "焦点在别的 App 上，暂时控制不了「%@」" = "Can't control %@ while another app holds the playback focus";
 "焦点在别的 App 上，暂时无法控制播放" = "Can't control playback while another app holds the playback focus";
 "版本 %@" = "Version %@";
@@ -1486,7 +1491,7 @@
 "用当前配色覆盖" = "Overwrite with Current Colors";
 "用户名下方显示" = "Shown Under Your Name";
 "由副行决定" = "Set by Second Line";
-"申请页只需填写「应用名称」，其余可留空；提交后页面将直接显示 API Key 和 Shared Secret" = "The form only needs an application name; leave everything else blank. Your API Key and Shared Secret appear as soon as you submit it";
+"申请页只需填写「应用名称」，其余可留空。提交后页面会显示 API Key 和 Shared Secret；Secret 只显示这一次，以后找不回来，忘了就再建一个应用。" = "The form only needs an application name; leave everything else blank. After you submit it, the page shows your API Key and Shared Secret. The secret is shown only this once and can't be looked up later — if you lose it, create another application.";
 "界面语言" = "Language";
 "登录中…" = "Signing In…";
 "登录已过期，请重新连接" = "Sign-in has expired; reconnect to continue";
@@ -1532,6 +1537,8 @@
 "管理…" = "Manage…";
 "类型" = "Genre";
 "粗细" = "Weight";
+"粘贴 API Key" = "Paste API Key";
+"粘贴 Shared Secret" = "Paste Shared Secret";
 "粤拼" = "Jyutping";
 "粤语" = "Cantonese";
 "系统兜底翻译" = "System Fallback Translation";
@@ -1568,6 +1575,7 @@
 "经典黑字" = "Classic Black";
 "结束点获印证" = "End time corroborated";
 "统计" = "Stats";
+"统计与榜单" = "Stats & Charts";
 "继续即表示你已了解" = "By continuing, you acknowledge the";
 "继续导出" = "Export";
 "继续播放" = "Resume";
@@ -1603,6 +1611,7 @@
 "胜者" = "Winner";
 "自 %@ 起" = "Since %@";
 "自动" = "Automatic";
+"自动 Scrobble" = "Automatic Scrobbling";
 "自动下载并安装" = "Download and Install Automatically";
 "自动化权限" = "Automation Permission";
 "自动化权限可让 Lyrimuse 准确识别%@正在播放的歌曲，并可在歌词上直接控制播放" = "Automation access lets Lyrimuse tell which song %@ is playing and lets you control playback right from the lyrics";
@@ -1816,13 +1825,12 @@
 "连接 Last.fm" = "Connect Last.fm";
 "连接 Last.fm 账号" = "Connect Last.fm Account";
 "连接 Last.fm…" = "Connect Last.fm…";
+"连接 Last.fm，把听过的每一首歌都留下来。" = "Connect Last.fm and keep a record of every song you play.";
 "连接信息" = "Connection Info";
 "连接后可获取 Apple Music 官方歌词，需要 Apple Music 订阅" = "Connect to get Apple Music's official lyrics. Requires an Apple Music subscription";
-"连接后将在此显示听歌档案" = "Once connected, your listening profile shows up here";
 "连接失败或超时，未收到任何响应" = "Connection failed or timed out with no response";
 "连接失败或超时：%@" = "Connection failed or timed out: %@";
 "连接账号" = "Connect";
-"连接账号…" = "Connect account…";
 "连续收听 %d 次，点按展开每一次" = "Played %d times in a row — click to show each one";
 "连续混音版，与原版编排不同" = "Continuous mix, arranged differently from the original";
 "迷你尺寸" = "Mini Size";
@@ -1897,6 +1905,7 @@
 "重新匹配整个歌词库已暂停" = "Library Re-Match Paused";
 "重新匹配整个歌词库？" = "Re-match the whole lyrics library?";
 "重新打开授权页面" = "Reopen Authorization Page";
+"重新授权" = "Reauthorize";
 "重新搜索" = "Search Again";
 "重新检测" = "Check Again";
 "重新联网匹配，直接采用算法选出的结果，依据设置中的「匹配算法」" = "Match again online and use the result the algorithm picks, following the Matching Algorithm setting";

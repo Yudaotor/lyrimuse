@@ -2947,25 +2947,25 @@
         }
       }
     },
-    "Last.fm 仅接受约两周内的记录，更早的记录无法补交" : {
+    "Last.fm 只收两周内的记录" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Last.fm only accepts scrobbles from about the last two weeks; older ones can't be filled in"
+            "value" : "Last.fm only accepts plays from the last two weeks"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Last.fm 仅接受约两周内的记录，更早的记录无法补交"
+            "value" : "Last.fm 只收两周内的记录"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Last.fm 僅接受約兩週內的記錄，更早的記錄無法補交"
+            "value" : "Last.fm 只接受兩週內的記錄"
           }
         }
       }
@@ -3808,75 +3808,6 @@
         }
       }
     },
-    "① 填写密钥" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "① Enter API Key"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "① 填写密钥"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "① 填寫金鑰"
-          }
-        }
-      }
-    },
-    "② 浏览器授权" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "② Authorize in Browser"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "② 浏览器授权"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "② 瀏覽器授權"
-          }
-        }
-      }
-    },
-    "③ 完成连接" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "③ Finish Connecting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "③ 完成连接"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "③ 完成連線"
-          }
-        }
-      }
-    },
     "✓ 已生效，Lyrimuse 现在可以控制此浏览器" : {
       "localizations" : {
         "en" : {
@@ -4388,29 +4319,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下載中…"
-          }
-        }
-      }
-    },
-    "下方的「连接」需要使用这对密钥完成授权：请先在 Last.fm 创建应用，获取 API Key 和 Secret" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connecting below needs this key pair. Create a Last.fm application first to get an API Key and Secret"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下方的「连接」需要使用这对密钥完成授权：请先在 Last.fm 创建应用，获取 API Key 和 Secret"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下方的「連線」需要使用這對金鑰完成授權：請先在 Last.fm 建立應用程式，取得 API Key 和 Secret"
           }
         }
       }
@@ -6515,29 +6423,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "前往專輯"
-          }
-        }
-      }
-    },
-    "前往申请" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Get One"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前往申请"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前往申請"
           }
         }
       }
@@ -14034,7 +13919,7 @@
         }
       }
     },
-    "本地有 %@ 首待补交的记录" : {
+    "本机已记下 %@ 首" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -14043,13 +13928,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%@ listen saved locally, waiting to be submitted"
+                  "value" : "%@ play saved on this Mac"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%@ listens saved locally, waiting to be submitted"
+                  "value" : "%@ plays saved on this Mac"
                 }
               }
             }
@@ -14058,13 +13943,48 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本地有 %@ 首待补交的记录"
+            "value" : "本机已记下 %@ 首"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本機有 %@ 首待補交的記錄"
+            "value" : "本機已記下 %@ 首"
+          }
+        }
+      }
+    },
+    "%@ 首待补交" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ play to submit"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ plays to submit"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 首待补交"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 首待補交"
           }
         }
       }
@@ -14272,29 +14192,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查看官方文件 →"
-          }
-        }
-      }
-    },
-    "查看已有应用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "My Applications"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看已有应用"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看已有的應用程式"
           }
         }
       }
@@ -16677,29 +16574,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用於將目前播放狀態推送到網頁小工具和狀態徽章"
-          }
-        }
-      }
-    },
-    "申请页只需填写「应用名称」，其余可留空；提交后页面将直接显示 API Key 和 Shared Secret" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The form only needs an application name; leave everything else blank. Your API Key and Shared Secret appear as soon as you submit it"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "申请页只需填写「应用名称」，其余可留空；提交后页面将直接显示 API Key 和 Shared Secret"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "申請頁只需填寫「應用程式名稱」，其餘可留空；提交後頁面將直接顯示 API Key 和 Shared Secret"
           }
         }
       }
@@ -21276,29 +21150,6 @@
         }
       }
     },
-    "连接后将在此显示听歌档案" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, your listening profile shows up here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接后将在此显示听歌档案"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線後將在此顯示聆聽概況"
-          }
-        }
-      }
-    },
     "退出 Lyrimuse" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24515,29 +24366,6 @@
         }
       }
     },
-    "连接账号…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect account…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接账号…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連結帳號…"
-          }
-        }
-      }
-    },
     "逐行" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26674,29 +26502,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "開：也 Scrobble，播放過半即記。\n關：不記（官方規則）。"
-          }
-        }
-      }
-    },
-    "此处可查看已创建应用的 API Key，但无法查看 Secret；如已遗失，可通过「前往申请」重新创建。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shows your existing apps and their API Key, but not the Secret; if it's lost, use Get One to create a new app."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此处可查看已创建应用的 API Key，但无法查看 Secret；如已遗失，可通过「前往申请」重新创建。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此處可查看已建立應用程式的 API Key，但無法查看 Secret；如已遺失，可透過「前往申請」重新建立。"
           }
         }
       }
@@ -31666,29 +31471,6 @@
         }
       }
     },
-    "对比 %@ – %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compared with %@ – %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "对比 %@ – %@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "對比 %@ – %@"
-          }
-        }
-      }
-    },
     "上一期（%@ – %@）无收听记录，不显示排名变化" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31708,6 +31490,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上一期（%@ – %@）無聆聽記錄，不顯示排名變化"
+          }
+        }
+      }
+    },
+    "排名升降对比的是上一期（%@ – %@）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rank changes compare with the previous period (%@ – %@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排名升降对比的是上一期（%@ – %@）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排名升降對比的是上一期（%@ – %@）"
           }
         }
       }
@@ -33492,41 +33297,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "含帳號憑證，請勿分享給他人；需要連同外觀與快速鍵整體遷移時，請使用「備份與遷移」"
-          }
-        }
-      }
-    },
-    "%1$@ %2$@ 次" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%1$@: %2$@ play"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%1$@: %2$@ plays"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ %2$@ 次"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ %2$@ 次"
           }
         }
       }
@@ -41621,6 +41391,443 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "資料卡「正在聆聽 ××」裡的 ××。iOS 和網頁版的 Discord 不認這一項，仍顯示播放器名稱。\n選歌名或歌手時，使用者名稱下方不能再選「播放器」。"
+          }
+        }
+      }
+    },
+    "开始你的听歌档案" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Your Listening History"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开始你的听歌档案"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開始你的聆聽檔案"
+          }
+        }
+      }
+    },
+    "连接 Last.fm，把听过的每一首歌都留下来。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect Last.fm and keep a record of every song you play."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接 Last.fm，把听过的每一首歌都留下来。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連線至 Last.fm，把聽過的每一首歌都留下來。"
+          }
+        }
+      }
+    },
+    "自动 Scrobble" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic Scrobbling"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动 Scrobble"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動 Scrobble"
+          }
+        }
+      }
+    },
+    "各个播放器里听的歌都会记上" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plays from every supported player are logged"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各个播放器里听的歌都会记上"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各個播放器裡聽的歌都會記上"
+          }
+        }
+      }
+    },
+    "统计与榜单" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stats & Charts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "统计与榜单"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "統計與榜單"
+          }
+        }
+      }
+    },
+    "今天、近 7 天、听得最多的歌手和歌" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today, the last 7 days, and your top artists and tracks"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天、近 7 天、听得最多的歌手和歌"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天、近 7 天、聽得最多的歌手和歌曲"
+          }
+        }
+      }
+    },
+    "热力图、听歌时段、那年今日" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heatmap, listening hours and On This Day"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "热力图、听歌时段、那年今日"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "熱力圖、聆聽時段、那年今日"
+          }
+        }
+      }
+    },
+    "三步，大约一分钟" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Three steps, about a minute"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "三步，大约一分钟"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "三個步驟，大約一分鐘"
+          }
+        }
+      }
+    },
+    "准备密钥" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get Your API Keys"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "准备密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "準備金鑰"
+          }
+        }
+      }
+    },
+    "已就绪" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已就绪"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已就緒"
+          }
+        }
+      }
+    },
+    "去 Last.fm 申请" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply on Last.fm"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去 Last.fm 申请"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前往 Last.fm 申請"
+          }
+        }
+      }
+    },
+    "粘贴 API Key" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste API Key"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴 API Key"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "貼上 API Key"
+          }
+        }
+      }
+    },
+    "粘贴 Shared Secret" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste Shared Secret"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴 Shared Secret"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "貼上 Shared Secret"
+          }
+        }
+      }
+    },
+    "申请页只需填写「应用名称」，其余可留空。提交后页面会显示 API Key 和 Shared Secret；Secret 只显示这一次，以后找不回来，忘了就再建一个应用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The form only needs an application name; leave everything else blank. After you submit it, the page shows your API Key and Shared Secret. The secret is shown only this once and can't be looked up later — if you lose it, create another application."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "申请页只需填写「应用名称」，其余可留空。提交后页面会显示 API Key 和 Shared Secret；Secret 只显示这一次，以后找不回来，忘了就再建一个应用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "申請頁只需填寫「應用程式名稱」，其餘可留空。提交後頁面會顯示 API Key 和 Shared Secret；Secret 只顯示這一次，之後找不回來，忘了就再建立一個應用程式。"
+          }
+        }
+      }
+    },
+    "在浏览器里授权" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authorize in Your Browser"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在浏览器里授权"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在瀏覽器中授權"
+          }
+        }
+      }
+    },
+    "会打开 Last.fm 授权页，点「Yes, allow access」后自动回到这里。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the Last.fm authorization page. Click “Yes, allow access” and you'll come straight back here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会打开 Last.fm 授权页，点「Yes, allow access」后自动回到这里。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "會開啟 Last.fm 授權頁面，按一下「Yes, allow access」後自動回到這裡。"
+          }
+        }
+      }
+    },
+    "打开授权页" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Authorization Page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开授权页"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟授權頁面"
+          }
+        }
+      }
+    },
+    "重新授权" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reauthorize"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新授权"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新授權"
+          }
+        }
+      }
+    },
+    "完成，开始 Scrobble" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done — Start Scrobbling"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成，开始 Scrobble"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成，開始 Scrobble"
           }
         }
       }

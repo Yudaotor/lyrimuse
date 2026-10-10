@@ -298,10 +298,7 @@ struct LastfmStatsSection: View {
                 } else {
                     let window = stats.chartWindow(kind, period)
                     chartList(Array(entries.prefix(chartVisibleRows)), showMovement: (window?.listens ?? 0) > 0)
-                    if let summary = chartSummaryText(entries) {
-                        chartFootnote(summary).padding(.bottom, window == nil ? 8 : 2)
-                    }
-                    if let window { chartWindowCaption(window) }
+                    chartFooter(summary: chartSummaryText(entries), window: window)
                 }
             } else if stats.chartFailed(kind, period) {
                 retryRow { stats.refreshChart(kind: kind, period: period) }
@@ -669,11 +666,11 @@ struct LastfmStatsSection: View {
         }
     }
 
-    /// 卡底概况:这段时间共多少次、前 N 名占多少。总次数还没取到时不显示。
+    /// 卡底概况:这段时间共多少次、前 N 名占多少。总次数还没取到时不显示。时段不写:卡头胶囊上就是。
     /// 不写条目数:三种榜都是合并过的,Last.fm 的原始条目数把繁简 / 中英写法各算一条,跟榜单对不上。
     private func chartSummaryText(_ entries: [LastfmStatsService.ChartEntry]) -> String? {
         guard let total = stats.listens(period), total > 0 else { return nil }
-        var parts = [String(format: L10n.plural("%1$@ %2$@ 次", count: total), period.displayName, total.formatted())]
+        var parts = [String(format: L10n.plural("共 %@ 次", count: total), total.formatted())]
         let top = min(chartVisibleRows, entries.count)
         if let share = ChartSummary.topShare(counts: entries.prefix(top).map(\.playcount), total: total) {
             let format: String
@@ -687,12 +684,27 @@ struct LastfmStatsSection: View {
         return parts.joined(separator: " · ")
     }
 
-    private func chartFootnote(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 10.5))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    /// 卡底一行:左边概况,右边 ⓘ 说明升降箭头跟哪一段比;上一期一条收听都没有时换成橙色感叹号,说明为什么没有箭头。
+    @ViewBuilder
+    private func chartFooter(summary: String?, window: LastfmStatsService.ChartWindow?) -> some View {
+        if summary != nil || window != nil {
+            HStack(spacing: 8) {
+                if let summary {
+                    Text(summary)
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if let window {
+                    GlassInfoButton(text: chartWindowNote(window), warning: window.listens == 0)
+                }
+            }
             .padding(.horizontal, 14)
+            .padding(.top, 4)
+            .padding(.bottom, 10)
+        }
     }
 
     /// 名次升降:▲n 前进、▼n 后退、「新」上一期没进榜、– 没变。名次差超过 99 显示 99+(见 ChartMovement)。
@@ -726,16 +738,21 @@ struct LastfmStatsSection: View {
         .frame(width: 34, alignment: .leading)
     }
 
-    /// 榜单下面那一行:对比的是哪一段;上一期一条收听都没有时说明为什么没有箭头。
-    private func chartWindowCaption(_ window: LastfmStatsService.ChartWindow) -> some View {
+    /// ⓘ 里那句:对比的是哪一段;上一期一条收听都没有时说明为什么没有箭头。两头都在今年就不写年份。
+    private func chartWindowNote(_ window: LastfmStatsService.ChartWindow) -> String {
+        let calendar = Calendar.current
+        let thisYear = calendar.component(.year, from: Date())
+        let sameYear = calendar.component(.year, from: window.from) == thisYear
+            && calendar.component(.year, from: window.to) == thisYear
         // 日期跟界面语言走(不指定 locale 就是系统语言:英文界面配中文系统时句子是英文、日期是中文)。
-        let style = Date.FormatStyle.dateTime.year().month().day().locale(L10n.locale)
+        let style = sameYear
+            ? Date.FormatStyle.dateTime.month().day().locale(L10n.locale)
+            : Date.FormatStyle.dateTime.year().month().day().locale(L10n.locale)
         let from = window.from.formatted(style)
         let to = window.to.formatted(style)
-        let text = window.listens > 0
-            ? String(format: L10n.t("对比 %@ – %@"), from, to)
+        return window.listens > 0
+            ? String(format: L10n.t("排名升降对比的是上一期（%@ – %@）"), from, to)
             : String(format: L10n.t("上一期（%@ – %@）无收听记录，不显示排名变化"), from, to)
-        return chartFootnote(text).padding(.bottom, 8)
     }
 
     /// Last.fm 的实体页地址。路径段里的 "/" 必须转义 —— 专辑名里带斜杠(The Hits/The

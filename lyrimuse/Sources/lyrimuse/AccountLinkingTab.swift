@@ -512,9 +512,8 @@ struct AccountLinkingTab: View {
     // 「断开」的确认框 —— 重连要重新走一遍浏览器授权,一次误点的代价不小,值得拦一下
     // (发散采纳)。
     @State private var showLastfmDisconnectConfirm = false
-    // 点过「前往申请」才展开"怎么填"提示 —— 没点之前它是噪声(密钥早就填好的人根本
-    // 不会去申请页)。
-    @State private var showLastfmApplyHint = false
+    // 连接向导第一步「准备密钥」是不是展开着(两个输入框)。打开向导时密钥没填全就展开。
+    @State private var lastfmKeysEditing = false
 
     var body: some View {
         // 从 .formStyle(.grouped) 换成跟其余六个设置分类同一套卡片组件
@@ -877,9 +876,9 @@ struct AccountLinkingTab: View {
     //
     // 这一页 99% 的时间处于"已连接"态,配置期才需要的东西(用户名输入框、
     // API Key/Secret 两行、"前往申请")不该永久平铺着。现在:
-    //   - 主界面只剩一行开关(+ 已连接时一行状态);
+    //   - 已连接时主界面只剩一行状态 + 一行开关;未连接时页头整张是欢迎卡,只有一颗连接按钮;
     //   - API Key/Secret 收进"连接向导"sheet,只在配置那一刻出现;
-    //   - 未连接时打开开关 = 打开向导,连接成功自动开启 scrobble——消灭"已连接但开关
+    //   - 连接成功自动开启 scrobble——消灭"已连接但开关
     //     没开"这个死状态(用户以为连上就会记录,实际还差一个开关);断开时同步关掉;
     //   - 手填用户名框删掉:授权成功返回的真实用户名自动回填(LastfmAuthFlow 里已有
     //     该逻辑),桥接/周报读的就是它。
@@ -950,7 +949,7 @@ struct AccountLinkingTab: View {
 
     /// 本地已记录的收听清单。**有待补内容就出现,不分连没连账号。**
     ///
-    /// 折起来只占一行(显示条数),展开才是清单 —— 攒到几十首时不该把整页顶开。
+    /// 一颗玻璃胶囊(显示条数)+ 下面的清单,默认展开;清单最高 180pt、自己滚,攒到几十首也不会把整页顶开。
     ///
     /// 出现条件是「有待补内容」,不是「未连接」:**数据层**攒不攒歌看的是另一个谓词
     /// ——引擎侧 lastfmScrobblerIfEnabled 一见 `!features.LastfmMirrorScrobble`
@@ -958,8 +957,7 @@ struct AccountLinkingTab: View {
     /// poller.go:545)。「已连接、但 Scrobble 开关关掉」同样在攒歌,两个谓词必须对齐,
     /// 否则这条路径下用户只能看到另一行干巴巴的条数、点不开清单。
     ///
-    /// 同一天再合并一次:「补提交」按钮原本自己独占一行(标题「补提交历史收听」),放宽条件
-    /// 之后它跟这一行同时出现、说的还是同一个数字,于是按钮搬进这一行的右侧,那一行删掉。
+    /// 「补交」按钮跟计数放在一起:它原本自己独占一行(标题「补提交历史收听」),跟这一行说的是同一个数字。
     ///
     /// 保留的那条设计决定:回填**必须人工点一下**,不做连接成功自动弹窗。这一步往用户的
     /// Last.fm 写数据,而 scrobble 落进去基本删不掉(只能在网页上一条条手删);自动弹窗
@@ -967,93 +965,93 @@ struct AccountLinkingTab: View {
     @ViewBuilder
     private var pendingListensRow: some View {
         let items = backfill.pending?.items ?? []
-        SettingsRawRow(insetToText: true) {
-            // 展开/收起必须走**显式动画事务**,不能把 $pendingListensExpanded 直接绑上去。
-            //
-            // 直接绑的话,点一下清单瞬间多出一百多 pt,外层那个 GlassEffectContainer
-            // (见 SettingsGlassContainer)的几何随之突变、玻璃折射区域被要求在同一帧内
-            // 重算 —— 用户看到的就是"整个页面抖一下"。
-            //
-            // 包进 withAnimation 之后高度是渐变的,玻璃跟着逐帧重算,没有那一下跳变。
-            // 这也正是本项目已有的约定,见 Animation.settingsCardReveal 的注释:
-            // "必须在改状态那一处用 withAnimation 显式包起来"。
-            DisclosureGroup(isExpanded: Binding(
-                get: { pendingListensExpanded },
-                set: { expanded in
-                    withAnimation(.settingsCardReveal) { pendingListensExpanded = expanded }
+        VStack(spacing: 10) {
+            // 整块收成一颗玻璃胶囊居中,点开在下面列出清单;连着账号时旁边再一颗「补交」。
+            HStack(spacing: 8) {
+                // 展开/收起必须走**显式动画事务**:清单瞬间多出一百多 pt,外层 GlassEffectContainer
+                // (见 SettingsGlassContainer)的几何随之突变、玻璃折射区域被要求在同一帧内重算,
+                // 用户看到的就是"整个页面抖一下"。约定见 Animation.settingsCardReveal 的注释。
+                Button {
+                    withAnimation(.settingsCardReveal) { pendingListensExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "music.note")
+                            .foregroundStyle(.secondary)
+                        Text(lastfmConnected
+                             ? String(format: L10n.plural("%@ 首待补交", count: items.count), "\(items.count)")
+                             : String(format: L10n.plural("本机已记下 %@ 首", count: items.count), "\(items.count)"))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(pendingListensExpanded ? 180 : 0))
+                    }
+                    .font(.system(size: 12))
                 }
-            )) {
-                // 高度封顶 + 自己滚:清单可能几十上百条,不能让它无限撑高这张卡。
-                //
-                // hovered 状态必须是 PendingListenRow 组件自己的本地 @State,不能是
-                // 整个 AccountLinkingTab 上的共享 @State(hoveredPendingUTS)——共享的话,
-                // 鼠标停着不动、靠滚轮把行滑过光标下面时,每一行滑过都会触发一次 .onHover
-                // 进出,每次都写这个共享值,进而让 AccountLinkingTab.body 整体重算(牵连
-                // 连接卡/统计图表等一大票跟这份清单毫不相关的内容),列表越滚,重算越密。
-                // hover 状态下沉成组件自己的本地 @State,hover 变化只会让**这一行**
-                // 重新求值,不再波及整个 tab。LazyVStack 顺带换掉普通 VStack,几十条也
-                // 不必一次性建满视图树。
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(items, id: \.uts) { item in
-                            PendingListenRow(item: item, busy: backfill.busy) {
-                                backfill.deleteListen(uts: item.uts)
+                // 「补交」就在这颗胶囊旁边:计数、清单、动作都在一处。只在连着账号时给:没连账号提交不到任何地方去,
+                // 那时这里只是"本地攒了些什么"。
+                if lastfmConnected {
+                    if backfill.busy { ProgressView().controlSize(.small) }
+                    Button(L10n.t("补交")) { backfill.runBackfill() }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .disabled(backfill.busy || items.isEmpty)
+                }
+            }
+            .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
+            if let status = backfillStatusLine() {
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            if pendingListensExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    // 高度封顶 + 自己滚:清单可能几十上百条,不能让它无限撑高这张卡。hover 状态是每一行自己的
+                    // @State(见 PendingListenRow),别提到 AccountLinkingTab 上共享:滚轮把行滑过光标时每一行都会
+                    // 写一次,牵连整个 tab 重算。
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(items, id: \.uts) { item in
+                                PendingListenRow(item: item, busy: backfill.busy) {
+                                    backfill.deleteListen(uts: item.uts)
+                                }
                             }
                         }
                     }
-                    .padding(.top, 4)
+                    .frame(maxHeight: 180)
+                    .fixedSize(horizontal: false, vertical: true)
+                    // Last.fm 只接受约两周内的时间戳,更老的会被服务端静默 ignore
+                    // (backfill.go 的 backfillMaxAge = 13 天,留了一天余量)。
+                    Text(L10n.t("Last.fm 只收两周内的记录"))
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 6)
                 }
-                .frame(maxHeight: 180)
-            } label: {
-                HStack(spacing: 4) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 4) {
-                            Label(
-                                String(format: L10n.plural("本地有 %@ 首待补交的记录", count: items.count), "\(items.count)"),
-                                systemImage: "tray.full"
-                            )
-                            .font(.callout)
-                            // Last.fm 只接受约两周内的时间戳,更老的会被服务端静默 ignore
-                            // (backfill.go 的 backfillMaxAge = 13 天,留了一天余量)。
-                            //
-                            // 收窄成只讲这一条。原来还并列讲了"本地最多存 4 万条
-                            // (约两年半)",但那条永远不是决定性的:Last.fm 两周的闸门比它严得多,
-                            // 本地能存多久对"到底能补回什么"毫无影响,并列写反而让人以为有两道
-                            // 需要各自留意的限制。
-                            HelpButton(text: L10n.t("Last.fm 仅接受约两周内的记录，更早的记录无法补交"))
-                        }
-                        if let status = backfillStatusLine() {
-                            Text(status).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    // 「补提交」就放在这一行。之前它自己独占一个 SettingsRow
-                    // (标题「补提交历史收听」+ 副标题「有 N 条本地收听还没提交」),跟这一行
-                    // 说的是同一件事、同一个数字,两行紧挨着摆纯属重复。合并之后
-                    // 计数、清单、动作都在一处。
-                    //
-                    // 按钮只在连着账号时给:没连账号提交不到任何地方去,那时这一行退化成纯粹的
-                    // "本地攒了些什么"清单。
-                    if lastfmConnected {
-                        if backfill.busy { ProgressView().controlSize(.small) }
-                        Button(L10n.t("补交")) { backfill.runBackfill() }
-                            .disabled(backfill.busy || items.isEmpty)
-                    }
-                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.04)))
+                .transition(.opacity)
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        .padding(.top, lastfmConnected ? 12 : 0)
+        .padding(.bottom, 14)
     }
 
     // fileprivate 而不是 private——PendingListenRow(同文件里的独立 struct)也要用同一份
     // 格式化,理由跟下面那个 struct 头注一致:hover 状态下沉之后它拿不到 AccountLinkingTab
     // 的 private 成员(Swift 的 private 按"所在声明"限定,不是按文件)。
+    // 今天 / 昨天写成「今天 20:20」,更早的写日期;按界面语言排。
     fileprivate static func listenTimeText(_ uts: Int64) -> String {
         let formatter = DateFormatter()
+        formatter.locale = L10n.locale
         formatter.dateStyle = .short
         formatter.timeStyle = .short
+        formatter.doesRelativeDateFormatting = true
         return formatter.string(from: Date(timeIntervalSince1970: TimeInterval(uts)))
     }
-
     /// 待补那一行的第二行小字。nil = 没有额外要说的(最常见的情形)。
     ///
     /// 只把**确实还有信息量**的两种情况留了下来:刚跑完的结果、以及有多少条已经太旧。
@@ -1138,10 +1136,8 @@ struct AccountLinkingTab: View {
             if lastfmSection == .settings {
                 lastfmScrobbleSettingsCard
             }
-        } else {
-            // 未连接时没有数据可看,给一句预告而不是一段空 tab。
-            lastfmStatsPlaceholderCard
         }
+        // 未连接时下面什么都不放:连上能看到什么,页头的欢迎卡(lastfmWelcomeContent)已经说了。
     }
 
     /// 规则卡每一行在通用行距之外上下再各留的空隙:这张卡单独放在一段里,行距放松一点。
@@ -1348,8 +1344,8 @@ struct AccountLinkingTab: View {
     // 只在这一段活跃时跑——这没问题:它们喂的 backfill.pending 只喂这张卡自己的
     // pendingListensRow,不像 LastfmStatsSection 的刷新要跨 4 个 tab 共用,离开这一段
     // 不会让别的 tab 变旧,回来再 onAppear 一次就补齐。
-    /// Last.fm 页的页头「账号卡」。第一行:品牌图标 + 用户名(后面跟去个人主页的小图标)+「Last.fm 账号」,右边是连接状态与动作
-    /// (断开 / 连接 / 重新连接);第二行是「Scrobble 到 Last.fm」开关。待处理的建议不进这张卡,在卡下面单独一组
+    /// Last.fm 页的页头「账号卡」。已连接时第一行:品牌图标 + 用户名(后面跟去个人主页的小图标)+「Last.fm 账号」,右边是连接
+    /// 状态与动作(断开 / 重新连接);第二行是「Scrobble 到 Last.fm」开关。未连接时整张换成欢迎卡(lastfmWelcomeContent)。待处理的建议不进这张卡,在卡下面单独一组
     /// (lastfmSuggestionsGroup)。
     /// 页头卡里的分隔线从卡片左内边距起画:这张卡的行没有图标列,用 CardDivider 的缩进会让线悬在半空。
     private var lastfmProfileDivider: some View {
@@ -1358,47 +1354,42 @@ struct AccountLinkingTab: View {
 
     private var lastfmProfileCard: some View {
         SettingsCard(cornerRadius: 18) {
-            HStack(alignment: .center, spacing: 14) {
-                accountIconBadge(.lastfm, size: 44, cornerRadius: 10)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 5) {
-                        Text(lastfmConnected && !lastfmDisplayName.isEmpty ? lastfmDisplayName : destination.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .lineLimit(1)
-                        // 主页链接紧挨着用户名:这个动作是「去看这个人的页面」。
-                        if lastfmConnected {
+            if lastfmConnected {
+                HStack(alignment: .center, spacing: 14) {
+                    accountIconBadge(.lastfm, size: 44, cornerRadius: 10)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Text(lastfmDisplayName.isEmpty ? destination.title : lastfmDisplayName)
+                                .font(.system(size: 15, weight: .semibold))
+                                .lineLimit(1)
+                            // 主页链接紧挨着用户名:这个动作是「去看这个人的页面」。
                             lastfmProfileLinkButton
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                         }
-                    }
-                    if lastfmConnected {
                         Text(L10n.t("Last.fm 账号"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                    } else if let intro = cardIntroText {
-                        Text(intro)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    Spacer(minLength: 16)
+                    lastfmProfileStatusLine
                 }
-                Spacer(minLength: 16)
-                lastfmProfileStatusLine
+                .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+                .padding(.vertical, 12)
+                lastfmProfileDivider
+                lastfmScrobbleToggleRow
+            } else {
+                lastfmWelcomeContent
             }
-            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-            .padding(.vertical, 12)
-            lastfmProfileDivider
-            lastfmScrobbleToggleRow
             // 只要本地攒了东西就把它们列出来 —— 不看连没连账号,理由见 pendingListensRow
             // 的文档注释(界面原来按 lastfmConnected 分岔,而数据层看的是 Scrobble 开关)。
             //
             // 光说"会记在本地"是空头承诺 —— 用户没法验证到底记了没有、记了什么。列出来
             // 之后这件事就是可核对的,连账号时也能预期"补上去大概是这些"。
             if (backfill.pending?.eligible ?? 0) > 0 {
-                lastfmProfileDivider
+                // 欢迎卡底下不画分隔线:胶囊直接挂在连接按钮下面。
+                if lastfmConnected { lastfmProfileDivider }
                 pendingListensRow
             } else if let result = backfillRunResultText() {
                 // 清单空了 = 这一次把能补的都补上去了。这恰恰是最该说一句话的时刻,
@@ -1460,26 +1451,72 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 页头右边一行:连接状态 + 对应动作。
+    /// 未连接时页头卡的全部内容:一句话、三行说明、连接按钮。Scrobble 开关不画:没连账号时拨它只能打开向导,
+    /// 跟按钮是同一个入口。没连账号时听的歌先记在本机(见下面的待补那一行),连上后补交。
+    /// 整张卡只有 logo 一处品牌色:说明行的图标用灰色单色,按钮用系统强调色,别再加彩色方块或品牌红按钮。
+    private var lastfmWelcomeContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 6) {
+                accountIconBadge(.lastfm, size: 56, cornerRadius: 13)
+                Text(L10n.t("开始你的听歌档案"))
+                    .font(.system(size: 17, weight: .bold))
+                    .padding(.top, 4)
+                Text(L10n.t("连接 Last.fm，把听过的每一首歌都留下来。"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // 三列各自对齐(图标 / 名称 / 说明):标题长短不一,用 HStack 各排各的,说明会参差不齐。
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 9) {
+                lastfmWelcomeRow(symbol: "music.note", title: L10n.t("自动 Scrobble"),
+                                 detail: L10n.t("各个播放器里听的歌都会记上"))
+                lastfmWelcomeRow(symbol: "chart.bar", title: L10n.t("统计与榜单"),
+                                 detail: L10n.t("今天、近 7 天、听得最多的歌手和歌"))
+                lastfmWelcomeRow(symbol: "square.grid.3x3", title: L10n.t("收听足迹"),
+                                 detail: L10n.t("热力图、听歌时段、那年今日"))
+            }
+            .fixedSize()
+            Button(L10n.t("连接 Last.fm 账号")) { showLastfmWizard = true }
+                .controlSize(.large)
+                .settingsProminentGlassButton(tint: .accentColor)
+                .buttonBorderShape(.capsule)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        .padding(.top, 20)
+        .padding(.bottom, 18)
+    }
+
+    private func lastfmWelcomeRow(symbol: String, title: String, detail: String) -> some View {
+        GridRow {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            Text(title)
+                .font(.system(size: 12.5))
+            Text(detail)
+                .font(.system(size: 12.5))
+                .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
+    }
+
+    /// 页头右边一行(只在已连接时画):连接状态 + 对应动作。
     ///  - 熔断(引擎落了 lyrimuse-lastfm-status.json):红点「授权已失效」+「重新连接…」,悬停看原因;
-    ///  - 已连接:绿点「已连接」+「断开…」(断开走确认框,理由见 showLastfmDisconnectConfirm);
-    ///  - 未连接:灰字「未连接」+「连接账号…」(跟拨开关同一个入口:向导 sheet)。
+    ///  - 其余:绿点「已连接」+「断开…」(断开走确认框,理由见 showLastfmDisconnectConfirm)。
     @ViewBuilder
     private var lastfmProfileStatusLine: some View {
         HStack(spacing: 10) {
-            if lastfmConnected, mirrorStatus.info != nil {
+            if mirrorStatus.info != nil {
                 lastfmStatusDot(.red, L10n.t("授权已失效"))
                     .foregroundStyle(.red)
                     .help(L10n.t("Last.fm 拒绝写入，Scrobble 已暂停，授权可能已在网站上被撤销"))
                 Button(L10n.t("重新连接…")) { showLastfmWizard = true }
-            } else if lastfmConnected {
+            } else {
                 lastfmStatusDot(.green, L10n.t("已连接"))
                 Button(L10n.t("断开…")) { showLastfmDisconnectConfirm = true }
-            } else {
-                Text(L10n.t("未连接"))
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                Button(L10n.t("连接账号…")) { showLastfmWizard = true }
             }
         }
         .lineLimit(1)
@@ -1551,17 +1588,6 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 未连接时,「统计/最近记录/榜单/那年今日」四段都还没有数据可看,给一句预告
-    /// 而不是空白 tab。
-    private var lastfmStatsPlaceholderCard: some View {
-        SettingsCard {
-            Text(L10n.t("连接后将在此显示听歌档案"))
-                .font(.callout).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
-        }
-    }
-
     private var lastfmConnected: Bool { !config.lastfmScrobbleSessionKey.isEmpty }
 
     /// 断开的完整不变量集:清凭据、清"授权失效"红标(描述的是刚扔掉的旧钥匙)、
@@ -1613,74 +1639,83 @@ struct AccountLinkingTab: View {
         return (k, s)
     }
 
-    // 连接向导——整个 App 里唯一会见到 API Key/Secret 的地方。
+    /// 连接向导里第几步、到了哪一档。
+    private enum LastfmWizardStepState { case pending, active, done }
+
+    private var lastfmKeysReady: Bool {
+        !config.lastfmScrobbleAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !config.lastfmScrobbleSecret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var lastfmKeyStepState: LastfmWizardStepState {
+        lastfmKeysEditing || !lastfmKeysReady ? .active : .done
+    }
+
+    private var lastfmAuthStepState: LastfmWizardStepState {
+        guard lastfmKeyStepState == .done else { return .pending }
+        switch lastfmConnect.state {
+        case .exchanging, .success: return .done
+        default: return .active
+        }
+    }
+
+    private var lastfmFinishStepState: LastfmWizardStepState {
+        switch lastfmConnect.state {
+        case .exchanging: return .active
+        case .success: return .done
+        case .idle: return lastfmConnected ? .done : .pending
+        default: return .pending
+        }
+    }
+
+    // 连接向导——整个 App 里唯一会见到 API Key/Secret 的地方。三步写成三张小卡:准备密钥 → 浏览器授权 → 完成,
+    // 当前那一步高亮,要点的按钮就在那一步里。密钥填好了第一步收成一行「已就绪 · 更改」。
     private var lastfmWizardSheet: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(L10n.t("连接 Last.fm")).font(.title3.bold())
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                accountIconBadge(.lastfm, size: 36, cornerRadius: 9)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("连接 Last.fm")).font(.system(size: 16, weight: .bold))
+                    Text(L10n.t("三步，大约一分钟"))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button(L10n.t("取消")) {
+                Button {
                     lastfmConnect.reset()
                     showLastfmWizard = false
-                }
-            }
-            HStack {
-                Text(L10n.t("下方的「连接」需要使用这对密钥完成授权：请先在 Last.fm 创建应用，获取 API Key 和 Secret"))
-                    .font(.callout).foregroundStyle(.secondary)
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    // 不是纯 Link:打开申请页的同时展开下面那条"怎么填"。申请页在登录墙
-                    // 后面、不支持 URL 参数预填(实测:未登录 302 到 /login),
-                    // 帮用户填表做不到,能做的是把"该填什么"送到眼前。
-                    Button(L10n.t("前往申请")) {
-                        NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/account/create")!)
-                        withAnimation { showLastfmApplyHint = true }
-                    }
-                    .buttonStyle(.link)
-                    // 重装/重置配置/换机器之后要重新填这对密钥,而这些人**早就创建过应用**
-                    // 了 —— 只给"前往申请"的话他们只能再建一个重复的。这个入口必须常驻:
-                    // 上面那条"怎么填"的提示要点过「前往申请」才展开,而他们恰恰不会点它。
-                    // /api/accounts 是 Last.fm 的"我的 API 应用"列表(实测:
-                    // 未登录 302 到 /login,页面存在;/api/account 不带 s 是 404)。
-                    // 实测(带自己账号真实登录态查的):这份列表页现在
-                    // **只显示 API Key,不显示 Secret**,每行也没有能点进去的应用详情页
-                    // (原来那句"点应用名,页面上就有 API Key 和 Shared Secret"已经对不上
-                    // Last.fm 现在的页面了,大概率是对方后来改版收紧的——Secret 大概率只在
-                    // 创建那一刻显示一次)。所以旧 Secret 丢了从这里找不回来,只能新建一个。
-                    Button(L10n.t("查看已有应用")) {
-                        NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/accounts")!)
-                    }
-                    .buttonStyle(.link)
-                    .font(.caption)
-                    .help(L10n.t("此处可查看已创建应用的 API Key，但无法查看 Secret；如已遗失，可通过「前往申请」重新创建。"))
-                }
-            }
-            if showLastfmApplyHint {
-                HStack(spacing: 8) {
-                    Image(systemName: "info.circle")
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.secondary)
-                    Text(L10n.t("申请页只需填写「应用名称」，其余可留空；提交后页面将直接显示 API Key 和 Shared Secret"))
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button(L10n.t("拷贝名称")) {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString("Lyrimuse", forType: .string)
-                    }
-                    .buttonStyle(.link)
-                    .font(.caption)
-                    .help(L10n.t("将「Lyrimuse」拷贝到剪贴板，用作申请页中的应用名称"))
+                        .frame(width: 24, height: 24)
+                        .background(Color.primary.opacity(0.08), in: Circle())
+                        .contentShape(Circle())
                 }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .help(L10n.t("取消"))
             }
-            SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
-            SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret)
-            Divider()
-            lastfmConnectArea
+            .padding(.bottom, 4)
+            lastfmWizardStep(1, title: L10n.t("准备密钥"), state: lastfmKeyStepState) {
+                lastfmKeyStepHeaderTrailing
+            } content: {
+                if lastfmKeyStepState == .active { lastfmKeyStepFields }
+            }
+            lastfmWizardStep(2, title: L10n.t("在浏览器里授权"), state: lastfmAuthStepState) {
+                EmptyView()
+            } content: {
+                if lastfmAuthStepState == .active { lastfmAuthStepContent }
+            }
+            lastfmWizardStep(3, title: L10n.t("完成，开始 Scrobble"), state: lastfmFinishStepState) {
+                EmptyView()
+            } content: {
+                lastfmFinishStepContent
+            }
         }
         .padding(20)
         .frame(width: 460)
+        .onAppear { lastfmKeysEditing = !lastfmKeysReady }
         // Esc / 点外面关掉 sheet 时状态机跟着复位 —— 原来残留在 waitingForBrowserAuth,
         // 下次打开向导直接停在中间步骤,还带着一个已经作废的 token。成功
         // 自动关闭那条路里 reset 已经调用过,这里重复调用无害(幂等)。
@@ -1695,6 +1730,194 @@ struct AccountLinkingTab: View {
                 showLastfmWizard = false
                 lastfmConnect.reset()
             }
+        }
+    }
+
+    /// 向导里的一步:左边序号圆(做完了换成对勾),右边标题行 + 内容。当前那一步染强调色底和描边。
+    private func lastfmWizardStep<Trailing: View, Content: View>(
+        _ number: Int, title: String, state: LastfmWizardStepState,
+        @ViewBuilder trailing: () -> Trailing, @ViewBuilder content: () -> Content
+    ) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle().fill(state == .done ? Color.green : (state == .active ? Color.accentColor : Color.primary.opacity(0.12)))
+                if state == .done {
+                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
+                } else {
+                    Text("\(number)").font(.system(size: 11, weight: .bold))
+                }
+            }
+            .foregroundStyle(state == .pending ? Color.secondary : Color.white)
+            .frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(state == .pending ? .secondary : .primary)
+                    trailing()
+                }
+                .frame(minHeight: 22)
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(shape.fill(state == .active ? Color.accentColor.opacity(0.09) : Color.primary.opacity(0.045)))
+        .overlay(shape.strokeBorder(state == .active ? Color.accentColor.opacity(0.3) : .clear, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var lastfmKeyStepHeaderTrailing: some View {
+        if lastfmKeyStepState == .done {
+            Text(L10n.t("已就绪"))
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.green)
+            Spacer(minLength: 8)
+            Button(L10n.t("更改")) { lastfmKeysEditing = true }
+                .buttonStyle(.link)
+                .disabled(lastfmConnectInFlight)
+        } else {
+            Spacer(minLength: 8)
+            // 申请页在登录墙后面、不支持 URL 参数预填(实测:未登录 302 到 /login),帮用户填表做不到,
+            // 能做的是把"该填什么"写在下面那条提示里。
+            Button(L10n.t("去 Last.fm 申请")) {
+                NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/account/create")!)
+            }
+            .buttonStyle(.link)
+            if lastfmKeysReady {
+                Button(L10n.t("完成")) {
+                    _ = trimmedLastfmKeys()
+                    lastfmKeysEditing = false
+                }
+                .buttonStyle(.link)
+            }
+        }
+    }
+
+    /// 第一步展开时的两个输入框和怎么申请的提示。不给「查看已有应用」(Last.fm 的 /api/accounts):那份列表只显示
+    /// API Key、不显示 Secret,缺 Secret 照样连不上,旧 Secret 丢了只能新建一个应用。
+    @ViewBuilder
+    private var lastfmKeyStepFields: some View {
+        lastfmKeyField("API Key", text: $config.lastfmScrobbleAPIKey, prompt: L10n.t("粘贴 API Key"))
+        lastfmKeyField("Secret", text: $config.lastfmScrobbleSecret, prompt: L10n.t("粘贴 Shared Secret"))
+        HStack(alignment: .top, spacing: 8) {
+            Text(L10n.t("申请页只需填写「应用名称」，其余可留空。提交后页面会显示 API Key 和 Shared Secret；Secret 只显示这一次，以后找不回来，忘了就再建一个应用。"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(L10n.t("拷贝名称")) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("Lyrimuse", forType: .string)
+            }
+            .buttonStyle(.link)
+            .font(.system(size: 11))
+            .help(L10n.t("将「Lyrimuse」拷贝到剪贴板，用作申请页中的应用名称"))
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
+    }
+
+    private func lastfmKeyField(_ label: String, text: Binding<String>, prompt: String) -> some View {
+        HStack(spacing: 8) {
+            // 标题常驻在框外:框里的占位字一填上内容就没了,只剩一串圆点看不出是哪一项。
+            Text(label)
+                .font(.system(size: 12.5))
+                .frame(width: 56, alignment: .leading)
+            SecureField(label, text: text, prompt: Text(prompt))
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    /// 授权流程正在跑(拿令牌、等浏览器、换 session):这时不许改密钥,start() 已经把这一轮的密钥钉死了。
+    private var lastfmConnectInFlight: Bool {
+        switch lastfmConnect.state {
+        case .requestingToken, .waitingForBrowserAuth, .exchanging: return true
+        default: return false
+        }
+    }
+
+    // 浏览器跳回 App 的回调(lyrimuse://)可能被浏览器或安全软件拦下,等浏览器授权那一档保留一颗手动「继续」。
+    @ViewBuilder
+    private var lastfmAuthStepContent: some View {
+        switch lastfmConnect.state {
+        case .requestingToken:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(L10n.t("正在获取授权令牌…")).font(.caption)
+            }
+        case .waitingForBrowserAuth:
+            Text(L10n.t("已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮"))
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button(L10n.t("我已完成授权，继续")) { lastfmConnect.confirmBrowserAuth() }
+                    .settingsProminentGlassButton(tint: .accentColor)
+                    .buttonBorderShape(.capsule)
+                Button(L10n.t("重新打开授权页面")) { lastfmConnect.reopenBrowserAuth() }
+                    .buttonStyle(.link)
+                Button(L10n.t("取消")) { lastfmConnect.reset() }
+                    .buttonStyle(.link).foregroundStyle(.secondary)
+            }
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption).foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(L10n.t("重试")) { lastfmConnect.reset() }
+                .buttonStyle(.link)
+        default:
+            Text(L10n.t("会打开 Last.fm 授权页，点「Yes, allow access」后自动回到这里。"))
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            // 已连着账号(从「授权已失效 · 重新连接…」进来)也直接重走授权:换到同一个账号的新 session 不清统计,
+            // 见 LastfmConnectController.confirmBrowserAuth。
+            Button(lastfmConnected ? L10n.t("重新授权") : L10n.t("打开授权页")) {
+                let keys = trimmedLastfmKeys()
+                lastfmConnect.start(apiKey: keys.key, secret: keys.secret)
+            }
+            .settingsProminentGlassButton(tint: .accentColor)
+            .buttonBorderShape(.capsule)
+        }
+    }
+
+    @ViewBuilder
+    private var lastfmFinishStepContent: some View {
+        switch lastfmConnect.state {
+        case .exchanging:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(L10n.t("正在确认授权，即将完成…")).font(.caption)
+            }
+        case .success(let username):
+            HStack {
+                Label(String(format: L10n.t("已连接：%@"), username), systemImage: "checkmark.seal.fill")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.green)
+                Spacer()
+                lastfmProfileLinkButton
+            }
+        case .idle where lastfmConnected:
+            HStack {
+                Label(
+                    config.lastfmScrobbleUsername.isEmpty ? L10n.t("已连接 Last.fm 账号") : String(format: L10n.t("已连接：%@"), config.lastfmScrobbleUsername),
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(.system(size: 12.5))
+                .foregroundStyle(.green)
+                Spacer()
+                lastfmProfileLinkButton
+                Button(L10n.t("断开")) {
+                    // 同一套不变量,复用主卡的方法。不再弹确认:这里已经在
+                    // 「重新连接」两层交互之下,误点概率低,sheet 上叠 alert 反而别扭。
+                    performLastfmDisconnect()
+                }
+                .buttonStyle(.link)
+            }
+        default:
+            EmptyView()
         }
     }
 
@@ -1724,101 +1947,6 @@ struct AccountLinkingTab: View {
             }
             .help(L10n.t("在 Last.fm 网站查看主页"))
         }
-    }
-
-    // Last.fm 经典 auth API 没有回调机制,中间必须有一步用户手动确认——三步小圆点让
-    // 这个"看起来复杂"的流程翻译成"其实就三步,你现在在第几步"。
-    @ViewBuilder
-    private var lastfmConnectArea: some View {
-        switch lastfmConnect.state {
-        case .idle:
-            if config.lastfmScrobbleSessionKey.isEmpty {
-                stepDots(current: 0)
-                Button(L10n.t("连接 Last.fm 账号")) {
-                    let keys = trimmedLastfmKeys()
-                    lastfmConnect.start(apiKey: keys.key, secret: keys.secret)
-                }
-                    .buttonStyle(.borderedProminent)
-            } else {
-                HStack {
-                    Label(
-                        config.lastfmScrobbleUsername.isEmpty ? L10n.t("已连接 Last.fm 账号") : String(format: L10n.t("已连接：%@"), config.lastfmScrobbleUsername),
-                        systemImage: "checkmark.seal.fill"
-                    ).foregroundStyle(.green)
-                    Spacer()
-                    lastfmProfileLinkButton
-                    Button(L10n.t("断开")) {
-                        // 同一套不变量,复用主卡的方法。不再弹确认:这里已经在
-                        // 「重新连接」两层交互之下,误点概率低,sheet 上叠 alert 反而别扭。
-                        performLastfmDisconnect()
-                    }
-                    .buttonStyle(.link)
-                }
-            }
-        case .requestingToken:
-            stepDots(current: 1)
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text(L10n.t("正在获取授权令牌…")).font(.caption)
-            }
-        case .waitingForBrowserAuth:
-            stepDots(current: 2)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.t("已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮"))
-                    .font(.caption).foregroundStyle(.secondary)
-                Button(L10n.t("我已完成授权，继续")) { lastfmConnect.confirmBrowserAuth() }
-                .buttonStyle(.borderedProminent)
-                HStack(spacing: 12) {
-                    Button(L10n.t("重新打开授权页面")) { lastfmConnect.reopenBrowserAuth() }
-                        .buttonStyle(.link)
-                    Button(L10n.t("取消")) { lastfmConnect.reset() }
-                        .buttonStyle(.link).foregroundStyle(.secondary)
-                }
-            }
-        case .exchanging:
-            stepDots(current: 3)
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text(L10n.t("正在确认授权，即将完成…")).font(.caption)
-            }
-        case .success(let username):
-            HStack {
-                Label(String(format: L10n.t("已连接：%@"), username), systemImage: "checkmark.seal.fill").foregroundStyle(.green)
-                Spacer()
-                lastfmProfileLinkButton
-            }
-        case .failed(let message):
-            VStack(alignment: .leading, spacing: 6) {
-                Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption).foregroundStyle(.red)
-                Button(L10n.t("重试")) { lastfmConnect.reset() }
-                    .buttonStyle(.link)
-            }
-        }
-    }
-
-    private func stepDots(current: Int) -> some View {
-        HStack(spacing: 4) {
-            stepDot(filled: current >= 1, label: L10n.t("① 填写密钥"))
-            stepLine(active: current >= 2)
-            stepDot(filled: current >= 2, label: L10n.t("② 浏览器授权"))
-            stepLine(active: current >= 3)
-            stepDot(filled: current >= 3, label: L10n.t("③ 完成连接"))
-        }
-    }
-
-    private func stepDot(filled: Bool, label: String) -> some View {
-        Circle()
-            .fill(filled ? Color.accentColor : Color.clear)
-            .overlay(Circle().strokeBorder(filled ? Color.clear : Color.secondary.opacity(0.5), lineWidth: 1))
-            .frame(width: 6, height: 6)
-            .accessibilityLabel(label)
-    }
-
-    private func stepLine(active: Bool) -> some View {
-        Rectangle()
-            .fill(active ? Color.accentColor : Color.secondary.opacity(0.3))
-            .frame(width: 16, height: 1)
     }
 
     // MARK: - 推送提醒
@@ -2236,35 +2364,34 @@ private struct PendingListenRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            // 三段的布局优先级是**故意**排开的:空间不够时先牺牲专辑,再牺牲歌手,
-            // 歌名最后才截。清单里有 "愛愛愛 (Acounstic Version) - Remix Acoustic
-            // Verison" 这种长到离谱的标题,不排优先级的话 SwiftUI 会均摊压缩,
-            // 几段一起变成省略号。
-            Text(item.title)
-                .font(.caption)
-                .lineLimit(1)
-                .layoutPriority(2)
-            Text(item.artist)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .layoutPriority(1)
-            // 专辑是**会被真提交给 Last.fm 的字段**(listenLogLine.AL 进 scrobble
-            // 请求),这份清单的作用就是"连上之后会补交什么",所以它该看得见 ——
-            // 提交前发现专辑名不对,这里是唯一的机会。
-            //
-            // 它帮不了"两条看起来一模一样"的情况:那多半是同一首歌听了两遍,
-            // 专辑当然也一样,区分它们的只有时间。
-            if let album = item.album, !album.isEmpty {
-                Text(album)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+        HStack(spacing: 10) {
+            // 封面查本机 enrich 缓存:待补条目本身不带图,但都是本机播过的,播放时引擎已经把封面存下了
+            // (同 RecentListensPanel 待补那几行)。查不到画中性灰的音符占位,不用按歌手着色的色块。
+            CachedImage(url: EnrichCacheReader.coverURL(
+                artist: item.artist, title: item.title, album: item.album ?? "")) {
+                ZStack {
+                    Color.primary.opacity(0.08)
+                    Image(systemName: "music.note")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: LastfmStatsSection.recentCoverSize, height: LastfmStatsSection.recentCoverSize)
+            .clipShape(RoundedRectangle(cornerRadius: LastfmStatsSection.recentCoverRadius, style: .continuous))
+            // 两行:歌名;歌手 · 专辑。专辑是**会被真提交给 Last.fm 的字段**(listenLogLine.AL 进 scrobble
+            // 请求),这份清单的作用就是"连上之后会补交什么",提交前发现专辑名不对,这里是唯一的机会。
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                Text([item.artist, item.album ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
             Text(AccountLinkingTab.listenTimeText(item.uts))
-                .font(.caption2)
+                .font(.system(size: 10.5))
                 .foregroundStyle(.tertiary)
                 .monospacedDigit()
             // 槽位常驻、只改 opacity:按钮跟着 hover 出现/消失的话,整行会跟着变宽
@@ -2281,6 +2408,7 @@ private struct PendingListenRow: View {
             .allowsHitTesting(isHovered && !busy)
             .help(L10n.t("从待补交清单中移除此条（不可恢复）"))
         }
+        .padding(.vertical, 5)
         .contentShape(Rectangle())
         .onHover { inside in isHovered = inside }
     }
