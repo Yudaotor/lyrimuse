@@ -340,7 +340,9 @@ type neteaseUpcomingFile struct {
 		// RandomOrder 是一个随机大数(实测 6354311200、492958900 这类):随机播放按它**从小到大**放。
 		// 实测连续 6 首的名次是 401 → 402 → 403 → 404 → 405 → 406,列表位置却是 96 → 371 → 225 → 549 → 188 → 375。
 		RandomOrder float64 `json:"randomOrder"`
-		Track       struct {
+		// ResourceType 是 track(歌)、voice / downloadVoice / localVoice(播客单集)等。单集不预取:没有歌词。
+		ResourceType string `json:"resourceType"`
+		Track        struct {
 			Name    string `json:"name"`
 			ID      string `json:"id"`
 			Artists []struct {
@@ -353,6 +355,9 @@ type neteaseUpcomingFile struct {
 		} `json:"track"`
 	} `json:"list"`
 }
+
+// neteaseVoiceTypes 是队列条目里的播客单集。App 认出在放单集时不报(02 章决策 114),预取也跳过它们。
+var neteaseVoiceTypes = map[string]bool{"voice": true, "downloadVoice": true, "localVoice": true}
 
 // neteasePlayOrder 记同一份列表里上一次看到的位置,用来从相邻两次换歌推断顺序 / 随机。
 //
@@ -570,7 +575,7 @@ func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 				return false
 			}
 			tr := f.List[i].Track
-			if tr.Name == "" || seen[i] {
+			if tr.Name == "" || seen[i] || neteaseVoiceTypes[f.List[i].ResourceType] {
 				return true
 			}
 			seen[i] = true

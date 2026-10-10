@@ -156,7 +156,7 @@ public enum TrustedPlayers {
 
     /// `artistlessNotMusic` 的内置播放器报了一份歌手空、但时长已经有了而且在放的快照:不是开播那一帧(那一帧时长 0、
     /// 没在放),是本来就没有歌手的非歌曲内容(KKBOX、Amazon Music 的播客单集)。KKBOX 的 title 是 Chromium 拿窗口标题凑的,
-    /// 不能当曲名(见 02 章决策 62)。调用方当成「没在放音乐」(`MediaControlClient.artistlessContentNotMusic`)。
+    /// 不能当曲名(见 02 章决策 62)。调用方当成「没在放音乐」(`MediaControlClient.playerContentNotMusic`)。
     /// 纯函数,selftest 直接覆盖。
     /// `artistArrivesLate` 的内置播放器(KKBOX)这一帧还没报歌手:开播那一帧(播客那种歌手空、有时长、在放的先由
     /// `artistlessContent` 认走)。调用方当成「在加载」(`MediaControlClient.artistNotYetReported`)。纯函数,selftest 覆盖。

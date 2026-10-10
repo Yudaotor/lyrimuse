@@ -14,6 +14,7 @@ type testNeteaseSong struct {
 	artists      []string
 	durationMS   int64
 	randomOrder  float64 // 0 = 跟数组顺序一致(两种顺序一样,只有随机相关的用例才另给)
+	resourceType string  // 空 = 不写这个字段
 }
 
 // writeTestNeteaseQueue 造一份跟真实 playingList 同构的队列文件(明文 JSON,无加密)。
@@ -62,14 +63,18 @@ func testNeteaseQueueBody(t *testing.T, songs []testNeteaseSong) []byte {
 		for _, a := range s.artists {
 			artists = append(artists, map[string]any{"id": "1", "name": a})
 		}
-		list = append(list, map[string]any{
+		item := map[string]any{
 			"displayOrder": i,
 			"randomOrder":  map[bool]float64{true: float64(i + 1), false: s.randomOrder}[s.randomOrder == 0],
 			"track": map[string]any{
 				"id": s.title, "name": s.title, "artists": artists,
 				"album": map[string]any{"name": s.album}, "duration": s.durationMS,
 			},
-		})
+		}
+		if s.resourceType != "" {
+			item["resourceType"] = s.resourceType
+		}
+		list = append(list, item)
 	}
 	body, err := json.Marshal(map[string]any{"list": list})
 	if err != nil {
@@ -176,6 +181,20 @@ func TestNeteaseUpcomingWrapsAtListEnd(t *testing.T) {
 	got, _ = neteaseUpcoming("甲", "第0首", 2)
 	if want := []string{"第1首", "第2首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
 		t.Fatalf("接回开头后得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+}
+
+// 队列里夹着播客单集(歌单里加进来的、下载的):预取跳过,没有歌词。
+func TestNeteaseUpcomingSkipsPodcastEpisodes(t *testing.T) {
+	writeTestNeteaseQueue(t, []testNeteaseSong{
+		{title: "当前", album: "甲", artists: []string{"甲"}, durationMS: 100000, resourceType: "track"},
+		{title: "一集", album: "节目", artists: []string{"主播"}, durationMS: 1800000, resourceType: "voice"},
+		{title: "下载的一集", album: "节目", artists: []string{"主播"}, durationMS: 1800000, resourceType: "downloadVoice"},
+		{title: "下一首", album: "乙", artists: []string{"乙"}, durationMS: 200000, resourceType: "track"},
+	})
+	got, _ := neteaseUpcoming("甲", "当前", 5)
+	if want := []string{"下一首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("得到 %v,期望 %v", neteaseTitles(got), want)
 	}
 }
 

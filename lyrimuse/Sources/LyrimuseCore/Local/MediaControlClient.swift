@@ -137,11 +137,13 @@ public enum MediaControlClient {
 
     // MARK: - 切歌间隙保持(见 PlayerGapHold)
 
-    /// 这一拍是「在放、但不是音乐」(KKBOX 的播客单集,见 `TrustedPlayers.artistlessContent`)就当没在放:切歌间隙保持
-    /// 当场放手(不然会把上一首撑满整个窗口),调用方直接交回 nil、不退回去问别家的暂停会话。
-    private static func artistlessContentNotMusic(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
-        guard TrustedPlayers.artistlessContent(bundleID: bundleID, artist: snapshot.artist,
-                                               duration: snapshot.duration, playing: snapshot.playing) else { return false }
+    /// 这一拍是「播放器在放、但不是音乐」(KKBOX / Amazon 的播客单集,见 `TrustedPlayers.artistlessContent`;网易云的
+    /// 播客单集,见 `NeteasePodcastQueue`)就当没在放:切歌间隙保持当场放手(不然会把上一首撑满整个窗口),调用方直接
+    /// 交回 nil、不退回去问别家的暂停会话。
+    private static func playerContentNotMusic(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
+        let artistless = TrustedPlayers.artistlessContent(bundleID: bundleID, artist: snapshot.artist,
+                                                          duration: snapshot.duration, playing: snapshot.playing)
+        guard artistless || neteasePodcastEpisode(bundleID: bundleID, snapshot: snapshot) else { return false }
         setSnapshotFailure(.targetNotPlayingMusic)
         gapHoldLock.lock()
         defer { gapHoldLock.unlock() }
@@ -151,6 +153,24 @@ public enum MediaControlClient {
             }
             gapHoldingSince = nil
             gapHoldLast = nil
+        }
+        return true
+    }
+
+    /// 认成网易云播客单集时打过日志的那一条(歌名),同一条只打一条。
+    private static var neteasePodcastLoggedTitle: String?
+    private static let neteasePodcastLogLock = NSLock()
+
+    private static func neteasePodcastEpisode(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
+        guard NeteasePodcastQueue.isEpisode(bundleID: bundleID, title: snapshot.title, artist: snapshot.artist) else {
+            return false
+        }
+        neteasePodcastLogLock.lock()
+        let log = neteasePodcastLoggedTitle != snapshot.title
+        if log { neteasePodcastLoggedTitle = snapshot.title }
+        neteasePodcastLogLock.unlock()
+        if log {
+            logger.notice("netease: podcast episode, not reported as a song track=\(snapshot.title ?? "", privacy: .public)")
         }
         return true
     }
@@ -1178,7 +1198,7 @@ public enum MediaControlClient {
             // 走信任列表这条路进来的(不是用户在「播放器」卡里选中的具体播放器)要多过
             // 一道"这是不是一首歌"的守卫——跟 fetchAutoDetectedSnapshot 的信任分支同一套
             // 语义,理由见 TrustedPlayers.notASong 的注释(浏览器视频/播客不能被当成一首歌)。
-            if artistlessContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
+            if playerContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
             guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
                 setSnapshotFailure(.notASong)
                 return fallback()
@@ -1188,7 +1208,7 @@ public enum MediaControlClient {
                 bundleID: bundleID, mediaControl: snapshotWithProbedAlbum(snapshot))
         }
         // 勾选的内置播放器也过一次:KKBOX 的播客、开播那一帧还没有歌手,都不退回去问别家。
-        if artistlessContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
+        if playerContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
         if artistNotYetReported(bundleID: bundleID, snapshot: snapshot) { return nil }
         guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
             setSnapshotFailure(.notASong)
@@ -1501,7 +1521,7 @@ public enum MediaControlClient {
         // 开播那一帧还没有歌手的,主路径会挡下,从这里绕进来的却会被当成一首歌去查歌词、换一次曲目身份丢一次封面。
         // 挡下时不动回退开关:播放器还是那一个,只是这一拍没有可报的歌。
         if let s = snapshot {
-            if artistlessContentNotMusic(bundleID: player.bundleIdentifier, snapshot: s) { return nil }
+            if playerContentNotMusic(bundleID: player.bundleIdentifier, snapshot: s) { return nil }
             if trustedPlaybackRejected(bundleID: player.bundleIdentifier, snapshot: s) {
                 setSnapshotFailure(.notASong)
                 return nil
@@ -1651,8 +1671,8 @@ public enum MediaControlClient {
             setSnapshotFailure(.focusHeldByOtherApp)
             return snapshotAfterFocusLost()
         }
-        // KKBOX 在放播客:没在放音乐,不退回去问别家(见 TrustedPlayers.artistlessContent)。
-        if artistlessContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
+        // KKBOX / Amazon / 网易云在放播客:没在放音乐,不退回去问别家(见 playerContentNotMusic)。
+        if playerContentNotMusic(bundleID: bundleID, snapshot: snapshot) { return nil }
         if artistNotYetReported(bundleID: bundleID, snapshot: snapshot) { return nil }
         // 信任的未知播放器再过一道"这是不是一首歌"的守卫:歌手名**或专辑名**为空的丢掉
         // (浏览器视频/播客)。见 TrustedPlayers.notASong。
