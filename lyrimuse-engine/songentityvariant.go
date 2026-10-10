@@ -158,11 +158,16 @@ func songVariantIDs(e enrichEntry, plainVersion bool) []songGradedID {
 	if plainVersion {
 		isrcLevel = songIDVerified
 	}
+	recorded := map[string]songIDLevel{isrcLevelPlayer: songIDPlayer, isrcLevelVerified: songIDVerified, isrcLevelSearched: songIDSearched}
 	seen := map[string]bool{}
 	for _, raw := range e.ISRCs {
 		if code := normalizeISRC(raw); code != "" && !seen[code] {
 			seen[code] = true
-			add(songIDISRC, code, isrcLevel)
+			level, ok := recorded[e.ISRCLevels[code]]
+			if !ok {
+				level = isrcLevel
+			}
+			add(songIDISRC, code, level)
 		}
 	}
 	if len(e.SpotifyTrackID) == 22 {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"maps"
 	"math"
 	"net/http"
 	"regexp"
@@ -19,9 +20,27 @@ import (
 // 来路:Spotify 原生客户端在播时报的(playbackISRC,就是这一条录音);这一轮已被认可(分数 >= 0)、自报时长跟播放器报的
 // 对得上(isrcDurationFits)的 applemusic / deezer 候选报的;存量条目由 startRecordingISRCSweep 按已存的 Apple 歌曲 id、
 // Spotify 曲目 id 补。ISRC 有脏数据(占位符样式的编号被注册给了不相干的歌),候选报的都要过时长闸,占位符样式的直接丢掉。
+//
+// 每个号写进来时在 isrc_levels 记来路级别(歌曲实体按它定这个号能不能当强证据,见 18 章决策 5):播放器报的是 player;
+// 候选、补扫取回的,配上的那一轨版本词跟这一条对得上是 verified(补扫按的是检索配上的 Apple 链接,另要那一轨的署名
+// 写全了合作者或时长几乎相等),对不上是 searched。同一个号取更高的级别;没记级别的号(这一机制之前写进来的)由歌曲实体
+// 按写法有没有版本词推断。
 
 // recordingISRCMax:一条最多记几个。
 const recordingISRCMax = 4
+
+const (
+	isrcLevelPlayer   = "player"
+	isrcLevelVerified = "verified"
+	isrcLevelSearched = "searched"
+)
+
+var isrcLevelRank = map[string]int{isrcLevelSearched: 1, isrcLevelVerified: 2, isrcLevelPlayer: 3}
+
+// recordedISRC:一个号和它的来路级别(级别为空:不知道)。
+type recordedISRC struct {
+	code, level string
+}
 
 // isrcDurationToleranceSecs:候选自报时长跟播放器报的最多差多少才认它报的 ISRC。Apple 报毫秒,同一份录音差不到
 // 0.01 秒;Deezer 报整秒,差不到 1 秒。
@@ -47,18 +66,83 @@ func isrcDurationFits(localSecs, sourceSecs float64) bool {
 	return localSecs > 0 && sourceSecs > 0 && math.Abs(localSecs-sourceSecs) <= isrcDurationToleranceSecs
 }
 
-// recordingISRCsFromScored:这一轮认出来的这条录音的 ISRC。playback 是播放器报的(没有传空串),排在前面;候选报的按
-// 候选顺序接在后面,去重。
-func recordingISRCsFromScored(playback string, scored []scoredLyricCandidateResult, durationSecs float64) []string {
-	out := mergeRecordingISRCs(nil, []string{playback})
+// recordingISRCsFromScored:这一轮认出来的这条录音的 ISRC,带级别。playback 是播放器报的(没有传空串),排在前面;候选报的
+// 按候选顺序接在后面。title / album 是本地这一条的,候选配上的那一轨跟它比版本词。
+func recordingISRCsFromScored(playback string, scored []scoredLyricCandidateResult, durationSecs float64, title, album string) []recordedISRC {
+	var out []recordedISRC
+	if c := normalizeISRC(playback); c != "" {
+		out = append(out, recordedISRC{c, isrcLevelPlayer})
+	}
 	for _, r := range scored {
-		if (r.Source != "applemusic" && r.Source != "deezer") || r.Score < 0 ||
+		c := normalizeISRC(r.ISRC)
+		if c == "" || (r.Source != "applemusic" && r.Source != "deezer") || r.Score < 0 ||
 			!isrcDurationFits(durationSecs, r.SourceReportedDurationSecs) {
 			continue
 		}
-		out = mergeRecordingISRCs(out, []string{r.ISRC})
+		level := isrcLevelVerified
+		if versionTagsMismatch(title, album, r.Title, r.Album) {
+			level = isrcLevelSearched
+		}
+		out = append(out, recordedISRC{c, level})
 	}
 	return out
+}
+
+// recordISRCs 把 add 并进条目:号照 mergeRecordingISRCs 的规矩进 isrcs,级别记进 isrc_levels(同一个号取更高的;封顶
+// 挤掉的号不记)。isrc_levels 换一份新的写,不改原来那份(快照可能还拿着它)。
+func recordISRCs(e *enrichEntry, add []recordedISRC) {
+	codes := make([]string, len(add))
+	for i, a := range add {
+		codes[i] = a.code
+	}
+	e.ISRCs = mergeRecordingISRCs(e.ISRCs, codes)
+	var levels map[string]string
+	for _, a := range add {
+		c := normalizeISRC(a.code)
+		if c == "" || isrcLevelRank[a.level] <= isrcLevelRank[e.ISRCLevels[c]] || !slices.Contains(e.ISRCs, c) {
+			continue
+		}
+		if levels == nil {
+			levels = maps.Clone(e.ISRCLevels)
+			if levels == nil {
+				levels = map[string]string{}
+			}
+		}
+		levels[c] = a.level
+	}
+	if levels != nil {
+		e.ISRCLevels = levels
+	}
+}
+
+// mergeEntryISRCs:把 src 的号连同级别并进 dst(外围补全、合并条目用)。
+func mergeEntryISRCs(dst *enrichEntry, src enrichEntry) {
+	add := make([]recordedISRC, len(src.ISRCs))
+	for i, c := range src.ISRCs {
+		add[i] = recordedISRC{c, src.ISRCLevels[normalizeISRC(c)]}
+	}
+	recordISRCs(dst, add)
+}
+
+// removeISRCs:拿掉 drop 认定的号,连同它们的级别。都拿光时两个字段都是 nil。
+func removeISRCs(e *enrichEntry, drop func(code string) bool) {
+	e.ISRCs = slices.DeleteFunc(slices.Clone(e.ISRCs), func(c string) bool { return drop(normalizeISRC(c)) })
+	if len(e.ISRCs) == 0 {
+		e.ISRCs = nil
+	}
+	if len(e.ISRCLevels) == 0 {
+		return
+	}
+	levels := map[string]string{}
+	for c, l := range e.ISRCLevels {
+		if slices.Contains(e.ISRCs, c) {
+			levels[c] = l
+		}
+	}
+	if len(levels) == 0 {
+		levels = nil
+	}
+	e.ISRCLevels = levels
 }
 
 // mergeRecordingISRCs:已有的在前,新的接在后面,去重,最多 recordingISRCMax 个。
@@ -138,9 +222,9 @@ func isrcSweepJobsLocked() []isrcSweepJob {
 
 // appleCatalogSong:按 id 取回来的一首。补 ISRC 用 isrc、durationSecs;按合作署名重核链接(applecreditlinks.go)另用 artist、title。
 type appleCatalogSong struct {
-	isrc          string
-	durationSecs  float64
-	artist, title string
+	isrc                 string
+	durationSecs         float64
+	artist, title, album string
 }
 
 // isrcFromAppleSong:这首报的 ISRC 时长跟播放器报的对得上才认,不认返回空串。没取到这首(这个商店没有)也是空串。
@@ -151,14 +235,27 @@ func isrcFromAppleSong(song appleCatalogSong, found bool, durationSecs float64) 
 	return normalizeISRC(song.isrc)
 }
 
+// appleSweepISRCLevel:补扫按条目上的 Apple 链接取回的那一轨,号的级别。链接是按歌名检索配上的,可能配到同专辑的另一版
+// (合唱重录版配到独唱那一轨):版本词对得上、署名写全了本地点名的合作者或时长几乎相等(appleTrackCreditFits)才算
+// verified。key 是条目的键。
+func appleSweepISRCLevel(key string, song appleCatalogSong, durationSecs float64) string {
+	artist, title, album := splitEnrichKey(key)
+	title = enrichKeyDurationVariantRe.ReplaceAllString(title, "")
+	if versionTagsMismatch(title, album, song.title, song.album) ||
+		!appleTrackCreditFits(creditCoArtists(artist, title), song.artist, song.title, song.durationSecs, durationSecs) {
+		return isrcLevelSearched
+	}
+	return isrcLevelVerified
+}
+
 // applyISRCSweepResultLocked:把一条的结果写回。条目还在、id 没变才写;isrcs 合进已有的,ISRCLookup 记成这次的 id。
 // 返回有没有改动。调用方持有 enrichMu。
-func applyISRCSweepResultLocked(job isrcSweepJob, isrcs []string) bool {
+func applyISRCSweepResultLocked(job isrcSweepJob, isrcs []recordedISRC) bool {
 	cur, ok := enrichCache[job.key]
 	if !ok || isrcLookupKey(cur) != job.lookup {
 		return false
 	}
-	cur.ISRCs = mergeRecordingISRCs(cur.ISRCs, isrcs)
+	recordISRCs(&cur, isrcs)
 	cur.ISRCLookup = job.lookup
 	enrichCache[job.key] = cur
 	return true
@@ -192,7 +289,7 @@ func appleCatalogSongsByID(ctx context.Context, storefront string, ids []string)
 	out := make(map[string]appleCatalogSong, len(resp.Data))
 	for _, s := range resp.Data {
 		out[s.ID] = appleCatalogSong{isrc: s.Attributes.Isrc, durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
-			artist: s.Attributes.ArtistName, title: s.Attributes.Name}
+			artist: s.Attributes.ArtistName, title: s.Attributes.Name, album: s.Attributes.AlbumName}
 	}
 	return out, true
 }
@@ -212,7 +309,7 @@ func startRecordingISRCSweep(ctx context.Context) {
 	if len(jobs) == 0 {
 		return
 	}
-	found := map[string][]string{}
+	found := map[string][]recordedISRC{}
 	settled := map[string]bool{}
 	byStorefront := map[string][]isrcSweepJob{}
 	// Spotify 那几条一次查完:本机库每个账号只扫一遍(见 spotifyLocalISRCs)。
@@ -225,7 +322,7 @@ func startRecordingISRCSweep(ctx context.Context) {
 	spotifyCodes := spotifyLocalISRCs(spotifyIDs)
 	for _, job := range jobs {
 		if code := spotifyCodes[job.spotifyID]; job.spotifyID != "" && code != "" {
-			found[job.key] = append(found[job.key], code)
+			found[job.key] = append(found[job.key], recordedISRC{code, isrcLevelPlayer})
 		}
 		if job.appleID == "" {
 			settled[job.key] = true
@@ -257,7 +354,7 @@ sweep:
 				for _, job := range batch {
 					song, has := songs[job.appleID]
 					if code := isrcFromAppleSong(song, has, job.durationSecs); code != "" {
-						found[job.key] = append(found[job.key], code)
+						found[job.key] = append(found[job.key], recordedISRC{code, appleSweepISRCLevel(job.key, song, job.durationSecs)})
 					}
 					settled[job.key] = true
 				}

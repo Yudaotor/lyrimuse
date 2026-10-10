@@ -43,7 +43,7 @@ var songEntityFieldClasses = map[string]songFieldClass{
 	"instrumental_cleared": songFieldUserJudgment,
 
 	"lyrics_songwriters": songFieldRecording, "song_language": songFieldRecording, "lyrics_tr_source": songFieldRecording,
-	"lyrics_tr_lang": songFieldRecording, "translation_lang": songFieldRecording, "isrcs": songFieldRecording,
+	"lyrics_tr_lang": songFieldRecording, "translation_lang": songFieldRecording, "isrcs": songFieldRecording, "isrc_levels": songFieldRecording,
 
 	"lyrics_retry_ts": songFieldBookkeeping, "lyrics_retry_count": songFieldBookkeeping, "lyrics_fill_ts": songFieldBookkeeping,
 	"lyrics_fill_count": songFieldBookkeeping, "lyrics_rescore_count": songFieldBookkeeping,

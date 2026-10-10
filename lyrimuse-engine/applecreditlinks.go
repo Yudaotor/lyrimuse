@@ -182,13 +182,10 @@ func recheckAppleCreditLinks(ctx context.Context, scope migrationScope, deps app
 		lookedUp := e.ISRCLookup == isrcLookupKey(e)
 		e.AppleURL = c.newURL
 		if c.dropISRC != "" {
-			e.ISRCs = slices.DeleteFunc(slices.Clone(e.ISRCs), func(code string) bool { return normalizeISRC(code) == c.dropISRC })
-			if len(e.ISRCs) == 0 {
-				e.ISRCs = nil
-			}
+			removeISRCs(&e, func(code string) bool { return code == c.dropISRC })
 		}
 		if c.addISRC != "" {
-			e.ISRCs = mergeRecordingISRCs(e.ISRCs, []string{c.addISRC})
+			recordISRCs(&e, []recordedISRC{{c.addISRC, isrcLevelVerified}})
 		}
 		// 原来按这几个 id 补齐过、新那一轨这一轮又问到了,才记成补过;否则留给补扫按新的 id 再取。
 		if lookedUp && c.newAsked {

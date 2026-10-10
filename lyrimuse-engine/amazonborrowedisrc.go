@@ -110,10 +110,7 @@ func cleanAmazonBorrowedISRCs(scope migrationScope, isrcOf map[string]string) in
 	sort.Strings(keys)
 	for _, k := range keys {
 		e := enrichCache[k]
-		e.ISRCs = slices.DeleteFunc(slices.Clone(e.ISRCs), func(c string) bool { return slices.Contains(drops[k], normalizeISRC(c)) })
-		if len(e.ISRCs) == 0 {
-			e.ISRCs = nil
-		}
+		removeISRCs(&e, func(c string) bool { return slices.Contains(drops[k], c) })
 		enrichCache[k] = e
 		log.Printf("amazon isrc cleanup: %q carried %v from another entry's Amazon track, dropping it", k, drops[k])
 	}

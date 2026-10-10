@@ -89,3 +89,25 @@ func TestSongEntityRegisteredTitleConflict(t *testing.T) {
 		t.Errorf("几条写法推出的登记歌名不一致:只当计数用 %+v", e)
 	}
 }
+
+// 记了来路的号按记的级别;没记的(这一机制之前写进来的)按写法有没有版本词推断。
+func TestSongVariantISRCLevels(t *testing.T) {
+	level := func(key string, e enrichEntry) songIDLevel {
+		v := songVariantOf(key, e, false)
+		_, l := v.gradedID(songIDISRC)
+		return l
+	}
+	code := "USAAA1100001"
+	if l := level("A|Song (Live)|Tour", enrichEntry{ISRCs: []string{code}, ISRCLevels: map[string]string{code: isrcLevelPlayer}}); l != songIDPlayer {
+		t.Errorf("带版本词的写法上播放器给的号:player,实得 %v", l)
+	}
+	if l := level("A|Song|Album", enrichEntry{ISRCs: []string{code}, ISRCLevels: map[string]string{code: isrcLevelSearched}}); l != songIDSearched {
+		t.Errorf("记成 searched 的号不当证据,实得 %v", l)
+	}
+	if l := level("A|Song|Album", enrichEntry{ISRCs: []string{code}}); l != songIDVerified {
+		t.Errorf("没记级别、没有版本词:verified,实得 %v", l)
+	}
+	if l := level("A|Song (Live)|Tour", enrichEntry{ISRCs: []string{code}}); l != songIDSearched {
+		t.Errorf("没记级别、带版本词:searched,实得 %v", l)
+	}
+}

@@ -30,22 +30,82 @@ func TestNormalizeISRC(t *testing.T) {
 
 func TestRecordingISRCsFromScored(t *testing.T) {
 	scored := []scoredLyricCandidateResult{
-		{Source: "kuwo", Score: 1031, SourceReportedDurationSecs: 281, ISRC: "CNA001600001"},          // 别的源报的不收
-		{Source: "applemusic", Score: 998, SourceReportedDurationSecs: 281.093, ISRC: "hka351501001"}, // 毫秒级吻合
-		{Source: "deezer", Score: 611, SourceReportedDurationSecs: 280, ISRC: "HKC382400008"},         // 整秒,差 1.0 秒
-		{Source: "deezer", Score: -1, SourceReportedDurationSecs: 281, ISRC: "HKI490867406"},          // 没被认可
-		{Source: "applemusic", Score: 500, SourceReportedDurationSecs: 290, ISRC: "HKI491267110"},     // 时长差 9 秒
-		{Source: "applemusic", Score: 400, SourceReportedDurationSecs: 281.1, ISRC: "ZZZZZ9999999"},   // 占位符
-		{Source: "deezer", Score: 300, SourceReportedDurationSecs: 281, ISRC: "HKA351501001"},         // 重复
-		{Source: "applemusic", Score: 300, SourceReportedDurationSecs: 0, ISRC: "HKI490667205"},       // 源没报时长
+		{Source: "kuwo", Score: 1031, SourceReportedDurationSecs: 281, ISRC: "CNA001600001"},                                  // 别的源报的不收
+		{Source: "applemusic", Score: 998, SourceReportedDurationSecs: 281.093, ISRC: "hka351501001"},                         // 毫秒级吻合
+		{Source: "deezer", Score: 611, SourceReportedDurationSecs: 280, ISRC: "HKC382400008"},                                 // 整秒,差 1.0 秒
+		{Source: "deezer", Score: -1, SourceReportedDurationSecs: 281, ISRC: "HKI490867406"},                                  // 没被认可
+		{Source: "applemusic", Score: 500, SourceReportedDurationSecs: 290, ISRC: "HKI491267110"},                             // 时长差 9 秒
+		{Source: "applemusic", Score: 400, SourceReportedDurationSecs: 281.1, ISRC: "ZZZZZ9999999"},                           // 占位符
+		{Source: "deezer", Score: 300, SourceReportedDurationSecs: 281, ISRC: "HKA351501001"},                                 // 重复
+		{Source: "applemusic", Score: 300, SourceReportedDurationSecs: 0, ISRC: "HKI490667205"},                               // 源没报时长
+		{Source: "applemusic", Score: 200, SourceReportedDurationSecs: 281.093, ISRC: "HKA351509999", Title: "Listen (Live)"}, // 版本词对不上
 	}
-	got := recordingISRCsFromScored("JPU902200009", scored, 281.093)
-	want := []string{"JPU902200009", "HKA351501001", "HKC382400008"}
+	got := recordingISRCsFromScored("JPU902200009", scored, 281.093, "Listen", "JTW")
+	want := []recordedISRC{{"JPU902200009", isrcLevelPlayer}, {"HKA351501001", isrcLevelVerified}, {"HKC382400008", isrcLevelVerified},
+		{"HKA351501001", isrcLevelVerified}, {"HKA351509999", isrcLevelSearched}}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("recordingISRCsFromScored = %v, want %v(播放器报的在前,候选只收被认可、时长对得上的 applemusic / deezer)", got, want)
+		t.Errorf("recordingISRCsFromScored = %v, want %v(播放器报的在前记 player,候选只收被认可、时长对得上的 applemusic / deezer,版本词对不上记 searched)", got, want)
 	}
-	if got := recordingISRCsFromScored("", scored, 0); len(got) != 0 {
+	if got := recordingISRCsFromScored("", scored, 0, "Listen", "JTW"); len(got) != 0 {
 		t.Errorf("播放器没报时长时候选报的一个都不收: %v", got)
+	}
+}
+
+// 级别:同一个号取更高的;封顶挤掉的号不记;不改原来那份 isrc_levels;拿掉号时级别一起拿掉。
+func TestRecordISRCLevels(t *testing.T) {
+	shared := map[string]string{"HKA351501001": isrcLevelSearched}
+	e := enrichEntry{ISRCs: []string{"HKA351501001"}, ISRCLevels: shared}
+	recordISRCs(&e, []recordedISRC{{"hka351501001", isrcLevelPlayer}, {"HKC382400008", isrcLevelVerified}, {"HKI490667205", ""},
+		{"HKI490867102", isrcLevelSearched}, {"HKI490867406", isrcLevelPlayer}})
+	if want := []string{"HKA351501001", "HKC382400008", "HKI490667205", "HKI490867102"}; !reflect.DeepEqual(e.ISRCs, want) {
+		t.Errorf("isrcs = %v, want %v", e.ISRCs, want)
+	}
+	want := map[string]string{"HKA351501001": isrcLevelPlayer, "HKC382400008": isrcLevelVerified, "HKI490867102": isrcLevelSearched}
+	if !reflect.DeepEqual(e.ISRCLevels, want) {
+		t.Errorf("isrc_levels = %v, want %v", e.ISRCLevels, want)
+	}
+	if shared["HKA351501001"] != isrcLevelSearched {
+		t.Error("原来那份 isrc_levels 被改了")
+	}
+	recordISRCs(&e, []recordedISRC{{"HKA351501001", isrcLevelSearched}})
+	if e.ISRCLevels["HKA351501001"] != isrcLevelPlayer {
+		t.Error("低的级别不覆盖高的")
+	}
+	dst := enrichEntry{}
+	mergeEntryISRCs(&dst, e)
+	if !reflect.DeepEqual(dst.ISRCs, e.ISRCs) || !reflect.DeepEqual(dst.ISRCLevels, e.ISRCLevels) {
+		t.Errorf("合并条目连同级别并过来: %+v", dst)
+	}
+	removeISRCs(&e, func(c string) bool { return c == "HKA351501001" || c == "HKI490667205" })
+	if want := map[string]string{"HKC382400008": isrcLevelVerified, "HKI490867102": isrcLevelSearched}; !reflect.DeepEqual(e.ISRCLevels, want) ||
+		len(e.ISRCs) != 2 {
+		t.Errorf("拿掉号时级别一起拿掉: %+v", e)
+	}
+	removeISRCs(&e, func(string) bool { return true })
+	if e.ISRCs != nil || e.ISRCLevels != nil {
+		t.Errorf("拿光时两个字段都是 nil: %+v", e)
+	}
+}
+
+// 补扫按检索配上的 Apple 链接取回的号:版本词对得上、署名写全了合作者(或时长几乎相等)才算 verified。
+func TestAppleSweepISRCLevel(t *testing.T) {
+	duet := "Sam Smith & Aitana|Like I Can|In The Lonely Hour (10th Anniversary Edition / Deluxe)"
+	solo := appleCatalogSong{isrc: "GBUM71308834", durationSecs: 168.08, artist: "Sam Smith", title: "Like I Can", album: "In The Lonely Hour (10th Anniversary Edition / Deluxe)"}
+	if got := appleSweepISRCLevel(duet, solo, 166.707); got != isrcLevelSearched {
+		t.Errorf("合唱版的链接配到独唱那一轨:searched,实得 %s", got)
+	}
+	credited := solo
+	credited.artist = "Sam Smith & Aitana"
+	if got := appleSweepISRCLevel(duet, credited, 166.707); got != isrcLevelVerified {
+		t.Errorf("署名写全了:verified,实得 %s", got)
+	}
+	live := credited
+	live.title = "Like I Can (Live)"
+	if got := appleSweepISRCLevel(duet, live, 166.707); got != isrcLevelSearched {
+		t.Errorf("版本词对不上:searched,实得 %s", got)
+	}
+	if got := appleSweepISRCLevel("Sam Smith|Like I Can|In The Lonely Hour", solo, 167.065); got != isrcLevelVerified {
+		t.Errorf("没点名合作者、版本词对得上:verified,实得 %s", got)
 	}
 }
 
@@ -91,13 +151,13 @@ func TestApplyISRCSweepResult(t *testing.T) {
 	})
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	if !applyISRCSweepResultLocked(isrcSweepJob{key: "a", lookup: "apple:cn:1587171823"}, []string{"HKA351501001"}) {
+	if !applyISRCSweepResultLocked(isrcSweepJob{key: "a", lookup: "apple:cn:1587171823"}, []recordedISRC{{"HKA351501001", isrcLevelVerified}}) {
 		t.Fatal("id 没变时写回")
 	}
 	if e := enrichCache["a"]; !reflect.DeepEqual(e.ISRCs, []string{"HKC382400008", "HKA351501001"}) || e.ISRCLookup != "apple:cn:1587171823" {
 		t.Errorf("合进已有的、记下按哪个 id 补过: %+v", e)
 	}
-	if applyISRCSweepResultLocked(isrcSweepJob{key: "b", lookup: "apple:cn:3"}, []string{"HKA351501001"}) {
+	if applyISRCSweepResultLocked(isrcSweepJob{key: "b", lookup: "apple:cn:3"}, []recordedISRC{{"HKA351501001", isrcLevelVerified}}) {
 		t.Error("问的时候链接已经换了(id 对不上)就不写")
 	}
 	if applyISRCSweepResultLocked(isrcSweepJob{key: "gone", lookup: "apple:cn:3"}, nil) {
@@ -125,12 +185,14 @@ func TestISRCFromAppleSong(t *testing.T) {
 }
 
 func TestEnrichEntryISRCFieldsRoundTrip(t *testing.T) {
-	in := map[string]enrichEntry{"a|b|c": {ISRCs: []string{"HKA351501001"}, ISRCLookup: "apple:cn:1587171823"}}
+	in := map[string]enrichEntry{"a|b|c": {ISRCs: []string{"HKA351501001"}, ISRCLevels: map[string]string{"HKA351501001": isrcLevelPlayer},
+		ISRCLookup: "apple:cn:1587171823"}}
 	raw, err := json.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), `"isrcs":["HKA351501001"]`) || !strings.Contains(string(raw), `"isrc_lookup":"apple:cn:1587171823"`) {
+	if !strings.Contains(string(raw), `"isrcs":["HKA351501001"]`) || !strings.Contains(string(raw), `"isrc_lookup":"apple:cn:1587171823"`) ||
+		!strings.Contains(string(raw), `"isrc_levels":{"HKA351501001":"player"}`) {
 		t.Errorf("键名: %s", raw)
 	}
 	var back map[string]enrichEntry
@@ -157,13 +219,13 @@ func TestRecordingISRCWiring(t *testing.T) {
 		t.Errorf("首次解析收 ISRC,现在 %d 处", n)
 	}
 	if n, m := strings.Count(enrich, "sourceISRC := lyricSourceISRC(ctx, artist, title, album)"),
-		strings.Count(enrich, "recordingISRCsFromScored(sourceISRC, scored, durationSecs)"); n != 2 || m != 2 {
+		strings.Count(enrich, "recordISRCs(&e, recordingISRCsFromScored(sourceISRC, scored, durationSecs, title, album))"); n != 2 || m != 2 {
 		t.Errorf("重试升级、重打分两处在上锁之前取 ISRC 再收,现在取 %d 处、收 %d 处", n, m)
 	}
-	if !strings.Contains(enrich, "e.ISRCs = mergeRecordingISRCs(e.ISRCs, fresh.ISRCs)") {
+	if !strings.Contains(enrich, "mergeEntryISRCs(&e, fresh)") {
 		t.Error("外围补全并进这一轮的 ISRC")
 	}
-	if !strings.Contains(read("enrichkey.go"), "winner.ISRCs = mergeRecordingISRCs(winner.ISRCs, loser.ISRCs)") {
+	if !strings.Contains(read("enrichkey.go"), "mergeEntryISRCs(&winner, loser)") {
 		t.Error("合并条目时把落选那条的 ISRC 并过来")
 	}
 	if !strings.Contains(read("poller.go"), "go startRecordingISRCSweep(ctx)") {
