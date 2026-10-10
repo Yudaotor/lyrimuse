@@ -1763,6 +1763,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startSongEntityShadow(ctx)                     // 歌曲实体表在后台建、出诊断报告,见 songentitystore.go
 	go startAppleNamesSweep(ctx)                      // 歌曲实体阶段 2:Apple 歌曲 id 按三个区补名字,见 songentitynames.go
 	go startMBRecordingsSweep(ctx)                    // 歌曲实体阶段 2:ISRC 按 MusicBrainz 补录音,见 songentitymb.go
+	go startNeteaseNamesSweep(ctx)                    // 歌曲实体阶段 2:网易云歌曲 id 补登记名与别名,见 songentityneteasenames.go
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()

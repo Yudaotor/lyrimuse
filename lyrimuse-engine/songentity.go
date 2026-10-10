@@ -39,19 +39,20 @@ type songEvidenceKind struct {
 }
 
 var songEvidenceKinds = map[string]songEvidenceKind{
-	songIDISRC:            {strong: true, order: 10},
-	songIDMBRecording:     {strong: true, order: 11},
-	songIDSpotifyTrack:    {strong: true, order: 20},
-	songIDAmazonASIN:      {strong: true, order: 21},
-	songIDKKBOXSong:       {strong: true, order: 22},
-	songIDSodaTrack:       {strong: true, order: 23},
-	songIDYouTubeVideo:    {strong: true, order: 24},
-	songIDAppleSong:       {order: 30, searched: true},
-	songIDNeteaseSong:     {order: 31, searched: true},
-	songIDQQSong:          {order: 32, searched: true},
-	songEvidenceAppleName: {order: 60},
-	songEvidenceFamily:    {order: 40},
-	songEvidenceLyrics:    {order: 50},
+	songIDISRC:              {strong: true, order: 10},
+	songIDMBRecording:       {strong: true, order: 11},
+	songIDSpotifyTrack:      {strong: true, order: 20},
+	songIDAmazonASIN:        {strong: true, order: 21},
+	songIDKKBOXSong:         {strong: true, order: 22},
+	songIDSodaTrack:         {strong: true, order: 23},
+	songIDYouTubeVideo:      {strong: true, order: 24},
+	songIDAppleSong:         {order: 30, searched: true},
+	songIDNeteaseSong:       {order: 31, searched: true},
+	songIDQQSong:            {order: 32, searched: true},
+	songEvidenceAppleName:   {order: 60},
+	songEvidenceNeteaseName: {order: 61},
+	songEvidenceFamily:      {order: 40},
+	songEvidenceLyrics:      {order: 50},
 }
 
 // songEdge:一条证据边,a < b 是写法下标(写法按键排序)。

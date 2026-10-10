@@ -122,7 +122,7 @@ func TestAttachAppleNamesVerifiesLink(t *testing.T) {
 	}
 	for _, c := range cases {
 		attachAppleNames(c.vs, c.names)
-		if got := len(c.vs[0].appleNames) > 0 && c.vs[0].audioLocale == "en-US"; got != c.want {
+		if got := len(c.vs[0].catalogNames) > 0 && c.vs[0].audioLocale == "en-US"; got != c.want {
 			t.Errorf("%s: 挂上=%v,应为 %v", c.name, got, c.want)
 		}
 	}

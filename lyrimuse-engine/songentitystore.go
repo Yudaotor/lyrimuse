@@ -126,6 +126,7 @@ func rebuildSongEntityTable(now time.Time) {
 	variants := songVariantsFromCache(snapshot, lyricsPinnedKeys())
 	if features().SongEntityPhase2 {
 		attachAppleNames(variants, readAppleNames(appleNamesPath()))
+		attachNeteaseNames(variants, readNeteaseNames(neteaseNamesPath()))
 		attachMBRecordings(variants, readMBRecordings(mbRecordingsPath()))
 		attachSpotifyLanguages(variants, spotifyLanguagesForVariants(variants))
 	}

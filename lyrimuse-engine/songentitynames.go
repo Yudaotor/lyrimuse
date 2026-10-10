@@ -30,6 +30,19 @@ const (
 
 var appleNamesStorefronts = []string{"us", "cn", "tw"}
 
+// songCatalogName:平台目录给一条写法登记的一个名字。kind 是拿它连边时的证据种类,id 是那个平台的歌曲 id。
+type songCatalogName struct {
+	name, artist string
+	kind, id     string
+}
+
+// addCatalogName 挂一个名字,同一个名字、歌手、种类只挂一次。
+func (v *songVariant) addCatalogName(n songCatalogName) {
+	if !slices.Contains(v.catalogNames, n) {
+		v.catalogNames = append(v.catalogNames, n)
+	}
+}
+
 type appleCatalogName struct {
 	Name   string `json:"name"`
 	Artist string `json:"artist"`
@@ -216,8 +229,8 @@ func attachAppleNames(vs []songVariant, names map[string]appleCatalogNames) {
 			continue
 		}
 		for _, sf := range appleNamesStorefronts {
-			if n, ok := rec.Names[sf]; ok && !slices.Contains(v.appleNames, n) {
-				v.appleNames = append(v.appleNames, n)
+			if n, ok := rec.Names[sf]; ok {
+				v.addCatalogName(songCatalogName{name: n.Name, artist: n.Artist, kind: songEvidenceAppleName, id: v.id(songIDAppleSong)})
 			}
 		}
 		v.audioLocale = rec.AudioLocale
@@ -255,19 +268,21 @@ func spotifyLanguagesForVariants(vs []songVariant) func(trackID string) []string
 	return func(trackID string) []string { return spotifyTrackLanguages(metas[trackID]) }
 }
 
-// songRegisteredViaAppleNames:平台登记的歌名跟写法歌名一中一外时,写法挂着的(核对过的)Apple 名字里有一个区跟登记歌名
+// songRegisteredViaCatalogNames:平台登记的歌名跟写法歌名一中一外时,写法挂着的(核对过的)目录名字里有一个跟登记歌名
 // 同一种文字、对得上,就当登记歌名对上了(18 章决策 16)。
-func songRegisteredViaAppleNames(v *songVariant, registered string) bool {
-	for _, n := range v.appleNames {
-		if ok, _ := songTitlesCompatible(registered, n.Name); ok {
+func songRegisteredViaCatalogNames(v *songVariant, registered string) bool {
+	for _, n := range v.catalogNames {
+		if ok, _ := songTitlesCompatible(registered, n.name); ok {
 			return true
 		}
 	}
 	return false
 }
 
-// nameEdges:带核对过的 Apple 名字的写法 y,某个区的歌手跟另一条写法 x 的主歌手对得上、歌名的写法族键相同、两边都有时长且
-// 差不超过时长闸,连一条名字边。x 跟 y 本来就同一位主歌手、同一个写法族时不连(写法族边管)。
+// nameEdges:带核对过的目录名字的写法 y,另一条写法 x 的写法族键跟其中一个名字相同、x 的主歌手跟 y 登记过的任一歌手(y 的
+// 主歌手、y 的各个目录名字的歌手)对得上、两边都有时长且差不超过时长闸,连一条名字边(种类跟着那个名字:apple_name /
+// netease_name)。x 跟 y 本来就同一位主歌手、同一个写法族时不连(写法族边管)。歌手放宽到「任一」:网易云别名「Sunny Day」
+// 登记的歌手是「周杰伦」,英文写法「Jay Chou」要靠 Apple 美区登记的歌手才对得上(18 章决策 18)。
 func (b *songEdgeBuilder) nameEdges() {
 	byFamily := map[string][]int{}
 	for i := range b.vs {
@@ -277,20 +292,27 @@ func (b *songEdgeBuilder) nameEdges() {
 	}
 	for yi := range b.vs {
 		y := &b.vs[yi]
-		for _, n := range y.appleNames {
-			for _, xi := range byFamily[songFamilyTitle(n.Name)] {
+		if len(y.catalogNames) == 0 {
+			continue
+		}
+		artists := []string{y.primary}
+		for _, n := range y.catalogNames {
+			artists = append(artists, artistCreditPrimary(n.artist))
+		}
+		for _, n := range y.catalogNames {
+			for _, xi := range byFamily[songFamilyTitle(n.name)] {
 				x := &b.vs[xi]
-				if xi == yi || !songArtistMatch(x.primary, artistCreditPrimary(n.Artist)) {
+				if xi == yi || !slices.ContainsFunc(artists, func(a string) bool { return songArtistMatch(x.primary, a) }) {
 					continue
 				}
 				if x.family == y.family && songArtistMatch(x.primary, y.primary) {
 					continue
 				}
 				if ok, known := songDurationsWithinGate(x, y); !ok || !known {
-					b.drop(songEvidenceAppleName, "duration", 1)
+					b.drop(n.kind, "duration", 1)
 					continue
 				}
-				b.add(songEdge{kind: songEvidenceAppleName, a: xi, b: yi, value: y.id(songIDAppleSong)})
+				b.add(songEdge{kind: n.kind, a: xi, b: yi, value: n.id})
 			}
 		}
 	}

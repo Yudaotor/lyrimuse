@@ -93,10 +93,11 @@ type songVariant struct {
 	timelineDone bool
 	timeline     []timelineLine
 
-	// appleNames / audioLocale:Apple 目录名字补扫的结果,核对过这条写法的 Apple 链接之后才挂上(attachAppleNames);
-	// 带 Spotify 曲目 id 的,audioLocale 换成 Spotify 本机元数据里的演唱语言(attachSpotifyLanguages)。
-	appleNames  []appleCatalogName
-	audioLocale string
+	// catalogNames:各平台目录给这条写法登记的名字(Apple 各区、网易云登记名与别名),核对过这条写法的链接之后才挂上
+	// (attachAppleNames、attachNeteaseNames)。audioLocale:Apple 的演唱语种;带 Spotify 曲目 id 的换成 Spotify 本机元数据里的
+	// 演唱语言(attachSpotifyLanguages)。
+	catalogNames []songCatalogName
+	audioLocale  string
 	// vocalsByLocale:vocalsKind 的结论是按 audioLocale 下的(不是纯音乐标记、版本词或歌词)。
 	vocalsByLocale bool
 }

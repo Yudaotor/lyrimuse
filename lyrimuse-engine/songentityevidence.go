@@ -182,7 +182,7 @@ func (b *songEdgeBuilder) searchedIDEdges(ns, id string, members []int) {
 					}
 					match, cross := songTitlesCompatible(registered, v.title)
 					switch {
-					case cross && !songRegisteredViaAppleNames(v, registered):
+					case cross && !songRegisteredViaCatalogNames(v, registered):
 						countOnly = true
 					case cross:
 					case !match:

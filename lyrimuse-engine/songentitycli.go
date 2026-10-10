@@ -36,6 +36,8 @@ func runSongEntitiesCLI(args []string) {
 	diff := fs.String("diff", "", "拿 -dump 存下的那份对照这一次建表,列出新并的实体和拆开的实体")
 	appleNames := fs.String("apple-names", "", "Apple 目录名字补扫结果的文件(缺省是配置目录里常驻引擎写的那份)")
 	fetchNames := fs.Bool("fetch-apple-names", false, "建表前先把到期的 Apple 歌曲 id 补扫进 -apple-names 那个文件(联网)")
+	neteaseNames := fs.String("netease-names", "", "网易云登记名补扫结果的文件(缺省是配置目录里常驻引擎写的那份)")
+	fetchNetease := fs.Bool("fetch-netease-names", false, "建表前先把到期的网易云歌曲 id 补扫进 -netease-names 那个文件(联网)")
 	mbRecordings := fs.String("mb-recordings", "", "MusicBrainz 录音补扫结果的文件(缺省是配置目录里常驻引擎写的那份)")
 	fetchMB := fs.Bool("fetch-mb-recordings", false, "建表前先把到期的号按 MusicBrainz 补扫进 -mb-recordings 那个文件(联网,每秒一次)")
 	if err := fs.Parse(args); err != nil {
@@ -80,6 +82,14 @@ func runSongEntitiesCLI(args []string) {
 	variants := songVariantsFromCache(snapshot, lyricsPinnedKeys())
 	if features().SongEntityPhase2 {
 		attachAppleNames(variants, readAppleNames(namesPath))
+		nePath := *neteaseNames
+		if nePath == "" {
+			nePath = filepath.Join(cfgDir, clientName+"-netease-names.json")
+		}
+		if *fetchNetease {
+			sweepNeteaseNames(context.Background(), nePath, time.Now())
+		}
+		attachNeteaseNames(variants, readNeteaseNames(nePath))
 		mbPath := *mbRecordings
 		if mbPath == "" {
 			mbPath = filepath.Join(cfgDir, clientName+"-mb-recordings.json")
