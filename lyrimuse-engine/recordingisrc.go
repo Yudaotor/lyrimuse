@@ -88,6 +88,26 @@ func recordingISRCsFromScored(playback string, scored []scoredLyricCandidateResu
 	return out
 }
 
+// confidentISRC:写入时记了级别、能拿去给别人认录音的号:播放器报的优先,其次核对过的;没有返回空串。检索配的、
+// 没记级别的(存量)不算。按号排序取第一个,结果稳定。
+func (e enrichEntry) confidentISRC() string {
+	best, bestRank := "", 0
+	for _, code := range e.ISRCs {
+		code = normalizeISRC(code)
+		rank := 0
+		switch e.ISRCLevels[code] {
+		case isrcLevelPlayer:
+			rank = 2
+		case isrcLevelVerified:
+			rank = 1
+		}
+		if rank > bestRank || (rank == bestRank && rank > 0 && code < best) {
+			best, bestRank = code, rank
+		}
+	}
+	return best
+}
+
 // recordISRCs 把 add 并进条目:号照 mergeRecordingISRCs 的规矩进 isrcs,级别记进 isrc_levels(同一个号取更高的;封顶
 // 挤掉的号不记)。isrc_levels 换一份新的写,不改原来那份(快照可能还拿着它)。
 func recordISRCs(e *enrichEntry, add []recordedISRC) {
@@ -225,6 +245,7 @@ type appleCatalogSong struct {
 	isrc                 string
 	durationSecs         float64
 	artist, title, album string
+	audioLocale          string
 }
 
 // isrcFromAppleSong:这首报的 ISRC 时长跟播放器报的对得上才认,不认返回空串。没取到这首(这个商店没有)也是空串。
@@ -289,7 +310,7 @@ func appleCatalogSongsByID(ctx context.Context, storefront string, ids []string)
 	out := make(map[string]appleCatalogSong, len(resp.Data))
 	for _, s := range resp.Data {
 		out[s.ID] = appleCatalogSong{isrc: s.Attributes.Isrc, durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
-			artist: s.Attributes.ArtistName, title: s.Attributes.Name, album: s.Attributes.AlbumName}
+			artist: s.Attributes.ArtistName, title: s.Attributes.Name, album: s.Attributes.AlbumName, audioLocale: s.Attributes.AudioLocale}
 	}
 	return out, true
 }

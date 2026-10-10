@@ -532,6 +532,7 @@ func (e enrichEntry) fields() map[string]string {
 	put("youtube_music_url", e.YouTubeMusicURL)
 	put("soda_url", e.SodaURL)
 	put("youtube_music_album", e.YouTubeMusicAlbum)
+	put("isrc", e.confidentISRC())
 	// 标了纯音乐就不交歌词,网页和 ListenBrainz 都不显示;歌词还在条目里,撤掉标记就回来。App 读缓存同一口径
 	// (EnrichCacheReader.makeLyrics)。
 	// 改交一个 instrumental 记号:字段表非空才算解析过(poller 里换曲那条 playing_now 的挂起判据),只存着歌词的条目

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sync"
 	"time"
 )
@@ -153,20 +154,26 @@ func spotifyLocalNoVocals(trackID string) bool {
 
 // spotifyTrackNoVocals 从一条元数据缓存的值里读演唱语言,有 zxx 就是没有人声。
 func spotifyTrackNoVocals(v []byte) bool {
+	return slices.Contains(spotifyTrackLanguages(v), "zxx")
+}
+
+// spotifyTrackLanguages 从一条元数据缓存的值里读演唱语言(language_of_performance,可重复),读不到返回 nil。
+func spotifyTrackLanguages(v []byte) []string {
 	val := spotifyFindAny(v, "spotify.metadata.Track", 0)
 	if val == nil {
-		return false
+		return nil
 	}
 	fields, err := pbParse(val)
 	if err != nil {
-		return false
+		return nil
 	}
+	var out []string
 	for _, f := range fields {
-		if f.num == spotifyTrackLanguageField && f.wire == 2 && string(f.b) == "zxx" {
-			return true
+		if f.num == spotifyTrackLanguageField && f.wire == 2 {
+			out = append(out, string(f.b))
 		}
 	}
-	return false
+	return out
 }
 
 func spotifyLocalISRC(trackID string) (string, bool) {
@@ -220,6 +227,16 @@ func spotifyLocalISRC(trackID string) (string, bool) {
 // 不碰 spotifyLocalISRC 的命中 / 未命中缓存,也不逐条记日志 —— 补录收尾那行汇总里有条数。
 func spotifyLocalISRCs(trackIDs []string) map[string]string {
 	out := map[string]string{}
+	for id, v := range spotifyLocalTrackMetas(trackIDs, func(v []byte) bool { return spotifyParseISRC(v) != "" }) {
+		out[id] = spotifyParseISRC(v)
+	}
+	return out
+}
+
+// spotifyLocalTrackMetas:一批曲目各自在元数据缓存里的原始值,只要 useful 认的(查不到的不在结果里)。多账号时按账号顺序,
+// 前一个账号里那条 useful 不认就接着查下一个;每个账号的库只扫一遍、一次带上全部 key(见 spotifyLocalISRCs)。
+func spotifyLocalTrackMetas(trackIDs []string, useful func(v []byte) bool) map[string][]byte {
+	out := map[string][]byte{}
 	idByKey := map[string]string{}
 	for _, id := range trackIDs {
 		if len(id) == 22 {
@@ -241,8 +258,8 @@ func spotifyLocalISRCs(trackIDs []string) map[string]string {
 			break
 		}
 		for k, v := range ldbGet(dir, keys) {
-			if code := spotifyParseISRC(v); code != "" {
-				out[idByKey[k]] = code
+			if v != nil && useful(v) {
+				out[idByKey[k]] = v
 			}
 		}
 	}

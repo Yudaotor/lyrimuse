@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -102,8 +103,13 @@ func startSongEntityShadow(ctx context.Context) {
 	}
 }
 
+// songEntityRebuildMu:每天那一次和名字补扫之后那一次(startAppleNamesSweep)不同时跑,免得两份结果互相覆盖。
+var songEntityRebuildMu sync.Mutex
+
 // rebuildSongEntityTable 全量建一次实体表,写实体表和报告两个文件。
 func rebuildSongEntityTable(now time.Time) {
+	songEntityRebuildMu.Lock()
+	defer songEntityRebuildMu.Unlock()
 	start := time.Now()
 	enrichMu.Lock()
 	snapshot := make(map[string]enrichEntry, len(enrichCache))
@@ -118,6 +124,11 @@ func rebuildSongEntityTable(now time.Time) {
 		}
 	}
 	variants := songVariantsFromCache(snapshot, lyricsPinnedKeys())
+	if features().SongEntityPhase2 {
+		attachAppleNames(variants, readAppleNames(appleNamesPath()))
+		attachMBRecordings(variants, readMBRecordings(mbRecordingsPath()))
+		attachSpotifyLanguages(variants, spotifyLanguagesForVariants(variants))
+	}
 	b := buildSongEntities(variants, readSongEntityUserSplits(songEntityUserPath()), decisionSidecarDir())
 	table := b.table(readSongEntityTable(songEntityTablePath()), songs, now)
 	if n := writeBackSongEntityIDs(table); n > 0 {

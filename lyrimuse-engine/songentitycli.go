@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -33,6 +34,10 @@ func runSongEntitiesCLI(args []string) {
 	score := fs.String("score", "", "拿标好的标注集(jsonl)对照当前规则算合错率、漏合率")
 	dump := fs.String("dump", "", "把每个实体的写法键写到这个文件(一行一个实体),改规则之前存一份给 -diff 用")
 	diff := fs.String("diff", "", "拿 -dump 存下的那份对照这一次建表,列出新并的实体和拆开的实体")
+	appleNames := fs.String("apple-names", "", "Apple 目录名字补扫结果的文件(缺省是配置目录里常驻引擎写的那份)")
+	fetchNames := fs.Bool("fetch-apple-names", false, "建表前先把到期的 Apple 歌曲 id 补扫进 -apple-names 那个文件(联网)")
+	mbRecordings := fs.String("mb-recordings", "", "MusicBrainz 录音补扫结果的文件(缺省是配置目录里常驻引擎写的那份)")
+	fetchMB := fs.Bool("fetch-mb-recordings", false, "建表前先把到期的号按 MusicBrainz 补扫进 -mb-recordings 那个文件(联网,每秒一次)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("song-entities: %v", err)
 	}
@@ -64,8 +69,27 @@ func runSongEntitiesCLI(args []string) {
 		}
 		defer pprof.StopCPUProfile()
 	}
+	namesPath := *appleNames
+	if namesPath == "" {
+		namesPath = filepath.Join(cfgDir, clientName+"-apple-catalog-names.json")
+	}
+	if *fetchNames {
+		sweepAppleNames(context.Background(), namesPath, time.Now())
+	}
 	start := time.Now()
 	variants := songVariantsFromCache(snapshot, lyricsPinnedKeys())
+	if features().SongEntityPhase2 {
+		attachAppleNames(variants, readAppleNames(namesPath))
+		mbPath := *mbRecordings
+		if mbPath == "" {
+			mbPath = filepath.Join(cfgDir, clientName+"-mb-recordings.json")
+		}
+		if *fetchMB {
+			sweepMBRecordings(context.Background(), mbPath, time.Now())
+		}
+		attachMBRecordings(variants, readMBRecordings(mbPath))
+		attachSpotifyLanguages(variants, spotifyLanguagesForVariants(variants))
+	}
 	read := time.Since(start)
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)

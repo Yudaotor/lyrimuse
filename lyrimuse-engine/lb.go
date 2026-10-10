@@ -158,6 +158,13 @@ func lbMeta(s snapshot) lbTrackMeta {
 	for k, v := range spotifyListenFields(s.Bundle, enr["spotify_track_id"]) {
 		info[k] = v
 	}
+	// isrc / recording_mbid:ListenBrainz 拿来直接认录音,只报写入时记了级别的号和 MusicBrainz 唯一命中的录音(18 章决策 15)。
+	if code := enr["isrc"]; code != "" {
+		info["isrc"] = code
+		if mbid := mbRecordingForISRC(code); mbid != "" {
+			info["recording_mbid"] = mbid
+		}
+	}
 	// 歌词受 LB「单条 listen ≤ 10240 字节」硬上限约束：按 原文>翻译>罗马音>逐字 优先级加入，
 	// 累计超预算就丢后面的(逐字最大、最先被丢)——否则整条会被 LB 400 拒(含桥接的 iPhone 记录)。
 	budget := lyricBudgetBytes

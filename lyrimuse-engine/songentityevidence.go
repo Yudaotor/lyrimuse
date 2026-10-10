@@ -26,6 +26,7 @@ type songEdgeKey struct {
 func songEvidenceEdges(vs []songVariant, dir string) ([]songEdge, map[string]int) {
 	b := &songEdgeBuilder{vs: vs, seen: map[songEdgeKey]bool{}, drops: map[string]int{}, dir: dir}
 	b.idEdges()
+	b.nameEdges()
 	b.familyEdges()
 	b.lyricsEdges()
 	return b.edges, b.drops
@@ -181,8 +182,9 @@ func (b *songEdgeBuilder) searchedIDEdges(ns, id string, members []int) {
 					}
 					match, cross := songTitlesCompatible(registered, v.title)
 					switch {
-					case cross:
+					case cross && !songRegisteredViaAppleNames(v, registered):
 						countOnly = true
+					case cross:
 					case !match:
 						mismatch = true
 					}
@@ -409,9 +411,16 @@ func songPairVeto(x, y *songVariant, strong bool, splits map[string]bool) string
 		return "explicit"
 	}
 	// 「明确没有人声」只看两个现成字段,先判它;两边都不是时这条否决不可能成立,不用去剥正文判「有」。
-	if nx, ny := x.instrumental || x.instrumentalVersion, y.instrumental || y.instrumentalVersion; nx != ny {
+	if nx, ny := x.instrumental || x.instrumentalVersion || x.audioLocale == "zxx", y.instrumental || y.instrumentalVersion || y.audioLocale == "zxx"; nx != ny {
 		if vx, vy := x.vocalsKind(), y.vocalsKind(); (vx == songVocalsNone && vy == songVocalsPresent) || (vx == songVocalsPresent && vy == songVocalsNone) {
-			return "vocals"
+			none, present := x, y
+			if vx != songVocalsNone {
+				none, present = y, x
+			}
+			// 只凭 audioLocale(zxx)判的没有人声,对面只凭配到的歌词判有人声时不否决:两边都是间接信号,同一份录音会撞上。
+			if !none.vocalsByLocale || present.vocalsByLocale {
+				return "vocals"
+			}
 		}
 	}
 	if songLyricsOvershoot(x, y) || songLyricsOvershoot(y, x) {

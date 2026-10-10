@@ -214,6 +214,8 @@ type featureFlagsFile struct {
 	// SongEntityShadow:后台建歌曲实体表、写诊断报告,见 songentitystore.go。**默认开**;只有引擎认,App 不读不写,
 	// 靠 unknownFileKeys 原样保留。关掉时两个派生文件删掉。
 	SongEntityShadow *bool `json:"song_entity_shadow,omitempty"`
+	// SongEntityPhase2:歌曲实体阶段 2 的补扫与证据(Apple 目录名字,见 songentitynames.go)。**默认开**;只有引擎认。
+	SongEntityPhase2 *bool `json:"song_entity_phase2,omitempty"`
 	// SongEntityPhase1:歌曲实体阶段 1(「第 N 次收听」的写法族并上实体、「⋯」菜单链接向同一首歌的其它写法借),
 	// 缺失 = 开。只有 App 读,引擎不用;声明在这里只为两侧键镜像契约。见 18 章决策 9、10。
 	SongEntityPhase1 *bool `json:"song_entity_phase1,omitempty"`
@@ -292,6 +294,8 @@ type featureFlags struct {
 	LyricsDecisionTrace bool
 	// SongEntityShadow 只被 songentitystore.go 读取,见 featureFlagsFile.SongEntityShadow。
 	SongEntityShadow bool
+	// SongEntityPhase2 被 songentitynames.go 的补扫、建表时挂名字读取,见 featureFlagsFile.SongEntityPhase2。
+	SongEntityPhase2 bool
 	// TrustedPlayers 是已经清洗过的形态(见 resolveTrustedPlayers):键一定非空、一定不是
 	// 五个内置播放器之一;值可能是空字符串(反查不到 App 名),此时标签退回 bundle id。
 	TrustedPlayers map[string]string
@@ -411,6 +415,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LaunchLyrimuseOnPlayers:   resolveLaunchLyrimuseOnPlayers(f.LaunchLyrimuseOnPlayers),
 		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
 		SongEntityShadow:          boolOr(f.SongEntityShadow, true),
+		SongEntityPhase2:          boolOr(f.SongEntityPhase2, true),
 	}
 }
 
@@ -712,6 +717,7 @@ func logFeatureSnapshot() {
 		"lyrics_machine_translation", features().LyricsMachineTranslation,
 		"lyrics_decision_trace", features().LyricsDecisionTrace,
 		"song_entity_shadow", features().SongEntityShadow,
+		"song_entity_phase2", features().SongEntityPhase2,
 		"lastfm_mirror_scrobble", features().LastfmMirrorScrobble,
 		// 档位 + 摊平后的三个布尔一起打:排查时「界面选了什么」和「实际按什么办」是两件事,
 		// 只记档位的话自定义档看不出它到底开了哪几项。三个布尔各占一个键 —— 拼成一个带

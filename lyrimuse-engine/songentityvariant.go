@@ -92,6 +92,13 @@ type songVariant struct {
 	words        songHashSet // 正文词元集合
 	timelineDone bool
 	timeline     []timelineLine
+
+	// appleNames / audioLocale:Apple 目录名字补扫的结果,核对过这条写法的 Apple 链接之后才挂上(attachAppleNames);
+	// 带 Spotify 曲目 id 的,audioLocale 换成 Spotify 本机元数据里的演唱语言(attachSpotifyLanguages)。
+	appleNames  []appleCatalogName
+	audioLocale string
+	// vocalsByLocale:vocalsKind 的结论是按 audioLocale 下的(不是纯音乐标记、版本词或歌词)。
+	vocalsByLocale bool
 }
 
 var songDurVariantRe = regexp.MustCompile(`~dur\d+$`)
@@ -362,6 +369,10 @@ func (v *songVariant) vocalsKind() songVocals {
 	switch {
 	case v.instrumental || v.instrumentalVersion:
 		v.vocals = songVocalsNone
+	case v.audioLocale == "zxx":
+		v.vocals, v.vocalsByLocale = songVocalsNone, true
+	case v.audioLocale != "":
+		v.vocals, v.vocalsByLocale = songVocalsPresent, true
 	case len(v.displayedLines()) >= timelineOffsetMinMatched:
 		if s, _ := v.lyricsShingles(); s != nil {
 			v.vocals = songVocalsPresent
