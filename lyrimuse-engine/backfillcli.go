@@ -55,6 +55,10 @@ func runBackfillLastfmCLI(args []string) {
 	lastfmCatalogPath = filepath.Join(cfgDir, clientName+"-lastfm-catalog.json")
 	// 跨进程的"feed 提前拉一次"信号文件,跟常驻进程 main.go 设的是同一个路径(见 lastfmfeed.go)。
 	lastfmFeedNudgePath = filepath.Join(cfgDir, clientName+"-lastfm-feed-nudge")
+	// App 跑真补交时轮询这份进度(ScrobbleBackfillService.progressURL,路径两边必须一致)。空跑不写。
+	if !*dryRun {
+		backfillProgressPath = filepath.Join(cfgDir, clientName+"-backfill-progress.json")
+	}
 
 	// 刻意**不**走 lastfmScrobblerIfEnabled:那个多包了一层 features().LastfmMirrorScrobble
 	// 开关。回填是用户在界面上显式点的一次性动作,不该被"要不要持续镜像"这个偏好否决 ——

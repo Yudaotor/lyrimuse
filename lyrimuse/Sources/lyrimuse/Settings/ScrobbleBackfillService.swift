@@ -97,6 +97,17 @@ final class ScrobbleBackfillService: ObservableObject {
     /// 最糟的一种:失败得毫无声息)。
     @Published private(set) var lastRunFailed = false
     @Published private(set) var busy = false
+    /// 真补交跑着时处理到第几首(子命令写的进度文件,见 `progressURL`);没在补交、或子命令还没写出第一份时是 nil。
+    @Published private(set) var progress: Progress?
+
+    struct Progress: Decodable, Equatable {
+        var total: Int
+        var done: Int
+    }
+
+    /// 子命令 `backfill-lastfm` 写进度的文件(lyrimuse-engine/backfillcli.go 的 backfillProgressPath,两边必须一致),
+    /// 跑完它自己删掉。
+    static let progressURL = LyrimusePaths.configFile("lyrimuse-backfill-progress.json")
 
     private init() {}
 
@@ -134,8 +145,20 @@ final class ScrobbleBackfillService: ObservableObject {
         // 上一次的结果先清掉:跑的过程中还挂着"已补 3 条"会让人以为那是这一次的结果。
         lastRun = nil
         lastRunFailed = false
+        // 上一趟被杀掉时留下的进度文件不能当成这一趟的。
+        _ = FileIO.remove(Self.progressURL)
+        let poll = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                if let p = FileIO.decodeJSON(Progress.self, from: Self.progressURL), p.total > 0 {
+                    self?.progress = p
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
         Task { @MainActor in
             let out = await Self.run(dryRun: false)
+            poll.cancel()
+            progress = nil
             lastRun = out
             lastRunFailed = (out == nil)
             pending = await Self.run(dryRun: true)

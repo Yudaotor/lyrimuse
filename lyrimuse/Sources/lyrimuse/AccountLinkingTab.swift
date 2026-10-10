@@ -991,6 +991,13 @@ struct AccountLinkingTab: View {
                 // 那时这里只是"本地攒了些什么"。
                 if lastfmConnected {
                     if backfill.busy { ProgressView().controlSize(.small) }
+                    // 真补交时转圈旁边报处理到第几首:发送前要逐首取写法(按限速问 Last.fm),几十首就要一两分钟。
+                    if let p = backfill.progress {
+                        Text(String(format: L10n.t("补交中 %@/%@"), "\(p.done)", "\(p.total)"))
+                            .font(.system(size: 12))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
                     Button(L10n.t("补交")) { backfill.runBackfill() }
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.accentColor)

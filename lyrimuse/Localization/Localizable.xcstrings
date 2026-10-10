@@ -42108,6 +42108,29 @@
           }
         }
       }
+    },
+    "补交中 %@/%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitting %@ of %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "补交中 %@/%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "補交中 %@/%@"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

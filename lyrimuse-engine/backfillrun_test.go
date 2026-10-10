@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -323,5 +324,58 @@ func TestRunBackfillNothingPending(t *testing.T) {
 	}
 	if nudgeTouched() {
 		t.Error("什么都没补,不该通知重拉 feed")
+	}
+}
+
+// 进度:发送时这一批已经全部取完写法(done 到了这一批的末尾),跑完删掉进度文件。
+func TestRunBackfillWritesProgress(t *testing.T) {
+	saved := backfillProgressPath
+	t.Cleanup(func() { backfillProgressPath = saved })
+	backfillProgressPath = filepath.Join(t.TempDir(), "progress.json")
+	var seen []backfillProgress
+	env := setUpBackfillRun(t, func(ts []string) (string, error) {
+		var p backfillProgress
+		if b, err := os.ReadFile(backfillProgressPath); err == nil {
+			_ = json.Unmarshal(b, &p)
+		}
+		seen = append(seen, p)
+		return acceptAll(ts)
+	})
+	seedListens(backfillBatchSize + 1)
+
+	out := runBackfill(context.Background(), env.s, false)
+
+	if out.Accepted != backfillBatchSize+1 {
+		t.Fatalf("应全部补上: %+v", out)
+	}
+	want := []backfillProgress{{Total: backfillBatchSize + 1, Done: backfillBatchSize}, {Total: backfillBatchSize + 1, Done: backfillBatchSize + 1}}
+	if fmt.Sprint(seen) != fmt.Sprint(want) {
+		t.Errorf("发每一批时读到的进度 %v,期望 %v", seen, want)
+	}
+	if _, err := os.Stat(backfillProgressPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("跑完应删掉进度文件,stat: %v", err)
+	}
+}
+
+// 总时限剩下的不够一次完整请求:这一批不发,原样留在清单里,不进隔离(发到一半被掐断才会被当成可能已经落库)。
+func TestRunBackfillKeepsBatchWhenTimeoutTooShortToSend(t *testing.T) {
+	env := setUpBackfillRun(t, acceptAll)
+	uts := seedListens(3)
+	ctx, cancel := context.WithTimeout(context.Background(), backfillRequestTimeout/2)
+	defer cancel()
+
+	out := runBackfill(ctx, env.s, false)
+
+	if n := len(env.requests()); n != 0 {
+		t.Fatalf("剩下的时限不够一次请求时不该发,发了 %d 次", n)
+	}
+	if out.Accepted != 0 || out.Quarantined != 0 || !strings.Contains(out.AbortedReason, "not sent") {
+		t.Errorf("应报没发出去: %+v", out)
+	}
+	if marks := receiptMarks(); len(marks) != 0 {
+		t.Errorf("一条回执都不该写,got %v", marks)
+	}
+	if n := pendingCount(); n != len(uts) {
+		t.Errorf("3 条都应留在清单里,剩 %d", n)
 	}
 }

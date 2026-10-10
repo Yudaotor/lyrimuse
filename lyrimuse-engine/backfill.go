@@ -9,9 +9,11 @@ import (
 	"log"
 	"net/http"
 	neturl "net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,6 +54,57 @@ const (
 // backfillBatchPause:批间隔。官方 TOS 明确警告"持续每秒多次调用可能导致账号被停用",这里给足余量。
 // 变量只为单测能调成 0。
 var backfillBatchPause = 2 * time.Second
+
+// backfillProgressPath:真补交时进度写在这里(App 跑补交期间轮询它显示「第几首 / 共几首」),跑完删掉。空 = 不写。
+// 见 12 章决策 66。
+var backfillProgressPath string
+
+// backfillProgress 是写给 App 的进度。Done 数的是处理过的条数:取完写法的(发送之前每首都要取一次,补交的耗时
+// 主要在这一步),以及发送前发现已经有回执、不用再发的。
+type backfillProgress struct {
+	Total int `json:"total"`
+	Done  int `json:"done"`
+}
+
+var backfillProgressState struct {
+	mu sync.Mutex
+	p  backfillProgress
+}
+
+// resetBackfillProgress 开始一趟补交:从 0 / total 写起。
+func resetBackfillProgress(total int) {
+	backfillProgressState.mu.Lock()
+	defer backfillProgressState.mu.Unlock()
+	backfillProgressState.p = backfillProgress{Total: total}
+	writeBackfillProgressLocked()
+}
+
+func advanceBackfillProgress(n int) {
+	if n <= 0 {
+		return
+	}
+	backfillProgressState.mu.Lock()
+	defer backfillProgressState.mu.Unlock()
+	backfillProgressState.p.Done = min(backfillProgressState.p.Done+n, backfillProgressState.p.Total)
+	writeBackfillProgressLocked()
+}
+
+func writeBackfillProgressLocked() {
+	if backfillProgressPath == "" {
+		return
+	}
+	b, err := json.Marshal(backfillProgressState.p)
+	if err != nil {
+		return
+	}
+	_ = writeFileAtomic(backfillProgressPath, b)
+}
+
+func clearBackfillProgress() {
+	if backfillProgressPath != "" {
+		_ = os.Remove(backfillProgressPath)
+	}
+}
 
 // backfillItem 是待补清单里的一条,给"未连接"那一栏按歌名列出来用。
 //
@@ -212,11 +265,16 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 		// 补活路径的 duration 时统一的,免得"只发正数、整数秒"这条规则在两处各写一份、
 		// 以后改一处漏一处。
 		durationParam(p, "duration["+idx+"]", it.DUR)
+		advanceBackfillProgress(1)
 	}
 	// 取标签那一步可能已经把总时限耗完:这时请求还没发出去,别让 callBatch 带着过期的 ctx 失败、
-	// 被当成「可能已经落库」整批隔离。
+	// 被当成「可能已经落库」整批隔离。剩下的不够一次完整请求(backfillRequestTimeout)也不发:请求发到一半被总时限
+	// 掐断,同样会被当成可能已经落库。
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("%w: %w", errScrobbleBatchNotSent, err)
+	}
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < backfillRequestTimeout {
+		return nil, fmt.Errorf("%w: only %s of the overall timeout left", errScrobbleBatchNotSent, time.Until(deadline).Round(time.Second))
 	}
 	// 签名不需要为批量做任何特殊处理:sign() 用 sort.Strings 按字节序排,而官方要求的
 	// 正是 ASCII 字节序 —— "artist[0]" / "artist[10]" 这类名字排出来跟官方一致。
@@ -428,12 +486,15 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 	}
 
 	log.Printf("backfill: %d listen(s) to submit (%d too old to accept)", len(pending), tooOld)
+	resetBackfillProgress(len(pending))
+	defer clearBackfillProgress()
 	for start := 0; start < len(pending); start += backfillBatchSize {
 		end := min(start+backfillBatchSize, len(pending))
 		// 这条命令一跑就是几分钟(按标签查 Last.fm 限速 1 次/秒),开头那份清单到发送这一刻可能已经过期:常驻进程的
 		// 重发队列(lfmretry.go)这期间交掉了其中几条,或者它们正排在那个队列里等下一轮。每批发送前重读一遍,
 		// 只发此刻仍然待补、又不在重发队列里的 —— 同一条收听交两次,删不掉。
 		batch := stillPendingForBackfill(pending[start:end], now)
+		advanceBackfillProgress(end - start - len(batch))
 		if len(batch) == 0 {
 			continue
 		}

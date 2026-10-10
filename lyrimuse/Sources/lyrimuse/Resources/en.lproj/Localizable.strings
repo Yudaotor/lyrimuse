@@ -1677,6 +1677,7 @@
 "行为" = "Behavior";
 "行数" = "Lines";
 "补交" = "Backfill";
+"补交中 %@/%@" = "Submitting %@ of %@";
 "补交未完成，请稍后重试" = "Backfill didn't finish. Try again later.";
 "补全曲目信息" = "Track info backfill";
 "要保存到 iCloud 吗？" = "Save your settings to iCloud?";
