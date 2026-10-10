@@ -30,6 +30,17 @@ public struct DiscordActivity: Equatable, Sendable, Encodable {
         }
     }
 
+    /// 资料卡底下的按钮。自己看不到自己的按钮(Discord 的已知问题),别人看得到、点得开。
+    public struct Button: Equatable, Sendable, Encodable {
+        public var label: String
+        public var url: String
+
+        public init(label: String, url: String) {
+            self.label = label
+            self.url = url
+        }
+    }
+
     public struct Timestamps: Equatable, Sendable, Encodable {
         /// Unix 毫秒。只给 start 时 Discord 显示已经过了多久,两个都给才有进度条。
         public var start: Int64
@@ -55,9 +66,11 @@ public struct DiscordActivity: Equatable, Sendable, Encodable {
     /// 没有封面时为 nil:Discord 显示应用自己的图标。
     public var assets: Assets?
     public var timestamps: Timestamps?
+    /// 最多 2 个(`DiscordPresence.maxButtons`);没有时为 nil,不编码。
+    public var buttons: [Button]?
 
     enum CodingKeys: String, CodingKey {
-        case name, type, details, state, assets, timestamps
+        case name, type, details, state, assets, timestamps, buttons
         case statusDisplayType = "status_display_type"
         case detailsURL = "details_url"
         case stateURL = "state_url"
@@ -308,10 +321,15 @@ public enum DiscordPresence {
         public var durationMs: Int?
         /// 发给哪个 Discord 应用(`applicationID(forBundleID:webPlatformID:)`)。
         public var applicationID: String
+        /// 「显示当前歌词」开着时这一刻要显示的那句(`DiscordLyricLine.pick`);nil = 专辑那一行照常写专辑。
+        public var lyric: String?
+        /// 资料卡底下的按钮(`DiscordPresence.buttons`);nil 或空 = 不带。
+        public var buttons: [DiscordActivity.Button]?
 
         public init(title: String, artist: String, album: String = "", playerName: String? = nil,
                     coverURL: URL? = nil, songURL: URL? = nil, artistURL: URL? = nil,
-                    positionMs: Int? = nil, durationMs: Int? = nil, applicationID: String = DiscordPresence.applicationID) {
+                    positionMs: Int? = nil, durationMs: Int? = nil, applicationID: String = DiscordPresence.applicationID,
+                    lyric: String? = nil, buttons: [DiscordActivity.Button]? = nil) {
             self.title = title
             self.artist = artist
             self.album = album
@@ -322,6 +340,8 @@ public enum DiscordPresence {
             self.positionMs = positionMs
             self.durationMs = durationMs
             self.applicationID = applicationID
+            self.lyric = lyric
+            self.buttons = buttons
         }
     }
 
@@ -359,7 +379,9 @@ public enum DiscordPresence {
     /// 时拿应用的注册名去拼),封面角上是暂停图标。
     public static func pausedActivity(_ track: Track, statusLine: StatusLine, listeningName: ListeningName = .player,
                                       now: Date, pausedNameFormat: String) -> DiscordActivity {
-        var paused = activity(track, statusLine: statusLine, listeningName: listeningName, now: nil, smallImage: .paused)
+        var quiet = track
+        quiet.lyric = nil
+        var paused = activity(quiet, statusLine: statusLine, listeningName: listeningName, now: nil, smallImage: .paused)
         let block: Int64 = 12 * 3_600_000
         let nowMs = Int64((now.timeIntervalSince1970 * 1000).rounded())
         paused.timestamps = DiscordActivity.Timestamps(start: nowMs / block * block + 2 * block)
@@ -370,6 +392,9 @@ public enum DiscordPresence {
 
     /// `now` 为 nil 时不带时间戳(暂停时保留的那份)。有位置才出时间戳,有时长才出进度条。没有封面就不给大图,Discord 显示
     /// 应用自己的图标(各播放器的应用就是那个播放器的图标);小图压在大图上,没有大图时也不给。
+    ///
+    /// 带着歌词(`track.lyric`)时专辑那一行(`large_text`)换成「♪ 这一句」;没有封面时拿应用自己的图标当大图,
+    /// 不然没有 `large_text` 那一行(小图照样不给,跟没封面时一个样子)。见 12 章决策 65。
     public static func activity(_ track: Track, statusLine: StatusLine, listeningName: ListeningName = .player,
                                 now: Date?, smallImage: SmallImage? = nil) -> DiscordActivity {
         var timestamps: DiscordActivity.Timestamps?
@@ -381,6 +406,8 @@ public enum DiscordPresence {
         let songLink = link(track.songURL)
         let cover = track.coverURL.flatMap { $0.scheme?.lowercased() == "https" ? link($0) : nil }
         let album = trimmed(track.album)
+        let lyric = track.lyric.map(trimmed).flatMap { $0.isEmpty ? nil : fitted(lyricMark + $0) }
+        let largeText = lyric ?? (album.isEmpty ? nil : fitted(album))
         let player = track.playerName.map(trimmed).flatMap { $0.isEmpty ? nil : $0 }
         let name: String?
         switch listeningName {
@@ -398,20 +425,71 @@ public enum DiscordPresence {
             state: fitted(track.artist),
             stateURL: link(track.artistURL),
             assets: cover.map {
-                DiscordActivity.Assets(largeImage: $0, largeText: album.isEmpty ? nil : fitted(album), largeURL: songLink,
+                DiscordActivity.Assets(largeImage: $0, largeText: largeText, largeURL: songLink,
                                        smallImage: smallImage?.image,
                                        smallURL: smallImage?.image == nil ? nil : websiteURL)
+            } ?? lyric.flatMap { lyric in
+                iconURL(of: application(forApplicationID: track.applicationID)).map {
+                    DiscordActivity.Assets(largeImage: $0, largeText: lyric, largeURL: songLink)
+                }
             },
-            timestamps: timestamps)
+            timestamps: timestamps,
+            buttons: track.buttons.flatMap { $0.isEmpty ? nil : Array($0.prefix(maxButtons)) })
     }
 
-    /// Discord 拒收了这一份时补发的精简版:去掉歌名、歌手上的链接和大图、小图(连带它们的悬停文字和链接),文字和时间照旧。
-    /// 被拒多半是哪个链接或哪张图它不认,精简版至少还能显示歌名、歌手。
+    /// 专辑那一行写歌词时加在前面的记号。
+    public static let lyricMark = "\u{266A} "
+
+    /// 按钮最多几个、文字多长(按 UTF-16 码元,同 `textLengthRange`)。
+    public static let maxButtons = 2
+    public static let buttonLabelLength = 1...32
+
+    /// 资料卡底下的按钮,依次取、只留前 `maxButtons` 个:自定义按钮(文字和链接都有效才算)、「在 XX 上收听」(这首有歌曲页
+    /// 才有,`listenLabel` 是已经拼好服务名的文字)、「获取 Lyrimuse」(链到官网)。没有一个时为 nil。
+    public static func buttons(custom: (label: String, url: String)?, listen: Bool, listenLabel: String, songURL: URL?,
+                               getLyrimuse: Bool, getLyrimuseLabel: String) -> [DiscordActivity.Button]? {
+        var result: [DiscordActivity.Button] = []
+        if let custom, let label = buttonLabel(custom.label), let url = link(URL(string: trimmed(custom.url))) {
+            result.append(DiscordActivity.Button(label: label, url: url))
+        }
+        if listen, let url = link(songURL), let label = buttonLabel(listenLabel) {
+            result.append(DiscordActivity.Button(label: label, url: url))
+        }
+        if getLyrimuse, let label = buttonLabel(getLyrimuseLabel) {
+            result.append(DiscordActivity.Button(label: label, url: websiteURL))
+        }
+        return result.isEmpty ? nil : Array(result.prefix(maxButtons))
+    }
+
+    /// 自定义按钮填的链接能不能用(http / https、不超长)。设置页据此提示。
+    public static func isUsableButtonURL(_ text: String) -> Bool {
+        link(URL(string: trimmed(text))) != nil
+    }
+
+    /// 按钮文字:去掉首尾空白,空的不要,超长截到上限(留一位给省略号,不切开一个字)。
+    static func buttonLabel(_ text: String) -> String? {
+        let text = trimmed(text)
+        guard !text.isEmpty else { return nil }
+        guard text.utf16.count > buttonLabelLength.upperBound else { return text }
+        var kept = ""
+        var units = 0
+        for character in text {
+            let width = character.utf16.count
+            if units + width > buttonLabelLength.upperBound - 1 { break }
+            kept.append(character)
+            units += width
+        }
+        return kept + "…"
+    }
+
+    /// Discord 拒收了这一份时补发的精简版:去掉歌名、歌手上的链接,大图、小图(连带它们的悬停文字和链接)和按钮,文字和
+    /// 时间照旧。被拒多半是哪个链接或哪张图它不认,精简版至少还能显示歌名、歌手。
     public static func withoutLinksAndImages(_ activity: DiscordActivity) -> DiscordActivity {
         var plain = activity
         plain.detailsURL = nil
         plain.stateURL = nil
         plain.assets = nil
+        plain.buttons = nil
         return plain
     }
 

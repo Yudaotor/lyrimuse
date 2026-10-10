@@ -70,7 +70,7 @@ func runSettingsSearchTests() {
     expectEqual(accountTab.contains("@AppStorage(\"\(SettingsSearchCatalog.lastfmSectionKey)\")"), true,
                 "设置搜索: Last.fm 页分段键名与源码一致")
     let discordSectionCases = enumCaseNames(after: "private enum DiscordSection:", in: accountTab)
-    expectEqual(discordSectionCases, ["display", "privacy"], "设置搜索: Discord 页两个分段")
+    expectEqual(discordSectionCases, ["display", "buttons", "privacy"], "设置搜索: Discord 页三个分段")
     expectEqual(accountTab.contains("@AppStorage(SettingsSearchCatalog.discordSectionKey)"), true,
                 "设置搜索: Discord 页分段键取目录常量")
 

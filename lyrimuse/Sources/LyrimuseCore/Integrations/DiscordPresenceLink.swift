@@ -132,8 +132,9 @@ public final class DiscordPresenceLink: @unchecked Sendable {
                                              error: error)
         }
         do {
-            try connection.setActivity(activity, pid: pid, timeout: timeout)
+            let echo = try connection.setActivity(activity, pid: pid, timeout: timeout)
             audit(nil)
+            if let echo { log("discord stored " + echo) }
             return .delivered
         } catch DiscordIPCConnection.Failure.rejected(let code, let message) {
             audit(DiscordIPCConnection.Failure.rejected(code: code, message: message))

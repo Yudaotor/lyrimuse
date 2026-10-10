@@ -1876,6 +1876,41 @@
       "path" : [
         "Discord"
       ],
+      "title" : "显示当前歌词"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "按钮"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "自定义按钮"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "「在播放器上收听」"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "「获取 Lyrimuse」"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
       "title" : "隐私"
     },
     {

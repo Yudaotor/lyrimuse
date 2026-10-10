@@ -139,6 +139,34 @@ public enum DiscordIPC {
         (value as? NSNumber)?.intValue ?? 0
     }
 
+    /// SET_ACTIVITY 回执里 Discord 收下的那份(`data`)整理成一行,写进日志:Discord 那边存的就是它,自己又看不到自己的按钮,
+    /// 查「好友看到的是什么」只能靠这一行。按钮 Discord 回的是文字数组(链接另放在 `metadata.button_urls`),也认带
+    /// `label` 的对象。回执里没有 activity(清空的回执)时为 nil。
+    public static func activityEcho(_ payload: Data) -> String? {
+        guard let object = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any],
+              let data = object["data"] as? [String: Any], !data.isEmpty else { return nil }
+        func text(_ value: Any?) -> String { (value as? String).map { "\"\($0)\"" } ?? "-" }
+        let assets = data["assets"] as? [String: Any]
+        let timestamps = data["timestamps"] as? [String: Any]
+        let buttons = (data["buttons"] as? [Any] ?? []).compactMap { item -> String? in
+            (item as? String) ?? ((item as? [String: Any])?["label"] as? String)
+        }
+        let urls = ((data["metadata"] as? [String: Any])?["button_urls"] as? [Any])?.count
+        var parts = [
+            "name=" + text(data["name"]),
+            "status_display_type=" + ((data["status_display_type"] as? NSNumber).map { "\($0.intValue)" } ?? "-"),
+            "details=" + text(data["details"]),
+            "state=" + text(data["state"]),
+            "large_text=" + text(assets?["large_text"]),
+            "large_image=" + ((assets?["large_image"] as? String)?.isEmpty == false ? "yes" : "no"),
+            "start=" + ((timestamps?["start"] as? NSNumber).map { "\($0.int64Value)" } ?? "-"),
+            "end=" + ((timestamps?["end"] as? NSNumber).map { "\($0.int64Value)" } ?? "-"),
+            "buttons=[" + buttons.map { "\"\($0)\"" }.joined(separator: ",") + "]",
+        ]
+        if let urls { parts.append("button_urls=\(urls)") }
+        return parts.joined(separator: " ")
+    }
+
     /// READY 里的 `user`。没有 ID 或用户名时当没有;空字符串的字段当没给。
     private static func user(from object: [String: Any]?) -> DiscordUser? {
         func text(_ key: String) -> String? {
@@ -282,16 +310,19 @@ public final class DiscordIPCConnection {
         throw failure ?? Failure.unavailable
     }
 
-    /// 发一条 SET_ACTIVITY(nil = 清掉)并等它的回执。
-    public func setActivity(_ activity: DiscordActivity?, pid: Int32, timeout: TimeInterval) throws {
+    /// 发一条 SET_ACTIVITY(nil = 清掉)并等它的回执。返回 Discord 收下的那份的一行摘要(`DiscordIPC.activityEcho`),
+    /// 清空的回执为 nil。
+    @discardableResult
+    public func setActivity(_ activity: DiscordActivity?, pid: Int32, timeout: TimeInterval) throws -> String? {
         nextNonce += 1
         let nonce = String(nextNonce)
         try write(.frame, DiscordIPC.setActivity(activity, pid: pid, nonce: nonce))
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            switch DiscordIPC.reply(to: try readFrame(until: deadline)) {
+            let frame = try readFrame(until: deadline)
+            switch DiscordIPC.reply(to: frame) {
             case .ack(let replyNonce) where replyNonce == nonce:
-                return
+                return DiscordIPC.activityEcho(frame.payload)
             case .error(let replyNonce, let code, let message) where replyNonce == nonce:
                 throw Failure.rejected(code: code, message: message)
             case .close(let code, let message):

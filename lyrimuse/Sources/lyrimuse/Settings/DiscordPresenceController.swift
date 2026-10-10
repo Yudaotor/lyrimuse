@@ -52,6 +52,8 @@ final class DiscordPresenceController: ObservableObject {
     static let fastConnectWindow: TimeInterval = 60
     /// Discord 开着、过了这么久还没连上,算卡住了。
     static let stallThreshold: TimeInterval = 20
+    /// 「显示当前歌词」开着、正在放有歌词的歌时,隔这么久看一次该不该换句;真发出去仍受 `DiscordPresenceGate.minInterval` 限。
+    static let lyricTick: TimeInterval = 0.5
 
     private lazy var link = DiscordPresenceLink(
         socketPaths: {
@@ -78,6 +80,8 @@ final class DiscordPresenceController: ObservableObject {
     private var retryTask: Task<Void, Never>?
     private var fastConnectTask: Task<Void, Never>?
     private var extras: TrackExtras?
+    /// 这首的歌词按句的起止(`DiscordLyricLine.spans`),歌词、间奏、整首时长没变就不重算。
+    private var lyricSpans: (key: String, spans: [DiscordLyricLine.Span])?
     /// 要联网那几档封面的查询,按这首记住,一首只跑一次(见 `PresenceCover`)。
     private var coverLookups: [String: CoverLookup] = [:]
     /// 「暂时隐藏」到这个时刻(`hide(minutes:)`);没在隐藏时为 nil。记在 `hiddenUntilKey` 里,App 重启后接着隐藏。
@@ -108,7 +112,11 @@ final class DiscordPresenceController: ObservableObject {
             signal(settings.$discordPresenceEnabled), signal(settings.$discordStatusDisplay),
             signal(settings.$discordListeningName),
             signal(settings.$discordKeepWhenPaused), signal(settings.$discordExcludedBundles),
-            signal(settings.$discordBadge),
+            signal(settings.$discordBadge), signal(settings.$discordShowLyrics),
+            signal(settings.$discordButtonListen), signal(settings.$discordButtonGetLyrimuse),
+            signal(settings.$discordCustomButtonEnabled), signal(settings.$discordCustomButtonLabel),
+            signal(settings.$discordCustomButtonURL),
+            signal(playback.$allLines), signal(playback.$lyricsGapMarkers),
         ]
         // 去抖挂主队列、别挂 RunLoop.main:菜单开着时它不走,换歌后的状态要等菜单关了才更新(见 01 章决策 11)。
         observers.append(Publishers.MergeMany(changes)
@@ -180,6 +188,15 @@ final class DiscordPresenceController: ObservableObject {
                 Task { @MainActor in self?.sendFinished(delivery, wanted: activity, generation: sentGeneration) }
             }
         }
+        // 歌词跟着时间走,没有别的信号会叫刷新:正在放有歌词的歌时自己按 `lyricTick` 再看一次。
+        if wakeTask == nil, track != nil, followsLyrics, case .connected = status {
+            wake(at: now.addingTimeInterval(Self.lyricTick))
+        }
+    }
+
+    /// 「显示当前歌词」开着、在放、这首有歌词。
+    private var followsLyrics: Bool {
+        AppSettings.shared.discordShowLyrics && PlaybackCoordinator.shared.isPlayingSmoothed && !currentLyricSpans().isEmpty
     }
 
     /// Discord 上现在挂着的那一份:连着时最近一次交给 Discord 的,被拒过的按它实际显示的(补发的精简版;都被拒、清掉了为 nil);
@@ -423,15 +440,64 @@ final class DiscordPresenceController: ObservableObject {
         if let host, AppSettings.shared.discordExcludedBundles.contains(host) { return nil }
         let extras = trackExtras(reportedBundleID: reported)
         let anchor = playback.anchor
+        let applicationID = DiscordPresence.applicationID(forBundleID: reported, webPlatformID: playback.resolvedWebPlatformID)
+        let player = playerName(host: host)
         return DiscordPresence.Track(
             title: playback.title, artist: playback.displayArtist, album: playback.displayAlbum,
-            playerName: playerName(host: host),
+            playerName: player,
             coverURL: coverURL(for: extras, now: now, lookingUp: lookingUp), songURL: extras.songURL,
             // Apple Music 的歌手页缓存里没有,用按曲目 ID 查封面时顺带拿到的那个。
             artistURL: extras.artistURL ?? coverLookups[extras.coverKey]?.hit?.artistPage,
             positionMs: anchor.flatMap { $0.rate > 0 ? $0.extrapolatedPositionMs(now: now) : nil },
             durationMs: anchor?.durationMs ?? playback.currentDurationMs,
-            applicationID: DiscordPresence.applicationID(forBundleID: reported, webPlatformID: playback.resolvedWebPlatformID))
+            applicationID: applicationID,
+            lyric: currentLyric(now: now),
+            buttons: presenceButtons(songURL: extras.songURL, applicationID: applicationID, playerName: player))
+    }
+
+    // MARK: - 歌词与按钮
+
+    /// 此刻要显示的那句:「显示当前歌词」开着、在放时,从歌词时间轴上的此刻起挑 `DiscordPresenceGate.minInterval` 这一段里
+    /// 唱得最久的那句(`DiscordLyricLine.pick`)。间奏里、唱完了、没歌词为 nil。
+    private func currentLyric(now: Date) -> String? {
+        let playback = PlaybackCoordinator.shared
+        guard AppSettings.shared.discordShowLyrics, playback.isPlayingSmoothed else { return nil }
+        let spans = currentLyricSpans()
+        guard !spans.isEmpty else { return nil }
+        return DiscordLyricLine.pick(spans, atMs: playback.lyricsTimelineMs(now: now),
+                                     windowMs: Int(DiscordPresenceGate.minInterval * 1000))
+    }
+
+    private func currentLyricSpans() -> [DiscordLyricLine.Span] {
+        let playback = PlaybackCoordinator.shared
+        let lines = playback.allLines
+        let gaps = playback.lyricsGapMarkers
+        let key = [lines.first?.id ?? "", lines.last?.id ?? "", String(lines.count), String(gaps.count),
+                   gaps.last.map { "\($0.index):\($0.startMs)" } ?? "", playback.currentDurationMs.map { String($0) } ?? ""]
+            .joined(separator: "|")
+        if let lyricSpans, lyricSpans.key == key { return lyricSpans.spans }
+        var gapStarts: [Int: Int] = [:]
+        for gap in gaps where gap.index >= 0 { gapStarts[gap.index] = gap.startMs }
+        let spans = DiscordLyricLine.spans(starts: lines.map(\.timeMs), texts: lines.map { $0.line.plainText ?? "" },
+                                           gapStarts: gapStarts, trackDurationMs: playback.currentDurationMs)
+        lyricSpans = (key, spans)
+        return spans
+    }
+
+    /// 资料卡底下的按钮(`DiscordPresence.buttons`)。「在 XX 上收听」写的名字跟「正在听」后面那个一样(`playerName`,
+    /// Kaset 已经写成 YouTube Music);没有时用那个播放器应用的注册名,归 Lyrimuse 那个应用的不出这个按钮。预览的示例那份也用它。
+    func presenceButtons(songURL: URL?, applicationID: String, playerName: String?) -> [DiscordActivity.Button]? {
+        let settings = AppSettings.shared
+        let application = DiscordPresence.application(forApplicationID: applicationID)
+        let service = playerName ?? (application == .lyrimuse ? nil : application.registeredName)
+        return DiscordPresence.buttons(
+            custom: settings.discordCustomButtonEnabled
+                ? (settings.discordCustomButtonLabel, settings.discordCustomButtonURL) : nil,
+            listen: settings.discordButtonListen && service != nil,
+            listenLabel: String(format: L10n.t("在 %@ 上收听"), service ?? ""),
+            songURL: songURL,
+            getLyrimuse: settings.discordButtonGetLyrimuse,
+            getLyrimuseLabel: L10n.t("获取 Lyrimuse"))
     }
 
     /// 「正在听」后面的名字(`DiscordPresence.listeningName`):认得出的播放器、网页平台用界面上那个名字,信任列表里的 App

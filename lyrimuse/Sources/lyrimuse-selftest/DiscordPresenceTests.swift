@@ -14,6 +14,8 @@ func runDiscordPresenceTests() {
     checkDiscordGate()
     checkDiscordConnection()
     checkDiscordCover()
+    checkDiscordLyrics()
+    checkDiscordButtons()
     checkDiscordWiring()
 }
 
@@ -1017,6 +1019,117 @@ private func checkDiscordCover() {
     expectEqual(unpinned.flatMap(EnrichCacheReader.validPublicCover), nil, "Discord 封面(公网同图): 没记核对的是哪张不用")
 }
 
+private func checkDiscordLyrics() {
+    typealias L = DiscordLyricLine
+    // ---- 每句唱到哪 ----
+    let spans = L.spans(starts: [1_000, 3_000, 4_000, 10_000, 20_000], texts: ["第一句", "  ", "第三句", "第四句", "最后"],
+                        gapStarts: [3: 12_000], trackDurationMs: 25_000)
+    expectEqual(spans, [L.Span(startMs: 1_000, endMs: 3_000, text: "第一句"), L.Span(startMs: 4_000, endMs: 10_000, text: "第三句"),
+                        L.Span(startMs: 10_000, endMs: 12_000, text: "第四句"), L.Span(startMs: 20_000, endMs: 25_000, text: "最后")],
+                "Discord 歌词: 唱到下一句开始或间奏开始,空白句不要,最后一句到整首结束")
+    expectEqual(L.spans(starts: [5_000], texts: ["只有一句"], gapStarts: [:], trackDurationMs: nil).first?.endMs, 10_000,
+                "Discord 歌词: 不知道整首多长时最后一句按 5 秒算")
+    // ---- 挑哪一句 ----
+    let lines = [L.Span(startMs: 0, endMs: 1_500, text: "短"), L.Span(startMs: 1_500, endMs: 6_000, text: "长"),
+                 L.Span(startMs: 6_000, endMs: 7_000, text: "一秒"), L.Span(startMs: 9_000, endMs: 12_000, text: "间奏后")]
+    expectEqual(L.pick(lines, atMs: 0, windowMs: 4_000), "长", "Discord 歌词: 挑这一段里唱得最久的那句,不是此刻这句")
+    expectEqual(L.pick(lines, atMs: 1_000, windowMs: 4_000), "长", "Discord 歌词: 此刻那句快唱完了,挑下一句")
+    expectEqual(L.pick(lines, atMs: 7_200, windowMs: 4_000), "间奏后", "Discord 歌词: 间奏快完时挑下一句(进得去 1 秒以上)")
+    expectEqual(L.pick(lines, atMs: 7_000, windowMs: 2_500), nil, "Discord 歌词: 只进得去半秒的下一句不提前亮出来")
+    expectEqual(L.pick([L.Span(startMs: 100, endMs: 600, text: "整句")], atMs: 0, windowMs: 4_000), "整句",
+                "Discord 歌词: 整句都落在这一段里的短句照样算")
+    expectEqual(L.pick(lines, atMs: 12_500, windowMs: 4_000), nil, "Discord 歌词: 唱完了为 nil")
+    expectEqual(L.pick([L.Span(startMs: 0, endMs: 2_000, text: "前"), L.Span(startMs: 2_000, endMs: 4_000, text: "后")],
+                       atMs: 0, windowMs: 4_000), "前", "Discord 歌词: 一样久挑先唱的")
+
+    // ---- 进 activity ----
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    var track = sampleTrack()
+    track.lyric = "  刮风这天 我试过握着你手 "
+    let withLyric = DiscordPresence.activity(track, statusLine: .title, now: now)
+    expectEqual(withLyric.assets?.largeText, "\u{266A} 刮风这天 我试过握着你手", "Discord 歌词: 专辑那一行换成「♪ 这一句」")
+    expectEqual(withLyric.details, "晴天", "Discord 歌词: 歌名不动")
+    expectEqual(withLyric.state, "周杰伦", "Discord 歌词: 歌手不动")
+    track.lyric = "   "
+    expectEqual(DiscordPresence.activity(track, statusLine: .title, now: now).assets?.largeText, "叶惠美",
+                "Discord 歌词: 只有空白的歌词当没有,照常写专辑")
+    track.lyric = String(repeating: "啦", count: 200)
+    expectEqual(DiscordPresence.activity(track, statusLine: .title, now: now).assets?.largeText?.utf16.count, 128,
+                "Discord 歌词: 超长的截到 128")
+    var bare = sampleTrack()
+    bare.coverURL = nil
+    bare.lyric = "这一句"
+    let bareLyric = DiscordPresence.activity(bare, statusLine: .title, now: now, smallImage: .lyrimuse)
+    expectEqual(bareLyric.assets?.largeImage, DiscordPresence.iconURL(of: .lyrimuse),
+                "Discord 歌词: 没封面时拿应用图标当大图,好让歌词那一行出来")
+    expectEqual(bareLyric.assets?.largeText, "\u{266A} 这一句", "Discord 歌词: 没封面时歌词照样显示")
+    expectEqual(bareLyric.assets?.smallImage, nil, "Discord 歌词: 补上的大图不压小图,跟没封面时一个样子")
+    bare.lyric = nil
+    expectEqual(DiscordPresence.activity(bare, statusLine: .title, now: now).assets, nil,
+                "Discord 歌词: 没歌词、没封面时照旧不给大图")
+    var lyricTrack = sampleTrack()
+    lyricTrack.lyric = "这一句"
+    expectEqual(DiscordPresence.pausedActivity(lyricTrack, statusLine: .title, now: now, pausedNameFormat: "%@ (Paused)")
+                    .assets?.largeText, "叶惠美", "Discord 歌词: 暂停保留的那份写专辑,不挂歌词")
+}
+
+private func checkDiscordButtons() {
+    let song = URL(string: "https://music.apple.com/cn/album/x/1?i=2")
+    func make(custom: (String, String)? = nil, listen: Bool = false, songURL: URL? = song,
+              get: Bool = false) -> [DiscordActivity.Button]? {
+        DiscordPresence.buttons(custom: custom, listen: listen, listenLabel: "在 Apple Music 上收听", songURL: songURL,
+                                getLyrimuse: get, getLyrimuseLabel: "获取 Lyrimuse")
+    }
+    let listen = DiscordActivity.Button(label: "在 Apple Music 上收听", url: "https://music.apple.com/cn/album/x/1?i=2")
+    let get = DiscordActivity.Button(label: "获取 Lyrimuse", url: DiscordPresence.websiteURL)
+    let custom = DiscordActivity.Button(label: "我的歌单", url: "https://example.com/list")
+    expectEqual(make(), nil, "Discord 按钮: 都没开时不带")
+    expectEqual(make(listen: true, get: true), [listen, get], "Discord 按钮: 「在 XX 上收听」排在「获取 Lyrimuse」前面")
+    expectEqual(make(custom: (" 我的歌单 ", " https://example.com/list "), listen: true, get: true), [custom, listen],
+                "Discord 按钮: 自定义排第一,最多两个,多出来的「获取 Lyrimuse」不带")
+    expectEqual(make(listen: true, songURL: nil, get: true), [get], "Discord 按钮: 这首没有歌曲页时「在 XX 上收听」不出,后面的顶上")
+    expectEqual(make(listen: true, songURL: URL(string: "music://x"), get: false), nil,
+                "Discord 按钮: 歌曲页不是网页(进 App 的深链)时不出")
+    expectEqual(make(custom: ("看看", "example.com"), get: true), [get], "Discord 按钮: 自定义链接不是 http(s) 时不带")
+    expectEqual(make(custom: ("  ", "https://example.com"), get: true), [get], "Discord 按钮: 自定义文字空的不带")
+    let long = make(custom: (String(repeating: "长", count: 40), "https://example.com"))?.first?.label
+    expectEqual(long?.utf16.count, 32, "Discord 按钮: 文字截到 32")
+    expectEqual(long?.hasSuffix("…"), true, "Discord 按钮: 截断的文字带省略号")
+    expectEqual(DiscordPresence.isUsableButtonURL(" https://example.com "), true, "Discord 按钮: 链接两头的空白不算")
+    expectEqual(DiscordPresence.isUsableButtonURL("ftp://example.com"), false, "Discord 按钮: 只认 http(s)")
+
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    var track = sampleTrack()
+    track.buttons = [custom, listen, get]
+    let activity = DiscordPresence.activity(track, statusLine: .title, now: now)
+    expectEqual(activity.buttons, [custom, listen], "Discord 按钮: activity 里最多两个")
+    let json = String(decoding: DiscordIPC.setActivity(activity, pid: 1, nonce: "n"), as: UTF8.self)
+    expectEqual(json.contains("\"buttons\":[{\"label\":\"我的歌单\",\"url\":\"https://example.com/list\"}"), true,
+                "Discord 按钮: 编码成 buttons 数组,每个带 label 和 url")
+    expectEqual(String(decoding: DiscordIPC.setActivity(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now),
+                                                        pid: 1, nonce: "n"), as: UTF8.self).contains("buttons"), false,
+                "Discord 按钮: 没按钮时不编码这个键")
+    expectEqual(DiscordPresence.withoutLinksAndImages(activity).buttons, nil, "Discord 按钮: 被拒后补发的精简版不带按钮")
+    track.buttons = []
+    expectEqual(DiscordPresence.activity(track, statusLine: .title, now: now).buttons, nil, "Discord 按钮: 空数组当没有")
+    expectEqual(DiscordPresence.pausedActivity({ var t = sampleTrack(); t.buttons = [get]; return t }(), statusLine: .title,
+                                               now: now, pausedNameFormat: "%@ (Paused)").buttons, [get],
+                "Discord 按钮: 暂停保留的那份照样带按钮")
+
+    // ---- 回执里 Discord 收下的那份,整理成一行日志 ----
+    let echoed = Data(#"{"cmd":"SET_ACTIVITY","nonce":"3","evt":null,"data":{"name":"QQ 音乐","type":2,"status_display_type":2,"details":"晴天","state":"周杰伦","assets":{"large_image":"mp:external/abc","large_text":"♪ 刮风这天"},"timestamps":{"start":1000,"end":201000},"buttons":["在 QQ 音乐 上收听","获取 Lyrimuse"],"metadata":{"button_urls":["https://y.qq.com/x","https://yudaotor.github.io/lyrimuse/"]}}}"#.utf8)
+    expectEqual(DiscordIPC.activityEcho(echoed),
+                #"name="QQ 音乐" status_display_type=2 details="晴天" state="周杰伦" large_text="♪ 刮风这天" large_image=yes start=1000 end=201000 buttons=["在 QQ 音乐 上收听","获取 Lyrimuse"] button_urls=2"#,
+                "Discord 回执: 收下的那份整理成一行,按钮是文字数组、链接数另记")
+    let objectButtons = Data(#"{"data":{"details":"晴天","buttons":[{"label":"获取 Lyrimuse","url":"https://x"}]}}"#.utf8)
+    expectEqual(DiscordIPC.activityEcho(objectButtons)?.contains(#"buttons=["获取 Lyrimuse"]"#), true,
+                "Discord 回执: 按钮回成带 label 的对象也认")
+    expectEqual(DiscordIPC.activityEcho(objectButtons)?.contains("large_image=no start=- end=-"), true,
+                "Discord 回执: 没有的字段写 no / -")
+    expectEqual(DiscordIPC.activityEcho(Data(#"{"cmd":"SET_ACTIVITY","data":null}"#.utf8)), nil, "Discord 回执: 清空的回执没有这一行")
+    expectEqual(DiscordIPC.activityEcho(Data("not json".utf8)), nil, "Discord 回执: 读不懂的回执没有这一行")
+}
+
 private func checkDiscordWiring() {
     let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     func code(_ path: String) -> String {
@@ -1025,6 +1138,20 @@ private func checkDiscordWiring() {
     expectEqual(sourceBytes(code("lyrimuse/AppDelegate.swift"), contain: "DiscordPresenceController.shared.start()"), true,
                 "Discord(接线): App 启动时开始盯")
     let controller = code("lyrimuse/Settings/DiscordPresenceController.swift")
+    let accountTab = code("lyrimuse/AccountLinkingTab.swift")
+    expectEqual(sourceBytes(accountTab, contain: "pinnedViews"), false,
+                "Discord(接线): 预览不用 LazyVStack 的组头钉住(玻璃卡片、胶囊会压到组头上)")
+    expectEqual(sourceBytes(accountTab, contain: "VStack(spacing: 14) {\n            DiscordPresencePreview()\n                .padding(.bottom, 6)\n            if appSettings.discordPresenceEnabled"), true,
+                "Discord(接线): 预览排在最前面、跟着页面一起滚,不钉住(钉住会挡住下面的设置项)")
+    for toggle in ["discordCustomButtonEnabled", "discordButtonListen", "discordButtonGetLyrimuse"] {
+        expectEqual(sourceBytes(accountTab, contain: "Toggle(\"\", isOn: $appSettings.\(toggle))"), true,
+                    "Discord(接线): \(toggle) 随便开,不拦第三个(多出来的按顺序让位)")
+    }
+    expectEqual(sourceBytes(code("lyrimuse/Settings/AppSettings.swift"),
+                            contain: "discordButtonGetLyrimuse = (defaults.object(forKey: Keys.discordButtonGetLyrimuse) as? Bool) ?? true"), true,
+                "Discord(接线): 「获取 Lyrimuse」默认开(同 Music Presence 的「Get this status」)")
+    expectEqual(sourceBytes(accountTab, contain: "title: L10n.t(\"「获取 Lyrimuse」\"),\n                        subtitle: L10n.t(\"另外两个都开着时不显示\"))"), true,
+                "Discord(接线): 「获取 Lyrimuse」那一行写明另外两个都开着时让位")
     for needle in ["signal(playback.$title)", "signal(playback.$anchor)", "signal(playback.$isPlayingSmoothed)",
                    "signal(source.$webPageArtworkURL)", "signal(ConfigStore.shared.$stateRelayURL)",
                    "signal(playback.$isCurrentTrackAdBreak)", "signal(playback.$isRadioTalkBreak)",
@@ -1034,7 +1161,12 @@ private func checkDiscordWiring() {
                    "signal(settings.$discordBadge)", "badge: settings.discordBadge", "hiddenUntil: hiddenUntil",
                    "links?.artistWebLink(forPlayerBundleID: reportedBundleID", "hit?.artistPage",
                    "signal(source.$webPageVideoFrameURL)", "source.kasetVideoFrameURL ?? source.webPageVideoFrameURL",
-                   "videoFrame: extras.videoFrame", "EnrichCacheReader.publicCoverURL(artist: source.artist"] {
+                   "videoFrame: extras.videoFrame", "EnrichCacheReader.publicCoverURL(artist: source.artist",
+                   "signal(settings.$discordShowLyrics)", "signal(playback.$allLines)", "signal(playback.$lyricsGapMarkers)",
+                   "signal(settings.$discordCustomButtonURL)", "signal(settings.$discordButtonListen)",
+                   "signal(settings.$discordButtonGetLyrimuse)", "lyric: currentLyric(now: now)",
+                   "atMs: playback.lyricsTimelineMs(now: now)", "windowMs: Int(DiscordPresenceGate.minInterval * 1000)",
+                   "wake(at: now.addingTimeInterval(Self.lyricTick))"] {
         expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 控制器盯着 \(needle)")
     }
     for needle in ["if lookup.finished, lookup.hit == nil, let retryAt = lookup.retryAt, now >= retryAt {",

@@ -693,7 +693,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 221 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 226 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1077,6 +1077,11 @@ Every setting in the Settings window, by where it lives: 221 in all. Type a name
 - **Shown Under Your Name**
 - **Cover Badge**
 - **When Paused**
+- **Show Current Lyrics**: Replaces the album line on your profile card with the line being sung. Discord updates at most every 4 seconds, so very short lines are skipped; the album shows during instrumental breaks and while paused.
+- **Buttons**
+- **Custom Button**
+- **“Listen on Player”**: Opens this song’s page on the current player’s website, same as clicking the title. Hidden when there’s no page for the song.
+- **“Get Lyrimuse”**
 - **Privacy**
 - **Hide Temporarily**
 - **Players Shown**

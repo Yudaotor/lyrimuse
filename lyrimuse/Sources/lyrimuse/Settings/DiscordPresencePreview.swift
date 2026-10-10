@@ -8,6 +8,7 @@ import SwiftUI
 /// 会发出去的那一份(`DiscordPresence.activity`);没在放歌、或者这首不会显示时用一份示例。不联网:封面用 App 手上那张,没有公网
 /// 封面时跟 Discord 一样显示应用图标;头像和头像框(戴着才有)用 `DiscordAvatarStore` 已经取到的那张,横幅用头像的平均色。
 /// 画面不随开关、暂停、暂时隐藏变淡,这些情况只写在下面那行说明里。设置窗口看不见时停表。
+/// 带按钮时资料卡底下画出来:自己在 Discord 里看不到自己的按钮,预览是用户唯一看得到它们的地方。
 struct DiscordPresencePreview: View {
     @ObservedObject private var discord = DiscordPresenceController.shared
     @ObservedObject private var avatars = DiscordAvatarStore.shared
@@ -33,6 +34,8 @@ struct DiscordPresencePreview: View {
         static let progressTrack = Color(red: 151 / 255, green: 151 / 255, blue: 159 / 255).opacity(0.16)
         /// 暂停小图的底色,跟传到 Discord 的那张同色。
         static let pausedBadge = Color(red: 0x4E / 255, green: 0x50 / 255, blue: 0x58 / 255)
+        /// 资料卡底下按钮的底色。
+        static let button = Color(red: 0x3F / 255, green: 0x41 / 255, blue: 0x47 / 255)
     }
 
     /// 资料卡宽 300(实测),里面活动那一块左右各让 16,正好 268。横幅实测 105、头像 80,这里缩成 60 和 64,舞台不至于太高。
@@ -44,7 +47,10 @@ struct DiscordPresencePreview: View {
     /// 头像框的边长是头像的 1.2 倍、跟头像同心(Discord 的画法,Decor 的头像框素材规范写的同一个比例),见 12 章决策 58。
     private static let decorationScale: CGFloat = 1.2
     /// 资料卡最高时(活动那一块有专辑、有进度条)的高度。舞台按最高的留位置,暂停时进度条没了页面也不跳。
+    /// 带按钮时每个再加 `buttonHeight + buttonSpacing`。
     private static let popoutTallestHeight: CGFloat = 300
+    private static let buttonHeight: CGFloat = 32
+    private static let buttonSpacing: CGFloat = 8
     /// 小图跟封面之间那一圈弹窗底色的宽度。
     private static let smallImageRing: CGFloat = 2
 
@@ -112,27 +118,39 @@ struct DiscordPresencePreview: View {
             caption = playback.title.isEmpty ? L10n.t("预览 · 当前未播放，显示示例") : L10n.t("预览 · 当前歌曲不会显示在 Discord 上")
         } else if !playback.isPlayingSmoothed && !settings.discordKeepWhenPaused {
             caption = String(format: L10n.t("预览 · 暂停 %d 秒后从 Discord 上清除"), Int(DiscordPresence.pauseGrace))
+        } else if activity.buttons?.isEmpty == false {
+            caption = L10n.t("预览 · 好友看到的效果，按钮只有别人看得到")
         } else {
             caption = L10n.t("预览 · 好友在 Discord 上看到的效果")
         }
+        let application = DiscordPresence.application(forApplicationID: activity.applicationID)
+        // 没封面、为了歌词那一行补上的应用图标不去取,照本地的应用图标画(跟没有大图时一个样子)。
+        let appIcon = DiscordPresence.iconURL(of: application)
         return Model(
             activity: activity,
-            application: DiscordPresence.application(forApplicationID: activity.applicationID),
-            coverURL: live != nil ? activity.assets.flatMap { URL(string: $0.largeImage) } : nil,
+            application: application,
+            coverURL: live != nil
+                ? activity.assets.flatMap { $0.largeImage == appIcon ? nil : URL(string: $0.largeImage) } : nil,
             progress: DiscordPresence.progress(of: activity, now: now),
             elapsed: DiscordPresence.elapsed(of: activity, now: now),
             caption: caption)
     }
 
     /// 示例那份给一个占位的封面地址(不会去取),好让它跟有封面的歌一样带上小图;画的时候没有封面图,显示应用图标。
+    /// 歌曲页也是占位的,「在 XX 上收听」那个按钮才画得出来;「显示当前歌词」开着时专辑那一行写一句示例歌词。
     private var sampleTrack: DiscordPresence.Track {
-        DiscordPresence.Track(
+        let applicationID = DiscordPresence.applicationID(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier,
+                                                          webPlatformID: nil)
+        let player = DiscordPresence.Application.appleMusic.registeredName
+        let songURL = URL(string: "https://lyrimuse.invalid/song")
+        return DiscordPresence.Track(
             title: L10n.t("歌名"), artist: L10n.t("歌手"),
-            playerName: DiscordPresence.Application.appleMusic.registeredName,
+            playerName: player,
             coverURL: URL(string: "https://lyrimuse.invalid/sample.jpg"),
             positionMs: 83_000, durationMs: 269_000,
-            applicationID: DiscordPresence.applicationID(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier,
-                                                         webPlatformID: nil))
+            applicationID: applicationID,
+            lyric: settings.discordShowLyrics ? L10n.t("正在唱的这一句") : nil,
+            buttons: discord.presenceButtons(songURL: songURL, applicationID: applicationID, playerName: player))
     }
 
     private var userName: String {
@@ -155,7 +173,9 @@ struct DiscordPresencePreview: View {
             memberList(model)
                 .frame(minWidth: 150, maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, minHeight: Self.popoutTallestHeight, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: Self.popoutTallestHeight
+                   + CGFloat(model.activity.buttons?.count ?? 0) * (Self.buttonHeight + Self.buttonSpacing),
+               alignment: .top)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Palette.window))
     }
@@ -282,6 +302,7 @@ struct DiscordPresencePreview: View {
                     .padding(.top, 12)
                     .padding(.bottom, 6)
                 activityCard(model)
+                buttons(model)
             }
             .lineLimit(1)
             .padding(.horizontal, Self.popoutInset)
@@ -367,6 +388,25 @@ struct DiscordPresencePreview: View {
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Palette.card))
+    }
+
+    /// 资料卡底下的按钮:跟活动那一块一样宽,灰底白字。示例那份的链接是占位的,不能点。
+    @ViewBuilder private func buttons(_ model: Model) -> some View {
+        if let buttons = model.activity.buttons, !buttons.isEmpty {
+            VStack(spacing: Self.buttonSpacing) {
+                ForEach(Array(buttons.enumerated()), id: \.offset) { _, button in
+                    PreviewLink(url: Self.url(button.url).flatMap { $0.host == "lyrimuse.invalid" ? nil : $0 }) { _ in
+                        Text(button.label)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Palette.profileName)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: Self.buttonHeight)
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Palette.button))
+                    }
+                }
+            }
+            .padding(.top, Self.buttonSpacing)
+        }
     }
 
     // MARK: - 零件

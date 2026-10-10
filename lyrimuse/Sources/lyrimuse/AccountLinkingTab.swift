@@ -2161,13 +2161,14 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// Discord 页的两段:页头账号胶囊里是总开关,预览下面一排胶囊 tab 切这两组。
+    /// Discord 页的三段:页头账号胶囊里是总开关,预览下面一排胶囊 tab 切这几组。
     private enum DiscordSection: String, CaseIterable, Identifiable {
-        case display, privacy
+        case display, buttons, privacy
         var id: Self { self }
         var title: String {
             switch self {
             case .display: return L10n.t("显示内容")
+            case .buttons: return L10n.t("按钮")
             case .privacy: return L10n.t("隐私")
             }
         }
@@ -2176,32 +2177,29 @@ struct AccountLinkingTab: View {
     @AppStorage(SettingsSearchCatalog.discordSectionKey) private var discordSectionRaw = SettingsSearchCatalog.discordSectionDefault
     private var discordSection: DiscordSection { DiscordSection(rawValue: discordSectionRaw) ?? .display }
 
-    /// 预览是组头,往下滚时钉在顶部(`pinnedViews`);组头垫一层窗口底色,下面的卡滚过去不会从说明文字后面透出来。
-    /// 总开关关着时 tab 和卡一起变灰。见 12 章决策 48。
+    /// 预览排在最前面,跟着页面一起滚,不钉住:钉住的预览很高,下面的设置项一滚就钻到它底下被挡住(见 12 章决策 65)。
+    /// 总开关关着时 tab 和卡一起变灰。
     private var discordFields: some View {
-        LazyVStack(spacing: 14, pinnedViews: [.sectionHeaders]) {
-            Section {
-                if appSettings.discordPresenceEnabled, discordNeedsSetup {
-                    SettingsCard(cornerRadius: 18) { discordSetupRow }
-                }
-                VStack(spacing: 14) {
-                    SettingsGlassTabPicker(
-                        selection: Binding(get: { discordSection }, set: { discordSectionRaw = $0.rawValue }),
-                        options: DiscordSection.allCases,
-                        label: \.title
-                    )
-                    switch discordSection {
-                    case .display: discordDisplayCard
-                    case .privacy: discordPrivacyCard
-                    }
-                }
-                .disabled(!appSettings.discordPresenceEnabled)
-                .background { LastfmGlassGlow() }
-            } header: {
-                DiscordPresencePreview()
-                    .padding(.bottom, 6)
-                    .background(Color(nsColor: .windowBackgroundColor))
+        VStack(spacing: 14) {
+            DiscordPresencePreview()
+                .padding(.bottom, 6)
+            if appSettings.discordPresenceEnabled, discordNeedsSetup {
+                SettingsCard(cornerRadius: 18) { discordSetupRow }
             }
+            VStack(spacing: 14) {
+                SettingsGlassTabPicker(
+                    selection: Binding(get: { discordSection }, set: { discordSectionRaw = $0.rawValue }),
+                    options: DiscordSection.allCases,
+                    label: \.title
+                )
+                switch discordSection {
+                case .display: discordDisplayCard
+                case .buttons: discordButtonsCard
+                case .privacy: discordPrivacyCard
+                }
+            }
+            .disabled(!appSettings.discordPresenceEnabled)
+            .background { LastfmGlassGlow() }
         }
     }
 
@@ -2263,6 +2261,13 @@ struct AccountLinkingTab: View {
                 )
             }
             CardDivider()
+            SettingsRow(icon: "quote.bubble", title: L10n.t("显示当前歌词"),
+                        help: L10n.t("资料卡上专辑那一行换成正在唱的这一句。Discord 最多每 4 秒更新一次，很短的句子会跳过；间奏、暂停时显示专辑。")) {
+                Toggle("", isOn: $appSettings.discordShowLyrics)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            CardDivider()
             SettingsRow(icon: "pause.circle", title: L10n.t("暂停后")) {
                 SettingsGlassMenuPicker(
                     selection: $appSettings.discordKeepWhenPaused,
@@ -2272,6 +2277,52 @@ struct AccountLinkingTab: View {
                     },
                     compact: true
                 )
+            }
+        }
+    }
+
+    /// 「按钮」:资料卡底下最多两个按钮(`DiscordPresence.maxButtons`),依次取自定义、「在 XX 上收听」、「获取 Lyrimuse」
+    /// (`DiscordPresence.buttons`)。三个开关都能开,「获取 Lyrimuse」在另外两个都开着时让位、不显示(同 Music Presence 的
+    /// 「Get this status」),那一行写着这一句。见 12 章决策 65。
+    private var discordButtonsCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsRow(icon: "hand.tap", title: L10n.t("自定义按钮")) {
+                Toggle("", isOn: $appSettings.discordCustomButtonEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            if appSettings.discordCustomButtonEnabled {
+                SettingsRawRow(insetToText: true) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        LabeledInputRow(L10n.t("按钮文字")) {
+                            TextField(L10n.t("按钮文字"), text: $appSettings.discordCustomButtonLabel,
+                                      prompt: Text(L10n.t("最多 32 个字")))
+                        }
+                        LabeledInputRow(L10n.t("链接")) {
+                            TextField(L10n.t("链接"), text: $appSettings.discordCustomButtonURL,
+                                      prompt: Text(verbatim: "https://"))
+                        }
+                        if !appSettings.discordCustomButtonURL.isEmpty,
+                           !DiscordPresence.isUsableButtonURL(appSettings.discordCustomButtonURL) {
+                            Text(L10n.t("链接需以 http:// 或 https:// 开头"))
+                                .font(.caption2).foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
+            CardDivider()
+            SettingsRow(icon: "play.circle", title: L10n.t("「在播放器上收听」"),
+                        help: L10n.t("打开这首歌在当前播放器网站上的页面，跟点歌名一样。找不到这首歌的页面时不显示。")) {
+                Toggle("", isOn: $appSettings.discordButtonListen)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            CardDivider()
+            SettingsRow(icon: "arrow.down.app", title: L10n.t("「获取 Lyrimuse」"),
+                        subtitle: L10n.t("另外两个都开着时不显示")) {
+                Toggle("", isOn: $appSettings.discordButtonGetLyrimuse)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
             }
         }
     }

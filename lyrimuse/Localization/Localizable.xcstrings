@@ -17479,6 +17479,278 @@
         }
       }
     },
+    "在 %@ 上收听" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listen on %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 %@ 上聆聽"
+          }
+        }
+      }
+    },
+    "获取 Lyrimuse" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get Lyrimuse"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取得 Lyrimuse"
+          }
+        }
+      }
+    },
+    "预览 · 好友看到的效果，按钮只有别人看得到" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview · What friends see; only others can see your buttons"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "預覽 · 好友看到的效果，按鈕只有別人看得到"
+          }
+        }
+      }
+    },
+    "正在唱的这一句" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The line being sung"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在唱的這一句"
+          }
+        }
+      }
+    },
+    "按钮" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buttons"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按鈕"
+          }
+        }
+      }
+    },
+    "显示当前歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Current Lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示目前歌詞"
+          }
+        }
+      }
+    },
+    "资料卡上专辑那一行换成正在唱的这一句。Discord 最多每 4 秒更新一次，很短的句子会跳过；间奏、暂停时显示专辑。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces the album line on your profile card with the line being sung. Discord updates at most every 4 seconds, so very short lines are skipped; the album shows during instrumental breaks and while paused."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "資料卡上專輯那一行換成正在唱的這一句。Discord 最多每 4 秒更新一次，很短的句子會跳過；間奏、暫停時顯示專輯。"
+          }
+        }
+      }
+    },
+    "自定义按钮" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom Button"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自訂按鈕"
+          }
+        }
+      }
+    },
+    "按钮文字" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Button Text"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按鈕文字"
+          }
+        }
+      }
+    },
+    "最多 32 个字" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up to 32 characters"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最多 32 個字"
+          }
+        }
+      }
+    },
+    "链接" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連結"
+          }
+        }
+      }
+    },
+    "链接需以 http:// 或 https:// 开头" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link must start with http:// or https://"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連結需以 http:// 或 https:// 開頭"
+          }
+        }
+      }
+    },
+    "「在播放器上收听」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Listen on Player”"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「在播放器上聆聽」"
+          }
+        }
+      }
+    },
+    "打开这首歌在当前播放器网站上的页面，跟点歌名一样。找不到这首歌的页面时不显示。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens this song’s page on the current player’s website, same as clicking the title. Hidden when there’s no page for the song."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打開這首歌在目前播放器網站上的頁面，跟點歌名一樣。找不到這首歌的頁面時不顯示。"
+          }
+        }
+      }
+    },
+    "「获取 Lyrimuse」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Get Lyrimuse”"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「取得 Lyrimuse」"
+          }
+        }
+      }
+    },
+    "另外两个都开着时不显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hidden when the other two are on"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另外兩個都開著時不顯示"
+          }
+        }
+      }
+    },
     "纯黑" : {
       "extractionState" : "manual",
       "localizations" : {
