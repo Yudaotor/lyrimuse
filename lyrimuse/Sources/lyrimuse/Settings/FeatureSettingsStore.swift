@@ -220,6 +220,8 @@ struct FeatureFlagsFile: Codable, Equatable {
     var albumPrefetch: Bool?
     /// 歌词定下来之后要不要跟着算法/打分升级在后台自动换掉。缺失 = true(现状)。
     var lyricsAutoUpgrade: Bool?
+    /// 手动补搜 / 全量扫库两首之间隔几秒。缺失 = 5 秒(引擎 lyricsManualSweepGap)。
+    var lyricsSweepGapSecs: Int?
     var lyricsMachineTranslation: Bool?
     var lastfmMirrorScrobble: Bool?
     /// 上送匹配档位,LastfmMatchMode 的 rawValue("smart"/"custom"/"raw")。缺失时 load() 顺着下面两个遗留字段迁移。
@@ -311,6 +313,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case players
         case albumPrefetch = "album_prefetch"
         case lyricsAutoUpgrade = "lyrics_auto_upgrade"
+        case lyricsSweepGapSecs = "lyrics_sweep_gap_secs"
         case lyricsMachineTranslation = "lyrics_machine_translation"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
         case lastfmMatchMode = "lastfm_match_mode"
@@ -409,6 +412,12 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var albumPrefetch = true
     /// 「自动跟进算法升级」——关掉之后,已经选定的歌词不再被后台的重打分/升级重搜换掉。
     @Published public var lyricsAutoUpgrade = true
+    /// 「扫描间隔」:手动补搜和全量扫库两首之间等几秒(后台自动补空另有自己的 15 秒,不受它管)。
+    /// 可选档跟引擎 lyricsSweepGapChoices 逐个相同;2 秒是建议的最快值,更快的档界面上标「可能被限流」。
+    @Published public var lyricsSweepGapSecs = FeatureSettingsStore.lyricsSweepGapDefault
+    public static let lyricsSweepGapChoices = [1, 2, 3, 5, 10]
+    public static let lyricsSweepGapDefault = 5
+    public static let lyricsSweepGapFastestRecommended = 2
     // 这几个都要连一个外部账号才有意义,默认关闭。
     // 歌词源没带社区译文时,自己补一份翻译。默认关:优先走系统端上翻译(不联网),
     // 但在 macOS 26 以下、或语言包没装时会退到网络翻译服务,那条路会把歌词正文发出去,
@@ -571,6 +580,7 @@ public final class FeatureSettingsStore: ObservableObject {
             players: players.map(\.rawValue).sorted(),
             albumPrefetch: albumPrefetch,
             lyricsAutoUpgrade: lyricsAutoUpgrade,
+            lyricsSweepGapSecs: lyricsSweepGapSecs,
             lyricsMachineTranslation: lyricsMachineTranslation,
             lastfmMirrorScrobble: lastfmMirrorScrobble,
             // 只写新键;两个遗留字段(lastfm_scrobble_artist_mode /
@@ -777,6 +787,9 @@ public final class FeatureSettingsStore: ObservableObject {
         }
         albumPrefetch = f.albumPrefetch ?? true
         lyricsAutoUpgrade = f.lyricsAutoUpgrade ?? true
+        // 不在可选档里的值(手改过文件、老版本)按缺省档,同引擎 resolveLyricsSweepGap。
+        lyricsSweepGapSecs = f.lyricsSweepGapSecs.flatMap { Self.lyricsSweepGapChoices.contains($0) ? $0 : nil }
+            ?? Self.lyricsSweepGapDefault
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
         // 上送匹配:新键缺失/非法时顺着**两级遗留链**迁移(lastfm_match_mode →

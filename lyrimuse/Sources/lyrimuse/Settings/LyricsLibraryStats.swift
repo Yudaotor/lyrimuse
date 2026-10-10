@@ -159,10 +159,12 @@ struct LyricsLibrarySizeLabel: View {
 /// 免得为了传 counts 让外层再订阅一次。
 struct LyricsLibraryStatsPanel: View {
     @ObservedObject private var store = EnrichCacheStore.shared
+    @ObservedObject private var features = FeatureSettingsStore.shared
     /// body 里要把整库过一遍的两个数(统计、待补搜),见 `LibraryStatsMemo`。
     @State private var memo = LibraryStatsMemo()
     /// 设置窗口看不见时不轮询:补搜 / 全量扫库期间每写一首缓存就变,这一页会跟着反复解析整份缓存。
     @Environment(\.previewHostVisible) private var windowVisible
+    @Environment(\.openWindow) private var openWindow
     // 引擎侧补空扫描的进度快照(LyricsFillSweep,进度文件按 mtime 读),由下面那个 .task 轮询。
     // 「歌词管理」窗口里同一份状态另有自己的一份 @State,两处各自轮询同一个文件,不共享——
     // 两扇窗口生命周期独立,共享一个 ObservableObject 只会多一个单例订阅面。
@@ -199,34 +201,47 @@ struct LyricsLibraryStatsPanel: View {
         // 用 VStack(spacing: 0) 而不是 Group 装这几行:修饰符挂在 Group 上会**逐个**作用到每个
         // 子视图 —— 下面那个 .task 就会跑出三份轮询循环。外层卡片本身就是 VStack(spacing: 0),
         // 这里再套一层对布局零影响。
-        VStack(spacing: 0) {
-            if store.summaries.isEmpty && store.isLoading {
-                SettingsRawRow(insetToText: true, icon: "music.note.list") {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text(L10n.t("正在统计歌词库…"))
+        // 两张卡:「歌词库」只读统计、「批量匹配」两轮扫描。spacing 14 = SettingsPage 的卡间距。
+        VStack(spacing: 14) {
+            SettingsCard(cornerRadius: 18) {
+                // 「歌词管理」是卡名行右侧的按钮、不占一整行:它是跳到另一扇窗口的入口,不是设置项,
+                // 占一行会跟统计块平权。说明文字降为按钮的 tooltip。
+                SettingsCardHeader(title: L10n.t("歌词库")) { openManagerButton }
+                if store.summaries.isEmpty && store.isLoading {
+                    SettingsRawRow(insetToText: true, icon: "music.note.list") {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(L10n.t("正在统计歌词库…"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else if counts.total == 0 {
+                    // 空库不是错误,是新装的常态 —— 说清楚下一步会发生什么,别摆一排 0、也别画一条空比例条。
+                    SettingsRawRow(insetToText: true, icon: "music.note.list") {
+                        Text(L10n.t("尚未缓存任何歌词。播放歌曲后，Lyrimuse 会自动搜索并保存歌词"))
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                } else {
+                    SettingsRawRow(insetToText: true, icon: "music.note.list") {
+                        statsBlock(counts)
+                    }
+                    .padding(.bottom, 4)
                 }
-            } else if counts.total == 0 {
-                // 空库不是错误,是新装的常态 —— 说清楚下一步会发生什么,别摆一排 0、也别画一条空比例条。
-                SettingsRawRow(insetToText: true, icon: "music.note.list") {
-                    Text(L10n.t("尚未缓存任何歌词。播放歌曲后，Lyrimuse 会自动搜索并保存歌词"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            }
+            if counts.total > 0 {
+                SettingsCard(cornerRadius: 18) {
+                    SettingsCardHeader(title: L10n.t("批量匹配"), subtitle: L10n.t("联网逐首搜索，可随时停止"))
+                    // 「自动匹配缺失歌词」「重新匹配整个歌词库」是同一条通道的窄档和宽档,排在一起、长得一样。
+                    fillSweepRow()
+                    // 分隔线画在这一族的里面 —— 整行在引擎还没公布过打分版本号时会整个
+                    // 消失,分隔线留在外面就会变成两条紧挨着的线。
+                    fullScanRow()
+                    CardDivider()
+                    sweepGapRow
                 }
-            } else {
-                SettingsRawRow(insetToText: true, icon: "music.note.list") {
-                    statsBlock(counts)
-                }
-                CardDivider()
-                // 「自动匹配缺失歌词」「重新匹配整个歌词库」是同一条通道的窄档和宽档,排在一起、长得一样。
-                fillSweepRow()
-                // 分隔线画在这一族的里面 —— 整行在引擎还没公布过打分版本号时会整个
-                // 消失,分隔线留在外面就会变成两条紧挨着的线。
-                fullScanRow()
             }
         }
         // `onlyIfChanged` 让重复进出这一页不重复解析整份缓存(全库几千条,那是一次真实的
@@ -290,6 +305,57 @@ struct LyricsLibraryStatsPanel: View {
         }
     }
 
+    /// 卡头右侧「打开歌词管理 ↗」。accessory 策略下打开新窗口得先手动激活 App,不然 openWindow 调了也没反应
+    /// ——跟 MenuBarMenu.swift 里"歌词管理…"菜单项同一个坑、同一个修法。
+    private var openManagerButton: some View {
+        Button {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "lyrics-manager")
+        } label: {
+            HStack(spacing: 4) {
+                Text(L10n.t("打开歌词管理"))
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 11, weight: .medium))
+        }
+        .controlSize(.small)
+        .settingsGlassButtons()
+        .buttonBorderShape(.capsule)
+        .help(L10n.t("查看、编辑和重新搜索已缓存的歌词"))
+    }
+
+    /// 「扫描间隔」:上面两轮两首之间等几秒。2 秒是建议的最快值(依据见引擎 lyricsManualSweepGap 的注释),选得比它快时
+    /// 副标题换成提醒、分段旁边亮一颗橙色三角;改了下一首就按新档等,预计时长由引擎按新档重新发布。
+    private var sweepGapRow: some View {
+        let gap = features.lyricsSweepGapSecs
+        let tooFast = gap < FeatureSettingsStore.lyricsSweepGapFastestRecommended
+        return SettingsRow(
+            icon: "speedometer",
+            title: L10n.t("扫描间隔"),
+            subtitle: tooFast
+                ? L10n.t("低于建议的 2 秒，可能被歌词源限流")
+                : L10n.t("每首之间停几秒；建议不快于 2 秒，以免被限流")
+        ) {
+            HStack(spacing: 8) {
+                if tooFast {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.orange)
+                }
+                SettingsGlassTabPicker(
+                    selection: Binding(
+                        get: { gap },
+                        set: { features.lyricsSweepGapSecs = $0; Task { await features.save() } }
+                    ),
+                    options: FeatureSettingsStore.lyricsSweepGapChoices,
+                    label: { String(format: L10n.t("%@ 秒"), "\($0)") },
+                    compact: true
+                )
+            }
+        }
+    }
+
     // MARK: 统计块
 
     /// 「共 N 首 ／ 191 MB」→ 分段比例条 → 五桶图例 → 一排叠加指标。
@@ -342,13 +408,13 @@ struct LyricsLibraryStatsPanel: View {
                 metricItem(
                     label: L10n.t("已缓存读音"),
                     value: counts.bundledRomanization,
-                    help: L10n.t("仅统计已存入缓存、会随歌词文件一同导出的读音。其余歌曲的读音在播放时实时生成，不计入统计"))
+                    help: L10n.t("只数存进缓存、会随歌词文件导出的读音；其余的在播放时现算，不算在内"))
             }
             .padding(.top, 2)
         }
     }
 
-    /// 第二排的一项:标签 + 数字 + ⓘ。跟 `legendItem` 同一种读法(标签 secondary、数字 semibold
+    /// 第二排的一项:标签 + 数字 + 玻璃 ⓘ(`GlassInfoButton`)。跟 `legendItem` 同一种读法(标签 secondary、数字 semibold
     /// 等宽),**不带色板** —— 理由见 `statsBlock` 的第三条约束。
     ///
     /// ⓘ 必须留在 `accessibilityElement(children: .combine)` **外面**:合并会把它一起吞掉,
@@ -365,7 +431,7 @@ struct LyricsLibraryStatsPanel: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(label)：\(Self.format(value))")
-            HelpButton(text: help)
+            GlassInfoButton(text: help)
         }
         .lineLimit(1)
         .fixedSize()
@@ -423,6 +489,7 @@ struct LyricsLibraryStatsPanel: View {
     /// 进度和收据都必须先判 `isFullScan`:「重新匹配整个歌词库」为了跨重启续跑复用了这条通道
     /// (见 lyrimuse-engine/lyricsfullscan.go 头注),两轮共用**同一份** `lyrimuse-lyrics-fill-status.json`。
     /// 不判的话,全量在跑时这一行会照着那份状态画出跟下面那行逐字重复的「扫描中 42/5318 + 停止」。
+    @ViewBuilder
     private func fillSweepRow() -> some View {
         let status = fillSweepStatus
         // running = 任意一轮(引擎一次只准跑一轮);sweepRunning = 跑的是补空这一轮。
@@ -430,11 +497,10 @@ struct LyricsLibraryStatsPanel: View {
         let running = status?.running == true
         let sweepRunning = running && status?.isFullScan != true
         let retryable = memo.retryable(store)
-        return SettingsRow(
+        SettingsRow(
             icon: "text.magnifyingglass",
             title: L10n.t("自动匹配缺失歌词"),
-            subtitle: Self.sweepReceipt(status),
-            help: L10n.t("自动匹配范围：无歌词或仅有纯文本的歌曲；纯音乐和人工修正过的歌曲除外")
+            subtitle: L10n.t("只搜没有歌词或只有纯文本的歌")
         ) {
             HStack(spacing: 10) {
                 if sweepRunning, let status {
@@ -458,10 +524,13 @@ struct LyricsLibraryStatsPanel: View {
                     }
                     // 不带 SF Symbol:同一行左边已经写着这一行在干什么,再叠一个 ⟳ 是往控件上
                     // 加装饰(要强调就改文字,别叠图标)。
+                    let canStart = !(retryable == 0 || running || fillSweepStarting)
                     Button(L10n.t("开始")) {
                         if LyricsFillSweep.request(keys: []) { fillSweepStarting = true }
                     }
                         .controlSize(.small)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(canStart ? Color.accentColor : Color.secondary)
                         .fixedSize()
                         // 全量那一轮跑着的时候也置灰,跟「重新匹配整个歌词库」那颗「开始」对称:引擎
                         // 一次只允许一轮在跑(runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
@@ -472,15 +541,19 @@ struct LyricsLibraryStatsPanel: View {
                 }
             }
             .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
+        }
+        // 上一轮的收据挂在从属行里,同下面「重新匹配整个歌词库」那一行的「上次：…」。
+        if let receipt = Self.sweepReceipt(status) {
+            SettingsSubRow(title: nil, subtitle: receipt) { EmptyView() }
         }
     }
 
-    /// 补空那一轮的收据,挂在标题下面当副标题。没跑过、正在跑、或者那份状态属于全量那一轮的,
+    /// 补空那一轮的收据,挂在这一行下面的从属行里。没跑过、正在跑、或者那份状态属于全量那一轮的,
     /// 一律不给 —— 全量跑完那句「过了 N 首」归它自己那一行,两轮共用同一份状态文件。
     ///
     /// 一首都没搜的那一轮**也不给**。「上次:搜了 0 首,补出 0 首」两个数都是 0,占着一行
-    /// 副标题却一个字的信息都没有(库里当时没有可搜的条目,或者刚点下就被停了);这一行本来
-    /// 就该跟「重新匹配整个歌词库」等高,凭空多出来的那一行还把两行的对称打破了。
+    /// 却一个字的信息都没有(库里当时没有可搜的条目,或者刚点下就被停了)。
     ///
     /// 断网停下的那一轮例外:要说清楚它为什么停了,不然看起来像是搜完了、都没有词。
     private static func sweepReceipt(_ status: LyricsFillSweep.Info?) -> String? {
@@ -531,8 +604,8 @@ struct LyricsLibraryStatsPanel: View {
     // MARK: 全量重新扫库
 
     /// 每首的平均耗时**由引擎发布**(`LyricsFullScan.State.secondsPerTrack`,
-    /// = lyricsManualSweepGap + 一轮全源搜索的估计)。这里只留一个兜底值,给老引擎
-    /// 或状态文件还没写出来的那一拍用。
+    /// = 当时的扫描间隔 + 一轮全源搜索的估计),界面再按用户此刻选的「扫描间隔」换算(`LyricsFullScan.secondsPerTrack`),
+    /// 点完那一档预计时长当场就变。这里只留一个兜底值,给老引擎或状态文件还没写出来的那一拍用。
     ///
     /// 别把它改回写死一份:之前这里是 `25.0`、注释还写着「15 秒固定间隔
     /// (lyricsFillSweepGap)」,而引擎把全量那一档换成 5 秒(lyricsManualSweepGap),
@@ -542,15 +615,14 @@ struct LyricsLibraryStatsPanel: View {
     /// 只用来在确认框和 tooltip 里说一句"大概多久",不参与任何判断。
     private static let fallbackSecondsPerTrack = 10.0
 
-    /// 引擎发布的值;没有(老版本 / 文件还没写出来)就退回兜底。
+    /// 引擎发布的值换算到当前档;没有(老版本 / 文件还没写出来)就退回兜底。
     private var secondsPerTrack: Double {
-        Self.fullScanSecondsPerTrack(fullScanState)
+        Self.fullScanSecondsPerTrack(fullScanState, gapSecs: features.lyricsSweepGapSecs)
     }
 
     /// 见 `secondsPerTrack`。静态版给「歌词管理」侧栏「⋯」那个入口共用。
-    static func fullScanSecondsPerTrack(_ state: LyricsFullScan.State?) -> Double {
-        let published = state?.secondsPerTrack ?? 0
-        return published > 0 ? Double(published) : fallbackSecondsPerTrack
+    static func fullScanSecondsPerTrack(_ state: LyricsFullScan.State?, gapSecs: Int) -> Double {
+        LyricsFullScan.secondsPerTrack(state, gapSecs: gapSecs).map(Double.init) ?? fallbackSecondsPerTrack
     }
 
     private static func hoursText(_ tracks: Int, secondsPerTrack: Double) -> String {
@@ -587,7 +659,7 @@ struct LyricsLibraryStatsPanel: View {
             SettingsRow(
                 icon: "arrow.clockwise",
                 title: L10n.t("重新匹配整个歌词库"),
-                help: L10n.t("已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外")
+                subtitle: L10n.t("已有歌词的也重挑一遍；手改、校准过和纯音乐的不动")
             ) {
                 HStack(spacing: 10) {
                     if fullRunning, let status {
@@ -596,8 +668,10 @@ struct LyricsLibraryStatsPanel: View {
                             .controlSize(.small)
                             .fixedSize()
                     } else {
+                        // 待办数旁边直接写预计时长:这一轮动辄十几个小时,点「开始…」之前就该看得到。
                         Text(pending > 0
-                             ? String(format: L10n.t("%@ 首待重新匹配"), Self.format(pending))
+                             ? String(format: L10n.plural("%1$@ 首 · %2$@", count: pending), Self.format(pending),
+                                      Self.hoursText(pending, secondsPerTrack: secondsPerTrack))
                              : L10n.t("无待重新匹配的歌曲"))
                             .font(.system(size: 11))
                             .monospacedDigit()
@@ -610,11 +684,14 @@ struct LyricsLibraryStatsPanel: View {
                                 .frame(width: 16, height: 16)
                         }
                         // 这里只弹确认框;「正在启动」在确认框里点了「开始扫描」才置上 —— 在这里置的话,
-                        // 确认框点「取消」之后按钮会一直转着、一直点不了。
-                        Button(L10n.t("开始")) {
+                        // 确认框点「取消」之后按钮会一直转着、一直点不了。标签带「…」= 点了先弹确认框。
+                        let canStart = !(pending == 0 || running || fullScanStarting)
+                        Button(L10n.t("开始…")) {
                             confirmFullScan = true
                         }
                             .controlSize(.small)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(canStart ? Color.accentColor : Color.secondary)
                             .fixedSize()
                             // 补空那一轮跑着的时候也置灰:引擎一次只允许一轮在跑
                             // (runLyricsFillSweep 开头那道闸),这时点下去只会被静默丢掉。
@@ -626,6 +703,7 @@ struct LyricsLibraryStatsPanel: View {
                     }
                 }
                 .settingsGlassButtons()
+                .buttonBorderShape(.capsule)
             }
             // 引擎记着有一轮没跑完、但此刻并没有在跑 —— 它还在启动后的那 10 分钟等待
             // 期里(或者刚被 launchd 拉起来)。不说一句的话,界面看起来就是"我明明点过了,

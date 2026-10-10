@@ -11781,29 +11781,6 @@
         }
       }
     },
-    "更换文件夹后，现有文件不会自动迁移" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Existing files aren't moved to the new folder"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更换文件夹后，现有文件不会自动迁移"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更換檔案夾後，現有檔案不會自動遷移"
-          }
-        }
-      }
-    },
     "授权已失效" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24641,29 +24618,6 @@
         }
       }
     },
-    "仅统计已存入缓存、会随歌词文件一同导出的读音。其余歌曲的读音在播放时实时生成，不计入统计" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Counts only romanization stored in the cache and exported alongside the lyrics files. For other songs it is generated on the fly while playing and is not counted."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仅统计已存入缓存、会随歌词文件一同导出的读音。其余歌曲的读音在播放时实时生成，不计入统计"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "僅統計已存入快取、會隨歌詞檔案一同匯出的讀音。其餘歌曲的讀音在播放時即時產生，不計入統計"
-          }
-        }
-      }
-    },
     "咪咕音乐" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29201,23 +29155,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "開始"
-          }
-        }
-      }
-    },
-    "%@ 首待重新匹配" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ to re-match"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 首待重新比對"
           }
         }
       }
@@ -37980,23 +37917,6 @@
         }
       }
     },
-    "自动匹配范围：无歌词或仅有纯文本的歌曲；纯音乐和人工修正过的歌曲除外" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auto-matches songs with no lyrics or plain text only. Instrumentals and manually edited songs are left alone."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動比對範圍：無歌詞或僅有純文字的歌曲；純音樂和人工修正過的歌曲除外"
-          }
-        }
-      }
-    },
     "最近一次解析时没有任何歌词源应答，可能是当时网络不可用，并不代表这首歌曲没有歌词。稍后会自动重试，也可立即重新自动匹配" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -41920,6 +41840,271 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成，開始 Scrobble"
+          }
+        }
+      }
+    },
+    "只数存进缓存、会随歌词文件导出的读音；其余的在播放时现算，不算在内" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counts only pronunciations stored in the cache, which are exported with the lyric files; the rest are generated during playback and aren't counted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只数存进缓存、会随歌词文件导出的读音；其余的在播放时现算，不算在内"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只計算存進快取、會隨歌詞檔案匯出的讀音；其餘的在播放時即時產生，不計入"
+          }
+        }
+      }
+    },
+    "扫描间隔" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan Interval"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描间隔"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "掃描間隔"
+          }
+        }
+      }
+    },
+    "每首之间停几秒；建议不快于 2 秒，以免被限流" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seconds to pause between songs; 2 seconds is the fastest we recommend, to avoid rate limits"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每首之间停几秒；建议不快于 2 秒，以免被限流"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每首之間停幾秒；建議不快於 2 秒，以免被限流"
+          }
+        }
+      }
+    },
+    "低于建议的 2 秒，可能被歌词源限流" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faster than the recommended 2 seconds; lyric sources may rate-limit you"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低于建议的 2 秒，可能被歌词源限流"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低於建議的 2 秒，可能被歌詞來源限流"
+          }
+        }
+      }
+    },
+    "批量匹配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Batch Matching"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批量匹配"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批次比對"
+          }
+        }
+      }
+    },
+    "联网逐首搜索，可随时停止" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searches online one song at a time; you can stop at any time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "联网逐首搜索，可随时停止"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連網逐首搜尋，可隨時停止"
+          }
+        }
+      }
+    },
+    "只搜没有歌词或只有纯文本的歌" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only songs with no lyrics or only plain text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只搜没有歌词或只有纯文本的歌"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只搜沒有歌詞或只有純文字的歌"
+          }
+        }
+      }
+    },
+    "已有歌词的也重挑一遍；手改、校准过和纯音乐的不动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs that already have lyrics get re-picked too; hand-edited, re-timed and instrumental songs are left alone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已有歌词的也重挑一遍；手改、校准过和纯音乐的不动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已有歌詞的也重挑一遍；手動修改、校正過和純音樂的不動"
+          }
+        }
+      }
+    },
+    "改位置后，已有文件不会跟着搬" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Existing files stay where they are when you change the location"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改位置后，已有文件不会跟着搬"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改位置後，已有檔案不會跟著搬"
+          }
+        }
+      }
+    },
+    "%1$@ 首 · %2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ song · %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ songs · %2$@"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 首 · %2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 首 · %2$@"
+          }
+        }
+      }
+    },
+    "开始…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开始…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開始…"
           }
         }
       }

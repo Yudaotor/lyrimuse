@@ -315,11 +315,9 @@ func TestLyricsFillSweepPace(t *testing.T) {
 		t.Errorf("手动那一档必须比自动补空短,否则分两档没有意义: manual=%v auto=%v",
 			lyricsManualSweepGap, lyricsFillSweepGap)
 	}
-	// 下限守卫:一首歌会打出 100+ 个请求散到十几个主机,而整个采集器没有 per-host 限流器。
-	// gap 是这些突发之间唯一的喘息 —— 真要压到 2 秒以下,得先补限流,不能只改这个数。
+	// 缺省档不能低于建议的最快值(2 秒):更快的档只给用户自己选,依据见 lyricsManualSweepGap 的注释。
 	if lyricsManualSweepGap < 2*time.Second {
-		t.Errorf("gap %v 太短:没有 per-host 限流器兜底时这是唯一的喘息,先补限流再压",
-			lyricsManualSweepGap)
+		t.Errorf("缺省 gap %v 低于建议的最快值 2 秒", lyricsManualSweepGap)
 	}
 	// 5300 首的全库一轮别超过一天 —— 超了「全量重新扫库」这个功能就没人用得下去。
 	const libraryTracks = 5300
@@ -373,5 +371,38 @@ func TestLyricsFullScanProgressBase(t *testing.T) {
 		if done > total {
 			t.Errorf("%s: 分子 %d 超过分母 %d —— 界面会显示成倒着走", c.name, done, total)
 		}
+	}
+}
+
+// 「扫描间隔」设置:只认 lyricsSweepGapChoices 里的档,缺失 / 非法值按缺省档;选了之后手动那两轮按它走,
+// 自动补空不受影响,界面拿到的每首耗时也跟着变。
+func TestLyricsSweepGapSetting(t *testing.T) {
+	ptr := func(v int) *int { return &v }
+	if got := resolveLyricsSweepGap(nil); got != lyricsManualSweepGap {
+		t.Errorf("缺失应当按缺省档: got %v", got)
+	}
+	for _, c := range lyricsSweepGapChoices {
+		if got := resolveLyricsSweepGap(ptr(c)); got != time.Duration(c)*time.Second {
+			t.Errorf("档 %d 应当原样生效: got %v", c, got)
+		}
+	}
+	for _, bad := range []int{0, -1, 4, 60} {
+		if got := resolveLyricsSweepGap(ptr(bad)); got != lyricsManualSweepGap {
+			t.Errorf("非法值 %d 应当按缺省档: got %v", bad, got)
+		}
+	}
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
+	f := saved
+	f.LyricsSweepGap = 2 * time.Second
+	setFeatures(f)
+	if got := lyricsFillSweepPace(true); got != 2*time.Second {
+		t.Errorf("手动那一轮应当按设置的 2 秒: got %v", got)
+	}
+	if got := lyricsFillSweepPace(false); got != lyricsFillSweepGap {
+		t.Errorf("自动补空不受设置影响: got %v", got)
+	}
+	if got, want := lyricsFullScanSecondsPerTrack(), int((2*time.Second+lyricsFullScanSearchEstimate)/time.Second); got != want {
+		t.Errorf("每首耗时应当按设置的间隔算: got %d, want %d", got, want)
 	}
 }

@@ -2722,14 +2722,14 @@ struct LyricsManagerView: View {
 
     /// 全量扫库还没跑完一首时估剩余时长用的每首秒数(引擎发布的值,没有时是设置页同一个兜底)。
     private var fullScanFallbackSecondsPerTrack: Double {
-        LyricsLibraryStatsPanel.fullScanSecondsPerTrack(fullScanState)
+        LyricsLibraryStatsPanel.fullScanSecondsPerTrack(fullScanState, gapSecs: FeatureSettingsStore.shared.lyricsSweepGapSecs)
     }
 
     /// 「重新匹配整个歌词库？」确认框正文。首数是引擎数好发布的(`LyricsFullScan.State.pending`)。
     private var fullScanConfirmMessage: String {
         guard let state = fullScanState else { return "" }
         return LyricsLibraryStatsPanel.fullScanConfirmMessage(
-            pending: state.pending ?? 0, secondsPerTrack: LyricsLibraryStatsPanel.fullScanSecondsPerTrack(state))
+            pending: state.pending ?? 0, secondsPerTrack: LyricsLibraryStatsPanel.fullScanSecondsPerTrack(state, gapSecs: FeatureSettingsStore.shared.lyricsSweepGapSecs))
     }
 
     // 口径本体挪到 EnrichCacheStore.byteText —— 设置页「歌词库」那一行是第三处要显示同一个

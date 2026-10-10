@@ -61,15 +61,16 @@ const (
 	// → 约 12 小时;手动补搜一轮上百首,每首的搜索本身就要 8~24 秒(没词的条目会把所有退路走一遍),
 	// 15 秒 gap 让它每首约 28 秒,5 秒约 18 秒。见 11 章决策 30。
 	//
-	// 5 秒这个值的依据是实测各源的真实速率,不是拍脑袋(从 api call summary 读的,
-	// 80 秒窗口约 4~5 首):网易云 71 次 ≈ 0.89 req/s、iTunes 68 次 ≈ 0.85、QQ smartbox 60 次
-	// ≈ 0.75,**这三个源当时一次 503 都没有**。gap 15→5 让平均速率涨到约 2.3 倍(网易云约
-	// 2 req/s),对这种量级的平台仍在安全区。
+	// 这是「扫描间隔」设置(features().LyricsSweepGap)的**缺省档**;用户可以在 lyricsSweepGapChoices 里另选。
+	// 间隔之下还有按主机的令牌桶(hostguard.go):后台请求只用前台剩下的额度,排不上就不发,所以调短间隔
+	// 不会打穿对方的限流,代价是被本机闸挡下的源这一首没搜到。
 	//
-	// 别把它当"越小越好"的旋钮往下调:一首歌会打出 100+ 个请求、散到十几个主机,gap 是
-	// 这些**突发之间**唯一的喘息,而整个采集器没有任何 per-host 限流器(查过,
-	// 一个 rate.Limiter 都没有)。真要再往下压,先补限流再说。
-	// (musicbrainz 不在此列:它自己有 1.1 秒全局最小间隔 + 结果永久缓存,见 musicbrainz.go。)
+	// 各档的依据是实测(11 章决策 111 记着两轮的完整数字):隔离目录里起实验版引擎,5 / 3 / 2 / 1 秒各跑同一批
+	// 20~25 首。没词那批每首 14.7 / 11.7 / 10.1 / 9.8 秒,已有歌词那批 11.3 / 8.9 / 8.3 / 6.1 秒;每秒请求
+	// 3.0 → 5.8。限流只有 lrclib 的 503,而且 5 秒那档就有、各档次数差不多(本机闸暂停它十几秒,其余源照常),
+	// 没有 429、没有 Musixmatch 验证码,网易云 / QQ / 酷狗 / 咪咕一次错误都没有;找到的结果各档持平。
+	// 每档只跑了几分钟,连续十几个小时的配额测不出来 —— 所以 2 秒是建议的最快值,1 秒只作为「可能被限流」的选项。
+	// (musicbrainz 另有自己的 1.1 秒全局最小间隔 + 结果永久缓存,见 musicbrainz.go。)
 	lyricsManualSweepGap           = 5 * time.Second
 	lyricsFillSweepDailyCap        = 40
 	lyricsFillRequestCheckInterval = 2 * time.Second
@@ -212,10 +213,14 @@ func setLyricsFillPaths() {
 // 抽成纯函数的理由跟下面 lyricsFillSweepFirstDelay 一模一样:**选错常量完全不报错**——扫描照跑、
 // 进度照涨,只是多花几十分钟到十几个小时。单测把两档钉死。
 func lyricsFillSweepPace(manual bool) time.Duration {
-	if manual {
-		return lyricsManualSweepGap
+	if !manual {
+		return lyricsFillSweepGap
 	}
-	return lyricsFillSweepGap
+	// 用户在设置里选的档;快照还没加载(零值)时按缺省档。
+	if gap := features().LyricsSweepGap; gap > 0 {
+		return gap
+	}
+	return lyricsManualSweepGap
 }
 
 func lyricsFillSweepFirstDelay(resumingFullScan bool) time.Duration {

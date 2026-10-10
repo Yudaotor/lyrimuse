@@ -2155,28 +2155,13 @@ private struct LyricsSettingsTab: View {
     //   3. 统计块的读法照系统设置「储存空间」:总数 + 一条比例条 + 图例,不用六格平级数字。
     @ViewBuilder
     private var managementCard: some View {
-        SettingsCard {
-            // 「歌词管理」是卡名行右侧的按钮、不占一整行:它是跳到另一扇窗口的入口,不是设置项,
-            // 占一行会跟统计块平权。说明文字降为按钮的 tooltip。
-            SettingsCardHeader(title: L10n.t("歌词库")) {
-                // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow 调了也没反应
-                // ——跟 MenuBarMenu.swift 里"歌词管理…"菜单项同一个坑、同一个修法。
-                Button(L10n.t("打开歌词管理")) {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openWindow(id: "lyrics-manager")
-                }
-                .font(.system(size: 11, weight: .medium))
-                .controlSize(.small)
-                .settingsGlassButtons()
-                .help(L10n.t("查看、编辑和重新搜索已缓存的歌词"))
-            }
-            CardDivider()
-            // 统计块 + 译文 / 罗马音两条从属行都在这个 View 里。数据全部来自 EnrichCacheStore 里
-            // 早就存着的字段,没有新增解析。它自己订阅 store、自己在 .task 里 reload(onlyIfChanged:),
-            // 不把 @ObservedObject 挂到这一页上 —— 理由见它的头注。
-            LyricsLibraryStatsPanel()
-        }
-        SettingsCard {
+        // 三张卡:「歌词库」(只读统计)、「批量匹配」(两轮扫描)、「歌词文件夹」。前两张由
+        // LyricsLibraryStatsPanel 自己画 —— 两张卡共用同一份扫描状态和同一个轮询循环,拆到这里会变成两份。
+        // 它自己订阅 store、自己在 .task 里 reload(onlyIfChanged:),不把 @ObservedObject 挂到这一页上。
+        // 间距同 SettingsPage 的卡间距(14):包一层只为挂同一片背景光,同前三段。
+        VStack(spacing: 14) {
+        LyricsLibraryStatsPanel()
+        SettingsCard(cornerRadius: 18) {
             lyricsFolderRow
             // 只在偏离默认位置时多出一条从属行:既说明了状态(你现在不在默认位置),又给出退路。
             // 放在默认状态下也摆一颗"恢复默认"是在给一个点了什么都不会变的按钮占位。
@@ -2191,39 +2176,29 @@ private struct LyricsSettingsTab: View {
                 }
             }
         }
+        }
+        // 玻璃要背后有东西才看得出来,跟 Last.fm 各段同一份淡色光(12 章决策 63)。
+        .background { LastfmGlassGlow() }
     }
 
-    /// 「歌词文件夹」行:标题 + 路径 + 两颗动作按钮,全部在同一行。
+    /// 「歌词文件夹」行:标题 + 路径胶囊(点了在访达中打开)+「更改…」,全部在同一行。
     ///
     /// 路径用 `~` 缩写(默认路径从 38 个字符缩到 26 个)、中间省略,完整路径放 tooltip。
     ///
-    /// 尾部是"路径 + 两颗按钮"三件套,而 `SettingsRow` 的 HStack 里"标题列 / Spacer / 尾部"是三个
-    /// 可伸缩成员,SwiftUI **均分**亏空(见 04 章「设计决策」第 15 条)。这个仓库为此踩过两种坑:按钮被压成
-    /// 没有文字的空圆角矩形(「我的配色主题」命名行)、标题被压成换行。所以三件套里
-    /// **只有路径可压**:两颗按钮 `.fixedSize()` 一分不让,路径 `.layoutPriority(-1)` 最后拿空间、
-    /// 拿不够就中间省略 —— 它本来就带 `.truncationMode(.middle)`,`~/…/lyrics` 仍看得出首尾,
-    /// 而按钮没字、标题换行都是纯粹的坏。默认路径缩写后约 150pt(11pt),两颗按钮约 170pt,
-    /// 尾部预算约 430pt,常用情形远够;英文界面按钮更宽("Show in Finder"),也仍在预算内。
+    /// `SettingsRow` 的 HStack 里"标题列 / Spacer / 尾部"是三个可伸缩成员,SwiftUI **均分**亏空(见 04 章
+    /// 「设计决策」第 15 条)。这个仓库为此踩过两种坑:按钮被压成没有文字的空圆角矩形(「我的配色主题」命名行)、
+    /// 标题被压成换行。所以尾部**只有路径文字可压**:「更改…」`.fixedSize()` 一分不让,路径 `.layoutPriority(-1)`
+    /// 最后拿空间、拿不够就中间省略(`~/…/lyrics` 仍看得出首尾)。
     private var lyricsFolderRow: some View {
         let url = features.effectiveLyricsDir
         return SettingsRow(
             icon: "folder",
             title: L10n.t("歌词文件夹"),
-            help: L10n.t("更换文件夹后，现有文件不会自动迁移")
+            subtitle: L10n.t("改位置后，已有文件不会跟着搬")
         ) {
             HStack(spacing: 8) {
-                Text((url.path as NSString).abbreviatingWithTildeInPath)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .layoutPriority(-1)
-                    .help(url.path)
-                    // 路径可能很长,给 VoiceOver 一个说得清"这是什么"的标签(可见文案里已经
-                    // 没有副标题了,单读一串路径不知道它在说哪件事)。
-                    .accessibilityLabel(L10n.t("歌词文件夹"))
-                    .accessibilityValue(url.path)
-                Button(L10n.t("在访达中显示")) {
+                // 路径本身就是「在访达中显示」那颗按钮:一行里不再另摆一颗同义的按钮。
+                Button {
                     // 引擎那边(见 lyrimuse-engine/lyricsexport.go)只在真正解析/导出过
                     // 至少一首歌之后才会建这个目录,这里先兜底建一下。建不成(自选目录在一块没挂载的外置盘上、
                     // 没有写权限)或者打不开时要说一句,不能点了没反应。
@@ -2238,8 +2213,23 @@ private struct LyricsSettingsTab: View {
                         alert.informativeText = error.localizedDescription
                         alert.runModal()
                     }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 10))
+                        Text((url.path as NSString).abbreviatingWithTildeInPath)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Image(systemName: "arrow.up.forward")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                 }
-                .fixedSize()
+                .layoutPriority(-1)
+                .help(url.path)
+                .accessibilityLabel(L10n.t("在访达中显示"))
+                .accessibilityValue(url.path)
                 Button(L10n.t("更改…")) {
                     let panel = NSOpenPanel()
                     panel.canChooseDirectories = true
@@ -2257,6 +2247,8 @@ private struct LyricsSettingsTab: View {
                 }
                 .fixedSize()
             }
+            .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
         }
     }
 

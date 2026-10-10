@@ -116,7 +116,11 @@ type featureFlagsFile struct {
 	// 调整歌词的能力;开了就是现状,不开就是一开始选了什么就不会后台自动给换了」)。
 	// 缺失=true=现状。闸门只加在**换掉已有歌词**的那两条路径上(enrich.go 的
 	// needsLyricsRescore / needsLyricsRetry),首次填充、封面/译文回填、用户手动重搜都不受它管。
-	LyricsAutoUpgrade    *bool `json:"lyrics_auto_upgrade,omitempty"`
+	LyricsAutoUpgrade *bool `json:"lyrics_auto_upgrade,omitempty"`
+	// LyricsSweepGapSecs:用户点出来的那两轮(手动补搜、全量扫库)两首之间隔几秒,设置 › 歌词 › 管理 ›
+	// 「扫描间隔」。只认 lyricsSweepGapChoices 里的档,缺失 / 非法值按 lyricsManualSweepGap(见 resolveLyricsSweepGap)。
+	// 后台自动补空那一轮不受它管(lyricsFillSweepGap)。
+	LyricsSweepGapSecs   *int  `json:"lyrics_sweep_gap_secs,omitempty"`
 	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
 	// LastfmMatchMode：上送 Last.fm 前怎么对待播放器报的标签,三档 lastfmMatchSmart / lastfmMatchCustom /
 	// lastfmMatchRaw,缺失 / 非法值按原始(见 resolveLastfmMatch)。语义与取舍见 lastfm.go 里
@@ -237,7 +241,9 @@ type featureFlags struct {
 	Players       map[string]bool
 	AlbumPrefetch bool
 	// 见 featureFlagsFile.LyricsAutoUpgrade。默认 true(现状)。
-	LyricsAutoUpgrade    bool
+	LyricsAutoUpgrade bool
+	// 见 featureFlagsFile.LyricsSweepGapSecs。恒为 lyricsSweepGapChoices 之一(resolveLyricsSweepGap 保证)。
+	LyricsSweepGap       time.Duration
 	LastfmMirrorScrobble bool
 	// 上送匹配档位,恒为 lastfmMatchSmart/Custom/Raw 之一(resolveLastfmMatch 保证),
 	// 默认 lastfmMatchRaw(原样发)。只给日志和诊断看 —— 判断行为一律读下面三个布尔,
@@ -386,6 +392,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		AlbumPrefetch:         boolOr(f.AlbumPrefetch, true),
 		// 缺省 true = 保持这个能力上线以来的行为。
 		LyricsAutoUpgrade:    boolOr(f.LyricsAutoUpgrade, true),
+		LyricsSweepGap:       resolveLyricsSweepGap(f.LyricsSweepGapSecs),
 		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
 		// 默认 lastfmMatchRaw:原样发。理由见 lastfm.go resolveScrobbleTags ——
 		// ListenBrainz 文档要求合唱 credit "include them all",Navidrome 同名开关默认也是 false。
@@ -486,6 +493,25 @@ func resolveScrobblePoint(raw string) string {
 		log.Printf("feature flags: unknown lastfm_scrobble_point %q (falling back)", raw)
 	}
 	return scrobblePointHalf
+}
+
+// lyricsSweepGapChoices:「扫描间隔」可选的档(秒),跟 Swift 侧 FeatureSettingsStore.lyricsSweepGapChoices 逐个相同。
+// 2 秒是建议的最快值,1 秒界面上标「可能被限流」,依据见 lyricsManualSweepGap 的注释。
+var lyricsSweepGapChoices = []int{1, 2, 3, 5, 10}
+
+// resolveLyricsSweepGap 把文件里的秒数校验成 lyricsSweepGapChoices 之一;缺失兜底 lyricsManualSweepGap,
+// 非法值同样兜底但记一行日志(理由同 resolveScrobblePoint)。
+func resolveLyricsSweepGap(secs *int) time.Duration {
+	if secs == nil {
+		return lyricsManualSweepGap
+	}
+	for _, c := range lyricsSweepGapChoices {
+		if *secs == c {
+			return time.Duration(c) * time.Second
+		}
+	}
+	log.Printf("feature flags: unsupported lyrics_sweep_gap_secs %d (falling back)", *secs)
+	return lyricsManualSweepGap
 }
 
 // isValidPlayerValue 核对一个字符串是不是已知播放器的 rawValue(resolvePlayers 校验列表条目用)。
@@ -727,6 +753,7 @@ func logFeatureSnapshot() {
 		"lastfm_match_track", features().LastfmMatchTrack,
 		"lastfm_match_first_artist_only", features().LastfmMatchFirstArtistOnly,
 		"lastfm_scrobble_point", orDash(features().LastfmScrobblePoint),
+		"lyrics_sweep_gap_secs", int(features().LyricsSweepGap/time.Second),
 		"scrobble_short_tracks", features().ScrobbleShortTracks,
 		"lastfm_excluded_bundles", len(features().LastfmExcludedBundles),
 		"weekly_digest", features().WeeklyDigest,

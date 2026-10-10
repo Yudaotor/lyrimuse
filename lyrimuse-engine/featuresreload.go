@@ -157,6 +157,14 @@ func maybeReloadFeatures() {
 			switchLyricsDir(next.LyricsDir)
 		}()
 	}
+	// 「扫描间隔」换了:下一首起就按新档等(lyricsFillSweepPace 每首现读),这里只把界面上的预计时长按新档重写。
+	if prev != nil && prev.LyricsSweepGap != next.LyricsSweepGap {
+		featuresReloadWork.Add(1)
+		go func() {
+			defer featuresReloadWork.Done()
+			refreshLyricsFullScanEstimate()
+		}()
+	}
 	// 译文语言换了:旧语言的机翻清掉(启动时那一遍管不到运行中的修改,见 invalidateStaleTranslations)。
 	// 放后台:这里可能正被持着 enrichMu 的调用方经 features() 调到,而清理自己要拿那把锁。
 	if prev != nil && prev.LyricsTranslationLanguage != next.LyricsTranslationLanguage {

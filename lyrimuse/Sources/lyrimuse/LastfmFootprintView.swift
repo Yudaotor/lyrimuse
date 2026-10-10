@@ -730,12 +730,13 @@ private struct FootprintTile<Content: View>: View {
     }
 }
 
-/// 垫在玻璃方块后面的几团淡色光。足迹段的方块和「设置」段的规则卡共用这一份。
+/// 垫在玻璃卡片后面的几团淡色光,设置页各段用玻璃卡的地方共用这一份。只为让玻璃看得出透光,不该读出颜色:
+/// 浓度别往上调(12 章决策 63 下记着从 14% / 20% 减半的那次)。
 struct LastfmGlassGlow: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let a = colorScheme == .dark ? 0.20 : 0.14
+        let a = colorScheme == .dark ? 0.10 : 0.07
         GeometryReader { geo in
             let r = max(geo.size.width, 1) * 0.5
             ZStack {

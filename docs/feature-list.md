@@ -693,7 +693,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 220 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 221 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -720,9 +720,10 @@ Every setting in the Settings window, by where it lives: 220 in all. Type a name
 ### Lyrics › Library
 
 - **Lyrics Library**
-- **Auto-Match Missing Lyrics**: Auto-matches songs with no lyrics or plain text only. Instrumentals and manually edited songs are left alone.
-- **Re-Match Whole Library**: Re-matches songs that already have lyrics too, except manually edited, timing-calibrated and instrumental songs
-- **Lyrics Folder**: Existing files aren't moved to the new folder
+- **Auto-Match Missing Lyrics**: Only songs with no lyrics or only plain text
+- **Re-Match Whole Library**: Songs that already have lyrics get re-picked too; hand-edited, re-timed and instrumental songs are left alone
+- **Scan Interval**: Seconds to pause between songs; 2 seconds is the fastest we recommend, to avoid rate limits
+- **Lyrics Folder**: Existing files stay where they are when you change the location
 
 ### Player
 

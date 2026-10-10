@@ -102,6 +102,9 @@ type lyricsFullScanState struct {
 	// lyricsManualSweepGap(5 秒)之后那句话和那个数当场都成了错的 —— 没有任何东西会报错,
 	// 只是用户看到的预计时长凭空多出一倍。
 	SecondsPerTrack int `json:"secondsPerTrack,omitempty"`
+	// SweepGapSecs:算 SecondsPerTrack 时用的是几秒间隔。App 拿它把发布的耗时换算到用户刚选的档,
+	// 点完「扫描间隔」当场就能改预计时长,不用等这里下一次重写。
+	SweepGapSecs int `json:"sweepGapSecs,omitempty"`
 	// Total / Done / Filled:**整场**全量的累计进度,给界面当分母与分子。
 	// 一场 = 从点下「开始」到整份候选列表真的跑完,中间的进程重启、"停一下再点"都算同一场。
 	// 语义与取舍见 lyricsFullScanProgressBase 的头注。
@@ -241,10 +244,29 @@ func pruneLyricsFullScanDeferred(keys []string) []string {
 // 实测速度**外推(见 LyricsLibraryStats.remainingText),这个常量只影响还没点「开始」那一刻。
 const lyricsFullScanSearchEstimate = 8 * time.Second
 
-// lyricsFullScanSecondsPerTrack 是上面两个常量的和,取整到秒。抽出来是为了让单测能钉住
-// 「界面拿到的数必须跟真实 gap 对得上」这条,而不是又一次靠人去记得同步两个地方。
+// lyricsFullScanSecondsPerTrack 是此刻生效的间隔(用户选的「扫描间隔」)加上面的搜索估计,取整到秒。抽出来是为了
+// 让单测能钉住「界面拿到的数必须跟真实 gap 对得上」这条,而不是又一次靠人去记得同步两个地方。
 func lyricsFullScanSecondsPerTrack() int {
-	return int((lyricsManualSweepGap + lyricsFullScanSearchEstimate) / time.Second)
+	return int((lyricsFillSweepPace(true) + lyricsFullScanSearchEstimate) / time.Second)
+}
+
+// refreshLyricsFullScanEstimate:「扫描间隔」改了,把状态文件里的每首耗时按新档重写,界面那句「约 N 小时」跟着变。
+// 没变就不写(updateLyricsFullScanState 的 mutate 返回 false)。
+func refreshLyricsFullScanEstimate() {
+	updateLyricsFullScanState(func(state *lyricsFullScanState) bool {
+		next, gap := lyricsFullScanSecondsPerTrack(), int(lyricsFillSweepPace(true)/time.Second)
+		if state.SecondsPerTrack == next && state.SweepGapSecs == gap {
+			return false
+		}
+		stampLyricsFullScanEstimate(state)
+		return true
+	})
+}
+
+// stampLyricsFullScanEstimate 把每首耗时和算它用的间隔一起写进状态,两个数只在这里成对写。
+func stampLyricsFullScanEstimate(state *lyricsFullScanState) {
+	state.SecondsPerTrack = lyricsFullScanSecondsPerTrack()
+	state.SweepGapSecs = int(lyricsFillSweepPace(true) / time.Second)
 }
 
 // setLyricsFullScanStatePath 由 setLyricsFillPaths 调用。
@@ -269,7 +291,7 @@ func setLyricsFullScanStatePath(path string) {
 			state.Pending = nil
 		}
 		state.ScoringVersion, state.ScoringRevision = lyricsScoringVersion, lyricsScoringRevision
-		state.SecondsPerTrack = lyricsFullScanSecondsPerTrack()
+		stampLyricsFullScanEstimate(state)
 		return true
 	})
 }
@@ -348,7 +370,7 @@ func setLyricsFullScanActive(active bool) {
 		}
 		state.Active = active
 		state.ScoringVersion, state.ScoringRevision = lyricsScoringVersion, lyricsScoringRevision
-		state.SecondsPerTrack = lyricsFullScanSecondsPerTrack()
+		stampLyricsFullScanEstimate(state)
 		if active {
 			state.StartedAt = time.Now().Unix()
 		} else {

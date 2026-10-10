@@ -38,12 +38,14 @@ public enum LyricsFullScan {
         ///
         /// 0 = 这份文件是老引擎写的(Go 那边带 omitempty),调用方退回自己的兜底值。
         public let secondsPerTrack: Int
+        /// 算 `secondsPerTrack` 时用的是几秒间隔(引擎 `SweepGapSecs`)。0 = 老引擎没写,不能换算。
+        public let sweepGapSecs: Int
         /// 这一刻真会被全量扫库挑中的条数,引擎数好发布(`publishLyricsFullScanPending`),界面上
         /// 「N 首待重新匹配」就是它。nil = 还没数过,界面不显示数字;0 = 已全部跟进。
         public let pending: Int?
 
         enum CodingKeys: String, CodingKey {
-            case scoringVersion, scoringRevision, active, startedAt, updatedAt, secondsPerTrack, pending
+            case scoringVersion, scoringRevision, active, startedAt, updatedAt, secondsPerTrack, sweepGapSecs, pending
         }
 
         public init(from decoder: Decoder) throws {
@@ -57,19 +59,29 @@ public enum LyricsFullScan {
             updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? 0
             // 同样带 omitempty:老引擎的文件里没有这个键,读成 0 交给调用方兜底。
             secondsPerTrack = try c.decodeIfPresent(Int.self, forKey: .secondsPerTrack) ?? 0
+            sweepGapSecs = try c.decodeIfPresent(Int.self, forKey: .sweepGapSecs) ?? 0
             pending = try c.decodeIfPresent(Int.self, forKey: .pending)
         }
 
         public init(scoringVersion: Int, scoringRevision: Int = 0, active: Bool, startedAt: Int64 = 0, updatedAt: Int64 = 0,
-                    secondsPerTrack: Int = 0, pending: Int? = nil) {
+                    secondsPerTrack: Int = 0, sweepGapSecs: Int = 0, pending: Int? = nil) {
             self.scoringVersion = scoringVersion
             self.scoringRevision = scoringRevision
             self.active = active
             self.startedAt = startedAt
             self.updatedAt = updatedAt
             self.secondsPerTrack = secondsPerTrack
+            self.sweepGapSecs = sweepGapSecs
             self.pending = pending
         }
+    }
+
+    /// 换算到 `gapSecs` 这一档的每首耗时(秒):引擎发布的值去掉它当时的间隔、换上这一档。引擎没写间隔(老版本)
+    /// 时原样用发布的值;连耗时都没有返回 nil,调用方用自己的兜底。纯函数,selftest 直接钉。
+    public static func secondsPerTrack(_ state: State?, gapSecs: Int) -> Int? {
+        guard let state, state.secondsPerTrack > 0 else { return nil }
+        guard state.sweepGapSecs > 0 else { return state.secondsPerTrack }
+        return max(state.secondsPerTrack - state.sweepGapSecs + gapSecs, 1)
     }
 
     static let stateURL = LyrimusePaths.configFile("lyrimuse-lyrics-fullscan.json")

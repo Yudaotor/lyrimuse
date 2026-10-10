@@ -1561,6 +1561,17 @@ func runLyricsManagerTests() {
         // 老引擎的文件里没有这个键(omitempty),必须读成 0 让调用方退回兜底,
         // 而不是让整份文件解不开 —— 那会连版本号一起丢掉,整行界面消失。
         expectEqual(idle?.secondsPerTrack, 0, "全量状态: 老引擎没这个键时读成 0,不是解码失败")
+        // 「扫描间隔」换档后预计时长当场跟着变:发布值去掉它当时的间隔、换上新档;老引擎没写间隔就原样用。
+        typealias FS = LyricsFullScan
+        let stamped = FS.State(scoringVersion: 19, active: false, secondsPerTrack: 13, sweepGapSecs: 5)
+        expectEqual(FS.secondsPerTrack(stamped, gapSecs: 2), 10, "扫描间隔: 13 秒(5 秒间隔)换到 2 秒档是 10 秒")
+        expectEqual(FS.secondsPerTrack(stamped, gapSecs: 5), 13, "扫描间隔: 同一档原样")
+        expectEqual(FS.secondsPerTrack(FS.State(scoringVersion: 19, active: false, secondsPerTrack: 13), gapSecs: 2), 13,
+                    "扫描间隔: 老引擎没写间隔时不换算")
+        expectEqual(FS.secondsPerTrack(FS.State(scoringVersion: 19, active: false), gapSecs: 2), nil,
+                    "扫描间隔: 没有发布值交给调用方兜底")
+        let decodedGap = try? JSONDecoder().decode(FS.State.self, from: Data(#"{"scoringVersion":19,"updatedAt":1,"secondsPerTrack":13,"sweepGapSecs":5}"#.utf8))
+        expectEqual(decodedGap?.sweepGapSecs, 5, "扫描间隔: 状态文件里的 sweepGapSecs 解出来")
         // 待跟进的条数:0 是「无待重新匹配的歌曲」,键不在是「还没数过」(界面不显示数字),两者要分得开。
         let counted = try? JSONDecoder().decode(F.State.self, from: Data("""
         {"scoringVersion":19,"updatedAt":1789500000,"pending":5472}

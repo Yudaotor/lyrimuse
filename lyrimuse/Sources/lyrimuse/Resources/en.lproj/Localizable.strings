@@ -20,6 +20,8 @@
 "%1$@ 年同期 %2$@ 次" = "%2$@ in the same span of %1$@";
 "%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookups went without it. It's paused for now and will be retried automatically.";
 "%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。#one" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookup went without it. It's paused for now and will be retried automatically.";
+"%1$@ 首 · %2$@" = "%1$@ songs · %2$@";
+"%1$@ 首 · %2$@#one" = "%1$@ song · %2$@";
 "%1$@ 首来自歌词源，%2$@ 首为机器翻译" = "%1$@ from the source, %2$@ machine-translated";
 "%1$@–%2$@ 点 · %3$@ 次" = "%1$@:00–%2$@:00 · %3$@ plays";
 "%1$@–%2$@ 点 · %3$@ 次#one" = "%1$@:00–%2$@:00 · %3$@ play";
@@ -80,7 +82,6 @@
 "%@ 首待搜索" = "%@ to search";
 "%@ 首待补交" = "%@ plays to submit";
 "%@ 首待补交#one" = "%@ play to submit";
-"%@ 首待重新匹配" = "%@ to re-match";
 "%@ 首本次无法判断，扫描结束后将重试" = "%@ couldn't be checked this time, will retry at the end";
 "%@ 首歌" = "%@ songs";
 "%@ 首歌#one" = "%@ song";
@@ -290,7 +291,6 @@
 "仅由 Lyrimuse 记录…" = "Keep Lyrimuse…";
 "仅第一位" = "First Only";
 "仅纯文本" = "Plain Text Only";
-"仅统计已存入缓存、会随歌词文件一同导出的读音。其余歌曲的读音在播放时实时生成，不计入统计" = "Counts only romanization stored in the cache and exported alongside the lyrics files. For other songs it is generated on the fly while playing and is not counted.";
 "仅自动匹配筛选出的 %@ 首" = "Auto-Match Only the %@ Filtered Songs";
 "仅自动匹配筛选出的 %@ 首#one" = "Auto-Match Only the %@ Filtered Song";
 "仅调整主行，%@～%@pt，放不下时歌词行会自动加高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" = "Main line only, %@–%@pt; the lyric row grows if the text no longer fits. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
@@ -328,6 +328,7 @@
 "位置" = "Position";
 "位置已固定为「%@」，可在 ⚙ 菜单中更改" = "Position is fixed to “%@” — change it in the ⚙ menu";
 "位置已锁定" = "Position locked";
+"低于建议的 2 秒，可能被歌词源限流" = "Faster than the recommended 2 seconds; lyric sources may rate-limit you";
 "作用于歌词、顶部信息和控制条；「自动」根据背景亮度在浅色与深色之间切换" = "Applies to the lyrics, header, and controls. Auto switches between light and dark based on the background's brightness.";
 "你" = "You";
 "你的常听" = "Your top plays";
@@ -529,6 +530,8 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space.";
 "只列能翻成当前译文语言的语言，所以可能比「系统设置」里少几种。点一下没下载的就能下载" = "Only languages that can be translated into your translation language are listed, so there may be a few fewer than in System Settings. Click one that isn't downloaded to download it.";
+"只搜没有歌词或只有纯文本的歌" = "Only songs with no lyrics or only plain text";
+"只数存进缓存、会随歌词文件导出的读音；其余的在播放时现算，不算在内" = "Counts only pronunciations stored in the cache, which are exported with the lyric files; the rest are generated during playback and aren't counted";
 "只有勾选的播放器会 Scrobble；网页播放器按浏览器算。" = "Only checked players scrobble; web players count as their browser.";
 "只用于悬浮歌词、灵动岛、菜单栏和触控栏" = "Only for Floating Lyrics, Notch, Menu Bar and Touch Bar";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
@@ -784,6 +787,7 @@
 "已更换为「%1$@」（%2$@ 分），原为「%3$@」" = "Switched to “%1$@” (%2$@ pts), was “%3$@”";
 "已更新 %@ 首" = "%@ updated";
 "已更新到 %@" = "Updated to %@";
+"已有歌词的也重挑一遍；手改、校准过和纯音乐的不动" = "Songs that already have lyrics get re-picked too; hand-edited, re-timed and instrumental songs are left alone";
 "已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外" = "Re-matches songs that already have lyrics too, except manually edited, timing-calibrated and instrumental songs";
 "已标为纯音乐" = "Marked as Instrumental";
 "已标为纯音乐：不显示歌词，也不会自动搜索。采用任一候选将取消标记" = "Marked as instrumental: lyrics are hidden and aren’t searched for automatically. Using a candidate removes the mark";
@@ -849,6 +853,7 @@
 "开启「自动识别」时，将识别所有已知和已信任的播放器，上方的勾选暂不生效。如只需识别部分播放器，请取消勾选此项。" = "“Auto-detect” recognizes every known and trusted player, so the checkboxes above have no effect right now. Untick it to recognize only the ones you pick";
 "开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享。" = "When on, the song you're playing shows on your Discord profile and in your friends list. If friends can't see it, go to User Settings › Activity Privacy in Discord and turn on activity sharing.";
 "开始" = "Start";
+"开始…" = "Start…";
 "开始你的听歌档案" = "Start Your Listening History";
 "开始使用" = "Get Started";
 "开始扫描" = "Start Scanning";
@@ -925,6 +930,8 @@
 "打开该浏览器" = "Open Browser";
 "打开软件更新" = "Open Software Update";
 "扫描中 %1$@/%2$@" = "Scanning %1$@/%2$@";
+"扫描间隔" = "Scan Interval";
+"批量匹配" = "Batch Matching";
 "找不到正确的歌词？在 GitHub 反馈" = "Can't find the right lyrics? Report it on GitHub";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
@@ -1010,6 +1017,7 @@
 "收听高峰 %@" = "Busiest %@";
 "收起" = "Collapse";
 "收起面板后生效" = "Takes effect after this panel closes";
+"改位置后，已有文件不会跟着搬" = "Existing files stay where they are when you change the location";
 "改过歌词或调过时间轴偏移的歌曲" = "Songs whose lyrics you edited or whose timing offset you adjusted";
 "放弃修改" = "Discard Changes";
 "整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳" = "Edit the whole text to paste, add or remove lines; each line starts with its timestamp";
@@ -1130,7 +1138,6 @@
 "更多歌词操作" = "More Lyrics Actions";
 "更多设置…" = "More Settings…";
 "更换备份文件夹…" = "Change Backup Folder…";
-"更换文件夹后，现有文件不会自动迁移" = "Existing files aren't moved to the new folder";
 "更改" = "Change";
 "更改…" = "Change…";
 "更新" = "Updates";
@@ -1411,6 +1418,7 @@
 "每日听歌报告" = "Daily Listening Report";
 "每月听歌小结" = "Monthly Listening Digest";
 "每项均按播放器分别勾选，仅列出已选择的播放器；选择「自动识别」时，还会列出本机已安装的播放器" = "Each item is checked per player. Only the selected players are listed; with Auto-detect selected, the ones installed on this Mac are added";
+"每首之间停几秒；建议不快于 2 秒，以免被限流" = "Seconds to pause between songs; 2 seconds is the fastest we recommend, to avoid rate limits";
 "比上一期上升 %@ 名" = "Up %@ from the previous period";
 "比上一期下降 %@ 名" = "Down %@ from the previous period";
 "比胜者多 %@" = "Ahead of the winner by %@";
@@ -1612,6 +1620,7 @@
 "署名里的汉字段" = "Han characters in the credit";
 "翻译语言包" = "Translation Languages";
 "联网搜索候选歌词" = "Search Online for Lyrics";
+"联网逐首搜索，可随时停止" = "Searches online one song at a time; you can stop at any time";
 "背景" = "Background";
 "背景颜色" = "Background Color";
 "胜者" = "Winner";
@@ -1630,7 +1639,6 @@
 "自动匹配已停止" = "Auto-Match Stopped";
 "自动匹配正在进行，可在左下角查看进度" = "Auto-match is in progress; see the bottom left for progress";
 "自动匹配缺失歌词" = "Auto-Match Missing Lyrics";
-"自动匹配范围：无歌词或仅有纯文本的歌曲；纯音乐和人工修正过的歌曲除外" = "Auto-matches songs with no lyrics or plain text only. Instrumentals and manually edited songs are left alone.";
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "The automatic backup couldn't be written, so nothing was deleted this time to keep it recoverable. Check your disk space and write access to the config folder, then try again.";
 "自动更新" = "Automatic Updates";
 "自动检查" = "Check Automatically";
