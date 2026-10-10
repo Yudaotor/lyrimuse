@@ -89,8 +89,8 @@ func TestNeteaseUpcomingLocatesByCurrentTrack(t *testing.T) {
 	if !ok {
 		t.Fatalf("当前这首在队列里,该定位得到")
 	}
-	if len(got) != 2 || got[0].title != "第三首" || got[1].title != "第四首" {
-		t.Fatalf("取到 %+v,期望第三首、第四首", got)
+	if want := []string{"第三首", "第四首", "第一首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("取到 %v,期望 %v(数到末尾接回开头)", neteaseTitles(got), want)
 	}
 	if got[0].album != "丙专辑" {
 		t.Errorf("专辑名 %q —— 队列里每首的专辑各不相同", got[0].album)
@@ -137,9 +137,9 @@ func TestNeteaseUpcomingFollowsShuffleOrder(t *testing.T) {
 	if want := []string{"第7首", "第0首", "第3首"}; !ok || fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
 		t.Fatalf("得到 ok=%v %v,期望 %v", ok, neteaseTitles(got), want)
 	}
-	// 用户手动点了一首(两种顺序都不是下一位):沿用随机的结论。
+	// 用户手动点了一首(两种顺序都不是下一位):沿用随机的结论;名次排到最后接回名次最小的那首。
 	got, _ = neteaseUpcoming("甲", "第1首", 2)
-	if want := []string{"第4首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+	if want := []string{"第4首", "第5首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
 		t.Fatalf("手动跳转后该沿用随机序,得到 %v,期望 %v", neteaseTitles(got), want)
 	}
 }
@@ -153,6 +153,29 @@ func TestNeteaseUpcomingFollowsListOrder(t *testing.T) {
 	got, _ := neteaseUpcoming("甲", "第4首", 2)
 	if want := []string{"第5首", "第6首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
 		t.Fatalf("得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+}
+
+// 列表循环(读不到模式,顺序播放也按它数):数到末尾接回开头,数回当前这首就停。
+func TestNeteaseUpcomingWrapsAtListEnd(t *testing.T) {
+	writeTestNeteaseQueue(t, testNeteaseShuffledSongs())
+	neteaseUpcoming("甲", "第5首", 2)
+	neteaseUpcoming("甲", "第6首", 2) // 顺序
+	got, _ := neteaseUpcoming("甲", "第7首", 2)
+	if want := []string{"第0首", "第1首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("最后一首之后得到 %v,期望 %v", neteaseTitles(got), want)
+	}
+	got, _ = neteaseUpcoming("甲", "第7首", 20)
+	if want := []string{"第0首", "第1首", "第2首", "第3首", "第4首", "第5首", "第6首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("n 比列表长时得到 %v,期望 %v(不重复、不含当前这首)", neteaseTitles(got), want)
+	}
+
+	// 从最后一首换到第一首就是数组里的下一位:判成顺序,之后只按数组取(随机序里第3首的下一位是第1首)。
+	writeTestNeteaseQueue(t, testNeteaseInsertedSongs([]string{"第0首", "第1首", "第2首", "第3首"}, []float64{20, 40, 10, 30}))
+	neteaseUpcoming("甲", "第3首", 2)
+	got, _ = neteaseUpcoming("甲", "第0首", 2)
+	if want := []string{"第1首", "第2首"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
+		t.Fatalf("接回开头后得到 %v,期望 %v", neteaseTitles(got), want)
 	}
 }
 
@@ -227,9 +250,10 @@ func TestNeteaseUpcomingPrefersExactMatch(t *testing.T) {
 		{title: "当前", album: "甲", artists: []string{"甲"}, durationMS: 100000},
 		{title: "之后", album: "丁", artists: []string{"丁"}, durationMS: 200000},
 	})
+	// 定位到第 1 首时数组下一位是「之后」;定位错到第 0 首,下一位就是另一首「当前」。
 	got, _ := neteaseUpcoming("甲", "当前", 1)
-	if want := []string{"之后"}; fmt.Sprint(neteaseTitles(got)) != fmt.Sprint(want) {
-		t.Fatalf("得到 %v,期望 %v", neteaseTitles(got), want)
+	if len(got) == 0 || got[0].title != "之后" {
+		t.Fatalf("得到 %v,第一首应为「之后」", neteaseTitles(got))
 	}
 }
 

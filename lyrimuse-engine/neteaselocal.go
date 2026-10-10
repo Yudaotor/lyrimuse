@@ -465,26 +465,36 @@ func neteaseQueueGrew(before, after []string) bool {
 	return true
 }
 
-// neteaseNextInList 是数组顺序里 from 之后第一首不是插进来的;没有返回 -1。
+// neteaseNextInList 是数组顺序里 from 之后第一首不是插进来的,数到末尾接回开头;除了 from 没有别的返回 -1。
+//
+// 「列表循环」放完最后一首接回第一首,「顺序播放」放完停下。模式读不到,一律按接回开头数:顺序播放时多解析的那几首
+// 用不上,列表循环时才不会在最后一首断掉。见 09 章决策 226。
 func neteaseNextInList(ids []string, inserted map[string]bool, from int) int {
-	for i := from + 1; i < len(ids); i++ {
-		if !inserted[ids[i]] {
+	for k := 1; k < len(ids); k++ {
+		if i := (from + k) % len(ids); !inserted[ids[i]] {
 			return i
 		}
 	}
 	return -1
 }
 
-// neteaseNextInShuffle 是随机顺序(randomOrder 名次)里 from 之后第一首不是插进来的;没有返回 -1。
+// neteaseNextInShuffle 是随机顺序(randomOrder 名次)里 from 之后第一首不是插进来的,名次排到最后时接回名次最小的那首
+// (客户端只在切到随机播放时重新洗牌,接回去还是这一套名次);除了 from 没有别的返回 -1。
 func neteaseNextInShuffle(ids []string, inserted map[string]bool, rank []int, from int) int {
-	best := -1
+	best, first := -1, -1
 	for i := range ids {
-		if inserted[ids[i]] || rank[i] <= rank[from] {
+		if i == from || inserted[ids[i]] {
 			continue
 		}
-		if best < 0 || rank[i] < rank[best] {
+		if rank[i] > rank[from] && (best < 0 || rank[i] < rank[best]) {
 			best = i
 		}
+		if first < 0 || rank[i] < rank[first] {
+			first = i
+		}
+	}
+	if best < 0 {
+		return first
 	}
 	return best
 }
@@ -575,14 +585,15 @@ func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 			return true
 		})
 	}
-	listOrder := func(yield func(int) bool) {
-		for i := neteaseNextInList(ids, inserted, anchor); i >= 0 && yield(i); i = neteaseNextInList(ids, inserted, i) {
+	// 两种顺序都绕圈:数回 anchor 就停。anchor 是插进来的歌时圈里没有它,靠步数封顶。
+	walk := func(next func(int) int) func(yield func(int) bool) {
+		return func(yield func(int) bool) {
+			for i, k := next(anchor), 0; i >= 0 && i != anchor && k < len(ids) && yield(i); i, k = next(i), k+1 {
+			}
 		}
 	}
-	shuffleOrder := func(yield func(int) bool) {
-		for i := neteaseNextInShuffle(ids, inserted, rank, anchor); i >= 0 && yield(i); i = neteaseNextInShuffle(ids, inserted, rank, i) {
-		}
-	}
+	listOrder := walk(func(i int) int { return neteaseNextInList(ids, inserted, i) })
+	shuffleOrder := walk(func(i int) int { return neteaseNextInShuffle(ids, inserted, rank, i) })
 	// 插进来的歌连成一段排在当前这首后面,不管顺序还是随机都先放它们。
 	insertedNext := func(yield func(int) bool) {
 		for i := pos + 1; i < len(f.List) && inserted[ids[i]] && yield(i); i++ {
