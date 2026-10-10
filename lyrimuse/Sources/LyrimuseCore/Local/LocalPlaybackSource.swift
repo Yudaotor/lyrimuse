@@ -4189,6 +4189,9 @@ public final class LocalPlaybackSource: ObservableObject {
         let trackKey: String
         let lyrics, lyricsTr, lyricsRoma, lyricsYRC, lyricsBG: String
         let instrumental, resolved: Bool
+        // 补搜跑完时常常只翻这一位(正文还是空的、resolved 早就是真):不比它,这道闸会把那次重算吞掉,
+        // currentTrackHasNoLyrics 不再更新,界面停在「搜索歌词中…」直到换歌。
+        let searchIncomplete: Bool
         let lineBreaks: LineBreakOptions
         let variant: ChineseVariant
         let romanizationScripts: RomanizationScripts
@@ -4244,6 +4247,7 @@ public final class LocalPlaybackSource: ObservableObject {
             lyricsBG: found?.lyricsBG ?? "",
             instrumental: found?.instrumental ?? false,
             resolved: found?.resolved ?? false,
+            searchIncomplete: found?.searchIncomplete ?? false,
             lineBreaks: lineBreaks,
             variant: chineseVariant,
             romanizationScripts: romanizationScripts,

@@ -303,6 +303,8 @@ private func wiringContracts() {
     let seek = body("public func seek(toMs targetMs: Int) {", in: source)
     expectEqual(seek.contains("pollFlight.invalidateInFlight()"), true, "单飞接线: 拖动作废在飞那一轮、回来后补跑")
     expectEqual(seek.contains("env.browserProbeSeeked(now)"), true, "拖动作废读数: 拖动时通知浏览器探针")
+    expectEqual(body("private func reloadCurrentLyrics() {", in: source).contains("searchIncomplete: found?.searchIncomplete ?? false"),
+                true, "歌词重载等值闸: 补搜跑完只翻 searchIncomplete 时也重算,不停在「搜索歌词中…」")
 
     let client = code("LyrimuseCore/Local/MediaControlClient.swift")
     let focus = body("private static func snapshotAfterFocusLost() -> MediaControlSnapshot? {", in: client)
