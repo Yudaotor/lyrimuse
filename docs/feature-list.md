@@ -30,7 +30,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Apple Music's own lyrics](#feature-apple-music-lyrics) | Settings › Lyrics › Sources › Lyrics Sources |
 | [Use the lyrics your player already saved](#feature-player-local-lyrics) | Settings › Player › Full Disk Access |
 | [Lock hand-picked lyrics](#feature-lock-hand-picked) | Settings › Lyrics › Sources › Lock Hand-Picked Lyrics |
-| [Machine translation when there is none](#feature-machine-translation) | Settings › Lyrics › Translation › System Fallback Translation |
+| [Machine translation when there is none](#feature-machine-translation) | Settings › Lyrics › Translation › Translate When None Is Provided |
 | [Split long lines, join short ones](#feature-split-join-lines) | Settings › Lyrics › Adjust › Split Long Lines |
 | [Notch lyrics](#feature-notch-lyrics) | Settings › Lyrics Display › Notch › Notch Lyrics |
 | [Menu bar lyrics](#feature-menu-bar-lyrics) | Settings › Lyrics Display › Menu Bar › Menu Bar Lyrics |
@@ -176,7 +176,7 @@ Translations that come with the lyrics appear under each line. NetEase Cloud Mus
 When no source has a translation, the lyrics are translated by machine. On macOS 15 or later with the language downloaded, Apple Translation does it on your Mac and the lyrics stay there; otherwise the lines to translate are sent to Google Translate, then MyMemory. Translation languages are downloaded from the same card.
 
 - Off by default
-- Settings: Lyrics › Translation › System Fallback Translation
+- Settings: Lyrics › Translation › Translate When None Is Provided
 - Settings: Lyrics › Translation › Translation Languages
 
 <a id="feature-romanization"></a>
@@ -705,9 +705,9 @@ Every setting in the Settings window, by where it lives: 220 in all. Type a name
 
 ### Lyrics › Translation
 
-- **Translation Language**: The language you want translations in. Whether Floating Lyrics, the Lyrics Window and the others show them is set for each one in Lyrics Display
-- **System Fallback Translation**: Fills in where the lyrics source ships none
-- **Translation Languages**: Counts only languages that can be translated into the current translation language; the target language itself and languages in the same family are excluded, so the number can be lower than in System Settings. Language packs are managed by macOS and translation runs on this Mac
+- **Translation Language**: Whether each place shows translations is set in Lyrics Display
+- **Translate When None Is Provided**: Translates on this Mac first, then online if that fails
+- **Translation Languages**: Only languages that can be translated into your translation language are listed, so there may be a few fewer than in System Settings. Click one that isn't downloaded to download it.
 
 ### Lyrics › Adjust
 

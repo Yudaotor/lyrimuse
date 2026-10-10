@@ -163,12 +163,11 @@ final class LanguagePackStatusStore: ObservableObject {
 /// 会被过滤掉,所以系统设置显示 8 种、这里是 6 / 18 是**正常的**(用户觉得
 /// "感觉有 bug",进程外探针对过:系统真值就是这 6 个)。help 气泡里把这条写明了。
 @available(macOS 15.0, *)
-struct LanguagePackRow: View {
+struct LanguagePackCard: View {
     @ObservedObject private var features = FeatureSettingsStore.shared
     @ObservedObject private var store = LanguagePackStatusStore.shared
     @State private var pending: TranslationSession.Configuration?
     @State private var downloading: String?
-    @State private var isExpanded = false
     /// 鼠标悬在哪一格上(只为悬停底色,跟「歌词来源」网格的 hoveredSource 同一个用法)。
     @State private var hoveredCode: String?
     /// 每发起一次下载 +1。两处靠它:
@@ -203,45 +202,34 @@ struct LanguagePackRow: View {
     }
 
     var body: some View {
-        // 外面必须是 VStack 而不是 Group:下面挂的 .task / .onReceive / .translationTask
-        // 要是套在 Group 上,会被转发给**每一个**子视图 —— 刷新跑两遍还只是浪费,
-        // translationTask 跑两遍就是弹两张下载 sheet。VStack(spacing: 0) 嵌在 SettingsCard
-        // 自己那个 VStack(spacing: 0) 里,对布局是透明的。
-        VStack(spacing: 0) {
-            SettingsRow(
-                icon: "arrow.down.circle",
+        // 下面挂的 .task / .onReceive / .translationTask 必须挂在**一个**视图上(这张卡),别套在 Group 上:
+        // 会被转发给每一个子视图 —— 刷新跑两遍还只是浪费,translationTask 跑两遍就是弹两张下载 sheet。
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(
                 title: L10n.t("翻译语言包"),
-                help: L10n.t("仅统计可翻译为当前译文语言的语言；译文语言本身及同一语系的语言不计入，因此数量可能少于「系统设置」中显示的数量。语言包由 macOS 管理，翻译在本机完成")
+                help: L10n.t("只列能翻成当前译文语言的语言，所以可能比「系统设置」里少几种。点一下没下载的就能下载")
             ) {
-                HStack(spacing: 10) {
-                    // 首次读取有可见延迟(进程刚起时 translationd 冷启动还会先误报全零、
-                    // 等 5 秒复查,见 LanguagePackStatusStore.refresh),这段时间明说
-                    // "检查中",而不是让人以为一个都没装。
-                    Text(summaryText)
-                        .font(.system(size: 11))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                    Button(isExpanded ? L10n.t("收起") : L10n.t("管理…")) {
-                        withAnimation(.settingsCardReveal) { isExpanded.toggle() }
-                    }
-                    .controlSize(.small)
-                    .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
-                }
+                // 首次读取有可见延迟(进程刚起时 translationd 冷启动还会先误报全零、
+                // 等 5 秒复查,见 LanguagePackStatusStore.refresh),这段时间明说
+                // "检查中",而不是让人以为一个都没装。
+                Text(summaryText)
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
-            if isExpanded {
-                CardDivider()
-                SettingsRawRow(insetToText: true) { packGrid }
-                SettingsNote {
-                    Text(L10n.t("如需删除已下载的语言包，请前往「系统设置 › 通用 › 语言与地区 › 翻译语言」"))
-                    Button(L10n.t("打开系统设置")) {
-                        // 语言与地区面板;「翻译语言…」是那一页底部的一颗按钮,系统没给它
-                        // 单独的深链,只能开到这一层。
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") {
-                            NSWorkspace.shared.open(url)
-                        }
+            SettingsRawRow(insetToText: true) { packGrid }
+            SettingsNote {
+                Text(L10n.t("删除语言包：系统设置 › 通用 › 语言与地区 › 翻译语言"))
+                Button(L10n.t("打开系统设置")) {
+                    // 语言与地区面板;「翻译语言…」是那一页底部的一颗按钮,系统没给它
+                    // 单独的深链,只能开到这一层。
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") {
+                        NSWorkspace.shared.open(url)
                     }
-                    .controlSize(.small)
                 }
+                .controlSize(.small)
+                .settingsGlassButtons()
+                .buttonBorderShape(.capsule)
             }
         }
         // 出现时刷新一次;目标语言改了要按新目标重算 —— 可用性是**按语言对**算的,换了目标
@@ -348,7 +336,7 @@ struct LanguagePackRow: View {
     /// 最后一行不满 3 格时 Grid 自己会留空,不用补占位。
     private var packGrid: some View {
         let codes = store.codes
-        return Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+        return Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 6) {
             ForEach(Array(stride(from: 0, to: codes.count, by: Self.columns)), id: \.self) { start in
                 GridRow {
                     ForEach(codes[start ..< min(start + Self.columns, codes.count)], id: \.self) { code in
@@ -371,7 +359,7 @@ struct LanguagePackRow: View {
     /// - 下载中:小转轴代替图标。系统的下载 sheet 是模态的,这个态实际上只在 sheet 弹出前
     ///   后各露一瞬,但没有它,从点下到 sheet 出现之间就是一段"点了没反应"。
     ///
-    /// 视觉上跟「歌词来源」网格是一家(圆形状态图标 15pt + 13pt 文字 + 悬停底色),读的人
+    /// 视觉上跟「歌词来源」网格是一家(圆角小格:有的是玻璃底,没有的只剩细线;圆形状态图标 15pt),读的人
     /// 不用再学一套。区别只在语义:那边的勾是"启用了",这边的勾是"装好了"。
     @ViewBuilder
     private func packCell(_ code: String) -> some View {
@@ -394,16 +382,18 @@ struct LanguagePackRow: View {
             }
             .frame(width: 15, height: 15)
             Text(name)
-                .font(.system(size: 13))
+                .font(.system(size: 12.5))
                 .foregroundStyle(installed ? Color.primary : Color.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 7)
+        .padding(.horizontal, 9)
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+        let tile = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
         if installed {
             label
+                .background { Color.clear.settingsCardBackground(cornerRadius: 10) }
                 .help(L10n.t("已下载"))
                 .accessibilityLabel(String(format: L10n.t("%@，已下载"), name))
         } else {
@@ -412,10 +402,11 @@ struct LanguagePackRow: View {
                 requestDownload(code)
             } label: {
                 label
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(hovered ? Color.secondary.opacity(0.12) : .clear))
-                    .contentShape(RoundedRectangle(cornerRadius: 6))
+                    .background {
+                        tile.fill(Color.primary.opacity(hovered ? 0.05 : 0))
+                        tile.strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                    }
+                    .contentShape(tile)
             }
             .buttonStyle(.plain)
             // 一次只下一个:系统 sheet 本来就是模态的,这里置灰只是把"为什么现在点不动"

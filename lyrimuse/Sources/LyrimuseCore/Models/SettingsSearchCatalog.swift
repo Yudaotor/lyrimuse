@@ -229,8 +229,9 @@ public enum SettingsSearchCatalog {
         lyrics("fetch", "预解析待播曲目", kw: ["预解析", "提前解析", "待播", "专辑", "队列", "播放列表", "下一首"]),
         lyrics("fetch", "锁定手选歌词", kw: ["手动选定", "锁定"]),
         // ---- 歌词 › 译文 ----
-        lyrics("translation", "译文语言", kw: ["翻译", "语言"]),
-        lyrics("translation", "系统兜底翻译", kw: ["机翻", "Google", "MyMemory", "翻译"]),
+        lyrics("translation", "译文语言", sub: "各处显不显示译文，在「歌词显示」里设", kw: ["翻译", "语言"]),
+        lyrics("translation", "没有译文时自动翻译", alt: ["系统兜底翻译"], sub: "优先在本机翻译，翻不了再联网",
+               kw: ["机翻", "Google", "MyMemory", "翻译"]),
         lyrics("translation", "翻译语言包", kw: ["下载", "语言包", "Apple 翻译"]),
         // ---- 歌词 › 调整 ----
         lyrics("display", "繁简转换", kw: ["繁体", "简体", "OpenCC"]),

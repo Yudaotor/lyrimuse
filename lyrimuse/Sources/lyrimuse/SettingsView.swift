@@ -1869,36 +1869,39 @@ private struct LyricsSettingsTab: View {
     }
 
     private var translationCard: some View {
-        SettingsCard {
+        // 间距同 SettingsPage 的卡间距(14):包一层只为挂同一片背景光,同「获取」那一段。
+        VStack(spacing: 14) {
+        SettingsCard(cornerRadius: 18) {
             // 顺序是一条链:要哪种语言 → 没有译文时兜底 → 兜底要的语言包。显不显示译文是各展示面自己的开关,
-            // 在「歌词显示」里(04 章决策 42)。
+            // 在「歌词显示」里(04 章决策 42)。两行的说明常显在副标题里;搜索目录登记同一句(功能清单从那里取)。
             SettingsRow(
                 icon: "globe",
                 title: L10n.t("译文语言"),
-                help: L10n.t("选择译文的语言。悬浮歌词、歌词窗口等是否显示译文，可在「歌词显示」中分别设置")
+                subtitle: L10n.t("各处显不显示译文，在「歌词显示」里设")
             ) {
-                Picker("", selection: Binding(
-                    get: { features.lyricsTranslationLanguage },
-                    set: { features.lyricsTranslationLanguage = $0; Task { await features.save() } }
-                )) {
-                    ForEach(MusixmatchTranslationLanguage.allCases) { lang in
-                        Text(lang.displayName).tag(lang)
-                    }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
+                SettingsGlassMenuPicker(
+                    selection: Binding(
+                        get: { features.lyricsTranslationLanguage },
+                        set: { features.lyricsTranslationLanguage = $0; Task { await features.save() } }
+                    ),
+                    options: MusixmatchTranslationLanguage.allCases,
+                    label: \.displayName,
+                    compact: true
+                )
             }
             CardDivider()
+            // 副标题要写出「翻不了再联网」:不只是本机翻译,本机翻不了会把歌词发给联网翻译(09 章)。
             SettingsRow(
                 icon: "character.book.closed",
-                title: L10n.t("系统兜底翻译"),
-                help: L10n.t("歌词源未提供译文时补充")
+                title: L10n.t("没有译文时自动翻译"),
+                subtitle: L10n.t("优先在本机翻译，翻不了再联网")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsMachineTranslation },
                     set: { features.lyricsMachineTranslation = $0; Task { await features.save() } }
                 ))
             }
+        }
             // 系统翻译按语言分别下载语言包,没装的语言(日语/韩语默认就没装)只能退回联网翻译。
             // 下载弹窗是系统 UI,只有 SwiftUI 的 .translationTask 建出来的 session 才有权拉起它 ——
             // 采集器那个子进程即使在 macOS 15…25 上挂了离屏视图也**刻意不碰**语言包下载
@@ -1907,11 +1910,14 @@ private struct LyricsSettingsTab: View {
             // 闸是 15 而不是 26:`LanguageAvailability` 与 `.translationTask` 都是 macOS 15 起就有,
             // 端上翻译在 15…25 上同样能跑(见 lyrics-translate/main.swift)。这里卡 26 的话,
             // 那批系统的用户装不了语言包,端上那条路就永远是 notInstalled。
+            //
+            // 语言包单独一张卡、直接摊开全部语言(不再折在「管理…」后面);兜底关着时整张不出现。
             if #available(macOS 15.0, *), features.lyricsMachineTranslation {
-                CardDivider()
-                LanguagePackRow()
+                LanguagePackCard()
             }
         }
+        // 玻璃要背后有东西才看得出来,跟 Last.fm 各段同一份淡色光(12 章决策 63)。
+        .background { LastfmGlassGlow() }
     }
 
     // 「调整」这一段只放**改歌词内容本身**的三项:繁简 / 罗马音 / 时间轴偏移 —— 四个展示面

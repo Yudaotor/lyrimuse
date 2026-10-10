@@ -148,7 +148,7 @@ enum ConfigPortability {
     /// 又搜短名标识符),这五个在 **lyrimuse / LyrimuseCore / 引擎 / desktop-lyrics /
     /// web 全部代码里零命中**,并逐个确认过去向:
     ///
-    /// - `useSystemTranslationFallback`:"系统兜底翻译"这个开关还在,但早就改绑到
+    /// - `useSystemTranslationFallback`:「没有译文时自动翻译」(原名"系统兜底翻译")这个开关还在,但早就改绑到
     ///   `features.lyricsMachineTranslation`(features.json)了,不再走 UserDefaults。
     /// - `textShadowEnabled` / `textShadowColorHex`:文字阴影这个功能整个已经不存在。
     /// - `relayBaseURL`:中继地址现在由引擎的 config.json (`state_relay_url`) 管。
