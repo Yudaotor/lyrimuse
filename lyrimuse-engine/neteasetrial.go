@@ -43,15 +43,12 @@ func liveNeteaseTrialFull(bundle, title, artist, album string, duration float64)
 // 署名有几位就逐位试,挑法见 neteaseLocalPickFullDuration。
 func neteaseLocalFullDuration(ctx context.Context, artist, title, album string) float64 {
 	names := append([]string{artist}, artistCreditParts(artist)...)
-	neteaseLocalMu.Lock()
-	refreshNeteaseLocalIndexLocked(ctx)
-	var ents []neteaseLocalTrack
+	keys := make([]string, 0, len(names))
 	for _, a := range names {
-		if key := neteaseLocalKey(a, title); key != "" && len(neteaseLocalIndex[key]) > 0 {
-			ents = append([]neteaseLocalTrack(nil), neteaseLocalIndex[key]...)
-			break
-		}
+		keys = append(keys, neteaseLocalKey(a, title))
 	}
+	neteaseLocalMu.Lock()
+	ents := neteaseLocalEntriesLocked(ctx, keys...)
 	neteaseLocalMu.Unlock()
 	return neteaseLocalPickFullDuration(ents, album)
 }

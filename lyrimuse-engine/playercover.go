@@ -106,8 +106,7 @@ func neteaseLocalCoverURL(artist, title, album string, durationSecs float64) str
 		return ""
 	}
 	neteaseLocalMu.Lock()
-	refreshNeteaseLocalIndexLocked(context.Background())
-	ents := append([]neteaseLocalTrack(nil), neteaseLocalIndex[key]...)
+	ents := neteaseLocalEntriesLocked(context.Background(), key)
 	neteaseLocalMu.Unlock()
 	t, ok := pickNeteaseLocalEntry(ents, album, durationSecs)
 	if !ok {

@@ -257,3 +257,64 @@ func TestNeteaseLocalIndexReadsPlayHistory(t *testing.T) {
 		t.Fatalf("没有播放历史表时照读 dbTrack: err=%v n=%d", err, len(tracks))
 	}
 }
+
+// 要查的这首不在索引里、库又变过:距上次扫描过了 neteaseLocalMissRescanMin 就重扫,不等 60 秒;没过就不扫。
+// 查得到的那首不因库变过而重扫。见 03 章决策 41。
+func TestNeteaseLocalMissRescansSooner(t *testing.T) {
+	if neteaseLocalMissRescanMin+time.Second >= neteaseLocalRescanMin {
+		t.Fatal("没命中时的重扫间隔要比常规节流短,下面才测得到它")
+	}
+	path := writeTestNeteaseDB(t, neteaseLocalTestTracks[:1])
+	resetNeteaseLocalIndex(t, path)
+	if _, ok := neteaseLocalSong(context.Background(), "毛不易", "像我这样的人", "", 207); !ok {
+		t.Fatal("首次扫描应当命中")
+	}
+	// 点播的新歌写进库:换成多一首的库,改一下修改时间。
+	next := writeTestNeteaseDB(t, neteaseLocalTestTracks[:2])
+	if err := os.Rename(next, path); err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(time.Minute)
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatal(err)
+	}
+	setScanned := func(ago time.Duration) time.Time {
+		at := time.Now().Add(-ago)
+		neteaseLocalMu.Lock()
+		neteaseLocalScanned = at
+		neteaseLocalMu.Unlock()
+		return at
+	}
+	setScanned(neteaseLocalMissRescanMin / 2)
+	if _, ok := neteaseLocalSong(context.Background(), "邓丽君", "小城故事", "", 156); ok {
+		t.Fatal("距上次扫描不到 5 秒不该重扫")
+	}
+	at := setScanned(neteaseLocalMissRescanMin + time.Second)
+	if _, ok := neteaseLocalSong(context.Background(), "毛不易", "像我这样的人", "", 207); !ok {
+		t.Fatal("已在索引里的那首应当照常命中")
+	}
+	neteaseLocalMu.Lock()
+	rescanned := !neteaseLocalScanned.Equal(at)
+	neteaseLocalMu.Unlock()
+	if rescanned {
+		t.Fatal("查得到的那首不该触发重扫")
+	}
+	if _, ok := neteaseLocalSong(context.Background(), "邓丽君", "小城故事", "", 156); !ok {
+		t.Fatal("没命中、库变过、过了 5 秒,应当重扫后命中")
+	}
+}
+
+// 本机命中时候选带上客户端给这首记的封面(换成 https):客户端播放页显示的是它,专辑自己的封面偶尔是另一张。
+func TestNeteaseLocalSongCarriesClientCover(t *testing.T) {
+	raw := `{"id":"2631336273","name":"Passing Memories","artists":[{"name":"Faouzia"},{"name":"HOYO-MiX"}],` +
+		`"album":{"id":"249154288","name":"EP","picId":"109951169995238104",` +
+		`"picUrl":"http://p3.music.126.net/xLbGwnQdnbGVmXili1Xo9Q==/109951170000140542.jpg"},"duration":219721}`
+	resetNeteaseLocalIndex(t, writeTestNeteaseDB(t, []string{raw}))
+	s, ok := neteaseLocalSong(context.Background(), "Faouzia", "Passing Memories", "EP", 220)
+	if !ok {
+		t.Fatal("应当命中本地曲库")
+	}
+	if want := "https://p3.music.126.net/xLbGwnQdnbGVmXili1Xo9Q==/109951170000140542.jpg"; s.Album.PicURL != want {
+		t.Fatalf("封面应为客户端记的那张: %q", s.Album.PicURL)
+	}
+}

@@ -61,6 +61,11 @@ func neteaseLocalDBPath() string {
 }
 
 const neteaseLocalRescanMin = 60 * time.Second
+
+// neteaseLocalMissRescanMin:要查的这首不在索引里、库又变过时,距上次扫描过了这么久就再扫一次,不等 60 秒。客户端点播时
+// 才把这首写进播放历史,只按 60 秒节流的话,刚扫过之后点播的歌首轮解析读不到它,封面先用上网易云接口给的专辑图
+// (跟客户端自己显示的单曲封面可以不是一张)。见 03 章决策 41。
+const neteaseLocalMissRescanMin = 5 * time.Second
 const neteaseLocalQueryTimeout = 4 * time.Second
 const neteaseLocalMaxRows = 20000
 
@@ -188,6 +193,30 @@ func queryNeteaseLocalTable(ctx context.Context, dbPath, query string) ([]neteas
 // refreshNeteaseLocalIndexLocked 在库变过、且距上次扫描超过节流间隔时重建索引。
 // 调用方必须持有 neteaseLocalMu。
 func refreshNeteaseLocalIndexLocked(ctx context.Context) {
+	refreshNeteaseLocalIndexAfterLocked(ctx, neteaseLocalRescanMin)
+}
+
+// neteaseLocalEntriesLocked:keys 里第一个在索引里有条目的那组。都没有时按 neteaseLocalMissRescanMin 再试一次重扫
+// (库没变过照旧不扫)。调用方必须持有 neteaseLocalMu,返回的是拷贝。
+func neteaseLocalEntriesLocked(ctx context.Context, keys ...string) []neteaseLocalTrack {
+	refreshNeteaseLocalIndexLocked(ctx)
+	find := func() []neteaseLocalTrack {
+		for _, k := range keys {
+			if k != "" && len(neteaseLocalIndex[k]) > 0 {
+				return append([]neteaseLocalTrack(nil), neteaseLocalIndex[k]...)
+			}
+		}
+		return nil
+	}
+	if ents := find(); ents != nil {
+		return ents
+	}
+	refreshNeteaseLocalIndexAfterLocked(ctx, neteaseLocalMissRescanMin)
+	return find()
+}
+
+// refreshNeteaseLocalIndexAfterLocked:库变过、且距上次扫描超过 minGap 时重建索引。调用方必须持有 neteaseLocalMu。
+func refreshNeteaseLocalIndexAfterLocked(ctx context.Context, minGap time.Duration) {
 	path := neteaseLocalDBPath()
 	if path == "" {
 		neteaseLocalIndex, neteaseLocalReady = nil, true
@@ -205,7 +234,7 @@ func refreshNeteaseLocalIndexLocked(ctx context.Context) {
 	if neteaseLocalReady && st.ModTime().Equal(neteaseLocalDBMod) && st.Size() == neteaseLocalDBSize {
 		return
 	}
-	if neteaseLocalReady && now.Sub(neteaseLocalScanned) < neteaseLocalRescanMin {
+	if neteaseLocalReady && now.Sub(neteaseLocalScanned) < minGap {
 		return
 	}
 	neteaseLocalScanned, neteaseLocalReady = now, true
@@ -277,8 +306,7 @@ func neteaseLocalEntry(ctx context.Context, artist, title, album string, duratio
 		return neteaseLocalTrack{}, false
 	}
 	neteaseLocalMu.Lock()
-	refreshNeteaseLocalIndexLocked(ctx)
-	ents := append([]neteaseLocalTrack(nil), neteaseLocalIndex[key]...)
+	ents := neteaseLocalEntriesLocked(ctx, key)
 	neteaseLocalMu.Unlock()
 	if len(ents) == 0 {
 		return neteaseLocalTrack{}, false
@@ -295,6 +323,9 @@ func neteaseLocalSong(ctx context.Context, artist, title, album string, duration
 	}
 	song := neSearchSong{ID: int64(t.ID), Name: t.Name, Duration: t.Duration, Mark: t.Mark}
 	song.Album.ID, song.Album.Name = int64(t.Album.ID), t.Album.Name
+	// 封面用客户端给这首记的那张:它是这首的单曲封面,客户端播放页显示的就是它;专辑自己的封面(picId 算出来的那张)
+	// 偶尔是另一张图。
+	song.Album.PicURL = neteaseHTTPSImage(t.Album.PicURL)
 	for _, a := range t.Artists {
 		song.Artists = append(song.Artists, struct {
 			Name string `json:"name"`
