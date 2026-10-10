@@ -630,6 +630,22 @@ public final class LocalPlaybackSource: ObservableObject {
         tier == .noisyFloored && reported - predicted > flooredForwardSnapEpsilonSecs
     }
 
+    /// QQ 音乐的开播锚点有时比真正出声早(点播那一刻就发 `elapsed=0`,缓冲完才出声),从它外推下来整首偏快,
+    /// 而前向棘轮只会往前追、EMA 门槛 1.0s 够不着。这首从开播锚点一路外推下来时(`posAnchorLagSampleValid`),
+    /// 读数比外推落后 `earlyStartAnchorMinSecs`~`earlyStartAnchorMaxSecs` 就对齐读数,一首一次;对齐过头变偏慢的,
+    /// 交给前向棘轮在下一次重发锚点时追回。上沿必须小于 1 秒:QQ 在整秒跳变时刻重发的锚点偶尔少报一秒,
+    /// 起点准时的那种差恰好 1.0,不能采信。只认 QQ(网易云同档但没实测)。见 02 章决策 115。纯函数,selftest 直接覆盖。
+    public nonisolated static func correctsEarlyStartAnchor(bundleID: String?, reported: Double, predicted: Double) -> Bool {
+        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier else { return false }
+        let ahead = predicted - reported
+        return ahead > earlyStartAnchorMinSecs && ahead < earlyStartAnchorMaxSecs
+    }
+
+    /// 见 correctsEarlyStartAnchor。下沿只挡同锚点外推的毫秒级漂移。
+    public nonisolated static let earlyStartAnchorMinSecs: Double = 0.1
+    /// 见 correctsEarlyStartAnchor。
+    public nonisolated static let earlyStartAnchorMaxSecs: Double = 0.8
+
     // 实测排查坐实的设计缺陷修复:原来"稳定播放"分支只按墙钟外推、完全不回看
     // 真实读数,任何播种时刻带进来的偏差——App 启动那一拍的读数毛刺、恰好整个落在两次
     // 2 秒轮询之间而完全没被观察到的短暂停(墙钟累加器会把暂停时长也当播放时间加进去)——
@@ -2087,6 +2103,14 @@ public final class LocalPlaybackSource: ObservableObject {
             posLateAnchorProbedElapsed = anchorElapsedTime
             logger.notice("late anchor suspected: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) behind=\(predicted - reported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3))")
             env.spotifyProbeRequestConfirmation(key)
+        }
+        // 开播锚点比出声早:对齐之后这首不再算「从开播锚点外推下来」,闸保持关着(上面已置 false)。
+        if anchorLagSampleWasValid,
+           Self.correctsEarlyStartAnchor(bundleID: lastSnapshot?.bundleIdentifier, reported: reported, predicted: predicted) {
+            logger.notice("early start anchor: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) ahead=\(predicted - reported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3))")
+            trackPosSeconds = reported
+            posErrEMA = 0
+            return (trackPosSeconds, true)
         }
         posAnchorLagSampleValid = anchorLagSampleWasValid
         return resolveSteadyState(reported: reported, predicted: predicted, key: key, tier: tier)

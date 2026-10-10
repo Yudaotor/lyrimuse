@@ -98,6 +98,8 @@ func runPositionReplayTests() {
     replayCaptureLag()
     replaySodaAnchorLag()
     replayBrowserProbeReopensOnEveryTrackChange()
+    replayQQEarlyStartAnchor()
+    replayQQEarlyStartGates()
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
     replayKKBOXStallHolds()
@@ -181,6 +183,52 @@ private func replayKasetFollowsWebClock() {
     expectEqual(near(rig.shown(at: at(15)), 15.25), true, "回放·Kaset: 某一拍它自己的读数记早了,棘轮跟上去、屏上快 0.25 秒(\(shown(15)))")
     rig.tick(kaset(17, precise: true, 17), at: at(17))
     expectEqual(near(rig.shown(at: at(17)), 17), true, "回放·Kaset: 网页时钟把屏上拉回真值(\(shown(17)))")
+}
+
+private let qqID = PlaybackPlayer.qqMusic.bundleIdentifier
+
+/// QQ 开播锚点比出声早 0.48 秒(真机《Silver Lining》:`0@T0`,1.48 秒后补 `1.000` 那个锚点,真起点 = 补的那个 − 1):
+/// 补的锚点一到就对齐,之后整首按它走;对齐一首只一次,之后再落后一截交给伺服。网易云同一串读数照旧(对照)。
+@MainActor
+private func replayQQEarlyStartAnchor() {
+    for (bundle, corrects) in [(qqID, true), (PlaybackPlayer.netease.bundleIdentifier, false)] {
+        let rig = ReplayRig("qq-early-start-\(corrects)")
+        defer { rig.tearDown() }
+        func shown(_ t: Double) -> String { rig.shown(at: at(t)).map { String(format: "%.3f", $0) } ?? "nil" }
+        rig.tick(mediaControl(bundle, "Silver Lining", anchor: 0, elapsed: 0.4, duration: 233), at: at(0.4))
+        for t in stride(from: 1.6, through: 20, by: 2) {
+            rig.tick(mediaControl(bundle, "Silver Lining", anchor: 1, elapsed: 1 + (t - 1.48), duration: 233), at: at(t))
+        }
+        if corrects {
+            expectEqual(near(rig.shown(at: at(20)), 19.52), true, "回放·QQ 开播早打: 补的锚点一到就对齐(\(shown(20)))")
+            for t in stride(from: 21.6, through: 26, by: 2) {
+                rig.tick(mediaControl(bundle, "Silver Lining", anchor: 20, elapsed: 20 + (t - 20.88), duration: 233), at: at(t))
+            }
+            expectEqual(near(rig.shown(at: at(26)), 25.52, 0.15), true, "回放·QQ 开播早打: 一首只对齐一次(\(shown(26)))")
+        } else {
+            expectEqual(near(rig.shown(at: at(20)), 20), true, "回放·网易云: 同一串读数照旧按开播锚点走(\(shown(20)))")
+        }
+    }
+}
+
+/// QQ 开播早打那条只管「从开播锚点一路外推下来」的歌:中途接手(App 重启时歌已经放到 50 秒)的不动;
+/// 起点准时、整秒跳变那一刻少报一秒(落后整 1 秒)的锚点也不采信。
+@MainActor
+private func replayQQEarlyStartGates() {
+    let midway = ReplayRig("qq-early-start-midway")
+    defer { midway.tearDown() }
+    midway.tick(mediaControl(qqID, "哎呀 爱呀", anchor: 50, elapsed: 50, duration: 192), at: at(0))
+    midway.tick(mediaControl(qqID, "哎呀 爱呀", anchor: 51, elapsed: 51.6, duration: 192), at: at(2))
+    expectEqual(near(midway.shown(at: at(2)), 52), true,
+                "回放·QQ 中途接手: 落后 0.4 不对齐(\(midway.shown(at: at(2)).map { String(format: "%.3f", $0) } ?? "nil"))")
+
+    let oneLess = ReplayRig("qq-early-start-one-less")
+    defer { oneLess.tearDown() }
+    oneLess.tick(mediaControl(qqID, "醉", anchor: 0, elapsed: 0.3, duration: 266), at: at(0.3))
+    oneLess.tick(mediaControl(qqID, "醉", anchor: 0, elapsed: 2, duration: 266), at: at(2))
+    oneLess.tick(mediaControl(qqID, "醉", anchor: 8, elapsed: 8, duration: 266), at: at(9))
+    expectEqual(near(oneLess.shown(at: at(9)), 9), true,
+                "回放·QQ 少报一秒: 落后整 1 秒的锚点不采信(\(oneLess.shown(at: at(9)).map { String(format: "%.3f", $0) } ?? "nil"))")
 }
 
 private let kkboxID = PlaybackPlayer.kkbox.bundleIdentifier

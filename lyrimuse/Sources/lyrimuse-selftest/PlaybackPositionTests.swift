@@ -1670,6 +1670,17 @@ func runPlaybackPositionTests() {
         expectEqual(T.isMusicVideoType("MUSIC_VIDEO_TYPE_ATV"), false, "MV 类型: 歌曲版不算")
         expectEqual(T.isMusicVideoType(nil), false, "MV 类型: 读不到不算")
 
+        // QQ 开播锚点比出声早:读数落后外推 0.1~0.8 秒才对齐(02 章决策 115)。
+        let qq = PlaybackPlayer.qqMusic.bundleIdentifier
+        let qqEarly = LocalPlaybackSource.correctsEarlyStartAnchor
+        expectEqual(qqEarly(qq, 1.0, 1.48), true, "QQ 开播早打: 落后 0.48 对齐(Laufey 真机样本)")
+        expectEqual(qqEarly(qq, 1.0, 1.05), false, "QQ 开播早打: 落后 0.05 是外推漂移,不动")
+        expectEqual(qqEarly(qq, 8.0, 9.0), false, "QQ 开播早打: 落后整 1 秒是整秒跳变时少报一秒,不采信")
+        expectEqual(qqEarly(qq, 8.0, 9.39), false, "QQ 开播早打: 落后 1.39(早打叠少报一秒)不采信")
+        expectEqual(qqEarly(qq, 2.0, 1.5), false, "QQ 开播早打: 读数靠前归前向棘轮管")
+        expectEqual(qqEarly(PlaybackPlayer.netease.bundleIdentifier, 1.0, 1.48), false, "QQ 开播早打: 网易云没实测,不放进来")
+        expectEqual(qqEarly(PlaybackPlayer.kugou.bundleIdentifier, 1.0, 1.48), false, "QQ 开播早打: 酷狗不动")
+
         // 跟随重发锚点(KKBOX)的两条判据。
         let L2 = LocalPlaybackSource.self
         let kk = PlaybackPlayer.kkbox.bundleIdentifier
