@@ -755,38 +755,6 @@ extension SettingsRow where Trailing == EmptyView {
     }
 }
 
-// MARK: - 复选框
-
-/// 卡片里的复选框。不用系统的 `.checkbox`:macOS 26 上它没勾选时只有一块很浅的灰底、没有边框,
-/// 放在白色卡片上几乎看不出来是个能点的框。这里没勾选时画一圈描边,勾选时是强调色底 + 白色对勾,
-/// 禁用时整体变淡。只画框本身,文字由调用方在旁边摆(行容器会 `.labelsHidden()`,见 romanizationToggle)。
-struct SettingsCheckboxStyle: ToggleStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
-        return ZStack {
-            if configuration.isOn {
-                shape.fill(Color.accentColor)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-            } else {
-                shape.fill(Color(nsColor: .controlBackgroundColor))
-                shape.strokeBorder(Color.secondary.opacity(0.55), lineWidth: 1)
-            }
-        }
-        .frame(width: 14, height: 14)
-        .opacity(isEnabled ? 1 : 0.45)
-        .contentShape(Rectangle())
-        .onTapGesture { if isEnabled { configuration.isOn.toggle() } }
-        .accessibilityElement()
-        .accessibilityAddTraits(.isToggle)
-        .accessibilityValue(configuration.isOn ? L10n.t("已开启") : L10n.t("未开启"))
-        .accessibilityAction { if isEnabled { configuration.isOn.toggle() } }
-    }
-}
-
 // MARK: - 破坏性操作按钮
 
 /// 会造成不可撤销后果的按钮(清除配置、清空缓存这类)。

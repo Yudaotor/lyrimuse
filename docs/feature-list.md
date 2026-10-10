@@ -711,10 +711,10 @@ Every setting in the Settings window, by where it lives: 220 in all. Type a name
 
 ### Lyrics › Adjust
 
-- **Chinese Script**: Show Chinese lyrics in simplified or traditional throughout
-- **Romanization Languages**: Which languages get romanization. Whether Floating Lyrics, the Lyrics Window and the others show it is set for each one in Lyrics Display
-- **Split Long Lines**: On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, lines too wide for one row are split into parts shown one after another, so no line wraps or scrolls; the Lyrics Window still shows one line at a time
-- **Join Short Lines**: On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, runs of very short lines are shown as one line, only when the result fits on one row; the Touch Bar is wide, so there adjacent lines are joined whenever they fit and last 5 seconds or less in total; the Lyrics Window still shows one line at a time
+- **Chinese Script**: Show Chinese lyrics in Simplified or Traditional characters
+- **Romanization Languages**: Selected languages get pronunciation; whether it shows is set in Lyrics Display
+- **Split Long Lines**: Lines too long to fit are shown in parts, one after another
+- **Join Short Lines**: Neighbouring short lines are joined when they fit on one line
 - **Timing Offset**: Positive shows lyrics earlier, negative later
 
 ### Lyrics › Library

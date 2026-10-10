@@ -7306,94 +7306,94 @@
         }
       }
     },
-    "仅对识别为日语的歌词生效，例如 こんにちは → konnichiwa" : {
+    "罗马字，如 こんにちは → konnichiwa" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Applies only to lyrics judged Japanese, e.g. こんにちは → konnichiwa"
+            "value" : "Romaji, e.g. こんにちは → konnichiwa"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅对识别为日语的歌词生效，例如 こんにちは → konnichiwa"
+            "value" : "罗马字，如 こんにちは → konnichiwa"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅對識別為日文的歌詞生效，例如 こんにちは → konnichiwa"
+            "value" : "羅馬字，如 こんにちは → konnichiwa"
           }
         }
       }
     },
-    "仅对识别为普通话的歌词生效，例如 你好 → nǐ hǎo" : {
+    "拼音，如 你好 → nǐ hǎo" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Applies only to lyrics judged Mandarin, e.g. 你好 → nǐ hǎo"
+            "value" : "Pinyin, e.g. 你好 → nǐ hǎo"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅对识别为普通话的歌词生效，例如 你好 → nǐ hǎo"
+            "value" : "拼音，如 你好 → nǐ hǎo"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅對識別為國語的歌詞生效，例如 你好 → nǐ hǎo"
+            "value" : "漢語拼音，如 你好 → nǐ hǎo"
           }
         }
       }
     },
-    "仅对识别为粤语的歌词生效，采用粤拼（Jyutping）方案，例如 你好 → nei5 hou2" : {
+    "粤拼（Jyutping），如 你好 → nei5 hou2" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Applies only to lyrics judged Cantonese, using the Jyutping scheme, e.g. 你好 → nei5 hou2"
+            "value" : "Jyutping, e.g. 你好 → nei5 hou2"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅对识别为粤语的歌词生效，采用粤拼（Jyutping）方案，例如 你好 → nei5 hou2"
+            "value" : "粤拼（Jyutping），如 你好 → nei5 hou2"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅對識別為粵語的歌詞生效，採用粵拼（Jyutping）方案，例如 你好 → nei5 hou2"
+            "value" : "粵拼（Jyutping），如 你好 → nei5 hou2"
           }
         }
       }
     },
-    "仅对识别为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo" : {
+    "罗马字，如 안녕하세요 → annyeonghaseyo" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Applies only to lyrics judged Korean, e.g. 안녕하세요 → annyeonghaseyo"
+            "value" : "Romanization, e.g. 안녕하세요 → annyeonghaseyo"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅对识别为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo"
+            "value" : "罗马字，如 안녕하세요 → annyeonghaseyo"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅對識別為韓文的歌詞生效，例如 안녕하세요 → annyeonghaseyo"
+            "value" : "羅馬字，如 안녕하세요 → annyeonghaseyo"
           }
         }
       }
@@ -11397,25 +11397,71 @@
         }
       }
     },
-    "将中文歌词统一显示为简体或繁体" : {
+    "中文歌词统一成简体或繁体" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Chinese lyrics in simplified or traditional throughout"
+            "value" : "Show Chinese lyrics in Simplified or Traditional characters"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将中文歌词统一显示为简体或繁体"
+            "value" : "中文歌词统一成简体或繁体"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "將中文歌詞統一顯示為簡體或繁體"
+            "value" : "中文歌詞統一成簡體或繁體"
+          }
+        }
+      }
+    },
+    "只用于悬浮歌词、灵动岛、菜单栏和触控栏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only for Floating Lyrics, Notch, Menu Bar and Touch Bar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只用于悬浮歌词、灵动岛、菜单栏和触控栏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只用於浮動歌詞、動態島、選單列和觸控列"
+          }
+        }
+      }
+    },
+    "断句" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line Breaks"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "断句"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "斷句"
           }
         }
       }
@@ -15572,7 +15618,7 @@
         }
       }
     },
-    "正值：歌词提前；负值：歌词延后" : {
+    "正值歌词提前，负值延后" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -15584,13 +15630,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正值：歌词提前；负值：歌词延后"
+            "value" : "正值歌词提前，负值延后"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正值：歌詞提前；負值：歌詞延後"
+            "value" : "正值歌詞提前，負值延後"
           }
         }
       }
@@ -36666,48 +36712,48 @@
         }
       }
     },
-    "在悬浮歌词、灵动岛、菜单栏和触控栏上，一行显示不下的句子会按各自宽度拆分为多段依次显示，不换行也不滚动；歌词窗口仍按一句一行显示" : {
+    "一行放不下时拆成几段依次显示" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, lines too wide for one row are split into parts shown one after another, so no line wraps or scrolls; the Lyrics Window still shows one line at a time"
+            "value" : "Lines too long to fit are shown in parts, one after another"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在悬浮歌词、灵动岛、菜单栏和触控栏上，一行显示不下的句子会按各自宽度拆分为多段依次显示，不换行也不滚动；歌词窗口仍按一句一行显示"
+            "value" : "一行放不下时拆成几段依次显示"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在浮動歌詞、動態島、選單列和觸控列上，一行顯示不下的句子會按各自寬度拆分為多段依序顯示，不換行也不捲動；歌詞視窗仍按一句一行顯示"
+            "value" : "一行放不下時拆成幾段依序顯示"
           }
         }
       }
     },
-    "在悬浮歌词、灵动岛、菜单栏和触控栏上，连续的短句会合并为一句显示，仅在合并后能在一行内显示时合并；触控栏较宽，相邻几句能放下且合计不超过 5 秒即可合并；歌词窗口仍按一句一行显示" : {
+    "相邻的短句放得进一行时并成一行" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, runs of very short lines are shown as one line, only when the result fits on one row; the Touch Bar is wide, so there adjacent lines are joined whenever they fit and last 5 seconds or less in total; the Lyrics Window still shows one line at a time"
+            "value" : "Neighbouring short lines are joined when they fit on one line"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在悬浮歌词、灵动岛、菜单栏和触控栏上，连续的短句会合并为一句显示，仅在合并后能在一行内显示时合并；触控栏较宽，相邻几句能放下且合计不超过 5 秒即可合并；歌词窗口仍按一句一行显示"
+            "value" : "相邻的短句放得进一行时并成一行"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在浮動歌詞、動態島、選單列和觸控列上，連續的短句會合併為一句顯示，僅在合併後能在一行內顯示時合併；觸控列較寬，相鄰幾句能放下且合計不超過 5 秒即可合併；歌詞視窗仍按一句一行顯示"
+            "value" : "相鄰的短句放得進一行時併成一行"
           }
         }
       }
@@ -39345,25 +39391,25 @@
         }
       }
     },
-    "选择为哪些语言的歌词标注读音。悬浮歌词、歌词窗口等是否显示读音，可在「歌词显示」中分别设置" : {
+    "勾选的语言标上读音；显不显示在「歌词显示」里设" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Which languages get romanization. Whether Floating Lyrics, the Lyrics Window and the others show it is set for each one in Lyrics Display"
+            "value" : "Selected languages get pronunciation; whether it shows is set in Lyrics Display"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选择为哪些语言的歌词标注读音。悬浮歌词、歌词窗口等是否显示读音，可在「歌词显示」中分别设置"
+            "value" : "勾选的语言标上读音；显不显示在「歌词显示」里设"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選擇為哪些語言的歌詞標註讀音。浮動歌詞、歌詞視窗等是否顯示讀音，可在「歌詞顯示」中分別設定"
+            "value" : "勾選的語言標上讀音；顯不顯示在「歌詞顯示」裡設定"
           }
         }
       }

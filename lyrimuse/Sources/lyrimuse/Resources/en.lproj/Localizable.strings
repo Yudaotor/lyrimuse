@@ -187,6 +187,7 @@
 "一切就绪" = "All Set";
 "一并解锁" = "Unlock Them";
 "一行 1 分，最多 200" = "One point per line, up to 200";
+"一行放不下时拆成几段依次显示" = "Lines too long to fit are shown in parts, one after another";
 "三" = "W";
 "三步，大约一分钟" = "Three steps, about a minute";
 "三连音符" = "Three Notes";
@@ -255,6 +256,7 @@
 "两者均为现场版，但该候选的专辑名对应另一场演出（如另一次巡演），其时间轴与当前录音无法对齐" = "Both are live versions, but this candidate's album points to a different performance (such as another tour), so its timing won't line up with this recording";
 "两首探测曲均无响应，该源目前可能不可用" = "Neither probe track got a response — this source may currently be unavailable";
 "中文" = "Chinese";
+"中文歌词统一成简体或繁体" = "Show Chinese lyrics in Simplified or Traditional characters";
 "为当前配色命名" = "Name these colors";
 "主行的字重；副行和展开时的下一句预览比主行细一档" = "Font weight of the main line; the secondary line and the expanded next-line preview are one step lighter";
 "主题" = "Theme";
@@ -277,10 +279,6 @@
 "仅含署名行，无正文" = "Credits only, no lyrics";
 "仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息" = "Only needed if the bot's security settings have “Signature Verification” enabled — messages still arrive without it";
 "仅在机器人安全设置选择「加签」时需要填写，留空则按未加签处理" = "Only needed if the bot's security settings have “Signature” enabled; leave it blank to treat it as unsigned";
-"仅对识别为日语的歌词生效，例如 こんにちは → konnichiwa" = "Applies only to lyrics judged Japanese, e.g. こんにちは → konnichiwa";
-"仅对识别为普通话的歌词生效，例如 你好 → nǐ hǎo" = "Applies only to lyrics judged Mandarin, e.g. 你好 → nǐ hǎo";
-"仅对识别为粤语的歌词生效，采用粤拼（Jyutping）方案，例如 你好 → nei5 hou2" = "Applies only to lyrics judged Cantonese, using the Jyutping scheme, e.g. 你好 → nei5 hou2";
-"仅对识别为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo" = "Applies only to lyrics judged Korean, e.g. 안녕하세요 → annyeonghaseyo";
 "仅影响能完整显示的短句在固定宽度区域内的位置。显示不下的句子会横向滚动，对齐设置对其无效" = "Only affects lines that fit: which side of the fixed-width slot they sit on. Lines too long to fit scroll horizontally — there is no spare space, so alignment does nothing";
 "仅影响能完整显示的短句在歌词行中的位置。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左。显示不下的句子会横向滚动，对齐设置对其无效" = "Only affects short lines that fit: where they sit in the lyric row. Automatic follows the duet part — each singer's lines sit on their side, choruses are centered, and lines without duet info stay left. Lines that don't fit scroll horizontally, so alignment has no effect on them";
 "仅恢复完整尺寸的设置，迷你尺寸和窗口大小保持不变" = "Resets only the Full Size settings; the Mini Size and the window's dimensions stay as they are";
@@ -481,6 +479,7 @@
 "动态封面缓存" = "Animated Artwork Cache";
 "勾选后需退出并重新打开浏览器才能生效，此选项仅在浏览器启动时读取。" = "After ticking it, quit and reopen the browser — this switch is only read at browser launch.";
 "勾选的播放器全部退出 5 秒后，Lyrimuse 随之退出；期间如有播放器重新打开则取消。设置、歌词管理或歌词窗口打开时，会等其关闭后再退出" = "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. If Settings, Lyrics Manager or the lyrics window is open, it waits until they are closed";
+"勾选的语言标上读音；显不显示在「歌词显示」里设" = "Selected languages get pronunciation; whether it shows is set in Lyrics Display";
 "包含明文凭证；导入将覆盖全部设置并重启" = "Contains credentials in plain text; importing overwrites every setting and restarts";
 "匹配条目" = "Match";
 "匹配条目：用 Last.fm 收录的写法，如「Wang Leehom」→「王力宏」，查不到就原样发。\n仅第一位：合唱只发第一位，如「陶喆, 卢广仲」→「陶喆」；歌名选「匹配条目」且 Last.fm 收录了这首时不截。\n原始：照播放器报告的原样发。" = "Match: Last.fm's spelling, e.g. Wang Leehom → 王力宏, or as-is when it isn't listed.\nFirst Only: just the first credited artist, e.g. 陶喆, 卢广仲 → 陶喆. Not trimmed when Title is set to Match and Last.fm lists the track.\nRaw: exactly what the player reports.";
@@ -531,6 +530,7 @@
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space.";
 "只列能翻成当前译文语言的语言，所以可能比「系统设置」里少几种。点一下没下载的就能下载" = "Only languages that can be translated into your translation language are listed, so there may be a few fewer than in System Settings. Click one that isn't downloaded to download it.";
 "只有勾选的播放器会 Scrobble；网页播放器按浏览器算。" = "Only checked players scrobble; web players count as their browser.";
+"只用于悬浮歌词、灵动岛、菜单栏和触控栏" = "Only for Floating Lyrics, Notch, Menu Bar and Touch Bar";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "右" = "Right";
 "右侧" = "Right";
@@ -599,8 +599,6 @@
 "在其他设备上播放，Last.fm 已收到" = "Playing on another device; Last.fm has received it";
 "在功能栏中显示 Lyrimuse 图标，轻点即可展开歌词" = "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics.";
 "在外部编辑器中编辑歌词" = "Edit Lyrics in External Editor";
-"在悬浮歌词、灵动岛、菜单栏和触控栏上，一行显示不下的句子会按各自宽度拆分为多段依次显示，不换行也不滚动；歌词窗口仍按一句一行显示" = "On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, lines too wide for one row are split into parts shown one after another, so no line wraps or scrolls; the Lyrics Window still shows one line at a time";
-"在悬浮歌词、灵动岛、菜单栏和触控栏上，连续的短句会合并为一句显示，仅在合并后能在一行内显示时合并；触控栏较宽，相邻几句能放下且合计不超过 5 秒即可合并；歌词窗口仍按一句一行显示" = "On Desktop Floating Lyrics, the Notch, the Menu Bar and the Touch Bar, runs of very short lines are shown as one line, only when the result fits on one row; the Touch Bar is wide, so there adjacent lines are joined whenever they fit and last 5 seconds or less in total; the Lyrics Window still shows one line at a time";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在歌词下方显示一行译文" = "Show a line of translation under the lyrics";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
@@ -668,7 +666,6 @@
 "封面位置" = "Artwork Position";
 "封面角标" = "Cover Badge";
 "将「Lyrimuse」拷贝到剪贴板，用作申请页中的应用名称" = "Copies “Lyrimuse” so you can paste it as the application name";
-"将中文歌词统一显示为简体或繁体" = "Show Chinese lyrics in simplified or traditional throughout";
 "将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词" = "This deletes all %d local records, including lyrics you edited or adopted from candidates, along with their exported lyrics files. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play";
 "将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词#one" = "This deletes the %d local record, including lyrics you edited or adopted from candidates, along with its exported lyrics file. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play";
 "将在退出 Lyrimuse 时安装" = "Will install when Lyrimuse quits";
@@ -937,6 +934,7 @@
 "拷贝歌名与歌手" = "Copy Title and Artist";
 "拷贝邮箱地址" = "Copy Email Address";
 "拼音" = "Pinyin";
+"拼音，如 你好 → nǐ hǎo" = "Pinyin, e.g. 你好 → nǐ hǎo";
 "指定颜色" = "Custom Color";
 "指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板。" = "Hover over the menu bar lyrics to turn them into Previous / Play-Pause / Next; move away and the lyrics return. Doesn't take over once the lyrics shrink back to the icon after pausing, or when the slot is too narrow for three buttons. Clicking outside the three buttons still opens the panel.";
 "按 %@ 秒校验" = "Validated against %@s";
@@ -1021,6 +1019,7 @@
 "文字" = "Text";
 "文字描边" = "Text Outline";
 "文字颜色" = "Text Color";
+"断句" = "Line Breaks";
 "断开" = "Disconnect";
 "断开 Last.fm？" = "Disconnect Last.fm?";
 "断开…" = "Disconnect…";
@@ -1349,7 +1348,7 @@
 "歌词（LRC）" = "Lyrics (LRC)";
 "歌词（逐字）" = "Lyrics (Word-Timed)";
 "正值提前显示，负值延后显示" = "Positive = show earlier, negative = show later";
-"正值：歌词提前；负值：歌词延后" = "Positive shows lyrics earlier, negative later";
+"正值歌词提前，负值延后" = "Positive shows lyrics earlier, negative later";
 "正在下载…" = "Downloading…";
 "正在从 iCloud 下载这份备份，下载完成后请再次点按「恢复此备份」" = "Downloading this backup from iCloud — click Restore This Backup again once it finishes";
 "正在准备安装…" = "Preparing to install…";
@@ -1499,6 +1498,7 @@
 "登录中…" = "Signing In…";
 "登录已过期，请重新连接" = "Sign-in has expired; reconnect to continue";
 "白字描边" = "White Text with Outline";
+"相邻的短句放得进一行时并成一行" = "Neighbouring short lines are joined when they fit on one line";
 "知道了" = "OK";
 "短于 30 秒的曲目" = "Tracks Under 30 Seconds";
 "短句合并" = "Join Short Lines";
@@ -1543,6 +1543,7 @@
 "粘贴 API Key" = "Paste API Key";
 "粘贴 Shared Secret" = "Paste Shared Secret";
 "粤拼" = "Jyutping";
+"粤拼（Jyutping），如 你好 → nei5 hou2" = "Jyutping, e.g. 你好 → nei5 hou2";
 "粤语" = "Cantonese";
 "系统兜底翻译" = "System Fallback Translation";
 "系统功能栏" = "System Control Strip";
@@ -1605,6 +1606,8 @@
 "网页推送" = "Web Push";
 "网页播放器" = "Web Players";
 "网页播放器不会主动报告精确进度，开启此选项可在切歌后立即校准。" = "Web players don't report precise position; this switch lets Lyrimuse recalibrate right after a track change.";
+"罗马字，如 こんにちは → konnichiwa" = "Romaji, e.g. こんにちは → konnichiwa";
+"罗马字，如 안녕하세요 → annyeonghaseyo" = "Romanization, e.g. 안녕하세요 → annyeonghaseyo";
 "置于最顶层" = "Always on Top";
 "署名里的汉字段" = "Han characters in the credit";
 "翻译语言包" = "Translation Languages";
@@ -1857,7 +1860,6 @@
 "选择 .ttf 或 .otf 字体文件，可多选" = "Choose a .ttf or .otf font file (you can select multiple)";
 "选择…" = "Choose…";
 "选择一个自动同步的文件夹（Dropbox、坚果云、OneDrive 等），更换 Mac 后指向同一文件夹即可" = "Pick a folder that syncs on its own — Dropbox, OneDrive and the like. On your next Mac, point Lyrimuse at that same folder";
-"选择为哪些语言的歌词标注读音。悬浮歌词、歌词窗口等是否显示读音，可在「歌词显示」中分别设置" = "Which languages get romanization. Whether Floating Lyrics, the Lyrics Window and the others show it is set for each one in Lyrics Display";
 "选择左侧的设置分类" = "Select a Settings Category on the Left";
 "选择播放器" = "Choose Players";
 "选择歌词显示方式" = "Choose Where Lyrics Appear";
