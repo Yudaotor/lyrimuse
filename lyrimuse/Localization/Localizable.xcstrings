@@ -24,52 +24,6 @@
         }
       }
     },
-    "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−” and add it back with “+”."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更新後，先前的授權已失效。請在系統設定中用「−」移除 Lyrimuse，再用「+」重新新增。"
-          }
-        }
-      }
-    },
-    "在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn on Lyrimuse in System Settings. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在系統設定中開啟 Lyrimuse。開關已開啟卻仍未生效時，請用「−」移除 Lyrimuse，再用「+」重新新增。"
-          }
-        }
-      }
-    },
     "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加，然后点「重启歌词引擎」。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -181,29 +135,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 不向系統報告播放進度。授權後 Lyrimuse 會讀取其介面上的播放時間來校正，並在你按隨機、循環鍵時替你按下對應按鈕。不授權也能使用，但自動連播時進度可能差一兩秒，也沒有這兩顆鍵。"
-          }
-        }
-      }
-    },
-    "%@ 没有脚本接口。授权后 Lyrimuse 会通过它的菜单读取和切换随机、循环与喜欢。不授权也能用，只是没有这几颗键。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ has no scripting interface, so with access Lyrimuse reads and switches shuffle, repeat and Like through its menus. Without it, Lyrimuse still works, but those buttons won’t appear."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 没有脚本接口。授权后 Lyrimuse 会通过它的菜单读取和切换随机、循环与喜欢。不授权也能用，只是没有这几颗键。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 沒有腳本介面。授權後 Lyrimuse 會透過其選單讀取和切換隨機、循環與喜歡。不授權也能使用，只是沒有這幾顆鍵。"
           }
         }
       }
@@ -40424,29 +40355,6 @@
         }
       }
     },
-    "辅助功能权限可显示%@的随机、循环与喜欢键，点按时会操作其菜单栏" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accessibility shows shuffle, repeat and Like buttons for %@; clicking them uses its menu bar"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "辅助功能权限可显示%@的随机、循环与喜欢键，点按时会操作其菜单栏"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輔助使用權限可顯示%@的隨機、循環與喜歡鍵，按下時會操作其選單列"
-          }
-        }
-      }
-    },
     "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -40983,6 +40891,213 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這首歌曲時長 %@"
+          }
+        }
+      }
+    },
+    "在「系统设置 → 隐私与安全性 → %@」中开启 Lyrimuse。列表里没有时，用「+」添加当前运行的 Lyrimuse.app；已开启却仍无效时，移除旧条目并重新添加，然后重启 Lyrimuse。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「系统设置 → 隐私与安全性 → %@」中开启 Lyrimuse。列表里没有时，用「+」添加当前运行的 Lyrimuse.app；已开启却仍无效时，移除旧条目并重新添加，然后重启 Lyrimuse。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable Lyrimuse in System Settings → Privacy & Security → %@. If it is missing, use “+” to add the Lyrimuse.app you are currently running. If it is already enabled but still unavailable, remove the old entry, add the current app again, then restart Lyrimuse."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「系統設定 → 隱私權與安全性 → %@」中開啟 Lyrimuse。列表裡沒有時，用「+」加入目前執行的 Lyrimuse.app；已開啟卻仍無效時，移除舊項目並重新加入，然後重新啟動 Lyrimuse。"
+          }
+        }
+      }
+    },
+    "授权已失效。请在「系统设置 → 隐私与安全性 → %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授权已失效。请在「系统设置 → 隐私与安全性 → %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permission is no longer valid. In System Settings → Privacy & Security → %@, remove the old entry, add the Lyrimuse.app you are currently running, then restart Lyrimuse."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授權已失效。請在「系統設定 → 隱私權與安全性 → %@」中移除舊項目，重新加入目前執行的 Lyrimuse.app，然後重新啟動 Lyrimuse。"
+          }
+        }
+      }
+    },
+    "%@ 没有脚本接口。授权后 Lyrimuse 会读取并点按它的菜单，以控制随机、循环与喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能用，但没有这几颗键，失焦时也无法控制播放。失焦时的进度跳转暂不支持。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 没有脚本接口。授权后 Lyrimuse 会读取并点按它的菜单，以控制随机、循环与喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能用，但没有这几颗键，失焦时也无法控制播放。失焦时的进度跳转暂不支持。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has no scripting interface. With permission, Lyrimuse reads and presses its menus for shuffle, repeat and liking songs. When another app holds system media focus, it can also pause, resume and skip tracks. Without permission, those buttons are unavailable and playback cannot be controlled while focus is elsewhere. Seeking while focus is elsewhere is not supported."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 沒有腳本介面。授權後 Lyrimuse 會讀取並點按它的選單，以控制隨機、循環與喜歡；系統媒體焦點被其他 App 占用時，也能暫停、繼續和切換上下一首。不授權也能用，但沒有這幾顆鍵，失焦時也無法控制播放。失焦時的進度跳轉暫不支援。"
+          }
+        }
+      }
+    },
+    "辅助功能权限可显示%@的随机、循环与喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辅助功能权限可显示%@的随机、循环与喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission enables shuffle, repeat and liking songs for %@, and lets its menus pause, resume and skip tracks when another app holds system media focus"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可顯示%@的隨機、循環與喜歡鍵，也能在系統媒體焦點被其他 App 占用時，透過選單控制暫停、繼續和上下一首"
+          }
+        }
+      }
+    },
+    "请开启此权限，以显示%@的随机、循环与喜欢键，并在失去系统媒体焦点时控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，以显示%@的随机、循环与喜欢键，并在失去系统媒体焦点时控制播放"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable this permission for shuffle, repeat and liking songs in %@, and to control playback when it loses system media focus"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以顯示%@的隨機、循環與喜歡鍵，並在失去系統媒體焦點時控制播放"
+          }
+        }
+      }
+    },
+    "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable this permission to improve progress accuracy during autoplay in %@, and enable shuffle, repeat, liking songs and playback controls without system media focus in %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，讓%@自動連播時的播放進度更準確，並顯示%@的隨機、循環與喜歡鍵及失焦播放控制"
+          }
+        }
+      }
+    },
+    "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键，失焦时也无法控制播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键，失焦时也无法控制播放"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission is missing: %@ has no shuffle, repeat or like buttons, and cannot be controlled when system media focus is elsewhere"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得輔助使用權限，%@ 不顯示隨機、循環與喜歡鍵，失焦時也無法控制播放"
+          }
+        }
+      }
+    },
+    "设备控制和数据访问" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备控制和数据访问"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Device Control and Data Access"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裝置控制和資料取用"
+          }
+        }
+      }
+    },
+    "辅助功能" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辅助功能"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用"
           }
         }
       }

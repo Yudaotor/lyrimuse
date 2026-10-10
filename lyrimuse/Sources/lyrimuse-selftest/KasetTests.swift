@@ -827,9 +827,8 @@ func runKasetTests() {
                     "Kaset 契约: 勾了它的多选同样问,没勾的不问")
         expectEqual(client.contains("if !players.contains(.auto), !players.contains(.kaset) { forgetKasetPreference() }"), true,
                     "Kaset 契约: 设置不认 Kaset 时清掉顶替记录(播放控制别再发给它)")
-        let control = client.range(of: "public static func focusControlTarget() -> PlaybackPlayer? {")
-            .map { String(client[$0.upperBound...].prefix(260)) } ?? ""
-        expectEqual(control.contains("if kasetPreferred { return .kaset }"), true, "Kaset 契约: 顶替系统那边时播放控制直接发给它")
+        expectEqual(client.contains("return (kasetPreferred ? .kaset : scriptTarget, directQueryTarget, heldElsewhere)"), true,
+                    "Kaset 契约: 顶替系统那边时播放控制直接发给它")
         expectEqual(src("lyrimuse/LastfmStatsSection.swift").contains(
             #"if let url = links?.kaset, Self.isInstalled(.kaset) {"#), true, "Kaset 契约: 榜单右键「在 Kaset 中播放」只在装了 Kaset 时出")
         expectEqual(src("lyrimuse/UI/LyricsWindowView.swift").contains(#"L10n.t("YouTube Music 歌曲页")"#), true,

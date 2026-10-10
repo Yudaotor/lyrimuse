@@ -468,7 +468,7 @@ Players not on the list can be added to your trusted players from Applications, 
 
 ### Permissions, only where needed
 
-Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration and QQ Music's shuffle, repeat and like buttons need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.
+Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration and QQ Music's shuffle, repeat, like and playback controls without system media focus need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.
 
 - Settings: Player › Automation Permission
 - Settings: Player › Full Disk Access
@@ -478,7 +478,7 @@ Apple Music, Spotify and Kaset need Automation permission to read what is playin
 
 ### Playback controls and seeking
 
-Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them. Play, pause and skipping can have global shortcuts.
+Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them. Play, pause and skipping can have global shortcuts. When QQ Music loses system media focus, authorized Accessibility menus can pause, resume and skip tracks, but cannot seek.
 
 - Settings: Lyrics Display › Notch › Expanded State › Show Playback Controls
 - Settings: Keyboard Shortcuts › Play/Pause

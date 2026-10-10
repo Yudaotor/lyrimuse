@@ -1178,9 +1178,9 @@
             "zh-Hant": "依需要的權限"
           },
           "desc": {
-            "en": "Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration and QQ Music's shuffle, repeat and like buttons need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.",
-            "zh-Hans": "Apple Music、Spotify 和 Kaset 要「自动化」权限才能读播放状态；QQ 音乐、网易云音乐、酷狗音乐要「完全磁盘访问权限」才能用本机歌词和播放队列；Amazon Music 校准进度、QQ 音乐的随机、循环和喜欢键要「辅助功能」权限；浏览器里的网页播放器要给浏览器「自动化」权限，并在浏览器里打开「允许 Apple 事件中的 JavaScript」。其余播放器不需要权限。设置里每一项都标着现在授权了没有。",
-            "zh-Hant": "Apple Music、Spotify 和 Kaset 要「自動化」權限才能讀取播放狀態；QQ 音樂、網易雲音樂、酷狗音樂要「完整磁碟取用權限」才能用本機歌詞和播放佇列；Amazon Music 校正進度、QQ 音樂的隨機、循環和喜歡鍵要「輔助使用」權限；瀏覽器裡的網頁播放器要給瀏覽器「自動化」權限，並在瀏覽器裡打開「允許 Apple 事件的 JavaScript」。其餘播放器不需要權限。設定裡每一項都標著目前授權了沒有。"
+            "en": "Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration and QQ Music's shuffle, repeat, like and playback controls without system media focus need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.",
+            "zh-Hans": "Apple Music、Spotify 和 Kaset 要「自动化」权限才能读播放状态；QQ 音乐、网易云音乐、酷狗音乐要「完全磁盘访问权限」才能用本机歌词和播放队列；Amazon Music 校准进度、QQ 音乐的随机、循环和喜欢键，以及失焦时的暂停、恢复和上下首要「辅助功能」权限；浏览器里的网页播放器要给浏览器「自动化」权限，并在浏览器里打开「允许 Apple 事件中的 JavaScript」。其余播放器不需要权限。设置里每一项都标着现在授权了没有。",
+            "zh-Hant": "Apple Music、Spotify 和 Kaset 要「自動化」權限才能讀取播放狀態；QQ 音樂、網易雲音樂、酷狗音樂要「完整磁碟取用權限」才能用本機歌詞和播放佇列；Amazon Music 校正進度、QQ 音樂的隨機、循環和喜歡鍵，以及失焦時的暫停、繼續和上下一首要「輔助使用」權限；瀏覽器裡的網頁播放器要給瀏覽器「自動化」權限，並在瀏覽器裡打開「允許 Apple 事件的 JavaScript」。其餘播放器不需要權限。設定裡每一項都標著目前授權了沒有。"
           },
           "settings": [
             [
@@ -1205,9 +1205,9 @@
             "zh-Hant": "播放控制、拖移進度列"
           },
           "desc": {
-            "zh-Hans": "在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖进度条跳转。随机、循环、喜欢和音量看播放器支持：Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music 和浏览器里的 YouTube Music 各支持其中几项或全部。播放、暂停和切歌也能绑全局快捷键。",
-            "en": "Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them. Play, pause and skipping can have global shortcuts.",
-            "zh-Hant": "在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量看播放器支援：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music 和瀏覽器裡的 YouTube Music 各支援其中幾項或全部。播放、暫停和切歌也能設定全域快速鍵。"
+            "zh-Hans": "在歌词窗口和展开的灵动岛上播放、暂停、切歌，拖进度条跳转。随机、循环、喜欢和音量看播放器支持：Apple Music、Spotify、Kaset、QQ 音乐、Amazon Music 和浏览器里的 YouTube Music 各支持其中几项或全部。播放、暂停和切歌也能绑全局快捷键。QQ 音乐失去系统媒体焦点时，可通过已授权的辅助功能菜单控制暂停、恢复和上下首，但不能跳转进度。",
+            "en": "Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them. Play, pause and skipping can have global shortcuts. When QQ Music loses system media focus, authorized Accessibility menus can pause, resume and skip tracks, but cannot seek.",
+            "zh-Hant": "在歌詞視窗和展開的動態島上播放、暫停、切歌，拖移進度列跳轉。隨機、循環、喜歡和音量看播放器支援：Apple Music、Spotify、Kaset、QQ 音樂、Amazon Music 和瀏覽器裡的 YouTube Music 各支援其中幾項或全部。播放、暫停和切歌也能設定全域快速鍵。QQ 音樂失去系統媒體焦點時，可透過已授權的輔助使用選單控制暫停、繼續和上下一首，但不能跳轉進度。"
           },
           "settings": [
             [

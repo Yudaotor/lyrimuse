@@ -205,7 +205,7 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 
 ### 不管選哪種方案
 
-從 `/Applications` 打開 Lyrimuse，首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、Spotify、Kaset，或者自動偵測），選了 Apple Music、Spotify 或 Kaset 的話再授予對它的「自動化」權限（其它幾個都不需要額外權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
+從 `/Applications` 打開 Lyrimuse，首次啟動的設定引導會帶你完成：選播放器（Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、汽水音樂、KKBOX、Amazon Music、Spotify、Kaset，或者自動偵測），選了 Apple Music、Spotify 或 Kaset 的話再授予對它的「自動化」權限（其他幾個讀取基本曲目資訊不需要權限），以及啟用它的背景常駐擷取服務（這樣就算把視窗關掉，歌詞／封面也會持續解析）。走完引導歌詞馬上就會顯示出來（更多建置選項見 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 看歌詞只需要這些。上面那些附加功能，之後想用了再到設定裡打開就行。
 
@@ -229,8 +229,13 @@ QQ 音樂／網易雲音樂／酷狗音樂／汽水音樂／KKBOX／Amazon Music
 ### Lyrimuse 免費嗎？
 免費。它是 GPL-3.0 開源的，沒有付費版，沒有 App 內購買，也不用註冊帳號。Last.fm 這些帳號連不連都隨你。如果它幫到了你、想支持一下，可以在 [GitHub Sponsors](https://github.com/sponsors/Yudaotor) 上贊助，或者用支付寶、微信[請作者喝杯咖啡](https://yudaotor.github.io/donate/)。
 
+### QQ 音樂失去系統媒體焦點時還能控制嗎？
+可以。在 Lyrimuse 的 **設定 → 播放器** 中授予「輔助使用」權限後，即使瀏覽器影片占用系統媒體焦點，也能透過 QQ 自己的選單暫停、繼續和切換上下一首。這與既有的 QQ 隨機、循環和喜歡鍵共用同一項權限。QQ 留在背景，瀏覽器播放不受影響。失焦時的進度跳轉暫不支援。不授權仍能顯示歌詞；此時點按這些播放控制會打開播放器設定，由你選擇是否授權。
+
+macOS 27 的系統頁面叫 **系統設定 → 隱私權與安全性 → 裝置控制和資料取用**，更早版本叫 **輔助使用**。請加入並開啟**目前正在執行的 Lyrimuse.app**。切換至不同簽名的測試包或原始碼建置後，既有項目即使勾選也可能不再匹配；移除舊項目，重新加入目前的 App，再重新啟動 Lyrimuse。
+
 ### 只支援 Apple Music 嗎，Spotify、QQ 音樂、網易雲音樂能用嗎？
-都能用，另外還有酷狗音樂、汽水音樂、KKBOX、Amazon Music 和 YouTube Music 播放器 Kaset，一共九個播放器，還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，macOS 顯示哪個在「正在播放」就跟哪個。Apple Music、Spotify 和 Kaset 需要「自動化」權限（Spotify 和 Kaset 用它取得精確進度、控制播放），其他六個走 macOS 的 MediaRemote，不需要任何權限。用 KKBOX 或 Amazon Music 播放時，它們自己存下的這首歌詞也會拿來比較，Lyrimuse 不會向這兩家發出任何請求。
+都能用，另外還有酷狗音樂、汽水音樂、KKBOX、Amazon Music 和 YouTube Music 播放器 Kaset，一共九個播放器，還有瀏覽器裡的網頁版 YouTube Music / Spotify；也可以交給自動偵測，macOS 顯示哪個在「正在播放」就跟哪個。Apple Music、Spotify 和 Kaset 需要「自動化」權限（Spotify 和 Kaset 用它取得精確進度、控制播放），其他六個透過 macOS 的 MediaRemote 讀取基本曲目資訊，不需要權限；QQ 音樂的選單控制使用「輔助使用」權限。用 KKBOX 或 Amazon Music 播放時，它們自己存下的這首歌詞也會拿來比較，Lyrimuse 不會向這兩家發出任何請求。
 
 ### KKBOX、Amazon Music 在 Mac 上能顯示桌面歌詞嗎？
 可以。這兩家都透過 macOS 的 MediaRemote 讀取，不用給權限，歌詞和其他播放器一樣能顯示在桌面浮動視窗、選單列、動態島膠囊和歌詞視窗裡。如果 KKBOX 或 Amazon Music 自己已經存了這首歌的歌詞，也會拿來一起比較，並且額外加分。Lyrimuse 不登入這兩家的帳號，也不向它們發出請求。其他歌詞來源照樣會查，哪家的版本更好（例如帶逐字時間軸），就用哪家的。

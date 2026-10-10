@@ -207,7 +207,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/Spotify/K
 
 ### 不管选哪种方案
 
-从 `/Applications` 打开 Lyrimuse，首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、Spotify、Kaset，或者自动识别），选了 Apple Music、Spotify 或 Kaset 的话再授予对它的「自动化」权限（其它几个都不需要额外权限），以及启用它的歌词引擎（在后台常驻，这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
+从 `/Applications` 打开 Lyrimuse，首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、Spotify、Kaset，或者自动识别），选了 Apple Music、Spotify 或 Kaset 的话再授予对它的「自动化」权限（其它几个读取基本曲目信息不需要权限），以及启用它的歌词引擎（在后台常驻，这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 看歌词只需要这些。上面那些附加功能，以后想用了再去设置里打开就行。
 
@@ -231,8 +231,13 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/Spotify/K
 ### Lyrimuse 免费吗？
 免费。它是 GPL-3.0 开源的，没有付费版，没有内购，也不用注册账号。Last.fm 这些账号连不连都随你。如果它帮到了你、想支持一下，可以在 [GitHub Sponsors](https://github.com/sponsors/Yudaotor) 上赞助，或者用支付宝、微信[请作者喝杯咖啡](https://yudaotor.github.io/donate/)。
 
+### QQ 音乐失去系统媒体焦点时还能控制吗？
+可以。在 Lyrimuse 的 **设置 → 播放器** 中授予「辅助功能」权限后，即使浏览器视频占用系统媒体焦点，也能通过 QQ 自己的菜单暂停、恢复和切换上下首。这与已有的 QQ 随机、循环和喜欢键共用同一项权限。QQ 留在后台，浏览器播放不受影响。失焦时的进度跳转暂不支持。不授权仍能显示歌词；此时点击这些播放控制会打开播放器设置，由你选择是否授权。
+
+macOS 27 的系统页面叫 **系统设置 → 隐私与安全性 → 设备控制和数据访问**，更早版本叫 **辅助功能**。请添加并开启**当前正在运行的 Lyrimuse.app**。切换到不同签名的测试包或源码构建后，已有条目即使勾选也可能不再匹配；移除旧条目，重新添加当前 App，再重启 Lyrimuse。
+
 ### 只支持 Apple Music 吗，Spotify、QQ 音乐、网易云音乐能用吗？
-都能用，另外还有酷狗音乐、汽水音乐、KKBOX、Amazon Music 和 YouTube Music 客户端 Kaset，一共九个播放器；也可以交给自动识别，macOS 显示哪个在「正在播放」就跟哪个。Apple Music、Spotify 和 Kaset 需要「自动化」权限（Spotify 和 Kaset 用它拿精确进度、控制播放），其它六个走 macOS 的 MediaRemote，不需要任何权限。用 KKBOX 或 Amazon Music 放歌时，它们自己存下的这首歌词也会拿来比较，Lyrimuse 不会向这两家发任何请求。
+都能用，另外还有酷狗音乐、汽水音乐、KKBOX、Amazon Music 和 YouTube Music 客户端 Kaset，一共九个播放器；也可以交给自动识别，macOS 显示哪个在「正在播放」就跟哪个。Apple Music、Spotify 和 Kaset 需要「自动化」权限（Spotify 和 Kaset 用它拿精确进度、控制播放），其它六个通过 macOS 的 MediaRemote 读取基本曲目信息，不需要权限；QQ 音乐的菜单控制使用「辅助功能」权限。用 KKBOX 或 Amazon Music 放歌时，它们自己存下的这首歌词也会拿来比较，Lyrimuse 不会向这两家发任何请求。
 
 ### KKBOX、Amazon Music 在 Mac 上能显示桌面歌词吗？
 能。这两家都通过 macOS 的 MediaRemote 读取，不用给权限，歌词和其它播放器一样能显示在桌面悬浮窗、菜单栏、灵动岛胶囊和歌词窗口里。如果 KKBOX 或 Amazon Music 自己已经存了这首歌的歌词，也会拿来一起比较，并且额外加分。Lyrimuse 不登录这两家的账号，也不向它们发请求。其它歌词源照样会查，哪家的版本更好（比如带逐字时间轴），就用哪家的。

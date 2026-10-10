@@ -115,6 +115,37 @@ func runPlayerIdentityTests() {
         expectEqual(held(false, .spotify), Route.spotifyScript, "控制分派: 焦点被占但能发 AppleScript → 照发 AppleScript")
         expectEqual(held(true, nil), Route.appleMusicScript, "控制分派: 只勾 Apple Music → 不受焦点影响")
         do {
+            typealias Command = QQMusicAccessibilityControl.Command
+            for command in [Command.playPause, .nextTrack, .previousTrack] {
+                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                    focusHeldElsewhere: true, directQueryFallback: .qqMusic, mediaControlCommand: command.rawValue),
+                    Route.qqAccessibility(command), "QQ 失焦: \(command.rawValue) 只发给 QQ 菜单")
+                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                    directQueryFallback: .qqMusic, mediaControlCommand: command.rawValue),
+                    Route.mediaControl, "QQ 焦点正常: 不额外依赖辅助功能")
+                for player in PlaybackPlayer.allCases where player != .qqMusic {
+                    expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                        focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
+                        Route.withheld, "非 QQ 的直查回退: \(player) 不能误按 QQ 菜单")
+                }
+            }
+            for command in ["seek", "", "unknown"] {
+                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                    focusHeldElsewhere: true, directQueryFallback: .qqMusic, mediaControlCommand: command),
+                    Route.withheld, "QQ 失焦: \(command) 没有菜单通路,不能控到 Safari")
+            }
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: .spotify,
+                focusHeldElsewhere: true, directQueryFallback: .qqMusic, mediaControlCommand: "next-track"),
+                Route.spotifyScript, "AppleScript 的实际控制目标优先,不被 QQ 菜单路由覆盖")
+            expectEqual(Command.playPause.matches(menuTitle: "暂停"), true, "QQ toggle: 播放时的标题")
+            expectEqual(Command.playPause.matches(menuTitle: "播放"), true, "QQ toggle: 暂停后标题延迟刷新也仍能按同一动作")
+            expectEqual(Command.nextTrack.matches(menuTitle: "下一首"), true, "QQ next: 精确菜单项")
+            expectEqual(Command.previousTrack.matches(menuTitle: "上一首"), true, "QQ previous: 精确菜单项")
+            expectEqual(Command.nextTrack.matches(menuTitle: "上一首"), false, "QQ next: 不混用上一首")
+            expectEqual(Command.playPause.matches(menuTitle: "播放模式"), false, "QQ toggle: 不做含糊的前缀匹配")
+            expectEqual(Command(rawValue: "seek"), nil, "QQ 菜单能力: 没有 seek,API 边界拒绝")
+        }
+        do {
             let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             func src(_ path: String) -> String {
                 (try? String(contentsOf: sourcesRoot.appendingPathComponent(path), encoding: .utf8)) ?? ""
@@ -122,11 +153,12 @@ func runPlayerIdentityTests() {
             let controller = src("LyrimuseCore/Local/MusicPlaybackController.swift")
             let client = src("LyrimuseCore/Local/MediaControlClient.swift")
             let adProbe = src("LyrimuseCore/Local/YouTubeMusicAdProbe.swift")
-            expectEqual(controller.contains("focusFallback: MediaControlClient.focusControlTarget(),\n")
-                        && controller.contains("focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())"), true,
+            expectEqual(controller.contains("let focus = MediaControlClient.focusControlContext()")
+                        && controller.contains("directQueryFallback: focus.directQueryTarget,")
+                        && controller.contains("focusHeldElsewhere: focus.heldElsewhere,"), true,
                         "控制分派(契约): dispatch 按焦点回退目标与「焦点被占、没有 AppleScript」分派")
             expectEqual(client.contains("fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript")
-                        && client.contains("return viaProbe || holdingDroppedSession"), true,
+                        && client.contains("let heldElsewhere = viaProbe || holdingDroppedSession"), true,
                         "控制分派(接线): 查询是否成功与目标是否恢复交给同一保护判据;屏上这首是会话被撤后保持出来的也不发")
             let successful = MediaControlClient.shouldWithholdFocusControls(
                 fallingBack: true, targetGone: false, viaAppleScript: false)
@@ -153,8 +185,7 @@ func runPlayerIdentityTests() {
                                            + "                                                       kasetWasPlaying: kasetWasPlaying) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
             expectEqual(client.contains("fallbackViaAppleScript = viaAppleScript")
-                        && client.contains("if fallbackActive && fallbackViaAppleScript { return lastAcceptedDirectQueryPlayer }")
-                        && client.contains("return channelFallbackPlayer"), true,
+                        && client.contains("let scriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryPlayer : channelFallbackPlayer"), true,
                         "控制分派(契约): 只有经 AppleScript 问到的播放器(焦点回退 / 通道坏了时直问)才改发 AppleScript")
             expectEqual(adProbe.contains("if Self.notFoundSuppresses(notedKey: notFoundKey, notedAt: notFoundAt, key: key, now: Date())")
                         && adProbe.contains("if reading == nil, notFound {"), true,

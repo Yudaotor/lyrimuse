@@ -149,7 +149,7 @@ final class PlayerHealthMonitor: ObservableObject {
             }
             let playMode = accessibilityMissingPlayers.filter { $0.accessibilityUse == .switchesPlayMode }
             if !playMode.isEmpty {
-                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环与喜欢键"), names(playMode)))
+                parts.append(String(format: L10n.t("未获得辅助功能权限，%@ 不显示随机、循环与喜欢键，失焦时也无法控制播放"), names(playMode)))
             }
             return parts.joined(separator: L10n.t("；"))
         }

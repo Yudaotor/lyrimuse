@@ -221,12 +221,12 @@ public enum AutomationAlert {
 }
 
 extension PlaybackPlayer {
-    /// 「辅助功能」权限替这个播放器做什么。授权说明、体检提示、引导页那一句按它分开写:读进度只读不点,切模式要按菜单项。
+    /// 「辅助功能」权限替这个播放器做什么。授权说明、体检提示、引导页按它分开写:校准进度或操作菜单。
     public enum AccessibilityUse: Sendable {
         /// 读界面上的播放时间校准进度(Amazon Music,`AmazonMusicUIProbe`);点随机 / 循环键时还会按它播放条上的键
         /// (`AmazonMusicModeControl`)。
         case calibratesProgress
-        /// 读、按菜单栏里的「播放模式」「喜欢歌曲」(QQ 音乐,`QQMusicMenuControl`),点随机 / 循环 / 喜欢键时会按菜单项。
+        /// QQ 读取、点按模式与喜欢菜单(`QQMusicMenuControl`),失焦时也按播放控制菜单(`QQMusicAccessibilityControl`)。
         case switchesPlayMode
     }
 
