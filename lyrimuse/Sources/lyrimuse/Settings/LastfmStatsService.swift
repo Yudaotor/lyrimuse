@@ -2190,12 +2190,16 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    private func applyLocalAliases(_ tables: EnrichCacheReader.LocalAliasTables, rebuildFamilies: Bool) {
+    private func applyLocalAliases(_ derived: EnrichCacheReader.LocalAliasTables, rebuildFamilies: Bool) {
+        var tables = derived
+        // 实体那一层有开关(features.json 的 song_entity_phase1),关着时当空表,族退回原来的写法族(18 章决策 9)。
+        if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:] }
         guard tables != localAliasTables else { return }
         let old = localAliasTables
         localAliasTables = tables
         PlayCountFold.setLocalArtistAliases(tables.artists)
         PlayCountFold.setLocalTitleAliases(tables.titles)
+        PlayCountFold.setEntityFamilyAliases(tables.entities)
         // 受影响的写法先攒起来,等族建好/重建好再按族索引把它们的次数标过期(见 flushLocalAliasStaleMarks):
         // 歌手别名变了 → 这个歌手键、以及新旧代表写法的键;歌名别名变了 → 英文键 + 新旧中文歌名的折叠键。
         for key in Set(old.artists.keys).union(tables.artists.keys) where old.artists[key] != tables.artists[key] {
@@ -2211,13 +2215,23 @@ final class LastfmStatsService: ObservableObject {
                 if let h = after[eng] { pendingLocalAliasTouched[artistKey, default: []].insert(PlayCountFold.foldTitle(h)) }
             }
         }
-        logger.notice("local aliases: \(tables.artists.count, privacy: .public) artist + \(tables.titles.values.reduce(0) { $0 + $1.count }, privacy: .public) title alias(es) inferred from local caches")
+        // 实体别名变了 → 那个族键和新旧代表键;里程碑报过的档跟着抄到新族键下。
+        if old.entities != tables.entities {
+            for key in Set(old.entities.keys).union(tables.entities.keys) where old.entities[key] != tables.entities[key] {
+                pendingEntityTouched.insert(key)
+                if let v = old.entities[key] { pendingEntityTouched.insert(v) }
+                if let v = tables.entities[key] { pendingEntityTouched.insert(v) }
+            }
+            ListenMilestoneCenter.carryOverFamilies(from: old.entities, to: tables.entities)
+        }
+        logger.notice("local aliases: \(tables.artists.count, privacy: .public) artist + \(tables.titles.values.reduce(0) { $0 + $1.count }, privacy: .public) title + \(tables.entities.count, privacy: .public) song-entity alias(es) inferred from local caches")
         // 推出来的每一条都记进日志(表变了才记,不是每拍):这张表没有界面,排查"为什么并了/没并"只能靠它。
         // os_log 对 public 字串约 1 KB 截断,分块记。
         let artistItems = tables.artists.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
         let titleItems = tables.titles.sorted { $0.key < $1.key }
             .flatMap { a, m in m.sorted { $0.key < $1.key }.map { "\(a)|\($0.key)→\($0.value)" } }
-        for (label, items) in [("artists", artistItems), ("titles", titleItems)] {
+        let entityItems = tables.entities.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
+        for (label, items) in [("artists", artistItems), ("titles", titleItems), ("song entities", entityItems)] {
             var start = 0
             while start < items.count {
                 let chunk = items[start..<min(start + 12, items.count)].joined(separator: "; ")
@@ -2236,22 +2250,28 @@ final class LastfmStatsService: ObservableObject {
     /// 别名变了但族索引还没建好时先记在这里(首次加载:loadTitleForms 先灌别名再建族)。
     private var pendingLocalAliasTouched: [String: Set<String>] = [:]   // 歌手键 → 歌名折叠键
     private var pendingLocalArtistTouched: Set<String> = []               // 歌手键(原始或代表)
+    private var pendingEntityTouched: Set<String> = []                    // 族键(baseFamilyKey)
 
     /// 把攒下的受影响写法的次数标过期。族索引刚建好/重建好之后调;旧值照显、后台重取
     /// (stalePlayCountKeys 的语义)。首次装机后的第一次启动也走这里:此前缓存里 `khalil fong|oasis`
     /// 存的是它自己那 7 次,不标过期的话要等判据④的 24 小时窗口才会换成合并后的数。
     private func flushLocalAliasStaleMarks() {
         guard !primaryCreditFamilies.isEmpty,
-              !(pendingLocalAliasTouched.isEmpty && pendingLocalArtistTouched.isEmpty) else { return }
+              !(pendingLocalAliasTouched.isEmpty && pendingLocalArtistTouched.isEmpty && pendingEntityTouched.isEmpty)
+        else { return }
         let touchedTitles = pendingLocalAliasTouched, touchedArtists = pendingLocalArtistTouched
+        let touchedFamilies = pendingEntityTouched
         pendingLocalAliasTouched = [:]
         pendingLocalArtistTouched = []
+        pendingEntityTouched = []
         var marked = 0
         for family in primaryCreditFamilies.values {
             for form in family {
                 let canonKey = PlayCountFold.canonicalArtistKey(form.artist)
                 var hit = touchedArtists.contains(canonKey) || touchedArtists.contains(LocalArtistAliases.artistKey(form.artist))
                 if !hit, let folded = touchedTitles[canonKey], folded.contains(PlayCountFold.foldTitle(form.title)) { hit = true }
+                if !hit, !touchedFamilies.isEmpty,
+                   touchedFamilies.contains(PlayCountFold.baseFamilyKey(artist: form.artist, title: form.title)) { hit = true }
                 guard hit else { continue }
                 stalePlayCountKeys.insert(Self.playCountKey(artist: form.artist, title: form.title))
                 marked += 1
@@ -2338,9 +2358,9 @@ final class LastfmStatsService: ObservableObject {
 
     /// 歌曲榜、专辑榜的合并口径版本:改 ChartMerge 的分组规则、两种榜的折叠键或取数深度时 +1
     /// (见 StatsSnapshot.mergedChartVersion)。
-    private static let mergedChartVersion = 1
+    private static let mergedChartVersion = 2
     /// 次数表的口径版本,读写快照两处都用它,见 StatsSnapshot.mergedCountsVersion。
-    private static let mergedCountsVersion = 17
+    private static let mergedCountsVersion = 18
 
     /// 快照里允许持久化的 `fetchedAt` 键。榜单键是 `"\(kind)|\(period)"`,跟 `refreshChart`
     /// 拼法一致。

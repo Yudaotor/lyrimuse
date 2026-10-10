@@ -378,12 +378,34 @@ public enum PlayCountFold {
     /// 只作用在**派生索引** primaryCreditFamilies 的键上,不改 PlayCountFold.key 本身的
     /// 歌手口径 —— 沿用合唱 credit 归并的既有做法:那个键是整本统计账的身份,
     /// 而这里要的只是「查族时多看一眼隔壁桶」。
+    /// 最后再查一层实体别名表(同一个歌曲实体的写法并成一族,18 章决策 9)。
     public static func familyKey(artist: String, title: String) -> String {
+        let base = baseFamilyKey(artist: artist, title: title)
+        return lookupEntityFamilyAlias(base) ?? base
+    }
+
+    /// familyKey 去掉实体那一层:只按合唱归首位、歌手别名表、歌名别名表折。实体别名表的键就是它。
+    public static func baseFamilyKey(artist: String, title: String) -> String {
         let canonArtist = canonicalArtist(artist)
         let artistKey = canonicalArtistKey(canonArtist)
         let foldedTitle = foldTitle(title)
         let canonTitle = lookupLocalTitleAlias(artistKey: artistKey, foldedTitle: foldedTitle) ?? title
         return key(artist: canonArtist, title: canonTitle)
+    }
+
+    /// 同 baseFamilyKey,歌手、歌名两张表由参数给(刚推出来、还没灌进全局的;推实体别名表时用)。两个版本必须同一把尺子,
+    /// selftest 拿同一份表核对。
+    public static func baseFamilyKey(artist: String, title: String, artists: [String: String],
+                                     titles: [String: [String: String]]) -> String {
+        let canonArtist = canonicalArtist(artist, table: artists)
+        let artistKey = stripSpaces(normalized(canonicalArtist(canonArtist, table: artists)))
+        let canonTitle = titles[artistKey]?[foldTitle(title)] ?? title
+        return key(artist: canonArtist, title: canonTitle)
+    }
+
+    private static func canonicalArtist(_ artist: String, table: [String: String]) -> String {
+        let primary = ArtistCredit.mergeArtist(artist)
+        return table[stripSpaces(normalized(primary))] ?? primary
     }
 
     /// 专辑榜判同一张专辑的键:歌手跟 familyKey 同一把尺子(合唱归首位、罗马字艺名折到中文本名),专辑名走 foldTitle
@@ -465,6 +487,23 @@ public enum PlayCountFold {
         localLock.lock()
         localTitleAliasesByArtist = table
         localLock.unlock()
+    }
+
+    private static let entityLock = NSLock()
+    nonisolated(unsafe) private static var entityFamilyAliases: [String: String] = [:]
+
+    /// 灌入 `SongEntityFamilies.derive` 的结果:族键(baseFamilyKey)→ 代表族键。开关关着时灌空表。
+    public static func setEntityFamilyAliases(_ table: [String: String]) {
+        entityLock.lock()
+        entityFamilyAliases = table
+        entityLock.unlock()
+    }
+
+    private static func lookupEntityFamilyAlias(_ key: String) -> String? {
+        entityLock.lock()
+        let value = entityFamilyAliases[key]
+        entityLock.unlock()
+        return value
     }
 
     private static func lookupLocalTitleAlias(artistKey: String, foldedTitle: String) -> String? {

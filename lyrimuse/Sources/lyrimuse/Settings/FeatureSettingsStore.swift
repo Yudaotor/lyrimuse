@@ -296,6 +296,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 只管 Last.fm(含给它兜底的本地收听日志与 now-playing),ListenBrainz 不受影响。与引擎的
     /// featureFlagsFile.LastfmExcludedBundles 一一对应,语义见那边 lastfmexclude.go 头注。
     var lastfmExcludedBundles: [String]?
+    /// 歌曲实体阶段 1:「第 N 次收听」的写法族并上实体、「⋯」菜单链接向同一首歌的其它写法借(18 章决策 9、10)。
+    /// 缺失 = 开;设置界面不露出来,排查时手改文件关掉。只 App 读(启动时),引擎 features.go 声明同名键只为两侧键镜像契约。
+    var songEntityPhase1: Bool?
     /// 「网页播放器」配对关系的镜像:平台 id → 浏览器 bundle id(已排序)。真源是 AppSettings.browserPlatformPairs,
     /// 这里只为让引擎知道 —— 它那几路网页平台探针只对配对过的浏览器跑(引擎 browserpairs.go)。
     /// 缺失 = 还没写过,引擎沿用所有浏览器都探;空对象 = 一个都没配。
@@ -344,6 +347,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case trustedPlayers = "trusted_players"
         case lastfmExcludedBundles = "lastfm_excluded_bundles"
         case browserPlatformPairs = "browser_platform_pairs"
+        case songEntityPhase1 = "song_entity_phase1"
     }
 
     /// 这个版本认识的全部 JSON 键。见 FeatureSettingsStore.unknownFileKeys 的注释。
@@ -506,6 +510,9 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public private(set) var lastfmExcludedBundles: Set<String> = []
     /// 见 FeatureFlagsFile.browserPlatformPairs。只经 syncBrowserPlatformPairs 改。
     public private(set) var browserPlatformPairs: [String: [String]]?
+    /// 见 FeatureFlagsFile.songEntityPhase1。读进来原样写回,界面上不改。
+    public private(set) var songEntityPhase1: Bool?
+    public var songEntityPhase1Enabled: Bool { songEntityPhase1 ?? true }
 
     @Published public private(set) var lastError: String?
     /// 上一次保存落盘成功、但引擎没重启——因为用户在「播放器」页主动停用了后台服务(kickstart 对没加载的
@@ -609,6 +616,7 @@ public final class FeatureSettingsStore: ObservableObject {
             launchLyrimuseOnPlayers: launchLyrimuseOnPlayers.map(\.rawValue).sorted(),
             trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers,
             lastfmExcludedBundles: lastfmExcludedBundles.isEmpty ? nil : lastfmExcludedBundles.sorted(),
+            songEntityPhase1: songEntityPhase1,
             browserPlatformPairs: browserPlatformPairs
         )
     }
@@ -858,6 +866,8 @@ public final class FeatureSettingsStore: ObservableObject {
         lastfmExcludedBundles = Set((f.lastfmExcludedBundles ?? [])
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         browserPlatformPairs = f.browserPlatformPairs
+        songEntityPhase1 = f.songEntityPhase1
+        EnrichCacheReader.borrowsEntityLinks = songEntityPhase1Enabled
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {

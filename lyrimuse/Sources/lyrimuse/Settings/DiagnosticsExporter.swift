@@ -63,9 +63,11 @@ enum DiagnosticsExporter {
             // 状态段要读 @MainActor 的单例,在主线程取;自动化权限先 await 出来传进去,
             // 不能在主线程上同步查(见 `automationLine`)。日志段(慢的那部分)扔后台。
             let head = stateLines(automation: await automationLine(), engineState: await engineStateOffMain())
+            let entityAliasGaps = await EnrichCacheReader.songEntityAliasGapsText()
             await Task.detached(priority: .userInitiated) {
                 writeDiagnosticsBundle(to: url, bundleName: bundleName, head: head,
-                                       secrets: secrets, currentTrackLines: currentTrackLines)
+                                       secrets: secrets, currentTrackLines: currentTrackLines,
+                                       entityAliasGaps: entityAliasGaps)
             }.value
             // 写包的每一步都是 try?:按结果判断有没有写成(文件在、而且是这次写的),没写成就明说,
             // 不要照样打开访达、让人对着一个空文件夹或上一次的旧文件。
@@ -430,7 +432,7 @@ enum DiagnosticsExporter {
     /// 日志照样直接 grep,而 3MB 的 txt 两头都不讨好。
     private static func writeDiagnosticsBundle(
         to destination: URL, bundleName: String, head: [String],
-        secrets: [String: String], currentTrackLines: [String]?
+        secrets: [String: String], currentTrackLines: [String]?, entityAliasGaps: String?
     ) {
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("lyrimuse-diag-\(UUID().uuidString)")
@@ -456,6 +458,10 @@ enum DiagnosticsExporter {
         // 歌曲实体的诊断报告:引擎在后台建实体表时写(lyrimuse-engine/songentitystore.go),还没建过就不带。
         if let entities = songEntityReportText(secrets: secrets) {
             files.append(("song-entity-report.txt", entities))
+        }
+        // 旧别名表并着、实体判成不同歌的写法族(App 侧算的,18 章决策 11),别名表还没算好就不带。
+        if let gaps = entityAliasGaps {
+            files.append(("song-entity-alias-gaps.txt", LogRedactor.redactAll(gaps, secrets: secrets)))
         }
         let home = fm.homeDirectoryForCurrentUser.path
         for (name, text) in files {

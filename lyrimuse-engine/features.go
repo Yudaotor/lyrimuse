@@ -214,6 +214,9 @@ type featureFlagsFile struct {
 	// SongEntityShadow:后台建歌曲实体表、写诊断报告,见 songentitystore.go。**默认开**;只有引擎认,App 不读不写,
 	// 靠 unknownFileKeys 原样保留。关掉时两个派生文件删掉。
 	SongEntityShadow *bool `json:"song_entity_shadow,omitempty"`
+	// SongEntityPhase1:歌曲实体阶段 1(「第 N 次收听」的写法族并上实体、「⋯」菜单链接向同一首歌的其它写法借),
+	// 缺失 = 开。只有 App 读,引擎不用;声明在这里只为两侧键镜像契约。见 18 章决策 9、10。
+	SongEntityPhase1 *bool `json:"song_entity_phase1,omitempty"`
 }
 
 // featureFlags is the resolved (never-nil) form consulted at every gate site.

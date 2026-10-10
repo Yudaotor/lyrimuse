@@ -64,10 +64,12 @@ public enum EnrichTitleAliases {
         public var appleMusicURL: String?
         /// 这条录音的 ISRC,缓存里的 `isrcs`;E1 用。
         public var isrcs: [String]
+        /// 所在歌曲实体的 id,缓存里的 `song`;只给实体别名表(SongEntityFamilies)用。
+        public var song: String?
 
         public init(artist: String, title: String, neteaseURL: String?, qqMusicURL: String?, durationSecs: Double?,
                     resolvedDurationSecs: Double? = nil, lyrics: String? = nil, lyricsRef: LyricsRef? = nil,
-                    appleMusicURL: String? = nil, isrcs: [String] = []) {
+                    appleMusicURL: String? = nil, isrcs: [String] = [], song: String? = nil) {
             self.artist = artist
             self.title = title
             self.neteaseURL = neteaseURL
@@ -78,6 +80,7 @@ public enum EnrichTitleAliases {
             self.lyricsRef = lyricsRef
             self.appleMusicURL = appleMusicURL
             self.isrcs = isrcs
+            self.song = song
         }
     }
 

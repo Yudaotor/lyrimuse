@@ -306,9 +306,10 @@ func TestCatalogIDFieldsReachApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	swift := string(raw)
-	start := strings.Index(swift, "public static func platformLinks(")
+	// 拼链接的是 platformLinks(for:siblings:)(字段从自己或借出的那条写法取,所以按「.字段名」认);签名改了就跟着改这条测试。
+	start := strings.Index(swift, "static func platformLinks(for entry: EnrichCacheEntry")
 	if start < 0 {
-		t.Fatal("EnrichCacheReader.swift 里没找到 platformLinks(签名改了就跟着改这条测试)")
+		t.Fatal("EnrichCacheReader.swift 里没找到 platformLinks(for:siblings:)(签名改了就跟着改这条测试)")
 	}
 	feed := swift[start:]
 	if end := strings.Index(feed, "\n    }\n"); end > 0 {
@@ -326,8 +327,8 @@ func TestCatalogIDFieldsReachApp(t *testing.T) {
 		m := regexp.MustCompile(`case (\w+) = "` + regexp.QuoteMeta(key) + `"`).FindStringSubmatch(swift)
 		if m == nil {
 			t.Errorf("%s:App 没解码(EnrichCacheReader.swift 的 CodingKeys 里没有)", key)
-		} else if !strings.Contains(feed, "entry."+m[1]) {
-			t.Errorf("%s:App 解码了却没交给 PlatformLinks(platformLinks 里没用 entry.%s)", key, m[1])
+		} else if !regexp.MustCompile(`\.` + m[1] + `\b`).MatchString(feed) {
+			t.Errorf("%s:App 解码了却没交给 PlatformLinks(platformLinks(for:siblings:) 里没用 .%s)", key, m[1])
 		}
 	}
 	if n != 12 {

@@ -113,6 +113,16 @@ final class ListenMilestoneCenter: ObservableObject {
         }
     }
 
+    /// 写法族的分组变了时把报过的档抄到新族键下(ListenMilestoneLedger.carryOver)。LastfmStatsService 换实体别名表时调。
+    static func carryOverFamilies(from old: [String: String], to new: [String: String]) {
+        guard let data = UserDefaults.standard.data(forKey: ledgerKey),
+              var ledger = try? JSONDecoder().decode(ListenMilestoneLedger.self, from: data),
+              ledger.carryOver(familyAliasesFrom: old, to: new) > 0,
+              let out = try? JSONEncoder().encode(ledger)
+        else { return }
+        UserDefaults.standard.set(out, forKey: ledgerKey)
+    }
+
     private func loadLedger() -> ListenMilestoneLedger {
         guard let data = UserDefaults.standard.data(forKey: Self.ledgerKey),
               let ledger = try? JSONDecoder().decode(ListenMilestoneLedger.self, from: data)

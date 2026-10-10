@@ -83,6 +83,10 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     let spotifyTrackID: String?
     // 这条录音的 ISRC(引擎的 enrichEntry.ISRCs,见 lyrimuse-engine/recordingisrc.go)。只喂歌名别名推断(EnrichTitleAliases)。
     let isrcs: [String]?
+    // 所在歌曲实体的 id(引擎的 enrichEntry.Song,实体表全量重建时写)。喂实体别名表(SongEntityFamilies)和链接借用。
+    let song: String?
+    // 在实体里是第几个共享组(引擎的 enrichEntry.SongShare,第 0 组不写)。只喂链接借用(platformLinks(for:siblings:))。
+    let songShare: Int?
     // KKBOX 歌曲页(引擎的 enrichEntry.KKBOXURL,用 KKBOX 放这首时从它缓存的单曲详情取的)。只喂 PlatformLinks.kkboxSong。
     let kkboxURL: String?
     // Amazon Music 曲目页(引擎的 enrichEntry.AmazonURL,用 Amazon Music 放这首时从它日志里的 ASIN 拼的)。
@@ -171,6 +175,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case youtubeMusicArtistID = "youtube_music_artist_id"
         case spotifyTrackID = "spotify_track_id"
         case isrcs
+        case song
+        case songShare = "song_share"
         case kkboxURL = "kkbox_url"
         case amazonURL = "amazon_url"
         case youtubeMusicURL = "youtube_music_url"
@@ -238,6 +244,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         youtubeMusicArtistID = try c.decodeIfPresent(String.self, forKey: .youtubeMusicArtistID)
         spotifyTrackID = try c.decodeIfPresent(String.self, forKey: .spotifyTrackID)
         isrcs = try c.decodeIfPresent([String].self, forKey: .isrcs)
+        song = try c.decodeIfPresent(String.self, forKey: .song)
+        songShare = try c.decodeIfPresent(Int.self, forKey: .songShare)
         kkboxURL = try c.decodeIfPresent(String.self, forKey: .kkboxURL)
         amazonURL = try c.decodeIfPresent(String.self, forKey: .amazonURL)
         youtubeMusicURL = try c.decodeIfPresent(String.self, forKey: .youtubeMusicURL)
@@ -457,38 +465,72 @@ public enum EnrichCacheReader {
     public static func platformLinks(artist: String, title: String, album: String) -> PlatformLinks? {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         guard let entry = currentEntry(key) else { return nil }
-        let rawQQ = entry.qqMusicURL ?? ""
+        return platformLinks(for: entry, siblings: entitySiblings(of: entry))
+    }
+
+    /// 播放器给的那几家链接能不能向同一首歌的其它写法借(features.json 的 song_entity_phase1,App 启动读到后设)。
+    public static var borrowsEntityLinks = true
+
+    /// 同一首歌(缓存条目的 `song` 相同)的全部写法,按键排序,含 entry 自己;没有实体 id、开关关着、缓存没加载好时是空的。
+    private static func entitySiblings(of entry: EnrichCacheEntry) -> [EnrichCacheEntry] {
+        guard borrowsEntityLinks, let song = entry.song, !song.isEmpty, let all = loadEntries() else { return [] }
+        return all.filter { $0.value.song == song }.sorted { $0.key < $1.key }.map(\.value)
+    }
+
+    /// 拼这首歌在各平台的跳转目标。siblings 是同一首歌的其它写法:当前这条缺某一家的歌曲页时,从第一条有的写法借,
+    /// 同一家的专辑页、歌手页自己没有的跟着从那条借。播放器给的那几家(Spotify、Amazon Music、KKBOX、YouTube Music、汽水,
+    /// id 只在用那个播放器放时写进来)整个实体里借,YouTube Music 不借 MV 那一版(18 章决策 10);检索配的 Apple、网易云、QQ
+    /// 只在同一个共享组(`song_share` 相同)里借(决策 12)。
+    public nonisolated static func platformLinks(for entry: EnrichCacheEntry, siblings: [EnrichCacheEntry]) -> PlatformLinks? {
+        func lender(_ has: (EnrichCacheEntry) -> Bool, borrowable: (EnrichCacheEntry) -> Bool = { _ in true }) -> EnrichCacheEntry {
+            if has(entry) { return entry }
+            return siblings.first { has($0) && borrowable($0) } ?? entry
+        }
+        let sameShare = { (e: EnrichCacheEntry) in (e.songShare ?? 0) == (entry.songShare ?? 0) }
+        let ap = lender({ MusicCatalogSearch.musicSchemeURL($0.appleMusicURL) != nil }, borrowable: sameShare)
+        let ne = lender({ $0.neteaseURL.flatMap { $0.isEmpty ? nil : URL(string: $0) } != nil }, borrowable: sameShare)
+        let qq = lender({ e in
+            let raw = e.qqMusicURL ?? ""
+            return !raw.isEmpty && !PlatformLinks.isQQSearchFallback(raw) && URL(string: raw) != nil
+        }, borrowable: sameShare)
+        func own(_ mine: String?, _ lent: String?) -> String { (mine?.isEmpty == false ? mine : lent) ?? "" }
+        let sp = lender { PlatformLinks.spotifyTrackURL(id: $0.spotifyTrackID ?? "") != nil }
+        let kk = lender { PlatformLinks.kkboxAppURL(songPage: $0.kkboxURL ?? "") != nil }
+        let am = lender { PlatformLinks.amazonTrackURL($0.amazonURL ?? "") != nil }
+        let yt = lender({ PlatformLinks.youtubeMusicWatchURL($0.youtubeMusicURL ?? "") != nil }, borrowable: { $0.youtubeMusicMV != true })
+        let so = lender { PlatformLinks.sodaTrackURL($0.sodaURL ?? "") != nil }
+        let rawQQ = qq.qqMusicURL ?? ""
         // 搜索兜底链接不当"歌曲页"给出去,理由见 PlatformLinks.isQQSearchFallback
         let qqSong = (!rawQQ.isEmpty && !PlatformLinks.isQQSearchFallback(rawQQ))
             ? URL(string: rawQQ) : nil
         let links = PlatformLinks(
             // https://music.apple.com/… → music://(进 App)。非 AM 链接会被这个函数拒掉。
-            appleMusic: MusicCatalogSearch.musicSchemeURL(entry.appleMusicURL),
+            appleMusic: MusicCatalogSearch.musicSchemeURL(ap.appleMusicURL),
             qqSong: qqSong,
-            qqAlbum: PlatformLinks.qqAlbumURL(mid: entry.qqAlbumMid ?? ""),
-            qqArtist: PlatformLinks.qqArtistURL(mid: entry.qqSingerMid ?? ""),
-            neteaseSong: (entry.neteaseURL?.isEmpty == false) ? URL(string: entry.neteaseURL!) : nil,
+            qqAlbum: PlatformLinks.qqAlbumURL(mid: own(entry.qqAlbumMid, qq.qqAlbumMid)),
+            qqArtist: PlatformLinks.qqArtistURL(mid: own(entry.qqSingerMid, qq.qqSingerMid)),
+            neteaseSong: (ne.neteaseURL?.isEmpty == false) ? URL(string: ne.neteaseURL!) : nil,
             // 只认真曲目 ID;spotify_url 那个搜索页兜底不进来(理由见 PlatformLinks.spotifySong)。
-            spotifySong: PlatformLinks.spotifyTrackURL(id: entry.spotifyTrackID ?? ""),
-            kkboxSong: PlatformLinks.kkboxAppURL(songPage: entry.kkboxURL ?? ""),
-            amazonSong: PlatformLinks.amazonTrackURL(entry.amazonURL ?? ""),
-            youtubeMusicSong: PlatformLinks.youtubeMusicWatchURL(entry.youtubeMusicURL ?? ""),
-            sodaSong: PlatformLinks.sodaTrackURL(entry.sodaURL ?? ""),
-            sodaAlbum: PlatformLinks.sodaAlbumURL(id: entry.sodaAlbumID ?? ""),
-            sodaArtist: PlatformLinks.sodaArtistURL(id: entry.sodaArtistID ?? ""),
-            kkboxAlbum: PlatformLinks.kkboxAlbumAppURL(id: entry.kkboxAlbumID ?? ""),
-            kkboxArtist: PlatformLinks.kkboxArtistAppURL(id: entry.kkboxArtistID ?? ""),
-            amazonAlbum: PlatformLinks.amazonAlbumURL(asin: entry.amazonAlbumASIN ?? ""),
-            amazonArtist: PlatformLinks.amazonArtistURL(asin: entry.amazonArtistASIN ?? ""),
-            spotifyAlbum: PlatformLinks.spotifyAlbumURL(id: entry.spotifyAlbumID ?? ""),
-            spotifyArtist: PlatformLinks.spotifyArtistURL(id: entry.spotifyArtistID ?? ""),
-            youtubeMusicAlbum: PlatformLinks.youtubeMusicAlbumURL(browseID: entry.youtubeMusicAlbumID ?? ""),
-            youtubeMusicArtist: PlatformLinks.youtubeMusicArtistURL(channelID: entry.youtubeMusicArtistID ?? ""),
-            appleMusicWeb: MusicCatalogSearch.musicSchemeURL(entry.appleMusicURL) == nil
-                ? nil : entry.appleMusicURL.flatMap { URL(string: $0) },
-            kkboxWeb: PlatformLinks.kkboxAppURL(songPage: entry.kkboxURL ?? "") == nil
-                ? nil : entry.kkboxURL.flatMap { URL(string: $0) },
-            kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: entry.kkboxURL ?? "", artistID: entry.kkboxArtistID ?? ""))
+            spotifySong: PlatformLinks.spotifyTrackURL(id: sp.spotifyTrackID ?? ""),
+            kkboxSong: PlatformLinks.kkboxAppURL(songPage: kk.kkboxURL ?? ""),
+            amazonSong: PlatformLinks.amazonTrackURL(am.amazonURL ?? ""),
+            youtubeMusicSong: PlatformLinks.youtubeMusicWatchURL(yt.youtubeMusicURL ?? ""),
+            sodaSong: PlatformLinks.sodaTrackURL(so.sodaURL ?? ""),
+            sodaAlbum: PlatformLinks.sodaAlbumURL(id: own(entry.sodaAlbumID, so.sodaAlbumID)),
+            sodaArtist: PlatformLinks.sodaArtistURL(id: own(entry.sodaArtistID, so.sodaArtistID)),
+            kkboxAlbum: PlatformLinks.kkboxAlbumAppURL(id: own(entry.kkboxAlbumID, kk.kkboxAlbumID)),
+            kkboxArtist: PlatformLinks.kkboxArtistAppURL(id: own(entry.kkboxArtistID, kk.kkboxArtistID)),
+            amazonAlbum: PlatformLinks.amazonAlbumURL(asin: own(entry.amazonAlbumASIN, am.amazonAlbumASIN)),
+            amazonArtist: PlatformLinks.amazonArtistURL(asin: own(entry.amazonArtistASIN, am.amazonArtistASIN)),
+            spotifyAlbum: PlatformLinks.spotifyAlbumURL(id: own(entry.spotifyAlbumID, sp.spotifyAlbumID)),
+            spotifyArtist: PlatformLinks.spotifyArtistURL(id: own(entry.spotifyArtistID, sp.spotifyArtistID)),
+            youtubeMusicAlbum: PlatformLinks.youtubeMusicAlbumURL(browseID: own(entry.youtubeMusicAlbumID, yt.youtubeMusicAlbumID)),
+            youtubeMusicArtist: PlatformLinks.youtubeMusicArtistURL(channelID: own(entry.youtubeMusicArtistID, yt.youtubeMusicArtistID)),
+            appleMusicWeb: MusicCatalogSearch.musicSchemeURL(ap.appleMusicURL) == nil
+                ? nil : ap.appleMusicURL.flatMap { URL(string: $0) },
+            kkboxWeb: PlatformLinks.kkboxAppURL(songPage: kk.kkboxURL ?? "") == nil
+                ? nil : kk.kkboxURL.flatMap { URL(string: $0) },
+            kkboxArtistWeb: PlatformLinks.kkboxArtistWebURL(songPage: kk.kkboxURL ?? "", artistID: own(entry.kkboxArtistID, kk.kkboxArtistID)))
         return links.isEmpty ? nil : links
     }
 
@@ -1414,11 +1456,31 @@ public enum EnrichCacheReader {
     public struct LocalAliasTables: Equatable {
         public var artists: [String: String]
         public var titles: [String: [String: String]]
+        /// 实体别名:族键 → 代表族键(SongEntityFamilies.derive,18 章决策 9)。
+        public var entities: [String: String] = [:]
         public static let empty = LocalAliasTables(artists: [:], titles: [:])
     }
 
     /// 已算好的那份(没算过给 nil)。主线程同步读,不触发计算 —— 计算走 `computeLocalAliasTables`。
     public static var localAliasTablesIfComputed: LocalAliasTables? { cachedAliasTables }
+
+    /// 旧别名表并着、实体判成不同歌的写法族(SongEntityFamilies.aliasOnlyMerges),写成文本给诊断包。别名表还没算好、
+    /// 缓存读不到时返回 nil。在后台算。
+    public static func songEntityAliasGapsText() async -> String? {
+        guard let tables = cachedAliasTables, let all = loadEntries() else { return nil }
+        let entries = all
+        return await Task.detached(priority: .utility) {
+            let inputs = entries.compactMap { key, entry -> EnrichTitleAliases.Entry? in
+                guard EnrichCacheKeys.strippingDurationVariant(key) == key else { return nil }
+                let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+                guard parts.count == 3 else { return nil }
+                return .init(artist: String(parts[0]), title: String(parts[1]), neteaseURL: nil, qqMusicURL: nil,
+                             durationSecs: nil, song: entry.song)
+            }
+            let merges = SongEntityFamilies.aliasOnlyMerges(inputs, artists: tables.artists, titles: tables.titles)
+            return SongEntityFamilies.aliasOnlyMergesText(merges)
+        }.value
+    }
     private static var cachedAliasTables: LocalAliasTables?
     private static var aliasTablesGeneration = 0
     /// 算 `cachedAliasTables` 那一刻引擎三份 MusicBrainz 缓存的样子;采纳新一版缓存时它们变了,别名表也作废(见 adopt)。
@@ -1465,7 +1527,7 @@ public enum EnrichCacheReader {
                                     durationSecs: entry.durationSecs,
                                     resolvedDurationSecs: entry.resolvedDurationSecs,
                                     lyrics: entry.lyrics, lyricsRef: ref,
-                                    appleMusicURL: entry.appleMusicURL, isrcs: entry.isrcs ?? []))
+                                    appleMusicURL: entry.appleMusicURL, isrcs: entry.isrcs ?? [], song: entry.song))
             }
             var bodies = EnrichTitleAliases.StoredBodies(remembered: remembered) { ref in
                 readBody(forKey: ref.key, crc: ref.crc, in: dir)?.lyrics
@@ -1490,7 +1552,13 @@ public enum EnrichCacheReader {
         // derive 有好几个函数参数:必须写 `artistKey:` 标签,别写成尾随闭包。见 12 章决策 27。
         let titles = EnrichTitleAliases.derive(entries, artistKey: { LocalArtistAliases.canonicalArtistKey($0, table: artists) },
                                                storedBody: storedBody)
-        return LocalAliasTables(artists: artists, titles: titles)
+        // 实体别名表在两张表之上算:族键用刚推出的两张表折,跟灌进全局之后 familyKey 算的一样。
+        let members = entries.compactMap { e -> SongEntityFamilies.Member? in
+            guard let song = e.song, !song.isEmpty else { return nil }
+            return .init(song: song, familyKey: PlayCountFold.baseFamilyKey(artist: e.artist, title: e.title,
+                                                                            artists: artists, titles: titles))
+        }
+        return LocalAliasTables(artists: artists, titles: titles, entities: SongEntityFamilies.derive(members))
     }
 
     /// 缓存文件的 mtime。给"要不要重算派生表"这类判断用 —— 调用方自己存一份上次的值,

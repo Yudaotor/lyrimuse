@@ -85,6 +85,27 @@ public struct ListenMilestoneLedger: Codable, Equatable, Sendable {
         return (day == today ? shownToday : 0) < Self.dailyTrackLimit
     }
 
+    /// 写法族的分组变了(实体别名表换了一版):报过的档抄到新族键下,并多、拆开、换代表都抄,不然重新分组之后同一首歌
+    /// 会把同一档再报一遍。`old` / `new` 是族键 → 代表族键,不在表里的键代表它自己。返回抄了几条。
+    public mutating func carryOver(familyAliasesFrom old: [String: String], to new: [String: String]) -> Int {
+        var counts: [String: [String]] = [:] // 族键 → 报过的「#次数」
+        for k in celebratedTracks {
+            guard let i = k.lastIndex(of: "#") else { continue }
+            counts[String(k[..<i]), default: []].append(String(k[i...]))
+        }
+        var have = Set(celebratedTracks)
+        var added = 0
+        for key in Set(old.keys).union(new.keys).sorted() where old[key] != new[key] {
+            let from = old[key] ?? key, to = new[key] ?? key
+            guard from != to else { continue }
+            for suffix in counts[from] ?? [] where have.insert(to + suffix).inserted {
+                celebratedTracks.append(to + suffix)
+                added += 1
+            }
+        }
+        return added
+    }
+
     public mutating func recordTrack(_ key: String, today: String) {
         if day != today {
             day = today

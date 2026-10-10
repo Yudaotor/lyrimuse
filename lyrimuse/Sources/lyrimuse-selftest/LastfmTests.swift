@@ -683,6 +683,147 @@ func runLastfmTests() {
                     "别名表作废(契约): 采纳新一版缓存时,条目里的别名输入变了、或者引擎那三份 MusicBrainz 缓存变了都重算")
     }
 
+    // ---- SongEntityFamilies:同一个歌曲实体的写法并进同一族(18 章决策 9) ----
+    do {
+        typealias M = SongEntityFamilies.Member
+        let base = { (a: String, t: String) in PlayCountFold.baseFamilyKey(artist: a, title: t, artists: [:], titles: [:]) }
+        let en = base("Gareth.T", "polar express"), zh = base("Gareth.T", "去北極忘記你")
+        expectEqual(SongEntityFamilies.derive([M(song: "s_1", familyKey: en), M(song: "s_1", familyKey: zh)]), [en: zh],
+                    "实体族: 同一个实体的两种写法并成一族,代表键含汉字的优先")
+        let a = base("A", "One"), b = base("A", "Two"), c = base("A", "Three"), d = base("A", "Four")
+        let shared = SongEntityFamilies.derive([M(song: "s_1", familyKey: a), M(song: "s_1", familyKey: b),
+                                                M(song: "s_2", familyKey: b), M(song: "s_2", familyKey: c)])
+        expectEqual(shared, [:], "实体族: 两个实体共用的族键不拿来并,不同的歌不经它连成一族")
+        let rest = SongEntityFamilies.derive([M(song: "s_1", familyKey: a), M(song: "s_1", familyKey: b), M(song: "s_1", familyKey: d),
+                                              M(song: "s_2", familyKey: b)])
+        expectEqual(Set(rest.keys).union(rest.values), [a, d], "实体族: 共用的键剔掉之后,实体自己的其余写法照并")
+        expectEqual(Set(rest.values).count, 1, "实体族: 一组只有一个代表键")
+        // 合唱版归首位之后跟独唱版的一条写法同名:「(独唱版)」不并进合唱版那一族
+        let duet = base("陶喆 & 卢广仲", "逗阵兄弟"), solo = base("陶喆", "逗阵兄弟"), soloTagged = base("陶喆", "逗阵兄弟 (独唱版)")
+        expectEqual(duet, solo, "实体族: 合唱版归首位之后跟独唱版那条写法是同一个族键(前提)")
+        expectEqual(SongEntityFamilies.derive([M(song: "s_duet", familyKey: duet), M(song: "s_solo", familyKey: solo),
+                                               M(song: "s_solo", familyKey: soloTagged)]), [:],
+                    "实体族: 独唱版不经共用的族键并进合唱版")
+        expectEqual(SongEntityFamilies.derive([M(song: "", familyKey: a), M(song: "", familyKey: b),
+                                               M(song: "s_3", familyKey: c), M(song: "s_3", familyKey: c)]), [:],
+                    "实体族: 没有实体 id 的不并,只有一种族键的实体不产出")
+
+        // 按参数传表的 baseFamilyKey 跟灌进全局之后的同一把尺子
+        let artists = [LocalArtistAliases.artistKey("Khalil Fong"): "方大同"]
+        let titles = [LocalArtistAliases.canonicalArtistKey("方大同", table: artists): [PlayCountFold.foldTitle("Love Love Love"): "爱爱爱"]]
+        PlayCountFold.setLocalArtistAliases(artists)
+        PlayCountFold.setLocalTitleAliases(titles)
+        for (artist, title) in [("Khalil Fong", "Love Love Love"), ("方大同 & 薛凯琪", "四人游"), ("Khalil Fong feat. X", "Flow (feat. X)")] {
+            expectEqual(PlayCountFold.baseFamilyKey(artist: artist, title: title),
+                        PlayCountFold.baseFamilyKey(artist: artist, title: title, artists: artists, titles: titles),
+                        "实体族: 两个 baseFamilyKey 同一把尺子(\(artist) / \(title))")
+        }
+        let k = PlayCountFold.baseFamilyKey(artist: "Khalil Fong", title: "Love Love Love")
+        expectEqual(PlayCountFold.familyKey(artist: "Khalil Fong", title: "Love Love Love"), k, "实体族: 没有实体别名时 familyKey 就是 baseFamilyKey")
+        PlayCountFold.setEntityFamilyAliases([k: "rep|key"])
+        expectEqual(PlayCountFold.familyKey(artist: "Khalil Fong", title: "Love Love Love"), "rep|key", "实体族: familyKey 最后查实体别名表")
+        PlayCountFold.setEntityFamilyAliases([:])
+        PlayCountFold.setLocalArtistAliases([:])
+        PlayCountFold.setLocalTitleAliases([:])
+
+        // 别名表推导带上实体:歌手写法不同(歌手表并不上)、同一个实体 id 的两条并成一族;没有实体 id 的不进
+        typealias E = EnrichTitleAliases.Entry
+        let tables = EnrichCacheReader.deriveLocalAliasTables(entries: [
+            E(artist: "Abel Tesfaye", title: "Starboy (feat. Daft Punk)", neteaseURL: nil, qqMusicURL: nil, durationSecs: 230, song: "s_9"),
+            E(artist: "The Weeknd", title: "Starboy", neteaseURL: nil, qqMusicURL: nil, durationSecs: 230.45, song: "s_9"),
+            E(artist: "The Weeknd", title: "Die For You", neteaseURL: nil, qqMusicURL: nil, durationSecs: 260),
+        ], caches: .init())
+        let starboy = [base("Abel Tesfaye", "Starboy (feat. Daft Punk)"), base("The Weeknd", "Starboy")]
+        expectEqual(Set(tables.entities.keys).union(tables.entities.values), Set(starboy), "实体族: 别名表推导按实体 id 并族")
+
+        // 里程碑账本:分组变了,报过的档抄到新族键下
+        var ledger = ListenMilestoneLedger(celebratedTracks: ["x|a#100", "x|rep#1000"])
+        expectEqual(ledger.carryOver(familyAliasesFrom: [:], to: ["x|a": "x|rep"]), 1, "里程碑换键: 并进来时抄一条")
+        expectEqual(ledger.celebratedTracks.contains("x|rep#100"), true, "里程碑换键: 并进来的那族报过的档抄到代表键下")
+        expectEqual(ledger.carryOver(familyAliasesFrom: [:], to: ["x|a": "x|rep"]), 0, "里程碑换键: 已经有的不重复抄")
+        expectEqual(ledger.carryOver(familyAliasesFrom: ["x|a": "x|rep"], to: [:]), 1, "里程碑换键: 拆开时代表键报过的档抄回各族(已有的不重复)")
+        expectEqual(ledger.celebratedTracks.contains("x|a#1000"), true, "里程碑换键: 拆出去的那族也算报过")
+        var swapped = ListenMilestoneLedger(celebratedTracks: ["y|old#100"])
+        _ = swapped.carryOver(familyAliasesFrom: ["y|b": "y|old"], to: ["y|b": "y|new", "y|old": "y|new"])
+        expectEqual(swapped.celebratedTracks.contains("y|new#100"), true, "里程碑换键: 换了代表键也抄过去")
+
+        // 契约:开关关着时当空表;实体表变了要标过期、抄里程碑;别名输入比对带上 song
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let stats = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"), encoding: .utf8)) ?? ""
+        expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:] }")
+                    && stats.contains("PlayCountFold.setEntityFamilyAliases(tables.entities)")
+                    && stats.contains("ListenMilestoneCenter.carryOverFamilies(from: old.entities, to: tables.entities)")
+                    && stats.contains("touchedFamilies.contains(PlayCountFold.baseFamilyKey(artist: form.artist, title: form.title))"),
+                    true, "实体族(契约): 开关、灌表、抄里程碑、标过期四处都接上了")
+        let diff = (try? String(contentsOf: root.appendingPathComponent("LyrimuseCore/Local/EnrichIndexDiff.swift"), encoding: .utf8)) ?? ""
+        expectEqual(diff.contains("a.song == b.song"), true, "实体族(契约): 条目的 song 变了别名表要重算")
+    }
+
+    // ---- 比旧别名表少并的明细(SongEntityFamilies.aliasOnlyMerges,18 章决策 11) ----
+    do {
+        typealias E = EnrichTitleAliases.Entry
+        let artists = [LocalArtistAliases.artistKey("Khalil Fong"): "方大同"]
+        let titles = [LocalArtistAliases.canonicalArtistKey("方大同", table: artists): [PlayCountFold.foldTitle("Love Love Love"): "爱爱爱"]]
+        let split = SongEntityFamilies.aliasOnlyMerges([
+            E(artist: "Khalil Fong", title: "Love Love Love", neteaseURL: nil, qqMusicURL: nil, durationSecs: nil, song: "s_1"),
+            E(artist: "方大同", title: "爱爱爱", neteaseURL: nil, qqMusicURL: nil, durationSecs: nil, song: "s_2"),
+            E(artist: "周杰倫", title: "晴天", neteaseURL: nil, qqMusicURL: nil, durationSecs: nil, song: "s_3"),
+            E(artist: "周杰伦", title: "晴天", neteaseURL: nil, qqMusicURL: nil, durationSecs: nil, song: "s_4"),
+            E(artist: "方大同", title: "无实体", neteaseURL: nil, qqMusicURL: nil, durationSecs: nil),
+        ], artists: artists, titles: titles)
+        expectEqual(split.count, 1, "少并明细: 只列靠别名表并起来、实体不同的那一族(繁简这类折叠规则并的不算)")
+        expectEqual(split.first?.writings.map(\.song), ["s_1", "s_2"], "少并明细: 整族列出,每条带实体 id")
+        let same = SongEntityFamilies.aliasOnlyMerges([
+            E(artist: "Khalil Fong", title: "Love Love Love", neteaseURL: nil, qqMusicURL: nil, durationSecs: nil, song: "s_1"),
+            E(artist: "方大同", title: "爱爱爱", neteaseURL: nil, qqMusicURL: nil, durationSecs: nil, song: "s_1"),
+        ], artists: artists, titles: titles)
+        expectEqual(same, [], "少并明细: 实体也判成同一首的不列")
+        expectEqual(SongEntityFamilies.aliasOnlyMergesText(split).hasPrefix("旧别名表并着、实体判成不同歌的写法族 1 个"), true,
+                    "少并明细: 文本开头是条数")
+        let exporter = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/DiagnosticsExporter.swift"), encoding: .utf8)) ?? ""
+        expectEqual(exporter.contains("files.append((\"song-entity-alias-gaps.txt\", LogRedactor.redactAll(gaps, secrets: secrets)))"), true,
+                    "少并明细(契约): 进诊断包,过脱敏")
+    }
+
+    // ---- 「⋯」菜单链接向同一首歌的其它写法借(EnrichCacheReader.platformLinks(for:siblings:),18 章决策 10) ----
+    do {
+        func entry(_ json: String) -> EnrichCacheEntry { try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8)) }
+        let apple = entry(#"{"song":"s_1","apple_music_url":"https://music.apple.com/cn/album/x/1?i=2","netease_url":"https://music.163.com/song?id=9"}"#)
+        let spotify = entry(#"{"song":"s_1","spotify_track_id":"2TeLIzFBe3hxkPR5FIQZut","spotify_album_id":"5Lx9ZsxbdFxZYqmQBvf1Bm","spotify_artist_id":"2wY79sveU1sp5g7SokKOiI","apple_music_url":"https://music.apple.com/us/album/y/3?i=4"}"#)
+        let amazonMV = entry(#"{"song":"s_1","amazon_url":"https://music.amazon.com/tracks/B0H9LD5H83","youtube_music_url":"https://music.youtube.com/watch?v=mvmvmvmvmv1","youtube_music_mv":true}"#)
+        let youtube = entry(#"{"song":"s_1","youtube_music_url":"https://music.youtube.com/watch?v=audioaudio1"}"#)
+        let links = EnrichCacheReader.platformLinks(for: apple, siblings: [apple, spotify, amazonMV, youtube])
+        expectEqual(links?.spotifySong?.absoluteString.contains("2TeLIzFBe3hxkPR5FIQZut"), true, "实体链接: 缺 Spotify 歌曲页时向同一首的写法借")
+        expectEqual(links?.spotifyAlbum != nil && links?.spotifyArtist != nil, true, "实体链接: 专辑、歌手页跟着歌曲页从同一条借")
+        expectEqual(links?.amazonSong != nil, true, "实体链接: Amazon 也借")
+        expectEqual(links?.youtubeMusicSong?.absoluteString.contains("audioaudio1"), true, "实体链接: YouTube Music 不借 MV 那一版")
+        expectEqual(links?.appleMusicWeb?.absoluteString, "https://music.apple.com/cn/album/x/1?i=2", "实体链接: Apple 用自己的,不借")
+        let sameShare = EnrichCacheReader.platformLinks(for: spotify, siblings: [apple, spotify])
+        expectEqual(sameShare?.neteaseSong?.absoluteString, "https://music.163.com/song?id=9", "实体链接: 检索配的网易云在同一个共享组里借")
+        expectEqual(sameShare?.appleMusicWeb?.absoluteString, "https://music.apple.com/us/album/y/3?i=4", "实体链接: 自己有 Apple 链接的不借")
+        let otherShare = entry(#"{"song":"s_1","song_share":1,"spotify_track_id":"1111111111111111111111"}"#)
+        let apart = EnrichCacheReader.platformLinks(for: otherShare, siblings: [apple, spotify, otherShare])
+        expectEqual(apart?.neteaseSong == nil && apart?.appleMusicWeb == nil, true, "实体链接: 不同共享组不借检索配的 Apple、网易云")
+        expectEqual(apart?.spotifySong?.absoluteString.contains("1111111111111111111111"), true, "实体链接: 不同共享组照样用自己的播放器链接")
+        let qqSearch = entry(#"{"song":"s_2","qq_music_url":"https://y.qq.com/n/ryqq/search?w=x"}"#)
+        let qqReal = entry(#"{"song":"s_2","qq_music_url":"https://y.qq.com/n/ryqq/songDetail/0033Bpvf2kTKXx","qq_album_mid":"002abc"}"#)
+        let qqLinks = EnrichCacheReader.platformLinks(for: qqSearch, siblings: [qqSearch, qqReal])
+        expectEqual(qqLinks?.qqSong?.absoluteString.contains("0033Bpvf2kTKXx") == true && qqLinks?.qqAlbum != nil, true,
+                    "实体链接: 自己只有 QQ 搜索页时从同组借真歌曲页,专辑页跟着借")
+        let ownSpotify = entry(#"{"song":"s_1","spotify_track_id":"0000000000000000000000"}"#)
+        expectEqual(EnrichCacheReader.platformLinks(for: ownSpotify, siblings: [spotify])?.spotifySong?.absoluteString.contains("0000000000000000000000"), true,
+                    "实体链接: 自己有的不被别的写法盖掉")
+        let alone = EnrichCacheReader.platformLinks(for: apple, siblings: [])
+        expectEqual(alone?.spotifySong == nil && alone?.amazonSong == nil && alone?.appleMusicWeb != nil, true, "实体链接: 没有其它写法时只用自己的")
+        let mvOwn = EnrichCacheReader.platformLinks(for: amazonMV, siblings: [youtube])
+        expectEqual(mvOwn?.youtubeMusicSong?.absoluteString.contains("mvmvmvmvmv1"), true, "实体链接: 自己那条是 MV 的照旧用自己的")
+        let reader = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"), encoding: .utf8)) ?? ""
+        expectEqual(reader.contains("guard borrowsEntityLinks, let song = entry.song, !song.isEmpty, let all = loadEntries() else { return [] }"),
+                    true, "实体链接(契约): 开关关着、没有实体 id 时不借")
+    }
+
     // ---- ChartVisibleRows / ArtistTopTracks:「听得最多」显示更多与歌手展开行 ----
     do {
         typealias R = ChartVisibleRows
