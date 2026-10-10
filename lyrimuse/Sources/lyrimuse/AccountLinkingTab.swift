@@ -1001,8 +1001,7 @@ struct AccountLinkingTab: View {
                     Button(L10n.t("补交")) { backfill.runBackfill() }
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
-                        // 只剩状态未知的也能点:补交开头先去 Last.fm 核对它们。
-                        .disabled(backfill.busy || (items.isEmpty && (backfill.pending?.unverified ?? 0) == 0))
+                        .disabled(backfill.busy || items.isEmpty)
                 }
             }
             .settingsGlassButtons()
@@ -1069,14 +1068,9 @@ struct AccountLinkingTab: View {
     private func backfillStatusLine() -> String? {
         // 刚跑完就报这次的结果,比"还剩几条"更是用户此刻想知道的。
         if let result = backfillRunResultText() { return result }
-        var parts: [String] = []
-        if let unverified = backfill.pending?.unverified, unverified > 0 {
-            parts.append(String(format: L10n.t("另有 %@ 条状态未知，补交时会先去 Last.fm 核对"), "\(unverified)"))
-        }
-        if let tooOld = backfill.pending?.skippedTooOld, tooOld > 0 {
-            parts.append(String(format: L10n.t("另有 %@ 条记录过旧，Last.fm 不再接受"), "\(tooOld)"))
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: "，")
+        let tooOld = backfill.pending?.skippedTooOld ?? 0
+        guard tooOld > 0 else { return nil }
+        return String(format: L10n.t("另有 %@ 条记录过旧，Last.fm 不再接受"), "\(tooOld)")
     }
 
     /// 「补提交」跑完之后的那句结果。nil = 这一趟还没跑过。
@@ -1097,11 +1091,9 @@ struct AccountLinkingTab: View {
         // 而"一条都没补上"同样是一个答案 —— 原来这里要求三项之和 > 0 才出声,
         // 于是"什么都没发生"这种最需要解释的情况反而最安静。
         var parts = [String(format: L10n.t("已补 %@ 条"), "\(last.accepted)")]
-        if last.recovered > 0 {
-            parts.append(String(format: L10n.t("%@ 条核对后确认已在 Last.fm 上"), "\(last.recovered)"))
-        }
         if last.quarantined > 0 {
-            parts.append(String(format: L10n.t("%@ 条状态未知，下次补交时会先去 Last.fm 核对"), "\(last.quarantined)"))
+            // 隔离的条目常驻引擎会自己去 Last.fm 核对、确认没有就重交,不用再点。
+            parts.append(String(format: L10n.t("%@ 条状态未知，稍后会自动去 Last.fm 核对"), "\(last.quarantined)"))
         }
         if last.ignored > 0 {
             parts.append(String(format: L10n.t("%@ 条被 Last.fm 拒绝"), "\(last.ignored)"))
@@ -1403,7 +1395,7 @@ struct AccountLinkingTab: View {
             //
             // 光说"会记在本地"是空头承诺 —— 用户没法验证到底记了没有、记了什么。列出来
             // 之后这件事就是可核对的,连账号时也能预期"补上去大概是这些"。
-            if (backfill.pending?.eligible ?? 0) > 0 || (backfill.pending?.unverified ?? 0) > 0 {
+            if (backfill.pending?.eligible ?? 0) > 0 {
                 // 欢迎卡底下不画分隔线:胶囊直接挂在连接按钮下面。
                 if lastfmConnected { lastfmProfileDivider }
                 pendingListensRow

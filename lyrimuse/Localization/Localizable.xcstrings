@@ -42381,71 +42381,25 @@
         }
       }
     },
-    "另有 %@ 条状态未知，补交时会先去 Last.fm 核对" : {
+    "%@ 条状态未知，稍后会自动去 Last.fm 核对" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ more with unknown status — checked against Last.fm when you submit"
+            "value" : "%@ with unknown status — will be checked against Last.fm automatically"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "另有 %@ 条状态未知，补交时会先去 Last.fm 核对"
+            "value" : "%@ 条状态未知，稍后会自动去 Last.fm 核对"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "另有 %@ 筆狀態未知，補交時會先到 Last.fm 核對"
-          }
-        }
-      }
-    },
-    "%@ 条状态未知，下次补交时会先去 Last.fm 核对" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ with unknown status — checked against Last.fm next time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 条状态未知，下次补交时会先去 Last.fm 核对"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 筆狀態未知，下次補交時會先到 Last.fm 核對"
-          }
-        }
-      }
-    },
-    "%@ 条核对后确认已在 Last.fm 上" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ already on Last.fm after checking"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 条核对后确认已在 Last.fm 上"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 筆核對後確認已在 Last.fm 上"
+            "value" : "%@ 筆狀態未知，稍後會自動到 Last.fm 核對"
           }
         }
       }

@@ -542,9 +542,9 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 //     到 什么都不写,只靠上面 mirrorAsync 那行日志把真实原因(现在带 ignoredMessage 了)
 //     暴露出来,让人去改数据而不是让机器空转。
 //   - **不确定发没发到**(超时/连接中断/服务端说自己暂时不可用):写 "l" + "q" 一对。
-//     "q" 让回填**永远不会自动重试**它(见 markQuarantined 的注释:重复比漏补贵得多),
-//     "l" 则保住艺人/曲名,将来要人工对账才有依据 —— 原来这种情况连曲目是什么都查不
-//     出来。
+//     "q" 让回填不交它(见 markQuarantined 的注释:重复比漏补贵得多),隔离够久后常驻进程按
+//     时间戳去 Last.fm 核对,确认没有才重交(reconcileQuarantined);"l" 保住艺人/曲名,
+//     重交时用的就是它。
 //
 // 应用层错误(lastfmAPIError)**不能**一律当成"拒收":
 // 限流(29)和凭据失效(4/9/10/26)下服务端**确定没落库**,那恰恰是最该

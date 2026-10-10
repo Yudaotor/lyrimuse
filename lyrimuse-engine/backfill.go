@@ -22,7 +22,8 @@ import (
 // ## 这个功能能做到什么、做不到什么
 //
 // 做得到:用户先用了一阵 Lyrimuse、之后才连 Last.fm(或中途断开又重连)的那段空窗,
-// 只要是**本地日志开始记录之后**的收听,都能补上。
+// 只要是**本地日志开始记录之后**的收听,都能补上。连着账号时当场打卡失败的,由常驻进程自己重发(lfmretry.go),
+// 不在这里:排在重发队列里的、还隔离着的都不进清单。
 //
 // 做不到两件事,都必须如实告诉用户,不能含糊:
 //
@@ -130,35 +131,33 @@ type backfillOutcome struct {
 	Ignored int `json:"ignored"`
 	// 超过 Last.fm 回溯窗口、根本没发的条数。
 	SkippedTooOld int `json:"skippedTooOld"`
-	// 发出去了但拿不到回执的条数 —— **既不算成功也不算失败**,不会被自动重试。
+	// 发出去了但拿不到回执的条数 —— **既不算成功也不算失败**,这里不再交;常驻进程隔离够久后去 Last.fm 核对
+	// (reconcileQuarantined)。
 	Quarantined int `json:"quarantined"`
 	// 中止原因(限流/服务不可用/凭据失效)。空 = 跑完了。
 	AbortedReason string `json:"abortedReason,omitempty"`
-	// 隔离着的收听在补交开头去 Last.fm 核对的结果(见 reconcileQuarantined):Recovered = 那边已经有、补记了回执,
-	// Released = 确认没有、解除隔离跟着这一趟补交(计入 Eligible / Accepted)。
-	Recovered int `json:"recovered,omitempty"`
-	Released  int `json:"released,omitempty"`
-	// 仅 dry-run:还隔离着、点补交时会先去核对的条数。
-	Unverified int `json:"unverified,omitempty"`
 }
 
-// pendingBackfillListens 折叠日志,返回"还没提交过、且在回溯窗口内"的收听,按 uts 升序。
+// pendingBackfillListens 折叠日志,返回"还没提交过、且在回溯窗口内"的收听,按 uts 升序。排在常驻进程 Last.fm
+// 重发队列里的不算(那边会交,两边都交就重复了)。
 //
-// 折叠规则(读侧唯一权威):
-//   - t=="l" 收 uts→收听行(同 uts 后来的覆盖先前的)
-//   - t=="s" 记 uts 已提交过
+// 折叠规则见 foldListenLog。
 //
 // 官方指南:"Scrobbles should be sent in order, therefore cached scrobbles should be sent
 // before new scrobbles." —— 所以按 uts 升序,不是随便什么顺序。
 func pendingBackfillListens(now time.Time) (pending []listenLogLine, tooOld int) {
 	f := foldListenLog(readListenLog())
+	queued := map[int64]bool{}
+	for _, ts := range lfmRetryQueuedTimestamps() {
+		queued[ts] = true
+	}
 	cutoff := now.Add(-backfillMaxAge).Unix()
 	for uts, l := range f.listens {
-		if f.submitted[uts] {
+		if f.submitted[uts] || queued[uts] {
 			continue
 		}
-		// 隔离:发出去了但没拿到回执。**跟已提交一样排除**,不在这里重发 —— 只有补交开头去 Last.fm 核对过、
-		// 确认没有的才解除(见 markQuarantined、reconcileQuarantined)。
+		// 隔离:发出去了但没拿到回执。**跟已提交一样排除**,不在这里重发 —— 常驻进程核对过、确认没有的才解除并
+		// 排进重发队列(见 markQuarantined、reconcileQuarantined)。
 		if _, q := f.quarantined[uts]; q {
 			continue
 		}
@@ -443,8 +442,8 @@ func truncateForLog(b []byte) string {
 //   - 下次自动重试 → 如果上次其实成功了,就在用户的听歌历史里造出一条永久删不掉的重复
 //   - 就此搁置     → 最多少补一条,用户的历史仍然是干净的
 //
-// 所以选后者。这些条目不会被自动重试;用户点补交时先按时间戳去 user.getRecentTracks 核对,确认那边没有才解除
-// (reconcileQuarantined)。
+// 所以选后者。补交不交这些条目;常驻进程的重发循环等隔离够久后按时间戳去 user.getRecentTracks 核对,那边已经有就
+// 补记回执,确认没有才解除、排进重发队列(reconcileQuarantined)。
 func markQuarantined(uts int64) {
 	_ = markQuarantinedChecked(uts)
 }
@@ -470,16 +469,13 @@ func backfillBatchNeverStored(err error) bool {
 	return errors.Is(err, errScrobbleBatchNotSent) || provablyNeverSent(err)
 }
 
-// stillPendingForBackfill 从一批里去掉此刻已经不需要补的:日志里已经有回执("s" / "q"),或者正排在常驻进程的
-// Last.fm 重发队列里(交给那边重发,两边都发就重复了)。
+// stillPendingForBackfill 从一批里去掉此刻已经不需要补的:日志里已经有回执、隔离着,或者正排在常驻进程的
+// Last.fm 重发队列里(都按 pendingBackfillListens 重读一遍)。
 func stillPendingForBackfill(batch []listenLogLine, now time.Time) []listenLogLine {
 	current, _ := pendingBackfillListens(now)
 	pending := make(map[int64]bool, len(current))
 	for _, l := range current {
 		pending[l.UTS] = true
-	}
-	for _, ts := range lfmRetryQueuedTimestamps() {
-		delete(pending, ts)
 	}
 	out := make([]listenLogLine, 0, len(batch))
 	for _, l := range batch {
@@ -499,21 +495,16 @@ func stillPendingForBackfill(batch []listenLogLine, now time.Time) []listenLogLi
 //   - 网络错误/超时:同上,整批进隔离
 //
 // 官方允许重试的错误码白名单只有 11/16(以及 9 在重新授权之后),但即便如此我们也不重试 ——
-// 这个功能一次跑完不成功,用户手动再点一次就是了,不值得为它承担重复提交的风险。
+// 这个功能一次跑完不成功,用户手动再点一次就是了,不值得为它承担重复提交的风险。进了隔离的由常驻进程核对后重交。
 func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillOutcome {
 	now := time.Now()
-	var recovered, released int
-	if !dryRun && s != nil {
-		recovered, released = reconcileQuarantined(ctx, s, now)
-	}
 	pending, tooOld := pendingBackfillListens(now)
-	out := backfillOutcome{Eligible: len(pending), SkippedTooOld: tooOld, Recovered: recovered, Released: released}
+	out := backfillOutcome{Eligible: len(pending), SkippedTooOld: tooOld}
 	// dry-run 的判断必须排在 `s == nil` **之前**。空跑一个请求都不发,压根不需要
 	// scrobbler —— 而"还没连账号"恰恰是这个功能最主要的场景:界面要在那个状态下把本地
 	// 已记录的清单列出来。顺序反了的话未连接时永远拿不到清单,新功能在主场景下直接失效
 	// (被 TestDryRunReturnsListNewestFirst 抓到)。
 	if dryRun {
-		out.Unverified = len(quarantinedBackfillListens(now))
 		// 清单给界面用,最近的排前面(pending 本身是升序,那是提交顺序的要求)。
 		out.Items = make([]backfillItem, 0, len(pending))
 		for i := len(pending) - 1; i >= 0; i-- {
@@ -549,8 +540,8 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 		res, err := s.scrobbleBatch(ctx, batch)
 		if err != nil {
 			// 停手是一定的(见本函数头注释),但**要不要隔离**取决于这一批到底有没有可能
-			// 已经落库 —— 隔离是永久的(pendingBackfillListens 把 "q" 跟"已提交"同等排除),
-			// 用错了就是把一批从没提交过的收听彻底踢出清单,用户再点多少次也补不回来。
+			// 已经落库 —— 隔离了补交就不再交(pendingBackfillListens 把 "q" 跟"已提交"同等排除),
+			// 用错了,一批从没提交过的收听就得等常驻进程逐条核对完才交得上去。
 			//
 			// 修:原来无条件整批隔离。但 scrobbleBatch 的错误里有一半是
 			// **服务端明确表过态、确定没落库**的 —— 限流(29)、凭据失效(4/9/10/26) ——

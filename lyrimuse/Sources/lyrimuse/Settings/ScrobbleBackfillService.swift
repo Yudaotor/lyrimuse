@@ -49,12 +49,6 @@ final class ScrobbleBackfillService: ObservableObject {
         var skippedTooOld = 0
         var quarantined = 0
         var abortedReason: String?
-        /// 补交开头核对隔离条目:Last.fm 上已经有、补记了回执的条数(引擎 reconcileQuarantined)。
-        var recovered = 0
-        /// 核对后确认没有、解除隔离跟着这一趟补交的条数(已计入 accepted)。
-        var released = 0
-        /// 只有空跑带:还隔离着、点补交时会先去核对的条数。
-        var unverified = 0
 
         // 手写 init(from) —— **不能**靠上面那些属性默认值(修的真 bug:界面报
         // 「补提交没能完成，请稍后再试」,而 Last.fm 那边 26 条全补进去了、本地回执也写了)。
@@ -76,7 +70,7 @@ final class ScrobbleBackfillService: ObservableObject {
         // 加一个,不该再炸第三次。selftest 里「omitempty 边界」那道守卫从 Go 的 struct tag
         // 反推这条要求。
         private enum CodingKeys: String, CodingKey {
-            case items, eligible, accepted, ignored, skippedTooOld, quarantined, abortedReason, recovered, released, unverified
+            case items, eligible, accepted, ignored, skippedTooOld, quarantined, abortedReason
         }
 
         init(from decoder: Decoder) throws {
@@ -88,9 +82,6 @@ final class ScrobbleBackfillService: ObservableObject {
             skippedTooOld = try c.decodeIfPresent(Int.self, forKey: .skippedTooOld) ?? 0
             quarantined = try c.decodeIfPresent(Int.self, forKey: .quarantined) ?? 0
             abortedReason = try c.decodeIfPresent(String.self, forKey: .abortedReason)
-            recovered = try c.decodeIfPresent(Int.self, forKey: .recovered) ?? 0
-            released = try c.decodeIfPresent(Int.self, forKey: .released) ?? 0
-            unverified = try c.decodeIfPresent(Int.self, forKey: .unverified) ?? 0
         }
     }
 

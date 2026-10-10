@@ -17,11 +17,11 @@ import (
 //
 // 一次收听写 Last.fm 失败后,本地收听日志会留痕(recordFailedMirror),但要等用户手动「补提交」才补得回。这里把
 // 其中**确定没写进去**的那部分(请求没发出去、或服务端明确没收:限流、凭据失效等)原样存下来,后台隔一阵重发。
-// 判据跟补提交同一套(lastfmResendSafe):不确定有没有写进去的(超时、连接中断、11/16)不进队列,照旧隔离,
-// 重复一条比漏一条贵得多。
+// 判据跟补提交同一套(lastfmResendSafe):不确定有没有写进去的(超时、连接中断、11/16)不进队列,先隔离,
+// 重复一条比漏一条贵得多。隔离够久的由每轮开头的核对去 Last.fm 查,确认没有才排进来(reconcileQuarantined)。
 //
 // 跟补提交共用收听日志里的回执:重发成功写 "s"(markBackfilled),补提交就不会再交;重发前先看这一条是不是已经
-// 被补提交交过或被隔离("s" / "q"),是就直接移出。
+// 被补提交交过或还隔离着,是就直接移出。
 //
 // 队列只在后台 goroutine 里读写文件,不碰 poller 的任何字段;当前的 Last.fm 写入器经 lfmRetryTarget 拿
 // (主循环换 p.lfm 时同步更新),不能直接读 p.lfm。
@@ -140,7 +140,15 @@ func lastfmResendSafe(err error) bool {
 // enqueueLastfmRetryIfSafe 在写 Last.fm 失败的地方调:只有 lastfmResendSafe 的才记。同一条已在队列里就不重复记。
 // 可以从 mirrorAsync 的 goroutine 里调(只碰自带锁的队列文件)。
 func enqueueLastfmRetryIfSafe(err error, it lfmRetryItem) {
-	if it.Timestamp <= 0 || !lastfmResendSafe(err) {
+	if !lastfmResendSafe(err) {
+		return
+	}
+	enqueueLastfmRetry(it)
+}
+
+// enqueueLastfmRetry 不问原因直接排进队列,同一条已在队列里就不重复记。调用方自己保证这一条确定没写进 Last.fm。
+func enqueueLastfmRetry(it lfmRetryItem) {
+	if it.Timestamp <= 0 {
 		return
 	}
 	lfmRetryMu.Lock()
@@ -165,11 +173,11 @@ type lfmRetrySubmitter func(ctx context.Context, it lfmRetryItem) error
 
 // lfmRetryHooks 是重发一轮要碰的收听日志操作,测试换成假的。
 type lfmRetryHooks struct {
-	// handled:这个时间戳在收听日志里已经有回执或被隔离("s" / "q")。
+	// handled:这个时间戳在收听日志里已经有回执,或者还隔离着(按 foldListenLog 折叠:"r" 解除过的不算)。
 	handled func() map[int64]bool
 	// submitted:重发成功,写回执(markBackfilledChecked)。返回写盘错误。
 	submitted func(ts int64) error
-	// quarantine:重发时撞上「不确定有没有写进去」,隔离、不再自动重发(markQuarantined)。
+	// quarantine:重发时撞上「不确定有没有写进去」,隔离(markQuarantined),等隔离够久再核对。
 	quarantine func(ts int64)
 	// logged:收听日志里还留着收听行("l")的时间戳;第二个返回值 = 收听日志在用。为 nil 时不查(单测)。
 	// 进队列的每一条都先经 recordFailedMirror 写过 "l",这一行不在了只能是用户在待补清单里删掉了它
@@ -180,11 +188,13 @@ type lfmRetryHooks struct {
 func defaultLfmRetryHooks() lfmRetryHooks {
 	return lfmRetryHooks{
 		handled: func() map[int64]bool {
-			out := map[int64]bool{}
-			for _, l := range readListenLog() {
-				if (l.T == "s" || l.T == "q") && l.UTS > 0 {
-					out[l.UTS] = true
-				}
+			f := foldListenLog(readListenLog())
+			out := make(map[int64]bool, len(f.submitted)+len(f.quarantined))
+			for uts := range f.submitted {
+				out[uts] = true
+			}
+			for uts := range f.quarantined {
+				out[uts] = true
 			}
 			return out
 		},
@@ -208,7 +218,7 @@ func defaultLfmRetryHooks() lfmRetryHooks {
 // processLfmRetry 按入队顺序重发一轮,返回送达的条数。处置跟补提交同一套口径:
 //   - 成功:写回执,移出;
 //   - 服务端拒收内容(accepted=0)、或别的确定没落库又重发也没用的应用层错误:移出;
-//   - 撞上可能已落库的(11/16、超时、连接中断):隔离后移出,不再自动重发;
+//   - 撞上可能已落库的(11/16、超时、连接中断):隔离后移出,隔离够久后由 reconcileQuarantined 核对;
 //   - 请求没发出去、限流(29)、凭据失效(4/9/10/26):这一轮停下,整队留到下一轮;
 //   - 超过补提交的时间窗(backfillMaxAge,Last.fm 不收更老的时间戳)、已被补提交交过 / 隔离、
 //     或入队时的账号不是现在这个(user,换过账号):移出。
@@ -303,8 +313,8 @@ func processLfmRetry(ctx context.Context, now time.Time, user string, submit lfm
 	return sent
 }
 
-// startLfmRetryLoop 后台常驻:每 lfmRetryInterval 重发一轮。没配 Last.fm 写入、或凭据已判死时整轮跳过,
-// 重新授权(主循环换了新的写入器)之后自然接着重发。
+// startLfmRetryLoop 后台常驻:每 lfmRetryInterval 先核对一遍隔离够久的收听(reconcileQuarantined),再重发一轮。
+// 没配 Last.fm 写入、或凭据已判死时整轮跳过,重新授权(主循环换了新的写入器)之后自然接着做。
 func startLfmRetryLoop(ctx context.Context) {
 	t := time.NewTicker(lfmRetryInterval)
 	defer t.Stop()
@@ -317,6 +327,7 @@ func startLfmRetryLoop(ctx context.Context) {
 			if s == nil || s.dead.Load() {
 				continue
 			}
+			reconcileQuarantined(ctx, s, time.Now())
 			if processLfmRetry(ctx, time.Now(), s.user, func(ctx context.Context, it lfmRetryItem) error {
 				rctx, cancel := context.WithTimeout(ctx, mirrorTimeout())
 				defer cancel()

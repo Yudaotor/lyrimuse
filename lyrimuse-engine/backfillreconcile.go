@@ -12,11 +12,11 @@ import (
 	"time"
 )
 
-// 隔离条目的核对:补交(用户点的那一下)开头,按时间戳逐条去 Last.fm 查还隔离着的收听(「发出去了但不知道结果」)。
-// 那边已经有 → 补记回执 "s";确认没有、而且隔离过了 backfillReleaseAfter → 写 "r" 解除隔离,这一趟跟着补交。
-// 不在后台自动跑。见 12 章决策 67。
+// 隔离条目的核对:常驻进程的重发循环每轮先跑一次(startLfmRetryLoop),按时间戳逐条去 Last.fm 查隔离够久的收听
+// (「发出去了但不知道结果」)。那边已经有 → 补记回执 "s";确认没有 → 排进重发队列、写 "r" 解除隔离,紧接着的那一轮
+// 重发把它交上去。补交命令不碰隔离条目,只补没连 Last.fm 时记下的收听。见 12 章决策 69。
 
-// backfillReleaseAfter:隔离不到这么久的不解除。刚落库的 scrobble 要过几分钟才出现在 user.getRecentTracks 里,
+// backfillReleaseAfter:隔离不到这么久的不查。刚落库的 scrobble 要过几分钟才出现在 user.getRecentTracks 里,
 // 查早了会把已经落库的当成没有、再交一遍。
 const backfillReleaseAfter = 15 * time.Minute
 
@@ -52,19 +52,28 @@ func markReleasedChecked(uts int64) error {
 	})
 }
 
-// reconcileQuarantined 核对隔离着的收听,返回补记了回执的条数和解除隔离的条数。查询出错(限流、网络)或写盘失败
-// 就停下,剩下的照旧隔离,下次补交再查。
+// reconcileQuarantined 核对隔离够久的收听,返回补记了回执的条数和排进重发队列的条数。查询出错(限流、网络)或写盘
+// 失败就停下,剩下的照旧隔离,下一轮再查。
+//
+// 解除的顺序是先入队、再写 "r":中间这段时间它在收听日志里还隔离着,补交命令(另一个进程)不会交它;写完 "r" 之后它
+// 排在重发队列里,补交同样跳过(stillPendingForBackfill)。反过来写,中间那段时间它就是一条普通的待补收听。重发在
+// 同一个 goroutine 里、排在这之后跑,看到的已经是写过 "r" 的日志。
 func reconcileQuarantined(ctx context.Context, s *lastfmScrobbler, now time.Time) (recovered, released int) {
-	qs := quarantinedBackfillListens(now)
-	if len(qs) == 0 {
+	var due []quarantinedListen
+	for _, q := range quarantinedBackfillListens(now) {
+		if now.Unix()-q.quarantinedAt >= int64(backfillReleaseAfter/time.Second) {
+			due = append(due, q)
+		}
+	}
+	if len(due) == 0 {
 		return 0, 0
 	}
 	if s.user == "" {
-		log.Printf("backfill: %d quarantined listen(s) left unchecked: no Last.fm username", len(qs))
+		log.Printf("lastfm retry: %d quarantined listen(s) left unchecked: no Last.fm username", len(due))
 		return 0, 0
 	}
-	log.Printf("backfill: checking %d quarantined listen(s) against Last.fm", len(qs))
-	for i, q := range qs {
+	log.Printf("lastfm retry: checking %d quarantined listen(s) against Last.fm", len(due))
+	for i, q := range due {
 		if i > 0 {
 			select {
 			case <-time.After(backfillLookupPause):
@@ -74,25 +83,27 @@ func reconcileQuarantined(ctx context.Context, s *lastfmScrobbler, now time.Time
 		}
 		found, err := s.lastfmHasScrobbleAt(ctx, q.line.UTS)
 		if err != nil {
-			warnf("backfill: quarantine check stopped, %d left as they are: %v", len(qs)-i, err)
+			warnf("lastfm retry: quarantine check stopped, %d left as they are: %v", len(due)-i, err)
 			return recovered, released
 		}
-		switch {
-		case found:
+		if found {
 			if err := markBackfilledChecked(q.line.UTS); err != nil {
-				warnf("backfill: quarantine check stopped, receipt could not be written: %v", err)
+				warnf("lastfm retry: quarantine check stopped, receipt could not be written: %v", err)
 				return recovered, released
 			}
 			recovered++
-		case now.Unix()-q.quarantinedAt >= int64(backfillReleaseAfter/time.Second):
-			if err := markReleasedChecked(q.line.UTS); err != nil {
-				warnf("backfill: quarantine check stopped, release could not be written: %v", err)
-				return recovered, released
-			}
-			released++
+			continue
 		}
+		// 歌手、专辑用收听日志里的原样标签,写法在重发时取(scrobble 里的 resolveScrobbleTags),跟补交同一个口径。
+		enqueueLastfmRetry(lfmRetryItem{User: s.user, Timestamp: q.line.UTS, Artist: q.line.AR, Title: q.line.TI,
+			Album: q.line.AL, Duration: q.line.DUR})
+		if err := markReleasedChecked(q.line.UTS); err != nil {
+			warnf("lastfm retry: quarantine check stopped, release could not be written: %v", err)
+			return recovered, released
+		}
+		released++
 	}
-	log.Printf("backfill: quarantine check — %d already on Last.fm, %d released for resubmission", recovered, released)
+	log.Printf("lastfm retry: quarantine check — %d already on Last.fm, %d queued for resubmission", recovered, released)
 	return recovered, released
 }
 
