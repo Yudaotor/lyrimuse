@@ -34,11 +34,17 @@ final class ShortcutRecorderButton: NSButton {
     // 命令式控件,不吃 SwiftUI 那套响应式重渲染——清除按钮也必须照这个思路
     // 做,不能引入任何 @State/Combine 订阅,否则又会把这条列表重新变得不稳定。
     weak var clearButton: NSButton?
+    private var isHovering = false {
+        didSet { if oldValue != isHovering { needsDisplay = true } }
+    }
+    private var hoverArea: NSTrackingArea?
 
     init(name: KeyboardShortcuts.Name) {
         self.shortcutName = name
         super.init(frame: .zero)
-        bezelStyle = .rounded
+        // 外观整个自己画(`draw(_:)`):没设是一圈细线 +「未设置」,指针压上去换成「点按录制」,
+        // 已设是一颗胶囊里排着每个键的小键帽。`title` 照样维护,只给辅助功能读。
+        isBordered = false
         setButtonType(.momentaryPushIn)
         target = self
         action = #selector(handleClick)
@@ -53,12 +59,118 @@ final class ShortcutRecorderButton: NSButton {
         if let windowResignObserver { NotificationCenter.default.removeObserver(windowResignObserver) }
     }
 
-    // 固定宽度——不同状态下的文案("点按录制"/"请按下快捷键…"/某个具体组合符号串)
-    // 长度差异很大,不固定宽度的话这一列 7 行会随录制状态跳来跳去。
+    // 宽度有下限——不同状态下的文案(「未设置」/「请按下快捷键…」/一串键帽)长度差异很大,
+    // 不给下限的话一列录制框会随录制状态跳来跳去。快捷键页是两列排,下限不能再大,
+    // 再大一列放不下「显示/隐藏灵动岛歌词」这类标题。
+    static let minimumWidth: CGFloat = 112
+    static let height: CGFloat = 24
+    /// 已设时胶囊右端留给清除「×」的位置(「×」是容器里另一颗按钮,叠在这里)。
+    static let clearSlot: CGFloat = 20
+
     override var intrinsicContentSize: CGSize {
-        var size = super.intrinsicContentSize
-        size.width = max(size.width, 150)
-        return size
+        var width = Self.minimumWidth
+        if !isRecording, let shortcut = KeyboardShortcuts.getShortcut(for: shortcutName) {
+            width = max(width, Self.keycapsWidth(Self.keyTokens(shortcut)) + Self.clearSlot + 16)
+        }
+        return CGSize(width: width, height: Self.height)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovering = true }
+    override func mouseExited(with event: NSEvent) { isHovering = false }
+
+    /// 一个组合拆成键帽:打头的修饰键符号各一颗,剩下的(主键,可能是「F1」「Space」这种多字符)一颗。
+    static func keyTokens(_ shortcut: KeyboardShortcuts.Shortcut) -> [String] {
+        var rest = Substring("\(shortcut)")
+        var tokens: [String] = []
+        while let first = rest.first, "⌃⌥⇧⌘".contains(first) {
+            tokens.append(String(first))
+            rest = rest.dropFirst()
+        }
+        if !rest.isEmpty { tokens.append(String(rest)) }
+        return tokens
+    }
+
+    private static let keycapFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
+    private static let keycapHeight: CGFloat = 17
+    private static let keycapGap: CGFloat = 3
+
+    private static func keycapWidths(_ tokens: [String]) -> [CGFloat] {
+        tokens.map { max(keycapHeight, ($0 as NSString).size(withAttributes: [.font: keycapFont]).width + 10) }
+    }
+
+    private static func keycapsWidth(_ tokens: [String]) -> CGFloat {
+        keycapWidths(tokens).reduce(0, +) + keycapGap * CGFloat(max(0, tokens.count - 1))
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 0.75, dy: 0.75)
+        let capsule = NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
+        let accent = NSColor.controlAccentColor
+        if isRecording {
+            accent.withAlphaComponent(0.1).setFill()
+            capsule.fill()
+            accent.setStroke()
+            capsule.lineWidth = 1.5
+            capsule.stroke()
+            drawCentered(L10n.t("请按下快捷键…"), color: accent, in: bounds)
+        } else if let shortcut = KeyboardShortcuts.getShortcut(for: shortcutName) {
+            NSColor.labelColor.withAlphaComponent(0.06).setFill()
+            capsule.fill()
+            NSColor.separatorColor.setStroke()
+            capsule.lineWidth = 0.5
+            capsule.stroke()
+            var area = bounds
+            area.size.width -= Self.clearSlot
+            drawKeycaps(Self.keyTokens(shortcut), in: area)
+        } else if isHovering {
+            accent.withAlphaComponent(0.08).setFill()
+            capsule.fill()
+            accent.withAlphaComponent(0.55).setStroke()
+            capsule.lineWidth = 1
+            capsule.stroke()
+            drawCentered(L10n.t("点按录制"), color: accent, in: bounds)
+        } else {
+            NSColor.separatorColor.setStroke()
+            capsule.lineWidth = 1
+            capsule.stroke()
+            drawCentered(L10n.t("未设置"), color: .tertiaryLabelColor, in: bounds)
+        }
+    }
+
+    private func drawCentered(_ text: String, color: NSColor, in area: NSRect) {
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11.5), .foregroundColor: color]
+        let size = (text as NSString).size(withAttributes: attrs)
+        (text as NSString).draw(at: NSPoint(x: area.midX - size.width / 2, y: area.midY - size.height / 2),
+                                withAttributes: attrs)
+    }
+
+    private func drawKeycaps(_ tokens: [String], in area: NSRect) {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let attrs: [NSAttributedString.Key: Any] = [.font: Self.keycapFont, .foregroundColor: NSColor.labelColor]
+        let widths = Self.keycapWidths(tokens)
+        var x = max(area.minX + 8, area.midX - Self.keycapsWidth(tokens) / 2)
+        for (token, width) in zip(tokens, widths) {
+            let cap = NSRect(x: x, y: area.midY - Self.keycapHeight / 2, width: width, height: Self.keycapHeight)
+            let path = NSBezierPath(roundedRect: cap, xRadius: 4, yRadius: 4)
+            NSColor.white.withAlphaComponent(dark ? 0.14 : 0.9).setFill()
+            path.fill()
+            NSColor.separatorColor.setStroke()
+            path.lineWidth = 0.5
+            path.stroke()
+            let size = (token as NSString).size(withAttributes: attrs)
+            (token as NSString).draw(at: NSPoint(x: cap.midX - size.width / 2, y: cap.midY - size.height / 2),
+                                     withAttributes: attrs)
+            x += width + Self.keycapGap
+        }
     }
 
     override func viewDidMoveToWindow() {
@@ -189,16 +301,14 @@ final class ShortcutRecorderButton: NSButton {
             title = L10n.t("点按录制")
             clearButton?.isHidden = true
         }
+        invalidateIntrinsicContentSize()
+        needsDisplay = true
     }
 }
 
-// 库自带的 Recorder 已经录进一个快捷键后,右侧会带一个可点的"×"用来清除;这里的替代
-// 实现(ShortcutRecorderButton)原来只在"点击进入录制状态后按 Delete/Backspace"这一步
-// 隐藏手势里做了清除(见上面 handle(_) 里那个分支),没有任何可见控件——
-// 现象是"没有清空这种按钮，现在没办法移除",补一个同样位置的"×"按钮。跟录制
-// 按钮放进同一个 NSStackView,由 refreshTitle() 统一决定显隐,不用 SwiftUI
-// @State/NotificationCenter 驱动(见 ShortcutRecorderButton.clearButton 注释,这条
-// 路线已经在这个 Form 里踩过"行被错误复用"的坑)。
+// 已录进快捷键时胶囊右端那颗可点的"×",用来清除(录制态里按 Delete/Backspace 也能清,但那是隐藏手势)。
+// 它是容器里叠在录制按钮右端的另一颗 NSButton,显隐由 refreshTitle() 统一决定,不用 SwiftUI
+// @State/NotificationCenter 驱动(见 ShortcutRecorderButton.clearButton 注释)。
 private final class ShortcutRecorderContainerView: NSView {
     let recordButton: ShortcutRecorderButton
 
@@ -206,48 +316,36 @@ private final class ShortcutRecorderContainerView: NSView {
         let recordButton = ShortcutRecorderButton(name: name)
         self.recordButton = recordButton
 
-        let clearButton = NSButton(
-            image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: L10n.t("清除快捷键"))!,
-            target: recordButton,
-            action: #selector(ShortcutRecorderButton.clearShortcut)
-        )
+        let symbol = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: L10n.t("清除快捷键"))!
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))!
+        let clearButton = NSButton(image: symbol, target: recordButton,
+                                   action: #selector(ShortcutRecorderButton.clearShortcut))
         clearButton.isBordered = false
         clearButton.bezelStyle = .regularSquare
-        clearButton.contentTintColor = .secondaryLabelColor
+        clearButton.contentTintColor = .tertiaryLabelColor
         clearButton.toolTip = L10n.t("清除快捷键")
         recordButton.clearButton = clearButton
 
         super.init(frame: .zero)
 
-        // 录制按钮必须拒绝被拉伸——现象是"点按录制"那颗胶囊被拉成了
-        // 铺满整行的长条:这个容器在 Form(.formStyle(.grouped))的 LabeledContent
-        // 尾部内容位里,SwiftUI 会为它提出一个远比按钮实际需要的宽度,而下面这层
-        // NSStackView 原来把 leading/trailing 都钉死在容器边缘,容器多宽、stack 就被
-        // 撑多宽,recordButton 是 stack 里唯一没有固定宽度的排列子视图,于是把多出来的
-        // 空间全部吃成了自己的拉伸——只固定 trailing(贴住行的右边缘,视觉上跟以前
-        // "点按录制"紧贴右侧同一个位置),leading 只做"不小于"的下限,再显式把
-        // recordButton 的水平 hugging/压缩阻力都提到 required,双重保证它只会保持
-        // 自己文字需要的宽度,不会被撑开。
+        // 录制按钮必须拒绝被拉伸:SwiftUI 给这个容器的宽度常常远比按钮需要的宽,只钉 trailing
+        // (贴住行的右缘,一列胶囊右缘对齐),leading 只做"不小于"的下限,再把录制按钮的水平
+        // hugging/压缩阻力提到 required。「×」叠在胶囊里面,出现或消失都不改胶囊的位置。
         recordButton.setContentHuggingPriority(.required, for: .horizontal)
         recordButton.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        // "×"排在录制按钮**前面**。放在后面(库自带 Recorder 的做法)时,只有已录过快捷键
-        // 的那几行才多出这颗按钮,而 stack 的 trailing 钉在行右缘 —— 于是那几行的录制
-        // 胶囊被"×"往左顶,跟没录过的行对不齐,一列胶囊左右参差(现象是)。
-        // 挪到前面之后,胶囊右缘永远贴着同一条线,"×"出现或消失只影响它自己左边那点空隙。
-        let stack = NSStackView(views: [clearButton, recordButton])
-        stack.orientation = .horizontal
-        stack.spacing = 6
-        stack.alignment = .centerY
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        recordButton.translatesAutoresizingMaskIntoConstraints = false
+        clearButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(recordButton)
+        addSubview(clearButton)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            clearButton.widthAnchor.constraint(equalToConstant: 16),
-            clearButton.heightAnchor.constraint(equalToConstant: 16),
+            recordButton.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            recordButton.trailingAnchor.constraint(equalTo: trailingAnchor),
+            recordButton.topAnchor.constraint(equalTo: topAnchor),
+            recordButton.bottomAnchor.constraint(equalTo: bottomAnchor),
+            clearButton.trailingAnchor.constraint(equalTo: recordButton.trailingAnchor, constant: -5),
+            clearButton.centerYAnchor.constraint(equalTo: recordButton.centerYAnchor),
+            clearButton.widthAnchor.constraint(equalToConstant: 14),
+            clearButton.heightAnchor.constraint(equalToConstant: 14),
         ])
 
         recordButton.refreshTitle()

@@ -6842,145 +6842,238 @@ private struct GeneralSettingsTab: View {
 private struct ShortcutsSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var touchBar = TouchBarAvailability.shared
+    /// 任意一个快捷键改了就 +1,让卡头的「已设 N / M」重算。快捷键库每次改都发这条通知(名字是库里定死的)。
+    @State private var shortcutsRevision = 0
 
     var body: some View {
         // "至少需要搭配 ⌘/⌥/⌃ 中一个"这条限制对本页每一个录制框都成立,所以写在页面说明里
-        // 而不是某一组的 footer(放 footer 只挨着上面那一组,下面「播放控制」那组的录制框同样
-        // 受限却看不到这句话)。规则本身照抄 KeyboardShortcuts 库自带 Recorder 的行为(见
+        // 而不是某一张卡上。规则本身照抄 KeyboardShortcuts 库自带 Recorder 的行为(见
         // ShortcutRecorder.swift 里 handle(_:) 的注释),不是这个项目额外加的 —— 但它只会
         // "响一声"、没有任何文字提示,必须写出来。
         SettingsPage(
             title: L10n.t("快捷键"),
             subtitle: L10n.t("可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一")
         ) {
-            // 四张卡按语义分:「切换显示形态」和「打开某扇窗」是两类动作,16 项挤一张卡里
-            // 会有十来行,找不到自己要的那一条。
-            SettingsCard {
-                SettingsRow(icon: "eye", title: L10n.t("显示/隐藏悬浮歌词")) {
-                    ShortcutRecorderControl(name: .toggleOverlay)
-                }
-                CardDivider()
-                SettingsRow(icon: "inset.filled.topthird.square", title: L10n.t("显示/隐藏灵动岛歌词")) {
-                    ShortcutRecorderControl(name: .toggleNotchOverlayHotkey)
-                }
-                CardDivider()
-                SettingsRow(icon: "menubar.rectangle", title: L10n.t("显示/隐藏菜单栏歌词")) {
-                    ShortcutRecorderControl(name: .toggleMenuBarLyricsHotkey)
-                }
-                // 只在这台 Mac 此刻有触控栏时出现,同菜单栏「快速开关」那一项;设置搜索跟着收放(17 章决策 40)。
-                if touchBar.isPresent {
+            // 四张卡按语义分,卡里两列排(19 行压成 10 行,一屏看得完)。
+            VStack(spacing: 14) {
+                hotkeyCard(L10n.t("显示开关"), names: displayNames, cells: displayCells)
+                hotkeyCard(L10n.t("打开窗口"), names: windowNames, cells: windowCells)
+                hotkeyCard(L10n.t("歌词时间轴"), names: timingNames, cells: timingCells) {
                     CardDivider()
-                    SettingsRow(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t("展开/收起触控栏歌词")) {
-                        ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)
-                    }
+                    stepRow
                 }
-                CardDivider()
-                SettingsRow(icon: "lock", title: L10n.t("锁定/解锁位置")) {
-                    ShortcutRecorderControl(name: .toggleLockPosition)
-                }
-                CardDivider()
-                SettingsRow(
-                    icon: "character.book.closed",
-                    title: L10n.t("显示/隐藏译文")
-                ) {
-                    ShortcutRecorderControl(name: .toggleTranslationHotkey)
-                }
-                CardDivider()
-                // 别再给这一行加副标题(比如"总开关;具体给哪几种文字标注仍在「歌词显示」里
-                // 分别设置")—— 解释性文案在这一页是被明确否掉的,同「全局时间轴偏移」那一行。
-                SettingsRow(icon: "textformat.abc", title: L10n.t("显示/隐藏读音")) {
-                    ShortcutRecorderControl(name: .toggleRomanizationHotkey)
-                }
+                hotkeyCard(L10n.t("播放控制"), names: playbackNames, cells: playbackCells)
             }
-
-            SettingsCard {
-                SettingsRow(icon: "list.bullet.rectangle", title: L10n.t("打开歌词管理")) {
-                    ShortcutRecorderControl(name: .openLyricsManagerHotkey)
-                }
-                CardDivider()
-                SettingsRow(icon: "text.quote", title: L10n.t("打开歌词窗口")) {
-                    ShortcutRecorderControl(name: .openLyricsWindowHotkey)
-                }
-                CardDivider()
-                SettingsRow(icon: "rectangle.inset.bottomright.filled", title: L10n.t("切换迷你 / 完整尺寸")) {
-                    ShortcutRecorderControl(name: .toggleLyricsWindowMiniHotkey)
-                }
-                CardDivider()
-                SettingsRow(
-                    icon: "magnifyingglass",
-                    title: L10n.t("搜索歌词")
-                ) {
-                    ShortcutRecorderControl(name: .lyricsQuickSearchHotkey)
-                }
-                CardDivider()
-                SettingsRow(icon: "gearshape", title: L10n.t("打开设置")) {
-                    ShortcutRecorderControl(name: .openSettingsHotkey)
-                }
-            }
-
-            SettingsCard {
-                SettingsRow(
-                    icon: "backward.end",
-                    title: L10n.t("歌词提前")
-                ) {
-                    ShortcutRecorderControl(name: .lyricsAdvanceHotkey)
-                }
-                CardDivider()
-                SettingsRow(icon: "forward.end", title: L10n.t("歌词延后")) {
-                    ShortcutRecorderControl(name: .lyricsDelayHotkey)
-                }
-                CardDivider()
-                SettingsRow(
-                    icon: "arrow.counterclockwise",
-                    title: L10n.t("歌词偏移归零")
-                ) {
-                    ShortcutRecorderControl(name: .lyricsOffsetResetHotkey)
-                }
-                CardDivider()
-                // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的按钮文案/
-                // 快捷键的实际调整量会一起变。0.05~2s 区间对"手动校准"这个场景够用,不需要再大
-                // 或者再细。
-                //
-                // 数值必须作为**独立内容**摆在 Stepper 外面,不能塞进 Stepper 的 label:
-                // SettingsRow/SettingsSubRow 对尾部控件统一套了 .labelsHidden()(用来藏掉
-                // Toggle/Picker 自带的、会跟行标题重复的那份标签),而 Stepper 恰恰是把数值
-                // 画在 label 里的——放进去会被一并藏掉,界面上只剩一对光秃秃的上下箭头,
-                // 完全看不出当前步长是多少。
-                //
-                // 用完整的 SettingsRow 而不是 SettingsSubRow:只有"每次调整"四个字说不清调的是
-                // 什么、影响哪里,配上图标和副标题才自解释。
-                SettingsRow(
-                    icon: "timer",
-                    title: L10n.t("步长"),
-                    subtitle: L10n.t("每按一次调整的幅度")
-                ) {
-                    HStack(spacing: 8) {
-                        Text("\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                        Stepper("", value: Binding(
-                            get: { Double(settings.lyricsOffsetStepMs) / 1000 },
-                            set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
-                        ), in: 0.05...2.0, step: 0.05)
-                    }
-                }
-            }
-
-            SettingsCard {
-                SettingsRow(icon: "playpause", title: L10n.t("播放/暂停")) {
-                    ShortcutRecorderControl(name: .playPauseHotkey)
-                }
-                CardDivider()
-                SettingsRow(icon: "forward.fill", title: L10n.t("下一首")) {
-                    ShortcutRecorderControl(name: .nextTrackHotkey)
-                }
-                CardDivider()
-                SettingsRow(icon: "backward.fill", title: L10n.t("上一首")) {
-                    ShortcutRecorderControl(name: .previousTrackHotkey)
-                }
-            }
+            .background { LastfmGlassGlow() }
         }
         .id(L10n.current)
+        .onReceive(NotificationCenter.default.publisher(
+            for: Notification.Name("KeyboardShortcuts_shortcutByNameDidChange"))) { _ in
+            shortcutsRevision &+= 1
+        }
+    }
+
+    private func hotkeyCard(_ title: String, names: [KeyboardShortcuts.Name], cells: [AnyView]) -> some View {
+        hotkeyCard(title, names: names, cells: cells) { EmptyView() }
+    }
+
+    private func hotkeyCard<Extra: View>(_ title: String, names: [KeyboardShortcuts.Name], cells: [AnyView],
+                                         @ViewBuilder extra: () -> Extra) -> some View {
+        let _ = shortcutsRevision
+        let set = names.filter { KeyboardShortcuts.getShortcut(for: $0) != nil }.count
+        let extraRows = extra()
+        return SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: title) {
+                Text(String(format: L10n.t("已设 %d / %d"), set, names.count))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            HotkeyGrid(cells: cells)
+            extraRows
+        }
+    }
+
+    // 每张卡的 names 和 cells 一一对应(同序),卡头的计数照 names 算。
+
+    private var displayNames: [KeyboardShortcuts.Name] {
+        [.toggleOverlay, .toggleNotchOverlayHotkey, .toggleMenuBarLyricsHotkey]
+            + (touchBar.isPresent ? [.toggleTouchBarLyricsHotkey] : [])
+            + [.toggleLockPosition, .toggleTranslationHotkey, .toggleRomanizationHotkey]
+    }
+
+    private var displayCells: [AnyView] {
+        var cells = [
+            AnyView(HotkeyCell(icon: "eye", title: L10n.t("显示/隐藏悬浮歌词")) {
+                ShortcutRecorderControl(name: .toggleOverlay)
+            }),
+            AnyView(HotkeyCell(icon: "inset.filled.topthird.square", title: L10n.t("显示/隐藏灵动岛歌词")) {
+                ShortcutRecorderControl(name: .toggleNotchOverlayHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "menubar.rectangle", title: L10n.t("显示/隐藏菜单栏歌词")) {
+                ShortcutRecorderControl(name: .toggleMenuBarLyricsHotkey)
+            }),
+        ]
+        // 只在这台 Mac 此刻有触控栏时出现,同菜单栏「快速开关」那一项;设置搜索跟着收放(17 章决策 40)。
+        if touchBar.isPresent {
+            cells.append(AnyView(HotkeyCell(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t("展开/收起触控栏歌词")) {
+                ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)
+            }))
+        }
+        cells += [
+            AnyView(HotkeyCell(icon: "lock", title: L10n.t("锁定/解锁位置")) {
+                ShortcutRecorderControl(name: .toggleLockPosition)
+            }),
+            AnyView(HotkeyCell(icon: "character.book.closed", title: L10n.t("显示/隐藏译文")) {
+                ShortcutRecorderControl(name: .toggleTranslationHotkey)
+            }),
+            // 别再给这一格加说明(比如"总开关;具体给哪几种文字标注仍在「歌词显示」里分别设置")——
+            // 解释性文案在这一页是被明确否掉的,同「步长」以外的每一格。
+            AnyView(HotkeyCell(icon: "textformat.abc", title: L10n.t("显示/隐藏读音")) {
+                ShortcutRecorderControl(name: .toggleRomanizationHotkey)
+            }),
+        ]
+        return cells
+    }
+
+    private var windowNames: [KeyboardShortcuts.Name] {
+        [.openLyricsManagerHotkey, .openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey,
+         .lyricsQuickSearchHotkey, .openSettingsHotkey]
+    }
+
+    private var windowCells: [AnyView] {
+        [
+            AnyView(HotkeyCell(icon: "list.bullet.rectangle", title: L10n.t("打开歌词管理")) {
+                ShortcutRecorderControl(name: .openLyricsManagerHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "text.quote", title: L10n.t("打开歌词窗口")) {
+                ShortcutRecorderControl(name: .openLyricsWindowHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "rectangle.inset.bottomright.filled", title: L10n.t("切换迷你 / 完整尺寸")) {
+                ShortcutRecorderControl(name: .toggleLyricsWindowMiniHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "magnifyingglass", title: L10n.t("搜索歌词")) {
+                ShortcutRecorderControl(name: .lyricsQuickSearchHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "gearshape", title: L10n.t("打开设置")) {
+                ShortcutRecorderControl(name: .openSettingsHotkey)
+            }),
+        ]
+    }
+
+    private var timingNames: [KeyboardShortcuts.Name] {
+        [.lyricsAdvanceHotkey, .lyricsDelayHotkey, .lyricsOffsetResetHotkey]
+    }
+
+    private var timingCells: [AnyView] {
+        [
+            AnyView(HotkeyCell(icon: "backward.end", title: L10n.t("歌词提前")) {
+                ShortcutRecorderControl(name: .lyricsAdvanceHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "forward.end", title: L10n.t("歌词延后")) {
+                ShortcutRecorderControl(name: .lyricsDelayHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "arrow.counterclockwise", title: L10n.t("歌词偏移归零")) {
+                ShortcutRecorderControl(name: .lyricsOffsetResetHotkey)
+            }),
+        ]
+    }
+
+    // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的按钮文案/
+    // 快捷键的实际调整量会一起变。0.05~2s 区间对"手动校准"这个场景够用。
+    //
+    // 数值必须作为**独立内容**摆在 Stepper 外面,不能塞进 Stepper 的 label:
+    // SettingsRow 对尾部控件统一套了 .labelsHidden(),而 Stepper 恰恰是把数值画在 label 里的——
+    // 放进去会被一并藏掉,界面上只剩一对光秃秃的上下箭头。
+    //
+    // 用完整的 SettingsRow 而不是一格:只有"步长"两个字说不清调的是什么,配上副标题才自解释,
+    // 所以它横跨两列、排在格子下面。
+    private var stepRow: some View {
+        SettingsRow(
+            icon: "timer",
+            title: L10n.t("步长"),
+            subtitle: L10n.t("每按一次调整的幅度")
+        ) {
+            HStack(spacing: 8) {
+                Text("\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Stepper("", value: Binding(
+                    get: { Double(settings.lyricsOffsetStepMs) / 1000 },
+                    set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
+                ), in: 0.05...2.0, step: 0.05)
+            }
+        }
+    }
+
+    private var playbackNames: [KeyboardShortcuts.Name] { [.playPauseHotkey, .nextTrackHotkey, .previousTrackHotkey] }
+
+    private var playbackCells: [AnyView] {
+        [
+            AnyView(HotkeyCell(icon: "playpause", title: L10n.t("播放/暂停")) {
+                ShortcutRecorderControl(name: .playPauseHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "forward.fill", title: L10n.t("下一首")) {
+                ShortcutRecorderControl(name: .nextTrackHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "backward.fill", title: L10n.t("上一首")) {
+                ShortcutRecorderControl(name: .previousTrackHotkey)
+            }),
+        ]
+    }
+}
+
+/// 快捷键页一格:图标 + 名字 + 录制框,一行。名字放不下先缩一点字号,再不行截断(悬停看全名)。
+/// 自绘的格子不会自动挂设置搜索高亮(只有 SettingsRow / SettingsCardHeader 会),这里手挂。
+private struct HotkeyCell<Recorder: View>: View {
+    let icon: String
+    let title: String
+    @ViewBuilder let recorder: () -> Recorder
+
+    var body: some View {
+        HStack(spacing: 9) {
+            SymbolImage(name: icon, size: 13)
+                .foregroundStyle(.secondary)
+                // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分符号有 CJK 变体)。
+                .environment(\.locale, Locale(identifier: "en"))
+                .frame(width: 18)
+            Text(title)
+                .font(.system(size: 13))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .truncationMode(.tail)
+                .help(title)
+            Spacer(minLength: 6)
+            recorder()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .settingsSearchHighlight(title: title)
+    }
+}
+
+/// 两列排的格子,行与行之间一条贯穿的发丝线,两列之间一条竖线;单数时最后一行右边空着。
+private struct HotkeyGrid: View {
+    let cells: [AnyView]
+
+    var body: some View {
+        let rows = (cells.count + 1) / 2
+        VStack(spacing: 0) {
+            ForEach(0..<rows, id: \.self) { row in
+                if row > 0 { Divider() }
+                HStack(spacing: 0) {
+                    cells[row * 2]
+                    Divider()
+                    if row * 2 + 1 < cells.count {
+                        cells[row * 2 + 1]
+                    } else {
+                        Color.clear.frame(maxWidth: .infinity)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 

@@ -797,9 +797,10 @@ func runTouchBarTests() {
                         && controller.contains("case .collapse:\n            if TouchBarPrivateAPI.supportsHidingControlStrip {\n"
                                                + "                TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
                     "触控栏快捷键: 关着就打开开关(订阅当场展开),收着就展开,看得见就照 ✕ 收起")
-        expectEqual(settingsView.contains("if touchBar.isPresent {\n                    CardDivider()\n"
-                                          + "                    SettingsRow(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t(\"展开/收起触控栏歌词\")) {\n"
-                                          + "                        ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)"), true,
+        expectEqual(settingsView.contains("if touchBar.isPresent {\n"
+                                          + "            cells.append(AnyView(HotkeyCell(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t(\"展开/收起触控栏歌词\")) {\n"
+                                          + "                ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)")
+                    && settingsView.contains("+ (touchBar.isPresent ? [.toggleTouchBarLyricsHotkey] : [])"), true,
                     "触控栏快捷键: 设置页那一行只在有触控栏时出现")
         expectEqual(search.contains("$0.entry.titleKey != SettingsSearchCatalog.touchBarHotkeyTitleKey)"), true,
                     "触控栏快捷键: 没有触控栏时设置搜索不收这一条")

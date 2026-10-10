@@ -818,6 +818,7 @@
 "已解锁 %@ 首" = "Unlocked %@ songs";
 "已解锁 %@ 首#one" = "Unlocked %@ song";
 "已解锁位置" = "Position unlocked";
+"已设 %d / %d" = "%d of %d set";
 "已设置" = "Set";
 "已返回候选" = "Candidate returned";
 "已连接" = "Connected";
@@ -938,6 +939,7 @@
 "打开授权页" = "Open Authorization Page";
 "打开歌词窗口" = "Open Lyrics Window";
 "打开歌词管理" = "Open Lyrics Manager";
+"打开窗口" = "Open Windows";
 "打开系统设置" = "Open System Settings";
 "打开设置" = "Open Settings";
 "打开该浏览器" = "Open Browser";
@@ -1116,6 +1118,7 @@
 "显示哪些播放器" = "Players Shown";
 "显示在桌面上" = "Sits on your desktop";
 "显示封面" = "Show Artwork";
+"显示开关" = "Show & Hide";
 "显示当前歌词" = "Show Current Lyrics";
 "显示播放控制" = "Show Playback Controls";
 "显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
@@ -1228,6 +1231,7 @@
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键" = "No Accessibility permission; %@’s shuffle, repeat and Like buttons are hidden";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "No Accessibility permission; %@’s progress cannot be calibrated";
 "未获授权" = "Not granted";
+"未设置" = "Not Set";
 "未运行" = "Not Running";
 "未返回候选" = "No candidate returned";
 "未连接" = "Not connected";
