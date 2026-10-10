@@ -833,9 +833,9 @@
             "zh-Hant": "指標移上去時變淡"
           },
           "desc": {
-            "zh-Hans": "鼠标移到悬浮歌词上时它变成半透明，不挡你看下面的东西。迷你歌词窗口另有一个开关。",
-            "en": "Floating lyrics turn see-through while the pointer is over them, so they never block what is underneath. The mini lyrics window has its own switch.",
-            "zh-Hant": "指標移到浮動歌詞上時它變成半透明，不擋你看下面的東西。迷你歌詞視窗另有一個開關。"
+            "zh-Hans": "鼠标移到悬浮歌词上时它变成半透明，不挡你看下面的东西。迷你歌词窗口另有一个开关，还可以让淡化时的点按落到下面的窗口，按住 ⌥ 再操作迷你窗口。",
+            "en": "Floating lyrics turn see-through while the pointer is over them, so they never block what is underneath. The mini lyrics window has its own switch, and can also let clicks through to the window underneath while faded; hold ⌥ to use the mini window.",
+            "zh-Hant": "指標移到浮動歌詞上時它變成半透明，不擋你看下面的東西。迷你歌詞視窗另有一個開關，還可以讓淡化時的點按落到下方的視窗，按住 ⌥ 再操作迷你視窗。"
           },
           "default": "off",
           "check": {
@@ -853,6 +853,12 @@
               "歌词窗口",
               "行为",
               "悬浮淡化"
+            ],
+            [
+              "歌词显示",
+              "歌词窗口",
+              "行为",
+              "淡化时点按穿透"
             ]
           ]
         },

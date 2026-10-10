@@ -1428,6 +1428,8 @@
 "测试失败：%@" = "Couldn't test lyrics sources: %@";
 "测试版更新" = "Beta Updates";
 "浓淡" = "Density";
+"淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作" = "While faded, clicks go to the window underneath. Hold ⌥ to make it opaque again and use it";
+"淡化时点按穿透" = "Click Through While Faded";
 "深色" = "Dark";
 "深色卡片" = "Dark Card";
 "深色渐变" = "Dark Gradient";

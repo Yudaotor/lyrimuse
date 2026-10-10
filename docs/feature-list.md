@@ -348,11 +348,12 @@ When floating lyrics move to the next line, the old line slides up and the new o
 
 ### Fade when the pointer is over it
 
-Floating lyrics turn see-through while the pointer is over them, so they never block what is underneath. The mini lyrics window has its own switch.
+Floating lyrics turn see-through while the pointer is over them, so they never block what is underneath. The mini lyrics window has its own switch, and can also let clicks through to the window underneath while faded; hold ⌥ to use the mini window.
 
 - Off by default
 - Settings: Lyrics Display › Floating Lyrics › Behavior › Fade on Hover
 - Settings: Lyrics Display › Lyrics Window › Behavior › Fade on Hover
+- Settings: Lyrics Display › Lyrics Window › Behavior › Click Through While Faded
 
 <a id="feature-lock-position"></a>
 
@@ -692,7 +693,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 219 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 220 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -942,6 +943,7 @@ Every setting in the Settings window, by where it lives: 219 in all. Type a name
 ### Lyrics Display › Lyrics Window › Behavior
 
 - **Fade on Hover** (mini size only)
+- **Click Through While Faded** (mini size only): While faded, clicks go to the window underneath. Hold ⌥ to make it opaque again and use it
 - **Hide When Paused** (mini size only)
 - **Hide in Full Screen** (mini size only)
 

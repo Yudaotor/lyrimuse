@@ -1,7 +1,8 @@
 import Foundation
 import LyrimuseCore
 
-/// 迷你窗「悬浮淡化」(07 章决策 118):判据、跟悬浮歌词同一组数和同一个标题 / 图标、接线。
+/// 迷你窗「悬浮淡化」(07 章决策 118)和从属的「淡化时点按穿透」(决策 144):判据、跟悬浮歌词同一组数和同一个
+/// 标题 / 图标、接线。
 func checkLyricsWindowHoverFade() {
     print("\n== 迷你窗悬浮淡化 ==")
     typealias F = LyricsWindowMiniHoverFade
@@ -15,6 +16,19 @@ func checkLyricsWindowHoverFade() {
                 "迷你悬浮淡化: 指针不在窗里不淡")
     expectEqual(F.shouldDim(enabled: true, isMini: true, hovered: true, heldOpenByClick: true), false,
                 "迷你悬浮淡化: 这次停留里按过鼠标就恢复")
+    expectEqual(F.shouldDim(enabled: true, isMini: true, hovered: true, heldOpenByClick: false, revealHeld: true), false,
+                "淡化时点按穿透: 按住 ⌥ 不淡")
+    expectEqual(F.passesClicksThrough(clickThrough: true, dimmed: true), true, "淡化时点按穿透: 开着、正淡着就穿透")
+    expectEqual(F.passesClicksThrough(clickThrough: false, dimmed: true), false, "淡化时点按穿透: 关着不穿透(决策 118 的默认)")
+    expectEqual(F.passesClicksThrough(clickThrough: true, dimmed: false), false, "淡化时点按穿透: 没淡(按住 ⌥、按过鼠标)不穿透")
+    expectEqual(F.pollsPointer(enabled: true, clickThrough: true, isMini: true, hovered: true, heldOpenByClick: false), true,
+                "淡化时点按穿透: 停在窗里时轮询指针和 ⌥")
+    expectEqual(F.pollsPointer(enabled: true, clickThrough: false, isMini: true, hovered: true, heldOpenByClick: false)
+                || F.pollsPointer(enabled: false, clickThrough: true, isMini: true, hovered: true, heldOpenByClick: false)
+                || F.pollsPointer(enabled: true, clickThrough: true, isMini: false, hovered: true, heldOpenByClick: false)
+                || F.pollsPointer(enabled: true, clickThrough: true, isMini: true, hovered: false, heldOpenByClick: false)
+                || F.pollsPointer(enabled: true, clickThrough: true, isMini: true, hovered: true, heldOpenByClick: true), false,
+                "淡化时点按穿透: 开关关着、不在迷你、指针不在窗里、这次停留按过鼠标都不轮询")
 
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     func source(_ path: String) -> String {
@@ -65,6 +79,31 @@ func checkLyricsWindowHoverFade() {
                 "迷你悬浮淡化: 迷你「重置」恢复成关")
     expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniFadeOnHover = (defaults.object(forKey: Keys.lyricsWindowMiniFadeOnHover) as? Bool) ?? false"),
                 true, "迷你悬浮淡化: 默认关,同悬浮歌词「悬浮淡化」")
+
+    expectEqual(sourceBytes(fade, contain: "window.ignoresMouseEvents = pass")
+                && sourceBytes(fade, contain: "if pass != passingThrough {"), true,
+                "淡化时点按穿透: 穿透是整扇窗 ignoresMouseEvents,只在自己的状态翻转时写")
+    expectEqual(sourceBytes(fade, contain: "        if passingThrough { return }\n        hovered = value"), true,
+                "淡化时点按穿透: 穿透期间跟踪区报的进出不作数")
+    expectEqual(sourceBytes(fade, contain: "window.frame.contains(NSEvent.mouseLocation)")
+                && sourceBytes(fade, contain: "NSEvent.modifierFlags.contains(.option)"), true,
+                "淡化时点按穿透: 轮询读指针位置和 ⌥(不装全局按键监听,不用辅助功能权限)")
+    expectEqual(sourceBytes(fade, contain: "NotificationCenter.default.post(name: MiniWindowHoverTracker.resyncNotification, object: window)")
+                && sourceBytes(fade, contain: "forName: MiniWindowHoverTracker.resyncNotification, object: window, queue: .main")
+                && sourceBytes(fade, contain: "MainActor.assumeIsolated { self?.installFrameTracking() }"), true,
+                "淡化时点按穿透: 穿透结束让跟踪区按真实指针位置重报")
+    expectEqual(sourceBytes(fade, contain: "$lyricsWindowMiniFadeClickThrough.removeDuplicates()"), true,
+                "淡化时点按穿透: 跟着设置走")
+    expectEqual(sourceBytes(settingsView, contain: "        if settings.lyricsWindowMiniFadeOnHover {\n            CardDivider()\n"
+                            + "            SettingsSubRow(title: L10n.t(\"淡化时点按穿透\"),")
+                && sourceBytes(settingsView, contain: "Toggle(\"\", isOn: $settings.lyricsWindowMiniFadeClickThrough)"), true,
+                "淡化时点按穿透: 设置页「悬浮淡化」下面的从属行,只在它开着时出现")
+    expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniFadeClickThrough = false"), true,
+                "淡化时点按穿透: 迷你「重置」恢复成关")
+    expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniFadeClickThrough =\n            (defaults.object(forKey: Keys.lyricsWindowMiniFadeClickThrough) as? Bool) ?? false"),
+                true, "淡化时点按穿透: 默认关")
+    expectEqual(SettingsSearchCatalog.lyricsWindowMiniOnlyTitles.contains("淡化时点按穿透"), true,
+                "淡化时点按穿透: 设置搜索登记为只有迷你")
 }
 
 /// 歌词窗口完整布局「闲置隐藏」:判据 + 接线。

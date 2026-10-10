@@ -40687,6 +40687,40 @@
         }
       }
     },
+    "淡化时点按穿透" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click Through While Faded"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "淡化時點按穿透"
+          }
+        }
+      }
+    },
+    "淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While faded, clicks go to the window underneath. Hold ⌥ to make it opaque again and use it"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "淡化時點按會落到下方的視窗；按住 ⌥ 回復不透明，就能操作"
+          }
+        }
+      }
+    },
     "搜索结果只有现在使用的这一份" : {
       "extractionState" : "manual",
       "localizations" : {

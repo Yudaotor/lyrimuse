@@ -337,6 +337,7 @@ final class AppSettings: ObservableObject {
         static let lyricsWindowMiniKaraokeFillColorHex = "np:lyricsWindowMiniKaraokeFillColorHex"
         static let lyricsWindowMiniShowsControls = "np:lyricsWindowMiniShowsControls"
         static let lyricsWindowMiniFadeOnHover = "np:lyricsWindowMiniFadeOnHover"
+        static let lyricsWindowMiniFadeClickThrough = "np:lyricsWindowMiniFadeClickThrough"
         static let lyricsWindowMiniHideWhenNotPlaying = "np:lyricsWindowMiniHideWhenNotPlaying"
         static let lyricsWindowMiniHideInFullScreen = "np:lyricsWindowMiniHideInFullScreen"
         static let lyricsWindowTextColorMode = "np:lyricsWindowTextColorMode"
@@ -1417,6 +1418,10 @@ final class AppSettings: ObservableObject {
     @Published var lyricsWindowMiniFadeOnHover: Bool {
         didSet { defaults.set(lyricsWindowMiniFadeOnHover, forKey: Keys.lyricsWindowMiniFadeOnHover) }
     }
+    /// 「悬浮淡化」的从属项「淡化时点按穿透」(07 章决策 144):淡着的时候点按落到下面的窗口,按住 ⌥ 恢复。默认关。
+    @Published var lyricsWindowMiniFadeClickThrough: Bool {
+        didSet { defaults.set(lyricsWindowMiniFadeClickThrough, forKey: Keys.lyricsWindowMiniFadeClickThrough) }
+    }
     /// 迷你窗「暂停时隐藏」「全屏时隐藏」(07 章决策 142),默认都关。跟悬浮歌词、灵动岛那几颗同名开关各管各的。
     /// 开关在设置页迷你「行为」里,「重置」恢复成关;执行在 `LyricsMiniPanelAutoHide`。
     @Published var lyricsWindowMiniHideWhenNotPlaying: Bool {
@@ -2259,6 +2264,8 @@ final class AppSettings: ObservableObject {
         lyricsWindowMiniShowsControls =
             (defaults.object(forKey: Keys.lyricsWindowMiniShowsControls) as? Bool) ?? true
         lyricsWindowMiniFadeOnHover = (defaults.object(forKey: Keys.lyricsWindowMiniFadeOnHover) as? Bool) ?? false
+        lyricsWindowMiniFadeClickThrough =
+            (defaults.object(forKey: Keys.lyricsWindowMiniFadeClickThrough) as? Bool) ?? false
         lyricsWindowMiniHideWhenNotPlaying =
             (defaults.object(forKey: Keys.lyricsWindowMiniHideWhenNotPlaying) as? Bool) ?? false
         lyricsWindowMiniHideInFullScreen =

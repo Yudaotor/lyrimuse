@@ -2851,6 +2851,14 @@ private struct AppearanceSettingsTab: View {
         SettingsRow(icon: "cursorarrow.motionlines", title: L10n.t("悬浮淡化")) {
             Toggle("", isOn: $settings.lyricsWindowMiniFadeOnHover)
         }
+        // 从属于「悬浮淡化」,只在它开着时出现(07 章决策 144)。
+        if settings.lyricsWindowMiniFadeOnHover {
+            CardDivider()
+            SettingsSubRow(title: L10n.t("淡化时点按穿透"),
+                           help: L10n.t("淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作")) {
+                Toggle("", isOn: $settings.lyricsWindowMiniFadeClickThrough)
+            }
+        }
         CardDivider()
         SettingsRow(icon: "pause.circle", title: L10n.t("暂停时隐藏"),
                     help: L10n.t("迷你尺寸下，暂停或没有播放时隐藏，开始播放后重新出现")) {
@@ -3972,6 +3980,7 @@ enum LyricsWindowStyleDefaults {
             s.lyricsWindowMiniLineOverflow = .wrap
             s.lyricsWindowMiniLyricsLayout = .twoLines
             s.lyricsWindowMiniFadeOnHover = false
+            s.lyricsWindowMiniFadeClickThrough = false
             s.lyricsWindowMiniHideWhenNotPlaying = false
             s.lyricsWindowMiniHideInFullScreen = false
             s.lyricsWindowMiniLyricsKaraoke = true
