@@ -160,21 +160,22 @@
       "path" : [
         "播放器"
       ],
-      "title" : "播放器"
+      "title" : "音乐 App"
     },
     {
       "dest" : "tab:player",
       "path" : [
         "播放器"
       ],
-      "title" : "网页播放器"
+      "title" : "网页版"
     },
     {
       "dest" : "tab:player",
       "path" : [
         "播放器",
-        "网页播放器"
+        "网页版"
       ],
+      "subtitle" : "能跳过的广告一出现就自动跳过",
       "title" : "自动跳过 YouTube Music 广告"
     },
     {
@@ -182,16 +183,15 @@
       "path" : [
         "播放器"
       ],
-      "title" : "已信任的播放器"
+      "title" : "其他 App"
     },
     {
       "dest" : "tab:player",
       "path" : [
-        "播放器",
-        "已信任的播放器"
+        "播放器"
       ],
       "subtitle" : "从「应用程序」中选择，无需等待其开始播放",
-      "title" : "添加播放器…"
+      "title" : "添加 App…"
     },
     {
       "dest" : "tab:player",
@@ -204,35 +204,40 @@
     {
       "dest" : "tab:player",
       "path" : [
-        "播放器"
+        "播放器",
+        "权限与服务"
       ],
       "title" : "自动化权限"
     },
     {
       "dest" : "tab:player",
       "path" : [
-        "播放器"
+        "播放器",
+        "权限与服务"
       ],
       "title" : "完全磁盘访问权限"
     },
     {
       "dest" : "tab:player",
       "path" : [
-        "播放器"
+        "播放器",
+        "权限与服务"
       ],
       "title" : "辅助功能权限"
     },
     {
       "dest" : "tab:player",
       "path" : [
-        "播放器"
+        "播放器",
+        "权限与服务"
       ],
       "title" : "歌词引擎"
     },
     {
       "dest" : "tab:player",
       "path" : [
-        "播放器"
+        "播放器",
+        "联动"
       ],
       "title" : "播放器联动"
     },
@@ -240,7 +245,7 @@
       "dest" : "tab:player",
       "path" : [
         "播放器",
-        "播放器联动"
+        "联动"
       ],
       "title" : "打开 Lyrimuse 时启动"
     },
@@ -248,7 +253,7 @@
       "dest" : "tab:player",
       "path" : [
         "播放器",
-        "播放器联动"
+        "联动"
       ],
       "title" : "跟随播放器启动"
     },
@@ -256,7 +261,7 @@
       "dest" : "tab:player",
       "path" : [
         "播放器",
-        "播放器联动"
+        "联动"
       ],
       "title" : "跟随播放器退出"
     },

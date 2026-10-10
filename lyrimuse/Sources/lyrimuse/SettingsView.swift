@@ -280,8 +280,8 @@ struct SettingsView: View {
 
     // MARK: - 前进 / 后退
 
-    /// 三处页内二级分段的当前值:「歌词」(获取/译文/效果/管理)、「歌词显示」(悬浮歌词/灵动岛/
-    /// 菜单栏)、Last.fm 账号页(统计/榜单/足迹/设置)。
+    /// 各页内二级分段的当前值:「歌词」(获取/译文/调整/管理)、「播放器」(播放器/联动/权限与服务)、
+    /// 「歌词显示」(悬浮歌词/灵动岛/菜单栏…)、Last.fm 与 Discord 账号页。
     ///
     /// 这里是同一批 UserDefaults 键的**第二个**观察者 —— 真正画分段选择器的是各自那一页,
     /// 顶层读它们只为把「当前停在哪一段」并进前进 / 后退的位置里。
@@ -297,6 +297,8 @@ struct SettingsView: View {
     private var lastfmSectionRaw = SettingsSearchCatalog.lastfmSectionDefault
     @AppStorage(SettingsSearchCatalog.discordSectionKey)
     private var discordSectionRaw = SettingsSearchCatalog.discordSectionDefault
+    @AppStorage(SettingsSearchCatalog.playerSectionKey)
+    private var playerSectionRaw = SettingsSearchCatalog.playerSectionDefault
 
     /// 走过的位置序列 + 当前停在第几个。语义跟系统「系统设置」逐条对齐:
     ///   · 后退回到上一个位置、前进再走回来;
@@ -328,6 +330,7 @@ struct SettingsView: View {
     private func section(of panel: SettingsSidebarItem) -> String? {
         switch panel {
         case .tab(.lyrics): return lyricsSectionRaw
+        case .tab(.player): return playerSectionRaw
         case .tab(.appearance): return appearanceSectionRaw
         case .account(.lastfm): return lastfmSectionRaw
         case .account(.discord): return discordSectionRaw
@@ -345,6 +348,7 @@ struct SettingsView: View {
         guard let section = location.section else { return }
         switch location.panel {
         case .tab(.lyrics): lyricsSectionRaw = section
+        case .tab(.player): playerSectionRaw = section
         case .tab(.appearance): appearanceSectionRaw = section
         case .account(.lastfm): lastfmSectionRaw = section
         case .account(.discord): discordSectionRaw = section
@@ -4413,35 +4417,98 @@ private final class PlayerTabStores: ObservableObject {
 /// 只有它订阅 AppSettings,别的设置变化不打醒整个「播放器」页。
 private struct YouTubeMusicAutoSkipRow: View {
     @ObservedObject private var settings = AppSettings.shared
-    /// 回到 App 时 +1(`browserAutomationCard` 的 didBecomeActive),让「有没有辅助功能权限」重读一次:
+    /// 回到 App 时 +1(`webPlayersCard` 的 didBecomeActive),让「有没有辅助功能权限」重读一次:
     /// TCC 状态没有通知可订阅,用户去系统设置勾完回来这里才会跟着变。
     let refreshTick: Int
+    /// 「网页版」卡里跟平台格并排的那块面板:标题、开关、副标题挤在一块圆角框里,缺权限时只留一句提示和按钮
+    /// (操作步骤挂在提示的悬停说明上),别把整段步骤塞进面板,会把同一行的平台格一起撑高。
+    var asPanel = false
+
+    private var helpText: String {
+        L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时会短暂切换过去再切回，当前使用的浏览器窗口不受影响。")
+    }
+
+    private var isOn: Binding<Bool> {
+        Binding(
+            get: { settings.youTubeMusicAutoSkipAds },
+            set: { on in
+                settings.youTubeMusicAutoSkipAds = on
+                // 打开的那一下就把授权要到手,不等第一条广告来了才在后台弹框。已授权时什么都不弹。
+                if on { AccessibilitySkipPress.promptForTrust() }
+            })
+    }
+
+    private func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
 
     var body: some View {
         let _ = refreshTick
+        if asPanel { panel } else { row }
+    }
+
+    private var panel: some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 7) {
+                Image(systemName: "forward.end")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                Text(L10n.t("自动跳过 YouTube Music 广告"))
+                    .font(.system(size: 12.5))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                HelpButton(text: helpText)
+                Spacer(minLength: 6)
+                Toggle("", isOn: isOn)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                    .accessibilityLabel(L10n.t("自动跳过 YouTube Music 广告"))
+            }
+            Text(L10n.t("能跳过的广告一出现就自动跳过"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            if settings.youTubeMusicAutoSkipAds && !AccessibilitySkipPress.isTrusted {
+                HStack(spacing: 6) {
+                    Text(L10n.t("尚未获得「辅助功能」权限，自动跳过不会生效。"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .help(AccessibilityPermission.shared.steps)
+                    Spacer(minLength: 4)
+                    Button(L10n.t("打开系统设置"), action: openAccessibilitySettings)
+                        .controlSize(.small)
+                        .settingsGlassButtons()
+                        .buttonBorderShape(.capsule)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 1))
+        // 自绘的面板不会自动挂搜索高亮(只有 SettingsRow / SettingsCardHeader 会),手挂。
+        .settingsSearchHighlight(title: L10n.t("自动跳过 YouTube Music 广告"))
+    }
+
+    @ViewBuilder
+    private var row: some View {
         SettingsRow(
             icon: "forward.end",
             title: L10n.t("自动跳过 YouTube Music 广告"),
-            help: L10n.t("出现「跳过」按钮时自动点按，无法跳过的广告照常播放。需要「辅助功能」权限。YouTube Music 位于后台标签页时会短暂切换过去再切回，当前使用的浏览器窗口不受影响。")
+            subtitle: L10n.t("能跳过的广告一出现就自动跳过"),
+            help: helpText
         ) {
-            Toggle("", isOn: Binding(
-                get: { settings.youTubeMusicAutoSkipAds },
-                set: { on in
-                    settings.youTubeMusicAutoSkipAds = on
-                    // 打开的那一下就把授权要到手,不等第一条广告来了才在后台弹框。已授权时什么都不弹。
-                    if on { AccessibilitySkipPress.promptForTrust() }
-                }
-            ))
+            Toggle("", isOn: isOn)
         }
         if settings.youTubeMusicAutoSkipAds && !AccessibilitySkipPress.isTrusted {
             SettingsNote {
                 Text(L10n.t("尚未获得「辅助功能」权限，自动跳过不会生效。"))
                 Text(AccessibilityPermission.shared.steps)
-                Button(L10n.t("打开系统设置")) {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
+                Button(L10n.t("打开系统设置"), action: openAccessibilitySettings)
             }
         }
     }
@@ -4490,20 +4557,32 @@ private struct PlayerSettingsTab: View {
     /// 回到前台再查一次(用户可能刚去系统设置里改过)。
     @State private var notificationsDenied = false
 
+    /// 这一页的三个分段:认哪些来源、跟播放器一起开关、要授的权限和后台服务。
+    private enum Section: String, CaseIterable, Identifiable {
+        case players, linkage, permissions
+        var id: Self { self }
+        var title: String {
+            switch self {
+            case .players: return L10n.t("播放器")
+            case .linkage: return L10n.t("联动")
+            case .permissions: return L10n.t("权限与服务")
+            }
+        }
+    }
+
+    @AppStorage(SettingsSearchCatalog.playerSectionKey) private var sectionRaw = Section.players.rawValue
+    private var section: Section { Section(rawValue: sectionRaw) ?? .players }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         SettingsPage(
             title: L10n.t("播放器")
         ) {
-            playerCard
-            browserAutomationCard
-            unknownPlayerCard
-            notificationDeniedCard
-            trustedPlayersCard
-            companionCard
-            permissionCard
-            fullDiskAccessCard
-            accessibilityCard
-            engineCard
+            sectionPicker
+            // 切段只淡入淡出,理由同「歌词」页 body 那条注释。
+            currentSection
+                .id(section)
+                .transition(.opacity)
         }
         .id(L10n.current)
         .onAppear {
@@ -4547,6 +4626,46 @@ private struct PlayerSettingsTab: View {
         ungatedNowPlaying = seen
     }
 
+    private var sectionPicker: some View {
+        SettingsGlassTabPicker(
+            selection: Binding(
+                get: { section },
+                set: { next in
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+                        sectionRaw = next.rawValue
+                    }
+                }),
+            options: Section.allCases,
+            label: \.title,
+            // 判据跟侧栏「播放器」那颗警告徽标是同一份(`PlayerHealth` 的四类警告全在这一段里)。
+            badge: { $0 == .permissions && !playerHealth.warnings.isEmpty }
+        )
+        .fixedSize()
+        .padding(.bottom, 2)
+    }
+
+    @ViewBuilder
+    private var currentSection: some View {
+        switch section {
+        case .players:
+            // 「发现未知播放器」「通知被关」两张是临时的提醒卡,有才出现,排在常驻那张前面。
+            VStack(spacing: 14) {
+                unknownPlayerCard
+                notificationDeniedCard
+                musicAppsCard
+                webPlayersCard
+                trustedPlayersCard
+            }
+            .background { LastfmGlassGlow() }
+        case .linkage:
+            companionCard
+                .background { LastfmGlassGlow() }
+        case .permissions:
+            permissionsCard
+                .background { LastfmGlassGlow() }
+        }
+    }
+
     private func refreshNotificationStatus() {
         Task {
             let denied = await UnknownPlayerNotifier.authorizationStatus() == .denied
@@ -4554,25 +4673,89 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    // 播放器图标网格(「自动识别」是其中一张卡),跟引导页"选择播放器"那一步是同一个组件(Settings/PlayerPicker.swift),
-    // 两处排版一致。用 SettingsCardHeader + SettingsRawRow 包起来而不是裸摆:这页所有分组都是
-    // "卡片+发丝描边+统一内边距"的语言(见 SettingsDesignSystem.swift)。
-    private var playerCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("播放器"))
-            SettingsRawRow {
-                PlayerPicker(features: FeatureSettingsStore.shared)
-            }
-            // 勾着「自动识别」时把话说明白:卡片上那圈虚线+角标只说得出"这颗由自动识别接管",说不出
-            // "该去取消哪一张",所以这一行是必须的;没勾自动识别时不出现 —— 那时单独勾选就是全部判据。
-            // 文案最后半句("取消勾选它")不能砍,那正是这一行存在的理由。
-            if stores.players.contains(.auto) {
-                SettingsNote {
-                    Text(L10n.t("开启「自动识别」时，将识别所有已知和已信任的播放器，上方的勾选暂不生效。如只需识别部分播放器，请取消勾选此项。"))
+    /// 「音乐 App」卡:跟引导页「选择播放器」是同一个组件(`PlayerPicker`,这里用紧凑模式);「自动识别」在卡头当总开关。
+    ///
+    /// 播放器段三张卡(音乐 App / 网页版 / 其他 App)回答的是同一件事(认哪些来源),用同一种方块格
+    /// (`compactTileChrome`)、同样的列数(`PlayerPicker.compactColumnCount`),三张卡的格子一样大。
+    private var musicAppsCard: some View {
+        let isAuto = stores.players.contains(.auto)
+        // 跟网格里摆出来的那几格是同一份(`PlayerPicker` 也这么算),没装又没勾的在「更多播放器」里、不算进来。
+        let shown = PlayerPickerLayout.tiles(order: PlaybackPlayer.displayOrder, selected: stores.players,
+                                             installed: InstalledPlayersCache.current()).main
+        let chosen = shown.filter { stores.players.contains($0) }.count
+        return SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("音乐 App")) {
+                HStack(spacing: 12) {
+                    if !isAuto {
+                        HStack(spacing: 8) {
+                            Text(String(format: L10n.t("已选 %d / %d"), chosen, shown.count))
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                            if chosen < shown.count {
+                                Button(L10n.t("全选")) { FeatureSettingsStore.shared.selectPlayers(Set(shown)) }
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                    autoDetectSwitch
                 }
             }
+            // 开着「自动识别」时说清格子为什么不分选中、想只认几个该怎么做;关着时一行灰字讲清现在的规则。
+            SettingsRawRow {
+                if isAuto {
+                    autoDetectBanner
+                } else {
+                    Text(L10n.t("只识别勾选的播放器；没勾的不显示歌词，也不计入收听记录。"))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.top, -4)
+            SettingsRawRow {
+                PlayerPicker(features: FeatureSettingsStore.shared, compact: true)
+            }
+            .padding(.top, -6)
         }
     }
+
+    private var autoDetectBanner: some View {
+        (Text(L10n.t("自动识别中")).fontWeight(.semibold).foregroundStyle(Color.accentColor)
+            + Text("  ")
+            + Text(L10n.t("下面的播放器都会识别；想只要其中几个，关掉右上角的开关再勾选。")))
+            .font(.system(size: 11.5))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.accentColor.opacity(0.09)))
+    }
+
+    /// 卡头那颗「自动识别」总开关。跟网格里点格子走同一条 `togglePlayerSelection`(「最后一个不能取消」
+    /// 的判断、勾上时顺带要自动化权限都在那条路上)。
+    private var autoDetectSwitch: some View {
+        HStack(spacing: 7) {
+            Text(PlaybackPlayer.auto.displayName)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Toggle("", isOn: Binding(
+                get: { stores.players.contains(.auto) },
+                set: { on in
+                    guard on != stores.players.contains(.auto) else { return }
+                    togglePlayerSelection(.auto, features: FeatureSettingsStore.shared)
+                }))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                .accessibilityLabel(PlaybackPlayer.auto.displayName)
+            HelpButton(text: L10n.t("开着时识别所有已知和已信任的播放器；关掉后只认勾选的。"))
+        }
+    }
+
 
     // 「检测到未知播放器」——「自动识别」不再限死内置那几个 App 的入口。
     //
@@ -4598,7 +4781,7 @@ private struct PlayerSettingsTab: View {
                // 新鲜度由 refreshUngatedNowPlaying 每拍把关(陈旧就置 nil),这里存的 at 是第一次看到的时刻。
                observedAt: Date(), isAutoDetect: stores.players.contains(.auto), now: Date(),
                isAccepted: { TrustedPlayers.isAccepted($0) }) {
-            SettingsCard {
+            SettingsCard(cornerRadius: 18) {
                 SettingsRow(
                     // 用真图标,跟隔壁两张卡同一份取图逻辑(AppIconResolver)。这张「发现未知播放器」
                     // 卡恰恰是最需要图标的一张:另外两张卡里的 App 用户本来就认识,这张问的是"这个你
@@ -4629,7 +4812,7 @@ private struct PlayerSettingsTab: View {
     @ViewBuilder
     private var notificationDeniedCard: some View {
         if stores.players.contains(.auto), notificationsDenied {
-            SettingsCard {
+            SettingsCard(cornerRadius: 18) {
                 SettingsRow(
                     icon: "bell.slash",
                     title: L10n.t("新播放器提醒"),
@@ -4654,40 +4837,38 @@ private struct PlayerSettingsTab: View {
         return seen.bundleID + " · " + String(format: L10n.t("正在播放：%@"), what)
     }
 
-    @ViewBuilder
-    /// **这张卡总是显示,哪怕一条信任项都没有** —— 它是「添加播放器…」唯一的入口。
-    /// 原来的写法是"有信任项才显示",那在主动添加这个功能上就是一个**鸡生蛋**:没信任过
-    /// 任何 App → 卡片不显示 → 没有地方点「添加」→ 只能回去被动等「自动识别」撞见。
-    /// (同一个坑「网页播放器」卡踩过一次,见 `addablePlatformBrowsers` 头注。)
+    /// **这张卡总是显示,哪怕一条信任项都没有** —— 它是「添加 App…」唯一的入口。只在有信任项时
+    /// 才显示的话就是鸡生蛋:没信任过任何 App → 没有地方点「添加」→ 只能回去被动等「自动识别」撞见。
+    /// (网页那组踩过同一个坑,见 `addablePlatformBrowsers` 头注。)
     ///
-    /// 排版必须跟上面「播放器」「网页播放器」两张卡是同一套(3 列图标网格 +
-    /// `choiceCardChrome` 外壳),别改回一行一条的 `SettingsRow` 列表:这三张卡在同一页里
-    /// 上下挨着,讲的又是同一件事("哪些 App 算播放器"),两种排版并置会读成两类不相干的设置。
-    /// bundle id 这种只在排查时才看的细节移进点开的气泡里(跟浏览器头像那套同一个套路),
-    /// 格子面上只留图标+名字。
+    /// 格子跟另外两张卡是同一种方块格,别改回一行一条的 `SettingsRow` 列表:三组讲的是同一件事
+    /// ("哪些 App 算播放器"),两种排版并置会读成两类不相干的设置。bundle id 这种只在排查时才看的
+    /// 细节放进点开的气泡里(跟浏览器头像同一个套路),格子面上只留图标+名字。
     private var trustedPlayersCard: some View {
-        SettingsCard {
-            // 补一个标题:playerCard 有自己的 SettingsCardHeader,紧跟着一张没有标题的卡在
-            // 视觉上不成对,补上让两张卡看起来是同一套设计语言里的姐妹卡。
-            SettingsCardHeader(title: L10n.t("已信任的播放器"))
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("其他 App"), help: L10n.t("不在上面的 App 也能当播放器：添加后显示它正在放的歌，也计入收听记录。点格子可以移除。"))
             SettingsRawRow {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                    // 按 bundle id 排序,别让格子顺序随 Dictionary 遍历顺序每次启动乱跳。
-                    ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
-                        trustedPlayerTile(bundleID: bundleID)
+                VStack(alignment: .leading, spacing: 8) {
+                    LazyVGrid(columns: PlayerPicker<EmptyView>.compactColumns, spacing: 8) {
+                        // 按 bundle id 排序,别让格子顺序随 Dictionary 遍历顺序每次启动乱跳。
+                        ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
+                            trustedPlayerTile(bundleID: bundleID)
+                        }
+                        addTrustedPlayerTile
                     }
-                    addTrustedPlayerTile
+                    .frame(maxWidth: .infinity)
+                    // 空列表时只剩一个「添加」格,得有一句话交代"加进来会怎样";有信任项时那几格本身就说明了。
+                    if stores.trustedPlayers.isEmpty {
+                        Text(L10n.t("添加的应用与内置播放器相同：显示其正在播放的内容，并计入收听记录。可随时移除。"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .frame(maxWidth: .infinity)
             }
-            // 空列表时这张卡只剩标题和一个格子,得有一句话交代"加进来会怎样",
-            // 否则它看起来像一个用途不明的入口。有信任项时那几格本身就说明了一切,不再重复。
-            if stores.trustedPlayers.isEmpty {
-                SettingsNote {
-                    Text(L10n.t("添加的应用与内置播放器相同：显示其正在播放的内容，并计入收听记录。可随时移除。"))
-                }
-            }
+            .padding(.top, -4)
         }
+        // 挂在这张卡上,跟网页版那张卡的弹窗各挂各的(同一视图挂两个 `.alert` 只有一个生效)。
         .alert(
             L10n.t("无法添加"),
             isPresented: Binding(
@@ -4704,21 +4885,20 @@ private struct PlayerSettingsTab: View {
     /// platformID 去消歧:一个 bundle id 在这张网格里只出现一次,不存在同一个按钮被渲染两遍。
     @State private var expandedTrustedBundleID: String?
 
-    /// 一格已信任的 App。图标用它自己的真图标(跟上面两张卡同一份 `AppIconResolver`),
-    /// 查不到才退回印章图标 —— 一页里六个内置播放器都亮着真图标,这张卡清一色通用图标会显得不搭。
+    /// 一格已信任的 App。图标用它自己的真图标(另外两张卡同一份 `AppIconResolver`),查不到才退回印章图标。
+    /// 已信任 = 这个来源确实在生效,所以一律是选中样式;不信任的 App 压根不在这里。右上角的「…」提示点开有详情。
     private func trustedPlayerTile(bundleID: String) -> some View {
         Button { expandedTrustedBundleID = bundleID } label: {
-            VStack(spacing: 6) {
+            CompactTileLabel(title: displayNameForTrusted(bundleID)) {
                 Self.appIconView(bundleID: bundleID, size: 26, fallbackSymbol: "checkmark.seal")
-                Text(displayNameForTrusted(bundleID))
-                    .font(.caption)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .foregroundStyle(.primary)
             }
-            // 已信任 = 这个来源确实在生效,按跟上面两张卡同一套"选中"样式高亮(亮底+强调色
-            // 描边+角标)。这张卡里没有"没选中"的格子 —— 不信任的 App 压根不在这里。
-            .choiceCardChrome(isSelected: true)
+            .compactTileChrome(isSelected: true)
+            .compactTileCorner {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 14, height: 14)
+            }
         }
         .buttonStyle(.plain)
         // bundle id 直接当 tooltip:排查时最常要看的就是它,指一下就有,不必先点开气泡。
@@ -4731,38 +4911,29 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    /// 「添加播放器…」那一格。 它是主动添加**唯一**的入口,不能跟着"有没有信任项"隐藏
-    /// (见 `trustedPlayersCard` 头注那条鸡生蛋)。
-    ///
-    /// 走未选中态的 `choiceCardChrome`(暗底+极淡描边),跟旁边亮着的已信任格子一眼分得开;
-    /// 「从「应用程序」里挑一个」那句副标题塞不进一格卡片,改挂 tooltip。
+    /// 「添加 App…」那一格。它是主动添加**唯一**的入口,不能跟着"有没有信任项"隐藏
+    /// (见 `trustedPlayersCard` 头注)。没选中样式(只有一圈细线),跟旁边亮着的已信任格子一眼分得开。
     private var addTrustedPlayerTile: some View {
         Button { chooseTrustedPlayerFromApplications() } label: {
-            VStack(spacing: 6) {
+            CompactTileLabel(title: L10n.t("添加 App…"), dimmed: true) {
                 Image(systemName: "plus.circle")
-                    .font(.system(size: 17))
+                    .font(.system(size: 18))
                     .foregroundStyle(.secondary)
                     .frame(width: 26, height: 26)
-                Text(L10n.t("添加播放器…"))
-                    .font(.caption)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .foregroundStyle(.secondary)
             }
-            .choiceCardChrome(isSelected: false)
+            .compactTileChrome(isSelected: false)
         }
         .buttonStyle(.plain)
         .help(L10n.t("从「应用程序」中选择，无需等待其开始播放"))
-        // 手挂高亮:这一条在设置搜索目录里有登记(`SettingsSearchCatalog` 的
-        // 「添加播放器…」),而自动挂高亮+滚进视野的是 `SettingsRow`/`SettingsCardHeader`
-        // 那几个组件 —— 这里是一格自绘的卡片,不挂的话搜到它只会跳到这一页、既不高亮也不滚动。
-        .settingsSearchHighlight(title: L10n.t("添加播放器…"))
+        // 手挂高亮:自动挂高亮+滚进视野的是 `SettingsRow`/`SettingsCardHeader`,这一格是自绘的,
+        // 不挂的话搜到「添加 App…」只会跳到这一页、既不高亮也不滚动。
+        .settingsSearchHighlight(title: L10n.t("添加 App…"))
     }
 
     /// 点一格弹出的详情气泡:图标+名称+bundle id,底下是「移除」。
     ///
     /// 排版和"移除放在最底下"这个位置都跟浏览器头像那个气泡(`browserPermissionPopover`)
-    /// 一致 —— 两张卡并排在同一页里,点开长得不一样会被当成两种不同的东西。
+    /// 一致 —— 两张卡在同一段里,点开长得不一样会被当成两种不同的东西。
     private func trustedPlayerPopover(bundleID: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -5094,57 +5265,51 @@ private struct PlayerSettingsTab: View {
     @State private var expandedBrowserBundleID: String?
     @State private var expandedBrowserPlatformID: String?
 
-    // 这张卡管的是"浏览器自己加的第二道 JS 执行开关"(跟下面 permissionCard 管的系统级
+    // 网页版这张卡管的是"浏览器自己加的第二道 JS 执行开关"(跟「权限与服务」里的系统级
     // Automation/TCC 授权是两码事,见 BrowserAutomationPermission 头注)。
     //
     // **展示条件是"这台机器上装了受支持的浏览器",不是"已经信任过某个浏览器"**。
     // 「+」菜单走的是 `trustAndPairBrowser`,**不要求先信任** —— 选一个没信任过的浏览器会
-    // 一步自动信任+配对。也就是说这张卡是"信任这件事本身的入口",不是"信任之后才用得上的
-    // 配置面板"。拿"已信任"当条件会制造**鸡生蛋**:没信任过任何浏览器 → 卡片不显示 →
-    // 界面上没有任何地方能发起信任 → 只能靠"真的用浏览器放歌 → 被动检测到未知播放器"这条
-    // 被动路径绕回来。
-    //
-    // "不为了'这里没事'而占地方"这条原则**保留**,只是判据是"装了受支持浏览器 = 真的有事
-    // 可做";一台只装了 Firefox 的机器仍然不显示这张卡。
+    // 一步自动信任+配对。也就是说这一组是"信任这件事本身的入口",不是"信任之后才用得上的
+    // 配置面板"。拿"已信任"当条件会制造**鸡生蛋**:没信任过任何浏览器 → 这张卡不显示 →
+    // 界面上没有任何地方能发起信任。一台只装了 Firefox 的机器仍然不显示这张卡。
     //
     // 模型是显式的"平台与浏览器配对":按 `BrowserPositionProbe.supportedPlatforms` 逐个平台
-    // 分组,配对之外还提供"添加浏览器" —— 没配对过的浏览器完全不会触发后台探测(见
-    // BrowserPositionProbe.kickIfNeeded)。
-    //
-    // 外层容器用 PlayerChoiceCard 同款的图标网格小卡片(不是铺满宽度的一行),让这张卡跟上面
-    // 「播放器」卡在同一页里是同一套视觉语言;头像/气泡/添加菜单那套交互不变。
+    // 一格,没配对过的浏览器完全不会触发后台探测(见 BrowserPositionProbe.kickIfNeeded)。
     @ViewBuilder
-    private var browserAutomationCard: some View {
+    private var webPlayersCard: some View {
         // 走 `knownBrowserBundleIDs` + 用户手动加过的那批,判据跟 `addablePlatformBrowsers`
-        // 里那一道完全同源 —— 那边能列出候选,这边就该把卡片显示出来,两处不该有分歧。
+        // 里那一道完全同源 —— 那边能列出候选,这边就该把这张卡显示出来,两处不该有分歧。
         let anySupportedInstalled = (BrowserAutomationPermission.knownBrowserBundleIDs
             + Array(stores.manualBrowserFamilies.keys))
             .contains { BrowserAutomationPermission.isInstalled(bundleID: $0)
                         && BrowserAutomationPermission.family(forBundleID: $0) != nil }
+        // 跳广告只在 YouTube Music 配了(且装着)浏览器时出现:没配对就没有探针、也就没有广告可跳。
+        let showsAdSkip = !(stores.browserPlatformPairs["youtubeMusic"] ?? [])
+            .filter({ BrowserAutomationPermission.isInstalled(bundleID: $0) }).isEmpty
+        let platforms = BrowserPositionProbe.supportedPlatforms
+        let columns = PlayerPicker<EmptyView>.compactColumnCount
         if anySupportedInstalled {
-            SettingsCard {
-                SettingsCardHeader(
-                    title: L10n.t("网页播放器"),
-                    help: L10n.t("网页播放器不会主动报告精确进度，开启此选项可在切歌后立即校准。")
-                )
+            SettingsCard(cornerRadius: 18) {
+                SettingsCardHeader(title: L10n.t("网页版"), help: L10n.t("在浏览器里听歌也能显示歌词。点「+」配对你用的浏览器，进度直接从网页读，换歌后马上对准。"))
                 SettingsRawRow {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                        ForEach(BrowserPositionProbe.supportedPlatforms) { platform in
+                    // 平台格跟「音乐 App」卡的方块格同宽;跳广告只管网页版 YouTube Music,放在同一行剩下的列里。
+                    // 平台数 + 1 要不超过列数,超了就得把面板挪到下一行。
+                    EqualColumnsRow(columns: columns, spacing: 8) {
+                        ForEach(platforms) { platform in
                             browserPlatformCard(platform: platform)
                         }
+                        if showsAdSkip {
+                            YouTubeMusicAutoSkipRow(refreshTick: automationRefreshTick, asPanel: true)
+                                .columnSpan(columns - platforms.count)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
                 }
-                // 只在 YouTube Music 配了(且装着)浏览器时出现:没配对就没有探针、也就没有广告可跳。
-                if !(stores.browserPlatformPairs["youtubeMusic"] ?? [])
-                    .filter({ BrowserAutomationPermission.isInstalled(bundleID: $0) }).isEmpty {
-                    CardDivider()
-                    YouTubeMusicAutoSkipRow(refreshTick: automationRefreshTick)
-                }
+                // 卡头下面直接是格子,收一点间距(同「音乐 App」卡)。
+                .padding(.top, -4)
             }
-            // 挂在整张卡上,不是挂在每个平台的小卡上:`browserPickerError` 只有一个,
-            // 而 supportedPlatforms 有好几个 —— 每张小卡各挂一个 `.alert` 绑同一个状态,
-            // 一次失败会同时触发多个弹窗。
+            // 挂在整张卡上,不是挂在每个平台格上:`browserPickerError` 只有一个,每格各挂一个 `.alert`
+            // 绑同一个状态,一次失败会同时触发多个弹窗。
             .alert(
                 L10n.t("无法使用该应用"),
                 isPresented: Binding(
@@ -5155,31 +5320,18 @@ private struct PlayerSettingsTab: View {
             } message: {
                 Text(browserPickerError ?? "")
             }
-            // **回到 Lyrimuse 时重新读一次两道门的状态**。
+            // **回到 Lyrimuse 时重新读一次浏览器那两道门的状态**。
             //
-            // 这张卡上所有状态都是**渲染时同步现读**的(浏览器那道 JS 开关读的是它自己的
-            // 配置文件、系统自动化授权读的是 TCC),没有任何 `@Published` 可以依赖 ——
-            // 用户按指引跑去浏览器菜单里把开关勾上、再切回来,界面上什么都不会变,得手动
-            // 把气泡关掉重开(或者点一次「重新检测」)才刷新。
-            //
-            // 「App 重新变成活跃」正好是这条流程的天然节拍:去浏览器操作这件事**必然**要
-            // 切走再切回来。比起给配置文件挂 FSEvents 或者起个定时器轮询,这个信号更准
-            // (不会在用户没做任何事的时候空刷)、也更省 —— 而且它同时覆盖另一道门:用户
-            // 去「系统设置 → 自动化」里勾完回来,那一行也会跟着更新。
-            //
-            // 只是让 SwiftUI 重新读一遍,不发起任何 AppleScript/自检 —— 自检有子进程开销,
-            // 不该在每次切回 App 时白跑一次(要不要跑由用户点「重新检测」决定)。
+            // 这张卡的状态都是现读的(浏览器那道 JS 开关读它自己的配置文件、系统自动化授权读 TCC),
+            // 没有 `@Published` 可依赖 —— 用户按指引去浏览器菜单勾上开关再切回来,不重读的话界面不变。
+            // 「App 重新变成活跃」正是这条流程的天然节拍(去浏览器操作必然要切走再切回),也同时覆盖
+            // 「系统设置 → 自动化」那一道。这里只让状态重读,不跑自检(自检有子进程开销,由用户点「重新检测」)。
             .onReceive(NotificationCenter.default.publisher(
                 for: NSApplication.didBecomeActiveNotification)) { _ in
                 automationRefreshTick &+= 1
-                // **再补一拍**:Chromium 那道开关勾完之后**不是立刻写盘的** —— 它的偏好
-                // 走批量延迟提交,用户在浏览器菜单里勾上、两三秒就切回来的话,文件里很可能
-                // 还是旧值,上面那次刷新读到的就还是"关"。补这一拍让它过一会儿自己纠正过来,
-                // 用户不必再手动做什么。
-                //
-                // 12 秒是个**留余量的兜底值,不是量出来的常数** —— 没有公开保证的提交
-                // 间隔可依。真要立刻确认,气泡里那个「重新检测」是**不看文件**的活证据
-                // (它直接执行一段 JavaScript),那条路任何时候都即时准确。
+                // 再补一拍:Chromium 那道开关勾完不是立刻写盘(偏好走批量延迟提交),两三秒就切回来时文件里
+                // 多半还是旧值。12 秒是留余量的兜底值,不是量出来的常数;要立刻确认用气泡里的「重新检测」,
+                // 它直接执行一段 JavaScript、不看文件。
                 delayedAutomationRecheck?.cancel()
                 delayedAutomationRecheck = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 12_000_000_000)
@@ -5194,73 +5346,56 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    /// 跟 `PlayerChoiceCard` 同一套卡片底(10pt 圆角、26×26 图标、`.caption` 文字),
-    /// 图标下面多一行头像+添加按钮,是跟 `PlayerChoiceCard` 相比唯一多出来的内容,交互
-    /// 逐字复用 `browserAvatarButton`/`addablePlatformBrowsers`/`trustAndPairBrowser`,
-    /// 没有新逻辑。
+    /// 一个网页平台一格:平台图标 + 名字,下面一排配对的浏览器头像和「+」。外壳跟另外两张卡的方块格同一套。
     ///
-    /// 配对了至少一个浏览器就按 `PlayerChoiceCard` 同款样式高亮(强调色描边+浅色底)——
-    /// "选中"不是一个新的独立开关,而是直接复用既有的"配了/没配"这个状态,配对本身早就是
-    /// 显式的用户动作(点「+」选浏览器)。配对的浏览器无论有没有勾"自动识别"都会被采纳
-    /// (见 MediaControlClient.fetchMultiSelectedSnapshot),
-    /// 高亮因此如实反映"这确实是一个会生效的来源",不是纯装饰。整卡仍然不包一个 `Button`
-    /// (配对的是一组浏览器,不是单选一个),只有头像和"+"各自可点。
+    /// 配对了至少一个浏览器就是选中样式 —— "选中"不是一个新的独立开关,而是直接复用"配了/没配"这个状态
+    /// (配对本身就是显式的用户动作)。配对的浏览器无论开没开「自动识别」都会被采纳
+    /// (见 MediaControlClient.fetchMultiSelectedSnapshot),所以高亮如实反映"这确实是一个会生效的来源"。
+    /// 整格不是一个 `Button`(配对的是一组浏览器,不是单选一个),只有头像和「+」各自可点,所以关掉悬停底。
     private func browserPlatformCard(platform: BrowserPositionProbe.BrowserMusicPlatform) -> some View {
-        // 已配对的头像也要过 `isInstalled` 这道门。只在「+」菜单侧过滤装没装的话,
-        // "配对过、后来把那个浏览器卸载了"会一直留一个取不到图标的虚线方框
-        // (`appIconView` 的 `app.dashed` 兜底),点开还给一份无意义的权限状态 —— 那是
-        // "设置里显示的东西跟实际能用的东西对不上"。
+        // 已配对的头像也要过 `isInstalled` 这道门:配对过、后来把那个浏览器卸载了,不过滤的话会一直留
+        // 一个取不到图标的虚线方框,点开还给一份无意义的权限状态。
         //
-        // **只是不显示,配对记录原样留在 `browserPlatformPairs` 里** —— 装回来自动恢复,
-        // 用户不用重配。这跟「指定的屏幕拔掉后自动回落到自动、偏好保留、插回来即恢复」
-        // 是同一个口径(见 05-notch.md「显示于」),不是新发明的处置方式。
+        // **只是不显示,配对记录原样留在 `browserPlatformPairs` 里** —— 装回来自动恢复,用户不用重配
+        // (跟「指定的屏幕拔掉后回落到自动、插回来即恢复」同一个口径,见 05-notch.md「显示于」)。
         // 也因此**不要**顺手在这里 `unpairBrowser` 去"清理" —— 那会把用户的配置替他删掉。
         let pairedBundleIDs = (stores.browserPlatformPairs[platform.id] ?? [])
             .filter { BrowserAutomationPermission.isInstalled(bundleID: $0) }
             .sorted()
         let addable = addablePlatformBrowsers(platformID: platform.id)
         return VStack(spacing: 6) {
-            if let icon = WebPlatformIcon.image(platform.id) {
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: 26, height: 26)
+            CompactTileLabel(title: platform.displayName, dimmed: pairedBundleIDs.isEmpty) {
+                if let icon = WebPlatformIcon.image(platform.id) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 26, height: 26)
+                }
             }
-            Text(platform.displayName)
-                .font(.caption)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .foregroundStyle(.primary)
             // 头像并排展示、不重叠 —— 负间距的"头像堆叠"看不出到底配了几个。
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 ForEach(pairedBundleIDs, id: \.self) { bundleID in
                     browserAvatarButton(bundleID: bundleID, platformID: platform.id)
                 }
-                // 条件恒真,不要写成 `!addable.isEmpty`:内置候选全配完之后「+」会整个消失,
-                // 而菜单里还有「从应用程序中选择…」这条路 —— 那时恰恰是最需要它的时候(装的浏览器
-                // 不在内置那四个里)。
-                do {
-                    Menu {
-                        ForEach(addable, id: \.self) { bundleID in
-                            Button(addBrowserMenuLabel(bundleID)) { trustAndPairBrowser(bundleID, platformID: platform.id) }
-                        }
-                        Divider()
-                        Button(L10n.t("从应用程序中选择…")) { chooseBrowserFromApplications(platformID: platform.id) }
-                    } label: {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 15))
+                // 「+」恒在,不要写成 `!addable.isEmpty` 才显示:内置候选全配完之后菜单里还有
+                // 「从应用程序中选择…」这条路 —— 装的浏览器不在内置那四个里时恰恰最需要它。
+                Menu {
+                    ForEach(addable, id: \.self) { bundleID in
+                        Button(addBrowserMenuLabel(bundleID)) { trustAndPairBrowser(bundleID, platformID: platform.id) }
                     }
-                    .menuStyle(.borderlessButton)
-                    // 「+」自己就长得像"点开有东西",再挂一个下拉小箭头只是噪声——这一行卡片上
-                    // 排着一串浏览器头像,多出来的箭头会被当成其中一个图标的角标。
-                    .menuIndicator(.hidden)
-                    .fixedSize()
+                    Divider()
+                    Button(L10n.t("从应用程序中选择…")) { chooseBrowserFromApplications(platformID: platform.id) }
+                } label: {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 14))
                 }
+                .menuStyle(.borderlessButton)
+                // 「+」自己就长得像"点开有东西",再挂下拉小箭头会被当成旁边某个头像的角标。
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(L10n.t("配对浏览器"))
             }
         }
-        // 外壳走 `choiceCardChrome`,别在这里另写一份圆角/底色/描边:这张卡跟上面「播放器」
-        // 卡在同一页里并排,样式各写一份下次调色就会漏一处。整卡不可点(只有头像和「+」各自
-        // 可点),所以关掉悬停高亮。
-        .choiceCardChrome(isSelected: !pairedBundleIDs.isEmpty, highlightsOnHover: false)
+        .compactTileChrome(isSelected: !pairedBundleIDs.isEmpty, highlightsOnHover: false)
     }
 
     private func browserAvatarButton(bundleID: String, platformID: String) -> some View {
@@ -5268,7 +5403,7 @@ private struct PlayerSettingsTab: View {
             expandedBrowserBundleID = bundleID
             expandedBrowserPlatformID = platformID
         } label: {
-            Self.appIconView(bundleID: bundleID, size: 22, fallbackSymbol: "app.dashed")
+            Self.appIconView(bundleID: bundleID, size: 18, fallbackSymbol: "app.dashed")
                 // 角标是自动展开那条的**兜底**:气泡一关就再没有任何提示了,而"还差两步"
                 // 这件事必须在卡片上长期看得见,否则用户关掉气泡就回到了原来那个"图标默默
                 // 待在那儿、没人告诉我还要干嘛"的状态。
@@ -5660,65 +5795,101 @@ private struct PlayerSettingsTab: View {
     }
 
 
-    // 本地数据源通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),这个权限
-    // 因此是"核心路径必需、没有就完全看不到歌词",不是"可选、只影响播放进度精度",副标题
-    // 特意说清楚这一点,别让人以为不给也无所谓。
-    //
-    // QQ 音乐/网易云/Spotify 走系统级 MediaRemote,压根不需要这个权限,这张卡整个不出现。
-    // 不需要时**不显示**,别改成显示一句"无需额外授权"的确认卡 —— 一张只为了说"这里
-    // 没事"而存在的卡片本身就是噪声,占的篇幅跟真正需要处理的那张一样大,反而稀释了页面上
-    // 真正要人动手的内容。
-    /// 需要「自动化」权限的播放器 —— 一家一行,全部收在这一张卡里。
+    /// 「权限与服务」:所选播放器要的几项系统权限 + 歌词引擎的运行状态,一张卡一份清单。
     ///
-    /// 列表来自 `Set<PlaybackPlayer>.playersNeedingAutomation`(含 auto 时按超集算,两家都列)
-    /// 再按"这台机器上装了"过滤,判据与理由见那个属性和 `PlayerAutomationPermissions`。
+    /// 权限行只在用得到时出现(所选播放器需要、且这台 Mac 装了;各自的判据见下面几段)。不需要时
+    /// **不显示**,别改成一行"无需额外授权"的确认 —— 只为了说"这里没事"的行会稀释真正要人动手的那几行。
+    /// 引擎那一行总在。
+    private var permissionsCard: some View {
+        let automationTargets = automation.visiblePlayers(for: stores.players)
+        let diskTargets = fullDiskAccess.visiblePlayers(for: stores.players)
+        let accessibilityTargets = accessibility.visiblePlayers(for: stores.players)
+        return SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("权限与服务")) {
+                Text(L10n.t("权限只列出所选播放器用得到的"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            // 分隔线只画在行与行之间,卡头下面不画(同页别的卡)。
+            automationRows(automationTargets)
+            fullDiskAccessRows(diskTargets, afterRows: !automationTargets.isEmpty)
+            accessibilityRows(accessibilityTargets, afterRows: !automationTargets.isEmpty || !diskTargets.isEmpty)
+            if !automationTargets.isEmpty || !diskTargets.isEmpty || !accessibilityTargets.isEmpty {
+                CardDivider()
+            }
+            engineRows
+        }
+        .settingsGlassButtons()
+        .buttonBorderShape(.capsule)
+        .onAppear {
+            if !automationTargets.isEmpty { automation.refresh(automationTargets) }
+            if !diskTargets.isEmpty { fullDiskAccess.refresh() }
+            if !accessibilityTargets.isEmpty { accessibility.refresh() }
+            refreshEngineState()
+            refreshEngineVersionCheck()
+            refreshEngineFolderFindings()
+        }
+        // 用户可能切去系统设置手动处理自动化授权,切回来要重读一次,并在已经不是 notDetermined 时
+        // 清掉"正在等待"那套 UI,不然状态文字变了,下面却还卡在转圈/超时提示。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if !automationTargets.isEmpty { automation.refresh(automationTargets, clearRequestUI: true) }
+        }
+        // 完全磁盘访问的状态文件由引擎写、不推通知,按 mtime 读很便宜;辅助功能的授权系统也不推送。
+        // 两样都跟这一页的主轮询同频。
+        .settingsPolling(every: 2) {
+            if !diskTargets.isEmpty { fullDiskAccess.refresh() }
+            if !accessibilityTargets.isEmpty { accessibility.refresh() }
+        }
+        // 引擎状态不能只在 onAppear 读一次。
+        //
+        // 引擎的 job 在 bootout→bootstrap 中途,`launchctl print` 会退出码 0 但输出里认不出 state 字段 →
+        // 解析成 .unknown(见 LaunchdPrintParser)。build.sh 的重装顺序恰好制造这个窗口:先 kickstart App
+        // (设置窗口恢复、onAppear 读一次)、再 reload 引擎的 job。所以要让它自愈:每拍重读、切回 App 时重读。
+        // 这两件都由侧栏那条健康检查(`PlayerHealthMonitor`)做,这里只接它发布的状态。
+        .onReceive(playerHealth.$engineState.compactMap { $0 }) { latest in
+            if latest != engineState { engineState = latest }
+            refreshEngineFolderFindings()
+        }
+    }
+
+    /// 需要「自动化」权限的播放器,一家一行。
+    ///
+    /// 列表来自 `Set<PlaybackPlayer>.playersNeedingAutomation`(含 auto 时按超集算)再按"这台机器上装了"
+    /// 过滤,判据与理由见那个属性和 `PlayerAutomationPermissions`。本地数据源通过 AppleScript 直接问
+    /// Music.app 这类播放器,这个权限是"核心路径必需、没有就看不到歌词";走系统 MediaRemote 的播放器
+    /// 不需要它,不出现在这里。
     ///
     /// **别把它收窄成"只选了某一家"**:多选时命中谁就走谁那条 AppleScript 路
     /// (`MediaControlClient.adaptedSnapshot` 只看 bundle id、不看 features.players),
     /// 而 `players` 的默认值就是 `[.auto]` —— 收窄的话默认配置的人在引导里被问过、回头在设置里
-    /// **找不到入口**;当时点了拒绝、或更新/重签名之后 TCC 授权失效,就再没有地方能重新授权,
-    /// 而读取路径那边只往 OSLog 写一行 `snapshot failed`,界面上一个字都没有。
+    /// **找不到入口**;当时点了拒绝、或更新/重签名之后 TCC 授权失效,就再没有地方能重新授权。
+    ///
+    /// 「自动化权限」在设置搜索里的锚点挂在第一行上(行标题是拼出来的,扫不到),改名要同步改
+    /// `SettingsSearchCatalog` 那一条。
     @ViewBuilder
-    private var permissionCard: some View {
-        let targets = automation.visiblePlayers(for: stores.players)
-        if !targets.isEmpty {
-            SettingsCard {
-                // 卡头承担"这是什么权限",每一行只报**哪个播放器 + 什么状态** —— 行标题写成
-                // 「Apple Music 自动化」「Spotify 自动化」的话,"自动化"三个字要在卡里重复两遍。
-                // 卡头这句是这张卡在设置搜索里的**唯一锚点**(行标题是 `player.displayName`、
-                // 不是字面量,扫不到也没法登记),改它要同步改 `SettingsSearchCatalog` 那一条。
-                SettingsCardHeader(title: L10n.t("自动化权限"),
-                                   help: automation.unauthorizedHelp(targets))
-                ForEach(Array(targets.enumerated()), id: \.element) { index, player in
-                    if index > 0 { CardDivider() }
-                    SettingsRow(
-                        icon: automation.iconName(player),
-                        iconTint: automation.iconColor(player),
-                        title: player.displayName,
-                        // 副标题只留状态本身,"为什么需要它"挪进卡头的「?」——状态是每次扫一眼
-                        // 都要读的,而理由只在第一次(或者犹豫要不要授权时)才需要。
-                        subtitle: automation.caption(player)
-                    ) {
-                        if automation.isRequesting(player) {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Button(automation.actionTitle(player)) { automation.handleAction(player) }
-                        }
-                    }
-                    if automation.showsWaitingNote(player) {
-                        CardDivider()
-                        SettingsNote {
-                            PlayerAutomationWaitingNote(timedOut: automation.hasTimedOut(player))
-                        }
-                    }
+    private func automationRows(_ targets: [PlaybackPlayer]) -> some View {
+        ForEach(Array(targets.enumerated()), id: \.element) { index, player in
+            if index > 0 { CardDivider() }
+            SettingsRow(
+                icon: automation.iconName(player),
+                iconTint: automation.iconColor(player),
+                title: String(format: L10n.t("%@ 自动化权限"), player.displayName),
+                // 副标题只留状态本身,"为什么需要它"进「?」:状态每次扫一眼都要读,理由只在犹豫时才看。
+                subtitle: automation.caption(player),
+                help: automation.unauthorizedHelp(targets)
+            ) {
+                if automation.isRequesting(player) {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(automation.actionTitle(player)) { automation.handleAction(player) }
                 }
             }
-            .onAppear { automation.refresh(targets) }
-            // 用户可能切去系统设置手动处理,切回来要重新读一次最新状态,并在已经不是
-            // notDetermined 时清掉"正在等待"这套 UI,不然状态文字已经变了,下面却还卡在
-            // 转圈/超时提示。
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                automation.refresh(targets, clearRequestUI: true)
+            .settingsSearchHighlight(title: index == 0 ? L10n.t("自动化权限") : nil)
+            if automation.showsWaitingNote(player) {
+                CardDivider()
+                SettingsNote {
+                    PlayerAutomationWaitingNote(timedOut: automation.hasTimedOut(player))
+                }
             }
         }
     }
@@ -5727,162 +5898,124 @@ private struct PlayerSettingsTab: View {
     ///
     /// 列表来自 `Set<PlaybackPlayer>.playersNeedingFullDiskAccess`(含 auto 时按超集算)再按装没装过滤,
     /// 结论只认引擎发布的状态,见 `FullDiskAccessPermission`。授权是整个 App 一份、几家共用,
-    /// 所以只有一行,行标题就是这项权限本身;替哪几家要写在「?」里。
+    /// 所以只有一行,行标题就是这项权限本身(也是它在设置搜索里的锚点);替哪几家要写在「?」里。
     @ViewBuilder
-    private var fullDiskAccessCard: some View {
-        let targets = fullDiskAccess.visiblePlayers(for: stores.players)
+    private func fullDiskAccessRows(_ targets: [PlaybackPlayer], afterRows: Bool) -> some View {
         if !targets.isEmpty {
-            SettingsCard {
-                // 行标题是这张卡在设置搜索里的唯一锚点,改它要同步改 `SettingsSearchCatalog`。
-                SettingsRow(
-                    icon: fullDiskAccess.iconName(targets),
-                    iconTint: fullDiskAccess.iconColor(targets),
-                    title: L10n.t("完全磁盘访问权限"),
-                    subtitle: fullDiskAccess.caption(targets),
-                    help: FullDiskAccessGuide.reason(targets)
-                ) {
-                    EmptyView()
-                }
-                if fullDiskAccess.grant(targets) != .granted || fullDiskAccess.restartPhase != .idle {
-                    CardDivider()
-                    SettingsNote {
-                        FullDiskAccessGuide(players: targets)
-                    }
-                }
+            if afterRows { CardDivider() }
+            SettingsRow(
+                icon: fullDiskAccess.iconName(targets),
+                iconTint: fullDiskAccess.iconColor(targets),
+                title: L10n.t("完全磁盘访问权限"),
+                subtitle: fullDiskAccess.caption(targets),
+                help: FullDiskAccessGuide.reason(targets)
+            ) {
+                EmptyView()
             }
-            .onAppear { fullDiskAccess.refresh() }
-            // 状态文件由引擎写,不会推通知过来;按 mtime 读很便宜,跟这一页的主轮询同频。
-            .settingsPolling(every: 2) {
-                fullDiskAccess.refresh()
+            if fullDiskAccess.grant(targets) != .granted || fullDiskAccess.restartPhase != .idle {
+                CardDivider()
+                SettingsNote {
+                    FullDiskAccessGuide(players: targets)
+                }
             }
         }
     }
 
     /// 「辅助功能」—— 勾了要读界面的播放器(Amazon Music)且装了才出现。列表来自
     /// `Set<PlaybackPlayer>.playersNeedingAccessibility`(含 auto 时按超集算)再按装没装过滤,见 `AccessibilityPermission`。
-    /// 一行,行标题是这项权限本身;替哪几家要写在「?」里。
+    /// 一行,行标题是这项权限本身(也是设置搜索的锚点);替哪几家要写在「?」里。
     @ViewBuilder
-    private var accessibilityCard: some View {
-        let targets = accessibility.visiblePlayers(for: stores.players)
+    private func accessibilityRows(_ targets: [PlaybackPlayer], afterRows: Bool) -> some View {
         if !targets.isEmpty {
-            SettingsCard {
-                // 行标题是这张卡在设置搜索里的唯一锚点,改它要同步改 `SettingsSearchCatalog`。
-                SettingsRow(
-                    icon: accessibility.iconName,
-                    iconTint: accessibility.iconColor,
-                    title: L10n.t("辅助功能权限"),
-                    subtitle: accessibility.caption,
-                    help: AccessibilityPermissionGuide.reason(targets)
-                ) {
-                    EmptyView()
-                }
-                if !accessibility.trusted {
-                    CardDivider()
-                    SettingsNote {
-                        AccessibilityPermissionGuide()
-                    }
-                }
+            if afterRows { CardDivider() }
+            SettingsRow(
+                icon: accessibility.iconName,
+                iconTint: accessibility.iconColor,
+                title: L10n.t("辅助功能权限"),
+                subtitle: accessibility.caption,
+                help: AccessibilityPermissionGuide.reason(targets)
+            ) {
+                EmptyView()
             }
-            .onAppear { accessibility.refresh() }
-            // 系统不推送授权变化,用户去系统设置勾完回来这里要跟着变。
-            .settingsPolling(every: 2) {
-                accessibility.refresh()
+            if !accessibility.trusted {
+                CardDivider()
+                SettingsNote {
+                    AccessibilityPermissionGuide()
+                }
             }
         }
     }
 
     // 引擎(读播放状态、抓歌词/封面写本地缓存的后台服务)用"状态图标 + 状态文字 +
     // 动作按钮"而不是简单 Toggle——需要展示"装了但没跑起来"这种中间态,纯 Toggle 表达不了。
-    private var engineCard: some View {
-        SettingsCard {
-            SettingsRow(
-                icon: engineStatusIconName,
-                iconTint: engineStatusIconColor,
-                title: L10n.t("歌词引擎"),
-                // 同 permissionCard:副标题只留状态,职责说明进「?」。
-                subtitle: engineStatusCaption,
-                help: L10n.t("读取播放状态，获取歌词和封面")
-            ) {
-                // 只有「启用」,没有「停用」:这个服务停掉之后 App 就是个空壳(读不到播放状态、
-                // 不解析歌词、不写缓存),界面上每一处都不再更新,而用户很难把"什么都不动了"跟
-                // 自己在设置里点过的一个按钮联系起来。它没有"用户可能想关掉它"的正当场景。
-                if isTogglingEngineService {
-                    ProgressView().controlSize(.small)
-                } else if !engineState.isRunning {
-                    Button(L10n.t("启用")) { enableEngineService() }
-                }
-            }
-            // 启用失败时给具体指引,不是只把红叉留在原地——这里能提供的具体行动是导出
-            // 诊断信息(汇总 App/采集器日志),不是空泛地说"启用失败"。
-            if !engineState.isRunning, !engineFolderFindings.isEmpty {
-                CardDivider()
-                SettingsNote {
-                    EngineFolderAccessNote(findings: engineFolderFindings)
-                }
-            } else if engineEnableFailed {
-                CardDivider()
-                SettingsNote {
-                    Text(L10n.t("启用失败，可能是权限或系统限制导致歌词引擎未能正常启动。导出诊断信息可查看具体原因，也便于反馈问题"))
-                    DiagnosticsExportButton(title: L10n.t("导出诊断…"))
-                }
-            }
-            // 私有通道自检失败时明说。不显示成报错红字:用户无法修复它(只能等上游适配),
-            // 说清受影响范围比制造焦虑有用。
-            //
-            // 受影响范围**不是**"只有 QQ 音乐/网易云"。判据在 `MediaControlClient.fetchSnapshot`
-            // 那三条路径上:勾了「自动识别」→ 整条路的基座就是 media-control(Apple Music 也在内,
-            // AppleScript 只做位置精化);恰好只勾 Apple Music、没勾自动识别 → 纯 AppleScript,
-            // 这是**唯一**绕开它的配置;其余组合(QQ 音乐/网易云/Spotify/酷狗/汽水…)一律经它读。
-            // 所以文案按"哪一种配置绕开了它"说,不按"哪几个播放器不受影响"说 —— 后者既不准
-            // (Spotify 其实也经这条通道),又会随着新增播放器过期。
-            if case .unavailable(let message) = stores.mediaControlState {
-                CardDivider()
-                SettingsNote {
-                    Text(L10n.t("系统媒体信息通道在本机不可用，可能无法读取播放状态。仅有一种配置可绕过该通道：关闭「自动识别」并只勾选 Apple Music；其他配置均需通过该通道读取。"))
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .textSelection(.enabled)
-                }
-            }
-            // App 本体版本跟打包的引擎版本对不上(见
-            // EngineServiceManager.bundledEngineVersion 头注)。只在真查到不一致时才显示这条,
-            // 查不出来(nil)时保持沉默,不把"没法判断"说成"有问题"。
-            //
-            // 文案**不要**写成"建议重新安装 App" —— 版本号是编译期烧进二进制的,重装同一个安装包
-            // 一万次也还是同一个版本号,用户照做只会白费力气还更困惑。如实说明:这是打包时的疏漏、
-            // 不影响功能、不需要用户做任何事。
-            if let mismatch = engineVersionMismatch {
-                CardDivider()
-                SettingsNote {
-                    Text(L10n.t("此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作"))
-                    Text("App \(mismatch.appVersion) · \(L10n.t("歌词引擎")) \(mismatch.engineVersion)")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .textSelection(.enabled)
-                }
+    @ViewBuilder
+    private var engineRows: some View {
+        SettingsRow(
+            icon: engineStatusIconName,
+            iconTint: engineStatusIconColor,
+            title: L10n.t("歌词引擎"),
+            // 副标题只留状态,职责说明进「?」。
+            subtitle: engineStatusCaption,
+            help: L10n.t("读取播放状态，获取歌词和封面")
+        ) {
+            // 只有「启用」,没有「停用」:这个服务停掉之后 App 就是个空壳(读不到播放状态、
+            // 不解析歌词、不写缓存),界面上每一处都不再更新,而用户很难把"什么都不动了"跟
+            // 自己在设置里点过的一个按钮联系起来。它没有"用户可能想关掉它"的正当场景。
+            if isTogglingEngineService {
+                ProgressView().controlSize(.small)
+            } else if !engineState.isRunning {
+                Button(L10n.t("启用")) { enableEngineService() }
             }
         }
-        // 不能只在 onAppear 读一次。
-        //
-        // 引擎的 job 在 bootout→bootstrap 中途,`launchctl print` 会退出码 0 但输出里
-        // 认不出 state 字段 → 解析成 .unknown(见 LaunchdPrintParser:"我读不懂"跟"我知道它
-        // 没跑"刻意分开两档)。而 build.sh 的重装顺序恰好制造这个窗口:**先** kickstart App
-        // (设置窗口恢复、onAppear 读一次状态)、**再** reload 引擎的 job。于是这一次读
-        // 正好落在中间态上,之后再没人重读,卡片就永久挂着一个橙色警告和一颗本不该出现的
-        // 「启用」按钮 —— 而服务其实一直在跑。
-        //
-        // 所以要让它自愈:每拍重读一次,外加切回 App 时重读一次。这两件事现在都由侧栏那条健康检查
-        // (`PlayerHealthMonitor`,设置窗口看得见时每 2 秒一拍、切回 App 也补查)做,这里只接它发布的
-        // 状态 —— 原来页面自己也每 2 秒起一次 `launchctl print`,跟它查的是同一件事。
-        .onAppear {
-            refreshEngineState()
-            refreshEngineVersionCheck()
-            refreshEngineFolderFindings()
+        // 启用失败时给具体指引,不是只把红叉留在原地——这里能提供的具体行动是导出
+        // 诊断信息(汇总 App/采集器日志),不是空泛地说"启用失败"。
+        if !engineState.isRunning, !engineFolderFindings.isEmpty {
+            CardDivider()
+            SettingsNote {
+                EngineFolderAccessNote(findings: engineFolderFindings)
+            }
+        } else if engineEnableFailed {
+            CardDivider()
+            SettingsNote {
+                Text(L10n.t("启用失败，可能是权限或系统限制导致歌词引擎未能正常启动。导出诊断信息可查看具体原因，也便于反馈问题"))
+                DiagnosticsExportButton(title: L10n.t("导出诊断…"))
+            }
         }
-        .onReceive(playerHealth.$engineState.compactMap { $0 }) { latest in
-            if latest != engineState { engineState = latest }
-            refreshEngineFolderFindings()
+        // 私有通道自检失败时明说。不显示成报错红字:用户无法修复它(只能等上游适配),
+        // 说清受影响范围比制造焦虑有用。
+        //
+        // 受影响范围**不是**"只有 QQ 音乐/网易云"。判据在 `MediaControlClient.fetchSnapshot`
+        // 那三条路径上:勾了「自动识别」→ 整条路的基座就是 media-control(Apple Music 也在内,
+        // AppleScript 只做位置精化);恰好只勾 Apple Music、没勾自动识别 → 纯 AppleScript,
+        // 这是**唯一**绕开它的配置;其余组合(QQ 音乐/网易云/Spotify/酷狗/汽水…)一律经它读。
+        // 所以文案按"哪一种配置绕开了它"说,不按"哪几个播放器不受影响"说 —— 后者既不准
+        // (Spotify 其实也经这条通道),又会随着新增播放器过期。
+        if case .unavailable(let message) = stores.mediaControlState {
+            CardDivider()
+            SettingsNote {
+                Text(L10n.t("系统媒体信息通道在本机不可用，可能无法读取播放状态。仅有一种配置可绕过该通道：关闭「自动识别」并只勾选 Apple Music；其他配置均需通过该通道读取。"))
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .textSelection(.enabled)
+            }
+        }
+        // App 本体版本跟打包的引擎版本对不上(见
+        // EngineServiceManager.bundledEngineVersion 头注)。只在真查到不一致时才显示这条,
+        // 查不出来(nil)时保持沉默,不把"没法判断"说成"有问题"。
+        //
+        // 文案**不要**写成"建议重新安装 App" —— 版本号是编译期烧进二进制的,重装同一个安装包
+        // 一万次也还是同一个版本号,用户照做只会白费力气还更困惑。如实说明:这是打包时的疏漏、
+        // 不影响功能、不需要用户做任何事。
+        if let mismatch = engineVersionMismatch {
+            CardDivider()
+            SettingsNote {
+                Text(L10n.t("此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作"))
+                Text("App \(mismatch.appVersion) · \(L10n.t("歌词引擎")) \(mismatch.engineVersion)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .textSelection(.enabled)
+            }
         }
     }
 
@@ -5896,11 +6029,10 @@ private struct PlayerSettingsTab: View {
     }
 
     private var companionCard: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(
                 title: L10n.t("播放器联动"),
                 help: L10n.t("每项均按播放器分别勾选，仅列出已选择的播放器；选择「自动识别」时，还会列出本机已安装的播放器"))
-            CardDivider()
             PlayerLinkageRow(
                 icon: "arrow.up.forward.app",
                 title: L10n.t("打开 Lyrimuse 时启动"),

@@ -13,6 +13,8 @@ import SwiftUI
 /// 落盘和顺带要「自动化」权限。
 struct PlayerPicker<Trailing: View>: View {
     @ObservedObject var features: FeatureSettingsStore
+    /// 设置页用:5 列方块格(`PlayerCompactTile`),不画「自动识别」那一格(它在卡头当总开关)。引导页不传。
+    var compact = false
     /// 追加在播放器卡之后、「更多播放器」之前的卡(引导页那张 YouTube Music)。
     @ViewBuilder let trailing: () -> Trailing
 
@@ -21,8 +23,9 @@ struct PlayerPicker<Trailing: View>: View {
     @State private var installed: Set<PlaybackPlayer> = InstalledPlayersCache.current()
     @State private var showsMore = false
 
-    init(features: FeatureSettingsStore, @ViewBuilder trailing: @escaping () -> Trailing) {
+    init(features: FeatureSettingsStore, compact: Bool = false, @ViewBuilder trailing: @escaping () -> Trailing) {
         self.features = features
+        self.compact = compact
         self.trailing = trailing
     }
 
@@ -32,32 +35,8 @@ struct PlayerPicker<Trailing: View>: View {
         let tiles = PlayerPickerLayout.tiles(order: PlaybackPlayer.displayOrder,
                                              selected: features.players,
                                              installed: installed)
-        VStack(alignment: .leading, spacing: 12) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                ForEach(tiles.main) { player in
-                    PlayerChoiceCard(player: player,
-                                     isSelected: features.players.contains(player),
-                                     isCoveredByAuto: isAutoDetect && !features.players.contains(player),
-                                     isInstalled: installed.contains(player)) {
-                        toggle(player)
-                    }
-                }
-                trailing()
-                // 「自动识别」排在具体播放器(以及引导页那张 YouTube Music)之后。从 displayOrder 里取、
-                // 不裸写 `.auto`:displayOrder 里有什么就摆什么,这条对整张网格成立。
-                ForEach(PlaybackPlayer.displayOrder.filter { $0 == .auto }) { player in
-                    PlayerChoiceCard(player: player, isSelected: isAutoDetect) {
-                        toggle(player)
-                    }
-                }
-                if !tiles.more.isEmpty {
-                    MorePlayersCard(count: tiles.more.count) { showsMore = true }
-                        .popover(isPresented: $showsMore, arrowEdge: .bottom) {
-                            morePlayersPopover
-                        }
-                }
-            }
-            .frame(maxWidth: .infinity)
+        Group {
+            if compact { compactGrid(tiles) } else { regularGrid(tiles) }
         }
         .onAppear(perform: refreshInstalled)
         // 设置页开着的时候用户去装了一个播放器,切回来就该出现在网格里。
@@ -65,6 +44,72 @@ struct PlayerPicker<Trailing: View>: View {
             refreshInstalled()
         }
     }
+
+    /// 引导页那套:3 列大卡,「自动识别」是其中一张。
+    private func regularGrid(_ tiles: PlayerPickerLayout.Tiles) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+            ForEach(tiles.main) { player in
+                PlayerChoiceCard(player: player,
+                                 isSelected: features.players.contains(player),
+                                 isCoveredByAuto: isAutoDetect && !features.players.contains(player),
+                                 isInstalled: installed.contains(player)) {
+                    toggle(player)
+                }
+            }
+            trailing()
+            // 「自动识别」排在具体播放器(以及引导页那张 YouTube Music)之后。从 displayOrder 里取、
+            // 不裸写 `.auto`:displayOrder 里有什么就摆什么,这条对整张网格成立。
+            ForEach(PlaybackPlayer.displayOrder.filter { $0 == .auto }) { player in
+                PlayerChoiceCard(player: player, isSelected: isAutoDetect) {
+                    toggle(player)
+                }
+            }
+            if !tiles.more.isEmpty {
+                MorePlayersCard(count: tiles.more.count) { showsMore = true }
+                    .popover(isPresented: $showsMore, arrowEdge: .bottom) {
+                        morePlayersPopover
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 紧凑模式的网格:5 列方块格,末尾一格「更多播放器(N)」点开同一个弹层。列数用 `compactColumns`,
+    /// 设置页另外两组(网页、已信任)也用它,三组的格子一样大。
+    private func compactGrid(_ tiles: PlayerPickerLayout.Tiles) -> some View {
+        LazyVGrid(columns: Self.compactColumns, spacing: 8) {
+            ForEach(tiles.main) { player in
+                PlayerCompactTile(player: player,
+                                  isSelected: features.players.contains(player),
+                                  isCoveredByAuto: isAutoDetect,
+                                  isInstalled: installed.contains(player)) {
+                    toggle(player)
+                }
+            }
+            trailing()
+            if !tiles.more.isEmpty {
+                Button { showsMore = true } label: {
+                    CompactTileLabel(title: String(format: L10n.t("更多播放器（%d）"), tiles.more.count), dimmed: true) {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .compactTileChrome(isSelected: false)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("这台 Mac 上未安装的播放器"))
+                .popover(isPresented: $showsMore, arrowEdge: .bottom) {
+                    morePlayersPopover
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 设置页方块格的列。窗口默认宽度下一格约 108pt,「Amazon Music」「Microsoft Edge」放得下。
+    static var compactColumnCount: Int { 5 }
+    static var compactColumns: [GridItem] { Array(repeating: GridItem(.flexible(), spacing: 8), count: compactColumnCount) }
 
     /// 「更多播放器」弹出的那一小格网格。每次重新求 `tiles`:勾上一个它就挪进主网格,
     /// 这里跟着少一格;一格都不剩时锚点那张卡消失,弹层随之收起。
@@ -102,10 +147,7 @@ struct PlayerPicker<Trailing: View>: View {
     /// 切换一个具体播放器。「最后一个不能取消」的判断在 `FeatureSettingsStore.togglePlayer`;
     /// **勾上**的那一下顺带把「自动化」权限要出来(分寸见 `requestOnSelect` 头注),取消不触发。
     private func toggle(_ player: PlaybackPlayer) {
-        let wasSelected = features.players.contains(player)
-        features.togglePlayer(player)
-        guard !wasSelected, features.players.contains(player) else { return }
-        PlayerAutomationPermissions.shared.requestOnSelect(justEnabled: player)
+        togglePlayerSelection(player, features: features)
     }
 
     private func refreshInstalled() {
@@ -115,8 +157,8 @@ struct PlayerPicker<Trailing: View>: View {
 }
 
 extension PlayerPicker where Trailing == EmptyView {
-    init(features: FeatureSettingsStore) {
-        self.init(features: features) { EmptyView() }
+    init(features: FeatureSettingsStore, compact: Bool = false) {
+        self.init(features: features, compact: compact) { EmptyView() }
     }
 }
 
@@ -164,4 +206,13 @@ enum InstalledPlayersCache {
         at = Date()
         return now
     }
+}
+
+/// 勾上 / 取消一个播放器(含「自动识别」)。设置页卡头那颗「自动识别」开关也走这里,跟网格里点格子同一条路。
+@MainActor
+func togglePlayerSelection(_ player: PlaybackPlayer, features: FeatureSettingsStore) {
+    let wasSelected = features.players.contains(player)
+    features.togglePlayer(player)
+    guard !wasSelected, features.players.contains(player) else { return }
+    PlayerAutomationPermissions.shared.requestOnSelect(justEnabled: player)
 }

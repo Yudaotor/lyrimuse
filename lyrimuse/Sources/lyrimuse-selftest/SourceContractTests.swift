@@ -2584,7 +2584,7 @@ func runSourceContractTests() {
             if let settingsSource = read("SettingsView.swift") {
                 expectEqual(settingsSource.contains("automation.visiblePlayers(for: stores.players)"), true,
                             "设置页权限卡: 显示条件必须用同一个判据(漏掉 .auto = 默认配置的人找不到重新授权的入口)")
-                expectEqual(settingsSource.contains("PlayerPicker(features: FeatureSettingsStore.shared)"), true,
+                expectEqual(settingsSource.contains("PlayerPicker(features: FeatureSettingsStore.shared, compact: true)"), true,
                             "设置页选中即请求: 播放器网格必须用共享的 PlayerPicker,别再自己写一份点击逻辑")
             } else {
                 expectEqual(true, false, "设置页权限卡: 读不到 SettingsView.swift(路径挪了?)")

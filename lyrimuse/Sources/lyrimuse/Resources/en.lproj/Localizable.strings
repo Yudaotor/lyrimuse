@@ -226,6 +226,7 @@
 "下移" = "Move Down";
 "下载 Discord…" = "Download Discord…";
 "下载中…" = "Downloading…";
+"下面的播放器都会识别；想只要其中几个，关掉右上角的开关再勾选。" = "Every player below is detected. To use only some of them, turn off the switch at the top right, then check the ones you want.";
 "不 Scrobble 任何播放器" = "Nothing is scrobbled";
 "不保存" = "Don’t Save";
 "不再悬停显示播放控制" = "Stop Showing Playback Controls on Hover";
@@ -236,6 +237,7 @@
 "不含宽度和总开关" = "Width and the master toggle are left alone";
 "不含总开关" = "The master toggle is left alone";
 "不含时间戳" = "No timestamps";
+"不在上面的 App 也能当播放器：添加后显示它正在放的歌，也计入收听记录。点格子可以移除。" = "Apps not listed above can count as players too: once added, what they play shows lyrics and goes into your listening history. Click a tile to remove it.";
 "不显示" = "None";
 "不足 1 分钟" = "under a minute";
 "不足 1 小时" = "under an hour";
@@ -359,6 +361,7 @@
 "免费开源，感谢你的 ⭐ 支持" = "Free and open source. A ⭐ means a lot — thank you!";
 "全屏时隐藏" = "Hide in Full Screen";
 "全角/半角" = "Full-width/half-width";
+"全选" = "Select All";
 "全选 %@ 首" = "Select All (%@)";
 "全部" = "All";
 "全部不显示" = "None shown";
@@ -399,6 +402,7 @@
 "其中包含 %@ 个歌词文件，将一并恢复。" = "It contains %@ lyrics files, which will be restored too. ";
 "其中包含 %@ 个歌词文件，将一并恢复。#one" = "It contains %@ lyrics file, which will be restored too. ";
 "其他" = "Other";
+"其他 App" = "Other Apps";
 "其他折叠规则" = "Other fold rule";
 "其他歌词源仍在搜索中…" = "Still searching other sources…";
 "其他歌词源照常搜索，只要有其他源找到歌词，就不受影响。这些数据仅在本机统计。" = "Other sources keep searching — as long as one of them has a song, its lyrics aren't affected. These numbers are only counted on this Mac.";
@@ -539,6 +543,7 @@
 "只数存进缓存、会随歌词文件导出的读音；其余的在播放时现算，不算在内" = "Counts only pronunciations stored in the cache, which are exported with the lyric files; the rest are generated during playback and aren't counted";
 "只有勾选的播放器会 Scrobble；网页播放器按浏览器算。" = "Only checked players scrobble; web players count as their browser.";
 "只用于悬浮歌词、灵动岛、菜单栏和触控栏" = "Only for Floating Lyrics, Notch, Menu Bar and Touch Bar";
+"只识别勾选的播放器；没勾的不显示歌词，也不计入收听记录。" = "Only the players you check are detected. The rest don't show lyrics or count toward your listening history.";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "右" = "Right";
 "右侧" = "Right";
@@ -611,6 +616,7 @@
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在歌词下方显示一行译文" = "Show a line of translation under the lyrics";
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
+"在浏览器里听歌也能显示歌词。点「+」配对你用的浏览器，进度直接从网页读，换歌后马上对准。" = "Lyrics work for songs playing in a browser too. Click + to pair the browser you use; the position is read straight from the page, so lyrics line up right after a song change.";
 "在浏览器里授权" = "Authorize in Your Browser";
 "在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
 "在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings, then click Restart Lyrics Engine. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
@@ -822,6 +828,7 @@
 "已连接为 @%@" = "Connected as @%@";
 "已连接：%@" = "Connected: %@";
 "已选 %@ 首" = "%@ selected";
+"已选 %d / %d" = "%d of %d selected";
 "已选择 %@ 首" = "%@ Songs Selected";
 "已选择 %@ 首#one" = "%@ Song Selected";
 "已选择的播放器" = "Selected players";
@@ -868,6 +875,7 @@
 "开源组件与词典" = "Open-source components and dictionaries";
 "开源许可证" = "Open-Source License";
 "开着 %@ 个" = "%@ on";
+"开着时识别所有已知和已信任的播放器；关掉后只认勾选的。" = "When on, every known and trusted player is detected. When off, only the ones you check.";
 "开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
 "开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。" = "On: scrobbled too, once half-played.\nOff: not scrobbled (Last.fm's rule).";
 "当前使用" = "In use";
@@ -1251,6 +1259,8 @@
 "机器人 Token" = "Bot Token";
 "机器人 Token，形如 123456789:AAH…" = "Bot token, e.g. 123456789:AAH…";
 "机器翻译" = "Machine translation";
+"权限与服务" = "Permissions & Services";
+"权限只列出所选播放器用得到的" = "Only permissions your players need are listed";
 "来源" = "Source";
 "来源 A→Z" = "Source A→Z";
 "来源 Z→A" = "Source Z→A";
@@ -1459,6 +1469,7 @@
 "深色" = "Dark";
 "深色卡片" = "Dark Card";
 "深色渐变" = "Dark Gradient";
+"添加 App…" = "Add App…";
 "添加中…" = "Adding…";
 "添加到资料库" = "Add to Library";
 "添加失败" = "Couldn't Add";
@@ -1626,16 +1637,19 @@
 "网页推送" = "Web Push";
 "网页播放器" = "Web Players";
 "网页播放器不会主动报告精确进度，开启此选项可在切歌后立即校准。" = "Web players don't report precise position; this switch lets Lyrimuse recalibrate right after a track change.";
+"网页版" = "Web";
 "罗马字，如 こんにちは → konnichiwa" = "Romaji, e.g. こんにちは → konnichiwa";
 "罗马字，如 안녕하세요 → annyeonghaseyo" = "Romanization, e.g. 안녕하세요 → annyeonghaseyo";
 "置于最顶层" = "Always on Top";
 "署名里的汉字段" = "Han characters in the credit";
 "翻译语言包" = "Translation Languages";
+"联动" = "Linkage";
 "联网搜索候选歌词" = "Search Online for Lyrics";
 "联网逐首搜索，可随时停止" = "Searches online one song at a time; you can stop at any time";
 "背景" = "Background";
 "背景颜色" = "Background Color";
 "胜者" = "Winner";
+"能跳过的广告一出现就自动跳过" = "Skippable ads are skipped as soon as they appear";
 "自 %@ 起" = "Since %@";
 "自动" = "Automatic";
 "自动 Scrobble" = "Automatic Scrobbling";
@@ -1655,6 +1669,7 @@
 "自动更新" = "Automatic Updates";
 "自动检查" = "Check Automatically";
 "自动识别" = "Auto-detect";
+"自动识别中" = "Auto-detecting";
 "自动识别正在播放的 App" = "Whichever app is playing, detected automatically";
 "自动识别正在播放的 App，以及 %@" = "Whichever app is playing, plus %@";
 "自动跳过 YouTube Music 广告" = "Skip YouTube Music Ads Automatically";
@@ -1913,6 +1928,7 @@
 "邮件反馈" = "Email Feedback";
 "部分写法未能获取" = "Some spellings couldn't be loaded";
 "部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限" = "Some settings couldn't be written (%@); the rest were imported. Try importing again, or check that the config folder is writable.";
+"配对浏览器" = "Pair a Browser";
 "配置尚未完成，点按查看缺少的项目" = "Setup isn’t finished — click to see what’s left";
 "配置文件 %@ 无法读取，为避免覆盖，所有保存已暂停" = "The configuration file %@ can't be read. Saving is paused so it won't be overwritten.";
 "配置文件夹" = "Config Folder";
@@ -1977,10 +1993,12 @@
 "需要 Discord 桌面版" = "Requires the Discord desktop app";
 "需要先完成配置" = "Setup Required";
 "需要先配置「%@」（%@）" = "Set up “%@” first — %@";
+"需要处理" = "Needs attention";
 "霓虹" = "Neon";
 "静音" = "Mute";
 "静默启动" = "Launch Silently";
 "韩语" = "Korean";
+"音乐 App" = "Music Apps";
 "音叉" = "Tuning Fork";
 "音浪" = "Audio Wave";
 "音符" = "Note";

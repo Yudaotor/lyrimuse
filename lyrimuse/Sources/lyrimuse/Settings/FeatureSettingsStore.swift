@@ -405,6 +405,16 @@ public final class FeatureSettingsStore: ObservableObject {
         Task { await save() }
     }
 
+    /// 一次勾上好几个(设置页「音乐 App」卡头的「全选」),只落一次盘。不顺带要自动化权限:逐个要会在后台
+    /// 把好几个播放器一起拉起来、连弹好几个系统框;缺的权限「权限与服务」那段会列出来。
+    @MainActor
+    public func selectPlayers(_ added: Set<PlaybackPlayer>) {
+        let next = players.union(added)
+        guard next != players else { return }
+        players = next
+        Task { await save() }
+    }
+
     /// 预解析待播曲目。字段名和 json 键(`album_prefetch`)是这个功能只预取
     /// 「同一张专辑里其它曲目」那阵子留下的,语义**已经扩到整条播放队列**(见
     /// lyrimuse-engine/upcoming.go)。不改名是刻意的:改了就要多一个迁移标记,而迁移标记漏写一边

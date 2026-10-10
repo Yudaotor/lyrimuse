@@ -73,6 +73,13 @@ func runSettingsSearchTests() {
     expectEqual(discordSectionCases, ["display", "buttons", "privacy"], "设置搜索: Discord 页三个分段")
     expectEqual(accountTab.contains("@AppStorage(SettingsSearchCatalog.discordSectionKey)"), true,
                 "设置搜索: Discord 页分段键取目录常量")
+    let playerSectionCases: [String] = {
+        guard let structRange = settingsView.range(of: "struct PlayerSettingsTab") else { return [] }
+        return enumCaseNames(after: "private enum Section:", in: String(settingsView[structRange.upperBound...]))
+    }()
+    expectEqual(playerSectionCases, ["players", "linkage", "permissions"], "设置搜索: 「播放器」页三个分段")
+    expectEqual(SettingsSearchCatalog.playerSectionDefault, playerSectionCases.first,
+                "设置搜索: 「播放器」页默认分段 = 枚举第一个 case")
 
     // ---- 分段的默认值:设置窗前进 / 后退要拿它还原「这一页还没换过分段」那个位置 ----
     //
@@ -98,20 +105,22 @@ func runSettingsSearchTests() {
     expectEqual(LyricsSurface.overlay.appearanceSectionRawValue, appearanceSectionCases.first,
                 "设置搜索: 「歌词显示」页默认分段 = 枚举第一个 case")
 
-    // 有页内分段的面板一共四处。再加一处时这条会红 —— 提醒除了往目录里登记,还要接上设置窗的
+    // 有页内分段的面板一共五处。再加一处时这条会红 —— 提醒除了往目录里登记,还要接上设置窗的
     // 前进 / 后退(SettingsView 的 `section(of:)` / `applySection`),漏了不报错、只表现成后退键
     // 把那几步整个跳过。
     let catalogSectionKeys = Set(entries.compactMap(\.sectionKey))
     expectEqual(catalogSectionKeys, [SettingsSearchCatalog.lyricsSectionKey,
                                      LyricsSurface.appearanceSectionStorageKey,
                                      SettingsSearchCatalog.lastfmSectionKey,
-                                     SettingsSearchCatalog.discordSectionKey],
-                "设置搜索: 页内分段只有这四处(新加一处要一并接上前进/后退)")
+                                     SettingsSearchCatalog.discordSectionKey,
+                                     SettingsSearchCatalog.playerSectionKey],
+                "设置搜索: 页内分段只有这五处(新加一处要一并接上前进/后退)")
     let sectionKeyTokens = [
         LyricsSurface.appearanceSectionStorageKey: "LyricsSurface.appearanceSectionStorageKey",
         SettingsSearchCatalog.lyricsSectionKey: "SettingsSearchCatalog.lyricsSectionKey",
         SettingsSearchCatalog.lastfmSectionKey: "SettingsSearchCatalog.lastfmSectionKey",
         SettingsSearchCatalog.discordSectionKey: "SettingsSearchCatalog.discordSectionKey",
+        SettingsSearchCatalog.playerSectionKey: "SettingsSearchCatalog.playerSectionKey",
     ]
     for key in catalogSectionKeys {
         let token = sectionKeyTokens[key] ?? key
@@ -139,6 +148,8 @@ func runSettingsSearchTests() {
             if !lastfmSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
         case (SettingsSearchCatalog.discordSectionKey?, let value?):
             if !discordSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
+        case (SettingsSearchCatalog.playerSectionKey?, let value?):
+            if !playerSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
         default:
             badSections.append("\(entry.titleKey)→\(entry.sectionKey ?? "nil")/\(entry.sectionValue ?? "nil")")
         }
@@ -178,6 +189,7 @@ func runSettingsSearchTests() {
         "顶部信息", "布局",                                       // 歌词显示 › 歌词窗口 的卡头
         "断句",                                                   // 歌词 › 调整 的卡头(同段的「文字」卡头见上一行)
         "批量匹配",                                         // 歌词 › 管理 的卡头
+        "权限与服务",                                       // 播放器 › 权限与服务 的卡头(跟分段同名,分段本身已可搜到这一页)
         "菜单栏与 Dock", "语言与启动", "通知", "备份与迁移",              // 通用页卡头
         "更新", "反馈", "许可与版权", "诊断与数据",                 // 关于页卡头
         "自动更新", "已安装",                                         // 软件更新页:卡头与只读状态行
@@ -326,7 +338,7 @@ func runSettingsSearchTests() {
                 "目录: 「字号」命中悬浮歌词、灵动岛、菜单栏、触控栏、歌词窗口迷你尺寸五条,按目录顺序")
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
-    expectEqual(qqHits.map(\.titleKey).contains("播放器"), true, "目录: 搜「QQ」也能落到「播放器」卡")
+    expectEqual(qqHits.map(\.titleKey).contains("音乐 App"), true, "目录: 搜「QQ」也能落到「音乐 App」卡")
 
     // 「歌词窗口」那一段只在一种尺寸的预览下才有的行(14 章决策 56):命中时预览先切过去。
     let lyricsWindowEntries = entries.filter { $0.sectionValue == SettingsSearchCatalog.lyricsWindowSectionValue }

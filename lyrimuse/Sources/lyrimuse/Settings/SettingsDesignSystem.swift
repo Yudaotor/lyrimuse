@@ -1227,6 +1227,8 @@ struct SettingsGlassTabPicker<T: Hashable>: View {
     /// 暂时不能选的档:变灰、点不了,位置照留。可选的档会随别的设置变时用它,别去增删 `options` ——
     /// 档数一变整排宽度跟着缩放,选中胶囊又同时在挪,两件事叠在一起看着很乱(实测)。
     var isDisabled: (T) -> Bool = { _ in false }
+    /// 档名后面亮一颗橙色小点(那一段里有要处理的事,比如权限没给)。
+    var badge: (T) -> Bool = { _ in false }
     @Environment(\.controlActiveState) private var activeState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 每一项在这排 tab 里的位置(按下标),选中胶囊照它摆。
@@ -1241,13 +1243,21 @@ struct SettingsGlassTabPicker<T: Hashable>: View {
                 Button {
                     selection = option
                 } label: {
-                    Text(label(option))
-                        .font(.system(size: compact ? 12 : 13, weight: .medium))
-                        .foregroundStyle(selected ? Color.white : Color.primary)
-                        .opacity(disabled && !selected ? 0.3 : 1)
-                        .padding(.horizontal, compact ? 11 : 14)
-                        .frame(height: compact ? 22 : 26)
-                        .contentShape(Capsule())
+                    HStack(spacing: 5) {
+                        Text(label(option))
+                        if badge(option) {
+                            Circle()
+                                .fill(Color.orange)
+                                .frame(width: 6, height: 6)
+                                .accessibilityLabel(L10n.t("需要处理"))
+                        }
+                    }
+                    .font(.system(size: compact ? 12 : 13, weight: .medium))
+                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .opacity(disabled && !selected ? 0.3 : 1)
+                    .padding(.horizontal, compact ? 11 : 14)
+                    .frame(height: compact ? 22 : 26)
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(disabled)

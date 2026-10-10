@@ -28,7 +28,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | Feature | Where to turn it on |
 |---|---|
 | [Apple Music's own lyrics](#feature-apple-music-lyrics) | Settings › Lyrics › Sources › Lyrics Sources |
-| [Use the lyrics your player already saved](#feature-player-local-lyrics) | Settings › Player › Full Disk Access |
+| [Use the lyrics your player already saved](#feature-player-local-lyrics) | Settings › Player › Permissions & Services › Full Disk Access |
 | [Lock hand-picked lyrics](#feature-lock-hand-picked) | Settings › Lyrics › Sources › Lock Hand-Picked Lyrics |
 | [Machine translation when there is none](#feature-machine-translation) | Settings › Lyrics › Translation › Translate When None Is Provided |
 | [Split long lines, join short ones](#feature-split-join-lines) | Settings › Lyrics › Adjust › Split Long Lines |
@@ -41,9 +41,9 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Lock position, long-press to drag](#feature-lock-position) | Settings › Lyrics Display › Floating Lyrics › Behavior › Lock Position |
 | [Hidden from screenshots and screen sharing](#feature-hide-in-screenshots) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide in Screenshots |
 | [Hide or shrink when paused](#feature-hide-when-paused) | Settings › Lyrics Display › Floating Lyrics › Behavior › Hide When Paused |
-| [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web Players |
-| [Skip YouTube Music ads automatically](#feature-skip-youtube-ads) | Settings › Player › Web Players › Skip YouTube Music Ads Automatically |
-| [Start and quit together with your player](#feature-player-linkage) | Settings › Player › Player Linkage › Launch When Lyrimuse Opens |
+| [YouTube Music and Spotify Web in your browser](#feature-web-players) | Settings › Player › Web |
+| [Skip YouTube Music ads automatically](#feature-skip-youtube-ads) | Settings › Player › Web › Skip YouTube Music Ads Automatically |
+| [Start and quit together with your player](#feature-player-linkage) | Settings › Player › Linkage › Launch When Lyrimuse Opens |
 | [Last.fm scrobbling and listening profile](#feature-lastfm) | Settings › Last.fm › Settings › Scrobble Rules |
 | [Scrobble to ListenBrainz too](#feature-listenbrainz) | Settings › Lab Features › ListenBrainz › Account Info |
 | [Show what you're playing on Discord](#feature-discord) | Settings › Discord › Show on Discord |
@@ -100,7 +100,7 @@ Reads your player's queue and finds lyrics for the next few songs ahead of time;
 
 - On by default
 - Settings: Lyrics › Sources › Pre-Resolve Upcoming Tracks
-- Settings: Player › Full Disk Access
+- Settings: Player › Permissions & Services › Full Disk Access
 
 <a id="feature-player-local-lyrics"></a>
 
@@ -109,7 +109,7 @@ Reads your player's queue and finds lyrics for the next few songs ahead of time;
 Lyrics that QQ Music, NetEase Cloud Music and Kugou already downloaded can be used directly: the same version the player shows, and faster. This needs Full Disk Access for Lyrimuse in System Settings; without it lyrics are still found online.
 
 - Off by default
-- Settings: Player › Full Disk Access
+- Settings: Player › Permissions & Services › Full Disk Access
 
 <a id="feature-source-health"></a>
 
@@ -434,7 +434,7 @@ When a song reaches its 100th, 1,000th or 10,000th play, or your Last.fm total p
 
 Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
 
-- Settings: Player › Player
+- Settings: Player › Music Apps
 
 <a id="feature-web-players"></a>
 
@@ -443,7 +443,7 @@ Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, A
 Pair your browser once and music playing in it gets lyrics too, following the page's own progress. A one-click check tells you first whether that browser can be controlled. During ads the notch shows the time left and which ad it is.
 
 - Off by default
-- Settings: Player › Web Players
+- Settings: Player › Web
 
 <a id="feature-skip-youtube-ads"></a>
 
@@ -452,8 +452,8 @@ Pair your browser once and music playing in it gets lyrics too, following the pa
 YouTube Music in your browser has its ads skipped the moment the Skip button appears. With it off, you can still skip from the notch yourself. Needs the Accessibility permission.
 
 - Off by default
-- Settings: Player › Web Players › Skip YouTube Music Ads Automatically
-- Settings: Player › Accessibility
+- Settings: Player › Web › Skip YouTube Music Ads Automatically
+- Settings: Player › Permissions & Services › Accessibility
 
 <a id="feature-other-players"></a>
 
@@ -461,8 +461,8 @@ YouTube Music in your browser has its ads skipped the moment the Skip button app
 
 Players not on the list can be added to your trusted players from Applications, and Lyrimuse asks when it notices an unfamiliar player making music.
 
-- Settings: Player › Trusted Players
-- Settings: Player › Trusted Players › Add a Player…
+- Settings: Player › Other Apps
+- Settings: Player › Add App…
 - Settings: Player › New Player Alerts
 
 <a id="feature-permissions"></a>
@@ -471,9 +471,9 @@ Players not on the list can be added to your trusted players from Applications, 
 
 Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration and QQ Music's shuffle, repeat and like buttons need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.
 
-- Settings: Player › Automation Permission
-- Settings: Player › Full Disk Access
-- Settings: Player › Accessibility
+- Settings: Player › Permissions & Services › Automation Permission
+- Settings: Player › Permissions & Services › Full Disk Access
+- Settings: Player › Permissions & Services › Accessibility
 
 <a id="feature-controls"></a>
 
@@ -505,9 +505,9 @@ Click the title, artist or album in the lyrics window or the expanded notch to r
 Per player: open the player when Lyrimuse opens, open Lyrimuse when the player opens, or quit Lyrimuse once every player it follows has quit.
 
 - Off by default
-- Settings: Player › Player Linkage › Launch When Lyrimuse Opens
-- Settings: Player › Player Linkage › Launch When Your Player Opens
-- Settings: Player › Player Linkage › Quit With Player
+- Settings: Player › Linkage › Launch When Lyrimuse Opens
+- Settings: Player › Linkage › Launch When Your Player Opens
+- Settings: Player › Linkage › Quit With Player
 
 <a id="section-listening"></a>
 
@@ -727,26 +727,26 @@ Every setting in the Settings window, by where it lives: 226 in all. Type a name
 
 ### Player
 
-- **Player**
-- **Web Players**: Web players don't report precise position; this switch lets Lyrimuse recalibrate right after a track change.
-- **Trusted Players**
+- **Music Apps**
+- **Web**: Lyrics work for songs playing in a browser too. Click + to pair the browser you use; the position is read straight from the page, so lyrics line up right after a song change.
+- **Other Apps**: Apps not listed above can count as players too: once added, what they play shows lyrics and goes into your listening history. Click a tile to remove it.
+- **Add App…**: Pick one from Applications — no need to wait until it’s playing
 - **New Player Alerts**
+
+### Player › Web
+
+- **Skip YouTube Music Ads Automatically**: Skippable ads are skipped as soon as they appear
+
+### Player › Permissions & Services
+
 - **Automation Permission**
 - **Full Disk Access**
 - **Accessibility**
 - **Lyrics Engine**: Reads playback state and fetches lyrics and artwork
+
+### Player › Linkage
+
 - **Player Linkage**: Each item is checked per player. Only the selected players are listed; with Auto-detect selected, the ones installed on this Mac are added
-
-### Player › Web Players
-
-- **Skip YouTube Music Ads Automatically**: Presses Skip as soon as it appears; ads that can't be skipped still play. Needs Accessibility permission. If YouTube Music is in a background tab, Lyrimuse briefly switches to it and back without touching the browser window you're using.
-
-### Player › Trusted Players
-
-- **Add a Player…**: Pick one from Applications — no need to wait until it’s playing
-
-### Player › Player Linkage
-
 - **Launch When Lyrimuse Opens**
 - **Launch When Your Player Opens**
 - **Quit With Player**

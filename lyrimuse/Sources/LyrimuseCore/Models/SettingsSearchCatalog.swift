@@ -98,6 +98,10 @@ public enum SettingsSearchCatalog {
     public static let discordSectionKey = "np:discordSection"
     /// 同 `lyricsSectionDefault`,对应 `DiscordSection` 的第一个 case。
     public static let discordSectionDefault = "display"
+    /// 「播放器」页分段(播放器 / 联动 / 权限与服务)的 @AppStorage 键(SettingsView.swift `PlayerSettingsTab`)。
+    public static let playerSectionKey = "settings:playerSection"
+    /// 同 `lyricsSectionDefault`,对应 `PlayerSettingsTab.Section` 的第一个 case。
+    public static let playerSectionDefault = "players"
 
     /// 「歌词显示」页第四段「歌词窗口」的分段取值(`AppearanceSettingsTab.Section.lyricsWindow`)。
     /// 前三段的取值来自 `LyricsSurface`,这一段没有对应的形态,所以单独在这里定义一份。
@@ -139,9 +143,18 @@ public enum SettingsSearchCatalog {
                                    pathKeys: ["歌词", sectionTitle] + (group.map { [$0] } ?? []))
     }
 
-    private static func player(_ title: String, sub: String? = nil, kw: [String] = [], group: String? = nil) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .tab("player"), titleKey: title, subtitleKey: sub, keywords: kw,
-                            pathKeys: ["播放器"] + (group.map { [$0] } ?? []))
+    private static func player(_ section: String, _ title: String, alt: [String] = [], sub: String? = nil,
+                               kw: [String] = [], group: [String] = []) -> SettingsSearchEntry {
+        // 第一段跟页名同叫「播放器」,面包屑里不重复写它。
+        let sectionPath: [String]
+        switch section {
+        case "players": sectionPath = []
+        case "linkage": sectionPath = ["联动"]
+        default: sectionPath = ["权限与服务"]
+        }
+        return SettingsSearchEntry(destination: .tab("player"), sectionKey: playerSectionKey, sectionValue: section,
+                                   titleKey: title, alternateTitleKeys: alt, subtitleKey: sub, keywords: kw,
+                                   pathKeys: ["播放器"] + sectionPath + group)
     }
 
     private static func surface(_ surface: LyricsSurface, _ title: String, alt: [String] = [], sub: String? = nil,
@@ -249,25 +262,26 @@ public enum SettingsSearchCatalog {
         lyrics("manage", "歌词文件夹", sub: "改位置后，已有文件不会跟着搬", kw: ["lyrics", "自定义位置", "目录", "lrc"]),
 
         // ---- 播放器 ----
-        player("播放器", kw: ["Apple Music", "QQ音乐", "网易云音乐", "酷狗音乐", "Spotify", "自动识别", "多选"]),
-        player("网页播放器", kw: ["YouTube Music", "Spotify", "浏览器", "Chrome", "Safari", "Edge", "Arc"]),
-        player("自动跳过 YouTube Music 广告", kw: ["广告", "跳过", "YouTube Music", "辅助功能"], group: "网页播放器"),
-        player("已信任的播放器", kw: ["信任列表", "其它播放器"]),
-        player("添加播放器…", sub: "从「应用程序」中选择，无需等待其开始播放",
-               kw: ["信任列表", "手动添加", "第三方播放器", "应用程序"], group: "已信任的播放器"),
-        player("新播放器提醒", sub: "系统通知已关闭", kw: ["通知", "未知播放器"]),
+        player("players", "音乐 App", alt: ["选择播放器"],
+               kw: ["Apple Music", "QQ音乐", "网易云音乐", "酷狗音乐", "Spotify", "自动识别", "多选"]),
+        player("players", "网页版", alt: ["网页播放器"], kw: ["YouTube Music", "Spotify", "浏览器", "Chrome", "Safari", "Edge", "Arc", "配对"]),
+        player("players", "自动跳过 YouTube Music 广告", sub: "能跳过的广告一出现就自动跳过", kw: ["广告", "跳过", "YouTube Music", "辅助功能"],
+               group: ["网页版"]),
+        player("players", "其他 App", alt: ["已信任的播放器"], kw: ["信任列表", "其它播放器"]),
+        player("players", "添加 App…", alt: ["添加播放器…"], sub: "从「应用程序」中选择，无需等待其开始播放",
+               kw: ["信任列表", "手动添加", "第三方播放器", "应用程序"]),
+        player("players", "新播放器提醒", sub: "系统通知已关闭", kw: ["通知", "未知播放器"]),
         // 一条通用条目,不按播放器各登记一条:那张卡的行标题是播放器名(运行期从
         // `playersNeedingAutomation` 来),登记成字面量就等于在第三个地方再抄一份播放器清单。
         // 关键词把两家的名字都收进来,搜「Spotify 权限」同样命中。
-        player("自动化权限", kw: ["权限", "AppleScript", "自动化", "Apple Music", "Spotify"]),
-        // 同「自动化权限」那条:行标题是运行期拼出来的播放器名,只登记卡头。
-        player("完全磁盘访问权限", kw: ["权限", "磁盘", "隐私", "歌词缓存", "播放队列", "QQ音乐", "网易云音乐", "酷狗音乐"]),
-        player("辅助功能权限", kw: ["权限", "辅助功能", "隐私", "播放进度", "Amazon Music"]),
-        player("歌词引擎", kw: ["lyrimuse-engine", "collector", "launchd", "服务", "运行状态", "后台采集服务", "后台服务", "采集"]),
-        player("播放器联动", kw: ["启动", "退出", "联动"]),
-        player("打开 Lyrimuse 时启动", kw: ["联动", "启动播放器"], group: "播放器联动"),
-        player("跟随播放器启动", kw: ["联动", "自动启动"], group: "播放器联动"),
-        player("跟随播放器退出", kw: ["联动", "自动退出"], group: "播放器联动"),
+        player("permissions", "自动化权限", kw: ["权限", "AppleScript", "自动化", "Apple Music", "Spotify"]),
+        player("permissions", "完全磁盘访问权限", kw: ["权限", "磁盘", "隐私", "歌词缓存", "播放队列", "QQ音乐", "网易云音乐", "酷狗音乐"]),
+        player("permissions", "辅助功能权限", kw: ["权限", "辅助功能", "隐私", "播放进度", "Amazon Music"]),
+        player("permissions", "歌词引擎", kw: ["lyrimuse-engine", "collector", "launchd", "服务", "运行状态", "后台采集服务", "后台服务", "采集"]),
+        player("linkage", "播放器联动", kw: ["启动", "退出", "联动"]),
+        player("linkage", "打开 Lyrimuse 时启动", kw: ["联动", "启动播放器"]),
+        player("linkage", "跟随播放器启动", kw: ["联动", "自动启动"]),
+        player("linkage", "跟随播放器退出", kw: ["联动", "自动退出"]),
 
         // ---- 歌词显示 › 悬浮歌词 ----
         surface(.overlay, "桌面悬浮歌词", kw: ["开关", "悬浮窗", "总开关"], inDrawer: false),

@@ -299,3 +299,160 @@ struct WebPlatformChoiceCard: View {
     }
 }
 
+
+// MARK: - 紧凑小格(设置页)
+
+/// 设置页用的方块格外壳(图标在上、名字在下,居中)。选中是浅色实底 + 发丝描边(`accent` 时换成强调色描边 +
+/// 一层很淡的强调色底,「音乐 App」手动勾选用),没选中只剩一圈细线,`flat`(「自动识别」开着、勾选不生效时)
+/// 是一层中性浅底、不描边。指针压在上面叠一层淡底。
+/// 选中别用 `settingsCardBackground` 的玻璃:玻璃自带阴影,一卡十几格叠在一起显得重。
+/// 别改成图标和名字横排的长条:作者要的是方块。右上角的勾 / 「…」由各格自己用 `compactTileCorner` 叠。
+/// 引导页那套大卡(`choiceCardChrome`)不走这里。整格不可点(只有格子里的小按钮可点)时关掉悬停底。
+private struct CompactTileChrome: ViewModifier {
+    let isSelected: Bool
+    var highlightsOnHover = true
+    var flat = false
+    var accent = false
+    @State private var hovering = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        content
+            .padding(.horizontal, 8)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 74)
+            .background {
+                ZStack {
+                    if flat {
+                        shape.fill(Color.primary.opacity(0.04))
+                    } else if isSelected && accent {
+                        shape.fill(Color.accentColor.opacity(0.09))
+                        shape.strokeBorder(Color.accentColor.opacity(0.7), lineWidth: 1.5)
+                    } else if isSelected {
+                        shape.fill(Color.white.opacity(colorScheme == .dark ? 0.09 : 0.62))
+                        shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+                    } else {
+                        shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                    }
+                    shape.fill(Color.primary.opacity(hovering && highlightsOnHover ? 0.05 : 0))
+                }
+            }
+            .contentShape(shape)
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+extension View {
+    func compactTileChrome(isSelected: Bool, highlightsOnHover: Bool = true, flat: Bool = false,
+                           accent: Bool = false) -> some View {
+        modifier(CompactTileChrome(isSelected: isSelected, highlightsOnHover: highlightsOnHover, flat: flat, accent: accent))
+    }
+
+    /// `EqualColumnsRow` 里这一格占几列。
+    func columnSpan(_ columns: Int) -> some View { layoutValue(key: ColumnSpanKey.self, value: columns) }
+
+    /// 方块格右上角叠一个小标记(勾选圆、「…」)。
+    func compactTileCorner<Corner: View>(@ViewBuilder _ corner: () -> Corner) -> some View {
+        overlay(alignment: .topTrailing) { corner().padding(7) }
+    }
+}
+
+/// 方块格的内容:图标在上、名字在下。名字一行,放不下先缩一点字号再截断。`faint` 比 `dimmed` 再淡一档。
+struct CompactTileLabel<Icon: View>: View {
+    let title: String
+    var dimmed = false
+    var faint = false
+    @ViewBuilder let icon: () -> Icon
+
+    var body: some View {
+        VStack(spacing: 6) {
+            icon()
+            Text(title)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .truncationMode(.tail)
+                .foregroundStyle(faint ? AnyShapeStyle(.tertiary) : AnyShapeStyle(dimmed ? Color.secondary : Color.primary))
+        }
+    }
+}
+
+/// 等宽列的一行:按 `columns` 把宽度均分,每格按 `columnSpan` 占若干列,整行高度取最高的那格、各格撑满。
+/// 设置页「网页版」那张卡用它让平台格跟别的卡的方块格同宽,跳广告面板占掉剩下的列。各格列数之和不能超过 `columns`。
+struct EqualColumnsRow: Layout {
+    var columns: Int
+    var spacing: CGFloat
+
+    private func columnWidth(_ width: CGFloat) -> CGFloat {
+        max(0, (width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+    }
+
+    private func width(of subview: LayoutSubview, column: CGFloat) -> CGFloat {
+        let span = CGFloat(max(1, subview[ColumnSpanKey.self]))
+        return column * span + spacing * (span - 1)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let total = proposal.width ?? CGFloat(columns) * 100
+        let column = columnWidth(total)
+        let height = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width(of: $0, column: column), height: nil)).height }
+            .max() ?? 0
+        return CGSize(width: total, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let column = columnWidth(bounds.width)
+        var x = bounds.minX
+        for subview in subviews {
+            let w = width(of: subview, column: column)
+            subview.place(at: CGPoint(x: x, y: bounds.minY), proposal: ProposedViewSize(width: w, height: bounds.height))
+            x += w + spacing
+        }
+    }
+}
+
+private struct ColumnSpanKey: LayoutValueKey {
+    static let defaultValue = 1
+}
+
+/// `PlayerChoiceCard` 的设置页版:方块格,图标 + 名字。悬停说明、无障碍特征同大卡。
+/// 手动勾选时,选中是强调色描边 + 淡强调色底,没选中图标去色压淡、名字最淡一档 —— 靠整格颜色区分,不画勾。
+/// `isCoveredByAuto`(「自动识别」开着)时整格换成 `flat` 底,点了也不改勾选 —— 那时勾选不生效,
+/// 卡头下那条提示让用户先关掉开关。
+struct PlayerCompactTile: View {
+    let player: PlaybackPlayer
+    let isSelected: Bool
+    var isCoveredByAuto: Bool = false
+    var isInstalled: Bool = true
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button {
+            guard !isCoveredByAuto else { return }
+            onSelect()
+        } label: {
+            let faded = !isCoveredByAuto && !isSelected
+            CompactTileLabel(title: player.displayName, dimmed: !isInstalled, faint: faded) {
+                PlayerIconView(player: player, size: 26)
+                    .saturation(faded ? 0 : 1)
+                    .opacity(faded || !isInstalled ? 0.45 : 1)
+            }
+            .compactTileChrome(isSelected: isSelected, highlightsOnHover: !isCoveredByAuto, flat: isCoveredByAuto,
+                               accent: true)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(note ?? "")
+        .hoverNote(note)
+    }
+
+    private var note: String? {
+        let status: String? = isCoveredByAuto
+            ? L10n.t("已由「自动识别」接管，取消「自动识别」后将仅识别勾选的播放器")
+            : (isInstalled ? nil : L10n.t("这台 Mac 上未安装此播放器"))
+        let lines = [PlayerChoiceCard.about(player), status].compactMap { $0 }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+}
