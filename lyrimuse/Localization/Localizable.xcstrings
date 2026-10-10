@@ -41304,6 +41304,38 @@
           }
         }
       }
+    },
+    "纯音乐/无歌词时收起歌词行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse Lyric Row for Instrumentals & No Lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "純音樂/無歌詞時收起歌詞行"
+          }
+        }
+      }
+    },
+    "搜完确认没有歌词才收起，只留顶部那一条，悬停展开照常；搜索期间照常显示歌词行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapses only once the search confirms there are no lyrics, leaving just the top strip; hovering still expands it. The lyric row stays while searching"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜尋完確認沒有歌詞才收起，只留頂部那一條，懸停展開照常；搜尋期間照常顯示歌詞行"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

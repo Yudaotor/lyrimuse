@@ -553,7 +553,7 @@ struct OverlayEditorStage: View {
         SettingsToggleSummary.text(
             OverlayBehaviorItem.allCases.map { (title: $0.title, isOn: $0.binding.wrappedValue) }
                 + AutoHideItem.allCases.map {
-                    (title: $0.title, isOn: $0.binding(for: .desktopOverlay).wrappedValue)
+                    (title: $0.title(for: .desktopOverlay), isOn: $0.binding(for: .desktopOverlay).wrappedValue)
                 })
     }
 

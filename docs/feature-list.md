@@ -852,7 +852,7 @@ Every setting in the Settings window, by where it lives: 218 in all. Type a name
 - **Shrink When Paused**
 - **Hide in Screenshots**
 - **Hide When Paused**
-- **Hide for Instrumentals & No Lyrics**
+- **Collapse Lyric Row for Instrumentals & No Lyrics**
 - **Hide in Full Screen**
 - **Listening Milestones**
 - **Show Title on Song Change**

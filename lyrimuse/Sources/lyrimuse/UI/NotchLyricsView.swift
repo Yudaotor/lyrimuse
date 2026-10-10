@@ -696,7 +696,8 @@ protocol NotchChromeSource: ObservableObject {
     /// AppSettings(那是性能审计定的:别让无关设置写入打醒整卡)。真窗口那一侧
     /// 由控制器订阅设置后 @Published 出来,预览那一侧现读即可。
     ///
-    /// 卡片按它排歌词行;要表达"用户开关本身"的地方读 `showsLyricsSetting`(两者现在恒等)。
+    /// 卡片按它排歌词行;真窗口上它还叠了「纯音乐/无歌词时收起歌词行」(`NotchVisibility.showsLyrics`),
+    /// 要表达"用户开关本身"的地方读 `showsLyricsSetting`。
     var showsLyrics: Bool { get }
     /// 用户「显示歌词」开关本身。只给展开态快捷操作那颗「显示 / 隐藏歌词」键用。
     var showsLyricsSetting: Bool { get }

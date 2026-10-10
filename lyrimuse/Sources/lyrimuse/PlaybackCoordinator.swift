@@ -125,7 +125,7 @@ final class PlaybackCoordinator: ObservableObject {
     // 联网查过了、明确是纯音乐,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackInstrumental: Bool = false
     @Published private(set) var currentTrackHasNoLyrics: Bool = false
-    /// 上面两项合成的「这首没有歌词」(`NoLyricsAutoHide.lacksLyrics`),「纯音乐/无歌词时隐藏」读它。
+    /// 上面两项合成的「这首没有歌词」(`NoLyricsAutoHide.lacksLyrics`),「纯音乐/无歌词时隐藏」(灵动岛是收起歌词行)读它。
     @Published private(set) var currentTrackLacksLyrics: Bool = false
     // 没有时间戳的纯文本歌词兜底,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentTrackPlainLyrics: String = ""
@@ -1013,7 +1013,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
             s.$currentTrackHasNoLyrics.assign(to: \.currentTrackHasNoLyrics, on: self),
             // 防抖 50ms:两项是先后分开写的,从纯音乐换到一首没搜到词的歌会先放出一个「两项都是 false」的中间态,
-            // 不压一下开着「纯音乐/无歌词时隐藏」的窗口会闪出来一下(见 04 章决策 58)。
+            // 不压一下开着「纯音乐/无歌词时隐藏」的窗口会闪出来一下、灵动岛的歌词行会弹出来一下(见 04 章决策 58)。
             s.$isCurrentTrackInstrumental.combineLatest(s.$currentTrackHasNoLyrics)
                 .map { NoLyricsAutoHide.lacksLyrics(isInstrumental: $0, hasNoLyrics: $1) }
                 .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)

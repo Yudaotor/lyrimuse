@@ -8,12 +8,15 @@ public enum NotchVisibility {
     ///
     /// `coveredByFullScreen`:`fullScreenHides` 为真(窗口所在屏幕的当前 Space 是全屏 App)。它压过提醒挂起 ——
     /// 全屏期间什么都不露,切回桌面后照常显示。
-    ///
-    /// `hiddenForNoLyrics`:「纯音乐/无歌词时隐藏」开着、这首没有歌词(`NoLyricsAutoHide.hides`)。提醒挂起压过它。
-    public static func shouldShow(isVisible: Bool, hideWhenNotPlaying: Bool, isPlaying: Bool, alertHold: Bool,
-                                  coveredByFullScreen: Bool, hiddenForNoLyrics: Bool) -> Bool {
-        isVisible && !coveredByFullScreen
-            && (alertHold || (!hiddenForNoLyrics && (!hideWhenNotPlaying || isPlaying)))
+    public static func shouldShow(isVisible: Bool, hideWhenNotPlaying: Bool,
+                                  isPlaying: Bool, alertHold: Bool, coveredByFullScreen: Bool) -> Bool {
+        isVisible && !coveredByFullScreen && (!hideWhenNotPlaying || isPlaying || alertHold)
+    }
+
+    /// 稳态那一行歌词画不画(卡片读的生效值):「显示歌词」开着,且没被「纯音乐/无歌词时收起歌词行」收掉
+    /// (`collapsedForNoLyrics` = `NoLyricsAutoHide.hides`)。收掉后跟关了「显示歌词」一样只留顶行,hover 展开照常。
+    public static func showsLyrics(setting: Bool, collapsedForNoLyrics: Bool) -> Bool {
+        setting && !collapsedForNoLyrics
     }
 
     /// 「全屏时隐藏」开着、窗口所在屏幕的当前 Space 是全屏 App 时,整卡隐藏。有没有刘海一样处理:

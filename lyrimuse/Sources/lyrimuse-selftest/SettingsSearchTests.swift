@@ -207,17 +207,17 @@ func runSettingsSearchTests() {
             }
         }
     }
-    // 标题住在枚举里的三族行:`var title: String {` 块里的 return L10n.t("…")。
-    let enumTitleBlocks: [(file: String, marker: String)] = [
-        ("UI/OverlayBehaviorSettingsRows.swift", "enum OverlayBehaviorItem"),
-        ("UI/AutoHideSettingsRows.swift", "enum AutoHideItem"),
-        ("SettingsView.swift", "enum NotchBehaviorItem"),
+    // 标题住在枚举里的三族行:标题块(`var title: String {`,按形态分文案的是 `func title(for:)`)里的 return L10n.t("…")。
+    let enumTitleBlocks: [(file: String, marker: String, header: String)] = [
+        ("UI/OverlayBehaviorSettingsRows.swift", "enum OverlayBehaviorItem", "var title: String {"),
+        ("UI/AutoHideSettingsRows.swift", "enum AutoHideItem", "func title(for surface: AutoHideSurface) -> String {"),
+        ("SettingsView.swift", "enum NotchBehaviorItem", "var title: String {"),
     ]
     let returnPattern = #/return L10n\.t\("((?:[^"\\]|\\.)*)"\)/#
     for block in enumTitleBlocks {
         let text = source(block.file)
         guard let enumRange = text.range(of: block.marker),
-              let titleRange = text.range(of: "var title: String {", range: enumRange.upperBound..<text.endIndex) else {
+              let titleRange = text.range(of: block.header, range: enumRange.upperBound..<text.endIndex) else {
             expectEqual(false, true, "设置搜索: 找到了 \(block.marker) 的 title 块")
             continue
         }

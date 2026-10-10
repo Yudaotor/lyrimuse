@@ -1,7 +1,8 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「自动隐藏」三项(截屏时隐藏 / 暂停时隐藏 / 纯音乐/无歌词时隐藏)的唯一一份实现。
+// 「自动隐藏」三项(截屏时隐藏 / 暂停时隐藏 / 纯音乐/无歌词时隐藏)的唯一一份实现。第三项在灵动岛上是
+// 「纯音乐/无歌词时收起歌词行」:只收歌词行、不整卡隐藏,标题和 ⓘ 按形态分开写。
 //
 // **搬家史**(两次,一天之隔,方向不同,别把后一次读成前一次的回退):
 //   ① 原来它是「歌词显示」页第四段「其它」里一张跨形态的卡、**只有一份值**。
@@ -49,8 +50,8 @@ import SwiftUI
 // 本组件只在**自己两行之间**插一条 `CardDivider()`,首尾都不插;"本组之前"那一条由宿主插。
 // `SettingsCard` 只是 `VStack(spacing: 0)`,不会替谁补分隔线。
 
-/// 这两行服务的是哪个形态。**只用来分流 Binding**(各自的 AppSettings 键 + 各自的
-/// WindowController),不影响任何文案 —— 文案两个形态逐字相同,理由见文件头。
+/// 这两行服务的是哪个形态。用来分流 Binding(各自的 AppSettings 键 + 各自的 WindowController);
+/// 文案除了无歌词那一项(两个形态做的事不同)都逐字相同,理由见文件头。
 enum AutoHideSurface {
     case desktopOverlay
     case notch
@@ -77,24 +78,27 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         }
     }
 
-    var title: String {
-        switch self {
-        case .duringScreenCapture: return L10n.t("截屏时隐藏")
-        case .whenNotPlaying: return L10n.t("暂停时隐藏")
-        case .whenNoLyrics: return L10n.t("纯音乐/无歌词时隐藏")
+    func title(for surface: AutoHideSurface) -> String {
+        switch (self, surface) {
+        case (.duringScreenCapture, _): return L10n.t("截屏时隐藏")
+        case (.whenNotPlaying, _): return L10n.t("暂停时隐藏")
+        case (.whenNoLyrics, .desktopOverlay): return L10n.t("纯音乐/无歌词时隐藏")
+        case (.whenNoLyrics, .notch): return L10n.t("纯音乐/无歌词时收起歌词行")
         }
     }
 
     /// 都不带副标题。
     var subtitle: String? { nil }
 
-    /// 截屏那一项的覆盖范围、无歌词那一项什么时候算「没有歌词」放在 ⓘ 气泡里。措辞**不写死是哪个形态**:同一份文案
+    /// 截屏那一项的覆盖范围、无歌词那一项什么时候算「没有歌词」放在 ⓘ 气泡里。截屏那句**不写死是哪个形态**:同一份文案
     /// 悬浮歌词和灵动岛各渲染一次。
-    var help: String? {
-        switch self {
-        case .duringScreenCapture: return L10n.t("截屏、录屏和屏幕共享均无法捕捉，但你仍可正常看到")
-        case .whenNotPlaying: return nil
-        case .whenNoLyrics: return L10n.t("搜完确认没有歌词才隐藏，搜索期间照常显示")
+    func help(for surface: AutoHideSurface) -> String? {
+        switch (self, surface) {
+        case (.duringScreenCapture, _): return L10n.t("截屏、录屏和屏幕共享均无法捕捉，但你仍可正常看到")
+        case (.whenNotPlaying, _): return nil
+        case (.whenNoLyrics, .desktopOverlay): return L10n.t("搜完确认没有歌词才隐藏，搜索期间照常显示")
+        case (.whenNoLyrics, .notch):
+            return L10n.t("搜完确认没有歌词才收起，只留顶部那一条，悬停展开照常；搜索期间照常显示歌词行")
         }
     }
 
@@ -169,7 +173,8 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         case (.desktopOverlay, .whenNoLyrics):
             return Binding(get: { settings.hideWhenNoLyrics }, set: { settings.hideWhenNoLyrics = $0 })
         case (.notch, .whenNoLyrics):
-            return Binding(get: { settings.notchHideWhenNoLyrics }, set: { settings.notchHideWhenNoLyrics = $0 })
+            return Binding(get: { settings.notchCollapseLyricsWhenNoLyrics },
+                           set: { settings.notchCollapseLyricsWhenNoLyrics = $0 })
         }
     }
 }
@@ -191,9 +196,9 @@ struct AutoHideSettingsRows: View {
                 if index > 0 { CardDivider() }
                 SettingsRow(
                     icon: item.icon,
-                    title: item.title,
+                    title: item.title(for: surface),
                     subtitle: item.subtitle,
-                    help: item.help
+                    help: item.help(for: surface)
                 ) {
                     Toggle("", isOn: item.binding(for: surface))
                 }

@@ -3795,8 +3795,8 @@ struct NotchExpandedSettingsRows: View {
 }
 
 /// 「行为」组 —— 工具栏「行为」浮层(`NotchBehaviorPopover`)与抽屉 `behaviorGroup` 同一份:
-/// 「暂停时收起」+ 两行自动隐藏(`AutoHideSettingsRows`,跟悬浮歌词共用同一份视图、靠 `surface`
-/// 分流到 `notchHide*`)+「全屏时隐藏」(只有灵动岛有,所以不进 `AutoHideItem`)+「换歌时显示歌名」+「收听里程碑」。
+/// 「暂停时收起」+ 自动隐藏那几行(`AutoHideSettingsRows`,跟悬浮歌词共用同一份视图、靠 `surface`
+/// 分流到灵动岛那几个键,无歌词那一行在灵动岛上是收起歌词行)+「全屏时隐藏」(只有灵动岛有,所以不进 `AutoHideItem`)+「换歌时显示歌名」+「收听里程碑」。
 ///
 /// 工具栏「行为」按钮的摘要(`NotchEditorStage.behaviorSummary`)要把这里每一项都算进去 ——
 /// 少算不会编译报错,只会让按钮在漏掉的那项开着时照旧显示「全部关闭」。

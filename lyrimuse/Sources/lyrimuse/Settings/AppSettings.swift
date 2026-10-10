@@ -292,9 +292,9 @@ final class AppSettings: ObservableObject {
         static let notchHideDuringScreenCapture = "np:notchHideDuringScreenCapture"
         static let notchHideWhenNotPlaying = "np:notchHideWhenNotPlaying"
         static let notchHideInFullScreen = "np:notchHideInFullScreen"
-        // 「纯音乐/无歌词时隐藏」,悬浮歌词和灵动岛各一份。
+        // 「纯音乐/无歌词时隐藏」,悬浮歌词和灵动岛各一份;灵动岛那份是收起歌词行,键名不跟着改(改了已开着的会丢)。
         static let hideWhenNoLyrics = "np:hideWhenNoLyrics"
-        static let notchHideWhenNoLyrics = "np:notchHideWhenNoLyrics"
+        static let notchCollapseLyricsWhenNoLyrics = "np:notchHideWhenNoLyrics"
         // 收听里程碑:灵动岛自己撑开报喜(ListenMilestoneCenter)。
         static let notchListenMilestones = "np:notchListenMilestones"
         // 换歌时显示歌名:新歌名从刘海里掉出来(NotchTrackDropStrip)。耳朵里的封面那一翻一直开,不看设置。
@@ -473,7 +473,7 @@ final class AppSettings: ObservableObject {
     /// 这里的常量只回答前者(= 重置按钮该恢复成什么)。
     static let defaultNotchHideDuringScreenCapture = false
     static let defaultNotchHideWhenNotPlaying = false
-    static let defaultNotchHideWhenNoLyrics = false
+    static let defaultNotchCollapseLyricsWhenNoLyrics = false
     /// 默认开:全屏 App 期间整卡隐藏(有没有刘海一样),见 `NotchVisibility.fullScreenHides`。
     static let defaultNotchHideInFullScreen = true
     /// 默认开:某首歌第 100 / 1,000…… 次、累计跨过一档时灵动岛报一次喜(连着 Last.fm 才有)。
@@ -1057,14 +1057,15 @@ final class AppSettings: ObservableObject {
     @Published var notchHideInFullScreen: Bool {
         didSet { defaults.set(notchHideInFullScreen, forKey: Keys.notchHideInFullScreen) }
     }
-    /// 「纯音乐/无歌词时隐藏」:这首按纯音乐处理、或搜完确认没有歌词时整个窗口隐藏(`NoLyricsAutoHide`)。
+    /// 这首按纯音乐处理、或搜完确认没有歌词时(`NoLyricsAutoHide`):悬浮歌词整个窗口隐藏(「纯音乐/无歌词时隐藏」),
+    /// 灵动岛只收起歌词行(「纯音乐/无歌词时收起歌词行」,`NotchVisibility.showsLyrics`)。
     /// 两个形态各一份值,同 `hideWhenNotPlaying` / `notchHideWhenNotPlaying`;生效不经设置页调控制器,
     /// 每个窗口实例(含灵动岛镜像副本)自己订阅。
     @Published var hideWhenNoLyrics: Bool {
         didSet { defaults.set(hideWhenNoLyrics, forKey: Keys.hideWhenNoLyrics) }
     }
-    @Published var notchHideWhenNoLyrics: Bool {
-        didSet { defaults.set(notchHideWhenNoLyrics, forKey: Keys.notchHideWhenNoLyrics) }
+    @Published var notchCollapseLyricsWhenNoLyrics: Bool {
+        didSet { defaults.set(notchCollapseLyricsWhenNoLyrics, forKey: Keys.notchCollapseLyricsWhenNoLyrics) }
     }
     /// 收听里程碑:某首歌第 100 / 1,000 / 10,000…… 次、或累计收听跨过一档时,灵动岛自己撑开报一次喜。
     /// 怎么判、怎么防打扰见 `ListenMilestoneCenter`;那边判的时候现读,不经设置页调控制器。
@@ -2155,8 +2156,8 @@ final class AppSettings: ObservableObject {
         notchHideInFullScreen = (defaults.object(forKey: Keys.notchHideInFullScreen) as? Bool)
             ?? Self.defaultNotchHideInFullScreen
         hideWhenNoLyrics = (defaults.object(forKey: Keys.hideWhenNoLyrics) as? Bool) ?? false
-        notchHideWhenNoLyrics = (defaults.object(forKey: Keys.notchHideWhenNoLyrics) as? Bool)
-            ?? Self.defaultNotchHideWhenNoLyrics
+        notchCollapseLyricsWhenNoLyrics = (defaults.object(forKey: Keys.notchCollapseLyricsWhenNoLyrics) as? Bool)
+            ?? Self.defaultNotchCollapseLyricsWhenNoLyrics
         notchListenMilestones = (defaults.object(forKey: Keys.notchListenMilestones) as? Bool)
             ?? Self.defaultNotchListenMilestones
         notchShowsTrackDrop = (defaults.object(forKey: Keys.notchShowsTrackDrop) as? Bool)

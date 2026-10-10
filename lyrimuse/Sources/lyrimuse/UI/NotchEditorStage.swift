@@ -777,7 +777,7 @@ struct NotchEditorStage: View {
             [(title: NotchBehaviorItem.collapseWhenPaused.title,
               isOn: NotchBehaviorItem.collapseWhenPaused.binding.wrappedValue)]
                 + AutoHideItem.allCases.map {
-                    (title: $0.title, isOn: $0.binding(for: .notch).wrappedValue)
+                    (title: $0.title(for: .notch), isOn: $0.binding(for: .notch).wrappedValue)
                 }
                 + [(title: NotchBehaviorItem.hideInFullScreen.title,
                     isOn: NotchBehaviorItem.hideInFullScreen.binding.wrappedValue),
@@ -1750,7 +1750,7 @@ enum NotchStyleDefaults {
         // "不含宽度和总开关"。
         settings.notchHideDuringScreenCapture = AppSettings.defaultNotchHideDuringScreenCapture
         settings.notchHideWhenNotPlaying = AppSettings.defaultNotchHideWhenNotPlaying
-        settings.notchHideWhenNoLyrics = AppSettings.defaultNotchHideWhenNoLyrics
+        settings.notchCollapseLyricsWhenNoLyrics = AppSettings.defaultNotchCollapseLyricsWhenNoLyrics
         settings.notchHideInFullScreen = AppSettings.defaultNotchHideInFullScreen
         settings.notchListenMilestones = AppSettings.defaultNotchListenMilestones
         settings.notchShowsTrackDrop = AppSettings.defaultNotchShowsTrackDrop

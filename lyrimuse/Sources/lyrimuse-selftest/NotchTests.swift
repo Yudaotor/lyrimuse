@@ -1796,15 +1796,17 @@ func runNotchTests() {
         expectEqual(controller.contains("(!hideWhenNotPlaying || isPlayingNow || alertHold)")
                     || controller.contains("(!self.hideWhenNotPlaying || PlaybackCoordinator.shared.isPlayingSmoothed"), false,
                     "显隐契约: 控制器里不许再内联写一份「该不该显示」的判据")
-        expectEqual(controller.components(separatedBy: "coveredByFullScreen: coveredByFullScreen,").count - 1
-                    + controller.components(separatedBy: "coveredByFullScreen: self.coveredByFullScreen,").count - 1, 2,
+        expectEqual(controller.components(separatedBy: "coveredByFullScreen: coveredByFullScreen)").count - 1
+                    + controller.components(separatedBy: "coveredByFullScreen: self.coveredByFullScreen)").count - 1, 2,
                     "全屏契约: 立刻判定与延迟隐藏到点的复核都带上全屏条件")
-        expectEqual(controller.components(separatedBy: "hiddenForNoLyrics: hiddenForNoLyrics)").count - 1
-                    + controller.components(separatedBy: "hiddenForNoLyrics: self.hiddenForNoLyrics)").count - 1, 2,
-                    "无歌词隐藏契约: 立刻判定与延迟隐藏到点的复核都带上无歌词条件")
-        expectEqual(controller.contains("AppSettings.shared.$notchHideWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)"), true,
-                    "无歌词隐藏契约: 每个实例(含镜像副本)自己订阅开关与「这首有没有歌词」,值从 sink 参数拿")
-        expectEqual(controller.contains("noLyricsObserver?.cancel()"), true, "无歌词隐藏契约: 副本 teardown 摘掉订阅")
+        expectEqual(controller.contains("hiddenForNoLyrics"), false,
+                    "无歌词收起契约: 灵动岛没有歌词时只收歌词行,不进显隐判据")
+        expectEqual(controller.contains("AppSettings.shared.$notchCollapseLyricsWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)"), true,
+                    "无歌词收起契约: 每个实例(含镜像副本)自己订阅开关与「这首有没有歌词」,值从 sink 参数拿")
+        expectEqual(controller.contains("let shows = NotchVisibility.showsLyrics(setting: showsLyricsSetting,\n                                                collapsedForNoLyrics: lyricsCollapsedForNoLyrics)")
+                    && controller.components(separatedBy: "applyShowsLyrics()").count - 1 == 3, true,
+                    "无歌词收起契约: 卡片读的 showsLyrics 由 Core 合成,「显示歌词」开关和无歌词两路变化都重算")
+        expectEqual(controller.contains("noLyricsObserver?.cancel()"), true, "无歌词收起契约: 副本 teardown 摘掉订阅")
         let overlayController = read("LyricsOverlayWindowController.swift")
         expectEqual(overlayController.contains("AppSettings.shared.$hideWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)")
                     && overlayController.contains("let shouldShow = isVisible && !hiddenForNoLyrics && (!hideWhenNotPlaying || isPlayingNow)"), true,
@@ -1866,31 +1868,29 @@ func runNotchTests() {
     do {
         typealias V = NotchVisibility
         // 该不该在屏上
-        expectEqual(V.shouldShow(isVisible: false, hideWhenNotPlaying: false, isPlaying: true, alertHold: true, coveredByFullScreen: false, hiddenForNoLyrics: false), false,
+        expectEqual(V.shouldShow(isVisible: false, hideWhenNotPlaying: false, isPlaying: true, alertHold: true, coveredByFullScreen: false), false,
                     "显隐: 灵动岛关着,什么都不显示")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: false, isPlaying: false, alertHold: false, coveredByFullScreen: false, hiddenForNoLyrics: false), true,
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: false, isPlaying: false, alertHold: false, coveredByFullScreen: false), true,
                     "显隐: 没开「暂停时隐藏」时暂停也显示")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: false, coveredByFullScreen: false, hiddenForNoLyrics: false), false,
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: false, coveredByFullScreen: false), false,
                     "显隐: 开了「暂停时隐藏」且没在播 = 藏")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: true, alertHold: false, coveredByFullScreen: false, hiddenForNoLyrics: false), true,
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: true, alertHold: false, coveredByFullScreen: false), true,
                     "显隐: 开了「暂停时隐藏」但在播 = 显示")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: true, coveredByFullScreen: false, hiddenForNoLyrics: false), true,
+        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: true, coveredByFullScreen: false), true,
                     "显隐: 「发现新播放器」提醒挂着时即使没在播也要显示")
         expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: false, isPlaying: true, alertHold: false,
-                                 coveredByFullScreen: true, hiddenForNoLyrics: false), false,
+                                 coveredByFullScreen: true), false,
                     "显隐: 全屏 Space = 藏,在播也藏")
         expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: true,
-                                 coveredByFullScreen: true, hiddenForNoLyrics: false), false,
+                                 coveredByFullScreen: true), false,
                     "显隐: 全屏压过「发现新播放器」提醒")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: false, isPlaying: true, alertHold: false,
-                                 coveredByFullScreen: false, hiddenForNoLyrics: true), false,
-                    "显隐: 「纯音乐/无歌词时隐藏」生效时在播也藏")
-        expectEqual(V.shouldShow(isVisible: true, hideWhenNotPlaying: true, isPlaying: false, alertHold: true,
-                                 coveredByFullScreen: false, hiddenForNoLyrics: true), true,
-                    "显隐: 「发现新播放器」提醒压过无歌词隐藏")
-        expectEqual(V.shouldShow(isVisible: false, hideWhenNotPlaying: false, isPlaying: true, alertHold: false,
-                                 coveredByFullScreen: false, hiddenForNoLyrics: false), false,
-                    "显隐: 灵动岛关着,有歌词也不显示")
+
+        // 稳态歌词行:「显示歌词」开着且没被无歌词收起才画
+        expectEqual(V.showsLyrics(setting: true, collapsedForNoLyrics: false), true, "歌词行: 开着、有歌词 = 画")
+        expectEqual(V.showsLyrics(setting: true, collapsedForNoLyrics: true), false,
+                    "歌词行: 「纯音乐/无歌词时收起歌词行」生效 = 只留顶行")
+        expectEqual(V.showsLyrics(setting: false, collapsedForNoLyrics: false), false, "歌词行: 「显示歌词」关着 = 不画")
+        expectEqual(V.showsLyrics(setting: false, collapsedForNoLyrics: true), false, "歌词行: 两个都收 = 不画")
 
         typealias N = NoLyricsAutoHide
         expectEqual(N.lacksLyrics(isInstrumental: true, hasNoLyrics: false), true, "无歌词隐藏: 纯音乐算没有歌词")

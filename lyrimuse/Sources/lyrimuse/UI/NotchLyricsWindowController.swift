@@ -97,9 +97,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 「全屏时隐藏」(`NotchVisibility.fullScreenHides`)的结论,由 `applyFullScreenCover` 写入,进
     /// updateActualVisibility 的判据。主实例和镜像副本各看自己那块屏,别的屏全屏不算。
     private var coveredByFullScreen = false
-    /// 「纯音乐/无歌词时隐藏」开着、这首没有歌词(`NoLyricsAutoHide.hides`),由 noLyricsObserver 写入,
-    /// 进 updateActualVisibility 的判据。每个实例(含镜像副本)各自订阅。
-    private var hiddenForNoLyrics = false
+    /// 「纯音乐/无歌词时收起歌词行」开着、这首没有歌词(`NoLyricsAutoHide.hides`),由 noLyricsObserver 写入,
+    /// 跟 `showsLyricsSetting` 一起算出 `showsLyrics`。每个实例(含镜像副本)各自订阅。
+    private var lyricsCollapsedForNoLyrics = false
     /// 当前有没有在播放。由 isPlayingObserver 写入,值取 sink 的**参数**——不能回头去读
     /// PlaybackCoordinator 的存储属性,@Published 在 willSet 时机发布,那一刻读到的还是
     /// 旧值(本项目已实测踩过两次,见下面 isPlayingObserver 处的注释)。
@@ -161,7 +161,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 用户要不要看歌词行,真值在 `AppSettings.notchShowLyrics`(见那边的注释)。
     /// 镜像到这里是因为 `NotchWindowRoot` 只观察这个控制器、不观察 AppSettings ——
     /// 那是性能审计定的纪律,别为了这一个开关把整卡挂回去观察全部设置。
-    /// `showsLyrics` 是卡片读的生效值,`showsLyricsSetting` 是开关本身(快捷操作那颗键的文案读它);两者现在恒等。
+    /// `showsLyrics` 是卡片读的生效值(`NotchVisibility.showsLyrics`,叠上了无歌词收起),`showsLyricsSetting`
+    /// 是开关本身(快捷操作那颗键的文案读它)。
     @Published private(set) var showsLyrics: Bool = AppSettings.shared.notchShowLyrics
     @Published private(set) var showsLyricsSetting: Bool = AppSettings.shared.notchShowLyrics
     /// 展开区要不要给迷你进度条留高度(= 这首歌有没有时长)。同上。
@@ -541,15 +542,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             .sink { [weak self] enabled, displays in
                 self?.applyFullScreenCover(enabled: enabled, displays: displays)
             }
-        // 「纯音乐/无歌词时隐藏」:开关和「这首有没有歌词」同时从参数拿(同一个 willSet 坑)。
-        noLyricsObserver = AppSettings.shared.$notchHideWhenNoLyrics
+        // 「纯音乐/无歌词时收起歌词行」:开关和「这首有没有歌词」同时从参数拿(同一个 willSet 坑)。
+        noLyricsObserver = AppSettings.shared.$notchCollapseLyricsWhenNoLyrics
             .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)
             .map { NoLyricsAutoHide.hides(enabled: $0, lacksLyrics: $1) }
             .removeDuplicates()
-            .sink { [weak self] hide in
-                guard let self, hide != hiddenForNoLyrics else { return }
-                hiddenForNoLyrics = hide
-                updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
+            .sink { [weak self] collapse in
+                guard let self else { return }
+                lyricsCollapsedForNoLyrics = collapse
+                applyShowsLyrics()
             }
 
         // 展开区的两个"要不要留高度"标志(修"没歌词时展开卡一大片空白")。
@@ -568,7 +569,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         showLyricsObserver = AppSettings.shared.$notchShowLyrics.removeDuplicates().sink { [weak self] show in
             guard let self else { return }
             showsLyricsSetting = show
-            if showsLyrics != show { showsLyrics = show }
+            applyShowsLyrics()
         }
         // 「暂停时缩到最小」开关。同一个 willSet 坑同一个修法:存 sink 参数值。写入
         // @Published 即生效——isCollapsed 是计算属性,靠这次 objectWillChange 让依赖它的
@@ -1070,12 +1071,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var pendingHideWork: DispatchWorkItem?
     private var hideGeneration = 0
 
+    /// 「显示歌词」开关与无歌词收起两个输入都存好之后再算生效值,值没变不发布。
+    private func applyShowsLyrics() {
+        let shows = NotchVisibility.showsLyrics(setting: showsLyricsSetting,
+                                                collapsedForNoLyrics: lyricsCollapsedForNoLyrics)
+        if showsLyrics != shows { showsLyrics = shows }
+    }
+
     private func updateActualVisibility(isPlayingNow: Bool) {
         // 该做哪一步由 Core 的 NotchVisibility 决定(selftest 覆盖),这里只执行。
         let shouldShow = NotchVisibility.shouldShow(isVisible: isVisible, hideWhenNotPlaying: hideWhenNotPlaying,
                                                     isPlaying: isPlayingNow, alertHold: alertHold,
-                                                    coveredByFullScreen: coveredByFullScreen,
-                                                    hiddenForNoLyrics: hiddenForNoLyrics)
+                                                    coveredByFullScreen: coveredByFullScreen)
         let step = NotchVisibility.step(shouldShow: shouldShow, isVisible: isVisible,
                                         lastApplied: lastAppliedShouldShow, isVanished: isVanished,
                                         reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
@@ -1131,7 +1138,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 let stillShow = NotchVisibility.shouldShow(
                     isVisible: self.isVisible, hideWhenNotPlaying: self.hideWhenNotPlaying,
                     isPlaying: PlaybackCoordinator.shared.isPlayingSmoothed, alertHold: self.alertHold,
-                    coveredByFullScreen: self.coveredByFullScreen, hiddenForNoLyrics: self.hiddenForNoLyrics)
+                    coveredByFullScreen: self.coveredByFullScreen)
                 if stillShow {
                     // 兜底:没人作废却又该显示了——别让一张缩成一点的卡片留在可见窗口里。
                     if self.isVanished { self.isVanished = false }
