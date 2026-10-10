@@ -8,9 +8,12 @@ public enum NotchVisibility {
     ///
     /// `coveredByFullScreen`:`fullScreenHides` 为真(窗口所在屏幕的当前 Space 是全屏 App)。它压过提醒挂起 ——
     /// 全屏期间什么都不露,切回桌面后照常显示。
-    public static func shouldShow(isVisible: Bool, hideWhenNotPlaying: Bool,
-                                  isPlaying: Bool, alertHold: Bool, coveredByFullScreen: Bool) -> Bool {
-        isVisible && !coveredByFullScreen && (!hideWhenNotPlaying || isPlaying || alertHold)
+    ///
+    /// `hiddenForNoLyrics`:「纯音乐/无歌词时隐藏」开着、这首没有歌词(`NoLyricsAutoHide.hides`)。提醒挂起压过它。
+    public static func shouldShow(isVisible: Bool, hideWhenNotPlaying: Bool, isPlaying: Bool, alertHold: Bool,
+                                  coveredByFullScreen: Bool, hiddenForNoLyrics: Bool) -> Bool {
+        isVisible && !coveredByFullScreen
+            && (alertHold || (!hiddenForNoLyrics && (!hideWhenNotPlaying || isPlaying)))
     }
 
     /// 「全屏时隐藏」开着、窗口所在屏幕的当前 Space 是全屏 App 时,整卡隐藏。有没有刘海一样处理:

@@ -80,6 +80,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 初值直接读设置(同 isVisible):现在靠 AppDelegate 在同一拍补齐才不闪,任何先构造 `.shared` 的新路径
     // 都会先按「不隐藏」把窗口摆出来。
     @Published private(set) var hideWhenNotPlaying: Bool = AppSettings.shared.hideWhenNotPlaying
+    /// 「纯音乐/无歌词时隐藏」开着、这首没有歌词(`NoLyricsAutoHide.hides`),由 noLyricsObserver 写入。
+    private var hiddenForNoLyrics = false
 
     private var moveObserver: NSObjectProtocol?
     private var screenObserver: NSObjectProtocol?
@@ -105,6 +107,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private enum PositionSaveSource { case windowMoved, programmaticResize }
     private var moveDebounceTimer: Timer?
     private var isPlayingObserver: AnyCancellable?
+    private var noLyricsObserver: AnyCancellable?
     private var shadowObserver: AnyCancellable?
     private var placementModeObserver: AnyCancellable?
     private var showHoverControlsObserver: AnyCancellable?
@@ -550,6 +553,16 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         isPlayingObserver = PlaybackCoordinator.shared.$isPlayingSmoothed.sink { [weak self] isPlaying in
             self?.updateActualVisibility(isPlayingNow: isPlaying)
         }
+        // 「纯音乐/无歌词时隐藏」:开关和「这首有没有歌词」都从 sink 参数拿(同上那个 willSet 坑)。
+        noLyricsObserver = AppSettings.shared.$hideWhenNoLyrics
+            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)
+            .map { NoLyricsAutoHide.hides(enabled: $0, lacksLyrics: $1) }
+            .removeDuplicates()
+            .sink { [weak self] hide in
+                guard let self else { return }
+                hiddenForNoLyrics = hide
+                updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
+            }
     }
 
     deinit {
@@ -604,7 +617,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
-    // 实际是否显示 = 用户手动偏好(isVisible) AND (没开自动隐藏 OR 当前正在播放)。
+    // 实际是否显示 = 用户手动偏好(isVisible) AND 没因无歌词隐藏 AND (没开暂停时隐藏 OR 当前正在播放)。
     // 不直接改 isVisible 本身——isVisible 就是纯粹的"用户手动想不想看见"这一件事,菜单栏
     // "显示悬浮歌词"复选框读的也是这个值;暂停时被自动隐藏不应该让那个复选框跟着变成
     // 未勾选状态,不然看起来像是被谁悄悄关掉了。
@@ -616,7 +629,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 当前值即可(如果做成默认参数,默认值表达式在 Swift 6 严格并发模式下是 nonisolated
     // 上下文,访问 @MainActor 单例会报错,所以强制显式传参而不是偷懒用默认值)。
     private func updateActualVisibility(isPlayingNow: Bool) {
-        let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
+        let shouldShow = isVisible && !hiddenForNoLyrics && (!hideWhenNotPlaying || isPlayingNow)
         if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
         refreshSurfaceVisible()
         // 兜底:万一上屏之后系统没发遮挡变化通知,这里过一小会儿再核一次,别让填色停在「看不见」。

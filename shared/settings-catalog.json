@@ -513,6 +513,15 @@
       "dest" : "tab:appearance",
       "path" : [
         "歌词显示",
+        "悬浮歌词",
+        "行为"
+      ],
+      "title" : "纯音乐/无歌词时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
         "悬浮歌词"
       ],
       "title" : "位置"
@@ -771,6 +780,15 @@
         "行为"
       ],
       "title" : "暂停时隐藏"
+    },
+    {
+      "dest" : "tab:appearance",
+      "path" : [
+        "歌词显示",
+        "灵动岛",
+        "行为"
+      ],
+      "title" : "纯音乐/无歌词时隐藏"
     },
     {
       "dest" : "tab:appearance",

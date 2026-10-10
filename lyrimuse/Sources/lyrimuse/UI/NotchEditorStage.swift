@@ -761,12 +761,12 @@ struct NotchEditorStage: View {
         SettingsToggleSummary.text(entries)
     }
 
-    /// 「行为」浮层现在有四项,而且**跨两个枚举**:`NotchBehaviorItem.collapseWhenPaused`
-    /// (`.showLyrics` 搬去了「歌词行」浮层,见 `lyricRowSummary`)+ `AutoHideItem`
-    /// 那两项(从撤掉的独立「自动隐藏」卡并进来的)+ `NotchBehaviorItem.hideInFullScreen`。
+    /// 「行为」浮层**跨两个枚举**:`NotchBehaviorItem.collapseWhenPaused`
+    /// (`.showLyrics` 在「歌词行」浮层,见 `lyricRowSummary`)+ `AutoHideItem`
+    /// 各项 + `NotchBehaviorItem` 的全屏隐藏 / 换歌显示歌名 / 收听里程碑。
     ///
     /// **两个来源必须都算,而且要跟 `NotchBehaviorPopover` /
-    /// `NotchAllSettingsDrawer.behaviorGroup` 的内容一致**:少算自动隐藏那两项不会编译报错,
+    /// `NotchAllSettingsDrawer.behaviorGroup` 的内容一致**:少算自动隐藏那几项不会编译报错,
     /// 只会让这颗按钮在它们开着时照旧显示「全部关闭」—— 一个会撒谎的派生值。
     ///
     /// 三项都开时摘要会拼成一长串(「暂停时收起、截屏时隐藏、暂停时隐藏」),交给
@@ -1746,14 +1746,11 @@ enum NotchStyleDefaults {
         settings.notchFontSize = AppSettings.defaultNotchFontSize
         // 歌词行「高度」同样进重置:按钮自报的排除范围只有「宽度和总开关」,它不在里面。
         settings.notchLyricRowHeight = AppSettings.defaultNotchLyricRowHeight
-        // 「行为」组里那两个自动隐藏开关(补漏)。
-        //
-        // 它们才从撤掉的那张跨形态「自动隐藏」卡并进灵动岛「行为」组,**并进来时
-        // 没同步扩这里** —— 而这颗按钮叫「恢复默认风格与**开关**」、界面自报的排除范围只有
-        // "不含宽度和总开关",这两项既是开关又不在排除项里,点了重置却不动,是漏不是取舍。
-        // (同一天菜单栏那颗也因为同样的原因漏了两项,见 MenuBarStyleDefaults 的头注。)
+        // 「行为」组的开关都进重置:这颗按钮叫「恢复默认风格与开关」,界面自报的排除范围只有
+        // "不含宽度和总开关"。
         settings.notchHideDuringScreenCapture = AppSettings.defaultNotchHideDuringScreenCapture
         settings.notchHideWhenNotPlaying = AppSettings.defaultNotchHideWhenNotPlaying
+        settings.notchHideWhenNoLyrics = AppSettings.defaultNotchHideWhenNoLyrics
         settings.notchHideInFullScreen = AppSettings.defaultNotchHideInFullScreen
         settings.notchListenMilestones = AppSettings.defaultNotchListenMilestones
         settings.notchShowsTrackDrop = AppSettings.defaultNotchShowsTrackDrop

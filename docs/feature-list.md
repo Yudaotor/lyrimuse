@@ -692,7 +692,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 216 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 218 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -801,6 +801,7 @@ Every setting in the Settings window, by where it lives: 216 in all. Type a name
 - **Controls on Hover**
 - **Hide in Screenshots**
 - **Hide When Paused**
+- **Hide for Instrumentals & No Lyrics**
 
 ### Lyrics Display › Notch
 
@@ -851,6 +852,7 @@ Every setting in the Settings window, by where it lives: 216 in all. Type a name
 - **Shrink When Paused**
 - **Hide in Screenshots**
 - **Hide When Paused**
+- **Hide for Instrumentals & No Lyrics**
 - **Hide in Full Screen**
 - **Listening Milestones**
 - **Show Title on Song Change**

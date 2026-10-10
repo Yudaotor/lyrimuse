@@ -1,7 +1,7 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「自动隐藏」两项(截屏时隐藏 / 暂停时隐藏)的唯一一份实现。
+// 「自动隐藏」三项(截屏时隐藏 / 暂停时隐藏 / 纯音乐/无歌词时隐藏)的唯一一份实现。
 //
 // **搬家史**(两次,一天之隔,方向不同,别把后一次读成前一次的回退):
 //   ① 原来它是「歌词显示」页第四段「其它」里一张跨形态的卡、**只有一份值**。
@@ -56,7 +56,7 @@ enum AutoHideSurface {
     case notch
 }
 
-/// 两项自动隐藏开关的唯一真源:图标、文案(标题 / 副标题 / ⓘ 帮助)、以及那个"改了要连带
+/// 自动隐藏开关的唯一真源:图标、文案(标题 / 副标题 / ⓘ 帮助)、以及那个"改了要连带
 /// 让真窗口生效"的 Binding。
 ///
 /// 类型本身**不**标 `@MainActor`(只有 `binding(for:)` 标)—— `title`/`subtitle`/`help` 走的是
@@ -65,6 +65,7 @@ enum AutoHideSurface {
 enum AutoHideItem: String, CaseIterable, Identifiable {
     case duringScreenCapture
     case whenNotPlaying
+    case whenNoLyrics
 
     var id: String { rawValue }
 
@@ -72,6 +73,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         switch self {
         case .duringScreenCapture: return "camera.viewfinder"
         case .whenNotPlaying: return "pause.circle"
+        case .whenNoLyrics: return "text.badge.xmark"
         }
     }
 
@@ -79,18 +81,20 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
         switch self {
         case .duringScreenCapture: return L10n.t("截屏时隐藏")
         case .whenNotPlaying: return L10n.t("暂停时隐藏")
+        case .whenNoLyrics: return L10n.t("纯音乐/无歌词时隐藏")
         }
     }
 
-    /// 两项都不带副标题。
+    /// 都不带副标题。
     var subtitle: String? { nil }
 
-    /// 截屏那一项的覆盖范围放在 ⓘ 气泡里。措辞**不写死是哪个形态**:同一份文案
+    /// 截屏那一项的覆盖范围、无歌词那一项什么时候算「没有歌词」放在 ⓘ 气泡里。措辞**不写死是哪个形态**:同一份文案
     /// 悬浮歌词和灵动岛各渲染一次。
     var help: String? {
         switch self {
         case .duringScreenCapture: return L10n.t("截屏、录屏和屏幕共享均无法捕捉，但你仍可正常看到")
         case .whenNotPlaying: return nil
+        case .whenNoLyrics: return L10n.t("搜完确认没有歌词才隐藏，搜索期间照常显示")
         }
     }
 
@@ -161,11 +165,16 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
                         NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
                     }
                 })
+        // 无歌词这一项只写设置:每个窗口实例(含灵动岛镜像副本)自己订阅这个值,不经这里调控制器。
+        case (.desktopOverlay, .whenNoLyrics):
+            return Binding(get: { settings.hideWhenNoLyrics }, set: { settings.hideWhenNoLyrics = $0 })
+        case (.notch, .whenNoLyrics):
+            return Binding(get: { settings.notchHideWhenNoLyrics }, set: { settings.notchHideWhenNoLyrics = $0 })
         }
     }
 }
 
-/// 两行标准设置行。四个宿主都调这一份,只把 `surface` 换掉。
+/// 标准设置行,每项一行。宿主都调这一份,只把 `surface` 换掉。
 ///
 /// `@ObservedObject` 是**必需**的,不是照抄的样板:宿主里 `NotchBehaviorPopover` 自己不观察 `AppSettings`,现在只靠父层(`AppearanceSettingsTab` /
 /// `NotchEditorStage`)的对象级失效顺带刷新。新组件继续吃这个隐式依赖的话,哪天它被放进第五个

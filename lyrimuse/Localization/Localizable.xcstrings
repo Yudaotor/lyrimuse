@@ -17548,6 +17548,40 @@
         }
       }
     },
+    "纯音乐/无歌词时隐藏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide for Instrumentals & No Lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "純音樂/無歌詞時隱藏"
+          }
+        }
+      }
+    },
+    "搜完确认没有歌词才隐藏，搜索期间照常显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hides only once the search confirms there are no lyrics; stays visible while searching"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜尋完確認沒有歌詞才隱藏，搜尋期間照常顯示"
+          }
+        }
+      }
+    },
     "纯黑" : {
       "extractionState" : "manual",
       "localizations" : {

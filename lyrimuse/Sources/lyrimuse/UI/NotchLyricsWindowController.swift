@@ -97,6 +97,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 「全屏时隐藏」(`NotchVisibility.fullScreenHides`)的结论,由 `applyFullScreenCover` 写入,进
     /// updateActualVisibility 的判据。主实例和镜像副本各看自己那块屏,别的屏全屏不算。
     private var coveredByFullScreen = false
+    /// 「纯音乐/无歌词时隐藏」开着、这首没有歌词(`NoLyricsAutoHide.hides`),由 noLyricsObserver 写入,
+    /// 进 updateActualVisibility 的判据。每个实例(含镜像副本)各自订阅。
+    private var hiddenForNoLyrics = false
     /// 当前有没有在播放。由 isPlayingObserver 写入,值取 sink 的**参数**——不能回头去读
     /// PlaybackCoordinator 的存储属性,@Published 在 willSet 时机发布,那一刻读到的还是
     /// 旧值(本项目已实测踩过两次,见下面 isPlayingObserver 处的注释)。
@@ -354,6 +357,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private static let trackDropLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "notch-track-drop")
     private var unknownPlayerAlertObserver: AnyCancellable?
     private var fullScreenObserver: AnyCancellable?
+    private var noLyricsObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     private var occlusionObserver: NSObjectProtocol?
     // 一个真实的坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
@@ -536,6 +540,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)
             .sink { [weak self] enabled, displays in
                 self?.applyFullScreenCover(enabled: enabled, displays: displays)
+            }
+        // 「纯音乐/无歌词时隐藏」:开关和「这首有没有歌词」同时从参数拿(同一个 willSet 坑)。
+        noLyricsObserver = AppSettings.shared.$notchHideWhenNoLyrics
+            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)
+            .map { NoLyricsAutoHide.hides(enabled: $0, lacksLyrics: $1) }
+            .removeDuplicates()
+            .sink { [weak self] hide in
+                guard let self, hide != hiddenForNoLyrics else { return }
+                hiddenForNoLyrics = hide
+                updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
             }
 
         // 展开区的两个"要不要留高度"标志(修"没歌词时展开卡一大片空白")。
@@ -1060,7 +1074,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 该做哪一步由 Core 的 NotchVisibility 决定(selftest 覆盖),这里只执行。
         let shouldShow = NotchVisibility.shouldShow(isVisible: isVisible, hideWhenNotPlaying: hideWhenNotPlaying,
                                                     isPlaying: isPlayingNow, alertHold: alertHold,
-                                                    coveredByFullScreen: coveredByFullScreen)
+                                                    coveredByFullScreen: coveredByFullScreen,
+                                                    hiddenForNoLyrics: hiddenForNoLyrics)
         let step = NotchVisibility.step(shouldShow: shouldShow, isVisible: isVisible,
                                         lastApplied: lastAppliedShouldShow, isVanished: isVanished,
                                         reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
@@ -1116,7 +1131,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 let stillShow = NotchVisibility.shouldShow(
                     isVisible: self.isVisible, hideWhenNotPlaying: self.hideWhenNotPlaying,
                     isPlaying: PlaybackCoordinator.shared.isPlayingSmoothed, alertHold: self.alertHold,
-                    coveredByFullScreen: self.coveredByFullScreen)
+                    coveredByFullScreen: self.coveredByFullScreen, hiddenForNoLyrics: self.hiddenForNoLyrics)
                 if stillShow {
                     // 兜底:没人作废却又该显示了——别让一张缩成一点的卡片留在可见窗口里。
                     if self.isVanished { self.isVanished = false }
@@ -1402,6 +1417,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         unknownPlayerAlertObserver = nil
         fullScreenObserver?.cancel()
         fullScreenObserver = nil
+        noLyricsObserver?.cancel()
+        noLyricsObserver = nil
         if let screenParamsObserver {
             NotificationCenter.default.removeObserver(screenParamsObserver)
             self.screenParamsObserver = nil

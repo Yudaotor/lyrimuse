@@ -950,6 +950,7 @@
 "提前" = "Advance";
 "提前 %@ 秒显示" = "Show %@s earlier";
 "提醒" = "Alerts";
+"搜完确认没有歌词才隐藏，搜索期间照常显示" = "Hides only once the search confirms there are no lyrics; stays visible while searching";
 "搜索" = "Search";
 "搜索候选歌词" = "Search for Lyrics";
 "搜索失败：%@" = "Couldn't search for lyrics: %@";
@@ -1529,6 +1530,7 @@
 "纯文本（无时间戳）" = "Plain text (no timing)";
 "纯色" = "Solid";
 "纯音乐" = "Instrumental";
+"纯音乐/无歌词时隐藏" = "Hide for Instrumentals & No Lyrics";
 "纯黑" = "Solid Black";
 "纸白卡片" = "Paper Card";
 "细" = "Light";

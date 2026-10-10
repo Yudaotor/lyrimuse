@@ -530,12 +530,12 @@ struct OverlayEditorStage: View {
     }
 
     /// 「行为」按钮上那句摘要。**跨两个枚举**:`OverlayBehaviorItem`(锁定位置 / 长按拖动 /
-    /// 悬浮淡化 / 悬停控制条)+ `AutoHideItem` 两项(截屏隐藏 / 暂停隐藏,从撤掉的
-    /// 独立「自动隐藏」卡并进「行为」的)。项数跟着 `allCases` 走,这里不写死。
+    /// 悬浮淡化 / 悬停控制条)+ `AutoHideItem` 各项(截屏隐藏 / 暂停隐藏 / 无歌词隐藏)。
+    /// 项数跟着 `allCases` 走,这里不写死。
     ///
     /// **两个来源必须都算,而且要跟「行为」浮层 /
     /// `OverlayAllSettingsDrawer.behaviorGroup`(两处调同一份 `OverlayBehaviorSettingsRows`)
-    /// 的内容一致**:少算自动隐藏那两项不会编译报错,
+    /// 的内容一致**:少算自动隐藏那几项不会编译报错,
     /// 只会让这颗按钮在它们开着时照旧显示「全部关闭」—— 一个会撒谎的派生值。灵动岛那边
     /// (`NotchEditorStage.behaviorSummary`)是同一天为同一个原因写的同一个形状。
     ///
