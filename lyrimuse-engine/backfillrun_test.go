@@ -33,8 +33,13 @@ type backfillRunEnv struct {
 func setUpBackfillRun(t *testing.T, reply func(ts []string) (string, error)) *backfillRunEnv {
 	t.Helper()
 	savedLog, savedNudge, savedPause := listenLogPath, lastfmFeedNudgePath, backfillBatchPause
-	t.Cleanup(func() { listenLogPath, lastfmFeedNudgePath, backfillBatchPause = savedLog, savedNudge, savedPause })
-	backfillBatchPause = 0
+	savedResend, savedLookup := backfillResendDelays, backfillLookupPause
+	t.Cleanup(func() {
+		listenLogPath, lastfmFeedNudgePath, backfillBatchPause = savedLog, savedNudge, savedPause
+		backfillResendDelays, backfillLookupPause = savedResend, savedLookup
+	})
+	backfillBatchPause, backfillLookupPause = 0, 0
+	backfillResendDelays = []time.Duration{0, 0}
 	dir := t.TempDir()
 	listenLogPath = filepath.Join(dir, "listens.jsonl")
 	lastfmFeedNudgePath = filepath.Join(dir, "feed-nudge")

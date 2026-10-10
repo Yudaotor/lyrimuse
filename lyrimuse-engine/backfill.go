@@ -134,6 +134,12 @@ type backfillOutcome struct {
 	Quarantined int `json:"quarantined"`
 	// 中止原因(限流/服务不可用/凭据失效)。空 = 跑完了。
 	AbortedReason string `json:"abortedReason,omitempty"`
+	// 隔离着的收听在补交开头去 Last.fm 核对的结果(见 reconcileQuarantined):Recovered = 那边已经有、补记了回执,
+	// Released = 确认没有、解除隔离跟着这一趟补交(计入 Eligible / Accepted)。
+	Recovered int `json:"recovered,omitempty"`
+	Released  int `json:"released,omitempty"`
+	// 仅 dry-run:还隔离着、点补交时会先去核对的条数。
+	Unverified int `json:"unverified,omitempty"`
 }
 
 // pendingBackfillListens 折叠日志,返回"还没提交过、且在回溯窗口内"的收听,按 uts 升序。
@@ -145,34 +151,15 @@ type backfillOutcome struct {
 // 官方指南:"Scrobbles should be sent in order, therefore cached scrobbles should be sent
 // before new scrobbles." —— 所以按 uts 升序,不是随便什么顺序。
 func pendingBackfillListens(now time.Time) (pending []listenLogLine, tooOld int) {
-	lines := readListenLog()
-	listens := make(map[int64]listenLogLine, len(lines))
-	submitted := make(map[int64]bool, len(lines))
-	for _, l := range lines {
-		switch l.T {
-		case "l":
-			if l.UTS > 0 && l.TI != "" {
-				listens[l.UTS] = l
-				// 记录时就已经镜像给 Last.fm 的,等于已提交 —— 见 listenLogLine.M。
-				if l.M == 1 {
-					submitted[l.UTS] = true
-				}
-			}
-		case "s":
-			if l.UTS > 0 {
-				submitted[l.UTS] = true
-			}
-		case "q":
-			// 隔离:发出去了但没拿到回执。**跟已提交一样排除**,绝不自动重试 ——
-			// 见 markQuarantined。
-			if l.UTS > 0 {
-				submitted[l.UTS] = true
-			}
-		}
-	}
+	f := foldListenLog(readListenLog())
 	cutoff := now.Add(-backfillMaxAge).Unix()
-	for uts, l := range listens {
-		if submitted[uts] {
+	for uts, l := range f.listens {
+		if f.submitted[uts] {
+			continue
+		}
+		// 隔离:发出去了但没拿到回执。**跟已提交一样排除**,不在这里重发 —— 只有补交开头去 Last.fm 核对过、
+		// 确认没有的才解除(见 markQuarantined、reconcileQuarantined)。
+		if _, q := f.quarantined[uts]; q {
 			continue
 		}
 		// 本地复核一遍"算不算一次收听"—— 不信任日志一定干净(可能被手工编辑过,或是
@@ -190,6 +177,44 @@ func pendingBackfillListens(now time.Time) (pending []listenLogLine, tooOld int)
 	}
 	sort.Slice(pending, func(i, j int) bool { return pending[i].UTS < pending[j].UTS })
 	return pending, tooOld
+}
+
+// listenLogFold 是收听日志按行折叠后的样子(读侧唯一权威,pendingBackfillListens / quarantinedBackfillListens 共用)。
+type listenLogFold struct {
+	listens   map[int64]listenLogLine
+	submitted map[int64]bool // 有 "s" 回执,或记录时就镜像过(M=1)
+	// 还隔离着的 → 那一行隔离的写盘时刻。"q" 记上,之后的 "r"(核对过 Last.fm 上确实没有)解除。
+	quarantined map[int64]int64
+}
+
+func foldListenLog(lines []listenLogLine) listenLogFold {
+	f := listenLogFold{
+		listens:     make(map[int64]listenLogLine, len(lines)),
+		submitted:   make(map[int64]bool, len(lines)),
+		quarantined: map[int64]int64{},
+	}
+	for _, l := range lines {
+		if l.UTS <= 0 {
+			continue
+		}
+		switch l.T {
+		case "l":
+			if l.TI != "" {
+				f.listens[l.UTS] = l
+				// 记录时就已经镜像给 Last.fm 的,等于已提交 —— 见 listenLogLine.M。
+				if l.M == 1 {
+					f.submitted[l.UTS] = true
+				}
+			}
+		case "s":
+			f.submitted[l.UTS] = true
+		case "q":
+			f.quarantined[l.UTS] = l.AT
+		case "r":
+			delete(f.quarantined, l.UTS)
+		}
+	}
+	return f
 }
 
 // markBackfilled 追加一条回执行。**先写盘再算成功** —— 写不进去就当没提交过,
@@ -273,13 +298,30 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("%w: %w", errScrobbleBatchNotSent, err)
 	}
-	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < backfillRequestTimeout {
-		return nil, fmt.Errorf("%w: only %s of the overall timeout left", errScrobbleBatchNotSent, time.Until(deadline).Round(time.Second))
-	}
 	// 签名不需要为批量做任何特殊处理:sign() 用 sort.Strings 按字节序排,而官方要求的
 	// 正是 ASCII 字节序 —— "artist[0]" / "artist[10]" 这类名字排出来跟官方一致。
-	return s.callBatch(ctx, "track.scrobble", p)
+	//
+	// 请求确定没离开本机(provablyNeverSent:DNS / dial 失败)时按 backfillResendDelays 隔一会儿重发同一批,写法不用
+	// 再取。别的失败一律不在这里重发:限流 29 要停手,其余可能已经落库。
+	for attempt := 0; ; attempt++ {
+		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < backfillRequestTimeout {
+			return nil, fmt.Errorf("%w: only %s of the overall timeout left", errScrobbleBatchNotSent, time.Until(deadline).Round(time.Second))
+		}
+		res, err := s.callBatch(ctx, "track.scrobble", p)
+		if err == nil || attempt >= len(backfillResendDelays) || !provablyNeverSent(err) {
+			return res, err
+		}
+		log.Printf("backfill: batch never left this machine (%v), sending it again in %s", err, backfillResendDelays[attempt])
+		select {
+		case <-time.After(backfillResendDelays[attempt]):
+		case <-ctx.Done():
+			return nil, fmt.Errorf("%w: %w", errScrobbleBatchNotSent, err)
+		}
+	}
 }
+
+// backfillResendDelays:一批请求确定没离开本机时,第 n 次重发前等多久。变量只为单测能调成 0。
+var backfillResendDelays = []time.Duration{5 * time.Second, 15 * time.Second}
 
 func (s *lastfmScrobbler) callBatch(ctx context.Context, method string, params map[string]string) (*scrobbleBatchResult, error) {
 	p := make(map[string]string, len(params)+3)
@@ -401,8 +443,8 @@ func truncateForLog(b []byte) string {
 //   - 下次自动重试 → 如果上次其实成功了,就在用户的听歌历史里造出一条永久删不掉的重复
 //   - 就此搁置     → 最多少补一条,用户的历史仍然是干净的
 //
-// 所以选后者。这些条目不会被自动重试;将来若要救回来,正路是拿 user.getRecentTracks
-// 按时间区间对账(那个方法不需要认证),确认服务端确实没有再放行 —— 那部分单独实现。
+// 所以选后者。这些条目不会被自动重试;用户点补交时先按时间戳去 user.getRecentTracks 核对,确认那边没有才解除
+// (reconcileQuarantined)。
 func markQuarantined(uts int64) {
 	_ = markQuarantinedChecked(uts)
 }
@@ -460,13 +502,18 @@ func stillPendingForBackfill(batch []listenLogLine, now time.Time) []listenLogLi
 // 这个功能一次跑完不成功,用户手动再点一次就是了,不值得为它承担重复提交的风险。
 func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillOutcome {
 	now := time.Now()
+	var recovered, released int
+	if !dryRun && s != nil {
+		recovered, released = reconcileQuarantined(ctx, s, now)
+	}
 	pending, tooOld := pendingBackfillListens(now)
-	out := backfillOutcome{Eligible: len(pending), SkippedTooOld: tooOld}
+	out := backfillOutcome{Eligible: len(pending), SkippedTooOld: tooOld, Recovered: recovered, Released: released}
 	// dry-run 的判断必须排在 `s == nil` **之前**。空跑一个请求都不发,压根不需要
 	// scrobbler —— 而"还没连账号"恰恰是这个功能最主要的场景:界面要在那个状态下把本地
 	// 已记录的清单列出来。顺序反了的话未连接时永远拿不到清单,新功能在主场景下直接失效
 	// (被 TestDryRunReturnsListNewestFirst 抓到)。
 	if dryRun {
+		out.Unverified = len(quarantinedBackfillListens(now))
 		// 清单给界面用,最近的排前面(pending 本身是升序,那是提交顺序的要求)。
 		out.Items = make([]backfillItem, 0, len(pending))
 		for i := len(pending) - 1; i >= 0; i-- {

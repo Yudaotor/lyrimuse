@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -66,6 +67,11 @@ func runBackfillLastfmCLI(args []string) {
 	scrobbler := newLastfmScrobbler(
 		cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
 	if scrobbler != nil {
+		// 补交开头核对隔离条目要按账号查 user.getRecentTracks(reconcileQuarantined),取法同 lastfmScrobblerIfEnabled。
+		scrobbler.user = strings.ToLower(strings.TrimSpace(cfg.LastfmScrobbleUsername))
+		if scrobbler.user == "" {
+			scrobbler.user = strings.ToLower(strings.TrimSpace(cfg.LastfmUser))
+		}
 		// 用**只读**的那把 api_key:track.getInfo 不需要签名,读写本来就是两个 key
 		// (理由见 lastfm.go 里同一处的注释)。
 		scrobbler.catalog = newLastfmCatalogMatcher(cfg.lastfmBridgeAPIKey())

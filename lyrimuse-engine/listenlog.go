@@ -43,7 +43,8 @@ import (
 //
 // 字段名刻意压到两三个字母:这文件会长到上万行,`artist`/`timestamp` 这种拼法纯属浪费。
 type listenLogLine struct {
-	// 行类型:"l" = 一次收听;"s" = 一条 Last.fm 提交回执(回填功能写,见下)。
+	// 行类型:"l" = 一次收听;"s" = 一条 Last.fm 提交回执(回填功能写,见下);"q" = 隔离(发出去了但不知道结果,
+	// markQuarantined);"r" = 解除隔离(核对过 Last.fm 上没有,markReleasedChecked)。折叠见 foldListenLog。
 	T string `json:"t"`
 	// 行级 schema 版本。以后加字段时老行仍能读 —— 不做整文件版本头,那需要读-改-写。
 	V int `json:"v"`

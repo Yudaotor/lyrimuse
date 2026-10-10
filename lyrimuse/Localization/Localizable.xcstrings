@@ -2636,29 +2636,6 @@
         }
       }
     },
-    "%@ 条状态未知，不会自动重试" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ with unknown status — not retried automatically"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 条状态未知，不会自动重试"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 筆狀態未知，不會自動重試"
-          }
-        }
-      }
-    },
     "%@ 条被 Last.fm 拒绝" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -42128,6 +42105,75 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "補交中 %@/%@"
+          }
+        }
+      }
+    },
+    "另有 %@ 条状态未知，补交时会先去 Last.fm 核对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ more with unknown status — checked against Last.fm when you submit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另有 %@ 条状态未知，补交时会先去 Last.fm 核对"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另有 %@ 筆狀態未知，補交時會先到 Last.fm 核對"
+          }
+        }
+      }
+    },
+    "%@ 条状态未知，下次补交时会先去 Last.fm 核对" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ with unknown status — checked against Last.fm next time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 条状态未知，下次补交时会先去 Last.fm 核对"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 筆狀態未知，下次補交時會先到 Last.fm 核對"
+          }
+        }
+      }
+    },
+    "%@ 条核对后确认已在 Last.fm 上" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ already on Last.fm after checking"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 条核对后确认已在 Last.fm 上"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 筆核對後確認已在 Last.fm 上"
           }
         }
       }

@@ -53,7 +53,8 @@
 "%@ 已匹配到该曲目，无歌词文本" = "%@ matched this track; no lyrics text";
 "%@ 拒绝了这台 Mac 的请求" = "%@ is refusing requests from this Mac";
 "%@ 月" = "%@";
-"%@ 条状态未知，不会自动重试" = "%@ with unknown status — not retried automatically";
+"%@ 条核对后确认已在 Last.fm 上" = "%@ already on Last.fm after checking";
+"%@ 条状态未知，下次补交时会先去 Last.fm 核对" = "%@ with unknown status — checked against Last.fm next time";
 "%@ 条被 Last.fm 拒绝" = "%@ rejected by Last.fm";
 "%@ 次" = "×%@";
 "%@ 次收听" = "%@ plays";
@@ -525,6 +526,7 @@
 "取消静音" = "Unmute";
 "口白" = "Spoken";
 "另一轮扫描正在进行，请在完成后再试" = "Another scan is in progress. Try again when it finishes";
+"另有 %@ 条状态未知，补交时会先去 Last.fm 核对" = "%@ more with unknown status — checked against Last.fm when you submit";
 "另有 %@ 条记录过旧，Last.fm 不再接受" = "%@ more are too old for Last.fm to accept";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
