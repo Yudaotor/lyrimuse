@@ -36,7 +36,7 @@ final class PlayerAutomationPermissions: ObservableObject {
     @Published private(set) var requesting: Set<PlaybackPlayer> = []
     /// 这一家的请求等超时了(`requestWithTimeout` 返回 nil)—— 不是"已拒绝",只是这次不等了。
     @Published private(set) var timedOut: Set<PlaybackPlayer> = []
-    /// 上次查询时目标没在运行、结果又是 `.notDetermined`:这时系统给不出真实状态,
+    /// 上次查询时目标没在运行、结果又是 `.notDetermined`、也没有它上次运行时查到的结论:这时系统给不出真实状态,
     /// 不能显示成「未授权」(见 `MusicAutomationPermission.check(bundleID:askIfNeeded:)`)。
     @Published private(set) var notRunning: Set<PlaybackPlayer> = []
 
@@ -65,7 +65,8 @@ final class PlayerAutomationPermissions: ObservableObject {
     /// 重读一遍状态(不弹窗)。
     ///
     /// 查询走 `MusicAutomationPermission.status`(专用线程 + 超时),结果回主 actor 再写;
-    /// 超时(nil)就保留上一次的结论不动。
+    /// 超时(nil)就保留上一次的结论不动。目标没在运行时系统查不出来,用它上次运行时查到的结论
+    /// (`AutomationLastStatusMemory`)。
     /// `clearRequestUI` 给"切去系统设置手动开完又切回来"那条路用:状态已经不是
     /// `.notDetermined` 了就把转圈/超时提示一起清掉,不然文字变了、下面还卡着。
     func refresh(_ players: [PlaybackPlayer], clearRequestUI: Bool = false) {
@@ -76,9 +77,13 @@ final class PlayerAutomationPermissions: ObservableObject {
             Task { [weak self] in
                 guard let latest = await MusicAutomationPermission.status(bundleID: bundleID, askIfNeeded: false),
                       let self else { return }
-                if self.statuses[player] != latest { self.statuses[player] = latest }
+                let unknown = latest == .notDetermined && !running
+                let remembered = unknown ? AutomationLastStatusMemory.last(player) : nil
+                let shown = remembered ?? latest
+                if self.statuses[player] != shown { self.statuses[player] = shown }
                 if latest == .authorized { AutomationGrantMemory.record(player) }
-                self.setNotRunning(player, latest == .notDetermined && !running)
+                AutomationLastStatusMemory.record(player, latest, targetRunning: running)
+                self.setNotRunning(player, unknown && remembered == nil)
                 if clearRequestUI, latest != .notDetermined {
                     self.requesting.remove(player)
                     self.timedOut.remove(player)
@@ -125,6 +130,8 @@ final class PlayerAutomationPermissions: ObservableObject {
             if let result {
                 self.statuses[player] = result
                 if result == .authorized { AutomationGrantMemory.record(player) }
+                AutomationLastStatusMemory.record(player, result,
+                                                  targetRunning: MusicAutomationPermission.isRunning(bundleID: bundleID))
                 self.timedOut.remove(player)
                 if result != .notDetermined { self.setNotRunning(player, false) }
             } else {

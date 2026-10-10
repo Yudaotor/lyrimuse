@@ -54,6 +54,7 @@ final class AutomationAlertMonitor: ObservableObject {
             guard let self else { return }
             self.inFlight = false
             if status == .authorized { AutomationGrantMemory.record(playing) }
+            if let status { AutomationLastStatusMemory.record(playing, status, targetRunning: true) }
             let grant = status.map(Self.grant)
             let next = AutomationAlert.player(
                 toAlert: playing, grant: grant,
@@ -79,6 +80,36 @@ final class AutomationAlertMonitor: ObservableObject {
         case .authorized: return .authorized
         case .denied: return .denied
         case .notDetermined: return .undetermined
+        }
+    }
+}
+
+/// 每个播放器最近一次查到的自动化授权结论(已授权 / 已拒绝;目标在运行时查到「还没问过」就清掉)。目标没在运行时
+/// 系统查不出来(`MusicAutomationPermission.check(bundleID:askIfNeeded:)` 落进 procNotFound),设置页和引导页那一行
+/// 显示这一份。属于机器状态:配置导出时排除(`ConfigPortability.machineLocalDefaultsKeys`)。
+enum AutomationLastStatusMemory {
+    static let defaultsKey = "np:automationLastStatus"
+
+    /// 目标没在运行时查到的 `.notDetermined` 不是结论,不记、也不清。
+    static func record(_ player: PlaybackPlayer, _ status: MusicAutomationPermissionStatus, targetRunning: Bool) {
+        guard targetRunning || status != .notDetermined else { return }
+        var map = UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String] ?? [:]
+        let value: String?
+        switch status {
+        case .authorized: value = "authorized"
+        case .denied: value = "denied"
+        case .notDetermined: value = nil
+        }
+        guard map[player.rawValue] != value else { return }
+        map[player.rawValue] = value
+        UserDefaults.standard.set(map, forKey: defaultsKey)
+    }
+
+    static func last(_ player: PlaybackPlayer) -> MusicAutomationPermissionStatus? {
+        switch (UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String])?[player.rawValue] {
+        case "authorized": return .authorized
+        case "denied": return .denied
+        default: return nil
         }
     }
 }

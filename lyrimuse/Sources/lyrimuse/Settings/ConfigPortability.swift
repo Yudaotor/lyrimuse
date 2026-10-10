@@ -88,6 +88,8 @@ enum ConfigPortability {
         // 「这台机器曾经授权过哪几个播放器的自动化权限」—— TCC 授权是每台机器各自的,
         // 带到新机器会让那边从没授权过的播放器被当成「授权作废」来提示。
         "np:automationEverAuthorized",
+        // 各播放器上次运行时查到的自动化授权结论(AutomationLastStatusMemory),同上一条。
+        "np:automationLastStatus",
         // 「完全磁盘访问」「辅助功能」在这台机器上授权成功过没有(PermissionGrantMemory),同上一条。
         "np:fullDiskAccessEverGranted",
         "np:accessibilityEverGranted",

@@ -3160,6 +3160,17 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "AE 权限闸: 读不到 Settings/MusicAutomationPermission.swift(路径挪了?)")
         }
+
+        // 目标没在运行时系统查不出授权状态,权限卡显示它上次运行时查到的结论;只有连这份也没有才写「未在运行」。
+        // 这份结论属于机器状态,配置导出时排除。
+        let rows = try? String(contentsOf: sourcesDir.appendingPathComponent("Settings/PlayerAutomationPermissions.swift"),
+                               encoding: .utf8)
+        let portability = try? String(contentsOf: sourcesDir.appendingPathComponent("Settings/ConfigPortability.swift"),
+                                      encoding: .utf8)
+        expectEqual((rows?.contains("let remembered = unknown ? AutomationLastStatusMemory.last(player) : nil") ?? false)
+                    && (rows?.contains("self.setNotRunning(player, unknown && remembered == nil)") ?? false)
+                    && (portability?.contains("\"np:automationLastStatus\",") ?? false), true,
+                    "自动化权限: 目标没在运行时显示上次查到的结论,没有才写「未在运行」;这份结论不随配置导出")
     }
 
     // ---- 「重置」必须覆盖它那个形态的每一个默认值常量 ----
