@@ -468,8 +468,12 @@ func main() {
 	startAppleSingleLinkRecheck(ctx)
 	// 存量里从本机曲库记下、现在不认的曲目 id 清掉(locallibrarylinks.go),要读别的 App 的本机数据,同样放后台。
 	startLocalLibraryLinkRecheck(ctx)
+	// 存量里从同名另一条写法借来的 Amazon ISRC 拿掉(amazonborrowedisrc.go),要读 Amazon 的本机目录缓存,同样放后台。
+	startAmazonBorrowedISRCCleanup(ctx)
 	// 存量 Apple 链接换成已校验目录锚点的页面(applecataloglink.go),要联网,同样放后台。
 	startAppleCatalogLinkMigration(ctx)
+	// 存量 Apple 歌曲页按合作署名重核(applecreditlinks.go),要联网,同样放后台。
+	startAppleCreditLinkRecheck(ctx)
 	// 存量里早先预生成的韩文罗马音换成按读音的(koreanroma.go),要起 helper 子进程,同样放后台。
 	startLegacyKoreanRomaMigration(ctx)
 	// 常驻进程里播放热路径的保存走 2 秒节流(见 enrichsave.go);退出前把排着的那次补写当场做掉。

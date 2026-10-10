@@ -68,7 +68,8 @@ func runSongEntitiesCLI(args []string) {
 	read := time.Since(start)
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
-	b := buildSongEntities(variants, nil, filepath.Join(cfgDir, clientName+"-decisions"))
+	splits := readSongEntityUserSplits(filepath.Join(cfgDir, clientName+"-song-entity-user.json"))
+	b := buildSongEntities(variants, splits, filepath.Join(cfgDir, clientName+"-decisions"))
 	var after runtime.MemStats
 	runtime.ReadMemStats(&after)
 	if *memProfile != "" {

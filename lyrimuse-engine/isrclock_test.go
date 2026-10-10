@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// 升级重试与重评持着 enrichMu 时不能再去取播放器给的 ISRC:Amazon 那一路(amazonCachedASIN)缓存过期时要拿同一把锁,
-// 持锁调用会锁死整个引擎。一轮在上锁之前问歌词源时已经取过一次 ISRC、缓存刚建过,只有从问完源到上锁之间缓存
-// 正好过期才撞得上;这里在假 musixmatch 应答时把缓存置成过期,让每一轮都落在这种情形,要求很快跑完。
+// 升级重试与重评不能持着 enrichMu 去取播放器给的 ISRC:取号要读别的 App 的本机缓存,Amazon 按歌手 + 歌名认曲目的那份
+// 索引(amazonCachedASIN)过期时重建还要拿同一把锁,取号的路一旦经过它,持锁调用就会锁死整个引擎。这里在假 musixmatch
+// 应答时把那份索引置成过期,要求每一轮都很快跑完。
 func TestLyricsRoundsLookUpPlaybackISRCOutsideTheLock(t *testing.T) {
 	setupRescoreTest(t, []string{"musixmatch"}, func(context.Context) {
 		amazonCachedASINsMu.Lock()

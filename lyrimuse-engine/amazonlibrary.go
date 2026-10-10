@@ -198,10 +198,11 @@ func buildAmazonISRCIndex() map[string]string {
 	return out
 }
 
-// amazonPlaybackISRC:这首(系统报的歌手 / 歌名)在 Amazon Music 里的 ISRC,ASIN 怎么认见 amazonASINFor。
-// 会取 enrichMu(经 amazonASINFor):调用方不能持着它。
+// amazonPlaybackISRC:App 此刻报的 Amazon Music 当前曲目就是这首时(amazonCurrentASIN),它在本机目录缓存里的 ISRC。
+// 只认当前曲目:amazonASINFor 那两条退路(队列、整份缓存的索引)按歌手 + 歌名认 ASIN,同名的另一版(删减版与不删减版、
+// 单曲与专辑版)落在同一个位上,拿到的是另一条录音的号(09 章决策 225)。
 func amazonPlaybackISRC(artist, title string) string {
-	return amazonISRCForASIN(amazonASINFor(artist, title))
+	return amazonISRCForASIN(amazonCurrentASIN(artist, title))
 }
 
 // ---- 本地歌词 ----

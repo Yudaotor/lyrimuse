@@ -77,6 +77,29 @@ type appleMusicMatch struct {
 	// durationSecs:加,给 searchcli.go 的"本地没有可信时长时,问 Apple 目录
 	// 要一个"兜底用——见 runSearchLyricsCLI 里那段调用处的完整说明。
 	durationSecs float64
+	// artist:url 那一轨在目录里的署名;只有封面、没有曲目页时为空。
+	artist string
+	// credited:url 那一轨能当这条写法的歌曲页(appleTrackCreditFits)。creditURL:同一批结果里署名写全了本地点名的
+	// 合作者的那一轨的曲目页(appleCreditAlternative),本地没点名合作者、或没有这样一轨时为空。
+	credited  bool
+	creditURL string
+}
+
+// songURL:歌曲页链接。url 那一轨当不了、同一批结果里另有一轨署名写全了时,用那一轨:同一张专辑的同一个版次里常同时
+// 收着独唱版和合唱重录版,按专辑挑出来的是独唱那一轨。封面、专辑名仍出自 url 那一轨所在的那张。见 03 章决策 43。
+func (m appleMusicMatch) songURL() string {
+	if !m.credited && m.creditURL != "" {
+		return m.creditURL
+	}
+	return m.url
+}
+
+// creditedURL:能当这条写法歌曲页的那一轨的曲目页(url 那一轨能当就是它,否则是 creditURL),没有为空。
+func (m appleMusicMatch) creditedURL() string {
+	if m.credited {
+		return m.url
+	}
+	return m.creditURL
 }
 
 // hiResArtwork 把 iTunes Search 默认给的 100x100 封面 URL 换成 1200x1200——mzstatic
@@ -169,6 +192,10 @@ func resolveAppleMusicMatch(ctx context.Context, artist, title, album string, du
 	viaAlbum, viaReached := resolveAppleMusicMatchViaAlbum(ctx, artist, title, album, durationSecs)
 	reached = reached && viaReached
 	if viaAlbum.cover != "" || viaAlbum.url != "" {
+		// 专辑曲目表里没有署名写全合作者的那一轨时,用全文搜索那一批里的(合唱重录版常单独发成单曲)。
+		if viaAlbum.creditURL == "" {
+			viaAlbum.creditURL = m.creditURL
+		}
 		return viaAlbum, reached
 	}
 	// 按专辑定位也没查到任何东西——titleFallback 好歹是张图,好过没有(哪怕专辑可能不对)。
@@ -305,26 +332,77 @@ func pickAppleMusicMatch(results []itunesResult, artist, title, album string, du
 	bestScore := 0
 	var best appleMusicMatch
 	for _, r := range results {
-		if r.TrackViewURL == "" || !looseContains(r.TrackName, title) {
-			continue // skip unrelated results (song may not be in this catalog)
-		}
-		// 同名不同人的闸:iTunes 对本商店没有的歌会回模糊命中,见 appleResultIdentityOK。
-		if !appleResultIdentityOK(r.ArtistName, r.CollectionName, artist, album, title, r.TrackTimeMillis/1000, durationSecs) {
+		if !appleTitleResultOK(r, artist, title, album, durationSecs) {
 			continue
 		}
 		if titleFallback.url == "" {
-			titleFallback = appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100), title: r.TrackName, album: r.CollectionName, durationSecs: r.TrackTimeMillis / 1000} // CN-first first title match
+			titleFallback = appleMatchFromResult(r) // CN-first first title match
 		}
 		if sc := albumScore(r.CollectionName, album); sc > bestScore {
-			bestScore, best = sc, appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100), title: r.TrackName, album: r.CollectionName, durationSecs: r.TrackTimeMillis / 1000} // best album match
+			bestScore, best = sc, appleMatchFromResult(r) // best album match
 		}
 	}
 	if best.url != "" {
-		return best, true
+		return withAppleCredit(best, results, artist, title, album, durationSecs), true
 	}
 	// titleFallback (空 url 表示压根没查到) 而不是"没查到就报错":better no link
 	// than a wrong-song link (iTunes returns fuzzy unrelated hits for missing songs)。
-	return titleFallback, false
+	return withAppleCredit(titleFallback, results, artist, title, album, durationSecs), false
+}
+
+// appleTitleResultOK:一条结果能不能当本曲的候选:有曲目页、曲名对得上,过同名不同人的闸(iTunes 对本商店没有的歌
+// 会回模糊命中,见 appleResultIdentityOK)。
+func appleTitleResultOK(r itunesResult, artist, title, album string, durationSecs float64) bool {
+	return r.TrackViewURL != "" && looseContains(r.TrackName, title) &&
+		appleResultIdentityOK(r.ArtistName, r.CollectionName, artist, album, title, r.TrackTimeMillis/1000, durationSecs)
+}
+
+func appleMatchFromResult(r itunesResult) appleMusicMatch {
+	return appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100), title: r.TrackName, album: r.CollectionName,
+		durationSecs: r.TrackTimeMillis / 1000, artist: r.ArtistName}
+}
+
+// withAppleCredit 给挑出来的 m 填上 credited、creditURL。results 是挑它的那一批结果。
+func withAppleCredit(m appleMusicMatch, results []itunesResult, artist, title, album string, durationSecs float64) appleMusicMatch {
+	co := creditCoArtists(artist, title)
+	m.credited = appleTrackCreditFits(co, m.artist, m.title, m.durationSecs, durationSecs)
+	if len(co) > 0 {
+		m.creditURL = appleCreditAlternative(results, creditAllNames(artist, title), artist, title, album, durationSecs)
+	}
+	return m
+}
+
+// appleTrackCreditFits:一轨能当这条写法的歌曲页:署名写全了本地点名的合作者 co;或者两边时长都知道、差不超过
+// appleSingleExactRecordingSecs(同一份录音,只是这一家的署名没写合作者,或写法对不上:王力宏 / Leehom Wang)。纯函数。
+func appleTrackCreditFits(co []string, trackArtist, trackTitle string, trackSecs, localSecs float64) bool {
+	if creditCovers(co, trackArtist, trackTitle) {
+		return true
+	}
+	return trackSecs > 0 && localSecs > 0 && math.Abs(trackSecs-localSecs) <= appleSingleExactRecordingSecs
+}
+
+// appleCreditAlternative:这一批结果里署名写全了 names(本地点名的每一个人,creditAllNames)的那一轨的曲目页。要过
+// appleTitleResultOK、歌名不多带本地没有的版本词(身份闸对合唱署名只要求有一位对得上,曲名闸只看包含:同一位合作者
+// 跟别人的同名曲、混音版都过得去);两边时长都知道时差不超过 isrcDurationToleranceSecs(同一份录音)。几条都行时取
+// 专辑分高的,再取时长近的,再取先出现的。没有返回空串。
+func appleCreditAlternative(results []itunesResult, names []string, artist, title, album string, durationSecs float64) string {
+	best, bestScore, bestDiff := "", -1, math.Inf(1)
+	for _, r := range results {
+		if !appleTitleResultOK(r, artist, title, album, durationSecs) || versionTagsMismatch(title, "", r.TrackName, "") ||
+			!creditCovers(names, r.ArtistName, r.TrackName) {
+			continue
+		}
+		diff := math.Inf(1)
+		if secs := r.TrackTimeMillis / 1000; durationSecs > 0 && secs > 0 {
+			if diff = math.Abs(secs - durationSecs); diff > isrcDurationToleranceSecs {
+				continue
+			}
+		}
+		if sc := albumScore(r.CollectionName, album); sc > bestScore || (sc == bestScore && diff < bestDiff) {
+			best, bestScore, bestDiff = r.TrackViewURL, sc, diff
+		}
+	}
+	return best
 }
 
 // resolveAppleMusicMatchViaAlbum finds the best-matching album by name via a
@@ -366,9 +444,10 @@ func resolveAppleMusicMatchViaAlbum(ctx context.Context, artist, title, album st
 		// 可能是**别人的同名专辑**,曲目表里再逐字对上曲名也还是别人的歌。bestScore>=200
 		// (专辑名逐字相等)时闸门里那条专辑旁路天然成立、等于不拦——专辑既已精确定位,
 		// 它的曲目表就是权威的,不该被署名写法的跨商店差异挡住。
-		for _, t := range itunesLookupTracks(ctx, bestID, country) {
-			if t.TrackViewURL != "" && looseContains(t.TrackName, title) && appleResultIdentityOK(t.ArtistName, t.CollectionName, artist, album, title, t.TrackTimeMillis/1000, durationSecs) {
-				return appleMusicMatch{url: t.TrackViewURL, cover: hiResArtwork(t.ArtworkURL100), title: t.TrackName, album: t.CollectionName, durationSecs: t.TrackTimeMillis / 1000}, reached
+		tracks := itunesLookupTracks(ctx, bestID, country)
+		for _, t := range tracks {
+			if appleTitleResultOK(t, artist, title, album, durationSecs) {
+				return withAppleCredit(appleMatchFromResult(t), tracks, artist, title, album, durationSecs), reached
 			}
 		}
 		// 专辑名已经精确对上(>=200,同 coverNeedsAlbumCheck 的"确信"门槛),但曲目表里

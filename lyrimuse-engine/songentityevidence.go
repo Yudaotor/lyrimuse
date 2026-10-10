@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"math"
 	"sort"
 )
@@ -121,7 +122,7 @@ func splitSongIDKey(k string) (ns, id string) {
 //  3. 时长:两边都有时长时差不超过 songEntityDurationGateSecs,有一边没有时长时要写法族歌名相同;
 //  4. 尾巴:有一边带版本尾巴时要写法族歌名相同(「Ten Reasons (Live版)」不连「Ten Reasons」);
 //  5. 登记歌名:平台给这个 id 登记的歌名跟写法歌名同一种文字时要对得上,对不上不连;文字不同、或登记歌名不知道时
-//     只当计数用(countOnly),不连共享组。
+//     只当计数用(countOnly),不连共享组。组里几条写法各自推出的登记歌名不是同一种写法族时也算不知道。
 func (b *songEdgeBuilder) searchedIDEdges(ns, id string, members []int) {
 	comps := b.artistComponents(members)
 	for ci, comp := range comps {
@@ -146,8 +147,14 @@ func (b *songEdgeBuilder) searchedIDEdges(ns, id string, members []int) {
 		registered := ""
 		for _, m := range comp {
 			b.vs[m].loadDecisionTitles(b.dir)
-			if t := b.vs[m].registered[ns+":"+id]; t != "" {
+			t := b.vs[m].registered[ns+":"+id]
+			if t == "" {
+				continue
+			}
+			if registered == "" {
 				registered = t
+			} else if songFamilyTitle(t) != songFamilyTitle(registered) {
+				registered = ""
 				break
 			}
 		}
@@ -330,25 +337,25 @@ func (b *songEdgeBuilder) lyricsEdges() {
 	}
 }
 
-// songLyricsSourceID:歌词源 → 条目上记的那个平台 id 的命名空间(没有对应 id 的源返回空串)。
+// songLyricsSourceID:歌词源 → 条目上记的、就是那份歌词出处的平台 id 的命名空间。QQ、Apple 不在里面:写法上的这两家
+// 链接是另外单独查的,跟歌词那条候选对不上号(两份同源歌词按正文比,见 18 章决策 4)。
 var songLyricsSourceID = map[string]string{
-	"netease": songIDNeteaseSong, "qq": songIDQQSong, "applemusic": songIDAppleSong,
-	"amazon": songIDAmazonASIN, "kkbox": songIDKKBOXSong, "soda": songIDSodaTrack,
+	"netease": songIDNeteaseSong, "amazon": songIDAmazonASIN, "kkbox": songIDKKBOXSong, "soda": songIDSodaTrack,
 }
 
 // songLyricsIndependent:两份歌词是不是各自独立得来的。出自同一个检索条目的不算:同一个源、同一个平台 id;源那边
-// 没有 id 可比时,同一个源给出一字不差的两份也算同一个条目。任何一份来自登记歌名对不上的候选也不算(那条写法
-// 显示的是另一首歌的词,跟另一首对得上说明不了是同一首)。
+// 没有 id 可比(或有一边不知道来源)时,一字不差的两份也算同一个条目。任何一份来自登记歌名对不上的候选也不算(那条
+// 写法显示的是另一首歌的词,跟另一首对得上说明不了是同一首)。
 func songLyricsIndependent(x, y *songVariant, dir string) bool {
 	x.loadDecisionTitles(dir)
 	y.loadDecisionTitles(dir)
 	if songLyricsFromMismatchedCandidate(x) || songLyricsFromMismatchedCandidate(y) {
 		return false
 	}
-	if x.lyricsSource == "" || x.lyricsSource != y.lyricsSource {
+	if x.lyricsSource != "" && y.lyricsSource != "" && x.lyricsSource != y.lyricsSource {
 		return true
 	}
-	if ns := songLyricsSourceID[x.lyricsSource]; ns != "" {
+	if ns := songLyricsSourceID[x.lyricsSource]; ns != "" && x.lyricsSource == y.lyricsSource {
 		if a, b := x.id(ns), y.id(ns); a != "" && b != "" {
 			return a != b
 		}
@@ -379,10 +386,10 @@ func songIndependentLyricsMatch(x, y *songVariant, dir string) bool {
 //     和播放器给的(Spotify、Amazon、KKBOX、汽水)。QQ 的专辑 mid 是拿检索配上的那首另查的,一条配错就带出一对假的
 //     「同专辑不同曲」。强证据只认两边都是播放器给的:检索会把一条写法配到同一张专辑的别的曲目上,拿它推翻 ISRC
 //     是倒过来了(见 18 章决策 1);
-//   - version:版本词不一致(versionTagsMismatch,不忽略语种)。例外:两边播放器给的 ISRC 相同且时长差不超过
-//     songEntityVersionExceptionSecs,或 sameRecordingDespiteVersionTags 成立,或只差专辑名带来的版次词且时长几乎相等
-//     (songOnlyAlbumEditionDiffers);伴奏、纯音乐这类无人声版本词不吃例外;
-//   - explicit:删减版与不删减版都标明;
+//   - version:版本词集合不同(recordingVersionTags,即 versionTagsMismatch 去掉删减版那一项、不忽略语种)。例外:
+//     两边播放器给的 ISRC 相同且时长差不超过 songEntityVersionExceptionSecs,或 sameRecordingDespiteVersionTags 成立,
+//     或只差专辑名带来的版次词且时长几乎相等(songOnlyAlbumEditionDiffers);伴奏、纯音乐这类无人声版本词不吃例外;
+//   - explicit:删减版与不删减版都标明,没有例外(两条的分工见 18 章决策 4);
 //   - vocals:一边明确没有人声、一边明确有;
 //   - overshoot:没有时长的写法,歌词末句比对方时长晚 lyricOvershootToleranceSecs 以上;
 //   - lyrics_words / lyrics_timeline(只对中证据):两份正文用词重合低于 songLyricsDifferentWordsMax;或用词重合
@@ -451,7 +458,7 @@ func songSameAlbumDifferentTrack(x, y *songVariant, playerOnly bool) string {
 }
 
 func songVersionVeto(x, y *songVariant) bool {
-	if !versionTagsMismatch(x.title, x.album, y.title, y.album) {
+	if maps.Equal(x.versionTags, y.versionTags) {
 		return false
 	}
 	if x.instrumentalVersion || y.instrumentalVersion {
@@ -484,18 +491,23 @@ func songSameLength(x, y *songVariant) bool {
 // songAlbumEditionTags:专辑名里这几种版本词说的是版次:加长版专辑多收几首,混音 EP 连原版一起收。
 var songAlbumEditionTags = map[string]bool{"extended": true, "remix": true}
 
-// songOnlyAlbumEditionDiffers:两边版本词的差别全是专辑名带来的版次词(songAlbumEditionTags),两边歌名里都没有。
-// 删减版与不删减版归 explicit 那条否决。
+// songOnlyAlbumEditionDiffers:两边版本词有差别,而且差别全是专辑名带来的版次词(songAlbumEditionTags),两边歌名里
+// 都没有。删减版与不删减版归 explicit 那条否决。
 func songOnlyAlbumEditionDiffers(x, y *songVariant) bool {
 	inTitles := versionTagsIn(x.title, y.title)
+	differs := false
 	for _, p := range [2][2]map[string]bool{{x.versionTags, y.versionTags}, {y.versionTags, x.versionTags}} {
 		for tag := range p[0] {
-			if !p[1][tag] && (!songAlbumEditionTags[tag] || inTitles[tag]) {
+			if p[1][tag] {
+				continue
+			}
+			if !songAlbumEditionTags[tag] || inTitles[tag] {
 				return false
 			}
+			differs = true
 		}
 	}
-	return true
+	return differs
 }
 
 // songSharePlayerISRC:两边有一个相同的、播放器给的 ISRC。

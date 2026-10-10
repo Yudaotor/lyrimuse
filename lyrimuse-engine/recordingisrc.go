@@ -136,10 +136,11 @@ func isrcSweepJobsLocked() []isrcSweepJob {
 	return jobs
 }
 
-// appleCatalogSong:按 id 取回来的一首,只留补 ISRC 用得上的两项。
+// appleCatalogSong:按 id 取回来的一首。补 ISRC 用 isrc、durationSecs;按合作署名重核链接(applecreditlinks.go)另用 artist、title。
 type appleCatalogSong struct {
-	isrc         string
-	durationSecs float64
+	isrc          string
+	durationSecs  float64
+	artist, title string
 }
 
 // isrcFromAppleSong:这首报的 ISRC 时长跟播放器报的对得上才认,不认返回空串。没取到这首(这个商店没有)也是空串。
@@ -190,7 +191,8 @@ func appleCatalogSongsByID(ctx context.Context, storefront string, ids []string)
 	}
 	out := make(map[string]appleCatalogSong, len(resp.Data))
 	for _, s := range resp.Data {
-		out[s.ID] = appleCatalogSong{isrc: s.Attributes.Isrc, durationSecs: float64(s.Attributes.DurationInMillis) / 1000}
+		out[s.ID] = appleCatalogSong{isrc: s.Attributes.Isrc, durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
+			artist: s.Attributes.ArtistName, title: s.Attributes.Name}
 	}
 	return out, true
 }

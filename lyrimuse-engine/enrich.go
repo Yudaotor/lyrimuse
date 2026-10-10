@@ -3469,8 +3469,8 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 		e.InferredAlbum = coverAlbum
 	}
 	// 各平台单曲跳转链接。Apple Music:有已校验的目录锚点就用它的页面(appleCatalogLinkFor),没有才用上面封面兜底那步
-	// 按歌名搜出来的 appleMatch(同一个 key 缓存,不是重新发请求);QQ 经 smartbox;Spotify 搜索链接。
-	e.AppleURL = appleMatch.url
+	// 按歌名搜出来的 appleMatch(同一个 key 缓存,不是重新发请求),歌曲页按合作署名挑(songURL);QQ 经 smartbox;Spotify 搜索链接。
+	e.AppleURL = appleMatch.songURL()
 	if u := appleCatalogLinkFor(artist, title, album, durationSecs); u != "" {
 		e.AppleURL = u
 	}

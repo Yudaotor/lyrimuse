@@ -251,11 +251,11 @@ func spotifyLocalISRCs(trackIDs []string) map[string]string {
 
 // playbackISRC 是给歌词源用的入口:「这次播放的这首歌」的 ISRC,没有就返回空串。
 //
-// 两个来处:Spotify 原生客户端播放时取它本机缓存里这首的 ISRC(曲目 ID 由 platformtrackid.go 在换曲那一拍记下);
-// 用 Amazon Music 放的取它本机缓存里专辑页 / 歌单页曲目表记着的(amazonPlaybackISRC,只有打开 / 播放过那张专辑或
-// 那个歌单的才有)。两边都按「歌手 + 歌名」认这一首:别名轮 / 拆分身份轮传的是改写过的署名,那时必然落空,这里
-// 跟着返回空串 —— 提示说的是「系统报的这一条录音」,换了身份就不再对应同一条。
-// 会取 enrichMu(经 amazonPlaybackISRC):调用方不能持着它。
+// 两个来处:Spotify 原生客户端播放时取它本机缓存里这首的 ISRC(曲目 ID 由 platformtrackid.go 在换曲那一拍按「歌手|歌名|
+// 专辑」记下);正用 Amazon Music 放、App 报的当前曲目就是这首时,取它本机缓存里专辑页 / 歌单页曲目表记着的
+// (amazonPlaybackISRC,只有打开 / 播放过那张专辑或那个歌单的才有)。别名轮 / 拆分身份轮传的是改写过的署名,两边都
+// 必然落空,这里跟着返回空串 —— 提示说的是「系统报的这一条录音」,换了身份就不再对应同一条。
+// 要读两家的本机缓存(Amazon 那份索引过期时整个重读一遍):调用方别持着 enrichMu。
 func playbackISRC(artist, title, album string) string {
 	if _, trackID := playbackTrackIDsFor(artist, title, album); trackID != "" {
 		if code, ok := spotifyLocalISRC(trackID); ok {
