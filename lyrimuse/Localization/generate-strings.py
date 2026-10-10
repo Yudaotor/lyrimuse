@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""把 Localizable.xcstrings(唯一真源)生成两份 Localizable.strings(入库的编译产物)。
+"""把 Localizable.xcstrings(唯一真源)生成各语言包的 Localizable.strings 与 InfoPlist.strings(入库的编译产物)。
 
 用法:改完 Localizable.xcstrings 后跑一次:
     python3 Localization/generate-strings.py
@@ -38,12 +38,23 @@ TARGETS = {
 # 失败并列出缺的键。加繁体那天曾短暂开过回退,让 1196 条译文写入前树不红;译文齐了就关掉。
 FALLBACK_TO_SOURCE = set()
 OUT_DIR = os.path.join(ROOT, "..", "Sources", "lyrimuse", "Resources")
+# Info.plist 里按界面语言显示的键 → catalog 里那一条的键(简体原文)。每个语言包生成一份 InfoPlist.strings,
+# 系统弹权限框时按它取用途说明。英文原文同时写在 build.sh 的 Info.plist 里(没有对应语言包时系统用那份),
+# 两处必须一致,selftest 本地化守卫对着查。
+INFO_PLIST_KEYS = {
+    "NSAppleEventsUsageDescription": "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。",
+}
 # 按数量分单复数:某语言写成 Xcode 的 plural 变体(variations.plural 下 one / other 两条)时,other 写进这个键,
 # one 写进「键 + PLURAL_ONE_SUFFIX」。L10n.plural(_:count:) 数量为 1 时先查后者,查不到(这个语言没分单复数)
 # 用前者。.strings 不带复数规则,所以只认 one / other 两档(英文的规则),数量由调用方传,不看格式参数。
 # 后缀跟 L10n.swift、selftest 本地化守卫、scripts/check_strings_parity.py 三处必须一致。
 PLURAL_ONE_SUFFIX = "#one"
 FORMAT_SPEC = re.compile(r"%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:ll|l|h)?[@dDiuUxXoOfeEgGcCsSpaA%]")
+
+INFO_PLIST_HEADER = """\
+/* 由 Localization/Localizable.xcstrings 生成(键表见 generate-strings.py 的 INFO_PLIST_KEYS)—— 不要手改这个文件。 */
+
+"""
 
 HEADER = """\
 /* 由 Localization/Localizable.xcstrings 生成 —— 不要手改这个文件。
@@ -231,6 +242,12 @@ def main() -> int:
         if len(stale) > 20:
             print(f"    …还有 {len(stale) - 20} 条", file=sys.stderr)
         return 1
+    unknown = [k for k in INFO_PLIST_KEYS.values() if k not in strings]
+    if unknown:
+        print(f"\u2717 INFO_PLIST_KEYS 指向的键 catalog 里没有:", file=sys.stderr)
+        for key in unknown:
+            print(f"    {key[:80]}", file=sys.stderr)
+        return 1
     problems = plural_problems(strings, catalog["sourceLanguage"])
     if problems:
         print(f"\u2717 plural 变体有 {len(problems)} 处写得不对:", file=sys.stderr)
@@ -269,11 +286,19 @@ def main() -> int:
             if len(missing) > 20:
                 print(f"    …还有 {len(missing) - 20} 条", file=sys.stderr)
             return 1
+        info_lines = [INFO_PLIST_HEADER]
+        for plist_key, catalog_key in INFO_PLIST_KEYS.items():
+            value, _ = forms(strings[catalog_key], lang)
+            info_lines.append(f'"{plist_key}" = "{escape(value if value is not None else catalog_key)}";\n')
+        info_out = os.path.join(OUT_DIR, lproj, "InfoPlist.strings")
+        with open(info_out, "w", encoding="utf-8") as f:
+            f.writelines(info_lines)
         suffix = f"(其中 {fallback_count} 条暂回退简体)" if fallback_count else ""
         # 打完整相对路径,不要只打 `zh-hans.lproj` —— 产物不在 Localization/ 下面,而在
         # Sources/lyrimuse/Resources/ 下,只报 lproj 名会让人以为它跟 catalog 同目录。
         # 实测两个会话**各自独立**把路径记成 Localization/*.lproj/,都是被这行误导的。
         print(f"{os.path.relpath(out, os.path.join(ROOT, '..'))}: {len(strings)} 键{suffix}")
+        print(f"{os.path.relpath(info_out, os.path.join(ROOT, '..'))}: {len(INFO_PLIST_KEYS)} 键")
     return 0
 
 

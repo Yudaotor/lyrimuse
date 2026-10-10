@@ -42863,6 +42863,23 @@
           }
         }
       }
+    },
+    "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse 需要讀取播放器和瀏覽器中正在播放的歌曲，才能顯示同步歌詞。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

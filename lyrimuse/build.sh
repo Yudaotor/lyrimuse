@@ -816,7 +816,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
          App 改名前后各个身份的历史授权记录，把"首次全新请求"这条路径的真实缺陷
          盖住了，只有在没有任何历史记录的全新机器上才会暴露。Apple 官方要求任何
          要发 Apple Event 控制别的 App 的进程,必须在 Info.plist 里声明这个 key
-         说明用途,这段文字会原样显示在系统弹窗里,不经过 App 自己的 L10n 机制。 -->
+         说明用途。这里是英文原文,没有对应语言包时系统弹窗显示它;各语言的译文在
+         <语言包>/InfoPlist.strings,由 Localization/generate-strings.py 从 catalog 生成。
+         改这句要连 catalog 里那一条的英文一起改,selftest 本地化守卫对着查。 -->
     <key>NSAppleEventsUsageDescription</key>
     <string>Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.</string>
     <!-- 2026-07-29 新增:给"连接 Last.fm 账号"这一步的浏览器授权做自动回跳用

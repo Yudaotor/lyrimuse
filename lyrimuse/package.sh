@@ -68,6 +68,9 @@ REQUIRED_CONTENTS=(
   "Resources/zh-hans.lproj/Localizable.strings"
   "Resources/zh-hant.lproj/Localizable.strings"
   "Resources/en.lproj/Localizable.strings"
+  "Resources/zh-hans.lproj/InfoPlist.strings"
+  "Resources/zh-hant.lproj/InfoPlist.strings"
+  "Resources/en.lproj/InfoPlist.strings"
   "Resources/THIRD_PARTY_LICENSES"
 )
 # 跟 build.sh 同一个开关:设了就不嵌 Sparkle。

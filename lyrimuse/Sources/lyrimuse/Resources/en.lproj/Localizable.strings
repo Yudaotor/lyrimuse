@@ -136,6 +136,7 @@
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
 "Lyrimuse 已在「系统设置 › 通用 › 登录项」中关闭，如需开机启动，请在该处重新开启" = "Lyrimuse is turned off in System Settings › General › Login Items. Turn it back on there to open at login";
 "Lyrimuse 的通知已在「系统设置 › 通知」中关闭，请在该处重新开启" = "Notifications for Lyrimuse are turned off in System Settings › Notifications. Turn them back on there";
+"Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。" = "Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.";
 "MV" = "Music Video";
 "MusicBrainz 中文名" = "Chinese name on MusicBrainz";
 "MusicBrainz 别名" = "Alias on MusicBrainz";

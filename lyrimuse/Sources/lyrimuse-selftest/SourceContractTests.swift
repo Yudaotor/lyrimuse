@@ -247,6 +247,30 @@ func runSourceContractTests() {
             diff(catalog.hant, hantGen, "zh-hant")
             diff(catalog.en, enGen, "en")
 
+            // Info.plist 的用途说明:各语言包的 InfoPlist.strings 由 generate-strings.py 按 INFO_PLIST_KEYS 生成,
+            // 简体那份的值就是 catalog 键,另两份是那一条的译文。英文原文另写在 build.sh 的 Info.plist 里
+            // (没有对应语言包时系统用它),必须跟 catalog 的英文一致。
+            let infoZh = stringsPairs(resources.appendingPathComponent("zh-hans.lproj/InfoPlist.strings").path) ?? [:]
+            let infoHant = stringsPairs(resources.appendingPathComponent("zh-hant.lproj/InfoPlist.strings").path) ?? [:]
+            let infoEn = stringsPairs(resources.appendingPathComponent("en.lproj/InfoPlist.strings").path) ?? [:]
+            expectEqual(infoZh["NSAppleEventsUsageDescription"] != nil, true,
+                        "本地化: 语言包里有 InfoPlist.strings,含自动化权限的用途说明(跑 generate-strings.py)")
+            expectEqual(Set(infoHant.keys) == Set(infoZh.keys) && Set(infoEn.keys) == Set(infoZh.keys), true,
+                        "本地化: 三份 InfoPlist.strings 的键一致")
+            let buildScript = (try? String(contentsOf: sourcesDir.deletingLastPathComponent()
+                .appendingPathComponent("build.sh"), encoding: .utf8)) ?? ""
+            for (plistKey, catalogKey) in infoZh.sorted(by: { $0.key < $1.key }) {
+                expectEqual(catalog.zh[catalogKey] != nil, true, "本地化: InfoPlist.strings 的 \(plistKey) 是 catalog 里的键")
+                expectEqual(infoHant[plistKey], catalog.hant[catalogKey], "本地化: zh-hant InfoPlist.strings 的 \(plistKey) 跟 catalog 一致")
+                expectEqual(infoEn[plistKey], catalog.en[catalogKey], "本地化: en InfoPlist.strings 的 \(plistKey) 跟 catalog 一致")
+                let english = (catalog.en[catalogKey] ?? "\u{0}")
+                    .replacingOccurrences(of: "&", with: "&amp;")
+                    .replacingOccurrences(of: "<", with: "&lt;")
+                    .replacingOccurrences(of: ">", with: "&gt;")
+                expectEqual(buildScript.contains("<key>\(plistKey)</key>\n    <string>\(english)</string>"), true,
+                            "本地化: build.sh 写进 Info.plist 的 \(plistKey) 英文原文跟 catalog 的英文一致")
+            }
+
             // ---- 语言协商(加繁体):系统语言标签 → 语言包目录名,规则见 UILanguage ----
             expectEqual(UILanguage.resolve(preferred: "zh-Hans-CN"), "zh-hans", "本地化: zh-Hans-CN → 简体包")
             expectEqual(UILanguage.resolve(preferred: "zh"), "zh-hans", "本地化: 裸 zh → 简体包")
