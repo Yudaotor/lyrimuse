@@ -39,6 +39,9 @@ final class PlayerAutomationPermissions: ObservableObject {
     /// 上次查询时目标没在运行、结果又是 `.notDetermined`、也没有它上次运行时查到的结论:这时系统给不出真实状态,
     /// 不能显示成「未授权」(见 `MusicAutomationPermission.check(bundleID:askIfNeeded:)`)。
     @Published private(set) var notRunning: Set<PlaybackPlayer> = []
+    /// 眼下显示的是 `AutomationLastStatusMemory` 里记的结论(目标没在运行、系统查不出来)。记的可能已经过时
+    /// (播放器关着时授权失效),所以这几家照样可以发起请求。
+    private var fromMemory: Set<PlaybackPlayer> = []
 
     private init() {}
 
@@ -73,17 +76,13 @@ final class PlayerAutomationPermissions: ObservableObject {
         for player in players {
             let bundleID = player.bundleIdentifier
             guard !bundleID.isEmpty else { continue }
-            let running = MusicAutomationPermission.isRunning(bundleID: bundleID)
+            let runningBefore = MusicAutomationPermission.isRunning(bundleID: bundleID)
             Task { [weak self] in
                 guard let latest = await MusicAutomationPermission.status(bundleID: bundleID, askIfNeeded: false),
                       let self else { return }
-                let unknown = latest == .notDetermined && !running
-                let remembered = unknown ? AutomationLastStatusMemory.last(player) : nil
-                let shown = remembered ?? latest
-                if self.statuses[player] != shown { self.statuses[player] = shown }
-                if latest == .authorized { AutomationGrantMemory.record(player) }
-                AutomationLastStatusMemory.record(player, latest, targetRunning: running)
-                self.setNotRunning(player, unknown && remembered == nil)
+                // 查询前后都在运行,查到的才算数:中途退出或刚启动时系统可能解析不到进程。
+                let running = runningBefore && MusicAutomationPermission.isRunning(bundleID: bundleID)
+                self.apply(player, latest: latest, running: running)
                 if clearRequestUI, latest != .notDetermined {
                     self.requesting.remove(player)
                     self.timedOut.remove(player)
@@ -99,6 +98,7 @@ final class PlayerAutomationPermissions: ObservableObject {
     /// 见 `MusicAutomationPermission.requestWithTimeout` 头注)。
     ///
     /// 已经有结论的(authorized / denied)在 `request` 里一律不碰:系统不会重复弹窗,再问一次只是白等。
+    /// 显示的是记下的结论(`fromMemory`)时例外,见 `request`。
     func requestOnSelect(justEnabled player: PlaybackPlayer) {
         let plan = AutomationRequestPlan.onSelect(
             player, isInstalled: isInstalled,
@@ -119,7 +119,8 @@ final class PlayerAutomationPermissions: ObservableObject {
     func request(_ player: PlaybackPlayer, launchIfNeeded: Bool = true) {
         let bundleID = player.bundleIdentifier
         guard !bundleID.isEmpty, !requesting.contains(player) else { return }
-        guard status(player) == .notDetermined else { return }
+        // 显示的是记下的结论时照样问:它可能已经过时;真授权着的话系统不弹窗,直接返回结论。
+        guard status(player) == .notDetermined || fromMemory.contains(player) else { return }
         requesting.insert(player)
         timedOut.remove(player)
         Task { [weak self] in
@@ -128,16 +129,25 @@ final class PlayerAutomationPermissions: ObservableObject {
             guard let self else { return }
             self.requesting.remove(player)
             if let result {
-                self.statuses[player] = result
-                if result == .authorized { AutomationGrantMemory.record(player) }
-                AutomationLastStatusMemory.record(player, result,
-                                                  targetRunning: MusicAutomationPermission.isRunning(bundleID: bundleID))
+                self.apply(player, latest: result, running: MusicAutomationPermission.isRunning(bundleID: bundleID))
                 self.timedOut.remove(player)
-                if result != .notDetermined { self.setNotRunning(player, false) }
             } else {
                 self.timedOut.insert(player)
             }
         }
+    }
+
+    /// 查到一个结果之后:显示什么、记什么。目标没在运行时查到的 `.notDetermined` 不是结论,有记下的结论就显示它,
+    /// 没有才标「未在运行」。
+    private func apply(_ player: PlaybackPlayer, latest: MusicAutomationPermissionStatus, running: Bool) {
+        let unknown = latest == .notDetermined && !running
+        let remembered = unknown ? AutomationLastStatusMemory.last(player) : nil
+        let shown = remembered ?? latest
+        if statuses[player] != shown { statuses[player] = shown }
+        if remembered != nil { fromMemory.insert(player) } else { fromMemory.remove(player) }
+        if latest == .authorized { AutomationGrantMemory.record(player) }
+        AutomationLastStatusMemory.record(player, latest, targetRunning: running)
+        setNotRunning(player, unknown && remembered == nil)
     }
 
     private func setNotRunning(_ player: PlaybackPlayer, _ value: Bool) {

@@ -54,7 +54,11 @@ final class AutomationAlertMonitor: ObservableObject {
             guard let self else { return }
             self.inFlight = false
             if status == .authorized { AutomationGrantMemory.record(playing) }
-            if let status { AutomationLastStatusMemory.record(playing, status, targetRunning: true) }
+            // 在播不等于在运行:刚退出的播放器播放状态可能还没跟上,这时查到的 `.notDetermined` 不是结论。
+            if let status {
+                AutomationLastStatusMemory.record(
+                    playing, status, targetRunning: MusicAutomationPermission.isRunning(bundleID: playing.bundleIdentifier))
+            }
             let grant = status.map(Self.grant)
             let next = AutomationAlert.player(
                 toAlert: playing, grant: grant,
