@@ -89,10 +89,12 @@ struct DiscordPresencePreview: View {
         if inGrace, let sent = discord.sentActivity {
             activity = sent
         } else if pausedKept {
-            activity = DiscordPresence.pausedActivity(track, statusLine: settings.discordStatusDisplay, now: now,
+            activity = DiscordPresence.pausedActivity(track, statusLine: settings.discordStatusDisplay,
+                                                      listeningName: settings.discordListeningName, now: now,
                                                       pausedNameFormat: L10n.t("%@（已暂停）"))
         } else {
-            activity = DiscordPresence.activity(track, statusLine: settings.discordStatusDisplay, now: now,
+            activity = DiscordPresence.activity(track, statusLine: settings.discordStatusDisplay,
+                                                listeningName: settings.discordListeningName, now: now,
                                                 smallImage: DiscordPresence.smallImage(for: settings.discordBadge,
                                                                                        applicationID: track.applicationID))
         }

@@ -184,6 +184,7 @@
 "「%@」已是内置播放器，在上方「播放器」卡片中勾选即可。" = "“%@” is already a built-in player — just tick it in the Players card above.";
 "「%@」无法用于同步歌词进度。此功能需要浏览器执行一段 JavaScript 来读取播放进度，而该应用未提供相应的脚本命令。Firefox 目前不支持，非浏览器应用同样不支持。" = "“%@” can’t be used to sync lyric timing. This feature reads playback position by having the browser run a small piece of JavaScript, and this app provides no scripting command for that. Firefox doesn’t support it, and neither do apps that aren’t browsers.";
 "「%@」有未保存的修改" = "“%@” Has Unsaved Changes";
+"「正在收听」后面显示" = "After “Listening to”";
 "「第 N 次收听」会将同一首歌曲的不同写法（繁简、括号风格、合唱署名等）合并计数。此处列出合并到这一行的每种写法、各自的次数与原因，以及每次收听的时间" = "“Play #N” merges different spellings of the same track (Traditional/Simplified, bracket styles, artist credits and so on). This lists every spelling folded into this row with its own count and the reason, plus every individual play";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开后自动恢复为「自动」" = "“Automatic” picks the display with the notch; “All Displays” shows one on every display; if the chosen display is unplugged it falls back to Automatic";
 "一" = "M";
@@ -1737,6 +1738,7 @@
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "After you change any colors, a Custom card appears here. Click it to save them as a theme.";
 "账号 Token" = "Account Token";
 "账号信息" = "Account Info";
+"资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。" = "The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player.\nWith Title or Artist here, “Shown Under Your Name” can't show the player.";
 "超薄" = "Ultra Thin";
 "足迹" = "Footprint";
 "跟随「全部播放器」：%@" = "Following “All players”: %@";

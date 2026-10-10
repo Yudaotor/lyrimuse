@@ -94,6 +94,10 @@ public enum SettingsSearchCatalog {
     public static let lastfmSectionKey = "np:lastfmDetailSection"
     /// 同 `lyricsSectionDefault`,对应 `LastfmSection` 的第一个 case。
     public static let lastfmSectionDefault = "stats"
+    /// Discord 账号页分段(显示内容 / 隐私)的 @AppStorage 键(AccountLinkingTab.swift `DiscordSection`)。
+    public static let discordSectionKey = "np:discordSection"
+    /// 同 `lyricsSectionDefault`,对应 `DiscordSection` 的第一个 case。
+    public static let discordSectionDefault = "display"
 
     /// 「歌词显示」页第四段「歌词窗口」的分段取值(`AppearanceSettingsTab.Section.lyricsWindow`)。
     /// 前三段的取值来自 `LyricsSurface`,这一段没有对应的形态,所以单独在这里定义一份。
@@ -208,9 +212,9 @@ public enum SettingsSearchCatalog {
 
     private static func account(_ name: String, path: [String], sectionValue: String? = nil, _ title: String,
                                 kw: [String] = []) -> SettingsSearchEntry {
-        SettingsSearchEntry(destination: .account(name),
-                            sectionKey: sectionValue == nil ? nil : lastfmSectionKey, sectionValue: sectionValue,
-                            titleKey: title, keywords: kw, pathKeys: path)
+        let key = sectionValue == nil ? nil : (name == "discord" ? discordSectionKey : lastfmSectionKey)
+        return SettingsSearchEntry(destination: .account(name), sectionKey: key, sectionValue: sectionValue,
+                                   titleKey: title, keywords: kw, pathKeys: path)
     }
 
     // MARK: - 目录本体
@@ -493,13 +497,15 @@ public enum SettingsSearchCatalog {
         account("bark", path: ["推送提醒"], "每月听歌小结", kw: ["月报", "推送", "Bark", "专辑"]),
         account("bark", path: ["推送提醒"], "年度听歌小结", kw: ["年报", "年度", "推送", "Bark", "专辑"]),
         account("discord", path: ["Discord"], "在 Discord 上显示", kw: ["Discord", "正在听", "状态", "资料卡", "Rich Presence"]),
-        account("discord", path: ["Discord"], "显示内容", kw: ["Discord", "状态", "角标", "暂停"]),
-        account("discord", path: ["Discord"], "用户名下方显示", kw: ["Discord", "好友列表", "成员列表", "状态", "歌名", "歌手", "播放器"]),
-        account("discord", path: ["Discord"], "封面角标", kw: ["Discord", "角标", "小图", "图标", "Lyrimuse", "播放器", "官网"]),
-        account("discord", path: ["Discord"], "暂停后", kw: ["Discord", "暂停", "保留", "清掉", "进度条"]),
-        account("discord", path: ["Discord"], "隐私", kw: ["Discord", "隐藏", "播放器", "不显示"]),
-        account("discord", path: ["Discord"], "暂时隐藏", kw: ["Discord", "隐藏", "暂时", "隐私", "不显示"]),
-        account("discord", path: ["Discord"], "显示哪些播放器", kw: ["Discord", "播放器", "排除", "浏览器"]),
+        account("discord", path: ["Discord"], sectionValue: "display", "显示内容", kw: ["Discord", "状态", "角标", "暂停"]),
+        account("discord", path: ["Discord"], sectionValue: "display", "「正在收听」后面显示",
+                kw: ["Discord", "正在听", "正在收听", "资料卡", "播放器", "歌名", "歌手"]),
+        account("discord", path: ["Discord"], sectionValue: "display", "用户名下方显示", kw: ["Discord", "好友列表", "成员列表", "状态", "歌名", "歌手", "播放器"]),
+        account("discord", path: ["Discord"], sectionValue: "display", "封面角标", kw: ["Discord", "角标", "小图", "图标", "Lyrimuse", "播放器", "官网"]),
+        account("discord", path: ["Discord"], sectionValue: "display", "暂停后", kw: ["Discord", "暂停", "保留", "清掉", "进度条"]),
+        account("discord", path: ["Discord"], sectionValue: "privacy", "隐私", kw: ["Discord", "隐藏", "播放器", "不显示"]),
+        account("discord", path: ["Discord"], sectionValue: "privacy", "暂时隐藏", kw: ["Discord", "隐藏", "暂时", "隐私", "不显示"]),
+        account("discord", path: ["Discord"], sectionValue: "privacy", "显示哪些播放器", kw: ["Discord", "播放器", "排除", "浏览器"]),
     ]
 }
 

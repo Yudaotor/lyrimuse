@@ -692,7 +692,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 218 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 219 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1070,6 +1070,7 @@ Every setting in the Settings window, by where it lives: 218 in all. Type a name
 
 - **Show on Discord**: When on, the song you're playing shows on your Discord profile and in your friends list. If friends can't see it, go to User Settings › Activity Privacy in Discord and turn on activity sharing.
 - **What's Shown**
+- **After “Listening to”**: The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player. With Title or Artist here, “Shown Under Your Name” can't show the player.
 - **Shown Under Your Name**
 - **Cover Badge**
 - **When Paused**

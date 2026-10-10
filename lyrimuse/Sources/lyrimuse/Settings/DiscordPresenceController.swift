@@ -106,6 +106,7 @@ final class DiscordPresenceController: ObservableObject {
             signal(source.$enrichContentVersion),
             signal(ConfigStore.shared.$stateRelayURL),
             signal(settings.$discordPresenceEnabled), signal(settings.$discordStatusDisplay),
+            signal(settings.$discordListeningName),
             signal(settings.$discordKeepWhenPaused), signal(settings.$discordExcludedBundles),
             signal(settings.$discordBadge),
         ]
@@ -159,6 +160,7 @@ final class DiscordPresenceController: ObservableObject {
         }
         let intent = DiscordPresence.intent(track: track, pausedSince: pausedSince,
                                             statusLine: settings.discordStatusDisplay,
+                                            listeningName: settings.discordListeningName,
                                             keepWhenPaused: settings.discordKeepWhenPaused,
                                             badge: settings.discordBadge,
                                             pausedNameFormat: L10n.t("%@（已暂停）"),

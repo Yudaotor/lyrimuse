@@ -92,7 +92,7 @@ CHROME = {
     },
 }
 
-CALL_RE = re.compile(r"\b(SettingsRow|SettingsSubRow|SettingsCardHeader)\(")
+CALL_RE = re.compile(r"\b(SettingsRow|SettingsSubRow|SettingsCardHeader|SettingsChipToggle)\(")
 STR = r'"((?:[^"\\\n]|\\.)*)"'
 ARG_RE = {name: re.compile(name + r":\s*L10n\.t\(" + STR + r"\)") for name in ("title", "help")}
 # 目录里当副标题登记、其实是状态提示的字(搜索用得上,当说明会误导)。

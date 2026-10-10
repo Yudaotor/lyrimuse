@@ -1220,11 +1220,32 @@ struct SteppedSlider: View {
     }
 }
 
+// MARK: - 胶囊里的开关
+
+/// 放在页头胶囊里的总开关(Discord 页「在 Discord 上显示」):小号开关 + 「?」说明,标题只给读屏用。
+/// 写成带 `title:` / `help:` 的调用,对外功能清单(scripts/gen-feature-list.py)才抓得到这一项的说明。
+struct SettingsChipToggle: View {
+    let title: String
+    let help: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                .accessibilityLabel(title)
+            HelpButton(text: help)
+        }
+    }
+}
+
 // MARK: - 玻璃胶囊 tab
 
 /// 页内分段 tab 的液态玻璃版:一圈玻璃胶囊底,选中项是一颗强调色胶囊,切换时滑过去。
-/// 用在页头下面单独成行的页内 tab(「歌词」「歌词显示」「Last.fm」三页),三处要长得一样。卡片行里的
-/// 选项仍用 `SettingsSegmentedControl`。
+/// 用在页头下面单独成行的页内 tab(「歌词」「歌词显示」「Last.fm」「Discord」),这几处要长得一样;卡片行里用 `compact`
+/// 那一档(Last.fm 规则卡、Discord 页),别的页卡片里的选项仍是 `SettingsSegmentedControl`。
 ///
 /// 每一项的字重固定,选中与否不改字重:改了宽度会跟着变,切换时整排 tab 左右晃。
 /// 窗口不在前台时选中胶囊退成灰色,跟系统分段控件一致。
@@ -1235,78 +1256,160 @@ struct SettingsGlassTabPicker<T: Hashable>: View {
     let label: (T) -> String
     /// 设置行尾部用的小一号(整体 28pt 高,放得进 `SettingsRowMetrics.trailingAlignBand`);页内 tab 用默认的 32pt。
     var compact = false
-    @Namespace private var selectionSpace
+    /// 暂时不能选的档:变灰、点不了,位置照留。可选的档会随别的设置变时用它,别去增删 `options` ——
+    /// 档数一变整排宽度跟着缩放,选中胶囊又同时在挪,两件事叠在一起看着很乱(实测)。
+    var isDisabled: (T) -> Bool = { _ in false }
     @Environment(\.controlActiveState) private var activeState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 每一项在这排 tab 里的位置(按下标),选中胶囊照它摆。
+    @State private var itemFrames: [Int: CGRect] = [:]
 
     var body: some View {
+        let selectedIndex = options.firstIndex(of: selection)
         HStack(spacing: 2) {
-            ForEach(options, id: \.self) { option in
-                let selected = option == selection
+            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                let selected = index == selectedIndex
+                let disabled = isDisabled(option)
                 Button {
                     selection = option
                 } label: {
                     Text(label(option))
                         .font(.system(size: compact ? 12 : 13, weight: .medium))
                         .foregroundStyle(selected ? Color.white : Color.primary)
+                        .opacity(disabled && !selected ? 0.3 : 1)
                         .padding(.horizontal, compact ? 11 : 14)
                         .frame(height: compact ? 22 : 26)
-                        .background {
-                            if selected {
-                                Capsule()
-                                    .fill(activeState == .inactive ? Color.secondary.opacity(0.55) : Color.accentColor)
-                                    .matchedGeometryEffect(id: "selection", in: selectionSpace)
-                            }
-                        }
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .disabled(disabled)
                 .accessibilityAddTraits(selected ? .isSelected : [])
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: GlassTabItemFramesKey.self,
+                                               value: [index: proxy.frame(in: .named(Self.space))])
+                    }
+                }
             }
         }
-        // 滑动动画只挂在这一排 tab 里面,不包住改 selection 的那一下:改 selection 会切换下面整页内容,
+        // 选中胶囊只画一颗,摆到选中项量出来的位置:切换时它平移、宽度跟着变。别改回每项各自
+        // `if selected` 画一颗再 matchedGeometryEffect —— 那样是旧的淡出、新的淡入再挪过去,两颗叠着发虚。
+        .background(alignment: .topLeading) {
+            if let index = selectedIndex, let frame = itemFrames[index] {
+                Capsule()
+                    .fill(activeState == .inactive ? Color.secondary.opacity(0.55) : Color.accentColor)
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: frame.minY)
+            }
+        }
+        .coordinateSpace(name: Self.space)
+        .onPreferenceChange(GlassTabItemFramesKey.self) { itemFrames = $0 }
+        // 动画只挂在这一排 tab 里面,不包住改 selection 的那一下:改 selection 会切换下面整页内容,
         // 切换带上动画时,页里桥接过来的 AppKit 分段控件会在过渡那一帧定型成错误尺寸、点一下才变对
         // (04 章「这个 Picker 的宽度」那条)。页面自己要切换动画的,在 selection 的 Binding 里自己包。
-        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82), value: selection)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.86), value: selection)
         .padding(3)
         .settingsCardBackground(cornerRadius: compact ? 14 : 16)
         .fixedSize()
     }
+
+    private static var space: String { "SettingsGlassTabPicker" }
 }
 
-/// 跟 `SettingsGlassTabPicker` 并排的玻璃胶囊下拉(Last.fm 榜单卡头的时段、条数):同高(32pt)、同材质,
-/// 胶囊里写当前选项,点开是带勾的选项列表。
-///
-/// 内边距和高度加在 Menu **外面**:macOS 26 起无边框菜单不认标签上的 padding / frame(同 `settingsGlassMenu`)。
+private struct GlassTabItemFramesKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+/// 跟 `SettingsGlassTabPicker` 并排的玻璃胶囊下拉(Last.fm 榜单卡头的时段、条数,Discord 页的封面角标、暂停后):
+/// 同高(默认 32pt,`compact` 28pt 跟紧凑的胶囊 tab 一致)、同材质,胶囊里写当前选项,点开是带勾的选项列表。
 struct SettingsGlassMenuPicker<T: Hashable>: View {
     @Binding var selection: T
     let options: [T]
     let label: (T) -> String
+    var compact = false
 
     var body: some View {
-        let menu = Menu {
-            Picker("", selection: $selection) {
-                ForEach(options, id: \.self) { option in
-                    Text(label(option)).tag(option)
+        SettingsGlassPopoverMenu(
+            title: label(selection),
+            items: options,
+            itemLabel: label,
+            isChecked: { $0 == selection },
+            height: compact ? 28 : 32
+        ) { selection = $0 }
+    }
+}
+
+/// 玻璃胶囊按钮,点开一个选项浮层(当前项带勾,选了就收起)。
+///
+/// 别换回 SwiftUI `Menu` 外面套玻璃:macOS 26 起无边框菜单不认标签上的 padding / frame,能点的只有中间那几个字,
+/// 胶囊的内边距和玻璃都在菜单外面,点上去没反应(实测弹不出来)。整颗胶囊是一个 Button,点哪都行。
+struct SettingsGlassPopoverMenu<Item: Hashable>: View {
+    let title: String
+    let items: [Item]
+    let itemLabel: (Item) -> String
+    var isChecked: (Item) -> Bool = { _ in false }
+    var height: CGFloat = 32
+    let onPick: (Item) -> Void
+    @State private var shown = false
+
+    var body: some View {
+        Button { shown.toggle() } label: {
+            HStack(spacing: 4) {
+                Text(title).font(.system(size: 12))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: height)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .settingsCardBackground(cornerRadius: height / 2)
+        .fixedSize()
+        .popover(isPresented: $shown, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(items, id: \.self) { item in
+                    GlassPopoverMenuRow(title: itemLabel(item), checked: isChecked(item)) {
+                        shown = false
+                        onPick(item)
+                    }
                 }
             }
-            .pickerStyle(.inline)
-            .labelsHidden()
-        } label: {
-            Text(label(selection)).font(.system(size: 12))
+            .padding(5)
+            .frame(minWidth: 140)
         }
-        if #available(macOS 26.0, *) {
-            menu
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .settingsCardBackground(cornerRadius: 16, interactive: true)
-        } else {
-            menu
-                .menuStyle(.button)
-                .fixedSize()
+    }
+}
+
+/// `SettingsGlassPopoverMenu` 浮层里的一行:左边勾、悬停时整行强调色,跟系统菜单的手感一致。
+private struct GlassPopoverMenuRow: View {
+    let title: String
+    let checked: Bool
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .opacity(checked ? 1 : 0)
+                Text(title).font(.system(size: 13))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(hovered ? Color.white : Color.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(hovered ? Color.accentColor : .clear))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
     }
 }
 

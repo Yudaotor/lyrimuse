@@ -137,6 +137,25 @@ private func checkDiscordWire() {
                 [40_000, 200_000], "Discord 预览: 进度按此刻算")
     expectEqual(DiscordPresence.progress(of: byTitle, now: previewNow.addingTimeInterval(500)).map { $0.elapsedMs }, 200_000,
                 "Discord 预览: 已放的不超过整首")
+    // 「正在收听」后面那一项(name)跟用户名下方那一行分开设。
+    let nameTitle = DiscordPresence.activity(previewSample, statusLine: .artist, listeningName: .title, now: previewNow)
+    expectEqual(nameTitle.name, nameTitle.details, "Discord: 正在收听后面写歌名")
+    expectEqual(DiscordPresence.statusText(of: nameTitle), nameTitle.state, "Discord: 正在收听写歌名时,用户名下方照样能写歌手")
+    let nameArtist = DiscordPresence.activity(previewSample, statusLine: .title, listeningName: .artist, now: previewNow)
+    expectEqual(nameArtist.name, nameArtist.state, "Discord: 正在收听后面写歌手")
+    expectEqual(DiscordPresence.activity(previewSample, statusLine: .title, now: previewNow).name, byTitle.name,
+                "Discord: 不传 listeningName 时照旧写播放器")
+    expectEqual(DiscordPresence.statusLines(for: .player), [.title, .artist, .player], "Discord: 正在收听写播放器时用户名下方三档都在")
+    expectEqual(DiscordPresence.statusLines(for: .title), [.title, .artist], "Discord: 正在收听写歌名时用户名下方没有「播放器」")
+    expectEqual(DiscordPresence.effectiveStatusLine(.player, listeningName: .artist), .artist,
+                "Discord: 存的「播放器」在正在收听写歌手时按歌手算")
+    expectEqual(DiscordPresence.effectiveStatusLine(.player, listeningName: .player), .player, "Discord: 切回播放器时恢复")
+    let nameTitleAsPlayer = DiscordPresence.activity(previewSample, statusLine: .player, listeningName: .title, now: previewNow)
+    expectEqual(nameTitleAsPlayer.statusDisplayType, DiscordPresence.StatusLine.title.displayType,
+                "Discord: 存的「播放器」+ 正在收听写歌名 → 发出去按歌名那档")
+    let pausedTitle = DiscordPresence.pausedActivity(previewSample, statusLine: .title, listeningName: .title,
+                                                     now: previewNow, pausedNameFormat: "%@ (Paused)")
+    expectEqual(pausedTitle.name, "\(nameTitle.details) (Paused)", "Discord: 暂停时正在收听后面的歌名也带暂停字样")
     previewSample.positionMs = nil
     expectEqual(DiscordPresence.progress(of: DiscordPresence.activity(previewSample, statusLine: .title, now: previewNow),
                                          now: previewNow) == nil, true, "Discord 预览: 暂停时没有进度条")
@@ -1010,6 +1029,7 @@ private func checkDiscordWiring() {
                    "signal(source.$webPageArtworkURL)", "signal(ConfigStore.shared.$stateRelayURL)",
                    "signal(playback.$isCurrentTrackAdBreak)", "signal(playback.$isRadioTalkBreak)",
                    "signal(settings.$discordPresenceEnabled)", "signal(settings.$discordStatusDisplay)",
+                   "signal(settings.$discordListeningName)", "listeningName: settings.discordListeningName",
                    "signal(settings.$discordKeepWhenPaused)", "signal(settings.$discordExcludedBundles)",
                    "signal(settings.$discordBadge)", "badge: settings.discordBadge", "hiddenUntil: hiddenUntil",
                    "links?.artistWebLink(forPlayerBundleID: reportedBundleID", "hit?.artistPage",

@@ -1818,6 +1818,13 @@
       "path" : [
         "Discord"
       ],
+      "title" : "「正在收听」后面显示"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
       "title" : "用户名下方显示"
     },
     {

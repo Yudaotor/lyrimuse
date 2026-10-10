@@ -69,6 +69,10 @@ func runSettingsSearchTests() {
                 "设置搜索: 「歌词」页分段键名与源码一致")
     expectEqual(accountTab.contains("@AppStorage(\"\(SettingsSearchCatalog.lastfmSectionKey)\")"), true,
                 "设置搜索: Last.fm 页分段键名与源码一致")
+    let discordSectionCases = enumCaseNames(after: "private enum DiscordSection:", in: accountTab)
+    expectEqual(discordSectionCases, ["display", "privacy"], "设置搜索: Discord 页两个分段")
+    expectEqual(accountTab.contains("@AppStorage(SettingsSearchCatalog.discordSectionKey)"), true,
+                "设置搜索: Discord 页分段键取目录常量")
 
     // ---- 分段的默认值:设置窗前进 / 后退要拿它还原「这一页还没换过分段」那个位置 ----
     //
@@ -89,22 +93,28 @@ func runSettingsSearchTests() {
                 "设置搜索: 「歌词」页默认分段 = 枚举第一个 case")
     expectEqual(SettingsSearchCatalog.lastfmSectionDefault, lastfmSectionCases.first,
                 "设置搜索: Last.fm 页默认分段 = 枚举第一个 case")
+    expectEqual(SettingsSearchCatalog.discordSectionDefault, discordSectionCases.first,
+                "设置搜索: Discord 页默认分段 = 枚举第一个 case")
     expectEqual(LyricsSurface.overlay.appearanceSectionRawValue, appearanceSectionCases.first,
                 "设置搜索: 「歌词显示」页默认分段 = 枚举第一个 case")
 
-    // 有页内分段的面板一共三处。新加第四处时这条会红 —— 提醒除了往目录里登记,还要接上设置窗的
+    // 有页内分段的面板一共四处。再加一处时这条会红 —— 提醒除了往目录里登记,还要接上设置窗的
     // 前进 / 后退(SettingsView 的 `section(of:)` / `applySection`),漏了不报错、只表现成后退键
     // 把那几步整个跳过。
     let catalogSectionKeys = Set(entries.compactMap(\.sectionKey))
     expectEqual(catalogSectionKeys, [SettingsSearchCatalog.lyricsSectionKey,
                                      LyricsSurface.appearanceSectionStorageKey,
-                                     SettingsSearchCatalog.lastfmSectionKey],
-                "设置搜索: 页内分段只有这三处(新加一处要一并接上前进/后退)")
+                                     SettingsSearchCatalog.lastfmSectionKey,
+                                     SettingsSearchCatalog.discordSectionKey],
+                "设置搜索: 页内分段只有这四处(新加一处要一并接上前进/后退)")
+    let sectionKeyTokens = [
+        LyricsSurface.appearanceSectionStorageKey: "LyricsSurface.appearanceSectionStorageKey",
+        SettingsSearchCatalog.lyricsSectionKey: "SettingsSearchCatalog.lyricsSectionKey",
+        SettingsSearchCatalog.lastfmSectionKey: "SettingsSearchCatalog.lastfmSectionKey",
+        SettingsSearchCatalog.discordSectionKey: "SettingsSearchCatalog.discordSectionKey",
+    ]
     for key in catalogSectionKeys {
-        let token = key == LyricsSurface.appearanceSectionStorageKey
-            ? "LyricsSurface.appearanceSectionStorageKey"
-            : (key == SettingsSearchCatalog.lyricsSectionKey
-               ? "SettingsSearchCatalog.lyricsSectionKey" : "SettingsSearchCatalog.lastfmSectionKey")
+        let token = sectionKeyTokens[key] ?? key
         expectEqual(settingsView.contains("@AppStorage(\(token))"), true,
                     "设置搜索: 前进/后退读得到分段键 \(key)")
     }
@@ -127,6 +137,8 @@ func runSettingsSearchTests() {
             if !appearanceSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
         case (SettingsSearchCatalog.lastfmSectionKey?, let value?):
             if !lastfmSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
+        case (SettingsSearchCatalog.discordSectionKey?, let value?):
+            if !discordSectionCases.contains(value) { badSections.append("\(entry.titleKey)→\(value)") }
         default:
             badSections.append("\(entry.titleKey)→\(entry.sectionKey ?? "nil")/\(entry.sectionValue ?? "nil")")
         }

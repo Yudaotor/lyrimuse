@@ -41544,6 +41544,52 @@
           }
         }
       }
+    },
+    "「正在收听」后面显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After “Listening to”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「正在收听」后面显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「正在聆聽」後面顯示"
+          }
+        }
+      }
+    },
+    "资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player.\nWith Title or Artist here, “Shown Under Your Name” can't show the player."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "資料卡「正在聆聽 ××」裡的 ××。iOS 和網頁版的 Discord 不認這一項，仍顯示播放器名稱。\n選歌名或歌手時，使用者名稱下方不能再選「播放器」。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

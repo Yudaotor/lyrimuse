@@ -213,6 +213,7 @@ final class AppSettings: ObservableObject {
         // Discord「正在听」(DiscordPresenceController)。
         static let discordPresenceEnabled = "np:discordPresenceEnabled"
         static let discordStatusDisplay = "np:discordStatusDisplay"
+        static let discordListeningName = "np:discordListeningName"
         static let discordKeepWhenPaused = "np:discordKeepWhenPaused"
         static let discordExcludedBundles = "np:discordExcludedBundles"
         static let discordBadge = "np:discordBadge"
@@ -777,6 +778,10 @@ final class AppSettings: ObservableObject {
     /// 好友列表里「正在听」后面写什么。
     @Published var discordStatusDisplay: DiscordPresence.StatusLine {
         didSet { defaults.set(discordStatusDisplay.rawValue, forKey: Keys.discordStatusDisplay) }
+    }
+    /// 资料卡「正在听 ××」里的 ××(`DiscordPresence.ListeningName`)。默认播放器。
+    @Published var discordListeningName: DiscordPresence.ListeningName {
+        didSet { defaults.set(discordListeningName.rawValue, forKey: Keys.discordListeningName) }
     }
     /// 暂停时保留状态(不带进度条);关着时暂停满 `DiscordPresence.pauseGrace` 就清掉。
     @Published var discordKeepWhenPaused: Bool {
@@ -2035,6 +2040,8 @@ final class AppSettings: ObservableObject {
         discordPresenceEnabled = (defaults.object(forKey: Keys.discordPresenceEnabled) as? Bool) ?? false
         discordStatusDisplay = defaults.string(forKey: Keys.discordStatusDisplay)
             .flatMap(DiscordPresence.StatusLine.init(rawValue:)) ?? .title
+        discordListeningName = defaults.string(forKey: Keys.discordListeningName)
+            .flatMap(DiscordPresence.ListeningName.init(rawValue:)) ?? .player
         discordKeepWhenPaused = (defaults.object(forKey: Keys.discordKeepWhenPaused) as? Bool) ?? false
         discordExcludedBundles = Set((defaults.array(forKey: Keys.discordExcludedBundles) as? [String]) ?? [])
         discordBadge = defaults.string(forKey: Keys.discordBadge).flatMap(DiscordPresence.Badge.init(rawValue:)) ?? .lyrimuse

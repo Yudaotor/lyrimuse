@@ -554,7 +554,7 @@ struct AccountLinkingTab: View {
                                 .frame(maxWidth: 380)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        if destination == .discord, appSettings.discordPresenceEnabled {
+                        if destination == .discord {
                             discordAccountChip
                                 .padding(.top, 4)
                         }
@@ -1937,32 +1937,43 @@ struct AccountLinkingTab: View {
     // MARK: - Discord
 
     /// 页头说明下面那一小块:连上时是 Discord 头像、名字、用户名和「已连接」,没连上时写卡在哪一步。
+    /// 页头的账号胶囊,总开关「在 Discord 上显示」也在这里面:开着时左边写连接状态,关着时写开关的名字。
     private var discordAccountChip: some View {
-        HStack(spacing: 6) {
-            if case .connected(let user?) = discord.status {
-                DiscordAvatarImage(size: 20)
-                Text(user.displayName)
-                Text("@" + user.username)
-                    .foregroundStyle(.secondary)
-                Text(verbatim: "·")
-                    .foregroundStyle(.tertiary)
-                Text(L10n.t("已连接"))
-                    .foregroundStyle(.green)
-            } else {
-                Circle()
-                    .fill(discordChipTint)
-                    .frame(width: 6, height: 6)
-                    .padding(.leading, 7)
-                Text(discordStatusText(discord.status))
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                if !appSettings.discordPresenceEnabled {
+                    Text(L10n.t("在 Discord 上显示"))
+                        .padding(.leading, 7)
+                } else if case .connected(let user?) = discord.status {
+                    DiscordAvatarImage(size: 20)
+                    Text(user.displayName)
+                    Text("@" + user.username)
+                        .foregroundStyle(.secondary)
+                    Text(verbatim: "·")
+                        .foregroundStyle(.tertiary)
+                    Text(L10n.t("已连接"))
+                        .foregroundStyle(.green)
+                } else {
+                    Circle()
+                        .fill(discordChipTint)
+                        .frame(width: 6, height: 6)
+                        .padding(.leading, 7)
+                    Text(discordStatusText(discord.status))
+                        .foregroundStyle(.secondary)
+                }
             }
+            .font(.system(size: 12, weight: .medium))
+            .lineLimit(1)
+            SettingsChipToggle(
+                title: L10n.t("在 Discord 上显示"),
+                help: L10n.t("开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享。"),
+                isOn: $appSettings.discordPresenceEnabled
+            )
         }
-        .font(.system(size: 12, weight: .medium))
-        .lineLimit(1)
-        .padding(.vertical, 3)
-        .padding(.leading, 3)
-        .padding(.trailing, 10)
-        .background(Capsule().fill(Color.primary.opacity(0.06)))
+        .padding(.vertical, 4)
+        .padding(.leading, 4)
+        .padding(.trailing, 8)
+        .settingsCardBackground(cornerRadius: 15)
     }
 
     private var discordChipTint: Color {
@@ -1973,11 +1984,18 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 没装、没打开 Discord,或者开着却一直连不上时,开关下面多一行:说清楚要什么,带一颗按钮直接去做。
+    /// 没装、没打开 Discord,或者开着却一直连不上时,预览下面多一张卡:说清楚要什么,带一颗按钮直接去做。
+    private var discordNeedsSetup: Bool {
+        switch discord.status {
+        case .waiting(.notInstalled), .waiting(.notRunning): return true
+        case .waiting(.connecting): return discord.connectingStalled
+        default: return false
+        }
+    }
+
     @ViewBuilder private var discordSetupRow: some View {
         switch discord.status {
         case .waiting(.notInstalled):
-            CardDivider()
             SettingsRow(icon: "arrow.down.circle", title: L10n.t("需要 Discord 桌面版"),
                         subtitle: L10n.t("安装并登录后将自动连接；网页版和手机版不支持连接")) {
                 Button(L10n.t("下载 Discord…")) {
@@ -1985,13 +2003,11 @@ struct AccountLinkingTab: View {
                 }
             }
         case .waiting(.notRunning):
-            CardDivider()
             SettingsRow(icon: "arrow.up.forward.app", title: L10n.t("请打开 Discord"),
                         subtitle: L10n.t("打开并登录后将自动连接")) {
                 Button(L10n.t("打开 Discord")) { discord.openDiscord() }
             }
         case .waiting(.connecting) where discord.connectingStalled:
-            CardDivider()
             SettingsRow(icon: "exclamationmark.circle", title: L10n.t("Discord 尚未就绪"),
                         subtitle: L10n.t("请确认已登录 Discord；如仍无法连接，请退出 Discord 后重新打开")) {
                 Button(L10n.t("重新连接")) { discord.reconnectNow() }
@@ -2001,34 +2017,80 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 预览,下面三张卡:总开关(连不上时多一行引导),「显示内容」,「隐私」。总开关关着时后两张变灰。见 12 章决策 48。
-    private var discordFields: some View {
-        VStack(spacing: 14) {
-            DiscordPresencePreview()
-            SettingsCard {
-                SettingsRow(icon: "headphones", title: L10n.t("在 Discord 上显示"),
-                            help: L10n.t("开启后，Discord 资料卡和好友列表中将显示正在收听的歌曲。如好友无法看到，请在 Discord 的「用户设置 › 活动隐私」中开启活动状态分享。")) {
-                    Toggle("", isOn: $appSettings.discordPresenceEnabled)
-                }
-                if appSettings.discordPresenceEnabled {
-                    discordSetupRow
-                }
+    /// Discord 页的两段:页头账号胶囊里是总开关,预览下面一排胶囊 tab 切这两组。
+    private enum DiscordSection: String, CaseIterable, Identifiable {
+        case display, privacy
+        var id: Self { self }
+        var title: String {
+            switch self {
+            case .display: return L10n.t("显示内容")
+            case .privacy: return L10n.t("隐私")
             }
-            discordDisplayCard
+        }
+    }
+
+    @AppStorage(SettingsSearchCatalog.discordSectionKey) private var discordSectionRaw = SettingsSearchCatalog.discordSectionDefault
+    private var discordSection: DiscordSection { DiscordSection(rawValue: discordSectionRaw) ?? .display }
+
+    /// 预览是组头,往下滚时钉在顶部(`pinnedViews`);组头垫一层窗口底色,下面的卡滚过去不会从说明文字后面透出来。
+    /// 总开关关着时 tab 和卡一起变灰。见 12 章决策 48。
+    private var discordFields: some View {
+        LazyVStack(spacing: 14, pinnedViews: [.sectionHeaders]) {
+            Section {
+                if appSettings.discordPresenceEnabled, discordNeedsSetup {
+                    SettingsCard(cornerRadius: 18) { discordSetupRow }
+                }
+                VStack(spacing: 14) {
+                    SettingsGlassTabPicker(
+                        selection: Binding(get: { discordSection }, set: { discordSectionRaw = $0.rawValue }),
+                        options: DiscordSection.allCases,
+                        label: \.title
+                    )
+                    switch discordSection {
+                    case .display: discordDisplayCard
+                    case .privacy: discordPrivacyCard
+                    }
+                }
                 .disabled(!appSettings.discordPresenceEnabled)
-            discordPrivacyCard
-                .disabled(!appSettings.discordPresenceEnabled)
+                .background { LastfmGlassGlow() }
+            } header: {
+                DiscordPresencePreview()
+                    .padding(.bottom, 6)
+                    .background(Color(nsColor: .windowBackgroundColor))
+            }
         }
     }
 
     /// 「显示内容」:名字下面那一行写什么,封面角标,暂停以后还显不显示。
     private var discordDisplayCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("显示内容"))
+        SettingsCard(cornerRadius: 18) {
+            SettingsRow(icon: "music.note", title: L10n.t("「正在收听」后面显示"),
+                        help: L10n.t("资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。")) {
+                SettingsGlassTabPicker(
+                    selection: $appSettings.discordListeningName,
+                    options: DiscordPresence.ListeningName.allCases,
+                    label: { name in
+                        switch name {
+                        case .player: return L10n.t("播放器")
+                        case .title: return L10n.t("歌名")
+                        case .artist: return L10n.t("歌手")
+                        }
+                    },
+                    compact: true
+                )
+            }
             CardDivider()
+            // 上面选了歌名 / 歌手时没有字段装着播放器名,「播放器」那档变灰(档数不变,免得整排缩放);存着的「播放器」不改,
+            // 显示成跟上面同名的那一档,切回来恢复(`effectiveStatusLine`)。
             SettingsRow(icon: "text.alignleft", title: L10n.t("用户名下方显示")) {
-                SettingsSegmentedControlHashable(
-                    selection: $appSettings.discordStatusDisplay,
+                SettingsGlassTabPicker(
+                    selection: Binding(
+                        get: {
+                            DiscordPresence.effectiveStatusLine(appSettings.discordStatusDisplay,
+                                                                listeningName: appSettings.discordListeningName)
+                        },
+                        set: { appSettings.discordStatusDisplay = $0 }
+                    ),
                     options: DiscordPresence.StatusLine.allCases,
                     label: { line in
                         switch line {
@@ -2036,36 +2098,43 @@ struct AccountLinkingTab: View {
                         case .artist: return L10n.t("歌手")
                         case .player: return L10n.t("播放器")
                         }
-                    }
+                    },
+                    compact: true,
+                    isDisabled: { !DiscordPresence.statusLines(for: appSettings.discordListeningName).contains($0) }
                 )
             }
             CardDivider()
             SettingsRow(icon: "app.badge", title: L10n.t("封面角标")) {
-                Picker("", selection: $appSettings.discordBadge) {
-                    Text(L10n.t("Lyrimuse")).tag(DiscordPresence.Badge.lyrimuse)
-                    Text(L10n.t("播放器")).tag(DiscordPresence.Badge.player)
-                    Text(L10n.t("不显示")).tag(DiscordPresence.Badge.none)
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
+                SettingsGlassMenuPicker(
+                    selection: $appSettings.discordBadge,
+                    options: [DiscordPresence.Badge.lyrimuse, .player, .none],
+                    label: { badge in
+                        switch badge {
+                        case .lyrimuse: return L10n.t("Lyrimuse")
+                        case .player: return L10n.t("播放器")
+                        case .none: return L10n.t("不显示")
+                        }
+                    },
+                    compact: true
+                )
             }
             CardDivider()
             SettingsRow(icon: "pause.circle", title: L10n.t("暂停后")) {
-                Picker("", selection: $appSettings.discordKeepWhenPaused) {
-                    Text(L10n.t("继续显示")).tag(true)
-                    Text(String(format: L10n.t("%d 秒后清除"), Int(DiscordPresence.pauseGrace))).tag(false)
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
+                SettingsGlassMenuPicker(
+                    selection: $appSettings.discordKeepWhenPaused,
+                    options: [true, false],
+                    label: { keep in
+                        keep ? L10n.t("继续显示") : String(format: L10n.t("%d 秒后清除"), Int(DiscordPresence.pauseGrace))
+                    },
+                    compact: true
+                )
             }
         }
     }
 
     /// 「隐私」:暂时隐藏,显示哪些播放器。
     private var discordPrivacyCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("隐私"))
-            CardDivider()
+        SettingsCard(cornerRadius: 18) {
             discordHideRow
             CardDivider()
             discordPlayersRow
@@ -2083,15 +2152,15 @@ struct AccountLinkingTab: View {
         ) {
             if discord.hiddenUntil != nil {
                 Button(L10n.t("恢复显示")) { discord.unhide() }
+                    .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
             } else {
-                Menu(L10n.t("隐藏…")) {
-                    ForEach(DiscordPresence.hideDurations, id: \.self) { minutes in
-                        Button(DiscordPresenceController.hideDurationText(minutes: minutes)) {
-                            discord.hide(minutes: minutes)
-                        }
-                    }
-                }
-                .fixedSize()
+                SettingsGlassPopoverMenu(
+                    title: L10n.t("隐藏…"),
+                    items: DiscordPresence.hideDurations,
+                    itemLabel: { DiscordPresenceController.hideDurationText(minutes: $0) },
+                    height: 28
+                ) { discord.hide(minutes: $0) }
             }
         }
     }
@@ -2103,6 +2172,7 @@ struct AccountLinkingTab: View {
             title: L10n.t("显示哪些播放器"),
             note: L10n.t("仅勾选的播放器会显示在 Discord 上；网页播放器按所在浏览器计算。"),
             allOffSummary: L10n.t("全部不显示"),
+            glassButton: true,
             choices: playerBundleChoices,
             excluded: appSettings.discordExcludedBundles
         ) { bundleID, on in

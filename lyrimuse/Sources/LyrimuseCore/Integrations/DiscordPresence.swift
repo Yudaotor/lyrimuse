@@ -260,13 +260,36 @@ public enum DiscordPresence {
     public enum StatusLine: String, CaseIterable, Sendable {
         case title, artist, player
 
-        /// Discord 的 `status_display_type`。「播放器」显示的是应用名,而应用名被覆盖成了播放器的名字。
+        /// Discord 的 `status_display_type`。「播放器」显示的是 `name`(`ListeningName` 为播放器时就是播放器的名字)。
         public var displayType: Int {
             switch self {
             case .player: return 0
             case .artist: return 1
             case .title: return 2
             }
+        }
+    }
+
+    /// 资料卡「正在听 ××」里的 ××,即 activity 的 `name`。rawValue 存在设置里。只有 Mac 和安卓的 Discord 认 `name`,
+    /// iOS、网页版照旧显示应用的注册名(各播放器的应用就是播放器名,见 12 章决策 33)。
+    /// case 顺序就是设置页上的顺序,跟 `StatusLine` 一致(歌名 / 歌手 / 播放器);默认值是 `.player`,不看顺序。
+    public enum ListeningName: String, CaseIterable, Sendable {
+        case title, artist, player
+    }
+
+    /// 用户名下方那一行能选哪几档。`name` 不写播放器时三个字段里没有一个装着播放器名,「播放器」那档拿掉。
+    public static func statusLines(for listeningName: ListeningName) -> [StatusLine] {
+        listeningName == .player ? StatusLine.allCases : [.title, .artist]
+    }
+
+    /// 存着的那一档在当前 `listeningName` 下实际生效的是哪一档。存的是「播放器」而 `name` 改写成了歌名 / 歌手时,
+    /// 好友列表显示的就是 `name`,等于选了同名那一档。存的值不动,`name` 切回播放器时原样恢复。
+    public static func effectiveStatusLine(_ stored: StatusLine, listeningName: ListeningName) -> StatusLine {
+        guard stored == .player else { return stored }
+        switch listeningName {
+        case .player: return .player
+        case .title: return .title
+        case .artist: return .artist
         }
     }
 
@@ -313,28 +336,30 @@ public enum DiscordPresence {
     /// 暂时隐藏期间(`hiddenUntil` 之前)、track 为 nil(没在放、广告、电台口白、排除的播放器)、没歌名或没歌手时清掉。
     /// 在放时按 `badge` 带角标(`smallImage(for:applicationID:)`)。暂停满 `pauseGrace` 后 `keepWhenPaused` 时换成暂停
     /// 的那份(`pausedActivity`,应用名按 `pausedNameFormat` 拼),否则清掉。
-    public static func intent(track: Track?, pausedSince: Date?, statusLine: StatusLine, keepWhenPaused: Bool,
+    public static func intent(track: Track?, pausedSince: Date?, statusLine: StatusLine,
+                              listeningName: ListeningName = .player, keepWhenPaused: Bool,
                               badge: Badge = .none, pausedNameFormat: String = "%@ (Paused)",
                               hiddenUntil: Date? = nil, now: Date) -> Intent {
         if let hiddenUntil, now < hiddenUntil { return .clear }
         guard let track, !trimmed(track.title).isEmpty, !trimmed(track.artist).isEmpty else { return .clear }
         guard let pausedSince else {
-            return .show(activity(track, statusLine: statusLine, now: now,
+            return .show(activity(track, statusLine: statusLine, listeningName: listeningName, now: now,
                                   smallImage: smallImage(for: badge, applicationID: track.applicationID)))
         }
         let graceEnds = pausedSince.addingTimeInterval(pauseGrace)
         if now < graceEnds { return .hold(until: graceEnds) }
         guard keepWhenPaused else { return .clear }
-        return .show(pausedActivity(track, statusLine: statusLine, now: now, pausedNameFormat: pausedNameFormat))
+        return .show(pausedActivity(track, statusLine: statusLine, listeningName: listeningName, now: now,
+                                    pausedNameFormat: pausedNameFormat))
     }
 
     /// 暂停后保留的那份。Discord 没有暂停状态:不带时间戳它写这条状态挂了多久、一直往上走;开始时间在将来时停在 0:00。
     /// 开始时间取「当前这个十二小时段的起点再加一天」,总在十二到二十四小时之后:同一段里内容不变、不重发,跨段重发一次。
     /// 别放得太远,太远 Discord 整条不显示(见 12 章决策 50)。应用名后面加上暂停字样(`pausedNameFormat`,没有播放器名
     /// 时拿应用的注册名去拼),封面角上是暂停图标。
-    public static func pausedActivity(_ track: Track, statusLine: StatusLine, now: Date,
-                                      pausedNameFormat: String) -> DiscordActivity {
-        var paused = activity(track, statusLine: statusLine, now: nil, smallImage: .paused)
+    public static func pausedActivity(_ track: Track, statusLine: StatusLine, listeningName: ListeningName = .player,
+                                      now: Date, pausedNameFormat: String) -> DiscordActivity {
+        var paused = activity(track, statusLine: statusLine, listeningName: listeningName, now: nil, smallImage: .paused)
         let block: Int64 = 12 * 3_600_000
         let nowMs = Int64((now.timeIntervalSince1970 * 1000).rounded())
         paused.timestamps = DiscordActivity.Timestamps(start: nowMs / block * block + 2 * block)
@@ -345,8 +370,8 @@ public enum DiscordPresence {
 
     /// `now` 为 nil 时不带时间戳(暂停时保留的那份)。有位置才出时间戳,有时长才出进度条。没有封面就不给大图,Discord 显示
     /// 应用自己的图标(各播放器的应用就是那个播放器的图标);小图压在大图上,没有大图时也不给。
-    public static func activity(_ track: Track, statusLine: StatusLine, now: Date?,
-                                smallImage: SmallImage? = nil) -> DiscordActivity {
+    public static func activity(_ track: Track, statusLine: StatusLine, listeningName: ListeningName = .player,
+                                now: Date?, smallImage: SmallImage? = nil) -> DiscordActivity {
         var timestamps: DiscordActivity.Timestamps?
         if let now, let position = track.positionMs {
             let start = Int64((now.timeIntervalSince1970 * 1000).rounded()) - Int64(max(0, position))
@@ -357,11 +382,17 @@ public enum DiscordPresence {
         let cover = track.coverURL.flatMap { $0.scheme?.lowercased() == "https" ? link($0) : nil }
         let album = trimmed(track.album)
         let player = track.playerName.map(trimmed).flatMap { $0.isEmpty ? nil : $0 }
+        let name: String?
+        switch listeningName {
+        case .player: name = player.map(fitted)
+        case .title: name = fitted(track.title)
+        case .artist: name = fitted(track.artist)
+        }
         return DiscordActivity(
             applicationID: track.applicationID,
-            name: player.map(fitted),
+            name: name,
             type: listeningType,
-            statusDisplayType: statusLine.displayType,
+            statusDisplayType: effectiveStatusLine(statusLine, listeningName: listeningName).displayType,
             details: fitted(track.title),
             detailsURL: songLink,
             state: fitted(track.artist),

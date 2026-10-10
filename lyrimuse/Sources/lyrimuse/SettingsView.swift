@@ -295,6 +295,8 @@ struct SettingsView: View {
     private var appearanceSectionRaw = LyricsSurface.overlay.appearanceSectionRawValue
     @AppStorage(SettingsSearchCatalog.lastfmSectionKey)
     private var lastfmSectionRaw = SettingsSearchCatalog.lastfmSectionDefault
+    @AppStorage(SettingsSearchCatalog.discordSectionKey)
+    private var discordSectionRaw = SettingsSearchCatalog.discordSectionDefault
 
     /// 走过的位置序列 + 当前停在第几个。语义跟系统「系统设置」逐条对齐:
     ///   · 后退回到上一个位置、前进再走回来;
@@ -328,6 +330,7 @@ struct SettingsView: View {
         case .tab(.lyrics): return lyricsSectionRaw
         case .tab(.appearance): return appearanceSectionRaw
         case .account(.lastfm): return lastfmSectionRaw
+        case .account(.discord): return discordSectionRaw
         default: return nil
         }
     }
@@ -344,6 +347,7 @@ struct SettingsView: View {
         case .tab(.lyrics): lyricsSectionRaw = section
         case .tab(.appearance): appearanceSectionRaw = section
         case .account(.lastfm): lastfmSectionRaw = section
+        case .account(.discord): discordSectionRaw = section
         default: break
         }
     }
