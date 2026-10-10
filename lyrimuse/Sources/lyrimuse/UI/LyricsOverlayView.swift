@@ -945,6 +945,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         duetInsets(for: playback.duetAlignmentOverride.effectiveDecorationSide(realSide: line?.side))
     }
 
+    /// 这一行两侧实际留的白(乘过 `duetInsetScale`)。
+    private var duetPadding: (leading: CGFloat, trailing: CGFloat) {
+        (duetInsets.leading * duetInsetScale, duetInsets.trailing * duetInsetScale)
+    }
+
+    /// 操作回声 / 拖动提示两侧补的留白。换句动画开着时卡片外面那份不加、改由舞台每一格各自带上,这两行不在舞台里,
+    /// 自己补;关着时卡片外面已经加了,这里是 0。
+    private var hintDuetPadding: (leading: CGFloat, trailing: CGFloat) {
+        animatesLineChange ? duetPadding : (0, 0)
+    }
+
     /// 下一句预览要额外补偿的内边距——让它按**自己真正会用到的**位置摆,不是"当前行
     /// 缩进之后、在剩下的空间里尽量靠边"。
     ///
@@ -1137,9 +1148,12 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         //
         // 留白乘 `duetInsetScale`:它只占"这一行本来就用不到"的那部分宽度,一行装不下就整份
         // 让开,别让留白逼出提前折行(见 OverlayCardGeometry.elasticInsetScale)。
+        //
+        // 换句动画开着时这份留白不加在卡片外面,由舞台每一格各自带上(`lineChangeRows`):加在外面的话换人唱时舞台跟着横移,
+        // 正在淡出的旧句被带着横跳(见 04 章决策 59)。
         lyricsCardContent
-            .padding(.leading, duetInsets.leading * duetInsetScale)
-            .padding(.trailing, duetInsets.trailing * duetInsetScale)
+            .padding(.leading, animatesLineChange ? 0 : duetPadding.leading)
+            .padding(.trailing, animatesLineChange ? 0 : duetPadding.trailing)
             .padding(.horizontal, OverlayPlayback.cardHorizontalPadding)
             .padding(.top, OverlayMetrics.cardTopPadding)
             .padding(.bottom, cardBottomPadding)
@@ -1255,6 +1269,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
                     .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
                     .padding(.top, 4)
+                    .padding(.leading, hintDuetPadding.leading)
+                    .padding(.trailing, hintDuetPadding.trailing)
                     .transition(.opacity)
             } else if overlayController.showDragHint {
                 Text(AppSettings.shared.overlayDragNeedsLongPress
@@ -1264,6 +1280,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                     .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
                     .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
                     .padding(.top, 4)
+                    .padding(.leading, hintDuetPadding.leading)
+                    .padding(.trailing, hintDuetPadding.trailing)
                     .transition(.opacity)
             }
         }
@@ -1276,15 +1294,19 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 换句动画开着时卡片里的两格(样子见 04 章决策 52,做法见 04 章决策 54)。读音、译文跟着自己那一句走:第一格是这一句
     /// (主句,下面一块读音 → 译文;前奏 / 间奏时是「•••」),第二格是下一句(前奏 / 间奏时是接下来那句,连同它的读音、译文)。
     /// 两格各在舞台的一个托管视图里,换句的位移、放大、淡入淡出由舞台交给 Core Animation;两格之间的距离也由舞台给,
-    /// 格子的顶边就是字的顶边。
+    /// 格子的顶边就是字的顶边。对唱留白由每一格自己带(`duetPadding`,下一句那一行再按自己的声部补差),舞台本身撑满
+    /// 卡片、换人唱时不横移;`insets` 报给舞台的是格子里字那一块的实际缩进,新主句按它从预览那里起步。
     private var lineChangeRows: some View {
-        OverlayLineChangeStage(
-            main: .init(id: mainSlotID, alignment: duetFrameAlignment.horizontal,
-                        content: AnyView(lineChangeSlot(mainSlotID, alignment: duetFrameAlignment) {
+        let pad = duetPadding
+        let nextDelta = nextLineInsetsDelta
+        return OverlayLineChangeStage(
+            main: .init(id: mainSlotID, alignment: duetFrameAlignment.horizontal, insets: pad,
+                        content: AnyView(lineChangeSlot(mainSlotID, alignment: duetFrameAlignment, insets: pad) {
                             reportingMainLineRect(mainLine)
                                 .reportsContentRow(.main, in: contentRowRectsSpace)
                         }),
-                        tail: line == nil ? nil : AnyView(lineChangeSlot(mainSlotID + "#tail", alignment: duetFrameAlignment) {
+                        tail: line == nil ? nil : AnyView(lineChangeSlot(mainSlotID + "#tail", alignment: duetFrameAlignment,
+                                                                         insets: pad) {
                             VStack(alignment: duetAlignment, spacing: 0) {
                                 romanizationRow.reportsContentRow(.romanization, in: contentRowRectsSpace)
                                     .padding(.top, CGFloat(rowSpacing.romanization))
@@ -1293,7 +1315,9 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                             }
                         })),
             next: .init(id: nextSlotID, alignment: frameAlignment(for: nextLineDuetSide).horizontal,
-                        content: AnyView(lineChangeSlot(nextSlotID, alignment: frameAlignment(for: nextLineDuetSide)) {
+                        insets: (pad.leading + nextDelta.leading, pad.trailing + nextDelta.trailing),
+                        content: AnyView(lineChangeSlot(nextSlotID, alignment: frameAlignment(for: nextLineDuetSide),
+                                                        insets: pad) {
                             VStack(alignment: duetAlignment, spacing: 0) {
                                 nextLinePreviewRow.reportsContentRow(.nextLine, in: contentRowRectsSpace)
                                 if line == nil {
@@ -1319,13 +1343,15 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                                                    rowSpace: contentRowRectsSpace))
     }
 
-    /// 舞台里的一格,见 `OverlayLineChangeSlotRoot`。内容先撑满整宽、按对齐摆好,坐标空间定义在这一层上,
+    /// 舞台里的一格,见 `OverlayLineChangeSlotRoot`。内容先撑满整宽、按对齐摆好、两侧留出对唱留白,坐标空间定义在这一层上,
     /// 量出来的矩形才是相对格子左上角的(定义在内容自己身上会少算它在格子里的横向偏移)。
     private func lineChangeSlot<Content: View>(_ slot: String, alignment: Alignment,
+                                               insets: (leading: CGFloat, trailing: CGFloat),
                                                @ViewBuilder _ content: () -> Content) -> some View {
         OverlayLineChangeSlotRoot(slot: slot, coordinateSpace: overlayCoordSpaceName, rowSpace: contentRowRectsSpace,
                                   reports: lineChangeReports,
-                                  content: content().frame(maxWidth: .infinity, alignment: alignment))
+                                  content: content().frame(maxWidth: .infinity, alignment: alignment)
+                                      .padding(.leading, insets.leading).padding(.trailing, insets.trailing))
     }
 
     // MARK: - 换句动画(见 04 章决策 52)

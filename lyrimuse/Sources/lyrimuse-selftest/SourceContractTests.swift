@@ -2008,7 +2008,7 @@ func runSourceContractTests() {
             if let stage = read("UI/OverlayLineChangeStage.swift") {
                 // 新主句跟上一拍下一句同号才从它那一格、按它的字号起步,否则原地淡入。
                 expectEqual(stage.contains("if lastNextRow.id == m.id, let oldNext = next, oldNext.id == m.id {")
-                            && stage.contains("pendingEntry = .rise(from: oldNext.view.frame, scale: lastNextRow.scale,")
+                            && stage.contains("pendingEntry = .rise(from: oldNext.contentBox(in: oldNext.view.frame), scale: lastNextRow.scale,")
                             && stage.contains("pendingEntry = .fade"), true,
                             "悬浮换句动画: 新主句跟上一拍下一句同号才走上来,否则原地淡入")
                 // 走上来的那一句只有一份:按预览的字号、跟预览一样的亮度起步,边走边放大、变实;不跟旧的下一句叠着交叉淡化
@@ -2033,13 +2033,18 @@ func runSourceContractTests() {
                 expectEqual(stage.contains("override func hitTest(_ point: NSPoint) -> NSView? { nil }")
                             && stage.contains("return CGSize(width: width, height: max(contentHeight(width: width), heldHeight ?? 0))"), true,
                             "悬浮换句动画: 舞台不接鼠标;换句前更高时撑住高度(不然走上来的那一句起步时被窗口下沿裁掉)")
+                // 对唱留白由舞台每一格各自带,卡片外面不加:换人唱时舞台不横移,正在淡出的旧句不被带着横跳;
+                // 新主句起步时按两头字那一块的对齐点横向也挪,不只挪纵向。
+                expectEqual(view.contains(".padding(.leading, animatesLineChange ? 0 : duetPadding.leading)")
+                            && stage.contains("let offset = CGVector(dx: from.minX + from.width * fraction - anchor.x, dy: from.minY - box.minY)"), true,
+                            "悬浮换句动画: 对唱留白在格子里、换人唱时舞台不横移;新主句起步横向对上预览那一块")
             } else {
                 expectEqual(true, false, "悬浮换句动画: 读不到 UI/OverlayLineChangeStage.swift(路径挪了?)")
             }
             // 读音、译文跟着自己那一句走:两格(这一句 / 下一句);格子里量的矩形在格子根部接住、清零,由外层按舞台位置发出。
             // 坐标空间定义在撑满整宽的那一层上,量出来的才是相对格子左上角的(定义在内容自己身上会少算居中 / 靠右的横向偏移)。
             expectEqual(view.components(separatedBy: "content: AnyView(lineChangeSlot(").count - 1 == 2
-                        && view.contains("content: content().frame(maxWidth: .infinity, alignment: alignment))")
+                        && view.contains("content: content().frame(maxWidth: .infinity, alignment: alignment)\n                                      .padding(.leading, insets.leading).padding(.trailing, insets.trailing))")
                         && view.contains(".transformPreference(LyricsTextRectPreferenceKey.self) { $0 = .zero }")
                         && view.contains(".background(OverlayLineChangeReportEmitter(reports: lineChangeReports, coordinateSpace: overlayCoordSpaceName,"), true,
                         "悬浮换句动画: 开着时卡片里只有这一句 / 下一句两格;格子撑满整宽后量矩形,接住清零、由外层按舞台位置发出")

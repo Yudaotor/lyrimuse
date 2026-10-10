@@ -15,6 +15,9 @@ struct OverlayLineChangeStage: NSViewRepresentable {
         var id: String
         /// 这一格内容的横向对齐;新主句以终点那一格顶边上的这一点为中心放大。
         var alignment: HorizontalAlignment
+        /// 格子里字那一块两侧的缩进(对唱留白,格子内容自己已经按它摆好)。起止点按缩进后的那一块取:左右声部、合唱的
+        /// 留白各不相同,新主句的落点跟上一拍预览的落点可能横向错开,按整格取会在起步那一帧横跳(见 04 章决策 59)。
+        var insets: (leading: CGFloat, trailing: CGFloat) = (0, 0)
         var content: AnyView
         /// 这一句那一格:主句下面的读音、译文,单独放一个托管视图。走上来时跟主句同一个变换,另外从透明渐显 ——
         /// 它起步时落在上一拍下一句的下面,常在窗口底边以外,整块实着走会先露出被裁掉的半截。
@@ -129,6 +132,7 @@ final class OverlayLineChangeStageView: NSView {
         /// 主句下面的读音、译文(只有这一句那一格有),摆在 `host` 正下方。
         private(set) var tailHost: NSHostingController<AnyView>?
         var alignment: HorizontalAlignment
+        var insets: (leading: CGFloat, trailing: CGFloat)
         var carriesAnnotations: Bool
         private var heights: [CGFloat: CGFloat] = [:]
         private var tailHeights: [CGFloat: CGFloat] = [:]
@@ -136,6 +140,7 @@ final class OverlayLineChangeStageView: NSView {
         init(_ slot: OverlayLineChangeStage.Slot) {
             id = slot.id
             alignment = slot.alignment
+            insets = slot.insets
             carriesAnnotations = slot.carriesAnnotations
             host = NSHostingController(rootView: Self.root(slot.content, slot.alignment))
             host.sizingOptions = []
@@ -143,12 +148,19 @@ final class OverlayLineChangeStageView: NSView {
         }
 
         var view: NSView { host.view }
+
+        /// 格子 `frame`(舞台坐标)里字那一块:去掉两侧缩进。
+        func contentBox(in frame: CGRect) -> CGRect {
+            CGRect(x: frame.minX + insets.leading, y: frame.minY,
+                   width: max(0, frame.width - insets.leading - insets.trailing), height: frame.height)
+        }
         var tailView: NSView? { tailHost?.view }
         /// 读音、译文那一块上报矩形用的编号。
         var tailID: String { id + "#tail" }
 
         func update(_ slot: OverlayLineChangeStage.Slot) {
             alignment = slot.alignment
+            insets = slot.insets
             carriesAnnotations = slot.carriesAnnotations
             host.rootView = Self.root(slot.content, slot.alignment)
             heights.removeAll()
@@ -196,7 +208,7 @@ final class OverlayLineChangeStageView: NSView {
 
     /// 换句那一拍排好版之后要装的进场动画。
     private enum Entry {
-        /// 从上一拍下一句那一格(`from`,舞台坐标)按它的字号比例、跟预览一样的亮度起步,走上来、放大到位、变实。只有这一份:
+        /// 从上一拍下一句那一格里字那一块(`from`,舞台坐标)按它的字号比例、跟预览一样的亮度起步,走上来、放大到位、变实。只有这一份:
         /// 旧的下一句当场收掉,别加回跟它叠着交叉淡化,路上看得出两份在替换(见 04 章决策 52)。`tailFades`:读音、译文从透明渐显
         /// (上一拍下一句那一格没带着它们时)。
         case rise(from: CGRect, scale: CGFloat, tailFades: Bool)
@@ -249,7 +261,7 @@ final class OverlayLineChangeStageView: NSView {
         } else {
             if let old = main {
                 if lastNextRow.id == m.id, let oldNext = next, oldNext.id == m.id {
-                    pendingEntry = .rise(from: oldNext.view.frame, scale: lastNextRow.scale,
+                    pendingEntry = .rise(from: oldNext.contentBox(in: oldNext.view.frame), scale: lastNextRow.scale,
                                          tailFades: !lastNextRow.carriesAnnotations)
                 } else {
                     pendingEntry = .fade
@@ -373,9 +385,12 @@ final class OverlayLineChangeStageView: NSView {
             let tailLayer = main.tailView?.layer
             switch entry {
             case .rise(let from, let scale, let tailFades) where flipped:
-                // 主句和下面的读音、译文是同一个变换:以终点那一格顶边上按对齐取的一点为中心缩放、整体挪到上一拍下一句那里。
-                let anchor = CGPoint(x: mainFrame.minX + mainFrame.width * Self.anchorFraction(main.alignment), y: mainFrame.minY)
-                let offset = CGVector(dx: 0, dy: from.minY - mainFrame.minY)
+                // 主句和下面的读音、译文是同一个变换:以终点那一块顶边上按对齐取的一点为中心缩放、整体挪到上一拍下一句
+                // 那一块上同一个对齐点。横向也要挪:对唱换声部时两头的留白不同,只挪纵向的话起步那一帧横跳。
+                let fraction = Self.anchorFraction(main.alignment)
+                let box = main.contentBox(in: mainFrame)
+                let anchor = CGPoint(x: box.minX + box.width * fraction, y: box.minY)
+                let offset = CGVector(dx: from.minX + from.width * fraction - anchor.x, dy: from.minY - box.minY)
                 if riseStartOpacity < 1 {
                     layer.add(Self.fade(from: Float(riseStartOpacity), to: 1, duration: OverlayLineRise.duration,
                                         curve: Self.riseCurve), forKey: "lineBrighten")
