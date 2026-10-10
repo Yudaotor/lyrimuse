@@ -2192,14 +2192,15 @@ final class LastfmStatsService: ObservableObject {
 
     private func applyLocalAliases(_ derived: EnrichCacheReader.LocalAliasTables, rebuildFamilies: Bool) {
         var tables = derived
-        // 实体那一层有开关(features.json 的 song_entity_phase1),关着时当空表,族退回原来的写法族(18 章决策 9)。
-        if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:] }
+        // 实体那一层和撤出表有开关(features.json 的 song_entity_phase1),关着时当空表,族退回原来的写法族(18 章决策 9、19)。
+        if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:] }
         guard tables != localAliasTables else { return }
         let old = localAliasTables
         localAliasTables = tables
         PlayCountFold.setLocalArtistAliases(tables.artists)
         PlayCountFold.setLocalTitleAliases(tables.titles)
         PlayCountFold.setEntityFamilyAliases(tables.entities)
+        PlayCountFold.setAliasWithdrawals(tables.withdrawals.mapValues(\.key))
         // 受影响的写法先攒起来,等族建好/重建好再按族索引把它们的次数标过期(见 flushLocalAliasStaleMarks):
         // 歌手别名变了 → 这个歌手键、以及新旧代表写法的键;歌名别名变了 → 英文键 + 新旧中文歌名的折叠键。
         for key in Set(old.artists.keys).union(tables.artists.keys) where old.artists[key] != tables.artists[key] {
@@ -2224,14 +2225,26 @@ final class LastfmStatsService: ObservableObject {
             }
             ListenMilestoneCenter.carryOverFamilies(from: old.entities, to: tables.entities)
         }
-        logger.notice("local aliases: \(tables.artists.count, privacy: .public) artist + \(tables.titles.values.reduce(0) { $0 + $1.count }, privacy: .public) title + \(tables.entities.count, privacy: .public) song-entity alias(es) inferred from local caches")
+        // 撤出表变了 → 原来的族、撤出后的族,以及它们的实体代表键。
+        for key in Set(old.withdrawals.keys).union(tables.withdrawals.keys) where old.withdrawals[key] != tables.withdrawals[key] {
+            for w in [old.withdrawals[key], tables.withdrawals[key]].compactMap({ $0 }) {
+                for k in [w.family, w.key] {
+                    pendingEntityTouched.insert(k)
+                    if let v = old.entities[k] { pendingEntityTouched.insert(v) }
+                    if let v = tables.entities[k] { pendingEntityTouched.insert(v) }
+                }
+            }
+        }
+        logger.notice("local aliases: \(tables.artists.count, privacy: .public) artist + \(tables.titles.values.reduce(0) { $0 + $1.count }, privacy: .public) title + \(tables.entities.count, privacy: .public) song-entity alias(es) + \(tables.withdrawals.count, privacy: .public) alias withdrawal(s) inferred from local caches")
         // 推出来的每一条都记进日志(表变了才记,不是每拍):这张表没有界面,排查"为什么并了/没并"只能靠它。
         // os_log 对 public 字串约 1 KB 截断,分块记。
         let artistItems = tables.artists.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
         let titleItems = tables.titles.sorted { $0.key < $1.key }
             .flatMap { a, m in m.sorted { $0.key < $1.key }.map { "\(a)|\($0.key)→\($0.value)" } }
         let entityItems = tables.entities.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
-        for (label, items) in [("artists", artistItems), ("titles", titleItems), ("song entities", entityItems)] {
+        let withdrawalItems = tables.withdrawals.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value.family)→\($0.value.key)" }
+        for (label, items) in [("artists", artistItems), ("titles", titleItems), ("song entities", entityItems),
+                               ("withdrawals", withdrawalItems)] {
             var start = 0
             while start < items.count {
                 let chunk = items[start..<min(start + 12, items.count)].joined(separator: "; ")
@@ -2358,9 +2371,9 @@ final class LastfmStatsService: ObservableObject {
 
     /// 歌曲榜、专辑榜的合并口径版本:改 ChartMerge 的分组规则、两种榜的折叠键或取数深度时 +1
     /// (见 StatsSnapshot.mergedChartVersion)。
-    private static let mergedChartVersion = 2
+    private static let mergedChartVersion = 3
     /// 次数表的口径版本,读写快照两处都用它,见 StatsSnapshot.mergedCountsVersion。
-    private static let mergedCountsVersion = 18
+    private static let mergedCountsVersion = 19
 
     /// 快照里允许持久化的 `fetchedAt` 键。榜单键是 `"\(kind)|\(period)"`,跟 `refreshChart`
     /// 拼法一致。

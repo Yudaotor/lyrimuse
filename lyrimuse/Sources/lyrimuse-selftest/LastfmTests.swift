@@ -750,7 +750,7 @@ func runLastfmTests() {
         // 契约:开关关着时当空表;实体表变了要标过期、抄里程碑;别名输入比对带上 song
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let stats = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"), encoding: .utf8)) ?? ""
-        expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:] }")
+        expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:] }")
                     && stats.contains("PlayCountFold.setEntityFamilyAliases(tables.entities)")
                     && stats.contains("ListenMilestoneCenter.carryOverFamilies(from: old.entities, to: tables.entities)")
                     && stats.contains("touchedFamilies.contains(PlayCountFold.baseFamilyKey(artist: form.artist, title: form.title))"),
@@ -784,6 +784,67 @@ func runLastfmTests() {
             .appendingPathComponent("lyrimuse/Settings/DiagnosticsExporter.swift"), encoding: .utf8)) ?? ""
         expectEqual(exporter.contains("files.append((\"song-entity-alias-gaps.txt\", LogRedactor.redactAll(gaps, secrets: secrets)))"), true,
                     "少并明细(契约): 进诊断包,过脱敏")
+    }
+
+    // ---- 旧别名表并起来、录音对不上的写法撤出来(SongEntityFamilies.withdrawals,18 章决策 19) ----
+    do {
+        typealias E = EnrichTitleAliases.Entry
+        let artists = [LocalArtistAliases.artistKey("Khalil Fong"): "方大同", LocalArtistAliases.artistKey("KF"): "方大同"]
+        let fam = { (t: String) in PlayCountFold.baseFamilyKey(artist: "方大同", title: t, artists: artists, titles: [:]) }
+        let plain = { (a: String, t: String) in PlayCountFold.plainFamilyKey(artist: a, title: t) }
+        func e(_ artist: String, _ title: String, _ secs: Double?, _ song: String) -> E {
+            E(artist: artist, title: title, neteaseURL: nil, qqMusicURL: nil, durationSecs: secs, song: song)
+        }
+        expectEqual(plain("方大同 & 薛凯琪", "四人游"), PlayCountFold.baseFamilyKey(artist: "方大同 & 薛凯琪", title: "四人游", artists: [:], titles: [:]),
+                    "撤出: plainFamilyKey 就是两张表都给空表时的 baseFamilyKey")
+        let live = [e("方大同", "魔术先生", 227.7, "s_1"), e("Khalil Fong", "魔术先生", 193.4, "s_2")]
+        let split = SongEntityFamilies.withdrawals(live, artists: artists, titles: [:])
+        expectEqual(split, [plain("Khalil Fong", "魔术先生"): .init(family: fam("魔术先生"), key: plain("Khalil Fong", "魔术先生"))],
+                    "撤出: 时长对不上、实体不同的那块撤出去,族键那块留下")
+        expectEqual(SongEntityFamilies.withdrawals([e("方大同", "A", 230, "s_1"), e("Khalil Fong", "A", 231.9, "s_2")], artists: artists, titles: [:]),
+                    [:], "撤出: 时长差在容差以内的不撤")
+        expectEqual(SongEntityFamilies.withdrawals([e("方大同", "B", 230, "s_1"), e("Khalil Fong", "B", 260, "s_1")], artists: artists, titles: [:]),
+                    [:], "撤出: 同一个实体的不撤")
+        expectEqual(SongEntityFamilies.withdrawals([e("方大同", "C", 230, "s_1"), e("Khalil Fong", "C", nil, "s_2")], artists: artists, titles: [:]),
+                    [:], "撤出: 没有时长的块判不了,不撤")
+        let noFamilyDuration = SongEntityFamilies.withdrawals(
+            [e("方大同", "D", nil, "s_1"), e("Khalil Fong", "D", 200, "s_2"), e("Khalil Fong", "D", 200.5, "s_4"), e("KF", "D", 260, "s_3")],
+            artists: artists, titles: [:])
+        expectEqual(Set(noFamilyDuration.keys), [plain("KF", "D")], "撤出: 族键那块没有时长时,留写法块多的那片")
+        let piece = SongEntityFamilies.withdrawals(
+            [e("方大同", "E", 200, "s_1"), e("Khalil Fong", "E", 260, "s_2"), e("KF", "E", 260.5, "s_3")], artists: artists, titles: [:])
+        expectEqual(Set(piece.keys), [plain("Khalil Fong", "E"), plain("KF", "E")], "撤出: 连着的几块一起撤")
+        expectEqual(Set(piece.values.map(\.key)).count, 1, "撤出: 连着的几块撤出后成一族")
+
+        let regroup = split.mapValues(\.key)
+        PlayCountFold.setLocalArtistAliases(artists)
+        PlayCountFold.setAliasWithdrawals(regroup)
+        for (artist, title) in [("Khalil Fong", "魔术先生"), ("方大同", "魔术先生"), ("Khalil Fong", "黑白")] {
+            expectEqual(PlayCountFold.baseFamilyKey(artist: artist, title: title),
+                        PlayCountFold.baseFamilyKey(artist: artist, title: title, artists: artists, titles: [:], withdrawals: regroup),
+                        "撤出: 两个 baseFamilyKey 同一把尺子(\(artist) / \(title))")
+        }
+        expectEqual(PlayCountFold.baseFamilyKey(artist: "Khalil Fong", title: "魔术先生"), plain("Khalil Fong", "魔术先生"), "撤出: 撤出的写法不套别名表")
+        expectEqual(PlayCountFold.baseFamilyKey(artist: "Khalil Fong", title: "黑白"), fam("黑白"), "撤出: 别的写法照旧套别名表")
+        PlayCountFold.setAliasWithdrawals([:])
+        PlayCountFold.setLocalArtistAliases([:])
+
+        let gaps = SongEntityFamilies.aliasOnlyMerges(live, artists: artists, titles: [:])
+        expectEqual(gaps.count, 1, "撤出: 没撤时这一族在少并明细里(前提)")
+        expectEqual(SongEntityFamilies.aliasOnlyMerges(live, artists: artists, titles: [:], withdrawals: split), [],
+                    "撤出: 撤出之后不再算少并")
+        expectEqual(SongEntityFamilies.aliasOnlyMergesText([], withdrawals: split).contains("录音对不上撤出来的写法块 1 个"), true,
+                    "撤出: 诊断文本列出撤出来的写法块")
+
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let stats = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"), encoding: .utf8)) ?? ""
+        expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:] }")
+                    && stats.contains("PlayCountFold.setAliasWithdrawals(tables.withdrawals.mapValues(\\.key))")
+                    && stats.contains("for key in Set(old.withdrawals.keys).union(tables.withdrawals.keys) where old.withdrawals[key] != tables.withdrawals[key] {"),
+                    true, "撤出(契约): 开关、灌表、标过期三处都接上了")
+        let reader = (try? String(contentsOf: root.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"), encoding: .utf8)) ?? ""
+        expectEqual(reader.contains("artists: artists, titles: titles, withdrawals: regroup))"), true,
+                    "撤出(契约): 实体别名表按撤出之后的族键算")
     }
 
     // ---- 「⋯」菜单链接向同一首歌的其它写法借(EnrichCacheReader.platformLinks(for:siblings:),18 章决策 10) ----

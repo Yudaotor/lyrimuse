@@ -1458,6 +1458,8 @@ public enum EnrichCacheReader {
         public var titles: [String: [String: String]]
         /// 实体别名:族键 → 代表族键(SongEntityFamilies.derive,18 章决策 9)。
         public var entities: [String: String] = [:]
+        /// 旧别名表并起来、录音对不上而撤出来的写法块:原始族键 → 撤出记录(SongEntityFamilies.withdrawals,18 章决策 19)。
+        public var withdrawals: [String: SongEntityFamilies.AliasWithdrawal] = [:]
         public static let empty = LocalAliasTables(artists: [:], titles: [:])
     }
 
@@ -1477,8 +1479,9 @@ public enum EnrichCacheReader {
                 return .init(artist: String(parts[0]), title: String(parts[1]), neteaseURL: nil, qqMusicURL: nil,
                              durationSecs: nil, song: entry.song)
             }
-            let merges = SongEntityFamilies.aliasOnlyMerges(inputs, artists: tables.artists, titles: tables.titles)
-            return SongEntityFamilies.aliasOnlyMergesText(merges)
+            let merges = SongEntityFamilies.aliasOnlyMerges(inputs, artists: tables.artists, titles: tables.titles,
+                                                            withdrawals: tables.withdrawals)
+            return SongEntityFamilies.aliasOnlyMergesText(merges, withdrawals: tables.withdrawals)
         }.value
     }
     private static var cachedAliasTables: LocalAliasTables?
@@ -1552,13 +1555,15 @@ public enum EnrichCacheReader {
         // derive 有好几个函数参数:必须写 `artistKey:` 标签,别写成尾随闭包。见 12 章决策 27。
         let titles = EnrichTitleAliases.derive(entries, artistKey: { LocalArtistAliases.canonicalArtistKey($0, table: artists) },
                                                storedBody: storedBody)
-        // 实体别名表在两张表之上算:族键用刚推出的两张表折,跟灌进全局之后 familyKey 算的一样。
+        // 撤出表、实体别名表在两张表之上算:族键用刚推出的两张表和撤出表折,跟灌进全局之后 familyKey 算的一样。
+        let withdrawals = SongEntityFamilies.withdrawals(entries, artists: artists, titles: titles)
+        let regroup = withdrawals.mapValues(\.key)
         let members = entries.compactMap { e -> SongEntityFamilies.Member? in
             guard let song = e.song, !song.isEmpty else { return nil }
             return .init(song: song, familyKey: PlayCountFold.baseFamilyKey(artist: e.artist, title: e.title,
-                                                                            artists: artists, titles: titles))
+                                                                            artists: artists, titles: titles, withdrawals: regroup))
         }
-        return LocalAliasTables(artists: artists, titles: titles, entities: SongEntityFamilies.derive(members))
+        return LocalAliasTables(artists: artists, titles: titles, entities: SongEntityFamilies.derive(members), withdrawals: withdrawals)
     }
 
     /// 缓存文件的 mtime。给"要不要重算派生表"这类判断用 —— 调用方自己存一份上次的值,

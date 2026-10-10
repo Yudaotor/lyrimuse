@@ -385,7 +385,9 @@ public enum PlayCountFold {
     }
 
     /// familyKey 去掉实体那一层:只按合唱归首位、歌手别名表、歌名别名表折。实体别名表的键就是它。
+    /// 撤出表(setAliasWithdrawals)里有这条写法的原始族键时,不套两张别名表,直接给撤出后的族键。
     public static func baseFamilyKey(artist: String, title: String) -> String {
+        if let withdrawn = lookupAliasWithdrawal(artist: artist, title: title) { return withdrawn }
         let canonArtist = canonicalArtist(artist)
         let artistKey = canonicalArtistKey(canonArtist)
         let foldedTitle = foldTitle(title)
@@ -393,10 +395,11 @@ public enum PlayCountFold {
         return key(artist: canonArtist, title: canonTitle)
     }
 
-    /// 同 baseFamilyKey,歌手、歌名两张表由参数给(刚推出来、还没灌进全局的;推实体别名表时用)。两个版本必须同一把尺子,
-    /// selftest 拿同一份表核对。
+    /// 同 baseFamilyKey,歌手、歌名两张表和撤出表由参数给(刚推出来、还没灌进全局的;推实体别名表时用)。两个版本必须
+    /// 同一把尺子,selftest 拿同一份表核对。
     public static func baseFamilyKey(artist: String, title: String, artists: [String: String],
-                                     titles: [String: [String: String]]) -> String {
+                                     titles: [String: [String: String]], withdrawals: [String: String] = [:]) -> String {
+        if !withdrawals.isEmpty, let withdrawn = withdrawals[plainFamilyKey(artist: artist, title: title)] { return withdrawn }
         let canonArtist = canonicalArtist(artist, table: artists)
         let artistKey = stripSpaces(normalized(canonicalArtist(canonArtist, table: artists)))
         let canonTitle = titles[artistKey]?[foldTitle(title)] ?? title
@@ -406,6 +409,11 @@ public enum PlayCountFold {
     private static func canonicalArtist(_ artist: String, table: [String: String]) -> String {
         let primary = ArtistCredit.mergeArtist(artist)
         return table[stripSpaces(normalized(primary))] ?? primary
+    }
+
+    /// 不套歌手、歌名两张别名表的族键(只归合唱首位、走 key 的折叠),等于两张表都给空表时的 baseFamilyKey。撤出表的键是它。
+    public static func plainFamilyKey(artist: String, title: String) -> String {
+        key(artist: ArtistCredit.mergeArtist(artist), title: title)
     }
 
     /// 专辑榜判同一张专辑的键:歌手跟 familyKey 同一把尺子(合唱归首位、罗马字艺名折到中文本名),专辑名走 foldTitle
@@ -497,6 +505,24 @@ public enum PlayCountFold {
         entityLock.lock()
         entityFamilyAliases = table
         entityLock.unlock()
+    }
+
+    private static let withdrawalLock = NSLock()
+    nonisolated(unsafe) private static var aliasWithdrawals: [String: String] = [:]
+
+    /// 灌入 `SongEntityFamilies.withdrawals` 的结果:原始族键(plainFamilyKey)→ 撤出后的族键。开关关着时灌空表。
+    public static func setAliasWithdrawals(_ table: [String: String]) {
+        withdrawalLock.lock()
+        aliasWithdrawals = table
+        withdrawalLock.unlock()
+    }
+
+    private static func lookupAliasWithdrawal(artist: String, title: String) -> String? {
+        withdrawalLock.lock()
+        let table = aliasWithdrawals
+        withdrawalLock.unlock()
+        guard !table.isEmpty else { return nil }
+        return table[plainFamilyKey(artist: artist, title: title)]
     }
 
     private static func lookupEntityFamilyAlias(_ key: String) -> String? {
