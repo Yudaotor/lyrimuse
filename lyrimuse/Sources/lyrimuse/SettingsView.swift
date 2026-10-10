@@ -995,7 +995,7 @@ private struct LyricsSettingsTab: View {
     }
 
     private var sectionPicker: some View {
-        SettingsSegmentedControl(
+        SettingsGlassTabPicker(
             selection: Binding(
                 get: { section },
                 set: { next in
@@ -2455,7 +2455,7 @@ private struct AppearanceSettingsTab: View {
     private var section: Section { Section(rawValue: sectionRaw) ?? .overlay }
 
     private var sectionPicker: some View {
-        SettingsSegmentedControl(
+        SettingsGlassTabPicker(
             selection: Binding(
                 get: { section },
                 set: { next in

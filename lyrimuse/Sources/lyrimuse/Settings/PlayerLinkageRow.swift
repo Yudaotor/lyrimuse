@@ -79,6 +79,8 @@ struct PlayerBundleChipsRow: View {
     let note: String
     /// 全都没勾时的副标题。
     let allOffSummary: String
+    /// 「选择…」画成胶囊形(Last.fm 规则卡,跟同卡的胶囊分段一致);Discord 页仍是默认的圆角矩形。
+    var glassButton = false
     let choices: [PlayerBundleChoice]
     /// 未勾选(被排除)的 bundle id。
     let excluded: Set<String>
@@ -95,7 +97,7 @@ struct PlayerBundleChipsRow: View {
 
     var body: some View {
         SettingsRow(icon: icon, title: title, subtitle: summary) {
-            Button(L10n.t("选择…")) { showsChips = true }
+            chooseButton
                 .popover(isPresented: $showsChips, arrowEdge: .bottom) {
                     SettingsPopoverShell(
                         title: title,
@@ -112,6 +114,19 @@ struct PlayerBundleChipsRow: View {
                         }
                     }
                 }
+        }
+    }
+}
+
+extension PlayerBundleChipsRow {
+    @ViewBuilder
+    fileprivate var chooseButton: some View {
+        if glassButton {
+            Button(L10n.t("选择…")) { showsChips = true }
+                .settingsGlassButtons()
+                .buttonBorderShape(.capsule)
+        } else {
+            Button(L10n.t("选择…")) { showsChips = true }
         }
     }
 }

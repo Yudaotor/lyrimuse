@@ -2,10 +2,10 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-/// 「足迹」段的「歌手来自哪里」卡内容:每个国家或地区一行横条(占比 + 次数),下面一行是这个地区播放最多的几位。
+/// 「足迹」段歌手地区点开后的完整内容:每个国家或地区一行横条(占比 + 次数),下面一行是这个地区播放最多的几位。
 ///
 /// 数据是引擎后台汇总的 `LastfmStatsService.artistRegions`(歌手榜前若干位,位数随文件给,按 MusicBrainz 登记的
-/// 所属国家或地区加权),这里只画。范围选择器在卡头,由宿主持有(理由同 LastfmListeningHoursView)。
+/// 所属国家或地区加权),这里只画。范围由宿主(LastfmFootprintView)持有。
 struct LastfmArtistRegionsView: View {
     @ObservedObject private var stats = LastfmStatsService.shared
     @Environment(\.colorScheme) private var colorScheme

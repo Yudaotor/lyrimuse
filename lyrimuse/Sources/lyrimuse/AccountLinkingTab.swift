@@ -924,19 +924,14 @@ struct AccountLinkingTab: View {
     // 拿到最终 frame 就先合成了一帧,肉眼看到的就是"两个控件暂时叠在一起"。改成不包
     // withAnimation 之后切 tab 是硬切,不再有这个过渡窗口。
     private var lastfmSectionPicker: some View {
-        Picker(
-            "",
+        SettingsGlassTabPicker(
             selection: Binding(
                 get: { lastfmSection },
                 set: { next in lastfmSectionRaw = next.rawValue }
-            )
-        ) {
-            ForEach(LastfmSection.allCases) { s in
-                Text(s.title).tag(s)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+            ),
+            options: LastfmSection.allCases,
+            label: \.title
+        )
         .fixedSize()
         .padding(.bottom, 2)
     }
@@ -1149,6 +1144,9 @@ struct AccountLinkingTab: View {
         }
     }
 
+    /// 规则卡每一行在通用行距之外上下再各留的空隙:这张卡单独放在一段里,行距放松一点。
+    private static let lastfmRuleRowExtraPadding: CGFloat = 3
+
     /// 「设置」段的内容。
     ///
     /// 目前两项:匹配模式(三档:智能 / 自定义 / 原始,自定义再展开三个维度,绑
@@ -1168,7 +1166,7 @@ struct AccountLinkingTab: View {
     /// 点了不影响任何事的控件。
     @ViewBuilder
     private var lastfmScrobbleSettingsCard: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             // 卡头「Scrobble 规则」:卡里四行(匹配模式 / 时机 / 短曲目 / 播放器)各自回答
             // "什么才算一次 scrobble"的一个侧面,「规则」是它们的总称。三条边界:
             // ①本仓的中文界面不翻译 scrobble 这个词(「Scrobble 到 Last.fm」「Scrobble 已暂停」
@@ -1194,18 +1192,19 @@ struct AccountLinkingTab: View {
                     //
                     // 「智能」那一档同样只写效果 —— 机制(候选只来自哪几处、时长闸、每首歌只判
                     // 一次、失败维持原样)在引擎 lastfmcatalog.go 头注,不在这行字里展开。
-                    help: L10n.t("发送给 Last.fm 的歌手名和歌名。\n智能：使用 Last.fm 上收听人数最多的写法，未找到时按原样发送；专辑名去除「 - Single」「 - EP」后缀。\n自定义：分别设置歌名和歌手。\n原始：按播放器报告的标签原样发送。")
+                    help: L10n.t("发给 Last.fm 的歌手名和歌名。\n智能：用 Last.fm 上收听人数最多的写法，查不到就原样发；专辑名去掉「 - Single」「 - EP」。\n自定义：歌名、歌手分开设置。\n原始：照播放器报告的原样发。")
                 ) {
-                    SettingsSegmentedControl(
+                    SettingsGlassTabPicker(
                         selection: Binding(
                             get: { features.lastfmMatchMode },
                             set: { features.lastfmMatchMode = $0; Task { await features.save() } }
                         ),
                         options: LastfmMatchMode.allCases,
-                        label: \.displayName
+                        label: \.displayName,
+                        compact: true
                     )
-                    .frame(width: 180)
                 }
+                .padding(.vertical, Self.lastfmRuleRowExtraPadding)
                 // 「自定义」的两个维度:曲名一行、歌手一行。 只在选了自定义时才挂 ——
                 // 另两档的值由档位本身决定(智能 = 都匹配条目、原始 = 都原样),那时显示两行
                 // 点了也不生效的选项只会让人以为自己关掉了某件事。
@@ -1218,33 +1217,37 @@ struct AccountLinkingTab: View {
                 if features.lastfmMatchMode == .custom {
                     SettingsSubRow(
                         title: L10n.t("歌名"),
-                        help: L10n.t("匹配条目：使用 Last.fm 编目中这首歌曲的歌名写法，例如「那个女孩」发送为「那個女孩」；编目中未找到时按原样发送。专辑名同时去除「 - Single」「 - EP」后缀。\n原始：按播放器报告的歌名原样发送。")
+                        help: L10n.t("匹配条目：用 Last.fm 收录的写法，如「那个女孩」→「那個女孩」，查不到就原样发；专辑名同时去掉「 - Single」「 - EP」。\n原始：照播放器报告的原样发。")
                     ) {
-                        SettingsSegmentedControl(
+                        SettingsGlassTabPicker(
                             selection: Binding(
                                 get: { features.lastfmTrackRule },
                                 set: { features.lastfmTrackRule = $0; Task { await features.save() } }
                             ),
                             options: LastfmTrackRule.allCases,
-                            label: \.displayName
+                            label: \.displayName,
+                            compact: true
                         )
                     }
+                    .padding(.vertical, Self.lastfmRuleRowExtraPadding)
                     // 「只发第一位」不查编目、纯字符串截断,而且**只在没匹配到编目条目时**才
                     // 落地(匹配到的写法已经是编目认的那条,再截一刀就把它变成一个不存在的
                     // 条目)。判据在引擎 resolveScrobbleTags,说明气泡里照实写了这一句。
                     SettingsSubRow(
                         title: L10n.t("歌手"),
-                        help: L10n.t("匹配条目：使用 Last.fm 编目中这首歌曲的歌手写法，例如「Wang Leehom」发送为「王力宏」；编目中未找到时按原样发送。\n仅第一位：合唱歌手只保留第一位，例如「陶喆, 卢广仲」发送为「陶喆」，不查询编目；Last.fm 已收录该合唱条目时不截取。\n原始：按播放器报告的歌手原样发送。")
+                        help: L10n.t("匹配条目：用 Last.fm 收录的写法，如「Wang Leehom」→「王力宏」，查不到就原样发。\n仅第一位：合唱只发第一位，如「陶喆, 卢广仲」→「陶喆」；歌名选「匹配条目」且 Last.fm 收录了这首时不截。\n原始：照播放器报告的原样发。")
                     ) {
-                        SettingsSegmentedControl(
+                        SettingsGlassTabPicker(
                             selection: Binding(
                                 get: { features.lastfmArtistRule },
                                 set: { features.lastfmArtistRule = $0; Task { await features.save() } }
                             ),
                             options: LastfmArtistRule.allCases,
-                            label: \.displayName
+                            label: \.displayName,
+                            compact: true
                         )
                     }
+                    .padding(.vertical, Self.lastfmRuleRowExtraPadding)
                 }
                 CardDivider()
                 // Scrobble 时机(原话「只考虑 lastfm 的」):一次收听听到哪里才记到
@@ -1255,18 +1258,19 @@ struct AccountLinkingTab: View {
                 SettingsRow(
                     icon: "hourglass",
                     title: L10n.t("Scrobble 时机"),
-                    help: L10n.t("收听到何时记录到 Last.fm。\n50%：曲长的一半，最多 4 分钟（官方规则）。\n75% / 90%：达到对应比例。\n曲终：播放至结尾才记录，中途切歌不记录。")
+                    help: L10n.t("听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。")
                 ) {
-                    SettingsSegmentedControl(
+                    SettingsGlassTabPicker(
                         selection: Binding(
                             get: { features.lastfmScrobblePoint },
                             set: { features.lastfmScrobblePoint = $0; Task { await features.save() } }
                         ),
                         options: LastfmScrobblePoint.allCases,
-                        label: \.displayName
+                        label: \.displayName,
+                        compact: true
                     )
-                    .frame(width: 200)
                 }
+                .padding(.vertical, Self.lastfmRuleRowExtraPadding)
                 CardDivider()
                 // 短曲目(加的开关,默认关)。Last.fm 官方规则 "The track must be
                 // longer than 30 seconds" 是给客户端的,服务端不拒收;这里默认照规则办,用户显式打开
@@ -1277,13 +1281,14 @@ struct AccountLinkingTab: View {
                 SettingsRow(
                     icon: "timer",
                     title: L10n.t("短于 30 秒的曲目"),
-                    help: L10n.t("开：短于 30 秒的曲目也会 Scrobble，播放过半即记录。\n关：不记录（Last.fm 官方规则）。")
+                    help: L10n.t("开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。")
                 ) {
                     Toggle("", isOn: Binding(
                         get: { features.scrobbleShortTracks },
                         set: { features.scrobbleShortTracks = $0; Task { await features.save() } }
                     ))
                 }
+                .padding(.vertical, Self.lastfmRuleRowExtraPadding)
                 CardDivider()
                 // Scrobble 的播放器:按播放器决定放的歌要不要 scrobble 到 Last.fm(含它的 now-playing),默认全勾。
                 // 取消的写进 features.json 的 lastfm_excluded_bundles,引擎开会话那一拍算一次标记,只挡 Last.fm 那一路
@@ -1294,17 +1299,21 @@ struct AccountLinkingTab: View {
                 PlayerBundleChipsRow(
                     icon: "music.note.list",
                     title: L10n.t("Scrobble 的播放器"),
-                    note: L10n.t("仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。"),
+                    note: L10n.t("只有勾选的播放器会 Scrobble；网页播放器按浏览器算。"),
                     allOffSummary: L10n.t("不 Scrobble 任何播放器"),
+                    glassButton: true,
                     choices: playerBundleChoices,
                     excluded: features.lastfmExcludedBundles
                 ) { bundleID, on in
                     Task { await features.updateLastfmExclusion(scrobbled: on ? [bundleID] : [], excluded: on ? [] : [bundleID]) }
                 }
+                .padding(.vertical, Self.lastfmRuleRowExtraPadding)
             } else {
                 SettingsNote { Text(L10n.t("上方的「Scrobble 到 Last.fm」已关闭，此处设置暂不生效")) }
             }
         }
+        // 玻璃要背后有东西才看得出来,垫一层跟足迹页同一份的淡色光。
+        .background { LastfmGlassGlow() }
     }
 
     /// 「Scrobble 的播放器」「显示哪些播放器」两处芯片的候选:内置播放器跟「播放器联动」卡同一套(`PlayerLinkage.listed`:选中的,
@@ -1342,8 +1351,13 @@ struct AccountLinkingTab: View {
     /// Last.fm 页的页头「账号卡」。第一行:品牌图标 + 用户名(后面跟去个人主页的小图标)+「Last.fm 账号」,右边是连接状态与动作
     /// (断开 / 连接 / 重新连接);第二行是「Scrobble 到 Last.fm」开关。待处理的建议不进这张卡,在卡下面单独一组
     /// (lastfmSuggestionsGroup)。
+    /// 页头卡里的分隔线从卡片左内边距起画:这张卡的行没有图标列,用 CardDivider 的缩进会让线悬在半空。
+    private var lastfmProfileDivider: some View {
+        Divider().padding(.leading, SettingsRowMetrics.horizontalPadding)
+    }
+
     private var lastfmProfileCard: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             HStack(alignment: .center, spacing: 14) {
                 accountIconBadge(.lastfm, size: 44, cornerRadius: 10)
                 VStack(alignment: .leading, spacing: 3) {
@@ -1376,7 +1390,7 @@ struct AccountLinkingTab: View {
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
             .padding(.vertical, 12)
-            CardDivider()
+            lastfmProfileDivider
             lastfmScrobbleToggleRow
             // 只要本地攒了东西就把它们列出来 —— 不看连没连账号,理由见 pendingListensRow
             // 的文档注释(界面原来按 lastfmConnected 分岔,而数据层看的是 Scrobble 开关)。
@@ -1384,15 +1398,17 @@ struct AccountLinkingTab: View {
             // 光说"会记在本地"是空头承诺 —— 用户没法验证到底记了没有、记了什么。列出来
             // 之后这件事就是可核对的,连账号时也能预期"补上去大概是这些"。
             if (backfill.pending?.eligible ?? 0) > 0 {
-                CardDivider()
+                lastfmProfileDivider
                 pendingListensRow
             } else if let result = backfillRunResultText() {
                 // 清单空了 = 这一次把能补的都补上去了。这恰恰是最该说一句话的时刻,
                 // 而在此之前它是唯一一种一句话都没有的时刻(见 backfillRunResultText)。
-                CardDivider()
+                lastfmProfileDivider
                 backfillResultRow(result)
             }
         }
+        // 玻璃要背后有东西才看得出来,跟下面各段同一份淡色光(12 章决策 63)。
+        .background { LastfmGlassGlow() }
         .onAppear {
             backfill.refreshPending()
             // 上一趟留下的那句结果不跟着用户跑:重新进这一页不该还挂着"已补 12 条"。
@@ -1467,6 +1483,9 @@ struct AccountLinkingTab: View {
             }
         }
         .lineLimit(1)
+        // 跟下面规则卡的「选择…」、各段的玻璃胶囊同一种形状。
+        .settingsGlassButtons()
+        .buttonBorderShape(.capsule)
     }
 
     private func lastfmStatusDot(_ color: Color, _ text: String) -> some View {

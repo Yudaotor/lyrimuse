@@ -19,6 +19,7 @@
 "%1$@ 年前的今天收听 %2$@ 次，循环最多的是以下歌曲#one" = "%1$@ years ago today: %2$@ play, most on repeat";
 "%1$@ 年前的这一周收听 %2$@ 次，循环最多的是以下歌曲" = "This week %1$@ years ago: %2$@ plays, most on repeat";
 "%1$@ 年前的这一周收听 %2$@ 次，循环最多的是以下歌曲#one" = "This week %1$@ years ago: %2$@ play, most on repeat";
+"%1$@ 年同期 %2$@ 次" = "%2$@ in the same span of %1$@";
 "%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookups went without it. It's paused for now and will be retried automatically.";
 "%1$@ 的反爬限制拦下了这台 Mac 的请求，最近有 %2$d 次查询因此未使用它。已暂时停用，稍后将自动重试。#one" = "%1$@'s anti-bot protection is blocking requests from this Mac, so %2$d recent lookup went without it. It's paused for now and will be retried automatically.";
 "%1$@ 首来自歌词源，%2$@ 首为机器翻译" = "%1$@ from the source, %2$@ machine-translated";
@@ -213,6 +214,7 @@
 "上次：检查 %1$@ 首后停止，更新 %2$@ 首" = "Last run: stopped after checking %1$@, updated %2$@";
 "上次：检查 %1$@ 首，更新 %2$@ 首" = "Last run: checked %1$@, updated %2$@";
 "上移" = "Move Up";
+"下一个里程碑" = "Next milestone";
 "下一句" = "Next Line";
 "下一句间距" = "Next Line Spacing";
 "下一步" = "Next";
@@ -271,10 +273,10 @@
 "人工修正" = "Manually Edited";
 "人工修正 %@ 首" = "%@ manually edited";
 "人工修正过的歌词删除后无法恢复" = "Manually edited lyrics can't be recovered once deleted";
+"什么时候听、听谁" = "When and who";
 "仅作用于歌词；「自动」根据背景亮度在浅色与深色之间切换" = "Applies to lyrics only; Automatic switches between light and dark based on background brightness";
 "仅作用于歌词；字号随窗口大小自动调整" = "Applies to lyrics only; size scales with the window";
 "仅作用于歌词；顶部信息和控制条仍用系统字体" = "Lyrics only; the header and controls keep the system font.";
-"仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。" = "Only checked players scrobble to Last.fm; web players count as the browser they play in.";
 "仅勾选的播放器会显示在 Discord 上；网页播放器按所在浏览器计算。" = "Only checked players show on Discord; web players count as the browser they play in.";
 "仅含署名行，无正文" = "Credits only, no lyrics";
 "仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息" = "Only needed if the bot's security settings have “Signature Verification” enabled — messages still arrive without it";
@@ -301,10 +303,11 @@
 "仅调整主行，%@～%@pt，放不下时歌词行会自动加高；副行和展开时的下一句预览固定为 %@pt，仅跟随字体与字重" = "Main line only, %@–%@pt; the lyric row grows if the text no longer fits. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
 "仅部分专辑提供；低电量或「减弱动态效果」时自动暂停" = "Available on some albums only; pauses in Low Power Mode or with Reduce Motion on";
 "今天" = "Today";
+"今天已听 %@ 次" = "%@ plays today";
+"今天已听 %@ 次#one" = "%@ play today";
 "今天收听 %1$@ 次 · 本周 %2$@ 次" = "%1$@ plays today · %2$@ this week";
 "今天收听 %1$@ 次 · 本周 %2$@ 次#one" = "%1$@ play today · %2$@ this week";
 "今年至今" = "This year so far";
-"今年至今 · %1$@ 年同期 %2$@ 次" = "This year so far · %2$@ in the same span of %1$@";
 "从「%@」导出的备份" = "Backup exported from “%@”";
 "从「应用程序」中选择，无需等待其开始播放" = "Pick one from Applications — no need to wait until it’s playing";
 "从上到下" = "Top to Bottom";
@@ -391,6 +394,8 @@
 "关闭悬浮歌词" = "Close Floating Lyrics";
 "关闭灵动岛歌词" = "Turn Off Notch Lyrics";
 "关（默认）：仅本次更换，之后的自动搜索或评分变化仍可能替换\n开：锁定这首歌曲的歌词，自动匹配不再更改\n开启时，之前手动选定的歌曲一并锁定（已被自动替换的除外）" = "Off (default): swaps in this version now — later auto re-searches or scoring changes can still replace it\nOn: locks this song’s lyrics; automatic matching won’t touch it again\nTurning it on also locks songs you picked earlier (except those already replaced automatically)";
+"其中 %1$@ 天有记录，日均 %2$@ 次" = "%1$@ days with plays, %2$@ per day";
+"其中 %1$@ 天有记录，日均 %2$@ 次#one" = "%1$@ day with plays, %2$@ per day";
 "其中包含 %@ 个歌词文件，将一并恢复。" = "It contains %@ lyrics files, which will be restored too. ";
 "其中包含 %@ 个歌词文件，将一并恢复。#one" = "It contains %@ lyrics file, which will be restored too. ";
 "其他" = "Other";
@@ -479,11 +484,11 @@
 "勾选的播放器全部退出 5 秒后，Lyrimuse 随之退出；期间如有播放器重新打开则取消。设置、歌词管理或歌词窗口打开时，会等其关闭后再退出" = "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. If Settings, Lyrics Manager or the lyrics window is open, it waits until they are closed";
 "包含明文凭证；导入将覆盖全部设置并重启" = "Contains credentials in plain text; importing overwrites every setting and restarts";
 "匹配条目" = "Match";
-"匹配条目：使用 Last.fm 编目中这首歌曲的歌名写法，例如「那个女孩」发送为「那個女孩」；编目中未找到时按原样发送。专辑名同时去除「 - Single」「 - EP」后缀。\n原始：按播放器报告的歌名原样发送。" = "Match: use the spelling Last.fm's catalog has for this song, e.g. 那个女孩 → 那個女孩; sent as-is when the catalog has no entry. Album names also drop the “ - Single” / “ - EP” suffix.\nRaw: exactly the title the player reports.";
-"匹配条目：使用 Last.fm 编目中这首歌曲的歌手写法，例如「Wang Leehom」发送为「王力宏」；编目中未找到时按原样发送。\n仅第一位：合唱歌手只保留第一位，例如「陶喆, 卢广仲」发送为「陶喆」，不查询编目；Last.fm 已收录该合唱条目时不截取。\n原始：按播放器报告的歌手原样发送。" = "Match: use the spelling Last.fm's catalog has for this artist, e.g. Wang Leehom → 王力宏; sent as-is when the catalog has no entry.\nFirst Only: keep just the first credited artist — 陶喆, 卢广仲 becomes 陶喆. No catalog lookup, and nothing is trimmed when Last.fm really does list the collaboration.\nRaw: exactly the artist the player reports.";
+"匹配条目：用 Last.fm 收录的写法，如「Wang Leehom」→「王力宏」，查不到就原样发。\n仅第一位：合唱只发第一位，如「陶喆, 卢广仲」→「陶喆」；歌名选「匹配条目」且 Last.fm 收录了这首时不截。\n原始：照播放器报告的原样发。" = "Match: Last.fm's spelling, e.g. Wang Leehom → 王力宏, or as-is when it isn't listed.\nFirst Only: just the first credited artist, e.g. 陶喆, 卢广仲 → 陶喆. Not trimmed when Title is set to Match and Last.fm lists the track.\nRaw: exactly what the player reports.";
+"匹配条目：用 Last.fm 收录的写法，如「那个女孩」→「那個女孩」，查不到就原样发；专辑名同时去掉「 - Single」「 - EP」。\n原始：照播放器报告的原样发。" = "Match: Last.fm's spelling, e.g. 那个女孩 → 那個女孩, or as-is when it isn't listed. Albums also drop “ - Single” / “ - EP”.\nRaw: exactly what the player reports.";
 "匹配模式" = "Matching Mode";
 "匹配算法" = "Matching Algorithm";
-"单日最高 · %@" = "Busiest day · %@";
+"单日最高" = "Busiest day";
 "单曲循环" = "Repeat One";
 "单曲收听达到 100、1,000… 次，或累计收听达到 1,000、5,000… 次时，灵动岛展开庆祝。需连接 Last.fm" = "When a song reaches 100, 1,000… plays, or your total reaches 1,000, 5,000…, the notch opens to celebrate. Requires Last.fm";
 "单行" = "One Line";
@@ -509,7 +514,7 @@
 "反馈问题…" = "Report an Issue…";
 "反馈问题时请附上：打包日志、崩溃记录与运行状态，已移除账号凭据和本机用户名" = "Attach this when reporting a problem: logs, crash reports and app state in one file, with account credentials and your Mac user name removed";
 "发布于 %@" = "Released %@";
-"发送给 Last.fm 的歌手名和歌名。\n智能：使用 Last.fm 上收听人数最多的写法，未找到时按原样发送；专辑名去除「 - Single」「 - EP」后缀。\n自定义：分别设置歌名和歌手。\n原始：按播放器报告的标签原样发送。" = "The artist and track names sent to Last.fm.\nSmart: switches to the most-listened spelling on Last.fm; sent as-is when there is no match. Album names drop the “ - Single” / “ - EP” suffix.\nCustom: choose for the track title and the artist separately.\nRaw: exactly what the player reports.";
+"发给 Last.fm 的歌手名和歌名。\n智能：用 Last.fm 上收听人数最多的写法，查不到就原样发；专辑名去掉「 - Single」「 - EP」。\n自定义：歌名、歌手分开设置。\n原始：照播放器报告的原样发。" = "The artist and title sent to Last.fm.\nSmart: the most-listened spelling on Last.fm, or as-is when there's no match. Albums drop “ - Single” / “ - EP”.\nCustom: set title and artist separately.\nRaw: exactly what the player reports.";
 "取消" = "Cancel";
 "取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列" = "Remove the instrumental mark: lyrics it has show again, and a track without lyrics goes back into the auto-match queue";
 "取消喜欢" = "Remove Favorite";
@@ -524,6 +529,7 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space.";
+"只有勾选的播放器会 Scrobble；网页播放器按浏览器算。" = "Only checked players scrobble; web players count as their browser.";
 "可在任意 App 中触发，需包含 ⌘、⌥ 或 ⌃ 之一" = "Works in any app; must include ⌘, ⌥ or ⌃";
 "右" = "Right";
 "右侧" = "Right";
@@ -546,6 +552,7 @@
 "后退" = "Back";
 "向 Discord 好友展示正在收听的歌曲" = "Let your Discord friends see what you're listening to";
 "含账号凭据，请勿分享给他人；需要连同外观与快捷键整体迁移时，请使用「备份与迁移」" = "Contains account credentials, so don’t share it. To move everything including appearance and shortcuts, use Backup & Migration";
+"听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。" = "How far you listen before it's scrobbled.\n50%: half the track or 4 minutes, whichever comes first (Last.fm's rule).\n75% / 90%: that share of the track.\nTrack End: only when played through; skips don't count.";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态。" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status.";
 "启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。" = "Opens no windows at launch; only the menu bar icon and your lyrics displays remain. Turning it on also turns off Show in Dock.";
 "启用" = "Enable";
@@ -848,7 +855,7 @@
 "开源组件与词典" = "Open-source components and dictionaries";
 "开源许可证" = "Open-Source License";
 "开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
-"开：短于 30 秒的曲目也会 Scrobble，播放过半即记录。\n关：不记录（Last.fm 官方规则）。" = "On: tracks under 30 seconds are scrobbled too, once half-played.\nOff: they aren't (Last.fm's rule).";
+"开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。" = "On: scrobbled too, once half-played.\nOff: not scrobbled (Last.fm's rule).";
 "当前使用" = "In use";
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
@@ -861,8 +868,7 @@
 "当前歌词为手动修改或手动采纳，并非下方自动决策的结果" = "The current lyrics were edited or picked by you, not chosen by the automatic decision below.";
 "当前歌词的出处" = "Where the current lyrics came from";
 "当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "Musixmatch's API host is unreachable over a direct connection on this network (no TCP/TLS response), and no working system proxy is available — turning on a proxy usually fixes it";
-"当前连续 · 最长 %@ 天" = "Current streak · longest %@ days";
-"当前连续 · 最长 %@ 天#one" = "Current streak · longest %@ day";
+"当前连续" = "Current streak";
 "当前配色尚未保存，点按保存为主题" = "These colors aren't saved yet. Click to save them as a theme";
 "当天最后一次收听：%@" = "Last played that day: %@";
 "待补交的收听" = "Pending Scrobbles";
@@ -986,7 +992,6 @@
 "播放热力图" = "Listening Heatmap";
 "播放记录" = "Play History";
 "播放过的歌曲将显示在这里" = "Songs you play will show up here automatically.";
-"收听到何时记录到 Last.fm。\n50%：曲长的一半，最多 4 分钟（官方规则）。\n75% / 90%：达到对应比例。\n曲终：播放至结尾才记录，中途切歌不记录。" = "How far into a track before it's scrobbled to Last.fm.\n50%: half the track, capped at 4 minutes (Last.fm's rule).\n75% / 90%: that fraction of the track.\nTrack End: only when played through; skipping doesn't count.";
 "收听时段" = "Listening Hours";
 "收听最多" = "Most Played";
 "收听最多 %@" = "Top day %@";
@@ -994,6 +999,7 @@
 "收听次数：%@" = "Plays: %@";
 "收听足迹" = "Listening Footprint";
 "收听里程碑" = "Listening Milestones";
+"收听高峰" = "Busiest hour";
 "收听高峰 %@" = "Busiest %@";
 "收起" = "Collapse";
 "收起面板后生效" = "Takes effect after this panel closes";
@@ -1142,11 +1148,12 @@
 "最近播放" = "Recently played";
 "最近记录" = "Recent Scrobbles";
 "最近连续 %1$d 次查询中，同类曲库至少有两家找到了歌词，%2$@ 一次也没有提供；按它平时的收录情况，本该提供约 %3$d 次。可能是其接口发生变化，或请求被拦截。" = "In the last %1$d lookups in a row, at least two other sources of the same kind found lyrics, but %2$@ returned none; going by its usual coverage it should have returned about %3$d. Its API may have changed, or its requests are being blocked.";
+"最长 %@ 天" = "Longest: %@ days";
+"最长 %@ 天#one" = "Longest: %@ day";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定" = "%@ songs are locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust them again; songs whose lyrics you edited by hand are unaffected and stay locked";
 "有 %@ 首歌曲因此开关而锁定。解锁后将恢复自动搜索和评分更新；手动编辑过歌词的歌曲不受影响，将保持锁定#one" = "%@ song is locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust it again; songs whose lyrics you edited by hand are unaffected and stay locked";
 "有新版本 %@" = "Update available: %@";
 "有歌词源将这首歌曲标记为纯音乐，无可用的候选歌词" = "A lyrics source marks this song as instrumental; no usable lyrics candidate";
-"有记录 · 日均 %@ 次" = "Days with plays · %@ per day";
 "有软件更新可用" = "Software Update Available";
 "服务器报错（5xx）：%@" = "Server error (5xx): %@";
 "服务器设置 → 整合（Integrations） → Webhook → 新建 Webhook，选择要发送到的频道后拷贝 Webhook URL" = "Server Settings → Integrations → Webhooks → New Webhook. Pick the channel to post to, then copy the Webhook URL";
@@ -1508,6 +1515,7 @@
 "立即重启" = "Restart Now";
 "第" = "Page";
 "第 %1$d 步，共 %2$d 步" = "Step %1$d of %2$d";
+"第 %@ 天" = "Day %@";
 "第 %@ 次" = "Play #%@";
 "第 %@ 次收听" = "Play #%@";
 "第三方许可" = "Third-Party Licenses";
@@ -1758,6 +1766,7 @@
 "近 12 周的收听热力图（完整年历见设置中的统计页）" = "Listening heatmap for the last 12 weeks (the full year is on the Stats page in Settings)";
 "近 30 天" = "Past 30 days";
 "近 7 天" = "Past 7 days";
+"近 7 天 %1$@ 次 · 昨天 %2$@ 次" = "Past 7 days %1$@ · Yesterday %2$@";
 "近 7 天：查询 %1$d 次，返回歌词 %2$d%%，被选用 %3$d%%" = "Last 7 days: %1$d lookups, lyrics found %2$d%%, chosen %3$d%%";
 "近 7 天：查询 %1$d 次，返回歌词 %2$d%%，被选用 %3$d%%#one" = "Last 7 days: %1$d lookup, lyrics found %2$d%%, chosen %3$d%%";
 "近一年" = "Past year";
@@ -1770,6 +1779,7 @@
 "还需 %@ 次" = "%@ to go";
 "这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar each pick translation or romanization in their own “Second Line”";
 "这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation or romanization in their own “Second Line” setting";
+"这也是你最长的一次连续" = "Your longest streak yet";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played.";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "These lyrics have no timing. Once adopted they only show as static text in the Lyrics Window, and won't highlight word by word or line by line as the song plays";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";

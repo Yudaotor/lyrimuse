@@ -1540,6 +1540,10 @@ func runLastfmTests() {
         expectEqual(ListeningMilestones.nextMilestone(total: 25000).target, 26000, "里程碑: 正好在整点 → 下一个")
         expectEqual(ListeningMilestones.nextMilestone(total: 4321).target, 4500, "里程碑: 千级按 500")
         expectEqual(ListeningMilestones.nextMilestone(total: 42).target, 100, "里程碑: 百以内按 100")
+        expectEqual(ListeningMilestones.milestoneProgress(total: 24300), 0.3, "里程碑进度: 万级这一档走了三成")
+        expectEqual(ListeningMilestones.milestoneProgress(total: 25000), 0.0, "里程碑进度: 正好在整点 → 新一档从零起")
+        expectEqual(ListeningMilestones.milestoneProgress(total: 4250), 0.5, "里程碑进度: 千级按 500 算")
+        expectEqual(ListeningMilestones.milestoneProgress(total: 999), 0.99, "里程碑进度: 百级按 100 算")
     }
 
     // ---- 「那边没有次数」结论的退避重探 ----

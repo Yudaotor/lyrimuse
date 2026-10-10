@@ -46,14 +46,15 @@ extension View {
     /// 看得见、且每一页都一致"的唯一保证。
     ///
     /// 放在 sheet 里的卡片传 `inSheet: true`,画下面「sheet 里的玻璃替身」:sheet 里的玻璃一直是失焦那一档。
+    /// 整块可点的卡片传 `interactive: true`:悬停 / 按下由玻璃自己给反馈(`.interactive()`),旧系统没有这一档。
     @ViewBuilder
-    func settingsCardBackground(cornerRadius: CGFloat, inSheet: Bool = false) -> some View {
+    func settingsCardBackground(cornerRadius: CGFloat, inSheet: Bool = false, interactive: Bool = false) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(macOS 26.0, *) {
             if inSheet {
                 modifier(SheetGlassCardBackground(shape: shape))
             } else {
-                glassEffect(.regular, in: shape)
+                glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
                     .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
             }
         } else {
@@ -550,6 +551,8 @@ struct SettingsPageCustomHeader<Header: View, Content: View>: View {
 
 // 一张卡片。内部子行之间由调用方插 CardDivider() 隔开(理由见文件顶部注释)。
 struct SettingsCard<Content: View>: View {
+    /// 绝大多数卡用默认的 10;单独成段、背后垫了色光的卡(Last.fm「设置」段)跟足迹页的方块一样用 18。
+    var cornerRadius: CGFloat = 10
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -558,7 +561,7 @@ struct SettingsCard<Content: View>: View {
         }
         // macOS 26+ 是液态玻璃,更早的系统退回原来那层 primary 低透明度叠加(深浅外观下
         // 自动跟着前景色反转,不需要各写一套),见 settingsCardBackground。
-        .settingsCardBackground(cornerRadius: 10)
+        .settingsCardBackground(cornerRadius: cornerRadius)
     }
 }
 
@@ -1214,6 +1217,96 @@ struct SteppedSlider: View {
         guard step > 0 else { return clamped }
         let quantized = range.lowerBound + ((clamped - range.lowerBound) / step).rounded() * step
         return min(max(quantized, range.lowerBound), range.upperBound)
+    }
+}
+
+// MARK: - 玻璃胶囊 tab
+
+/// 页内分段 tab 的液态玻璃版:一圈玻璃胶囊底,选中项是一颗强调色胶囊,切换时滑过去。
+/// 用在页头下面单独成行的页内 tab(「歌词」「歌词显示」「Last.fm」三页),三处要长得一样。卡片行里的
+/// 选项仍用 `SettingsSegmentedControl`。
+///
+/// 每一项的字重固定,选中与否不改字重:改了宽度会跟着变,切换时整排 tab 左右晃。
+/// 窗口不在前台时选中胶囊退成灰色,跟系统分段控件一致。
+/// 自己按内容定宽(`fixedSize`):跟会撑开的 Spacer 排在同一行时,不定宽的话每一项的文字会被压成零宽、只剩选中那颗空胶囊。
+struct SettingsGlassTabPicker<T: Hashable>: View {
+    @Binding var selection: T
+    let options: [T]
+    let label: (T) -> String
+    /// 设置行尾部用的小一号(整体 28pt 高,放得进 `SettingsRowMetrics.trailingAlignBand`);页内 tab 用默认的 32pt。
+    var compact = false
+    @Namespace private var selectionSpace
+    @Environment(\.controlActiveState) private var activeState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.self) { option in
+                let selected = option == selection
+                Button {
+                    selection = option
+                } label: {
+                    Text(label(option))
+                        .font(.system(size: compact ? 12 : 13, weight: .medium))
+                        .foregroundStyle(selected ? Color.white : Color.primary)
+                        .padding(.horizontal, compact ? 11 : 14)
+                        .frame(height: compact ? 22 : 26)
+                        .background {
+                            if selected {
+                                Capsule()
+                                    .fill(activeState == .inactive ? Color.secondary.opacity(0.55) : Color.accentColor)
+                                    .matchedGeometryEffect(id: "selection", in: selectionSpace)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        // 滑动动画只挂在这一排 tab 里面,不包住改 selection 的那一下:改 selection 会切换下面整页内容,
+        // 切换带上动画时,页里桥接过来的 AppKit 分段控件会在过渡那一帧定型成错误尺寸、点一下才变对
+        // (04 章「这个 Picker 的宽度」那条)。页面自己要切换动画的,在 selection 的 Binding 里自己包。
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.82), value: selection)
+        .padding(3)
+        .settingsCardBackground(cornerRadius: compact ? 14 : 16)
+        .fixedSize()
+    }
+}
+
+/// 跟 `SettingsGlassTabPicker` 并排的玻璃胶囊下拉(Last.fm 榜单卡头的时段、条数):同高(32pt)、同材质,
+/// 胶囊里写当前选项,点开是带勾的选项列表。
+///
+/// 内边距和高度加在 Menu **外面**:macOS 26 起无边框菜单不认标签上的 padding / frame(同 `settingsGlassMenu`)。
+struct SettingsGlassMenuPicker<T: Hashable>: View {
+    @Binding var selection: T
+    let options: [T]
+    let label: (T) -> String
+
+    var body: some View {
+        let menu = Menu {
+            Picker("", selection: $selection) {
+                ForEach(options, id: \.self) { option in
+                    Text(label(option)).tag(option)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Text(label(selection)).font(.system(size: 12))
+        }
+        if #available(macOS 26.0, *) {
+            menu
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .settingsCardBackground(cornerRadius: 16, interactive: true)
+        } else {
+            menu
+                .menuStyle(.button)
+                .fixedSize()
+        }
     }
 }
 

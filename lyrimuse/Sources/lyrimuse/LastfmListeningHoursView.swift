@@ -2,11 +2,10 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-/// 「足迹」段的收听时段卡内容:一天 24 小时一张条形图、一周 7 天一张条形图,卡底一行结论。
+/// 「足迹」段收听时段点开后的完整内容:一天 24 小时一张条形图、一周 7 天一张条形图,底部一行结论。
 ///
 /// 数据是 `LastfmStatsService.hourlyCounts`(跟热力图日桶同一次历史扫描写入),汇总在 Core
-/// `ListeningHours.summarize`。范围选择器在卡头,由宿主持有,跟热力图的年份选择器同一个理由:
-/// 卡收起时这个 View 不在视图层级里。
+/// `ListeningHours.summarize`。范围由宿主(LastfmFootprintView)持有,跟歌手地区共用一颗切换。
 struct LastfmListeningHoursView: View {
     @ObservedObject private var stats = LastfmStatsService.shared
     @Environment(\.colorScheme) private var colorScheme
@@ -164,7 +163,7 @@ struct LastfmListeningHoursView: View {
     }
 
     /// 周一在前,跟 Summary.weekdays 的下标一致。星期名跟着 App 语言走,不跟系统语言。
-    private static var weekdayNames: [String] {
+    static var weekdayNames: [String] {
         let f = DateFormatter()
         f.locale = L10n.locale
         let sundayFirst = f.shortStandaloneWeekdaySymbols ?? ["S", "M", "T", "W", "T", "F", "S"]

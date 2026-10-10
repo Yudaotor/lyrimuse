@@ -208,8 +208,18 @@ public enum ListeningMilestones {
     /// 下一个整数里程碑:<1 000 按百、<10 000 按 500、之后按 1 000。total 正好落在整点上时算"刚达成",
     /// 返回下一个。
     public static func nextMilestone(total: Int) -> (target: Int, remaining: Int) {
-        let step = total < 1_000 ? 100 : (total < 10_000 ? 500 : 1_000)
+        let step = milestoneStep(total: total)
         let target = (total / step + 1) * step
         return (target, target - total)
+    }
+
+    /// 从上一个整数里程碑走到下一个走了几成(0 ..< 1),步长同 `nextMilestone`。
+    public static func milestoneProgress(total: Int) -> Double {
+        let step = milestoneStep(total: total)
+        return Double(step - nextMilestone(total: total).remaining) / Double(step)
+    }
+
+    private static func milestoneStep(total: Int) -> Int {
+        total < 1_000 ? 100 : (total < 10_000 ? 500 : 1_000)
     }
 }

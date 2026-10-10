@@ -1,15 +1,14 @@
 import SwiftUI
 
 /// Last.fm 播放热力图(GitHub 贡献图风格):列=周、行=周一到周日、色深=当日播放量。
-/// 画在「足迹」段第一张卡的卡身里(见 LastfmStatsSection.heatmapCard),卡头那颗年份
-/// 选择器改的就是 `year`。
+/// 画在「足迹」段的热力图方块里(LastfmFootprintView.heatmapTile),方块头那颗年份选择器改的就是 `year`。
 ///
 /// 数据是 LastfmStatsService.dailyCounts(本地时区的天粒度桶,全量历史缓存+增量同步,
 /// 见 refreshDailyCounts 注释)。这里只做展示:按年切片、算色阶、排格子。
 struct LastfmHeatmapView: View {
     @ObservedObject private var stats = LastfmStatsService.shared
     @Environment(\.colorScheme) private var colorScheme
-    /// 要画哪一年。宿主持有 —— 年份选择器在卡头那一段,不在这个 View 的层级里。
+    /// 要画哪一年。宿主持有 —— 年份选择器在方块头,不在这个 View 的层级里。
     @Binding var year: Int
     /// 量到的卡身宽度,格子边长按它反算(见 cellSize)。首帧量不到,先按保守档画。
     @State private var width: CGFloat = 0
@@ -27,8 +26,7 @@ struct LastfmHeatmapView: View {
     static let lightLevels = ["#9be9a8", "#40c463", "#30a14e", "#216e39"]
     static let darkLevels = ["#0e4429", "#006d32", "#26a641", "#39d353"]
 
-    /// 有记录的年份 + 今年,倒序。宿主画年份选择器要用,所以是 static —— 这个 View
-    /// 收起时根本不在视图层级里,而卡头一直在。
+    /// 有记录的年份 + 今年,倒序。宿主画年份选择器要用(选择器不在这个 View 里),所以是 static。
     static func availableYears(in dailyCounts: [String: Int]) -> [Int] {
         let ys = Set(dailyCounts.keys.compactMap { Int($0.prefix(4)) })
         let current = Calendar.current.component(.year, from: Date())
@@ -88,8 +86,8 @@ struct LastfmHeatmapView: View {
 
     private static let horizontalPadding: CGFloat = 14
     /// 一年最多跨 54 个周列(周一起算:1 月 1 日是周日的闰年,例如 2012、2040,头尾各占一个残列)。
-    /// **按这个常数算边长,不按当年真实列数** —— 今年只画到今天(列数不满),按真实列数算的话今年的格子会比
-    /// 往年大一圈,切年份时整幅图跳一下。写成 53 时那种年份最右一列会溢出卡片。
+    /// **按这个常数算边长,不按当年真实列数** —— 各年真实列数是 53 或 54,按真实列数算的话切年份时
+    /// 整幅图跳一下。写成 53 时那种年份最右一列会溢出卡片。
     private static let columnCount = 54
     private static let cellGap: CGFloat = 2
     private static let weekdayLabelWidth: CGFloat = 12
@@ -145,7 +143,9 @@ struct LastfmHeatmapView: View {
                 ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
                     VStack(spacing: Self.cellGap) {
                         ForEach(0..<7, id: \.self) { row in
-                            if let day = week.days[row] {
+                            if let day = week.days[row], day.isFuture {
+                                cellShape(fill: futureColor).help(day.label)
+                            } else if let day = week.days[row] {
                                 let n = stats.dailyCounts[day.key] ?? 0
                                 cellShape(fill: color(for: n, thresholds: thresholds, levels: levels))
                                     .help("\(day.label) · \(n.formatted()) \(L10n.t("次"))")
@@ -175,6 +175,7 @@ struct LastfmHeatmapView: View {
     private struct DayCell {
         var key: String   // "yyyy-MM-dd"
         var label: String // 悬停提示里的人话日期
+        var isFuture = false // 今天之后的天:画一格更淡的底,不读次数
     }
 
     private func memoizedWeekColumns(year: Int) -> [WeekColumn] {
@@ -187,7 +188,7 @@ struct LastfmHeatmapView: View {
         return weeksMemo.weeks
     }
 
-    /// 把一年切成周列(周一起始)。只生成 1/1 到 12/31(未来的天不生成格子)。
+    /// 把一年切成周列(周一起始),整年 1/1 到 12/31 都生成格子;今天之后的天标 `isFuture`。
     private func weekColumns(year: Int) -> [WeekColumn] {
         var cal = Calendar(identifier: .gregorian)
         cal.firstWeekday = 2 // 周一
@@ -195,7 +196,7 @@ struct LastfmHeatmapView: View {
               let dec31 = cal.date(from: DateComponents(year: year, month: 12, day: 31))
         else { return [] }
         let today = cal.startOfDay(for: Date())
-        let end = min(dec31, today)
+        let end = cal.startOfDay(for: dec31)
         // 回退到 1/1 所在周的周一
         var cursor = cal.startOfDay(for: jan1)
         let weekdayRow = { (d: Date) -> Int in (cal.component(.weekday, from: d) + 5) % 7 } // 周一=0
@@ -212,7 +213,8 @@ struct LastfmHeatmapView: View {
                 days[row] = DayCell(
                     key: LastfmStatsService.dayKey(d),
                     label: String(format: L10n.t("%1$@ 年 %2$@ 月 %3$@ 日"),
-                                  "\(comps.year!)", "\(comps.month!)", "\(comps.day!)"))
+                                  "\(comps.year!)", "\(comps.month!)", "\(comps.day!)"),
+                    isFuture: d > today)
                 if comps.day! <= 7, comps.month! != lastLabeledMonth {
                     label = String(format: L10n.t("%@ 月"), "\(comps.month!)")
                     lastLabeledMonth = comps.month!
@@ -242,6 +244,8 @@ struct LastfmHeatmapView: View {
     private static let darkLevelColors = darkLevels.compactMap { NSColor(hexStringWithAlpha: $0 + "FF").map(Color.init) }
     private var levelColors: [Color] { colorScheme == .dark ? Self.darkLevelColors : Self.lightLevelColors }
     private var emptyColor: Color { Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.07) }
+    /// 还没到的天比零播放那格再淡一档,一眼分得出「没听」和「还没到」。
+    private var futureColor: Color { Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.03) }
 
     private func color(for count: Int, thresholds: [Int], levels: [Color]) -> Color {
         guard count > 0 else { return emptyColor }

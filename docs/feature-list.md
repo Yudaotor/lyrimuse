@@ -1047,11 +1047,11 @@ Every setting in the Settings window, by where it lives: 218 in all. Type a name
 ### Last.fm › Settings
 
 - **Scrobble Rules**
-- **Matching Mode**: The artist and track names sent to Last.fm. Smart: switches to the most-listened spelling on Last.fm; sent as-is when there is no match. Album names drop the “ - Single” / “ - EP” suffix. Custom: choose for the track title and the artist separately. Raw: exactly what the player reports.
+- **Matching Mode**: The artist and title sent to Last.fm. Smart: the most-listened spelling on Last.fm, or as-is when there's no match. Albums drop “ - Single” / “ - EP”. Custom: set title and artist separately. Raw: exactly what the player reports.
 - **Title**
 - **Artist**
 - **Scrobble Point**
-- **Tracks Under 30 Seconds**: On: tracks under 30 seconds are scrobbled too, once half-played. Off: they aren't (Last.fm's rule).
+- **Tracks Under 30 Seconds**: On: scrobbled too, once half-played. Off: not scrobbled (Last.fm's rule).
 - **Players to Scrobble**
 
 ### Lab Features › Web Push

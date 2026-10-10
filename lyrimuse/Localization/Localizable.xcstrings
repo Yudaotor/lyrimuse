@@ -7645,71 +7645,71 @@
         }
       }
     },
-    "匹配条目：使用 Last.fm 编目中这首歌曲的歌名写法，例如「那个女孩」发送为「那個女孩」；编目中未找到时按原样发送。专辑名同时去除「 - Single」「 - EP」后缀。\n原始：按播放器报告的歌名原样发送。" : {
+    "匹配条目：用 Last.fm 收录的写法，如「那个女孩」→「那個女孩」，查不到就原样发；专辑名同时去掉「 - Single」「 - EP」。\n原始：照播放器报告的原样发。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Match: use the spelling Last.fm's catalog has for this song, e.g. 那个女孩 → 那個女孩; sent as-is when the catalog has no entry. Album names also drop the “ - Single” / “ - EP” suffix.\nRaw: exactly the title the player reports."
+            "value" : "Match: Last.fm's spelling, e.g. 那个女孩 → 那個女孩, or as-is when it isn't listed. Albums also drop “ - Single” / “ - EP”.\nRaw: exactly what the player reports."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "匹配条目：使用 Last.fm 编目中这首歌曲的歌名写法，例如「那个女孩」发送为「那個女孩」；编目中未找到时按原样发送。专辑名同时去除「 - Single」「 - EP」后缀。\n原始：按播放器报告的歌名原样发送。"
+            "value" : "匹配条目：用 Last.fm 收录的写法，如「那个女孩」→「那個女孩」，查不到就原样发；专辑名同时去掉「 - Single」「 - EP」。\n原始：照播放器报告的原样发。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "比對條目：使用 Last.fm 編目中這首歌曲的歌名寫法，例如「那个女孩」送出為「那個女孩」；編目中未找到時按原樣送出。專輯名同時去除「 - Single」「 - EP」字尾。\n原始：按播放器回報的歌名原樣送出。"
+            "value" : "比對條目：用 Last.fm 收錄的寫法，如「那个女孩」→「那個女孩」，查不到就原樣送出；專輯名同時去掉「 - Single」「 - EP」。\n原始：照播放器回報的原樣送出。"
           }
         }
       }
     },
-    "匹配条目：使用 Last.fm 编目中这首歌曲的歌手写法，例如「Wang Leehom」发送为「王力宏」；编目中未找到时按原样发送。\n仅第一位：合唱歌手只保留第一位，例如「陶喆, 卢广仲」发送为「陶喆」，不查询编目；Last.fm 已收录该合唱条目时不截取。\n原始：按播放器报告的歌手原样发送。" : {
+    "匹配条目：用 Last.fm 收录的写法，如「Wang Leehom」→「王力宏」，查不到就原样发。\n仅第一位：合唱只发第一位，如「陶喆, 卢广仲」→「陶喆」；歌名选「匹配条目」且 Last.fm 收录了这首时不截。\n原始：照播放器报告的原样发。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Match: use the spelling Last.fm's catalog has for this artist, e.g. Wang Leehom → 王力宏; sent as-is when the catalog has no entry.\nFirst Only: keep just the first credited artist — 陶喆, 卢广仲 becomes 陶喆. No catalog lookup, and nothing is trimmed when Last.fm really does list the collaboration.\nRaw: exactly the artist the player reports."
+            "value" : "Match: Last.fm's spelling, e.g. Wang Leehom → 王力宏, or as-is when it isn't listed.\nFirst Only: just the first credited artist, e.g. 陶喆, 卢广仲 → 陶喆. Not trimmed when Title is set to Match and Last.fm lists the track.\nRaw: exactly what the player reports."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "匹配条目：使用 Last.fm 编目中这首歌曲的歌手写法，例如「Wang Leehom」发送为「王力宏」；编目中未找到时按原样发送。\n仅第一位：合唱歌手只保留第一位，例如「陶喆, 卢广仲」发送为「陶喆」，不查询编目；Last.fm 已收录该合唱条目时不截取。\n原始：按播放器报告的歌手原样发送。"
+            "value" : "匹配条目：用 Last.fm 收录的写法，如「Wang Leehom」→「王力宏」，查不到就原样发。\n仅第一位：合唱只发第一位，如「陶喆, 卢广仲」→「陶喆」；歌名选「匹配条目」且 Last.fm 收录了这首时不截。\n原始：照播放器报告的原样发。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "比對條目：使用 Last.fm 編目中這首歌曲的歌手寫法，例如「Wang Leehom」送出為「王力宏」；編目中未找到時按原樣送出。\n僅第一位：合唱歌手只保留第一位，例如「陶喆, 卢广仲」送出為「陶喆」，不查詢編目；Last.fm 已收錄該合唱條目時不截取。\n原始：按播放器回報的歌手原樣送出。"
+            "value" : "比對條目：用 Last.fm 收錄的寫法，如「Wang Leehom」→「王力宏」，查不到就原樣送出。\n僅第一位：合唱只送第一位，如「陶喆, 卢广仲」→「陶喆」；歌名選「比對條目」且 Last.fm 收錄了這首時不截。\n原始：照播放器回報的原樣送出。"
           }
         }
       }
     },
-    "发送给 Last.fm 的歌手名和歌名。\n智能：使用 Last.fm 上收听人数最多的写法，未找到时按原样发送；专辑名去除「 - Single」「 - EP」后缀。\n自定义：分别设置歌名和歌手。\n原始：按播放器报告的标签原样发送。" : {
+    "发给 Last.fm 的歌手名和歌名。\n智能：用 Last.fm 上收听人数最多的写法，查不到就原样发；专辑名去掉「 - Single」「 - EP」。\n自定义：歌名、歌手分开设置。\n原始：照播放器报告的原样发。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The artist and track names sent to Last.fm.\nSmart: switches to the most-listened spelling on Last.fm; sent as-is when there is no match. Album names drop the “ - Single” / “ - EP” suffix.\nCustom: choose for the track title and the artist separately.\nRaw: exactly what the player reports."
+            "value" : "The artist and title sent to Last.fm.\nSmart: the most-listened spelling on Last.fm, or as-is when there's no match. Albums drop “ - Single” / “ - EP”.\nCustom: set title and artist separately.\nRaw: exactly what the player reports."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "发送给 Last.fm 的歌手名和歌名。\n智能：使用 Last.fm 上收听人数最多的写法，未找到时按原样发送；专辑名去除「 - Single」「 - EP」后缀。\n自定义：分别设置歌名和歌手。\n原始：按播放器报告的标签原样发送。"
+            "value" : "发给 Last.fm 的歌手名和歌名。\n智能：用 Last.fm 上收听人数最多的写法，查不到就原样发；专辑名去掉「 - Single」「 - EP」。\n自定义：歌名、歌手分开设置。\n原始：照播放器报告的原样发。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "送給 Last.fm 的歌手名和曲名。\n智慧：使用 Last.fm 上聆聽人數最多的寫法，未找到時按原樣送出；專輯名去除「 - Single」「 - EP」字尾。\n自訂：分別設定曲名和歌手。\n原始：按播放器回報的標籤原樣送出。"
+            "value" : "送給 Last.fm 的歌手名和歌名。\n智慧：用 Last.fm 上聆聽人數最多的寫法，查不到就原樣送出；專輯名去掉「 - Single」「 - EP」。\n自訂：歌名、歌手分開設定。\n原始：照播放器回報的原樣送出。"
           }
         }
       }
@@ -23923,29 +23923,6 @@
         }
       }
     },
-    "有记录 · 日均 %@ 次" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Days with plays · %@ per day"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有记录 · 日均 %@ 次"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有記錄 · 日均 %@ 次"
-          }
-        }
-      }
-    },
     "%@ 次收听" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23981,64 +23958,6 @@
         }
       }
     },
-    "单日最高 · %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Busiest day · %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "单日最高 · %@"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "單日最高 · %@"
-          }
-        }
-      }
-    },
-    "当前连续 · 最长 %@ 天" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Current streak · longest %@ day"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Current streak · longest %@ days"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前连续 · 最长 %@ 天"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "目前連續 · 最長 %@ 天"
-          }
-        }
-      }
-    },
     "今年至今" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24058,29 +23977,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "今年至今"
-          }
-        }
-      }
-    },
-    "今年至今 · %1$@ 年同期 %2$@ 次" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This year so far · %2$@ in the same span of %1$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "今年至今 · %1$@ 年同期 %2$@ 次"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "今年至今 · %1$@ 年同期 %2$@ 次"
           }
         }
       }
@@ -26644,25 +26540,25 @@
         }
       }
     },
-    "收听到何时记录到 Last.fm。\n50%：曲长的一半，最多 4 分钟（官方规则）。\n75% / 90%：达到对应比例。\n曲终：播放至结尾才记录，中途切歌不记录。" : {
+    "听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "How far into a track before it's scrobbled to Last.fm.\n50%: half the track, capped at 4 minutes (Last.fm's rule).\n75% / 90%: that fraction of the track.\nTrack End: only when played through; skipping doesn't count."
+            "value" : "How far you listen before it's scrobbled.\n50%: half the track or 4 minutes, whichever comes first (Last.fm's rule).\n75% / 90%: that share of the track.\nTrack End: only when played through; skips don't count."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "收听到何时记录到 Last.fm。\n50%：曲长的一半，最多 4 分钟（官方规则）。\n75% / 90%：达到对应比例。\n曲终：播放至结尾才记录，中途切歌不记录。"
+            "value" : "听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "聆聽到何時記錄到 Last.fm。\n50%：曲長的一半，最多 4 分鐘（官方規則）。\n75% / 90%：達到對應比例。\n曲終：播放至結尾才記錄，中途切歌不記錄。"
+            "value" : "聽到哪裡才記一次 Scrobble。\n50%：一半或 4 分鐘，先到為準（官方規則）。\n75% / 90%：聽滿對應比例。\n曲終：播完才記，中途切歌不記。"
           }
         }
       }
@@ -26759,25 +26655,25 @@
         }
       }
     },
-    "开：短于 30 秒的曲目也会 Scrobble，播放过半即记录。\n关：不记录（Last.fm 官方规则）。" : {
+    "开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On: tracks under 30 seconds are scrobbled too, once half-played.\nOff: they aren't (Last.fm's rule)."
+            "value" : "On: scrobbled too, once half-played.\nOff: not scrobbled (Last.fm's rule)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "开：短于 30 秒的曲目也会 Scrobble，播放过半即记录。\n关：不记录（Last.fm 官方规则）。"
+            "value" : "开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開：短於 30 秒的曲目也會 Scrobble，播放過半即記錄。\n關：不記錄（Last.fm 官方規則）。"
+            "value" : "開：也 Scrobble，播放過半即記。\n關：不記（官方規則）。"
           }
         }
       }
@@ -40165,25 +40061,25 @@
         }
       }
     },
-    "仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。" : {
+    "只有勾选的播放器会 Scrobble；网页播放器按浏览器算。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only checked players scrobble to Last.fm; web players count as the browser they play in."
+            "value" : "Only checked players scrobble; web players count as their browser."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅勾选的播放器会 Scrobble 到 Last.fm；网页播放器按所在浏览器计算。"
+            "value" : "只有勾选的播放器会 Scrobble；网页播放器按浏览器算。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅勾選的播放器會 Scrobble 到 Last.fm；網頁播放器按所在瀏覽器計算。"
+            "value" : "只有勾選的播放器會 Scrobble；網頁播放器按瀏覽器算。"
           }
         }
       }
@@ -41301,6 +41197,318 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選中的候選"
+          }
+        }
+      }
+    },
+    "什么时候听、听谁" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When and who"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "什么时候听、听谁"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "什麼時候聽、聽誰"
+          }
+        }
+      }
+    },
+    "当前连续" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current streak"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前连续"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前連續"
+          }
+        }
+      }
+    },
+    "这也是你最长的一次连续" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your longest streak yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这也是你最长的一次连续"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這也是你最長的一次連續"
+          }
+        }
+      }
+    },
+    "最长 %@ 天" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Longest: %@ day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Longest: %@ days"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最长 %@ 天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最長 %@ 天"
+          }
+        }
+      }
+    },
+    "今天已听 %@ 次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ play today"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@ plays today"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天已听 %@ 次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天已聽 %@ 次"
+          }
+        }
+      }
+    },
+    "下一个里程碑" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next milestone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一个里程碑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一個里程碑"
+          }
+        }
+      }
+    },
+    "%1$@ 年同期 %2$@ 次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%2$@ in the same span of %1$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 年同期 %2$@ 次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 年同期 %2$@ 次"
+          }
+        }
+      }
+    },
+    "单日最高" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busiest day"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "单日最高"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "單日最高"
+          }
+        }
+      }
+    },
+    "第 %@ 天" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Day %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %@ 天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %@ 天"
+          }
+        }
+      }
+    },
+    "其中 %1$@ 天有记录，日均 %2$@ 次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ day with plays, %2$@ per day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ days with plays, %2$@ per day"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其中 %1$@ 天有记录，日均 %2$@ 次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其中 %1$@ 天有記錄，日均 %2$@ 次"
+          }
+        }
+      }
+    },
+    "近 7 天 %1$@ 次 · 昨天 %2$@ 次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Past 7 days %1$@ · Yesterday %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近 7 天 %1$@ 次 · 昨天 %2$@ 次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近 7 天 %1$@ 次 · 昨天 %2$@ 次"
+          }
+        }
+      }
+    },
+    "收听高峰" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busiest hour"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收听高峰"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聆聽高峰"
           }
         }
       }
