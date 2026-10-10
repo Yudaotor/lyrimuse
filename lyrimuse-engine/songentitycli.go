@@ -50,6 +50,8 @@ func runSongEntitiesCLI(args []string) {
 	setFeatures(loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json")))
 	lyricsPinsPath = filepath.Join(cfgDir, clientName+"-lyrics-pins.json")
 	loadArtistIdentityCache(filepath.Join(cfgDir, clientName+"-artist-identity-cache.json"))
+	loadArtistAliasCache(filepath.Join(cfgDir, clientName+"-artist-alias-cache.json"))
+	loadMBPrimaryNameCache(filepath.Join(cfgDir, clientName+"-artist-primary-cache.json"))
 	loadEnrichForMaintenance(cfgDir, false)
 	enrichMu.Lock()
 	snapshot := make(map[string]enrichEntry, len(enrichCache))

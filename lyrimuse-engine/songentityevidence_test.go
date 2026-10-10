@@ -111,3 +111,79 @@ func TestSongVariantISRCLevels(t *testing.T) {
 		t.Errorf("没记级别、带版本词:searched,实得 %v", l)
 	}
 }
+
+// 主歌手:MusicBrainz 名字缓存里登记的别的名字(中文别名、MusicBrainz 别名列表)对得上的算同一个人;不含汉字、去掉空格
+// 不到 3 个字符的别名不用;两份缓存都没登记的照旧认不出。
+func TestSongArtistMatchCachedNames(t *testing.T) {
+	withCachedAliases(t, map[string]string{"Wang Leehom": "王力宏"})
+	withCachedMBAliases(t, map[string][]string{
+		"Musiq":        {"Musiq Soulchild"},
+		"宇多田ヒカル":       {"Hikaru Utada", "宇多田光"},
+		"Short Cutter": {"S C"},
+	})
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"Wang Leehom", "王力宏", true},
+		{"Musiq Soulchild", "Musiq", true},
+		{"宇多田光", "宇多田ヒカル", true},
+		{"Short Cutter", "S C", false},
+		{"Musiq", "Musiq Soulchild Band", false},
+		{"Nobody Here", "Somebody Else", false},
+	}
+	for _, c := range cases {
+		if got := songArtistMatch(c.a, c.b); got != c.want {
+			t.Errorf("songArtistMatch(%q, %q) = %v,应为 %v", c.a, c.b, got, c.want)
+		}
+	}
+	// 歌手写法不同、时长对得上的同一首,经名字缓存并成一个实体
+	_, of := songTestBuild(t, []songVariant{
+		songTestVariant("Musiq Soulchild|Love|Aijuswannasing", enrichEntry{DurationSecs: 300}, nil),
+		songTestVariant("Musiq|Love|Aijuswannasing", enrichEntry{DurationSecs: 300.4}, nil),
+	}, nil)
+	if !songTestSame(of, "Musiq Soulchild|Love|Aijuswannasing", "Musiq|Love|Aijuswannasing") {
+		t.Error("MusicBrainz 别名列表认出同一个人,同名同时长的应当并成一首")
+	}
+}
+
+// 空格隔开的双语署名只多认 CJK 那一半;拉丁那一半、文字交替三段以上、同一种文字、带括号的都不拆。
+func TestSongArtistMatchSpacedBilingual(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"田馥甄 Hebe Tien", "田馥甄", true},
+		{"曹格", "Gary 曹格", true},
+		{"TIA LEE 李毓芬", "李毓芬", true},
+		{"Lee 木子", "Lee", false},
+		{"田馥甄 Hebe Tien", "Hebe Tien", false},
+		{"Hebe 田馥甄 Tien", "田馥甄", false},
+		{"五月天 阿信", "五月天", false},
+	}
+	for _, c := range cases {
+		if got := songArtistMatch(c.a, c.b); got != c.want {
+			t.Errorf("songArtistMatch(%q, %q) = %v,应为 %v", c.a, c.b, got, c.want)
+		}
+	}
+	for name, want := range map[string]string{
+		"田馥甄 Hebe Tien":      "田馥甄",
+		"TIA LEE 李毓芬":        "李毓芬",
+		"Hebe 田馥甄 Tien":      "",
+		"Taylor Swift":       "",
+		"TF家族 Boys":          "",
+		"周杰伦 feat. Lara":     "",
+		"Taylor Swift (泰勒絲)": "",
+	} {
+		if got := songSpacedBilingualCJK(name); got != want {
+			t.Errorf("songSpacedBilingualCJK(%q) = %q,应为 %q", name, got, want)
+		}
+	}
+	_, of := songTestBuild(t, []songVariant{
+		songTestVariant("田馥甄 Hebe Tien|烏鴉|", enrichEntry{DurationSecs: 225}, nil),
+		songTestVariant("田馥甄|乌鸦|要去什麼地方", enrichEntry{DurationSecs: 224.91}, nil),
+	}, nil)
+	if !songTestSame(of, "田馥甄 Hebe Tien|烏鴉|", "田馥甄|乌鸦|要去什麼地方") {
+		t.Error("双语署名的 CJK 那一半就是另一边的歌手,同一写法族、时长对得上的应当并成一首")
+	}
+}

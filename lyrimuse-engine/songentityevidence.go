@@ -4,6 +4,7 @@ import (
 	"maps"
 	"math"
 	"sort"
+	"strings"
 )
 
 // 歌曲实体的证据边与否决。登记表在 songentity.go 的 songEvidenceKinds。
@@ -238,9 +239,9 @@ func (b *songEdgeBuilder) artistComponents(members []int) [][]int {
 	return out
 }
 
-// songArtistMatch:两个主歌手是不是同一个人:引擎现成的歌手比对(artistMatches),双语写法两半各算一种名字
-// (artistNameForms),或 MusicBrainz 身份缓存里是同一个 mbid。不用从歌曲推出来的歌手别名:拿它闸歌曲的边就成了循环。
-// 没有歌手的写法跟谁都不算同一个人。
+// songArtistMatch:两个主歌手是不是同一个人:引擎现成的歌手比对(artistMatches),双语写法各算几种名字
+// (songArtistNameForms),MusicBrainz 身份缓存里是同一个 mbid,或者一边在 MusicBrainz 名字缓存里登记的别的名字跟另一边对得上
+// (songArtistCachedNames)。不用从歌曲推出来的歌手别名:拿它闸歌曲的边就成了循环。没有歌手的写法跟谁都不算同一个人。
 func songArtistMatch(a, b string) bool {
 	if a == "" || b == "" {
 		return false
@@ -248,8 +249,8 @@ func songArtistMatch(a, b string) bool {
 	if artistMatches(a, b) {
 		return true
 	}
-	for _, fa := range artistNameForms(a) {
-		for _, fb := range artistNameForms(b) {
+	for _, fa := range songArtistNameForms(a) {
+		for _, fb := range songArtistNameForms(b) {
 			if artistMatches(fa, fb) {
 				return true
 			}
@@ -257,7 +258,84 @@ func songArtistMatch(a, b string) bool {
 	}
 	ia, okA := cachedArtistIdentity(a)
 	ib, okB := cachedArtistIdentity(b)
-	return okA && okB && ia.Mbid != "" && ia.Mbid == ib.Mbid
+	if okA && okB && ia.Mbid != "" && ia.Mbid == ib.Mbid {
+		return true
+	}
+	for _, n := range songArtistCachedNames(a) {
+		if artistMatches(n, b) {
+			return true
+		}
+	}
+	for _, n := range songArtistCachedNames(b) {
+		if artistMatches(a, n) {
+			return true
+		}
+	}
+	return false
+}
+
+// songArtistNameForms:artistNameForms(「五月天 (Mayday)」的两半)之外,空格隔开的双语写法(「田馥甄 Hebe Tien」
+// 「Gary 曹格」)再加上 CJK 那一半。拉丁那一半不单拿出来用:常是很短的英文名(Ian、Lee、Gary),会撞上别的歌手。
+// 见 18 章决策 21。
+func songArtistNameForms(name string) []string {
+	forms := artistNameForms(name)
+	if h := songSpacedBilingualCJK(name); h != "" {
+		forms = append(forms, h)
+	}
+	return forms
+}
+
+// songSpacedBilingualCJK:按空格切开后正好两段、一段每个词都只有 CJK、另一段每个词都只有拉丁字母时,返回 CJK 那一段;
+// 合唱署名、带括号的(「A (B)」归 artistNameForms)、只有一种文字、两种文字交替出现三段以上、有词两种文字都带的,
+// 都返回空串。
+func songSpacedBilingualCJK(name string) string {
+	if isMultiArtistCredit(name) || strings.ContainsAny(name, "()（）") {
+		return ""
+	}
+	words := strings.Fields(name)
+	cut := 0
+	for i, w := range words {
+		s := artistNameScript(w)
+		if s == artistScriptOther {
+			return ""
+		}
+		if i > 0 && s != artistNameScript(words[i-1]) {
+			if cut > 0 {
+				return ""
+			}
+			cut = i
+		}
+	}
+	if cut == 0 {
+		return ""
+	}
+	if artistNameScript(words[0]) == artistScriptCJK {
+		return strings.Join(words[:cut], " ")
+	}
+	return strings.Join(words[cut:], " ")
+}
+
+// songArtistMinAliasLen:MusicBrainz 别名不含汉字时去掉空格至少这么长才用,太短的容易撞上别的歌手(跟 App 侧
+// LocalArtistAliases.minAliasLength 同一个数)。
+const songArtistMinAliasLen = 3
+
+// songArtistCachedNames:MusicBrainz 两份名字缓存里给这个写法登记的别的名字:中文别名(artistAliasCache)、MusicBrainz
+// 上的主名和别名(mbPrimaryNameCache)。只读内存里的缓存,不联网。
+func songArtistCachedNames(name string) []string {
+	var out []string
+	artistAliasMu.Lock()
+	if v := artistAliasCache[name]; v != "" {
+		out = append(out, v)
+	}
+	artistAliasMu.Unlock()
+	mbPrimaryNameMu.Lock()
+	for _, v := range mbPrimaryNameCache[name] {
+		if containsHan(v) || len([]rune(strings.ReplaceAll(v, " ", ""))) >= songArtistMinAliasLen {
+			out = append(out, v)
+		}
+	}
+	mbPrimaryNameMu.Unlock()
+	return out
 }
 
 // familyEdges:同一位主歌手、写法族歌名相同、两边都有时长且差不超过闸的写法连边。歌手、歌名两段逐字相同(只差专辑)的
