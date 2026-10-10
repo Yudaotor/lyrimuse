@@ -95,6 +95,8 @@ public enum SongEntityFamilies {
 
     /// 旧别名表(歌手、歌名两张)把几种写法并成一族、实体却判成不同歌的地方:同一个族里、不套别名表时族键不同、
     /// 实体 id 也不同的写法。阶段 1 计数族是「实体 ∪ 旧表」,这些照旧并着;列出来逐条过目,确认是旧表并错了再撤(方案 §5.6)。
+    /// countKeyOnly:整族按「原始族键(plainFamilyKey)相同或实体相同」就能连成一片,跨实体的是计数键本身并的、不是别名表,
+    /// 撤出(withdrawals)管不到(18 章决策 22)。
     public struct AliasOnlyMerge: Equatable, Sendable {
         public struct Writing: Equatable, Sendable {
             public var artist: String
@@ -104,6 +106,7 @@ public enum SongEntityFamilies {
 
         public var familyKey: String
         public var writings: [Writing]
+        public var countKeyOnly = false
     }
 
     public static func aliasOnlyMerges(_ entries: [EnrichTitleAliases.Entry], artists: [String: String],
@@ -119,25 +122,47 @@ public enum SongEntityFamilies {
             let plain = PlayCountFold.plainFamilyKey(artist: e.artist, title: e.title)
             byFamily[family, default: []].append(Row(plain: plain, writing: .init(artist: e.artist, title: e.title, song: song)))
         }
+        // 原始族键相同或实体相同的写法连起来,看整族是不是一片。
+        func onePiece(_ rows: [Row]) -> Bool {
+            var parent = Array(rows.indices)
+            func find(_ x: Int) -> Int {
+                var x = x
+                while parent[x] != x { x = parent[x] }
+                return x
+            }
+            for i in rows.indices {
+                for j in rows.indices where j > i && (rows[i].plain == rows[j].plain || rows[i].writing.song == rows[j].writing.song) {
+                    parent[find(i)] = find(j)
+                }
+            }
+            return Set(rows.indices.map(find)).count == 1
+        }
         var out: [AliasOnlyMerge] = []
         for (family, rows) in byFamily {
             let split = rows.contains { x in rows.contains { y in x.plain != y.plain && x.writing.song != y.writing.song } }
             guard split else { continue }
             let writings = rows.map(\.writing).sorted { ($0.song, $0.artist, $0.title) < ($1.song, $1.artist, $1.title) }
-            out.append(AliasOnlyMerge(familyKey: family, writings: writings))
+            out.append(AliasOnlyMerge(familyKey: family, writings: writings, countKeyOnly: onePiece(rows)))
         }
         return out.sorted { $0.familyKey < $1.familyKey }
     }
 
-    /// aliasOnlyMerges 的结果写成给人看的文本(诊断包里的 song-entity-alias-gaps.txt),后面接着列撤出来的写法块。
+    /// aliasOnlyMerges 的结果写成给人看的文本(诊断包里的 song-entity-alias-gaps.txt):别名表并的、计数键本身并的各一节,
+    /// 后面接着列撤出来的写法块。
     public static func aliasOnlyMergesText(_ merges: [AliasOnlyMerge], withdrawals: [String: AliasWithdrawal] = [:]) -> String {
-        var lines = ["旧别名表并着、实体判成不同歌的写法族 \(merges.count) 个(计数照旧按旧表并着,逐条过目;见 18 章决策 11)", ""]
-        for m in merges {
-            lines.append(m.familyKey)
-            for w in m.writings {
-                lines.append("  \(w.song)  \(w.artist) | \(w.title)")
+        let byAlias = merges.filter { !$0.countKeyOnly }, byKey = merges.filter(\.countKeyOnly)
+        var lines = ["旧别名表并着、实体判成不同歌的写法族 \(byAlias.count) 个(计数照旧按旧表并着,逐条过目;见 18 章决策 11)", ""]
+        func list(_ ms: [AliasOnlyMerge]) {
+            for m in ms {
+                lines.append(m.familyKey)
+                for w in m.writings {
+                    lines.append("  \(w.song)  \(w.artist) | \(w.title)")
+                }
             }
         }
+        list(byAlias)
+        lines += ["", "计数键本身并着、实体判成不同歌的写法族 \(byKey.count) 个(只按原始族键和实体就连成一片,撤出管不到,要等计数按实体算;见 18 章决策 22)", ""]
+        list(byKey)
         lines += ["", "旧别名表并着、录音对不上撤出来的写法块 \(withdrawals.count) 个(原始族键:原来的族 → 撤出后的族;见 18 章决策 19)", ""]
         for (plain, w) in withdrawals.sorted(by: { ($0.value.family, $0.key) < ($1.value.family, $1.key) }) {
             lines.append("  \(plain):\(w.family) → \(w.key)")

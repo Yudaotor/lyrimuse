@@ -780,6 +780,18 @@ func runLastfmTests() {
         expectEqual(same, [], "少并明细: 实体也判成同一首的不列")
         expectEqual(SongEntityFamilies.aliasOnlyMergesText(split).hasPrefix("旧别名表并着、实体判成不同歌的写法族 1 个"), true,
                     "少并明细: 文本开头是条数")
+        func blackWhite(_ songs: [(String, String)]) -> [SongEntityFamilies.AliasOnlyMerge] {
+            SongEntityFamilies.aliasOnlyMerges(songs.map { E(artist: $0.0, title: "黑白", neteaseURL: nil, qqMusicURL: nil, durationSecs: nil, song: $0.1) },
+                                               artists: artists, titles: titles)
+        }
+        let keyOnly = blackWhite([("方大同", "s_5"), ("方大同", "s_6"), ("Khalil Fong", "s_6")])
+        expectEqual(keyOnly.map(\.countKeyOnly), [true], "少并明细: 原始族键或实体就能把整族连成一片的,记成计数键本身并的")
+        expectEqual(split.map(\.countKeyOnly), [false], "少并明细: 靠别名表连起两个实体的不记")
+        expectEqual(blackWhite([("方大同", "s_5"), ("方大同", "s_6"), ("Khalil Fong", "s_7")]).map(\.countKeyOnly), [false],
+                    "少并明细: 有一片只靠别名表连上的不记")
+        let twoSections = SongEntityFamilies.aliasOnlyMergesText(split + keyOnly)
+        expectEqual(twoSections.contains("旧别名表并着、实体判成不同歌的写法族 1 个")
+                    && twoSections.contains("计数键本身并着、实体判成不同歌的写法族 1 个"), true, "少并明细: 文本分两节,各带条数")
         let exporter = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("lyrimuse/Settings/DiagnosticsExporter.swift"), encoding: .utf8)) ?? ""
         expectEqual(exporter.contains("files.append((\"song-entity-alias-gaps.txt\", LogRedactor.redactAll(gaps, secrets: secrets)))"), true,
