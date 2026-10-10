@@ -25,12 +25,12 @@ func TestSongEntityTableKeepsIDs(t *testing.T) {
 	}
 	t0 := time.Unix(1_000_000, 0)
 	b1, _ := songTestBuild(t, mk(false), nil)
-	first := b1.table(nil, t0)
+	first := b1.table(nil, nil, t0)
 	if len(first.Songs) != 2 {
 		t.Fatalf("应当两首: %+v", first.Songs)
 	}
 	b2, _ := songTestBuild(t, mk(false), nil)
-	second := b2.table(first, t0.Add(time.Hour))
+	second := b2.table(first, nil, t0.Add(time.Hour))
 	ids := func(tb *songEntityTableFile) []string {
 		var out []string
 		for id := range tb.Songs {
@@ -60,7 +60,7 @@ func TestSongEntityTableKeepsIDs(t *testing.T) {
 		}
 	}
 	b3, _ := songTestBuild(t, mk(true), nil)
-	third := b3.table(second, t0.Add(2*time.Hour))
+	third := b3.table(second, nil, t0.Add(2*time.Hour))
 	if len(third.Songs) != 1 {
 		t.Fatalf("三条共用一个 ISRC 应当并成一首: %+v", third.Songs)
 	}
@@ -118,5 +118,97 @@ func TestSongEntityReportNameMatchesDiagnosticsExporter(t *testing.T) {
 	}
 	if want := `"` + filepath.Base(songEntityReportPath()) + `"`; !strings.Contains(string(raw), want) {
 		t.Fatalf("App 的诊断导出里找不到 %s", want)
+	}
+}
+
+// 条目上的 `song` 是 id 种子:建完写回条目并落盘;实体表丢了照样接上;跟旧表不一致时以 `song` 为准。
+func TestSongEntitySongFieldSeedsIDs(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LYRIMUSE_CONFIG_DIR", dir)
+	savedPath, savedDirty := enrichPath, enrichDirty
+	t.Cleanup(func() { enrichPath, enrichDirty = savedPath, savedDirty })
+	enrichPath = filepath.Join(dir, clientName+"-enrich-cache.json")
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|Song|One":    {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}},
+		"A|Song|Two":    {DurationSecs: 200.1, ISRCs: []string{"USAAA1100001"}},
+		"B|Other|Three": {DurationSecs: 180},
+	})
+	song := func(k string) string {
+		enrichMu.Lock()
+		defer enrichMu.Unlock()
+		return enrichCache[k].Song
+	}
+	t0 := time.Unix(1_000_000, 0)
+
+	rebuildSongEntityTable(t0)
+	one, other := song("A|Song|One"), song("B|Other|Three")
+	if one == "" || one != song("A|Song|Two") || other == "" || other == one {
+		t.Fatalf("song 没按实体写回: %q %q %q", one, song("A|Song|Two"), other)
+	}
+	if data, err := os.ReadFile(enrichPath); err != nil || !strings.Contains(string(data), `"song":"`+one+`"`) {
+		t.Fatalf("写回的 song 要落盘: %v", err)
+	}
+	table := readSongEntityTable(songEntityTablePath())
+	if table == nil || !slices.Contains(table.Songs[one].Variants, "A|Song|One") {
+		t.Fatalf("实体表跟条目上的 song 对不上: %+v", table)
+	}
+
+	if err := os.Remove(songEntityTablePath()); err != nil {
+		t.Fatal(err)
+	}
+	rebuildSongEntityTable(t0.Add(time.Hour))
+	if song("A|Song|One") != one || song("B|Other|Three") != other {
+		t.Errorf("实体表丢了之后 id 要按 song 接上: %q %q", song("A|Song|One"), song("B|Other|Three"))
+	}
+	if table := readSongEntityTable(songEntityTablePath()); table == nil || len(table.Songs[one].Variants) != 2 {
+		t.Errorf("重建的实体表要沿用 song 里的 id: %+v", table)
+	}
+
+	enrichMu.Lock()
+	for _, k := range []string{"A|Song|One", "A|Song|Two"} {
+		e := enrichCache[k]
+		e.Song = "s_00000000abcd"
+		enrichCache[k] = e
+	}
+	enrichMu.Unlock()
+	rebuildSongEntityTable(t0.Add(2 * time.Hour))
+	table = readSongEntityTable(songEntityTablePath())
+	if table == nil || len(table.Songs["s_00000000abcd"].Variants) != 2 {
+		t.Errorf("条目上的 song 跟旧表不一致时以 song 为准: %+v", table)
+	}
+	if _, ok := table.Songs[one]; ok || table.Redirects[one] != "s_00000000abcd" {
+		t.Errorf("旧表里那个 id 没分到实体,要重定向到现在的 id: %+v", table.Redirects)
+	}
+}
+
+// writeBackSongEntityIDs 只改 id 或共享组变了的、缓存里还在的写法。
+func TestWriteBackSongEntityIDs(t *testing.T) {
+	savedDirty := enrichDirty
+	t.Cleanup(func() { enrichDirty = savedDirty })
+	enrichDirty = false
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|Song|One": {Song: "s_000000000001"},
+		"A|Song|Two": {},
+	})
+	n := writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
+		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two", "A|Song|Gone"}},
+	}})
+	if n != 1 || enrichCache["A|Song|Two"].Song != "s_000000000001" || !enrichDirty {
+		t.Errorf("n=%d song=%q dirty=%v", n, enrichCache["A|Song|Two"].Song, enrichDirty)
+	}
+	if _, ok := enrichCache["A|Song|Gone"]; ok {
+		t.Error("缓存里没有的写法不该被建出来")
+	}
+	enrichDirty = false
+	if n := writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
+		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two"}},
+	}}); n != 0 || enrichDirty {
+		t.Errorf("没变的不改、不标脏: n=%d dirty=%v", n, enrichDirty)
+	}
+	n = writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
+		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two"}, Share: []int{0, 1}},
+	}})
+	if n != 1 || enrichCache["A|Song|One"].SongShare != 0 || enrichCache["A|Song|Two"].SongShare != 1 {
+		t.Errorf("共享组编号要跟实体表 share 一致: n=%d one=%d two=%d", n, enrichCache["A|Song|One"].SongShare, enrichCache["A|Song|Two"].SongShare)
 	}
 }

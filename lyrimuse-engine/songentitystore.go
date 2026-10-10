@@ -19,7 +19,8 @@ import (
 // 启动后 songEntityBuildDelay 建第一次(避开启动迁移、ISRC 补扫),之后每 songEntityRebuildInterval 一次。持锁只复制缓存,
 // 摘字段、读解析决策、建表都在锁外。开关(features().SongEntityShadow)关着时两个文件都删掉。
 //
-// 实体 id 用上一份实体表做种子延续(songEntityIDs):每个实体取跟旧表共有写法最多的旧 id。
+// 实体 id 延续(songEntityIDs):种子先取各写法条目上的 `song`,没有的再取上一份实体表;每个实体取跟种子共有写法最多的
+// id。建完把变了的 `song` 写回条目、同步落盘,之后才写实体表:哪一步之间被杀,下次都接得上(18 章决策 8)。
 // 用户拆开过的写法对记在 `lyrimuse-song-entity-user.json`(user_splits),这里只读;实体表重建、删除都不碰它。
 // 写它的一方必须原样保留不认识的键。
 
@@ -110,9 +111,21 @@ func rebuildSongEntityTable(now time.Time) {
 		snapshot[k] = v
 	}
 	enrichMu.Unlock()
+	songs := make(map[string]string, len(snapshot))
+	for k, e := range snapshot {
+		if e.Song != "" {
+			songs[k] = e.Song
+		}
+	}
 	variants := songVariantsFromCache(snapshot, lyricsPinnedKeys())
 	b := buildSongEntities(variants, readSongEntityUserSplits(songEntityUserPath()), decisionSidecarDir())
-	table := b.table(readSongEntityTable(songEntityTablePath()), now)
+	table := b.table(readSongEntityTable(songEntityTablePath()), songs, now)
+	if n := writeBackSongEntityIDs(table); n > 0 {
+		if err := saveEnrichCacheChecked(); err != nil {
+			slog.Error("song entities: save song ids", "err", err)
+		}
+		slog.Info("song entities: wrote song ids", "variants", n)
+	}
 	data, err := json.Marshal(table)
 	if err != nil {
 		slog.Error("song entities: encode table", "err", err)
@@ -182,8 +195,36 @@ func readSongEntityUserSplits(path string) map[string]bool {
 	return out
 }
 
-// table 把这次建表的结果整理成实体表文件。old 是上一份(id 延续的种子),没有时全部新开。
-func (b *songEntityBuild) table(old *songEntityTableFile, now time.Time) *songEntityTableFile {
+// writeBackSongEntityIDs 把实体表里每条写法的实体 id 写进条目的 `song`、共享组编号写进 `song_share`,返回改了几条。
+// 缓存里已经没有的写法跳过。
+func writeBackSongEntityIDs(t *songEntityTableFile) int {
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	n := 0
+	for id, rec := range t.Songs {
+		for i, k := range rec.Variants {
+			share := 0
+			if i < len(rec.Share) {
+				share = rec.Share[i]
+			}
+			e, ok := enrichCache[k]
+			if !ok || (e.Song == id && e.SongShare == share) {
+				continue
+			}
+			e.Song, e.SongShare = id, share
+			enrichCache[k] = e
+			n++
+		}
+	}
+	if n > 0 {
+		enrichDirty = true
+	}
+	return n
+}
+
+// table 把这次建表的结果整理成实体表文件。id 延续的种子:songs(写法键 → 条目上的 `song`)优先,其次是 old(上一份
+// 实体表);都没有时新开。建立时刻只有旧表里有,只从 `song` 来的 id 按 now 算。
+func (b *songEntityBuild) table(old *songEntityTableFile, songs map[string]string, now time.Time) *songEntityTableFile {
 	seeds, created := map[string]string{}, map[string]int64{}
 	if old != nil {
 		for id, s := range old.Songs {
@@ -192,6 +233,9 @@ func (b *songEntityBuild) table(old *songEntityTableFile, now time.Time) *songEn
 				seeds[k] = id
 			}
 		}
+	}
+	for k, id := range songs {
+		seeds[k] = id
 	}
 	keys := make([][]string, len(b.clusters))
 	for ci, members := range b.clusters {
@@ -256,6 +300,37 @@ func (b *songEntityBuild) table(old *songEntityTableFile, now time.Time) *songEn
 	// 重定向压平:旧表里指向的 id 这次又被并走的,直接指到现在的 id;指向已经不存在的 id 的丢掉。
 	for from, to := range redirects {
 		t.Redirects[from] = to
+	}
+	// 旧表里的 id 这次没分到实体、也没记重定向(种子全被条目上的 `song` 盖掉了):指向拿走它写法最多的那个实体。
+	if old != nil {
+		of := map[string]string{}
+		for id, rec := range t.Songs {
+			for _, k := range rec.Variants {
+				of[k] = id
+			}
+		}
+		for id, s := range old.Songs {
+			if _, live := t.Songs[id]; live {
+				continue
+			}
+			if _, ok := t.Redirects[id]; ok {
+				continue
+			}
+			count, best := map[string]int{}, ""
+			for _, k := range s.Variants {
+				to := of[k]
+				if to == "" {
+					continue
+				}
+				count[to]++
+				if best == "" || count[to] > count[best] || (count[to] == count[best] && to < best) {
+					best = to
+				}
+			}
+			if best != "" {
+				t.Redirects[id] = best
+			}
+		}
 	}
 	if old != nil {
 		for from, to := range old.Redirects {

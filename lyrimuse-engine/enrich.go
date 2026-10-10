@@ -494,6 +494,13 @@ type enrichEntry struct {
 	SpotifyAlbumID   string `json:"spotify_album_id,omitempty"`
 	SpotifyArtistID  string `json:"spotify_artist_id,omitempty"`
 
+	// Song:这条写法所在的歌曲实体的 id。只由实体表全量重建写(writeBackSongEntityIDs),重建分 id 时当种子、比上一份
+	// 实体表优先(见 18 章决策 8)。
+	Song string `json:"song,omitempty"`
+	// SongShare:这条写法在实体里是第几个共享组(实体表 `share` 的编号),第 0 组不写。跟 Song 一起由全量重建写,
+	// App 只在同一个共享组里借检索配的链接(18 章决策 12)。
+	SongShare int `json:"song_share,omitempty"`
+
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
 	// (enrichjson.go)。
 	//
