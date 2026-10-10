@@ -91,7 +91,6 @@
 "%@（其他用户也可修改，系统拒绝加载）" = "%@ (other users can modify it, so macOS won't load it)";
 "%@（属于 %@）" = "%@ (owned by %@)";
 "%@（已暂停）" = "%@ (Paused)";
-"%@（推荐）" = "%@ (recommended)";
 "%@（未安装）" = "%@ (not installed)";
 "%@（没有写入权限）" = "%@ (no write access)";
 "%@，已下载" = "%@, downloaded";
@@ -257,7 +256,6 @@
 "两首探测曲均无响应，该源目前可能不可用" = "Neither probe track got a response — this source may currently be unavailable";
 "中文" = "Chinese";
 "为当前配色命名" = "Name these colors";
-"为每个歌词源评分，选用最高分的结果" = "Scores every source and keeps the best match";
 "主行的字重；副行和展开时的下一句预览比主行细一档" = "Font weight of the main line; the secondary line and the expanded next-line preview are one step lighter";
 "主题" = "Theme";
 "主题名称" = "Theme Name";
@@ -859,6 +857,7 @@
 "开机时自动启动 Lyrimuse" = "Launch Lyrimuse at login";
 "开源组件与词典" = "Open-source components and dictionaries";
 "开源许可证" = "Open-Source License";
+"开着 %@ 个" = "%@ on";
 "开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
 "开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。" = "On: scrobbled too, once half-played.\nOff: not scrobbled (Last.fm's rule).";
 "当前使用" = "In use";
@@ -969,6 +968,7 @@
 "排版" = "Layout";
 "接收 Lyrimuse 的推送通知" = "Receive push notifications from Lyrimuse";
 "接近平分，但内容印证不完整" = "Nearly tied, but not fully corroborated";
+"推荐。为每个歌词源评分，选用最高分的结果" = "Recommended. Scores every source and keeps the best match";
 "推送地址" = "Push URL";
 "推送提醒" = "Push Alerts";
 "描边颜色" = "Stroke Color";
@@ -1429,6 +1429,7 @@
 "浅色卡片" = "Light Card";
 "测试" = "Test";
 "测试中…" = "Testing…";
+"测试全部" = "Test All";
 "测试失败：%@" = "Couldn't test lyrics sources: %@";
 "测试版更新" = "Beta Updates";
 "浓淡" = "Density";

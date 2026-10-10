@@ -1026,8 +1026,14 @@ private struct LyricsSettingsTab: View {
             // 说明白这张卡管什么)。
             //
             // 预取排在决策项(选来源、挑算法)后面:它是无感优化,不该压在真正要动的决策上面。
-            sourcesCard
-            matchingCard
+            //
+            // 间距跟 SettingsPage 的卡间距(14)一致:两张卡包一层只为挂同一片背景光。
+            VStack(spacing: 14) {
+                sourcesCard
+                matchingCard
+            }
+            // 玻璃要背后有东西才看得出来,跟 Last.fm 各段同一份淡色光(12 章决策 63)。
+            .background { LastfmGlassGlow() }
         case .translation:
             translationCard
         case .display:
@@ -1038,11 +1044,19 @@ private struct LyricsSettingsTab: View {
     }
 
     // 每个来源前面那个彩色圆点用 iconTint 上色——这里的图标不是"行首的视觉锚点",它本身
-    // 就是这个来源的身份色(跟"歌词管理"窗口里来源列的色点是同一套 source.color)。
+    // 就是这个来源的身份色(跟"歌词管理"窗口里来源列的色点是同一套 source.color)。身份色只落在勾上:
+    // 格子本身是中性的玻璃,别给格子铺来源色,12 种颜色铺满一张卡就花了。
     private var sourcesCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("歌词来源")) { testAllSourcesButton }
-            CardDivider()
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("歌词来源")) {
+                HStack(spacing: 10) {
+                    Text(String(format: L10n.t("开着 %@ 个"), "\(features.lyricsSources.count)"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    testAllSourcesButton
+                }
+            }
             // 固定 4 列的网格,不用 WrapLayout 按可用宽度贪心折行 —— 那样折行位置完全由译文长度
             // 决定("网易云音乐"5 个字、英文界面下 "NetEase Cloud Music" 20 个字符,同一张卡在两种
             // 语言下从两行变三行)。固定列数下行数只取决于「来源数 ÷ 4」,跟语言、译文长短无关,
@@ -1050,8 +1064,8 @@ private struct LyricsSettingsTab: View {
             // hover 出完整名字(.help),不会像 WrapLayout 那样把整张卡的折行结构带歪。
             SettingsRawRow(insetToText: true) {
                 LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
-                    alignment: .leading, spacing: 4
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
+                    alignment: .leading, spacing: 6
                 ) {
                     ForEach(LyricsSource.settingsDisplayOrder) { source in
                         // 测试按钮/结果状态放在每一格尾部。
@@ -1072,7 +1086,10 @@ private struct LyricsSettingsTab: View {
                             appleMusicConnectionAccessory(source)
                             sourceTestAccessory(source)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 2)
+                        .padding(.trailing, 5)
+                        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                        .background { sourceTileBackground(source) }
                         // 在整行(复选框+空白+图标)上补一层独立的悬停追踪,专门喂给 hoveredRow:
                         // sourceCheckbox 自己的悬停范围紧贴内容(不占满整格,见上面那段),跟测试小图标
                         // 之间隔着 Spacer 撑出来的一段空白,指针走在那段空白里时两边的悬停信号都不成立。
@@ -1085,6 +1102,7 @@ private struct LyricsSettingsTab: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 4)
             }
         }
         .onAppear { appleMusic.refresh() }
@@ -1287,49 +1305,32 @@ private struct LyricsSettingsTab: View {
     /// 可以省掉那个"这是在说哪一档"的前缀 —— 右边 radio 已经标明了。
     private var matchingModeSubtitle: String {
         switch features.lyricsSourceMode {
-        case .smart: return L10n.t("为每个歌词源评分，选用最高分的结果")
+        // 「推荐」写在智能那一档的说明开头:分段控件每一格只放档名,别往格子上叠星标之类的装饰。
+        case .smart: return L10n.t("推荐。为每个歌词源评分，选用最高分的结果")
         case .priority: return L10n.t("不进行评分，按下方顺序采用第一个有结果的来源")
         }
-    }
-
-    /// radio 的标签。「智能算法」带「（推荐）」后缀 —— 这是"推荐"这层语义唯一的表达方式。
-    ///
-    /// 别再往控件上叠图标(星标之类)来强调推荐:分段控件桥接成 NSSegmentedControl,没法在
-    /// 某一格里放东西,只能往控件**外面**叠装饰,而任何叠在原生控件上的东西都不像原生。radio
-    /// 每一档有自己的一行文字,「推荐」就写进标签里(同引导页「Apple Music 自动化权限（推荐）」)。
-    /// 想强调就改文字。
-    private func matchingModeLabel(_ mode: LyricsSourceMode) -> String {
-        mode == .smart
-            ? String(format: L10n.t("%@（推荐）"), mode.displayName)
-            : mode.displayName
     }
 
     /// 第二张卡:找到来源之后"怎么定"—— 匹配算法、(顺序优先时的)手排顺序、后台许不许换、
     /// 预取、手动锁定。为什么跟来源网格分开成两张卡,见 currentSection 里 `.fetch` 分支的注释。
     private var matchingCard: some View {
-        SettingsCard {
-            // 二选一用原生 **纵向 radio 组**(macOS 系统设置里「点按滚动条时」那种,两颗 radio
-            // 上下排、跟标题顶对齐),不用分段控件。三个原因:
-            //   1. 每档一行文字,「（推荐）」才有地方写(见 matchingModeLabel);
-            //   2. 分段控件是一块灰底色块,在一列开关里是这张卡上最重的东西,radio 只有两个
-            //      小圆圈,视觉分量跟旁边的 Toggle 相当;
-            //   3. 英文标签(“Smart Matching (recommended)”)比中文长一倍,横排会挤到左边的副
-            //      标题折行,纵排的宽度只取决于最长那一条标签,两种语言下行高都是两行 radio。
-            // 副标题随选中项变(matchingModeSubtitle),不另给「?」气泡。
+        SettingsCard(cornerRadius: 18) {
+            // 二选一用玻璃分段(同 Last.fm「Scrobble 规则」卡的匹配模式),副标题随选中项变
+            // (matchingModeSubtitle),不另给「?」气泡。
             SettingsRow(
                 icon: "slider.horizontal.3",
                 title: L10n.t("匹配算法"),
                 subtitle: matchingModeSubtitle
             ) {
-                Picker("", selection: Binding(
-                    get: { features.lyricsSourceMode },
-                    set: { features.lyricsSourceMode = $0; Task { await features.save() } }
-                )) {
-                    ForEach(LyricsSourceMode.allCases) { mode in
-                        Text(matchingModeLabel(mode)).tag(mode)
-                    }
-                }
-                .pickerStyle(.radioGroup)
+                SettingsGlassTabPicker(
+                    selection: Binding(
+                        get: { features.lyricsSourceMode },
+                        set: { features.lyricsSourceMode = $0; Task { await features.save() } }
+                    ),
+                    options: LyricsSourceMode.allCases,
+                    label: \.displayName,
+                    compact: true
+                )
             }
             if features.lyricsSourceMode == .priority {
                 // 顺序列表支持把手拖拽排序:每行左侧一个 line.3.horizontal 把手,挂 DragGesture;
@@ -1564,11 +1565,10 @@ private struct LyricsSettingsTab: View {
     private func sourceCheckbox(
         id: String, name: String, color: Color, on: Bool, toggle: @escaping (Bool) -> Void
     ) -> some View {
-        let hovered = hoveredSource == id
-        return Button {
+        Button {
             toggle(!on)
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 // 勾要留着 —— 只画一个实心圆点的话,五个来源全开时这一排看上去就是一条
                 // 静态色标图例,完全读不出"能点"。勾 = 多选,圆的颜色 = 这是谁,两件事各
                 // 说各的,不再重复。
@@ -1589,7 +1589,7 @@ private struct LyricsSettingsTab: View {
                 // 这类)在这个宽度下装不下。所以用截断:单行 + 尾部省略号,鼠标悬停(.help)给出
                 // 完整名字,不让某一个来源的长译名撑破所在的整列宽度。
                 Text(name)
-                    .font(.system(size: 13))
+                    .font(.system(size: 12.5))
                     .foregroundStyle(on ? Color.primary : Color.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -1598,19 +1598,32 @@ private struct LyricsSettingsTab: View {
             // 按自己的内容(圆点+文字)天然宽度来,"占满整格"交给外层 HStack 负责 —— 占满的话会
             // 把 Spacer 和测试小图标挤没空间。测试图标是 HStack 里的平级兄弟、不是叠上来的
             // overlay(叠加方案在实机上点击互相抢占,见 ForEach 调用点的详细注释)。
-            .padding(.vertical, 4)
-            .padding(.horizontal, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(hovered ? Color.secondary.opacity(0.12) : .clear))
-            // 整块(含内边距)都算命中区,不是只有文字和圆点上才点得到
+            .padding(.vertical, 6)
+            .padding(.horizontal, 6)
+            // 整块(含内边距)都算命中区,不是只有文字和圆点上才点得到。悬停反馈画在外面那一格上
+            // (sourceTileBackground),这里不再画底色。
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .help(sourceHelpText(id))
         .onHover { hoveredSource = $0 ? id : (hoveredSource == id ? nil : hoveredSource) }
-        .animation(.easeOut(duration: 0.12), value: hovered)
         .accessibilityAddTraits(on ? [.isSelected] : [])
+    }
+
+    /// 来源那一格的底:开着是一块玻璃,关着只剩一圈细线(字和勾已经变灰);指针压在格子上时再叠一层淡底。
+    @ViewBuilder
+    private func sourceTileBackground(_ source: LyricsSource) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        let hovered = hoveredRow == source
+        ZStack {
+            if features.lyricsSources.contains(source) {
+                Color.clear.settingsCardBackground(cornerRadius: 10)
+            } else {
+                shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+            }
+            shape.fill(Color.primary.opacity(hovered ? 0.05 : 0))
+        }
+        .animation(.easeOut(duration: 0.12), value: hovered)
     }
 
     private func setSource(_ source: LyricsSource, enabled: Bool) {
@@ -1648,12 +1661,13 @@ private struct LyricsSettingsTab: View {
                 } else {
                     Image(systemName: "antenna.radiowaves.left.and.right")
                 }
-                Text(isTestingLyricSources ? L10n.t("测试中…") : L10n.t("测试"))
+                Text(isTestingLyricSources ? L10n.t("测试中…") : L10n.t("测试全部"))
             }
             .font(.system(size: 11, weight: .medium))
         }
         .controlSize(.small)
         .settingsGlassButtons()
+        .buttonBorderShape(.capsule)
     }
 
     /// 每个来源格子尾部的测试按钮/结果状态。跟 `sourceCheckbox` 是平级的 HStack 兄弟节点,

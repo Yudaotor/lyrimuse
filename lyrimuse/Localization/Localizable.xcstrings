@@ -24993,48 +24993,71 @@
         }
       }
     },
-    "%@（推荐）" : {
+    "推荐。为每个歌词源评分，选用最高分的结果" : {
       "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@（推荐）"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ (recommended)"
+            "value" : "Recommended. Scores every source and keeps the best match"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推荐。为每个歌词源评分，选用最高分的结果"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@（建議）"
+            "value" : "推薦。為每個歌詞來源評分，選用最高分的結果"
           }
         }
       }
     },
-    "为每个歌词源评分，选用最高分的结果" : {
+    "开着 %@ 个" : {
       "extractionState" : "manual",
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "为每个歌词源评分，选用最高分的结果"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scores every source and keeps the best match"
+            "value" : "%@ on"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开着 %@ 个"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "為每個歌詞來源評分，選用最高分的結果"
+            "value" : "開啟 %@ 個"
+          }
+        }
+      }
+    },
+    "测试全部" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Test All"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试全部"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部測試"
           }
         }
       }
