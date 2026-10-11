@@ -30,6 +30,7 @@ public enum QQMusicAccessibilityControl {
     }
 
     /// 同步返回 AXPress 是否送出,不把 API 成功当作播放器状态确认。
+    /// 会阻塞跨进程调用,不要在主线程调;播放控制由 MusicPlaybackController 排入命令队列。
     /// 只读菜单三层,最多 20 个顶层菜单 / 每层 32 项。总读取预算 0.5s,
     /// 单次 AX 消息 0.1s(含按下动作);最多再等一条已经发出的消息,不重试动作。
     public static func press(_ command: Command) -> Outcome {
