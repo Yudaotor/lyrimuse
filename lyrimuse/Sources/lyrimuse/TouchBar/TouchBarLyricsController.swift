@@ -14,7 +14,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// 整条触控栏)、或者本 App 在前台 —— 左端换成 App 自己那颗样子相同的收起键(`TouchBarSlot.showsCollapseKey`)。
 /// 1st generation 触控栏(左端是一颗虚拟 Esc 键)上,展开条会占掉系统的 Esc,左端那一格放回一颗自己的 esc 键
 /// (`TouchBarEscapeKey`,见 17 章决策 36),收起键跟在它后面。
-/// 在设置里打开开关的那一下直接展开,App 启动时只放图标。
+/// 在设置里打开开关的那一下直接展开,App 启动时只放图标。「行为」里的三个开关(默认都关)按播放状态自动展开 / 收起,
+/// 怎么判在 Core `TouchBarAutoPresent`,这里只执行(`autoUpdate` / `performAuto`,见 17 章决策 45)。
 /// 全局快捷键「展开/收起触控栏歌词」照此刻看不看得见来展开 / 收起,关着时先打开(`toggleFromHotkey`)。
 /// 系统入口见 `TouchBarPrivateAPI`。这台 Mac 此刻没有触控栏时(`TouchBarAvailability`)开关开着也不启用,
 /// 触控栏出现 / 消失时跟着启停。
@@ -26,7 +27,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// 看得见了再补上。
 ///
 /// 设置(同一段里):卡拉OK效果、跟随封面、字号、显示封面 / 播放控制(连同各自的位置)、对齐方式、副行、
-/// 展开时隐藏功能栏,改了当场生效。
+/// 展开时隐藏功能栏、自动展开 / 收起,改了当场生效;自动展开 / 收起从下一次播放状态变化起算。
 @MainActor
 final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     static let shared = TouchBarLyricsController()
@@ -83,6 +84,16 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     /// 快捷键回声(`flashHint`):这一行和它从歌词时间轴哪一刻起显示;nil = 没有。
     private var hint: (text: String, startMs: Int)?
     private var hintTask: Task<Void, Never>?
+    /// 自动展开 / 收起(`TouchBarAutoPresent`)的状态、三个开关此刻的值,和暂停满时长再收起的那一次计时。
+    private var autoPresent = TouchBarAutoPresent()
+    private var autoOptions = TouchBarAutoPresent.Options(expandOnPlay: false, collapseWhenPaused: false,
+                                                          collapseWhenNoLyrics: false)
+    private var pauseCollapseTask: Task<Void, Never>?
+    /// 自己发起的展开 / 收起等着哪个可见状态:`visibilityChanged` 看到的变化跟它对得上就是自己做的,对不上就是用户
+    /// 动的(功能栏图标、✕、收起键、快捷键)。
+    private var expectedVisibility: Bool?
+    /// 上一次看到的可见状态:KVO 同一个值报两次时不当成又变了一次。
+    private var lastVisible = false
 
     private let bar = NSTouchBar()
     private let trayItem = NSCustomTouchBarItem(identifier: Item.tray)
@@ -202,6 +213,14 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 .sink { [weak self] _ in self?.scheduleRefresh() },
             settings.$touchBarLyricsAlignment.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
+            // 自动展开 / 收起的三个开关:只换判据用的值,从下一次播放状态变化起算;关掉「暂停时收起」时作废等着的那一次。
+            Publishers.CombineLatest3(settings.$touchBarExpandOnPlay, settings.$touchBarCollapseWhenPaused,
+                                      settings.$touchBarCollapseWhenNoLyrics)
+                .sink { [weak self] expand, pause, noLyrics in
+                    self?.autoOptions = .init(expandOnPlay: expand, collapseWhenPaused: pause,
+                                              collapseWhenNoLyrics: noLyrics)
+                    if !pause { self?.cancelPauseCollapse() }
+                },
         ]
         setEnabled(settings.showLyricsInTouchBar && availability.isPresent, presentNow: false)
     }
@@ -284,6 +303,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             // 明确传 false:万一哪一版系统上它管用,也不会跟自己那一颗同时出现。
             TouchBarPrivateAPI.showCloseBoxWhenFrontmost(false)
             TouchBarPrivateAPI.setInControlStrip(trayItem, true)
+            lastVisible = bar.isVisible
+            startAuto(presentingNow: presentNow)
             observePlayback()
             visibilityObservation = bar.observe(\.isVisible, options: [.new]) { _, _ in
                 DispatchQueue.main.async { TouchBarLyricsController.shared.visibilityChanged() }
@@ -297,6 +318,9 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             presentedFullWidth = false
             hintTask?.cancel()
             hint = nil
+            cancelPauseCollapse()
+            autoPresent = TouchBarAutoPresent()
+            expectedVisibility = nil
             TouchBarPrivateAPI.dismissSystemModal(bar)
             TouchBarPrivateAPI.setInControlStrip(trayItem, false)
             displayStart = TouchBarDisplayStart()
@@ -358,15 +382,19 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         case .expand:
             presentLyrics(hidingControlStrip: settings.touchBarHidesControlStrip)
         case .collapse:
-            // 同 ✕ 和自己那颗收起键;收起的入口缺了的系统上只能撤掉展开条。
-            if TouchBarPrivateAPI.supportsHidingControlStrip {
-                TouchBarPrivateAPI.minimizeSystemModal(bar)
-            } else {
-                TouchBarPrivateAPI.dismissSystemModal(bar)
-            }
+            collapseBar()
         }
         logger.notice("[TouchBarLyricsController.toggleFromHotkey] \(String(describing: action), privacy: .public)")
         return action
+    }
+
+    /// 收回成功能栏图标,同 ✕ 和自己那颗收起键;收起的入口缺了的系统上只能撤掉展开条。
+    private func collapseBar() {
+        if TouchBarPrivateAPI.supportsHidingControlStrip {
+            TouchBarPrivateAPI.minimizeSystemModal(bar)
+        } else {
+            TouchBarPrivateAPI.dismissSystemModal(bar)
+        }
     }
 
     /// 快捷键回声(灵动岛、悬浮歌词都没开时,见 `GlobalHotkeys.flashHint`):展开着时歌词那一格换成这一行,副行藏起来,
@@ -417,6 +445,15 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         guard enabled else { return }
         let visible = bar.isVisible
         logger.notice("[TouchBarLyricsController.visibilityChanged] visible=\(visible)")
+        if visible != lastVisible {
+            lastVisible = visible
+            if expectedVisibility == visible {
+                expectedVisibility = nil
+            } else {
+                autoPresent.userChangedVisibility()
+                cancelPauseCollapse()
+            }
+        }
         guard visible else {
             // 占满整条的展开收起后功能栏重新排,放歌时 Lyrimuse 那一格会给系统的「正在播放」、图标点不回来;
             // 重新露一次面就排回去。普通方式展开的收起后图标还在,不动(17 章决策 42)。
@@ -433,6 +470,61 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         refresh()
     }
 
+    // MARK: - 自动展开 / 收起
+
+    private static func trackKey(_ title: String?, _ artist: String?) -> String {
+        "\(title ?? "")\u{1F}\(artist ?? "")"
+    }
+
+    private static func nowMs() -> Int { Int(ProcessInfo.processInfo.systemUptime * 1000) }
+
+    /// 启用那一刻:从此刻的播放状态记起。设置里拨开开关那一下已经在展开,不再自动展开一次。
+    private func startAuto(presentingNow: Bool) {
+        let p = PlaybackCoordinator.shared
+        performAuto(autoPresent.start(isPlaying: p.isPlayingNow, lacksLyrics: p.currentTrackLacksLyrics,
+                                      trackKey: Self.trackKey(p.title, p.artist), nowMs: Self.nowMs(),
+                                      visible: presentingNow || bar.isVisible, options: autoOptions))
+    }
+
+    private func autoUpdate(isPlaying: Bool, lacksLyrics: Bool, trackKey: String) {
+        guard enabled else { return }
+        if isPlaying { cancelPauseCollapse() }
+        performAuto(autoPresent.update(isPlaying: isPlaying, lacksLyrics: lacksLyrics, trackKey: trackKey,
+                                       nowMs: Self.nowMs(), visible: bar.isVisible, options: autoOptions))
+    }
+
+    private func performAuto(_ action: TouchBarAutoPresent.Action) {
+        switch action {
+        case .none:
+            return
+        case .expand:
+            guard !bar.isVisible else { return }
+            expectedVisibility = true
+            presentLyrics(hidingControlStrip: AppSettings.shared.touchBarHidesControlStrip)
+        case .collapse:
+            guard bar.isVisible else { return }
+            cancelPauseCollapse()
+            expectedVisibility = false
+            collapseBar()
+        case .schedulePauseCollapse:
+            cancelPauseCollapse()
+            pauseCollapseTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.pauseCollapseDelayMs))
+                guard !Task.isCancelled, let self, self.enabled else { return }
+                self.pauseCollapseTask = nil
+                self.performAuto(self.autoPresent.pauseDelayElapsed(
+                    isPlaying: PlaybackCoordinator.shared.isPlayingNow, visible: self.bar.isVisible,
+                    options: self.autoOptions))
+            }
+        }
+        logger.notice("[TouchBarLyricsController.performAuto] \(String(describing: action), privacy: .public)")
+    }
+
+    private func cancelPauseCollapse() {
+        pauseCollapseTask?.cancel()
+        pauseCollapseTask = nil
+    }
+
     // MARK: - 跟播放状态
 
     private func observePlayback() {
@@ -447,6 +539,13 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 .sink { [weak self] in
                     self?.coverAccent = $0
                     self?.scheduleRefresh()
+                },
+            // 自动展开 / 收起:四项一起防抖 300ms。没歌词那一项自己防抖过 50ms,歌名先到的话换歌那一刻会带着上一首的结论。
+            Publishers.CombineLatest4(p.$isPlayingNow, p.$currentTrackLacksLyrics, p.$title, p.$artist)
+                .dropFirst()
+                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+                .sink { [weak self] playing, lacks, title, artist in
+                    self?.autoUpdate(isPlaying: playing, lacksLyrics: lacks, trackKey: Self.trackKey(title, artist))
                 },
             // 系统的「减弱动态效果」:refresh 里现读,拨了当场换成静止 / 恢复滚动。
             NSWorkspace.shared.notificationCenter

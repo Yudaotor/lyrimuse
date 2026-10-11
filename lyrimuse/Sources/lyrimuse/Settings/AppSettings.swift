@@ -247,6 +247,9 @@ final class AppSettings: ObservableObject {
         static let touchBarControlsSide = "np:touchBarControlsSide"
         static let touchBarLyricsAlignment = "np:touchBarLyricsAlignment"
         static let touchBarHidesControlStrip = "np:touchBarHidesControlStrip"
+        static let touchBarExpandOnPlay = "np:touchBarExpandOnPlay"
+        static let touchBarCollapseWhenPaused = "np:touchBarCollapseWhenPaused"
+        static let touchBarCollapseWhenNoLyrics = "np:touchBarCollapseWhenNoLyrics"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
         static let menuBarLyricsWidthMode = "np:menuBarLyricsWidthMode"
@@ -599,6 +602,9 @@ final class AppSettings: ObservableObject {
     static let defaultTouchBarControlsSide = TouchBarSide.leading
     static let defaultTouchBarLyricsAlignment = LyricsRestingAlignment.automatic
     static let defaultTouchBarHidesControlStrip = true
+    static let defaultTouchBarExpandOnPlay = false
+    static let defaultTouchBarCollapseWhenPaused = false
+    static let defaultTouchBarCollapseWhenNoLyrics = false
 
     private let defaults = UserDefaults.standard
 
@@ -925,6 +931,16 @@ final class AppSettings: ObservableObject {
     /// 展开时隐藏功能栏:展开条占满整条触控栏,左端换成 App 自己的收起键。默认开;开着时展开期间够不着系统的亮度、音量,收起才回来。
     @Published var touchBarHidesControlStrip: Bool {
         didSet { defaults.set(touchBarHidesControlStrip, forKey: Keys.touchBarHidesControlStrip) }
+    }
+    /// 触控栏歌词的自动展开 / 收起(「行为」那三项,默认都关),怎么判见 Core `TouchBarAutoPresent`。
+    @Published var touchBarExpandOnPlay: Bool {
+        didSet { defaults.set(touchBarExpandOnPlay, forKey: Keys.touchBarExpandOnPlay) }
+    }
+    @Published var touchBarCollapseWhenPaused: Bool {
+        didSet { defaults.set(touchBarCollapseWhenPaused, forKey: Keys.touchBarCollapseWhenPaused) }
+    }
+    @Published var touchBarCollapseWhenNoLyrics: Bool {
+        didSet { defaults.set(touchBarCollapseWhenNoLyrics, forKey: Keys.touchBarCollapseWhenNoLyrics) }
     }
     // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——做成可调的
     // 上限而不是写死一个数字。
@@ -2146,6 +2162,12 @@ final class AppSettings: ObservableObject {
             .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? Self.defaultTouchBarLyricsAlignment
         touchBarHidesControlStrip = (defaults.object(forKey: Keys.touchBarHidesControlStrip) as? Bool)
             ?? Self.defaultTouchBarHidesControlStrip
+        touchBarExpandOnPlay = (defaults.object(forKey: Keys.touchBarExpandOnPlay) as? Bool)
+            ?? Self.defaultTouchBarExpandOnPlay
+        touchBarCollapseWhenPaused = (defaults.object(forKey: Keys.touchBarCollapseWhenPaused) as? Bool)
+            ?? Self.defaultTouchBarCollapseWhenPaused
+        touchBarCollapseWhenNoLyrics = (defaults.object(forKey: Keys.touchBarCollapseWhenNoLyrics) as? Bool)
+            ?? Self.defaultTouchBarCollapseWhenNoLyrics
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         // 默认 250pt:大约中文 19 个字、英文 37 个字,菜单栏上占一小条,不至于把右边
         // 其它 App 的图标挤走。从 200 改上来 —— 用户把自己在用的这一版菜单栏

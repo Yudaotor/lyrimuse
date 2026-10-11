@@ -430,6 +430,123 @@ func runTouchBarTests() {
         }
     }
 
+    // ---- 自动展开 / 收起(TouchBarAutoPresent,17 章决策 45)----
+    do {
+        typealias Auto = TouchBarAutoPresent
+        func opts(play: Bool = false, pause: Bool = false, noLyrics: Bool = false) -> Auto.Options {
+            .init(expandOnPlay: play, collapseWhenPaused: pause, collapseWhenNoLyrics: noLyrics)
+        }
+        let all = opts(play: true, pause: true, noLyrics: true)
+
+        // 三个开关都关:什么都不动。
+        do {
+            var a = Auto()
+            expectEqual(a.start(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: false,
+                                options: opts()), .none, "自动展开: 全关时启用不动")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 5_000, visible: false,
+                                 options: opts()), .none, "自动展开: 全关时开始播放不动")
+            expectEqual(a.update(isPlaying: false, lacksLyrics: true, trackKey: "B", nowMs: 6_000, visible: true,
+                                 options: opts()), .none, "自动展开: 全关时暂停、没歌词都不动")
+        }
+        // 启用时正在播放:开了「开始播放时自动展开」就展开;这首已知没歌词、又开了「无歌词时收起」的不展开;已经看得见的不重复。
+        do {
+            var a = Auto()
+            expectEqual(a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: false,
+                                options: opts(play: true)), .expand, "自动展开: 启用时正在播放就展开")
+            expectEqual(a.start(isPlaying: true, lacksLyrics: true, trackKey: "A", nowMs: 0, visible: false,
+                                options: all), .none, "自动展开: 启用时这首没歌词、开着无歌词收起,不展开")
+            expectEqual(a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: true,
+                                options: opts(play: true)), .none, "自动展开: 已经展开着(拨开开关那一下)不再展开")
+            expectEqual(a.start(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: false,
+                                options: opts(play: true)), .none, "自动展开: 启用时没在播放不展开")
+        }
+        // 开始播放:停够了才算;切歌、缓冲那一下(停不到 resumeDebounceMs)不展开;同一状态重复报不重复动作。
+        do {
+            var a = Auto()
+            _ = a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: false, options: opts(play: true))
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 10_000, visible: false,
+                                 options: opts(play: true)), .none, "自动展开: 暂停时不动(没开暂停收起)")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "B", nowMs: 10_000 + Auto.resumeDebounceMs - 1,
+                                 visible: false, options: opts(play: true)), .none, "自动展开: 切歌那一下的暂停不算开始播放")
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "B", nowMs: 20_000, visible: false,
+                                 options: opts(play: true)), .none, "自动展开: 再暂停")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "B", nowMs: 20_000 + Auto.resumeDebounceMs,
+                                 visible: false, options: opts(play: true)), .expand, "自动展开: 停够了再播,展开")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "B", nowMs: 23_000, visible: false,
+                                 options: opts(play: true)), .none, "自动展开: 同一状态重复报不重复展开")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "C", nowMs: 30_000, visible: false,
+                                 options: opts(play: true)), .none, "自动展开: 播放中自然换歌不展开(手动收起的保持收起)")
+        }
+        // 暂停时收起:暂停排一次计时,满了还暂停、还看得见才收;继续播放时展开回来,不看「开始播放时自动展开」。
+        do {
+            var a = Auto()
+            _ = a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: true, options: opts(pause: true))
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 1_000, visible: true,
+                                 options: opts(pause: true)), .schedulePauseCollapse, "暂停收起: 暂停时排计时")
+            expectEqual(a.pauseDelayElapsed(isPlaying: true, visible: true, options: opts(pause: true)), .none,
+                        "暂停收起: 计时满时已经在播,不收")
+            expectEqual(a.pauseDelayElapsed(isPlaying: false, visible: false, options: opts(pause: true)), .none,
+                        "暂停收起: 计时满时已经收着,不收")
+            expectEqual(a.pauseDelayElapsed(isPlaying: false, visible: true, options: opts()), .none,
+                        "暂停收起: 计时期间开关关了,不收")
+            expectEqual(a.pauseDelayElapsed(isPlaying: false, visible: true, options: opts(pause: true)), .collapse,
+                        "暂停收起: 满了还暂停、还展开着,收起")
+            expectEqual(a.autoCollapsed, .paused, "暂停收起: 记下是因为暂停收的")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 2_000, visible: false,
+                                 options: opts(pause: true)), .expand, "暂停收起: 继续播放时展开回来(哪怕停得很短)")
+            expectEqual(a.autoCollapsed, nil, "暂停收起: 展开后不再记着")
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 3_000, visible: false,
+                                 options: opts(pause: true)), .none, "暂停收起: 收着时暂停不排计时")
+        }
+        // 用户自己收起 / 展开之后:自动收起的原因作废,手动的结果保持到下一次变化。
+        do {
+            var a = Auto()
+            _ = a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: true, options: opts(pause: true))
+            _ = a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 1_000, visible: true, options: opts(pause: true))
+            _ = a.pauseDelayElapsed(isPlaying: false, visible: true, options: opts(pause: true))
+            a.userChangedVisibility()
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 30_000, visible: false,
+                                 options: opts(pause: true)), .none, "手动操作后: 暂停收起的原因作废,继续播放不展开")
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 31_000, visible: true,
+                                 options: opts(pause: true)), .schedulePauseCollapse, "手动展开后: 下一次暂停照常排计时")
+        }
+        // 纯音乐 / 无歌词时收起:确认没歌词那一刻收;下一首(搜索期间算有)或者后来有了歌词时展开回来;手动展开的不再收。
+        do {
+            var a = Auto()
+            let o = opts(noLyrics: true)
+            _ = a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: true, options: o)
+            expectEqual(a.update(isPlaying: true, lacksLyrics: true, trackKey: "A", nowMs: 3_000, visible: true, options: o),
+                        .collapse, "无歌词收起: 确认没歌词时收起")
+            expectEqual(a.autoCollapsed, .noLyrics, "无歌词收起: 记下是因为没歌词收的")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "B", nowMs: 200_000, visible: false, options: o),
+                        .expand, "无歌词收起: 换到下一首(搜索期间)展开回来")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: true, trackKey: "C", nowMs: 400_000, visible: true, options: o),
+                        .collapse, "无歌词收起: 换到一首已知没歌词的,收起")
+            expectEqual(a.update(isPlaying: false, lacksLyrics: true, trackKey: "C", nowMs: 401_000, visible: false, options: all),
+                        .none, "无歌词收起: 没歌词的这首暂停不动")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: true, trackKey: "C", nowMs: 420_000, visible: false, options: all),
+                        .none, "无歌词收起: 没歌词的这首继续播放不展开(哪怕开着自动展开)")
+            a.userChangedVisibility()
+            expectEqual(a.update(isPlaying: true, lacksLyrics: true, trackKey: "C", nowMs: 421_000, visible: true, options: o),
+                        .none, "无歌词收起: 手动展开后同一首不再收")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "D", nowMs: 600_000, visible: true, options: o),
+                        .none, "无歌词收起: 看得见时换到有歌词的不动")
+        }
+        // 没歌词收起后、暂停期间换到有歌词的一首:开着暂停收起时先不展开,继续播放时展开。
+        do {
+            var a = Auto()
+            let o = opts(pause: true, noLyrics: true)
+            _ = a.start(isPlaying: true, lacksLyrics: true, trackKey: "A", nowMs: 0, visible: true, options: o)
+            expectEqual(a.update(isPlaying: true, lacksLyrics: true, trackKey: "B", nowMs: 1_000, visible: true, options: o),
+                        .collapse, "无歌词收起: 换到没歌词的一首,收起")
+            _ = a.update(isPlaying: false, lacksLyrics: true, trackKey: "B", nowMs: 2_000, visible: false, options: o)
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "C", nowMs: 3_000, visible: false, options: o),
+                        .none, "无歌词收起: 暂停期间换到有歌词的,先不展开")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "C", nowMs: 3_500, visible: false, options: o),
+                        .expand, "无歌词收起: 继续播放时展开回来")
+        }
+    }
+
     // ---- 接线契约 ----
     let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     let appDir = sourcesRoot.appendingPathComponent("lyrimuse")
@@ -505,6 +622,7 @@ func runTouchBarTests() {
             return String(rows[from.upperBound..<to])
         }
         let rowViews = structBody("TouchBarLyricsRows") + structBody("TouchBarStyleRows") + structBody("TouchBarLayoutRows")
+            + structBody("TouchBarBehaviorRows")
         let restore = rows.range(of: "static func restoreDefaults() {")
             .map { String(rows[$0.upperBound...].prefix { $0 != "}" }) } ?? ""
         expectEqual(touchBarBranch?.contains("TouchBarEditorToolbar()") == true
@@ -513,7 +631,8 @@ func runTouchBarTests() {
         for key in ["touchBarLyricsKaraoke", "touchBarLyricsFollowsCover", "touchBarLyricsFontSize",
                     "touchBarShowsArtwork", "touchBarShowsControls", "touchBarSecondaryLine",
                     "touchBarArtworkSide", "touchBarControlsSide", "touchBarHidesControlStrip",
-                    "touchBarLyricsAlignment"] {
+                    "touchBarLyricsAlignment", "touchBarExpandOnPlay", "touchBarCollapseWhenPaused",
+                    "touchBarCollapseWhenNoLyrics"] {
             expectEqual(rowViews.contains("settings.\(key)"), true, "触控栏: \(key) 的设置行在三组行视图里")
             expectEqual(controller.contains("settings.$\(key)"), true, "触控栏: 控制器订阅了 \(key)")
             expectEqual(restore.contains("settings.\(key) = "), true, "触控栏: 「恢复默认」管到 \(key)")
@@ -526,6 +645,19 @@ func runTouchBarTests() {
                         && !dimmedColorCell.contains("withAlphaComponent(unsungAlpha)")
                         && !dimmedColorCell.contains("withAlphaComponent(CGFloat(TouchBarLyricsStyle.secondaryRowOpacity"), true,
                     "触控栏配色: 未唱的部分、副行打折走 dimmedOnBlack")
+        // 自动展开 / 收起(17 章决策 45):启用那一刻先记状态再订阅播放状态(订阅的头一拍丢掉);四项一起防抖;可见状态的变化
+        // 跟自己发起的对不上就当成用户动的;工具栏第二行是「行为」加两份占位和「重置 ▾」的占位。漏一处不报错,只表现成
+        // 自动展开 / 收起不灵、或者手动收起后又被弹出来。
+        expectEqual(controller.contains("startAuto(presentingNow: presentNow)\n            observePlayback()")
+                        && controller.contains("Publishers.CombineLatest4(p.$isPlayingNow, p.$currentTrackLacksLyrics, p.$title, p.$artist)\n                .dropFirst()\n                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)")
+                        && controller.contains("if expectedVisibility == visible {\n                expectedVisibility = nil\n            } else {\n                autoPresent.userChangedVisibility()")
+                        && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.pauseCollapseDelayMs))")
+                        && controller.contains("if isPlaying { cancelPauseCollapse() }"), true,
+                    "触控栏自动展开: 控制器接线(先记状态再订阅、防抖、认出用户操作、暂停计时)")
+        expectEqual(rows.contains("toolbarButton(.behavior)\n            ghostButton(.style)\n            ghostButton(.layout)\n            Spacer(minLength: 8)\n            EditorToolbarResetReserve()")
+                        && rows.contains("static let firstRow: [TouchBarSettingsGroup] = [.lyrics, .style, .layout]")
+                        && rows.contains("ForEach(TouchBarSettingsGroup.firstRow, id: \\.self)"), true,
+                    "触控栏自动展开: 「行为」在工具栏第二行,带对齐占位")
         // 系统开了「减弱动态效果」(17 章决策 43):本体和预览都把它传成图层行的 `still`,图层行这时不装动画、摆在开头、
         // 整行用已唱那张;本体收到系统通知当场重画,预览的「横向滚动」提示也看它。漏一处不报错,只表现成照样滚 / 填色。
         let scrollRow = code(appDir.appendingPathComponent("UI/OverlayScrollingLyricRow.swift")) ?? ""
@@ -816,8 +948,9 @@ func runTouchBarTests() {
                     "触控栏快捷键: 控制器按此刻有没有触控栏、有没有系统入口、开关和看不看得见判定")
         expectEqual(controller.contains("case .turnOn:\n            settings.showLyricsInTouchBar = true")
                         && controller.contains("case .expand:\n            presentLyrics(hidingControlStrip: settings.touchBarHidesControlStrip)")
-                        && controller.contains("case .collapse:\n            if TouchBarPrivateAPI.supportsHidingControlStrip {\n"
-                                               + "                TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
+                        && controller.contains("case .collapse:\n            collapseBar()\n        }")
+                        && controller.contains("private func collapseBar() {\n        if TouchBarPrivateAPI.supportsHidingControlStrip {\n"
+                                               + "            TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
                     "触控栏快捷键: 关着就打开开关(订阅当场展开),收着就展开,看得见就照 ✕ 收起")
         expectEqual(settingsView.contains("if touchBar.isPresent {\n"
                                           + "            cells.append(AnyView(HotkeyCell(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t(\"展开/收起触控栏歌词\")) {\n"

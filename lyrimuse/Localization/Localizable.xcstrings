@@ -41589,6 +41589,190 @@
         }
       }
     },
+    "开始播放时自动展开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expand When Playback Starts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开始播放时自动展开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開始播放時自動展開"
+          }
+        }
+      }
+    },
+    "从暂停开始播放时展开歌词；播放中切歌不会展开，手动收起的会保持收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the lyrics when playback resumes. Changing songs mid-playback won't expand them, and lyrics you collapsed yourself stay collapsed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从暂停开始播放时展开歌词；播放中切歌不会展开，手动收起的会保持收起"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "從暫停開始播放時展開歌詞；播放中切歌不會展開，手動收起的會保持收起"
+          }
+        }
+      }
+    },
+    "暂停 10 秒后收回到功能栏图标，继续播放时自动展开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂停 10 秒后收回到功能栏图标，继续播放时自动展开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暫停 10 秒後收回到功能列圖像，繼續播放時自動展開"
+          }
+        }
+      }
+    },
+    "纯音乐/无歌词时收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse for Instrumentals & No Lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "纯音乐/无歌词时收起"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "純音樂/無歌詞時收起"
+          }
+        }
+      }
+    },
+    "搜完确认没有歌词才收起，有歌词时自动展开；搜索期间照常显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapses only once the search confirms there are no lyrics, and expands again when there are. Stays shown while searching"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜完确认没有歌词才收起，有歌词时自动展开；搜索期间照常显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜尋完確認沒有歌詞才收起，有歌詞時自動展開；搜尋期間照常顯示"
+          }
+        }
+      }
+    },
+    "自动展开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto-Expand"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动展开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動展開"
+          }
+        }
+      }
+    },
+    "暂停收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse on Pause"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂停收起"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暫停收起"
+          }
+        }
+      }
+    },
+    "无歌词收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse Without Lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无歌词收起"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無歌詞收起"
+          }
+        }
+      }
+    },
     "搜完确认没有歌词才收起，只留顶部那一条，悬停展开照常；搜索期间照常显示歌词行" : {
       "localizations" : {
         "en" : {

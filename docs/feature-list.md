@@ -693,7 +693,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 231 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 234 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -913,6 +913,12 @@ Every setting in the Settings window, by where it lives: 231 in all. Type a name
 - **Controls Position**
 - **Hide Control Strip While Expanded**: Lyrics fill the whole Touch Bar. To use brightness, volume and other system buttons, tap ✕ on the left to collapse first.
 - **System Control Strip**: Add, remove or reorder the brightness, volume and other system buttons on the right of the Touch Bar in System Settings › Keyboard › Touch Bar Settings…
+
+### Lyrics Display › Touch Bar › Behavior
+
+- **Expand When Playback Starts**: Shows the lyrics when playback resumes. Changing songs mid-playback won't expand them, and lyrics you collapsed yourself stay collapsed
+- **Shrink When Paused**
+- **Collapse for Instrumentals & No Lyrics**: Collapses only once the search confirms there are no lyrics, and expands again when there are. Stays shown while searching
 
 ### Lyrics Display › Lyrics Window
 

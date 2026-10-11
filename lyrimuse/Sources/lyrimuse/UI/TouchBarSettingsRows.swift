@@ -1,22 +1,28 @@
 import LyrimuseCore
 import SwiftUI
 
-// 「歌词显示 › 触控栏」那一段的编辑台:预览上面一排工具栏(歌词 / 样式 / 布局三个浮层 + 「重置 ▾」),预览下面是总开关卡和
-// 默认折叠的「全部设置」抽屉。浮层和抽屉装配同一份行视图(`TouchBarLyricsRows` / `TouchBarStyleRows` / `TouchBarLayoutRows`),
-// 三组的顺序和标题两边一致。预览上点歌词那一格、封面、三键这些也能打开对应的浮层(`TouchBarPreviewStage`,弹的是同一份
+// 「歌词显示 › 触控栏」那一段的编辑台:预览上面两行工具栏(歌词 / 样式 / 布局 + 「重置 ▾」,第二行行为,四个浮层),预览下面是总开关卡和
+// 默认折叠的「全部设置」抽屉。浮层和抽屉装配同一份行视图(`TouchBarLyricsRows` / `TouchBarStyleRows` / `TouchBarLayoutRows` /
+// `TouchBarBehaviorRows`),四组的顺序和标题两边一致。预览上点歌词那一格、封面、三键这些也能打开对应的浮层(`TouchBarPreviewStage`,弹的是同一份
 // `TouchBarSettingsGroup.popoverContent`),工具栏照歌词窗口那一段摆在预览上面。
 
-/// 工具栏的三个入口,也是抽屉里三组的顺序。
+/// 工具栏的四个入口,也是抽屉里四组的顺序。
 enum TouchBarSettingsGroup: CaseIterable {
     case lyrics
     case style
     case layout
+    /// 工具栏第二行,同另外几段编辑台的「行为」(`TouchBarEditorToolbar.row2`)。
+    case behavior
+
+    /// 工具栏第一行那几颗。
+    static let firstRow: [TouchBarSettingsGroup] = [.lyrics, .style, .layout]
 
     var title: String {
         switch self {
         case .lyrics: return L10n.t("歌词")
         case .style: return L10n.t("样式")
         case .layout: return L10n.t("布局")
+        case .behavior: return L10n.t("行为")
         }
     }
 
@@ -25,6 +31,7 @@ enum TouchBarSettingsGroup: CaseIterable {
         case .lyrics: return "text.alignleft"
         case .style: return "paintpalette"
         case .layout: return "rectangle.split.3x1"
+        case .behavior: return "switch.2"
         }
     }
 }
@@ -38,11 +45,12 @@ extension TouchBarSettingsGroup {
         case .lyrics: SettingsPopoverShell(title: title, width: 460) { TouchBarLyricsRows() }
         case .style: SettingsPopoverShell(title: title, width: 400) { TouchBarStyleRows() }
         case .layout: SettingsPopoverShell(title: title, width: 440) { TouchBarLayoutRows() }
+        case .behavior: SettingsPopoverShell(title: title, width: 440) { TouchBarBehaviorRows() }
         }
     }
 }
 
-// MARK: - 三组行视图
+// MARK: - 四组行视图
 
 /// 「歌词」组:副行 → 字号 → 对齐方式。字号紧跟在副行下面:副行开着时两行的字号由触控栏的高定(14 / 11pt,见
 /// `TouchBarLyricsStyle`),滑杆拨了也没效果,行留着、尾部换成一句灰字「由副行决定」(同菜单栏「字号」那一行)。
@@ -171,6 +179,31 @@ struct TouchBarLayoutRows: View {
     }
 }
 
+/// 「行为」组:自动展开 / 收起的三个开关(默认都关)。只在情况变的那一刻动一次,手动展开、收起之后保持原样;
+/// 怎么判见 Core `TouchBarAutoPresent`(17 章决策 45)。
+struct TouchBarBehaviorRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SettingsRow(icon: "play.circle", title: L10n.t("开始播放时自动展开"),
+                        help: L10n.t("从暂停开始播放时展开歌词；播放中切歌不会展开，手动收起的会保持收起")) {
+                Toggle("", isOn: $settings.touchBarExpandOnPlay)
+            }
+            CardDivider()
+            SettingsRow(icon: "pause.circle", title: L10n.t("暂停时收起"),
+                        help: L10n.t("暂停 10 秒后收回到功能栏图标，继续播放时自动展开")) {
+                Toggle("", isOn: $settings.touchBarCollapseWhenPaused)
+            }
+            CardDivider()
+            SettingsRow(icon: "text.badge.xmark", title: L10n.t("纯音乐/无歌词时收起"),
+                        help: L10n.t("搜完确认没有歌词才收起，有歌词时自动展开；搜索期间照常显示")) {
+                Toggle("", isOn: $settings.touchBarCollapseWhenNoLyrics)
+            }
+        }
+    }
+}
+
 /// 「布局」组里两行位置的控件:摆在歌词左边还是右边(`TouchBarSide`)。跟别处从属行里的二选一一样用下拉菜单
 /// (同歌词窗口背景的「方向」)。
 struct TouchBarSidePicker: View {
@@ -190,7 +223,7 @@ struct TouchBarSidePicker: View {
 
 // MARK: - 恢复默认
 
-/// 「重置 ▾」和抽屉里「恢复默认」共用的动作:三组十项回到默认值,总开关不动。默认值跟 `AppSettings.init()` 的
+/// 「重置 ▾」和抽屉里「恢复默认」共用的动作:四组十三项回到默认值,总开关不动。默认值跟 `AppSettings.init()` 的
 /// fallback 读同一组常量(`AppSettings.defaultTouchBarXxx`,字号是 Core 的 `TouchBarLyricsStyle.defaultFontSize`)。
 @MainActor
 enum TouchBarStyleDefaults {
@@ -212,20 +245,53 @@ enum TouchBarStyleDefaults {
         settings.touchBarShowsControls = AppSettings.defaultTouchBarShowsControls
         settings.touchBarControlsSide = AppSettings.defaultTouchBarControlsSide
         settings.touchBarHidesControlStrip = AppSettings.defaultTouchBarHidesControlStrip
+        // 「行为」
+        settings.touchBarExpandOnPlay = AppSettings.defaultTouchBarExpandOnPlay
+        settings.touchBarCollapseWhenPaused = AppSettings.defaultTouchBarCollapseWhenPaused
+        settings.touchBarCollapseWhenNoLyrics = AppSettings.defaultTouchBarCollapseWhenNoLyrics
     }
 }
 
 // MARK: - 工具栏
 
-/// 预览上面那排工具栏:三颗胶囊按钮(图标 · 标题 · 当前值摘要)点开是浮层,右端「重置 ▾」。只有一行,不用另外几段
-/// 第二行那种对齐占位。
+/// 预览上面那排工具栏:胶囊按钮(图标 · 标题 · 当前值摘要)点开是浮层。第一行三颗加右端「重置 ▾」,第二行只有「行为」,
+/// 同另外几段编辑台;第二行用隐藏占位补上第一行另外两颗和「重置 ▾」的位置,平分出来的宽度才跟上面那颗一样。
 struct TouchBarEditorToolbar: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var popover: TouchBarSettingsGroup?
 
     var body: some View {
+        VStack(spacing: 10) {
+            row1
+            row2
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 2)
+    }
+
+    private var row2: some View {
         HStack(spacing: 8) {
-            ForEach(TouchBarSettingsGroup.allCases, id: \.self) { group in
+            toolbarButton(.behavior)
+            ghostButton(.style)
+            ghostButton(.layout)
+            Spacer(minLength: 8)
+            EditorToolbarResetReserve()
+        }
+    }
+
+    private func ghostButton(_ group: TouchBarSettingsGroup) -> some View {
+        Button {} label: {
+            EditorToolbarButtonLabel(icon: group.icon, title: group.title, summary: summary(for: group))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .hidden()
+        .accessibilityHidden(true)
+    }
+
+    private var row1: some View {
+        HStack(spacing: 8) {
+            ForEach(TouchBarSettingsGroup.firstRow, id: \.self) { group in
                 toolbarButton(group)
             }
             Spacer(minLength: 8)
@@ -239,8 +305,6 @@ struct TouchBarEditorToolbar: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
         }
-        .font(.system(size: 12))
-        .padding(.horizontal, 2)
     }
 
     private func toolbarButton(_ group: TouchBarSettingsGroup) -> some View {
@@ -293,6 +357,12 @@ struct TouchBarEditorToolbar: View {
             if settings.touchBarHidesControlStrip { parts.append(L10n.t("隐藏功能栏")) }
             guard !parts.isEmpty else { return L10n.t("全部关闭") }
             return L10n.list(parts)
+        case .behavior:
+            return SettingsToggleSummary.text([
+                (title: L10n.t("自动展开"), isOn: settings.touchBarExpandOnPlay),
+                (title: L10n.t("暂停收起"), isOn: settings.touchBarCollapseWhenPaused),
+                (title: L10n.t("无歌词收起"), isOn: settings.touchBarCollapseWhenNoLyrics),
+            ])
         }
     }
 
@@ -303,7 +373,7 @@ struct TouchBarEditorToolbar: View {
 
 // MARK: - 「全部设置」抽屉
 
-/// 触控栏那一段的「全部设置」抽屉:键盘 / VoiceOver 的全量兜底通路。三组的顺序和标题跟工具栏一致,行视图跟浮层同一份,
+/// 触控栏那一段的「全部设置」抽屉:键盘 / VoiceOver 的全量兜底通路。四组的顺序和标题跟工具栏一致,行视图跟浮层同一份,
 /// 最后一行「恢复默认」跟「重置 ▾」同一个动作、同一句作用范围。
 ///
 /// 设置搜索点名了这一段里总开关以外的行就展开:触控栏不是 `LyricsSurface`,用不上 `settingsSearchPendingDrawer`,
@@ -323,6 +393,8 @@ struct TouchBarAllSettingsDrawer: View {
                 group(.style) { TouchBarStyleRows() }
                 CardDivider()
                 group(.layout) { TouchBarLayoutRows() }
+                CardDivider()
+                group(.behavior) { TouchBarBehaviorRows() }
                 CardDivider()
                 SettingsRow(icon: "arrow.uturn.backward", title: L10n.t("恢复默认"),
                             subtitle: TouchBarStyleDefaults.scope) {

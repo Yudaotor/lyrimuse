@@ -320,6 +320,7 @@
 "从应用程序中选择…" = "Choose from Applications…";
 "从待补交清单中移除此条（不可恢复）" = "Remove this from the backfill queue (cannot be undone)";
 "从文件导入…" = "Import from File…";
+"从暂停开始播放时展开歌词；播放中切歌不会展开，手动收起的会保持收起" = "Shows the lyrics when playback resumes. Changing songs mid-playback won't expand them, and lyrics you collapsed yourself stay collapsed";
 "从此句开始播放" = "Play from this line";
 "从自动备份恢复" = "Restore from Auto Backup";
 "从资料库删除" = "Delete from Library";
@@ -878,6 +879,7 @@
 "开始你的听歌档案" = "Start Your Listening History";
 "开始使用" = "Get Started";
 "开始扫描" = "Start Scanning";
+"开始播放时自动展开" = "Expand When Playback Starts";
 "开机启动" = "Launch at Login";
 "开机时自动启动 Lyrimuse" = "Launch Lyrimuse at login";
 "开源组件与词典" = "Open-source components and dictionaries";
@@ -1011,6 +1013,7 @@
 "提前 %@ 秒显示" = "Show %@s earlier";
 "提醒" = "Alerts";
 "搜完确认没有歌词才收起，只留顶部那一条，悬停展开照常；搜索期间照常显示歌词行" = "Collapses only once the search confirms there are no lyrics, leaving just the top strip; hovering still expands it. The lyric row stays while searching";
+"搜完确认没有歌词才收起，有歌词时自动展开；搜索期间照常显示" = "Collapses only once the search confirms there are no lyrics, and expands again when there are. Stays shown while searching";
 "搜完确认没有歌词才隐藏，搜索期间照常显示" = "Hides only once the search confirms there are no lyrics; stays visible while searching";
 "搜索" = "Search";
 "搜索候选歌词" = "Search for Lyrics";
@@ -1071,6 +1074,7 @@
 "无来源" = "No Source";
 "无歌词" = "No Lyrics";
 "无歌词 %@ 首" = "%@ without lyrics";
+"无歌词收起" = "Collapse Without Lyrics";
 "无歌词时显示歌名" = "Show Title When No Lyrics";
 "无法从 Deezer 获取匿名访问令牌（并非这首歌曲没有歌词，稍后重试通常可恢复）" = "Could not get an anonymous access token from Deezer (this is not about the song having no lyrics; retrying later usually works)";
 "无法使用该应用" = "This app won’t work";
@@ -1148,7 +1152,9 @@
 "普通话" = "Mandarin";
 "智能" = "Smart";
 "智能算法" = "Smart Matching";
+"暂停 10 秒后收回到功能栏图标，继续播放时自动展开" = "Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes";
 "暂停后" = "When Paused";
+"暂停收起" = "Collapse on Pause";
 "暂停时收起" = "Shrink When Paused";
 "暂停时隐藏" = "Hide When Paused";
 "暂无" = "None yet";
@@ -1622,6 +1628,7 @@
 "纯文本，含账号凭据；外观与快捷键不在此处，整体迁移请使用「备份与迁移」" = "Plain text with account credentials. Appearance and shortcuts aren’t here; to move everything, use Backup & Migration";
 "纯色" = "Solid";
 "纯音乐" = "Instrumental";
+"纯音乐/无歌词时收起" = "Collapse for Instrumentals & No Lyrics";
 "纯音乐/无歌词时收起歌词行" = "Collapse Lyric Row for Instrumentals & No Lyrics";
 "纯音乐/无歌词时隐藏" = "Hide for Instrumentals & No Lyrics";
 "纯黑" = "Solid Black";
@@ -1688,6 +1695,7 @@
 "自动匹配正在进行，可在左下角查看进度" = "Auto-match is in progress; see the bottom left for progress";
 "自动匹配缺失歌词" = "Auto-Match Missing Lyrics";
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "The automatic backup couldn't be written, so nothing was deleted this time to keep it recoverable. Check your disk space and write access to the config folder, then try again.";
+"自动展开" = "Auto-Expand";
 "自动更新" = "Automatic Updates";
 "自动检查" = "Check Automatically";
 "自动识别" = "Auto-detect";
