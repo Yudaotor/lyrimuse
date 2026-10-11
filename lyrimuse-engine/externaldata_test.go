@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -21,7 +22,27 @@ import (
 //
 // 要用真实数据的测试自己 override 回去即可:resetKugouLocalIndex / resetQQLocalIndex
 // 的 t.Cleanup 恢复的就是这里设的值,不是空串。
+// testRealHome:换 HOME 之前的家目录,TestConfigDirIsSandboxed 拿它核对。
+var testRealHome string
+
+// 测试期间的配置目录不在真实家目录下(见 TestMain)。
+func TestConfigDirIsSandboxed(t *testing.T) {
+	if testRealHome == "" || strings.HasPrefix(configDir(), testRealHome+string(filepath.Separator)) {
+		t.Fatalf("配置目录 %s 落在真实家目录 %s 下", configDir(), testRealHome)
+	}
+}
+
 func TestMain(m *testing.M) {
+	// HOME 指到临时目录,配置目录(默认在 HOME 下)跟着走:没设 LYRIMUSE_CONFIG_DIR 的用例(只换了 enrichPath 的那些)
+	// 会落到真实的 ~/.config/lyrimuse,启动清理(sweepKeyedDir)会把真实的留底当孤儿删掉。别在这里设 LYRIMUSE_CONFIG_DIR:
+	// 靠 t.Setenv("HOME") 隔离的用例(代理提示等)就不再跟着自己的 HOME 走了。
+	sandbox, err := os.MkdirTemp("", "lyrimuse-engine-test-")
+	if err != nil {
+		panic(err)
+	}
+	testRealHome, _ = os.UserHomeDir()
+	_ = os.Unsetenv("LYRIMUSE_CONFIG_DIR")
+	_ = os.Setenv("HOME", sandbox)
 	missing := filepath.Join(os.TempDir(), "lyrimuse-no-such-external-app-data")
 	kugouLocalDirOverride = missing
 	qqLocalDBOverride = filepath.Join(missing, "qqmusic.sqlite")
@@ -60,5 +81,7 @@ func TestMain(m *testing.M) {
 	setSharedAMLLIndexStore(newAMLLIndexStore("", time.Now))
 	// 本机播放器数据里按歌名记着的封面(KKBOX 缓存、网易云曲库):单测一律当作没有,要测的用例自己换。
 	localPlayerCovers = func(string, string, string, float64) []string { return nil }
-	os.Exit(m.Run())
+	code := m.Run()
+	_ = os.RemoveAll(sandbox)
+	os.Exit(code)
 }
