@@ -917,7 +917,7 @@ Every setting in the Settings window, by where it lives: 234 in all. Type a name
 ### Lyrics Display › Touch Bar › Behavior
 
 - **Expand When Playback Starts**: Shows the lyrics when playback resumes. Changing songs mid-playback won't expand them, and lyrics you collapsed yourself stay collapsed
-- **Shrink When Paused**
+- **Collapse When Paused**: Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes
 - **Collapse for Instrumentals & No Lyrics**: Collapses only once the search confirms there are no lyrics, and expands again when there are. Stays shown while searching
 
 ### Lyrics Display › Lyrics Window

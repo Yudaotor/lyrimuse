@@ -16,7 +16,7 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
     public struct Options: Equatable, Sendable {
         /// 开始播放时自动展开。
         public var expandOnPlay: Bool
-        /// 暂停时收起(暂停满 `pauseCollapseDelayMs`),继续播放时展开回来。
+        /// 暂停时自动收起(暂停满 `pauseCollapseDelayMs`),继续播放时展开回来。
         public var collapseWhenPaused: Bool
         /// 纯音乐 / 无歌词时收起(判据 `NoLyricsAutoHide.lacksLyrics`),之后有歌词时展开回来。
         public var collapseWhenNoLyrics: Bool
@@ -112,7 +112,7 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
             awaitingSettle = true
             return .expandAfterSettle
         }
-        // 没歌词收起的,换到下一首(搜索期间照常算有)、或者这首后来有了歌词:展开回来。暂停着又开了「暂停时收起」的不展开。
+        // 没歌词收起的,换到下一首(搜索期间照常算有)、或者这首后来有了歌词:展开回来。暂停着又开了「暂停时自动收起」的不展开。
         if !lacksLyrics, lacked || newTrack, autoCollapsed == .noLyrics, !visible {
             guard isPlaying || !options.collapseWhenPaused else { return .none }
             autoCollapsed = nil

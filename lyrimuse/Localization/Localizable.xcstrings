@@ -41680,6 +41680,29 @@
         }
       }
     },
+    "暂停时自动收起" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse When Paused"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂停时自动收起"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暫停時自動收起"
+          }
+        }
+      }
+    },
     "从暂停开始播放时展开歌词；播放中切歌不会展开，手动收起的会保持收起" : {
       "extractionState" : "manual",
       "localizations" : {

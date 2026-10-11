@@ -1180,6 +1180,7 @@
 "暂停后" = "When Paused";
 "暂停收起" = "Collapse on Pause";
 "暂停时收起" = "Shrink When Paused";
+"暂停时自动收起" = "Collapse When Paused";
 "暂停时隐藏" = "Hide When Paused";
 "暂无" = "None yet";
 "暂无 Scrobble 记录" = "No scrobbles yet";

@@ -191,7 +191,7 @@ struct TouchBarBehaviorRows: View {
                 Toggle("", isOn: $settings.touchBarExpandOnPlay)
             }
             CardDivider()
-            SettingsRow(icon: "pause.circle", title: L10n.t("暂停时收起"),
+            SettingsRow(icon: "pause.circle", title: L10n.t("暂停时自动收起"),
                         help: L10n.t("暂停 10 秒后收回到功能栏图标，继续播放时自动展开")) {
                 Toggle("", isOn: $settings.touchBarCollapseWhenPaused)
             }

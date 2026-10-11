@@ -220,7 +220,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 .sink { [weak self] _ in self?.scheduleRefresh() },
             settings.$touchBarLyricsAlignment.dropFirst().removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
-            // 自动展开 / 收起的三个开关:只换判据用的值,从下一次播放状态变化起算;关掉「暂停时收起」时作废等着的那一次。
+            // 自动展开 / 收起的三个开关:只换判据用的值,从下一次播放状态变化起算;关掉「暂停时自动收起」时作废等着的那一次。
             Publishers.CombineLatest3(settings.$touchBarExpandOnPlay, settings.$touchBarCollapseWhenPaused,
                                       settings.$touchBarCollapseWhenNoLyrics)
                 .sink { [weak self] expand, pause, noLyrics in
