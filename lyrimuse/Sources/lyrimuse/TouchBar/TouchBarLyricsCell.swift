@@ -61,6 +61,8 @@ enum TouchBarLyricsCell {
         var karaoke: Bool
         /// 「对齐方式」:装得下的短句靠哪边;「自动」在这里按每一行的对唱声部落成具体方向(`side(_:duetSide:)`)。
         var alignment: LyricsRestingAlignment
+        /// 系统开了「减弱动态效果」:不滚动、不逐字填色(图层行的 `still`,见 17 章决策 43)。
+        var still: Bool
     }
 
     /// 设置里选的对齐方式落到这一行:「自动」按这一行的对唱声部走,没有声部时靠左(`LyricsRestingAlignment.resolved`,
@@ -286,7 +288,8 @@ enum TouchBarLyricsCell {
             pacedWindow: window,
             edgeFadeWidth: edgeFadeWidth,
             timingEpoch: inputs.timingEpoch,
-            rate: inputs.rate)
+            rate: inputs.rate,
+            still: inputs.still)
     }
 }
 

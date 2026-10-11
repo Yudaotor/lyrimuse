@@ -526,6 +526,28 @@ func runTouchBarTests() {
                         && !dimmedColorCell.contains("withAlphaComponent(unsungAlpha)")
                         && !dimmedColorCell.contains("withAlphaComponent(CGFloat(TouchBarLyricsStyle.secondaryRowOpacity"), true,
                     "触控栏配色: 未唱的部分、副行打折走 dimmedOnBlack")
+        // 系统开了「减弱动态效果」(17 章决策 43):本体和预览都把它传成图层行的 `still`,图层行这时不装动画、摆在开头、
+        // 整行用已唱那张;本体收到系统通知当场重画,预览的「横向滚动」提示也看它。漏一处不报错,只表现成照样滚 / 填色。
+        let scrollRow = code(appDir.appendingPathComponent("UI/OverlayScrollingLyricRow.swift")) ?? ""
+        let previewSource = code(appDir.appendingPathComponent("UI/TouchBarPreviewStage.swift")) ?? ""
+        expectEqual(dimmedColorCell.contains("rate: inputs.rate,\n            still: inputs.still)"), true,
+                    "触控栏减弱动态: 规格把 still 传给图层行")
+        expectEqual(scrollRow.contains("if spec.still {\n            scrollPath = []")
+                        && scrollRow.contains("let running = reinstall && !spec.paused && !spec.still")
+                        && scrollRow.contains("spec.pacedWindow != nil || spec.still")
+                        && scrollRow.contains("a.still = b.still")
+                        && scrollRow.contains("spec?.still != next.still"), true,
+                    "触控栏减弱动态: 图层行 still 时不装动画、停在开头、整行用已唱那张")
+        expectEqual(controller.contains("still: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)")
+                        && controller.contains(".publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)"),
+                    true, "触控栏减弱动态: 本体读系统设置、拨了当场重画")
+        expectEqual(previewSource.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion")
+                        && previewSource.contains("still: reduceMotion)")
+                        && previewSource.contains("let scrolls = !reduceMotion && "), true,
+                    "触控栏减弱动态: 预览同本体,「横向滚动」提示也看它")
+        expectEqual(structBody("TouchBarStyleRows").contains(
+                        "subtitle: reduceMotion ? L10n.t(\"系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮\") : nil"),
+                    true, "触控栏减弱动态: 卡拉OK效果那一行说明为什么没效果")
 
         // 没有触控栏时:那一段照样在、点进去只有说明卡,搜索只留总开关那一条,控制器不启用。漏一处都不报错,只表现成
         // 没有触控栏的 Mac 上冒出几项拨了没用的设置,或者白调私有接口。

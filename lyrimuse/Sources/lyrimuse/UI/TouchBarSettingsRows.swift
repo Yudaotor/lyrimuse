@@ -98,15 +98,18 @@ struct TouchBarLyricsRows: View {
     }
 }
 
-/// 「样式」组:卡拉OK效果、跟随封面。触控栏底色恒黑,不给配色(见 17 章决策 5)。
+/// 「样式」组:卡拉OK效果、跟随封面。触控栏底色恒黑,不给配色(见 17 章决策 5)。系统开了「减弱动态效果」时
+/// 卡拉OK效果那一行多一句副标题,说明这时不逐字填色(17 章决策 43)。
 struct TouchBarStyleRows: View {
     @ObservedObject private var settings = AppSettings.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
             SettingsRow(
                 icon: "sparkles",
                 title: L10n.t("卡拉OK效果"),
+                subtitle: reduceMotion ? L10n.t("系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮") : nil,
                 help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮")
             ) {
                 Toggle("", isOn: $settings.touchBarLyricsKaraoke)

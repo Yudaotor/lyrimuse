@@ -54,6 +54,8 @@ struct TouchBarPreviewStage: View {
     @ObservedObject private var touchBar = TouchBarAvailability.shared
     @StateObject private var feed = TouchBarPreviewFeed()
     @Environment(\.previewHostVisible) private var previewHostVisible
+    /// 系统的「减弱动态效果」:开着时同本体,歌词那一格不滚动、不逐字填色(17 章决策 43)。
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 设置窗口自己的深浅色。预览那一块固定画成深色(触控栏本来就是黑的),从那里弹出的浮层要换回这个。
     @Environment(\.colorScheme) private var colorScheme
     @State private var hoveredHotspot: Hotspot?
@@ -100,7 +102,8 @@ struct TouchBarPreviewStage: View {
             color: TouchBarLyricsCell.lyricColor(followsCover: settings.touchBarLyricsFollowsCover,
                                                  coverAccent: snapshot.coverAccent),
             karaoke: settings.touchBarLyricsKaraoke,
-            alignment: settings.touchBarLyricsAlignment)
+            alignment: settings.touchBarLyricsAlignment,
+            still: reduceMotion)
         var spec = TouchBarLyricsCell.spec(for: content, inputs)
         var secondarySpec = TouchBarLyricsCell.secondarySpec(
             for: content, kind: snapshot.secondary,
@@ -110,9 +113,9 @@ struct TouchBarPreviewStage: View {
             spec?.paused = true
             secondarySpec?.paused = true
         }
-        let scrolls = TouchBarLyricsCell.text(for: content).map {
+        let scrolls = !reduceMotion && (TouchBarLyricsCell.text(for: content).map {
             MenuBarMarqueeRenderer.width(of: $0, font: font) > lyricsWidth + 0.5
-        } ?? false
+        } ?? false)
         let rows = LyricRows(main: spec, secondary: secondarySpec, twoRows: snapshot.secondary.showsSecondaryRow)
         return VStack(spacing: SectionPreviewMetrics.captionSpacing) {
             stage(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, escapeKey: escapeKey, snapshot: snapshot)

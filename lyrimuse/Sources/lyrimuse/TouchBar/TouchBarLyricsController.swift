@@ -22,7 +22,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// 歌词那一格就是悬浮歌词的图层行 `OverlayLyricScrollView`:逐字填色、跟唱滚动、按显示时长配速、尾部渐隐都是它的,
 /// 这里只喂规格和时钟。显示哪一档由 Core `TouchBarLyricsContent` 定,规格怎么拼在 `TouchBarLyricsCell`(设置页那块
 /// 预览也用它)。开了「副行」时这一格里叠两行(主行在上、副行在下,落点见 `TouchBarLyricsStyle` 的两行那一节),
-/// 关着时只有主行、在 30pt 里垂直居中。触控栏看不见时(收着、没有触控栏的 Mac)只记状态,不画位图、不装动画,
+/// 关着时只有主行、在 30pt 里垂直居中。系统开了「减弱动态效果」时不滚动、不逐字填色(17 章决策 43)。触控栏看不见时(收着、没有触控栏的 Mac)只记状态,不画位图、不装动画,
 /// 看得见了再补上。
 ///
 /// 设置(同一段里):卡拉OK效果、跟随封面、字号、显示封面 / 播放控制(连同各自的位置)、对齐方式、副行、
@@ -448,6 +448,10 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                     self?.coverAccent = $0
                     self?.scheduleRefresh()
                 },
+            // 系统的「减弱动态效果」:refresh 里现读,拨了当场换成静止 / 恢复滚动。
+            NSWorkspace.shared.notificationCenter
+                .publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
+                .sink { [weak self] _ in self?.scheduleRefresh() },
         ]
     }
 
@@ -486,7 +490,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             color: TouchBarLyricsCell.lyricColor(followsCover: settings.touchBarLyricsFollowsCover,
                                                  coverAccent: coverAccent),
             karaoke: settings.touchBarLyricsKaraoke,
-            alignment: settings.touchBarLyricsAlignment)
+            alignment: settings.touchBarLyricsAlignment,
+            still: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         if let hint {
             var row = inputs
             row.startMs = hint.startMs

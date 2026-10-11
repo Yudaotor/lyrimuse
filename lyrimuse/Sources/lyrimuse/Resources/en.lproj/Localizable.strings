@@ -1604,6 +1604,7 @@
 "系统功能栏" = "System Control Strip";
 "系统媒体信息通道在本机不可用，可能无法读取播放状态。仅有一种配置可绕过该通道：关闭「自动识别」并只勾选 Apple Music；其他配置均需通过该通道读取。" = "The system media info channel does not work on this Mac, so playback state may not be readable. Only one setup bypasses it: “Auto-detect” off with just Apple Music ticked. Every other setup reads through this channel.";
 "系统字体" = "System Font";
+"系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮" = "Reduce Motion is on, so Touch Bar lyrics don't scroll or light up word by word";
 "系统自动化授权：上次检测时已授权" = "System automation access: granted as of the last check";
 "系统自动化授权：尚未授权" = "System automation access: not granted yet";
 "系统自动化授权：已拒绝，需在系统设置中开启" = "System automation access: denied — enable it in System Settings";

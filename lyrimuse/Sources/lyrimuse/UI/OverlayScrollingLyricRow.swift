@@ -60,6 +60,9 @@ struct OverlayScrollingLyricRow: NSViewRepresentable {
         var rate: Double = 1
         /// 这一行是译文(排字语言按译文判,见 `LyricTypesetting`)。
         var translation: Bool = false
+        /// true = 不装滚动和填色动画:整行按 `fillColor` 画,放不下时停在开头、尾部渐隐(触控栏在系统开了
+        /// 「减弱动态效果」时传,见 17 章决策 43)。
+        var still: Bool = false
     }
 
     /// 整行阴影。`offsetY` 取 SwiftUI 的口径(正 = 往下)。
@@ -218,12 +221,12 @@ final class OverlayLyricScrollView: NSView {
     func apply(spec next: OverlayScrollingLyricRow.Spec, nowMs: Int) {
         let imagesChanged = spec.map { !Self.sameImages($0, next) } ?? true
         let timingChanged = spec?.paused != next.paused || spec?.pacedWindow != next.pacedWindow
-            || spec?.timingEpoch != next.timingEpoch || spec?.rate != next.rate
+            || spec?.timingEpoch != next.timingEpoch || spec?.rate != next.rate || spec?.still != next.still
         spec = next
         if imagesChanged { rebuildImages(spec: next) }
         // 在跑时动画不在(首次装上 / 上一轮判成不用滚)要重装;停着时本来就不装动画,不算缺。
         // 配速行装得下(路径为空)本来就没有动画,也不算缺 —— 不然每次重估都白摆一遍。
-        let nothingToAnimate = next.pacedWindow != nil && installedAtMs != nil && scrollPath.isEmpty
+        let nothingToAnimate = next.still || (next.pacedWindow != nil && installedAtMs != nil && scrollPath.isEmpty)
         let missing = !next.paused && !nothingToAnimate
             && contentLayer.animation(forKey: Self.scrollKey) == nil
             && fillClipLayer.animation(forKey: Self.fillKey) == nil
@@ -231,14 +234,15 @@ final class OverlayLyricScrollView: NSView {
         place(nowMs: nowMs, reinstall: true)
     }
 
-    /// 两份输入画出来的长图是不是同一张 —— 除了 `paused` / `pacedWindow` / `timingEpoch` 全都一样。这几项只影响
-    /// 动画,不重画位图。
+    /// 两份输入画出来的长图是不是同一张 —— 除了 `paused` / `pacedWindow` / `timingEpoch` / `rate` / `still` 全都一样。
+    /// 这几项只影响动画和摆位,不重画位图。
     static func sameImages(_ a: OverlayScrollingLyricRow.Spec, _ b: OverlayScrollingLyricRow.Spec) -> Bool {
         var a = a
         a.paused = b.paused
         a.pacedWindow = b.pacedWindow
         a.timingEpoch = b.timingEpoch
         a.rate = b.rate
+        a.still = b.still
         return a == b
     }
 
@@ -369,7 +373,9 @@ final class OverlayLyricScrollView: NSView {
         // 排版宽度 = 长图宽减掉两侧阴影出血。放不放得下、滚多远、静置落点都按它算;长图整体再往左
         // 挪一个 `bleed`,字就落在跟没有阴影时同一个位置(见 `bleed` 注释)。没有阴影时两者相等。
         let layoutW = boxWidth - 2 * bleed
-        if let window = spec.pacedWindow {
+        if spec.still {
+            scrollPath = []
+        } else if let window = spec.pacedWindow {
             let chars = max(1, flatWords.reduce(0) { $0 + $1.text.count })
             scrollPath = MenuBarMarquee.pacedScrollPath(
                 startMs: window.startMs, dwellMs: window.dwellMs, maxOffset: layoutW - viewW,
@@ -393,15 +399,16 @@ final class OverlayLyricScrollView: NSView {
         CATransaction.setDisableActions(true)
         contentLayer.bounds = CGRect(x: 0, y: 0, width: imageWidth, height: boxHeight)
         contentLayer.position = CGPoint(x: restingX - pixelAligned(offset), y: restingY)
-        // 配速行整行都是"已唱"那张(fillColor),不走填色边界。
-        applyFill(x: spec.pacedWindow != nil ? boxWidth : MenuBarMarquee.karaokeFillX(atMs: nowMs, path: readingPath))
+        // 配速行、静止行整行都是"已唱"那张(fillColor),不走填色边界。
+        applyFill(x: spec.pacedWindow != nil || spec.still
+                  ? boxWidth : MenuBarMarquee.karaokeFillX(atMs: nowMs, path: readingPath))
         CATransaction.commit()
         for (layer, key) in [(contentLayer, Self.scrollKey), (fillClipLayer, Self.fillKey),
                              (baseClipLayer, Self.basePositionKey), (baseClipLayer, Self.baseBoundsKey),
                              (fadeCover, Self.fadeCoverKey)] {
             layer.removeAnimation(forKey: key)
         }
-        let running = reinstall && !spec.paused
+        let running = reinstall && !spec.paused && !spec.still
         applyEdgeFade(viewWidth: viewW, layoutWidth: layoutW, offset: offset, nowMs: nowMs, running: running)
         guard running else { return }
         installFill(nowMs: nowMs)

@@ -21808,6 +21808,29 @@
         }
       }
     },
+    "系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reduce Motion is on, so Touch Bar lyrics don't scroll or light up word by word"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系統已開啟「減少動態效果」，觸控列歌詞不捲動、不逐字高亮"
+          }
+        }
+      }
+    },
     "逐行歌词" : {
       "extractionState" : "manual",
       "localizations" : {
