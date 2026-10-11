@@ -36,6 +36,11 @@ type snapshot struct {
 	// SodaPreviewPending:汽水非会员试听、试听段还在后台搜 —— 这一拍的 Duration 还是试听段长度,
 	// 拿它解析歌词会另开一个时长变体。poller 在它为真时先不解析(见 sodapreview.go)。
 	SodaPreviewPending bool
+	// Spoken:App 认出这一条是 QQ 音乐的有声书 / 有声节目(appStateTrack.Spoken)。字幕照常解析显示,
+	// 正在播放、收听提交、待播预取、网页中继都不做,见 playSession.isSpoken。
+	Spoken bool
+	// SpokenPending:QQ 音乐的这一条,App 还没给出是不是有声节目的结论(见 awaitsSpokenVerdict)。
+	SpokenPending bool
 	// Remote:iPhone 经 Last.fm 桥接来的这一条(转发的完成收听、同步的正在播放)。上送时只查歌词缓存、
 	// 不新建条目,见 bridgeenrich.go。
 	Remote bool

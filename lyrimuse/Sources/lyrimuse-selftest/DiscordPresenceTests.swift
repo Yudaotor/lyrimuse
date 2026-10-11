@@ -6,6 +6,15 @@ import LyrimuseCore
 // 路径带 pid 和 UUID)走一遍握手 → 发状态 → 被拒 → 清空 → 心跳 → 断开重连,最后是接线契约。
 
 func runDiscordPresenceTests() {
+    do {
+        // 刚从暂停恢复先等 resumeSettleSecs 再发(02 章决策 119)。
+        let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+        expectEqual(DiscordPresence.resumeSettleUntil(resumedAt: t0, now: t0.addingTimeInterval(0.3)),
+                    t0.addingTimeInterval(DiscordPresence.resumeSettleSecs), "Discord 恢复播放: 0.3 秒时还在等")
+        expectEqual(DiscordPresence.resumeSettleUntil(resumedAt: t0, now: t0.addingTimeInterval(DiscordPresence.resumeSettleSecs)) == nil,
+                    true, "Discord 恢复播放: 到点就不等")
+        expectEqual(DiscordPresence.resumeSettleUntil(resumedAt: nil, now: t0) == nil, true, "Discord 恢复播放: 没恢复过不等")
+    }
     checkDiscordWire()
     checkDiscordActivity()
     checkDiscordSmallImage()

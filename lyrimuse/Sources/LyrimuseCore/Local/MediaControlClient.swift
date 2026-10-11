@@ -1363,6 +1363,14 @@ public enum MediaControlClient {
         return viaProbe || holdingDroppedSession
     }
 
+    /// 上一份被接受的快照是哪个播放器报的。焦点被别的 App 占着(`focusHeldByAnotherApp`)时就是屏上那首的播放器,
+    /// 播放控制据此决定能不能改按它的菜单栏(见 `MusicPlaybackController.ControlRoute.qqMenu`)。
+    public static func lastAcceptedPlayer() -> PlaybackPlayer? {
+        appleMusicFocusLock.lock()
+        defer { appleMusicFocusLock.unlock() }
+        return lastAcceptedDirectQueryPlayer
+    }
+
     private static func setFocusFallbackPlayer(_ value: PlaybackPlayer?) {
         appleMusicFocusLock.lock()
         lastAcceptedDirectQueryPlayer = value

@@ -860,9 +860,10 @@ public enum MusicPlaybackController {
     /// AppleScript 播放头,写路径也该走同一条,两边保持一致。
     /// 返回这一下走的哪条路,没发出去返回 nil。
     /// `kasetWasPlaying`:这一刻在放的是 Kaset 时传它跳转前在不在放,不是 Kaset 传 nil(见 `seekRoute`)。
+    /// `qqWasPaused`:这一刻是 QQ 音乐、而且暂停着。它暂停中收到跳转会自己放起来,跳完要停回去(见 `checkQQAfterPausedSeek`)。
     @discardableResult
     public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = false,
-                            kasetWasPlaying: Bool? = nil) -> ControlRoute? {
+                            kasetWasPlaying: Bool? = nil, qqWasPaused: Bool = false) -> ControlRoute? {
         let value = seekArgument(forSeconds: seconds)
         let script = #"tell application "Music" to set player position to "# + value
         if preferAppleScript {
@@ -870,10 +871,37 @@ public enum MusicPlaybackController {
             return .appleMusicScript
         }
         // Kaset 的字典里没有跳转:焦点回退到它时这一下不发(见 dispatch 的 kasetScript);焦点就是它时定向发给它(`.kasetDirect`)。
-        return dispatchRoute(appleScript: script, spotifyScript: #"tell application "Spotify" to set player position to "# + value,
-                             kasetScript: nil, mediaControlCommand: "seek", mediaControlArguments: [value],
-                             kasetDirectSeek: kasetWasPlaying.map { KasetDirectSeek(seconds: seconds, wasPlaying: $0) })
+        let route = dispatchRoute(appleScript: script, spotifyScript: #"tell application "Spotify" to set player position to "# + value,
+                                  kasetScript: nil, mediaControlCommand: "seek", mediaControlArguments: [value],
+                                  kasetDirectSeek: kasetWasPlaying.map { KasetDirectSeek(seconds: seconds, wasPlaying: $0) })
+        if route == .mediaControl, qqWasPaused {
+            commandQueue.async { checkQQAfterPausedSeek(serial: commandSerial, attempt: 1) }
+        }
+        return route
     }
+
+    /// 暂停中给 QQ 发了跳转(走 media-control,这时系统焦点就是它):每 `qqPausedSeekCheckInterval` 按 bundle id 问一次它那份会话,
+    /// 报在放了就发一个 `pause` 停回去,最多问 `qqPausedSeekCheckAttempts` 次;这期间又排进来过别的控制就不再问。它菜单那一项的
+    /// 标题要晚将近一秒才变,不拿它判。只在 `commandQueue` 上调。见 02 章决策 118。
+    private static func checkQQAfterPausedSeek(serial: Int, attempt: Int) {
+        commandQueue.asyncAfter(deadline: .now() + qqPausedSeekCheckInterval) {
+            guard commandSerial == serial else { return }
+            guard NowPlayingClientsProbe.snapshot(forBundleID: PlaybackPlayer.qqMusic.bundleIdentifier)?.playing == true else {
+                if attempt < qqPausedSeekCheckAttempts { checkQQAfterPausedSeek(serial: serial, attempt: attempt + 1) }
+                return
+            }
+            logger.notice("seek: QQ Music started playing after a seek while paused, pausing it again (check \(attempt))")
+            commandSerial &+= 1
+            if let binaryPath = MediaControlClient.binaryPath() {
+                _ = ProcessRunner.run(binaryPath, ["pause"], timeout: appleScriptTimeout)
+            }
+        }
+    }
+
+    /// 见 checkQQAfterPausedSeek。实测跳转后它那份会话 0.1~0.3 秒就报在放。
+    static let qqPausedSeekCheckInterval: TimeInterval = 0.25
+    /// 见 checkQQAfterPausedSeek。
+    static let qqPausedSeekCheckAttempts = 8
 
     /// 把秒数格式化成两个后端都吃、且能安全拼进 AppleScript 源码的字符串。抽成独立的纯
     /// 函数是为了能被 lyrimuse-selftest 覆盖——seek 本身要发子进程,测不了。
@@ -902,6 +930,9 @@ public enum MusicPlaybackController {
         case mediaControl
         /// 跳转定向发给 Kaset 本体那份会话(`NowPlayingClientsProbe.sendSeek`),不发给系统当前会话。只有跳转走这条,见 `seekRoute`。
         case kasetDirect
+        /// 焦点被别的 App 占着、屏上这首是 QQ 音乐:播放 / 暂停、上一首、下一首按它菜单栏「播放控制」里的项
+        /// (`QQMusicMenuControl.press`),跳转菜单里没有、照旧不发。见 02 章决策 118。
+        case qqMenu
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
         /// 按 bundle id 定向发(`MRMediaRemoteSendCommandToApp`)也不行 —— 目标不接时它不报错,照样落到焦点上,
         /// 见 02 章决策 51。
@@ -911,15 +942,28 @@ public enum MusicPlaybackController {
     /// 纯函数,selftest 覆盖。media-control 的控制指令作用于系统级 Now Playing 焦点;焦点被别的 App
     /// 占着、屏上这首靠 AppleScript 回退问到时(`MediaControlClient.focusControlTarget`),指令要直接发给
     /// 那个播放器,否则落在占用者身上。QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX / Amazon 没有 AppleScript:焦点被占、
-    /// 屏上这首是按 bundle id 直查问到的(`focusHeldElsewhere`,见 `MediaControlClient.focusHeldByAnotherApp`)时不发。
+    /// 屏上这首是按 bundle id 直查问到的(`focusHeldElsewhere`,见 `MediaControlClient.focusHeldByAnotherApp`)时不发;
+    /// 屏上是 QQ 音乐、能按它菜单栏(`menuControlPlayer`)时改按菜单。
     public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?,
-                                    focusHeldElsewhere: Bool = false) -> ControlRoute {
+                                    focusHeldElsewhere: Bool = false, menuControlPlayer: PlaybackPlayer? = nil) -> ControlRoute {
         if exclusivelyAppleMusic { return .appleMusicScript }
         switch focusFallback {
         case .appleMusic: return .appleMusicScript
         case .spotify: return .spotifyScript
         case .kaset: return .kasetScript
-        default: return focusHeldElsewhere ? .withheld : .mediaControl
+        default:
+            guard focusHeldElsewhere else { return .mediaControl }
+            return menuControlPlayer == .qqMusic ? .qqMenu : .withheld
+        }
+    }
+
+    /// `.qqMenu` 那条路上,media-control 的命令对应菜单里哪一项;菜单里没有的(跳转)为 nil。纯函数,selftest 覆盖。
+    public static func qqMenuItem(forMediaControlCommand command: String) -> QQMusicMenuControl.TransportItem? {
+        switch command {
+        case "toggle-play-pause": return .playPause
+        case "next-track": return .next
+        case "previous-track": return .previous
+        default: return nil
         }
     }
 
@@ -942,9 +986,12 @@ public enum MusicPlaybackController {
 
     /// 播放控制此刻该走哪条路(跳转另按 `seekRoute` 改)。
     private static func currentBaseRoute() -> ControlRoute {
-        controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
-                     focusFallback: MediaControlClient.focusControlTarget(),
-                     focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())
+        let held = MediaControlClient.focusHeldByAnotherApp()
+        let menuPlayer: PlaybackPlayer? = held && MediaControlClient.lastAcceptedPlayer() == .qqMusic
+            && QQMusicMenuControl.isAvailable ? .qqMusic : nil
+        return controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
+                            focusFallback: MediaControlClient.focusControlTarget(),
+                            focusHeldElsewhere: held, menuControlPlayer: menuPlayer)
     }
 
     /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
@@ -977,6 +1024,18 @@ public enum MusicPlaybackController {
         case .kasetDirect:
             guard let kasetDirectSeek else { return nil }
             runKasetDirectSeek(kasetDirectSeek, fallbackCommand: mediaControlCommand, fallbackArguments: mediaControlArguments)
+        case .qqMenu:
+            guard let item = qqMenuItem(forMediaControlCommand: mediaControlCommand) else {
+                logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): QQ Music's menu has no item for it")
+                DispatchQueue.main.async { onControlWithheld?() }
+                return nil
+            }
+            commandQueue.async {
+                commandSerial &+= 1
+                if !QQMusicMenuControl.press(item) {
+                    logger.notice("playback control (\(mediaControlCommand, privacy: .public)): QQ Music's menu item not pressed")
+                }
+            }
         case .withheld:
             logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): now playing focus is held by another app")
             DispatchQueue.main.async { onControlWithheld?() }

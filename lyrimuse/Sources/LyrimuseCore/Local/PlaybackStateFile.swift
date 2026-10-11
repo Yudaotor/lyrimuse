@@ -87,6 +87,8 @@ public enum PlaybackStateFile {
         public var amazonTrackID: String? = nil
         /// Kaset 放这首时它报的 YouTube Music videoId(引擎拼成歌曲页存进缓存);别的播放器为 nil。
         public var youtubeMusicVideoID: String? = nil
+        /// QQ 音乐这一条是不是有声书 / 有声节目(`QQSpokenAudio`)。还没判出来、不是 QQ 为 nil(不写这个键,引擎按「QQ 还在判」等一会)。
+        public var spoken: Bool? = nil
 
         enum CodingKeys: String, CodingKey {
             case playSeq = "play_seq"
@@ -101,6 +103,7 @@ public enum PlaybackStateFile {
             case spotifyTrackID = "spotify_track_id"
             case amazonTrackID = "amazon_track_id"
             case youtubeMusicVideoID = "youtube_music_video_id"
+            case spoken
         }
     }
 
@@ -217,12 +220,14 @@ public enum PlaybackStateFile {
         public var spotifyTrackID: String?
         public var amazonTrackID: String?
         public var youtubeMusicVideoID: String?
+        public var spoken: Bool?
 
         public init(player: String, title: String, artist: String, album: String, raw: Tags,
                     appliedFixRev: Int64, playing: Bool, durationSecs: Double?,
                     catalogTrackID: Int64? = nil, trackNumber: Int? = nil, mediaType: String? = nil,
                     musicVideo: Bool = false, radio: Radio? = nil, ad: Bool = false, positionSecs: Double?,
-                    spotifyTrackID: String? = nil, amazonTrackID: String? = nil, youtubeMusicVideoID: String? = nil) {
+                    spotifyTrackID: String? = nil, amazonTrackID: String? = nil, youtubeMusicVideoID: String? = nil,
+                    spoken: Bool? = nil) {
             self.player = player
             self.title = title
             self.artist = artist
@@ -241,6 +246,7 @@ public enum PlaybackStateFile {
             self.spotifyTrackID = spotifyTrackID
             self.amazonTrackID = amazonTrackID
             self.youtubeMusicVideoID = youtubeMusicVideoID
+            self.spoken = spoken
         }
 
         public static func idle() -> Input {
@@ -298,7 +304,7 @@ public enum PlaybackStateFile {
                 appliedFixRev: input.appliedFixRev, durationSecs: input.durationSecs,
                 catalogTrackID: input.catalogTrackID, trackNumber: input.trackNumber, mediaType: input.mediaType,
                 musicVideo: input.musicVideo, radio: input.radio, ad: input.ad, spotifyTrackID: input.spotifyTrackID,
-                amazonTrackID: input.amazonTrackID, youtubeMusicVideoID: input.youtubeMusicVideoID)
+                amazonTrackID: input.amazonTrackID, youtubeMusicVideoID: input.youtubeMusicVideoID, spoken: input.spoken)
             return Content(state: input.playing ? .playing : .paused, player: input.player, track: track,
                            position: published, artwork: artwork)
         }

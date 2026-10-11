@@ -263,6 +263,16 @@ public enum DiscordPresence {
 
     /// 暂停后先留着原来那份这么久,再按设置清掉或换成暂停的那份:切歌间隙、随手暂停一下都不闪。
     public static let pauseGrace: TimeInterval = 10
+    /// 从暂停到在放之后先等这么久再发:暂停着开播另一首时 QQ 音乐先报上一首在放、0.3 秒后才报新歌名,当场发的话
+    /// 上一首会在 Discord 上挂一个节流周期(见 02 章决策 119)。
+    public static let resumeSettleSecs: TimeInterval = 0.8
+
+    /// 刚从暂停恢复、还在等 `resumeSettleSecs`:等到什么时候;不在等为 nil。纯函数,selftest 覆盖。
+    public static func resumeSettleUntil(resumedAt: Date?, now: Date) -> Date? {
+        guard let resumedAt else { return nil }
+        let until = resumedAt.addingTimeInterval(resumeSettleSecs)
+        return now < until ? until : nil
+    }
     /// Discord 对文本字段的限制,按 UTF-16 码元数(它的校验按 JavaScript 的字符串长度算)。
     public static let textLengthRange = 2...128
     /// 链接超过这个长度就不给:截断的链接 Discord 会拒收整条 activity。

@@ -100,6 +100,12 @@ func runPositionReplayTests() {
     replayBrowserProbeReopensOnEveryTrackChange()
     replayQQEarlyStartAnchor()
     replayQQEarlyStartGates()
+    replayQQTrackEndZeroHold()
+    replayQQPauseHoldsShown()
+    replayQQTickAnchor()
+    replayQQSameStartAnchorNotEarly()
+    replayQQFlooredSeek()
+    replayQQResumeAudioLag()
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
     replayKKBOXStallHolds()
@@ -188,7 +194,7 @@ private func replayKasetFollowsWebClock() {
 private let qqID = PlaybackPlayer.qqMusic.bundleIdentifier
 
 /// QQ 开播锚点比出声早 0.48 秒(真机《Silver Lining》:`0@T0`,1.48 秒后补 `1.000` 那个锚点,真起点 = 补的那个 − 1):
-/// 补的锚点一到就对齐,之后整首按它走;对齐一首只一次,之后再落后一截交给伺服。网易云同一串读数照旧(对照)。
+/// 补的锚点一到就对齐,之后整首按它走;开播那条一首只对齐一次,之后曲中的整秒锚点按决策 118 照常纠。网易云同一串读数照旧(对照)。
 @MainActor
 private func replayQQEarlyStartAnchor() {
     for (bundle, corrects) in [(qqID, true), (PlaybackPlayer.netease.bundleIdentifier, false)] {
@@ -204,7 +210,7 @@ private func replayQQEarlyStartAnchor() {
             for t in stride(from: 21.6, through: 26, by: 2) {
                 rig.tick(mediaControl(bundle, "Silver Lining", anchor: 20, elapsed: 20 + (t - 20.88), duration: 233), at: at(t))
             }
-            expectEqual(near(rig.shown(at: at(26)), 25.52, 0.15), true, "回放·QQ 开播早打: 一首只对齐一次(\(shown(26)))")
+            expectEqual(near(rig.shown(at: at(26)), 25.12, 0.02), true, "回放·QQ 开播早打: 之后曲中的整秒锚点照常纠(\(shown(26)))")
         } else {
             expectEqual(near(rig.shown(at: at(20)), 20), true, "回放·网易云: 同一串读数照旧按开播锚点走(\(shown(20)))")
         }
@@ -229,6 +235,138 @@ private func replayQQEarlyStartGates() {
     oneLess.tick(mediaControl(qqID, "醉", anchor: 8, elapsed: 8, duration: 266), at: at(9))
     expectEqual(near(oneLess.shown(at: at(9)), 9), true,
                 "回放·QQ 少报一秒: 落后整 1 秒的锚点不采信(\(oneLess.shown(at: at(9)).map { String(format: "%.3f", $0) } ?? "nil"))")
+}
+
+/// QQ 自然放完:旧歌名下先发 `elapsed=0`,约 0.5 秒后才换歌名。这段按住旧歌的位置(停在曲长),不写成「同一首从头放」;
+/// 1.5 秒后还是这一首才当成重播。网易云同一串读数照旧当场跳回开头(对照)。见 02 章决策 118。
+@MainActor
+private func replayQQTrackEndZeroHold() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    for (bundle, holds) in [(qqID, true), (PlaybackPlayer.netease.bundleIdentifier, false)] {
+        let rig = ReplayRig("qq-end-zero-\(holds)")
+        defer { rig.tearDown() }
+        for t in stride(from: 0.0, through: 6, by: 2) {
+            rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 220, elapsed: 220 + t, duration: 226), at: at(t))
+        }
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 0, elapsed: 0.05, duration: 226), at: at(6.3))
+        if holds {
+            expectEqual(near(rig.shown(at: at(6.3)), 226, 0.05), true, "回放·QQ 曲尾归零: 换歌名之前停在曲尾(\(fmt(rig.shown(at: at(6.3)))))")
+            rig.tick(mediaControl(bundle, "再见以前先说再见", anchor: 0, elapsed: 0.05, duration: 272), at: at(6.8))
+            expectEqual(near(rig.shown(at: at(7.8)), 1.05, 0.05), true, "回放·QQ 曲尾归零: 换了歌名照常从开头走(\(fmt(rig.shown(at: at(7.8)))))")
+        } else {
+            expectEqual(near(rig.shown(at: at(6.3)), 0.05, 0.05), true, "回放·网易云: 照旧跳回开头(\(fmt(rig.shown(at: at(6.3)))))")
+        }
+    }
+    let loop = ReplayRig("qq-end-zero-loop")
+    defer { loop.tearDown() }
+    for t in stride(from: 0.0, through: 6, by: 2) {
+        loop.tick(mediaControl(qqID, "A.I.N.Y.", anchor: 220, elapsed: 220 + t, duration: 226), at: at(t))
+    }
+    loop.tick(mediaControl(qqID, "A.I.N.Y.", anchor: 0, elapsed: 0.05, duration: 226), at: at(6.3))
+    loop.tick(mediaControl(qqID, "A.I.N.Y.", anchor: 0, elapsed: 0.85, duration: 226), at: at(7.1))
+    loop.tick(mediaControl(qqID, "A.I.N.Y.", anchor: 0, elapsed: 1.65, duration: 226), at: at(7.9))
+    expectEqual(near(loop.shown(at: at(7.9)), 1.65, 0.05), true, "回放·QQ 真重播: 1.5 秒后还是这一首就从开头走(\(fmt(loop.shown(at: at(7.9)))))")
+}
+
+/// QQ 暂停:暂停事件冻住外推,快照里还是之前的锚点(没重发)→ 停在屏上位置;之后补发的下取整值不换,暂停中拖到别处的换。
+/// 酷狗照旧按快照冻结值(对照)。见 02 章决策 118。
+@MainActor
+private func replayQQPauseHoldsShown() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    for (bundle, holds) in [(qqID, true), (PlaybackPlayer.kugou.bundleIdentifier, false)] {
+        let rig = ReplayRig("qq-pause-hold-\(holds)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 109, elapsed: 109, duration: 226), at: at(0))
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 109, elapsed: 110, duration: 226), at: at(1))
+        rig.source.replayPlayerStateEvent(at: at(1.3), freeze: true)
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 109, elapsed: 109, duration: 226, playing: false), at: at(1.4))
+        let paused = rig.source.pausedPositionMs.map { Double($0) / 1000 }
+        if holds {
+            expectEqual(near(paused, 110.3, 0.03), true, "回放·QQ 暂停: 不退回旧锚点 109,停在屏上 110.3(\(fmt(paused)))")
+            rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 110, elapsed: 110, duration: 226, playing: false), at: at(1.6))
+            let floored = rig.source.pausedPositionMs.map { Double($0) / 1000 }
+            expectEqual(near(floored, 110.3, 0.03), true, "回放·QQ 暂停: 补发的下取整值 110 不换(\(fmt(floored)))")
+            rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 150, elapsed: 150, duration: 226, playing: false), at: at(5))
+            let moved = rig.source.pausedPositionMs.map { Double($0) / 1000 }
+            expectEqual(near(moved, 150, 0.03), true, "回放·QQ 暂停: 暂停中拖到 150 照换(\(fmt(moved)))")
+        } else {
+            expectEqual(near(paused, 109, 0.03), true, "回放·酷狗 暂停: 照旧按快照冻结值(\(fmt(paused)))")
+        }
+    }
+}
+
+/// QQ 同一首放完又重播:起点按 0 锚点、实际超前 0.36;之后 QQ 在整秒跳变那一刻重发的锚点(少报一秒的 8@9.36、准的 11@11.36)
+/// 一到就对齐,两种都折成超前 0.36。重播后 2.5 秒之内的锚点不看。网易云不动(对照)。见 02 章决策 118。
+@MainActor
+private func replayQQTickAnchor() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    for (bundle, corrects) in [(qqID, true), (PlaybackPlayer.netease.bundleIdentifier, false)] {
+        let rig = ReplayRig("qq-tick-anchor-\(corrects)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 0, elapsed: 0.02, duration: 226), at: at(0.02))
+        for t in stride(from: 2.0, through: 8, by: 2) {
+            rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 0, elapsed: t, duration: 226), at: at(t))
+        }
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 8, elapsed: 8.04, duration: 226), at: at(9.4))
+        let shown = rig.shown(at: at(9.4))
+        if corrects {
+            expectEqual(near(shown, 9.04, 0.02), true, "回放·QQ 整秒锚点: 少报一秒的锚点也折成超前 0.36 对齐(\(fmt(shown)))")
+            rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 11, elapsed: 11.2, duration: 226), at: at(11.56))
+            expectEqual(near(rig.shown(at: at(11.56)), 11.2, 0.03), true, "回放·QQ 整秒锚点: 对齐之后下一个准锚点不再动(\(fmt(rig.shown(at: at(11.56)))))")
+        } else {
+            expectEqual(near(shown, 9.4, 0.02), true, "回放·网易云: 不按整秒锚点纠(\(fmt(shown)))")
+        }
+    }
+    let early = ReplayRig("qq-tick-anchor-settle")
+    defer { early.tearDown() }
+    early.tick(mediaControl(qqID, "A.I.N.Y.", anchor: 50, elapsed: 50, duration: 226), at: at(0))
+    early.tick(mediaControl(qqID, "A.I.N.Y.", anchor: 51, elapsed: 51.64, duration: 226), at: at(2))
+    expectEqual(near(early.shown(at: at(2)), 52, 0.02), true, "回放·QQ 整秒锚点: 接手后 2.5 秒之内的锚点不看(\(fmt(early.shown(at: at(2)))))")
+}
+
+/// 开播锚点没换,读数只是口径变了一点(落后 0.158),决策 115 那条不该采信:要 QQ 发了值不小于 1 的新锚点才看。
+@MainActor
+private func replayQQSameStartAnchorNotEarly() {
+    let rig = ReplayRig("qq-same-start-anchor")
+    defer { rig.tearDown() }
+    rig.tick(mediaControl(qqID, "KID AGAIN", anchor: 0, elapsed: 0.3, duration: 200), at: at(0.3))
+    for t in stride(from: 2.0, through: 12, by: 2) {
+        rig.tick(mediaControl(qqID, "KID AGAIN", anchor: 0, elapsed: t, duration: 200), at: at(t))
+    }
+    rig.tick(mediaControl(qqID, "KID AGAIN", anchor: 0, elapsed: 13.842, duration: 200), at: at(14))
+    expectEqual(near(rig.shown(at: at(14)), 14, 0.02), true,
+                "回放·QQ 同一个开播锚点: 读数口径变了不当成打早(\(rig.shown(at: at(14)).map { String(format: "%.3f", $0) } ?? "nil"))")
+}
+
+/// 在 QQ 里拖动:报的锚点是下取整的(拖到 89.9 报 89),按中点补半秒。网易云不补(对照)。见 02 章决策 118。
+@MainActor
+private func replayQQFlooredSeek() {
+    for (bundle, adds) in [(qqID, true), (PlaybackPlayer.netease.bundleIdentifier, false)] {
+        let rig = ReplayRig("qq-floored-seek-\(adds)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 40, elapsed: 40, duration: 226), at: at(0))
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 40, elapsed: 42, duration: 226), at: at(2))
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 89, elapsed: 89, duration: 226), at: at(4))
+        expectEqual(near(rig.shown(at: at(4)), adds ? 89.5 : 89, 0.02), true,
+                    "回放·\(adds ? "QQ" : "网易云") 拖动: \(adds ? "下取整的锚点补半秒" : "不补")(\(rig.shown(at: at(4)).map { String(format: "%.3f", $0) } ?? "nil"))")
+    }
+}
+
+/// QQ 恢复:报在放之后约 0.12 秒才出声,起点按「冻结值 + 恢复信号至今 − 0.12」。酷狗照旧(对照)。见 02 章决策 118。
+@MainActor
+private func replayQQResumeAudioLag() {
+    for (bundle, lag) in [(qqID, 0.12), (PlaybackPlayer.kugou.bundleIdentifier, 0.0)] {
+        let rig = ReplayRig("qq-resume-lag-\(lag)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 30, elapsed: 30, duration: 226), at: at(0))
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 30, elapsed: 32, duration: 226), at: at(2))
+        rig.source.replayPlayerStateEvent(at: at(3), freeze: true)
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 30, elapsed: 33, duration: 226, playing: false), at: at(3.1))
+        rig.source.replayResumeSignal(at: at(10))
+        rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 30, elapsed: 40.3, duration: 226), at: at(10.3))
+        expectEqual(near(rig.shown(at: at(10.3)), 33.3 - lag, 0.02), true,
+                    "回放·\(lag > 0 ? "QQ" : "酷狗") 恢复: 起点扣 \(lag) 秒出声延迟(\(rig.shown(at: at(10.3)).map { String(format: "%.3f", $0) } ?? "nil"))")
+    }
 }
 
 private let kkboxID = PlaybackPlayer.kkbox.bundleIdentifier

@@ -149,6 +149,23 @@ public final class LocalPlaybackSource: ObservableObject {
     // (广告的标题/歌手压根不会被写进歌词缓存,见 lyrimuse-engine/enrich.go trackEnrichment
     // 的对应守卫,hasLyricsContent 永远拿不到内容)。
     @Published public private(set) var isCurrentTrackAdBreak: Bool = false
+    /// QQ 音乐这一首判成了有声书 / 有声节目(见 QQSpokenAudio):字幕照常显示,Discord 不显示,引擎不当歌。
+    @Published public private(set) var isCurrentTrackSpokenAudio: Bool = false
+    /// 这一首(身份)的结论;nil = 还没判出来。不是 QQ 时 key 为 nil。
+    private var spokenAudioKey: String?
+    private var spokenAudioVerdict: Bool?
+    /// 这一首(身份)从什么时候开始等结论,见 spokenAudioPendingUntil。
+    private var spokenAudioKeySince: Date?
+    /// 换到 QQ 的新一首之后,结论没到时 Discord 最多保持上一份这么久(实测结论 0.4 秒左右到)。
+    public static let spokenAudioPendingSecs: TimeInterval = 2
+
+    /// QQ 这一首还在等是不是有声节目的结论:等到什么时候;不在等为 nil。Discord 这段时间保持上一份,别先把一集有声节目
+    /// 显示出去(见 DiscordPresenceController)。
+    public func spokenAudioPendingUntil(now: Date) -> Date? {
+        guard spokenAudioKey != nil, spokenAudioVerdict == nil, let since = spokenAudioKeySince else { return nil }
+        let until = since.addingTimeInterval(Self.spokenAudioPendingSecs)
+        return now < until ? until : nil
+    }
     /// 这条广告在这次插播里是第几条、一共几条(灵动岛显示出来)。
     ///
     /// 只有 **YouTube Music 网页广告**给得出 —— 它自己把「赞助商广告 1/2 ·」写在页面的广告
@@ -645,6 +662,70 @@ public final class LocalPlaybackSource: ObservableObject {
     public nonisolated static let earlyStartAnchorMinSecs: Double = 0.1
     /// 见 correctsEarlyStartAnchor。
     public nonisolated static let earlyStartAnchorMaxSecs: Double = 0.8
+
+    /// QQ 曲中自己重发的锚点(不是跟着换歌、恢复、拖动发的那种)是在它播放头跨过整秒的那一刻发的:那一刻真位置恰好是整秒,
+    /// 就是报的值,或者少报一秒时报的值 + 1。所以「外推 − 读数」按 1 秒取模、折进 [−0.5, 0.5) 就是我们的误差(正 = 超前),
+    /// 超过 `tickAnchorMinErrorSecs` 就对齐,两个方向都纠。前提是误差本来在半秒以内,超过半秒折出来的方向是反的:在 QQ 里拖动
+    /// 之后那一截靠 `flooredSeekMidpoint` 压进半秒。只认 QQ。见 02 章决策 118。纯函数,selftest 直接覆盖。
+    public nonisolated static func tickAnchorError(bundleID: String?, reported: Double, predicted: Double) -> Double? {
+        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier else { return nil }
+        let diff = predicted - reported
+        let folded = diff - (diff + 0.5).rounded(.down)
+        return abs(folded) > tickAnchorMinErrorSecs ? folded : nil
+    }
+
+    /// 见 tickAnchorError。
+    public nonisolated static let tickAnchorMinErrorSecs: Double = 0.1
+    /// 换歌、恢复、拖动之后这么久之内 QQ 发的锚点是跟着操作发的,不在整秒时刻,不按 tickAnchorError 纠。
+    public nonisolated static let tickAnchorSettleSecs: TimeInterval = 2.5
+
+    /// QQ 被拖动之后报的锚点是整秒下取整的(拖到 89.9 报 89),真位置在它和它 + 1 之间:拖动那一支采信它时按中点补这么多。
+    /// 值不到 1 的锚点不补:0 锚点是开播,不是取整。见 02 章决策 118。纯函数,selftest 直接覆盖。
+    public nonisolated static func flooredSeekMidpoint(bundleID: String?, anchorElapsedTime: Double?) -> Double {
+        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier, let anchorElapsedTime, anchorElapsedTime >= 1 else { return 0 }
+        return flooredSeekMidpointSecs
+    }
+
+    /// 见 flooredSeekMidpoint。
+    public nonisolated static let flooredSeekMidpointSecs: Double = 0.5
+
+    /// QQ 自然放完时先把**旧歌**的位置归零发一个锚点,约 0.5 秒后才换歌名。读数回到开头、外推还在曲尾的这一段按住旧歌的位置
+    /// 等换歌名,最多 `trackEndZeroHoldSecs`,到点还是这一首才当成重播;不按住的话这几拍会被写成「同一首从头放」,引擎记成
+    /// 单曲循环。只认 QQ。见 02 章决策 118。纯函数,selftest 直接覆盖。
+    public nonisolated static func holdsTrackEndZero(bundleID: String?, reported: Double, predicted: Double,
+                                                     duration: Double) -> Bool {
+        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier, duration > 0 else { return false }
+        return reported <= trackEndZeroMaxReportedSecs && predicted >= duration - trackEndZeroWindowSecs
+    }
+
+    /// 见 holdsTrackEndZero。
+    public nonisolated static let trackEndZeroMaxReportedSecs: Double = 2.0
+    /// 见 holdsTrackEndZero。
+    public nonisolated static let trackEndZeroWindowSecs: Double = 2.0
+    /// 见 holdsTrackEndZero。
+    public nonisolated static let trackEndZeroHoldSecs: TimeInterval = 1.5
+
+    /// QQ 暂停时多数不重发锚点;补发的是整秒下取整的值,或者暂停前刚重发过的、时间戳新而值少一秒的旧值,都比暂停那一刻早。
+    /// 所以暂停事件冻住了外推时,暂停那一拍按屏上位置停住(见 posHeldPause),之后它再报的值按 `pausedReadingReplacesShown`
+    /// 决定换不换。只认 QQ。见 02 章决策 118。纯函数,selftest 直接覆盖。
+    public nonisolated static func holdsShownPositionAtPause(bundleID: String?, frozenByEvent: Bool) -> Bool {
+        bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && frozenByEvent
+    }
+
+    /// 按屏上位置停住的暂停,播放器再报的值什么时候换上:比屏上还靠前(下取整的值都比真位置早,还靠前说明屏上落后),
+    /// 或者差出 `pausedReadingSeekSecs` 以上(暂停中拖过)。纯函数,selftest 直接覆盖。
+    public nonisolated static func pausedReadingReplacesShown(reported: Double, shown: Double) -> Bool {
+        reported - shown > flooredForwardSnapEpsilonSecs || abs(reported - shown) > pausedReadingSeekSecs
+    }
+
+    /// 见 pausedReadingReplacesShown。
+    public nonisolated static let pausedReadingSeekSecs: Double = 1.5
+
+    /// 报在放之后多久才真出声:恢复那一拍的前跳上界扣掉这一截。QQ 实测 0.05~0.21 秒、平均约 0.12,别的播放器 0。
+    /// 见 02 章决策 118。纯函数,selftest 直接覆盖。
+    public nonisolated static func resumeAudioLagSecs(bundleID: String?) -> Double {
+        bundleID == PlaybackPlayer.qqMusic.bundleIdentifier ? 0.12 : 0
+    }
 
     // 实测排查坐实的设计缺陷修复:原来"稳定播放"分支只按墙钟外推、完全不回看
     // 真实读数,任何播种时刻带进来的偏差——App 启动那一拍的读数毛刺、恰好整个落在两次
@@ -1284,6 +1365,18 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 暂停那一拍按屏上位置停住时记下的(那个陈旧锚点的 elapsed, 停住的位置);锚点一变或恢复播放就清掉。
     private var posHeldPause: (anchorElapsed: Double, ms: Int)?
+    /// QQ 曲尾归零那一段从什么时候开始按住的(见 holdsTrackEndZero);不在那一段里为 nil。
+    private var posTrackEndZeroSince: Date?
+    /// 按 tickAnchorError 看过的那个锚点(elapsed),一个锚点只看一次;换歌 / 恢复 / 拖动时记成那一刻的锚点。
+    private var posTickCheckedAnchorElapsed: Double?
+    /// 最近一次换歌 / 恢复 / 拖动的时刻,见 tickAnchorSettleSecs。
+    private var posTickAnchorSettleFrom: Date?
+
+    /// 换歌 / 恢复 / 拖动那一刻:这时的锚点是跟着操作发的,记成看过;之后 `tickAnchorSettleSecs` 内的锚点也不看。
+    private func noteTickAnchorSettle(anchorElapsed: Double?, now: Date) {
+        posTickCheckedAnchorElapsed = anchorElapsed
+        posTickAnchorSettleFrom = now
+    }
 
     /// 这个播放器此刻该预置的锚点滞后量;没学到(或学到的太小)时为 0。
     private func anchorLag(forBundleID bundleID: String?) -> Double {
@@ -1898,7 +1991,7 @@ public final class LocalPlaybackSource: ObservableObject {
                     : Self.resumeSeedSeconds(
                         reported: reported,
                         frozen: pausedPositionMs.map { Double($0) / 1000 },
-                        maxForwardSecs: sinceSignal,
+                        maxForwardSecs: sinceSignal - Self.resumeAudioLagSecs(bundleID: lastSnapshot?.bundleIdentifier),
                         capSecs: resumeSignalAge == nil ? Self.resumeMaxForwardCapSecs : .infinity)
                 // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):播种值就是真声,差值折进偏置。
                 if gaplessLeadBundleID != nil, anchorElapsedTime == nil, resumeSignalAge != nil || freshSignalAge != nil,
@@ -1911,6 +2004,8 @@ public final class LocalPlaybackSource: ObservableObject {
             posErrEMA = 0
             // 换歌 / 恢复播放:上一段的「晚锚点已确认过」记录作废(见 posLateAnchorProbedElapsed)。
             posLateAnchorProbedElapsed = nil
+            posTrackEndZeroSince = nil
+            noteTickAnchorSettle(anchorElapsed: anchorElapsedTime, now: now)
             return (trackPosSeconds, true)
         }
         let gap = now.timeIntervalSince(prevWall)
@@ -2037,6 +2132,21 @@ public final class LocalPlaybackSource: ObservableObject {
             trackPosSeconds = predicted
             return (trackPosSeconds, false)
         }
+        // QQ 自然放完、换歌名之前那几拍:按住旧歌的位置,见 holdsTrackEndZero。
+        if Self.holdsTrackEndZero(bundleID: lastSnapshot?.bundleIdentifier, reported: reported, predicted: predicted,
+                                  duration: posPrevDurationSecs) {
+            let since = posTrackEndZeroSince ?? now
+            if posTrackEndZeroSince == nil {
+                posTrackEndZeroSince = now
+                logger.notice("track end zero: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) duration=\(self.posPrevDurationSecs, format: .fixed(precision: 3)), holding the old position until the title changes")
+            }
+            if now.timeIntervalSince(since) < Self.trackEndZeroHoldSecs {
+                trackPosSeconds = min(predicted, posPrevDurationSecs)
+                return (trackPosSeconds, false)
+            }
+            logger.notice("track end zero: still the same track after \(now.timeIntervalSince(since), format: .fixed(precision: 2))s, treating it as a restart")
+        }
+        posTrackEndZeroSince = nil
         if abs(reported - predicted) > Self.seekJumpToleranceSecs {
             // 真实 seek/跳变:直接重锚到这次读数。seek 时 Spotify 会重打锚点,重打后的
             // 锚点与真声对齐(与手动点播同一性质),自然切歌偏置随之作废——清零并改信
@@ -2049,8 +2159,13 @@ public final class LocalPlaybackSource: ObservableObject {
             // elapsedTimeNow 分不出"带偏置的锚点没动"和"准锚点+拖了≈偏置":拖动
             // ≥3s(绝大多数)正常进此分支纠正,换歌即自愈。
             setReportedBias(0, anchorElapsed: nil)
-            trackPosSeconds = rawReported
+            let midpoint = Self.flooredSeekMidpoint(bundleID: lastSnapshot?.bundleIdentifier, anchorElapsedTime: anchorElapsedTime)
+            if midpoint > 0 {
+                logger.notice("floored seek anchor: raw=\(rawReported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3)), adding \(midpoint, format: .fixed(precision: 2))s")
+            }
+            trackPosSeconds = rawReported + midpoint
             posErrEMA = 0
+            noteTickAnchorSettle(anchorElapsed: anchorElapsedTime, now: now)
             if isSpotifyPlayerClock {
                 // Spotify 自己的钟:拖动之后同样先于出声跑一截(见 SpotifyStartKind.seek);
                 // 跳回开头且刚收到过「从头播放」的通知的是重新起播,按 fresh(见 spotifyJumpKind)。
@@ -2104,13 +2219,26 @@ public final class LocalPlaybackSource: ObservableObject {
             logger.notice("late anchor suspected: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) behind=\(predicted - reported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3))")
             env.spotifyProbeRequestConfirmation(key)
         }
-        // 开播锚点比出声早:对齐之后这首不再算「从开播锚点外推下来」,闸保持关着(上面已置 false)。
-        if anchorLagSampleWasValid,
-           Self.correctsEarlyStartAnchor(bundleID: lastSnapshot?.bundleIdentifier, reported: reported, predicted: predicted) {
-            logger.notice("early start anchor: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) ahead=\(predicted - reported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3))")
-            trackPosSeconds = reported
-            posErrEMA = 0
-            return (trackPosSeconds, true)
+        // QQ 发了一个新锚点(值不小于 1、跟上次看过的不同),一个锚点只看一次:从开播锚点一路外推下来时按 correctsEarlyStartAnchor
+        // 看开播锚点有没有打早(对齐之后这首不再算「从开播锚点外推下来」,闸保持关着,上面已置 false);离上一次换歌 / 恢复 /
+        // 拖动够久的是整秒跳变那一刻发的,按 tickAnchorError 两个方向都纠。见 02 章决策 115、118。
+        if let anchorElapsed = anchorElapsedTime, anchorElapsed >= 1, anchorElapsed != posTickCheckedAnchorElapsed {
+            posTickCheckedAnchorElapsed = anchorElapsed
+            let bundle = lastSnapshot?.bundleIdentifier
+            if anchorLagSampleWasValid,
+               Self.correctsEarlyStartAnchor(bundleID: bundle, reported: reported, predicted: predicted) {
+                logger.notice("early start anchor: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) ahead=\(predicted - reported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3))")
+                trackPosSeconds = reported
+                posErrEMA = 0
+                return (trackPosSeconds, true)
+            }
+            if let from = posTickAnchorSettleFrom, now.timeIntervalSince(from) >= Self.tickAnchorSettleSecs,
+               let error = Self.tickAnchorError(bundleID: bundle, reported: reported, predicted: predicted) {
+                logger.notice("tick anchor: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) error=\(error, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsed, format: .fixed(precision: 3))")
+                trackPosSeconds = predicted - error
+                posErrEMA = 0
+                return (trackPosSeconds, true)
+            }
         }
         posAnchorLagSampleValid = anchorLagSampleWasValid
         return resolveSteadyState(reported: reported, predicted: predicted, key: key, tier: tier)
@@ -2880,7 +3008,9 @@ public final class LocalPlaybackSource: ObservableObject {
                     forTrackKey: MediaControlSnapshot.trackKey(artist: snapshot.artist, title: snapshot.title))
                 : nil,
             youtubeMusicVideoID: bundleID == PlaybackPlayer.kaset.bundleIdentifier
-                ? MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) : nil)
+                ? MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) : nil,
+            spoken: bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && spokenAudioKey == snapshot.identityKey
+                ? spokenAudioVerdict : nil)
         PlaybackStatePublisher.shared.publish(input, now: now)
     }
 
@@ -3025,8 +3155,46 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 一轮 poll 收尾:放开单飞,期间有人要过就立刻补跑。
     private func finishPoll() {
         refreshPlaybackControlsWithheld()
+        refreshSpokenAudio()
         syncKasetWebWatch()
         if pollFlight.finish() { poll() }
+    }
+
+    /// QQ 音乐这一首是不是有声节目:每拍轮询收尾看一次。缓存里有了这首的 QQ 歌曲页才问得了;判出来就当场重写一次播放状态。
+    private func refreshSpokenAudio() {
+        guard !title.isEmpty, let snapshot = lastSnapshot,
+              snapshot.bundleIdentifier == PlaybackPlayer.qqMusic.bundleIdentifier else {
+            spokenAudioKey = nil
+            spokenAudioVerdict = nil
+            if isCurrentTrackSpokenAudio { isCurrentTrackSpokenAudio = false }
+            return
+        }
+        let key = snapshot.identityKey
+        if key != spokenAudioKey {
+            spokenAudioKey = key
+            spokenAudioKeySince = Date()
+            spokenAudioVerdict = nil
+            if isCurrentTrackSpokenAudio { isCurrentTrackSpokenAudio = false }
+        }
+        guard spokenAudioVerdict == nil,
+              let mid = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)?.qqSong
+                .flatMap({ PlatformLinks.qqSongMID(songPage: $0.absoluteString) }) else { return }
+        if let known = QQSpokenAudio.shared.cached(mid: mid) { return applySpokenAudio(known, mid: mid) }
+        QQSpokenAudio.shared.classify(mid: mid) { [weak self] verdict in
+            Task { @MainActor [weak self] in
+                guard let self, self.spokenAudioKey == key, self.spokenAudioVerdict == nil else { return }
+                self.applySpokenAudio(verdict, mid: mid)
+                self.publishPlaybackState()
+            }
+        }
+    }
+
+    private func applySpokenAudio(_ verdict: Bool, mid: String) {
+        spokenAudioVerdict = verdict
+        if verdict != isCurrentTrackSpokenAudio { isCurrentTrackSpokenAudio = verdict }
+        if verdict {
+            logger.notice("qq spoken audio: mid=\(mid, privacy: .public) title=\(self.title, privacy: .public), showing subtitles, not reported as a song")
+        }
     }
 
     /// 播放控制此刻会不会被拦下,变了才发布。
@@ -3810,7 +3978,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 self.anchor = nil
                 if let shown = pauseShownMs, let stale = snapshot.anchorElapsedTime,
                    Self.pauseAnchorIsStale(bundleID: snapshot.bundleIdentifier, frozenByEvent: pauseAnchorWasFrozenByEvent,
-                                           latestAnchorPublishedWhilePaused: env.latestAnchorPublishedWhilePaused()) {
+                                           latestAnchorPublishedWhilePaused: env.latestAnchorPublishedWhilePaused())
+                    || Self.holdsShownPositionAtPause(bundleID: snapshot.bundleIdentifier, frozenByEvent: pauseAnchorWasFrozenByEvent) {
                     posHeldPause = (stale, shown)
                     logger.notice("pause hold: snapshot still carries the last playing anchor \(stale, format: .fixed(precision: 3)), keeping the shown position \(Double(shown) / 1000, format: .fixed(precision: 3)) until the pause anchor lands")
                 }
@@ -3858,6 +4027,13 @@ public final class LocalPlaybackSource: ObservableObject {
             }
             if let held = posHeldPause {
                 if let anchorNow = snapshot.anchorElapsedTime, abs(anchorNow - held.anchorElapsed) < 0.001 { return held.ms }
+                // QQ 暂停中再报的值多半是下取整的,见 pausedReadingReplacesShown;不换的话记住这个锚点、接着停在原处。
+                if let anchorNow = snapshot.anchorElapsedTime,
+                   Self.holdsShownPositionAtPause(bundleID: snapshot.bundleIdentifier, frozenByEvent: true),
+                   !Self.pausedReadingReplacesShown(reported: reported, shown: Double(held.ms) / 1000) {
+                    posHeldPause = (anchorNow, held.ms)
+                    return held.ms
+                }
                 posHeldPause = nil
             }
             return Int(reported * 1000)
@@ -4004,9 +4180,12 @@ public final class LocalPlaybackSource: ObservableObject {
         // Kaset 的跳转定向发给它本体,跳完停了要补播放,所以带上跳转前在不在放(见 MusicPlaybackController.seekRoute)。
         let kasetWasPlaying = lastSnapshot?.bundleIdentifier == PlaybackPlayer.kaset.bundleIdentifier
             ? (lastSnapshot?.playing ?? false) : nil
+        // QQ 暂停中收到跳转会自己放起来,跳完要停回去(见 MusicPlaybackController.seek)。
+        let qqWasPaused = lastSnapshot?.bundleIdentifier == PlaybackPlayer.qqMusic.bundleIdentifier
+            && !(lastSnapshot?.playing ?? false)
         // 没发出去(焦点被别的 App 占着)就别把屏上位置挪到目标:播放器没动,挪了要等下一拍才被拽回来。
         guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic,
-                                                       kasetWasPlaying: kasetWasPlaying) else { return }
+                                                       kasetWasPlaying: kasetWasPlaying, qqWasPaused: qqWasPaused) else { return }
 
         let now = Date()
         lineSelectionHeldMs = nil
@@ -4028,6 +4207,7 @@ public final class LocalPlaybackSource: ObservableObject {
         trackPosSeconds = seconds
         posPrevWall = now
         posErrEMA = 0
+        noteTickAnchorSettle(anchorElapsed: lastSnapshot?.anchorElapsedTime, now: now)
         // 我们主动发的 seek 同样会让 Spotify 重打锚点(与真声对齐)——锚点偏置作废。
         setReportedBias(0, anchorElapsed: nil)
         // 例外:读的是 Spotify 自己的钟、且正在放 —— 拖完它照样先于出声跑一截(SpotifyStartKind.seek),
@@ -4048,6 +4228,10 @@ public final class LocalPlaybackSource: ObservableObject {
         } else if currentDurationMs != nil {
             // 暂停态:显示源是 pausedPositionMs(见 apply() 里那段注释),没有锚点可改。
             pausedPositionMs = clampedMs
+            // QQ 回报的是拖到的目标下取整,按屏上位置停住的规则停在目标上(见 pausedReadingReplacesShown)。
+            if Self.holdsShownPositionAtPause(bundleID: lastSnapshot?.bundleIdentifier, frozenByEvent: true) {
+                posHeldPause = (lastSnapshot?.anchorElapsedTime ?? -1, clampedMs)
+            }
         }
         // 歌词高亮跟着立刻走到新位置,不等下一拍(排好的下一拍按旧位置算,那一拍之前
         // 屏幕上仍是旧的一句,拖动时看着像没反应)。

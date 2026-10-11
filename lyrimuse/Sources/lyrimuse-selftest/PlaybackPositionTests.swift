@@ -1681,6 +1681,40 @@ func runPlaybackPositionTests() {
         expectEqual(qqEarly(PlaybackPlayer.netease.bundleIdentifier, 1.0, 1.48), false, "QQ 开播早打: 网易云没实测,不放进来")
         expectEqual(qqEarly(PlaybackPlayer.kugou.bundleIdentifier, 1.0, 1.48), false, "QQ 开播早打: 酷狗不动")
 
+        // QQ 整秒跳变锚点:差值按 1 秒取模、折进 [−0.5, 0.5)(02 章决策 118)。
+        let kugouID = PlaybackPlayer.kugou.bundleIdentifier
+        let tick = { LocalPlaybackSource.tickAnchorError(bundleID: qq, reported: $0, predicted: $1) }
+        func near3(_ a: Double?, _ b: Double) -> Bool { a.map { abs($0 - b) < 0.001 } ?? false }
+        expectEqual(near3(tick(11, 11.358), 0.358), true, "QQ 整秒锚点: 报的值准,超前 0.358")
+        expectEqual(near3(tick(8, 9.36), 0.36), true, "QQ 整秒锚点: 少报一秒(差 1.36)折成超前 0.36")
+        expectEqual(near3(tick(20, 19.7), -0.3), true, "QQ 整秒锚点: 落后 0.3 往前纠")
+        expectEqual(near3(tick(20, 20.7), -0.3), true, "QQ 整秒锚点: 少报一秒又落后 0.3(差 0.7)折成落后 0.3")
+        expectEqual(tick(20, 21.0) == nil && tick(20, 20.05) == nil && tick(20, 19.95) == nil, true,
+                    "QQ 整秒锚点: 差整 1 秒 / 0.05 以内不动")
+        expectEqual(LocalPlaybackSource.tickAnchorError(bundleID: PlaybackPlayer.netease.bundleIdentifier, reported: 11, predicted: 11.358) == nil,
+                    true, "QQ 整秒锚点: 网易云不动")
+        // 拖动后的下取整锚点、曲尾归零、暂停停住、恢复出声延迟。
+        expectEqual(LocalPlaybackSource.flooredSeekMidpoint(bundleID: qq, anchorElapsedTime: 89), 0.5, "QQ 拖动: 下取整的锚点补半秒")
+        expectEqual(LocalPlaybackSource.flooredSeekMidpoint(bundleID: qq, anchorElapsedTime: 0), 0, "QQ 拖动: 0 锚点(开播)不补")
+        expectEqual(LocalPlaybackSource.flooredSeekMidpoint(bundleID: PlaybackPlayer.netease.bundleIdentifier, anchorElapsedTime: 89), 0,
+                    "QQ 拖动: 网易云不补")
+        let endZero = { LocalPlaybackSource.holdsTrackEndZero(bundleID: $0, reported: $1, predicted: $2, duration: 226) }
+        expectEqual(endZero(qq, 0.3, 225.6), true, "QQ 曲尾归零: 外推在曲尾、读数回到开头 → 按住")
+        expectEqual(endZero(qq, 0.3, 120), false, "QQ 曲尾归零: 曲中拖回开头不按住")
+        expectEqual(endZero(qq, 5, 226), false, "QQ 曲尾归零: 读数不在开头不按住")
+        expectEqual(endZero(PlaybackPlayer.kugou.bundleIdentifier, 0.3, 225.6), false, "QQ 曲尾归零: 酷狗不按住")
+        expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: qq, frozenByEvent: true), true, "QQ 暂停: 按屏上位置停住")
+        expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: qq, frozenByEvent: false), false,
+                    "QQ 暂停: 外推没被暂停事件冻住(屏上比暂停晚)不停住")
+        expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: kugouID, frozenByEvent: true), false, "QQ 暂停: 酷狗照旧")
+        let replaces = LocalPlaybackSource.pausedReadingReplacesShown
+        expectEqual(replaces(110, 110.605), false, "QQ 暂停: 补发的下取整值比屏上早,不换")
+        expectEqual(replaces(109, 110.295), false, "QQ 暂停: 少报一秒的旧值不换")
+        expectEqual(replaces(111, 110.6), true, "QQ 暂停: 比屏上还靠前说明屏上落后,换")
+        expectEqual(replaces(150, 110.6), true, "QQ 暂停: 差出 1.5 秒以上是暂停中拖过,换")
+        expectEqual(LocalPlaybackSource.resumeAudioLagSecs(bundleID: qq), 0.12, "QQ 恢复: 扣出声延迟 0.12")
+        expectEqual(LocalPlaybackSource.resumeAudioLagSecs(bundleID: kugouID), 0, "QQ 恢复: 别的播放器不扣")
+
         // 跟随重发锚点(KKBOX)的两条判据。
         let L2 = LocalPlaybackSource.self
         let kk = PlaybackPlayer.kkbox.bundleIdentifier

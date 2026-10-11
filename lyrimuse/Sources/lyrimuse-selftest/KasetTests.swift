@@ -810,7 +810,7 @@ func runKasetTests() {
         expectEqual(client.contains("let owner = reportedBundleID == safariMediaProcessBundleID\n            ? raw.processIdentifier.flatMap { responsibleBundleID(ofPID: $0) } : nil")
                         && client.contains("let bundleID = reportingPlayerBundleID(reportedBundleID, owner: owner)"), true,
                     "Kaset 契约: 系统当选的是 WebKit 媒体进程时按负责进程认,Kaset 内嵌网页那份不当成 Safari")
-        expectEqual(playbackSource.contains("kasetWasPlaying: kasetWasPlaying) else { return }")
+        expectEqual(playbackSource.contains("kasetWasPlaying: kasetWasPlaying, qqWasPaused: qqWasPaused) else { return }")
                         && src("LyrimuseCore/Local/MusicPlaybackController.swift").contains("let route = seekRoute(base, playerIsKaset: kasetDirectSeek != nil)")
                         && src("../native/nowplaying-clients/nowplaying-clients.pl").contains(
                             #"$ENV{LYRIMUSE_NOWPLAYING_SEEK} = $1 if defined $mode && $mode =~ /^seek=(\d+(?:\.\d+)?)$/;"#)

@@ -77,6 +77,31 @@ public enum QQMusicMenuControl {
         return false
     }
 
+    /// 「播放控制」里的播放控制项。焦点被别的 App 占着时播放控制按它们(见 `MusicPlaybackController.ControlRoute.qqMenu`)。
+    public enum TransportItem: Sendable { case playPause, next, previous }
+
+    /// 菜单项标题 → 这一项是哪个控制(简繁两套界面)。播放 / 暂停是同一项,标题随状态变(在放时写「暂停」),按下去都是切换。
+    /// 纯函数,selftest 覆盖。
+    public static func transport(forTitle title: String) -> TransportItem? {
+        switch title.trimmingCharacters(in: .whitespaces) {
+        case "播放", "暂停", "暫停": return .playPause
+        case "上一首": return .previous
+        case "下一首": return .next
+        default: return nil
+        }
+    }
+
+    /// 能不能走菜单:有辅助功能权限、QQ 在跑。不跨进程,主线程可调。
+    public static var isAvailable: Bool {
+        AXIsProcessTrusted() && !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+    }
+
+    /// 按一下这一项,返回按没按下去。会阻塞一次跨进程查询,别在主线程调。
+    public static func press(_ item: TransportItem) -> Bool {
+        guard let found = transportItems().first(where: { $0.item == item }) else { return false }
+        return AXUIElementPerformAction(found.element, kAXPressAction as CFString) == .success
+    }
+
     /// 当前档;QQ 没在跑、没有辅助功能权限、找不到那个子菜单时为 nil。会阻塞一次跨进程查询,别在主线程调。
     public static func readMode() -> MusicPlaybackController.MusicPlaybackMode? {
         guard let items = modeItems() else { return nil }
@@ -95,6 +120,18 @@ public enum QQMusicMenuControl {
         let ax = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(ax, 1)
         return element(ax, kAXMenuBarAttribute)
+    }
+
+    /// 认得出的播放控制项。按标题认,不按下标(同 favoriteItem)。
+    private static func transportItems() -> [(item: TransportItem, element: AXUIElement)] {
+        guard let bar = menuBar() else { return [] }
+        for top in menuChildren(bar) {
+            let found = menuChildren(top).compactMap { e -> (item: TransportItem, element: AXUIElement)? in
+                transport(forTitle: string(e, kAXTitleAttribute) ?? "").map { ($0, e) }
+            }
+            if found.count >= 2 { return found }
+        }
+        return []
     }
 
     private static func favoriteItem() -> (title: String, element: AXUIElement)? {

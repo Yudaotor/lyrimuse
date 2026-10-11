@@ -59,6 +59,8 @@ type appStateTrack struct {
 	AmazonTrackID string `json:"amazon_track_id,omitempty"`
 	// YouTubeMusicVideoID:Kaset 放这首时它报的 YouTube Music videoId;别的播放器为空。
 	YouTubeMusicVideoID string `json:"youtube_music_video_id,omitempty"`
+	// Spoken:QQ 音乐这一条是不是有声书 / 有声节目(App 按 QQ 歌曲详情判的);App 还没判出来、或者不是 QQ 时没有这个键。
+	Spoken *bool `json:"spoken,omitempty"`
 }
 
 type appStatePosition struct {
@@ -224,6 +226,7 @@ func appStateSnapshot(rec appStateRecord, now time.Time) snapshot {
 	s := snapshot{
 		Title: t.Title, Artist: t.Artist, Album: t.Album, Bundle: rec.Player,
 		Playing: rec.State == "playing", Radio: t.Radio != nil, NotAudio: t.MusicVideo,
+		Spoken: t.Spoken != nil && *t.Spoken, SpokenPending: rec.Player == qqMusicBundleID && t.Spoken == nil,
 	}
 	if t.DurationSecs != nil {
 		s.Duration, s.ReportedDuration = *t.DurationSecs, *t.DurationSecs

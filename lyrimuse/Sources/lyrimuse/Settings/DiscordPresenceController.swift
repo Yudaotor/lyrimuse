@@ -67,6 +67,8 @@ final class DiscordPresenceController: ObservableObject {
     private var observers: [AnyCancellable] = []
     /// 这一段暂停从什么时候开始;在放时为 nil。预览按它判暂停宽限期。
     private(set) var pausedSince: Date?
+    /// 最近一次从暂停变成在放的时刻,见 `DiscordPresence.resumeSettleUntil`。
+    private var resumedAt: Date?
     /// 当前播放器归哪个 Discord 应用(`DiscordPresence.applicationID(forBundleID:webPlatformID:)`);连接、重连都按它。
     private var applicationID = DiscordPresence.applicationID
     /// 关掉一次加一,之前发出去的回执晚到时认得出来、不再算数。
@@ -99,13 +101,16 @@ final class DiscordPresenceController: ObservableObject {
         let settings = AppSettings.shared
         // 暂停的时刻不防抖,宽限从真暂停那一刻算。
         observers.append(playback.$isPlayingSmoothed.removeDuplicates().sink { [weak self] playing in
-            self?.pausedSince = playing ? nil : Date()
+            guard let self else { return }
+            if playing, self.pausedSince != nil { self.resumedAt = Date() }
+            self.pausedSince = playing ? nil : Date()
         })
         // 换歌时歌名、歌手、专辑先后各发一次,攒一下再算。
         let changes: [AnyPublisher<Void, Never>] = [
             signal(playback.$title), signal(playback.$artist), signal(playback.$displayArtist),
             signal(playback.$displayAlbum), signal(playback.$isPlayingSmoothed), signal(playback.$anchor),
             signal(playback.$isCurrentTrackAdBreak), signal(playback.$isRadioTalkBreak),
+            signal(source.$isCurrentTrackSpokenAudio),
             signal(source.$spotifyArtworkURL), signal(source.$webPageArtworkURL), signal(source.$webPageVideoFrameURL),
             signal(source.$enrichContentVersion),
             signal(ConfigStore.shared.$stateRelayURL),
@@ -151,6 +156,16 @@ final class DiscordPresenceController: ObservableObject {
         if let hiddenUntil, now >= hiddenUntil {
             discordLogger.notice("hide ended on refresh, \(Int(now.timeIntervalSince(hiddenUntil)), privacy: .public)s late")
             setHidden(until: nil)
+        }
+        // 刚从暂停恢复:先等一下,这期间换了歌就不会把上一首发成在听(见 DiscordPresence.resumeSettleUntil)。
+        if let until = DiscordPresence.resumeSettleUntil(resumedAt: resumedAt, now: now) {
+            wake(at: until)
+            return
+        }
+        // QQ 这一首是不是有声节目还没判出来:保持上一份,结论到了(或到点)再看。
+        if let until = LocalPlaybackSource.shared.spokenAudioPendingUntil(now: now) {
+            wake(at: until)
+            return
         }
         // 隐藏着时不组曲目,也就不去查封面。
         let track = hiddenUntil == nil ? currentTrack(now: now) : nil
@@ -451,7 +466,9 @@ final class DiscordPresenceController: ObservableObject {
 
     private func makeTrack(now: Date, lookingUp: Bool) -> DiscordPresence.Track? {
         let playback = PlaybackCoordinator.shared
-        guard !playback.title.isEmpty, !playback.isCurrentTrackAdBreak, !playback.isRadioTalkBreak else { return nil }
+        // QQ 音乐的有声节目不显示成在听歌(见 QQSpokenAudio)。
+        guard !playback.title.isEmpty, !playback.isCurrentTrackAdBreak, !playback.isRadioTalkBreak,
+              !LocalPlaybackSource.shared.isCurrentTrackSpokenAudio else { return nil }
         let reported = LocalPlaybackSource.shared.lastResolvedBundleID
         let host = BrowserPositionProbe.probeTargetBundleID(forReported: reported)
         if let host, AppSettings.shared.discordExcludedBundles.contains(host) { return nil }

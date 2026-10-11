@@ -215,7 +215,14 @@ func lbMeta(s snapshot) lbTrackMeta {
 	}
 }
 
-var errListenRejected = errors.New("listen rejected by server (4xx, non-retryable)")
+var errListenRejected = errors.New("listen rejected by server (400/413, non-retryable)")
+
+// lbContentRejected:这个状态码说的是「这条内容 LB 不收」,重发多少次都一样。只有 400(内容不对,LB 文档里提交接口
+// 唯一的拒收)和 413(请求体太大)。别的 4xx(404 / 405 / 410 这类网关路由问题,不带令牌也照样回)跟 5xx 一样
+// 当暂时失败,进待重发队列;401 / 403 另算令牌被拒,429 另算冷却。见 12 章决策 70。纯函数,测试覆盖。
+func lbContentRejected(status int) bool {
+	return status == http.StatusBadRequest || status == http.StatusRequestEntityTooLarge
+}
 
 // errListenAuth:令牌被拒(401 / 403)。跟 errListenRejected 不同,这不是「这条内容发不进去」,是
 // 「这把令牌现在不能用」—— 换好令牌之后同一条照样能收。调用方一律按瞬时失败处理:会话结束的进待重发队列、
@@ -317,7 +324,7 @@ func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int
 			}
 			return fmt.Errorf("post %s: %v: %w", listenType, err, errListenAuth)
 		}
-		if status >= 400 && status < 500 && status != http.StatusTooManyRequests {
+		if lbContentRejected(status) {
 			return fmt.Errorf("post %s: %v: %w", listenType, err, errListenRejected)
 		}
 		lastErr = fmt.Errorf("post %s: %w", listenType, err)

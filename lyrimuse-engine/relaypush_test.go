@@ -68,8 +68,24 @@ func TestRelayShouldPushWaitsForCoverOnTrackChange(t *testing.T) {
 	}
 
 	r := &poller{relayLastState: "macpause|B|x|y", relayLastAt: now.Add(-time.Minute), relayStateSince: now.Add(-time.Minute)}
-	if _, ok := r.relayShouldPush(now, "mac|B|x|y", noCover, false); !ok {
-		t.Error("同一首歌从暂停到继续,不等封面")
+	if _, ok := r.relayShouldPush(now, "mac|B|x|y", noCover, false); ok {
+		t.Error("同一首歌从暂停到继续,先等 relayResumeSettle")
+	}
+	if _, ok := r.relayShouldPush(now.Add(relayResumeSettle), "mac|B|x|y", noCover, false); !ok {
+		t.Error("同一首歌从暂停到继续,等够了就推、不等封面")
+	}
+}
+
+// 暂停着开播另一首:先报上一首在放、紧接着换了歌名,上一首不被推成在放(02 章决策 119)。
+func TestRelayShouldPushSettlesResumeBeforeTrackChange(t *testing.T) {
+	now := time.Now()
+	p := &poller{relayLastState: "macpause|A|x|y|c", relayLastAt: now.Add(-time.Minute), relayStateSince: now.Add(-time.Minute)}
+	cover := map[string]any{"artwork": "https://c/1.jpg"}
+	if _, ok := p.relayShouldPush(now, "mac|A|x|y|c", cover, false); ok {
+		t.Fatal("上一首刚报在放,先等")
+	}
+	if _, ok := p.relayShouldPush(now.Add(350*time.Millisecond), "mac|B|x|y|c", cover, false); !ok {
+		t.Fatal("换成新歌照常推")
 	}
 }
 

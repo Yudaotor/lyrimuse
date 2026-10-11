@@ -114,6 +114,47 @@ func runPlayerIdentityTests() {
                     "控制分派: 焦点被占、屏上这首靠直查问到(没有 AppleScript) → 不发,发了会控到网页视频")
         expectEqual(held(false, .spotify), Route.spotifyScript, "控制分派: 焦点被占但能发 AppleScript → 照发 AppleScript")
         expectEqual(held(true, nil), Route.appleMusicScript, "控制分派: 只勾 Apple Music → 不受焦点影响")
+        let menu = { MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                                                          focusHeldElsewhere: $0, menuControlPlayer: $1) }
+        expectEqual(menu(true, .qqMusic), Route.qqMenu, "控制分派: 焦点被占、屏上是 QQ、能按菜单 → 按它菜单栏")
+        expectEqual(menu(false, .qqMusic), Route.mediaControl, "控制分派: 焦点没被占 → QQ 照旧走 media-control")
+        expectEqual(menu(true, .netease), Route.withheld, "控制分派: 只有 QQ 走菜单")
+        expectEqual(menu(true, nil), Route.withheld, "控制分派: 按不了菜单(没权限 / 没在跑)照旧不发")
+        typealias QQItem = QQMusicMenuControl.TransportItem
+        expectEqual(MusicPlaybackController.qqMenuItem(forMediaControlCommand: "toggle-play-pause"), QQItem.playPause, "QQ 菜单: 播放暂停")
+        expectEqual(MusicPlaybackController.qqMenuItem(forMediaControlCommand: "next-track"), QQItem.next, "QQ 菜单: 下一首")
+        expectEqual(MusicPlaybackController.qqMenuItem(forMediaControlCommand: "previous-track"), QQItem.previous, "QQ 菜单: 上一首")
+        expectEqual(MusicPlaybackController.qqMenuItem(forMediaControlCommand: "seek") == nil, true, "QQ 菜单: 没有跳转")
+        expectEqual(QQMusicMenuControl.transport(forTitle: "暂停"), QQItem.playPause, "QQ 菜单: 在放时那一项写「暂停」")
+        expectEqual(QQMusicMenuControl.transport(forTitle: "暫停"), QQItem.playPause, "QQ 菜单: 繁体「暫停」")
+        expectEqual(QQMusicMenuControl.transport(forTitle: "播放"), QQItem.playPause, "QQ 菜单: 暂停时那一项写「播放」")
+        expectEqual(QQMusicMenuControl.transport(forTitle: "下一首"), QQItem.next, "QQ 菜单: 下一首")
+        expectEqual(QQMusicMenuControl.transport(forTitle: "播放模式") == nil, true, "QQ 菜单: 播放模式不是播放控制项")
+        // QQ 有声节目:歌曲详情的 track_info.version 是 7(02 章决策 118)。
+        func detail(_ body: String) -> Data { Data(body.utf8) }
+        expectEqual(QQSongInfo.isSpokenAudio(fromDetail: detail(#"{"code":0,"songinfo":{"code":0,"data":{"track_info":{"version":7,"name":"通史-000引言"}}}}"#)),
+                    true, "QQ 有声节目: version 7")
+        expectEqual(QQSongInfo.isSpokenAudio(fromDetail: detail(#"{"code":0,"songinfo":{"code":0,"data":{"track_info":{"version":0,"name":"A.I.N.Y."}}}}"#)),
+                    false, "QQ 有声节目: 歌是 version 0")
+        expectEqual(QQSongInfo.isSpokenAudio(fromDetail: detail(#"{"code":0,"songinfo":{"code":0,"data":{"track_info":{"version":15}}}}"#)),
+                    false, "QQ 有声节目: 别的版本号(现场版之类)也是歌")
+        expectEqual(QQSongInfo.isSpokenAudio(fromDetail: detail(#"{"code":0,"songinfo":{"code":404}}"#)), false, "QQ 有声节目: 没有这首算不是")
+        expectEqual(QQSongInfo.isSpokenAudio(fromDetail: detail(#"{"code":0,"songinfo":{"code":0,"data":{}}}"#)) == nil, true,
+                    "QQ 有声节目: 形状不对不下结论")
+        expectEqual(QQSongInfo.isSpokenAudio(fromDetail: detail(#"{"code":500001}"#)) == nil, true, "QQ 有声节目: 风控不下结论")
+        do {
+            var tracker = PlaybackStateFile.Tracker()
+            let tags = PlaybackStateFile.Tags(title: "通史-000引言", artist: "茂桐笙花", album: "通史")
+            func encoded(_ spoken: Bool?) -> String {
+                let input = PlaybackStateFile.Input(player: PlaybackPlayer.qqMusic.bundleIdentifier, title: tags.title, artist: tags.artist,
+                                                    album: tags.album, raw: tags, appliedFixRev: 0, playing: true, durationSecs: 261,
+                                                    positionSecs: 1, spoken: spoken)
+                let content = tracker.advance(input, now: Date())
+                return (content.track.flatMap { try? JSONEncoder().encode($0) }).map { String(decoding: $0, as: UTF8.self) } ?? ""
+            }
+            expectEqual(encoded(true).contains(#""spoken":true"#), true, "播放状态: 有声节目写 spoken:true")
+            expectEqual(encoded(nil).contains(#""spoken""#), false, "播放状态: 还没判出来不写这个键(引擎按「还在判」等)")
+        }
         do {
             let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             func src(_ path: String) -> String {
@@ -123,7 +164,8 @@ func runPlayerIdentityTests() {
             let client = src("LyrimuseCore/Local/MediaControlClient.swift")
             let adProbe = src("LyrimuseCore/Local/YouTubeMusicAdProbe.swift")
             expectEqual(controller.contains("focusFallback: MediaControlClient.focusControlTarget(),\n")
-                        && controller.contains("focusHeldElsewhere: MediaControlClient.focusHeldByAnotherApp())"), true,
+                        && controller.contains("let held = MediaControlClient.focusHeldByAnotherApp()\n")
+                        && controller.contains("focusHeldElsewhere: held, menuControlPlayer: menuPlayer)"), true,
                         "控制分派(契约): dispatch 按焦点回退目标与「焦点被占、没有 AppleScript」分派")
             expectEqual(client.contains("fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript")
                         && client.contains("return viaProbe || holdingDroppedSession"), true,
@@ -150,7 +192,7 @@ func runPlayerIdentityTests() {
             let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
             expectEqual(coordinator.contains("guard MusicPlaybackController.playPause() else { return }")
                         && source.contains("guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic,\n"
-                                           + "                                                       kasetWasPlaying: kasetWasPlaying) else { return }"),
+                                           + "                                                       kasetWasPlaying: kasetWasPlaying, qqWasPaused: qqWasPaused) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
             expectEqual(client.contains("fallbackViaAppleScript = viaAppleScript")
                         && client.contains("if fallbackActive && fallbackViaAppleScript { return lastAcceptedDirectQueryPlayer }")

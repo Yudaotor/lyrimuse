@@ -52,6 +52,22 @@ public enum QQSongInfo {
         return parts.isEmpty ? Parsed.none : .text(parts.joined(separator: "\n\n"))
     }
 
+    /// 歌曲详情 → 这一条是不是有声书 / 有声节目:`songinfo.data.track_info.version` 是 7(见 `QQSpokenAudio`)。
+    /// `songinfo.code` 是 404(没有这首)算不是;顶层 `code` 不是 0、形状不对为 nil。
+    public static func isSpokenAudio(fromDetail data: Data) -> Bool? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (root["code"] as? NSNumber)?.intValue == 0,
+              let songinfo = root["songinfo"] as? [String: Any],
+              let code = (songinfo["code"] as? NSNumber)?.intValue else { return nil }
+        if code == 404 { return false }
+        guard code == 0, let track = (songinfo["data"] as? [String: Any])?["track_info"] as? [String: Any],
+              let version = (track["version"] as? NSNumber)?.intValue else { return nil }
+        return version == spokenAudioVersion
+    }
+
+    /// 有声书 / 有声节目在歌曲详情里的 `version`。
+    public static let spokenAudioVersion = 7
+
     /// 这个界面语言下问不问 QQ 音乐:只在中文界面(简体、繁体)问 —— 简介只有中文。
     public static func isUsable(uiLanguage: String) -> Bool {
         EditorialText.isChineseUI(uiLanguage)
@@ -63,9 +79,15 @@ public enum QQSongInfo {
     }
 
     /// 这首的简介。nil = 没问成(网络、风控、形状不对),下次再试;mid 拼不成请求算 QQ 这边没有(`.none`)。
-    /// 带浏览器的 User-Agent 和 QQ 音乐的 Referer,记进对外请求审计日志(服务名同 App 别处问 QQ 的 `qq`)。
     public static func fetchIntro(songMID: String, session: URLSession = .shared) async -> Parsed? {
-        guard let body = detailBody(songMID: songMID) else { return Parsed.none }
+        guard detailBody(songMID: songMID) != nil else { return Parsed.none }
+        return await fetchDetail(songMID: songMID, session: session).flatMap(intro(fromDetail:))
+    }
+
+    /// 这首的歌曲详情原文;没问成(网络、HTTP 状态不是 200)、mid 拼不成请求为 nil。
+    /// 带浏览器的 User-Agent 和 QQ 音乐的 Referer,记进对外请求审计日志(服务名同 App 别处问 QQ 的 `qq`)。
+    public static func fetchDetail(songMID: String, session: URLSession = .shared) async -> Data? {
+        guard let body = detailBody(songMID: songMID) else { return nil }
         var req = URLRequest(url: gatewayURL)
         req.httpMethod = "POST"
         req.httpBody = body
@@ -81,7 +103,7 @@ public enum QQSongInfo {
             let status = (resp as? HTTPURLResponse)?.statusCode
             NetworkAuditLog.record(service: "qq", operation: "song.detail", host: host,
                                    statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
-            return status == 200 ? intro(fromDetail: data) : nil
+            return status == 200 ? data : nil
         } catch {
             NetworkAuditLog.record(service: "qq", operation: "song.detail", host: host,
                                    statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)

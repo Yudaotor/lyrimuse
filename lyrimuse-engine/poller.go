@@ -49,6 +49,11 @@ type playSession struct {
 	// 动机:实测广告字段会**闪变**(开播 album 空、几拍后补齐,Blinds.com 坐实漏成
 	// Last.fm nowplaying),announce 的门若按"当下字段"逐拍重判,任何一拍看走眼就漏。
 	isAd bool
+	// 会话级「有声节目」标记:App 认出这一条是 QQ 音乐的有声书 / 有声节目(snapshot.Spoken)就往 true 棘轮。字幕照常解析
+	// 显示;正在播放、收听提交、待播预取、网页中继都挡掉,挡的位置同广告。见 02 章决策 118。
+	isSpoken bool
+	// prefetchDeferred:开播那一拍 App 对 QQ 这一条的结论还没到(awaitsSpokenVerdict),待播预取挪到结论到了再做。
+	prefetchDeferred bool
 	// 会话级「不 scrobble 到 Last.fm」标记:开播时按 features().LastfmExcludedBundles
 	// 算一次(lastfmExcluded,见 lastfmexclude.go 头注)。**只管 Last.fm**:recordLastfmListen 不挂起也不镜像、
 	// 不记给它兜底的本地收听日志,announce 不发 track.updateNowPlaying;ListenBrainz / 网页中继照旧。
@@ -623,6 +628,10 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	if p.cfg.StateRelayURL == "" {
 		return
 	}
+	// QQ 这一条是不是有声节目还没判出来:先不推,网页留着上一份(见 awaitsSpokenVerdict)。
+	if p.sess != nil && p.sess.key == p.cur.key() && awaitsSpokenVerdict(p.cur, p.sess.startedAt, now) {
+		return
+	}
 	var payload map[string]any
 	key := ""
 	// 显示优先级:Mac 正在放 > iPhone(经 Last.fm)正在放 > Mac 暂停 > 上次播放。
@@ -637,7 +646,7 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	// 判成 false 之后会顺着下面的 switch 落到 iPhone 正在放 / 上次播放,也就是广告这几十秒
 	// 网页停在上一首,跟"没在放"时的表现一致 —— 不会出现一张假的当前曲目卡。判据见 isAdBreak。
 	macHasTrack := p.isTracked() && !isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) &&
-		!(p.sess != nil && p.sess.isAd)
+		!(p.sess != nil && p.sess.isAd) && !p.cur.Spoken && !(p.sess != nil && p.sess.isSpoken)
 	iphonePlaying := !p.remoteAt.IsZero() && now.Sub(p.remoteAt) < 90*time.Second
 	switch {
 	case macHasTrack && p.cur.Playing: // Mac 正在放 → 最高优先(带进度条)
@@ -689,6 +698,8 @@ const (
 	// 等一下就能一次写到位,不用先推一次无封面、再补推一次(实测补推约占全部写的一成)。网页本身
 	// 10 秒才拉一次,这点延迟看不出来。
 	relayCoverWait = 5 * time.Second
+	// 同一首从暂停到在放,等这么久再推(见 relayShouldPush)。网页 10 秒才拉一次,看不出来。
+	relayResumeSettle = time.Second
 	// 引擎刚启动时最多等这么久再推(见 relayStartupPending),覆盖启动补种那次请求的整个时限。
 	relayStartupWait = relayRequestTimeout
 )
@@ -713,6 +724,18 @@ func (p *poller) relayShouldPush(now time.Time, key string, payload map[string]a
 		reanchored = false // 没有进度条的状态,重锚改不了网页上任何东西
 	}
 	changed := key != p.relayLastState
+	// 暂停 → 在放、还是同一首:等 relayResumeSettle 再推。暂停着开播另一首时 QQ 音乐先报这一首在放、0.3 秒后才报
+	// 新歌名,当场推的话网页会把上一首写成在放(见 02 章决策 119)。
+	if changed && strings.HasPrefix(key, "mac|") && strings.HasPrefix(p.relayLastState, "macpause|") &&
+		relayTrackOf(key) == relayTrackOf(p.relayLastState) {
+		if key != p.relayDeferKey {
+			p.relayDeferKey, p.relayDeferSince = key, now
+			return "", false
+		}
+		if now.Sub(p.relayDeferSince) < relayResumeSettle {
+			return "", false
+		}
+	}
 	if changed && progress && relayTrackOf(key) != relayTrackOf(p.relayLastState) {
 		if cov, _ := payload["artwork"].(string); cov == "" {
 			if key != p.relayDeferKey {
@@ -885,6 +908,12 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 		sess.listenSent = true // 标记成已处理,免得每一轮 poll 都重新判一次
 		return
 	}
+	// 有声节目同样不算一次收听(见 playSession.isSpoken)。
+	if sess.isSpoken || meta.Spoken {
+		log.Printf("skipping spoken audio: %q - %q", meta.Artist, meta.Title)
+		sess.listenSent = true
+		return
+	}
 	lm := lbMeta(meta)
 	// 没有歌手就别上送 —— 两个平台都把 artist 当必填,发过去只会 400(理由与实测见 recordLastfmListen
 	// 里那道同款闸)。标成已处理,免得每一轮 poll 都重来一次。
@@ -1052,6 +1081,9 @@ func (p *poller) announce(now time.Time, why string) {
 	if p.sess.isAd || isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 		return
 	}
+	if p.sess.isSpoken || p.cur.Spoken {
+		return
+	}
 	// 没有歌手就别宣布"正在播放" —— 同一道闸(见 submitSingleAsync)。电台台标那 80 秒里
 	// 每 5 秒一次的 400 就是从这里发出去的。
 	if p.cur.Artist == "" {
@@ -1173,6 +1205,14 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		}
 		p.recentFinalized = nil
+		if p.cur.Spoken {
+			p.sess.isSpoken = true
+		}
+		// QQ 这一条是不是有声节目还没判出来:正在播放和待播预取先等,见 awaitsSpokenVerdict。
+		waiting := awaitsSpokenVerdict(p.cur, p.sess.startedAt, now)
+		if waiting {
+			p.sess.prefetchDeferred = true
+		}
 		// 带上 bundle:换歌是按播放器排查问题的起点(预解析走哪一层、署名修正、本地缓存命中都按
 		// 播放器分流),不带就追不到这一首是哪个播放器在放。专辑和时长是缓存 key 与选版本的依据,
 		// 不带的话要另外去查这一首落在哪条缓存上。
@@ -1185,7 +1225,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 优先读播放器自己的队列,读不到才退回"同一张专辑里的其它曲目"——两层的理由见
 		// upcoming.go 头注。
 		// 广告不预取:它的「专辑」不是专辑、队列里也找不到它,读一遍队列只会白等重试再退回同专辑预取。
-		if features().AlbumPrefetch && (p.sess == nil || !p.sess.isAd) &&
+		if features().AlbumPrefetch && (p.sess == nil || !p.sess.isAd) && !p.sess.isSpoken && !waiting &&
 			!isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 			prefetchUpcoming(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
 		}
@@ -1195,7 +1235,8 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// (enrichNotify 触发)或超时再发。仅影响 KV 兜底路径,KV 主路径不受此延迟。
 		// 汽水试听段还在搜:这一拍的时长是试听段长度,先不解析歌词,挂起等下一拍(见 SodaPreviewPending)。
 		if !p.cur.SodaPreviewPending &&
-			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), true, p.cur.Radio)) > 0 {
+			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), true, p.cur.Radio)) > 0 &&
+			!waiting {
 			p.announce(now, "new")
 		} else {
 			p.sess.pnPending = true
@@ -1214,6 +1255,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess = &playSession{key: key, meta: p.cur, startedAt: now, lastPlaying: p.cur.Playing}
 		p.noteListeningTick(now)
 		p.sess.isAd = p.detectAdAtSessionStart()
+		p.sess.isSpoken = p.cur.Spoken
 		p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
 		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), true, p.cur.Radio)) > 0 {
@@ -1229,8 +1271,20 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.sess.isAd = true
 		log.Printf("ad break detected mid-session: %q - %q", p.cur.Artist, p.cur.Title)
 	}
+	if p.cur.Spoken && !p.sess.isSpoken {
+		p.sess.isSpoken = true
+		log.Printf("spoken audio: %q - %q, showing subtitles without now playing, listens or prefetch", p.cur.Artist, p.cur.Title)
+	}
+	// 开播时在等 QQ 的结论而挪后的待播预取:结论到了(或等到了上限)再做,是有声节目就不做。
+	if p.sess.prefetchDeferred && !awaitsSpokenVerdict(p.cur, p.sess.startedAt, now) {
+		p.sess.prefetchDeferred = false
+		if features().AlbumPrefetch && !p.sess.isAd && !p.sess.isSpoken &&
+			!isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
+			prefetchUpcoming(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
+		}
+	}
 	// 播放器的队列在这首歌中途被改写了(网易云「下一首播放」):重读一次,把新排进来的补进预解析。
-	if features().AlbumPrefetch && !p.sess.isAd {
+	if features().AlbumPrefetch && !p.sess.isAd && !p.sess.isSpoken && !p.sess.prefetchDeferred {
 		refreshUpcomingOnQueueChange(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)
 	}
 
@@ -1246,6 +1300,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 开始播放的那一刻,不该再取一次设备封面(那一刻已经在上面 "New track" 分支取过了)。
 		resolved := !p.cur.SodaPreviewPending &&
 			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), false, p.cur.Radio)) > 0
+		resolved = resolved && !awaitsSpokenVerdict(p.cur, p.sess.startedAt, now)
 		if (resolved || now.Sub(p.sess.startedAt) >= pnPendingMax) && now.Sub(p.sess.pnTriedAt) >= playingNowRefresh {
 			p.announce(now, "first") // pnPending 在结果异步返回后由 applyAnnounceOutcome 清除
 		}
@@ -1798,7 +1853,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 				p.settleLastfmPendingSync(flushCtx, p.sess)
 			}
 			if p.sess != nil && !p.sess.listenSent && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
-				!tooShortToScrobble(p.sess.meta.Duration) &&
+				!tooShortToScrobble(p.sess.meta.Duration) && !p.sess.isSpoken &&
 				!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
 				// Last.fm 镜像:与 LB 解耦,同样服从 scrobble 时点(默认档当场发),且必须走同步变体。
 				//
