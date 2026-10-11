@@ -445,3 +445,19 @@ jobs:
             fi
             echo "ok  ${BASE}/${name}"
           done
+
+      # English notes to the Discord server's #announcements. The release is already public by now, so
+      # a Discord failure must not fail the job; with the secret unset the script only logs a line.
+      # It has to live here: a release published with GITHUB_TOKEN fires no release event for
+      # other workflows.
+      - name: Announce on Discord
+        if: startsWith(github.ref, 'refs/tags/') && steps.version.outputs.is_prerelease != 'true'
+        continue-on-error: true
+        env:
+          NOTES_RAW: ${{ needs.tag.outputs.body }}
+          DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+        run: |
+          TAG="${{ steps.version.outputs.version }}"
+          printf '%s\n' "$NOTES_RAW" > "$RUNNER_TEMP/notes-discord.md"
+          python3 .github/scripts/discord_release_post.py "$RUNNER_TEMP/notes-discord.md" "$TAG" \
+            "https://github.com/${{ github.repository }}/releases/tag/${TAG}"
