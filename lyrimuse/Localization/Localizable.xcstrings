@@ -6084,7 +6084,7 @@
         }
       }
     },
-    "列出全部功能、所在位置和默认开关" : {
+    "全部功能、所在位置与默认开关" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6095,7 +6095,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "列出全部功能、所在位置和預設開關"
+            "value" : "全部功能、所在位置與預設開關"
           }
         }
       }
@@ -6354,29 +6354,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新整理"
-          }
-        }
-      }
-    },
-    "前往" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Visit"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前往"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前往"
           }
         }
       }
@@ -25033,6 +25010,23 @@
         }
       }
     },
+    "更新与帮助" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updates & Help"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新與協助"
+          }
+        }
+      }
+    },
     "保存失败，请重试" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -25103,23 +25097,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按一下拷貝版本資訊，便於回報問題"
-          }
-        }
-      }
-    },
-    "许可与版权" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "License & Copyright"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "授權與版權"
           }
         }
       }
@@ -33528,29 +33505,6 @@
         }
       }
     },
-    "生成 .zip 文件，其中包含最近播放的曲目名称与本机文件路径，公开发布前建议先解压检查" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Creates a .zip file. It keeps recently played track names and local file paths, so review it before posting publicly"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "生成 .zip 文件，其中包含最近播放的曲目名称与本机文件路径，公开发布前建议先解压检查"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "產生 .zip 檔案，其中包含最近播放的曲目名稱與本機檔案路徑，公開發佈前建議先解壓縮檢查"
-          }
-        }
-      }
-    },
     "运行日志" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33574,94 +33528,48 @@
         }
       }
     },
-    "%@ · 供自行排查；反馈问题请使用上方的「导出诊断」，信息更完整" : {
+    "歌词引擎的原始日志，供自行排查" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ · For your own troubleshooting. To report a problem, use Export Diagnostics above; it includes more"
+            "value" : "The lyrics engine’s raw log, for your own troubleshooting"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ · 供自行排查；反馈问题请使用上方的「导出诊断」，信息更完整"
+            "value" : "歌词引擎的原始日志，供自行排查"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ · 供自行排查；回報問題請使用上方的「匯出診斷」，資訊更完整"
+            "value" : "歌詞引擎的原始記錄檔，供自行排查"
           }
         }
       }
     },
-    "歌词引擎的原始日志，文件较大时会自动归档为 .old；App 界面的日志写入系统日志，可在「控制台」中按 me.yudaotor.lyrimuse 筛选" : {
+    "纯文本，含账号凭据；外观与快捷键不在此处，整体迁移请使用「备份与迁移」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The lyrics engine's raw log; it is archived as .old once it grows large. The app's interface logs go to the system log; filter by me.yudaotor.lyrimuse in Console"
+            "value" : "Plain text with account credentials. Appearance and shortcuts aren’t here; to move everything, use Backup & Migration"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "歌词引擎的原始日志，文件较大时会自动归档为 .old；App 界面的日志写入系统日志，可在「控制台」中按 me.yudaotor.lyrimuse 筛选"
+            "value" : "纯文本，含账号凭据；外观与快捷键不在此处，整体迁移请使用「备份与迁移」"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "歌詞引擎的原始記錄檔，檔案較大時會自動封存為 .old；App 介面的記錄寫入系統記錄，可在「主控台」中以 me.yudaotor.lyrimuse 過濾"
-          }
-        }
-      }
-    },
-    "%@ · 纯文本，可直接编辑；外观与快捷键另存于 App 偏好设置，不在此处" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · Plain text you can edit directly. Appearance and shortcuts are stored in the app’s preferences, not here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · 纯文本，可直接编辑；外观与快捷键另存于 App 偏好设置，不在此处"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · 純文字，可直接編輯；外觀與快速鍵另存於 App 偏好設定，不在這裡"
-          }
-        }
-      }
-    },
-    "含账号凭据，请勿分享给他人；需要连同外观与快捷键整体迁移时，请使用「备份与迁移」" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Contains account credentials, so don’t share it. To move everything including appearance and shortcuts, use Backup & Migration"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "含账号凭据，请勿分享给他人；需要连同外观与快捷键整体迁移时，请使用「备份与迁移」"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "含帳號憑證，請勿分享給他人；需要連同外觀與快速鍵整體遷移時，請使用「備份與遷移」"
+            "value" : "純文字，含帳號憑證；外觀與快速鍵不在這裡，整體遷移請使用「備份與遷移」"
           }
         }
       }
@@ -34485,19 +34393,19 @@
         }
       }
     },
-    "反馈问题时请附上：打包日志、崩溃记录与运行状态，已移除账号凭据和本机用户名" : {
+    "打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach this when reporting a problem: logs, crash reports and app state in one file, with account credentials and your Mac user name removed"
+            "value" : "Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "回報問題時請附上：打包記錄檔、當機報告與執行狀態，已移除帳號憑證和本機使用者名稱"
+            "value" : "打包記錄檔、當機報告與執行狀態，已移除帳號憑證；含曲目名與本機路徑，公開前請檢查"
           }
         }
       }

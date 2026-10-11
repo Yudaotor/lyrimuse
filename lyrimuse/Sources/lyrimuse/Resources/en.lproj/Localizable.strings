@@ -30,9 +30,7 @@
 "%1$d 条候选在这些项上完全相同：%2$@" = "All %1$d candidates scored identically on: %2$@";
 "%1$d/%2$d 个源应答" = "%1$d of %2$d sources responded";
 "%1$d/%2$d 个源应答#one" = "%1$d of %2$d source responded";
-"%@ · 供自行排查；反馈问题请使用上方的「导出诊断」，信息更完整" = "%@ · For your own troubleshooting. To report a problem, use Export Diagnostics above; it includes more";
 "%@ · 登录将在 %@ 过期，建议重新连接" = "%@ · Sign-in expires on %@; reconnecting is recommended";
-"%@ · 纯文本，可直接编辑；外观与快捷键另存于 App 偏好设置，不在此处" = "%@ · Plain text you can edit directly. Appearance and shortcuts are stored in the app’s preferences, not here";
 "%@ 不向系统报告播放进度。授权后 Lyrimuse 会读取它界面上的播放时间来校准，并在你点随机、循环键时替你按下对应按钮。不授权也能用，但自动连播时进度可能差一两秒，也没有这两颗键。" = "%@ doesn’t report its playback position, so with access Lyrimuse reads the time shown in its window to stay in sync, and presses its shuffle or repeat button when you click one of those. Without it, the position can be off by a second or two during autoplay, and those two buttons won’t appear.";
 "%@ 个文件导入失败，其余已导入" = "%@ files failed to import; the rest were imported";
 "%@ 个文件导入失败，其余已导入#one" = "%@ file failed to import; the rest were imported";
@@ -372,6 +370,7 @@
 "全部不显示" = "None shown";
 "全部专辑" = "All Albums";
 "全部关闭" = "All Off";
+"全部功能、所在位置与默认开关" = "Every feature, where it is in Settings, and whether it is on by default";
 "全部屏幕" = "All Displays";
 "全部开启" = "All On";
 "全部播放器" = "All players";
@@ -446,7 +445,6 @@
 "切换回 iCloud" = "Switch Back to iCloud";
 "切换迷你 / 完整尺寸" = "Switch Mini / Full Size";
 "切歌时新歌名从刘海下方滑出，数秒后收回" = "On a song change, the new title slides out below the notch for a few seconds";
-"列出全部功能、所在位置和默认开关" = "Every feature, where it is in Settings, and whether it is on by default";
 "刚刚" = "just now";
 "刚刚更新" = "Just updated";
 "创作者：" = "Written by: ";
@@ -468,7 +466,6 @@
 "前 %1$d 位占 %2$d%%" = "Top %1$d: %2$d%%";
 "前 %1$d 张占 %2$d%%" = "Top %1$d: %2$d%%";
 "前 %1$d 首占 %2$d%%" = "Top %1$d: %2$d%%";
-"前往" = "Visit";
 "前往 Last.fm 重新连接…" = "Reconnect on Last.fm…";
 "前往专辑" = "Go to Album";
 "前往处理" = "Fix It";
@@ -522,7 +519,6 @@
 "反馈" = "Feedback";
 "反馈问题" = "Report an Issue";
 "反馈问题…" = "Report an Issue…";
-"反馈问题时请附上：打包日志、崩溃记录与运行状态，已移除账号凭据和本机用户名" = "Attach this when reporting a problem: logs, crash reports and app state in one file, with account credentials and your Mac user name removed";
 "发布于 %@" = "Released %@";
 "发给 Last.fm 的歌手名和歌名。\n智能：用 Last.fm 上收听人数最多的写法，查不到就原样发；专辑名去掉「 - Single」「 - EP」。\n自定义：歌名、歌手分开设置。\n原始：照播放器报告的原样发。" = "The artist and title sent to Last.fm.\nSmart: the most-listened spelling on Last.fm, or as-is when there's no match. Albums drop “ - Single” / “ - EP”.\nCustom: set title and artist separately.\nRaw: exactly what the player reports.";
 "取消" = "Cancel";
@@ -571,7 +567,6 @@
 "后退" = "Back";
 "向 Discord 好友展示正在收听的歌曲" = "Let your Discord friends see what you're listening to";
 "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" = "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings";
-"含账号凭据，请勿分享给他人；需要连同外观与快捷键整体迁移时，请使用「备份与迁移」" = "Contains account credentials, so don’t share it. To move everything including appearance and shortcuts, use Backup & Migration";
 "听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。" = "How far you listen before it's scrobbled.\n50%: half the track or 4 minutes, whichever comes first (Last.fm's rule).\n75% / 90%: that share of the track.\nTrack End: only when played through; skips don't count.";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态。" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status.";
 "启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标" = "Opens no windows at launch, keeping only the menu bar icon and lyrics displays; turning it on also hides the Dock icon";
@@ -940,6 +935,7 @@
 "所有歌词源均无法连接" = "None of the lyrics sources could be reached";
 "手动调整" = "Manually Adjusted";
 "手动重新匹配" = "Manual re-match";
+"打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查" = "Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly";
 "打开" = "Open";
 "打开 %@" = "Open %@";
 "打开 Discord" = "Open Discord";
@@ -1177,6 +1173,7 @@
 "更改" = "Change";
 "更改…" = "Change…";
 "更新" = "Updates";
+"更新与帮助" = "Updates & Help";
 "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。" = "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−” and add it back with “+”.";
 "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加，然后点「重启歌词引擎」。" = "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−”, add it back with “+”, then click Restart Lyrics Engine.";
 "更新备份" = "Update Backup";
@@ -1363,7 +1360,7 @@
 "歌词引擎无响应" = "The lyrics engine didn't respond";
 "歌词引擎未运行，歌词不会更新" = "The lyrics engine isn’t running; lyrics won’t update";
 "歌词引擎本次未能将它们收入缓存，列表中暂时不可见；文件已在歌词文件夹中，歌词引擎下次启动时将自动导入" = "The lyrics engine couldn't add them to the cache this time, so they won't appear in the list yet. The files are already in the lyrics folder and will be imported the next time the lyrics engine starts";
-"歌词引擎的原始日志，文件较大时会自动归档为 .old；App 界面的日志写入系统日志，可在「控制台」中按 me.yudaotor.lyrimuse 筛选" = "The lyrics engine's raw log; it is archived as .old once it grows large. The app's interface logs go to the system log; filter by me.yudaotor.lyrimuse in Console";
+"歌词引擎的原始日志，供自行排查" = "The lyrics engine’s raw log, for your own troubleshooting";
 "歌词提前" = "Advance Lyrics";
 "歌词文件夹" = "Lyrics Folder";
 "歌词文件夹与本地记录文件占用的磁盘空间" = "Disk space used by the lyrics folder and the local records file";
@@ -1543,7 +1540,6 @@
 "状态未知" = "Status unknown";
 "现场版场次不符" = "Live recording from a different show";
 "玻璃浓淡" = "Glass Density";
-"生成 .zip 文件，其中包含最近播放的曲目名称与本机文件路径，公开发布前建议先解压检查" = "Creates a .zip file. It keeps recently played track names and local file paths, so review it before posting publicly";
 "用于将当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
 "用当前配色覆盖" = "Overwrite with Current Colors";
 "用户名下方显示" = "Shown Under Your Name";
@@ -1623,6 +1619,7 @@
 "约 %@ 小时#one" = "about %@ hour";
 "纯文本" = "Plain text";
 "纯文本（无时间戳）" = "Plain text (no timing)";
+"纯文本，含账号凭据；外观与快捷键不在此处，整体迁移请使用「备份与迁移」" = "Plain text with account credentials. Appearance and shortcuts aren’t here; to move everything, use Backup & Migration";
 "纯色" = "Solid";
 "纯音乐" = "Instrumental";
 "纯音乐/无歌词时收起歌词行" = "Collapse Lyric Row for Instrumentals & No Lyrics";
@@ -1752,7 +1749,6 @@
 "触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序" = "Add, remove or reorder the brightness, volume and other system buttons on the right of the Touch Bar in System Settings › Keyboard › Touch Bar Settings…";
 "触控栏歌词" = "Touch Bar Lyrics";
 "触控栏歌词仅适用于配备触控栏的 MacBook Pro" = "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar";
-"许可与版权" = "License & Copyright";
 "设置" = "Settings";
 "设置…" = "Settings…";
 "设置已保存；歌词库写入失败，可再次点按「更新备份」" = "Settings saved, but the lyrics library couldn’t be written. Click Update Backup to try again";

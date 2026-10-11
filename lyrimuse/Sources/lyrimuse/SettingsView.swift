@@ -7169,17 +7169,13 @@ private struct AboutSettingsTab: View {
         SettingsPageCustomHeader {
             hero
         } content: {
-            // 无 Sparkle 构建里没有可用的更新动作,卡片整块不画(见 SparkleUpdaterManager 的 #else 分支)。
-            #if canImport(Sparkle)
-            updateCard
-            #endif
-            feedbackCard
-            legalCard
-            diagnosticsCard
-            Text("© 2026 Yudaotor · GPL-3.0")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .padding(.top, 2)
+            // 两张卡:更新与帮助 / 诊断与数据。许可与版权三项只是外部打开一个文件,放在页脚一行。
+            VStack(spacing: 14) {
+                helpCard
+                diagnosticsCard
+            }
+            .background { LastfmGlassGlow() }
+            legalFooter
         }
         // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
         // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
@@ -7304,17 +7300,48 @@ private struct AboutSettingsTab: View {
 
     // MARK: 卡片
 
-    /// 「更新」卡只剩一行入口:检查 / 下载 / 安装的全部界面搬去了「软件更新」页
-    /// (Settings/SoftwareUpdatePage.swift,仿系统设置那页),这里像系统设置「通用 › 软件更新」那样只留一行
-    /// 带当前状态的入口;副标题仍说「有新版本 X / 上次检查」。
-    private var updateCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("更新"))
+    /// 「更新与帮助」:四行都是整行可点的入口,不放「打开 / 前往」按钮。行尾「›」= 在设置里翻页(软件更新),
+    /// 「↗」= 在浏览器里打开。
+    ///
+    /// 软件更新:检查 / 下载 / 安装的界面都在「软件更新」页(Settings/SoftwareUpdatePage.swift),这里只留一行
+    /// 带当前状态的入口。无 Sparkle 构建里没有可用的更新动作,这一行不画(见 SparkleUpdaterManager 的 #else 分支)。
+    ///
+    /// 反馈问题进 issue 模板选择页,版本、系统、播放器已经填好;行尾的邮件图标给没有 GitHub 账号的人,邮箱写在悬停提示里,
+    /// 按右键可拷贝地址。「使用求助」进讨论区的问答分类。反馈问题和邮件都走 `FeedbackReporter`,
+    /// 菜单栏右键菜单的「反馈问题…」也是,见 14 章决策 57、59。
+    private var helpCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("更新与帮助"))
+            #if canImport(Sparkle)
+            AboutLinkRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("软件更新"),
+                         subtitle: updateSubtitle, opensExternally: false) {
+                AppActions.shared.requestSettings(.softwareUpdate)
+            }
             CardDivider()
-            SettingsRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("软件更新"), subtitle: updateSubtitle) {
-                Button(L10n.t("打开")) {
-                    AppActions.shared.requestSettings(.softwareUpdate)
-                }
+            #endif
+            AboutLinkRow(icon: "exclamationmark.bubble", title: L10n.t("反馈问题"),
+                         subtitle: L10n.t("在 GitHub 新建 issue，自动附带版本、系统与播放器信息"),
+                         opensExternally: true) {
+                FeedbackReporter.openNewIssue()
+            } accessory: {
+                Button { FeedbackReporter.openEmail() } label: { Image(systemName: "envelope") }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help(String(format: L10n.t("无 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址"), FeedbackLinks.feedbackEmail))
+                    .accessibilityLabel(L10n.t("邮件反馈"))
+                    .contextMenu {
+                        Button(L10n.t("拷贝邮箱地址")) { FeedbackReporter.copyEmailAddress() }
+                    }
+            }
+            CardDivider()
+            AboutLinkRow(icon: "questionmark.bubble", title: L10n.t("使用求助"),
+                         subtitle: L10n.t("在 GitHub 讨论区的问答分类中提问"), opensExternally: true) {
+                NSWorkspace.shared.open(FeedbackLinks.helpURL)
+            }
+            CardDivider()
+            AboutLinkRow(icon: "list.bullet.rectangle", title: L10n.t("功能清单"),
+                         subtitle: L10n.t("全部功能、所在位置与默认开关"), opensExternally: true) {
+                NSWorkspace.shared.open(FeedbackLinks.featureListURL(language: L10n.current))
             }
         }
     }
@@ -7337,109 +7364,54 @@ private struct AboutSettingsTab: View {
         return String(format: L10n.t("上次检查：%@"), formatter.string(from: date))
     }
 
-    /// 「反馈问题」进 issue 模板选择页,版本、系统、播放器已经填好,反馈的类型在那里选;「前往」左边一颗邮件图标给没有 GitHub
-    /// 账号的人,邮箱写在悬停提示里,按右键可拷贝地址。「使用求助」进讨论区的问答分类。反馈问题和邮件都走 `FeedbackReporter`,
-    /// 菜单栏右键菜单的「反馈问题…」也是,见 14 章决策 57、59。
-    private var feedbackCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("反馈"))
-            CardDivider()
-            SettingsRow(
-                icon: "exclamationmark.bubble",
-                title: L10n.t("反馈问题"),
-                subtitle: L10n.t("在 GitHub 新建 issue，自动附带版本、系统与播放器信息")
-            ) {
-                HStack(spacing: 10) {
-                    Button { FeedbackReporter.openEmail() } label: { Image(systemName: "envelope") }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
-                        .help(String(format: L10n.t("无 GitHub 账号时，可发送邮件至 %@；右键点按可拷贝地址"), FeedbackLinks.feedbackEmail))
-                        .accessibilityLabel(L10n.t("邮件反馈"))
-                        .contextMenu {
-                            Button(L10n.t("拷贝邮箱地址")) { FeedbackReporter.copyEmailAddress() }
-                        }
-                    Button(L10n.t("前往")) { FeedbackReporter.openNewIssue() }
-                }
+    /// 页脚:许可与版权三项是三个外部链接(正文只在 README 维护,见 LegalNotices / LegalNoticeLinks 头注),
+    /// 下面一行版权。THIRD_PARTY_LICENSES 随包分发,分发条款要求「随附」,所以入口必须留着,不能删掉。
+    private var legalFooter: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 6) {
+                legalLink(L10n.t("版权说明")) { LegalNotices.openUsageNotice() }
+                Text("·").foregroundStyle(.tertiary)
+                legalLink(L10n.t("第三方许可")) { LegalNotices.openThirdPartyLicenses() }
+                Text("·").foregroundStyle(.tertiary)
+                legalLink(L10n.t("开源许可证")) { LegalNotices.openLicense() }
             }
-            CardDivider()
-            SettingsRow(
-                icon: "questionmark.bubble",
-                title: L10n.t("使用求助"),
-                subtitle: L10n.t("在 GitHub 讨论区的问答分类中提问")
-            ) {
-                Button(L10n.t("前往")) { NSWorkspace.shared.open(FeedbackLinks.helpURL) }
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "list.bullet.rectangle",
-                title: L10n.t("功能清单"),
-                subtitle: L10n.t("列出全部功能、所在位置和默认开关")
-            ) {
-                Button(L10n.t("前往")) { NSWorkspace.shared.open(FeedbackLinks.featureListURL(language: L10n.current)) }
-            }
+            Text("© 2026 Yudaotor · GPL-3.0")
+                .foregroundStyle(.tertiary)
         }
+        .font(.system(size: 11.5))
+        .padding(.top, 2)
     }
 
-    private var legalCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("许可与版权"))
-            CardDivider()
-            // 正文只在 README 维护(见 LegalNotices / LegalNoticeLinks 头注),这里只放入口,不带
-            // 副标题 —— 版权声明是点进去看的东西,不该常驻在设置行上。
-            SettingsRow(
-                icon: "doc.text",
-                title: L10n.t("版权说明")
-            ) {
-                Button(L10n.t("打开")) { LegalNotices.openUsageNotice() }
-            }
-            CardDivider()
-            // THIRD_PARTY_LICENSES 一直随包分发(build.sh 拷进 Contents/Resources/),但此前 App 里
-            // 没有任何入口能打开它 —— 分发条款要求"随附",随附了却没人找得到等于没附。
-            SettingsRow(
-                icon: "checkmark.seal",
-                title: L10n.t("第三方许可"),
-                subtitle: L10n.t("开源组件与词典")
-            ) {
-                Button(L10n.t("打开")) { LegalNotices.openThirdPartyLicenses() }
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "scroll",
-                title: L10n.t("开源许可证"),
-                subtitle: L10n.t("GPL-3.0")
-            ) {
-                Button(L10n.t("打开")) { LegalNotices.openLicense() }
-            }
-        }
+    /// 页脚里的一个链接。自绘的控件不会自动挂搜索高亮(只有 SettingsRow / SettingsCardHeader 会),手挂。
+    private func legalLink(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.link)
+            .settingsSearchHighlight(title: title)
     }
 
+    /// 「诊断与数据」:各行说明全写在常显副标题里,这张卡不放「?」。
     private var diagnosticsCard: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("诊断与数据"))
-            CardDivider()
-            // 引擎日志一直写得比较完整,但 App 自己的日志全在系统统一日志里,普通人不会用
-            // Console.app 去查。这里一键把两边日志+关键状态(权限/常驻服务/各功能是否已配置,不含任何
-            // token 原始值)汇总成一份文本存到桌面,方便贴进 issue 或者发给开发者。
+            // 把引擎日志、App 侧日志(系统统一日志)和关键状态(权限 / 常驻服务 / 各功能是否已配置)打成一个 .zip。
             // 导出只去掉账号凭据,曲目名和本机路径照样在里面(家目录只在崩溃报告那段改写成 ~),
-            // 所以 help 要说清这一点,副标题不能写成「已脱敏」。
+            // 所以副标题不能写成「已脱敏」,要说清公开发布前先检查。
             SettingsRow(
                 icon: "doc.text.magnifyingglass",
                 title: L10n.t("导出诊断"),
-                subtitle: L10n.t("反馈问题时请附上：打包日志、崩溃记录与运行状态，已移除账号凭据和本机用户名"),
-                help: L10n.t("生成 .zip 文件，其中包含最近播放的曲目名称与本机文件路径，公开发布前建议先解压检查")
+                subtitle: L10n.t("打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查")
             ) {
                 DiagnosticsExportButton(title: L10n.t("导出…"))
+                    .buttonBorderShape(.capsule)
             }
             CardDivider()
             // 原始日志只在访达里选中,不在 App 里做查看界面(见 15 章「不做设置页实时日志视图」)。
-            // 这一行给自己排查的人;反馈问题要的是导出诊断(多了 App 侧日志、崩溃报告和运行状态),副标题把人引过去。
             // App 自己的日志走系统统一日志,不在这个文件里。
             SettingsRow(
                 icon: "doc.plaintext",
                 title: L10n.t("运行日志"),
-                subtitle: String(format: L10n.t("%@ · 供自行排查；反馈问题请使用上方的「导出诊断」，信息更完整"),
-                                 "~/Library/Logs/" + LyrimuseIdentity.current.logFileName),
-                help: L10n.t("歌词引擎的原始日志，文件较大时会自动归档为 .old；App 界面的日志写入系统日志，可在「控制台」中按 me.yudaotor.lyrimuse 筛选")
+                // 说明单独成键,设置搜索目录的副标题用同一个键。
+                subtitle: "~/Library/Logs/" + LyrimuseIdentity.current.logFileName + " · " + L10n.t("歌词引擎的原始日志，供自行排查")
             ) {
                 Button(L10n.t("在访达中显示")) {
                     let url = LogFiles.engine
@@ -7449,30 +7421,71 @@ private struct AboutSettingsTab: View {
                         NSWorkspace.shared.open(url.deletingLastPathComponent())
                     }
                 }
+                .buttonBorderShape(.capsule)
             }
             CardDivider()
-            // 这一行**不是备份手段** —— 它是给拿 dotfiles/chezmoi 管机器的人直接看活配置的入口,
-            // 跟"备份/恢复"没有因果关系,所以不放进「备份与迁移」那张卡。放过去的直接后果是:两个
-            // 同叫「在访达中显示」的按钮挨在一起,却打开**两个不同目录**(备份目录 vs 这个活配置目录),
-            // 两个都没有二次确认 —— 用户把活配置当备份去拷/删就出事。
-            // 跟「导出诊断信息」放一起更合适:都是"给要自己动手的人看内部状态"。
+            // 这一行**不是备份手段**:它是给拿 dotfiles / chezmoi 管机器的人直接看活配置的入口,所以不放进
+            // 「备份与迁移」那张卡 —— 两个同叫「在访达中显示」的按钮挨在一起却打开两个不同目录,用户会把活配置当备份去拷 / 删。
             //
-            // 副标题里"外观和快捷键不在里面"这句**必须常显**,不能收进 help 气泡:它们存在
-            // UserDefaults,只拷这个文件夹会**静默**丢掉,是这条路子最容易踩的坑。help 只留副标题里
-            // 没有的两件事:含凭据别外发、完整搬家走哪个功能。
+            // 副标题里「外观与快捷键不在此处」必须常显:它们存在 UserDefaults,只拷这个文件夹会静默丢掉。
             SettingsRow(
                 icon: "folder",
                 title: L10n.t("配置文件夹"),
                 // 路径按变体显示(正式 ~/.config/lyrimuse,Dev ~/.config/lyrimuse-dev),别让 Dev 的用户对着一个错的路径找文件。
-                subtitle: String(format: L10n.t("%@ · 纯文本，可直接编辑；外观与快捷键另存于 App 偏好设置，不在此处"),
-                                 "~/.config/" + LyrimuseIdentity.configDirName),
-                help: L10n.t("含账号凭据，请勿分享给他人；需要连同外观与快捷键整体迁移时，请使用「备份与迁移」")
+                subtitle: "~/.config/" + LyrimuseIdentity.configDirName + " · "
+                    + L10n.t("纯文本，含账号凭据；外观与快捷键不在此处，整体迁移请使用「备份与迁移」")
             ) {
                 Button(L10n.t("在访达中显示")) {
                     NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])
                 }
+                .buttonBorderShape(.capsule)
             }
         }
+    }
+}
+
+/// 关于页「更新与帮助」卡里整行可点的一行:行尾「›」(在设置里翻页)或「↗」(在浏览器里打开),悬停时整行淡灰。
+///
+/// 整行用 `onTapGesture` 而不是包一个 Button:`accessory` 里还可能有自己的按钮(反馈问题那颗邮件图标),
+/// 按钮套按钮时里面那颗点不到;子视图的手势优先,点邮件图标不会连带触发整行。
+private struct AboutLinkRow<Accessory: View>: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let opensExternally: Bool
+    let action: () -> Void
+    @ViewBuilder var accessory: () -> Accessory
+    @State private var hovering = false
+
+    var body: some View {
+        SettingsRow(icon: icon, title: title, subtitle: subtitle) {
+            HStack(spacing: 10) {
+                accessory()
+                Image(systemName: opensExternally ? "arrow.up.right" : "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(hovering ? 0.05 : 0))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture(perform: action)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action() }
+    }
+}
+
+extension AboutLinkRow where Accessory == EmptyView {
+    init(icon: String, title: String, subtitle: String, opensExternally: Bool, action: @escaping () -> Void) {
+        self.init(icon: icon, title: title, subtitle: subtitle, opensExternally: opensExternally,
+                  action: action, accessory: { EmptyView() })
     }
 }
 

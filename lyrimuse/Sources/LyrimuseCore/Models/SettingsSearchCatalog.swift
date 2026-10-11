@@ -212,9 +212,9 @@ public enum SettingsSearchCatalog {
                             keywords: kw, pathKeys: ["通用"] + (group.map { [$0] } ?? []))
     }
 
-    private static func about(_ title: String, sub: String? = nil, kw: [String] = [], group: String) -> SettingsSearchEntry {
+    private static func about(_ title: String, sub: String? = nil, kw: [String] = [], group: String?) -> SettingsSearchEntry {
         SettingsSearchEntry(destination: .tab("about"), titleKey: title, subtitleKey: sub, keywords: kw,
-                            pathKeys: ["关于", group])
+                            pathKeys: ["关于"] + (group.map { [$0] } ?? []))
     }
 
     private static func softwareUpdate(_ title: String, sub: String? = nil, kw: [String] = [],
@@ -482,21 +482,20 @@ public enum SettingsSearchCatalog {
                 group: "备份与迁移"),
 
         // ---- 关于 ----
-        // 「软件更新」页(此前这四条住在「关于 › 更新」卡里)。「软件更新」同时也是「关于 › 更新」
-        // 卡里那一行入口的标题,目的地都是这一页。
+        // 「软件更新」页。「软件更新」同时也是「关于 › 更新与帮助」卡里那一行入口的标题,目的地都是这一页。
         softwareUpdate("软件更新", kw: ["更新", "Sparkle", "版本", "检查更新", "升级"], group: nil),
         softwareUpdate("自动检查", kw: ["更新", "自动"], group: "自动更新"),
         softwareUpdate("自动下载并安装", kw: ["更新", "自动"], group: "自动更新"),
         softwareUpdate("测试版更新", sub: "预发布版本，可能不稳定", kw: ["beta", "测试版", "预发布"], group: nil),
-        about("反馈问题", sub: "在 GitHub 新建 issue，自动附带版本、系统与播放器信息", kw: ["issue", "bug", "反馈", "建议", "github", "邮件", "邮箱", "email"], group: "反馈"),
-        about("使用求助", sub: "在 GitHub 讨论区的问答分类中提问", kw: ["discussion", "求助", "提问", "问答", "help"], group: "反馈"),
-        about("功能清单", sub: "列出全部功能、所在位置和默认开关", kw: ["全部功能", "功能列表", "功能介绍", "默认", "设置项", "features"], group: "反馈"),
-        about("版权说明", kw: ["版权", "歌词版权"], group: "许可与版权"),
-        about("第三方许可", sub: "开源组件与词典", kw: ["许可证", "开源", "license"], group: "许可与版权"),
-        about("开源许可证", sub: "GPL-3.0", kw: ["GPL", "许可证", "license"], group: "许可与版权"),
-        about("导出诊断", sub: "反馈问题时请附上：打包日志、崩溃记录与运行状态，已移除账号凭据和本机用户名", kw: ["诊断", "日志", "排查", "反馈"], group: "诊断与数据"),
-        about("运行日志", kw: ["日志", "log", "排查", "访达"], group: "诊断与数据"),
-        about("配置文件夹", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
+        about("反馈问题", sub: "在 GitHub 新建 issue，自动附带版本、系统与播放器信息", kw: ["issue", "bug", "反馈", "建议", "github", "邮件", "邮箱", "email"], group: "更新与帮助"),
+        about("使用求助", sub: "在 GitHub 讨论区的问答分类中提问", kw: ["discussion", "求助", "提问", "问答", "help"], group: "更新与帮助"),
+        about("功能清单", sub: "全部功能、所在位置与默认开关", kw: ["全部功能", "功能列表", "功能介绍", "默认", "设置项", "features"], group: "更新与帮助"),
+        about("版权说明", kw: ["版权", "歌词版权"], group: nil),
+        about("第三方许可", sub: "开源组件与词典", kw: ["许可证", "开源", "license"], group: nil),
+        about("开源许可证", sub: "GPL-3.0", kw: ["GPL", "许可证", "license"], group: nil),
+        about("导出诊断", sub: "打包日志、崩溃记录与运行状态，已移除账号凭据；含曲目名与本机路径，公开前请检查", kw: ["诊断", "日志", "排查", "反馈"], group: "诊断与数据"),
+        about("运行日志", sub: "歌词引擎的原始日志，供自行排查", kw: ["日志", "log", "排查", "访达"], group: "诊断与数据"),
+        about("配置文件夹", sub: "纯文本，含账号凭据；外观与快捷键不在此处，整体迁移请使用「备份与迁移」", kw: ["config", "配置", "文件夹", "路径"], group: "诊断与数据"),
 
         // ---- 账号 ----
         account("listenBrainz", path: ["ListenBrainz"], "账号信息", kw: ["ListenBrainz", "token", "令牌", "用户名", "连接"]),

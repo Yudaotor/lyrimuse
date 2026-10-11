@@ -687,7 +687,7 @@ Checks for new versions by itself; read the notes and install from the Software 
 Bundles logs, crash reports and app state into one file with credentials and your user name removed. Report an Issue opens a GitHub issue with your version, macOS and player filled in.
 
 - Settings: About › Diagnostics & Data › Export Diagnostics
-- Settings: About › Feedback › Report an Issue
+- Settings: About › Updates & Help › Report an Issue
 
 <a id="section-all-settings"></a>
 
@@ -1019,13 +1019,13 @@ Every setting in the Settings window, by where it lives: 231 in all. Type a name
 - **Check Automatically**
 - **Download and Install Automatically**
 
-### About › Feedback
+### About › Updates & Help
 
 - **Report an Issue**: Opens a new GitHub issue with your version, macOS and player filled in
 - **Get Help**: Ask in the Q&A category of GitHub Discussions
 - **Feature List**: Every feature, where it is in Settings, and whether it is on by default
 
-### About › License & Copyright
+### About
 
 - **Copyright Notice**
 - **Third-Party Licenses**: Open-source components and dictionaries
@@ -1033,9 +1033,9 @@ Every setting in the Settings window, by where it lives: 231 in all. Type a name
 
 ### About › Diagnostics & Data
 
-- **Export Diagnostics**: Creates a .zip file. It keeps recently played track names and local file paths, so review it before posting publicly
-- **Activity Log**: The lyrics engine's raw log; it is archived as .old once it grows large. The app's interface logs go to the system log; filter by me.yudaotor.lyrimuse in Console
-- **Config Folder**: Contains account credentials, so don’t share it. To move everything including appearance and shortcuts, use Backup & Migration
+- **Export Diagnostics**: Logs, crash reports and app state in one file, with account credentials removed. Track names and local paths stay in, so review it before posting publicly
+- **Activity Log**: The lyrics engine’s raw log, for your own troubleshooting
+- **Config Folder**: Plain text with account credentials. Appearance and shortcuts aren’t here; to move everything, use Backup & Migration
 
 ### Lab Features › ListenBrainz
 
