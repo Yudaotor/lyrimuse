@@ -121,7 +121,7 @@ struct OverlayEditorStage: View {
     /// 同时摆出来会互相遮挡,各自的 transient 关闭时机还会打架。
     @State private var popover: StagePopover?
 
-    /// 浮层高度上限 = 点开那一刻舞台上沿到屏幕顶的距离(见 stagePopoverAnchors)。
+    /// 浮层高度上限 = 点开那一刻按钮那一行上沿到屏幕顶的距离(见 toolbarButton)。
     @State private var popoverMaxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
     @State private var stageTopProbe = StageTopProbe()
 
@@ -557,41 +557,46 @@ struct OverlayEditorStage: View {
                 })
     }
 
+    /// 工具栏按钮。浮层挂在**这颗按钮**上、往上弹(`arrowEdge: .top`):箭头指着点的那颗,浮层盖住的是上面的工具栏和
+    /// 页面标题,不碰预览(04 章决策 34、61)。别改成往下弹:按钮就在舞台正上方,往下弹正好压在预览上。
+    ///
+    /// NSPopover 在首选方向放不下时会自己翻到对面,所以高度必须封顶在"按钮那一行上沿到屏幕可用区顶"这段距离里:
+    /// `StageTopProbe` 量的是舞台上沿,减去这一行到舞台上沿的距离(`rowOffsetAboveStage`)。内容更高就在浮层里滚动,
+    /// 而不是让系统翻下来盖住预览。
     private func toolbarButton(
         icon: String, title: String, summary: String, target: StagePopover
     ) -> some View {
         Button {
-            popoverMaxHeight = stageTopProbe.popoverHeightLimit()
+            popoverMaxHeight = stageTopProbe.popoverHeightLimit(rowOffset: Self.rowOffsetAboveStage(target))
             popoverAnchor = .toolbar
             popover = target
         } label: {
             EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .editorToolbarButtonStyle()
+        .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
+            SettingsPopoverShell(title: target.title, width: target.width, maxHeight: popoverMaxHeight) {
+                popoverRows(for: target)
+            }
+        }
+    }
+
+    /// 按钮所在那一行的上沿比舞台上沿高多少:第一行(主题 / 文字 / 背景)隔着两行,其余在第二行。
+    /// 跟 `toolbar` / `toolbarRow2` 里按钮的分行一致,挪了按钮要一起改。
+    private static func rowOffsetAboveStage(_ target: StagePopover) -> CGFloat {
+        switch target {
+        case .theme, .text, .background: return (toolbarHeight + toolbarSpacing) * 2
+        case .content, .layout, .behavior, .placement: return toolbarHeight + toolbarSpacing
+        }
     }
 
     // MARK: - 浮层
 
-    /// 七个浮层都从**舞台上沿往上**弹,盖住的是工具栏和页面标题,不碰预览(04 章决策 34)。
-    ///
-    /// 挂在按钮上往下弹会正好压在舞台上;NSPopover 在首选方向放不下时会自己翻到对面,所以高度必须
-    /// 封顶在"舞台上沿到屏幕可用区顶"这段距离里(`StageTopProbe`,点开那一刻现量),内容更高就在浮层里
-    /// 滚动,而不是让系统翻下来盖住预览。每个浮层各挂一个 1×1 的透明锚点(叠在同一处),保留"各自一份
-    /// isPresented"的关闭语义 —— 同一个视图上叠多个 `.popover` 修饰符不可靠。
-    private var stagePopoverAnchors: some View {
-        ZStack {
-            ForEach(StagePopover.allCases, id: \.self) { target in
-                Color.clear
-                    .frame(width: 1, height: 1)
-                    .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
-                        SettingsPopoverShell(title: target.title, width: target.width, maxHeight: popoverMaxHeight) {
-                            popoverRows(for: target)
-                        }
-                    }
-            }
-        }
-        .background(StageTopProbeView(probe: stageTopProbe))
+    /// 舞台上沿的测量点,给浮层算高度上限(见 `toolbarButton`)。
+    private var stageTopProbeAnchor: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .background(StageTopProbeView(probe: stageTopProbe))
     }
 
     private enum StagePopover: Hashable, CaseIterable {
@@ -699,14 +704,14 @@ struct OverlayEditorStage: View {
         }
         // 超出编辑台的部分在这里裁掉。裁在**舞台**的圆角上而不是给卡片自己套一层裁切:卡片没
         // 超宽时这一层什么也不做,超宽时切出来的边正好贴着编辑台的边框,像是"窗口伸出去了"。
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         // 舞台自己那条发丝描边挪到裁切**之后**(第五步):壁纸现在铺满整块舞台,
         // 压在底板上会把它整个盖住,而这条边是舞台跟设置页之间唯一的分界。透明度也从 0.07
         // 提到 0.12 —— 它现在描在一张照片上,0.07 那一档在壁纸上基本看不见。
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
-        .overlay(alignment: .top) { stagePopoverAnchors }
+        .overlay(alignment: .top) { stageTopProbeAnchor }
     }
 
     /// 把一块**跟卡片同高**的内容摆进"窗口那一格":在舞台上半部(去掉底部那条调整条通道)
@@ -729,7 +734,7 @@ struct OverlayEditorStage: View {
     /// 玻璃只会让"哪里是壁纸、哪里是设置页"这条边界更糊。一层低透明度的中性填充就够,
     /// 而且深浅色模式下都成立。
     private var stageBackground: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
             .fill(Color.primary.opacity(0.05))
     }
 
@@ -1257,16 +1262,18 @@ private extension View {
 final class StageTopProbe {
     fileprivate weak var view: NSView?
 
-    /// 浮层外框(箭头 + 边距)与菜单栏之间再留的余量。
-    private static let chromeAllowance: CGFloat = 36
+    /// 浮层外框(箭头 + 边距)与菜单栏之间再留的余量。别往小调:浮层最终顶边一贴到系统允许的上边界,NSPopover 就改成
+    /// 顶边钉住往下展开(看起来从上面落下来),还会在顶上露出一截底色(14 章决策 82)。
+    private static let chromeAllowance: CGFloat = 72
     /// 太矮的浮层没法用;真到这一步说明窗口顶到了屏幕最上面,只能让系统翻下来。
     private static let minimumHeight: CGFloat = 160
 
-    func popoverHeightLimit() -> CGFloat {
+    /// `rowOffset`:浮层挂的那一行比舞台上沿高多少,上方可用空间相应少这么多。
+    func popoverHeightLimit(rowOffset: CGFloat = 0) -> CGFloat {
         let fallback = SettingsPopoverMetrics.defaultMaxHeight
         guard let view, let window = view.window, let screen = window.screen ?? NSScreen.main else { return fallback }
         let rectInScreen = window.convertToScreen(view.convert(view.bounds, to: nil))
-        let space = screen.visibleFrame.maxY - rectInScreen.maxY - Self.chromeAllowance
+        let space = screen.visibleFrame.maxY - rectInScreen.maxY - rowOffset - Self.chromeAllowance
         return max(Self.minimumHeight, min(fallback, space))
     }
 }

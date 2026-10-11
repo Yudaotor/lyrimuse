@@ -670,6 +670,7 @@
 "好" = "OK";
 "字体" = "Font";
 "字号" = "Font Size";
+"字形" = "Type";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
 "安装并登录后将自动连接；网页版和手机版不支持连接" = "Connects automatically once it's installed and you're signed in. The web and mobile apps can't connect.";
 "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" = "Exact title 120 · parenthetical-only difference 60 · bilingual same name 30";
@@ -943,7 +944,7 @@
 "悬停时显示控制条" = "Controls on Hover";
 "悬停显示播放控制" = "Show Controls on Hover";
 "悬浮歌词" = "Floating Lyrics";
-"悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口按需打开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
+"悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" = "Floating Lyrics, Notch, Menu Bar and Touch Bar can run together; open the Lyrics Window when needed";
 "悬浮歌词宽度" = "Floating Lyrics Width";
 "悬浮淡化" = "Fade on Hover";
 "成立时间" = "Formed";
@@ -2056,6 +2057,7 @@
 "长按或右键打开设置" = "Click and hold or right-click for settings";
 "长按拖动" = "Long-Press to Drag";
 "间奏中多出一段歌词" = "Extra lyrics in an instrumental break";
+"间距" = "Spacing";
 "除 %@ 外" = "All except %@";
 "随匹配算法更新重新选择" = "Re-Pick After Algorithm Updates";
 "随机播放" = "Shuffle";

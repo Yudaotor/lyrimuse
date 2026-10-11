@@ -111,6 +111,21 @@ extension View {
         }
     }
 
+    /// 编辑台工具栏按钮的外观,五段编辑台(悬浮歌词 / 灵动岛 / 菜单栏 / 触控栏 / 歌词窗口)共用,
+    /// 各段的对齐占位也必须用它,不然占位和真按钮不同宽。macOS 26 起是玻璃胶囊(跟设置页其余按钮一套),
+    /// 更早的系统退回 `.bordered`。两种都是 small:各编辑台 26pt 的工具栏行高按它定。
+    @ViewBuilder
+    func editorToolbarButtonStyle() -> some View {
+        if #available(macOS 26.0, *) {
+            buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+        } else {
+            buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+    }
+
     /// 玻璃按钮那一排里的菜单(如「⋯」)。菜单不吃 `.buttonStyle(.glass)`,也不认标签上的 padding / frame:macOS 26 起
     /// 画成无边框菜单,外面套同一种可交互玻璃,宽高跟玻璃文字按钮一致(24pt 高);更早的系统用按钮样式的菜单。
     /// 标签写成文字里嵌符号(`Text(Image(systemName:))`):单独一个 Image 时旧系统按符号本身的高度画,ellipsis 很扁。
@@ -581,11 +596,99 @@ enum SettingsRowMetrics {
     static let iconTextSpacing: CGFloat = 12
     static let horizontalPadding: CGFloat = 14
     static let verticalPadding: CGFloat = 11
+    /// 浮层里的行更紧凑:往上弹的浮层高度受舞台上方空间限制,行多的浮层每行省 3pt 就少滚一截。
+    static let popoverVerticalPadding: CGFloat = 8
     /// SettingsRow 的尾部不超过这个高度时整块按中线对齐标题行;更高的(多行内容)只拿顶上这一截
     /// 的中线去对。28 盖得住单行控件里最高的那几种(分段选择器、玻璃按钮、带步进器的下拉框)。
     static let trailingAlignBand: CGFloat = 28
     // 图标列 + 图标与文字的间距 + 卡片左内边距 = 文字实际的左起点
     static var textLeadingInset: CGFloat { horizontalPadding + iconWidth + iconTextSpacing }
+}
+
+/// 设置行的纵向内边距:在浮层里(`SettingsPopoverShell` 发下来的 `settingsInPopover`)用紧凑的一档。
+struct SettingsRowVerticalPadding: ViewModifier {
+    @Environment(\.settingsInPopover) private var inPopover
+
+    func body(content: Content) -> some View {
+        content.padding(.vertical, inPopover ? SettingsRowMetrics.popoverVerticalPadding : SettingsRowMetrics.verticalPadding)
+    }
+}
+
+private struct SettingsInPopoverKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private struct SettingsBoxedGroupsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// 当前是不是在 `SettingsPopoverShell` 里。行的纵向边距和 `SettingsRowGroup` 的画法按它分两种。
+    var settingsInPopover: Bool {
+        get { self[SettingsInPopoverKey.self] }
+        set { self[SettingsInPopoverKey.self] = newValue }
+    }
+
+    /// 卡片里也要把 `SettingsRowGroup` 画成圆角分组框(悬浮歌词「全部设置」抽屉的各组卡)。浮层里恒为框,不用设它。
+    var settingsBoxedGroups: Bool {
+        get { self[SettingsBoxedGroupsKey.self] }
+        set { self[SettingsBoxedGroupsKey.self] = newValue }
+    }
+}
+
+// MARK: - 一组设置行
+
+/// 一组设置行。在浮层里(或设了 `settingsBoxedGroups` 的卡片里)画成圆角分组框、组名在框上方(同系统设置浮层的分组);
+/// 其余卡片里不画框(卡片本身就是框),组名画成一行小标题。行与行之间的 `CardDivider()` 仍由行视图自己插。
+///
+/// 同一份行视图既进浮层也进「全部设置」抽屉,所以分组写在行视图里、画法交给宿主环境,别在两个宿主里各拼一遍。
+struct SettingsRowGroup<Content: View>: View {
+    var title: String?
+    @ViewBuilder let content: () -> Content
+    @Environment(\.settingsInPopover) private var inPopover
+    @Environment(\.settingsBoxedGroups) private var boxedGroups
+
+    var body: some View {
+        if inPopover || boxedGroups {
+            VStack(alignment: .leading, spacing: 5) {
+                if let title {
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 6)
+                }
+                VStack(spacing: 0) { content() }
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.primary.opacity(0.05)))
+            }
+            .padding(.horizontal, 10)
+        } else {
+            VStack(spacing: 0) {
+                if let title {
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, SettingsRowMetrics.horizontalPadding)
+                        .padding(.top, 10)
+                        .padding(.bottom, 2)
+                }
+                content()
+            }
+        }
+    }
+}
+
+/// 几组 `SettingsRowGroup` 摞在一起:浮层里组与组之间留 10pt,卡片里紧贴(组名那行小标题自己隔开)。
+struct SettingsRowGroupStack<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @Environment(\.settingsInPopover) private var inPopover
+    @Environment(\.settingsBoxedGroups) private var boxedGroups
+
+    var body: some View {
+        VStack(spacing: inPopover || boxedGroups ? 10 : 0) { content() }
+    }
 }
 
 // MARK: - 卡片标题行
@@ -735,7 +838,7 @@ struct SettingsRow<Trailing: View>: View {
                 }
         }
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-        .padding(.vertical, SettingsRowMetrics.verticalPadding)
+        .modifier(SettingsRowVerticalPadding())
         // 设置搜索命中时高亮 + 滚进视野(Settings/SettingsSearch.swift)。只读 Environment,
         // 设置窗口之外用到这个组件的地方拿到的是空集,这一句等于没有。
         .settingsSearchHighlight(title: title)
@@ -912,7 +1015,7 @@ struct SettingsSubRow<Trailing: View>: View {
         // 常见的回归。
         .padding(.leading, SettingsRowMetrics.textLeadingInset)
         .padding(.trailing, SettingsRowMetrics.horizontalPadding)
-        .padding(.vertical, SettingsRowMetrics.verticalPadding)
+        .modifier(SettingsRowVerticalPadding())
         .settingsSearchHighlight(title: title)
     }
 }
@@ -950,15 +1053,16 @@ struct SettingsRawRow<Content: View>: View {
         // horizontalPadding + iconWidth + spacing = textLeadingInset,跟原来的对齐一致。
         .padding(.leading, SettingsRowMetrics.horizontalPadding)
         .padding(.trailing, SettingsRowMetrics.horizontalPadding)
-        .padding(.vertical, SettingsRowMetrics.verticalPadding)
+        .modifier(SettingsRowVerticalPadding())
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 // MARK: - 浮层外壳
 
-/// 编辑台工具栏那几个浮层共用的外壳:一个组标题 + 一条分隔线 + 内容,整体套 ScrollView
-/// 并限死宽高。
+/// 编辑台工具栏那几个浮层共用的外壳:一行粗体标题 + 内容,整体套 ScrollView 并限死宽高。标题下不画分隔线;
+/// 内容里的行按 `settingsInPopover` 收紧纵向边距,`SettingsRowGroup` 画成圆角分组框。外壳本身不给内容加左右边距:
+/// 好几个浮层的宽度是按内容量出来的(见 `width`),加了就会挤。
 ///
 /// 高度必须有上限。设置窗口本身只有 552pt 高,浮层比窗口还高的话 macOS 会把它整体
 /// 顶到屏幕上去、或者直接裁掉底部 —— 而「我的配色主题」的行数是**用户数据的函数**
@@ -1000,31 +1104,131 @@ struct SettingsPopoverShell<Content: View>: View {
     /// 转去内部滚动。
     @State private var measuredHeight: CGFloat = 0
 
+    /// 标题那一条的高度(实测),内容区的高度上限 = `maxHeight` 减去它。
+    @State private var headerHeight: CGFloat = 0
+    /// 内容往上滚了多少(实测),判断上下还有没有没露出来的内容。
+    @State private var scrollOffset: CGFloat = 0
+
+    private static var scrollSpace: String { "SettingsPopoverShell.scroll" }
+    private static var bottomID: String { "SettingsPopoverShell.bottom" }
+
+    /// 内容比可用高度高、要滚才看得全。
+    private var overflows: Bool { measuredHeight > contentMaxHeight + 1 }
+    private var moreBelow: Bool { overflows && scrollOffset + contentMaxHeight < measuredHeight - 2 }
+    private var moreAbove: Bool { overflows && scrollOffset > 2 }
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                SettingsCardHeader(title: title, help: help)
-                CardDivider()
-                content()
+        // 标题固定在顶上、不跟着滚:内容超高时滚的是下面的行,标题一直看得见。
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                if let help { HelpButton(text: help) }
             }
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.preference(key: PopoverContentHeightKey.self, value: proxy.size.height)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            .padding(.top, 12)
+            .padding(.bottom, 6)
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { headerHeight = $0 }
+            // 内容超高时要让人看得出能滚:滚动条常显、上下没露出来的那一侧渐隐、底部浮一颗「更多」(点了滚到底)。
+            // 不给提示的话,浮层底边正好切在两行之间时看起来就像内容到此为止。
+            ScrollViewReader { reader in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        content()
+                            .padding(.bottom, 8)
+                        // 「到底」的标记放在底部留白之后:放在留白之前,滚到它还差 8pt,`moreBelow` 一直为真。
+                        Color.clear.frame(height: 0).id(Self.bottomID)
+                    }
+                    .environment(\.settingsInPopover, true)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear
+                                .preference(key: PopoverContentHeightKey.self, value: proxy.size.height)
+                                .preference(key: PopoverScrollOffsetKey.self,
+                                            value: -proxy.frame(in: .named(Self.scrollSpace)).minY)
+                        }
+                    )
                 }
-            )
+                .coordinateSpace(name: Self.scrollSpace)
+                .scrollIndicators(overflows ? .visible : .automatic)
+                .mask { scrollFadeMask }
+                .overlay(alignment: .bottom) {
+                    if moreBelow {
+                        moreButton { withAnimation(.easeInOut(duration: 0.3)) { reader.scrollTo(Self.bottomID, anchor: .bottom) } }
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.15), value: moreBelow)
+                .onPreferenceChange(PopoverScrollOffsetKey.self) { if let offset = $0 { scrollOffset = offset } }
+            }
+            .modifier(PopoverScrollEdgeEffectHidden())
+            // measuredHeight 还没测出来之前(刚弹出的第一帧)只按上限约束,让 ScrollView 按内容自身高度走;
+            // 测出来之后就交给实测值 —— 封顶是「我的配色主题」这类随用户数据变长的内容仍然需要的滚动上限,
+            // 没超过时就是"多大内容给多大空间",不出现滚动条。
+            .frame(height: measuredHeight > 0 ? min(measuredHeight, contentMaxHeight) : nil)
+            .frame(maxHeight: contentMaxHeight)
+            .onPreferenceChange(PopoverContentHeightKey.self) { measuredHeight = $0 }
         }
         .frame(width: width)
-        // measuredHeight 还没测出来之前(刚弹出的第一帧)只按上限约束,让 ScrollView 按内容自身高度走;
-        // 测出来之后就交给实测值 —— 封顶是「我的配色主题」这类随用户数据变长的内容仍然需要的滚动上限,
-        // 没超过时就是"多大内容给多大空间",不出现滚动条。
-        .frame(height: measuredHeight > 0 ? min(measuredHeight, maxHeight) : nil)
-        .frame(maxHeight: maxHeight)
-        .onPreferenceChange(PopoverContentHeightKey.self) { measuredHeight = $0 }
+    }
+
+    private var contentMaxHeight: CGFloat { max(0, maxHeight - headerHeight) }
+
+    /// 上下还有内容的那一侧渐隐(上 14pt、下 36pt),最后露出来的那一行明显是被截断的,不像内容到此为止。
+    private var scrollFadeMask: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: moreAbove ? 14 : 0)
+            Rectangle()
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: moreBelow ? 36 : 0)
+        }
+    }
+
+    /// 底部正中那颗「更多 ⌄」:提示下面还有,点了滚到底;滚到底就不画了。
+    private func moreButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(L10n.t("更多"))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(.regularMaterial))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 6)
+    }
+}
+
+/// 浮层内容超高可以滚动时,macOS 26 会在滚动区顶边画滚动边缘效果;滚动区紧贴在标题下面,那条效果只会把标题和第一组隔开,不要它。
+private struct PopoverScrollEdgeEffectHidden: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            content
+        }
     }
 }
 
 enum SettingsPopoverMetrics {
     static let defaultMaxHeight: CGFloat = 460
+}
+
+/// `SettingsPopoverShell` 里内容往上滚了多少(内容顶边在滚动区坐标里的 -minY)。默认值必须是 nil:没设这个 key 的子视图
+/// 也会参与归约,默认值若是 0,就会把真实的偏移量盖掉。
+private struct PopoverScrollOffsetKey: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        if let next = nextValue() { value = next }
+    }
 }
 
 /// `SettingsPopoverShell` 专用的内容高度上报 key。
@@ -1452,6 +1656,44 @@ private struct GlassPopoverMenuRow: View {
 /// 两个重载：
 /// - `T: Identifiable & Equatable`：用于枚举类型（如 `Section.allCases`）
 /// - `T: Hashable`：用于基础类型（如 `Int`、`String`）
+/// 胶囊分段选择器:选中项强调色底、白字。纯 SwiftUI 手搭,每项给 `minWidth`,整体宽度只由自己定 —— 系统分段控件会随
+/// 选中项改变整体宽度(见 04 章「对齐方式」那条决策),在浮层里选中态还是灰底,跟这个不是一套。
+/// `fillsWidth` 时各项均分整行;否则按理想宽度落位(`.fixedSize`)。不固定的话放进 `SettingsRow` 尾部时,那一行的标题列、
+/// Spacer 和它三者均分剩余宽度,它会被压到 minWidth 下限,英文标签被截成「Automa…」;固定之后亏空转给标题(换行还读得出来)。
+struct SettingsPillSegmentedControl<T: Hashable>: View {
+    @Binding var selection: T
+    let options: [T]
+    let label: (T) -> String
+    var minWidth: CGFloat = 52
+    var fillsWidth = false
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.self) { option in
+                let isSelected = selection == option
+                Button {
+                    selection = option
+                } label: {
+                    Text(label(option))
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        .lineLimit(1)
+                        .frame(minWidth: minWidth, maxWidth: fillsWidth ? .infinity : nil)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .background(Capsule().fill(isSelected ? Color.accentColor : Color.clear))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .background(Capsule().fill(Color.primary.opacity(0.06)))
+        .fixedSize(horizontal: !fillsWidth, vertical: true)
+    }
+}
+
 struct SettingsSegmentedControl<T: Identifiable & Equatable>: View {
     @Binding var selection: T
     let options: [T]

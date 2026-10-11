@@ -214,7 +214,8 @@ func runSettingsSearchTests() {
     var scannedTitles: [String: [String]] = [:]   // 标题 → 出现的文件
     for relative in scannedFiles {
         let text = source(relative)
-        for marker in ["SettingsRow(", "SettingsSubRow(", "SettingsCardHeader(", "PlayerBundleChipsRow("] {
+        // `groupCard(` 是悬浮歌词「全部设置」抽屉里各组卡的卡头(OverlayAllSettingsDrawer),跟 SettingsCardHeader 同一回事。
+        for marker in ["SettingsRow(", "SettingsSubRow(", "SettingsCardHeader(", "PlayerBundleChipsRow(", "groupCard("] {
             var searchStart = text.startIndex
             while let found = text.range(of: marker, range: searchStart..<text.endIndex) {
                 // 取到配对右括号或第一个 `{`(尾随闭包)为止的参数段。

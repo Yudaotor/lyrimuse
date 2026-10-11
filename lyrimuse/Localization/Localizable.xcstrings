@@ -30511,6 +30511,40 @@
         }
       }
     },
+    "字形" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字形"
+          }
+        }
+      }
+    },
+    "间距" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spacing"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "間距"
+          }
+        }
+      }
+    },
     "顶部颜色" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36087,7 +36121,7 @@
         }
       }
     },
-    "悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口按需打开" : {
+    "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -36099,13 +36133,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口按需打开"
+            "value" : "悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "浮動歌詞、動態島、選單列和觸控列可同時開啟，歌詞視窗依需要開啟"
+            "value" : "浮動歌詞、動態島、選單列和觸控列可同時開，歌詞視窗依需要開啟"
           }
         }
       }

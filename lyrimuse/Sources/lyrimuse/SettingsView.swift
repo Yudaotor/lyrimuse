@@ -2469,7 +2469,7 @@ private struct AppearanceSettingsTab: View {
                 // 最后一段「歌词窗口」没有开关,靠快捷键/菜单按需打开,所以副标题要把它分开讲。
                 // 写「可同时开」不写「可同时开启」:多一个字就把末尾的「开」单独折到第二行(13pt 下这 29 字
                 // 约 375pt,副标题限宽 380)。
-                subtitle: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏可同时开启，歌词窗口按需打开")
+                subtitle: L10n.t("悬浮歌词、灵动岛、菜单栏和触控栏可同时开，歌词窗口按需打开")
                 // 这里**不要**再写 showsHeader: false:六个分类里只有这一页没有 22pt 大标题会显得
                 // 不一致。省下来的纵向空间由窗口高度补(见 SettingsView 的 .frame:minHeight 520 /
                 // idealHeight 720),保证桌面悬浮歌词的开关能落在首屏。
@@ -2561,23 +2561,27 @@ private struct AppearanceSettingsTab: View {
             // 里那条注释)。钉条本身仍然在,只是这一段不用它 —— 灵动岛/菜单栏两段照旧,
             // SectionPreviewMetrics 的高度契约不受影响。
             OverlayEditorStage()
-            modeToggleCard(
-                icon: "captions.bubble",
-                title: L10n.t("桌面悬浮歌词"),
-                isOn: Binding(
-                    get: { settings.classicOverlayEnabled },
-                    set: { LyricsOverlayWindowController.shared.setVisible($0) }))
-            // 配置项**不跟开关联动**:关着也能调。把它藏起来只是让"先开、调完、再关"变成必须的
-            // 操作顺序,并不能阻止什么;而想先配好再打开的人会以为这个形态没有可调项。
-            //
-            // 除总开关外的 18 项全在这个默认折叠的「全部设置」抽屉里 —— 高频项已经被编辑台和工具栏
-            // 浮层接管,剩下的职责只有"全量兜底通路",没有理由常年占着两屏。每一组来自哪个文件见
-            // `OverlayAllSettingsDrawer` 的头注,项数那个计数在同一个文件的 `disclosureHeader` 上。
-            //
-            // 别在这里长出常驻的「行为」卡或「自动隐藏」卡:锁定位置 / 长按拖动 / 悬浮淡化 + 两行
-            // 自动隐藏这五项的宿主是编辑台工具栏第二行的「行为」浮层和抽屉的「行为」组,
-            // 跟灵动岛那边取齐;真源 `UI/AutoHideSettingsRows.swift`。
-            OverlayAllSettingsDrawer()
+            // 总开关卡和抽屉背后垫一层光,玻璃卡才看得出边(同别的页的卡片列)。
+            VStack(spacing: 14) {
+                modeToggleCard(
+                    icon: "captions.bubble",
+                    title: L10n.t("桌面悬浮歌词"),
+                    isOn: Binding(
+                        get: { settings.classicOverlayEnabled },
+                        set: { LyricsOverlayWindowController.shared.setVisible($0) }))
+                // 配置项**不跟开关联动**:关着也能调。把它藏起来只是让"先开、调完、再关"变成必须的
+                // 操作顺序,并不能阻止什么;而想先配好再打开的人会以为这个形态没有可调项。
+                //
+                // 除总开关外的 18 项全在这个默认折叠的「全部设置」抽屉里 —— 高频项已经被编辑台和工具栏
+                // 浮层接管,剩下的职责只有"全量兜底通路",没有理由常年占着两屏。每一组来自哪个文件见
+                // `OverlayAllSettingsDrawer` 的头注,项数那个计数在同一个文件的 `disclosureHeader` 上。
+                //
+                // 别在这里长出常驻的「行为」卡或「自动隐藏」卡:锁定位置 / 长按拖动 / 悬浮淡化 + 两行
+                // 自动隐藏这五项的宿主是编辑台工具栏第二行的「行为」浮层和抽屉的「行为」组,
+                // 跟灵动岛那边取齐;真源 `UI/AutoHideSettingsRows.swift`。
+                OverlayAllSettingsDrawer()
+            }
+            .background { LastfmGlassGlow() }
         case .notch:
             // 编辑台(照悬浮歌词那一段的范式):一小片屏幕顶端(菜单栏 + 刘海 + 桌面),灵动岛卡片
             // 1:1 挂在上面,里面有宽度调整条和两个工具栏浮层。它取代页顶那条钉住的 NotchPreviewBar
@@ -2863,8 +2867,7 @@ private struct AppearanceSettingsTab: View {
         } label: {
             lyricsWindowToolbarLabel(item)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .editorToolbarButtonStyle()
         .popover(isPresented: Binding(
             get: { lyricsWindowPopover == item },
             set: { shown in
@@ -2877,8 +2880,7 @@ private struct AppearanceSettingsTab: View {
     /// 第二行的对齐占位:同一份 label、同一套按钮样式,所以同宽;不挂浮层、不画、不进无障碍树。
     private func lyricsWindowToolbarGhost(_ item: LyricsWindowToolbarItem) -> some View {
         Button {} label: { lyricsWindowToolbarLabel(item) }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .editorToolbarButtonStyle()
             .hidden()
             .accessibilityHidden(true)
     }
@@ -3371,7 +3373,7 @@ private struct AppearanceSettingsTab: View {
     private func modeToggleCard(
         icon: String, title: String, subtitle: String? = nil, isOn: Binding<Bool>
     ) -> some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             SettingsRow(icon: icon, title: title, subtitle: subtitle) {
                 Toggle("", isOn: Binding(
                     get: { isOn.wrappedValue },
@@ -4113,7 +4115,7 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
     }
 
     var body: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             disclosureHeader
             if isExpanded {
                 CardDivider()
@@ -4187,7 +4189,7 @@ private struct NotchAllSettingsDrawer: View {
     @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
 
     var body: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             disclosureHeader
             if isExpanded {
                 CardDivider()

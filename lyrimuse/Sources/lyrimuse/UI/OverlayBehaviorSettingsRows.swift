@@ -7,7 +7,7 @@ import SwiftUI
 //  已随之改口 —— `allCases` 的项数不是不变量,"自动隐藏那两行不进这个枚举"才是。)
 //
 // 为什么抽:跟 OverlayStyleSettingsRows 同一个理由 —— 这三项现在有**两个**宿主:
-//   ① 编辑台工具栏第二行「行为」按钮点开的浮层(OverlayEditorStage.stagePopoverAnchors);
+//   ① 编辑台工具栏第二行「行为」按钮点开的浮层(OverlayEditorStage.toolbarButton);
 //   ② 「全部设置」抽屉里「行为」那一组(OverlayAllSettingsDrawer;前叫「窗口」、还带着
 //      「宽度」滑杆,同日按"抽屉分组跟工具栏一一对应"拆开),键盘/VoiceOver/"我就想找个开关"的
 //      全量兜底通路。
@@ -167,12 +167,11 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
 // MARK: - 「行为」组的行(浮层与抽屉同一份)
 
 /// 「行为」那一组:锁定位置 / 长按拖动 / 悬浮淡化 + 截屏/录屏时隐藏 / 暂停/无播放时隐藏。
-/// 编辑台「行为」浮层(`OverlayEditorStage.stagePopoverAnchors`)和抽屉「行为」组(`OverlayAllSettingsDrawer`)调的
+/// 编辑台「行为」浮层(`OverlayEditorStage.toolbarButton`)和抽屉「行为」组(`OverlayAllSettingsDrawer`)调的
 /// 是这同一份 —— 之前两处各自拼「三项 + 分隔线 + 自动隐藏两行」,靠注释警告别漏。
 ///
-/// 行与行之间的 `CardDivider()` 由这个组件自己插 —— 宿主只知道"这里放一组行为设置",
-/// 不该知道它内部有几行(同 OverlayTextSettingsRows 的做法)。`AutoHideSettingsRows` 自己只在
-/// 它两行之间插一条,"本组之前"那一条在这里插(见那个文件头的约定)。
+/// 分两组:「窗口」(各项行为开关)、「自动隐藏」(`AutoHideSettingsRows`)。行与行之间的 `CardDivider()` 由这个组件和
+/// `AutoHideSettingsRows` 自己插 —— 宿主只知道"这里放一组行为设置",不该知道它内部有几行(同 OverlayTextSettingsRows)。
 ///
 /// `@ObservedObject` 是**必需**的,不是照抄的样板:`item.binding` 是手搓的 `Binding(get:set:)`,
 /// 写入不经过任何能让 SwiftUI 失效的通道,而这个视图一个存储属性都没有 —— 宿主刷新时 SwiftUI 判等
@@ -182,19 +181,24 @@ struct OverlayBehaviorSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        VStack(spacing: 0) {
+        SettingsRowGroupStack {
             // 「位置」三选一**不在这一组**:它一度是这里的第一行,后来
             // 单开一颗「位置」入口,抽屉
             // 跟着单开一组,见 `OverlayPlacementSettingsRows.swift`。这一组是 `OverlayBehaviorItem`
             // 的各项开关 + 两行自动隐藏。
-            ForEach(Array(OverlayBehaviorItem.allCases.enumerated()), id: \.element.id) { index, item in
-                if index > 0 { CardDivider() }
-                SettingsRow(icon: item.icon, title: item.title) {
-                    Toggle("", isOn: item.binding)
+            SettingsRowGroup(title: L10n.t("窗口")) {
+                VStack(spacing: 0) {
+                    ForEach(Array(OverlayBehaviorItem.allCases.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { CardDivider() }
+                        SettingsRow(icon: item.icon, title: item.title) {
+                            Toggle("", isOn: item.binding)
+                        }
+                    }
                 }
             }
-            CardDivider()
-            AutoHideSettingsRows(surface: .desktopOverlay)
+            SettingsRowGroup(title: L10n.t("自动隐藏")) {
+                AutoHideSettingsRows(surface: .desktopOverlay)
+            }
         }
     }
 }

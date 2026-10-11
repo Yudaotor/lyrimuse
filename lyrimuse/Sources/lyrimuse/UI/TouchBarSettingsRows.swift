@@ -290,8 +290,7 @@ struct TouchBarEditorToolbar: View {
         Button {} label: {
             EditorToolbarButtonLabel(icon: group.icon, title: group.title, summary: summary(for: group))
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .editorToolbarButtonStyle()
         .hidden()
         .accessibilityHidden(true)
     }
@@ -320,8 +319,7 @@ struct TouchBarEditorToolbar: View {
         } label: {
             EditorToolbarButtonLabel(icon: group.icon, title: group.title, summary: summary(for: group))
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .editorToolbarButtonStyle()
         .popover(isPresented: Binding(
             get: { popover == group },
             set: { shown in
@@ -392,7 +390,7 @@ struct TouchBarAllSettingsDrawer: View {
     @Environment(\.settingsSearchHighlightedTitles) private var highlightedTitles
 
     var body: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             disclosureHeader
             if isExpanded {
                 CardDivider()

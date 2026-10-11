@@ -5,7 +5,9 @@ import SwiftUI
 
 enum ThemeGalleryMetrics {
     /// 自适应列宽:编辑台「主题」浮层(720pt)一行排下全部 7 个内置预设;抽屉是整列宽(上限 600pt),排 6 列。
-    static let columns = [GridItem(.adaptive(minimum: 84, maximum: 150), spacing: 10, alignment: .top)]
+    /// 固定 7 列:七套内置主题一行排完(自适应列在抽屉的卡片宽度下只放得下 6 格,「霓虹」会单独掉到第二行)。
+    /// 窄到一格放不下示例字时,示例字自己缩(`ThemeSampleLyric` 的 minimumScaleFactor)。
+    static let columns = Array(repeating: GridItem(.flexible(minimum: 60, maximum: 150), spacing: 8, alignment: .top), count: 7)
     static let rowSpacing: CGFloat = 10
     static let tileHeight: CGFloat = 46
     static let cornerRadius: CGFloat = 8
@@ -44,6 +46,8 @@ private struct ThemeSampleLyric: View {
                            fallback: .white.opacity(0.35)))
         }
         .font(.system(size: 15, weight: .semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
         .lineLimit(1)
         .lyricsTextStroke(
             theme.textStrokeEnabled,

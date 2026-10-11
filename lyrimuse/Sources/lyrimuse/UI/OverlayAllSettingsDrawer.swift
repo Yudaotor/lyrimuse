@@ -13,7 +13,7 @@ import SwiftUI
 // 才能开这个形态";它留在编辑台正下方那张 modeToggleCard 里常驻可见。
 //
 // 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏各个入口一一
-// 对应**(主题 → 文字 → 背景 → 内容 → 排版 → 宽度 → 行为 → 位置 → 恢复默认)。别给抽屉另起一套分组名:
+// 对应**(主题 → 文字 → 背景 → 内容 → 排版(含宽度)→ 行为 → 位置 → 恢复默认),展开后一组一张卡。别给抽屉另起一套分组名:
 // 用户是按工具栏的记忆到抽屉里找的,对不上名就会落空:
 //   - 主题 / 文字 / 背景 / 内容 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
 // 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
@@ -22,7 +22,7 @@ import SwiftUI
 //   - 行为 → OverlayBehaviorSettingsRows.swift(三个行为项 + 两行自动隐藏,跟工具栏「行为」浮层
 //     同一份视图,不再各自拼)
 //   - 恢复 → OverlayStyleDefaults.restoreTextAndColors()(跟工具栏「重置 ▾」同一个动作)
-// 「宽度」那根滑杆写在本文件里、不属于任何一组(跟灵动岛抽屉里的两根宽度滑杆同一个摆法)——
+// 「宽度」那根滑杆写在本文件里,放在「排版」卡最后、自己一个框 ——
 // 它跟编辑台里那条宽度调整条(第六步替掉了原来的拖拽握柄)是同一个值的两个入口:
 // 那边 step 2、紧挨着窗口、看得见效果;这边 step 10、跟其它设置行同列,是键盘/VoiceOver 和
 // "我想输个准数"的兜底通路。两处的落点约束一模一样(相等守卫 + classicOverlayEnabled 守卫 +
@@ -39,10 +39,13 @@ struct OverlayAllSettingsDrawer: View {
     @State private var isExpanded = false
 
     var body: some View {
-        SettingsCard {
-            disclosureHeader
+        // 展开后每组各成一张卡(组名粗体卡头,组内小标题是圆角分组框,同浮层),不再是一张三屏长的卡:
+        // 组名和组内小标题都是灰色小字时两级看起来一样,分不清谁是谁的下级。
+        VStack(spacing: 14) {
+            SettingsCard(cornerRadius: 18) {
+                disclosureHeader
+            }
             if isExpanded {
-                CardDivider()
                 // 按"这个字段改的是哪一层"拆成 主题 / 文字 / 背景 三组
                 // (拆分判据见 OverlayStyleSettingsRows.swift 里 OverlayBackgroundSettingsRows
                 // 的头注)。顺序跟编辑台工具栏那几颗按钮一致 —— 抽屉的职责是"工具栏浮层的
@@ -51,21 +54,21 @@ struct OverlayAllSettingsDrawer: View {
                 // 「我的配色主题」不再单独占一组:它现在长在「主题」组里(OverlayThemeSettingsRows
                 // 的第二段),原来那组之所以没有组标题,就是因为它第一行本身就叫「我的配色主题」、
                 // 再加一条组标题是同一句话说两遍 —— 并进「主题」之后这个别扭之处一起没了。
-                themeGroup
-                CardDivider()
-                textGroup
-                CardDivider()
-                backgroundGroup
-                CardDivider()
-                contentGroup
-                CardDivider()
-                layoutGroup
-                CardDivider()
-                widthRow
-                CardDivider()
-                behaviorGroup
-                placementGroup
-                CardDivider()
+                groupCard(title: L10n.t("主题")) { OverlayThemeSettingsRows() }
+                groupCard(title: L10n.t("文字")) { OverlayTextSettingsRows() }
+                groupCard(title: L10n.t("背景")) { OverlayBackgroundSettingsRows() }
+                // 跟工具栏「内容」浮层同名、同一份视图。
+                groupCard(title: L10n.t("内容")) { OverlayContentSettingsRows() }
+                // 「宽度」放在「排版」卡最后、自己一个框:它讲的也是版面,放在「间距」后面不加框会读成间距的第四行。
+                groupCard(title: L10n.t("排版")) {
+                    SettingsRowGroupStack {
+                        OverlayLayoutSettingsRows()
+                        SettingsRowGroup { widthRow }
+                    }
+                }
+                groupCard(title: L10n.t("行为")) { OverlayBehaviorSettingsRows() }
+                // 排在「行为」之后 = 工具栏第二行的顺序(排版 / 行为 / 位置)。
+                groupCard(title: L10n.t("位置")) { OverlayPlacementSettingsRows() }
                 resetRow
             }
         }
@@ -103,9 +106,8 @@ struct OverlayAllSettingsDrawer: View {
         Button {
             withAnimation(.settingsCardReveal) { isExpanded.toggle() }
         } label: {
-            // (按标题右边那两句都删了:展开时的「键盘 / VoiceOver 的
-            //  全量兜底通路…」和折起来时那串当前值摘要「系统字体 31pt · 跟随封面 · 486pt」。
-            //  这一行现在就是一个三角形加两个字。)
+            // 折起来时标题右边列出里面有哪几组(固定的组名,跟下面渲染顺序一致),不点开也知道里面有什么。
+            // 不放当前值摘要:当前值在工具栏各按钮上。
             HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
@@ -114,10 +116,16 @@ struct OverlayAllSettingsDrawer: View {
                     .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
                 Text(L10n.t("全部设置"))
                     .font(.system(size: 13))
-                // Spacer 是**必需**的,不是那两句话留下的残骸:整行可点靠的是下面那句
-                // `contentShape(Rectangle())`,而它认的是 HStack 的实际尺寸 —— 没有 Spacer
-                // 撑满宽度,命中区就缩回"三角形 + 两个字"那一小截。
-                Spacer(minLength: 0)
+                // Spacer 是**必需**的:整行可点靠的是下面那句 `contentShape(Rectangle())`,而它认的是
+                // HStack 的实际尺寸 —— 没有 Spacer 撑满宽度,命中区就缩回"三角形 + 两个字"那一小截。
+                Spacer(minLength: 12)
+                if !isExpanded {
+                    Text(Self.groupNames)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
             .padding(.vertical, SettingsRowMetrics.verticalPadding)
@@ -132,73 +140,30 @@ struct OverlayAllSettingsDrawer: View {
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
     }
 
-    // MARK: - 各组
+    /// 抽屉头右侧那串组名,顺序跟 body 里各组卡的顺序一致(改了分组两处一起改)。
+    private static var groupNames: String {
+        [L10n.t("主题"), L10n.t("文字"), L10n.t("背景"), L10n.t("内容"), L10n.t("排版"),
+         L10n.t("行为"), L10n.t("位置")].joined(separator: " · ")
+    }
 
-    private var themeGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("主题"))
-            CardDivider()
-            OverlayThemeSettingsRows()
+    /// 一组一张卡:粗体卡头 + 那一组的行视图(跟工具栏同名浮层是同一份)。自绘的卡头不会自动挂搜索高亮
+    /// (只有 SettingsRow / SettingsCardHeader 会),手挂。
+    private func groupCard<Content: View>(title: String, @ViewBuilder content: @escaping () -> Content) -> some View {
+        SettingsCard(cornerRadius: 18) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+                .settingsSearchHighlight(title: title)
+            content()
+                .padding(.bottom, 10)
+                .environment(\.settingsBoxedGroups, true)
         }
     }
 
-    private var backgroundGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("背景"))
-            CardDivider()
-            OverlayBackgroundSettingsRows()
-        }
-    }
-
-    private var textGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("文字"))
-            CardDivider()
-            OverlayTextSettingsRows()
-        }
-    }
-
-    /// 跟工具栏「内容」浮层同名、同一份视图。
-    private var contentGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("内容"))
-            CardDivider()
-            OverlayContentSettingsRows()
-        }
-    }
-
-    /// 从「文字」里拆出来的一组(对齐方式和长句处理是排版、不是字形,
-    /// 拆的判据见 OverlayLayoutSettingsRows)。抽屉这边跟着拆,是因为抽屉的职责是"工具栏那
-    /// 几个浮层的全量兜底通路" —— 浮层分了三组、抽屉还并成两组的话,同一批设置在两个宿主里
-    /// 分组不一样,用户按浮层的记忆到抽屉里找会落空。
-    private var layoutGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("排版"))
-            CardDivider()
-            OverlayLayoutSettingsRows()
-        }
-    }
-
-    /// 跟工具栏「行为」浮层同名、同一份视图(此前这一组叫「窗口」、还带着「宽度」滑杆,
-    /// 组名的不对称当时被记成"有意接受",这次按"抽屉分组跟工具栏一一对应"取齐,「宽度」升成组外
-    /// 独立一行)。
-    private var behaviorGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("行为"))
-            CardDivider()
-            OverlayBehaviorSettingsRows()
-        }
-    }
-
-    /// 跟工具栏「位置」浮层同名、同一份视图。排在「行为」之后 = 工具栏第二行
-    /// 的顺序(排版 / 行为 / 位置),用户按浮层的记忆到抽屉里找不会落空。
-    private var placementGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("位置"))
-            CardDivider()
-            OverlayPlacementSettingsRows()
-        }
-    }
+    // MARK: - 宽度与恢复
 
     /// 宽度滑杆。编辑台里那条宽度调整条改的是同一个值,这里是它的兜底通路(键盘/VoiceOver,
     /// 以及"我想输一个准数"的场合)。
@@ -254,13 +219,17 @@ struct OverlayAllSettingsDrawer: View {
     /// 现在标题念**它真正覆盖的那三个浮层**、副标题念**没覆盖的**,跟菜单栏那颗同一个句式
     /// (见 MenuBarStyleDefaults 头注)。 功能本身没改 —— 排版和行为该不该纳入是产品取舍,
     /// 不是这次要顺手动的东西。
+    /// 抽屉展开后单独一张卡,挂在各组卡最后。
     private var resetRow: some View {
-        SettingsRow(
-            icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认"),
-            subtitle: L10n.t("不含内容、排版、行为、位置和宽度")
-        ) {
-            Button(L10n.t("恢复")) { OverlayStyleDefaults.restoreTextAndColors() }
+        SettingsCard(cornerRadius: 18) {
+            SettingsRow(
+                icon: "arrow.uturn.backward",
+                title: L10n.t("恢复默认"),
+                subtitle: L10n.t("不含内容、排版、行为、位置和宽度")
+            ) {
+                Button(L10n.t("恢复")) { OverlayStyleDefaults.restoreTextAndColors() }
+                    .buttonBorderShape(.capsule)
+            }
         }
     }
 }

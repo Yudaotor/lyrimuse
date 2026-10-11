@@ -282,11 +282,27 @@ private struct ColorSwatch: View {
     var cornerRadius: CGFloat
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(color)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-            )
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        ZStack {
+            // 棋盘格垫底:颜色带透明度时看得出来,全透明时就是一块棋盘格(不垫的话只是一个空框,看不出是透明)。
+            Canvas { context, size in
+                let cell: CGFloat = 4
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
+                var row = 0
+                var y: CGFloat = 0
+                while y < size.height {
+                    var x: CGFloat = row % 2 == 0 ? 0 : cell
+                    while x < size.width {
+                        context.fill(Path(CGRect(x: x, y: y, width: cell, height: cell)), with: .color(Color(white: 0.8)))
+                        x += cell * 2
+                    }
+                    y += cell
+                    row += 1
+                }
+            }
+            shape.fill(color)
+        }
+        .clipShape(shape)
+        .overlay(shape.stroke(Color.primary.opacity(0.15), lineWidth: 1))
     }
 }

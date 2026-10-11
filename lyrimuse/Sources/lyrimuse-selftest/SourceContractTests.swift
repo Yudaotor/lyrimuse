@@ -4825,11 +4825,13 @@ func runSourceContractTests() {
                     "主题: 浓淡只在毛玻璃开着时参与判等")
         let stage = stripComments(code("UI/OverlayEditorStage.swift"))
         expectEqual(stage.components(separatedBy: ".popover(").count - 1, 2,
-                    "编辑台浮层: 只有舞台上沿那一处锚点和预览可点区域那一处挂 popover,工具栏按钮上不挂(从按钮往下弹会盖住预览)")
+                    "编辑台浮层: 只有工具栏按钮那一处和预览可点区域那一处挂 popover")
         expectEqual(stage.contains(".popover(isPresented: hotspotPopoverBinding, arrowEdge: .trailing)"), true,
                     "编辑台浮层: 从预览上点开的往被点那块右侧弹,不压在卡片上(04 章决策 43)")
-        expectEqual(stage.contains(".popover(isPresented: popoverBinding(target), arrowEdge: .top)"), true, "编辑台浮层: 往上弹")
-        expectEqual(stage.contains(".overlay(alignment: .top) { stagePopoverAnchors }"), true, "编辑台浮层: 锚点在舞台上沿")
+        expectEqual(stage.contains(".popover(isPresented: popoverBinding(target), arrowEdge: .top)"), true,
+                    "编辑台浮层: 挂在按钮上往上弹,箭头指着点的那颗,不往下压在预览上(04 章决策 61)")
+        expectEqual(stage.contains("stageTopProbe.popoverHeightLimit(rowOffset: Self.rowOffsetAboveStage(target))"), true,
+                    "编辑台浮层: 高度上限扣掉按钮那一行到舞台上沿的距离,不然空间不够时系统会翻下来盖住预览")
         expectEqual(stage.contains("maxHeight: popoverMaxHeight"), true,
                     "编辑台浮层: 高度封顶在舞台上方的剩余空间里,放不下时不让系统翻下来盖住预览")
 

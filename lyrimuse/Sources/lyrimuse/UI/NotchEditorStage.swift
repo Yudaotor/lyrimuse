@@ -817,8 +817,7 @@ struct NotchEditorStage: View {
         } label: {
             EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .editorToolbarButtonStyle()
         .popover(isPresented: popoverBinding(target), arrowEdge: .bottom) {
             popoverContent(for: target)
         }

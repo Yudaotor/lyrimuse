@@ -201,8 +201,7 @@ struct MenuBarEditorStage: View {
         } label: {
             EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .editorToolbarButtonStyle()
         .popover(isPresented: popoverBinding(target), arrowEdge: .bottom) {
             popoverContent(for: target)
         }
@@ -214,8 +213,7 @@ struct MenuBarEditorStage: View {
         Button {} label: {
             EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .editorToolbarButtonStyle()
         .hidden()
         .accessibilityHidden(true)
     }
@@ -895,7 +893,7 @@ struct MenuBarAllSettingsDrawer: View {
     @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
 
     var body: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             disclosureHeader
             if isExpanded {
                 CardDivider()

@@ -4,41 +4,45 @@ import SwiftUI
 // 「歌词显示 → 悬浮歌词」的「位置」一项:自由 / 顶部居中 / 底部居中 三选一。
 //
 // 跟「排版」「行为」同一个模子:一份行组件(`OverlayPlacementSettingsRows`)给两个宿主 ——
-//   ① 编辑台工具栏第二行那颗「位置」按钮点开的浮层(`OverlayEditorStage.stagePopoverAnchors`);
+//   ① 编辑台工具栏第二行那颗「位置」按钮点开的浮层(`OverlayEditorStage.toolbarButton`);
 //   ② 「全部设置」抽屉里的「位置」组(`OverlayAllSettingsDrawer.placementGroup`)。
 //
 // 生效路径跟「行为」那三个开关不同:控制器**订阅** `AppSettings.overlayPlacementMode` 自己落位
 // (屏幕 / Dock 变化时要反复重算,不能靠设置行"顺手调一下"),这里只写值,一个 `.shared` 都不碰。
 
-/// 「位置」那一行。只有这一行,不再套分隔线;宿主决定放哪。
+/// 「位置」三选一铺满整宽,下面常显一段说明。不再是一行「位置」+ 尾部控件:两个宿主(浮层、抽屉组)的标题都已经叫「位置」,
+/// 再来一行同名行是同一句话说两遍,三个选项还被挤到右边贴边。说明原来收在「?」里,改成常显。
 @MainActor
 struct OverlayPlacementSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        SettingsRow(
-            icon: "dock.rectangle",
-            title: L10n.t("位置"),
-            help: L10n.t("自由：可拖移到任意位置。\n顶部居中 / 底部居中：在菜单栏下方 / Dock 上方水平居中，屏幕或 Dock 变化时自动对齐；此模式下窗口不可拖移。")
-        ) {
-            OverlayPlacementSegmentedControl(selection: $settings.overlayPlacementMode)
+        SettingsRowGroup {
+            SettingsRawRow {
+                VStack(alignment: .leading, spacing: 8) {
+                    OverlayPlacementSegmentedControl(selection: $settings.overlayPlacementMode, fillsWidth: true)
+                    Text(L10n.t("自由：可拖移到任意位置。\n顶部居中 / 底部居中：在菜单栏下方 / Dock 上方水平居中，屏幕或 Dock 变化时自动对齐；此模式下窗口不可拖移。"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            // 自绘的一行不会自动挂搜索高亮(只有 SettingsRow / SettingsCardHeader 会),手挂。
+            .settingsSearchHighlight(title: L10n.t("位置"))
         }
     }
 }
 
 /// 「位置」那一行的三选一(自由 / 顶部居中 / 底部居中)。
 ///
-/// 长相、尺寸照抄 `OverlayAlignmentSegmentedControl`(同文件夹 OverlayStyleSettingsRows.swift):
-/// 手搭的分段按钮、每档 `minWidth` 56、选中垫 accent 底 —— 不用系统 `.pickerStyle(.segmented)`
-/// 的理由那边写了三轮排查(macOS 把它桥成 NSSegmentedControl,按选中段的文字重新量宽,
-/// "选了哪档控件整体宽度就跟着变")。这是第三份同形状的控件(另一份是
-/// `LyricsAlignmentSegmentedControl`),各自绑不同的枚举;要改尺寸记得三处一起。
-///
-/// `.fixedSize()`:同那两份 —— 在 `SettingsRow` 尾部插槽里,标题列 / Spacer / 本控件三个可伸缩
-/// 成员**均分**亏空,不钉住的话英文 "Bottom Center" 会在行里还剩空白时先被截成 "Bottom Ce…"。
+/// 外观是设计系统里的 `SettingsPillSegmentedControl`(跟「对齐方式」同一个),每档 `minWidth` 56;不用系统分段控件的理由
+/// 见那个组件的头注。这里只留 `label(for:)`:工具栏摘要、悬浮窗右键菜单、无障碍播报都用这同一份叫法。
+/// 歌词窗口那份 `LyricsAlignmentSegmentedControl` 还是手搭的同形状控件,改到那一段时再换。
 @MainActor
 struct OverlayPlacementSegmentedControl: View {
     @Binding var selection: OverlayPlacementMode
+    /// 各档均分整行(「位置」浮层里铺满整宽);默认按理想宽度落位。
+    var fillsWidth = false
 
     /// 不能存成 `static let`:`L10n.t` 要在每次取值时现算(切语言之后标签要跟着变)。
     /// 「行为」工具栏按钮的摘要(`OverlayEditorStage.behaviorSummary`)也读这份,两处一个口径。
@@ -51,31 +55,11 @@ struct OverlayPlacementSegmentedControl: View {
     }
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(OverlayPlacementMode.allCases, id: \.self) { mode in
-                let isSelected = selection == mode
-                Button {
-                    selection = mode
-                } label: {
-                    Text(Self.label(for: mode))
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                        .lineLimit(1)
-                        .frame(minWidth: 56)
-                        .padding(.vertical, 4)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(isSelected ? Color.white : Color.primary)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isSelected ? Color.accentColor : Color.clear)
-                )
-            }
-        }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-        )
-        .fixedSize()
+        SettingsPillSegmentedControl(
+            selection: $selection,
+            options: OverlayPlacementMode.allCases,
+            label: Self.label(for:),
+            minWidth: 56,
+            fillsWidth: fillsWidth)
     }
 }
