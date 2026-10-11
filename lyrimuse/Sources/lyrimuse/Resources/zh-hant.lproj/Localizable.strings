@@ -97,6 +97,7 @@
 "Discord 尚未就绪" = "Discord 尚未就緒";
 "Discord 拒绝连接" = "Discord 拒絕連線";
 "Discord 未打开" = "Discord 未開啟";
+"Discord 社区" = "Discord 社群";
 "GPL-3.0" = "GPL-3.0";
 "GitHub Star 数" = "GitHub Star 數";
 "Last.fm 与 Spotify 的连接已于 %@ 过期，Lyrimuse 中也未勾选 Spotify。" = "Last.fm 與 Spotify 的連線已於 %@ 過期，Lyrimuse 中也未勾選 Spotify。";
@@ -226,6 +227,7 @@
 "不透明度" = "不透明度";
 "与 %@ 正文相同" = "與 %@ 正文相同";
 "与 Spotify 的连接已过期，Spotify 上播放的歌曲未记录到 Last.fm" = "與 Spotify 的連線已過期，Spotify 上播放的歌曲未記錄到 Last.fm";
+"与其他用户交流，也可在此提问或提出建议" = "與其他使用者交流，也可在此提問或提出建議";
 "与同一首歌曲的其他写法共用" = "與同一首歌曲的其他寫法共用";
 "与当前使用的歌词文字一致，只是分行不同" = "與目前使用的歌詞文字一致，只是分行不同";
 "与当前使用的歌词文字一致，只是繁简写法不同" = "與目前使用的歌詞文字一致，只是繁簡寫法不同";

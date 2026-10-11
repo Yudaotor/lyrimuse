@@ -7238,6 +7238,18 @@ private struct AboutSettingsTab: View {
                     }
                 }
                 .settingsGlassButtons()
+                // 只放 Discord 标志、不带字:去向写在悬停提示和读屏标签里。见 14 章决策 80。
+                Button {
+                    NSWorkspace.shared.open(FeedbackLinks.discordInviteURL)
+                } label: {
+                    accountIconBadge(.discord, size: 16, cornerRadius: 4)
+                }
+                .settingsGlassButtons()
+                .buttonBorderShape(.circle)
+                .help(L10n.t("Discord 社区"))
+                .accessibilityLabel(L10n.t("Discord 社区"))
+                .accessibilityHint(L10n.t("与其他用户交流，也可在此提问或提出建议"))
+                .settingsSearchHighlight(title: L10n.t("Discord 社区"))
             }
             .padding(.top, 8)
             // 这一行是唯一一处"求 star"的地方,所以常显而不是收进 help 气泡 —— 藏进悬停提示就没人

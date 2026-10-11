@@ -6869,6 +6869,52 @@
         }
       }
     },
+    "Discord 社区" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discord Community"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discord 社区"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discord 社群"
+          }
+        }
+      }
+    },
+    "与其他用户交流，也可在此提问或提出建议" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat with other users, ask questions or suggest features"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "与其他用户交流，也可在此提问或提出建议"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "與其他使用者交流，也可在此提問或提出建議"
+          }
+        }
+      }
+    },
     "在 GitHub 讨论区的问答分类中提问" : {
       "extractionState" : "manual",
       "localizations" : {
