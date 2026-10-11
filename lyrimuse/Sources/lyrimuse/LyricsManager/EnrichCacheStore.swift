@@ -1099,6 +1099,30 @@ public final class EnrichCacheStore: ObservableObject {
         await commit("split_song", ["keys": keys]).ok
     }
 
+    /// 同一首歌里内容不同的几份手改原件(见 SongVersions.manualConflict),歌词同步关着、没有实体 id、只有一份时是空的。
+    /// 成员取播放那一侧的读取、再用这份快照校正;正文按需从小文件补(只补这首歌的几条),补不回来的那条不算。
+    func manualConflict(forKey key: String) -> [String] {
+        guard EnrichCacheReader.sharesEntityLyrics, let own = songMembership(forKey: key) else { return [] }
+        var keys = Set(EnrichCacheReader.songMemberships().filter { $0.value.song == own.song }.map(\.key))
+        keys.insert(key)
+        var members: [SongVersions.ManualCandidate] = []
+        for k in keys.sorted() where songMembership(forKey: k)?.song == own.song {
+            let d = detail(for: k)
+            guard d.complete, let entry = raw[k] else { continue }
+            members.append(SongVersions.ManualCandidate(
+                key: k, manual: entry["manual_lyrics"] as? Bool ?? false,
+                origin: entry["lyrics_entity_origin"] as? String ?? "",
+                pickSHA: entry["manual_pick_sha"] as? String, lyrics: d.lyrics, yrc: d.yrc))
+        }
+        return SongVersions.manualConflict(members)
+    }
+
+    /// 两份手改选 key 这一份统一:别的原件换成它的副本(引擎先另存它们),其余写法跟上(18 章决策 31)。
+    @discardableResult
+    func resolveManualConflict(key: String) async -> Bool {
+        await commit("resolve_manual_conflict", ["key": key]).ok
+    }
+
     /// 恢复合并:删掉 keys 两两之间的拆开记录(两边各自所在实体的全部写法),引擎重建之后按证据重新合。
     @discardableResult
     func unsplitSong(keys: [String]) async -> Bool {

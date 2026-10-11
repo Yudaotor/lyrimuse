@@ -691,6 +691,9 @@ struct LyricsManagerView: View {
     }
     @State private var showDecisionSheet = false
     @State private var showSongVersions = false
+    // 这首歌内容不同的几份手改原件(两份以上才有提示,见 manualConflictRow);载入详情时算。
+    @State private var manualConflictKeys: [String] = []
+    @State private var confirmManualConflict = false
     // 「保存修改」点了之后闪一下「已保存」+ 对勾,1 秒后变回去。
     @State private var showSaveEditFeedback = false
     // 整段文本编辑里「拷贝」按钮的同款反馈:拷贝一大段文本到剪贴板本身没有任何肉眼可见的变化。
@@ -3228,6 +3231,10 @@ struct LyricsManagerView: View {
                     rematchStatusRow(key: key, summary: summary)
                         .padding(.top, 10)
                 }
+                if manualConflictKeys.count > 1 {
+                    manualConflictRow(key: key)
+                        .padding(.top, 10)
+                }
                 pageBody(key: key, summary: summary)
             }
             .padding(.leading, 30)
@@ -3311,6 +3318,40 @@ struct LyricsManagerView: View {
                 .accessibilityLabel(title)
         } else {
             Label(title, systemImage: icon)
+        }
+    }
+
+    /// 同一首歌有几份内容不同的手改:引擎不替用户选,同一首歌的其他写法不跟着任何一份同步。列出另外几份(点了选中那条);
+    /// 这一条本身是其中一份时多一颗「统一用这一份…」(先确认,见 18 章决策 31)。
+    private func manualConflictRow(key: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.bubble")
+                .foregroundStyle(LyricsFeatureTint.manual)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(String(format: L10n.t("这首歌有 %d 份你改过的歌词，内容不一样；同一首歌的其他写法暂时不跟着任何一份同步。"),
+                            manualConflictKeys.count))
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                SettingsFlowRow(spacing: 8) {
+                    if manualConflictKeys.contains(key) {
+                        Button(L10n.t("统一用这一份…")) { confirmManualConflict = true }
+                            .disabled(editMode != .preview)
+                    }
+                    ForEach(manualConflictKeys.filter { $0 != key }, id: \.self) { other in
+                        Button(String(format: L10n.t("查看「%@」"), writingDisplayName(other))) { _ = select(other) }
+                            .buttonStyle(.link)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(LyricsFeatureTint.manual.opacity(0.08)))
+        .alert(L10n.t("统一用这一份改过的歌词？"), isPresented: $confirmManualConflict) {
+            Button(L10n.t("统一")) { Task { await store.resolveManualConflict(key: key) } }
+            Button(L10n.t("取消"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("同一首歌另外几份改过的歌词会换成这一份，其他写法也跟着用它。被换掉的那几份会另存一份备份。"))
         }
     }
 
@@ -4203,6 +4244,10 @@ struct LyricsManagerView: View {
             refreshOffsetState(key: key, artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
             refreshPreviewRows(key: key, summary: summary, lyrics: d.lyrics, tr: d.tr, roma: d.roma)
             plainLyricsText = !summary.hasLyrics && summary.hasPlainTextFallback ? store.plainLyrics(for: key) : ""
+        }
+        manualConflictKeys = store.manualConflict(forKey: key)
+        if manualConflictKeys.count < 2 {
+            confirmManualConflict = false
         }
     }
 

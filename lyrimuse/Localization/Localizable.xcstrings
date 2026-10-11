@@ -44125,6 +44125,108 @@
           }
         }
       }
+    },
+    "这首歌有 %d 份你改过的歌词，内容不一样；同一首歌的其他写法暂时不跟着任何一份同步。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You've corrected this song's lyrics in %d different ways. Its other versions won't follow any of them until you pick one."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首歌有 %d 份你改過的歌詞，內容不一樣；同一首歌的其他寫法暫時不跟著任何一份同步。"
+          }
+        }
+      }
+    },
+    "统一用这一份…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use This One for All…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "統一用這一份…"
+          }
+        }
+      }
+    },
+    "查看「%@」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show “%@”"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檢視「%@」"
+          }
+        }
+      }
+    },
+    "统一用这一份改过的歌词？" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use these corrected lyrics for the whole song?"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "統一用這一份改過的歌詞？"
+          }
+        }
+      }
+    },
+    "统一" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use This One"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "統一"
+          }
+        }
+      }
+    },
+    "同一首歌另外几份改过的歌词会换成这一份，其他写法也跟着用它。被换掉的那几份会另存一份备份。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The other corrected lyrics of this song will be replaced with these, and its other versions will use them too. The replaced lyrics are kept in a backup."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同一首歌另外幾份改過的歌詞會換成這一份，其他寫法也跟著用它。被換掉的那幾份會另存一份備份。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

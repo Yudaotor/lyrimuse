@@ -51,6 +51,39 @@ public enum SongVersions {
         public var isEmpty: Bool { rows.isEmpty && splits.isEmpty }
     }
 
+    /// 判两份手改用的一条写法:手改标记、副本的原件、采纳指纹,和完整的主歌词与逐字歌词。
+    public struct ManualCandidate: Equatable, Sendable {
+        public let key: String
+        public let manual: Bool
+        public let origin: String
+        public let pickSHA: String?
+        public let lyrics: String
+        public let yrc: String
+
+        public init(key: String, manual: Bool, origin: String, pickSHA: String?, lyrics: String, yrc: String) {
+            self.key = key
+            self.manual = manual
+            self.origin = origin
+            self.pickSHA = pickSHA
+            self.lyrics = lyrics
+            self.yrc = yrc
+        }
+
+        /// 手改原件:手改过或者采纳的那一份还在,有正文,不是同步来的副本。跟引擎 songShareManualOriginal 同一判据。
+        public var isOriginal: Bool {
+            origin.isEmpty && !lyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && (manual || ManualPickLock.state(sha: pickSHA, lyrics: lyrics) == .original)
+        }
+    }
+
+    /// 同一首歌的这几条写法里,手改原件的内容不止一份时返回这些原件的键(按键排);一份或没有时是空的。引擎遇到这种情况
+    /// 不替用户选,同一首歌的其他写法不跟着任何一份同步(18 章决策 31)。
+    public static func manualConflict(_ members: [ManualCandidate]) -> [String] {
+        let originals = members.filter(\.isOriginal)
+        let contents = Set(originals.map { $0.lyrics + "\u{1}" + $0.yrc })
+        return contents.count > 1 ? originals.map(\.key).sorted() : []
+    }
+
     /// 证据种类的显示顺序:强证据在前,检索 id、写法族、歌词、登记名字在后。跟引擎 songEvidenceKinds 的种类一一对应,
     /// 引擎加了种类这里跟着加(SongVersionsTests 拿引擎源码核对)。
     public static let evidenceOrder = [

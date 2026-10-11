@@ -568,6 +568,7 @@
 "同一首 KKBOX 歌曲" = "Same KKBOX song";
 "同一首 QQ 音乐歌曲" = "Same QQ Music song";
 "同一首 Spotify 曲目" = "Same Spotify track";
+"同一首歌另外几份改过的歌词会换成这一份，其他写法也跟着用它。被换掉的那几份会另存一份备份。" = "The other corrected lyrics of this song will be replaced with these, and its other versions will use them too. The replaced lyrics are kept in a backup.";
 "同一首歌的其他写法" = "Other Versions of This Song";
 "同一首歌的其他写法…" = "Other Versions of This Song…";
 "同一首汽水音乐歌曲" = "Same Soda Music song";
@@ -1317,6 +1318,7 @@
 "来自网易云音乐" = "From NetEase Cloud Music";
 "查看" = "Show";
 "查看、编辑和重新搜索已缓存的歌词" = "View, edit and re-search cached lyrics";
+"查看「%@」" = "Show “%@”";
 "查看专辑简介" = "View Album Notes";
 "查看完整说明" = "Full Release Notes";
 "查看官方文档 →" = "View Official Docs →";
@@ -1672,6 +1674,9 @@
 "经典黑字" = "Classic Black";
 "经由其他写法连着" = "Linked through other versions";
 "结束点获印证" = "End time corroborated";
+"统一" = "Use This One";
+"统一用这一份…" = "Use This One for All…";
+"统一用这一份改过的歌词？" = "Use these corrected lyrics for the whole song?";
 "统计" = "Stats";
 "统计与榜单" = "Stats & Charts";
 "继续即表示你已了解" = "By continuing, you acknowledge the";
@@ -1932,6 +1937,7 @@
 "这首歌曲的歌词经过手动修改或选定，更换后将被覆盖。" = "You edited or picked these lyrics by hand; new ones would replace them.";
 "这首歌曲的语言未在设置的「标注读音的语言」中开启" = "This song’s language is turned off in Settings › Romanization Languages";
 "这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效。" = "You've adjusted this song's lyrics timing (%@); with new lyrics that adjustment may no longer fit.";
+"这首歌有 %d 份你改过的歌词，内容不一样；同一首歌的其他写法暂时不跟着任何一份同步。" = "You've corrected this song's lyrics in %d different ways. Its other versions won't follow any of them until you pick one.";
 "进入全屏" = "Enter Full Screen";
 "进入迷你尺寸" = "Enter Mini Size";
 "连接" = "Connection";

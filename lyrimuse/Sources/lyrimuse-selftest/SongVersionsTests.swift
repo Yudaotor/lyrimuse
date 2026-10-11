@@ -63,6 +63,25 @@ func runSongVersionsTests() {
         expectEqual(lone?.rows.isEmpty == true && lone?.isEmpty == false, true, "拆开过的写法: 只有拆开记录时也不算空")
     }
 
+    // ---- 两份手改:原件(手改过或采纳的那份还在,不是副本、有正文)内容不止一份才算 ----
+    do {
+        let lrcA = "[00:01.00]甲\n", lrcB = "[00:01.00]乙\n"
+        func c(_ key: String, manual: Bool = true, origin: String = "", sha: String? = nil, lyrics: String, yrc: String = "") -> V.ManualCandidate {
+            V.ManualCandidate(key: key, manual: manual, origin: origin, pickSHA: sha, lyrics: lyrics, yrc: yrc)
+        }
+        expectEqual(V.manualConflict([c("A|S|2", lyrics: lrcB), c("A|S|1", lyrics: lrcA), c("A|S|3", origin: "A|S|1", lyrics: lrcA)]),
+                    ["A|S|1", "A|S|2"], "两份手改: 两份原件内容不同,按键排,副本不算")
+        expectEqual(V.manualConflict([c("A|S|1", lyrics: lrcA), c("A|S|2", lyrics: lrcA)]), [], "两份手改: 内容一样不算")
+        expectEqual(V.manualConflict([c("A|S|1", lyrics: lrcA), c("A|S|2", lyrics: lrcA, yrc: "[1000,500](1000,500,0)甲")]),
+                    ["A|S|1", "A|S|2"], "两份手改: 逐字歌词不同也算不同")
+        expectEqual(V.manualConflict([c("A|S|1", lyrics: lrcA), c("A|S|2", manual: false, lyrics: lrcB)]), [], "两份手改: 没改过的不算")
+        expectEqual(V.manualConflict([c("A|S|1", lyrics: lrcA), c("A|S|2", manual: false, sha: ManualPickLock.fingerprint(lyrics: lrcB), lyrics: lrcB)]),
+                    ["A|S|1", "A|S|2"], "两份手改: 采纳的那份还在也算原件")
+        expectEqual(V.manualConflict([c("A|S|1", lyrics: lrcA), c("A|S|2", manual: false, sha: ManualPickLock.fingerprint(lyrics: lrcA), lyrics: lrcB)]),
+                    [], "两份手改: 采纳的那份已经被换掉不算")
+        expectEqual(V.manualConflict([c("A|S|1", lyrics: lrcA), c("A|S|2", lyrics: "  \n")]), [], "两份手改: 没正文的不算")
+    }
+
     // ---- 两个文件:实体表按含这条写法的那首取证据,用户判断文件取拆开记录;缺了坏了都是空 ----
     do {
         let table = #"""
@@ -139,6 +158,13 @@ func runSongVersionsTests() {
                     && sourceBytes(manager, contain: "borrowedFrom: offsetBorrowedFrom,")
                     && sourceBytes(parts, contain: "if let borrowedFrom {"), true,
                     "其他写法(契约): 偏移输入框标出借来的值")
+        let settings = read(sources, "lyrimuse/Settings/FeatureSettingsStore.swift")
+        expectEqual(sourceBytes(store, contain: "commit(\"resolve_manual_conflict\", [\"key\": key])")
+                    && sourceBytes(edit, contain: "case \"resolve_manual_conflict\":")
+                    && sourceBytes(manager, contain: "manualConflictKeys = store.manualConflict(forKey: key)")
+                    && sourceBytes(manager, contain: "if manualConflictKeys.count > 1 {")
+                    && sourceBytes(settings, contain: "EnrichCacheReader.sharesEntityLyrics = document.raw[\"song_entity_share_lyrics\"] as? Bool ?? false"), true,
+                    "其他写法(契约): 两份手改的提示、统一请求、开关读法接上")
         expectEqual(sourceBytes(manager, contain: "SongVersionsSheet(summary: summary, onOpen:")
                     && sourceBytes(manager, contain: "Button(L10n.t(\"同一首歌的其他写法…\")) { showSongVersions = true }"), true,
                     "其他写法(契约): 详情页「⋯」菜单接上弹窗")

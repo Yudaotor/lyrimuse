@@ -493,6 +493,10 @@ public enum EnrichCacheReader {
         return offsetSiblings(ownKey: key, entry: entry, in: all)
     }
 
+    /// 歌词同步开没开(features.json 的 song_entity_share_lyrics,只有引擎认、App 原样保留;App 启动读到后设)。两份手改的提示
+    /// 只在开着时有意义(关着时各写法各用各的)。
+    public static var sharesEntityLyrics = false
+
     /// 歌词管理「同一首歌的其他写法」:每条有实体 id 的写法在哪个实体、哪个共享组。缓存没加载好时是空的。不看开关:
     /// 拆开入口跟实体表走。
     public static func songMemberships() -> [String: SongVersions.Membership] {

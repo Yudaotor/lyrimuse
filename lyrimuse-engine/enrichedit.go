@@ -102,7 +102,7 @@ type enrichEditRequest struct {
 	// set_instrumental / set_manual_lock / count_manual_lock
 	Value bool `json:"value,omitempty"`
 
-	// split_song:Keys 是拆出去的写法;unsplit_song:Keys 里两两之间的拆开记录都删掉。
+	// split_song:Keys 是拆出去的写法;unsplit_song:Keys 里两两之间的拆开记录都删掉;resolve_manual_conflict:Key 是选定的那份手改。
 }
 
 type enrichEditResult struct {
@@ -151,6 +151,8 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 		out = adoptRestoreEdit()
 	case "split_song":
 		out = splitSongEdit(req.Keys, time.Now())
+	case "resolve_manual_conflict":
+		out = resolveManualConflictEdit(req.Key, time.Now())
 	case "unsplit_song":
 		// 只改用户判断文件,不动缓存:重建之后按证据重新合。
 		n, err := unsplitSongEdit(req.Keys)

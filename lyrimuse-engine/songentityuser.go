@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"time"
@@ -238,4 +239,93 @@ func unsplitSongEdit(keys []string) (int, error) {
 		requestSongEntityRebuild()
 	}
 	return removed, nil
+}
+
+// resolveManualConflictEdit:同一首歌里有几份内容不同的手改原件(建表之后那一轮不替用户选,见 shareManualLocked)时,用户在歌词
+// 管理里选 key 那一份统一(请求 resolve_manual_conflict,18 章决策 31)。别的原件换成它的副本:先按 writeSongSharePre 留底,
+// 另把它们这一刻的整条存进 ~/.config/lyrimuse-backups/<时刻>-song-entity-manual/(留底只存第一次同步之前那份,这一刻的手改
+// 只有这里有);其余写法照手改同步跟上。开关关着、这条不是手改原件、没有实体 id 时拒绝。
+func resolveManualConflictEdit(key string, now time.Time) enrichEditOutcome {
+	if !songEntitySharing() {
+		return enrichEditOutcome{err: fmt.Errorf("resolve_manual_conflict: lyrics sharing is off")}
+	}
+	pins := lyricsPinnedKeys() // 读文件,拿 enrichMu 之前取
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	src, ok := enrichCache[key]
+	if !ok || src.Song == "" || !songShareManualOriginal(src) {
+		return enrichEditOutcome{err: fmt.Errorf("resolve_manual_conflict: %q is not a manual original of a song", key)}
+	}
+	fp := songOffsetFingerprint(src.Lyrics, src.LyricsYRC)
+	var keys, others []string
+	for k, e := range enrichCache {
+		if e.Song != src.Song {
+			continue
+		}
+		keys = append(keys, k)
+		if k != key && songShareManualOriginal(e) && songOffsetFingerprint(e.Lyrics, e.LyricsYRC) != fp {
+			others = append(others, k)
+		}
+	}
+	sort.Strings(keys)
+	sort.Strings(others)
+	if len(others) > 0 {
+		if err := backupManualOriginalsLocked(songShareManualBackupDir(now), others); err != nil {
+			return enrichEditOutcome{err: fmt.Errorf("resolve_manual_conflict: back up: %w", err)}
+		}
+		for _, k := range others {
+			if _, err := writeSongSharePre(k, enrichCache[k], fp, now); err != nil {
+				return enrichEditOutcome{err: fmt.Errorf("resolve_manual_conflict: %w", err)}
+			}
+		}
+	}
+	changed := slices.Clone(others)
+	for _, k := range others {
+		e := enrichCache[k]
+		songShareCopyManual(&e, src, key, now)
+		enrichCache[k] = e
+	}
+	more, _ := shareManualLocked(keys, key, pins, now)
+	changed = append(changed, more...)
+	for _, k := range changed {
+		cancelInFlightEnrichLocked(k)
+	}
+	if len(changed) > 0 {
+		markEnrichEditedLocked(false, changed...)
+		enrichDirty = true
+	}
+	slog.Info("song entities: resolved manual lyrics conflict", "song", src.Song, "kept", key, "replaced", len(others),
+		"synced", len(more))
+	return enrichEditOutcome{changed: len(changed), exports: changed}
+}
+
+// songShareManualBackupDir:统一手改时被替换的原件存在这里(跟 songShareBackupDir 同级)。
+func songShareManualBackupDir(now time.Time) string {
+	dir := configDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(dir), clientName+"-backups", now.Format("20060102-150405")+"-song-entity-manual")
+}
+
+// backupManualOriginalsLocked:keys 这几条此刻的整条(当前歌词的出处带候选明细)写进 dir/entries.json(写法键 → 条目)。
+// 调用方持 enrichMu。
+func backupManualOriginalsLocked(dir string, keys []string) error {
+	if dir == "" {
+		return fmt.Errorf("no config directory")
+	}
+	out := make(map[string]enrichEntry, len(keys))
+	for _, k := range keys {
+		e := enrichCache[k]
+		e.LyricsDecisionApplied = withDecisionDetails(k, e.LyricsDecisionApplied)
+		out[k] = e
+	}
+	data, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return writeFileAtomic(filepath.Join(dir, "entries.json"), data)
 }

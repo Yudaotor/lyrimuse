@@ -344,3 +344,51 @@ func TestManualLockCountsOriginalsOnly(t *testing.T) {
 		}
 	}
 }
+
+// 两份手改选一份统一:别的原件留底、另存一份此刻的整条,换成选定那份的副本;其余写法跟上;开关关着、选的不是原件时拒绝。
+func TestResolveManualConflictEdit(t *testing.T) {
+	a, b, auto := songShareLRC("mine-a"), songShareLRC("mine-b"), songShareLRC("auto")
+	dir := setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: a, ManualLyrics: true, LyricsSource: "manual"},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: b, ManualLyrics: true, LyricsSource: "manual"},
+		"A|Song|Three": {Song: "s_000000000001", Lyrics: a, ManualLyrics: true, LyricsEntityOrigin: "A|Song|One"},
+		"A|Song|Four":  {Song: "s_000000000001", Lyrics: auto, LyricsSource: "qq"},
+		"A|Song|Five":  {Song: "s_000000000001", Lyrics: b, ManualLyrics: true, LyricsSource: "manual"},
+		"B|Other|One":  {Song: "s_000000000002", Lyrics: a, ManualLyrics: true},
+	}, true)
+	if res := applyEnrichEdit(enrichEditRequest{Op: "resolve_manual_conflict", Key: "A|Song|Three"}); res.OK {
+		t.Error("副本不能当选定的那份")
+	}
+	res := applyEnrichEdit(enrichEditRequest{Op: "resolve_manual_conflict", Key: "A|Song|Two"})
+	if !res.OK || res.Changed != 3 {
+		t.Fatalf("统一: %+v", res)
+	}
+	for _, k := range []string{"A|Song|One", "A|Song|Three", "A|Song|Four"} {
+		got, _ := cacheEntry(t, k)
+		if got.Lyrics != b || got.LyricsEntityOrigin != "A|Song|Two" || !got.ManualLyrics {
+			t.Errorf("%s 换成选定那份的副本: %+v", k, got)
+		}
+	}
+	if got, _ := cacheEntry(t, "A|Song|Five"); got.Lyrics != b || got.LyricsEntityOrigin != "" {
+		t.Errorf("内容跟选定那份一样的原件不动: %+v", got)
+	}
+	if got, _ := cacheEntry(t, "B|Other|One"); got.Lyrics != a || got.LyricsEntityOrigin != "" {
+		t.Errorf("别的歌不动: %+v", got)
+	}
+	if _, pre := readPreEntry(t, "A|Song|One"); pre.Lyrics != a {
+		t.Errorf("被换掉的原件要留底: %+v", pre)
+	}
+	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), clientName+"-backups", "*-song-entity-manual", "entries.json"))
+	if len(matches) != 1 {
+		t.Fatalf("被换掉的原件另存一份: %v", matches)
+	}
+	data, _ := os.ReadFile(matches[0])
+	var saved map[string]enrichEntry
+	if err := json.Unmarshal(data, &saved); err != nil || len(saved) != 1 || saved["A|Song|One"].Lyrics != a {
+		t.Errorf("另存的是被换掉的原件此刻的样子: %v %+v", err, saved)
+	}
+	setFeatures(featureFlags{SongEntityShadow: true})
+	if res := applyEnrichEdit(enrichEditRequest{Op: "resolve_manual_conflict", Key: "A|Song|Two"}); res.OK {
+		t.Error("开关关着时拒绝")
+	}
+}
