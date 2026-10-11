@@ -83,6 +83,9 @@ struct LyricsDecisionSheet: View {
         // 或 KKBOX 同一首歌的另一种歌手写法(引擎的 kkboxalias.go)。
         case "cross-album-reuse": return L10n.t("复用其他专辑中的同一首歌曲")
         case "artist-alias-reuse": return L10n.t("复用同一首歌曲的其他歌手写法")
+        // 歌曲实体同步过来的(引擎的 songentityshare.go):共享组以整首歌重搜那一轮选出的,或者同一首歌另一条写法上
+        // 手改的副本(reused_from 记搜的那条 / 原件)。
+        case "song-entity-share": return L10n.t("与同一首歌曲的其他写法共用")
         // 兜底显示原始值:引擎那边新增一条路径、这边忘了补译名时,至少还看得出是哪条
         // (而不是空白)。但那就是漏了 —— 这张表跟引擎里 buildLyricsDecision 的 path
         // 取值必须成对改,的 manual-rematch 就是这么漏出来一个英文串的。

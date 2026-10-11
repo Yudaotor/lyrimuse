@@ -500,6 +500,9 @@ type enrichEntry struct {
 	// SongShare:这条写法在实体里是第几个共享组(实体表 `share` 的编号),第 0 组不写。跟 Song 一起由全量重建写,
 	// App 只在同一个共享组里借检索配的链接(18 章决策 12)。
 	SongShare int `json:"song_share,omitempty"`
+	// LyricsEntityOrigin:这条的歌词是从同一首歌哪条写法的手改原件同步过来的副本(songentityshare.go);原件、自动选的都是
+	// 空串。副本的手改标记跟原件一样,各处的闸照旧拦得住;用户直接改这一条(歌词管理保存、歌词文件夹里改了正文)就成了原件。
+	LyricsEntityOrigin string `json:"lyrics_entity_origin,omitempty"`
 
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
 	// (enrichjson.go)。

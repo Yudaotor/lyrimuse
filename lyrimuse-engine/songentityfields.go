@@ -40,6 +40,7 @@ var songEntityFieldClasses = map[string]songFieldClass{
 
 	"manual_lyrics": songFieldUserJudgment, "manual_pick_sha": songFieldUserJudgment,
 	"lyrics_source_choice": songFieldUserJudgment, "instrumental": songFieldUserJudgment,
+	"lyrics_entity_origin": songFieldUserJudgment,
 	"instrumental_cleared": songFieldUserJudgment,
 
 	"lyrics_songwriters": songFieldRecording, "song_language": songFieldRecording, "lyrics_tr_source": songFieldRecording,

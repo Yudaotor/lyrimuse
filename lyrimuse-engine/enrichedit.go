@@ -212,7 +212,11 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		}
 		enrichCache[req.Key] = e
 		cancelInFlightEnrichLocked(req.Key)
-		return enrichEditOutcome{changed: 1, exports: []string{req.Key}}
+		exports := []string{req.Key}
+		if songEntitySharing() {
+			exports = append(exports, shareManualEditLocked(req.Key, time.Now())...)
+		}
+		return enrichEditOutcome{changed: len(exports), exports: exports}
 	case "save_plain_text":
 		if req.Key == "" {
 			return enrichEditOutcome{err: fmt.Errorf("save_plain_text: empty key")}
@@ -353,6 +357,8 @@ func applySaveEdit(e *enrichEntry, req enrichEditRequest) error {
 		e.LyricsSpeakers = &speakers
 	}
 	e.LyricsSource = req.Source
+	// 用户直接改的这一条是原件,不再是从别的写法同步过来的副本。
+	e.LyricsEntityOrigin = ""
 	// 「手动采纳的候选」留内容指纹,供「手动选定歌词后锁定」追溯;别的保存一律清掉(旧指纹已不描述新正文)。
 	e.ManualPickSHA = ""
 	if req.FromManualPick {

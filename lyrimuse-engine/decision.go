@@ -164,6 +164,9 @@ const (
 	// 不是这条自己检索的(没有 buildLyricsDecision 那一轮),是从另一条搬来的:reused_from 记来源。
 	lyricsDecisionPathCrossAlbumReuse  = "cross-album-reuse"  // 另一张专辑下的同一段录音
 	lyricsDecisionPathArtistAliasReuse = "artist-alias-reuse" // KKBOX 同一首歌的另一种歌手写法(kkboxalias.go)
+	// 歌曲实体同步过来的(songentityshare.go):共享组以整首歌重搜那一轮,reused_from 记搜的是哪条写法(就是这条时为空);
+	// 或者手改原件的副本,reused_from 记原件。
+	lyricsDecisionPathSongEntityShare = "song-entity-share"
 )
 
 // lyricsDecisionPaths 是上面那六条的清单,给测试用(见 lyricsdecisionpath_test.go)。
@@ -177,6 +180,7 @@ func lyricsDecisionPaths() []string {
 		lyricsDecisionPathPeripheral,
 		lyricsDecisionPathCrossAlbumReuse,
 		lyricsDecisionPathArtistAliasReuse,
+		lyricsDecisionPathSongEntityShare,
 	}
 }
 

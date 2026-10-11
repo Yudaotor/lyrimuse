@@ -18,7 +18,8 @@ import (
 //   - `lyrimuse-song-entity-report.txt`:诊断报告(songEntityReport.writeText),随 App 的诊断包一起导出。
 //
 // 启动后 songEntityBuildDelay 建第一次(避开启动迁移、ISRC 补扫),之后每 songEntityRebuildInterval 一次。持锁只复制缓存,
-// 摘字段、读解析决策、建表都在锁外。开关(features().SongEntityShadow)关着时两个文件都删掉。
+// 摘字段、读解析决策、建表都在锁外。开关(features().SongEntityShadow)关着时两个文件都删掉。每次建完接着按阶段 3 的开关
+// 同步歌词或者把同步过的恢复回去;第一次建完之后,那个开关一翻面也立刻这样做一次(songentityshare.go)。
 //
 // 实体 id 延续(songEntityIDs):种子先取各写法条目上的 `song`,没有的再取上一份实体表;每个实体取跟种子共有写法最多的
 // id。建完把变了的 `song` 写回条目、同步落盘,之后才写实体表:哪一步之间被杀,下次都接得上(18 章决策 8)。
@@ -88,26 +89,52 @@ func songEntityUserPath() string   { return configFilePath(clientName + "-song-e
 func startSongEntityShadow(ctx context.Context) {
 	timer := time.NewTimer(songEntityBuildDelay)
 	defer timer.Stop()
+	check := time.NewTicker(songShareCheckInterval)
+	defer check.Stop()
+	started, sharing := false, false
 	for {
+		rebuild := false
 		select {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+			timer.Reset(songEntityRebuildInterval)
+			started, rebuild = true, true
+		case <-check.C:
+			if !started || songEntitySharing() == sharing {
+				continue
+			}
+			rebuild = songEntitySharing()
 		}
-		if features().SongEntityShadow {
-			rebuildSongEntityTable(time.Now())
-		} else {
-			removeSongEntityFiles()
+		var b *songEntityBuild
+		if rebuild {
+			if features().SongEntityShadow {
+				b = rebuildSongEntityTable(time.Now())
+			} else {
+				removeSongEntityFiles()
+			}
 		}
-		timer.Reset(songEntityRebuildInterval)
+		sharing = songEntityShareStep(ctx, b)
 	}
+}
+
+// songEntityShareStep:建完表(b 为 nil 时是没建)之后按阶段 3 的开关同步一轮,或者把同步过的恢复回去,返回按哪种做的。
+func songEntityShareStep(ctx context.Context, b *songEntityBuild) bool {
+	if !songEntitySharing() {
+		revertSongEntityShare()
+		return false
+	}
+	if b != nil {
+		runSongEntitySharePass(ctx, b)
+	}
+	return true
 }
 
 // songEntityRebuildMu:每天那一次和名字补扫之后那一次(startAppleNamesSweep)不同时跑,免得两份结果互相覆盖。
 var songEntityRebuildMu sync.Mutex
 
-// rebuildSongEntityTable 全量建一次实体表,写实体表和报告两个文件。
-func rebuildSongEntityTable(now time.Time) {
+// rebuildSongEntityTable 全量建一次实体表,写实体表和报告两个文件,返回这次建出来的(写实体表失败时为 nil)。
+func rebuildSongEntityTable(now time.Time) *songEntityBuild {
 	songEntityRebuildMu.Lock()
 	defer songEntityRebuildMu.Unlock()
 	start := time.Now()
@@ -141,11 +168,11 @@ func rebuildSongEntityTable(now time.Time) {
 	data, err := json.Marshal(table)
 	if err != nil {
 		slog.Error("song entities: encode table", "err", err)
-		return
+		return nil
 	}
 	if err := writeFileAtomic(songEntityTablePath(), data); err != nil {
 		slog.Error("song entities: write table", "err", err)
-		return
+		return nil
 	}
 	var report bytes.Buffer
 	r := b.report()
@@ -155,6 +182,7 @@ func rebuildSongEntityTable(now time.Time) {
 	}
 	slog.Info("song entities: rebuilt", "variants", r.variants, "songs", r.entities, "multi", r.multi,
 		"merges", len(b.merged), "vetoed", len(b.vetoed), "took", time.Since(start).Round(time.Millisecond))
+	return b
 }
 
 // removeSongEntityFiles:开关关着时删掉两个派生文件(用户判断文件不动)。

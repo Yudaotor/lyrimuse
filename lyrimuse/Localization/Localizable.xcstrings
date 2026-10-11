@@ -33465,6 +33465,29 @@
         }
       }
     },
+    "与同一首歌曲的其他写法共用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shared with other versions of the same song"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "与同一首歌曲的其他写法共用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "與同一首歌曲的其他寫法共用"
+          }
+        }
+      }
+    },
     "显示 10 首" : {
       "extractionState" : "manual",
       "localizations" : {

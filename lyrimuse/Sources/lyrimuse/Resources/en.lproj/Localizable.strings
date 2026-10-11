@@ -245,6 +245,7 @@
 "不透明度" = "Opacity";
 "与 %@ 正文相同" = "Same lyrics as %@";
 "与 Spotify 的连接已过期，Spotify 上播放的歌曲未记录到 Last.fm" = "The connection to Spotify has expired, so songs played on Spotify aren't being scrobbled";
+"与同一首歌曲的其他写法共用" = "Shared with other versions of the same song";
 "与当前使用的歌词文字一致，只是分行不同" = "Same words as the lyrics in use, split into lines differently";
 "与当前使用的歌词文字一致，只是繁简写法不同" = "Same words as the lyrics in use, written in the other Chinese script";
 "与当前使用的歌词逐句一致" = "Matches the lyrics in use line by line";

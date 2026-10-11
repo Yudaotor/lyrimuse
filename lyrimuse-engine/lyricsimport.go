@@ -317,7 +317,7 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 
 		e := enrichCache[key] // 不存在时是 enrichEntry{} 零值,TS 自然留 0
 		changed := false
-		prevLyrics, prevTr, prevRoma := e.Lyrics, e.LyricsTr, e.LyricsRoma
+		prevLyrics, prevTr, prevRoma, prevYRC := e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC
 		if v, ok := variantBody(".lrc"); ok {
 			if e.Lyrics != v {
 				e.Lyrics, changed = v, true
@@ -360,6 +360,10 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		}
 		if e.ManualLyrics != parsed.manual {
 			e.ManualLyrics, changed = parsed.manual, true
+		}
+		// 文件里的正文或逐字被改过:这一条成了用户自己的,不再是从别的写法同步过来的副本(songentityshare.go)。
+		if e.LyricsEntityOrigin != "" && (e.Lyrics != prevLyrics || e.LyricsYRC != prevYRC) {
+			e.LyricsEntityOrigin, changed = "", true
 		}
 		if changed {
 			enrichCache[key] = e

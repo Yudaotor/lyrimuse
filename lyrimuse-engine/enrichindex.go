@@ -492,7 +492,7 @@ func enrichIndexOutdated(path string) bool {
 }
 
 // refreshEnrichIndexAtStartup:索引缺失、比主缓存旧(App 改过主缓存会删掉它;老版本从没写过)或是老格式
-// 就整份重写一遍(连带正文小文件),然后清掉没有对应条目的正文文件。常驻进程启动时调一次。
+// 就整份重写一遍(连带正文小文件),然后清掉没有对应条目的正文文件和歌曲实体同步的留底。常驻进程启动时调一次。
 func refreshEnrichIndexAtStartup() {
 	idx := enrichIndexPath()
 	if idx == "" {
@@ -511,6 +511,7 @@ func refreshEnrichIndexAtStartup() {
 		log.Printf("enrich index: regenerated for the app")
 	}
 	sweepKeyedDir(enrichBodiesDir(), "lyrics bodies")
+	sweepKeyedDir(songSharePreDir(), "song entity pre")
 }
 
 // sweepKeyedDir 删掉按 key 命名(decisionSidecarName)的目录里没有对应条目的文件,以及写到一半留下的
