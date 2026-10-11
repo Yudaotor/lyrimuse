@@ -329,3 +329,32 @@ func backupManualOriginalsLocked(dir string, keys []string) error {
 	}
 	return writeFileAtomic(filepath.Join(dir, "entries.json"), data)
 }
+
+// withShareGroupMatesLocked:歌词同步开着时,用户对一条写法标 / 撤纯音乐作用到它的共享组(同一实体、同一共享组编号):keys 后面
+// 按键排补上组里其余写法,自己手改过词、或采纳的那份还在的不补(用户给了词,就不是纯音乐)。去重,原有的顺序不变。
+// 调用方持 enrichMu。
+func withShareGroupMatesLocked(keys []string) []string {
+	type group struct {
+		song  string
+		share int
+	}
+	seen := map[string]bool{}
+	groups := map[group]bool{}
+	for _, k := range keys {
+		seen[k] = true
+		if e, ok := enrichCache[k]; ok && e.Song != "" {
+			groups[group{e.Song, e.SongShare}] = true
+		}
+	}
+	if len(groups) == 0 {
+		return keys
+	}
+	var extra []string
+	for k, e := range enrichCache {
+		if !seen[k] && e.Song != "" && groups[group{e.Song, e.SongShare}] && !e.ManualLyrics && !songSharePickHeld(e) {
+			extra = append(extra, k)
+		}
+	}
+	sort.Strings(extra)
+	return append(slices.Clone(keys), extra...)
+}

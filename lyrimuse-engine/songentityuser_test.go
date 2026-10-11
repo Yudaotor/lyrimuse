@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -390,5 +392,50 @@ func TestResolveManualConflictEdit(t *testing.T) {
 	setFeatures(featureFlags{SongEntityShadow: true})
 	if res := applyEnrichEdit(enrichEditRequest{Op: "resolve_manual_conflict", Key: "A|Song|Two"}); res.OK {
 		t.Error("开关关着时拒绝")
+	}
+}
+
+// 歌词同步开着时标 / 撤纯音乐作用到共享组;别的共享组、手改过词的、采纳的那份还在的不动;开关关着只动这一条。
+func TestSetInstrumentalFollowsShareGroup(t *testing.T) {
+	picked := songShareLRC("picked")
+	setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: songShareLRC("a")},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: songShareLRC("a")},
+		"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: songShareLRC("c")},
+		"A|Song|Four":  {Song: "s_000000000001", Lyrics: songShareLRC("mine"), ManualLyrics: true},
+		"A|Song|Five":  {Song: "s_000000000001", Lyrics: picked, ManualPickSHA: manualPickFingerprint(picked)},
+		"B|Other|One":  {Song: "s_000000000002", Lyrics: songShareLRC("b")},
+	}, true)
+	instrumental := func() []string {
+		enrichMu.Lock()
+		defer enrichMu.Unlock()
+		var out []string
+		for k, e := range enrichCache {
+			if e.Instrumental {
+				out = append(out, k)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Key: "A|Song|One", Value: true}); !res.OK {
+		t.Fatalf("标纯音乐: %+v", res)
+	}
+	if got := instrumental(); !slices.Equal(got, []string{"A|Song|One", "A|Song|Two"}) {
+		t.Errorf("同一共享组一起标,别的组、手改、采纳、别的歌不动: %v", got)
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Key: "A|Song|Two", Value: false}); !res.OK {
+		t.Fatalf("撤纯音乐: %+v", res)
+	}
+	if got := instrumental(); len(got) != 0 {
+		t.Errorf("撤也一起撤: %v", got)
+	}
+	if got, _ := cacheEntry(t, "A|Song|One"); !got.InstrumentalCleared {
+		t.Error("一起撤的那条也记下「用户说不是纯音乐」")
+	}
+	setFeatures(featureFlags{SongEntityShadow: true})
+	applyEnrichEdit(enrichEditRequest{Op: "set_instrumental", Key: "A|Song|One", Value: true})
+	if got := instrumental(); !slices.Equal(got, []string{"A|Song|One"}) {
+		t.Errorf("开关关着只动这一条: %v", got)
 	}
 }

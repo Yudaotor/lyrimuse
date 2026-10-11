@@ -44250,6 +44250,23 @@
           }
         }
       }
+    },
+    "；同一首歌共用歌词的其他写法也会一起改" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "; other versions of this song that share its lyrics change with it"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "；同一首歌共用歌詞的其他寫法也會一起改"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -694,6 +694,8 @@ struct LyricsManagerView: View {
     // 这首歌内容不同的几份手改原件(两份以上才有提示,见 manualConflictRow);载入详情时算。
     @State private var manualConflictKeys: [String] = []
     @State private var confirmManualConflict = false
+    // 歌词同步开着、这条的共享组里还有别的写法:标 / 撤纯音乐会连它们一起改(引擎 set_instrumental,18 章决策 32)。
+    @State private var instrumentalFollowsGroup = false
     // 「保存修改」点了之后闪一下「已保存」+ 对勾,1 秒后变回去。
     @State private var showSaveEditFeedback = false
     // 整段文本编辑里「拷贝」按钮的同款反馈:拷贝一大段文本到剪贴板本身没有任何肉眼可见的变化。
@@ -3360,12 +3362,13 @@ struct LyricsManagerView: View {
     private func detailMoreMenu(_ summary: EnrichCacheStore.Summary) -> some View {
         // 「标为纯音乐」/「取消纯音乐标记」:有没有歌词都能标。标上之后各处不显示歌词,引擎也不再自动搜;
         // 歌词留在条目里,撤掉就回来(见 EnrichCacheStore.setInstrumental)。搜索候选歌词面板标题栏有同一对动作。
+        let groupNote = instrumentalFollowsGroup ? L10n.t("；同一首歌共用歌词的其他写法也会一起改") : ""
         if summary.isInstrumental {
             Button(L10n.t("取消纯音乐标记")) { Task { await store.setInstrumental(key: summary.key, false) } }
-                .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列"))
+                .help(L10n.t("取消「纯音乐」标记：已有歌词的恢复显示，无歌词的重新加入自动匹配队列") + groupNote)
         } else {
             Button(L10n.t("标为纯音乐")) { Task { await store.setInstrumental(key: summary.key, true) } }
-                .help(L10n.t("按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复"))
+                .help(L10n.t("按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复") + groupNote)
         }
         Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
         // 「同一首歌的其他写法」:这条写法有实体 id 才有(实体表开关关着、还没建过表时没有),见 18 章决策 28。
@@ -4246,6 +4249,9 @@ struct LyricsManagerView: View {
             plainLyricsText = !summary.hasLyrics && summary.hasPlainTextFallback ? store.plainLyrics(for: key) : ""
         }
         manualConflictKeys = store.manualConflict(forKey: key)
+        instrumentalFollowsGroup = EnrichCacheReader.sharesEntityLyrics && store.songMembership(forKey: key).map { own in
+            EnrichCacheReader.songMemberships().contains { $0.key != key && $0.value == own }
+        } == true
         if manualConflictKeys.count < 2 {
             confirmManualConflict = false
         }

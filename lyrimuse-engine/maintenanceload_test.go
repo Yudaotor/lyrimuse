@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -84,5 +85,25 @@ func TestMaintenanceDryRunIsReadOnly(t *testing.T) {
 	}
 	if _, err := os.Stat(tempFile); err != nil {
 		t.Fatalf("预演删掉了歌词临时文件(可能是常驻进程写到一半的): %v", err)
+	}
+}
+
+// 歌词同步开着时维护命令不许真写,预演照常;只开建表不算。
+func TestMaintenanceRefusesWhileSharing(t *testing.T) {
+	resetFeaturesForTest(t)
+	setFeatures(featureFlags{SongEntityShadow: true, SongEntityShareLyrics: true})
+	if maintenanceSharingRefusal(true) == nil {
+		t.Error("同步开着时 -apply 要拒绝")
+	}
+	if err := maintenanceSharingRefusal(false); err != nil {
+		t.Errorf("预演照常: %v", err)
+	}
+	setFeatures(featureFlags{SongEntityShadow: true})
+	if err := maintenanceSharingRefusal(true); err != nil {
+		t.Errorf("只开建表不拦: %v", err)
+	}
+	src, err := os.ReadFile("maintenanceload.go")
+	if err != nil || !strings.Contains(string(src), "\tif err := maintenanceSharingRefusal(apply); err != nil {\n\t\tlog.Fatal(err)\n\t}\n") {
+		t.Errorf("loadEnrichForMaintenance 要先拦: %v", err)
 	}
 }

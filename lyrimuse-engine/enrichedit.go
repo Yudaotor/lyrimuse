@@ -264,6 +264,9 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		if len(keys) == 0 {
 			return enrichEditOutcome{err: fmt.Errorf("set_instrumental: empty key")}
 		}
+		if songEntitySharing() {
+			keys = withShareGroupMatesLocked(keys)
+		}
 		changed := 0
 		missing := ""
 		for _, k := range keys {

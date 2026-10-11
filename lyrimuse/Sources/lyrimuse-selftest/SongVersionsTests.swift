@@ -165,6 +165,9 @@ func runSongVersionsTests() {
                     && sourceBytes(manager, contain: "if manualConflictKeys.count > 1 {")
                     && sourceBytes(settings, contain: "EnrichCacheReader.sharesEntityLyrics = document.raw[\"song_entity_share_lyrics\"] as? Bool ?? false"), true,
                     "其他写法(契约): 两份手改的提示、统一请求、开关读法接上")
+        expectEqual(sourceBytes(manager, contain: "instrumentalFollowsGroup ? L10n.t(\"；同一首歌共用歌词的其他写法也会一起改\") : \"\"")
+                    && sourceBytes(edit, contain: "keys = withShareGroupMatesLocked(keys)"), true,
+                    "其他写法(契约): 标纯音乐作用到共享组,详情页的说明跟着说")
         expectEqual(sourceBytes(manager, contain: "SongVersionsSheet(summary: summary, onOpen:")
                     && sourceBytes(manager, contain: "Button(L10n.t(\"同一首歌的其他写法…\")) { showSongVersions = true }"), true,
                     "其他写法(契约): 详情页「⋯」菜单接上弹窗")
