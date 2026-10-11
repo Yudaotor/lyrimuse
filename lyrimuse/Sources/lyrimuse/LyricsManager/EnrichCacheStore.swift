@@ -54,6 +54,10 @@ public final class EnrichCacheStore: ObservableObject {
         public let lyricsSource: String
         public let hasWordTiming: Bool
         public let isManual: Bool
+        /// 这份手改是从同一首歌的另一条写法同步来的副本时,原件的键(`lyrics_entity_origin`);不是副本时为空。
+        public let manualOrigin: String
+        /// 用户自己改过或采纳过的(同步来的副本不算):「手动调整」筛选、计数只数这些(18 章决策 30)。
+        public var isManualOriginal: Bool { isManual && manualOrigin.isEmpty }
         /// 用户在「联网搜索候选歌词」里选定的源(引擎侧 `lyrics_source_choice`)。
         /// 空 = 没选过,由算法自由选。跟 `isManual` 是两件独立的事,详情页各显示各的徽章。
         public let sourceChoice: String
@@ -174,6 +178,7 @@ public final class EnrichCacheStore: ObservableObject {
             lyricsSource: String,
             hasWordTiming: Bool,
             isManual: Bool,
+            manualOrigin: String = "",
             sourceChoice: String,
             lyricsTrSource: String,
             hasTranslation: Bool,
@@ -208,6 +213,7 @@ public final class EnrichCacheStore: ObservableObject {
             self.lyricsSource = lyricsSource
             self.hasWordTiming = hasWordTiming
             self.isManual = isManual
+            self.manualOrigin = manualOrigin
             self.sourceChoice = sourceChoice
             self.lyricsTrSource = lyricsTrSource
             self.hasTranslation = hasTranslation
@@ -792,6 +798,7 @@ public final class EnrichCacheStore: ObservableObject {
                 lyricsSource: entry["lyrics_source"] as? String ?? "",
                 hasWordTiming: bodyFields.contains(.yrc),
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
+                manualOrigin: entry["lyrics_entity_origin"] as? String ?? "",
                 sourceChoice: entry["lyrics_source_choice"] as? String ?? "",
                 lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
                 hasTranslation: bodyFields.contains(.tr),
@@ -1033,7 +1040,8 @@ public final class EnrichCacheStore: ObservableObject {
             let state = ManualPickLock.state(
                 sha: entry["manual_pick_sha"] as? String,
                 lyrics: entry["lyrics"] as? String ?? "")
-            guard state != .neverPicked else { continue }
+            // 同一首歌的手改副本跟着原件翻,不算数(跟引擎 count_manual_lock 一样)。
+            guard state != .neverPicked, (entry["lyrics_entity_origin"] as? String ?? "").isEmpty else { continue }
             stats.picked += 1
             guard state == .original else { continue }
             stats.stillOriginal += 1

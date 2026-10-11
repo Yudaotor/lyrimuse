@@ -1511,6 +1511,9 @@
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲没有歌词，通常会在后续版本中修复" = "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it";
 "没有认成同一首歌的其他写法" = "No other versions are matched to this song.";
 "没有译文时自动翻译" = "Translate When None Is Provided";
+"沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上" = "Uses the timing correction from “%@”, another version of this song. Adjusting it here saves it to this version.";
+"沿用同一首歌的人工修正" = "Uses the manual correction from another version of this song";
+"沿用同一首歌的修正" = "From Another Version";
 "浅色" = "Light";
 "浅色卡片" = "Light Card";
 "测试" = "Test";
@@ -1905,6 +1908,7 @@
 "这些写法被你拆开过，不会再跟这首歌合在一起。" = "You split these versions off; they won't be merged with this song again.";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played.";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "These lyrics have no timing. Once adopted they only show as static text in the Lyrics Window, and won't highlight word by word or line by line as the song plays";
+"这份歌词是同一首歌另一种写法「%@」的人工修正，那边改了这边跟着改；直接改这一条就成为它自己的修正" = "These lyrics are the manual correction made on “%@”, another version of this song, and follow it when it changes. Editing this one makes it its own correction.";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";
 "这台 Mac 上未安装的播放器" = "Players not installed on this Mac";
 "这台 Mac 无刘海，将显示在屏幕顶部中央" = "No notch on this Mac, so it sits at the top center";

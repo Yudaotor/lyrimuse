@@ -354,10 +354,21 @@ public final class LyricsOffsetStore: ObservableObject {
 
     /// siblings 在 key 那份歌词下第一个非零的值,不看这条自己。
     private func inheritedOffset(forKey key: String, siblings: LyricsOffsetSiblings) -> Int {
+        inheritedEntry(forKey: key, siblings: siblings)?.value ?? 0
+    }
+
+    /// 这条写法这份歌词的单曲偏移是借来的时,借的是哪条写法(单曲偏移键的前两段 `歌手|歌名`);自己键下有记录、没得借时 nil。
+    public func borrowedOffsetSource(forKey key: String, siblings: LyricsOffsetSiblings) -> String? {
+        guard isValid(key), offsets[key] == nil, let found = inheritedEntry(forKey: key, siblings: siblings) else { return nil }
+        guard let sep = found.key.lastIndex(of: "|") else { return nil }
+        return String(found.key[..<sep])
+    }
+
+    private func inheritedEntry(forKey key: String, siblings: LyricsOffsetSiblings) -> (key: String, value: Int)? {
         for k in siblings.keys(for: key) {
-            if let v = offsets[k], v != 0 { return v }
+            if let v = offsets[k], v != 0 { return (k, v) }
         }
-        return 0
+        return nil
     }
 
     private nonisolated static func nonZeroCount(_ table: [String: Int]) -> Int {

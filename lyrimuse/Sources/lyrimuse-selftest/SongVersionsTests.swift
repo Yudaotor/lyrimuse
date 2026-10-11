@@ -123,6 +123,22 @@ func runSongVersionsTests() {
                     && sourceBytes(edit, contain: "case \"unsplit_song\":"), true,
                     "其他写法(契约): 拆开、恢复合并的请求跟引擎同名,参数用 keys")
         let manager = read(sources, "lyrimuse/LyricsManager/LyricsManagerView.swift")
+        // 手改副本不算原件:「手动调整」筛选与删除确认只数原件,副本单独标;偏移借来的值标出借的是哪条(18 章决策 30)。
+        let parts = read(sources, "lyrimuse/LyricsManager/LyricsManagerParts.swift")
+        expectEqual(sourceBytes(manager, contain: "LyricsManagerStatus.Facts(kind: kind, isManual: s.isManualOriginal,")
+                    && sourceBytes(manager, contain: "pending.contains($0.key) && $0.isManualOriginal }.count")
+                    && sourceBytes(manager, contain: "picked.filter(\\.isManualOriginal).count")
+                    && sourceBytes(manager, contain: "L10n.t(\"沿用同一首歌的修正\")")
+                    && sourceBytes(parts, contain: "help: L10n.t(\"沿用同一首歌的人工修正\")"), true,
+                    "其他写法(契约): 手改副本不算进人工修正,单独标出来")
+        expectEqual(sourceBytes(store, contain: "manualOrigin: entry[\"lyrics_entity_origin\"] as? String ?? \"\",")
+                    && sourceBytes(store, contain: "guard state != .neverPicked, (entry[\"lyrics_entity_origin\"] as? String ?? \"\").isEmpty else { continue }")
+                    && sourceBytes(edit, contain: "res.Changed = manualLockOriginalsLocked(manualLockFlipsLocked(req.Value))"), true,
+                    "其他写法(契约): 锁定开关的计数只数原件,App 本地统计跟引擎一样")
+        expectEqual(sourceBytes(manager, contain: "offsetBorrowedFrom = LyricsOffsetStore.shared.borrowedOffsetSource(forKey: offsetKey, siblings: offsetSiblings)")
+                    && sourceBytes(manager, contain: "borrowedFrom: offsetBorrowedFrom,")
+                    && sourceBytes(parts, contain: "if let borrowedFrom {"), true,
+                    "其他写法(契约): 偏移输入框标出借来的值")
         expectEqual(sourceBytes(manager, contain: "SongVersionsSheet(summary: summary, onOpen:")
                     && sourceBytes(manager, contain: "Button(L10n.t(\"同一首歌的其他写法…\")) { showSongVersions = true }"), true,
                     "其他写法(契约): 详情页「⋯」菜单接上弹窗")

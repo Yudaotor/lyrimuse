@@ -422,6 +422,12 @@ func runLyricsOffsetTests() {
         expectEqual(store.offset(forKey: mine, siblings: LyricsOffsetSiblings(names: ["第三写法|第三歌名", "Inherit Artist|Inherit Title"])),
                     -200, "读穿: 顺序在前的先借")
         expectEqual(store.effectiveOffset(forKey: mine, siblings: siblings), 300, "读穿: 生效值带上借来的")
+        expectEqual(store.borrowedOffsetSource(forKey: mine, siblings: siblings), "Inherit Artist|Inherit Title", "读穿: 说得出借的是哪条")
+        expectEqual(store.borrowedOffsetSource(forKey: mine, siblings: LyricsOffsetSiblings(names: ["第三写法|第三歌名", "Inherit Artist|Inherit Title"])),
+                    "第三写法|第三歌名", "读穿: 借的是顺序在前的那条")
+        expectEqual(store.borrowedOffsetSource(forKey: theirs, siblings: LyricsOffsetSiblings(names: ["第三写法|第三歌名"])), nil,
+                    "读穿: 自己键下有值就不算借")
+        expectEqual(store.borrowedOffsetSource(forKey: mine, siblings: .none), nil, "读穿: 没得借")
         expectEqual(store.effectiveOffset(forKey: mine, siblings: .none), 0, "读穿: 不给其它写法就不借")
         let noText = LyricsOffsetStore.trackKey(artist: "读穿歌手", title: "读穿歌名", lyrics: "", lyricsYRC: "")
         store.setOffset(700, forKey: "Inherit Artist|Inherit Title|", pinKey: "", siblings: .none)
@@ -442,6 +448,7 @@ func runLyricsOffsetTests() {
 
         store.reset(forKey: mine, pinKey: pinMine, siblings: siblings)
         expectEqual(store.offset(forKey: mine, siblings: siblings), 0, "读穿: 借着别人的值时重置,之后是 0、不再借")
+        expectEqual(store.borrowedOffsetSource(forKey: mine, siblings: siblings), nil, "读穿: 为了不借记的 0 也不算借")
         expectEqual(pins.isPinned(pinMine), false, "读穿: 重置之后解钉")
         expectEqual(store.trackOffsetCount, 3, "读穿: 为了不借记的 0 不算调过")
         store.setOffset(0, forKey: theirs, pinKey: pinTheirs, siblings: .none)

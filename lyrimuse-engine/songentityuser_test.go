@@ -318,3 +318,29 @@ func TestSongEntityRebuildNowWakesShadowLoop(t *testing.T) {
 	}
 	t.Fatal("请马上重建之后没有建表")
 }
+
+// 锁定开关:同一首歌的手改副本跟着原件一起翻(不然下一轮同步又要重抄),回报的「几首」只数原件。
+func TestManualLockCountsOriginalsOnly(t *testing.T) {
+	lrc := songShareLRC("picked")
+	sha := manualPickFingerprint(lrc)
+	setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: lrc, ManualLyrics: true, ManualPickSHA: sha},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: lrc, ManualLyrics: true, ManualPickSHA: sha, LyricsEntityOrigin: "A|Song|One"},
+		"A|Song|Three": {Song: "s_000000000001", Lyrics: lrc, ManualLyrics: true, ManualPickSHA: sha, LyricsEntityOrigin: "A|Song|One"},
+		"B|Other|One":  {Lyrics: songShareLRC("other"), ManualLyrics: true, ManualPickSHA: manualPickFingerprint(songShareLRC("other"))},
+	}, true)
+	if res := applyEnrichEdit(enrichEditRequest{Op: "count_manual_lock", Value: false}); !res.OK || res.Changed != 2 {
+		t.Fatalf("只数原件: %+v", res)
+	}
+	res := applyEnrichEdit(enrichEditRequest{Op: "set_manual_lock", Value: false})
+	if !res.OK || res.Changed != 2 {
+		t.Fatalf("回报只数原件: %+v", res)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	for _, k := range []string{"A|Song|One", "A|Song|Two", "A|Song|Three", "B|Other|One"} {
+		if enrichCache[k].ManualLyrics {
+			t.Errorf("%s 要跟着翻", k)
+		}
+	}
+}

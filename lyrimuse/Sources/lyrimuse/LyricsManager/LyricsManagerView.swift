@@ -639,6 +639,8 @@ struct LyricsManagerView: View {
     @State private var persistedYRCForOffset = ""
     /// 同一首歌的其它写法:这首自己没调过时,输入框显示、加减、重置都按读穿来的值(见 LyricsOffsetSiblings)。
     @State private var offsetSiblings = LyricsOffsetSiblings.none
+    // 输入框里的值是借同一首歌另一种写法的时,借的那条写法给人看的名字(见 refreshOffsetState)。
+    @State private var offsetBorrowedFrom: String?
     // 单曲时间轴校正值:「⋯」菜单里「已校准 N 首 / 清空」要跟着实时变(整对象订阅是安全的
     // —— 它只在用户动作时发布,不在播放热路径上,见 LyricsOffsetStore.trackOffsetCount)。
     @ObservedObject private var offsets = LyricsOffsetStore.shared
@@ -911,7 +913,7 @@ struct LyricsManagerView: View {
     }
 
     private func statusFacts(_ s: EnrichCacheStore.Summary, kind: LyricsKind) -> LyricsManagerStatus.Facts {
-        LyricsManagerStatus.Facts(kind: kind, isManual: s.isManual, isPinned: pins.isPinned(s.key))
+        LyricsManagerStatus.Facts(kind: kind, isManual: s.isManualOriginal, isPinned: pins.isPinned(s.key))
     }
 
     /// 每个状态胶囊上的数,全库口径(跟设置页「歌词库」一样,不随搜索和别的筛选变)。
@@ -2380,7 +2382,7 @@ struct LyricsManagerView: View {
             return L10n.t("已导出的歌词文件将一并删除。再次播放这首歌曲时会重新匹配，结果可能不同")
         }
         let pending = Set(pendingDeleteKeys)
-        let manual = store.summaries.filter { pending.contains($0.key) && $0.isManual }.count
+        let manual = store.summaries.filter { pending.contains($0.key) && $0.isManualOriginal }.count
         if manual > 0 {
             return String(format: L10n.t("已导出的歌词文件将一并删除，此操作无法撤销；其中 %@ 条经过人工修正。再次播放这些歌曲时会重新匹配，结果可能不同"), "\(manual)")
         }
@@ -2414,7 +2416,7 @@ struct LyricsManagerView: View {
         let picked = store.summaries.filter { victims.contains($0.key) }
         let byKey = Dictionary(picked.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
         let pickedInOrder = ordered.compactMap { byKey[$0] }
-        let manual = picked.filter(\.isManual).count
+        let manual = picked.filter(\.isManualOriginal).count
         let wordTiming = picked.filter(\.hasWordTiming).count
         // 「无歌词」这颗只数**真的缺**的:确证过的纯音乐、有纯文本兜底的都不该算进去,
         // 否则数字跟行上的徽章互相矛盾(行显示「纯音乐」/「仅纯文本」、上面却说它是无歌词)。
@@ -2533,10 +2535,14 @@ struct LyricsManagerView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            if summary.isManual {
+            if summary.isManualOriginal {
                 Image(systemName: "pencil.circle.fill")
                     .foregroundStyle(.orange)
                     .help(L10n.t("已人工修正"))
+            } else if summary.isManual {
+                Image(systemName: "pencil.circle")
+                    .foregroundStyle(.orange)
+                    .help(L10n.t("沿用同一首歌的人工修正"))
             }
         }
         .padding(.horizontal, 10)
@@ -3396,8 +3402,12 @@ struct LyricsManagerView: View {
             if summary.hasRomanization {
                 LyricsManagerTag(icon: "textformat.abc", text: L10n.t("读音"), tint: LyricsFeatureTint.romanization, latinIcon: true)
             }
-            if summary.isManual {
+            if summary.isManualOriginal {
                 LyricsManagerTag(icon: "pencil.circle.fill", text: L10n.t("人工修正"), tint: LyricsFeatureTint.manual)
+            } else if summary.isManual {
+                LyricsManagerTag(icon: "pencil.circle", text: L10n.t("沿用同一首歌的修正"), tint: LyricsFeatureTint.manual)
+                    .help(String(format: L10n.t("这份歌词是同一首歌另一种写法「%@」的人工修正，那边改了这边跟着改；直接改这一条就成为它自己的修正"),
+                                 writingDisplayName(summary.manualOrigin)))
             }
             // 「来源已选定」:这个字段已经没有写入方,引擎每次启动都会把存量转成 manual_pick_sha;读取侧整套跟引擎一起删,
             // 在那之前照常显示。
@@ -3492,6 +3502,7 @@ struct LyricsManagerView: View {
                 LyricsManagerOffsetControl(
                     text: $editedOffsetSeconds,
                     isNonZero: LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary), siblings: offsetSiblings) != 0,
+                    borrowedFrom: offsetBorrowedFrom,
                     stepText: AppSettings.formattedSeconds(ms: AppSettings.shared.lyricsOffsetStepMs),
                     onStep: { direction in nudgeOffset(summary, direction: direction) },
                     onSubmit: { applyOffsetEdit(summary) },
@@ -4217,6 +4228,8 @@ struct LyricsManagerView: View {
         persistedYRCForOffset = yrc
         offsetSiblings = EnrichCacheReader.offsetSiblings(forKey: key)
         let offsetKey = LyricsOffsetStore.trackKey(artist: artist, title: title, lyrics: lyrics, lyricsYRC: yrc)
+        offsetBorrowedFrom = LyricsOffsetStore.shared.borrowedOffsetSource(forKey: offsetKey, siblings: offsetSiblings)
+            .map { borrowedOffsetDisplayName($0, ownKey: key) }
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: offsetKey, siblings: offsetSiblings))
     }
 
@@ -4245,13 +4258,33 @@ struct LyricsManagerView: View {
         // 钉住的歌是两条记录(见 LocalPlaybackSource.currentPinKey 的注释)。
         LyricsOffsetStore.shared.setOffset(ms, forKey: currentOffsetKey(summary), pinKey: summary.key, siblings: offsetSiblings)
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: ms)
+        offsetBorrowedFrom = nil
         PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
     }
 
     private func resetOffsetEdit(_ summary: EnrichCacheStore.Summary) {
         LyricsOffsetStore.shared.reset(forKey: currentOffsetKey(summary), pinKey: summary.key, siblings: offsetSiblings)
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0)
+        offsetBorrowedFrom = nil
         PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
+    }
+
+    /// 一条写法给人看的名字:「歌名 — 歌手」,歌词管理里没有这条时按写法键的前两段。
+    private func writingDisplayName(_ key: String) -> String {
+        if let s = store.summary(forKey: key) {
+            return s.shownArtist.isEmpty ? s.shownTitle : "\(s.shownTitle) — \(s.shownArtist)"
+        }
+        let parts = key.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        return parts.count > 1 ? "\(parts[1]) — \(parts[0])" : key
+    }
+
+    /// 偏移借来的那条(单曲偏移键前两段)给人看的名字:同一首歌里前两段对得上的第一条写法;找不到时照原样显示。
+    private func borrowedOffsetDisplayName(_ name: String, ownKey: String) -> String {
+        guard let song = store.songMembership(forKey: ownKey)?.song else { return name }
+        let match = EnrichCacheReader.songMemberships()
+            .filter { $0.value.song == song && LyricsOffsetSiblings.name(ofWritingKey: $0.key) == name }
+            .map(\.key).sorted().first
+        return match.map(writingDisplayName) ?? name
     }
 }
 

@@ -439,8 +439,10 @@ struct LyricsManagerSongRow: View {
     private var badges: some View {
         if !summary.isSearching {
             HStack(spacing: 5) {
-                if summary.isManual {
+                if summary.isManualOriginal {
                     badge("pencil.circle.fill", tint: LyricsFeatureTint.manual, help: L10n.t("已人工修正"))
+                } else if summary.isManual {
+                    badge("pencil.circle", tint: LyricsFeatureTint.manual, help: L10n.t("沿用同一首歌的人工修正"))
                 }
                 if !summary.sourceChoice.isEmpty {
                     badge("pin.circle.fill", tint: LyricsFeatureTint.sourceChoice,
@@ -842,9 +844,11 @@ private struct UnavailableModeNote: ViewModifier {
 }
 
 /// 单曲时间轴偏移:− / + 按设置里的步长调,中间的数字能直接输入秒数、回车生效,不为 0 时多一颗「重置」。
+/// 值是借同一首歌另一种写法的时(borrowedFrom 是那条的名字),数字后面挂一个链接图标说明。
 struct LyricsManagerOffsetControl: View {
     @Binding var text: String
     let isNonZero: Bool
+    var borrowedFrom: String?
     let stepText: String
     let onStep: (Int) -> Void
     let onSubmit: () -> Void
@@ -865,6 +869,12 @@ struct LyricsManagerOffsetControl: View {
                 .frame(width: 44)
                 .onSubmit(onSubmit)
             Text(L10n.t("秒")).foregroundStyle(.secondary)
+            if let borrowedFrom {
+                Image(systemName: "link")
+                    .foregroundStyle(.secondary)
+                    .help(String(format: L10n.t("沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上"), borrowedFrom))
+                    .accessibilityLabel(String(format: L10n.t("沿用同一首歌另一种写法「%@」的校正，在这里调整后记在这一条上"), borrowedFrom))
+            }
             Button { onStep(1) } label: {
                 Image(systemName: "plus").frame(width: 18, height: 18).contentShape(Rectangle())
             }

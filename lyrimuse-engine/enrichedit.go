@@ -119,7 +119,9 @@ type enrichEditOutcome struct {
 	trash    []string // 要把歌词文件挪进废纸篓、删掉判决旁路文件的 key(删除)
 	dropped  []string // 只删判决旁路文件的 key(清空:歌词文件由 trashAll 按目录整批处理)
 	trashAll bool     // 清空:歌词目录里认得出的歌词文件全部挪进废纸篓
-	err      error
+	// followers:changed 里跟着原件一起改的手改副本,回报给 App 的改动数不算它们(界面上说的是「几首」)。
+	followers int
+	err       error
 }
 
 // applyEnrichEdit 执行一份请求:改内存缓存、存盘、同步歌词文件。常驻进程和 CLI 子命令共用。
@@ -139,9 +141,9 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 	switch req.Op {
 	case "count_manual_lock":
 		// 只数不改:锁定开关翻面前 App 拿它问会改几首(解锁之前要先问一句)。判据要逐条比主歌词,App 那边主歌词
-		// 只在正文小文件里,小文件缺了就比不了;引擎手上是完整的。
+		// 只在正文小文件里,小文件缺了就比不了;引擎手上是完整的。同一首歌的手改副本跟着原件翻,不算数。
 		enrichMu.Lock()
-		res.Changed = len(manualLockFlipsLocked(req.Value))
+		res.Changed = manualLockOriginalsLocked(manualLockFlipsLocked(req.Value))
 		enrichMu.Unlock()
 		res.OK = true
 		return res
@@ -204,7 +206,7 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 		}
 	}
 	res.OK = true
-	res.Changed = out.changed
+	res.Changed = out.changed - out.followers
 	log.Printf("enrich edit: op=%s changed=%d", req.Op, out.changed)
 	return res
 }
@@ -296,7 +298,7 @@ func applyEnrichEditLocked(req enrichEditRequest) enrichEditOutcome {
 		}
 		// 导出的 .lrc 文件头里那行 [manual:1] 是这个标记的第二份存档,importLyricsFromFiles 会拿它把缓存
 		// 改回去,所以这几首的文件要一起重写。
-		return enrichEditOutcome{changed: len(flipped), exports: flipped}
+		return enrichEditOutcome{changed: len(flipped), exports: flipped, followers: len(flipped) - manualLockOriginalsLocked(flipped)}
 	case "delete":
 		var removed []string
 		for _, k := range req.Keys {
@@ -423,6 +425,18 @@ func manualLockFlipsLocked(locking bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// manualLockOriginalsLocked:keys 里不是同步出去的副本的几条。副本带着原件的手改标记和采纳指纹,锁定开关翻的时候跟着原件
+// 一起翻(不然下一轮同步看它跟原件不一致又要重抄),只是不算进「几首」。调用方持 enrichMu。
+func manualLockOriginalsLocked(keys []string) int {
+	n := 0
+	for _, k := range keys {
+		if enrichCache[k].LyricsEntityOrigin == "" {
+			n++
+		}
+	}
+	return n
 }
 
 // cancelInFlightEnrichLocked 取消这个 key 还在飞的解析,免得它搜完把刚做的改动盖掉。调用方持 enrichMu。
