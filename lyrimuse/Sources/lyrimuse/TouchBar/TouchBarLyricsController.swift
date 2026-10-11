@@ -101,9 +101,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private var pauseCollapseTask: Task<Void, Never>?
     /// 开始播放触发的展开等着再确认的那一次计时(`TouchBarAutoPresent.settleExpandDelayMs`)。
     private var settleExpandTask: Task<Void, Never>?
-    /// 自己发起的展开 / 收起等着哪个可见状态:`visibilityChanged` 看到的变化跟它对得上就是自己做的,对不上就是用户
-    /// 动的(功能栏图标、✕、收起键、快捷键)。
-    private var expectedVisibility: Bool?
+    /// 自己发起的展开 / 收起等着哪个可见状态、什么时候发起的:`visibilityChanged` 看到的变化跟它对得上、又在
+    /// `expectedVisibilityTimeout` 之内,就是自己做的,否则是用户动的(功能栏图标、✕、收起键、快捷键)。有时限是因为
+    /// 系统不一定报这次变化(比如被别的 App 的展开条盖着),留着不清的话,用户下一次手动收起会被当成自动的。
+    private var expectedVisibility: (visible: Bool, at: Date)?
+    private static let expectedVisibilityTimeout: TimeInterval = 3
     /// 上一次看到的可见状态:KVO 同一个值报两次时不当成又变了一次。
     private var lastVisible = false
     /// 此刻是歌词那一页还是「更多」那一页,和「更多」页没有操作多久回到歌词的计时。
@@ -529,8 +531,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         logger.notice("[TouchBarLyricsController.visibilityChanged] visible=\(visible)")
         if visible != lastVisible {
             lastVisible = visible
-            if expectedVisibility == visible {
-                expectedVisibility = nil
+            let expected = expectedVisibility
+            expectedVisibility = nil
+            if let expected, expected.visible == visible,
+               Date().timeIntervalSince(expected.at) < Self.expectedVisibilityTimeout {
+                // 自己发起的那一次。
             } else {
                 autoPresent.userChangedVisibility()
                 cancelPauseCollapse()
@@ -600,12 +605,12 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             return
         case .expand:
             guard !bar.isVisible else { return }
-            expectedVisibility = true
+            expectedVisibility = (true, Date())
             presentLyrics(hidingControlStrip: AppSettings.shared.touchBarHidesControlStrip)
         case .collapse:
             guard bar.isVisible else { return }
             cancelPauseCollapse()
-            expectedVisibility = false
+            expectedVisibility = (false, Date())
             collapseBar()
         case .expandAfterSettle:
             cancelSettleExpand()

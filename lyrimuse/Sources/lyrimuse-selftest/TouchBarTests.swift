@@ -304,18 +304,25 @@ func runTouchBarTests() {
                                        showsControls: false, showsCollapseKey: false, showsMoreKey: false),
                     [.lyrics], "触控栏排列: 关掉「⋯」键就没有它")
         typealias M = TouchBarMorePage
-        expectEqual(M.items(hasDuration: true, supportsFavorite: true, canShuffle: true, canRepeat: true, supportsVolume: true),
+        expectEqual(M.items(hasDuration: true, isAdBreak: false, supportsFavorite: true, canShuffle: true, canRepeat: true, supportsVolume: true),
                     [.back, .progress, .offset, .favorite, .shuffle, .repeat, .volume], "更多页: 全都支持时七项、顺序固定")
-        expectEqual(M.items(hasDuration: false, supportsFavorite: false, canShuffle: false, canRepeat: false,
+        expectEqual(M.items(hasDuration: false, isAdBreak: false, supportsFavorite: false, canShuffle: false, canRepeat: false,
                             supportsVolume: false),
                     [.back, .offset], "更多页: 不知道时长、什么都不支持时只有返回和歌词校准")
-        expectEqual(M.items(hasDuration: true, supportsFavorite: false, canShuffle: false, canRepeat: true,
+        expectEqual(M.items(hasDuration: true, isAdBreak: false, supportsFavorite: false, canShuffle: false, canRepeat: true,
                             supportsVolume: false),
                     [.back, .progress, .offset, .repeat], "更多页: 只有循环(QQ 音乐那种)")
-        expectEqual(M.items(hasDuration: true, supportsFavorite: false, canShuffle: true, canRepeat: true,
+        expectEqual(M.items(hasDuration: true, isAdBreak: false, supportsFavorite: false, canShuffle: true, canRepeat: true,
                             supportsVolume: true),
                     [.back, .progress, .offset, .shuffle, .repeat, .volume], "更多页: 没有喜欢(Spotify 那种)")
+        expectEqual(M.items(hasDuration: true, isAdBreak: true, supportsFavorite: false, canShuffle: true, canRepeat: true,
+                            supportsVolume: false),
+                    [.back, .progress, .shuffle, .repeat], "更多页: 广告期间不放歌词校准")
         expectEqual(M.autoReturnDelayMs, 8_000, "更多页: 8 秒没有操作回到歌词")
+        // 不占满整条时只有约 621pt(决策 48):返回、校准、喜欢、随机、循环按定宽排,两条滑杆缩到最窄,刚好放得下全部七项。
+        let narrow = 3 * M.keyWidth + (M.keyWidth * 2 + 8 + M.offsetReadoutWidth) + M.keyWidth
+            + M.progressMinWidth + M.volumeMinWidth + 6 * 8
+        expectEqual(narrow <= 621, true, "更多页: 不占满整条时七项按最窄宽度排得下(\(narrow)pt)")
     }
 
     // ---- 展开态从左到右:封面、三键各自摆在歌词哪一边;同一边上封面在三键左边;关掉的那项拿掉;系统不给 ✕ 时最左边加自己的收起键 ----
@@ -717,7 +724,7 @@ func runTouchBarTests() {
         // 自动展开 / 收起不灵、或者手动收起后又被弹出来。
         expectEqual(controller.contains("startAuto(presentingNow: presentNow)\n            observePlayback()")
                         && controller.contains("Publishers.CombineLatest4(p.$isPlayingNow, p.$currentTrackLacksLyrics, p.$title, p.$artist)\n                .dropFirst()\n                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)")
-                        && controller.contains("if expectedVisibility == visible {\n                expectedVisibility = nil\n            } else {\n                autoPresent.userChangedVisibility()")
+                        && controller.contains("Self.expectedVisibilityTimeout {\n            } else {\n                autoPresent.userChangedVisibility()")
                         && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.pauseCollapseDelayMs))")
                         && controller.contains("if isPlaying { cancelPauseCollapse() } else { cancelSettleExpand() }")
                         && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.settleExpandDelayMs))")
@@ -752,6 +759,18 @@ func runTouchBarTests() {
                         && moreBar.contains("DispatchQueue.main.asyncAfter(deadline: .now() + Self.seekSettleSeconds, execute: work)")
                         && !moreBar.contains("currentLyricsOffsetMs"), true,
                     "触控栏更多页: 进度条跟着走、拖动不被盖、松手才跳、只读不叠偏移的播放位置")
+        // 审查后补的三条(决策 48):这一页没显示时状态变了不重排;进度、音量优先级最低、返回最高、每颗键定宽;
+        // 自动展开 / 收起等的可见状态有时限。
+        expectEqual(moreBar.contains("private func stateChanged() {\n        guard active else { return }")
+                        && moreBar.contains("item.visibilityPriority = .low")
+                        && moreBar.components(separatedBy: "item.visibilityPriority = .low").count == 3
+                        && moreBar.contains("custom.visibilityPriority = .high")
+                        && moreBar.contains("button.widthAnchor.constraint(equalToConstant: CGFloat(TouchBarMorePage.keyWidth)).isActive = true"),
+                    true, "触控栏更多页: 只在显示时重排、放不下先藏两条滑杆、键定宽")
+        expectEqual(controller.contains("Date().timeIntervalSince(expected.at) < Self.expectedVisibilityTimeout")
+                        && controller.contains("expectedVisibility = (true, Date())")
+                        && controller.contains("expectedVisibility = (false, Date())"), true,
+                    "触控栏自动展开: 等着的可见状态有时限,过时的不再当成自己做的")
         expectEqual(controller.contains("button.widthAnchor.constraint(equalToConstant: CGFloat(TouchBarLyricsStyle.moreKeyWidth))")
                         && (code(appDir.appendingPathComponent("UI/TouchBarPreviewStage.swift")) ?? "")
                             .contains(".frame(width: CGFloat(TouchBarLyricsStyle.moreKeyWidth), height: Self.barSize.height)"), true,

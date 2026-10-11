@@ -229,7 +229,7 @@ struct TouchBarSidePicker: View {
 
 // MARK: - 恢复默认
 
-/// 「重置 ▾」和抽屉里「恢复默认」共用的动作:四组十三项回到默认值,总开关不动。默认值跟 `AppSettings.init()` 的
+/// 「重置 ▾」和抽屉里「恢复默认」共用的动作:四组十四项回到默认值,总开关不动。默认值跟 `AppSettings.init()` 的
 /// fallback 读同一组常量(`AppSettings.defaultTouchBarXxx`,字号是 Core 的 `TouchBarLyricsStyle.defaultFontSize`)。
 @MainActor
 enum TouchBarStyleDefaults {

@@ -4,8 +4,11 @@ import LyrimuseCore
 
 /// 触控栏「更多」那一页的几项(Core `TouchBarMorePage`):返回、播放进度、歌词校准、喜欢、随机、循环、音量。放哪几项、每项的状态
 /// 都跟灵动岛展开区读同一份播放状态(`PlaybackCoordinator`),动作也走同一组入口。换页由 `TouchBarLyricsController`
-/// 管,这里只建键、刷新状态,有操作时叫 `onInteraction`(重新计「没有操作多久回到歌词」),放哪几项变了时叫
-/// `onItemsChanged`(控制器重排这一页)。
+/// 管,这里只建键、刷新状态,有操作时叫 `onInteraction`(重新计「没有操作多久回到歌词」),这一页显示着、放哪几项
+/// 变了时叫 `onItemsChanged`(控制器重排这一页)。
+///
+/// 每颗键定宽 `TouchBarMorePage.keyWidth`、滑杆能缩,进度和音量的显示优先级最低:不占满整条时放不下,系统先藏这两条,
+/// 不藏一按就生效的键(17 章决策 48)。
 @MainActor
 final class TouchBarMorePageBar {
     private enum ID {
@@ -25,6 +28,8 @@ final class TouchBarMorePageBar {
     private var cache: [NSTouchBarItem.Identifier: NSTouchBarItem] = [:]
     /// 这一页此刻排着的几项(`identifiers()` 记下),状态变了跟它比,不一样才重排。
     private var shown: [TouchBarMorePage.Item] = []
+    /// 这一页此刻显示着没有(`setActive`):没显示时状态变了不重排、不跟进度。
+    private var active = false
     /// 用户最近一次拖音量的时刻:拖着的时候不拿回读的值去盖滑杆。
     private var lastVolumeDrag: Date = .distantPast
     /// 进度:这一页显示着时每 `progressTickSeconds` 跟一次播放位置;拖着的时候(和松手后一小会儿)不去盖滑杆,
@@ -40,8 +45,9 @@ final class TouchBarMorePageBar {
         item.slider.maxValue = 1
         item.target = self
         item.action = #selector(progressChanged(_:))
-        item.minimumSliderWidth = 140
+        item.minimumSliderWidth = CGFloat(TouchBarMorePage.progressMinWidth)
         item.maximumSliderWidth = 260
+        item.visibilityPriority = .low
         item.customizationLabel = L10n.t("播放进度")
         item.slider.setAccessibilityLabel(L10n.t("播放进度"))
         return item
@@ -53,7 +59,7 @@ final class TouchBarMorePageBar {
         label.textColor = .white
         label.alignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.widthAnchor.constraint(equalToConstant: 84).isActive = true
+        label.widthAnchor.constraint(equalToConstant: CGFloat(TouchBarMorePage.offsetReadoutWidth)).isActive = true
         return label
     }()
     private lazy var favoriteButton = Self.button(symbol: "heart", label: L10n.t("喜欢"), target: self,
@@ -68,8 +74,9 @@ final class TouchBarMorePageBar {
         item.slider.maxValue = 100
         item.target = self
         item.action = #selector(volumeChanged(_:))
-        item.minimumSliderWidth = 120
+        item.minimumSliderWidth = CGFloat(TouchBarMorePage.volumeMinWidth)
         item.maximumSliderWidth = 200
+        item.visibilityPriority = .low
         if let low = NSImage(systemSymbolName: "speaker.fill", accessibilityDescription: nil) {
             item.minimumValueAccessory = NSSliderAccessory(image: low)
         }
@@ -90,6 +97,7 @@ final class TouchBarMorePageBar {
     private func currentItems() -> [TouchBarMorePage.Item] {
         let p = PlaybackCoordinator.shared
         return TouchBarMorePage.items(hasDuration: (p.currentDurationMs ?? 0) > 0,
+                                      isAdBreak: p.isCurrentTrackAdBreak,
                                       supportsFavorite: p.isFavorited != nil,
                                       canShuffle: p.playbackModeOptions.contains(.shuffle),
                                       canRepeat: p.playbackModeOptions.canRepeat,
@@ -116,13 +124,15 @@ final class TouchBarMorePageBar {
             Publishers.MergeMany(TouchBarLyricsCell.signal(p.$isFavorited), TouchBarLyricsCell.signal(p.$playbackMode),
                                  TouchBarLyricsCell.signal(p.$playbackModeOptions), TouchBarLyricsCell.signal(p.$soundVolume),
                                  TouchBarLyricsCell.signal(p.$trackLyricsOffsetMs),
-                                 TouchBarLyricsCell.signal(p.$currentDurationMs))
+                                 TouchBarLyricsCell.signal(p.$currentDurationMs),
+                                 TouchBarLyricsCell.signal(p.$isCurrentTrackAdBreak))
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] in self?.stateChanged() },
         ]
     }
 
     private func stateChanged() {
+        guard active else { return }
         refreshStates()
         if currentItems() != shown { onItemsChanged() }
     }
@@ -146,6 +156,7 @@ final class TouchBarMorePageBar {
 
     /// 这一页显示着就每 `progressTickSeconds` 跟一次播放位置,离开就停。
     func setActive(_ active: Bool) {
+        self.active = active
         progressTimer?.invalidate()
         progressTimer = nil
         guard active else { return }
@@ -177,7 +188,9 @@ final class TouchBarMorePageBar {
             let image = (NSImage(named: NSImage.touchBarGoBackTemplateName)?.copy() as? NSImage) ?? NSImage()
             let button = NSButton(image: image, target: self, action: #selector(backTapped))
             button.setAccessibilityLabel(L10n.t("返回"))
+            Self.fixWidth(button)
             custom.view = button
+            custom.visibilityPriority = .high
             item = custom
         case ID.progress:
             item = progressItem
@@ -275,7 +288,13 @@ final class TouchBarMorePageBar {
     private static func button(symbol name: String, label: String, target: AnyObject, action: Selector) -> NSButton {
         let button = NSButton(image: symbol(name), target: target, action: action)
         button.setAccessibilityLabel(label)
+        fixWidth(button)
         return button
+    }
+
+    private static func fixWidth(_ button: NSButton) {
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.widthAnchor.constraint(equalToConstant: CGFloat(TouchBarMorePage.keyWidth)).isActive = true
     }
 
     /// 随机 / 循环点亮时键底换成强调色,熄灭时用触控栏默认的灰底。
