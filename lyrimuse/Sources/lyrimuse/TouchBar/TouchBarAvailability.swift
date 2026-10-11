@@ -20,6 +20,15 @@ final class TouchBarAvailability: ObservableObject {
     static let controlStripBundleID = "com.apple.controlstrip"
 
     @Published private(set) var isPresent = false
+
+    /// 设置页「歌词显示 › 触控栏」那一段按「有触控栏」来画(工具栏、浮层、总开关、抽屉)。预览钩子:没有触控栏的机器上
+    /// `defaults write me.yudaotor.lyrimuse settings:previewTouchBarPresent -bool true` 之后切到这一段就能看全、调设置界面;
+    /// `defaults delete … settings:previewTouchBarPresent` 恢复。只给设置页这一段用:触控栏歌词本身、设置搜索、菜单、引导都还看
+    /// `isPresent`,这台机器上照旧不启用,一个私有接口都不碰。`settings:` 前缀 = 机器状态,配置导出不带走。
+    var settingsShowsPresent: Bool {
+        isPresent || UserDefaults.standard.bool(forKey: Self.previewPresentKey)
+    }
+    static let previewPresentKey = "settings:previewTouchBarPresent"
     /// 这块触控栏左端是不是一颗虚拟 Esc 键(1st generation 是,2nd generation 是实体键),跟 `isPresent` 一起判;
     /// 没有触控栏时 false。是的话展开歌词时左端补一颗自己的 esc 键(`TouchBarEscapeKey`,见 17 章决策 36)。
     @Published private(set) var hasEscapeKey = false

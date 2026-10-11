@@ -310,7 +310,6 @@
 "仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息" = "Only needed if the bot's security settings have “Signature Verification” enabled — messages still arrive without it";
 "仅在机器人安全设置选择「加签」时需要填写，留空则按未加签处理" = "Only needed if the bot's security settings have “Signature” enabled; leave it blank to treat it as unsigned";
 "仅影响能完整显示的短句在固定宽度区域内的位置。显示不下的句子会横向滚动，对齐设置对其无效" = "Only affects lines that fit: which side of the fixed-width slot they sit on. Lines too long to fit scroll horizontally — there is no spare space, so alignment does nothing";
-"仅影响能完整显示的短句在歌词行中的位置。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左。显示不下的句子会横向滚动，对齐设置对其无效" = "Only affects short lines that fit: where they sit in the lyric row. Automatic follows the duet part — each singer's lines sit on their side, choruses are centered, and lines without duet info stay left. Lines that don't fit scroll horizontally, so alignment has no effect on them";
 "仅恢复完整尺寸的设置，迷你尺寸和窗口大小保持不变" = "Resets only the Full Size settings; the Mini Size and the window's dimensions stay as they are";
 "仅恢复迷你尺寸的设置，完整尺寸和窗口大小保持不变" = "Resets only the Mini Size settings; the Full Size and the window's dimensions stay as they are";
 "仅有纯文本，无时间戳" = "Plain text only, no timing";
@@ -342,7 +341,7 @@
 "从应用程序中选择…" = "Choose from Applications…";
 "从待补交清单中移除此条（不可恢复）" = "Remove this from the backfill queue (cannot be undone)";
 "从文件导入…" = "Import from File…";
-"从暂停开始播放时展开歌词；播放中切歌不会展开，手动收起的会保持收起" = "Shows the lyrics when playback resumes. Changing songs mid-playback won't expand them, and lyrics you collapsed yourself stay collapsed";
+"从暂停恢复播放时展开歌词；播放中切歌不展开，手动收起后保持收起" = "Shows the lyrics when playback resumes from pause. Switching songs during playback doesn't expand them, and lyrics you collapsed stay collapsed";
 "从此句开始播放" = "Play from this line";
 "从自动备份恢复" = "Restore from Auto Backup";
 "从资料库删除" = "Delete from Library";
@@ -564,6 +563,7 @@
 "另有 %@ 首歌曲无源应答 · 全部自动匹配" = "%@ more songs had no source response · Auto-Match All";
 "另有 %@ 首歌曲无源应答 · 全部自动匹配#one" = "%@ more song had no source response · Auto-Match All";
 "另有 %d 个文件未能写入歌词文件夹，请检查写入权限和磁盘空间" = "%d more couldn't be written to the lyrics folder. Check write access and disk space.";
+"只作用于能完整显示的句子；显示不下、需横向滚动的句子不受影响。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左" = "Applies only to lines that fit; lines that scroll horizontally aren't affected. Automatic follows the duet parts: each singer's lines sit on their side, choruses are centered, and lines without duet info stay left";
 "只列能翻成当前译文语言的语言，所以可能比「系统设置」里少几种。点一下没下载的就能下载" = "Only languages that can be translated into your translation language are listed, so there may be a few fewer than in System Settings. Click one that isn't downloaded to download it.";
 "只搜没有歌词或只有纯文本的歌" = "Only songs with no lyrics or only plain text";
 "只数存进缓存、会随歌词文件导出的读音；其余的在播放时现算，不算在内" = "Counts only pronunciations stored in the cache, which are exported with the lyric files; the rest are generated during playback and aren't counted";
@@ -641,12 +641,12 @@
 "在 iPhone 上安装 Bark App，首页即显示专属推送地址，拷贝后粘贴到此处即可，无需额外设置" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed";
 "在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录。" = "Unchecks Spotify in Players to Scrobble. Spotify plays on your other devices are still recorded.";
 "在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览。放不下两行时歌词行会自动加高" = "Adds one more line under the main lyric. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview. If two lines don't fit, the lyric row grows to fit them";
-"在主歌词下方增加一行（两行分别为 14pt / 11pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行显示不下时，按该句时长横向滚动。" = "Adds a second line under the lyric (14pt / 11pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. When the second line doesn't fit, it scrolls across over the line's duration.";
 "在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，显示不下时末尾渐隐。" = "Adds a second line under the lyric without changing the item's height (10pt / 9pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. The second line never scrolls — its tail fades when it doesn't fit.";
+"在主行下方再显示一行：译文和读音对应当前句，「下一句」为即将演唱的歌词。开启后两行字号固定为 14pt / 11pt，「字号」不生效，主行也不再提前切到下一句；副行显示不下时，按该句时长横向滚动" = "Adds a second line under the main line: Translation and Romanization follow the current line, and Next Line shows the upcoming one. With it on, the two lines are fixed at 14pt / 11pt (Font Size has no effect) and the main line no longer switches early. A second line that doesn't fit scrolls across over the line's duration";
 "在企业微信群中：群设置 → 群机器人 → 添加机器人，创建后拷贝 Webhook 地址，无需额外的签名设置" = "In your WeCom group: Group Settings → Group Bots → Add a Bot, then copy the webhook URL after creating it. No extra signature setup is needed";
 "在其他设备上播放，Last.fm 已收到" = "Playing on another device; Last.fm has received it";
 "在列表里查看" = "Show in List";
-"在功能栏中显示 Lyrimuse 图标，轻点即可展开歌词" = "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics.";
+"在功能栏中显示 Lyrimuse 图标，轻点展开歌词" = "Adds a Lyrimuse button to the Control Strip; tap it to show lyrics";
 "在后台下载，退出 Lyrimuse 时安装" = "Downloads in the background and installs when you quit Lyrimuse";
 "在外部编辑器中编辑歌词" = "Edit Lyrics in External Editor";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
@@ -938,6 +938,7 @@
 "当前歌词" = "Current Lyric";
 "当前歌词为手动修改或手动采纳，并非下方自动决策的结果" = "The current lyrics were edited or picked by you, not chosen by the automatic decision below.";
 "当前歌词的出处" = "Where the current lyrics came from";
+"当前系统未提供触控栏接口，开启后不生效" = "This version of macOS doesn't provide the Touch Bar interfaces Lyrimuse needs, so turning this on has no effect";
 "当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "Musixmatch's API host is unreachable over a direct connection on this network (no TCP/TLS response), and no working system proxy is available — turning on a proxy usually fixes it";
 "当前这条" = "This Version";
 "当前连续" = "Current streak";
@@ -1058,7 +1059,6 @@
 "提醒" = "Alerts";
 "搜到的那首跟这条的歌名对不上号，只用来合并播放次数，不让歌词共用。" = "The song it found doesn't match this version's title, so it only merges play counts and doesn't share lyrics.";
 "搜完确认没有歌词才收起，只留顶部那一条，悬停展开照常；搜索期间照常显示歌词行" = "Collapses only once the search confirms there are no lyrics, leaving just the top strip; hovering still expands it. The lyric row stays while searching";
-"搜完确认没有歌词才收起，有歌词时自动展开；搜索期间照常显示" = "Collapses only once the search confirms there are no lyrics, and expands again when there are. Stays shown while searching";
 "搜完确认没有歌词才隐藏，搜索期间照常显示" = "Hides only once the search confirms there are no lyrics; stays visible while searching";
 "搜索" = "Search";
 "搜索候选歌词" = "Search for Lyrics";
@@ -1085,7 +1085,6 @@
 "播放记录" = "Play History";
 "播放过的歌曲将显示在这里" = "Songs you play will show up here automatically.";
 "播放进度" = "Playback Position";
-"播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" = "Playback position, lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden";
 "收听时段" = "Listening Hours";
 "收听最多" = "Most Played";
 "收听最多 %@" = "Top day %@";
@@ -1209,7 +1208,7 @@
 "普通话" = "Mandarin";
 "智能" = "Smart";
 "智能算法" = "Smart Matching";
-"暂停 10 秒后收回到功能栏图标，继续播放时自动展开" = "Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes";
+"暂停 10 秒后收起为功能栏图标，恢复播放时自动展开" = "Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes";
 "暂停后" = "When Paused";
 "暂停收起" = "Collapse on Pause";
 "暂停时收起" = "Shrink When Paused";
@@ -1323,7 +1322,6 @@
 "本机已记下 %@ 首" = "%@ plays saved on this Mac";
 "本机已记下 %@ 首#one" = "%@ play saved on this Mac";
 "本机系统未提供触控栏接口" = "Touch Bar API unavailable";
-"本机系统未提供触控栏接口，开启后不会生效" = "This Mac's system doesn't provide the Touch Bar interfaces this needs, so turning it on has no effect";
 "本条" = "This entry";
 "本轮「%@」未应答，为避免误降级未作更换，可稍后重试" = "“%@” didn't respond this round, so nothing was changed to avoid a downgrade. Try again later";
 "本轮候选明细已不可用" = "This round's candidate details are no longer available";
@@ -1412,13 +1410,13 @@
 "歌曲开始播放后将显示歌词" = "Lyrics will show once the song starts";
 "歌曲无歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
 "歌词" = "Lyrics";
-"歌词使用封面的主色，无法获取时使用白色" = "Lyrics use the cover's main color, or white when there isn't one";
+"歌词使用封面主色；无法获取时为白色" = "Lyrics use the cover's main color, or white when none is available";
 "歌词偏移" = "Lyrics Offset";
 "歌词偏移归零" = "Reset Lyrics Offset";
 "歌词内容与 %@ 相同" = "Same lyrics and line timing as %@";
 "歌词内容与其他歌词源高度一致（2 家及以上 250 · 1 家 150），版本不符的候选不计" = "Lyrics text agrees with other sources (2+ sources 250 · 1 source 150); candidates of a different version don't qualify";
 "歌词列表" = "Lyric List";
-"歌词占满整个触控栏；如需使用亮度、音量等系统按键，请先点按左端的 ✕ 收起" = "Lyrics fill the whole Touch Bar. To use brightness, volume and other system buttons, tap ✕ on the left to collapse first.";
+"歌词占满整条触控栏；需要调节亮度、音量等时，请先点按左端的 ✕ 收起歌词" = "Lyrics fill the whole Touch Bar. To reach brightness, volume and other system buttons, tap ✕ on the left to collapse the lyrics first";
 "歌词已同步显示" = "Lyrics are showing";
 "歌词布局" = "Lyrics Layout";
 "歌词库" = "Lyrics Library";
@@ -1598,6 +1596,7 @@
 "点按「复制修复命令」，打开「终端」，粘贴后按回车，按提示输入开机密码（输入时不显示字符），然后再点按「启用」" = "Click Copy Fix Command, open Terminal, paste it and press Return, enter your login password when asked (nothing shows as you type), then click Enable.";
 "点按「开始使用」，让歌词随旋律逐句亮起" = "Click “Get Started” and let every line light up with the music";
 "点按下载" = "Click to download";
+"点按后切换到播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" = "Tap it to switch to playback position, lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden";
 "点按图标可打开设置和歌词窗口" = "Click the icon to open Settings and the lyrics window";
 "点按归零" = "Click to reset";
 "点按录制" = "Record Shortcut";
@@ -1641,6 +1640,7 @@
 "确定要清空全部歌词时间轴校准吗？" = "Clear all lyrics timing calibrations?";
 "确定要清空全部歌词缓存吗？" = "Clear all cached lyrics?";
 "确定要清空全部电台校准吗？" = "Clear all radio calibrations?";
+"确认没有歌词后才收起，找到歌词时自动展开；搜索期间照常显示" = "Collapses only after confirming there are no lyrics, and expands again once lyrics are found. Stays shown while searching";
 "磨砂玻璃" = "Frosted";
 "秒" = "s";
 "移除" = "Remove";
@@ -2134,7 +2134,7 @@
 "预览 · 好友在 Discord 上看到的效果" = "Preview · What friends see on Discord";
 "预览 · 好友看到的效果，按钮只有别人看得到" = "Preview · What friends see; only others can see your buttons";
 "预览 · 左右滑动查看完整内容" = "Preview · swipe sideways for the whole bar";
-"预览 · 左右滑动查看完整内容 · 本句将横向滚动" = "Preview · swipe sideways for the whole bar · this line scrolls";
+"预览 · 左右滑动查看完整内容 · 本句较长，将横向滚动" = "Preview · swipe sideways for the whole bar · this line is long and scrolls";
 "预览 · 已关闭，Discord 上不会显示" = "Preview · Turned off, nothing shows on Discord";
 "预览 · 已暂时隐藏，%@ 恢复" = "Preview · Hidden until %@";
 "预览 · 当前未播放，显示示例" = "Preview · Nothing playing, showing an example";

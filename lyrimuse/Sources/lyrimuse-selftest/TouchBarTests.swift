@@ -825,7 +825,7 @@ func runTouchBarTests() {
 
         // 没有触控栏时:那一段照样在、点进去只有说明卡,搜索只留总开关那一条,控制器不启用。漏一处都不报错,只表现成
         // 没有触控栏的 Mac 上冒出几项拨了没用的设置,或者白调私有接口。
-        expectEqual(touchBarBranch?.contains("if touchBar.isPresent {"), true,
+        expectEqual(touchBarBranch?.contains("if touchBar.settingsShowsPresent {"), true,
                     "触控栏: .touchBar 那一支按有没有触控栏分两种内容")
         expectEqual(touchBarBranch?.contains("L10n.t(\"此 Mac 未配备触控栏\")"), true,
                     "触控栏: 没有触控栏时放「这台 Mac 没有触控栏」那张说明卡")
@@ -865,14 +865,14 @@ func runTouchBarTests() {
             expectEqual(text.contains("TouchBarPrivateAPI.supportsHidingControlStrip"), true,
                         "触控栏: \(name)只在系统入口在时才当隐藏功能栏算")
         }
-        // 「显示封面」「显示播放控制」开着时下面各挂一行位置(从属行),两项各管各的。
+        // 「显示封面」「显示播放控制」开着时那一块各挂一个位置下拉,两项各管各的。
         let layoutRows = structBody("TouchBarLayoutRows")
         expectEqual(layoutRows.contains("if settings.touchBarShowsArtwork {")
                         && layoutRows.contains("if settings.touchBarShowsControls {")
                         && layoutRows.components(separatedBy: "TouchBarSidePicker(selection:").count - 1 == 2
-                        && layoutRows.contains("SettingsSubRow(title: L10n.t(\"封面位置\"))")
-                        && layoutRows.contains("SettingsSubRow(title: L10n.t(\"播放控制位置\"))"),
-                    true, "触控栏: 封面、三键开着时下面各有一行「封面位置」「播放控制位置」")
+                        && layoutRows.contains(".help(L10n.t(\"封面位置\"))")
+                        && layoutRows.contains(".help(L10n.t(\"播放控制位置\"))"),
+                    true, "触控栏: 封面、三键开着时那一块各挂一个左 / 右下拉(「封面位置」「播放控制位置」)")
         // 「系统功能栏」那一行(17 章决策 37):右边那排系统按键 App 改不了,按钮带锚点直接弹出系统设置里的「触控栏设置…」。
         // 锚点丢了不报错,只表现成按下去停在「键盘」页、还得自己找。
         expectEqual(layoutRows.contains("SettingsRow(icon: \"keyboard\", title: L10n.t(\"系统功能栏\"),")

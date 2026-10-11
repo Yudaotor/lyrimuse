@@ -121,7 +121,7 @@ struct TouchBarPreviewStage: View {
         let rows = LyricRows(main: spec, secondary: secondarySpec, twoRows: snapshot.secondary.showsSecondaryRow)
         return VStack(spacing: SectionPreviewMetrics.captionSpacing) {
             stage(rows: rows, lyricsWidth: lyricsWidth, hidesStrip: hidesStrip, escapeKey: escapeKey, snapshot: snapshot)
-            Text(scrolls ? L10n.t("预览 · 左右滑动查看完整内容 · 本句将横向滚动") : L10n.t("预览 · 左右滑动查看完整内容"))
+            Text(scrolls ? L10n.t("预览 · 左右滑动查看完整内容 · 本句较长，将横向滚动") : L10n.t("预览 · 左右滑动查看完整内容"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(height: SectionPreviewMetrics.captionHeight)

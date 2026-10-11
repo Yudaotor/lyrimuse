@@ -46,35 +46,8 @@ struct LyricsAlignmentSegmentedControl: View {
         }
     }
 
+    // 外观同设置页其余分段(`SettingsPillSegmentedControl`):灵动岛、菜单栏、触控栏的「对齐方式」跟悬浮歌词那一组一个样子。
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(options, id: \.self) { option in
-                let isSelected = selection == option
-                Button {
-                    selection = option
-                } label: {
-                    Text(Self.label(for: option))
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                        .lineLimit(1)
-                        .frame(minWidth: 56)
-                        .padding(.vertical, 4)
-                        // .plain 按钮只认字形,不补这个的话点在文字两侧的留白上没反应。
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
-                .foregroundStyle(isSelected ? Color.white : Color.primary)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isSelected ? Color.accentColor : Color.clear)
-                )
-            }
-        }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-        )
-        .fixedSize()
+        SettingsPillSegmentedControl(selection: $selection, options: options, label: Self.label(for:), minWidth: 56)
     }
 }

@@ -2623,25 +2623,29 @@ private struct AppearanceSettingsTab: View {
         case .touchBar:
             // 编辑台:工具栏在预览上面,总开关卡和「全部设置」抽屉在预览下面,排法照歌词窗口那一段;工具栏、浮层、抽屉和三组行视图
             // 都在 UI/TouchBarSettingsRows.swift。有没有触控栏都给看预览,没有时预览下面只有一张说明卡。
-            if touchBar.isPresent {
+            if touchBar.settingsShowsPresent {
                 TouchBarEditorToolbar()
             }
             TouchBarPreviewStage()
-            if touchBar.isPresent {
+            if touchBar.settingsShowsPresent {
                 // 配置不看开关,关着也能先调好(同另外几段)。系统里取不到触控栏的那几个入口时(`TouchBarPrivateAPI.isAvailable`
                 // 为假),开关的副标题换成「不会生效」的说明,开关照样能拨。
-                modeToggleCard(
-                    icon: SurfaceGlyph.touchBar.rawValue,
-                    title: L10n.t("触控栏歌词"),
-                    subtitle: TouchBarPrivateAPI.isAvailable
-                        ? L10n.t("在功能栏中显示 Lyrimuse 图标，轻点即可展开歌词")
-                        : L10n.t("本机系统未提供触控栏接口，开启后不会生效"),
-                    isOn: $settings.showLyricsInTouchBar)
-                TouchBarAllSettingsDrawer()
+                // 总开关卡和抽屉背后垫一层光,玻璃卡才看得出边(同另外几段)。
+                VStack(spacing: 14) {
+                    modeToggleCard(
+                        icon: SurfaceGlyph.touchBar.rawValue,
+                        title: L10n.t("触控栏歌词"),
+                        subtitle: TouchBarPrivateAPI.isAvailable
+                            ? L10n.t("在功能栏中显示 Lyrimuse 图标，轻点展开歌词")
+                            : L10n.t("当前系统未提供触控栏接口，开启后不生效"),
+                        isOn: $settings.showLyricsInTouchBar)
+                    TouchBarAllSettingsDrawer()
+                }
+                .background { LastfmGlassGlow() }
             } else {
                 // 这台 Mac 此刻没有触控栏(真机没有,Xcode 的触控栏模拟器也没开):只放这一张说明卡,工具栏、开关和抽屉都不出现
                 // —— 拨了也不会生效。开关存着的值不动。
-                SettingsCard {
+                SettingsCard(cornerRadius: 18) {
                     SettingsRow(icon: "info.circle", title: L10n.t("此 Mac 未配备触控栏"),
                                 subtitle: L10n.t("触控栏歌词仅适用于配备触控栏的 MacBook Pro")) {
                         EmptyView()
@@ -3692,7 +3696,7 @@ private struct NotchLyricsAlignmentRow: View {
             icon: "text.alignleft",
             title: L10n.t("对齐方式"),
             // 「自动」那一档按什么走也写在这条 help 里(菜单栏那一行用的是另一条词条)。
-            help: L10n.t("仅影响能完整显示的短句在歌词行中的位置。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左。显示不下的句子会横向滚动，对齐设置对其无效")
+            help: L10n.t("只作用于能完整显示的句子；显示不下、需横向滚动的句子不受影响。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左")
         ) {
             LyricsAlignmentSegmentedControl(selection: $settings.notchLyricsAlignment,
                                             options: LyricsRestingAlignment.notchOptions)

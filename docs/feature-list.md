@@ -903,7 +903,7 @@ Every setting in the Settings window, by where it lives: 236 in all. Type a name
 ### Lyrics Display › Touch Bar › Style
 
 - **Karaoke Effect**
-- **Follow Cover Art**: Lyrics use the cover's main color, or white when there isn't one
+- **Follow Cover Art**: Lyrics use the cover's main color, or white when none is available
 
 ### Lyrics Display › Touch Bar › Layout
 
@@ -911,15 +911,15 @@ Every setting in the Settings window, by where it lives: 236 in all. Type a name
 - **Artwork Position**
 - **Show Playback Controls**: Previous, Play/Pause and Next, plus a settings button
 - **Controls Position**
-- **Show More Button**: Playback position, lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden
-- **Hide Control Strip While Expanded**: Lyrics fill the whole Touch Bar. To use brightness, volume and other system buttons, tap ✕ on the left to collapse first.
+- **Show More Button**: Tap it to switch to playback position, lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden
+- **Hide Control Strip While Expanded**: Lyrics fill the whole Touch Bar. To reach brightness, volume and other system buttons, tap ✕ on the left to collapse the lyrics first
 - **System Control Strip**: Add, remove or reorder the brightness, volume and other system buttons on the right of the Touch Bar in System Settings › Keyboard › Touch Bar Settings…
 
 ### Lyrics Display › Touch Bar › Behavior
 
-- **Expand When Playback Starts**: Shows the lyrics when playback resumes. Changing songs mid-playback won't expand them, and lyrics you collapsed yourself stay collapsed
-- **Collapse When Paused**: Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes
-- **Collapse for Instrumentals & No Lyrics**: Collapses only once the search confirms there are no lyrics, and expands again when there are. Stays shown while searching
+- **Expand When Playback Starts**
+- **Collapse When Paused**
+- **Collapse for Instrumentals & No Lyrics**
 
 ### Lyrics Display › Lyrics Window
 

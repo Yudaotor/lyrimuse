@@ -42,10 +42,13 @@ extension TouchBarSettingsGroup {
     @MainActor @ViewBuilder
     func popoverContent() -> some View {
         switch self {
-        case .lyrics: SettingsPopoverShell(title: title, width: 460) { TouchBarLyricsRows() }
+        // 「歌词」520:对齐方式四档胶囊分段 + 不折行的行名。
+        case .lyrics: SettingsPopoverShell(title: title, width: 520) { TouchBarLyricsRows() }
         case .style: SettingsPopoverShell(title: title, width: 400) { TouchBarStyleRows() }
-        case .layout: SettingsPopoverShell(title: title, width: 440) { TouchBarLayoutRows() }
-        case .behavior: SettingsPopoverShell(title: title, width: 440) { TouchBarBehaviorRows() }
+        // 「布局」四个开关两列小块、封面和三键的左 / 右下拉挂在小块里;「行为」三个开关两列。
+        // 别排成一行三格:要 780 宽,浮层伸出设置窗口外。
+        case .layout: SettingsPopoverShell(title: title, width: 560) { TouchBarLayoutRows() }
+        case .behavior: SettingsPopoverShell(title: title, width: 520) { TouchBarBehaviorRows() }
         }
     }
 }
@@ -58,49 +61,51 @@ struct TouchBarLyricsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        VStack(spacing: 0) {
-            // 四选一同灵动岛 / 菜单栏的「副行」(同一个枚举、同一套显示名),各存各的键,默认不显示。
-            SettingsRow(icon: "text.append", title: L10n.t("副行"),
-                        help: L10n.t("在主歌词下方增加一行（两行分别为 14pt / 11pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行显示不下时，按该句时长横向滚动。")) {
-                Picker("", selection: $settings.touchBarSecondaryLine) {
-                    ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
-                        Text(kind.displayName).tag(kind)
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                // 四选一同灵动岛 / 菜单栏的「副行」(同一个枚举、同一套显示名),各存各的键,默认不显示。
+                SettingsRow(icon: "text.append", title: L10n.t("副行"),
+                            help: L10n.t("在主行下方再显示一行：译文和读音对应当前句，「下一句」为即将演唱的歌词。开启后两行字号固定为 14pt / 11pt，「字号」不生效，主行也不再提前切到下一句；副行显示不下时，按该句时长横向滚动")) {
+                    Picker("", selection: $settings.touchBarSecondaryLine) {
+                        ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
+                            Text(kind.displayName).tag(kind)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            CardDivider()
-            SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
-                if settings.touchBarSecondaryLine.showsSecondaryRow {
-                    Text(L10n.t("由副行决定"))
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                } else {
-                    HStack(spacing: 8) {
-                        SteppedSlider(value: Binding(
-                            get: { TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize) },
-                            set: { newValue in
-                                guard newValue != settings.touchBarLyricsFontSize else { return }
-                                settings.touchBarLyricsFontSize = newValue
-                            }
-                        ), in: TouchBarLyricsStyle.fontSizeRange, step: 1)
-                        .frame(width: 150)
-                        Text(String(format: L10n.t("%@pt"),
-                                    "\(Int(TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize)))"))
+                CardDivider()
+                SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
+                    if settings.touchBarSecondaryLine.showsSecondaryRow {
+                        Text(L10n.t("由副行决定"))
+                            .font(.system(size: 13))
                             .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 46, alignment: .trailing)
+                    } else {
+                        HStack(spacing: 8) {
+                            SteppedSlider(value: Binding(
+                                get: { TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize) },
+                                set: { newValue in
+                                    guard newValue != settings.touchBarLyricsFontSize else { return }
+                                    settings.touchBarLyricsFontSize = newValue
+                                }
+                            ), in: TouchBarLyricsStyle.fontSizeRange, step: 1)
+                            .frame(width: 150)
+                            Text(String(format: L10n.t("%@pt"),
+                                        "\(Int(TouchBarLyricsStyle.clampedFontSize(settings.touchBarLyricsFontSize)))"))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 46, alignment: .trailing)
+                        }
                     }
                 }
-            }
-            CardDivider()
-            // 同灵动岛「对齐方式」那四档(含按对唱声部走的「自动」),说明文案也是同一条。
-            SettingsRow(icon: "text.alignleft", title: L10n.t("对齐方式"),
-                        help: L10n.t("仅影响能完整显示的短句在歌词行中的位置。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左。显示不下的句子会横向滚动，对齐设置对其无效")) {
-                LyricsAlignmentSegmentedControl(selection: $settings.touchBarLyricsAlignment,
-                                                options: LyricsRestingAlignment.notchOptions)
+                CardDivider()
+                // 同灵动岛「对齐方式」那四档(含按对唱声部走的「自动」),说明文案也是同一条。
+                SettingsRow(icon: "text.alignleft", title: L10n.t("对齐方式"),
+                            help: L10n.t("只作用于能完整显示的句子；显示不下、需横向滚动的句子不受影响。「自动」按对唱声部对齐：各声部靠向各自一侧，合唱居中，无对唱信息时靠左")) {
+                    LyricsAlignmentSegmentedControl(selection: $settings.touchBarLyricsAlignment,
+                                                    options: LyricsRestingAlignment.notchOptions)
+                }
             }
         }
     }
@@ -113,75 +118,77 @@ struct TouchBarStyleRows: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsRow(
-                icon: "sparkles",
-                title: L10n.t("卡拉OK效果"),
-                subtitle: reduceMotion ? L10n.t("系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮") : nil,
-                help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮")
-            ) {
-                Toggle("", isOn: $settings.touchBarLyricsKaraoke)
-            }
-            CardDivider()
-            SettingsRow(icon: "paintpalette", title: L10n.t("跟随封面"),
-                        subtitle: L10n.t("歌词使用封面的主色，无法获取时使用白色")) {
-                Toggle("", isOn: $settings.touchBarLyricsFollowsCover)
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                SettingsRow(
+                    icon: "sparkles",
+                    title: L10n.t("卡拉OK效果"),
+                    subtitle: reduceMotion ? L10n.t("系统已开启「减弱动态效果」，触控栏歌词不滚动、不逐字高亮") : nil,
+                    help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮")
+                ) {
+                    Toggle("", isOn: $settings.touchBarLyricsKaraoke)
+                }
+                CardDivider()
+                SettingsRow(icon: "paintpalette", title: L10n.t("跟随封面"),
+                            subtitle: L10n.t("歌词使用封面主色；无法获取时为白色")) {
+                    Toggle("", isOn: $settings.touchBarLyricsFollowsCover)
+                }
             }
         }
     }
 }
 
-/// 「布局」组:封面、播放控制各自显不显示、摆在歌词哪一边(`TouchBarSide`,两项各管各的,开着才有那一行位置),
+/// 「布局」组:封面、播放控制各自显不显示、摆在歌词哪一边(`TouchBarSide`,两项各管各的,开着那一块才挂左 / 右下拉),
 /// 「⋯」键,展开时隐藏功能栏,以及去系统设置里调功能栏的入口。
 struct TouchBarLayoutRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
+    // 四个开关两列小块(封面、三键开着时左 / 右下拉挂在那一块上),去系统设置那一行单独一框。说明都收进 ⓘ:
+    // 往上弹的浮层只有按钮上方约 200pt,一行一个开关加副标题放不下。
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsRow(icon: "photo", title: L10n.t("显示封面")) {
-                Toggle("", isOn: $settings.touchBarShowsArtwork)
-            }
-            if settings.touchBarShowsArtwork {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("封面位置")) {
-                    TouchBarSidePicker(selection: $settings.touchBarArtworkSide)
-                }
-            }
-            CardDivider()
-            SettingsRow(icon: "playpause.fill", title: L10n.t("显示播放控制"),
-                        subtitle: L10n.t("上一首、播放/暂停、下一首和设置键")) {
-                Toggle("", isOn: $settings.touchBarShowsControls)
-            }
-            if settings.touchBarShowsControls {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("播放控制位置")) {
-                    TouchBarSidePicker(selection: $settings.touchBarControlsSide)
-                }
-            }
-            CardDivider()
-            // 最右端那颗「⋯」键,点一下换成「更多」那一页(17 章决策 47)。
-            SettingsRow(icon: "ellipsis.circle", title: L10n.t("显示「更多」键"),
-                        subtitle: L10n.t("播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示")) {
-                Toggle("", isOn: $settings.touchBarShowsMoreKey)
-            }
-            CardDivider()
-            // 占满整条触控栏要连系统的功能栏一起收起,展开期间够不着亮度、音量,所以默认关。
-            SettingsRow(icon: "arrow.left.and.right", title: L10n.t("展开时隐藏功能栏"),
-                        subtitle: L10n.t("歌词占满整个触控栏；如需使用亮度、音量等系统按键，请先点按左端的 ✕ 收起")) {
-                Toggle("", isOn: $settings.touchBarHidesControlStrip)
-            }
-            CardDivider()
-            // 右边那排是系统的功能栏,放哪些按钮由用户在系统设置里调,App 没有接口改。链接带 `TouchBarSettings` 锚点,
-            // 直接弹出「触控栏设置…」那一层;不认这个锚点的系统停在「键盘」页,副标题写着往哪点。见 17 章决策 37。
-            SettingsRow(icon: "keyboard", title: L10n.t("系统功能栏"),
-                        subtitle: L10n.t("触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序")) {
-                Button(L10n.t("打开系统设置")) {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?TouchBarSettings") {
-                        NSWorkspace.shared.open(url)
+        SettingsRowGroupStack {
+            SettingsTileGrid {
+                SettingsToggleTile(icon: "photo", title: L10n.t("显示封面"), isOn: $settings.touchBarShowsArtwork) {
+                    if settings.touchBarShowsArtwork {
+                        TouchBarSidePicker(selection: $settings.touchBarArtworkSide)
+                            .help(L10n.t("封面位置"))
+                            .settingsSearchHighlight(title: L10n.t("封面位置"))
                     }
+                }
+                SettingsToggleTile(icon: "playpause.fill", title: L10n.t("显示播放控制"),
+                                   help: L10n.t("上一首、播放/暂停、下一首和设置键"),
+                                   isOn: $settings.touchBarShowsControls) {
+                    if settings.touchBarShowsControls {
+                        TouchBarSidePicker(selection: $settings.touchBarControlsSide)
+                            .help(L10n.t("播放控制位置"))
+                            .settingsSearchHighlight(title: L10n.t("播放控制位置"))
+                    }
+                }
+                // 最右端那颗「⋯」键,点一下换成「更多」那一页(17 章决策 47)。
+                SettingsToggleTile(icon: "ellipsis.circle", title: L10n.t("显示「更多」键"),
+                                   help: L10n.t("点按后切换到播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示"),
+                                   isOn: $settings.touchBarShowsMoreKey)
+                // 占满整条触控栏要连系统的功能栏一起收起,展开期间够不着亮度、音量,所以默认关。
+                SettingsToggleTile(icon: "arrow.left.and.right", title: L10n.t("展开时隐藏功能栏"),
+                                   help: L10n.t("歌词占满整条触控栏；需要调节亮度、音量等时，请先点按左端的 ✕ 收起歌词"),
+                                   isOn: $settings.touchBarHidesControlStrip)
+            }
+            SettingsRowGroup {
+                // 右边那排是系统的功能栏,放哪些按钮由用户在系统设置里调,App 没有接口改。链接带 `TouchBarSettings` 锚点,
+                // 直接弹出「触控栏设置…」那一层;不认这个锚点的系统停在「键盘」页,ⓘ 里写着往哪点。见 17 章决策 37。
+                SettingsRow(icon: "keyboard", title: L10n.t("系统功能栏"),
+                            help: L10n.t("触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序")) {
+                    Button(L10n.t("打开系统设置")) {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?TouchBarSettings") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonBorderShape(.capsule)
                 }
             }
         }
+        .animation(.default, value: settings.touchBarShowsArtwork)
+        .animation(.default, value: settings.touchBarShowsControls)
     }
 }
 
@@ -191,26 +198,21 @@ struct TouchBarBehaviorRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsRow(icon: "play.circle", title: L10n.t("开始播放时自动展开"),
-                        help: L10n.t("从暂停开始播放时展开歌词；播放中切歌不会展开，手动收起的会保持收起")) {
-                Toggle("", isOn: $settings.touchBarExpandOnPlay)
-            }
-            CardDivider()
-            SettingsRow(icon: "pause.circle", title: L10n.t("暂停时自动收起"),
-                        help: L10n.t("暂停 10 秒后收回到功能栏图标，继续播放时自动展开")) {
-                Toggle("", isOn: $settings.touchBarCollapseWhenPaused)
-            }
-            CardDivider()
-            SettingsRow(icon: "text.badge.xmark", title: L10n.t("纯音乐/无歌词时收起"),
-                        help: L10n.t("搜完确认没有歌词才收起，有歌词时自动展开；搜索期间照常显示")) {
-                Toggle("", isOn: $settings.touchBarCollapseWhenNoLyrics)
-            }
+        SettingsTileGrid {
+            SettingsToggleTile(icon: "play.circle", title: L10n.t("开始播放时自动展开"),
+                               help: L10n.t("从暂停恢复播放时展开歌词；播放中切歌不展开，手动收起后保持收起"),
+                               isOn: $settings.touchBarExpandOnPlay)
+            SettingsToggleTile(icon: "pause.circle", title: L10n.t("暂停时自动收起"),
+                               help: L10n.t("暂停 10 秒后收起为功能栏图标，恢复播放时自动展开"),
+                               isOn: $settings.touchBarCollapseWhenPaused)
+            SettingsToggleTile(icon: "text.badge.xmark", title: L10n.t("纯音乐/无歌词时收起"),
+                               help: L10n.t("确认没有歌词后才收起，找到歌词时自动展开；搜索期间照常显示"),
+                               isOn: $settings.touchBarCollapseWhenNoLyrics)
         }
     }
 }
 
-/// 「布局」组里两行位置的控件:摆在歌词左边还是右边(`TouchBarSide`)。跟别处从属行里的二选一一样用下拉菜单
+/// 「布局」组里封面、三键的位置控件:摆在歌词左边还是右边(`TouchBarSide`),挂在对应那一块开关上。跟别处从属行里的二选一一样用下拉菜单
 /// (同歌词窗口背景的「方向」)。
 struct TouchBarSidePicker: View {
     @Binding var selection: TouchBarSide
@@ -266,11 +268,17 @@ enum TouchBarStyleDefaults {
 struct TouchBarEditorToolbar: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var popover: TouchBarSettingsGroup?
+    /// 浮层高度上限 = 点开那一刻按钮那一行上沿到屏幕顶的距离(见 toolbarButton)。
+    @State private var popoverMaxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
+    @State private var row1Probe = StageTopProbe()
+    @State private var row2Probe = StageTopProbe()
 
     var body: some View {
         VStack(spacing: 10) {
             row1
+                .overlay(alignment: .top) { probeAnchor(row1Probe) }
             row2
+                .overlay(alignment: .top) { probeAnchor(row2Probe) }
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
@@ -284,6 +292,13 @@ struct TouchBarEditorToolbar: View {
             Spacer(minLength: 8)
             EditorToolbarResetReserve()
         }
+    }
+
+    /// 按钮那一行上沿的测量点(同悬浮歌词、灵动岛编辑台的 `StageTopProbe`)。
+    private func probeAnchor(_ probe: StageTopProbe) -> some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .background(StageTopProbeView(probe: probe))
     }
 
     private func ghostButton(_ group: TouchBarSettingsGroup) -> some View {
@@ -313,8 +328,11 @@ struct TouchBarEditorToolbar: View {
         }
     }
 
+    /// 浮层挂在按钮上往上弹(`arrowEdge: .top`),不往下压在预览上;高度封顶在按钮那一行上方的空间里,放不下时在浮层里滚,
+    /// 不让系统翻下来(同悬浮歌词、灵动岛编辑台,04 章决策 34、61)。
     private func toolbarButton(_ group: TouchBarSettingsGroup) -> some View {
         Button {
+            popoverMaxHeight = (group == .behavior ? row2Probe : row1Probe).popoverHeightLimit()
             popover = group
         } label: {
             EditorToolbarButtonLabel(icon: group.icon, title: group.title, summary: summary(for: group))
@@ -324,8 +342,9 @@ struct TouchBarEditorToolbar: View {
             get: { popover == group },
             set: { shown in
                 if shown { popover = group } else if popover == group { popover = nil }
-            }), arrowEdge: .bottom) {
+            }), arrowEdge: .top) {
             group.popoverContent()
+                .environment(\.settingsPopoverMaxHeight, popoverMaxHeight)
         }
     }
 
@@ -389,22 +408,23 @@ struct TouchBarAllSettingsDrawer: View {
     @State private var isExpanded = false
     @Environment(\.settingsSearchHighlightedTitles) private var highlightedTitles
 
+    // 展开后一组一张卡(同悬浮歌词、灵动岛抽屉,14 章决策 83、84),最后「恢复默认」单独一张卡。
     var body: some View {
-        SettingsCard(cornerRadius: 18) {
-            disclosureHeader
+        VStack(spacing: 14) {
+            SettingsCard(cornerRadius: 18) {
+                disclosureHeader
+            }
             if isExpanded {
-                CardDivider()
-                group(.lyrics) { TouchBarLyricsRows() }
-                CardDivider()
-                group(.style) { TouchBarStyleRows() }
-                CardDivider()
-                group(.layout) { TouchBarLayoutRows() }
-                CardDivider()
-                group(.behavior) { TouchBarBehaviorRows() }
-                CardDivider()
-                SettingsRow(icon: "arrow.uturn.backward", title: L10n.t("恢复默认"),
-                            subtitle: TouchBarStyleDefaults.scope) {
-                    Button(L10n.t("恢复")) { TouchBarStyleDefaults.restoreDefaults() }
+                SettingsGroupCard(title: TouchBarSettingsGroup.lyrics.title) { TouchBarLyricsRows() }
+                SettingsGroupCard(title: TouchBarSettingsGroup.style.title) { TouchBarStyleRows() }
+                SettingsGroupCard(title: TouchBarSettingsGroup.layout.title) { TouchBarLayoutRows() }
+                SettingsGroupCard(title: TouchBarSettingsGroup.behavior.title) { TouchBarBehaviorRows() }
+                SettingsCard(cornerRadius: 18) {
+                    SettingsRow(icon: "arrow.uturn.backward", title: L10n.t("恢复默认"),
+                                subtitle: TouchBarStyleDefaults.scope) {
+                        Button(L10n.t("恢复")) { TouchBarStyleDefaults.restoreDefaults() }
+                            .buttonBorderShape(.capsule)
+                    }
                 }
             }
         }
@@ -416,15 +436,6 @@ struct TouchBarAllSettingsDrawer: View {
         let toggleTitle = L10n.t(SettingsSearchCatalog.touchBarToggleTitleKey)
         guard !isExpanded, !highlightedTitles.subtracting([toggleTitle]).isEmpty else { return }
         withAnimation(.settingsCardReveal) { isExpanded = true }
-    }
-
-    /// 一组:标题行 + 分隔线 + 内容。标题跟工具栏对应那颗按钮同一个词条。
-    private func group<Content: View>(_ group: TouchBarSettingsGroup, @ViewBuilder content: () -> Content) -> some View {
-        Group {
-            SettingsCardHeader(title: group.title)
-            CardDivider()
-            content()
-        }
     }
 
     /// 折叠/展开那一行,逐字照 `MenuBarAllSettingsDrawer.disclosureHeader`。
