@@ -26612,6 +26612,125 @@
         }
       }
     },
+    "更新设置" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Settings"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新設定"
+          }
+        }
+      }
+    },
+    "每天检查一次新版本" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checks for a new version once a day"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每天檢查一次新版本"
+          }
+        }
+      }
+    },
+    "在后台下载，退出 Lyrimuse 时安装" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloads in the background and installs when you quit Lyrimuse"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在背景下載，結束 Lyrimuse 時安裝"
+          }
+        }
+      }
+    },
+    "当前 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前 %@"
+          }
+        }
+      }
+    },
+    "%@ 更新内容" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What’s New in %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 更新內容"
+          }
+        }
+      }
+    },
+    "查看完整说明" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full Release Notes"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看完整說明"
+          }
+        }
+      }
+    },
+    "在 GitHub 查看这一版的发布说明" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Release notes for this version on GitHub"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 GitHub 查看這一版的發佈說明"
+          }
+        }
+      }
+    },
     "开源组件与词典" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28601,40 +28720,6 @@
         }
       }
     },
-    "已安装" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Installed"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已安裝"
-          }
-        }
-      }
-    },
-    "自动更新" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatic Updates"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動更新"
-          }
-        }
-      }
-    },
     "更新失败" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28665,23 +28750,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重試結束"
-          }
-        }
-      }
-    },
-    "查看发布页面" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View Release Page"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "檢視發佈頁面"
           }
         }
       }

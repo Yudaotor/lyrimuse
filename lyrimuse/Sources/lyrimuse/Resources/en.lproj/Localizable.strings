@@ -50,6 +50,7 @@
 "%@ 已下载，点按安装" = "%@ downloaded, click to install";
 "%@ 已匹配到该曲目，无歌词文本" = "%@ matched this track; no lyrics text";
 "%@ 拒绝了这台 Mac 的请求" = "%@ is refusing requests from this Mac";
+"%@ 更新内容" = "What’s New in %@";
 "%@ 月" = "%@";
 "%@ 条状态未知，稍后会自动去 Last.fm 核对" = "%@ with unknown status — will be checked against Last.fm automatically";
 "%@ 条被 Last.fm 拒绝" = "%@ rejected by Last.fm";
@@ -597,6 +598,7 @@
 "在 Edge 菜单栏中依次选择「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。" = "In Edge’s menu bar: View → Developer → Allow JavaScript from Apple Events.";
 "在 GitHub 提交请求" = "Request it on GitHub";
 "在 GitHub 新建 issue，自动附带版本、系统与播放器信息" = "Opens a new GitHub issue with your version, macOS and player filled in";
+"在 GitHub 查看这一版的发布说明" = "Release notes for this version on GitHub";
 "在 GitHub 讨论区的问答分类中提问" = "Ask in the Q&A category of GitHub Discussions";
 "在 KKBOX 中显示专辑" = "Show Album in KKBOX";
 "在 KKBOX 中显示歌手" = "Show Artist in KKBOX";
@@ -613,6 +615,7 @@
 "在企业微信群中：群设置 → 群机器人 → 添加机器人，创建后拷贝 Webhook 地址，无需额外的签名设置" = "In your WeCom group: Group Settings → Group Bots → Add a Bot, then copy the webhook URL after creating it. No extra signature setup is needed";
 "在其他设备上播放，Last.fm 已收到" = "Playing on another device; Last.fm has received it";
 "在功能栏中显示 Lyrimuse 图标，轻点即可展开歌词" = "Adds a Lyrimuse button to the Control Strip. Tap it to show lyrics.";
+"在后台下载，退出 Lyrimuse 时安装" = "Downloads in the background and installs when you quit Lyrimuse";
 "在外部编辑器中编辑歌词" = "Edit Lyrics in External Editor";
 "在播放器中播放任意歌曲，歌词将自动显示" = "Play something in your player and lyrics will appear here";
 "在歌词下方显示一行译文" = "Show a line of translation under the lyrics";
@@ -766,7 +769,6 @@
 "已在播放但未显示歌词？请检查所选的播放器" = "Already playing but no lyrics? Check the player you picked";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "Last.fm's authorization page is open in your browser. Click “Yes, allow access” there to finish, and you'll be sent back to Lyrimuse automatically. If your browser doesn't come back on its own, use the button below";
 "已复制" = "Copied";
-"已安装" = "Installed";
 "已安装但未运行" = "Installed but not running";
 "已安装但未运行（上次退出码 %d）" = "Installed but not running (last exit code %d)";
 "已完成 %1$@ / %2$@ 首" = "%1$@ of %2$@ done";
@@ -888,6 +890,7 @@
 "开着时识别所有已知和已信任的播放器；关掉后只认勾选的。" = "When on, every known and trusted player is detected. When off, only the ones you check.";
 "开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
 "开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。" = "On: scrobbled too, once half-played.\nOff: not scrobbled (Last.fm's rule).";
+"当前 %@" = "Current %@";
 "当前使用" = "In use";
 "当前动态" = "Activity";
 "当前启用的其余歌词源未应答：%@" = "Other enabled sources did not respond: %@";
@@ -1186,6 +1189,7 @@
 "更新失败" = "Update failed";
 "更新时间 新→旧" = "Updated Newest→Oldest";
 "更新时间 旧→新" = "Updated Oldest→Newest";
+"更新设置" = "Update Settings";
 "更早的记录尚未加载，这些行暂不编号" = "Older plays aren't loaded yet, so those rows aren't numbered";
 "最后一句晚于歌曲结束 5 秒以上，可能是完整版歌词对应了精简版曲目" = "The last line falls more than 5 seconds after the track ends; likely full-version lyrics for an edited track";
 "最后一句的时间与曲长相差 25% 以上，可能是其他版本" = "The last line's time differs from the track length by more than 25%; likely a different version";
@@ -1293,7 +1297,7 @@
 "来自网易云音乐" = "From NetEase Cloud Music";
 "查看、编辑和重新搜索已缓存的歌词" = "View, edit and re-search cached lyrics";
 "查看专辑简介" = "View Album Notes";
-"查看发布页面" = "View Release Page";
+"查看完整说明" = "Full Release Notes";
 "查看官方文档 →" = "View Official Docs →";
 "查看效果与教程 →" = "Preview & Setup Guide →";
 "查看歌手简介" = "View Artist Bio";
@@ -1461,6 +1465,7 @@
 "此设置仅在本次打开窗口期间有效，重新打开后恢复默认" = "Applies only while this window is open; reopening resets it";
 "步长" = "Step";
 "每周听歌小结" = "Weekly Listening Digest";
+"每天检查一次新版本" = "Checks for a new version once a day";
 "每按一次调整的幅度" = "Amount per press";
 "每日听歌报告" = "Daily Listening Report";
 "每月听歌小结" = "Monthly Listening Digest";
@@ -1696,7 +1701,6 @@
 "自动匹配缺失歌词" = "Auto-Match Missing Lyrics";
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "The automatic backup couldn't be written, so nothing was deleted this time to keep it recoverable. Check your disk space and write access to the config folder, then try again.";
 "自动展开" = "Auto-Expand";
-"自动更新" = "Automatic Updates";
 "自动检查" = "Check Automatically";
 "自动识别" = "Auto-detect";
 "自动识别中" = "Auto-detecting";

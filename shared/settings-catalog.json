@@ -1659,22 +1659,25 @@
       "dest" : "softwareUpdate",
       "path" : [
         "软件更新",
-        "自动更新"
+        "更新设置"
       ],
+      "subtitle" : "每天检查一次新版本",
       "title" : "自动检查"
     },
     {
       "dest" : "softwareUpdate",
       "path" : [
         "软件更新",
-        "自动更新"
+        "更新设置"
       ],
+      "subtitle" : "在后台下载，退出 Lyrimuse 时安装",
       "title" : "自动下载并安装"
     },
     {
       "dest" : "softwareUpdate",
       "path" : [
-        "软件更新"
+        "软件更新",
+        "更新设置"
       ],
       "subtitle" : "预发布版本，可能不稳定",
       "title" : "测试版更新"

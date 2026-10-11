@@ -7313,13 +7313,13 @@ private struct AboutSettingsTab: View {
         SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("更新与帮助"))
             #if canImport(Sparkle)
-            AboutLinkRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("软件更新"),
+            SettingsLinkRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("软件更新"),
                          subtitle: updateSubtitle, opensExternally: false) {
                 AppActions.shared.requestSettings(.softwareUpdate)
             }
             CardDivider()
             #endif
-            AboutLinkRow(icon: "exclamationmark.bubble", title: L10n.t("反馈问题"),
+            SettingsLinkRow(icon: "exclamationmark.bubble", title: L10n.t("反馈问题"),
                          subtitle: L10n.t("在 GitHub 新建 issue，自动附带版本、系统与播放器信息"),
                          opensExternally: true) {
                 FeedbackReporter.openNewIssue()
@@ -7334,12 +7334,12 @@ private struct AboutSettingsTab: View {
                     }
             }
             CardDivider()
-            AboutLinkRow(icon: "questionmark.bubble", title: L10n.t("使用求助"),
+            SettingsLinkRow(icon: "questionmark.bubble", title: L10n.t("使用求助"),
                          subtitle: L10n.t("在 GitHub 讨论区的问答分类中提问"), opensExternally: true) {
                 NSWorkspace.shared.open(FeedbackLinks.helpURL)
             }
             CardDivider()
-            AboutLinkRow(icon: "list.bullet.rectangle", title: L10n.t("功能清单"),
+            SettingsLinkRow(icon: "list.bullet.rectangle", title: L10n.t("功能清单"),
                          subtitle: L10n.t("全部功能、所在位置与默认开关"), opensExternally: true) {
                 NSWorkspace.shared.open(FeedbackLinks.featureListURL(language: L10n.current))
             }
@@ -7441,51 +7441,6 @@ private struct AboutSettingsTab: View {
                 .buttonBorderShape(.capsule)
             }
         }
-    }
-}
-
-/// 关于页「更新与帮助」卡里整行可点的一行:行尾「›」(在设置里翻页)或「↗」(在浏览器里打开),悬停时整行淡灰。
-///
-/// 整行用 `onTapGesture` 而不是包一个 Button:`accessory` 里还可能有自己的按钮(反馈问题那颗邮件图标),
-/// 按钮套按钮时里面那颗点不到;子视图的手势优先,点邮件图标不会连带触发整行。
-private struct AboutLinkRow<Accessory: View>: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let opensExternally: Bool
-    let action: () -> Void
-    @ViewBuilder var accessory: () -> Accessory
-    @State private var hovering = false
-
-    var body: some View {
-        SettingsRow(icon: icon, title: title, subtitle: subtitle) {
-            HStack(spacing: 10) {
-                accessory()
-                Image(systemName: opensExternally ? "arrow.up.right" : "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-        }
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(hovering ? 0.05 : 0))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-        }
-        .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        .onTapGesture(perform: action)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { action() }
-    }
-}
-
-extension AboutLinkRow where Accessory == EmptyView {
-    init(icon: String, title: String, subtitle: String, opensExternally: Bool, action: @escaping () -> Void) {
-        self.init(icon: icon, title: title, subtitle: subtitle, opensExternally: opensExternally,
-                  action: action, accessory: { EmptyView() })
     }
 }
 

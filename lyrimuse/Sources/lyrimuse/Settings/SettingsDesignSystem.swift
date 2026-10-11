@@ -757,6 +757,54 @@ extension SettingsRow where Trailing == EmptyView {
     }
 }
 
+// MARK: - 整行可点的入口行
+
+/// 整行可点的一行(关于页「更新与帮助」、软件更新页「本版更新内容」):行尾「›」= 在设置里翻页,「↗」= 在设置外打开,
+/// 悬停时整行淡灰。
+///
+/// 整行用 `onTapGesture` 而不是包一个 Button:`accessory` 里还可能有自己的按钮(反馈问题那颗邮件图标),
+/// 按钮套按钮时里面那颗点不到;子视图的手势优先,点邮件图标不会连带触发整行。
+struct SettingsLinkRow<Accessory: View>: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let opensExternally: Bool
+    let action: () -> Void
+    @ViewBuilder var accessory: () -> Accessory
+    @State private var hovering = false
+
+    var body: some View {
+        SettingsRow(icon: icon, title: title, subtitle: subtitle) {
+            HStack(spacing: 10) {
+                accessory()
+                Image(systemName: opensExternally ? "arrow.up.right" : "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(hovering ? 0.05 : 0))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture(perform: action)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action() }
+    }
+}
+
+extension SettingsLinkRow where Accessory == EmptyView {
+    init(icon: String, title: String, subtitle: String, opensExternally: Bool, action: @escaping () -> Void) {
+        self.init(icon: icon, title: title, subtitle: subtitle, opensExternally: opensExternally,
+                  action: action, accessory: { EmptyView() })
+    }
+}
+
 // MARK: - 破坏性操作按钮
 
 /// 会造成不可撤销后果的按钮(清除配置、清空缓存这类)。

@@ -51,7 +51,7 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Daily, weekly, monthly and yearly listening digests](#feature-digests) | Settings › Lab Features › Push Alerts › Alerts |
 | [Launch silently](#feature-silent-launch) | Settings › General › Language, Startup & Notifications › Launch Silently |
 | [Notify when the song changes](#feature-song-notifications) | Settings › General › Language, Startup & Notifications › Notify When the Song Changes |
-| [Automatic updates and betas](#feature-updates) | Settings › Software Update › Automatic Updates › Check Automatically |
+| [Automatic updates and betas](#feature-updates) | Settings › Software Update › Update Settings › Check Automatically |
 
 <a id="section-lyrics"></a>
 
@@ -676,9 +676,9 @@ Export all your settings to one file, saved to iCloud Drive by default or to a f
 Checks for new versions by itself; read the notes and install from the Software Update page. Turn on Beta Updates to try new things early.
 
 - Off by default
-- Settings: Software Update › Automatic Updates › Check Automatically
-- Settings: Software Update › Automatic Updates › Download and Install Automatically
-- Settings: Software Update › Beta Updates
+- Settings: Software Update › Update Settings › Check Automatically
+- Settings: Software Update › Update Settings › Download and Install Automatically
+- Settings: Software Update › Update Settings › Beta Updates
 
 <a id="feature-diagnostics"></a>
 
@@ -1018,12 +1018,12 @@ Every setting in the Settings window, by where it lives: 234 in all. Type a name
 ### Software Update
 
 - **Software Update**
+
+### Software Update › Update Settings
+
+- **Check Automatically**: Checks for a new version once a day
+- **Download and Install Automatically**: Downloads in the background and installs when you quit Lyrimuse
 - **Beta Updates**: Pre-release builds; may be unstable
-
-### Software Update › Automatic Updates
-
-- **Check Automatically**
-- **Download and Install Automatically**
 
 ### About › Updates & Help
 

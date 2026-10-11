@@ -2,13 +2,14 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-/// 设置 → 「软件更新」页(仿系统设置「软件更新」那页,见 14 章决策 #25)。
+/// 设置 → 「软件更新」页(仿系统设置「软件更新」那页,见 14 章决策 #25、78)。
 ///
-/// 结构照系统那页:顶上一张状态卡(App 图标 + 「Lyrimuse 1.7.0」+ 大小 / 日期或进度 + 右侧动作),卡里往下
-/// 是发版日志;然后「已安装」一行、「自动更新」卡(自动检查 / 自动下载并安装)、「测试版更新」;页脚一行
-/// 上次检查时间。数据与动作全在 `SparkleUpdaterManager`(`flow` 状态机 + `pendingItem`),这里只画。
+/// 从上到下:状态卡(App 图标 + 「Lyrimuse 1.11.0」+ 当前版本 / 大小 / 日期,或检查 / 下载 / 解包进度,或
+/// 「已是最新版本 · 上次检查」+ 右侧动作);有新版本时一张发版说明卡(超过约六行折起,底下「查看完整说明」去发布页),
+/// 没有时一行「本版更新内容」;最后「更新设置」卡(自动检查 / 自动下载并安装 / 测试版更新)。
+/// 数据与动作全在 `SparkleUpdaterManager`(`flow` 状态机 + `pendingItem`),这里只画。
 ///
-/// 页面从三处进:侧栏「有软件更新可用」那一行(只在有新版本时存在)、「关于 › 更新 › 软件更新」、以及任何
+/// 页面从三处进:侧栏「有软件更新可用」那一行(只在有新版本时存在)、「关于 › 更新与帮助 › 软件更新」、以及任何
 /// 「检查更新」动作(菜单栏右键菜单 / 面板底栏)—— 检查的过程与结果都显示在这里,没有 Sparkle 的弹窗。
 struct SoftwareUpdatePage: View {
     @ObservedObject private var updater = SparkleUpdaterManager.shared
@@ -17,15 +18,24 @@ struct SoftwareUpdatePage: View {
 
     private var item: SoftwareUpdateItem? { updater.shownItem }
     private var appName: String { LyrimuseIdentity.displayName }
+    private var currentVersion: String { SparkleUpdaterManager.appVersionString }
+
+    /// 发版说明折起时的高度,约六行 13pt。
+    private static let notesCollapsedHeight: CGFloat = 132
 
     var body: some View {
         // 窗口副标题已经写着「软件更新」,页内不再画大标题(跟「歌词显示」页同一个理由)。
         SettingsPage(title: L10n.t("软件更新"), showsHeader: false) {
-            statusCard
-            installedCard
-            automaticCard
-            betaCard
-            footer
+            VStack(spacing: 14) {
+                statusCard
+                if let item {
+                    notesCard(item)
+                } else {
+                    currentReleaseCard
+                }
+                settingsCard
+            }
+            .background { LastfmGlassGlow() }
         }
         // 语言切换时整页重建,理由见 AboutSettingsTab 那处注释。
         .id(L10n.current)
@@ -34,7 +44,7 @@ struct SoftwareUpdatePage: View {
     // MARK: 状态卡
 
     private var statusCard: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             HStack(alignment: .center, spacing: 14) {
                 Image(nsImage: NSApplication.shared.applicationIconImage)
                     .resizable()
@@ -60,18 +70,12 @@ struct SoftwareUpdatePage: View {
                     .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
                     .padding(.vertical, 10)
             }
-            if let item, let notes = item.notesHTML, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                CardDivider()
-                ReleaseNotesView(source: notes, plainText: item.notesArePlainText)
-                    .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-                    .padding(.vertical, 14)
-            }
         }
     }
 
     private var headline: String {
         if let item { return "\(appName) \(item.version)" }
-        return "\(appName) \(SparkleUpdaterManager.appVersionString)"
+        return "\(appName) \(currentVersion)"
     }
 
     @ViewBuilder private var subline: some View {
@@ -118,8 +122,18 @@ struct SoftwareUpdatePage: View {
                 }
             } else if let version = updater.updatedToVersion {
                 secondaryLine(String(format: L10n.t("已更新到 %@"), version))
+            } else if let date = updater.lastUpdateCheckDate {
+                // 上次检查时间放在这里而不是页脚:紧挨着「检查更新」按钮,一眼看得出自动检查是不是真的在跑。
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 7, height: 7)
+                        .accessibilityHidden(true)
+                    secondaryLine(L10n.t("已是最新版本") + " · "
+                                  + String(format: L10n.t("上次检查：%@"), Self.dateTimeText(date)))
+                }
             } else {
-                secondaryLine(L10n.t("已是最新版本"))
+                secondaryLine(L10n.t("尚未检查更新"))
             }
         }
     }
@@ -129,12 +143,14 @@ struct SoftwareUpdatePage: View {
         case .checking, .downloading:
             Button(L10n.t("取消")) { updater.cancel() }
                 .settingsGlassButtons()
+                .buttonBorderShape(.capsule)
         case .extracting:
             EmptyView()
         case .readyToInstall:
             HStack(spacing: 8) {
                 Button(L10n.t("退出时安装")) { updater.installOnQuitInstead() }
                     .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
                 Button(L10n.t("立即重启")) { updater.installPendingUpdate() }
                     .settingsProminentGlassButton(tint: .accentColor)
             }
@@ -142,35 +158,25 @@ struct SoftwareUpdatePage: View {
             if !applicationTerminated {
                 Button(L10n.t("重试退出")) { updater.retryTerminatingForInstall() }
                     .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
             }
         case .failed:
             Button(L10n.t("重试")) { updater.checkForUpdates() }
                 .settingsGlassButtons()
+                .buttonBorderShape(.capsule)
         case .idle:
             if let item {
-                HStack(spacing: 8) {
-                    if item.downloaded || updater.installOnQuit {
-                        Button(L10n.t("立即重启")) { updater.installPendingUpdate() }
-                            .settingsProminentGlassButton(tint: .accentColor)
-                    } else {
-                        Button(L10n.t("立即更新")) { updater.installPendingUpdate() }
-                            .settingsProminentGlassButton(tint: .accentColor)
-                    }
-                    // 系统设置那页的 ⓘ:去看这一版的完整说明(GitHub Release 页)。
-                    Button {
-                        NSWorkspace.shared.open(item.releaseURL)
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 15))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help(L10n.t("查看发布页面"))
-                    .accessibilityLabel(L10n.t("查看发布页面"))
+                if item.downloaded || updater.installOnQuit {
+                    Button(L10n.t("立即重启")) { updater.installPendingUpdate() }
+                        .settingsProminentGlassButton(tint: .accentColor)
+                } else {
+                    Button(L10n.t("立即更新")) { updater.installPendingUpdate() }
+                        .settingsProminentGlassButton(tint: .accentColor)
                 }
             } else {
                 Button(L10n.t("检查更新…")) { updater.checkForUpdates() }
                     .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
                     .disabled(!updater.canCheckForUpdates)
             }
         }
@@ -193,9 +199,10 @@ struct SoftwareUpdatePage: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// 「12.3 MB · 发布于 2026年9月13日」;appcast 没写大小 / 日期的那一半就不出现。
+    /// 「当前 1.10.0 · 12.3 MB · 发布于 2026年9月13日」;appcast 没写大小 / 日期的那一半就不出现。
+    /// 页上没有单独的「已安装」一行,当前版本只在这里出现。
     private func itemMeta(_ item: SoftwareUpdateItem) -> String {
-        var parts: [String] = []
+        var parts = [String(format: L10n.t("当前 %@"), currentVersion)]
         if item.contentLength > 0 {
             parts.append(ByteCountFormatter.string(fromByteCount: Int64(item.contentLength), countStyle: .file))
         }
@@ -211,80 +218,84 @@ struct SoftwareUpdatePage: View {
         return "\(got) / \(ByteCountFormatter.string(fromByteCount: Int64(expected), countStyle: .file))"
     }
 
-    // MARK: 其余几张卡
+    // MARK: 发版说明
 
-    private var installedCard: some View {
-        SettingsCard {
-            SettingsRow(icon: "checkmark.seal", title: L10n.t("已安装")) {
-                Text("\(appName) \(SparkleUpdaterManager.appVersionString) · \(Self.architectureName)")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+    /// 新版本的发版说明。超过约六行就折起(底部渐隐),「查看完整说明」去这一版的发布页;appcast 没带说明时只剩这个链接。
+    private func notesCard(_ item: SoftwareUpdateItem) -> some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: String(format: L10n.t("%@ 更新内容"), item.version))
+            if let notes = item.notesHTML, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ReleaseNotesView(source: notes, plainText: item.notesArePlainText,
+                                 collapsedHeight: Self.notesCollapsedHeight)
+                    .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+                    .padding(.top, 2)
+            }
+            Button {
+                NSWorkspace.shared.open(item.releaseURL)
+            } label: {
+                HStack(spacing: 3) {
+                    Text(L10n.t("查看完整说明"))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+            }
+            .buttonStyle(.link)
+            .font(.system(size: 12))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+        }
+    }
+
+    /// 没有新版本时的一行:去当前这一版的发布页,装完新版后回头看改了什么。
+    private var currentReleaseCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsLinkRow(icon: "sparkles",
+                            title: String(format: L10n.t("%@ 更新内容"), currentVersion),
+                            subtitle: L10n.t("在 GitHub 查看这一版的发布说明"),
+                            opensExternally: true) {
+                NSWorkspace.shared.open(UpdateChannel.releasePageURL(displayVersion: currentVersion))
             }
         }
     }
 
-    private var automaticCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("自动更新"))
-            CardDivider()
-            SettingsRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("自动检查")) {
+    // MARK: 更新设置
+
+    private var settingsCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("更新设置"))
+            // 「每天」是 Sparkle 默认的检查间隔(Info.plist 没设 SUScheduledCheckInterval);改了间隔要同步改这句。
+            SettingsRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("自动检查"),
+                        subtitle: L10n.t("每天检查一次新版本")) {
                 Toggle("", isOn: Binding(
                     get: { updater.automaticallyChecksForUpdates },
                     set: { updater.automaticallyChecksForUpdates = $0 }
                 ))
-                .labelsHidden()
-                .toggleStyle(.switch)
             }
             CardDivider()
-            SettingsSubRow(title: L10n.t("自动下载并安装")) {
+            // 自动下好的包在 dismiss 后由 Sparkle 在退出时装(见 SparkleUpdaterManager 的 installOnQuit)。
+            SettingsRow(icon: "arrow.down.circle", title: L10n.t("自动下载并安装"),
+                        subtitle: L10n.t("在后台下载，退出 Lyrimuse 时安装")) {
                 Toggle("", isOn: Binding(
                     get: { updater.automaticallyDownloadsUpdates },
                     set: { updater.automaticallyDownloadsUpdates = $0 }
                 ))
-                .labelsHidden()
-                .toggleStyle(.switch)
                 // 关掉自动检查后这一项在 Sparkle 那边根本不会被读到,置灰而不是藏起来。
                 .disabled(!updater.automaticallyChecksForUpdates)
             }
-        }
-    }
-
-    private var betaCard: some View {
-        SettingsCard {
+            CardDivider()
             // 语义与落盘见 SparkleUpdaterManager 头注与 15 章决策 11(机器专属键 np:receiveBetaUpdates)。
             SettingsRow(icon: "flask", title: L10n.t("测试版更新"), subtitle: L10n.t("预发布版本，可能不稳定")) {
                 Toggle("", isOn: Binding(
                     get: { settings.receiveBetaUpdates },
                     set: { settings.receiveBetaUpdates = $0 }
                 ))
-                .labelsHidden()
-                .toggleStyle(.switch)
             }
         }
     }
 
-    private var footer: some View {
-        Text(lastCheckText)
-            .font(.system(size: 11))
-            .foregroundStyle(.tertiary)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 2)
-    }
-
-    private var lastCheckText: String {
-        guard let date = updater.lastUpdateCheckDate else { return L10n.t("尚未检查更新") }
-        return String(format: L10n.t("上次检查：%@"), Self.dateTimeText(date))
-    }
-
     // MARK: 格式化
-
-    private static var architectureName: String {
-        #if arch(arm64)
-        return "Apple Silicon"
-        #else
-        return "Intel"
-        #endif
-    }
 
     private static func dateText(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -317,7 +328,15 @@ struct SoftwareUpdatePage: View {
 private struct ReleaseNotesView: View {
     let source: String
     let plainText: Bool
+    /// 给了就最多这么高,超出的部分底部渐隐;nil = 全部展开。
+    var collapsedHeight: CGFloat?
     @State private var rendered: AttributedString?
+    @State private var naturalHeight: CGFloat = 0
+
+    private var overflows: Bool {
+        guard let collapsedHeight else { return false }
+        return naturalHeight > collapsedHeight + 1
+    }
 
     var body: some View {
         Group {
@@ -333,6 +352,15 @@ private struct ReleaseNotesView: View {
         .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { naturalHeight = $0 }
+        .frame(maxHeight: collapsedHeight, alignment: .top)
+        .clipped()
+        .mask {
+            LinearGradient(stops: [.init(color: .black, location: 0),
+                                   .init(color: .black, location: overflows ? 0.7 : 1),
+                                   .init(color: overflows ? .clear : .black, location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        }
         .task(id: source) {
             guard !plainText else { return }
             rendered = ReleaseNotesRenderer.render(html: source)

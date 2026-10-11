@@ -487,9 +487,9 @@ public enum SettingsSearchCatalog {
         // ---- 关于 ----
         // 「软件更新」页。「软件更新」同时也是「关于 › 更新与帮助」卡里那一行入口的标题,目的地都是这一页。
         softwareUpdate("软件更新", kw: ["更新", "Sparkle", "版本", "检查更新", "升级"], group: nil),
-        softwareUpdate("自动检查", kw: ["更新", "自动"], group: "自动更新"),
-        softwareUpdate("自动下载并安装", kw: ["更新", "自动"], group: "自动更新"),
-        softwareUpdate("测试版更新", sub: "预发布版本，可能不稳定", kw: ["beta", "测试版", "预发布"], group: nil),
+        softwareUpdate("自动检查", sub: "每天检查一次新版本", kw: ["更新", "自动"], group: "更新设置"),
+        softwareUpdate("自动下载并安装", sub: "在后台下载，退出 Lyrimuse 时安装", kw: ["更新", "自动"], group: "更新设置"),
+        softwareUpdate("测试版更新", sub: "预发布版本，可能不稳定", kw: ["beta", "测试版", "预发布"], group: "更新设置"),
         about("反馈问题", sub: "在 GitHub 新建 issue，自动附带版本、系统与播放器信息", kw: ["issue", "bug", "反馈", "建议", "github", "邮件", "邮箱", "email"], group: "更新与帮助"),
         about("使用求助", sub: "在 GitHub 讨论区的问答分类中提问", kw: ["discussion", "求助", "提问", "问答", "help"], group: "更新与帮助"),
         about("功能清单", sub: "全部功能、所在位置与默认开关", kw: ["全部功能", "功能列表", "功能介绍", "默认", "设置项", "features"], group: "更新与帮助"),
