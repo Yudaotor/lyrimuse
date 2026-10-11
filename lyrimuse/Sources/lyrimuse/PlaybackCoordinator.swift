@@ -507,6 +507,15 @@ final class PlaybackCoordinator: ObservableObject {
     // 那条订阅),以及鼠标悬停、控制排真的露出来的时候(见 LyricsOverlayView)。后者正好
     // 覆盖了"用户在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
     @Published private(set) var isFavorited: Bool?
+    /// 上一次换歌的时刻和那一首(歌名|歌手),「喜欢」靠菜单标题读写的播放器按它推迟读写(07 章决策 147)。
+    private var trackChangedAt = Date.distantPast
+    private var currentTrackKey = ""
+    /// 靠菜单标题写「喜欢」没写成的那一首:这一首不再显示心、不再按(没登录的网易云按下去会弹登录窗口,每点一下弹一次),
+    /// 换歌后自然恢复。
+    private var favoriteUnavailableTrackKey: String?
+    /// 换歌后等菜单标题换好再读一次「喜欢」。
+    private var settledFavoriteRefresh: Task<Void, Never>?
+    private var favoriteBlockedForTrack: Bool { favoriteUnavailableTrackKey == currentTrackKey }
 
     /// 播放模式(列表/随机/列表循环/单曲循环)。只有 Apple Music、Spotify、Kaset、QQ 音乐有 —— media-control 走的
     /// 系统级 MediaRemote 没有这个概念 —— 所以 nil 同样表示"这个播放器根本没有这回事",
@@ -679,7 +688,7 @@ final class PlaybackCoordinator: ObservableObject {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 if self.favoritedActionSeq == favSeq {
-                    let value = includeFavorited ? state.favorited : nil
+                    let value = includeFavorited && !self.favoriteBlockedForTrack ? state.favorited : nil
                     if self.isFavorited != value { self.isFavorited = value }
                 }
                 if self.playbackModeActionSeq == modeSeq {
@@ -689,6 +698,17 @@ final class PlaybackCoordinator: ObservableObject {
                     self.soundVolume = state.volume
                 }
             }
+        }
+    }
+
+    /// 「喜欢」靠菜单标题读写的播放器:换歌那一刻那次回读可能读到上一首的标题,`menuFavoriteSettleSeconds` 后再读一次纠正。
+    private func scheduleSettledFavoriteRefresh() {
+        settledFavoriteRefresh?.cancel()
+        guard let player = favoritePlayer, MusicPlaybackController.favoriteReadsMenuTitle(player) else { return }
+        settledFavoriteRefresh = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(MusicPlaybackController.menuFavoriteSettleSeconds))
+            guard !Task.isCancelled else { return }
+            self?.refreshFavorited()
         }
     }
 
@@ -703,6 +723,10 @@ final class PlaybackCoordinator: ObservableObject {
             } else if isFavorited != nil {
                 isFavorited = nil
             }
+            return
+        }
+        if favoriteBlockedForTrack {
+            if isFavorited != nil { isFavorited = nil }
             return
         }
         let seq = favoritedActionSeq
@@ -908,11 +932,22 @@ final class PlaybackCoordinator: ObservableObject {
             }
             return
         }
-        guard let player = favoritePlayer else { return }
+        guard let player = favoritePlayer, !favoriteBlockedForTrack else { return }
         let target = !(isFavorited ?? false)
         isFavorited = target
         favoritedActionSeq &+= 1
+        let trackKey = currentTrackKey
+        let delay = MusicPlaybackController.favoriteWriteDelay(for: player,
+                                                               sinceTrackChange: Date().timeIntervalSince(trackChangedAt))
         Task.detached(priority: .userInitiated) {
+            // 刚换歌:菜单标题可能还是上一首的状态,照它判断会把这一首按反。等标题换好;等的时候又换了歌就作废。
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+                guard await MainActor.run(body: { [weak self] in self?.currentTrackKey == trackKey }) else {
+                    await MainActor.run { [weak self] in self?.refreshFavorited() }
+                    return
+                }
+            }
             // Apple Music 用 checkAppleMusicSafely 而不是 checkForCurrentPlayerSafely:后者在设置为
             // "自动识别"时会直接返回 true(它假定别的播放器不需要这个权限),而这里已经确认
             // 实际在播的就是 Apple Music,必须真的查一次权限,否则下面的 AppleScript 会静默失败。
@@ -924,7 +959,15 @@ final class PlaybackCoordinator: ObservableObject {
             // 跟播放模式同一个道理:写被接受了就别回读,Music.app 的 getter 会滞后。Kaset 没登录时不理这条命令,
             // 那时 setFavorited 回 false,照样回读纠正。
             guard !MusicPlaybackController.setFavorited(target, for: player) else { return }
-            await MainActor.run { [weak self] in self?.refreshFavorited() }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                // 靠菜单标题的播放器按下去标题没翻:多半是没登录、弹了登录窗口,这一首不再显示心、不再按。
+                if MusicPlaybackController.favoriteReadsMenuTitle(player), self.currentTrackKey == trackKey {
+                    logger.notice("toggleFavorited: menu title did not flip for \(player.rawValue, privacy: .public), hiding the heart for this track")
+                    self.favoriteUnavailableTrackKey = trackKey
+                }
+                self.refreshFavorited()
+            }
         }
     }
 
@@ -951,10 +994,14 @@ final class PlaybackCoordinator: ObservableObject {
                 .map { "\($0)|\($1)" }
                 .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
                 .removeDuplicates()
-                .sink { [weak self] _ in
+                .sink { [weak self] key in
+                    guard let self else { return }
+                    self.trackChangedAt = Date()
+                    self.currentTrackKey = key
                     // 三项合并成一次 osascript 回读,见
                     // refreshExtendedControls;单项 refresh 保留给写后回读/视图 onAppear。
-                    self?.refreshExtendedControls()
+                    self.refreshExtendedControls()
+                    self.scheduleSettledFavoriteRefresh()
                 },
             s.$artist.assign(to: \.artist, on: self),
             // 除了 artist / title 变化,还要每秒重读一次纠正文件:署名本来就干净的歌,纠正落地时

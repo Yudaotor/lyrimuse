@@ -880,17 +880,28 @@ func runPlayerIdentityTests() {
                     [true, false, nil], "QQ 喜欢: 菜单写「取消喜欢」= 喜欢了,繁体也认,别的项不算")
         // 网易云同一种表示(07 章决策 146):「控制」里那一项喜欢了写「取消喜欢」,没喜欢写「喜欢歌曲」。
         typealias N = NetEaseMenuControl
-        expectEqual([N.favorited(forTitle: "取消喜欢"), N.favorited(forTitle: "喜欢歌曲"), N.favorited(forTitle: "喜歡歌曲"),
-                     N.favorited(forTitle: "随机播放"), N.favorited(forTitle: "下一个")],
-                    [true, false, false, nil, nil], "网易云喜欢: 菜单写「取消喜欢」= 喜欢了,繁体也认,别的项不算")
+        expectEqual([N.favorited(forTitle: "取消喜欢"), N.favorited(forTitle: "喜欢歌曲"), N.favorited(forTitle: "Dislike"),
+                     N.favorited(forTitle: "Like"), N.favorited(forTitle: "随机播放"), N.favorited(forTitle: "下一个")],
+                    [true, false, true, false, nil, nil],
+                    "网易云喜欢: 简体「取消喜欢」/ 英文「Dislike」= 喜欢了(取自它的语言包),别的项不算")
+        expectEqual(N.favorite.commandKey, "L", "网易云喜欢: 连同快捷键 ⌘L 一起认(英文标题是常见短词)")
+        expectEqual(Q.favorite.commandKey, nil, "QQ 喜欢: 只看标题")
+        // 换歌后菜单标题要过一会儿才换成新那首(网易云实测 0.16~0.27 秒):靠菜单标题的播放器写「喜欢」往后推(07 章决策 147)。
+        typealias C = MusicPlaybackController
+        expectEqual(PlaybackPlayer.allCases.filter(C.favoriteReadsMenuTitle), [.qqMusic, .netease].filter { PlaybackPlayer.allCases.contains($0) },
+                    "菜单标题喜欢: 只有 QQ 音乐和网易云")
+        expectEqual(C.favoriteWriteDelay(for: .netease, sinceTrackChange: 0.2), C.menuFavoriteSettleSeconds - 0.2,
+                    "菜单标题喜欢: 刚换歌就点,等到标题换好")
+        expectEqual(C.favoriteWriteDelay(for: .netease, sinceTrackChange: 5), 0, "菜单标题喜欢: 换歌很久了不等")
+        expectEqual(C.favoriteWriteDelay(for: .appleMusic, sinceTrackChange: 0), 0, "菜单标题喜欢: 有脚本接口的不等")
         expectEqual(N.bundleID, PlaybackPlayer.netease.bundleIdentifier, "网易云喜欢: 认的是网易云那个进程")
         // 按下「喜欢」之后等标题翻过来(约 1 秒才变;不等的话连点第二下读到旧标题,判成已经是这个状态不按)。
         var titleReads = 0
-        expectEqual(Q.waitFor(true, polls: 5, interval: 0) { titleReads += 1; return titleReads >= 3 }, true,
+        expectEqual(MenuBarAX.waitFor(true, polls: 5, interval: 0) { titleReads += 1; return titleReads >= 3 }, true,
                     "QQ 喜欢: 读到翻过来的标题就算到")
         expectEqual(titleReads, 3, "QQ 喜欢: 读到就停,剩下几次不再读")
-        expectEqual(Q.waitFor(false, polls: 4, interval: 0) { true }, false, "QQ 喜欢: 一直没翻过来算没到(调用方回读)")
-        expectEqual(Q.waitFor(true, polls: 3, interval: 0) { nil }, false, "QQ 喜欢: 读不出标题不算到")
+        expectEqual(MenuBarAX.waitFor(false, polls: 4, interval: 0) { true }, false, "QQ 喜欢: 一直没翻过来算没到(调用方回读)")
+        expectEqual(MenuBarAX.waitFor(true, polls: 3, interval: 0) { nil }, false, "QQ 喜欢: 读不出标题不算到")
         expectEqual(Mode.list.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .repeatOne,
                     "循环键: 没有列表循环时关 → 单曲循环")
         expectEqual(Mode.shuffle.nextRepeat(allowsRepeatOne: true, allowsRepeatAll: false), .repeatOne,

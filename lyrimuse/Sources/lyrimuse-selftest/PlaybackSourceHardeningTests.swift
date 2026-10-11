@@ -518,9 +518,19 @@ private func wiringContracts() {
     expectEqual(before("guard AXIsProcessTrusted() else { return nil }", "readSettings(logPath: logPath)",
                        in: body("public static func readMode(", in: amazon)), true,
                 "Amazon 读档: 没有辅助功能权限不报档位,两颗键不出现(按不了)")
-    let qqFavorite = body("public static func setFavorited(_ value: Bool) -> Bool {", in: code("LyrimuseCore/Local/QQMusicMenuControl.swift"))
-    expectEqual(before("favoriteLock.lock()", "favoriteItem()", in: qqFavorite) && qqFavorite.contains("return waitFor(value"), true,
-                "QQ 喜欢: 先排队再读标题,按完等标题翻过来")
+    let menuFavorite = body("public func set(_ value: Bool) -> Bool {", in: code("LyrimuseCore/Local/MenuTitleFavorite.swift"))
+    expectEqual(before("lock.lock()", "item()", in: menuFavorite) && menuFavorite.contains("return MenuBarAX.waitFor(value"), true,
+                "菜单标题喜欢(QQ、网易云): 先排队再读标题,按完等标题翻过来")
+    // 换歌后标题可能还是上一首的(07 章决策 147):写之前等到标题换好、等的时候又换了歌就作废;换歌后过一会儿再读一次;
+    // 按了标题没翻(没登录弹登录窗口)这一首不再显示心、不再按。
+    let coordinator = code("lyrimuse/PlaybackCoordinator.swift")
+    expectEqual(coordinator.contains("let delay = MusicPlaybackController.favoriteWriteDelay(for: player,")
+                    && coordinator.contains("guard await MainActor.run(body: { [weak self] in self?.currentTrackKey == trackKey }) else {")
+                    && coordinator.contains("self.scheduleSettledFavoriteRefresh()")
+                    && coordinator.contains("self.favoriteUnavailableTrackKey = trackKey")
+                    && coordinator.contains("guard let player = favoritePlayer, !favoriteBlockedForTrack else { return }")
+                    && coordinator.contains("let value = includeFavorited && !self.favoriteBlockedForTrack ? state.favorited : nil"), true,
+                "菜单标题喜欢: 换歌后推迟读写、没写成这一首藏起心")
 }
 
 // ---- 桌面版 Spotify 的 Connect 镜像 ----

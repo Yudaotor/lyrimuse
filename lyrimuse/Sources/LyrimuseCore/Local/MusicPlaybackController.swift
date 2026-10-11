@@ -387,6 +387,21 @@ public enum MusicPlaybackController {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease
     }
 
+    /// 「喜欢」靠它菜单栏里一项的标题读写的播放器(`MenuTitleFavorite`)。换歌后那个标题要过一会儿才换成新那首的状态
+    /// (网易云实测 0.16~0.27 秒),这段时间里读、写都按 `menuFavoriteSettleSeconds` 往后推,见 07 章决策 147。
+    public static func favoriteReadsMenuTitle(_ player: PlaybackPlayer) -> Bool {
+        player == .qqMusic || player == .netease
+    }
+
+    /// 换歌后多久菜单标题才算换成了新那首的状态。
+    public static let menuFavoriteSettleSeconds: TimeInterval = 1
+
+    /// 换歌 `sinceTrackChange` 秒后要写「喜欢」,还得等多久;不靠菜单标题的播放器不用等。纯函数,selftest 覆盖。
+    public static func favoriteWriteDelay(for player: PlaybackPlayer, sinceTrackChange: TimeInterval) -> TimeInterval {
+        guard favoriteReadsMenuTitle(player) else { return 0 }
+        return max(0, menuFavoriteSettleSeconds - sinceTrackChange)
+    }
+
     /// 按播放器读当前曲目的「喜欢」状态;不支持、读不到返回 nil。会阻塞到子进程结束,不要在主线程调用。
     public static func favoritedState(for player: PlaybackPlayer) -> Bool? {
         switch player {
