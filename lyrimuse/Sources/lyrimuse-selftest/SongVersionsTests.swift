@@ -98,6 +98,34 @@ func runSongVersionsTests() {
                     "重新自动匹配: 旧引擎没这个字段")
     }
 
+    // ---- 收录的播放器:引擎记下的优先;没记时从播放器给的 id 推断(18 章决策 38)----
+    do {
+        let noted = V.players(entry: ["players": ["com.apple.Music", "com.spotify.client"], "kkbox_url": "https://www.kkbox.com/x"])
+        expectEqual(noted.bundleIDs, ["com.apple.Music", "com.spotify.client"], "播放器: 记下的原样用")
+        expectEqual(noted.inferred, false, "播放器: 记下的不算推断")
+        let inferred = V.players(entry: ["spotify_track_id": "2TeLIzFBe3hxkPR5FIQZut", "kkbox_url": "https://www.kkbox.com/x",
+                                         "amazon_url": "https://music.amazon.com/tracks/B0", "soda_url": "https://x", "youtube_music_url": "https://music.youtube.com/watch?v=a"])
+        expectEqual(inferred.bundleIDs, [PlaybackPlayer.spotify.bundleIdentifier, PlaybackPlayer.kkbox.bundleIdentifier,
+                                         PlaybackPlayer.amazonMusic.bundleIdentifier, PlaybackPlayer.soda.bundleIdentifier,
+                                         PlaybackPlayer.kaset.bundleIdentifier], "播放器: 从播放器给的 id 推断")
+        expectEqual(inferred.inferred, true, "播放器: 推断的标出来")
+        let none = V.players(entry: ["apple_music_url": "https://music.apple.com/x", "players": [String]()])
+        expectEqual(none.bundleIDs.isEmpty && !none.inferred, true, "播放器: 检索配的链接不算,没有就是空")
+    }
+
+    // ---- 歌词逐句对照:按先后对齐、空行不算,标出文字不同的行,时间差取文字相同那些行的中位数 ----
+    do {
+        let a = "[00:01.00]一\n[00:02.00]\n[00:03.00]二\n[00:05.00]三\n"
+        let b = "[00:01.50]一\n[00:03.50]二改\n[00:05.50]三\n[00:07.00]四\n"
+        let d = V.lyricDiff(current: a, other: b)
+        expectEqual(d.rows.map(\.differs), [false, true, false, true], "逐句对照: 空行不算,改了的、多出来的标出来")
+        expectEqual(d.differentLines, 2, "逐句对照: 不同的行数")
+        expectEqual(d.shiftMs, 500, "逐句对照: 文字相同那些行晚多少")
+        expectEqual(d.rows.last?.current == nil && d.rows.last?.other?.text == "四", true, "逐句对照: 一边没有的那行")
+        expectEqual(V.lyricDiff(current: a, other: a).differentLines, 0, "逐句对照: 一样的没有不同")
+        expectEqual(V.lyricDiff(current: "[00:01.00]甲\n", other: "[00:02.00]乙\n").shiftMs == nil, true, "逐句对照: 没有相同的行就不算时间差")
+    }
+
     // ---- 两个文件:实体表按含这条写法的那首取证据,用户判断文件取拆开记录;缺了坏了都是空 ----
     do {
         let table = #"""
@@ -111,6 +139,9 @@ func runSongVersionsTests() {
         expectEqual(V.edges(tableData: Data(table.utf8), key: "A|Song|Two"),
                     [V.Edge(kind: "isrc", a: "A|Song|One", b: "A|Song|Two")], "实体表: 含这条写法的那首的证据,缺字段的边丢掉")
         expectEqual(V.edges(tableData: Data(table.utf8), key: "B|Other|One"), [], "实体表: 没有证据的一首")
+        let countOnly = #"{"version":1,"songs":{"s_1":{"variants":["A","B"],"evidence":[{"kind":"apple_song","a":"A","b":"B","count_only":true}]}}}"#
+        expectEqual(V.edges(tableData: Data(countOnly.utf8), key: "A").first?.countOnly, true, "实体表: 只用来合并播放次数的边标出来")
+        expectEqual(V.strongKinds.isSubset(of: Set(V.evidenceOrder)), true, "强证据的种类都在证据种类里")
         expectEqual(["D|D|Two", "E|E|One", "F|F|Two"].map { V.edges(tableData: Data(table.utf8), key: $0).map(\.kind) },
                     [["lyrics"], ["qq_song"], ["family"]], "实体表: 每条写法取的都是含它的那一首")
         expectEqual(V.edges(tableData: Data(table.utf8), key: "C|None|One"), [], "实体表: 没收这条写法")
@@ -184,6 +215,14 @@ func runSongVersionsTests() {
         expectEqual(sourceBytes(manager, contain: "instrumentalFollowsGroup ? L10n.t(\"；同一首歌共用歌词的其他写法也会一起改\") : \"\"")
                     && sourceBytes(edit, contain: "keys = withShareGroupMatesLocked(keys)"), true,
                     "其他写法(契约): 标纯音乐作用到共享组,详情页的说明跟着说")
+        let enrichEngine = read(engine, "enrich.go")
+        expectEqual(sourceBytes(enrichEngine, contain: "Players []string `json:\"players,omitempty\"`")
+                    && sourceBytes(store, contain: "let p = SongVersions.players(entry: entry)")
+                    && sourceBytes(sheet, contain: "case .shared: return L10n.t(\"共用歌词\")")
+                    && sourceBytes(sheet, contain: "case .own: return L10n.t(\"各自选词\")")
+                    && sourceBytes(sheet, contain: "case .split: return L10n.t(\"已拆开\")")
+                    && sourceBytes(sheet, contain: "let diff = SongVersions.lyricDiff(current: c.lyrics, other: v.lyrics)"), true,
+                    "其他写法(契约): 收录的播放器、三种关系、逐句对照接上")
         let rematchEngine = read(engine, "lyricsrematch.go")
         expectEqual(sourceBytes(manager, contain: "let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)")
                     && sourceBytes(rematchEngine, contain: "Followers int `json:\"followers,omitempty\"`"), true,

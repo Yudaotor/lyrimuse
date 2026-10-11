@@ -15,18 +15,25 @@ public enum SongVersions {
         }
     }
 
-    /// 实体表里的一条证据边(两端是写法键)。
+    /// 实体表里的一条证据边(两端是写法键)。countOnly:只用来合并播放次数、不让歌词共用(引擎 `count_only`)。
     public struct Edge: Equatable, Sendable {
         public let kind: String
         public let a: String
         public let b: String
+        public let countOnly: Bool
 
-        public init(kind: String, a: String, b: String) {
+        public init(kind: String, a: String, b: String, countOnly: Bool = false) {
             self.kind = kind
             self.a = a
             self.b = b
+            self.countOnly = countOnly
         }
     }
+
+    /// 强证据的种类(播放器或目录直接给的 id):跟引擎 songEvidenceKinds 里 `strong: true` 的那几种一致。
+    public static let strongKinds: Set<String> = [
+        "isrc", "mb_recording", "spotify_track", "amazon_asin", "kkbox_song", "soda_track", "youtube_video",
+    ]
 
     public struct Row: Equatable, Sendable {
         public let key: String
@@ -143,7 +150,7 @@ public enum SongVersions {
             let raw = rec["evidence"] as? [[String: Any]] ?? []
             return raw.compactMap { e in
                 guard let kind = e["kind"] as? String, let a = e["a"] as? String, let b = e["b"] as? String else { return nil }
-                return Edge(kind: kind, a: a, b: b)
+                return Edge(kind: kind, a: a, b: b, countOnly: e["count_only"] as? Bool ?? false)
             }
         }
         return []
@@ -154,5 +161,55 @@ public enum SongVersions {
         guard let root = try? JSONSerialization.jsonObject(with: userData) as? [String: Any],
               let raw = root["user_splits"] as? [[String]] else { return [] }
         return raw.filter { $0.count == 2 && !$0[0].isEmpty && !$0[1].isEmpty && $0[0] != $0[1] }
+    }
+}
+
+// MARK: - 收录的播放器、歌词逐句对照(18 章决策 38)
+
+extension SongVersions {
+    /// 这条写法是哪些播放器收录的(bundle id):引擎记下的 `players`;没记(更早的写法)时从播放器自己给的那几样 id 推断,
+    /// inferred 为 true。两样都没有时是空的。
+    public static func players(entry: [String: Any]) -> (bundleIDs: [String], inferred: Bool) {
+        if let noted = entry["players"] as? [String], !noted.isEmpty { return (noted, false) }
+        func has(_ field: String) -> Bool { !((entry[field] as? String) ?? "").isEmpty }
+        var out: [String] = []
+        if has("spotify_track_id") { out.append(PlaybackPlayer.spotify.bundleIdentifier) }
+        if has("kkbox_url") { out.append(PlaybackPlayer.kkbox.bundleIdentifier) }
+        if has("amazon_url") { out.append(PlaybackPlayer.amazonMusic.bundleIdentifier) }
+        if has("soda_url") { out.append(PlaybackPlayer.soda.bundleIdentifier) }
+        if has("youtube_music_url") { out.append(PlaybackPlayer.kaset.bundleIdentifier) }
+        return (out, !out.isEmpty)
+    }
+
+    /// 两份整行歌词逐句对照:按句子的先后一一对齐(空行不算),文字不同或一边没有的那一行标 differs。shiftMs 是文字相同的
+    /// 那些行里 other 比 current 晚多少毫秒的中位数,没有文字相同的行时为 nil。
+    public struct LyricDiff: Equatable {
+        public struct Row: Equatable {
+            public let current: LyricLine?
+            public let other: LyricLine?
+            public let differs: Bool
+        }
+        public let rows: [Row]
+        public let differentLines: Int
+        public let shiftMs: Int?
+    }
+
+    public static func lyricDiff(current: String, other: String) -> LyricDiff {
+        func lines(_ text: String) -> [LyricLine] {
+            LRCParser.parse(text).filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
+        }
+        let a = lines(current), b = lines(other)
+        var rows: [LyricDiff.Row] = []
+        var shifts: [Int] = []
+        for i in 0..<max(a.count, b.count) {
+            let x = i < a.count ? a[i] : nil, y = i < b.count ? b[i] : nil
+            let same = x != nil && y != nil
+                && x!.text.trimmingCharacters(in: .whitespaces) == y!.text.trimmingCharacters(in: .whitespaces)
+            if same { shifts.append(y!.timeMs - x!.timeMs) }
+            rows.append(LyricDiff.Row(current: x, other: y, differs: !same))
+        }
+        shifts.sort()
+        return LyricDiff(rows: rows, differentLines: rows.filter(\.differs).count,
+                         shiftMs: shifts.isEmpty ? nil : shifts[shifts.count / 2])
     }
 }

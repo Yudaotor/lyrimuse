@@ -1117,6 +1117,31 @@ public final class EnrichCacheStore: ObservableObject {
         return SongVersions.manualConflict(members)
     }
 
+    /// 「同一首歌的其他写法」里一条写法要显示的几样(18 章决策 38)。
+    struct VersionFacts {
+        /// 收录的播放器(bundle id);inferred:没记下来,从播放器给的 id 推断的。
+        let players: [String]
+        let playersInferred: Bool
+        /// 播放器报的时长,没报时 nil。
+        let durationSecs: Double?
+        let score: Int?
+        let lyrics: String
+        let yrc: String
+        /// 正文补全了(正文小文件读得回来)。补不回来时歌词按不知道算,不拿来比。
+        let complete: Bool
+    }
+
+    /// 正文按需从小文件补(只补这首歌的几条);缓存里没有这条时 nil。
+    func versionFacts(forKey key: String) -> VersionFacts? {
+        guard raw.contains(key) else { return nil }
+        let d = detail(for: key)
+        guard let entry = raw[key] else { return nil }
+        let p = SongVersions.players(entry: entry)
+        return VersionFacts(players: p.bundleIDs, playersInferred: p.inferred,
+                            durationSecs: (entry["duration_secs"] as? Double).flatMap { $0 > 0 ? $0 : nil },
+                            score: entry["lyrics_score"] as? Int, lyrics: d.lyrics, yrc: d.yrc, complete: d.complete)
+    }
+
     /// 两份手改选 key 这一份统一:别的原件换成它的副本(引擎先另存它们),其余写法跟上(18 章决策 31)。
     @discardableResult
     func resolveManualConflict(key: String) async -> Bool {

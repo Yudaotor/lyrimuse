@@ -503,6 +503,9 @@ type enrichEntry struct {
 	// LyricsEntityOrigin:这条的歌词是从同一首歌哪条写法的手改原件同步过来的副本(songentityshare.go);原件、自动选的都是
 	// 空串。副本的手改标记跟原件一样,各处的闸照旧拦得住;用户直接改这一条(歌词管理保存、歌词文件夹里改了正文)就成了原件。
 	LyricsEntityOrigin string `json:"lyrics_entity_origin,omitempty"`
+	// Players:放过这条写法的播放器(bundle id),按第一次放的先后排,最多 maxNotedPlayers 个(notePlayerLocked)。歌词管理
+	// 「同一首歌的其他写法」拿它显示每条写法是哪个播放器收录的(18 章决策 38)。
+	Players []string `json:"players,omitempty"`
 
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
 	// (enrichjson.go)。
@@ -832,6 +835,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			spotifyHintDirty = true
 		}
 		if applyPlayerCoverLocked(&e, bundleID, playerCover) {
+			spotifyHintDirty = true
+		}
+		if notePlayerLocked(&e, bundleID) {
 			spotifyHintDirty = true
 		}
 		if ytmSettled && applyKasetAlbumVerdict(&e, ytmVerdict, ytmusicDisplayLanguage()) {
@@ -5834,4 +5840,16 @@ func enrichSaveFailed(err error) error {
 	enrichDirty = true
 	enrichMu.Unlock()
 	return err
+}
+
+// maxNotedPlayers:一条写法最多记几个播放器(同一种写法通常只出自一两个播放器)。
+const maxNotedPlayers = 8
+
+// notePlayerLocked:把 bundleID 记进 e.Players(已经有、空串、记满了都不动),返回记没记。调用方持 enrichMu。
+func notePlayerLocked(e *enrichEntry, bundleID string) bool {
+	if bundleID == "" || len(e.Players) >= maxNotedPlayers || slices.Contains(e.Players, bundleID) {
+		return false
+	}
+	e.Players = append(e.Players, bundleID)
+	return true
 }
