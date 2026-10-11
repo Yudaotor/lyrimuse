@@ -41726,25 +41726,48 @@
         }
       }
     },
-    "歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" : {
+    "播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden"
+            "value" : "Playback position, lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示"
+            "value" : "播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "歌詞校正、喜歡、隨機/循環和音量；目前播放器不支援的項目不顯示"
+            "value" : "播放進度、歌詞校正、喜歡、隨機/循環和音量；目前播放器不支援的項目不顯示"
+          }
+        }
+      }
+    },
+    "播放进度" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback Position"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放进度"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放進度"
           }
         }
       }

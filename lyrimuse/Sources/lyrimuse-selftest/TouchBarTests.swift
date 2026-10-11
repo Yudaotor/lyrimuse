@@ -304,14 +304,17 @@ func runTouchBarTests() {
                                        showsControls: false, showsCollapseKey: false, showsMoreKey: false),
                     [.lyrics], "触控栏排列: 关掉「⋯」键就没有它")
         typealias M = TouchBarMorePage
-        expectEqual(M.items(supportsFavorite: true, canShuffle: true, canRepeat: true, supportsVolume: true),
-                    [.back, .offset, .favorite, .shuffle, .repeat, .volume], "更多页: 全都支持时六项、顺序固定")
-        expectEqual(M.items(supportsFavorite: false, canShuffle: false, canRepeat: false, supportsVolume: false),
-                    [.back, .offset], "更多页: 什么都不支持的播放器只有返回和歌词校准")
-        expectEqual(M.items(supportsFavorite: false, canShuffle: false, canRepeat: true, supportsVolume: false),
-                    [.back, .offset, .repeat], "更多页: 只有循环(QQ 音乐那种)")
-        expectEqual(M.items(supportsFavorite: false, canShuffle: true, canRepeat: true, supportsVolume: true),
-                    [.back, .offset, .shuffle, .repeat, .volume], "更多页: 没有喜欢(Spotify 那种)")
+        expectEqual(M.items(hasDuration: true, supportsFavorite: true, canShuffle: true, canRepeat: true, supportsVolume: true),
+                    [.back, .progress, .offset, .favorite, .shuffle, .repeat, .volume], "更多页: 全都支持时七项、顺序固定")
+        expectEqual(M.items(hasDuration: false, supportsFavorite: false, canShuffle: false, canRepeat: false,
+                            supportsVolume: false),
+                    [.back, .offset], "更多页: 不知道时长、什么都不支持时只有返回和歌词校准")
+        expectEqual(M.items(hasDuration: true, supportsFavorite: false, canShuffle: false, canRepeat: true,
+                            supportsVolume: false),
+                    [.back, .progress, .offset, .repeat], "更多页: 只有循环(QQ 音乐那种)")
+        expectEqual(M.items(hasDuration: true, supportsFavorite: false, canShuffle: true, canRepeat: true,
+                            supportsVolume: true),
+                    [.back, .progress, .offset, .shuffle, .repeat, .volume], "更多页: 没有喜欢(Spotify 那种)")
         expectEqual(M.autoReturnDelayMs, 8_000, "更多页: 8 秒没有操作回到歌词")
     }
 
@@ -735,8 +738,20 @@ func runTouchBarTests() {
                         && controller.contains("guard visible else {\n            showLyricsPage(reason: \"collapsed\")")
                         && controller.contains(".sink { [weak self] _ in self?.showLyricsPage(reason: \"track changed\") }")
                         && controller.contains("showLyricsPage(reason: \"disabled\")")
-                        && controller.contains("playbackObservers = morePage.observations() + ["), true,
+                        && controller.contains("playbackObservers = morePage.observations() + [")
+                        && controller.contains("morePage.refreshStates()\n        morePage.setActive(true)")
+                        && controller.contains("showingMorePage = false\n        morePage.setActive(false)"), true,
                     "触控栏更多页: 换页、回到歌词的几个时机、这一页的键")
+        // 进度(决策 47):这一页显示着才跟播放位置走;拖着时不盖滑杆,松手一会儿才跳一次;不接受跳转的播放器只显示不能拖;
+        // 位置不叠歌词偏移。
+        let moreBar = code(appDir.appendingPathComponent("TouchBar/TouchBarMorePageBar.swift")) ?? ""
+        expectEqual(moreBar.contains("progressItem.slider.isEnabled = p.acceptsSeek")
+                        && moreBar.contains("let position = p.anchor?.extrapolatedPositionMs(now: Date()) ?? p.pausedPositionMs ?? 0")
+                        && moreBar.contains("Date().timeIntervalSince(lastProgressDrag) > 1.5")
+                        && moreBar.contains("pendingSeek?.cancel()")
+                        && moreBar.contains("DispatchQueue.main.asyncAfter(deadline: .now() + Self.seekSettleSeconds, execute: work)")
+                        && !moreBar.contains("currentLyricsOffsetMs"), true,
+                    "触控栏更多页: 进度条跟着走、拖动不被盖、松手才跳、只读不叠偏移的播放位置")
         expectEqual(controller.contains("button.widthAnchor.constraint(equalToConstant: CGFloat(TouchBarLyricsStyle.moreKeyWidth))")
                         && (code(appDir.appendingPathComponent("UI/TouchBarPreviewStage.swift")) ?? "")
                             .contains(".frame(width: CGFloat(TouchBarLyricsStyle.moreKeyWidth), height: Self.barSize.height)"), true,

@@ -9,6 +9,8 @@ public enum TouchBarMorePage {
     public enum Item: Hashable, Sendable {
         /// 回到歌词那一页。
         case back
+        /// 播放进度:知道时长就显示,播放器不接受跳转时只显示、不能拖(同灵动岛的进度条)。
+        case progress
         /// 歌词校准:− 读数 +,步长同设置里的「微调步长」。
         case offset
         case favorite
@@ -20,11 +22,13 @@ public enum TouchBarMorePage {
     /// 这一页没有操作多久回到歌词那一页。
     public static let autoReturnDelayMs = 8_000
 
-    /// 这一页放哪几项:返回、歌词校准一直在;喜欢、随机、循环、音量只放当前播放器支持的(同灵动岛展开区:读数是 nil /
-    /// 不能切那一档就不显示)。
-    public static func items(supportsFavorite: Bool, canShuffle: Bool, canRepeat: Bool,
+    /// 这一页放哪几项:返回、歌词校准一直在;进度只在知道这首多长时放;喜欢、随机、循环、音量只放当前播放器支持的
+    /// (同灵动岛展开区:读数是 nil / 不能切那一档就不显示)。
+    public static func items(hasDuration: Bool, supportsFavorite: Bool, canShuffle: Bool, canRepeat: Bool,
                              supportsVolume: Bool) -> [Item] {
-        [.back, .offset]
+        [.back]
+            + (hasDuration ? [.progress] : [])
+            + [.offset]
             + (supportsFavorite ? [.favorite] : [])
             + (canShuffle ? [.shuffle] : [])
             + (canRepeat ? [.repeat] : [])

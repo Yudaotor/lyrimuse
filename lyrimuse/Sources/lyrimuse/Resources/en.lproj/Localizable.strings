@@ -1061,6 +1061,8 @@
 "播放热力图" = "Listening Heatmap";
 "播放记录" = "Play History";
 "播放过的歌曲将显示在这里" = "Songs you play will show up here automatically.";
+"播放进度" = "Playback Position";
+"播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" = "Playback position, lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden";
 "收听时段" = "Listening Hours";
 "收听最多" = "Most Played";
 "收听最多 %@" = "Top day %@";
@@ -1412,7 +1414,6 @@
 "歌词显示方式" = "Where lyrics appear";
 "歌词更新于 %@" = "Lyrics updated %@";
 "歌词来源" = "Lyrics Sources";
-"歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" = "Lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden";
 "歌词源可用情况" = "Lyrics Source Status";
 "歌词源已收录这首歌曲，但暂无歌词" = "Listed, but No Lyrics Yet";
 "歌词源标注的曲目时长" = "Track length reported by the lyrics source";

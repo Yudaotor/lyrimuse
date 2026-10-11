@@ -911,7 +911,7 @@ Every setting in the Settings window, by where it lives: 235 in all. Type a name
 - **Artwork Position**
 - **Show Playback Controls**: Previous, Play/Pause and Next, plus a settings button
 - **Controls Position**
-- **Show More Button**: Lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden
+- **Show More Button**: Playback position, lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden
 - **Hide Control Strip While Expanded**: Lyrics fill the whole Touch Bar. To use brightness, volume and other system buttons, tap ✕ on the left to collapse first.
 - **System Control Strip**: Add, remove or reorder the brightness, volume and other system buttons on the right of the Touch Bar in System Settings › Keyboard › Touch Bar Settings…
 

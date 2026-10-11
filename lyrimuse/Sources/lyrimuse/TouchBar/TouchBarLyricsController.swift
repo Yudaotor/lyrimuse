@@ -26,7 +26,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// 关着时只有主行、在 30pt 里垂直居中。系统开了「减弱动态效果」时不滚动、不逐字填色(17 章决策 43)。触控栏看不见时(收着、没有触控栏的 Mac)只记状态,不画位图、不装动画,
 /// 看得见了再补上。
 ///
-/// 「⋯」键(最右端,默认显示)把整条换成「更多」那一页:歌词校准、喜欢、随机 / 循环、音量(`TouchBarMorePageBar`);
+/// 「⋯」键(最右端,默认显示)把整条换成「更多」那一页:播放进度、歌词校准、喜欢、随机 / 循环、音量(`TouchBarMorePageBar`);
 /// 点返回、8 秒没有操作、收起、换歌时回到歌词那一页(17 章决策 47)。
 ///
 /// 设置(同一段里):卡拉OK效果、跟随封面、字号、显示封面 / 播放控制 / 「⋯」键(连同各自的位置)、对齐方式、副行、
@@ -275,7 +275,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private func setLayout(_ new: Layout) {
         layout = new
         bar.escapeKeyReplacementItemIdentifier = new.escapeKey ? Item.escape : nil
-        if showingMorePage, !new.slots.contains(.more) { showingMorePage = false }
+        if showingMorePage, !new.slots.contains(.more) { showLyricsPage(reason: "more key off") }
         applyItems()
         if !bar.isVisible { reportLyricsWidth() }
     }
@@ -294,6 +294,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         showingMorePage = true
         PlaybackCoordinator.shared.refreshExtendedControls()
         morePage.refreshStates()
+        morePage.setActive(true)
         applyItems()
         restartMoreReturn()
         logger.notice("[TouchBarLyricsController.moreTapped] showing more page")
@@ -305,6 +306,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         moreReturnTask = nil
         guard showingMorePage else { return }
         showingMorePage = false
+        morePage.setActive(false)
         applyItems()
         logger.notice("[TouchBarLyricsController.showLyricsPage] \(reason, privacy: .public)")
     }

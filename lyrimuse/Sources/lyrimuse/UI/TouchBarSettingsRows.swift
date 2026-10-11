@@ -161,7 +161,7 @@ struct TouchBarLayoutRows: View {
             CardDivider()
             // 最右端那颗「⋯」键,点一下换成「更多」那一页(17 章决策 47)。
             SettingsRow(icon: "ellipsis.circle", title: L10n.t("显示「更多」键"),
-                        subtitle: L10n.t("歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示")) {
+                        subtitle: L10n.t("播放进度、歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示")) {
                 Toggle("", isOn: $settings.touchBarShowsMoreKey)
             }
             CardDivider()
