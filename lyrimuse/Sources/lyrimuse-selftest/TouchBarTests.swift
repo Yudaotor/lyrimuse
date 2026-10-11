@@ -1006,18 +1006,27 @@ func runTouchBarTests() {
                     "触控栏快捷键: 灵动岛提示条的图标位画得出自画的触控栏图标")
     }
 
-    // 占满整条的展开收起后把功能栏图标重新露一次面(17 章决策 42):展开时按实际用的方式记下,收起时只在占满整条时做,
-    // 先藏再露。漏了不报错,只表现成放歌时收起之后功能栏那一格是系统的「正在播放」、Lyrimuse 图标点不回来。
+    // 占满整条的展开收起后把功能栏图标重新露一次面(17 章决策 42):展开时按实际用的方式记下,收起时只在占满整条
+    // (或展开期间开始放歌、换了曲目,决策 46)时做,先藏再露。漏了不报错,只表现成放歌时收起之后功能栏那一格是系统的「正在播放」、Lyrimuse 图标点不回来。
     do {
         let controller = code(appDir.appendingPathComponent("TouchBar/TouchBarLyricsController.swift")) ?? ""
         let api = code(appDir.appendingPathComponent("TouchBar/TouchBarPrivateAPI.swift")) ?? ""
         expectEqual(controller.contains("presentedFullWidth = hidingControlStrip && TouchBarPrivateAPI.supportsHidingControlStrip\n"
                                         + "        TouchBarPrivateAPI.presentSystemModal("), true,
                     "功能栏图标: 展开时按实际用的方式记下是不是占满整条")
-        expectEqual(controller.contains("guard visible else {\n            if presentedFullWidth {\n"
+        expectEqual(controller.contains("guard visible else {\n            if presentedFullWidth || trayDisplaced {\n"
                                         + "                presentedFullWidth = false\n"
+                                        + "                trayDisplaced = false\n"
                                         + "                TouchBarPrivateAPI.reassertInControlStrip(trayItem)"), true,
-                    "功能栏图标: 收起时只在占满整条展开过时重新露面")
+                    "功能栏图标: 收起时只在占满整条展开过、或展开期间开始放歌 / 换了曲目时重新露面")
+        // 收着时开始放歌、换曲目,系统「正在播放」随后占掉那一格(决策 46):在不在放歌、歌名、歌手一变就排计时,到点收着就露面,
+        // 展开着就记下等收起。漏了不报错,只表现成放歌后功能栏里没有 Lyrimuse 图标。
+        expectEqual(controller.contains("Publishers.CombineLatest3(p.$isPlayingNow, p.$title, p.$artist)")
+                        && controller.contains(".sink { [weak self] _ in self?.scheduleTrayReassert() }")
+                        && controller.contains("try? await Task.sleep(for: .milliseconds(Self.trayReassertDelayMs))")
+                        && controller.contains("if self.bar.isVisible {\n                self.trayDisplaced = true\n            } else {\n"
+                                               + "                TouchBarPrivateAPI.reassertInControlStrip(self.trayItem)"), true,
+                    "功能栏图标: 开始放歌、换曲目后重新露面(收着当场、展开着等收起)")
         if let r = api.range(of: "static func reassertInControlStrip(") {
             expectEqual(String(api[r.upperBound...].prefix(400))
                             .contains("e.setPresence(identifier, false)\n        e.setPresence(identifier, true)"), true,

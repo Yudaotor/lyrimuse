@@ -81,6 +81,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private var measuredUnderEstimate: Double?
     /// 这一次展开是不是占满整条(隐藏功能栏)的。这种展开收起后要把功能栏图标重新露一次面,见 `visibilityChanged`。
     private var presentedFullWidth = false
+    /// 开始放歌、换曲目后系统「正在播放」会占掉功能栏那一格:等它出现之后重新露一次面的计时;到点时展开着就记在
+    /// `trayDisplaced` 上,收起时再露(17 章决策 46)。
+    private var trayReassertTask: Task<Void, Never>?
+    private var trayDisplaced = false
+    private static let trayReassertDelayMs = 2_500
     /// 快捷键回声(`flashHint`):这一行和它从歌词时间轴哪一刻起显示;nil = 没有。
     private var hint: (text: String, startMs: Int)?
     private var hintTask: Task<Void, Never>?
@@ -318,6 +323,9 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             visibilityObservation = nil
             playbackObservers = []
             presentedFullWidth = false
+            trayReassertTask?.cancel()
+            trayReassertTask = nil
+            trayDisplaced = false
             hintTask?.cancel()
             hint = nil
             cancelPauseCollapse()
@@ -460,9 +468,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         }
         guard visible else {
             // 占满整条的展开收起后功能栏重新排,放歌时 Lyrimuse 那一格会给系统的「正在播放」、图标点不回来;
-            // 重新露一次面就排回去。普通方式展开的收起后图标还在,不动(17 章决策 42)。
-            if presentedFullWidth {
+            // 重新露一次面就排回去。普通方式展开的收起后图标还在,不动(17 章决策 42)。展开期间开始放歌、换了曲目的,
+            // 那一格也可能已经被占掉,同样露一次(决策 46)。
+            if presentedFullWidth || trayDisplaced {
                 presentedFullWidth = false
+                trayDisplaced = false
                 TouchBarPrivateAPI.reassertInControlStrip(trayItem)
             }
             return
@@ -472,6 +482,21 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         reportLyricsWidth()
         displayStart.restartIfNotLyric(nowMs: PlaybackCoordinator.shared.lyricsTimelineMs())
         refresh()
+    }
+
+    /// 播放状态变了 `trayReassertDelayMs` 之后(连着变只算最后一次):收着就把功能栏图标重新露一次面,展开着就等收起时再露。
+    private func scheduleTrayReassert() {
+        trayReassertTask?.cancel()
+        trayReassertTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(Self.trayReassertDelayMs))
+            guard !Task.isCancelled, let self, self.enabled else { return }
+            self.trayReassertTask = nil
+            if self.bar.isVisible {
+                self.trayDisplaced = true
+            } else {
+                TouchBarPrivateAPI.reassertInControlStrip(self.trayItem)
+            }
+        }
     }
 
     // MARK: - 自动展开 / 收起
@@ -560,6 +585,12 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                     self?.coverAccent = $0
                     self?.scheduleRefresh()
                 },
+            // 开始放歌、换曲目:系统「正在播放」随后会占掉功能栏那一格(17 章决策 46)。
+            Publishers.CombineLatest3(p.$isPlayingNow, p.$title, p.$artist)
+                .map { "\($0)\u{1F}\($1)\u{1F}\($2)" }
+                .removeDuplicates()
+                .dropFirst()
+                .sink { [weak self] _ in self?.scheduleTrayReassert() },
             // 自动展开 / 收起:四项一起防抖 300ms。没歌词那一项自己防抖过 50ms,歌名先到的话换歌那一刻会带着上一首的结论。
             Publishers.CombineLatest4(p.$isPlayingNow, p.$currentTrackLacksLyrics, p.$title, p.$artist)
                 .dropFirst()
