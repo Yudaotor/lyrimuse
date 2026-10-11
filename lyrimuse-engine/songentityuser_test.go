@@ -439,3 +439,52 @@ func TestSetInstrumentalFollowsShareGroup(t *testing.T) {
 		t.Errorf("开关关着只动这一条: %v", got)
 	}
 }
+
+// 新写法第一次有了歌词:歌词同步开着、还没有实体 id 时提醒常驻循环;攒到点重建一次。
+func TestNewSongVersionTriggersRebuild(t *testing.T) {
+	dir := setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}},
+	}, true)
+	enrichPath = filepath.Join(dir, clientName+"-enrich-cache.json")
+	drain := func() bool {
+		select {
+		case <-songEntityNewVersion:
+			return true
+		default:
+			return false
+		}
+	}
+	drain()
+	commitEnrichEntrySince("A|Song|Two", enrichEntry{Lyrics: songShareLRC("new"), DurationSecs: 200.1, ISRCs: []string{"USAAA1100001"}}, enrichEditNoStamp)
+	if !drain() {
+		t.Error("没有实体 id 的写法有了歌词要提醒")
+	}
+	commitEnrichEntrySince("A|Song|Three", enrichEntry{Song: "s_000000000001", Lyrics: songShareLRC("x")}, enrichEditNoStamp)
+	commitEnrichEntrySince("A|Song|Four", enrichEntry{}, enrichEditNoStamp)
+	if drain() {
+		t.Error("已有实体 id、没有歌词的不提醒")
+	}
+	setFeatures(featureFlags{SongEntityShadow: true})
+	commitEnrichEntrySince("A|Song|Five", enrichEntry{Lyrics: songShareLRC("y")}, enrichEditNoStamp)
+	if drain() {
+		t.Error("同步关着不提醒")
+	}
+	setFeatures(featureFlags{SongEntityShadow: true, SongEntityShareLyrics: true})
+
+	saved := songEntityNewVersionDelay
+	t.Cleanup(func() { songEntityNewVersionDelay = saved })
+	songEntityNewVersionDelay = 20 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { startSongEntityShadow(ctx); close(done) }()
+	defer func() { cancel(); <-done }()
+	noteNewSongVersionLocked(enrichEntry{Lyrics: songShareLRC("z")})
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(songEntityTablePath()); err == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("到点没有重建")
+}

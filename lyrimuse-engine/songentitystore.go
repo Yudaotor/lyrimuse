@@ -24,7 +24,7 @@ import (
 // 实体 id 延续(songEntityIDs):种子先取各写法条目上的 `song`,没有的再取上一份实体表;每个实体取跟种子共有写法最多的
 // id。建完把变了的 `song` 写回条目、同步落盘,之后才写实体表:哪一步之间被杀,下次都接得上(18 章决策 8)。
 // 用户拆开过的写法对记在 `lyrimuse-song-entity-user.json`(user_splits),写在 songentityuser.go;实体表重建、删除都不碰它。
-// 拆开、恢复合并之后马上重建一次(songEntityRebuildNow)。
+// 拆开、恢复合并之后马上重建一次(songEntityRebuildNow);歌词同步开着时出现新写法,攒十分钟重建一次(songEntityNewVersion)。
 
 const (
 	songEntityTableVersion = 1
@@ -92,11 +92,20 @@ func startSongEntityShadow(ctx context.Context) {
 	check := time.NewTicker(songShareCheckInterval)
 	defer check.Stop()
 	started, sharing := false, false
+	var soon <-chan time.Time // 新写法攒着,到点重建一次(songEntityNewVersion)
 	for {
 		rebuild := false
 		select {
 		case <-ctx.Done():
 			return
+		case <-songEntityNewVersion:
+			if soon == nil {
+				soon = time.After(songEntityNewVersionDelay)
+			}
+			continue
+		case <-soon:
+			soon = nil
+			rebuild = true
 		case <-timer.C:
 			timer.Reset(songEntityRebuildInterval)
 			started, rebuild = true, true
