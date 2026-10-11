@@ -121,6 +121,17 @@ public final class AmazonMusicLogWatcher: @unchecked Sendable {
         return t.id
     }
 
+    /// 日志里最近开播的那一首的 ASIN(`new track playing : asin://<ASIN>:…` 那行);播客、还没开始盯、日志读不到为 nil。
+    /// 先把新写的行读完。「喜欢」按它查资料库(`AmazonMusicFavoriteControl`)。
+    public func currentTrackASIN() -> String? {
+        queue.sync { drain(live: true) }
+        lock.lock()
+        defer { lock.unlock() }
+        guard fileAvailable, seenEvent, let id = state.trackID, id.hasPrefix("asin://") else { return nil }
+        let asin = String(id.dropFirst("asin://".count))
+        return asin.isEmpty ? nil : asin
+    }
+
     /// 同一件事已经试了 `count` 次、上次在 `lastAt`,现在能不能再试:前 `calibrationMaxAttempts` 次隔 `calibrationRetry`,
     /// 之后隔 `calibrationBackoff`,不放弃。纯函数。
     public static func mayRetryCalibration(count: Int, lastAt: Date, now: Date) -> Bool {

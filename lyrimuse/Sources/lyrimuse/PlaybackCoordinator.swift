@@ -701,12 +701,12 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
-    /// 「喜欢」靠菜单标题读写的播放器:换歌那一刻那次回读可能读到上一首的标题,`menuFavoriteSettleSeconds` 后再读一次纠正。
+    /// 「喜欢」读的是别处的播放器(菜单标题、Amazon 的资料库):换歌那一刻那次回读可能读到上一首的,`favoriteSettleSeconds` 后再读一次纠正。
     private func scheduleSettledFavoriteRefresh() {
         settledFavoriteRefresh?.cancel()
-        guard let player = favoritePlayer, MusicPlaybackController.favoriteReadsMenuTitle(player) else { return }
+        guard let player = favoritePlayer, MusicPlaybackController.favoriteSettlesAfterTrackChange(player) else { return }
         settledFavoriteRefresh = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(MusicPlaybackController.menuFavoriteSettleSeconds))
+            try? await Task.sleep(for: .seconds(MusicPlaybackController.favoriteSettleSeconds))
             guard !Task.isCancelled else { return }
             self?.refreshFavorited()
         }
@@ -961,9 +961,9 @@ final class PlaybackCoordinator: ObservableObject {
             guard !MusicPlaybackController.setFavorited(target, for: player) else { return }
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                // 靠菜单标题的播放器按下去标题没翻:多半是没登录、弹了登录窗口,这一首不再显示心、不再按。
-                if MusicPlaybackController.favoriteReadsMenuTitle(player), self.currentTrackKey == trackKey {
-                    logger.notice("toggleFavorited: menu title did not flip for \(player.rawValue, privacy: .public), hiding the heart for this track")
+                // 读别处状态的播放器按下去没生效:多半是没登录(弹了登录窗口)、界面上找不到那颗键,这一首不再显示心、不再按。
+                if MusicPlaybackController.favoriteSettlesAfterTrackChange(player), self.currentTrackKey == trackKey {
+                    logger.notice("toggleFavorited: favorite did not change for \(player.rawValue, privacy: .public), hiding the heart for this track")
                     self.favoriteUnavailableTrackKey = trackKey
                 }
                 self.refreshFavorited()

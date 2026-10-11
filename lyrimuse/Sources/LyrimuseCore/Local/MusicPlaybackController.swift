@@ -382,24 +382,27 @@ public enum MusicPlaybackController {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic
     }
 
-    /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)。
+    /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
+    /// Amazon Music(加进资料库)。
     public static func supportsFavorite(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease || player == .kugou
+            || player == .amazonMusic
     }
 
-    /// 「喜欢」靠按它菜单栏里一项读写的播放器(`MenuTitleFavorite`)。换歌后那一项的标题(酷狗是播放条那颗心)要过一会儿才换成
-    /// 新那首的状态(网易云实测 0.16~0.27 秒),这段时间里读、写都按 `menuFavoriteSettleSeconds` 往后推,见 07 章决策 147。
-    public static func favoriteReadsMenuTitle(_ player: PlaybackPlayer) -> Bool {
-        player == .qqMusic || player == .netease || player == .kugou
+    /// 「喜欢」不走脚本接口、读的是别处的播放器:菜单栏那一项(`MenuTitleFavorite`,酷狗是播放条那颗心)、Amazon 的日志加资料库。
+    /// 换歌后那份状态要过一会儿才换成新那首的(网易云实测 0.16~0.27 秒),这段时间里读、写都按 `favoriteSettleSeconds` 往后推;
+    /// 按了没生效(没登录等)这一首藏起心。见 07 章决策 147。
+    public static func favoriteSettlesAfterTrackChange(_ player: PlaybackPlayer) -> Bool {
+        player == .qqMusic || player == .netease || player == .kugou || player == .amazonMusic
     }
 
-    /// 换歌后多久菜单标题才算换成了新那首的状态。
-    public static let menuFavoriteSettleSeconds: TimeInterval = 1
+    /// 换歌后多久那份状态才算换成了新那首的。
+    public static let favoriteSettleSeconds: TimeInterval = 1
 
-    /// 换歌 `sinceTrackChange` 秒后要写「喜欢」,还得等多久;不靠菜单标题的播放器不用等。纯函数,selftest 覆盖。
+    /// 换歌 `sinceTrackChange` 秒后要写「喜欢」,还得等多久;走脚本接口的播放器不用等。纯函数,selftest 覆盖。
     public static func favoriteWriteDelay(for player: PlaybackPlayer, sinceTrackChange: TimeInterval) -> TimeInterval {
-        guard favoriteReadsMenuTitle(player) else { return 0 }
-        return max(0, menuFavoriteSettleSeconds - sinceTrackChange)
+        guard favoriteSettlesAfterTrackChange(player) else { return 0 }
+        return max(0, favoriteSettleSeconds - sinceTrackChange)
     }
 
     /// 按播放器读当前曲目的「喜欢」状态;不支持、读不到返回 nil。会阻塞到子进程结束,不要在主线程调用。
@@ -410,6 +413,7 @@ public enum MusicPlaybackController {
         case .qqMusic: return QQMusicMenuControl.readFavorited()
         case .netease: return NetEaseMenuControl.readFavorited()
         case .kugou: return KugouMenuControl.readFavorited()
+        case .amazonMusic: return AmazonMusicFavoriteControl.readFavorited()
         default: return nil
         }
     }
@@ -434,6 +438,8 @@ public enum MusicPlaybackController {
             return NetEaseMenuControl.setFavorited(value)
         case .kugou:
             return KugouMenuControl.setFavorited(value)
+        case .amazonMusic:
+            return AmazonMusicFavoriteControl.setFavorited(value)
         default:
             return false
         }
@@ -620,7 +626,7 @@ public enum MusicPlaybackController {
                                              .map { PlaybackModeState(mode: $0, options: QQMusicMenuControl.options) },
                                          volume: nil)
         case .amazonMusic:
-            return ExtendedControlsState(favorited: nil,
+            return ExtendedControlsState(favorited: includeFavorited ? AmazonMusicFavoriteControl.readFavorited() : nil,
                                          mode: AmazonMusicModeControl.readMode()
                                              .map { PlaybackModeState(mode: $0, options: AmazonMusicModeControl.options) },
                                          volume: nil)

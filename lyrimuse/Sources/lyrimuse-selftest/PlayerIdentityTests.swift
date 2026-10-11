@@ -103,6 +103,8 @@ func runPlayerIdentityTests() {
                     "能力: 网易云有喜欢(菜单栏「喜欢歌曲」,没有播放模式和音量)")
         expectEqual(MusicPlaybackController.supportsFavorite(.kugou), true,
                     "能力: 酷狗有喜欢(按菜单栏「喜欢歌曲」,读播放条那颗心)")
+        expectEqual(MusicPlaybackController.supportsFavorite(.amazonMusic), true,
+                    "能力: Amazon 有喜欢(加进资料库,读本地资料库)")
 
         // 播放控制发给谁:media-control 的指令作用于系统焦点,焦点被别的 App 占着、屏上这首靠 AppleScript
         // 回退问到时,要直接发给那个播放器,否则网页视频被暂停 / 被切走。
@@ -591,7 +593,7 @@ func runPlayerIdentityTests() {
                               .snapsToReportedPosition, .stampsCaptureTime, .catalogMenuRows]),
             .spotify: (.spotify, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .resume,
                                   .gaplessLead, .learnsAnchorLag, .catalogMenuRows]),
-            .amazonMusic: (.amazonMusic, [.extendedControls, .repeatOne, .learnsAnchorLag, .snapsToReportedPosition,
+            .amazonMusic: (.amazonMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .snapsToReportedPosition,
                                           .catalogMenuRows]),
             .kaset: (.youtubeMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                      .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
@@ -890,9 +892,9 @@ func runPlayerIdentityTests() {
         expectEqual(Q.favorite.commandKey, nil, "QQ 喜欢: 只看标题")
         // 换歌后菜单标题要过一会儿才换成新那首(网易云实测 0.16~0.27 秒):靠菜单标题的播放器写「喜欢」往后推(07 章决策 147)。
         typealias C = MusicPlaybackController
-        expectEqual(PlaybackPlayer.allCases.filter(C.favoriteReadsMenuTitle),
-                    [.qqMusic, .netease, .kugou].filter { PlaybackPlayer.allCases.contains($0) },
-                    "菜单喜欢: 只有 QQ 音乐、网易云和酷狗")
+        expectEqual(PlaybackPlayer.allCases.filter(C.favoriteSettlesAfterTrackChange),
+                    [.qqMusic, .netease, .kugou, .amazonMusic].filter { PlaybackPlayer.allCases.contains($0) },
+                    "读别处状态的喜欢: QQ 音乐、网易云、酷狗和 Amazon")
         // 酷狗那一项标题不变,状态读播放条那颗心;按总时长文字认播放条,歌单列表各行的心不算(07 章决策 148)。
         typealias K = KugouMenuControl
         expectEqual([K.favorited(forHeartDescription: "取消收藏"), K.favorited(forHeartDescription: "收藏"),
@@ -903,7 +905,8 @@ func runPlayerIdentityTests() {
                     [true, true, false, false], "酷狗喜欢: 播放条按「 / 总时长」那段文字认")
         expectEqual(K.favorite.commandKey, "L", "酷狗喜欢: 菜单那一项连同快捷键 ⌘L 一起认")
         expectEqual(K.bundleID, PlaybackPlayer.kugou.bundleIdentifier, "酷狗喜欢: 认的是酷狗那个进程")
-        expectEqual(C.favoriteWriteDelay(for: .netease, sinceTrackChange: 0.2), C.menuFavoriteSettleSeconds - 0.2,
+        amazonFavoriteChecks()
+        expectEqual(C.favoriteWriteDelay(for: .netease, sinceTrackChange: 0.2), C.favoriteSettleSeconds - 0.2,
                     "菜单标题喜欢: 刚换歌就点,等到标题换好")
         expectEqual(C.favoriteWriteDelay(for: .netease, sinceTrackChange: 5), 0, "菜单标题喜欢: 换歌很久了不等")
         expectEqual(C.favoriteWriteDelay(for: .appleMusic, sinceTrackChange: 0), 0, "菜单标题喜欢: 有脚本接口的不等")
@@ -2228,4 +2231,94 @@ func runPlayerIdentityTests() {
         expectEqual(MediaControlStreamWatcher.orphanedStreamPIDs(psOutput: ps, bundleMarker: marker), [52232],
                     "孤儿 stream: 只认父进程是 1、本 App 包、参数是 stream 的那个")
     }
+}
+
+/// Amazon 的「喜欢」:只读 LevelDB(表 + 写前日志,取最新版、删除标记生效、坏文件不崩)、资料库记录里认 ASIN、找界面元素的类名判据。
+/// 见 07 章决策 150。
+private func amazonFavoriteChecks() {
+    func varint(_ v: Int) -> [UInt8] {
+        var out: [UInt8] = []
+        var x = UInt64(v)
+        while x >= 0x80 { out.append(UInt8(x & 0x7f) | 0x80); x >>= 7 }
+        return out + [UInt8(x)]
+    }
+    func le(_ v: UInt64, _ n: Int) -> [UInt8] { (0..<n).map { UInt8((v >> (8 * UInt64($0))) & 0xff) } }
+    func internalKey(_ user: String, seq: UInt64, deleted: Bool = false) -> [UInt8] {
+        Array(user.utf8) + le(seq << 8 | (deleted ? 0 : 1), 8)
+    }
+    /// 一个不压缩的块:每条都不共享前缀,restart 数组只有一项。
+    func block(_ entries: [([UInt8], [UInt8])]) -> [UInt8] {
+        var b: [UInt8] = []
+        for (k, v) in entries { b += varint(0) + varint(k.count) + varint(v.count) + k + v }
+        return b + le(0, 4) + le(1, 4)
+    }
+    /// 一个数据块 + 索引块 + 尾部的最小 SSTable;块后面跟压缩类型 0 和 4 字节 CRC(读的时候不校验)。
+    func table(_ entries: [([UInt8], [UInt8])]) -> [UInt8] {
+        let data = block(entries)
+        var file = data + [0] + le(0, 4)
+        let handle = varint(0) + varint(data.count)
+        let index = block([(entries.last!.0, handle)])
+        let indexOffset = file.count
+        file += index + [0] + le(0, 4)
+        var footer = varint(0) + varint(0) + varint(indexOffset) + varint(index.count)
+        footer += [UInt8](repeating: 0, count: 40 - footer.count)
+        return file + footer + le(0xdb47_7524_8b80_fb57, 8)
+    }
+    /// 一条 FULL 记录的写前日志,里面一个 WriteBatch。
+    func log(seq: UInt64, _ ops: [(String, [UInt8]?)]) -> [UInt8] {
+        var batch = le(seq, 8) + le(UInt64(ops.count), 4)
+        for (k, v) in ops {
+            batch += [v == nil ? 0 : 1] + varint(k.utf8.count) + Array(k.utf8)
+            if let v { batch += varint(v.count) + v }
+        }
+        return le(0, 4) + le(UInt64(batch.count), 2) + [1] + batch
+    }
+    func record(asin: String, album: String) -> [UInt8] {
+        func field(_ name: String, _ value: String) -> [UInt8] {
+            le(UInt64(name.utf8.count), 8) + Array(name.utf8) + [0, 0, 0, 0] + le(UInt64(value.utf8.count), 8) + Array(value.utf8)
+        }
+        return Array("serialization::archive".utf8) + field("albumAsin", album) + field("artistName", "Jay Chou")
+            + field("asin", asin) + field("assetType", "AUDIO")
+    }
+
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("lyrimuse-selftest-leveldb-\(UUID().uuidString)").path
+    try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(atPath: dir) }
+    let a = record(asin: "B0AAAAAAA1", album: "B0ALBUMXX1"), b = record(asin: "B0BBBBBBB2", album: "B0AAAAAAA1")
+    FileManager.default.createFile(atPath: dir + "/000005.ldb", contents: Data(table([
+        (internalKey("album.1", seq: 3), [1]),
+        (internalKey("track.ML-a", seq: 5), a),
+        (internalKey("track.ML-b", seq: 6), b),
+    ])))
+    // 写前日志里更新的版本:删掉 a,加上 c;另放一个截断的坏文件和一个乱码的表,读不出就跳过。
+    let c = record(asin: "B0CCCCCCC3", album: "B0ALBUMXX3")
+    FileManager.default.createFile(atPath: dir + "/000009.log",
+                                   contents: Data(log(seq: 10, [("track.ML-a", nil), ("track.ML-c", c)])))
+    FileManager.default.createFile(atPath: dir + "/000010.log", contents: Data(Array(log(seq: 20, [("track.ML-b", nil)]).prefix(15))))
+    FileManager.default.createFile(atPath: dir + "/000007.ldb", contents: Data((0..<300).map { UInt8(($0 * 37) & 0xff) }))
+    let live = LevelDBReader.scan(directory: dir) { $0.starts(with: Array("track.".utf8)) }
+    expectEqual(Set(live.keys.map { String(decoding: $0, as: UTF8.self) }), ["track.ML-b", "track.ML-c"],
+                "LevelDB: 表里的旧版被日志里的删除盖掉、日志新加的读得到、别的前缀不算、坏文件跳过")
+    expectEqual(live[Array("track.ML-c".utf8)], c, "LevelDB: 取到的是整条值")
+
+    // Snappy:字面量 + 重叠拷贝("ab" 再从 2 字节前拷 4 个 = "ababab")。
+    expectEqual(LevelDBReader.snappyDecode([6, 1 << 2, 97, 98, (4 - 4) << 2 | 1, 2]).map { String(decoding: $0, as: UTF8.self) },
+                "ababab", "Snappy: 字面量加重叠拷贝")
+    expectEqual(LevelDBReader.snappyDecode([6, 1 << 2, 97, 98]), nil, "Snappy: 解出来比声明的短就是坏块")
+    expectEqual(LevelDBReader.snappyDecode([2, 0 << 2 | 1, 9]), nil, "Snappy: 拷贝的源超出已解出的部分")
+
+    typealias A = AmazonMusicFavoriteControl
+    expectEqual(A.trackASIN(inRecord: b), "B0BBBBBBB2", "Amazon 资料库: 认的是 asin 字段,不是 albumAsin")
+    expectEqual(A.trackASIN(inRecord: Array("serialization::archive".utf8)), nil, "Amazon 资料库: 没有 asin 字段")
+    expectEqual(A.libraryContains(asin: "B0CCCCCCC3", path: dir), true, "Amazon 资料库: 日志里新加的那首在库里")
+    expectEqual(A.libraryContains(asin: "B0AAAAAAA1", path: dir), false,
+                "Amazon 资料库: 删掉的那首不在,别的记录的 albumAsin 恰好是它也不算")
+    expectEqual(A.libraryContains(asin: "B0CCCCCCC3", path: dir + "/missing"), nil, "Amazon 资料库: 目录不在读不出")
+    expectEqual([A.isPlayBarArt(["artWrapper", "album", "small"]), A.isPlayBarArt(["artWrapper", "album", "large"])],
+                [true, false], "Amazon 界面: 播放条封面是 small,正在播放页里的大封面不算")
+    expectEqual([A.isDialogConfirm(["btn", "dialogButton", "large", "solid"]), A.isDialogConfirm(["btn", "dialogButton", "outline"])],
+                [true, false], "Amazon 界面: 确认框只按实心那颗(另一颗是取消)")
+    expectEqual(A.isNowPlayingRoot(["x3", "childViewShowing", "nowPlayingShowing", "hasTrackLoaded"]), true,
+                "Amazon 界面: 正在播放页开着时根上带 nowPlayingShowing")
 }
