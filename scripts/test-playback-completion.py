@@ -86,8 +86,11 @@ import Foundation
     changed.userTogglePlayPause()
     LocalPlaybackSource.shared.lastResolvedBundleID = "spotify"
     changed.sample(true)
+    C.normal = true
+    changed.userTogglePlayPause() // New player now shows an optimistic pause while truth is still playing.
+    C.normal = false
     C.finish(qq)
-    precondition(changed.isPlayingSmoothed, "old player completion must not change the new player")
+    precondition(!changed.isPlayingSmoothed, "old player completion must preserve the new player's differing icon")
 
     C.normal = true
     let normal = Coordinator()
