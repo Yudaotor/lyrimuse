@@ -105,6 +105,8 @@ func runPlayerIdentityTests() {
                     "能力: 酷狗有喜欢(按菜单栏「喜欢歌曲」,读播放条那颗心)")
         expectEqual(MusicPlaybackController.supportsFavorite(.amazonMusic), true,
                     "能力: Amazon 有喜欢(加进资料库,读本地资料库)")
+        expectEqual(MusicPlaybackController.supportsFavorite(.soda), true,
+                    "能力: 汽水有喜欢(底部播放条那颗心,全屏播放页读不出)")
 
         // 播放控制发给谁:media-control 的指令作用于系统焦点,焦点被别的 App 占着、屏上这首靠 AppleScript
         // 回退问到时,要直接发给那个播放器,否则网页视频被暂停 / 被切走。
@@ -588,7 +590,7 @@ func runPlayerIdentityTests() {
             .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.favorite, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
             .kugou: (nil, [.favorite, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime]),
-            .soda: (.soda, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
+            .soda: (.soda, [.favorite, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
                               .snapsToReportedPosition, .stampsCaptureTime, .catalogMenuRows]),
             .spotify: (.spotify, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .resume,
@@ -893,8 +895,13 @@ func runPlayerIdentityTests() {
         // 换歌后菜单标题要过一会儿才换成新那首(网易云实测 0.16~0.27 秒):靠菜单标题的播放器写「喜欢」往后推(07 章决策 147)。
         typealias C = MusicPlaybackController
         expectEqual(PlaybackPlayer.allCases.filter(C.favoriteSettlesAfterTrackChange),
-                    [.qqMusic, .netease, .kugou, .amazonMusic].filter { PlaybackPlayer.allCases.contains($0) },
-                    "读别处状态的喜欢: QQ 音乐、网易云、酷狗和 Amazon")
+                    [.qqMusic, .netease, .kugou, .soda, .amazonMusic].filter { PlaybackPlayer.allCases.contains($0) },
+                    "读别处状态的喜欢: QQ 音乐、网易云、酷狗、汽水和 Amazon")
+        // 汽水底部那颗心两张图标,带 show 的是正在显示的那张:第一张 = 喜欢了(07 章决策 151)。
+        typealias Soda = SodaMusicFavoriteControl
+        expectEqual([Soda.favorited(iconClasses: [["icon", "show"], ["icon"]]), Soda.favorited(iconClasses: [["icon"], ["icon", "show"]]),
+                     Soda.favorited(iconClasses: [["icon", "show"], ["icon", "show"]]), Soda.favorited(iconClasses: [["icon"]])],
+                    [true, false, nil, nil], "汽水喜欢: 第一张显示 = 喜欢了,认不出的不猜")
         // 酷狗那一项标题不变,状态读播放条那颗心;按总时长文字认播放条,歌单列表各行的心不算(07 章决策 148)。
         typealias K = KugouMenuControl
         expectEqual([K.favorited(forHeartDescription: "取消收藏"), K.favorited(forHeartDescription: "收藏"),

@@ -383,17 +383,18 @@ public enum MusicPlaybackController {
     }
 
     /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)、
-    /// Amazon Music(加进资料库)。
+    /// Amazon Music(加进资料库)、汽水音乐(底部播放条那颗心)。
     public static func supportsFavorite(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease || player == .kugou
-            || player == .amazonMusic
+            || player == .amazonMusic || player == .soda
     }
 
-    /// 「喜欢」不走脚本接口、读的是别处的播放器:菜单栏那一项(`MenuTitleFavorite`,酷狗是播放条那颗心)、Amazon 的日志加资料库。
+    /// 「喜欢」不走脚本接口、读的是别处的播放器:菜单栏那一项(`MenuTitleFavorite`,酷狗是播放条那颗心)、Amazon 的日志加资料库、
+    /// 汽水的界面。
     /// 换歌后那份状态要过一会儿才换成新那首的(网易云实测 0.16~0.27 秒),这段时间里读、写都按 `favoriteSettleSeconds` 往后推;
     /// 按了没生效(没登录等)这一首藏起心。见 07 章决策 147。
     public static func favoriteSettlesAfterTrackChange(_ player: PlaybackPlayer) -> Bool {
-        player == .qqMusic || player == .netease || player == .kugou || player == .amazonMusic
+        player == .qqMusic || player == .netease || player == .kugou || player == .amazonMusic || player == .soda
     }
 
     /// 换歌后多久那份状态才算换成了新那首的。
@@ -414,6 +415,7 @@ public enum MusicPlaybackController {
         case .netease: return NetEaseMenuControl.readFavorited()
         case .kugou: return KugouMenuControl.readFavorited()
         case .amazonMusic: return AmazonMusicFavoriteControl.readFavorited()
+        case .soda: return SodaMusicFavoriteControl.readFavorited()
         default: return nil
         }
     }
@@ -440,6 +442,8 @@ public enum MusicPlaybackController {
             return KugouMenuControl.setFavorited(value)
         case .amazonMusic:
             return AmazonMusicFavoriteControl.setFavorited(value)
+        case .soda:
+            return SodaMusicFavoriteControl.setFavorited(value)
         default:
             return false
         }
