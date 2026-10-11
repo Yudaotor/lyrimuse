@@ -1882,7 +1882,28 @@
       "path" : [
         "Discord"
       ],
-      "title" : "显示当前歌词"
+      "title" : "歌曲信息"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "状态文字"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "封面与进度"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "歌手、专辑前加说明"
     },
     {
       "dest" : "account:discord",
@@ -1925,6 +1946,20 @@
         "Discord"
       ],
       "title" : "暂时隐藏"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "不显示是哪首歌"
+    },
+    {
+      "dest" : "account:discord",
+      "path" : [
+        "Discord"
+      ],
+      "title" : "显示进度条"
     },
     {
       "dest" : "account:discord",

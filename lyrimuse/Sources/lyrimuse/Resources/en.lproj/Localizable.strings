@@ -115,6 +115,7 @@
 "CV 署名里的团体" = "Unit in the CV credit";
 "Chat ID" = "Chat ID";
 "Chat ID：个人为一串数字，群组以 -100 开头" = "Chat ID: a number for a person, starting with -100 for a group";
+"Discord 只能把第一行、第二行或「正在收听」后面那个放到用户名下方。歌名、歌手都不在这几处时，那一档变灰。" = "Discord can only show the first line, the second line, or what follows “Listening to” under your name. If the title or artist isn’t in one of those, that option is dimmed.";
 "Discord 尚未就绪" = "Discord isn't ready yet";
 "Discord 拒绝连接" = "Discord refused the connection";
 "Discord 未打开" = "Discord isn't open";
@@ -182,6 +183,7 @@
 "「%@」无法用于同步歌词进度。此功能需要浏览器执行一段 JavaScript 来读取播放进度，而该应用未提供相应的脚本命令。Firefox 目前不支持，非浏览器应用同样不支持。" = "“%@” can’t be used to sync lyric timing. This feature reads playback position by having the browser run a small piece of JavaScript, and this app provides no scripting command for that. Firefox doesn’t support it, and neither do apps that aren’t browsers.";
 "「%@」有未保存的修改" = "“%@” Has Unsaved Changes";
 "「在播放器上收听」" = "“Listen on Player”";
+"「当前歌词」那一行最多每 4 秒换一句，很短的句子会跳过；间奏、暂停或这首没有歌词时显示专辑，专辑已经占了一行时空着。" = "The “Current Lyric” line changes at most every 4 seconds, so very short lines are skipped. During instrumental breaks, while paused, or when the song has no lyrics, it shows the album, or stays empty if the album already has its own line.";
 "「正在收听」后面显示" = "After “Listening to”";
 "「第 N 次收听」会将同一首歌曲的不同写法（繁简、括号风格、合唱署名等）合并计数。此处列出合并到这一行的每种写法、各自的次数与原因，以及每次收听的时间" = "“Play #N” merges different spellings of the same track (Traditional/Simplified, bracket styles, artist credits and so on). This lists every spelling folded into this row with its own count and the reason, plus every individual play";
 "「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开后自动恢复为「自动」" = "“Automatic” picks the display with the notch; “All Displays” shows one on every display; if the chosen display is unplugged it falls back to Automatic";
@@ -238,6 +240,7 @@
 "不含时间戳" = "No timestamps";
 "不在上面的 App 也能当播放器：添加后显示它正在放的歌，也计入收听记录。点格子可以移除。" = "Apps not listed above can count as players too: once added, what they play shows lyrics and goes into your listening history. Click a tile to remove it.";
 "不显示" = "None";
+"不显示是哪首歌" = "Hide Song Details";
 "不足 1 分钟" = "under a minute";
 "不足 1 小时" = "under an hour";
 "不转换" = "As-is";
@@ -255,6 +258,7 @@
 "专辑 A→Z" = "Album A→Z";
 "专辑 Z→A" = "Album Z→A";
 "专辑吻合" = "Album match";
+"专辑：%@" = "on %@";
 "两个数字来自 Last.fm 的两个接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。两者不一致通常是因为某种写法只在其中一边被合并" = "The two numbers come from two Last.fm endpoints: the row sums track.getInfo (with autocorrect) over the spelling family, while the breakdown lists exact spellings via user.getTrackScrobbles. A gap usually means one spelling was merged on only one side";
 "两端已裁切" = "Edges clipped";
 "两者各项得分完全相同，按源的顺序排列。" = "Both scored identically on every term; ordered by source order.";
@@ -391,6 +395,7 @@
 "共检查 %1$@ 首，更新 %2$@ 首#one" = "Checked %1$@ song, updated %2$@";
 "关于" = "About";
 "关于 Lyrimuse" = "About Lyrimuse";
+"关掉后不显示进度条，Discord 改为显示这首已经放了多久，这个计时关不掉。" = "When off, there’s no progress bar. Discord shows how long the song has been playing instead, which can’t be turned off.";
 "关联平台" = "Linked Platforms";
 "关闭" = "Close";
 "关闭后仅保留菜单栏图标" = "When off, only the menu bar icon remains";
@@ -538,6 +543,7 @@
 "只列能翻成当前译文语言的语言，所以可能比「系统设置」里少几种。点一下没下载的就能下载" = "Only languages that can be translated into your translation language are listed, so there may be a few fewer than in System Settings. Click one that isn't downloaded to download it.";
 "只搜没有歌词或只有纯文本的歌" = "Only songs with no lyrics or only plain text";
 "只数存进缓存、会随歌词文件导出的读音；其余的在播放时现算，不算在内" = "Counts only pronunciations stored in the cache, which are exported with the lyric files; the rest are generated during playback and aren't counted";
+"只显示在用哪个播放器听歌和播放进度，歌名、歌手、专辑、歌词、链接和「在播放器上收听」按钮都不发。" = "Shows only which player you’re listening on and the progress. The title, artist, album, lyrics, links and the “Listen on Player” button aren’t sent.";
 "只有勾选的播放器会 Scrobble；网页播放器按浏览器算。" = "Only checked players scrobble; web players count as their browser.";
 "只用于悬浮歌词、灵动岛、菜单栏和触控栏" = "Only for Floating Lyrics, Notch, Menu Bar and Touch Bar";
 "只识别勾选的播放器；没勾的不显示歌词，也不计入收听记录。" = "Only the players you check are detected. The rest don't show lyrics or count toward your listening history.";
@@ -679,6 +685,7 @@
 "导出诊断" = "Export Diagnostics";
 "导出诊断…" = "Export Diagnostics…";
 "封面" = "Artwork";
+"封面与进度" = "Cover and Progress";
 "封面位置" = "Artwork Position";
 "封面角标" = "Cover Badge";
 "将「Lyrimuse」拷贝到剪贴板，用作申请页中的应用名称" = "Copies “Lyrimuse” so you can paste it as the application name";
@@ -835,6 +842,8 @@
 "已选 %d / %d" = "%d of %d selected";
 "已选择 %@ 首" = "%@ Songs Selected";
 "已选择 %@ 首#one" = "%@ Song Selected";
+"已选择「不显示是哪首歌」" = "“Hide Song Details” is on";
+"已选择「不显示是哪首歌」，跟歌曲有关的几项暂不起作用" = "“Hide Song Details” is on, so the song-related options have no effect for now.";
 "已选择的播放器" = "Selected players";
 "已选择的播放器：%@" = "The players you picked: %@";
 "已配置，点按可查看或移除" = "Configured — click to review or remove";
@@ -891,6 +900,7 @@
 "当前无正在播放的歌曲" = "Nothing Is Playing";
 "当前未在播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示" = "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch, Menu Bar and Touch Bar Lyrics only show up once playback starts";
 "当前未在播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示" = "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch Lyrics and Menu Bar Lyrics only show up once playback starts";
+"当前歌词" = "Current Lyric";
 "当前歌词为手动修改或手动采纳，并非下方自动决策的结果" = "The current lyrics were edited or picked by you, not chosen by the automatic decision below.";
 "当前歌词的出处" = "Where the current lyrics came from";
 "当前网络无法直接连接 Musixmatch 的接口（TCP/TLS 均无响应），系统代理也不可用；开启代理后通常可恢复" = "Musixmatch's API host is unreachable over a direct connection on this network (no TCP/TLS response), and no working system proxy is available — turning on a proxy usually fixes it";
@@ -1125,7 +1135,6 @@
 "显示在桌面上" = "Sits on your desktop";
 "显示封面" = "Show Artwork";
 "显示开关" = "Show & Hide";
-"显示当前歌词" = "Show Current Lyrics";
 "显示播放控制" = "Show Playback Controls";
 "显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
 "显示歌手简介" = "Show Artist Bio";
@@ -1138,6 +1147,7 @@
 "显示触控栏歌词" = "Show Touch Bar Lyrics";
 "显示译文" = "Show Translation";
 "显示读音" = "Show Romanization";
+"显示进度条" = "Show Progress Bar";
 "晚 %@ 秒" = "%@ s later";
 "普通话" = "Mandarin";
 "智能" = "Smart";
@@ -1313,6 +1323,7 @@
 "次" = "plays";
 "欢迎使用 Lyrimuse" = "Welcome to Lyrimuse";
 "歌名" = "Title";
+"歌名 - 歌手" = "Title - Artist";
 "歌名 A→Z" = "Title A→Z";
 "歌名 Z→A" = "Title Z→A";
 "歌名、专辑名或歌词文件头标注的版本（Live / Remix / Demo / Club Mix 等）与本地歌曲不符" = "The version (Live / Remix / Demo / Club Mix …) in the title, album, or lyrics header doesn't match the local track";
@@ -1321,11 +1332,15 @@
 "歌名始终为「%@」" = "Title was always “%@”";
 "歌名未变" = "Title unchanged";
 "歌手" = "Artist";
+"歌手 - 歌名" = "Artist - Title";
 "歌手 A→Z" = "Artist A→Z";
 "歌手 Z→A" = "Artist Z→A";
+"歌手、专辑前加说明" = "Label Artist and Album";
 "歌手别名" = "Artist alias";
+"歌手前加「演唱：」，专辑前加「专辑：」。歌名和歌手写在同一行时不加。" = "Adds “by” before the artist and “on” before the album. Not added when the title and artist share a line.";
 "歌手地区分布" = "Artist Regions";
 "歌曲" = "Track";
+"歌曲信息" = "Song Info";
 "歌曲开始播放后将显示歌词" = "Lyrics will show once the song starts";
 "歌曲无歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with the song title instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
 "歌词" = "Lyrics";
@@ -1499,6 +1514,7 @@
 "渐变" = "Gradient";
 "源自报曲长不符" = "Source duration mismatch";
 "滚动" = "Scroll";
+"演唱：%@" = "by %@";
 "灵动岛" = "Notch";
 "灵动岛宽度" = "Notch Card Width";
 "灵动岛展开宽度" = "Notch Card Expanded Width";
@@ -1523,6 +1539,7 @@
 "版权说明" = "Copyright Notice";
 "特厚" = "Ultra Thick";
 "特粗" = "Heavy";
+"状态文字" = "Status Text";
 "状态未知" = "Status unknown";
 "现场版场次不符" = "Live recording from a different show";
 "玻璃浓淡" = "Glass Density";
@@ -1564,7 +1581,10 @@
 "第 %@ 天" = "Day %@";
 "第 %@ 次" = "Play #%@";
 "第 %@ 次收听" = "Play #%@";
+"第一行" = "First Line";
 "第三方许可" = "Third-Party Licenses";
+"第三行" = "Third Line";
+"第二行" = "Second Line";
 "等待 Last.fm 确认（通常几秒内）" = "Waiting for Last.fm to acknowledge (usually a few seconds)";
 "等待下一首…" = "Waiting for the next song…";
 "筛选" = "Filter";
@@ -1802,7 +1822,6 @@
 "账号 Token" = "Account Token";
 "账号信息" = "Account Info";
 "资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。" = "The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player.\nWith Title or Artist here, “Shown Under Your Name” can't show the player.";
-"资料卡上专辑那一行换成正在唱的这一句。Discord 最多每 4 秒更新一次，很短的句子会跳过；间奏、暂停时显示专辑。" = "Replaces the album line on your profile card with the line being sung. Discord updates at most every 4 seconds, so very short lines are skipped; the album shows during instrumental breaks and while paused.";
 "超薄" = "Ultra Thin";
 "足迹" = "Footprint";
 "跟随「全部播放器」：%@" = "Following “All players”: %@";
@@ -2052,6 +2071,7 @@
 "默认为日文、韩文、中文和粤语标注读音，可在设置中按语言关闭" = "Japanese, Korean, Chinese and Cantonese are all annotated by default; turn any of them off in Settings";
 "默认为日文、韩文和粤语标注读音，普通话拼音可在设置中开启" = "Japanese, Korean and Cantonese are annotated by default; turn on Mandarin pinyin in Settings";
 "默认跟随系统菜单栏，可在 10～16pt 之间调整，16pt 仍在菜单栏项高度内。拖回系统字号处即恢复跟随。" = "Follows the system menu bar by default; adjustable from 10 to 16pt, and 16pt still fits the menu bar item. Drag back to the system size to follow it again.";
+"鼠标停在封面上时也显示这一行。" = "Also shown when hovering over the cover.";
 "（%@）" = " (%@)";
 "（已调）" = " (adjusted)";
 "（未信任，选择后自动信任）" = " (not trusted — choosing it trusts it)";

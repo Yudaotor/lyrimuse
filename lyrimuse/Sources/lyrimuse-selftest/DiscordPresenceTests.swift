@@ -16,6 +16,7 @@ func runDiscordPresenceTests() {
     checkDiscordCover()
     checkDiscordLyrics()
     checkDiscordButtons()
+    checkDiscordLayout()
     checkDiscordWiring()
 }
 
@@ -147,17 +148,20 @@ private func checkDiscordWire() {
     expectEqual(nameArtist.name, nameArtist.state, "Discord: 正在收听后面写歌手")
     expectEqual(DiscordPresence.activity(previewSample, statusLine: .title, now: previewNow).name, byTitle.name,
                 "Discord: 不传 listeningName 时照旧写播放器")
-    expectEqual(DiscordPresence.statusLines(for: .player), [.title, .artist, .player], "Discord: 正在收听写播放器时用户名下方三档都在")
-    expectEqual(DiscordPresence.statusLines(for: .title), [.title, .artist], "Discord: 正在收听写歌名时用户名下方没有「播放器」")
-    expectEqual(DiscordPresence.effectiveStatusLine(.player, listeningName: .artist), .artist,
+    expectEqual(DiscordPresence.statusLines(for: .player, layout: .init()), [.title, .artist, .player],
+                "Discord: 正在收听写播放器时用户名下方三档都在")
+    expectEqual(DiscordPresence.statusLines(for: .title, layout: .init()), [.title, .artist],
+                "Discord: 正在收听写歌名时用户名下方没有「播放器」")
+    expectEqual(DiscordPresence.effectiveStatusLine(.player, listeningName: .artist, layout: .init()), .artist,
                 "Discord: 存的「播放器」在正在收听写歌手时按歌手算")
-    expectEqual(DiscordPresence.effectiveStatusLine(.player, listeningName: .player), .player, "Discord: 切回播放器时恢复")
+    expectEqual(DiscordPresence.effectiveStatusLine(.player, listeningName: .player, layout: .init()), .player,
+                "Discord: 切回播放器时恢复")
     let nameTitleAsPlayer = DiscordPresence.activity(previewSample, statusLine: .player, listeningName: .title, now: previewNow)
     expectEqual(nameTitleAsPlayer.statusDisplayType, DiscordPresence.StatusLine.title.displayType,
                 "Discord: 存的「播放器」+ 正在收听写歌名 → 发出去按歌名那档")
     let pausedTitle = DiscordPresence.pausedActivity(previewSample, statusLine: .title, listeningName: .title,
                                                      now: previewNow, pausedNameFormat: "%@ (Paused)")
-    expectEqual(pausedTitle.name, "\(nameTitle.details) (Paused)", "Discord: 暂停时正在收听后面的歌名也带暂停字样")
+    expectEqual(pausedTitle.name, "\(nameTitle.details ?? "") (Paused)", "Discord: 暂停时正在收听后面的歌名也带暂停字样")
     previewSample.positionMs = nil
     expectEqual(DiscordPresence.progress(of: DiscordPresence.activity(previewSample, statusLine: .title, now: previewNow),
                                          now: previewNow) == nil, true, "Discord 预览: 暂停时没有进度条")
@@ -229,12 +233,12 @@ private func checkDiscordActivity() {
                 "Discord activity: 没专辑不写悬停文字")
     var localCover = sampleTrack()
     localCover.coverURL = URL(fileURLWithPath: "/tmp/cover.jpg")
-    expectEqual(DiscordPresence.activity(localCover, statusLine: .title, now: now).assets, nil,
-                "Discord activity: 本地文件封面 Discord 拿不到,不给大图")
+    expectEqual(DiscordPresence.activity(localCover, statusLine: .title, now: now).assets?.largeImage,
+                DiscordPresence.iconURL(of: .lyrimuse), "Discord activity: 本地文件封面 Discord 拿不到,不当大图(第三行有字时补应用图标)")
     var plainHTTP = sampleTrack()
     plainHTTP.coverURL = URL(string: "http://example.com/a.jpg")
-    expectEqual(DiscordPresence.activity(plainHTTP, statusLine: .title, now: now).assets, nil,
-                "Discord activity: 封面只认 https")
+    expectEqual(DiscordPresence.activity(plainHTTP, statusLine: .title, now: now).assets?.largeImage,
+                DiscordPresence.iconURL(of: .lyrimuse), "Discord activity: 封面只认 https")
 
     // ---- 每个播放器一个应用 ----
     typealias A = DiscordPresence.Application
@@ -307,7 +311,7 @@ private func checkDiscordSmallImage() {
     expectEqual(paused.assets?.smallURL, DiscordPresence.websiteURL, "Discord 小图: 点暂停图标也打开官网")
     var noCover = sampleTrack()
     noCover.coverURL = nil
-    expectEqual(DiscordPresence.activity(noCover, statusLine: .title, now: now, smallImage: .lyrimuse).assets, nil,
+    expectEqual(DiscordPresence.activity(noCover, statusLine: .title, now: now, smallImage: .lyrimuse).assets?.smallImage, nil,
                 "Discord 小图: 没有封面时小图也不给")
     let appleMusicID = DiscordPresence.applicationID(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier, webPlatformID: nil)
     let playerBadged = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, smallImage: .player(.appleMusic))
@@ -1044,33 +1048,39 @@ private func checkDiscordLyrics() {
 
     // ---- 进 activity ----
     let now = Date(timeIntervalSince1970: 1_000_000)
+    let lyricLine = DiscordPresence.Layout(third: .lyric)
     var track = sampleTrack()
     track.lyric = "  刮风这天 我试过握着你手 "
-    let withLyric = DiscordPresence.activity(track, statusLine: .title, now: now)
-    expectEqual(withLyric.assets?.largeText, "\u{266A} 刮风这天 我试过握着你手", "Discord 歌词: 专辑那一行换成「♪ 这一句」")
+    let withLyric = DiscordPresence.activity(track, statusLine: .title, now: now, layout: lyricLine)
+    expectEqual(withLyric.assets?.largeText, "\u{266A} 刮风这天 我试过握着你手", "Discord 歌词: 第三行选当前歌词时写「♪ 这一句」")
     expectEqual(withLyric.details, "晴天", "Discord 歌词: 歌名不动")
     expectEqual(withLyric.state, "周杰伦", "Discord 歌词: 歌手不动")
-    track.lyric = "   "
     expectEqual(DiscordPresence.activity(track, statusLine: .title, now: now).assets?.largeText, "叶惠美",
-                "Discord 歌词: 只有空白的歌词当没有,照常写专辑")
+                "Discord 歌词: 没有一行选当前歌词时带着歌词也不显示")
+    track.lyric = "   "
+    expectEqual(DiscordPresence.activity(track, statusLine: .title, now: now, layout: lyricLine).assets?.largeText, "叶惠美",
+                "Discord 歌词: 只有空白的歌词当没有,那一行写专辑")
     track.lyric = String(repeating: "啦", count: 200)
-    expectEqual(DiscordPresence.activity(track, statusLine: .title, now: now).assets?.largeText?.utf16.count, 128,
+    expectEqual(DiscordPresence.activity(track, statusLine: .title, now: now, layout: lyricLine).assets?.largeText?.utf16.count, 128,
                 "Discord 歌词: 超长的截到 128")
     var bare = sampleTrack()
     bare.coverURL = nil
     bare.lyric = "这一句"
-    let bareLyric = DiscordPresence.activity(bare, statusLine: .title, now: now, smallImage: .lyrimuse)
+    let bareLyric = DiscordPresence.activity(bare, statusLine: .title, now: now, smallImage: .lyrimuse, layout: lyricLine)
     expectEqual(bareLyric.assets?.largeImage, DiscordPresence.iconURL(of: .lyrimuse),
-                "Discord 歌词: 没封面时拿应用图标当大图,好让歌词那一行出来")
+                "Discord 歌词: 没封面时拿应用图标当大图,好让第三行出来")
     expectEqual(bareLyric.assets?.largeText, "\u{266A} 这一句", "Discord 歌词: 没封面时歌词照样显示")
     expectEqual(bareLyric.assets?.smallImage, nil, "Discord 歌词: 补上的大图不压小图,跟没封面时一个样子")
     bare.lyric = nil
-    expectEqual(DiscordPresence.activity(bare, statusLine: .title, now: now).assets, nil,
-                "Discord 歌词: 没歌词、没封面时照旧不给大图")
+    expectEqual(DiscordPresence.activity(bare, statusLine: .title, now: now).assets?.largeText, "叶惠美",
+                "Discord 排法: 没封面时第三行写专辑也补应用图标,专辑照样显示")
+    expectEqual(DiscordPresence.activity(bare, statusLine: .title, now: now, layout: .init(third: .none)).assets, nil,
+                "Discord 排法: 没封面、第三行没字时照旧不给大图")
     var lyricTrack = sampleTrack()
     lyricTrack.lyric = "这一句"
-    expectEqual(DiscordPresence.pausedActivity(lyricTrack, statusLine: .title, now: now, pausedNameFormat: "%@ (Paused)")
-                    .assets?.largeText, "叶惠美", "Discord 歌词: 暂停保留的那份写专辑,不挂歌词")
+    expectEqual(DiscordPresence.pausedActivity(lyricTrack, statusLine: .title, now: now, pausedNameFormat: "%@ (Paused)",
+                                               layout: lyricLine).assets?.largeText, "叶惠美",
+                "Discord 歌词: 暂停保留的那份不挂歌词,那一行写专辑")
 }
 
 private func checkDiscordButtons() {
@@ -1130,6 +1140,136 @@ private func checkDiscordButtons() {
     expectEqual(DiscordIPC.activityEcho(Data("not json".utf8)), nil, "Discord 回执: 读不懂的回执没有这一行")
 }
 
+private func checkDiscordLayout() {
+    typealias L = DiscordPresence.Layout
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    let plain = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now)
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, layout: L()), plain,
+                "Discord 排法: 默认的排法跟不传一模一样")
+
+    // ---- 不显示是哪首歌 ----
+    var track = sampleTrack()
+    track.lyric = "刮风这天"
+    let listen = DiscordActivity.Button(label: "在 Apple Music 上收听", url: "https://music.apple.com/cn/album/x/1?i=2")
+    let get = DiscordActivity.Button(label: "获取 Lyrimuse", url: DiscordPresence.websiteURL)
+    track.buttons = [listen, get]
+    let hidden = DiscordPresence.activity(track, statusLine: .title, listeningName: .title, now: now, smallImage: .lyrimuse,
+                                          layout: L(hidesSong: true))
+    expectEqual(hidden.details == nil && hidden.state == nil && hidden.detailsURL == nil && hidden.stateURL == nil, true,
+                "Discord 隐私: 不显示是哪首歌时不发歌名、歌手和链接")
+    expectEqual(hidden.name, "Apple Music", "Discord 隐私: 「正在收听」后面写播放器名,不按设置写歌名")
+    expectEqual(hidden.statusDisplayType, DiscordPresence.StatusLine.player.displayType, "Discord 隐私: 用户名下方写播放器名")
+    expectEqual(hidden.assets?.largeImage, DiscordPresence.iconURL(of: .lyrimuse), "Discord 隐私: 大图是应用图标,不是封面")
+    expectEqual(hidden.assets?.largeText == nil && hidden.assets?.largeURL == nil, true, "Discord 隐私: 不发专辑、歌词和封面链接")
+    expectEqual(hidden.assets?.smallImage, DiscordPresence.lyrimuseBadgeURL, "Discord 隐私: 角标照常")
+    expectEqual(hidden.timestamps, plain.timestamps, "Discord 隐私: 进度照常")
+    expectEqual(hidden.buttons, [get], "Discord 隐私: 链到这首歌曲页的按钮不带,别的照常")
+    let hiddenJSON = String(decoding: DiscordIPC.setActivity(hidden, pid: 1, nonce: "n"), as: UTF8.self)
+    expectEqual(hiddenJSON.contains("\"details\"") || hiddenJSON.contains("\"state\"") || hiddenJSON.contains("晴天"), false,
+                "Discord 隐私: 发出去的里面没有歌名、歌手字段")
+    expectEqual(DiscordPresence.pausedActivity(track, statusLine: .title, now: now, pausedNameFormat: "%@ (Paused)",
+                                               layout: L(hidesSong: true)).details, nil,
+                "Discord 隐私: 暂停保留的那份同样不写歌名")
+
+    // ---- 三行各写什么 ----
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, layout: L(third: .none)).assets?.largeText, nil,
+                "Discord 排法: 第三行选不显示时没有那一行")
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, layout: L(showsProgress: false)).timestamps,
+                DiscordActivity.Timestamps(start: 999_970_000, end: nil), "Discord 排法: 不显示进度条时只给开始时间")
+    var lyricTrack = sampleTrack()
+    lyricTrack.lyric = "这一句"
+    let merged = L(first: .titleArtist, second: .album, third: .lyric)
+    let oneLine = DiscordPresence.activity(lyricTrack, statusLine: .artist, now: now, layout: merged)
+    expectEqual(oneLine.details, "晴天 - 周杰伦", "Discord 排法: 第一行「歌名 - 歌手」")
+    expectEqual(oneLine.detailsURL, plain.detailsURL, "Discord 排法: 写着歌名的合并行链到歌曲页")
+    expectEqual(oneLine.state, "叶惠美", "Discord 排法: 第二行写专辑")
+    expectEqual(oneLine.stateURL, nil, "Discord 排法: 专辑那一行不挂链接")
+    expectEqual(oneLine.assets?.largeText, "\u{266A} 这一句", "Discord 排法: 第三行写歌词")
+    expectEqual(DiscordPresence.statusText(of: oneLine), "晴天 - 周杰伦", "Discord 排法: 用户名下方选歌手时写合并的那一行")
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, layout: merged).assets?.largeText, nil,
+                "Discord 排法: 歌词那一行没歌词、专辑已经占了一行时空着,不重复专辑")
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, layout: L(third: .lyric)).assets?.largeText,
+                "叶惠美", "Discord 排法: 歌词那一行没歌词、专辑没占一行时写专辑")
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, layout: L(first: .artistTitle)).details,
+                "周杰伦 - 晴天", "Discord 排法: 「歌手 - 歌名」")
+    let lyricFirst = DiscordPresence.activity(lyricTrack, statusLine: .title, now: now, layout: L(first: .lyric, second: .titleArtist))
+    expectEqual(lyricFirst.details, "\u{266A} 这一句", "Discord 排法: 歌词也能放第一行")
+    expectEqual(lyricFirst.detailsURL, nil, "Discord 排法: 歌词那一行不挂链接")
+    expectEqual(DiscordPresence.statusText(of: lyricFirst), "晴天 - 周杰伦", "Discord 排法: 用户名下方选歌名时找写着歌名的那一行")
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .player, now: now, layout: L(first: .none)).details, nil,
+                "Discord 排法: 第一行选不显示时不发 details")
+
+    let swapped = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now, layout: L(first: .artist, second: .title))
+    expectEqual(swapped.details, "周杰伦", "Discord 排法: 第一行写歌手")
+    expectEqual(swapped.state, "晴天", "Discord 排法: 第二行写歌名")
+    expectEqual(swapped.detailsURL, plain.stateURL, "Discord 排法: 歌手页链接跟着歌手走")
+    expectEqual(swapped.stateURL, plain.detailsURL, "Discord 排法: 歌曲页链接跟着歌名走")
+    expectEqual(DiscordPresence.statusText(of: swapped), "晴天", "Discord 排法: 歌手在前时用户名下方选歌名仍写歌名")
+    expectEqual(DiscordPresence.statusText(of: DiscordPresence.activity(sampleTrack(), statusLine: .artist, now: now,
+                                                                          layout: L(first: .artist, second: .title))),
+                "周杰伦", "Discord 排法: 歌手在前时用户名下方选歌手仍写歌手")
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now,
+                                         layout: L(first: .artistTitle, second: .title)).statusDisplayType,
+                DiscordPresence.StatusLine.artist.displayType, "Discord 排法: 单写歌名的那一行比合并的那一行优先")
+
+    let labeled = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now,
+                                           layout: L(artistFormat: "by %@", albumFormat: "on %@"))
+    expectEqual(labeled.state, "by 周杰伦", "Discord 排法: 歌手前加说明")
+    expectEqual(labeled.assets?.largeText, "on 叶惠美", "Discord 排法: 专辑前加说明")
+    expectEqual(labeled.details, "晴天", "Discord 排法: 歌名不加")
+    let labeledOneLine = DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now,
+                                                  layout: L(first: .titleArtist, second: .album, third: .none,
+                                                            artistFormat: "by %@", albumFormat: "on %@"))
+    expectEqual(labeledOneLine.details, "晴天 - 周杰伦", "Discord 排法: 合在一起的那一行不加说明")
+    expectEqual(labeledOneLine.state, "on 叶惠美", "Discord 排法: 别的行写专辑照样加说明")
+    expectEqual(DiscordPresence.activity(sampleTrack(), statusLine: .title, now: now,
+                                         layout: L(third: .lyric, albumFormat: "on %@")).assets?.largeText,
+                "on 叶惠美", "Discord 排法: 歌词那一行退回专辑时也加说明")
+    expectEqual([L().followsLyrics, L(second: .lyric).followsLyrics, L(hidesSong: true, third: .lyric).followsLyrics],
+                [false, true, false], "Discord 排法: 有一行写歌词、没选不显示是哪首歌时才跟歌词")
+
+    // ---- 设置之间互相压着时,界面显示实际生效的那一档 ----
+    typealias P = DiscordPresence
+    expectEqual(P.effectiveListeningName(.title, layout: L(hidesSong: true)), .player, "Discord 设置: 不显示是哪首歌时「正在收听」后面算播放器")
+    expectEqual(P.effectiveListeningName(.title, layout: L()), .title, "Discord 设置: 平时照存着的")
+    expectEqual(P.effectiveStatusLine(.title, listeningName: .player, layout: L(hidesSong: true)), .player,
+                "Discord 设置: 不显示是哪首歌时用户名下方算播放器")
+    expectEqual(P.statusLines(for: .player, layout: L()), [.title, .artist, .player], "Discord 设置: 平时三档都能选")
+    expectEqual(P.statusLines(for: .player, layout: L(second: .album)), [.title, .player],
+                "Discord 设置: 前两行都没写歌手时「歌手」那档不能选")
+    expectEqual(P.statusLines(for: .artist, layout: L(second: .album)), [.title, .artist],
+                "Discord 设置: 「正在收听」后面写着歌手时「歌手」那档用它")
+    expectEqual(P.statusLines(for: .player, layout: merged), [.title, .artist, .player],
+                "Discord 设置: 合在一起的那一行歌名、歌手两档都能选")
+    expectEqual(P.statusLines(for: .player, layout: L(first: .album, second: .lyric, third: .title)), [.player],
+                "Discord 设置: 歌名只在第三行时放不到用户名下方")
+    expectEqual(P.effectiveStatusLine(.artist, listeningName: .player, layout: L(second: .album)), .player,
+                "Discord 设置: 存的那档写不出来时退到「正在收听」后面那一样")
+    expectEqual(P.effectiveStatusLine(.artist, listeningName: .title, layout: L(second: .album)), .title,
+                "Discord 设置: 「正在收听」后面写歌名时退到歌名")
+    let layouts = [L(), merged, L(first: .artist, second: .title), L(first: .album, second: .lyric, third: .title),
+                   L(second: .none), L(first: .artistTitle, second: .title), L(hidesSong: true)]
+    for stored in DiscordPresence.StatusLine.allCases {
+        for name in DiscordPresence.ListeningName.allCases {
+            for layout in layouts {
+                let sent = P.activity(sampleTrack(), statusLine: stored, listeningName: name, now: now, layout: layout)
+                let shown = P.effectiveStatusLine(stored, listeningName: name, layout: layout)
+                let viaShown = P.activity(sampleTrack(), statusLine: shown, listeningName: P.effectiveListeningName(name, layout: layout),
+                                          now: now, layout: layout)
+                expectEqual(P.statusText(of: sent), P.statusText(of: viaShown),
+                            "Discord 设置: 界面显示的那一档跟实际发出去的一致(\(stored) / \(name) / \(layout))")
+                expectEqual(P.statusLines(for: name, layout: layout).contains(shown), true,
+                            "Discord 设置: 界面显示的那一档不是灰的(\(stored) / \(name) / \(layout))")
+            }
+        }
+    }
+    let hiddenPlayerBadge = P.activity(sampleTrack(), statusLine: .title, now: now, smallImage: .player(.appleMusic),
+                                       layout: L(hidesSong: true))
+    expectEqual(hiddenPlayerBadge.assets?.smallImage, nil, "Discord 隐私: 大图已是播放器图标时不再放播放器角标")
+    expectEqual(P.activity(sampleTrack(), statusLine: .title, now: now, smallImage: .paused, layout: L(hidesSong: true))
+                    .assets?.smallImage, DiscordPresence.pausedBadgeURL, "Discord 隐私: 暂停图标照放")
+}
+
 private func checkDiscordWiring() {
     let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     func code(_ path: String) -> String {
@@ -1162,11 +1302,14 @@ private func checkDiscordWiring() {
                    "links?.artistWebLink(forPlayerBundleID: reportedBundleID", "hit?.artistPage",
                    "signal(source.$webPageVideoFrameURL)", "source.kasetVideoFrameURL ?? source.webPageVideoFrameURL",
                    "videoFrame: extras.videoFrame", "EnrichCacheReader.publicCoverURL(artist: source.artist",
-                   "signal(settings.$discordShowLyrics)", "signal(playback.$allLines)", "signal(playback.$lyricsGapMarkers)",
+                   "signal(settings.$discordLine1)", "signal(playback.$allLines)", "signal(playback.$lyricsGapMarkers)",
                    "signal(settings.$discordCustomButtonURL)", "signal(settings.$discordButtonListen)",
                    "signal(settings.$discordButtonGetLyrimuse)", "lyric: currentLyric(now: now)",
                    "atMs: playback.lyricsTimelineMs(now: now)", "windowMs: Int(DiscordPresenceGate.minInterval * 1000)",
-                   "wake(at: now.addingTimeInterval(Self.lyricTick))"] {
+                   "wake(at: now.addingTimeInterval(Self.lyricTick))", "layout: presenceLayout(),",
+                   "signal(settings.$discordHideSongInfo)", "signal(settings.$discordShowProgress)",
+                   "signal(settings.$discordLine2)", "signal(settings.$discordLine3)",
+                   "guard presenceLayout().followsLyrics, playback.isPlayingSmoothed else { return nil }"] {
         expectEqual(sourceBytes(controller, contain: needle), true, "Discord(接线): 控制器盯着 \(needle)")
     }
     for needle in ["if lookup.finished, lookup.hit == nil, let retryAt = lookup.retryAt, now >= retryAt {",

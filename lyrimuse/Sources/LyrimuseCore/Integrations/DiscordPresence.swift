@@ -59,9 +59,10 @@ public struct DiscordActivity: Equatable, Sendable, Encodable {
     public var type: Int
     /// 好友列表那一行「正在听」后面写什么:0 应用名、1 `state`、2 `details`。
     public var statusDisplayType: Int
-    public var details: String
+    /// 资料卡第一行、第二行;nil = 不发这一行(「不显示是哪首歌」时两行都不发)。
+    public var details: String?
     public var detailsURL: String?
-    public var state: String
+    public var state: String?
     public var stateURL: String?
     /// 没有封面时为 nil:Discord 显示应用自己的图标。
     public var assets: Assets?
@@ -240,8 +241,8 @@ public enum DiscordPresence {
     /// 好友列表那一行「正在听」后面写的字:按 `statusDisplayType` 取应用名、state 或 details。
     public static func statusText(of activity: DiscordActivity) -> String {
         switch activity.statusDisplayType {
-        case StatusLine.artist.displayType: return activity.state
-        case StatusLine.title.displayType: return activity.details
+        case StatusLine.artist.displayType: return activity.state ?? ""
+        case StatusLine.title.displayType: return activity.details ?? ""
         default: return activity.name ?? ""
         }
     }
@@ -290,20 +291,13 @@ public enum DiscordPresence {
         case title, artist, player
     }
 
-    /// 用户名下方那一行能选哪几档。`name` 不写播放器时三个字段里没有一个装着播放器名,「播放器」那档拿掉。
-    public static func statusLines(for listeningName: ListeningName) -> [StatusLine] {
-        listeningName == .player ? StatusLine.allCases : [.title, .artist]
-    }
+    /// 资料卡上歌曲信息那一行写什么(`Layout` 的三行)。rawValue 存在设置里;case 顺序就是设置页下拉里的顺序。
+    public enum LineContent: String, CaseIterable, Sendable {
+        case title, artist, titleArtist, artistTitle, album, lyric, none
 
-    /// 存着的那一档在当前 `listeningName` 下实际生效的是哪一档。存的是「播放器」而 `name` 改写成了歌名 / 歌手时,
-    /// 好友列表显示的就是 `name`,等于选了同名那一档。存的值不动,`name` 切回播放器时原样恢复。
-    public static func effectiveStatusLine(_ stored: StatusLine, listeningName: ListeningName) -> StatusLine {
-        guard stored == .player else { return stored }
-        switch listeningName {
-        case .player: return .player
-        case .title: return .title
-        case .artist: return .artist
-        }
+        /// 这一行写着歌名 / 歌手;合在一起的那两档两样都算。
+        public var hasTitle: Bool { self == .title || self == .titleArtist || self == .artistTitle }
+        public var hasArtist: Bool { self == .artist || self == .titleArtist || self == .artistTitle }
     }
 
     /// 组 activity 要的东西。歌名、歌手已经是界面上显示的写法。
@@ -321,7 +315,7 @@ public enum DiscordPresence {
         public var durationMs: Int?
         /// 发给哪个 Discord 应用(`applicationID(forBundleID:webPlatformID:)`)。
         public var applicationID: String
-        /// 「显示当前歌词」开着时这一刻要显示的那句(`DiscordLyricLine.pick`);nil = 专辑那一行照常写专辑。
+        /// 有一行选了「当前歌词」时这一刻要显示的那句(`DiscordLyricLine.pick`);nil = 间奏、暂停、没歌词(那一行怎么写见 `activity`)。
         public var lyric: String?
         /// 资料卡底下的按钮(`DiscordPresence.buttons`);nil 或空 = 不带。
         public var buttons: [DiscordActivity.Button]?
@@ -359,18 +353,18 @@ public enum DiscordPresence {
     public static func intent(track: Track?, pausedSince: Date?, statusLine: StatusLine,
                               listeningName: ListeningName = .player, keepWhenPaused: Bool,
                               badge: Badge = .none, pausedNameFormat: String = "%@ (Paused)",
-                              hiddenUntil: Date? = nil, now: Date) -> Intent {
+                              layout: Layout = Layout(), hiddenUntil: Date? = nil, now: Date) -> Intent {
         if let hiddenUntil, now < hiddenUntil { return .clear }
         guard let track, !trimmed(track.title).isEmpty, !trimmed(track.artist).isEmpty else { return .clear }
         guard let pausedSince else {
             return .show(activity(track, statusLine: statusLine, listeningName: listeningName, now: now,
-                                  smallImage: smallImage(for: badge, applicationID: track.applicationID)))
+                                  smallImage: smallImage(for: badge, applicationID: track.applicationID), layout: layout))
         }
         let graceEnds = pausedSince.addingTimeInterval(pauseGrace)
         if now < graceEnds { return .hold(until: graceEnds) }
         guard keepWhenPaused else { return .clear }
         return .show(pausedActivity(track, statusLine: statusLine, listeningName: listeningName, now: now,
-                                    pausedNameFormat: pausedNameFormat))
+                                    pausedNameFormat: pausedNameFormat, layout: layout))
     }
 
     /// 暂停后保留的那份。Discord 没有暂停状态:不带时间戳它写这条状态挂了多久、一直往上走;开始时间在将来时停在 0:00。
@@ -378,10 +372,11 @@ public enum DiscordPresence {
     /// 别放得太远,太远 Discord 整条不显示(见 12 章决策 50)。应用名后面加上暂停字样(`pausedNameFormat`,没有播放器名
     /// 时拿应用的注册名去拼),封面角上是暂停图标。
     public static func pausedActivity(_ track: Track, statusLine: StatusLine, listeningName: ListeningName = .player,
-                                      now: Date, pausedNameFormat: String) -> DiscordActivity {
+                                      now: Date, pausedNameFormat: String, layout: Layout = Layout()) -> DiscordActivity {
         var quiet = track
         quiet.lyric = nil
-        var paused = activity(quiet, statusLine: statusLine, listeningName: listeningName, now: nil, smallImage: .paused)
+        var paused = activity(quiet, statusLine: statusLine, listeningName: listeningName, now: nil, smallImage: .paused,
+                              layout: layout)
         let block: Int64 = 12 * 3_600_000
         let nowMs = Int64((now.timeIntervalSince1970 * 1000).rounded())
         paused.timestamps = DiscordActivity.Timestamps(start: nowMs / block * block + 2 * block)
@@ -393,51 +388,164 @@ public enum DiscordPresence {
     /// `now` 为 nil 时不带时间戳(暂停时保留的那份)。有位置才出时间戳,有时长才出进度条。没有封面就不给大图,Discord 显示
     /// 应用自己的图标(各播放器的应用就是那个播放器的图标);小图压在大图上,没有大图时也不给。
     ///
-    /// 带着歌词(`track.lyric`)时专辑那一行(`large_text`)换成「♪ 这一句」;没有封面时拿应用自己的图标当大图,
-    /// 不然没有 `large_text` 那一行(小图照样不给,跟没封面时一个样子)。见 12 章决策 65。
+    /// 歌曲信息三行按 `layout` 写:第一行 `details`、第二行 `state`、第三行 `large_text`(也是悬停封面时的字)。写歌名的
+    /// 那一行(含「歌名 - 歌手」)链到歌曲页,单写歌手的链到歌手页,专辑、歌词不挂链接。「当前歌词」那一行写「♪ 这一句」,
+    /// 间奏、暂停、没歌词时写专辑,专辑已经单独占了一行就空着。第三行有字、没有封面时拿应用自己的图标当大图,不然那一行
+    /// 出不来(小图照样不给,跟没封面时一个样子)。见 12 章决策 65、68。
     public static func activity(_ track: Track, statusLine: StatusLine, listeningName: ListeningName = .player,
-                                now: Date?, smallImage: SmallImage? = nil) -> DiscordActivity {
+                                now: Date?, smallImage: SmallImage? = nil, layout: Layout = Layout()) -> DiscordActivity {
         var timestamps: DiscordActivity.Timestamps?
         if let now, let position = track.positionMs {
             let start = Int64((now.timeIntervalSince1970 * 1000).rounded()) - Int64(max(0, position))
-            let end = track.durationMs.flatMap { $0 > 0 ? start + Int64($0) : nil }
+            let end = layout.showsProgress ? track.durationMs.flatMap { $0 > 0 ? start + Int64($0) : nil } : nil
             timestamps = DiscordActivity.Timestamps(start: start, end: end)
         }
         let songLink = link(track.songURL)
-        let cover = track.coverURL.flatMap { $0.scheme?.lowercased() == "https" ? link($0) : nil }
-        let album = trimmed(track.album)
-        let lyric = track.lyric.map(trimmed).flatMap { $0.isEmpty ? nil : fitted(lyricMark + $0) }
-        let largeText = lyric ?? (album.isEmpty ? nil : fitted(album))
         let player = track.playerName.map(trimmed).flatMap { $0.isEmpty ? nil : $0 }
+        let buttons = track.buttons.map { all in
+            // 不显示是哪首歌时,链到这首歌曲页的按钮(「在 XX 上收听」)也不带。
+            Array(all.filter { !(layout.hidesSong && $0.url == songLink) }.prefix(maxButtons))
+        }.flatMap { $0.isEmpty ? nil : $0 }
+        if layout.hidesSong {
+            let icon = iconURL(of: application(forApplicationID: track.applicationID))
+            // 大图已经是播放器图标,角标再放一遍播放器图标就重复了,不放。
+            let badge: SmallImage? = { if case .player? = smallImage { return nil }; return smallImage }()
+            return DiscordActivity(
+                applicationID: track.applicationID, name: player.map(fitted), type: listeningType,
+                statusDisplayType: StatusLine.player.displayType,
+                details: nil, detailsURL: nil, state: nil, stateURL: nil,
+                assets: icon.map {
+                    DiscordActivity.Assets(largeImage: $0, smallImage: badge?.image,
+                                           smallURL: badge?.image == nil ? nil : websiteURL)
+                },
+                timestamps: timestamps, buttons: buttons)
+        }
+        let cover = track.coverURL.flatMap { $0.scheme?.lowercased() == "https" ? link($0) : nil }
+        let title = trimmed(track.title)
+        let artist = trimmed(track.artist)
+        let album = trimmed(track.album)
+        let lyric = track.lyric.map(trimmed).flatMap { $0.isEmpty ? nil : lyricMark + $0 }
+        let albumHasOwnLine = layout.lines.contains(.album)
+        func text(_ content: LineContent) -> String? {
+            switch content {
+            case .title: return fitted(title)
+            case .artist: return fitted(layout.artistFormat.map { String(format: $0, artist) } ?? artist)
+            case .titleArtist: return fitted(title + " - " + artist)
+            case .artistTitle: return fitted(artist + " - " + title)
+            case .album: return album.isEmpty ? nil : fitted(layout.albumFormat.map { String(format: $0, album) } ?? album)
+            case .lyric: return lyric.map(fitted) ?? (albumHasOwnLine ? nil : text(.album))
+            case .none: return nil
+            }
+        }
+        func url(_ content: LineContent) -> String? {
+            if content.hasTitle { return songLink }
+            return content == .artist ? link(track.artistURL) : nil
+        }
         let name: String?
         switch listeningName {
         case .player: name = player.map(fitted)
         case .title: name = fitted(track.title)
         case .artist: name = fitted(track.artist)
         }
+        let shown = effectiveStatusLine(statusLine, listeningName: listeningName, layout: layout)
+        let largeText = text(layout.third)
         return DiscordActivity(
             applicationID: track.applicationID,
             name: name,
             type: listeningType,
-            statusDisplayType: effectiveStatusLine(statusLine, listeningName: listeningName).displayType,
-            details: fitted(track.title),
-            detailsURL: songLink,
-            state: fitted(track.artist),
-            stateURL: link(track.artistURL),
+            statusDisplayType: statusDisplayType(of: shown, listeningName: listeningName, layout: layout)
+                ?? StatusLine.player.displayType,
+            details: text(layout.first),
+            detailsURL: url(layout.first),
+            state: text(layout.second),
+            stateURL: url(layout.second),
             assets: cover.map {
                 DiscordActivity.Assets(largeImage: $0, largeText: largeText, largeURL: songLink,
                                        smallImage: smallImage?.image,
                                        smallURL: smallImage?.image == nil ? nil : websiteURL)
-            } ?? lyric.flatMap { lyric in
+            } ?? largeText.flatMap { largeText in
                 iconURL(of: application(forApplicationID: track.applicationID)).map {
-                    DiscordActivity.Assets(largeImage: $0, largeText: lyric, largeURL: songLink)
+                    DiscordActivity.Assets(largeImage: $0, largeText: largeText, largeURL: songLink)
                 }
             },
             timestamps: timestamps,
-            buttons: track.buttons.flatMap { $0.isEmpty ? nil : Array($0.prefix(maxButtons)) })
+            buttons: buttons)
     }
 
-    /// 专辑那一行写歌词时加在前面的记号。
+    /// 「正在收听」后面实际写的是哪一档(设置页按它显示):不显示是哪首歌时一律播放器。
+    public static func effectiveListeningName(_ stored: ListeningName, layout: Layout) -> ListeningName {
+        layout.hidesSong ? .player : stored
+    }
+
+    /// 用户名下方选这一档时发哪个 `status_display_type`;nil = 这一档此刻写不出来(设置页那一档变灰)。Discord 只让
+    /// 第一行、第二行或「正在收听」后面那个放到用户名下方。歌名、歌手先找单写它的那一行,再找合在一起的那一行,第一行在前;
+    /// 两行都没写、「正在收听」后面写的正是它时用 `name`。「播放器」只在「正在收听」后面写播放器时有。
+    static func statusDisplayType(of line: StatusLine, listeningName: ListeningName, layout: Layout) -> Int? {
+        let name = effectiveListeningName(listeningName, layout: layout)
+        let rows: [(content: LineContent, displayType: Int)] = layout.hidesSong ? [] : [
+            (layout.first, StatusLine.title.displayType), (layout.second, StatusLine.artist.displayType),
+        ]
+        switch line {
+        case .player:
+            return name == .player ? StatusLine.player.displayType : nil
+        case .title:
+            return (rows.first { $0.content == .title } ?? rows.first { $0.content.hasTitle })?.displayType
+                ?? (name == .title ? StatusLine.player.displayType : nil)
+        case .artist:
+            return (rows.first { $0.content == .artist } ?? rows.first { $0.content.hasArtist })?.displayType
+                ?? (name == .artist ? StatusLine.player.displayType : nil)
+        }
+    }
+
+    /// 用户名下方能选哪几档(`statusDisplayType(of:listeningName:layout:)` 写得出来的),顺序同 `StatusLine.allCases`。
+    public static func statusLines(for listeningName: ListeningName, layout: Layout) -> [StatusLine] {
+        StatusLine.allCases.filter { statusDisplayType(of: $0, listeningName: listeningName, layout: layout) != nil }
+    }
+
+    /// 用户名下方实际写的是哪一档(设置页按它显示):存着的那档写不出来时,退到「正在收听」后面写的那一样 —— 那一样总写得出来
+    /// (至少用 `name`)。存着的值不动,条件撤掉后原样恢复。
+    public static func effectiveStatusLine(_ stored: StatusLine, listeningName: ListeningName, layout: Layout) -> StatusLine {
+        if statusDisplayType(of: stored, listeningName: listeningName, layout: layout) != nil { return stored }
+        switch effectiveListeningName(listeningName, layout: layout) {
+        case .player: return .player
+        case .title: return .title
+        case .artist: return .artist
+        }
+    }
+
+    /// 资料卡上的字怎么排、哪些不显示(设置页「显示内容」「隐私」两段)。默认值就是不做任何改动的样子。见 12 章决策 68。
+    public struct Layout: Equatable, Sendable {
+        /// 不显示是哪首歌:只留「正在听 播放器」、应用图标和进度;三行、链接和「在 XX 上收听」都不发,
+        /// 「正在收听」后面、用户名下方都写播放器名。
+        public var hidesSong: Bool
+        /// 歌曲信息三行各写什么:第一行 `details`、第二行 `state`、第三行 `large_text`。
+        public var first: LineContent
+        public var second: LineContent
+        public var third: LineContent
+        /// 关掉时不给结束时间:没有进度条,Discord 改写这首放了多久(这个计时 Discord 一定显示,关不掉)。
+        public var showsProgress: Bool
+        /// 单写歌手、专辑的那一行前面加的字(「演唱：%@」「专辑：%@」,跟界面语言走);nil = 不加。合在一起的那一行不加。
+        public var artistFormat: String?
+        public var albumFormat: String?
+
+        public init(hidesSong: Bool = false, first: LineContent = .title, second: LineContent = .artist,
+                    third: LineContent = .album, showsProgress: Bool = true,
+                    artistFormat: String? = nil, albumFormat: String? = nil) {
+            self.hidesSong = hidesSong
+            self.first = first
+            self.second = second
+            self.third = third
+            self.showsProgress = showsProgress
+            self.artistFormat = artistFormat
+            self.albumFormat = albumFormat
+        }
+
+        public var lines: [LineContent] { [first, second, third] }
+        /// 有一行写当前歌词,且没选「不显示是哪首歌」:这时才去挑句、起歌词节拍。
+        public var followsLyrics: Bool { !hidesSong && lines.contains(.lyric) }
+    }
+
+    /// 写歌词的那一行加在前面的记号。
     public static let lyricMark = "\u{266A} "
 
     /// 按钮最多几个、文字多长(按 UTF-16 码元,同 `textLengthRange`)。

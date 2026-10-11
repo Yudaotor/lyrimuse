@@ -52,7 +52,7 @@ final class DiscordPresenceController: ObservableObject {
     static let fastConnectWindow: TimeInterval = 60
     /// Discord 开着、过了这么久还没连上,算卡住了。
     static let stallThreshold: TimeInterval = 20
-    /// 「显示当前歌词」开着、正在放有歌词的歌时,隔这么久看一次该不该换句;真发出去仍受 `DiscordPresenceGate.minInterval` 限。
+    /// 有一行写当前歌词、正在放有歌词的歌时,隔这么久看一次该不该换句;真发出去仍受 `DiscordPresenceGate.minInterval` 限。
     static let lyricTick: TimeInterval = 0.5
 
     private lazy var link = DiscordPresenceLink(
@@ -112,10 +112,13 @@ final class DiscordPresenceController: ObservableObject {
             signal(settings.$discordPresenceEnabled), signal(settings.$discordStatusDisplay),
             signal(settings.$discordListeningName),
             signal(settings.$discordKeepWhenPaused), signal(settings.$discordExcludedBundles),
-            signal(settings.$discordBadge), signal(settings.$discordShowLyrics),
+            signal(settings.$discordBadge), signal(settings.$discordLine1),
             signal(settings.$discordButtonListen), signal(settings.$discordButtonGetLyrimuse),
             signal(settings.$discordCustomButtonEnabled), signal(settings.$discordCustomButtonLabel),
             signal(settings.$discordCustomButtonURL),
+            signal(settings.$discordHideSongInfo), signal(settings.$discordShowProgress),
+            signal(settings.$discordLine2), signal(settings.$discordLine3),
+            signal(settings.$discordLabelArtistAlbum),
             signal(playback.$allLines), signal(playback.$lyricsGapMarkers),
         ]
         // 去抖挂主队列、别挂 RunLoop.main:菜单开着时它不走,换歌后的状态要等菜单关了才更新(见 01 章决策 11)。
@@ -172,6 +175,7 @@ final class DiscordPresenceController: ObservableObject {
                                             keepWhenPaused: settings.discordKeepWhenPaused,
                                             badge: settings.discordBadge,
                                             pausedNameFormat: L10n.t("%@（已暂停）"),
+                                            layout: presenceLayout(),
                                             hiddenUntil: hiddenUntil, now: now)
         switch gate.decide(intent, now: now) {
         case .none:
@@ -194,9 +198,22 @@ final class DiscordPresenceController: ObservableObject {
         }
     }
 
-    /// 「显示当前歌词」开着、在放、这首有歌词。
+    /// 有一行写当前歌词、没选「不显示是哪首歌」(`Layout.followsLyrics`)、在放、这首有歌词。
     private var followsLyrics: Bool {
-        AppSettings.shared.discordShowLyrics && PlaybackCoordinator.shared.isPlayingSmoothed && !currentLyricSpans().isEmpty
+        presenceLayout().followsLyrics && PlaybackCoordinator.shared.isPlayingSmoothed && !currentLyricSpans().isEmpty
+    }
+
+    /// 资料卡上的字怎么排、哪些不显示(`DiscordPresence.Layout`),按设置组。前缀跟界面语言走。预览也用它。
+    func presenceLayout() -> DiscordPresence.Layout {
+        let settings = AppSettings.shared
+        return DiscordPresence.Layout(
+            hidesSong: settings.discordHideSongInfo,
+            first: settings.discordLine1,
+            second: settings.discordLine2,
+            third: settings.discordLine3,
+            showsProgress: settings.discordShowProgress,
+            artistFormat: settings.discordLabelArtistAlbum ? L10n.t("演唱：%@") : nil,
+            albumFormat: settings.discordLabelArtistAlbum ? L10n.t("专辑：%@") : nil)
     }
 
     /// Discord 上现在挂着的那一份:连着时最近一次交给 Discord 的,被拒过的按它实际显示的(补发的精简版;都被拒、清掉了为 nil);
@@ -457,11 +474,11 @@ final class DiscordPresenceController: ObservableObject {
 
     // MARK: - 歌词与按钮
 
-    /// 此刻要显示的那句:「显示当前歌词」开着、在放时,从歌词时间轴上的此刻起挑 `DiscordPresenceGate.minInterval` 这一段里
+    /// 此刻要显示的那句:有一行写当前歌词、在放时,从歌词时间轴上的此刻起挑 `DiscordPresenceGate.minInterval` 这一段里
     /// 唱得最久的那句(`DiscordLyricLine.pick`)。间奏里、唱完了、没歌词为 nil。
     private func currentLyric(now: Date) -> String? {
         let playback = PlaybackCoordinator.shared
-        guard AppSettings.shared.discordShowLyrics, playback.isPlayingSmoothed else { return nil }
+        guard presenceLayout().followsLyrics, playback.isPlayingSmoothed else { return nil }
         let spans = currentLyricSpans()
         guard !spans.isEmpty else { return nil }
         return DiscordLyricLine.pick(spans, atMs: playback.lyricsTimelineMs(now: now),

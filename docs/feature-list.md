@@ -693,7 +693,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 226 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 231 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1068,14 +1068,19 @@ Every setting in the Settings window, by where it lives: 226 in all. Type a name
 - **Show on Discord**: When on, the song you're playing shows on your Discord profile and in your friends list. If friends can't see it, go to User Settings › Activity Privacy in Discord and turn on activity sharing.
 - **What's Shown**
 - **After “Listening to”**: The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player. With Title or Artist here, “Shown Under Your Name” can't show the player.
-- **Shown Under Your Name**
+- **Shown Under Your Name**: Discord can only show the first line, the second line, or what follows “Listening to” under your name. If the title or artist isn’t in one of those, that option is dimmed.
 - **Cover Badge**
 - **When Paused**
-- **Show Current Lyrics**: Replaces the album line on your profile card with the line being sung. Discord updates at most every 4 seconds, so very short lines are skipped; the album shows during instrumental breaks and while paused.
+- **Song Info**
+- **Status Text**
+- **Cover and Progress**
+- **Label Artist and Album**: Adds “by” before the artist and “on” before the album. Not added when the title and artist share a line.
 - **Buttons**
 - **Custom Button**
 - **“Listen on Player”**: Opens this song’s page on the current player’s website, same as clicking the title. Hidden when there’s no page for the song.
 - **“Get Lyrimuse”**
 - **Privacy**
 - **Hide Temporarily**
+- **Hide Song Details**: Shows only which player you’re listening on and the progress. The title, artist, album, lyrics, links and the “Listen on Player” button aren’t sent.
+- **Show Progress Bar**: When off, there’s no progress bar. Discord shows how long the song has been playing instead, which can’t be turned off.
 - **Players Shown**

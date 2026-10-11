@@ -97,12 +97,14 @@ struct DiscordPresencePreview: View {
         } else if pausedKept {
             activity = DiscordPresence.pausedActivity(track, statusLine: settings.discordStatusDisplay,
                                                       listeningName: settings.discordListeningName, now: now,
-                                                      pausedNameFormat: L10n.t("%@（已暂停）"))
+                                                      pausedNameFormat: L10n.t("%@（已暂停）"),
+                                                      layout: discord.presenceLayout())
         } else {
             activity = DiscordPresence.activity(track, statusLine: settings.discordStatusDisplay,
                                                 listeningName: settings.discordListeningName, now: now,
                                                 smallImage: DiscordPresence.smallImage(for: settings.discordBadge,
-                                                                                       applicationID: track.applicationID))
+                                                                                       applicationID: track.applicationID),
+                                                layout: discord.presenceLayout())
         }
         // 这一份 Discord 拒收过:照它实际显示的画(补发的精简版没有封面和链接);都被拒、清掉了的照常画,说明里写这首不会显示。
         var refused = false
@@ -124,7 +126,7 @@ struct DiscordPresencePreview: View {
             caption = L10n.t("预览 · 好友在 Discord 上看到的效果")
         }
         let application = DiscordPresence.application(forApplicationID: activity.applicationID)
-        // 没封面、为了歌词那一行补上的应用图标不去取,照本地的应用图标画(跟没有大图时一个样子)。
+        // 没封面、为了第三行补上的应用图标不去取,照本地的应用图标画(跟没有大图时一个样子)。
         let appIcon = DiscordPresence.iconURL(of: application)
         return Model(
             activity: activity,
@@ -137,19 +139,19 @@ struct DiscordPresencePreview: View {
     }
 
     /// 示例那份给一个占位的封面地址(不会去取),好让它跟有封面的歌一样带上小图;画的时候没有封面图,显示应用图标。
-    /// 歌曲页也是占位的,「在 XX 上收听」那个按钮才画得出来;「显示当前歌词」开着时专辑那一行写一句示例歌词。
+    /// 歌曲页也是占位的,「在 XX 上收听」那个按钮才画得出来;有一行写当前歌词时那一行写一句示例歌词。
     private var sampleTrack: DiscordPresence.Track {
         let applicationID = DiscordPresence.applicationID(forBundleID: PlaybackPlayer.appleMusic.bundleIdentifier,
                                                           webPlatformID: nil)
         let player = DiscordPresence.Application.appleMusic.registeredName
         let songURL = URL(string: "https://lyrimuse.invalid/song")
         return DiscordPresence.Track(
-            title: L10n.t("歌名"), artist: L10n.t("歌手"),
+            title: L10n.t("歌名"), artist: L10n.t("歌手"), album: L10n.t("专辑"),
             playerName: player,
             coverURL: URL(string: "https://lyrimuse.invalid/sample.jpg"),
             positionMs: 83_000, durationMs: 269_000,
             applicationID: applicationID,
-            lyric: settings.discordShowLyrics ? L10n.t("正在唱的这一句") : nil,
+            lyric: discord.presenceLayout().followsLyrics ? L10n.t("正在唱的这一句") : nil,
             buttons: discord.presenceButtons(songURL: songURL, applicationID: applicationID, playerName: player))
     }
 
@@ -327,9 +329,9 @@ struct DiscordPresencePreview: View {
             .offset(x: 2, y: 2)
     }
 
-    /// 资料卡里「当前动态」那一块:标题「正在听 应用名」带右上角「···」,下面是 60pt 封面和歌名、歌手、专辑,在放时文字列底下
-    /// 一行时间和 2pt 进度条。专辑(large_text)只在有公网封面时才发,没有时那一行不画。封面、歌名、歌手、专辑有链接时能点,
-    /// 专辑跟封面共用 `large_url`,见 12 章决策 37、38。封面右下角压着小图(`smallImage`)。
+    /// 资料卡里「当前动态」那一块:标题「正在听 应用名」带右上角「···」,下面是 60pt 封面和歌曲信息三行(`details` / `state` /
+    /// `large_text`,各写什么按设置),在放时文字列底下一行时间和 2pt 进度条。哪一行没字就不画。封面和各行有链接时能点,
+    /// 第三行跟封面共用 `large_url`,见 12 章决策 37、38、68。封面右下角压着小图(`smallImage`)。
     private func activityCard(_ model: Model) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 4) {
@@ -352,21 +354,25 @@ struct DiscordPresencePreview: View {
                 }
                 .overlay(alignment: .bottomTrailing) { smallImage(model) }
                 VStack(alignment: .leading, spacing: 0) {
-                    PreviewLink(url: Self.url(model.activity.detailsURL)) { hovered in
-                        Text(model.activity.details)
-                            .font(.system(size: 14, weight: .semibold))
-                            .underline(hovered)
-                            .frame(height: 18)
+                    if let details = model.activity.details {
+                        PreviewLink(url: Self.url(model.activity.detailsURL)) { hovered in
+                            Text(details)
+                                .font(.system(size: 14, weight: .semibold))
+                                .underline(hovered)
+                                .frame(height: 18)
+                        }
                     }
-                    PreviewLink(url: Self.url(model.activity.stateURL)) { hovered in
-                        Text(model.activity.state)
-                            .font(.system(size: 12))
-                            .underline(hovered)
-                            .frame(height: 16)
+                    if let state = model.activity.state {
+                        PreviewLink(url: Self.url(model.activity.stateURL)) { hovered in
+                            Text(state)
+                                .font(.system(size: 12))
+                                .underline(hovered)
+                                .frame(height: 16)
+                        }
                     }
-                    if let album = model.activity.assets?.largeText {
+                    if let third = model.activity.assets?.largeText {
                         PreviewLink(url: Self.url(model.activity.assets?.largeURL)) { hovered in
-                            Text(album)
+                            Text(third)
                                 .font(.system(size: 12))
                                 .underline(hovered)
                                 .frame(height: 16)

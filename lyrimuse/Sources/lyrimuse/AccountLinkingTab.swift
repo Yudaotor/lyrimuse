@@ -2166,6 +2166,31 @@ struct AccountLinkingTab: View {
         }
     }
 
+    /// 歌曲信息每一行下拉里的写法。
+    private static func lineLabel(_ content: DiscordPresence.LineContent) -> String {
+        switch content {
+        case .title: return L10n.t("歌名")
+        case .artist: return L10n.t("歌手")
+        case .titleArtist: return L10n.t("歌名 - 歌手")
+        case .artistTitle: return L10n.t("歌手 - 歌名")
+        case .album: return L10n.t("专辑")
+        case .lyric: return L10n.t("当前歌词")
+        case .none: return L10n.t("不显示")
+        }
+    }
+
+    private func discordLineRow(_ title: String, icon: String, help: String? = nil,
+                                selection: Binding<DiscordPresence.LineContent>) -> some View {
+        SettingsRow(icon: icon, title: title, help: help) {
+            SettingsGlassMenuPicker(
+                selection: selection,
+                options: DiscordPresence.LineContent.allCases,
+                label: Self.lineLabel,
+                compact: true
+            )
+        }
+    }
+
     @AppStorage(SettingsSearchCatalog.discordSectionKey) private var discordSectionRaw = SettingsSearchCatalog.discordSectionDefault
     private var discordSection: DiscordSection { DiscordSection(rawValue: discordSectionRaw) ?? .display }
 
@@ -2195,80 +2220,129 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 「显示内容」:名字下面那一行写什么,封面角标,暂停以后还显不显示。
+    /// 「显示内容」:按改的是资料卡哪一块分三张卡 —— 歌曲信息(三行各写什么,一行一个下拉,互不牵连)、状态文字(「正在收听」
+    /// 后面和用户名下方)、封面与进度。有一行写当前歌词时,第一张卡下面一句说明歌词那一行怎么跟、间奏时写什么。「隐私」里
+    /// 选了「不显示是哪首歌」时,前两张整张变灰,上面一句说明为什么。见 12 章决策 68。
     private var discordDisplayCard: some View {
-        SettingsCard(cornerRadius: 18) {
-            SettingsRow(icon: "music.note", title: L10n.t("「正在收听」后面显示"),
-                        help: L10n.t("资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。")) {
-                SettingsGlassTabPicker(
-                    selection: $appSettings.discordListeningName,
-                    options: DiscordPresence.ListeningName.allCases,
-                    label: { name in
-                        switch name {
-                        case .player: return L10n.t("播放器")
-                        case .title: return L10n.t("歌名")
-                        case .artist: return L10n.t("歌手")
-                        }
-                    },
-                    compact: true
-                )
+        let layout = discord.presenceLayout()
+        let hidesSong = appSettings.discordHideSongInfo
+        return VStack(spacing: 14) {
+            if hidesSong {
+                Text(L10n.t("已选择「不显示是哪首歌」，跟歌曲有关的几项暂不起作用"))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
             }
-            CardDivider()
-            // 上面选了歌名 / 歌手时没有字段装着播放器名,「播放器」那档变灰(档数不变,免得整排缩放);存着的「播放器」不改,
-            // 显示成跟上面同名的那一档,切回来恢复(`effectiveStatusLine`)。
-            SettingsRow(icon: "text.alignleft", title: L10n.t("用户名下方显示")) {
-                SettingsGlassTabPicker(
-                    selection: Binding(
-                        get: {
-                            DiscordPresence.effectiveStatusLine(appSettings.discordStatusDisplay,
-                                                                listeningName: appSettings.discordListeningName)
+            SettingsCard(cornerRadius: 18) {
+                SettingsCardHeader(title: L10n.t("歌曲信息"))
+                CardDivider()
+                discordLineRow(L10n.t("第一行"), icon: "1.circle", selection: $appSettings.discordLine1)
+                CardDivider()
+                discordLineRow(L10n.t("第二行"), icon: "2.circle", selection: $appSettings.discordLine2)
+                CardDivider()
+                discordLineRow(L10n.t("第三行"), icon: "3.circle", help: L10n.t("鼠标停在封面上时也显示这一行。"),
+                               selection: $appSettings.discordLine3)
+                CardDivider()
+                SettingsRow(icon: "character.textbox", title: L10n.t("歌手、专辑前加说明"),
+                            help: L10n.t("歌手前加「演唱：」，专辑前加「专辑：」。歌名和歌手写在同一行时不加。")) {
+                    Toggle("", isOn: $appSettings.discordLabelArtistAlbum)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+            }
+            .disabled(hidesSong)
+            if layout.followsLyrics {
+                Text(L10n.t("「当前歌词」那一行最多每 4 秒换一句，很短的句子会跳过；间奏、暂停或这首没有歌词时显示专辑，专辑已经占了一行时空着。"))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+            }
+            // 两个选择器都显示实际生效的那一档(`effectiveListeningName` / `effectiveStatusLine`),存着的值不动。
+            // 用户名下方:写不出来的那档变灰(`statusLines(for:layout:)`,档数不变,免得整排缩放)。
+            SettingsCard(cornerRadius: 18) {
+                SettingsCardHeader(title: L10n.t("状态文字"))
+                CardDivider()
+                SettingsRow(icon: "music.note", title: L10n.t("「正在收听」后面显示"),
+                            help: L10n.t("资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。")) {
+                    SettingsGlassTabPicker(
+                        selection: Binding(
+                            get: { DiscordPresence.effectiveListeningName(appSettings.discordListeningName, layout: layout) },
+                            set: { appSettings.discordListeningName = $0 }
+                        ),
+                        options: DiscordPresence.ListeningName.allCases,
+                        label: { name in
+                            switch name {
+                            case .player: return L10n.t("播放器")
+                            case .title: return L10n.t("歌名")
+                            case .artist: return L10n.t("歌手")
+                            }
                         },
-                        set: { appSettings.discordStatusDisplay = $0 }
-                    ),
-                    options: DiscordPresence.StatusLine.allCases,
-                    label: { line in
-                        switch line {
-                        case .title: return L10n.t("歌名")
-                        case .artist: return L10n.t("歌手")
-                        case .player: return L10n.t("播放器")
+                        compact: true
+                    )
+                }
+                CardDivider()
+                SettingsRow(icon: "text.alignleft", title: L10n.t("用户名下方显示"),
+                            help: L10n.t("Discord 只能把第一行、第二行或「正在收听」后面那个放到用户名下方。歌名、歌手都不在这几处时，那一档变灰。")) {
+                    SettingsGlassTabPicker(
+                        selection: Binding(
+                            get: {
+                                DiscordPresence.effectiveStatusLine(appSettings.discordStatusDisplay,
+                                                                    listeningName: appSettings.discordListeningName,
+                                                                    layout: layout)
+                            },
+                            set: { appSettings.discordStatusDisplay = $0 }
+                        ),
+                        options: DiscordPresence.StatusLine.allCases,
+                        label: { line in
+                            switch line {
+                            case .title: return L10n.t("歌名")
+                            case .artist: return L10n.t("歌手")
+                            case .player: return L10n.t("播放器")
+                            }
+                        },
+                        compact: true,
+                        isDisabled: {
+                            !DiscordPresence.statusLines(for: appSettings.discordListeningName, layout: layout).contains($0)
                         }
-                    },
-                    compact: true,
-                    isDisabled: { !DiscordPresence.statusLines(for: appSettings.discordListeningName).contains($0) }
-                )
+                    )
+                }
             }
-            CardDivider()
-            SettingsRow(icon: "app.badge", title: L10n.t("封面角标")) {
-                SettingsGlassMenuPicker(
-                    selection: $appSettings.discordBadge,
-                    options: [DiscordPresence.Badge.lyrimuse, .player, .none],
-                    label: { badge in
-                        switch badge {
-                        case .lyrimuse: return L10n.t("Lyrimuse")
-                        case .player: return L10n.t("播放器")
-                        case .none: return L10n.t("不显示")
-                        }
-                    },
-                    compact: true
-                )
-            }
-            CardDivider()
-            SettingsRow(icon: "quote.bubble", title: L10n.t("显示当前歌词"),
-                        help: L10n.t("资料卡上专辑那一行换成正在唱的这一句。Discord 最多每 4 秒更新一次，很短的句子会跳过；间奏、暂停时显示专辑。")) {
-                Toggle("", isOn: $appSettings.discordShowLyrics)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-            }
-            CardDivider()
-            SettingsRow(icon: "pause.circle", title: L10n.t("暂停后")) {
-                SettingsGlassMenuPicker(
-                    selection: $appSettings.discordKeepWhenPaused,
-                    options: [true, false],
-                    label: { keep in
-                        keep ? L10n.t("继续显示") : String(format: L10n.t("%d 秒后清除"), Int(DiscordPresence.pauseGrace))
-                    },
-                    compact: true
-                )
+            .disabled(hidesSong)
+            SettingsCard(cornerRadius: 18) {
+                SettingsCardHeader(title: L10n.t("封面与进度"))
+                CardDivider()
+                SettingsRow(icon: "app.badge", title: L10n.t("封面角标")) {
+                    SettingsGlassMenuPicker(
+                        selection: $appSettings.discordBadge,
+                        options: [DiscordPresence.Badge.lyrimuse, .player, .none],
+                        label: { badge in
+                            switch badge {
+                            case .lyrimuse: return L10n.t("Lyrimuse")
+                            case .player: return L10n.t("播放器")
+                            case .none: return L10n.t("不显示")
+                            }
+                        },
+                        compact: true
+                    )
+                }
+                CardDivider()
+                SettingsRow(icon: "slider.horizontal.below.rectangle", title: L10n.t("显示进度条"),
+                            help: L10n.t("关掉后不显示进度条，Discord 改为显示这首已经放了多久，这个计时关不掉。")) {
+                    Toggle("", isOn: $appSettings.discordShowProgress)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+                CardDivider()
+                SettingsRow(icon: "pause.circle", title: L10n.t("暂停后")) {
+                    SettingsGlassMenuPicker(
+                        selection: $appSettings.discordKeepWhenPaused,
+                        options: [true, false],
+                        label: { keep in
+                            keep ? L10n.t("继续显示") : String(format: L10n.t("%d 秒后清除"), Int(DiscordPresence.pauseGrace))
+                        },
+                        compact: true
+                    )
+                }
             }
         }
     }
@@ -2303,12 +2377,15 @@ struct AccountLinkingTab: View {
                 }
             }
             CardDivider()
+            // 这个按钮会说出是哪首歌,选了「不显示是哪首歌」时不发(`DiscordPresence.activity`),这里跟着变灰。
             SettingsRow(icon: "play.circle", title: L10n.t("「在播放器上收听」"),
+                        subtitle: appSettings.discordHideSongInfo ? L10n.t("已选择「不显示是哪首歌」") : nil,
                         help: L10n.t("打开这首歌在当前播放器网站上的页面，跟点歌名一样。找不到这首歌的页面时不显示。")) {
                 Toggle("", isOn: $appSettings.discordButtonListen)
                     .labelsHidden()
                     .toggleStyle(.switch)
             }
+            .disabled(appSettings.discordHideSongInfo)
             CardDivider()
             SettingsRow(icon: "arrow.down.app", title: L10n.t("「获取 Lyrimuse」"),
                         subtitle: L10n.t("另外两个都开着时不显示")) {
@@ -2319,9 +2396,16 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 「隐私」:暂时隐藏,显示哪些播放器。
+    /// 「隐私」:不显示是哪首歌(影响最大,排第一),暂时隐藏,显示哪些播放器。卡片上显示哪些内容在「显示内容」。
     private var discordPrivacyCard: some View {
         SettingsCard(cornerRadius: 18) {
+            SettingsRow(icon: "theatermasks", title: L10n.t("不显示是哪首歌"),
+                        help: L10n.t("只显示在用哪个播放器听歌和播放进度，歌名、歌手、专辑、歌词、链接和「在播放器上收听」按钮都不发。")) {
+                Toggle("", isOn: $appSettings.discordHideSongInfo)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            CardDivider()
             discordHideRow
             CardDivider()
             discordPlayersRow

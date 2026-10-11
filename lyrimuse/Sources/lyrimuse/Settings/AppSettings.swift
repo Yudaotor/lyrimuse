@@ -217,12 +217,17 @@ final class AppSettings: ObservableObject {
         static let discordKeepWhenPaused = "np:discordKeepWhenPaused"
         static let discordExcludedBundles = "np:discordExcludedBundles"
         static let discordBadge = "np:discordBadge"
-        static let discordShowLyrics = "np:discordShowLyrics"
         static let discordButtonListen = "np:discordButtonListen"
         static let discordButtonGetLyrimuse = "np:discordButtonGetLyrimuse"
         static let discordCustomButtonEnabled = "np:discordCustomButtonEnabled"
         static let discordCustomButtonLabel = "np:discordCustomButtonLabel"
         static let discordCustomButtonURL = "np:discordCustomButtonURL"
+        static let discordHideSongInfo = "np:discordHideSongInfo"
+        static let discordShowProgress = "np:discordShowProgress"
+        static let discordLine1 = "np:discordLine1"
+        static let discordLine2 = "np:discordLine2"
+        static let discordLine3 = "np:discordLine3"
+        static let discordLabelArtistAlbum = "np:discordLabelArtistAlbum"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let overlayLineOverflow = "np:overlayLineOverflow"
@@ -802,10 +807,6 @@ final class AppSettings: ObservableObject {
     @Published var discordBadge: DiscordPresence.Badge {
         didSet { defaults.set(discordBadge.rawValue, forKey: Keys.discordBadge) }
     }
-    /// 专辑那一行换成正在唱的这句(`DiscordLyricLine`)。默认关。
-    @Published var discordShowLyrics: Bool {
-        didSet { defaults.set(discordShowLyrics, forKey: Keys.discordShowLyrics) }
-    }
     /// 资料卡底下的按钮(`DiscordPresence.buttons`)。「在 XX 上收听」链到这首的歌曲页,默认关;「获取 Lyrimuse」链到官网,
     /// 默认开,另外两个都开着时让位(同 Music Presence 的「Get this status」,全新安装 `show_branding` 为 true)。
     @Published var discordButtonListen: Bool {
@@ -823,6 +824,26 @@ final class AppSettings: ObservableObject {
     }
     @Published var discordCustomButtonURL: String {
         didSet { defaults.set(discordCustomButtonURL, forKey: Keys.discordCustomButtonURL) }
+    }
+    /// 资料卡上的字怎么排、哪些不显示(`DiscordPresence.Layout`)。「隐私」段:不显示是哪首歌(默认关);「显示内容」段:
+    /// 歌曲信息三行各写什么(默认歌名 / 歌手 / 专辑)、歌手专辑前加说明(默认关)、显示进度条(默认开)。
+    @Published var discordHideSongInfo: Bool {
+        didSet { defaults.set(discordHideSongInfo, forKey: Keys.discordHideSongInfo) }
+    }
+    @Published var discordLine1: DiscordPresence.LineContent {
+        didSet { defaults.set(discordLine1.rawValue, forKey: Keys.discordLine1) }
+    }
+    @Published var discordLine2: DiscordPresence.LineContent {
+        didSet { defaults.set(discordLine2.rawValue, forKey: Keys.discordLine2) }
+    }
+    @Published var discordLine3: DiscordPresence.LineContent {
+        didSet { defaults.set(discordLine3.rawValue, forKey: Keys.discordLine3) }
+    }
+    @Published var discordShowProgress: Bool {
+        didSet { defaults.set(discordShowProgress, forKey: Keys.discordShowProgress) }
+    }
+    @Published var discordLabelArtistAlbum: Bool {
+        didSet { defaults.set(discordLabelArtistAlbum, forKey: Keys.discordLabelArtistAlbum) }
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
@@ -2078,12 +2099,17 @@ final class AppSettings: ObservableObject {
         discordKeepWhenPaused = (defaults.object(forKey: Keys.discordKeepWhenPaused) as? Bool) ?? false
         discordExcludedBundles = Set((defaults.array(forKey: Keys.discordExcludedBundles) as? [String]) ?? [])
         discordBadge = defaults.string(forKey: Keys.discordBadge).flatMap(DiscordPresence.Badge.init(rawValue:)) ?? .lyrimuse
-        discordShowLyrics = (defaults.object(forKey: Keys.discordShowLyrics) as? Bool) ?? false
         discordButtonListen = (defaults.object(forKey: Keys.discordButtonListen) as? Bool) ?? false
         discordButtonGetLyrimuse = (defaults.object(forKey: Keys.discordButtonGetLyrimuse) as? Bool) ?? true
         discordCustomButtonEnabled = (defaults.object(forKey: Keys.discordCustomButtonEnabled) as? Bool) ?? false
         discordCustomButtonLabel = defaults.string(forKey: Keys.discordCustomButtonLabel) ?? ""
         discordCustomButtonURL = defaults.string(forKey: Keys.discordCustomButtonURL) ?? ""
+        discordHideSongInfo = (defaults.object(forKey: Keys.discordHideSongInfo) as? Bool) ?? false
+        discordLine1 = defaults.string(forKey: Keys.discordLine1).flatMap(DiscordPresence.LineContent.init(rawValue:)) ?? .title
+        discordLine2 = defaults.string(forKey: Keys.discordLine2).flatMap(DiscordPresence.LineContent.init(rawValue:)) ?? .artist
+        discordLine3 = defaults.string(forKey: Keys.discordLine3).flatMap(DiscordPresence.LineContent.init(rawValue:)) ?? .album
+        discordShowProgress = (defaults.object(forKey: Keys.discordShowProgress) as? Bool) ?? true
+        discordLabelArtistAlbum = (defaults.object(forKey: Keys.discordLabelArtistAlbum) as? Bool) ?? false
         // 默认开。多显示一句下文对跟读几乎总是有用的,而这一项本身不占额外窗口高度。
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true
         overlayDuetAlignmentOverride = defaults.string(forKey: Keys.overlayDuetAlignmentOverride)

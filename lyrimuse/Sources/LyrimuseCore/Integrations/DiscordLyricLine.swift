@@ -1,6 +1,6 @@
 import Foundation
 
-/// Discord「显示当前歌词」挑哪一句。Discord 最多每 `DiscordPresenceGate.minInterval` 收一次,大半句子比这短,
+/// Discord 资料卡上「当前歌词」那一行挑哪一句。Discord 最多每 `DiscordPresenceGate.minInterval` 收一次,大半句子比这短,
 /// 到点挑「接下来这一段里唱得最久的那句」,比挑「此刻这一句」跟得更齐(见 12 章决策 65)。纯函数,时刻都在歌词时间轴上。
 public enum DiscordLyricLine {
     /// 一句从开始唱到唱完(毫秒,歌词时间轴)。
