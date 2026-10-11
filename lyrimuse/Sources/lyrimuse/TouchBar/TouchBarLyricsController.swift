@@ -89,6 +89,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private var autoOptions = TouchBarAutoPresent.Options(expandOnPlay: false, collapseWhenPaused: false,
                                                           collapseWhenNoLyrics: false)
     private var pauseCollapseTask: Task<Void, Never>?
+    /// 开始播放触发的展开等着再确认的那一次计时(`TouchBarAutoPresent.settleExpandDelayMs`)。
+    private var settleExpandTask: Task<Void, Never>?
     /// 自己发起的展开 / 收起等着哪个可见状态:`visibilityChanged` 看到的变化跟它对得上就是自己做的,对不上就是用户
     /// 动的(功能栏图标、✕、收起键、快捷键)。
     private var expectedVisibility: Bool?
@@ -319,6 +321,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             hintTask?.cancel()
             hint = nil
             cancelPauseCollapse()
+            cancelSettleExpand()
             autoPresent = TouchBarAutoPresent()
             expectedVisibility = nil
             TouchBarPrivateAPI.dismissSystemModal(bar)
@@ -452,6 +455,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             } else {
                 autoPresent.userChangedVisibility()
                 cancelPauseCollapse()
+                cancelSettleExpand()
             }
         }
         guard visible else {
@@ -488,7 +492,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
 
     private func autoUpdate(isPlaying: Bool, lacksLyrics: Bool, trackKey: String) {
         guard enabled else { return }
-        if isPlaying { cancelPauseCollapse() }
+        if isPlaying { cancelPauseCollapse() } else { cancelSettleExpand() }
         performAuto(autoPresent.update(isPlaying: isPlaying, lacksLyrics: lacksLyrics, trackKey: trackKey,
                                        nowMs: Self.nowMs(), visible: bar.isVisible, options: autoOptions))
     }
@@ -506,6 +510,17 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             cancelPauseCollapse()
             expectedVisibility = false
             collapseBar()
+        case .expandAfterSettle:
+            cancelSettleExpand()
+            settleExpandTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.settleExpandDelayMs))
+                guard !Task.isCancelled, let self, self.enabled else { return }
+                self.settleExpandTask = nil
+                let p = PlaybackCoordinator.shared
+                self.performAuto(self.autoPresent.settleElapsed(
+                    isPlaying: p.isPlayingNow, lacksLyrics: p.currentTrackLacksLyrics, visible: self.bar.isVisible,
+                    options: self.autoOptions))
+            }
         case .schedulePauseCollapse:
             cancelPauseCollapse()
             pauseCollapseTask = Task { [weak self] in
@@ -523,6 +538,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private func cancelPauseCollapse() {
         pauseCollapseTask?.cancel()
         pauseCollapseTask = nil
+    }
+
+    private func cancelSettleExpand() {
+        settleExpandTask?.cancel()
+        settleExpandTask = nil
     }
 
     // MARK: - 跟播放状态

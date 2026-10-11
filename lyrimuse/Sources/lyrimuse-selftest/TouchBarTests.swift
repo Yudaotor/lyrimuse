@@ -452,7 +452,7 @@ func runTouchBarTests() {
         do {
             var a = Auto()
             expectEqual(a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: false,
-                                options: opts(play: true)), .expand, "自动展开: 启用时正在播放就展开")
+                                options: opts(play: true)), .expandAfterSettle, "自动展开: 启用时正在播放,等再确认")
             expectEqual(a.start(isPlaying: true, lacksLyrics: true, trackKey: "A", nowMs: 0, visible: false,
                                 options: all), .none, "自动展开: 启用时这首没歌词、开着无歌词收起,不展开")
             expectEqual(a.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: true,
@@ -471,11 +471,49 @@ func runTouchBarTests() {
             expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "B", nowMs: 20_000, visible: false,
                                  options: opts(play: true)), .none, "自动展开: 再暂停")
             expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "B", nowMs: 20_000 + Auto.resumeDebounceMs,
-                                 visible: false, options: opts(play: true)), .expand, "自动展开: 停够了再播,展开")
+                                 visible: false, options: opts(play: true)), .expandAfterSettle, "自动展开: 停够了再播,等再确认")
+            expectEqual(a.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: opts(play: true)),
+                        .expand, "自动展开: 再确认时还在放、还收着,展开")
+            expectEqual(a.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: opts(play: true)),
+                        .none, "自动展开: 再确认只认一次")
             expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "B", nowMs: 23_000, visible: false,
                                  options: opts(play: true)), .none, "自动展开: 同一状态重复报不重复展开")
             expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "C", nowMs: 30_000, visible: false,
                                  options: opts(play: true)), .none, "自动展开: 播放中自然换歌不展开(手动收起的保持收起)")
+        }
+        // 开始播放后再确认(settleExpandDelayMs):启动时先把播客当成在放歌、随即认出不是歌,不展开;期间用户自己动了、
+        // 已经展开着、开关关了、这首确认没歌词又开着无歌词收起,都不展开。
+        do {
+            var a = Auto()
+            expectEqual(a.start(isPlaying: false, lacksLyrics: false, trackKey: "播客", nowMs: 0, visible: false,
+                                options: opts(play: true)), .none, "再确认: 启动时还没认出在放")
+            expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "播客", nowMs: 2_400, visible: false,
+                                 options: opts(play: true)), .expandAfterSettle, "再确认: 先当成在放,等再确认")
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "播客", nowMs: 3_800, visible: false,
+                                 options: opts(play: true)), .none, "再确认: 认出不是歌(当成没在放)")
+            expectEqual(a.settleElapsed(isPlaying: false, lacksLyrics: false, visible: false, options: opts(play: true)),
+                        .none, "再确认: 启动时的播客不展开")
+            func pending() -> Auto {
+                var b = Auto()
+                _ = b.start(isPlaying: true, lacksLyrics: false, trackKey: "A", nowMs: 0, visible: false, options: all)
+                return b
+            }
+            var b = pending()
+            b.userChangedVisibility()
+            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: all), .none,
+                        "再确认: 期间用户自己动了,不展开")
+            b = pending()
+            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, visible: true, options: all), .none,
+                        "再确认: 已经展开着,不重复")
+            b = pending()
+            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: opts(noLyrics: true)),
+                        .none, "再确认: 期间开关关了,不展开")
+            b = pending()
+            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: true, visible: false, options: all), .none,
+                        "再确认: 期间确认这首没歌词、开着无歌词收起,不展开")
+            var c = Auto()
+            expectEqual(c.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: all), .none,
+                        "再确认: 没在等就不展开")
         }
         // 暂停时收起:暂停排一次计时,满了还暂停、还看得见才收;继续播放时展开回来,不看「开始播放时自动展开」。
         do {
@@ -652,8 +690,10 @@ func runTouchBarTests() {
                         && controller.contains("Publishers.CombineLatest4(p.$isPlayingNow, p.$currentTrackLacksLyrics, p.$title, p.$artist)\n                .dropFirst()\n                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)")
                         && controller.contains("if expectedVisibility == visible {\n                expectedVisibility = nil\n            } else {\n                autoPresent.userChangedVisibility()")
                         && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.pauseCollapseDelayMs))")
-                        && controller.contains("if isPlaying { cancelPauseCollapse() }"), true,
-                    "触控栏自动展开: 控制器接线(先记状态再订阅、防抖、认出用户操作、暂停计时)")
+                        && controller.contains("if isPlaying { cancelPauseCollapse() } else { cancelSettleExpand() }")
+                        && controller.contains("try? await Task.sleep(for: .milliseconds(TouchBarAutoPresent.settleExpandDelayMs))")
+                        && controller.contains("self.performAuto(self.autoPresent.settleElapsed("), true,
+                    "触控栏自动展开: 控制器接线(先记状态再订阅、防抖、认出用户操作、暂停计时、开始播放后再确认)")
         expectEqual(rows.contains("toolbarButton(.behavior)\n            ghostButton(.style)\n            ghostButton(.layout)\n            Spacer(minLength: 8)\n            EditorToolbarResetReserve()")
                         && rows.contains("static let firstRow: [TouchBarSettingsGroup] = [.lyrics, .style, .layout]")
                         && rows.contains("ForEach(TouchBarSettingsGroup.firstRow, id: \\.self)"), true,
