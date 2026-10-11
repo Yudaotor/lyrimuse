@@ -468,7 +468,7 @@ Players not on the list can be added to your trusted players from Applications, 
 
 ### Permissions, only where needed
 
-Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration and QQ Music's shuffle, repeat, like and playback controls without system media focus need Accessibility. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.
+Apple Music, Spotify and Kaset need Automation permission to read what is playing. QQ Music, NetEase Cloud Music and Kugou need Full Disk Access for their saved lyrics and queues. Amazon Music's progress calibration, QQ Music's shuffle, repeat and like controls, and QQ Music's and NetEase Cloud Music's playback controls without system media focus need Accessibility. Both menu playback routes share Lyrimuse's existing authorization; NetEase Cloud Music uses it only for play/pause, next and previous, with no separate target-app authorization. Without access, a control request opens Players settings so you can choose to grant it. Web players need Automation for the browser and its Allow JavaScript from Apple Events option. The other players need nothing. Settings shows the current state of each.
 
 - Settings: Player › Automation Permission
 - Settings: Player › Full Disk Access
@@ -478,7 +478,7 @@ Apple Music, Spotify and Kaset need Automation permission to read what is playin
 
 ### Playback controls and seeking
 
-Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them. Play, pause and skipping can have global shortcuts. When QQ Music loses system media focus, authorized Accessibility menus can pause, resume and skip tracks, but cannot seek.
+Play, pause, skip and drag the progress bar from the lyrics window or the expanded notch. Shuffle, repeat, like and volume depend on the player: Apple Music, Spotify, Kaset, QQ Music, Amazon Music and YouTube Music in a browser each support some or all of them. QQ Music keeps its existing shuffle, repeat and like controls; NetEase Cloud Music supports only play/pause, next and previous, with no playback mode, like or volume controls. Play, pause and skipping can have global shortcuts. When a direct-query fallback from QQ Music or NetEase Cloud Music is accepted and another app holds system media focus, authorized menus can handle these three controls, but cannot seek; normal system-focus controls keep their existing route. The menu route matches only verified Simplified Chinese titles (NetEase Cloud Music 3.1.13), keeps the player in the background, and does not send a global media command or retry on failure.
 
 - Settings: Lyrics Display › Notch › Expanded State › Show Playback Controls
 - Settings: Keyboard Shortcuts › Play/Pause

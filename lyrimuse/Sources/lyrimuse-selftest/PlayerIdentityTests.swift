@@ -115,35 +115,48 @@ func runPlayerIdentityTests() {
         expectEqual(held(false, .spotify), Route.spotifyScript, "控制分派: 焦点被占但能发 AppleScript → 照发 AppleScript")
         expectEqual(held(true, nil), Route.appleMusicScript, "控制分派: 只勾 Apple Music → 不受焦点影响")
         do {
-            typealias Command = QQMusicAccessibilityControl.Command
-            for command in [Command.playPause, .nextTrack, .previousTrack] {
-                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
-                    focusHeldElsewhere: true, directQueryFallback: .qqMusic, mediaControlCommand: command.rawValue),
-                    Route.qqAccessibility(command), "QQ 失焦: \(command.rawValue) 只发给 QQ 菜单")
-                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
-                    directQueryFallback: .qqMusic, mediaControlCommand: command.rawValue),
-                    Route.mediaControl, "QQ 焦点正常: 不额外依赖辅助功能")
-                for player in PlaybackPlayer.allCases where player != .qqMusic {
+            typealias Command = PlaybackMenuControl.Command
+            for player in [PlaybackPlayer.qqMusic, .netease] {
+                for command in [Command.playPause, .nextTrack, .previousTrack] {
                     expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                         focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
-                        Route.withheld, "非 QQ 的直查回退: \(player) 不能误按 QQ 菜单")
+                        Route.menuAccessibility(player, command), "菜单控制失焦: \(player) \(command.rawValue) 只发目标菜单")
+                    expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                        directQueryFallback: player, mediaControlCommand: command.rawValue),
+                        Route.mediaControl, "菜单控制焦点正常: \(player) 不额外依赖辅助功能")
+                    for fallback in [PlaybackPlayer.appleMusic, .spotify, .kaset] {
+                        let expected: Route = fallback == .appleMusic ? .appleMusicScript : fallback == .spotify ? .spotifyScript : .kasetScript
+                        expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: fallback,
+                            focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
+                            expected, "脚本实际控制目标优先,不被菜单覆盖")
+                    }
+                }
+                for command in ["seek", "", "unknown"] {
+                    expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                        focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command),
+                        Route.withheld, "失焦: \(player) \(command) 没有菜单通路,不能控到 Safari")
+                }
+                for title in ["播放", "暂停"] {
+                    expectEqual(Command.playPause.matches(menuTitle: title, for: player), true, "菜单 toggle: \(player) \(title)")
+                }
+                let next = player == .qqMusic ? "下一首" : "下一个"
+                let previous = player == .qqMusic ? "上一首" : "上一个"
+                expectEqual(Command.nextTrack.matches(menuTitle: next, for: player), true, "next 精确菜单项")
+                expectEqual(Command.previousTrack.matches(menuTitle: previous, for: player), true, "previous 精确菜单项")
+                expectEqual(Command.nextTrack.matches(menuTitle: previous, for: player), false, "next 不混用 previous")
+                expectEqual(Command.playPause.matches(menuTitle: "播放模式", for: player), false, "toggle 不做含糊前缀匹配")
+                expectEqual(Command.nextTrack.matches(menuTitle: player == .qqMusic ? "下一个" : "下一首", for: player), false,
+                            "不同来源不混用菜单标题")
+            }
+            for player in PlaybackPlayer.allCases where player != .qqMusic && player != .netease {
+                for command in [Command.playPause, .nextTrack, .previousTrack] {
+                    expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                        focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
+                        Route.withheld, "未适配来源: \(player) 不能误按菜单")
+                    expectEqual(command.matches(menuTitle: "播放", for: player), false, "未适配来源不匹配任何播放菜单")
                 }
             }
-            for command in ["seek", "", "unknown"] {
-                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
-                    focusHeldElsewhere: true, directQueryFallback: .qqMusic, mediaControlCommand: command),
-                    Route.withheld, "QQ 失焦: \(command) 没有菜单通路,不能控到 Safari")
-            }
-            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: .spotify,
-                focusHeldElsewhere: true, directQueryFallback: .qqMusic, mediaControlCommand: "next-track"),
-                Route.spotifyScript, "AppleScript 的实际控制目标优先,不被 QQ 菜单路由覆盖")
-            expectEqual(Command.playPause.matches(menuTitle: "暂停"), true, "QQ toggle: 播放时的标题")
-            expectEqual(Command.playPause.matches(menuTitle: "播放"), true, "QQ toggle: 暂停后标题延迟刷新也仍能按同一动作")
-            expectEqual(Command.nextTrack.matches(menuTitle: "下一首"), true, "QQ next: 精确菜单项")
-            expectEqual(Command.previousTrack.matches(menuTitle: "上一首"), true, "QQ previous: 精确菜单项")
-            expectEqual(Command.nextTrack.matches(menuTitle: "上一首"), false, "QQ next: 不混用上一首")
-            expectEqual(Command.playPause.matches(menuTitle: "播放模式"), false, "QQ toggle: 不做含糊的前缀匹配")
-            expectEqual(Command(rawValue: "seek"), nil, "QQ 菜单能力: 没有 seek,API 边界拒绝")
+            expectEqual(Command(rawValue: "seek"), nil, "菜单能力: 没有 seek, API 边界拒绝")
         }
         do {
             let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -229,7 +242,7 @@ func runPlayerIdentityTests() {
         }
     }
 
-    qqControlDispatchTests()
+    menuControlDispatchTests()
 
     // ---- 信任列表:「自动识别」放开到任意 App ----
     //
@@ -811,17 +824,19 @@ func runPlayerIdentityTests() {
     // 出不出现。每家要不要来自生成字段(shared/players.json),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .amazonMusic],
-                    "辅助功能判据: 读界面的 Amazon Music、按菜单切模式的 QQ 音乐(改 shared/players.json 的 needsAccessibilityPermission)")
-        expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse), [.switchesPlayMode, .calibratesProgress],
-                    "辅助功能判据: QQ 音乐是切模式、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .netease, .amazonMusic],
+                    "辅助功能判据: 读界面的 Amazon Music、按菜单控制的 QQ 音乐/网易云(改 shared/players.json 的 needsAccessibilityPermission)")
+        expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse), [.switchesPlayMode, .controlsPlayback, .calibratesProgress],
+                    "辅助功能判据: QQ 音乐是切模式、网易云只控制失焦播放、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse), [.refinesProgress, .refinesProgress, .readsTrack],
                     "自动化判据: Apple Music、Spotify 只让进度更准,Kaset 的曲目整份靠它,引导页和设置页的说明按这个分开写")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .amazonMusic], "辅助功能判据: 纯 auto 按超集算")
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .amazonMusic], "辅助功能判据: 纯 auto 按超集算")
+        expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
+        expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")
         expectEqual(P([.appleMusic, .spotify, .kkbox]).playersNeedingAccessibility, [],
-                    "辅助功能判据: 没勾 Amazon Music、QQ 音乐时不出现")
+                    "辅助功能判据: 没勾任何需要辅助功能的播放器时不出现")
     }
 
     // 说明文字里的播放器名单、开关摘要按界面语言拼(`L10n.list`):`ListFormatter.localizedString(byJoining:)` 按系统语言拼,
@@ -2192,76 +2207,78 @@ func runPlayerIdentityTests() {
 
 /// 用闸门让 AX 桩停在后台,由主线程的一次事件放行。验证响应与失败契约,不按耗时阈值判断、不操作真实播放器。
 @MainActor
-private func qqControlDispatchTests() {
+private func menuControlDispatchTests() {
     typealias Controller = MusicPlaybackController
-    typealias Command = QQMusicAccessibilityControl.Command
-    typealias Outcome = QQMusicAccessibilityControl.Outcome
-    let original = Controller.onControlWithheld
-    var reasons: [Controller.WithheldReason] = []
-    Controller.onControlWithheld = { reasons.append($0) }
-    defer { Controller.onControlWithheld = original }
+    typealias Command = PlaybackMenuControl.Command
+    typealias Outcome = PlaybackMenuControl.Outcome
+    for player in [PlaybackPlayer.qqMusic, .netease] {
+        let original = Controller.onControlWithheld
+        var reasons: [Controller.WithheldReason] = []
+        Controller.onControlWithheld = { reasons.append($0) }
+        defer { Controller.onControlWithheld = original }
 
-    func drain(until finished: () -> Bool) {
-        let deadline = Date().addingTimeInterval(2)
-        while !finished(), Date() < deadline {
-            _ = RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        func drain(until finished: () -> Bool) {
+            let deadline = Date().addingTimeInterval(2)
+            while !finished(), Date() < deadline {
+                _ = RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.01))
+            }
         }
-    }
 
-    let started = DispatchSemaphore(value: 0)
-    let release = DispatchSemaphore(value: 0)
-    var mainServed = false
-    var servedBeforeCompletion = false
-    var completed = false
-    var successfulCompletions = 0
-    Controller.dispatchQQAccessibility(.playPause, press: { _ in
-        started.signal()
-        if Thread.isMainThread { return .pressed } // 调用方阻塞的回归直接变成断言失败,不把测试卡住。
-        _ = release.wait(timeout: .now() + 2)
-        return .menuUnavailable
-    }, completion: { route in
-        servedBeforeCompletion = mainServed
-        if route != nil { successfulCompletions += 1 }
-        completed = true
-    })
-    expectEqual(started.wait(timeout: .now() + 2) == .success, true, "QQ 控制: 后台开始 AX 工作")
-    DispatchQueue.main.async {
-        mainServed = true
-        release.signal()
-    }
-    drain { completed }
-    release.signal()
-    expectEqual(completed && servedBeforeCompletion, true, "QQ 控制: AX 等待期间主线程能服务事件")
-    expectEqual(successfulCompletions, 0, "QQ 控制: 菜单失败不能回报成功通路")
-    expectEqual(reasons, [.unavailable], "QQ 控制: 菜单失败只回报一次,不静默成功")
-
-    let cases: [(Command, Outcome, Controller.WithheldReason?)] = [
-        (.nextTrack, .notTrusted, .accessibilityPermissionRequired),
-        (.previousTrack, .playerNotRunning, .unavailable),
-        (.playPause, .pressFailed(code: -25204), .unavailable),
-        (.nextTrack, .pressed, nil),
-    ]
-    for (command, outcome, reason) in cases {
-        reasons = []
-        completed = false
-        var sentResult: Controller.ControlRoute?
-        var callbackOnMain = false
-        let presses = DispatchSemaphore(value: 0)
-        Controller.dispatchQQAccessibility(command, press: { _ in
-            presses.signal()
-            return outcome
+        let started = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        var mainServed = false
+        var servedBeforeCompletion = false
+        var completed = false
+        var successfulCompletions = 0
+        Controller.dispatchMenuAccessibility(.playPause, for: player, press: { _, _ in
+            started.signal()
+            if Thread.isMainThread { return .pressed } // 调用方阻塞的回归直接变成断言失败,不把测试卡住。
+            _ = release.wait(timeout: .now() + 2)
+            return .menuUnavailable
         }, completion: { route in
-            sentResult = route
-            callbackOnMain = Thread.isMainThread
+            servedBeforeCompletion = mainServed
             if route != nil { successfulCompletions += 1 }
             completed = true
         })
+        expectEqual(started.wait(timeout: .now() + 2) == .success, true, "\(player) 菜单控制: 后台开始 AX 工作")
+        DispatchQueue.main.async {
+            mainServed = true
+            release.signal()
+        }
         drain { completed }
-        expectEqual(completed && callbackOnMain, true, "QQ 控制: \(outcome) 完成回调在主线程")
-        expectEqual(sentResult, outcome == .pressed ? .qqAccessibility(command) : nil, "QQ 控制: \(outcome) 只有 AXPress 成功才回报送出")
-        expectEqual(reasons, reason.map { [$0] } ?? [], "QQ 控制: \(outcome) 的失败分类由控制层决定")
-        expectEqual(presses.wait(timeout: .now()) == .success && presses.wait(timeout: .now()) == .timedOut,
-                    true, "QQ 控制: \(outcome) 只尝试一次动作")
+        release.signal()
+        expectEqual(completed && servedBeforeCompletion, true, "\(player) 菜单控制: AX 等待期间主线程能服务事件")
+        expectEqual(successfulCompletions, 0, "\(player) 菜单控制: 菜单失败不能回报成功通路")
+        expectEqual(reasons, [.unavailable], "\(player) 菜单控制: 菜单失败只回报一次,不静默成功")
+
+        let cases: [(Command, Outcome, Controller.WithheldReason?)] = [
+            (.nextTrack, .notTrusted, .accessibilityPermissionRequired),
+            (.previousTrack, .playerNotRunning, .unavailable),
+            (.playPause, .pressFailed(code: -25204), .unavailable),
+            (.nextTrack, .pressed, nil),
+        ]
+        for (command, outcome, reason) in cases {
+            reasons = []
+            completed = false
+            var sentResult: Controller.ControlRoute?
+            var callbackOnMain = false
+            let presses = DispatchSemaphore(value: 0)
+            Controller.dispatchMenuAccessibility(command, for: player, press: { actualCommand, actualPlayer in
+                if actualCommand == command && actualPlayer == player { presses.signal() }
+                return outcome
+            }, completion: { route in
+                sentResult = route
+                callbackOnMain = Thread.isMainThread
+                if route != nil { successfulCompletions += 1 }
+                completed = true
+            })
+            drain { completed }
+            expectEqual(completed && callbackOnMain, true, "\(player) 菜单控制: \(outcome) 完成回调在主线程")
+            expectEqual(sentResult, outcome == .pressed ? .menuAccessibility(player, command) : nil, "\(player) 菜单控制: \(outcome) 只有 AXPress 成功才回报送出")
+            expectEqual(reasons, reason.map { [$0] } ?? [], "\(player) 菜单控制: \(outcome) 的失败分类由控制层决定")
+            expectEqual(presses.wait(timeout: .now()) == .success && presses.wait(timeout: .now()) == .timedOut,
+                        true, "\(player) 菜单控制: \(outcome) 只尝试一次动作")
+        }
+        expectEqual(successfulCompletions, 1, "\(player) 菜单控制: 只有成功命令回报一次完成通路")
     }
-    expectEqual(successfulCompletions, 1, "QQ 控制: 只有成功命令回报一次完成通路")
 }

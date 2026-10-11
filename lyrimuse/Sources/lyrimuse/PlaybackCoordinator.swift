@@ -2041,7 +2041,7 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 播放/暂停 —— 各 UI 面(歌词窗/灵动岛/悬浮层热键/菜单栏面板/全局快捷键)都走这里,
     /// 不直接调 MusicPlaybackController.playPause():普通指令排入通路后**乐观翻转**观感层
-    /// isPlayingSmoothed。QQ 等 AXPress 后沿用回读真值,不再反转可能已更新的图标;查询期间主线程仍可服务。真实链路(命令→播放器切状态→分布式
+    /// isPlayingSmoothed。菜单通路等 AXPress 后沿用回读真值,不再反转可能已更新的图标;查询期间主线程仍可服务。真实链路(命令→播放器切状态→分布式
     /// 通知→250ms 去抖→poll 子进程→apply)实测要 0.5~1s,等它回读再动画,对比 AM 的即时
     /// 反馈明显迟钝(现象是"扩大延迟太久")。
     ///
@@ -2057,8 +2057,8 @@ final class PlaybackCoordinator: ObservableObject {
             stopGraceWork = nil
             optimisticReconcileWork?.cancel()
             optimisticReconcileWork = nil
-            // QQ 的实际操作已经结束,回读可能先到。跟随真值,不再对当前图标做一次 toggle。
-            if case .qqAccessibility = route {
+            // 菜单操作已经结束,回读可能先到。跟随真值,不再对当前图标做一次 toggle。
+            if case .menuAccessibility = route {
                 isPlayingSmoothed = isPlayingNow
                 return
             }

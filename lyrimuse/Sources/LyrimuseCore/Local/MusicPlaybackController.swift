@@ -2,7 +2,7 @@ import Foundation
 import os
 
 // 本机播放器的播放控制。正常焦点保留现有脚本或 media-control 通路;失焦时只用实际回退目标的定向通路。
-// Apple Music / Spotify / Kaset 用 AppleScript,QQ 只用已验证的三个 AX 菜单动作。
+// Apple Music / Spotify / Kaset 用 AppleScript,QQ / 网易云只用已验证的三个 AX 菜单动作。
 // 没有可用的定向通路时不发全局控制。命令工作在串行后台队列,失败反馈和完成通知回到主线程。
 public enum MusicPlaybackController {
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-control")
@@ -14,7 +14,7 @@ public enum MusicPlaybackController {
     }
     public nonisolated(unsafe) static var onControlWithheld: (@MainActor @Sendable (WithheldReason) -> Void)?
 
-    /// 普通通路回报已排入既有命令队列;QQ 通路等待 AXPress 结果。失败不驱动乐观状态。
+    /// 普通通路回报已排入既有命令队列;菜单通路等待 AXPress 结果。失败不驱动乐观状态。
     public typealias Completion = @MainActor @Sendable (ControlRoute?) -> Void
 
     @MainActor
@@ -892,8 +892,8 @@ public enum MusicPlaybackController {
         case spotifyScript
         case kasetScript
         case mediaControl
-        /// QQ 失焦时只按它自己的播放控制菜单;跳转不走这条。
-        case qqAccessibility(QQMusicAccessibilityControl.Command)
+        /// QQ / 网易云失焦时只按目标进程的播放菜单;跳转不走这条。
+        case menuAccessibility(PlaybackPlayer, PlaybackMenuControl.Command)
         /// 跳转定向发给 Kaset 本体那份会话(`NowPlayingClientsProbe.sendSeek`),不发给系统当前会话。只有跳转走这条,见 `seekRoute`。
         case kasetDirect
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
@@ -902,7 +902,7 @@ public enum MusicPlaybackController {
         case withheld
     }
 
-    /// 按实际回退目标决定控制通路。QQ 直查回退只允许三个已验证的 AX 菜单动作;
+    /// 按实际回退目标决定控制通路。QQ / 网易云直查回退只允许三个已验证的 AX 菜单动作;
     /// 其它无定向通路的命令仍不发。选择列表和前台窗口不能充当回退目标。
     public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?,
                                     focusHeldElsewhere: Bool = false, directQueryFallback: PlaybackPlayer? = nil,
@@ -914,9 +914,9 @@ public enum MusicPlaybackController {
         case .kaset: return .kasetScript
         default:
             guard focusHeldElsewhere else { return .mediaControl }
-            if directQueryFallback == .qqMusic,
-               let command = QQMusicAccessibilityControl.Command(rawValue: mediaControlCommand) {
-                return .qqAccessibility(command)
+            if let player = directQueryFallback, player == .qqMusic || player == .netease,
+               let command = PlaybackMenuControl.Command(rawValue: mediaControlCommand) {
+                return .menuAccessibility(player, command)
             }
             return .withheld
         }
@@ -957,11 +957,11 @@ public enum MusicPlaybackController {
                                  mediaControlCommand: String, completion: Completion?) {
         let route = dispatchRoute(appleScript: appleScript, spotifyScript: spotifyScript, kasetScript: kasetScript,
                                   mediaControlCommand: mediaControlCommand, completion: completion)
-        if case .qqAccessibility(_)? = route { return } // QQ 由后台 AX 结果回报,不能把入队当成功。
+        if case .menuAccessibility? = route { return } // 菜单通路由后台 AX 结果回报,不能把入队当成功。
         completion?(route)
     }
 
-    /// 交回排入的通路;没有通路返回 nil。QQ 另通过 completion 回报实际 AX 结果。
+    /// 交回排入的通路;没有通路返回 nil。菜单通路另通过 completion 回报实际 AX 结果。
     private static func dispatchRoute(appleScript: String, spotifyScript: String, kasetScript: String?,
                                       mediaControlCommand: String, mediaControlArguments: [String] = [],
                                       kasetDirectSeek: KasetDirectSeek? = nil,
@@ -983,28 +983,28 @@ public enum MusicPlaybackController {
         case .kasetDirect:
             guard let kasetDirectSeek else { return nil }
             runKasetDirectSeek(kasetDirectSeek, fallbackCommand: mediaControlCommand, fallbackArguments: mediaControlArguments)
-        case .qqAccessibility(let command):
-            dispatchQQAccessibility(command, completion: completion)
+        case .menuAccessibility(let player, let command):
+            dispatchMenuAccessibility(command, for: player, completion: completion)
         case .withheld:
             return withhold(mediaControlCommand, reason: "now playing focus is held by another app")
         }
         return route
     }
 
-    /// QQ 的三个动作与已有控制共用串行队列。press 是 AX 边界,selftest 用阻塞桩验证主线程仍可服务和失败回报。
-    public static func dispatchQQAccessibility(
-        _ command: QQMusicAccessibilityControl.Command,
-        press: @escaping @Sendable (QQMusicAccessibilityControl.Command) -> QQMusicAccessibilityControl.Outcome = { QQMusicAccessibilityControl.press($0) },
+    /// QQ / 网易云的三个动作与已有控制共用串行队列。press 是 AX 边界,selftest 用阻塞桩验证主线程仍可服务和失败回报。
+    public static func dispatchMenuAccessibility(
+        _ command: PlaybackMenuControl.Command, for player: PlaybackPlayer,
+        press: @escaping @Sendable (PlaybackMenuControl.Command, PlaybackPlayer) -> PlaybackMenuControl.Outcome = { PlaybackMenuControl.press($0, for: $1) },
         completion: Completion? = nil
     ) {
         commandQueue.async {
             commandSerial &+= 1
-            let outcome = press(command)
+            let outcome = press(command, player)
             if outcome != .pressed {
-                _ = withhold(command.rawValue, reason: "QQ accessibility: \(outcome)",
+                _ = withhold(command.rawValue, reason: "\(player.rawValue) accessibility: \(outcome)",
                              failure: outcome == .notTrusted ? .accessibilityPermissionRequired : .unavailable)
             }
-            DispatchQueue.main.async { completion?(outcome == .pressed ? .qqAccessibility(command) : nil) }
+            DispatchQueue.main.async { completion?(outcome == .pressed ? .menuAccessibility(player, command) : nil) }
         }
     }
 

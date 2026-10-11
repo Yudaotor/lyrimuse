@@ -121,6 +121,11 @@ struct AccessibilityPermissionGuide: View {
             lines.append(String(format: L10n.t("%@ 没有脚本接口。授权后 Lyrimuse 会读取并点按它的菜单，以控制随机、循环与喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能用，但没有这几颗键，失焦时也无法控制播放。失焦时的进度跳转暂不支持。"),
                                 model.playerNames(playMode)))
         }
+        let playback = players.filter { $0.accessibilityUse == .controlsPlayback }
+        if !playback.isEmpty {
+            lines.append(String(format: L10n.t("授权后 Lyrimuse 可通过%@自己的菜单，在系统媒体焦点被其它 App 占用时暂停、恢复和切换上下首。不授权也能显示歌词，但失焦时无法控制播放；失焦进度跳转暂不支持。"),
+                                model.playerNames(playback)))
+        }
         return lines.joined(separator: "\n")
     }
 }

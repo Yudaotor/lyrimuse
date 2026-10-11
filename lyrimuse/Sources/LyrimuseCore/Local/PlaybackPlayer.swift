@@ -226,14 +226,21 @@ extension PlaybackPlayer {
         /// 读界面上的播放时间校准进度(Amazon Music,`AmazonMusicUIProbe`);点随机 / 循环键时还会按它播放条上的键
         /// (`AmazonMusicModeControl`)。
         case calibratesProgress
-        /// QQ 读取、点按模式与喜欢菜单(`QQMusicMenuControl`),失焦时也按播放控制菜单(`QQMusicAccessibilityControl`)。
+        /// QQ 读取、点按模式与喜欢菜单(`QQMusicMenuControl`),失焦时也按播放控制菜单(`PlaybackMenuControl`)。
         case switchesPlayMode
+        /// 网易云失焦时按自身菜单执行播放/暂停与上下首,不提供模式或喜欢键。
+        case controlsPlayback
     }
 
     /// 不要这项权限的播放器为 nil(`needsAccessibilityPermission`,源头 shared/players.json)。
     public var accessibilityUse: AccessibilityUse? {
         guard needsAccessibilityPermission else { return nil }
-        return self == .qqMusic ? .switchesPlayMode : .calibratesProgress
+        switch self {
+        case .qqMusic: return .switchesPlayMode
+        case .netease: return .controlsPlayback
+        case .amazonMusic: return .calibratesProgress
+        default: return nil
+        }
     }
 
     /// 「自动化」权限替这个播放器做什么。引导页、设置页那张卡的说明按它分开写。

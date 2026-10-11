@@ -29,7 +29,8 @@ import Foundation
 }
 @MainActor enum MusicPlaybackController {
     enum Command { case playPause }
-    enum ControlRoute { case mediaControl, qqAccessibility(Command) }
+    enum Player { case qq, netease }
+    enum ControlRoute { case mediaControl, menuAccessibility(Player, Command) }
     typealias Completion = @MainActor (ControlRoute?) -> Void
     static var normal = false
     static var pending: [Completion] = []
@@ -50,23 +51,26 @@ import Foundation
 }
 @MainActor func replay() {
     typealias C = MusicPlaybackController
-    let qq = C.ControlRoute.qqAccessibility(.playPause)
+    for player in [C.Player.qq, .netease] {
+    LocalPlaybackSource.shared.lastResolvedBundleID = player == .qq ? "qq" : "netease"
+    C.normal = false
+    let menu = C.ControlRoute.menuAccessibility(player, .playPause)
     let resumed = Coordinator()
     resumed.userTogglePlayPause()
     resumed.sample(true)
-    C.finish(qq)
+    C.finish(menu)
     precondition(resumed.isPlayingSmoothed, "readback-before-success must stay playing")
 
     let paused = Coordinator()
     paused.sample(true)
     paused.userTogglePlayPause()
     paused.sample(false)
-    C.finish(qq)
+    C.finish(menu)
     precondition(!paused.isPlayingSmoothed, "known pause must not be reversed by completion")
 
     let late = Coordinator()
     late.userTogglePlayPause()
-    C.finish(qq)
+    C.finish(menu)
     precondition(!late.isPlayingSmoothed, "AX success is not confirmed playback")
     late.sample(true)
     precondition(late.isPlayingSmoothed, "later readback drives the deferred route")
@@ -75,7 +79,7 @@ import Foundation
     rapid.sample(true)
     rapid.userTogglePlayPause(); rapid.userTogglePlayPause()
     rapid.sample(false); rapid.sample(true)
-    C.finish(qq); C.finish(qq)
+    C.finish(menu); C.finish(menu)
     precondition(rapid.isPlayingSmoothed, "two deferred successes must not reverse latest truth")
 
     let failed = Coordinator()
@@ -89,7 +93,7 @@ import Foundation
     C.normal = true
     changed.userTogglePlayPause() // New player now shows an optimistic pause while truth is still playing.
     C.normal = false
-    C.finish(qq)
+    C.finish(menu)
     precondition(!changed.isPlayingSmoothed, "old player completion must preserve the new player's differing icon")
 
     C.normal = true
@@ -100,7 +104,8 @@ import Foundation
     normal.userTogglePlayPause()
     precondition(normal.isPlayingSmoothed, "normal route keeps rapid double-toggle")
     precondition(C.pending.isEmpty)
-    print("playback completion: 10 source-derived checks ALL PASS")
+    }
+    print("playback completion: 20 source-derived checks ALL PASS")
 }
 MainActor.assumeIsolated { replay() }
 '''

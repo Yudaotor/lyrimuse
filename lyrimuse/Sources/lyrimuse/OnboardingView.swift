@@ -813,6 +813,11 @@ struct OnboardingView: View {
             lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环与喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首"),
                                 accessibility.playerNames(playModeTargets)))
         }
+        let playbackTargets = pendingAccessibility.filter { $0.accessibilityUse == .controlsPlayback }
+        if !playbackTargets.isEmpty {
+            lines.append(String(format: L10n.t("辅助功能权限可让%@在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首"),
+                                accessibility.playerNames(playbackTargets)))
+        }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
@@ -1473,16 +1478,23 @@ struct OnboardingView: View {
             let targets = accessibilityTargets
             let progress = targets.filter { $0.accessibilityUse == .calibratesProgress }
             let playMode = targets.filter { $0.accessibilityUse == .switchesPlayMode }
-            if progress.isEmpty {
-                return String(format: L10n.t("请开启此权限，以显示%@的随机、循环与喜欢键，并在失去系统媒体焦点时控制播放"),
-                              accessibility.playerNames(playMode))
+            let playback = targets.filter { $0.accessibilityUse == .controlsPlayback }
+            var lines: [String] = []
+            if !progress.isEmpty && !playMode.isEmpty {
+                lines.append(String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制"),
+                                    accessibility.playerNames(progress), accessibility.playerNames(playMode)))
+            } else if !progress.isEmpty {
+                lines.append(String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键"),
+                                    accessibility.playerNames(progress)))
+            } else if !playMode.isEmpty {
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环与喜欢键，并在失去系统媒体焦点时控制播放"),
+                                    accessibility.playerNames(playMode)))
             }
-            if playMode.isEmpty {
-                return String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键"),
-                              accessibility.playerNames(progress))
+            if !playback.isEmpty {
+                lines.append(String(format: L10n.t("请开启此权限，以便在%@失去系统媒体焦点时控制暂停、恢复和上下首"),
+                                    accessibility.playerNames(playback)))
             }
-            return String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制"),
-                          accessibility.playerNames(progress), accessibility.playerNames(playMode))
+            return lines.joined(separator: "\n")
         case .automation(let player) where player.automationUse == .readsTrack:
             return L10n.t("请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放")
         default:
