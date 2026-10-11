@@ -2,15 +2,27 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// 读别的 App 菜单栏(没有脚本接口的播放器:QQ 音乐、网易云音乐)。只读它自己的菜单项、只对那一项 `AXPress`,不发全局快捷键,
+/// 读别的 App 菜单栏(没有脚本接口的播放器:QQ 音乐、网易云音乐、酷狗音乐)。只读它自己的菜单项、只对那一项 `AXPress`,不发全局快捷键,
 /// 不把它拉到前台;跨进程查询设 1 秒超时。没有「辅助功能」权限、它没在跑时读不到。
 public enum MenuBarAX {
     public static func menuBar(bundleID: String) -> AXUIElement? {
+        application(bundleID: bundleID).flatMap { element($0, kAXMenuBarAttribute) }
+    }
+
+    /// 它的 App 元素(跨进程查询 1 秒超时);没有权限、没在跑为 nil。
+    public static func application(bundleID: String) -> AXUIElement? {
         guard AXIsProcessTrusted(),
               let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return nil }
         let ax = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(ax, 1)
-        return element(ax, kAXMenuBarAttribute)
+        return ax
+    }
+
+    /// 一组子元素(默认 `AXChildren`,也可以是 `AXWindows`);读不到为空。
+    public static func children(_ e: AXUIElement, attribute: String = kAXChildrenAttribute) -> [AXUIElement] {
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(e, attribute as CFString, &value) == .success else { return [] }
+        return (value as? [AXUIElement]) ?? []
     }
 
     public static func element(_ e: AXUIElement, _ name: String) -> AXUIElement? {
@@ -28,10 +40,7 @@ public enum MenuBarAX {
 
     /// 菜单栏项 / 菜单项底下的菜单项:中间隔着一层 `AXMenu`,拆掉它。
     public static func menuChildren(_ e: AXUIElement) -> [AXUIElement] {
-        var value: AnyObject?
-        guard AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &value) == .success,
-              let children = value as? [AXUIElement] else { return [] }
-        return children.flatMap { child -> [AXUIElement] in
+        children(e).flatMap { child -> [AXUIElement] in
             string(child, kAXRoleAttribute) == kAXMenuRole ? menuChildren(child) : [child]
         }
     }
@@ -46,33 +55,57 @@ public enum MenuBarAX {
     }
 }
 
-/// 靠菜单栏里一项的标题读写「喜欢」:当前这首喜欢了,那一项写「取消喜欢」,没喜欢写「喜欢歌曲」(QQ 音乐、网易云音乐都是这样);
-/// 按一下翻转,标题过一会儿跟着变。按标题认那一项(网易云再加快捷键),不按下标、也不认上级菜单的名字(版本更新会挪位置)。
-/// 写入一次只走一个:先排队、再读标题,按完等标题翻过来才放 —— 连点两下时第二下读到的是第一下之后的状态。
-/// 见 07 章决策 138、146、147。
+/// 按菜单栏里一项写「喜欢」,按一下翻转。状态有两种读法:QQ 音乐、网易云音乐读那一项的标题(喜欢了写「取消喜欢」,
+/// 没喜欢写「喜欢歌曲」,按完过一会儿跟着变);酷狗那一项的标题不变,状态从别处读(`init(bundleID:itemTitle:…)`)。
+/// 按标题认那一项(网易云、酷狗再加快捷键),不按下标、也不认上级菜单的名字(版本更新会挪位置)。
+/// 写入一次只走一个:先排队、再读状态,按完等状态翻过来才放 —— 连点两下时第二下读到的是第一下之后的状态。
+/// 见 07 章决策 138、146、147、148。
 public final class MenuTitleFavorite: @unchecked Sendable {
     public let bundleID: String
-    /// 菜单项标题 → 喜欢了没有;认不出为 nil。
-    public let state: @Sendable (String) -> Bool?
     /// 那一项的快捷键字符要等于它才认(无修饰键);nil = 只看标题。英文界面「Like」这种常见短词,靠它避开别的同名项。
     public let commandKey: String?
     /// 按下之后等标题翻过来最多多久、隔多久看一次。
     public let confirmWait: TimeInterval
     public let confirmPollInterval: TimeInterval
+    private let recognizes: @Sendable (String) -> Bool
+    private let source: Source
     private let lock = NSLock()
 
+    private enum Source {
+        /// 菜单项标题 → 喜欢了没有;认不出为 nil。
+        case title(@Sendable (String) -> Bool?)
+        /// 标题不变,状态从别处读;读不到为 nil。
+        case elsewhere(@Sendable () -> Bool?)
+    }
+
+    /// 标题就是状态:`state` 把标题读成喜欢了没有,认不出的项为 nil。
     public init(bundleID: String, commandKey: String? = nil, confirmWait: TimeInterval,
                 confirmPollInterval: TimeInterval = 0.1, state: @escaping @Sendable (String) -> Bool?) {
         self.bundleID = bundleID
         self.commandKey = commandKey
         self.confirmWait = confirmWait
         self.confirmPollInterval = confirmPollInterval
-        self.state = state
+        recognizes = { state($0) != nil }
+        source = .title(state)
+    }
+
+    /// 标题固定是 `itemTitle`,状态由 `readState` 从别处读。
+    public init(bundleID: String, itemTitle: String, commandKey: String?, confirmWait: TimeInterval,
+                confirmPollInterval: TimeInterval = 0.1, readState: @escaping @Sendable () -> Bool?) {
+        self.bundleID = bundleID
+        self.commandKey = commandKey
+        self.confirmWait = confirmWait
+        self.confirmPollInterval = confirmPollInterval
+        recognizes = { $0.trimmingCharacters(in: .whitespaces) == itemTitle }
+        source = .elsewhere(readState)
     }
 
     /// 当前这首喜欢了没有;读不到为 nil。会阻塞一次跨进程查询,别在主线程调。
     public func read() -> Bool? {
-        item().flatMap { state($0.title) }
+        switch source {
+        case .title(let state): return item().flatMap { state($0.title) }
+        case .elsewhere(let readState): return readState()
+        }
     }
 
     /// 设成喜欢 / 不喜欢,返回到没到:已经是这个状态算到;按下去之后标题在 `confirmWait` 内翻过来才算到,没翻过来返回 false,
@@ -80,12 +113,21 @@ public final class MenuTitleFavorite: @unchecked Sendable {
     public func set(_ value: Bool) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard let found = item(), let now = state(found.title) else { return false }
+        guard let found = item(), let now = state(after: found) else { return false }
         if now == value { return true }
         guard AXUIElementPerformAction(found.element, kAXPressAction as CFString) == .success else { return false }
-        // 先读按下的那一项;它读不出来(菜单重建过)再整个找一遍。
         return MenuBarAX.waitFor(value, polls: Int(confirmWait / confirmPollInterval), interval: confirmPollInterval) {
-            (MenuBarAX.string(found.element, kAXTitleAttribute) ?? item()?.title).flatMap(state)
+            state(after: found)
+        }
+    }
+
+    /// 按过(或要按)`found` 那一项之后的状态。读标题时先读那一项本身,它读不出来(菜单重建过)再整个找一遍。
+    private func state(after found: (title: String, element: AXUIElement)) -> Bool? {
+        switch source {
+        case .title(let state):
+            return (MenuBarAX.string(found.element, kAXTitleAttribute) ?? item()?.title).flatMap(state)
+        case .elsewhere(let readState):
+            return readState()
         }
     }
 
@@ -94,7 +136,7 @@ public final class MenuTitleFavorite: @unchecked Sendable {
         for top in MenuBarAX.menuChildren(bar) {
             for candidate in MenuBarAX.menuChildren(top) {
                 let title = MenuBarAX.string(candidate, kAXTitleAttribute) ?? ""
-                guard state(title) != nil else { continue }
+                guard recognizes(title) else { continue }
                 if let commandKey, MenuBarAX.string(candidate, "AXMenuItemCmdChar") != commandKey { continue }
                 return (title, candidate)
             }

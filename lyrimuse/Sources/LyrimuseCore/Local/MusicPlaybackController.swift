@@ -382,15 +382,15 @@ public enum MusicPlaybackController {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic
     }
 
-    /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐和网易云音乐(菜单栏「喜欢歌曲」)。
+    /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐、网易云音乐和酷狗音乐(菜单栏「喜欢歌曲」)。
     public static func supportsFavorite(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease
+        player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease || player == .kugou
     }
 
-    /// 「喜欢」靠它菜单栏里一项的标题读写的播放器(`MenuTitleFavorite`)。换歌后那个标题要过一会儿才换成新那首的状态
-    /// (网易云实测 0.16~0.27 秒),这段时间里读、写都按 `menuFavoriteSettleSeconds` 往后推,见 07 章决策 147。
+    /// 「喜欢」靠按它菜单栏里一项读写的播放器(`MenuTitleFavorite`)。换歌后那一项的标题(酷狗是播放条那颗心)要过一会儿才换成
+    /// 新那首的状态(网易云实测 0.16~0.27 秒),这段时间里读、写都按 `menuFavoriteSettleSeconds` 往后推,见 07 章决策 147。
     public static func favoriteReadsMenuTitle(_ player: PlaybackPlayer) -> Bool {
-        player == .qqMusic || player == .netease
+        player == .qqMusic || player == .netease || player == .kugou
     }
 
     /// 换歌后多久菜单标题才算换成了新那首的状态。
@@ -409,6 +409,7 @@ public enum MusicPlaybackController {
         case .kaset: return kasetControls()?.liked
         case .qqMusic: return QQMusicMenuControl.readFavorited()
         case .netease: return NetEaseMenuControl.readFavorited()
+        case .kugou: return KugouMenuControl.readFavorited()
         default: return nil
         }
     }
@@ -431,6 +432,8 @@ public enum MusicPlaybackController {
             return QQMusicMenuControl.setFavorited(value)
         case .netease:
             return NetEaseMenuControl.setFavorited(value)
+        case .kugou:
+            return KugouMenuControl.setFavorited(value)
         default:
             return false
         }

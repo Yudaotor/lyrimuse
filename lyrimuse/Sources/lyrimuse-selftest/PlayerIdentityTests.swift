@@ -101,6 +101,8 @@ func runPlayerIdentityTests() {
         expectEqual(MusicPlaybackController.supportsFavorite(.spotify), false, "能力: Spotify 没有喜欢")
         expectEqual(MusicPlaybackController.supportsFavorite(.netease), true,
                     "能力: 网易云有喜欢(菜单栏「喜欢歌曲」,没有播放模式和音量)")
+        expectEqual(MusicPlaybackController.supportsFavorite(.kugou), true,
+                    "能力: 酷狗有喜欢(按菜单栏「喜欢歌曲」,读播放条那颗心)")
 
         // 播放控制发给谁:media-control 的指令作用于系统焦点,焦点被别的 App 占着、屏上这首靠 AppleScript
         // 回退问到时,要直接发给那个播放器,否则网页视频被暂停 / 被切走。
@@ -583,7 +585,7 @@ func runPlayerIdentityTests() {
                                         .favorite, .resume, .learnsAnchorLag, .spatialAudioOffset]),
             .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .catalogMenuRows]),
             .netease: (.netease, [.favorite, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
-            .kugou: (nil, [.lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime]),
+            .kugou: (nil, [.favorite, .lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime]),
             .soda: (.soda, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
                               .snapsToReportedPosition, .stampsCaptureTime, .catalogMenuRows]),
@@ -888,8 +890,19 @@ func runPlayerIdentityTests() {
         expectEqual(Q.favorite.commandKey, nil, "QQ 喜欢: 只看标题")
         // 换歌后菜单标题要过一会儿才换成新那首(网易云实测 0.16~0.27 秒):靠菜单标题的播放器写「喜欢」往后推(07 章决策 147)。
         typealias C = MusicPlaybackController
-        expectEqual(PlaybackPlayer.allCases.filter(C.favoriteReadsMenuTitle), [.qqMusic, .netease].filter { PlaybackPlayer.allCases.contains($0) },
-                    "菜单标题喜欢: 只有 QQ 音乐和网易云")
+        expectEqual(PlaybackPlayer.allCases.filter(C.favoriteReadsMenuTitle),
+                    [.qqMusic, .netease, .kugou].filter { PlaybackPlayer.allCases.contains($0) },
+                    "菜单喜欢: 只有 QQ 音乐、网易云和酷狗")
+        // 酷狗那一项标题不变,状态读播放条那颗心;按总时长文字认播放条,歌单列表各行的心不算(07 章决策 148)。
+        typealias K = KugouMenuControl
+        expectEqual([K.favorited(forHeartDescription: "取消收藏"), K.favorited(forHeartDescription: "收藏"),
+                     K.favorited(forHeartDescription: "收藏10w+"), K.favorited(forHeartDescription: "")],
+                    [true, false, nil, nil], "酷狗喜欢: 心写「取消收藏」= 喜欢了,歌单的收藏数不算")
+        expectEqual([K.isPlayBarDuration(" / 03:04"), K.isPlayBarDuration("/ 125:00"), K.isPlayBarDuration("02:48"),
+                     K.isPlayBarDuration("Mistletoe - Justin Bieber")],
+                    [true, true, false, false], "酷狗喜欢: 播放条按「 / 总时长」那段文字认")
+        expectEqual(K.favorite.commandKey, "L", "酷狗喜欢: 菜单那一项连同快捷键 ⌘L 一起认")
+        expectEqual(K.bundleID, PlaybackPlayer.kugou.bundleIdentifier, "酷狗喜欢: 认的是酷狗那个进程")
         expectEqual(C.favoriteWriteDelay(for: .netease, sinceTrackChange: 0.2), C.menuFavoriteSettleSeconds - 0.2,
                     "菜单标题喜欢: 刚换歌就点,等到标题换好")
         expectEqual(C.favoriteWriteDelay(for: .netease, sinceTrackChange: 5), 0, "菜单标题喜欢: 换歌很久了不等")
