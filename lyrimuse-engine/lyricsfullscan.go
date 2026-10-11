@@ -424,15 +424,16 @@ func lyricsFullScanCandidates() []string {
 func lyricsFullScanEach(visit func(key string, tier int)) {
 	// pin 快照必须在拿 enrichMu **之前**取:它要读文件,不能把几千条的循环连同一次 Stat
 	// 一起压在缓存锁里(见 lyricsPinnedKeys 头注)。
-	pins := lyricsPinnedKeys()
+	pins, content := lyricsPinSnapshot()
 	passStart := readLyricsFullScanState().StartedAt
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
 	polluted := lyricsPollutedKeys(enrichCache)
+	calibrated := songShareCalibrationsLocked(pins, content)
 	for key, e := range enrichCache {
 		// 挑候选这一刻在途的照样挑:一场要跑一两天,这里排除的话不重启就再也轮不到它。轮到时 lyricsFullScanOne
 		// 会再核一遍(那时还在途就算跳过)。
-		tier := lyricsFullScanTier(e, pins[key], false, passStart)
+		tier := lyricsFullScanTier(e, pins[key] || calibrated.holds(e), false, passStart)
 		if tier < 0 {
 			continue
 		}
@@ -497,19 +498,21 @@ func publishLyricsFullScanPending() {
 // 被播到(自己升级过了)、被用户手改/删除/校准。
 func lyricsFullScanOne(ctx context.Context, key string) lyricsSweepOutcome {
 	artist, title, album := splitEnrichKey(key)
+	pins, content := lyricsPinSnapshot() // 读文件,拿 enrichMu 之前取(见 lyricsPinnedKeys 头注)
 	enrichMu.Lock()
 	before, ok := enrichCache[key]
 	if !ok || before.ManualLyrics || before.Instrumental || enrichInflight[key] {
 		enrichMu.Unlock()
 		return lyricsSweepOutcome{skipped: true}
 	}
+	calibrated := pins[key] || songShareCalibrationsLocked(pins, content).holds(before)
 	enrichMu.Unlock()
 	// 没词的整条交给补空那支:写回规则(升级/纯音乐标记/纯文本兜底/退避账)全在那边,
 	// 这里一个字都不重写。它自己会重新取锁、重新核资格。
 	if before.Lyrics == "" {
 		return lyricsFillSweepOne(ctx, key)
 	}
-	if lyricsPinned(key) {
+	if calibrated {
 		return lyricsSweepOutcome{skipped: true}
 	}
 	duration := before.ResolvedDurationSecs

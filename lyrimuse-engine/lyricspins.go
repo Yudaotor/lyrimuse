@@ -34,17 +34,22 @@ type lyricsPinsFile struct {
 	// 时候校准的),引擎只关心键在不在,不读值 —— 刻意不在这里存校正毫秒数:那份
 	// 值的权威源是 App 的 UserDefaults,复制一份到这里只会多一处会漂的状态。
 	Pins map[string]int64 `json:"pins"`
+	// enrichKey -> 这条 pin 的校正值对着哪一份歌词(单曲偏移键里的歌词指纹,songOffsetFingerprint)。App 钉住、
+	// 播放到它重新对一遍时写;旧版 App 没写过、或者那一刻拿不到正文时缺。歌曲实体按它判同组的写法能不能跟着这份
+	// 歌词、读穿这个偏移(见 songentityshare.go)。
+	Content map[string]string `json:"content,omitempty"`
 }
 
 var (
 	// 由 main() 跟其余缓存路径一起设定;为空(一次性 CLI 子命令那些提前返回的分支)时
 	// lyricsPinned 一律返回 false。
-	lyricsPinsPath  string
-	lyricsPinsMu    sync.Mutex
-	lyricsPins      map[string]bool
-	lyricsPinsMTime time.Time
-	lyricsPinsSize  int64
-	lyricsPinsRead  bool
+	lyricsPinsPath   string
+	lyricsPinsMu     sync.Mutex
+	lyricsPins       map[string]bool
+	lyricsPinContent map[string]string
+	lyricsPinsMTime  time.Time
+	lyricsPinsSize   int64
+	lyricsPinsRead   bool
 )
 
 // lyricsPinned 判断这个 enrich key 是否被用户校准过时间轴。
@@ -74,19 +79,29 @@ func lyricsPinned(key string) bool {
 // 拷贝而不是把 lyricsPins 直接递出去:那张表下一次 mtime 变化会被整体替换,调用方拿着
 // 旧引用遍历时正好撞上就是 data race。快照只有几十个键,拷贝的代价可以忽略。
 func lyricsPinnedKeys() map[string]bool {
+	pins, _ := lyricsPinSnapshot()
+	return pins
+}
+
+// lyricsPinSnapshot:lyricsPinnedKeys 连同每条 pin 的校正值对着的歌词指纹(lyricsPinsFile.Content,只有钉着、记了的)。
+func lyricsPinSnapshot() (map[string]bool, map[string]string) {
 	if lyricsPinsPath == "" {
-		return nil
+		return nil, nil
 	}
 	lyricsPinsMu.Lock()
 	defer lyricsPinsMu.Unlock()
 	refreshLyricsPinsLocked()
-	snapshot := make(map[string]bool, len(lyricsPins))
+	pins := make(map[string]bool, len(lyricsPins))
+	content := make(map[string]string, len(lyricsPinContent))
 	for key, pinned := range lyricsPins {
 		if pinned {
-			snapshot[key] = true
+			pins[key] = true
+			if fp := lyricsPinContent[key]; fp != "" {
+				content[key] = fp
+			}
 		}
 	}
-	return snapshot
+	return pins, content
 }
 
 // refreshLyricsPinsLocked 按 mtime+大小决定要不要重读整份文件。调用方必须已持有 lyricsPinsMu。
@@ -95,12 +110,12 @@ func refreshLyricsPinsLocked() {
 	if err != nil {
 		// 文件还不存在(从没校准过任何一首歌)是正常状态、不是错误:清掉内存态,一律不 pin。
 		// 也覆盖了"用户刚点了『清空全部时间轴校正』把文件删掉"这一步。
-		lyricsPins, lyricsPinsRead = nil, true
+		lyricsPins, lyricsPinContent, lyricsPinsRead = nil, nil, true
 		lyricsPinsMTime, lyricsPinsSize = time.Time{}, 0
 		return
 	}
 	if !lyricsPinsRead || !st.ModTime().Equal(lyricsPinsMTime) || st.Size() != lyricsPinsSize {
-		lyricsPins = readLyricsPins(lyricsPinsPath)
+		lyricsPins, lyricsPinContent = readLyricsPins(lyricsPinsPath)
 		lyricsPinsMTime, lyricsPinsSize, lyricsPinsRead = st.ModTime(), st.Size(), true
 	}
 }
@@ -108,16 +123,16 @@ func refreshLyricsPinsLocked() {
 // readLyricsPins 读整份 pin 文件。解析失败一律当"没有任何 pin",而不是 panic 或沿用上
 // 一次的内存态:这份文件是 App 写的,读坏了最坏的后果是这一轮该保护的没保护到(下一次
 // 写入会把 mtime 推新、自然重试),而沿用旧内存态会让"清空"这个动作在坏文件下永久不生效。
-func readLyricsPins(path string) map[string]bool {
+func readLyricsPins(path string) (map[string]bool, map[string]string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		noteFileErr("read", path, err)
-		return nil
+		return nil, nil
 	}
 	var f lyricsPinsFile
 	if err := json.Unmarshal(data, &f); err != nil {
 		warnf("lyrics pins: cannot parse %s, treating as empty: %v", path, err)
-		return nil
+		return nil, nil
 	}
 	out := make(map[string]bool, len(f.Pins))
 	for k := range f.Pins {
@@ -125,5 +140,5 @@ func readLyricsPins(path string) map[string]bool {
 			out[k] = true
 		}
 	}
-	return out
+	return out, f.Content
 }

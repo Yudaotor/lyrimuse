@@ -48,7 +48,7 @@ public final class LyricsOffsetStore: ObservableObject {
         let loaded = Self.load()
         offsets = Self.migratedOffsetKeys(loaded)
         let didMigrateKeys = offsets != loaded
-        trackOffsetCount = offsets.count
+        trackOffsetCount = Self.nonZeroCount(offsets)
         // 没存过就是 0(integer(forKey:) 对缺失键返回 0),正好是"不偏移"。
         globalOffsetMs = UserDefaults.standard.integer(forKey: Self.globalDefaultsKey)
         playerOffsets = Self.loadPlayerOffsets()
@@ -151,8 +151,10 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 自己写 `global + track` —— 多处各加一次就是双倍校正,而那种 bug 只在
     /// "两条路径都跑过"的特定顺序下才露出来。
     /// - radioKey: 放电台时那首歌在这个台上的 key(见 radioOffsets);空串/nil = 不是电台,这一层按 0 算。
-    public func effectiveOffset(forKey key: String, bundleID: String? = nil, radioKey: String? = nil) -> Int {
-        baseOffsetMs(forBundleID: bundleID) + offset(forKey: key) + radioOffset(forKey: radioKey ?? "")
+    /// - siblings: 同一首歌别的写法,单曲那层按它读穿(见 offset(forKey:siblings:))。
+    public func effectiveOffset(forKey key: String, bundleID: String? = nil, radioKey: String? = nil,
+                                siblings: LyricsOffsetSiblings) -> Int {
+        baseOffsetMs(forBundleID: bundleID) + offset(forKey: key, siblings: siblings) + radioOffset(forKey: radioKey ?? "")
     }
 
     // MARK: - 按「电台 + 曲目」偏移
@@ -336,9 +338,30 @@ public final class LyricsOffsetStore: ObservableObject {
     /// 显示的("已校准 N 首"+清空入口),清空之后必须当场变 0,不能等下次开窗。
     @Published public private(set) var trackOffsetCount: Int
 
+    /// 这条写法**自己**键下的值。自动钉 / 解钉(syncPinToOffset)和改字后搬偏移只看它;显示、生效、在现有值上加减用
+    /// offset(forKey:siblings:)。
     public func offset(forKey key: String) -> Int {
         guard isValid(key) else { return 0 }
         return offsets[key] ?? 0
+    }
+
+    /// 这条写法这份歌词实际用的单曲偏移:自己键下有记录(含为了不借别人的而记的 0)就用它,没有就按 siblings 的顺序借
+    /// 同一份歌词指纹下第一个非零的。同一首歌、同一份歌词,时间轴本来就该一样(见 LyricsOffsetSiblings)。
+    public func offset(forKey key: String, siblings: LyricsOffsetSiblings) -> Int {
+        guard isValid(key) else { return 0 }
+        return offsets[key] ?? inheritedOffset(forKey: key, siblings: siblings)
+    }
+
+    /// siblings 在 key 那份歌词下第一个非零的值,不看这条自己。
+    private func inheritedOffset(forKey key: String, siblings: LyricsOffsetSiblings) -> Int {
+        for k in siblings.keys(for: key) {
+            if let v = offsets[k], v != 0 { return v }
+        }
+        return 0
+    }
+
+    private nonisolated static func nonZeroCount(_ table: [String: Int]) -> Int {
+        table.values.reduce(0) { $1 != 0 ? $0 + 1 : $0 }
     }
 
     // 三个写入口都要求传 pinKey(归一化的 enrich key),不给默认值:调过时间轴的歌要
@@ -346,21 +369,32 @@ public final class LyricsOffsetStore: ObservableObject {
     // 给默认值等于允许某条路径静默漏掉这件事,而漏掉的表现是"用户校准过的歌过一阵自己
     // 又不准了",极难归因 —— 这个仓库在 offset key 上已经栽过一次同类的坑(见
     // currentLyricsOffsetMs 的注释)。拿不到 enrich key 时显式传空串,setPinned 会跳过。
+    // siblings 同理不给默认值:漏传的路径会从 0 而不是从读穿来的值上加减,重置也会被读穿抵掉。
     @discardableResult
-    public func nudge(by deltaMs: Int, forKey key: String, pinKey: String) -> Int {
-        let newValue = offset(forKey: key) + deltaMs
-        set(newValue, forKey: key, pinKey: pinKey)
+    public func nudge(by deltaMs: Int, forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) -> Int {
+        let newValue = offset(forKey: key, siblings: siblings) + deltaMs
+        set(newValue, forKey: key, pinKey: pinKey, siblings: siblings)
         return newValue
     }
 
-    public func reset(forKey key: String, pinKey: String) {
-        set(0, forKey: key, pinKey: pinKey)
+    public func reset(forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) {
+        set(0, forKey: key, pinKey: pinKey, siblings: siblings)
     }
 
     // 直接赋一个绝对值——供"歌词管理"里那个输入框用(用户自己敲一个具体的秒数),跟
     // nudge() 的"在现有值上累加"是两种不同的调用方式,内部走的还是同一个 set()。
-    public func setOffset(_ ms: Int, forKey key: String, pinKey: String) {
-        set(ms, forKey: key, pinKey: pinKey)
+    public func setOffset(_ ms: Int, forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) {
+        set(ms, forKey: key, pinKey: pinKey, siblings: siblings)
+    }
+
+    /// 只改了字、时间轴没动的保存:这条写法的单曲偏移从旧正文的 key 搬到新正文下(新正文下自己已经有值就不动)。旧正文下的
+    /// 值是从同一首歌别的写法读穿来的,照样记到这条写法新正文下,别的写法那条不动。
+    public func carryOffset(from oldKey: String, to newKey: String, pinKey: String, siblings: LyricsOffsetSiblings) {
+        let own = offset(forKey: oldKey)
+        let ms = offset(forKey: oldKey, siblings: siblings)
+        guard ms != 0, oldKey != newKey, offset(forKey: newKey) == 0 else { return }
+        if own != 0 { set(0, forKey: oldKey, pinKey: "", siblings: .none) }
+        set(ms, forKey: newKey, pinKey: pinKey, siblings: siblings)
     }
 
     /// 播放到这首歌时,把它的"已校准"钉住状态跟当前校正值重新对一遍——维护的是 set() 里
@@ -389,7 +423,27 @@ public final class LyricsOffsetStore: ObservableObject {
         if offset(forKey: key) == 0, LyricsPinStore.shared.isPinned(pinKey) {
             carryOverOffset(to: key)
         }
-        LyricsPinStore.shared.setPinned(offset(forKey: key) != 0, forKey: pinKey)
+        LyricsPinStore.shared.setPinned(offset(forKey: key) != 0, forKey: pinKey, content: Self.fingerprint(ofKey: key))
+    }
+
+    /// 单曲偏移键的第三段(歌词指纹);没有就是空串。
+    nonisolated static func fingerprint(ofKey key: String) -> String {
+        guard let sep = key.lastIndex(of: "|") else { return "" }
+        return String(key[key.index(after: sep)...])
+    }
+
+    /// 校准名单里还没记校准对着哪份歌词的 pin,按现有的单曲偏移补上:这首歌(`歌手|歌名`)只在一份歌词下有非零值时记那一份,
+    /// 有几份的猜不出是哪份、不记。App 启动时调一次;记下之后播放到它时 syncPinToOffset 照常更新。
+    public func backfillPinContent() {
+        let pins = LyricsPinStore.shared
+        for key in pins.pins.keys where pins.content(forKey: key) == nil {
+            let prefix = LyricsOffsetSiblings.name(ofWritingKey: key) + "|"
+            let found = offsets.filter {
+                $0.value != 0 && $0.key.hasPrefix(prefix) && !$0.key.dropFirst(prefix.count).contains("|")
+            }
+            guard found.count == 1, let only = found.first?.key else { continue }
+            pins.setPinned(true, forKey: key, content: Self.fingerprint(ofKey: only))
+        }
     }
 
     private func carryOverOffset(to key: String) {
@@ -398,12 +452,12 @@ public final class LyricsOffsetStore: ObservableObject {
         let prefix = key[...lastSep]
         // 同一首歌 = 前两段(歌手|歌名)相同、只有第三段指纹不同。
         let candidates = offsets.keys.filter {
-            $0 != key && $0.hasPrefix(prefix) && !$0.dropFirst(prefix.count).contains("|")
+            $0 != key && $0.hasPrefix(prefix) && !$0.dropFirst(prefix.count).contains("|") && offsets[$0] != 0
         }
         guard candidates.count == 1, let old = candidates.first, let value = offsets[old] else { return }
         offsets[key] = value
         offsets.removeValue(forKey: old)
-        trackOffsetCount = offsets.count
+        trackOffsetCount = Self.nonZeroCount(offsets)
         persist()
         logger.notice("offset carried over to rewritten lyrics: \(value, privacy: .public)ms")
     }
@@ -416,7 +470,7 @@ public final class LyricsOffsetStore: ObservableObject {
         guard old != new, let value = offsets[old] else { return }
         if offsets[new] == nil { offsets[new] = value }
         offsets.removeValue(forKey: old)
-        trackOffsetCount = offsets.count
+        trackOffsetCount = Self.nonZeroCount(offsets)
         persist()
         logger.notice("offset key migrated off the BOM fingerprint: \(value, privacy: .public)ms")
     }
@@ -445,14 +499,15 @@ public final class LyricsOffsetStore: ObservableObject {
         !key.replacingOccurrences(of: "|", with: "").isEmpty
     }
 
-    private func set(_ ms: Int, forKey key: String, pinKey: String) {
+    private func set(_ ms: Int, forKey key: String, pinKey: String, siblings: LyricsOffsetSiblings) {
         guard isValid(key) else { return }
-        if ms == 0 {
+        if ms == 0, inheritedOffset(forKey: key, siblings: siblings) == 0 {
             offsets.removeValue(forKey: key)
         } else {
+            // 归零时同一首歌别的写法在这份歌词下还有值:记一个 0,不然读穿又把它借回来,「重置」等于没按。
             offsets[key] = ms
         }
-        trackOffsetCount = offsets.count
+        trackOffsetCount = Self.nonZeroCount(offsets)
         persist()
         logger.notice("offset set to \(ms, privacy: .public)ms key=\(key, privacy: .public)")
         // 校正值非零 = 用户已经亲手把这首歌调准了 → 钉住它,引擎不再自动重选歌词源
@@ -464,7 +519,7 @@ public final class LyricsOffsetStore: ObservableObject {
         // pinKey 为空(拿不到 enrich key / selftest 只测偏移那几条)时连单例都不碰 ——
         // LyricsPinStore 一被访问就会去读真实路径那份文件,不该为一次空操作付这个代价。
         if !pinKey.isEmpty {
-            LyricsPinStore.shared.setPinned(ms != 0, forKey: pinKey)
+            LyricsPinStore.shared.setPinned(ms != 0, forKey: pinKey, content: Self.fingerprint(ofKey: key))
         }
     }
 
@@ -504,5 +559,31 @@ public final class LyricsOffsetStore: ObservableObject {
             return [:]
         }
         return decoded
+    }
+}
+
+/// 同一首歌(歌曲实体)别的写法,按单曲偏移键的前两段 `歌手|歌名`(已归一化)列:歌词同步来的那条排最前,其余按写法键排,
+/// 不含这条自己。单曲偏移在这条写法自己的键下没有值时,按这个顺序借它们**同一份歌词指纹**下的值(EnrichCacheReader
+/// .offsetSiblings 给;见 18 章决策 27)。电台那一层不读穿。
+public struct LyricsOffsetSiblings: Equatable, Sendable {
+    public let names: [String]
+
+    public init(names: [String]) { self.names = names }
+
+    public static let none = LyricsOffsetSiblings(names: [])
+
+    /// 这几条写法在 key 那份歌词下的单曲偏移键。指纹段为空(还拿不到正文)时没有。
+    func keys(for key: String) -> [String] {
+        guard let sep = key.lastIndex(of: "|") else { return [] }
+        let fingerprint = key[key.index(after: sep)...]
+        guard !fingerprint.isEmpty else { return [] }
+        return names.map { "\($0)|\(fingerprint)" }.filter { $0 != key }
+    }
+
+    /// 缓存的写法键(`歌手|歌名|专辑`,歌名段可能带时长变体位)→ 它的单曲偏移键前两段。
+    public nonisolated static func name(ofWritingKey key: String) -> String {
+        let parts = EnrichCacheKeys.strippingDurationVariant(key).split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+        guard parts.count == 3 else { return key }
+        return "\(parts[0])|\(parts[1])"
     }
 }

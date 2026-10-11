@@ -144,32 +144,32 @@ func runLyricsOffsetTests() {
         // 起点归零 —— 这个 store 落在 UserDefaults 上(selftest 是独立可执行文件,域是
         // lyrimuse-selftest,污染不到用户的 App;但那份 plist 跨运行持久,不清会读到上次的残留)。
         store.setGlobalOffset(0)
-        store.reset(forKey: key, pinKey: "")
+        store.reset(forKey: key, pinKey: "", siblings: .none)
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
-        expectEqual(store.effectiveOffset(forKey: key), 0, "偏移: 各层都没调时是 0")
+        expectEqual(store.effectiveOffset(forKey: key, siblings: .none), 0, "偏移: 各层都没调时是 0")
 
         store.setGlobalOffset(300)
-        expectEqual(store.effectiveOffset(forKey: key), 300, "偏移: 只有全局基准时按它算")
+        expectEqual(store.effectiveOffset(forKey: key, siblings: .none), 300, "偏移: 只有全局基准时按它算")
 
-        store.nudge(by: -100, forKey: key, pinKey: "")
+        store.nudge(by: -100, forKey: key, pinKey: "", siblings: .none)
         expectEqual(store.offset(forKey: key), -100, "偏移: 单曲微调独立记账")
-        expectEqual(store.effectiveOffset(forKey: key), 200, "偏移: 生效值 = 全局 + 单曲")
+        expectEqual(store.effectiveOffset(forKey: key, siblings: .none), 200, "偏移: 生效值 = 全局 + 单曲")
 
-        store.reset(forKey: key, pinKey: "")
+        store.reset(forKey: key, pinKey: "", siblings: .none)
         expectEqual(store.offset(forKey: key), 0, "偏移: 重置清掉单曲微调")
         expectEqual(store.globalOffsetMs, 300, "偏移: 重置不动全局基准")
-        expectEqual(store.effectiveOffset(forKey: key), 300, "偏移: 重置后回到全局基准")
+        expectEqual(store.effectiveOffset(forKey: key, siblings: .none), 300, "偏移: 重置后回到全局基准")
 
-        store.setOffset(-250, forKey: key, pinKey: "")
+        store.setOffset(-250, forKey: key, pinKey: "", siblings: .none)
         store.setGlobalOffset(-50)
         expectEqual(store.offset(forKey: key), -250, "偏移: 改全局基准不动单曲微调")
-        expectEqual(store.effectiveOffset(forKey: key), -300, "偏移: 两个负值相加")
+        expectEqual(store.effectiveOffset(forKey: key, siblings: .none), -300, "偏移: 两个负值相加")
 
         // 空 key(从没拿到过曲目信息)不该被当成一首歌记账 —— 但全局基准跟曲目无关,照样生效
         store.setGlobalOffset(120)
-        store.nudge(by: 500, forKey: "||", pinKey: "")
+        store.nudge(by: 500, forKey: "||", pinKey: "", siblings: .none)
         expectEqual(store.offset(forKey: "||"), 0, "偏移: 空 key 不记账")
-        expectEqual(store.effectiveOffset(forKey: "||"), 120, "偏移: 空 key 下全局基准仍然生效")
+        expectEqual(store.effectiveOffset(forKey: "||", siblings: .none), 120, "偏移: 空 key 下全局基准仍然生效")
 
         // ---- 「按播放器」那一层----
         //
@@ -186,7 +186,7 @@ func runLyricsOffsetTests() {
         let arc = "company.thebrowser.Browser"
         let appleMusic = PlaybackPlayer.appleMusic.bundleIdentifier
         store.setGlobalOffset(0)
-        store.reset(forKey: key, pinKey: "")
+        store.reset(forKey: key, pinKey: "", siblings: .none)
 
         expectEqual(store.playerOffset(forBundleID: nil), 0, "按播放器: 没有播放器身份时是 0")
         expectEqual(store.playerOffset(forBundleID: ""), 0, "按播放器: 空 bundle id 是 0")
@@ -194,17 +194,17 @@ func runLyricsOffsetTests() {
 
         store.setPlayerOffset(800, forBundleID: arc)
         store.setGlobalOffset(100)
-        store.setOffset(-50, forKey: key, pinKey: "")
+        store.setOffset(-50, forKey: key, pinKey: "", siblings: .none)
         // 二选一:Arc 单独配过 → 只用它那档(800),「全部」那 100 完全不参与。
         expectEqual(store.baseOffsetMs(forBundleID: arc), 800, "按播放器: 配过就只用自己那档,不加全部")
-        expectEqual(store.effectiveOffset(forKey: key, bundleID: arc), 750,
+        expectEqual(store.effectiveOffset(forKey: key, bundleID: arc, siblings: .none), 750,
                     "按播放器: 生效值 = 自己那档 + 单曲(800 - 50)")
         // 最要紧的一条:绝不串台。同一首歌换个播放器,Arc 那档一点都不许漏进去 —— 没单独配过的
         // 播放器退回「全部」那档。
         expectEqual(store.baseOffsetMs(forBundleID: appleMusic), 100, "按播放器: 没配过的退回全部那档")
-        expectEqual(store.effectiveOffset(forKey: key, bundleID: appleMusic), 50,
+        expectEqual(store.effectiveOffset(forKey: key, bundleID: appleMusic, siblings: .none), 50,
                     "按播放器: 换播放器不吃别人那档(100 - 50)")
-        expectEqual(store.effectiveOffset(forKey: key), 50,
+        expectEqual(store.effectiveOffset(forKey: key, siblings: .none), 50,
                     "按播放器: 省略 bundleID 时用全部那档,不猜播放器")
 
         // 把单独那档调回 0 = 撤掉单独设置,重新跟随「全部」(零值不落盘,两件事是同一件)。
@@ -214,8 +214,8 @@ func runLyricsOffsetTests() {
         // 负值同理:单独那档为负、全部为正,生效的只有单独那档。
         store.setGlobalOffset(300)
         store.setPlayerOffset(-200, forBundleID: arc)
-        store.setOffset(-50, forKey: key, pinKey: "")
-        expectEqual(store.effectiveOffset(forKey: key, bundleID: arc), -250,
+        store.setOffset(-50, forKey: key, pinKey: "", siblings: .none)
+        expectEqual(store.effectiveOffset(forKey: key, bundleID: arc, siblings: .none), -250,
                     "按播放器: 单独那档为负时也不叠加全部(-200 - 50)")
 
         // 零值不落盘 —— 设置页那个下拉框靠"字典里有谁"来列"配过的播放器",留一个 0 进去就会
@@ -235,7 +235,7 @@ func runLyricsOffsetTests() {
 
         // 收尾:别把测试值留在 UserDefaults 里
         store.setGlobalOffset(0)
-        store.reset(forKey: key, pinKey: "")
+        store.reset(forKey: key, pinKey: "", siblings: .none)
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
     }
 
@@ -324,7 +324,7 @@ func runLyricsOffsetTests() {
         expectEqual(keyA == keyB, false, "已校准: 两份不同歌词内容的 offset key 本来就不同")
         expectEqual(pins.isPinned(pinKey), false, "已校准: 起点是干净的")
 
-        store.nudge(by: 300, forKey: keyA, pinKey: pinKey)
+        store.nudge(by: 300, forKey: keyA, pinKey: pinKey, siblings: .none)
         expectEqual(pins.isPinned(pinKey), true, "已校准: 调过偏移就自动钉住,不需要另外开开关")
 
         // 关键一条:同一首歌换了一份歌词内容 → 旧校正值查不到(这是既有设计,内容指纹变了),
@@ -333,11 +333,11 @@ func runLyricsOffsetTests() {
         expectEqual(store.offset(forKey: keyB), 0, "已校准: 换内容后旧校正值查不到(既有设计)")
         expectEqual(pins.isPinned(pinKey), true, "已校准: 换歌词内容不该让 pin 失效")
 
-        store.reset(forKey: keyA, pinKey: pinKey)
+        store.reset(forKey: keyA, pinKey: pinKey, siblings: .none)
         expectEqual(pins.isPinned(pinKey), false, "已校准: 偏移归零就自动解钉")
 
         // 空 pinKey(拿不到 enrich key)时什么都不该钉 —— 否则会长出一条谁都匹配不上的记录。
-        store.nudge(by: 100, forKey: keyA, pinKey: "")
+        store.nudge(by: 100, forKey: keyA, pinKey: "", siblings: .none)
         expectEqual(pins.count, 0, "已校准: 空 pinKey 不写名单")
 
         // 存量补钉:上一步刻意造出了「有校正值但没 pin」这个状态(等价于 pin 机制上线之前
@@ -347,7 +347,7 @@ func runLyricsOffsetTests() {
         expectEqual(pins.isPinned(pinKey), true, "同步: 存量非零校正值会被补上 pin")
 
         // 校正值是 0 的歌绝不该被补钉 —— 那样全库每首歌都会进名单、后台升级整个停摆。
-        store.reset(forKey: keyA, pinKey: pinKey)
+        store.reset(forKey: keyA, pinKey: pinKey, siblings: .none)
         store.syncPinToOffset(forKey: keyA, pinKey: pinKey)
         expectEqual(pins.count, 0, "同步: 校正值为 0 不补钉")
 
@@ -365,7 +365,7 @@ func runLyricsOffsetTests() {
         // ---- 「清空全部时间轴校正」----
         store.setGlobalOffset(700)
         store.setPlayerOffset(-300, forBundleID: "company.thebrowser.Browser")
-        store.setOffset(-900, forKey: keyA, pinKey: pinKey)
+        store.setOffset(-900, forKey: keyA, pinKey: pinKey, siblings: .none)
         expectEqual(store.trackOffsetCount, 1, "清空: 计数跟着写入走")
         expectEqual(pins.isPinned(pinKey), true, "清空: 前提——这首已经钉住了")
 
@@ -388,6 +388,142 @@ func runLyricsOffsetTests() {
         // 收尾
         store.setGlobalOffset(0)
         for id in store.playerOffsets.keys { store.setPlayerOffset(0, forBundleID: id) }
+    }
+
+    // ---- 单曲偏移按同一首歌读穿(18 章决策 27)----
+    //
+    // 自己键下没有记录才借,借的是同一份歌词指纹下的;加减从借来的值起算、写进自己的键;借着别人的值时归零要记一个 0,
+    // 不然「重置」被读穿抵掉;自动钉 / 解钉只看自己的键;改字搬偏移连借来的值一起搬;校准名单记下校正值对着哪份歌词。
+    MainActor.assumeIsolated {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lyrimuse-selftest-pins-inherit-\(ProcessInfo.processInfo.processIdentifier).json")
+        LyricsPinStore.redirectForTesting(to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let store = LyricsOffsetStore.shared
+        let pins = LyricsPinStore.shared
+        func fingerprint(_ key: String) -> String { String(key.split(separator: "|", omittingEmptySubsequences: false).last ?? "") }
+        let lrc = "[00:01.00]读穿测试\n", other = "[00:02.00]另一份\n"
+        let mine = LyricsOffsetStore.trackKey(artist: "读穿歌手", title: "读穿歌名", lyrics: lrc, lyricsYRC: "")
+        let theirs = LyricsOffsetStore.trackKey(artist: "Inherit Artist", title: "Inherit Title", lyrics: lrc, lyricsYRC: "")
+        let theirsOther = LyricsOffsetStore.trackKey(artist: "Inherit Artist", title: "Inherit Title", lyrics: other, lyricsYRC: "")
+        let third = LyricsOffsetStore.trackKey(artist: "第三写法", title: "第三歌名", lyrics: lrc, lyricsYRC: "")
+        let thirdOther = LyricsOffsetStore.trackKey(artist: "第三写法", title: "第三歌名", lyrics: other, lyricsYRC: "")
+        let siblings = LyricsOffsetSiblings(names: ["Inherit Artist|Inherit Title", "第三写法|第三歌名"])
+        let pinMine = "读穿歌手|读穿歌名|专辑", pinTheirs = "Inherit Artist|Inherit Title|Album", pinThird = "第三写法|第三歌名|专辑"
+        store.setGlobalOffset(0)
+        store.clearAllTrackOffsets()
+
+        store.setOffset(400, forKey: theirsOther, pinKey: "", siblings: .none)
+        expectEqual(store.offset(forKey: mine, siblings: siblings), 0, "读穿: 别的写法只在另一份歌词下有值,借不到")
+        store.setOffset(300, forKey: theirs, pinKey: pinTheirs, siblings: .none)
+        store.setOffset(-200, forKey: third, pinKey: "", siblings: .none)
+        expectEqual(store.offset(forKey: mine), 0, "读穿: 自己键下没有")
+        expectEqual(store.offset(forKey: mine, siblings: siblings), 300, "读穿: 按顺序借同一份歌词下第一个非零的")
+        expectEqual(store.offset(forKey: mine, siblings: LyricsOffsetSiblings(names: ["第三写法|第三歌名", "Inherit Artist|Inherit Title"])),
+                    -200, "读穿: 顺序在前的先借")
+        expectEqual(store.effectiveOffset(forKey: mine, siblings: siblings), 300, "读穿: 生效值带上借来的")
+        expectEqual(store.effectiveOffset(forKey: mine, siblings: .none), 0, "读穿: 不给其它写法就不借")
+        let noText = LyricsOffsetStore.trackKey(artist: "读穿歌手", title: "读穿歌名", lyrics: "", lyricsYRC: "")
+        store.setOffset(700, forKey: "Inherit Artist|Inherit Title|", pinKey: "", siblings: .none)
+        expectEqual(store.offset(forKey: noText, siblings: siblings), 0, "读穿: 还拿不到正文时不借")
+        store.setOffset(0, forKey: "Inherit Artist|Inherit Title|", pinKey: "", siblings: .none)
+        store.setOffset(0, forKey: third, pinKey: "", siblings: LyricsOffsetSiblings(names: ["Inherit Artist|Inherit Title"]))
+        expectEqual(store.offset(forKey: mine, siblings: LyricsOffsetSiblings(names: ["第三写法|第三歌名", "Inherit Artist|Inherit Title"])),
+                    300, "读穿: 别的写法为了不借记的 0 跳过,接着往后借")
+        store.setOffset(-200, forKey: third, pinKey: "", siblings: .none)
+
+        store.syncPinToOffset(forKey: mine, pinKey: pinMine)
+        expectEqual(pins.isPinned(pinMine), false, "读穿: 借来的值不钉")
+
+        expectEqual(store.nudge(by: 100, forKey: mine, pinKey: pinMine, siblings: siblings), 400, "读穿: 在借来的值上加")
+        expectEqual(store.offset(forKey: mine), 400, "读穿: 加完记在自己键下")
+        expectEqual(store.offset(forKey: theirs), 300, "读穿: 别的写法那条不动")
+        expectEqual(pins.isPinned(pinMine), true, "读穿: 自己调过就钉上")
+
+        store.reset(forKey: mine, pinKey: pinMine, siblings: siblings)
+        expectEqual(store.offset(forKey: mine, siblings: siblings), 0, "读穿: 借着别人的值时重置,之后是 0、不再借")
+        expectEqual(pins.isPinned(pinMine), false, "读穿: 重置之后解钉")
+        expectEqual(store.trackOffsetCount, 3, "读穿: 为了不借记的 0 不算调过")
+        store.setOffset(0, forKey: theirs, pinKey: pinTheirs, siblings: .none)
+        store.setOffset(0, forKey: third, pinKey: "", siblings: .none)
+        store.reset(forKey: mine, pinKey: pinMine, siblings: siblings)
+        store.setOffset(300, forKey: theirs, pinKey: pinTheirs, siblings: .none)
+        expectEqual(store.offset(forKey: mine, siblings: siblings), 300, "读穿: 没得借时归零就是删掉,之后照常借")
+
+        let mineNew = LyricsOffsetStore.trackKey(artist: "读穿歌手", title: "读穿歌名", lyrics: "[00:01.00]读穿测试改\n", lyricsYRC: "")
+        store.carryOffset(from: mine, to: mineNew, pinKey: pinMine, siblings: siblings)
+        expectEqual(store.offset(forKey: mineNew), 300, "读穿: 只改了字,借来的值记到自己新正文下")
+        expectEqual(store.offset(forKey: theirs), 300, "读穿: 改字不动别的写法那条")
+        expectEqual(pins.isPinned(pinMine), true, "读穿: 搬过来的值照常钉上")
+
+        let mineRewritten = LyricsOffsetStore.trackKey(artist: "读穿歌手", title: "读穿歌名", lyrics: "[00:01.00]读穿测试改 \n", lyricsYRC: "")
+        store.setOffset(0, forKey: mine, pinKey: "", siblings: siblings)
+        store.syncPinToOffset(forKey: mineRewritten, pinKey: pinMine)
+        expectEqual(store.offset(forKey: mineRewritten), 300, "接管: 为了不借记的 0 不算一条候选")
+        expectEqual(pins.isPinned(pinMine), true, "接管: 挪过来之后照旧钉着")
+
+        expectEqual(pins.content(forKey: pinMine), fingerprint(mineRewritten), "校准名单: 记下校正值对着的那份歌词,内容换了跟着换")
+        expectEqual(pins.content(forKey: pinTheirs), fingerprint(theirs), "校准名单: 调偏移时记下")
+        let onDisk = (try? String(contentsOf: tmp, encoding: .utf8)) ?? ""
+        expectEqual(onDisk.contains("\"content\""), true, "校准名单: 落盘带 content(引擎 lyricsPinsFile.Content 靠它)")
+        store.reset(forKey: theirs, pinKey: pinTheirs, siblings: .none)
+        expectEqual(pins.content(forKey: pinTheirs), nil, "校准名单: 解钉连记下的歌词一起删")
+
+        pins.setPinned(true, forKey: pinTheirs)
+        store.backfillPinContent()
+        expectEqual(pins.content(forKey: pinTheirs), fingerprint(theirsOther), "补记: 这首只在一份歌词下有值,记那一份")
+        store.setOffset(100, forKey: third, pinKey: "", siblings: .none)
+        store.setOffset(200, forKey: thirdOther, pinKey: "", siblings: .none)
+        pins.setPinned(true, forKey: pinThird)
+        store.backfillPinContent()
+        expectEqual(pins.content(forKey: pinThird), nil, "补记: 几份歌词下都有值时猜不出,不记")
+        store.setOffset(0, forKey: theirsOther, pinKey: "", siblings: .none)
+        store.setOffset(250, forKey: theirs, pinKey: "", siblings: .none)
+        store.backfillPinContent()
+        expectEqual(pins.content(forKey: pinTheirs), fingerprint(theirsOther), "补记: 已经记了的不改")
+
+        store.clearAllTrackOffsets()
+    }
+
+    // ---- 读穿的顺序:同一个实体的写法,手改副本的原件排最前,其余按写法键;按「歌手|歌名」去重,不列自己 ----
+    do {
+        func entry(_ json: String) -> EnrichCacheEntry {
+            (try? JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8)))
+                ?? (try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data("{}".utf8)))
+        }
+        let all: [String: EnrichCacheEntry] = [
+            "a|song|x": entry(#"{"song":"s_1","lyrics_entity_origin":"c|song~dur2|z"}"#),
+            "a|song|y": entry(#"{"song":"s_1"}"#),
+            "b|track|y": entry(#"{"song":"s_1"}"#),
+            "b|track|w": entry(#"{"song":"s_1"}"#),
+            "c|song~dur2|z": entry(#"{"song":"s_1"}"#),
+            "d|other|z": entry(#"{"song":"s_2"}"#),
+        ]
+        let own = all["a|song|x"] ?? entry("{}")
+        expectEqual(EnrichCacheReader.offsetSiblings(ownKey: "a|song|x", entry: own, in: all).names, ["c|song", "b|track"],
+                    "读穿顺序: 原件最前、其余按键排、按歌手歌名去重、去掉时长变体位、不列自己和别的实体")
+        expectEqual(EnrichCacheReader.offsetSiblings(ownKey: "d|other|z", entry: entry("{}"), in: all), LyricsOffsetSiblings.none,
+                    "读穿顺序: 没有实体 id 不读穿")
+        expectEqual(LyricsOffsetSiblings.name(ofWritingKey: "歌手|歌名~dur3|专辑"), "歌手|歌名", "读穿: 写法键 → 偏移键前两段")
+    }
+
+    // ---- 读穿的接线(源码契约):播放时生效、加减、重置都带上这首的其它写法;歌词管理同样;启动时补记校准对着的歌词 ----
+    do {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ rel: String) -> String { (try? String(contentsOf: sources.appendingPathComponent(rel), encoding: .utf8)) ?? "" }
+        let lps = read("LyrimuseCore/Local/LocalPlaybackSource.swift")
+        let manager = read("lyrimuse/LyricsManager/LyricsManagerView.swift")
+        let app = read("lyrimuse/AppDelegate.swift")
+        expectEqual(lps.isEmpty || manager.isEmpty || app.isEmpty, false, "读穿接线(契约): 读到源码")
+        expectEqual(sourceBytes(lps, contain: "currentOffsetSiblings = EnrichCacheReader.offsetSiblings(")
+                    && sourceBytes(lps, contain: "let track = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey, siblings: currentOffsetSiblings)")
+                    && sourceBytes(lps, contain: "radioKey: radioKey,\n            siblings: currentOffsetSiblings\n")
+                    && sourceBytes(lps, contain: "pinKey: currentPinKey,\n                                           siblings: currentOffsetSiblings)")
+                    && sourceBytes(lps, contain: "LyricsOffsetStore.shared.reset(forKey: currentOffsetKey, pinKey: currentPinKey, siblings: currentOffsetSiblings)"),
+                    true, "读穿接线(契约): 播放时生效、加减、重置都按这首的其它写法读穿")
+        expectEqual(sourceBytes(manager, contain: "offsetSiblings = EnrichCacheReader.offsetSiblings(forKey: key)")
+                    && !sourceBytes(manager, contain: "siblings: .none"), true, "读穿接线(契约): 歌词管理的偏移输入框按这首的其它写法读穿")
+        expectEqual(sourceBytes(app, contain: "LyricsOffsetStore.shared.backfillPinContent()"), true, "读穿接线(契约): 启动时补记校准对着的歌词")
     }
 
     // ---- Apple Music 放空间音频版时用歌词带的偏移 ----
@@ -440,7 +576,7 @@ func runLyricsOffsetTests() {
         let keyA = S.radioKey(stationHash: hashA, trackKey: track)
         let keyB = S.radioKey(stationHash: hashB, trackKey: track)
         store.setGlobalOffset(0)
-        store.reset(forKey: track, pinKey: "")
+        store.reset(forKey: track, pinKey: "", siblings: .none)
         store.clearAllRadioOffsets()
         expectEqual(store.radioOffsetCount, 0, "电台校正: 起点是空的")
 
@@ -451,17 +587,17 @@ func runLyricsOffsetTests() {
         expectEqual(store.radioOffsetCount, 1, "电台校正: 计数跟着走")
 
         // 不是电台时这一层压根不参与 —— 这是整个需求的要害:正常播放这首歌本来是准的。
-        expectEqual(store.effectiveOffset(forKey: track), 0,
+        expectEqual(store.effectiveOffset(forKey: track, siblings: .none), 0,
                     "电台校正: 不传 radioKey(= 正常播放)时完全不生效")
-        expectEqual(store.effectiveOffset(forKey: track, bundleID: nil, radioKey: keyA), 1500,
+        expectEqual(store.effectiveOffset(forKey: track, bundleID: nil, radioKey: keyA, siblings: .none), 1500,
                     "电台校正: 放电台时才加进来")
 
         // 跟另外两层是相加,不是二选一(两者成因不同,同一首歌可能两样都占)。
         store.setGlobalOffset(300)
-        store.nudge(by: -100, forKey: track, pinKey: "")
-        expectEqual(store.effectiveOffset(forKey: track, bundleID: nil, radioKey: keyA), 300 - 100 + 1500,
+        store.nudge(by: -100, forKey: track, pinKey: "", siblings: .none)
+        expectEqual(store.effectiveOffset(forKey: track, bundleID: nil, radioKey: keyA, siblings: .none), 300 - 100 + 1500,
                     "电台校正: 全局 + 单曲 + 电台三层相加")
-        expectEqual(store.effectiveOffset(forKey: track), 300 - 100,
+        expectEqual(store.effectiveOffset(forKey: track, siblings: .none), 300 - 100,
                     "电台校正: 同一首歌正常播放时仍然只有前两层")
 
         // 归零不落盘,跟另外两层同一个约定。
@@ -477,6 +613,6 @@ func runLyricsOffsetTests() {
 
         // 收尾
         store.setGlobalOffset(0)
-        store.reset(forKey: track, pinKey: "")
+        store.reset(forKey: track, pinKey: "", siblings: .none)
     }
 }

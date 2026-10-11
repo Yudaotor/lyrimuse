@@ -637,6 +637,8 @@ struct LyricsManagerView: View {
     @State private var editedOffsetSeconds = ""
     @State private var persistedLyricsForOffset = ""
     @State private var persistedYRCForOffset = ""
+    /// 同一首歌的其它写法:这首自己没调过时,输入框显示、加减、重置都按读穿来的值(见 LyricsOffsetSiblings)。
+    @State private var offsetSiblings = LyricsOffsetSiblings.none
     // 单曲时间轴校正值:「⋯」菜单里「已校准 N 首 / 清空」要跟着实时变(整对象订阅是安全的
     // —— 它只在用户动作时发布,不在播放热路径上,见 LyricsOffsetStore.trackOffsetCount)。
     @ObservedObject private var offsets = LyricsOffsetStore.shared
@@ -3480,7 +3482,7 @@ struct LyricsManagerView: View {
             SettingsFlowRow(spacing: 10) {
                 LyricsManagerOffsetControl(
                     text: $editedOffsetSeconds,
-                    isNonZero: LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary)) != 0,
+                    isNonZero: LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary), siblings: offsetSiblings) != 0,
                     stepText: AppSettings.formattedSeconds(ms: AppSettings.shared.lyricsOffsetStepMs),
                     onStep: { direction in nudgeOffset(summary, direction: direction) },
                     onSubmit: { applyOffsetEdit(summary) },
@@ -3919,7 +3921,7 @@ struct LyricsManagerView: View {
 
     /// 时间轴偏移 − / +:按设置里的步长在当前值上加减,跟敲一个数回车走同一条写入路径。
     private func nudgeOffset(_ summary: EnrichCacheStore.Summary, direction: Int) {
-        let current = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary))
+        let current = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary), siblings: offsetSiblings)
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: current + direction * AppSettings.shared.lyricsOffsetStepMs)
         applyOffsetEdit(summary)
     }
@@ -4178,7 +4180,7 @@ struct LyricsManagerView: View {
         saveEditNote = nil
         if let summary = store.summary(forKey: key) {
             resetBodyEdits(title: summary.title, artist: summary.artist)
-            refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
+            refreshOffsetState(key: key, artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
             refreshPreviewRows(key: key, summary: summary, lyrics: d.lyrics, tr: d.tr, roma: d.roma)
             plainLyricsText = !summary.hasLyrics && summary.hasPlainTextFallback ? store.plainLyrics(for: key) : ""
         }
@@ -4201,22 +4203,20 @@ struct LyricsManagerView: View {
     // 歌词内容变了,LyricsOffsetStore 的 key(内容指纹的一部分)跟着变,输入框要显示
     // "新内容对应的偏移值"(通常是 0,内容变了旧的校正值自然对不上、查不到),而不是
     // 继续显示改之前那份内容的偏移值。
-    private func refreshOffsetState(artist: String, title: String, lyrics: String, yrc: String) {
+    private func refreshOffsetState(key: String, artist: String, title: String, lyrics: String, yrc: String) {
         persistedLyricsForOffset = lyrics
         persistedYRCForOffset = yrc
-        let key = LyricsOffsetStore.trackKey(artist: artist, title: title, lyrics: lyrics, lyricsYRC: yrc)
-        editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: key))
+        offsetSiblings = EnrichCacheReader.offsetSiblings(forKey: key)
+        let offsetKey = LyricsOffsetStore.trackKey(artist: artist, title: title, lyrics: lyrics, lyricsYRC: yrc)
+        editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: offsetKey, siblings: offsetSiblings))
     }
 
-    /// 只改了字的保存:这首的单曲偏移从旧正文的指纹搬到新正文下(新指纹下已经有值就不动)。
+    /// 只改了字的保存:这首的单曲偏移从旧正文的指纹搬到新正文下(新指纹下已经有值就不动;见 LyricsOffsetStore.carryOffset)。
     private func carryOffset(_ summary: EnrichCacheStore.Summary, from old: (lyrics: String, yrc: String),
                              to new: (lyrics: String, yrc: String)) {
         let oldKey = LyricsOffsetStore.trackKey(artist: summary.artist, title: summary.title, lyrics: old.lyrics, lyricsYRC: old.yrc)
         let newKey = LyricsOffsetStore.trackKey(artist: summary.artist, title: summary.title, lyrics: new.lyrics, lyricsYRC: new.yrc)
-        let ms = LyricsOffsetStore.shared.offset(forKey: oldKey)
-        guard ms != 0, oldKey != newKey, LyricsOffsetStore.shared.offset(forKey: newKey) == 0 else { return }
-        LyricsOffsetStore.shared.setOffset(0, forKey: oldKey, pinKey: "")
-        LyricsOffsetStore.shared.setOffset(ms, forKey: newKey, pinKey: summary.key)
+        LyricsOffsetStore.shared.carryOffset(from: oldKey, to: newKey, pinKey: summary.key, siblings: offsetSiblings)
     }
 
     private func currentOffsetKey(_ summary: EnrichCacheStore.Summary) -> String {
@@ -4227,19 +4227,20 @@ struct LyricsManagerView: View {
         // 解析不了、不是有限数或超出范围(见 LyricsOffsetInput)时不写入,输入框改回当前生效的值:别当成 0 秒,那会把手动
         // 校正过的偏移悄悄清掉;输入框弹回原来的数字,就看得出这次输入没被接受。
         guard let ms = LyricsOffsetInput.milliseconds(from: editedOffsetSeconds) else {
-            editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary)))
+            editedOffsetSeconds = AppSettings.formattedSeconds(
+                ms: LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary), siblings: offsetSiblings))
             return
         }
         // pinKey 用 summary.key(缓存 key 本身,已归一化)—— 播放侧算的是
         // EnrichCacheKeys.normalizedKey,两边必须是同一个身份,否则在这里校准的歌跟播放时
         // 钉住的歌是两条记录(见 LocalPlaybackSource.currentPinKey 的注释)。
-        LyricsOffsetStore.shared.setOffset(ms, forKey: currentOffsetKey(summary), pinKey: summary.key)
+        LyricsOffsetStore.shared.setOffset(ms, forKey: currentOffsetKey(summary), pinKey: summary.key, siblings: offsetSiblings)
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: ms)
         PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
     }
 
     private func resetOffsetEdit(_ summary: EnrichCacheStore.Summary) {
-        LyricsOffsetStore.shared.reset(forKey: currentOffsetKey(summary), pinKey: summary.key)
+        LyricsOffsetStore.shared.reset(forKey: currentOffsetKey(summary), pinKey: summary.key, siblings: offsetSiblings)
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0)
         PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
     }

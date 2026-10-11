@@ -4067,7 +4067,8 @@ public final class LocalPlaybackSource: ObservableObject {
         if !radioKey.isEmpty {
             LyricsOffsetStore.shared.nudgeRadio(by: deltaMs, forKey: radioKey)
         } else {
-            LyricsOffsetStore.shared.nudge(by: deltaMs, forKey: currentOffsetKey, pinKey: currentPinKey)
+            LyricsOffsetStore.shared.nudge(by: deltaMs, forKey: currentOffsetKey, pinKey: currentPinKey,
+                                           siblings: currentOffsetSiblings)
         }
         applyOffsets()
         // 返回**这首歌**那部分,不是总和:调用方(快捷键的提示条、菜单标题)说的是
@@ -4085,7 +4086,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if !radioKey.isEmpty {
             LyricsOffsetStore.shared.setRadioOffset(0, forKey: radioKey)
         } else {
-            LyricsOffsetStore.shared.reset(forKey: currentOffsetKey, pinKey: currentPinKey)
+            LyricsOffsetStore.shared.reset(forKey: currentOffsetKey, pinKey: currentPinKey, siblings: currentOffsetSiblings)
         }
         applyOffsets()
     }
@@ -4115,15 +4116,16 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 原来它们各自赋两次值,加了全局基准之后每处都要多算一步 —— 分散写迟早漏掉一处,而
     /// 漏掉的表现是"某条路径下全局偏移不生效",只在特定操作顺序下复现,极难归因。
     private func applyOffsets() {
-        let track = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey)
-        // 播放到这首歌时把 pin 状态跟当前校正值重新对一遍(双向,见那个方法的注释)。
-        // 幂等,状态已经一致时是纯内存判断。
+        // 播放到这首歌时把 pin 状态跟当前校正值重新对一遍(双向,见那个方法的注释)。只看这条写法自己键下的值,
+        // 读穿来的不算。幂等,状态已经一致时是纯内存判断。
         LyricsOffsetStore.shared.syncPinToOffset(forKey: currentOffsetKey, pinKey: currentPinKey)
+        let track = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey, siblings: currentOffsetSiblings)
         // 播放器那层按**这一刻真正在播的那个 App** 算。拿不到身份(还没有快照)时传 nil,
         // 那层就按 0 算 —— 绝不能猜一个,否则会把浏览器的补偿套到 Apple Music 上。
         let radioKey = currentRadioOffsetKey
         let effective = LyricsOffsetStore.shared.effectiveOffset(
-            forKey: currentOffsetKey, bundleID: lastSnapshot?.bundleIdentifier, radioKey: radioKey
+            forKey: currentOffsetKey, bundleID: lastSnapshot?.bundleIdentifier, radioKey: radioKey,
+            siblings: currentOffsetSiblings
         )
         // 空间音频偏移是这份歌词对这一版母带的属性,跟 MV 偏移一样只进引擎与 currentLyricsOffsetMs。
         let spatial = currentSpatialAudioOffsetMs()
@@ -4176,6 +4178,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // 内容",这个决定"哪首歌不许后台再换歌词源"。内容指纹恰恰是会变的那一半,拿它当 pin
     // 的身份等于"内容一换 pin 也失效",正好把要防的事情放过去(见 LyricsPinStore)。
     private var currentPinKey = ""
+
+    /// 同一首歌的其它写法,单曲偏移按它读穿(见 LyricsOffsetSiblings)。跟 currentOffsetKey 同一刻算。
+    private var currentOffsetSiblings = LyricsOffsetSiblings.none
 
     /// 这一刻在放的电台(载荷里的 `radioStationHash`),不是电台就是 nil。见 currentRadioOffsetKey。
     private var currentStationHash: String?
@@ -4339,6 +4344,8 @@ public final class LocalPlaybackSource: ObservableObject {
             title: snapshot.title ?? "",
             album: snapshot.album ?? ""
         )
+        currentOffsetSiblings = EnrichCacheReader.offsetSiblings(
+            artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? "")
         applyOffsets()
         // hasLyricsContent/allLines 只在真的变化时才赋值——理由跟上面 apply() 里
         // title/artist/album 的同款注释一样。这个函数不止在真的换歌时调用,"歌词还没

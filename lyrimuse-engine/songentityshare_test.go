@@ -407,6 +407,16 @@ func TestApplyShareRound(t *testing.T) {
 
 	setUpSongShareTest(t, entries(), true)
 	snap = snapOf()
+	writeSongSharePins(t, map[string]string{keys[3]: ""})
+	if out := applyShareRound(keys, own, snap, enrichEditNoStamp, round, now); out.state != nil {
+		t.Fatalf("开搜之后钉住的要作废: %+v", out)
+	}
+	if got, _ := cacheEntry(t, keys[0]); got.Lyrics != songShareLRC("a") || hasPre(keys[0]) {
+		t.Errorf("钉住之后作废的一轮不改、不留底: %+v", got)
+	}
+
+	setUpSongShareTest(t, entries(), true)
+	snap = snapOf()
 	partial := round
 	partial.skipped = []string{"soda"}
 	own2 := []*songPlanLyrics{{}, {}, nil, {native: true}}
@@ -728,5 +738,278 @@ func TestSongEntitySharePassNeedsFullBackup(t *testing.T) {
 	}
 	if _, err := os.Stat(songShareStatePath()); !os.IsNotExist(err) {
 		t.Errorf("不记组: %v", err)
+	}
+}
+
+// writeSongSharePins:改写校准名单。content 是写法键 → 那条 pin 的校准对着的歌词指纹,空串是钉着、没记。
+func writeSongSharePins(t *testing.T, content map[string]string) {
+	t.Helper()
+	f := lyricsPinsFile{Version: 1, Pins: map[string]int64{}, Content: map[string]string{}}
+	for k, fp := range content {
+		f.Pins[k] = 1
+		if fp != "" {
+			f.Content[k] = fp
+		}
+	}
+	data, _ := json.Marshal(f)
+	if err := os.WriteFile(lyricsPinsPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lyricsPinsMu.Lock()
+	lyricsPinsRead = false
+	lyricsPinsMu.Unlock()
+}
+
+// 组里钉着的写法、校准正对着它现在这份歌词的,组里其余写法跟着用这一份;校准对着别的歌词的、两份不同的校准、实体里有手改的
+// 都不跟。跟着换过来的写法后台不再自动换词,开关关掉就不护着、按留底恢复。组里有校准的都不搜。
+func TestSharePinnedPass(t *testing.T) {
+	p1, p5 := songShareLRC("p1"), songShareLRC("p5")
+	entries := map[string]enrichEntry{
+		"P|Song|One":   {DurationSecs: 200, ISRCs: []string{"USAAA1100010"}, Lyrics: p1, LyricsSource: "qq"},
+		"P|Song|Two":   {DurationSecs: 200.1, ISRCs: []string{"USAAA1100010"}, Lyrics: songShareLRC("p2"), LyricsSource: "kugou"},
+		"P|Song|Three": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100010"}},
+		"P|Song|Four":  {DurationSecs: 200.3, ISRCs: []string{"USAAA1100010"}, Instrumental: true},
+		"P|Song|Five":  {DurationSecs: 200.4, ISRCs: []string{"USAAA1100010"}, Lyrics: p5, LyricsYRC: "[0,500]w", LyricsSource: "netease"},
+		"P|Song|Six":   {DurationSecs: 200.5, ISRCs: []string{"USAAA1100010"}, Lyrics: songShareLRC("p6"), LyricsSource: "kuwo"},
+		"Q|Tune|One":   {DurationSecs: 180, ISRCs: []string{"USAAA1100011"}, Lyrics: songShareLRC("q1"), LyricsSource: "qq"},
+		"Q|Tune|Two":   {DurationSecs: 180.1, ISRCs: []string{"USAAA1100011"}, Lyrics: songShareLRC("q2"), LyricsSource: "kuwo"},
+		"R|Air|One":    {DurationSecs: 150, ISRCs: []string{"USAAA1100012"}, Lyrics: songShareLRC("r1"), LyricsSource: "qq"},
+		"R|Air|Two":    {DurationSecs: 150.1, ISRCs: []string{"USAAA1100012"}, Lyrics: songShareLRC("r2"), LyricsSource: "kuwo"},
+		"R|Air|Three":  {DurationSecs: 150.2, ISRCs: []string{"USAAA1100012"}, Lyrics: songShareLRC("r3"), LyricsSource: "kugou"},
+		"M|Hit|One":    {DurationSecs: 120, ISRCs: []string{"USAAA1100013"}, Lyrics: songShareLRC("m1"), LyricsSource: "manual", ManualLyrics: true},
+		"M|Hit|Two":    {DurationSecs: 120.1, ISRCs: []string{"USAAA1100013"}, Lyrics: songShareLRC("m2"), LyricsSource: "qq"},
+		"M|Hit|Three":  {DurationSecs: 120.2, ISRCs: []string{"USAAA1100013"}, Lyrics: songShareLRC("m3"), LyricsSource: "kuwo"},
+		"N|Two|One":    {DurationSecs: 110, ISRCs: []string{"USAAA1100014"}, Lyrics: songShareLRC("n1"), LyricsSource: "manual", ManualLyrics: true},
+		"N|Two|Two":    {DurationSecs: 110.1, ISRCs: []string{"USAAA1100014"}, Lyrics: songShareLRC("n2"), LyricsSource: "manual", ManualLyrics: true},
+		"N|Two|Three":  {DurationSecs: 110.2, ISRCs: []string{"USAAA1100014"}, Lyrics: songShareLRC("n3"), LyricsSource: "qq"},
+		"N|Two|Four":   {DurationSecs: 110.3, ISRCs: []string{"USAAA1100014"}, Lyrics: songShareLRC("n4"), LyricsSource: "kuwo"},
+		"E|Mt|One":     {DurationSecs: 100, ISRCs: []string{"USAAA1100015"}, Lyrics: songShareLRC("e1"), LyricsSource: "qq"},
+		"E|Mt|Two":     {DurationSecs: 100.1, ISRCs: []string{"USAAA1100015"}},
+	}
+	setUpSongShareTest(t, entries, true)
+	fp1 := songOffsetFingerprint(p1, "")
+	writeSongSharePins(t, map[string]string{
+		"P|Song|One":  fp1,
+		"Q|Tune|One":  "0123456789ab",
+		"R|Air|One":   songOffsetFingerprint(songShareLRC("r1"), ""),
+		"R|Air|Two":   songOffsetFingerprint(songShareLRC("r2"), ""),
+		"M|Hit|Two":   songOffsetFingerprint(songShareLRC("m2"), ""),
+		"P|Song|Six":  "0123456789ab",
+		"N|Two|Three": songOffsetFingerprint(songShareLRC("n3"), ""),
+		"E|Mt|One":    "",
+	})
+	savedSearch := searchShareRound
+	t.Cleanup(func() { searchShareRound = savedSearch })
+	var searched []string
+	searchShareRound = func(_ context.Context, key, _, _, _ string, _ float64) songShareRound {
+		searched = append(searched, key)
+		return songShareRound{reached: true}
+	}
+	ctx := context.Background()
+	runSongEntitySharePass(ctx, rebuildSongEntityTable(time.Now()))
+
+	if len(searched) != 0 {
+		t.Errorf("组里有校准的都不搜: %v", searched)
+	}
+	for _, k := range []string{"P|Song|Two", "P|Song|Three"} {
+		got, _ := cacheEntry(t, k)
+		if got.Lyrics != p1 || got.LyricsSource != "qq" || got.ManualLyrics || got.LyricsEntityOrigin != "" {
+			t.Errorf("%s 跟着校准那份: %+v", k, got)
+		}
+		if ap := got.LyricsDecisionApplied; ap == nil || ap.Path != lyricsDecisionPathSongEntityShare || ap.ReusedFrom != "P|Song|One" {
+			t.Errorf("%s 的出处: %+v", k, ap)
+		}
+		if p, _ := readPreEntry(t, k); p.Synced != fp1 {
+			t.Errorf("%s 的留底: %+v", k, p)
+		}
+	}
+	for k, why := range map[string]string{
+		"P|Song|One": "钉着的那条", "P|Song|Four": "纯音乐", "P|Song|Five": "有逐字", "Q|Tune|Two": "校准对着别的歌词",
+		"R|Air|Three": "两份不同的校准", "M|Hit|Two": "钉着", "P|Song|Six": "自己钉着、校准对着别的歌词",
+		"N|Two|Four": "两份手改不替用户选,校准那组也不跟", "E|Mt|Two": "钉着的没记校准对着哪份歌词",
+	} {
+		if got, _ := cacheEntry(t, k); got.Lyrics != entries[k].Lyrics || hasPre(k) {
+			t.Errorf("%s(%s)不动: %+v", k, why, got)
+		}
+	}
+	if got, _ := cacheEntry(t, "M|Hit|Three"); got.Lyrics != songShareLRC("m1") || got.LyricsEntityOrigin != "M|Hit|One" {
+		t.Errorf("实体里有手改时跟手改: %+v", got)
+	}
+
+	enrichMu.Lock()
+	calibrated := map[string]bool{}
+	for k := range entries {
+		calibrated[k] = lyricsCalibratedLocked(k)
+	}
+	enrichMu.Unlock()
+	for k, want := range map[string]bool{
+		"P|Song|One": true, "P|Song|Two": true, "P|Song|Three": true, "P|Song|Five": false, "Q|Tune|One": true,
+		"Q|Tune|Two": false, "R|Air|One": true, "R|Air|Three": false, "E|Mt|Two": false,
+	} {
+		if calibrated[k] != want {
+			t.Errorf("%s 算不算校准过: %v", k, calibrated[k])
+		}
+	}
+	if got := lyricsFullScanCandidates(); slices.Contains(got, "P|Song|Two") || !slices.Contains(got, "P|Song|Five") {
+		t.Errorf("全量扫库不碰读穿着校准的写法: %v", got)
+	}
+
+	runSongEntitySharePass(ctx, rebuildSongEntityTable(time.Now()))
+	if got, _ := cacheEntry(t, "P|Song|Two"); got.Lyrics != p1 {
+		t.Errorf("再跑一轮不变: %+v", got)
+	}
+
+	setFeatures(featureFlags{SongEntityShadow: true})
+	enrichMu.Lock()
+	held := lyricsCalibratedLocked("P|Song|Two")
+	enrichMu.Unlock()
+	if held {
+		t.Error("开关关着时只认自己钉着的")
+	}
+	songEntityShareStep(ctx, nil)
+	if got, _ := cacheEntry(t, "P|Song|Two"); got.Lyrics != songShareLRC("p2") || got.LyricsSource != "kugou" {
+		t.Errorf("关掉之后恢复: %+v", got)
+	}
+	if got, _ := cacheEntry(t, "P|Song|Three"); got.Lyrics != "" {
+		t.Errorf("补上的恢复成没词: %+v", got)
+	}
+}
+
+// 跟着校准换词写回前持锁核对:建表之后校准那条的歌词变了,整组不动;某条写法的歌词变了,只跳过它。
+func TestSharePinnedGroupLiveChecks(t *testing.T) {
+	p1 := songShareLRC("p1")
+	entries := map[string]enrichEntry{
+		"P|Song|One":   {Song: "s", Lyrics: p1, LyricsSource: "qq"},
+		"P|Song|Two":   {Song: "s", Lyrics: songShareLRC("p2"), LyricsSource: "kugou"},
+		"P|Song|Three": {Song: "s", Lyrics: songShareLRC("p3"), LyricsSource: "kuwo"},
+		"P|Song|Four":  {Song: "s"},
+		"P|Song|Five":  {Song: "s", Lyrics: songShareLRC("p5"), LyricsSource: "qq"},
+		"P|Song|Six":   {Song: "s", Lyrics: songShareLRC("p6"), LyricsSource: "qq"},
+		"P|Song|Seven": {Song: "s", Lyrics: songShareLRC("p7"), LyricsSource: "qq"},
+	}
+	setUpSongShareTest(t, entries, true)
+	var vs []songVariant
+	for k, e := range entries {
+		vs = append(vs, songTestVariant(k, e, nil))
+	}
+	b, _ := songTestBuild(t, vs, nil)
+	ms := make([]int, len(b.variants))
+	own := make([]*songPlanLyrics, len(b.variants))
+	for i := range b.variants {
+		ms[i], own[i] = i, b.songPlanLyricsOf(i, nil)
+	}
+	pins := map[string]bool{"P|Song|One": true, "P|Song|Seven": true}
+	content := map[string]string{"P|Song|One": songOffsetFingerprint(p1, "")}
+	edit := func(k string, f func(*enrichEntry)) {
+		enrichMu.Lock()
+		e := enrichCache[k]
+		f(&e)
+		enrichCache[k] = e
+		enrichMu.Unlock()
+	}
+	setLyrics := func(k, lyrics string) { edit(k, func(e *enrichEntry) { e.Lyrics = lyrics }) }
+	now := time.Unix(5_000_000, 0)
+
+	setLyrics("P|Song|One", songShareLRC("p1b"))
+	if changed, _, _ := b.sharePinnedGroup(ms, own, pins, content, now); len(changed) != 0 {
+		t.Fatalf("校准那条的歌词在建表之后变了,整组不动: %v", changed)
+	}
+	setLyrics("P|Song|One", p1)
+	edit("P|Song|One", func(e *enrichEntry) { e.ManualLyrics = true })
+	if changed, _, _ := b.sharePinnedGroup(ms, own, pins, content, now); len(changed) != 0 {
+		t.Fatalf("校准那条在建表之后改成了手改,交给手改同步: %v", changed)
+	}
+	edit("P|Song|One", func(e *enrichEntry) { e.ManualLyrics = false })
+	setLyrics("P|Song|Three", songShareLRC("p3b"))
+	setLyrics("P|Song|Four", songShareLRC("p4"))
+	edit("P|Song|Five", func(e *enrichEntry) { e.ManualLyrics = true })
+	edit("P|Song|Six", func(e *enrichEntry) { e.ManualPickSHA = manualPickFingerprint(e.Lyrics) })
+	if changed, _, _ := b.sharePinnedGroup(ms, own, pins, content, now); !slices.Equal(changed, []string{"P|Song|Two"}) {
+		t.Fatalf("建表之后歌词变过、改成手改或采纳、钉住的写法这一轮跳过: %v", changed)
+	}
+	if got, _ := cacheEntry(t, "P|Song|Three"); got.Lyrics != songShareLRC("p3b") || hasPre("P|Song|Three") {
+		t.Errorf("跳过的不动: %+v", got)
+	}
+}
+
+// 后台自动换词的几道闸认读穿来的校准(lyricsCalibratedLocked):播放时起的重试 / 重评、全量扫库逐条那一步。
+func TestLyricsCalibratedGatesWired(t *testing.T) {
+	for file, needles := range map[string][]string{
+		"enrich.go": {"\t\tpinned := lyricsCalibratedLocked(key)\n"},
+		"lyricsfullscan.go": {
+			"\tcalibrated := pins[key] || songShareCalibrationsLocked(pins, content).holds(before)\n\tenrichMu.Unlock()\n",
+			"\tif calibrated {\n\t\treturn lyricsSweepOutcome{skipped: true}\n\t}\n",
+			"lyricsFullScanTier(e, pins[key] || calibrated.holds(e), false, passStart)",
+		},
+	} {
+		src := string(mustRead(t, file))
+		for _, n := range needles {
+			if !strings.Contains(src, n) {
+				t.Errorf("%s 里少了: %q", file, n)
+			}
+		}
+	}
+}
+
+// 没有实体 id 的写法不读穿,也就不护着跟它歌词相同的写法。
+func TestSongShareCalibrationsNeedEntity(t *testing.T) {
+	x := songShareLRC("x")
+	setUpSongShareTest(t, map[string]enrichEntry{"X|A|1": {Lyrics: x}, "X|A|2": {Lyrics: x}}, true)
+	writeSongSharePins(t, map[string]string{"X|A|1": songOffsetFingerprint(x, "")})
+	enrichMu.Lock()
+	own, other := lyricsCalibratedLocked("X|A|1"), lyricsCalibratedLocked("X|A|2")
+	enrichMu.Unlock()
+	if !own || other {
+		t.Errorf("自己钉着的算、没有实体 id 的同词写法不算: %v %v", own, other)
+	}
+}
+
+// 读穿按整首歌算:别的共享组里一条写法的歌词正是校准对着的那份,后台不换它,按共享组重搜时也留着,同组别的写法照换。
+func TestSharePassKeepsInheritedCalibration(t *testing.T) {
+	words := songTestWords("inherit", 30)
+	lrc, other, champ := songTestLRC(1000, words), songShareLRC("other"), songShareLRC("champ")
+	ne := "https://music.163.com/song?id=42"
+	reg := map[string]string{"netease_song:42": "Tune"}
+	entries := map[string]enrichEntry{
+		"Singer|Tune|One":   {Song: "s", NeteaseURL: ne, Lyrics: lrc, LyricsSource: "qq"},
+		"Singer|Tune|Two":   {Song: "s", DurationSecs: 300, NeteaseURL: ne, ISRCs: []string{"HKA351501001"}, Lyrics: lrc, LyricsSource: "qq"},
+		"Singer|Tune|Three": {Song: "s", DurationSecs: 300.1, ISRCs: []string{"HKA351501001"}, Lyrics: other, LyricsSource: "kugou"},
+	}
+	setUpSongShareTest(t, entries, true)
+	writeSongSharePins(t, map[string]string{"Singer|Tune|One": songOffsetFingerprint(lrc, "")})
+	var vs []songVariant
+	for k, e := range entries {
+		vs = append(vs, songTestVariant(k, e, reg))
+	}
+	b, _ := songTestBuild(t, vs, nil)
+	idx := map[string]int{}
+	for i, v := range b.variants {
+		idx[v.key] = i
+	}
+	if b.shareOf[idx["Singer|Tune|One"]] == b.shareOf[idx["Singer|Tune|Two"]] || b.shareOf[idx["Singer|Tune|Two"]] != b.shareOf[idx["Singer|Tune|Three"]] {
+		t.Fatalf("前提: One 单独一组, Two、Three 一组: %v", b.shareOf)
+	}
+	enrichMu.Lock()
+	held := lyricsCalibratedLocked("Singer|Tune|Two")
+	enrichMu.Unlock()
+	if !held {
+		t.Error("别的共享组里校准对着的那份歌词也护着")
+	}
+	saved := searchShareRound
+	t.Cleanup(func() { searchShareRound = saved })
+	searchShareRound = func(_ context.Context, key, artist, title, album string, dur float64) songShareRound {
+		return songShareRound{shareEvalRound: shareEvalRound{Key: key, Artist: artist, Title: title, Album: album, Duration: dur,
+			Scored: []scoredLyricCandidateResult{
+				{Source: "netease", Lyrics: champ, Score: 1200},
+				{Source: "qq", Lyrics: lrc, Score: 900},
+				{Source: "kugou", Lyrics: other, Score: 800},
+			}}, reached: true}
+	}
+	runSongEntitySharePass(context.Background(), b)
+	if got, _ := cacheEntry(t, "Singer|Tune|Two"); got.Lyrics != lrc || hasPre("Singer|Tune|Two") {
+		t.Errorf("读穿着校准的留着: %+v", got)
+	}
+	if got, _ := cacheEntry(t, "Singer|Tune|Three"); got.Lyrics != champ {
+		t.Errorf("同组别的写法照换: %+v", got)
 	}
 }

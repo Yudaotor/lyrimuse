@@ -18,12 +18,16 @@ import (
 )
 
 // 歌曲实体阶段 3:歌词按实体同步。开关 songEntitySharing()(`lyrimuse-features.json` 的 `song_entity_share_lyrics`,
-// 默认关,界面不露出;阶段 0 的建表要开着)。见 18 章决策 26。
+// 默认关,界面不露出;阶段 0 的建表要开着)。见 18 章决策 26、27。
 //   - 手改、采纳(采纳的那一份还在)同步到整个实体:改的当场同步(shareManualEditLocked),存量和后来才挂进实体的写法由每次
 //     建表之后那一轮补上。对方自己的手改原件、校准挡得住,标了纯音乐的不动;实体里两份内容不同的原件不替用户选。副本带
 //     同样的手改标记,lyrics_entity_origin 记原件。
-//   - 实体里没有手改时按共享组(shareEvalGroups):组里没有校准、歌词不止一份或有写法没词的,以整首歌重搜一轮,冠军是整组
-//     那一份,每条写法的去留跟正式空跑同一套(shareEvalPlan)。组里有校准的不动。
+//   - 实体里没有手改时按共享组。组里钉着的写法、App 记下的校准正对着它现在这份歌词的(lyricsPinsFile.Content),其余写法
+//     跟着用这一份、读穿那个偏移(sharePinnedPass),两份不同的这种校准不替用户选;组里钉着、校准却对着别的歌词的不动。
+//     组里没有校准、歌词不止一份或有写法没词的(shareEvalGroups),以整首歌重搜一轮,冠军是整组那一份,每条写法的去留跟
+//     正式空跑同一套(shareEvalPlan)。
+//   - 同一首歌里歌词正是一份校准对着的写法(App 读穿那个偏移),后台不再自动给它换词(lyricsCalibratedLocked),按共享组
+//     重搜时也留着自己那份。
 //   - 写法第一次被同步覆盖之前整条存进 lyrimuse-song-entity-pre/(只存一次),synced 记同步最近一次要写进去的那份;开关
 //     关掉时,歌词还是同步写进去那份的写法按它恢复(revertSongEntityShare)。第一次同步之前另把主缓存和正文小文件目录整份
 //     克隆到 ~/.config/lyrimuse-backups/<时刻>-song-entity/,备份不成就不同步。
@@ -232,6 +236,12 @@ func songShareCopyManual(dst *enrichEntry, src enrichEntry, origin string, now t
 	}
 	dst.LyricsEntityOrigin = origin
 	dst.LyricsDecisionApplied = &lyricsDecision{Path: lyricsDecisionPathSongEntityShare, DecidedAt: now.Unix(), ReusedFrom: origin}
+}
+
+// songShareCopyPinned:dst 改成同组校准那条 origin(条目 src)现在这一份。不是手改,不记 lyrics_entity_origin。
+func songShareCopyPinned(dst *enrichEntry, src enrichEntry, origin string, now time.Time) {
+	songShareCopyManual(dst, src, origin, now)
+	dst.LyricsEntityOrigin = ""
 }
 
 // shareManualLocked:keys 是一个实体的全部写法。from 非空时它是刚改的那条,其余写法跟着它;为空时(建表之后那一轮)实体里
@@ -519,10 +529,12 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 		d.SourcesSkipped, d.QueriesTried = round.skipped, round.queries
 		traceLyricsDecision(round.Key, d)
 	}
+	// 组里钉着的写法进不了这一轮(shareEvalGroups),开搜之后才钉住的整轮作废。
+	pins := lyricsPinnedKeys()
 	enrichMu.Lock()
 	for i, k := range keys {
 		e, ok := enrichCache[k]
-		if !ok || enrichEditedSinceLocked(k, stamp) || e.Song != snap[i].Song || e.SongShare != snap[i].SongShare ||
+		if !ok || pins[k] || enrichEditedSinceLocked(k, stamp) || e.Song != snap[i].Song || e.SongShare != snap[i].SongShare ||
 			e.Instrumental != snap[i].Instrumental || e.ManualLyrics != snap[i].ManualLyrics ||
 			songOffsetFingerprint(e.Lyrics, e.LyricsYRC) != songOffsetFingerprint(snap[i].Lyrics, snap[i].LyricsYRC) {
 			enrichMu.Unlock()
@@ -556,11 +568,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 	out.state = songShareGroupStateLocked(keys, now, retryAt)
 	enrichMu.Unlock()
 	if len(changed) > 0 {
-		for _, k := range changed {
-			requestEnrichSaveFor(k)
-		}
-		exportLyricsFilesFor(changed...)
-		nudgeEnrichPush()
+		flushShareChanges(changed)
 		slog.Info("song entities: shared group lyrics", "searched", round.Key, "winner", top.Source, "score", top.Score,
 			"changed", out.changed, "filled", out.filled, "kept", out.kept)
 	}
@@ -616,6 +624,7 @@ func (b *songEntityBuild) shareGroup(ctx context.Context, ms []int, own []*songP
 // songShareTally:一轮同步的计数,记日志用。
 type songShareTally struct {
 	manualEntities, manualChanged, manualConflicts   int
+	pinnedChanged, pinnedKept, pinnedConflicts       int
 	groups, searched, unchanged, noWinner, abandoned int
 	changed, filled, kept                            int
 	stopped                                          bool
@@ -641,7 +650,8 @@ func runSongEntitySharePass(ctx context.Context, b *songEntityBuild) {
 		slog.Info("song entities: backed up before sharing lyrics", "dir", dir)
 	}
 	var t songShareTally
-	b.shareManualPass(lyricsPinnedKeys(), start, &t)
+	pins, content := lyricsPinSnapshot()
+	b.shareManualPass(pins, start, &t)
 	enrichMu.Lock()
 	picked := songPlanPicked(enrichCache)
 	enrichMu.Unlock()
@@ -654,6 +664,15 @@ func runSongEntitySharePass(ctx context.Context, b *songEntityBuild) {
 			own[m] = b.songPlanLyricsOf(m, picked)
 		}
 	}
+	enrichMu.Lock()
+	calibrated := songShareCalibrationsLocked(pins, content)
+	for m, l := range own {
+		if l != nil && !l.pinned {
+			l.inherits = calibrated[enrichCache[b.variants[m].key].Song][l.fp]
+		}
+	}
+	enrichMu.Unlock()
+	b.sharePinnedPass(own, pins, content, start, &t)
 	groups := b.shareEvalGroups(own)
 	t.groups = len(groups)
 	live := map[string]bool{}
@@ -725,7 +744,8 @@ func runSongEntitySharePass(ctx context.Context, b *songEntityBuild) {
 		slog.Error("song entities: write share state", "err", err)
 	}
 	slog.Info("song entities: share pass", "manual_entities", t.manualEntities, "manual_changed", t.manualChanged,
-		"manual_conflicts", t.manualConflicts, "groups", t.groups, "searched", t.searched, "unchanged", t.unchanged,
+		"manual_conflicts", t.manualConflicts, "pinned_changed", t.pinnedChanged, "pinned_kept", t.pinnedKept,
+		"pinned_conflicts", t.pinnedConflicts, "groups", t.groups, "searched", t.searched, "unchanged", t.unchanged,
 		"no_winner", t.noWinner, "abandoned", t.abandoned, "changed", t.changed, "filled", t.filled, "kept", t.kept,
 		"stopped", t.stopped, "took", time.Since(start).Round(time.Second))
 }
@@ -769,14 +789,145 @@ func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t
 			all = append(all, changed...)
 		}
 	}
-	if len(all) == 0 {
+	flushShareChanges(all)
+}
+
+// flushShareChanges:同步改了的写法逐条落盘、导出歌词文件、推给 App。
+func flushShareChanges(keys []string) {
+	if len(keys) == 0 {
 		return
 	}
-	for _, k := range all {
+	for _, k := range keys {
 		requestEnrichSaveFor(k)
 	}
-	exportLyricsFilesFor(all...)
+	exportLyricsFilesFor(keys...)
 	nudgeEnrichPush()
+}
+
+// sharePinnedPass:实体里没有手改时,共享组里钉着的写法、App 记下的校准正对着它现在这份歌词的(content,见
+// lyricsPinsFile.Content),组里其余写法跟着用这一份,读穿那个偏移;组里两份不同的这种校准不替用户选。own 是建表那一刻
+// 各写法的歌词。改了的当场落盘、导出。
+func (b *songEntityBuild) sharePinnedPass(own []*songPlanLyrics, pins map[string]bool, content map[string]string, now time.Time, t *songShareTally) {
+	var all []string
+	for _, members := range b.clusters {
+		if len(members) < 2 || slices.ContainsFunc(members, func(m int) bool { return own[m] != nil && own[m].manual }) {
+			continue
+		}
+		groups := map[int][]int{}
+		for _, m := range members {
+			groups[b.shareOf[m]] = append(groups[b.shareOf[m]], m)
+		}
+		roots := make([]int, 0, len(groups))
+		for r := range groups {
+			roots = append(roots, r)
+		}
+		sort.Ints(roots)
+		for _, r := range roots {
+			changed, kept, conflict := b.sharePinnedGroup(groups[r], own, pins, content, now)
+			if conflict {
+				t.pinnedConflicts++
+			}
+			t.pinnedChanged, t.pinnedKept = t.pinnedChanged+len(changed), t.pinnedKept+kept
+			all = append(all, changed...)
+		}
+	}
+	flushShareChanges(all)
+}
+
+// sharePinnedGroup:一个共享组按 sharePinnedPass 改,返回改了的写法、按不变式 6 前四条留着自己那份的条数(songPlanKeep);
+// conflict:组里两份不同的校准。对方自己钉着的、标了纯音乐的、手改的不动;建表之后歌词变过的写法这一轮不动。
+func (b *songEntityBuild) sharePinnedGroup(ms []int, own []*songPlanLyrics, pins map[string]bool, content map[string]string,
+	now time.Time) (changed []string, kept int, conflict bool) {
+	if len(ms) < 2 {
+		return nil, 0, false
+	}
+	var to *songPlanLyrics
+	origin := ""
+	for _, m := range ms {
+		k, l := b.variants[m].key, own[m]
+		if !pins[k] || l == nil || content[k] != l.fp {
+			continue
+		}
+		if to != nil && to.fp != l.fp {
+			return nil, 0, true
+		}
+		if origin == "" || k < origin {
+			origin, to = k, l
+		}
+	}
+	if to == nil {
+		return nil, 0, false
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	src, ok := enrichCache[origin]
+	if !ok || src.ManualLyrics || songSharePickHeld(src) || songOffsetFingerprint(src.Lyrics, src.LyricsYRC) != to.fp {
+		return nil, 0, false
+	}
+	for _, m := range ms {
+		k, cur := b.variants[m].key, own[m]
+		e, ok := enrichCache[k]
+		if !ok || k == origin || pins[k] || e.Instrumental || e.ManualLyrics || songSharePickHeld(e) {
+			continue
+		}
+		fp := songOffsetFingerprint(e.Lyrics, e.LyricsYRC)
+		if fp == to.fp || (cur == nil) != (fp == "") || (cur != nil && cur.fp != fp) {
+			continue
+		}
+		if cur != nil && songPlanKeep(cur, to, false) != "" {
+			kept++
+			continue
+		}
+		if _, err := writeSongSharePre(k, e, to.fp, now); err != nil {
+			slog.Error("song entities: back up before following a calibration", "key", k, "err", err)
+			continue
+		}
+		songShareCopyPinned(&e, src, origin, now)
+		enrichCache[k] = e
+		changed = append(changed, k)
+	}
+	if len(changed) > 0 {
+		markEnrichEditedLocked(false, changed...)
+		enrichDirty = true
+		slog.Info("song entities: followed a calibration", "from", origin, "to", len(changed))
+	}
+	return changed, kept, false
+}
+
+// songShareCalibrations:歌词同步开着时,每首歌(实体 id)里钉着的写法的校准对着哪几份歌词(lyricsPinsFile.Content)。同一首
+// 歌里歌词正是其中一份的写法在读穿那个偏移(App 的 LyricsOffsetStore 按实体读穿),换了词就读不到了。
+type songShareCalibrations map[string]map[string]bool
+
+// songShareCalibrationsLocked:pins、content 是 lyricsPinSnapshot。调用方持 enrichMu。
+func songShareCalibrationsLocked(pins map[string]bool, content map[string]string) songShareCalibrations {
+	if len(content) == 0 || !songEntitySharing() {
+		return nil
+	}
+	out := songShareCalibrations{}
+	for k := range pins {
+		e, ok := enrichCache[k]
+		if !ok || e.Song == "" || content[k] == "" {
+			continue
+		}
+		if out[e.Song] == nil {
+			out[e.Song] = map[string]bool{}
+		}
+		out[e.Song][content[k]] = true
+	}
+	return out
+}
+
+// holds:e 现在这份歌词是同一首歌里一份校准对着的。
+func (c songShareCalibrations) holds(e enrichEntry) bool {
+	fps := c[e.Song]
+	return fps != nil && fps[songOffsetFingerprint(e.Lyrics, e.LyricsYRC)]
+}
+
+// lyricsCalibratedLocked:key 这条写法换了词会丢掉一份校准:自己钉着,或者在读穿同一首歌的一份(songShareCalibrations)。
+// 后台自动换词的各道闸认它。调用方持 enrichMu。
+func lyricsCalibratedLocked(key string) bool {
+	pins, content := lyricsPinSnapshot()
+	return pins[key] || songShareCalibrationsLocked(pins, content).holds(enrichCache[key])
 }
 
 // songShareFullBackup:第一次同步之前把主缓存和正文小文件目录整份克隆一份(APFS 上 cp -c 几乎不占空间),返回目录。

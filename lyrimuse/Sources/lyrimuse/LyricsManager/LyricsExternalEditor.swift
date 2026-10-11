@@ -267,15 +267,13 @@ final class LyricsExternalEditor {
 
     /// 单曲偏移按正文指纹存:从旧正文的 key 搬到新正文下,新的下面已经有值就不动(同歌词管理 carryOffset)。
     private func carryOffset(_ session: Session, to new: (lyrics: String, yrc: String)) {
-        let store = LyricsOffsetStore.shared
         let oldKey = LyricsOffsetStore.trackKey(artist: session.artist, title: session.title,
                                                 lyrics: session.base.lyrics, lyricsYRC: session.base.yrc)
         let newKey = LyricsOffsetStore.trackKey(artist: session.artist, title: session.title, lyrics: new.lyrics, lyricsYRC: new.yrc)
-        let ms = store.offset(forKey: oldKey)
-        guard ms != 0, oldKey != newKey, store.offset(forKey: newKey) == 0 else { return }
-        store.setOffset(0, forKey: oldKey, pinKey: "")
-        store.setOffset(ms, forKey: newKey,
-                        pinKey: EnrichCacheKeys.normalizedKey(artist: session.artist, title: session.title, album: session.album))
+        LyricsOffsetStore.shared.carryOffset(
+            from: oldKey, to: newKey,
+            pinKey: EnrichCacheKeys.normalizedKey(artist: session.artist, title: session.title, album: session.album),
+            siblings: EnrichCacheReader.offsetSiblings(forKey: session.key))
     }
 
     // MARK: - 文件

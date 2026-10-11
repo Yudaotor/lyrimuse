@@ -220,8 +220,8 @@ type featureFlagsFile struct {
 	SongEntityShadow *bool `json:"song_entity_shadow,omitempty"`
 	// SongEntityPhase2:歌曲实体阶段 2 的补扫与证据(Apple 目录名字,见 songentitynames.go)。**默认开**;只有引擎认。
 	SongEntityPhase2 *bool `json:"song_entity_phase2,omitempty"`
-	// SongEntityPhase1:歌曲实体阶段 1(「第 N 次收听」的写法族并上实体、「⋯」菜单链接向同一首歌的其它写法借),
-	// 缺失 = 开。只有 App 读,引擎不用;声明在这里只为两侧键镜像契约。见 18 章决策 9、10。
+	// SongEntityPhase1:歌曲实体阶段 1(「第 N 次收听」的写法族并上实体、「⋯」菜单链接向同一首歌的其它写法借;单曲偏移
+	// 按同一首歌读穿),缺失 = 开。只有 App 读,引擎不用;声明在这里只为两侧键镜像契约。见 18 章决策 9、10、27。
 	SongEntityPhase1 *bool `json:"song_entity_phase1,omitempty"`
 	// SongEntityShareLyrics:歌曲实体阶段 3,歌词按实体同步(手改到整个实体、自动选的按共享组),见 songentityshare.go。
 	// **默认关**;只有引擎认,App 靠 unknownFileKeys 原样保留。关掉时把同步动过的写法恢复回去。

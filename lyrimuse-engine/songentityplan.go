@@ -40,23 +40,6 @@ func (l *songPlanLyrics) describe() string {
 	return fmt.Sprintf("%s %s %s", l.source, score, kind)
 }
 
-// songPlanKeep:自动换成 to 时这条写法要不要留着自己那份(不变式 6 前四条),要留时返回原因。手改同步只看第一条。
-func songPlanKeep(own, to *songPlanLyrics, byManual bool) string {
-	switch {
-	case own.manual || own.pinned:
-		return songKeepOwn
-	case byManual:
-		return ""
-	case own.native:
-		return songKeepNative
-	case own.words && !to.words:
-		return songKeepWords
-	case own.timed && !to.timed:
-		return songKeepTimed
-	}
-	return ""
-}
-
 type songPlanTally struct {
 	entities, groups, byManual, byPinned, byEvaluated              int
 	manualConflicts, pinnedConflicts                               int

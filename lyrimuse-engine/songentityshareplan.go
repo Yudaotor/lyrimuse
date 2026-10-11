@@ -24,6 +24,9 @@ type songPlanLyrics struct {
 	timed   bool
 	manual  bool // 手改或采纳的就是这一份
 	pinned  bool
+	// inherits:不是自己钉着,歌词正是同一首歌里一份校准对着的(App 读穿那个偏移,见 songShareCalibrations)。按共享组重搜时
+	// 留着;跟着同组校准换词不看它,换过去照样读穿得到同组那份校准。
+	inherits bool
 }
 
 // songOffsetFingerprint:App 单曲偏移键里的歌词指纹(LyricsOffsetStore.contentFingerprint):正文、逐字各去掉开头一个 BOM,
@@ -90,7 +93,26 @@ const (
 	songKeepWords       = "有逐字,换过去就没了"
 	songKeepShown       = "换过去屏上看不出差别"
 	songKeepTimed       = "有时间轴,换过去是纯文本"
+	songKeepInherited   = "读穿着同一首歌的校准"
 )
+
+// songPlanKeep:自动换成 to 时这条写法要不要留着自己那份(不变式 6 前四条),要留时返回原因。手改同步只看第一条。
+// 跟着校准换词、快速空跑用它。
+func songPlanKeep(own, to *songPlanLyrics, byManual bool) string {
+	switch {
+	case own.manual || own.pinned:
+		return songKeepOwn
+	case byManual:
+		return ""
+	case own.native:
+		return songKeepNative
+	case own.words && !to.words:
+		return songKeepWords
+	case own.timed && !to.timed:
+		return songKeepTimed
+	}
+	return ""
+}
 
 // songPlanPicked:采纳的那一份还在的写法键(manual_pick_sha 对得上现在的正文,跟 manualPickShouldFlip 同一判据)。
 func songPlanPicked(cache map[string]enrichEntry) map[string]bool {
@@ -202,6 +224,8 @@ func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, 
 		switch {
 		case own[i] != nil && (own[i].manual || own[i].pinned):
 			why = songKeepOwn
+		case own[i] != nil && own[i].inherits:
+			why = songKeepInherited
 		case own[i] != nil && own[i].native:
 			why = songKeepNative
 		case !contradicted && !rescoreDecidable(scored, e.LyricsSource, false):

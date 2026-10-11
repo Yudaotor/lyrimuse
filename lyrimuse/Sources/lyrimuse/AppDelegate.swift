@@ -267,6 +267,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LocalPlaybackSource.shared.splitsLongLyricLines = settings.splitLongLyricLines
         LocalPlaybackSource.shared.mergesShortLyricLines = settings.mergeShortLyricLines
         LineLayoutBudgets.shared.start()
+        // 校准名单里还没记「校正值对着哪份歌词」的,按现有的单曲偏移补记一次;引擎靠它让同一首歌的别的写法跟着那份
+        // 歌词、读穿那个偏移(18 章决策 27)。之后播放到它时 syncPinToOffset 照常更新。
+        LyricsOffsetStore.shared.backfillPinContent()
         // 悬浮歌词的「译文」也得让 Core 知道 —— 它**不是**给歌词装载用的(译文转不转由
         // chineseVariant 决定,跟这个开关无关),而是给悬浮歌词 ⚙ 菜单里「简繁转换」那一项的显隐判据用:
         // 译文没在悬浮歌词上时,把一首日文歌的中文机翻转成繁体是一次看不见的改动,那一项就不该

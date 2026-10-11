@@ -852,10 +852,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			enrichCache[key] = e
 			enrichDirty = true
 		}
-		// 用户校准过这首歌的歌词时间轴吗 —— 两条"自动重选歌词源"的路径共用这一次判定
-		// (见 lyricspins.go)。放在这里而不是各自函数里面:那两个判定要保持纯函数,
+		// 用户校准过这首歌的歌词时间轴吗(自己钉着,或者在读穿同一首歌的一份校准,见 lyricsCalibratedLocked)—— 两条
+		// "自动重选歌词源"的路径共用这一次判定(见 lyricspins.go)。放在这里而不是各自函数里面:那两个判定要保持纯函数,
 		// 好让单测不碰文件系统就能覆盖"被 pin 住就不重选"。
-		pinned := lyricsPinned(key)
+		pinned := lyricsCalibratedLocked(key)
 		// 「时长对不上」的原始观察值先过稳定性去抖再交给重试判定 —— 换曲/预载窗口里的
 		// 混合快照(当前标题 + 下一首的时长)是一次性的脏值,直接当真会白烧重试预算、
 		// 还把决策记录盖掉,见 observeWrongDuration。每次进来都要喂一口(包括时长又对上

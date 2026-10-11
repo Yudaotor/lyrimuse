@@ -298,8 +298,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 只管 Last.fm(含给它兜底的本地收听日志与 now-playing),ListenBrainz 不受影响。与引擎的
     /// featureFlagsFile.LastfmExcludedBundles 一一对应,语义见那边 lastfmexclude.go 头注。
     var lastfmExcludedBundles: [String]?
-    /// 歌曲实体阶段 1:「第 N 次收听」的写法族并上实体、「⋯」菜单链接向同一首歌的其它写法借(18 章决策 9、10)。
-    /// 缺失 = 开;设置界面不露出来,排查时手改文件关掉。只 App 读(启动时),引擎 features.go 声明同名键只为两侧键镜像契约。
+    /// 歌曲实体阶段 1:「第 N 次收听」的写法族并上实体、「⋯」菜单链接向同一首歌的其它写法借(18 章决策 9、10);单曲偏移按
+    /// 同一首歌读穿(决策 27)。缺失 = 开;设置界面不露出来,排查时手改文件关掉。只 App 读(启动时),引擎 features.go 声明
+    /// 同名键只为两侧键镜像契约。
     var songEntityPhase1: Bool?
     /// 「网页播放器」配对关系的镜像:平台 id → 浏览器 bundle id(已排序)。真源是 AppSettings.browserPlatformPairs,
     /// 这里只为让引擎知道 —— 它那几路网页平台探针只对配对过的浏览器跑(引擎 browserpairs.go)。
@@ -891,6 +892,7 @@ public final class FeatureSettingsStore: ObservableObject {
         browserPlatformPairs = f.browserPlatformPairs
         songEntityPhase1 = f.songEntityPhase1
         EnrichCacheReader.borrowsEntityLinks = songEntityPhase1Enabled
+        EnrichCacheReader.inheritsEntityOffsets = songEntityPhase1Enabled
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {

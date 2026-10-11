@@ -39,6 +39,9 @@ public final class LyricsPinStore: ObservableObject {
     private struct File: Codable {
         var version: Int
         var pins: [String: Int]
+        /// 每条 pin 的校正值对着哪一份歌词(单曲偏移键里的歌词指纹,LyricsOffsetStore.fingerprint(ofKey:))。引擎按它判
+        /// 同一首歌的别的写法能不能跟着这份歌词、读穿这个偏移(lyrimuse-engine/songentityshare.go)。旧文件没有这一项。
+        var content: [String: String]?
     }
 
     private static let fileVersion = 1
@@ -56,16 +59,18 @@ public final class LyricsPinStore: ObservableObject {
     /// 任何调用点(改路径这件事本身也不该有第二个理由)。
     public static func redirectForTesting(to url: URL) {
         Self.url = url
-        shared.pins = load()
+        (shared.pins, shared.contents) = load()
     }
 
     /// 整份字典对外只读。发布出去是为了让「歌词管理」列表行上的小标记和详情页的标签跟着变 ——
     /// 改动只来自用户动作(调偏移/重置/清空),频率低,不存在 LyricsOffsetStore 那边
     /// "20Hz 热路径重渲染"那类顾虑。
     @Published public private(set) var pins: [String: Int]
+    /// 见 File.content。只有钉着的键。
+    private var contents: [String: String]
 
     private init() {
-        pins = Self.load()
+        (pins, contents) = Self.load()
     }
 
     public var count: Int { pins.count }
@@ -75,15 +80,24 @@ public final class LyricsPinStore: ObservableObject {
         return pins[key] != nil
     }
 
+    /// 这条 pin 的校正值对着哪一份歌词(见 File.content);没记过是 nil。
+    public func content(forKey key: String) -> String? {
+        contents[key]
+    }
+
     /// 钉住/解钉一首歌。幂等:状态没变就连盘都不写(菜单栏连点「提前」时,第一下之后
-    /// 每一下都是"已经钉住了")。
-    public func setPinned(_ pinned: Bool, forKey key: String, now: Date = Date()) {
+    /// 每一下都是"已经钉住了")。content 是校正值对着的那份歌词的指纹,钉着时跟记下的不一样才改;空串不动记下的。
+    public func setPinned(_ pinned: Bool, forKey key: String, content: String = "", now: Date = Date()) {
         guard !key.isEmpty else { return }
         if pinned {
-            guard pins[key] == nil else { return }
-            pins[key] = Int(now.timeIntervalSince1970)
+            let added = pins[key] == nil
+            let moved = !content.isEmpty && contents[key] != content
+            guard added || moved else { return }
+            if added { pins[key] = Int(now.timeIntervalSince1970) }
+            if moved { contents[key] = content }
         } else {
             guard pins.removeValue(forKey: key) != nil else { return }
+            contents.removeValue(forKey: key)
         }
         persist()
     }
@@ -92,7 +106,10 @@ public final class LyricsPinStore: ObservableObject {
     /// 意义,而且留着会让"这首歌重新解析出来的新歌词"莫名其妙一上来就不许后台升级。
     public func remove(keys: Set<String>) {
         let before = pins.count
-        for key in keys { pins.removeValue(forKey: key) }
+        for key in keys {
+            pins.removeValue(forKey: key)
+            contents.removeValue(forKey: key)
+        }
         guard pins.count != before else { return }
         persist()
         logger.notice("unpinned \(before - self.pins.count, privacy: .public) of \(keys.count, privacy: .public) requested")
@@ -104,6 +121,7 @@ public final class LyricsPinStore: ObservableObject {
         guard !pins.isEmpty else { return }
         logger.notice("cleared the whole pinned list (\(self.pins.count, privacy: .public) entries)")
         pins.removeAll()
+        contents.removeAll()
         persist()
     }
 
@@ -131,7 +149,7 @@ public final class LyricsPinStore: ObservableObject {
     }
 
     private func persist() {
-        let file = File(version: Self.fileVersion, pins: pins)
+        let file = File(version: Self.fileVersion, pins: pins, content: contents.isEmpty ? nil : contents)
         guard let data = try? JSONEncoder().encode(file) else { return }
         // 目录理应早就存在(引擎的配置就在这儿),但"用户刚导入过配置/换过机器"这种
         // 情况下第一次写可能撞上目录不在,补一次 createDirectory 比丢掉这次写入划算。
@@ -142,13 +160,15 @@ public final class LyricsPinStore: ObservableObject {
 
     /// 文件在、却解不开(坏了,或者是以后的版本换了格式):挪到旁边(`<名>.corrupt-<unix 秒>`)再从空开始。
     /// 不挪的话下一次 persist 会拿只含新 pin 的字典整份覆盖它,原来的已校准名单就没了。
-    private static func load() -> [String: Int] {
-        guard let data = FileIO.read(url) else { return [:] }
-        if let file = FileIO.decodeJSON(File.self, from: data, source: url) { return file.pins }
+    private static func load() -> (pins: [String: Int], contents: [String: String]) {
+        guard let data = FileIO.read(url) else { return ([:], [:]) }
+        if let file = FileIO.decodeJSON(File.self, from: data, source: url) {
+            return (file.pins, (file.content ?? [:]).filter { file.pins[$0.key] != nil && !$0.value.isEmpty })
+        }
         let aside = url.deletingLastPathComponent()
             .appendingPathComponent(url.lastPathComponent + ".corrupt-\(Int(Date().timeIntervalSince1970))")
         FileIO.move(url, to: aside)
         logger.error("pins file could not be decoded, moved aside as \(aside.lastPathComponent, privacy: .public)")
-        return [:]
+        return ([:], [:])
     }
 }

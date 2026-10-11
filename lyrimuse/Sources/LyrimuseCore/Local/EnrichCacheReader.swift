@@ -87,6 +87,9 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     let song: String?
     // 在实体里是第几个共享组(引擎的 enrichEntry.SongShare,第 0 组不写)。只喂链接借用(platformLinks(for:siblings:))。
     let songShare: Int?
+    // 这条写法的歌词是同一首歌哪条写法的手改同步来的(引擎的 enrichEntry.LyricsEntityOrigin)。只喂单曲偏移读穿的顺序
+    // (offsetSiblings)。
+    let lyricsEntityOrigin: String?
     // KKBOX 歌曲页(引擎的 enrichEntry.KKBOXURL,用 KKBOX 放这首时从它缓存的单曲详情取的)。只喂 PlatformLinks.kkboxSong。
     let kkboxURL: String?
     // Amazon Music 曲目页(引擎的 enrichEntry.AmazonURL,用 Amazon Music 放这首时从它日志里的 ASIN 拼的)。
@@ -177,6 +180,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case isrcs
         case song
         case songShare = "song_share"
+        case lyricsEntityOrigin = "lyrics_entity_origin"
         case kkboxURL = "kkbox_url"
         case amazonURL = "amazon_url"
         case youtubeMusicURL = "youtube_music_url"
@@ -246,6 +250,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         isrcs = try c.decodeIfPresent([String].self, forKey: .isrcs)
         song = try c.decodeIfPresent(String.self, forKey: .song)
         songShare = try c.decodeIfPresent(Int.self, forKey: .songShare)
+        lyricsEntityOrigin = try c.decodeIfPresent(String.self, forKey: .lyricsEntityOrigin)
         kkboxURL = try c.decodeIfPresent(String.self, forKey: .kkboxURL)
         amazonURL = try c.decodeIfPresent(String.self, forKey: .amazonURL)
         youtubeMusicURL = try c.decodeIfPresent(String.self, forKey: .youtubeMusicURL)
@@ -475,6 +480,42 @@ public enum EnrichCacheReader {
     private static func entitySiblings(of entry: EnrichCacheEntry) -> [EnrichCacheEntry] {
         guard borrowsEntityLinks, let song = entry.song, !song.isEmpty, let all = loadEntries() else { return [] }
         return all.filter { $0.value.song == song }.sorted { $0.key < $1.key }.map(\.value)
+    }
+
+    /// 单曲偏移能不能按同一首歌的其它写法读穿(features.json 的 song_entity_phase1,App 启动读到后设)。
+    public static var inheritsEntityOffsets = true
+
+    /// 按播放器报的三段取这首歌在单曲偏移上的其它写法(见 LyricsOffsetSiblings),匹配同 `lookup`。没有实体 id、开关关着、
+    /// 缓存没加载好时是空的。
+    public static func offsetSiblings(artist: String, title: String, album: String) -> LyricsOffsetSiblings {
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard inheritsEntityOffsets, let entry = currentEntry(key), let all = loadEntries() else { return .none }
+        return offsetSiblings(ownKey: key, entry: entry, in: all)
+    }
+
+    /// 同上,按缓存里的 key 原样取(歌词管理、外部编辑)。
+    public static func offsetSiblings(forKey key: String) -> LyricsOffsetSiblings {
+        guard inheritsEntityOffsets, let all = loadEntries(), let entry = all[key] else { return .none }
+        return offsetSiblings(ownKey: key, entry: entry, in: all)
+    }
+
+    /// 跟 entry 同一个实体(`song` 相同)的写法:entry 的歌词是手改副本时原件排最前,其余按写法键排;按单曲偏移键的前两段
+    /// 去重,跟 ownKey 一样的不列(只差专辑的写法本来就是同一个偏移键)。
+    public nonisolated static func offsetSiblings(ownKey: String, entry: EnrichCacheEntry,
+                                                 in all: [String: EnrichCacheEntry]) -> LyricsOffsetSiblings {
+        guard let song = entry.song, !song.isEmpty else { return .none }
+        var keys = all.compactMap { $0.value.song == song ? $0.key : nil }.sorted()
+        if let origin = entry.lyricsEntityOrigin, let i = keys.firstIndex(of: origin) {
+            keys.remove(at: i)
+            keys.insert(origin, at: 0)
+        }
+        var seen: Set<String> = [LyricsOffsetSiblings.name(ofWritingKey: ownKey)]
+        var names: [String] = []
+        for k in keys {
+            let name = LyricsOffsetSiblings.name(ofWritingKey: k)
+            if seen.insert(name).inserted { names.append(name) }
+        }
+        return LyricsOffsetSiblings(names: names)
     }
 
     /// 拼这首歌在各平台的跳转目标。siblings 是同一首歌的其它写法:当前这条缺某一家的歌曲页时,从第一条有的写法借,
