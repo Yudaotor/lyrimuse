@@ -30,9 +30,6 @@ QQ「播放控制 → 播放/暂停、下一首、上一首」;网易云 3.1.13�
 `Privacy_Accessibility` 深链保持不变。测试包与正式包签名不同时,需要确认系统条目匹配当前运行的 App;
 已勾选但进程仍未获授权时,移除旧条目、添加当前 App 并重启。不给权限不影响基础歌词读取。
 
-范围、实现与人工门禁见[网易云失焦播放控制设计](../docs/design/netease-playback-control.md)。旧菜单调研不能
-替代另一个 App 真正持有系统媒体焦点的验收;当前 App 的 GUI、实际授权与缺授权流程仍待人工确认。
-
 如果想要跨设备/跨房间同步展示（比如手机上也能看当前播放），或者想把"正在播放"做成一个
 公开网页/飞书卡片分享出去，见独立仓库
 [Yudaotor/nowplaying-workers](https://github.com/Yudaotor/nowplaying-workers)——那是一套
