@@ -248,6 +248,7 @@ final class AppSettings: ObservableObject {
         static let touchBarLyricsAlignment = "np:touchBarLyricsAlignment"
         static let touchBarHidesControlStrip = "np:touchBarHidesControlStrip"
         static let touchBarExpandOnPlay = "np:touchBarExpandOnPlay"
+        static let touchBarShowsMoreKey = "np:touchBarShowsMoreKey"
         static let touchBarCollapseWhenPaused = "np:touchBarCollapseWhenPaused"
         static let touchBarCollapseWhenNoLyrics = "np:touchBarCollapseWhenNoLyrics"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
@@ -603,6 +604,7 @@ final class AppSettings: ObservableObject {
     static let defaultTouchBarLyricsAlignment = LyricsRestingAlignment.automatic
     static let defaultTouchBarHidesControlStrip = true
     static let defaultTouchBarExpandOnPlay = false
+    static let defaultTouchBarShowsMoreKey = true
     static let defaultTouchBarCollapseWhenPaused = false
     static let defaultTouchBarCollapseWhenNoLyrics = false
 
@@ -931,6 +933,10 @@ final class AppSettings: ObservableObject {
     /// 展开时隐藏功能栏:展开条占满整条触控栏,左端换成 App 自己的收起键。默认开;开着时展开期间够不着系统的亮度、音量,收起才回来。
     @Published var touchBarHidesControlStrip: Bool {
         didSet { defaults.set(touchBarHidesControlStrip, forKey: Keys.touchBarHidesControlStrip) }
+    }
+    /// 歌词旁边的「⋯」键:点一下换成「更多」那一页(歌词校准、喜欢、随机 / 循环、音量,`TouchBarMorePage`)。默认开。
+    @Published var touchBarShowsMoreKey: Bool {
+        didSet { defaults.set(touchBarShowsMoreKey, forKey: Keys.touchBarShowsMoreKey) }
     }
     /// 触控栏歌词的自动展开 / 收起(「行为」那三项,默认都关),怎么判见 Core `TouchBarAutoPresent`。
     @Published var touchBarExpandOnPlay: Bool {
@@ -2162,6 +2168,8 @@ final class AppSettings: ObservableObject {
             .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? Self.defaultTouchBarLyricsAlignment
         touchBarHidesControlStrip = (defaults.object(forKey: Keys.touchBarHidesControlStrip) as? Bool)
             ?? Self.defaultTouchBarHidesControlStrip
+        touchBarShowsMoreKey = (defaults.object(forKey: Keys.touchBarShowsMoreKey) as? Bool)
+            ?? Self.defaultTouchBarShowsMoreKey
         touchBarExpandOnPlay = (defaults.object(forKey: Keys.touchBarExpandOnPlay) as? Bool)
             ?? Self.defaultTouchBarExpandOnPlay
         touchBarCollapseWhenPaused = (defaults.object(forKey: Keys.touchBarCollapseWhenPaused) as? Bool)

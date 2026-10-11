@@ -18,16 +18,20 @@ public enum TouchBarSlot: Hashable, Sendable {
     case artwork
     case controls
     case lyrics
+    /// 「⋯」键:点一下整条换成「更多」那一页(`TouchBarMorePage`),一直在最右端(`TouchBarLyricsStyle.moreKeyWidth`)。
+    case more
 
     /// 从左到右排哪几项:摆在左边的、歌词、摆在右边的;同一边上封面在三键左边。关掉的那一项拿掉;
-    /// 要自己的收起键时(`showsCollapseKey`)最左边加上它。
+    /// 要自己的收起键时(`showsCollapseKey`)最左边加上它;「⋯」键(`showsMoreKey`)排在最右端。
     public static func order(artworkSide: TouchBarSide, controlsSide: TouchBarSide,
-                             showsArtwork: Bool, showsControls: Bool, showsCollapseKey: Bool) -> [TouchBarSlot] {
+                             showsArtwork: Bool, showsControls: Bool, showsCollapseKey: Bool,
+                             showsMoreKey: Bool = false) -> [TouchBarSlot] {
         func items(on side: TouchBarSide) -> [TouchBarSlot] {
             (showsArtwork && artworkSide == side ? [.artwork] : [])
                 + (showsControls && controlsSide == side ? [.controls] : [])
         }
         return (showsCollapseKey ? [.collapse] : []) + items(on: .leading) + [.lyrics] + items(on: .trailing)
+            + (showsMoreKey ? [.more] : [])
     }
 
     /// 左端放不放 App 自己的收起键:系统不给 ✕ 的时候放 —— 展开条占满整条(`fullWidth`,隐藏功能栏)、本 App

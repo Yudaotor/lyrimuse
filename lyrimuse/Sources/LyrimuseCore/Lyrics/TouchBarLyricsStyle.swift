@@ -70,6 +70,10 @@ public enum TouchBarLyricsStyle {
     public static let artworkSlot: Double = 38
     /// 三键加设置键那一项(4 × 44 的分段控件,实测 182pt;只有三键时是 136pt)连同它后面的间距。
     public static let controlsSlot: Double = 190
+    /// 「⋯」键的宽(定宽,同三键的一格)。
+    public static let moreKeyWidth: Double = 44
+    /// 「⋯」键连同它前面的间距。
+    public static let moreKeySlot: Double = moreKeyWidth + itemSpacing
 
     // MARK: - 1st generation:左端是一颗虚拟 Esc 键(实测)
     //
@@ -86,14 +90,14 @@ public enum TouchBarLyricsStyle {
     /// 1st generation 上隐藏功能栏时系统模态条的宽:整条触控栏。
     public static let fullWidthModalWidthWithEscapeKey: Double = 1085
 
-    /// 歌词那一格分到的宽:收起键、封面、三键之后剩下的全给它。`escapeKey`(1st generation,左端放了自己的 esc 键)时
-    /// 前面多一个 Esc 那一格。
+    /// 歌词那一格分到的宽:收起键、封面、三键、「⋯」键之后剩下的全给它。`escapeKey`(1st generation,左端放了自己的
+    /// esc 键)时前面多一个 Esc 那一格。
     public static func lyricsWidth(showsArtwork: Bool, showsControls: Bool, hidesControlStrip: Bool = false,
-                                   escapeKey: Bool = false) -> Double {
+                                   escapeKey: Bool = false, showsMoreKey: Bool = false) -> Double {
         let modal = escapeKey
             ? (hidesControlStrip ? fullWidthModalWidthWithEscapeKey : systemModalWidthWithEscapeKey)
             : (hidesControlStrip ? fullWidthModalWidth : systemModalWidth)
         return modal - (escapeKey ? escapeSlotWidth : 0) - firstItemX
-            - (showsArtwork ? artworkSlot : 0) - (showsControls ? controlsSlot : 0)
+            - (showsArtwork ? artworkSlot : 0) - (showsControls ? controlsSlot : 0) - (showsMoreKey ? moreKeySlot : 0)
     }
 }

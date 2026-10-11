@@ -26,7 +26,10 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "touchb
 /// 关着时只有主行、在 30pt 里垂直居中。系统开了「减弱动态效果」时不滚动、不逐字填色(17 章决策 43)。触控栏看不见时(收着、没有触控栏的 Mac)只记状态,不画位图、不装动画,
 /// 看得见了再补上。
 ///
-/// 设置(同一段里):卡拉OK效果、跟随封面、字号、显示封面 / 播放控制(连同各自的位置)、对齐方式、副行、
+/// 「⋯」键(最右端,默认显示)把整条换成「更多」那一页:歌词校准、喜欢、随机 / 循环、音量(`TouchBarMorePageBar`);
+/// 点返回、8 秒没有操作、收起、换歌时回到歌词那一页(17 章决策 47)。
+///
+/// 设置(同一段里):卡拉OK效果、跟随封面、字号、显示封面 / 播放控制 / 「⋯」键(连同各自的位置)、对齐方式、副行、
 /// 展开时隐藏功能栏、自动展开 / 收起,改了当场生效;自动展开 / 收起从下一次播放状态变化起算。
 @MainActor
 final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
@@ -38,6 +41,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         static let artwork = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.artwork")
         static let controls = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.controls")
         static let lyrics = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.lyrics")
+        static let more = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.more")
         /// 1st generation 上放进左端 Esc 那一格的 esc 键(`escapeKeyReplacementItemIdentifier`),不在 `TouchBarSlot` 的排法里。
         static let escape = NSTouchBarItem.Identifier("me.yudaotor.lyrimuse.touchbar.escape")
 
@@ -47,6 +51,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             case .artwork: return artwork
             case .controls: return controls
             case .lyrics: return lyrics
+            case .more: return more
             }
         }
     }
@@ -63,7 +68,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         var estimatedLyricsWidth: Double {
             TouchBarLyricsStyle.lyricsWidth(showsArtwork: slots.contains(.artwork),
                                             showsControls: slots.contains(.controls), hidesControlStrip: fullWidth,
-                                            escapeKey: escapeKey)
+                                            escapeKey: escapeKey, showsMoreKey: slots.contains(.more))
         }
     }
 
@@ -101,6 +106,16 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private var expectedVisibility: Bool?
     /// 上一次看到的可见状态:KVO 同一个值报两次时不当成又变了一次。
     private var lastVisible = false
+    /// 此刻是歌词那一页还是「更多」那一页,和「更多」页没有操作多久回到歌词的计时。
+    private var showingMorePage = false
+    private var moreReturnTask: Task<Void, Never>?
+    private lazy var morePage: TouchBarMorePageBar = {
+        let page = TouchBarMorePageBar()
+        page.onBack = { [weak self] in self?.showLyricsPage(reason: "back") }
+        page.onInteraction = { [weak self] in self?.restartMoreReturn() }
+        page.onItemsChanged = { [weak self] in self?.applyItems() }
+        return page
+    }()
 
     private let bar = NSTouchBar()
     private let trayItem = NSCustomTouchBarItem(identifier: Item.tray)
@@ -137,6 +152,17 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                  Self.controlImage(NSImage.touchBarSkipToEndTemplateName, label: L10n.t("下一首")),
                  Self.settingsImage()],
         trackingMode: .momentary, target: self, action: #selector(controlTapped(_:)))
+    /// 「⋯」键:定宽(`TouchBarLyricsStyle.moreKeyWidth`),估算歌词那一格的宽时扣得准。
+    private lazy var moreButton: NSButton = {
+        let symbol = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: L10n.t("更多"))
+        let button = NSButton(image: symbol?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+                                  ?? symbol ?? NSImage(),
+                              target: self, action: #selector(moreTapped))
+        button.setAccessibilityLabel(L10n.t("更多"))
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.widthAnchor.constraint(equalToConstant: CGFloat(TouchBarLyricsStyle.moreKeyWidth)).isActive = true
+        return button
+    }()
     /// 歌词那一项的视图:主行、副行两个图层行叠在里面。
     private let lyricsContainer = NSView()
     private let lyricsView = OverlayLyricScrollView()
@@ -189,9 +215,11 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             Publishers.CombineLatest4(
                 Publishers.CombineLatest4(settings.$touchBarShowsArtwork, settings.$touchBarArtworkSide,
                                           settings.$touchBarShowsControls, settings.$touchBarControlsSide),
-                settings.$touchBarHidesControlStrip, Self.appIsActive(), availability.$hasEscapeKey)
+                settings.$touchBarHidesControlStrip.combineLatest(settings.$touchBarShowsMoreKey), Self.appIsActive(),
+                availability.$hasEscapeKey)
                 // 隐藏功能栏只在系统入口在时才算数,不然左端会同时有系统的 ✕ 和这颗收起键。
-                .map { items, hides, active, hasEscapeKey in
+                .map { items, stripAndMore, active, hasEscapeKey in
+                    let (hides, showsMore) = stripAndMore
                     let fullWidth = hides && TouchBarPrivateAPI.supportsHidingControlStrip
                     // 1st generation:左端 Esc 那一格放自己的 esc 键,系统的 ✕ 跟着没了、收起靠自己那一颗,所以收不起来
                     // (入口缺了)时不放。
@@ -201,7 +229,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                         canMinimize: TouchBarPrivateAPI.supportsHidingControlStrip)
                     return Layout(slots: TouchBarSlot.order(artworkSide: items.1, controlsSide: items.3,
                                                             showsArtwork: items.0, showsControls: items.2,
-                                                            showsCollapseKey: collapse),
+                                                            showsCollapseKey: collapse, showsMoreKey: showsMore),
                                   fullWidth: fullWidth, escapeKey: escapeKey)
                 }
                 .removeDuplicates()
@@ -247,8 +275,48 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
     private func setLayout(_ new: Layout) {
         layout = new
         bar.escapeKeyReplacementItemIdentifier = new.escapeKey ? Item.escape : nil
-        bar.defaultItemIdentifiers = new.slots.map(Item.identifier(for:))
+        if showingMorePage, !new.slots.contains(.more) { showingMorePage = false }
+        applyItems()
         if !bar.isVisible { reportLyricsWidth() }
+    }
+
+    /// 按此刻是哪一页排展开条:歌词那一页照 `layout`;「更多」那一页左端收起键照旧(有的话),后面是这一页的几项。
+    private func applyItems() {
+        if showingMorePage {
+            bar.defaultItemIdentifiers = (layout.slots.contains(.collapse) ? [Item.collapse] : []) + morePage.identifiers()
+        } else {
+            bar.defaultItemIdentifiers = layout.slots.map(Item.identifier(for:))
+        }
+    }
+
+    @objc private func moreTapped() {
+        guard !showingMorePage else { return }
+        showingMorePage = true
+        PlaybackCoordinator.shared.refreshExtendedControls()
+        morePage.refreshStates()
+        applyItems()
+        restartMoreReturn()
+        logger.notice("[TouchBarLyricsController.moreTapped] showing more page")
+    }
+
+    /// 回到歌词那一页。
+    private func showLyricsPage(reason: String) {
+        moreReturnTask?.cancel()
+        moreReturnTask = nil
+        guard showingMorePage else { return }
+        showingMorePage = false
+        applyItems()
+        logger.notice("[TouchBarLyricsController.showLyricsPage] \(reason, privacy: .public)")
+    }
+
+    /// 「更多」页每有一次操作就重新计时,`TouchBarMorePage.autoReturnDelayMs` 没有操作就回到歌词那一页。
+    private func restartMoreReturn() {
+        moreReturnTask?.cancel()
+        moreReturnTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(TouchBarMorePage.autoReturnDelayMs))
+            guard !Task.isCancelled else { return }
+            self?.showLyricsPage(reason: "idle")
+        }
     }
 
     /// 一行 / 两行:主行那一格占满整条高(位图垂直居中),或者挪到上面那一格(`TouchBarLyricsStyle.twoRowMain*`)。
@@ -326,6 +394,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             trayReassertTask?.cancel()
             trayReassertTask = nil
             trayDisplaced = false
+            showLyricsPage(reason: "disabled")
             hintTask?.cancel()
             hint = nil
             cancelPauseCollapse()
@@ -467,6 +536,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
             }
         }
         guard visible else {
+            showLyricsPage(reason: "collapsed")
             // 占满整条的展开收起后功能栏重新排,放歌时 Lyrimuse 那一格会给系统的「正在播放」、图标点不回来;
             // 重新露一次面就排回去。普通方式展开的收起后图标还在,不动(17 章决策 42)。展开期间开始放歌、换了曲目的,
             // 那一格也可能已经被占掉,同样露一次(决策 46)。
@@ -574,7 +644,7 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
 
     private func observePlayback() {
         let p = PlaybackCoordinator.shared
-        playbackObservers = [
+        playbackObservers = morePage.observations() + [
             Publishers.MergeMany(TouchBarLyricsCell.playbackChanges(p)).sink { [weak self] in self?.scheduleRefresh() },
             p.$playbackControlsWithheldReason.map { $0 != nil }.removeDuplicates()
                 .sink { [weak self] _ in self?.scheduleRefresh() },
@@ -585,6 +655,9 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                     self?.coverAccent = $0
                     self?.scheduleRefresh()
                 },
+            // 换歌时「更多」那一页回到歌词。
+            p.$title.combineLatest(p.$artist).map { "\($0)\u{1F}\($1)" }.removeDuplicates().dropFirst()
+                .sink { [weak self] _ in self?.showLyricsPage(reason: "track changed") },
             // 开始放歌、换曲目:系统「正在播放」随后会占掉功能栏那一格(17 章决策 46)。
             Publishers.CombineLatest3(p.$isPlayingNow, p.$title, p.$artist)
                 .map { "\($0)\u{1F}\($1)\u{1F}\($2)" }
@@ -719,8 +792,10 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
         case Item.lyrics:
             item.view = lyricsContainer
             item.visibilityPriority = .high
+        case Item.more:
+            item.view = moreButton
         default:
-            return nil
+            return morePage.makeItem(for: identifier)
         }
         items[identifier] = item
         return item

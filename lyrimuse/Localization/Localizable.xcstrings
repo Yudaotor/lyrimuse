@@ -41703,6 +41703,75 @@
         }
       }
     },
+    "显示「更多」键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show More Button"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示「更多」键"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示「更多」鍵"
+          }
+        }
+      }
+    },
+    "歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞校正、喜歡、隨機/循環和音量；目前播放器不支援的項目不顯示"
+          }
+        }
+      }
+    },
+    "音量" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音量"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音量"
+          }
+        }
+      }
+    },
     "从暂停开始播放时展开歌词；播放中切歌不会展开，手动收起的会保持收起" : {
       "extractionState" : "manual",
       "localizations" : {

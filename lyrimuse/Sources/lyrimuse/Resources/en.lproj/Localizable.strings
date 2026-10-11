@@ -1153,6 +1153,7 @@
 "显示/隐藏菜单栏歌词" = "Show/Hide Menu Bar Lyrics";
 "显示/隐藏译文" = "Show/Hide Translation";
 "显示/隐藏读音" = "Show/Hide Romanization";
+"显示「更多」键" = "Show More Button";
 "显示专辑简介" = "Show Album Notes";
 "显示内容" = "What's Shown";
 "显示哪些播放器" = "Players Shown";
@@ -1411,6 +1412,7 @@
 "歌词显示方式" = "Where lyrics appear";
 "歌词更新于 %@" = "Lyrics updated %@";
 "歌词来源" = "Lyrics Sources";
+"歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示" = "Lyrics timing, Favorite, Shuffle/Repeat and Volume. Items the current player doesn't support are hidden";
 "歌词源可用情况" = "Lyrics Source Status";
 "歌词源已收录这首歌曲，但暂无歌词" = "Listed, but No Lyrics Yet";
 "歌词源标注的曲目时长" = "Track length reported by the lyrics source";
@@ -2078,6 +2080,7 @@
 "音叉" = "Tuning Fork";
 "音浪" = "Audio Wave";
 "音符" = "Note";
+"音量" = "Volume";
 "音频输出" = "Audio Output";
 "顶部信息" = "Header";
 "顶部信息区占窗口宽度的百分比；文字超出时末尾显示省略号" = "How much of the window's width the header takes up; text that doesn't fit ends with an ellipsis";

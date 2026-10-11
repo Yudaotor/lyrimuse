@@ -61,10 +61,10 @@ struct TouchBarPreviewStage: View {
     @State private var hoveredHotspot: Hotspot?
     @State private var presentedHotspot: Hotspot?
 
-    /// 预览上能点的几块:歌词那一格开「歌词」,封面、三键、收起键、右边的功能栏开「布局」。「样式」管整条的颜色,
+    /// 预览上能点的几块:歌词那一格开「歌词」,封面、三键、「⋯」键、收起键、右边的功能栏开「布局」。「样式」管整条的颜色,
     /// 没有单独一块,从工具栏进。
     private enum Hotspot: Hashable {
-        case lyrics, artwork, controls, collapse, controlStrip
+        case lyrics, artwork, controls, more, collapse, controlStrip
 
         var group: TouchBarSettingsGroup { self == .lyrics ? .lyrics : .layout }
 
@@ -76,6 +76,7 @@ struct TouchBarPreviewStage: View {
             case .lyrics: region = nil
             case .artwork: region = L10n.t("封面")
             case .controls: region = L10n.t("播放控制")
+            case .more: region = L10n.t("更多")
             case .collapse: region = L10n.t("收起")
             case .controlStrip: region = L10n.t("系统功能栏")
             }
@@ -95,7 +96,8 @@ struct TouchBarPreviewStage: View {
         let escapeKey = touchBar.hasEscapeKey && TouchBarPrivateAPI.supportsHidingControlStrip
         let lyricsWidth = CGFloat(TouchBarLyricsStyle.lyricsWidth(showsArtwork: settings.touchBarShowsArtwork,
                                                                   showsControls: settings.touchBarShowsControls,
-                                                                  hidesControlStrip: hidesStrip, escapeKey: escapeKey))
+                                                                  hidesControlStrip: hidesStrip, escapeKey: escapeKey,
+                                                                  showsMoreKey: settings.touchBarShowsMoreKey))
         let inputs = TouchBarLyricsCell.Inputs(
             startMs: snapshot.startMs, dwellMs: snapshot.dwellMs, isPlaying: snapshot.isPlaying,
             timingEpoch: snapshot.timingEpoch, rate: snapshot.rate, font: font,
@@ -175,7 +177,7 @@ struct TouchBarPreviewStage: View {
         let slots = TouchBarSlot.order(
             artworkSide: settings.touchBarArtworkSide, controlsSide: settings.touchBarControlsSide,
             showsArtwork: settings.touchBarShowsArtwork, showsControls: settings.touchBarShowsControls,
-            showsCollapseKey: false)
+            showsCollapseKey: false, showsMoreKey: settings.touchBarShowsMoreKey)
         return ZStack(alignment: .leading) {
             if escapeKey {
                 // 第一代:本体放回 Esc 那一格的那颗 esc 键,贴左缘。只是参照物,没有可调的设置,不开浮层。
@@ -225,6 +227,10 @@ struct TouchBarPreviewStage: View {
             controls(playing: snapshot.isPlaying)
                 .accessibilityHidden(true)
                 .overlay { hotspot(.controls) }
+        case .more:
+            moreKey
+                .accessibilityHidden(true)
+                .overlay { hotspot(.more) }
         case .lyrics:
             lyricCell(rows)
                 .frame(width: lyricsWidth, height: Self.barSize.height, alignment: .topLeading)
@@ -361,6 +367,15 @@ struct TouchBarPreviewStage: View {
     }
 
     /// 三键 + 设置键(同本体那个分段控件的四格)。
+    /// 「⋯」键:定宽(`TouchBarLyricsStyle.moreKeyWidth`),底色同三键那一块。
+    private var moreKey: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 15))
+            .foregroundStyle(.white)
+            .frame(width: CGFloat(TouchBarLyricsStyle.moreKeyWidth), height: Self.barSize.height)
+            .background(RoundedRectangle(cornerRadius: Self.buttonCornerRadius, style: .continuous).fill(Self.buttonFill))
+    }
+
     private func controls(playing: Bool) -> some View {
         let names = [NSImage.touchBarSkipToStartTemplateName,
                      playing ? NSImage.touchBarPauseTemplateName : NSImage.touchBarPlayTemplateName,

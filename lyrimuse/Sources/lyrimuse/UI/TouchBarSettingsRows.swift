@@ -132,7 +132,7 @@ struct TouchBarStyleRows: View {
 }
 
 /// 「布局」组:封面、播放控制各自显不显示、摆在歌词哪一边(`TouchBarSide`,两项各管各的,开着才有那一行位置),
-/// 展开时隐藏功能栏,以及去系统设置里调功能栏的入口。
+/// 「⋯」键,展开时隐藏功能栏,以及去系统设置里调功能栏的入口。
 struct TouchBarLayoutRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -157,6 +157,12 @@ struct TouchBarLayoutRows: View {
                 SettingsSubRow(title: L10n.t("播放控制位置")) {
                     TouchBarSidePicker(selection: $settings.touchBarControlsSide)
                 }
+            }
+            CardDivider()
+            // 最右端那颗「⋯」键,点一下换成「更多」那一页(17 章决策 47)。
+            SettingsRow(icon: "ellipsis.circle", title: L10n.t("显示「更多」键"),
+                        subtitle: L10n.t("歌词校准、喜欢、随机/循环和音量；当前播放器不支持的项不显示")) {
+                Toggle("", isOn: $settings.touchBarShowsMoreKey)
             }
             CardDivider()
             // 占满整条触控栏要连系统的功能栏一起收起,展开期间够不着亮度、音量,所以默认关。
@@ -245,6 +251,7 @@ enum TouchBarStyleDefaults {
         settings.touchBarShowsControls = AppSettings.defaultTouchBarShowsControls
         settings.touchBarControlsSide = AppSettings.defaultTouchBarControlsSide
         settings.touchBarHidesControlStrip = AppSettings.defaultTouchBarHidesControlStrip
+        settings.touchBarShowsMoreKey = AppSettings.defaultTouchBarShowsMoreKey
         // 「行为」
         settings.touchBarExpandOnPlay = AppSettings.defaultTouchBarExpandOnPlay
         settings.touchBarCollapseWhenPaused = AppSettings.defaultTouchBarCollapseWhenPaused
@@ -354,6 +361,7 @@ struct TouchBarEditorToolbar: View {
             if settings.touchBarShowsControls {
                 parts.append(sided(L10n.t("播放控制"), settings.touchBarControlsSide, default: AppSettings.defaultTouchBarControlsSide))
             }
+            if settings.touchBarShowsMoreKey { parts.append(L10n.t("更多")) }
             if settings.touchBarHidesControlStrip { parts.append(L10n.t("隐藏功能栏")) }
             guard !parts.isEmpty else { return L10n.t("全部关闭") }
             return L10n.list(parts)
