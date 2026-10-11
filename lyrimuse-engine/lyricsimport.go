@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -265,6 +266,8 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 	enrichMu.Lock()
 	restoreAll, restoreKeys := lyricsImportRestoreAll, lyricsImportRestoreKeys
 	lyricsImportRestoreAll, lyricsImportRestoreKeys = false, nil
+	// edited:状态记录确认导出之后被用户改过、正文或逐字真的变了的(不含从快照恢复、状态记录作废时的全量读)。
+	var edited []string
 	for _, g := range groupsOldestFirst {
 		groupUnchanged := useState && g.unchanged == len(g.files)
 		if groupUnchanged && !restoreAll && len(restoreKeys) == 0 {
@@ -369,8 +372,12 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 			enrichCache[key] = e
 			enrichDirty = true
 			adopted = append(adopted, key)
+			if useState && !restoreAll && !restoreKeys[key] && (e.Lyrics != prevLyrics || e.LyricsYRC != prevYRC) {
+				edited = append(edited, key)
+			}
 		}
 	}
+	adopted = append(adopted, shareImportedEditsLocked(edited, time.Now())...)
 	enrichMu.Unlock()
 	if persist {
 		saveEnrichCache() // 内部会检查 enrichDirty,这一轮什么都没变时是无害的空操作

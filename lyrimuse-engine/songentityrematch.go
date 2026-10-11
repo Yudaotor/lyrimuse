@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -104,4 +105,32 @@ func shareFollowAfterSwap(key string) {
 func songShareFollower(e enrichEntry) bool {
 	return e.LyricsEntityOrigin != "" ||
 		(e.LyricsDecisionApplied != nil && e.LyricsDecisionApplied.Path == lyricsDecisionPathSongEntityShare)
+}
+
+// shareImportedEditsLocked:歌词同步开着时,歌词文件夹里被用户改过的那几条(导入时状态记录确认导出之后改过、正文或逐字真的变了)
+// 按手改处理:标上手改,像歌词管理保存手改一样同步到整首歌(shareManualEditLocked,18 章决策 35)。不这样做的话,它只是这一条
+// 写法的歌词变了,下一次建表那一组会被重搜、用户改的词被整组那一份盖掉。返回跟着改了的写法(不含 keys 本身)。调用方持 enrichMu。
+func shareImportedEditsLocked(keys []string, now time.Time) []string {
+	if len(keys) == 0 || !songEntitySharing() {
+		return nil
+	}
+	var changed []string
+	for _, k := range keys {
+		e, ok := enrichCache[k]
+		if !ok || e.Song == "" || strings.TrimSpace(e.Lyrics) == "" {
+			continue
+		}
+		if !e.ManualLyrics || e.LyricsEntityOrigin != "" {
+			e.ManualLyrics, e.LyricsEntityOrigin = true, ""
+			enrichCache[k] = e
+			enrichDirty = true
+		}
+		changed = append(changed, shareManualEditLocked(k, now)...)
+	}
+	if len(changed) > 0 {
+		markEnrichEditedLocked(false, changed...)
+		enrichDirty = true
+		slog.Info("song entities: synced lyrics edited in the lyrics folder", "edited", len(keys), "synced", len(changed))
+	}
+	return changed
 }
