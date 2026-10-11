@@ -1714,6 +1714,31 @@ func runPlaybackPositionTests() {
         expectEqual(replaces(150, 110.6), true, "QQ 暂停: 差出 1.5 秒以上是暂停中拖过,换")
         expectEqual(LocalPlaybackSource.resumeAudioLagSecs(bundleID: qq), 0.12, "QQ 恢复: 扣出声延迟 0.12")
         expectEqual(LocalPlaybackSource.resumeAudioLagSecs(bundleID: kugouID), 0, "QQ 恢复: 别的播放器不扣")
+        // 在暂停态开播、恢复时读数掉回开头(02 章决策 120)。
+        expectEqual(LocalPlaybackSource.resumeContinuesStartAnchor(bundleID: qq, frozen: 0), true, "QQ 暂停态开播: 恢复时还在开头,仍算从开播锚点下来")
+        expectEqual(LocalPlaybackSource.resumeContinuesStartAnchor(bundleID: qq, frozen: 30), false, "QQ 暂停态开播: 曲中恢复不算")
+        expectEqual(LocalPlaybackSource.resumeContinuesStartAnchor(bundleID: kugouID, frozen: 0), false, "QQ 暂停态开播: 酷狗不动")
+        expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: qq, frozen: 7.27, reported: 0.224), true, "QQ 恢复掉回开头: 按住暂停位置")
+        expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: qq, frozen: 1.5, reported: 0.2), false, "QQ 恢复掉回开头: 暂停位置本来就在开头不算")
+        expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: qq, frozen: 30, reported: 30.2), false, "QQ 恢复掉回开头: 正常恢复不算")
+        expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: kugouID, frozen: 7.27, reported: 0.224), false, "QQ 恢复掉回开头: 酷狗不动")
+        let lateZero = { LocalPlaybackSource.qqLateZeroAnchorLead(bundleID: $0, anchorElapsed: $1, rawReported: $2, resumeSignalAge: $3) }
+        expectEqual(lateZero(qq, 0, 0.05, 0.4), 0.12, "QQ 晚到的 0 锚点: 比在放信号晚 0.35 秒,往前补 0.12")
+        expectEqual(lateZero(qq, 0, 0.05, 0.16), 0, "QQ 晚到的 0 锚点: 只晚 0.11 秒(《Mmm》《夜来香》那种)不补")
+        expectEqual(lateZero(qq, 0, 0.05, 30), 0, "QQ 晚到的 0 锚点: 在放信号太旧不算")
+        expectEqual(lateZero(qq, 0, 0.05, nil), 0, "QQ 晚到的 0 锚点: 没有在放信号不补")
+        expectEqual(lateZero(qq, 1, 1.05, 0.4), 0, "QQ 晚到的 0 锚点: 不是 0 锚点不补")
+        expectEqual(lateZero(kugouID, 0, 0.05, 0.4), 0, "QQ 晚到的 0 锚点: 酷狗不动")
+        // 网易云换歌时锚点比在放信号晚到:起点挪到在放那一刻(02 章决策 121)。
+        let ne = PlaybackPlayer.netease.bundleIdentifier
+        let neLate = { LocalPlaybackSource.neteaseLateStartAnchorLead(bundleID: $0, anchorElapsed: $1, rawReported: $2, playingSince: $3) }
+        func near4(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 0.001 }
+        expectEqual(near4(neLate(ne, 0, 0.3, 0.72), 0.42), true, "网易云晚到的开播锚点: 晚 0.42 就补 0.42(《Pretty Eyes》)")
+        expectEqual(near4(neLate(ne, 2.0, 2.3, 0.73), 0.43), true, "网易云晚到的开播锚点: 从停下的地方恢复开播(锚点 2.0)同样补")
+        expectEqual(neLate(ne, 0, 0.3, 0.35), 0, "网易云晚到的开播锚点: 只晚 0.05 不补")
+        expectEqual(neLate(ne, 0, 0.3, 1.5), 0, "网易云晚到的开播锚点: 晚 1.2 秒更像卡了一下,不补")
+        expectEqual(neLate(ne, 0, 0.3, nil), 0, "网易云晚到的开播锚点: 没有在放信号不补")
+        expectEqual(neLate(qq, 0, 0.3, 0.72), 0, "网易云晚到的开播锚点: QQ 走自己那条")
 
         // 跟随重发锚点(KKBOX)的两条判据。
         let L2 = LocalPlaybackSource.self

@@ -474,6 +474,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 最近一次「恢复播放」信号的到达时刻(媒体事件流报 playing:true,Spotify / Apple Music 通知报 Playing)。
     /// 播放 → 暂停那一拍清掉,留下来的一定晚于这次暂停,见 resumeSignalAge。
     private var posResumeSignalAt: Date?
+    /// 这一段在放从哪一刻开始:暂停信号到了清掉,之后第一个「恢复播放」信号才记,后面再来的不覆盖。QQ 换歌时带新歌名和
+    /// 0 锚点的那一行里也有 `playing:true`,`posResumeSignalAt` 会被它刷新成跟锚点同时,见 qqLateZeroAnchorLead。
+    private var posResumeEpisodeAt: Date?
 
     /// 这一拍的「恢复信号」还算不算数:只认几秒之内到的。靠轮询(暂停档 6 秒一拍)发现恢复时,手上那个是暂停那一刻的
     /// 旧信号,拿它的年龄当前跳上界,会把起点砍到「暂停值 + 两秒多」,那一拍最多落后约 4 秒;这种时候跟拿不到信号
@@ -704,6 +707,52 @@ public final class LocalPlaybackSource: ObservableObject {
     public nonisolated static let trackEndZeroWindowSecs: Double = 2.0
     /// 见 holdsTrackEndZero。
     public nonisolated static let trackEndZeroHoldSecs: TimeInterval = 1.5
+
+    /// QQ 在暂停态开播一首(先在暂停态发 `elapsed=0`、开播后一秒多才补 `1.000`):恢复播放那一拍暂停位置还在开头,这首仍算
+    /// 「从开播锚点外推下来」,开播后补的那个锚点照 correctsEarlyStartAnchor 看(不然恢复那条路把这道闸关了,这种开播整首
+    /// 快 0.16 秒)。只认 QQ。见 02 章决策 120。纯函数,selftest 直接覆盖。
+    public nonisolated static func resumeContinuesStartAnchor(bundleID: String?, frozen: Double?) -> Bool {
+        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier, let frozen else { return false }
+        return frozen <= anchorLagFreshStartMaxSecs
+    }
+
+    /// QQ「先报在放、再发 0」那种开播:0 锚点比在放信号晚到 `qqLateZeroAnchorMinGapSecs` 以上时,真起点比这个锚点早
+    /// `qqLateZeroAnchorLeadSecs` 左右(按 QQ 桌面歌词量,10 次早 0.06~0.21 秒);晚到不到这么多的两次基本是准的,不补。
+    /// `resumeSignalAge` 是在放信号到这一拍过了多久(3 秒以前的不算数)。只认 QQ。见 02 章决策 120。纯函数,selftest 直接覆盖。
+    public nonisolated static func qqLateZeroAnchorLead(bundleID: String?, anchorElapsed: Double?, rawReported: Double,
+                                                        resumeSignalAge: TimeInterval?) -> Double {
+        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier, anchorElapsed == 0,
+              let resumeSignalAge, resumeSignalAge <= resumeSignalMaxAgeSecs else { return 0 }
+        return resumeSignalAge - rawReported >= qqLateZeroAnchorMinGapSecs ? qqLateZeroAnchorLeadSecs : 0
+    }
+
+    /// 网易云换歌时先报在放、约 0.4 秒后才发新歌的锚点,真起点就在报在放那一刻:锚点比这一段在放的起点晚到
+    /// `neteaseLateStartAnchorGapRange` 之内,起点挪到在放信号那一刻,返回要补上的那一截。锚点 elapsed 不一定是 0
+    /// (从上次停下的地方恢复开播时是那个位置)。`playingSince` 是这一段在放开始到这一拍过了多久。只认网易云。
+    /// 见 02 章决策 121。纯函数,selftest 直接覆盖。
+    public nonisolated static func neteaseLateStartAnchorLead(bundleID: String?, anchorElapsed: Double?, rawReported: Double,
+                                                              playingSince: TimeInterval?) -> Double {
+        guard bundleID == PlaybackPlayer.netease.bundleIdentifier, let anchorElapsed, let playingSince,
+              playingSince <= resumeSignalMaxAgeSecs else { return 0 }
+        let gap = playingSince - (rawReported - anchorElapsed)
+        return neteaseLateStartAnchorGapRange.contains(gap) ? gap : 0
+    }
+
+    /// 见 neteaseLateStartAnchorLead。超过上沿更像是中途卡了一下,不当成晚到的开播锚点。
+    public nonisolated static let neteaseLateStartAnchorGapRange: ClosedRange<Double> = 0.15...0.8
+
+    /// 见 qqLateZeroAnchorLead。
+    public nonisolated static let qqLateZeroAnchorMinGapSecs: Double = 0.15
+    /// 见 qqLateZeroAnchorLead。
+    public nonisolated static let qqLateZeroAnchorLeadSecs: Double = 0.12
+
+    /// QQ 暂停着开播另一首时先报这一首在放、读数掉回开头,0.3~0.6 秒后才换歌名。恢复那一拍读数回到开头、暂停位置却在后面:
+    /// 按暂停位置接着走,最多 `trackEndZeroHoldSecs`;这期间换了歌名就是换歌,到点还是这一首(暂停中拖回开头)再采信读数。
+    /// 不按住的话界面会先跳回这一首开头再换歌。只认 QQ。见 02 章决策 120。纯函数,selftest 直接覆盖。
+    public nonisolated static func resumeDropsToTrackStart(bundleID: String?, frozen: Double?, reported: Double) -> Bool {
+        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier, let frozen else { return false }
+        return reported <= anchorLagFreshStartMaxSecs && frozen - reported > seekJumpToleranceSecs
+    }
 
     /// QQ 暂停时多数不重发锚点;补发的是整秒下取整的值,或者暂停前刚重发过的、时间戳新而值少一秒的旧值,都比暂停那一刻早。
     /// 所以暂停事件冻住了外推时,暂停那一拍按屏上位置停住(见 posHeldPause),之后它再报的值按 `pausedReadingReplacesShown`
@@ -1367,6 +1416,8 @@ public final class LocalPlaybackSource: ObservableObject {
     private var posHeldPause: (anchorElapsed: Double, ms: Int)?
     /// QQ 曲尾归零那一段从什么时候开始按住的(见 holdsTrackEndZero);不在那一段里为 nil。
     private var posTrackEndZeroSince: Date?
+    /// QQ 恢复播放时读数掉回开头、按住暂停位置的那一段从什么时候开始的(见 resumeDropsToTrackStart);不在那一段里为 nil。
+    private var posResumeZeroSince: Date?
     /// 按 tickAnchorError 看过的那个锚点(elapsed),一个锚点只看一次;换歌 / 恢复 / 拖动时记成那一刻的锚点。
     private var posTickCheckedAnchorElapsed: Double?
     /// 最近一次换歌 / 恢复 / 拖动的时刻,见 tickAnchorSettleSecs。
@@ -1897,6 +1948,7 @@ public final class LocalPlaybackSource: ObservableObject {
         let anchorLagSampleWasValid = posAnchorLagSampleValid
         posAnchorLagSampleValid = false
         guard key == posTrackingKey, posWasPlaying, let prevWall = posPrevWall else {
+            var resumeZeroAt: Date?
             if key != posTrackingKey {
                 // 换歌:先判是不是 gapless 自然切歌——上一首(还在播)按墙钟连续外推已经
                 // 走到结尾附近。是的话按连续性播种 + 量出锚点超前量;否则(手动点播/首次
@@ -1961,6 +2013,18 @@ public final class LocalPlaybackSource: ObservableObject {
                 }
                 setReportedBias(natural?.bias ?? -seedLag, anchorElapsed: anchorElapsedTime)
                 trackPosSeconds = natural?.seed ?? (rawReported + seedLag)
+                let playingSince = posResumeEpisodeAt.map { now.timeIntervalSince($0) }
+                let startLead = Self.qqLateZeroAnchorLead(
+                    bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime, rawReported: rawReported,
+                    resumeSignalAge: playingSince)
+                    + Self.neteaseLateStartAnchorLead(
+                        bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime, rawReported: rawReported,
+                        playingSince: playingSince)
+                if lastSnapshot?.bundleIdentifier == PlaybackPlayer.qqMusic.bundleIdentifier
+                    || lastSnapshot?.bundleIdentifier == PlaybackPlayer.netease.bundleIdentifier {
+                    logger.notice("start anchor: raw=\(rawReported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3)) playingSince=\(playingSince ?? -1, format: .fixed(precision: 3))s lead=\(startLead, format: .fixed(precision: 3))")
+                }
+                trackPosSeconds += startLead
                 if natural == nil, seedLag == 0, let restoredBias {
                     // App 重启后的第一拍,接着用上一个进程给这首歌量的偏置(见 restorablePlayerClockBias)。
                     logger.notice("anchor bias restored after relaunch: \(restoredBias, format: .fixed(precision: 3))s (raw \(rawReported, format: .fixed(precision: 3)))")
@@ -1993,6 +2057,13 @@ public final class LocalPlaybackSource: ObservableObject {
                         frozen: pausedPositionMs.map { Double($0) / 1000 },
                         maxForwardSecs: sinceSignal - Self.resumeAudioLagSecs(bundleID: lastSnapshot?.bundleIdentifier),
                         capSecs: resumeSignalAge == nil ? Self.resumeMaxForwardCapSecs : .infinity)
+                let frozen = pausedPositionMs.map { Double($0) / 1000 }
+                posAnchorLagSampleValid = Self.resumeContinuesStartAnchor(bundleID: lastSnapshot?.bundleIdentifier, frozen: frozen)
+                if let frozen, Self.resumeDropsToTrackStart(bundleID: lastSnapshot?.bundleIdentifier, frozen: frozen, reported: reported) {
+                    logger.notice("resume to track start: frozen=\(frozen, format: .fixed(precision: 3)) reported=\(reported, format: .fixed(precision: 3)), keeping the paused position until the title changes")
+                    trackPosSeconds = frozen
+                    resumeZeroAt = now
+                }
                 // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):播种值就是真声,差值折进偏置。
                 if gaplessLeadBundleID != nil, anchorElapsedTime == nil, resumeSignalAge != nil || freshSignalAge != nil,
                    pausedPositionMs != nil,
@@ -2005,6 +2076,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 换歌 / 恢复播放:上一段的「晚锚点已确认过」记录作废(见 posLateAnchorProbedElapsed)。
             posLateAnchorProbedElapsed = nil
             posTrackEndZeroSince = nil
+            posResumeZeroSince = resumeZeroAt
             noteTickAnchorSettle(anchorElapsed: anchorElapsedTime, now: now)
             return (trackPosSeconds, true)
         }
@@ -2147,6 +2219,14 @@ public final class LocalPlaybackSource: ObservableObject {
             logger.notice("track end zero: still the same track after \(now.timeIntervalSince(since), format: .fixed(precision: 2))s, treating it as a restart")
         }
         posTrackEndZeroSince = nil
+        // QQ 恢复播放时读数掉回开头的那一段:接着按暂停位置走,见 resumeDropsToTrackStart。
+        if let since = posResumeZeroSince {
+            if now.timeIntervalSince(since) < Self.trackEndZeroHoldSecs, reported <= Self.trackEndZeroMaxReportedSecs + 1 {
+                trackPosSeconds = predicted
+                return (trackPosSeconds, false)
+            }
+            posResumeZeroSince = nil
+        }
         if abs(reported - predicted) > Self.seekJumpToleranceSecs {
             // 真实 seek/跳变:直接重锚到这次读数。seek 时 Spotify 会重打锚点,重打后的
             // 锚点与真声对齐(与手动点播同一性质),自然切歌偏置随之作废——清零并改信
@@ -2346,6 +2426,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 回放:一条播放器状态通知到达(线上是 handlePlayerInfoChanged:记下时刻;暂停类通知同时冻住外推)。
     public func replayPlayerStateEvent(at date: Date, freeze: Bool) {
         posStateSignalAt = date
+        if freeze { posResumeEpisodeAt = nil }
         if freeze { freezeExtrapolationUntilNextPoll(now: date) }
     }
 
@@ -2356,6 +2437,7 @@ public final class LocalPlaybackSource: ObservableObject {
     public func replayResumeSignal(at date: Date) {
         posStateSignalAt = date
         posResumeSignalAt = date
+        if posResumeEpisodeAt == nil { posResumeEpisodeAt = date }
     }
 
     /// 回放:此刻屏上的位置(播放中按锚点外推,暂停时是冻结位置)。
@@ -2567,7 +2649,11 @@ public final class LocalPlaybackSource: ObservableObject {
         // 记时刻和冻结外推是**两件事**:冻结只认暂停(纯锚点刷新冻了就是每句一顿),
         // 而"状态什么时候变的"这个上界,暂停和恢复都要记。
         if stateSignal { posStateSignalAt = Date() }
-        if resumeSignal { posResumeSignalAt = Date() }
+        if freezeExtrapolation, stateSignal { posResumeEpisodeAt = nil }
+        if resumeSignal {
+            posResumeSignalAt = Date()
+            if posResumeEpisodeAt == nil { posResumeEpisodeAt = posResumeSignalAt }
+        }
         if freezeExtrapolation { freezeExtrapolationUntilNextPoll() }
         pendingNotificationPoll?.cancel()
         pendingNotificationPoll = Task { @MainActor [weak self] in

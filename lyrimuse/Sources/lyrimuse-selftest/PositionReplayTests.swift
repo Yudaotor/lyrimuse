@@ -106,6 +106,10 @@ func runPositionReplayTests() {
     replayQQSameStartAnchorNotEarly()
     replayQQFlooredSeek()
     replayQQResumeAudioLag()
+    replayQQStartFromPaused()
+    replayQQResumeToOtherTrack()
+    replayQQLateZeroAnchor()
+    replayNeteaseLateStartAnchor()
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
     replayKKBOXStallHolds()
@@ -366,6 +370,88 @@ private func replayQQResumeAudioLag() {
         rig.tick(mediaControl(bundle, "A.I.N.Y.", anchor: 30, elapsed: 40.3, duration: 226), at: at(10.3))
         expectEqual(near(rig.shown(at: at(10.3)), 33.3 - lag, 0.02), true,
                     "回放·\(lag > 0 ? "QQ" : "酷狗") 恢复: 起点扣 \(lag) 秒出声延迟(\(rig.shown(at: at(10.3)).map { String(format: "%.3f", $0) } ?? "nil"))")
+    }
+}
+
+/// QQ 在暂停态开播一首:暂停态发 `0`、开播后 1.2 秒补 `1.000`(真起点比开播信号晚 0.22 秒)。补的锚点一到就按决策 115 对齐,
+/// 不再整首快 0.2 秒。见 02 章决策 120。
+@MainActor
+private func replayQQStartFromPaused() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let rig = ReplayRig("qq-start-from-paused")
+    defer { rig.tearDown() }
+    rig.tick(mediaControl(qqID, "孤勇者", anchor: 0, elapsed: 0, duration: 256, playing: false), at: at(0))
+    rig.source.replayResumeSignal(at: at(0.6))
+    rig.tick(mediaControl(qqID, "孤勇者", anchor: 0, elapsed: 0.1, duration: 256), at: at(0.7))
+    rig.tick(mediaControl(qqID, "孤勇者", anchor: 1, elapsed: 1.0, duration: 256), at: at(1.82))
+    expectEqual(near(rig.shown(at: at(1.82)), 1.0, 0.03), true, "回放·QQ 暂停态开播: 补的 1.000 锚点一到就对齐(\(fmt(rig.shown(at: at(1.82)))))")
+}
+
+/// QQ 暂停在《再见以前先说再见》7.27 秒时开播另一首:先报这一首在放、读数掉回 0.224,0.6 秒后才换歌名。界面接着按暂停位置走,
+/// 不先跳回这一首开头;到点还是这一首(暂停中拖回开头)才采信读数。见 02 章决策 120。
+@MainActor
+private func replayQQResumeToOtherTrack() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    for switchesTrack in [true, false] {
+        let rig = ReplayRig("qq-resume-other-\(switchesTrack)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(qqID, "再见以前先说再见", anchor: 5, elapsed: 5, duration: 272), at: at(0))
+        rig.tick(mediaControl(qqID, "再见以前先说再见", anchor: 5, elapsed: 7, duration: 272), at: at(2))
+        rig.source.replayPlayerStateEvent(at: at(2.27), freeze: true)
+        rig.tick(mediaControl(qqID, "再见以前先说再见", anchor: 5, elapsed: 7.27, duration: 272, playing: false), at: at(2.3))
+        rig.source.replayResumeSignal(at: at(10))
+        rig.tick(mediaControl(qqID, "再见以前先说再见", anchor: 0, elapsed: 0.224, duration: 272), at: at(10.06))
+        expectEqual(near(rig.shown(at: at(10.06)), 7.27, 0.05), true, "回放·QQ 恢复掉回开头: 不先跳回这一首开头(\(fmt(rig.shown(at: at(10.06)))))")
+        rig.tick(mediaControl(qqID, "再见以前先说再见", anchor: 0, elapsed: 0.4, duration: 272), at: at(10.24))
+        expectEqual(near(rig.shown(at: at(10.24)), 7.45, 0.05), true, "回放·QQ 恢复掉回开头: 换歌名之前再来一拍也接着按住(\(fmt(rig.shown(at: at(10.24)))))")
+        if switchesTrack {
+            rig.tick(mediaControl(qqID, "A.I.N.Y.", anchor: 0, elapsed: 0.05, duration: 226), at: at(10.6))
+            // 在放信号比新歌的 0 锚点早 0.6 秒到,也是「先报在放、再发 0」那种开播:起点往前补 0.12(qqLateZeroAnchorLead)。
+            expectEqual(near(rig.shown(at: at(11.6)), 1.17, 0.05), true, "回放·QQ 恢复掉回开头: 换了歌名照常从开头走(\(fmt(rig.shown(at: at(11.6)))))")
+        } else {
+            rig.tick(mediaControl(qqID, "再见以前先说再见", anchor: 0, elapsed: 0.8, duration: 272), at: at(10.6))
+            rig.tick(mediaControl(qqID, "再见以前先说再见", anchor: 0, elapsed: 1.9, duration: 272), at: at(11.7))
+            expectEqual(near(rig.shown(at: at(11.7)), 1.9, 0.05), true, "回放·QQ 恢复掉回开头: 到点还是这一首就采信读数(\(fmt(rig.shown(at: at(11.7)))))")
+        }
+    }
+}
+
+/// QQ「先报在放、再发 0」:在放信号 10.30 到,0 锚点 10.65 才发(晚 0.35 秒)→ 起点往前补 0.12;只晚 0.05 秒的不补。
+/// 带新歌名和 0 锚点的那一行同样带 `playing:true`(10.65 又来一次在放信号),不能拿它当这段在放的起点。
+/// 酷狗同一串读数不补(对照)。见 02 章决策 120。
+@MainActor
+private func replayQQLateZeroAnchor() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    for (bundle, signalAt, expected) in [(qqID, 10.30, 0.17), (qqID, 10.60, 0.05), (PlaybackPlayer.kugou.bundleIdentifier, 10.30, 0.05)] {
+        let rig = ReplayRig("qq-late-zero-\(bundle)-\(signalAt)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(bundle, "Mmm", anchor: 0, elapsed: 0, duration: 200), at: at(0))
+        rig.tick(mediaControl(bundle, "Mmm", anchor: 0, elapsed: 10, duration: 200), at: at(10))
+        rig.source.replayPlayerStateEvent(at: at(signalAt - 0.01), freeze: true)
+        rig.source.replayResumeSignal(at: at(signalAt))
+        rig.source.replayResumeSignal(at: at(10.65))
+        rig.tick(mediaControl(bundle, "孤勇者", anchor: 0, elapsed: 0.05, duration: 256), at: at(10.7))
+        expectEqual(near(rig.shown(at: at(10.7)), expected, 0.02), true,
+                    "回放·晚到的 0 锚点(\(bundle == qqID ? "QQ" : "酷狗"),信号 \(signalAt)): 起点 \(expected)(\(fmt(rig.shown(at: at(10.7)))))")
+    }
+}
+
+/// 网易云按「下一个」开播:43.95 报在放(紧跟着上一首的暂停信号),44.375 才发新歌的 `0` 锚点,带歌名的那一行也带
+/// `playing:true`。真起点是报在放那一刻:起点补上晚到的 0.42。酷狗同一串读数不补(对照)。见 02 章决策 121。
+@MainActor
+private func replayNeteaseLateStartAnchor() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    for (bundle, lead) in [(PlaybackPlayer.netease.bundleIdentifier, 0.425), (PlaybackPlayer.kugou.bundleIdentifier, 0.0)] {
+        let rig = ReplayRig("netease-late-start-\(lead)")
+        defer { rig.tearDown() }
+        rig.tick(mediaControl(bundle, "u got me", anchor: 40, elapsed: 40, duration: 212), at: at(30))
+        rig.tick(mediaControl(bundle, "u got me", anchor: 40, elapsed: 52, duration: 212), at: at(42))
+        rig.source.replayPlayerStateEvent(at: at(43.79), freeze: true)
+        rig.source.replayResumeSignal(at: at(43.95))
+        rig.source.replayResumeSignal(at: at(44.375))
+        rig.tick(mediaControl(bundle, "Pretty Eyes", anchor: 0, elapsed: 0.025, duration: 209), at: at(44.4))
+        expectEqual(near(rig.shown(at: at(44.4)), 0.025 + lead, 0.02), true,
+                    "回放·\(lead > 0 ? "网易云" : "酷狗") 开播锚点晚到: 起点补 \(lead)(\(fmt(rig.shown(at: at(44.4)))))")
     }
 }
 
