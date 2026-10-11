@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import LyrimuseCore
 
 // 悬浮歌词 ⚙ 按钮弹出的快捷设置菜单(参考 QQ 音乐悬浮歌词的设置菜单)。
@@ -13,6 +14,9 @@ import LyrimuseCore
 // MenuBar/DockMenu.swift):纯 target/action(NSMenuItem 不支持闭包)、每次弹出前
 // menuNeedsUpdate 里整棵 removeAllItems() 重建(保证勾选态永远是最新的,菜单项十几个、重建
 // 代价可以忽略)、autoenablesItems = false(这里每一项都常驻可点,没有需要变灰的场景)。
+//
+// 排法(04 章决策 60):最上面「歌词偏移」「字号」两行是嵌在菜单里的 − / + 控件,点了菜单不关、
+// 可以连着调;下面依次是译文 / 读音 / 下一句,繁简 / 配色 / 位置,搜索歌词 / 更多设置。
 //
 // 同 MenuBarStatusMenu 的那条不变量:构建菜单时只读 AppSettings/PlaybackCoordinator,
 // 不碰其它 `static let shared` 单例的构造路径——不过这个类本身就是
@@ -49,6 +53,22 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         let settings = AppSettings.shared
 
+        menu.addItem(stepperItem(offsetRow()))
+        menu.addItem(stepperItem(fontSizeRow()))
+        menu.addItem(.separator())
+        // 这三项跟设置页「歌词显示 › 悬浮歌词」的「内容」浮层同名、同图标、写同一个值(悬浮歌词自己那份,
+        // 不连带歌词窗口,见 04 章决策 42)。
+        menu.addItem(toggle(L10n.t("译文"), symbol: "text.bubble",
+                            on: settings.overlayShowTranslation,
+                            action: #selector(toggleShowTranslation)))
+        menu.addItem(toggle(L10n.t("读音"), symbol: "textformat.alt",
+                            on: settings.overlayShowRomanization,
+                            action: #selector(toggleShowRomanization)))
+        menu.addItem(toggle(L10n.t("下一句"), symbol: "rectangle.grid.1x2",
+                            on: settings.showNextLinePreview,
+                            action: #selector(toggleNextLinePreview)))
+        menu.addItem(.separator())
+
         // 「简繁转换」只在**这首歌的歌词真的会被转换**时才给("只有中文歌
         // 时才出现这个选项")。跟下面「搜索歌词…」按当前曲目决定显隐是同一个模式 —— 右键菜单
         // 本来就是上下文菜单,每次弹出都重建(见 menuNeedsUpdate)。
@@ -62,29 +82,13 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         if LocalPlaybackSource.shared.currentLyricsSupportsChineseVariant {
             menu.addItem(submenu(L10n.t("繁简转换"), symbol: "character.bubble", menu: chineseVariantMenu(settings)))
         }
-        // 这三项跟设置页「歌词显示 › 悬浮歌词」的「内容」浮层同名、同图标、写同一个值(悬浮歌词自己那份,
-        // 不连带歌词窗口,见 04 章决策 42)。
-        menu.addItem(toggle(L10n.t("译文"), symbol: "text.bubble",
-                            on: settings.overlayShowTranslation,
-                            action: #selector(toggleShowTranslation)))
-        menu.addItem(toggle(L10n.t("读音"), symbol: "textformat.alt",
-                            on: settings.overlayShowRomanization,
-                            action: #selector(toggleShowRomanization)))
-        menu.addItem(toggle(L10n.t("下一句"), symbol: "rectangle.grid.1x2",
-                            on: settings.showNextLinePreview,
-                            action: #selector(toggleNextLinePreview)))
-        // 关掉这一项时**不会**当场把控制排从指针底下抽走——这颗菜单本身就挂在控制排上,
-        // 当场收回等于连刚点过的这个入口一起消失。真正生效被推迟到这次悬停结束那一刻,
-        // 见 LyricsOverlayWindowController.showHoverControls 声明处。
-        menu.addItem(toggle(L10n.t("悬停时显示控制条"), symbol: "playpause.circle",
-                            on: settings.overlayShowHoverControls,
-                            action: #selector(toggleShowHoverControls)))
+        // 「悬停时显示控制条」不放这里:这个菜单只能从控制条上的 ⚙ 打开,在这里关掉控制条,菜单自己也就打不开了。
         menu.addItem(submenu(L10n.t("配色主题"), symbol: "paintpalette", menu: colorThemeMenu(settings)))
-        menu.addItem(submenu(offsetMenuTitle, symbol: "timer", menu: lyricsOffsetMenu()))
         // 「位置」:自由 / 顶部居中 / 底部居中。放在这里是因为预设模式下
         // 想拖窗口只会得到一条「🔒 已固定为…，在 ⚙ 菜单里可改」+ 抖一下,用户下一步最可能就是想切模式 —— 就近给出口,
         // 不必去设置页翻「行为」浮层。写的是同一个 AppSettings 值,控制器订阅它自己落位。
         menu.addItem(submenu(L10n.t("位置"), symbol: "dock.rectangle", menu: placementMenu(settings)))
+        menu.addItem(.separator())
         // 没歌在播时不给这一项——跟 LyricsWindowView 的「⋯」菜单同一条件
         // (`if !playback.title.isEmpty`),搜索面板本身就是按"当前播放的这首歌"算的,
         // 没有曲目信息搜什么都没意义。
@@ -92,7 +96,6 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
             menu.addItem(action(L10n.t("搜索歌词…"), symbol: "magnifyingglass",
                                selector: #selector(searchLyrics)))
         }
-        menu.addItem(.separator())
         menu.addItem(action(L10n.t("更多设置…"), symbol: "gearshape",
                            selector: #selector(openMoreSettings)))
     }
@@ -160,34 +163,54 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         return item
     }
 
-    /// 「歌词进度」子菜单——跟 MenuBar/MenuBarStatusMenu.swift 的「歌词时间轴」子菜单同一套
-    /// 动作(`PlaybackCoordinator.nudgeLyricsOffset(by:)`/`.resetLyricsOffset()`),标题也照抄
-    /// 那边的"把当前校准值直接写进子菜单标题"做法,不用另开一个只读展示行。
-    private func lyricsOffsetMenu() -> NSMenu {
-        let m = NSMenu()
-        m.autoenablesItems = false
-        m.addItem(action(nudgeTitle(L10n.t("提前")), symbol: "gobackward",
-                        selector: #selector(nudgeEarlier)))
-        m.addItem(action(nudgeTitle(L10n.t("延后")), symbol: "goforward",
-                        selector: #selector(nudgeLater)))
-        if PlaybackCoordinator.shared.trackLyricsOffsetMs != 0 {
-            m.addItem(.separator())
-            m.addItem(action(L10n.t("重置"), symbol: "arrow.counterclockwise",
-                            selector: #selector(resetOffset)))
-        }
-        return m
-    }
-
-    private func nudgeTitle(_ verb: String) -> String {
+    /// 「歌词偏移」一行:值是**这首歌**那一部分(同灵动岛的偏移控件,不含设置里的全局基准),− 延后、+ 提前,
+    /// 步长读设置里的「步长」;不为 0 时右边出 ↺ 归零。
+    private func offsetRow() -> MenuStepperRowView {
         let step = AppSettings.shared.lyricsOffsetStepMs
-        return "\(verb) \(AppSettings.formattedSeconds(ms: step))\(L10n.t("秒"))"
+        let seconds = "\(AppSettings.formattedSeconds(ms: step))\(L10n.t("秒"))"
+        return MenuStepperRowView(
+            title: L10n.t("歌词偏移"),
+            minus: ("minus", "\(L10n.t("延后")) \(seconds)"),
+            plus: ("plus", "\(L10n.t("提前")) \(seconds)"),
+            resetHelp: L10n.t("重置"),
+            state: PlaybackCoordinator.shared.$trackLyricsOffsetMs
+                .map { ms in
+                    MenuStepperRowView.State(text: "\(AppSettings.signedSeconds(ms: ms))s", canReset: ms != 0)
+                }
+                .eraseToAnyPublisher(),
+            onStep: { direction in
+                _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: direction * AppSettings.shared.lyricsOffsetStepMs)
+            },
+            onReset: { PlaybackCoordinator.shared.resetLyricsOffset() })
     }
 
-    private var offsetMenuTitle: String {
-        let ms = PlaybackCoordinator.shared.trackLyricsOffsetMs
-        guard ms != 0 else { return L10n.t("时间轴偏移") }
-        let sign = ms > 0 ? "+" : ""
-        return "\(L10n.t("时间轴偏移"))(\(sign)\(AppSettings.formattedSeconds(ms: ms))s)"
+    /// 「字号」一行:悬浮歌词主歌词行字号,每下 ±2pt,范围跟设置页那根滑杆同一份(`overlayFontSizeRange`)。
+    private func fontSizeRow() -> MenuStepperRowView {
+        let range = AppSettings.overlayFontSizeRange
+        return MenuStepperRowView(
+            title: L10n.t("字号"),
+            minus: ("textformat.size.smaller", L10n.t("缩小字号")),
+            plus: ("textformat.size.larger", L10n.t("放大字号")),
+            resetHelp: nil,
+            state: AppSettings.shared.$fontSize
+                .map { size in
+                    MenuStepperRowView.State(text: "\(Int(size.rounded()))", canReset: false,
+                                             canDecrease: size > range.lowerBound, canIncrease: size < range.upperBound)
+                }
+                .eraseToAnyPublisher(),
+            onStep: { direction in
+                let settings = AppSettings.shared
+                let next = min(max(settings.fontSize.rounded() + Double(direction * 2), range.lowerBound), range.upperBound)
+                guard next != settings.fontSize else { return }
+                settings.fontSize = next
+            },
+            onReset: nil)
+    }
+
+    private func stepperItem(_ view: MenuStepperRowView) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.view = view
+        return item
     }
 
     // MARK: - 菜单项工厂(同 MenuBarStatusMenu 的写法)
@@ -235,10 +258,6 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         AppSettings.shared.overlayShowRomanization.toggle()
     }
 
-    @objc private func toggleShowHoverControls() {
-        AppSettings.shared.overlayShowHoverControls.toggle()
-    }
-
     /// 中文繁简要双写(跟 SettingsView.swift 那个 Picker 完全一致):AppSettings 负责持久化,
     /// LocalPlaybackSource 负责让**当前正在播的这首歌**立刻按新设置重新解析——只写前者的话
     /// 要等切下一首歌才会生效,像是这一项点了没反应。
@@ -260,18 +279,6 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         theme.applyKeepingUnsaved(to: AppSettings.shared)
     }
 
-    @objc private func nudgeEarlier() {
-        PlaybackCoordinator.shared.nudgeLyricsOffset(by: AppSettings.shared.lyricsOffsetStepMs)
-    }
-
-    @objc private func nudgeLater() {
-        PlaybackCoordinator.shared.nudgeLyricsOffset(by: -AppSettings.shared.lyricsOffsetStepMs)
-    }
-
-    @objc private func resetOffset() {
-        PlaybackCoordinator.shared.resetLyricsOffset()
-    }
-
     /// 「搜索歌词…」——**不**跟 ⤢ 共用「展开到歌词窗口」那个入口:点了只弹
     /// 搜索页面本身,不需要连带拉起完整的歌词窗口。走它自己独立的一扇
     /// `Window(id: "lyrics-quick-search")`(`LyricsQuickSearchWindow`,App.swift),
@@ -291,4 +298,112 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         AppActions.shared.requestSettings(.tab(.appearance))
         AppActions.shared.openSettings?()
     }
+}
+
+/// 菜单里一行「标题  [−] 数值 [+] ↺」。−/+ 是 NSButton,点击由按钮自己收走,NSMenu 不当它选中了一项,所以菜单不关、
+/// 可以连着调。数值订阅外面给的 `state`:菜单开着时主线程跑在 event tracking 模式,@Published 的 sink 是同步回调,
+/// 不经 runloop 调度,照样实时刷新。每次弹出整棵重建,这一行跟着菜单项一起释放、订阅随之取消。
+@MainActor
+final class MenuStepperRowView: NSView {
+    struct State {
+        var text: String
+        var canReset: Bool
+        var canDecrease = true
+        var canIncrease = true
+    }
+
+    private let valueLabel = NSTextField(labelWithString: "")
+    private let minusButton: NSButton
+    private let plusButton: NSButton
+    private let resetButton: NSButton
+    private let onStep: (Int) -> Void
+    private let onReset: (() -> Void)?
+    private var subscription: AnyCancellable?
+
+    /// `minus` / `plus`:SF Symbol 名 + 悬停提示(也是读屏标签)。`resetHelp` 为 nil 时没有归零键,位置仍空出来,
+    /// 两行的 − / + 上下对齐。
+    init(title: String, minus: (symbol: String, help: String), plus: (symbol: String, help: String),
+         resetHelp: String?, state: AnyPublisher<State, Never>,
+         onStep: @escaping (Int) -> Void, onReset: (() -> Void)?) {
+        self.onStep = onStep
+        self.onReset = onReset
+        minusButton = Self.stepButton(minus.symbol, help: minus.help)
+        plusButton = Self.stepButton(plus.symbol, help: plus.help)
+        resetButton = NSButton(image: NSImage(systemSymbolName: "arrow.counterclockwise",
+                                              accessibilityDescription: resetHelp) ?? NSImage(),
+                               target: nil, action: nil)
+        super.init(frame: NSRect(x: 0, y: 0, width: 260, height: 30))
+        autoresizingMask = [.width]
+
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = .menuFont(ofSize: 0)
+        titleLabel.textColor = .labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        valueLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        valueLabel.alignment = .center
+        valueLabel.textColor = .labelColor
+        valueLabel.lineBreakMode = .byClipping
+
+        minusButton.target = self
+        minusButton.action = #selector(stepDown)
+        plusButton.target = self
+        plusButton.action = #selector(stepUp)
+        resetButton.isBordered = false
+        resetButton.contentTintColor = .secondaryLabelColor
+        resetButton.toolTip = resetHelp
+        resetButton.target = self
+        resetButton.action = #selector(reset)
+        resetButton.isHidden = true
+
+        let views: [NSView] = [titleLabel, minusButton, valueLabel, plusButton, resetButton]
+        for view in views {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+        // 数值定宽:「0.0s」变「+10.5s」时两侧按钮不跟着挪。
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 22),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            minusButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
+            minusButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            minusButton.widthAnchor.constraint(equalToConstant: 30),
+            valueLabel.leadingAnchor.constraint(equalTo: minusButton.trailingAnchor, constant: 4),
+            valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            valueLabel.widthAnchor.constraint(equalToConstant: 54),
+            plusButton.leadingAnchor.constraint(equalTo: valueLabel.trailingAnchor, constant: 4),
+            plusButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            plusButton.widthAnchor.constraint(equalToConstant: 30),
+            resetButton.leadingAnchor.constraint(equalTo: plusButton.trailingAnchor, constant: 4),
+            resetButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            resetButton.widthAnchor.constraint(equalToConstant: 20),
+            resetButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+        ])
+
+        subscription = state.sink { [weak self] in self?.apply($0) }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private static func stepButton(_ symbol: String, help: String) -> NSButton {
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: help) ?? NSImage()
+        let button = NSButton(image: image, target: nil, action: nil)
+        button.bezelStyle = .push
+        button.controlSize = .small
+        button.toolTip = help
+        return button
+    }
+
+    private func apply(_ state: State) {
+        valueLabel.stringValue = state.text
+        resetButton.isHidden = onReset == nil || !state.canReset
+        minusButton.isEnabled = state.canDecrease
+        plusButton.isEnabled = state.canIncrease
+    }
+
+    @objc private func stepDown() { onStep(-1) }
+    @objc private func stepUp() { onStep(1) }
+    @objc private func reset() { onReset?() }
 }

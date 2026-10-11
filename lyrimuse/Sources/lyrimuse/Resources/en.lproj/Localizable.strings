@@ -1100,6 +1100,7 @@
 "收起面板后生效" = "Takes effect after this panel closes";
 "改位置后，已有文件不会跟着搬" = "Existing files stay where they are when you change the location";
 "改过歌词或调过时间轴偏移的歌曲" = "Songs whose lyrics you edited or whose timing offset you adjusted";
+"放大字号" = "Increase Font Size";
 "放弃修改" = "Discard Changes";
 "整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳" = "Edit the whole text to paste, add or remove lines; each line starts with its timestamp";
 "整行" = "Line-timed";
@@ -1724,6 +1725,7 @@
 "编辑中" = "Editing";
 "编辑期间这首歌曲的歌词已发生变化，本次未应用；再次编辑将打开最新版本" = "This song's lyrics changed while you were editing, so this save wasn't applied. Click Edit again to open the latest version.";
 "编辑歌词" = "Edit Lyrics";
+"缩小字号" = "Decrease Font Size";
 "缺少用户名" = "Username missing";
 "缺少用户名，无法生成听歌报告" = "Username missing — listening digests can't run";
 "网易云音乐" = "NetEase Cloud Music";

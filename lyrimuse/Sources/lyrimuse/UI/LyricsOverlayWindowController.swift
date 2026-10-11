@@ -125,12 +125,10 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 翻面,让卡片本身能贴到可见区顶边、控制排仍留在够得着的地方。见 `recomputeControlsBelowCard()` 头注。
     @Published private(set) var controlsBelowCard = false
     /// 悬停时露不露出那排播放控制按钮——真值在 `AppSettings.overlayShowHoverControls`
-    /// (⚙ 菜单/设置页「悬停时显示控制条」都写它),这里是**滞后**生效的镜像:控制排此刻正显示着
-    /// (指针悬停中)的时候关掉这个开关,不会把控制排从指针底下当场抽走——那正是用户在
-    /// ⚙ 菜单里点这一项时的处境,菜单本身就挂在控制排上,当场收回等于点完这一下整排
-    /// (连同刚点过的这个菜单入口)从指针下面消失。改成等这次悬停结束(指针移开、控制排
-    /// 自然收起)才把新值应用进来,下一次悬停就不再露出;新值到达时若已经不在悬停中,
-    /// 照常立即生效。悬停中来的新值先记进 `pendingShowHoverControls`,由
+    /// (设置页「行为」的「悬停时显示控制条」写它;⚙ 菜单不放这一项,见 04 章决策 60),这里是**滞后**
+    /// 生效的镜像:控制排此刻正显示着(指针悬停中)的时候关掉这个开关,不会把控制排从指针底下当场
+    /// 抽走,等这次悬停结束(指针移开、控制排自然收起)才把新值应用进来,下一次悬停就不再露出;
+    /// 新值到达时若已经不在悬停中,照常立即生效。悬停中来的新值先记进 `pendingShowHoverControls`,由
     /// `isHoveringForControls` 的 `didSet` 在悬停结束那一刻取用。
     @Published private(set) var showHoverControls = AppSettings.shared.overlayShowHoverControls
     private var pendingShowHoverControls: Bool?
@@ -1024,13 +1022,20 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 推迟到下一轮主 runloop 再弹:点击是全局监听器收到的(窗口常年点击穿透),同步弹的话菜单
         // 整个跟踪循环会嵌在那次 HIToolbox 事件派发里跑,菜单里移动指针的事件送达变得不均匀、不跟手。
         // popUp 是同步的,返回即菜单已关;期间 isQuickMenuOpen 让 handleMouseEvent 整段跳过。
+        //
+        // 推迟用 .common 的一次性定时器,不用 DispatchQueue.main.async:菜单跟踪循环要是嵌在一个主队列任务里,菜单开着的
+        // 整段时间主队列都轮不到别的任务 —— 当前句换字号后回主线程换图、换句时排到主队列的更新,都要等菜单关了才走,
+        // 歌词停在这一句不动(见 04 章决策 60)。
         case .settingsMenu:
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.isQuickMenuOpen = true
-                self.overlayQuickSettingsMenu.popUp()
-                self.isQuickMenuOpen = false
+            let timer = Timer(timeInterval: 0, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.isQuickMenuOpen = true
+                    self.overlayQuickSettingsMenu.popUp()
+                    self.isQuickMenuOpen = false
+                }
             }
+            RunLoop.main.add(timer, forMode: .common)
         // 关闭"桌面悬浮歌词"——唯一入口是 setVisible(_:)(见该方法声明处注释:设置页/
         // 菜单栏/全局快捷键三处都必须走这里),这里同样不能绕开它自己再切一份状态。
         case .closeOverlay:

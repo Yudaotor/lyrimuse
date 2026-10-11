@@ -2188,9 +2188,13 @@ func runSourceContractTests() {
             expectEqual(ctl.contains("guard let window, !isQuickMenuOpen else { return }"), true,
                         "快捷菜单: 菜单开着时悬停逻辑整段跳过(菜单盖在悬浮窗上,判坐标会反复重渲染)")
             if let r = ctl.range(of: "case .settingsMenu:") {
-                let after = String(ctl[r.upperBound...].prefix(300))
-                expectEqual(after.contains("DispatchQueue.main.async"), true,
+                let after = String(ctl[r.upperBound...].prefix(600))
+                expectEqual(after.contains("let timer = Timer(timeInterval: 0, repeats: false)")
+                                && after.contains("RunLoop.main.add(timer, forMode: .common)"), true,
                             "快捷菜单: 推迟一拍再弹,别在鼠标监听器回调里同步 popUp")
+                // 菜单跟踪循环嵌在主队列任务里时,菜单开着期间主队列别的任务全停(当前句换图、换句更新都卡住)。
+                expectEqual(after.contains("DispatchQueue.main.async"), false,
+                            "快捷菜单: 不用主队列任务推迟弹出,菜单开着时歌词照常走")
             } else {
                 expectEqual(true, false, "快捷菜单: 找不到 case .settingsMenu(改名了?)")
             }
@@ -4843,6 +4847,31 @@ func runSourceContractTests() {
                     "配色主题: 快捷菜单子菜单标题跟设置页同名")
         expectEqual(quick.contains("item.image = theme.swatchImage()"), true, "配色主题: 快捷菜单每项带四段色条")
         expectEqual(quick.contains("let current = ColorTheme.current(settings)"), true, "配色主题: 快捷菜单与设置页共用同一份当前配色打包")
+
+        // ⚙ 菜单排法(04 章决策 60):偏移、字号两行在最上面,菜单里原地调;控制条开关不进菜单。
+        let quickCode = stripComments(quick)
+        let offsetAt = quickCode.range(of: "menu.addItem(stepperItem(offsetRow()))")?.lowerBound
+        let fontAt = quickCode.range(of: "menu.addItem(stepperItem(fontSizeRow()))")?.lowerBound
+        let translationAt = quickCode.range(of: "menu.addItem(toggle(L10n.t(\"译文\")")?.lowerBound
+        expectEqual(offsetAt != nil && fontAt != nil && translationAt != nil
+                        && offsetAt! < fontAt! && fontAt! < translationAt!, true,
+                    "⚙ 菜单: 歌词偏移、字号两行排在译文之前")
+        expectEqual(quickCode.contains("overlayShowHoverControls"), false,
+                    "⚙ 菜单: 不放「悬停时显示控制条」(菜单只能从控制条打开,关掉就回不来)")
+        expectEqual(quickCode.contains("minus: (\"minus\", \"\\(L10n.t(\"延后\")) \\(seconds)\")")
+                        && quickCode.contains("plus: (\"plus\", \"\\(L10n.t(\"提前\")) \\(seconds)\")")
+                        && quickCode.contains("PlaybackCoordinator.shared.nudgeLyricsOffset(by: direction * AppSettings.shared.lyricsOffsetStepMs)")
+                        && quickCode.contains("PlaybackCoordinator.shared.$trackLyricsOffsetMs")
+                        && quickCode.contains("@objc private func stepDown() { onStep(-1) }")
+                        && quickCode.contains("@objc private func stepUp() { onStep(1) }"), true,
+                    "⚙ 菜单: 偏移 − 延后、+ 提前,按设置里的步长,显示这首歌那一部分(同灵动岛)")
+        expectEqual(quickCode.contains("min(max(settings.fontSize.rounded() + Double(direction * 2), range.lowerBound), range.upperBound)")
+                        && quickCode.contains("let range = AppSettings.overlayFontSizeRange"), true,
+                    "⚙ 菜单: 字号每下 ±2,夹在设置页滑杆同一个范围里")
+        expectEqual(quickCode.contains("minusButton.action = #selector(stepDown)")
+                        && quickCode.contains("plusButton.action = #selector(stepUp)")
+                        && quickCode.contains("item.view = view"), true,
+                    "⚙ 菜单: − / + 是菜单项视图里的按钮,点了菜单不关")
     }
 
     // ---- 关于页页头的漂浮符号走 Core Animation----
