@@ -947,6 +947,21 @@ func runLyricsWindowTests() {
         expectEqual(group("悬浮淡化"), Optional("行为"), "设置分组: 搜索里悬浮淡化归「行为」")
     }
 
+    // MARK: - 记的那块屏不在时借屏、回来时送回去
+    do {
+        let both: Set<String> = ["内建", "外接"], builtin: Set<String> = ["内建"]
+        expectEqual(WindowScreenAffinity.onScreensChanged(savedScreenID: nil, connected: builtin, borrowing: false),
+                    .keep, "借屏: 没存过位置不管")
+        expectEqual(WindowScreenAffinity.onScreensChanged(savedScreenID: "外接", connected: both, borrowing: false),
+                    .keep, "借屏: 记的屏接着、没在借屏 → 不动")
+        expectEqual(WindowScreenAffinity.onScreensChanged(savedScreenID: "外接", connected: builtin, borrowing: false),
+                    .startBorrowing, "借屏: 记的屏拔掉了 → 开始借屏,之后不写盘")
+        expectEqual(WindowScreenAffinity.onScreensChanged(savedScreenID: "外接", connected: builtin, borrowing: true),
+                    .keep, "借屏: 已经在借屏、屏还没回来 → 不动")
+        expectEqual(WindowScreenAffinity.onScreensChanged(savedScreenID: "外接", connected: both, borrowing: true),
+                    .returnHome, "借屏: 记的屏插回来了 → 送回去")
+    }
+
     // MARK: - 窗口位置恢复
     do {
         let visible = CGRect(x: 0, y: 25, width: 1440, height: 875)

@@ -517,12 +517,7 @@ private final class LyricsWindowController: ObservableObject {
 
     /// 出迷你时完整那扇窗摆哪:上次完整尺寸的位置(那块屏还在,夹进可见区);没有就在 `screen` 上居中、按默认大小。
     static func fullWindowTarget(on screen: NSScreen?) -> NSRect {
-        let defaults = UserDefaults.standard
-        if let raw = defaults.string(forKey: frameKey), let id = defaults.string(forKey: screenKey),
-           let saved = Optional(NSRectFromString(raw)), saved.width > 0, saved.height > 0,
-           let savedScreen = ScreenIdentity.screen(withID: id) {
-            return WindowFrameFit.clamp(saved, into: savedScreen.visibleFrame)
-        }
+        if let frame = restoredFullFrame() { return frame }
         let visible = (screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1020, height: 660)
         let size = CGSize(width: min(1020, visible.width), height: min(660, visible.height))
         return NSRect(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2,
@@ -568,6 +563,14 @@ private final class LyricsWindowController: ObservableObject {
     /// 落盘去抖。拖动窗口期间 didMove 每帧都来,不去抖就是每帧一次 UserDefaults 写 ——
     /// 跟「歌词管理」列宽拖动那次(松手才落盘)同一个坑,同一个修法。
     private var persistFrameTask: Task<Void, Never>?
+    /// 盘上记的那块屏(完整、迷你各记一份)不在了,窗口在别的屏上借住:这期间的位置不写盘,那块屏回来时
+    /// 送回去(见 reconcileScreens)。规则同悬浮歌词(04 章「多屏」)。
+    private var isBorrowingScreen = false
+    /// 用户亲手挪过、拉过窗口:下一次落盘照写,借屏就此作罢。判据是 willMove,或者 didMove / didResize
+    /// 发出时鼠标左键按着;程序自己的 setFrame 不发 willMove,系统在拔屏时搬窗口也不会按着鼠标。
+    private var userRepositioned = false
+    private var willMoveObserver: NSObjectProtocol?
+    private var screenParametersObserver: NSObjectProtocol?
 
     // MARK: - 窗口位置/尺寸/所在屏幕的持久化
     //
@@ -611,6 +614,14 @@ private final class LyricsWindowController: ObservableObject {
         guard let window, !isActive, !isNativeFullScreen, !isNativeFullScreenTransition else { return }
         // 窗口还没真正上屏时 frame 可能是 SwiftUI 给的中间值,不足为据。
         guard window.isVisible else { return }
+        // 先对账再写:拔屏时系统挪窗口的 didMove 可能比屏幕变化的通知先到。用户亲手挪过就以它为准。
+        if userRepositioned {
+            userRepositioned = false
+            isBorrowingScreen = false
+        } else {
+            reconcileScreens(window)
+            guard !isBorrowingScreen else { return }
+        }
         let defaults = UserDefaults.standard
         if isMini {
             // 小于下限的是进出迷你那一拍动画的中间值,不是用户拖出来的。
@@ -641,22 +652,47 @@ private final class LyricsWindowController: ObservableObject {
     /// 首次 attach 时恢复一次。返回是否真的摆过 —— 只是给调用点读着清楚。
     @discardableResult
     private func restorePersistedFrame(_ window: NSWindow) -> Bool {
-        let defaults = UserDefaults.standard
-        guard let raw = defaults.string(forKey: Self.frameKey) else { return false }
-        let saved = NSRectFromString(raw)
-        guard saved.width > 0, saved.height > 0 else { return false }
-        // 认屏幕:存过 ID 就必须那块屏还在。不在 = 用户换了显示器配置,旧坐标没有任何意义。
-        guard let id = defaults.string(forKey: Self.screenKey),
-              let screen = ScreenIdentity.screen(withID: id) else { return false }
-        // 夹进那块屏的可见区。存的时候屏幕分辨率可能跟现在不同(接同一块屏但改了缩放),
-        // 不夹的话窗口会有一部分挂在屏幕外 —— 跟悬浮窗 `repositionIfOffscreen` 同一个理由。
-        window.setFrame(WindowFrameFit.clamp(saved, into: screen.visibleFrame), display: false)
+        guard let frame = Self.restoredFullFrame() else { return false }
+        window.setFrame(frame, display: false)
         // 系统自己也按场景 id 存了一份 frame(`NSWindow Frame lyrics-window`),而且在我们恢复之后才
         // 套用 —— 它不分迷你与否,迷你期间照存。不改写它的话,完整布局打开时窗口会先被我们摆成完整
         // 尺寸、再被它摆回迷你尺寸,成了一扇迷你大小的完整布局窗(07 章决策 88)。
         // 这里把它改写成刚恢复的完整 frame,两份一致,谁后套用都一样;要进迷你由调用方随后再切(决策 72)。
         window.saveFrame(usingName: Self.sceneFrameAutosaveName)
         return true
+    }
+
+    /// 存的完整 frame 摆回去该在哪。认屏幕:存过的那块屏不在 = 显示器配置换了,旧坐标没有意义,返回 nil。
+    /// 夹进那块屏的可见区:存的时候分辨率 / 缩放可能跟现在不同,不夹会有一截挂在屏幕外。
+    static func restoredFullFrame() -> NSRect? {
+        let defaults = UserDefaults.standard
+        guard let raw = defaults.string(forKey: frameKey) else { return nil }
+        let saved = NSRectFromString(raw)
+        guard saved.width > 0, saved.height > 0,
+              let id = defaults.string(forKey: screenKey),
+              let screen = ScreenIdentity.screen(withID: id) else { return nil }
+        return WindowFrameFit.clamp(saved, into: screen.visibleFrame)
+    }
+
+    /// 屏幕变了(插拔、改分辨率),或者要落盘之前:窗口跟盘上记的那块屏对一次账。迷你、完整各认各的键,
+    /// 跟 persistFrame 按 isMini 分键一致。全屏期间不管。
+    private func reconcileScreens(_ window: NSWindow) {
+        guard !isActive, !isNativeFullScreen, !isNativeFullScreenTransition else { return }
+        let saved = UserDefaults.standard.string(forKey: isMini ? Self.miniScreenKey : Self.screenKey)
+        let connected = Set(NSScreen.screens.compactMap { ScreenIdentity.id(of: $0) })
+        switch WindowScreenAffinity.onScreensChanged(savedScreenID: saved, connected: connected,
+                                                     borrowing: isBorrowingScreen) {
+        case .keep:
+            break
+        case .startBorrowing:
+            isBorrowingScreen = true
+            persistFrameTask?.cancel()
+            persistFrameTask = nil
+        case .returnHome:
+            isBorrowingScreen = false
+            let home = isMini ? Self.restoredMiniFrame(size: window.frame.size) : Self.restoredFullFrame()
+            if let home, home != window.frame { window.setFrame(home, display: true) }
+        }
     }
 
     /// 记「窗口开着」(`LyricsWindowSession.openKey`)。只在窗口真的在屏上、而且记的不是 true 时才写:
@@ -991,6 +1027,9 @@ private final class LyricsWindowController: ObservableObject {
         }
         self.window = window
         LyricsWindowSession.window = window
+        // 换了一扇窗(完整和迷你互切):借屏按新窗口那组键重新判,下一次落盘或屏幕变化时再对账。
+        isBorrowingScreen = false
+        userRepositioned = false
         // 迷你面板挂上来就是迷你形态,默认置顶;不进窗口菜单、不恢复完整尺寸的 frame、不再按「上次是迷你」切(07 章决策 133)。
         let isMiniPanel = window is LyricsMiniPanel
         if isMiniPanel {
@@ -1054,10 +1093,29 @@ private final class LyricsWindowController: ObservableObject {
         // didMove 和 didResize 合用一个回调:两者要存的东西完全一样,而拖动窗口边角同时
         // 产生这两个通知 —— 分开挂只会写两遍。
         let persist: @Sendable (Notification) -> Void = { [weak self] _ in
-            MainActor.assumeIsolated { self?.schedulePersistFrame() }
+            MainActor.assumeIsolated {
+                if NSEvent.pressedMouseButtons & 1 != 0 { self?.userRepositioned = true }
+                self?.schedulePersistFrame()
+            }
         }
         frameObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification, object: window, queue: .main, using: persist)
+        if let willMoveObserver { NotificationCenter.default.removeObserver(willMoveObserver) }
+        willMoveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willMoveNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.userRepositioned = true }
+        }
+        if screenParametersObserver == nil {
+            screenParametersObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let window = self.window, window.isVisible else { return }
+                    self.reconcileScreens(window)
+                }
+            }
+        }
         if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
         // 缩放这一支除了存 frame,还要**当场把红绿灯摆回去**。
         //
@@ -1070,6 +1128,7 @@ private final class LyricsWindowController: ObservableObject {
             forName: NSWindow.didResizeNotification, object: window, queue: .main
         ) { [weak self] note in
             MainActor.assumeIsolated {
+                if NSEvent.pressedMouseButtons & 1 != 0 { self?.userRepositioned = true }
                 self?.schedulePersistFrame()
                 if let win = note.object as? NSWindow { self?.enforceTrafficLightPosition(win) }
             }
@@ -1348,7 +1407,8 @@ private final class LyricsWindowController: ObservableObject {
         for observer in [closeObserver, resignKeyObserver, becomeKeyObserver, enterFullScreenObserver,
                          exitFullScreenObserver, fullScreenCapabilityObserver, frameObserver, resizeObserver,
                          liveResizeStartObserver, liveResizeEndObserver, occlusionObserver,
-                         terminateObserver, formRequestObserver].compactMap({ $0 }) + fullScreenTransitionObservers {
+                         terminateObserver, formRequestObserver, willMoveObserver,
+                         screenParametersObserver].compactMap({ $0 }) + fullScreenTransitionObservers {
             NotificationCenter.default.removeObserver(observer)
         }
         // coverageMonitor 随本对象释放,自己的 deinit 会停表。
