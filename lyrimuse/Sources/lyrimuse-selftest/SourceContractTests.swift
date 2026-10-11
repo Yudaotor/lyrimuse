@@ -4451,7 +4451,8 @@ func runSourceContractTests() {
                 expectEqual(true, false, "项目级 skill: 读得到 \(name)/SKILL.md")
                 continue
             }
-            let lineCount = src.split(separator: "\n", omittingEmptySubsequences: false).count
+            // 跟 wc -l 一样数:末尾换行后面那段空的不算一行。
+            let lineCount = src.split(separator: "\n", omittingEmptySubsequences: false).count - (src.hasSuffix("\n") ? 1 : 0)
             expectEqual(lineCount <= 80, true, "项目级 skill: \(name) 不超过 80 行(实际 \(lineCount))——只写步骤,理由回链")
             expectEqual(src.hasPrefix("---\nname: \(name)\n"), true, "项目级 skill: \(name) frontmatter 以 name 开头且与目录名一致")
             expectEqual(src.contains("\ndescription: "), true, "项目级 skill: \(name) 有 description(按场景触发靠它)")
