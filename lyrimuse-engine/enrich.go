@@ -503,8 +503,9 @@ type enrichEntry struct {
 	// LyricsEntityOrigin:这条的歌词是从同一首歌哪条写法的手改原件同步过来的副本(songentityshare.go);原件、自动选的都是
 	// 空串。副本的手改标记跟原件一样,各处的闸照旧拦得住;用户直接改这一条(歌词管理保存、歌词文件夹里改了正文)就成了原件。
 	LyricsEntityOrigin string `json:"lyrics_entity_origin,omitempty"`
-	// Players:放过这条写法的播放器(bundle id),按第一次放的先后排,最多 maxNotedPlayers 个(notePlayerLocked)。歌词管理
-	// 「同一首歌的其他写法」拿它显示每条写法是哪个播放器收录的(18 章决策 38)。
+	// Players:放过这条写法的播放器(bundle id),按第一次放的先后排,最多 maxNotedPlayers 个(notePlayerLocked)。条目里
+	// playerIDFields 那几样 id、PlayerCovers 的键对应的播放器也记在这里(notePlayersFromRecords)。歌词管理「同一首歌的其他写法」
+	// 拿它显示每条写法是哪个播放器收录的(18 章决策 38、39、42)。
 	Players []string `json:"players,omitempty"`
 
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
@@ -837,7 +838,16 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		if applyPlayerCoverLocked(&e, bundleID, playerCover) {
 			spotifyHintDirty = true
 		}
+		if notePlayersFromRecords(&e) {
+			spotifyHintDirty = true
+		}
 		if notePlayerLocked(&e, bundleID) {
+			spotifyHintDirty = true
+		}
+		// 条目先建好、后来才真正放到(专辑预取,第一次解析时播放器还没报时长):补上播放器报的时长。已经有的不动,
+		// 对不上的走上面的消歧变体。
+		if e.DurationSecs <= 0 && durationSecs > 0 {
+			e.DurationSecs = durationSecs
 			spotifyHintDirty = true
 		}
 		if ytmSettled && applyKasetAlbumVerdict(&e, ytmVerdict, ytmusicDisplayLanguage()) {
@@ -5852,4 +5862,93 @@ func notePlayerLocked(e *enrichEntry, bundleID string) bool {
 	}
 	e.Players = append(e.Players, bundleID)
 	return true
+}
+
+// playerIDFields:只在用某个播放器放这首时才写进条目的那几样 id,和那个播放器。条目有其中一样,就说明那个播放器放过,
+// 跟 notePlayerLocked 当场记下的一样算数。别把按歌名搜出来的链接(NeteaseURL、QQURL、AppleURL、SpotifyURL)加进来,
+// 那几样不说明谁放过。App 侧 SongVersions.players 没有记录时按同一张表推断,两处同步改。
+var playerIDFields = []struct {
+	bundleID string
+	id       func(e *enrichEntry) string
+}{
+	{spotifyBundleID, func(e *enrichEntry) string { return e.SpotifyTrackID }},
+	{kkboxBundleID, func(e *enrichEntry) string { return e.KKBOXURL }},
+	{amazonMusicBundleID, func(e *enrichEntry) string { return e.AmazonURL }},
+	{sodaMusicBundleID, func(e *enrichEntry) string { return e.SodaURL }},
+	{kasetBundleID, func(e *enrichEntry) string { return e.YouTubeMusicURL }},
+}
+
+// notePlayersFromRecords:把条目里 playerIDFields 那几样 id 对应的播放器,和 PlayerCovers 的键(播放器自己给这首记的封面,
+// 只在用它放时写)记进 e.Players(规则同 notePlayerLocked),返回记没记。
+func notePlayersFromRecords(e *enrichEntry) bool {
+	changed := false
+	for _, f := range playerIDFields {
+		if f.id(e) != "" && notePlayerLocked(e, f.bundleID) {
+			changed = true
+		}
+	}
+	for _, b := range songSortedKeys(e.PlayerCovers) {
+		if notePlayerLocked(e, b) {
+			changed = true
+		}
+	}
+	return changed
+}
+
+// migratePlayersFromRecords:存量条目按 notePlayersFromRecords 补记播放器(18 章决策 39、42)。运行期在 trackEnrichment 和
+// mergePeripheralInto 里做同一件事;不挂水位,每次启动都扫一遍(近万条只要几毫秒,没改动不落盘),配置搬家进来的
+// 条目也能补上。
+func migratePlayersFromRecords() {
+	enrichMu.Lock()
+	n := 0
+	for k, e := range enrichCache {
+		if notePlayersFromRecords(&e) {
+			enrichCache[k] = e
+			n++
+		}
+	}
+	if n > 0 {
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if n > 0 {
+		log.Printf("enrich: noted players from player-provided ids and covers on %d entries", n)
+		saveEnrichCache()
+	}
+}
+
+// migrateListenDurations:没有时长的条目从收听记录里补播放器当时报的时长(18 章决策 42)。只认 key 对得上、记了时长的收听;
+// 几次收听的时长互相差过 durationMismatch 的不补(说不准是哪一段录音)。运行期 trackEnrichment 放到时自己补,存量只补一次。
+func migrateListenDurations(listens []listenLogLine) {
+	scope := migrationScopeOf(migrationListenDurations, migrationListenDurationsVersion)
+	if scope.skip() {
+		return
+	}
+	durs := map[string][]float64{}
+	for _, l := range listens {
+		if l.T == "l" && l.DUR > 0 && l.TI != "" {
+			k := enrichKey(l.AR, l.TI, l.AL)
+			durs[k] = append(durs[k], l.DUR)
+		}
+	}
+	enrichMu.Lock()
+	n := 0
+	for k, e := range scope.entries() {
+		ds := durs[k]
+		if e.DurationSecs > 0 || len(ds) == 0 || slices.ContainsFunc(ds, func(d float64) bool { return durationMismatch(ds[0], d) }) {
+			continue
+		}
+		e.DurationSecs = ds[len(ds)-1]
+		enrichCache[k] = e
+		n++
+	}
+	if n > 0 {
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if n > 0 {
+		log.Printf("enrich: filled duration from the listen log on %d entries", n)
+		saveEnrichCache()
+	}
+	markMigrationDone(migrationListenDurations, migrationListenDurationsVersion)
 }

@@ -387,6 +387,13 @@ func main() {
 	// 存量网易云封面换原图档(见 netease.go migrateNeteaseCoverURLs)。排在 refreshEnrichIndex 之前,
 	// App 读的精简索引里也带封面地址。
 	startupStep("migrateNeteaseCoverURLs", migrateNeteaseCoverURLs)
+	// 存量条目按播放器给的 id、播放器记的封面补记放过的播放器(见 enrich.go migratePlayersFromRecords)。排在 migrateEnrichKeys 之后
+	// (合并过的条目一起补)、refreshEnrichIndex 之前。
+	startupStep("migratePlayersFromRecords", migratePlayersFromRecords)
+	// 存量没有时长的条目从收听记录补(见 enrich.go migrateListenDurations),同样排在 refreshEnrichIndex 之前。
+	startupStep("migrateListenDurations", func() {
+		migrateListenDurations(readListenLogAt(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl")))
+	})
 	startupStep("migrateManualPickMarks", migrateManualPickMarks)
 	// 正文只有纯音乐占位的存量条目标上纯音乐(见 instrumentalplaceholder.go)。只打标、不改正文;排在
 	// migrateManualPickMarks 之后,它补记的手动选定留痕这一步要看。

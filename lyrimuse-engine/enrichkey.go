@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -230,6 +231,12 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 	if winner.DurationSecs == 0 {
 		winner.DurationSecs = loser.DurationSecs
 	}
+	// 两条都放过的播放器合在一起,上面补过来的 id 对应的播放器也记上。
+	winner.Players = slices.Clone(winner.Players)
+	for _, p := range loser.Players {
+		notePlayerLocked(&winner, p)
+	}
+	notePlayersFromRecords(&winner)
 	return winner
 }
 

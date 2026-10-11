@@ -113,6 +113,10 @@ const (
 	// 新解析的在打分时判废(isCreditOnlyLRC),运行期不再产生。改了 isInstrumentalPlaceholderLyric 的判据就 +1。
 	migrationInstrumentalPlaceholder        = "instrumental_placeholder"
 	migrationInstrumentalPlaceholderVersion = 1
+	// migrationListenDurations:存量没有时长的条目从收听记录补播放器报的时长(enrich.go migrateListenDurations)。运行期
+	// trackEnrichment 放到没有时长的条目时自己补,不再产生。
+	migrationListenDurations        = "listen_durations"
+	migrationListenDurationsVersion = 1
 )
 
 // loadMigrationState 读水位文件。文件不存在 / 解不出来都当作"一道都没跑过",照常全量跑 ——

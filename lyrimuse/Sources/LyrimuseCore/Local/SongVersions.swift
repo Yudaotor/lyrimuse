@@ -167,8 +167,9 @@ public enum SongVersions {
 // MARK: - 收录的播放器、歌词逐句对照(18 章决策 38)
 
 extension SongVersions {
-    /// 这条写法是哪些播放器收录的(bundle id):引擎记下的 `players`;没记(更早的写法)时从播放器自己给的那几样 id 推断,
-    /// inferred 为 true。两样都没有时是空的。
+    /// 这条写法是哪些播放器收录的(bundle id):引擎记下的 `players`;没记时从播放器自己给的那几样 id 推断,inferred 为 true。
+    /// 两样都没有时是空的。引擎启动时会按同一张表把这几样 id 补进 `players`(enrich.go playerIDFields),两处同步改;
+    /// 这里的推断只在引擎还没补上时用到。
     public static func players(entry: [String: Any]) -> (bundleIDs: [String], inferred: Bool) {
         if let noted = entry["players"] as? [String], !noted.isEmpty { return (noted, false) }
         func has(_ field: String) -> Bool { !((entry[field] as? String) ?? "").isEmpty }

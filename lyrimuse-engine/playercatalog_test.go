@@ -289,8 +289,11 @@ func TestPlayerCatalogFieldsAndMerge(t *testing.T) {
 	if got := links["soda"]; got != testSodaSongPage {
 		t.Errorf("中继 links.soda: %v", got)
 	}
-	if got := mergePeripheralInto(enrichEntry{}, full); !reflect.DeepEqual(got, full) {
-		t.Errorf("合并条目时都从落选那条补过来:\n got %+v\nwant %+v", got, full)
+	// 汽水歌曲页说明汽水放过,合并后的条目把它记进放过的播放器(notePlayersFromRecords)。
+	want := full
+	want.Players = []string{sodaMusicBundleID}
+	if got := mergePeripheralInto(enrichEntry{}, full); !reflect.DeepEqual(got, want) {
+		t.Errorf("合并条目时都从落选那条补过来:\n got %+v\nwant %+v", got, want)
 	}
 	winner := enrichEntry{SodaAlbumID: "w", YouTubeMusicMV: true, YouTubeMusicAlbumLang: "en"}
 	if got := mergePeripheralInto(winner, full); got.SodaAlbumID != "w" || got.YouTubeMusicAlbumID != "" || got.YouTubeMusicArtistID != "UCZONOh3FvcD" {
