@@ -180,7 +180,8 @@ func runPlayerIdentityTests() {
                         "接受到可信系统快照: 才解除失败后的控制保护")
             let coordinator = src("lyrimuse/PlaybackCoordinator.swift")
             let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
-            expectEqual(coordinator.contains("guard MusicPlaybackController.playPause() else { return }")
+            expectEqual(coordinator.contains("MusicPlaybackController.playPause { [weak self] sent in")
+                        && coordinator.contains("guard sent, let self, LocalPlaybackSource.shared.lastResolvedBundleID == targetBundleID else { return }")
                         && source.contains("guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic,\n"
                                            + "                                                       kasetWasPlaying: kasetWasPlaying) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
@@ -227,6 +228,8 @@ func runPlayerIdentityTests() {
             }
         }
     }
+
+    qqControlDispatchTests()
 
     // ---- 信任列表:「自动识别」放开到任意 App ----
     //
@@ -2185,4 +2188,80 @@ func runPlayerIdentityTests() {
         expectEqual(MediaControlStreamWatcher.orphanedStreamPIDs(psOutput: ps, bundleMarker: marker), [52232],
                     "孤儿 stream: 只认父进程是 1、本 App 包、参数是 stream 的那个")
     }
+}
+
+/// 用闸门让 AX 桩停在后台,由主线程的一次事件放行。验证响应与失败契约,不按耗时阈值判断、不操作真实播放器。
+@MainActor
+private func qqControlDispatchTests() {
+    typealias Controller = MusicPlaybackController
+    typealias Command = QQMusicAccessibilityControl.Command
+    typealias Outcome = QQMusicAccessibilityControl.Outcome
+    let original = Controller.onControlWithheld
+    var reasons: [Controller.WithheldReason] = []
+    Controller.onControlWithheld = { reasons.append($0) }
+    defer { Controller.onControlWithheld = original }
+
+    func drain(until finished: () -> Bool) {
+        let deadline = Date().addingTimeInterval(2)
+        while !finished(), Date() < deadline {
+            _ = RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+    }
+
+    let started = DispatchSemaphore(value: 0)
+    let release = DispatchSemaphore(value: 0)
+    var mainServed = false
+    var servedBeforeCompletion = false
+    var completed = false
+    var optimisticFlips = 0
+    Controller.dispatchQQAccessibility(.playPause, press: { _ in
+        started.signal()
+        if Thread.isMainThread { return .pressed } // 调用方阻塞的回归直接变成断言失败,不把测试卡住。
+        _ = release.wait(timeout: .now() + 2)
+        return .menuUnavailable
+    }, completion: { sent in
+        servedBeforeCompletion = mainServed
+        if sent { optimisticFlips += 1 }
+        completed = true
+    })
+    expectEqual(started.wait(timeout: .now() + 2) == .success, true, "QQ 控制: 后台开始 AX 工作")
+    DispatchQueue.main.async {
+        mainServed = true
+        release.signal()
+    }
+    drain { completed }
+    release.signal()
+    expectEqual(completed && servedBeforeCompletion, true, "QQ 控制: AX 等待期间主线程能服务事件")
+    expectEqual(optimisticFlips, 0, "QQ 控制: 菜单失败不能乐观翻转播放状态")
+    expectEqual(reasons, [.unavailable], "QQ 控制: 菜单失败只回报一次,不静默成功")
+
+    let cases: [(Command, Outcome, Controller.WithheldReason?)] = [
+        (.nextTrack, .notTrusted, .accessibilityPermissionRequired),
+        (.previousTrack, .playerNotRunning, .unavailable),
+        (.playPause, .pressFailed(code: -25204), .unavailable),
+        (.nextTrack, .pressed, nil),
+    ]
+    for (command, outcome, reason) in cases {
+        reasons = []
+        completed = false
+        var sentResult: Bool?
+        var callbackOnMain = false
+        let presses = DispatchSemaphore(value: 0)
+        Controller.dispatchQQAccessibility(command, press: { _ in
+            presses.signal()
+            return outcome
+        }, completion: { sent in
+            sentResult = sent
+            callbackOnMain = Thread.isMainThread
+            if sent { optimisticFlips += 1 }
+            completed = true
+        })
+        drain { completed }
+        expectEqual(completed && callbackOnMain, true, "QQ 控制: \(outcome) 完成回调在主线程")
+        expectEqual(sentResult, outcome == .pressed, "QQ 控制: \(outcome) 只有 AXPress 成功才回报送出")
+        expectEqual(reasons, reason.map { [$0] } ?? [], "QQ 控制: \(outcome) 的失败分类由控制层决定")
+        expectEqual(presses.wait(timeout: .now()) == .success && presses.wait(timeout: .now()) == .timedOut,
+                    true, "QQ 控制: \(outcome) 只尝试一次动作")
+    }
+    expectEqual(optimisticFlips, 1, "QQ 控制: 只有成功命令驱动一次乐观状态")
 }

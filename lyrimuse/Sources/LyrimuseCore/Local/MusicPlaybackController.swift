@@ -1,23 +1,9 @@
 import Foundation
 import os
 
-// 跟 AppleMusicPositionClient(同目录,"读"精确播放进度)对称的"写"操作——发指令
-// 控制当前选定播放器(PlaybackPlayerPreference.selected,可多选)的播放。
-//
-// 之前这里无条件发 AppleScript 给"Music"这一个应用,不管当前选的是哪个
-// 播放器——QQ 音乐/网易云音乐接入时都没有同步修这一处,导致选了它们之后悬浮窗/全局
-// 快捷键的播放/暂停/上一首/下一首按钮全部不生效(AppleScript 发给了根本没在播的
-// Music.app),是遗留下来一直没修的坑,这次一起补上。
-//
-// Apple Music 继续走 AppleScript(复用同一份"自动化"权限,TCC 是按 (发起方 App,
-// 目标 App) 这一对整体授权,不是按具体某条 AppleScript 指令单独授权,调用方在真正
-// 发指令之前应该自己检查 MusicAutomationPermission,这里不重复做判断)。QQ 音乐/
-// 网易云音乐都没有 AppleScript 支持,改发 media-control 的控制指令(实测坐实:
-// media-control 的播放控制指令走的是系统级 MediaRemote,对"当前系统认定的 Now
-// Playing 焦点"生效,不需要指定具体是哪个 App——跟读取状态那条路径依赖同一个
-// "当前是谁在报告"的系统机制,QQ 音乐/网易云音乐被读取路径确认正在播放时,这几个
-// 控制指令天然作用在它们身上,不会误控到别的 App;焦点被别的 App 占着时例外,见 controlRoute)。发出去之后失败就静默失败(跟
-// AppleMusicPositionClient 一样宽松,不是核心路径)。
+// 本机播放器的播放控制。正常焦点保留现有脚本或 media-control 通路;失焦时只用实际回退目标的定向通路。
+// Apple Music / Spotify / Kaset 用 AppleScript,QQ 只用已验证的三个 AX 菜单动作。
+// 没有可用的定向通路时不发全局控制。命令工作在串行后台队列,失败反馈和完成通知回到主线程。
 public enum MusicPlaybackController {
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-control")
 
@@ -28,29 +14,28 @@ public enum MusicPlaybackController {
     }
     public nonisolated(unsafe) static var onControlWithheld: (@MainActor @Sendable (WithheldReason) -> Void)?
 
-    /// 返回这次指令发没发出去(见 `ControlRoute.withheld`)。
-    @discardableResult
-    public static func playPause() -> Bool {
+    /// 普通通路回报已排入既有命令队列;QQ 通路等待 AXPress 结果。失败不驱动乐观状态。
+    public typealias Completion = @MainActor @Sendable (Bool) -> Void
+
+    public static func playPause(completion: Completion? = nil) {
         dispatch(appleScript: #"tell application "Music" to playpause"#,
                  spotifyScript: #"tell application "Spotify" to playpause"#,
                  kasetScript: #"tell application "Kaset" to playpause"#,
-                 mediaControlCommand: "toggle-play-pause")
+                 mediaControlCommand: "toggle-play-pause", completion: completion)
     }
 
-    @discardableResult
-    public static func nextTrack() -> Bool {
+    public static func nextTrack(completion: Completion? = nil) {
         dispatch(appleScript: #"tell application "Music" to next track"#,
                  spotifyScript: #"tell application "Spotify" to next track"#,
                  kasetScript: #"tell application "Kaset" to next track"#,
-                 mediaControlCommand: "next-track")
+                 mediaControlCommand: "next-track", completion: completion)
     }
 
-    @discardableResult
-    public static func previousTrack() -> Bool {
+    public static func previousTrack(completion: Completion? = nil) {
         dispatch(appleScript: #"tell application "Music" to previous track"#,
                  spotifyScript: #"tell application "Spotify" to previous track"#,
                  kasetScript: #"tell application "Kaset" to previous track"#,
-                 mediaControlCommand: "previous-track")
+                 mediaControlCommand: "previous-track", completion: completion)
     }
 
     /// 「喜欢」这件事只有 Apple Music 有——QQ 音乐/网易云音乐没有 AppleScript 支持,
@@ -965,15 +950,19 @@ public enum MusicPlaybackController {
 
     /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
     private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?,
-                                 mediaControlCommand: String, mediaControlArguments: [String] = []) -> Bool {
-        dispatchRoute(appleScript: appleScript, spotifyScript: spotifyScript, kasetScript: kasetScript,
-                      mediaControlCommand: mediaControlCommand, mediaControlArguments: mediaControlArguments) != nil
+                                 mediaControlCommand: String, completion: Completion?) {
+        let route = dispatchRoute(appleScript: appleScript, spotifyScript: spotifyScript, kasetScript: kasetScript,
+                                  mediaControlCommand: mediaControlCommand, completion: completion)
+        if case .qqAccessibility(_)? = route { return } // QQ 由后台 AX 结果回报,不能把入队当成功。
+        let dispatched = route != nil
+        DispatchQueue.main.async { completion?(dispatched) }
     }
 
-    /// 同 `dispatch`,另外交回这一下走的哪条路;没发出去返回 nil。
+    /// 交回排入的通路;没有通路返回 nil。QQ 另通过 completion 回报实际 AX 结果。
     private static func dispatchRoute(appleScript: String, spotifyScript: String, kasetScript: String?,
                                       mediaControlCommand: String, mediaControlArguments: [String] = [],
-                                      kasetDirectSeek: KasetDirectSeek? = nil) -> ControlRoute? {
+                                      kasetDirectSeek: KasetDirectSeek? = nil,
+                                      completion: Completion? = nil) -> ControlRoute? {
         let base = currentBaseRoute(mediaControlCommand: mediaControlCommand)
         let route = seekRoute(base, playerIsKaset: kasetDirectSeek != nil)
         switch route {
@@ -992,15 +981,28 @@ public enum MusicPlaybackController {
             guard let kasetDirectSeek else { return nil }
             runKasetDirectSeek(kasetDirectSeek, fallbackCommand: mediaControlCommand, fallbackArguments: mediaControlArguments)
         case .qqAccessibility(let command):
-            let outcome = QQMusicAccessibilityControl.press(command)
-            guard outcome == .pressed else {
-                return withhold(mediaControlCommand, reason: "QQ accessibility: \(outcome)",
-                                failure: outcome == .notTrusted ? .accessibilityPermissionRequired : .unavailable)
-            }
+            dispatchQQAccessibility(command, completion: completion)
         case .withheld:
             return withhold(mediaControlCommand, reason: "now playing focus is held by another app")
         }
         return route
+    }
+
+    /// QQ 的三个动作与已有控制共用串行队列。press 是 AX 边界,selftest 用阻塞桩验证主线程仍可服务和失败回报。
+    public static func dispatchQQAccessibility(
+        _ command: QQMusicAccessibilityControl.Command,
+        press: @escaping @Sendable (QQMusicAccessibilityControl.Command) -> QQMusicAccessibilityControl.Outcome = { QQMusicAccessibilityControl.press($0) },
+        completion: Completion? = nil
+    ) {
+        commandQueue.async {
+            commandSerial &+= 1
+            let outcome = press(command)
+            if outcome != .pressed {
+                _ = withhold(command.rawValue, reason: "QQ accessibility: \(outcome)",
+                             failure: outcome == .notTrusted ? .accessibilityPermissionRequired : .unavailable)
+            }
+            DispatchQueue.main.async { completion?(outcome == .pressed) }
+        }
     }
 
     private static func withhold(_ command: String, reason: String,
