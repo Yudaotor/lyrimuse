@@ -654,6 +654,12 @@ final class PlaybackCoordinator: ObservableObject {
             if let web = youtubeMusicWebTarget {
                 // 不先清,换歌时几颗键不闪一下。
                 refreshYouTubeMusicWeb(web, mode: true, favorite: true, volume: true)
+            } else if favoritePlayer != nil {
+                // 只有「喜欢」、没有播放模式和音量的播放器(网易云):另两项清掉,喜欢单独回读,不先清(换歌时心不闪)。
+                // 见 07 章决策 146。
+                applyPlaybackMode(nil)
+                if soundVolume != nil { soundVolume = nil }
+                refreshFavorited()
             } else {
                 clearExtendedControls()
             }

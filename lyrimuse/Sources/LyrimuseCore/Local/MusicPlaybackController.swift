@@ -382,9 +382,9 @@ public enum MusicPlaybackController {
         player == .appleMusic || player == .kaset || player == .qqMusic || player == .amazonMusic
     }
 
-    /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐(菜单栏「喜欢歌曲」)。
+    /// 这个播放器有没有「喜欢」:Apple Music(收藏)、Kaset(YouTube Music 的赞)、QQ 音乐和网易云音乐(菜单栏「喜欢歌曲」)。
     public static func supportsFavorite(_ player: PlaybackPlayer) -> Bool {
-        player == .appleMusic || player == .kaset || player == .qqMusic
+        player == .appleMusic || player == .kaset || player == .qqMusic || player == .netease
     }
 
     /// 按播放器读当前曲目的「喜欢」状态;不支持、读不到返回 nil。会阻塞到子进程结束,不要在主线程调用。
@@ -393,6 +393,7 @@ public enum MusicPlaybackController {
         case .appleMusic: return favoritedState()
         case .kaset: return kasetControls()?.liked
         case .qqMusic: return QQMusicMenuControl.readFavorited()
+        case .netease: return NetEaseMenuControl.readFavorited()
         default: return nil
         }
     }
@@ -413,6 +414,8 @@ public enum MusicPlaybackController {
             return runKasetJXACapturing(body) == "ok"
         case .qqMusic:
             return QQMusicMenuControl.setFavorited(value)
+        case .netease:
+            return NetEaseMenuControl.setFavorited(value)
         default:
             return false
         }

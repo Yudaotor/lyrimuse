@@ -99,6 +99,8 @@ func runPlayerIdentityTests() {
         expectEqual(MusicPlaybackController.supportsFavorite(.appleMusic) && MusicPlaybackController.supportsFavorite(.kaset),
                     true, "能力: Apple Music、Kaset 有喜欢")
         expectEqual(MusicPlaybackController.supportsFavorite(.spotify), false, "能力: Spotify 没有喜欢")
+        expectEqual(MusicPlaybackController.supportsFavorite(.netease), true,
+                    "能力: 网易云有喜欢(菜单栏「喜欢歌曲」,没有播放模式和音量)")
 
         // 播放控制发给谁:media-control 的指令作用于系统焦点,焦点被别的 App 占着、屏上这首靠 AppleScript
         // 回退问到时,要直接发给那个播放器,否则网页视频被暂停 / 被切走。
@@ -580,7 +582,7 @@ func runPlayerIdentityTests() {
             .appleMusic: (.appleMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                         .favorite, .resume, .learnsAnchorLag, .spatialAudioOffset]),
             .qqMusic: (.qqMusic, [.extendedControls, .repeatOne, .favorite, .learnsAnchorLag, .catalogMenuRows]),
-            .netease: (.netease, [.learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
+            .netease: (.netease, [.favorite, .learnsAnchorLag, .pausedAnchorStartsOnPlay, .catalogMenuRows]),
             .kugou: (nil, [.lateAnchorProbe, .resetAnchorCorrection, .stampsCaptureTime]),
             .soda: (.soda, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .catalogMenuRows]),
             .kkbox: (.kkbox, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .followsRepublishedAnchors,
@@ -876,6 +878,12 @@ func runPlayerIdentityTests() {
         expectEqual(Q.options.canRepeat, true, "QQ 播放模式: 有循环键(单曲循环)")
         expectEqual([Q.favorited(forTitle: "取消喜欢"), Q.favorited(forTitle: "喜歡歌曲"), Q.favorited(forTitle: "播放模式")],
                     [true, false, nil], "QQ 喜欢: 菜单写「取消喜欢」= 喜欢了,繁体也认,别的项不算")
+        // 网易云同一种表示(07 章决策 146):「控制」里那一项喜欢了写「取消喜欢」,没喜欢写「喜欢歌曲」。
+        typealias N = NetEaseMenuControl
+        expectEqual([N.favorited(forTitle: "取消喜欢"), N.favorited(forTitle: "喜欢歌曲"), N.favorited(forTitle: "喜歡歌曲"),
+                     N.favorited(forTitle: "随机播放"), N.favorited(forTitle: "下一个")],
+                    [true, false, false, nil, nil], "网易云喜欢: 菜单写「取消喜欢」= 喜欢了,繁体也认,别的项不算")
+        expectEqual(N.bundleID, PlaybackPlayer.netease.bundleIdentifier, "网易云喜欢: 认的是网易云那个进程")
         // 按下「喜欢」之后等标题翻过来(约 1 秒才变;不等的话连点第二下读到旧标题,判成已经是这个状态不按)。
         var titleReads = 0
         expectEqual(Q.waitFor(true, polls: 5, interval: 0) { titleReads += 1; return titleReads >= 3 }, true,
