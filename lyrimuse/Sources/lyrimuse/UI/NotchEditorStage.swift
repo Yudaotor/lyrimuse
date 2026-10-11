@@ -808,22 +808,39 @@ struct NotchEditorStage: View {
         return L10n.list([module.displayName, L10n.t("音浪")])
     }
 
+    /// 工具栏按钮。浮层挂在这颗按钮上往上弹(`arrowEdge: .top`),盖住的是上面的工具栏和页面标题,不碰预览;
+    /// 高度封顶在按钮那一行上方的空间里,放不下就在浮层里滚,不让系统翻下来盖住预览(同悬浮歌词编辑台,04 章决策 34、61)。
     private func toolbarButton(
         icon: String, title: String, summary: String, target: StagePopover
     ) -> some View {
         Button {
+            popoverMaxHeight = stageTopProbe.popoverHeightLimit(rowOffset: Self.rowOffsetAboveStage(target))
             popoverAnchor = .toolbar
             popover = target
         } label: {
             EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
         .editorToolbarButtonStyle()
-        .popover(isPresented: popoverBinding(target), arrowEdge: .bottom) {
+        .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
             popoverContent(for: target)
+                .environment(\.settingsPopoverMaxHeight, popoverMaxHeight)
+        }
+    }
+
+    /// 按钮所在那一行的上沿比舞台上沿高多少:第一行(风格 / 屏幕 / 左耳 / 右耳)隔着两行,其余在第二行。
+    /// 跟 `toolbar` / `toolbarRow2` 里按钮的分行一致,挪了按钮要一起改。
+    private static func rowOffsetAboveStage(_ target: StagePopover) -> CGFloat {
+        switch target {
+        case .style, .screen, .leftEar, .rightEar: return (toolbarHeight + toolbarSpacing) * 2
+        case .lyricRow, .font, .expanded, .behavior: return toolbarHeight + toolbarSpacing
         }
     }
 
     // MARK: - 浮层
+
+    /// 浮层高度上限 = 点开那一刻按钮那一行上沿到屏幕顶的距离(见 toolbarButton)。
+    @State private var popoverMaxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
+    @State private var stageTopProbe = StageTopProbe()
 
     private enum StagePopover: Equatable {
         case style
@@ -929,13 +946,18 @@ struct NotchEditorStage: View {
         //      舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40),侧边栏拉到最宽、窗口拖到最窄
         //      (SettingsSidebarWidth.windowMinWidth)时舞台约 499pt;卡片比舞台宽时整组按 previewScale
         //      缩到恰好等宽,余量正好是 0。
-        .clipShape(NotchHangingShape(bottomCornerRadius: 12))
+        .overlay(alignment: .top) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .background(StageTopProbeView(probe: stageTopProbe))
+        }
+        .clipShape(NotchHangingShape(bottomCornerRadius: 18))
         // 舞台自己那条发丝描边画在裁切**之后**:壁纸铺满整块舞台,压在底板上会把它整个盖住,
         // 而这条边是舞台跟设置页之间唯一的分界。透明度 0.12 —— 它描在一张照片上,更淡的档位
         // 在壁纸上基本看不见(这两条都是悬浮歌词编辑台第五步实测出来的,直接沿用)。
         // `.stroke` 而不是 `.strokeBorder`,理由见 windowEdgeOutline。
         .overlay(
-            NotchHangingShape(bottomCornerRadius: 12)
+            NotchHangingShape(bottomCornerRadius: 18)
                 .stroke(Color.primary.opacity(0.12), lineWidth: 0.5))
     }
 
@@ -955,7 +977,7 @@ struct NotchEditorStage: View {
     /// 刻意**不**用 settingsCardBackground 那套液态玻璃:玻璃的可见度完全取决于背后有什么,
     /// 而这块底板上压着的是真实桌面壁纸 —— 玻璃只会让"哪里是壁纸、哪里是设置页"这条边界更糊。
     private var stageBackground: some View {
-        NotchHangingShape(bottomCornerRadius: 12)
+        NotchHangingShape(bottomCornerRadius: 18)
             .fill(Color.primary.opacity(0.05))
     }
 
@@ -1575,20 +1597,35 @@ struct NotchStyleSettingsRows: View {
     /// 给圆角滑杆定上限、给「默认」算读数。不碰 `NotchLyricsWindowController.shared`(理由见 NotchPreviewChrome)。
     @StateObject private var card = NotchPreviewChrome()
 
+    // 一框:背景是一行下拉(四种风格选其一),下面两个圆角。浮层往上弹、高度有限,四行单选列表会把它撑到要滚动。
     var body: some View {
-        VStack(spacing: 0) {
-            // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一种
-            // 风格,这里不加就是"设置里选不到的合法值"。
-            ForEach(Array(NotchCardStyle.allCases.enumerated()), id: \.element) { index, style in
-                if index > 0 { CardDivider() }
-                row(style)
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                SettingsRow(icon: "paintbrush", title: L10n.t("背景")) {
+                    Picker("", selection: Binding(
+                        get: { settings.notchCardStyle },
+                        set: { style in
+                            // 相等守卫:@Published 是 willSet 语义,等值赋值照样广播 objectWillChange 打醒
+                            // 所有观察 AppSettings 的界面,didSet 还会白写一次 UserDefaults。
+                            guard settings.notchCardStyle != style else { return }
+                            settings.notchCardStyle = style
+                        })) {
+                        // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一种
+                        // 风格,这里不加就是"设置里选不到的合法值"。
+                        ForEach(NotchCardStyle.allCases, id: \.self) { style in
+                            Text(style.displayName).tag(style)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+                CardDivider()
+                cornerRadiusRow(icon: "square.bottomhalf.filled", title: L10n.t("圆角"), slot: .collapsed,
+                                cardHeight: card.cardHeight(expanded: false))
+                CardDivider()
+                cornerRadiusRow(icon: "rectangle.bottomhalf.filled", title: L10n.t("展开圆角"), slot: .expanded,
+                                cardHeight: card.cardHeight(expanded: true))
             }
-            CardDivider()
-            cornerRadiusRow(icon: "square.bottomhalf.filled", title: L10n.t("圆角"), slot: .collapsed,
-                            cardHeight: card.cardHeight(expanded: false))
-            CardDivider()
-            cornerRadiusRow(icon: "rectangle.bottomhalf.filled", title: L10n.t("展开圆角"), slot: .expanded,
-                            cardHeight: card.cardHeight(expanded: true))
         }
         // 拖到一半、或指针还停在行上时这一页没了(浮层被关、抽屉收起):值写回去,预览也别停在摆出来的那一态上。
         .onDisappear {
@@ -1662,36 +1699,6 @@ struct NotchStyleSettingsRows: View {
                 Text(title)
             }
         }
-    }
-
-    private func row(_ style: NotchCardStyle) -> some View {
-        let isSelected = settings.notchCardStyle == style
-        return Button {
-            // 相等守卫:@Published 是 willSet 语义,等值赋值照样广播 objectWillChange 打醒
-            // 所有观察 AppSettings 的界面,didSet 还会白写一次 UserDefaults。
-            guard settings.notchCardStyle != style else { return }
-            settings.notchCardStyle = style
-        } label: {
-            HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
-                // 勾**始终占位**(不选中时透明),否则选中项一变、整列文字就横向跳一格。
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .opacity(isSelected ? 1 : 0)
-                    .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
-                Text(style.displayName)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                // 整行可点靠下面那句 contentShape,而它认的是 HStack 的实际尺寸 —— 没有
-                // Spacer 撑满宽度,命中区就缩回"勾 + 几个字"那一小截。
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-            .padding(.vertical, SettingsRowMetrics.verticalPadding)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -1793,7 +1800,8 @@ struct NotchEarPopover: View {
         // 前者的信息量不足以单独留一个「?」气泡)。别再往这儿加 help 参数。
         SettingsPopoverShell(
             title: side == .left ? L10n.t("左耳") : L10n.t("右耳"),
-            width: 240
+            // 「显示内容」那一行是标题 + 下拉,240 时标题会被挤成一字一行。
+            width: 320
         ) {
             NotchEarSettingsRows(side: side)
         }
@@ -1843,71 +1851,37 @@ struct NotchEarSettingsRows: View {
         }
     }
 
+    // 一框:音浪一行开关,这一侧显示什么一行下拉(选其一;选「不显示」就空着)。
     var body: some View {
-        VStack(spacing: 0) {
-            equalizerRow
-            CardDivider()
-            // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一个
-            // 模块,这里不加就是"设置里选不到的合法值"。
-            ForEach(Array(NotchEarModule.allCases.enumerated()), id: \.element) { index, module in
-                if index > 0 { CardDivider() }
-                row(module)
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                equalizerRow
+                CardDivider()
+                SettingsRow(icon: "rectangle.lefthalf.inset.filled", title: L10n.t("显示内容")) {
+                    Picker("", selection: Binding(get: { current }, set: { select($0) })) {
+                        // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一个
+                        // 模块,这里不加就是"设置里选不到的合法值"。
+                        ForEach(NotchEarModule.allCases, id: \.self) { module in
+                            Text(module.displayName).tag(module)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
             }
         }
     }
 
-    private func row(_ module: NotchEarModule) -> some View {
-        let isSelected = current == module
-        return Button {
-            apply(module)
-        } label: {
-            HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
-                // 勾**始终占位**(不选中时透明),否则选中项一变、整列文字就横向跳一格。
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .opacity(isSelected ? 1 : 0)
-                    .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
-                Text(module.displayName)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-            .padding(.vertical, SettingsRowMetrics.verticalPadding)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-    }
-
-    /// 点**已勾选**的那一项 = 取消勾选,落回「不显示」。这让整个浮层
-    /// 上下两段的语义统一:顶上那行「音浪」是个能关的开关(`equalizerRow`),下面这组单选此前
-    /// 却是"点自己 = 无操作",同一个浮层里一半能关一半关不掉。
-    ///
-    /// 取消**不是**清空成"没有值":`NotchEarModule` 是全域枚举、`.none` 就是它表达"这只耳朵
-    /// 什么都不放"的合法成员(显示名正是「不显示」),所以取消 = 选中 `.none`,勾也跟着跳到
-    /// 那一行去 —— 不存在"一个都没勾"的中间态。
-    ///
-    /// 相等守卫留着,但守的是**算完之后的目标值**,不再是入参:
-    ///   - 点未选中项 → target = 该项(照旧);
-    ///   - 点已选中项 → target = `.none`(本次新增的取消语义);
-    ///   - 「不显示」已选中时点它自己 → target 仍是 `.none`、等于当前值,被守卫吃掉(无操作)——
-    ///     这一条正是守卫必须算在 target 上的原因,写在入参上会漏掉它。
-    ///
-    /// 守卫本身不能去掉:@Published 是 willSet 语义,等值赋值照样广播 objectWillChange 打醒
-    /// 所有观察 AppSettings 的界面,didSet 还会白写一次 UserDefaults。
-    /// 写全 `NotchEarModule.none`,别缩成 `.none`:这个枚举有个成员就叫 `none`,而 `.none`
-    /// 同时也是 `Optional` 的成员 —— 简写在这里能编过(左边标了非可选类型),但只要哪天有人
-    /// 把它挪进一个可选上下文,含义就会静默换成"空值"。
-    private func apply(_ module: NotchEarModule) {
-        let target: NotchEarModule = current == module ? NotchEarModule.none : module
+    /// 下拉选中哪个就是哪个(「不显示」= `NotchEarModule.none`)。写全 `NotchEarModule.none`,别缩成 `.none`:这个枚举有个
+    /// 成员就叫 `none`,而 `.none` 同时也是 `Optional` 的成员,挪进可选上下文含义会静默换成"空值"。
+    /// 相等守卫不能去掉:@Published 是 willSet 语义,等值赋值照样广播 objectWillChange,didSet 还会白写一次 UserDefaults。
+    private func select(_ module: NotchEarModule) {
         if side == .left {
-            guard settings.notchLeftEar != target else { return }
-            settings.notchLeftEar = target
+            guard settings.notchLeftEar != module else { return }
+            settings.notchLeftEar = module
         } else {
-            guard settings.notchRightEar != target else { return }
-            settings.notchRightEar = target
+            guard settings.notchRightEar != module else { return }
+            settings.notchRightEar = module
         }
     }
 }
@@ -1919,24 +1893,17 @@ struct NotchEarSettingsRows: View {
 /// 「所有屏幕」从一个独立的 Toggle 并进了这个选择:它跟"选哪一块屏"
 /// 本来就是同一个问题的几个互斥答案 —— 拆成"下拉 + 一个会把下拉整个禁用掉的开关"是把一个
 /// 选择硬掰成两个控件,还得额外写一句"开启后上面的指定屏幕不再起作用"来解释它们的关系。
-/// 这次换成单选列表,那条并法原样保留。
+/// 现在是一行「显示在」+ 下拉(浮层往上弹、高度有限,单选列表会撑高),那条并法原样保留。
 ///
-/// 宽度 300 —— 四个浮层里余量给得最大的一个,因为它是**唯一内容在运行时才知道**的:行文字
-/// 是 `NSScreen.localizedName`。离屏 `fittingSize` 拿几台常见机器的名字量下来是中文 176pt /
-/// 英文 215pt(最长那行 "LG UltraFine 5K Display"),300 留出约 85pt ≈ 再多 13 个西文字符。
-/// 更长的名字会走 `.truncationMode(.tail)` 截尾 —— 但 380 一样会截,只是阈值往后挪十几个字符,
-/// 所以"留宽点更安全"到不了"保证不截"这一步,不值得为它把浮层撑成内容的 1.8 倍。
+/// 宽度 340:下拉里显示的是 `NSScreen.localizedName`,运行时才知道多长(常见机器量下来英文最长约 215pt,
+/// "LG UltraFine 5K Display")。行名「显示在」+ ⓘ + 图标列约 110pt,再加下拉自身的边距。更长的名字下拉会截尾。
 @MainActor
 struct NotchScreenPopover: View {
     /// 选完之后让宿主重算编辑台的刘海几何(换到没有刘海的外接屏,画面里那个刘海要消失)。
     var onScreenChange: () -> Void
 
     var body: some View {
-        SettingsPopoverShell(
-            title: L10n.t("屏幕"),
-            help: L10n.t("「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开后自动恢复为「自动」"),
-            width: 300
-        ) {
+        SettingsPopoverShell(title: L10n.t("屏幕"), width: 340) {
             NotchScreenSettingsRows(onScreenChange: onScreenChange)
         }
     }
@@ -1962,26 +1929,35 @@ struct NotchScreenSettingsRows: View {
         settings.notchAllScreens ? Self.allScreensTag : settings.notchScreenID
     }
 
+    // 一行「显示在 [下拉]」,说明在这一行的 ⓘ 里(浮层和抽屉两个宿主都看得到)。别做成没有行名、居中铺开的下拉:
+    // 放进抽屉那张宽卡里就是一个孤零零浮在中间的框,看不出在选什么。
     var body: some View {
-        VStack(spacing: 0) {
-            row(tag: "", title: L10n.t("自动"))
-            CardDivider()
-            row(tag: Self.allScreensTag, title: L10n.t("全部屏幕"))
-            ForEach(availableScreens, id: \.self) { screen in
-                if let id = ScreenIdentity.id(of: screen) {
-                    CardDivider()
-                    row(tag: id, title: screen.localizedName)
+        SettingsRowGroup {
+            SettingsRow(
+                icon: "display",
+                title: L10n.t("显示在"),
+                help: L10n.t("「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开后自动恢复为「自动」")
+            ) {
+                Picker("", selection: Binding(get: { selection }, set: { apply($0) })) {
+                    Text(L10n.t("自动")).tag("")
+                    Text(L10n.t("全部屏幕")).tag(Self.allScreensTag)
+                    ForEach(availableScreens, id: \.self) { screen in
+                        if let id = ScreenIdentity.id(of: screen) {
+                            Text(screen.localizedName).tag(id)
+                        }
+                    }
+                    // 存着的那块屏现在没接着时补一项。少了它,菜单里没有任何一项是选中的 ——
+                    // 那看起来像设置丢了,而实际上偏好还在、屏幕插回来就会恢复。
+                    if !settings.notchAllScreens, !settings.notchScreenID.isEmpty,
+                       ScreenIdentity.screen(withID: settings.notchScreenID) == nil {
+                        Text(L10n.t("已断开的屏幕")).tag(settings.notchScreenID)
+                    }
                 }
+                .pickerStyle(.menu)
+                .fixedSize()
             }
-            // 存着的那块屏现在没接着时补一行。少了它,列表里没有任何一项是选中的 ——
-            // 那看起来像设置丢了,而实际上偏好还在、屏幕插回来就会恢复。
-            // (改版前这里是 Picker 的一个占位 tag:选中值在选项里找不到对应 tag 时整个
-            //  控件会显示成空白,同一个问题的同一条修法。)
-            if !settings.notchAllScreens, !settings.notchScreenID.isEmpty,
-               ScreenIdentity.screen(withID: settings.notchScreenID) == nil {
-                CardDivider()
-                row(tag: settings.notchScreenID, title: L10n.t("已断开的屏幕"))
-            }
+            // 搜索目录里这一项按「屏幕」登记。
+            .settingsSearchHighlight(title: L10n.t("屏幕"))
         }
         // 设置页开着的时候插拔显示器,列表里的选项要跟着变。
         .onReceive(
@@ -1990,31 +1966,6 @@ struct NotchScreenSettingsRows: View {
         ) { _ in
             availableScreens = NSScreen.screens
         }
-    }
-
-    private func row(tag: String, title: String) -> some View {
-        let isSelected = selection == tag
-        return Button {
-            apply(tag)
-        } label: {
-            HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .opacity(isSelected ? 1 : 0)
-                    .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
-                Text(title)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-            .padding(.vertical, SettingsRowMetrics.verticalPadding)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     /// `if settings.notchOverlayEnabled` 守卫不能省 —— 理由同

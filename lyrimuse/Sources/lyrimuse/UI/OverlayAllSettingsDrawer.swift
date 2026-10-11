@@ -13,12 +13,10 @@ import SwiftUI
 // 才能开这个形态";它留在编辑台正下方那张 modeToggleCard 里常驻可见。
 //
 // 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏各个入口一一
-// 对应**(主题 → 文字 → 背景 → 内容 → 排版(含宽度)→ 行为 → 位置 → 恢复默认),展开后一组一张卡。别给抽屉另起一套分组名:
+// 对应**(主题 → 字形 → 颜色 → 内容 → 排版(含宽度)→ 行为 → 位置 → 恢复默认),展开后一组一张卡。别给抽屉另起一套分组名:
 // 用户是按工具栏的记忆到抽屉里找的,对不上名就会落空:
-//   - 主题 / 文字 / 背景 / 内容 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
-// 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
-//     文字层和背景层,拆分判据见那个文件里 OverlayBackgroundSettingsRows 的头注;
-//     「跟随封面」从「文字」组挪进「主题」组,理由见 OverlayThemeSettingsRows 头注
+//   - 主题 / 字形 / 颜色 / 内容 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
+//     「跟随封面」在「主题」组,理由见 OverlayThemeSettingsRows 头注
 //   - 行为 → OverlayBehaviorSettingsRows.swift(三个行为项 + 两行自动隐藏,跟工具栏「行为」浮层
 //     同一份视图,不再各自拼)
 //   - 恢复 → OverlayStyleDefaults.restoreTextAndColors()(跟工具栏「重置 ▾」同一个动作)
@@ -46,29 +44,28 @@ struct OverlayAllSettingsDrawer: View {
                 disclosureHeader
             }
             if isExpanded {
-                // 按"这个字段改的是哪一层"拆成 主题 / 文字 / 背景 三组
-                // (拆分判据见 OverlayStyleSettingsRows.swift 里 OverlayBackgroundSettingsRows
-                // 的头注)。顺序跟编辑台工具栏那几颗按钮一致 —— 抽屉的职责是"工具栏浮层的
-                // 全量兜底通路",两个宿主分组不一样的话,用户按工具栏的记忆到抽屉里找会落空。
+                // 主题 / 字形 / 颜色三组,分法见 OverlayStyleSettingsRows.swift 里 OverlayTypeSettingsRows 的头注。
+                // 顺序跟编辑台工具栏那几颗按钮一致 —— 抽屉的职责是"工具栏浮层的全量兜底通路",
+                // 两个宿主分组不一样的话,用户按工具栏的记忆到抽屉里找会落空。
                 //
                 // 「我的配色主题」不再单独占一组:它现在长在「主题」组里(OverlayThemeSettingsRows
                 // 的第二段),原来那组之所以没有组标题,就是因为它第一行本身就叫「我的配色主题」、
                 // 再加一条组标题是同一句话说两遍 —— 并进「主题」之后这个别扭之处一起没了。
-                groupCard(title: L10n.t("主题")) { OverlayThemeSettingsRows() }
-                groupCard(title: L10n.t("文字")) { OverlayTextSettingsRows() }
-                groupCard(title: L10n.t("背景")) { OverlayBackgroundSettingsRows() }
+                SettingsGroupCard(title: L10n.t("主题")) { OverlayThemeSettingsRows() }
+                SettingsGroupCard(title: L10n.t("字形")) { OverlayTypeSettingsRows() }
+                SettingsGroupCard(title: L10n.t("颜色")) { OverlayColorSettingsRows() }
                 // 跟工具栏「内容」浮层同名、同一份视图。
-                groupCard(title: L10n.t("内容")) { OverlayContentSettingsRows() }
+                SettingsGroupCard(title: L10n.t("内容")) { OverlayContentSettingsRows() }
                 // 「宽度」放在「排版」卡最后、自己一个框:它讲的也是版面,放在「间距」后面不加框会读成间距的第四行。
-                groupCard(title: L10n.t("排版")) {
+                SettingsGroupCard(title: L10n.t("排版")) {
                     SettingsRowGroupStack {
                         OverlayLayoutSettingsRows()
                         SettingsRowGroup { widthRow }
                     }
                 }
-                groupCard(title: L10n.t("行为")) { OverlayBehaviorSettingsRows() }
+                SettingsGroupCard(title: L10n.t("行为")) { OverlayBehaviorSettingsRows() }
                 // 排在「行为」之后 = 工具栏第二行的顺序(排版 / 行为 / 位置)。
-                groupCard(title: L10n.t("位置")) { OverlayPlacementSettingsRows() }
+                SettingsGroupCard(title: L10n.t("位置")) { OverlayPlacementSettingsRows() }
                 resetRow
             }
         }
@@ -142,25 +139,8 @@ struct OverlayAllSettingsDrawer: View {
 
     /// 抽屉头右侧那串组名,顺序跟 body 里各组卡的顺序一致(改了分组两处一起改)。
     private static var groupNames: String {
-        [L10n.t("主题"), L10n.t("文字"), L10n.t("背景"), L10n.t("内容"), L10n.t("排版"),
+        [L10n.t("主题"), L10n.t("字形"), L10n.t("颜色"), L10n.t("内容"), L10n.t("排版"),
          L10n.t("行为"), L10n.t("位置")].joined(separator: " · ")
-    }
-
-    /// 一组一张卡:粗体卡头 + 那一组的行视图(跟工具栏同名浮层是同一份)。自绘的卡头不会自动挂搜索高亮
-    /// (只有 SettingsRow / SettingsCardHeader 会),手挂。
-    private func groupCard<Content: View>(title: String, @ViewBuilder content: @escaping () -> Content) -> some View {
-        SettingsCard(cornerRadius: 18) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-                .padding(.top, 12)
-                .padding(.bottom, 6)
-                .settingsSearchHighlight(title: title)
-            content()
-                .padding(.bottom, 10)
-                .environment(\.settingsBoxedGroups, true)
-        }
     }
 
     // MARK: - 宽度与恢复

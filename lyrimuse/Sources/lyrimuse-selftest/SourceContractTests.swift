@@ -2268,7 +2268,7 @@ func runSourceContractTests() {
         let stage = read("UI/OverlayEditorStage.swift")
         expectEqual(stage.contains("get: { popover == target && popoverAnchor == .toolbar }"), true,
                     "可点区域: 工具栏那份浮层只在锚点是工具栏时亮,同一个浮层不会两处同时弹")
-        expectEqual(stage.contains("CardHotspot(kind: .mainLine, rect: rect, target: .text)")
+        expectEqual(stage.contains("CardHotspot(kind: .mainLine, rect: rect, target: .type)")
                         && stage.contains("CardHotspot(kind: .content, rect: rect, target: .content)"), true,
                     "可点区域: 主行开「文字」,读音 / 译文 / 下一句开「内容」")
         expectEqual(overlay.contains("value.merge(nextValue()) { $0.union($1) }"), true,

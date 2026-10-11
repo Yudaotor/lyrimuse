@@ -183,13 +183,16 @@ func runSettingsSearchTests() {
         // 「背景」不在这儿:歌词窗口那一段有一行真的叫这个名字、已登记在目录里,而这张白名单
         // 跟目录必须不相交(下面那条断言)。悬浮歌词抽屉里同名的那个组标题因此顺带被目录覆盖 ——
         // 搜「背景」会落到歌词窗口那一行,不再是查无此项。
-        "主题", "文字", "内容", "排版", "行为",                      // 悬浮歌词抽屉的组标题(「文字」「内容」也是歌词窗口抽屉的卡头)
+        "主题", "字形", "颜色", "内容", "排版", "行为",              // 悬浮歌词抽屉的组标题(「内容」也是歌词窗口抽屉的卡头)
+        "文字",                                                   // 歌词窗口抽屉的卡头
         // 「封面」同「背景」:迷你「顶部信息」里有一行真的叫这个名字、已登记在目录里,
         // 所以完整尺寸那张同名卡头顺带被目录覆盖,不能再留在白名单里(两者必须不相交)。
         "顶部信息", "布局",                                       // 歌词显示 › 歌词窗口 的卡头
         "断句",                                                   // 歌词 › 调整 的卡头(同段的「文字」卡头见上一行)
         "批量匹配",                                         // 歌词 › 管理 的卡头
         "权限与服务",                                       // 播放器 › 权限与服务 的卡头(跟分段同名,分段本身已可搜到这一页)
+        "歌词行", "展开态",                                 // 歌词显示 › 灵动岛「全部设置」抽屉的卡头(跟工具栏入口同名)
+        "显示在",                                           // 灵动岛「屏幕」那一行的行名,目录里按「屏幕」登记
         "菜单栏与 Dock", "语言、启动与通知", "备份与迁移",                // 通用页卡头
         "更新与帮助", "诊断与数据",                                   // 关于页卡头
         "更新设置",                                                   // 软件更新页的卡头
@@ -214,8 +217,8 @@ func runSettingsSearchTests() {
     var scannedTitles: [String: [String]] = [:]   // 标题 → 出现的文件
     for relative in scannedFiles {
         let text = source(relative)
-        // `groupCard(` 是悬浮歌词「全部设置」抽屉里各组卡的卡头(OverlayAllSettingsDrawer),跟 SettingsCardHeader 同一回事。
-        for marker in ["SettingsRow(", "SettingsSubRow(", "SettingsCardHeader(", "PlayerBundleChipsRow(", "groupCard("] {
+        // `SettingsGroupCard(` 是「全部设置」抽屉里各组卡的卡头,跟 SettingsCardHeader 同一回事。
+        for marker in ["SettingsRow(", "SettingsSubRow(", "SettingsCardHeader(", "PlayerBundleChipsRow(", "SettingsGroupCard("] {
             var searchStart = text.startIndex
             while let found = text.range(of: marker, range: searchStart..<text.endIndex) {
                 // 取到配对右括号或第一个 `{`(尾随闭包)为止的参数段。

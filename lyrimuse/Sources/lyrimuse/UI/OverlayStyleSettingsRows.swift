@@ -19,191 +19,172 @@ import SwiftUI
 // 两个宿主绑的是同一个 AppSettings.shared,所以"浮层里改"和"卡片里改"天然同步,不需要
 // 任何双向绑定代码 —— 这也是不把设置值往上提成 @State 的理由:一提就多出一份要同步的真相。
 
-// MARK: - 文字
+// MARK: - 字形
 
-/// 「文字」那一组:字体 / 粗细 / 字号 / 卡拉OK效果 / 文字颜色 / 文字描边 / 描边颜色。
+/// 「字形」那一组:字体 / 粗细 / 字号 —— 字长什么样。颜色、描边、卡拉OK 在「颜色」(`OverlayColorSettingsRows`),
+/// 版面在「排版」,一键套一整套配色在「主题」:按"这个字段改的是哪一层"归组。
 ///
-/// 行与行之间的 `CardDivider()` 由这个组件自己插 —— 宿主只知道"这里放一组文字设置",
-/// 不该知道它内部有几行、该在哪儿断。
-///
-/// **这一组三次增删的账**:
-///   - 减:「双行显示」「对齐方式」搬去了 `OverlayLayoutSettingsRows` ——
-///     字体字号讲的是**字长什么样**,那两项讲的是版面,判据记在那个组件的注释里。
-///   - 增:原「配色」组里属于**文字层**的四行(跟随封面 / 文字颜色 / 文字描边 /
-///     描边颜色)并了过来(「帮我把这 2 个里面的配置重新整理一下,拆分为文字以及
-///     背景;分别归纳」)。拆分判据见 `OverlayBackgroundSettingsRows` 的头注。
-///   - 减:「跟随封面」搬去了 `OverlayThemeSettingsRows`(整页按"不要这一个
-///     那一个"重排)。它虽然只接管文字色,但它跟「配色主题」是同一个问题的两个答案——文字色从哪来:
-///     封面主色,还是某一套主题;开关在这边、被它顶成「—」的主题行在那边,用户在「主题」浮层里看到
-///     一个破折号却找不到原因。悬浮窗右键的「配色主题」子菜单(`OverlayQuickSettingsMenu`)现在也
-///     只列主题、不放跟随封面。
-/// 三次用的是同一条判据 —— 按"这个字段改的是哪一层 / 回答的是哪个问题"归组,不按"都跟文字有关"
-/// 这种最粗的相关性(那条相关性把整页设置都能装进去)。
-///
-/// 「文字颜色」那一行**任何时候都在**:跟随封面开着时尾部不放取色器、改成一句
-/// 灰字「跟随封面」—— 取色模式的开关已经不在这个浮层里,再把整行藏掉就成了"文字颜色去哪了"。
-/// `if textStrokeEnabled` 那处条件显示是搬过来时**原样保留**的既有行为,理由写在那一行上面。
+/// 原来的「文字」组(字形 + 卡拉OK + 字色 + 描边)和「背景」组在往上弹、只有按钮上方约 200pt 的浮层里放不下,
+/// 重分成「字形」「颜色」两组,工具栏仍是三颗(第一行横向预算见 `OverlayEditorStage.toolbar`)。
 @MainActor
-struct OverlayTextSettingsRows: View {
+struct OverlayTypeSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
-    // 浮层里分两组:字形(字体 / 粗细 / 字号)、颜色(卡拉OK 与各种颜色、描边)。外层那个 Stack 是下面
-    // `.animation(value:)` 的挂载点(挂在 Group 上是逐个子视图生效的,条件行长出 / 收起的动画就没人负责)。
     var body: some View {
-        SettingsRowGroupStack {
-            SettingsRowGroup(title: L10n.t("字形")) { typeRows }
-            SettingsRowGroup(title: L10n.t("颜色")) { colorRows }
-        }
-        // 条件行长出/收起时别硬跳(设计稿明确要求)。挂 value: 而不是裸 .animation() ——
-        // 裸的那种会把这一组里所有变化都动画化,包括拖字号滑杆时预览的每一帧。
-        // (`followsCoverArt` 那条拿掉了:它在这一组里不再增删任何行,只换「文字颜色」
-        //  尾部的内容,没有几何要过渡。)
-        .animation(.default, value: settings.textStrokeEnabled)
-        .animation(.default, value: settings.overlayLyricsKaraoke)
-    }
-
-    private var typeRows: some View {
-        VStack(spacing: 0) {
-            SettingsRow(icon: "character", title: L10n.t("字体")) {
-                // 系统装了什么就能选什么(带搜索、每行用字体自己渲染),见 FontFamilyPicker 顶部注释。
-                FontFamilyPicker(selection: $settings.fontFamilyName)
-            }
-            CardDivider()
-            // 加(「帮我悬浮歌词模块加一个控制字体粗细的功能配置吧」)。
-            //
-            // 排在字体和字号**之间**:粗细是"这个字体族的哪一个粗细",跟字体是同一件事的两半,
-            // 中间隔着字号会把它读成一个独立维度。
-            //
-            // 这一行叫「粗细」不叫「字重」(改的,「这个命名为字重是不是
-            // 不太合适啊」)。「字重」是排版行话,而用户提这个需求时自己的原话就是"控制字体粗细"
-            // —— 用户已经说出口的那个词,就是这一行该有的名字。**代码里的标识符仍然叫
-            // `overlayFontWeight` / `OverlayFontWeight`**,那是给写代码的人看的,行业术语在那边
-            // 反而更准确;这条不对称是有意的,别为了"统一"把界面文案改回去。
-            //
-            // 这里选的是**主歌词行**那一档,罗马音/译文/下一句三行按固定档位差自动跟着细
-            // (见 `OverlayFontWeight`)。刻意不做成四行各自可调:那是四个滑杆的复杂度,换来的是
-            // 用户可以把译文调得比主歌词还粗——一个没人想要、却要用界面去防的状态。
-            //
-            // `.fixedSize` 不能省(已知坑第 15 条):`SettingsRow` 的 HStack 有三个
-            // 可伸缩成员,SwiftUI **均分**剩余宽度而不是"先按理想宽度发",不加这一句时下拉会在
-            // 行里还空着一大截的情况下被压到自己的下限、把最长的那个选项截掉。
-            SettingsRow(icon: "bold", title: L10n.t("粗细")) {
-                Picker("", selection: $settings.overlayFontWeight) {
-                    ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
-                        Text(weight.displayName).tag(weight)
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                SettingsRow(icon: "character", title: L10n.t("字体")) {
+                    // 系统装了什么就能选什么(带搜索、每行用字体自己渲染),见 FontFamilyPicker 顶部注释。
+                    FontFamilyPicker(selection: $settings.fontFamilyName)
+                }
+                CardDivider()
+                // 加(「帮我悬浮歌词模块加一个控制字体粗细的功能配置吧」)。
+                //
+                // 排在字体和字号**之间**:粗细是"这个字体族的哪一个粗细",跟字体是同一件事的两半,
+                // 中间隔着字号会把它读成一个独立维度。
+                //
+                // 这一行叫「粗细」不叫「字重」(改的,「这个命名为字重是不是
+                // 不太合适啊」)。「字重」是排版行话,而用户提这个需求时自己的原话就是"控制字体粗细"
+                // —— 用户已经说出口的那个词,就是这一行该有的名字。**代码里的标识符仍然叫
+                // `overlayFontWeight` / `OverlayFontWeight`**,那是给写代码的人看的,行业术语在那边
+                // 反而更准确;这条不对称是有意的,别为了"统一"把界面文案改回去。
+                //
+                // 这里选的是**主歌词行**那一档,罗马音/译文/下一句三行按固定档位差自动跟着细
+                // (见 `OverlayFontWeight`)。刻意不做成四行各自可调:那是四个滑杆的复杂度,换来的是
+                // 用户可以把译文调得比主歌词还粗——一个没人想要、却要用界面去防的状态。
+                //
+                // `.fixedSize` 不能省(已知坑第 15 条):`SettingsRow` 的 HStack 有三个
+                // 可伸缩成员,SwiftUI **均分**剩余宽度而不是"先按理想宽度发",不加这一句时下拉会在
+                // 行里还空着一大截的情况下被压到自己的下限、把最长的那个选项截掉。
+                SettingsRow(icon: "bold", title: L10n.t("粗细")) {
+                    Picker("", selection: $settings.overlayFontWeight) {
+                        ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
+                            Text(weight.displayName).tag(weight)
+                        }
+                    }
+                    .labelsHidden()
+                    // 六个档位:分段控件在 380pt 的浮层里放不下六个中文标签(而且这一栏本来就不是
+                    // 高频项),下拉更合适。同 `FontFamilyPicker` 那一行的形态。
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+                CardDivider()
+                SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
+                    HStack(spacing: 8) {
+                        // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
+                        // (「没有意义,不好看」),量化语义一模一样。
+                        SteppedSlider(value: Binding(
+                            get: { settings.fontSize },
+                            set: { newValue in
+                                // 相等守卫:拖动中每个鼠标事件都会调 set,step 量化后大量等值
+                                // 赋值照样广播 objectWillChange,didSet 还会 recomputeFonts()
+                                // 连带重赋 4 个派生字体 @Published(一写五发)——所有观察
+                                // AppSettings 的界面跟着白跑(同三个宽度滑杆)。
+                                guard newValue != settings.fontSize else { return }
+                                settings.fontSize = newValue
+                            }
+                        ), in: AppSettings.overlayFontSizeRange, step: 1)
+                            .frame(width: 150)
+                        Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 46, alignment: .trailing)
                     }
                 }
-                .labelsHidden()
-                // 六个档位:分段控件在 380pt 的浮层里放不下六个中文标签(而且这一栏本来就不是
-                // 高频项),下拉更合适。同 `FontFamilyPicker` 那一行的形态。
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            CardDivider()
-            SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
-                HStack(spacing: 8) {
-                    // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
-                    // (「没有意义,不好看」),量化语义一模一样。
-                    SteppedSlider(value: Binding(
-                        get: { settings.fontSize },
-                        set: { newValue in
-                            // 相等守卫:拖动中每个鼠标事件都会调 set,step 量化后大量等值
-                            // 赋值照样广播 objectWillChange,didSet 还会 recomputeFonts()
-                            // 连带重赋 4 个派生字体 @Published(一写五发)——所有观察
-                            // AppSettings 的界面跟着白跑(同三个宽度滑杆)。
-                            guard newValue != settings.fontSize else { return }
-                            settings.fontSize = newValue
-                        }
-                    ), in: AppSettings.overlayFontSizeRange, step: 1)
-                        .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
-                }
             }
         }
     }
+}
 
-    private var colorRows: some View {
-        VStack(spacing: 0) {
-            // 从「歌词」页的「效果」段拆过来的悬浮歌词那一份——"卡拉OK是某个展示面怎么画的
-            // 问题,跟繁简 / 罗马音那些改歌词内容本身的不是一类"。判据跟 「双行显示」挪进
-            // 「排版」那次同一条:只对这一种展示方式生效的就归到这一段。灵动岛 / 菜单栏各有自己那颗,歌词窗口
-            // 迷你尺寸也有一颗、完整尺寸始终逐字。
-            //
-            // 排在字号之后、颜色那几行之前:它讲的是"字怎么被点亮",介于字形和颜色之间,放在两组的
-            // 分界上最不突兀。生效链路见 AppSettings.overlayLyricsKaraoke。
-            SettingsRow(
-                icon: "sparkles",
-                title: L10n.t("卡拉OK效果"),
-                help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮")
-            ) {
-                Toggle("", isOn: $settings.overlayLyricsKaraoke)
+// MARK: - 颜色
+
+/// 「颜色」那一组:卡拉OK效果 / 文字描边 / 毛玻璃背景三个开关一行小块,下面文字颜色 / 未唱颜色 / 描边颜色 /
+/// 背景颜色几格(两列)。
+///
+/// - 未唱颜色只在开着卡拉OK时出现:没有卡拉OK就没有"已唱 / 未唱"。它跟文字颜色是平级的一对,各自能跟随封面或选色。
+/// - 描边颜色只在开着描边时出现;描边只让选颜色(含 alpha),粗细是固定常量(LyricsOverlayView 的 OptionalTextStroke)。
+/// - 毛玻璃改变的是背景颜色的含义(从卡片本色变成玻璃上的着色);开着时浓淡下拉挂在毛玻璃那一块上
+///   (SwiftUI 的 Material 做不成连续滑杆,见 OverlayGlassIntensity)。
+/// - 文字颜色、背景颜色都开透明度:alpha 拖到 0 窗口会整个看不见,退路是工具栏「重置 ▾」和抽屉「恢复默认」。
+///   背景不透明度就是背景颜色的 alpha,不另加滑杆。
+/// - 「跟随封面」本身的开关在「主题」(见 OverlayThemeSettingsRows 头注);这里的下拉只切这一格的取色模式。
+@MainActor
+struct OverlayColorSettingsRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    // 外层那个 Stack 是下面 `.animation(value:)` 的挂载点(挂在 Group 上是逐个子视图生效的,条件格长出 / 收起的
+    // 动画就没人负责)。挂 value: 而不是裸 .animation():裸的那种会把这一组里所有变化都动画化。
+    var body: some View {
+        SettingsRowGroupStack {
+            SettingsTileGrid(columns: 3) {
+                SettingsToggleTile(icon: "sparkles", title: L10n.t("卡拉OK效果"),
+                                   help: L10n.t("逐字歌词随演唱逐字高亮；无逐字数据的歌曲整行高亮"),
+                                   isOn: $settings.overlayLyricsKaraoke)
+                SettingsToggleTile(icon: "pencil.and.outline", title: L10n.t("文字描边"), isOn: $settings.textStrokeEnabled)
+                SettingsToggleTile(icon: "square.on.square", title: L10n.t("毛玻璃背景"), isOn: $settings.overlayBackgroundGlass) {
+                    if settings.overlayBackgroundGlass {
+                        Picker("", selection: $settings.overlayGlassIntensity) {
+                            ForEach(OverlayGlassIntensity.allCases, id: \.self) { intensity in
+                                Text(intensity.displayName).tag(intensity)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .help(L10n.t("玻璃浓淡"))
+                        .settingsSearchHighlight(title: L10n.t("玻璃浓淡"))
+                    }
+                }
             }
-            // ── 以下两行从原「配色」组并过来 ──
-            //
-            // 「跟随封面 / 自定义颜色」这两行共用的取色控件用下拉菜单(`colorModeMenu`,纯文字
-            // `Menu(标题) { Button(...) }`,这个仓库里验证过好用的下拉形态,见 04 章决策 21)——下拉本身就是**当前模式的文字**,不依赖 Toggle 的标签渲染,选
-            // "自定义颜色"才在旁边露出取色器。 别退回独立开关(切模式要跨两个浮层,体验
-            // 割裂)或带文字标签的 `Toggle`(那个文字标签在 macOS 上不渲染,行里只剩一颗
-            // 看不出意义的光秃秃开关)。
-            //
-            // 两行共用 `colorModeMenu(follows:color:supportsOpacity:)`(定义在这个 struct
-            // 底部)——避免各写一遍、以后漏改一处。
-            CardDivider()
-            SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
-                colorModeMenu(
-                    follows: $settings.followsCoverArt,
-                    color: Binding(
-                        get: { settings.foregroundColor },
-                        set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
-                    ),
-                    // 打开。之前故意关着,理由是"拖到
-                    // alpha 0 悬浮窗会整个消失、没有任何视觉提示能定位问题"——但工具栏
-                    // 「重置 ▾」菜单和设置页都有一颗「恢复默认文字与配色」
-                    // (OverlayStyleDefaults.restoreTextAndColors),走的是菜单栏,不依赖看得见
-                    // 悬浮窗本身,跟这次会话刚给「锁定态解锁提示」补的逃生路径是同一个道理:
-                    // 原来的顾虑已经有退路兜底,不必为了防一个可恢复的状态阉割掉透明度这个
-                    // 真实诉求。
-                    supportsOpacity: true
-                )
-            }
-            // **跟「文字颜色」是平级的一对独立颜色**,
-            // 不是它的附属项——已唱色就是上面那行,这一行是未唱到那一段单独的颜色,两者各自
-            // 都能"跟随封面"或"选一个具体颜色",互不牵连。
-            //
-            // 整行仍然只在开着「卡拉OK效果」时出现:没有卡拉OK就没有"已唱/未唱"这回事,给一个
-            // 不会产生任何视觉效果的设置项没有意义。
-            if settings.overlayLyricsKaraoke {
-                CardDivider()
-                SettingsRow(icon: "circle.lefthalf.filled", title: L10n.t("未唱颜色")) {
+            SettingsTileGrid(columns: 2) {
+                SettingsControlCell(icon: "paintbrush", title: L10n.t("文字颜色")) {
                     colorModeMenu(
-                        follows: $settings.karaokeUnsungFollowsCoverArt,
+                        follows: $settings.followsCoverArt,
                         color: Binding(
-                            get: { settings.karaokeUnsungColor },
-                            set: { settings.karaokeUnsungColorHex = $0.hexStringWithAlpha }
+                            get: { settings.foregroundColor },
+                            set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
                         ),
                         supportsOpacity: true
                     )
                 }
-            }
-            CardDivider()
-            SettingsRow(icon: "pencil.and.outline", title: L10n.t("文字描边")) {
-                Toggle("", isOn: $settings.textStrokeEnabled)
-            }
-            if settings.textStrokeEnabled {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("描边颜色")) {
-                    AppColorPicker(selection: Binding(
-                        get: { settings.textStrokeColor },
-                        set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
-                    ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
-                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
-                                              // 不额外加调节项——同类实现普遍也是这个取舍。
+                if settings.overlayLyricsKaraoke {
+                    SettingsControlCell(icon: "circle.lefthalf.filled", title: L10n.t("未唱颜色")) {
+                        colorModeMenu(
+                            follows: $settings.karaokeUnsungFollowsCoverArt,
+                            color: Binding(
+                                get: { settings.karaokeUnsungColor },
+                                set: { settings.karaokeUnsungColorHex = $0.hexStringWithAlpha }
+                            ),
+                            supportsOpacity: true
+                        )
+                    }
+                }
+                if settings.textStrokeEnabled {
+                    SettingsControlCell(icon: "pencil.tip", title: L10n.t("描边颜色")) {
+                        AppColorPicker(selection: Binding(
+                            get: { settings.textStrokeColor },
+                            set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
+                        ), supportsOpacity: true)
+                    }
+                }
+                SettingsControlCell(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
+                    HStack(spacing: 8) {
+                        // 透明时色块只是一块棋盘格,写明「透明」;判据跟工具栏摘要同一个(`OverlayStyleSummary.background`)。
+                        if !AppSettings.backgroundVisible(hex: settings.backgroundColorHex, glass: false) {
+                            Text(L10n.t("透明"))
+                                .foregroundStyle(.secondary)
+                        }
+                        AppColorPicker(selection: Binding(
+                            get: { settings.backgroundColor },
+                            set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
+                        ), supportsOpacity: true)
+                    }
                 }
             }
         }
+        .animation(.default, value: settings.textStrokeEnabled)
+        .animation(.default, value: settings.overlayLyricsKaraoke)
+        .animation(.default, value: settings.overlayBackgroundGlass)
     }
 
     /// 「文字颜色」「未唱颜色」共用的取色控件:下拉菜单选"跟随封面"还是"自定义颜色",
@@ -240,20 +221,10 @@ struct OverlayContentSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        SettingsRowGroup {
-            VStack(spacing: 0) {
-                SettingsRow(icon: "textformat.alt", title: L10n.t("读音")) {
-                    Toggle("", isOn: $settings.overlayShowRomanization)
-                }
-                CardDivider()
-                SettingsRow(icon: "text.bubble", title: L10n.t("译文")) {
-                    Toggle("", isOn: $settings.overlayShowTranslation)
-                }
-                CardDivider()
-                SettingsRow(icon: "rectangle.grid.1x2", title: L10n.t("下一句")) {
-                    Toggle("", isOn: $settings.showNextLinePreview)
-                }
-            }
+        SettingsTileGrid(columns: 3) {
+            SettingsToggleTile(icon: "textformat.alt", title: L10n.t("读音"), isOn: $settings.overlayShowRomanization)
+            SettingsToggleTile(icon: "text.bubble", title: L10n.t("译文"), isOn: $settings.overlayShowTranslation)
+            SettingsToggleTile(icon: "rectangle.grid.1x2", title: L10n.t("下一句"), isOn: $settings.showNextLinePreview)
         }
     }
 }
@@ -267,79 +238,65 @@ struct OverlayContentSettingsRows: View {
 struct OverlayLayoutSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
-    // 浮层里分两组:对齐方式 / 长句处理 / 换句动画一组(不加组名),三行间距一组。
+    // 浮层里:对齐方式一行(四档分段太宽,单占一行);长句处理、换句动画并排两格;三格间距一组。
+    // 一行一个控件时这个浮层放不下(往上弹,按钮上方只有约 236pt)。
     var body: some View {
         SettingsRowGroupStack {
-            SettingsRowGroup { arrangementRows }
-            SettingsRowGroup(title: L10n.t("间距")) { spacingRows }
-        }
-    }
-
-    private var arrangementRows: some View {
-        VStack(spacing: 0) {
-            // 多人声部歌词默认按演唱者自动在左/右/居中
-            // 之间切换(仿 Apple Music 的 Duet View),但对贴在桌面上的固定悬浮窗来说,
-            // 位置来回跳会影响阅读体验——这一项让用户强制固定到一个方向,忽略声部信息。
-            // 选了非"自动"时,两侧留白也会一并关掉(不止改对齐方向)——
-            // 只改对齐、留着留白跟真实声部走,文字块还是会因为留白量变化而轻微漂移,
-            // 没有真正做到"始终保持在同一个位置",具体见 OverlayDuetAlignmentOverride
-            // 声明处注释。只影响悬浮窗,不影响歌词窗口(issue 与原始描述都只提悬浮歌词)。
-            SettingsRow(
-                icon: "text.alignleft",
-                title: L10n.t("对齐方式"),
-                help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中之间切换。\n其他：忽略声部，固定在同一位置。")
-            ) {
-                // 故意不用系统 `.pickerStyle(.segmented)`(三轮修法都没
-                // 按住"选了哪个选项、控件整体宽度就跟着变"这个问题,完整排查过程见
-                // docs/features/04-desktop-overlay.md 对应决策记录)。改用纯 SwiftUI 手搭的
-                // OverlayAlignmentSegmentedControl——每个选项固定 minWidth,尺寸完全由自己
-                // 控制,不经过任何系统分段控件的内部尺寸/动画逻辑。
-                OverlayAlignmentSegmentedControl(selection: $settings.overlayDuetAlignmentOverride)
-            }
-            CardDivider()
-            // 归在「版面」这一组,判据同上面两行:它讲的是**版面**(一句话占几行、窗口高不高),
-            // 不是字长什么样。这一颗只管悬浮窗;歌词窗口迷你尺寸另有自己的一颗,灵动岛 / 菜单栏
-            // 只有一行高、恒滚动,不可配。
-            SettingsRow(
-                icon: "arrow.left.and.right.text.vertical",
-                title: L10n.t("长句处理"),
-                help: L10n.t("换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。")
-            ) {
-                SettingsPillSegmentedControl(
-                    selection: $settings.overlayLineOverflow,
-                    options: OverlayLineOverflow.allCases,
-                    label: OverlayLineOverflowLabel.text(for:)
+            SettingsRowGroup { alignmentRow }
+            SettingsTileGrid(columns: 2) {
+                // 归在「版面」这一组:它讲的是**版面**(一句话占几行、窗口高不高),不是字长什么样。这一颗只管悬浮窗;
+                // 歌词窗口迷你尺寸另有自己的一颗,灵动岛 / 菜单栏只有一行高、恒滚动,不可配。
+                SettingsControlCell(
+                    icon: "arrow.left.and.right.text.vertical",
+                    title: L10n.t("长句处理"),
+                    help: L10n.t("换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。")
+                ) {
+                    SettingsPillSegmentedControl(
+                        selection: $settings.overlayLineOverflow,
+                        options: OverlayLineOverflow.allCases,
+                        label: OverlayLineOverflowLabel.text(for:),
+                        minWidth: 40
+                    )
+                }
+                SettingsToggleTile(
+                    icon: "arrow.up.to.line",
+                    title: L10n.t("换句动画"),
+                    help: L10n.t("换句时，下一句从原来的位置移到当前行；关闭时直接切换"),
+                    isOn: $settings.overlayLineChangeAnimation
                 )
             }
-            CardDivider()
-            SettingsRow(
-                icon: "arrow.up.to.line",
-                title: L10n.t("换句动画"),
-                help: L10n.t("换句时，下一句从原来的位置移到当前行；关闭时直接切换")
-            ) {
-                Toggle("", isOn: $settings.overlayLineChangeAnimation)
+            // 主行下面三行各自离上一行多远,按卡片里从上到下的顺序,三格一行。那一行在「内容」里关着时这一格不起作用,
+            // 置灰。范围与默认值见 OverlayRowSpacing(04 章决策 48);拖动中只改临时值,见 OverlayRowSpacingDraft。
+            SettingsTileGrid(title: L10n.t("间距"), columns: 3) {
+                OverlayRowSpacingCell(item: .romanization, title: L10n.t("读音间距"))
+                    .disabled(!settings.overlayShowRomanization)
+                OverlayRowSpacingCell(item: .translation, title: L10n.t("译文间距"))
+                    .disabled(!settings.overlayShowTranslation)
+                OverlayRowSpacingCell(item: .nextLine, title: L10n.t("下一句间距"))
+                    .disabled(!settings.showNextLinePreview)
             }
         }
     }
 
-    private var spacingRows: some View {
-        VStack(spacing: 0) {
-            // 主行下面三行各自离上一行多远,按卡片里从上到下的顺序。那一行在「内容」里关着时这一项不起作用,
-            // 置灰。范围与默认值见 OverlayRowSpacing(04 章决策 48);拖动中只改临时值,见 OverlayRowSpacingDraft。
-            SettingsRow(icon: "textformat.alt", title: L10n.t("读音间距")) {
-                OverlayRowSpacingSlider(item: .romanization)
-            }
-            .disabled(!settings.overlayShowRomanization)
-            CardDivider()
-            SettingsRow(icon: "text.bubble", title: L10n.t("译文间距")) {
-                OverlayRowSpacingSlider(item: .translation)
-            }
-            .disabled(!settings.overlayShowTranslation)
-            CardDivider()
-            SettingsRow(icon: "rectangle.grid.1x2", title: L10n.t("下一句间距")) {
-                OverlayRowSpacingSlider(item: .nextLine)
-            }
-            .disabled(!settings.showNextLinePreview)
+    private var alignmentRow: some View {
+        // 多人声部歌词默认按演唱者自动在左/右/居中
+        // 之间切换(仿 Apple Music 的 Duet View),但对贴在桌面上的固定悬浮窗来说,
+        // 位置来回跳会影响阅读体验——这一项让用户强制固定到一个方向,忽略声部信息。
+        // 选了非"自动"时,两侧留白也会一并关掉(不止改对齐方向)——
+        // 只改对齐、留着留白跟真实声部走,文字块还是会因为留白量变化而轻微漂移,
+        // 没有真正做到"始终保持在同一个位置",具体见 OverlayDuetAlignmentOverride
+        // 声明处注释。只影响悬浮窗,不影响歌词窗口(issue 与原始描述都只提悬浮歌词)。
+        SettingsRow(
+            icon: "text.alignleft",
+            title: L10n.t("对齐方式"),
+            help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中之间切换。\n其他：忽略声部，固定在同一位置。")
+        ) {
+            // 故意不用系统 `.pickerStyle(.segmented)`(三轮修法都没
+            // 按住"选了哪个选项、控件整体宽度就跟着变"这个问题,完整排查过程见
+            // docs/features/04-desktop-overlay.md 对应决策记录)。改用纯 SwiftUI 手搭的
+            // OverlayAlignmentSegmentedControl——每个选项固定 minWidth,尺寸完全由自己
+            // 控制,不经过任何系统分段控件的内部尺寸/动画逻辑。
+            OverlayAlignmentSegmentedControl(selection: $settings.overlayDuetAlignmentOverride)
         }
     }
 }
@@ -398,29 +355,41 @@ final class OverlayRowSpacingDraft: ObservableObject {
 /// 「排版」里三项间距共用的滑杆 + 读数,样式同「文字」里「字号」那一行(150pt 滑杆、等宽数字读数)。
 /// 拖动中只改 `OverlayRowSpacingDraft`、松手才提交,读数跟着临时值走。
 @MainActor
-struct OverlayRowSpacingSlider: View {
+struct OverlayRowSpacingCell: View {
     let item: OverlayRowSpacing.Item
+    let title: String
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var draft = OverlayRowSpacingDraft.shared
 
     private var value: Double { (draft.values ?? settings.overlayRowSpacing)[item] }
 
+    // 名字和读数一行,滑杆铺满这一格。三格排一行:一行一根滑杆时浮层放不下。
     var body: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12.5))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(String(format: L10n.t("%@pt"), "\(Int(value.rounded()))"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
             SteppedSlider(
                 value: Binding(get: { value }, set: { draft.set(item, to: $0) }),
                 in: item.range, step: 1,
                 onEditingChanged: { editing in
                     if !editing { draft.commit() }
                 })
-                .frame(width: 150)
-            Text(String(format: L10n.t("%@pt"), "\(Int(value.rounded()))"))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .frame(width: 46, alignment: .trailing)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
         // 浮层在拖动中途被关掉时收不到松手那一下,别把临时值留在预览上。
         .onDisappear { draft.commit() }
+        .settingsSearchHighlight(title: title)
     }
 }
 
@@ -475,77 +444,6 @@ struct OverlayAlignmentSegmentedControl: View {
     }
 }
 
-// MARK: - 背景
-
-/// 「背景」那一组:背景颜色 / 毛玻璃背景。
-///
-/// 从原来的「配色」组里拆出来(「帮我把这 2 个里面的配置重新整理一下,
-/// 拆分为文字以及背景;分别归纳」)。原「配色」组一次装着 跟随封面 / 配色主题 / 文字颜色 /
-/// 背景颜色 / 毛玻璃背景 / 文字描边 / 描边颜色 七行 —— "都是颜色"是它们唯一的共性,而那条
-/// 共性太粗:改文字色和改背景色是两件互不相干的事,挤在一个入口里要先在七行里找。
-///
-/// 拆分判据是**这个字段改的是哪一层**:
-///   - 文字层(字形 + 字色 + 描边)→ `OverlayTextSettingsRows`
-///   - 背景层(底色 + 底的材质)→ 本组
-///   - 一键套一整套配色 → `OverlayThemeSettingsRows`(它同时改两层,所以哪一边都不属于)
-/// 「跟随封面」归了文字(它接管的只有文字颜色),又归了主题 —— 它跟「配色主题」
-/// 回答的是同一个问题(文字色从哪来),见 `OverlayThemeSettingsRows` 头注。
-@MainActor
-struct OverlayBackgroundSettingsRows: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    var body: some View {
-        SettingsRowGroup {
-            VStack(spacing: 0) {
-                SettingsRow(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
-                    HStack(spacing: 8) {
-                        // 透明时色块只是一块棋盘格,写明「透明」;判据跟工具栏摘要同一个(`OverlayStyleSummary.background`)。
-                        if !AppSettings.backgroundVisible(hex: settings.backgroundColorHex, glass: false) {
-                            Text(L10n.t("透明"))
-                                .foregroundStyle(.secondary)
-                        }
-                        // 背景不透明度就是这个颜色的 alpha 通道本身,不另加一根 opacity 滑杆。
-                        AppColorPicker(selection: Binding(
-                            get: { settings.backgroundColor },
-                            set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
-                        ), supportsOpacity: true)
-                    }
-                }
-                // 毛玻璃:作为「背景颜色」的从属项——它改变的是背景颜色的**含义**
-                // (从"卡片本色"变成"玻璃上的着色"),不是一个独立维度,所以缩进挂在背景颜色下面。
-                // 默认关,关着时透明/纯色两种既有用法逐像素不变。
-                CardDivider()
-                // (删掉这一行的副标题「开启后背景颜色作为玻璃的着色」。
-                //  上面那段注释已经把"它改变的是背景颜色的含义"这层关系交代清楚了,那是给读代码
-                //  的人看的;界面上缩进本身就是一句话——这一行是上一行的从属项。L10n 键跟着一起
-                //  从 catalog 里删了,全仓再无引用。)
-                SettingsSubRow(title: L10n.t("毛玻璃背景")) {
-                    Toggle("", isOn: $settings.overlayBackgroundGlass)
-                }
-                // 毛玻璃「浓淡」。只在毛玻璃开着时才有意义——
-                // 关着时背景要么纯色要么全透明,没有"材质浓淡"这回事。SwiftUI 的 Material 做不成
-                // 连续滑杆(见 OverlayGlassIntensity 声明处注释),这里开的是 Material 全部五档,
-                // 复用「文字」组「粗细」那一行验证过的同一种下拉写法。
-                if settings.overlayBackgroundGlass {
-                    CardDivider()
-                    SettingsSubRow(title: L10n.t("玻璃浓淡")) {
-                        Picker("", selection: $settings.overlayGlassIntensity) {
-                            ForEach(OverlayGlassIntensity.allCases, id: \.self) { intensity in
-                                Text(intensity.displayName).tag(intensity)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                    }
-                }
-            }
-            // 条件行长出/收起时别硬跳,同「文字」组那一句同一个理由(见 OverlayTextSettingsRows)。
-            .animation(.default, value: settings.overlayBackgroundGlass)
-        }
-    }
-}
-
 // MARK: - 主题
 
 /// 「主题」那一组:内置预设和「我的配色主题」都画成预览卡(`ThemePreviewCard`),点一下套用。
@@ -571,6 +469,7 @@ struct OverlayThemeSettingsRows: View {
     }
 
     @State private var editing: Editing = .none
+    @Environment(\.settingsInPopover) private var inPopover
     @State private var draftName = ""
     @FocusState private var nameFieldFocused: Bool
 
@@ -590,11 +489,23 @@ struct OverlayThemeSettingsRows: View {
             }
             .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
             .padding(.vertical, 12)
-            CardDivider()
-            customSection(current: current)
+            // 浮层里没存过主题、也没有待存 / 可恢复的配色时整段不画:只剩一句提示,往上弹的浮层放不下。抽屉里照旧显示。
+            if !(inPopover && customSectionIsEmpty(current: current)) {
+                CardDivider()
+                customSection(current: current)
+            }
         }
         .animation(.default, value: editing)
         .animation(.default, value: settings.customColorThemes)
+    }
+
+    /// 「我的配色主题」那一段只剩空状态提示:当前配色对得上某套、没有可恢复的那套、也没存过主题(判据同 customSection)。
+    private func customSectionIsEmpty(current: ColorTheme) -> Bool {
+        guard UnsavedColorThemeSnapshot.isKnown(current, settings: settings) else { return false }
+        let restorable = UnsavedColorThemeSnapshot.load().flatMap {
+            UnsavedColorThemeSnapshot.isKnown($0, settings: settings) ? nil : $0
+        }
+        return restorable == nil && settings.customColorThemes.isEmpty
     }
 
     @ViewBuilder
@@ -843,6 +754,12 @@ enum OverlayStyleSummary {
     ///    再报「跟随封面」就成了拿另一个浮层的状态当自己的摘要。回到"跟 `currentThemeLabel`
     ///    同一个字符串",而那个字符串现在也不再是占位符(理由见 `OverlayThemeSettingsRows` 头注)。
     static var theme: String { OverlayThemeSettingsRows.currentThemeLabel }
+
+    /// 「颜色」按钮的摘要:文字色从哪来 + 背景是什么,例「跟随封面 · 透明」。
+    static var color: String {
+        let text = AppSettings.shared.followsCoverArt ? L10n.t("跟随封面") : L10n.t("自定义颜色")
+        return "\(text) · \(background)"
+    }
 
     /// 例:「毛玻璃」/「纯色」/「透明」。报的是**背景当前是什么材质**,不是颜色值本身 ——
     /// 一串 hex 或者 rgb 数字在按钮上没人读得出来是什么样,而"毛玻璃/纯色/透明"这三档正好

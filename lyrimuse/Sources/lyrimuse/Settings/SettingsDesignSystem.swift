@@ -629,11 +629,22 @@ extension EnvironmentValues {
         set { self[SettingsInPopoverKey.self] = newValue }
     }
 
-    /// 卡片里也要把 `SettingsRowGroup` 画成圆角分组框(悬浮歌词「全部设置」抽屉的各组卡)。浮层里恒为框,不用设它。
+    /// 卡片里也要把 `SettingsRowGroup` 画成圆角分组框(「全部设置」抽屉的各组卡,见 `SettingsGroupCard`)。浮层里恒为框,不用设它。
     var settingsBoxedGroups: Bool {
         get { self[SettingsBoxedGroupsKey.self] }
         set { self[SettingsBoxedGroupsKey.self] = newValue }
     }
+
+    /// 宿主给浮层的高度上限(编辑台往上弹的浮层按按钮上方的空间算)。`SettingsPopoverShell` 取它和自己 `maxHeight` 里小的那个;
+    /// 浮层视图套了一层 struct、宿主够不着 `maxHeight` 参数时用它往下传。
+    var settingsPopoverMaxHeight: CGFloat? {
+        get { self[SettingsPopoverMaxHeightKey.self] }
+        set { self[SettingsPopoverMaxHeightKey.self] = newValue }
+    }
+}
+
+private struct SettingsPopoverMaxHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
 }
 
 // MARK: - 一组设置行
@@ -676,6 +687,175 @@ struct SettingsRowGroup<Content: View>: View {
                 }
                 content()
             }
+        }
+    }
+}
+
+/// 一组小块排成等宽几列(开关小块 `SettingsToggleTile`、控件小块 `SettingsControlCell` 或自绘的格)。浮层高度有限:
+/// 往上弹的浮层只有按钮上方那点空间,一行一个控件会撑高到要滚动。跟 `SettingsRowGroup` 同一个位置、同一种组名;
+/// 小块自己带圆角底,所以不再套分组框。
+struct SettingsTileGrid<Content: View>: View {
+    var title: String?
+    var help: String?
+    /// 浮层里的列数。卡片(「全部设置」抽屉)比浮层窄,最多排 2 列:3 列时名字截成「纯音乐/无歌词时收…」、附加按钮挤成「…」。
+    var columns: Int = 2
+    @ViewBuilder let content: () -> Content
+    @Environment(\.settingsInPopover) private var inPopover
+
+    private var effectiveColumns: Int { inPopover ? columns : min(columns, 2) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if let title {
+                HStack(spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    if let help { HelpButton(text: help) }
+                }
+                .padding(.leading, 6)
+                .settingsSearchHighlight(title: title)
+            }
+            SettingsEqualColumns(columns: effectiveColumns, spacing: 6) { content() }
+        }
+        .padding(.horizontal, 10)
+    }
+}
+
+/// 一个控件小块:图标 + 名字(+ ⓘ),右边是控件(下拉、取色块之类),圆角淡底。放进 `SettingsTileGrid`。
+struct SettingsControlCell<Control: View>: View {
+    var icon: String?
+    let title: String
+    var help: String?
+    @ViewBuilder let control: () -> Control
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let icon {
+                SymbolImage(name: icon, size: 12)
+                    .foregroundStyle(.secondary)
+                    .environment(\.locale, Locale(identifier: "en"))
+                    .frame(width: 16)
+            }
+            Text(title)
+                .font(.system(size: 12.5))
+                .lineLimit(1)
+            if let help { HelpButton(text: help) }
+            Spacer(minLength: 6)
+            control()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .settingsSearchHighlight(title: title)
+    }
+}
+
+/// 一个开关小块:图标 + 名字(+ ⓘ)+ 可选的附加按钮 + 小号开关,圆角淡底。名字最多两行。
+struct SettingsToggleTile<Accessory: View>: View {
+    var icon: String?
+    let title: String
+    var help: String?
+    let isOn: Binding<Bool>
+    @ViewBuilder var accessory: () -> Accessory
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let icon {
+                SymbolImage(name: icon, size: 12)
+                    .foregroundStyle(.secondary)
+                    .environment(\.locale, Locale(identifier: "en"))
+                    .frame(width: 16)
+            }
+            Text(title)
+                .font(.system(size: 12.5))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let help { HelpButton(text: help) }
+            Spacer(minLength: 4)
+            // 附加按钮(「试用」、浓淡下拉)按自身宽度画,不跟名字分压缩量。
+            accessory()
+                .fixedSize()
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .settingsSearchHighlight(title: title)
+    }
+}
+
+extension SettingsToggleTile where Accessory == EmptyView {
+    init(icon: String? = nil, title: String, help: String? = nil, isOn: Binding<Bool>) {
+        self.init(icon: icon, title: title, help: help, isOn: isOn) { EmptyView() }
+    }
+}
+
+/// 子视图按顺序排进等宽的 `columns` 列,一行的高度取这一行里最高的那个,每格都撑满自己那一行。
+/// 不用 LazyVGrid:Lazy 容器在窗口不可见时不铺格子(同 MenuBarIconPicker 的取舍)。
+struct SettingsEqualColumns: Layout {
+    var columns: Int
+    var spacing: CGFloat
+
+    private func cellWidth(_ width: CGFloat) -> CGFloat {
+        max(0, (width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+    }
+
+    private func rowHeights(_ subviews: Subviews, cellWidth: CGFloat) -> [CGFloat] {
+        stride(from: 0, to: subviews.count, by: columns).map { start in
+            subviews[start..<min(start + columns, subviews.count)]
+                .map { $0.sizeThatFits(ProposedViewSize(width: cellWidth, height: nil)).height }
+                .max() ?? 0
+        }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 320
+        let rows = rowHeights(subviews, cellWidth: cellWidth(width))
+        let height = rows.reduce(0, +) + spacing * CGFloat(max(0, rows.count - 1))
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let w = cellWidth(bounds.width)
+        let rows = rowHeights(subviews, cellWidth: w)
+        var y = bounds.minY
+        for (r, rowHeight) in rows.enumerated() {
+            for c in 0..<columns {
+                let index = r * columns + c
+                guard index < subviews.count else { break }
+                let x = bounds.minX + CGFloat(c) * (w + spacing)
+                subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
+                                      proposal: ProposedViewSize(width: w, height: rowHeight))
+            }
+            y += rowHeight + spacing
+        }
+    }
+}
+
+/// 「全部设置」抽屉展开后的一组一张卡:粗体卡头 + 那一组的行视图(跟工具栏同名浮层是同一份),组内 `SettingsRowGroup` 画成
+/// 圆角分组框。自绘的卡头不会自动挂搜索高亮(只有 SettingsRow / SettingsCardHeader 会),这里手挂。
+struct SettingsGroupCard<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        SettingsCard(cornerRadius: 18) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+                .settingsSearchHighlight(title: title)
+            content()
+                .padding(.bottom, 10)
+                .environment(\.settingsBoxedGroups, true)
         }
     }
 }
@@ -1106,6 +1286,7 @@ struct SettingsPopoverShell<Content: View>: View {
 
     /// 标题那一条的高度(实测),内容区的高度上限 = `maxHeight` 减去它。
     @State private var headerHeight: CGFloat = 0
+    @Environment(\.settingsPopoverMaxHeight) private var hostMaxHeight
     /// 内容往上滚了多少(实测),判断上下还有没有没露出来的内容。
     @State private var scrollOffset: CGFloat = 0
 
@@ -1173,7 +1354,7 @@ struct SettingsPopoverShell<Content: View>: View {
         .frame(width: width)
     }
 
-    private var contentMaxHeight: CGFloat { max(0, maxHeight - headerHeight) }
+    private var contentMaxHeight: CGFloat { max(0, min(maxHeight, hostMaxHeight ?? maxHeight) - headerHeight) }
 
     /// 上下还有内容的那一侧渐隐(上 14pt、下 36pt),最后露出来的那一行明显是被截断的,不像内容到此为止。
     private var scrollFadeMask: some View {

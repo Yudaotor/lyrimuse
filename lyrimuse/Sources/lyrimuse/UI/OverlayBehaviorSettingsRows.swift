@@ -170,8 +170,8 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
 /// 编辑台「行为」浮层(`OverlayEditorStage.toolbarButton`)和抽屉「行为」组(`OverlayAllSettingsDrawer`)调的
 /// 是这同一份 —— 之前两处各自拼「三项 + 分隔线 + 自动隐藏两行」,靠注释警告别漏。
 ///
-/// 分两组:「窗口」(各项行为开关)、「自动隐藏」(`AutoHideSettingsRows`)。行与行之间的 `CardDivider()` 由这个组件和
-/// `AutoHideSettingsRows` 自己插 —— 宿主只知道"这里放一组行为设置",不该知道它内部有几行(同 OverlayTextSettingsRows)。
+/// 分两组小块(三列):「窗口」(各项行为开关)、「自动隐藏」(`AutoHideToggleTiles`)。行与行之间的 `CardDivider()` 由这个组件和
+/// `AutoHideSettingsRows` 自己插 —— 宿主只知道"这里放一组行为设置",不该知道它内部有几行(同 OverlayTypeSettingsRows)。
 ///
 /// `@ObservedObject` 是**必需**的,不是照抄的样板:`item.binding` 是手搓的 `Binding(get:set:)`,
 /// 写入不经过任何能让 SwiftUI 失效的通道,而这个视图一个存储属性都没有 —— 宿主刷新时 SwiftUI 判等
@@ -186,18 +186,13 @@ struct OverlayBehaviorSettingsRows: View {
             // 单开一颗「位置」入口,抽屉
             // 跟着单开一组,见 `OverlayPlacementSettingsRows.swift`。这一组是 `OverlayBehaviorItem`
             // 的各项开关 + 两行自动隐藏。
-            SettingsRowGroup(title: L10n.t("窗口")) {
-                VStack(spacing: 0) {
-                    ForEach(Array(OverlayBehaviorItem.allCases.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { CardDivider() }
-                        SettingsRow(icon: item.icon, title: item.title) {
-                            Toggle("", isOn: item.binding)
-                        }
-                    }
+            SettingsTileGrid(title: L10n.t("窗口"), columns: 3) {
+                ForEach(OverlayBehaviorItem.allCases) { item in
+                    SettingsToggleTile(icon: item.icon, title: item.title, isOn: item.binding)
                 }
             }
-            SettingsRowGroup(title: L10n.t("自动隐藏")) {
-                AutoHideSettingsRows(surface: .desktopOverlay)
+            SettingsTileGrid(title: L10n.t("自动隐藏"), columns: 3) {
+                AutoHideToggleTiles(surface: .desktopOverlay)
             }
         }
     }

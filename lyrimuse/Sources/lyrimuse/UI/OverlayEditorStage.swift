@@ -412,11 +412,11 @@ struct OverlayEditorStage: View {
     /// 工具栏按钮是各浮层的主入口。预览上那两块可点区域(`cardHotspots`:主行 → 「文字」,读音 / 译文 / 下一句
     /// → 「内容」)只是快捷方式:关着的那一行在预览里根本不存在,要打开它还得走这里。
     ///
-    /// 分组:「配色」按内容拆成「主题」(配色主题 / 我的配色主题)和「背景」(背景颜色 / 毛玻璃);
-    /// 文字层那几项(字体/粗细/字号/卡拉OK/文字色/描边)归「文字」;「跟随封面」归「主题」
-    /// (它跟「配色主题」回答的是同一个问题,见 `OverlayThemeSettingsRows` 头注)。**顺序跟「全部设置」
-    /// 抽屉的渲染顺序逐字一致**(主题 → 文字 → 背景 → 排版 → 宽度 → 行为)—— 抽屉的职责是工具栏
-    /// 浮层的全量兜底通路,两个宿主分组或顺序不一样,用户按记忆去另一边找就会落空。
+    /// 分组:「主题」(配色主题 / 我的配色主题,「跟随封面」也在这里,见 `OverlayThemeSettingsRows` 头注)、
+    /// 「字形」(字体 / 粗细 / 字号)、「颜色」(卡拉OK / 描边 / 毛玻璃三个开关 + 文字、未唱、描边、背景几种颜色)。
+    /// 原来是「主题 / 文字 / 背景」,「文字」八行在往上弹的浮层里放不下,跟「背景」一起重分成后两组,按钮数不变。
+    /// **顺序跟「全部设置」抽屉的渲染顺序逐字一致** —— 抽屉的职责是工具栏浮层的全量兜底通路,
+    /// 两个宿主分组或顺序不一样,用户按记忆去另一边找就会落空。
     ///
     /// 横向够不够(加第三个入口时离屏量的,别凭感觉重排):这一条的可用宽度
     /// 就是卡片列宽 —— 窗口按 idealWidth 860 打开时 600pt(卡片列上限),拖到 minWidth 760
@@ -441,15 +441,15 @@ struct OverlayEditorStage: View {
             )
             toolbarButton(
                 icon: "textformat",
-                title: L10n.t("文字"),
+                title: L10n.t("字形"),
                 summary: OverlayStyleSummary.text,
-                target: .text
+                target: .type
             )
             toolbarButton(
-                icon: "rectangle.fill",
-                title: L10n.t("背景"),
-                summary: OverlayStyleSummary.background,
-                target: .background
+                icon: "paintpalette",
+                title: L10n.t("颜色"),
+                summary: OverlayStyleSummary.color,
+                target: .color
             )
             Spacer(minLength: 8)
             Menu {
@@ -581,11 +581,11 @@ struct OverlayEditorStage: View {
         }
     }
 
-    /// 按钮所在那一行的上沿比舞台上沿高多少:第一行(主题 / 文字 / 背景)隔着两行,其余在第二行。
+    /// 按钮所在那一行的上沿比舞台上沿高多少:第一行(主题 / 字形 / 颜色)隔着两行,其余在第二行。
     /// 跟 `toolbar` / `toolbarRow2` 里按钮的分行一致,挪了按钮要一起改。
     private static func rowOffsetAboveStage(_ target: StagePopover) -> CGFloat {
         switch target {
-        case .theme, .text, .background: return (toolbarHeight + toolbarSpacing) * 2
+        case .theme, .type, .color: return (toolbarHeight + toolbarSpacing) * 2
         case .content, .layout, .behavior, .placement: return toolbarHeight + toolbarSpacing
         }
     }
@@ -601,8 +601,8 @@ struct OverlayEditorStage: View {
 
     private enum StagePopover: Hashable, CaseIterable {
         case theme
-        case text
-        case background
+        case type
+        case color
         case content
         case layout
         case behavior
@@ -611,8 +611,8 @@ struct OverlayEditorStage: View {
         var title: String {
             switch self {
             case .theme: return L10n.t("主题")
-            case .text: return L10n.t("文字")
-            case .background: return L10n.t("背景")
+            case .type: return L10n.t("字形")
+            case .color: return L10n.t("颜色")
             case .content: return L10n.t("内容")
             case .layout: return L10n.t("排版")
             case .behavior: return L10n.t("行为")
@@ -621,13 +621,17 @@ struct OverlayEditorStage: View {
         }
 
         /// 各浮层按自己内容的自然宽度取值。「主题」720:7 张预览卡排成一行,浮层更矮,更容易放进舞台上方;
-        /// 「排版」460:对齐方式那组分段选择器要的宽度;「文字」380:滑杆和取色盘;其余 420。
+        /// 「排版」540:对齐方式那组分段选择器加上不折行的标题;「字形」380:字号滑杆;「颜色」「行为」见下;其余 420。
         var width: CGFloat {
             switch self {
             case .theme: return 720
-            case .text: return 380
-            case .layout: return 460
-            case .background, .content, .behavior, .placement: return 420
+            case .type: return 380
+            // 「颜色」开关三列、颜色两列,一格要放下名字 + 「跟随封面」下拉 + 取色块。
+            case .color: return 560
+            case .layout: return 540
+            case .content, .placement: return 420
+            // 「行为」三列开关小块,最长的「纯音乐/无歌词时隐藏」+ ⓘ + 开关要 230 左右一格。
+            case .behavior: return 740
             }
         }
     }
@@ -653,8 +657,8 @@ struct OverlayEditorStage: View {
     private func popoverRows(for target: StagePopover) -> some View {
         switch target {
         case .theme: OverlayThemeSettingsRows()
-        case .text: OverlayTextSettingsRows()
-        case .background: OverlayBackgroundSettingsRows()
+        case .type: OverlayTypeSettingsRows()
+        case .color: OverlayColorSettingsRows()
         case .content: OverlayContentSettingsRows()
         case .layout: OverlayLayoutSettingsRows()
         case .behavior: OverlayBehaviorSettingsRows()
@@ -860,7 +864,7 @@ struct OverlayEditorStage: View {
             return CGRect(x: minX, y: top, width: visibleWidth, height: bottom - top)
         }
         var spots: [CardHotspot] = []
-        if let rect = band([.main]) { spots.append(CardHotspot(kind: .mainLine, rect: rect, target: .text)) }
+        if let rect = band([.main]) { spots.append(CardHotspot(kind: .mainLine, rect: rect, target: .type)) }
         if let rect = band([.romanization, .translation, .nextLine]) {
             spots.append(CardHotspot(kind: .content, rect: rect, target: .content))
         }
@@ -1260,7 +1264,7 @@ private extension View {
 /// 量"舞台上沿到屏幕可用区顶"还剩多高,给浮层封顶用。点开时现量(窗口可能被拖到任何位置)。
 @MainActor
 final class StageTopProbe {
-    fileprivate weak var view: NSView?
+    weak var view: NSView?
 
     /// 浮层外框(箭头 + 边距)与菜单栏之间再留的余量。别往小调:浮层最终顶边一贴到系统允许的上边界,NSPopover 就改成
     /// 顶边钉住往下展开(看起来从上面落下来),还会在顶上露出一截底色(14 章决策 82)。
@@ -1278,7 +1282,8 @@ final class StageTopProbe {
     }
 }
 
-private struct StageTopProbeView: NSViewRepresentable {
+/// 挂在舞台上沿的测量点(悬浮歌词、灵动岛两个编辑台共用)。
+struct StageTopProbeView: NSViewRepresentable {
     let probe: StageTopProbe
 
     func makeNSView(context: Context) -> NSView {

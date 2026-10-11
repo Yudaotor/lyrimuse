@@ -2588,23 +2588,27 @@ private struct AppearanceSettingsTab: View {
             // —— 那一层收不到点击(理由见上面 stickyHeader 里那条注释)。风格 / 宽度 / 显示在哪块屏幕
             // 都在编辑台里,这一段因此只剩"编辑台 + 总开关 + 显示歌词"三块。
             NotchEditorStage()
-            // 总开关排在编辑台下面而不是上面,跟悬浮歌词那一段同一个排法:先看见这个形态
-            // 长什么样,再决定开不开。
-            modeToggleCard(
-                icon: SurfaceGlyph.notch.rawValue,
-                title: L10n.t("灵动岛歌词"),
-                subtitle: L10n.t("紧贴屏幕顶部的刘海显示"),
-                isOn: Binding(
-                    get: { settings.notchOverlayEnabled },
-                    set: { NotchLyricsWindowController.shared.setVisible($0) }))
-            // 灵动岛那批布尔开关**不在页面上常驻**:宿主是编辑台工具栏第二行的三个浮层(见
-            // NotchEditorStage.toolbarRow2)+ 下面「全部设置」抽屉兜底。分组按卡片解剖走(歌词行 /
-            // 展开态 / 行为),浮层和抽屉调同一份分组视图,见 `NotchBehaviorItem` 头注。
-            //
-            // 别在这里长出常驻的「自动隐藏」卡:灵动岛自己那一份(`notchHide*`)的两行在编辑台
-            // 工具栏的「行为」浮层和抽屉的「行为」组里,真源 `UI/AutoHideSettingsRows.swift`
-            // (那条"开着「暂停/无播放时隐藏」就看不到收起动画"的结论也在那个文件里)。
-            NotchAllSettingsDrawer()
+            // 总开关卡和抽屉背后垫一层光,玻璃卡才看得出边(同悬浮歌词那一段)。
+            VStack(spacing: 14) {
+                // 总开关排在编辑台下面而不是上面,跟悬浮歌词那一段同一个排法:先看见这个形态
+                // 长什么样,再决定开不开。
+                modeToggleCard(
+                    icon: SurfaceGlyph.notch.rawValue,
+                    title: L10n.t("灵动岛歌词"),
+                    subtitle: L10n.t("紧贴屏幕顶部的刘海显示"),
+                    isOn: Binding(
+                        get: { settings.notchOverlayEnabled },
+                        set: { NotchLyricsWindowController.shared.setVisible($0) }))
+                // 灵动岛那批布尔开关**不在页面上常驻**:宿主是编辑台工具栏第二行的三个浮层(见
+                // NotchEditorStage.toolbarRow2)+ 下面「全部设置」抽屉兜底。分组按卡片解剖走(歌词行 /
+                // 展开态 / 行为),浮层和抽屉调同一份分组视图,见 `NotchBehaviorItem` 头注。
+                //
+                // 别在这里长出常驻的「自动隐藏」卡:灵动岛自己那一份(`notchHide*`)的两行在编辑台
+                // 工具栏的「行为」浮层和抽屉的「行为」组里,真源 `UI/AutoHideSettingsRows.swift`
+                // (那条"开着「暂停/无播放时隐藏」就看不到收起动画"的结论也在那个文件里)。
+                NotchAllSettingsDrawer()
+            }
+            .background { LastfmGlassGlow() }
         case .menuBar:
             // 编辑台(照悬浮歌词/灵动岛两段的范式):预览(MenuBarPreviewBar,原样复用)在编辑台
             // 内部 + 工具栏两个浮层(宽度模式/配色)+ 重置 ▾ + 常驻宽度条。总开关沿用跟灵动岛一样
@@ -3591,6 +3595,33 @@ private struct NotchBehaviorToggleRow: View {
 
 /// 「收听里程碑」那一行:开关旁边一颗「试一下」,在真灵动岛上摆一次报喜(`ListenMilestoneCenter.preview`)。
 /// 灵动岛关着、或这一项关着时按钮灰掉 —— 没有灵动岛可摆。`@ObservedObject` 必需,理由同 `NotchBehaviorToggleRow`。
+/// 灵动岛一个开关的小块版本(放进 `SettingsTileGrid`)。
+@MainActor
+private struct NotchBehaviorToggleTile: View {
+    let item: NotchBehaviorItem
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsToggleTile(icon: item.icon, title: item.title, help: item.help, isOn: item.binding)
+    }
+}
+
+/// 「收听里程碑」的小块版本:开关左边带「试用」。
+@MainActor
+private struct NotchListenMilestonesTile: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        let item = NotchBehaviorItem.listenMilestones
+        SettingsToggleTile(icon: item.icon, title: item.title, help: item.help, isOn: item.binding) {
+            Button(L10n.t("试用")) { ListenMilestoneCenter.shared.preview() }
+                .controlSize(.small)
+                .buttonBorderShape(.capsule)
+                .disabled(!settings.notchOverlayEnabled || !settings.notchListenMilestones)
+        }
+    }
+}
+
 @MainActor
 private struct NotchListenMilestonesRow: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -3753,38 +3784,40 @@ private struct NotchLyricRowHeightRow: View {
 struct NotchLyricRowSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
+    // 开关排成两列小块(显示歌词 / 卡拉OK / 封面 / 预览下一句),其余带下拉、分段、滑杆的行一框。
     var body: some View {
-        VStack(spacing: 0) {
-            NotchBehaviorToggleRow(item: .showLyrics)
-            if settings.notchShowLyrics {
-                CardDivider()
-                NotchLyricsAlignmentRow()
-                CardDivider()
-                LyricSecondaryLineRow()
+        SettingsRowGroupStack {
+            SettingsTileGrid {
+                NotchBehaviorToggleTile(item: .showLyrics)
+                if settings.notchShowLyrics {
+                    NotchBehaviorToggleTile(item: .karaoke)
+                    NotchBehaviorToggleTile(item: .lyricRowArtwork)
+                }
                 if !settings.notchSecondaryLine.hidesExpandedNextLinePreview {
-                    CardDivider()
-                    NotchBehaviorToggleSubRow(item: .expandedNextLine)
+                    NotchBehaviorToggleTile(item: .expandedNextLine)
                 }
-                CardDivider()
-                NotchLyricRowHeightRow()
-                CardDivider()
-                NotchBehaviorToggleRow(item: .karaoke)
-                CardDivider()
-                NotchBehaviorToggleRow(item: .lyricRowArtwork)
-                if settings.notchLyricRowShowsArtwork {
-                    CardDivider()
-                    NotchLyricRowArtworkPositionRow()
+            }
+            if settings.notchShowLyrics {
+                SettingsRowGroup {
+                    VStack(spacing: 0) {
+                        NotchLyricsAlignmentRow()
+                        CardDivider()
+                        LyricSecondaryLineRow()
+                        CardDivider()
+                        NotchLyricRowHeightRow()
+                        if settings.notchLyricRowShowsArtwork {
+                            CardDivider()
+                            NotchLyricRowArtworkPositionRow()
+                        }
+                    }
                 }
-            } else if !settings.notchSecondaryLine.hidesExpandedNextLinePreview {
-                CardDivider()
-                NotchBehaviorToggleRow(item: .expandedNextLine)
             }
         }
     }
 }
 
 /// 「字体」组 —— 工具栏第二行「字体」浮层(`NotchFontPopover`)与「全部设置」抽屉的「字体」组
-/// 调的是这同一份。三行照搬悬浮歌词「文字」浮层的前三行(`OverlayTextSettingsRows`):同一个
+/// 调的是这同一份。三行照搬悬浮歌词「字形」浮层的三行(`OverlayTypeSettingsRows`):同一个
 /// `FontFamilyPicker`、同一个六档粗细下拉、同一根 `SteppedSlider`,只是绑到灵动岛自己的三个键。
 /// 控件形态的理由(下拉不用分段、`.fixedSize()` 不能省、`SteppedSlider` 不画刻度点、相等守卫)
 /// 都写在那边,这里不复述。
@@ -3808,41 +3841,43 @@ struct NotchFontSettingsRows: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsRow(icon: "character", title: L10n.t("字体")) {
-                FontFamilyPicker(selection: $settings.notchFontFamilyName)
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "bold",
-                title: L10n.t("粗细"),
-                help: L10n.t("主行的字重；副行和展开时的下一句预览比主行细一档")
-            ) {
-                Picker("", selection: $settings.notchFontWeight) {
-                    ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
-                        Text(weight.displayName).tag(weight)
-                    }
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                SettingsRow(icon: "character", title: L10n.t("字体")) {
+                    FontFamilyPicker(selection: $settings.notchFontFamilyName)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            CardDivider()
-            SettingsRow(icon: "textformat.size", title: L10n.t("字号"), help: sizeHelp) {
-                HStack(spacing: 8) {
-                    SteppedSlider(value: Binding(
-                        get: { settings.notchFontSize },
-                        set: { newValue in
-                            // 相等守卫,理由同悬浮歌词「字号」那根:拖动中大量等值赋值会白白广播 + 重算三个派生字体。
-                            guard newValue != settings.notchFontSize else { return }
-                            settings.notchFontSize = newValue
+                CardDivider()
+                SettingsRow(
+                    icon: "bold",
+                    title: L10n.t("粗细"),
+                    help: L10n.t("主行的字重；副行和展开时的下一句预览比主行细一档")
+                ) {
+                    Picker("", selection: $settings.notchFontWeight) {
+                        ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
+                            Text(weight.displayName).tag(weight)
                         }
-                    ), in: sizeRange, step: 1)
-                        .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchFontSize))"))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+                CardDivider()
+                SettingsRow(icon: "textformat.size", title: L10n.t("字号"), help: sizeHelp) {
+                    HStack(spacing: 8) {
+                        SteppedSlider(value: Binding(
+                            get: { settings.notchFontSize },
+                            set: { newValue in
+                                // 相等守卫,理由同悬浮歌词「字号」那根:拖动中大量等值赋值会白白广播 + 重算三个派生字体。
+                                guard newValue != settings.notchFontSize else { return }
+                                settings.notchFontSize = newValue
+                            }
+                        ), in: sizeRange, step: 1)
+                            .frame(width: 150)
+                        Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchFontSize))"))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 46, alignment: .trailing)
+                    }
                 }
             }
         }
@@ -3851,8 +3886,8 @@ struct NotchFontSettingsRows: View {
 
 /// 「展开态」组 —— 工具栏「展开态」浮层(`NotchExpandedPopover`)与抽屉 `expandedGroup` 同一份。
 ///
-/// 两截:先是控制区的两颗(显示播放控制 / 显示歌词校准)加「快捷操作」(头部右侧那排四颗键的
-/// 总开关),分割线之后一行「曲目信息」标题行(纯说明,没有控件)带四个从属子行
+/// 两组小块(三列 / 四列):先是控制区的两颗(显示播放控制 / 显示歌词校准)加「快捷操作」(头部右侧那排四颗键的
+/// 总开关),另一组以「曲目信息」为组名(纯说明,没有控件)带四个从属子行
 /// (封面 / 歌名 / 歌手 / 专辑)。分成两截是因为它们本来就是不同的东西 —— 平铺成一列开关的话,
 /// 这里的「显示封面」会跟「歌词行」浮层那枚同名的项混在一起。
 ///
@@ -3862,26 +3897,20 @@ struct NotchFontSettingsRows: View {
 @MainActor
 struct NotchExpandedSettingsRows: View {
     var body: some View {
-        VStack(spacing: 0) {
-            NotchBehaviorToggleRow(item: .expandedShowsControls)
-            CardDivider()
-            NotchBehaviorToggleRow(item: .expandedShowsLyricsOffset)
-            CardDivider()
-            NotchBehaviorToggleRow(item: .expandedShowsQuickActions)
-            CardDivider()
-            SettingsRow(
-                icon: "person.text.rectangle",
-                title: L10n.t("曲目信息"),
-                help: L10n.t("展开时在歌词行上方显示曲目信息，四项可分别开关；全部关闭时不占用空间。")
-            )
-            CardDivider()
-            NotchBehaviorToggleSubRow(item: .expandedShowsArtwork)
-            CardDivider()
-            NotchBehaviorToggleSubRow(item: .expandedShowsTrackTitle)
-            CardDivider()
-            NotchBehaviorToggleSubRow(item: .expandedShowsArtist)
-            CardDivider()
-            NotchBehaviorToggleSubRow(item: .expandedShowsAlbum)
+        SettingsRowGroupStack {
+            SettingsTileGrid(columns: 3) {
+                NotchBehaviorToggleTile(item: .expandedShowsControls)
+                NotchBehaviorToggleTile(item: .expandedShowsLyricsOffset)
+                NotchBehaviorToggleTile(item: .expandedShowsQuickActions)
+            }
+            SettingsTileGrid(title: L10n.t("曲目信息"),
+                               help: L10n.t("展开时在歌词行上方显示曲目信息，四项可分别开关；全部关闭时不占用空间。"),
+                               columns: 4) {
+                NotchBehaviorToggleTile(item: .expandedShowsArtwork)
+                NotchBehaviorToggleTile(item: .expandedShowsTrackTitle)
+                NotchBehaviorToggleTile(item: .expandedShowsArtist)
+                NotchBehaviorToggleTile(item: .expandedShowsAlbum)
+            }
         }
     }
 }
@@ -3894,18 +3923,15 @@ struct NotchExpandedSettingsRows: View {
 /// 少算不会编译报错,只会让按钮在漏掉的那项开着时照旧显示「全部关闭」。
 @MainActor
 struct NotchBehaviorSettingsRows: View {
+    // 一组小块(三列),不分组名:先收起与隐藏(暂停时收起、自动隐藏几项、全屏时隐藏),后两项提示(换歌时显示歌名、收听里程碑)。
+    // 分成两组带组名时,组名和组间距多出的二十来 pt 正好让第三行出界,浮层要滚。
     var body: some View {
-        VStack(spacing: 0) {
-            NotchBehaviorToggleRow(item: .collapseWhenPaused)
-            // "本组之前"那条分隔线由宿主插,`AutoHideSettingsRows` 只在自己两行之间插一条(见那个文件头)。
-            CardDivider()
-            AutoHideSettingsRows(surface: .notch)
-            CardDivider()
-            NotchBehaviorToggleRow(item: .hideInFullScreen)
-            CardDivider()
-            NotchBehaviorToggleRow(item: .trackDrop)
-            CardDivider()
-            NotchListenMilestonesRow()
+        SettingsTileGrid(columns: 3) {
+            NotchBehaviorToggleTile(item: .collapseWhenPaused)
+            AutoHideToggleTiles(surface: .notch)
+            NotchBehaviorToggleTile(item: .hideInFullScreen)
+            NotchBehaviorToggleTile(item: .trackDrop)
+            NotchListenMilestonesTile()
         }
     }
 }
@@ -3949,7 +3975,7 @@ struct NotchFontPopover: View {
 /// 340 给英文留 44pt,比同族(24~+34)略宽一点,是给「曲目信息」那行的 ⓘ 和四个子行的竖线留的。
 struct NotchExpandedPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("展开态"), width: 340) {
+        SettingsPopoverShell(title: L10n.t("展开态"), width: 560) {
             NotchExpandedSettingsRows()
         }
     }
@@ -3967,7 +3993,7 @@ struct NotchExpandedPopover: View {
 /// 三者当场错位。跟悬浮歌词的「行为」浮层同宽,两个形态的「行为」看起来是一件东西。
 struct NotchBehaviorPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("行为"), width: 420) {
+        SettingsPopoverShell(title: L10n.t("行为"), width: 780) {
             NotchBehaviorSettingsRows()
         }
     }
@@ -4188,31 +4214,30 @@ private struct NotchAllSettingsDrawer: View {
     /// 设置搜索命中了这个抽屉里的行时的"该展开了"信号(理由与写法同 `OverlayAllSettingsDrawer`)。
     @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
 
+    // 展开后一组一张卡(同悬浮歌词抽屉,14 章决策 83)。两根宽度滑杆合成「宽度」一张卡。
     var body: some View {
-        SettingsCard(cornerRadius: 18) {
-            disclosureHeader
+        VStack(spacing: 14) {
+            SettingsCard(cornerRadius: 18) {
+                disclosureHeader
+            }
             if isExpanded {
-                CardDivider()
-                group(L10n.t("风格")) { NotchStyleSettingsRows() }
-                CardDivider()
-                group(L10n.t("屏幕")) { NotchScreenSettingsRows(onScreenChange: {}) }
-                CardDivider()
-                group(L10n.t("左耳")) { NotchEarSettingsRows(side: .left) }
-                CardDivider()
-                group(L10n.t("右耳")) { NotchEarSettingsRows(side: .right) }
-                CardDivider()
-                widthRow
-                CardDivider()
-                expandedWidthRow
-                CardDivider()
-                group(L10n.t("歌词行")) { NotchLyricRowSettingsRows() }
-                CardDivider()
-                group(L10n.t("字体")) { NotchFontSettingsRows() }
-                CardDivider()
-                group(L10n.t("展开态")) { NotchExpandedSettingsRows() }
-                CardDivider()
-                group(L10n.t("行为")) { NotchBehaviorSettingsRows() }
-                CardDivider()
+                SettingsGroupCard(title: L10n.t("风格")) { NotchStyleSettingsRows() }
+                SettingsGroupCard(title: L10n.t("屏幕")) { NotchScreenSettingsRows(onScreenChange: {}) }
+                SettingsGroupCard(title: L10n.t("左耳")) { NotchEarSettingsRows(side: .left) }
+                SettingsGroupCard(title: L10n.t("右耳")) { NotchEarSettingsRows(side: .right) }
+                SettingsGroupCard(title: L10n.t("宽度")) {
+                    SettingsRowGroup {
+                        VStack(spacing: 0) {
+                            widthRow
+                            CardDivider()
+                            expandedWidthRow
+                        }
+                    }
+                }
+                SettingsGroupCard(title: L10n.t("歌词行")) { NotchLyricRowSettingsRows() }
+                SettingsGroupCard(title: L10n.t("字体")) { NotchFontSettingsRows() }
+                SettingsGroupCard(title: L10n.t("展开态")) { NotchExpandedSettingsRows() }
+                SettingsGroupCard(title: L10n.t("行为")) { NotchBehaviorSettingsRows() }
                 resetRow
             }
         }
@@ -4232,14 +4257,6 @@ private struct NotchAllSettingsDrawer: View {
     }
 
     /// 一组:标题行 + 分隔线 + 内容。标题文案跟工具栏对应那颗按钮用同一个词条。
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        Group {
-            SettingsCardHeader(title: title)
-            CardDivider()
-            content()
-        }
-    }
-
     /// 「恢复默认风格与开关」——抽屉里的兜底入口。
     ///
     /// 动作本体跟工具栏那颗「重置 ▾」是**同一个函数**(`NotchStyleDefaults.restoreDefaults()`),
@@ -4248,13 +4265,17 @@ private struct NotchAllSettingsDrawer: View {
     /// 这一行不能省:**抽屉的定位是键盘 / VoiceOver 的全量兜底通路**,而工具栏那颗是 SwiftUI
     /// `Menu`,抽屉里这一行是普通 `SettingsRow` + Button。三个形态都要有。
     /// 标题/副标题跟工具栏那颗**一字不差** —— 同一个动作在两个入口自报两种范围是最坏的情况。
+    /// 抽屉展开后单独一张卡,挂在各组卡最后。
     private var resetRow: some View {
-        SettingsRow(
-            icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认"),
-            subtitle: L10n.t("不含宽度和总开关")
-        ) {
-            Button(L10n.t("恢复")) { NotchStyleDefaults.restoreDefaults() }
+        SettingsCard(cornerRadius: 18) {
+            SettingsRow(
+                icon: "arrow.uturn.backward",
+                title: L10n.t("恢复默认"),
+                subtitle: L10n.t("不含宽度和总开关")
+            ) {
+                Button(L10n.t("恢复")) { NotchStyleDefaults.restoreDefaults() }
+                    .buttonBorderShape(.capsule)
+            }
         }
     }
 

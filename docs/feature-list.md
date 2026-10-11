@@ -321,8 +321,8 @@ Font (the system's, or your own .ttf / .otf), size, weight, text and background 
 
 - Settings: Lyrics Display › Floating Lyrics › Theme › Color Theme
 - Settings: Lyrics Display › Floating Lyrics › Theme › My Themes
-- Settings: Lyrics Display › Floating Lyrics › Text › Font
-- Settings: Lyrics Display › Floating Lyrics › Background › Frosted Glass Background
+- Settings: Lyrics Display › Floating Lyrics › Type › Font
+- Settings: Lyrics Display › Floating Lyrics › Color › Frosted Glass Background
 
 <a id="feature-karaoke"></a>
 
@@ -331,7 +331,7 @@ Font (the system's, or your own .ttf / .otf), size, weight, text and background 
 Each word lights up as it is sung. Floating lyrics, the notch, the menu bar, the Touch Bar and the mini lyrics window each have their own switch; off means the whole line lights at once.
 
 - On by default
-- Settings: Lyrics Display › Floating Lyrics › Text › Karaoke Effect
+- Settings: Lyrics Display › Floating Lyrics › Color › Karaoke Effect
 - Settings: Lyrics Display › Notch › Lyric Row › Karaoke Effect
 - Settings: Lyrics Display › Menu Bar › Color › Karaoke Effect
 
@@ -763,19 +763,19 @@ Every setting in the Settings window, by where it lives: 236 in all. Type a name
 - **Color Theme**
 - **My Themes**
 
-### Lyrics Display › Floating Lyrics › Text
+### Lyrics Display › Floating Lyrics › Type
 
 - **Font**
 - **Weight**
 - **Font Size**
+
+### Lyrics Display › Floating Lyrics › Color
+
 - **Karaoke Effect**
 - **Text Color**
 - **Text Outline**
 - **Stroke Color**
 - **Unsung Color**
-
-### Lyrics Display › Floating Lyrics › Background
-
 - **Background Color**
 - **Frosted Glass Background**
 - **Glass Density**
@@ -790,7 +790,7 @@ Every setting in the Settings window, by where it lives: 236 in all. Type a name
 
 - **Alignment**
 - **Long Lines**
-- **Line Transition**: When the lyric changes, the next line moves up into place. When off, lines switch instantly
+- **Line Transition**
 - **Romanization Spacing**
 - **Translation Spacing**
 - **Next Line Spacing**
@@ -847,7 +847,7 @@ Every setting in the Settings window, by where it lives: 236 in all. Type a name
 - **Show Playback Controls**
 - **Show Lyrics Calibration**
 - **Quick Actions**
-- **Track Info**: When expanded, shows a track-info block above the lyric row. The four items are independent; turn them all off and the block takes no space.
+- **Track Info**
 
 ### Lyrics Display › Notch › Behavior
 

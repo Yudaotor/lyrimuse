@@ -11174,6 +11174,23 @@
         }
       }
     },
+    "显示在" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show On"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示在"
+          }
+        }
+      }
+    },
     "手动重新匹配" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -1079,8 +1079,10 @@ func runNotchTests() {
             expectEqual(shapeDecl.isEmpty, false, "圆角契约: 切得出 NotchHangingShape")
             expectEqual(shapeDecl.contains("animatableData") || reveal.contains("animatableData"), false,
                         "圆角契约: 卡片形状与出场裁剪都不靠插值")
-            expectEqual(stageSrc.contains("slot: .collapsed,\n                            cardHeight: card.cardHeight(expanded: false))")
-                        && stageSrc.contains("slot: .expanded,\n                            cardHeight: card.cardHeight(expanded: true))")
+            // 空白压成一个空格再比:这两行会随着外面套几层分组改缩进,判据只是参数的配对。
+            let stageSquashed = stageSrc.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            expectEqual(stageSquashed.contains("slot: .collapsed, cardHeight: card.cardHeight(expanded: false))")
+                        && stageSquashed.contains("slot: .expanded, cardHeight: card.cardHeight(expanded: true))")
                         && stageSrc.contains("slot == .collapsed ? \\.notchCornerRadius : \\.notchExpandedCornerRadius"), true,
                         "圆角契约: 「风格」里两行分别接两个设置,各按自己那一态的卡片高度")
             // 拖动中不写 AppSettings(每一格都会打醒所有观察它的界面),松手才写回;滑杆上限跟着这一态的卡片高度走。

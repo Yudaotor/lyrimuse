@@ -206,3 +206,17 @@ struct AutoHideSettingsRows: View {
         }
     }
 }
+
+/// 自动隐藏几项的小块版本,放进 `SettingsToggleGrid`(浮层里一列一个开关太高)。内容、顺序跟 `AutoHideSettingsRows` 一致。
+@MainActor
+struct AutoHideToggleTiles: View {
+    let surface: AutoHideSurface
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        ForEach(AutoHideItem.allCases) { item in
+            SettingsToggleTile(icon: item.icon, title: item.title(for: surface), help: item.help(for: surface),
+                               isOn: item.binding(for: surface))
+        }
+    }
+}
