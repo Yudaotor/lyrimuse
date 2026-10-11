@@ -23,8 +23,8 @@ import (
 //
 // 实体 id 延续(songEntityIDs):种子先取各写法条目上的 `song`,没有的再取上一份实体表;每个实体取跟种子共有写法最多的
 // id。建完把变了的 `song` 写回条目、同步落盘,之后才写实体表:哪一步之间被杀,下次都接得上(18 章决策 8)。
-// 用户拆开过的写法对记在 `lyrimuse-song-entity-user.json`(user_splits),这里只读;实体表重建、删除都不碰它。
-// 写它的一方必须原样保留不认识的键。
+// 用户拆开过的写法对记在 `lyrimuse-song-entity-user.json`(user_splits),写在 songentityuser.go;实体表重建、删除都不碰它。
+// 拆开、恢复合并之后马上重建一次(songEntityRebuildNow)。
 
 const (
 	songEntityTableVersion = 1
@@ -105,6 +105,8 @@ func startSongEntityShadow(ctx context.Context) {
 				continue
 			}
 			rebuild = songEntitySharing()
+		case <-songEntityRebuildNow:
+			rebuild = true
 		}
 		var b *songEntityBuild
 		if rebuild {

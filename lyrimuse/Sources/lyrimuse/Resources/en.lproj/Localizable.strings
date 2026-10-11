@@ -556,8 +556,22 @@
 "各处显不显示译文，在「歌词显示」里设" = "Whether each place shows translations is set in Lyrics Display";
 "各处显示为纯音乐，不会自动搜索歌词" = "Shown as Instrumental everywhere, and lyrics aren’t searched for automatically";
 "各处显示为纯音乐，不会自动搜索歌词。原有歌词仍会保留，取消标记即可恢复" = "Shown as Instrumental everywhere, and lyrics aren’t searched for automatically. The existing lyrics are kept and come back when you unmark it";
+"各自找到的歌词一致" = "Lyrics found separately match";
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
+"同一个 ISRC" = "Same ISRC";
+"同一个 MusicBrainz 录音" = "Same MusicBrainz recording";
+"同一个 YouTube Music 视频" = "Same YouTube Music video";
+"同一位歌手、同一个歌名，时长相近" = "Same artist and title, similar length";
+"同一首 Amazon Music 曲目" = "Same Amazon Music track";
+"同一首 Apple Music 歌曲" = "Same Apple Music song";
+"同一首 KKBOX 歌曲" = "Same KKBOX song";
+"同一首 QQ 音乐歌曲" = "Same QQ Music song";
+"同一首 Spotify 曲目" = "Same Spotify track";
+"同一首歌的其他写法" = "Other Versions of This Song";
+"同一首歌的其他写法…" = "Other Versions of This Song…";
+"同一首汽水音乐歌曲" = "Same Soda Music song";
+"同一首网易云音乐歌曲" = "Same NetEase Cloud Music song";
 "同步你的收听记录" = "Sync your listening history";
 "同步失败" = "Sync failed";
 "同步收听记录" = "Scrobble your listens";
@@ -919,6 +933,7 @@
 "总分 %@" = "Total %@";
 "恢复" = "Reset";
 "恢复原信息" = "Restore Original Info";
+"恢复合并" = "Merge Back";
 "恢复显示" = "Show Again";
 "恢复歌词库" = "Restore Lyrics Library";
 "恢复此备份" = "Restore This Backup";
@@ -966,6 +981,11 @@
 "找不到正确的歌词？在 GitHub 反馈" = "Can't find the right lyrics? Report it on GitHub";
 "找到 %1$@ · 未找到 %2$@ · 跳过 %3$@" = "Found %1$@ · Not found %2$@ · Skipped %3$@";
 "找到 %@ 首" = "%@ Found";
+"把「%@」拆出去？" = "Split “%@” off from this song?";
+"拆开" = "Split";
+"拆开…" = "Split…";
+"拆开后它单独算一首歌：播放次数分开，歌词不再跟这首共用；从这首同步过去的歌词会换回它原来那份。之后可以在这里恢复合并。" = "It will count as a separate song: its plays are counted on their own and it no longer shares lyrics with this song. Lyrics it took from this song go back to its own. You can merge it back here later.";
+"拆开过的写法" = "Split Versions";
 "拖动调整顺序" = "Drag to reorder";
 "拷贝" = "Copy";
 "拷贝名称" = "Copy Name";
@@ -1295,6 +1315,7 @@
 "来自汽水音乐" = "From Soda Music";
 "来自维基百科" = "From Wikipedia";
 "来自网易云音乐" = "From NetEase Cloud Music";
+"查看" = "Show";
 "查看、编辑和重新搜索已缓存的歌词" = "View, edit and re-search cached lyrics";
 "查看专辑简介" = "View Album Notes";
 "查看完整说明" = "Full Release Notes";
@@ -1302,6 +1323,7 @@
 "查看效果与教程 →" = "Preview & Setup Guide →";
 "查看歌手简介" = "View Artist Bio";
 "查看歌曲简介" = "View Song Notes";
+"查看被认成同一首歌的其他写法，认错了可以拆开" = "See the other versions matched to this song, and split any that were matched by mistake";
 "查看进度详情" = "Show progress details";
 "查看选用这份歌词的依据：当时的候选、得分与淘汰原因" = "Why these lyrics were chosen: the candidates, scores and rejections at decision time";
 "查询 %d 组" = "%d query sets";
@@ -1354,10 +1376,12 @@
 "歌词使用封面的主色，无法获取时使用白色" = "Lyrics use the cover's main color, or white when there isn't one";
 "歌词偏移" = "Lyrics Offset";
 "歌词偏移归零" = "Reset Lyrics Offset";
+"歌词共用一份" = "Shares lyrics";
 "歌词内容与 %@ 相同" = "Same lyrics and line timing as %@";
 "歌词内容与其他歌词源高度一致（2 家及以上 250 · 1 家 150），版本不符的候选不计" = "Lyrics text agrees with other sources (2+ sources 250 · 1 source 150); candidates of a different version don't qualify";
 "歌词列表" = "Lyric List";
 "歌词占满整个触控栏；如需使用亮度、音量等系统按键，请先点按左端的 ✕ 收起" = "Lyrics fill the whole Touch Bar. To use brightness, volume and other system buttons, tap ✕ on the left to collapse first.";
+"歌词各自匹配" = "Lyrics matched separately";
 "歌词已同步显示" = "Lyrics are showing";
 "歌词布局" = "Lyrics Layout";
 "歌词库" = "Lyrics Library";
@@ -1485,6 +1509,7 @@
 "汽水音乐歌手页" = "Soda Music artist page";
 "汽水音乐歌曲页" = "Soda Music song page";
 "汽水音乐的歌词接口返回了无法识别的内容（接口可能已变更），并非这首歌曲没有歌词，通常会在后续版本中修复" = "Soda Music's lyrics endpoint returned something unrecognizable (the API may have changed) — this does not mean the song has no lyrics; an app update usually fixes it";
+"没有认成同一首歌的其他写法" = "No other versions are matched to this song.";
 "没有译文时自动翻译" = "Translate When None Is Provided";
 "浅色" = "Light";
 "浅色卡片" = "Light Card";
@@ -1642,6 +1667,7 @@
 "经典" = "Classic";
 "经典白字" = "Classic White";
 "经典黑字" = "Classic Black";
+"经由其他写法连着" = "Linked through other versions";
 "结束点获印证" = "End time corroborated";
 "统计" = "Stats";
 "统计与榜单" = "Stats & Charts";
@@ -1833,6 +1859,8 @@
 "资料卡「正在收听 ××」里的 ××。iOS 和网页版的 Discord 不认这一项，仍显示播放器名。\n选歌名或歌手时，用户名下方不能再选「播放器」。" = "The “××” in “Listening to ××” on your profile. Discord on iOS and the web ignores this and keeps showing the player.\nWith Title or Artist here, “Shown Under Your Name” can't show the player.";
 "超薄" = "Ultra Thin";
 "足迹" = "Footprint";
+"跟 Apple Music 登记的名字对得上" = "Matches a name listed on Apple Music";
+"跟网易云音乐登记的名字对得上" = "Matches a name listed on NetEase Cloud Music";
 "跟随「全部播放器」：%@" = "Following “All players”: %@";
 "跟随刘海" = "Match Notch";
 "跟随封面" = "Follow Cover Art";
@@ -1873,6 +1901,8 @@
 "这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch, Menu Bar and Touch Bar each pick translation or romanization in their own “Second Line”";
 "这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音" = "These switches apply to Floating Lyrics and the Lyrics Window; the Notch and Menu Bar pick translation or romanization in their own “Second Line” setting";
 "这也是你最长的一次连续" = "Your longest streak yet";
+"这些写法算作同一首歌，播放次数合在一起。认错了就拆开。" = "These versions count as one song and their plays are combined. Split any that were matched by mistake.";
+"这些写法被你拆开过，不会再跟这首歌合在一起。" = "You split these versions off; they won't be merged with this song again.";
 "这些记录无歌词，且无歌手或时长超过 20 分钟，通常是广告、播客或有声书。人工修正、标为纯音乐、校准过时间轴的记录和正在播放的歌曲不在其中；再次播放时会重新匹配。" = "These entries have no lyrics and either no artist or a duration over 20 minutes — usually ads, podcasts, or audiobooks. Manually edited, instrumental, and calibrated entries and the song now playing aren’t included. They’ll be matched again if played.";
 "这份歌词无时间戳，采纳后仅在「歌词窗口」中作为静态文字显示，不会随播放逐字 / 逐行高亮" = "These lyrics have no timing. Once adopted they only show as static text in the Lyrics Window, and won't highlight word by word or line by line as the song plays";
 "这台 Mac 上未安装此播放器" = "This player isn't installed on this Mac";

@@ -688,6 +688,7 @@ struct LyricsManagerView: View {
         var tint: Color { LyricsRematchRunner.tint(tone) }
     }
     @State private var showDecisionSheet = false
+    @State private var showSongVersions = false
     // 「保存修改」点了之后闪一下「已保存」+ 对勾,1 秒后变回去。
     @State private var showSaveEditFeedback = false
     // 整段文本编辑里「拷贝」按钮的同款反馈:拷贝一大段文本到剪贴板本身没有任何肉眼可见的变化。
@@ -3112,6 +3113,9 @@ struct LyricsManagerView: View {
                     LyricsDecisionSheet(summary: summary, latest: latest, applied: applied)
                 }
             }
+            .sheet(isPresented: $showSongVersions) {
+                SongVersionsSheet(summary: summary, onOpen: { other in _ = select(other) })
+            }
             .sheet(item: $searchTarget) { target in
                 // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
                 // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。下面的 key 是面板为之打开的那一首。
@@ -3317,6 +3321,11 @@ struct LyricsManagerView: View {
                 .help(L10n.t("按纯音乐处理：不显示歌词，也不会自动搜索；原有歌词仍会保留，取消标记即可恢复"))
         }
         Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
+        // 「同一首歌的其他写法」:这条写法有实体 id 才有(实体表开关关着、还没建过表时没有),见 18 章决策 28。
+        if store.songMembership(forKey: summary.key) != nil {
+            Button(L10n.t("同一首歌的其他写法…")) { showSongVersions = true }
+                .help(L10n.t("查看被认成同一首歌的其他写法，认错了可以拆开"))
+        }
         if summary.hasLyrics && !summary.isInstrumental {
             Divider()
             Button(L10n.t("以文本方式编辑")) { beginTextEditing() }

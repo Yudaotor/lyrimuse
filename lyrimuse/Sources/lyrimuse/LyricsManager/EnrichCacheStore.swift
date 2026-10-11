@@ -1078,6 +1078,25 @@ public final class EnrichCacheStore: ObservableObject {
         await commit("save_plain_text", ["key": key, "plain_lyrics": plainLyrics, "plain_lyrics_source": source]).ok
     }
 
+    /// 这条写法现在在哪个实体、哪个共享组,取自刚重读的快照(拆开之后比播放那一侧的读取早一拍);没有实体 id 时是 nil。
+    func songMembership(forKey key: String) -> SongVersions.Membership? {
+        guard let entry = raw[key], let song = entry["song"] as? String, !song.isEmpty else { return nil }
+        return SongVersions.Membership(song: song, share: (entry["song_share"] as? Int) ?? 0)
+    }
+
+    /// 「同一首歌的其他写法」里的拆开:keys 这几条从所在实体里拆出去,引擎记下拆开记录、同步过去的歌词换回原来那份
+    /// (18 章决策 28)。回报引擎有没有做成。
+    @discardableResult
+    func splitSong(keys: [String]) async -> Bool {
+        await commit("split_song", ["keys": keys]).ok
+    }
+
+    /// 恢复合并:删掉 keys 两两之间的拆开记录(两边各自所在实体的全部写法),引擎重建之后按证据重新合。
+    @discardableResult
+    func unsplitSong(keys: [String]) async -> Bool {
+        await commit("unsplit_song", ["keys": keys]).ok
+    }
+
     /// 用户手动标 / 撤「纯音乐」(详情页那对按钮、搜索候选歌词面板标题栏的按钮)。
     /// 只置一个字段、不碰 lyrics/manual_lyrics/source;撤销时把键整个删掉(引擎侧 omitempty,false 与缺失等价)。
     /// 标上之后各处按纯音乐显示、不显示条目里的歌词(EnrichCacheReader.makeLyrics),引擎也不再自动搜歌词;

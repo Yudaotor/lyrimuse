@@ -493,6 +493,19 @@ public enum EnrichCacheReader {
         return offsetSiblings(ownKey: key, entry: entry, in: all)
     }
 
+    /// 歌词管理「同一首歌的其他写法」:每条有实体 id 的写法在哪个实体、哪个共享组。缓存没加载好时是空的。不看开关:
+    /// 拆开入口跟实体表走。
+    public static func songMemberships() -> [String: SongVersions.Membership] {
+        guard let all = loadEntries() else { return [:] }
+        var out: [String: SongVersions.Membership] = [:]
+        for (key, entry) in all {
+            if let song = entry.song, !song.isEmpty {
+                out[key] = SongVersions.Membership(song: song, share: entry.songShare ?? 0)
+            }
+        }
+        return out
+    }
+
     /// 同上,按缓存里的 key 原样取(歌词管理、外部编辑)。
     public static func offsetSiblings(forKey key: String) -> LyricsOffsetSiblings {
         guard inheritsEntityOffsets, let all = loadEntries(), let entry = all[key] else { return .none }
