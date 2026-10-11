@@ -10,20 +10,6 @@ import (
 
 // 歌曲实体的诊断报告:实体规模、各证据的贡献、被闸与否决挡下的合并,以及要人过目的几类清单。
 
-// songVariantsFromCache 把缓存条目摘成建表用的写法,按键排序。pinned 是校准过时间轴的写法。
-func songVariantsFromCache(cache map[string]enrichEntry, pinned map[string]bool) []songVariant {
-	keys := make([]string, 0, len(cache))
-	for k := range cache {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	out := make([]songVariant, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, songVariantOf(k, cache[k], pinned[k]))
-	}
-	return out
-}
-
 // songEntityReport:一次建表的诊断。
 type songEntityReport struct {
 	variants, entities, multi int

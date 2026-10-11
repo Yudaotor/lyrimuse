@@ -86,7 +86,7 @@ func TestSongEntityGoldenCapture(t *testing.T) {
 	}
 	decisionsDir := filepath.Join(cfgDir, clientName+"-decisions")
 	splits := readSongEntityUserSplits(filepath.Join(cfgDir, clientName+"-song-entity-user.json"))
-	full := buildSongEntities(songVariantsFromCache(snapshot, lyricsPinnedKeys()), splits, decisionsDir)
+	full := buildSongEntities((&songEntitySource{cache: snapshot, pins: lyricsPinnedKeys()}).variants(songSortedKeys(snapshot)), splits, decisionsDir)
 	idx := map[string]int{}
 	for i := range full.variants {
 		idx[full.variants[i].key] = i

@@ -91,6 +91,8 @@ type songEntityBuild struct {
 	vetoMemo  map[songVetoKey]string
 	// decisionsDir:解析决策旁路文件的目录,登记歌名与当前歌词的候选歌名按需从这里读;空串时都当不知道。
 	decisionsDir string
+	// partial:只是增量重算的那一块(restrict),不是全库。
+	partial bool
 }
 
 type songVetoKey struct {

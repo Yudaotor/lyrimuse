@@ -47,6 +47,7 @@ func runSongEntitiesCLI(args []string) {
 	shareEval := fs.String("share-eval", "", "阶段 3 正式空跑:要换词的共享组逐个以整首歌重搜一轮(联网),结果边跑边写到这个文件,不写缓存")
 	shareEvalLimit := fs.Int("share-eval-limit", 0, "跟 -share-eval 一起用:只搜前这么多组(0 = 全搜)")
 	shareEvalCandidates := fs.String("share-eval-candidates", "", "跟 -share-eval 一起用:每组这一轮的候选追加进这个文件(jsonl);文件里已有的组不再联网,按存下的候选重算")
+	checkIncremental := fs.Int("check-incremental", 0, "随机改这么多次,每次比增量重算跟全量建表的实体表(只读)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("song-entities: %v", err)
 	}
@@ -69,6 +70,13 @@ func runSongEntitiesCLI(args []string) {
 	if len(snapshot) == 0 {
 		log.Fatalf("song-entities: enrich cache is empty or unreadable")
 	}
+	if *checkIncremental > 0 {
+		src := &songEntitySource{cache: snapshot, pins: lyricsPinnedKeys(),
+			splits: readSongEntityUserSplits(filepath.Join(cfgDir, clientName+"-song-entity-user.json")),
+			dir:    filepath.Join(cfgDir, clientName+"-decisions"), prepare: songEntityPrepare()}
+		runSongEntityIncrementalCheck(src, *checkIncremental, os.Stdout)
+		return
+	}
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
 		if err != nil {
@@ -88,7 +96,7 @@ func runSongEntitiesCLI(args []string) {
 		sweepAppleNames(context.Background(), namesPath, time.Now())
 	}
 	start := time.Now()
-	variants := songVariantsFromCache(snapshot, lyricsPinnedKeys())
+	variants := (&songEntitySource{cache: snapshot, pins: lyricsPinnedKeys()}).variants(songSortedKeys(snapshot))
 	if features().SongEntityPhase2 {
 		attachAppleNames(variants, readAppleNames(namesPath))
 		nePath := *neteaseNames

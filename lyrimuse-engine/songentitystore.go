@@ -24,7 +24,8 @@ import (
 // 实体 id 延续(songEntityIDs):种子先取各写法条目上的 `song`,没有的再取上一份实体表;每个实体取跟种子共有写法最多的
 // id。建完把变了的 `song` 写回条目、同步落盘,之后才写实体表:哪一步之间被杀,下次都接得上(18 章决策 8)。
 // 用户拆开过的写法对记在 `lyrimuse-song-entity-user.json`(user_splits),写在 songentityuser.go;实体表重建、删除都不碰它。
-// 拆开、恢复合并之后马上重建一次(songEntityRebuildNow);歌词同步开着时出现新写法,攒十分钟重建一次(songEntityNewVersion)。
+// 拆开、恢复合并之后马上重建一次(songEntityRebuildNow)。两次全量建表之间,缓存落盘几秒后增量重算变了的写法所在的那一块
+// (songEntityCacheSaved,见 songentityincremental.go)。
 
 const (
 	songEntityTableVersion = 1
@@ -92,20 +93,30 @@ func startSongEntityShadow(ctx context.Context) {
 	check := time.NewTicker(songShareCheckInterval)
 	defer check.Stop()
 	started, sharing := false, false
-	var soon <-chan time.Time // 新写法攒着,到点重建一次(songEntityNewVersion)
+	var update <-chan time.Time // 缓存落盘之后攒几秒,到点增量重算一次
 	for {
 		rebuild := false
 		select {
 		case <-ctx.Done():
 			return
-		case <-songEntityNewVersion:
-			if soon == nil {
-				soon = time.After(songEntityNewVersionDelay)
+		case <-songEntityCacheSaved:
+			if update == nil {
+				update = time.After(songEntityUpdateDelay)
 			}
 			continue
-		case <-soon:
-			soon = nil
-			rebuild = true
+		case <-update:
+			update = nil
+			if !features().SongEntityShadow {
+				continue
+			}
+			b, full := updateSongEntityTable(time.Now())
+			if full {
+				b = rebuildSongEntityTable(time.Now())
+			}
+			if b != nil && songEntitySharing() {
+				sharing = songEntityShareStep(ctx, b)
+			}
+			continue
 		case <-timer.C:
 			timer.Reset(songEntityRebuildInterval)
 			started, rebuild = true, true
@@ -144,32 +155,19 @@ func songEntityShareStep(ctx context.Context, b *songEntityBuild) bool {
 // songEntityRebuildMu:每天那一次和名字补扫之后那一次(startAppleNamesSweep)不同时跑,免得两份结果互相覆盖。
 var songEntityRebuildMu sync.Mutex
 
-// rebuildSongEntityTable 全量建一次实体表,写实体表和报告两个文件,返回这次建出来的(写实体表失败时为 nil)。
+// rebuildSongEntityTable 全量建一次实体表,写实体表和报告两个文件,返回这次建出来的(写实体表失败时为 nil)。建完的状态
+// 留给增量重算(songEntityLive);之前有增量维护的那份时跟它对一遍,不一样的写法记一行日志。
 func rebuildSongEntityTable(now time.Time) *songEntityBuild {
 	songEntityRebuildMu.Lock()
 	defer songEntityRebuildMu.Unlock()
 	start := time.Now()
-	enrichMu.Lock()
-	snapshot := make(map[string]enrichEntry, len(enrichCache))
-	for k, v := range enrichCache {
-		snapshot[k] = v
+	src := songEntityLiveSource(songEntityPrepare())
+	b, table, st := buildSongEntityState(src, readSongEntityTable(songEntityTablePath()), now)
+	prev := songEntityLive
+	if songEntityLivePath != songEntityTablePath() {
+		prev = nil
 	}
-	enrichMu.Unlock()
-	songs := make(map[string]string, len(snapshot))
-	for k, e := range snapshot {
-		if e.Song != "" {
-			songs[k] = e.Song
-		}
-	}
-	variants := songVariantsFromCache(snapshot, lyricsPinnedKeys())
-	if features().SongEntityPhase2 {
-		attachAppleNames(variants, readAppleNames(appleNamesPath()))
-		attachNeteaseNames(variants, readNeteaseNames(neteaseNamesPath()))
-		attachMBRecordings(variants, readMBRecordings(mbRecordingsPath()))
-		attachSpotifyLanguages(variants, spotifyLanguagesForVariants(variants))
-	}
-	b := buildSongEntities(variants, readSongEntityUserSplits(songEntityUserPath()), decisionSidecarDir())
-	table := b.table(readSongEntityTable(songEntityTablePath()), songs, now)
+	songEntityLive = nil
 	if n := writeBackSongEntityIDs(table); n > 0 {
 		if err := saveEnrichCacheChecked(); err != nil {
 			slog.Error("song entities: save song ids", "err", err)
@@ -193,7 +191,74 @@ func rebuildSongEntityTable(now time.Time) *songEntityBuild {
 	}
 	slog.Info("song entities: rebuilt", "variants", r.variants, "songs", r.entities, "multi", r.multi,
 		"merges", len(b.merged), "vetoed", len(b.vetoed), "took", time.Since(start).Round(time.Millisecond))
+	if prev != nil {
+		songEntityCompareLive(prev.table, table)
+	}
+	songEntityLive, songEntityLivePath = st, songEntityTablePath()
 	return b
+}
+
+// songEntityCompareLive:全量建出来的 t 跟增量维护的那份 prev 比,两份里都有的写法不一样时记一行日志(歌手身份缓存、目录
+// 名字、Spotify 演唱语言这些不在指纹里的输入变了也会不一样)。
+func songEntityCompareLive(prev, t *songEntityTableFile) {
+	inPrev, inNew := map[string]bool{}, map[string]bool{}
+	for _, rec := range prev.Songs {
+		for _, k := range rec.Variants {
+			inPrev[k] = true
+		}
+	}
+	for _, rec := range t.Songs {
+		for _, k := range rec.Variants {
+			inNew[k] = true
+		}
+	}
+	var diff []string
+	for _, k := range songEntityTableDiff(prev, t) {
+		if inPrev[k] && inNew[k] {
+			diff = append(diff, k)
+		}
+	}
+	if len(diff) > 0 {
+		slog.Info("song entities: full rebuild differs from the incrementally kept table", "variants", len(diff),
+			"examples", diff[:min(len(diff), 3)])
+	}
+}
+
+// updateSongEntityTable 增量重算一次(见 songentityincremental.go),写实体表,返回重算的那一块(没有改动时为 nil)。第一次全量
+// 建表之前什么都不做。full 为 true 时要全量建表。报告只在全量建表时写。
+func updateSongEntityTable(now time.Time) (b *songEntityBuild, full bool) {
+	songEntityRebuildMu.Lock()
+	defer songEntityRebuildMu.Unlock()
+	st := songEntityLive
+	if st == nil || songEntityLivePath != songEntityTablePath() {
+		return nil, false
+	}
+	start := time.Now()
+	up, err := st.update(songEntityLiveSource(st.prepare), now)
+	if err != nil {
+		songEntityLive = nil
+		return nil, true
+	}
+	if up == nil {
+		return nil, false
+	}
+	if n := writeBackSongEntityIDs(up.table); n > 0 {
+		if err := saveEnrichCacheChecked(); err != nil {
+			slog.Error("song entities: save song ids", "err", err)
+		}
+	}
+	data, err := json.Marshal(up.table)
+	if err == nil {
+		err = writeFileAtomic(songEntityTablePath(), data)
+	}
+	if err != nil {
+		slog.Error("song entities: write table", "err", err)
+		songEntityLive = nil
+		return nil, true
+	}
+	slog.Info("song entities: updated", "changed", up.changed, "removed", up.removed, "block", len(up.build.variants),
+		"songs", len(up.table.Songs), "took", time.Since(start).Round(time.Millisecond))
+	return up.build, false
 }
 
 // removeSongEntityFiles:开关关着时删掉两个派生文件(用户判断文件不动)。

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -30,25 +29,6 @@ var songEntityRebuildNow = make(chan struct{}, 1)
 func requestSongEntityRebuild() {
 	select {
 	case songEntityRebuildNow <- struct{}{}:
-	default:
-	}
-}
-
-// songEntityNewVersion:歌词同步开着时,一条还没有实体 id 的写法(上一次建表之后才出现的)第一次有了歌词(noteNewSongVersionLocked),
-// 常驻循环过 songEntityNewVersionDelay 重建一次,这段时间里再来的合并成一次(连着放一张新专辑)。新写法因此十来分钟内就认进
-// 同一首歌、跟上手改或校准、按组重搜,不用等每天那一次建表(18 章决策 37)。
-var (
-	songEntityNewVersion      = make(chan struct{}, 1)
-	songEntityNewVersionDelay = 10 * time.Minute
-)
-
-// noteNewSongVersionLocked:首次解析把 e 写进 key 时调(commitEnrichEntrySince)。调用方持 enrichMu。
-func noteNewSongVersionLocked(e enrichEntry) {
-	if e.Song != "" || strings.TrimSpace(e.Lyrics) == "" || !songEntitySharing() {
-		return
-	}
-	select {
-	case songEntityNewVersion <- struct{}{}:
 	default:
 	}
 }

@@ -733,7 +733,8 @@ func runSongEntitySharePass(ctx context.Context, b *songEntityBuild) {
 		wait = pace
 		i++
 	}
-	if !t.stopped {
+	// 只建了一块(增量重算)时别的组都不在 live 里,不清;全量建表之后那一轮再清。
+	if !t.stopped && !b.partial {
 		for sig := range st.Groups {
 			if !live[sig] {
 				delete(st.Groups, sig)
@@ -742,6 +743,9 @@ func runSongEntitySharePass(ctx context.Context, b *songEntityBuild) {
 	}
 	if err := writeSongShareState(statePath, st); err != nil {
 		slog.Error("song entities: write share state", "err", err)
+	}
+	if b.partial && t == (songShareTally{groups: t.groups, unchanged: t.unchanged}) {
+		return
 	}
 	slog.Info("song entities: share pass", "manual_entities", t.manualEntities, "manual_changed", t.manualChanged,
 		"manual_conflicts", t.manualConflicts, "pinned_changed", t.pinnedChanged, "pinned_kept", t.pinnedKept,

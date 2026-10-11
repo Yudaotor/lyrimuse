@@ -2770,7 +2770,6 @@ func commitEnrichEntrySince(key string, e enrichEntry, stamp uint64) {
 	adoptCrossAlbumSiblingLyrics(key, &e)
 	enrichCache[key] = e
 	enrichDirty = true
-	noteNewSongVersionLocked(e)
 	enrichMu.Unlock()
 	timer.mark("cross_album")
 	// 非阻塞通知 poll 立刻重推(带上刚解析好的封面/歌词);没人在听就跳过。排在落盘之前:
@@ -5840,6 +5839,7 @@ func saveEnrichCacheChecked() error {
 		return enrichSaveFailed(err)
 	}
 	linkEnrichIndex(snapshot, bodyCRCs)
+	noteSongEntityCacheSaved()
 	return nil
 }
 
