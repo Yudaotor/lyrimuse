@@ -43,18 +43,23 @@ func songOffsetFingerprint(lyrics, yrc string) string {
 // songPlanLyricsOf:这条写法现在那份歌词;没有歌词时为 nil。分数、打分版本取采用那一轮胜者的(胜者源跟现在的来源对得上才算)。
 func (b *songEntityBuild) songPlanLyricsOf(i int, picked map[string]bool) *songPlanLyrics {
 	v := &b.variants[i]
-	fp := songOffsetFingerprint(v.lyrics, v.yrc)
+	return songPlanLyricsFor(v.key, v.lyrics, v.yrc, v.lyricsSource, v.manual || picked[v.key], v.pinned, v.applied, b.decisionsDir)
+}
+
+// songPlanLyricsFor:同 songPlanLyricsOf,按条目的几样字段算;decisionsDir 是解析决策旁路文件的目录。
+func songPlanLyricsFor(key, lyrics, yrc, source string, manual, pinned bool, applied *lyricsDecision, decisionsDir string) *songPlanLyrics {
+	fp := songOffsetFingerprint(lyrics, yrc)
 	if fp == "" {
 		return nil
 	}
-	l := &songPlanLyrics{fp: fp, source: v.lyricsSource, score: -1, words: strings.TrimSpace(v.yrc) != "",
-		timed: isTimedLRC(v.lyrics), manual: v.manual || picked[v.key], pinned: v.pinned}
-	d := v.applied
+	l := &songPlanLyrics{fp: fp, source: source, score: -1, words: strings.TrimSpace(yrc) != "",
+		timed: isTimedLRC(lyrics), manual: manual, pinned: pinned}
+	d := applied
 	if d == nil || d.Winner == "" || (l.source != "" && d.Winner != l.source) {
 		return l
 	}
 	l.source, l.version = d.Winner, d.ScoringVersion
-	pool := readDecisionSidecar(filepath.Join(b.decisionsDir, decisionSidecarName(v.key))).slots()
+	pool := readDecisionSidecar(filepath.Join(decisionsDir, decisionSidecarName(key))).slots()
 	if det := resolveSlot(d, pool); det != nil {
 		for _, c := range det.Candidates {
 			if c.Source == d.Winner {

@@ -82,6 +82,22 @@ func runSongVersionsTests() {
         expectEqual(V.manualConflict([c("A|S|1", lyrics: lrcA), c("A|S|2", lyrics: "  \n")]), [], "两份手改: 没正文的不算")
     }
 
+    // ---- 重新自动匹配:同组跟着换了几条,只认跑完的、同一首的那一轮 ----
+    do {
+        let json = #"{"id":"r1","key":"A|S|1","running":false,"startedAt":1,"updatedAt":2,"finishedAt":2,"result":{"outcome":"changed","followers":2}}"#
+        let status = try? JSONDecoder().decode(LyricsRematch.Status.self, from: Data(json.utf8))
+        expectEqual(status?.result?.followers, 2, "重新自动匹配: 解出跟着换的条数")
+        expectEqual(LyricsRematch.followers(of: status, key: "A|S|1"), 2, "重新自动匹配: 同一首、跑完了")
+        expectEqual(LyricsRematch.followers(of: status, key: "A|S|2"), 0, "重新自动匹配: 别的歌那一轮不算")
+        let running = LyricsRematch.Status(id: "r1", key: "A|S|1", running: true, startedAt: 1, updatedAt: 2,
+                                           result: LyricsRematch.Conclusion(outcome: "changed", followers: 3))
+        expectEqual(LyricsRematch.followers(of: running, key: "A|S|1"), 0, "重新自动匹配: 还在跑的不算")
+        expectEqual(LyricsRematch.followers(of: nil, key: "A|S|1"), 0, "重新自动匹配: 没有状态")
+        let old = #"{"id":"r1","key":"A|S|1","running":false,"startedAt":1,"updatedAt":2,"result":{"outcome":"unchanged"}}"#
+        expectEqual(LyricsRematch.followers(of: try? JSONDecoder().decode(LyricsRematch.Status.self, from: Data(old.utf8)), key: "A|S|1"), 0,
+                    "重新自动匹配: 旧引擎没这个字段")
+    }
+
     // ---- 两个文件:实体表按含这条写法的那首取证据,用户判断文件取拆开记录;缺了坏了都是空 ----
     do {
         let table = #"""
@@ -168,6 +184,10 @@ func runSongVersionsTests() {
         expectEqual(sourceBytes(manager, contain: "instrumentalFollowsGroup ? L10n.t(\"；同一首歌共用歌词的其他写法也会一起改\") : \"\"")
                     && sourceBytes(edit, contain: "keys = withShareGroupMatesLocked(keys)"), true,
                     "其他写法(契约): 标纯音乐作用到共享组,详情页的说明跟着说")
+        let rematchEngine = read(engine, "lyricsrematch.go")
+        expectEqual(sourceBytes(manager, contain: "let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)")
+                    && sourceBytes(rematchEngine, contain: "Followers int `json:\"followers,omitempty\"`"), true,
+                    "其他写法(契约): 重新自动匹配的结论带上同组跟着换了几条")
         expectEqual(sourceBytes(manager, contain: "SongVersionsSheet(summary: summary, onOpen:")
                     && sourceBytes(manager, contain: "Button(L10n.t(\"同一首歌的其他写法…\")) { showSongVersions = true }"), true,
                     "其他写法(契约): 详情页「⋯」菜单接上弹窗")

@@ -52,6 +52,8 @@ type lyricsRematchResult struct {
 	// changed 时正文、逐字各自换没换;两个都没换就是只换了来源。
 	TextChanged   bool `json:"textChanged,omitempty"`
 	TimingChanged bool `json:"timingChanged,omitempty"`
+	// Followers:歌词同步开着时,同一共享组跟着这一条换了词的写法数(shareFollowRematch)。
+	Followers int `json:"followers,omitempty"`
 }
 
 // lyricsRematchStatus 是写给 App 看的状态。Done / Total:几个歌词源回了话 / 一共几个,追加轮(别名轮等)从 0 重数。
@@ -350,6 +352,15 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 		retryLyricsUpgradeWith(withManualLyricSearch(ctx), key, artist, title, album, duration, true, opts)
 	} else {
 		rescoreLyricsWith(withManualLyricSearch(ctx), key, artist, title, album, duration, opts)
+	}
+	// 换了或者算下来还是这一份:共享组的其余写法跟着用这一份(歌词同步开着时,见 shareFollowRematch)。
+	switch result.Outcome {
+	case lyricsRematchChanged, lyricsRematchUnchanged, lyricsRematchKeptWordTiming:
+		if followers := shareFollowRematch(key, time.Now()); len(followers) > 0 {
+			result.Followers = len(followers)
+			exportLyricsFilesFor(followers...)
+			nudgeEnrichPush()
+		}
 	}
 	// 当场落盘再报结论:没换词时那两个函数只排了一次记账补写(常驻进程里最多晚一分钟),App 拿到结论就重读。
 	flushEnrichSave()

@@ -4223,7 +4223,13 @@ struct LyricsManagerView: View {
     /// 别的歌就不碰),结论挂在详情页那一行。调用前列表要先重读过。
     private func finishRematch(key: String, line: LyricsRematch.Line) {
         if line.tone == .changed, editingKey == key { loadDetail(key: key) }
-        rematchResult = RematchOutcome(key: key, tone: line.tone, text: LyricsRematchRunner.text(line))
+        // 歌词同步开着时同一共享组跟着这一首换了词(18 章决策 33):结论后面接一句。
+        var text = LyricsRematchRunner.text(line)
+        let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)
+        if followers > 0 {
+            text += String(format: L10n.t("；同一首歌另外 %d 种写法也跟着用这一份"), followers)
+        }
+        rematchResult = RematchOutcome(key: key, tone: line.tone, text: text)
         rematchRunningKey = nil
     }
 

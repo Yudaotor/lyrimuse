@@ -2131,3 +2131,4 @@
 "（正在播放）" = " (now playing)";
 "；" = "; ";
 "；同一首歌共用歌词的其他写法也会一起改" = "; other versions of this song that share its lyrics change with it";
+"；同一首歌另外 %d 种写法也跟着用这一份" = "; %d other versions of this song now use it too";

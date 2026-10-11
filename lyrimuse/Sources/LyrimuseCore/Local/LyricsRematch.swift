@@ -48,9 +48,11 @@ public enum LyricsRematch {
         /// changed 时正文、逐字各自换没换。
         public let textChanged: Bool?
         public let timingChanged: Bool?
+        /// 歌词同步开着时,同一共享组跟着这一首换了词的写法数(引擎 shareFollowRematch);没有时不出现。
+        public let followers: Int?
 
         public init(outcome: String, winner: String? = nil, winnerScore: Int? = nil, previous: String? = nil,
-                    hadLyrics: Bool? = nil, textChanged: Bool? = nil, timingChanged: Bool? = nil) {
+                    hadLyrics: Bool? = nil, textChanged: Bool? = nil, timingChanged: Bool? = nil, followers: Int? = nil) {
             self.outcome = outcome
             self.winner = winner
             self.winnerScore = winnerScore
@@ -58,6 +60,7 @@ public enum LyricsRematch {
             self.hadLyrics = hadLyrics
             self.textChanged = textChanged
             self.timingChanged = timingChanged
+            self.followers = followers
         }
     }
 
@@ -179,6 +182,12 @@ public enum LyricsRematch {
     }
 
     /// 状态文件此刻的内容;不存在 / 解不开都是 nil。只在等结论时读,文件很小,不做缓存。
+    /// 跑完的那一轮是 key 这一首时,同一共享组跟着换了几条写法;别的情况 0。
+    public static func followers(of status: Status?, key: String) -> Int {
+        guard let status, status.key == key, !status.running else { return 0 }
+        return max(status.result?.followers ?? 0, 0)
+    }
+
     public static var current: Status? {
         FileIO.decodeJSON(Status.self, from: statusURL)
     }

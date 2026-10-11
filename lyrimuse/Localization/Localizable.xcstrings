@@ -44336,6 +44336,23 @@
           }
         }
       }
+    },
+    "；同一首歌另外 %d 种写法也跟着用这一份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "; %d other versions of this song now use it too"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "；同一首歌另外 %d 種寫法也跟著用這一份"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
