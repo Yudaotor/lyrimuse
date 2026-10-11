@@ -2534,6 +2534,10 @@ private struct AppearanceSettingsTab: View {
     private var lyricsWindowPreviewShowsMini = false
     /// 「歌词窗口」工具栏此刻弹着哪个浮层(同一时刻只弹一个,同菜单栏编辑台的 `popover`)。
     @State private var lyricsWindowPopover: LyricsWindowToolbarItem?
+    /// 工具栏浮层的高度上限 = 点开那一刻按钮那一行上沿到屏幕顶的距离(见 lyricsWindowToolbarButton)。
+    @State private var lyricsWindowPopoverMaxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
+    @State private var lyricsWindowRow1Probe = StageTopProbe()
+    @State private var lyricsWindowRow2Probe = StageTopProbe()
     private var section: Section { Section(rawValue: sectionRaw) ?? .overlay }
 
     private var sectionPicker: some View {
@@ -2666,62 +2670,49 @@ private struct AppearanceSettingsTab: View {
             }
             // 预览下面那张卡,位置同另外三段的总开关卡。歌词窗口没有"开不开"这件事,这里放的是
             // 打开那扇真窗口(走 `AppActions.openLyricsWindow`,跟菜单栏面板、快捷键同一个入口)。
-            SettingsCard {
-                SettingsRow(icon: "macwindow", title: L10n.t("歌词窗口")) {
-                    Button(L10n.t("打开")) {
-                        // 按预览停在哪个尺寸开:迷你预览开迷你窗,完整预览开完整窗口;窗口已经开着就当场切过去。
-                        LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)
-                        AppActions.shared.openLyricsWindow?()
+            // 打开窗口那张卡和抽屉背后垫一层光,玻璃卡才看得出边(同另外几段)。
+            VStack(spacing: 14) {
+                SettingsCard(cornerRadius: 18) {
+                    SettingsRow(icon: "macwindow", title: L10n.t("歌词窗口")) {
+                        Button(L10n.t("打开")) {
+                            // 按预览停在哪个尺寸开:迷你预览开迷你窗,完整预览开完整窗口;窗口已经开着就当场切过去。
+                            LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)
+                            AppActions.shared.openLyricsWindow?()
+                        }
+                        .buttonBorderShape(.capsule)
+                    }
+                }
+                // 配置分**两套**:上面预览那个「完整 / 迷你」切到哪个,下面就配哪个。
+                //
+                // 两种尺寸是两种用法 —— 完整多半是摊开来看的、跟随封面好看;迷你常年钉在角落当挂件,
+                // 很多人要的是一块安静的纯色。共用一份就得二选一,所以各存各的(见 AppSettings 里那两组
+                // 同名字段)。两边的行长得一模一样,所以抽成 lyricsWindowAppearanceRows 带参调用,
+                // 别复制两份 —— 复制出来的那份迟早只改一边。
+                //
+                // 自定义颜色这两档会**反过来决定文字颜色**:歌词窗口的正文默认是白的,那是因为
+                // 封面背景必然够暗(烘焙压过 EV −1.9 + 0.15 黑遮罩)。用户填一个浅色背景时白字会直接
+                // 消失,所以 LyricsWindowView.hasArtworkBackground 改成了真的算背景亮度 —— 判据在
+                // LyricsWindowBackgroundLuma,selftest 钉着边界值。这里只管收集配置。
+                // 工具栏浮层之外的全量兜底:默认折叠,展开后一组一张卡,顺序和组名跟工具栏一致。
+                LyricsWindowAllSettingsDrawer {
+                    SettingsGroupCard(title: L10n.t("背景")) { lyricsWindowAppearanceRows(.background) }
+                    SettingsGroupCard(title: L10n.t("文字")) { lyricsWindowAppearanceRows(.text) }
+                    if lyricsWindowPreviewShowsMini {
+                        SettingsGroupCard(title: L10n.t("行为")) { lyricsWindowBehaviorRows }
+                    }
+                    SettingsGroupCard(title: L10n.t("内容")) { lyricsWindowContentRows }
+                    if lyricsWindowPreviewShowsMini {
+                        SettingsGroupCard(title: L10n.t("布局")) { lyricsWindowAppearanceRows(.layout) }
+                        SettingsGroupCard(title: L10n.t("顶部信息")) { lyricsWindowMiniHeaderRows }
+                    } else {
+                        SettingsGroupCard(title: L10n.t("封面")) { lyricsWindowCoverRows }
+                    }
+                    SettingsCard(cornerRadius: 18) {
+                        lyricsWindowResetRow
                     }
                 }
             }
-            // 配置分**两套**:上面预览那个「完整 / 迷你」切到哪个,下面就配哪个。
-            //
-            // 两种尺寸是两种用法 —— 完整多半是摊开来看的、跟随封面好看;迷你常年钉在角落当挂件,
-            // 很多人要的是一块安静的纯色。共用一份就得二选一,所以各存各的(见 AppSettings 里那两组
-            // 同名字段)。两边的卡片长得一模一样,所以抽成 lyricsWindowAppearanceCard 带参调用,
-            // 别复制两份 —— 复制出来的那份迟早只改一边。
-            //
-            // 自定义颜色这两档会**反过来决定文字颜色**:歌词窗口的正文默认是白的,那是因为
-            // 封面背景必然够暗(烘焙压过 EV −1.9 + 0.15 黑遮罩)。用户填一个浅色背景时白字会直接
-            // 消失,所以 LyricsWindowView.hasArtworkBackground 改成了真的算背景亮度 —— 判据在
-            // LyricsWindowBackgroundLuma,selftest 钉着边界值。这里只管收集配置。
-            // 工具栏浮层之外的全量兜底:默认折叠,跟另外三段的抽屉同一个排法。
-            LyricsWindowAllSettingsDrawer {
-                SettingsCardHeader(title: L10n.t("背景"))
-                CardDivider()
-                lyricsWindowAppearanceRows(.background)
-                CardDivider()
-                SettingsCardHeader(title: L10n.t("文字"))
-                CardDivider()
-                lyricsWindowAppearanceRows(.text)
-                CardDivider()
-                if lyricsWindowPreviewShowsMini {
-                    SettingsCardHeader(title: L10n.t("行为"))
-                    CardDivider()
-                    lyricsWindowBehaviorRows
-                    CardDivider()
-                }
-                SettingsCardHeader(title: L10n.t("内容"))
-                CardDivider()
-                lyricsWindowContentRows
-                CardDivider()
-                if lyricsWindowPreviewShowsMini {
-                    SettingsCardHeader(title: L10n.t("布局"))
-                    CardDivider()
-                    lyricsWindowAppearanceRows(.layout)
-                    CardDivider()
-                    SettingsCardHeader(title: L10n.t("顶部信息"))
-                    CardDivider()
-                    lyricsWindowMiniHeaderRows
-                } else {
-                    SettingsCardHeader(title: L10n.t("封面"))
-                    CardDivider()
-                    lyricsWindowCoverRows
-                }
-                CardDivider()
-                lyricsWindowResetRow
-            }
+            .background { LastfmGlassGlow() }
         }
     }
 
@@ -2747,6 +2738,7 @@ private struct AppearanceSettingsTab: View {
             Button(L10n.t("恢复")) {
                 LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)
             }
+            .buttonBorderShape(.capsule)
         }
     }
 
@@ -2787,6 +2779,7 @@ private struct AppearanceSettingsTab: View {
                 .menuStyle(.borderlessButton)
                 .fixedSize()
             }
+            .overlay(alignment: .top) { lyricsWindowProbeAnchor(lyricsWindowRow1Probe) }
             HStack(spacing: 8) {
                 lyricsWindowToolbarButton(.content)
                 if lyricsWindowPreviewShowsMini {
@@ -2799,9 +2792,27 @@ private struct AppearanceSettingsTab: View {
                 Spacer(minLength: 8)
                 EditorToolbarResetReserve()
             }
+            .overlay(alignment: .top) { lyricsWindowProbeAnchor(lyricsWindowRow2Probe) }
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
+    }
+
+    /// 按钮那一行上沿的测量点(同另外几段编辑台的 `StageTopProbe`)。
+    private func lyricsWindowProbeAnchor(_ probe: StageTopProbe) -> some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .background(StageTopProbeView(probe: probe))
+    }
+
+    /// 背景几档的名字,工具栏摘要和「背景」那一行的胶囊分段共用。
+    private func lyricsWindowBackgroundModeName(_ mode: LyricsWindowBackgroundMode) -> String {
+        switch mode {
+        case .artwork: L10n.t("跟随封面")
+        case .solid: L10n.t("纯色")
+        case .gradient: L10n.t("渐变")
+        case .glass: L10n.t("毛玻璃")
+        }
     }
 
     private func lyricsWindowToolbarLabel(_ item: LyricsWindowToolbarItem) -> EditorToolbarButtonLabel {
@@ -2809,13 +2820,8 @@ private struct AppearanceSettingsTab: View {
         switch item {
         case .background:
             let mode = mini ? settings.lyricsWindowMiniBackgroundMode : settings.lyricsWindowBackgroundMode
-            let name: String = switch mode {
-            case .artwork: L10n.t("跟随封面")
-            case .solid: L10n.t("纯色")
-            case .gradient: L10n.t("渐变")
-            case .glass: L10n.t("毛玻璃")
-            }
-            return EditorToolbarButtonLabel(icon: "photo.artframe", title: L10n.t("背景"), summary: name)
+            return EditorToolbarButtonLabel(icon: "photo.artframe", title: L10n.t("背景"),
+                                            summary: lyricsWindowBackgroundModeName(mode))
         case .text:
             // 摘要只报字体(迷你再加粗细和字号),同悬浮歌词「文字」那颗。
             var summary = FontFamilyPicker.displayName(
@@ -2869,8 +2875,13 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
+    /// 浮层挂在按钮上往上弹(`arrowEdge: .top`),不往下压在预览上;高度封顶在按钮那一行上方的空间里,放不下时在浮层里滚,
+    /// 不让系统翻下来(同另外几段编辑台,04 章决策 34、61)。
     private func lyricsWindowToolbarButton(_ item: LyricsWindowToolbarItem) -> some View {
         Button {
+            let firstRow: [LyricsWindowToolbarItem] = [.background, .text, .behavior]
+            let probe = firstRow.contains(item) ? lyricsWindowRow1Probe : lyricsWindowRow2Probe
+            lyricsWindowPopoverMaxHeight = probe.popoverHeightLimit()
             lyricsWindowPopover = item
         } label: {
             lyricsWindowToolbarLabel(item)
@@ -2880,8 +2891,9 @@ private struct AppearanceSettingsTab: View {
             get: { lyricsWindowPopover == item },
             set: { shown in
                 if shown { lyricsWindowPopover = item } else if lyricsWindowPopover == item { lyricsWindowPopover = nil }
-            }), arrowEdge: .bottom) {
+            }), arrowEdge: .top) {
             lyricsWindowPopoverContent(item)
+                .environment(\.settingsPopoverMaxHeight, lyricsWindowPopoverMaxHeight)
         }
     }
 
@@ -2894,33 +2906,33 @@ private struct AppearanceSettingsTab: View {
     }
 
     /// 浮层宽度按内容估、宁宽勿窄(`SettingsPopoverShell.width` 那条:窄了尾部控件 fixedSize
-    /// 之后亏空全摊给标题,标题会被压没)。**没离屏量过**,要收紧先量。
+    /// 之后亏空全摊给标题,标题会被压没)。两列小块的那几个按一格放得下「名字 + ⓘ + 控件」定宽。
     @ViewBuilder
     private func lyricsWindowPopoverContent(_ item: LyricsWindowToolbarItem) -> some View {
         switch item {
         case .background:
-            SettingsPopoverShell(title: L10n.t("背景"), width: 400) {
+            SettingsPopoverShell(title: L10n.t("背景"), width: 480) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.background) }
             }
         case .text:
-            SettingsPopoverShell(title: L10n.t("文字"), width: 440) {
+            SettingsPopoverShell(title: L10n.t("文字"), width: 580) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.text) }
             }
         case .behavior:
-            SettingsPopoverShell(title: L10n.t("行为"), width: 360) {
+            SettingsPopoverShell(title: L10n.t("行为"), width: 480) {
                 VStack(spacing: 0) { lyricsWindowBehaviorRows }
             }
         case .layout:
-            SettingsPopoverShell(title: L10n.t("布局"), width: 440) {
+            SettingsPopoverShell(title: L10n.t("布局"), width: 460) {
                 VStack(spacing: 0) { lyricsWindowAppearanceRows(.layout) }
             }
         case .content:
-            SettingsPopoverShell(title: L10n.t("内容"), width: 400) {
+            SettingsPopoverShell(title: L10n.t("内容"), width: 360) {
                 VStack(spacing: 0) { lyricsWindowContentRows }
             }
         case .info:
             if lyricsWindowPreviewShowsMini {
-                SettingsPopoverShell(title: L10n.t("顶部信息"), width: 360) {
+                SettingsPopoverShell(title: L10n.t("顶部信息"), width: 520) {
                     VStack(spacing: 0) { lyricsWindowMiniHeaderRows }
                 }
             } else {
@@ -2934,29 +2946,26 @@ private struct AppearanceSettingsTab: View {
     /// 「行为」那几行(工具栏浮层与抽屉同一份),只有迷你有(07 章决策 118、142)。标题、图标跟悬浮歌词「行为」里那颗
     /// (`OverlayBehaviorItem.fadeOnHover`、`AutoHideItem.whenNotPlaying`)和灵动岛 `NotchBehaviorItem.hideInFullScreen`
     /// 一样,几处一起改;值各管各的。
+    /// 两列小块:往上弹的浮层只有按钮上方约 200pt,一行一个开关放不下。
     @ViewBuilder
     private var lyricsWindowBehaviorRows: some View {
-        SettingsRow(icon: "cursorarrow.motionlines", title: L10n.t("悬浮淡化")) {
-            Toggle("", isOn: $settings.lyricsWindowMiniFadeOnHover)
-        }
-        // 从属于「悬浮淡化」,只在它开着时出现(07 章决策 144)。
-        if settings.lyricsWindowMiniFadeOnHover {
-            CardDivider()
-            SettingsSubRow(title: L10n.t("淡化时点按穿透"),
-                           help: L10n.t("淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作")) {
-                Toggle("", isOn: $settings.lyricsWindowMiniFadeClickThrough)
+        SettingsTileGrid {
+            SettingsToggleTile(icon: "cursorarrow.motionlines", title: L10n.t("悬浮淡化"),
+                               isOn: $settings.lyricsWindowMiniFadeOnHover)
+            // 从属于「悬浮淡化」,只在它开着时出现(07 章决策 144)。
+            if settings.lyricsWindowMiniFadeOnHover {
+                SettingsToggleTile(icon: "cursorarrow.click", title: L10n.t("淡化时点按穿透"),
+                                   help: L10n.t("淡化时点按会落到下面的窗口；按住 ⌥ 恢复不透明，就能操作"),
+                                   isOn: $settings.lyricsWindowMiniFadeClickThrough)
             }
+            SettingsToggleTile(icon: "pause.circle", title: L10n.t("暂停时隐藏"),
+                               help: L10n.t("迷你尺寸下，暂停或没有播放时隐藏，开始播放后重新出现"),
+                               isOn: $settings.lyricsWindowMiniHideWhenNotPlaying)
+            SettingsToggleTile(icon: "arrow.up.left.and.arrow.down.right", title: L10n.t("全屏时隐藏"),
+                               help: L10n.t("迷你尺寸下，所在屏幕有 App 全屏时隐藏"),
+                               isOn: $settings.lyricsWindowMiniHideInFullScreen)
         }
-        CardDivider()
-        SettingsRow(icon: "pause.circle", title: L10n.t("暂停时隐藏"),
-                    help: L10n.t("迷你尺寸下，暂停或没有播放时隐藏，开始播放后重新出现")) {
-            Toggle("", isOn: $settings.lyricsWindowMiniHideWhenNotPlaying)
-        }
-        CardDivider()
-        SettingsRow(icon: "arrow.up.left.and.arrow.down.right", title: L10n.t("全屏时隐藏"),
-                    help: L10n.t("迷你尺寸下，所在屏幕有 App 全屏时隐藏")) {
-            Toggle("", isOn: $settings.lyricsWindowMiniHideInFullScreen)
-        }
+        .animation(.default, value: settings.lyricsWindowMiniFadeOnHover)
     }
 
     /// 「内容」那几行(工具栏浮层与抽屉同一份):歌词窗口完整、迷你共用这一份读音 / 译文
@@ -2964,12 +2973,9 @@ private struct AppearanceSettingsTab: View {
     /// 给哪些语言标读音只在「歌词 › 调整 › 标注读音的语言」里设,这里不放(04 章决策 47)。
     @ViewBuilder
     private var lyricsWindowContentRows: some View {
-        SettingsRow(icon: "textformat.alt", title: L10n.t("读音")) {
-            Toggle("", isOn: $settings.showRomanization)
-        }
-        CardDivider()
-        SettingsRow(icon: "text.bubble", title: L10n.t("译文")) {
-            Toggle("", isOn: $settings.showTranslation)
+        SettingsTileGrid {
+            SettingsToggleTile(icon: "textformat.alt", title: L10n.t("读音"), isOn: $settings.showRomanization)
+            SettingsToggleTile(icon: "text.bubble", title: L10n.t("译文"), isOn: $settings.showTranslation)
         }
     }
 
@@ -2982,31 +2988,29 @@ private struct AppearanceSettingsTab: View {
     /// `Picker(.menu)`,而 Picker 做不了多选,所以这里回到最朴素、也最经得起点的形态。
     @ViewBuilder
     private var lyricsWindowMiniHeaderRows: some View {
-        // 封面**自己一颗设置**,不并进 miniHeaderFields(同下面「时间」那条理由):
-        // 那个 OptionSet 的 `visibleValues` 吐的是字符串,封面不是字符串。
-        SettingsRow(icon: "photo", title: L10n.t("封面")) {
-            Toggle("", isOn: $settings.lyricsWindowMiniShowsCover)
+        // 五样显示开关三列小块,宽度 / 高度两根滑杆单独一框。
+        SettingsRowGroupStack {
+            SettingsTileGrid(columns: 3) {
+                // 封面**自己一颗设置**,不并进 miniHeaderFields(同下面「时间」那条理由):
+                // 那个 OptionSet 的 `visibleValues` 吐的是字符串,封面不是字符串。
+                SettingsToggleTile(icon: "photo", title: L10n.t("封面"), isOn: $settings.lyricsWindowMiniShowsCover)
+                SettingsToggleTile(icon: "music.note", title: L10n.t("歌名"), isOn: miniHeaderFieldBinding(.title))
+                SettingsToggleTile(icon: "music.mic", title: L10n.t("歌手"), isOn: miniHeaderFieldBinding(.artist))
+                SettingsToggleTile(icon: "square.stack", title: L10n.t("专辑"), isOn: miniHeaderFieldBinding(.album))
+                // 时间自己一颗设置键(不并进 miniHeaderFields):上面三样是这首歌的元数据,时间不是,
+                // 排版也不一样(更小更淡、单独一行)。并进那个 OptionSet 还会让老用户升级后默认拿不到 ——
+                // 那个键他们早就有值,新加的位一律是 0。
+                SettingsToggleTile(icon: "clock", title: L10n.t("时间"), isOn: $settings.lyricsWindowMiniShowsTime)
+            }
+            SettingsRowGroup {
+                lyricsWindowMiniHeaderSizeRows
+            }
         }
-        CardDivider()
-        SettingsRow(icon: "music.note", title: L10n.t("歌名")) {
-            Toggle("", isOn: miniHeaderFieldBinding(.title))
-        }
-        CardDivider()
-        SettingsRow(icon: "music.mic", title: L10n.t("歌手")) {
-            Toggle("", isOn: miniHeaderFieldBinding(.artist))
-        }
-        CardDivider()
-        SettingsRow(icon: "square.stack", title: L10n.t("专辑")) {
-            Toggle("", isOn: miniHeaderFieldBinding(.album))
-        }
-        CardDivider()
-        // 时间自己一颗设置键(不并进 miniHeaderFields):上面三样是这首歌的元数据,时间不是,
-        // 排版也不一样(更小更淡、单独一行)。并进那个 OptionSet 还会让老用户升级后默认拿不到 ——
-        // 那个键他们早就有值,新加的位一律是 0。
-        SettingsRow(icon: "clock", title: L10n.t("时间")) {
-            Toggle("", isOn: $settings.lyricsWindowMiniShowsTime)
-        }
-        CardDivider()
+    }
+
+    /// 顶部信息区的宽度 / 高度两根滑杆。
+    @ViewBuilder
+    private var lyricsWindowMiniHeaderSizeRows: some View {
         SettingsRow(
             icon: "arrow.left.and.right",
             title: L10n.t("宽度"),
@@ -3056,15 +3060,17 @@ private struct AppearanceSettingsTab: View {
     /// 是顶部信息里的小图,不播动态封面。
     @ViewBuilder
     private var lyricsWindowCoverRows: some View {
-        SettingsRow(
-            icon: "photo.badge.arrow.down",
-            title: L10n.t("动态封面"),
-            help: L10n.t("仅部分专辑提供；低电量或「减弱动态效果」时自动暂停")
-        ) {
-            Toggle("", isOn: $settings.motionCoverEnabled)
+        SettingsRowGroup {
+            SettingsRow(
+                icon: "photo.badge.arrow.down",
+                title: L10n.t("动态封面"),
+                help: L10n.t("仅部分专辑提供；低电量或「减弱动态效果」时自动暂停")
+            ) {
+                Toggle("", isOn: $settings.motionCoverEnabled)
+            }
+            CardDivider()
+            MotionCoverCacheRow()
         }
-        CardDivider()
-        MotionCoverCacheRow()
     }
 
     /// 按预览停在哪个尺寸,把外观行绑到那一套字段上。
@@ -3145,215 +3151,211 @@ private struct AppearanceSettingsTab: View {
     ) -> some View {
         switch part {
         case .background:
-            SettingsRow(
-                icon: "photo.artframe",
-                title: L10n.t("背景")
-            ) {
-                Picker("", selection: mode) {
-                    Text(L10n.t("跟随封面")).tag(LyricsWindowBackgroundMode.artwork)
-                    Text(L10n.t("纯色")).tag(LyricsWindowBackgroundMode.solid)
-                    Text(L10n.t("渐变")).tag(LyricsWindowBackgroundMode.gradient)
-                    Text(L10n.t("毛玻璃")).tag(LyricsWindowBackgroundMode.glass)
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            // 下面三项都是「背景」的**从属项** —— 选了哪一档才出现哪一项。用 SettingsSubRow
-            // (缩进 + 无图标)把从属关系画出来:平级摆着的话,看上去像三个互不相干的设置。
-            if mode.wrappedValue == .gradient {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("方向")) {
-                    Picker("", selection: direction) {
-                        Text(L10n.t("从上到下")).tag(LyricsWindowGradientDirection.vertical)
-                        Text(L10n.t("从左到右")).tag(LyricsWindowGradientDirection.horizontal)
+            SettingsRowGroupStack {
+                SettingsRowGroup {
+                    SettingsRow(icon: "photo.artframe", title: L10n.t("背景")) {
+                        SettingsPillSegmentedControl(
+                            selection: mode,
+                            options: LyricsWindowBackgroundMode.allCases,
+                            label: lyricsWindowBackgroundModeName)
                     }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
                 }
-            }
-            if mode.wrappedValue.usesCustomColor {
-                CardDivider()
-                SettingsSubRow(
-                    // 两个颜色按**当前方向**叫「顶部/底部」或「左侧/右侧」,不叫「起点/终点」——
-                    // 后者还要人回头去看方向那一行才知道是哪一端,而这两行本来就紧挨着。
-                    title: mode.wrappedValue != .gradient
-                        ? L10n.t("颜色")
-                        : (direction.wrappedValue == .vertical ? L10n.t("顶部颜色") : L10n.t("左侧颜色"))
-                ) {
-                    AppColorPicker(selection: startColor)
-                }
-            }
-            if mode.wrappedValue == .gradient {
-                CardDivider()
-                SettingsSubRow(
-                    title: direction.wrappedValue == .vertical ? L10n.t("底部颜色") : L10n.t("右侧颜色")
-                ) {
-                    AppColorPicker(selection: endColor)
-                }
-            }
-            // 浓淡复用悬浮歌词那套五档 Material(`OverlayGlassIntensity`),不另起一套档位 ——
-            // 系统就这五档,两处各定义一份只会漂。
-            if mode.wrappedValue == .glass {
-                CardDivider()
-                SettingsSubRow(
-                    title: L10n.t("玻璃浓淡"),
-                    help: L10n.t("毛玻璃效果折射窗口后方的桌面，因此在此模式下窗口本身为透明")
-                ) {
-                    Picker("", selection: glass) {
-                        ForEach(OverlayGlassIntensity.allCases, id: \.self) { level in
-                            Text(level.displayName).tag(level)
+                // 下面几格都是「背景」的**从属项** —— 选了哪一档才出现哪一格,排成背景那一框下面的一组小块。
+                if mode.wrappedValue != .artwork {
+                    SettingsTileGrid {
+                        if mode.wrappedValue == .gradient {
+                            SettingsControlCell(icon: "arrow.up.and.down.righttriangle.up.righttriangle.down", title: L10n.t("方向")) {
+                                Picker("", selection: direction) {
+                                    Text(L10n.t("从上到下")).tag(LyricsWindowGradientDirection.vertical)
+                                    Text(L10n.t("从左到右")).tag(LyricsWindowGradientDirection.horizontal)
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .fixedSize()
+                            }
+                        }
+                        if mode.wrappedValue.usesCustomColor {
+                            // 两个颜色按**当前方向**叫「顶部/底部」或「左侧/右侧」,不叫「起点/终点」——
+                            // 后者还要人回头去看方向那一格才知道是哪一端,而这几格本来就紧挨着。
+                            SettingsControlCell(
+                                icon: "paintpalette",
+                                title: mode.wrappedValue != .gradient
+                                    ? L10n.t("颜色")
+                                    : (direction.wrappedValue == .vertical ? L10n.t("顶部颜色") : L10n.t("左侧颜色"))
+                            ) {
+                                AppColorPicker(selection: startColor)
+                            }
+                        }
+                        if mode.wrappedValue == .gradient {
+                            SettingsControlCell(
+                                icon: "paintpalette.fill",
+                                title: direction.wrappedValue == .vertical ? L10n.t("底部颜色") : L10n.t("右侧颜色")
+                            ) {
+                                AppColorPicker(selection: endColor)
+                            }
+                        }
+                        // 浓淡复用悬浮歌词那套五档 Material(`OverlayGlassIntensity`),不另起一套档位 ——
+                        // 系统就这五档,两处各定义一份只会漂。
+                        if mode.wrappedValue == .glass {
+                            SettingsControlCell(
+                                icon: "square.on.square",
+                                title: L10n.t("玻璃浓淡"),
+                                help: L10n.t("毛玻璃效果折射窗口后方的桌面，因此在此模式下窗口本身为透明")
+                            ) {
+                                Picker("", selection: glass) {
+                                    ForEach(OverlayGlassIntensity.allCases, id: \.self) { level in
+                                        Text(level.displayName).tag(level)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .fixedSize()
+                            }
                         }
                     }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
                 }
             }
+            .animation(.default, value: mode.wrappedValue)
         case .text:
             // 排法同悬浮歌词「文字」浮层:字体 → 粗细 → 字号 → 卡拉OK效果 → 文字颜色 → 已唱颜色(07 章决策 119)。
             // 粗细、字号、卡拉OK效果、已唱颜色只有迷你传,完整尺寸这一块只有字体和文字颜色。
             // 完整尺寸的字号不给配:这扇窗的字号是跟着窗口尺寸算出来的(完整走 lyricFontSize、迷你走
             // miniFontSize),再给一根滑杆就是让两套规则打架 —— 拖窗口会把用户调好的数悄悄改掉。
-            SettingsRow(
-                icon: "textformat",
-                title: L10n.t("字体"),
-                // 完整尺寸的字号由窗口大小推出、不给滑杆;迷你有下面那根「字号」上限滑杆。
-                help: fontSize != nil
-                    ? L10n.t("仅作用于歌词；顶部信息和控制条仍用系统字体")
-                    : L10n.t("仅作用于歌词；字号随窗口大小自动调整")
-            ) {
-                FontFamilyPicker(selection: font)
-            }
-            // 排在字体和字号之间,同悬浮歌词:粗细是「这个字体族的哪一个粗细」。选的是正文那一档,读音 / 译文跟着细。
-            if let fontWeight {
-                CardDivider()
-                SettingsRow(icon: "bold", title: L10n.t("粗细")) {
-                    Picker("", selection: fontWeight) {
-                        ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
-                            Text(weight.displayName).tag(weight)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                }
-            }
-            if let fontSize {
-                CardDivider()
-                SettingsRow(
-                    icon: "textformat.size",
-                    title: L10n.t("字号"),
-                    help: L10n.t("此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口")
+            // 两列小块:字体 + 粗细、字号 + 卡拉OK、文字颜色 + 已唱颜色(完整尺寸只有字体、文字颜色两块),
+            // 往上弹的浮层只有按钮上方约 200pt,一行一个控件放不下。
+            SettingsTileGrid {
+                SettingsControlCell(
+                    icon: "textformat",
+                    title: L10n.t("字体"),
+                    // 完整尺寸的字号由窗口大小推出、不给滑杆;迷你有「字号」上限滑杆。
+                    help: fontSize != nil
+                        ? L10n.t("仅作用于歌词；顶部信息和控制条仍用系统字体")
+                        : L10n.t("仅作用于歌词；字号随窗口大小自动调整")
                 ) {
-                    HStack(spacing: 8) {
-                        // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点。
-                        SteppedSlider(value: Binding(
-                            get: { fontSize.wrappedValue },
-                            // 相等守卫:拖动中每个鼠标事件都会调 set,量化后大量等值赋值照样
-                            // 广播 objectWillChange,所有观察 AppSettings 的界面跟着白跑。
-                            set: { v in
-                                guard v != fontSize.wrappedValue else { return }
-                                fontSize.wrappedValue = v
-                            }
-                        ), in: AppSettings.lyricsWindowMiniFontSizeRange, step: 1)
-                            .frame(width: 150)
-                        Text(String(format: L10n.t("%@pt"), "\(Int(fontSize.wrappedValue))"))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
+                    FontFamilyPicker(selection: font)
                 }
-            }
-            // 跟「已唱颜色」同一块:两样都只管逐字填色。三档布局都按这颗画,生效链路见 AppSettings.lyricsWindowMiniLyricsKaraoke。
-            if let miniKaraoke {
-                CardDivider()
-                SettingsRow(icon: "sparkles", title: L10n.t("卡拉OK效果")) {
-                    Toggle("", isOn: miniKaraoke)
-                }
-            }
-            CardDivider()
-            // 文字颜色是**自己一颗设置**,不再是背景的派生物。
-            //
-            // 在此之前它没有设置:全窗配色读一个"背景够不够暗"的布尔(LyricsWindowBackgroundLuma
-            // 算出来的),于是「深底配深字」「毛玻璃上钉死白字」这类搭配根本表达不出来 —— 而用户
-            // 能自己填背景之后,这恰恰是最常见的诉求。`.auto` 档就是原来那套,仍是默认。
-            SettingsRow(
-                icon: "paintpalette",
-                title: L10n.t("文字颜色"),
-                // 迷你的顶部信息和控制条跟歌词紧挨成一块,文字色一起走(LyricsWindowView.miniPrimaryColor);
-                // 完整尺寸只管歌词。说明按尺寸分开写,别合成一句。
-                help: fontSize != nil
-                    ? L10n.t("作用于歌词、顶部信息和控制条；「自动」根据背景亮度在浅色与深色之间切换")
-                    : L10n.t("仅作用于歌词；「自动」根据背景亮度在浅色与深色之间切换")
-            ) {
-                Picker("", selection: textColorMode) {
-                    Text(L10n.t("自动")).tag(LyricsWindowTextColorMode.auto)
-                    Text(L10n.t("浅色")).tag(LyricsWindowTextColorMode.light)
-                    Text(L10n.t("深色")).tag(LyricsWindowTextColorMode.dark)
-                    Text(L10n.t("自定义")).tag(LyricsWindowTextColorMode.custom)
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            if textColorMode.wrappedValue.usesCustomColor {
-                CardDivider()
-                // 叫「指定颜色」不叫「颜色」:这张卡里「颜色」已经是背景那一档的从属行了,
-                // 同名两行摆在一张卡里,看的人得先数缩进才知道哪个管哪个。
-                SettingsSubRow(title: L10n.t("指定颜色")) {
-                    AppColorPicker(selection: textColor)
-                }
-            }
-            // 一行下拉,选「自定义颜色」时旁边露出取色器(同悬浮歌词「未唱颜色」),不另起子行:上面文字颜色已经有一个
-            // 「指定颜色」子行,再来一个同名的分不清。
-            if let karaokeFill, let karaokeFillColor {
-                CardDivider()
-                SettingsRow(
-                    icon: "paintbrush.pointed",
-                    title: L10n.t("已唱颜色"),
-                    help: L10n.t("逐字填色时已唱部分使用此颜色；未唱部分和其他行仍使用文字颜色。关闭「卡拉OK效果」时无效")
-                ) {
-                    HStack(spacing: 8) {
-                        Menu(LyricsWindowKaraokeFillLabel.text(for: karaokeFill.wrappedValue)) {
-                            ForEach(LyricsWindowKaraokeFill.allCases, id: \.self) { mode in
-                                Button(LyricsWindowKaraokeFillLabel.text(for: mode)) { karaokeFill.wrappedValue = mode }
+                // 排在字体和字号之间,同悬浮歌词:粗细是「这个字体族的哪一个粗细」。选的是正文那一档,读音 / 译文跟着细。
+                if let fontWeight {
+                    SettingsControlCell(icon: "bold", title: L10n.t("粗细")) {
+                        Picker("", selection: fontWeight) {
+                            ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
+                                Text(weight.displayName).tag(weight)
                             }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                         .fixedSize()
-                        if karaokeFill.wrappedValue == .custom {
-                            AppColorPicker(selection: karaokeFillColor)
+                    }
+                }
+                if let fontSize {
+                    SettingsControlCell(
+                        icon: "textformat.size",
+                        title: L10n.t("字号"),
+                        help: L10n.t("此为上限：窗口足够大时使用此字号，窗口缩小时文字随之缩小，以免超出窗口")
+                    ) {
+                        HStack(spacing: 6) {
+                            // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点。
+                            SteppedSlider(value: Binding(
+                                get: { fontSize.wrappedValue },
+                                // 相等守卫:拖动中每个鼠标事件都会调 set,量化后大量等值赋值照样
+                                // 广播 objectWillChange,所有观察 AppSettings 的界面跟着白跑。
+                                set: { v in
+                                    guard v != fontSize.wrappedValue else { return }
+                                    fontSize.wrappedValue = v
+                                }
+                            ), in: AppSettings.lyricsWindowMiniFontSizeRange, step: 1)
+                                .frame(width: 96)
+                            Text(String(format: L10n.t("%@pt"), "\(Int(fontSize.wrappedValue))"))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 36, alignment: .trailing)
+                        }
+                    }
+                }
+                // 跟「已唱颜色」同一块:两样都只管逐字填色。三档布局都按这颗画,生效链路见 AppSettings.lyricsWindowMiniLyricsKaraoke。
+                if let miniKaraoke {
+                    SettingsToggleTile(icon: "sparkles", title: L10n.t("卡拉OK效果"), isOn: miniKaraoke)
+                }
+                // 文字颜色是**自己一颗设置**,不是背景的派生物:「深底配深字」「毛玻璃上钉死白字」这类搭配要能表达。
+                // `.auto` 档按背景亮度算(LyricsWindowBackgroundLuma),仍是默认。
+                // 选「自定义」时取色块挂在这一格上;它叫「指定颜色」(悬停提示与搜索高亮),别叫「颜色」——
+                // 背景那一组已经有一格「颜色」。
+                SettingsControlCell(
+                    icon: "paintpalette",
+                    title: L10n.t("文字颜色"),
+                    // 迷你的顶部信息和控制条跟歌词紧挨成一块,文字色一起走(LyricsWindowView.miniPrimaryColor);
+                    // 完整尺寸只管歌词。说明按尺寸分开写,别合成一句。
+                    help: fontSize != nil
+                        ? L10n.t("作用于歌词、顶部信息和控制条；「自动」根据背景亮度在浅色与深色之间切换")
+                        : L10n.t("仅作用于歌词；「自动」根据背景亮度在浅色与深色之间切换")
+                ) {
+                    HStack(spacing: 6) {
+                        Picker("", selection: textColorMode) {
+                            Text(L10n.t("自动")).tag(LyricsWindowTextColorMode.auto)
+                            Text(L10n.t("浅色")).tag(LyricsWindowTextColorMode.light)
+                            Text(L10n.t("深色")).tag(LyricsWindowTextColorMode.dark)
+                            Text(L10n.t("自定义")).tag(LyricsWindowTextColorMode.custom)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        if textColorMode.wrappedValue.usesCustomColor {
+                            AppColorPicker(selection: textColor)
+                                .help(L10n.t("指定颜色"))
+                                .settingsSearchHighlight(title: L10n.t("指定颜色"))
+                        }
+                    }
+                }
+                // 一格下拉,选「自定义颜色」时旁边露出取色器(同悬浮歌词「未唱颜色」)。
+                if let karaokeFill, let karaokeFillColor {
+                    SettingsControlCell(
+                        icon: "paintbrush.pointed",
+                        title: L10n.t("已唱颜色"),
+                        help: L10n.t("逐字填色时已唱部分使用此颜色；未唱部分和其他行仍使用文字颜色。关闭「卡拉OK效果」时无效")
+                    ) {
+                        HStack(spacing: 6) {
+                            Menu(LyricsWindowKaraokeFillLabel.text(for: karaokeFill.wrappedValue)) {
+                                ForEach(LyricsWindowKaraokeFill.allCases, id: \.self) { mode in
+                                    Button(LyricsWindowKaraokeFillLabel.text(for: mode)) { karaokeFill.wrappedValue = mode }
+                                }
+                            }
+                            .fixedSize()
+                            if karaokeFill.wrappedValue == .custom {
+                                AppColorPicker(selection: karaokeFillColor)
+                            }
                         }
                     }
                 }
             }
         case .layout:
             if let miniLyricsLayout {
-                SettingsRow(
-                    icon: "rectangle.split.1x2",
-                    title: L10n.t("歌词布局"),
-                    help: L10n.t("单行：仅显示当前句。\n双行：显示当前句和下一句。\n多行：与完整尺寸相同，整页滚动显示歌词。")
-                ) {
-                    SettingsSegmentedControl(
-                        selection: miniLyricsLayout,
-                        options: LyricsWindowMiniLyricsLayout.allCases,
-                        label: LyricsWindowMiniLyricsLayoutLabel.text(for:)
-                    )
-                }
-                // 长句处理只管「单行 / 双行」那套;「多行」是完整布局那份列表,恒换行。选了多行就不摆这一行,
-                // 摆着一颗改了没反应的开关只会让人以为坏了。
-                if miniLyricsLayout.wrappedValue != .list, let lineOverflow {
-                    CardDivider()
+                SettingsRowGroup {
                     SettingsRow(
-                        icon: "arrow.left.and.right.text.vertical",
-                        title: L10n.t("长句处理"),
-                        help: L10n.t("换行（默认）：一行显示不下时折行显示。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。")
+                        icon: "rectangle.split.1x2",
+                        title: L10n.t("歌词布局"),
+                        help: L10n.t("单行：仅显示当前句。\n双行：显示当前句和下一句。\n多行：与完整尺寸相同，整页滚动显示歌词。")
                     ) {
-                        SettingsSegmentedControl(
-                            selection: lineOverflow,
-                            options: OverlayLineOverflow.allCases,
-                            label: OverlayLineOverflowLabel.text(for:)
+                        SettingsPillSegmentedControl(
+                            selection: miniLyricsLayout,
+                            options: LyricsWindowMiniLyricsLayout.allCases,
+                            label: LyricsWindowMiniLyricsLayoutLabel.text(for:)
                         )
+                    }
+                    // 长句处理只管「单行 / 双行」那套;「多行」是完整布局那份列表,恒换行。选了多行就不摆这一行,
+                    // 摆着一颗改了没反应的开关只会让人以为坏了。
+                    if miniLyricsLayout.wrappedValue != .list, let lineOverflow {
+                        CardDivider()
+                        SettingsRow(
+                            icon: "arrow.left.and.right.text.vertical",
+                            title: L10n.t("长句处理"),
+                            help: L10n.t("换行（默认）：一行显示不下时折行显示。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。")
+                        ) {
+                            SettingsPillSegmentedControl(
+                                selection: lineOverflow,
+                                options: OverlayLineOverflow.allCases,
+                                label: OverlayLineOverflowLabel.text(for:)
+                            )
+                        }
                     }
                 }
             }
@@ -4144,11 +4146,13 @@ struct LyricsWindowAllSettingsDrawer<Content: View>: View {
         self.content = content
     }
 
+    // 展开后一组一张卡(同另外几个抽屉,14 章决策 83、84),各组的卡由调用方给。
     var body: some View {
-        SettingsCard(cornerRadius: 18) {
-            disclosureHeader
+        VStack(spacing: 14) {
+            SettingsCard(cornerRadius: 18) {
+                disclosureHeader
+            }
             if isExpanded {
-                CardDivider()
                 content()
             }
         }

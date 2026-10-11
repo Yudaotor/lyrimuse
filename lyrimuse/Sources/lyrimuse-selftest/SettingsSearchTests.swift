@@ -368,6 +368,7 @@ func runSettingsSearchTests() {
     func rowTitles(_ text: String) -> Set<String> { Set(text.matches(of: titlePattern).map { String($0.1) }) }
     let miniBlocks = [
         block(from: "    private var lyricsWindowMiniHeaderRows: some View {", to: "\n    }\n"),
+        block(from: "    private var lyricsWindowMiniHeaderSizeRows: some View {", to: "\n    }\n"),
         block(from: "        case .layout:\n            if let miniLyricsLayout {", to: "    /// 迷你顶部那一行的某一样勾没勾。"),
         block(from: "    private var lyricsWindowBehaviorRows: some View {", to: "\n    }\n"),
     ]

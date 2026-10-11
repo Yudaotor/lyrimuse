@@ -67,8 +67,8 @@ func checkLyricsWindowMiniAutoHide() {
     expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniHideWhenNotPlaying =\n            (defaults.object(forKey: Keys.lyricsWindowMiniHideWhenNotPlaying) as? Bool) ?? false")
                 && sourceBytes(appSettings, contain: "lyricsWindowMiniHideInFullScreen =\n            (defaults.object(forKey: Keys.lyricsWindowMiniHideInFullScreen) as? Bool) ?? false"),
                 true, "迷你自动隐藏: 两项默认关")
-    expectEqual(sourceBytes(settingsView, contain: "Toggle(\"\", isOn: $settings.lyricsWindowMiniHideWhenNotPlaying)")
-                && sourceBytes(settingsView, contain: "Toggle(\"\", isOn: $settings.lyricsWindowMiniHideInFullScreen)"), true,
+    expectEqual(sourceBytes(settingsView, contain: "isOn: $settings.lyricsWindowMiniHideWhenNotPlaying)")
+                && sourceBytes(settingsView, contain: "isOn: $settings.lyricsWindowMiniHideInFullScreen)"), true,
                 "迷你自动隐藏: 设置页迷你「行为」摆这两颗开关")
     expectEqual(sourceBytes(settingsView, contain: "(title: L10n.t(\"暂停时隐藏\"), isOn: settings.lyricsWindowMiniHideWhenNotPlaying)")
                 && sourceBytes(settingsView, contain: "(title: L10n.t(\"全屏时隐藏\"), isOn: settings.lyricsWindowMiniHideInFullScreen)"),

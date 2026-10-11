@@ -2438,7 +2438,7 @@ func runSourceContractTests() {
                 expectEqual(view.contains("            UserDefaults.standard.set(true, forKey: LyricsWindowSession.openKey)\n            return\n"), false,
                             "歌词窗口重开: 同一扇窗再次 attach 时别无条件写「开着」(关窗后保活的视图树一刷新就会写回去)")
                 if let settingsView = read("SettingsView.swift") {
-                    expectEqual(settingsView.contains("LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                        AppActions.shared.openLyricsWindow?()"), true,
+                    expectEqual(settingsView.contains("LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
                                 "开窗形态: 「打开」先按预览的形态发请求,再开窗")
                 }
                 if let restore = view.range(of: "restorePersistedFrame(window)\n"),
@@ -2485,7 +2485,7 @@ func runSourceContractTests() {
             expectEqual(settings.contains("LyricsWindowAllSettingsDrawer {"), true,
                         "歌词窗口设置: 全量配置收进「全部设置」抽屉")
             expectEqual(settings.contains("Button(L10n.t(\"打开\")) {")
-                        && settings.contains("LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                        AppActions.shared.openLyricsWindow?()"), true,
+                        && settings.contains("LyricsWindowSession.requestForm(mini: lyricsWindowPreviewShowsMini)\n                            AppActions.shared.openLyricsWindow?()"), true,
                         "歌词窗口设置: 预览下面那张卡里有打开窗口的按钮,走 AppActions 那个统一入口(先按预览的形态发请求)")
             expectEqual(settings.contains("LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)"), true,
                         "歌词窗口设置: 工具栏「重置 ▾」只恢复当前预览的那个尺寸")
@@ -3333,8 +3333,8 @@ func runSourceContractTests() {
             }
             // 要求同时有**定义**和**装配**:只定义不装配等于没有。
             let defined = text.contains("private var \(row): some View")
-            // 装配点:抽屉 body 里单独一行(前面是缩进,后面直接换行)。
-            let mounted = text.contains("\n                \(row)\n")
+            // 装配点:抽屉 body 里单独一行(前面只有缩进,后面直接换行;缩进随外面套了几层卡而变)。
+            let mounted = text.range(of: "\n +\(row)\n", options: .regularExpression) != nil
             if !(defined && mounted) { missing.append("\(surface)(定义=\(defined) 装配=\(mounted))") }
         }
         expectEqual(unreadable, [], "抽屉重置闸: 四个抽屉的宿主文件都读得到(读不到 = 路径挪了)")

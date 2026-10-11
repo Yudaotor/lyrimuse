@@ -68,8 +68,8 @@ func checkLyricsWindowHoverFade() {
                 "迷你悬浮淡化: 窗口 attach 时接上、跟着进出迷你,关窗复位")
     expectEqual(sourceBytes(window, contain: "lyricsWindowMiniFadeOnHover"), false,
                 "迷你悬浮淡化: 开关不在窗口里(在设置页「行为」)")
-    expectEqual(sourceBytes(settingsView, contain: "SettingsRow(icon: \"cursorarrow.motionlines\", title: L10n.t(\"悬浮淡化\")) {\n"
-                            + "            Toggle(\"\", isOn: $settings.lyricsWindowMiniFadeOnHover)"), true,
+    expectEqual(sourceBytes(settingsView, contain: "SettingsToggleTile(icon: \"cursorarrow.motionlines\", title: L10n.t(\"悬浮淡化\"),\n"
+                            + "                               isOn: $settings.lyricsWindowMiniFadeOnHover)"), true,
                 "迷你悬浮淡化: 设置页迷你「行为」摆这颗开关")
     let overlayBehavior = source("lyrimuse/UI/OverlayBehaviorSettingsRows.swift")
     expectEqual(sourceBytes(overlayBehavior, contain: "case .fadeOnHover: return \"cursorarrow.motionlines\"")
@@ -94,10 +94,10 @@ func checkLyricsWindowHoverFade() {
                 "淡化时点按穿透: 穿透结束让跟踪区按真实指针位置重报")
     expectEqual(sourceBytes(fade, contain: "$lyricsWindowMiniFadeClickThrough.removeDuplicates()"), true,
                 "淡化时点按穿透: 跟着设置走")
-    expectEqual(sourceBytes(settingsView, contain: "        if settings.lyricsWindowMiniFadeOnHover {\n            CardDivider()\n"
-                            + "            SettingsSubRow(title: L10n.t(\"淡化时点按穿透\"),")
-                && sourceBytes(settingsView, contain: "Toggle(\"\", isOn: $settings.lyricsWindowMiniFadeClickThrough)"), true,
-                "淡化时点按穿透: 设置页「悬浮淡化」下面的从属行,只在它开着时出现")
+    expectEqual(sourceBytes(settingsView, contain: "            if settings.lyricsWindowMiniFadeOnHover {\n"
+                            + "                SettingsToggleTile(icon: \"cursorarrow.click\", title: L10n.t(\"淡化时点按穿透\"),")
+                && sourceBytes(settingsView, contain: "isOn: $settings.lyricsWindowMiniFadeClickThrough)"), true,
+                "淡化时点按穿透: 设置页「悬浮淡化」后面的那一块,只在它开着时出现")
     expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniFadeClickThrough = false"), true,
                 "淡化时点按穿透: 迷你「重置」恢复成关")
     expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniFadeClickThrough =\n            (defaults.object(forKey: Keys.lyricsWindowMiniFadeClickThrough) as? Bool) ?? false"),

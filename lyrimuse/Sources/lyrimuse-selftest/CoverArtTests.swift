@@ -1178,7 +1178,7 @@ func runCoverArtTests() {
                     "动态封面下载: 跳过终审时也要确认解得出帧,解不出就试下一条")
         expectEqual(storeSource.contains("MotionCoverManifest.pick("), false,
                     "动态封面下载: 别回到只挑一档、失败就放弃的写法")
-        expectEqual(settingsSource.contains("CardDivider()\n        MotionCoverCacheRow()"), true,
+        expectEqual(settingsSource.contains("CardDivider()\n            MotionCoverCacheRow()"), true,
                     "动态封面缓存: 完整尺寸「封面」那几行里有这一行(浮层和抽屉同一份)")
         expectEqual(settingsSource.contains("keeping: PlaybackCoordinator.shared.motionCoverFile)"), true,
                     "动态封面缓存: 清除时留下歌词窗口正在播的那一份")

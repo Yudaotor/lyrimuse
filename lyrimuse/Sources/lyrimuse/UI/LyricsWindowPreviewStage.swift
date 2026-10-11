@@ -93,7 +93,7 @@ struct LyricsWindowPreviewStage: View {
         // SectionPreviewMetrics,跟菜单栏那条预览栏取齐。
         VStack(spacing: SectionPreviewMetrics.captionSpacing) {
             stage
-            SettingsSegmentedControlHashable(
+            SettingsPillSegmentedControl(
                 selection: $showsMini,
                 options: [false, true],
                 label: { $0 ? L10n.t("迷你尺寸") : L10n.t("完整尺寸") }

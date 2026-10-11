@@ -767,8 +767,8 @@ func runLyricsWindowTests() {
         expectEqual(sourceBytes(appSettings, contain: "lyricsWindowMiniLyricsKaraoke = (defaults.object(forKey: Keys.lyricsWindowMiniLyricsKaraoke) as? Bool) ?? true"),
                     true, "迷你卡拉OK: 没存过时默认开")
         expectEqual(sourceBytes(settingsView, contain: "miniKaraoke: $settings.lyricsWindowMiniLyricsKaraoke")
-                    && sourceBytes(settingsView, contain: "Toggle(\"\", isOn: miniKaraoke)"), true,
-                    "迷你卡拉OK: 「布局」浮层摆这颗开关")
+                    && sourceBytes(settingsView, contain: "SettingsToggleTile(icon: \"sparkles\", title: L10n.t(\"卡拉OK效果\"), isOn: miniKaraoke)"), true,
+                    "迷你卡拉OK: 「文字」浮层摆这颗开关")
         expectEqual(sourceBytes(settingsView, contain: "s.lyricsWindowMiniLyricsKaraoke = true"), true, "迷你卡拉OK: 「重置」恢复成开")
         let hits = SettingsSearchMatcher.ranked(SettingsSearchCatalog.entries, query: "卡拉OK效果", title: { $0.titleKey },
                                                 secondary: { $0.keywords + $0.pathKeys })
@@ -912,15 +912,12 @@ func runLyricsWindowTests() {
         expectEqual(sourceBytes(settingsView, contain: "lyricsWindowToolbarButton(.content)\n                if lyricsWindowPreviewShowsMini {\n"
                                 + "                    lyricsWindowToolbarButton(.layout)\n                    lyricsWindowToolbarButton(.info)"),
                     true, "设置分组: 迷你第二行是内容、布局、顶部信息")
-        expectEqual(sourceBytes(settingsView, contain: "SettingsCardHeader(title: L10n.t(\"背景\"))\n                CardDivider()\n"
-                                + "                lyricsWindowAppearanceRows(.background)\n                CardDivider()\n"
-                                + "                SettingsCardHeader(title: L10n.t(\"文字\"))\n                CardDivider()\n"
-                                + "                lyricsWindowAppearanceRows(.text)"),
+        expectEqual(sourceBytes(settingsView, contain: "SettingsGroupCard(title: L10n.t(\"背景\")) { lyricsWindowAppearanceRows(.background) }\n"
+                                + "                    SettingsGroupCard(title: L10n.t(\"文字\")) { lyricsWindowAppearanceRows(.text) }\n"),
                     true, "设置分组: 抽屉按背景、文字分组,跟工具栏同名")
-        expectEqual(sourceBytes(settingsView, contain: "lyricsWindowAppearanceRows(.text)\n                CardDivider()\n"
-                                + "                if lyricsWindowPreviewShowsMini {\n"
-                                + "                    SettingsCardHeader(title: L10n.t(\"行为\"))\n                    CardDivider()\n"
-                                + "                    lyricsWindowBehaviorRows\n"),
+        expectEqual(sourceBytes(settingsView, contain: "{ lyricsWindowAppearanceRows(.text) }\n"
+                                + "                    if lyricsWindowPreviewShowsMini {\n"
+                                + "                        SettingsGroupCard(title: L10n.t(\"行为\")) { lyricsWindowBehaviorRows }\n"),
                     true, "设置分组: 抽屉里迷你在文字后面是行为,跟工具栏同序")
         let textPart = settingsView.components(separatedBy: "        case .text:\n            // 排法同悬浮歌词「文字」浮层").dropFirst().first?
             .components(separatedBy: "        case .layout:\n            if let miniLyricsLayout {").first ?? ""
