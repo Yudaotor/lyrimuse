@@ -1071,16 +1071,23 @@ func backfillTranslation(key string) {
 		delete(translationInflight, key)
 		enrichMu.Unlock()
 	}()
+	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	enrichMu.Lock()
 	lyrics := enrichCache[key].Lyrics
+	borrowed := lyrics != "" && borrowSongMachineTranslationLocked(key, target)
 	enrichMu.Unlock()
+	if borrowed {
+		commitEnrichSave(key)
+		exportLyricsFilesFor(key)
+		nudgeEnrichPush()
+		return
+	}
 	if lyrics == "" {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	target := myMemoryLangCode(features().LyricsTranslationLanguage)
 	artist, title, _ := splitEnrichKey(key)
 	started := time.Now()
 	res, err := machineTranslateLRC(ctx, translateClient, lyrics, target, artist, title)
@@ -1099,6 +1106,8 @@ func backfillTranslation(key string) {
 	// 导出只在歌词族字段真的变了的时候做,而且只导这一条(exportLyricsFilesFor):这几条
 	// 路径就算什么都没补上也会推进重试计数/时间戳(那些只要落盘、不涉及 lyrics/ 文件)。
 	lyricsChanged := false
+	// shared:同一首歌里歌词跟这一条一样、跟着用上这份机翻的写法(shareSongMachineTranslationLocked)。
+	var shared []string
 	defer func() {
 		enrichMu.Unlock()
 		if !lyricsChanged {
@@ -1107,6 +1116,7 @@ func backfillTranslation(key string) {
 		}
 		commitEnrichSave(key)
 		exportLyricsFilesFor(key)
+		flushShareChanges(shared)
 		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,**四条补全路径都要做** —— 漏了
 		// 的话,同一首歌播到中途才补出来的译文,要等下一次换歌才会被推出去(表现是"为什么当前这
 		// 歌没有英文译文",译文其实早就翻好、也落盘了,只是没人通知)。
@@ -1160,6 +1170,77 @@ func backfillTranslation(key string) {
 	}
 	enrichCache[key] = e
 	enrichDirty = true
+	if lyricsChanged {
+		shared = shareSongMachineTranslationLocked(key, target)
+	}
+}
+
+// 同一首歌(实体 id 相同)的几条写法歌词一字不差时,机翻只做一次(18 章决策 36):翻之前先看有没有写法已经有同一目标语言的
+// 机翻可借,翻成之后填给歌词相同、还没有可用译文的写法。只看实体 id,不看歌词同步的开关:正文一样,译文就该一样。
+// 社区译文、别的语言的机翻不借;标了纯音乐的不填。
+
+// songMachineTranslationMates:跟 key 同一首歌、歌词一字不差的其余写法,按键排。调用方持 enrichMu。
+func songMachineTranslationMates(key string) []string {
+	e := enrichCache[key]
+	if e.Song == "" || e.Lyrics == "" {
+		return nil
+	}
+	var out []string
+	for k, x := range enrichCache {
+		if k != key && x.Song == e.Song && x.Lyrics == e.Lyrics {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// borrowSongMachineTranslationLocked:key 没有可用译文、同一首歌里有歌词一样、目标语言一样的机翻时抄过来,返回抄没抄。
+// 调用方持 enrichMu。
+func borrowSongMachineTranslationLocked(key, target string) bool {
+	e, ok := enrichCache[key]
+	if !ok || target == "" || e.Instrumental || translationUsable(e, target) {
+		return false
+	}
+	for _, k := range songMachineTranslationMates(key) {
+		x := enrichCache[k]
+		if x.LyricsTr == "" || x.LyricsTrSource != lyricsTrSourceMachine || x.LyricsTrLang != target || !translationUsable(x, target) {
+			continue
+		}
+		songCopyMachineTranslation(&e, x, target)
+		enrichCache[key] = e
+		enrichDirty = true
+		log.Printf("translate: %s borrowed the machine translation of %s (same song, same lyrics)", key, k)
+		return true
+	}
+	return false
+}
+
+// shareSongMachineTranslationLocked:key 刚翻成机翻,填给同一首歌里歌词一样、还没有可用译文、没标纯音乐的写法,返回填了的。
+// 调用方持 enrichMu。
+func shareSongMachineTranslationLocked(key, target string) []string {
+	src := enrichCache[key]
+	var changed []string
+	for _, k := range songMachineTranslationMates(key) {
+		x := enrichCache[k]
+		if x.Instrumental || translationUsable(x, target) {
+			continue
+		}
+		songCopyMachineTranslation(&x, src, target)
+		enrichCache[k] = x
+		changed = append(changed, k)
+	}
+	if len(changed) > 0 {
+		enrichDirty = true
+		log.Printf("translate: %s machine translation shared with %d other version(s) of the song", key, len(changed))
+	}
+	return changed
+}
+
+// songCopyMachineTranslation:dst 用上 src 那份机翻;重试计数和节流跟翻成了一样清零。
+func songCopyMachineTranslation(dst *enrichEntry, src enrichEntry, target string) {
+	dst.LyricsTr, dst.LyricsTrSource, dst.LyricsTrLang = src.LyricsTr, lyricsTrSourceMachine, target
+	dst.TranslationLang, dst.TranslationTS, dst.TranslationRetryCount = target, 0, 0
 }
 
 // lyricsTrSourceMachine 是 enrichEntry.LyricsTrSource 目前唯一的非空取值。
