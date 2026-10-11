@@ -1816,6 +1816,8 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 	// 导出只在歌词族字段真的变了的时候做,而且只导这一条(exportLyricsFilesFor):这几条
 	// 路径就算什么都没补上也会推进重试计数/时间戳(那些只要落盘、不涉及 lyrics/ 文件)。
 	lyricsChanged := false
+	// leadsGroup:换词之前这条的歌词不是从同组别的写法同步来的(songShareFollower),换了才让共享组跟上。
+	leadsGroup := false
 	// 条目里有词、这一轮改按纯音乐处理:要马上落盘、通知重推(屏上还显示着那份词),但歌词没换,不导出。
 	markedInstrumental := false
 	defer func() {
@@ -1831,6 +1833,10 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		if lyricsChanged {
 			exportLyricsFilesFor(key)
 		}
+		// 歌词同步开着时共享组跟上这一份(手动重新匹配那条路自己跟,见 runLyricsRematchOne)。
+		if lyricsChanged && leadsGroup && !opts.manual {
+			shareFollowAfterSwap(key)
+		}
 		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,**四条补全路径都要做** —— 漏了
 		// 的话,同一首歌播到中途才补出来的译文要等下一次换歌才会被推出去(译文其实早就翻好、
 		// 也落盘了,只是没人通知)。
@@ -1842,6 +1848,7 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 		}
 	}()
 	e, ok := enrichCache[key]
+	leadsGroup = ok && !songShareFollower(e)
 	if !ok {
 		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
 		opts.report(lyricsRematchMissing)
@@ -2207,6 +2214,8 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 	// 导出只在歌词族字段真的变了的时候做,而且只导这一条(exportLyricsFilesFor):这几条
 	// 路径就算什么都没补上也会推进重试计数/时间戳(那些只要落盘、不涉及 lyrics/ 文件)。
 	lyricsChanged := false
+	// leadsGroup:换词之前这条的歌词不是从同组别的写法同步来的(songShareFollower),换了才让共享组跟上。
+	leadsGroup := false
 	defer func() {
 		if lyricsChanged {
 			translateAfterLyricsSwapLocked(key)
@@ -2220,6 +2229,10 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		if lyricsChanged {
 			exportLyricsFilesFor(key)
 		}
+		// 歌词同步开着时共享组跟上这一份(手动重新匹配那条路自己跟,见 runLyricsRematchOne)。
+		if lyricsChanged && leadsGroup && !opts.manual {
+			shareFollowAfterSwap(key)
+		}
 		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,**四条补全路径都要做** —— 漏了
 		// 的话,同一首歌播到中途才补出来的译文要等下一次换歌才会被推出去(译文其实早就翻好、
 		// 也落盘了,只是没人通知)。
@@ -2231,6 +2244,7 @@ func rescoreLyricsWith(ctx context.Context, key, artist, title, album string, du
 		}
 	}()
 	e, ok := enrichCache[key]
+	leadsGroup = ok && !songShareFollower(e)
 	if !ok {
 		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
 		opts.report(lyricsRematchMissing)

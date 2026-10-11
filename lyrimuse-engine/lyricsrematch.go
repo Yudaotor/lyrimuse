@@ -52,7 +52,7 @@ type lyricsRematchResult struct {
 	// changed 时正文、逐字各自换没换;两个都没换就是只换了来源。
 	TextChanged   bool `json:"textChanged,omitempty"`
 	TimingChanged bool `json:"timingChanged,omitempty"`
-	// Followers:歌词同步开着时,同一共享组跟着这一条换了词的写法数(shareFollowRematch)。
+	// Followers:歌词同步开着时,同一共享组跟着这一条换了词的写法数(shareFollowWriting)。
 	Followers int `json:"followers,omitempty"`
 }
 
@@ -353,10 +353,10 @@ func runLyricsRematchOne(ctx context.Context, key string, progress func(done, to
 	} else {
 		rescoreLyricsWith(withManualLyricSearch(ctx), key, artist, title, album, duration, opts)
 	}
-	// 换了或者算下来还是这一份:共享组的其余写法跟着用这一份(歌词同步开着时,见 shareFollowRematch)。
+	// 换了或者算下来还是这一份:共享组的其余写法跟着用这一份(歌词同步开着时,见 shareFollowWriting)。
 	switch result.Outcome {
 	case lyricsRematchChanged, lyricsRematchUnchanged, lyricsRematchKeptWordTiming:
-		if followers := shareFollowRematch(key, time.Now()); len(followers) > 0 {
+		if followers := shareFollowWriting(key, time.Now()); len(followers) > 0 {
 			result.Followers = len(followers)
 			exportLyricsFilesFor(followers...)
 			nudgeEnrichPush()

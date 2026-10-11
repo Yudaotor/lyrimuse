@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// shareFollowRematch:歌词同步开着时,歌词管理「重新自动匹配」一条写法之后,它所在共享组的其余写法跟着用这一条现在那份
-// (18 章决策 33)。规则同跟着校准换词(sharePinnedGroup):对方钉着、标了纯音乐、手改或采纳的、歌词正是同一首歌一份校准
+// shareFollowWriting:歌词同步开着时,一条写法刚由「重新自动匹配」或后台重评、升级重试、补空、全量扫库定下歌词之后,它所在
+// 共享组的其余写法跟着用这一条现在那份(18 章决策 33、34)。规则同跟着校准换词(sharePinnedGroup):对方钉着、标了纯音乐、手改或采纳的、歌词正是同一首歌一份校准
 // 对着的(读穿着那个偏移)不动,不变式 6 前四条照样护着(songPlanKeep);换之前写留底,出处记 song-entity-share、reused_from
 // 记这一条。实体里有手改原件时不跟:那时整首歌按手改同步。返回跟着换了的写法。
-func shareFollowRematch(key string, now time.Time) []string {
+func shareFollowWriting(key string, now time.Time) []string {
 	if !songEntitySharing() {
 		return nil
 	}
@@ -86,6 +86,22 @@ func shareFollowRematch(key string, now time.Time) []string {
 		markEnrichEditedLocked(false, changed...)
 		enrichDirty = true
 	}
-	slog.Info("song entities: share group followed a rematch", "from", key, "changed", len(changed), "kept", kept)
+	slog.Info("song entities: share group followed a version", "from", key, "changed", len(changed), "kept", kept)
 	return changed
+}
+
+// shareFollowAfterSwap:后台那几条路径(rescoreLyricsWith / retryLyricsUpgradeWith,不是手动重新匹配)给 key 换了词、落了盘
+// 之后调:共享组跟上,跟上的落盘、导出、通知重推。
+func shareFollowAfterSwap(key string) {
+	if changed := shareFollowWriting(key, time.Now()); len(changed) > 0 {
+		flushShareChanges(changed)
+	}
+}
+
+// songShareFollower:这条写法现在的歌词是从同一首歌别的写法同步来的(出处 song-entity-share:按组重搜、跟着校准、跟着别的写法、
+// 手改副本)。后台给这种写法换了词不让共享组跟着它:两条名字不同的写法各自重评可能搜出不同的冠军,互相跟会来回换;交给
+// 每天建表那一轮按组的代表名重搜统一。
+func songShareFollower(e enrichEntry) bool {
+	return e.LyricsEntityOrigin != "" ||
+		(e.LyricsDecisionApplied != nil && e.LyricsDecisionApplied.Path == lyricsDecisionPathSongEntityShare)
 }
