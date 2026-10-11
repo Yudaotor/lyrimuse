@@ -15,8 +15,9 @@ public enum MusicPlaybackController {
     public nonisolated(unsafe) static var onControlWithheld: (@MainActor @Sendable (WithheldReason) -> Void)?
 
     /// 普通通路回报已排入既有命令队列;QQ 通路等待 AXPress 结果。失败不驱动乐观状态。
-    public typealias Completion = @MainActor @Sendable (Bool) -> Void
+    public typealias Completion = @MainActor @Sendable (ControlRoute?) -> Void
 
+    @MainActor
     public static func playPause(completion: Completion? = nil) {
         dispatch(appleScript: #"tell application "Music" to playpause"#,
                  spotifyScript: #"tell application "Spotify" to playpause"#,
@@ -24,6 +25,7 @@ public enum MusicPlaybackController {
                  mediaControlCommand: "toggle-play-pause", completion: completion)
     }
 
+    @MainActor
     public static func nextTrack(completion: Completion? = nil) {
         dispatch(appleScript: #"tell application "Music" to next track"#,
                  spotifyScript: #"tell application "Spotify" to next track"#,
@@ -31,6 +33,7 @@ public enum MusicPlaybackController {
                  mediaControlCommand: "next-track", completion: completion)
     }
 
+    @MainActor
     public static func previousTrack(completion: Completion? = nil) {
         dispatch(appleScript: #"tell application "Music" to previous track"#,
                  spotifyScript: #"tell application "Spotify" to previous track"#,
@@ -949,13 +952,13 @@ public enum MusicPlaybackController {
     }
 
     /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
+    @MainActor
     private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?,
                                  mediaControlCommand: String, completion: Completion?) {
         let route = dispatchRoute(appleScript: appleScript, spotifyScript: spotifyScript, kasetScript: kasetScript,
                                   mediaControlCommand: mediaControlCommand, completion: completion)
         if case .qqAccessibility(_)? = route { return } // QQ 由后台 AX 结果回报,不能把入队当成功。
-        let dispatched = route != nil
-        DispatchQueue.main.async { completion?(dispatched) }
+        completion?(route)
     }
 
     /// 交回排入的通路;没有通路返回 nil。QQ 另通过 completion 回报实际 AX 结果。
@@ -1001,7 +1004,7 @@ public enum MusicPlaybackController {
                 _ = withhold(command.rawValue, reason: "QQ accessibility: \(outcome)",
                              failure: outcome == .notTrusted ? .accessibilityPermissionRequired : .unavailable)
             }
-            DispatchQueue.main.async { completion?(outcome == .pressed) }
+            DispatchQueue.main.async { completion?(outcome == .pressed ? .qqAccessibility(command) : nil) }
         }
     }
 

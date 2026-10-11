@@ -2040,8 +2040,8 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     /// 播放/暂停 —— 各 UI 面(歌词窗/灵动岛/悬浮层热键/菜单栏面板/全局快捷键)都走这里,
-    /// 不直接调 MusicPlaybackController.playPause():指令回报已送出后**乐观翻转**观感层
-    /// isPlayingSmoothed。普通通路排入队列就回报;QQ 等 AXPress 结果,查询期间主线程仍可服务。真实链路(命令→播放器切状态→分布式
+    /// 不直接调 MusicPlaybackController.playPause():普通指令排入通路后**乐观翻转**观感层
+    /// isPlayingSmoothed。QQ 等 AXPress 后沿用回读真值,不再反转可能已更新的图标;查询期间主线程仍可服务。真实链路(命令→播放器切状态→分布式
     /// 通知→250ms 去抖→poll 子进程→apply)实测要 0.5~1s,等它回读再动画,对比 AM 的即时
     /// 反馈明显迟钝(现象是"扩大延迟太久")。
     ///
@@ -2051,15 +2051,20 @@ final class PlaybackCoordinator: ObservableObject {
     /// 拨回真值 —— 有 grace 定时在跑说明真值正在按老路径收敛,那种情况不抢。
     func userTogglePlayPause() {
         let targetBundleID = LocalPlaybackSource.shared.lastResolvedBundleID
-        MusicPlaybackController.playPause { [weak self] sent in
-            // QQ 等到真正 AXPress 成功才翻;等待期间换了播放器也不改新播放器的观感层。
-            guard sent, let self, LocalPlaybackSource.shared.lastResolvedBundleID == targetBundleID else { return }
+        MusicPlaybackController.playPause { [weak self] route in
+            guard let route, let self, LocalPlaybackSource.shared.lastResolvedBundleID == targetBundleID else { return }
             stopGraceWork?.cancel()
             stopGraceWork = nil
+            optimisticReconcileWork?.cancel()
+            optimisticReconcileWork = nil
+            // QQ 的实际操作已经结束,回读可能先到。跟随真值,不再对当前图标做一次 toggle。
+            if case .qqAccessibility = route {
+                isPlayingSmoothed = isPlayingNow
+                return
+            }
             // 按界面此刻显示的翻,不按真值翻:快速连按两下时第二下真值还没回读,按真值翻会连写两次「暂停」,
             // 而播放器实际已经恢复播放、真值没变也不会来纠正,界面要反着显示到 2.5 秒后的对账。
             isPlayingSmoothed = !isPlayingSmoothed
-            optimisticReconcileWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 self.optimisticReconcileWork = nil
