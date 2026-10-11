@@ -53,7 +53,7 @@ enum MenuBarIconStyle: String, CaseIterable, Codable, Hashable, Identifiable {
         case .noteList: return L10n.t("歌词列表")
         case .quarternotes: return L10n.t("三连音符")
         case .waveform: return L10n.t("声波")
-        case .equalizer: return L10n.t("跳动音条")
+        case .equalizer: return L10n.t("均衡器")
         case .mic: return L10n.t("麦克风")
         case .metronome: return L10n.t("节拍器")
         case .pianokeys: return L10n.t("钢琴键")

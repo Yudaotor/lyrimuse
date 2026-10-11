@@ -97,6 +97,7 @@
 "%@，已下载" = "%@, downloaded";
 "%@，点按下载" = "%@, click to download";
 "%d 个源的歌词正文相同" = "%d sources returned identical lyrics";
+"%d 天前" = "%d days ago";
 "%d 次" = "×%d";
 "%d 秒后清除" = "Clear After %d Seconds";
 "/ %@ 页" = "of %@";
@@ -133,8 +134,6 @@
 "Lyrimuse 反馈" = "Lyrimuse Feedback";
 "Lyrimuse 启动时同时打开勾选的播放器，已在运行的播放器不受影响，也不会抢占焦点" = "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus";
 "Lyrimuse 将显示正在播放的 App 的歌词，之后可随时在设置中更改" = "Lyrimuse shows lyrics for whichever app is playing. You can change this in Settings any time";
-"Lyrimuse 已在「系统设置 › 通用 › 登录项」中关闭，如需开机启动，请在该处重新开启" = "Lyrimuse is turned off in System Settings › General › Login Items. Turn it back on there to open at login";
-"Lyrimuse 的通知已在「系统设置 › 通知」中关闭，请在该处重新开启" = "Notifications for Lyrimuse are turned off in System Settings › Notifications. Turn them back on there";
 "Lyrimuse 需要读取播放器和浏览器中正在播放的歌曲，才能显示同步歌词。" = "Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.";
 "MV" = "Music Video";
 "MusicBrainz 中文名" = "Chinese name on MusicBrainz";
@@ -291,6 +290,7 @@
 "仅恢复迷你尺寸的设置，完整尺寸和窗口大小保持不变" = "Resets only the Mini Size settings; the Full Size and the window's dimensions stay as they are";
 "仅有纯文本，无时间戳" = "Plain text only, no timing";
 "仅查询 %@" = "queried %@ only";
+"仅清除本机设置，备份与导出的文件不受影响；无法撤销" = "Erases settings on this Mac only; backups and exported files are kept. Can’t be undone";
 "仅用首位歌手" = "First credited artist only";
 "仅由 Last.fm 记录" = "Keep Last.fm";
 "仅由 Lyrimuse 记录…" = "Keep Lyrimuse…";
@@ -325,6 +325,7 @@
 "以下位置 Lyrimuse 无法写入，歌词引擎因此无法启动：" = "Lyrimuse can't write to these locations, so the lyrics engine can't start:";
 "以下播放器尚未安装，可提前选择，安装后自动生效" = "These players aren't installed yet. Select one now and it takes effect once installed.";
 "以文本方式编辑" = "Edit as Text";
+"以系统通知显示封面、歌名、歌手与专辑" = "Shows the artwork, title, artist and album in a system notification";
 "企业微信" = "WeCom";
 "优先在本机翻译，翻不了再联网" = "Translates on this Mac first, then online if that fails";
 "会打开 Last.fm 授权页，点「Yes, allow access」后自动回到这里。" = "Opens the Last.fm authorization page. Click “Yes, allow access” and you'll come straight back here.";
@@ -343,8 +344,7 @@
 "保存" = "Save";
 "保存修改" = "Save Changes";
 "保存到 iCloud" = "Save to iCloud";
-"保存到 iCloud，更换 Mac 时可直接恢复" = "Save a copy to iCloud and pull it back on your next Mac";
-"保存副本" = "Save a Copy";
+"保存备份" = "Save Backup";
 "保存失败，请重试" = "Couldn't save. Try again.";
 "保存的歌词不含任何时间戳，未保存（否则会丢失原有时间轴）" = "The saved lyrics have no timestamps at all; not saved (the existing timing would be lost).";
 "保持锁定" = "Keep Locked";
@@ -392,7 +392,7 @@
 "关于 Lyrimuse" = "About Lyrimuse";
 "关联平台" = "Linked Platforms";
 "关闭" = "Close";
-"关闭后仅显示菜单栏图标，不在 Dock 中显示" = "Turn off to show only the menu bar icon and keep Lyrimuse out of the Dock";
+"关闭后仅保留菜单栏图标" = "When off, only the menu bar icon remains";
 "关闭后，常态下仅保留刘海高度，不显示歌词；指针悬停展开时，播放控制、进度条和下一句预览仍照常显示。" = "When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual.";
 "关闭悬浮歌词" = "Close Floating Lyrics";
 "关闭灵动岛歌词" = "Turn Off Notch Lyrics";
@@ -415,7 +415,6 @@
 "内容获印证" = "Content corroborated";
 "内部数据不是有效的 JSON，已取消保存" = "The data isn't valid JSON, so nothing was saved";
 "写入 config.json 失败：%@" = "Couldn't write config.json: %@";
-"写入 iCloud 失败，可改用下方的「导出…」保存为文件" = "Couldn't save to iCloud — use Export… below to save a file instead";
 "写入功能开关文件失败：%@" = "Couldn't write the feature flags file: %@";
 "写入本地记录文件失败，歌词引擎未能执行此次修改" = "Couldn't write the local records file; the lyrics engine couldn't apply this change";
 "写入本地记录文件失败：%@" = "Couldn't write the local records file: %@";
@@ -441,7 +440,6 @@
 "切换回 iCloud" = "Switch Back to iCloud";
 "切换迷你 / 完整尺寸" = "Switch Mini / Full Size";
 "切歌时新歌名从刘海下方滑出，数秒后收回" = "On a song change, the new title slides out below the notch for a few seconds";
-"切歌时显示系统通知，包含封面、歌名、歌手和专辑" = "Show a system notification with the artwork, title, artist and album when a new song starts";
 "列出全部功能、所在位置和默认开关" = "Every feature, where it is in Settings, and whether it is on by default";
 "刚刚" = "just now";
 "刚刚更新" = "Just updated";
@@ -488,7 +486,6 @@
 "勾选后需退出并重新打开浏览器才能生效，此选项仅在浏览器启动时读取。" = "After ticking it, quit and reopen the browser — this switch is only read at browser launch.";
 "勾选的播放器全部退出 5 秒后，Lyrimuse 随之退出；期间如有播放器重新打开则取消。设置、歌词管理或歌词窗口打开时，会等其关闭后再退出" = "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. If Settings, Lyrics Manager or the lyrics window is open, it waits until they are closed";
 "勾选的语言标上读音；显不显示在「歌词显示」里设" = "Selected languages get pronunciation; whether it shows is set in Lyrics Display";
-"包含明文凭证；导入将覆盖全部设置并重启" = "Contains credentials in plain text; importing overwrites every setting and restarts";
 "匹配条目" = "Match";
 "匹配条目：用 Last.fm 收录的写法，如「Wang Leehom」→「王力宏」，查不到就原样发。\n仅第一位：合唱只发第一位，如「陶喆, 卢广仲」→「陶喆」；歌名选「匹配条目」且 Last.fm 收录了这首时不截。\n原始：照播放器报告的原样发。" = "Match: Last.fm's spelling, e.g. Wang Leehom → 王力宏, or as-is when it isn't listed.\nFirst Only: just the first credited artist, e.g. 陶喆, 卢广仲 → 陶喆. Not trimmed when Title is set to Match and Last.fm lists the track.\nRaw: exactly what the player reports.";
 "匹配条目：用 Last.fm 收录的写法，如「那个女孩」→「那個女孩」，查不到就原样发；专辑名同时去掉「 - Single」「 - EP」。\n原始：照播放器报告的原样发。" = "Match: Last.fm's spelling, e.g. 那个女孩 → 那個女孩, or as-is when it isn't listed. Albums also drop “ - Single” / “ - EP”.\nRaw: exactly what the player reports.";
@@ -566,10 +563,11 @@
 "名次与上一期相同" = "Same rank as the previous period";
 "后退" = "Back";
 "向 Discord 好友展示正在收听的歌曲" = "Let your Discord friends see what you're listening to";
+"含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" = "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings";
 "含账号凭据，请勿分享给他人；需要连同外观与快捷键整体迁移时，请使用「备份与迁移」" = "Contains account credentials, so don’t share it. To move everything including appearance and shortcuts, use Backup & Migration";
 "听到哪里才记一次 Scrobble。\n50%：一半或 4 分钟，先到为准（官方规则）。\n75% / 90%：听满对应比例。\n曲终：播完才记，中途切歌不记。" = "How far you listen before it's scrobbled.\n50%: half the track or 4 minutes, whichever comes first (Last.fm's rule).\n75% / 90%: that share of the track.\nTrack End: only when played through; skips don't count.";
 "启动失败（%@）。可先「暂时跳过」，之后在设置的「播放器 → 歌词引擎」中重试，该页面会显示更详细的状态。" = "Couldn't start (%@). You can skip this for now and retry later under Settings → Player → Lyrics Engine, which reports a more detailed status.";
-"启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。" = "Opens no windows at launch; only the menu bar icon and your lyrics displays remain. Turning it on also turns off Show in Dock.";
+"启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标" = "Opens no windows at launch, keeping only the menu bar icon and lyrics displays; turning it on also hides the Dock icon";
 "启用" = "Enable";
 "启用失败，可能是权限或系统限制导致歌词引擎未能正常启动。导出诊断信息可查看具体原因，也便于反馈问题" = "Couldn't enable it — a permission or system restriction may have kept the lyrics engine from starting. Export Diagnostics shows the specific cause and makes it easier to report";
 "启用歌词引擎与权限" = "Engine & Permissions";
@@ -581,6 +579,7 @@
 "因网络不可用已停止" = "Stopped: no connection";
 "固定" = "Fixed";
 "固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度。" = "Fixed: every song uses the set width.\nAdaptive: each song gets its own width from its lyrics, up to the set width.";
+"图标动画" = "Animate Icon";
 "圆角" = "Corners";
 "在 %@ 上收听" = "Listen on %@";
 "在 %@ 中打开" = "Open in %@";
@@ -627,11 +626,14 @@
 "在该浏览器的开发者菜单中开启「允许 Apple 事件中的 JavaScript」。" = "Turn on “Allow JavaScript from Apple Events” in this browser’s Developer menu.";
 "在钉钉群中：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后拷贝 Webhook 地址。安全设置建议选择「加签」，并将生成的密钥填入下方的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, choose “Signature” and put the generated secret in the “Signing Secret” field below";
 "在飞书群中：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后拷贝 Webhook 地址。如需额外校验，可开启「签名校验」，并将密钥填入下方的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signature Secret” field below";
+"均衡器" = "Equalizer";
 "域名解析失败（DNS），请求未能发出。常见于 VPN 或公司网络接管 DNS 的情况；浏览器能打开网页并不代表此处可以连接" = "DNS lookup failed, so no request was ever sent. Common when a VPN or corporate network takes over DNS; a browser loading pages doesn't mean this can get through.";
 "域名解析失败（DNS）：%@" = "DNS lookup failed: %@";
 "墨字白边" = "Ink Outline";
 "声波" = "Waveform";
 "备份与迁移" = "Backup & Migration";
+"备份中包含账号凭证与密钥的明文，将保存到「%@」" = "The backup contains your account credentials and keys in plain text and is saved to “%@”";
+"备份中包含账号凭证与密钥的明文，将同步到登录同一 Apple 账户的所有设备" = "The backup contains your account credentials and keys in plain text and syncs to every device signed in to the same Apple Account";
 "备份中的歌词文件将写回歌词文件夹：同名文件会被覆盖，缺少的文件会补齐；备份之后新增的歌曲不受影响。恢复后立即生效，无需重启" = "The lyrics files in the backup are written back to the lyrics folder: files with the same name are overwritten and missing ones are added. Songs added after the backup are not affected. Changes take effect immediately, with no restart needed";
 "备份文件夹" = "Backup Folder";
 "备份文件夹…" = "Backup Folder…";
@@ -673,7 +675,6 @@
 "导出失败：%@" = "Export failed: %@";
 "导出时间 %1$@，来自 %2$@。" = "Exported %1$@ from %2$@. ";
 "导出时间 %@。" = "Exported %@. ";
-"导出的文件包含账号凭证和密钥，请妥善保管，切勿分享。歌词库会另存为同名的第二个文件，迁移时需同时拷贝两个文件" = "The exported file contains your account credentials and keys — keep it safe and do not share it. Your lyrics library is written as a second file with a matching name; copy both when migrating.";
 "导出诊断" = "Export Diagnostics";
 "导出诊断…" = "Export Diagnostics…";
 "封面" = "Artwork";
@@ -682,8 +683,8 @@
 "将「Lyrimuse」拷贝到剪贴板，用作申请页中的应用名称" = "Copies “Lyrimuse” so you can paste it as the application name";
 "将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词" = "This deletes all %d local records, including lyrics you edited or adopted from candidates, along with their exported lyrics files. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play";
 "将删除全部 %d 条本地记录，包括手动编辑和从候选中采纳的歌词，已导出的歌词文件也会一并删除。清空前会自动备份，可通过此菜单中的「从自动备份恢复」找回。之后播放的歌曲会重新匹配歌词#one" = "This deletes the %d local record, including lyrics you edited or adopted from candidates, along with its exported lyrics file. A backup is made automatically first and can be restored from “Restore from Auto Backup” in this menu. Songs are matched again when they play";
+"将删除本机的全部账号凭证、密钥与个人设置，恢复为初始安装状态，下次启动时重新显示设置引导。此操作无法撤销。iCloud 中的备份与已导出的文件不受影响；如两者均没有，建议先备份" = "This erases every account credential, key and personal setting on this Mac and returns Lyrimuse to a fresh install; the setup guide runs again on next launch. This can’t be undone. Backups in iCloud and exported files are kept; if you have neither, back up first";
 "将在退出 Lyrimuse 时安装" = "Will install when Lyrimuse quits";
-"将备份到「%@」，尚无备份" = "Backing up to “%@” — nothing saved yet";
 "将完整的决策记录拷贝到剪贴板（纯文本）" = "Copy the whole decision record to the clipboard as plain text";
 "将播放记录同步到 Last.fm" = "Syncs what you play to Last.fm";
 "将播放记录同步到 ListenBrainz" = "Syncs what you play to ListenBrainz";
@@ -692,13 +693,14 @@
 "将清除 %d 首歌曲的手动时间轴校准，此操作无法撤销。歌词内容和设置中的「时间轴偏移」不受影响。清除后，这些歌曲将恢复自动更新歌词源#one" = "This clears the manual timing calibration for %d song and can't be undone. The lyrics and the Timing Offset setting are unaffected. Afterwards the song resumes automatic lyrics source updates";
 "将清除 %d 首歌曲的电台时间轴校准，此操作无法撤销。这些校准仅在播放电台时生效，清除后不影响正常播放时的歌词" = "This clears the radio timing calibration for %d songs and can't be undone. These calibrations apply only to radio playback, so normal playback is unaffected";
 "将清除 %d 首歌曲的电台时间轴校准，此操作无法撤销。这些校准仅在播放电台时生效，清除后不影响正常播放时的歌词#one" = "This clears the radio timing calibration for %d song and can't be undone. The calibration applies only to radio playback, so normal playback is unaffected";
-"将清除本机所有账号令牌、密钥和个人设置，恢复为初始安装状态（下次启动时将重新显示设置引导），此操作无法撤销。iCloud 中的备份和已导出的文件不受影响；如两者均没有，建议先进行备份" = "This erases every account token, key, and personal setting on this Mac, restoring Lyrimuse to a fresh install (the setup guide runs again on next launch). This can't be undone. The copy in iCloud and any files you exported are untouched; if you have neither, back up first";
-"将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址，并立即重启 Lyrimuse 使其生效" = "This overwrites every current setting, including connected accounts and where your playback data is sent, then restarts Lyrimuse right away";
-"将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址；同一备份中的 %@ 个歌词文件也会一并恢复（同名文件将被覆盖）。完成后立即重启 Lyrimuse 使其生效" = "This overwrites every setting, including linked accounts and where playback data is sent; the %@ lyrics files in the same backup are restored too (same-named files are overwritten). Lyrimuse restarts right after";
-"将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址；同一备份中的 %@ 个歌词文件也会一并恢复（同名文件将被覆盖）。完成后立即重启 Lyrimuse 使其生效#one" = "This overwrites every setting, including linked accounts and where playback data is sent; the %@ lyrics file in the same backup is restored too (a same-named file is overwritten). Lyrimuse restarts right after";
+"将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址。完成后 Lyrimuse 将立即重启" = "This replaces all current settings, including connected accounts and where playback data is sent. Lyrimuse then restarts right away";
+"将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址，并恢复备份中的 %@ 个歌词文件（同名文件将被覆盖）。完成后 Lyrimuse 将立即重启" = "This replaces all current settings, including connected accounts and where playback data is sent, and restores the %@ lyrics files in the backup (files with the same names are overwritten). Lyrimuse then restarts right away";
+"将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址，并恢复备份中的 %@ 个歌词文件（同名文件将被覆盖）。完成后 Lyrimuse 将立即重启#one" = "This replaces all current settings, including connected accounts and where playback data is sent, and restores the %@ lyrics file in the backup (a file with the same name is overwritten). Lyrimuse then restarts right away";
 "少" = "Less";
 "少 %@ 句" = "%@ missing lines";
 "少 %@ 句#one" = "%@ missing line";
+"尚无备份，将保存到「%@」" = "No backup yet; it will be saved to “%@”";
+"尚无备份；保存到 iCloud 后，可在新 Mac 上直接恢复" = "No backup yet. Save to iCloud to restore it on a new Mac";
 "尚未修改" = "No changes yet";
 "尚未填写 Webhook 地址" = "Webhook URL not set yet";
 "尚未手动选定过歌词；此后选定的歌词将直接锁定" = "You haven't picked any lyrics manually yet; from now on, your picks will be locked right away";
@@ -755,6 +757,7 @@
 "已在「%@」中打开。保存后自动应用：带时间戳的内容存为同步歌词，不带时间戳的存为纯文本" = "Opened in %@. Save when you're done: lines with timestamps become synced lyrics, text without them is saved as plain text.";
 "已在「%@」中打开。逐字歌词仅修改文字，请勿改动每行开头的时间，保存后自动应用" = "Opened in %@. For word-timed lyrics, change only the words and keep the time at the start of each line; saving applies the changes.";
 "已在「%@」中打开，保存后自动应用" = "Opened in %@; saving applies the changes.";
+"已在「系统设置 › 通用 › 登录项」中关闭，开机启动不会生效" = "Turned off in System Settings › General › Login Items, so Lyrimuse won’t open at login";
 "已在「设置 → 歌词 → 歌词来源」中关闭，本轮未查询" = "Turned off under Settings → Lyrics → Lyrics Sources; this search did not query it";
 "已在播放但未显示歌词？请检查所选的播放器" = "Already playing but no lyrics? Check the player you picked";
 "已在浏览器中打开 Last.fm 授权页面。请点按「Yes, allow access」完成授权，完成后将自动返回 Lyrimuse；如浏览器未自动跳转，也可返回此处点按下方按钮" = "Last.fm's authorization page is open in your browser. Click “Yes, allow access” there to finish, and you'll be sent back to Lyrimuse automatically. If your browser doesn't come back on its own, use the button below";
@@ -763,10 +766,10 @@
 "已安装但未运行" = "Installed but not running";
 "已安装但未运行（上次退出码 %d）" = "Installed but not running (last exit code %d)";
 "已完成 %1$@ / %2$@ 首" = "%1$@ of %2$@ done";
-"已导出两个文件：设置和歌词库（%@）。迁移到新 Mac 时需同时拷贝" = "Exported two files: the settings and the lyrics library (%@). Copy both when moving to a new Mac.";
 "已导出的歌词文件将一并删除。再次播放这首歌曲时会重新匹配，结果可能不同" = "Its exported lyrics file is deleted too. The song is matched again the next time it plays, and the result may differ";
 "已导出的歌词文件将一并删除，此操作无法撤销。再次播放这些歌曲时会重新匹配，结果可能不同" = "Their exported lyrics files are deleted too, and this can't be undone. These songs are matched again the next time they play, and the results may differ";
 "已导出的歌词文件将一并删除，此操作无法撤销；其中 %@ 条经过人工修正。再次播放这些歌曲时会重新匹配，结果可能不同" = "Their exported lyrics files are deleted too, and this can't be undone; %@ of these were edited manually. These songs are matched again the next time they play, and the results may differ";
+"已导出设置与歌词库两个文件（%@），迁移时请一并拷贝" = "Exported two files, settings and lyrics library (%@). Copy both when moving to a new Mac";
 "已就绪" = "Ready";
 "已展开" = "Expanded";
 "已展开触控栏歌词" = "Touch Bar lyrics expanded";
@@ -1019,7 +1022,7 @@
 "播放器联动" = "Player Linkage";
 "播放控制" = "Controls";
 "播放控制位置" = "Controls Position";
-"播放时图标显示动画，暂停时静止" = "Icons come alive while playing, still when paused";
+"播放时显示动画，暂停时静止" = "Animates while music plays and stays still when paused";
 "播放歌曲后，歌词将自动显示" = "Play a song and lyrics will appear here";
 "播放热力图" = "Listening Heatmap";
 "播放记录" = "Play History";
@@ -1040,6 +1043,7 @@
 "放弃修改" = "Discard Changes";
 "整段编辑可粘贴替换、增删句子；每行开头是这一句的时间戳" = "Edit the whole text to paste, add or remove lines; each line starts with its timestamp";
 "整行时间轴" = "Line timing";
+"文件中包含账号凭证与密钥的明文，请妥善保管，请勿分享。歌词库将另存为同名的第二个文件，迁移时请一并拷贝" = "The file contains your account credentials and keys in plain text. Keep it safe and don’t share it. The lyrics library is saved as a second file with a matching name; copy both when moving to a new Mac";
 "文件中尚无歌词，未保存" = "The file has no lyrics yet; not saved.";
 "文件过大，不像是歌词，未保存" = "The file is too large to be lyrics; not saved.";
 "文字" = "Text";
@@ -1063,6 +1067,7 @@
 "无歌词时显示歌名" = "Show Title When No Lyrics";
 "无法从 Deezer 获取匿名访问令牌（并非这首歌曲没有歌词，稍后重试通常可恢复）" = "Could not get an anonymous access token from Deezer (this is not about the song having no lyrics; retrying later usually works)";
 "无法使用该应用" = "This app won’t work";
+"无法写入 iCloud，可使用下方的「导出…」保存为文件" = "Couldn’t save to iCloud. Use Export… below to save a file instead";
 "无法写入歌词文件：%@" = "Couldn't write the lyrics file: %@";
 "无法打开「%1$@」：%2$@" = "Couldn't open %1$@: %2$@";
 "无法打开此文件夹：%@" = "Couldn't open this folder: %@";
@@ -1074,10 +1079,10 @@
 "无法获取末句时间" = "No timestamp on the last line";
 "无法读取 %@ 的歌词缓存" = "Can't read %@'s lyrics cache";
 "无法读取 %@ 的歌词缓存，点按查看处理方法" = "Can't read %@'s lyrics cache — click to see what to do";
+"无法读取此备份：可能未开启 iCloud Drive，或该文件夹尚未同步" = "Can’t read this backup. iCloud Drive may be off, or the folder hasn’t synced yet";
 "无法读取该应用的标识，请选择其他应用。" = "Couldn’t read this app’s identifier. Try another one.";
 "无法读取该文件（需保存为 UTF-8 文本），未保存" = "Couldn't read the file (save it as UTF-8 text); not saved.";
 "无法读取这份备份" = "This backup could not be read";
-"无法读取这份备份：可能未开启 iCloud Drive，或该文件夹未同步" = "Can’t read this backup — iCloud Drive may be off, or this folder isn’t syncing";
 "无法读取这首歌曲的歌词内容（歌词文件缺失或损坏）。为避免覆盖磁盘上的内容，暂时无法保存修改。可通过「搜索候选歌词」重新采纳" = "Can't read this song's lyrics (the lyrics file is missing or damaged), so saving is disabled to avoid overwriting what's on disk. Use Search for Lyrics to adopt a new copy";
 "无法连接 Last.fm" = "Couldn't Connect to Last.fm";
 "无法连接 ListenBrainz，稍后将自动重试" = "Can't reach ListenBrainz — will retry";
@@ -1244,7 +1249,6 @@
 "本机已记下 %@ 首#one" = "%@ play saved on this Mac";
 "本机系统未提供触控栏接口" = "Touch Bar API unavailable";
 "本机系统未提供触控栏接口，开启后不会生效" = "This Mac's system doesn't provide the Touch Bar interfaces this needs, so turning it on has no effect";
-"本机设置，无法撤销" = "This Mac only; can't be undone";
 "本条" = "This entry";
 "本轮「%@」未应答，为避免误降级未作更换，可稍后重试" = "“%@” didn't respond this round, so nothing was changed to avoid a downgrade. Try again later";
 "本轮候选明细已不可用" = "This round's candidate details are no longer available";
@@ -1335,7 +1339,6 @@
 "歌词布局" = "Lyrics Layout";
 "歌词库" = "Lyrics Library";
 "歌词库中尚无这首歌曲的记录，可先通过「搜索歌词」查找" = "This song isn't in the lyrics library yet. Try Search Lyrics to find some first.";
-"歌词库为同名的第二个文件，迁移时需同时拷贝。\n请勿分享凭证；导入会同时覆盖已连接的账号和播放数据的发送地址" = "The lyrics library is a second file with a matching name — copy both when moving to a new Mac.\nDon't share the credentials; importing also overwrites connected accounts and where listening data is sent";
 "歌词库正在刷新，请稍后重试" = "The lyrics library is refreshing. Try again in a moment";
 "歌词延后" = "Delay Lyrics";
 "歌词引擎" = "Lyrics Engine";
@@ -1381,7 +1384,7 @@
 "正值提前显示，负值延后显示" = "Positive = show earlier, negative = show later";
 "正值歌词提前，负值延后" = "Positive shows lyrics earlier, negative later";
 "正在下载…" = "Downloading…";
-"正在从 iCloud 下载这份备份，下载完成后请再次点按「恢复此备份」" = "Downloading this backup from iCloud — click Restore This Backup again once it finishes";
+"正在从 iCloud 下载此备份，完成后请再次点按「恢复此备份」" = "Downloading this backup from iCloud. Click Restore This Backup again when it finishes";
 "正在准备安装…" = "Preparing to install…";
 "正在准备自动匹配…" = "Preparing to auto-match…";
 "正在加载…" = "Loading…";
@@ -1540,14 +1543,11 @@
 "确定要删除「%@ - %@」的本地记录吗？" = "Delete the saved lyrics for “%@ — %@”?";
 "确定要删除选中的 %@ 条本地记录吗？" = "Delete %@ selected entries?";
 "确定要删除选中的 %@ 条本地记录吗？#one" = "Delete %@ selected entry?";
-"确定要导入此设置文件吗？" = "Import these settings?";
-"确定要导出设置吗？" = "Export settings?";
 "确定要清理 %@ 条无效记录吗？" = "Clean up %@ invalid entries?";
 "确定要清理 %@ 条无效记录吗？#one" = "Clean up %@ invalid entry?";
 "确定要清空全部歌词时间轴校准吗？" = "Clear all lyrics timing calibrations?";
 "确定要清空全部歌词缓存吗？" = "Clear all cached lyrics?";
 "确定要清空全部电台校准吗？" = "Clear all radio calibrations?";
-"确定要清除全部设置吗？" = "Erase all settings?";
 "磨砂玻璃" = "Frosted";
 "秒" = "s";
 "移除" = "Remove";
@@ -1699,7 +1699,7 @@
 "菜单栏" = "Menu Bar";
 "菜单栏与 Dock" = "Menu Bar & Dock";
 "菜单栏图标" = "Menu Bar Icon";
-"菜单栏图标、语言与启动，以及备份与迁移" = "Menu bar icon, language & startup, and backups";
+"菜单栏图标、启动与通知，以及备份与迁移" = "Menu bar icon, startup & notifications, and backups";
 "菜单栏图标：%@" = "Menu bar icon: %@";
 "菜单栏歌词" = "Menu Bar Lyrics";
 "菜单栏歌词的字重。「常规」即系统菜单栏的默认字重；中文只加粗不加宽，英文字重越大宽度略增" = "How heavy the menu bar lyrics are drawn. Regular is exactly the system default weight. Chinese only gets bolder, Latin text also gets slightly wider.";
@@ -1713,8 +1713,12 @@
 "补交未完成，请稍后重试" = "Backfill didn't finish. Try again later.";
 "补全曲目信息" = "Track info backfill";
 "要保存到 iCloud 吗？" = "Save your settings to iCloud?";
+"要保存备份吗？" = "Save a backup?";
 "要同时解锁之前锁定的歌曲吗？" = "Unlock the songs locked earlier?";
+"要导入此备份吗？" = "Import this backup?";
+"要导出设置吗？" = "Export settings?";
 "要放弃对歌词的修改吗？" = "Discard your changes to these lyrics?";
+"要清除全部设置吗？" = "Erase all settings?";
 "解析 Last.fm 响应失败" = "Couldn't read the response from Last.fm";
 "解析决策" = "Resolution decision";
 "解析时 %1$@ 个源应答，选用「%2$@」" = "%1$@ sources responded; chose %2$@";
@@ -1729,7 +1733,7 @@
 "许可与版权" = "License & Copyright";
 "设置" = "Settings";
 "设置…" = "Settings…";
-"设置已保存，但歌词库文件写入失败" = "Settings saved, but the lyrics library file could not be written";
+"设置已保存；歌词库写入失败，可再次点按「更新备份」" = "Settings saved, but the lyrics library couldn’t be written. Click Update Backup to try again";
 "设置已导出；歌词库写入失败，仅导出了设置文件" = "Settings exported; writing the lyrics library failed, so only the settings file was written";
 "设置已导出；歌词库打包失败，仅导出了设置文件" = "Settings exported; the lyrics library could not be packaged this time, so only the settings file was written";
 "设置文件" = "Settings File";
@@ -1761,8 +1765,8 @@
 "该组合是本 App 菜单中「%@」的快捷键。" = "That combination is the keyboard shortcut for “%@” in this app’s menu.";
 "该选项已关闭。当前仍可使用是因为浏览器尚未重启，重启后将失效" = "This switch has been turned off — it still works right now only because the browser hasn't restarted yet, and it will stop working after a restart";
 "语言" = "Language";
+"语言、启动与通知" = "Language, Startup & Notifications";
 "语言不符" = "Language mismatch";
-"语言与启动" = "Language & Startup";
 "请作者喝杯咖啡" = "Buy the Author a Coffee";
 "请先在此卡片中填写：%@" = "Fill in %@ first";
 "请先填写 API Key" = "API Key is required";
@@ -1809,7 +1813,6 @@
 "跟随文字颜色" = "Match Text Color";
 "跟随系统" = "Follow System";
 "跟随系统语言" = "Follow System Language";
-"跳动音条" = "Dancing Bars";
 "跳转到列表中正在播放的歌曲；若被搜索或筛选隐藏，会先清除" = "Jump to the playing song in the list, clearing the search or filters if they hide it";
 "跳过" = "Skip";
 "跳过广告" = "Skip Ad";
@@ -1901,7 +1904,7 @@
 "选择" = "Choose";
 "选择 .ttf 或 .otf 字体文件，可多选" = "Choose a .ttf or .otf font file (you can select multiple)";
 "选择…" = "Choose…";
-"选择一个自动同步的文件夹（Dropbox、坚果云、OneDrive 等），更换 Mac 后指向同一文件夹即可" = "Pick a folder that syncs on its own — Dropbox, OneDrive and the like. On your next Mac, point Lyrimuse at that same folder";
+"选择一个会自动同步的文件夹（如 Dropbox、坚果云、OneDrive），在新 Mac 上选择同一文件夹即可恢复" = "Choose a folder that syncs automatically, such as Dropbox or OneDrive. On a new Mac, choose the same folder to restore";
 "选择左侧的设置分类" = "Select a Settings Category on the Left";
 "选择播放器" = "Choose Players";
 "选择歌词显示方式" = "Choose Where Lyrics Appear";
@@ -1921,6 +1924,7 @@
 "逐首联网搜索，每首间隔约 5 秒；跳过纯音乐和人工修正过的歌曲" = "Searches one song at a time, about 5 seconds apart. Instrumentals and manually edited songs are skipped.";
 "通用" = "General";
 "通知" = "Notifications";
+"通知已在「系统设置 › 通知」中关闭" = "Notifications are turned off in System Settings › Notifications";
 "通知平台" = "Notification Platform";
 "遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」" = "If something goes wrong, right-click the menu bar icon and choose “Report an Issue…”";
 "那年今日" = "On This Day";
@@ -1981,7 +1985,6 @@
 "间奏中多出一段歌词" = "Extra lyrics in an instrumental break";
 "除 %@ 外" = "All except %@";
 "随匹配算法更新重新选择" = "Re-Pick After Algorithm Updates";
-"随播放律动" = "Move with the Music";
 "随机播放" = "Shuffle";
 "随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏、触控栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改" = "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar, on the Touch Bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings.";
 "随正在播放的歌曲显示歌词，可显示在桌面、灵动岛、菜单栏和歌词窗口中，并支持对照译文与标注读音。接下来几步将完成基本设置，之后可随时在设置中更改" = "Shows lyrics for whatever’s playing — on the desktop, around the notch, in the menu bar or in a lyrics window, with translations and romanization if you like. The next few steps set it up for you; you can change everything later in Settings.";

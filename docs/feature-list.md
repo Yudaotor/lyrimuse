@@ -49,8 +49,8 @@ These features stay off after you install. Turn them on in Settings first (some 
 | [Show what you're playing on Discord](#feature-discord) | Settings › Discord › Show on Discord |
 | [A shareable now-playing web page](#feature-now-playing-page) | Settings › Lab Features › Web Push › Connection Info |
 | [Daily, weekly, monthly and yearly listening digests](#feature-digests) | Settings › Lab Features › Push Alerts › Alerts |
-| [Launch silently](#feature-silent-launch) | Settings › General › Language & Startup › Launch Silently |
-| [Notify when the song changes](#feature-song-notifications) | Settings › General › Notifications › Notify When the Song Changes |
+| [Launch silently](#feature-silent-launch) | Settings › General › Language, Startup & Notifications › Launch Silently |
+| [Notify when the song changes](#feature-song-notifications) | Settings › General › Language, Startup & Notifications › Notify When the Song Changes |
 | [Automatic updates and betas](#feature-updates) | Settings › Software Update › Automatic Updates › Check Automatically |
 
 <a id="section-lyrics"></a>
@@ -598,7 +598,7 @@ The first time you open Lyrimuse, it walks you through choosing players, pairing
 
 Follows your system by default; switching takes effect at once, without a restart.
 
-- Settings: General › Language & Startup › Language
+- Settings: General › Language, Startup & Notifications › Language
 
 <a id="feature-shortcuts"></a>
 
@@ -622,7 +622,7 @@ Twelve icons to choose from, moving with the music while it plays. Everyday acti
 
 - On by default
 - Settings: General › Menu Bar & Dock › Menu Bar Icon
-- Settings: General › Menu Bar & Dock › Move with the Music
+- Settings: General › Menu Bar & Dock › Animate Icon
 
 <a id="feature-dock-icon"></a>
 
@@ -640,7 +640,7 @@ Turn it off to keep only the menu bar icon.
 Opens Lyrimuse when you log in to your Mac.
 
 - On by default
-- Settings: General › Language & Startup › Launch at Login
+- Settings: General › Language, Startup & Notifications › Launch at Login
 
 <a id="feature-silent-launch"></a>
 
@@ -649,7 +649,7 @@ Opens Lyrimuse when you log in to your Mac.
 Starts without opening any window, just the menu bar icon.
 
 - Off by default
-- Settings: General › Language & Startup › Launch Silently
+- Settings: General › Language, Startup & Notifications › Launch Silently
 
 <a id="feature-song-notifications"></a>
 
@@ -658,7 +658,7 @@ Starts without opening any window, just the menu bar icon.
 A system notification for every new song.
 
 - Off by default
-- Settings: General › Notifications › Notify When the Song Changes
+- Settings: General › Language, Startup & Notifications › Notify When the Song Changes
 
 <a id="feature-backup"></a>
 
@@ -993,27 +993,21 @@ Every setting in the Settings window, by where it lives: 226 in all. Type a name
 ### General › Menu Bar & Dock
 
 - **Menu Bar Icon**
-- **Move with the Music**: Icons come alive while playing, still when paused
-- **Show in Dock**: Turn off to show only the menu bar icon and keep Lyrimuse out of the Dock
+- **Animate Icon**
+- **Show in Dock**
 
-### General › Language & Startup
+### General › Language, Startup & Notifications
 
 - **Language**
 - **Launch at Login**
-- **Launch Silently**: Opens no windows at launch; only the menu bar icon and your lyrics displays remain. Turning it on also turns off Show in Dock.
-
-### General › Notifications
-
-- **Notify When the Song Changes**: Show a system notification with the artwork, title, artist and album when a new song starts
+- **Launch Silently**
+- **Notify When the Song Changes**
 
 ### General › Backup & Migration
 
 - **iCloud Backup**
-- **Settings File**: The lyrics library is a second file with a matching name — copy both when moving to a new Mac. Don't share the credentials; importing also overwrites connected accounts and where listening data is sent
-
-### General
-
-- **Erase All Settings**: This Mac only; can't be undone
+- **Settings File**: Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings
+- **Erase All Settings**: Erases settings on this Mac only; backups and exported files are kept. Can’t be undone
 
 ### Software Update
 

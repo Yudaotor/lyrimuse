@@ -6,7 +6,7 @@ import QuartzCore
 //
 // ---- 为什么是 Core Animation,不是 Timer 换帧 ----
 //
-// 「跳动音条」不能做成 10fps 的主线程 Timer 换帧(RunCat 的做法),观感是
+// 「均衡器」不能做成 10fps 的主线程 Timer 换帧(RunCat 的做法),观感是
 // "卡卡的":正弦起伏这种**连续**运动,10fps 的台阶肉眼可见;而且主线程上还有 20Hz
 // 逐字高亮在跑,Timer 间隔一被挤就一顿一顿。RunCat 的卡通跑步帧吃得消低帧率,
 // 平滑形变吃不消 —— 跟 MenuBarScrollingLabel 头注里记录的滚动歌词是同一课。

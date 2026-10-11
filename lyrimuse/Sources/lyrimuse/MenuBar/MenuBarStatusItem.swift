@@ -181,7 +181,7 @@ final class MenuBarStatusItem: NSObject {
         // 等于挑不了。
         settings.$menuBarIconStyle.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
-        // 「随播放律动」开关拨动要立刻生效 —— 用户就是盯着菜单栏拨的。
+        // 「图标动画」开关拨动要立刻生效 —— 用户就是盯着菜单栏拨的。
         settings.$menuBarIconAnimates.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }.store(in: &cancellables)
         // 歌词旁那枚带进度的图标:开/关/换边要立刻看到(用户就是盯着菜单栏点的)。
@@ -1474,7 +1474,7 @@ final class MenuBarStatusItem: NSObject {
     /// 没开菜单栏歌词 / 没在播放 / 还没解析出这一句:图标(槽位由 showIconSlot 管,
     /// 这里只管内容)。静态图靠按钮自己居中,活体渲染靠 MenuBarLiveIconView.layout()
     /// 按 bounds 居中,两条路都天然适应槽宽。
-    /// 「随播放律动」开着且正在播放时走活体渲染:按钮里只放一张撑尺寸的透明占位图
+    /// 「图标动画」开着且正在播放时走活体渲染:按钮里只放一张撑尺寸的透明占位图
     /// (footprint 跟静态款逐像素一致),真身画在 liveIconView 的图层上,动画全部
     /// 交给 Core Animation(见 MenuBarLiveIconView 头注)。其余情况就是一张静态模板图。
     private func showIcon(_ button: NSStatusBarButton) {

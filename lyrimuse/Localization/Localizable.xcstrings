@@ -5709,25 +5709,25 @@
         }
       }
     },
-    "关闭后仅显示菜单栏图标，不在 Dock 中显示" : {
+    "关闭后仅保留菜单栏图标" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Turn off to show only the menu bar icon and keep Lyrimuse out of the Dock"
+            "value" : "When off, only the menu bar icon remains"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "关闭后仅显示菜单栏图标，不在 Dock 中显示"
+            "value" : "关闭后仅保留菜单栏图标"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "關閉後僅顯示選單列圖像，不在 Dock 中顯示"
+            "value" : "關閉後僅保留選單列圖像"
           }
         }
       }
@@ -5905,25 +5905,25 @@
         }
       }
     },
-    "写入 iCloud 失败，可改用下方的「导出…」保存为文件" : {
+    "无法写入 iCloud，可使用下方的「导出…」保存为文件" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't save to iCloud — use Export… below to save a file instead"
+            "value" : "Couldn’t save to iCloud. Use Export… below to save a file instead"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "写入 iCloud 失败，可改用下方的「导出…」保存为文件"
+            "value" : "无法写入 iCloud，可使用下方的「导出…」保存为文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "寫入 iCloud 失敗，可改用下方的「匯出…」儲存為檔案"
+            "value" : "無法寫入 iCloud，可使用下方的「匯出…」儲存為檔案"
           }
         }
       }
@@ -7645,25 +7645,25 @@
         }
       }
     },
-    "包含明文凭证；导入将覆盖全部设置并重启" : {
+    "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Contains credentials in plain text; importing overwrites every setting and restarts"
+            "value" : "Contains credentials in plain text; exports two files, settings and lyrics library; importing replaces all settings"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "包含明文凭证；导入将覆盖全部设置并重启"
+            "value" : "含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "包含明文憑證；匯入將覆蓋全部設定並重新啟動"
+            "value" : "含明文憑證；匯出為設定與歌詞庫兩個檔案，匯入將覆蓋全部設定"
           }
         }
       }
@@ -8216,25 +8216,48 @@
         }
       }
     },
-    "将备份到「%@」，尚无备份" : {
+    "尚无备份，将保存到「%@」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Backing up to “%@” — nothing saved yet"
+            "value" : "No backup yet; it will be saved to “%@”"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将备份到「%@」，尚无备份"
+            "value" : "尚无备份，将保存到「%@」"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "將備份到「%@」，尚無備份"
+            "value" : "尚無備份，將儲存到「%@」"
+          }
+        }
+      }
+    },
+    "%d 天前" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d days ago"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 天前"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 天前"
           }
         }
       }
@@ -8400,48 +8423,48 @@
         }
       }
     },
-    "保存副本" : {
+    "保存备份" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save a Copy"
+            "value" : "Save Backup"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "保存副本"
+            "value" : "保存备份"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "儲存副本"
+            "value" : "儲存備份"
           }
         }
       }
     },
-    "保存到 iCloud，更换 Mac 时可直接恢复" : {
+    "尚无备份；保存到 iCloud 后，可在新 Mac 上直接恢复" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save a copy to iCloud and pull it back on your next Mac"
+            "value" : "No backup yet. Save to iCloud to restore it on a new Mac"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "保存到 iCloud，更换 Mac 时可直接恢复"
+            "value" : "尚无备份；保存到 iCloud 后，可在新 Mac 上直接恢复"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "儲存到 iCloud，更換 Mac 時可直接回復"
+            "value" : "尚無備份；儲存到 iCloud 後，可在新 Mac 上直接回復"
           }
         }
       }
@@ -8923,25 +8946,25 @@
         }
       }
     },
-    "导出的文件包含账号凭证和密钥，请妥善保管，切勿分享。歌词库会另存为同名的第二个文件，迁移时需同时拷贝两个文件" : {
+    "文件中包含账号凭证与密钥的明文，请妥善保管，请勿分享。歌词库将另存为同名的第二个文件，迁移时请一并拷贝" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The exported file contains your account credentials and keys — keep it safe and do not share it. Your lyrics library is written as a second file with a matching name; copy both when migrating."
+            "value" : "The file contains your account credentials and keys in plain text. Keep it safe and don’t share it. The lyrics library is saved as a second file with a matching name; copy both when moving to a new Mac"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导出的文件包含账号凭证和密钥，请妥善保管，切勿分享。歌词库会另存为同名的第二个文件，迁移时需同时拷贝两个文件"
+            "value" : "文件中包含账号凭证与密钥的明文，请妥善保管，请勿分享。歌词库将另存为同名的第二个文件，迁移时请一并拷贝"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "匯出的檔案包含帳號憑證和金鑰，請妥善保管，切勿分享。歌詞庫會另存為同名的第二個檔案，遷移時需同時拷貝兩個檔案"
+            "value" : "檔案中包含帳號憑證與金鑰的明文，請妥善保管，請勿分享。歌詞庫將另存為同名的第二個檔案，遷移時請一併拷貝"
           }
         }
       }
@@ -9440,25 +9463,25 @@
         }
       }
     },
-    "已导出两个文件：设置和歌词库（%@）。迁移到新 Mac 时需同时拷贝" : {
+    "已导出设置与歌词库两个文件（%@），迁移时请一并拷贝" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exported two files: the settings and the lyrics library (%@). Copy both when moving to a new Mac."
+            "value" : "Exported two files, settings and lyrics library (%@). Copy both when moving to a new Mac"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已导出两个文件：设置和歌词库（%@）。迁移到新 Mac 时需同时拷贝"
+            "value" : "已导出设置与歌词库两个文件（%@），迁移时请一并拷贝"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已匯出兩個檔案：設定和歌詞庫（%@）。遷移到新 Mac 時需同時拷貝"
+            "value" : "已匯出設定與歌詞庫兩個檔案（%@），遷移時請一併拷貝"
           }
         }
       }
@@ -12142,25 +12165,25 @@
         }
       }
     },
-    "播放时图标显示动画，暂停时静止" : {
+    "播放时显示动画，暂停时静止" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Icons come alive while playing, still when paused"
+            "value" : "Animates while music plays and stays still when paused"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放时图标显示动画，暂停时静止"
+            "value" : "播放时显示动画，暂停时静止"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放時圖像顯示動畫，暫停時靜止"
+            "value" : "播放時顯示動畫，暫停時靜止"
           }
         }
       }
@@ -14773,29 +14796,6 @@
         }
       }
     },
-    "歌词库为同名的第二个文件，迁移时需同时拷贝。\n请勿分享凭证；导入会同时覆盖已连接的账号和播放数据的发送地址" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The lyrics library is a second file with a matching name — copy both when moving to a new Mac.\nDon't share the credentials; importing also overwrites connected accounts and where listening data is sent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词库为同名的第二个文件，迁移时需同时拷贝。\n请勿分享凭证；导入会同时覆盖已连接的账号和播放数据的发送地址"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞庫為同名的第二個檔案，遷移時需同時拷貝。\n請勿分享憑證；匯入會同時覆蓋已連線的帳號和播放資料的傳送位址"
-          }
-        }
-      }
-    },
     "歌词延后" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15118,19 +15118,25 @@
         }
       }
     },
-    "正在从 iCloud 下载这份备份，下载完成后请再次点按「恢复此备份」" : {
+    "正在从 iCloud 下载此备份，完成后请再次点按「恢复此备份」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Downloading this backup from iCloud — click Restore This Backup again once it finishes"
+            "value" : "Downloading this backup from iCloud. Click Restore This Backup again when it finishes"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在從 iCloud 下載這份備份，下載完成後請再次按一下「回復此備份」"
+            "value" : "正在從 iCloud 下載此備份，完成後請再次按一下「回復此備份」"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在从 iCloud 下载此备份，完成后请再次点按「恢复此备份」"
           }
         }
       }
@@ -16721,30 +16727,99 @@
         }
       }
     },
-    "确定要导入此设置文件吗？" : {
+    "要保存备份吗？" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Import these settings?"
+            "value" : "Save a backup?"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "确定要导入此设置文件吗？"
+            "value" : "要保存备份吗？"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "確定要匯入此設定檔嗎？"
+            "value" : "要儲存備份嗎？"
           }
         }
       }
     },
-    "确定要导出设置吗？" : {
+    "备份中包含账号凭证与密钥的明文，将同步到登录同一 Apple 账户的所有设备" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backup contains your account credentials and keys in plain text and syncs to every device signed in to the same Apple Account"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备份中包含账号凭证与密钥的明文，将同步到登录同一 Apple 账户的所有设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "備份中包含帳號憑證與金鑰的明文，將同步到登入同一 Apple 帳號的所有裝置"
+          }
+        }
+      }
+    },
+    "备份中包含账号凭证与密钥的明文，将保存到「%@」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backup contains your account credentials and keys in plain text and is saved to “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备份中包含账号凭证与密钥的明文，将保存到「%@」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "備份中包含帳號憑證與金鑰的明文，將儲存到「%@」"
+          }
+        }
+      }
+    },
+    "要导入此备份吗？" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import this backup?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要导入此备份吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要匯入此備份嗎？"
+          }
+        }
+      }
+    },
+    "要导出设置吗？" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -16756,13 +16831,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "确定要导出设置吗？"
+            "value" : "要导出设置吗？"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "確定要匯出設定嗎？"
+            "value" : "要匯出設定嗎？"
           }
         }
       }
@@ -16813,7 +16888,7 @@
         }
       }
     },
-    "确定要清除全部设置吗？" : {
+    "要清除全部设置吗？" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -16825,13 +16900,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "确定要清除全部设置吗？"
+            "value" : "要清除全部设置吗？"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "確定要清除全部設定嗎？"
+            "value" : "要清除全部設定嗎？"
           }
         }
       }
@@ -19119,25 +19194,25 @@
         }
       }
     },
-    "设置已保存，但歌词库文件写入失败" : {
+    "设置已保存；歌词库写入失败，可再次点按「更新备份」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Settings saved, but the lyrics library file could not be written"
+            "value" : "Settings saved, but the lyrics library couldn’t be written. Click Update Backup to try again"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "设置已保存，但歌词库文件写入失败"
+            "value" : "设置已保存；歌词库写入失败，可再次点按「更新备份」"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "設定已儲存，但歌詞庫檔案寫入失敗"
+            "value" : "設定已儲存；歌詞庫寫入失敗，可再次按一下「更新備份」"
           }
         }
       }
@@ -19372,25 +19447,25 @@
         }
       }
     },
-    "语言与启动" : {
+    "语言、启动与通知" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Language & Startup"
+            "value" : "Language, Startup & Notifications"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "语言与启动"
+            "value" : "语言、启动与通知"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "語言與啟動"
+            "value" : "語言、啟動與通知"
           }
         }
       }
@@ -19611,25 +19686,25 @@
         }
       }
     },
-    "无法读取这份备份：可能未开启 iCloud Drive，或该文件夹未同步" : {
+    "无法读取此备份：可能未开启 iCloud Drive，或该文件夹尚未同步" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Can’t read this backup — iCloud Drive may be off, or this folder isn’t syncing"
+            "value" : "Can’t read this backup. iCloud Drive may be off, or the folder hasn’t synced yet"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法读取这份备份：可能未开启 iCloud Drive，或该文件夹未同步"
+            "value" : "无法读取此备份：可能未开启 iCloud Drive，或该文件夹尚未同步"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法讀取這份備份：可能未開啟 iCloud Drive，或該檔案夾未同步"
+            "value" : "無法讀取此備份：可能未開啟 iCloud Drive，或該檔案夾尚未同步"
           }
         }
       }
@@ -19864,25 +19939,25 @@
         }
       }
     },
-    "跳动音条" : {
+    "均衡器" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dancing Bars"
+            "value" : "Equalizer"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "跳动音条"
+            "value" : "均衡器"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "跳動音條"
+            "value" : "等化器"
           }
         }
       }
@@ -21019,53 +21094,53 @@
         }
       }
     },
-    "将清除本机所有账号令牌、密钥和个人设置，恢复为初始安装状态（下次启动时将重新显示设置引导），此操作无法撤销。iCloud 中的备份和已导出的文件不受影响；如两者均没有，建议先进行备份" : {
+    "将删除本机的全部账号凭证、密钥与个人设置，恢复为初始安装状态，下次启动时重新显示设置引导。此操作无法撤销。iCloud 中的备份与已导出的文件不受影响；如两者均没有，建议先备份" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This erases every account token, key, and personal setting on this Mac, restoring Lyrimuse to a fresh install (the setup guide runs again on next launch). This can't be undone. The copy in iCloud and any files you exported are untouched; if you have neither, back up first"
+            "value" : "This erases every account credential, key and personal setting on this Mac and returns Lyrimuse to a fresh install; the setup guide runs again on next launch. This can’t be undone. Backups in iCloud and exported files are kept; if you have neither, back up first"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将清除本机所有账号令牌、密钥和个人设置，恢复为初始安装状态（下次启动时将重新显示设置引导），此操作无法撤销。iCloud 中的备份和已导出的文件不受影响；如两者均没有，建议先进行备份"
+            "value" : "将删除本机的全部账号凭证、密钥与个人设置，恢复为初始安装状态，下次启动时重新显示设置引导。此操作无法撤销。iCloud 中的备份与已导出的文件不受影响；如两者均没有，建议先备份"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "將清除本機所有帳號權杖、金鑰和個人設定，回復為初始安裝狀態（下次啟動時將重新顯示設定引導），此操作無法復原。iCloud 中的備份和已匯出的檔案不受影響；如兩者均沒有，建議先進行備份"
+            "value" : "將刪除本機的全部帳號憑證、金鑰與個人設定，回復為初始安裝狀態，下次啟動時重新顯示設定引導。此操作無法復原。iCloud 中的備份與已匯出的檔案不受影響；如兩者均沒有，建議先備份"
           }
         }
       }
     },
-    "将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址，并立即重启 Lyrimuse 使其生效" : {
+    "将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址。完成后 Lyrimuse 将立即重启" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This overwrites every current setting, including connected accounts and where your playback data is sent, then restarts Lyrimuse right away"
+            "value" : "This replaces all current settings, including connected accounts and where playback data is sent. Lyrimuse then restarts right away"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址，并立即重启 Lyrimuse 使其生效"
+            "value" : "将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址。完成后 Lyrimuse 将立即重启"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "將覆蓋目前所有設定，包括已連線的帳號和播放資料的傳送位址，並立即重新啟動 Lyrimuse 使其生效"
+            "value" : "將覆蓋目前全部設定，包括已連線的帳號與播放紀錄的傳送位址。完成後 Lyrimuse 將立即重新啟動"
           }
         }
       }
     },
-    "将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址；同一备份中的 %@ 个歌词文件也会一并恢复（同名文件将被覆盖）。完成后立即重启 Lyrimuse 使其生效" : {
+    "将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址，并恢复备份中的 %@ 个歌词文件（同名文件将被覆盖）。完成后 Lyrimuse 将立即重启" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -21074,13 +21149,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "This overwrites every setting, including linked accounts and where playback data is sent; the %@ lyrics file in the same backup is restored too (a same-named file is overwritten). Lyrimuse restarts right after"
+                  "value" : "This replaces all current settings, including connected accounts and where playback data is sent, and restores the %@ lyrics file in the backup (a file with the same name is overwritten). Lyrimuse then restarts right away"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "This overwrites every setting, including linked accounts and where playback data is sent; the %@ lyrics files in the same backup are restored too (same-named files are overwritten). Lyrimuse restarts right after"
+                  "value" : "This replaces all current settings, including connected accounts and where playback data is sent, and restores the %@ lyrics files in the backup (files with the same names are overwritten). Lyrimuse then restarts right away"
                 }
               }
             }
@@ -21089,13 +21164,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址；同一备份中的 %@ 个歌词文件也会一并恢复（同名文件将被覆盖）。完成后立即重启 Lyrimuse 使其生效"
+            "value" : "将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址，并恢复备份中的 %@ 个歌词文件（同名文件将被覆盖）。完成后 Lyrimuse 将立即重启"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "將覆蓋目前所有設定，包括已連線的帳號和播放資料的傳送位址；同一備份中的 %@ 個歌詞檔案也會一併回復（同名檔案將被覆蓋）。完成後立即重新啟動 Lyrimuse 使其生效"
+            "value" : "將覆蓋目前全部設定，包括已連線的帳號與播放紀錄的傳送位址，並回復備份中的 %@ 個歌詞檔案（同名檔案將被覆蓋）。完成後 Lyrimuse 將立即重新啟動"
           }
         }
       }
@@ -21514,25 +21589,25 @@
         }
       }
     },
-    "选择一个自动同步的文件夹（Dropbox、坚果云、OneDrive 等），更换 Mac 后指向同一文件夹即可" : {
+    "选择一个会自动同步的文件夹（如 Dropbox、坚果云、OneDrive），在新 Mac 上选择同一文件夹即可恢复" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pick a folder that syncs on its own — Dropbox, OneDrive and the like. On your next Mac, point Lyrimuse at that same folder"
+            "value" : "Choose a folder that syncs automatically, such as Dropbox or OneDrive. On a new Mac, choose the same folder to restore"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选择一个自动同步的文件夹（Dropbox、坚果云、OneDrive 等），更换 Mac 后指向同一文件夹即可"
+            "value" : "选择一个会自动同步的文件夹（如 Dropbox、坚果云、OneDrive），在新 Mac 上选择同一文件夹即可恢复"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選擇一個自動同步的檔案夾（Dropbox、堅果雲、OneDrive 等），更換 Mac 後指向同一檔案夾即可"
+            "value" : "選擇一個會自動同步的檔案夾（如 Dropbox、堅果雲、OneDrive），在新 Mac 上選擇同一檔案夾即可回復"
           }
         }
       }
@@ -22520,25 +22595,25 @@
         }
       }
     },
-    "随播放律动" : {
+    "图标动画" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Move with the Music"
+            "value" : "Animate Icon"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "随播放律动"
+            "value" : "图标动画"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "隨播放律動"
+            "value" : "圖像動畫"
           }
         }
       }
@@ -25242,25 +25317,25 @@
         }
       }
     },
-    "菜单栏图标、语言与启动，以及备份与迁移" : {
+    "菜单栏图标、启动与通知，以及备份与迁移" : {
       "extractionState" : "manual",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "菜单栏图标、语言与启动，以及备份与迁移"
+            "value" : "菜单栏图标、启动与通知，以及备份与迁移"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Menu bar icon, language & startup, and backups"
+            "value" : "Menu bar icon, startup & notifications, and backups"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選單列圖像、語言與啟動，以及備份與遷移"
+            "value" : "選單列圖像、啟動與通知，以及備份與遷移"
           }
         }
       }
@@ -26502,25 +26577,25 @@
         }
       }
     },
-    "本机设置，无法撤销" : {
+    "仅清除本机设置，备份与导出的文件不受影响；无法撤销" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This Mac only; can't be undone"
+            "value" : "Erases settings on this Mac only; backups and exported files are kept. Can’t be undone"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本机设置，无法撤销"
+            "value" : "仅清除本机设置，备份与导出的文件不受影响；无法撤销"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本機設定，無法復原"
+            "value" : "僅清除本機設定，備份與匯出的檔案不受影響；無法復原"
           }
         }
       }
@@ -31526,25 +31601,25 @@
         }
       }
     },
-    "Lyrimuse 已在「系统设置 › 通用 › 登录项」中关闭，如需开机启动，请在该处重新开启" : {
+    "已在「系统设置 › 通用 › 登录项」中关闭，开机启动不会生效" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrimuse is turned off in System Settings › General › Login Items. Turn it back on there to open at login"
+            "value" : "Turned off in System Settings › General › Login Items, so Lyrimuse won’t open at login"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrimuse 已在「系统设置 › 通用 › 登录项」中关闭，如需开机启动，请在该处重新开启"
+            "value" : "已在「系统设置 › 通用 › 登录项」中关闭，开机启动不会生效"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrimuse 已在「系統設定 › 一般 › 登入項目」中關閉，如需在登入時啟動，請在該處重新開啟"
+            "value" : "已在「系統設定 › 一般 › 登入項目」中關閉，登入時啟動不會生效"
           }
         }
       }
@@ -35596,48 +35671,48 @@
         }
       }
     },
-    "切歌时显示系统通知，包含封面、歌名、歌手和专辑" : {
+    "以系统通知显示封面、歌名、歌手与专辑" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show a system notification with the artwork, title, artist and album when a new song starts"
+            "value" : "Shows the artwork, title, artist and album in a system notification"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "切歌时显示系统通知，包含封面、歌名、歌手和专辑"
+            "value" : "以系统通知显示封面、歌名、歌手与专辑"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "切歌時顯示系統通知，包含封面、歌名、歌手和專輯"
+            "value" : "以系統通知顯示封面、歌名、歌手與專輯"
           }
         }
       }
     },
-    "Lyrimuse 的通知已在「系统设置 › 通知」中关闭，请在该处重新开启" : {
+    "通知已在「系统设置 › 通知」中关闭" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notifications for Lyrimuse are turned off in System Settings › Notifications. Turn them back on there"
+            "value" : "Notifications are turned off in System Settings › Notifications"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrimuse 的通知已在「系统设置 › 通知」中关闭，请在该处重新开启"
+            "value" : "通知已在「系统设置 › 通知」中关闭"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrimuse 的通知已在「系統設定 › 通知」中關閉，請在該處重新開啟"
+            "value" : "通知已在「系統設定 › 通知」中關閉"
           }
         }
       }
@@ -40270,25 +40345,25 @@
         }
       }
     },
-    "启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。" : {
+    "启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opens no windows at launch; only the menu bar icon and your lyrics displays remain. Turning it on also turns off Show in Dock."
+            "value" : "Opens no windows at launch, keeping only the menu bar icon and lyrics displays; turning it on also hides the Dock icon"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。"
+            "value" : "启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "啟動時不開啟任何視窗，僅保留選單列圖像和已開啟的歌詞顯示。開啟後會同時關閉「在 Dock 中顯示」。"
+            "value" : "啟動時不開啟視窗，僅保留選單列圖像與歌詞顯示；開啟後同時隱藏 Dock 圖像"
           }
         }
       }

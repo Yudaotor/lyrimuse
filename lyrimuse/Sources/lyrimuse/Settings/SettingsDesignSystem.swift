@@ -670,6 +670,8 @@ struct SettingsRow<Trailing: View>: View {
     var subtitle: String?
     // 说明文字里需要放"?"气泡这类交互元素时用它替代纯文本 subtitle。两者只用其一。
     var help: String?
+    /// 副标题的颜色,默认次要灰。只在副标题本身是一条需要留意的状态时传(如备份已经很久没更新)。
+    var subtitleTint: Color?
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
@@ -709,7 +711,7 @@ struct SettingsRow<Trailing: View>: View {
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(subtitleTint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

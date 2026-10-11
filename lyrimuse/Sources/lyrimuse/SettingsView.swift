@@ -6200,470 +6200,479 @@ private struct GeneralSettingsTab: View {
     var body: some View {
         SettingsPage(
             title: L10n.t("通用"),
-            // 副标题砍短:原句 33 字在 900pt 窗口里折行,「台 Mac」三个字孤零零掉到
-            // 第二行。这一行只用回答"这页管什么",不用把每一项都点一遍 —— 下面的卡头本来就在点。
-            subtitle: L10n.t("菜单栏图标、语言与启动，以及备份与迁移")
+            subtitle: L10n.t("菜单栏图标、启动与通知，以及备份与迁移")
         ) {
+            // 三张卡:菜单栏与 Dock / 语言、启动与通知 / 备份与迁移(含清除全部设置)。各行说明一律写成常显副标题,
+            // 这一页不放「?」。
+            //
             // **这一页没有预览**:菜单栏就在屏幕顶上,选哪款抬头就看得见,不需要在设置页里
             // 再仿一条。别把仿菜单栏的 MenuBarIconStage 那套加回来。
-            //
-            // 12 款用写死 2×6 的 Grid,不用 LazyVGrid —— Lazy 容器在窗口不可见时不铺格子,表现是
-            // 整块空白。选中款的名字常驻在「菜单栏图标」这一行的行尾,不是只有悬停 tooltip 才报
-            // 名字。「菜单栏与 Dock」这张卡排在「语言与启动」前面 —— 它是这一页唯一带画面的一张,
-            // 当页首比夹在中间稳;两张卡不合并(语言/开机启动讲 App 怎么跑,Dock/菜单栏图标讲它
-            // 在系统 UI 里怎么露面)。
-            SettingsCard {
-                SettingsCardHeader(title: L10n.t("菜单栏与 Dock"))
-                CardDivider()
-                // 放在这张卡而不是「菜单栏歌词」那张里:这个图标恰恰是**没有**歌词可显示时才出现的
-                // (没在放歌、还没解析出这一句、或者菜单栏歌词整个关掉),跟那边的宽度/滚动设置一件
-                // 都不沾;它跟 Dock 那一行才是同类 —— 都在说"这个 App 在系统 UI 里长什么样"。
-                //
-                // 行尾放所选款的名字,跟「歌词文件夹」行尾放路径 / 歌词库统计块顶行放占用空间是同一种
-                // 写法:裸值、次要色、11pt。
-                SettingsRow(
-                    icon: "menubar.rectangle",
-                    title: L10n.t("菜单栏图标")
-                ) {
-                    Text(settings.menuBarIconStyle.displayName)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                // 不 insetToText:这一块要在整张卡里居中,空出图标列再居中会让中轴往右偏半个图标列,
-                // 见 MenuBarIconPicker.body 的注释。
-                SettingsRawRow {
-                    // 直接把图标本身摆出来让人挑,不用文字列表 —— 这一项的全部内容就是"长什么样",
-                    // 写成一串名字反而要人先在脑子里翻译一遍。
-                    MenuBarIconPicker()
-                }
-                CardDivider()
-                // 律动紧跟在图标后面:它改的是上面那枚图标的状态。
-                SettingsRow(
-                    icon: "figure.dance",
-                    title: L10n.t("随播放律动"),
-                    help: L10n.t("播放时图标显示动画，暂停时静止")
-                ) {
-                    Toggle("", isOn: $settings.menuBarIconAnimates)
-                }
-                CardDivider()
-                SettingsRow(
-                    icon: "macwindow",
-                    title: L10n.t("在 Dock 中显示"),
-                    help: L10n.t("关闭后仅显示菜单栏图标，不在 Dock 中显示")
-                ) {
-                    Toggle("", isOn: $settings.showInDock)
-                }
+            VStack(spacing: 14) {
+                menuBarCard
+                startupCard
+                backupCard
             }
+            .background { LastfmGlassGlow() }
+        }
+        .id(L10n.current)
+    }
 
-            SettingsCard {
-                SettingsCardHeader(title: L10n.t("语言与启动"))
-                CardDivider()
-                // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
-                // 语言(繁体中文/日语等)容易挤爆这一行;下拉菜单不管加多少个选项,这一行
-                // 的宽度都不变。
-                SettingsRow(icon: "globe", title: L10n.t("语言")) {
-                    Picker("", selection: $settings.appLanguage) {
-                        Text(L10n.t("跟随系统")).tag("system")
-                        Text(L10n.t("简体中文")).tag("zh-hans")
-                        // 语言名一律用该语言自己的写法(简体中文 / 繁體中文 / English),三档下都不翻译。
-                        Text(L10n.t("繁體中文")).tag("zh-hant")
-                        Text("English").tag("en")
-                    }
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                }
-                CardDivider()
-                SettingsRow(icon: "power", title: L10n.t("开机启动")) {
-                    Toggle("", isOn: $settings.launchAtLoginEnabled)
-                }
-                if loginItemNeedsApproval {
-                    SettingsNote {
-                        Text(L10n.t("Lyrimuse 已在「系统设置 › 通用 › 登录项」中关闭，如需开机启动，请在该处重新开启"))
-                        Button(L10n.t("打开系统设置")) { LoginItemManager.shared.openSystemSettings() }
-                    }
-                }
-                CardDivider()
-                SettingsRow(
-                    icon: "rectangle.on.rectangle.slash",
-                    title: L10n.t("静默启动"),
-                    help: L10n.t("启动时不打开任何窗口，仅保留菜单栏图标和已开启的歌词显示。开启后会同时关闭「在 Dock 中显示」。")
-                ) {
-                    Toggle("", isOn: $settings.silentLaunch)
-                }
+    /// 「菜单栏与 Dock」:12 款图标一行排开,所选款名在卡头右侧。
+    ///
+    /// 菜单栏图标放在这张卡而不是「菜单栏歌词」那边:这个图标恰恰是**没有**歌词可显示时才出现的,
+    /// 跟 Dock 那一行是同类 —— 都在说这个 App 在系统 UI 里长什么样。
+    private var menuBarCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("菜单栏与 Dock")) {
+                Text(String(format: L10n.t("菜单栏图标：%@"), settings.menuBarIconStyle.displayName))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .onAppear { refreshLoginItemState() }
-            // 用户去系统设置里改完切回来,开关和提示当场跟上。
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                refreshLoginItemState()
+            SettingsRawRow {
+                MenuBarIconPicker()
             }
+            // 自绘的一行不会自动挂搜索高亮(只有 SettingsRow / SettingsCardHeader 会),手挂。
+            .settingsSearchHighlight(title: L10n.t("菜单栏图标"))
+            CardDivider()
+            // 动画紧跟在图标后面:它改的是上面那枚图标的状态。
+            SettingsRow(
+                icon: "figure.dance",
+                title: L10n.t("图标动画"),
+                subtitle: L10n.t("播放时显示动画，暂停时静止")
+            ) {
+                Toggle("", isOn: $settings.menuBarIconAnimates)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "macwindow",
+                title: L10n.t("在 Dock 中显示"),
+                subtitle: L10n.t("关闭后仅保留菜单栏图标")
+            ) {
+                Toggle("", isOn: $settings.showInDock)
+            }
+        }
+    }
 
-            SettingsCard {
-                SettingsCardHeader(title: L10n.t("通知"))
-                CardDivider()
-                SettingsRow(
-                    icon: "bell.badge",
-                    title: L10n.t("换歌时显示通知"),
-                    help: L10n.t("切歌时显示系统通知，包含封面、歌名、歌手和专辑")
-                ) {
-                    Toggle("", isOn: $settings.nowPlayingNotifications)
+    /// 系统设置里关掉了某项时挂在那一行下面的提示:橙字说状态,右侧一颗「打开系统设置」。
+    private func systemSettingsNote(_ text: String, open: @escaping () -> Void) -> some View {
+        SettingsRawRow(insetToText: true) {
+            HStack(spacing: 8) {
+                Text(text)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Button(L10n.t("打开系统设置"), action: open)
+                    .controlSize(.small)
+                    .settingsGlassButtons()
+                    .buttonBorderShape(.capsule)
+            }
+        }
+    }
+
+    /// 「语言、启动与通知」:语言、开机启动、静默启动、换歌通知。
+    private var startupCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("语言、启动与通知"))
+            // 下拉菜单而不是分段控件:以后再加语言,这一行的宽度也不变。
+            SettingsRow(icon: "globe", title: L10n.t("语言")) {
+                Picker("", selection: $settings.appLanguage) {
+                    Text(L10n.t("跟随系统")).tag("system")
+                    Text(L10n.t("简体中文")).tag("zh-hans")
+                    // 语言名一律用该语言自己的写法(简体中文 / 繁體中文 / English),三档下都不翻译。
+                    Text(L10n.t("繁體中文")).tag("zh-hant")
+                    Text("English").tag("en")
                 }
-                if settings.nowPlayingNotifications, nowPlayingNotificationsDenied {
-                    SettingsNote {
-                        Text(L10n.t("Lyrimuse 的通知已在「系统设置 › 通知」中关闭，请在该处重新开启"))
-                        Button(L10n.t("打开系统设置")) {
-                            if let url = URL(string:
-                                "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        }
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            CardDivider()
+            SettingsRow(icon: "power", title: L10n.t("开机启动")) {
+                Toggle("", isOn: $settings.launchAtLoginEnabled)
+            }
+            if loginItemNeedsApproval {
+                systemSettingsNote(L10n.t("已在「系统设置 › 通用 › 登录项」中关闭，开机启动不会生效")) {
+                    LoginItemManager.shared.openSystemSettings()
+                }
+            }
+            CardDivider()
+            // 打开时会把「在 Dock 中显示」关掉(AppSettings.silentLaunch),副标题必须说出这一句:那个开关在另一张卡里。
+            SettingsRow(
+                icon: "rectangle.on.rectangle.slash",
+                title: L10n.t("静默启动"),
+                subtitle: L10n.t("启动时不打开窗口，仅保留菜单栏图标与歌词显示；开启后同时隐藏 Dock 图标")
+            ) {
+                Toggle("", isOn: $settings.silentLaunch)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "bell.badge",
+                title: L10n.t("换歌时显示通知"),
+                subtitle: L10n.t("以系统通知显示封面、歌名、歌手与专辑")
+            ) {
+                Toggle("", isOn: $settings.nowPlayingNotifications)
+            }
+            if settings.nowPlayingNotifications, nowPlayingNotificationsDenied {
+                systemSettingsNote(L10n.t("通知已在「系统设置 › 通知」中关闭")) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+                        NSWorkspace.shared.open(url)
                     }
                 }
             }
-            .onAppear { refreshNotificationState() }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        }
+        .onAppear {
+            refreshLoginItemState()
+            refreshNotificationState()
+        }
+        // 用户去系统设置里改完切回来,开关和提示当场跟上。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshLoginItemState()
+            refreshNotificationState()
+        }
+        .onChange(of: settings.nowPlayingNotifications) { _, on in
+            Task {
+                await NowPlayingNotifier.shared.enabledChanged(on)
                 refreshNotificationState()
             }
-            .onChange(of: settings.nowPlayingNotifications) { _, on in
-                Task {
-                    await NowPlayingNotifier.shared.enabledChanged(on)
-                    refreshNotificationState()
-                }
-            }
+        }
+    }
 
-            // 导入/导出打包引擎的 config.json(账号 token 原文都在里面)+ features.json +
-            // App 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断信息"反着来:那个绝不能带任何
-            // token(设计给贴进公开 issue),这个就是要把 token 原样带走(设计给换新机器用)——
-            // 两处的用户提示因此也刻意写成相反的语气。
+    // 导入/导出打包引擎的 config.json(账号 token 原文都在里面)+ features.json +
+    // App 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断信息"反着来:那个绝不能带任何
+    // token(设计给贴进公开 issue),这个就是要把 token 原样带走(设计给换新机器用)——
+    // 两处的用户提示因此也刻意写成相反的语气。
+    //
+    // 说明文字放在**各自行下面的副标题**里,不写成一整段 Section footer:每条只讲它自己
+    // 那个按钮会发生什么,尤其"会覆盖""无法撤销"这类后果要紧贴着对应的按钮。
+    private var backupCard: some View {
+        SettingsCard(cornerRadius: 18) {
+            // 两行备份(目的地 / 文件),最下面是清除全部设置;卡级动作上提到卡头,配置文件夹在「关于」。
             //
-            // 说明文字放在**各自行下面的副标题**里,不写成一整段 Section footer:每条只讲它自己
-            // 那个按钮会发生什么,尤其"会覆盖""无法撤销"这类后果要紧贴着对应的按钮。
-            SettingsCard {
-                // 这张卡是两行(目的地 / 文件),卡级动作上提到卡头,配置文件夹在「关于」。
-                //
-                // 别再摊回"iCloud 备份 / 导出设置 / 导入设置 / 配置文件夹"四行平铺 —— 这四行不是
-                // 同一类东西:第一行是个有状态的目的地(有快照、时间戳、来源设备、能换绑目录),二三行
-                // 是围绕"文件"的一对互逆动作,第四行压根跟备份没有因果关系(它是给 dotfiles/chezmoi
-                // 用户看活配置的)。四行等高平铺时唯一的层级信号只有"第一行副标题里有时间戳",读者
-                // 没法看出它们不是并列关系。
-                //
-                // 卡名用文档里自己的说法(docs/features/14 §4「备份与迁移」)——「设置备份」既没盖住
-                // dotfiles 那条路,也没盖住一起被备份的歌词库。
-                SettingsCardHeader(title: L10n.t("备份与迁移")) {
-                    // 卡级动作(换绑目录)上提到卡头 —— 这是本仓库既有的位置(见「歌词来源」卡头那颗
-                    // 「测试」按钮)。别把它们藏回行尾的 ellipsis.circle 菜单:那个 ⋯ 会是整个设置页
-                    // **唯一**的一个,别处的无边框 Menu 都带文字标签。
-                    Menu {
-                        Button(L10n.t("更换备份文件夹…")) { chooseBackupFolder() }
-                        if ICloudConfigStore.usingCustomFolder {
-                            Button(L10n.t("切换回 iCloud")) {
-                                ICloudConfigStore.setCustomFolder(nil)
-                                iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-                            }
+            // 别再摊回"iCloud 备份 / 导出设置 / 导入设置 / 配置文件夹"四行平铺 —— 这四行不是
+            // 同一类东西:第一行是个有状态的目的地(有快照、时间戳、来源设备、能换绑目录),二三行
+            // 是围绕"文件"的一对互逆动作,第四行压根跟备份没有因果关系(它是给 dotfiles/chezmoi
+            // 用户看活配置的)。四行等高平铺时唯一的层级信号只有"第一行副标题里有时间戳",读者
+            // 没法看出它们不是并列关系。
+            //
+            // 卡名用文档里自己的说法(docs/features/14 §4「备份与迁移」)——「设置备份」既没盖住
+            // dotfiles 那条路,也没盖住一起被备份的歌词库。
+            SettingsCardHeader(title: L10n.t("备份与迁移")) {
+                // 卡级动作(换绑目录)上提到卡头 —— 这是本仓库既有的位置(见「歌词来源」卡头那颗
+                // 「测试」按钮)。别把它们藏回行尾的 ellipsis.circle 菜单:那个 ⋯ 会是整个设置页
+                // **唯一**的一个,别处的无边框 Menu 都带文字标签。
+                Menu {
+                    Button(L10n.t("更换备份文件夹…")) { chooseBackupFolder() }
+                    if ICloudConfigStore.usingCustomFolder {
+                        Button(L10n.t("切换回 iCloud")) {
+                            ICloudConfigStore.setCustomFolder(nil)
+                            iCloudSnapshot = ICloudConfigStore.latestSnapshot()
                         }
-                        // 别加回「只保留最近 N 份」这类手动清理项:它是给"每存一次就新增一对文件、
-                        // 永不删旧"这个缺陷贴的创可贴,正确的修法是写入时自动只留最近几份(见「存到
-                        // iCloud」那个 alert 里的说明)。手动项等于要求用户记得定期来打扫自己的备份,
-                        // 而这个菜单本来就藏在卡头,不点开根本不知道有多少份在堆。
-                        Divider()
-                        // 必须写清是**哪个**文件夹。这里和下面「配置文件夹」那行都叫「在访达中
-                        // 显示」的话,一字不差却开两个不同目录(备份目录 vs ~/.config/lyrimuse 这个
-                        // **活配置**目录),两个都没有二次确认 —— 用户把打开的活配置目录当成备份去
-                        // 拷/删,丢的是正在用的配置。
-                        Button(L10n.t("打开备份文件夹")) {
-                            NSWorkspace.shared.activateFileViewerSelecting(
-                                [ICloudConfigStore.preparedFolderURL()])
-                        }
+                    }
+                    // 别加回「只保留最近 N 份」这类手动清理项:它是给"每存一次就新增一对文件、
+                    // 永不删旧"这个缺陷贴的创可贴,正确的修法是写入时自动只留最近几份(见「存到
+                    // iCloud」那个 alert 里的说明)。手动项等于要求用户记得定期来打扫自己的备份,
+                    // 而这个菜单本来就藏在卡头,不点开根本不知道有多少份在堆。
+                    Divider()
+                    // 必须写清是**哪个**文件夹。这里和下面「配置文件夹」那行都叫「在访达中
+                    // 显示」的话,一字不差却开两个不同目录(备份目录 vs ~/.config/lyrimuse 这个
+                    // **活配置**目录),两个都没有二次确认 —— 用户把打开的活配置目录当成备份去
+                    // 拷/删,丢的是正在用的配置。
+                    Button(L10n.t("打开备份文件夹")) {
+                        NSWorkspace.shared.activateFileViewerSelecting(
+                            [ICloudConfigStore.preparedFolderURL()])
+                    }
+                } label: {
+                    Text(L10n.t("备份文件夹…"))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+            // 第一行:有状态的目的地。
+            //
+            // 整行**不能**因为 iCloud Drive 关掉/自选目录掉线就消失(别写成
+            // `if ICloudConfigStore.isAvailable { ... }`)—— 外置盘一拔整行没了,连菜单里的
+            // 「改回 iCloud」也跟着没了,用户被锁死而且没有任何解释。行照常在,按钮禁用,
+            // 副标题说明原因。
+            SettingsRow(
+                icon: ICloudConfigStore.usingCustomFolder ? "folder" : "icloud",
+                title: ICloudConfigStore.usingCustomFolder
+                    ? L10n.t("备份文件夹") : L10n.t("iCloud 备份"),
+                subtitle: iCloudSubtitle,
+                subtitleTint: backupIsStale ? .orange : nil
+            ) {
+                HStack(spacing: 8) {
+                    if iCloudBusy { ProgressView().controlSize(.small) }
+                    Button {
+                        showICloudExportWarning = true
                     } label: {
-                        Text(L10n.t("备份文件夹…"))
+                        if iCloudJustSaved {
+                            Label(L10n.t("已保存"), systemImage: "checkmark")
+                        } else {
+                            Text(iCloudSnapshot == nil
+                                ? (ICloudConfigStore.usingCustomFolder
+                                    ? L10n.t("保存备份") : L10n.t("保存到 iCloud"))
+                                : L10n.t("更新备份"))
+                        }
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
+                    // 只给**这一颗**按钮定宽。本仓库的风格就是按钮宽度参差
+                    // (SettingsDesignSystem 里没有任何 minWidth,定宽只用在滑杆和数字
+                    // 读数上),不该全局统一。但这颗的文字会**原地变化**
+                    // (保存到 iCloud / 保存备份 / 更新备份 / 已保存),每变一次整行跳一下 ——
+                    // 跟 ShortcutRecorder 用 max(width,150) 解决的是同一个问题。
+                    .frame(minWidth: 88)
+                    .disabled(!ICloudConfigStore.isAvailable || iCloudBusy)
+                    if iCloudSnapshot != nil {
+                        // 这颗叫「恢复这份」不叫「导入…」:它直接恢复**副标题里说的那一份**
+                        // (不开面板),而下面「设置文件」那行的「导入…」是开文件选择器;两条路的
+                        // 文件面板默认目录还是同一个 iCloud 文件夹,同名会更难分辨。
+                        Button(L10n.t("恢复此备份")) { importFromICloud() }
+                            .disabled(!ICloudConfigStore.isAvailable || iCloudBusy)
+                    }
                 }
+                .buttonBorderShape(.capsule)
+            }
+            if let iCloudMessage {
                 CardDivider()
-                // 第一行:有状态的目的地。
-                //
-                // 整行**不能**因为 iCloud Drive 关掉/自选目录掉线就消失(别写成
-                // `if ICloudConfigStore.isAvailable { ... }`)—— 外置盘一拔整行没了,连菜单里的
-                // 「改回 iCloud」也跟着没了,用户被锁死而且没有任何解释。行照常在,按钮禁用,
-                // 副标题说明原因。
-                SettingsRow(
-                    icon: ICloudConfigStore.usingCustomFolder ? "folder" : "icloud",
-                    title: ICloudConfigStore.usingCustomFolder
-                        ? L10n.t("备份文件夹") : L10n.t("iCloud 备份"),
-                    subtitle: iCloudSubtitle
-                ) {
-                    HStack(spacing: 8) {
-                        if iCloudBusy { ProgressView().controlSize(.small) }
-                        Button {
-                            showICloudExportWarning = true
-                        } label: {
-                            if iCloudJustSaved {
-                                Label(L10n.t("已保存"), systemImage: "checkmark")
-                            } else {
-                                Text(iCloudSnapshot == nil
-                                    ? (ICloudConfigStore.usingCustomFolder
-                                        ? L10n.t("保存副本") : L10n.t("保存到 iCloud"))
-                                    : L10n.t("更新备份"))
-                            }
-                        }
-                        // 只给**这一颗**按钮定宽。本仓库的风格就是按钮宽度参差
-                        // (SettingsDesignSystem 里没有任何 minWidth,定宽只用在滑杆和数字
-                        // 读数上),不该全局统一。但这颗的文字会**原地变化**
-                        // (存到 iCloud / 存一份 / 更新备份 / 已保存),每变一次整行跳一下 ——
-                        // 跟 ShortcutRecorder 用 max(width,150) 解决的是同一个问题。
-                        .frame(minWidth: 88)
-                        .disabled(!ICloudConfigStore.isAvailable || iCloudBusy)
-                        if iCloudSnapshot != nil {
-                            // 这颗叫「恢复这份」不叫「导入…」:它直接恢复**副标题里说的那一份**
-                            // (不开面板),而下面「设置文件」那行的「导入…」是开文件选择器;两条路的
-                            // 文件面板默认目录还是同一个 iCloud 文件夹,同名会更难分辨。
-                            Button(L10n.t("恢复此备份")) { importFromICloud() }
-                                .disabled(!ICloudConfigStore.isAvailable || iCloudBusy)
-                        }
-                    }
+                SettingsNote { Text(iCloudMessage) }
+            }
+            CardDivider()
+            // 第二行:导出/导入合成一行 —— 它们是同一件事(把配置存成文件 / 从文件读回来)的
+            // 两个方向,分成两行只是把一对互逆动作拆开摆,还各自挂一个点开才看得见的 ⓘ。
+            //
+            // 后果写进**副标题**而不是 help 气泡。本仓库的规矩写得很明确
+            // (SettingsDesignSystem「两者只用其一」、SettingsView 里「副标题**常显**…藏在
+            // tooltip 里等于没说」),而 HelpButton 是**点击**才弹、不是悬停。既有先例也都这么做:
+            // 「导出诊断信息」把"不含 token"放副标题、「清除所有设置」把"无法撤销"放副标题。
+            // 含凭证、覆盖一切并重启、含账号凭据这三条都是最该常显的事实,不许塞进气泡。
+            SettingsRow(
+                icon: "doc.badge.gearshape",
+                title: L10n.t("设置文件"),
+                // 「歌词库是单独的第二个文件」必须常显:它是迁移时最容易漏拷的东西。
+                subtitle: L10n.t("含明文凭证；导出为设置与歌词库两个文件，导入将覆盖全部设置")
+            ) {
+                HStack(spacing: 8) {
+                    Button(L10n.t("导出…")) { showExportConfigWarning = true }
+                    Button(L10n.t("从文件导入…")) { pickConfigFileToImport() }
                 }
-                if let iCloudMessage {
-                    CardDivider()
-                    SettingsNote { Text(iCloudMessage) }
-                }
+                .buttonBorderShape(.capsule)
+            }
+            if let configMessage {
                 CardDivider()
-                // 第二行:导出/导入合成一行 —— 它们是同一件事(把配置存成文件 / 从文件读回来)的
-                // 两个方向,分成两行只是把一对互逆动作拆开摆,还各自挂一个点开才看得见的 ⓘ。
-                //
-                // 后果写进**副标题**而不是 help 气泡。本仓库的规矩写得很明确
-                // (SettingsDesignSystem「两者只用其一」、SettingsView 里「副标题**常显**…藏在
-                // tooltip 里等于没说」),而 HelpButton 是**点击**才弹、不是悬停。既有先例也都这么做:
-                // 「导出诊断信息」把"不含 token"放副标题、「清除所有设置」把"无法撤销"放副标题。
-                // 含凭证、覆盖一切并重启、含账号凭据这三条都是最该常显的事实,不许塞进气泡。
-                SettingsRow(
-                    icon: "doc.badge.gearshape",
-                    title: L10n.t("设置文件"),
-                    // 副标题和气泡**分工,不重复说**:副标题只留"点之前必须知道的后果",气泡只补
-                    // 副标题装不下的**细节**。两边把同样三件事各讲一遍的话,读的人点开只是把刚看过的
-                    // 话再读一遍。
-                    //
-                    // 副标题不能说"含账号凭证与歌词库":歌词库根本不在这个文件里 —— 它是单独的第二
-                    // 个文件,而这正是用户最容易漏拷的东西。
-                    subtitle: L10n.t("包含明文凭证；导入将覆盖全部设置并重启"),
-                    help: L10n.t("歌词库为同名的第二个文件，迁移时需同时拷贝。\n请勿分享凭证；导入会同时覆盖已连接的账号和播放数据的发送地址")
-                ) {
-                    HStack(spacing: 8) {
-                        Button(L10n.t("导出…")) { showExportConfigWarning = true }
-                        Button(L10n.t("从文件导入…")) { pickConfigFileToImport() }
-                    }
-                }
-                if let configMessage {
-                    CardDivider()
-                    SettingsNote { Text(configMessage) }
-                }
+                SettingsNote { Text(configMessage) }
             }
-            .onAppear {
-                iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+            // 本页唯一不可撤销的动作:跟上面的备份行隔一条通栏分隔,按钮红字。
+            Divider()
+                .padding(.top, 6)
+            SettingsRow(
+                icon: "trash",
+                title: L10n.t("清除全部设置"),
+                subtitle: L10n.t("仅清除本机设置，备份与导出的文件不受影响；无法撤销")
+            ) {
+                // 玻璃胶囊 + 红字,不用 DestructiveButton:它的红色 tint 会把玻璃按钮染成整颗实心红,在这张卡里太抢眼。
+                Button(L10n.t("清除…"), role: .destructive) { showClearConfigWarning = true }
+                    .foregroundStyle(.red)
+                    .buttonBorderShape(.capsule)
             }
-            // 这个 alert 必须带 message 说清风险:存到 iCloud 才是把明文 token 推上 Apple
-            // 服务器和你所有设备的那一步(write 设的 0600 权限过了同步就不作数),风险比本地
-            // 导出更高,文案不能反而更轻。
-            .alert(L10n.t("要保存到 iCloud 吗？"), isPresented: $showICloudExportWarning) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("保存到 iCloud")) {
-                    // Task 包一层:歌词归档要读几千个文件 + 压缩,不能卡在 alert 的按钮里
-                    // (buildArchive 内部已经把重活扔进 detached task,这里只是别同步等)。
-                    Task { @MainActor in
-                        // 要读几千个歌词文件再压缩,可能到秒级:这段时间转圈、按钮置灰,免得以为没反应再点一次,
-                        // 并发写出两对备份。
-                        iCloudBusy = true
-                        defer { iCloudBusy = false }
-                        guard let data = ConfigPortability.buildExportData() else { return }
-                        let name = ConfigPortability.suggestedFilename()
-                        guard ICloudConfigStore.write(data, filename: name) != nil else {
-                            iCloudMessage = L10n.t("写入 iCloud 失败，可改用下方的「导出…」保存为文件")
-                            return
-                        }
-                        // 歌词库单独一份 sidecar(同名同时间戳,只把 -Config- 换成 -Lyrics-)。
-                        // 失败**不算整体失败**:配置已经存好了,歌词那份下次再存就行,所以
-                        // 只在下面那行小字里如实说一句。
-                        var note: String?
-                        if let archive = await LyricsBackupStore.buildArchive() {
-                            let lyricsName = LyricsBackupArchive.sidecarName(forConfigName: name)
-                            if ICloudConfigStore.write(archive, filename: lyricsName) == nil {
-                                note = L10n.t("设置已保存，但歌词库文件写入失败")
-                            }
-                        } else if !LyricsBackupStore.hasNoLyricsFiles() {
-                            // 有歌词却没打成包:跟「导出到文件」那条路说同一句,别照样显示「已保存」。
-                            note = L10n.t("设置已保存，但歌词库文件写入失败")
-                        }
-                        // **这里不做任何自动清理,备份想攒多少份就多少份**。
-                        //
-                        // 每点一次都新写一对文件(配置 4KB + 歌词包 ~8MB),没有东西会删旧的(攒到 9 份
-                        // 配置 + 8 份歌词包 ≈ 55MB)。这是刻意的:那是用户的磁盘和他的备份,「攒着」本身
-                        // 就是他要的行为。
-                        //
-                        // 所以别再"顺手"加回来:不加定时清理、不加写入时清理、不加"超过 N 份就提醒"。
-                        // 真要省空间由用户自己去备份文件夹删(卡头菜单里有「打开备份文件夹」)。
-                        //
-                        // 写成功的反馈由按钮自己变身「已保存」承担,写法与理由见 iCloudJustSaved 声明处注释。
-                        iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-                        iCloudMessage = note
-                        // note 非 nil(歌词库那份没写成功)时不弹这个打勾态:那种情况
-                        // 已经有一条要用户看到并处理的持久提示了(上面 iCloudMessage),
-                        // 按钮再摆出一副"全成功"的样子会互相矛盾。
-                        if note == nil {
-                            iCloudJustSavedToken += 1
-                            let token = iCloudJustSavedToken
-                            withAnimation { iCloudJustSaved = true }
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .seconds(1))
-                                guard iCloudJustSavedToken == token else { return }
-                                withAnimation { iCloudJustSaved = false }
-                            }
-                        }
-                    }
-                }
-            }
-            .alert(L10n.t("确定要导出设置吗？"), isPresented: $showExportConfigWarning) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("继续导出")) {
+        }
+        .onAppear {
+            iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+        }
+        // 这个 alert 必须带 message 说清风险:存到 iCloud 才是把明文 token 推上 Apple
+        // 服务器和你所有设备的那一步(write 设的 0600 权限过了同步就不作数),风险比本地
+        // 导出更高,文案不能反而更轻。
+        .alert(ICloudConfigStore.usingCustomFolder ? L10n.t("要保存备份吗？") : L10n.t("要保存到 iCloud 吗？"),
+               isPresented: $showICloudExportWarning) {
+            Button(L10n.t("取消"), role: .cancel) {}
+            Button(ICloudConfigStore.usingCustomFolder ? L10n.t("保存备份") : L10n.t("保存到 iCloud")) {
+                // Task 包一层:歌词归档要读几千个文件 + 压缩,不能卡在 alert 的按钮里
+                // (buildArchive 内部已经把重活扔进 detached task,这里只是别同步等)。
+                Task { @MainActor in
+                    // 要读几千个歌词文件再压缩,可能到秒级:这段时间转圈、按钮置灰,免得以为没反应再点一次,
+                    // 并发写出两对备份。
+                    iCloudBusy = true
+                    defer { iCloudBusy = false }
                     guard let data = ConfigPortability.buildExportData() else { return }
-                    let panel = NSSavePanel()
-                    panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
-                    // 默认落点改成 iCloud Drive 里的 Lyrimuse 文件夹(没开 iCloud 就退回
-                    // 桌面)—— 换电脑是这个按钮唯一的用途,而新机器能自动找到的就是这个
-                    // 文件夹。用户仍然可以在面板里改到任何地方。
-                    panel.directoryURL = ICloudConfigStore.isAvailable
-                        ? ICloudConfigStore.preparedFolderURL()
-                        : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
-                    if panel.runModal() == .OK, let url = panel.url {
-                        // 导出包里带着全部凭据(上面那句警告文案说的就是它)。
-                        //
-                        // 这两处**不要**写成裸 `try?`:盘满、没有写权限、目标被别的进程占着时会完全
-                        // 静默,界面上什么都不会发生,用户以为导出成功了。
-                        do {
-                            try data.writeSecurely(to: url)
-                        } catch {
-                            configMessage = String(format: L10n.t("导出失败：%@"), error.localizedDescription)
+                    let name = ConfigPortability.suggestedFilename()
+                    guard ICloudConfigStore.write(data, filename: name) != nil else {
+                        iCloudMessage = L10n.t("无法写入 iCloud，可使用下方的「导出…」保存为文件")
+                        return
+                    }
+                    // 歌词库单独一份 sidecar(同名同时间戳,只把 -Config- 换成 -Lyrics-)。
+                    // 失败**不算整体失败**:配置已经存好了,歌词那份下次再存就行,所以
+                    // 只在下面那行小字里如实说一句。
+                    var note: String?
+                    if let archive = await LyricsBackupStore.buildArchive() {
+                        let lyricsName = LyricsBackupArchive.sidecarName(forConfigName: name)
+                        if ICloudConfigStore.write(archive, filename: lyricsName) == nil {
+                            note = L10n.t("设置已保存；歌词库写入失败，可再次点按「更新备份」")
+                        }
+                    } else if !LyricsBackupStore.hasNoLyricsFiles() {
+                        // 有歌词却没打成包:跟「导出到文件」那条路说同一句,别照样显示「已保存」。
+                        note = L10n.t("设置已保存；歌词库写入失败，可再次点按「更新备份」")
+                    }
+                    // **这里不做任何自动清理,备份想攒多少份就多少份**。
+                    //
+                    // 每点一次都新写一对文件(配置 4KB + 歌词包 ~8MB),没有东西会删旧的(攒到 9 份
+                    // 配置 + 8 份歌词包 ≈ 55MB)。这是刻意的:那是用户的磁盘和他的备份,「攒着」本身
+                    // 就是他要的行为。
+                    //
+                    // 所以别再"顺手"加回来:不加定时清理、不加写入时清理、不加"超过 N 份就提醒"。
+                    // 真要省空间由用户自己去备份文件夹删(卡头菜单里有「打开备份文件夹」)。
+                    //
+                    // 写成功的反馈由按钮自己变身「已保存」承担,写法与理由见 iCloudJustSaved 声明处注释。
+                    iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+                    iCloudMessage = note
+                    // note 非 nil(歌词库那份没写成功)时不弹这个打勾态:那种情况
+                    // 已经有一条要用户看到并处理的持久提示了(上面 iCloudMessage),
+                    // 按钮再摆出一副"全成功"的样子会互相矛盾。
+                    if note == nil {
+                        iCloudJustSavedToken += 1
+                        let token = iCloudJustSavedToken
+                        withAnimation { iCloudJustSaved = true }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(1))
+                            guard iCloudJustSavedToken == token else { return }
+                            withAnimation { iCloudJustSaved = false }
+                        }
+                    }
+                }
+            }
+        } message: {
+            if ICloudConfigStore.usingCustomFolder {
+                Text(String(format: L10n.t("备份中包含账号凭证与密钥的明文，将保存到「%@」"),
+                            ICloudConfigStore.folderURL.lastPathComponent))
+            } else {
+                Text(L10n.t("备份中包含账号凭证与密钥的明文，将同步到登录同一 Apple 账户的所有设备"))
+            }
+        }
+        .alert(L10n.t("要导出设置吗？"), isPresented: $showExportConfigWarning) {
+            Button(L10n.t("取消"), role: .cancel) {}
+            Button(L10n.t("继续导出")) {
+                guard let data = ConfigPortability.buildExportData() else { return }
+                let panel = NSSavePanel()
+                panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
+                // 默认落点改成 iCloud Drive 里的 Lyrimuse 文件夹(没开 iCloud 就退回
+                // 桌面)—— 换电脑是这个按钮唯一的用途,而新机器能自动找到的就是这个
+                // 文件夹。用户仍然可以在面板里改到任何地方。
+                panel.directoryURL = ICloudConfigStore.isAvailable
+                    ? ICloudConfigStore.preparedFolderURL()
+                    : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+                if panel.runModal() == .OK, let url = panel.url {
+                    // 导出包里带着全部凭据(上面那句警告文案说的就是它)。
+                    //
+                    // 这两处**不要**写成裸 `try?`:盘满、没有写权限、目标被别的进程占着时会完全
+                    // 静默,界面上什么都不会发生,用户以为导出成功了。
+                    do {
+                        try data.writeSecurely(to: url)
+                    } catch {
+                        configMessage = String(format: L10n.t("导出失败：%@"), error.localizedDescription)
+                        return
+                    }
+                    // 歌词库那份写在**紧邻的同名文件**旁边 —— 导入时就是靠这个位置关系
+                    // 找到它的(NSSavePanel 只能给一个落点,所以是"兄弟文件"而不是两次面板)。
+                    Task { @MainActor in
+                        guard let archive = await LyricsBackupStore.buildArchive() else {
+                            // 歌词库本来就是空的(新用户)不算失败,不提示。
+                            if !LyricsBackupStore.hasNoLyricsFiles() {
+                                configMessage = L10n.t("设置已导出；歌词库打包失败，仅导出了设置文件")
+                            }
                             return
                         }
-                        // 歌词库那份写在**紧邻的同名文件**旁边 —— 导入时就是靠这个位置关系
-                        // 找到它的(NSSavePanel 只能给一个落点,所以是"兄弟文件"而不是两次面板)。
-                        Task { @MainActor in
-                            guard let archive = await LyricsBackupStore.buildArchive() else {
-                                // 歌词库本来就是空的(新用户)不算失败,不提示。
-                                if !LyricsBackupStore.hasNoLyricsFiles() {
-                                    configMessage = L10n.t("设置已导出；歌词库打包失败，仅导出了设置文件")
-                                }
-                                return
-                            }
-                            let sidecarName = LyricsBackupArchive.sidecarName(forConfigName: url.lastPathComponent)
-                            let sidecar = url.deletingLastPathComponent().appendingPathComponent(sidecarName)
-                            do {
-                                try archive.writeSecurely(to: sidecar)
-                                // 必须把"旁边还有第二个文件"说出来:静默写的话,用户只会拷走自己在
-                                // 面板里选中的那一个 —— 到新机器导入时找不到兄弟包,按设计"一个歌词文件
-                                // 都不动",于是歌词**静默全丢**。
-                                configMessage = String(format: L10n.t("已导出两个文件：设置和歌词库（%@）。迁移到新 Mac 时需同时拷贝"), sidecarName)
-                            } catch {
-                                configMessage = L10n.t("设置已导出；歌词库写入失败，仅导出了设置文件")
-                            }
+                        let sidecarName = LyricsBackupArchive.sidecarName(forConfigName: url.lastPathComponent)
+                        let sidecar = url.deletingLastPathComponent().appendingPathComponent(sidecarName)
+                        do {
+                            try archive.writeSecurely(to: sidecar)
+                            // 必须把"旁边还有第二个文件"说出来:静默写的话,用户只会拷走自己在
+                            // 面板里选中的那一个 —— 到新机器导入时找不到兄弟包,按设计"一个歌词文件
+                            // 都不动",于是歌词**静默全丢**。
+                            configMessage = String(format: L10n.t("已导出设置与歌词库两个文件（%@），迁移时请一并拷贝"), sidecarName)
+                        } catch {
+                            configMessage = L10n.t("设置已导出；歌词库写入失败，仅导出了设置文件")
                         }
                     }
                 }
-            } message: {
-                Text(L10n.t("导出的文件包含账号凭证和密钥，请妥善保管，切勿分享。歌词库会另存为同名的第二个文件，迁移时需同时拷贝两个文件"))
             }
-            .alert(L10n.t("确定要导入此设置文件吗？"), isPresented: $showImportConfigConfirm) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                // Task 包一层:importData 现在要等引擎重新读到新配置才返回(见那边
-                // 的注释),而 restartApp() 必须排在它后面 —— 一旦 terminate,没跑完的
-                // launchctl 操作就跟着进程一起没了。
-                Button(L10n.t("导入并重启"), role: .destructive) {
-                    if let data = pendingImportData {
-                        Task { @MainActor in
-                            // `importData` 的返回值**必须检查**:它是 `async -> Bool`,顶层 JSON
-                            // 解析失败时 return false(ConfigPortability.swift:254)。丢掉返回值再无条件
-                            // restartApp() 的话,用户选错一个 .json(面板只过滤扩展名、不校验是不是我们的
-                            // 导出包)的结果就是 **App 退出重启、设置一个字没改、界面上零提示**,唯一能
-                            // 得出的结论是"导入把我的设置弄坏了"。
-                            //
-                            // 失败就地报错、**不重启**。歌词恢复和 adoptFolder 也一并跳过:配置都没写进去,
-                            // 单独铺歌词/改备份目录只会留下一个半吊子状态。
-                            guard await ConfigPortability.importData(data) else {
-                                configMessage = L10n.t("导入失败：该文件不是 Lyrimuse 的设置备份，或已损坏。当前设置未更改")
-                                return
-                            }
-                            // 歌词必须排在 importData **之后**:歌词目录是
-                            // features.lyricsDir(用户可自定义的绝对路径),而那个文件正是
-                            // importData 刚写的 —— 先铺后导会铺到旧机器那个目录里去。
-                            if let lyrics = pendingImportLyrics {
-                                await LyricsBackupStore.restore(from: lyrics)
-                            }
-                            // 必须排在 importData 之后:备份目录这个键在导入排除表里、
-                            // 不会被导入的包覆盖,但顺序反了会先被写、再被这一句改回来。
-                            if let folder = pendingImportFolder {
-                                ICloudConfigStore.adoptFolder(folder)
-                            }
-                            // 有一份没写成(盘满、没有写权限):说清楚是哪部分,这次不重启 —— 重启了提示就没了,
-                            // 用户会以为全部导入成功。其余部分已经生效,可以再导一次。
-                            let failed = ConfigPortability.lastImportFailures
-                            guard failed.isEmpty else {
-                                configMessage = String(format: L10n.t("部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限"),
-                                                       failed.joined(separator: ", "))
-                                return
-                            }
-                            ConfigPortability.restartApp()
-                        }
-                    }
-                }
-            } message: {
-                // 确认框里要**讲对象**,不能只讲后果 —— 用户得看得出正要导入的是哪一份。
-                // 导出时间和机器名就在包里(ConfigPortability 写的),iCloud 那一行也一直渲染成
-                // "…· 来自 DJ-chenyuhao";同一份信息在行里有、在真正要拍下决定的确认框里反而
-                // 没有,是反的。
-                //
-                // 这一句放在后果**之前**:先说清"你要覆盖成哪一份",再说"会覆盖掉什么"。
-                if let source = pendingImportSourceDescription {
-                    Text(String(format: L10n.t("即将导入：%@"), source))
-                }
-                // 歌词那句只在真有 sidecar 时才加 —— 没有的时候提一句"不含歌词"只会让人
-                // 以为哪里出错了。两句都是完整句子,不在运行时拼半句。
-                if pendingImportLyrics != nil {
-                    Text(String(format: L10n.plural("将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址；同一备份中的 %@ 个歌词文件也会一并恢复（同名文件将被覆盖）。完成后立即重启 Lyrimuse 使其生效", count: pendingImportLyricsCount),
-                                "\(pendingImportLyricsCount)"))
-                } else {
-                    Text(L10n.t("将覆盖当前所有设置，包括已连接的账号和播放数据的发送地址，并立即重启 Lyrimuse 使其生效"))
-                }
-            }
-
-            // 「封面」卡不在这一页:它只有「动态封面」一项,而那一项只管歌词窗口那张封面卡,
-            // 归 设置 › 歌词显示 › 歌词窗口(AppearanceSettingsTab 的 .lyricsWindow 段)。
-
-            // 单独一张卡,不跟上面的备份/恢复挤在一起 —— 这是本页唯一不可撤销的动作。
-            // 「歌词显示」页的「恢复默认文字与配色」也是这么单独放的,同类动作按同一套处理。
-            SettingsCard {
-                SettingsRow(
-                    icon: "trash",
-                    title: L10n.t("清除全部设置"),
-                    subtitle: L10n.t("本机设置，无法撤销")
-                ) {
-                    DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
-                }
-            }
-            // 这条 alert 跟着按钮一起搬过来。留在上面那张卡上也能弹(alert 由 @State 驱动,
-            // 锚点只要还在层级里就行),但按钮和它的确认框分居两张卡纯属给人添乱。
-            .alert(L10n.t("确定要清除全部设置吗？"), isPresented: $showClearConfigWarning) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                // 同上:clearAllConfig 现在要等常驻服务真的卸载完才返回,不能在它之前 terminate。
-                Button(L10n.t("清除并重启"), role: .destructive) {
+        } message: {
+            Text(L10n.t("文件中包含账号凭证与密钥的明文，请妥善保管，请勿分享。歌词库将另存为同名的第二个文件，迁移时请一并拷贝"))
+        }
+        .alert(L10n.t("要导入此备份吗？"), isPresented: $showImportConfigConfirm) {
+            Button(L10n.t("取消"), role: .cancel) {}
+            // Task 包一层:importData 现在要等引擎重新读到新配置才返回(见那边
+            // 的注释),而 restartApp() 必须排在它后面 —— 一旦 terminate,没跑完的
+            // launchctl 操作就跟着进程一起没了。
+            Button(L10n.t("导入并重启"), role: .destructive) {
+                if let data = pendingImportData {
                     Task { @MainActor in
-                        await ConfigPortability.clearAllConfig()
+                        // `importData` 的返回值**必须检查**:它是 `async -> Bool`,顶层 JSON
+                        // 解析失败时 return false(ConfigPortability.swift:254)。丢掉返回值再无条件
+                        // restartApp() 的话,用户选错一个 .json(面板只过滤扩展名、不校验是不是我们的
+                        // 导出包)的结果就是 **App 退出重启、设置一个字没改、界面上零提示**,唯一能
+                        // 得出的结论是"导入把我的设置弄坏了"。
+                        //
+                        // 失败就地报错、**不重启**。歌词恢复和 adoptFolder 也一并跳过:配置都没写进去,
+                        // 单独铺歌词/改备份目录只会留下一个半吊子状态。
+                        guard await ConfigPortability.importData(data) else {
+                            configMessage = L10n.t("导入失败：该文件不是 Lyrimuse 的设置备份，或已损坏。当前设置未更改")
+                            return
+                        }
+                        // 歌词必须排在 importData **之后**:歌词目录是
+                        // features.lyricsDir(用户可自定义的绝对路径),而那个文件正是
+                        // importData 刚写的 —— 先铺后导会铺到旧机器那个目录里去。
+                        if let lyrics = pendingImportLyrics {
+                            await LyricsBackupStore.restore(from: lyrics)
+                        }
+                        // 必须排在 importData 之后:备份目录这个键在导入排除表里、
+                        // 不会被导入的包覆盖,但顺序反了会先被写、再被这一句改回来。
+                        if let folder = pendingImportFolder {
+                            ICloudConfigStore.adoptFolder(folder)
+                        }
+                        // 有一份没写成(盘满、没有写权限):说清楚是哪部分,这次不重启 —— 重启了提示就没了,
+                        // 用户会以为全部导入成功。其余部分已经生效,可以再导一次。
+                        let failed = ConfigPortability.lastImportFailures
+                        guard failed.isEmpty else {
+                            configMessage = String(format: L10n.t("部分设置未能写入（%@），其余已导入。可再次导入，或检查配置文件夹的写入权限"),
+                                                   failed.joined(separator: ", "))
+                            return
+                        }
                         ConfigPortability.restartApp()
                     }
                 }
-            } message: {
-                Text(L10n.t("将清除本机所有账号令牌、密钥和个人设置，恢复为初始安装状态（下次启动时将重新显示设置引导），此操作无法撤销。iCloud 中的备份和已导出的文件不受影响；如两者均没有，建议先进行备份"))
+            }
+        } message: {
+            // 确认框里要**讲对象**,不能只讲后果 —— 用户得看得出正要导入的是哪一份。
+            // 导出时间和机器名就在包里(ConfigPortability 写的),iCloud 那一行也一直渲染成
+            // "…· 来自 DJ-chenyuhao";同一份信息在行里有、在真正要拍下决定的确认框里反而
+            // 没有,是反的。
+            //
+            // 这一句放在后果**之前**:先说清"你要覆盖成哪一份",再说"会覆盖掉什么"。
+            if let source = pendingImportSourceDescription {
+                Text(String(format: L10n.t("即将导入：%@"), source))
+            }
+            // 歌词那句只在真有 sidecar 时才加 —— 没有的时候提一句"不含歌词"只会让人
+            // 以为哪里出错了。两句都是完整句子,不在运行时拼半句。
+            if pendingImportLyrics != nil {
+                Text(String(format: L10n.plural("将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址，并恢复备份中的 %@ 个歌词文件（同名文件将被覆盖）。完成后 Lyrimuse 将立即重启", count: pendingImportLyricsCount),
+                            "\(pendingImportLyricsCount)"))
+            } else {
+                Text(L10n.t("将覆盖当前全部设置，包括已连接的账号与播放记录的发送地址。完成后 Lyrimuse 将立即重启"))
             }
         }
-        .id(L10n.current)
+
+        // 「封面」卡不在这一页:它只有「动态封面」一项,而那一项只管歌词窗口那张封面卡,
+        // 归 设置 › 歌词显示 › 歌词窗口(AppearanceSettingsTab 的 .lyricsWindow 段)。
+        .alert(L10n.t("要清除全部设置吗？"), isPresented: $showClearConfigWarning) {
+            Button(L10n.t("取消"), role: .cancel) {}
+            // clearAllConfig 要等常驻服务真的卸载完才返回,不能在它之前 terminate。
+            Button(L10n.t("清除并重启"), role: .destructive) {
+                Task { @MainActor in
+                    await ConfigPortability.clearAllConfig()
+                    ConfigPortability.restartApp()
+                }
+            }
+        } message: {
+            Text(L10n.t("将删除本机的全部账号凭证、密钥与个人设置，恢复为初始安装状态，下次启动时重新显示设置引导。此操作无法撤销。iCloud 中的备份与已导出的文件不受影响；如两者均没有，建议先备份"))
+        }
     }
 
     /// 正要导入的那份备份是"哪一份":导出时间 + 写它的那台机器。
@@ -6687,18 +6696,34 @@ private struct GeneralSettingsTab: View {
         }
     }
 
-    /// iCloud 那一行的副标题:有配置就说清是哪一份(时间 + 哪台机器写的),没有就说还没存过。
+    /// 上次备份距今超过这么多天,iCloud 那一行的副标题转成橙色。
+    private static let staleBackupDays = 30
+
+    /// 上次备份距今几天(按日历日算);还没有备份时为 nil。
+    private var backupAgeDays: Int? {
+        guard let snap = iCloudSnapshot else { return nil }
+        let calendar = Calendar.current
+        return calendar.dateComponents([.day], from: calendar.startOfDay(for: snap.exportedAt ?? snap.modifiedAt),
+                                       to: calendar.startOfDay(for: Date())).day
+    }
+
+    private var backupIsStale: Bool { (backupAgeDays ?? 0) > Self.staleBackupDays }
+
+    /// iCloud 那一行的副标题:有配置就说清是哪一份(几天前 + 时间 + 哪台机器写的),没有就说还没存过。
     private var iCloudSubtitle: String {
         guard let snap = iCloudSnapshot else {
             // 还没存过时这行是这一栏唯一的说明,所以要说清楚存了有什么用。自选了文件夹
             // 的话改成报位置 —— 那时"换 Mac 时读回来"能不能成立取决于用户挑的是不是一个
             // 会同步的目录,不该由我们替他打这个包票。
             guard ICloudConfigStore.usingCustomFolder else {
-                return L10n.t("保存到 iCloud，更换 Mac 时可直接恢复")
+                return L10n.t("尚无备份；保存到 iCloud 后，可在新 Mac 上直接恢复")
             }
-            return String(format: L10n.t("将备份到「%@」，尚无备份"), ICloudConfigStore.folderURL.lastPathComponent)
+            return String(format: L10n.t("尚无备份，将保存到「%@」"), ICloudConfigStore.folderURL.lastPathComponent)
         }
-        let when = SettingsDateText.mediumShort(snap.exportedAt ?? snap.modifiedAt)
+        var when = SettingsDateText.mediumShort(snap.exportedAt ?? snap.modifiedAt)
+        if let days = backupAgeDays, days >= 2 {
+            when = String(format: L10n.t("%d 天前"), days) + " · " + when
+        }
         let base: String
         if let device = snap.deviceName, !device.isEmpty {
             base = String(format: L10n.t("%1$@ · 来自 %2$@"), when, device)
@@ -6719,7 +6744,7 @@ private struct GeneralSettingsTab: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = L10n.t("选择")
-        panel.message = L10n.t("选择一个自动同步的文件夹（Dropbox、坚果云、OneDrive 等），更换 Mac 后指向同一文件夹即可")
+        panel.message = L10n.t("选择一个会自动同步的文件夹（如 Dropbox、坚果云、OneDrive），在新 Mac 上选择同一文件夹即可恢复")
         panel.directoryURL = ICloudConfigStore.preparedFolderURL()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         ICloudConfigStore.setCustomFolder(url)
@@ -6815,10 +6840,10 @@ private struct GeneralSettingsTab: View {
             case .data(let d):
                 data = d
             case .downloading:
-                iCloudMessage = L10n.t("正在从 iCloud 下载这份备份，下载完成后请再次点按「恢复此备份」")
+                iCloudMessage = L10n.t("正在从 iCloud 下载此备份，完成后请再次点按「恢复此备份」")
                 return
             case .unavailable:
-                iCloudMessage = L10n.t("无法读取这份备份：可能未开启 iCloud Drive，或该文件夹未同步")
+                iCloudMessage = L10n.t("无法读取此备份：可能未开启 iCloud Drive，或该文件夹尚未同步")
                 return
             }
             pendingImportData = data
