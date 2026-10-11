@@ -45080,6 +45080,23 @@
           }
         }
       }
+    },
+    "同一首歌的 %d 种写法" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d Versions of This Song"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同一首歌的 %d 種寫法"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

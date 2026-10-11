@@ -3481,9 +3481,29 @@ struct LyricsManagerView: View {
         }
     }
 
-    /// 头部下面那行概况:时长、歌词更新时间(没词的写解析时间)、当初几个源应答选了谁(见 11 章决策 76)。
+    /// 头部下面那行概况:同一首歌有几种写法(点开「同一首歌的其他写法」)、时长、歌词更新时间(没词的写解析时间)、当初几个源
+    /// 应答选了谁(见 11 章决策 76)。
     private func factsRow(_ summary: EnrichCacheStore.Summary) -> some View {
         SettingsFlowRow(spacing: 18) {
+            // 认进同一首歌的写法不止这一条时露在外面;只有这一条(含拆开过的)从「⋯」里进(18 章决策 41)。
+            let versions = store.songVersionCount(forKey: summary.key)
+            if versions > 1 {
+                Button { showSongVersions = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "square.stack")
+                            .font(.system(size: 11))
+                        Text(String(format: L10n.t("同一首歌的 %d 种写法"), versions)).lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.accentColor)
+                    .fixedSize()
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("查看被认成同一首歌的其他写法，认错了可以拆开"))
+            }
             if summary.durationSecs > 0 {
                 LyricsManagerFact(icon: "clock",
                                   text: String(format: L10n.t("时长 %@"), Self.durationText(summary.durationSecs)))

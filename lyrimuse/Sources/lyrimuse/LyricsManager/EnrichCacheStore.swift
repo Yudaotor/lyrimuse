@@ -273,6 +273,8 @@ public final class EnrichCacheStore: ObservableObject {
     private var looseKeyIndex: [String: String] = [:]
     /// key 到它在 summaries 里的下标,随 summaries 一起重建(见 summary(forKey:))。
     private var summaryIndex: [String: Int] = [:]
+    /// 实体 id(条目上的 `song`)到这首歌有几种写法,随 summaries 一起重建(见 songVersionCount(forKey:))。
+    private var songVersionCounts: [String: Int] = [:]
     /// 读盘失败(缓存读不出、正文补不回):下一次读成功就清。
     @Published private var loadError: String?
     /// 写入失败(保存、删除、清空没做成):只在下一次写成功、或调用方 `dismissEditError()` 时清 ——
@@ -531,6 +533,7 @@ public final class EnrichCacheStore: ObservableObject {
         var summaryIndex: [String: Int] = [:]
         /// 条目里出现过、但不在 `LyricsSource` 里的来源:播放器自带的那份歌词(KKBOX、Spotify)。
         var extraSources: [String] = []
+        var songVersionCounts: [String: Int] = [:]
     }
 
     /// 把一份构建结果发布出去。跟 buildSummaries 拆开:构建是纯函数(reload 时在后台跑,
@@ -544,6 +547,7 @@ public final class EnrichCacheStore: ObservableObject {
         distinctAlbums = bundle.distinctAlbums
         looseKeyIndex = bundle.looseKeyIndex
         summaryIndex = bundle.summaryIndex
+        songVersionCounts = bundle.songVersionCounts
         if extraSources != bundle.extraSources { extraSources = bundle.extraSources }
     }
 
@@ -848,6 +852,12 @@ public final class EnrichCacheStore: ObservableObject {
                 artistMap[s.normPrimaryArtist] = rawArtist
             }
         }
+        var songVersionCounts: [String: Int] = [:]
+        for entry in raw.values {
+            if let song = entry["song"] as? String, !song.isEmpty {
+                songVersionCounts[song, default: 0] += 1
+            }
+        }
         return SummariesBundle(
             summaries: items,
             albumDisplayMap: albumMap,
@@ -855,7 +865,8 @@ public final class EnrichCacheStore: ObservableObject {
             distinctAlbums: Array(Set(albumMap.values)).sorted(),
             looseKeyIndex: looseIndex,
             summaryIndex: summaryIndex,
-            extraSources: extraSources.sorted()
+            extraSources: extraSources.sorted(),
+            songVersionCounts: songVersionCounts
         )
     }
 
@@ -1090,6 +1101,12 @@ public final class EnrichCacheStore: ObservableObject {
     func songMembership(forKey key: String) -> SongVersions.Membership? {
         guard let entry = raw[key], let song = entry["song"] as? String, !song.isEmpty else { return nil }
         return SongVersions.Membership(song: song, share: (entry["song_share"] as? Int) ?? 0)
+    }
+
+    /// 这条写法所在的那首歌一共有几种写法(含它自己);没有实体 id 时为 0。
+    func songVersionCount(forKey key: String) -> Int {
+        guard let song = songMembership(forKey: key)?.song else { return 0 }
+        return songVersionCounts[song] ?? 0
     }
 
     /// 「同一首歌的其他写法」里的拆开:keys 这几条从所在实体里拆出去,引擎记下拆开记录、同步过去的歌词换回原来那份

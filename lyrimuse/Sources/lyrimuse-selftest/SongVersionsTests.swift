@@ -230,5 +230,10 @@ func runSongVersionsTests() {
         expectEqual(sourceBytes(manager, contain: "SongVersionsSheet(summary: summary, onOpen:")
                     && sourceBytes(manager, contain: "Button(L10n.t(\"同一首歌的其他写法…\")) { showSongVersions = true }"), true,
                     "其他写法(契约): 详情页「⋯」菜单接上弹窗")
+        expectEqual(sourceBytes(manager, contain: "let versions = store.songVersionCount(forKey: summary.key)")
+                    && sourceBytes(manager, contain: "if versions > 1 {\n                Button { showSongVersions = true } label: {")
+                    && sourceBytes(store, contain: "songVersionCounts[song, default: 0] += 1")
+                    && sourceBytes(store, contain: "songVersionCounts = bundle.songVersionCounts"), true,
+                    "其他写法(契约): 详情页概况那一行露出「同一首歌的 N 种写法」,随列表一起数")
     }
 }

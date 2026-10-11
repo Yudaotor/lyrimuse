@@ -587,6 +587,7 @@
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
 "同一首歌另外几份改过的歌词会换成这一份，其他写法也跟着用它。被换掉的那几份会另存一份备份。" = "The other corrected lyrics of this song will be replaced with these, and its other versions will use them too. The replaced lyrics are kept in a backup.";
+"同一首歌的 %d 种写法" = "%d Versions of This Song";
 "同一首歌的其他写法" = "Other Versions of This Song";
 "同一首歌的其他写法…" = "Other Versions of This Song…";
 "同步你的收听记录" = "Sync your listening history";
