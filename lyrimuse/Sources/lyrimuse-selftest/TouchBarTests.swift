@@ -508,9 +508,9 @@ func runTouchBarTests() {
                                  options: opts(play: true)), .none, "自动展开: 再暂停")
             expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "B", nowMs: 20_000 + Auto.resumeDebounceMs,
                                  visible: false, options: opts(play: true)), .expandAfterSettle, "自动展开: 停够了再播,等再确认")
-            expectEqual(a.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: opts(play: true)),
+            expectEqual(a.settleElapsed(isPlaying: true, lacksLyrics: false, nowMs: 0, visible: false, options: opts(play: true)),
                         .expand, "自动展开: 再确认时还在放、还收着,展开")
-            expectEqual(a.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: opts(play: true)),
+            expectEqual(a.settleElapsed(isPlaying: true, lacksLyrics: false, nowMs: 0, visible: false, options: opts(play: true)),
                         .none, "自动展开: 再确认只认一次")
             expectEqual(a.update(isPlaying: true, lacksLyrics: false, trackKey: "B", nowMs: 23_000, visible: false,
                                  options: opts(play: true)), .none, "自动展开: 同一状态重复报不重复展开")
@@ -527,7 +527,7 @@ func runTouchBarTests() {
                                  options: opts(play: true)), .expandAfterSettle, "再确认: 先当成在放,等再确认")
             expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "播客", nowMs: 3_800, visible: false,
                                  options: opts(play: true)), .none, "再确认: 认出不是歌(当成没在放)")
-            expectEqual(a.settleElapsed(isPlaying: false, lacksLyrics: false, visible: false, options: opts(play: true)),
+            expectEqual(a.settleElapsed(isPlaying: false, lacksLyrics: false, nowMs: 0, visible: false, options: opts(play: true)),
                         .none, "再确认: 启动时的播客不展开")
             func pending() -> Auto {
                 var b = Auto()
@@ -536,20 +536,45 @@ func runTouchBarTests() {
             }
             var b = pending()
             b.userChangedVisibility()
-            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: all), .none,
+            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, nowMs: 0, visible: false, options: all), .none,
                         "再确认: 期间用户自己动了,不展开")
             b = pending()
-            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, visible: true, options: all), .none,
+            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, nowMs: 0, visible: true, options: all), .none,
                         "再确认: 已经展开着,不重复")
             b = pending()
-            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: opts(noLyrics: true)),
+            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: false, nowMs: 0, visible: false, options: opts(noLyrics: true)),
                         .none, "再确认: 期间开关关了,不展开")
             b = pending()
-            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: true, visible: false, options: all), .none,
+            expectEqual(b.settleElapsed(isPlaying: true, lacksLyrics: true, nowMs: 0, visible: false, options: all), .none,
                         "再确认: 期间确认这首没歌词、开着无歌词收起,不展开")
             var c = Auto()
-            expectEqual(c.settleElapsed(isPlaying: true, lacksLyrics: false, visible: false, options: all), .none,
+            expectEqual(c.settleElapsed(isPlaying: true, lacksLyrics: false, nowMs: 0, visible: false, options: all), .none,
                         "再确认: 没在等就不展开")
+        }
+        // 开始播放触发的展开算临时的(provisionalExpandMs,决策 49):期间判定没在放歌(启动时先把播客当成歌、过了几秒才认出来)
+        // 当场收回,不看「暂停时自动收起」;过了这段时间按普通暂停;用户自己动过就不算临时的了。
+        do {
+            func expandedOnPlay(at ms: Int) -> Auto {
+                var a = Auto()
+                _ = a.start(isPlaying: false, lacksLyrics: false, trackKey: "播客", nowMs: 0, visible: false,
+                            options: opts(play: true))
+                _ = a.update(isPlaying: true, lacksLyrics: false, trackKey: "播客", nowMs: 2_400, visible: false,
+                             options: opts(play: true))
+                _ = a.settleElapsed(isPlaying: true, lacksLyrics: false, nowMs: ms, visible: false, options: opts(play: true))
+                return a
+            }
+            var a = expandedOnPlay(at: 5_000)
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "播客", nowMs: 11_300, visible: true,
+                                 options: opts(play: true)), .collapse, "临时展开: 认出不是歌(当成停了)当场收回")
+            expectEqual(a.autoCollapsed, .paused, "临时展开: 收回记成因为暂停,真是歌再放起来会展开回来")
+            a = expandedOnPlay(at: 5_000)
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 5_000 + Auto.provisionalExpandMs,
+                                 visible: true, options: opts(play: true, pause: true)), .schedulePauseCollapse,
+                        "临时展开: 过了临时期按普通暂停")
+            a = expandedOnPlay(at: 5_000)
+            a.userChangedVisibility()
+            expectEqual(a.update(isPlaying: false, lacksLyrics: false, trackKey: "A", nowMs: 6_000, visible: true,
+                                 options: opts(play: true)), .none, "临时展开: 用户自己动过就不算临时的")
         }
         // 暂停时收起:暂停排一次计时,满了还暂停、还看得见才收;继续播放时展开回来,不看「开始播放时自动展开」。
         do {

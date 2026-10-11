@@ -8,7 +8,8 @@ import Foundation
 /// - 手动收起的,只有「开始播放时自动展开」在下一次真正开始播放时才展开;播放中自然换歌不展开;
 /// - 停不到 `resumeDebounceMs` 就又放起来的(切歌、缓冲那一下)不算开始播放;
 /// - 「开始播放时自动展开」等 `settleExpandDelayMs` 再确认一次还在放歌才展开:App 刚启动时可能先把播客当成在放歌,
-///   过一会儿才认出不是歌。
+///   过一会儿才认出不是歌;认出来要多久不固定(实测 1.4 秒到 8.9 秒),所以这样展开后的 `provisionalExpandMs` 里
+///   一旦判定没在放歌,当场收回去,不等「暂停时自动收起」(17 章决策 49)。
 ///
 /// 控制器每次播放状态变了调 `update`,暂停满时长调 `pauseDelayElapsed`,看到不是自己发起的展开 / 收起时调
 /// `userChangedVisibility`;返回的动作照做。
@@ -50,6 +51,8 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
     public static let resumeDebounceMs = 2_000
     /// 开始播放后等多久再确认展开。启动时在放播客,认出不是歌之前约有 1.4 秒按在放歌算(17 章决策 45)。
     public static let settleExpandDelayMs = 2_500
+    /// 开始播放触发的展开算临时的这么久:期间判定没在放歌就当场收回。
+    public static let provisionalExpandMs = 15_000
 
     /// 现在收着是不是自己收的、因为什么;nil = 没收,或者是用户收的。
     public private(set) var autoCollapsed: Reason?
@@ -59,6 +62,8 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
     private var pausedAtMs: Int?
     /// 回过 `.expandAfterSettle`、还在等 `settleElapsed`。
     private var awaitingSettle = false
+    /// 开始播放触发的那次展开到哪一刻为止算临时的;nil = 不是。
+    private var provisionalUntilMs: Int?
 
     public init() {}
 
@@ -91,6 +96,8 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
         if paused { pausedAtMs = nowMs }
         if resumed { pausedAtMs = nil }
         if !isPlaying { awaitingSettle = false }
+        let provisional = provisionalUntilMs.map { nowMs < $0 } ?? false
+        if paused || provisionalUntilMs.map({ nowMs >= $0 }) == true { provisionalUntilMs = nil }
 
         // 刚确认没歌词,或者换到一首已知没歌词的。
         if lacksLyrics, !lacked || newTrack, options.collapseWhenNoLyrics {
@@ -99,6 +106,11 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
             return .collapse
         }
         if paused {
+            // 刚因为开始播放展开、很快就判定没在放歌(多半是把播客、视频先当成了歌):当场收回。
+            if provisional, visible {
+                autoCollapsed = .paused
+                return .collapse
+            }
             return options.collapseWhenPaused && visible ? .schedulePauseCollapse : .none
         }
         if resumed {
@@ -121,11 +133,14 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
         return .none
     }
 
-    /// 开始播放后满 `settleExpandDelayMs`:还在放歌、还收着、开关还开着(这首也不是开着「无歌词时收起」的没歌词的歌)才展开。
-    public mutating func settleElapsed(isPlaying: Bool, lacksLyrics: Bool, visible: Bool, options: Options) -> Action {
+    /// 开始播放后满 `settleExpandDelayMs`:还在放歌、还收着、开关还开着(这首也不是开着「无歌词时收起」的没歌词的歌)才展开,
+    /// 这次展开在 `provisionalExpandMs` 里算临时的。
+    public mutating func settleElapsed(isPlaying: Bool, lacksLyrics: Bool, nowMs: Int, visible: Bool,
+                                       options: Options) -> Action {
         guard awaitingSettle else { return .none }
         awaitingSettle = false
         guard isPlaying, !visible, options.expandOnPlay, !(lacksLyrics && options.collapseWhenNoLyrics) else { return .none }
+        provisionalUntilMs = nowMs + Self.provisionalExpandMs
         return .expand
     }
 
@@ -140,5 +155,6 @@ public struct TouchBarAutoPresent: Equatable, Sendable {
     public mutating func userChangedVisibility() {
         autoCollapsed = nil
         awaitingSettle = false
+        provisionalUntilMs = nil
     }
 }

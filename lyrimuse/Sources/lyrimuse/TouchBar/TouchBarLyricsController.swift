@@ -620,8 +620,8 @@ final class TouchBarLyricsController: NSObject, NSTouchBarDelegate {
                 self.settleExpandTask = nil
                 let p = PlaybackCoordinator.shared
                 self.performAuto(self.autoPresent.settleElapsed(
-                    isPlaying: p.isPlayingNow, lacksLyrics: p.currentTrackLacksLyrics, visible: self.bar.isVisible,
-                    options: self.autoOptions))
+                    isPlaying: p.isPlayingNow, lacksLyrics: p.currentTrackLacksLyrics, nowMs: Self.nowMs(),
+                    visible: self.bar.isVisible, options: self.autoOptions))
             }
         case .schedulePauseCollapse:
             cancelPauseCollapse()
