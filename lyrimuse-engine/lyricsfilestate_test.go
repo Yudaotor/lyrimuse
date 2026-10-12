@@ -26,7 +26,7 @@ func withLyricsFileStateEnv(t *testing.T) string {
 
 func resetLyricsFileStateForTest() {
 	lyricsFileStateMu.Lock()
-	lyricsFileStateDir, lyricsFileStateFiles, lyricsFileStateReady = "", nil, false
+	lyricsFileStateDir, lyricsFileStateFiles, lyricsFileStateReady, lyricsFileStateTrusted = "", nil, false, false
 	lyricsFileStateMu.Unlock()
 }
 

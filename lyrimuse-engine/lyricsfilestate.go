@@ -38,6 +38,9 @@ var (
 	lyricsFileStateDir   string
 	lyricsFileStateFiles map[string]lyricsFileStamp
 	lyricsFileStateReady bool // 已经按 lyricsFileStateDir 读过盘
+	// lyricsFileStateTrusted:手上的记录描述的就是这个文件夹(从盘上读到了它的记录,或者这个进程对它做完过一次全量导出)。
+	// 记录丢了、换了文件夹时为 false:导入把每个文件都当成可能改过,但不能当成「用户导出之后改过」。
+	lyricsFileStateTrusted bool
 )
 
 func lyricsFileStatePath() string {
@@ -59,11 +62,19 @@ func lyricsFileStateEnabled(dir string) bool {
 		return true
 	}
 	lyricsFileStateDir, lyricsFileStateFiles, lyricsFileStateReady = dir, map[string]lyricsFileStamp{}, true
+	lyricsFileStateTrusted = false
 	var f lyricsFileStateFile
 	if raw, err := os.ReadFile(path); err == nil && json.Unmarshal(raw, &f) == nil && f.Dir == dir && f.Files != nil {
-		lyricsFileStateFiles = f.Files
+		lyricsFileStateFiles, lyricsFileStateTrusted = f.Files, true
 	}
 	return true
+}
+
+// lyricsFileStateTrustedFor:记录描述的是 dir 这个文件夹,记录里没有、或者跟记录不一致的文件才是导出之后被动过的。
+func lyricsFileStateTrustedFor(dir string) bool {
+	lyricsFileStateMu.Lock()
+	defer lyricsFileStateMu.Unlock()
+	return lyricsFileStateReady && lyricsFileStateDir == dir && lyricsFileStateTrusted
 }
 
 func lyricsStampOf(info fs.FileInfo, crc uint32) lyricsFileStamp {
@@ -124,7 +135,13 @@ func saveLyricsFileState(dir string, present map[string]fs.FileInfo) {
 	}
 	if err := writeFileAtomic(path, raw); err != nil {
 		slog.Warn("lyrics file state: save failed", "err", err)
+		return
 	}
+	lyricsFileStateMu.Lock()
+	if lyricsFileStateReady && lyricsFileStateDir == dir {
+		lyricsFileStateTrusted = true
+	}
+	lyricsFileStateMu.Unlock()
 }
 
 // listLyricsDir:目录里每个文件的状态(一次 ReadDir + 每项一次 lstat),给全量导出判断「在不在、动没动」。

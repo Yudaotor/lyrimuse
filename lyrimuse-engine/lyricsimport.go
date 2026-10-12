@@ -194,6 +194,7 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 	var adopted []string
 	// 上次之后没人动过的文件不读(见 lyricsfilestate.go);整组都没动过就整组跳过。
 	useState := lyricsFileStateEnabled(dir)
+	trusted := useState && lyricsFileStateTrustedFor(dir)
 
 	type group struct {
 		base      string
@@ -268,6 +269,9 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 	lyricsImportRestoreAll, lyricsImportRestoreKeys = false, nil
 	// edited:状态记录确认导出之后被用户改过、正文或逐字真的变了的(不含从快照恢复、状态记录作废时的全量读)。
 	var edited []string
+	// 状态记录作废时:predated 是同步之前导出的旧文件(不导入,随后的全量导出按缓存重写),alone 是跟缓存不一样、只改这一条的
+	// 同一首歌的写法。见 18 章决策 53。
+	var predated, alone []string
 	for _, g := range groupsOldestFirst {
 		groupUnchanged := useState && g.unchanged == len(g.files)
 		if groupUnchanged && !restoreAll && len(restoreKeys) == 0 {
@@ -319,6 +323,10 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 		}
 
 		e := enrichCache[key] // 不存在时是 enrichEntry{} 零值,TS 自然留 0
+		if !trusted && !restoreAll && !restoreKeys[key] && importPredatesSongShare(key, e, variantBody) {
+			predated = append(predated, key)
+			continue
+		}
 		changed := false
 		prevLyrics, prevTr, prevRoma, prevYRC := e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC
 		if v, ok := variantBody(".lrc"); ok {
@@ -372,13 +380,23 @@ func importLyricsFromOpts(dir string, persist, cleanTemps bool) []string {
 			enrichCache[key] = e
 			enrichDirty = true
 			adopted = append(adopted, key)
-			if useState && !restoreAll && !restoreKeys[key] && (e.Lyrics != prevLyrics || e.LyricsYRC != prevYRC) {
-				edited = append(edited, key)
+			if !restoreAll && !restoreKeys[key] && (e.Lyrics != prevLyrics || e.LyricsYRC != prevYRC) {
+				switch {
+				case trusted:
+					edited = append(edited, key)
+				case e.Song != "":
+					alone = append(alone, key)
+				}
 			}
 		}
 	}
 	adopted = append(adopted, shareImportedEditsLocked(edited, time.Now())...)
 	enrichMu.Unlock()
+	if len(predated) > 0 || len(alone) > 0 {
+		examples := append(append([]string{}, predated...), alone...)
+		slog.Warn("lyrics import: file state record missing, not syncing folder lyrics to the rest of the song",
+			"predated_kept", len(predated), "adopted_alone", len(alone), "examples", examples[:min(len(examples), 5)])
+	}
 	if persist {
 		saveEnrichCache() // 内部会检查 enrichDirty,这一轮什么都没变时是无害的空操作
 	}

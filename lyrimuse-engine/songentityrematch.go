@@ -107,6 +107,21 @@ func songShareFollower(e enrichEntry) bool {
 		(e.LyricsDecisionApplied != nil && e.LyricsDecisionApplied.Path == lyricsDecisionPathSongEntityShare)
 }
 
+// importPredatesSongShare:导入歌词文件夹、状态记录作废时用。key 这条写法的歌词还是同步写进去那份(有留底、指纹对得上),
+// 文件夹里这组文件的正文、逐字跟留底里同步之前那份一样:是同步之前导出、之后没更新过的旧文件,不导入。调用方持 enrichMu。
+func importPredatesSongShare(key string, e enrichEntry, body func(suffix string) (string, bool)) bool {
+	pre, ok := songShareRestorable(key, e)
+	if !ok {
+		return false
+	}
+	lrc, hasLRC := body(".lrc")
+	yrc, hasYRC := body(".yrc")
+	if !hasLRC && !hasYRC {
+		return false
+	}
+	return (!hasLRC || lrc == pre.Lyrics) && (!hasYRC || yrc == pre.LyricsYRC) && (lrc != "" || yrc != "")
+}
+
 // shareImportedEditsLocked:歌词同步开着时,歌词文件夹里被用户改过的那几条(导入时状态记录确认导出之后改过、正文或逐字真的变了)
 // 按手改处理:标上手改,像歌词管理保存手改一样同步到整首歌(shareManualEditLocked,18 章决策 35)。不这样做的话,它只是这一条
 // 写法的歌词变了,下一次建表那一组会被重搜、用户改的词被整组那一份盖掉。返回跟着改了的写法(不含 keys 本身)。调用方持 enrichMu。
