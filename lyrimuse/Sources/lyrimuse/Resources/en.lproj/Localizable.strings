@@ -1054,6 +1054,7 @@
 "推荐。为每个歌词源评分，选用最高分的结果" = "Recommended. Scores every source and keeps the best match";
 "推送地址" = "Push URL";
 "推送提醒" = "Push Alerts";
+"推送正常" = "Pushing normally";
 "描边颜色" = "Stroke Color";
 "提前" = "Advance";
 "提前 %@ 秒显示" = "Show %@s earlier";

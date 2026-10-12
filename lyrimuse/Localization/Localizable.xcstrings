@@ -11913,6 +11913,22 @@
         }
       }
     },
+    "推送正常" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pushing normally"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推送正常"
+          }
+        }
+      }
+    },
     "描边颜色" : {
       "extractionState" : "manual",
       "localizations" : {

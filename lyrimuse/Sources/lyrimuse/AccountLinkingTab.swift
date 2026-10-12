@@ -161,7 +161,7 @@ private struct SecretFieldRow: View {
                     .labelsHidden()
                 if !value.isEmpty {
                     Button(L10n.t("完成")) { isEditing = false }
-                        .buttonStyle(.link)
+                        .buttonBorderShape(.capsule)
                 }
             }
         } else {
@@ -171,7 +171,7 @@ private struct SecretFieldRow: View {
                 Label(L10n.t("已设置"), systemImage: "checkmark.circle.fill")
                     .font(.caption).foregroundStyle(.green)
                 Button(L10n.t("更改")) { isEditing = true }
-                    .buttonStyle(.link)
+                    .buttonBorderShape(.capsule)
             }
         }
     }
@@ -556,6 +556,9 @@ struct AccountLinkingTab: View {
                         if destination == .discord {
                             discordAccountChip
                                 .padding(.top, 4)
+                        } else if destination.livesInLabs {
+                            labsStatusChip
+                                .padding(.top, 4)
                         }
                     }
                 }
@@ -689,41 +692,73 @@ struct AccountLinkingTab: View {
         apply(picked)
     }
 
-    /// 「提醒」卡里一行听歌报告的行尾控件:数据源 Picker + 开关。Picker 只在开关打开时出现
-    /// (没开这个提醒,选哪个数据源无所谓),摆在开关左边、同一行,归属由行本身表达,不另加标签。
-    /// Picker 显示的是「这次实际会用哪个」(没手动选过时是 resolvedDigestSource 判定出的默认值)。
-    private func digestControls(
+    /// 「提醒」卡里一块听歌报告的数据源:显示「这次实际会用哪个」(没手动选过时是 resolvedDigestSource 判定出的默认值),
+    /// 选了还没配好的源走 digestSourcePicked 的提示,不落盘。
+    private func digestSourceBinding(_ source: ReferenceWritableKeyPath<FeatureSettingsStore, String>) -> Binding<String> {
+        Binding(
+            get: { resolvedDigestSource(preference: features[keyPath: source]) },
+            set: { picked in
+                digestSourcePicked(picked, current: features[keyPath: source]) {
+                    features[keyPath: source] = $0
+                    Task { await features.save() }
+                }
+            }
+        )
+    }
+
+    /// 同一块的开关:打开前过 toggleGuarded(推送平台没填、数据源账号没配好就弹提示)。
+    private func digestEnabledBinding(
+        _ enabled: ReferenceWritableKeyPath<FeatureSettingsStore, Bool>,
+        source: ReferenceWritableKeyPath<FeatureSettingsStore, String>
+    ) -> Binding<Bool> {
+        Binding(
+            get: { features[keyPath: enabled] },
+            set: { newValue in
+                let resolved = resolvedDigestSource(preference: features[keyPath: source])
+                toggleGuarded(newValue,
+                    sameCardHint: config.pushMissingHint(),
+                    crossCard: digestCrossCard(source: resolved)
+                ) { v in features[keyPath: enabled] = v; Task { await features.save() } }
+            }
+        )
+    }
+
+    /// 「提醒」卡里的一块:图标、名字、开关;开着时下面一行是数据源的胶囊分段(没开这个提醒,选哪个数据源无所谓)。
+    /// 样子同 `SettingsToggleTile`,数据源排在名字下面而不是开关旁边:两列小块一格放不下名字、分段和开关。
+    private func digestTile(
+        icon: String, title: String,
         enabled: ReferenceWritableKeyPath<FeatureSettingsStore, Bool>,
         source: ReferenceWritableKeyPath<FeatureSettingsStore, String>
     ) -> some View {
-        HStack(spacing: 8) {
-            if features[keyPath: enabled] {
-                Picker("", selection: Binding(
-                    get: { resolvedDigestSource(preference: features[keyPath: source]) },
-                    set: { picked in
-                        digestSourcePicked(picked, current: features[keyPath: source]) {
-                            features[keyPath: source] = $0
-                            Task { await features.save() }
-                        }
-                    }
-                )) {
-                    Text("Last.fm").tag("lastfm")
-                    Text("ListenBrainz").tag("listenbrainz")
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                SymbolImage(name: icon, size: 12)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+                Text(title)
+                    .font(.system(size: 12.5))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Toggle("", isOn: digestEnabledBinding(enabled, source: source))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
             }
-            Toggle("", isOn: Binding(
-                get: { features[keyPath: enabled] },
-                set: { newValue in
-                    let resolved = resolvedDigestSource(preference: features[keyPath: source])
-                    toggleGuarded(newValue,
-                        sameCardHint: config.pushMissingHint(),
-                        crossCard: digestCrossCard(source: resolved)
-                    ) { v in features[keyPath: enabled] = v; Task { await features.save() } }
-                }
-            ))
+            if features[keyPath: enabled] {
+                SettingsPillSegmentedControl(
+                    selection: digestSourceBinding(source),
+                    options: ["lastfm", "listenbrainz"],
+                    label: { $0 == "listenbrainz" ? "ListenBrainz" : "Last.fm" },
+                    minWidth: 0
+                )
+                .padding(.leading, 22)
+            }
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.05)))
+        .settingsSearchHighlight(title: title)
     }
 
     // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
@@ -788,9 +823,9 @@ struct AccountLinkingTab: View {
                 ProgressView().controlSize(.small)
                 Text(L10n.t("正在验证…")).foregroundStyle(.secondary)
             }
-        case .valid(let user):
-            Label(String(format: L10n.t("已连接：%@"), user), systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+        case .valid:
+            // 连上了由页头胶囊报(`labsStatusChip`),这里不重复。
+            EmptyView()
         case .invalid:
             Label(L10n.t("Token 无效，请重新拷贝"), systemImage: "exclamationmark.circle.fill")
                 .foregroundStyle(.orange)
@@ -802,9 +837,8 @@ struct AccountLinkingTab: View {
     }
 
     private var listenBrainzFields: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(title: L10n.t("账号信息"))
-            CardDivider()
             SettingsRawRow(insetToText: true, icon: "key.fill") {
                 VStack(alignment: .leading, spacing: 8) {
                     SecretFieldRow(L10n.t("账号 Token"), value: $config.listenbrainzToken)
@@ -821,33 +855,38 @@ struct AccountLinkingTab: View {
             .onAppear { checkListenBrainzToken() }
             .onChange(of: config.listenbrainzToken) { _, _ in checkListenBrainzToken() }
         }
+        .background { LastfmGlassGlow() }
     }
 
     // MARK: - 状态中继
 
     @ViewBuilder
     private var stateRelayFields: some View {
-        SettingsCard {
+        SettingsCard(cornerRadius: 18) {
             SettingsCardHeader(
                 title: L10n.t("连接信息"),
                 help: L10n.t("需先部署网页端并获取访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端")
             )
-            CardDivider()
             SettingsRawRow(insetToText: true) {
                 VStack(alignment: .leading, spacing: 8) {
-            TextField(text: $config.stateRelayURL, prompt: Text(L10n.t("例如 https://yourdomain.com/api/state"))) {
-                HStack(spacing: 4) {
-                    Text(L10n.t("同步服务地址"))
-                    HelpButton(
-                        text: L10n.t("使用 Cloudflare Worker + KV 自行搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。也可不自建：配置「ListenBrainz」后，网页同样能显示「正在播放」，两者配置其一即可。效果截图与完整搭建步骤见该仓库的 README"),
-                        docTitle: L10n.t("查看效果与教程 →"),
-                        // 指向 Yudaotor/nowplaying-workers 仓库自己的 README(#readme 锚点,
-                        // GitHub 会自动渲染仓库首页那份)。
-                        docURL: URL(string: "https://github.com/Yudaotor/nowplaying-workers#readme")!
-                    )
-                }
-            }
-            SecretFieldRow(L10n.t("访问令牌"), value: $config.stateRelayToken)
+                    // 标题和「?」常驻在框外,同 LabeledInputRow:卡片不在 Form 里,TextField 自带的 label 不显示。
+                    HStack {
+                        HStack(spacing: 4) {
+                            Text(L10n.t("同步服务地址"))
+                            HelpButton(
+                                text: L10n.t("使用 Cloudflare Worker + KV 自行搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。也可不自建：配置「ListenBrainz」后，网页同样能显示「正在播放」，两者配置其一即可。效果截图与完整搭建步骤见该仓库的 README"),
+                                docTitle: L10n.t("查看效果与教程 →"),
+                                // 指向 Yudaotor/nowplaying-workers 仓库自己的 README(#readme 锚点,
+                                // GitHub 会自动渲染仓库首页那份)。
+                                docURL: URL(string: "https://github.com/Yudaotor/nowplaying-workers#readme")!
+                            )
+                        }
+                        .fixedSize()
+                        TextField(L10n.t("同步服务地址"), text: $config.stateRelayURL,
+                                  prompt: Text(L10n.t("例如 https://yourdomain.com/api/state")))
+                            .labelsHidden()
+                    }
+                    SecretFieldRow(L10n.t("访问令牌"), value: $config.stateRelayToken)
                 }
             }
             if let note = relayPushNote {
@@ -856,6 +895,66 @@ struct AccountLinkingTab: View {
                     Label(note.text, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(note.isError ? Color.red : Color.orange)
                 }
+            }
+        }
+        .background { LastfmGlassGlow() }
+    }
+
+    // MARK: - 实验室三页的页头胶囊
+
+    /// ListenBrainz / 网页推送 / 推送提醒页头说明下面那枚状态胶囊,位置和样子同 Discord 页那枚(`discordAccountChip`):
+    /// 一个状态点 + 一句话。状态跟侧栏徽标同一个来源(`destinationStatus`),ListenBrainz 另外先看这一次 Token 校验的结果。
+    private var labsStatusChip: some View {
+        let chip = labsChipContent
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(chip.tint)
+                .frame(width: 6, height: 6)
+            Text(chip.primary)
+            if let secondary = chip.secondary {
+                Text(verbatim: "·")
+                    .foregroundStyle(.tertiary)
+                Text(secondary)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .lineLimit(1)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .settingsCardBackground(cornerRadius: 15)
+    }
+
+    private var labsChipContent: (tint: Color, primary: String, secondary: String?) {
+        if destination == .listenBrainz {
+            switch tokenCheck.state {
+            case .checking: return (.secondary, L10n.t("正在验证…"), nil)
+            case .invalid: return (.orange, L10n.t("Token 无效，请重新拷贝"), nil)
+            default: break
+            }
+        }
+        let status = destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect,
+                                       mirrorInfo: mirrorStatus.info, relayVerdict: relayStatus.verdict)
+        switch status {
+        case .disabled:
+            return (.secondary, L10n.t("未启用"), nil)
+        case .notConfigured(let hint):
+            return (.secondary, hint, nil)
+        case .missingCreds(let hint), .warning(let hint):
+            return (.orange, hint, nil)
+        case .error(let message):
+            return (.red, message, nil)
+        case .active:
+            switch destination {
+            case .listenBrainz:
+                return (.green, "@" + config.listenbrainzUser, L10n.t("已连接"))
+            case .stateRelay:
+                let host = URL(string: config.stateRelayURL)?.host ?? config.stateRelayURL
+                return (.green, L10n.t("推送正常"), host.isEmpty ? nil : host)
+            case .bark:
+                return (.green, config.notificationPlatform.displayName, L10n.t("已设置"))
+            case .lastfm, .discord:
+                return (.green, L10n.t("已连接"), nil)
             }
         }
     }
@@ -1973,101 +2072,78 @@ struct AccountLinkingTab: View {
     // 的常驻榜单,数据来源不同。
     @ViewBuilder
     private var barkFields: some View {
-        SettingsCard {
-            // 这一行的"?"里带官方文档外链(docTitle/docURL),SettingsRow 的 help 参数只收
-            // 纯文本,所以这一行整块用 SettingsRawRow 自己排:图标列宽和左缩进都取
-            // SettingsRowMetrics,跟其它行对齐在同一条竖线上。
-            SettingsRawRow {
-                HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
-                    Image(systemName: "bell.badge")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .frame(width: SettingsRowMetrics.iconWidth)
-                    Text(L10n.t("通知平台"))
-                        .font(.system(size: 13))
-                    HelpButton(
-                        text: config.notificationPlatform.setupGuide,
-                        docTitle: L10n.t("查看官方文档 →"),
-                        docURL: config.notificationPlatform.setupDocURL
-                    )
-                    Spacer(minLength: 12)
-                    Picker("", selection: $config.notificationPlatform) {
-                        ForEach(NotificationPlatform.displayOrder) { platform in
-                            Text(platform.displayName).tag(platform)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                }
-            }
-            CardDivider()
-            SettingsRawRow(insetToText: true) {
-                VStack(alignment: .leading, spacing: 8) {
-                    LabeledInputRow(config.notificationPlatform.fieldLabel) {
-                        TextField(
-                            config.notificationPlatform.fieldLabel, text: $config.notificationWebhookURL,
-                            prompt: Text(config.notificationPlatform.urlPlaceholder)
+        VStack(spacing: 14) {
+            SettingsCard(cornerRadius: 18) {
+                // 这一行的"?"里带官方文档外链(docTitle/docURL),SettingsRow 的 help 参数只收
+                // 纯文本,所以这一行整块用 SettingsRawRow 自己排:图标列宽和左缩进都取
+                // SettingsRowMetrics,跟其它行对齐在同一条竖线上。
+                SettingsRawRow {
+                    HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
+                        Image(systemName: "bell.badge")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .frame(width: SettingsRowMetrics.iconWidth)
+                        Text(L10n.t("通知平台"))
+                            .font(.system(size: 13))
+                        HelpButton(
+                            text: config.notificationPlatform.setupGuide,
+                            docTitle: L10n.t("查看官方文档 →"),
+                            docURL: config.notificationPlatform.setupDocURL
                         )
-                    }
-                    if config.notificationPlatform == .dingtalk {
-                        SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
-                        Text(L10n.t("仅在机器人安全设置选择「加签」时需要填写，留空则按未加签处理"))
-                            .font(.caption2).foregroundStyle(.secondary)
-                    } else if config.notificationPlatform == .feishu {
-                        SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
-                        Text(L10n.t("仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息"))
-                            .font(.caption2).foregroundStyle(.secondary)
-                    } else if config.notificationPlatform == .telegram {
-                        LabeledInputRow(L10n.t("Chat ID")) {
-                            TextField(
-                                L10n.t("Chat ID"), text: $config.telegramChatID,
-                                prompt: Text(L10n.t("Chat ID：个人为一串数字，群组以 -100 开头"))
-                            )
+                        Spacer(minLength: 12)
+                        Picker("", selection: $config.notificationPlatform) {
+                            ForEach(NotificationPlatform.displayOrder) { platform in
+                                Text(platform.displayName).tag(platform)
+                            }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
                     }
                 }
+                CardDivider()
+                // 推送地址里带着密钥(Bark 的 Key、Webhook 的 access_token、机器人 Token),跟别的凭据一样填好就收起。
+                // 每个平台各存一份地址:换平台时整块按平台重建,收起 / 展开跟着那个平台自己的值走。
+                SettingsRawRow(insetToText: true) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SecretFieldRow(config.notificationPlatform.fieldLabel, value: $config.notificationWebhookURL,
+                                       prompt: config.notificationPlatform.urlPlaceholder)
+                        if config.notificationPlatform == .dingtalk {
+                            SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
+                            Text(L10n.t("仅在机器人安全设置选择「加签」时需要填写，留空则按未加签处理"))
+                                .font(.caption2).foregroundStyle(.secondary)
+                        } else if config.notificationPlatform == .feishu {
+                            SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
+                            Text(L10n.t("仅在机器人安全设置开启「签名校验」时需要填写，未开启时也能正常接收消息"))
+                                .font(.caption2).foregroundStyle(.secondary)
+                        } else if config.notificationPlatform == .telegram {
+                            SecretFieldRow(L10n.t("Chat ID"), value: $config.telegramChatID,
+                                           prompt: L10n.t("Chat ID：个人为一串数字，群组以 -100 开头"))
+                        }
+                    }
+                    .id(config.notificationPlatform)
+                }
             }
-        }
 
-        SettingsCard {
-            SettingsCardHeader(
-                title: L10n.t("提醒")
-            )
-            CardDivider()
             // 数据源可选——Last.fm 的周榜接口(user.getWeekly*Chart)接受任意 from/to,不是只认
-            // 官方周边界,所以每个 cadence 都能自己选数据源。行尾控件见 digestControls。
-            //
-            // 每一行的标题都要在 SettingsRow 调用点上写成字面量:设置搜索的对账测试只扫字面
-            // 调用点,标题改成变量传进辅助函数,这几行就从守卫里消失了。
-            SettingsRow(
-                icon: "sun.max",
-                title: L10n.t("每日听歌报告")
-            ) {
-                digestControls(enabled: \.dailyDigest, source: \.dailyDigestSource)
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "calendar",
-                title: L10n.t("每周听歌小结")
-            ) {
-                digestControls(enabled: \.weeklyDigest, source: \.weeklyDigestSource)
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "calendar.badge.clock",
-                title: L10n.t("每月听歌小结")
-            ) {
-                digestControls(enabled: \.monthlyDigest, source: \.monthlyDigestSource)
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "trophy",
-                title: L10n.t("年度听歌小结")
-            ) {
-                digestControls(enabled: \.yearlyDigest, source: \.yearlyDigestSource)
+            // 官方周边界,所以每个 cadence 都能自己选数据源。四块排两列,见 digestTile。
+            SettingsCard(cornerRadius: 18) {
+                SettingsCardHeader(title: L10n.t("提醒"))
+                SettingsTileGrid {
+                    digestTile(icon: "sun.max", title: L10n.t("每日听歌报告"),
+                               enabled: \.dailyDigest, source: \.dailyDigestSource)
+                    digestTile(icon: "calendar", title: L10n.t("每周听歌小结"),
+                               enabled: \.weeklyDigest, source: \.weeklyDigestSource)
+                    digestTile(icon: "calendar.badge.clock", title: L10n.t("每月听歌小结"),
+                               enabled: \.monthlyDigest, source: \.monthlyDigestSource)
+                    digestTile(icon: "trophy", title: L10n.t("年度听歌小结"),
+                               enabled: \.yearlyDigest, source: \.yearlyDigestSource)
+                }
+                .padding(.top, 4)
+                .padding(.bottom, 12)
             }
         }
+        .background { LastfmGlassGlow() }
     }
 
     // MARK: - Discord
