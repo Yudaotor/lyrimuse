@@ -507,7 +507,7 @@ public final class LyricsSyncEngine {
                 .map(Character.init)
             let nonHanOK = String(label).unicodeScalars.allSatisfy { u in
                 u.properties.isIdeographic || CharacterSet.alphanumerics.contains(u)
-                    || " ./&()'’-：:".unicodeScalars.contains(u)
+                    || " ./&()（）'’-：:".unicodeScalars.contains(u)
             }
             if nonHanOK, !hanOnly.isEmpty { core = String(hanOnly) }
         }
