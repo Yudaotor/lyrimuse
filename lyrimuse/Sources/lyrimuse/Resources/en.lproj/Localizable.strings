@@ -879,6 +879,7 @@
 "已选择「不显示是哪首歌」，跟歌曲有关的几项暂不起作用" = "“Hide Song Details” is on, so the song-related options have no effect for now.";
 "已选择的播放器" = "Selected players";
 "已选择的播放器：%@" = "The players you picked: %@";
+"已配置" = "Configured";
 "已配置，点按可查看或移除" = "Configured — click to review or remove";
 "已采用" = "Applied";
 "已采用 %@ 的歌词" = "Now using lyrics from %@";
@@ -1054,7 +1055,6 @@
 "推荐。为每个歌词源评分，选用最高分的结果" = "Recommended. Scores every source and keeps the best match";
 "推送地址" = "Push URL";
 "推送提醒" = "Push Alerts";
-"推送正常" = "Pushing normally";
 "描边颜色" = "Stroke Color";
 "提前" = "Advance";
 "提前 %@ 秒显示" = "Show %@s earlier";

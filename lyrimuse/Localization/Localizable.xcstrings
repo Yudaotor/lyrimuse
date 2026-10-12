@@ -11913,18 +11913,18 @@
         }
       }
     },
-    "推送正常" : {
+    "已配置" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pushing normally"
+            "value" : "Configured"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "推送正常"
+            "value" : "已設定"
           }
         }
       }

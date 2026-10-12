@@ -142,13 +142,16 @@ private struct SecretFieldRow: View {
     let label: String
     @Binding var value: String
     var prompt: String? = nil
+    /// 输入时要不要遮成圆点。不是密钥、只是填好后收起来的字段(Telegram 的 Chat ID)传 false:粘进去得看得见对不对。
+    var masked = true
 
     @State private var isEditing: Bool
 
-    init(_ label: String, value: Binding<String>, prompt: String? = nil) {
+    init(_ label: String, value: Binding<String>, prompt: String? = nil, masked: Bool = true) {
         self.label = label
         self._value = value
         self.prompt = prompt
+        self.masked = masked
         self._isEditing = State(initialValue: value.wrappedValue.isEmpty)
     }
 
@@ -157,8 +160,14 @@ private struct SecretFieldRow: View {
             HStack {
                 // 标题常驻在框外:框里的占位字一填上内容就没了,只剩一串圆点看不出是哪一项。
                 Text(label).fixedSize()
-                SecureField(label, text: $value, prompt: prompt.map(Text.init))
-                    .labelsHidden()
+                Group {
+                    if masked {
+                        SecureField(label, text: $value, prompt: prompt.map(Text.init))
+                    } else {
+                        TextField(label, text: $value, prompt: prompt.map(Text.init))
+                    }
+                }
+                .labelsHidden()
                 if !value.isEmpty {
                     Button(L10n.t("完成")) { isEditing = false }
                         .buttonBorderShape(.capsule)
@@ -949,8 +958,9 @@ struct AccountLinkingTab: View {
             case .listenBrainz:
                 return (.green, "@" + config.listenbrainzUser, L10n.t("已连接"))
             case .stateRelay:
+                // 只说「已配置」不说推得出去:没出问题(`.ok`)也包括引擎刚启动还没推过、刚改了地址或令牌、连不上还不到 10 分钟。
                 let host = URL(string: config.stateRelayURL)?.host ?? config.stateRelayURL
-                return (.green, L10n.t("推送正常"), host.isEmpty ? nil : host)
+                return (.green, L10n.t("已配置"), host.isEmpty ? nil : host)
             case .bark:
                 return (.green, config.notificationPlatform.displayName, L10n.t("已设置"))
             case .lastfm, .discord:
@@ -2118,7 +2128,7 @@ struct AccountLinkingTab: View {
                                 .font(.caption2).foregroundStyle(.secondary)
                         } else if config.notificationPlatform == .telegram {
                             SecretFieldRow(L10n.t("Chat ID"), value: $config.telegramChatID,
-                                           prompt: L10n.t("Chat ID：个人为一串数字，群组以 -100 开头"))
+                                           prompt: L10n.t("Chat ID：个人为一串数字，群组以 -100 开头"), masked: false)
                         }
                     }
                     .id(config.notificationPlatform)
