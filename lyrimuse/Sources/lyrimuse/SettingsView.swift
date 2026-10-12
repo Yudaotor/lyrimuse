@@ -2619,11 +2619,15 @@ private struct AppearanceSettingsTab: View {
             // 的排法:排在编辑台**下面**,先看见长什么样再决定开不开。详见 MenuBarEditorStage.swift
             // 顶部注释。
             MenuBarEditorStage()
-            modeToggleCard(
-                icon: "menubar.rectangle",
-                title: L10n.t("菜单栏歌词"),
-                isOn: $settings.showLyricsInMenuBar)
-            MenuBarAllSettingsDrawer()
+            // 总开关卡和抽屉背后垫一层光,玻璃卡才看得出边(同另外几段)。
+            VStack(spacing: 14) {
+                modeToggleCard(
+                    icon: "menubar.rectangle",
+                    title: L10n.t("菜单栏歌词"),
+                    isOn: $settings.showLyricsInMenuBar)
+                MenuBarAllSettingsDrawer()
+            }
+            .background { LastfmGlassGlow() }
         case .touchBar:
             // 编辑台:工具栏在预览上面,总开关卡和「全部设置」抽屉在预览下面,排法照歌词窗口那一段;工具栏、浮层、抽屉和三组行视图
             // 都在 UI/TouchBarSettingsRows.swift。有没有触控栏都给看预览,没有时预览下面只有一张说明卡。

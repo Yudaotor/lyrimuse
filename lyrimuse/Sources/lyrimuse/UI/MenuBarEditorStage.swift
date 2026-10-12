@@ -13,7 +13,7 @@ import LyrimuseCore
 /// 工具栏两行(跟另外两段取齐):第一行「布局」「配色」「字体」+「重置 ▾」(第三个
 /// 入口是加的),横向预算离屏量过(见 `toolbar` 上面那条提醒):中文在 499pt 窄档下
 /// 也放得下,英文在 600pt 宽档放得下、窄档只压摘要不压标题。第二行只有「行为」一颗 —— 两个行为开关
-/// (悬停显示播放控制 / 无歌词时显示歌名)此前因为第一行装不下而寄住在「布局」里,`MenuBarHoverControlsRow`
+/// (悬停显示播放控制 / 无歌词时显示歌名)此前因为第一行装不下而寄住在「布局」里,`MenuBarHoverControlsTile`
 /// 头注当时就写着"真要再来第二个行为开关,那时候一起拆一个「行为」浮层出来";第二个 09-04 就来了,
 /// 这次按"不要这一个那一个"的要求拆出来。分组按卡片解剖:「布局」= 这一格怎么占位、几行、旁边
 /// 有没有图标;「配色」= 颜色;「字体」= 字长什么样;「行为」= 什么状态下显示什么。
@@ -25,28 +25,15 @@ struct MenuBarEditorStage: View {
     var body: some View {
         VStack(spacing: 10) {
             toolbar
+                .overlay(alignment: .top) { probeAnchor(row1Probe) }
             toolbarRow2
-            // 宽度调整条浮**在预览框里面**(「把这个配置项也给我
-            // 和之前两个页面一样加到这个预览框里面去进行调整」)。前两版都不是他要的:
-            // 宽度调整条**要长在舞台里面**,不能摆在预览下面平铺一行、也不能只做 VStack 里的
-            // 兄弟节点 —— MenuBarWidthRow 用的是 SettingsRow 的外壳,在舞台那块近白的
-            // controlBackgroundColor 上跟"页面上一条独立的设置行"长得几乎一样,难怪看着像
-            // 没动。现在照 OverlayEditorStage/NotchEditorStage 的做法:预览条自己让出一条
-            // 通道(reservesWidthLane),胶囊浮在通道里。
-            // 壁纸底扩展到包住整块舞台(含通道里的调整条),caption 挪到舞台
-            // 外面 —— 「这里帮我把预览背景部分扩展到这下面,把下面的滑条包在里面,
-            // 和灵动岛和悬浮歌词设置一样」。三块编辑台的舞台到此是同一个模型。
-            //
-            // 调整条现在**注入给预览条**、不再由这里 overlay 在外面:壁纸底一旦要包住它,
-            // 背景/高度/圆角就必须由同一个人算(见 MenuBarPreviewBar.lane 的注释)。这里
-            // 在外面 overlay 的话,那一层会落在"舞台 + caption"整块上,胶囊掉到 caption 下面。
+                .overlay(alignment: .top) { probeAnchor(row2Probe) }
+            // 宽度调整条注入给预览条、浮在预览框底部那条通道里,不在这里 overlay 在外面:壁纸底要包住它,
+            // 背景 / 高度 / 圆角只能由预览条一处算(见 MenuBarPreviewBar.lane)。
             MenuBarPreviewBar(reservesWidthLane: true) {
                 stageWidthBar.padding(.bottom, 8)
             }
         }
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: - 工具栏
@@ -193,18 +180,34 @@ struct MenuBarEditorStage: View {
         ])
     }
 
+    /// 浮层挂在按钮上往上弹(`arrowEdge: .top`),不往下压在预览上;高度封顶在按钮那一行上方的空间里,放不下时
+    /// 在浮层里滚,不让系统翻下来(同另外几段编辑台,04 章决策 34、61)。
     private func toolbarButton(
         icon: String, title: String, summary: String, target: StagePopover
     ) -> some View {
         Button {
+            popoverMaxHeight = (target == .behavior ? row2Probe : row1Probe).popoverHeightLimit()
             popover = target
         } label: {
             EditorToolbarButtonLabel(icon: icon, title: title, summary: summary)
         }
         .editorToolbarButtonStyle()
-        .popover(isPresented: popoverBinding(target), arrowEdge: .bottom) {
+        .popover(isPresented: popoverBinding(target), arrowEdge: .top) {
             popoverContent(for: target)
+                .environment(\.settingsPopoverMaxHeight, popoverMaxHeight)
         }
+    }
+
+    /// 浮层高度上限 = 点开那一刻按钮那一行上沿到屏幕可用区顶的距离(见 toolbarButton)。
+    @State private var popoverMaxHeight: CGFloat = SettingsPopoverMetrics.defaultMaxHeight
+    /// 两行按钮各自上沿的测量点。「行为」在第二行,其余在第一行;挪了按钮要一起改 toolbarButton 里的取法。
+    @State private var row1Probe = StageTopProbe()
+    @State private var row2Probe = StageTopProbe()
+
+    private func probeAnchor(_ probe: StageTopProbe) -> some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .background(StageTopProbeView(probe: probe))
     }
 
     /// 第二行的对齐占位:跟 `toolbarButton` 同一份 label、同一套按钮样式,因此同宽;但不挂
@@ -378,7 +381,7 @@ struct MenuBarLyricsIconRow: View {
             title: L10n.t("歌词旁的图标"),
             help: L10n.t("在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。")
         ) {
-            SettingsSegmentedControlHashable(
+            SettingsPillSegmentedControl(
                 selection: $settings.menuBarLyricsIconPosition,
                 options: MenuBarLyricsIconPosition.allCases,
                 label: { position in
@@ -403,36 +406,32 @@ struct MenuBarLyricsIconRow: View {
 ///
 /// 在「重置 ▾」范围内("这部分所有配置都改为默认,除了宽度"),见
 /// `MenuBarStyleDefaults`。
-struct MenuBarHoverControlsRow: View {
+struct MenuBarHoverControlsTile: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        SettingsRow(
+        SettingsToggleTile(
             icon: "playpause.circle",
             title: L10n.t("悬停显示播放控制"),
-            help: L10n.t("指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板。")
-        ) {
-            Toggle("", isOn: $settings.menuBarHoverShowsControls)
-        }
+            help: L10n.t("指针移到菜单栏歌词上时显示「上一曲 / 播放暂停 / 下一曲」三个按钮，移开后恢复。暂停后歌词收起为图标，或区域过窄放不下三个按钮时不显示。点按按钮以外的区域仍会打开面板。"),
+            isOn: $settings.menuBarHoverShowsControls)
     }
 }
 
-/// 「无歌词时显示歌名」行。跟上面「悬停显示播放控制」同住「行为」浮层
+/// 「无歌词时显示歌名」小块。跟上面「悬停显示播放控制」同住「行为」浮层
 /// 与「全部设置」抽屉「行为」组(前两项都在「布局」里):它管的也是"这一格在什么状态下
 /// 显示什么",不是样式。判据在 Core
 /// (`MenuBarSlotPolicy.displayText`),help 里把三条边界(暂停仍缩回 / 广告不显示 / 歌词一到就换)说清。
 /// 进「重置 ▾」——漏过两项被用户当场看出来,见 `MenuBarStyleDefaults` 头注。
-struct MenuBarTitleFallbackRow: View {
+struct MenuBarTitleFallbackTile: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        SettingsRow(
+        SettingsToggleTile(
             icon: "music.note.list",
             title: L10n.t("无歌词时显示歌名"),
-            help: L10n.t("歌曲无歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示")
-        ) {
-            Toggle("", isOn: $settings.menuBarShowsTitleWhenNoLyrics)
-        }
+            help: L10n.t("歌曲无歌词或仍在搜索时，在歌词位置显示歌名，不收起为小图标；获取歌词后立即切换为歌词。暂停时仍收起为图标，广告期间不显示"),
+            isOn: $settings.menuBarShowsTitleWhenNoLyrics)
     }
 }
 
@@ -484,12 +483,14 @@ enum MenuBarStyleDefaults {
 /// 搬去了 `MenuBarBehaviorRows`。
 struct MenuBarLayoutRows: View {
     var body: some View {
-        VStack(spacing: 0) {
-            MenuBarWidthModeRow()
-            CardDivider()
-            MenuBarSecondaryLineRow()
-            CardDivider()
-            MenuBarLyricsIconRow()
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                MenuBarWidthModeRow()
+                CardDivider()
+                MenuBarSecondaryLineRow()
+                CardDivider()
+                MenuBarLyricsIconRow()
+            }
         }
     }
 }
@@ -514,23 +515,19 @@ struct MenuBarLayoutPopover: View {
 /// 两项都是"这一格在什么状态下显示什么",不是样式 —— 跟另外两段编辑台的「行为」入口同一条判据。
 struct MenuBarBehaviorRows: View {
     var body: some View {
-        VStack(spacing: 0) {
-            MenuBarHoverControlsRow()
-            CardDivider()
-            MenuBarTitleFallbackRow()
+        SettingsTileGrid(columns: 2) {
+            MenuBarHoverControlsTile()
+            MenuBarTitleFallbackTile()
         }
     }
 }
 
 /// 工具栏第二行「行为」浮层。
 ///
-/// 宽度 420 跟另外两段的「行为」浮层同宽(三个形态的「行为」看起来是一件东西),也够用:最宽一行
-/// 是英文 "Show Title When No Lyrics" 161.3pt + ⓘ 19 + `SettingsRow` 固定开销 150(2×14 内边距 + 20 图标列
-/// + 3×12 间距 + 12 Spacer + 54 开关)= 330(中文「悬停显示播放控制」103.2 + 19 + 150 = 272),13pt 系统字
-/// 实测文字宽算的。
+/// 两颗开关并排两列小块。宽 500:一格约 237pt,中文标题(8 字 + ⓘ + 开关)一行放得下;420 时一格 197pt,中文也折成两行。
 struct MenuBarBehaviorPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("行为"), width: 420) {
+        SettingsPopoverShell(title: L10n.t("行为"), width: 500) {
             MenuBarBehaviorRows()
         }
     }
@@ -572,7 +569,7 @@ struct MenuBarWidthModeRow: View {
             // 判断,不进这行字。
             help: L10n.t("固定：所有歌曲使用设定的宽度。\n自适应：按每首歌曲的歌词确定宽度，不超过设定宽度。")
         ) {
-            SettingsSegmentedControlHashable(
+            SettingsPillSegmentedControl(
                 selection: $settings.menuBarLyricsWidthMode,
                 options: MenuBarLyricsWidthMode.allCases,
                 label: { mode in
@@ -625,7 +622,7 @@ struct MenuBarAlignmentRow: View {
 /// 挪成工具栏第三个入口(`MenuBarFontPopover`),这里不再混进非颜色的项。
 struct MenuBarColorPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("配色"), width: 330) {
+        SettingsPopoverShell(title: L10n.t("配色"), width: 360) {
             MenuBarColorRows()
         }
     }
@@ -642,12 +639,14 @@ struct MenuBarColorPopover: View {
 /// 同一条"空串 = 跟随系统"规则),渲染侧的接线在 `MenuBarMarqueeRenderer`(见其头注)。
 struct MenuBarFontRows: View {
     var body: some View {
-        VStack(spacing: 0) {
-            MenuBarFontFamilyRow()
-            CardDivider()
-            MenuBarFontWeightRow()
-            CardDivider()
-            MenuBarFontSizeRow()
+        SettingsRowGroup {
+            VStack(spacing: 0) {
+                MenuBarFontFamilyRow()
+                CardDivider()
+                MenuBarFontWeightRow()
+                CardDivider()
+                MenuBarFontSizeRow()
+            }
         }
     }
 }
@@ -783,96 +782,99 @@ struct MenuBarFontWeightRow: View {
     }
 }
 
-/// 「逐字染色」+「文字颜色」+「染色颜色」(条件显示)三行——文案/help 一字不改自旧
-/// `menuBarCard`,浮层和抽屉共用同一份。
+/// 「配色」组(浮层与抽屉共用同一份):卡拉OK效果一块开关,下面「文字颜色 / 未唱颜色」+「已唱颜色」(条件显示)一框。
 ///
-/// 跟 `MenuBarWidthModeRow` 同一天的同一条修正:改用 `SettingsRow(icon:)`
-/// 而不是 `SettingsSubRow`——这三行在浮层/抽屉里都是顶层设置项,不该带"子项"竖线,理由
-/// 详见 `MenuBarWidthModeRow` 上面那条提醒。浮层宽度也一并离屏量过(实测这三行最宽一条
-/// 中文 288.0pt / 英文 308.0pt,原来的 280 连中文都不够),改成 330 留出余量。
+/// 颜色两行用 `SettingsRow(icon:)` 不用 `SettingsSubRow`:它们是顶层设置项,不该带"子项"竖线(见 `MenuBarWidthModeRow`
+/// 上面那条)。最宽一行离屏量过中文 288.0pt / 英文 308.0pt,框在浮层里两侧各缩 10pt,浮层宽 360。
 struct MenuBarColorRows: View {
     @ObservedObject private var settings = AppSettings.shared
     /// 两个色块画的是**菜单栏上**那个颜色,菜单栏由亮转暗时要跟着重画。
     @ObservedObject private var menuBarAppearance = MenuBarAppearanceStore.shared
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsRow(
-                icon: "text.word.spacing",
-                // 本仓面向用户的术语统一是**卡拉OK**,英文侧是 "Karaoke fill" —— 三个展示面
-                // (悬浮歌词 / 灵动岛 / 菜单栏)各一颗同名开关,别在某一面另起名字。
-                //
-                // 这颗就是菜单栏那一份,也是菜单栏(状态栏项 + 面板里那行歌词)逐字填色**唯一**的闸:
-                // 引擎侧不再有决定"要不要用逐字数据"的全局开关,染不染色全在各展示面自己。
-                title: L10n.t("卡拉OK效果"),
-                help: L10n.t("随演唱进度将已演唱部分显示为系统强调色。仅在歌曲有逐字时间轴时生效；打开菜单反白期间暂停着色")
-            ) {
-                Toggle("", isOn: $settings.menuBarLyricsKaraoke)
+        SettingsRowGroupStack {
+            SettingsTileGrid(columns: 1) {
+                SettingsToggleTile(
+                    icon: "text.word.spacing",
+                    // 本仓面向用户的术语统一是**卡拉OK**,英文侧是 "Karaoke fill" —— 三个展示面
+                    // (悬浮歌词 / 灵动岛 / 菜单栏)各一颗同名开关,别在某一面另起名字。
+                    //
+                    // 这颗就是菜单栏那一份,也是菜单栏(状态栏项 + 面板里那行歌词)逐字填色**唯一**的闸:
+                    // 引擎侧不再有决定"要不要用逐字数据"的全局开关,染不染色全在各展示面自己。
+                    title: L10n.t("卡拉OK效果"),
+                    help: L10n.t("随演唱进度将已演唱部分显示为系统强调色。仅在歌曲有逐字时间轴时生效；打开菜单反白期间暂停着色"),
+                    isOn: $settings.menuBarLyricsKaraoke)
             }
+            SettingsRowGroup {
+                VStack(spacing: 0) { colorRows }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var colorRows: some View {
+        SettingsRow(
+            icon: "textformat",
+            // 标题跟着上面那个开关走,因为这一行管的范围**真的会变**:染色关着时它就是
+            // 整条歌词的颜色(叫「未唱颜色」会莫名其妙——什么都不会被"唱到"),开着时
+            // 它只管未唱到那半截。
+            //
+            // 两个都是既有说法:关态复用「文字颜色」(跟悬浮歌词那行同一个键,
+            // OverlayStyleSettingsRows),开态用下面那行的对称说法。 正因为共用,
+            // **别去改「文字颜色」那个键的值** —— 那会连带把悬浮歌词那一行也改掉。
+            title: settings.menuBarLyricsKaraoke
+                ? L10n.t("未唱颜色") : L10n.t("文字颜色"),
+            help: L10n.t("未演唱部分的文字颜色。默认跟随系统：自动适配浅色 / 深色菜单栏，打开菜单时自动反白")
+        ) {
+            HStack(spacing: 8) {
+                if !settings.menuBarLyricsTextColorHex.isEmpty {
+                    Button(L10n.t("跟随系统")) { settings.menuBarLyricsTextColorHex = "" }
+                }
+                // 色块必须画**菜单栏上那个颜色**,不是设置窗口里解析出来的那个——
+                // `labelColor` 是动态色,在浅色的设置窗口里求值就是黑,而菜单栏上
+                // 实际显示的可能是白字。所以取值走
+                // `MenuBarScrollingLabel.textColor`(跟真正渲染同一份口径)再
+                // `resolved(in: 菜单栏的 appearance)` 定型。详见 MenuBarAppearanceStore。
+                AppColorPicker(selection: Binding(
+                    get: {
+                        Color(nsColor: MenuBarScrollingLabel
+                            .textColor(hex: settings.menuBarLyricsTextColorHex,
+                                       highlighted: false)
+                            .resolved(in: menuBarAppearance.appearance))
+                    },
+                    set: { settings.menuBarLyricsTextColorHex = $0.hexStringWithAlpha }
+                ), supportsOpacity: false)
+            }
+        }
+        // 显示条件加了后半句:这个色**还**是歌词旁那枚进度图标上"涨上来"
+        // 那一截的颜色。只看卡拉OK染色开关的话,"染色关掉 + 图标开着"的用户会看不到这一行,
+        // 却又确实被它影响 —— 一个在起作用、却在设置里找不到的颜色。
+        if settings.menuBarLyricsKaraoke || settings.menuBarLyricsIconPosition != .off {
             CardDivider()
             SettingsRow(
-                icon: "textformat",
-                // 标题跟着上面那个开关走,因为这一行管的范围**真的会变**:染色关着时它就是
-                // 整条歌词的颜色(叫「未唱颜色」会莫名其妙——什么都不会被"唱到"),开着时
-                // 它只管未唱到那半截。
-                //
-                // 两个都是既有说法:关态复用「文字颜色」(跟悬浮歌词那行同一个键,
-                // OverlayStyleSettingsRows),开态用下面那行的对称说法。 正因为共用,
-                // **别去改「文字颜色」那个键的值** —— 那会连带把悬浮歌词那一行也改掉。
-                title: settings.menuBarLyricsKaraoke
-                    ? L10n.t("未唱颜色") : L10n.t("文字颜色"),
-                help: L10n.t("未演唱部分的文字颜色。默认跟随系统：自动适配浅色 / 深色菜单栏，打开菜单时自动反白")
+                icon: "paintpalette.fill",
+                // 「染色颜色」→「已唱颜色」:原来那个词组自己打结("染色"已经含"色"),
+                // 而且没说清染的是哪一半。它的 help 一直写着"已唱到部分的颜色" —— 标题
+                // 直接用 help 里那句话,跟上面「未唱颜色」成对。
+                title: L10n.t("已唱颜色"),
+                help: L10n.t("已演唱部分的颜色，也用于歌词旁进度图标的已播放部分。默认跟随系统强调色（深色菜单栏下自动提亮）；自定义后按原色显示，不再自动提亮")
             ) {
                 HStack(spacing: 8) {
-                    if !settings.menuBarLyricsTextColorHex.isEmpty {
-                        Button(L10n.t("跟随系统")) { settings.menuBarLyricsTextColorHex = "" }
+                    if !settings.menuBarLyricsFillColorHex.isEmpty {
+                        Button(L10n.t("跟随系统")) { settings.menuBarLyricsFillColorHex = "" }
                     }
-                    // 色块必须画**菜单栏上那个颜色**,不是设置窗口里解析出来的那个——
-                    // `labelColor` 是动态色,在浅色的设置窗口里求值就是黑,而菜单栏上
-                    // 实际显示的可能是白字。所以取值走
-                    // `MenuBarScrollingLabel.textColor`(跟真正渲染同一份口径)再
-                    // `resolved(in: 菜单栏的 appearance)` 定型。详见 MenuBarAppearanceStore。
+                    // 同上一行:走渲染那份口径 + 按菜单栏的明暗定型。这一个还多一层
+                    // ——「跟随系统」时深色菜单栏上要向白提亮四成,不这么取的话色块画的是
+                    // 未提亮的原始强调色,跟菜单栏上看到的差一截。
                     AppColorPicker(selection: Binding(
                         get: {
                             Color(nsColor: MenuBarScrollingLabel
-                                .textColor(hex: settings.menuBarLyricsTextColorHex,
-                                           highlighted: false)
+                                .fillColor(hex: settings.menuBarLyricsFillColorHex,
+                                           darkMenuBar: menuBarAppearance.isDark)
                                 .resolved(in: menuBarAppearance.appearance))
                         },
-                        set: { settings.menuBarLyricsTextColorHex = $0.hexStringWithAlpha }
+                        set: { settings.menuBarLyricsFillColorHex = $0.hexStringWithAlpha }
                     ), supportsOpacity: false)
-                }
-            }
-            // 显示条件加了后半句:这个色**还**是歌词旁那枚进度图标上"涨上来"
-            // 那一截的颜色。只看卡拉OK染色开关的话,"染色关掉 + 图标开着"的用户会看不到这一行,
-            // 却又确实被它影响 —— 一个在起作用、却在设置里找不到的颜色。
-            if settings.menuBarLyricsKaraoke || settings.menuBarLyricsIconPosition != .off {
-                CardDivider()
-                SettingsRow(
-                    icon: "paintpalette.fill",
-                    // 「染色颜色」→「已唱颜色」:原来那个词组自己打结("染色"已经含"色"),
-                    // 而且没说清染的是哪一半。它的 help 一直写着"已唱到部分的颜色" —— 标题
-                    // 直接用 help 里那句话,跟上面「未唱颜色」成对。
-                    title: L10n.t("已唱颜色"),
-                    help: L10n.t("已演唱部分的颜色，也用于歌词旁进度图标的已播放部分。默认跟随系统强调色（深色菜单栏下自动提亮）；自定义后按原色显示，不再自动提亮")
-                ) {
-                    HStack(spacing: 8) {
-                        if !settings.menuBarLyricsFillColorHex.isEmpty {
-                            Button(L10n.t("跟随系统")) { settings.menuBarLyricsFillColorHex = "" }
-                        }
-                        // 同上一行:走渲染那份口径 + 按菜单栏的明暗定型。这一个还多一层
-                        // ——「跟随系统」时深色菜单栏上要向白提亮四成,不这么取的话色块画的是
-                        // 未提亮的原始强调色,跟菜单栏上看到的差一截。
-                        AppColorPicker(selection: Binding(
-                            get: {
-                                Color(nsColor: MenuBarScrollingLabel
-                                    .fillColor(hex: settings.menuBarLyricsFillColorHex,
-                                               darkMenuBar: menuBarAppearance.isDark)
-                                    .resolved(in: menuBarAppearance.appearance))
-                            },
-                            set: { settings.menuBarLyricsFillColorHex = $0.hexStringWithAlpha }
-                        ), supportsOpacity: false)
-                    }
                 }
             }
         }
@@ -892,21 +894,20 @@ struct MenuBarAllSettingsDrawer: View {
     /// 设置搜索命中了这个抽屉里的行时的"该展开了"信号(理由与写法同 `OverlayAllSettingsDrawer`)。
     @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
 
+    // 展开后一组一张卡(同另外几段的抽屉,14 章决策 83)。
     var body: some View {
-        SettingsCard(cornerRadius: 18) {
-            disclosureHeader
+        VStack(spacing: 14) {
+            SettingsCard(cornerRadius: 18) {
+                disclosureHeader
+            }
             if isExpanded {
-                CardDivider()
-                group(L10n.t("布局")) { MenuBarLayoutRows() }
-                CardDivider()
-                group(L10n.t("配色")) { MenuBarColorRows() }
-                CardDivider()
-                group(L10n.t("字体")) { MenuBarFontRows() }
-                CardDivider()
-                MenuBarWidthRow()
-                CardDivider()
-                group(L10n.t("行为")) { MenuBarBehaviorRows() }
-                CardDivider()
+                SettingsGroupCard(title: L10n.t("布局")) { MenuBarLayoutRows() }
+                SettingsGroupCard(title: L10n.t("配色")) { MenuBarColorRows() }
+                SettingsGroupCard(title: L10n.t("字体")) { MenuBarFontRows() }
+                SettingsGroupCard(title: L10n.t("宽度")) {
+                    SettingsRowGroup { MenuBarWidthRow() }
+                }
+                SettingsGroupCard(title: L10n.t("行为")) { MenuBarBehaviorRows() }
                 resetRow
             }
         }
@@ -922,15 +923,6 @@ struct MenuBarAllSettingsDrawer: View {
         SettingsSearchRouter.shared.consumeDrawer(.menuBar)
     }
 
-    /// 一组:标题行 + 分隔线 + 内容。标题文案跟工具栏对应那颗按钮用同一个词条(同 `NotchAllSettingsDrawer.group`)。
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        Group {
-            SettingsCardHeader(title: title)
-            CardDivider()
-            content()
-        }
-    }
-
     /// 「恢复默认布局、配色、字体与行为」——抽屉里的兜底入口(补;随「行为」入口改名)。
     ///
     /// 动作本体跟工具栏那颗「重置 ▾」是**同一个函数**(`MenuBarStyleDefaults.restoreDefaults()`)。
@@ -938,13 +930,17 @@ struct MenuBarAllSettingsDrawer: View {
     /// `NotchAllSettingsDrawer.resetRow`(SettingsView.swift)与悬浮歌词那份
     /// `OverlayAllSettingsDrawer.resetRow` —— 抽屉是键盘 / VoiceOver 的全量兜底通路,
     /// 工具栏那颗是 SwiftUI `Menu`,不能只有它。
+    /// 抽屉展开后单独一张卡,挂在各组卡最后。
     private var resetRow: some View {
-        SettingsRow(
-            icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认"),
-            subtitle: L10n.t("不含宽度和总开关")
-        ) {
-            Button(L10n.t("恢复")) { MenuBarStyleDefaults.restoreDefaults() }
+        SettingsCard(cornerRadius: 18) {
+            SettingsRow(
+                icon: "arrow.uturn.backward",
+                title: L10n.t("恢复默认"),
+                subtitle: L10n.t("不含宽度和总开关")
+            ) {
+                Button(L10n.t("恢复")) { MenuBarStyleDefaults.restoreDefaults() }
+                    .buttonBorderShape(.capsule)
+            }
         }
     }
 

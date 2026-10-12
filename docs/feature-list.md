@@ -790,7 +790,7 @@ Every setting in the Settings window, by where it lives: 236 in all. Type a name
 
 - **Alignment**
 - **Long Lines**
-- **Line Transition**
+- **Line Transition**: When the lyric changes, the next line moves up into place. When off, lines switch instantly
 - **Romanization Spacing**
 - **Translation Spacing**
 - **Next Line Spacing**
@@ -917,9 +917,9 @@ Every setting in the Settings window, by where it lives: 236 in all. Type a name
 
 ### Lyrics Display › Touch Bar › Behavior
 
-- **Expand When Playback Starts**
-- **Collapse When Paused**
-- **Collapse for Instrumentals & No Lyrics**
+- **Expand When Playback Starts**: Shows the lyrics when playback resumes from pause. Switching songs during playback doesn't expand them, and lyrics you collapsed stay collapsed
+- **Collapse When Paused**: Collapses to the Control Strip button after 10 seconds paused, and expands again when playback resumes
+- **Collapse for Instrumentals & No Lyrics**: Collapses only after confirming there are no lyrics, and expands again once lyrics are found. Stays shown while searching
 
 ### Lyrics Display › Lyrics Window
 
