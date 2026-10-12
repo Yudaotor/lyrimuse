@@ -52,7 +52,7 @@ enum FillSweepProgressText {
     }
 
     /// 「大约还要」的时长,按这一轮实测速度外推;还没跑完一首时按 `fallbackSecondsPerTrack` 估
-    /// (自动匹配约 20 秒:两首之间的间隔加上一首的搜索;全量取引擎发布的每首耗时)。
+    /// (自动匹配按 `fillSecondsPerTrack`;全量取引擎发布的每首耗时)。
     private static func remainingText(_ status: LyricsFillSweep.Info, fallbackSecondsPerTrack: Double) -> String {
         let seconds = LyricsFillSweep.remainingSeconds(status, now: Date(), fallbackSecondsPerTrack: fallbackSecondsPerTrack)
         let minutes = Int((seconds / 60).rounded(.up))
@@ -61,9 +61,16 @@ enum FillSweepProgressText {
         return String(format: L10n.t("%1$@ 小时 %2$@ 分钟"), "\(minutes / 60)", "\(minutes % 60)")
     }
 
-    /// 自动匹配那一轮估剩余时长用的每首秒数,见 `remainingText`。全量那一轮用引擎发布的值
+    /// 自动匹配那一轮每首的耗时估计(秒):两首之间的间隔(「扫描间隔」那一档)加一首歌把所有源搜一遍。设置页那一行
+    /// 没开跑时的预计时长、跑起来之后还没测出速度时的剩余时长都用它。全量那一轮用引擎发布的值
     /// (`LyricsLibraryStatsPanel.fullScanSecondsPerTrack`)。
-    static let fillFallbackSecondsPerTrack = 20.0
+    static func fillSecondsPerTrack(gapSecs: Int) -> Double {
+        Double(max(gapSecs, 0)) + fillSearchSeconds
+    }
+
+    /// 自动匹配搜一首要多久。这一轮只搜没词或只有纯文本的歌,要把所有源加别名轮全走一遍,是最慢的那一层:
+    /// 引擎实测间隔 5 秒时每首 15.9 秒(见 lyricsfullscan.go 的 lyricsFullScanSearchEstimate)。见 11 章决策 114。
+    static let fillSearchSeconds = 11.0
 }
 
 /// 设置页「歌词库」那两行点进度圆环、「歌词管理」点进度卡弹出的详情,内容与「歌词管理」「⋯」菜单跑着时那几段相同

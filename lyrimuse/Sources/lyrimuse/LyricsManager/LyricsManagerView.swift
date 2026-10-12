@@ -2060,7 +2060,8 @@ struct LyricsManagerView: View {
                     phase: phase,
                     listingMissing: statusFilter == .missing,
                     fallbackSecondsPerTrack: fillSweepStatus?.isFullScan == true
-                        ? fullScanFallbackSecondsPerTrack : FillSweepProgressText.fillFallbackSecondsPerTrack,
+                        ? fullScanFallbackSecondsPerTrack
+                        : FillSweepProgressText.fillSecondsPerTrack(gapSecs: FeatureSettingsStore.shared.lyricsSweepGapSecs),
                     onStop: { LyricsFillSweep.requestCancel() })
             }
             // store.lastError 跟选中状态无关、永远有地方显示:批量删完选中清空、右侧变回空占位时,
@@ -2594,7 +2595,8 @@ struct LyricsManagerView: View {
             // (FillSweepProgressText)。
             Section {
                 ForEach(FillSweepProgressText.lines(status, fallbackSecondsPerTrack: isFull
-                        ? fullScanFallbackSecondsPerTrack : FillSweepProgressText.fillFallbackSecondsPerTrack),
+                        ? fullScanFallbackSecondsPerTrack
+                        : FillSweepProgressText.fillSecondsPerTrack(gapSecs: FeatureSettingsStore.shared.lyricsSweepGapSecs)),
                         id: \.self) { Text($0) }
             } header: {
                 Text(FillSweepProgressText.title(status))

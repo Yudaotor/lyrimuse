@@ -81,7 +81,6 @@
 "%@ 近期频繁无法连接" = "%@ often can't be reached";
 "%@ 首保持锁定；此后手动选定的歌曲不再自动锁定" = "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically";
 "%@ 首保持锁定；此后手动选定的歌曲不再自动锁定#one" = "%@ song stays locked; from now on, manually picked songs are no longer locked automatically";
-"%@ 首待搜索" = "%@ to search";
 "%@ 首待补交" = "%@ plays to submit";
 "%@ 首待补交#one" = "%@ play to submit";
 "%@ 首本次无法判断，扫描结束后将重试" = "%@ couldn't be checked this time, will retry at the end";
@@ -257,7 +256,6 @@
 "不显示" = "None";
 "不显示是哪首歌" = "Hide Song Details";
 "不足 1 分钟" = "under a minute";
-"不足 1 小时" = "under an hour";
 "不转换" = "As-is";
 "不进行评分，按下方顺序采用第一个有结果的来源" = "No scoring — takes the first source below that returns lyrics";
 "不透明度" = "Opacity";
@@ -1715,6 +1713,8 @@
 "繁简写法不同" = "written in the other Chinese script";
 "繁简转换" = "Chinese Script";
 "繁體中文" = "Traditional Chinese";
+"约 %@ 分钟" = "about %@ minutes";
+"约 %@ 分钟#one" = "about %@ minute";
 "约 %@ 小时" = "about %@ hours";
 "约 %@ 小时#one" = "about %@ hour";
 "纯文本" = "Plain text";

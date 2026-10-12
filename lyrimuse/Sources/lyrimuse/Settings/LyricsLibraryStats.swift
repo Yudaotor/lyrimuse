@@ -488,6 +488,7 @@ struct LyricsLibraryStatsPanel: View {
         let running = status?.running == true
         let sweepRunning = running && status?.isFullScan != true
         let retryable = store.libraryDigest?.retryable ?? 0
+        let perTrack = FillSweepProgressText.fillSecondsPerTrack(gapSecs: features.lyricsSweepGapSecs)
         SettingsRow(
             icon: "text.magnifyingglass",
             title: L10n.t("自动匹配缺失歌词"),
@@ -495,13 +496,15 @@ struct LyricsLibraryStatsPanel: View {
         ) {
             HStack(spacing: 10) {
                 if sweepRunning, let status {
-                    progressButton(status, fallbackSecondsPerTrack: FillSweepProgressText.fillFallbackSecondsPerTrack)
+                    progressButton(status, fallbackSecondsPerTrack: perTrack)
                     Button(L10n.t("停止")) { LyricsFillSweep.requestCancel() }
                         .controlSize(.small)
                         .fixedSize()
                 } else {
+                    // 待搜数旁边写预计时长,跟下面「重新匹配整个歌词库」同一个写法,按「扫描间隔」那一档当场换算。
                     Text(retryable > 0
-                         ? String(format: L10n.t("%@ 首待搜索"), Self.format(retryable))
+                         ? String(format: L10n.plural("%1$@ 首 · %2$@", count: retryable), Self.format(retryable),
+                                  Self.durationText(retryable, secondsPerTrack: perTrack))
                          : L10n.t("无缺失"))
                         .font(.system(size: 11))
                         .monospacedDigit()
@@ -616,9 +619,12 @@ struct LyricsLibraryStatsPanel: View {
         LyricsFullScan.secondsPerTrack(state, gapSecs: gapSecs).map(Double.init) ?? fallbackSecondsPerTrack
     }
 
-    private static func hoursText(_ tracks: Int, secondsPerTrack: Double) -> String {
-        let hours = Int((Double(tracks) * secondsPerTrack / 3600).rounded())
-        if hours < 1 { return L10n.t("不足 1 小时") }
+    /// 预计时长:不到 1 小时按分钟(向上取整,自动匹配那一行常常只有几十首),否则按小时四舍五入。
+    private static func durationText(_ tracks: Int, secondsPerTrack: Double) -> String {
+        let seconds = Double(tracks) * secondsPerTrack
+        let minutes = max(Int((seconds / 60).rounded(.up)), 1)
+        if minutes < 60 { return String(format: L10n.plural("约 %@ 分钟", count: minutes), format(minutes)) }
+        let hours = Int((seconds / 3600).rounded())
         return String(format: L10n.plural("约 %@ 小时", count: hours), format(hours))
     }
 
@@ -630,7 +636,7 @@ struct LyricsLibraryStatsPanel: View {
     static func fullScanConfirmMessage(pending: Int, secondsPerTrack: Double) -> String {
         String(
             format: L10n.plural("共 %1$@ 首，预计%2$@。已有歌词的歌曲也会重新匹配；人工修正、已校准时间轴和纯音乐的歌曲除外。可随时停止，关闭后进度不会丢失", count: pending),
-            format(pending), hoursText(pending, secondsPerTrack: secondsPerTrack))
+            format(pending), durationText(pending, secondsPerTrack: secondsPerTrack))
     }
 
     /// 「重新匹配整个歌词库」这一行。引擎没公布过待跟进的条数(还没起来过 / 还没数完第一遍)时整行
@@ -662,7 +668,7 @@ struct LyricsLibraryStatsPanel: View {
                         // 待办数旁边直接写预计时长:这一轮动辄十几个小时,点「开始…」之前就该看得到。
                         Text(pending > 0
                              ? String(format: L10n.plural("%1$@ 首 · %2$@", count: pending), Self.format(pending),
-                                      Self.hoursText(pending, secondsPerTrack: secondsPerTrack))
+                                      Self.durationText(pending, secondsPerTrack: secondsPerTrack))
                              : L10n.t("无待重新匹配的歌曲"))
                             .font(.system(size: 11))
                             .monospacedDigit()
@@ -690,7 +696,7 @@ struct LyricsLibraryStatsPanel: View {
                             .help(running
                                   ? L10n.t("另一轮扫描正在进行，请在完成后再试")
                                   : String(format: L10n.t("预计%@，可随时停止"),
-                                             Self.hoursText(pending, secondsPerTrack: secondsPerTrack)))
+                                             Self.durationText(pending, secondsPerTrack: secondsPerTrack)))
                     }
                 }
                 .settingsGlassButtons()
@@ -740,8 +746,7 @@ struct LyricsLibraryStatsPanel: View {
         let perTrack = thisRound > 0 && elapsed > 0
             ? elapsed / Double(thisRound)
             : fallbackSecondsPerTrack
-        // 直接按实测速度算,不再绕"换算成等效首数"那一道:hoursText 现在收显式的每首秒数,
-        // 把实测值原样传进去就行。
-        return String(format: L10n.t("预计还需%@"), hoursText(left, secondsPerTrack: perTrack))
+        // 直接按实测速度算:durationText 收显式的每首秒数,把实测值原样传进去就行。
+        return String(format: L10n.t("预计还需%@"), durationText(left, secondsPerTrack: perTrack))
     }
 }

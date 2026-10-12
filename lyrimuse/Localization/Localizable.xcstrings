@@ -29842,19 +29842,31 @@
         }
       }
     },
-    "不足 1 小时" : {
+    "约 %@ 分钟" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "under an hour"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "about %@ minute"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "about %@ minutes"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "不足 1 小時"
+            "value" : "約 %@ 分鐘"
           }
         }
       }
@@ -30389,23 +30401,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ 首來自歌詞來源，%2$@ 首為機器翻譯"
-          }
-        }
-      }
-    },
-    "%@ 首待搜索" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ to search"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 首待搜尋"
           }
         }
       }
