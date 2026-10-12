@@ -207,21 +207,34 @@ final class MenuBarPanelController {
         if window.frame != frame { window.setFrame(frame, display: true) }
     }
 
+    /// 状态栏按钮在屏幕上的矩形。
+    private var anchorButtonScreenRect: NSRect? {
+        guard let button = anchorButton, let buttonWindow = button.window else { return nil }
+        return buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
     private func installDismissWatchers(for window: MenuBarPanelWindow) {
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
         ) { [weak self] _ in
-            Task { @MainActor in self?.close() }
+            let location = NSEvent.mouseLocation
+            Task { @MainActor in
+                // 点状态栏按钮那一下也会先到这里(macOS 26 上状态栏的点击先当作别的进程的事件发出来),
+                // 在这里收的话按钮的 toggle 紧接着又把面板打开。开关交给 toggle。
+                guard let self, self.anchorButtonScreenRect?.contains(location) != true else { return }
+                self.close()
+            }
         }
         localClickMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
         ) { [weak self, weak window] event in
             guard let self, let window else { return event }
             let target = event.window
-            // 面板自己、状态栏按钮(它的点击走 toggle,在这里收会被 toggle 立刻重新打开)、
-            // 面板里下拉菜单的菜单窗口(level ≥ popUpMenu)都不算「点到外面」。
-            if target === window || target === self.anchorButton?.window { return event }
+            // 面板自己、面板里下拉菜单的菜单窗口(level ≥ popUpMenu)都不算「点到外面」。
+            if target === window { return event }
             if let level = target?.level, level >= .popUpMenu { return event }
+            // 状态栏按钮也不算:它的点击走 toggle,在这里先收的话 toggle 紧接着又把面板打开。按点击位置认。
+            if self.anchorButtonScreenRect?.contains(NSEvent.mouseLocation) == true { return event }
             self.close()
             return event
         }
