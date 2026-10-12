@@ -13,9 +13,10 @@ import LyrimuseCore
 // 设置窗口。够不着的一律走底下那颗「全部设置…」,它会把设置窗口直接翻到对应那一段。
 //
 // **别把 `AppColorPicker` / `FontFamilyPicker` 这类自带 `.popover` 的控件搬进来**(歌词窗口
-// 那格的颜色和字体因此只在设置页)。这片设置住在一扇 `.transient` 的 NSPopover 里:嵌套的
-// 子 popover 是**另一扇窗**,点它就是"点在面板外面",面板会当场被收掉,子 popover 跟着一起
-// 消失 —— 表现是"点一下颜色块,整个面板就没了"。判据仍然成立(颜色改了立刻看得见),
+// 那格的颜色和字体因此只在设置页)。这片设置住在菜单栏面板里,点到面板以外的窗口面板就收起
+// (MenuBarPanelController 的局部点击监听,只放过系统菜单窗口):嵌套的子 popover 是**另一扇窗**,
+// 点它就是"点在面板外面",面板会当场被收掉,子 popover 跟着一起消失 —— 表现是"点一下颜色块,
+// 整个面板就没了"。下拉因此用系统菜单(`PanelGlassMenuPicker`),不用 `SettingsGlassMenuPicker`。判据仍然成立(颜色改了立刻看得见),
 // 挡住的是控件形态;够不着的走底栏那颗「全部设置…」,不在行尾另写一句灰字解释。
 
 // MARK: - 能翻到背面的那几格
@@ -38,6 +39,18 @@ enum PanelQuickTarget: Hashable {
     case surface(LyricsSurface)
     case lyricsWindow
     case touchBar
+
+    /// lyrimuse://menubar-panel?quick=… 里的取值。
+    init?(deepLinkValue value: String) {
+        switch value {
+        case "overlay": self = .surface(.overlay)
+        case "notch": self = .surface(.notch)
+        case "menubar": self = .surface(.menuBar)
+        case "lyrics-window": self = .lyricsWindow
+        case "touchbar": self = .touchBar
+        default: return nil
+        }
+    }
 }
 
 @MainActor
@@ -285,11 +298,15 @@ struct PanelQuickSettings: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().opacity(0.6)
-            VStack(spacing: 7) { rows }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
-            Divider().opacity(0.6)
+            VStack(alignment: .leading, spacing: 6) {
+                // 各行装进一个圆角分组框(同设置页弹窗里的分组)。行与行之间留 1pt 缝,透出底下的卡片,读起来就是分隔线:
+                // 行视图里有条件行,没法在两行之间自动插分隔线。
+                VStack(spacing: 1) { rows }
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                footnote
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 9)
             footer
         }
         // 玻璃卡,同正在播放卡和钮块。
@@ -302,12 +319,11 @@ struct PanelQuickSettings: View {
         HStack(spacing: 6) {
             Button(action: back) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20, height: 22)
-                    .contentShape(Rectangle())
+                    .font(.system(size: 10, weight: .semibold))
             }
-            .buttonStyle(.plain)
+            .settingsGlassButtons()
+            .buttonBorderShape(.circle)
+            .controlSize(.small)
             .help(L10n.t("返回"))
             SymbolImage(name: target.symbolName, size: 12, weight: .semibold)
                 .foregroundStyle(target.isEnabled ? Color.accentColor : Color.secondary)
@@ -316,9 +332,9 @@ struct PanelQuickSettings: View {
             Spacer(minLength: 8)
             headerControl
         }
-        .padding(.leading, 6)
+        .padding(.leading, 8)
         .padding(.trailing, 10)
-        .padding(.vertical, 7)
+        .padding(.vertical, 8)
     }
 
     /// 头部右边那一颗。三个形态和触控栏是总开关;歌词窗口没有"开不开"可配(它是一扇按需打开的真窗口,
@@ -331,11 +347,14 @@ struct PanelQuickSettings: View {
             // 碰窗口控制器。
             Toggle("", isOn: Binding(get: { target.isEnabled }, set: { _ in action() }))
                 .labelsHidden()
+                .toggleStyle(.switch)
                 .controlSize(.mini)
         case .lyricsWindow:
             Button(action: action) {
                 Text(L10n.t("打开")).font(.system(size: 11))
             }
+            .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
             .controlSize(.small)
             .help(L10n.t("打开歌词窗口"))
         }
@@ -386,15 +405,8 @@ struct PanelQuickSettings: View {
                         }))
         case .surface(.notch):
             row(L10n.t("风格")) {
-                Picker("", selection: $settings.notchCardStyle) {
-                    ForEach(NotchCardStyle.allCases, id: \.self) { style in
-                        Text(style.displayName).tag(style)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .fixedSize()
+                PanelGlassMenuPicker(selection: $settings.notchCardStyle,
+                                     options: NotchCardStyle.allCases, label: { $0.displayName })
             }
             notchWidthRow
             // 「显示歌词」(搬进这块面板)。绑定直接写 AppSettings 就够,
@@ -442,7 +454,7 @@ struct PanelQuickSettings: View {
             }
         case .surface(.menuBar):
             row(L10n.t("宽度模式")) {
-                SettingsSegmentedControlHashable(
+                SettingsPillSegmentedControl(
                     selection: $settings.menuBarLyricsWidthMode,
                     options: MenuBarLyricsWidthMode.allCases,
                     label: { mode in
@@ -452,7 +464,6 @@ struct PanelQuickSettings: View {
                         }
                     }
                 )
-                .controlSize(.small)
             }
             sliderRow(L10n.t("最大宽度"), value: Binding(
                 get: { Double(settings.menuBarLyricsWidth) },
@@ -478,15 +489,6 @@ struct PanelQuickSettings: View {
             // 「字号」属「字体」组,排在它下面正好让下面那句「由副行决定」的原因就在上一行。
             secondaryLineRow(selection: $settings.menuBarSecondaryLine)
             menuBarFontSizeRow
-            // **这一整段四行**(宽度模式 / 最大宽度 / 副行 / 字号)改的都是菜单栏那一项占多宽,
-            // 而这张面板正锚在那一项上 —— 面板开着期间状态栏项不许重建(见 MenuBarStatusItem.present
-            // 里的 panelIsOpen 分支),所以拖的时候菜单栏上不会当场变。明说一句,别让人以为拖了没反应。
-            // (从"这两项"扩到四项:新加的副行会把一行变两行、字号连行高一起改,
-            //  两者都要重建槽位,跟宽度那两项踩的是同一个分支。)
-            Text(L10n.t("收起面板后生效"))
-                .font(.system(size: 9.5))
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
         case .touchBar:
             // 跟设置页「布局」卡同序(显示封面 → 显示播放控制 → 对齐方式 → 副行),「字号」在「外观」卡、排在最后,
             // 让「由副行决定」的原因就在上一行(同菜单栏那格)。收哪几项见 06 章决策 37。
@@ -502,26 +504,24 @@ struct PanelQuickSettings: View {
             // 跟菜单栏「对齐方式」是同一条规矩 —— **藏一个旋钮的前提是把"为什么"摆在它上面**,
             // 这里"为什么"就是正上方那一行「样式」。
             row(L10n.t("样式")) {
-                Picker("", selection: $settings.lyricsWindowBackgroundMode) {
-                    Text(L10n.t("跟随封面")).tag(LyricsWindowBackgroundMode.artwork)
-                    Text(L10n.t("纯色")).tag(LyricsWindowBackgroundMode.solid)
-                    Text(L10n.t("渐变")).tag(LyricsWindowBackgroundMode.gradient)
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .fixedSize()
+                PanelGlassMenuPicker(
+                    selection: $settings.lyricsWindowBackgroundMode,
+                    options: [.artwork, .solid, .gradient],
+                    label: { mode in
+                        switch mode {
+                        case .artwork: L10n.t("跟随封面")
+                        case .solid: L10n.t("纯色")
+                        case .gradient: L10n.t("渐变")
+                        case .glass: L10n.t("毛玻璃")
+                        }
+                    })
             }
             if settings.lyricsWindowBackgroundMode == .gradient {
                 row(L10n.t("方向")) {
-                    Picker("", selection: $settings.lyricsWindowGradientDirection) {
-                        Text(L10n.t("从上到下")).tag(LyricsWindowGradientDirection.vertical)
-                        Text(L10n.t("从左到右")).tag(LyricsWindowGradientDirection.horizontal)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .controlSize(.small)
-                    .fixedSize()
+                    PanelGlassMenuPicker(
+                        selection: $settings.lyricsWindowGradientDirection,
+                        options: [.vertical, .horizontal],
+                        label: { $0 == .vertical ? L10n.t("从上到下") : L10n.t("从左到右") })
                 }
             }
             // 动态封面**当场生效**:PlaybackCoordinator 订阅着这个值、拨一下就重算一次
@@ -530,6 +530,19 @@ struct PanelQuickSettings: View {
             toggleRow(L10n.t("动态封面"),
                       help: L10n.t("仅部分专辑提供；低电量或「减弱动态效果」时自动暂停"),
                       isOn: $settings.motionCoverEnabled)
+        }
+    }
+
+    /// 分组框下面那句说明,只有菜单栏那格有。
+    @ViewBuilder private var footnote: some View {
+        if case .surface(.menuBar) = target {
+            // **这一整段四行**(宽度模式 / 最大宽度 / 副行 / 字号)改的都是菜单栏那一项占多宽,
+            // 而这张面板正锚在那一项上 —— 面板开着期间状态栏项不许重建(见 MenuBarStatusItem.present
+            // 里的 panelIsOpen 分支),所以拖的时候菜单栏上不会当场变。明说一句,别让人以为拖了没反应。
+            Text(L10n.t("收起面板后生效"))
+                .font(.system(size: 9.5))
+                .foregroundStyle(.tertiary)
+                .padding(.leading, 4)
         }
     }
 
@@ -556,13 +569,14 @@ struct PanelQuickSettings: View {
                                    @ViewBuilder control: () -> Control) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11.5))
                 .lineLimit(1)
             Spacer(minLength: 6)
             control()
         }
-        .frame(minHeight: 20)
+        .padding(.horizontal, 10)
+        .frame(minHeight: 32)
+        .background(Color.primary.opacity(0.05))
         .modifier(OptionalHelp(text: help))
     }
 
@@ -592,7 +606,7 @@ struct PanelQuickSettings: View {
     private func toggleRow(_ title: String, help: String? = nil,
                            isOn: Binding<Bool>) -> some View {
         row(title, help: help) {
-            Toggle("", isOn: isOn).labelsHidden().controlSize(.mini)
+            Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.mini)
         }
     }
 
@@ -661,15 +675,8 @@ struct PanelQuickSettings: View {
     /// 四档分段、分段控件按选中项重量宽度、这个文件已有的宽选项行就是 `.menu`)。
     private func secondaryLineRow(selection: Binding<LyricSecondaryLine>) -> some View {
         row(L10n.t("副行")) {
-            Picker("", selection: selection) {
-                ForEach(LyricSecondaryLine.allCases, id: \.self) { option in
-                    Text(option.displayName).tag(option)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .controlSize(.small)
-            .fixedSize()
+            PanelGlassMenuPicker(selection: selection, options: LyricSecondaryLine.allCases,
+                                 label: { $0.displayName })
         }
     }
 
@@ -757,15 +764,7 @@ struct PanelQuickSettings: View {
         selection: Binding<Value>, options: [Value], label: @escaping (Value) -> String
     ) -> some View {
         row(L10n.t("对齐方式")) {
-            Picker("", selection: selection) {
-                ForEach(options, id: \.self) { option in
-                    Text(label(option)).tag(option)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .controlSize(.small)
-            .fixedSize()
+            PanelGlassMenuPicker(selection: selection, options: options, label: label)
         }
     }
 
@@ -782,16 +781,42 @@ struct PanelQuickSettings: View {
             AppActions.shared.requestSettings(.tab(.appearance))
             AppActions.shared.openSettings?()
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "gearshape").font(.system(size: 10.5))
-                Text(L10n.t("全部设置…")).font(.system(size: 10.5))
-            }
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
+            Label(L10n.t("全部设置…"), systemImage: "gearshape")
+                .font(.system(size: 11))
         }
-        .buttonStyle(.plain)
+        .settingsGlassButtons()
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .padding(.bottom, 10)
+    }
+}
+
+/// 面板里的下拉:弹的是系统菜单(菜单窗口不算「点到面板外面」,见 MenuBarPanelController 的局部点击监听),
+/// 外面套一层玻璃胶囊,同设置页的玻璃按钮。别换成 `SettingsGlassMenuPicker`:那颗弹的是 popover,另一扇窗,
+/// 点它面板就收起了(同文件头注那条)。
+private struct PanelGlassMenuPicker<T: Hashable>: View {
+    @Binding var selection: T
+    let options: [T]
+    let label: (T) -> String
+
+    var body: some View {
+        Menu {
+            Picker("", selection: $selection) {
+                ForEach(options, id: \.self) { option in
+                    Text(label(option)).tag(option)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Text(label(selection)).font(.system(size: 11))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .fixedSize()
+        .padding(.horizontal, 9)
+        .frame(height: 22)
+        .settingsGlassMenuCapsule()
     }
 }
 

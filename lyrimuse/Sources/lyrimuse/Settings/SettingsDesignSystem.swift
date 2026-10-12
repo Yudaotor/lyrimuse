@@ -141,6 +141,17 @@ extension View {
         }
     }
 
+    /// 带文字的玻璃下拉的那层胶囊(菜单栏面板的快捷设置用):系统菜单本体外面套可交互玻璃,宽度跟着当前选项走,
+    /// 不像 settingsGlassMenu 那样钉成图标按钮的 38pt。更早的系统用一层淡底胶囊。
+    @ViewBuilder
+    func settingsGlassMenuCapsule() -> some View {
+        if #available(macOS 26.0, *) {
+            glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            background(Capsule().fill(Color.primary.opacity(0.08)))
+        }
+    }
+
     /// 歌词窗口里那些浮在内容之上的玻璃胶囊(音量、窗口操作)。跟卡片同一套写法(玻璃 + 一条发丝描边),
     /// 描边的理由见 settingsCardBackground:液态玻璃的可见度完全取决于背后有什么,而歌词
     /// 窗口的背景是被高斯模糊过的专辑封面,亮暗随歌变化 —— 没有描边时边界时有时无。

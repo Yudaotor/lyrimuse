@@ -135,8 +135,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // lyrimuse://menubar-panel → 开 / 关菜单栏左键面板(同普通左键点状态栏图标;也是本机不点界面核对它外观的入口)。
+        // 带 ?quick=overlay|notch|menubar|lyrics-window|touchbar 时打开就翻到那一格的快捷设置(同长按 / 右键那一格),
+        // 认不出的值当没带。
         if url.host == "menubar-panel" {
-            MenuBarStatusItem.shared.togglePanelFromDeepLink()
+            let quick = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+                .first { $0.name == "quick" }?.value.flatMap(PanelQuickTarget.init(deepLinkValue:))
+            MenuBarStatusItem.shared.togglePanelFromDeepLink(quick: quick)
             return
         }
         // lyrimuse://lyrics-search → 打开「搜索歌词…」小窗(跟悬浮歌词 ⚙ 那一项同一个入口,开着时一样换成当前这首;

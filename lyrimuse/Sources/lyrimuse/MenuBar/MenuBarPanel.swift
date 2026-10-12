@@ -160,7 +160,8 @@ final class MenuBarPanelController {
     /// 面板开/关 —— 状态栏那行滚动歌词要跟着反白,跟 NSMenu 的 delegate 回调同一件事。
     var onVisibilityChange: ((Bool) -> Void)?
 
-    func toggle(relativeTo button: NSStatusBarButton) {
+    /// `quick`:打开就翻到那一格的快捷设置(lyrimuse://menubar-panel?quick=…),nil = 正常的钮块网格。
+    func toggle(relativeTo button: NSStatusBarButton, quick: PanelQuickTarget? = nil) {
         if panel != nil {
             close()
             return
@@ -169,7 +170,7 @@ final class MenuBarPanelController {
         let window = MenuBarPanelWindow()
         window.onCancel = { [weak self] in self?.close() }
         let content = MenuBarPanelRoot(
-            content: MenuBarPanelView(close: { [weak self] in self?.close() }),
+            content: MenuBarPanelView(close: { [weak self] in self?.close() }, initialQuickTarget: quick),
             onSizeChange: { [weak self] size in self?.place(size: size) })
         let host = FirstMouseHostingView(rootView: content)
         // 只要固有尺寸(下面 fittingSize 要用),不要 min / max:那两项会往窗口上加尺寸约束,跟 place 摆的 frame 打架。
@@ -360,6 +361,11 @@ private struct MenuBarPanelView: View {
     // 长按 / 右键某个能翻面的格子之后,面板下半部分换成它自己的快捷设置;
     // nil = 正常的钮块网格。见 MenuBarPanelQuickSettings.swift。
     @State private var quickTarget: PanelQuickTarget?
+
+    init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil) {
+        self.close = close
+        _quickTarget = State(initialValue: initialQuickTarget)
+    }
     /// 停播卡「打开」键上那枚播放器图标(见 idleRow)。按播放器取一次,不在 body 里现查。
     @State private var idlePlayerIcon: NSImage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

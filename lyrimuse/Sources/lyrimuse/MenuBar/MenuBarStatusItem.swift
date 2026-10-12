@@ -570,9 +570,10 @@ final class MenuBarStatusItem: NSObject {
     private var anchorIsBusy: Bool { panelIsOpen || statusMenuIsOpen || positionHintIsOpen }
 
     /// lyrimuse://menubar-panel:开 / 关左键面板,跟普通左键按下同一个结果(不认控制键、不走悬停三键)。
-    func togglePanelFromDeepLink() {
+    /// 带 quick 时打开就翻到那一格的快捷设置。
+    func togglePanelFromDeepLink(quick: PanelQuickTarget? = nil) {
         guard let button = statusItem?.button else { return }
-        panelController.toggle(relativeTo: button)
+        panelController.toggle(relativeTo: button, quick: quick)
     }
 
     private func setPanelOpen(_ open: Bool) {
