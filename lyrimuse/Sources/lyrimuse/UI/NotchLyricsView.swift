@@ -291,8 +291,15 @@ private final class NotchPlayback: ObservableObject {
                 .removeDuplicates()
                 .sink { [weak self] in self?.secondaryText = $0 },
             s.$notchSecondaryLine.removeDuplicates().sink { [weak self] in self?.secondaryLine = $0 },
-            p.$notchLyrics.map(\.nextText).removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
-            p.$notchLyrics.map(\.nextSide).removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
+            // 展开区「下一句」预览:接主行显示的那一句往后数(`LyricSecondaryLine.expandedNextLine`)。
+            Publishers.CombineLatest(p.$notchLyrics, s.$notchSecondaryLine)
+                .map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextText, afterCompact: lyrics.compactNextText) }
+                .removeDuplicates()
+                .sink { [weak self] in self?.nextLineText = $0 },
+            Publishers.CombineLatest(p.$notchLyrics, s.$notchSecondaryLine)
+                .map { lyrics, secondary in secondary.expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide) }
+                .removeDuplicates()
+                .sink { [weak self] in self?.nextLineSide = $0 },
             Publishers.CombineLatest(p.$playbackMode, p.$playbackModeOptions)
                 .map { mode, options in options.contains(.shuffle) && options.canRepeat ? mode : nil }
                 .removeDuplicates()

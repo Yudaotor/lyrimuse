@@ -1292,7 +1292,8 @@ func runSourceContractTests() {
             }
             expectEqual(code.contains("resolved(duetSide: displayLine?.side)"), true, "灵动岛对齐: 主行按当前句声部解析「自动」")
             expectEqual(code.contains("resolved(duetSide: nextLineSide)"), true, "灵动岛对齐: 展开态「下一句」按下一句声部解析「自动」")
-            expectEqual(code.contains("p.$notchLyrics.map(\\.nextSide)"), true, "灵动岛对齐: NotchPlayback 要镜像 nextLineSide")
+            expectEqual(code.contains("expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide)"), true,
+                        "灵动岛对齐: NotchPlayback 要镜像下一句的声部(按主行显示的那句取)")
         } else {
             expectEqual(true, false, "灵动岛对齐: 读不到 UI/NotchLyricsView.swift(路径挪了?)")
         }

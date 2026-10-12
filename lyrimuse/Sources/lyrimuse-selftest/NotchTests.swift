@@ -1682,6 +1682,45 @@ func runNotchTests() {
         expectEqual(LyricSecondaryLine.off.displayedLine(compactLine: nil, currentLine: current), nil,
                     "主行取句: 副行关着、长间奏中段没有提前量 = nil,不退回当前句")
 
+        // 展开区「下一句」预览接主行显示的那一句往后数:副行关着时主行提前亮出下一句,预览得是下下句。
+        expectEqual(LyricSecondaryLine.off.expandedNextLine(next: "下一句", afterCompact: "下下句"), "下下句",
+                    "下一句预览: 副行关着 = 接提前亮出的那句往后数")
+        for kind in [LyricSecondaryLine.nextLine, .translation, .romanization] {
+            expectEqual(kind.expandedNextLine(next: "下一句", afterCompact: "下下句"), "下一句",
+                        "下一句预览: 副行开着(\(kind))= 主行是当前句,接它往后数")
+        }
+        do {
+            // 第 1 句 12000 唱完、第 2 句 12100 开唱;第 2 句 14100 唱完、第 3 句 30000 才开唱。
+            let yrc = "[10000,2000](10000,2000,0)first line\n"
+                + "[12100,2000](12100,2000,0)second line\n"
+                + "[30000,2000](30000,2000,0)third line\n"
+            let engine = LyricsSyncEngine()
+            engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, lineBreaks: .all)
+            let revealed = engine.surfaceTick(.notch, atMs: 12_050)
+            expectEqual([revealed.compactLine?.plainText, revealed.nextText, revealed.compactNextText],
+                        ["second line", "second line", "third line"],
+                        "下一句预览: 提前量窗口里主行已是第 2 句,按它数是第 3 句(按正在唱的数会跟主行同一句)")
+            let singing = engine.surfaceTick(.notch, atMs: 12_500)
+            expectEqual([singing.nextText, singing.compactNextText], ["third line", "third line"],
+                        "下一句预览: 开唱后两份一样")
+            let gap = engine.surfaceTick(.notch, atMs: 20_000)
+            expectEqual([gap.compactPlaceholder ? "占位" : "", gap.compactNextText], ["占位", "third line"],
+                        "下一句预览: 长间奏里主行是占位,预览是接下来那句")
+            let intro = engine.surfaceTick(.notch, atMs: 5_000)
+            expectEqual([intro.nextText, intro.compactNextText], ["first line", "first line"],
+                        "下一句预览: 还没到第一句时是第一句")
+            let last = engine.surfaceTick(.notch, atMs: 30_500)
+            expectEqual(last.compactNextText, nil, "下一句预览: 最后一句没有下一句")
+        }
+        do {
+            let view = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("lyrimuse/UI/NotchLyricsView.swift"),
+                encoding: .utf8)) ?? ""
+            expectEqual(view.contains("secondary.expandedNextLine(next: lyrics.nextText, afterCompact: lyrics.compactNextText)")
+                        && view.contains("secondary.expandedNextLine(next: lyrics.nextSide, afterCompact: lyrics.compactNextSide)"), true,
+                        "下一句预览接线: 文字和声部都按主行显示的那句取")
+        }
+
         // 够格的间奏里当前句当作没有:副行开着时主行画「•••」,副行的下一句照旧,译文跟着没有。
         let sung = SyncedLyricLine(romanization: nil, translation: "译文", mainText: "唱完的那句", words: nil, wordGroups: nil, side: nil)
         let masked = LyricSecondaryLine.currentLine(sung, inMarkedInterlude: true)

@@ -56,6 +56,13 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
         showsSecondaryRow ? currentLine : compactLine
     }
 
+    /// 灵动岛展开区「下一句」预览接哪一份:接主行显示的那一句(`displayedLine`)往后数。副行开着时主行是当前句,
+    /// 取按正在唱的那句数的 `next`;关着时主行提前亮出下一句,取按它数的 `afterCompact`,不然提前量那段时间
+    /// 两行是同一句。文字和对唱声部都走这里。见 05 章决策 77。
+    public func expandedNextLine<Value>(next: Value, afterCompact: Value) -> Value {
+        showsSecondaryRow ? next : afterCompact
+    }
+
     /// 灵动岛喂给 `displayedLine` / `secondaryText` 的当前句:在够格的间奏里(`LyricsGapWindow.isMarked`)
     /// 当作没有,跟前奏一样 —— 主行画「•••」,副行的「下一句」照旧,译文 / 罗马音跟着没有。同悬浮歌词的
     /// `inMarkedInterlude`。不够格的句间空档照旧留着上一句,不然每两句之间都闪一下圆点。
