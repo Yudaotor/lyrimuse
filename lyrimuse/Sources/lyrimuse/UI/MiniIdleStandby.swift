@@ -54,6 +54,7 @@ struct IdleLastTrack: Equatable {
 /// 封面 + 歌名做主角;连上次那首都没有(全新用户)→ 呼吸音符 + 「没有在播放」。
 /// 每种都按窗口高度用 `ViewThatFits` 逐档减内容(迷你窗能缩到 300×110),只减内容、不压字号。
 /// 颜色走系统语义色:底是统一的中心柔光(`IdleStandbyBackground`),不是用户选的背景。
+/// 按钮是玻璃胶囊,主按钮(继续播放;没有时是「打开」)用强调色玻璃,同完整停播页(07 章决策 153)。
 struct MiniIdleStandby: View {
     let player: PlaybackPlayer
     /// 呼吸动画开不开(看不见 / 减弱动态效果时关),由窗口那边定。
@@ -210,7 +211,8 @@ struct MiniIdleStandby: View {
                 Label(L10n.t("继续播放"), systemImage: "play.fill")
                     .lineLimit(1)
             }
-            .buttonStyle(.borderedProminent)
+            .settingsProminentGlassButton(tint: .accentColor)
+            .buttonBorderShape(.capsule)
             .controlSize(.small)
         } else {
             openButton(prominent: true)
@@ -230,13 +232,14 @@ struct MiniIdleStandby: View {
                     .lineLimit(1)
             }
         }
+        .buttonBorderShape(.capsule)
         .controlSize(.small)
         .help(String(format: L10n.t("打开 %@"), player.displayName))
         .accessibilityLabel(String(format: L10n.t("打开 %@"), player.displayName))
         if prominent {
-            button.buttonStyle(.borderedProminent)
+            button.settingsProminentGlassButton(tint: .accentColor)
         } else {
-            button.buttonStyle(.bordered)
+            button.settingsGlassButtons()
         }
     }
 

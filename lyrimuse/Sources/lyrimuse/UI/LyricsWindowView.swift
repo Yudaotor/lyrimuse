@@ -5120,8 +5120,7 @@ struct LyricsWindowView: View {
                     } label: {
                         Label(L10n.t("继续播放"), systemImage: "play.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .settingsProminentGlassButton(tint: .accentColor)
                 }
                 // 没有「继续播放」可给的播放器,「打开」升格为主按钮。
                 if canResume {
@@ -5130,18 +5129,19 @@ struct LyricsWindowView: View {
                     } label: {
                         Text(String(format: L10n.t("打开 %@"), playerName))
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
                 } else {
                     Button {
                         openIdlePlayerApp(player)
                     } label: {
                         Text(String(format: L10n.t("打开 %@"), playerName))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .settingsProminentGlassButton(tint: .accentColor)
                 }
             }
+            // 玻璃胶囊,主按钮那颗自己换成强调色玻璃,同完整停播页(07 章决策 153)。
+            .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
             .padding(.top, 20)
             // Last.fm 统计:今日/本周计数、那年今日、迷你热力图。连着账号才有;没连时这块整体
             // 缺席,欢迎态不受影响。
