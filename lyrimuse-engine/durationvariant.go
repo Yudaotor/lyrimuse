@@ -42,3 +42,27 @@ func durationVariantSteadyLocked(key string, durationSecs float64, now time.Time
 	delete(durationVariantSeen, key)
 	return true
 }
+
+// enrichCreatedThisPlay:正在播的那首首次解析时新建的条目,连同是哪一次播放(换歌那一拍 noteEnrichPlayingKey 存的指针,
+// 每换一首一份新的)。开播头一两拍报的时长可能不对(汽水试听换回整首之前),主条目按它建了;同一次播放里时长稳定成另一个值,
+// 是这条记录的时长记错了、不是另一段录音:原地改时长,不另开「~durN」(trackEnrichment 时长那段)。只在 enrichMu 临界区内读写。
+// 见 09 章决策 234。
+var enrichCreatedThisPlay struct {
+	key  string
+	play *string
+}
+
+// noteEnrichCreatedLocked:首次解析开跑时记一笔,只记正在播的那首。别再按 isNewTrack 挑:汽水试听段要先搜,
+// 正在播的这首常常是挂起之后那一拍(isNewTrack=false)才起解析。
+func noteEnrichCreatedLocked(key string) {
+	if !isEnrichPlayingKey(key) {
+		return
+	}
+	enrichCreatedThisPlay.key, enrichCreatedThisPlay.play = key, enrichPlayingKey.Load()
+}
+
+// enrichCreatedThisPlayLocked:key 是这一次播放里刚建的(播放还没换过歌)。
+func enrichCreatedThisPlayLocked(key string) bool {
+	return enrichCreatedThisPlay.key == key && enrichCreatedThisPlay.play != nil &&
+		enrichPlayingKey.Load() == enrichCreatedThisPlay.play
+}

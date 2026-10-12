@@ -557,6 +557,7 @@
 "取消选择" = "Deselect All";
 "取消静音" = "Unmute";
 "口白" = "Spoken";
+"另一时长" = "Other length";
 "另一轮扫描正在进行，请在完成后再试" = "Another scan is in progress. Try again when it finishes";
 "另外两个都开着时不显示" = "Hidden when the other two are on";
 "另有 %@ 条记录过旧，Last.fm 不再接受" = "%@ more are too old for Last.fm to accept";
@@ -586,6 +587,7 @@
 "合唱署名" = "Artist credit";
 "合并明细" = "Play Breakdown";
 "同一首歌另外几份改过的歌词会换成这一份，其他写法也跟着用它。被换掉的那几份会另存一份备份。" = "The other corrected lyrics of this song will be replaced with these, and its other versions will use them too. The replaced lyrics are kept in a backup.";
+"同名但时长不同，按另一段录音单独保存歌词" = "Same title but a different length, so its lyrics are saved separately as another recording";
 "同曲条目" = "Entries for This Song";
 "同曲条目 %d" = "%d Entries for This Song";
 "同曲条目…" = "Entries for This Song…";

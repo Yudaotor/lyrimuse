@@ -379,6 +379,16 @@ struct LyricsManagerSongRow: View {
                     Text(highlighted(summary.shownTitle))
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
+                    if summary.isDurationVariant {
+                        Text(L10n.t("另一时长"))
+                            .font(.system(size: 9.5, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.secondary.opacity(0.5), lineWidth: 0.5))
+                            .fixedSize()
+                            .help(L10n.t("同名但时长不同，按另一段录音单独保存歌词"))
+                    }
                 }
                 Text(highlighted(subtitle))
                     .font(.system(size: 11))
@@ -1865,6 +1875,8 @@ struct LyricsManagerLineEditor: View {
 }
 
 extension EnrichCacheStore.Summary {
-    /// 列表、详情里歌名那一位(`TrackNameDisplay.cleaned`);key、搜索仍用 `title`。
-    var shownTitle: String { TrackNameDisplay.cleaned(title) }
+    /// 列表、详情里歌名那一位(`TrackNameDisplay.cleaned`,去掉时长变体的 `~durN`);key、搜索仍用 `title`。
+    var shownTitle: String { TrackNameDisplay.cleaned(EnrichCacheKeys.strippingDurationVariantTitle(title)) }
+    /// 引擎按同名、时长不同另存的一条(`歌名~dur2`),列表里歌名后面标出来。
+    var isDurationVariant: Bool { EnrichCacheKeys.strippingDurationVariantTitle(title) != title }
 }

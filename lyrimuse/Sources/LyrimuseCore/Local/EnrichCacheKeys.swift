@@ -232,9 +232,16 @@ public enum EnrichCacheKeys {
     /// 去掉标题段末尾的 `~durN`(N 在 2…8),不是变体原样返回。
     public static func strippingDurationVariant(_ key: String) -> String {
         let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
-        guard parts.count == 3, let r = parts[1].range(of: "~dur", options: .backwards),
-              let n = Int(parts[1][r.upperBound...]), (2...maxDurationVariants).contains(n) else { return key }
-        return "\(parts[0])|\(parts[1][..<r.lowerBound])|\(parts[2])"
+        guard parts.count == 3 else { return key }
+        let title = strippingDurationVariantTitle(String(parts[1]))
+        return title.count == parts[1].count ? key : "\(parts[0])|\(title)|\(parts[2])"
+    }
+
+    /// 只对标题段:去掉末尾的 `~durN`(N 在 2…8),不是变体原样返回。
+    public static func strippingDurationVariantTitle(_ title: String) -> String {
+        guard let r = title.range(of: "~dur", options: .backwards),
+              let n = Int(title[r.upperBound...]), (2...maxDurationVariants).contains(n) else { return title }
+        return String(title[..<r.lowerBound])
     }
 
     /// 引擎 `durationMismatch`:任一方未知(≤0 / nil)不算冲突,差超过较长者的 12% 才算。

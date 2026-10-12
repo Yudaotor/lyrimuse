@@ -802,6 +802,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			key, e, ok = alt, enrichCache[alt], true
 		}
 	}
+	correctDuration := false
 	if ok && durationSecs > 0 {
 		// 命中的条目时长跟这次播放差太多——key 撞车,其实是两首不同录音,见
 		// resolveEnrichKeyForDuration 的注释。换成消歧变体 key,不覆盖已有数据。
@@ -811,9 +812,19 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 				enrichMu.Unlock()
 				return nil
 			}
-			log.Printf("enrich: %q duration mismatch (cached %.1fs vs actual %.1fs), using variant %q",
-				key, e.DurationSecs, durationSecs, rk)
-			key, e, ok = rk, re, rok
+			switch {
+			case !rok && enrichCreatedThisPlayLocked(key) && enrichInflight[key]:
+				// 这次播放刚建的、首次解析还在跑:它后面的提交会把建条目时那个时长写回去,等它跑完下一拍再改。
+			case !rok && enrichCreatedThisPlayLocked(key):
+				// 这次播放刚建的:是开播那一拍的时长不对,不是另一段录音(见 enrichCreatedThisPlay)。
+				log.Printf("enrich: %q duration corrected in place (recorded %.1fs, %.1fs in the same play)",
+					key, e.DurationSecs, durationSecs)
+				correctDuration = true
+			default:
+				log.Printf("enrich: %q duration mismatch (cached %.1fs vs actual %.1fs), using variant %q",
+					key, e.DurationSecs, durationSecs, rk)
+				key, e, ok = rk, re, rok
+			}
 		} else {
 			delete(durationVariantSeen, key)
 		}
@@ -855,6 +866,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 条目先建好、后来才真正放到(专辑预取,第一次解析时播放器还没报时长):补上播放器报的时长。已经有的不动,
 		// 对不上的走上面的消歧变体。
 		if e.DurationSecs <= 0 && durationSecs > 0 {
+			e.DurationSecs = durationSecs
+			spotifyHintDirty = true
+		}
+		// 解析时用的时长(ResolvedDurationSecs)不动:跟这一拍对不上,下面 wrongDuration 按改好的时长重搜歌词。
+		if correctDuration {
 			e.DurationSecs = durationSecs
 			spotifyHintDirty = true
 		}
@@ -2603,6 +2619,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 	// 开跑时的改动序号:这一轮跑着的时候「歌词管理」改了这首,落盘时整轮作废(见 enrichedit.go 的改动序号)。
 	enrichMu.Lock()
 	stamp := enrichEditStampLocked()
+	noteEnrichCreatedLocked(key)
 	enrichMu.Unlock()
 	defer func() {
 		enrichMu.Lock()

@@ -72,6 +72,17 @@ func TestBridgedSnapshotNeverStartsResolution(t *testing.T) {
 	}
 }
 
+// 汽水试听段还在搜的那几拍:中继、ListenBrainz 组装负载只查缓存,不按试听段时长起首次解析(那样会建出 30 秒的条目)。
+func TestSodaPreviewPendingSnapshotNeverStartsResolution(t *testing.T) {
+	withEnrichCache(t, map[string]enrichEntry{})
+	before := inflightSnapshot()
+	pending := snapshot{Title: "搬家", Artist: "张震岳", Album: "跟着感觉走", Bundle: sodaMusicBundleID,
+		Duration: 30, ReportedDuration: 30, Playing: true, SodaPreviewPending: true}
+	lbMeta(pending)
+	relayState(pending, true, "mac", 0, true)
+	assertNoNewResolution(t, before, 0)
+}
+
 // 没配 ListenBrainz(上送目标)时,桥接结果只落 App 的 feed,转发 / 同步正在播放那两步连缓存都不查。
 func TestApplyBridgeResultWithoutUploadTargetSkipsEnrichment(t *testing.T) {
 	withEnrichCache(t, nil)
