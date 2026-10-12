@@ -117,13 +117,20 @@ func runSongVersionsTests() {
     do {
         let a = "[00:01.00]一\n[00:02.00]\n[00:03.00]二\n[00:05.00]三\n"
         let b = "[00:01.50]一\n[00:03.50]二改\n[00:05.50]三\n[00:07.00]四\n"
-        let d = V.lyricDiff(current: a, other: b)
+        func shown(_ text: String) -> [LyricLine] { V.displayedLines(text, title: "", artist: "") }
+        let d = V.lyricDiff(current: shown(a), other: shown(b))
         expectEqual(d.rows.map(\.differs), [false, true, false, true], "逐句对照: 空行不算,改了的、多出来的标出来")
         expectEqual(d.differentLines, 2, "逐句对照: 不同的行数")
         expectEqual(d.shiftMs, 500, "逐句对照: 文字相同那些行晚多少")
         expectEqual(d.rows.last?.current == nil && d.rows.last?.other?.text == "四", true, "逐句对照: 一边没有的那行")
-        expectEqual(V.lyricDiff(current: a, other: a).differentLines, 0, "逐句对照: 一样的没有不同")
-        expectEqual(V.lyricDiff(current: "[00:01.00]甲\n", other: "[00:02.00]乙\n").shiftMs == nil, true, "逐句对照: 没有相同的行就不算时间差")
+        expectEqual(V.lyricDiff(current: shown(a), other: shown(a)).differentLines, 0, "逐句对照: 一样的没有不同")
+        expectEqual(V.lyricDiff(current: shown("[00:01.00]甲\n"), other: shown("[00:02.00]乙\n")).shiftMs == nil, true, "逐句对照: 没有相同的行就不算时间差")
+        // 抬头、署名不显示,也不参与比对:两边写法不同(「作词：」对「词：」、抬头多一段英文名)照样算一样。
+        let x = "[00:00.10]偷笑 - 方大同\n[00:00.20]作词：方大同\n[00:00.30]作曲：方大同\n[00:12.00]第一句歌词在这里\n[00:18.00]第二句歌词在这里\n"
+        let y = "[00:00.00]偷笑 - 方大同 (Khalil Fong)\n[00:00.78]词：方大同\n[00:01.57]曲：方大同\n[00:12.00]第一句歌词在这里\n[00:18.00]第二句歌词在这里\n"
+        let sx = V.displayedLines(x, title: "偷笑", artist: "方大同"), sy = V.displayedLines(y, title: "偷笑", artist: "Khalil Fong")
+        expectEqual(sx.map(\.text), ["第一句歌词在这里", "第二句歌词在这里"], "逐句对照: 抬头、署名不算")
+        expectEqual(sx == sy && V.lyricDiff(current: sx, other: sy).differentLines == 0, true, "逐句对照: 只差抬头、署名的两份算一样")
     }
 
     // ---- 两个文件:实体表按含这条写法的那首取证据,用户判断文件取拆开记录;缺了坏了都是空 ----
@@ -221,7 +228,8 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "case .shared: return L10n.t(\"歌词同步\")")
                     && sourceBytes(sheet, contain: "case .own: return L10n.t(\"独立匹配\")")
                     && sourceBytes(sheet, contain: "case .split: return L10n.t(\"已拆分\")")
-                    && sourceBytes(sheet, contain: "let diff = SongVersions.lyricDiff(current: c.lyrics, other: v.lyrics)"), true,
+                    && sourceBytes(sheet, contain: "let diff = SongVersions.lyricDiff(current: c.shownLines, other: v.shownLines)")
+                    && sourceBytes(sheet, contain: "&& shownLines == current.shownLines && shownWords == current.shownWords"), true,
                     "其他写法(契约): 收录的播放器、三种关系、逐句对照接上")
         let rematchEngine = read(engine, "lyricsrematch.go")
         expectEqual(sourceBytes(manager, contain: "let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)")

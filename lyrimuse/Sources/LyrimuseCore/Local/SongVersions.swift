@@ -182,8 +182,23 @@ extension SongVersions {
         return (out, !out.isEmpty)
     }
 
-    /// 两份整行歌词逐句对照:按句子的先后一一对齐(空行不算),文字不同或一边没有的那一行标 differs。shiftMs 是文字相同的
-    /// 那些行里 other 比 current 晚多少毫秒的中位数,没有文字相同的行时为 nil。
+    /// 一份歌词里会显示出来的行:去掉开头的抬头(「歌名 - 歌手」)、署名和声明这类行,跟歌词窗口同一套过滤
+    /// (LyricsSyncEngine.creditLineDropDecisions;title / artist 是这条写法的歌名、歌手,认抬头用),再去掉空行。wordTimed 时
+    /// text 是逐字歌词,先摊成每行「行首时间 + 这一行的字」(LyricsWordTimingEdit.editableText)再过滤。
+    public static func displayedLines(_ text: String, title: String, artist: String, wordTimed: Bool = false) -> [LyricLine] {
+        let lrc = wordTimed ? LyricsWordTimingEdit.editableText(yrc: text) : text
+        let parsed = LRCParser.parse(lrc)
+        let texts = parsed.map(\.text)
+        let drop = LyricsSyncEngine.creditLineDropDecisions(
+            texts, trackTitle: title, trackArtist: artist, tags: LRCParser.headerTags(text),
+            speakerExemptions: LyricDuet.speakers(in: texts))
+        return zip(parsed, drop).compactMap { line, dropped in
+            dropped || line.text.trimmingCharacters(in: .whitespaces).isEmpty ? nil : line
+        }
+    }
+
+    /// 两份歌词(displayedLines 过滤过的行)逐句对照:按句子的先后一一对齐,文字不同或一边没有的那一行标 differs。shiftMs 是
+    /// 文字相同的那些行里 other 比 current 晚多少毫秒的中位数,没有文字相同的行时为 nil。
     public struct LyricDiff: Equatable {
         public struct Row: Equatable {
             public let current: LyricLine?
@@ -195,11 +210,7 @@ extension SongVersions {
         public let shiftMs: Int?
     }
 
-    public static func lyricDiff(current: String, other: String) -> LyricDiff {
-        func lines(_ text: String) -> [LyricLine] {
-            LRCParser.parse(text).filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
-        }
-        let a = lines(current), b = lines(other)
+    public static func lyricDiff(current a: [LyricLine], other b: [LyricLine]) -> LyricDiff {
         var rows: [LyricDiff.Row] = []
         var shifts: [Int] = []
         for i in 0..<max(a.count, b.count) {

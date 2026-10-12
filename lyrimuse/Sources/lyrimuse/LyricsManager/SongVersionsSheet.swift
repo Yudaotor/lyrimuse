@@ -40,9 +40,12 @@ struct SongVersionsSheet: View {
         let features: [String]
         let lyrics: String
         let yrc: String
+        /// 会显示出来的行(SongVersions.displayedLines,不含抬头、署名):整行一份、逐字一份。比对、判一致都只看它们。
+        let shownLines: [LyricLine]
+        let shownWords: [LyricLine]
         /// 正文读得回来(读不回来时歌词按不知道算,不拿来比)。
         let lyricsKnown: Bool
-        /// 现在的歌词(正文加逐字)跟当前这条一字不差。
+        /// 显示出来的歌词(整行加逐字的文字和行时间)跟当前条目完全一致。
         let sameLyrics: Bool
         /// 已拆开那条恢复合并时交给引擎的写法。
         let mergeKeys: [String]
@@ -507,7 +510,7 @@ struct SongVersionsSheet: View {
     }
 
     private func lyricDiffSection(_ c: Version, _ v: Version) -> some View {
-        let diff = SongVersions.lyricDiff(current: c.lyrics, other: v.lyrics)
+        let diff = SongVersions.lyricDiff(current: c.shownLines, other: v.shownLines)
         return DisclosureGroup(isExpanded: $diffExpanded) {
             VStack(alignment: .leading, spacing: 6) {
                 VStack(spacing: 0) {
@@ -795,17 +798,20 @@ struct SongVersionsSheet: View {
         }
         if s.hasTranslation { features.append(L10n.t("译文")) }
         if s.hasRomanization { features.append(L10n.t("读音")) }
+        let shownLines = SongVersions.displayedLines(facts.lyrics, title: s.title, artist: s.artist)
+        let shownWords = SongVersions.displayedLines(facts.yrc, title: s.title, artist: s.artist, wordTimed: true)
         let same: Bool
         if let current {
-            same = facts.complete && current.lyricsKnown && !facts.lyrics.isEmpty
-                && facts.lyrics == current.lyrics && facts.yrc == current.yrc
+            same = facts.complete && current.lyricsKnown && !shownLines.isEmpty
+                && shownLines == current.shownLines && shownWords == current.shownWords
         } else {
             same = true
         }
         return Version(key: key, relation: relation, title: s.shownTitle, artist: s.shownArtist, album: s.displayAlbum,
                        players: facts.players, playersInferred: facts.playersInferred, durationSecs: facts.durationSecs,
                        source: s.lyricsSource, score: facts.score, features: features,
-                       lyrics: facts.lyrics, yrc: facts.yrc, lyricsKnown: facts.complete, sameLyrics: same, mergeKeys: mergeKeys)
+                       lyrics: facts.lyrics, yrc: facts.yrc, shownLines: shownLines, shownWords: shownWords,
+                       lyricsKnown: facts.complete, sameLyrics: same, mergeKeys: mergeKeys)
     }
 
     static func evidenceLabel(_ kind: String) -> String {
