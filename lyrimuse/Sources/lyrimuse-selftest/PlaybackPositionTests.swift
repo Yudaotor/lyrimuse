@@ -1729,9 +1729,9 @@ func runPlaybackPositionTests() {
         expectEqual(lateZero(qq, 0, 0.05, nil), 0, "QQ 晚到的 0 锚点: 没有在放信号不补")
         expectEqual(lateZero(qq, 1, 1.05, 0.4), 0, "QQ 晚到的 0 锚点: 不是 0 锚点不补")
         expectEqual(lateZero(kugouID, 0, 0.05, 0.4), 0, "QQ 晚到的 0 锚点: 酷狗不动")
-        // 网易云换歌时锚点比在放信号晚到:起点挪到在放那一刻(02 章决策 121)。
+        // 网易云、酷狗换歌时锚点比在放信号晚到:起点挪到在放那一刻(02 章决策 121、123)。
         let ne = PlaybackPlayer.netease.bundleIdentifier
-        let neLate = { LocalPlaybackSource.neteaseLateStartAnchorLead(bundleID: $0, anchorElapsed: $1, rawReported: $2, playingSince: $3) }
+        let neLate = { LocalPlaybackSource.lateStartAnchorLead(bundleID: $0, anchorElapsed: $1, rawReported: $2, playingSince: $3) }
         func near4(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 0.001 }
         expectEqual(near4(neLate(ne, 0, 0.3, 0.72), 0.42), true, "网易云晚到的开播锚点: 晚 0.42 就补 0.42(《Pretty Eyes》)")
         expectEqual(near4(neLate(ne, 2.0, 2.3, 0.73), 0.43), true, "网易云晚到的开播锚点: 从停下的地方恢复开播(锚点 2.0)同样补")
@@ -1739,6 +1739,9 @@ func runPlaybackPositionTests() {
         expectEqual(neLate(ne, 0, 0.3, 1.5), 0, "网易云晚到的开播锚点: 晚 1.2 秒更像卡了一下,不补")
         expectEqual(neLate(ne, 0, 0.3, nil), 0, "网易云晚到的开播锚点: 没有在放信号不补")
         expectEqual(neLate(qq, 0, 0.3, 0.72), 0, "网易云晚到的开播锚点: QQ 走自己那条")
+        expectEqual(near4(neLate(kugouID, 54.86, 54.865, 0.445), 0.44), true, "酷狗晚到的开播锚点: 试听片段从中段起播,晚 0.44 就补 0.44")
+        expectEqual(neLate(kugouID, 0.025, 0.06, 0.02), 0, "酷狗晚到的开播锚点: 锚点先到、在放后到不补")
+        expectEqual(neLate(PlaybackPlayer.soda.bundleIdentifier, 0, 0.3, 0.72), 0, "晚到的开播锚点: 汽水不动")
 
         // 跟随重发锚点(KKBOX)的两条判据。
         let L2 = LocalPlaybackSource.self

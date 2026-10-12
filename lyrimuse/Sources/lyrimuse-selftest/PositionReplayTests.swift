@@ -110,6 +110,7 @@ func runPositionReplayTests() {
     replayQQResumeToOtherTrack()
     replayQQLateZeroAnchor()
     replayNeteaseLateStartAnchor()
+    replayKugouLateStartAnchor()
     replayKKBOXFollowsRepublishedAnchor()
     replayKKBOXPauseHoldsUntilPauseAnchor()
     replayKKBOXStallHolds()
@@ -418,11 +419,11 @@ private func replayQQResumeToOtherTrack() {
 
 /// QQ「先报在放、再发 0」:在放信号 10.30 到,0 锚点 10.65 才发(晚 0.35 秒)→ 起点往前补 0.12;只晚 0.05 秒的不补。
 /// 带新歌名和 0 锚点的那一行同样带 `playing:true`(10.65 又来一次在放信号),不能拿它当这段在放的起点。
-/// 酷狗同一串读数不补(对照)。见 02 章决策 120。
+/// 汽水同一串读数不补(对照)。见 02 章决策 120。
 @MainActor
 private func replayQQLateZeroAnchor() {
     func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
-    for (bundle, signalAt, expected) in [(qqID, 10.30, 0.17), (qqID, 10.60, 0.05), (PlaybackPlayer.kugou.bundleIdentifier, 10.30, 0.05)] {
+    for (bundle, signalAt, expected) in [(qqID, 10.30, 0.17), (qqID, 10.60, 0.05), (PlaybackPlayer.soda.bundleIdentifier, 10.30, 0.05)] {
         let rig = ReplayRig("qq-late-zero-\(bundle)-\(signalAt)")
         defer { rig.tearDown() }
         rig.tick(mediaControl(bundle, "Mmm", anchor: 0, elapsed: 0, duration: 200), at: at(0))
@@ -432,16 +433,16 @@ private func replayQQLateZeroAnchor() {
         rig.source.replayResumeSignal(at: at(10.65))
         rig.tick(mediaControl(bundle, "孤勇者", anchor: 0, elapsed: 0.05, duration: 256), at: at(10.7))
         expectEqual(near(rig.shown(at: at(10.7)), expected, 0.02), true,
-                    "回放·晚到的 0 锚点(\(bundle == qqID ? "QQ" : "酷狗"),信号 \(signalAt)): 起点 \(expected)(\(fmt(rig.shown(at: at(10.7)))))")
+                    "回放·晚到的 0 锚点(\(bundle == qqID ? "QQ" : "汽水"),信号 \(signalAt)): 起点 \(expected)(\(fmt(rig.shown(at: at(10.7)))))")
     }
 }
 
 /// 网易云按「下一个」开播:43.95 报在放(紧跟着上一首的暂停信号),44.375 才发新歌的 `0` 锚点,带歌名的那一行也带
-/// `playing:true`。真起点是报在放那一刻:起点补上晚到的 0.42。酷狗同一串读数不补(对照)。见 02 章决策 121。
+/// `playing:true`。真起点是报在放那一刻:起点补上晚到的 0.42。汽水同一串读数不补(对照)。见 02 章决策 121。
 @MainActor
 private func replayNeteaseLateStartAnchor() {
     func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
-    for (bundle, lead) in [(PlaybackPlayer.netease.bundleIdentifier, 0.425), (PlaybackPlayer.kugou.bundleIdentifier, 0.0)] {
+    for (bundle, lead) in [(PlaybackPlayer.netease.bundleIdentifier, 0.425), (PlaybackPlayer.soda.bundleIdentifier, 0.0)] {
         let rig = ReplayRig("netease-late-start-\(lead)")
         defer { rig.tearDown() }
         rig.tick(mediaControl(bundle, "u got me", anchor: 40, elapsed: 40, duration: 212), at: at(30))
@@ -451,8 +452,26 @@ private func replayNeteaseLateStartAnchor() {
         rig.source.replayResumeSignal(at: at(44.375))
         rig.tick(mediaControl(bundle, "Pretty Eyes", anchor: 0, elapsed: 0.025, duration: 209), at: at(44.4))
         expectEqual(near(rig.shown(at: at(44.4)), 0.025 + lead, 0.02), true,
-                    "回放·\(lead > 0 ? "网易云" : "酷狗") 开播锚点晚到: 起点补 \(lead)(\(fmt(rig.shown(at: at(44.4)))))")
+                    "回放·\(lead > 0 ? "网易云" : "汽水") 开播锚点晚到: 起点补 \(lead)(\(fmt(rig.shown(at: at(44.4)))))")
     }
+}
+
+/// 酷狗拖出试听片段的结尾、跳到下一首的试听片段(从 54.86 放起):10.959 停、11.047 报在放、声音同时响起,
+/// 11.483 才发新歌的锚点(位置 54.86)。起点补上晚到的 0.44。见 02 章决策 123。
+@MainActor
+private func replayKugouLateStartAnchor() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let rig = ReplayRig("kugou-late-start")
+    defer { rig.tearDown() }
+    let kugou = PlaybackPlayer.kugou.bundleIdentifier
+    rig.tick(mediaControl(kugou, "One Call Away", anchor: 0, elapsed: 0, duration: 194), at: at(0))
+    rig.tick(mediaControl(kugou, "One Call Away", anchor: 0, elapsed: 8, duration: 194), at: at(8))
+    rig.source.replayPlayerStateEvent(at: at(10.959), freeze: true)
+    rig.source.replayResumeSignal(at: at(11.047))
+    rig.source.replayResumeSignal(at: at(11.488))
+    rig.tick(mediaControl(kugou, "Boys", anchor: 54.86, elapsed: 54.865, duration: 163), at: at(11.49))
+    expectEqual(near(rig.shown(at: at(11.49)), 54.865 + 0.443, 0.02), true,
+                "回放·酷狗 开播锚点晚到: 起点补 0.44(\(fmt(rig.shown(at: at(11.49)))))")
 }
 
 private let kkboxID = PlaybackPlayer.kkbox.bundleIdentifier

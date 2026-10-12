@@ -89,11 +89,35 @@ type kugouLocalEntry struct {
 
 // kugouLocalFile 是单个 .krc 上一轮的解析结果,按 mtime+size 判断要不要重新解密。
 // ok=false 表示解不开或没有 [ar:]/[ti:](AI 字幕那类),同样记下,免得每轮重解一遍。
+// named 是按文件名记的那一份(见 kugouLocalNamedIdentity),拆不出或 AI 生成时 hasNamed=false。
 type kugouLocalFile struct {
-	mod   time.Time
-	size  int64
-	entry kugouLocalEntry
-	ok    bool
+	mod      time.Time
+	size     int64
+	entry    kugouLocalEntry
+	ok       bool
+	named    kugouLocalEntry
+	hasNamed bool
+}
+
+// kugouLocalNamedFile 认客户端按「歌手 - 歌名_文件hash.krc」落盘的那种文件名。
+var kugouLocalNamedFile = regexp.MustCompile(`^(.+?) - (.+)_[0-9A-Fa-f]{32}\.krc$`)
+
+// kugouLocalNamedIdentity 从文件名拆出歌手与歌名。这个文件名是客户端按它自己的曲目信息起的,写法跟它报给
+// 系统的歌手、歌名一致;KRC 里的 [ar:] [ti:] 常跟它不同(多出或少了副标题、歌手分隔符不同、占位文字、错字),
+// 只按标签认时这些歌要么只能宽松命中、拿不到同源加权,要么完全命中不了。见 09 章决策 233。
+func kugouLocalNamedIdentity(fileName string) (artist, title string, ok bool) {
+	m := kugouLocalNamedFile.FindStringSubmatch(fileName)
+	if m == nil {
+		return "", "", false
+	}
+	artist, title = strings.TrimSpace(m[1]), strings.TrimSpace(m[2])
+	return artist, title, artist != "" && title != ""
+}
+
+// kugouLocalAIGenerated:客户端给没有官方歌词的歌用 AI 生成的那种(`[by:]` 写着「…AI生成…」,
+// 或正文首行是 AI 语音识别的字幕声明)。不按文件名收进索引,跟它们一向因为标签全空而进不来保持一致。
+func kugouLocalAIGenerated(body string) bool {
+	return strings.Contains(krcTag(body, "by"), "AI生成") || strings.Contains(body, "AI语音识别")
 }
 
 var (
@@ -169,17 +193,27 @@ func refreshKugouLocalIndexLocked() {
 			if krc := decryptKRCFile(path); krc != "" {
 				_, body := splitKRCLanguageLine(krc)
 				artist, title := krcTag(body, "ar"), krcTag(body, "ti")
+				album, hash := krcTag(body, "al"), krcTag(body, "hash")
 				if kugouLocalKey(artist, title) != "" {
-					f.entry = kugouLocalEntry{path: path, artist: artist, title: title, album: krcTag(body, "al"),
-						hash: krcTag(body, "hash")}
+					f.entry = kugouLocalEntry{path: path, artist: artist, title: title, album: album, hash: hash}
 					f.ok = true
+				}
+				if na, nt, named := kugouLocalNamedIdentity(e.Name()); named && !kugouLocalAIGenerated(body) {
+					f.named = kugouLocalEntry{path: path, artist: na, title: nt, album: album, hash: hash}
+					f.hasNamed = kugouLocalKey(na, nt) != ""
 				}
 			}
 		}
 		files[path] = f
+		tagKey := ""
 		if f.ok {
-			key := kugouLocalKey(f.entry.artist, f.entry.title)
-			idx[key] = append(idx[key], f.entry)
+			tagKey = kugouLocalKey(f.entry.artist, f.entry.title)
+			idx[tagKey] = append(idx[tagKey], f.entry)
+		}
+		if f.hasNamed {
+			if key := kugouLocalKey(f.named.artist, f.named.title); key != tagKey {
+				idx[key] = append(idx[key], f.named)
+			}
 		}
 	}
 	kugouLocalIndex, kugouLocalFiles = idx, files

@@ -353,3 +353,63 @@ func TestKugouLocalTitleMatches(t *testing.T) {
 		}
 	}
 }
+
+// 文件名是客户端按它自己的曲目信息起的「歌手 - 歌名_文件hash.krc」:标签跟它对不上时按文件名精确命中、拿同源加权;
+// AI 生成的不收;纯数字文件名没有这份信息,照旧只靠标签。
+func TestKugouLocalLyricNamedFile(t *testing.T) {
+	const hash = "61148f22379cc8b87858e484f9c7d05c"
+	dir := t.TempDir()
+	writeTestKRC(t, dir, "Dia Frampton - Walk Away (Album Version)_"+hash+".krc",
+		strings.NewReplacer("[ar:周杰伦]", "[ar:Dia Frampton]", "[ti:搁浅]", "[ti:Walk Away]", "[al:七里香]", "[al:Red]").Replace(testKRCGeLian))
+	writeTestKRC(t, dir, "Prismo - Pretty Stranger_e0df2b26d28050917d6c743860000000.krc",
+		strings.NewReplacer("[ar:周杰伦]", "[ar:Prismo]", "[ti:搁浅]", "[ti:__song_name__]").Replace(testKRCGeLian))
+	writeTestKRC(t, dir, "车厘子的车车 - 天际_69fac4a860b9470bc430299136099cdd.krc",
+		strings.NewReplacer("[ar:周杰伦]", "[ar:]", "[ti:搁浅]", "[ti:]", "[by:]", "[by:天琴实验室AI生成v1.0]").Replace(testKRCGeLian))
+	writeTestKRC(t, dir, "738696028.krc",
+		strings.NewReplacer("[ar:周杰伦]", "[ar:Sarah Connor]", "[ti:搁浅]", "[ti:Every Moment Of My Life]").Replace(testKRCGeLian))
+	writeTestKRC(t, dir, "周杰伦 - 搁浅_fbc234520fed713c30c1c026e7352770.krc", testKRCGeLian)
+	resetKugouLocalIndex(t, dir)
+
+	r, ok := kugouLocalLyric("Dia Frampton", "Walk Away (Album Version)", "Red", 0)
+	if !ok || !r.fromLocalClient {
+		t.Fatalf("文件名跟播放器报的一致时应精确命中并拿同源加权: ok=%v fromLocalClient=%v", ok, r.fromLocalClient)
+	}
+	if r.title != "Walk Away (Album Version)" || r.album != "Red" {
+		t.Errorf("歌名取文件名的、专辑取标签的: %q / %q", r.title, r.album)
+	}
+	if r, ok := kugouLocalLyric("Prismo", "Pretty Stranger", "", 0); !ok || !r.fromLocalClient {
+		t.Errorf("标签是占位文字时按文件名命中: ok=%v fromLocalClient=%v", ok, r.fromLocalClient)
+	}
+	if _, ok := kugouLocalLyric("车厘子的车车", "天际", "", 0); ok {
+		t.Error("AI 生成的歌词不按文件名收")
+	}
+	if r, ok := kugouLocalLyric("Sarah Connor", "Every Moment Of My Life (Album Version)", "", 0); !ok || r.fromLocalClient {
+		t.Errorf("纯数字文件名只靠标签:宽松命中、不拿同源加权: ok=%v fromLocalClient=%v", ok, r.fromLocalClient)
+	}
+	kugouLocalMu.Lock()
+	n := len(kugouLocalIndex[kugouLocalKey("周杰伦", "搁浅")])
+	kugouLocalMu.Unlock()
+	if n != 1 {
+		t.Errorf("文件名跟标签一样时只记一条,得到 %d 条", n)
+	}
+}
+
+func TestKugouLocalNamedIdentity(t *testing.T) {
+	cases := []struct {
+		name, artist, title string
+		ok                  bool
+	}{
+		{"Katie Sky、Timeflies - Monsters_6ba0edcebabaeec91547b4778cde4a1b.krc", "Katie Sky、Timeflies", "Monsters", true},
+		{"任素汐、毛不易 - 歌曲：别来无恙_6ba0edcebabaeec91547b4778cde4a1b.krc", "任素汐、毛不易", "歌曲：别来无恙", true},
+		{"A - B - C_6ba0edcebabaeec91547b4778cde4a1b.krc", "A", "B - C", true},
+		{"347132483.krc", "", "", false},
+		{"Dia Frampton - Walk Away_abc.krc", "", "", false},
+		{"artistsInfo-周杰伦 - 搁浅_6ba0edcebabaeec91547b4778cde4a1b", "", "", false},
+	}
+	for _, c := range cases {
+		a, ti, ok := kugouLocalNamedIdentity(c.name)
+		if a != c.artist || ti != c.title || ok != c.ok {
+			t.Errorf("%s: 得到 %q / %q / %v", c.name, a, ti, ok)
+		}
+	}
+}

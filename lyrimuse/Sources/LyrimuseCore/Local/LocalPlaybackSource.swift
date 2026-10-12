@@ -726,20 +726,25 @@ public final class LocalPlaybackSource: ObservableObject {
         return resumeSignalAge - rawReported >= qqLateZeroAnchorMinGapSecs ? qqLateZeroAnchorLeadSecs : 0
     }
 
-    /// 网易云换歌时先报在放、约 0.4 秒后才发新歌的锚点,真起点就在报在放那一刻:锚点比这一段在放的起点晚到
-    /// `neteaseLateStartAnchorGapRange` 之内,起点挪到在放信号那一刻,返回要补上的那一截。锚点 elapsed 不一定是 0
-    /// (从上次停下的地方恢复开播时是那个位置)。`playingSince` 是这一段在放开始到这一拍过了多久。只认网易云。
-    /// 见 02 章决策 121。纯函数,selftest 直接覆盖。
-    public nonisolated static func neteaseLateStartAnchorLead(bundleID: String?, anchorElapsed: Double?, rawReported: Double,
-                                                              playingSince: TimeInterval?) -> Double {
-        guard bundleID == PlaybackPlayer.netease.bundleIdentifier, let anchorElapsed, let playingSince,
+    /// 换歌时先报在放、约 0.4 秒后才发新歌的锚点,真起点就在报在放那一刻:锚点比这一段在放的起点晚到
+    /// `lateStartAnchorGapRange` 之内,起点挪到在放信号那一刻,返回要补上的那一截。锚点 elapsed 不一定是 0
+    /// (从上次停下的地方恢复开播、试听片段从中段放起时是那个位置)。`playingSince` 是这一段在放开始到这一拍过了多久。
+    /// 只认 `lateStartAnchorPlayers`。见 02 章决策 121、123。纯函数,selftest 直接覆盖。
+    public nonisolated static func lateStartAnchorLead(bundleID: String?, anchorElapsed: Double?, rawReported: Double,
+                                                       playingSince: TimeInterval?) -> Double {
+        guard let bundleID, lateStartAnchorPlayers.contains(bundleID), let anchorElapsed, let playingSince,
               playingSince <= resumeSignalMaxAgeSecs else { return 0 }
         let gap = playingSince - (rawReported - anchorElapsed)
-        return neteaseLateStartAnchorGapRange.contains(gap) ? gap : 0
+        return lateStartAnchorGapRange.contains(gap) ? gap : 0
     }
 
-    /// 见 neteaseLateStartAnchorLead。超过上沿更像是中途卡了一下,不当成晚到的开播锚点。
-    public nonisolated static let neteaseLateStartAnchorGapRange: ClosedRange<Double> = 0.15...0.8
+    /// 见 lateStartAnchorLead。只放实测过「先报在放、锚点晚到、真起点在报在放那一刻」的播放器。
+    public nonisolated static let lateStartAnchorPlayers: Set<String> = [
+        PlaybackPlayer.netease.bundleIdentifier, PlaybackPlayer.kugou.bundleIdentifier,
+    ]
+
+    /// 见 lateStartAnchorLead。超过上沿更像是中途卡了一下,不当成晚到的开播锚点。
+    public nonisolated static let lateStartAnchorGapRange: ClosedRange<Double> = 0.15...0.8
 
     /// 见 qqLateZeroAnchorLead。
     public nonisolated static let qqLateZeroAnchorMinGapSecs: Double = 0.15
@@ -2020,11 +2025,11 @@ public final class LocalPlaybackSource: ObservableObject {
                 let startLead = Self.qqLateZeroAnchorLead(
                     bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime, rawReported: rawReported,
                     resumeSignalAge: playingSince)
-                    + Self.neteaseLateStartAnchorLead(
+                    + Self.lateStartAnchorLead(
                         bundleID: lastSnapshot?.bundleIdentifier, anchorElapsed: anchorElapsedTime, rawReported: rawReported,
                         playingSince: playingSince)
-                if lastSnapshot?.bundleIdentifier == PlaybackPlayer.qqMusic.bundleIdentifier
-                    || lastSnapshot?.bundleIdentifier == PlaybackPlayer.netease.bundleIdentifier {
+                if let bundle = lastSnapshot?.bundleIdentifier,
+                   bundle == PlaybackPlayer.qqMusic.bundleIdentifier || Self.lateStartAnchorPlayers.contains(bundle) {
                     logger.notice("start anchor: raw=\(rawReported, format: .fixed(precision: 3)) anchorElapsed=\(anchorElapsedTime ?? -1, format: .fixed(precision: 3)) playingSince=\(playingSince ?? -1, format: .fixed(precision: 3))s lead=\(startLead, format: .fixed(precision: 3))")
                 }
                 trackPosSeconds += startLead
