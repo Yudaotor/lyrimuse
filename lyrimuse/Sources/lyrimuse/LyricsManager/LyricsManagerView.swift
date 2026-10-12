@@ -3409,10 +3409,16 @@ struct LyricsManagerView: View {
                                size: 128, radius: 14)
                 .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
             VStack(alignment: .leading, spacing: 4) {
+                // 别加 .textSelection(.enabled):这一行会整行上下颠倒,复制歌名走右键菜单(见 11 章决策 116)。
                 Text(summary.shownTitle)
                     .font(.system(size: 28, weight: .bold))
                     .lineLimit(2)
-                    .textSelection(.enabled)
+                    .contextMenu {
+                        Button(L10n.t("拷贝")) {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(summary.shownTitle, forType: .string)
+                        }
+                    }
                 Text(summary.shownArtist.isEmpty ? L10n.t("未知歌手") : summary.shownArtist)
                     .font(.system(size: 16))
                     .foregroundStyle(.secondary)
