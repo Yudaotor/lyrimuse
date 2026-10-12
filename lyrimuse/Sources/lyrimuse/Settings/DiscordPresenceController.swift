@@ -508,9 +508,11 @@ final class DiscordPresenceController: ObservableObject {
         let playback = PlaybackCoordinator.shared
         let lines = playback.allLines
         let gaps = playback.lyricsGapMarkers
-        let key = [lines.first?.id ?? "", lines.last?.id ?? "", String(lines.count), String(gaps.count),
-                   gaps.last.map { "\($0.index):\($0.startMs)" } ?? "", playback.currentDurationMs.map { String($0) } ?? ""]
-            .joined(separator: "|")
+        // 拆成几段、写明类型:一整个数组字面量连着几个 `??`,CI 的编译器会在限时内推不出类型而报错。
+        let lastGap: String = gaps.last.map { "\($0.index):\($0.startMs)" } ?? ""
+        let duration: String = playback.currentDurationMs.map { String($0) } ?? ""
+        let parts: [String] = [lines.first?.id ?? "", lines.last?.id ?? "", String(lines.count), String(gaps.count), lastGap, duration]
+        let key = parts.joined(separator: "|")
         if let lyricSpans, lyricSpans.key == key { return lyricSpans.spans }
         var gapStarts: [Int: Int] = [:]
         for gap in gaps where gap.index >= 0 { gapStarts[gap.index] = gap.startMs }
