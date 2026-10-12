@@ -181,13 +181,24 @@ func songGoldenWrite(path string, f *songGoldenFixture) error {
 
 // songGoldenBuild 按案例建表:换上案例记的 MusicBrainz 身份,建完还原。
 func songGoldenBuild(f *songGoldenFixture) (*songEntityBuild, error) {
+	return songGoldenBuildWith(f, nil, false)
+}
+
+// songGoldenBuildWith:同 songGoldenBuild,条目换成 entries 里的(写法键 → 条目;nil 时用案例存的);own 为 true 时证据看写法
+// 自己得来的那份歌词(songUseOwnLyrics)。
+func songGoldenBuildWith(f *songGoldenFixture, entries map[string]enrichEntry, own bool) (*songEntityBuild, error) {
 	vs := make([]songVariant, 0, len(f.Variants))
 	for _, fv := range f.Variants {
-		var e enrichEntry
-		if err := json.Unmarshal(fv.Entry, &e); err != nil {
-			return nil, fmt.Errorf("%s: %v", fv.Key, err)
+		e, ok := entries[fv.Key]
+		if !ok {
+			if err := json.Unmarshal(fv.Entry, &e); err != nil {
+				return nil, fmt.Errorf("%s: %v", fv.Key, err)
+			}
 		}
 		v := songVariantOf(fv.Key, e, fv.Pinned)
+		if own {
+			songUseOwnLyrics(&v, e)
+		}
 		v.titlesDone, v.registered, v.winnerTitle = true, fv.Registered, fv.WinnerTitle
 		vs = append(vs, v)
 	}

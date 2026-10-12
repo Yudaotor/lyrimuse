@@ -396,11 +396,11 @@ func (st *songEntityState) update(src *songEntitySource, now time.Time) (*songEn
 			oldSub.Songs[id] = rec
 		}
 	}
-	songs := map[string]string{}
+	songs := map[string]songEntitySeed{}
 	for k := range block {
-		id := src.cache[k].Song
-		if _, live := st.table.Songs[id]; id != "" && (oldIDs[id] || !live) {
-			songs[k] = id
+		e := src.cache[k]
+		if _, live := st.table.Songs[e.Song]; e.Song != "" && (oldIDs[e.Song] || !live) {
+			songs[k] = songEntitySeed{song: e.Song, share: e.SongShare}
 		}
 	}
 	part := b.table(oldSub, songs, now)
@@ -656,12 +656,12 @@ func songEntityLiveSource(prepare func(vs []songVariant)) *songEntitySource {
 		dir: decisionSidecarDir(), prepare: prepare}
 }
 
-// songEntitySongs:写法键 → 条目上的 `song`(没有的不在里面),给 id 延续当种子。
-func songEntitySongs(cache map[string]enrichEntry) map[string]string {
-	out := map[string]string{}
+// songEntitySongs:写法键 → 条目上的 `song`、`song_share`(没有实体 id 的不在里面),给 id、组号延续当种子。
+func songEntitySongs(cache map[string]enrichEntry) map[string]songEntitySeed {
+	out := map[string]songEntitySeed{}
 	for k, e := range cache {
 		if e.Song != "" {
-			out[k] = e.Song
+			out[k] = songEntitySeed{song: e.Song, share: e.SongShare}
 		}
 	}
 	return out

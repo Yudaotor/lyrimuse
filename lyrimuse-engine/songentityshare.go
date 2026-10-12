@@ -357,6 +357,46 @@ func removeSongSharePre(key string) {
 	noteFileErr("remove", songSharePrePath(key), removeIfExists(songSharePrePath(key)))
 }
 
+// songShareAutoCopyOf:e 是自动同步写进来的副本(按组重搜换成组里搜的那条、跟着校准、跟上重新匹配)时返回它跟的那条写法;
+// 手改副本、自己搜的、出处不是同步的返回空串。
+func songShareAutoCopyOf(e enrichEntry) string {
+	d := e.LyricsDecisionApplied
+	if e.LyricsEntityOrigin != "" || d == nil || d.Path != lyricsDecisionPathSongEntityShare {
+		return ""
+	}
+	return d.ReusedFrom
+}
+
+// releaseStrayAutoCopiesLocked:keys 这个共享组里,自动同步写进来的副本跟的那条写法还在、却已经不在这一组(证据变了,分到了
+// 别的组或别的实体):没把握是同一份录音就不共用歌词,歌词还是同步写进去那份的按留底恢复、删掉留底(18 章决策 60)。跟的那条
+// 已经删了的不动:词本身没错。过翻转保险。返回改了的写法。调用方持 enrichMu。
+func releaseStrayAutoCopiesLocked(keys []string, now time.Time) []string {
+	var changed []string
+	for _, k := range keys {
+		e := enrichCache[k]
+		from := songShareAutoCopyOf(e)
+		if from == "" || from == k {
+			continue
+		}
+		src, ok := enrichCache[from]
+		if !ok || (src.Song == e.Song && src.SongShare == e.SongShare) {
+			continue
+		}
+		pre, ok := songShareRestorable(k, e)
+		if !ok || !songShareAutoWriteAllowedLocked(k, now) {
+			continue
+		}
+		songShareRestore(&e, pre)
+		enrichCache[k] = e
+		noteFileErr("remove", songSharePrePath(k), removeIfExists(songSharePrePath(k)))
+		changed = append(changed, k)
+	}
+	if len(changed) > 0 {
+		slog.Info("song entities: released synced lyrics that no longer share a group with their source", "versions", len(changed))
+	}
+	return changed
+}
+
 // songShareRestorable:key 这条写法有留底,而且歌词还是同步写进去的那一份,返回留底里的条目。
 func songShareRestorable(key string, e enrichEntry) (enrichEntry, bool) {
 	p, err := readSongSharePre(songSharePrePath(key))
@@ -591,7 +631,8 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 }
 
 // shareGroup:搜一个共享组并按结果改。组里有写法正在被别的任务处理时这一轮跳过;搜的这段时间把整组占住,播放那一侧的
-// 后台任务不会同时改它们。
+// 后台任务不会同时改它们。正在播的那首不占:播放那一侧这一刻要给它起设备封面、外围补全、重评这些后台任务,一次只起一路、
+// 占着就跳过,这一次播放就全错过了(18 章决策 60)。它在搜的这段时间里歌词要是变了,applyShareRound 按指纹核对、整轮作废。
 func (b *songEntityBuild) shareGroup(ctx context.Context, ms []int, own []*songPlanLyrics) songShareGroupOutcome {
 	keys := make([]string, len(ms))
 	groupOwn := make([]*songPlanLyrics, len(ms))
@@ -614,14 +655,22 @@ func (b *songEntityBuild) shareGroup(ctx context.Context, ms []int, own []*songP
 		}
 		snap[i] = e
 	}
+	playing := ""
+	if p := enrichPlayingKey.Load(); p != nil {
+		playing = *p
+	}
+	held := make([]string, 0, len(keys))
 	for _, k := range keys {
-		enrichInflight[k] = true
+		if k != playing {
+			enrichInflight[k] = true
+			held = append(held, k)
+		}
 	}
 	stamp := enrichEditStampLocked()
 	enrichMu.Unlock()
 	defer func() {
 		enrichMu.Lock()
-		for _, k := range keys {
+		for _, k := range held {
 			delete(enrichInflight, k)
 		}
 		enrichMu.Unlock()
@@ -639,6 +688,7 @@ func (b *songEntityBuild) shareGroup(ctx context.Context, ms []int, own []*songP
 // songShareTally:一轮同步的计数,记日志用。
 type songShareTally struct {
 	manualEntities, manualChanged, manualConflicts   int
+	strays                                           int
 	pinnedChanged, pinnedKept, pinnedConflicts       int
 	groups, searched, unchanged, noWinner, abandoned int
 	changed, filled, kept                            int
@@ -762,7 +812,7 @@ func runSongEntitySharePass(ctx context.Context, b *songEntityBuild) {
 	if b.partial && t == (songShareTally{groups: t.groups, unchanged: t.unchanged}) {
 		return
 	}
-	slog.Info("song entities: share pass", "manual_entities", t.manualEntities, "manual_changed", t.manualChanged,
+	slog.Info("song entities: share pass", "manual_entities", t.manualEntities, "manual_changed", t.manualChanged, "strays_released", t.strays,
 		"manual_conflicts", t.manualConflicts, "pinned_changed", t.pinnedChanged, "pinned_kept", t.pinnedKept,
 		"pinned_conflicts", t.pinnedConflicts, "groups", t.groups, "searched", t.searched, "unchanged", t.unchanged,
 		"no_winner", t.noWinner, "abandoned", t.abandoned, "changed", t.changed, "filled", t.filled, "kept", t.kept,
@@ -818,8 +868,9 @@ func songShareFingerprints(keys []string) map[string]string {
 	return out
 }
 
-// shareManualPass:每个共享组过一遍 shareManualLocked,改了的当场落盘、导出。只有一条写法的组只在它是副本时过(原件分到了
-// 别的组或别的实体,要按留底恢复)。
+// shareManualPass:每个共享组过一遍 shareManualLocked,再把跟的那条已经不在这一组的自动同步副本按留底恢复
+// (releaseStrayAutoCopiesLocked),改了的当场落盘、导出。只有一条写法的组只在它是副本时过(原件或跟的那条分到了别的组或
+// 别的实体,要按留底恢复)。
 func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t *songShareTally) {
 	var all []string
 	for _, ms := range b.shareGroupsOf() {
@@ -828,13 +879,14 @@ func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t
 			keys[i] = b.variants[m].key
 		}
 		enrichMu.Lock()
-		if len(keys) == 1 && enrichCache[keys[0]].LyricsEntityOrigin == "" {
+		if one := enrichCache[keys[0]]; len(keys) == 1 && one.LyricsEntityOrigin == "" && songShareAutoCopyOf(one) == "" {
 			enrichMu.Unlock()
 			continue
 		}
 		changed, conflict := shareManualLocked(keys, "", pins, now)
-		if len(changed) > 0 {
-			markEnrichEditedLocked(false, changed...)
+		strays := releaseStrayAutoCopiesLocked(keys, now)
+		if len(changed)+len(strays) > 0 {
+			markEnrichEditedLocked(false, append(slices.Clone(changed), strays...)...)
 			enrichDirty = true
 		}
 		enrichMu.Unlock()
@@ -846,6 +898,8 @@ func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t
 			t.manualChanged += len(changed)
 			all = append(all, changed...)
 		}
+		t.strays += len(strays)
+		all = append(all, strays...)
 	}
 	flushShareChanges(all)
 }

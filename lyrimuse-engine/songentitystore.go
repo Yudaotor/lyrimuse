@@ -43,7 +43,7 @@ type songEntityTableFile struct {
 	Redirects map[string]string           `json:"redirects,omitempty"`
 }
 
-// songEntityRecord:一首歌。Share 跟 Variants 逐条对齐,是共享组编号(从 0 起);全在一组时省略。
+// songEntityRecord:一首歌。Share 跟 Variants 逐条对齐,是共享组编号(跨重建延续,不一定连续,见 songShareNumbers);全在一组时省略。
 type songEntityRecord struct {
 	Created      int64                     `json:"created"`
 	Variants     []string                  `json:"variants"`
@@ -348,9 +348,64 @@ func writeBackSongEntityIDs(t *songEntityTableFile) int {
 	return n
 }
 
-// table 把这次建表的结果整理成实体表文件。id 延续的种子:songs(写法键 → 条目上的 `song`)优先,其次是 old(上一份
-// 实体表);都没有时新开。建立时刻只有旧表里有,只从 `song` 来的 id 按 now 算。
-func (b *songEntityBuild) table(old *songEntityTableFile, songs map[string]string, now time.Time) *songEntityTableFile {
+// songEntitySeed:条目上记着的实体 id(`song`)和共享组编号(`song_share`),建表时给 id、组号延续当种子。
+type songEntitySeed struct {
+	song  string
+	share int
+}
+
+// songShareNumbers:一个实体里各共享组的编号(groups 按组里第一条写法的先后排,每组是写法键)。跟上一次共有写法最多的组沿用
+// 那个编号(同样多取小的编号、再取排在前面的组),一个编号只给一组;其余组按先后取最小的空号。prev 是写法 → 它上一次在这个实体里
+// 的组号。编号按成员先后重排的话,一条键小的写法挂进第二组就会让两组对调编号、整组写回(18 章决策 60)。
+func songShareNumbers(groups [][]string, prev map[string]int) []int {
+	type claim struct{ group, number, shared int }
+	var claims []claim
+	for gi, keys := range groups {
+		count := map[int]int{}
+		for _, k := range keys {
+			if n, ok := prev[k]; ok {
+				count[n]++
+			}
+		}
+		for n, c := range count {
+			claims = append(claims, claim{group: gi, number: n, shared: c})
+		}
+	}
+	sort.Slice(claims, func(i, j int) bool {
+		x, y := claims[i], claims[j]
+		if x.shared != y.shared {
+			return x.shared > y.shared
+		}
+		if x.number != y.number {
+			return x.number < y.number
+		}
+		return x.group < y.group
+	})
+	out := make([]int, len(groups))
+	assigned := make([]bool, len(groups))
+	used := map[int]bool{}
+	for _, c := range claims {
+		if assigned[c.group] || used[c.number] {
+			continue
+		}
+		out[c.group], assigned[c.group], used[c.number] = c.number, true, true
+	}
+	next := 0
+	for gi := range groups {
+		if assigned[gi] {
+			continue
+		}
+		for used[next] {
+			next++
+		}
+		out[gi], used[next] = next, true
+	}
+	return out
+}
+
+// table 把这次建表的结果整理成实体表文件。id 延续的种子:songs(写法键 → 条目上的 `song` / `song_share`)优先,其次是 old
+// (上一份实体表);都没有时新开。建立时刻只有旧表里有,只从 `song` 来的 id 按 now 算。共享组编号也延续(songShareNumbers)。
+func (b *songEntityBuild) table(old *songEntityTableFile, songs map[string]songEntitySeed, now time.Time) *songEntityTableFile {
 	seeds, created := map[string]string{}, map[string]int64{}
 	if old != nil {
 		for id, s := range old.Songs {
@@ -360,8 +415,30 @@ func (b *songEntityBuild) table(old *songEntityTableFile, songs map[string]strin
 			}
 		}
 	}
-	for k, id := range songs {
-		seeds[k] = id
+	for k, s := range songs {
+		seeds[k] = s.song
+	}
+	// prevShare:写法 k 上一次在实体 id 里的共享组编号;上一次不在这个实体里时 ok 为 false。
+	prevShare := func(k, id string) (int, bool) {
+		if s, ok := songs[k]; ok && s.song != "" {
+			return s.share, s.song == id
+		}
+		if old == nil {
+			return 0, false
+		}
+		rec, ok := old.Songs[id]
+		if !ok {
+			return 0, false
+		}
+		for i, v := range rec.Variants {
+			if v == k {
+				if i < len(rec.Share) {
+					return rec.Share[i], true
+				}
+				return 0, true
+			}
+		}
+		return 0, false
 	}
 	keys := make([][]string, len(b.clusters))
 	for ci, members := range b.clusters {
@@ -384,14 +461,34 @@ func (b *songEntityBuild) table(old *songEntityTableFile, songs map[string]strin
 		if c, ok := created[ids[ci]]; ok {
 			rec.Created = c
 		}
-		groups := map[int]int{}
+		var order []int // 共享组的根,按组里第一条写法的先后
+		groupKeys := map[int][]string{}
+		for _, m := range members {
+			r := b.shareOf[m]
+			if _, ok := groupKeys[r]; !ok {
+				order = append(order, r)
+			}
+			groupKeys[r] = append(groupKeys[r], b.variants[m].key)
+		}
+		groupList := make([][]string, len(order))
+		for i, r := range order {
+			groupList[i] = groupKeys[r]
+		}
+		prev := map[string]int{}
+		for _, k := range keys[ci] {
+			if n, ok := prevShare(k, ids[ci]); ok {
+				prev[k] = n
+			}
+		}
+		numbers := songShareNumbers(groupList, prev)
+		groups := make(map[int]int, len(order))
+		for i, r := range order {
+			groups[r] = numbers[i]
+		}
 		lo, hi := 0.0, 0.0
 		rec.IDs = map[string][]songIDRecord{}
 		seen := map[string]bool{}
 		for _, m := range members {
-			if _, ok := groups[b.shareOf[m]]; !ok {
-				groups[b.shareOf[m]] = len(groups)
-			}
 			rec.Share = append(rec.Share, groups[b.shareOf[m]])
 			v := &b.variants[m]
 			if d := v.durationSecs; d > 0 {

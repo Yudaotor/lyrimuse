@@ -1311,3 +1311,76 @@ func TestShareFollowIgnoresManualInOtherGroup(t *testing.T) {
 		t.Errorf("别的组的手改不动: %q", got.Lyrics)
 	}
 }
+
+// 按组重搜时正在播的那首不占:播放那一侧这时还能给它起后台任务;同组其余写法照旧占着,搜完放开。
+func TestShareGroupLeavesPlayingKeyFree(t *testing.T) {
+	entries := map[string]enrichEntry{
+		"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: songShareLRC("a1"), LyricsSource: "qq"},
+		"A|Song|Two": {DurationSecs: 200.2, ISRCs: []string{"USAAA1100001"}, Lyrics: songShareLRC("a2"), LyricsSource: "kugou"},
+	}
+	setUpSongShareTest(t, entries, true)
+	savedSearch, savedPlaying := searchShareRound, enrichPlayingKey.Load()
+	t.Cleanup(func() { searchShareRound = savedSearch; enrichPlayingKey.Store(savedPlaying) })
+	playing := "A|Song|Two"
+	enrichPlayingKey.Store(&playing)
+	var oneHeld, twoHeld bool
+	searchShareRound = func(context.Context, string, string, string, string, float64) songShareRound {
+		enrichMu.Lock()
+		oneHeld, twoHeld = enrichInflight["A|Song|One"], enrichInflight["A|Song|Two"]
+		enrichMu.Unlock()
+		return songShareRound{reached: true}
+	}
+	vs := []songVariant{songTestVariant("A|Song|One", entries["A|Song|One"], nil), songTestVariant("A|Song|Two", entries["A|Song|Two"], nil)}
+	b, _ := songTestBuild(t, vs, nil)
+	own := []*songPlanLyrics{b.songPlanLyricsOf(0, nil), b.songPlanLyricsOf(1, nil)}
+	b.shareGroup(context.Background(), []int{0, 1}, own)
+	if !oneHeld || twoHeld {
+		t.Errorf("搜的时候:同组那条占着=%v,正在播的那首不占=%v", oneHeld, !twoHeld)
+	}
+	enrichMu.Lock()
+	left := enrichInflight["A|Song|One"] || enrichInflight["A|Song|Two"]
+	enrichMu.Unlock()
+	if left {
+		t.Error("搜完要放开")
+	}
+}
+
+// 自动同步写进来的副本,跟的那条写法已经不在这一组时按留底恢复;还在同一组的、跟的那条删了的不动;只有一条写法的组也过。
+func TestShareManualPassReleasesStrayAutoCopies(t *testing.T) {
+	src := songShareLRC("src")
+	copyFrom := func(from string) enrichEntry {
+		return enrichEntry{Song: "s_000000000001", Lyrics: src, LyricsSource: "netease",
+			LyricsDecisionApplied: &lyricsDecision{Path: lyricsDecisionPathSongEntityShare, ReusedFrom: from}}
+	}
+	stray, kept, orphan, alone := copyFrom("A|Song|One"), copyFrom("A|Song|One"), copyFrom("A|Song|Gone"), copyFrom("A|Song|One")
+	stray.SongShare, alone.SongShare = 1, 2
+	setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: src, LyricsSource: "netease"},
+		"A|Song|Two":   stray,
+		"A|Song|Three": kept,
+		"A|Song|Four":  orphan,
+		"A|Song|Five":  alone,
+	}, true)
+	now := time.Unix(6_000_000, 0)
+	for _, k := range []string{"A|Song|Two", "A|Song|Three", "A|Song|Four", "A|Song|Five"} {
+		if _, err := writeSongSharePre(k, enrichEntry{Song: "s_000000000001", Lyrics: songShareLRC(k), LyricsSource: "kugou"}, songOffsetFingerprint(src, ""), now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keys := []string{"A|Song|Five", "A|Song|Four", "A|Song|One", "A|Song|Three", "A|Song|Two"}
+	b := &songEntityBuild{clusters: [][]int{{0, 1, 2, 3, 4}}, shareOf: []int{0, 1, 1, 1, 4}}
+	for _, k := range keys {
+		b.variants = append(b.variants, songVariant{key: k})
+	}
+	var tally songShareTally
+	b.shareManualPass(nil, now, &tally)
+	for k, wantOwn := range map[string]bool{"A|Song|Two": true, "A|Song|Five": true, "A|Song|Three": false, "A|Song|Four": false} {
+		got, _ := cacheEntry(t, k)
+		if restored := got.Lyrics == songShareLRC(k); restored != wantOwn || hasPre(k) == wantOwn {
+			t.Errorf("%s 恢复=%v(应为 %v),留底还在=%v", k, restored, wantOwn, hasPre(k))
+		}
+	}
+	if tally.strays != 2 {
+		t.Errorf("计数: %d", tally.strays)
+	}
+}

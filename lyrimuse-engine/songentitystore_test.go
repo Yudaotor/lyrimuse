@@ -235,3 +235,38 @@ func TestSongEntityEvidenceRebuildsSkipCompare(t *testing.T) {
 		}
 	}
 }
+
+// 共享组编号延续:一条键更小的写法挂进第二组,两组照旧各用原来的编号;新出现的组取最小的空号;上一次不在这个实体里的写法
+// 不当种子;只有一组时不写编号。
+func TestSongShareNumbersContinue(t *testing.T) {
+	cases := []struct {
+		name   string
+		groups [][]string
+		prev   map[string]int
+		want   []int
+	}{
+		{"按先后", [][]string{{"b", "c"}, {"d"}}, nil, []int{0, 1}},
+		{"新写法挂进第二组", [][]string{{"a", "d"}, {"b", "c"}}, map[string]int{"b": 0, "c": 0, "d": 1}, []int{1, 0}},
+		{"组拆开,共有多的留原号", [][]string{{"b"}, {"c", "d"}}, map[string]int{"b": 0, "c": 0, "d": 0}, []int{1, 0}},
+		{"空号从小取", [][]string{{"a"}, {"b"}, {"c"}}, map[string]int{"b": 0, "c": 2}, []int{1, 0, 2}},
+	}
+	for _, c := range cases {
+		if got := songShareNumbers(c.groups, c.prev); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v,应为 %v", c.name, got, c.want)
+		}
+	}
+	// 建表那一层:条目上记着的组号接着用;上一次在别的实体里的写法不算。
+	b := &songEntityBuild{clusters: [][]int{{0, 1, 2}}, shareOf: []int{0, 1, 1}, entityOf: []int{0, 0, 0}}
+	for _, k := range []string{"A|Song|A", "A|Song|B", "A|Song|C"} {
+		b.variants = append(b.variants, songVariant{key: k})
+	}
+	songs := map[string]songEntitySeed{
+		"A|Song|B": {song: "s_000000000001", share: 0}, "A|Song|C": {song: "s_000000000001", share: 0},
+		"A|Song|A": {song: "s_000000000009", share: 0},
+	}
+	tbl := b.table(nil, songs, time.Unix(6_000_000, 0))
+	rec, ok := tbl.Songs["s_000000000001"]
+	if !ok || !slices.Equal(rec.Share, []int{1, 0, 0}) {
+		t.Errorf("条目上记的组号接着用、从别的实体来的取空号: %+v", tbl.Songs)
+	}
+}

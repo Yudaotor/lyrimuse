@@ -497,7 +497,7 @@ type enrichEntry struct {
 	// Song:这条写法所在的歌曲实体的 id。只由实体表全量重建写(writeBackSongEntityIDs),重建分 id 时当种子、比上一份
 	// 实体表优先(见 18 章决策 8)。
 	Song string `json:"song,omitempty"`
-	// SongShare:这条写法在实体里是第几个共享组(实体表 `share` 的编号),第 0 组不写。跟 Song 一起由全量重建写,
+	// SongShare:这条写法在实体里所在共享组的编号(实体表 `share` 的编号,跨重建延续、不一定连续),0 号不写。跟 Song 一起由建表写,
 	// App 只在同一个共享组里借检索配的链接(18 章决策 12)。
 	SongShare int `json:"song_share,omitempty"`
 	// LyricsEntityOrigin:这条的歌词是从同一首歌哪条写法的手改原件同步过来的副本(songentityshare.go);原件、自动选的都是

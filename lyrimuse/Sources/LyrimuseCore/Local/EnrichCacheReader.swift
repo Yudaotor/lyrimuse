@@ -85,7 +85,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     let isrcs: [String]?
     // 所在歌曲实体的 id(引擎的 enrichEntry.Song,实体表全量重建时写)。喂实体别名表(SongEntityFamilies)和链接借用。
     let song: String?
-    // 在实体里是第几个共享组(引擎的 enrichEntry.SongShare,第 0 组不写)。只喂链接借用(platformLinks(for:siblings:))。
+    // 在实体里所在共享组的编号(引擎的 enrichEntry.SongShare,只比相等,0 号不写)。只喂链接借用(platformLinks(for:siblings:))。
     let songShare: Int?
     // 这条写法的歌词是同一首歌哪条写法的手改同步来的(引擎的 enrichEntry.LyricsEntityOrigin)。只喂单曲偏移读穿的顺序
     // (offsetSiblings)。

@@ -211,13 +211,17 @@ func songUseOwnLyrics(v *songVariant, e enrichEntry) {
 	v.setEvidenceLyrics(songOwnLyricsEntry(v.key, e))
 }
 
+// songSharePreOf:key 这条写法的同步留底,歌词还是同步写进去那份时才有(songShareRestorable 读留底目录)。检查同步会不会改分组的
+// 命令换成内存里模拟的留底(songentitysynccheckcli.go),不写盘。
+var songSharePreOf = songShareRestorable
+
 // songOwnLyricsEntry:e 的歌词还是同步写进来的那一份(手改副本、按组同步、跟着校准,有留底且指纹对得上)时,返回留底里同步
 // 之前那份(setEvidenceLyrics 读的几样换掉,其余照 e);不是副本、留底读不到、或者之后这条写法自己又换过词时原样返回 e。
 func songOwnLyricsEntry(key string, e enrichEntry) enrichEntry {
 	if e.LyricsEntityOrigin == "" && (e.LyricsDecisionApplied == nil || e.LyricsDecisionApplied.Path != lyricsDecisionPathSongEntityShare) {
 		return e
 	}
-	pre, ok := songShareRestorable(key, e)
+	pre, ok := songSharePreOf(key, e)
 	if !ok {
 		return e
 	}
