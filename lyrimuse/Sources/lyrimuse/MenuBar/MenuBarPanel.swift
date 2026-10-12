@@ -138,130 +138,111 @@ private final class PanelPlayback: ObservableObject {
 // 右键仍是原来那棵完整 NSMenu(MenuBarStatusMenu)——所有低频功能的家不动,
 // 面板只承载高频:看一眼在放什么、切歌/拖进度、开关两种歌词悬浮层、进统计。
 //
-// 用 NSPopover 而不是自建无边框 NSPanel:transient(点外面自动收)、锚定状态栏按钮、
-// 系统材质都是免费的,跟控制中心的观感也最接近。
+// 窗口是自建的**不激活 App 的面板**(`MenuBarPanelWindow`,同 Spotlight / 控制中心那一类),不是 NSPopover:
+// 弹出就是 key window,控件按「当前窗口」的样子画,不用先点一下才亮;又不激活 App —— 激活会把用户正在用的
+// App 顶到后台、把开着的歌词窗口 / 设置窗口一起带到前面,在别人的全屏空间里还可能被拉回桌面空间。
+// NSPopover 的窗口是系统现建的,「不激活也能成为 key」这一位必须在建窗时就带上,事后补不上(见 06 章决策 40)。
+// 代价是 transient(点外面收起)、锚定位置、跟着内容变高这三件 NSPopover 白给的事要自己做,见下面各段。
 @MainActor
 final class MenuBarPanelController {
-    private var popover: NSPopover?
-    private var closeObserver: NSObjectProtocol?
-    /// 「点到别的 App 上」的收起路径。NSPopover 的 .transient 只管 App 语境内的点击 ——
-    /// 菜单栏 accessory App 的面板弹出时**不激活 App**,点到别的应用上 transient 根本
-    /// 不触发(实测「失焦后不缩回」)。全局监视器只收得到**别的 App**
-    /// 的事件,恰好补上这一半;本 App 内其它窗口的点击仍由 transient 行为处理。
+    private var panel: MenuBarPanelWindow?
+    /// 面板挂在哪颗状态栏按钮下面。内容变高时按它重新定位(顶边不动、往下长)。
+    private weak var anchorButton: NSStatusBarButton?
+    /// 「点到别的 App 上」的收起路径:全局监视器只收得到**别的 App** 的事件。
     private var outsideClickMonitor: Any?
-    /// cmd-tab 这类不带点击的失焦也要收 —— App 真的活跃过时靠这个通知兜住。
-    private var resignActiveObserver: NSObjectProtocol?
-    /// 切 Space 也要收 —— 面板现在会出现在每个 Space 上(见 toggle 里 collectionBehavior
-    /// 那段),不收的话切走之后它还挂在那儿。 挂在 NSWorkspace 的通知中心,不是
-    /// NotificationCenter.default,拆的时候也要从那边拆。
+    /// 「点到本 App 别的窗口上」的收起路径(NSPopover 的 .transient 原来管的那一半)。
+    private var localClickMonitor: Any?
+    /// 切 Space 也要收 —— 面板会出现在每个 Space 上(见 MenuBarPanelWindow 的 collectionBehavior),
+    /// 不收的话切走之后它还挂在那儿。挂在 NSWorkspace 的通知中心,拆的时候也要从那边拆。
     private var spaceChangeObserver: NSObjectProtocol?
+    /// 别的 App 被激活(Cmd-Tab、空闲卡上点「打开 X」把播放器带到前台)也收起。
     private var appActivationObserver: NSObjectProtocol?
     /// 面板开/关 —— 状态栏那行滚动歌词要跟着反白,跟 NSMenu 的 delegate 回调同一件事。
     var onVisibilityChange: ((Bool) -> Void)?
 
     func toggle(relativeTo button: NSStatusBarButton) {
-        if let popover, popover.isShown {
-            popover.performClose(nil)
+        if panel != nil {
+            close()
             return
         }
-        // 上一个面板的收尾还排在队里没跑(它推迟到下一拍,见下面 didClose 那段)时就又点了一次:先把它的
-        // 三道失焦监听拆掉,不然下面给新面板装的会把句柄覆盖掉、旧的永远拆不掉。
+        anchorButton = button
+        let window = MenuBarPanelWindow()
+        window.onCancel = { [weak self] in self?.close() }
+        let content = MenuBarPanelRoot(
+            content: MenuBarPanelView(close: { [weak self] in self?.close() }),
+            onSizeChange: { [weak self] size in self?.place(size: size) })
+        let host = FirstMouseHostingView(rootView: content)
+        // 只要固有尺寸(下面 fittingSize 要用),不要 min / max:那两项会往窗口上加尺寸约束,跟 place 摆的 frame 打架。
+        host.sizingOptions = [.intrinsicContentSize]
+        // 先登记再装内容:内容第一次布局就会报尺寸(onSizeChange),那时 panel 还是 nil 的话这次摆位会被跳过。
+        panel = window
+        window.setContent(host)
+        place(size: host.fittingSize)
+        installDismissWatchers(for: window)
+        onVisibilityChange?(true)
+        window.orderFrontRegardless()
+        window.makeKey()
+    }
+
+    func close() {
+        guard let window = panel else { return }
         teardownDismissWatchers()
-        let pop = NSPopover()
-        pop.behavior = .transient
-        // 「点了马上弹出」:NSPopover 默认那段弹出/收起动画本身就有
-        // 一两百毫秒,跟"按下→松开才触发"和首帧解码大图叠在一起就是可感知的一拍延迟。
-        // 三处一起改(另两处见 MenuBarStatusItem.attachButtonChrome / statusButtonClicked
-        // 和 PanelPlayback.highResArtworkThumbnail),这里关动画,弹出即到位。
-        pop.animates = false
-        let content = MenuBarPanelView(close: { [weak pop] in pop?.performClose(nil) })
-        pop.contentViewController = FirstMouseHostingController(rootView: content)
-        popover = pop
-        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
-        let popID = ObjectIdentifier(pop)
-        closeObserver = NotificationCenter.default.addObserver(
-            forName: NSPopover.didCloseNotification, object: pop, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                // 收尾推迟到了下一拍,这期间可能已经开了一个新面板:收的必须还是关掉的这一个,
-                // 否则会把新面板的失焦监听拆掉、把它的引用置空、还提前告诉状态栏「面板关了」。
-                guard let self, let current = self.popover, ObjectIdentifier(current) == popID else { return }
-                self.teardownDismissWatchers()
-                self.onVisibilityChange?(false)
-                // 面板收起即整树释放:下次 toggle 本来就是全新建
-                // (onAppear 快照语义还依赖这一点),保留旧树零复用收益,只是让两条
-                // @ObservedObject 订阅在离窗死树上继续挨 objectWillChange 派发、并常驻
-                // 一份视图树+NSPopover 内存。observer 自己也一并拆掉,不再等下次开面板。
-                self.popover = nil
-                if let closeObserver = self.closeObserver {
-                    NotificationCenter.default.removeObserver(closeObserver)
-                    self.closeObserver = nil
-                }
-            }
-        }
-        // 两道「失焦收起」:落在别的 App 上的任何按下 / 本 App 失活(cmd-tab)。
-        // 都挂在弹出这一刻、由 didClose 统一拆 —— 面板不在时零常驻监听。
+        // 收起即整树释放:下次 toggle 本来就是全新建(onAppear 快照语义还依赖这一点)。
+        panel = nil
+        window.orderOut(nil)
+        onVisibilityChange?(false)
+    }
+
+    /// 顶边贴着状态栏按钮下沿(留 4pt)、水平居中在按钮下面,再钳进屏幕可用区。内容变高时只往下长。
+    private func place(size: CGSize) {
+        guard let window = panel, size.width > 0, size.height > 0 else { return }
+        guard let button = anchorButton, let buttonWindow = button.window else { return }
+        let buttonRect = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
+        let visible = (buttonWindow.screen ?? NSScreen.main)?.visibleFrame ?? buttonRect
+        let margin: CGFloat = 8
+        let x = min(max(buttonRect.midX - size.width / 2, visible.minX + margin), visible.maxX - size.width - margin)
+        let top = min(buttonRect.minY - 4, visible.maxY)
+        let frame = NSRect(x: x.rounded(), y: (top - size.height).rounded(), width: size.width, height: size.height)
+        if window.frame != frame { window.setFrame(frame, display: true) }
+    }
+
+    private func installDismissWatchers(for window: MenuBarPanelWindow) {
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
-        ) { [weak pop] _ in
-            Task { @MainActor in pop?.performClose(nil) }
+        ) { [weak self] _ in
+            Task { @MainActor in self?.close() }
         }
-        resignActiveObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
-        ) { [weak pop] _ in
-            Task { @MainActor in pop?.performClose(nil) }
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self, weak window] event in
+            guard let self, let window else { return event }
+            let target = event.window
+            // 面板自己、状态栏按钮(它的点击走 toggle,在这里收会被 toggle 立刻重新打开)、
+            // 面板里下拉菜单的菜单窗口(level ≥ popUpMenu)都不算「点到外面」。
+            if target === window || target === self.anchorButton?.window { return event }
+            if let level = target?.level, level >= .popUpMenu { return event }
+            self.close()
+            return event
         }
-        // 切 Space 也要收起。这是下面 collectionBehavior 连带出来的:面板从此会跟着用户
-        // 出现在**每个** Space 上,切走之后它还挂在那儿就成了甩不掉的残影。而已有的两道
-        // 监视器都接不住这种情况——切 Space 既不是"点到别的 App 上"(没有鼠标按下),
-        // App 也从来没活跃过(所以不会 resign)。
         spaceChangeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
-        ) { [weak pop] _ in
-            Task { @MainActor in pop?.performClose(nil) }
+        ) { [weak self] _ in
+            Task { @MainActor in self?.close() }
         }
-        // 别的 App 被激活也收起:空闲卡片上点「打开 X」把播放器带到前台时,面板不会自己关(本 App 从没活跃过,
-        // 不会 resign;也没有落在别的 App 上的鼠标按下),不收就一直挂在播放器上面。Cmd-Tab 同理。
         appActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-        ) { [weak pop] note in
+        ) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             guard app?.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
-            Task { @MainActor in pop?.performClose(nil) }
+            Task { @MainActor in self?.close() }
         }
-        onVisibilityChange?(true)
-        pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        // 修「别的 App 全屏时面板打不开」。
-        //
-        // 真实症状不是"点了没反应",而是**面板弹在了桌面 Space 上**:日志里
-        // `panel opened` 照常打出来(说明点击到位、popover 也 show 了),用户在全屏里看不见,
-        // 于是再点一下——第二下走 toggle 开头 `popover.isShown` 那个分支把它关掉。日志上就是
-        // 一对间隔一两秒的 opened/closed(17:22:28→17:22:30、17:22:57→17:22:58 实测)。
-        //
-        // 成因:NSPopover 自建的窗口 collectionBehavior 是默认的"受管",进不了别的 App 的
-        // 全屏 Space;而这个面板刻意**不** NSApp.activate()(理由见下面 FirstMouseHostingView
-        // 那段注释),没有激活就不会切 Space,窗口只能落在桌面 Space 上。别家菜单栏 App 没这个
-        // 毛病,多半是它们 activate 了——代价是把用户正在用的全屏 App 顶掉,这里不接受。
-        //
-        // 用的是跟 LyricsOverlayWindow.swift:26 / NotchLyricsWindow.swift:47 同一套 flag 里
-        // 相关的那两位:.fullScreenAuxiliary 给"能进别人全屏 Space"的许可,.canJoinAllSpaces
-        // 让它落在**当前**这个 Space 上,两个缺一不可。刻意不带那边另外两位:.stationary 是给
-        // 常驻悬浮窗防 Mission Control 搬动的,套在一个活几秒的 popover 上反而像卡住的残影;
-        // .ignoresCycle 管 Cmd-` 轮转,popover 窗口本来就不在那张表里。
-        //
-        // 只能放在 show **之后**:那个窗口是 show 内部现建的,willShow 时
-        // `contentViewController?.view.window` 还是 nil。也不需要像 LyricsWindowView 那样
-        // 持续守护——每次 toggle 都是全新的 NSPopover(didClose 里置 nil),AppKit 不会回写,
-        // 跟着每次弹出设一次就够。formUnion 而不是直接赋值:别把 AppKit 自己塞的位覆盖掉。
-        pop.contentViewController?.view.window?.collectionBehavior
-            .formUnion([.canJoinAllSpaces, .fullScreenAuxiliary])
     }
 
     private func teardownDismissWatchers() {
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
         outsideClickMonitor = nil
-        if let resignActiveObserver { NotificationCenter.default.removeObserver(resignActiveObserver) }
-        resignActiveObserver = nil
+        if let localClickMonitor { NSEvent.removeMonitor(localClickMonitor) }
+        localClickMonitor = nil
         if let spaceChangeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(spaceChangeObserver)
         }
@@ -273,29 +254,98 @@ final class MenuBarPanelController {
     }
 }
 
-/// 让面板里的 SwiftUI 控件也「第一下就算数」。
+/// 面板窗口:不激活 App 也能成为 key 的无边框面板,底是系统 popover 材质 + 圆角 + 窗口阴影。
 ///
-/// 菜单栏面板弹出时**不激活 App**(见上面 outsideClickMonitor 那段)。AppKit 的规矩是:
-/// 非活跃 App 里,鼠标按下先问被点中的那个视图 `acceptsFirstMouse` —— 返回 false 的话
-/// 这一下**只用来激活 App**,不会传给控件。SwiftUI 的控件全都住在 NSHostingView 这一层
-/// 里,它默认返回 false,于是面板里除了三个圆钮块(TileMouseRouter 自己接了 first mouse)
-/// 之外的东西 —— 播放键、进度条、底栏、快捷设置里的滑杆/开关 —— 都得先点一下"唤醒"、
-/// 再点一下才动。
-///
-/// 不走 `NSApp.activate()` 那条路:那会把用户正在用的 App 顶到后台,只为了瞄一眼面板,
-/// 代价比问题本身还大(系统控制中心也不激活任何 App)。这里只是让这一层认下第一次点击,
-/// 前台 App 是谁完全不变。
-private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+/// `.nonactivatingPanel` 必须在建窗时传进 styleMask(事后插入不生效)。无边框窗口默认不能成为 key,
+/// 所以 canBecomeKey 要显式放开。collectionBehavior 的两位是「别的 App 全屏时也打得开」:
+/// `.fullScreenAuxiliary` 给进别人全屏 Space 的许可,`.canJoinAllSpaces` 让它落在当前 Space 上,缺一不可。
+private final class MenuBarPanelWindow: NSPanel {
+    static let cornerRadius: CGFloat = 24
+    /// Esc 收起。
+    var onCancel: (() -> Void)?
+
+    init() {
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 336, height: 400),
+                   styleMask: [.borderless, .nonactivatingPanel],
+                   backing: .buffered, defer: false)
+        // 别设 isFloatingPanel:它会把 level 改回 .floating,压不过别的 App 的浮动窗口。
+        level = .statusBar
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        hidesOnDeactivate = false
+        becomesKeyOnlyIfNeeded = false
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        isMovable = false
+        isReleasedWhenClosed = false
+        animationBehavior = .none
+    }
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
+    override func cancelOperation(_ sender: Any?) {
+        onCancel?()
+    }
+
+    /// 材质底 + 圆角遮罩,内容铺满。
+    func setContent(_ content: NSView) {
+        let effect = NSVisualEffectView()
+        effect.material = .popover
+        effect.blendingMode = .behindWindow
+        effect.state = .active
+        effect.maskImage = Self.roundedMask(radius: Self.cornerRadius)
+        content.frame = effect.bounds
+        content.autoresizingMask = [.width, .height]
+        effect.addSubview(content)
+        contentView = effect
+    }
+
+    private static func roundedMask(radius: CGFloat) -> NSImage {
+        let edge = radius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
+    }
 }
 
-/// 只为把上面那层换进去。仍然用 NSHostingController 而不是裸 NSViewController:
-/// popover 的高度是跟着 SwiftUI 内容变的(展开/收起快捷设置那一下),这套自动尺寸
-/// 传递归它管,裸控制器接不上。
-private final class FirstMouseHostingController<Content: View>: NSHostingController<Content> {
-    override func loadView() {
-        view = FirstMouseHostingView(rootView: rootView)
+/// 面板内容的外壳:按内容的理想尺寸报给控制器摆窗口(长出快捷设置那一下窗口跟着变高),再描一圈发丝边。
+private struct MenuBarPanelRoot<Content: View>: View {
+    let content: Content
+    let onSizeChange: (CGSize) -> Void
+
+    var body: some View {
+        content
+            .fixedSize()
+            .overlay {
+                RoundedRectangle(cornerRadius: MenuBarPanelWindow.cornerRadius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+            }
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(key: MenuBarPanelSizeKey.self, value: geo.size)
+                }
+            }
+            .onPreferenceChange(MenuBarPanelSizeKey.self) { onSizeChange($0) }
     }
+}
+
+private struct MenuBarPanelSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+
+/// 让面板里的 SwiftUI 控件也「第一下就算数」。面板平时就是 key window,这一层兜的是它失去 key 之后
+/// (比如点开过别的窗口又点回来):NSHostingView 默认 `acceptsFirstMouse` 为 false,那一下会只用来把窗口变回 key。
+private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 // MARK: - 面板本体
@@ -338,6 +388,8 @@ private struct MenuBarPanelView: View {
             }
         }
         .padding(10)
+        // 玻璃卡后面那层淡光,同设置页:面板底色上玻璃折射不到东西,没有它卡片边界看不出来。
+        .background { LastfmGlassGlow() }
         .frame(width: 336)
         // 快捷设置正翻在「触控栏歌词」那一格上时触控栏没了(模拟器关掉):那一格已经不在了,退回钮块网格。
         .onChange(of: playback.touchBarPresent) { _, present in
@@ -557,8 +609,6 @@ private struct MenuBarPanelView: View {
                 //
                 // 用 .tertiary 而不是 .secondary:标题(primary)→ 歌手(secondary)→
                 // 专辑(tertiary)三级递减,跟「最近记录」列表里专辑列的处理一致。
-                // 加上这一行之后文字块约 45pt,正好跟 44pt 的封面齐平(原来只有两行、
-                // 比封面矮一截),所以卡片总高几乎不变。
                 if !displayAlbum.isEmpty {
                     Text(displayAlbum)
                         .font(.system(size: 10.5))
@@ -627,9 +677,8 @@ private struct MenuBarPanelView: View {
                 }
             }
         }
-        .padding(10)
-        .background(Color(nsColor: .quaternarySystemFill),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(12)
+        .settingsCardBackground(cornerRadius: 18)
     }
 
     /// 压根没有曲目时这张卡的全部内容:两行状态字 + 一颗主动作键。
@@ -702,9 +751,9 @@ private struct MenuBarPanelView: View {
         .task(id: player) {
             idlePlayerIcon = AppIconResolver.icon(forBundleID: player.bundleIdentifier)
         }
-        // 有曲目时卡片靠 44pt 的封面撑高,这里只有一行字。给同样的下限,面板在"放着"和
+        // 有曲目时卡片靠封面撑高,这里只有一行字。给同样的下限,面板在"放着"和
         // "没放"之间切换时顶部这一块不会突然塌掉一截。
-        .frame(minHeight: 44)
+        .frame(minHeight: Self.coverSide)
     }
 
     // MARK: 当前歌词(带逐字高亮)
@@ -814,6 +863,9 @@ private struct MenuBarPanelView: View {
         }
     }
 
+    /// 封面边长。没在播放那一行的最小高度跟它一致(见 idleRow)。
+    private static let coverSide: CGFloat = 52
+
     @ViewBuilder private var coverView: some View {
         // displayArtworkImage 而不是裸 artworkImage:高清替代优先,口径跟灵动岛/歌词窗口/
         // 悬浮歌词一致(见那个属性的注释;漏了它的表现是同一首歌两处封面不一样)。
@@ -821,17 +873,17 @@ private struct MenuBarPanelView: View {
             // 广告期间换成广告标识(「只要识别到是广告的话,封面部分都用这个
             // 替代」)。底沿用下面"没有封面"那块同一个渐变,只把符号从 music.note 换成
             // megaphone.fill —— 跟灵动岛、歌词窗口是同一枚,同一件事全App 一种画法。
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LinearGradient(colors: [.blue.opacity(0.55), .purple.opacity(0.45)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 44, height: 44)
+                .frame(width: Self.coverSide, height: Self.coverSide)
                 .overlay(Image(systemName: "megaphone.fill").foregroundStyle(.white.opacity(0.85)))
         } else if let image = playback.displayArtworkImage {
-            // 按 44pt × 显示倍率预先重采样成位图再贴,不在运行期缩(半调网点封面在灵动岛小图上
+            // 按封面边长 × 显示倍率预先重采样成位图再贴,不在运行期缩(半调网点封面在灵动岛小图上
             // 缩成摩尔纹黑斑,这里同一张图、同一种缩法;理由与算法见 ArtworkThumbnail / ArtworkThumbnailCache)。
             let scale = max(1, displayScale)
             Group {
-                if let bitmap = ArtworkThumbnailCache.bitmap(for: image, pixelSide: Int((44 * scale).rounded())) {
+                if let bitmap = ArtworkThumbnailCache.bitmap(for: image, pixelSide: Int((Self.coverSide * scale).rounded())) {
                     Image(decorative: bitmap, scale: scale)
                 } else {
                     Image(nsImage: image)
@@ -839,13 +891,13 @@ private struct MenuBarPanelView: View {
                         .aspectRatio(contentMode: .fill)
                 }
             }
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .frame(width: Self.coverSide, height: Self.coverSide)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         } else {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LinearGradient(colors: [.blue.opacity(0.55), .purple.opacity(0.45)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 44, height: 44)
+                .frame(width: Self.coverSide, height: Self.coverSide)
                 .overlay(Image(systemName: "music.note").foregroundStyle(.white.opacity(0.85)))
         }
     }
@@ -899,10 +951,13 @@ private struct MenuBarPanelView: View {
 
         var body: some View {
             content
+                // 玻璃格,同设置页的卡片;悬停 / 按下在玻璃上再叠一层灰(玻璃自带的交互反馈收不到:
+                // 鼠标事件都落在上面那层 TileMouseRouter 上)。
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(nsColor: fillColor))
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.primary.opacity(stateFillLevel))
                 )
+                .settingsCardBackground(cornerRadius: 16)
                 .overlay {
                     // 事件路由盖在最上面一层:整格都是热区,内容那边不用再加 contentShape。
                     TileMouseRouter(
@@ -925,11 +980,11 @@ private struct MenuBarPanelView: View {
                 }
         }
 
-        /// 静止 → 悬停 → 按下三档系统填充色,一档比一档实一点点——默认的 Button + buttonStyle
+        /// 静止 → 悬停 → 按下三档,一档比一档实一点点——默认的 Button + buttonStyle
         /// 什么反馈都没给,鼠标放上去看不出这一格是可点的。
-        private var fillColor: NSColor {
-            if pressing { return .secondarySystemFill }
-            return hovering ? .tertiarySystemFill : .quaternarySystemFill
+        private var stateFillLevel: Double {
+            if pressing { return 0.10 }
+            return hovering ? 0.05 : 0
         }
 
         // 去掉了右上角那个悬停才出现的「⋯」。它本来是"这一格还能长按"的提示,
@@ -1003,7 +1058,11 @@ private struct MenuBarPanelView: View {
                 close()
                 AppActions.shared.openSettings?()
             }
-            lastfmFooterItem
+            if lastfmFooterVisible {
+                footerSeparator
+                lastfmFooterItem
+            }
+            footerSeparator
             versionFooterItem
         }
     }
@@ -1041,6 +1100,22 @@ private struct MenuBarPanelView: View {
                 AppActions.shared.requestSettings(.tab(.about))
                 AppActions.shared.openSettings?()
             }
+        }
+    }
+
+    /// 底栏几项之间的「·」:三项都没有底色,靠它分开。
+    private var footerSeparator: some View {
+        Text(verbatim: "·")
+            .font(.system(size: 10.5))
+            .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
+    }
+
+    /// Last.fm 那一项出不出现(跟 lastfmFooterItem 的分支同一个判据),分隔点跟着它走。
+    private var lastfmFooterVisible: Bool {
+        switch lastfmStatus {
+        case .active, .error, .missingCreds, .warning: return true
+        case .notConfigured, .disabled, .none: return false
         }
     }
 
@@ -1099,8 +1174,8 @@ private struct MenuBarPanelView: View {
                                         // @State,是个真正的 View 而不是就地求值的函数)。
                                         @ViewBuilder icon: @escaping () -> Icon,
                                         action: @escaping () -> Void) -> some View {
-        // 底栏一格很宽(约 105pt),压下去整格缩 8% 会很晃 —— pressScale 收到 0.97。
-        ChipButton(cornerRadius: 6, pressScale: 0.97, action: action) {
+        // 底栏一格很宽(约 105pt),压下去整格缩 8% 会很晃 —— pressScale 收到 0.97。悬停底是胶囊。
+        ChipButton(cornerRadius: 11, pressScale: 0.97, action: action) {
             HStack(spacing: 4) {
                 icon()
                 Text(title)
@@ -1296,8 +1371,10 @@ private struct PanelProgressSection: View {
             //
             // 定宽 64pt:实测最宽的形态是英文两位数负值 "Lyrics -12.5s" = 60.9pt(9.5pt
             // 等宽数字)。不定宽的话两颗按钮会随数值长短左右跳。
+            // 调过就换强调色:这首被单独调过,一眼看得出来。
             Text(offsetText)
-                .foregroundStyle(trackLyricsOffsetMs != 0 ? .secondary : .tertiary)
+                .foregroundStyle(trackLyricsOffsetMs != 0 ? AnyShapeStyle(Color.accentColor)
+                                                          : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
                 .frame(width: 64)
                 // 只有真调过才让它变成「归零」按钮 —— 已经是 0 时点了什么都不会发生,
                 // 那种按钮比没有更糟(跟右键菜单里「重置」按需出现同一个道理)。
@@ -1326,9 +1403,9 @@ private struct PanelProgressSection: View {
 
     private func offsetButton(_ symbol: String, help: String,
                               action: @escaping () -> Void) -> some View {
-        // 只有 16×14,圆角取 4 —— 再大就成了一块方片压在 9.5pt 的文字行里。
+        // 16×14,悬停底是小圆(圆角 7)。
         // 尺寸保持原样:这一行的行高就是被这 14pt 撑起来的,动了会连带改卡片高度。
-        ChipButton(cornerRadius: 4, pressScale: 0.88, action: action) {
+        ChipButton(cornerRadius: 7, pressScale: 0.88, action: action) {
             Image(systemName: symbol)
                 // semibold 而不是 medium:± 比原来那两颗圆箭头细得多,minus 更是只有一根
                 // 横杠,再轻就读成一条分隔线而不是按钮了。

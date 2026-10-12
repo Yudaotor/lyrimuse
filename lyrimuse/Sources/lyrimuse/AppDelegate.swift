@@ -134,6 +134,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppActions.shared.openLyricsManager?()
             return
         }
+        // lyrimuse://menubar-panel → 开 / 关菜单栏左键面板(同普通左键点状态栏图标;也是本机不点界面核对它外观的入口)。
+        if url.host == "menubar-panel" {
+            MenuBarStatusItem.shared.togglePanelFromDeepLink()
+            return
+        }
         // lyrimuse://lyrics-search → 打开「搜索歌词…」小窗(跟悬浮歌词 ⚙ 那一项同一个入口,开着时一样换成当前这首;
         // 也是本机不点界面打开它核对的入口)。
         if url.host == "lyrics-search" {

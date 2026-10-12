@@ -569,6 +569,12 @@ final class MenuBarStatusItem: NSObject {
     /// 状态栏按钮此刻有东西锚在上面,不许重建(present() 里那道闸)。
     private var anchorIsBusy: Bool { panelIsOpen || statusMenuIsOpen || positionHintIsOpen }
 
+    /// lyrimuse://menubar-panel:开 / 关左键面板,跟普通左键按下同一个结果(不认控制键、不走悬停三键)。
+    func togglePanelFromDeepLink() {
+        guard let button = statusItem?.button else { return }
+        panelController.toggle(relativeTo: button)
+    }
+
     private func setPanelOpen(_ open: Bool) {
         panelIsOpen = open
         // notice 级:面板开合要能跟上面那些 slot rebuild 日志对到同一条时间线上 ——

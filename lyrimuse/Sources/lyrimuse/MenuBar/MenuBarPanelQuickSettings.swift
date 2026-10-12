@@ -292,8 +292,8 @@ struct PanelQuickSettings: View {
             Divider().opacity(0.6)
             footer
         }
-        .background(Color(nsColor: .quaternarySystemFill),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // 玻璃卡,同正在播放卡和钮块。
+        .settingsCardBackground(cornerRadius: 18)
     }
 
     // MARK: 头部(返回 + 身份 + 这个形态的总开关)
