@@ -80,6 +80,24 @@ extension View {
         }
     }
 
+    /// 歌词窗口播放时弹出的那组浮层的底(「⋯」菜单、你的常听、翻译与发音、输出设备、简介、操作提示)。
+    /// macOS 26 起是液态玻璃 + 淡白发丝边,更早的系统退回 ultraThinMaterial + 淡白描边;两档同一层投影。
+    /// 深浅跟调用点的 colorScheme 走(有封面背景时调用点强制深色)。`compact` 是操作提示那种小条:投影收一档。
+    /// 见 07 章决策 155。
+    @ViewBuilder
+    func lyricsWindowFloatingPanelBackground(cornerRadius: CGFloat = 18, compact: Bool = false) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(macOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.16), lineWidth: 0.5))
+                .shadow(color: .black.opacity(compact ? 0.25 : 0.35), radius: compact ? 14 : 24, y: compact ? 6 : 10)
+        } else {
+            background(.ultraThinMaterial, in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
+                .shadow(color: .black.opacity(compact ? 0.25 : 0.35), radius: compact ? 14 : 24, y: compact ? 6 : 10)
+        }
+    }
+
     /// 页面里那个唯一的强调按钮(「请作者喝杯咖啡」)。macOS 26 起用 .glassProminent,
     /// 更早的系统退回原来的 .borderedProminent —— 两者都吃 .tint。
     @ViewBuilder

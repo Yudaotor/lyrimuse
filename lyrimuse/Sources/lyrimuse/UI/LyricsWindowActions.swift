@@ -398,9 +398,7 @@ struct LyricsWindowActionCaption: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
-        .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+        .lyricsWindowFloatingPanelBackground(cornerRadius: 12, compact: true)
         .environment(\.colorScheme, onArtwork ? .dark : colorScheme)
         .accessibilityElement(children: .combine)
         .transition(.opacity)

@@ -2944,12 +2944,7 @@ struct LyricsWindowView: View {
                             ChartsPanelView()
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(width: 300)
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                                )
-                                .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+                                .lyricsWindowFloatingPanelBackground()
                                 .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
                                 .padding(.leading, moreAnchorRect.maxX)
                                 .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
@@ -3779,8 +3774,8 @@ struct LyricsWindowView: View {
     }
 
     /// 「…」的 AM 式菜单面板:深色玻璃圆角、白字、悬停行高亮(对照用户给的 AM 截图:
-    /// 它的菜单是采样背景的暗玻璃,不是系统 NSMenu 的浅色小面板)。玻璃用 ultraThinMaterial
-    /// 并在有封面背景时强制深色外观 —— 跟 AM 一样透出封面底色;无封面背景的普通窗口
+    /// 它的菜单是采样背景的暗玻璃,不是系统 NSMenu 的浅色小面板)。底走 `lyricsWindowFloatingPanelBackground`
+    /// (同这扇窗里另外几块浮层),有封面背景时强制深色外观 —— 跟 AM 一样透出封面底色;无封面背景的普通窗口
     /// 跟随系统外观。每行点完动作前先关面板。
     /// 当前播放器是不是 Apple Music —— Apple Music 专属菜单项(资料库/减少推荐/前往
     /// 专辑·艺人)的显示条件。非 @Published,但面板每次打开都重建,取值足够新鲜。
@@ -3907,12 +3902,7 @@ struct LyricsWindowView: View {
         }
         .padding(6)
         .frame(minWidth: 200, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+        .lyricsWindowFloatingPanelBackground()
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
         .onAppear {
             refreshMoreMenuTrackState()
@@ -4397,12 +4387,7 @@ struct LyricsWindowView: View {
         }
         .padding(6)
         .frame(minWidth: 150, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+        .lyricsWindowFloatingPanelBackground()
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
     }
 
@@ -4469,12 +4454,7 @@ struct LyricsWindowView: View {
         }
         .padding(12)
         .frame(minWidth: 240, maxWidth: 360, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+        .lyricsWindowFloatingPanelBackground()
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
     }
 
@@ -4483,12 +4463,7 @@ struct LyricsWindowView: View {
         EditorialNotesContent(card: card, primary: primaryTextColor, secondary: secondaryTextColor, maxTextHeight: 260)
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+            .lyricsWindowFloatingPanelBackground()
             .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
     }
 
@@ -4515,12 +4490,7 @@ struct LyricsWindowView: View {
         }
         .padding(6)
         .frame(minWidth: 230, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+        .lyricsWindowFloatingPanelBackground()
         .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
     }
 
@@ -7282,7 +7252,7 @@ private struct OutputDeviceRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                Capsule()
                     .fill(Color.primary.opacity(hovered ? 0.12 : 0))
             )
             .contentShape(Rectangle())
@@ -7340,7 +7310,7 @@ private struct LyricsSearchContext: Identifiable {
 
 /// 「显示简介」面板的一行:次级色标签 + 主色值,值可换行(长歌名/长专辑名)。
 ///
-/// 标签**不能**固定用 `.secondary`:这块面板背景是 `.ultraThinMaterial`,故意让封面
+/// 标签**不能**固定用 `.secondary`:这块面板是半透明的浮层底(`lyricsWindowFloatingPanelBackground`),故意让封面
 /// 底色透上来(跟「…」菜单同一个设计意图,见 trackInfoPanel 注释),而 `.secondary` 那点
 /// 暗淡的灰度差,在封面恰好是浅色/白色区域(挡在材质后面透出来)时几乎被完全吃掉 ——
 /// `.primary` 的值列因为是接近纯白的高对比度还扛得住,所以只有标签列出问题。有封面背景
@@ -7444,7 +7414,7 @@ private struct MoreMenuRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                Capsule()
                     .fill(Color.primary.opacity(hovered ? 0.12 : 0))
             )
             .contentShape(Rectangle())
@@ -7938,12 +7908,12 @@ private struct ChartsPanelView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
-            SettingsSegmentedControl(
+            SettingsPillSegmentedControl(
                 selection: $kind,
                 options: LastfmStatsService.ChartKind.allCases,
                 label: \.displayName
             )
-            SettingsSegmentedControl(
+            SettingsPillSegmentedControl(
                 selection: $period,
                 options: LastfmStatsService.Period.allCases,
                 label: \.displayName
