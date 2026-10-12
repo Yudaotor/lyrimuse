@@ -80,7 +80,8 @@ private struct MenuBarPositionHintView: View {
                     .font(.system(size: 12))
                     .fixedSize(horizontal: false, vertical: true)
                 Button(L10n.t("知道了"), action: dismiss)
-                    .buttonStyle(.borderedProminent)
+                    .settingsProminentGlassButton(tint: .accentColor)
+                    .buttonBorderShape(.capsule)
                     .controlSize(.small)
             }
         }

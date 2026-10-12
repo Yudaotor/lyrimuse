@@ -98,6 +98,22 @@ extension View {
         }
     }
 
+    /// 浮在设置页内容上面的提示条(引擎配置「应用中」那条)的底。macOS 26 起是玻璃,更早的系统退回 regularMaterial;
+    /// 两档都带发丝边和一层浅投影:它压在会滚动的内容上,要跟底下的卡片分得开。
+    @ViewBuilder
+    func settingsFloatingBarBackground(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(macOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+        } else {
+            background(.regularMaterial, in: shape)
+                .overlay(shape.strokeBorder(.quaternary))
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+        }
+    }
+
     /// 页面里那个唯一的强调按钮(「请作者喝杯咖啡」)。macOS 26 起用 .glassProminent,
     /// 更早的系统退回原来的 .borderedProminent —— 两者都吃 .tint。
     @ViewBuilder
@@ -1677,7 +1693,7 @@ struct SettingsChipToggle: View {
 
 /// 页内分段 tab 的液态玻璃版:一圈玻璃胶囊底,选中项是一颗强调色胶囊,切换时滑过去。
 /// 用在页头下面单独成行的页内 tab(「歌词」「歌词显示」「Last.fm」「Discord」),这几处要长得一样;卡片行里用 `compact`
-/// 那一档(Last.fm 规则卡、Discord 页),别的页卡片里的选项仍是 `SettingsSegmentedControl`。
+/// 那一档(Last.fm 规则卡、Discord 页),别的页卡片里的选项用 `SettingsPillSegmentedControl`。
 ///
 /// 每一项的字重固定,选中与否不改字重:改了宽度会跟着变,切换时整排 tab 左右晃。
 /// 窗口不在前台时选中胶囊退成灰色,跟系统分段控件一致。
@@ -1901,201 +1917,6 @@ struct SettingsPillSegmentedControl<T: Hashable>: View {
         .padding(2)
         .background(Capsule().fill(Color.primary.opacity(0.06)))
         .fixedSize(horizontal: !fillsWidth, vertical: true)
-    }
-}
-
-struct SettingsSegmentedControl<T: Identifiable & Equatable>: View {
-    @Binding var selection: T
-    let options: [T]
-    let label: (T) -> String
-    
-    var body: some View {
-        SegmentedControlRepresentable(
-            selection: $selection,
-            options: options,
-            label: label
-        )
-    }
-}
-
-/// 针对基础类型（Int、String 等）的重载，使用值本身作为 ID。
-struct SettingsSegmentedControlHashable<T: Hashable>: View {
-    @Binding var selection: T
-    let options: [T]
-    let label: (T) -> String
-    
-    var body: some View {
-        SegmentedControlRepresentableHashable(
-            selection: $selection,
-            options: options,
-            label: label
-        )
-    }
-}
-
-/// NSSegmentedControl 的 NSViewRepresentable wrapper，强制固定宽度。
-private struct SegmentedControlRepresentable<T: Identifiable & Equatable>: NSViewRepresentable {
-    @Binding var selection: T
-    let options: [T]
-    let label: (T) -> String
-    
-    func makeNSView(context: Context) -> NSSegmentedControl {
-        let control = NSSegmentedControl()
-        control.segmentStyle = .rounded
-        control.trackingMode = .selectOne
-        control.segmentCount = options.count
-        
-        for (index, option) in options.enumerated() {
-            control.setLabel(label(option), forSegment: index)
-        }
-        
-        // 设置初始选中项
-        if let selectedIndex = options.firstIndex(where: { $0.id == selection.id }) {
-            control.selectedSegment = selectedIndex
-        }
-        
-        control.target = context.coordinator
-        control.action = #selector(Coordinator.segmentChanged(_:))
-        
-        // 强制固定尺寸：sizeToFit() 之后记住这个尺寸，后续不再变化
-        control.sizeToFit()
-        context.coordinator.fixedSize = control.fittingSize
-        control.isEnabled = context.environment.isEnabled
-        
-        return control
-    }
-    
-    func updateNSView(_ control: NSSegmentedControl, context: Context) {
-        // 外面套的 `.disabled` 不会自己传到 AppKit 控件上,每次更新照环境同步。
-        if control.isEnabled != context.environment.isEnabled { control.isEnabled = context.environment.isEnabled }
-        // 段数、文字只在 makeNSView 里设过一次:选项列表变了(决策面板的记录数)、运行中切了界面语言,都要在这里跟上,
-        // 不然显示的还是旧的段。变了才重建,并重新量一次固定尺寸。
-        context.coordinator.selection = $selection
-        context.coordinator.options = options
-        let labels = options.map(label)
-        if control.segmentCount != labels.count
-            || labels.indices.contains(where: { control.label(forSegment: $0) != labels[$0] }) {
-            control.segmentCount = labels.count
-            for (index, text) in labels.enumerated() { control.setLabel(text, forSegment: index) }
-            control.sizeToFit()
-            context.coordinator.fixedSize = control.fittingSize
-        }
-        // 同步 SwiftUI 的 selection 到 NSSegmentedControl
-        if let selectedIndex = options.firstIndex(where: { $0.id == selection.id }) {
-            if control.selectedSegment != selectedIndex {
-                control.selectedSegment = selectedIndex
-            }
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(selection: $selection, options: options)
-    }
-    
-    class Coordinator: NSObject {
-        // 两个都是 var:updateNSView 每次都换成最新的,不然选项列表变了之后点击还映射到旧的那一份上。
-        var selection: Binding<T>
-        var options: [T]
-        var fixedSize: NSSize = .zero
-        
-        init(selection: Binding<T>, options: [T]) {
-            self.selection = selection
-            self.options = options
-        }
-        
-        @objc func segmentChanged(_ sender: NSSegmentedControl) {
-            let index = sender.selectedSegment
-            guard index >= 0 && index < options.count else { return }
-            selection.wrappedValue = options[index]
-        }
-    }
-    
-    // 返回首次测量的固定尺寸，后续不再变化
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSegmentedControl, context: Context) -> CGSize? {
-        return context.coordinator.fixedSize
-    }
-}
-
-/// NSSegmentedControl 的 NSViewRepresentable wrapper（针对基础类型），强制固定宽度。
-private struct SegmentedControlRepresentableHashable<T: Hashable>: NSViewRepresentable {
-    @Binding var selection: T
-    let options: [T]
-    let label: (T) -> String
-    
-    func makeNSView(context: Context) -> NSSegmentedControl {
-        let control = NSSegmentedControl()
-        control.segmentStyle = .rounded
-        control.trackingMode = .selectOne
-        control.segmentCount = options.count
-        
-        for (index, option) in options.enumerated() {
-            control.setLabel(label(option), forSegment: index)
-        }
-        
-        // 设置初始选中项
-        if let selectedIndex = options.firstIndex(of: selection) {
-            control.selectedSegment = selectedIndex
-        }
-        
-        control.target = context.coordinator
-        control.action = #selector(Coordinator.segmentChanged(_:))
-        
-        // 强制固定尺寸：sizeToFit() 之后记住这个尺寸，后续不再变化
-        control.sizeToFit()
-        context.coordinator.fixedSize = control.fittingSize
-        control.isEnabled = context.environment.isEnabled
-        
-        return control
-    }
-    
-    func updateNSView(_ control: NSSegmentedControl, context: Context) {
-        // 外面套的 `.disabled` 不会自己传到 AppKit 控件上,每次更新照环境同步。
-        if control.isEnabled != context.environment.isEnabled { control.isEnabled = context.environment.isEnabled }
-        // 段数、文字只在 makeNSView 里设过一次:选项列表变了(决策面板的记录数)、运行中切了界面语言,都要在这里跟上,
-        // 不然显示的还是旧的段。变了才重建,并重新量一次固定尺寸。
-        context.coordinator.selection = $selection
-        context.coordinator.options = options
-        let labels = options.map(label)
-        if control.segmentCount != labels.count
-            || labels.indices.contains(where: { control.label(forSegment: $0) != labels[$0] }) {
-            control.segmentCount = labels.count
-            for (index, text) in labels.enumerated() { control.setLabel(text, forSegment: index) }
-            control.sizeToFit()
-            context.coordinator.fixedSize = control.fittingSize
-        }
-        // 同步 SwiftUI 的 selection 到 NSSegmentedControl
-        if let selectedIndex = options.firstIndex(of: selection) {
-            if control.selectedSegment != selectedIndex {
-                control.selectedSegment = selectedIndex
-            }
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(selection: $selection, options: options)
-    }
-    
-    class Coordinator: NSObject {
-        // 两个都是 var:updateNSView 每次都换成最新的,不然选项列表变了之后点击还映射到旧的那一份上。
-        var selection: Binding<T>
-        var options: [T]
-        var fixedSize: NSSize = .zero
-        
-        init(selection: Binding<T>, options: [T]) {
-            self.selection = selection
-            self.options = options
-        }
-        
-        @objc func segmentChanged(_ sender: NSSegmentedControl) {
-            let index = sender.selectedSegment
-            guard index >= 0 && index < options.count else { return }
-            selection.wrappedValue = options[index]
-        }
-    }
-    
-    // 返回首次测量的固定尺寸，后续不再变化
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSegmentedControl, context: Context) -> CGSize? {
-        return context.coordinator.fixedSize
     }
 }
 

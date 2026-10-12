@@ -207,7 +207,7 @@ struct LyricsDecisionSheet: View {
                         // (比如一轮维持原状的升级重试)。正是这两份对不上号让用户困惑
                         // (一轮被换曲窗口串扰时长的重试盖掉了首解存档,记录
                         // 跟生效歌词说不到一块去),所以两份并排都给看,不再只剩最后一轮。
-                        SettingsSegmentedControlHashable(
+                        SettingsPillSegmentedControl(
                             selection: $selectedRecord,
                             options: Array(records.indices),
                             label: { records[$0].label }

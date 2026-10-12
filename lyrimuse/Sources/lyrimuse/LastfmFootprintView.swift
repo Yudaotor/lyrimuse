@@ -29,7 +29,7 @@ struct LastfmFootprintView: View {
             HStack(alignment: .center, spacing: 8) {
                 sectionTitle(L10n.t("什么时候听、听谁"))
                 Spacer(minLength: 8)
-                SettingsSegmentedControlHashable(
+                SettingsPillSegmentedControl(
                     selection: Binding(get: { span }, set: { spanRaw = $0.rawValue }),
                     options: ListeningHours.Span.allCases,
                     label: Self.spanLabel
@@ -268,15 +268,12 @@ struct LastfmFootprintView: View {
         )
     }
 
-    /// 年数少时用分段控件,多了换下拉菜单:SettingsSegmentedControl 的宽度由段数定死,听了十几年的账号会把方块头撑出去。
-    /// `.id(years)` 不能省:那个控件的 `updateNSView` 只同步选中项、不重建段,首轮全量同步落地时年份表会从"只有今年"
-    /// 长出好几年,不换 id 的话点哪一段都对不上。
+    /// 年数少时用分段控件,多了换下拉菜单:分段的宽度随段数长,听了十几年的账号会把方块头撑出去。
     @ViewBuilder
     private var heatmapYearPicker: some View {
         let years = LastfmHeatmapView.availableYears(in: stats.dailyCounts)
         if years.count <= 8 {
-            SettingsSegmentedControlHashable(selection: heatmapYearBinding, options: years, label: { "\($0)" })
-                .id(years)
+            SettingsPillSegmentedControl(selection: heatmapYearBinding, options: years, label: { "\($0)" }, minWidth: 36)
         } else {
             Picker("", selection: heatmapYearBinding) {
                 ForEach(years, id: \.self) { y in Text(verbatim: "\(y)").tag(y) }
