@@ -361,3 +361,69 @@ func TestAmazonISRCFromLookupEntries(t *testing.T) {
 		t.Errorf("换了身份(别名轮)不再对应这一条录音: %q", got)
 	}
 }
+
+// 同一份正文挂在两个 ASIN 上:「Ai!」(《唉!》,221s)挂的是同专辑「Love Love Love」(《爱爱爱》,213s)的词。
+func TestAmazonLyricsBorrowedFromAnotherSong(t *testing.T) {
+	_, hammer := useTempAmazonData(t)
+	localStorage := amazonLocalStorageOverride
+	catalog := func(asin, title, dur string) string {
+		return "\x16\x00\x00\x00\x00\x00\x00\x00serialization::archive\x13\x00\x04\x08\x04\x08\x01\x00\x00\x00" +
+			`{"id":"","uniqueId":"` + asin + `","asin":"` + asin + `","title":"` + title + `","duration":"` + dur + `","hasLyrics":true,` +
+			`"album":{"name":"This Love","asin":"B0TESTALB2","image":""},"artist":{"name":"Khalil Fong","asin":"B0TESTART2"}}`
+	}
+	lyrics := strings.Replace(amazonTestLyricsJSON, "B0TESTAAA2", "B0TESTAI01", 1)
+	testWriteLog(t, filepath.Join(localStorage, "000016.log"), [][]testLDBEntry{{
+		{key: amazonCatalogKeyPrefix + "B0TESTAI01", seq: 20, value: catalog("B0TESTAI01", "Ai!", "221")},
+		{key: amazonCatalogKeyPrefix + "B0TESTLLL1", seq: 21, value: catalog("B0TESTLLL1", "Love Love Love", "213")},
+		{key: amazonCatalogKeyPrefix + "B0TESTRAD1", seq: 22, value: catalog("B0TESTRAD1", "Ai! (Radio Edit)", "200")},
+		{key: amazonCatalogKeyPrefix + "B0TESTNEAR", seq: 23, value: catalog("B0TESTNEAR", "Something Else", "222")},
+	}})
+	writeHammer := func(name string, entries ...testLDBEntry) {
+		testWriteLog(t, filepath.Join(hammer, name), [][]testLDBEntry{entries})
+	}
+	writeHammer("000012.log", testLDBEntry{key: "B0TESTAI01-ATVPDKIKX0DER", seq: 30, value: lyrics})
+	meta := amazonCatalog([]string{"B0TESTAI01"})["B0TESTAI01"]
+	lrc, _, _ := amazonLyricsForASIN("B0TESTAI01")
+
+	// 用例共用的 B0TESTAAA2 那份(目录里歌名「I Can't Love You Anymore」、229s)本来就跟它一字不差:时长差 8s、歌名不同。
+	if got := amazonLyricsBorrowedBy("B0TESTAI01", meta, lrc); got != `B0TESTAAA2 "I Can't Love You Anymore [Explicit]"` {
+		t.Fatalf("同一份正文挂在歌名不同、时长差 8s 的另一首上要认出来, got %q", got)
+	}
+	// 只剩同名剪辑版和时长接近的另一首:都不算借来的。
+	hammer2 := t.TempDir()
+	amazonHammerCacheOverride = hammer2
+	testWriteLog(t, filepath.Join(hammer2, "000013.log"), [][]testLDBEntry{{
+		{key: "B0TESTAI01-ATVPDKIKX0DER", seq: 40, value: lyrics},
+		{key: "B0TESTRAD1-ATVPDKIKX0DER", seq: 41, value: strings.Replace(lyrics, "B0TESTAI01", "B0TESTRAD1", 1)},
+		{key: "B0TESTNEAR-ATVPDKIKX0DER", seq: 42, value: strings.Replace(lyrics, "B0TESTAI01", "B0TESTNEAR", 1)},
+	}})
+	if got := amazonLyricsBorrowedBy("B0TESTAI01", meta, lrc); got != "" {
+		t.Fatalf("同一首歌的剪辑版、时长差不到 3s 的都不算, got %q", got)
+	}
+	testWriteLog(t, filepath.Join(hammer2, "000014.log"), [][]testLDBEntry{{
+		{key: "B0TESTLLL1-ATVPDKIKX0DER", seq: 43, value: strings.Replace(lyrics, "B0TESTAI01", "B0TESTLLL1", 1)},
+	}})
+	if got := amazonLyricsBorrowedBy("B0TESTAI01", meta, lrc); got != `B0TESTLLL1 "Love Love Love"` {
+		t.Fatalf("got %q", got)
+	}
+
+	// 接到检索上:借来的不置 identityFromLocalClient(不拿同源加权),也不先上屏;候选照样给。
+	amazonCurrentMu.Lock()
+	savedCur := amazonCurrentTrack
+	amazonCurrentMu.Unlock()
+	t.Cleanup(func() {
+		setNativeLyricSourcesForPlayer("")
+		amazonCurrentMu.Lock()
+		amazonCurrentTrack = savedCur
+		amazonCurrentMu.Unlock()
+	})
+	noteAmazonCurrentTrack(amazonMusicBundleID, "Khalil Fong", "Ai!", "asin://B0TESTAI01")
+	setNativeLyricSourcesForPlayer(amazonMusicBundleID)
+	r, ok := amazonLocalLyricsFor("Khalil Fong", "Ai!")
+	if !ok || r.identityFromLocalClient || r.lyr == "" {
+		t.Fatalf("借来的正文照样给候选,但不置 identityFromLocalClient: %+v ok=%v", r, ok)
+	}
+	if _, ok := amazonProvisionalLyrics(true, amazonMusicBundleID, "Khalil Fong", "Ai!"); ok {
+		t.Error("借来的正文不先上屏")
+	}
+}

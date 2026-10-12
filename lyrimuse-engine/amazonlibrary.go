@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,7 +21,7 @@ import (
 //     序列化归档,中间夹一个 JSON 对象(title、artist.name、album.name、duration 秒数字符串、hasLyrics)。多个歌手在
 //     artist.name 里已经用 ` & ` 连好,跟它报给系统 Now Playing 的写法一样。
 //   - 本地歌词:`Data/Hammer Cache`(LevelDB),键 `<ASIN>-<市场 ID>`,值同样是 boost 归档夹 JSON:`lyrics.lines[]` 逐行 `startTime` /
-//     `endTime`(毫秒)+ `text`,来源标着 LYRIC_FIND,没有逐字、没有译文。开头那句 `...` 是前奏占位。队列里还没播到的
+//     `endTime`(毫秒)+ `text`,来源标着 LYRIC_FIND 或 MUSIX_MATCH,没有逐字、没有译文,也没有歌名。开头那句 `...` 是前奏占位。队列里还没播到的
 //     几首它也提前拉好了。
 //   - 播放队列:日志里的 `updateQueue` 行(见 amazonLogTail),是「当前这首 + 后两首」的滑动窗口。
 //
@@ -347,33 +348,82 @@ func amazonASINFromTrackURL(u string) string {
 
 // amazonLocalLyricsFor 给歌词检索用:正在用 Amazon Music 放歌时才读,换成一份跟各歌词源同形的原始应答。
 func amazonLocalLyricsFor(artist, title string) (lyricSourceResult, bool) {
+	r, _, ok := amazonLocalLyrics(artist, title)
+	return r, ok
+}
+
+// amazonLocalLyrics 同 amazonLocalLyricsFor,另带回这份正文是不是借来的(amazonLyricsBorrowedBy 非空):借来的
+// 不置 identityFromLocalClient,不享受同源加权,跟各源按内容公平打分。
+func amazonLocalLyrics(artist, title string) (r lyricSourceResult, borrowed, ok bool) {
 	if !isNativeLyricSource(amazonLocalLyricsSource) {
-		return lyricSourceResult{}, false
+		return lyricSourceResult{}, false, false
 	}
 	asin := amazonASINFor(artist, title)
 	lrc, coarse, ok := amazonLyricsForASIN(asin)
 	if !ok {
-		return lyricSourceResult{}, false
+		return lyricSourceResult{}, false, false
 	}
-	r := lyricSourceResult{
+	r = lyricSourceResult{
 		source: amazonLocalLyricsSource, lyr: lrc, matchTitle: title, matchArtist: artist,
 		identityFromLocalClient: !coarse,
 	}
-	if meta, ok := amazonCatalog([]string{asin})[asin]; ok {
+	meta, hasMeta := amazonCatalog([]string{asin})[asin]
+	if hasMeta {
 		r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur = meta.Title, meta.Artist.Name, meta.albumName(), meta.durationSecs()
 		r.matchCover = amazonJPEGImage(meta.Album.Image)
+		if other := amazonLyricsBorrowedBy(asin, meta, lrc); other != "" {
+			log.Printf("amazon: local lyrics of %s (%q) are word for word those of %s, a different song; no native-source bonus", asin, meta.Title, other)
+			r.identityFromLocalClient, borrowed = false, true
+		}
 	}
-	return r, true
+	return r, borrowed, true
+}
+
+// amazonBorrowedLyricsMinDurationDiffSecs:两首歌名不同、时长差这么多以上,才认定是两首歌共用了一份正文。
+const amazonBorrowedLyricsMinDurationDiffSecs = 3.0
+
+// amazonLyricsBorrowedBy:这首(asin,目录记录 meta)的本地歌词正文,在 Hammer Cache 里一字不差地也挂在另一个 ASIN 上,
+// 而那首去掉括号后歌名不同、时长差 amazonBorrowedLyricsMinDurationDiffSecs 以上 —— Amazon 把一首歌的词挂到了另一首上,
+// 返回那首的「ASIN 歌名」,没有返回 ""。实例:「Khalil Fong - Ai!」(《唉!》,221s)挂的是同专辑「Love Love Love」
+// (《爱爱爱》,213s)的词。歌词本身没有歌名字段,只能这样认。同一首歌的不同剪辑(Radio Edit 之类)歌名去括号后一样,不算。
+//
+// 两首都会被认成借来的:分不出正文原本是谁的,只撤同源加权,不丢候选,原主那首靠跨源共识照样能赢。
+func amazonLyricsBorrowedBy(asin string, meta amazonCatalogTrack, lrc string) string {
+	prefix := asin + "-"
+	var others []string
+	for k, v := range ldbScan(amazonHammerCacheDir(), func([]byte) bool { return true }) {
+		other, _, found := strings.Cut(k, "-")
+		if v.deleted || !found || strings.HasPrefix(k, prefix) || slices.Contains(others, other) {
+			continue
+		}
+		if o, _, ok := amazonLyricsLRC(v.value); ok && o == lrc {
+			others = append(others, other)
+		}
+	}
+	if len(others) == 0 {
+		return ""
+	}
+	title := loosenEnrichKey(normEnrichTitle(stripParens(meta.Title)))
+	for other, m := range amazonCatalog(others) {
+		if loosenEnrichKey(normEnrichTitle(stripParens(m.Title))) == title {
+			continue
+		}
+		if math.Abs(m.durationSecs()-meta.durationSecs()) < amazonBorrowedLyricsMinDurationDiffSecs {
+			continue
+		}
+		return other + " " + strconv.Quote(m.Title)
+	}
+	return ""
 }
 
 // amazonProvisionalLyrics:首次解析开跑时先上屏的那份(见 resolveEnrichAsync)。只给正用 Amazon Music 放着的这首
-// (isNewTrack),而且它本机缓存里有这首的歌词;别的情况返回 false。
+// (isNewTrack),而且它本机缓存里有这首的歌词;正文是借来的(amazonLyricsBorrowedBy)不先上屏。别的情况返回 false。
 func amazonProvisionalLyrics(isNewTrack bool, bundleID, artist, title string) (enrichEntry, bool) {
 	if !isNewTrack || bundleID != amazonMusicBundleID {
 		return enrichEntry{}, false
 	}
-	r, ok := amazonLocalLyricsFor(artist, title)
-	if !ok {
+	r, borrowed, ok := amazonLocalLyrics(artist, title)
+	if !ok || borrowed {
 		return enrichEntry{}, false
 	}
 	return enrichEntry{Lyrics: r.lyr, LyricsSource: amazonLocalLyricsSource}, true
