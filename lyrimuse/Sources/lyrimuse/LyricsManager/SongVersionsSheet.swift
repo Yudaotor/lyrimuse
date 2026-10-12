@@ -18,6 +18,8 @@ struct SongVersionsSheet: View {
     @State private var loaded = false
     @State private var selected: String?
     @State private var diffExpanded = true
+    @State private var evidenceExpanded = false
+    @State private var pairEvidenceExpanded = false
     @State private var pendingSplit: String?
     @State private var confirmingSplit = false
     @State private var busy = false
@@ -416,7 +418,7 @@ struct SongVersionsSheet: View {
         let kinds = (SongVersions.evidenceOrder + edges.map(\.kind)).filter { kind in
             seen.insert(kind).inserted && edges.contains { $0.kind == kind }
         }
-        return DisclosureGroup {
+        return DisclosureGroup(isExpanded: $evidenceExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.t("播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考。"))
                     .font(.caption)
@@ -440,7 +442,7 @@ struct SongVersionsSheet: View {
             .font(.callout)
             .padding(.top, 6)
         } label: {
-            Text(L10n.t("匹配依据")).font(.callout)
+            disclosureLabel(L10n.t("匹配依据"), font: .callout, isExpanded: $evidenceExpanded)
         }
     }
 
@@ -546,8 +548,21 @@ struct SongVersionsSheet: View {
             }
             .padding(.top, 6)
         } label: {
-            Text(L10n.t("逐行歌词对比")).font(.callout.weight(.semibold))
+            disclosureLabel(L10n.t("逐行歌词对比"), font: .callout.weight(.semibold), isExpanded: $diffExpanded)
         }
+    }
+
+    /// 折叠区的标题:点文字也能展开 / 收起。macOS 的 DisclosureGroup 默认只认左边的箭头,标题要自己接点击,占满整行好点。
+    private func disclosureLabel(_ title: String, font: Font, isExpanded: Binding<Bool>) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { isExpanded.wrappedValue.toggle() }
+        } label: {
+            Text(title)
+                .font(font)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func diffCell(_ line: LyricLine?, highlight: Bool) -> some View {
@@ -593,7 +608,7 @@ struct SongVersionsSheet: View {
             direct.contains { $0.kind == kind } && seen.insert(kind).inserted
         }
         let current = versions.first { $0.relation == .current }
-        return DisclosureGroup {
+        return DisclosureGroup(isExpanded: $pairEvidenceExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.t("播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考。"))
                     .font(.caption)
@@ -626,7 +641,7 @@ struct SongVersionsSheet: View {
             .font(.callout)
             .padding(.top, 6)
         } label: {
-            Text(L10n.t("匹配依据")).font(.callout)
+            disclosureLabel(L10n.t("匹配依据"), font: .callout, isExpanded: $pairEvidenceExpanded)
         }
     }
 

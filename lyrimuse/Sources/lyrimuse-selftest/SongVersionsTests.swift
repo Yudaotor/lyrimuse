@@ -238,6 +238,8 @@ func runSongVersionsTests() {
                     && sourceBytes(parts, contain: "if let borrowedFrom {"), true,
                     "其他写法(契约): 偏移输入框标出借来的值")
         let settings = read(sources, "lyrimuse/Settings/FeatureSettingsStore.swift")
+        let sheetSource = read(sources, "lyrimuse/LyricsManager/SongVersionsSheet.swift")
+        expectEqual(sheetSource.components(separatedBy: "label: {\n            disclosureLabel(").count - 1, 3, "其他写法(契约): 三处折叠区点标题文字也能展开")
         expectEqual(sourceBytes(store, contain: "commit(\"resolve_manual_conflict\", [\"key\": key])")
                     && sourceBytes(edit, contain: "case \"resolve_manual_conflict\":")
                     && sourceBytes(manager, contain: "manualConflictKeys = store.manualConflict(forKey: key)")
