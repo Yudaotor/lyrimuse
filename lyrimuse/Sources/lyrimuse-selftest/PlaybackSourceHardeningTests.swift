@@ -470,9 +470,11 @@ private func wiringContracts() {
 
     // 播放控制被拦下时各展示面置灰 + 说明:判据跟真发指令同一个,每拍轮询收尾刷新,六个展示面都接上。
     let controller = code("LyrimuseCore/Local/MusicPlaybackController.swift")
-    expectEqual(controller.contains("public static func controlsWithheld() -> Bool { currentBaseRoute() == .withheld }")
-                && body("private static func dispatchRoute(", in: controller).contains("let base = currentBaseRoute()"), true,
-                "拦下置灰: 判据跟发指令同一个 currentBaseRoute")
+    expectEqual(body("public static func controlsWithheld() -> Bool {", in: controller)
+                    .contains("currentBaseRoute(mediaControlCommand: \"toggle-play-pause\") == .withheld")
+                && body("private static func dispatchRoute(", in: controller)
+                    .contains("let base = currentBaseRoute(mediaControlCommand: mediaControlCommand)"), true,
+                "拦下置灰: 展示与发指令共用按命令能力判定的 currentBaseRoute")
     let localSource = code("LyrimuseCore/Local/LocalPlaybackSource.swift")
     expectEqual(body("private func finishPoll() {", in: localSource).contains("refreshPlaybackControlsWithheld()"), true,
                 "拦下置灰: 每拍轮询收尾刷新")
@@ -505,7 +507,7 @@ private func wiringContracts() {
     expectEqual(gapHold.contains("PlayerGapHold.shouldHoldWhileOutputting(") && gapHold.contains("holdingDroppedSession = true")
                 && gapHold.contains("outputting: { ProcessAudioOutput.isRunningOutput(bundleID: lastBundleID) }"), true,
                 "会话在放时被撤: 保持接在 heldAcrossPlayerGap、按进程出声判,保持时记下")
-    expectEqual(body("public static func focusHeldByAnotherApp() -> Bool {", in: client).contains("return viaProbe || holdingDroppedSession"),
+    expectEqual(body("public static func focusControlContext() -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {", in: client).contains("let heldElsewhere = viaProbe || holdingDroppedSession"),
                 true, "会话在放时被撤: 保持出来的那首,播放控制不发")
 
     // 按相对量的写入要排队(07 章决策 139、138 补记):Amazon 循环键按一下进一档、QQ「喜欢」按一下翻一次,连点时后一次读到的

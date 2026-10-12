@@ -84,11 +84,11 @@
       "ignoresSeekCommand": false,
       "needsAutomationPermission": false,
       "needsFullDiskAccess": true,
-      "needsAccessibilityPermission": false,
+      "needsAccessibilityPermission": true,
       "tint": {"source": "netease"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "NeteaseIcon",
-      "note": "同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。"
+      "note": "同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。失焦时三项播放控制走自身「控制」菜单(PlaybackMenuControl),需要辅助功能权限；不接失焦 seek 或模式/喜欢键。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。"
     },
     {
       "id": "kugou_music",

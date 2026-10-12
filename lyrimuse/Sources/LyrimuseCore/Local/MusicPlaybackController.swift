@@ -1,59 +1,52 @@
 import Foundation
 import os
 
-// 跟 AppleMusicPositionClient(同目录,"读"精确播放进度)对称的"写"操作——发指令
-// 控制当前选定播放器(PlaybackPlayerPreference.selected,可多选)的播放。
-//
-// 之前这里无条件发 AppleScript 给"Music"这一个应用,不管当前选的是哪个
-// 播放器——QQ 音乐/网易云音乐接入时都没有同步修这一处,导致选了它们之后悬浮窗/全局
-// 快捷键的播放/暂停/上一首/下一首按钮全部不生效(AppleScript 发给了根本没在播的
-// Music.app),是遗留下来一直没修的坑,这次一起补上。
-//
-// Apple Music 继续走 AppleScript(复用同一份"自动化"权限,TCC 是按 (发起方 App,
-// 目标 App) 这一对整体授权,不是按具体某条 AppleScript 指令单独授权,调用方在真正
-// 发指令之前应该自己检查 MusicAutomationPermission,这里不重复做判断)。QQ 音乐/
-// 网易云音乐都没有 AppleScript 支持,改发 media-control 的控制指令(实测坐实:
-// media-control 的播放控制指令走的是系统级 MediaRemote,对"当前系统认定的 Now
-// Playing 焦点"生效,不需要指定具体是哪个 App——跟读取状态那条路径依赖同一个
-// "当前是谁在报告"的系统机制,QQ 音乐/网易云音乐被读取路径确认正在播放时,这几个
-// 控制指令天然作用在它们身上,不会误控到别的 App;焦点被别的 App 占着时例外,见 controlRoute)。发出去之后失败就静默失败(跟
-// AppleMusicPositionClient 一样宽松,不是核心路径)。
+// 本机播放器的播放控制。正常焦点保留现有脚本或 media-control 通路;失焦时只用实际回退目标的定向通路。
+// Apple Music / Spotify / Kaset 用 AppleScript,QQ / 网易云只用已验证的三个 AX 菜单动作。
+// 没有可用的定向通路时不发全局控制。命令工作在串行后台队列,失败反馈和完成通知回到主线程。
 public enum MusicPlaybackController {
     private static let logger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "playback-control")
 
-    /// 控制因为焦点被别的 App 占着而没发时调(主线程)。App 在这里给一声提示音。
-    public nonisolated(unsafe) static var onControlWithheld: (@Sendable () -> Void)?
+    /// 控制未发出时调(主线程)。权限缺失与其它失败分别展示,不由 UI 重新猜控制路由。
+    public enum WithheldReason: Equatable, Sendable {
+        case unavailable
+        case accessibilityPermissionRequired
+    }
+    public nonisolated(unsafe) static var onControlWithheld: (@MainActor @Sendable (WithheldReason) -> Void)?
 
-    /// 返回这次指令发没发出去(见 `ControlRoute.withheld`)。
-    @discardableResult
-    public static func playPause() -> Bool {
+    /// 普通通路回报已排入既有命令队列;菜单通路等待 AXPress 结果。失败不驱动乐观状态。
+    public typealias Completion = @MainActor @Sendable (ControlRoute?) -> Void
+
+    @MainActor
+    public static func playPause(completion: Completion? = nil) {
         // 模拟播放(`PlaybackSimulation`)时停 / 放的是模拟那一份,不发给真实播放器;上一首 / 下一首 / 跳转同理不发。
         if PlaybackSimulation.togglePlaying() {
-            Task { @MainActor in LocalPlaybackSource.shared.simulationChanged() }
-            return false
+            LocalPlaybackSource.shared.simulationChanged()
+            completion?(nil)
+            return
         }
-        return dispatch(appleScript: #"tell application "Music" to playpause"#,
+        dispatch(appleScript: #"tell application "Music" to playpause"#,
                  spotifyScript: #"tell application "Spotify" to playpause"#,
                  kasetScript: #"tell application "Kaset" to playpause"#,
-                 mediaControlCommand: "toggle-play-pause")
+                 mediaControlCommand: "toggle-play-pause", completion: completion)
     }
 
-    @discardableResult
-    public static func nextTrack() -> Bool {
-        guard !PlaybackSimulation.isActive else { return false }
-        return dispatch(appleScript: #"tell application "Music" to next track"#,
+    @MainActor
+    public static func nextTrack(completion: Completion? = nil) {
+        guard !PlaybackSimulation.isActive else { completion?(nil); return }
+        dispatch(appleScript: #"tell application "Music" to next track"#,
                  spotifyScript: #"tell application "Spotify" to next track"#,
                  kasetScript: #"tell application "Kaset" to next track"#,
-                 mediaControlCommand: "next-track")
+                 mediaControlCommand: "next-track", completion: completion)
     }
 
-    @discardableResult
-    public static func previousTrack() -> Bool {
-        guard !PlaybackSimulation.isActive else { return false }
-        return dispatch(appleScript: #"tell application "Music" to previous track"#,
+    @MainActor
+    public static func previousTrack(completion: Completion? = nil) {
+        guard !PlaybackSimulation.isActive else { completion?(nil); return }
+        dispatch(appleScript: #"tell application "Music" to previous track"#,
                  spotifyScript: #"tell application "Spotify" to previous track"#,
                  kasetScript: #"tell application "Kaset" to previous track"#,
-                 mediaControlCommand: "previous-track")
+                 mediaControlCommand: "previous-track", completion: completion)
     }
 
     /// 「喜欢」这件事只有 Apple Music 有——QQ 音乐/网易云音乐没有 AppleScript 支持,
@@ -967,24 +960,21 @@ public enum MusicPlaybackController {
         case spotifyScript
         case kasetScript
         case mediaControl
+        /// QQ / 网易云失焦时只按目标进程的播放菜单;跳转不走这条。
+        case menuAccessibility(PlaybackPlayer, PlaybackMenuControl.Command)
         /// 跳转定向发给 Kaset 本体那份会话(`NowPlayingClientsProbe.sendSeek`),不发给系统当前会话。只有跳转走这条,见 `seekRoute`。
         case kasetDirect
-        /// 焦点被别的 App 占着、屏上这首是 QQ 音乐:播放 / 暂停、上一首、下一首按它菜单栏「播放控制」里的项
-        /// (`QQMusicMenuControl.press`),跳转菜单里没有、照旧不发。见 02 章决策 118。
-        case qqMenu
         /// 不发。焦点被别的 App 占着、屏上这首又没有 AppleScript 可发:media-control 的指令会落在占用者身上。
         /// 按 bundle id 定向发(`MRMediaRemoteSendCommandToApp`)也不行 —— 目标不接时它不报错,照样落到焦点上,
         /// 见 02 章决策 51。
         case withheld
     }
 
-    /// 纯函数,selftest 覆盖。media-control 的控制指令作用于系统级 Now Playing 焦点;焦点被别的 App
-    /// 占着、屏上这首靠 AppleScript 回退问到时(`MediaControlClient.focusControlTarget`),指令要直接发给
-    /// 那个播放器,否则落在占用者身上。QQ 音乐 / 网易云 / 酷狗 / 汽水音乐 / KKBOX / Amazon 没有 AppleScript:焦点被占、
-    /// 屏上这首是按 bundle id 直查问到的(`focusHeldElsewhere`,见 `MediaControlClient.focusHeldByAnotherApp`)时不发;
-    /// 屏上是 QQ 音乐、能按它菜单栏(`menuControlPlayer`)时改按菜单。
+    /// 按实际回退目标决定控制通路。QQ / 网易云直查回退只允许三个已验证的 AX 菜单动作;
+    /// 其它无定向通路的命令仍不发。选择列表和前台窗口不能充当回退目标。
     public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?,
-                                    focusHeldElsewhere: Bool = false, menuControlPlayer: PlaybackPlayer? = nil) -> ControlRoute {
+                                    focusHeldElsewhere: Bool = false, directQueryFallback: PlaybackPlayer? = nil,
+                                    mediaControlCommand: String = "") -> ControlRoute {
         if exclusivelyAppleMusic { return .appleMusicScript }
         switch focusFallback {
         case .appleMusic: return .appleMusicScript
@@ -992,17 +982,11 @@ public enum MusicPlaybackController {
         case .kaset: return .kasetScript
         default:
             guard focusHeldElsewhere else { return .mediaControl }
-            return menuControlPlayer == .qqMusic ? .qqMenu : .withheld
-        }
-    }
-
-    /// `.qqMenu` 那条路上,media-control 的命令对应菜单里哪一项;菜单里没有的(跳转)为 nil。纯函数,selftest 覆盖。
-    public static func qqMenuItem(forMediaControlCommand command: String) -> QQMusicMenuControl.TransportItem? {
-        switch command {
-        case "toggle-play-pause": return .playPause
-        case "next-track": return .next
-        case "previous-track": return .previous
-        default: return nil
+            if let player = directQueryFallback, player == .qqMusic || player == .netease,
+               let command = PlaybackMenuControl.Command(rawValue: mediaControlCommand) {
+                return .menuAccessibility(player, command)
+            }
+            return .withheld
         }
     }
 
@@ -1021,30 +1005,36 @@ public enum MusicPlaybackController {
 
     /// 此刻发播放控制会不会被拦下(`ControlRoute.withheld`)。各展示面据此把上一首 / 播放暂停 / 下一首画灰、悬停时说明原因,
     /// 判据跟真发指令时是同一个(`currentBaseRoute`)。`LocalPlaybackSource` 每拍轮询收尾时读一次。
-    public static func controlsWithheld() -> Bool { currentBaseRoute() == .withheld }
+    public static func controlsWithheld() -> Bool {
+        currentBaseRoute(mediaControlCommand: "toggle-play-pause") == .withheld
+    }
 
-    /// 播放控制此刻该走哪条路(跳转另按 `seekRoute` 改)。
-    private static func currentBaseRoute() -> ControlRoute {
-        let held = MediaControlClient.focusHeldByAnotherApp()
-        let menuPlayer: PlaybackPlayer? = held && MediaControlClient.lastAcceptedPlayer() == .qqMusic
-            && QQMusicMenuControl.isAvailable ? .qqMusic : nil
+    /// 每次控制与展示面可用性都从同一份焦点上下文决定;跳转仍按自己的指令判通路。
+    private static func currentBaseRoute(mediaControlCommand: String) -> ControlRoute {
+        let focus = MediaControlClient.focusControlContext()
         return controlRoute(exclusivelyAppleMusic: PlaybackPlayerPreference.isExclusivelyAppleMusic,
-                            focusFallback: MediaControlClient.focusControlTarget(),
-                            focusHeldElsewhere: held, menuControlPlayer: menuPlayer)
+                            focusFallback: focus.scriptTarget,
+                            focusHeldElsewhere: focus.heldElsewhere,
+                            directQueryFallback: focus.directQueryTarget,
+                            mediaControlCommand: mediaControlCommand)
     }
 
     /// `kasetScript` 为 nil = Kaset 的字典里没有这个动作:焦点回退到它时不发,理由同 `.withheld`。
+    @MainActor
     private static func dispatch(appleScript: String, spotifyScript: String, kasetScript: String?,
-                                 mediaControlCommand: String, mediaControlArguments: [String] = []) -> Bool {
-        dispatchRoute(appleScript: appleScript, spotifyScript: spotifyScript, kasetScript: kasetScript,
-                      mediaControlCommand: mediaControlCommand, mediaControlArguments: mediaControlArguments) != nil
+                                 mediaControlCommand: String, completion: Completion?) {
+        let route = dispatchRoute(appleScript: appleScript, spotifyScript: spotifyScript, kasetScript: kasetScript,
+                                  mediaControlCommand: mediaControlCommand, completion: completion)
+        if case .menuAccessibility? = route { return } // 菜单通路由后台 AX 结果回报,不能把入队当成功。
+        completion?(route)
     }
 
-    /// 同 `dispatch`,另外交回这一下走的哪条路;没发出去返回 nil。
+    /// 交回排入的通路;没有通路返回 nil。菜单通路另通过 completion 回报实际 AX 结果。
     private static func dispatchRoute(appleScript: String, spotifyScript: String, kasetScript: String?,
                                       mediaControlCommand: String, mediaControlArguments: [String] = [],
-                                      kasetDirectSeek: KasetDirectSeek? = nil) -> ControlRoute? {
-        let base = currentBaseRoute()
+                                      kasetDirectSeek: KasetDirectSeek? = nil,
+                                      completion: Completion? = nil) -> ControlRoute? {
+        let base = currentBaseRoute(mediaControlCommand: mediaControlCommand)
         let route = seekRoute(base, playerIsKaset: kasetDirectSeek != nil)
         switch route {
         case .appleMusicScript:
@@ -1053,9 +1043,7 @@ public enum MusicPlaybackController {
             runAppleScript(spotifyRunningGuard + spotifyScript)
         case .kasetScript:
             guard let kasetScript else {
-                logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): Kaset has no AppleScript command for it")
-                DispatchQueue.main.async { onControlWithheld?() }
-                return nil
+                return withhold(mediaControlCommand, reason: "Kaset has no AppleScript command for it")
             }
             runAppleScript(kasetRunningGuard + kasetScript)
         case .mediaControl:
@@ -1063,24 +1051,36 @@ public enum MusicPlaybackController {
         case .kasetDirect:
             guard let kasetDirectSeek else { return nil }
             runKasetDirectSeek(kasetDirectSeek, fallbackCommand: mediaControlCommand, fallbackArguments: mediaControlArguments)
-        case .qqMenu:
-            guard let item = qqMenuItem(forMediaControlCommand: mediaControlCommand) else {
-                logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): QQ Music's menu has no item for it")
-                DispatchQueue.main.async { onControlWithheld?() }
-                return nil
-            }
-            commandQueue.async {
-                commandSerial &+= 1
-                if !QQMusicMenuControl.press(item) {
-                    logger.notice("playback control (\(mediaControlCommand, privacy: .public)): QQ Music's menu item not pressed")
-                }
-            }
+        case .menuAccessibility(let player, let command):
+            dispatchMenuAccessibility(command, for: player, completion: completion)
         case .withheld:
-            logger.notice("playback control withheld (\(mediaControlCommand, privacy: .public)): now playing focus is held by another app")
-            DispatchQueue.main.async { onControlWithheld?() }
-            return nil
+            return withhold(mediaControlCommand, reason: "now playing focus is held by another app")
         }
         return route
+    }
+
+    /// QQ / 网易云的三个动作与已有控制共用串行队列。press 是 AX 边界,selftest 用阻塞桩验证主线程仍可服务和失败回报。
+    public static func dispatchMenuAccessibility(
+        _ command: PlaybackMenuControl.Command, for player: PlaybackPlayer,
+        press: @escaping @Sendable (PlaybackMenuControl.Command, PlaybackPlayer) -> PlaybackMenuControl.Outcome = { PlaybackMenuControl.press($0, for: $1) },
+        completion: Completion? = nil
+    ) {
+        commandQueue.async {
+            commandSerial &+= 1
+            let outcome = press(command, player)
+            if outcome != .pressed {
+                _ = withhold(command.rawValue, reason: "\(player.rawValue) accessibility: \(outcome)",
+                             failure: outcome == .notTrusted ? .accessibilityPermissionRequired : .unavailable)
+            }
+            DispatchQueue.main.async { completion?(outcome == .pressed ? .menuAccessibility(player, command) : nil) }
+        }
+    }
+
+    private static func withhold(_ command: String, reason: String,
+                                 failure: WithheldReason = .unavailable) -> ControlRoute? {
+        logger.notice("playback control withheld (\(command, privacy: .public)): \(reason, privacy: .public)")
+        DispatchQueue.main.async { onControlWithheld?(failure) }
+        return nil
     }
 
     /// 问播放器要状态的超时上限。

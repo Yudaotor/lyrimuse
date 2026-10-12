@@ -192,7 +192,7 @@ public enum MediaControlClient {
     private static var gapHoldLast: (snapshot: MediaControlSnapshot, at: Date)?
     /// 这一轮保持从哪一拍开始;nil = 没在保持。
     private static var gapHoldingSince: Date?
-    /// 屏上这首是不是会话被撤后保持出来的(`PlayerGapHold.shouldHoldWhileOutputting`)。播放控制看它,见 `focusHeldByAnotherApp`。
+    /// 屏上这首是不是会话被撤后保持出来的(`PlayerGapHold.shouldHoldWhileOutputting`)。播放控制看它,见 `focusControlContext`。
     private static var holdingDroppedSession = false
     /// 会撤会话的那个播放器的进程号,保持期间拿它问内核「还在不在」。只在采纳它的快照时记:
     /// NSRunningApplication 在后台线程上偶尔返回空,保持期间别照它判(会提前放手)。
@@ -509,7 +509,7 @@ public enum MediaControlClient {
     private static let kasetWebClockMaxAge: TimeInterval = 30
     private static let kasetWebClockRetryInterval: TimeInterval = 10
     /// 此刻正顶替系统那边、改用 Kaset 的读数时,系统报的是谁("nothing" = 什么都没报);没在顶替为 nil。
-    /// 播放控制据此直接发给 Kaset(`focusControlTarget`),日志在它变化时打一条。
+    /// 播放控制据此直接发给 Kaset(`focusControlContext`),日志在它变化时打一条。
     private static var kasetPreferredOver: String?
 
     /// 问一次 Kaset。拿不到(没在跑、没有当前曲目、没授「自动化」权限、超时)返回 nil,不记失败原因:
@@ -753,7 +753,7 @@ public enum MediaControlClient {
     /// Kaset 在放时系统里可能一拍都没有它:会话交给了 WebKit(歌名歌手是空的,bundle id 报成 WebKit 的媒体进程),
     /// 换歌加载时它自己那份又整个撤掉。光等系统认出它,可能一整首都等不到,系统那边还会落回别的播放器暂停着的旧会话。
     /// 别的来源什么都没有时,Kaset 暂停着的那首也照样报(跟 Music.app 暂停着同一个口径);别的来源有一首暂停着的,
-    /// 只在 Kaset 在放或正要放时才换过去。换过去之后记在 `kasetPreferredOver`:`focusControlTarget` 据此把播放控制
+    /// 只在 Kaset 在放或正要放时才换过去。换过去之后记在 `kasetPreferredOver`:`focusControlContext` 据此把播放控制
     /// 直接发给它,不然 media-control 的指令会落在系统焦点上的那个 App 身上。别改成按焦点回退那套记账:系统那边每一拍
     /// 照样认下别的播放器(`noteAccepted`),回退开关一拍一翻,两条日志每拍各打一遍。
     ///
@@ -1290,7 +1290,7 @@ public enum MediaControlClient {
     /// 此刻是不是正处在回退状态(只为让那条 notice 日志在**状态翻转**时打一次,不是每拍都打)。
     private static var fallbackActive = false
     /// 这一拍回退是不是经 AppleScript 问到的(而不是 per-client 探针)。播放控制要不要改发 AppleScript 看它,
-    /// 见 `focusControlTarget`。
+    /// 见 `focusControlContext`。
     private static var fallbackViaAppleScript = false
 
     /// 回退开关的状态转移。纯函数,selftest 覆盖 —— 这条把"它会不会一直白 fork 下去"
@@ -1327,18 +1327,22 @@ public enum MediaControlClient {
         return fallbackActive ? lastAcceptedDirectQueryPlayer : nil
     }
 
-    /// 焦点被别的 App 占着、或 media-control 通道坏了,屏上这首是经 AppleScript 问到的那个播放器 —— 播放控制要
-    /// 直接发给它。media-control 的控制指令作用于系统焦点,焦点被占时发出去落在占用者(网页视频)身上,通道坏了时
-    /// 根本发不出去。经 per-client 探针回退的不算:那说明它的 AppleScript 这时就不通。
-    public static func focusControlTarget() -> PlaybackPlayer? {
+    /// 控制所需的回退目标与保护状态在同一次读取里取出,避免拼接不同轮询拍的值。
+    /// Kaset 顶替和会话保持仍按各自已有的锁读取;只有回退状态允许 QQ 定向控制。
+    public static func focusControlContext() -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {
         kasetLock.lock()
         let kasetPreferred = kasetPreferredOver != nil
         kasetLock.unlock()
-        if kasetPreferred { return .kaset }
         appleMusicFocusLock.lock()
-        defer { appleMusicFocusLock.unlock() }
-        if fallbackActive && fallbackViaAppleScript { return lastAcceptedDirectQueryPlayer }
-        return channelFallbackPlayer
+        let scriptTarget = fallbackActive && fallbackViaAppleScript ? lastAcceptedDirectQueryPlayer : channelFallbackPlayer
+        let directQueryTarget = fallbackActive ? lastAcceptedDirectQueryPlayer : nil
+        let viaProbe = shouldWithholdFocusControls(
+            fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript)
+        appleMusicFocusLock.unlock()
+        gapHoldLock.lock()
+        let heldElsewhere = viaProbe || holdingDroppedSession
+        gapHoldLock.unlock()
+        return (kasetPreferred ? .kaset : scriptTarget, directQueryTarget, heldElsewhere)
     }
 
     /// 回退查询失败只关闭读取开关,不证明焦点恢复。targetGone 由被接受的快照清零;
@@ -1347,28 +1351,6 @@ public enum MediaControlClient {
         fallingBack: Bool, targetGone: Bool, viaAppleScript: Bool
     ) -> Bool {
         (fallingBack || targetGone) && !viaAppleScript
-    }
-
-    /// 焦点被别的 App 占着,屏上这首是按 bundle id 直查回退问到的(没有 AppleScript 可发);或者屏上这首是会话被撤后保持出来的
-    /// (`PlayerGapHold.shouldHoldWhileOutputting`,这时系统焦点是空的或者在别人手里)。这两种时候 media-control 的控制指令
-    /// 都会落在焦点上,播放控制不发(见 `MusicPlaybackController.controlRoute`)。
-    /// 回退查询失败之后同样保护,直到 noteAccepted 清掉 targetGone(见 `shouldWithholdFocusControls`)。
-    public static func focusHeldByAnotherApp() -> Bool {
-        appleMusicFocusLock.lock()
-        let viaProbe = shouldWithholdFocusControls(
-            fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript)
-        appleMusicFocusLock.unlock()
-        gapHoldLock.lock()
-        defer { gapHoldLock.unlock() }
-        return viaProbe || holdingDroppedSession
-    }
-
-    /// 上一份被接受的快照是哪个播放器报的。焦点被别的 App 占着(`focusHeldByAnotherApp`)时就是屏上那首的播放器,
-    /// 播放控制据此决定能不能改按它的菜单栏(见 `MusicPlaybackController.ControlRoute.qqMenu`)。
-    public static func lastAcceptedPlayer() -> PlaybackPlayer? {
-        appleMusicFocusLock.lock()
-        defer { appleMusicFocusLock.unlock() }
-        return lastAcceptedDirectQueryPlayer
     }
 
     private static func setFocusFallbackPlayer(_ value: PlaybackPlayer?) {
@@ -1568,7 +1550,7 @@ public enum MediaControlClient {
     private static var channelTestFailed = false
     /// 本进程读到过一份真快照。之后 `test` 的失败不再算数:通道已经证明能用,自检偶发失败不该把读取切到直问。
     private static var channelSeenSnapshot = false
-    /// 通道坏了期间屏上这首经 AppleScript 问自哪个播放器(nil = 没在靠直问取数)。播放控制看它,见 `focusControlTarget`。
+    /// 通道坏了期间屏上这首经 AppleScript 问自哪个播放器(nil = 没在靠直问取数)。播放控制看它,见 `focusControlContext`。
     private static var channelFallbackPlayer: PlaybackPlayer?
 
     /// `MediaControlHealth` 落定结论时调:`media-control test` 失败 = 通道坏了。系统更新弄坏私有 MediaRemote
@@ -1586,7 +1568,7 @@ public enum MediaControlClient {
     }
 
     /// 真读到了一份快照:通道好了。直问期间记下的播放器一并撤掉,不然播放控制还会绕开 media-control 发给它
-    /// (`focusControlTarget`),哪怕用户已经换到别的播放器。
+    /// (`focusControlContext`),哪怕用户已经换到别的播放器。
     private static func noteChannelReadSnapshot() {
         appleMusicFocusLock.lock()
         channelTestFailed = false

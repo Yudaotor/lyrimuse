@@ -2102,8 +2102,8 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     /// 播放/暂停 —— 各 UI 面(歌词窗/灵动岛/悬浮层热键/菜单栏面板/全局快捷键)都走这里,
-    /// 不直接调 MusicPlaybackController.playPause():发命令的同时**乐观翻转**观感层
-    /// isPlayingSmoothed,封面缩放/播放图标点击即动。真实链路(命令→播放器切状态→分布式
+    /// 不直接调 MusicPlaybackController.playPause():普通指令排入通路后**乐观翻转**观感层
+    /// isPlayingSmoothed。菜单通路等 AXPress 后沿用回读真值,不再反转可能已更新的图标;查询期间主线程仍可服务。真实链路(命令→播放器切状态→分布式
     /// 通知→250ms 去抖→poll 子进程→apply)实测要 0.5~1s,等它回读再动画,对比 AM 的即时
     /// 反馈明显迟钝(现象是"扩大延迟太久")。
     ///
@@ -2112,24 +2112,31 @@ final class PlaybackCoordinator: ObservableObject {
     /// (updateSmoothedPlaying 只在 isPlayingNow **变化**时被调),所以 2.5s 后对账一次、
     /// 拨回真值 —— 有 grace 定时在跑说明真值正在按老路径收敛,那种情况不抢。
     func userTogglePlayPause() {
-        // 没发出去(焦点被别的 App 占着,见 MusicPlaybackController.ControlRoute.withheld)就不翻:翻了播放器不会跟着变,
-        // 界面要反着显示到 2.5 秒后的对账。
-        guard MusicPlaybackController.playPause() else { return }
-        stopGraceWork?.cancel()
-        stopGraceWork = nil
-        // 按界面此刻显示的翻,不按真值翻:快速连按两下时第二下真值还没回读,按真值翻会连写两次「暂停」,
-        // 而播放器实际已经恢复播放、真值没变也不会来纠正,界面要反着显示到 2.5 秒后的对账。
-        isPlayingSmoothed = !isPlayingSmoothed
-        optimisticReconcileWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.optimisticReconcileWork = nil
-            if self.isPlayingSmoothed != self.isPlayingNow, self.stopGraceWork == nil {
-                self.isPlayingSmoothed = self.isPlayingNow
+        let targetBundleID = LocalPlaybackSource.shared.lastResolvedBundleID
+        MusicPlaybackController.playPause { [weak self] route in
+            guard let route, let self, LocalPlaybackSource.shared.lastResolvedBundleID == targetBundleID else { return }
+            stopGraceWork?.cancel()
+            stopGraceWork = nil
+            optimisticReconcileWork?.cancel()
+            optimisticReconcileWork = nil
+            // 菜单操作已经结束,回读可能先到。跟随真值,不再对当前图标做一次 toggle。
+            if case .menuAccessibility = route {
+                isPlayingSmoothed = isPlayingNow
+                return
             }
+            // 按界面此刻显示的翻,不按真值翻:快速连按两下时第二下真值还没回读,按真值翻会连写两次「暂停」,
+            // 而播放器实际已经恢复播放、真值没变也不会来纠正,界面要反着显示到 2.5 秒后的对账。
+            isPlayingSmoothed = !isPlayingSmoothed
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.optimisticReconcileWork = nil
+                if self.isPlayingSmoothed != self.isPlayingNow, self.stopGraceWork == nil {
+                    self.isPlayingSmoothed = self.isPlayingNow
+                }
+            }
+            optimisticReconcileWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
         }
-        optimisticReconcileWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
     }
 
     private func updateSmoothedPlaying(_ playing: Bool) {

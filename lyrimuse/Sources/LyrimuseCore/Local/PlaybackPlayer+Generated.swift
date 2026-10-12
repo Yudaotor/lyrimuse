@@ -12,7 +12,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     case appleMusic = "apple_music"
     /// 无 AppleScript 字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),走 media-control;读数整秒下取整 + ±1~1.5s 抖动。随机 / 循环走它菜单栏「播放控制 → 播放模式」(QQMusicMenuControl),所以要辅助功能权限。
     case qqMusic = "qq_music"
-    /// 同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。
+    /// 同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。失焦时三项播放控制走自身「控制」菜单(PlaybackMenuControl),需要辅助功能权限；不接失焦 seek 或模式/喜欢键。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。
     case netease = "netease_music"
     /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。
     case kugou = "kugou_music"
@@ -112,6 +112,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     public var needsAccessibilityPermission: Bool {
         switch self {
         case .qqMusic: return true
+        case .netease: return true
         case .amazonMusic: return true
         default: return false
         }

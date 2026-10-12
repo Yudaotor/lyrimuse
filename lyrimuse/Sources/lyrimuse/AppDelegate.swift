@@ -164,9 +164,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 默认容量小得可怜 —— 最近记录展开到 100 行再切个 tab 回来,九十多张封面全部
         // 重新下载。给共享缓存一个像样的容量,磁盘部分跨启动依然有效。
         URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
-        // 焦点被网页视频这类 App 占着、屏上的播放器又没有 AppleScript 时,播放控制不发(发出去会控到占用者),
+        // 焦点被网页视频占着且没有可用的定向通路(AppleScript / QQ 辅助功能菜单)时,播放控制不发,
         // 给一声提示音说明这次没生效。见 MusicPlaybackController.ControlRoute.withheld。
-        MusicPlaybackController.onControlWithheld = { NSSound.beep() }
+        MusicPlaybackController.onControlWithheld = { reason in
+            NSSound.beep()
+            if reason == .accessibilityPermissionRequired {
+                AccessibilityPermission.shared.refresh()
+                AppActions.shared.requestSettings(.tab(.player))
+                AppActions.shared.openSettings?()
+            }
+        }
         // 两项授权在生效时就记下「授权成功过」(PermissionGrantMemory),之后失效才说得出「授权已失效」;
         // 不等设置页、引导页打开才记。见 14 章决策 67。
         AccessibilityPermission.shared.refresh()

@@ -5,7 +5,7 @@ import SwiftUI
 
 /// 「辅助功能」权限的**唯一状态源**,设置页「播放器」那张卡和引导页那一步共用。
 ///
-/// 替播放器要的这份权限只给读界面用(Amazon Music:读界面上的播放时间校准进度,见 `AmazonMusicUIProbe`),
+/// Amazon Music 用它读进度和按播放模式按钮;QQ 音乐用它读取、操作自己的菜单。
 /// 判据是 `Set<PlaybackPlayer>.playersNeedingAccessibility`。授权是整个 App 一份,两个界面都只摆**一行**,
 /// 替哪几家要只出现在「为什么要这项授权」那句里(`AccessibilityPermissionGuide.reason`)。
 ///
@@ -71,10 +71,16 @@ final class AccessibilityPermission: ObservableObject {
     var caption: String { trusted ? L10n.t("已授权") : everGranted ? L10n.t("授权已失效") : L10n.t("未获授权") }
 
     /// 没授权时怎么补,两个界面共用。授权过的直接讲删掉再加回来:失效的那条留在列表里、开关亮着,关了再开不管用。
+    /// macOS 27 改了系统页面的名字,TCC 类型和设置深链仍是 Accessibility。
+    private var settingsPaneTitle: String {
+        if #available(macOS 27, *) { return L10n.t("设备控制和数据访问") }
+        return L10n.t("辅助功能")
+    }
+
     var steps: String {
         everGranted
-            ? L10n.t("更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。")
-            : L10n.t("在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。")
+            ? String(format: L10n.t("授权已失效。请在「系统设置 → 隐私与安全性 → %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse。"), settingsPaneTitle)
+            : String(format: L10n.t("在「系统设置 → 隐私与安全性 → %@」中开启 Lyrimuse。列表里没有时，用「+」添加当前运行的 Lyrimuse.app；已开启却仍无效时，移除旧条目并重新添加，然后重启 Lyrimuse。"), settingsPaneTitle)
     }
     var iconName: String { trusted ? "checkmark.circle.fill" : "xmark.circle.fill" }
     var iconColor: Color { trusted ? .green : .orange }
@@ -112,8 +118,13 @@ struct AccessibilityPermissionGuide: View {
         }
         let playMode = players.filter { $0.accessibilityUse == .switchesPlayMode }
         if !playMode.isEmpty {
-            lines.append(String(format: L10n.t("%@ 没有脚本接口。授权后 Lyrimuse 会通过它的菜单读取和切换随机、循环与喜欢。不授权也能用，只是没有这几颗键。"),
+            lines.append(String(format: L10n.t("%@ 没有脚本接口。授权后 Lyrimuse 会读取并点按它的菜单，以控制随机、循环与喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能用，但没有这几颗键，失焦时也无法控制播放。失焦时的进度跳转暂不支持。"),
                                 model.playerNames(playMode)))
+        }
+        let playback = players.filter { $0.accessibilityUse == .controlsPlayback }
+        if !playback.isEmpty {
+            lines.append(String(format: L10n.t("授权后 Lyrimuse 可通过%@自己的菜单，在系统媒体焦点被其它 App 占用时暂停、恢复和切换上下首。不授权也能显示歌词，但失焦时无法控制播放；失焦进度跳转暂不支持。"),
+                                model.playerNames(playback)))
         }
         return lines.joined(separator: "\n")
     }

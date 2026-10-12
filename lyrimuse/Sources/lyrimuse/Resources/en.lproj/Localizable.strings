@@ -60,7 +60,7 @@
 "%@ 次" = "×%@";
 "%@ 次收听" = "%@ plays";
 "%@ 次收听#one" = "%@ play";
-"%@ 没有脚本接口。授权后 Lyrimuse 会通过它的菜单读取和切换随机、循环与喜欢。不授权也能用，只是没有这几颗键。" = "%@ has no scripting interface, so with access Lyrimuse reads and switches shuffle, repeat and Like through its menus. Without it, Lyrimuse still works, but those buttons won’t appear.";
+"%@ 没有脚本接口。授权后 Lyrimuse 会读取并点按它的菜单，以控制随机、循环与喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能用，但没有这几颗键，失焦时也无法控制播放。失焦时的进度跳转暂不支持。" = "%@ has no scripting interface. With permission, Lyrimuse reads and presses its menus for shuffle, repeat and liking songs. When another app holds system media focus, it can also pause, resume and skip tracks. Without permission, those buttons are unavailable and playback cannot be controlled while focus is elsewhere. Seeking while focus is elsewhere is not supported.";
 "%@ 点" = "%@:00";
 "%@ 的歌词缓存位于受系统保护的目录中。授予「完全磁盘访问权限」后，可直接使用本机已有的逐字歌词，无需每次联网搜索。" = "%@ keeps its lyrics cache inside a system-protected folder. Grant Full Disk Access and the word-by-word lyrics already on this Mac can be used straight away, with no online search.";
 "%@ 的歌词缓存和播放队列在受保护的目录中。授权后可直接使用本机已有的歌词，并提前解析即将播放的歌曲；不授权也能联网查找歌词。" = "%@ keeps its lyrics cache and play queue in protected folders. With access, lyrics already on this Mac are used directly and upcoming tracks are resolved ahead of time; without it, lyrics are still found online.";
@@ -643,6 +643,7 @@
 "在 iCloud 中发现 Lyrimuse 备份" = "Found a Lyrimuse backup in iCloud";
 "在 iPhone 上安装 Bark App，首页即显示专属推送地址，拷贝后粘贴到此处即可，无需额外设置" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed";
 "在「Scrobble 的播放器」中取消勾选 Spotify；在手机等其他设备上收听的 Spotify 仍会照常记录。" = "Unchecks Spotify in Players to Scrobble. Spotify plays on your other devices are still recorded.";
+"在「系统设置 → 隐私与安全性 → %@」中开启 Lyrimuse。列表里没有时，用「+」添加当前运行的 Lyrimuse.app；已开启却仍无效时，移除旧条目并重新添加，然后重启 Lyrimuse。" = "Enable Lyrimuse in System Settings → Privacy & Security → %@. If it is missing, use “+” to add the Lyrimuse.app you are currently running. If it is already enabled but still unavailable, remove the old entry, add the current app again, then restart Lyrimuse.";
 "在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览。放不下两行时歌词行会自动加高" = "Adds one more line under the main lyric. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview. If two lines don't fit, the lyric row grows to fit them";
 "在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，显示不下时末尾渐隐。" = "Adds a second line under the lyric without changing the item's height (10pt / 9pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one. With a second line on, the main line no longer switches early. The second line never scrolls — its tail fades when it doesn't fit.";
 "在主行下方再显示一行：译文和读音对应当前句，「下一句」为即将演唱的歌词。开启后两行字号固定为 14pt / 11pt，「字号」不生效，主行也不再提前切到下一句；副行显示不下时，按该句时长横向滚动" = "Adds a second line under the main line: Translation and Romanization follow the current line, and Next Line shows the upcoming one. With it on, the two lines are fixed at 14pt / 11pt (Font Size has no effect) and the main line no longer switches early. A second line that doesn't fit scrolls across over the line's duration";
@@ -657,7 +658,6 @@
 "在歌词区域最左或最右侧显示菜单栏图标，图标颜色自下而上填充以表示播放进度：已填充部分使用「已唱颜色」，其余使用「未唱颜色」。仅在显示歌词时出现。" = "Puts a menu bar icon at the far left or right of the lyrics slot; its color fills from the bottom up to show playback progress — the filled part in Sung Color, the rest in Unsung Color. Only appears while lyrics are showing.";
 "在浏览器里听歌也能显示歌词。点「+」配对你用的浏览器，进度直接从网页读，换歌后马上对准。" = "Lyrics work for songs playing in a browser too. Click + to pair the browser you use; the position is read straight from the page, so lyrics line up right after a song change.";
 "在浏览器里授权" = "Authorize in Your Browser";
-"在系统设置中打开 Lyrimuse。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
 "在系统设置中打开 Lyrimuse，然后点「重启歌词引擎」。开关已打开却仍未生效时，用「−」移除 Lyrimuse，再用「+」重新添加。" = "Turn on Lyrimuse in System Settings, then click Restart Lyrics Engine. If it’s already on but still not working, remove Lyrimuse with “−” and add it back with “+”.";
 "在线 — %d" = "Online — %d";
 "在菜单栏中显示一行歌词" = "A single line in the menu bar";
@@ -1063,7 +1063,9 @@
 "换行（默认）：一行显示不下时折行显示。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。" = "Wrap (default): long lines fold onto the next line.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
 "换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。" = "Wrap (default): long lines fold onto the next line and the window grows taller.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复。" = "The authorization may have been revoked on the Last.fm website. Reconnect to resume.";
+"授权后 Lyrimuse 可通过%@自己的菜单，在系统媒体焦点被其它 App 占用时暂停、恢复和切换上下首。不授权也能显示歌词，但失焦时无法控制播放；失焦进度跳转暂不支持。" = "With permission, Lyrimuse can use %@’s own menus to pause, resume and skip tracks when another app holds system media focus. Lyrics still work without permission, but playback controls are unavailable without media focus; seeking without media focus is not supported.";
 "授权已失效" = "Authorization expired";
+"授权已失效。请在「系统设置 → 隐私与安全性 → %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse。" = "Permission is no longer valid. In System Settings → Privacy & Security → %@, remove the old entry, add the Lyrimuse.app you are currently running, then restart Lyrimuse.";
 "授权已失效，Scrobble 已暂停" = "Authorization revoked — scrobbling paused";
 "排名升降对比的是上一期（%@ – %@）" = "Rank changes compare with the previous period (%@ – %@)";
 "排序" = "Sort";
@@ -1260,7 +1262,6 @@
 "更改…" = "Change…";
 "更新" = "Updates";
 "更新与帮助" = "Updates & Help";
-"更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加。" = "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−” and add it back with “+”.";
 "更新后，之前的授权已失效。请在系统设置中用「−」移除 Lyrimuse，再用「+」重新添加，然后点「重启歌词引擎」。" = "After the update, the earlier permission no longer applies. In System Settings, remove Lyrimuse with “−”, add it back with “+”, then click Restart Lyrics Engine.";
 "更新备份" = "Update Backup";
 "更新失败" = "Update failed";
@@ -1330,6 +1331,8 @@
 "未获取" = "Not loaded";
 "未获得完全磁盘访问权限，无法读取 %@ 的本机歌词" = "No Full Disk Access; %@’s local lyrics cannot be read";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键" = "No Accessibility permission; %@’s shuffle, repeat and Like buttons are hidden";
+"未获得辅助功能权限，%@ 不显示随机、循环与喜欢键，失焦时也无法控制播放" = "Accessibility permission is missing: %@ has no shuffle, repeat or like buttons, and cannot be controlled when system media focus is elsewhere";
+"未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和上下首" = "Accessibility permission is missing, so %@ cannot pause, resume or skip tracks without system media focus";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "No Accessibility permission; %@’s progress cannot be calibrated";
 "未获授权" = "Not granted";
 "未记录" = "Not recorded";
@@ -1870,6 +1873,7 @@
 "触控栏右侧的亮度、音量等系统按键，可在「系统设置 › 键盘 › 触控栏设置…」中增减或调整顺序" = "Add, remove or reorder the brightness, volume and other system buttons on the right of the Touch Bar in System Settings › Keyboard › Touch Bar Settings…";
 "触控栏歌词" = "Touch Bar Lyrics";
 "触控栏歌词仅适用于配备触控栏的 MacBook Pro" = "Touch Bar Lyrics works only on MacBook Pro models with a Touch Bar";
+"设备控制和数据访问" = "Device Control and Data Access";
 "设置" = "Settings";
 "设置…" = "Settings…";
 "设置已保存；歌词库写入失败，可再次点按「更新备份」" = "Settings saved, but the lyrics library couldn’t be written. Click Update Backup to try again";
@@ -1915,9 +1919,12 @@
 "请将 YouTube Music 标签页切换到前台后重试" = "Bring the YouTube Music tab to the front and try again";
 "请尝试其他筛选条件或关键词" = "Try different filters or search terms.";
 "请开启此权限，以便准确识别正在播放的歌曲，并可在歌词上直接控制播放" = "Turn this on so the playing song is recognized correctly, with playback controls right on the lyrics";
+"请开启此权限，以便在%@失去系统媒体焦点时控制暂停、恢复和上下首" = "Enable this permission to pause, resume and skip tracks when %@ loses system media focus";
 "请开启此权限，以便直接使用本机已有的歌词，并提前准备下一首" = "Turn this on to use lyrics already on this Mac and get the next song ready ahead of time";
 "请开启此权限，以显示%@的随机、循环与喜欢键" = "Turn this on to show shuffle, repeat and Like buttons for %@";
+"请开启此权限，以显示%@的随机、循环与喜欢键，并在失去系统媒体焦点时控制播放" = "Enable this permission for shuffle, repeat and liking songs in %@, and to control playback when it loses system media focus";
 "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键" = "Turn this on to keep %@'s playback position accurate during autoplay and show shuffle, repeat and Like buttons for %@";
+"请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制" = "Enable this permission to improve progress accuracy during autoplay in %@, and enable shuffle, repeat, liking songs and playback controls without system media focus in %@";
 "请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键" = "Turn this on to keep %@'s playback position accurate during autoplay and show its shuffle and repeat buttons";
 "请开启此权限，让播放进度更准确，并可在歌词上直接控制播放" = "Turn this on for more accurate progress and playback controls right on the lyrics";
 "请打开 Discord" = "Discord needs to be open";
@@ -1958,8 +1965,10 @@
 "软件更新" = "Software Update";
 "较上周 %@" = "%@ vs last week";
 "较粗" = "Semibold";
+"辅助功能" = "Accessibility";
 "辅助功能权限" = "Accessibility";
-"辅助功能权限可显示%@的随机、循环与喜欢键，点按时会操作其菜单栏" = "Accessibility shows shuffle, repeat and Like buttons for %@; clicking them uses its menu bar";
+"辅助功能权限可显示%@的随机、循环与喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" = "Accessibility permission enables shuffle, repeat and liking songs for %@, and lets its menus pause, resume and skip tracks when another app holds system media focus";
+"辅助功能权限可让%@在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" = "Accessibility access lets %@ use its menus to pause, resume and skip tracks when another app holds system media focus";
 "辅助功能权限可让%@的播放进度更准确，并显示随机、循环键" = "Accessibility keeps %@'s playback position accurate and shows its shuffle and repeat buttons";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";
