@@ -224,7 +224,8 @@ type featureFlagsFile struct {
 	// 按同一首歌读穿),缺失 = 开。只有 App 读,引擎不用;声明在这里只为两侧键镜像契约。见 18 章决策 9、10、27。
 	SongEntityPhase1 *bool `json:"song_entity_phase1,omitempty"`
 	// SongEntityShareLyrics:歌曲实体阶段 3,歌词按实体同步(手改到整个实体、自动选的按共享组),见 songentityshare.go。
-	// **默认关**;只有引擎认,App 靠 unknownFileKeys 原样保留。关掉时把同步动过的写法恢复回去。
+	// **默认开**(18 章决策 49);只有引擎认,App 靠 unknownFileKeys 原样保留,另读一份判断同曲条目面板的说法。设成 false 时把
+	// 同步动过的写法恢复回去。
 	SongEntityShareLyrics *bool `json:"song_entity_share_lyrics,omitempty"`
 }
 
@@ -428,7 +429,7 @@ func buildFeatureFlags(f featureFlagsFile) featureFlags {
 		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
 		SongEntityShadow:          boolOr(f.SongEntityShadow, true),
 		SongEntityPhase2:          boolOr(f.SongEntityPhase2, true),
-		SongEntityShareLyrics:     boolOr(f.SongEntityShareLyrics, false),
+		SongEntityShareLyrics:     boolOr(f.SongEntityShareLyrics, true),
 	}
 }
 

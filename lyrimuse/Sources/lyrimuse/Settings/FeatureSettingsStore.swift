@@ -893,7 +893,8 @@ public final class FeatureSettingsStore: ObservableObject {
         songEntityPhase1 = f.songEntityPhase1
         EnrichCacheReader.borrowsEntityLinks = songEntityPhase1Enabled
         EnrichCacheReader.inheritsEntityOffsets = songEntityPhase1Enabled
-        EnrichCacheReader.sharesEntityLyrics = document.raw["song_entity_share_lyrics"] as? Bool ?? false
+        // 缺失 = 开,跟引擎 features.go 的默认值一致(18 章决策 49)。
+        EnrichCacheReader.sharesEntityLyrics = document.raw["song_entity_share_lyrics"] as? Bool ?? true
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {
