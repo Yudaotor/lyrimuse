@@ -206,7 +206,7 @@ func startAppleNamesSweep(ctx context.Context) {
 		if features().SongEntityPhase2 {
 			settled, complete := sweepAppleNames(ctx, appleNamesPath(), time.Now())
 			if settled > 0 && features().SongEntityShadow {
-				rebuildSongEntityTable(time.Now())
+				rebuildSongEntityTableForEvidence(time.Now())
 			}
 			if !complete {
 				next = catalogSweepRetry

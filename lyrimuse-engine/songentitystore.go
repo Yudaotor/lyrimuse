@@ -95,7 +95,7 @@ func startSongEntityShadow(ctx context.Context) {
 	started, sharing := false, false
 	var update <-chan time.Time // 缓存落盘之后攒几秒,到点增量重算一次
 	for {
-		rebuild := false
+		rebuild, evidence := false, false
 		select {
 		case <-ctx.Done():
 			return
@@ -126,12 +126,12 @@ func startSongEntityShadow(ctx context.Context) {
 			}
 			rebuild = songEntitySharing()
 		case <-songEntityRebuildNow:
-			rebuild = true
+			rebuild, evidence = true, true
 		}
 		var b *songEntityBuild
 		if rebuild {
 			if features().SongEntityShadow {
-				b = rebuildSongEntityTable(time.Now())
+				b = rebuildSongEntityTableWith(time.Now(), !evidence)
 			} else {
 				removeSongEntityFiles()
 			}
@@ -158,6 +158,16 @@ var songEntityRebuildMu sync.Mutex
 // rebuildSongEntityTable 全量建一次实体表,写实体表和报告两个文件,返回这次建出来的(写实体表失败时为 nil)。建完的状态
 // 留给增量重算(songEntityLive);之前有增量维护的那份时跟它对一遍,不一样的写法记一行日志。
 func rebuildSongEntityTable(now time.Time) *songEntityBuild {
+	return rebuildSongEntityTableWith(now, true)
+}
+
+// rebuildSongEntityTableForEvidence:补扫补到了新证据、用户拆开或恢复合并之后的全量建表。这些输入不在增量的指纹里,建出来
+// 跟增量维护的那份不一样是预期的,不对比(对比那行日志只留给定时建表,用来发现增量算错)。
+func rebuildSongEntityTableForEvidence(now time.Time) *songEntityBuild {
+	return rebuildSongEntityTableWith(now, false)
+}
+
+func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 	songEntityRebuildMu.Lock()
 	defer songEntityRebuildMu.Unlock()
 	start := time.Now()
@@ -191,7 +201,7 @@ func rebuildSongEntityTable(now time.Time) *songEntityBuild {
 	}
 	slog.Info("song entities: rebuilt", "variants", r.variants, "songs", r.entities, "multi", r.multi,
 		"merges", len(b.merged), "vetoed", len(b.vetoed), "took", time.Since(start).Round(time.Millisecond))
-	if prev != nil {
+	if compare && prev != nil {
 		songEntityCompareLive(prev.table, table)
 	}
 	songEntityLive, songEntityLivePath = st, songEntityTablePath()

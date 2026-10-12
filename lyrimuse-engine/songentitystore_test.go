@@ -212,3 +212,26 @@ func TestWriteBackSongEntityIDs(t *testing.T) {
 		t.Errorf("共享组编号要跟实体表 share 一致: n=%d one=%d two=%d", n, enrichCache["A|Song|One"].SongShare, enrichCache["A|Song|Two"].SongShare)
 	}
 }
+
+// 补扫补到新证据、拆开或恢复合并之后的全量建表跟增量维护的那份不一样是预期的,不对比;对比只留给定时建表。
+func TestSongEntityEvidenceRebuildsSkipCompare(t *testing.T) {
+	for _, f := range []string{"songentitymb.go", "songentitynames.go", "songentityneteasenames.go"} {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(src), "rebuildSongEntityTableForEvidence(time.Now())") || strings.Contains(string(src), "rebuildSongEntityTable(time.Now())") {
+			t.Errorf("%s: 补扫之后的建表要跳过对比", f)
+		}
+	}
+	src, err := os.ReadFile("songentitystore.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"case <-songEntityRebuildNow:\n\t\t\trebuild, evidence = true, true", "b = rebuildSongEntityTableWith(time.Now(), !evidence)",
+		"if compare && prev != nil {"} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("songentitystore.go 少了 %q", want)
+		}
+	}
+}
