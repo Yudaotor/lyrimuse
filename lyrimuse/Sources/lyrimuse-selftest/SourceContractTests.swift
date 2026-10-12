@@ -3713,7 +3713,9 @@ func runSourceContractTests() {
             let appOnlyLegacy: Set<String> = ["player", "lastfm_scrobble_artist_mode", "lastfm_scrobble_first_artist_only",
                                               "launch_lyrimuse_on_music_open"]
             expectEqual(appOnlyLegacy.subtracting(keys), [], "features 键镜像: 四个遗留键还在 CodingKeys 里(读老文件要用)")
-            let appOnly = keys.filter { appOnlyLegacy.contains($0) || $0.hasSuffix("_lyrics") }
+            // 以 _lyrics 结尾、却是两侧都认的开关(不是迁移标记)。
+            let sharedLyricsSwitches: Set<String> = ["song_entity_share_lyrics"]
+            let appOnly = keys.filter { appOnlyLegacy.contains($0) || ($0.hasSuffix("_lyrics") && !sharedLyricsSwitches.contains($0)) }
             let tagged = { (key: String) in go.contains("json:\"\(key),omitempty\"") || go.contains("json:\"\(key)\"") }
             let missing = keys.filter { !appOnly.contains($0) && !tagged($0) }
             expectEqual(missing, [], "features 键镜像: 引擎 features.go 缺这些键的 json tag,App 写了引擎不认")

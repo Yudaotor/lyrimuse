@@ -242,7 +242,8 @@ func runSongVersionsTests() {
                     && sourceBytes(edit, contain: "case \"resolve_manual_conflict\":")
                     && sourceBytes(manager, contain: "manualConflictKeys = store.manualConflict(forKey: key)")
                     && sourceBytes(manager, contain: "if manualConflictKeys.count > 1 {")
-                    && sourceBytes(settings, contain: "EnrichCacheReader.sharesEntityLyrics = document.raw[\"song_entity_share_lyrics\"] as? Bool ?? true"), true,
+                    && sourceBytes(settings, contain: "songEntityShareLyrics = f.songEntityShareLyrics ?? true\n        EnrichCacheReader.sharesEntityLyrics = songEntityShareLyrics")
+                    && sourceBytes(settings, contain: "case songEntityShareLyrics = \"song_entity_share_lyrics\""), true,
                     "其他写法(契约): 两份手改的提示、统一请求、开关读法接上")
         expectEqual(sourceBytes(manager, contain: "instrumentalFollowsGroup ? L10n.t(\"；同一首歌共用歌词的其他写法也会一起改\") : \"\"")
                     && sourceBytes(edit, contain: "keys = withShareGroupMatesLocked(keys)"), true,

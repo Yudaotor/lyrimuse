@@ -1342,6 +1342,19 @@ private struct LyricsSettingsTab: View {
                 ))
             }
             CardDivider()
+            // 「同曲条目共用歌词」:歌曲实体的歌词同步(features.json 的 song_entity_share_lyrics,18 章决策 56)。跟上一行同属
+            // 「后台会不会换掉已有歌词」,紧挨着放。关掉时引擎按留底把同步过的条目恢复、后来又改过的留着,help 第二行照这个写。
+            SettingsRow(
+                icon: "rectangle.on.rectangle",
+                title: L10n.t("同曲条目共用歌词"),
+                help: L10n.t("开（默认）：同一首歌在不同播放器、不同专辑版本下的条目使用同一份歌词，手动修改会同步到全部条目\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { features.songEntityShareLyrics },
+                    set: { features.songEntityShareLyrics = $0; Task { await features.save() } }
+                ))
+            }
+            CardDivider()
             // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
             SettingsRow(
                 icon: "square.stack",

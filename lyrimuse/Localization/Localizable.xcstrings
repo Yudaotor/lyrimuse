@@ -26415,6 +26415,52 @@
         }
       }
     },
+    "同曲条目共用歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Lyrics Across Entries of a Song"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同曲条目共用歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同曲條目共用歌詞"
+          }
+        }
+      }
+    },
+    "开（默认）：同一首歌在不同播放器、不同专辑版本下的条目使用同一份歌词，手动修改会同步到全部条目\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On (default): entries of the same song from different players or album editions use the same lyrics, and manual edits apply to all of them\nOff: each entry is matched on its own, and entries that were synced go back to their original lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开（默认）：同一首歌在不同播放器、不同专辑版本下的条目使用同一份歌词，手动修改会同步到全部条目\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開（預設）：同一首歌在不同播放器、不同專輯版本下的條目使用同一份歌詞，手動修改會同步到全部條目\n關：各條目分別比對歌詞，已同步的條目恢復為原來的歌詞"
+          }
+        }
+      }
+    },
     "锁定手选歌词" : {
       "extractionState" : "manual",
       "localizations" : {

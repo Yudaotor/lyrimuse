@@ -693,13 +693,14 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 236 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 237 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
 - **Lyrics Sources**
 - **Matching Algorithm**
 - **Re-Pick After Algorithm Updates**: On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match Off: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected
+- **Share Lyrics Across Entries of a Song**: On (default): entries of the same song from different players or album editions use the same lyrics, and manual edits apply to all of them Off: each entry is matched on its own, and entries that were synced go back to their original lyrics
 - **Pre-Resolve Upcoming Tracks**
 - **Lock Hand-Picked Lyrics**: Off (default): swaps in this version now — later auto re-searches or scoring changes can still replace it On: locks this song’s lyrics; automatic matching won’t touch it again Turning it on also locks songs you picked earlier (except those already replaced automatically)
 

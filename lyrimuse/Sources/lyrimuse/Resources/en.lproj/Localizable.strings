@@ -590,6 +590,7 @@
 "同曲条目" = "Entries for This Song";
 "同曲条目 %d" = "%d Entries for This Song";
 "同曲条目…" = "Entries for This Song…";
+"同曲条目共用歌词" = "Share Lyrics Across Entries of a Song";
 "同步你的收听记录" = "Sync your listening history";
 "同步失败" = "Sync failed";
 "同步收听记录" = "Scrobble your listens";
@@ -932,6 +933,7 @@
 "开着 %@ 个" = "%@ on";
 "开着时识别所有已知和已信任的播放器；关掉后只认勾选的。" = "When on, every known and trusted player is detected. When off, only the ones you check.";
 "开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
+"开（默认）：同一首歌在不同播放器、不同专辑版本下的条目使用同一份歌词，手动修改会同步到全部条目\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词" = "On (default): entries of the same song from different players or album editions use the same lyrics, and manual edits apply to all of them\nOff: each entry is matched on its own, and entries that were synced go back to their original lyrics";
 "开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。" = "On: scrobbled too, once half-played.\nOff: not scrobbled (Last.fm's rule).";
 "当前" = "Current";
 "当前 %@" = "Current %@";

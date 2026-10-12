@@ -302,6 +302,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 同一首歌读穿(决策 27)。缺失 = 开;设置界面不露出来,排查时手改文件关掉。只 App 读(启动时),引擎 features.go 声明
     /// 同名键只为两侧键镜像契约。
     var songEntityPhase1: Bool?
+    /// 歌曲实体阶段 3:同一首歌的条目共用歌词(设置 › 歌词来源「同曲条目共用歌词」,18 章决策 26、49、56)。缺失 = 开,
+    /// 跟引擎 features.go 的默认值一致;引擎每分钟看一次,关掉时把同步过的条目按留底恢复。
+    var songEntityShareLyrics: Bool?
     /// 「网页播放器」配对关系的镜像:平台 id → 浏览器 bundle id(已排序)。真源是 AppSettings.browserPlatformPairs,
     /// 这里只为让引擎知道 —— 它那几路网页平台探针只对配对过的浏览器跑(引擎 browserpairs.go)。
     /// 缺失 = 还没写过,引擎沿用所有浏览器都探;空对象 = 一个都没配。
@@ -352,6 +355,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lastfmExcludedBundles = "lastfm_excluded_bundles"
         case browserPlatformPairs = "browser_platform_pairs"
         case songEntityPhase1 = "song_entity_phase1"
+        case songEntityShareLyrics = "song_entity_share_lyrics"
     }
 
     /// 这个版本认识的全部 JSON 键。见 FeatureSettingsStore.unknownFileKeys 的注释。
@@ -423,6 +427,10 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var albumPrefetch = true
     /// 「自动跟进算法升级」——关掉之后,已经选定的歌词不再被后台的重打分/升级重搜换掉。
     @Published public var lyricsAutoUpgrade = true
+    /// 「同曲条目共用歌词」。改了立刻同步给 EnrichCacheReader(歌词管理里两份手改的提示、纯音乐作用到共享组的说明看它)。
+    @Published public var songEntityShareLyrics = true {
+        didSet { EnrichCacheReader.sharesEntityLyrics = songEntityShareLyrics }
+    }
     /// 「扫描间隔」:手动补搜和全量扫库两首之间等几秒(后台自动补空另有自己的 15 秒,不受它管)。
     /// 可选档跟引擎 lyricsSweepGapChoices 逐个相同;2 秒是建议的最快值,更快的档界面上标「可能被限流」。
     @Published public var lyricsSweepGapSecs = FeatureSettingsStore.lyricsSweepGapDefault
@@ -638,6 +646,7 @@ public final class FeatureSettingsStore: ObservableObject {
             trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers,
             lastfmExcludedBundles: lastfmExcludedBundles.isEmpty ? nil : lastfmExcludedBundles.sorted(),
             songEntityPhase1: songEntityPhase1,
+            songEntityShareLyrics: songEntityShareLyrics,
             browserPlatformPairs: browserPlatformPairs
         )
     }
@@ -894,7 +903,8 @@ public final class FeatureSettingsStore: ObservableObject {
         EnrichCacheReader.borrowsEntityLinks = songEntityPhase1Enabled
         EnrichCacheReader.inheritsEntityOffsets = songEntityPhase1Enabled
         // 缺失 = 开,跟引擎 features.go 的默认值一致(18 章决策 49)。
-        EnrichCacheReader.sharesEntityLyrics = document.raw["song_entity_share_lyrics"] as? Bool ?? true
+        songEntityShareLyrics = f.songEntityShareLyrics ?? true
+        EnrichCacheReader.sharesEntityLyrics = songEntityShareLyrics
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         if let raw = f.launchLyrimuseOnPlayers {
