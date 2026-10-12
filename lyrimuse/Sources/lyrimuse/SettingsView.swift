@@ -2628,7 +2628,7 @@ private struct AppearanceSettingsTab: View {
             .background { LastfmGlassGlow() }
         case .menuBar:
             // 编辑台(照悬浮歌词/灵动岛两段的范式):预览(MenuBarPreviewBar,原样复用)在编辑台
-            // 内部 + 工具栏两个浮层(宽度模式/配色)+ 重置 ▾ + 常驻宽度条。总开关沿用跟灵动岛一样
+            // 内部 + 工具栏四个浮层(布局 / 配色 / 字体 / 行为)+ 重置 ▾ + 预览框里的宽度条。总开关沿用跟灵动岛一样
             // 的排法:排在编辑台**下面**,先看见长什么样再决定开不开。详见 MenuBarEditorStage.swift
             // 顶部注释。
             MenuBarEditorStage()
@@ -3431,10 +3431,9 @@ private struct AppearanceSettingsTab: View {
     // docs/features/05-notch.md 设计决策第 1 条)。调用点都要带 `if settings.notchOverlayEnabled`
     // 守卫。
 
-    // 「菜单栏歌词」那张平铺卡片(宽度模式/逐字染色/文字颜色/染色颜色/最大宽度五项)在
-    // UI/MenuBarEditorStage.swift —— 前两项在编辑台工具栏的两个浮层(宽度模式/配色),最大宽度
-    // 在舞台正下方的常驻宽度条,「全部设置」抽屉(MenuBarAllSettingsDrawer)兜底。别在这里重新
-    // 长出一张同名的卡:那一段只有编辑台一个宿主,多一份实现就多一处会漂的地方。
+    // 「菜单栏歌词」的配置项在 UI/MenuBarEditorStage.swift —— 编辑台工具栏四个浮层(布局 / 配色 / 字体 /
+    // 行为),最大宽度在预览框里那条常驻宽度条,「全部设置」抽屉(MenuBarAllSettingsDrawer)兜底。别在这里
+    // 重新长出一张同名的卡:那一段只有编辑台一个宿主,多一份实现就多一处会漂的地方。
 }
 
 // MARK: - 灵动岛「歌词行 / 展开态 / 行为」三组内容开关(唯一数据源 + 三个分组视图)

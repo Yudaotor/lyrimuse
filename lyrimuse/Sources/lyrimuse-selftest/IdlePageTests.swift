@@ -335,5 +335,27 @@ func runIdlePageTests() {
                     "↗ 落点(契约): KKBOX 这首歌不在目录入口里另占一行(跟下面「在 KKBOX 中显示」同名)")
         expectEqual(sourceBytes(window, contain: "let song = platformLinks?.kkboxSong {\n                    NSWorkspace.shared.open(song)"),
                     true, "↗ 落点(契约): 「在 KKBOX 中显示」有歌曲深链时打开它")
+
+        // 设置页那张歌词窗口预览是 scaleEffect 缩小画的,玻璃里的内容不吃这层缩放和裁切(07 章决策 156)。预览里关玻璃靠
+        // `settingsGlassDisabled`,它只管住三个修饰符:停播页这几份视图里出现别的玻璃写法,预览会再次按原尺寸画到框外。
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func source(_ rel: String) -> String {
+            (try? String(contentsOf: sources.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+        }
+        let otherGlass = ["glassEffect(", "buttonStyle(.glass", "lyricsWindowFloatingPanelBackground(",
+                          "settingsFloatingBarBackground(", "settingsGlassMenu(", "settingsGlassMenuCapsule(",
+                          "editorToolbarButtonStyle(", "onboardingCardBackground(", "SettingsGlassTabPicker("]
+        for rel in ["UI/IdleStandbyView.swift", "UI/RecentListensPanel.swift", "UI/MiniIdleStandby.swift"] {
+            let text = source(rel)
+            expectEqual(text.isEmpty, false, "预览关玻璃(契约): 读到 \(rel)")
+            expectEqual(otherGlass.filter { sourceBytes(text, contain: $0) }, [],
+                        "预览关玻璃(契约): \(rel) 只经 settingsCardBackground / settingsGlassButtons / settingsProminentGlassButton 用玻璃")
+        }
+        expectEqual(sourceBytes(source("UI/LyricsWindowPreviewStage.swift"), contain: ".environment(\\.settingsGlassDisabled, true)"),
+                    true, "预览关玻璃(契约): 歌词窗口预览打开 settingsGlassDisabled")
+        expectEqual(source("Settings/SettingsDesignSystem.swift")
+                        .components(separatedBy: "if #available(macOS 26.0, *), !glassDisabled {").count - 1, 3,
+                    "预览关玻璃(契约): 三个修饰符都按 settingsGlassDisabled 退回旧系统那一档")
     }
 }
