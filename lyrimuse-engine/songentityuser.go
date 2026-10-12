@@ -189,7 +189,7 @@ func songSplitSidesLocked(keys []string) (string, []string, error) {
 // songSplitRestoreLocked:拆出去的写法里,歌词是同步写进去那份的按留底恢复、删掉留底;手改副本没有能用的留底时只去掉副本
 // 标记(同 releaseStaleCopiesLocked)。它们自己的手改、校准不动。返回歌词变了的写法。调用方持 enrichMu。
 func songSplitRestoreLocked(keys []string) []string {
-	restored := releaseStaleCopiesLocked(keys)
+	restored := releaseStaleCopiesLocked(keys, nil)
 	done := map[string]bool{}
 	for _, k := range restored {
 		done[k] = true

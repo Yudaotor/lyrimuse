@@ -132,7 +132,7 @@ func TestSongEntityGoldenCapture(t *testing.T) {
 			for _, k := range memberKeys {
 				v := full.variants[idx[k]]
 				v.loadDecisionTitles(decisionsDir)
-				entry, err := songGoldenEntryJSON(snapshot[k])
+				entry, err := songGoldenEntryJSON(songOwnLyricsEntry(k, snapshot[k]))
 				if err != nil {
 					t.Fatal(err)
 				}

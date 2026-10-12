@@ -381,7 +381,7 @@ func (b *songEdgeBuilder) lyricsEdges() {
 	var keys []string
 	for i := range b.vs {
 		v := &b.vs[i]
-		if v.durationSecs <= 0 || v.tailed || v.primary == "" || !v.lyricsTrusted || v.instrumental {
+		if v.durationSecs <= 0 || v.tailed || v.primary == "" || !v.evTrusted || v.instrumental {
 			continue
 		}
 		k := artistMatchKey(v.primary)
@@ -432,15 +432,15 @@ func songLyricsIndependent(x, y *songVariant, dir string) bool {
 	if songLyricsFromMismatchedCandidate(x) || songLyricsFromMismatchedCandidate(y) {
 		return false
 	}
-	if x.lyricsSource != "" && y.lyricsSource != "" && x.lyricsSource != y.lyricsSource {
+	if x.evSource != "" && y.evSource != "" && x.evSource != y.evSource {
 		return true
 	}
-	if ns := songLyricsSourceID[x.lyricsSource]; ns != "" && x.lyricsSource == y.lyricsSource {
+	if ns := songLyricsSourceID[x.evSource]; ns != "" && x.evSource == y.evSource {
 		if a, b := x.id(ns), y.id(ns); a != "" && b != "" {
 			return a != b
 		}
 	}
-	return x.lyrics != y.lyrics
+	return x.evLyrics != y.evLyrics
 }
 
 // songLyricsFromMismatchedCandidate:当前这份歌词的候选在源那边的歌名跟写法歌名同一种文字、却对不上。

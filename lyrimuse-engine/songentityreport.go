@@ -181,15 +181,16 @@ func (b *songEntityBuild) reportEntity(r *songEntityReport, ci int, members []in
 		r.mediumChains = append(r.mediumChains, summary)
 	}
 
-	// 实体内两份正文:用词重合不到一半的(多半是其中一条选错了词)、同一套词时间轴整体平移超过 1 秒的。
+	// 实体内两份正文:用词重合不到一半的(多半是其中一条选错了词)、同一套词时间轴整体平移超过 1 秒的。比的是现在显示的词:
+	// 三元组、时间轴按证据那份算,歌词还是同步写进来的副本(证据换成了同步之前那份)的不比。
 	for i, x := range members {
 		_, wx := vs[x].lyricsShingles()
-		if wx == nil {
+		if wx == nil || vs[x].evLyrics != vs[x].lyrics {
 			continue
 		}
 		for _, y := range members[i+1:] {
 			_, wy := vs[y].lyricsShingles()
-			if wy == nil || vs[x].lyrics == vs[y].lyrics {
+			if wy == nil || vs[y].evLyrics != vs[y].lyrics || vs[x].lyrics == vs[y].lyrics {
 				continue
 			}
 			overlap := songWordOverlap(wx, wy)

@@ -107,6 +107,30 @@ func TestSongEntitySharePlan(t *testing.T) {
 	}
 }
 
+// 关着「随匹配算法更新重新选择」:没词的照补,已经有词的一律留(补逐字也不补),理由写明是开关。
+func TestShareEvalPlanAutoUpgradeOff(t *testing.T) {
+	lrc := func(seed string) string { return songTestLRC(0, songTestWords(seed, 4)) }
+	keys := []string{"e0", "e1", "e2"}
+	entries := []enrichEntry{{}, {Lyrics: lrc("c"), LyricsSource: "netease"}, {Lyrics: lrc("l4"), LyricsSource: "qq"}}
+	scored := []scoredLyricCandidateResult{
+		{Source: "netease", Lyrics: lrc("c"), LyricsYRC: "[0,500]y", Score: 1200},
+		{Source: "qq", Lyrics: lrc("l4"), Score: 900},
+	}
+	got := map[string]songEvalLine{}
+	for _, l := range shareEvalPlan(keys, entries, []*songPlanLyrics{nil, {}, {}}, scored, &scored[0], false) {
+		got[l.key] = l
+	}
+	if got["e0"].action != "补" {
+		t.Errorf("没词的照补: %+v", got["e0"])
+	}
+	if _, ok := got["e1"]; ok {
+		t.Errorf("正文相同只缺逐字的不补逐字: %+v", got["e1"])
+	}
+	if l := got["e2"]; l.action != "留" || l.why != songKeepNoUpgrade {
+		t.Errorf("有词的留、理由是开关: %+v", l)
+	}
+}
+
 // 正式空跑的去留:没词的补,正文相同只缺逐字的补逐字,纯音乐跳过;自家源的、自己手改的留着;其余跟自动重评同一套 —— 来源这一轮
 // 没应答的、没参与比较而冠军不比它存的分高的、会丢逐字的、换过去屏上看不出差别的留着,另一首歌的词一律不留;再加会丢时间轴的
 // 留着,只有署名的不算。其余换,现有那份这一轮找得到时带上它这一轮的分数。
@@ -128,7 +152,7 @@ func TestShareEvalPlan(t *testing.T) {
 		{Source: "qq", Lyrics: lrc("l4"), Score: 900},
 	}
 	got := map[string]songEvalLine{}
-	for _, l := range shareEvalPlan(keys, entries, own, scored, &scored[0]) {
+	for _, l := range shareEvalPlan(keys, entries, own, scored, &scored[0], true) {
 		got[l.key] = l
 	}
 	want := map[string]string{"e0": "补", "e1": "补逐字", "e2": "留", "e3": "留", "e4": "换", "e5": "换"}
@@ -146,7 +170,7 @@ func TestShareEvalPlan(t *testing.T) {
 	if !got["e4"].found || got["e4"].before != "qq 900 分 逐行" || got["e5"].found || got["e5"].before != "qq 这一轮没找到 逐行" {
 		t.Errorf("现有那份这一轮的分数: %+v / %+v", got["e4"], got["e5"])
 	}
-	if n := songEvalChanges(shareEvalPlan(keys, entries, own, scored, &scored[0])); n != 3 {
+	if n := songEvalChanges(shareEvalPlan(keys, entries, own, scored, &scored[0], true)); n != 3 {
 		t.Errorf("换和补合计 %d,应为 3", n)
 	}
 
@@ -161,7 +185,7 @@ func TestShareEvalPlan(t *testing.T) {
 		{Lyrics: credits, LyricsSource: "qq"},
 	}
 	own2 := []*songPlanLyrics{{}, {}, {manual: true}, {}}
-	checkWhys(t, shareEvalPlan(keys2, entries2, own2, plain, &plain[0]), map[string]string{
+	checkWhys(t, shareEvalPlan(keys2, entries2, own2, plain, &plain[0], true), map[string]string{
 		"words": "留:" + songKeepWords, "timed": "留:" + songKeepTimed, "manual": "留:" + songKeepOwn, "credits": "换:"})
 
 	terms := []scoreTerm{{Kind: scoreTermTitleMatch, Points: 100}, {Kind: scoreTermConsensus, Points: 250}, {Kind: scoreTermDuration, Points: 100}}
@@ -185,7 +209,7 @@ func TestShareEvalPlan(t *testing.T) {
 		{Lyrics: champ + "\n", LyricsSource: "netease"},
 		{Lyrics: lrc("z"), LyricsYRC: "[0,500]z", LyricsSource: "kuwo"},
 	}
-	lines3 := shareEvalPlan(keys3, entries3, []*songPlanLyrics{{}, {}, {}, {}, {}}, full, &full[0])
+	lines3 := shareEvalPlan(keys3, entries3, []*songPlanLyrics{{}, {}, {}, {}, {}}, full, &full[0], true)
 	checkWhys(t, lines3, map[string]string{
 		"unscored": "留:" + songKeepUnscored, "lower": "换:", "stale": "换:", "shown": "留:" + songKeepShown, "wrong": "换:"})
 	for _, l := range lines3 {
@@ -214,6 +238,9 @@ func checkWhys(t *testing.T, lines []songEvalLine, want map[string]string) {
 // 正式空跑按存档重算:存档里有的组不联网、也不往存档里追加;拿去搜的是现有歌词最好的那条写法,时长取各写法的中位数;
 // 另一首歌的词标出来,留着的按原因计数;冠军只比多数那份高不到 30 分时另报留多数那份要动几条。
 func TestShareEvalReplay(t *testing.T) {
+	saved := features()
+	t.Cleanup(func() { setFeatures(saved) })
+	setFeatures(featureFlags{LyricsAutoUpgrade: true})
 	lrc := func(seed string) string { return songTestLRC(0, songTestWords(seed, 4)) }
 	cache := map[string]enrichEntry{
 		"A|Song|Album1": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}, Lyrics: lrc("a1"), LyricsSource: "qq"},

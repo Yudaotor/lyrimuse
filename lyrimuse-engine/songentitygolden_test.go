@@ -73,8 +73,9 @@ var songGoldenEntryKeys = []string{
 	"netease_url", "qq_music_url", "qq_album_mid",
 }
 
-// songGoldenEntryFieldsReplaced:建表读、但案例里换成摘好的结果存的条目字段(登记歌名、当前歌词候选的歌名)。
-var songGoldenEntryFieldsReplaced = map[string]bool{"LyricsDecision": true, "LyricsDecisionApplied": true}
+// songGoldenEntryFieldsReplaced:建表读、但案例里换成摘好的结果存的条目字段(登记歌名、当前歌词候选的歌名;同步写进来的
+// 副本存的是同步之前那份歌词,见 songOwnLyricsEntry)。
+var songGoldenEntryFieldsReplaced = map[string]bool{"LyricsDecision": true, "LyricsDecisionApplied": true, "LyricsEntityOrigin": true}
 
 // songGoldenCategories:每一类守什么,和案例体现它的判据。版本、删减版、无人声、歌词用词、歌词时间轴这几种否决
 // 本机数据里没有人判得清的案例,由 songentity_test.go、songentityevidence_test.go 的单测守。

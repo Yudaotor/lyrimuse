@@ -417,7 +417,7 @@ func (b *songEntityBuild) evaluateShareGroup(w io.Writer, ms []int, own []*songP
 		return
 	}
 	fmt.Fprintln(w, head+"这一轮冠军 "+songEvalDescribe(top))
-	lines := shareEvalPlan(keys, entries, groupOwn, scored, top)
+	lines := shareEvalPlan(keys, entries, groupOwn, scored, top, features().LyricsAutoUpgrade)
 	for _, l := range lines {
 		switch l.action {
 		case "补":
@@ -462,7 +462,7 @@ func (b *songEntityBuild) evaluateShareGroup(w io.Writer, ms []int, own []*songP
 		t.stableChanged += strict
 		return
 	}
-	n := songEvalChanges(shareEvalPlan(keys, entries, groupOwn, scored, stable))
+	n := songEvalChanges(shareEvalPlan(keys, entries, groupOwn, scored, stable, features().LyricsAutoUpgrade))
 	t.stableChanged += n
 	fmt.Fprintf(w, "  参照:冠军只比组里多数那份(%s)高 %d 分,留多数那份要动 %d 条(按冠军动 %d 条)\n", songEvalDescribe(stable), top.Score-stable.Score, n, strict)
 }

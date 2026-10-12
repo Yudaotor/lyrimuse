@@ -73,11 +73,16 @@ type songVariant struct {
 	albums               map[string]string // 平台 → 专辑 id;跟 ids 里同一平台的曲目 id 配对,给「同一张专辑里歌曲 id 不同」用
 	lyrics, yrc          string
 	lyricsSource         string
-	lyricsTrusted        bool
 	manual               bool
 	pinned               bool
 	// latest / applied:解析决策的两槽(只有顶层字段,候选明细在旁路文件里)。
 	latest, applied *lyricsDecision
+	// ev*:证据与否决看的那份歌词:这条写法自己得来的。歌词还是同步写进来的副本时换成同步之前那份(songUseOwnLyrics),
+	// 不然同一组同步之后两份一字不差,「两份歌词各自独立」那几样证据就没了,组和实体跟着拆开、来回翻(18 章决策 59)。
+	// lyrics / yrc / lyricsSource / applied 是现在这一份,同步规划、报告看它们。
+	evLyrics, evYRC, evSource string
+	evTrusted                 bool
+	evLatest, evApplied       *lyricsDecision
 
 	// 建表时按需算、算一次留着。
 	// registered:检索 id(「netease_song:<id>」)→ 平台给这个 id 登记的歌名;对不上号的不在里面。winnerTitle:当前这份
@@ -132,9 +137,7 @@ func songVariantOf(key string, e enrichEntry, pinned bool) songVariant {
 		applied:             e.LyricsDecisionApplied,
 	}
 	v.tailed = songFamilyTitle(core) != v.family
-	// 只有署名的歌词剥完不够 songLyricsMinTokens,到比对时自然不参与,这里不另判。
-	v.lyricsTrusted = strings.TrimSpace(e.Lyrics) != "" &&
-		(v.durationSecs <= 0 || v.resolvedSecs <= 0 || math.Abs(v.durationSecs-v.resolvedSecs) <= songLyricsTrustToleranceSecs)
+	v.setEvidenceLyrics(e)
 	v.ids = songVariantIDs(e, len(v.versionTags) == 0)
 	if s := strconv.FormatInt(motionCoverAlbumIDFromAppleURL(e.AppleURL), 10); s != "0" {
 		v.albums[songIDAppleSong] = s
@@ -191,6 +194,36 @@ func songVariantIDs(e enrichEntry, plainVersion bool) []songGradedID {
 	add(songIDNeteaseSong, neteaseSongIDFromURL(e.NeteaseURL), songIDSearched)
 	add(songIDQQSong, qqMidFromURL(e.QQURL), songIDSearched)
 	return out
+}
+
+// setEvidenceLyrics:证据看的那份歌词取自 e(e 是这条写法自己的,或者同步之前的留底)。只有署名的歌词剥完不够
+// songLyricsMinTokens,到比对时自然不参与,这里不另判。
+func (v *songVariant) setEvidenceLyrics(e enrichEntry) {
+	v.evLyrics, v.evYRC, v.evSource = e.Lyrics, e.LyricsYRC, e.LyricsSource
+	v.evLatest, v.evApplied = e.LyricsDecision, e.LyricsDecisionApplied
+	resolved := math.Max(e.ResolvedDurationSecs, 0)
+	v.evTrusted = strings.TrimSpace(e.Lyrics) != "" &&
+		(v.durationSecs <= 0 || resolved <= 0 || math.Abs(v.durationSecs-resolved) <= songLyricsTrustToleranceSecs)
+}
+
+// songUseOwnLyrics:证据看 key 这条写法自己得来的那份歌词(songOwnLyricsEntry)。
+func songUseOwnLyrics(v *songVariant, e enrichEntry) {
+	v.setEvidenceLyrics(songOwnLyricsEntry(v.key, e))
+}
+
+// songOwnLyricsEntry:e 的歌词还是同步写进来的那一份(手改副本、按组同步、跟着校准,有留底且指纹对得上)时,返回留底里同步
+// 之前那份(setEvidenceLyrics 读的几样换掉,其余照 e);不是副本、留底读不到、或者之后这条写法自己又换过词时原样返回 e。
+func songOwnLyricsEntry(key string, e enrichEntry) enrichEntry {
+	if e.LyricsEntityOrigin == "" && (e.LyricsDecisionApplied == nil || e.LyricsDecisionApplied.Path != lyricsDecisionPathSongEntityShare) {
+		return e
+	}
+	pre, ok := songShareRestorable(key, e)
+	if !ok {
+		return e
+	}
+	e.Lyrics, e.LyricsYRC, e.LyricsSource = pre.Lyrics, pre.LyricsYRC, pre.LyricsSource
+	e.LyricsDecision, e.LyricsDecisionApplied, e.ResolvedDurationSecs = pre.LyricsDecision, pre.LyricsDecisionApplied, pre.ResolvedDurationSecs
+	return e
 }
 
 // id:这条写法在某个命名空间下的 id(取第一个),没有返回空串。
@@ -338,10 +371,10 @@ func (v *songVariant) lyricsShingles() (songHashSet, songHashSet) {
 		return v.shingles, v.words
 	}
 	v.shinglesDone = true
-	if !v.lyricsTrusted || v.instrumental {
+	if !v.evTrusted || v.instrumental {
 		return nil, nil
 	}
-	tokens := songLyricsTokens(songLyricsBody(v.lyrics))
+	tokens := songLyricsTokens(songLyricsBody(v.evLyrics))
 	if len(tokens) < songLyricsMinTokens {
 		return nil, nil
 	}
@@ -353,8 +386,8 @@ func (v *songVariant) lyricsShingles() (songHashSet, songHashSet) {
 func (v *songVariant) displayedLines() []timelineLine {
 	if !v.timelineDone {
 		v.timelineDone = true
-		if v.lyricsTrusted && !v.instrumental {
-			v.timeline = displayedTimeline(v.lyrics, v.yrc)
+		if v.evTrusted && !v.instrumental {
+			v.timeline = displayedTimeline(v.evLyrics, v.evYRC)
 		}
 	}
 	return v.timeline
@@ -390,12 +423,12 @@ func (v *songVariant) loadDecisionTitles(dir string) {
 		return
 	}
 	v.titlesDone = true
-	if dir == "" || (v.latest == nil && v.applied == nil) {
+	if dir == "" || (v.evLatest == nil && v.evApplied == nil) {
 		return
 	}
 	pool := readDecisionSidecar(filepath.Join(dir, decisionSidecarName(v.key))).slots()
 	netease := map[string]bool{}
-	for _, d := range []*lyricsDecision{v.latest, v.applied} {
+	for _, d := range []*lyricsDecision{v.evLatest, v.evApplied} {
 		if det := resolveSlot(d, pool); det != nil {
 			for _, c := range det.Candidates {
 				if t := strings.TrimSpace(c.Title); c.Source == "netease" && t != "" {
@@ -409,7 +442,7 @@ func (v *songVariant) loadDecisionTitles(dir string) {
 			v.registered = map[string]string{songIDNeteaseSong + ":" + id: t}
 		}
 	}
-	if d := v.applied; d != nil && d.Winner != "" {
+	if d := v.evApplied; d != nil && d.Winner != "" {
 		if det := resolveSlot(d, pool); det != nil {
 			for _, c := range det.Candidates {
 				if c.Source == d.Winner {

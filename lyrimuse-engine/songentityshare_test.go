@@ -22,7 +22,10 @@ func setUpSongShareTest(t *testing.T, entries map[string]enrichEntry, on bool, p
 		t.Fatal(err)
 	}
 	t.Setenv("LYRIMUSE_CONFIG_DIR", dir)
-	setFeatures(featureFlags{SongEntityShadow: true, SongEntityShareLyrics: on})
+	setFeatures(featureFlags{SongEntityShadow: true, SongEntityShareLyrics: on, LyricsAutoUpgrade: true})
+	savedFlaps, savedStopped := songShareFlaps, songShareFlapStopped
+	t.Cleanup(func() { songShareFlaps, songShareFlapStopped = savedFlaps, savedStopped })
+	songShareFlaps, songShareFlapStopped = map[string][]time.Time{}, map[string]bool{}
 	pins := map[string]int64{}
 	for _, k := range pinned {
 		pins[k] = 1
@@ -149,7 +152,7 @@ func TestSongShareManualEdit(t *testing.T) {
 		t.Fatalf("开关关着不该同步: %+v", got)
 	}
 
-	setFeatures(featureFlags{SongEntityShadow: true, SongEntityShareLyrics: true})
+	setFeatures(featureFlags{SongEntityShadow: true, SongEntityShareLyrics: true, LyricsAutoUpgrade: true})
 	fixed := songShareLRC("fixed")
 	if res := save(a, fixed); !res.OK || res.Changed != 2 {
 		t.Fatalf("开关开着: %+v", res)
@@ -1134,5 +1137,177 @@ func TestSharePassKeepsInheritedCalibration(t *testing.T) {
 	}
 	if got, _ := cacheEntry(t, "Singer|Tune|Three"); got.Lyrics != champ {
 		t.Errorf("同组别的写法照换: %+v", got)
+	}
+}
+
+// 同步写进来的副本按同步之前那份歌词算证据:同一组同步之后两份一字不差,靠「两份歌词各自独立」连着的实体和组不拆;
+// 没有留底、或者之后这条写法自己又换过词时照旧按现在这份算。
+func TestSongEntityEvidenceUsesOwnLyricsOfSyncedCopies(t *testing.T) {
+	words := songTestWords("listen", 30)
+	la := songTestLRC(1000, words)
+	lb := la + "[05:00.00]extra closing line here\n"
+	const ka, kb = "Khalil Fong|Listen|Journey", "Khalil Fong|听|JTW"
+	own := enrichEntry{DurationSecs: 281.093, Lyrics: lb, LyricsSource: "kugou", ResolvedDurationSecs: 281.093}
+	synced := enrichEntry{DurationSecs: 281.093, Lyrics: la, LyricsSource: "kuwo", ResolvedDurationSecs: 281,
+		LyricsDecisionApplied: &lyricsDecision{Path: lyricsDecisionPathSongEntityShare, ReusedFrom: ka}}
+	cache := map[string]enrichEntry{
+		ka: {DurationSecs: 281, Lyrics: la, LyricsSource: "kuwo", ResolvedDurationSecs: 281},
+		kb: synced,
+	}
+	setUpSongShareTest(t, cache, true)
+	build := func() *songEntityBuild {
+		src := &songEntitySource{cache: cache}
+		return buildSongEntities(src.variants(songSortedKeys(cache)), nil, "")
+	}
+	together := func(b *songEntityBuild) bool {
+		return b.entityOf[0] == b.entityOf[1] && b.shareOf[0] == b.shareOf[1]
+	}
+	if together(build()) {
+		t.Fatal("没有留底时按现在这份算:两份一字不差、同一个源,不算独立,连不上(前提不成立,测试没意义)")
+	}
+	if _, err := writeSongSharePre(kb, own, songOffsetFingerprint(la, ""), time.Unix(6_000_000, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if !together(build()) {
+		t.Error("副本按同步之前那份算,同一首歌、同一组")
+	}
+	changed := synced
+	changed.Lyrics = la + "[05:10.00]own later edit line\n"
+	cache[kb] = changed
+	if b := build(); b.variants[1].evLyrics != changed.Lyrics {
+		t.Errorf("之后自己又换过词,按现在这份算: %q", b.variants[1].evLyrics)
+	}
+}
+
+// 只靠「两份歌词各自独立得来又对得上」连着的两条,一条手改:同步之后再建表、再同步,副本留着、不被恢复也不重抄(18 章决策 59
+// 修的那种来回翻:同步 → 旁证没了、组拆开 → 恢复 → 旁证回来 → 再同步)。
+func TestManualSyncStableAcrossRebuilds(t *testing.T) {
+	words := songTestWords("listen", 30)
+	const ka, kb = "Khalil Fong|Listen|Journey", "Khalil Fong|听|JTW"
+	la := songTestLRC(1000, words)
+	// 手改是在原词上改几行,正文大体还是那首歌的词。
+	mine := songTestLRC(1000, append(slices.Clone(words[:28]), "fixed line one here", "fixed line two here"))
+	savedSearch, savedWait := searchShareRound, songShareWait
+	t.Cleanup(func() { searchShareRound, songShareWait = savedSearch, savedWait })
+	songShareWait = func(context.Context, time.Duration) {}
+	searchShareRound = func(_ context.Context, key, artist, title, album string, dur float64) songShareRound {
+		return songShareRound{shareEvalRound: shareEvalRound{Key: key, Artist: artist, Title: title, Album: album, Duration: dur}, reached: true}
+	}
+	setUpSongShareTest(t, map[string]enrichEntry{
+		ka: {DurationSecs: 281, Lyrics: la, LyricsSource: "kuwo", ResolvedDurationSecs: 281},
+		kb: {DurationSecs: 281.093, Lyrics: la + "[05:00.00]extra closing line here\n", LyricsSource: "kugou", ResolvedDurationSecs: 281.093},
+	}, true)
+	ctx := context.Background()
+	runSongEntitySharePass(ctx, rebuildSongEntityTable(time.Now()))
+	if got, _ := cacheEntry(t, kb); got.Song == "" {
+		t.Fatal("前提:两条连成一首")
+	}
+	if res := applyEnrichEdit(enrichEditRequest{ID: "r", Op: "save_edit", Key: ka, Lyrics: mine, Source: "manual", MarkManual: true, YRC: strPtr("")}); !res.OK || res.Changed != 2 {
+		t.Fatalf("手改同步到同组: %+v", res)
+	}
+	for round := 1; round <= 3; round++ {
+		runSongEntitySharePass(ctx, rebuildSongEntityTable(time.Now()))
+		if got, _ := cacheEntry(t, kb); got.Lyrics != mine || got.LyricsEntityOrigin != ka {
+			t.Fatalf("第 %d 轮之后副本应当留着: %+v", round, got)
+		}
+	}
+}
+
+// 翻转保险:同步这一层在一个小时里自动改同一条写法到了上限,这个进程里不再自动改它;别的写法不受影响,过了窗口的旧记录不算。
+func TestSongShareFlapGuard(t *testing.T) {
+	setUpSongShareTest(t, nil, true)
+	t0 := time.Unix(6_000_000, 0)
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if !songShareAutoWriteAllowedLocked("old", t0) {
+		t.Fatal("第一次放行")
+	}
+	for i := 0; i < songShareFlapLimit; i++ {
+		if !songShareAutoWriteAllowedLocked("old", t0.Add(songShareFlapWindow+time.Duration(i)*time.Second)) {
+			t.Fatalf("窗口外的旧记录不算,第 %d 次应放行", i+1)
+		}
+	}
+	if songShareAutoWriteAllowedLocked("old", t0.Add(songShareFlapWindow+time.Minute)) {
+		t.Error("窗口里到了上限要停手")
+	}
+	if songShareAutoWriteAllowedLocked("old", t0.Add(10*songShareFlapWindow)) {
+		t.Error("停手之后这个进程里一直不改")
+	}
+	if !songShareAutoWriteAllowedLocked("other", t0) {
+		t.Error("别的写法不受影响")
+	}
+}
+
+// 翻转保险接在建表之后那一轮上:一条副本被自动改写到上限之后,那一轮不再改它;用户自己的保存照常同步。
+func TestShareManualPassStopsFlappingVersion(t *testing.T) {
+	fixed := songShareLRC("fixed")
+	setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One": {Song: "s_000000000001", Lyrics: fixed, LyricsSource: "manual", ManualLyrics: true},
+		"A|Song|Two": {Song: "s_000000000001", Lyrics: songShareLRC("b"), LyricsSource: "qq"},
+	}, true)
+	now := time.Unix(6_000_000, 0)
+	enrichMu.Lock()
+	songShareFlapStopped["A|Song|Two"] = true
+	changed, _ := shareManualLocked([]string{"A|Song|One", "A|Song|Two"}, "", nil, now)
+	enrichMu.Unlock()
+	if len(changed) != 0 {
+		t.Errorf("停手的写法建表之后那一轮不改: %v", changed)
+	}
+	again := songShareLRC("again")
+	if res := applyEnrichEdit(enrichEditRequest{ID: "r", Op: "save_edit", Key: "A|Song|One", Lyrics: again, Source: "manual", MarkManual: true, YRC: strPtr("")}); !res.OK || res.Changed != 2 {
+		t.Errorf("用户自己的保存照常同步: %+v", res)
+	}
+}
+
+// 关着「随匹配算法更新重新选择」时,跟着校准、跟上重新匹配都只补没词的,已经有词的不换。
+func TestShareFollowRespectsAutoUpgradeOff(t *testing.T) {
+	keys := []string{"A|Song|One", "A|Song|Two", "A|Song|Three"}
+	entries := map[string]enrichEntry{
+		keys[0]: {Song: "s_000000000001", Lyrics: songShareLRC("a"), LyricsSource: "qq"},
+		keys[1]: {Song: "s_000000000001", Lyrics: songShareLRC("b"), LyricsSource: "kugou"},
+		keys[2]: {Song: "s_000000000001"},
+	}
+	setUpSongShareTest(t, entries, true, keys[0])
+	setFeatures(featureFlags{SongEntityShadow: true, SongEntityShareLyrics: true})
+	b := &songEntityBuild{clusters: [][]int{{0, 1, 2}}, shareOf: []int{0, 0, 0}}
+	own := make([]*songPlanLyrics, len(keys))
+	for i, k := range keys {
+		b.variants = append(b.variants, songVariant{key: k})
+		e := entries[k]
+		own[i] = songPlanLyricsFor(k, e.Lyrics, e.LyricsYRC, e.LyricsSource, false, i == 0, nil, "")
+	}
+	content := map[string]string{keys[0]: songOffsetFingerprint(songShareLRC("a"), "")}
+	var tally songShareTally
+	b.sharePinnedPass(own, map[string]bool{keys[0]: true}, content, time.Unix(6_000_000, 0), &tally)
+	if got, _ := cacheEntry(t, keys[1]); got.Lyrics != songShareLRC("b") {
+		t.Errorf("跟着校准:有词的不换: %q", got.Lyrics)
+	}
+	if got, _ := cacheEntry(t, keys[2]); got.Lyrics != songShareLRC("a") {
+		t.Errorf("跟着校准:没词的照补: %q", got.Lyrics)
+	}
+	enrichMu.Lock()
+	e := enrichCache[keys[2]]
+	e.Lyrics, e.LyricsEntityOrigin, e.LyricsDecisionApplied = "", "", nil
+	enrichCache[keys[2]] = e
+	enrichMu.Unlock()
+	writeSongSharePins(t, map[string]string{})
+	if changed := shareFollowWriting(keys[0], time.Unix(6_000_100, 0)); !slices.Equal(changed, []string{keys[2]}) {
+		t.Errorf("跟上重新匹配:只补没词的那条: %v", changed)
+	}
+}
+
+// 跟上重新匹配只看本组有没有手改原件:同一首歌别的组有手改,不挡这一组跟上。
+func TestShareFollowIgnoresManualInOtherGroup(t *testing.T) {
+	keys := []string{"A|Song|One", "A|Song|Two", "A|Song|Three"}
+	setUpSongShareTest(t, map[string]enrichEntry{
+		keys[0]: {Song: "s_000000000001", Lyrics: songShareLRC("a"), LyricsSource: "qq"},
+		keys[1]: {Song: "s_000000000001", Lyrics: songShareLRC("b"), LyricsSource: "kugou"},
+		keys[2]: {Song: "s_000000000001", SongShare: 1, Lyrics: songShareLRC("m"), LyricsSource: "manual", ManualLyrics: true},
+	}, true)
+	if changed := shareFollowWriting(keys[0], time.Unix(6_000_000, 0)); !slices.Equal(changed, []string{keys[1]}) {
+		t.Errorf("本组跟上,别的组的手改不挡: %v", changed)
+	}
+	if got, _ := cacheEntry(t, keys[2]); got.Lyrics != songShareLRC("m") {
+		t.Errorf("别的组的手改不动: %q", got.Lyrics)
 	}
 }

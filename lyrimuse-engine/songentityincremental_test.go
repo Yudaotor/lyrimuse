@@ -218,6 +218,12 @@ func TestSongEntityPrintCoversVariantFields(t *testing.T) {
 			body := string(src)
 			i := strings.Index(body, "func "+fn+"(")
 			if i < 0 {
+				// 方法:func (v *songVariant) fn(
+				if loc := regexp.MustCompile(`func \([^)]*\) ` + fn + `\(`).FindStringIndex(body); loc != nil {
+					i = loc[0]
+				}
+			}
+			if i < 0 {
 				t.Fatalf("找不到 %s", fn)
 			}
 			body = body[i:]
@@ -230,7 +236,7 @@ func TestSongEntityPrintCoversVariantFields(t *testing.T) {
 		}
 		return out
 	}
-	used := read("songentityvariant.go", "songVariantOf", "songVariantIDs")
+	used := read("songentityvariant.go", "songVariantOf", "songVariantIDs", "setEvidenceLyrics", "songOwnLyricsEntry")
 	printed := read("songentityincremental.go", "songEntityPrintOf")
 	if len(used) < 10 {
 		t.Fatalf("没扫到字段: %v", used)
@@ -278,15 +284,15 @@ func TestSongEntityUpdatesAfterCacheSave(t *testing.T) {
 	for time.Now().Before(deadline) {
 		one, _ := cacheEntry(t, "A|Song|One")
 		two, _ := cacheEntry(t, "A|Song|Two")
+		// 先把 song 写回条目、落盘,再写实体表(决策 8):看到 song 之后实体表可能还差一拍,接着等。
 		if two.Song != "" && two.Song == one.Song {
-			if tbl := readSongEntityTable(songEntityTablePath()); tbl == nil || len(tbl.Songs[one.Song].Variants) != 2 {
-				t.Fatalf("实体表没跟上: %+v", tbl)
+			if tbl := readSongEntityTable(songEntityTablePath()); tbl != nil && len(tbl.Songs[one.Song].Variants) == 2 {
+				return
 			}
-			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("落盘之后没有增量重算")
+	t.Fatal("落盘之后没有增量重算(或实体表没跟上)")
 }
 
 // 增量重算的那一块跑同步时,不在这一块里的组的同步状态留着。

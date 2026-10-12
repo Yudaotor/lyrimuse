@@ -82,6 +82,7 @@ func songEntityPrintOf(e enrichEntry, pinned bool) songEntityPrint {
 	flag(e.ManualLyrics)
 	flag(pinned)
 	str(e.LyricsSource)
+	str(e.LyricsEntityOrigin)
 	for _, d := range [2]*lyricsDecision{e.LyricsDecision, e.LyricsDecisionApplied} {
 		flag(d != nil)
 		if d != nil {
@@ -121,7 +122,9 @@ type songEntitySource struct {
 func (s *songEntitySource) variants(keys []string) []songVariant {
 	vs := make([]songVariant, len(keys))
 	for i, k := range keys {
-		vs[i] = songVariantOf(k, s.cache[k], s.pins[k])
+		e := s.cache[k]
+		vs[i] = songVariantOf(k, e, s.pins[k])
+		songUseOwnLyrics(&vs[i], e)
 	}
 	if s.prepare != nil {
 		s.prepare(vs)

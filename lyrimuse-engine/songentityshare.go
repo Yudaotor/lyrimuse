@@ -250,6 +250,11 @@ func songShareCopyPinned(dst *enrichEntry, src enrichEntry, origin string, now t
 // 升成原件,其余照它同步;原件还在、却不在这个组里的副本(分到了别的组或别的实体),按留底恢复(releaseStaleCopiesLocked)。
 // 返回改了的写法。调用方持 enrichMu。
 func shareManualLocked(keys []string, from string, pins map[string]bool, now time.Time) (changed []string, conflict bool) {
+	// 建表之后那一轮(from 为空)是自动改写,过翻转保险;用户自己的保存、统一两份手改不算。
+	allow := func(string) bool { return true }
+	if from == "" {
+		allow = func(k string) bool { return songShareAutoWriteAllowedLocked(k, now) }
+	}
 	origin := from
 	if origin == "" {
 		contents := map[string]string{}
@@ -265,8 +270,8 @@ func shareManualLocked(keys []string, from string, pins map[string]bool, now tim
 		}
 		switch len(contents) {
 		case 0:
-			if origin = promoteOrphanCopyLocked(keys); origin == "" {
-				return releaseStaleCopiesLocked(keys), false
+			if origin = promoteOrphanCopyLocked(keys, allow); origin == "" {
+				return releaseStaleCopiesLocked(keys, allow), false
 			}
 			changed = append(changed, origin)
 		case 1:
@@ -287,7 +292,7 @@ func shareManualLocked(keys []string, from string, pins map[string]bool, now tim
 		if !ok || k == origin || songShareManualOriginal(e) || pins[k] || e.Instrumental {
 			continue
 		}
-		if songShareCopyCurrent(e, src, origin) {
+		if songShareCopyCurrent(e, src, origin) || !allow(k) {
 			continue
 		}
 		if _, err := writeSongSharePre(k, e, fp, now); err != nil {
@@ -302,8 +307,8 @@ func shareManualLocked(keys []string, from string, pins map[string]bool, now tim
 }
 
 // promoteOrphanCopyLocked:原件已经不在缓存里(被删了)的副本里挑键最小的一条升成原件,返回它;没有这种副本时返回空串。
-// 升上来的那条删掉留底:开关关掉时它留着用户的词,不恢复成同步之前的。调用方持 enrichMu。
-func promoteOrphanCopyLocked(keys []string) string {
+// 升上来的那条删掉留底:开关关掉时它留着用户的词,不恢复成同步之前的。allow 不让改的跳过。调用方持 enrichMu。
+func promoteOrphanCopyLocked(keys []string, allow func(key string) bool) string {
 	for _, k := range keys {
 		e := enrichCache[k]
 		if e.LyricsEntityOrigin == "" {
@@ -313,7 +318,7 @@ func promoteOrphanCopyLocked(keys []string) string {
 			continue
 		}
 		e.LyricsEntityOrigin = ""
-		if !songShareManualOriginal(e) {
+		if !songShareManualOriginal(e) || !allow(k) {
 			continue
 		}
 		enrichCache[k] = e
@@ -326,12 +331,12 @@ func promoteOrphanCopyLocked(keys []string) string {
 
 // releaseStaleCopiesLocked:keys 这个实体里已经没有手改原件,剩下的副本(原件还在、却改回了自动匹配,或者分到了别的实体)
 // 不再跟着谁:歌词还是同步写进去那份的按留底恢复、删掉留底;没有能用的留底时只去掉副本标记和手改标记,词留着、交回自动
-// 流程。返回改了的写法。调用方持 enrichMu。
-func releaseStaleCopiesLocked(keys []string) []string {
+// 流程。allow 不让改的跳过(nil 时都改)。返回改了的写法。调用方持 enrichMu。
+func releaseStaleCopiesLocked(keys []string, allow func(key string) bool) []string {
 	var changed []string
 	for _, k := range keys {
 		e := enrichCache[k]
-		if e.LyricsEntityOrigin == "" {
+		if e.LyricsEntityOrigin == "" || (allow != nil && !allow(k)) {
 			continue
 		}
 		if pre, ok := songShareRestorable(k, e); ok {
@@ -500,7 +505,7 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 	retry := !round.complete()
 	var targets []int
 	var created []string
-	for _, l := range shareEvalPlan(keys, snap, own, round.Scored, top) {
+	for _, l := range shareEvalPlan(keys, snap, own, round.Scored, top, features().LyricsAutoUpgrade) {
 		i := index[l.key]
 		switch {
 		case l.action == "留":
@@ -554,6 +559,9 @@ func applyShareRound(keys []string, own []*songPlanLyrics, snap []enrichEntry, s
 	changed := make([]string, 0, len(targets))
 	for _, i := range targets {
 		k := keys[i]
+		if !songShareAutoWriteAllowedLocked(k, now) {
+			continue
+		}
 		e := enrichCache[k]
 		dd := *d
 		if k != round.Key {
@@ -761,6 +769,43 @@ func runSongEntitySharePass(ctx context.Context, b *songEntityBuild) {
 		"stopped", t.stopped, "took", time.Since(start).Round(time.Second))
 }
 
+// songShareFlapLimit / songShareFlapWindow:同步这一层的自动改写(建表之后那一轮的手改同步与恢复、跟着校准、按组重搜、
+// 跟上重新匹配)在 songShareFlapWindow 里改同一条写法到了 songShareFlapLimit 次,就当它在来回翻:这个进程里不再自动改它,
+// 记一行警告。正常的同步一条写法一个小时里改不了几次;来回翻是证据跟着同步结果变的那类缺陷(18 章决策 59),
+// 不拦的话每次落盘后的增量重算都会再翻一次。用户自己的保存、统一两份手改、拆开、关开关恢复不算、也不挡。
+const (
+	songShareFlapLimit  = 6
+	songShareFlapWindow = time.Hour
+)
+
+// songShareFlaps / songShareFlapStopped:每条写法最近的自动改写时刻、已经停手的写法。持 enrichMu 读写。
+var (
+	songShareFlaps       = map[string][]time.Time{}
+	songShareFlapStopped = map[string]bool{}
+)
+
+// songShareAutoWriteAllowedLocked:同步这一层这一刻还能不能自动改 key;能就记下这一次。调用方持 enrichMu。
+func songShareAutoWriteAllowedLocked(key string, now time.Time) bool {
+	if songShareFlapStopped[key] {
+		return false
+	}
+	recent := songShareFlaps[key][:0]
+	for _, at := range songShareFlaps[key] {
+		if now.Sub(at) < songShareFlapWindow {
+			recent = append(recent, at)
+		}
+	}
+	if len(recent) >= songShareFlapLimit {
+		songShareFlapStopped[key] = true
+		delete(songShareFlaps, key)
+		slog.Warn("song entities: a version keeps being rewritten by sharing, leaving it alone for this run",
+			"key", key, "writes", len(recent), "window", songShareFlapWindow)
+		return false
+	}
+	songShareFlaps[key] = append(recent, now)
+	return true
+}
+
 // songShareFingerprints:keys 这几条写法现在的歌词指纹。
 func songShareFingerprints(keys []string) map[string]string {
 	out := make(map[string]string, len(keys))
@@ -902,6 +947,7 @@ func (b *songEntityBuild) sharePinnedGroup(ms []int, own []*songPlanLyrics, pins
 	if !ok || src.ManualLyrics || songSharePickHeld(src) || songOffsetFingerprint(src.Lyrics, src.LyricsYRC) != to.fp {
 		return nil, 0, false
 	}
+	upgrade := features().LyricsAutoUpgrade
 	for _, m := range ms {
 		k, cur := b.variants[m].key, own[m]
 		e, ok := enrichCache[k]
@@ -912,8 +958,12 @@ func (b *songEntityBuild) sharePinnedGroup(ms []int, own []*songPlanLyrics, pins
 		if fp == to.fp || (cur == nil) != (fp == "") || (cur != nil && cur.fp != fp) {
 			continue
 		}
-		if cur != nil && songPlanKeep(cur, to, false) != "" {
+		// 关着「随匹配算法更新重新选择」时已经有词的不换,只补没词的(18 章决策 59)。
+		if cur != nil && (!upgrade || songPlanKeep(cur, to, false) != "") {
 			kept++
+			continue
+		}
+		if !songShareAutoWriteAllowedLocked(k, now) {
 			continue
 		}
 		if _, err := writeSongSharePre(k, e, to.fp, now); err != nil {

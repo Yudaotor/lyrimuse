@@ -99,6 +99,7 @@ const (
 	songKeepShown       = "换过去屏上看不出差别"
 	songKeepTimed       = "有时间轴,换过去是纯文本"
 	songKeepInherited   = "读穿着同一首歌的校准"
+	songKeepNoUpgrade   = "关着「随匹配算法更新重新选择」"
 )
 
 // songPlanKeep:自动换成 to 时这条写法要不要留着自己那份(不变式 6 前四条),要留时返回原因。手改同步只看第一条。
@@ -203,7 +204,10 @@ type songEvalLine struct {
 // 播放器自家源加分选出来的。其余跟自动重评(rescoreLyricsWith)同一套:现有那份的来源这一轮没应答的比不了(rescoreDecidable),
 // 跟这一轮哪一份都对不上的另一首歌的词除外(rescoreCurrentContradicted);rescoreKeepsLyrics 判留的留。最后是有时间轴换成
 // 纯文本的,只有署名的不算。自动重评的判据直接调,不另抄一份。
-func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, scored []scoredLyricCandidateResult, choice *scoredLyricCandidateResult) []songEvalLine {
+// upgrade:「随匹配算法更新重新选择」开着(features().LyricsAutoUpgrade);关着时已经有词的不换(补逐字也不补),只补没词的
+// (18 章决策 59)。
+func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, scored []scoredLyricCandidateResult, choice *scoredLyricCandidateResult,
+	upgrade bool) []songEvalLine {
 	var out []songEvalLine
 	for i, e := range entries {
 		switch {
@@ -213,7 +217,7 @@ func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, 
 			out = append(out, songEvalLine{key: keys[i], action: "补"})
 			continue
 		case e.Lyrics == choice.Lyrics:
-			if gainsWordTiming(e, choice) {
+			if upgrade && gainsWordTiming(e, choice) {
 				out = append(out, songEvalLine{key: keys[i], action: "补逐字"})
 			}
 			continue
@@ -234,6 +238,8 @@ func shareEvalPlan(keys []string, entries []enrichEntry, own []*songPlanLyrics, 
 		switch {
 		case own[i] != nil && (own[i].manual || own[i].pinned):
 			why = songKeepOwn
+		case !upgrade:
+			why = songKeepNoUpgrade
 		case own[i] != nil && own[i].inherits:
 			why = songKeepInherited
 		case own[i] != nil && own[i].native:
