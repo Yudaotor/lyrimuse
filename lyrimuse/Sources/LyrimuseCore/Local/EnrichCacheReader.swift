@@ -487,6 +487,28 @@ public enum EnrichCacheReader {
 
     /// 按播放器报的三段取这首歌在单曲偏移上的其它写法(见 LyricsOffsetSiblings),匹配同 `lookup`。没有实体 id、开关关着、
     /// 缓存没加载好时是空的。
+    /// 同曲条目里其他条目的歌名、歌手(写法键前两段),给认歌词开头的抬头用(LRCParser.HeaderTags.aliases);没有实体 id 时是空的。
+    /// 最多取 maxHeaderAliases 组。
+    public static func headerAliases(artist: String, title: String, album: String) -> [LRCParser.HeaderIdentity] {
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard let song = currentEntry(key)?.song, !song.isEmpty, let all = loadEntries() else { return [] }
+        return headerAliases(song: song, ownKey: key, in: all)
+    }
+
+    static let maxHeaderAliases = 12
+
+    public nonisolated static func headerAliases(song: String, ownKey: String, in all: [String: EnrichCacheEntry]) -> [LRCParser.HeaderIdentity] {
+        var out: [LRCParser.HeaderIdentity] = []
+        for k in all.compactMap({ $0.value.song == song && $0.key != ownKey ? $0.key : nil }).sorted() {
+            let parts = k.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+            guard parts.count == 3 else { continue }
+            let identity = LRCParser.HeaderIdentity(title: parts[1], artist: parts[0])
+            if !identity.title.isEmpty, !identity.artist.isEmpty, !out.contains(identity) { out.append(identity) }
+            if out.count == maxHeaderAliases { break }
+        }
+        return out
+    }
+
     public static func offsetSiblings(artist: String, title: String, album: String) -> LyricsOffsetSiblings {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         guard inheritsEntityOffsets, let entry = currentEntry(key), let all = loadEntries() else { return .none }

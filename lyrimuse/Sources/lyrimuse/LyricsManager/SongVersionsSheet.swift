@@ -773,14 +773,22 @@ struct SongVersionsSheet: View {
             refresh(first.rows.map(\.key) + first.splits.flatMap(\.mergeKeys))
         }
         let listing = SongVersions.listing(key: key, memberships: memberships, edges: edges, splits: splits)
+        // 这首歌各条目的歌名、歌手都拿来认歌词开头的抬头(跟歌词窗口同一套,见 EnrichCacheReader.headerAliases)。
+        var aliases: [LRCParser.HeaderIdentity] = []
+        for s in ([key] + (listing?.rows.map(\.key) ?? [])).compactMap(store.summary(forKey:)) {
+            let identity = LRCParser.HeaderIdentity(title: s.title, artist: s.artist)
+            if !aliases.contains(identity) { aliases.append(identity) }
+        }
         var out: [Version] = []
-        if let current = makeVersion(key, .current, mergeKeys: [], against: nil) {
+        if let current = makeVersion(key, .current, mergeKeys: [], against: nil, aliases: aliases) {
             out.append(current)
             for row in listing?.rows ?? [] {
-                if let v = makeVersion(row.key, row.sharesLyrics ? .shared : .own, mergeKeys: [], against: current) { out.append(v) }
+                if let v = makeVersion(row.key, row.sharesLyrics ? .shared : .own, mergeKeys: [], against: current, aliases: aliases) {
+                    out.append(v)
+                }
             }
             for split in listing?.splits ?? [] {
-                if let v = makeVersion(split.key, .split, mergeKeys: split.mergeKeys, against: current) { out.append(v) }
+                if let v = makeVersion(split.key, .split, mergeKeys: split.mergeKeys, against: current, aliases: aliases) { out.append(v) }
             }
         }
         self.edges = edges
@@ -788,7 +796,8 @@ struct SongVersionsSheet: View {
         loaded = true
     }
 
-    private func makeVersion(_ key: String, _ relation: Relation, mergeKeys: [String], against current: Version?) -> Version? {
+    private func makeVersion(_ key: String, _ relation: Relation, mergeKeys: [String], against current: Version?,
+                             aliases: [LRCParser.HeaderIdentity]) -> Version? {
         guard let s = store.summary(forKey: key), let facts = store.versionFacts(forKey: key) else { return nil }
         var features: [String] = []
         if s.hasLyrics {
@@ -798,8 +807,8 @@ struct SongVersionsSheet: View {
         }
         if s.hasTranslation { features.append(L10n.t("译文")) }
         if s.hasRomanization { features.append(L10n.t("读音")) }
-        let shownLines = SongVersions.displayedLines(facts.lyrics, title: s.title, artist: s.artist)
-        let shownWords = SongVersions.displayedLines(facts.yrc, title: s.title, artist: s.artist, wordTimed: true)
+        let shownLines = SongVersions.displayedLines(facts.lyrics, title: s.title, artist: s.artist, aliases: aliases)
+        let shownWords = SongVersions.displayedLines(facts.yrc, title: s.title, artist: s.artist, aliases: aliases, wordTimed: true)
         let same: Bool
         if let current {
             same = facts.complete && current.lyricsKnown && !shownLines.isEmpty

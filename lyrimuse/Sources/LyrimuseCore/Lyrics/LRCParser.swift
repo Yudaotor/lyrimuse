@@ -57,8 +57,22 @@ public enum LRCParser {
     public struct HeaderTags: Equatable, Sendable {
         public var title: String
         public var artist: String
+        /// 这首歌的别的写法(同曲条目里其他条目的歌名、歌手),认抬头时也当这首的歌名、歌手(见 LyricsSyncEngine.headerIdentities)。
+        public var aliases: [HeaderIdentity]
 
-        public init(title: String = "", artist: String = "") {
+        public init(title: String = "", artist: String = "", aliases: [HeaderIdentity] = []) {
+            self.title = title
+            self.artist = artist
+            self.aliases = aliases
+        }
+    }
+
+    /// 一组歌名、歌手。
+    public struct HeaderIdentity: Equatable, Hashable, Sendable {
+        public var title: String
+        public var artist: String
+
+        public init(title: String, artist: String) {
             self.title = title
             self.artist = artist
         }

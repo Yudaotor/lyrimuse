@@ -895,15 +895,20 @@ public final class LyricsSyncEngine {
             .contains { looksLikeLabeledHeaderLine(text, trackTitle: $0.title, trackArtist: $0.artist) }
     }
 
-    /// 播放器报的和歌词标签里的歌名、歌手两两搭配;空的、重复的不算。
+    /// 播放器报的和歌词标签里的歌名、歌手两两搭配,再加上这首歌别的写法(`tags.aliases`,成组用、不跟别的搭配:同曲条目里
+    /// 「方大同 - 诗人的情人」认得出 Amazon 报「Khalil Fong - The Poet's Lover」那条的中文抬头);空的、重复的不算。判据本身
+    /// (形状、等值、长度下限)不因为多几组候选放宽。
     private static func headerIdentities(trackTitle: String, trackArtist: String,
                                          tags: LRCParser.HeaderTags) -> [(title: String, artist: String)] {
         var out: [(title: String, artist: String)] = []
-        for title in [trackTitle, tags.title] where !title.isEmpty {
-            for artist in [trackArtist, tags.artist] where !artist.isEmpty {
-                if !out.contains(where: { $0.title == title && $0.artist == artist }) { out.append((title, artist)) }
-            }
+        func add(_ title: String, _ artist: String) {
+            guard !title.isEmpty, !artist.isEmpty, !out.contains(where: { $0.title == title && $0.artist == artist }) else { return }
+            out.append((title, artist))
         }
+        for title in [trackTitle, tags.title] {
+            for artist in [trackArtist, tags.artist] { add(title, artist) }
+        }
+        for alias in tags.aliases { add(alias.title, alias.artist) }
         return out
     }
 
@@ -1617,6 +1622,7 @@ public final class LyricsSyncEngine {
     private struct LoadFingerprint: Equatable {
         let lyrics, lyricsTr, lyricsRoma, lyricsYRC, lyricsBG: String
         let trackTitle, trackArtist: String
+        let headerAliases: [LRCParser.HeaderIdentity]
         let romanizationScripts: RomanizationScripts
         let songIsCantonese: Bool
         let songIsHokkien: Bool
@@ -1636,13 +1642,13 @@ public final class LyricsSyncEngine {
     @discardableResult
     public func load(
         lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String, lyricsBG: String = "",
-        trackTitle: String = "", trackArtist: String = "",
+        trackTitle: String = "", trackArtist: String = "", headerAliases: [LRCParser.HeaderIdentity] = [],
         romanizationScripts: RomanizationScripts = .default, songIsCantonese: Bool = false,
         songIsHokkien: Bool = false, lineBreaks: LineBreakOptions = .off
     ) -> Bool {
         let fingerprint = LoadFingerprint(
             lyrics: lyrics, lyricsTr: lyricsTr, lyricsRoma: lyricsRoma, lyricsYRC: lyricsYRC, lyricsBG: lyricsBG,
-            trackTitle: trackTitle, trackArtist: trackArtist,
+            trackTitle: trackTitle, trackArtist: trackArtist, headerAliases: headerAliases,
             romanizationScripts: romanizationScripts, songIsCantonese: songIsCantonese,
             songIsHokkien: songIsHokkien, lineBreaks: lineBreaks)
         if fingerprint == loadedFingerprint { return false }
@@ -1690,7 +1696,8 @@ public final class LyricsSyncEngine {
         // 正文两条路径(整行 / 逐字)各自认出来的演唱者标签的并集,下面剥译文和罗马音用。
         var allSpeakers = baseSpeakers
         // 抬头里的歌名 / 歌手也认这份歌词自己的 [ti:] / [ar:](整行那份优先,缺的从逐字那份补)。
-        let lrcHeaderTags = LRCParser.headerTags(lyrics, lyricsYRC)
+        var lrcHeaderTags = LRCParser.headerTags(lyrics, lyricsYRC)
+        lrcHeaderTags.aliases = headerAliases
         let baseDrop = Self.strippingCreditLines(
             baseTexts, trackTitle: trackTitle, trackArtist: trackArtist, tags: lrcHeaderTags,
             speakerExemptions: baseSpeakers)

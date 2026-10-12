@@ -4586,9 +4586,11 @@ public final class LocalPlaybackSource: ObservableObject {
             lyricsRoma: found?.lyricsRoma ?? "",
             lyricsYRC: variant.converted(JapaneseKanjiRepair.repair(rawYRC, japaneseSong: japaneseSong)),
             lyricsBG: variant.converted(HanCompatibility.normalized(found?.lyricsBG ?? "")),
-            // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine。
+            // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine;同曲条目里别的写法的歌名、歌手也算。
             trackTitle: snapshot.title ?? "",
             trackArtist: snapshot.artist ?? "",
+            headerAliases: EnrichCacheReader.headerAliases(
+                artist: snapshot.artist ?? "", title: snapshot.title ?? "", album: snapshot.album ?? ""),
             romanizationScripts: romanizationScripts,
             songIsCantonese: found?.isCantonese ?? false,
             songIsHokkien: found?.isHokkien ?? false,

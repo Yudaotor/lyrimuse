@@ -183,14 +183,18 @@ extension SongVersions {
     }
 
     /// 一份歌词里会显示出来的行:去掉开头的抬头(「歌名 - 歌手」)、署名和声明这类行,跟歌词窗口同一套过滤
-    /// (LyricsSyncEngine.creditLineDropDecisions;title / artist 是这条写法的歌名、歌手,认抬头用),再去掉空行。wordTimed 时
-    /// text 是逐字歌词,先摊成每行「行首时间 + 这一行的字」(LyricsWordTimingEdit.editableText)再过滤。
-    public static func displayedLines(_ text: String, title: String, artist: String, wordTimed: Bool = false) -> [LyricLine] {
+    /// (LyricsSyncEngine.creditLineDropDecisions;title / artist 是这条写法的歌名、歌手,aliases 是同曲条目里别的写法的,都拿来
+    /// 认抬头),再去掉空行。wordTimed 时 text 是逐字歌词,先摊成每行「行首时间 + 这一行的字」(LyricsWordTimingEdit.editableText)
+    /// 再过滤。
+    public static func displayedLines(_ text: String, title: String, artist: String, aliases: [LRCParser.HeaderIdentity] = [],
+                                      wordTimed: Bool = false) -> [LyricLine] {
         let lrc = wordTimed ? LyricsWordTimingEdit.editableText(yrc: text) : text
         let parsed = LRCParser.parse(lrc)
         let texts = parsed.map(\.text)
+        var tags = LRCParser.headerTags(text)
+        tags.aliases = aliases
         let drop = LyricsSyncEngine.creditLineDropDecisions(
-            texts, trackTitle: title, trackArtist: artist, tags: LRCParser.headerTags(text),
+            texts, trackTitle: title, trackArtist: artist, tags: tags,
             speakerExemptions: LyricDuet.speakers(in: texts))
         return zip(parsed, drop).compactMap { line, dropped in
             dropped || line.text.trimmingCharacters(in: .whitespaces).isEmpty ? nil : line

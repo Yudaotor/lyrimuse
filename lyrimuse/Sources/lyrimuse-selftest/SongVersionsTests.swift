@@ -131,6 +131,21 @@ func runSongVersionsTests() {
         let sx = V.displayedLines(x, title: "偷笑", artist: "方大同"), sy = V.displayedLines(y, title: "偷笑", artist: "Khalil Fong")
         expectEqual(sx.map(\.text), ["第一句歌词在这里", "第二句歌词在这里"], "逐句对照: 抬头、署名不算")
         expectEqual(sx == sy && V.lyricDiff(current: sx, other: sy).differentLines == 0, true, "逐句对照: 只差抬头、署名的两份算一样")
+        // 抬头写的是同曲条目里另一个条目的歌名、歌手(播放器报英文名,歌词抬头写中文名):带上别的条目的写法才认得出。
+        let poet = "[00:06.00]诗人的情人 - 方大同\n[00:09.92]缠绵是首诗\n[00:13.42]很容易迷失\n"
+        expectEqual(V.displayedLines(poet, title: "The Poet's Lover", artist: "Khalil Fong").first?.text, "诗人的情人 - 方大同",
+                    "逐句对照: 只认这条自己的歌名歌手时,中文抬头认不出")
+        expectEqual(V.displayedLines(poet, title: "The Poet's Lover", artist: "Khalil Fong",
+                                     aliases: [LRCParser.HeaderIdentity(title: "诗人的情人", artist: "方大同")]).map(\.text),
+                    ["缠绵是首诗", "很容易迷失"], "逐句对照: 同曲条目里别的写法的歌名歌手也认抬头")
+        expectEqual(V.displayedLines(poet, title: "The Poet's Lover", artist: "Khalil Fong",
+                                     aliases: [LRCParser.HeaderIdentity(title: "缠绵是首诗", artist: "方大同")]).count, 3,
+                    "逐句对照: 别的写法也要歌名歌手两段都对上才删")
+        func entry(_ json: String) -> EnrichCacheEntry { try! JSONDecoder().decode(EnrichCacheEntry.self, from: Data(json.utf8)) }
+        let all = ["Khalil Fong|The Poet's Lover|This Love": entry(#"{"song":"s_1"}"#), "方大同|诗人的情人|爱爱爱": entry(#"{"song":"s_1"}"#),
+                   "方大同|诗人的情人|愛愛愛": entry(#"{"song":"s_1"}"#), "别人|别的歌|": entry(#"{"song":"s_2"}"#)]
+        expectEqual(EnrichCacheReader.headerAliases(song: "s_1", ownKey: "Khalil Fong|The Poet's Lover|This Love", in: all),
+                    [LRCParser.HeaderIdentity(title: "诗人的情人", artist: "方大同")], "逐句对照: 同曲条目的歌名歌手按写法键取、不含自己、去重")
     }
 
     // ---- 两个文件:实体表按含这条写法的那首取证据,用户判断文件取拆开记录;缺了坏了都是空 ----
@@ -196,6 +211,7 @@ func runSongVersionsTests() {
                     && sourceBytes(edit, contain: "case \"unsplit_song\":"), true,
                     "其他写法(契约): 拆开、恢复合并的请求跟引擎同名,参数用 keys")
         let manager = read(sources, "lyrimuse/LyricsManager/LyricsManagerView.swift")
+        let playback = read(sources, "LyrimuseCore/Local/LocalPlaybackSource.swift")
         // 手改副本不算原件:「手动调整」筛选与删除确认只数原件,副本单独标;偏移借来的值标出借的是哪条(18 章决策 30)。
         let parts = read(sources, "lyrimuse/LyricsManager/LyricsManagerParts.swift")
         expectEqual(sourceBytes(manager, contain: "LyricsManagerStatus.Facts(kind: kind, isManual: s.isManualOriginal,")
@@ -229,7 +245,8 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "case .own: return L10n.t(\"独立匹配\")")
                     && sourceBytes(sheet, contain: "case .split: return L10n.t(\"已拆分\")")
                     && sourceBytes(sheet, contain: "let diff = SongVersions.lyricDiff(current: c.shownLines, other: v.shownLines)")
-                    && sourceBytes(sheet, contain: "&& shownLines == current.shownLines && shownWords == current.shownWords"), true,
+                    && sourceBytes(sheet, contain: "&& shownLines == current.shownLines && shownWords == current.shownWords")
+                    && sourceBytes(playback, contain: "headerAliases: EnrichCacheReader.headerAliases("), true,
                     "其他写法(契约): 收录的播放器、三种关系、逐句对照接上")
         let rematchEngine = read(engine, "lyricsrematch.go")
         expectEqual(sourceBytes(manager, contain: "let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)")
