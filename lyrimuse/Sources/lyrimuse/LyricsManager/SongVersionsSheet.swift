@@ -159,8 +159,7 @@ struct SongVersionsSheet: View {
             selected = v.key
         } label: {
             HStack(spacing: 8) {
-                playerIcon(v.players.first)
-                    .frame(width: 22, height: 22)
+                playerIcons(v, size: 22)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
                         Text(v.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
@@ -361,8 +360,7 @@ struct SongVersionsSheet: View {
         } label: {
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
-                    playerIcon(v.players.first)
-                        .frame(width: 18, height: 18)
+                    playerIcons(v, size: 18)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(v.title).lineLimit(1)
                         Text([v.artist, v.album].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -683,6 +681,21 @@ struct SongVersionsSheet: View {
         return v.playersInferred ? String(format: L10n.t("%@（推断）"), names) : names
     }
 
+    /// 这条记录过的播放器,最多叠三个图标(正在放这条的那个排最前,见 makeVersion);一个都没有时是问号。
+    private func playerIcons(_ v: Version, size: CGFloat) -> some View {
+        let ids: [String?] = v.players.isEmpty ? [nil] : v.players.prefix(3).map { $0 }
+        let step = (size * 0.45).rounded()
+        return ZStack(alignment: .leading) {
+            ForEach(Array(ids.enumerated()).reversed(), id: \.offset) { index, id in
+                playerIcon(id)
+                    .frame(width: size, height: size)
+                    .offset(x: CGFloat(index) * step)
+            }
+        }
+        .frame(width: size + step * 2, height: size, alignment: .leading)
+        .help(playersText(v))
+    }
+
     @ViewBuilder
     private func playerIcon(_ bundleID: String?) -> some View {
         if let bundleID, let image = AppIconResolver.icon(forBundleID: bundleID)
@@ -816,8 +829,16 @@ struct SongVersionsSheet: View {
         } else {
             same = true
         }
+        // 正在放的就是这条时,当前这个播放器排最前(引擎按第一次放的先后记)。
+        var players = facts.players
+        let playback = PlaybackCoordinator.shared
+        if let bundle = playback.resolvedPlayerBundleID, !playback.title.isEmpty,
+           EnrichCacheKeys.normalizedKey(artist: playback.artist, title: playback.title, album: playback.album) == key {
+            players.removeAll { $0 == bundle }
+            players.insert(bundle, at: 0)
+        }
         return Version(key: key, relation: relation, title: s.shownTitle, artist: s.shownArtist, album: s.displayAlbum,
-                       players: facts.players, playersInferred: facts.playersInferred, durationSecs: facts.durationSecs,
+                       players: players, playersInferred: facts.playersInferred, durationSecs: facts.durationSecs,
                        source: s.lyricsSource, score: facts.score, features: features,
                        lyrics: facts.lyrics, yrc: facts.yrc, shownLines: shownLines, shownWords: shownWords,
                        lyricsKnown: facts.complete, sameLyrics: same, mergeKeys: mergeKeys)

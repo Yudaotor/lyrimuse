@@ -246,7 +246,9 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "case .split: return L10n.t(\"已拆分\")")
                     && sourceBytes(sheet, contain: "let diff = SongVersions.lyricDiff(current: c.shownLines, other: v.shownLines)")
                     && sourceBytes(sheet, contain: "&& shownLines == current.shownLines && shownWords == current.shownWords")
-                    && sourceBytes(playback, contain: "headerAliases: EnrichCacheReader.headerAliases("), true,
+                    && sourceBytes(playback, contain: "headerAliases: EnrichCacheReader.headerAliases(")
+                    && sourceBytes(sheet, contain: "playerIcons(v, size: 22)") && sourceBytes(sheet, contain: "playerIcons(v, size: 18)")
+                    && sourceBytes(sheet, contain: "players.insert(bundle, at: 0)"), true,
                     "其他写法(契约): 收录的播放器、三种关系、逐句对照接上")
         let rematchEngine = read(engine, "lyricsrematch.go")
         expectEqual(sourceBytes(manager, contain: "let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)")
