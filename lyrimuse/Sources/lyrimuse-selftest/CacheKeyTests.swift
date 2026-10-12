@@ -74,6 +74,24 @@ func runCacheKeyTests() {
         expectEqual(adopted.map { EnrichCacheSlim.isSlim($0) }, false, "精简条目: 补完去掉校验值标记")
         expectEqual(adopted?["cover_url"] as? String, "https://x/c.jpg", "精简条目: 元数据以条目为准")
 
+        // 正在播那首的单条快照:比整份缓存新才并进「歌词管理」,整份写完之后它就不算数(PlayingEntrySnapshot)。
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        expectEqual(PlayingEntrySnapshot.supersedes(snapshotMTime: t0.addingTimeInterval(1), cacheMTime: t0), true,
+                    "单条快照: 比整份缓存新(整份还攒着没落盘)才并进来")
+        expectEqual(PlayingEntrySnapshot.supersedes(snapshotMTime: t0, cacheMTime: t0.addingTimeInterval(1)), false,
+                    "单条快照: 整份写完之后不盖住它")
+        expectEqual(PlayingEntrySnapshot.supersedes(snapshotMTime: t0, cacheMTime: t0), false, "单条快照: 同一刻不算新")
+        expectEqual(PlayingEntrySnapshot.supersedes(snapshotMTime: nil, cacheMTime: t0)
+                    || PlayingEntrySnapshot.supersedes(snapshotMTime: t0, cacheMTime: nil), false, "单条快照: 读不到时间不并")
+        let snapURL = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-playing-entry-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: snapURL) }
+        try? Data(#"{"key":"KUN|Deadman|Deadman","entry":{"lyrics":"[00:01.00]x","lyrics_source":"kugou","ts":1}}"#.utf8).write(to: snapURL)
+        let playing = PlayingEntrySnapshot.read(at: snapURL)
+        expectEqual(playing?.key, "KUN|Deadman|Deadman", "单条快照: 读出 key")
+        expectEqual(playing?.entry["lyrics_source"] as? String, "kugou", "单条快照: 条目原样交出")
+        try? Data(#"{"key":"","entry":{}}"#.utf8).write(to: snapURL)
+        expectEqual(PlayingEntrySnapshot.read(at: snapURL) == nil, true, "单条快照: 没有 key 不算")
+
         // 列表摘要建好之后主歌词也拿掉,只留标记;点开时连主歌词一起从小文件补回(见 11 章决策 93)。
         var snap: [String: [String: Any]] = ["slim": slim, "picked": slim.merging(["manual_pick_sha": "abc"]) { $1 },
                                              "bare": bare, "noLyrics": EnrichCacheSlim.slim(["lyrics_tr": "[00:01.00]t"])]
