@@ -1328,7 +1328,8 @@ public enum MediaControlClient {
     }
 
     /// 控制所需的回退目标与保护状态在同一次读取里取出,避免拼接不同轮询拍的值。
-    /// Kaset 顶替和会话保持仍按各自已有的锁读取;只有回退状态允许 QQ 定向控制。
+    /// Kaset 顶替和会话保持仍按各自已有的锁读取。`directQueryTarget` 是能定向按菜单的那个播放器:直查回退问到的,
+    /// 或者屏上这首是它会话被撤后保持出来的(这时系统焦点空着或在别人手里,屏上这首仍是它在放)。
     public static func focusControlContext() -> (scriptTarget: PlaybackPlayer?, directQueryTarget: PlaybackPlayer?, heldElsewhere: Bool) {
         kasetLock.lock()
         let kasetPreferred = kasetPreferredOver != nil
@@ -1341,8 +1342,10 @@ public enum MediaControlClient {
         appleMusicFocusLock.unlock()
         gapHoldLock.lock()
         let heldElsewhere = viaProbe || holdingDroppedSession
+        let droppedSessionPlayer = holdingDroppedSession
+            ? PlaybackPlayer.builtin(forBundleID: gapHoldLast?.snapshot.bundleIdentifier) : nil
         gapHoldLock.unlock()
-        return (kasetPreferred ? .kaset : scriptTarget, directQueryTarget, heldElsewhere)
+        return (kasetPreferred ? .kaset : scriptTarget, directQueryTarget ?? droppedSessionPlayer, heldElsewhere)
     }
 
     /// 回退查询失败只关闭读取开关,不证明焦点恢复。targetGone 由被接受的快照清零;

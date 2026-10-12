@@ -10,13 +10,13 @@ import Foundation
 public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashable {
     /// 系统自带,走 AppleScript(JXA)直问 Music.app,因此要一份「自动化」权限;scrobbleLabel 同时是 mediaPlayerLabel 认不出来源时的兜底值。
     case appleMusic = "apple_music"
-    /// 无 AppleScript 字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),走 media-control;读数整秒下取整 + ±1~1.5s 抖动。随机 / 循环走它菜单栏「播放控制 → 播放模式」(QQMusicMenuControl),所以要辅助功能权限。
+    /// 无 AppleScript 字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),走 media-control;读数整秒下取整 + ±1~1.5s 抖动。随机 / 循环走它菜单栏「播放控制 → 播放模式」(QQMusicMenuControl),所以要辅助功能权限;失焦时播放 / 暂停、上一首、下一首也按这个菜单里的项(PlaybackMenuControl)。
     case qqMusic = "qq_music"
-    /// 同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。失焦时三项播放控制走自身「控制」菜单(PlaybackMenuControl),需要辅助功能权限；不接失焦 seek 或模式/喜欢键。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。
+    /// 同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。失焦时三项播放控制走自身「控制」菜单(PlaybackMenuControl),需要辅助功能权限;「喜欢」也按同一菜单里的「喜欢歌曲」(NetEaseMenuControl)。不接失焦 seek,没有模式键。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。
     case netease = "netease_music"
-    /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。
+    /// Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。「喜欢」按它菜单栏的「喜欢歌曲」、读播放条那颗心(KugouMenuControl),所以要辅助功能权限。
     case kugou = "kugou_music"
-    /// Electron 应用,走 media-control。只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。
+    /// Electron 应用,走 media-control。只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。「喜欢」读、按底部播放条那颗心(SodaMusicFavoriteControl),所以要辅助功能权限。
     case soda = "soda_music"
     /// Electron 应用,走 media-control,没有 AppleScript 字典、没有沙盒。播放中约每 1.06 秒重发一次锚点,位置精确到微秒、跟墙钟一致(实测 92 秒累计偏差 0.8 毫秒),归 cleanExtrapolated —— 跟它此前作为信任播放器走的是同一档,内置化不改变位置行为。开播先发一帧只有歌名的(歌手空、时长 0、rate 0),约半秒后才补齐,所以 artistArrivesLate;开播那个 0 锚点没见过原样重发。切歌时会先撤掉 Now Playing(多数 4~5 秒,刚开播一张专辑后的第一次切歌实测有过 19 秒),暂停着点开新列表加载时也撤,所以 dropsSessionBetweenTracks。歌手名取每首歌自己的 artist_roles,同一个歌手也时有时无括号里的译名(`Taylor Swift` / `Taylor Swift (泰勒絲)`、`周杰倫` / `周杰倫 (Jay Chou)`)。nativeLyricSource 填 kkbox:不是歌词源(接入走不通,见 kkboxlyrics.go 头注),是用它放歌时读它自己缓存里的那份歌词,享受同源加权。processName 5 字节。
     case kkbox = "kkbox"
@@ -113,6 +113,8 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         switch self {
         case .qqMusic: return true
         case .netease: return true
+        case .kugou: return true
+        case .soda: return true
         case .amazonMusic: return true
         default: return false
         }

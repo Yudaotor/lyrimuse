@@ -169,24 +169,43 @@ func runPlayerIdentityTests() {
                         focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command),
                         Route.withheld, "失焦: \(player) \(command) 没有菜单通路,不能控到 Safari")
                 }
-                for title in ["播放", "暂停"] {
-                    expectEqual(Command.playPause.matches(menuTitle: title, for: player), true, "菜单 toggle: \(player) \(title)")
+                let title = { PlaybackMenuControl.command(forMenuTitle: $0, player: player) }
+                for t in ["播放", "暂停"] {
+                    expectEqual(title(t), Command.playPause, "菜单 toggle: \(player) \(t)")
                 }
                 let next = player == .qqMusic ? "下一首" : "下一个"
                 let previous = player == .qqMusic ? "上一首" : "上一个"
-                expectEqual(Command.nextTrack.matches(menuTitle: next, for: player), true, "next 精确菜单项")
-                expectEqual(Command.previousTrack.matches(menuTitle: previous, for: player), true, "previous 精确菜单项")
-                expectEqual(Command.nextTrack.matches(menuTitle: previous, for: player), false, "next 不混用 previous")
-                expectEqual(Command.playPause.matches(menuTitle: "播放模式", for: player), false, "toggle 不做含糊前缀匹配")
-                expectEqual(Command.nextTrack.matches(menuTitle: player == .qqMusic ? "下一个" : "下一首", for: player), false,
-                            "不同来源不混用菜单标题")
+                expectEqual(title(next), Command.nextTrack, "next 精确菜单项")
+                expectEqual(title(previous), Command.previousTrack, "previous 精确菜单项")
+                expectEqual(title("播放模式"), nil, "toggle 不做含糊前缀匹配")
+                expectEqual(title(player == .qqMusic ? "下一个" : "下一首"), nil, "不同来源不混用菜单标题")
             }
+            expectEqual(PlaybackMenuControl.command(forMenuTitle: "暫停", player: .qqMusic), Command.playPause, "QQ 菜单: 繁体「暫停」")
+            expectEqual(PlaybackMenuControl.command(forMenuTitle: "Pause", player: .qqMusic), nil, "QQ 菜单: 没有英文界面")
+            for (t, command) in [("Play", Command.playPause), ("Pause", .playPause), ("Play/Pause", .playPause),
+                                 ("播放/暂停", .playPause), ("Next", .nextTrack), ("Previous", .previousTrack)] {
+                expectEqual(PlaybackMenuControl.command(forMenuTitle: t, player: .netease), command, "网易云菜单: \(t)(语言包里的标题)")
+            }
+            expectEqual(PlaybackMenuControl.isTransportMenu([.playPause, .nextTrack]), true, "菜单定位: 认出两种控制就是播放控制那个菜单")
+            expectEqual(PlaybackMenuControl.isTransportMenu([.nextTrack, .nextTrack]), false,
+                        "菜单定位: 只认出一种不算(英文的 Next 可能出现在别的菜单里)")
+            expectEqual(PlaybackMenuControl.isTransportMenu([]), false, "菜单定位: 一项都没认出")
+            let shown = { (route: Route, shown: Bool, atTap: Bool, now: Bool) in
+                MusicPlaybackController.shownPlayingAfterPlayPause(route: route, shown: shown, truthAtTap: atTap, truthNow: now)
+            }
+            let menuRoute = Route.menuAccessibility(.qqMusic, .playPause)
+            expectEqual(shown(.mediaControl, false, false, false), true, "播放键反馈: 普通通路按显示的翻")
+            expectEqual(shown(.mediaControl, true, false, true), false, "播放键反馈: 普通通路不看真值(连按第二下)")
+            expectEqual(shown(menuRoute, false, false, false), true, "播放键反馈: 菜单按下去、回读还没到 → 立刻翻")
+            expectEqual(shown(menuRoute, true, false, false), false, "播放键反馈: 菜单连按第二下按显示的翻回去")
+            expectEqual(shown(menuRoute, true, false, true), true, "播放键反馈: 菜单回报前回读已到 → 跟真值,不再翻")
+            expectEqual(shown(menuRoute, false, true, false), false, "播放键反馈: 回读先到的是暂停 → 跟真值")
             for player in PlaybackPlayer.allCases where player != .qqMusic && player != .netease {
                 for command in [Command.playPause, .nextTrack, .previousTrack] {
                     expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                         focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
                         Route.withheld, "未适配来源: \(player) 不能误按菜单")
-                    expectEqual(command.matches(menuTitle: "播放", for: player), false, "未适配来源不匹配任何播放菜单")
+                    expectEqual(PlaybackMenuControl.command(forMenuTitle: "播放", player: player), nil, "未适配来源不匹配任何播放菜单")
                 }
             }
             expectEqual(Command(rawValue: "seek"), nil, "菜单能力: 没有 seek, API 边界拒绝")
@@ -204,8 +223,9 @@ func runPlayerIdentityTests() {
                         && controller.contains("focusHeldElsewhere: focus.heldElsewhere,"), true,
                         "控制分派(契约): dispatch 按焦点回退目标与「焦点被占、没有 AppleScript」分派")
             expectEqual(client.contains("fallingBack: fallbackActive, targetGone: fallbackTargetGone, viaAppleScript: fallbackViaAppleScript")
-                        && client.contains("let heldElsewhere = viaProbe || holdingDroppedSession"), true,
-                        "控制分派(接线): 查询是否成功与目标是否恢复交给同一保护判据;屏上这首是会话被撤后保持出来的也不发")
+                        && client.contains("let heldElsewhere = viaProbe || holdingDroppedSession")
+                        && client.contains("directQueryTarget ?? droppedSessionPlayer, heldElsewhere)"), true,
+                        "控制分派(接线): 查询是否成功与目标是否恢复交给同一保护判据;屏上这首是会话被撤后保持出来的,只按它自己的菜单")
             let successful = MediaControlClient.shouldWithholdFocusControls(
                 fallingBack: true, targetGone: false, viaAppleScript: false)
             expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
@@ -228,6 +248,7 @@ func runPlayerIdentityTests() {
             let source = src("LyrimuseCore/Local/LocalPlaybackSource.swift")
             expectEqual(coordinator.contains("MusicPlaybackController.playPause { [weak self] route in")
                         && coordinator.contains("guard let route, let self, LocalPlaybackSource.shared.lastResolvedBundleID == targetBundleID else { return }")
+                        && coordinator.contains("isPlayingSmoothed = MusicPlaybackController.shownPlayingAfterPlayPause(")
                         && source.contains("guard let route = MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic,\n"
                                            + "                                                       kasetWasPlaying: kasetWasPlaying, qqWasPaused: qqWasPaused) else { return }"),
                         true, "控制分派(契约): 没发出去时不乐观翻转播放状态、不挪屏上进度")
@@ -857,15 +878,18 @@ func runPlayerIdentityTests() {
     // 出不出现。每家要不要来自生成字段(shared/players.json),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .netease, .amazonMusic],
-                    "辅助功能判据: 读界面的 Amazon Music、按菜单控制的 QQ 音乐/网易云(改 shared/players.json 的 needsAccessibilityPermission)")
-        expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse), [.switchesPlayMode, .controlsPlayback, .calibratesProgress],
-                    "辅助功能判据: QQ 音乐是切模式、网易云只控制失焦播放、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .netease, .kugou, .soda, .amazonMusic],
+                    "辅助功能判据: 读界面的 Amazon Music、按菜单控制的 QQ 音乐/网易云、只为喜欢按界面的酷狗/汽水(改 shared/players.json 的 needsAccessibilityPermission)")
+        expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
+                    [.switchesPlayMode, .controlsPlayback, .pressesFavorite, .pressesFavorite, .calibratesProgress],
+                    "辅助功能判据: QQ 音乐是切模式、网易云是喜欢加失焦播放、酷狗/汽水只有喜欢、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse), [.refinesProgress, .refinesProgress, .readsTrack],
                     "自动化判据: Apple Music、Spotify 只让进度更准,Kaset 的曲目整份靠它,引导页和设置页的说明按这个分开写")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .amazonMusic], "辅助功能判据: 纯 auto 按超集算")
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic], "辅助功能判据: 纯 auto 按超集算")
+        expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")
+        expectEqual(PlaybackPlayer.soda.accessibilityUse, .pressesFavorite, "汽水授权用途只有喜欢")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")
         expectEqual(P([.appleMusic, .spotify, .kkbox]).playersNeedingAccessibility, [],

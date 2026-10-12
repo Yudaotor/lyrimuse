@@ -17,6 +17,14 @@ public enum MusicPlaybackController {
     /// 普通通路回报已排入既有命令队列;菜单通路等待 AXPress 结果。失败不驱动乐观状态。
     public typealias Completion = @MainActor @Sendable (ControlRoute?) -> Void
 
+    /// 播放 / 暂停送出之后,观感层(`PlaybackCoordinator.isPlayingSmoothed`)该显示在放还是停。按界面此刻显示的翻,不按真值翻:
+    /// 快速连按两下时第二下真值还没回读。菜单通路要等按下去才回报,这期间真值已经变了(回读先到)就跟真值,不再翻一次。
+    /// 纯函数,selftest 覆盖。
+    public static func shownPlayingAfterPlayPause(route: ControlRoute, shown: Bool, truthAtTap: Bool, truthNow: Bool) -> Bool {
+        if case .menuAccessibility = route, truthNow != truthAtTap { return truthNow }
+        return !shown
+    }
+
     @MainActor
     public static func playPause(completion: Completion? = nil) {
         // 模拟播放(`PlaybackSimulation`)时停 / 放的是模拟那一份,不发给真实播放器;上一首 / 下一首 / 跳转同理不发。

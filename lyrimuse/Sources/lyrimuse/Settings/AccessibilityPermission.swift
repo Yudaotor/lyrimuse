@@ -5,7 +5,7 @@ import SwiftUI
 
 /// 「辅助功能」权限的**唯一状态源**,设置页「播放器」那张卡和引导页那一步共用。
 ///
-/// Amazon Music 用它读进度和按播放模式按钮;QQ 音乐用它读取、操作自己的菜单。
+/// 替播放器读、按它们的界面:Amazon Music 读进度和按播放模式按钮,QQ 音乐 / 网易云按自己的菜单,酷狗 / 汽水音乐按喜欢(`PlaybackPlayer.accessibilityUse`)。
 /// 判据是 `Set<PlaybackPlayer>.playersNeedingAccessibility`。授权是整个 App 一份,两个界面都只摆**一行**,
 /// 替哪几家要只出现在「为什么要这项授权」那句里(`AccessibilityPermissionGuide.reason`)。
 ///
@@ -123,8 +123,13 @@ struct AccessibilityPermissionGuide: View {
         }
         let playback = players.filter { $0.accessibilityUse == .controlsPlayback }
         if !playback.isEmpty {
-            lines.append(String(format: L10n.t("授权后 Lyrimuse 可通过%@自己的菜单，在系统媒体焦点被其它 App 占用时暂停、恢复和切换上下首。不授权也能显示歌词，但失焦时无法控制播放；失焦进度跳转暂不支持。"),
+            lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取并点按%@的菜单，以显示和切换喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能显示歌词，但没有喜欢键，失焦时也无法控制播放；失焦时的进度跳转暂不支持。"),
                                 model.playerNames(playback)))
+        }
+        let favorite = players.filter { $0.accessibilityUse == .pressesFavorite }
+        if !favorite.isEmpty {
+            lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取%@的喜欢状态，并在你点喜欢键时替你按下它界面上对应的那一项。不授权也能用，只是没有喜欢键。"),
+                                model.playerNames(favorite)))
         }
         return lines.joined(separator: "\n")
     }

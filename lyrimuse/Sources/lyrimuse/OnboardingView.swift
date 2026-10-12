@@ -821,8 +821,13 @@ struct OnboardingView: View {
         }
         let playbackTargets = pendingAccessibility.filter { $0.accessibilityUse == .controlsPlayback }
         if !playbackTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可让%@在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首"),
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首"),
                                 accessibility.playerNames(playbackTargets)))
+        }
+        let favoriteTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesFavorite }
+        if !favoriteTargets.isEmpty {
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢键"),
+                                accessibility.playerNames(favoriteTargets)))
         }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
@@ -1469,6 +1474,7 @@ struct OnboardingView: View {
             let progress = targets.filter { $0.accessibilityUse == .calibratesProgress }
             let playMode = targets.filter { $0.accessibilityUse == .switchesPlayMode }
             let playback = targets.filter { $0.accessibilityUse == .controlsPlayback }
+            let favorite = targets.filter { $0.accessibilityUse == .pressesFavorite }
             var lines: [String] = []
             if !progress.isEmpty && !playMode.isEmpty {
                 lines.append(String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制"),
@@ -1481,8 +1487,12 @@ struct OnboardingView: View {
                                     accessibility.playerNames(playMode)))
             }
             if !playback.isEmpty {
-                lines.append(String(format: L10n.t("请开启此权限，以便在%@失去系统媒体焦点时控制暂停、恢复和上下首"),
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢键，并在失去系统媒体焦点时控制暂停、恢复和上下首"),
                                     accessibility.playerNames(playback)))
+            }
+            if !favorite.isEmpty {
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢键"),
+                                    accessibility.playerNames(favorite)))
             }
             return lines.joined(separator: "\n")
         case .automation(let player) where player.automationUse == .readsTrack:

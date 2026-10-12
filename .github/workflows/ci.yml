@@ -127,10 +127,6 @@ jobs:
           swift build --product lyrimuse-selftest
           ./.build/debug/lyrimuse-selftest
 
-      - name: 播放控制完成与回读的时序
-        # 重放真实 coordinator 方法,平台和控制回调用桩,不启动 App 或操作播放器。
-        run: python3 scripts/test-playback-completion.py
-
       - name: 编译整个 App
         # selftest 只依赖 LyrimuseCore，编它编不到 app target。不加这一步的话，app 侧的
         # 编译错误要等到发版打包时才会暴露。

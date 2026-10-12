@@ -62,7 +62,7 @@
       "tint": {"source": "qq"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "QQMusicIcon",
-      "note": "无 AppleScript 字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),走 media-control;读数整秒下取整 + ±1~1.5s 抖动。随机 / 循环走它菜单栏「播放控制 → 播放模式」(QQMusicMenuControl),所以要辅助功能权限。"
+      "note": "无 AppleScript 字典(核实过:无 .sdef、未开 NSAppleScriptEnabled),走 media-control;读数整秒下取整 + ±1~1.5s 抖动。随机 / 循环走它菜单栏「播放控制 → 播放模式」(QQMusicMenuControl),所以要辅助功能权限;失焦时播放 / 暂停、上一首、下一首也按这个菜单里的项(PlaybackMenuControl)。"
     },
     {
       "id": "netease_music",
@@ -88,7 +88,7 @@
       "tint": {"source": "netease"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "NeteaseIcon",
-      "note": "同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。失焦时三项播放控制走自身「控制」菜单(PlaybackMenuControl),需要辅助功能权限；不接失焦 seek 或模式/喜欢键。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。"
+      "note": "同 QQ 音乐:无 AppleScript 字典,走 media-control,整秒量化。失焦时三项播放控制走自身「控制」菜单(PlaybackMenuControl),需要辅助功能权限;「喜欢」也按同一菜单里的「喜欢歌曲」(NetEaseMenuControl)。不接失焦 seek,没有模式键。冷启动后一两秒内开播,它启动时那次延迟的清空会把在放的会话撤掉、声音照放,直到暂停或换歌才重新登记(02 章决策 96)。"
     },
     {
       "id": "kugou_music",
@@ -110,11 +110,11 @@
       "ignoresSeekCommand": false,
       "needsAutomationPermission": false,
       "needsFullDiskAccess": true,
-      "needsAccessibilityPermission": false,
+      "needsAccessibilityPermission": true,
       "tint": {"source": "kugou"},
       "fallbackSymbol": "music.note",
       "bundledIcon": "KugouIcon",
-      "note": "Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。"
+      "note": "Mac Catalyst 应用,靠 MPNowPlayingInfoCenter 发布进 MediaRemote。processName 是 UTF-8 12 字节,内核 p_comm 上限 16 字节——再长两个汉字 pgrep -x 就会失效。「喜欢」按它菜单栏的「喜欢歌曲」、读播放条那颗心(KugouMenuControl),所以要辅助功能权限。"
     },
     {
       "id": "soda_music",
@@ -136,11 +136,11 @@
       "ignoresSeekCommand": false,
       "needsAutomationPermission": false,
       "needsFullDiskAccess": true,
-      "needsAccessibilityPermission": false,
+      "needsAccessibilityPermission": true,
       "tint": {"rgb": [0.30, 0.85, 0.35]},
       "fallbackSymbol": "music.note",
       "bundledIcon": "SodaMusicIcon",
-      "note": "Electron 应用,走 media-control。只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。"
+      "note": "Electron 应用,走 media-control。只在开播发一个 elapsed=0 锚点、播放中不再重发(实测 42 秒里 elapsedTime 恒 0、timestamp 冻在开播那一刻),位置全靠墙钟外推,所以归 cleanExtrapolated —— 这也正是它此前作为信任播放器走的那一档,内置化不改变位置行为。那个 0 锚点有概率被原样重发一次,由 zeroAnchorRepublishWindowSecs 的时间窗兜住。processName 是 UTF-8 12 字节,与酷狗同长,在内核 p_comm 16 字节上限内。「喜欢」读、按底部播放条那颗心(SodaMusicFavoriteControl),所以要辅助功能权限。"
     },
     {
       "id": "kkbox",

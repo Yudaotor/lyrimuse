@@ -45599,6 +45599,142 @@
         }
       }
     },
+    "授权后 Lyrimuse 会读取并点按%@的菜单，以显示和切换喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能显示歌词，但没有喜欢键，失焦时也无法控制播放；失焦时的进度跳转暂不支持。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With permission, Lyrimuse reads and presses %@’s menus to show and toggle Like, and can pause, resume and skip tracks when another app holds system media focus. Lyrics still work without permission, but there is no Like button and playback can’t be controlled without media focus; seeking without media focus is not supported."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授權後 Lyrimuse 會讀取並點按%@的選單，以顯示和切換喜歡；系統媒體焦點被其他 App 占用時，也能暫停、繼續和切換上下一首。不授權也能顯示歌詞，但沒有喜歡鍵，失焦時也無法控制播放；失焦時的進度跳轉暫不支援。"
+          }
+        }
+      }
+    },
+    "授权后 Lyrimuse 会读取%@的喜欢状态，并在你点喜欢键时替你按下它界面上对应的那一项。不授权也能用，只是没有喜欢键。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With permission, Lyrimuse reads whether %@ has liked the current song and presses the matching control in its window when you click Like. Everything else works without it; there is just no Like button."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授權後 Lyrimuse 會讀取%@的喜歡狀態，並在你點喜歡鍵時替你按下它介面上對應的那一項。不授權也能用，只是沒有喜歡鍵。"
+          }
+        }
+      }
+    },
+    "辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission enables liking songs for %@, and lets its menus pause, resume and skip tracks when another app holds system media focus"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可顯示%@的喜歡鍵，也能在系統媒體焦點被其他 App 占用時，透過選單控制暫停、繼續和上下一首"
+          }
+        }
+      }
+    },
+    "辅助功能权限可显示%@的喜欢键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission enables liking songs for %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可顯示%@的喜歡鍵"
+          }
+        }
+      }
+    },
+    "请开启此权限，以显示%@的喜欢键，并在失去系统媒体焦点时控制暂停、恢复和上下首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable this permission to show the Like button for %@ and to pause, resume and skip tracks when it loses system media focus"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以顯示%@的喜歡鍵，並在失去系統媒體焦點時控制暫停、繼續和上下一首"
+          }
+        }
+      }
+    },
+    "请开启此权限，以显示%@的喜欢键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable this permission to show the Like button for %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以顯示%@的喜歡鍵"
+          }
+        }
+      }
+    },
+    "未获得辅助功能权限，%@ 不显示喜欢键，失去系统媒体焦点时也无法控制暂停、恢复和上下首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission is missing: %@ has no Like button, and can’t pause, resume or skip tracks without system media focus"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得輔助使用權限，%@ 不顯示喜歡鍵，失去系統媒體焦點時也無法控制暫停、繼續和上下一首"
+          }
+        }
+      }
+    },
+    "未获得辅助功能权限，%@ 不显示喜欢键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission is missing: %@ has no Like button"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得輔助使用權限，%@ 不顯示喜歡鍵"
+          }
+        }
+      }
+    },
     "无法识别的链接" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -45802,74 +45938,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回到播放器"
-          }
-        }
-      }
-    },
-    "授权后 Lyrimuse 可通过%@自己的菜单，在系统媒体焦点被其它 App 占用时暂停、恢复和切换上下首。不授权也能显示歌词，但失焦时无法控制播放；失焦进度跳转暂不支持。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With permission, Lyrimuse can use %@’s own menus to pause, resume and skip tracks when another app holds system media focus. Lyrics still work without permission, but playback controls are unavailable without media focus; seeking without media focus is not supported."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "授權後 Lyrimuse 可透過%@自己的選單，在系統媒體焦點被其他 App 占用時暫停、繼續和切換上下一首。不授權也能顯示歌詞，但失焦時無法控制播放；失焦進度跳轉暫不支援。"
-          }
-        }
-      }
-    },
-    "辅助功能权限可让%@在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accessibility access lets %@ use its menus to pause, resume and skip tracks when another app holds system media focus"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輔助使用權限可讓%@在系統媒體焦點被其他 App 占用時，透過選單控制暫停、繼續和上下一首"
-          }
-        }
-      }
-    },
-    "请开启此权限，以便在%@失去系统媒体焦点时控制暂停、恢复和上下首" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable this permission to pause, resume and skip tracks when %@ loses system media focus"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請開啟此權限，以便在%@失去系統媒體焦點時控制暫停、繼續和上下一首"
-          }
-        }
-      }
-    },
-    "未获得辅助功能权限，%@ 失去系统媒体焦点时无法控制暂停、恢复和上下首" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accessibility permission is missing, so %@ cannot pause, resume or skip tracks without system media focus"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未取得輔助使用權限，%@ 失去系統媒體焦點時無法控制暫停、繼續和上下一首"
           }
         }
       }
