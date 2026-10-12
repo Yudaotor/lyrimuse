@@ -1257,5 +1257,16 @@ func runLyricsWindowTests() {
                     && !window.contains("LyricsWindowHintSurface.visible ="), true,
                     "快捷键回声面(契约): 可见性变化报自己那一条、关窗只撤自己那一条")
     }
+    // 「搜索歌词…」的 sheet 内容只收曲目快照(11 章决策 112):内容闭包随歌词窗口的 body 重算,带着闭包参数的话
+    // 歌词窗口每换一句整张面板都跟着重算。
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let window = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/LyricsWindowView.swift"),
+                                  encoding: .utf8)) ?? ""
+        expectEqual(window.contains(".sheet(item: $lyricsSearchContext) { ctx in\n                LyricsWindowSearchSheet(ctx: ctx)\n            }")
+                    && window.contains("private struct LyricsSearchContext: Identifiable, Equatable {")
+                    && window.contains("private struct LyricsWindowSearchSheet: View, Equatable {\n    let ctx: LyricsSearchContext\n\n    var body: some View {"),
+                    true, "搜索歌词 sheet(契约): 只摆 LyricsWindowSearchSheet(ctx:),它是 Equatable、只存曲目快照")
+    }
     checkLyricsWindowFormMorph()
 }

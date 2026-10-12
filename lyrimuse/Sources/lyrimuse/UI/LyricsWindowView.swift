@@ -3050,50 +3050,7 @@ struct LyricsWindowView: View {
             // 持有,见 LyricsSearchContext)。用 sheet(item:) 而不是 isPresented:上下文
             // 快照即身份,换歌后再开是新的一份。
             .sheet(item: $lyricsSearchContext) { ctx in
-                LyricsSearchSheet(
-                    artist: ctx.artist, title: ctx.title, album: ctx.album, songKey: ctx.key,
-                    currentSource: ctx.currentSource, currentFingerprint: ctx.currentFingerprint,
-                    durationSecs: ctx.durationSecs,
-                    isMarkedInstrumental: ctx.isInstrumental,
-                    onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: ctx.key, value) },
-                    onAutoMatch: { progress in
-                        // 跟歌词管理「重新自动匹配」同一条路;换了词让播放侧立刻重载(面板随后关掉,同采纳)。
-                        let line = await LyricsRematchRunner.run(key: ctx.key, onProgress: progress)
-                        if let line, LyricsRematchRunner.rewroteLyrics(line) {
-                            PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
-                        }
-                        return line
-                    }
-                ) { candidate in
-                    // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本。
-                    // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能
-                    // 跟带时间戳的候选共用 saveEdit,那会把纯文本当成一份"没有任何一行
-                    // 能同步显示"的坏 LRC 写进 lyrics,反而让这首歌在别的展示面上从
-                    // "至少有静态文字"退化成"看起来完全没有歌词"。
-                    let saved: Bool
-                    if candidate.isPlainTextOnly {
-                        saved = await EnrichCacheStore.shared.savePlainTextEdit(
-                            key: ctx.key, plainLyrics: candidate.lyrics, source: candidate.source)
-                    } else {
-                        // 必须显式传 markManual / sourceChoice:落进 saveEdit 的默认值 markManual: true
-                        // 的话,「歌词窗口」里搜一次、采纳一次就把这首歌**永久冻结**了,以后打分改进/该源
-                        // 补出逐字都再也不会被采纳,而用户只是想换份词。
-                        //
-                        // 这是「采纳候选」的第三个入口(另外两个:歌词管理、悬浮窗 ⚙ 的「搜索歌词…」小窗)。
-                        // 三处必须同进同出 —— 改任何一处之前先 grep `LyricsSearchSheet(` 数清楚有几个。
-                        saved = await EnrichCacheStore.shared.saveEdit(
-                            key: ctx.key,
-                            lyrics: candidate.lyrics, tr: candidate.lyricsTr,
-                            roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                            source: candidate.source,
-                            markManual: AppSettings.shared.manualPickLocksLyrics,
-                            sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
-                    }
-                    // 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
-                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
-                    // 回报落盘成败:面板等它决定关窗/挪徽标(onApply 可等待,不用自己套 Task)。
-                    return saved
-                }
+                LyricsWindowSearchSheet(ctx: ctx)
             }
         }
     }
@@ -7292,7 +7249,7 @@ private struct OffsetNudgeButton: View {
 }
 
 /// 「搜索歌词…」的曲目快照(sheet(item:) 的身份即快照,见声明处注释)。
-private struct LyricsSearchContext: Identifiable {
+private struct LyricsSearchContext: Identifiable, Equatable {
     let artist: String
     let title: String
     let album: String
@@ -7306,6 +7263,60 @@ private struct LyricsSearchContext: Identifiable {
     let isInstrumental: Bool
 
     var id: String { key }
+}
+
+/// 「搜索歌词…」面板的 sheet 内容。sheet 的内容跟着歌词窗口的 body 一起重算,而歌词窗口每换一句都要重算好几次:
+/// 这里只收曲目快照(Equatable),几个回调在 body 里现建,快照没变就整张跳过。别给它加闭包或别的每次都会变的参数,
+/// 不然换句时整张面板连同预览跟着重算,预览的滚动和逐字染色卡顿。见 11 章决策 112。
+private struct LyricsWindowSearchSheet: View, Equatable {
+    let ctx: LyricsSearchContext
+
+    var body: some View {
+        LyricsSearchSheet(
+            artist: ctx.artist, title: ctx.title, album: ctx.album, songKey: ctx.key,
+            currentSource: ctx.currentSource, currentFingerprint: ctx.currentFingerprint,
+            durationSecs: ctx.durationSecs,
+            isMarkedInstrumental: ctx.isInstrumental,
+            onSetInstrumental: { value in await EnrichCacheStore.shared.setInstrumental(key: ctx.key, value) },
+            onAutoMatch: { progress in
+                // 跟歌词管理「重新自动匹配」同一条路;换了词让播放侧立刻重载(面板随后关掉,同采纳)。
+                let line = await LyricsRematchRunner.run(key: ctx.key, onProgress: progress)
+                if let line, LyricsRematchRunner.rewroteLyrics(line) {
+                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+                }
+                return line
+            }
+        ) { candidate in
+            // 保存前不用先把整份缓存读进 store:写入由引擎执行(EnrichEditChannel),不经 store 的内存副本。
+            // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能
+            // 跟带时间戳的候选共用 saveEdit,那会把纯文本当成一份"没有任何一行
+            // 能同步显示"的坏 LRC 写进 lyrics,反而让这首歌在别的展示面上从
+            // "至少有静态文字"退化成"看起来完全没有歌词"。
+            let saved: Bool
+            if candidate.isPlainTextOnly {
+                saved = await EnrichCacheStore.shared.savePlainTextEdit(
+                    key: ctx.key, plainLyrics: candidate.lyrics, source: candidate.source)
+            } else {
+                // 必须显式传 markManual / sourceChoice:落进 saveEdit 的默认值 markManual: true
+                // 的话,「歌词窗口」里搜一次、采纳一次就把这首歌**永久冻结**了,以后打分改进/该源
+                // 补出逐字都再也不会被采纳,而用户只是想换份词。
+                //
+                // 这是「采纳候选」的第三个入口(另外两个:歌词管理、悬浮窗 ⚙ 的「搜索歌词…」小窗)。
+                // 三处必须同进同出 —— 改任何一处之前先 grep `LyricsSearchSheet(` 数清楚有几个。
+                saved = await EnrichCacheStore.shared.saveEdit(
+                    key: ctx.key,
+                    lyrics: candidate.lyrics, tr: candidate.lyricsTr,
+                    roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
+                    source: candidate.source,
+                    markManual: AppSettings.shared.manualPickLocksLyrics,
+                    sourceChoice: "", fromManualPick: true, bg: candidate.lyricsBG, trLang: candidate.lyricsTrLang)
+            }
+            // 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
+            PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+            // 回报落盘成败:面板等它决定关窗/挪徽标(onApply 可等待,不用自己套 Task)。
+            return saved
+        }
+    }
 }
 
 /// 「显示简介」面板的一行:次级色标签 + 主色值,值可换行(长歌名/长专辑名)。
