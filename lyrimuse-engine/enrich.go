@@ -4574,6 +4574,7 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	repairCandidateAccentSplits(cands)
 	// v15:批级语种判决,跟下面两个批级步骤同一位置(理由见 match.go applyLanguageVersionVerdicts)。
 	applyLanguageVersionVerdicts(title, album, durationSecs, cands)
+	applyVerifiedTitleVersion(title, album, durationSecs, verifiedRecordingTitle(base, extra), cands)
 	corroborated := corroboratedEndings(cands, durationSecs)
 	consensusPeers := contentConsensusPeers(artist, title, cands, durationSecs)
 	inheritIdentityTerms(title, album, cands, consensusPeers)

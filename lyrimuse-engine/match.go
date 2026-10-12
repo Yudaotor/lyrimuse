@@ -348,6 +348,8 @@ type lyricCandidate struct {
 	// 两者都 false = 至少一边不知道语种,退回 v14 的纯标签比对(保守:该罚的照罚)。
 	languageVersionMismatch bool
 	languageVersionAgrees   bool
+	// verifiedTitleVersionAgrees:**批级**,候选的版本限定词跟 Apple 原产地商店坐实的正式歌名一致(applyVerifiedTitleVersion)。
+	verifiedTitleVersionAgrees bool
 	// plainTextOnly:加,见 lrclibResult.plainOnly 头注——true 时 lyrics 装的是
 	// **没有时间戳**的纯文本,不是能拿 isTimedLRC 正常判定的东西。scoreLyricCandidateDetailed
 	// 看到这个标记会跳过"不是带时间戳的歌词就判废"那条通用闸,改判一个专门写明"仅纯文本"
@@ -528,7 +530,7 @@ const lyricOvershootToleranceSecs = 5.0
 // (按版本号可查,如决策 31/33/36/43/44/49/50/58/64/69/82)——这里不重复。
 const lyricsScoringVersion = 29
 
-const lyricsScoringRevision = 1
+const lyricsScoringRevision = 3
 
 // lyricsScoringStamp 是一条歌词按哪一版打分规则选出来的:主版本号 + 开发修订号。存成两个整数、按这两段比大小,
 // 不存小数:小数比大小时 29.10 会排在 29.9 前面。
@@ -999,6 +1001,8 @@ func scoreLyricCandidateDetailed(
 	switch {
 	case c.languageVersionMismatch:
 		add(scoreTermVersionTags, -versionMismatchPenalty)
+	// 标题和歌词头的版本限定词都跟反查坐实的正式歌名对得上(applyVerifiedTitleVersion):本地标签只是没写,下面两条都不扣。
+	case c.verifiedTitleVersionAgrees:
 	case versionTagsMismatchIgnoringLanguage(localTitle, localAlbum, c.title, c.album, c.languageVersionAgrees) &&
 		!sameRecordingDespiteVersionTagsIgnoringLanguage(localTitle, localAlbum, durationSecs,
 			c.title, c.album, c.sourceReportedDurationSecs, c.languageVersionAgrees):
@@ -1009,7 +1013,8 @@ func scoreLyricCandidateDetailed(
 	// v7:两场不同命名的演出 → 同级重扣。versionTagsMismatch 在「两边都是 Live」时限定词
 	// 集合相等、必然静默,这一档接住它够不到的那半边。判据和四道防误伤的门见
 	// liveAlbumIdentityConflict 的注释。
-	if liveAlbumIdentityConflict(localArtist, localTitle, localAlbum, c.title, c.album) {
+	if liveAlbumIdentityConflict(localArtist, localTitle, localAlbum, c.title, c.album) &&
+		!sameLiveShowNamedInOtherLanguage(localAlbum, durationSecs, c) {
 		add(scoreTermLiveAlbumConflict, -liveAlbumConflictPenalty)
 	}
 	// ---- v3 新维度(分值全部来自 201 首反事实消融,见 lyricsScoringVersion 注释) ----
