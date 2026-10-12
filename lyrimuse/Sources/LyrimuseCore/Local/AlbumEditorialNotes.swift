@@ -12,7 +12,7 @@ import Foundation
 /// 店面都上架(没上架的店面专辑页直接 404)。所以先问用户地区的店面,404 再问 `apple_music_url` 自带的店面
 /// (`storefronts(region:linkStorefront:)`)。纯函数部分(ID 解析、店面顺序、页面解析、按店面依次取)selftest 覆盖。
 public enum AlbumEditorialNotes {
-    public struct Notes: Equatable, Sendable {
+    public struct Notes: Equatable, Sendable, Codable {
         /// 页面上的专辑名(用户店面的写法,可能与播放器报的专辑名不同)。
         public let title: String
         /// 「歌手 · 年份」那一行,可能为空。
@@ -27,7 +27,7 @@ public enum AlbumEditorialNotes {
     }
 
     /// 专辑页上的一位署名歌手(头部「歌手」那一行的链接)。合作专辑有多位。
-    public struct ArtistLink: Equatable, Sendable {
+    public struct ArtistLink: Equatable, Sendable, Codable {
         public let name: String
         public let id: Int64
 
@@ -38,7 +38,7 @@ public enum AlbumEditorialNotes {
     }
 
     /// 一次专辑页请求里用得上的全部东西:简介(可能没有)+ 署名歌手(歌手简介要靠它拿歌手 ID)。
-    public struct AlbumPage: Equatable, Sendable {
+    public struct AlbumPage: Equatable, Sendable, Codable {
         public let notes: Notes?
         public let artists: [ArtistLink]
 

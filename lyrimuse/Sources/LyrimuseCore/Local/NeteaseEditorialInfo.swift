@@ -22,7 +22,7 @@ public enum NeteaseEditorialInfo {
     }
 
     /// 歌曲详情里用得上的两样:署名(按网易云给的顺序)和所在专辑(没有为 nil)。
-    public struct Song: Equatable, Sendable {
+    public struct Song: Equatable, Sendable, Codable {
         public let artists: [AlbumEditorialNotes.ArtistLink]
         public let album: Album?
 
@@ -34,7 +34,7 @@ public enum NeteaseEditorialInfo {
 
     /// 网易云上这首歌所在的专辑:ID、名字,和别名(`alias` / `transName`,常是另一种语言的名字:
     /// 《最伟大的作品》的「Greatest Works of Art」、《Coloring Stephy》的「有声有色」)。
-    public struct Album: Equatable, Sendable {
+    public struct Album: Equatable, Sendable, Codable {
         public let id: Int64
         public let name: String
         public let aliases: [String]

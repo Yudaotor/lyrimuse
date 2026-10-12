@@ -18,7 +18,7 @@ public enum SodaEditorialInfo {
 
     /// 一页的介绍:汽水写的名字(歌手卡片的标题用它 —— 播放器报的常是「泳儿/海鸣威」这种合唱署名)和正文。
     /// `text` 为 nil = 汽水明确没有(页面上报错、或者没有介绍)。
-    public struct Intro: Equatable, Sendable {
+    public struct Intro: Equatable, Sendable, Codable {
         public let name: String?
         public let text: String?
 

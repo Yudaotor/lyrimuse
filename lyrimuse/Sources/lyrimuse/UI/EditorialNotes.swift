@@ -5,8 +5,8 @@ import OSLog
 import SwiftUI
 
 /// 专辑简介 / 歌手简介 / 歌曲简介的一张卡片:标题 + 副标题 + 若干「标签:值」+ 正文。
-struct EditorialCard: Equatable {
-    enum Kind: Equatable {
+struct EditorialCard: Equatable, Codable {
+    enum Kind: Equatable, Codable {
         case album, artist, song
 
         /// 能点开这一类简介的那段文字给辅助功能的提示。
@@ -21,7 +21,7 @@ struct EditorialCard: Equatable {
 
     /// 正文从哪来。Last.fm 的是 CC BY-SA 授权的用户百科,YouTube Music 给的是维基百科条目(同样 CC BY-SA),网易云、QQ 音乐、
     /// 汽水音乐的是它们家的介绍,这几种卡片底部都注明出处。
-    enum Source: Equatable {
+    enum Source: Equatable, Codable {
         case appleMusic, lastfm, netease, qqMusic, soda, youtubeMusic
 
         /// 卡片底部那一行出处;Apple Music 的不注明。YouTube Music 那一路的正文是维基百科的,注明维基百科。
@@ -37,7 +37,7 @@ struct EditorialCard: Equatable {
         }
     }
 
-    struct Fact: Equatable, Hashable {
+    struct Fact: Equatable, Hashable, Codable {
         let label: String
         let value: String
     }
@@ -71,8 +71,9 @@ struct EditorialCard: Equatable {
 /// 别的界面:YouTube Music → Last.fm。按分享页地址、专辑 ID / 「歌手|专辑」、频道 ID 记结论。
 /// **歌曲简介没有 Apple 那一档**(Apple Music 不给单曲写介绍):中文界面先问 QQ 音乐(`QQSongInfo`,这首在缓存里的
 /// QQ 歌曲页 → 歌曲详情里的「简介」),再问 Last.fm `track.getInfo`;别的界面只问 Last.fm。按 songmid、「歌手|歌名」记结论。
-/// 专辑按专辑 ID、歌手按歌手 ID 记住结果,同一个只取一次;所有店面都 404 记成「没有」,本次运行不再问;
-/// 网络失败 / 页面形状不对不记,下次换歌 / 消费方再来时重试。同一张专辑 / 同一位歌手在飞时不重复发,
+/// 专辑按专辑 ID、歌手按歌手 ID 记住结果,同一个只取一次;所有店面都 404 记成「没有」;
+/// 网络失败 / 页面形状不对不记,下次换歌 / 消费方再来时重试。各来源的结论都落盘(`EditorialMemo`):有正文的 30 天、
+/// 明确没有的 7 天内重启也不再问(18 章决策 54)。同一张专辑 / 同一位歌手在飞时不重复发,
 /// 请求回来时已经换歌,就按此刻在放的曲目再查一次(命中刚记下的结果,不多发请求)。
 /// 没有消费方时一个请求都不发。
 @MainActor
@@ -95,7 +96,7 @@ final class EditorialNotesStore: ObservableObject {
     }
 
     /// 取到的专辑页与给出它的店面。
-    private struct FetchedAlbum {
+    private struct FetchedAlbum: Codable {
         let page: AlbumEditorialNotes.AlbumPage
         let storefront: String
     }
@@ -106,10 +107,10 @@ final class EditorialNotesStore: ObservableObject {
         let storefront: String
     }
 
-    /// 值为 nil = 所有店面都 404,这张专辑没有公开页。
-    private var albumPages: [Int64: FetchedAlbum?] = [:]
+    /// 值为 nil = 所有店面都 404,这张专辑没有公开页。页面在、没有简介的按「明确没有」的期限记(歌手 ID 照样用)。
+    private let albumPages = EditorialMemo<Int64, FetchedAlbum>("apple-album") { $0.page.notes == nil }
     /// 值为 nil = 查过了,这位歌手没有简介。
-    private var artistCards: [Int64: EditorialCard?] = [:]
+    private let artistCards = EditorialMemo<Int64, EditorialCard>("apple-artist")
     /// 按歌手名(`cleanTag`)记住兜底找到的歌手;值为 nil = 找过了,找不到。
     private var artistLinks: [String: ResolvedArtist?] = [:]
     private var albumsInFlight: Set<Int64> = []
@@ -120,6 +121,7 @@ final class EditorialNotesStore: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
 
     private init() {
+        EditorialDisk.load()
         let p = PlaybackCoordinator.shared
         let track = Publishers.CombineLatest3(p.$artist, p.$title, p.$album)
             .map { Track(artist: $0, title: $1, album: $2) }
@@ -393,7 +395,7 @@ final class EditorialNotesStore: ObservableObject {
     // MARK: - Last.fm
 
     /// 按「album|歌手|专辑」「artist|歌手」「track|歌手|歌名」(`cleanTag`)记结论;值为 nil = Last.fm 明确没有。
-    private var lastfmCards: [String: EditorialCard?] = [:]
+    private let lastfmCards = EditorialMemo<String, EditorialCard>("lastfm")
     private var lastfmInFlight: Set<String> = []
 
     private func lastfmAlbum(_ track: Track, then: @escaping (EditorialCard?) -> Void) {
@@ -488,7 +490,7 @@ final class EditorialNotesStore: ObservableObject {
     // MARK: - 汽水音乐
 
     /// 汽水分享页地址 → 名字 + 介绍(正文已按界面转好繁简;正文为 nil = 汽水明确没有)。
-    private var sodaIntros: [URL: SodaEditorialInfo.Intro] = [:]
+    private let sodaIntros = EditorialMemo<URL, SodaEditorialInfo.Intro>("soda") { $0.text == nil }
     private var sodaInFlight: Set<URL> = []
 
     /// 专辑:缓存里这首的汽水专辑页(用汽水放过才有,ID 是汽水给的)→ 专辑介绍。卡片标题、副标题用播放器报的专辑名和歌手。
@@ -517,7 +519,7 @@ final class EditorialNotesStore: ObservableObject {
     /// 这一页的介绍:记过就地回调;没有就问一次。回来时已经换歌,按当前曲目重查(命中刚记下的,不多发请求)。
     /// 繁体界面转成繁体(`SodaEditorialInfo.localized`)。
     private func withSodaIntro(_ page: URL, for track: Track, _ body: @escaping (SodaEditorialInfo.Intro) -> Void) {
-        if let known = sodaIntros[page] { return body(known) }
+        if let known = sodaIntros.value(page) { return body(known) }
         guard !sodaInFlight.contains(page) else { return }
         sodaInFlight.insert(page)
         let language = L10n.current
@@ -541,7 +543,7 @@ final class EditorialNotesStore: ObservableObject {
     // MARK: - YouTube Music(维基百科)
 
     /// 一张专辑在 YouTube Music 上的结论:维基介绍(界面语言那版,没有时英文版;都没有为 nil)和署名歌手。
-    private struct YouTubeMusicAlbum: Sendable {
+    private struct YouTubeMusicAlbum: Sendable, Codable {
         let description: String?
         let artists: [YouTubeMusicEditorialInfo.Artist]
     }
@@ -552,12 +554,12 @@ final class EditorialNotesStore: ObservableObject {
     }
 
     /// 「界面语言|专辑 ID」或「界面语言|search|歌手|专辑」→ 这张专辑;值为 nil = 搜过了,没有对得上的专辑。
-    private var youtubeMusicAlbums: [String: YouTubeMusicAlbum?] = [:]
+    private let youtubeMusicAlbums = EditorialMemo<String, YouTubeMusicAlbum>("youtube-album") { $0.description == nil }
     /// 在飞的专辑查询 → 等它的那几路(各记着是为哪首要的)。专辑、歌手两路都要它(歌手 ID 从专辑页的署名来),同网易云的
     /// 歌曲详情:后到的那一路排队等,不丢。
     private var youtubeMusicAlbumWaiters: [String: [(key: String, body: (YouTubeMusicAlbum?) -> Void)]] = [:]
     /// 「界面语言|频道 ID」→ 歌手的维基介绍;值为 nil = 明确没有。
-    private var youtubeMusicArtistTexts: [String: String?] = [:]
+    private let youtubeMusicArtistTexts = EditorialMemo<String, String>("youtube-artist")
     private var youtubeMusicArtistsInFlight: Set<String> = []
     /// YouTube Music 上一次问不通的时刻。国内网络常年连不上 YouTube:照别的来源「没问成就停在那儿」的规矩,这一路会把排在
     /// 后面的 Last.fm 永远挡住,每次重查还要等满超时。所以它问不通时这一轮当没有、交给下一个来源(不记结论),之后
@@ -711,7 +713,7 @@ final class EditorialNotesStore: ObservableObject {
     // MARK: - QQ 音乐
 
     /// QQ 歌曲 mid → 简介正文(已按界面转好繁简);值为 nil = QQ 明确没有这首的简介。
-    private var qqSongTexts: [String: String?] = [:]
+    private let qqSongTexts = EditorialMemo<String, String>("qq-song")
     private var qqSongsInFlight: Set<String> = []
 
     /// 歌曲:缓存里这首的 QQ 音乐歌曲页 → 歌曲详情里的「简介」。卡片标题、副标题用播放器报的歌名和歌手。缓存里没有
@@ -753,14 +755,14 @@ final class EditorialNotesStore: ObservableObject {
     // MARK: - 网易云
 
     /// 网易云歌曲 ID → 歌曲详情(署名 + 所在专辑);专辑、歌手两路都用,同一首只问一次。
-    private var neteaseSongs: [Int64: NeteaseEditorialInfo.Song] = [:]
+    private let neteaseSongs = EditorialMemo<Int64, NeteaseEditorialInfo.Song>("netease-song")
     /// 在飞的歌曲详情 → 等它的那几路,各记着是为哪首要的。换歌后专辑、歌手常一前一后退到网易云要同一首,后到的那路
     /// 排队等它:照别的请求那样「在飞就不回调」,那一路就停在半路,这首的另一张卡片出不来。
     private var neteaseSongWaiters: [Int64: [(key: String, body: (NeteaseEditorialInfo.Song) -> Void)]] = [:]
     /// 网易云歌手 ID → 简介卡片;值为 nil = 网易云明确没有这位的介绍。
-    private var neteaseCards: [Int64: EditorialCard?] = [:]
+    private let neteaseCards = EditorialMemo<Int64, EditorialCard>("netease-artist")
     /// 网易云专辑 ID → 介绍正文(已按界面转好繁简);值为 nil = 网易云明确没有这张的介绍。
-    private var neteaseAlbumTexts: [Int64: String?] = [:]
+    private let neteaseAlbumTexts = EditorialMemo<Int64, String>("netease-album")
     private var neteaseArtistsInFlight: Set<Int64> = []
     private var neteaseAlbumsInFlight: Set<Int64> = []
 
@@ -799,7 +801,7 @@ final class EditorialNotesStore: ObservableObject {
     /// 就按当前曲目重查(命中刚记下的,不多发请求),否则挨个回调。
     private func withNeteaseSong(songID: Int64, for track: Track,
                                  _ body: @escaping (NeteaseEditorialInfo.Song) -> Void) {
-        if let known = neteaseSongs[songID] { return body(known) }
+        if let known = neteaseSongs.value(songID) { return body(known) }
         let waiter = (key: track.key, body: body)
         guard neteaseSongWaiters[songID] == nil else {
             neteaseSongWaiters[songID]?.append(waiter)

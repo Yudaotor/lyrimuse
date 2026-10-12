@@ -24,7 +24,7 @@ public enum YouTubeMusicEditorialInfo {
     }
 
     /// 一位署名歌手:名字 + 频道 ID(`UC…`)。
-    public struct Artist: Equatable, Sendable {
+    public struct Artist: Equatable, Sendable, Codable {
         public let name: String
         public let channelID: String
 
