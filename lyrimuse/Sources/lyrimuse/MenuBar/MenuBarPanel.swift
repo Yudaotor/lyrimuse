@@ -1086,7 +1086,7 @@ private struct MenuBarPanelView: View {
         }
     }
 
-    /// 右下角那一格:平时是版本号(→ 关于页),有未安装的新版本时是升级提示(→ 设置的「软件更新」页)。
+    /// 右下角那一格:平时是版本号,有未安装的新版本时是升级提示;点了都翻到设置的「软件更新」页(06 章决策 46)。
     ///
     /// 状态来自 `SparkleUpdaterManager.availableUpdate`(Sparkle 委托只记状态、不接管显示,
     /// 见那边注释),开窗时取一次快照。升级提示用强调色 + 下载图标,而不是只换文字——跟
@@ -1111,12 +1111,12 @@ private struct MenuBarPanelView: View {
         } else {
             footerItem(
                 title: String(format: L10n.t("版本 %@"), SparkleUpdaterManager.appVersionString),
-                tint: .secondary, help: L10n.t("关于 Lyrimuse"),
+                tint: .secondary, help: L10n.t("打开软件更新"),
                 icon: { Image(systemName: "info.circle").font(.system(size: 10.5)) }
             ) {
                 close()
-                // 一次性信箱把设置窗口直接翻到「关于」,跟右键菜单 openAbout 同一条路。
-                AppActions.shared.requestSettings(.tab(.about))
+                // 一次性信箱把设置窗口直接翻到「软件更新」:那一页就是版本号、检查更新和这一版的更新内容。
+                AppActions.shared.requestSettings(.softwareUpdate)
                 AppActions.shared.openSettings?()
             }
         }
