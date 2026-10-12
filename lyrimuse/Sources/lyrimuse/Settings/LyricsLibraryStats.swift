@@ -160,8 +160,6 @@ struct LyricsLibrarySizeLabel: View {
 struct LyricsLibraryStatsPanel: View {
     @ObservedObject private var store = EnrichCacheStore.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
-    /// body 里要把整库过一遍的两个数(统计、待补搜),见 `LibraryStatsMemo`。
-    @State private var memo = LibraryStatsMemo()
     /// 设置窗口看不见时不轮询:补搜 / 全量扫库期间每写一首缓存就变,这一页会跟着反复解析整份缓存。
     @Environment(\.previewHostVisible) private var windowVisible
     @Environment(\.openWindow) private var openWindow
@@ -184,8 +182,6 @@ struct LyricsLibraryStatsPanel: View {
     /// 进度圆环点开的详情(`FillSweepProgressDetail`)。两行一次只有一行在跑,共用这一个。
     @State private var progressDetailShown = false
 
-    private static let snapshotHolder = "settings-library-stats"
-
     private static let numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -197,7 +193,9 @@ struct LyricsLibraryStatsPanel: View {
     }
 
     var body: some View {
-        let counts = memo.counts(store)
+        // 统计数字只读 `libraryDigest`(读盘时在后台算好、快照放掉也留着),不碰整份摘要:这张卡不握快照,
+        // 再进这一页先摆上次的数,缓存变了再刷新。
+        let counts = store.libraryDigest?.counts ?? LyricsLibraryStats.Counts()
         // 用 VStack(spacing: 0) 而不是 Group 装这几行:修饰符挂在 Group 上会**逐个**作用到每个
         // 子视图 —— 下面那个 .task 就会跑出三份轮询循环。外层卡片本身就是 VStack(spacing: 0),
         // 这里再套一层对布局零影响。
@@ -207,7 +205,7 @@ struct LyricsLibraryStatsPanel: View {
                 // 「歌词管理」是卡名行右侧的按钮、不占一整行:它是跳到另一扇窗口的入口,不是设置项,
                 // 占一行会跟统计块平权。说明文字降为按钮的 tooltip。
                 SettingsCardHeader(title: L10n.t("歌词库")) { openManagerButton }
-                if store.summaries.isEmpty && store.isLoading {
+                if store.libraryDigest == nil && store.isLoading {
                     SettingsRawRow(insetToText: true, icon: "music.note.list") {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -244,29 +242,22 @@ struct LyricsLibraryStatsPanel: View {
                 }
             }
         }
-        // `onlyIfChanged` 让重复进出这一页不重复解析整份缓存(全库几千条,那是一次真实的
-        // 开销)。用 .task 而不是 .onAppear:reload 本身是 async 的,挂在 .task 上由 SwiftUI
+        // `refreshLibraryDigest` 让重复进出这一页不重复解析整份缓存(全库上万条,一秒上下):缓存文件没变就不读盘,
+        // 变了才 reload。用 .task 而不是 .onAppear:reload 本身是 async 的,挂在 .task 上由 SwiftUI
         // 负责视图消失时取消。
         //
         // 之后留在这个循环里轮询补空扫描的进度:跑着的时候 2 秒一次,补出一首 / 一轮开始或结束时
         // 顺带 reload(LyricsFillSweep.changesVisibleRows)—— 每补上一首「暂无」那格就该少一,
         // 没补出东西的那些条目统计上什么都不变,不必每条都整份重读;没在跑 5 秒一次只看进度文件的
         // mtime,一次 stat 的开销。视图消失即取消,没有常驻计时器。设置窗口看不见时整个循环停掉,
-        // 重新看得见时从头来一遍(先按指纹 reload,再接着轮询)。
-        // 这一页看得见时握着「歌词管理」那份快照,看不见 / 离开这一页就放手(见 EnrichCacheStore.snapshotHolders)。
-        // 设置窗口隐藏时视图不一定消失,所以按 windowVisible 走,onDisappear 兜离开这一页。
-        .onAppear { if windowVisible { store.holdSnapshot(Self.snapshotHolder) } }
-        .onChange(of: windowVisible) { _, visible in
-            if visible { store.holdSnapshot(Self.snapshotHolder) } else { store.releaseSnapshot(Self.snapshotHolder) }
-        }
-        .onDisappear { store.releaseSnapshot(Self.snapshotHolder) }
+        // 重新看得见时从头来一遍(先按指纹刷新统计,再接着轮询)。不握快照:读完盘没人握着,5 秒后照常放掉。
         .task(id: windowVisible) {
             guard windowVisible else { return }
             // 两份状态文件先读,再重读缓存:这一块每次进页面都是新建的,状态从 nil 起步,而 reload 要把整份
             // 缓存按指纹过一遍、下面的循环还要先睡一拍 —— 后读的话,扫库明明在跑,这两行头几秒显示的是「开始」。
             fillSweepStatus = LyricsFillSweep.current
             fullScanState = LyricsFullScan.current
-            await store.reload(onlyIfChanged: true)
+            await store.refreshLibraryDigest()
             while !Task.isCancelled {
                 let starting = fillSweepStarting || fullScanStarting
                 try? await Task.sleep(for: .seconds(starting ? 1 : (fillSweepStatus?.running == true ? 2 : 5)))
@@ -284,7 +275,7 @@ struct LyricsLibraryStatsPanel: View {
                 let full = LyricsFullScan.current
                 if full != fullScanState { fullScanState = full }
                 if LyricsFillSweep.changesVisibleRows(previous: previous, current: sweep) {
-                    await store.reload(onlyIfChanged: true)
+                    await store.refreshLibraryDigest()
                 }
             }
         }
@@ -496,7 +487,7 @@ struct LyricsLibraryStatsPanel: View {
         // 两个量分开,正是因为这一行只该画补空那一轮,而按钮要对**任意**一轮置灰。
         let running = status?.running == true
         let sweepRunning = running && status?.isFullScan != true
-        let retryable = memo.retryable(store)
+        let retryable = store.libraryDigest?.retryable ?? 0
         SettingsRow(
             icon: "text.magnifyingglass",
             title: L10n.t("自动匹配缺失歌词"),
@@ -752,32 +743,5 @@ struct LyricsLibraryStatsPanel: View {
         // 直接按实测速度算,不再绕"换算成等效首数"那一道:hoursText 现在收显式的每首秒数,
         // 把实测值原样传进去就行。
         return String(format: L10n.t("预计还需%@"), hoursText(left, secondsPerTrack: perTrack))
-    }
-}
-
-/// 统计面板 body 里两个要把整库几千条过一遍的数,按缓存内容(`summariesGeneration`)记住。扫描进行中
-/// `.task` 每 2 秒更新一次进度、整个 body 跟着重算,而这两个数只在缓存内容变了才会变。
-/// 引用类型挂在 @State 里:实例跨重算保持不变,在 body 里更新它不会触发新的重算。
-@MainActor
-private final class LibraryStatsMemo {
-    private var countsGeneration: Int?
-    private var countsValue = LyricsLibraryStats.Counts()
-    private var retryableGeneration: Int?
-    private var retryableValue = 0
-
-    func counts(_ store: EnrichCacheStore) -> LyricsLibraryStats.Counts {
-        if countsGeneration != store.summariesGeneration {
-            countsValue = LyricsLibraryStats.counts(store.summaries)
-            countsGeneration = store.summariesGeneration
-        }
-        return countsValue
-    }
-
-    func retryable(_ store: EnrichCacheStore) -> Int {
-        if retryableGeneration != store.summariesGeneration {
-            retryableValue = store.summaries.filter(EnrichCacheStore.isFillSweepRetryable).count
-            retryableGeneration = store.summariesGeneration
-        }
-        return retryableValue
     }
 }

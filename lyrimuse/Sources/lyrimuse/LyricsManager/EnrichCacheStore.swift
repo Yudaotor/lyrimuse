@@ -262,6 +262,15 @@ public final class EnrichCacheStore: ObservableObject {
     /// summaries 每重建一次 +1 —— 给视图侧的 filtered 缓存当失效键(见 LyricsManagerView),
     /// 数组本身没做 Equatable,靠这个代数判断"列表内容换过了没有"。
     private(set) var summariesGeneration = 0
+    /// 设置页「歌词库」卡要的几个数(各成色桶、译文 / 读音、待补搜),每次读盘在后台跟摘要一起算好。快照放掉也留着
+    /// (几十个字节):再进那一页先摆这份,不用为几个数字重新解析整份歌词库;缓存文件没变就连读盘都省掉
+    /// (`refreshLibraryDigest`)。读盘失败清掉,跟列表一起回到「没有数」。
+    struct LibraryDigest: Equatable {
+        var counts: LyricsLibraryStats.Counts
+        var retryable: Int
+        var fingerprint: FileFingerprint?
+    }
+    @Published private(set) var libraryDigest: LibraryDigest?
     /// 专辑归并展示名:归并键(toSimplified+小写)→ 首见原写法。随 summaries 重建一次
     /// (若做成计算属性、每次访问全量重建,List 每物化一行就要付一次 O(N) 次 ICU 变换,
     /// 是本模块里最重的操作之一)。
@@ -326,7 +335,7 @@ public final class EnrichCacheStore: ObservableObject {
     // true = 内存里没有可用的快照:从没读过、上次读盘失败,或被 `dropSnapshotIfIdle` 清掉了。改动交给引擎
     // 之后据此决定要不要 reload(没人在看就不读)。
     private var isReleased = true
-    // 正在看这份快照的界面(「歌词管理」窗口、设置页「歌词库统计」)。都不看了 `releaseDelay` 之后清掉快照:
+    // 正在看这份快照的界面(「歌词管理」窗口)。都不看了 `releaseDelay` 之后清掉快照:
     // 开着「歌词管理」时它连同列表约占 300 MB,原来关窗之后一直留到 App 退出。
     private var snapshotHolders: Set<String> = []
     private var releaseTask: Task<Void, Never>?
@@ -422,6 +431,7 @@ public final class EnrichCacheStore: ObservableObject {
             var raw: EnrichRawSnapshot?
             var bundle: SummariesBundle?
             var fingerprint: FileFingerprint?
+            var digest: LibraryDigest?
             var parseFailed = false
             // 基线埋点(临时,见 LyricsManagerBaseline)——分段耗时在 detached 闭包里量,
             // 借这个盒子捎回 MainActor 一起打一条日志。
@@ -451,6 +461,11 @@ public final class EnrichCacheStore: ObservableObject {
             // summaries 的构建+排序也在后台做掉(原来回 MainActor 同步跑,
             // 每次开窗/激活吃几十到一二百 ms 主线程),主线程只收结果赋值。
             box.bundle = Self.buildSummaries(from: obj, lyricsDir: lyricsDir)
+            if let summaries = box.bundle?.summaries {
+                box.digest = LibraryDigest(counts: LyricsLibraryStats.counts(summaries),
+                                           retryable: summaries.filter(Self.isFillSweepRetryable).count,
+                                           fingerprint: box.fingerprint)
+            }
             box.buildMS = LyricsManagerBaseline.ms(since: tBuild)
             // 摘要建好了,主歌词不用整份留着(约 40 MB),点开哪一首 hydrate 再从正文小文件补(EnrichCacheSlim.dropMainLyrics)。
             EnrichCacheSlim.dropMainLyrics(&obj)
@@ -462,6 +477,7 @@ public final class EnrichCacheStore: ObservableObject {
             isReleased = false
             if loadError != nil { loadError = nil }
             applySummaries(bundle)
+            if libraryDigest != box.digest { libraryDigest = box.digest }
             scheduleReleaseIfUnheld()
             LyricsManagerBaseline.logReload(
                 bytes: box.bytes, count: snapshot.count,
@@ -475,7 +491,17 @@ public final class EnrichCacheStore: ObservableObject {
             loadError = box.parseFailed ? L10n.t("解析本地记录文件失败") : L10n.t("读取本地记录文件失败")
             // raw 是空的,不用为了建一份空列表去列举整个歌词目录。
             applySummaries(SummariesBundle(summaries: [], albumDisplayMap: [:], distinctArtists: [], distinctAlbums: []))
+            if libraryDigest != nil { libraryDigest = nil }
         }
+    }
+
+    /// 设置页「歌词库」卡进页面、轮询时调:缓存文件跟上次算统计时一样就什么都不做(不读盘),变了才 reload。
+    func refreshLibraryDigest() async {
+        if let digest = libraryDigest, let fingerprint = digest.fingerprint,
+           fingerprint == Self.fileFingerprint(Self.cacheURL) {
+            return
+        }
+        await reload(onlyIfChanged: true)
     }
 
     // nonisolated——从 reload() 里的 Task.detached 闭包(非 MainActor 上下文)调用,
