@@ -1347,7 +1347,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "rectangle.on.rectangle",
                 title: L10n.t("同曲条目共用歌词"),
-                help: L10n.t("开（默认）：同一首歌在不同播放器、不同专辑版本下的条目使用同一份歌词，手动修改会同步到全部条目\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词")
+                help: L10n.t("开（默认）：同一首歌在不同播放器、不同专辑版本下、可确认为同一录音的条目使用同一份歌词，手动修改一并同步\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.songEntityShareLyrics },

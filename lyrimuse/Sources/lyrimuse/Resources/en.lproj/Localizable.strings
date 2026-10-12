@@ -931,7 +931,7 @@
 "开着 %@ 个" = "%@ on";
 "开着时识别所有已知和已信任的播放器；关掉后只认勾选的。" = "When on, every known and trusted player is detected. When off, only the ones you check.";
 "开（默认）：匹配算法或评分规则更新后，会在后台重新评估已有歌词，并可能更换为更合适的版本\n关：歌词确定后不再自动更换；首次解析、手动重新搜索和手动编辑不受影响" = "On (default): when the matching algorithm or scoring rules change, existing lyrics are re-evaluated in the background and may be swapped for a better match\nOff: once chosen, lyrics are never swapped automatically; first-time lookups, manual re-searches and manual edits are unaffected";
-"开（默认）：同一首歌在不同播放器、不同专辑版本下的条目使用同一份歌词，手动修改会同步到全部条目\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词" = "On (default): entries of the same song from different players or album editions use the same lyrics, and manual edits apply to all of them\nOff: each entry is matched on its own, and entries that were synced go back to their original lyrics";
+"开（默认）：同一首歌在不同播放器、不同专辑版本下、可确认为同一录音的条目使用同一份歌词，手动修改一并同步\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词" = "On (default): entries of the same song from different players or album editions that are confirmed to be the same recording use the same lyrics, and manual edits apply to all of them\nOff: each entry is matched on its own, and entries that were synced go back to their original lyrics";
 "开：也 Scrobble，播放过半即记。\n关：不记（官方规则）。" = "On: scrobbled too, once half-played.\nOff: not scrobbled (Last.fm's rule).";
 "当前" = "Current";
 "当前 %@" = "Current %@";
@@ -1468,6 +1468,7 @@
 "歌词源标注的曲目时长" = "Track length reported by the lyrics source";
 "歌词源标注的曲目时长，这首歌曲时长 %@" = "Track length reported by the lyrics source. This song is %@.";
 "歌词源自带的读音。没有这个标记的歌词，也会按设置中「标注读音的语言」自动标注" = "Romanization supplied by the lyrics source. Lyrics without this tag are still romanized for the languages chosen in Settings › Romanization Languages";
+"歌词独立匹配，不随当前条目更换；手动修改也不会同步。" = "Lyrics are matched independently and won't change with the current entry; manual edits don't sync either.";
 "歌词窗口" = "Lyrics Window";
 "歌词窗口…" = "Lyrics Window…";
 "歌词窗口的文字颜色；「自动」根据背景亮度在浅色与深色之间切换" = "The lyrics window's text color. Auto switches between light and dark based on the background's brightness.";
@@ -1793,7 +1794,6 @@
 "自动匹配完成，找到 %@ 首" = "Auto-match finished: %@ found";
 "自动匹配已停止" = "Auto-Match Stopped";
 "自动匹配正在进行，可在左下角查看进度" = "Auto-match is in progress; see the bottom left for progress";
-"自动匹配独立进行，不随当前条目更换；手动修改仍会同步。" = "Lyrics are matched independently and won't change with the current entry; manual edits still sync.";
 "自动匹配的歌词与当前条目同步：更换歌词时一并更新，手动修改也会同步。" = "Automatically matched lyrics stay in sync with the current entry: replacements and manual edits apply to both.";
 "自动匹配缺失歌词" = "Auto-Match Missing Lyrics";
 "自动备份失败，为避免数据无法恢复，本次未执行删除。请检查磁盘空间和配置文件夹的写入权限后重试" = "The automatic backup couldn't be written, so nothing was deleted this time to keep it recoverable. Check your disk space and write access to the config folder, then try again.";

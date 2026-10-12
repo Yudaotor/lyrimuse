@@ -787,7 +787,7 @@ struct SongVersionsSheet: View {
         switch relation {
         case .current: return ""
         case .shared: return L10n.t("自动匹配的歌词与当前条目同步：更换歌词时一并更新，手动修改也会同步。")
-        case .own: return L10n.t("自动匹配独立进行，不随当前条目更换；手动修改仍会同步。")
+        case .own: return L10n.t("歌词独立匹配，不随当前条目更换；手动修改也不会同步。")
         case .split: return L10n.t("已从此歌曲拆分：作为独立歌曲单独统计播放次数，歌词不再关联。如拆分有误，可恢复合并。")
         }
     }

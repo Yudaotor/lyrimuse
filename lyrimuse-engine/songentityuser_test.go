@@ -348,6 +348,24 @@ func TestManualLockCountsOriginalsOnly(t *testing.T) {
 }
 
 // 两份手改选一份统一:别的原件留底、另存一份此刻的整条,换成选定那份的副本;其余写法跟上;开关关着、选的不是原件时拒绝。
+// 统一两份手改只动同一个共享组:别的组自己的手改原件留着。
+func TestResolveManualConflictStaysInShareGroup(t *testing.T) {
+	setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: songShareLRC("x"), LyricsSource: "manual", ManualLyrics: true},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: songShareLRC("y"), LyricsSource: "manual", ManualLyrics: true},
+		"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: songShareLRC("z"), LyricsSource: "manual", ManualLyrics: true},
+	}, true)
+	if res := applyEnrichEdit(enrichEditRequest{Op: "resolve_manual_conflict", Key: "A|Song|One"}); !res.OK {
+		t.Fatalf("统一: %+v", res)
+	}
+	if got, _ := cacheEntry(t, "A|Song|Two"); got.Lyrics != songShareLRC("x") || got.LyricsEntityOrigin != "A|Song|One" {
+		t.Errorf("同组那份换成选的: %+v", got)
+	}
+	if got, _ := cacheEntry(t, "A|Song|Three"); got.Lyrics != songShareLRC("z") || got.LyricsEntityOrigin != "" {
+		t.Errorf("别的组的手改原件留着: %+v", got)
+	}
+}
+
 func TestResolveManualConflictEdit(t *testing.T) {
 	a, b, auto := songShareLRC("mine-a"), songShareLRC("mine-b"), songShareLRC("auto")
 	dir := setUpSongShareTest(t, map[string]enrichEntry{

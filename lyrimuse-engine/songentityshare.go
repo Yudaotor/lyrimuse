@@ -19,10 +19,11 @@ import (
 
 // 歌曲实体阶段 3:歌词按实体同步。开关 songEntitySharing()(`lyrimuse-features.json` 的 `song_entity_share_lyrics`,
 // 默认关,界面不露出;阶段 0 的建表要开着)。见 18 章决策 26、27。
-//   - 手改、采纳(采纳的那一份还在)同步到整个实体:改的当场同步(shareManualEditLocked),存量和后来才挂进实体的写法由每次
-//     建表之后那一轮补上。对方自己的手改原件、校准挡得住,标了纯音乐的不动;实体里两份内容不同的原件不替用户选。副本带
-//     同样的手改标记,lyrics_entity_origin 记原件。
-//   - 实体里没有手改时按共享组。组里钉着的写法、App 记下的校准正对着它现在这份歌词的(lyricsPinsFile.Content),其余写法
+//   - 手改、采纳(采纳的那一份还在)同步到同一个共享组:改的当场同步(shareManualEditLocked),存量和后来才挂进组里的写法由
+//     每次建表之后那一轮补上。只靠检索 id、只算计数连着的写法不在同一组,不跟(没把握是同一份录音的不同步,18 章决策 58)。
+//     对方自己的手改原件、校准挡得住,标了纯音乐的不动;组里两份内容不同的原件不替用户选。副本带同样的手改标记,
+//     lyrics_entity_origin 记原件。
+//   - 组里没有手改时按共享组。组里钉着的写法、App 记下的校准正对着它现在这份歌词的(lyricsPinsFile.Content),其余写法
 //     跟着用这一份、读穿那个偏移(sharePinnedPass),两份不同的这种校准不替用户选;组里钉着、校准却对着别的歌词的不动。
 //     组里没有校准、歌词不止一份或有写法没词的(shareEvalGroups),以整首歌重搜一轮,冠军是整组那一份,每条写法的去留跟
 //     正式空跑同一套(shareEvalPlan)。
@@ -244,9 +245,9 @@ func songShareCopyPinned(dst *enrichEntry, src enrichEntry, origin string, now t
 	dst.LyricsEntityOrigin = ""
 }
 
-// shareManualLocked:keys 是一个实体的全部写法。from 非空时它是刚改的那条,其余写法跟着它;为空时(建表之后那一轮)实体里
-// 原件只有一份内容才跟,两份不同的不替用户选(conflict)。实体里一个原件都没有时:原件已经不在缓存里的副本,挑键最小的一条
-// 升成原件,其余照它同步;原件还在、却不再是这个实体里的手改原件的副本,按留底恢复(releaseStaleCopiesLocked)。
+// shareManualLocked:keys 是一个共享组的全部写法。from 非空时它是刚改的那条,其余写法跟着它;为空时(建表之后那一轮)组里
+// 原件只有一份内容才跟,两份不同的不替用户选(conflict)。组里一个原件都没有时:原件已经不在缓存里的副本,挑键最小的一条
+// 升成原件,其余照它同步;原件还在、却不在这个组里的副本(分到了别的组或别的实体),按留底恢复(releaseStaleCopiesLocked)。
 // 返回改了的写法。调用方持 enrichMu。
 func shareManualLocked(keys []string, from string, pins map[string]bool, now time.Time) (changed []string, conflict bool) {
 	origin := from
@@ -370,8 +371,8 @@ func songShareRestore(e *enrichEntry, pre enrichEntry) {
 	e.LyricsSongwriters = pre.LyricsSongwriters
 }
 
-// shareManualEditLocked:歌词管理刚把 key 这条存成手改或采纳(applySaveEdit),开关开着时同步到整个实体,返回跟着改了的写法。
-// 调用方持 enrichMu。
+// shareManualEditLocked:歌词管理刚把 key 这条存成手改或采纳(applySaveEdit),开关开着时同步到同一个共享组,返回跟着改了的
+// 写法。调用方持 enrichMu。
 func shareManualEditLocked(key string, now time.Time) []string {
 	e := enrichCache[key]
 	if e.Song == "" || !songShareManualOriginal(e) {
@@ -379,7 +380,7 @@ func shareManualEditLocked(key string, now time.Time) []string {
 	}
 	var keys []string
 	for k, x := range enrichCache {
-		if x.Song == e.Song {
+		if x.Song == e.Song && x.SongShare == e.SongShare {
 			keys = append(keys, k)
 		}
 	}
@@ -772,18 +773,20 @@ func songShareFingerprints(keys []string) map[string]string {
 	return out
 }
 
-// shareManualPass:每个多写法实体过一遍 shareManualLocked,改了的当场落盘、导出。
+// shareManualPass:每个共享组过一遍 shareManualLocked,改了的当场落盘、导出。只有一条写法的组只在它是副本时过(原件分到了
+// 别的组或别的实体,要按留底恢复)。
 func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t *songShareTally) {
 	var all []string
-	for _, ms := range b.clusters {
-		if len(ms) < 2 {
-			continue
-		}
+	for _, ms := range b.shareGroupsOf() {
 		keys := make([]string, len(ms))
 		for i, m := range ms {
 			keys[i] = b.variants[m].key
 		}
 		enrichMu.Lock()
+		if len(keys) == 1 && enrichCache[keys[0]].LyricsEntityOrigin == "" {
+			enrichMu.Unlock()
+			continue
+		}
 		changed, conflict := shareManualLocked(keys, "", pins, now)
 		if len(changed) > 0 {
 			markEnrichEditedLocked(false, changed...)
@@ -802,6 +805,26 @@ func (b *songEntityBuild) shareManualPass(pins map[string]bool, now time.Time, t
 	flushShareChanges(all)
 }
 
+// shareGroupsOf:全部共享组(各写法下标,组内按下标、组按实体顺序和组根排),含只有一条写法的。
+func (b *songEntityBuild) shareGroupsOf() [][]int {
+	var out [][]int
+	for _, members := range b.clusters {
+		groups := map[int][]int{}
+		for _, m := range members {
+			groups[b.shareOf[m]] = append(groups[b.shareOf[m]], m)
+		}
+		roots := make([]int, 0, len(groups))
+		for r := range groups {
+			roots = append(roots, r)
+		}
+		sort.Ints(roots)
+		for _, r := range roots {
+			out = append(out, groups[r])
+		}
+	}
+	return out
+}
+
 // flushShareChanges:同步改了的写法逐条落盘、导出歌词文件、推给 App。
 func flushShareChanges(keys []string) {
 	if len(keys) == 0 {
@@ -814,18 +837,23 @@ func flushShareChanges(keys []string) {
 	nudgeEnrichPush()
 }
 
-// sharePinnedPass:实体里没有手改时,共享组里钉着的写法、App 记下的校准正对着它现在这份歌词的(content,见
+// sharePinnedPass:组里没有手改时,共享组里钉着的写法、App 记下的校准正对着它现在这份歌词的(content,见
 // lyricsPinsFile.Content),组里其余写法跟着用这一份,读穿那个偏移;组里两份不同的这种校准不替用户选。own 是建表那一刻
 // 各写法的歌词。改了的当场落盘、导出。
 func (b *songEntityBuild) sharePinnedPass(own []*songPlanLyrics, pins map[string]bool, content map[string]string, now time.Time, t *songShareTally) {
 	var all []string
 	for _, members := range b.clusters {
-		if len(members) < 2 || slices.ContainsFunc(members, func(m int) bool { return own[m] != nil && own[m].manual }) {
+		if len(members) < 2 {
 			continue
 		}
 		groups := map[int][]int{}
 		for _, m := range members {
 			groups[b.shareOf[m]] = append(groups[b.shareOf[m]], m)
+		}
+		for r, ms := range groups {
+			if slices.ContainsFunc(ms, func(m int) bool { return own[m] != nil && own[m].manual }) {
+				delete(groups, r)
+			}
 		}
 		roots := make([]int, 0, len(groups))
 		for r := range groups {

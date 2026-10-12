@@ -686,6 +686,102 @@ func TestStartupSweepsOrphanSongSharePre(t *testing.T) {
 	}
 }
 
+// 手改只同步到同一个共享组:同一首歌别的共享组(只靠检索 id、只算计数连着的)不跟。
+func TestManualSyncStaysInShareGroup(t *testing.T) {
+	setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: songShareLRC("a"), LyricsSource: "qq"},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: songShareLRC("a"), LyricsSource: "qq"},
+		"A|Song|Three": {Song: "s_000000000001", SongShare: 1, Lyrics: songShareLRC("c"), LyricsSource: "kugou"},
+	}, true)
+	fixed := songShareLRC("fixed")
+	res := applyEnrichEdit(enrichEditRequest{ID: "r", Op: "save_edit", Key: "A|Song|One", Lyrics: fixed, Source: "manual", MarkManual: true, YRC: strPtr("")})
+	if !res.OK || res.Changed != 2 {
+		t.Fatalf("保存手改(自己和同组那一条): %+v", res)
+	}
+	if got, _ := cacheEntry(t, "A|Song|Two"); got.Lyrics != fixed || got.LyricsEntityOrigin != "A|Song|One" {
+		t.Errorf("同一个共享组跟上: %+v", got)
+	}
+	if got, _ := cacheEntry(t, "A|Song|Three"); got.Lyrics != songShareLRC("c") || got.LyricsEntityOrigin != "" || hasPre("A|Song|Three") {
+		t.Errorf("别的共享组不跟: %+v", got)
+	}
+}
+
+// 建表之后那一轮按共享组过手改:组里的跟上原件;原件在别的组的旧副本(之前按整首歌同步过去的)按留底恢复;只有一条写法的组
+// 是副本时同样恢复。
+func TestShareManualPassPerShareGroup(t *testing.T) {
+	fixed := songShareLRC("fixed")
+	copyOf := func() enrichEntry {
+		return enrichEntry{Song: "s_000000000001", Lyrics: fixed, LyricsSource: "manual", ManualLyrics: true, LyricsEntityOrigin: "A|Song|One"}
+	}
+	setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One":   {Song: "s_000000000001", Lyrics: fixed, LyricsSource: "manual", ManualLyrics: true},
+		"A|Song|Two":   {Song: "s_000000000001", Lyrics: songShareLRC("b"), LyricsSource: "qq"},
+		"A|Song|Three": copyOf(),
+		"A|Song|Four":  copyOf(),
+	}, true)
+	now := time.Unix(6_000_000, 0)
+	for k, old := range map[string]string{"A|Song|Three": "c", "A|Song|Four": "d"} {
+		if _, err := writeSongSharePre(k, enrichEntry{Song: "s_000000000001", Lyrics: songShareLRC(old), LyricsSource: "kugou"}, songOffsetFingerprint(fixed, ""), now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keys := []string{"A|Song|Four", "A|Song|One", "A|Song|Three", "A|Song|Two"}
+	b := &songEntityBuild{clusters: [][]int{{0, 1, 2, 3}}, shareOf: []int{0, 1, 2, 1}}
+	for _, k := range keys {
+		b.variants = append(b.variants, songVariant{key: k})
+	}
+	var tally songShareTally
+	b.shareManualPass(lyricsPinnedKeys(), now, &tally)
+	if got, _ := cacheEntry(t, "A|Song|Two"); got.Lyrics != fixed || got.LyricsEntityOrigin != "A|Song|One" {
+		t.Errorf("同组跟上原件: %+v", got)
+	}
+	for k, old := range map[string]string{"A|Song|Three": "c", "A|Song|Four": "d"} {
+		if got, _ := cacheEntry(t, k); got.Lyrics != songShareLRC(old) || got.LyricsEntityOrigin != "" || got.ManualLyrics || hasPre(k) {
+			t.Errorf("%s 原件在别的组,按留底恢复: %+v pre=%v", k, got, hasPre(k))
+		}
+	}
+}
+
+// 实体里一个共享组有手改时,只跳过那一组:别的组照常按组重搜、跟着校准。
+func TestShareGroupsSkipOnlyManualGroup(t *testing.T) {
+	keys := []string{"A|Song|One", "A|Song|Two", "A|Song|Three", "A|Song|Four"}
+	b := &songEntityBuild{clusters: [][]int{{0, 1, 2, 3}}, shareOf: []int{0, 0, 2, 2}}
+	own := make([]*songPlanLyrics, len(keys))
+	for i, k := range keys {
+		b.variants = append(b.variants, songVariant{key: k})
+		own[i] = songPlanLyricsFor(k, songShareLRC(k), "", "qq", i == 0, false, nil, "")
+	}
+	groups := b.shareEvalGroups(own)
+	if len(groups) != 1 || !slices.Equal(groups[0], []int{2, 3}) {
+		t.Errorf("有手改的组跳过、别的组照搜: %v", groups)
+	}
+}
+
+// 跟着校准那一轮也只跳过有手改的组:同一首歌另一组里钉着的那份照样带着组里其余写法。
+func TestSharePinnedPassSkipsOnlyManualGroup(t *testing.T) {
+	keys := []string{"A|Song|One", "A|Song|Two", "A|Song|Three", "A|Song|Four"}
+	entries := map[string]enrichEntry{}
+	for i, k := range keys {
+		entries[k] = enrichEntry{Song: "s_000000000001", Lyrics: songShareLRC(k), LyricsSource: "qq", ManualLyrics: i == 0}
+	}
+	setUpSongShareTest(t, entries, true, "A|Song|Three")
+	b := &songEntityBuild{clusters: [][]int{{0, 1, 2, 3}}, shareOf: []int{0, 0, 2, 2}}
+	own := make([]*songPlanLyrics, len(keys))
+	for i, k := range keys {
+		b.variants = append(b.variants, songVariant{key: k})
+		own[i] = songPlanLyricsFor(k, songShareLRC(k), "", "qq", i == 0, k == "A|Song|Three", nil, "")
+	}
+	content := map[string]string{"A|Song|Three": songOffsetFingerprint(songShareLRC("A|Song|Three"), "")}
+	var tally songShareTally
+	b.sharePinnedPass(own, map[string]bool{"A|Song|Three": true}, content, time.Unix(6_000_000, 0), &tally)
+	if got, _ := cacheEntry(t, "A|Song|Four"); got.Lyrics != songShareLRC("A|Song|Three") {
+		t.Errorf("没有手改的那一组跟着校准: %q", got.Lyrics)
+	}
+	if got, _ := cacheEntry(t, "A|Song|Two"); got.Lyrics != songShareLRC("A|Song|Two") {
+		t.Errorf("有手改的那一组不动: %q", got.Lyrics)
+	}
+}
+
 // 删掉、清空条目时同步留底跟着删:不然这条写法再放回来又被同步时沿用删之前那份,恢复成删掉的旧词。
 func TestDeleteAndClearDropSongSharePre(t *testing.T) {
 	setUpSongShareTest(t, map[string]enrichEntry{

@@ -9,7 +9,8 @@ import (
 	"time"
 )
 
-// 歌词文件夹里改过的一条:同步开着时按手改处理,同一首歌的其他写法跟上;同步关着、从快照恢复时只改这一条。
+// 歌词文件夹里改过的一条:同步开着时按手改处理,同一个共享组的写法跟上(别的共享组不跟,18 章决策 58);同步关着、从快照恢复时
+// 只改这一条。
 func TestImportedEditSyncsToSong(t *testing.T) {
 	for _, c := range []struct {
 		name    string
@@ -68,11 +69,11 @@ func TestImportedEditSyncsToSong(t *testing.T) {
 			if one.ManualLyrics != c.synced {
 				t.Errorf("同步开着才按手改处理: manual=%v", one.ManualLyrics)
 			}
-			for _, k := range []string{"A|Song|Two", "A|Song|Three"} {
-				got, _ := cacheEntry(t, k)
-				if follows := got.Lyrics == one.Lyrics && got.LyricsEntityOrigin == "A|Song|One"; follows != c.synced {
-					t.Errorf("%s 跟上手改: %v (%+v)", k, follows, got)
-				}
+			if got, _ := cacheEntry(t, "A|Song|Two"); (got.Lyrics == one.Lyrics && got.LyricsEntityOrigin == "A|Song|One") != c.synced {
+				t.Errorf("同一个共享组跟上手改: %+v", got)
+			}
+			if got, _ := cacheEntry(t, "A|Song|Three"); got.Lyrics != songShareLRC("other") || got.LyricsEntityOrigin != "" {
+				t.Errorf("别的共享组不跟: %+v", got)
 			}
 			if got, _ := cacheEntry(t, "B|Other|One"); got.Lyrics != auto {
 				t.Errorf("别的歌不动: %q", got.Lyrics)

@@ -26438,25 +26438,25 @@
         }
       }
     },
-    "开（默认）：同一首歌在不同播放器、不同专辑版本下的条目使用同一份歌词，手动修改会同步到全部条目\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词" : {
+    "开（默认）：同一首歌在不同播放器、不同专辑版本下、可确认为同一录音的条目使用同一份歌词，手动修改一并同步\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On (default): entries of the same song from different players or album editions use the same lyrics, and manual edits apply to all of them\nOff: each entry is matched on its own, and entries that were synced go back to their original lyrics"
+            "value" : "On (default): entries of the same song from different players or album editions that are confirmed to be the same recording use the same lyrics, and manual edits apply to all of them\nOff: each entry is matched on its own, and entries that were synced go back to their original lyrics"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "开（默认）：同一首歌在不同播放器、不同专辑版本下的条目使用同一份歌词，手动修改会同步到全部条目\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词"
+            "value" : "开（默认）：同一首歌在不同播放器、不同专辑版本下、可确认为同一录音的条目使用同一份歌词，手动修改一并同步\n关：各条目分别匹配歌词，已同步的条目恢复为原来的歌词"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開（預設）：同一首歌在不同播放器、不同專輯版本下的條目使用同一份歌詞，手動修改會同步到全部條目\n關：各條目分別比對歌詞，已同步的條目恢復為原來的歌詞"
+            "value" : "開（預設）：同一首歌在不同播放器、不同專輯版本下、可確認為同一錄音的條目使用同一份歌詞，手動修改一併同步\n關：各條目分別比對歌詞，已同步的條目恢復為原來的歌詞"
           }
         }
       }
@@ -45155,19 +45155,25 @@
         }
       }
     },
-    "自动匹配独立进行，不随当前条目更换；手动修改仍会同步。" : {
+    "歌词独立匹配，不随当前条目更换；手动修改也不会同步。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrics are matched independently and won't change with the current entry; manual edits still sync."
+            "value" : "Lyrics are matched independently and won't change with the current entry; manual edits don't sync either."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词独立匹配，不随当前条目更换；手动修改也不会同步。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "自動匹配獨立進行，不隨目前條目更換；手動修改仍會同步。"
+            "value" : "歌詞獨立匹配，不隨目前條目更換；手動修改也不會同步。"
           }
         }
       }

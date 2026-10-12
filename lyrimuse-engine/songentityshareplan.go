@@ -135,17 +135,22 @@ func songSharePickHeld(e enrichEntry) bool {
 	return e.ManualPickSHA != "" && e.ManualPickSHA == manualPickFingerprint(e.Lyrics)
 }
 
-// shareEvalGroups:正式空跑要重搜的共享组:实体里没有手改或采纳、组里没有校准、两条写法以上,而且组里歌词不止一份
+// shareEvalGroups:正式空跑要重搜的共享组:组里没有手改或采纳、没有校准、两条写法以上,而且组里歌词不止一份
 // (或者有写法没词)。手改、校准那几首不用搜,快速版已经按规则定了。
 func (b *songEntityBuild) shareEvalGroups(own []*songPlanLyrics) [][]int {
 	var out [][]int
 	for _, members := range b.clusters {
-		if len(members) < 2 || slices.ContainsFunc(members, func(m int) bool { return own[m] != nil && own[m].manual }) {
+		if len(members) < 2 {
 			continue
 		}
 		groups := map[int][]int{}
 		for _, m := range members {
 			groups[b.shareOf[m]] = append(groups[b.shareOf[m]], m)
+		}
+		for r, ms := range groups {
+			if slices.ContainsFunc(ms, func(m int) bool { return own[m] != nil && own[m].manual }) {
+				delete(groups, r)
+			}
 		}
 		roots := make([]int, 0, len(groups))
 		for r := range groups {

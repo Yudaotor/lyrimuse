@@ -241,8 +241,8 @@ func unsplitSongEdit(keys []string) (int, error) {
 	return removed, nil
 }
 
-// resolveManualConflictEdit:同一首歌里有几份内容不同的手改原件(建表之后那一轮不替用户选,见 shareManualLocked)时,用户在歌词
-// 管理里选 key 那一份统一(请求 resolve_manual_conflict,18 章决策 31)。别的原件换成它的副本:先按 writeSongSharePre 留底,
+// resolveManualConflictEdit:同一个共享组里有几份内容不同的手改原件(建表之后那一轮不替用户选,见 shareManualLocked)时,用户在
+// 歌词管理里选 key 那一份统一(请求 resolve_manual_conflict,18 章决策 31)。别的原件换成它的副本:先按 writeSongSharePre 留底,
 // 另把它们这一刻的整条存进 ~/.config/lyrimuse-backups/<时刻>-song-entity-manual/(留底只存第一次同步之前那份,这一刻的手改
 // 只有这里有);其余写法照手改同步跟上。开关关着、这条不是手改原件、没有实体 id 时拒绝。
 func resolveManualConflictEdit(key string, now time.Time) enrichEditOutcome {
@@ -259,7 +259,7 @@ func resolveManualConflictEdit(key string, now time.Time) enrichEditOutcome {
 	fp := songOffsetFingerprint(src.Lyrics, src.LyricsYRC)
 	var keys, others []string
 	for k, e := range enrichCache {
-		if e.Song != src.Song {
+		if e.Song != src.Song || e.SongShare != src.SongShare {
 			continue
 		}
 		keys = append(keys, k)
