@@ -33,8 +33,8 @@ import (
 // permitted`,来自 ReadDir 而非 Stat),只在 stat 那一支记日志会让这类拒绝继续无声无息。
 //
 // 哪几条需要授权由**路径在不在 `~/Library/Containers/` 下**决定,不是按播放器分:酷狗 /
-// QQ 音乐 / 网易云在那底下(要授权),汽水(`Application Support/SodaMusic/`)与 Apple Music
-// (`Caches/com.apple.Music/`)不在(不要)。别把这个判断硬编码成来源名单。
+// QQ 音乐 / 网易云 / 汽水(沙盒版)在那底下(要授权),Apple Music(`Caches/com.apple.Music/`)
+// 不在(不要)。别把这个判断硬编码成来源名单。
 
 // localCacheAccessState 是设置页那三格「客户端缓存读不到」提示的数据源。
 //

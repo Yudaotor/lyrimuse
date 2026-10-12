@@ -26,7 +26,7 @@ func localCacheClientPaths() map[string][]string {
 			kugouConfigPlistPath(), kugouLibraryDBPath(), kugouNowPlayingPath()},
 		"qq":         {qqLocalDBPath(), qqUpcomingPath()},
 		"netease":    {neteaseLocalDBPath(), neteaseUpcomingPath(), neteaseFMPath()},
-		"soda":       {sodaLocalQueuePath(), sodaPreloadPath()},
+		"soda":       {sodaContainerPath(sodaQueueRel), sodaContainerPath(sodaPreloadRel)},
 		"applemusic": {applemusicLocalCacheDir()},
 		"spotify":    {spotifyISRCUsersDir()},
 		"kkbox":      {kkboxLocalStorageDir(), kkboxCacheDir()},

@@ -135,7 +135,7 @@
       "dropsSessionWhilePlaying": false,
       "ignoresSeekCommand": false,
       "needsAutomationPermission": false,
-      "needsFullDiskAccess": false,
+      "needsFullDiskAccess": true,
       "needsAccessibilityPermission": false,
       "tint": {"rgb": [0.30, 0.85, 0.35]},
       "fallbackSymbol": "music.note",

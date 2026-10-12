@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -49,11 +48,7 @@ func sodaPreloadPath() string {
 	if sodaPreloadOverride != "" {
 		return sodaPreloadOverride
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Application Support/SodaMusic/LunaCacheV2/entries.db")
+	return sodaDataPath(sodaPreloadRel)
 }
 
 // sodaPreloadedTrack 是一段预载缓存对应的曲目。

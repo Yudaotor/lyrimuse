@@ -128,6 +128,7 @@ var playerNeedsFullDiskAccess = map[string]bool{
 	playerQQMusic: true,
 	playerNetease: true,
 	playerKugou:   true,
+	playerSoda:    true,
 }
 
 // playerArtistlessNotMusic 是「bundle id → 歌手空、时长 > 0、在放的是非歌曲内容(播客单集)」。

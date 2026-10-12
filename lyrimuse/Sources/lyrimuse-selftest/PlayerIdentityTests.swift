@@ -809,17 +809,17 @@ func runPlayerIdentityTests() {
     // TestPlayersNeedFullDiskAccessMatchesClientPaths 按真实路径对账),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess), [.qqMusic, .netease, .kugou],
-                    "完全磁盘访问判据: 客户端文件在私有容器里的就这三家")
-        expectEqual(P([.auto]).playersNeedingFullDiskAccess, [.qqMusic, .netease, .kugou],
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess), [.qqMusic, .netease, .kugou, .soda],
+                    "完全磁盘访问判据: 客户端文件在私有容器里的就这四家(汽水是沙盒版)")
+        expectEqual(P([.auto]).playersNeedingFullDiskAccess, [.qqMusic, .netease, .kugou, .soda],
                     "完全磁盘访问判据: 纯 auto 按超集算")
         expectEqual(P([.kugou, .spotify]).playersNeedingFullDiskAccess, [.kugou],
                     "完全磁盘访问判据: 多选里只挑出要授权的那几家")
-        expectEqual(P([.spotify, .soda, .appleMusic]).playersNeedingFullDiskAccess, [],
-                    "完全磁盘访问判据: Spotify / 汽水 / Apple Music 的文件不在私有容器里,不出现")
+        expectEqual(P([.spotify, .soda, .appleMusic]).playersNeedingFullDiskAccess, [.soda],
+                    "完全磁盘访问判据: Spotify / Apple Music 的文件不在私有容器里,不出现;汽水在")
         // 状态文件里的来源名就是各家的 nativeLyricSource —— 对不上的话结论永远是「还没确认」。
         expectEqual(PlaybackPlayer.allCases.filter(\.needsFullDiskAccess).map(\.nativeLyricSource),
-                    ["qq", "netease", "kugou"],
+                    ["qq", "netease", "kugou", "soda"],
                     "完全磁盘访问判据: 要授权的每家都有 nativeLyricSource,且就是引擎状态文件里的来源名")
     }
 
@@ -1948,7 +1948,7 @@ func runPlayerIdentityTests() {
         expectEqual(PH.warnings(.init(automationMissingPlayers: [], engineServiceEnabled: true, engineRunning: true,
                                       accessibilityMissingPlayers: [.amazonMusic])),
                     [.accessibilityMissing], "PlayerHealth: 只缺辅助功能时也亮徽标")
-        expectEqual([PlaybackPlayer.qqMusic, .netease, .kugou].allSatisfy(\.needsFullDiskAccess)
+        expectEqual([PlaybackPlayer.qqMusic, .netease, .kugou, .soda].allSatisfy(\.needsFullDiskAccess)
                     && [PlaybackPlayer.amazonMusic].allSatisfy(\.needsAccessibilityPermission)
                     && !PlaybackPlayer.appleMusic.needsAccessibilityPermission, true,
                     "PlayerHealth: 哪几家要这两项权限,跟播放器目录一致")
