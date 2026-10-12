@@ -161,6 +161,31 @@ enum ChoiceHighlight {
         guard isSelected, scheme != .dark else { return .clear }
         return Color.black.opacity(0.07)
     }
+
+    /// 摆在引导页整窗玻璃上的格子(`choiceCardsOnGlass`):没选中是一层很淡的白,选中亮一档。不分深浅外观:
+    /// 底是透出桌面的玻璃,明暗跟着桌面走。选中靠强调色描边和对号表达,不加投影。见 14 章决策 91。
+    static func glassFill(isSelected: Bool, isHovering: Bool) -> Color {
+        if isSelected { return Color.white.opacity(0.32) }
+        return Color.white.opacity(isHovering ? 0.14 : 0.08)
+    }
+
+    static func glassStroke(isSelected: Bool) -> Color {
+        isSelected ? Color.accentColor : Color.white.opacity(0.35)
+    }
+
+    static func glassLineWidth(isSelected: Bool) -> CGFloat { isSelected ? 1.5 : 0.5 }
+}
+
+private struct ChoiceCardsOnGlassKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// 选项格子摆在引导页的整窗玻璃上,换成 `ChoiceHighlight.glassFill` 那一套。设置页不设。
+    var choiceCardsOnGlass: Bool {
+        get { self[ChoiceCardsOnGlassKey.self] }
+        set { self[ChoiceCardsOnGlassKey.self] = newValue }
+    }
 }
 
 /// 选项卡片的外壳(圆角底 + 选中态的强调色描边/浅底)。从 `PlayerChoiceCard`
@@ -176,23 +201,35 @@ private struct ChoiceCardChrome: ViewModifier {
     var highlightsOnHover: Bool = true
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.choiceCardsOnGlass) private var onGlass
     @State private var isHovering = false
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 11, style: .continuous) }
+
+    private var fill: Color {
+        onGlass ? ChoiceHighlight.glassFill(isSelected: isSelected, isHovering: isHovering)
+                : ChoiceHighlight.fill(isSelected: isSelected, isHovering: isHovering, scheme: colorScheme)
+    }
+
+    private var stroke: Color {
+        onGlass ? ChoiceHighlight.glassStroke(isSelected: isSelected)
+                : ChoiceHighlight.stroke(isSelected: isSelected, scheme: colorScheme)
+    }
+
+    private var lineWidth: CGFloat {
+        onGlass ? ChoiceHighlight.glassLineWidth(isSelected: isSelected) : ChoiceHighlight.lineWidth(isSelected: isSelected)
+    }
+
+    private var shadow: Color {
+        onGlass ? .clear : ChoiceHighlight.selectedShadow(isSelected: isSelected, scheme: colorScheme)
+    }
 
     func body(content: Content) -> some View {
         content
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
-            .background(
-                shape.fill(ChoiceHighlight.fill(isSelected: isSelected,
-                                                isHovering: isHovering,
-                                                scheme: colorScheme))
-                    .shadow(color: ChoiceHighlight.selectedShadow(isSelected: isSelected, scheme: colorScheme),
-                            radius: 2, y: 1)
-            )
-            .overlay(shape.strokeBorder(ChoiceHighlight.stroke(isSelected: isSelected, scheme: colorScheme),
-                                        lineWidth: ChoiceHighlight.lineWidth(isSelected: isSelected)))
+            .background(shape.fill(fill).shadow(color: shadow, radius: 2, y: 1))
+            .overlay(shape.strokeBorder(stroke, lineWidth: lineWidth))
             // 「由自动识别接管」= **虚线**强调色描边:虚线读作"不是一个你勾上的选项",
             // 加上强调色正好表达"它在生效,但不是你勾的"。
             //

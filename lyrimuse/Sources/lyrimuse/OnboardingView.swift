@@ -494,6 +494,7 @@ struct OnboardingView: View {
                     toggleYouTubeMusic()
                 }
             }
+            .environment(\.choiceCardsOnGlass, true)
             .padding(14)
             .onboardingCardBackground(cornerRadius: 14, fallbackFill: Color.primary.opacity(0.035),
                                       fallbackStroke: Color.primary.opacity(0.08))
@@ -563,11 +564,16 @@ struct OnboardingView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
+                // 同第 2 步:玻璃外框 + 玻璃配色的格子(14 章决策 91)。
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                     ForEach(candidates, id: \.self) { bundleID in
                         browserCard(bundleID: bundleID, platformID: platformID)
                     }
                 }
+                .environment(\.choiceCardsOnGlass, true)
+                .padding(14)
+                .onboardingCardBackground(cornerRadius: 14, fallbackFill: Color.primary.opacity(0.035),
+                                          fallbackStroke: Color.primary.opacity(0.08))
                 // 这里**曾经**有一行小字「亮起来的就是已经配好的；再点一下取消」,
                 // 同日加上又被去掉("去掉这个文案")。加它的理由是:点一张
                 // 已经亮着的卡做的是取消配对,而正文邀请的是"选",怕用户误删(那天确实误删过
@@ -820,7 +826,7 @@ struct OnboardingView: View {
     private static let setupRowIndent: CGFloat = 30
 
     private func cardRow<Leading: View, Trailing: View>(
-        leadingWidth: CGFloat = 20, title: String, subtitle: String?,
+        leadingWidth: CGFloat = 20, verticalPadding: CGFloat = 9, title: String, subtitle: String?,
         @ViewBuilder leading: () -> Leading, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         HStack(alignment: .center, spacing: 10) {
@@ -841,13 +847,14 @@ struct OnboardingView: View {
             Spacer(minLength: 8)
             trailing()
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, verticalPadding)
     }
 
     /// 左侧是一个 SF Symbol 的卡片行。
     private func setupRow<Trailing: View>(icon: String, tint: Color, title: String, subtitle: String?,
+                                          verticalPadding: CGFloat = 9,
                                           @ViewBuilder trailing: () -> Trailing) -> some View {
-        cardRow(title: title, subtitle: subtitle) {
+        cardRow(verticalPadding: verticalPadding, title: title, subtitle: subtitle) {
             Image(systemName: icon)
                 .font(.system(size: 15))
                 .foregroundStyle(tint)
@@ -888,12 +895,13 @@ struct OnboardingView: View {
     /// (触控栏只在这台 Mac 有触控栏时提)。
     private var lyricsExtrasSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 0) {
                 toggleRow(
                     icon: "text.bubble",
                     title: L10n.t("显示译文"),
                     subtitle: L10n.t("在歌词下方显示一行译文"),
                     isOn: overlayAndWindow(\.overlayShowTranslation, \.showTranslation))
+                setupDivider
                 toggleRow(
                     icon: "textformat.alt",
                     title: L10n.t("显示读音"),
@@ -902,6 +910,7 @@ struct OnboardingView: View {
                         : L10n.t("默认为日文、韩文和粤语标注读音，普通话拼音可在设置中开启"),
                     isOn: overlayAndWindow(\.overlayShowRomanization, \.showRomanization))
             }
+            .onboardingCard()
             Text(touchBar.isPresent
                  ? L10n.t("这两个开关作用于悬浮歌词和歌词窗口；灵动岛、菜单栏和触控栏可在各自的「副行」中选择译文或读音")
                  : L10n.t("这两个开关作用于悬浮歌词和歌词窗口；灵动岛和菜单栏可在各自的「副行」中选择译文或读音"))
@@ -945,14 +954,15 @@ struct OnboardingView: View {
     // (`@Published`),引导页自己的 .lastfm 那一步还有个按钮专门去开设置窗。真正的守卫现在
     // 是 `currentStep` + `.onChange(of: steps.count)` 那一对,详见 `currentStep` 头注。
     private var displayModeStep: some View {
-        // 段间距比别的步骤紧(12 不是 16):有触控栏时这一步多一行,这样中文下四行也放得进窗口。
-        VStack(alignment: .leading, spacing: 12) {
+        // 段间距比别的步骤紧(10 不是 16):这一步装着两张卡,有触控栏时还多一行显示方式。
+        VStack(alignment: .leading, spacing: 10) {
             Text(L10n.t("选择歌词显示方式"))
                 .font(.title2.bold())
             Text(L10n.t("以上方式可同时开启，请先选择当前需要的，之后可随时在设置中分别开关"))
                 .foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: 10) {
+            // 显示方式一张引导卡片、译文与读音一张,同第 1、4 步的卡片行(14 章决策 91)。
+            VStack(alignment: .leading, spacing: 0) {
                 displayModeRow(
                     kind: .classic,
                     title: L10n.t("桌面悬浮歌词"),
@@ -960,6 +970,7 @@ struct OnboardingView: View {
                     isOn: Binding(
                         get: { settings.classicOverlayEnabled },
                         set: { LyricsOverlayWindowController.shared.setVisible($0) }))
+                displayModeDivider
                 displayModeRow(
                     kind: .notch,
                     title: L10n.t("灵动岛歌词"),
@@ -969,12 +980,14 @@ struct OnboardingView: View {
                     isOn: Binding(
                         get: { settings.notchOverlayEnabled },
                         set: { NotchLyricsWindowController.shared.setVisible($0) }))
+                displayModeDivider
                 displayModeRow(
                     kind: .menuBar,
                     title: L10n.t("菜单栏歌词"),
                     subtitle: L10n.t("在菜单栏中显示一行歌词"),
                     isOn: $settings.showLyricsInMenuBar)
                 if touchBar.isPresent {
+                    displayModeDivider
                     displayModeRow(
                         kind: .touchBar,
                         title: L10n.t("触控栏歌词"),
@@ -982,6 +995,7 @@ struct OnboardingView: View {
                         isOn: $settings.showLyricsInTouchBar)
                 }
             }
+            .onboardingCard()
 
             // 这两条提示**互斥**,任何时候最多出现一条 —— 窗口固定 480×500,两条同时出现会把这一步
             // 顶出窗口(超出时外层只是滚动兜底,见 body 头注)。全关时"等播起来才看得到"也没意义了,
@@ -999,7 +1013,6 @@ struct OnboardingView: View {
                         ? L10n.t("当前未在播放。桌面悬浮歌词会立即显示，灵动岛、菜单栏和触控栏歌词将在开始播放后显示")
                         : L10n.t("当前未在播放。桌面悬浮歌词会立即显示，灵动岛和菜单栏歌词将在开始播放后显示"))
             }
-            Divider()
             lyricsExtrasSection
         }
     }
@@ -1015,20 +1028,10 @@ struct OnboardingView: View {
         subtitle: String,
         isOn: Binding<Bool>
     ) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        // 上下留白比别的卡片行小:这一步装着两张卡,有触控栏时四行显示方式,按 9pt 排窗口里放不下要滚。
+        cardRow(leadingWidth: DisplayModeThumbnail.width, verticalPadding: 4, title: title, subtitle: subtitle) {
             DisplayModeThumbnail(kind: kind)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13))
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 12)
-
+        } trailing: {
             // 必须显式 .toggleStyle(.switch):macOS 上 Toggle 默认画成**复选框**,只有
             // 放在 Form/List 里才会自动变成右侧胶囊开关。设置页是靠 SettingsRow 统一挂了
             // 这一句(Settings/SettingsDesignSystem.swift:346),向导里没有那个祖先,不写
@@ -1038,6 +1041,11 @@ struct OnboardingView: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
         }
+    }
+
+    /// 显示方式那张卡的行间分隔线,缩进到示意图右边。
+    private var displayModeDivider: some View {
+        cardDivider(indent: DisplayModeThumbnail.width + 10)
     }
 
     /// 引导页的「显示译文」「显示读音」一次设悬浮歌词和歌词窗口两份(04 章决策 42),读悬浮歌词那份。
@@ -1056,26 +1064,8 @@ struct OnboardingView: View {
     private func toggleRow(
         icon: String, title: String, subtitle: String?, isOn: Binding<Bool>
     ) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
-                .frame(width: 22)
-                // 跟 displayModeNote 同一个理由钉死拉丁语区:SF Symbols 里有一批"字母造型"
-                // 的符号带 CJK 本地化变体(这里用到的 textformat.alt 正是其中之一),中文界面
-                // 下会被渲染成汉字。图标位置要的永远是图形而不是本地化文字。
-                .environment(\.locale, Locale(identifier: "en"))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13))
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 12)
+        // setupRow 给图标钉了拉丁语区:textformat.alt 这类"字母造型"的符号带 CJK 本地化变体,中文界面下会画成汉字。
+        setupRow(icon: icon, tint: .secondary, title: title, subtitle: subtitle, verticalPadding: 6) {
             // 标题传给开关本身再 labelsHidden:视觉不变,旁白读得出这是哪个开关。
             Toggle(title, isOn: isOn)
                 .labelsHidden()
@@ -1577,7 +1567,7 @@ private struct DisplayModeThumbnail: View {
 
     let kind: Kind
 
-    private static let width: CGFloat = 56
+    static let width: CGFloat = 56
     private static let height: CGFloat = 36
     private static let menuBarHeight: CGFloat = 6
     private static let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
