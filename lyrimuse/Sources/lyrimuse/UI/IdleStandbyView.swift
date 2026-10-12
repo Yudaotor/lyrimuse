@@ -42,12 +42,20 @@ struct IdleStandbyView: View {
                 // 收听总览没有本地替代来源(三个数字全靠 Last.fm 的每日归档),
                 // 未连接就没有东西可画,直接省略——不画空卡、不画破折号,沿用
                 // 「没连账号也不难看」那条既有契约。
-                if stats.isConnected { IdleOverviewCard() }
+                // 收听总览和右列最近播放各一张玻璃卡(同设置页),唱片 hero 不进卡、仍浮在柔光上。
+                if stats.isConnected {
+                    IdleOverviewCard()
+                        .padding(EdgeInsets(top: 14, leading: 18, bottom: 12, trailing: 18))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .settingsCardBackground(cornerRadius: 18)
+                }
                 IdleLastTrackHero(player: player, onResume: onResume,
                                   onOpenPlayer: onOpenPlayer, onOpenAlbum: onOpenAlbum)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 跟右列同一个顶部间距,两张卡上沿对齐。
+            .padding(.top, 18)
             // 右列连没连 Last.fm 二选一(与歌词窗口「播放记录」按钮同一套
             // 逻辑):已连接=`RecentListensPanel`(最近听过);未连接=`PendingListensPanel`
             // (本地静默记的、还没提交的收听)。跟原来"未连接时右列跟着整段消失"不同——
@@ -68,6 +76,8 @@ struct IdleStandbyView: View {
             .padding(.top, 18)
         }
         .padding(EdgeInsets(top: 22, leading: 34, bottom: 26, trailing: 34))
+        // 玻璃卡后面那层淡光,同设置页:柔光底上玻璃折射不到东西,没有它卡片边界看不出来。
+        .background { LastfmGlassGlow() }
         // 停播页可能一挂几小时,只靠 onAppear 一次会让「今天 N 首」越挂越旧(与原
         // IdleLastfmSection 同一套节流):3 分钟轮一次档案数字;refreshDailyCounts
         // **没有 TTL**(每次都真发请求 + 落盘),每 20 轮(约 1 小时)才带它一次 ——
@@ -520,7 +530,8 @@ private struct IdleLastTrackHero: View {
                 .frame(width: 216, height: 216)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
-            Text(L10n.t("上次播放"))
+            // 带上是哪个播放器:没有「继续播放」的播放器,按钮里才写播放器名,有的话光看按钮看不出来。
+            Text(String(format: L10n.t("上次播放 · %@"), player.displayName))
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .padding(.top, 18)
@@ -539,22 +550,16 @@ private struct IdleLastTrackHero: View {
                     Button(action: onResume) {
                         Label(L10n.t("继续播放"), systemImage: "play.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .settingsProminentGlassButton(tint: .accentColor)
                 }
                 // 没有「继续播放」可给的播放器(QQ/网易云/酷狗没有 AppleScript),
                 // 「前往专辑」升格为主按钮 —— 与原欢迎态里「打开 X」的同一条规则。
                 if canResume {
                     Button(L10n.t("前往专辑")) { onOpenAlbum(lastTitle, lastArtist, lastAlbum) }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
                 } else {
                     Button(L10n.t("前往专辑")) { onOpenAlbum(lastTitle, lastArtist, lastAlbum) }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
+                        .settingsProminentGlassButton(tint: .accentColor)
                     Button(String(format: L10n.t("打开 %@"), player.displayName), action: onOpenPlayer)
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
                 }
                 // 「设置」("在红框这里加一个按钮打开设置")。停播页把这扇
                 // 窗口平时常驻的那排圆钮(星形 / 「…」 / 齿轮,见 LyricsWindowView)整个藏掉了,
@@ -573,11 +578,14 @@ private struct IdleLastTrackHero: View {
                 } label: {
                     Image(systemName: "gearshape")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .buttonBorderShape(.circle)
                 .help(L10n.t("设置…"))
                 .accessibilityLabel(L10n.t("设置…"))
             }
+            // 玻璃胶囊,同设置页按钮;主按钮那颗自己换成强调色玻璃(离按钮近的样式胜出)。
+            .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
             .padding(.top, 18)
             if !quotes.isEmpty {
                 quoteBand
@@ -665,7 +673,8 @@ private struct IdleLastTrackHero: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 6)
             Button(String(format: L10n.t("打开 %@"), player.displayName), action: onOpenPlayer)
-                .buttonStyle(.borderedProminent)
+                .settingsProminentGlassButton(tint: .accentColor)
+                .buttonBorderShape(.capsule)
                 .controlSize(.large)
                 .padding(.top, 20)
         }

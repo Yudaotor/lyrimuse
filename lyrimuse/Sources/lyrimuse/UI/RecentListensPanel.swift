@@ -74,15 +74,7 @@ struct RecentListensPanel: View {
         }
         .padding(EdgeInsets(top: 14, leading: 16, bottom: 12, trailing: 16))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background {
-            if showsCard {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.primary.opacity(0.07), lineWidth: 1))
-            }
-        }
+        .listPanelCard(showsCard)
         // 本机封面兜底只在有这块面板挂着时才跟着缓存重算(见 LastfmStatsService.setLocalCoversConsumer)。
         .onAppear { stats.setLocalCoversConsumer(coverConsumerID, onScreen: true) }
         .onDisappear {
@@ -228,7 +220,39 @@ struct RecentListensPanel: View {
 
     // MARK: 翻页
 
-    private var pager: some View {
+    /// 停播页(有卡片)是两颗玻璃圆钮夹着页码,同设置页的玻璃按钮;歌词窗口里直接铺在封面上的那份(`showsCard == false`)
+    /// 仍是两颗文字按钮,玻璃压在封面模糊图上读不出边。
+    @ViewBuilder private var pager: some View {
+        if showsCard { glassPager } else { textPager }
+    }
+
+    private var glassPager: some View {
+        HStack(spacing: 10) {
+            Spacer(minLength: 0)
+            Button { stats.goToPage(stats.recentPage - 1) } label: {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(stats.recentPage <= 1 || stats.recentPaging)
+            .help(L10n.t("上一页"))
+            .accessibilityLabel(L10n.t("上一页"))
+            Text("\(stats.recentPage) / \(max(stats.recentTotalPages, 1))")
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(secondaryTextColor)
+            Button { stats.goToPage(stats.recentPage + 1) } label: {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(stats.recentPage >= stats.recentTotalPages || stats.recentPaging)
+            .help(L10n.t("下一页"))
+            .accessibilityLabel(L10n.t("下一页"))
+            Spacer(minLength: 0)
+        }
+        .settingsGlassButtons()
+        .buttonBorderShape(.circle)
+        .controlSize(.small)
+        .padding(.top, 10)
+    }
+
+    private var textPager: some View {
         HStack(spacing: 12) {
             Spacer(minLength: 0)
             Button(L10n.t("上一页")) { stats.goToPage(stats.recentPage - 1) }
@@ -369,15 +393,7 @@ struct PendingListensPanel: View {
         }
         .padding(EdgeInsets(top: 14, leading: 16, bottom: 12, trailing: 16))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background {
-            if showsCard {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.primary.opacity(0.07), lineWidth: 1))
-            }
-        }
+        .listPanelCard(showsCard)
         .onAppear { backfill.refreshPending() }
         .onReceive(LocalPlaybackSource.shared.$enrichContentVersion.removeDuplicates()) { enrichVersion = $0 }
         // 面板开着的这段时间里盯住收听日志:同 AccountLinkingTab.pendingListensRow
@@ -521,5 +537,17 @@ struct PendingListensPanel: View {
             out.append(.row(listen))
         }
         return out
+    }
+}
+
+extension View {
+    /// 停播页里这两块面板的卡片:玻璃卡,同设置页(`settingsCardBackground`)。歌词窗口那边传 `showsCard: false`,不画。
+    @ViewBuilder
+    func listPanelCard(_ shows: Bool) -> some View {
+        if shows {
+            settingsCardBackground(cornerRadius: 18)
+        } else {
+            self
+        }
     }
 }

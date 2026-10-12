@@ -6146,25 +6146,25 @@
         }
       }
     },
-    "上次播放" : {
+    "上次播放 · %@" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Last played"
+            "value" : "Last played · %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上次播放"
+            "value" : "上次播放 · %@"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上次播放"
+            "value" : "上次播放 · %@"
           }
         }
       }

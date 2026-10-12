@@ -218,7 +218,7 @@
 "上次刷新失败，当前显示 %@ 的内容" = "Last refresh failed; showing content from %@";
 "上次刷新：%@" = "Last refreshed: %@";
 "上次已保存但未应用的内容已另存为「%@」" = "The earlier saved but unapplied copy was kept as “%@”.";
-"上次播放" = "Last played";
+"上次播放 · %@" = "Last played · %@";
 "上次收听" = "Last listened";
 "上次检查：%@" = "Last checked: %@";
 "上次检测通过（%@）" = "Verified working (%@)";
