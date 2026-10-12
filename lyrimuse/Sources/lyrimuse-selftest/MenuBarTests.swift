@@ -1540,4 +1540,45 @@ func runMenuBarTests() {
         expectEqual(w(.translation), 120, "槽宽: 译文撑宽、封顶最大宽度")
         expectEqual(w(.translation, twoRows: false), 80, "槽宽: 单行就是主行宽")
     }
+
+    // ---- 「歌词管理」那一格的背面(06 章决策 43) ----
+    // 面板里不许弹确认框(另一扇窗,点它面板就收起了),要确认的在行内问;重新匹配跟歌词窗口那颗共用一份实现。
+    do {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ rel: String) -> String {
+            (try? String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8)) ?? ""
+        }
+        let panel = source("lyrimuse/MenuBar/MenuBarPanel.swift")
+        let quick = source("lyrimuse/MenuBar/MenuBarPanelQuickSettings.swift")
+        let rows = source("lyrimuse/MenuBar/MenuBarPanelLyricsManagerQuick.swift")
+        let settingsView = source("lyrimuse/SettingsView.swift")
+        let actions = source("lyrimuse/UI/LyricsWindowActions.swift")
+        expectEqual(panel.contains("on: false, quick: .lyricsManager,\n                         action: openLyricsManagerAction)")
+                    && panel.contains("case .lyricsManager: return openLyricsManagerAction"), true,
+                    "歌词管理背面: 格子接上快捷设置,短按和头部「打开」是同一条闭包")
+        expectEqual(quick.contains("case \"lyrics-manager\": self = .lyricsManager")
+                    && quick.contains("PanelLyricsManagerRows(close: close)")
+                    && quick.contains("UserDefaults.standard.set(SettingsSearchCatalog.lyricsManageSectionValue,"), true,
+                    "歌词管理背面: 深链取值、两组行、「全部设置…」翻到「歌词 › 管理」")
+        expectEqual(SettingsSearchCatalog.lyricsManageSectionValue == "manage"
+                    && settingsView.contains("case fetch, translation, display, manage"), true,
+                    "歌词管理背面: 「管理」分段的取值跟设置页枚举对得上")
+        expectEqual(!rows.contains(".alert(") && !rows.contains(".confirmationDialog(") && !rows.contains(".popover("), true,
+                    "歌词管理背面: 不弹确认框 / popover(另一扇窗,点它面板就收起了),要确认的在行内问")
+        expectEqual(rows.contains("guard let target = rematch.prepare() else { return }")
+                    && actions.contains("guard let target = prepare() else { return }"), true,
+                    "歌词管理背面: 重新匹配跟歌词窗口那颗共用 LyricsWindowRematch.prepare()")
+        // 只放正在放的这首的动作;歌词库的批量匹配 / 扫描间隔 / 锁定手选歌词走「全部设置…」(用户嫌挤,拿掉了)。
+        expectEqual(!rows.contains("LyricsFillSweep") && !rows.contains("manualPickLocksLyrics")
+                    && !rows.contains("lyricsSweepGapSecs") && !rows.contains("LyricsExternalEditor"), true,
+                    "歌词管理背面: 不收歌词库那一组,也不收外部编辑器")
+        // 窗口跟着内容长高:尺寸由宿主视图在 layout() 里报。GeometryReader + PreferenceKey 那条在内容比窗口高时不来(06 章决策 44)。
+        expectEqual(panel.contains("host.onFittingSizeChange = { [weak self] size in self?.place(size: size) }")
+                    && panel.contains("guard fitting != bounds.size else { return }\n        onFittingSizeChange?(fitting)")
+                    && !panel.contains("onPreferenceChange("), true,
+                    "面板尺寸: 宿主视图 layout() 里当场报 fittingSize,不用 PreferenceKey、不推到下一拍")
+        // 内容贴顶:对不上高度的那一帧不许上下居中(翻面时整个面板抖一下),minHeight: 0 不能省(06 章决策 45)。
+        expectEqual(panel.contains(".frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)"), true,
+                    "面板尺寸: 内容贴着窗口顶边摆")
+    }
 }

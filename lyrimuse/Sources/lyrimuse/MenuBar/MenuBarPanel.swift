@@ -2,6 +2,10 @@ import AppKit
 import SwiftUI
 import Combine
 import LyrimuseCore
+import os
+
+/// 面板翻面、摆窗口这类界面事件的 debug 级日志:不落盘,验证时边触发边 `log stream --level debug` 对,不靠截图(14 章决策 98)。
+private let panelLogger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "menubar-panel")
 
 /// 面板的**窄订阅代理**(性能审计,四个展示面里最后一个接上;完整机制见
 /// OverlayPlayback 的注释):PlaybackCoordinator 32 个 @Published 面板实读约 16 个、
@@ -170,23 +174,25 @@ final class MenuBarPanelController {
         let window = MenuBarPanelWindow()
         window.onCancel = { [weak self] in self?.close() }
         let content = MenuBarPanelRoot(
-            content: MenuBarPanelView(close: { [weak self] in self?.close() }, initialQuickTarget: quick),
-            onSizeChange: { [weak self] size in self?.place(size: size) })
+            content: MenuBarPanelView(close: { [weak self] in self?.close() }, initialQuickTarget: quick))
         let host = FirstMouseHostingView(rootView: content)
         // 只要固有尺寸(下面 fittingSize 要用),不要 min / max:那两项会往窗口上加尺寸约束,跟 place 摆的 frame 打架。
         host.sizingOptions = [.intrinsicContentSize]
-        // 先登记再装内容:内容第一次布局就会报尺寸(onSizeChange),那时 panel 还是 nil 的话这次摆位会被跳过。
+        host.onFittingSizeChange = { [weak self] size in self?.place(size: size) }
+        // 先登记再装内容:内容第一次布局就会报尺寸(onFittingSizeChange),那时 panel 还是 nil 的话这次摆位会被跳过。
         panel = window
         window.setContent(host)
         place(size: host.fittingSize)
         installDismissWatchers(for: window)
         onVisibilityChange?(true)
         window.orderFrontRegardless()
-        window.makeKey()
+        // 深链带 background=1 时不当 key:不激活的面板当了 key 照样接走键盘输入,用户在别的 App 里打的字会落进面板。
+        if !WindowActivation.isBackground { window.makeKey() }
     }
 
     func close() {
         guard let window = panel else { return }
+        MenuBarPanelDebugState.quickTarget = nil
         teardownDismissWatchers()
         // 收起即整树释放:下次 toggle 本来就是全新建(onAppear 快照语义还依赖这一点)。
         panel = nil
@@ -204,7 +210,10 @@ final class MenuBarPanelController {
         let x = min(max(buttonRect.midX - size.width / 2, visible.minX + margin), visible.maxX - size.width - margin)
         let top = min(buttonRect.minY - 4, visible.maxY)
         let frame = NSRect(x: x.rounded(), y: (top - size.height).rounded(), width: size.width, height: size.height)
-        if window.frame != frame { window.setFrame(frame, display: true) }
+        if window.frame != frame {
+            panelLogger.debug("panel placed: \(Int(frame.width), privacy: .public)x\(Int(frame.height), privacy: .public)")
+            window.setFrame(frame, display: true)
+        }
     }
 
     /// 状态栏按钮在屏幕上的矩形。
@@ -328,10 +337,13 @@ private final class MenuBarPanelWindow: NSPanel {
     }
 }
 
-/// 面板内容的外壳:按内容的理想尺寸报给控制器摆窗口(长出快捷设置那一下窗口跟着变高),再描一圈发丝边。
+/// 面板内容的外壳:按理想尺寸排(窗口多大由宿主视图报给控制器,见 FirstMouseHostingView),再描一圈发丝边。
+///
+/// 内容贴着窗口顶边摆:内容跟窗口一时对不上高度时,宿主视图默认把它上下居中,翻面那一下整块先往上 / 往下挪半个高度差、
+/// 窗口改完尺寸再弹回来,看着就是整个面板抖一下。贴顶之后多出 / 少掉的只在底部。`minHeight: 0` 不能省:不写的话这层
+/// frame 不会比内容矮,照样被撑高、照样居中。见 06 章决策 45。
 private struct MenuBarPanelRoot<Content: View>: View {
     let content: Content
-    let onSizeChange: (CGSize) -> Void
 
     var body: some View {
         content
@@ -340,26 +352,28 @@ private struct MenuBarPanelRoot<Content: View>: View {
                 RoundedRectangle(cornerRadius: MenuBarPanelWindow.cornerRadius, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
             }
-            .background {
-                GeometryReader { geo in
-                    Color.clear.preference(key: MenuBarPanelSizeKey.self, value: geo.size)
-                }
-            }
-            .onPreferenceChange(MenuBarPanelSizeKey.self) { onSizeChange($0) }
-    }
-}
-
-private struct MenuBarPanelSizeKey: PreferenceKey {
-    static let defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
     }
 }
 
 /// 让面板里的 SwiftUI 控件也「第一下就算数」。面板平时就是 key window,这一层兜的是它失去 key 之后
 /// (比如点开过别的窗口又点回来):NSHostingView 默认 `acceptsFirstMouse` 为 false,那一下会只用来把窗口变回 key。
+///
+/// 它也负责报尺寸:内容的理想尺寸(`fittingSize`)跟自己现在的尺寸对不上时,当场交给控制器摆窗口。翻出快捷设置、行内
+/// 多出一行这类变化之后它一定会走一次 `layout()`。别换回 GeometryReader + PreferenceKey:内容长得比窗口高时那条回调
+/// 不来,窗口停在旧高度、下面截掉(06 章决策 44)。也别推到下一拍再改窗口:中间那一帧窗口和内容对不上,面板抖一下;
+/// 当场改完窗口会再走一次 layout,那时尺寸已经对上、直接返回(06 章决策 45)。
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    var onFittingSizeChange: ((CGSize) -> Void)?
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func layout() {
+        super.layout()
+        let fitting = fittingSize
+        guard fitting != bounds.size else { return }
+        onFittingSizeChange?(fitting)
+    }
 }
 
 // MARK: - 面板本体
@@ -378,6 +392,7 @@ private struct MenuBarPanelView: View {
     init(close: @escaping () -> Void, initialQuickTarget: PanelQuickTarget? = nil) {
         self.close = close
         _quickTarget = State(initialValue: initialQuickTarget)
+        MenuBarPanelDebugState.quickTarget = initialQuickTarget?.deepLinkValue
     }
     /// 停播卡「打开」键上那枚播放器图标(见 idleRow)。按播放器取一次,不在 body 里现查。
     @State private var idlePlayerIcon: NSImage?
@@ -445,6 +460,8 @@ private struct MenuBarPanelView: View {
     /// resize 动画管(pop.animates),SwiftUI 这一层补间不到它。等于是白担了副作用。
     private func setQuickTarget(_ target: PanelQuickTarget?) {
         quickTarget = target
+        MenuBarPanelDebugState.quickTarget = target?.deepLinkValue
+        panelLogger.debug("panel quick target: \(target?.deepLinkValue ?? "grid", privacy: .public)")
     }
 
     /// 某一格的主动作。快捷设置头部那颗控件跟格子本身调的必须是**同一条闭包**(三个形态和触控栏
@@ -455,6 +472,15 @@ private struct MenuBarPanelView: View {
         case .surface(let surface): return toggleAction(for: surface)
         case .lyricsWindow: return openLyricsWindowAction
         case .touchBar: return toggleTouchBarAction
+        case .lyricsManager: return openLyricsManagerAction
+        }
+    }
+
+    /// 「歌词管理」那一格:先收面板再开窗,理由同 `openLyricsWindowAction`。
+    private var openLyricsManagerAction: () -> Void {
+        {
+            close()
+            AppActions.shared.openLyricsManager?()
         }
     }
 
@@ -541,10 +567,11 @@ private struct MenuBarPanelView: View {
                 }
                 // 这一格从「统计」换成「歌词管理」(统计入口收进
                 // 设置窗口的 Last.fm 账号页),底栏那条「歌词管理…」随之撤掉,不留双入口。
-                knobTile(symbol: "music.note.list", title: L10n.t("歌词管理"), on: false) {
-                    close()
-                    AppActions.shared.openLyricsManager?()
-                }
+                // 短按开窗,长按 / 右键翻到背面:正在放的这首的几个动作(PanelLyricsManagerRows)。
+                knobTile(symbol: PanelQuickTarget.lyricsManager.symbolName,
+                         title: PanelQuickTarget.lyricsManager.panelTitle,
+                         on: false, quick: .lyricsManager,
+                         action: openLyricsManagerAction)
             }
         }
     }
@@ -945,8 +972,7 @@ private struct MenuBarPanelView: View {
                           action: @escaping () -> Void) -> some View {
         KnobTile(symbol: symbol, title: title, subtitle: subtitle, on: on,
                  action: action,
-                 // 只有能长按的格子才接一个去处;「歌词管理」是纯动作,长按/右键
-                 // 就当普通按一下(见 KnobTile.body 的 onSecondary)。
+                 // 只有能长按的格子才接一个去处;没接的长按 / 右键就当普通按一下(见 KnobTile.body 的 onSecondary)。
                  openQuick: quick.map { target in { setQuickTarget(target) } })
     }
 

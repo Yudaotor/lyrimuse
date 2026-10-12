@@ -561,6 +561,8 @@ final class MenuBarStatusItem: NSObject {
     /// 左键面板(popover)开着没有。开着期间**一律不重建**状态栏项 —— 详见 present()
     /// 里那段分支。收起时补一次 refresh(),把期间挡下来的几何变化一次性落地。
     private var panelIsOpen = false
+    /// 给 `debug/state` 和 `debug/restore` 读。
+    var isPanelOpen: Bool { panelIsOpen }
     /// 右键菜单 / 首次「⌘ 拖拽」提示气泡开着没有。跟面板同一个理由:它们都锚在状态栏按钮上,开着期间
     /// 重建会把锚拆掉。右键菜单借 performClick 弹出、追踪循环里 GCD 主队列照样会跑,推迟的重建
     /// (pendingRefresh 走 asyncAfter)不挡就会在菜单开着时落地。
@@ -571,8 +573,11 @@ final class MenuBarStatusItem: NSObject {
 
     /// lyrimuse://menubar-panel:开 / 关左键面板,跟普通左键按下同一个结果(不认控制键、不走悬停三键)。
     /// 带 quick 时打开就翻到那一格的快捷设置。
+    /// 带 `quick` 时面板开着也不关:收起再按那一格重新打开(自动化要的是「打开并翻到那一格」,不是开关)。
+    /// 不带时同普通左键,开 / 关。
     func togglePanelFromDeepLink(quick: PanelQuickTarget? = nil) {
         guard let button = statusItem?.button else { return }
+        if quick != nil, panelIsOpen { panelController.close() }
         panelController.toggle(relativeTo: button, quick: quick)
     }
 

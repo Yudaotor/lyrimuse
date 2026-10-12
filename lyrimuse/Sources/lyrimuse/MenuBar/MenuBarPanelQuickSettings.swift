@@ -21,8 +21,11 @@ import LyrimuseCore
 
 // MARK: - 能翻到背面的那几格
 
-/// 面板里长按 / 右键能翻出快捷设置的格子:三个展示形态各一格,外加第二排的「歌词窗口」和「触控栏歌词」
-/// (后者只在这台 Mac 此刻有触控栏时出现)。
+/// 面板里长按 / 右键能翻出快捷设置的格子:三个展示形态各一格,外加第二排的「歌词窗口」「触控栏歌词」
+/// (只在这台 Mac 此刻有触控栏时出现)和「歌词管理」。
+///
+/// 「歌词管理」那一格的背面不是一组外观旋钮,是正在放的这首的几个动作,行在 `PanelLyricsManagerRows`,
+/// 「全部设置…」翻到「歌词 › 管理」而不是「歌词显示」。
 ///
 /// **歌词窗口不是一个 `LyricsSurface`,别为了少包一层就往那个枚举里塞第四个 case。**
 /// 那个枚举的契约是"三个可以同时开着、各有常驻开关的展示形态"(见它的头注):歌词窗口是
@@ -39,6 +42,7 @@ enum PanelQuickTarget: Hashable {
     case surface(LyricsSurface)
     case lyricsWindow
     case touchBar
+    case lyricsManager
 
     /// lyrimuse://menubar-panel?quick=… 里的取值。
     init?(deepLinkValue value: String) {
@@ -48,7 +52,20 @@ enum PanelQuickTarget: Hashable {
         case "menubar": self = .surface(.menuBar)
         case "lyrics-window": self = .lyricsWindow
         case "touchbar": self = .touchBar
+        case "lyrics-manager": self = .lyricsManager
         default: return nil
+        }
+    }
+
+    /// 反过来:这一格在深链里的取值(`debug/state` 报面板翻在哪一格用)。
+    var deepLinkValue: String {
+        switch self {
+        case .surface(.overlay): return "overlay"
+        case .surface(.notch): return "notch"
+        case .surface(.menuBar): return "menubar"
+        case .lyricsWindow: return "lyrics-window"
+        case .touchBar: return "touchbar"
+        case .lyricsManager: return "lyrics-manager"
         }
     }
 }
@@ -62,6 +79,7 @@ extension PanelQuickTarget {
         case .lyricsWindow: return "text.quote"
         // 系统符号里没有触控栏,用自画的那枚;设置页那张开关卡、右键菜单「快速开关」里那一项也是它。
         case .touchBar: return SurfaceGlyph.touchBar.rawValue
+        case .lyricsManager: return "music.note.list"
         }
     }
 
@@ -70,6 +88,7 @@ extension PanelQuickTarget {
         case .surface(let surface): return surface.panelTitle
         case .lyricsWindow: return L10n.t("歌词窗口")
         case .touchBar: return L10n.t("触控栏歌词")
+        case .lyricsManager: return L10n.t("歌词管理")
         }
     }
 
@@ -80,15 +99,17 @@ extension PanelQuickTarget {
         case .surface(let surface): return surface.isEnabled
         case .lyricsWindow: return false
         case .touchBar: return AppSettings.shared.showLyricsInTouchBar
+        case .lyricsManager: return false
         }
     }
 
-    /// 「歌词显示」页里对应那一段的分段取值,底栏那颗「全部设置…」拿它翻页。
-    var appearanceSectionValue: String {
+    /// 「歌词显示」页里对应那一段的分段取值,底栏那颗「全部设置…」拿它翻页。「歌词管理」那一格不在这一页,是 nil。
+    var appearanceSectionValue: String? {
         switch self {
         case .surface(let surface): return surface.appearanceSectionRawValue
         case .lyricsWindow: return SettingsSearchCatalog.lyricsWindowSectionValue
         case .touchBar: return SettingsSearchCatalog.touchBarSectionValue
+        case .lyricsManager: return nil
         }
     }
 }
@@ -288,7 +309,7 @@ struct PanelQuickSettings: View {
     let target: PanelQuickTarget
     /// 头部那颗控件**直接复用格子自己的动作闭包** —— 同一件事在两处必须一模一样,尤其
     /// 菜单栏歌词那一个(它要先收面板再切,理由见 MenuBarPanelView.toggleAction)。
-    /// 三个形态和触控栏那里它是总开关,歌词窗口那里是一颗「打开」——那一格本来就是"按一下开一扇窗"。
+    /// 三个形态和触控栏那里它是总开关,歌词窗口和歌词管理那里是一颗「打开」——那两格本来就是"按一下开一扇窗"。
     let action: () -> Void
     let back: () -> Void
     let close: () -> Void
@@ -301,8 +322,12 @@ struct PanelQuickSettings: View {
             VStack(alignment: .leading, spacing: 6) {
                 // 各行装进一个圆角分组框(同设置页弹窗里的分组)。行与行之间留 1pt 缝,透出底下的卡片,读起来就是分隔线:
                 // 行视图里有条件行,没法在两行之间自动插分隔线。
-                VStack(spacing: 1) { rows }
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                if case .lyricsManager = target {
+                    PanelLyricsManagerRows(close: close)
+                } else {
+                    VStack(spacing: 1) { rows }
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
                 footnote
             }
             .padding(.horizontal, 10)
@@ -357,6 +382,14 @@ struct PanelQuickSettings: View {
             .buttonBorderShape(.capsule)
             .controlSize(.small)
             .help(L10n.t("打开歌词窗口"))
+        case .lyricsManager:
+            Button(action: action) {
+                Text(L10n.t("打开")).font(.system(size: 11))
+            }
+            .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
+            .help(L10n.t("打开歌词管理"))
         }
     }
 
@@ -530,6 +563,9 @@ struct PanelQuickSettings: View {
             toggleRow(L10n.t("动态封面"),
                       help: L10n.t("仅部分专辑提供；低电量或「减弱动态效果」时自动暂停"),
                       isOn: $settings.motionCoverEnabled)
+        case .lyricsManager:
+            // 行在 PanelLyricsManagerRows(带自己的小标题和分组框),body 里单独摆。
+            EmptyView()
         }
     }
 
@@ -567,17 +603,7 @@ struct PanelQuickSettings: View {
 
     private func row<Control: View>(_ title: String, help: String? = nil,
                                    @ViewBuilder control: () -> Control) -> some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.system(size: 11.5))
-                .lineLimit(1)
-            Spacer(minLength: 6)
-            control()
-        }
-        .padding(.horizontal, 10)
-        .frame(minHeight: 32)
-        .background(Color.primary.opacity(0.05))
-        .modifier(OptionalHelp(text: help))
+        PanelQuickRow(title, help: help, control: control)
     }
 
     /// displayValue:读数要显示的不是设定值本身时给它(灵动岛宽度用 —— 真实宽度还要过一道
@@ -776,9 +802,14 @@ struct PanelQuickSettings: View {
             // 一次性信箱把设置窗口翻到「歌词显示」页(见 AppActions.pendingSettingsSelection),
             // 再顺手把那一页停在这一格自己的分段上 —— 那边是 @AppStorage,直接写
             // UserDefaults 就行,窗口已经开着也会立刻跟着翻。
-            UserDefaults.standard.set(target.appearanceSectionValue,
-                                      forKey: LyricsSurface.appearanceSectionStorageKey)
-            AppActions.shared.requestSettings(.tab(.appearance))
+            if let section = target.appearanceSectionValue {
+                UserDefaults.standard.set(section, forKey: LyricsSurface.appearanceSectionStorageKey)
+                AppActions.shared.requestSettings(.tab(.appearance))
+            } else {
+                UserDefaults.standard.set(SettingsSearchCatalog.lyricsManageSectionValue,
+                                          forKey: SettingsSearchCatalog.lyricsSectionKey)
+                AppActions.shared.requestSettings(.tab(.lyrics))
+            }
             AppActions.shared.openSettings?()
         } label: {
             Label(L10n.t("全部设置…"), systemImage: "gearshape")
@@ -788,6 +819,34 @@ struct PanelQuickSettings: View {
         .buttonBorderShape(.capsule)
         .controlSize(.small)
         .padding(.bottom, 10)
+    }
+}
+
+/// 快捷设置里的一行:标题在左、控件在右,32pt 高、淡底。分组框由调用方套(行与行之间留 1pt 缝当分隔线)。
+/// 比设置页那套 SettingsRow 紧得多 —— 这里总宽只有 296pt。
+struct PanelQuickRow<Control: View>: View {
+    let title: String
+    var help: String?
+    let control: Control
+
+    init(_ title: String, help: String? = nil, @ViewBuilder control: () -> Control) {
+        self.title = title
+        self.help = help
+        self.control = control()
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 11.5))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            control
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 32)
+        .background(Color.primary.opacity(0.05))
+        .modifier(OptionalHelp(text: help))
     }
 }
 

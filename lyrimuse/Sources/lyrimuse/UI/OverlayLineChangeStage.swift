@@ -1,7 +1,11 @@
 import AppKit
 import LyrimuseCore
+import os
 import QuartzCore
 import SwiftUI
+
+/// 换句入场开始的 debug 级日志:不落盘,验证换句动画时边触发边 `log stream --level debug` 对时间点,不靠逐帧截图(14 章决策 98)。
+private let lineChangeLogger = Logger(subsystem: LyrimuseIdentity.logSubsystem, category: "overlay-line-change")
 
 /// 换句动画开着时卡片里的两格(这一句 / 下一句)。每一格的内容放进自己的托管视图,换句时 SwiftUI 一次摆好终态;
 /// 新主句从上一拍下一句的位置走上来、旧的一句原地淡出、新的下一句后半程淡入,都由这里装 Core Animation 动画,
@@ -379,6 +383,7 @@ final class OverlayLineChangeStageView: NSView {
     private func installEntry(mainFrame: CGRect) {
         if let entry = pendingEntry, let main, let layer = main.view.layer {
             pendingEntry = nil
+            lineChangeLogger.debug("overlay line change entry started")
             // 格子图层挂在舞台自己的图层下(刚加进来的格子这一刻可能还没挂上),舞台图层跟舞台视图一样上下翻转时,
             // 舞台视图坐标就是格子 `position` 所在的坐标系。没翻转时坐标对不上,退回原地淡入,别按错的起点走。
             let flipped = self.layer?.isGeometryFlipped == true

@@ -6931,6 +6931,7 @@ private struct ShortcutsSettingsTab: View {
                     stepRow
                 }
                 hotkeyCard(L10n.t("播放控制"), names: playbackNames, cells: playbackCells)
+                linksCard
             }
             .background { LastfmGlassGlow() }
         }
@@ -6972,32 +6973,32 @@ private struct ShortcutsSettingsTab: View {
 
     private var displayCells: [AnyView] {
         var cells = [
-            AnyView(HotkeyCell(icon: "eye", title: L10n.t("显示/隐藏悬浮歌词")) {
+            AnyView(HotkeyCell(icon: "eye", title: L10n.t("显示/隐藏悬浮歌词"), action: .toggleOverlay) {
                 ShortcutRecorderControl(name: .toggleOverlay)
             }),
-            AnyView(HotkeyCell(icon: "inset.filled.topthird.square", title: L10n.t("显示/隐藏灵动岛歌词")) {
+            AnyView(HotkeyCell(icon: "inset.filled.topthird.square", title: L10n.t("显示/隐藏灵动岛歌词"), action: .toggleNotchOverlayHotkey) {
                 ShortcutRecorderControl(name: .toggleNotchOverlayHotkey)
             }),
-            AnyView(HotkeyCell(icon: "menubar.rectangle", title: L10n.t("显示/隐藏菜单栏歌词")) {
+            AnyView(HotkeyCell(icon: "menubar.rectangle", title: L10n.t("显示/隐藏菜单栏歌词"), action: .toggleMenuBarLyricsHotkey) {
                 ShortcutRecorderControl(name: .toggleMenuBarLyricsHotkey)
             }),
         ]
         // 只在这台 Mac 此刻有触控栏时出现,同菜单栏「快速开关」那一项;设置搜索跟着收放(17 章决策 40)。
         if touchBar.isPresent {
-            cells.append(AnyView(HotkeyCell(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t("展开/收起触控栏歌词")) {
+            cells.append(AnyView(HotkeyCell(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t("展开/收起触控栏歌词"), action: .toggleTouchBarLyricsHotkey) {
                 ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)
             }))
         }
         cells += [
-            AnyView(HotkeyCell(icon: "lock", title: L10n.t("锁定/解锁位置")) {
+            AnyView(HotkeyCell(icon: "lock", title: L10n.t("锁定/解锁位置"), action: .toggleLockPosition) {
                 ShortcutRecorderControl(name: .toggleLockPosition)
             }),
-            AnyView(HotkeyCell(icon: "character.book.closed", title: L10n.t("显示/隐藏译文")) {
+            AnyView(HotkeyCell(icon: "character.book.closed", title: L10n.t("显示/隐藏译文"), action: .toggleTranslationHotkey) {
                 ShortcutRecorderControl(name: .toggleTranslationHotkey)
             }),
             // 别再给这一格加说明(比如"总开关;具体给哪几种文字标注仍在「歌词显示」里分别设置")——
             // 解释性文案在这一页是被明确否掉的,同「步长」以外的每一格。
-            AnyView(HotkeyCell(icon: "textformat.abc", title: L10n.t("显示/隐藏读音")) {
+            AnyView(HotkeyCell(icon: "textformat.abc", title: L10n.t("显示/隐藏读音"), action: .toggleRomanizationHotkey) {
                 ShortcutRecorderControl(name: .toggleRomanizationHotkey)
             }),
         ]
@@ -7011,19 +7012,19 @@ private struct ShortcutsSettingsTab: View {
 
     private var windowCells: [AnyView] {
         [
-            AnyView(HotkeyCell(icon: "list.bullet.rectangle", title: L10n.t("打开歌词管理")) {
+            AnyView(HotkeyCell(icon: "list.bullet.rectangle", title: L10n.t("打开歌词管理"), action: .openLyricsManagerHotkey) {
                 ShortcutRecorderControl(name: .openLyricsManagerHotkey)
             }),
-            AnyView(HotkeyCell(icon: "text.quote", title: L10n.t("打开歌词窗口")) {
+            AnyView(HotkeyCell(icon: "text.quote", title: L10n.t("打开歌词窗口"), action: .openLyricsWindowHotkey) {
                 ShortcutRecorderControl(name: .openLyricsWindowHotkey)
             }),
-            AnyView(HotkeyCell(icon: "rectangle.inset.bottomright.filled", title: L10n.t("切换迷你 / 完整尺寸")) {
+            AnyView(HotkeyCell(icon: "rectangle.inset.bottomright.filled", title: L10n.t("切换迷你 / 完整尺寸"), action: .toggleLyricsWindowMiniHotkey) {
                 ShortcutRecorderControl(name: .toggleLyricsWindowMiniHotkey)
             }),
-            AnyView(HotkeyCell(icon: "magnifyingglass", title: L10n.t("搜索歌词")) {
+            AnyView(HotkeyCell(icon: "magnifyingglass", title: L10n.t("搜索歌词"), action: .lyricsQuickSearchHotkey) {
                 ShortcutRecorderControl(name: .lyricsQuickSearchHotkey)
             }),
-            AnyView(HotkeyCell(icon: "gearshape", title: L10n.t("打开设置")) {
+            AnyView(HotkeyCell(icon: "gearshape", title: L10n.t("打开设置"), action: .openSettingsHotkey) {
                 ShortcutRecorderControl(name: .openSettingsHotkey)
             }),
         ]
@@ -7035,13 +7036,13 @@ private struct ShortcutsSettingsTab: View {
 
     private var timingCells: [AnyView] {
         [
-            AnyView(HotkeyCell(icon: "backward.end", title: L10n.t("歌词提前")) {
+            AnyView(HotkeyCell(icon: "backward.end", title: L10n.t("歌词提前"), action: .lyricsAdvanceHotkey) {
                 ShortcutRecorderControl(name: .lyricsAdvanceHotkey)
             }),
-            AnyView(HotkeyCell(icon: "forward.end", title: L10n.t("歌词延后")) {
+            AnyView(HotkeyCell(icon: "forward.end", title: L10n.t("歌词延后"), action: .lyricsDelayHotkey) {
                 ShortcutRecorderControl(name: .lyricsDelayHotkey)
             }),
-            AnyView(HotkeyCell(icon: "arrow.counterclockwise", title: L10n.t("歌词偏移归零")) {
+            AnyView(HotkeyCell(icon: "arrow.counterclockwise", title: L10n.t("歌词偏移归零"), action: .lyricsOffsetResetHotkey) {
                 ShortcutRecorderControl(name: .lyricsOffsetResetHotkey)
             }),
         ]
@@ -7074,17 +7075,44 @@ private struct ShortcutsSettingsTab: View {
         }
     }
 
+    /// 「链接」卡:打开类的 `lyrimuse://` 链接,每行可拷贝;动作类的在上面各格悬停时拷贝。设置页链接还能带页面和分段
+    /// (`lyrimuse://settings/lyrics/manage`),不一一列出。见 14 章决策 94。
+    private var linksCard: some View {
+        let links: [(icon: String, title: String, link: LyrimuseDeepLink)] = [
+            ("gearshape", L10n.t("打开设置"), .settings(path: "", checkForUpdates: false)),
+            ("list.bullet.rectangle", L10n.t("打开歌词管理"), .lyricsManager),
+            ("text.quote", L10n.t("打开歌词窗口"), .lyricsWindow),
+            ("magnifyingglass", L10n.t("搜索歌词"), .lyricsSearch),
+            ("menubar.rectangle", L10n.t("打开菜单栏面板"), .menuBarPanel(quick: nil)),
+            ("hand.wave", L10n.t("打开引导"), .onboarding),
+            ("doc.on.doc", L10n.t("拷贝当前歌词"), .copyLyric(includeTranslation: false)),
+            ("play.rectangle", L10n.t("回到播放器"), .openPlayer),
+        ]
+        return SettingsCard(cornerRadius: 18) {
+            SettingsCardHeader(title: L10n.t("链接"),
+                               subtitle: L10n.t("可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接"))
+            ForEach(Array(links.enumerated()), id: \.offset) { index, item in
+                if index > 0 { CardDivider() }
+                if let url = item.link.url(scheme: LyrimuseIdentity.urlScheme) {
+                    SettingsRow(icon: item.icon, title: item.title, subtitle: url.absoluteString) {
+                        CopyLinkButton(url: url)
+                    }
+                }
+            }
+        }
+    }
+
     private var playbackNames: [KeyboardShortcuts.Name] { [.playPauseHotkey, .nextTrackHotkey, .previousTrackHotkey] }
 
     private var playbackCells: [AnyView] {
         [
-            AnyView(HotkeyCell(icon: "playpause", title: L10n.t("播放/暂停")) {
+            AnyView(HotkeyCell(icon: "playpause", title: L10n.t("播放/暂停"), action: .playPauseHotkey) {
                 ShortcutRecorderControl(name: .playPauseHotkey)
             }),
-            AnyView(HotkeyCell(icon: "forward.fill", title: L10n.t("下一首")) {
+            AnyView(HotkeyCell(icon: "forward.fill", title: L10n.t("下一首"), action: .nextTrackHotkey) {
                 ShortcutRecorderControl(name: .nextTrackHotkey)
             }),
-            AnyView(HotkeyCell(icon: "backward.fill", title: L10n.t("上一首")) {
+            AnyView(HotkeyCell(icon: "backward.fill", title: L10n.t("上一首"), action: .previousTrackHotkey) {
                 ShortcutRecorderControl(name: .previousTrackHotkey)
             }),
         ]
@@ -7096,15 +7124,34 @@ private struct ShortcutsSettingsTab: View {
 private struct HotkeyCell<Recorder: View>: View {
     let icon: String
     let title: String
+    /// 这一格的动作;给了就在指针悬停时把行首图标换成「拷贝链接」(`lyrimuse://action/…`,14 章决策 94)。
+    let action: LyrimuseAction?
     @ViewBuilder let recorder: () -> Recorder
+    @State private var hovering = false
+
+    init(icon: String, title: String, action: LyrimuseAction? = nil, @ViewBuilder recorder: @escaping () -> Recorder) {
+        self.icon = icon
+        self.title = title
+        self.action = action
+        self.recorder = recorder
+    }
 
     var body: some View {
+        let link = action.flatMap { LyrimuseDeepLink.action($0, on: nil, stepSeconds: nil).url(scheme: LyrimuseIdentity.urlScheme) }
         HStack(spacing: 9) {
-            SymbolImage(name: icon, size: 13)
-                .foregroundStyle(.secondary)
-                // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分符号有 CJK 变体)。
-                .environment(\.locale, Locale(identifier: "en"))
-                .frame(width: 18)
+            // 拷贝链接借行首图标那一格:两列格子挤不下第二颗常驻按钮,另占位置会把名字压小、录制框挤出卡片。
+            ZStack {
+                SymbolImage(name: icon, size: 13)
+                    .foregroundStyle(.secondary)
+                    // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分符号有 CJK 变体)。
+                    .environment(\.locale, Locale(identifier: "en"))
+                    .opacity(hovering && link != nil ? 0 : 1)
+                if let link {
+                    CopyLinkButton(url: link)
+                        .opacity(hovering ? 1 : 0)
+                }
+            }
+            .frame(width: 18)
             Text(title)
                 .font(.system(size: 13))
                 .lineLimit(1)
@@ -7117,7 +7164,36 @@ private struct HotkeyCell<Recorder: View>: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .settingsSearchHighlight(title: title)
+    }
+}
+
+/// 拷贝一条 `lyrimuse://` 链接;拷完图标换成对勾一会儿。悬停提示带上链接本身,不拷也看得见是哪一条。
+private struct CopyLinkButton: View {
+    let url: URL
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.absoluteString, forType: .string)
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "link")
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(copied ? Color.green : Color.secondary)
+        .help(copied ? L10n.t("已拷贝") : L10n.t("拷贝链接") + "\n" + url.absoluteString)
+        .accessibilityLabel(L10n.t("拷贝链接"))
     }
 }
 

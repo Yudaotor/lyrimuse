@@ -27,7 +27,12 @@ public enum MusicPlaybackController {
     /// 返回这次指令发没发出去(见 `ControlRoute.withheld`)。
     @discardableResult
     public static func playPause() -> Bool {
-        dispatch(appleScript: #"tell application "Music" to playpause"#,
+        // 模拟播放(`PlaybackSimulation`)时停 / 放的是模拟那一份,不发给真实播放器;上一首 / 下一首 / 跳转同理不发。
+        if PlaybackSimulation.togglePlaying() {
+            Task { @MainActor in LocalPlaybackSource.shared.simulationChanged() }
+            return false
+        }
+        return dispatch(appleScript: #"tell application "Music" to playpause"#,
                  spotifyScript: #"tell application "Spotify" to playpause"#,
                  kasetScript: #"tell application "Kaset" to playpause"#,
                  mediaControlCommand: "toggle-play-pause")
@@ -35,7 +40,8 @@ public enum MusicPlaybackController {
 
     @discardableResult
     public static func nextTrack() -> Bool {
-        dispatch(appleScript: #"tell application "Music" to next track"#,
+        guard !PlaybackSimulation.isActive else { return false }
+        return dispatch(appleScript: #"tell application "Music" to next track"#,
                  spotifyScript: #"tell application "Spotify" to next track"#,
                  kasetScript: #"tell application "Kaset" to next track"#,
                  mediaControlCommand: "next-track")
@@ -43,7 +49,8 @@ public enum MusicPlaybackController {
 
     @discardableResult
     public static func previousTrack() -> Bool {
-        dispatch(appleScript: #"tell application "Music" to previous track"#,
+        guard !PlaybackSimulation.isActive else { return false }
+        return dispatch(appleScript: #"tell application "Music" to previous track"#,
                  spotifyScript: #"tell application "Spotify" to previous track"#,
                  kasetScript: #"tell application "Kaset" to previous track"#,
                  mediaControlCommand: "previous-track")
@@ -895,6 +902,7 @@ public enum MusicPlaybackController {
     @discardableResult
     public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = false,
                             kasetWasPlaying: Bool? = nil, qqWasPaused: Bool = false) -> ControlRoute? {
+        guard !PlaybackSimulation.isActive else { return nil }
         let value = seekArgument(forSeconds: seconds)
         let script = #"tell application "Music" to set player position to "# + value
         if preferAppleScript {

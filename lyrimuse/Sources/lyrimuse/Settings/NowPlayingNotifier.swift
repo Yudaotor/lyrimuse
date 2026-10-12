@@ -66,6 +66,8 @@ final class NowPlayingNotifier {
 
     private func trackChanged(title: String, artist: String) {
         task?.cancel()
+        // 模拟播放(本机验证)换进换出都不是用户换了歌。
+        guard !PlaybackSimulation.suppressesTrackChange() else { return }
         let isFirstSighting = !sawTrack
         sawTrack = true
         let sinceStart = Date().timeIntervalSince(startedAt)

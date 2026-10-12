@@ -126,60 +126,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
-              let url = URL(string: urlString), url.scheme == LyrimuseIdentity.urlScheme else {
+              let url = URL(string: urlString) else {
             return
         }
-        // lyrimuse://lyrics-manager → 打开「歌词管理」(跟菜单栏那一项同一个入口;也是本机不点界面核对它外观的入口)。
-        if url.host == "lyrics-manager" {
-            AppActions.shared.openLyricsManager?()
-            return
-        }
-        // lyrimuse://menubar-panel → 开 / 关菜单栏左键面板(同普通左键点状态栏图标;也是本机不点界面核对它外观的入口)。
-        // 带 ?quick=overlay|notch|menubar|lyrics-window|touchbar 时打开就翻到那一格的快捷设置(同长按 / 右键那一格),
-        // 认不出的值当没带。
-        if url.host == "menubar-panel" {
-            let quick = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
-                .first { $0.name == "quick" }?.value.flatMap(PanelQuickTarget.init(deepLinkValue:))
-            MenuBarStatusItem.shared.togglePanelFromDeepLink(quick: quick)
-            return
-        }
-        // lyrimuse://lyrics-search → 打开「搜索歌词…」小窗(跟悬浮歌词 ⚙ 那一项同一个入口,开着时一样换成当前这首;
-        // 也是本机不点界面打开它核对的入口)。
-        if url.host == "lyrics-search" {
-            AppActions.shared.openLyricsQuickSearch?()
-            return
-        }
-        // lyrimuse://lyrics-window/search → 打开歌词窗口并弹出它的搜索候选歌词面板(同「⋯」菜单「搜索歌词…」;
-        // 也是本机不点界面打开它核对的入口)。
-        if url.host == "lyrics-window", url.path == "/search" {
-            AppActions.shared.openLyricsWindow?()
-            AppActions.shared.requestLyricsWindowSearch()
-            return
-        }
-        // 两种用途(按 host 分流):
-        //   lyrimuse://settings/<路径> → 把设置窗口翻到那一页(仿系统设置的 x-apple.systempreferences: 深链;
-        //     发版说明 / 支持回复里可以直接给链接,也是本机不点界面核对某一页外观的入口)。路径表见 Core
-        //     `SettingsDeepLink`;software-update 带 ?check=1 则顺手发起一次检查(支持回复里「点这个链接检查更新」)。
-        //     认不出的路径只打开设置窗口。
-        //   其它(lyrimuse://lastfm-auth-callback)→ Last.fm 授权回跳,原样。
-        if url.host == "settings" {
-            if url.path == "/software-update" {
-                let wantsCheck = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
-                    .contains { $0.name == "check" && $0.value != "0" } ?? false
-                if wantsCheck {
-                    SparkleUpdaterManager.shared.checkForUpdates()
-                } else {
-                    SparkleUpdaterManager.shared.showUpdatePage()
-                }
-            } else {
-                if let item = SettingsDeepLink(path: url.path).flatMap(SettingsSidebarItem.init(deepLink:)) {
-                    AppActions.shared.requestSettings(item)
-                }
-                AppActions.shared.openSettings?()
-            }
-            return
-        }
-        LastfmConnectController.shared.handleAuthCallback()
+        // 路由表在 Core `LyrimuseDeepLink`(有哪些链接、各自什么意思都在那边的头注),分派在 `DeepLinkRouter`。
+        DeepLinkRouter.handle(url)
     }
 
 

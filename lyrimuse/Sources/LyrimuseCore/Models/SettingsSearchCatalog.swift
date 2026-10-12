@@ -89,6 +89,9 @@ public enum SettingsSearchCatalog {
     /// 设置窗的前进 / 后退拿它还原「还没换过分段」那个位置 —— 跟那边对不上,表现是后退之后
     /// 停在另一个分段。selftest 按源码里的枚举首个 case 钉着它。
     public static let lyricsSectionDefault = "fetch"
+    /// 「歌词」页「管理」那一段的取值(`LyricsSettingsTab.Section.manage`)。菜单栏面板「歌词管理」那一格的
+    /// 「全部设置…」拿它翻页;selftest 按源码里的枚举钉着它。
+    public static let lyricsManageSectionValue = "manage"
     /// Last.fm 账号页分段的 @AppStorage 键(AccountLinkingTab.swift)。它带 `np:` 前缀是历史原因,
     /// 这里只写不新建。
     public static let lastfmSectionKey = "np:lastfmDetailSection"
@@ -454,6 +457,8 @@ public enum SettingsSearchCatalog {
                      kw: ["缓存", "磁盘", "空间", "占用", "清除", "清理", "存储", "动态封面"], group: "封面"),
 
         // ---- 快捷键 ----
+        shortcut("链接", sub: "可在快捷指令、Raycast、Alfred 等工具中打开；指针移到上方的快捷键上，可拷贝对应动作的链接",
+                 kw: ["深链", "URL", "lyrimuse://", "Raycast", "Alfred", "Stream Deck", "自动化", "拷贝链接"]),
         shortcut("显示/隐藏悬浮歌词", kw: ["悬浮歌词", "开关"]),
         shortcut("显示/隐藏灵动岛歌词", kw: ["灵动岛", "开关"]),
         shortcut("显示/隐藏菜单栏歌词", kw: ["菜单栏", "开关"]),

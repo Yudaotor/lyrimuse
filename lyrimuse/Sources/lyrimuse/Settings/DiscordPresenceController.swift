@@ -145,6 +145,8 @@ final class DiscordPresenceController: ObservableObject {
     }
 
     private func refresh() {
+        // 模拟播放(本机验证,`PlaybackSimulation`)期间保持原来那份,不把模拟的歌发出去。
+        guard !PlaybackSimulation.isActive else { return }
         wakeTask?.cancel()
         wakeTask = nil
         let settings = AppSettings.shared

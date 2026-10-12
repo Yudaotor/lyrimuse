@@ -693,7 +693,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 237 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 238 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -978,6 +978,7 @@ Every setting in the Settings window, by where it lives: 237 in all. Type a name
 
 ### Keyboard Shortcuts
 
+- **Link**: Open these from Shortcuts, Raycast, Alfred and similar tools. Hover over a shortcut above to copy the link for that action.
 - **Show/Hide Floating Lyrics**
 - **Show/Hide Notch Lyrics**
 - **Show/Hide Menu Bar Lyrics**

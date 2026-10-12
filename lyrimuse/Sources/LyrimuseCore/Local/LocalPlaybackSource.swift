@@ -1148,6 +1148,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func learnSpotifyStartLead(kind: SpotifyStartKind, sample: Double) {
+        guard !PlaybackSimulation.isActive else { return }
         var table = loadStartLeadTable()
         let current = table[kind.rawValue] ?? Self.spotifyStartLeadPrior(kind)
         var counts = (env.defaults.dictionary(forKey: Self.spotifyStartLeadSamplesDefaultsKey) as? [String: Int]) ?? [:]
@@ -1439,6 +1440,7 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 播放器重发锚点那一刻量到一次残差:更新并持久化它的滞后量。
     private func learnAnchorLag(bundleID: String?, residual: Double) {
+        guard !PlaybackSimulation.isActive else { return }
         guard Self.learnsAnchorLag(bundleID: bundleID), let bundleID else { return }
         let prior = anchorLagByPlayer[bundleID]
         let next = Self.learnedAnchorLag(current: prior ?? 0, residual: residual, hasPrior: prior != nil)
@@ -1461,6 +1463,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func learnProbeLead(residual: Double) {
+        guard !PlaybackSimulation.isActive else { return }
         guard let route = currentOutputRoute else { return }
         let prior = probeLeadByDevice[route.uid]
         let next = Self.learnedProbeLead(current: prior ?? Self.probeLeadPrior(for: route.transport),
@@ -3056,6 +3059,8 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 每拍轮询的出口与拖动之后各调一次;保活由发布方自己的计时器做,不走这里。
     /// 身份按引擎的口径清洗(`EnrichCacheKeys.cleanTag`),位置不含歌词偏移。
     private func publishPlaybackState(now: Date = Date()) {
+        // 模拟播放不写给引擎(引擎据此打卡、推送):引擎照旧当在放模拟之前那首,保活由发布方自己续。
+        guard !PlaybackSimulation.isActive else { return }
         guard !title.isEmpty, let snapshot = lastSnapshot else {
             PlaybackStatePublisher.shared.publish(.idle(), now: now)
             return
@@ -3331,10 +3336,17 @@ public final class LocalPlaybackSource: ObservableObject {
         // 失败原因跟快照在同一条队列上一起取:它是 MediaControlClient 的全局量,回到主线程再读就可能已经不是这一轮的。
         Task {
             defer { self.finishPoll() }
-            let (snapshot, provenance, snapshotFailure) = await Self.runOffPool(Self.pollQueue) {
-                let fetched = MediaControlClient.fetchSnapshotWithProvenance()
-                return (fetched.snapshot, fetched.provenance, MediaControlClient.lastSnapshotFailure)
+            let polled: (MediaControlSnapshot?, MediaControlClient.SnapshotProvenance?, MediaControlClient.SnapshotFailure?)
+            if let simulated = PlaybackSimulation.current {
+                // 模拟播放(见 14 章决策 98)时不读播放器,这一拍按模拟那一份造。
+                polled = (simulated.snapshot(at: Date()), nil, nil)
+            } else {
+                polled = await Self.runOffPool(Self.pollQueue) {
+                    let fetched = MediaControlClient.fetchSnapshotWithProvenance()
+                    return (fetched.snapshot, fetched.provenance, MediaControlClient.lastSnapshotFailure)
+                }
             }
+            let (snapshot, provenance, snapshotFailure) = polled
             guard Self.pollResultIsCurrent(generation: generation, appliedGeneration: self.pollAppliedGeneration,
                                            invalidatedThrough: self.pollInvalidatedThrough) else {
                 logger.debug("poll result discarded: stale generation (\(generation) vs applied \(self.pollAppliedGeneration), invalidated through \(self.pollInvalidatedThrough))")
@@ -3527,7 +3539,7 @@ public final class LocalPlaybackSource: ObservableObject {
         // 整个清空,这里是唯一还记得的地方(见 LyricsWindowView.idleWelcomeView)。落
         // UserDefaults,只在值变化时写,2 秒轮询不刷盘。
         let bid = snapshot.bundleIdentifier ?? ""
-        if !bid.isEmpty, !newTitle.isEmpty, bid != lastPersistedPlayerBundleID {
+        if !bid.isEmpty, !newTitle.isEmpty, bid != lastPersistedPlayerBundleID, !PlaybackSimulation.isActive {
             UserDefaults.standard.set(bid, forKey: "np:lastPlayerBundleID")
             lastPersistedPlayerBundleID = bid
         }
@@ -3575,7 +3587,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let spotifyNoticeSaysAd = isSpotifyNative
             && (spotifyNotificationHint.map { $0.isAd && $0.matches(title: snapshot.title, artist: snapshot.artist) } ?? false)
         let knownAdThisTrack = isCurrentTrackAdBreak && snapshot.identityKey == lastKey
-        if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, newTitle != lastPersistedTrackTitle {
+        if !newTitle.isEmpty, !adByFields, !spotifyNoticeSaysAd, !knownAdThisTrack, newTitle != lastPersistedTrackTitle,
+           !PlaybackSimulation.isActive {
             let defaults = UserDefaults.standard
             lastTrackBeforeWrite = (key: snapshot.trackKey,
                                     title: defaults.string(forKey: "np:lastTrackTitle"),
@@ -4251,6 +4264,13 @@ public final class LocalPlaybackSource: ObservableObject {
         logger.notice("seek \(landing.rawValue, privacy: .public): player=\(snapshot.bundleIdentifier ?? "-", privacy: .public) from=\(previous, format: .fixed(precision: 2)) to=\(target, format: .fixed(precision: 2)) reported=\(reported, format: .fixed(precision: 2)) playing=\(playing) readAge=\(now.timeIntervalSince(readAt), format: .fixed(precision: 2))")
     }
 
+    /// 模拟播放开 / 关 / 跳转之后马上按新的来源跑一拍;在飞的那一拍是按旧来源取的,作废。
+    public func simulationChanged() {
+        pollInvalidatedThrough = pollGeneration
+        pollFlight.invalidateInFlight()
+        poll()
+    }
+
     public func seek(toMs targetMs: Int) {
         guard acceptsSeek else {
             logger.notice("seek ignored: \(self.isCurrentTrackAdBreak ? "an ad is playing" : "the current player does not accept seek commands", privacy: .public)")
@@ -4258,6 +4278,11 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         let clampedMs = max(0, min(targetMs, currentDurationMs ?? targetMs))
         let seconds = Double(clampedMs) / 1000
+        // 模拟播放跳的是模拟那一份,不发给真实播放器。
+        if PlaybackSimulation.seek(toSeconds: seconds) {
+            simulationChanged()
+            return
+        }
         // .auto/多选模式下要按"这一刻实际在播的是谁"选后端,不能只看设置值——只要不是排他地
         // 选了 Apple Music 一个(PlaybackPlayerPreference.isExclusivelyAppleMusic 为 false),
         // 写路径会走 media-control,而读路径对 Apple Music 走的是精确的 AppleScript 播放头,

@@ -2261,10 +2261,10 @@ func runSourceContractTests() {
                     "内容开关: 歌词窗口读它自己那份")
         expectEqual(read("AppDelegate.swift").contains("settings.$overlayShowTranslation"), true,
                     "内容开关: 「简繁转换」露不露看悬浮歌词那份译文(只有悬浮歌词 ⚙ 菜单用这条判据)")
-        let hotkeys = read("Settings/GlobalHotkeys.swift")
-        expectEqual(hotkeys.contains("s.overlayShowTranslation = on") && hotkeys.contains("s.showTranslation = on")
-                        && hotkeys.contains("s.overlayShowRomanization = on") && hotkeys.contains("s.showRomanization = on"), true,
-                    "内容开关: 全局快捷键两份一起切")
+        let actions = read("Settings/LyrimuseActionRunner.swift")
+        expectEqual(actions.contains("s.overlayShowTranslation = show") && actions.contains("s.showTranslation = show")
+                        && actions.contains("s.overlayShowRomanization = show") && actions.contains("s.showRomanization = show"), true,
+                    "内容开关: 全局快捷键 / 深链两份一起切")
         let model = read("Settings/AppSettings.swift")
         expectEqual(model.contains("if !defaults.bool(forKey: Keys.overlayContentTogglesMigrated) {")
                         && model.contains("defaults.set(true, forKey: Keys.overlayContentTogglesMigrated)"), true,
@@ -2455,7 +2455,7 @@ func runSourceContractTests() {
                                 "歌词窗口重开: 启动时先置标记、再直接开窗")
                     expectEqual(actions.contains("LyricsWindowSession.shouldReopenAtLaunch {\n                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {\n                        AppActions.shared.openLyricsWindow?()"), false,
                                 "歌词窗口重开: 启动时不走先激活 App 的 openLyricsWindow")
-                    expectEqual(actions.contains("AppActions.shared.openLyricsWindow = {\n                    LyricsWindowSession.open {\n                        NSApp.activate(ignoringOtherApps: true)\n                        openWindowAction(id: \"lyrics-window\")"), true,
+                    expectEqual(actions.contains("AppActions.shared.openLyricsWindow = {\n                    LyricsWindowSession.open {\n                        WindowActivation.activateApp()\n                        openWindowAction(id: \"lyrics-window\")"), true,
                                 "歌词窗口: 菜单、快捷键这些手动打开的入口照旧先激活 App")
                 }
                 expectEqual(view.contains("if LyricsWindowSession.takeRestoringAtLaunch() { window.orderFrontRegardless() }"), true,

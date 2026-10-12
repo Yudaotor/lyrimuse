@@ -621,8 +621,8 @@ func runSettingsInteractionTests() {
                     "设置深链(契约): tabNames 与 SettingsTab 的 case 逐个一致、顺序相同")
         expectEqual(D.Account.allCases.allSatisfy { settingsView.contains("case .\($0.rawValue): self = .account(") }, true,
                     "设置深链(契约): 每个账号路径在 App 侧都映射到一个账号页")
-        expectEqual(appSource("AppDelegate.swift").contains("SettingsDeepLink(path: url.path).flatMap(SettingsSidebarItem.init(deepLink:))"), true,
-                    "设置深链(契约): URL 回调按路径翻页")
+        expectEqual(appSource("Settings/DeepLinkRouter.swift").contains("SettingsDeepLink(path: SettingsDeepLink.pagePath(of: path)).flatMap(SettingsSidebarItem.init(deepLink:))"), true,
+                    "设置深链(契约): URL 回调按路径翻页(带分段时先去掉分段)")
     }
 
     // ---- 设置窗侧栏:宽度放得下当前语言最长的那一行、收不起来(见 14 章决策 58) ----

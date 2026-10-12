@@ -884,7 +884,8 @@ func runLyricsWindowTests() {
                     true, "迷你粗细 / 已唱颜色: 「重置」恢复默认")
         expectEqual(sourceBytes(hotkeys, contain: ".openLyricsWindowHotkey, .toggleLyricsWindowMiniHotkey,")
                     && sourceBytes(hotkeys, contain: "case .toggleLyricsWindowMiniHotkey: return L10n.t(\"切换迷你 / 完整尺寸\")")
-                    && sourceBytes(hotkeys, contain: "LyricsWindowSession.requestForm(mini: LyricsWindowMiniToggle.targetIsMini("),
+                    && sourceBytes(source("lyrimuse/Settings/LyrimuseActionRunner.swift"),
+                                   contain: "let mini = on ?? LyricsWindowMiniToggle.targetIsMini("),
                     true, "切换迷你快捷键: 登记进撞键清单、有标题、按开没开切形态")
         expectEqual(sourceBytes(settingsView, contain: "ShortcutRecorderControl(name: .toggleLyricsWindowMiniHotkey)"), true,
                     "切换迷你快捷键: 快捷键页有这一行")

@@ -111,9 +111,20 @@ final class LyricsWindowRematch: ObservableObject {
             stop(round)
             return
         }
+        guard let target = prepare() else { return }
+        if target.reasons.isEmpty {
+            start(key: target.key, title: target.title)
+        } else {
+            confirm = target
+        }
+    }
+
+    /// 当前这首开一轮之前要先确认什么(`reasons` 为空 = 不用确认);查不到条目时发一句说明、返回 nil。
+    /// 菜单栏面板也走这里,它在面板里行内确认,不经 `confirm`(那个绑着歌词窗口里的确认框)。
+    func prepare() -> Confirm? {
         let playback = PlaybackCoordinator.shared
         let title = playback.title
-        guard !title.isEmpty else { return }
+        guard !title.isEmpty else { return nil }
         guard let stored = EnrichCacheReader.storedEntry(artist: playback.artist, title: title, album: playback.album) else {
             // 歌词库正在重读时查不到不代表没有记录。
             if EnrichCacheReader.isCurrent {
@@ -123,7 +134,7 @@ final class LyricsWindowRematch: ObservableObject {
                 EnrichCacheReader.refreshIfNeeded()
                 LyricsWindowActionNotes.shared.post(.info, title: title, text: L10n.t("歌词库正在刷新，请稍后重试"))
             }
-            return
+            return nil
         }
         var reasons: [String] = []
         if stored.manualLyrics {
@@ -135,11 +146,7 @@ final class LyricsWindowRematch: ObservableObject {
             reasons.append(String(format: L10n.t("这首歌曲调整过歌词时间轴（%@），更换歌词后该校准可能失效。"),
                                   AppSettings.signedSeconds(ms: playback.trackLyricsOffsetMs) + "s"))
         }
-        if reasons.isEmpty {
-            start(key: stored.key, title: title)
-        } else {
-            confirm = Confirm(key: stored.key, title: title, reasons: reasons)
-        }
+        return Confirm(key: stored.key, title: title, reasons: reasons)
     }
 
     func start(key: String, title: String) {

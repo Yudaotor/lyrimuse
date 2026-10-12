@@ -1079,10 +1079,11 @@ func runTouchBarTests() {
                         && hotkeys.contains(".toggleMenuBarLyricsHotkey, .toggleTouchBarLyricsHotkey,")
                         && hotkeys.contains("case .toggleTouchBarLyricsHotkey: return L10n.t(\"展开/收起触控栏歌词\")"), true,
                     "触控栏快捷键: 登记进撞键检查,标题跟设置页那一行一致")
-        expectEqual(hotkeys.contains("switch TouchBarLyricsController.shared.toggleFromHotkey() {")
-                        && hotkeys.contains("case .noTouchBar: text = L10n.t(\"未检测到触控栏\")")
-                        && hotkeys.contains("case .turnOn, .expand: text = L10n.t(\"已展开触控栏歌词\")")
-                        && hotkeys.contains("flashHint(icon: SurfaceGlyph.touchBar.rawValue, text: text)"), true,
+        let actions = code(appDir.appendingPathComponent("Settings/LyrimuseActionRunner.swift")) ?? ""
+        expectEqual(actions.contains("switch TouchBarLyricsController.shared.toggleFromHotkey() {")
+                        && actions.contains("case .noTouchBar: text = L10n.t(\"未检测到触控栏\")")
+                        && actions.contains("case .turnOn, .expand: text = L10n.t(\"已展开触控栏歌词\")")
+                        && actions.contains("flashHint(icon: SurfaceGlyph.touchBar.rawValue, text: text)"), true,
                     "触控栏快捷键: 按下去交给控制器,做了哪一件都回声")
         expectEqual(controller.contains("let action = TouchBarHotkeyAction.resolve(")
                         && controller.contains("touchBarPresent: TouchBarAvailability.shared.isPresent, entryPointsAvailable: TouchBarPrivateAPI.isAvailable,")
@@ -1095,7 +1096,7 @@ func runTouchBarTests() {
                                                + "            TouchBarPrivateAPI.minimizeSystemModal(bar)"), true,
                     "触控栏快捷键: 关着就打开开关(订阅当场展开),收着就展开,看得见就照 ✕ 收起")
         expectEqual(settingsView.contains("if touchBar.isPresent {\n"
-                                          + "            cells.append(AnyView(HotkeyCell(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t(\"展开/收起触控栏歌词\")) {\n"
+                                          + "            cells.append(AnyView(HotkeyCell(icon: SurfaceGlyph.touchBar.rawValue, title: L10n.t(\"展开/收起触控栏歌词\"), action: .toggleTouchBarLyricsHotkey) {\n"
                                           + "                ShortcutRecorderControl(name: .toggleTouchBarLyricsHotkey)")
                     && settingsView.contains("+ (touchBar.isPresent ? [.toggleTouchBarLyricsHotkey] : [])"), true,
                     "触控栏快捷键: 设置页那一行只在有触控栏时出现")
