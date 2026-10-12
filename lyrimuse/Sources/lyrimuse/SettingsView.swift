@@ -3671,13 +3671,9 @@ private struct NotchLyricRowArtworkPositionRow: View {
 
     var body: some View {
         SettingsSubRow(title: L10n.t("封面位置")) {
-            Picker("", selection: $settings.notchLyricRowArtworkPosition) {
-                ForEach(NotchLyricRowArtworkPosition.allCases, id: \.self) { position in
-                    Text(position.displayName).tag(position)
-                }
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
+            SettingsPillSegmentedControl(selection: $settings.notchLyricRowArtworkPosition,
+                                         options: NotchLyricRowArtworkPosition.allCases,
+                                         label: \.displayName)
         }
     }
 }

@@ -47,20 +47,8 @@ extension View {
     ///
     /// 放在 sheet 里的卡片传 `inSheet: true`,画下面「sheet 里的玻璃替身」:sheet 里的玻璃一直是失焦那一档。
     /// 整块可点的卡片传 `interactive: true`:悬停 / 按下由玻璃自己给反馈(`.interactive()`),旧系统没有这一档。
-    @ViewBuilder
     func settingsCardBackground(cornerRadius: CGFloat, inSheet: Bool = false, interactive: Bool = false) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        if #available(macOS 26.0, *) {
-            if inSheet {
-                modifier(SheetGlassCardBackground(shape: shape))
-            } else {
-                glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
-                    .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
-            }
-        } else {
-            background(shape.fill(Color.primary.opacity(0.05)))
-                .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
-        }
+        modifier(SettingsCardBackground(cornerRadius: cornerRadius, inSheet: inSheet, interactive: interactive))
     }
 
     /// 设置侧栏搜索框的材质("像系统设置那样的液态玻璃"):macOS 26+ 用
@@ -116,13 +104,8 @@ extension View {
 
     /// 页面里那个唯一的强调按钮(「请作者喝杯咖啡」)。macOS 26 起用 .glassProminent,
     /// 更早的系统退回原来的 .borderedProminent —— 两者都吃 .tint。
-    @ViewBuilder
     func settingsProminentGlassButton(tint: Color) -> some View {
-        if #available(macOS 26.0, *) {
-            buttonStyle(.glassProminent).tint(tint)
-        } else {
-            buttonStyle(.borderedProminent).tint(tint)
-        }
+        modifier(SettingsProminentGlassButton(tint: tint))
     }
 
     /// 行尾控件里的按钮统一套玻璃按钮样式。
@@ -132,17 +115,8 @@ extension View {
     /// 离 Button 更近的那个 buttonStyle 胜出,这正是我们想要的:它们本来就该是链接样式。
     ///
     /// 放在 sheet 里的按钮传 `inSheet: true`,同 `settingsCardBackground`。
-    @ViewBuilder
     func settingsGlassButtons(inSheet: Bool = false) -> some View {
-        if #available(macOS 26.0, *) {
-            if inSheet {
-                buttonStyle(SheetGlassButtonStyle())
-            } else {
-                buttonStyle(.glass)
-            }
-        } else {
-            self
-        }
+        modifier(SettingsGlassButtons(inSheet: inSheet))
     }
 
     /// 编辑台工具栏按钮的外观,五段编辑台(悬浮歌词 / 灵动岛 / 菜单栏 / 触控栏 / 歌词窗口)共用,
@@ -319,6 +293,74 @@ private struct SheetGlassEdgeOverlay<S: InsettableShape>: View {
         LinearGradient(stops: [.init(color: ends, location: 0), .init(color: sides, location: reach),
                                .init(color: sides, location: 1 - reach), .init(color: ends, location: 1)],
                        startPoint: .top, endPoint: .bottom)
+    }
+}
+
+private struct SettingsGlassDisabledKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// 关掉玻璃卡片 / 玻璃按钮,一律走 macOS 26 之前那一档。设置页的歌词窗口预览要它:那张预览是把整扇歌词窗口
+    /// `scaleEffect` 缩小画进去的,玻璃里的内容不吃这层缩放和裁切,会按原尺寸画到预览框外面(07 章决策 156)。
+    var settingsGlassDisabled: Bool {
+        get { self[SettingsGlassDisabledKey.self] }
+        set { self[SettingsGlassDisabledKey.self] = newValue }
+    }
+}
+
+/// `settingsCardBackground` 的本体:要读 `settingsGlassDisabled`,所以是 ViewModifier。
+private struct SettingsCardBackground: ViewModifier {
+    let cornerRadius: CGFloat
+    let inSheet: Bool
+    let interactive: Bool
+    @Environment(\.settingsGlassDisabled) private var glassDisabled
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(macOS 26.0, *), !glassDisabled {
+            if inSheet {
+                content.modifier(SheetGlassCardBackground(shape: shape))
+            } else {
+                content.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+                    .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
+            }
+        } else {
+            content.background(shape.fill(Color.primary.opacity(0.05)))
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
+        }
+    }
+}
+
+/// `settingsProminentGlassButton` 的本体,理由同 `SettingsCardBackground`。
+private struct SettingsProminentGlassButton: ViewModifier {
+    let tint: Color
+    @Environment(\.settingsGlassDisabled) private var glassDisabled
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *), !glassDisabled {
+            content.buttonStyle(.glassProminent).tint(tint)
+        } else {
+            content.buttonStyle(.borderedProminent).tint(tint)
+        }
+    }
+}
+
+/// `settingsGlassButtons` 的本体,理由同 `SettingsCardBackground`。
+private struct SettingsGlassButtons: ViewModifier {
+    let inSheet: Bool
+    @Environment(\.settingsGlassDisabled) private var glassDisabled
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *), !glassDisabled {
+            if inSheet {
+                content.buttonStyle(SheetGlassButtonStyle())
+            } else {
+                content.buttonStyle(.glass)
+            }
+        } else {
+            content
+        }
     }
 }
 

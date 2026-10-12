@@ -4010,8 +4010,8 @@ func runSourceContractTests() {
         expectEqual(sheet.contains("private var presentedAsSheet: Bool { !standaloneWindow }")
                     && sheet.contains(".settingsCardBackground(cornerRadius: Self.panelCornerRadius, inSheet: presentedAsSheet)")
                     && !sheet.contains(".settingsGlassButtons()")
-                    && designSystem.contains("if inSheet {\n                modifier(SheetGlassCardBackground(shape: shape))")
-                    && designSystem.contains("if inSheet {\n                buttonStyle(SheetGlassButtonStyle())"), true,
+                    && designSystem.contains("if inSheet {\n                content.modifier(SheetGlassCardBackground(shape: shape))")
+                    && designSystem.contains("if inSheet {\n                content.buttonStyle(SheetGlassButtonStyle())"), true,
                     "搜索候选歌词: sheet 里的侧栏和玻璃按钮画设计系统的替身(inSheet: presentedAsSheet),不直接用玻璃")
         expectEqual(sheet.components(separatedBy: "markInstrumentalAction\n").count - 1, 2,
                     "采纳候选入口: 「纯音乐」「已匹配曲目 · 无歌词文本」两个空状态里有「标为纯音乐」")

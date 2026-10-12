@@ -119,6 +119,8 @@ struct LyricsWindowPreviewStage: View {
     private var preview: some View {
         let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
         return LyricsWindowView(previewMode: true, previewMini: mini)
+            // 玻璃里的内容不吃下面的 scaleEffect 和裁切,会按原尺寸画到预览框外面;预览里一律不用玻璃(07 章决策 156)。
+            .environment(\.settingsGlassDisabled, true)
             .frame(width: contentSize.width, height: contentSize.height)
             // 在缩放之前取范围:这里拿到的是内容坐标,下面叠可点区域时再乘 scale。
             .overlayPreferenceValue(LyricsWindowPreviewHeaderAnchorKey.self) { anchor in
