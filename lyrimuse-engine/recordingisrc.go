@@ -369,7 +369,8 @@ sweep:
 			for i, job := range batch {
 				ids[i] = job.appleID
 			}
-			songs, ok := appleCatalogSongsByID(ctx, sf, ids)
+			// 后台请求:只用主机限速里富余的额度,不跟正在播的那首排队(见 hostguard.go 第 3 道)。
+			songs, ok := appleCatalogSongsByID(withBackgroundOutbound(ctx), sf, ids)
 			requests++
 			if ok {
 				for _, job := range batch {

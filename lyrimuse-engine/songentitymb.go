@@ -201,7 +201,7 @@ func sweepMBRecordings(ctx context.Context, path string, now time.Time) (int, bo
 			slog.Error("song entities: write mb recordings", "err", err)
 		}
 	}
-	settled := fetchMBRecordings(ctx, due, have, now, mbRecordingsBackoff, lookupMBRecording, save)
+	settled := fetchMBRecordings(withBackgroundOutbound(ctx), due, have, now, mbRecordingsBackoff, lookupMBRecording, save)
 	save()
 	slog.Info("song entities: mb recordings swept", "due", len(due), "settled", settled, "known", len(have))
 	return settled, settled == len(due)

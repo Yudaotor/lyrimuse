@@ -89,32 +89,39 @@ func neteaseNamesDue(entries map[string]enrichEntry, have map[string]neteaseCata
 	return out
 }
 
-// fetchNeteaseNames 按 neteaseNamesBatch 一批问,结果并进 have(这一批里网易云没有的也记成问过),返回发了几次请求。一批
-// 没问成就跳过,下次再问。两次请求之间隔 pace。
-func fetchNeteaseNames(ctx context.Context, ids []string, have map[string]neteaseCatalogName, now time.Time, pace time.Duration,
-	fetch func(ctx context.Context, ids []string) (map[string]neteaseCatalogName, bool)) int {
-	requests := 0
-	for start := 0; start < len(ids); start += neteaseNamesBatch {
+// fetchNeteaseNames 按 neteaseNamesBatch 一批问,结果并进 have(这一批里网易云没有的也记成问过),返回发了几次请求、问完了
+// 没有。一批没问成就等 backoff 再问(规则见 catalogSweepBackoff);每问成 catalogSweepSaveEvery 批调一次 save。两次请求之间隔 pace。
+func fetchNeteaseNames(ctx context.Context, ids []string, have map[string]neteaseCatalogName, now time.Time, pace, backoff time.Duration,
+	fetch func(ctx context.Context, ids []string) (map[string]neteaseCatalogName, bool), save func()) (int, bool) {
+	requests, failures, done := 0, 0, 0
+	for start := 0; start < len(ids); {
 		if ctx.Err() != nil {
-			break
+			return requests, false
 		}
 		batch := ids[start:min(start+neteaseNamesBatch, len(ids))]
 		got, ok := fetch(ctx, batch)
 		requests++
-		if ok {
-			for _, id := range batch {
-				rec := got[id]
-				rec.Checked = now.Unix()
-				have[id] = rec
+		if !ok {
+			if failures++; failures >= catalogSweepMaxFailures || !sleepCtx(ctx, backoff) {
+				return requests, false
 			}
+			continue
 		}
-		select {
-		case <-ctx.Done():
-			return requests
-		case <-time.After(pace):
+		failures = 0
+		start += len(batch)
+		for _, id := range batch {
+			rec := got[id]
+			rec.Checked = now.Unix()
+			have[id] = rec
+		}
+		if done++; done%catalogSweepSaveEvery == 0 {
+			save()
+		}
+		if !sleepCtx(ctx, pace) {
+			return requests, false
 		}
 	}
-	return requests
+	return requests, true
 }
 
 // neteaseSongDetails 问一批歌曲详情;ok=false 表示没问成(网络、限流、网易云回的 code 不是 200)。
@@ -168,15 +175,22 @@ func startNeteaseNamesSweep(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
-		if features().SongEntityPhase2 && sweepNeteaseNames(ctx, neteaseNamesPath(), time.Now()) > 0 && features().SongEntityShadow {
-			rebuildSongEntityTable(time.Now())
+		next := neteaseNamesInterval
+		if features().SongEntityPhase2 {
+			settled, complete := sweepNeteaseNames(ctx, neteaseNamesPath(), time.Now())
+			if settled > 0 && features().SongEntityShadow {
+				rebuildSongEntityTable(time.Now())
+			}
+			if !complete {
+				next = catalogSweepRetry
+			}
 		}
-		timer.Reset(neteaseNamesInterval)
+		timer.Reset(next)
 	}
 }
 
-// sweepNeteaseNames 补一轮,返回这一轮记下了几个 id(问成了的)。
-func sweepNeteaseNames(ctx context.Context, path string, now time.Time) int {
+// sweepNeteaseNames 补一轮,返回这一轮记下了几个 id(问成了的)、到期的问完了没有。
+func sweepNeteaseNames(ctx context.Context, path string, now time.Time) (int, bool) {
 	enrichMu.Lock()
 	entries := make(map[string]enrichEntry, len(enrichCache))
 	for k, v := range enrichCache {
@@ -186,9 +200,15 @@ func sweepNeteaseNames(ctx context.Context, path string, now time.Time) int {
 	have := readNeteaseNames(path)
 	due := neteaseNamesDue(entries, have, now)
 	if len(due) == 0 {
-		return 0
+		return 0, true
 	}
-	requests := fetchNeteaseNames(ctx, due, have, now, neteaseNamesPace, neteaseSongDetails)
+	save := func() {
+		if err := writeNeteaseNames(path, have); err != nil {
+			slog.Error("song entities: write netease names", "err", err)
+		}
+	}
+	requests, complete := fetchNeteaseNames(withBackgroundOutbound(ctx), due, have, now, neteaseNamesPace, catalogSweepBackoff,
+		neteaseSongDetails, save)
 	settled := 0
 	for _, id := range due {
 		if have[id].Checked == now.Unix() {
@@ -197,10 +217,11 @@ func sweepNeteaseNames(ctx context.Context, path string, now time.Time) int {
 	}
 	if err := writeNeteaseNames(path, have); err != nil {
 		slog.Error("song entities: write netease names", "err", err)
-		return 0
+		return 0, false
 	}
-	slog.Info("song entities: netease names swept", "due", len(due), "settled", settled, "requests", requests, "known", len(have))
-	return settled
+	slog.Info("song entities: netease names swept", "due", len(due), "settled", settled, "requests", requests, "known", len(have),
+		"complete", complete)
+	return settled, complete
 }
 
 // attachNeteaseNames 把补扫到的网易云登记名挂到写法上。先核对这条写法的网易云链接没配错:网易云那一轨的时长跟写法差不超过

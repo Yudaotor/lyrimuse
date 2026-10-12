@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -39,12 +41,21 @@ func TestFetchNeteaseNames(t *testing.T) {
 	}
 	have := map[string]neteaseCatalogName{}
 	now := time.Unix(2_000_000_000, 0)
-	requests := fetchNeteaseNames(context.Background(), ids, have, now, 0, fetch)
-	if requests != 3 || !slices.Equal(sizes, []int{200, 200, 50}) {
-		t.Errorf("一次最多 %d 个 id: requests=%d sizes=%v", neteaseNamesBatch, requests, sizes)
+	requests, complete := fetchNeteaseNames(context.Background(), ids, have, now, 0, 0, fetch, func() {})
+	if requests != 4 || !slices.Equal(sizes, []int{200, 200, 200, 50}) || !complete {
+		t.Errorf("一次最多 %d 个 id,没问成的那一批等一下重问: requests=%d sizes=%v complete=%v", neteaseNamesBatch, requests, sizes, complete)
 	}
-	if _, ok := have[ids[200]]; ok {
-		t.Error("没问成的那一批不记")
+	if _, ok := have[ids[200]]; !ok {
+		t.Error("重问成了的那一批记下")
+	}
+	calls := 0
+	failing := func(_ context.Context, batch []string) (map[string]neteaseCatalogName, bool) {
+		calls++
+		return nil, false
+	}
+	if requests, complete := fetchNeteaseNames(context.Background(), ids, map[string]neteaseCatalogName{}, now, 0, 0, failing, func() {}); complete ||
+		requests != catalogSweepMaxFailures || calls != catalogSweepMaxFailures {
+		t.Errorf("一直没问成就停: requests=%d calls=%d complete=%v", requests, calls, complete)
 	}
 	if rec := have[ids[0]]; rec.Name != "n-"+ids[0] || rec.Checked != now.Unix() {
 		t.Errorf("记下登记名和问的时刻: %+v", rec)
@@ -106,6 +117,25 @@ func TestAttachNeteaseNamesVerifiesLink(t *testing.T) {
 		attachNeteaseNames(vs, c.names)
 		if got := len(vs[0].catalogNames) > 0; got != c.want {
 			t.Errorf("%s: 挂上=%v,应为 %v", c.name, got, c.want)
+		}
+	}
+}
+
+// 联网补扫的请求都标成后台(只用主机限速里富余的额度,不跟正在播的那首排队)。
+func TestCatalogSweepsUseBackgroundOutbound(t *testing.T) {
+	for file, want := range map[string]string{
+		"songentitynames.go":        "fetchAppleNames(withBackgroundOutbound(ctx),",
+		"songentityneteasenames.go": "fetchNeteaseNames(withBackgroundOutbound(ctx),",
+		"songentitymb.go":           "fetchMBRecordings(withBackgroundOutbound(ctx),",
+		"applecreditlinks.go":       "recheckAppleCreditLinks(withBackgroundOutbound(ctx),",
+		"recordingisrc.go":          "appleCatalogSongsByID(withBackgroundOutbound(ctx), sf, ids)",
+	} {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(src), want) {
+			t.Errorf("%s 的补扫请求要标成后台: %s", file, want)
 		}
 	}
 }

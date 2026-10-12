@@ -23,6 +23,15 @@ const (
 	appleNamesBatch   = 300
 	appleNamesPace    = time.Second
 	appleNamesRecheck = 180 * 24 * time.Hour
+
+	// 目录名字补扫(Apple、网易云)没问成时的规则,跟 MusicBrainz 那道同一个做法:等 catalogSweepBackoff 再问同一批,连续
+	// catalogSweepMaxFailures 次没问成就停(断网、token 失效、一直被限流),catalogSweepRetry 之后接着问;每问成
+	// catalogSweepSaveEvery 批落一次盘,被重启时最多重问这么多批。请求都标成后台(withBackgroundOutbound),只用主机限速里
+	// 富余的额度,不跟正在播的那首排队。
+	catalogSweepBackoff     = 30 * time.Second
+	catalogSweepMaxFailures = 3
+	catalogSweepRetry       = time.Hour
+	catalogSweepSaveEvery   = 5
 	// songEvidenceAppleName:同一个 Apple 歌曲 id 在某个区的名字跟另一条写法对得上。排在全部证据之后加:名字只补并,
 	// 不改变别的证据先并出来的结构(排在前面会改变加边顺序,让原来并上的撞上否决)。
 	songEvidenceAppleName = "apple_name"
@@ -109,18 +118,19 @@ func appleNamesDue(entries map[string]enrichEntry, have map[string]appleCatalogN
 	return out
 }
 
-// fetchAppleNames 按 appleNamesBatch 一批、三个区各问一遍,结果并进 have,返回发了几次请求。一批里有一个区没问成,这一批
-// 都不记,下次再问。fetch 是按区取一批 id,ok=false 表示没问成。两次请求之间隔 pace。
-func fetchAppleNames(ctx context.Context, ids []string, have map[string]appleCatalogNames, now time.Time, pace time.Duration,
-	fetch func(ctx context.Context, storefront string, ids []string) (map[string]appleCatalogSong, bool)) int {
-	requests := 0
-	for start := 0; start < len(ids); start += appleNamesBatch {
+// fetchAppleNames 按 appleNamesBatch 一批、三个区各问一遍,结果并进 have,返回发了几次请求、问完了没有。一批里有一个区没问成,
+// 这一批都不记,等 backoff 再问(规则见 catalogSweepBackoff);每问成 catalogSweepSaveEvery 批调一次 save。fetch 是按区取一批 id,
+// ok=false 表示没问成。两次请求之间隔 pace。
+func fetchAppleNames(ctx context.Context, ids []string, have map[string]appleCatalogNames, now time.Time, pace, backoff time.Duration,
+	fetch func(ctx context.Context, storefront string, ids []string) (map[string]appleCatalogSong, bool), save func()) (int, bool) {
+	requests, failures, done := 0, 0, 0
+	for start := 0; start < len(ids); {
 		batch := ids[start:min(start+appleNamesBatch, len(ids))]
 		got := map[string]map[string]appleCatalogSong{}
 		complete := true
 		for _, sf := range appleNamesStorefronts {
 			if ctx.Err() != nil {
-				return requests
+				return requests, false
 			}
 			songs, ok := fetch(ctx, sf, batch)
 			requests++
@@ -129,15 +139,18 @@ func fetchAppleNames(ctx context.Context, ids []string, have map[string]appleCat
 				break
 			}
 			got[sf] = songs
-			select {
-			case <-ctx.Done():
-				return requests
-			case <-time.After(pace):
+			if !sleepCtx(ctx, pace) {
+				return requests, false
 			}
 		}
 		if !complete {
+			if failures++; failures >= catalogSweepMaxFailures || !sleepCtx(ctx, backoff) {
+				return requests, false
+			}
 			continue
 		}
+		failures = 0
+		start += len(batch)
 		for _, id := range batch {
 			rec := appleCatalogNames{Checked: now.Unix()}
 			for _, sf := range appleNamesStorefronts {
@@ -158,12 +171,28 @@ func fetchAppleNames(ctx context.Context, ids []string, have map[string]appleCat
 			}
 			have[id] = rec
 		}
+		if done++; done%catalogSweepSaveEvery == 0 {
+			save()
+		}
 	}
-	return requests
+	return requests, true
 }
 
-// startAppleNamesSweep 由 poller 单开一个 goroutine:启动后 appleNamesDelay 补一次,之后每 appleNamesInterval 一次,只问到期的 id;
-// 补到了新结果、实体表开着,就重建一次实体表,不等它每天那一次。
+// sleepCtx 等 d;ctx 先取消时返回 false。
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
+// startAppleNamesSweep 由 poller 单开一个 goroutine:启动后 appleNamesDelay 补一次,之后每 appleNamesInterval 一次(这一轮没问完就
+// catalogSweepRetry 之后接着问),只问到期的 id;补到了新结果、实体表开着,就重建一次实体表,不等它每天那一次。
 func startAppleNamesSweep(ctx context.Context) {
 	timer := time.NewTimer(appleNamesDelay)
 	defer timer.Stop()
@@ -173,15 +202,22 @@ func startAppleNamesSweep(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
-		if features().SongEntityPhase2 && sweepAppleNames(ctx, appleNamesPath(), time.Now()) > 0 && features().SongEntityShadow {
-			rebuildSongEntityTable(time.Now())
+		next := appleNamesInterval
+		if features().SongEntityPhase2 {
+			settled, complete := sweepAppleNames(ctx, appleNamesPath(), time.Now())
+			if settled > 0 && features().SongEntityShadow {
+				rebuildSongEntityTable(time.Now())
+			}
+			if !complete {
+				next = catalogSweepRetry
+			}
 		}
-		timer.Reset(appleNamesInterval)
+		timer.Reset(next)
 	}
 }
 
-// sweepAppleNames 补一轮,返回这一轮记下了几个 id(问成了的)。
-func sweepAppleNames(ctx context.Context, path string, now time.Time) int {
+// sweepAppleNames 补一轮,返回这一轮记下了几个 id(问成了的)、到期的问完了没有。
+func sweepAppleNames(ctx context.Context, path string, now time.Time) (int, bool) {
 	enrichMu.Lock()
 	entries := make(map[string]enrichEntry, len(enrichCache))
 	for k, v := range enrichCache {
@@ -191,9 +227,15 @@ func sweepAppleNames(ctx context.Context, path string, now time.Time) int {
 	have := readAppleNames(path)
 	due := appleNamesDue(entries, have, now)
 	if len(due) == 0 {
-		return 0
+		return 0, true
 	}
-	requests := fetchAppleNames(ctx, due, have, now, appleNamesPace, appleCatalogSongsByID)
+	save := func() {
+		if err := writeAppleNames(path, have); err != nil {
+			slog.Error("song entities: write apple names", "err", err)
+		}
+	}
+	requests, complete := fetchAppleNames(withBackgroundOutbound(ctx), due, have, now, appleNamesPace, catalogSweepBackoff,
+		appleCatalogSongsByID, save)
 	settled := 0
 	for _, id := range due {
 		if have[id].Checked == now.Unix() {
@@ -202,10 +244,11 @@ func sweepAppleNames(ctx context.Context, path string, now time.Time) int {
 	}
 	if err := writeAppleNames(path, have); err != nil {
 		slog.Error("song entities: write apple names", "err", err)
-		return 0
+		return 0, false
 	}
-	slog.Info("song entities: apple names swept", "due", len(due), "settled", settled, "requests", requests, "known", len(have))
-	return settled
+	slog.Info("song entities: apple names swept", "due", len(due), "settled", settled, "requests", requests, "known", len(have),
+		"complete", complete)
+	return settled, complete
 }
 
 // attachAppleNames 把补扫到的名字挂到写法上。先核对这条写法的 Apple 链接没配错:目录里那一轨的时长跟写法差不超过

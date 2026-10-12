@@ -146,7 +146,8 @@ func startAppleCreditLinkRecheck(ctx context.Context) {
 			return
 		case <-time.After(appleCreditLinkDelay):
 		}
-		recheckAppleCreditLinks(ctx, scope, appleCreditLinkLiveDeps, appleCreditLinkPause)
+		// 后台请求:只用主机限速里富余的额度,不跟正在播的那首排队(见 hostguard.go 第 3 道)。
+		recheckAppleCreditLinks(withBackgroundOutbound(ctx), scope, appleCreditLinkLiveDeps, appleCreditLinkPause)
 	}()
 }
 

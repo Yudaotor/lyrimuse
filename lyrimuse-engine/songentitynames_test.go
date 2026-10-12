@@ -46,17 +46,21 @@ func TestFetchAppleNames(t *testing.T) {
 	}
 	have := map[string]appleCatalogNames{}
 	now := time.Unix(2_000_000_000, 0)
-	requests := fetchAppleNames(context.Background(), ids, have, now, 0, fetch)
+	saves := 0
+	requests, complete := fetchAppleNames(context.Background(), ids, have, now, 0, 0, fetch, func() { saves++ })
 	for _, n := range calls {
 		if n > appleNamesBatch {
 			t.Fatalf("一次最多 %d 个 id,这次带了 %d 个", appleNamesBatch, n)
 		}
 	}
-	if requests != len(calls) || requests != 3+2+3 {
-		t.Errorf("三批:第一、三批问三个区,第二批中国区没问成就停:requests=%d calls=%v", requests, calls)
+	if requests != len(calls) || requests != 3+2+3+3 || !complete {
+		t.Errorf("三批:第二批中国区没问成,整批等一下重问;都问完了:requests=%d calls=%v complete=%v", requests, calls, complete)
 	}
-	if _, ok := have[ids[300]]; ok {
-		t.Error("有一个区没问成的那一批不记")
+	if _, ok := have[ids[300]]; !ok {
+		t.Error("重问成了的那一批记下")
+	}
+	if saves != 0 {
+		t.Errorf("不满 %d 批不落盘(收尾那次由调用方写): %d", catalogSweepSaveEvery, saves)
 	}
 	rec, ok := have[ids[0]]
 	if !ok || rec.Names["tw"].Name != "tw-"+ids[0] || rec.AudioLocale != "zxx" || rec.DurationSecs != 100 || rec.Checked != now.Unix() {
@@ -208,5 +212,31 @@ func TestAttachSpotifyLanguages(t *testing.T) {
 		if v.audioLocale != want[i] {
 			t.Errorf("#%d audioLocale=%q,应为 %q", i, v.audioLocale, want[i])
 		}
+	}
+}
+
+// 目录名字补扫连续 catalogSweepMaxFailures 次没问成就停(断网、token 失效、一直被限流),不把剩下的批次一口气空转完;每问成
+// catalogSweepSaveEvery 批落一次盘。
+func TestFetchAppleNamesStopsAfterFailures(t *testing.T) {
+	ids := make([]string, appleNamesBatch*(catalogSweepSaveEvery+3))
+	for i := range ids {
+		ids[i] = time.Duration(i + 1).String()
+	}
+	calls, saves := 0, 0
+	fail := false
+	fetch := func(_ context.Context, sf string, batch []string) (map[string]appleCatalogSong, bool) {
+		calls++
+		return map[string]appleCatalogSong{}, !fail
+	}
+	have := map[string]appleCatalogNames{}
+	now := time.Unix(2_000_000_000, 0)
+	if _, complete := fetchAppleNames(context.Background(), ids, have, now, 0, 0, fetch, func() { saves++ }); !complete || saves != 1 {
+		t.Fatalf("都问成:complete=%v saves=%d", complete, saves)
+	}
+	clear(have)
+	calls, fail = 0, true
+	requests, complete := fetchAppleNames(context.Background(), ids, have, now, 0, 0, fetch, func() {})
+	if complete || requests != catalogSweepMaxFailures || calls != catalogSweepMaxFailures || len(have) != 0 {
+		t.Errorf("一直没问成:第一批问 %d 次就停: requests=%d calls=%d complete=%v", catalogSweepMaxFailures, requests, calls, complete)
 	}
 }
