@@ -345,6 +345,12 @@ func releaseStaleCopiesLocked(keys []string) []string {
 	return changed
 }
 
+// removeSongSharePre:条目删掉时把它的同步留底一起删。留底只写一次,留着的话这条写法再放回来、又被同步时会沿用删之前那份,
+// 关开关或拆开时恢复成删掉的旧歌词。
+func removeSongSharePre(key string) {
+	noteFileErr("remove", songSharePrePath(key), removeIfExists(songSharePrePath(key)))
+}
+
 // songShareRestorable:key 这条写法有留底,而且歌词还是同步写进去的那一份,返回留底里的条目。
 func songShareRestorable(key string, e enrichEntry) (enrichEntry, bool) {
 	p, err := readSongSharePre(songSharePrePath(key))

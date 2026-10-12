@@ -686,6 +686,33 @@ func TestStartupSweepsOrphanSongSharePre(t *testing.T) {
 	}
 }
 
+// 删掉、清空条目时同步留底跟着删:不然这条写法再放回来又被同步时沿用删之前那份,恢复成删掉的旧词。
+func TestDeleteAndClearDropSongSharePre(t *testing.T) {
+	setUpSongShareTest(t, map[string]enrichEntry{
+		"a|x|1": {Lyrics: songShareLRC("a")},
+		"b|x|1": {Lyrics: songShareLRC("b")},
+		"c|x|1": {Lyrics: songShareLRC("c")},
+	}, true)
+	now := time.Unix(6_000_000, 0)
+	for _, k := range []string{"a|x|1", "b|x|1", "c|x|1"} {
+		if _, err := writeSongSharePre(k, enrichEntry{Lyrics: "old"}, "fp", now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "delete", Keys: []string{"a|x|1"}}); !res.OK {
+		t.Fatalf("delete: %+v", res)
+	}
+	if hasPre("a|x|1") || !hasPre("b|x|1") || !hasPre("c|x|1") {
+		t.Errorf("删一条只删它的留底 a=%v b=%v c=%v", hasPre("a|x|1"), hasPre("b|x|1"), hasPre("c|x|1"))
+	}
+	if res := applyEnrichEdit(enrichEditRequest{Op: "clear_all"}); !res.OK {
+		t.Fatalf("clear_all: %+v", res)
+	}
+	if hasPre("b|x|1") || hasPre("c|x|1") {
+		t.Errorf("清空之后留底还在 b=%v c=%v", hasPre("b|x|1"), hasPre("c|x|1"))
+	}
+}
+
 // 组里有写法正在被别的任务处理:这一轮不搜、不改,下一轮再来。
 func TestShareGroupSkipsInflight(t *testing.T) {
 	entries := map[string]enrichEntry{

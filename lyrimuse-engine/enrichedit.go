@@ -190,9 +190,11 @@ func applyEnrichEdit(req enrichEditRequest) enrichEditResult {
 				trashFile(path)
 			}
 			removeDecisionSidecar(k)
+			removeSongSharePre(k)
 		}
 		for _, k := range out.dropped {
 			removeDecisionSidecar(k)
+			removeSongSharePre(k)
 		}
 		if out.trashAll {
 			trashAllLyricsFiles()
