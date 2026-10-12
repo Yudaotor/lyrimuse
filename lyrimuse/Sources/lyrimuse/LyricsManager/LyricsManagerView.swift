@@ -1178,6 +1178,9 @@ struct LyricsManagerView: View {
     /// 列表一行的实际高度:行内容 48(LyricsManagerSongRow:封面 40 + 上下各 4)加 `.inset` 样式每行自带的上下 8。
     /// 改行高要连这个数一起改。
     private static let listRowHeight: CGFloat = 56
+    /// 按专辑分组时列表往上伸进标题行底下的距离,伸出去的这一条遮住不画(见 11 章决策 113)。
+    /// 不能超过组头行里文字上方的空白(行高 56 减去文字和分隔线),不然排在最前面的组头会被切掉字。
+    private static let groupedListTopTrim: CGFloat = 28
     private static let panelCornerRadius: CGFloat = 22
     private static let sidebarWidthKey = "np:lyricsManagerSidebarWidth"
 
@@ -1199,6 +1202,8 @@ struct LyricsManagerView: View {
                 nowPlayingRow(scrollProxy: scrollProxy)
             }
             listHeader
+                // 分组时列表伸进这一行底下,这一行要盖在上层,排序菜单才点得到。
+                .zIndex(1)
             songList(scrollProxy: scrollProxy)
         }
         .padding(.horizontal, 12)
@@ -1685,6 +1690,12 @@ struct LyricsManagerView: View {
                  // 右键点已选中区内任一行则 keys 是整个选区。
                  menu: { keys in listMenu(keys) })
         .equatable()
+        // 分组时第一行是组头,行里上方那一截是组跟组之间的间隔,排在最前面时用不上:列表往上伸进标题行底下,把它藏起来,
+        // 伸出去的这一条不画,往下滚时行照旧在原来的上沿切掉。别改成单独把第一行改矮(会被最小行高撑回 56),
+        // 也别用负的 contentMargins(列表不认),见 11 章决策 113。
+        .padding(.top, groupByAlbum ? -Self.groupedListTopTrim : 0)
+        // 裁到缩回后的外框(就是原来列表的位置),伸出去的那一条不画。
+        .clipped()
         // 首次开窗、summaries 还没任何内容时叠一个"正在加载"提示,不让空 List 看着像一片白屏。
         // 用 .overlay 而不是拿 if/else 把 List 整个换掉:下面 .onAppear(真正触发 reload() 的地方)要挂在一直存在的 List 上。
         .overlay {
