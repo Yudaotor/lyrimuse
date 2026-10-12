@@ -1404,8 +1404,22 @@ func retryTitleFromAlbumDetailed(ctx context.Context, artist, album, localTitle 
 	if nearFound {
 		return near, nearDiff, true, true
 	}
-	title, diff, ok = bestAlbumTrackByDurationDetailed(tracks, durationSecs)
+	title, diff, ok = bestAlbumTrackByDurationDetailed(sameVersionAlbumTracks(tracks, localTitle, album), durationSecs)
 	return title, diff, false, ok
+}
+
+// sameVersionAlbumTracks:纯时长挑曲之前,去掉版本限定词跟本地对不上的曲目(versionTagsMismatch,打分层同一把尺)。
+// 按专辑名找到的专辑不一定收着目标录音,里面的现场版时长凑巧落在容差内就会被挑中:Amazon「Khalil Fong - Ai!」
+// (专辑 This Love,221s,即《唉!》)在网易云同名专辑里挑中了 220.773s 的「爱爱爱 (Live)」,别的源跟着拿错歌名去查。
+func sameVersionAlbumTracks(tracks []albumTrack, localTitle, localAlbum string) []albumTrack {
+	kept := make([]albumTrack, 0, len(tracks))
+	for _, t := range tracks {
+		if versionTagsMismatch(localTitle, localAlbum, t.title, "") {
+			continue
+		}
+		kept = append(kept, t)
+	}
+	return kept
 }
 
 // retryTitleFromAlbumNearTitleMaxDurationDiffSecs:近似标题命中时的时长容差。身份由标题文字

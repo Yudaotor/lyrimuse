@@ -79,3 +79,23 @@ func TestRuneEditDistance(t *testing.T) {
 		}
 	}
 }
+
+// Amazon「Khalil Fong - Ai!」(专辑 This Love,221s)是《唉!》。网易云同名专辑里没有它,却有一首 220.773s 的
+// 「爱爱爱 (Live)」:纯时长挑曲之前要先去掉版本限定词跟本地对不上的曲目,不然会拿它当更正后的曲名。
+func TestSameVersionAlbumTracksDropsLiveForStudioTitle(t *testing.T) {
+	tracks := []albumTrack{
+		{title: "爱爱爱 (Live)", duration: 220.773},
+		{title: "Love Song (Live)", duration: 357.373},
+	}
+	if got, _, ok := bestAlbumTrackByDurationDetailed(tracks, 221); !ok || got != "爱爱爱 (Live)" {
+		t.Fatalf("前提变了:不过滤时纯时长判据应挑中「爱爱爱 (Live)」, got %q ok=%v", got, ok)
+	}
+	if got, _, ok := bestAlbumTrackByDurationDetailed(sameVersionAlbumTracks(tracks, "Ai!", "This Love"), 221); ok {
+		t.Fatalf("录音室曲名不该挑中现场版, got %q", got)
+	}
+	// 本地自己就是现场版时照常留着。
+	kept := sameVersionAlbumTracks(tracks, "Ai Ai Ai (Live)", "This Love")
+	if got, _, ok := bestAlbumTrackByDurationDetailed(kept, 221); !ok || got != "爱爱爱 (Live)" {
+		t.Fatalf("本地是现场版时应保留现场版曲目, got %q ok=%v", got, ok)
+	}
+}
