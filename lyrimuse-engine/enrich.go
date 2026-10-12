@@ -503,6 +503,9 @@ type enrichEntry struct {
 	// LyricsEntityOrigin:这条的歌词是从同一首歌哪条写法的手改原件同步过来的副本(songentityshare.go);原件、自动选的都是
 	// 空串。副本的手改标记跟原件一样,各处的闸照旧拦得住;用户直接改这一条(歌词管理保存、歌词文件夹里改了正文)就成了原件。
 	LyricsEntityOrigin string `json:"lyrics_entity_origin,omitempty"`
+	// Reported:各播放器最近一次原样报的歌名、歌手、专辑,跟这条的写法键(归一化之后)不一样时才记,键是 bundle id,最多
+	// maxNotedPlayers 个(noteReportedNameLocked)。只给歌词管理显示「原始写法」,不参与建表、不随歌词同步复制(18 章决策 50)。
+	Reported map[string]reportedName `json:"reported,omitempty"`
 	// Players:放过这条写法的播放器(bundle id),按第一次放的先后排,最多 maxNotedPlayers 个(notePlayerLocked)。条目里
 	// playerIDFields 那几样 id、PlayerCovers 的键对应的播放器也记在这里(notePlayersFromRecords)。歌词管理「同一首歌的其他写法」
 	// 拿它显示每条写法是哪个播放器收录的(18 章决策 38、39、42)。
@@ -744,6 +747,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// 放在这里而不是更靠里:专辑预取会为同一张专辑并发跑几十首,它们共享同一个播放器,
 	// 值相同、重复设是幂等的;而更靠里的话每条兜底轮都要各自关心一次这件事。
 	setNativeLyricSourcesForPlayer(bundleID)
+	// 播放器原样报的那一份(下面歌名会归一化),跟写法键不一样时记进条目(noteReportedNameLocked)。
+	reported := reportedName{Title: title, Artist: artist, Album: album}
 	key := enrichKey(artist, title, album)
 	// Spotify 曲目 ID 提示按**原始** key 存(poller 那边也是拿原始 artist/title/album 算的,见 spotifytrack.go);
 	// 下面 key 可能被 canonical / 时长变体重定向,提示的查找键要留一份原样的。
@@ -842,6 +847,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			spotifyHintDirty = true
 		}
 		if notePlayerLocked(&e, bundleID) {
+			spotifyHintDirty = true
+		}
+		if noteReportedNameLocked(&e, key, bundleID, reported) {
 			spotifyHintDirty = true
 		}
 		// 条目先建好、后来才真正放到(专辑预取,第一次解析时播放器还没报时长):补上播放器报的时长。已经有的不动,
@@ -5862,6 +5870,43 @@ func notePlayerLocked(e *enrichEntry, bundleID string) bool {
 		return false
 	}
 	e.Players = append(e.Players, bundleID)
+	return true
+}
+
+// reportedName:播放器原样报的歌名、歌手、专辑(App 送来的那一份,没经 enrichKey 归一化)。
+type reportedName struct {
+	Title  string `json:"title,omitempty"`
+	Artist string `json:"artist,omitempty"`
+	Album  string `json:"album,omitempty"`
+}
+
+// noteReportedNameLocked:bundleID 这一拍原样报的 r 跟写法键 key 拆出来的三段(歌名去掉时长变体位标记)不一样时记进
+// e.Reported(换掉这个播放器上次记的),一样时删掉这个播放器原来记的;记满 maxNotedPlayers 个不再加新播放器。返回改没改。
+// 换整张表、不原地改:条目是值拷贝,表跟落盘那份快照共用。调用方持 enrichMu。
+func noteReportedNameLocked(e *enrichEntry, key, bundleID string, r reportedName) bool {
+	if bundleID == "" {
+		return false
+	}
+	artist, title, album := splitEnrichKey(key)
+	old, had := e.Reported[bundleID]
+	same := r == reportedName{Title: songDurVariantRe.ReplaceAllString(title, ""), Artist: artist, Album: album}
+	switch {
+	case same && !had, !same && had && old == r, !same && !had && len(e.Reported) >= maxNotedPlayers:
+		return false
+	}
+	out := make(map[string]reportedName, len(e.Reported)+1)
+	for k, v := range e.Reported {
+		out[k] = v
+	}
+	if same {
+		delete(out, bundleID)
+	} else {
+		out[bundleID] = r
+	}
+	if len(out) == 0 {
+		out = nil
+	}
+	e.Reported = out
 	return true
 }
 

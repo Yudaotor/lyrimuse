@@ -164,3 +164,47 @@ func TestPlayersFromRecordsWiring(t *testing.T) {
 		t.Errorf("启动顺序: migrateEnrichKeys=%d migratePlayersFromRecords=%d refreshEnrichIndex=%d", keys, seed, index)
 	}
 }
+
+// 播放器原样报的写法跟写法键不一样时才记,按播放器分开、换成最近一次的;跟键一样了就删掉;时长变体位标记不算差别。
+func TestNoteReportedNameLocked(t *testing.T) {
+	var e enrichEntry
+	key := "方大同|偷笑|爱爱爱"
+	if noteReportedNameLocked(&e, key, qqMusicBundleID, reportedName{Title: "偷笑", Artist: "方大同", Album: "爱爱爱"}) || e.Reported != nil {
+		t.Fatalf("跟键一样不记: %v", e.Reported)
+	}
+	raw := reportedName{Title: "偷笑 (Tou Xiao)", Artist: "方大同", Album: "爱爱爱"}
+	if !noteReportedNameLocked(&e, key, qqMusicBundleID, raw) || e.Reported[qqMusicBundleID] != raw {
+		t.Fatalf("不一样就记: %v", e.Reported)
+	}
+	if noteReportedNameLocked(&e, key, qqMusicBundleID, raw) {
+		t.Error("同一份不重复记")
+	}
+	if !noteReportedNameLocked(&e, key, qqMusicBundleID, reportedName{Title: "偷笑", Artist: "方大同", Album: "爱爱爱"}) || e.Reported != nil {
+		t.Errorf("最近一次跟键一样了就删掉: %v", e.Reported)
+	}
+	if noteReportedNameLocked(&e, "方大同|偷笑~dur2|爱爱爱", appleMusicBundleID, reportedName{Title: "偷笑", Artist: "方大同", Album: "爱爱爱"}) {
+		t.Error("时长变体位标记不算差别")
+	}
+	if noteReportedNameLocked(&e, key, "", raw) {
+		t.Error("没有播放器不记")
+	}
+}
+
+// 播放时那条路记下原始写法;合并条目时落选那条记的带过来。
+func TestReportedNameWiring(t *testing.T) {
+	src, err := os.ReadFile("enrich.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "\t\tif noteReportedNameLocked(&e, key, bundleID, reported) {\n\t\t\tspotifyHintDirty = true\n\t\t}") {
+		t.Error("trackEnrichment 要记下播放器原样报的写法")
+	}
+	loser := enrichEntry{Reported: map[string]reportedName{qqMusicBundleID: {Title: "偷笑 (Tou Xiao)"}}}
+	winner := enrichEntry{Reported: map[string]reportedName{qqMusicBundleID: {Title: "偷笑 (Live)"}}}
+	if got := mergePeripheralInto(enrichEntry{}, loser); got.Reported[qqMusicBundleID].Title != "偷笑 (Tou Xiao)" {
+		t.Errorf("胜者没有的带过来: %v", got.Reported)
+	}
+	if got := mergePeripheralInto(winner, loser); got.Reported[qqMusicBundleID].Title != "偷笑 (Live)" {
+		t.Errorf("胜者有的不动: %v", got.Reported)
+	}
+}

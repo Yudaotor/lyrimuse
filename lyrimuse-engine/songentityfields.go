@@ -75,6 +75,7 @@ var songEntityFieldClasses = map[string]songFieldClass{
 	"lyrics_native_video_id": songFieldVariant, "lyrics_listed_album": songFieldVariant,
 	"lyrics_search_title": songFieldVariant, "ts": songFieldVariant, "peripheral_ts": songFieldVariant,
 	"peripheral_retry_count": songFieldVariant, "song": songFieldVariant, "song_share": songFieldVariant, "players": songFieldVariant,
+	"reported": songFieldVariant,
 
 	"lyrics_decision": songFieldDecision, "lyrics_decision_applied": songFieldDecision,
 	"lyrics_sources_seen": songFieldDecision, "lyrics_sources_responded": songFieldDecision,

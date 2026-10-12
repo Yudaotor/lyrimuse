@@ -49,6 +49,8 @@ struct SongVersionsSheet: View {
         let sameLyrics: Bool
         /// 已拆开那条恢复合并时交给引擎的写法。
         let mergeKeys: [String]
+        /// 各播放器原样报的写法(跟写法键不一样时才有)。
+        let reported: [SongVersions.ReportedName]
         var id: String { key }
     }
 
@@ -129,7 +131,16 @@ struct SongVersionsSheet: View {
 
     private var selectedKey: String? {
         if let selected, versions.contains(where: { $0.key == selected }) { return selected }
-        return versions.first { $0.relation != .current }?.key ?? versions.first?.key
+        // 打开时默认选正在放的那一条(它在这首歌里时),不然选当前条目(概况)。
+        if let playing = Self.nowPlayingKey, versions.contains(where: { $0.key == playing }) { return playing }
+        return versions.first { $0.relation == .current }?.key ?? versions.first?.key
+    }
+
+    /// 正在放的那首的写法键(播放器报的歌手 / 歌名 / 专辑归一化后);没在放时为 nil。
+    static var nowPlayingKey: String? {
+        let playback = PlaybackCoordinator.shared
+        guard playback.resolvedPlayerBundleID != nil, !playback.title.isEmpty else { return nil }
+        return EnrichCacheKeys.normalizedKey(artist: playback.artist, title: playback.title, album: playback.album)
     }
 
     private var versionList: some View {
@@ -302,6 +313,7 @@ struct SongVersionsSheet: View {
             (L10n.t("曲名"), c.title),
             (L10n.t("艺人"), c.artist),
             (L10n.t("专辑"), c.album),
+        ] + (c.reported.isEmpty ? [] : [(L10n.t("原始写法"), reportedText(c))]) + [
             (L10n.t("播放来源"), playersText(c)),
             (L10n.t("时长"), durationText(c)),
             (L10n.t("歌词来源"), sourceText(c)),
@@ -477,6 +489,11 @@ struct SongVersionsSheet: View {
             (L10n.t("歌词格式"), featuresText(c), featuresText(v)),
         ]
         let differing = rows.filter { $0.1 != $0.2 }.count
+        // 原始写法本来就各不相同,不算进「存在差异」那一项、不标橙,放在专辑后面。
+        var shown = rows
+        if !c.reported.isEmpty || !v.reported.isEmpty {
+            shown.insert((L10n.t("原始写法"), reportedText(c), reportedText(v)), at: 3)
+        }
         return VStack(alignment: .leading, spacing: 6) {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                 GridRow {
@@ -486,7 +503,7 @@ struct SongVersionsSheet: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, row in
                     let same = row.1 == row.2
                     GridRow {
                         Text(row.0).font(.caption).foregroundStyle(.secondary)
@@ -670,10 +687,20 @@ struct SongVersionsSheet: View {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    private func playerName(_ bundleID: String) -> String {
+    private func playerName(_ bundleID: String) -> String { Self.playerDisplayName(bundleID) }
+
+    static func playerDisplayName(_ bundleID: String) -> String {
         PlaybackPlayer.builtin(forBundleID: bundleID)?.displayName
             ?? FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
     }
+
+    /// 一份原始写法:「歌名 · 歌手 · 专辑（播放器）」,空的那段不写。
+    static func reportedLine(_ r: SongVersions.ReportedName) -> String {
+        let name = [r.title, r.artist, r.album].filter { !$0.isEmpty }.joined(separator: " · ")
+        return String(format: L10n.t("%1$@（%2$@）"), name, playerDisplayName(r.bundleID))
+    }
+
+    private func reportedText(_ v: Version) -> String { v.reported.map(Self.reportedLine).joined(separator: "\n") }
 
     private func playersText(_ v: Version) -> String {
         guard !v.players.isEmpty else { return L10n.t("未记录") }
@@ -831,9 +858,7 @@ struct SongVersionsSheet: View {
         }
         // 正在放的就是这条时,当前这个播放器排最前(引擎按第一次放的先后记)。
         var players = facts.players
-        let playback = PlaybackCoordinator.shared
-        if let bundle = playback.resolvedPlayerBundleID, !playback.title.isEmpty,
-           EnrichCacheKeys.normalizedKey(artist: playback.artist, title: playback.title, album: playback.album) == key {
+        if let bundle = PlaybackCoordinator.shared.resolvedPlayerBundleID, Self.nowPlayingKey == key {
             players.removeAll { $0 == bundle }
             players.insert(bundle, at: 0)
         }
@@ -841,7 +866,7 @@ struct SongVersionsSheet: View {
                        players: players, playersInferred: facts.playersInferred, durationSecs: facts.durationSecs,
                        source: s.lyricsSource, score: facts.score, features: features,
                        lyrics: facts.lyrics, yrc: facts.yrc, shownLines: shownLines, shownWords: shownWords,
-                       lyricsKnown: facts.complete, sameLyrics: same, mergeKeys: mergeKeys)
+                       lyricsKnown: facts.complete, sameLyrics: same, mergeKeys: mergeKeys, reported: s.reportedNames)
     }
 
     static func evidenceLabel(_ kind: String) -> String {

@@ -182,6 +182,24 @@ extension SongVersions {
         return (out, !out.isEmpty)
     }
 
+    /// 播放器原样报的一份写法(引擎条目的 `reported`,跟写法键不一样时才记,18 章决策 50)。
+    public struct ReportedName: Equatable, Sendable {
+        public let bundleID: String
+        public let title: String
+        public let artist: String
+        public let album: String
+    }
+
+    /// 条目里各播放器原样报的写法,按 bundle id 排;没有为空。
+    public static func reportedNames(entry: [String: Any]) -> [ReportedName] {
+        guard let raw = entry["reported"] as? [String: Any] else { return [] }
+        return raw.keys.sorted().compactMap { bundleID in
+            guard let r = raw[bundleID] as? [String: Any] else { return nil }
+            return ReportedName(bundleID: bundleID, title: r["title"] as? String ?? "", artist: r["artist"] as? String ?? "",
+                                album: r["album"] as? String ?? "")
+        }
+    }
+
     /// 一份歌词里会显示出来的行:去掉开头的抬头(「歌名 - 歌手」)、署名和声明这类行,跟歌词窗口同一套过滤
     /// (LyricsSyncEngine.creditLineDropDecisions;title / artist 是这条写法的歌名、歌手,aliases 是同曲条目里别的写法的,都拿来
     /// 认抬头),再去掉空行。wordTimed 时 text 是逐字歌词,先摊成每行「行首时间 + 这一行的字」(LyricsWordTimingEdit.editableText)

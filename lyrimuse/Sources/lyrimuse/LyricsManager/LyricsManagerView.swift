@@ -3411,6 +3411,14 @@ struct LyricsManagerView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+                // 播放器原样报的写法跟上面的名字(写法键)不一样时才有;悬停列出各播放器的(18 章决策 50)。
+                if let first = summary.reportedNames.first {
+                    Text(String(format: L10n.t("播放器原始写法：%@"), SongVersionsSheet.reportedLine(first)))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .help(summary.reportedNames.map(SongVersionsSheet.reportedLine).joined(separator: "\n"))
+                }
                 headerTags(summary)
                     .padding(.top, 8)
             }

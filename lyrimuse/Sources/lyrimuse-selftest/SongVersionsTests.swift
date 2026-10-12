@@ -113,6 +113,15 @@ func runSongVersionsTests() {
         expectEqual(none.bundleIDs.isEmpty && !none.inferred, true, "播放器: 检索配的链接不算,没有就是空")
     }
 
+    // ---- 原始写法:引擎的 reported 按 bundle id 排,缺的字段为空 ----
+    do {
+        let r = V.reportedNames(entry: ["reported": ["com.tencent.QQMusicMac": ["title": "偷笑 (Tou Xiao)", "artist": "方大同"],
+                                                     "com.apple.Music": ["title": "偷笑\u{00A0}", "album": "爱爱爱"]]])
+        expectEqual(r.map(\.bundleID), ["com.apple.Music", "com.tencent.QQMusicMac"], "原始写法: 按 bundle id 排")
+        expectEqual(r.last?.title == "偷笑 (Tou Xiao)" && r.last?.album == "", true, "原始写法: 原样取、缺的为空")
+        expectEqual(V.reportedNames(entry: [:]).isEmpty, true, "原始写法: 没有就是空")
+    }
+
     // ---- 歌词逐句对照:按先后对齐、空行不算,标出文字不同的行,时间差取文字相同那些行的中位数 ----
     do {
         let a = "[00:01.00]一\n[00:02.00]\n[00:03.00]二\n[00:05.00]三\n"
@@ -248,7 +257,10 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "&& shownLines == current.shownLines && shownWords == current.shownWords")
                     && sourceBytes(playback, contain: "headerAliases: EnrichCacheReader.headerAliases(")
                     && sourceBytes(sheet, contain: "playerIcons(v, size: 22)") && sourceBytes(sheet, contain: "playerIcons(v, size: 18)")
-                    && sourceBytes(sheet, contain: "players.insert(bundle, at: 0)"), true,
+                    && sourceBytes(sheet, contain: "players.insert(bundle, at: 0)")
+                    && sourceBytes(sheet, contain: "if let playing = Self.nowPlayingKey, versions.contains(where: { $0.key == playing }) { return playing }")
+                    && sourceBytes(sheet, contain: "return versions.first { $0.relation == .current }?.key ?? versions.first?.key")
+                    && sourceBytes(manager, contain: "Text(String(format: L10n.t(\"播放器原始写法：%@\"), SongVersionsSheet.reportedLine(first)))"), true,
                     "其他写法(契约): 收录的播放器、三种关系、逐句对照接上")
         let rematchEngine = read(engine, "lyricsrematch.go")
         expectEqual(sourceBytes(manager, contain: "let followers = LyricsRematch.followers(of: LyricsRematch.current, key: key)")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -230,6 +231,19 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 	}
 	if winner.DurationSecs == 0 {
 		winner.DurationSecs = loser.DurationSecs
+	}
+	// 落选那条记下的原始写法,胜者没有的那几个播放器带过来。
+	if len(loser.Reported) > 0 {
+		reported := maps.Clone(winner.Reported)
+		if reported == nil {
+			reported = map[string]reportedName{}
+		}
+		for b, r := range loser.Reported {
+			if _, ok := reported[b]; !ok && len(reported) < maxNotedPlayers {
+				reported[b] = r
+			}
+		}
+		winner.Reported = reported
 	}
 	// 两条都放过的播放器合在一起,上面补过来的 id 对应的播放器也记上。
 	winner.Players = slices.Clone(winner.Players)

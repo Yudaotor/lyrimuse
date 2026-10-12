@@ -163,6 +163,8 @@ public final class EnrichCacheStore: ObservableObject {
         let searchDisplayArtistLower: String
         let searchTitleLower: String
         let searchAlbumLower: String
+        /// 各播放器原样报的写法(跟写法键不一样时才有),歌词管理显示「原始写法」用。
+        let reportedNames: [SongVersions.ReportedName]
 
         init(
             key: String,
@@ -198,7 +200,8 @@ public final class EnrichCacheStore: ObservableObject {
             searchArtistLower: String,
             searchDisplayArtistLower: String,
             searchTitleLower: String,
-            searchAlbumLower: String
+            searchAlbumLower: String,
+            reportedNames: [SongVersions.ReportedName] = []
         ) {
             self.key = key
             self.artist = artist
@@ -234,6 +237,7 @@ public final class EnrichCacheStore: ObservableObject {
             self.searchDisplayArtistLower = searchDisplayArtistLower
             self.searchTitleLower = searchTitleLower
             self.searchAlbumLower = searchAlbumLower
+            self.reportedNames = reportedNames
         }
 
         /// 只给排序/筛选归并用(normPrimaryArtist、EnrichCacheStore.artistMap→
@@ -826,7 +830,8 @@ public final class EnrichCacheStore: ObservableObject {
                 searchArtistLower: parts.artist.lowercased(),
                 searchDisplayArtistLower: display.lowercased(),
                 searchTitleLower: parts.title.lowercased(),
-                searchAlbumLower: displayAlbum.lowercased()
+                searchAlbumLower: displayAlbum.lowercased(),
+                reportedNames: SongVersions.reportedNames(entry: entry)
             )
         }
         items.sort {
