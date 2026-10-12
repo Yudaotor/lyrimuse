@@ -3373,8 +3373,8 @@ struct LyricsManagerView: View {
         Button(L10n.t("拷贝歌名与歌手")) { copySongName(summary) }
         // 「同一首歌的其他写法」:这条写法有实体 id 才有(实体表开关关着、还没建过表时没有),见 18 章决策 28。
         if store.songMembership(forKey: summary.key) != nil {
-            Button(L10n.t("同一首歌的其他写法…")) { showSongVersions = true }
-                .help(L10n.t("查看被认成同一首歌的其他写法，认错了可以拆开"))
+            Button(L10n.t("同曲条目…")) { showSongVersions = true }
+                .help(L10n.t("查看识别为同一首歌的其他条目，可拆分误识别的条目"))
         }
         if summary.hasLyrics && !summary.isInstrumental {
             Divider()
@@ -3492,7 +3492,7 @@ struct LyricsManagerView: View {
                     HStack(spacing: 5) {
                         Image(systemName: "square.stack")
                             .font(.system(size: 11))
-                        Text(String(format: L10n.t("同一首歌的 %d 种写法"), versions)).lineLimit(1)
+                        Text(String(format: L10n.t("同曲条目 %d"), versions)).lineLimit(1)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
                     }
@@ -3502,7 +3502,7 @@ struct LyricsManagerView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(L10n.t("查看被认成同一首歌的其他写法，认错了可以拆开"))
+                .help(L10n.t("查看识别为同一首歌的其他条目，可拆分误识别的条目"))
             }
             if summary.durationSecs > 0 {
                 LyricsManagerFact(icon: "clock",

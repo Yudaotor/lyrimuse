@@ -2,9 +2,9 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-/// 歌词管理详情页「同一首歌的其他写法」(18 章决策 28、38)。左边是这首歌的全部写法,按当前这条 / 共用歌词 / 各自选词 / 已拆开
+/// 歌词管理详情页「同曲条目」(18 章决策 28、38、44)。左边是这首歌的全部写法,按当前条目 / 歌词同步 / 独立匹配 / 已拆分
 /// 分组,每条两个圆点:现在的歌词跟当前这条一样吗、以后怎么处理。右边是选中那条跟当前这条的对照:两张结论卡,逐项对照(不一样
-/// 的标橙),歌词不一样时多一块逐句对照,认成同一首的依据,拆开 / 恢复合并。拆开、恢复合并都交给引擎(EnrichCacheStore.splitSong /
+/// 的标橙),歌词不一样时多一块逐句对照,认成同一首的依据,拆开 / 恢复合并;选中当前这条时是这首歌的概况(18 章决策 43)。拆开、恢复合并都交给引擎(EnrichCacheStore.splitSong /
 /// unsplitSong),列表数据见 SongVersions。
 struct SongVersionsSheet: View {
     let summary: EnrichCacheStore.Summary
@@ -64,7 +64,7 @@ struct SongVersionsSheet: View {
             if !loaded {
                 ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if versions.count < 2 {
-                Text(L10n.t("没有认成同一首歌的其他写法"))
+                Text(L10n.t("暂无同曲条目"))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -86,12 +86,12 @@ struct SongVersionsSheet: View {
         .task(id: store.summariesGeneration) { await reload() }
         // 要拆的那条经 presenting 交给按钮:关确认框时会先把开关置回去,按钮里再读 @State 可能已经晚了。
         .alert(splitTitle, isPresented: $confirmingSplit, presenting: pendingSplit) { key in
-            Button(L10n.t("拆开"), role: .destructive) {
+            Button(L10n.t("拆分"), role: .destructive) {
                 run { await store.splitSong(keys: [key]) }
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: { _ in
-            Text(L10n.t("拆开后它单独算一首歌：播放次数分开，歌词不再跟这首共用；从这首同步过去的歌词会换回它原来那份。之后可以在这里恢复合并。"))
+            Text(L10n.t("拆分后，该条目将作为独立歌曲：播放次数单独统计，不再同步歌词；此前同步过去的歌词将恢复为原有版本。之后可在此恢复合并。"))
         }
     }
 
@@ -100,14 +100,14 @@ struct SongVersionsSheet: View {
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("同一首歌的其他写法")).font(.headline)
+                Text(L10n.t("同曲条目")).font(.headline)
                 Group {
                     if loaded, versions.count > 1 {
                         let inSong = versions.filter { $0.relation != .split }
-                        Text(String(format: L10n.t("%1$d 种写法 · 现在 %2$d 种用同一份歌词 · %3$d 种跟当前这条共用歌词"),
+                        Text(String(format: L10n.t("%1$d 个条目 · %2$d 个歌词一致 · %3$d 个与当前条目歌词同步"),
                                     inSong.count, inSong.filter(\.sameLyrics).count, inSong.filter { $0.relation == .shared }.count))
                     } else {
-                        Text(L10n.t("这些写法算作同一首歌，播放次数合在一起。认错了就拆开。"))
+                        Text(L10n.t("以下条目已识别为同一首歌，播放次数合并统计；如有误识别，可将其拆分。"))
                     }
                 }
                 .font(.caption)
@@ -135,7 +135,7 @@ struct SongVersionsSheet: View {
                 ForEach(Relation.allCases, id: \.self) { relation in
                     let group = versions.filter { $0.relation == relation }
                     if !group.isEmpty {
-                        Text(relation == .current ? L10n.t("当前这条") : Self.relationTitle(relation))
+                        Text(relation == .current ? L10n.t("当前条目") : Self.relationTitle(relation))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
@@ -203,10 +203,7 @@ struct SongVersionsSheet: View {
     private var detail: some View {
         if let v = versions.first(where: { $0.key == selectedKey }), let current = versions.first(where: { $0.relation == .current }) {
             if v.relation == .current {
-                Text(L10n.t("这是当前这条。点左边别的写法，跟它对照。"))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 40)
+                overview(current)
             } else {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top, spacing: 10) {
@@ -225,6 +222,215 @@ struct SongVersionsSheet: View {
         }
     }
 
+    // MARK: - 右边:选中当前这条时,这首歌的概况
+
+    private func overview(_ c: Version) -> some View {
+        let others = versions.filter { $0.relation != .current }
+        let inSong = others.filter { $0.relation != .split }
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 10) {
+                card(L10n.t("歌曲概况")) {
+                    Label(inSong.isEmpty ? L10n.t("仅当前条目") : String(format: L10n.t("%d 个条目"), inSong.count + 1),
+                          systemImage: "square.stack")
+                        .font(.title3.weight(.semibold))
+                    Text(relationBreakdown(others))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                lyricsOverviewCard(c, inSong)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            factsTable(c)
+            allVersionsTable(c)
+            if !edges.isEmpty { evidenceSummary }
+            Text(L10n.t("选择左侧或表格中的其他条目，可与当前条目逐项对比。"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// 「跟当前这条共用歌词 2 种 · 各自选词 1 种 · 已拆开 1 种」,没有的那几类不写。
+    private func relationBreakdown(_ others: [Version]) -> String {
+        let shared = others.filter { $0.relation == .shared }.count
+        let own = others.filter { $0.relation == .own }.count
+        let split = others.filter { $0.relation == .split }.count
+        var parts: [String] = []
+        if shared > 0 { parts.append(String(format: L10n.t("歌词同步 %d"), shared)) }
+        if own > 0 { parts.append(String(format: L10n.t("独立匹配 %d"), own)) }
+        if split > 0 { parts.append(String(format: L10n.t("已拆分 %d"), split)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func lyricsOverviewCard(_ c: Version, _ inSong: [Version]) -> some View {
+        let known = inSong.filter { $0.lyricsKnown && !$0.lyrics.isEmpty }
+        let same = known.filter(\.sameLyrics).count
+        let unknownText: String? = !c.lyricsKnown ? L10n.t("歌词无法读取")
+            : c.lyrics.isEmpty ? L10n.t("当前条目无歌词")
+            : known.isEmpty ? L10n.t("无法读取其他条目的歌词") : nil
+        return card(L10n.t("歌词一致性")) {
+            if let unknownText {
+                Label(unknownText, systemImage: "questionmark")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    statLine(String(format: L10n.t("完全一致 %d"), same), color: .green)
+                    if known.count > same {
+                        statLine(String(format: L10n.t("存在差异 %d"), known.count - same), color: .orange)
+                    }
+                }
+            }
+            Text([sourceText(c), featuresText(c)].filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func statLine(_ text: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(color).frame(width: 9, height: 9)
+            Text(text).font(.title3.weight(.semibold)).lineLimit(1)
+        }
+    }
+
+    private func factsTable(_ c: Version) -> some View {
+        let rows: [(String, String)] = [
+            (L10n.t("曲名"), c.title),
+            (L10n.t("艺人"), c.artist),
+            (L10n.t("专辑"), c.album),
+            (L10n.t("播放来源"), playersText(c)),
+            (L10n.t("时长"), durationText(c)),
+            (L10n.t("歌词来源"), sourceText(c)),
+            (L10n.t("歌词格式"), featuresText(c)),
+        ]
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.t("当前条目")).font(.callout.weight(.semibold))
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    GridRow {
+                        Text(row.0).font(.caption).foregroundStyle(.secondary)
+                        Text(row.1.isEmpty ? "—" : row.1)
+                    }
+                }
+            }
+            .font(.callout)
+            .textSelection(.enabled)
+        }
+    }
+
+    /// 全部写法一行一条:播放器、名字、时长、歌词来源、现在的歌词跟当前这条、以后。点一行切到它的对照。
+    private func allVersionsTable(_ c: Version) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.t("全部条目")).font(.callout.weight(.semibold))
+            HStack(spacing: 10) {
+                Text(L10n.t("条目")).frame(maxWidth: .infinity, alignment: .leading)
+                Text(L10n.t("时长")).frame(width: Self.durationColumn, alignment: .leading)
+                Text(L10n.t("歌词来源")).frame(width: Self.sourceColumn, alignment: .leading)
+                Text(L10n.t("歌词一致性")).frame(width: Self.lyricsColumn, alignment: .leading)
+                Text(L10n.t("同步策略")).frame(width: Self.relationColumn, alignment: .leading)
+            }
+            .lineLimit(1)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            VStack(spacing: 0) {
+                ForEach(Array(versions.enumerated()), id: \.element.id) { index, v in
+                    if index > 0 { Divider().opacity(0.5) }
+                    overviewRow(v)
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.primary.opacity(0.1)))
+        }
+    }
+
+    /// 一览表各列的宽度。弹窗最窄时(760)右边约 450 点,名字那列要留够两行字。
+    static let durationColumn: CGFloat = 40
+    static let sourceColumn: CGFloat = 92
+    static let lyricsColumn: CGFloat = 70
+    static let relationColumn: CGFloat = 62
+
+    private func overviewRow(_ v: Version) -> some View {
+        let isCurrent = v.relation == .current
+        return Button {
+            selected = v.key
+        } label: {
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    playerIcon(v.players.first)
+                        .frame(width: 18, height: 18)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(v.title).lineLimit(1)
+                        Text([v.artist, v.album].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(v.durationSecs == nil ? "—" : durationText(v))
+                    .monospacedDigit()
+                    .help(v.durationSecs == nil ? L10n.t("未提供") : "")
+                    .frame(width: Self.durationColumn, alignment: .leading)
+                Text(v.source.isEmpty ? "—" : sourceDisplayName(v.source))
+                    .help(sourceText(v))
+                    .frame(width: Self.sourceColumn, alignment: .leading)
+                HStack(spacing: 4) {
+                    if !isCurrent { Circle().fill(lyricsColor(v)).frame(width: 7, height: 7) }
+                    Text(isCurrent ? "—" : lyricsVerdict(v))
+                }
+                .frame(width: Self.lyricsColumn, alignment: .leading)
+                Text(isCurrent ? L10n.t("当前条目") : Self.relationTitle(v.relation))
+                    .foregroundStyle(Self.relationColor(v.relation))
+                    .frame(width: Self.relationColumn, alignment: .leading)
+            }
+            .lineLimit(1)
+            .font(.callout)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(isCurrent ? Color.accentColor.opacity(0.07) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .allowsHitTesting(!isCurrent)
+        .help(isCurrent ? "" : L10n.t("与当前条目对比"))
+    }
+
+    /// 这首歌里全部证据按种类数:几对写法靠它连着,强弱跟对照页那块同一个口径。
+    private var evidenceSummary: some View {
+        var seen: Set<String> = []
+        let kinds = (SongVersions.evidenceOrder + edges.map(\.kind)).filter { kind in
+            seen.insert(kind).inserted && edges.contains { $0.kind == kind }
+        }
+        return DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L10n.t("播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考。"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(kinds, id: \.self) { kind in
+                    let ofKind = edges.filter { $0.kind == kind }
+                    let countOnly = ofKind.allSatisfy(\.countOnly)
+                    let strong = SongVersions.strongKinds.contains(kind)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(Self.evidenceLabel(kind))
+                        Text("×\(ofKind.count)").monospacedDigit().foregroundStyle(.secondary)
+                        Text(strong ? L10n.t("高可信") : countOnly ? L10n.t("仅计数") : L10n.t("参考"))
+                            .font(.caption)
+                            .foregroundStyle(strong ? Color.green : Color.secondary)
+                            .padding(.horizontal, 5)
+                            .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.06)))
+                    }
+                }
+            }
+            .font(.callout)
+            .padding(.top, 6)
+        } label: {
+            Text(L10n.t("匹配依据")).font(.callout)
+        }
+    }
+
     private func card<Content: View>(_ caption: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(caption).font(.caption).foregroundStyle(.secondary)
@@ -236,7 +442,7 @@ struct SongVersionsSheet: View {
     }
 
     private func lyricsCard(_ v: Version) -> some View {
-        card(L10n.t("现在的歌词跟当前这条")) {
+        card(L10n.t("歌词一致性")) {
             Label(lyricsVerdict(v), systemImage: !v.lyricsKnown || v.lyrics.isEmpty ? "questionmark" : v.sameLyrics ? "checkmark" : "notequal")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(lyricsColor(v))
@@ -248,7 +454,7 @@ struct SongVersionsSheet: View {
     }
 
     private func relationCard(_ v: Version) -> some View {
-        card(L10n.t("以后")) {
+        card(L10n.t("同步策略")) {
             Label(Self.relationTitle(v.relation), systemImage: Self.relationSymbol(v.relation))
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Self.relationColor(v.relation))
@@ -261,21 +467,21 @@ struct SongVersionsSheet: View {
 
     private func compareTable(_ c: Version, _ v: Version) -> some View {
         let rows: [(String, String, String)] = [
-            (L10n.t("歌名"), c.title, v.title),
-            (L10n.t("歌手"), c.artist, v.artist),
+            (L10n.t("曲名"), c.title, v.title),
+            (L10n.t("艺人"), c.artist, v.artist),
             (L10n.t("专辑"), c.album, v.album),
-            (L10n.t("收录于"), playersText(c), playersText(v)),
+            (L10n.t("播放来源"), playersText(c), playersText(v)),
             (L10n.t("时长"), durationText(c), durationText(v)),
             (L10n.t("歌词来源"), sourceText(c), sourceText(v)),
-            (L10n.t("内容"), featuresText(c), featuresText(v)),
+            (L10n.t("歌词格式"), featuresText(c), featuresText(v)),
         ]
         let differing = rows.filter { $0.1 != $0.2 }.count
         return VStack(alignment: .leading, spacing: 6) {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                 GridRow {
                     Text("")
-                    Text(L10n.t("当前这条"))
-                    Text(L10n.t("这条写法"))
+                    Text(L10n.t("当前条目"))
+                    Text(L10n.t("所选条目"))
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -293,7 +499,7 @@ struct SongVersionsSheet: View {
             .font(.callout)
             .textSelection(.enabled)
             if differing > 0 {
-                Text(String(format: L10n.t("%d 项不一样，已标橙"), differing))
+                Text(String(format: L10n.t("%d 项存在差异（以橙色标示）"), differing))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -322,7 +528,7 @@ struct SongVersionsSheet: View {
             }
             .padding(.top, 6)
         } label: {
-            Text(L10n.t("歌词逐句对照")).font(.callout.weight(.semibold))
+            Text(L10n.t("逐行歌词对比")).font(.callout.weight(.semibold))
         }
     }
 
@@ -348,16 +554,16 @@ struct SongVersionsSheet: View {
         var parts: [String] = []
         if let shift = diff.shiftMs, abs(shift) >= 100 {
             let seconds = String(format: "%.1f", Double(abs(shift)) / 1000)
-            parts.append(String(format: L10n.t(shift > 0 ? "时间整体晚 %@ 秒" : "时间整体早 %@ 秒"), seconds))
+            parts.append(String(format: L10n.t(shift > 0 ? "整体延后 %@ 秒" : "整体提前 %@ 秒"), seconds))
         }
         if diff.differentLines > 0 {
-            parts.append(String(format: L10n.t("有 %d 句文字不同"), diff.differentLines))
+            parts.append(String(format: L10n.t("%d 行文本不同"), diff.differentLines))
         }
         if !c.yrc.isEmpty, v.yrc.isEmpty {
-            parts.append(L10n.t("这条没有逐字时间轴"))
+            parts.append(L10n.t("所选条目无逐字时间轴"))
         }
         if parts.isEmpty {
-            parts.append(L10n.t("文字和整行时间一样，逐字时间轴不同"))
+            parts.append(L10n.t("文本与行时间一致，仅逐字时间轴不同"))
         }
         return parts.joined(separator: L10n.t("；"))
     }
@@ -371,12 +577,12 @@ struct SongVersionsSheet: View {
         let current = versions.first { $0.relation == .current }
         return DisclosureGroup {
             VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.t("播放器或曲库直接给的编号最可靠；按歌名搜到的可能搜错，只作参考。"))
+                Text(L10n.t("播放器或曲库提供的标识符可信度最高；按曲名检索得到的结果可能有误，仅供参考。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if kinds.isEmpty {
-                    Text(L10n.t("经由同一首歌的其他写法连着")).foregroundStyle(.secondary)
+                    Text(L10n.t("经由其他同曲条目间接关联")).foregroundStyle(.secondary)
                 }
                 ForEach(kinds, id: \.self) { kind in
                     let countOnly = direct.filter { $0.kind == kind }.allSatisfy(\.countOnly)
@@ -384,14 +590,14 @@ struct SongVersionsSheet: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text(evidenceSentence(kind, current, v))
-                            Text(strong ? L10n.t("可靠") : countOnly ? L10n.t("仅参考") : L10n.t("参考"))
+                            Text(strong ? L10n.t("高可信") : countOnly ? L10n.t("仅计数") : L10n.t("参考"))
                                 .font(.caption)
                                 .foregroundStyle(strong ? Color.green : Color.secondary)
                                 .padding(.horizontal, 5)
                                 .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.06)))
                         }
                         if countOnly {
-                            Text(L10n.t("搜到的那首跟这条的歌名对不上号，只用来合并播放次数，不让歌词共用。"))
+                            Text(L10n.t("检索到的曲目与本条目曲名不符，仅用于合并播放次数，不参与歌词同步。"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -402,7 +608,7 @@ struct SongVersionsSheet: View {
             .font(.callout)
             .padding(.top, 6)
         } label: {
-            Text(L10n.t("为什么认成同一首")).font(.callout)
+            Text(L10n.t("匹配依据")).font(.callout)
         }
     }
 
@@ -410,7 +616,7 @@ struct SongVersionsSheet: View {
     private func evidenceSentence(_ kind: String, _ current: Version?, _ v: Version) -> String {
         if kind == "family", let a = current?.durationSecs, let b = v.durationSecs {
             let gap = abs(a - b)
-            return String(format: L10n.t("歌手相同、歌名相同，时长只差 %@ 秒"), gap < 0.95 ? String(format: "%.1f", gap) : String(Int(gap.rounded())))
+            return String(format: L10n.t("艺人、曲名一致，时长相差 %@ 秒"), gap < 0.95 ? String(format: "%.1f", gap) : String(Int(gap.rounded())))
         }
         return Self.evidenceLabel(kind)
     }
@@ -418,7 +624,7 @@ struct SongVersionsSheet: View {
     private func actions(_ v: Version) -> some View {
         HStack(spacing: 8) {
             Spacer()
-            Button(L10n.t("在列表里查看")) {
+            Button(L10n.t("在列表中显示")) {
                 dismiss()
                 onOpen(v.key)
             }
@@ -427,7 +633,7 @@ struct SongVersionsSheet: View {
                 Button(L10n.t("恢复合并")) { run { await store.unsplitSong(keys: v.mergeKeys) } }
                     .disabled(busy)
             } else {
-                Button(L10n.t("拆开…")) {
+                Button(L10n.t("拆分…")) {
                     pendingSplit = v.key
                     confirmingSplit = true
                 }
@@ -439,9 +645,9 @@ struct SongVersionsSheet: View {
     // MARK: - 文字
 
     private func lyricsVerdict(_ v: Version) -> String {
-        if !v.lyricsKnown { return L10n.t("读不到这条的歌词") }
-        if v.lyrics.isEmpty { return L10n.t("这条没有歌词") }
-        return v.sameLyrics ? L10n.t("一字不差") : L10n.t("不一样")
+        if !v.lyricsKnown { return L10n.t("歌词无法读取") }
+        if v.lyrics.isEmpty { return L10n.t("无歌词") }
+        return v.sameLyrics ? L10n.t("完全一致") : L10n.t("存在差异")
     }
 
     private func lyricsColor(_ v: Version) -> Color {
@@ -458,7 +664,7 @@ struct SongVersionsSheet: View {
     private func featuresText(_ v: Version) -> String { v.features.joined(separator: " · ") }
 
     private func durationText(_ v: Version) -> String {
-        guard let secs = v.durationSecs else { return L10n.t("播放器没报") }
+        guard let secs = v.durationSecs else { return L10n.t("未提供") }
         let total = Int(secs.rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
     }
@@ -489,15 +695,15 @@ struct SongVersionsSheet: View {
     private var splitTitle: String {
         guard let key = pendingSplit else { return "" }
         let title = versions.first { $0.key == key }?.title ?? key
-        return String(format: L10n.t("把「%@」拆出去？"), title)
+        return String(format: L10n.t("拆分「%@」？"), title)
     }
 
     static func relationTitle(_ relation: Relation) -> String {
         switch relation {
-        case .current: return L10n.t("当前这条")
-        case .shared: return L10n.t("共用歌词")
-        case .own: return L10n.t("各自选词")
-        case .split: return L10n.t("已拆开")
+        case .current: return L10n.t("当前条目")
+        case .shared: return L10n.t("歌词同步")
+        case .own: return L10n.t("独立匹配")
+        case .split: return L10n.t("已拆分")
         }
     }
 
@@ -522,9 +728,9 @@ struct SongVersionsSheet: View {
     static func relationExplanation(_ relation: Relation) -> String {
         switch relation {
         case .current: return ""
-        case .shared: return L10n.t("自动选的歌词跟当前这条共用一份，换词时一起换，手改也一起同步。")
-        case .own: return L10n.t("以后自动选词各选各的，不跟当前这条一起换；你在这首歌上的手改仍会同步过去。")
-        case .split: return L10n.t("你把它从这首歌里拆了出去：单独算一首歌，播放次数分开，歌词不再相关。认错了可以恢复合并。")
+        case .shared: return L10n.t("自动匹配的歌词与当前条目同步：更换歌词时一并更新，手动修改也会同步。")
+        case .own: return L10n.t("自动匹配独立进行，不随当前条目更换；手动修改仍会同步。")
+        case .split: return L10n.t("已从此歌曲拆分：作为独立歌曲单独统计播放次数，歌词不再关联。如拆分有误，可恢复合并。")
         }
     }
 
@@ -604,20 +810,20 @@ struct SongVersionsSheet: View {
 
     static func evidenceLabel(_ kind: String) -> String {
         switch kind {
-        case "isrc": return L10n.t("两条的录音编号（ISRC）相同")
-        case "mb_recording": return L10n.t("两条在 MusicBrainz 上是同一个录音")
-        case "spotify_track": return L10n.t("Spotify 给的曲目编号相同")
-        case "amazon_asin": return L10n.t("Amazon Music 给的曲目编号相同")
-        case "kkbox_song": return L10n.t("KKBOX 给的歌曲编号相同")
-        case "soda_track": return L10n.t("汽水音乐给的歌曲编号相同")
-        case "youtube_video": return L10n.t("YouTube Music 给的视频编号相同")
-        case "apple_song": return L10n.t("两条的歌名在 Apple Music 上搜到同一首歌")
-        case "netease_song": return L10n.t("两条的歌名在网易云音乐上搜到同一首歌")
-        case "qq_song": return L10n.t("两条的歌名在 QQ 音乐上搜到同一首歌")
-        case "family": return L10n.t("歌手相同、歌名相同、时长相近")
-        case "lyrics": return L10n.t("两条各自找到的歌词一致")
-        case "apple_name": return L10n.t("Apple Music 登记的名字跟这条对得上")
-        case "netease_name": return L10n.t("网易云音乐登记的名字跟这条对得上")
+        case "isrc": return L10n.t("ISRC 一致")
+        case "mb_recording": return L10n.t("MusicBrainz 录音 ID 一致")
+        case "spotify_track": return L10n.t("Spotify 曲目 ID 一致")
+        case "amazon_asin": return L10n.t("Amazon Music 曲目 ID 一致")
+        case "kkbox_song": return L10n.t("KKBOX 歌曲 ID 一致")
+        case "soda_track": return L10n.t("汽水音乐歌曲 ID 一致")
+        case "youtube_video": return L10n.t("YouTube Music 视频 ID 一致")
+        case "apple_song": return L10n.t("Apple Music 检索结果为同一曲目")
+        case "netease_song": return L10n.t("网易云音乐检索结果为同一曲目")
+        case "qq_song": return L10n.t("QQ 音乐检索结果为同一曲目")
+        case "family": return L10n.t("艺人、曲名一致，时长相近")
+        case "lyrics": return L10n.t("两条独立匹配的歌词一致")
+        case "apple_name": return L10n.t("与 Apple Music 目录中的曲名吻合")
+        case "netease_name": return L10n.t("与网易云音乐目录中的曲名吻合")
         default: return kind
         }
     }

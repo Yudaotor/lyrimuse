@@ -218,9 +218,9 @@ func runSongVersionsTests() {
         let enrichEngine = read(engine, "enrich.go")
         expectEqual(sourceBytes(enrichEngine, contain: "Players []string `json:\"players,omitempty\"`")
                     && sourceBytes(store, contain: "let p = SongVersions.players(entry: entry)")
-                    && sourceBytes(sheet, contain: "case .shared: return L10n.t(\"共用歌词\")")
-                    && sourceBytes(sheet, contain: "case .own: return L10n.t(\"各自选词\")")
-                    && sourceBytes(sheet, contain: "case .split: return L10n.t(\"已拆开\")")
+                    && sourceBytes(sheet, contain: "case .shared: return L10n.t(\"歌词同步\")")
+                    && sourceBytes(sheet, contain: "case .own: return L10n.t(\"独立匹配\")")
+                    && sourceBytes(sheet, contain: "case .split: return L10n.t(\"已拆分\")")
                     && sourceBytes(sheet, contain: "let diff = SongVersions.lyricDiff(current: c.lyrics, other: v.lyrics)"), true,
                     "其他写法(契约): 收录的播放器、三种关系、逐句对照接上")
         let rematchEngine = read(engine, "lyricsrematch.go")
@@ -228,12 +228,16 @@ func runSongVersionsTests() {
                     && sourceBytes(rematchEngine, contain: "Followers int `json:\"followers,omitempty\"`"), true,
                     "其他写法(契约): 重新自动匹配的结论带上同组跟着换了几条")
         expectEqual(sourceBytes(manager, contain: "SongVersionsSheet(summary: summary, onOpen:")
-                    && sourceBytes(manager, contain: "Button(L10n.t(\"同一首歌的其他写法…\")) { showSongVersions = true }"), true,
+                    && sourceBytes(manager, contain: "Button(L10n.t(\"同曲条目…\")) { showSongVersions = true }"), true,
                     "其他写法(契约): 详情页「⋯」菜单接上弹窗")
         expectEqual(sourceBytes(manager, contain: "let versions = store.songVersionCount(forKey: summary.key)")
                     && sourceBytes(manager, contain: "if versions > 1 {\n                Button { showSongVersions = true } label: {")
                     && sourceBytes(store, contain: "songVersionCounts[song, default: 0] += 1")
                     && sourceBytes(store, contain: "songVersionCounts = bundle.songVersionCounts"), true,
                     "其他写法(契约): 详情页概况那一行露出「同一首歌的 N 种写法」,随列表一起数")
+        expectEqual(sourceBytes(sheet, contain: "if v.relation == .current {\n                overview(current)")
+                    && sourceBytes(sheet, contain: "allVersionsTable(c)")
+                    && sourceBytes(sheet, contain: "if !edges.isEmpty { evidenceSummary }"), true,
+                    "其他写法(契约): 选中当前这条时右边是这首歌的概况(总览卡、当前这条的信息、全部写法一览、依据汇总)")
     }
 }
