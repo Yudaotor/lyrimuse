@@ -25,6 +25,12 @@ func TestIsRelaxedCreditLineLabelSpacing(t *testing.T) {
 		{"真歌词里的英文感叹词不算版权标签", "Oh : you know", false},
 		{"真歌词里的单字母不算版权标签", "I : am here", false},
 		{"普通歌词行", "今天天气真好", false},
+		{"中文职务紧跟英文职务", "作曲Composer : 甲", true},
+		{"中文职务空格英文职务", "母带工程师 Mastering Engineer : 乙 @某录音棚", true},
+		{"康熙部首写的职务", "⺟带⼯程师 Mastering Engineer : 乙", true},
+		{"几个中文职务连写再接英文", "编曲 & 制作Arrangers & Producers：丙 / 丁", true},
+		{"中英混写的真歌词没有冒号", "我爱你Baby 别走", false},
+		{"英文段太长不像职务", "我说Hello and goodbye to everything we used to have in that summer by the sea : 甲", false},
 	}
 	for _, c := range cases {
 		if got := isRelaxedCreditLine(c.text, nil); got != c.want {

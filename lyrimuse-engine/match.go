@@ -162,6 +162,11 @@ var spacedHanCreditLineRe = regexp.MustCompile(`^\p{Han}{1,8}[\s\x{3000}]+[:：]
 // 形状出得来,枚举法在这里比结构判定安全。
 var copyrightLabelRe = regexp.MustCompile(`(?i)^(OP|SP|OA|SA)[\s\x{3000}]*[:：]`)
 
+// 中文职务后面紧跟英文职务再冒号:`作曲Composer : 甲`、`母带工程师 Mastering Engineer : 乙`、
+// `编曲 & 制作Arrangers & Producers：丙`(网易云纯音乐占位前面的职员表常这么写)。上面两条都要求汉字之后直接是冒号或空白加冒号,
+// 认不出。英文那段只认字母、空白和 & / . ' ( ) -,冒号前最多 60 个字符。只进宽松版,见 09 章决策 235。
+var bilingualCreditLabelRe = regexp.MustCompile(`^\p{Han}{1,8}(?:[\s\x{3000}]*[&/、][\s\x{3000}]*\p{Han}{1,8})*[\s\x{3000}]*[A-Za-z][A-Za-z\s&/.'()\-]{0,60}[:：]`)
+
 // isRelaxedCreditLine 是 isCreditLineWithSpeakers 多认上面两种排版的版本。
 //
 // 两套判据是**故意**分开的,别合并成一套:
@@ -181,7 +186,8 @@ func isRelaxedCreditLine(text string, speakers map[string]bool) bool {
 			return false
 		}
 	}
-	return spacedHanCreditLineRe.MatchString(text) || copyrightLabelRe.MatchString(text)
+	return spacedHanCreditLineRe.MatchString(text) || copyrightLabelRe.MatchString(text) ||
+		bilingualCreditLabelRe.MatchString(text)
 }
 
 // neteaseInstrumentalPlaceholderMarker 是网易云对纯音乐曲目自己给出的固定占位文案(常

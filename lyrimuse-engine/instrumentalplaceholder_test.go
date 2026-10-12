@@ -171,3 +171,21 @@ func TestPickLyricCandidateInstrumentalMarkerSkipsOvershoot(t *testing.T) {
 		t.Fatalf("没有纯音乐标记时照旧,得到 %v", got)
 	}
 }
+
+// 网易云纯音乐的职员表用中英连写的职务(`作曲Composer :`)、还夹着康熙部首写的字(`⺟带⼯程师`):照样判成纯音乐占位,
+// 不当歌词存(step.jad依加《夜奔》专辑里的 Intro / Outro,见 09 章决策 235)。
+func TestInstrumentalPlaceholderWithBilingualCredits(t *testing.T) {
+	intro := "[00:00.00] 作曲Composer : 甲\n[00:01.00] 编曲Arranger : 甲\n" +
+		"[00:02.00] ⺟带⼯程师 Mastering Engineer : 乙 @某录音棚\n[00:05.00]纯音乐，请欣赏"
+	outro := "[00:00.00] 编曲 & 制作Arrangers & Producers：丙 / 丁\n" +
+		"[00:01.00] ⺟带⼯程师 Mastering Engineer：乙 @某录音棚\n[00:05.00]纯音乐，请欣赏"
+	for name, lrc := range map[string]string{"Intro": intro, "Outro": outro} {
+		if !isInstrumentalPlaceholderLyric(lrc) {
+			t.Errorf("%s: 只有职员表加占位,该判成纯音乐", name)
+		}
+	}
+	withLyric := intro + "\n[00:10.00]真的有一句歌词"
+	if isInstrumentalPlaceholderLyric(withLyric) {
+		t.Error("多了一句真歌词就不是占位")
+	}
+}
