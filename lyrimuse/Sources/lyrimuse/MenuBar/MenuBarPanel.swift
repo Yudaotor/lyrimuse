@@ -277,7 +277,7 @@ final class MenuBarPanelController {
     }
 }
 
-/// 面板窗口:不激活 App 也能成为 key 的无边框面板,底是系统 popover 材质 + 圆角 + 窗口阴影。
+/// 面板窗口:不激活 App 也能成为 key 的无边框面板,底是一整块液态玻璃(macOS 26 起;更早是系统 popover 材质)+ 圆角 + 窗口阴影。
 ///
 /// `.nonactivatingPanel` 必须在建窗时传进 styleMask(事后插入不生效)。无边框窗口默认不能成为 key,
 /// 所以 canBecomeKey 要显式放开。collectionBehavior 的两位是「别的 App 全屏时也打得开」:
@@ -311,8 +311,13 @@ private final class MenuBarPanelWindow: NSPanel {
         onCancel?()
     }
 
-    /// 材质底 + 圆角遮罩,内容铺满。
+    /// 底 + 圆角,内容铺满。macOS 26 起是 `NSGlassEffectView` 常规那一档,圆角和边上的亮边由它自己画;窗口本来就透明,
+    /// 玻璃折射的是背后的桌面。更早的系统是 popover 材质 + 圆角遮罩。见 06 章决策 47。
     func setContent(_ content: NSView) {
+        if let glass = menuBarPanelGlassBackdrop(content: content, cornerRadius: Self.cornerRadius) {
+            contentView = glass
+            return
+        }
         let effect = NSVisualEffectView()
         effect.material = .popover
         effect.blendingMode = .behindWindow
@@ -337,7 +342,8 @@ private final class MenuBarPanelWindow: NSPanel {
     }
 }
 
-/// 面板内容的外壳:按理想尺寸排(窗口多大由宿主视图报给控制器,见 FirstMouseHostingView),再描一圈发丝边。
+/// 面板内容的外壳:按理想尺寸排(窗口多大由宿主视图报给控制器,见 FirstMouseHostingView);旧系统的材质底再描一圈发丝边,
+/// macOS 26 起的玻璃底自带亮边,不描。
 ///
 /// 内容贴着窗口顶边摆:内容跟窗口一时对不上高度时,宿主视图默认把它上下居中,翻面那一下整块先往上 / 往下挪半个高度差、
 /// 窗口改完尺寸再弹回来,看着就是整个面板抖一下。贴顶之后多出 / 少掉的只在底部。`minHeight: 0` 不能省:不写的话这层
@@ -349,8 +355,10 @@ private struct MenuBarPanelRoot<Content: View>: View {
         content
             .fixedSize()
             .overlay {
-                RoundedRectangle(cornerRadius: MenuBarPanelWindow.cornerRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                if #unavailable(macOS 26.0) {
+                    RoundedRectangle(cornerRadius: MenuBarPanelWindow.cornerRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                }
             }
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
     }
@@ -422,8 +430,10 @@ private struct MenuBarPanelView: View {
             }
         }
         .padding(10)
-        // 玻璃卡后面那层淡光,同设置页:面板底色上玻璃折射不到东西,没有它卡片边界看不出来。
-        .background { LastfmGlassGlow() }
+        // 旧系统的材质底上垫一层淡光,同设置页:材质上玻璃折射不到东西,没有它卡片边界看不出来。玻璃底透得到桌面,不垫。
+        .background {
+            if #unavailable(macOS 26.0) { LastfmGlassGlow() }
+        }
         .frame(width: 336)
         // 快捷设置正翻在「触控栏歌词」那一格上时触控栏没了(模拟器关掉):那一格已经不在了,退回钮块网格。
         .onChange(of: playback.touchBarPresent) { _, present in
@@ -724,7 +734,7 @@ private struct MenuBarPanelView: View {
             }
         }
         .padding(12)
-        .settingsCardBackground(cornerRadius: 18)
+        .menuBarPanelCardBackground(cornerRadius: 18)
     }
 
     /// 压根没有曲目时这张卡的全部内容:两行状态字 + 一颗主动作键。
@@ -996,13 +1006,13 @@ private struct MenuBarPanelView: View {
 
         var body: some View {
             content
-                // 玻璃格,同设置页的卡片;悬停 / 按下在玻璃上再叠一层灰(玻璃自带的交互反馈收不到:
+                // 玻璃格,同正在播放卡;悬停 / 按下在玻璃上再叠一层灰(玻璃自带的交互反馈收不到:
                 // 鼠标事件都落在上面那层 TileMouseRouter 上)。
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color.primary.opacity(stateFillLevel))
                 )
-                .settingsCardBackground(cornerRadius: 16)
+                .menuBarPanelCardBackground(cornerRadius: 16)
                 .overlay {
                     // 事件路由盖在最上面一层:整格都是热区,内容那边不用再加 contentShape。
                     TileMouseRouter(

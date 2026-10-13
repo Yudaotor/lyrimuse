@@ -355,7 +355,7 @@ func runIdlePageTests() {
         expectEqual(sourceBytes(source("UI/LyricsWindowPreviewStage.swift"), contain: ".environment(\\.settingsGlassDisabled, true)"),
                     true, "预览关玻璃(契约): 歌词窗口预览打开 settingsGlassDisabled")
         expectEqual(source("Settings/SettingsDesignSystem.swift")
-                        .components(separatedBy: "if #available(macOS 26.0, *), !glassDisabled {").count - 1, 3,
-                    "预览关玻璃(契约): 三个修饰符都按 settingsGlassDisabled 退回旧系统那一档")
+                        .components(separatedBy: "if #available(macOS 26.0, *), !glassDisabled {").count - 1, 4,
+                    "预览关玻璃(契约): 四个修饰符(设置页三个 + 菜单栏面板卡片)都按 settingsGlassDisabled 退回旧系统那一档")
     }
 }

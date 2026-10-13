@@ -1998,6 +1998,45 @@ extension View {
     }
 }
 
+// MARK: - 菜单栏面板的玻璃
+
+/// 菜单栏面板窗口的整块玻璃底:macOS 26+ 返回包着 `content` 的 `NSGlassEffectView`(常规那一档,圆角和边上的亮边由它
+/// 自己画;窗口本来就透明,折射的是背后的桌面),更早的系统返回 nil,调用方自己垫材质。见 06 章决策 47。
+@MainActor
+func menuBarPanelGlassBackdrop(content: NSView, cornerRadius: CGFloat) -> NSView? {
+    guard #available(macOS 26.0, *) else { return nil }
+    let glass = NSGlassEffectView()
+    glass.style = .regular
+    glass.cornerRadius = cornerRadius
+    content.autoresizingMask = [.width, .height]
+    glass.contentView = content
+    return glass
+}
+
+extension View {
+    /// 菜单栏面板里的卡片(正在播放卡、钮块、快捷设置卡)。macOS 26 起是浮在整块玻璃底上的透明那一档玻璃(`.clear`)+
+    /// 白色发丝亮边,同首启引导的卡片:底是常规那一档,两档叠着卡片才浮得起来;背后发白时玻璃边界很淡,亮边保证看得见。
+    /// 更早的系统和关了玻璃的地方同设置页卡片。见 06 章决策 47。
+    func menuBarPanelCardBackground(cornerRadius: CGFloat) -> some View {
+        modifier(MenuBarPanelCardBackground(cornerRadius: cornerRadius))
+    }
+}
+
+private struct MenuBarPanelCardBackground: ViewModifier {
+    let cornerRadius: CGFloat
+    @Environment(\.settingsGlassDisabled) private var glassDisabled
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(macOS 26.0, *), !glassDisabled {
+            content.glassEffect(.clear, in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+        } else {
+            content.settingsCardBackground(cornerRadius: cornerRadius)
+        }
+    }
+}
+
 /// `onboardingWindowBackground()` 垫的那块底。两档都在进窗口时把标题设回可见:scene 挂 `.hiddenTitleBar`(标题栏
 /// 透明 + 内容铺满,玻璃才能通到窗顶)会顺带把标题藏掉,而标题要跟着界面语言走(`.navigationTitle`)。别改成自己设
 /// `titlebarAppearsTransparent` / `fullSizeContentView`:SwiftUI 管着 scene 的窗口样式,手设的会被它盖回去,标题栏

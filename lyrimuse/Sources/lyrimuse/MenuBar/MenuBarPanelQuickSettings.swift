@@ -335,7 +335,7 @@ struct PanelQuickSettings: View {
             footer
         }
         // 玻璃卡,同正在播放卡和钮块。
-        .settingsCardBackground(cornerRadius: 18)
+        .menuBarPanelCardBackground(cornerRadius: 18)
     }
 
     // MARK: 头部(返回 + 身份 + 这个形态的总开关)
