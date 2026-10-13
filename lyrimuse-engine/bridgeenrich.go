@@ -17,7 +17,7 @@ package main
 
 // enrichmentFor 是上送组装负载时取封面 / 链接 / 歌词的入口:桥接来的只查缓存,本机播放照常解析。
 func enrichmentFor(s snapshot) map[string]string {
-	// 汽水试听段还在搜:这一拍的时长是试听段长度,只查缓存、不按它起首次解析(同 poller 的 SodaPreviewPending)。
+	// 汽水试听段还没有结论:这一拍的时长可能是试听段长度,只查缓存、不按它起首次解析(同 poller 的 SodaPreviewPending)。
 	// 中继、ListenBrainz 换歌那一拍就来取,按 30 秒建出来的条目会让后面换回整首的那拍另开「~durN」。
 	if s.Remote || s.SodaPreviewPending {
 		return cachedTrackEnrichment(s.Artist, s.Title, s.Album)

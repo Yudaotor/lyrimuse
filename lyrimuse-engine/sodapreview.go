@@ -40,8 +40,10 @@ const (
 	sodaPreviewMinGap = 5.0
 	// 只有报的时长这么短时才去搜索:试听段实测 30 / 60s;正常长度的歌不值得多一次网络请求。
 	sodaPreviewMaxSearchSecs = 90.0
-	// 搜索没找到的曲目多久之后再试一次。
+	// 搜索没找到的曲目多久之后再试一次。前 sodaPreviewQuickRetries 次隔得短(sodaPreviewRetryAfter):搜索接口时不时
+	// 整批给降级结果,试听段只有 30 / 60 秒,等 10 分钟就整段错过了(09 章决策 240)。
 	sodaPreviewNegativeTTL   = 10 * time.Minute
+	sodaPreviewQuickRetries  = 2
 	sodaPreviewSearchTimeout = 8 * time.Second
 )
 
@@ -105,6 +107,20 @@ type sodaPreviewCacheEntry struct {
 	p     sodaPreview
 	found bool
 	at    time.Time
+	// misses:连着没搜到几次;隔了 sodaPreviewNegativeTTL 以上再搜的从头数。
+	misses int
+}
+
+// sodaPreviewRetryAfter:连着没搜到 misses 次之后,隔多久再搜。
+func sodaPreviewRetryAfter(misses int) time.Duration {
+	switch {
+	case misses <= 1:
+		return 5 * time.Second
+	case misses <= sodaPreviewQuickRetries:
+		return 15 * time.Second
+	default:
+		return sodaPreviewNegativeTTL
+	}
 }
 
 var (
@@ -135,7 +151,7 @@ func sodaPreviewFor(artist, title, album string, mrDuration float64, onSearchFou
 	key := normLoose(artist) + "|" + normLoose(title)
 	sodaPreviewMu.Lock()
 	e, cached := sodaPreviewCache[key]
-	if cached && (e.found || time.Since(e.at) < sodaPreviewNegativeTTL) {
+	if cached && (e.found || time.Since(e.at) < sodaPreviewRetryAfter(e.misses)) {
 		sodaPreviewMu.Unlock()
 		if e.found && sodaPreviewMatches(mrDuration, e.p) {
 			return e.p, true
@@ -147,6 +163,10 @@ func sodaPreviewFor(artist, title, album string, mrDuration float64, onSearchFou
 		return sodaPreview{}, false
 	}
 	sodaPreviewInflight[key] = true
+	misses := 0
+	if cached && !e.found && time.Since(e.at) < sodaPreviewNegativeTTL {
+		misses = e.misses
+	}
 	sodaPreviewMu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), sodaPreviewSearchTimeout)
@@ -160,8 +180,12 @@ func sodaPreviewFor(artist, title, album string, mrDuration float64, onSearchFou
 				onSearchFound(p)
 			}
 		}
+		entry := sodaPreviewCacheEntry{p: p, found: ok, at: time.Now()}
+		if !ok {
+			entry.misses = misses + 1
+		}
 		sodaPreviewMu.Lock()
-		sodaPreviewCache[key] = sodaPreviewCacheEntry{p: p, found: ok, at: time.Now()}
+		sodaPreviewCache[key] = entry
 		delete(sodaPreviewInflight, key)
 		sodaPreviewMu.Unlock()
 	}()
@@ -293,11 +317,53 @@ func sodaPreviewSessionBackfill(bundle, artist, title string, sessDur, curDur fl
 	return math.Abs(sessDur-p.DurSecs) <= sodaPreviewDurationTolerance && math.Abs(curDur-p.FullSecs) < 0.5
 }
 
-// sodaPreviewLookupPending 判这首歌的试听段是不是还在后台搜。在搜的时候先别按试听段时长去解析歌词
-// (见 poller 的 SodaPreviewPending):按 30s 去比缓存里几分钟的曲长,会另开一个「时长变体」重新
-// 解析,挑出来的多半是凑数的歌词,还留在缓存里。
-func sodaPreviewLookupPending(artist, title string) bool {
+// sodaPreviewLookupPending 判这首歌的试听段是不是还没有结论:还在后台搜,或者报的时长正是试听段的长度
+// (sodaPreviewTypicalLength)、又没有证据说这首整首就这么长(sodaFullLengthKnown)。没结论时先别按这一拍的时长
+// 解析歌词、建条目、记收听(见 poller 的 SodaPreviewPending):按 30s 去比缓存里几分钟的曲长,会另开一个「时长变体」
+// 重新解析,挑出来的多半是凑数的歌词;会话时长记成 30s,听满一半就算一次收听(09 章决策 240)。
+func sodaPreviewLookupPending(artist, title string, mrDuration float64) bool {
 	sodaPreviewMu.Lock()
-	defer sodaPreviewMu.Unlock()
-	return sodaPreviewInflight[normLoose(artist)+"|"+normLoose(title)]
+	inflight := sodaPreviewInflight[normLoose(artist)+"|"+normLoose(title)]
+	sodaPreviewMu.Unlock()
+	if inflight {
+		return true
+	}
+	return sodaPreviewTypicalLength(mrDuration) && !sodaFullLengthKnown(artist, title, mrDuration)
+}
+
+// sodaPreviewTypicalLength:报的时长是不是试听段的长度(实测只有 30 / 60s 两种)。
+func sodaPreviewTypicalLength(mrDuration float64) bool {
+	return math.Abs(mrDuration-30) <= sodaPreviewDurationTolerance || math.Abs(mrDuration-60) <= sodaPreviewDurationTolerance
+}
+
+// sodaFullLengthKnown:本机的队列缓存或音频缓存库(曲目信息已经问到的)里有这首,整首时长跟报的对得上 —— 这首本来就这么长,
+// 不是试听。
+func sodaFullLengthKnown(artist, title string, mrDuration float64) bool {
+	fits := func(fullMs int64) bool {
+		return fullMs > 0 && math.Abs(float64(fullMs)/1000-mrDuration) <= sodaPreviewMinGap
+	}
+	sodaLocalMu.Lock()
+	refreshSodaLocalIndexLocked()
+	var ents []sodaLocalTrack
+	for _, a := range sodaArtistCandidates(artist) {
+		if key := sodaLocalKey(a, title); key != "" {
+			ents = append(ents, sodaLocalIndex[key]...)
+		}
+	}
+	sodaLocalMu.Unlock()
+	for _, e := range ents {
+		if fits(e.Duration) {
+			return true
+		}
+	}
+	want := loosenEnrichKey(artist + "|" + title)
+	if want == "|" {
+		return false
+	}
+	for _, t := range sodaPreloadIndex() {
+		if loosenEnrichKey(t.upcoming.artist+"|"+t.upcoming.title) == want && fits(t.fullMs) {
+			return true
+		}
+	}
+	return false
 }

@@ -52,6 +52,9 @@ type playSession struct {
 	// 会话级「有声节目」标记:App 认出这一条是 QQ 音乐的有声书 / 有声节目(snapshot.Spoken)就往 true 棘轮。字幕照常解析
 	// 显示;正在播放、收听提交、待播预取、网页中继都挡掉,挡的位置同广告。见 02 章决策 118。
 	isSpoken bool
+	// sodaPreviewPending:汽水试听段到这一拍还没有结论(snapshot.SodaPreviewPending,每拍跟着更新)。没结论时会话时长是
+	// 试听段长度,不提交收听;查到之后会话时长补成整首(sodaPreviewSessionBackfill),照常按整首算。见 09 章决策 240。
+	sodaPreviewPending bool
 	// prefetchDeferred:开播那一拍 App 对 QQ 这一条的结论还没到(awaitsSpokenVerdict),待播预取挪到结论到了再做。
 	prefetchDeferred bool
 	// 会话级「不 scrobble 到 Last.fm」标记:开播时按 features().LastfmExcludedBundles
@@ -1042,7 +1045,7 @@ func (p *poller) finalize(now time.Time) {
 		slog.Debug("lastfm: session ended before scrobble point", "point", features().LastfmScrobblePoint,
 			"played_secs", int(s.playedSecs), "duration_secs", int(s.meta.Duration), "artist", s.meta.Artist, "title", s.meta.Title)
 	}
-	if s.listenSent || s.submitting || tooShortToScrobble(s.meta.Duration) {
+	if s.listenSent || s.submitting || s.sodaPreviewPending || tooShortToScrobble(s.meta.Duration) {
 		return
 	}
 	if s.playedSecs < listenThreshold(s.meta.Duration) {
@@ -1174,6 +1177,9 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		sodaPreviewSessionBackfill(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.sess.meta.Duration, p.cur.Duration) {
 		p.sess.meta.Duration = p.cur.Duration
 	}
+	if p.sess != nil && p.sess.key == key {
+		p.sess.sodaPreviewPending = p.cur.SodaPreviewPending
+	}
 
 	// Player quit or another app took over: finalize and drop the session.
 	if !isMusic {
@@ -1196,10 +1202,12 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			// session(播放进度/是否已提交过 listen 都带过去),不清零重开——否则这次
 			// 收听会被切成两段,各自达到阈值时向 LB 提交两条重复的 listen。
 			p.sess = p.recentFinalized
+			p.sess.sodaPreviewPending = p.cur.SodaPreviewPending
 			p.sess.pnPending = false // 即将重新走一遍"是否需要挂起等歌词"的判定
 			p.sess.ended = false     // 会话还没完;挂着的 Last.fm 收听(lastfmPending)继续跟着它等到点
 		} else {
-			p.sess = &playSession{key: key, meta: p.cur, startedAt: now, lastPlaying: p.cur.Playing}
+			p.sess = &playSession{key: key, meta: p.cur, startedAt: now, lastPlaying: p.cur.Playing,
+				sodaPreviewPending: p.cur.SodaPreviewPending}
 			p.noteListeningTick(now)
 			p.sess.isAd = p.detectAdAtSessionStart()
 			p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
@@ -1233,7 +1241,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论
 		// 有无歌词)立即发;仅首次解析中(缓存未命中)才挂起,由下方处理器等 enrich 完成
 		// (enrichNotify 触发)或超时再发。仅影响 KV 兜底路径,KV 主路径不受此延迟。
-		// 汽水试听段还在搜:这一拍的时长是试听段长度,先不解析歌词,挂起等下一拍(见 SodaPreviewPending)。
+		// 汽水试听段还没有结论:这一拍的时长可能是试听段长度,先不解析歌词,挂起等下一拍(见 SodaPreviewPending)。
 		if !p.cur.SodaPreviewPending &&
 			len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.lyricsDurationSecs(), true, p.cur.Radio)) > 0 &&
 			!waiting {
@@ -1252,7 +1260,8 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	if loopRestart {
 		p.finalize(now)
 		p.recentFinalized = nil
-		p.sess = &playSession{key: key, meta: p.cur, startedAt: now, lastPlaying: p.cur.Playing}
+		p.sess = &playSession{key: key, meta: p.cur, startedAt: now, lastPlaying: p.cur.Playing,
+			sodaPreviewPending: p.cur.SodaPreviewPending}
 		p.noteListeningTick(now)
 		p.sess.isAd = p.detectAdAtSessionStart()
 		p.sess.isSpoken = p.cur.Spoken
@@ -1334,7 +1343,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	if !submitted && (reanchored || now.Sub(p.sess.pnTriedAt) >= playingNowRefresh) {
 		p.announce(now, "refresh")
 	}
-	if !p.sess.listenSent && !p.sess.submitting && !now.Before(p.sess.listenRetryAt) &&
+	if !p.sess.listenSent && !p.sess.submitting && !p.sess.sodaPreviewPending && !now.Before(p.sess.listenRetryAt) &&
 		p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 		!tooShortToScrobble(p.sess.meta.Duration) {
 		p.sess.submitting = true
@@ -1852,7 +1861,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 				p.sess.ended, p.sess.endedNaturally = true, sessionEndedNaturally(p.sess, time.Now())
 				p.settleLastfmPendingSync(flushCtx, p.sess)
 			}
-			if p.sess != nil && !p.sess.listenSent && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
+			if p.sess != nil && !p.sess.listenSent && !p.sess.sodaPreviewPending && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 				!tooShortToScrobble(p.sess.meta.Duration) && !p.sess.isSpoken &&
 				!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
 				// Last.fm 镜像:与 LB 解耦,同样服从 scrobble 时点(默认档当场发),且必须走同步变体。

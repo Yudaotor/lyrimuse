@@ -38,7 +38,7 @@ type appPlaybackJudge struct {
 	fixedTrack func(bundle, title, artist, album string, duration float64) (fixedArtist, fixedTitle string, ok bool)
 	// fixRev:引擎最近一次发布的署名纠正版本。
 	fixRev func() int64
-	// sodaPreview:汽水试听段。known=true 时给出起点与整首时长;pending = 还在后台查。
+	// sodaPreview:汽水试听段。known=true 时给出起点与整首时长;pending = 还没有结论(sodaPreviewLookupPending)。
 	sodaPreview func(bundle, title, artist, album string, duration float64) (startSecs, fullSecs float64, known, pending bool)
 	// neteaseTrial:网易云试听,是的话给出整首时长(见 neteasetrial.go)。
 	neteaseTrial func(bundle, title, artist, album string, duration float64) (fullSecs float64, ok bool)
@@ -97,7 +97,7 @@ func liveAppSodaPreview(bundle, rawTitle, rawArtist, rawAlbum string, duration f
 		publishPlayerPreviewFix(bundle, rawTitle, rawArtist, found)
 	})
 	if !ok {
-		return 0, 0, false, sodaPreviewLookupPending(artist, title)
+		return 0, 0, false, sodaPreviewLookupPending(artist, title, duration)
 	}
 	noteSodaPreviewKnown(artist, title, p)
 	publishPlayerPreviewFix(bundle, rawTitle, rawArtist, p)
