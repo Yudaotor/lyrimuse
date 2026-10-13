@@ -73,7 +73,7 @@ func TestSodaPreviewSearchRetriesSoonAfterMiss(t *testing.T) {
 		calls++
 		return sodaPreview{}, false
 	})
-	key := normLoose("方大同") + "|" + normLoose("南音")
+	key := sodaPreviewSearchKey("方大同", "南音", "Soulboy")
 	ask := func() {
 		if _, ok := sodaPreviewFor("方大同", "南音", "Soulboy", 30, nil); ok {
 			t.Fatal("搜索没搜到,不该报找到")
@@ -153,15 +153,37 @@ func TestSodaPreviewLookupPendingHoldsPreviewLengths(t *testing.T) {
 		{"间奏", 30, true},  // 整首 60 秒,报 30 秒对不上
 	}
 	for _, c := range cases {
-		if got := sodaPreviewLookupPending("方大同", c.title, c.dur); got != c.want {
+		if got := sodaPreviewLookupPending("方大同", c.title, "Soulboy", c.dur); got != c.want {
 			t.Errorf("%s 报 %v 秒: pending=%v want %v", c.title, c.dur, got, c.want)
 		}
 	}
 	sodaPreviewMu.Lock()
-	sodaPreviewInflight[normLoose("方大同")+"|"+normLoose("南音")] = true
+	sodaPreviewInflight[sodaPreviewSearchKey("方大同", "南音", "Soulboy")] = true
 	sodaPreviewMu.Unlock()
-	if !sodaPreviewLookupPending("方大同", "南音", 45) {
+	if !sodaPreviewLookupPending("方大同", "南音", "Soulboy", 45) {
 		t.Error("搜索在途时什么时长都算没结论")
+	}
+}
+
+// 搜索结果按专辑分开记:同名的另一个版本另搜一次,不拿上一个版本的试听段。
+func TestSodaPreviewSearchKeyedByAlbum(t *testing.T) {
+	calls := 0
+	resetSodaPreviewSearch(t, func(_ context.Context, _, _, album string, _ float64) (sodaPreview, bool) {
+		calls++
+		if album == "This Love Live 2007" {
+			return sodaPreview{StartSecs: 113.088, DurSecs: 30.001, FullSecs: 277.6}, true
+		}
+		return sodaPreview{StartSecs: 0, DurSecs: 30.047, FullSecs: 221.707}, true
+	})
+	sodaPreviewFor("方大同", "歌手与模特儿", "爱爱爱", 30, nil)
+	waitSodaPreviewSearched(t, sodaPreviewSearchKey("方大同", "歌手与模特儿", "爱爱爱"))
+	if _, ok := sodaPreviewFor("方大同", "歌手与模特儿", "This Love Live 2007", 30, nil); ok {
+		t.Fatal("另一个版本还没搜过,这一拍不该有结论")
+	}
+	waitSodaPreviewSearched(t, sodaPreviewSearchKey("方大同", "歌手与模特儿", "This Love Live 2007"))
+	p, ok := sodaPreviewFor("方大同", "歌手与模特儿", "This Love Live 2007", 30, nil)
+	if !ok || p.StartSecs != 113.088 || p.FullSecs != 277.6 || calls != 2 {
+		t.Fatalf("现场版该用自己搜到的试听段: %+v ok=%v calls=%d", p, ok, calls)
 	}
 }
 
@@ -202,11 +224,26 @@ func TestLiveAppSodaPreviewPendingAfterMiss(t *testing.T) {
 		return sodaPreview{}, false
 	})
 	liveAppSodaPreview(sodaMusicBundleID, "南音", "方大同", "Soulboy", 30)
-	waitSodaPreviewSearched(t, normLoose("方大同")+"|"+normLoose("南音"))
+	waitSodaPreviewSearched(t, sodaPreviewSearchKey("方大同", "南音", "Soulboy"))
 	if _, _, known, pending := liveAppSodaPreview(sodaMusicBundleID, "南音", "方大同", "Soulboy", 30); known || !pending {
 		t.Fatalf("搜索落空、报 30 秒: known=%v pending=%v", known, pending)
 	}
 	if _, _, known, pending := liveAppSodaPreview(sodaMusicBundleID, "南音", "方大同", "Soulboy", 200); known || pending {
 		t.Fatalf("报整首: known=%v pending=%v", known, pending)
+	}
+}
+
+// 搜索在途时,报的不是 30 / 60 秒也算没结论:在途按歌手、歌名、专辑认,跟发起搜索的那一次同一个键。
+func TestLiveAppSodaPreviewPendingWhileSearchInflight(t *testing.T) {
+	release := make(chan struct{})
+	resetSodaPreviewSearch(t, func(context.Context, string, string, string, float64) (sodaPreview, bool) {
+		<-release
+		return sodaPreview{}, false
+	})
+	_, _, known, pending := liveAppSodaPreview(sodaMusicBundleID, "南音", "方大同", "Soulboy", 45)
+	close(release)
+	waitSodaPreviewSearched(t, sodaPreviewSearchKey("方大同", "南音", "Soulboy"))
+	if known || !pending {
+		t.Fatalf("搜索在途、报 45 秒: known=%v pending=%v", known, pending)
 	}
 }

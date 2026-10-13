@@ -198,23 +198,24 @@ var (
 
 // sodaPreloadPreview 在音频缓存库里找这首的试听段(sodapreview.go 的 sodaPreviewFor 在本地队列没命中、
 // 发起搜索之前调它)。正在播的歌一定已经缓存(开播那一刻、或更早被预载时建立);2.9 起还要它的曲目信息已经问到
-// (sodatrackmeta.go),预载过的歌早就问好了,换歌那一拍同步拿得到,没问到的照常走搜索。只收 preview 与播放器报的
-// 时长对得上的那条(sodaPreviewMatches)。
+// (sodatrackmeta.go),预载过的歌早就问好了,换歌那一拍同步拿得到,没问到的照常走搜索。挑法见 sodaPickLocalPreview:
+// 专辑对得上的优先,同名几个版本分不出来时取缓存建得最晚的那条。
 // 按库文件的修改时间与大小、曲目信息的代号缓存解析结果:库只在换歌时变,每拍都来问也只是一次 stat。
-func sodaPreloadPreview(artist, title string, mrDuration float64) (sodaPreview, bool) {
+func sodaPreloadPreview(artist, title, album string, mrDuration float64) (sodaPreview, bool) {
 	want := loosenEnrichKey(artist + "|" + title)
 	if want == "|" {
 		return sodaPreview{}, false
 	}
+	var cands []sodaPreviewCandidate
 	for _, t := range sodaPreloadIndex() {
 		if t.previewDurMs <= 0 || loosenEnrichKey(t.upcoming.artist+"|"+t.upcoming.title) != want {
 			continue
 		}
-		if p, ok := sodaPreviewFromMillis(t.previewStartMs, t.previewDurMs, t.fullMs); ok && sodaPreviewMatches(mrDuration, p) {
-			return p, true
+		if p, ok := sodaPreviewFromMillis(t.previewStartMs, t.previewDurMs, t.fullMs); ok {
+			cands = append(cands, sodaPreviewCandidate{p: p, album: t.upcoming.album, at: t.at})
 		}
 	}
-	return sodaPreview{}, false
+	return sodaPickLocalPreview(cands, album, mrDuration)
 }
 
 func sodaPreloadIndex() []sodaPreloadedTrack {

@@ -68,6 +68,87 @@ func TestSodaPickPreview(t *testing.T) {
 	}
 }
 
+// 同名的录音室版和现场版:专辑对得上的优先;剩下的取缓存建得最晚的那条,同一刻建的几条换算不一样就没结论
+// (队列缓存不记建立时刻,都是 0)。
+func TestSodaPickLocalPreview(t *testing.T) {
+	studio := sodaPreviewCandidate{p: sodaPreview{StartSecs: 0, DurSecs: 30.047, FullSecs: 221.707}, album: "爱爱爱", at: 100}
+	live := sodaPreviewCandidate{p: sodaPreview{StartSecs: 113.088, DurSecs: 30.001, FullSecs: 277.6}, album: "This Love Live 2007", at: 200}
+	queued := func(c sodaPreviewCandidate) sodaPreviewCandidate {
+		c.at = 0
+		return c
+	}
+	liveSameMoment := live
+	liveSameMoment.at = studio.at
+	compilation := studio
+	compilation.album = "精选"
+	sameStartLonger := studio
+	sameStartLonger.p.FullSecs = 240
+	sameFullLater := studio
+	sameFullLater.p.StartSecs = 50
+	liveNoAlbum := live
+	liveNoAlbum.album = ""
+	live60 := live
+	live60.p.DurSecs = 60
+	none := sodaPreview{}
+	cases := []struct {
+		name  string
+		cands []sodaPreviewCandidate
+		album string
+		mr    float64
+		want  sodaPreview
+		ok    bool
+	}{
+		{"专辑对得上的那条排在后面", []sodaPreviewCandidate{studio, live}, "This Love Live 2007", 30, live.p, true},
+		{"专辑宽松比对:繁简", []sodaPreviewCandidate{studio, live}, "愛愛愛", 30, studio.p, true},
+		{"专辑宽松比对:大小写", []sodaPreviewCandidate{queued(studio), queued(live)}, "this love live 2007", 30, live.p, true},
+		{"专辑对得上的建得早也取它", []sodaPreviewCandidate{studio, live}, "爱爱爱", 30, studio.p, true},
+		{"没报专辑,取建得最晚的", []sodaPreviewCandidate{studio, live}, "", 30, live.p, true},
+		{"建得最晚的排在前面", []sodaPreviewCandidate{live, studio}, "", 30, live.p, true},
+		{"专辑都对不上,取建得最晚的", []sodaPreviewCandidate{studio, live}, "别的专辑", 30, live.p, true},
+		{"最晚的那一刻有两个版本", []sodaPreviewCandidate{studio, liveSameMoment}, "", 30, none, false},
+		{"队列缓存按专辑挑", []sodaPreviewCandidate{queued(studio), queued(live)}, "This Love Live 2007", 30, live.p, true},
+		{"队列缓存没报专辑,分不出来", []sodaPreviewCandidate{queued(studio), queued(live)}, "", 30, none, false},
+		{"换算一样的几条不算分不出来", []sodaPreviewCandidate{queued(studio), queued(compilation)}, "", 30, studio.p, true},
+		{"起点一样、整首不一样", []sodaPreviewCandidate{queued(studio), queued(sameStartLonger)}, "", 30, none, false},
+		{"整首一样、起点不一样", []sodaPreviewCandidate{queued(studio), queued(sameFullLater)}, "", 30, none, false},
+		{"没报专辑时专辑为空的不算对上", []sodaPreviewCandidate{queued(studio), queued(liveNoAlbum)}, "", 30, none, false},
+		{"试听段长度对不上的不算候选", []sodaPreviewCandidate{queued(studio), queued(live60)}, "", 30, studio.p, true},
+		{"专辑对得上的那条试听段长度对不上", []sodaPreviewCandidate{studio, live60}, "This Love Live 2007", 30, studio.p, true},
+		{"报的是整首", []sodaPreviewCandidate{studio, live}, "This Love Live 2007", 277.6, none, false},
+		{"没有候选", nil, "爱爱爱", 30, none, false},
+	}
+	for _, c := range cases {
+		got, ok := sodaPickLocalPreview(c.cands, c.album, c.mr)
+		if ok != c.ok || got != c.want {
+			t.Errorf("%s: 得到 %+v ok=%v,want %+v ok=%v", c.name, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+// 队列缓存里同名两个版本:按播放器报的专辑挑;分不出来就交给后面(这里搜索也落空)。
+func TestLiveAppSodaPreviewLocalQueuePicksAlbum(t *testing.T) {
+	studio := sodaTestTrack("歌手与模特儿", "方大同", "爱爱爱", 221707, 1, 0)
+	studio["preview"] = map[string]any{"start": 0, "duration": 30047}
+	live := sodaTestTrack("歌手与模特儿", "方大同", "This Love Live 2007", 277600, 1, 0)
+	live["preview"] = map[string]any{"start": 113088, "duration": 30001}
+	resetSodaLocalIndex(t, writeTestSodaQueue(t, []map[string]any{studio, live}))
+	resetSodaPreviewSearch(t, func(context.Context, string, string, string, float64) (sodaPreview, bool) {
+		return sodaPreview{}, false
+	})
+
+	start, full, known, _ := liveAppSodaPreview(sodaMusicBundleID, "歌手与模特儿", "方大同", "This Love Live 2007", 30)
+	if !known || start != 113.088 || full != 277.6 {
+		t.Fatalf("报的是现场版的专辑:start %v full %v known %v", start, full, known)
+	}
+	start, full, known, _ = liveAppSodaPreview(sodaMusicBundleID, "歌手与模特儿", "方大同", "爱爱爱", 30)
+	if !known || start != 0 || full != 221.707 {
+		t.Fatalf("报的是录音室版的专辑:start %v full %v known %v", start, full, known)
+	}
+	if _, ok := sodaLocalPreview("方大同", "歌手与模特儿", "", 30); ok {
+		t.Error("没报专辑、两个版本试听段又不一样:队列缓存不该自己挑")
+	}
+}
+
 // 本地队列里有这首(推荐流里的歌):同步命中,交回试听段起点与整首时长,并发布给 App(按原始标签)。
 func TestLiveAppSodaPreviewFromLocalQueue(t *testing.T) {
 	tr := sodaTestTrack("一分之二", "HUSH|孙盛希", "出没地带", 282801, 1, 0)
@@ -135,7 +216,7 @@ func TestLiveAppSodaPreviewViaSearch(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		sodaPreviewMu.Lock()
-		_, done := sodaPreviewCache[normLoose("王力宏")+"|"+normLoose("花田错")]
+		_, done := sodaPreviewCache[sodaPreviewSearchKey("王力宏", "花田错", "盖世英雄")]
 		sodaPreviewMu.Unlock()
 		if done || time.Now().After(deadline) {
 			break

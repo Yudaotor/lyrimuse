@@ -91,13 +91,13 @@ func liveAppSodaPreview(bundle, rawTitle, rawArtist, rawAlbum string, duration f
 	if bundle != sodaMusicBundleID {
 		return 0, 0, false, false
 	}
-	title, artist := cleanMediaTag(rawTitle), cleanMediaTag(rawArtist)
-	p, ok := sodaPreviewFor(artist, title, cleanMediaTag(rawAlbum), duration, func(found sodaPreview) {
+	title, artist, album := cleanMediaTag(rawTitle), cleanMediaTag(rawArtist), cleanMediaTag(rawAlbum)
+	p, ok := sodaPreviewFor(artist, title, album, duration, func(found sodaPreview) {
 		noteSodaPreviewKnown(artist, title, found)
 		publishPlayerPreviewFix(bundle, rawTitle, rawArtist, found)
 	})
 	if !ok {
-		return 0, 0, false, sodaPreviewLookupPending(artist, title, duration)
+		return 0, 0, false, sodaPreviewLookupPending(artist, title, album, duration)
 	}
 	noteSodaPreviewKnown(artist, title, p)
 	publishPlayerPreviewFix(bundle, rawTitle, rawArtist, p)

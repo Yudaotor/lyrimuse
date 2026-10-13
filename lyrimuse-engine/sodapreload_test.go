@@ -144,14 +144,19 @@ func TestSodaUpcomingFallsBackToPreload(t *testing.T) {
 
 // testSodaPreviewRecord 拼一条带试听段(preview{start,duration},毫秒)的缓存记录。
 func testSodaPreviewRecord(id, name, artist string, durMs, pvStart, pvDur uint32) []byte {
+	return testSodaAlbumPreviewRecord(id, name, artist, "专辑", durMs, pvStart, pvDur, uint32(time.Now().Unix()))
+}
+
+// testSodaAlbumPreviewRecord 同 testSodaPreviewRecord,专辑名和缓存建立的时刻(秒)自己给。
+func testSodaAlbumPreviewRecord(id, name, artist, album string, durMs, pvStart, pvDur, at uint32) []byte {
 	playable := mpDef('C', []string{"id", "name", "artists", "album", "duration", "preview"},
 		mpStr(id), mpStr(name), mpArr(mpDef('D', []string{"id", "name"}, mpStr("a"), mpStr(artist))),
-		mpDef('E', []string{"id", "name"}, mpStr("b"), mpStr("专辑")), mpU32(durMs),
+		mpDef('E', []string{"id", "name"}, mpStr("b"), mpStr(album)), mpU32(durMs),
 		mpDef('F', []string{"start", "duration"}, mpU32(pvStart), mpU32(pvDur)))
 	detail := mpDef('B', []string{"video_model", "playable"}, []byte{0xc0}, playable)
 	info := mpDef('A', []string{"trackId", "urls", "mediaDetail"}, mpStr(id), mpArr(), detail)
 	return mpDef('@', []string{"resourceId", "info", "headers", "chunkId", "previousAccessTime", "size"},
-		mpStr("v_P_medium"), info, []byte{0x80}, mpStr("x"), mpU32(uint32(time.Now().Unix())), mpU32(1))
+		mpStr("v_P_medium"), info, []byte{0x80}, mpStr("x"), mpU32(at), mpU32(1))
 }
 
 func TestSodaPreviewForReadsPreloadCacheWithoutSearch(t *testing.T) {
@@ -188,7 +193,43 @@ func TestSodaPreviewForReadsPreloadCacheWithoutSearch(t *testing.T) {
 		t.Error("缓存库命中了就不该再发搜索")
 	}
 	// 播放器报的是整首(会员 / 限免):对不上试听段,不换算。
-	if _, ok := sodaPreloadPreview("萧敬腾", "Say a lil something", 209); ok {
+	if _, ok := sodaPreloadPreview("萧敬腾", "Say a lil something", "王妃", 209); ok {
 		t.Error("报的是整首时不该当成试听")
+	}
+}
+
+// 缓存库里同名的录音室版和现场版:按播放器报的专辑挑;没报专辑时取缓存建得最晚的那条。
+func TestSodaPreloadPreviewPicksAlbum(t *testing.T) {
+	now := uint32(time.Now().Unix())
+	raw := append(testSodaAlbumPreviewRecord("1", "歌手与模特儿", "方大同", "爱爱爱", 221707, 0, 30047, now-600),
+		testSodaAlbumPreviewRecord("2", "歌手与模特儿", "方大同", "This Love Live 2007", 277600, 113088, 30001, now-60)...)
+	path := filepath.Join(t.TempDir(), "entries.db")
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := sodaPreloadOverride
+	sodaPreloadOverride = path
+	resetPreloadIndex := func() {
+		sodaPreloadIndexMu.Lock()
+		sodaPreloadIndexMod, sodaPreloadIndexSize, sodaPreloadIndexTrack = time.Time{}, 0, nil
+		sodaPreloadIndexMu.Unlock()
+	}
+	resetPreloadIndex()
+	t.Cleanup(func() {
+		sodaPreloadOverride = old
+		resetPreloadIndex()
+	})
+	resetSodaPreviewSearch(t, func(context.Context, string, string, string, float64) (sodaPreview, bool) {
+		return sodaPreview{}, false
+	})
+
+	if p, ok := sodaPreviewFor("方大同", "歌手与模特儿", "爱爱爱", 30, nil); !ok || p.StartSecs != 0 || p.FullSecs != 221.707 {
+		t.Errorf("报的是录音室版的专辑(缓存建得早):得到 %+v ok=%v", p, ok)
+	}
+	if p, ok := sodaPreloadPreview("方大同", "歌手与模特儿", "This Love Live 2007", 30); !ok || p.StartSecs != 113.088 || p.FullSecs != 277.6 {
+		t.Errorf("报的是现场版的专辑:得到 %+v ok=%v", p, ok)
+	}
+	if p, ok := sodaPreloadPreview("方大同", "歌手与模特儿", "", 30); !ok || p.FullSecs != 277.6 {
+		t.Errorf("没报专辑:取缓存建得最晚的现场版,得到 %+v ok=%v", p, ok)
 	}
 }

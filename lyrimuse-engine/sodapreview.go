@@ -81,8 +81,9 @@ func sodaArtistCandidates(artist string) []string {
 	return out
 }
 
-// sodaLocalPreview 在本地队列缓存里找这首歌的试听段。只收 preview 与播放器报的时长对得上的那条。
-func sodaLocalPreview(artist, title string, mrDuration float64) (sodaPreview, bool) {
+// sodaLocalPreview 在本地队列缓存里找这首歌的试听段,挑法见 sodaPickLocalPreview。队列缓存不记哪一条是正在放的,
+// 同名的几个版本分不出来时没结论,交给音频缓存库和搜索。
+func sodaLocalPreview(artist, title, album string, mrDuration float64) (sodaPreview, bool) {
 	sodaLocalMu.Lock()
 	refreshSodaLocalIndexLocked()
 	var ents []sodaLocalTrack
@@ -92,15 +93,64 @@ func sodaLocalPreview(artist, title string, mrDuration float64) (sodaPreview, bo
 		}
 	}
 	sodaLocalMu.Unlock()
+	var cands []sodaPreviewCandidate
 	for _, e := range ents {
 		if e.Preview == nil {
 			continue
 		}
-		if p, ok := sodaPreviewFromMillis(e.Preview.Start, e.Preview.Duration, e.Duration); ok && sodaPreviewMatches(mrDuration, p) {
-			return p, true
+		if p, ok := sodaPreviewFromMillis(e.Preview.Start, e.Preview.Duration, e.Duration); ok {
+			cands = append(cands, sodaPreviewCandidate{p: p, album: e.Album.Name})
 		}
 	}
-	return sodaPreview{}, false
+	return sodaPickLocalPreview(cands, album, mrDuration)
+}
+
+// sodaPreviewCandidate:本机记录里一条同歌手、同歌名的曲目的试听段。at 是它在音频缓存库里建立的时刻(秒),队列缓存的为 0。
+type sodaPreviewCandidate struct {
+	p     sodaPreview
+	album string
+	at    int64
+}
+
+// sodaPickLocalPreview 从本机记录(队列缓存 / 音频缓存库)的同名曲目里给这一拍挑试听段,纯函数。只看试听段跟播放器报的
+// 时长对得上的;其中有专辑对得上的,就只在这几条里挑 —— 同名的录音室版和现场版试听段一样长,只有专辑分得开,
+// 搜索那条路(sodaPickPreview)同样专辑优先。剩下的取缓存建得最晚的那条(正在放的这首,缓存多半是刚建的);
+// 同一刻建的几条换算不一样就没结论。队列缓存不记建立时刻(都是 0),它那边同名几条换算不一样时一律没结论。
+func sodaPickLocalPreview(cands []sodaPreviewCandidate, album string, mrDuration float64) (sodaPreview, bool) {
+	wantAlbum := normLoose(album)
+	var fit, sameAlbum []sodaPreviewCandidate
+	for _, c := range cands {
+		if !sodaPreviewMatches(mrDuration, c.p) {
+			continue
+		}
+		fit = append(fit, c)
+		if wantAlbum != "" && normLoose(c.album) == wantAlbum {
+			sameAlbum = append(sameAlbum, c)
+		}
+	}
+	if len(sameAlbum) > 0 {
+		fit = sameAlbum
+	}
+	if len(fit) == 0 {
+		return sodaPreview{}, false
+	}
+	latest := fit[0]
+	for _, c := range fit[1:] {
+		if c.at > latest.at {
+			latest = c
+		}
+	}
+	for _, c := range fit {
+		if c.at == latest.at && !sodaPreviewSame(c.p, latest.p) {
+			return sodaPreview{}, false
+		}
+	}
+	return latest.p, true
+}
+
+// sodaPreviewSame:两条换算的起点、整首时长都一样。
+func sodaPreviewSame(a, b sodaPreview) bool {
+	return a.StartSecs == b.StartSecs && a.FullSecs == b.FullSecs
 }
 
 type sodaPreviewCacheEntry struct {
@@ -138,17 +188,17 @@ func sodaPreviewFor(artist, title, album string, mrDuration float64, onSearchFou
 	if mrDuration <= 0 || strings.TrimSpace(title) == "" {
 		return sodaPreview{}, false
 	}
-	if p, ok := sodaLocalPreview(artist, title, mrDuration); ok {
+	if p, ok := sodaLocalPreview(artist, title, album, mrDuration); ok {
 		return p, true
 	}
 	if mrDuration > sodaPreviewMaxSearchSecs {
 		return sodaPreview{}, false
 	}
 	// 点播的歌不在队列缓存里,但一定在客户端的音频缓存库里;曲目信息已经问到时同步查得到,不用等搜索(见 sodapreload.go)。
-	if p, ok := sodaPreloadPreview(artist, title, mrDuration); ok {
+	if p, ok := sodaPreloadPreview(artist, title, album, mrDuration); ok {
 		return p, true
 	}
-	key := normLoose(artist) + "|" + normLoose(title)
+	key := sodaPreviewSearchKey(artist, title, album)
 	sodaPreviewMu.Lock()
 	e, cached := sodaPreviewCache[key]
 	if cached && (e.found || time.Since(e.at) < sodaPreviewRetryAfter(e.misses)) {
@@ -190,6 +240,12 @@ func sodaPreviewFor(artist, title, album string, mrDuration float64, onSearchFou
 		sodaPreviewMu.Unlock()
 	}()
 	return sodaPreview{}, false
+}
+
+// sodaPreviewSearchKey:搜索结果按歌手、歌名、专辑记。挑哪一条要看专辑(sodaPickPreview),同名的另一个版本得另搜,
+// 不能拿上一个版本搜到的试听段。
+func sodaPreviewSearchKey(artist, title, album string) string {
+	return normLoose(artist) + "|" + normLoose(title) + "|" + normLoose(album)
 }
 
 // sodaSearchPreview 按曲名搜一次,在过了身份闸、preview 又对得上播放器时长的候选里挑一条。
@@ -321,9 +377,9 @@ func sodaPreviewSessionBackfill(bundle, artist, title string, sessDur, curDur fl
 // (sodaPreviewTypicalLength)、又没有证据说这首整首就这么长(sodaFullLengthKnown)。没结论时先别按这一拍的时长
 // 解析歌词、建条目、记收听(见 poller 的 SodaPreviewPending):按 30s 去比缓存里几分钟的曲长,会另开一个「时长变体」
 // 重新解析,挑出来的多半是凑数的歌词;会话时长记成 30s,听满一半就算一次收听(09 章决策 240)。
-func sodaPreviewLookupPending(artist, title string, mrDuration float64) bool {
+func sodaPreviewLookupPending(artist, title, album string, mrDuration float64) bool {
 	sodaPreviewMu.Lock()
-	inflight := sodaPreviewInflight[normLoose(artist)+"|"+normLoose(title)]
+	inflight := sodaPreviewInflight[sodaPreviewSearchKey(artist, title, album)]
 	sodaPreviewMu.Unlock()
 	if inflight {
 		return true
