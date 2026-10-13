@@ -1497,6 +1497,11 @@ func needsLyricsFirstFill(e enrichEntry) bool {
 	if e.Lyrics != "" || e.ManualLyrics || e.Instrumental {
 		return false
 	}
+	// 落成"没歌词"的那一轮是按别的时长搜的(开播那一拍播放器报错了时长、同一次播放里才改正):那一轮的结论不作数,
+	// 不等退避、这一拍就按现在的时长补一次。只认还没补过空的;补完决策记录记的是现在的时长,不会反复触发。见 09 章决策 236。
+	if e.LyricsFillCount == 0 && e.LyricsDecision != nil && durationMismatch(e.LyricsDecision.DurationSecs, e.DurationSecs) {
+		return true
+	}
 	// 从"上次补空尝试"和"当初解析"里取更晚的那个当起算点,理由跟 needsLyricsRetry 同款:
 	// 免得刚写进缓存的新条目立刻又被重搜一遍。
 	base := e.LyricsFillTS

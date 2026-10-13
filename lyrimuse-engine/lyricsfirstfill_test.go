@@ -70,6 +70,33 @@ func TestNeedsLyricsFirstFill(t *testing.T) {
 			want: false,
 		},
 		{
+			// 开播那一拍汽水报了 200 秒、实际 105.4 秒:首次解析按错的时长什么也没选出来,改正后马上补(09 章决策 236)。
+			name: "没歌词的结论是按别的时长搜的 → 刚解析完也马上补",
+			e:    enrichEntry{TS: now - 10, DurationSecs: 105.378, LyricsDecision: &lyricsDecision{DurationSecs: 199.779}},
+			want: true,
+		},
+		{
+			name: "时长只差几秒 → 照常等退避",
+			e:    enrichEntry{TS: now - 10, DurationSecs: 105.378, LyricsDecision: &lyricsDecision{DurationSecs: 107}},
+			want: false,
+		},
+		{
+			name: "时长对不上但已经补过一次 → 照常等退避,不反复触发",
+			e: enrichEntry{TS: now - 10, DurationSecs: 105.378, LyricsFillCount: 1, LyricsFillTS: now - 10,
+				LyricsDecision: &lyricsDecision{DurationSecs: 199.779}},
+			want: false,
+		},
+		{
+			name: "决策记录没记时长(MV 那种 0) → 照常等退避",
+			e:    enrichEntry{TS: now - 10, DurationSecs: 105.378, LyricsDecision: &lyricsDecision{}},
+			want: false,
+		},
+		{
+			name: "时长对不上但已经有歌词 → 不是这条路径的事",
+			e:    enrichEntry{TS: now - 10, Lyrics: "[00:01.00]x", DurationSecs: 105.378, LyricsDecision: &lyricsDecision{DurationSecs: 199.779}},
+			want: false,
+		},
+		{
 			// TS 比 LyricsFillTS 更晚(条目被重写过)时以更晚的那个为起算点。
 			name: "起算点取 TS 和 LyricsFillTS 里更晚的那个",
 			e:    enrichEntry{TS: now - 60, LyricsFillCount: 0, LyricsFillTS: now - 10*day},

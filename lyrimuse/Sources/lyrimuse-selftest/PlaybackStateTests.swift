@@ -168,7 +168,26 @@ func runPlaybackStateTests() {
     appleBefore.bundle = "com.apple.Music"
     var appleLag = neteaseLag
     appleLag.bundle = "com.apple.Music"
-    expectEqual(T.isTorn(current: appleBefore, next: appleLag), false, "撕裂快照: 只有时长没跟上的这一种只认网易云")
+    expectEqual(T.isTorn(current: appleBefore, next: appleLag), false, "撕裂快照: 只有时长没跟上的这一种只认网易云和汽水")
+    // 真机:汽水暂停着从 step.jad依加《夜奔》换到 Michael Jackson,第一份整包歌手、专辑已换,时长还是《夜奔》的(09 章决策 237)。
+    let soda = PlaybackPlayer.soda.bundleIdentifier
+    let sodaBefore = T.Fields(title: "夜奔", artist: "step.jad依加", album: "夜奔", bundle: soda, duration: 199.779, isRadio: false)
+    let sodaLag = T.Fields(title: "Man In The Mirror Mix", artist: "Michael Jackson", album: "He's The King, Im The DJ",
+                           bundle: soda, duration: 199.779, isRadio: false)
+    expectEqual(T.isTorn(current: sodaBefore, next: sodaLag), true, "撕裂快照: 汽水换了歌、时长还是上一首的")
+    var sodaReal = sodaLag
+    sodaReal.duration = 105.378
+    expectEqual(T.isTorn(current: sodaBefore, next: sodaReal), false, "撕裂快照: 汽水时长跟上来就是真换歌")
+    for previewSecs in [30.0, 60.0, 60.024] {
+        var a = sodaBefore, b = sodaLag
+        a.duration = previewSecs
+        b.duration = previewSecs
+        expectEqual(T.isTorn(current: a, next: b), false, "撕裂快照: 汽水连着两首 \(previewSecs) 秒试听不判")
+    }
+    var sodaHold = T()
+    expectEqual(sodaHold.decide(current: sodaBefore, next: sodaLag, now: t0), .holdStarted, "撕裂快照: 汽水时长没跟上先按住")
+    expectEqual(sodaHold.decide(current: sodaBefore, next: sodaReal, now: t0.addingTimeInterval(0.5)), .accept,
+                "撕裂快照: 汽水时长跟上来立即采纳")
     var neteaseNoDuration = neteaseBefore
     neteaseNoDuration.duration = 0
     var neteaseLagNoDuration = neteaseLag
