@@ -43,8 +43,8 @@ public struct MediaControlSnapshot: Decodable {
     public var capturedAt: Date? = nil
     /// 这一条是 MV。Apple Music 的 JXA 快照按 Music.app 的 `media kind` == "music video" 填,Kaset 的快照按它报的封面与
     /// 两份时长填(`KasetPlayerInfo.isMusicVideo`);media-control 的 `mediaType` 对 MV 也报 Music,认不出来(见 02 章决策 33)。
-    /// 用法见 `LocalPlaybackSource.isMusicVideo`。`with…` 系列副本不带它:那几条路(署名 / 专辑 / 试听段 / 电台 / 空档保持)
-    /// 都不经过 Apple Music 的 MV 和 Kaset。
+    /// 用法见 `LocalPlaybackSource.isMusicVideo`。`with…` 系列副本里只有 `withDuration` 带它(Apple Music 的快照补时长时经过它);
+    /// 其余几条路(署名 / 专辑 / 试听段 / 电台 / 空档保持)都不经过 Apple Music 的 MV 和 Kaset,不带。
     public var isMusicVideo: Bool? = nil
     /// 播放器说在放(或正要放),声音却还没走起来:加载、广告、缓冲卡住。这时 `playing` 是 false、位置停着,
     /// `LocalPlaybackSource` 据此把轮询留在播放中的节拍,声音一走起来就接上(这几种时候播放器不一定发系统通知,
@@ -186,13 +186,16 @@ public struct MediaControlSnapshot: Decodable {
     ///   显示成「2:29 / 56:30」。真曲长由引擎从 Apple 目录查到、写进歌词缓存,App 在 `LocalPlaybackSource.apply`
     ///   里读出来替换。
     /// - Apple Music 的 AppleScript 快照没有时长时,补上 media-control 报的同一首的时长(`MediaControlClient.fillingMissingAppleDuration`)。
+    ///   那份快照带着 `isMusicVideo`,所以这里要带上它,丢了 MV 会被当成音轨。
     /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
     public func withDuration(_ newDuration: Double) -> MediaControlSnapshot {
-        MediaControlSnapshot(
+        var copy = MediaControlSnapshot(
             title: title, artist: artist, album: album, duration: newDuration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
+        copy.isMusicVideo = isMusicVideo
+        return copy
     }
 
     /// 汽水非会员试听换回原曲口径的副本:时长换成整首,位置与原始锚点都加上试听段起点。

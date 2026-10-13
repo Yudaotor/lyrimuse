@@ -2686,6 +2686,10 @@ func runPlaybackPositionTests() {
                     "缺时长: 报 0 跟报空一样,视为没有")
         expectEqual(MediaControlClient.fillingMissingAppleDuration(apple, from: nil).duration == nil, true,
                     "缺时长: 没有系统快照就保持原样")
+        var mv = snap("晴天", "周杰伦", duration: nil, elapsed: 40)
+        mv.isMusicVideo = true
+        expectEqual(MediaControlClient.fillingMissingAppleDuration(mv, from: donor).isMusicVideo, true,
+                    "缺时长: 补时长不丢 MV 标记(Apple Music 的快照按 media kind 填,丢了 MV 会被当成音轨)")
 
         // 补时长那次问到的结论记不记住:问失败 / 问到这首都记;问到别的曲目先不记,问满上限也记,不每拍都起 media-control。
         let key = apple.trackKey
