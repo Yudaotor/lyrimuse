@@ -1789,6 +1789,34 @@ func runNotchTests() {
         expectEqual(root.contains("let changed = inside != hoveringCard || stale"), true,
                     "悬停契约: 对不上时这一次算边沿")
 
+        // 光标:App 在后台,不开后台光标时卡片上的光标归下层前台 App。跟悬停同一份输入、不等进入延迟;
+        // 离开、窗口收走、副本拆掉都要放手,定时器自己也核指针还在不在卡片 / 浮框上。
+        let cursorBody: String = {
+            guard let a = controller.range(of: "private func syncCardCursor()"),
+                  let b = controller.range(of: "private func applyHoverIntent()", range: a.upperBound..<controller.endIndex)
+            else { return "" }
+            return String(controller[a.lowerBound..<b.lowerBound])
+        }()
+        expectEqual(cursorBody.contains("let wants = (cardHovered || editorialHovered) && (window?.isVisible ?? false)")
+                        && cursorBody.contains("BackgroundCursor.setEnabled(true, for: ObjectIdentifier(self))")
+                        && cursorBody.contains("NSCursor.arrow.set()"), true,
+                    "光标契约: 指针在卡片或简介浮框上时打开后台光标、设成箭头")
+        expectEqual(cursorBody.contains("cardCursorTimer?.invalidate()")
+                        && cursorBody.contains("BackgroundCursor.setEnabled(false, for: ObjectIdentifier(self))"), true,
+                    "光标契约: 放手时停定时器、放掉后台光标")
+        expectEqual(cursorBody.contains("guard onCard || onPanel else { releaseCardCursor(); return }"), true,
+                    "光标契约: 定时器发现指针已不在卡片 / 浮框上就放手")
+        expectEqual(controller.contains("cardHovered = expanded\n        syncCardCursor()\n        applyHoverIntent()")
+                        && controller.contains("editorialHovered = hovered\n        syncCardCursor()\n        applyHoverIntent()"), true,
+                    "光标契约: 进出卡片 / 浮框当场同步光标,不等进入延迟")
+        expectEqual(controller.contains("editorialHovered = false\n        syncCardCursor()")
+                        && controller.contains("window?.orderOut(nil)\n        releaseCardCursor()"), true,
+                    "光标契约: 窗口收走、副本拆掉时放手")
+        let backgroundCursor = read("BackgroundCursor.swift")
+        expectEqual(backgroundCursor.contains("private static var holders: Set<ObjectIdentifier> = []")
+                        && backgroundCursor.contains("guard isOn != wasOn,"), true,
+                    "光标契约: 后台光标按持有方记,最后一个放手才关")
+
         // 层内停表:NotchLyricsView 自己属性上的 @Environment 读到的是根上的值,拿不到 body 里
         // NotchCardLayerActive 设的层值(同构复现:属性上读 63 次/2 秒不停,子视图里读 0 次)。
         // 只看 NotchLyricsView 结构体本身:NotchScrubber 这类独立子视图在自己的属性上读是对的。

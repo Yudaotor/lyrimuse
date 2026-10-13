@@ -1549,7 +1549,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             window.acceptsMouseMovedEvents = true
             window.ignoresMouseEvents = false
             // App 在后台,不开这个 `NSCursor.set()` 不生效,见 `BackgroundCursor`。
-            BackgroundCursor.setEnabled(true)
+            BackgroundCursor.setEnabled(true, for: ObjectIdentifier(self))
             // 前台 App 重绘时会把光标换回它自己的(真机上是终端的 I 形),指针停着不动也会被改掉;
             // 压在边上的这段时间定时重设。
             let timer = Timer(timeInterval: 0.1, repeats: true) { _ in
@@ -1568,7 +1568,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         edgeCursorTimer = nil
         restorePassthroughIfIdle()
         NSCursor.arrow.set()
-        BackgroundCursor.setEnabled(false)
+        BackgroundCursor.setEnabled(false, for: ObjectIdentifier(self))
     }
 
     /// 拖动中每一帧:按 `OverlayWidthDrag.resizedFrame` 算新 frame,高度 / y 沿用此刻的窗口(拖的

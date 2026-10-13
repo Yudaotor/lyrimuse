@@ -686,13 +686,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 展开态头部点歌名 / 专辑名 / 歌手名。卡片从屏幕顶边垂下来、水平居中,所以卡片在屏幕上的矩形按窗口顶边与
     /// 卡片宽高直接算。这一类没有简介时什么都不做(入口本来也不可点)。
     func toggleEditorial(_ kind: EditorialCard.Kind) {
-        guard let window, let card = EditorialNotesStore.shared.card(kind) else { return }
-        let width = isExpanded ? expandedCardWidth : steadyCardWidth
-        let frame = NSRect(x: window.frame.midX - width / 2, y: window.frame.maxY - cardHeight,
-                           width: width, height: cardHeight)
+        guard let window, let frame = cardScreenFrame, let card = EditorialNotesStore.shared.card(kind) else { return }
         NotchEditorialPanel.shared.toggle(card: card, cardFrame: frame, owner: window) { [weak self] hovered in
             self?.setEditorialHovered(hovered)
         }
+    }
+
+    /// 卡片此刻在屏幕上的矩形:卡片从窗口顶边垂下来、水平居中。
+    private var cardScreenFrame: NSRect? {
+        guard let window else { return nil }
+        let width = isExpanded ? expandedCardWidth : steadyCardWidth
+        return NSRect(x: window.frame.midX - width / 2, y: window.frame.maxY - cardHeight,
+                      width: width, height: cardHeight)
     }
 
     /// 灵动岛开着且头部画歌名、歌手名或专辑名时,向 `EditorialNotesStore` 登记要预取(入口只在有简介时可点,
@@ -790,6 +795,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
     func setExpandedFromWindow(_ expanded: Bool) {
         cardHovered = expanded
+        syncCardCursor()
         applyHoverIntent()
     }
 
@@ -797,6 +803,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     func setEditorialHovered(_ hovered: Bool) {
         guard hovered != editorialHovered else { return }
         editorialHovered = hovered
+        syncCardCursor()
         applyHoverIntent()
     }
 
@@ -805,6 +812,39 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var editorialHovered = false
     /// 控制器此刻认不认为指针在卡片上。`NotchWindowRoot.updateHover` 拿它跟自己的边沿记忆对账。
     var isCardHovered: Bool { cardHovered }
+
+    /// 指针在卡片或简介浮框上时光标钉成箭头。App 在后台,不开 `BackgroundCursor` 时 `NSCursor.set()` 不生效,
+    /// 光标停在下层前台 App 设的样子(终端上是 I 形);前台 App 重绘又会把它换回去,所以停着期间定时重设。
+    /// 跟悬停同一份输入、不等进入延迟:光标跟着卡片的边界走。见 05 章决策 78。
+    private var cardCursorTimer: Timer?
+
+    private func syncCardCursor() {
+        let wants = (cardHovered || editorialHovered) && (window?.isVisible ?? false)
+        guard wants != (cardCursorTimer != nil) else { return }
+        guard wants else { releaseCardCursor(); return }
+        BackgroundCursor.setEnabled(true, for: ObjectIdentifier(self))
+        NSCursor.arrow.set()
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reassertCardCursor() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        cardCursorTimer = timer
+    }
+
+    /// 「离开」事件丢了也不能一直改别人窗口上的光标:指针已经不在卡片和浮框上就放手。
+    private func reassertCardCursor() {
+        let mouse = NSEvent.mouseLocation
+        let onCard = (window?.isVisible ?? false) && (cardScreenFrame?.contains(mouse) ?? false)
+        let onPanel = NotchEditorialPanel.shared.frame(ifOwner: window)?.contains(mouse) ?? false
+        guard onCard || onPanel else { releaseCardCursor(); return }
+        NSCursor.arrow.set()
+    }
+
+    private func releaseCardCursor() {
+        cardCursorTimer?.invalidate()
+        cardCursorTimer = nil
+        BackgroundCursor.setEnabled(false, for: ObjectIdentifier(self))
+    }
 
     private func applyHoverIntent() {
         let expanded = cardHovered || editorialHovered
@@ -1161,6 +1201,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         pendingHoverWork = nil
         cardHovered = false
         editorialHovered = false
+        syncCardCursor()
         clearTrackDrop()
         guard hoverExpanded else { return }
         hoverExpanded = false
@@ -1363,6 +1404,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     func teardown() {
         cancelPendingHide()
         window?.orderOut(nil)
+        releaseCardCursor()
         isPlayingObserver?.cancel()
         isPlayingObserver = nil
         adBreakObserver?.cancel()

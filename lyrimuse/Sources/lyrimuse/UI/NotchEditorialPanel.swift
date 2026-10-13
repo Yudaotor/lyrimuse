@@ -73,6 +73,12 @@ final class NotchEditorialPanel {
         close()
     }
 
+    /// 这扇窗(`owner`)开着的浮框在屏幕上的矩形;没开着或不是它开的为 nil。
+    func frame(ifOwner owner: NSWindow?) -> NSRect? {
+        guard let panel, ownerWindow === owner else { return nil }
+        return panel.frame
+    }
+
     func close() {
         for monitor in monitors { NSEvent.removeMonitor(monitor) }
         monitors = []

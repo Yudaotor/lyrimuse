@@ -2138,7 +2138,7 @@ func runSourceContractTests() {
             // 后台光标开关与重设定时器只在压着边的那段时间开着,还原时一起收掉。
             if let a = ctrl.range(of: "private func releaseEdgeCapture()"), let b = ctrl.range(of: "private func applyWidthDrag(") {
                 let body = String(ctrl[a.upperBound..<b.lowerBound])
-                expectEqual(body.contains("BackgroundCursor.setEnabled(false)") && body.contains("edgeCursorTimer?.invalidate()"), true,
+                expectEqual(body.contains("BackgroundCursor.setEnabled(false, for: ObjectIdentifier(self))") && body.contains("edgeCursorTimer?.invalidate()"), true,
                             "悬浮调宽: 离开边缘时关掉后台光标并停掉重设定时器")
             } else {
                 expectEqual(true, false, "悬浮调宽: 找不到 releaseEdgeCapture / applyWidthDrag(改名了?)")
