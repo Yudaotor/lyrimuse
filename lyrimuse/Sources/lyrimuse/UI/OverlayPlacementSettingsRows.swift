@@ -29,6 +29,25 @@ struct OverlayPlacementSettingsRows: View {
             }
             // 自绘的一行不会自动挂搜索高亮(只有 SettingsRow / SettingsCardHeader 会),手挂。
             .settingsSearchHighlight(title: L10n.t("位置"))
+            // 标题和两档同一行、说明另起一行铺满:浮层宽 420,说明放在标题下面会被分段控件挤成一窄条。
+            SettingsRawRow {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text(L10n.t("所在屏幕"))
+                        Spacer(minLength: 8)
+                        SettingsPillSegmentedControl(
+                            selection: $settings.overlayFollowsActiveScreen,
+                            options: [false, true],
+                            label: { $0 ? L10n.t("跟随当前窗口") : L10n.t("固定") },
+                            minWidth: 56)
+                    }
+                    Text(L10n.t("跟随当前窗口：你在另一块屏幕上操作窗口时，悬浮歌词跟过去，在屏幕里的相对位置不变。"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .settingsSearchHighlight(title: L10n.t("所在屏幕"))
         }
     }
 }

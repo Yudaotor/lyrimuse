@@ -46675,6 +46675,75 @@
           }
         }
       }
+    },
+    "所在屏幕" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所在屏幕"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所在螢幕"
+          }
+        }
+      }
+    },
+    "跟随当前窗口" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow Active Window"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟随当前窗口"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟隨目前視窗"
+          }
+        }
+      }
+    },
+    "跟随当前窗口：你在另一块屏幕上操作窗口时，悬浮歌词跟过去，在屏幕里的相对位置不变。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow Active Window: when you work in a window on another screen, the floating lyrics move there and keep the same relative position."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟随当前窗口：你在另一块屏幕上操作窗口时，悬浮歌词跟过去，在屏幕里的相对位置不变。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟隨目前視窗：你在另一塊螢幕上操作視窗時，浮動歌詞跟過去，在螢幕裡的相對位置不變。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

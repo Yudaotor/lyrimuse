@@ -163,6 +163,21 @@ public enum OverlayPlacement {
         }
     }
 
+    /// 「跟随当前窗口」把窗口从 `from` 这块屏的可见区搬到 `to` 那块:保持在屏内的相对位置 —— 中心横坐标、顶边离可见区
+    /// 顶边的距离各按可见区宽、高的比例换算 —— 再整个夹进 `to`。所有屏共用这一份相对位置,用户在哪块屏上拖过,换屏后
+    /// 还在那块屏上的同一个相对位置。预设模式不走这里(按 `presetFrame` 在目标屏上重算)。见 04 章决策 63。
+    public static func relocated(frame: CGRect, from: CGRect, to: CGRect) -> CGRect {
+        guard from.width > 0, from.height > 0 else {
+            return CGRect(origin: clamped(frame: frame, into: to), size: frame.size)
+        }
+        let xFraction = (frame.midX - from.minX) / from.width
+        let topFraction = (from.maxY - frame.maxY) / from.height
+        let moved = CGRect(x: to.minX + xFraction * to.width - frame.width / 2,
+                           y: to.maxY - topFraction * to.height - frame.height,
+                           width: frame.width, height: frame.height)
+        return CGRect(origin: clamped(frame: moved, into: to), size: frame.size)
+    }
+
     /// 内容高度变了之后窗口该长成什么样 —— `updateHeight` 的几何本体,抽成纯函数是为了把
     /// "守顶边向下长"和"守底边向上长"两条路一起钉进 selftest。
     ///

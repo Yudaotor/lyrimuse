@@ -1267,6 +1267,24 @@ func runOverlayTests() {
         expectEqual(onExternal?.midX, external.midX, "位置预设: 外接屏上按外接屏居中")
         expectEqual(onExternal?.minY, 956, "位置预设: 外接屏上贴外接屏的底边")
 
+        // 跟随当前窗口:换屏后保持在屏内的相对位置,所有屏共用一份;放不下时夹进目标屏。
+        let builtIn = CGRect(x: 0, y: 70, width: 1470, height: 853)
+        let leftThird = CGRect(x: 1470 * 0.3 - 244, y: 923 - 85 - 120, width: 488, height: 120)
+        let followed = OverlayPlacement.relocated(frame: leftThird, from: builtIn, to: external)
+        expectEqual(abs(followed.midX - (external.minX + 0.3 * external.width)) < 0.001, true,
+                    "跟随当前窗口: 中心横坐标按可见区宽的比例换算")
+        expectEqual(abs((external.maxY - followed.maxY) - 85.0 / 853 * 1440) < 0.001, true,
+                    "跟随当前窗口: 顶边离可见区顶边的距离按可见区高的比例换算")
+        expectEqual(followed.size, leftThird.size, "跟随当前窗口: 不改尺寸")
+        let back = OverlayPlacement.relocated(frame: followed, from: external, to: builtIn)
+        expectEqual(abs(back.minX - leftThird.minX) < 0.001 && abs(back.maxY - leftThird.maxY) < 0.001, true,
+                    "跟随当前窗口: 搬过去再搬回来回到原位")
+        let rightEdge = CGRect(x: 1470 - 488, y: 500, width: 488, height: 120)
+        let narrow = CGRect(x: 2000, y: 0, width: 600, height: 400)
+        let squeezed = OverlayPlacement.relocated(frame: rightEdge, from: builtIn, to: narrow)
+        expectEqual(squeezed.maxX <= narrow.maxX && squeezed.minX >= narrow.minX && squeezed.minY >= narrow.minY
+                    && squeezed.maxY <= narrow.maxY, true, "跟随当前窗口: 靠边的窗口到了窄屏上整个夹进可见区")
+
         // 「自由」模式控制排放卡片上方还是下方,按卡片位置判:卡片上方放得下整个槽位才放上方。
         let slot = OverlayPlacement.controlsSlotHeight
         expectEqual(slot, 30, "控制排翻面: 槽位高 = 胶囊 22 + 上下各 4")

@@ -317,6 +317,8 @@ final class AppSettings: ObservableObject {
         static let notchShowsTrackDrop = "np:notchShowsTrackDrop"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
+        // 悬浮歌词跟不跟着当前窗口换屏,见 overlayFollowsActiveScreen。
+        static let overlayFollowsActiveScreen = "np:overlayFollowsActiveScreen"
         // 悬停时露不露出那排播放控制按钮。默认 true = 改动前的行为。
         static let overlayShowHoverControls = "np:overlayShowHoverControls"
         // 悬浮歌词位置预设,取值见 OverlayPlacementMode。
@@ -1198,6 +1200,11 @@ final class AppSettings: ObservableObject {
     /// 默认 true。
     @Published var overlayShowHoverControls: Bool {
         didSet { defaults.set(overlayShowHoverControls, forKey: Keys.overlayShowHoverControls) }
+    }
+    /// 悬浮歌词「所在屏幕」:false = 固定(待在拖到的那块屏,改动前的行为),true = 跟随当前窗口(有键盘焦点的窗口
+    /// 换到另一块屏时跟过去)。只负责持久化,`LyricsOverlayWindowController` 订阅它自己落位。默认 false。
+    @Published var overlayFollowsActiveScreen: Bool {
+        didSet { defaults.set(overlayFollowsActiveScreen, forKey: Keys.overlayFollowsActiveScreen) }
     }
     /// 悬浮歌词的位置模式:自由拖动 / 顶部居中 / 底部居中(Dock 之上)。
     ///
@@ -2234,6 +2241,7 @@ final class AppSettings: ObservableObject {
             (defaults.object(forKey: Keys.overlayDragNeedsLongPress) as? Bool) ?? false
         overlayShowHoverControls =
             (defaults.object(forKey: Keys.overlayShowHoverControls) as? Bool) ?? true
+        overlayFollowsActiveScreen = defaults.bool(forKey: Keys.overlayFollowsActiveScreen)
         // 默认自由拖动:这是改动前唯一的行为,老用户的窗口不能因为升级自己跑去居中。
         overlayPlacementMode = defaults.string(forKey: Keys.overlayPlacementMode)
             .flatMap(OverlayPlacementMode.init(rawValue:)) ?? .free

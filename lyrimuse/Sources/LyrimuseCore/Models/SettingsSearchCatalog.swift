@@ -321,6 +321,7 @@ public enum SettingsSearchCatalog {
         surface(.overlay, "纯音乐/无歌词时隐藏", kw: ["自动隐藏", "纯音乐", "无歌词", "没有歌词", "伴奏", "instrumental"], group: "行为"),
         // 「位置」自成一组(工具栏第二行第三颗 / 抽屉「位置」组),标题就是组名,不带 group。
         surface(.overlay, "位置", kw: ["自由", "顶部居中", "底部居中", "Dock", "预设", "对齐"]),
+        surface(.overlay, "所在屏幕", kw: ["屏幕", "多屏", "外接屏", "显示器", "跟随", "跟随当前窗口", "固定"]),
         surface(.overlay, "恢复默认", sub: "不含内容、排版、行为、位置和宽度", kw: ["重置"]),
 
         // ---- 歌词显示 › 灵动岛 ----

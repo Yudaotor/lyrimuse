@@ -695,7 +695,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 240 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 241 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -759,6 +759,7 @@ Every setting in the Settings window, by where it lives: 240 in all. Type a name
 - **Desktop Floating Lyrics**
 - **Width**
 - **Position**
+- **Screen**
 - **Reset to Defaults**: Content, layout, behavior, position and width are left alone
 
 ### Lyrics Display › Floating Lyrics › Theme

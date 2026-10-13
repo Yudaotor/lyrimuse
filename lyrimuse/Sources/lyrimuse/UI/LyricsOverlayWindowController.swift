@@ -469,6 +469,23 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 这一次按住有没有已经给过反馈。同一次按住只给一次,松手清零(cancelPendingPress)。
     private var presetDragRejectedThisPress = false
 
+    /// 「所在屏幕:跟随当前窗口」。真值在 `AppSettings.overlayFollowsActiveScreen`,这里是订阅来的镜像。开着时不借屏、
+    /// 不送回锚点那块屏,换屏只看焦点屏(`NSScreen.main`,有键盘焦点的窗口所在那块屏):只在它**换了**、并且新的那块
+    /// 稳定了 `activeScreenSettleDelay` 之后才搬。按「窗口不在焦点屏上」去判的话,用户把歌词拖到另一块屏,下一秒就会
+    /// 被拽回焦点屏。见 04 章决策 63。
+    private var followsActiveScreen = false
+    private var followsActiveScreenObserver: AnyCancellable?
+    private var activeAppObserver: NSObjectProtocol?
+    private var activeScreenTimer: Timer?
+    /// 上一次跟过去的焦点屏;nil = 还没跟过(刚打开开关 / 刚启动,下一拍无论在哪块屏都跟一次)。
+    private var followedScreenID: String?
+    /// 焦点屏刚换到的那块和换过去的时刻,稳定够久才搬。
+    private var pendingActiveScreen: (id: String, since: Date)?
+    /// 同一个 App 的窗口拖到另一块屏上时系统不发通知,靠这一拍兜底;前台 App 换了的通知让大多数换屏不用等这一拍。
+    private static let activeScreenPollInterval: TimeInterval = 1
+    /// 焦点屏换了之后等多久才搬:快速切几个 App 时不来回闪。
+    private static let activeScreenSettleDelay: TimeInterval = 0.5
+
     convenience init() {
         let size = NSSize(width: AppSettings.shared.overlayWidth, height: overlayDefaultHeight)
         let placement = Self.restoredPlacement(size: size)
@@ -562,6 +579,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                     self.pendingShowHoverControls = nil
                     self.showHoverControls = newValue
                 }
+            }
+
+        // 「所在屏幕」。初值这里接上(当场跟一次焦点屏),之后的切换同样走这条。
+        followsActiveScreenObserver = AppSettings.shared.$overlayFollowsActiveScreen
+            .removeDuplicates()
+            .sink { [weak self] on in
+                self?.setFollowsActiveScreen(on)
             }
 
         // 显示器配置变了(拔插外接屏、改分辨率、改排列、外接屏睡醒)之后对一次账:该救的救、
@@ -1743,6 +1767,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 还是下方要重判,不然可能被菜单栏盖住。(窗口真挪了的话 didMove 那边还会再判一次,判等所以无妨。)
         recomputeControlsBelowCard()
 
+        // 跟随当前窗口:没有"借屏"和"送回锚点那块屏",屏幕变了就在焦点屏上重新落位。
+        if followsActiveScreen {
+            isBorrowingScreen = false
+            followActiveScreen(force: true)
+            return
+        }
+
         // 预设模式:位置由几何推导,对账 = 在该在的那块屏上按预设重算。Dock 改大小 /
         // 换边 / 开关自动隐藏也走这条通知(visibleFrame 变了),所以"Dock 之上"能跟着 Dock 走。
         if placementMode.isPreset {
@@ -1856,6 +1887,84 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 亚像素之内不动 —— 会白白触发一次 didMove → 位置持久化。
         if abs(target.minX - current.minX) < 0.5, abs(target.minY - current.minY) < 0.5 { return }
         window.setFrameOrigin(target.origin)
+    }
+
+    // MARK: - 所在屏幕:跟随当前窗口
+
+    private func setFollowsActiveScreen(_ on: Bool) {
+        followsActiveScreen = on
+        activeScreenTimer?.invalidate()
+        activeScreenTimer = nil
+        if let activeAppObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(activeAppObserver)
+            self.activeAppObserver = nil
+        }
+        followedScreenID = nil
+        pendingActiveScreen = nil
+        guard on else { return }
+        // 跟随模式下锚点就是窗口此刻在哪儿,借屏那套不再适用。
+        isBorrowingScreen = false
+        activeAppObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkActiveScreen() }
+        }
+        let timer = Timer(timeInterval: Self.activeScreenPollInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkActiveScreen() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        activeScreenTimer = timer
+        followActiveScreen(force: true)
+    }
+
+    /// 焦点屏换了没有。换了先记下,稳定 `activeScreenSettleDelay` 再搬;拖着窗口时不动。
+    private func checkActiveScreen(now: Date = Date()) {
+        guard followsActiveScreen, !isDragArmed,
+              let id = NSScreen.main.flatMap(ScreenIdentity.id(of:)) else { return }
+        guard id != followedScreenID else {
+            pendingActiveScreen = nil
+            return
+        }
+        guard let pending = pendingActiveScreen, pending.id == id else {
+            pendingActiveScreen = (id, now)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.activeScreenSettleDelay) { [weak self] in
+                self?.checkActiveScreen()
+            }
+            return
+        }
+        guard now.timeIntervalSince(pending.since) >= Self.activeScreenSettleDelay else { return }
+        followActiveScreen(force: false)
+    }
+
+    /// 把窗口落到焦点屏上:预设模式按预设在那块屏上重算,自由模式按屏内相对位置搬过去
+    /// (`OverlayPlacement.relocated`)。`force`:窗口已经在焦点屏上也重新对一次(屏幕参数变了、刚打开开关)。
+    private func followActiveScreen(force: Bool) {
+        pendingActiveScreen = nil
+        guard let window, let active = NSScreen.main else { return }
+        followedScreenID = ScreenIdentity.id(of: active)
+        let target = active.visibleFrame
+        let current = baseFrame(of: window)
+        let screens = Self.allVisibleFrames()
+        let host = OverlayPlacement.hostVisibleFrame(of: current, screens: screens)
+        let frame: CGRect
+        if placementMode.isPreset {
+            guard let preset = OverlayPlacement.presetFrame(mode: placementMode, size: current.size, visibleFrame: target)
+            else { return }
+            frame = preset
+        } else if let host, host != target {
+            frame = OverlayPlacement.relocated(frame: current, from: host, to: target)
+        } else if host == nil {
+            frame = OverlayPlacement.relocated(frame: current, from: screens.first ?? target, to: target)
+        } else if force, let origin = OverlayPlacement.repositionIfOffscreen(frame: current, screens: screens) {
+            frame = NSRect(origin: origin, size: current.size)
+        } else {
+            return
+        }
+        // 亚像素之内不动 —— 会白白触发一次 didMove → 位置持久化。
+        if abs(frame.minX - current.minX) < 0.5, abs(frame.minY - current.minY) < 0.5 { return }
+        dragReleaseAnchor = nil
+        window.setFrameOrigin(frame.origin)
+        recomputeControlsBelowCard()
     }
 
     private func scheduleSavePosition(_ source: PositionSaveSource) {

@@ -1015,6 +1015,7 @@
 "我的配色主题" = "My Themes";
 "截屏、录屏和屏幕共享均无法捕捉，但你仍可正常看到" = "Screenshots, recordings and screen sharing can't capture it, but you still see it";
 "截屏时隐藏" = "Hide in Screenshots";
+"所在屏幕" = "Screen";
 "所有候选都相同的项：%@" = "Terms identical on every candidate: %@";
 "所有已启用的歌词源请求均失败，可能是网络连接问题，并不代表这首歌曲没有歌词。检查网络后可点按下方的「重试」" = "None of the enabled lyrics sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
 "所有歌词源均无法连接" = "None of the lyrics sources could be reached";
@@ -1994,6 +1995,8 @@
 "跟随「全部播放器」：%@" = "Following “All players”: %@";
 "跟随刘海" = "Match Notch";
 "跟随封面" = "Follow Cover Art";
+"跟随当前窗口" = "Follow Active Window";
+"跟随当前窗口：你在另一块屏幕上操作窗口时，悬浮歌词跟过去，在屏幕里的相对位置不变。" = "Follow Active Window: when you work in a window on another screen, the floating lyrics move there and keep the same relative position.";
 "跟随播放" = "Follow Playback";
 "跟随播放器启动" = "Launch When Your Player Opens";
 "跟随播放器退出" = "Quit With Player";
