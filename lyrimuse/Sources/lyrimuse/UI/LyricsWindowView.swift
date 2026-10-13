@@ -2566,7 +2566,7 @@ struct LyricsWindowView: View {
         .clearGlassCapsule(rim: miniCapsuleRim)
     }
 
-    /// 偏移读数。口径同菜单栏 `offsetMenuTitle`:只报**这首歌**的微调,不含全局基准 ——
+    /// 偏移读数。口径同菜单里的偏移行(`MenuStepperRowView.lyricsOffset`):只报**这首歌**的微调,不含全局基准 ——
     /// 含了的话点「重置」之后数字对不上操作。
     @ViewBuilder
     private func miniOffsetValue(_ trackMs: Int) -> some View {
@@ -4168,7 +4168,7 @@ struct LyricsWindowView: View {
     }
 
     /// 「歌词时间轴」内联行:标签 + 当前值(只显示**这首歌**的微调,不含全局基准 ——
-    /// 口径同菜单栏 offsetMenuTitle 的注释)+ 重置(按需)/−/＋ 三颗小钮。
+    /// 口径同菜单里的偏移行 `MenuStepperRowView.lyricsOffset`)+ 重置(按需)/−/＋ 三颗小钮。
     /// 交互对齐菜单栏面板 offsetControls:**左「−」=延后、右「＋」=提前** —— 那边已经为
     /// 同一个反直觉问题定过稿("想歌词快一点应该点右边");也别换回圆箭头
     /// gobackward/goforward,它们是 Apple 的"快退/快进 15 秒"符号,会一直往"调播放进度"上带。

@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import KeyboardShortcuts
 import LyrimuseCore
 
 // 状态栏那个下拉菜单(从 SwiftUI 搬到 AppKit)。
@@ -90,24 +91,38 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
+        // 排法见 06 章决策 48:偏移在最上面原地调,下面是这首歌的「搜索歌词…」和「快速开关」;
+        // 看歌词的两扇窗一组;设置 / 更新 / 关于 / 帮助一组;退出单独一组。
+        // 能对上全局快捷键的项把用户录的那个组合显示在右侧(`shortcut:`);菜单开着时全局快捷键是停用的
+        // (GlobalHotkeys.pauseWhileMenuTracking),按下去只触发菜单项这一次。
+        //
+        // 没有任何曲目信息(从未播过任何曲目)时偏移和搜索歌词都不显示,不留点了也没意义的项。
+        if !coordinator.title.isEmpty {
+            let offset = NSMenuItem()
+            // 顶层没有勾选列,标题按 16 对齐其余菜单项的文字。
+            offset.view = MenuStepperRowView.lyricsOffset(titleInset: 16)
+            menu.addItem(offset)
+            menu.addItem(action(L10n.t("搜索歌词…"), symbol: "magnifyingglass",
+                                selector: #selector(searchLyrics), shortcut: .lyricsQuickSearchHotkey))
+        }
+
         // ---- 「快速开关」子菜单 ----
-        // 把四个状态开关收进二级子菜单,顶层只留"点一下就发生一件事"的动作
-        // 入口。原来开关和动作混在顶层、靠两条分隔线分区,菜单一共十一项、相当长。
         let quick = NSMenu()
         quick.autoenablesItems = false
         quick.addItem(toggle(L10n.t("显示桌面悬浮歌词"), symbol: "captions.bubble",
                              on: settings.classicOverlayEnabled,
-                             action: #selector(toggleClassicOverlay)))
+                             action: #selector(toggleClassicOverlay), shortcut: .toggleOverlay))
         quick.addItem(toggle(L10n.t("显示灵动岛歌词"), symbol: SurfaceGlyph.notch.rawValue,
                              on: settings.notchOverlayEnabled,
-                             action: #selector(toggleNotchOverlay)))
+                             action: #selector(toggleNotchOverlay), shortcut: .toggleNotchOverlayHotkey))
         // 菜单栏歌词跟上面两个不一样:它没有独立的 WindowController(就画在状态栏那一行
         // 上),所以直接读写 AppSettings 那个布尔值就够。
         quick.addItem(toggle(L10n.t("显示菜单栏歌词"), symbol: "menubar.rectangle",
                              on: settings.showLyricsInMenuBar,
-                             action: #selector(toggleMenuBarLyrics)))
+                             action: #selector(toggleMenuBarLyrics), shortcut: .toggleMenuBarLyricsHotkey))
         // 触控栏歌词:这台 Mac 此刻有触控栏时才有(`TouchBarAvailability`,App 启动时已经开始盯,读它没有副作用)。
         // 跟菜单栏歌词一样只翻 AppSettings 那个布尔值,`TouchBarLyricsController` 盯着它启停,拨开的那一下顺手展开。
+        // 不挂快捷键:那个快捷键是展开 / 收起,这一项翻的是总开关,两件事。
         if TouchBarAvailability.shared.isPresent {
             quick.addItem(toggle(L10n.t("显示触控栏歌词"), symbol: SurfaceGlyph.touchBar.rawValue,
                                  on: settings.showLyricsInTouchBar,
@@ -121,8 +136,16 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
             // 那套"用图标本身表达当前状态"的做法一致。
             quick.addItem(toggle(L10n.t("锁定位置"),
                                  symbol: locked ? "lock.fill" : "lock.open.fill",
-                                 on: locked, action: #selector(toggleLockPosition)))
+                                 on: locked, action: #selector(toggleLockPosition), shortcut: .toggleLockPosition))
         }
+        quick.addItem(.separator())
+        // 译文 / 读音跟同名快捷键一个口径:悬浮歌词、歌词窗口两份一起切,有一处开着就打勾。
+        quick.addItem(toggle(L10n.t("显示译文"), symbol: "character.book.closed",
+                             on: settings.overlayShowTranslation || settings.showTranslation,
+                             action: #selector(toggleTranslation), shortcut: .toggleTranslationHotkey))
+        quick.addItem(toggle(L10n.t("显示读音"), symbol: "textformat.abc",
+                             on: settings.overlayShowRomanization || settings.showRomanization,
+                             action: #selector(toggleRomanization), shortcut: .toggleRomanizationHotkey))
         quick.addItem(.separator())
         settings.syncLaunchAtLoginFromSystem()
         quick.addItem(toggle(L10n.t("开机启动"), symbol: "power",
@@ -130,60 +153,52 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
                              action: #selector(toggleLaunchAtLogin)))
         menu.addItem(submenu(L10n.t("快速开关"), symbol: "switch.2", menu: quick))
 
-        // ---- 「歌词时间轴」子菜单 ----
-        // 跟悬浮窗样式(经典/灵动岛)正交——校准的是"当前这首歌的歌词该提前/延后多少",
-        // 不管哪种样式在显示都适用,所以不收进上面那个"快速开关":它是一组增减操作,不是开关。
-        //
-        // 没有任何曲目信息(从未播过任何曲目)时整个子菜单不显示,不留一个点了也没意义的
-        // 死菜单项。
-        if !coordinator.title.isEmpty {
-            let offset = NSMenu()
-            offset.autoenablesItems = false
-            offset.addItem(action(nudgeTitle(L10n.t("提前")), symbol: "gobackward",
-                                  selector: #selector(nudgeEarlier)))
-            offset.addItem(action(nudgeTitle(L10n.t("延后")), symbol: "goforward",
-                                  selector: #selector(nudgeLater)))
-            // 「重置」清的是这首歌的微调,所以按它出现,不看总和(全局基准非 0、这首歌
-            // 没调过时,摆一个点了什么都不会变的「重置」才是真的坏)。
-            if coordinator.trackLyricsOffsetMs != 0 {
-                offset.addItem(.separator())
-                offset.addItem(action(L10n.t("重置"), symbol: "arrow.counterclockwise",
-                                      selector: #selector(resetOffset)))
-            }
-            menu.addItem(submenu(offsetMenuTitle, symbol: "timer", menu: offset))
-        }
-
-        menu.addItem(.separator())
-        menu.addItem(action(L10n.t("设置…"), symbol: "gearshape",
-                            selector: #selector(openSettings)))
-        menu.addItem(action(L10n.t("歌词管理…"), symbol: "music.note.list",
-                            selector: #selector(openLyricsManager)))
-        // 「歌词窗口」跟上面两项各自单成一组:上面是"配置/管理"(改设置、整理歌词库),
-        // 它是"看歌词"本身 —— 手上正在做的事不一样,不该看起来像同一串。
         menu.addItem(.separator())
         menu.addItem(action(L10n.t("歌词窗口…"), symbol: "text.quote",
-                            selector: #selector(openLyricsWindow)))
-        // 再一条分隔线,把上面"打开某个窗口做配置/管理"这几项,跟下面"检查更新/关于"
-        // 这类"了解一下这个 App 本身"的入口分开(现象是原来四项挤在一起看着乱)。
+                            selector: #selector(openLyricsWindow), shortcut: .openLyricsWindowHotkey))
+        menu.addItem(action(L10n.t("歌词管理…"), symbol: "music.note.list",
+                            selector: #selector(openLyricsManager), shortcut: .openLyricsManagerHotkey))
+
         menu.addItem(.separator())
+        let settingsItem = action(L10n.t("设置…"), symbol: "gearshape",
+                                  selector: #selector(openSettings), shortcut: .openSettingsHotkey)
+        // 没录「打开设置」快捷键时显示系统惯例的 ⌘,。
+        if settingsItem.keyEquivalent.isEmpty {
+            settingsItem.keyEquivalent = ","
+            settingsItem.keyEquivalentModifierMask = .command
+        }
+        menu.addItem(settingsItem)
         // 同「关于」页那张卡片:无 Sparkle 构建里这一项点了没反应,不如不给。
+        // 查到还没装的新版本时换成跟面板底栏同一句提示,点了同样翻到设置的「软件更新」页(06 章决策 46)。
         #if canImport(Sparkle)
-        menu.addItem(action(L10n.t("检查更新…"), symbol: "arrow.triangle.2.circlepath",
-                            selector: #selector(checkForUpdates)))
+        if let update = SparkleUpdaterManager.shared.availableUpdate {
+            menu.addItem(action(String(format: update.downloaded ? L10n.t("%@ 已下载，点按安装") : L10n.t("有新版本 %@"),
+                                       update.version),
+                                symbol: "arrow.down.circle.fill", selector: #selector(openSoftwareUpdate)))
+        } else {
+            menu.addItem(action(L10n.t("检查更新…"), symbol: "arrow.triangle.2.circlepath",
+                                selector: #selector(checkForUpdates)))
+        }
         #endif
-        // 引导可以重来:走完的人后来想重新配一遍(换了播放器、服务被自己关掉了、想重新
-        // 给权限)也得有入口。
-        menu.addItem(action(L10n.t("重新运行引导…"), symbol: "sparkles",
-                            selector: #selector(rerunOnboarding)))
-        // 跟设置「关于」页的「反馈问题」同一个入口,见 FeedbackReporter。
-        menu.addItem(action(L10n.t("反馈问题…"), symbol: "exclamationmark.bubble",
-                            selector: #selector(reportIssue)))
         menu.addItem(action(L10n.t("关于 Lyrimuse"), symbol: "info.circle",
                             selector: #selector(openAbout)))
+        let help = NSMenu()
+        help.autoenablesItems = false
+        // 引导可以重来:走完的人后来想重新配一遍(换了播放器、服务被自己关掉了、想重新
+        // 给权限)也得有入口。
+        help.addItem(action(L10n.t("重新运行引导…"), symbol: "sparkles",
+                            selector: #selector(rerunOnboarding)))
+        // 跟设置「关于」页的「反馈问题」同一个入口,见 FeedbackReporter。引导收尾页那句提示写的是这条路径。
+        help.addItem(action(L10n.t("反馈问题…"), symbol: "exclamationmark.bubble",
+                            selector: #selector(reportIssue)))
+        menu.addItem(submenu(L10n.t("帮助"), symbol: "questionmark.circle", menu: help))
+
         menu.addItem(.separator())
-        menu.addItem(action(L10n.t("退出 Lyrimuse"),
-                            symbol: "rectangle.portrait.and.arrow.right",
-                            selector: #selector(quit)))
+        let quit = action(L10n.t("退出 Lyrimuse"), symbol: "rectangle.portrait.and.arrow.right",
+                          selector: #selector(quit))
+        quit.keyEquivalent = "q"
+        quit.keyEquivalentModifierMask = .command
+        menu.addItem(quit)
     }
 
     // MARK: - 菜单项工厂
@@ -198,12 +213,17 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         return item
     }
 
-    private func action(_ title: String, symbol: String, selector: Selector) -> NSMenuItem {
-        makeItem(title, symbol: symbol, selector: selector)
+    /// `shortcut`:用户录了这个全局快捷键就显示在右侧,没录就空着。
+    private func action(_ title: String, symbol: String, selector: Selector,
+                        shortcut: KeyboardShortcuts.Name? = nil) -> NSMenuItem {
+        let item = makeItem(title, symbol: symbol, selector: selector)
+        if let shortcut { item.setShortcut(KeyboardShortcuts.getShortcut(for: shortcut)) }
+        return item
     }
 
-    private func toggle(_ title: String, symbol: String, on: Bool, action: Selector) -> NSMenuItem {
-        let item = makeItem(title, symbol: symbol, selector: action)
+    private func toggle(_ title: String, symbol: String, on: Bool, action: Selector,
+                        shortcut: KeyboardShortcuts.Name? = nil) -> NSMenuItem {
+        let item = self.action(title, symbol: symbol, selector: action, shortcut: shortcut)
         item.state = on ? .on : .off
         return item
     }
@@ -213,25 +233,6 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         let item = makeItem(title, symbol: symbol, selector: nil)
         item.submenu = menu
         return item
-    }
-
-    private func nudgeTitle(_ verb: String) -> String {
-        let step = AppSettings.shared.lyricsOffsetStepMs
-        return "\(verb) \(AppSettings.formattedSeconds(ms: step))\(L10n.t("秒"))"
-    }
-
-    // 菜单标题里直接带上当前校准值(比如"歌词时间轴(+0.6s)"),不用另开一个 HUD 或者
-    // 禁用态文字行专门显示这个数字。
-    private var offsetMenuTitle: String {
-        // 只显示**这首歌**那部分,不含全局基准(加全局偏移时改)。显示总和的
-        // 话,用户看到"歌词时间轴(0.8s)"、点了下面的「重置」却只回到 +0.5s(全局基准
-        // 还在),数字跟操作对不上。全局基准在设置里调,也在那里显示。
-        let ms = PlaybackCoordinator.shared.trackLyricsOffsetMs
-        guard ms != 0 else { return L10n.t("歌词时间轴") }
-        // 跟两个按钮共用同一份格式化(AppSettings.formattedSeconds)——不然步长设成
-        // 比如 0.15s 时,按钮显示"0.15"、这里的累计值却按 %.1f 四舍五入成"0.2"。
-        let sign = ms > 0 ? "+" : ""
-        return "\(L10n.t("歌词时间轴"))(\(sign)\(AppSettings.formattedSeconds(ms: ms))s)"
     }
 
     // MARK: - 动作
@@ -270,17 +271,9 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         AppSettings.shared.launchAtLoginEnabled.toggle()
     }
 
-    @objc private func nudgeEarlier() {
-        PlaybackCoordinator.shared.nudgeLyricsOffset(by: AppSettings.shared.lyricsOffsetStepMs)
-    }
-
-    @objc private func nudgeLater() {
-        PlaybackCoordinator.shared.nudgeLyricsOffset(by: -AppSettings.shared.lyricsOffsetStepMs)
-    }
-
-    @objc private func resetOffset() {
-        PlaybackCoordinator.shared.resetLyricsOffset()
-    }
+    // 跟同名快捷键走同一个派发(两份一起切、当下这首没有译文时也有一句回声)。
+    @objc private func toggleTranslation() { LyrimuseActionRunner.perform(.toggleTranslationHotkey) }
+    @objc private func toggleRomanization() { LyrimuseActionRunner.perform(.toggleRomanizationHotkey) }
 
     // 下面几个"打开某扇窗"的动作都走 AppActions —— 那几个闭包里已经带了
     // NSApp.activate(ignoringOtherApps:),.accessory 策略(没有 Dock 图标)下少了这一步
@@ -291,6 +284,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     @objc private func rerunOnboarding() { AppActions.shared.openOnboarding?() }
     @objc private func resolveAutomationAlert() { AutomationAlertMonitor.shared.resolve() }
     @objc private func reportIssue() { FeedbackReporter.openNewIssue() }
+    @objc private func searchLyrics() { AppActions.shared.openLyricsQuickSearch?() }
 
     @objc private func openAbout() {
         // 直接跳到设置窗口的"关于"分类,复用 Onboarding 的 Last.fm 步骤已经在用的同一套
@@ -306,6 +300,11 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         // 已经打开的设置窗口里点,App 早就是激活状态)。
         NSApp.activate(ignoringOtherApps: true)
         SparkleUpdaterManager.shared.checkForUpdates()
+    }
+
+    @objc private func openSoftwareUpdate() {
+        AppActions.shared.requestSettings(.softwareUpdate)
+        AppActions.shared.openSettings?()
     }
     #endif
 

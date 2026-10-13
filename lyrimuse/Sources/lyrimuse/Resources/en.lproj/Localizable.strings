@@ -933,6 +933,7 @@
 "已静音" = "Muted";
 "布局" = "Layout";
 "带逐字（卡拉 OK）时间轴，是衡量歌词质量最直接的依据" = "Has word-by-word (karaoke) timing, the most direct evidence of quality";
+"帮助" = "Help";
 "常见于 VPN 或公司网络接管 DNS 的情况；浏览器能打开网页并不代表此处可以连接" = "Common when a VPN or corporate network takes over DNS; a browser loading pages doesn't mean this can get through.";
 "常规" = "Regular";
 "年度听歌小结" = "Yearly Listening Digest";
@@ -2117,7 +2118,7 @@
 "通知" = "Notifications";
 "通知已在「系统设置 › 通知」中关闭" = "Notifications are turned off in System Settings › Notifications";
 "通知平台" = "Notification Platform";
-"遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」" = "If something goes wrong, right-click the menu bar icon and choose “Report an Issue…”";
+"遇到问题时，可右键点按菜单栏图标，选择「帮助」›「反馈问题…」" = "If something goes wrong, right-click the menu bar icon and choose Help › “Report an Issue…”";
 "那年今日" = "On This Day";
 "那年今日 · %1$@ 年前收听 %2$@ 次" = "On this day · %2$@ plays %1$@ years ago";
 "那年今日 · %1$@ 年前收听 %2$@ 次#one" = "On this day · %2$@ play %1$@ years ago";

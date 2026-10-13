@@ -12,6 +12,7 @@ import Foundation
 ///     lyrics-window/search          歌词窗口 + 搜索候选歌词面板
 ///     lyrics-search                 「搜索歌词…」小窗(当前这首)
 ///     menubar-panel[?quick=<格子>]   开 / 关菜单栏左键面板,带 quick 时翻到那一格的快捷设置
+///     menubar-menu                  弹出菜单栏右键菜单(同右键点状态栏图标)
 ///     onboarding                    欢迎引导
 ///     action/<名字>[?on=1|0][&step=<秒>]   执行一个动作(= 全局快捷键那一套,见 `LyrimuseAction`)
 ///     action/copy-lyric[?translation=1]    把当前这句歌词(可连译文)放进剪贴板
@@ -38,6 +39,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     case lyricsSearch
     /// `quick` 是原样的取值(App 侧 `PanelQuickTarget(deepLinkValue:)` 认),认不出时 App 当没带。
     case menuBarPanel(quick: String?)
+    case menuBarMenu
     case onboarding
     /// `on`:开关的目标状态(只有 `acceptsTargetState` 的动作收,别的动作带了也当没带);`stepSeconds`:歌词提前 /
     /// 延后的步长(只有 `acceptsStep` 的收,超出 0…`maxStepSeconds` 当没带)。
@@ -102,6 +104,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             self = .lyricsSearch
         case ("menubar-panel", ""), ("menubar-panel", "/"):
             self = .menuBarPanel(quick: value("quick")?.lowercased())
+        case ("menubar-menu", ""), ("menubar-menu", "/"):
+            self = .menuBarMenu
         case ("onboarding", ""), ("onboarding", "/"):
             self = .onboarding
         case ("action", "/copy-lyric"):
@@ -189,6 +193,8 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case let .menuBarPanel(quick):
             components.host = "menubar-panel"
             if let quick { components.queryItems = [URLQueryItem(name: "quick", value: quick)] }
+        case .menuBarMenu:
+            components.host = "menubar-menu"
         case .onboarding:
             components.host = "onboarding"
         case let .action(action, on, step):

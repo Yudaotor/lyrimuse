@@ -34,6 +34,7 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://menubar-panel"), .menuBarPanel(quick: nil), "深链: 菜单栏面板")
         expectEqual(link("lyrimuse://menubar-panel?quick=Lyrics-Manager"), .menuBarPanel(quick: "lyrics-manager"),
                     "深链: 面板 quick 取值转小写")
+        expectEqual(link("lyrimuse://menubar-menu"), .menuBarMenu, "深链: 菜单栏右键菜单")
         expectEqual(link("lyrimuse://lastfm-auth-callback?token=abc"), .lastfmAuthCallback, "深链: Last.fm 回跳带 token")
         expectEqual(link("LYRIMUSE://Lyrics-Manager/"), .lyricsManager, "深链: scheme / host 大小写、结尾斜杠不敏感")
     }
@@ -225,7 +226,7 @@ func runDeepLinkTests() {
             .lyricsManagerSongVersions(key: "daniel caesar & mustafa|never enough|toronto 2014", showEvidence: false),
             .lyricsManagerSongVersions(key: "方大同|为妳写的歌|橙月", showEvidence: true), .lyricsManagerSongVersions(key: nil, showEvidence: true),
             .lyricsWindow, .lyricsWindowSearch, .lyricsSearch,
-            .menuBarPanel(quick: nil), .menuBarPanel(quick: "overlay"), .onboarding, .lastfmAuthCallback,
+            .menuBarPanel(quick: nil), .menuBarPanel(quick: "overlay"), .menuBarMenu, .onboarding, .lastfmAuthCallback,
             .action(.toggleOverlay, on: true, stepSeconds: nil), .action(.lyricsAdvanceHotkey, on: nil, stepSeconds: 0.5),
             .copyLyric(includeTranslation: true), .copyLyric(includeTranslation: false), .openPlayer,
             .setSurfaces(overlay: true, notch: false, menuBar: nil), .setLyricsOffset(ms: -300),

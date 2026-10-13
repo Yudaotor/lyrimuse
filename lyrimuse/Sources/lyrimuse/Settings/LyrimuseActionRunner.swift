@@ -76,7 +76,7 @@ enum LyrimuseActionRunner {
                 MusicPlaybackController.previousTrack()
             }
         // 单曲歌词时间轴微调 —— 不需要自动化权限(不碰播放器,只改 LyricsSyncEngine 的匹配位置),随时可用。步长默认
-        // 现读 AppSettings,跟菜单栏「歌词时间轴」菜单的两个按钮共用同一个值。改完闪一条「歌词偏移 +0.50s」(累计值)。
+        // 现读 AppSettings,跟菜单里的偏移行(`MenuStepperRowView.lyricsOffset`)共用同一个值。改完闪一条「歌词偏移 +0.50s」(累计值)。
         case .lyricsAdvanceHotkey:
             showOffsetBanner(PlaybackCoordinator.shared.nudgeLyricsOffset(by: stepMs ?? AppSettings.shared.lyricsOffsetStepMs))
         case .lyricsDelayHotkey:

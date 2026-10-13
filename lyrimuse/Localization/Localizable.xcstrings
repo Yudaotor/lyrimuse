@@ -6731,6 +6731,29 @@
         }
       }
     },
+    "帮助" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Help"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帮助"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助說明"
+          }
+        }
+      }
+    },
     "反馈" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6869,25 +6892,25 @@
         }
       }
     },
-    "遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」" : {
+    "遇到问题时，可右键点按菜单栏图标，选择「帮助」›「反馈问题…」" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "If something goes wrong, right-click the menu bar icon and choose “Report an Issue…”"
+            "value" : "If something goes wrong, right-click the menu bar icon and choose Help › “Report an Issue…”"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」"
+            "value" : "遇到问题时，可右键点按菜单栏图标，选择「帮助」›「反馈问题…」"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "遇到問題時，可在選單列圖像上按右鍵，選擇「回報問題…」"
+            "value" : "遇到問題時，可在選單列圖像上按右鍵，選擇「輔助說明」›「回報問題…」"
           }
         }
       }

@@ -2954,9 +2954,10 @@ func runSourceContractTests() {
                     && sourceBytes(sheetSrc, contain: "let source = effectiveCurrentSource"), true,
                     "反馈链接: 歌词反馈带的来源认本次面板里刚采纳的那条,不认打开面板时的快照")
 
-        let hint = "遇到问题时，可右键点按菜单栏图标，选择「反馈问题…」"
+        let hint = "遇到问题时，可右键点按菜单栏图标，选择「帮助」›「反馈问题…」"
         expectEqual(sourceBytes(read("OnboardingView.swift"), contain: "L10n.t(\"\(hint)\")")
-                    && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "L10n.t(\"反馈问题…\")"), true,
+                    && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "L10n.t(\"反馈问题…\")")
+                    && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "submenu(L10n.t(\"帮助\")"), true,
                     "反馈链接: 引导收尾页那句和菜单栏右键菜单那一项还用这两个键")
         let catalogData = (try? Data(contentsOf: packageDir.appendingPathComponent("Localization/Localizable.xcstrings"))) ?? Data()
         let catalogStrings = ((try? JSONSerialization.jsonObject(with: catalogData)) as? [String: Any])?["strings"] as? [String: Any] ?? [:]
@@ -2966,8 +2967,10 @@ func runSourceContractTests() {
         }
         for lang in ["zh-Hans", "zh-Hant", "en"] {
             let item = localized("反馈问题…", lang)
-            expectEqual(!item.isEmpty && localized(hint, lang).contains(item), true,
-                        "反馈链接: 引导收尾页那句点名的菜单项跟菜单栏右键菜单同名(\(lang))")
+            let parent = localized("帮助", lang)
+            expectEqual(!item.isEmpty && !parent.isEmpty
+                            && localized(hint, lang).contains(item) && localized(hint, lang).contains(parent), true,
+                        "反馈链接: 引导收尾页那句点名的子菜单和菜单项跟菜单栏右键菜单同名(\(lang))")
         }
     }
 
@@ -4883,6 +4886,27 @@ func runSourceContractTests() {
                         && quickCode.contains("plusButton.action = #selector(stepUp)")
                         && quickCode.contains("item.view = view"), true,
                     "⚙ 菜单: − / + 是菜单项视图里的按钮,点了菜单不关")
+        expectEqual(quickCode.contains("minusButton = MenuStepButton(symbol: minus.symbol, help: minus.help, filled: true)")
+                        && quickCode.contains("plusButton = MenuStepButton(symbol: plus.symbol, help: plus.help, filled: true)")
+                        && quickCode.contains("options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect]"), true,
+                    "菜单偏移行: − / + 自己画悬停态(菜单开着时系统不画),两个菜单共用")
+        expectEqual(quickCode.contains("override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsetsZero }"), true,
+                    "菜单偏移行: − / + 不吃符号自带的对齐边距,两颗一样大")
+
+        // 菜单栏右键菜单(06 章决策 48):偏移跟 ⚙ 菜单同一行原地调,搜索歌词、译文 / 读音跟同名快捷键走同一个动作。
+        let statusMenu = stripComments(code("MenuBar/MenuBarStatusMenu.swift"))
+        expectEqual(statusMenu.contains("offset.view = MenuStepperRowView.lyricsOffset(titleInset: 16)")
+                        && quickCode.contains("private func offsetRow() -> MenuStepperRowView { .lyricsOffset() }")
+                        && !statusMenu.contains("nudgeLyricsOffset"), true,
+                    "右键菜单: 偏移跟 ⚙ 菜单共用同一行原地调的控件,不再是点一下就关的子菜单")
+        expectEqual(statusMenu.contains("@objc private func searchLyrics() { AppActions.shared.openLyricsQuickSearch?() }")
+                        && statusMenu.contains("LyrimuseActionRunner.perform(.toggleTranslationHotkey)")
+                        && statusMenu.contains("LyrimuseActionRunner.perform(.toggleRomanizationHotkey)")
+                        && statusMenu.contains("on: settings.overlayShowTranslation || settings.showTranslation,"), true,
+                    "右键菜单: 搜索歌词、译文 / 读音跟同名快捷键同一个动作,两处有一处开着就打勾")
+        expectEqual(statusMenu.contains("action: #selector(toggleTouchBarLyrics)))")
+                        && statusMenu.contains("item.setShortcut(KeyboardShortcuts.getShortcut(for: shortcut))"), true,
+                    "右键菜单: 显示用户录的快捷键;触控栏那一项翻的是总开关,不挂展开 / 收起的快捷键")
     }
 
     // ---- 关于页页头的漂浮符号走 Core Animation----

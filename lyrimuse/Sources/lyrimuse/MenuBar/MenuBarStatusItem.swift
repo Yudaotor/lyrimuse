@@ -581,6 +581,18 @@ final class MenuBarStatusItem: NSObject {
         panelController.toggle(relativeTo: button, quick: quick)
     }
 
+    /// lyrimuse://menubar-menu:弹出右键菜单,同右键点状态栏图标;面板开着先收起。
+    /// 用 `.common` 模式的一次性定时器推迟到链接处理返回之后再弹,别换成 `DispatchQueue.main.async`:
+    /// 弹出是同步的,菜单跟踪整段会嵌在那个主队列任务里,开着期间排到主队列的别的任务全都轮不到(04 章决策 60)。
+    func popUpMenuFromDeepLink() {
+        guard !statusMenuIsOpen else { return }
+        if panelIsOpen { panelController.close() }
+        let timer = Timer(timeInterval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.popUpFullMenu() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
     private func setPanelOpen(_ open: Bool) {
         panelIsOpen = open
         // notice 级:面板开合要能跟上面那些 slot rebuild 日志对到同一条时间线上 ——

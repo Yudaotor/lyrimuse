@@ -1415,12 +1415,11 @@ private struct PanelProgressSection: View {
     private var offsetControls: some View {
         HStack(spacing: 3) {
             // 左减右加 —— 跟中间那个带符号的数字对齐:点右边数字变大,点左边变小。
-            // 「正的步长 = 提前」这条口径不在这里定义,跟右键菜单的 nudgeEarlier、
+            // 「正的步长 = 提前」这条口径不在这里定义,跟菜单里的偏移行(`MenuStepperRowView.lyricsOffset`)、
             // 设置页那个 Stepper(▲ = 提前)是同一条。
             //
             // 左右分工按这一行的参照系来定:这一行左右夹着 1:02 / -5:28 两个播放时间,
-            // 读者的参照系是播放器——右 = 往前 = 赶快一点,不是右键菜单里"提前在上"的
-            // 上下顺序横过来套用(横过来会丢掉含义)。
+            // 读者的参照系是播放器——右 = 往前 = 赶快一点。
             //
             // 圆箭头不是 Apple 的「快退/快进 15 秒」符号(gobackward/goforward):那对符号
             // 在这个位置容易被读成"调播放进度",± 没有方向隐喻,只说"把这个数字调大/调小"。

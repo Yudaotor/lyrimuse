@@ -163,26 +163,7 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
         return item
     }
 
-    /// 「歌词偏移」一行:值是**这首歌**那一部分(同灵动岛的偏移控件,不含设置里的全局基准),− 延后、+ 提前,
-    /// 步长读设置里的「步长」;不为 0 时右边出 ↺ 归零。
-    private func offsetRow() -> MenuStepperRowView {
-        let step = AppSettings.shared.lyricsOffsetStepMs
-        let seconds = "\(AppSettings.formattedSeconds(ms: step))\(L10n.t("秒"))"
-        return MenuStepperRowView(
-            title: L10n.t("歌词偏移"),
-            minus: ("minus", "\(L10n.t("延后")) \(seconds)"),
-            plus: ("plus", "\(L10n.t("提前")) \(seconds)"),
-            resetHelp: L10n.t("重置"),
-            state: PlaybackCoordinator.shared.$trackLyricsOffsetMs
-                .map { ms in
-                    MenuStepperRowView.State(text: "\(AppSettings.signedSeconds(ms: ms))s", canReset: ms != 0)
-                }
-                .eraseToAnyPublisher(),
-            onStep: { direction in
-                _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: direction * AppSettings.shared.lyricsOffsetStepMs)
-            },
-            onReset: { PlaybackCoordinator.shared.resetLyricsOffset() })
-    }
+    private func offsetRow() -> MenuStepperRowView { .lyricsOffset() }
 
     /// 「字号」一行:悬浮歌词主歌词行字号,每下 ±2pt,范围跟设置页那根滑杆同一份(`overlayFontSizeRange`)。
     private func fontSizeRow() -> MenuStepperRowView {
@@ -313,25 +294,24 @@ final class MenuStepperRowView: NSView {
     }
 
     private let valueLabel = NSTextField(labelWithString: "")
-    private let minusButton: NSButton
-    private let plusButton: NSButton
-    private let resetButton: NSButton
+    private let minusButton: MenuStepButton
+    private let plusButton: MenuStepButton
+    private let resetButton: MenuStepButton
     private let onStep: (Int) -> Void
     private let onReset: (() -> Void)?
     private var subscription: AnyCancellable?
 
     /// `minus` / `plus`:SF Symbol 名 + 悬停提示(也是读屏标签)。`resetHelp` 为 nil 时没有归零键,位置仍空出来,
-    /// 两行的 − / + 上下对齐。
+    /// 两行的 − / + 上下对齐。`titleInset`:标题离左边多远,要跟同一个菜单里普通菜单项的文字对齐 —— 菜单里有
+    /// 勾选列时是 22,没有时(菜单栏右键菜单的顶层)是 16。
     init(title: String, minus: (symbol: String, help: String), plus: (symbol: String, help: String),
-         resetHelp: String?, state: AnyPublisher<State, Never>,
+         resetHelp: String?, titleInset: CGFloat = 22, state: AnyPublisher<State, Never>,
          onStep: @escaping (Int) -> Void, onReset: (() -> Void)?) {
         self.onStep = onStep
         self.onReset = onReset
-        minusButton = Self.stepButton(minus.symbol, help: minus.help)
-        plusButton = Self.stepButton(plus.symbol, help: plus.help)
-        resetButton = NSButton(image: NSImage(systemSymbolName: "arrow.counterclockwise",
-                                              accessibilityDescription: resetHelp) ?? NSImage(),
-                               target: nil, action: nil)
+        minusButton = MenuStepButton(symbol: minus.symbol, help: minus.help, filled: true)
+        plusButton = MenuStepButton(symbol: plus.symbol, help: plus.help, filled: true)
+        resetButton = MenuStepButton(symbol: "arrow.counterclockwise", help: resetHelp, filled: false)
         super.init(frame: NSRect(x: 0, y: 0, width: 260, height: 30))
         autoresizingMask = [.width]
 
@@ -350,9 +330,6 @@ final class MenuStepperRowView: NSView {
         minusButton.action = #selector(stepDown)
         plusButton.target = self
         plusButton.action = #selector(stepUp)
-        resetButton.isBordered = false
-        resetButton.contentTintColor = .secondaryLabelColor
-        resetButton.toolTip = resetHelp
         resetButton.target = self
         resetButton.action = #selector(reset)
         resetButton.isHidden = true
@@ -364,20 +341,23 @@ final class MenuStepperRowView: NSView {
         }
         // 数值定宽:「0.0s」变「+10.5s」时两侧按钮不跟着挪。
         NSLayoutConstraint.activate([
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 22),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: titleInset),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             minusButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
             minusButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             minusButton.widthAnchor.constraint(equalToConstant: 30),
+            minusButton.heightAnchor.constraint(equalToConstant: 22),
             valueLabel.leadingAnchor.constraint(equalTo: minusButton.trailingAnchor, constant: 4),
             valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             valueLabel.widthAnchor.constraint(equalToConstant: 54),
             plusButton.leadingAnchor.constraint(equalTo: valueLabel.trailingAnchor, constant: 4),
             plusButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             plusButton.widthAnchor.constraint(equalToConstant: 30),
+            plusButton.heightAnchor.constraint(equalToConstant: 22),
             resetButton.leadingAnchor.constraint(equalTo: plusButton.trailingAnchor, constant: 4),
             resetButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            resetButton.widthAnchor.constraint(equalToConstant: 20),
+            resetButton.widthAnchor.constraint(equalToConstant: 22),
+            resetButton.heightAnchor.constraint(equalToConstant: 22),
             resetButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
         ])
 
@@ -386,15 +366,6 @@ final class MenuStepperRowView: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    private static func stepButton(_ symbol: String, help: String) -> NSButton {
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: help) ?? NSImage()
-        let button = NSButton(image: image, target: nil, action: nil)
-        button.bezelStyle = .push
-        button.controlSize = .small
-        button.toolTip = help
-        return button
-    }
 
     private func apply(_ state: State) {
         valueLabel.stringValue = state.text
@@ -406,4 +377,101 @@ final class MenuStepperRowView: NSView {
     @objc private func stepDown() { onStep(-1) }
     @objc private func stepUp() { onStep(1) }
     @objc private func reset() { onReset?() }
+}
+
+/// 菜单里那一行的 − / + / ↺。菜单开着时系统不给按钮画悬停态,这里自己画:指针移上去底色加深、按下再深一档,
+/// 跟菜单项的高亮一样告诉人「这里能点」。底色用 labelColor 调透明度,浅色深色菜单各自深一档、浅一档。
+@MainActor
+final class MenuStepButton: NSButton {
+    /// true:平时就带一层浅底(− / +);false:平时透明、只在悬停和按下时出底(↺)。
+    private let filled: Bool
+    private var hoverArea: NSTrackingArea?
+    private var hovering = false {
+        didSet {
+            guard hovering != oldValue else { return }
+            updateTint()
+            needsDisplay = true
+        }
+    }
+
+    init(symbol: String, help: String?, filled: Bool) {
+        self.filled = filled
+        super.init(frame: .zero)
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        image = NSImage(systemSymbolName: symbol, accessibilityDescription: help)?.withSymbolConfiguration(config)
+        imagePosition = .imageOnly
+        isBordered = false
+        toolTip = help
+        updateTint()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var isEnabled: Bool {
+        didSet { needsDisplay = true }
+    }
+
+    // 只放图标的无边框按钮会把 SF Symbol 自带的对齐边距当成自己的,约束管的是扣掉边距之后的那块:
+    // minus 和 plus 两枚符号的边距不同,同样 30×22 的约束画出来一矮一高。归零后约束多大底色就多大。
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsetsZero }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
+    // ↺ 平时是次要色,指针移上去换成正文色;− / + 一直是正文色,变灰交给 NSButton 自己的禁用态。
+    private func updateTint() {
+        contentTintColor = filled || hovering ? .labelColor : .secondaryLabelColor
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let alpha: CGFloat
+        if !isEnabled {
+            alpha = filled ? 0.04 : 0
+        } else if cell?.isHighlighted == true {
+            alpha = 0.24
+        } else if hovering {
+            alpha = 0.16
+        } else {
+            alpha = filled ? 0.07 : 0
+        }
+        if alpha > 0 {
+            NSColor.labelColor.withAlphaComponent(alpha).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+        }
+        super.draw(dirtyRect)
+    }
+}
+
+extension MenuStepperRowView {
+    /// 「歌词偏移」一行,⚙ 菜单和菜单栏右键菜单共用:值是**这首歌**那一部分(同灵动岛的偏移控件,不含设置里的
+    /// 全局基准),− 延后、+ 提前,步长读设置里的「步长」;不为 0 时右边出 ↺ 归零。`titleInset` 见 init。
+    static func lyricsOffset(titleInset: CGFloat = 22) -> MenuStepperRowView {
+        let step = AppSettings.shared.lyricsOffsetStepMs
+        let seconds = "\(AppSettings.formattedSeconds(ms: step))\(L10n.t("秒"))"
+        return MenuStepperRowView(
+            title: L10n.t("歌词偏移"),
+            minus: ("minus", "\(L10n.t("延后")) \(seconds)"),
+            plus: ("plus", "\(L10n.t("提前")) \(seconds)"),
+            resetHelp: L10n.t("重置"),
+            titleInset: titleInset,
+            state: PlaybackCoordinator.shared.$trackLyricsOffsetMs
+                .map { ms in
+                    MenuStepperRowView.State(text: "\(AppSettings.signedSeconds(ms: ms))s", canReset: ms != 0)
+                }
+                .eraseToAnyPublisher(),
+            onStep: { direction in
+                _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: direction * AppSettings.shared.lyricsOffsetStepMs)
+            },
+            onReset: { PlaybackCoordinator.shared.resetLyricsOffset() })
+    }
 }
