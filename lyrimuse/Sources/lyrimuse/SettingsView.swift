@@ -4770,7 +4770,7 @@ private struct PlayerSettingsTab: View {
         VStack(alignment: .leading, spacing: 4) {
             (Text(L10n.t("自动识别中")).fontWeight(.semibold).foregroundStyle(Color.accentColor)
                 + Text("  ")
-                + Text(L10n.t("下面的播放器都会识别；想只要其中几个，关掉右上角的开关再勾选。")))
+                + Text(L10n.t("下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选。")))
             Text(L10n.t("未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。"))
         }
             .font(.system(size: 11.5))

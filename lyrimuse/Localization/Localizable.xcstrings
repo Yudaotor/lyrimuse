@@ -43356,25 +43356,25 @@
         }
       }
     },
-    "下面的播放器都会识别；想只要其中几个，关掉右上角的开关再勾选。" : {
+    "下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Every player below is detected. To use only some of them, turn off the switch at the top right, then check the ones you want."
+            "value" : "All players below are detected automatically. To detect only some of them, turn off the switch at the top right and select them manually."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下面的播放器都会识别；想只要其中几个，关掉右上角的开关再勾选。"
+            "value" : "下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下面的播放器都會識別；想只要其中幾個，關掉右上角的開關再勾選。"
+            "value" : "下列播放器均會自動識別；如需僅識別部分播放器，請關閉右上角開關後手動勾選。"
           }
         }
       }

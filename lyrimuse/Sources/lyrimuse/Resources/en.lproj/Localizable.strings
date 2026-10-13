@@ -253,10 +253,10 @@
 "下一步" = "Next";
 "下一页" = "Next";
 "下一首" = "Next Track";
+"下列播放器均会自动识别；如需仅识别部分播放器，请关闭右上角开关后手动勾选。" = "All players below are detected automatically. To detect only some of them, turn off the switch at the top right and select them manually.";
 "下移" = "Move Down";
 "下载 Discord…" = "Download Discord…";
 "下载中…" = "Downloading…";
-"下面的播放器都会识别；想只要其中几个，关掉右上角的开关再勾选。" = "Every player below is detected. To use only some of them, turn off the switch at the top right, then check the ones you want.";
 "不 Scrobble 任何播放器" = "Nothing is scrobbled";
 "不保存" = "Don’t Save";
 "不再悬停显示播放控制" = "Stop Showing Playback Controls on Hover";
