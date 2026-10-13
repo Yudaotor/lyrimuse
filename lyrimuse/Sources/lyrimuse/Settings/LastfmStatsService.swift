@@ -1076,6 +1076,7 @@ final class LastfmStatsService: ObservableObject {
         onThisDayUpdatedAt = nil
         onThisDayDay = nil
         onThisDayOutcome = .pending
+        dayListens = [:]
         snapshotSaveTask?.cancel()
         FileIO.remove(Self.snapshotURL)
         titleForms = [:]
@@ -1477,26 +1478,7 @@ final class LastfmStatsService: ObservableObject {
                         rows.append(contentsOf: parseRecent(more).filter { $0.date != nil })
                     }
                 }
-                var counts: [String: Int] = [:]
-                var sample: [String: RecentTrack] = [:]
-                var lastPlayed: [String: Date] = [:]
-                for r in rows {
-                    let k = Self.playCountKey(artist: r.artist, title: r.title)
-                    counts[k, default: 0] += 1
-                    if sample[k] == nil { sample[k] = r } // 响应是倒序,首见即当天最后一次
-                    if let d = r.date, lastPlayed[k] == nil || d > lastPlayed[k]! { lastPlayed[k] = d }
-                }
-                // 确定性排序:次数降序 → 当天最后一次更晚的在前 → 歌名。少了后两级的话,
-                // 并列时取谁全看字典迭代序,同一天刷两次能给出不同的"最多那首"。
-                let ranked = counts.keys.compactMap { key -> OnThisDayResult.TopTrack? in
-                    guard let track = sample[key], let n = counts[key] else { return nil }
-                    return OnThisDayResult.TopTrack(track: track, count: n, lastPlayed: lastPlayed[key])
-                }.sorted { a, b in
-                    if a.count != b.count { return a.count > b.count }
-                    let ad = a.lastPlayed ?? .distantPast, bd = b.lastPlayed ?? .distantPast
-                    if ad != bd { return ad > bd }
-                    return a.track.title < b.track.title
-                }
+                let ranked = Self.rankDayTracks(rows)
                 guard !ranked.isEmpty else { continue }
                 let top = Array(ranked.prefix(3))
                 onThisDay = OnThisDayResult(yearsAgo: yearsAgo, total: total, top: top, span: window.span)
@@ -1528,6 +1510,97 @@ final class LastfmStatsService: ObservableObject {
             } else {
                 onThisDayOutcome = .failed
             }
+        }
+    }
+
+    /// 一段时间里的收听按同一首歌(playCountKey)数次数,取样那一行是这段里最后一次。确定性排序:次数降序 → 最后一次
+    /// 更晚的在前 → 歌名;少了后两级的话,并列时取谁全看字典迭代序,同一天刷两次能给出不同的「最多那首」。
+    /// 「那年今日」和热力图点开的那一天共用。
+    nonisolated static func rankDayTracks(_ rows: [RecentTrack]) -> [OnThisDayResult.TopTrack] {
+        var counts: [String: Int] = [:]
+        var sample: [String: RecentTrack] = [:]
+        var lastPlayed: [String: Date] = [:]
+        for r in rows {
+            let k = playCountKey(artist: r.artist, title: r.title)
+            counts[k, default: 0] += 1
+            if sample[k] == nil { sample[k] = r } // 响应是倒序,首见即最后一次
+            if let d = r.date, lastPlayed[k] == nil || d > lastPlayed[k]! { lastPlayed[k] = d }
+        }
+        return counts.keys.compactMap { key -> OnThisDayResult.TopTrack? in
+            guard let track = sample[key], let n = counts[key] else { return nil }
+            return OnThisDayResult.TopTrack(track: track, count: n, lastPlayed: lastPlayed[key])
+        }.sorted { a, b in
+            if a.count != b.count { return a.count > b.count }
+            let ad = a.lastPlayed ?? .distantPast, bd = b.lastPlayed ?? .distantPast
+            if ad != bd { return ad > bd }
+            return a.track.title < b.track.title
+        }
+    }
+
+    // MARK: - 热力图上点开的那一天
+
+    /// 热力图上点开的那一天听得最多的几首。点开时按那一天(本地时区 0 点到次日 0 点)去 Last.fm 取收听、当场聚合,
+    /// 不留逐条记录;取数分页上限和排序跟「那年今日」同一套。只在内存里:过去那一天的收听不会变,取到就一直用,
+    /// 今天那一格每次点开重取;换账号时 resetAll 清掉。见 12 章决策 74。
+    enum DayListensState: Equatable {
+        case loading
+        case loaded(total: Int, top: [OnThisDayResult.TopTrack])
+        /// 日桶说那天有收听、Last.fm 那一天却一条都没给(删掉的记录、时区边界)。
+        case empty
+        case failed
+    }
+
+    /// 点开的那一天最多列几首。
+    static let dayListensTopCount = 5
+
+    /// dayKey(`yyyy-MM-dd`,本地时区) → 点开过的那一天。
+    @Published private(set) var dayListens: [String: DayListensState] = [:]
+
+    /// 点开热力图上的 dayKey 那一天。正在取的不重发;取到过的除了今天都直接用;force 给失败态那颗「重试」。
+    func loadDayListens(_ dayKey: String, force: Bool = false) {
+        switch dayListens[dayKey] {
+        case .loading?:
+            return
+        case .loaded?, .empty?:
+            if !force && dayKey != Self.dayKey(Date()) { return }
+        case .failed?, nil:
+            break
+        }
+        guard let cred = credentials,
+              let start = Self.dayKeyFormatter.date(from: dayKey).map({ Calendar.current.startOfDay(for: $0) }),
+              let end = Calendar.current.date(byAdding: .day, value: 1, to: start)
+        else { return }
+        dayListens[dayKey] = .loading
+        let epoch = accountEpoch
+        let base = ["from": String(Int(start.timeIntervalSince1970)), "to": String(Int(end.timeIntervalSince1970)),
+                    "limit": String(onThisDayPageSize)]
+        Task {
+            guard let first = await request(method: "user.getrecenttracks", cred: cred, extra: base) else {
+                if epoch == accountEpoch { dayListens[dayKey] = .failed }
+                return
+            }
+            guard epoch == accountEpoch else { return }
+            var rows = parseRecent(first).filter { $0.date != nil }
+            let totalPages = Int(dig(first, "recenttracks", "@attr", "totalPages") as? String ?? "") ?? 1
+            if totalPages > 1 {
+                for page in 2...min(totalPages, onThisDayMaxPages) {
+                    guard let more = await request(method: "user.getrecenttracks", cred: cred,
+                                                   extra: base.merging(["page": String(page)]) { _, new in new })
+                    else { break }
+                    guard epoch == accountEpoch else { return }
+                    rows.append(contentsOf: parseRecent(more).filter { $0.date != nil })
+                }
+            }
+            let top = Array(Self.rankDayTracks(rows).prefix(Self.dayListensTopCount))
+            let total = attrTotal(first)
+            guard total > 0, !top.isEmpty else {
+                dayListens[dayKey] = .empty
+                return
+            }
+            dayListens[dayKey] = .loaded(total: total, top: top)
+            // 封面走跟「那年今日」同一套兜底(本机 enrich 缓存 + getinfo),见 refreshOnThisDay 里同一处的注释。
+            refreshLocalCovers()
+            resolvePlayCounts(for: top.map(\.track))
         }
     }
 

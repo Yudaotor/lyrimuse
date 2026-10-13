@@ -4,7 +4,8 @@ import SwiftUI
 /// 画在「足迹」段的热力图方块里(LastfmFootprintView.heatmapTile),方块头那颗年份选择器改的就是 `year`。
 ///
 /// 数据是 LastfmStatsService.dailyCounts(本地时区的天粒度桶,全量历史缓存+增量同步,
-/// 见 refreshDailyCounts 注释)。这里只做展示:按年切片、算色阶、排格子。
+/// 见 refreshDailyCounts 注释)。这里只做展示:按年切片、算色阶、排格子。有收听的格子点一下,在格子旁弹出那一天
+/// 听得最多的几首(HeatmapDayPopover,按需去 Last.fm 取,LastfmStatsService.loadDayListens)。
 struct LastfmHeatmapView: View {
     @ObservedObject private var stats = LastfmStatsService.shared
     @Environment(\.colorScheme) private var colorScheme
@@ -15,6 +16,16 @@ struct LastfmHeatmapView: View {
     /// 一整年的周列只跟年份和「今天」有关,而这个视图订阅着整个统计服务、同步时每翻一页都重算 body:
     /// 按 (年份, 今天) 记住,不每次都重新格式化三百多个日期。
     @State private var weeksMemo = WeeksMemo()
+    /// 点开的那一格。整张网格只挂一个浮层,锚在这一格的位置上(dayAnchor),不给三百多个格子各挂一个。
+    @State private var openedDay: OpenedDay?
+
+    private struct OpenedDay: Identifiable, Equatable {
+        let key: String
+        let label: String
+        let column: Int
+        let row: Int
+        var id: String { key }
+    }
 
     private final class WeeksMemo {
         var key = ""
@@ -140,15 +151,21 @@ struct LastfmHeatmapView: View {
                             .frame(width: Self.weekdayLabelWidth, height: cell)
                     }
                 }
-                ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
+                ForEach(Array(weeks.enumerated()), id: \.offset) { column, week in
                     VStack(spacing: Self.cellGap) {
                         ForEach(0..<7, id: \.self) { row in
                             if let day = week.days[row], day.isFuture {
                                 cellShape(fill: futureColor).help(day.label)
-                            } else if let day = week.days[row] {
-                                let n = stats.dailyCounts[day.key] ?? 0
+                            } else if let day = week.days[row], let n = stats.dailyCounts[day.key], n > 0 {
                                 cellShape(fill: color(for: n, thresholds: thresholds, levels: levels))
-                                    .help("\(day.label) · \(n.formatted()) \(L10n.t("次"))")
+                                    .help("\(day.label) · \(n.formatted()) \(L10n.t("次"))\n\(L10n.t("按一下查看这一天听得最多的歌"))")
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        openedDay = OpenedDay(key: day.key, label: day.label, column: column, row: row)
+                                    }
+                            } else if let day = week.days[row] {
+                                cellShape(fill: emptyColor)
+                                    .help("\(day.label) · 0 \(L10n.t("次"))")
                             } else {
                                 // 年头/年尾不属于本年的格子:占位保持列对齐,完全透明。
                                 cellShape(fill: .clear)
@@ -158,6 +175,18 @@ struct LastfmHeatmapView: View {
                 }
             }
         }
+        .popover(item: $openedDay, attachmentAnchor: .rect(.rect(dayAnchor(openedDay, cell: cell))), arrowEdge: .bottom) { day in
+            HeatmapDayPopover(dayKey: day.key, label: day.label)
+        }
+    }
+
+    /// 点开的那一格在网格里的位置,跟上面的排法一一对应:月份标签行(高 10 + 行距 3)在上,星期标签列(宽
+    /// weekdayLabelWidth + 列距)在左,格子之间 cellGap。改网格排法时这里跟着改。
+    private func dayAnchor(_ day: OpenedDay?, cell: CGFloat) -> CGRect {
+        guard let day else { return .zero }
+        let step = cell + Self.cellGap
+        return CGRect(x: Self.weekdayLabelWidth + Self.cellGap + CGFloat(day.column) * step,
+                      y: 10 + 3 + CGFloat(day.row) * step, width: cell, height: cell)
     }
 
     private func cellShape(fill: Color) -> some View {
@@ -264,4 +293,71 @@ struct LastfmHeatmapView: View {
 private struct HeatmapWidthKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// 热力图上点开的那一天:那天听得最多的几首,每行封面、歌名、歌手、当天次数,点一行打开 Last.fm 曲目页。
+/// 取数中 / 取到 / Last.fm 那天没给记录 / 失败(带重试)四种样子都要有,不能留空白。
+private struct HeatmapDayPopover: View {
+    @ObservedObject private var stats = LastfmStatsService.shared
+    let dayKey: String
+    let label: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(label).font(.headline)
+            switch stats.dayListens[dayKey] ?? .loading {
+            case .loading:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(L10n.t("正在查询这一天的收听…")).foregroundStyle(.secondary)
+                }
+            case .empty:
+                Text(L10n.t("Last.fm 上查不到这一天的收听")).foregroundStyle(.secondary)
+            case .failed:
+                HStack(spacing: 8) {
+                    Label(L10n.t("无法获取这一天的收听：Last.fm 未响应"), systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button(L10n.t("重试")) { stats.loadDayListens(dayKey, force: true) }
+                }
+            case .loaded(let total, let top):
+                Text(String(format: L10n.plural("这一天收听 %@ 次，听得最多的是以下歌曲", count: total), total.formatted()))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(top) { row($0) }
+                }
+            }
+        }
+        .font(.callout)
+        .padding(14)
+        .frame(width: 300, alignment: .leading)
+        .onAppear { stats.loadDayListens(dayKey) }
+    }
+
+    private func row(_ entry: LastfmStatsService.OnThisDayResult.TopTrack) -> some View {
+        let t = entry.track
+        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+        return Button {
+            if let url = LastfmStatsSection.trackURL(artist: t.artist, title: t.title) {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                CachedImage(url: stats.coverURL(for: t)) { shape.fill(.quaternary) }
+                    .frame(width: 32, height: 32)
+                    .clipShape(shape)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(t.title).lineLimit(1)
+                    Text(t.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                Text(String(format: L10n.t("%@ 次"), "\(entry.count)"))
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(entry.lastPlayed.map { String(format: L10n.t("当天最后一次收听：%@"), LastfmStatsSection.absolute($0)) } ?? "")
+    }
 }
