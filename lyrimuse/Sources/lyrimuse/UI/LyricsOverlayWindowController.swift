@@ -284,15 +284,102 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         setLyricsCapture(false)
     }
 
-    /// 边缘、按钮、歌词文字三处都没在接管、也没在拖时,还原点击穿透。
+    /// 指针停在歌词文字上、按着 ⌘ 时这扇窗收回点击穿透,⌘ + 滚轮 / 触控板捏合调字号(04 章决策 62)。锁定、
+    /// 「拖动前先长按」开着时照样接:穿透着的话滚轮直接派给下层 App,这边只看得到、拦不住,下层会跟着滚。
+    /// 接住之后只要 ⌘ 没松、指针没出窗口就一直接着:字号一变文字矩形跟着变,指针可能落到字外,下一格不能漏下去。
+    /// 代价:按着 ⌘ 时点在歌词文字上的那一下到不了下层。
+    private var fontZoomCaptured = false
+    private var fontZoom = OverlayFontZoom()
+    /// 指针停在歌词文字上(或正接着)时轮询 ⌘:按下 ⌘、鼠标不动时收不到任何鼠标事件,监听键盘又要辅助功能权限。
+    private var fontZoomModifierPoll: Timer?
+
+    private func setFontZoomCapture(_ on: Bool) {
+        guard on != fontZoomCaptured, let window else { return }
+        fontZoomCaptured = on
+        fontZoom.reset()
+        if on {
+            window.acceptsMouseMovedEvents = true
+            if !isDragArmed { window.ignoresMouseEvents = false }
+        } else {
+            restorePassthroughIfIdle()
+        }
+    }
+
+    /// 按此刻的 ⌘ 和指针位置决定接不接;指针在歌词文字上或正接着时开着轮询,别的时候停掉。
+    private func refreshFontZoomCapture() {
+        guard let window, window.isVisible, !isQuickMenuOpen else {
+            stopFontZoom()
+            return
+        }
+        let loc = NSEvent.mouseLocation
+        let onLyrics = lyricsHotZoneLocal?.contains(window.convertPoint(fromScreen: loc)) ?? false
+        let commandHeld = NSEvent.modifierFlags.contains(OverlayFontZoom.modifier)
+        setFontZoomCapture(commandHeld && (fontZoomCaptured ? window.frame.contains(loc) : onLyrics))
+        let polling = onLyrics || fontZoomCaptured
+        if polling, fontZoomModifierPoll == nil {
+            let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshFontZoomCapture() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            fontZoomModifierPoll = timer
+        } else if !polling {
+            fontZoomModifierPoll?.invalidate()
+            fontZoomModifierPoll = nil
+        }
+    }
+
+    private func stopFontZoom() {
+        fontZoomModifierPoll?.invalidate()
+        fontZoomModifierPoll = nil
+        setFontZoomCapture(false)
+    }
+
+    /// 落到这扇窗的滚轮:按着 ⌘、指针在歌词文字上(或正接着调字号)就调字号,不然让开。
+    private func handleScrollWheel(_ event: NSEvent) {
+        guard event.modifierFlags.contains(OverlayFontZoom.modifier), fontZoomCaptured || isPointerOnLyricsText() else {
+            yieldPointerCaptureToScroll()
+            return
+        }
+        setFontZoomCapture(true)
+        if event.phase == .began { fontZoom.reset() }
+        let deltaY = OverlayFontZoom.deviceDeltaY(event.scrollingDeltaY, invertedFromDevice: event.isDirectionInvertedFromDevice)
+        stepFontSize(fontZoom.steps(scrollDeltaY: deltaY, precise: event.hasPreciseScrollingDeltas,
+                                    momentum: event.momentumPhase != []))
+    }
+
+    /// 落到这扇窗的触控板捏合:指针在歌词文字上(或正接着调字号)时调字号,不用按 ⌘。停在按钮上捏合不算。
+    private func handleMagnify(_ event: NSEvent) {
+        guard fontZoomCaptured || isPointerOnLyricsText() else { return }
+        if event.phase == .began { fontZoom.reset() }
+        stepFontSize(fontZoom.steps(magnification: event.magnification))
+    }
+
+    private func isPointerOnLyricsText() -> Bool {
+        guard let window, let zone = lyricsHotZoneLocal else { return false }
+        return zone.contains(window.convertPoint(fromScreen: NSEvent.mouseLocation))
+    }
+
+    /// 字号走 `steps` 档,跟 ⚙ 菜单「字号」、放大 / 缩小快捷键同一个步长和范围;到了上下限照样回声当前值。
+    private func stepFontSize(_ steps: Int) {
+        guard steps != 0 else { return }
+        let settings = AppSettings.shared
+        var next = settings.fontSize
+        for _ in 0..<abs(steps) {
+            next = AppSettings.steppedOverlayFontSize(from: next, direction: steps > 0 ? 1 : -1)
+        }
+        if next != settings.fontSize { settings.fontSize = next }
+        flashTransientHint(String(format: L10n.t("字号 %@pt"), "\(Int(next))"))
+    }
+
+    /// 边缘、按钮、歌词文字、调字号四处都没在接管、也没在拖时,还原点击穿透。
     private func restorePassthroughIfIdle() {
-        guard !edgeCaptured, !controlCaptured, !lyricsCaptured, !isDragArmed else { return }
+        guard !edgeCaptured, !controlCaptured, !lyricsCaptured, !fontZoomCaptured, !isDragArmed else { return }
         window?.ignoresMouseEvents = true
     }
 
-    /// 拖完或拖动作废:指针还停在按钮、歌词文字或可拖的边上就接着接住,不然还原穿透。
+    /// 拖完或拖动作废:指针还停在按钮、歌词文字或可拖的边上,或正按着 ⌘ 调字号,就接着接住,不然还原穿透。
     private func restorePointerCaptureAfterDrag() {
-        window?.ignoresMouseEvents = !(edgeCaptured || controlCaptured || lyricsCaptured)
+        window?.ignoresMouseEvents = !(edgeCaptured || controlCaptured || lyricsCaptured || fontZoomCaptured)
     }
 
     /// 被这扇窗接住、没拖起来的那一下单击原样补发给下层窗口(见 04 章决策 55):先放掉歌词文字的接管、还原点击
@@ -410,7 +497,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 点击穿透常年开启,只有指针停在按钮、歌词文字、可拖的边上时才临时收回。
         panel.isMovableByWindowBackground = false
         panel.ignoresMouseEvents = true
-        panel.onScrollWheel = { [weak self] in self?.yieldPointerCaptureToScroll() }
+        panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }
+        panel.onMagnify = { [weak self] event in self?.handleMagnify(event) }
 
         let hosting = NSHostingView(rootView: LyricsOverlayView(
             overlayController: self,
@@ -646,6 +734,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         window?.isMovableByWindowBackground = false
         controlCaptured = false
         lyricsCaptured = false
+        fontZoomCaptured = false
         window?.ignoresMouseEvents = true
         if locked {
             // 锁定这一刻可能正悬停/正长按/正拖到一半,全部清零,不留任何残留状态。
@@ -922,6 +1011,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         cancelPendingPress()
         setAdjustingWidth(false)
         clearControlsHoverState()
+        stopFontZoom()
     }
 
     private func installMouseMonitors() {
@@ -1186,6 +1276,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
                 clearControlsHoverState()
                 if isHoveringLyrics { isHoveringLyrics = false }
             }
+            stopFontZoom()
             return
         }
         let loc = NSEvent.mouseLocation
@@ -1258,6 +1349,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             setLyricsCapture(insideLyrics && lyricsHotZoneLocal != nil && !isPositionLocked
                              && !placementMode.isPreset && !AppSettings.shared.overlayDragNeedsLongPress
                              && !clickReplayInFlight)
+            // 锁定、长按模式也接(见 fontZoomCaptured)。
+            refreshFontZoomCapture()
             if isAdjustingWidth, widthDrag == nil {
                 let onEdge = hit == nil
                     && OverlayWidthDrag.edge(at: localPoint, windowSize: frame.size) != nil
