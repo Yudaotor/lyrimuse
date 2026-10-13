@@ -10,16 +10,23 @@ import (
 	"unicode/utf16"
 )
 
-// 正在放的 MP3 自己 ID3v2 标签里的歌词:同目录没有同名 .lrc 时的退路(见 localFileLyrics)。
-// USLT 只收写成 LRC(带时间标签)的那种 —— 不少中文 MP3 把整份 LRC 塞在这一帧里;纯文本对不上时间,不要。
-// SYLT 是逐行带时间的,换成 LRC。只认 ID3v2.3 / v2.4;v2.2(三字母帧名)不认。
+// 正在放的文件自己标签里的歌词:同目录没有同名 .lrc 时的退路(见 localFileLyrics)。只收写成 LRC(带时间标签)的那种 ——
+// 不少中文歌曲文件把整份 LRC 塞在歌词字段里;纯文本对不上时间,不要。按扩展名认格式:
+//   - MP3:开头的 ID3v2(v2.3 / v2.4;v2.2 三字母帧名不认)。SYLT 逐行带时间,换成 LRC;USLT;TXXX 里描述叫 LYRICS /
+//     UNSYNCEDLYRICS / USLT 的(有的工具把歌词写成这种自定义帧)。
+//   - AIFF / WAV:块里嵌着的那份 ID3v2(`ID3 ` / `id3 ` 块),同 MP3。
+//   - FLAC:VORBIS_COMMENT 块;OGG / Opus:第二个包(Vorbis 的注释头、OpusTags)。都是 LYRICS / UNSYNCEDLYRICS 这类键。
+//   - M4A / MP4:moov › udta › meta › ilst › ©lyr 的 data。
 
 // localFileEmbeddedMaxTagBytes:标签区大过这个就不读(多半塞了大图,歌词帧不会这么大)。
 const localFileEmbeddedMaxTagBytes = 16 << 20
 
-// localFileEmbeddedLyrics 读 MP3 的 ID3v2 标签,先 SYLT、后 USLT;都没有能用的为 false。
+// localFileEmbeddedLyrics 按扩展名读文件标签里的歌词;认不出的格式、没有能用的为 false。
 func localFileEmbeddedLyrics(path string) (string, bool) {
-	if !strings.EqualFold(strings.TrimPrefix(fileExt(path), "."), "mp3") {
+	ext := strings.ToLower(strings.TrimPrefix(fileExt(path), "."))
+	switch ext {
+	case "mp3", "flac", "ogg", "oga", "opus", "m4a", "m4b", "mp4", "aif", "aiff", "aifc", "wav", "wave":
+	default:
 		return "", false
 	}
 	f, err := os.Open(path)
@@ -28,8 +35,24 @@ func localFileEmbeddedLyrics(path string) (string, bool) {
 		return "", false
 	}
 	defer f.Close()
+	switch ext {
+	case "mp3":
+		return id3LyricsAt(f)
+	case "flac":
+		return flacEmbeddedLyrics(f)
+	case "ogg", "oga", "opus":
+		return oggEmbeddedLyrics(f)
+	case "m4a", "m4b", "mp4":
+		return mp4EmbeddedLyrics(f)
+	default:
+		return chunkedID3Lyrics(f, ext == "wav" || ext == "wave")
+	}
+}
+
+// id3LyricsAt:从读写位置开始是一份 ID3v2 标签(10 字节头 + 标签区)时读里面的歌词。
+func id3LyricsAt(r io.Reader) (string, bool) {
 	header := make([]byte, 10)
-	if _, err := io.ReadFull(f, header); err != nil || !bytes.HasPrefix(header, []byte("ID3")) {
+	if _, err := io.ReadFull(r, header); err != nil || !bytes.HasPrefix(header, []byte("ID3")) {
 		return "", false
 	}
 	size := syncsafeInt(header[6:10])
@@ -37,10 +60,253 @@ func localFileEmbeddedLyrics(path string) (string, bool) {
 		return "", false
 	}
 	tag := make([]byte, size)
-	if _, err := io.ReadFull(f, tag); err != nil {
+	if _, err := io.ReadFull(r, tag); err != nil {
 		return "", false
 	}
 	return embeddedLyricsFromID3(header, tag)
+}
+
+// chunkedID3Lyrics:AIFF(FORM,块长大端)/ WAV(RIFF,块长小端)里 `ID3 ` / `id3 ` 块装着的 ID3v2。
+func chunkedID3Lyrics(f io.ReadSeeker, riff bool) (string, bool) {
+	head := make([]byte, 12)
+	if _, err := io.ReadFull(f, head); err != nil {
+		return "", false
+	}
+	if riff && (string(head[:4]) != "RIFF" || string(head[8:12]) != "WAVE") {
+		return "", false
+	}
+	if !riff && (string(head[:4]) != "FORM" || (string(head[8:12]) != "AIFF" && string(head[8:12]) != "AIFC")) {
+		return "", false
+	}
+	for {
+		ch := make([]byte, 8)
+		if _, err := io.ReadFull(f, ch); err != nil {
+			return "", false
+		}
+		var size uint32
+		if riff {
+			size = binary.LittleEndian.Uint32(ch[4:8])
+		} else {
+			size = binary.BigEndian.Uint32(ch[4:8])
+		}
+		if id := string(ch[:4]); id == "ID3 " || id == "id3 " {
+			if size > localFileEmbeddedMaxTagBytes {
+				return "", false
+			}
+			return id3LyricsAt(io.LimitReader(f, int64(size)))
+		}
+		if _, err := f.Seek(int64(size)+int64(size&1), io.SeekCurrent); err != nil {
+			return "", false
+		}
+	}
+}
+
+// flacEmbeddedLyrics:FLAC 元数据块里的 VORBIS_COMMENT(类型 4);图片之类的块跳过。
+func flacEmbeddedLyrics(f io.ReadSeeker) (string, bool) {
+	magic := make([]byte, 4)
+	if _, err := io.ReadFull(f, magic); err != nil || string(magic) != "fLaC" {
+		return "", false
+	}
+	for {
+		bh := make([]byte, 4)
+		if _, err := io.ReadFull(f, bh); err != nil {
+			return "", false
+		}
+		last, kind := bh[0]&0x80 != 0, bh[0]&0x7F
+		size := int(bh[1])<<16 | int(bh[2])<<8 | int(bh[3])
+		if kind == 4 {
+			body := make([]byte, size)
+			if _, err := io.ReadFull(f, body); err != nil {
+				return "", false
+			}
+			return lyricsFromVorbisComment(body)
+		}
+		if last {
+			return "", false
+		}
+		if _, err := f.Seek(int64(size), io.SeekCurrent); err != nil {
+			return "", false
+		}
+	}
+}
+
+// oggEmbeddedLyrics:OGG 第一个逻辑流的第二个包(Vorbis 注释头 `\x03vorbis`、Opus 的 `OpusTags`)。包可能跨页,按分段表拼。
+func oggEmbeddedLyrics(f io.Reader) (string, bool) {
+	var packets [][]byte
+	var cur []byte
+	read := 0
+	for len(packets) < 2 {
+		h := make([]byte, 27)
+		if _, err := io.ReadFull(f, h); err != nil || string(h[:4]) != "OggS" {
+			return "", false
+		}
+		segs := make([]byte, h[26])
+		if _, err := io.ReadFull(f, segs); err != nil {
+			return "", false
+		}
+		total := 0
+		for _, s := range segs {
+			total += int(s)
+		}
+		data := make([]byte, total)
+		if _, err := io.ReadFull(f, data); err != nil {
+			return "", false
+		}
+		if read += 27 + len(segs) + total; read > localFileEmbeddedMaxTagBytes {
+			return "", false
+		}
+		off := 0
+		for _, s := range segs {
+			cur = append(cur, data[off:off+int(s)]...)
+			off += int(s)
+			if s < 255 {
+				packets = append(packets, cur)
+				cur = nil
+			}
+		}
+	}
+	p := packets[1]
+	switch {
+	case bytes.HasPrefix(p, []byte("\x03vorbis")):
+		return lyricsFromVorbisComment(p[7:])
+	case bytes.HasPrefix(p, []byte("OpusTags")):
+		return lyricsFromVorbisComment(p[8:])
+	}
+	return "", false
+}
+
+// lyricsFromVorbisComment:厂商串 + 若干条「键=值」(长度都是小端 32 位)。键不分大小写,认 LYRICS / UNSYNCEDLYRICS /
+// UNSYNCED LYRICS。纯函数,单测覆盖。
+func lyricsFromVorbisComment(b []byte) (string, bool) {
+	next := func() ([]byte, bool) {
+		if len(b) < 4 {
+			return nil, false
+		}
+		n := int(binary.LittleEndian.Uint32(b[:4]))
+		if n < 0 || n > len(b)-4 {
+			return nil, false
+		}
+		v := b[4 : 4+n]
+		b = b[4+n:]
+		return v, true
+	}
+	if _, ok := next(); !ok {
+		return "", false
+	}
+	if len(b) < 4 {
+		return "", false
+	}
+	count := int(binary.LittleEndian.Uint32(b[:4]))
+	b = b[4:]
+	for i := 0; i < count; i++ {
+		c, ok := next()
+		if !ok {
+			return "", false
+		}
+		key, value, found := bytes.Cut(c, []byte("="))
+		if !found || !isLyricsTagKey(string(key)) {
+			continue
+		}
+		if text, ok := decodeLyricBytes(value); ok && localFileLRCTimestamp.MatchString(text) {
+			return text, true
+		}
+	}
+	return "", false
+}
+
+func isLyricsTagKey(key string) bool {
+	switch strings.ToUpper(strings.TrimSpace(key)) {
+	case "LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS", "USLT":
+		return true
+	}
+	return false
+}
+
+// mp4EmbeddedLyrics:顶层找 moov(mdat 跳过,moov 在文件末尾也找得到),再顺着 udta › meta › ilst › ©lyr › data 往下。
+func mp4EmbeddedLyrics(f io.ReadSeeker) (string, bool) {
+	for {
+		kind, size, err := mp4AtomHeader(f)
+		if err != nil {
+			return "", false
+		}
+		if kind == "moov" {
+			if size > localFileEmbeddedMaxTagBytes {
+				return "", false
+			}
+			body := make([]byte, size)
+			if _, err := io.ReadFull(f, body); err != nil {
+				return "", false
+			}
+			return lyricsFromMP4Moov(body)
+		}
+		if size < 0 {
+			return "", false
+		}
+		if _, err := f.Seek(size, io.SeekCurrent); err != nil {
+			return "", false
+		}
+	}
+}
+
+// mp4AtomHeader:读一个原子头,交回类型和正文长度(去掉头);64 位长度也认,长度 0(到文件末尾)交回 -1。
+func mp4AtomHeader(r io.Reader) (string, int64, error) {
+	h := make([]byte, 8)
+	if _, err := io.ReadFull(r, h); err != nil {
+		return "", 0, err
+	}
+	size := int64(binary.BigEndian.Uint32(h[:4]))
+	kind := string(h[4:8])
+	switch size {
+	case 0:
+		return kind, -1, nil
+	case 1:
+		ext := make([]byte, 8)
+		if _, err := io.ReadFull(r, ext); err != nil {
+			return "", 0, err
+		}
+		return kind, int64(binary.BigEndian.Uint64(ext)) - 16, nil
+	}
+	if size < 8 {
+		return "", 0, fmt.Errorf("mp4 atom %q too short", kind)
+	}
+	return kind, size - 8, nil
+}
+
+// lyricsFromMP4Moov:moov 正文里 udta › meta(正文前有 4 字节版本标志)› ilst › ©lyr › data(正文前 8 字节类型与地区)。
+// 纯函数,单测覆盖。
+func lyricsFromMP4Moov(moov []byte) (string, bool) {
+	path := []struct {
+		kind string
+		skip int
+	}{{"udta", 0}, {"meta", 4}, {"ilst", 0}, {"\xa9lyr", 0}, {"data", 8}}
+	b := moov
+	for _, step := range path {
+		body, ok := mp4Child(b, step.kind)
+		if !ok || len(body) < step.skip {
+			return "", false
+		}
+		b = body[step.skip:]
+	}
+	text, ok := decodeLyricBytes(b)
+	if !ok || !localFileLRCTimestamp.MatchString(text) {
+		return "", false
+	}
+	return text, true
+}
+
+// mp4Child:在一串原子里找第一个类型对得上的,交回它的正文。
+func mp4Child(b []byte, kind string) ([]byte, bool) {
+	for len(b) >= 8 {
+		size := int(binary.BigEndian.Uint32(b[:4]))
+		if size < 8 || size > len(b) {
+			return nil, false
+		}
+		if string(b[4:8]) == kind {
+			return b[8:size], true
+		}
+		b = b[size:]
+	}
+	return nil, false
 }
 
 func fileExt(path string) string {
@@ -97,6 +363,12 @@ func embeddedLyricsFromID3(header, tag []byte) (string, bool) {
 					unsynced = text
 				}
 			}
+		case "TXXX":
+			if unsynced == "" {
+				if text, ok := textFromLyricsTXXX(body); ok && localFileLRCTimestamp.MatchString(text) {
+					unsynced = text
+				}
+			}
 		}
 		pos += 10 + size
 	}
@@ -115,6 +387,24 @@ func textFromUSLT(body []byte) (string, bool) {
 	enc := body[0]
 	_, rest, ok := splitID3Terminated(enc, body[4:])
 	if !ok {
+		return "", false
+	}
+	return decodeID3Text(enc, rest)
+}
+
+// textFromLyricsTXXX 取 TXXX 帧里的歌词。帧正文是编码(1) + 描述(以编码对应的结束符收尾) + 正文,描述是歌词那几个键
+// (isLyricsTagKey)才要。
+func textFromLyricsTXXX(body []byte) (string, bool) {
+	if len(body) < 2 {
+		return "", false
+	}
+	enc := body[0]
+	descRaw, rest, ok := splitID3Terminated(enc, body[1:])
+	if !ok {
+		return "", false
+	}
+	desc, ok := decodeID3Text(enc, descRaw)
+	if !ok || !isLyricsTagKey(desc) {
 		return "", false
 	}
 	return decodeID3Text(enc, rest)

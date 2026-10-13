@@ -50,8 +50,10 @@ public struct TornTrackHold: Sendable {
 
     /// 这个播放器的快照是整份读来的,不会撕裂:Kaset 走 AppleScript `get player info`,歌名中途换了没有、换了算不算
     /// 另一段录音,`KasetPlayerInfo.steadyIdentity` 已经判过。按住只会让界面停在上一拍(02 章决策 84)。
+    /// reAMP 也是:它把标题(「歌手 - 歌名」一个字段)和时长一起发,歌手、专辑、时长从这一份标题或它开着的那个文件来,
+    /// 同专辑两首时长相同时按住只会让新歌晚 12 秒才换上(02 章决策 126)。
     public static func arrivesWhole(bundle: String) -> Bool {
-        bundle == PlaybackPlayer.kaset.bundleIdentifier
+        bundle == PlaybackPlayer.kaset.bundleIdentifier || bundle == PlaybackPlayer.reamp.bundleIdentifier
     }
 
     public static func isTorn(current: Fields, next: Fields) -> Bool {

@@ -678,6 +678,14 @@ func runPlayerIdentityTests() {
         expectEqual(sourceBytes(clientSource, contain: "|| PlayerTitleSplit.streamPlaceholder(bundleID: bundleID, title: snapshot.title"),
                     true, "电台流 契约: 连接那两拍走「不是音乐」那道闸(playerContentNotMusic)")
         expectEqual(P.strippingTrailingParenthetical("(Groove Salad)"), "(Groove Salad)", "拆标题: 整串都是括号时不去")
+        expectEqual([P.shouldLookUpFile(found: nil, attempts: 0, sinceChecked: 0),
+                     P.shouldLookUpFile(found: true, attempts: 1, sinceChecked: 100),
+                     P.shouldLookUpFile(found: false, attempts: 1, sinceChecked: 1),
+                     P.shouldLookUpFile(found: false, attempts: 1, sinceChecked: 2.5),
+                     P.shouldLookUpFile(found: false, attempts: 3, sinceChecked: 5),
+                     P.shouldLookUpFile(found: false, attempts: 3, sinceChecked: 21)],
+                    [true, false, false, true, false, true],
+                    "找正在放的文件: 没找过就找、找到过不再找、没找到隔 2 秒再找,连着 3 次都没有就隔 20 秒再找一轮")
         // 电台流延迟线:新标题晚 streamLeadSecs 才换上去,进度从推算的出声时刻起算;连上后的第一首不给进度。
         do {
             typealias Line = P.StreamDelayLine
@@ -708,10 +716,10 @@ func runPlayerIdentityTests() {
             let a = feed("A1 - One (Station: x [S])", elapsed: 30, at: 0)
             expectEqual(a?.title == "One" && a?.elapsedTime == nil, true, "电台延迟线 出口: 第一首不给进度")
             let held = feed("B2 - Two (Station: x [S])", elapsed: 0.5, at: 10)
-            expectEqual(held?.title == "One" && held?.artist == "A1" && held?.republishDueBy == t0.addingTimeInterval(13.9), true,
+            expectEqual(held?.title == "One" && held?.artist == "A1" && held?.republishDueBy == t0.addingTimeInterval(12.4), true,
                         "电台延迟线 出口: 换标题后先接着报上一首,到点补查")
             let b = feed("B2 - Two (Station: x [S])", elapsed: 6.6, at: 16.1)
-            expectEqual(b?.title == "Two" && b?.artist == "B2" && abs((b?.elapsedTime ?? -1) - 2.2) < 0.001, true,
+            expectEqual(b?.title == "Two" && b?.artist == "B2" && abs((b?.elapsedTime ?? -1) - 3.7) < 0.001, true,
                         "电台延迟线 出口: 换上之后进度从推算的出声时刻起算")
             expectEqual(P.streamClockKnown(bundleID: reamp, duration: nil, elapsed: b?.elapsedTime), true,
                         "电台延迟线: 起点推算过的才拿缓存曲长")
@@ -901,7 +909,7 @@ func runPlayerIdentityTests() {
             .kaset: (.youtubeMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                      .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
                                      .systemNeverHasArtwork, .catalogMenuRows]),
-            .reamp: (nil, [.extendedControls, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag]),
+            .reamp: (nil, [.extendedControls, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .arrivesWhole]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")

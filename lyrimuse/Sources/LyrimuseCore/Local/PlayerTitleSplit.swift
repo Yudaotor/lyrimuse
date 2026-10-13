@@ -77,8 +77,9 @@ public enum PlayerTitleSplit {
     // MARK: 电台流延迟线
 
     /// reAMP 换电台标题比这首真正出声早多少秒:它一收到新标题就换,声音要等缓冲里前面那几秒放完。本机测试台(开头突发
-    /// 0 / 16KB / 64KB / 320KB)量到 3.8~5.9 秒,多数在 4.2~4.5 秒;SomaFM 4.3 秒。见 02 章决策 126「电台逐行歌词」。
-    public static let streamLeadSecs: TimeInterval = 4.4
+    /// 0 / 16KB / 64KB / 320KB)量到 3.8~5.9 秒,多数在 4.2~4.5 秒;SomaFM 4.3 秒。电台往往在新歌开始之后才发标题、晚多少
+    /// 不固定(SomaFM 每 2.8 秒才能插一次),歌词因此总是偏晚:在 4.4 秒上再提前 1.5 秒。见 02 章决策 126「电台逐行歌词」。
+    public static let streamLeadSecs: TimeInterval = 2.9
 
     /// 电台流的延迟线:屏上在放的那首(`shown`)和收到了、还没出声的下一首(`pending`)。`start` 是推算的出声时刻;
     /// 连上后的第一首不知道从哪里进来的,为 nil(不给进度)。
@@ -270,25 +271,36 @@ public enum PlayerTitleSplit {
         var attempts: Int
     }
 
-    /// 按播放器报的标题记:同一首每拍不重复读盘。没找到的隔 `retryInterval` 再找,最多 `maxAttempts` 次 —— 换歌那一拍
-    /// 播放器可能还没打开新文件。
+    /// 按播放器报的标题记:同一首每拍不重复读盘。没找到的隔 `retryInterval` 再找,连找 `maxAttempts` 次 —— 换歌那一拍
+    /// 播放器可能还没打开新文件;还是没有就隔 `giveUpRetryInterval` 再找一轮(系统会话里挂着旧标题、它开着的却是另一个
+    /// 文件时会连着对不上,之后真放这一首就对得上了)。
     private static let cache = OSAllocatedUnfairLock<[String: CacheEntry]>(initialState: [:])
     static let retryInterval: TimeInterval = 2
     static let maxAttempts = 3
+    static let giveUpRetryInterval: TimeInterval = 20
+
+    /// 这一拍要不要再去找文件:找到过的不找;没找到的按上面的节奏。纯函数,selftest 覆盖。
+    public static func shouldLookUpFile(found: Bool?, attempts: Int, sinceChecked: TimeInterval) -> Bool {
+        guard let found else { return true }
+        if found { return false }
+        return sinceChecked >= (attempts >= maxAttempts ? giveUpRetryInterval : retryInterval)
+    }
 
     /// 正在放的那个文件换来的身份;不归这里管、没进程号、找不到对得上的文件时为 nil。
     static func fileIdentity(bundleID: String?, title: String?, duration: Double?, pid: Int?,
                              now: Date = Date()) -> FileIdentity? {
         guard let bundleID, bundleIDs.contains(bundleID), let title, !title.isEmpty else { return nil }
-        if let hit = cache.withLock({ $0[title] }),
-           hit.path != nil || hit.attempts >= maxAttempts || now.timeIntervalSince(hit.checkedAt) < retryInterval {
+        let hit = cache.withLock { $0[title] }
+        if let hit, !shouldLookUpFile(found: hit.path != nil, attempts: hit.attempts,
+                                      sinceChecked: now.timeIntervalSince(hit.checkedAt)) {
             return hit.identity
         }
         guard let pid, pid > 0 else { return nil }
         let found = lookUp(title: title, duration: duration, pid: pid_t(pid))
         cache.withLock { entries in
             if entries.count > 64 { entries.removeAll() }
-            let attempts = (entries[title]?.attempts ?? 0) + 1
+            let previous = entries[title]?.attempts ?? 0
+            let attempts = previous >= maxAttempts ? 1 : previous + 1
             entries[title] = CacheEntry(identity: found?.identity, path: found?.path, checkedAt: now, attempts: attempts)
         }
         return found?.identity

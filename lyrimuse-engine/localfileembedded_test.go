@@ -101,3 +101,131 @@ func TestLocalFileLyricsFallsBackToEmbedded(t *testing.T) {
 		t.Errorf("同名 .lrc 优先于内嵌:得到 %q", got)
 	}
 }
+
+func vorbisComment(fields ...string) []byte {
+	le := func(n int) []byte { return binary.LittleEndian.AppendUint32(nil, uint32(n)) }
+	out := append(le(6), "vendor"...)
+	out = append(out, le(len(fields))...)
+	for _, f := range fields {
+		out = append(append(out, le(len(f))...), f...)
+	}
+	return out
+}
+
+func writeTemp(t *testing.T, name string, data []byte) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+const embeddedLRC = "[00:01.00]稻香\n[00:05.20]对这个世界如果你有太多的抱怨"
+
+func TestEmbeddedLyricsFLAC(t *testing.T) {
+	block := func(kind byte, last bool, body []byte) []byte {
+		if last {
+			kind |= 0x80
+		}
+		return append([]byte{kind, byte(len(body) >> 16), byte(len(body) >> 8), byte(len(body))}, body...)
+	}
+	data := append([]byte("fLaC"), block(0, false, make([]byte, 34))...)
+	data = append(data, block(6, false, make([]byte, 100))...)
+	data = append(data, block(4, true, vorbisComment("TITLE=稻香", "lyrics="+embeddedLRC))...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "a.flac", data)); !ok || got != embeddedLRC {
+		t.Fatalf("FLAC 的 VORBIS_COMMENT(图片块跳过、键不分大小写):得到 %q, ok=%v", got, ok)
+	}
+	plain := append([]byte("fLaC"), block(4, true, vorbisComment("LYRICS=只有文字"))...)
+	if _, ok := localFileEmbeddedLyrics(writeTemp(t, "b.flac", plain)); ok {
+		t.Error("FLAC 里没有时间标签的歌词不该收")
+	}
+}
+
+func TestEmbeddedLyricsOgg(t *testing.T) {
+	page := func(packets ...[]byte) []byte {
+		var segs, body []byte
+		for _, p := range packets {
+			n := len(p)
+			for n >= 255 {
+				segs = append(segs, 255)
+				n -= 255
+			}
+			segs = append(segs, byte(n))
+			body = append(body, p...)
+		}
+		h := make([]byte, 27)
+		copy(h, "OggS")
+		h[26] = byte(len(segs))
+		return append(append(h, segs...), body...)
+	}
+	tags := append([]byte("OpusTags"), vorbisComment("UNSYNCEDLYRICS="+embeddedLRC)...)
+	for len(tags) < 300 {
+		tags = append(tags, 0)
+	}
+	data := append(page([]byte("OpusHead........")), page(tags)...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "a.opus", data)); !ok || got != embeddedLRC {
+		t.Fatalf("Opus 的 OpusTags(包长过 255、分段拼回):得到 %q, ok=%v", got, ok)
+	}
+	vorbis := append(page(append([]byte("\x01vorbis"), make([]byte, 23)...)),
+		page(append([]byte("\x03vorbis"), vorbisComment("LYRICS="+embeddedLRC)...))...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "a.ogg", vorbis)); !ok || got != embeddedLRC {
+		t.Fatalf("OGG Vorbis 的注释头:得到 %q, ok=%v", got, ok)
+	}
+}
+
+func TestEmbeddedLyricsMP4(t *testing.T) {
+	atom := func(kind string, body ...[]byte) []byte {
+		var b []byte
+		for _, x := range body {
+			b = append(b, x...)
+		}
+		return append(append(binary.BigEndian.AppendUint32(nil, uint32(8+len(b))), kind...), b...)
+	}
+	lyr := atom("\xa9lyr", atom("data", []byte{0, 0, 0, 1, 0, 0, 0, 0}, []byte(embeddedLRC)))
+	moov := atom("moov", atom("mvhd", make([]byte, 100)), atom("udta", atom("meta", []byte{0, 0, 0, 0}, atom("hdlr", make([]byte, 25)),
+		atom("ilst", atom("\xa9nam", atom("data", []byte{0, 0, 0, 1, 0, 0, 0, 0}, []byte("稻香"))), lyr))))
+	data := append(append(atom("ftyp", []byte("M4A \x00\x00\x00\x00")), atom("mdat", make([]byte, 4096))...), moov...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "a.m4a", data)); !ok || got != embeddedLRC {
+		t.Fatalf("M4A 的 ©lyr(moov 在 mdat 后面):得到 %q, ok=%v", got, ok)
+	}
+}
+
+func TestEmbeddedLyricsChunkedID3(t *testing.T) {
+	tag := id3Tag(3, id3Frame(3, "USLT", usltBody(3, []byte(embeddedLRC))))
+	be := func(n int) []byte { return binary.BigEndian.AppendUint32(nil, uint32(n)) }
+	le := func(n int) []byte { return binary.LittleEndian.AppendUint32(nil, uint32(n)) }
+	aiff := append(append([]byte("FORM"), be(0)...), "AIFF"...)
+	aiff = append(append(append(aiff, "COMM"...), be(18)...), make([]byte, 18)...)
+	aiff = append(append(append(aiff, "ID3 "...), be(len(tag))...), tag...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "a.aiff", aiff)); !ok || got != embeddedLRC {
+		t.Fatalf("AIFF 的 ID3 块:得到 %q, ok=%v", got, ok)
+	}
+	wav := append(append([]byte("RIFF"), le(0)...), "WAVE"...)
+	wav = append(append(append(wav, "fmt "...), le(17)...), make([]byte, 18)...)
+	wav = append(append(append(wav, "id3 "...), le(len(tag))...), tag...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "a.wav", wav)); !ok || got != embeddedLRC {
+		t.Fatalf("WAV 的 id3 块(奇数长度的块补一字节):得到 %q, ok=%v", got, ok)
+	}
+}
+
+func TestEmbeddedLyricsTXXX(t *testing.T) {
+	utf16 := func(s string) []byte {
+		out := []byte{0xFF, 0xFE}
+		for _, r := range s {
+			out = append(out, byte(r), byte(r>>8))
+		}
+		return out
+	}
+	body := append([]byte{1}, utf16("USLT")...)
+	body = append(append(body, 0, 0), utf16(embeddedLRC)...)
+	tag := id3Tag(3, id3Frame(3, "TXXX", body))
+	if got, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); !ok || got != embeddedLRC {
+		t.Fatalf("描述叫 USLT 的 TXXX(ffmpeg 就这么写):得到 %q, ok=%v", got, ok)
+	}
+	other := append(append([]byte{3}, "comment\x00"...), embeddedLRC...)
+	tag = id3Tag(3, id3Frame(3, "TXXX", other))
+	if _, ok := embeddedLyricsFromID3(tag[:10], tag[10:]); ok {
+		t.Error("别的描述的 TXXX 不当歌词")
+	}
+}
