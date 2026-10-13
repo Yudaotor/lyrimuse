@@ -2265,8 +2265,9 @@ final class LastfmStatsService: ObservableObject {
 
     private func applyLocalAliases(_ derived: EnrichCacheReader.LocalAliasTables, rebuildFamilies: Bool) {
         var tables = derived
-        // 实体那一层和撤出表有开关(features.json 的 song_entity_phase1),关着时当空表,族退回原来的写法族(18 章决策 9、19)。
-        if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:] }
+        // 实体那一层和撤出表有开关(features.json 的 song_entity_phase1),关着时当空表,族退回原来的写法族(18 章决策 9、19);
+        // 上送写法那一层建在实体那一层上,跟它一起关(12 章决策 73)。
+        if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:]; tables.rewrites = [:] }
         guard tables != localAliasTables else { return }
         let old = localAliasTables
         localAliasTables = tables
@@ -2274,6 +2275,7 @@ final class LastfmStatsService: ObservableObject {
         PlayCountFold.setLocalTitleAliases(tables.titles)
         PlayCountFold.setEntityFamilyAliases(tables.entities)
         PlayCountFold.setAliasWithdrawals(tables.withdrawals.mapValues(\.key))
+        PlayCountFold.setScrobbleRewriteAliases(tables.rewrites)
         // 受影响的写法先攒起来,等族建好/重建好再按族索引把它们的次数标过期(见 flushLocalAliasStaleMarks):
         // 歌手别名变了 → 这个歌手键、以及新旧代表写法的键;歌名别名变了 → 英文键 + 新旧中文歌名的折叠键。
         for key in Set(old.artists.keys).union(tables.artists.keys) where old.artists[key] != tables.artists[key] {
@@ -2289,26 +2291,27 @@ final class LastfmStatsService: ObservableObject {
                 if let h = after[eng] { pendingLocalAliasTouched[artistKey, default: []].insert(PlayCountFold.foldTitle(h)) }
             }
         }
-        // 实体别名变了 → 那个族键和新旧代表键;里程碑报过的档跟着抄到新族键下。
-        if old.entities != tables.entities {
-            for key in Set(old.entities.keys).union(tables.entities.keys) where old.entities[key] != tables.entities[key] {
+        // 实体那一层和上送写法那一层合起来的映射变了 → 那个族键和新旧最终族键;里程碑报过的档跟着抄到新族键下。
+        let oldFamilies = old.familyAliases, newFamilies = tables.familyAliases
+        if oldFamilies != newFamilies {
+            for key in Set(oldFamilies.keys).union(newFamilies.keys) where oldFamilies[key] != newFamilies[key] {
                 pendingEntityTouched.insert(key)
-                if let v = old.entities[key] { pendingEntityTouched.insert(v) }
-                if let v = tables.entities[key] { pendingEntityTouched.insert(v) }
+                if let v = oldFamilies[key] { pendingEntityTouched.insert(v) }
+                if let v = newFamilies[key] { pendingEntityTouched.insert(v) }
             }
-            ListenMilestoneCenter.carryOverFamilies(from: old.entities, to: tables.entities)
+            ListenMilestoneCenter.carryOverFamilies(from: oldFamilies, to: newFamilies)
         }
-        // 撤出表变了 → 原来的族、撤出后的族,以及它们的实体代表键。
+        // 撤出表变了 → 原来的族、撤出后的族,以及它们的最终族键。
         for key in Set(old.withdrawals.keys).union(tables.withdrawals.keys) where old.withdrawals[key] != tables.withdrawals[key] {
             for w in [old.withdrawals[key], tables.withdrawals[key]].compactMap({ $0 }) {
                 for k in [w.family, w.key] {
                     pendingEntityTouched.insert(k)
-                    if let v = old.entities[k] { pendingEntityTouched.insert(v) }
-                    if let v = tables.entities[k] { pendingEntityTouched.insert(v) }
+                    if let v = oldFamilies[k] { pendingEntityTouched.insert(v) }
+                    if let v = newFamilies[k] { pendingEntityTouched.insert(v) }
                 }
             }
         }
-        logger.notice("local aliases: \(tables.artists.count, privacy: .public) artist + \(tables.titles.values.reduce(0) { $0 + $1.count }, privacy: .public) title + \(tables.entities.count, privacy: .public) song-entity alias(es) + \(tables.withdrawals.count, privacy: .public) alias withdrawal(s) inferred from local caches")
+        logger.notice("local aliases: \(tables.artists.count, privacy: .public) artist + \(tables.titles.values.reduce(0) { $0 + $1.count }, privacy: .public) title + \(tables.entities.count, privacy: .public) song-entity alias(es) + \(tables.withdrawals.count, privacy: .public) alias withdrawal(s) + \(tables.rewrites.count, privacy: .public) scrobble-rewrite alias(es) inferred from local caches")
         // 推出来的每一条都记进日志(表变了才记,不是每拍):这张表没有界面,排查"为什么并了/没并"只能靠它。
         // os_log 对 public 字串约 1 KB 截断,分块记。
         let artistItems = tables.artists.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
@@ -2316,8 +2319,9 @@ final class LastfmStatsService: ObservableObject {
             .flatMap { a, m in m.sorted { $0.key < $1.key }.map { "\(a)|\($0.key)→\($0.value)" } }
         let entityItems = tables.entities.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
         let withdrawalItems = tables.withdrawals.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value.family)→\($0.value.key)" }
+        let rewriteItems = tables.rewrites.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
         for (label, items) in [("artists", artistItems), ("titles", titleItems), ("song entities", entityItems),
-                               ("withdrawals", withdrawalItems)] {
+                               ("withdrawals", withdrawalItems), ("scrobble rewrites", rewriteItems)] {
             var start = 0
             while start < items.count {
                 let chunk = items[start..<min(start + 12, items.count)].joined(separator: "; ")
@@ -2444,9 +2448,9 @@ final class LastfmStatsService: ObservableObject {
 
     /// 歌曲榜、专辑榜的合并口径版本:改 ChartMerge 的分组规则、两种榜的折叠键或取数深度时 +1
     /// (见 StatsSnapshot.mergedChartVersion)。
-    private static let mergedChartVersion = 3
+    private static let mergedChartVersion = 4
     /// 次数表的口径版本,读写快照两处都用它,见 StatsSnapshot.mergedCountsVersion。
-    private static let mergedCountsVersion = 19
+    private static let mergedCountsVersion = 20
 
     /// 快照里允许持久化的 `fetchedAt` 键。榜单键是 `"\(kind)|\(period)"`,跟 `refreshChart`
     /// 拼法一致。

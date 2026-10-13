@@ -750,9 +750,9 @@ func runLastfmTests() {
         // 契约:开关关着时当空表;实体表变了要标过期、抄里程碑;别名输入比对带上 song
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let stats = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"), encoding: .utf8)) ?? ""
-        expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:] }")
+        expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:]; tables.rewrites = [:] }")
                     && stats.contains("PlayCountFold.setEntityFamilyAliases(tables.entities)")
-                    && stats.contains("ListenMilestoneCenter.carryOverFamilies(from: old.entities, to: tables.entities)")
+                    && stats.contains("ListenMilestoneCenter.carryOverFamilies(from: oldFamilies, to: newFamilies)")
                     && stats.contains("touchedFamilies.contains(PlayCountFold.baseFamilyKey(artist: form.artist, title: form.title))"),
                     true, "实体族(契约): 开关、灌表、抄里程碑、标过期四处都接上了")
         let diff = (try? String(contentsOf: root.appendingPathComponent("LyrimuseCore/Local/EnrichIndexDiff.swift"), encoding: .utf8)) ?? ""
@@ -796,6 +796,112 @@ func runLastfmTests() {
             .appendingPathComponent("lyrimuse/Settings/DiagnosticsExporter.swift"), encoding: .utf8)) ?? ""
         expectEqual(exporter.contains("files.append((\"song-entity-alias-gaps.txt\", LogRedactor.redactAll(gaps, secrets: secrets)))"), true,
                     "少并明细(契约): 进诊断包,过脱敏")
+    }
+
+    // ---- ScrobbleRewriteFamilies:智能档上送的写法并回本机写法那一族(12 章决策 73) ----
+    do {
+        typealias R = ScrobbleRewriteFamilies.Rewrite
+        let base = { (a: String, t: String) in PlayCountFold.baseFamilyKey(artist: a, title: t, artists: [:], titles: [:]) }
+        let catalog = Data(#"""
+        {"HUSH, 孙盛希\n一分之二":{"verdict":"match","artist":"Shi Shi","track":"一分之二"},
+         "陶喆\n那个女孩":{"verdict":"keep","artist":"陶喆","track":"那个女孩"},
+         "某人\n某歌":{"verdict":"defer","artist":"某人"},
+         "Abel Tesfaye\nAfter Hours":{"verdict":"match","artist":"The Weeknd"},
+         "没有换行":{"verdict":"match","artist":"X","track":"Y"}}
+        """#.utf8)
+        expectEqual(ScrobbleRewriteFamilies.rewrites(fromCatalog: catalog, source: URL(fileURLWithPath: "/dev/null")),
+                    [R(artist: "Abel Tesfaye", title: "After Hours", sentArtist: "The Weeknd", sentTitle: "After Hours"),
+                     R(artist: "HUSH, 孙盛希", title: "一分之二", sentArtist: "Shi Shi", sentTitle: "一分之二")],
+                    "上送写法: 只认改写过的(match),上送的曲名省略时按原样,键里没有换行的跳过")
+
+        let hush = R(artist: "HUSH, 孙盛希", title: "一分之二", sentArtist: "Shi Shi", sentTitle: "一分之二")
+        let local = base("HUSH, 孙盛希", "一分之二"), sent = base("Shi Shi", "一分之二")
+        expectEqual(local != sent, true, "上送写法: 前提,本机写法和上送写法本来是两族")
+        let one = ScrobbleRewriteFamilies.derive([hush], familyKey: base, songs: [local: ["s_1"]])
+        expectEqual(Set(one.keys).union(one.values), [local, sent], "上送写法: 本机写法和上送写法并成一族")
+        expectEqual(one.count, 1, "上送写法: 一族只有一个代表键")
+        expectEqual(ScrobbleRewriteFamilies.derive([
+            R(artist: "A", title: "One", sentArtist: "Z", sentTitle: "Song"),
+            R(artist: "B", title: "Two", sentArtist: "Z", sentTitle: "Song"),
+        ], familyKey: base, songs: [:]), [:], "上送写法: 一个上送写法连着两个本机族时分不清是哪一首,不并")
+        expectEqual(ScrobbleRewriteFamilies.derive([hush], familyKey: base, songs: [local: ["s_1"], sent: ["s_2"]]), [:],
+                    "上送写法: 两边都有实体 id、互不重叠(实体判成不同歌)的不并")
+        expectEqual(ScrobbleRewriteFamilies.derive([hush], familyKey: base, songs: [local: ["s_1"], sent: ["s_1", "s_9"]]).count, 1,
+                    "上送写法: 两边实体有重叠的照并")
+        let partly = ScrobbleRewriteFamilies.derive([
+            R(artist: "A", title: "One", sentArtist: "B", sentTitle: "Two"),
+            R(artist: "D", title: "Four", sentArtist: "A", sentTitle: "One"),
+        ], familyKey: base, songs: [base("A", "One"): ["s_1"], base("B", "Two"): ["s_2"]])
+        expectEqual(Set(partly.keys).union(partly.values), [base("A", "One"), base("D", "Four")],
+                    "上送写法: 实体不同的那一条不连,同一片里其余的照并")
+        let unchanged = ScrobbleRewriteFamilies.derive([
+            R(artist: "A", title: "One", sentArtist: "A", sentTitle: "One"),
+            R(artist: "A", title: "Uno", sentArtist: "A", sentTitle: "One"),
+        ], familyKey: base, songs: [:])
+        expectEqual(Set(unchanged.keys).union(unchanged.values), [base("A", "One"), base("A", "Uno")],
+                    "上送写法: 上送写法跟本机写法本来一族的那条不算多连一族,另一条照并")
+        let chain = [R(artist: "A", title: "One", sentArtist: "M", sentTitle: "Mid"),
+                     R(artist: "M", title: "Mid", sentArtist: "C", sentTitle: "Three")]
+        expectEqual(ScrobbleRewriteFamilies.derive(chain, familyKey: base, songs: [base("A", "One"): ["s_1"], base("C", "Three"): ["s_2"]]), [:],
+                    "上送写法: 连成一片之后片里有两个互不重叠的实体,整片不并")
+        let joined = ScrobbleRewriteFamilies.derive(chain, familyKey: base, songs: [base("A", "One"): ["s_1"]])
+        expectEqual(Set(joined.keys).union(joined.values), [base("A", "One"), base("M", "Mid"), base("C", "Three")],
+                    "上送写法: 连成一片的整片并")
+        expectEqual(Set(joined.values).count, 1, "上送写法: 一片只有一个代表键")
+        expectEqual(ScrobbleRewriteFamilies.derive([R(artist: "陶喆", title: "那个女孩", sentArtist: "陶喆", sentTitle: "那個女孩")],
+                                                   familyKey: base, songs: [:]), [:], "上送写法: 本来就是一族的(繁简)不产出")
+        let rep = ScrobbleRewriteFamilies.derive([R(artist: "Khalil Fong", title: "Oasis X", sentArtist: "方大同", sentTitle: "Oasis X")],
+                                                 familyKey: base, songs: [:])
+        expectEqual(rep, [base("Khalil Fong", "Oasis X"): base("方大同", "Oasis X")], "上送写法: 代表键含汉字的优先")
+
+        // familyKey 在实体那一层之后查这一层,按实体那一层给的族键查
+        let k = PlayCountFold.baseFamilyKey(artist: "Shi Shi", title: "一分之二")
+        PlayCountFold.setScrobbleRewriteAliases([k: "rep|key"])
+        expectEqual(PlayCountFold.familyKey(artist: "Shi Shi", title: "一分之二"), "rep|key", "上送写法: familyKey 最后查上送写法别名表")
+        PlayCountFold.setEntityFamilyAliases([k: "entity|rep"])
+        expectEqual(PlayCountFold.familyKey(artist: "Shi Shi", title: "一分之二"), "entity|rep", "上送写法: 实体那一层给的族键不在表里时不改")
+        PlayCountFold.setScrobbleRewriteAliases(["entity|rep": "rep|key"])
+        expectEqual(PlayCountFold.familyKey(artist: "Shi Shi", title: "一分之二"), "rep|key", "上送写法: 按实体那一层给的族键查")
+        PlayCountFold.setEntityFamilyAliases([:])
+        PlayCountFold.setScrobbleRewriteAliases([:])
+
+        // 别名表推导带上编目结论;合起来的映射按最终族键给
+        typealias E = EnrichTitleAliases.Entry
+        let tables = EnrichCacheReader.deriveLocalAliasTables(entries: [
+            E(artist: "HUSH, 孙盛希", title: "一分之二", neteaseURL: nil, qqMusicURL: nil, durationSecs: 282.8, song: "s_1"),
+        ], caches: .init(), rewrites: [hush])
+        expectEqual(Set(tables.rewrites.keys).union(tables.rewrites.values), [local, sent], "上送写法: 别名表推导带上编目结论")
+        expectEqual(tables.familyAliases[sent] ?? sent, tables.familyAliases[local] ?? local, "上送写法: 合起来的映射里两族指向同一个族键")
+        var composed = EnrichCacheReader.LocalAliasTables.empty
+        composed.entities = ["x|a": "x|r"]
+        composed.rewrites = ["x|r": "x|f"]
+        expectEqual(composed.familyAliases, ["x|a": "x|f", "x|r": "x|f"], "上送写法: 实体那一层和这一层合起来按最终族键给")
+        composed.rewrites = [:]
+        expectEqual(composed.familyAliases, ["x|a": "x|r"], "上送写法: 没有这一层时就是实体那一层")
+
+        // 编目结论文件:读得到、改了看得出来(别名表据此作废)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-rewritestamp-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        expectEqual(ScrobbleRewriteFamilies.stamp(configDir: dir), nil, "上送写法作废: 没有编目结论文件时是 nil")
+        let file = dir.appendingPathComponent("lyrimuse-lastfm-catalog.json")
+        try? Data("{}".utf8).write(to: file)
+        let first = ScrobbleRewriteFamilies.stamp(configDir: dir)
+        expectEqual(first != nil, true, "上送写法作废: 引擎写出编目结论看得出来")
+        try? catalog.write(to: file)
+        expectEqual(ScrobbleRewriteFamilies.stamp(configDir: dir) != first, true, "上送写法作废: 编目结论改了看得出来")
+        expectEqual(ScrobbleRewriteFamilies.load(configDir: dir).count, 2, "上送写法: 从配置目录读编目结论")
+
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let reader = (try? String(contentsOf: sources.appendingPathComponent("LyrimuseCore/Local/EnrichCacheReader.swift"), encoding: .utf8)) ?? ""
+        expectEqual(reader.contains("if cachedAliasTables != nil && ScrobbleRewriteFamilies.stamp() != rewriteCatalogStamp {")
+                    && reader.contains("rewriteCatalogStamp = rewriteStamp")
+                    && reader.contains("rewrites: ScrobbleRewriteFamilies.load(),"), true,
+                    "上送写法(契约): 推导时读编目结论,它变了别名表作废重算")
+        let stats = (try? String(contentsOf: sources.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"), encoding: .utf8)) ?? ""
+        expectEqual(stats.contains("PlayCountFold.setScrobbleRewriteAliases(tables.rewrites)")
+                    && stats.contains("let oldFamilies = old.familyAliases, newFamilies = tables.familyAliases"), true,
+                    "上送写法(契约): 灌表,标过期、抄里程碑按合起来的映射比")
     }
 
     // ---- 旧别名表并起来、录音对不上的写法撤出来(SongEntityFamilies.withdrawals,18 章决策 19) ----
@@ -850,7 +956,7 @@ func runLastfmTests() {
 
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let stats = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/LastfmStatsService.swift"), encoding: .utf8)) ?? ""
-        expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:] }")
+        expectEqual(stats.contains("if !FeatureSettingsStore.shared.songEntityPhase1Enabled { tables.entities = [:]; tables.withdrawals = [:]; tables.rewrites = [:] }")
                     && stats.contains("PlayCountFold.setAliasWithdrawals(tables.withdrawals.mapValues(\\.key))")
                     && stats.contains("for key in Set(old.withdrawals.keys).union(tables.withdrawals.keys) where old.withdrawals[key] != tables.withdrawals[key] {"),
                     true, "撤出(契约): 开关、灌表、标过期三处都接上了")

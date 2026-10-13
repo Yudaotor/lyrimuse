@@ -378,10 +378,12 @@ public enum PlayCountFold {
     /// 只作用在**派生索引** primaryCreditFamilies 的键上,不改 PlayCountFold.key 本身的
     /// 歌手口径 —— 沿用合唱 credit 归并的既有做法:那个键是整本统计账的身份,
     /// 而这里要的只是「查族时多看一眼隔壁桶」。
-    /// 最后再查一层实体别名表(同一个歌曲实体的写法并成一族,18 章决策 9)。
+    /// 最后再查两层:实体别名表(同一个歌曲实体的写法并成一族,18 章决策 9)、上送写法别名表(智能档上送的写法并回本机写法
+    /// 那一族,12 章决策 73)。
     public static func familyKey(artist: String, title: String) -> String {
         let base = baseFamilyKey(artist: artist, title: title)
-        return lookupEntityFamilyAlias(base) ?? base
+        let entity = lookupEntityFamilyAlias(base) ?? base
+        return lookupScrobbleRewriteAlias(entity) ?? entity
     }
 
     /// familyKey 去掉实体那一层:只按合唱归首位、歌手别名表、歌名别名表折。实体别名表的键就是它。
@@ -529,6 +531,23 @@ public enum PlayCountFold {
         entityLock.lock()
         let value = entityFamilyAliases[key]
         entityLock.unlock()
+        return value
+    }
+
+    private static let rewriteLock = NSLock()
+    nonisolated(unsafe) private static var scrobbleRewriteAliases: [String: String] = [:]
+
+    /// 灌入 `ScrobbleRewriteFamilies.derive` 的结果:到实体那一层为止的族键 → 代表族键。开关关着时灌空表。
+    public static func setScrobbleRewriteAliases(_ table: [String: String]) {
+        rewriteLock.lock()
+        scrobbleRewriteAliases = table
+        rewriteLock.unlock()
+    }
+
+    private static func lookupScrobbleRewriteAlias(_ key: String) -> String? {
+        rewriteLock.lock()
+        let value = scrobbleRewriteAliases[key]
+        rewriteLock.unlock()
         return value
     }
 

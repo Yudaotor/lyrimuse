@@ -1581,7 +1581,21 @@ public enum EnrichCacheReader {
         public var entities: [String: String] = [:]
         /// 旧别名表并起来、录音对不上而撤出来的写法块:原始族键 → 撤出记录(SongEntityFamilies.withdrawals,18 章决策 19)。
         public var withdrawals: [String: SongEntityFamilies.AliasWithdrawal] = [:]
+        /// 上送写法别名:到实体那一层为止的族键 → 代表族键(ScrobbleRewriteFamilies.derive,12 章决策 73)。
+        public var rewrites: [String: String] = [:]
         public static let empty = LocalAliasTables(artists: [:], titles: [:])
+
+        /// 实体那一层和上送写法那一层合起来:族键(baseFamilyKey)→ 最终的族键,不在表里的键代表它自己。标过期、里程碑换键
+        /// 按它比新旧。
+        public var familyAliases: [String: String] {
+            var out: [String: String] = [:]
+            for key in Set(entities.keys).union(rewrites.keys) {
+                let entity = entities[key] ?? key
+                let final = rewrites[entity] ?? entity
+                if final != key { out[key] = final }
+            }
+            return out
+        }
     }
 
     /// 已算好的那份(没算过给 nil)。主线程同步读,不触发计算 —— 计算走 `computeLocalAliasTables`。
@@ -1609,6 +1623,8 @@ public enum EnrichCacheReader {
     private static var aliasTablesGeneration = 0
     /// 算 `cachedAliasTables` 那一刻引擎三份 MusicBrainz 缓存的样子;采纳新一版缓存时它们变了,别名表也作废(见 adopt)。
     private static var aliasCachesStamp: ArtistIdentityCaches.Stamp?
+    /// 算 `cachedAliasTables` 那一刻引擎编目结论文件的样子,同上(上送写法那一层读它)。
+    private static var rewriteCatalogStamp: ScrobbleRewriteFamilies.Stamp?
     /// 上一轮 E2 比对用到的、剥好的正文(按 key + body_crc 记),下一轮只剥新的(见 `EnrichTitleAliases.StoredBodies`)。
     private static var aliasLyricsBodies: [EnrichTitleAliases.LyricsRef: String] = [:]
 
@@ -1631,6 +1647,7 @@ public enum EnrichCacheReader {
         // 先看再读:看完、读之前它们又变了的话,记下的是旧样子,下一次采纳时照样会重算。
         let cachesStamp = ArtistIdentityCaches.stamp()
         let caches = ArtistIdentityCaches.load()
+        let rewriteStamp = ScrobbleRewriteFamilies.stamp()
         let remembered = aliasLyricsBodies
         let dir = bodiesDir
         let (tables, used) = await Task.detached(priority: .utility) {
@@ -1656,20 +1673,24 @@ public enum EnrichCacheReader {
             var bodies = EnrichTitleAliases.StoredBodies(remembered: remembered) { ref in
                 readBody(forKey: ref.key, crc: ref.crc, in: dir)?.lyrics
             }
-            let tables = deriveLocalAliasTables(entries: inputs, caches: caches, storedBody: { bodies.body(for: $0) })
+            let tables = deriveLocalAliasTables(entries: inputs, caches: caches, rewrites: ScrobbleRewriteFamilies.load(),
+                                                storedBody: { bodies.body(for: $0) })
             return (tables, bodies.used)
         }.value
         aliasLyricsBodies = used
         if gen == aliasTablesGeneration, cachedEntries != nil {
             cachedAliasTables = tables
             aliasCachesStamp = cachesStamp
+            rewriteCatalogStamp = rewriteStamp
         }
         return tables
     }
 
-    /// 两张别名表的推导本体(纯函数,selftest 覆盖):歌手表先推,歌名表按新推出的歌手表分桶。
+    /// 两张别名表的推导本体(纯函数,selftest 覆盖):歌手表先推,歌名表按新推出的歌手表分桶。`rewrites` 是引擎的编目结论里
+    /// 改写过的那些(上送写法那一层)。
     public nonisolated static func deriveLocalAliasTables(entries: [EnrichTitleAliases.Entry],
                                                          caches: LocalArtistAliases.MusicBrainzCaches,
+                                                         rewrites: [ScrobbleRewriteFamilies.Rewrite] = [],
                                                          storedBody: (EnrichTitleAliases.LyricsRef) -> String? = { _ in nil })
         -> LocalAliasTables {
         let artists = LocalArtistAliases.derive(caches: caches, entries: entries)
@@ -1684,7 +1705,18 @@ public enum EnrichCacheReader {
             return .init(song: song, familyKey: PlayCountFold.baseFamilyKey(artist: e.artist, title: e.title,
                                                                             artists: artists, titles: titles, withdrawals: regroup))
         }
-        return LocalAliasTables(artists: artists, titles: titles, entities: SongEntityFamilies.derive(members), withdrawals: withdrawals)
+        let entities = SongEntityFamilies.derive(members)
+        // 上送写法那一层在实体那一层之上算:族键到实体那一层为止,跟灌进全局之后 familyKey 去掉这一层算的一样。
+        let entityKey = { (artist: String, title: String) -> String in
+            let base = PlayCountFold.baseFamilyKey(artist: artist, title: title, artists: artists, titles: titles, withdrawals: regroup)
+            return entities[base] ?? base
+        }
+        var songs: [String: Set<String>] = [:]
+        for m in members {
+            songs[entities[m.familyKey] ?? m.familyKey, default: []].insert(m.song)
+        }
+        return LocalAliasTables(artists: artists, titles: titles, entities: entities, withdrawals: withdrawals,
+                                rewrites: ScrobbleRewriteFamilies.derive(rewrites, familyKey: entityKey, songs: songs))
     }
 
     /// 缓存文件的 mtime。给"要不要重算派生表"这类判断用 —— 调用方自己存一份上次的值,
@@ -1984,6 +2016,10 @@ public enum EnrichCacheReader {
         // 别名表还读引擎那三份 MusicBrainz 缓存:歌手身份核对、Top 歌手统计这类后台任务只写它们、不碰条目,
         // 只按条目判的话,它们的更新要等下一首新歌入库、整份重解或重启才接得住。
         if aliasInputsChanged || (cachedAliasTables != nil && ArtistIdentityCaches.stamp() != aliasCachesStamp) {
+            cachedAliasTables = nil; aliasTablesGeneration += 1
+        }
+        // 上送写法那一层还读引擎的编目结论:引擎每判一首新歌就写它,同样不碰条目。
+        if cachedAliasTables != nil && ScrobbleRewriteFamilies.stamp() != rewriteCatalogStamp {
             cachedAliasTables = nil; aliasTablesGeneration += 1
         }
         if previous != nil {
