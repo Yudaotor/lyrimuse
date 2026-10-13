@@ -9,9 +9,12 @@ import Foundation
 ///     - `lyrimuse-artist-identity-cache.json`:名字 → {mbid, zh}(`Soft Lipa → 蛋堡`);
 ///     - `lyrimuse-artist-primary-cache.json`:名字 → MusicBrainz 上的全部别名
 ///       (`周杰伦 → [Jay Chou, Jay, Zhou Jie Lun, ジェイ・チョウ, …]`、`Will Pan → [潘瑋柏, Wilber Pan]`)。
-///  2. enrich 缓存里的共现:两种歌手写法名下的曲目被歌词解析落到了**同一批歌曲 id**
-///     (`Khalil Fong` 与 `方大同` 共享 13 个网易云 id、`David Tao` 与 `陶喆` 3 个)。要求 ≥ 2 个
-///     不同 id —— 单个共享 id 实测全是噪音(`方大同 与 王诗安` 是合唱、`K 与 英雄联盟` 是配错)。
+///  2. enrich 缓存里的共现:两种歌手写法名下的曲目被歌词解析落到了**同一批歌曲**(见 12 章决策 75)。
+///     - 按首数,不按 id 数:同一条目上的网易云 id 和 QQ id 是同一首。
+///     - 两种写法互不包含时,要共享 `minSharedSongs` 首,两人合作的那首不算:落在这首上的条目里有一条两个
+///       名字都署了(合唱串里,或者歌名里写着另一位)。
+///     - 一种写法包含另一种(`名字 (英文名)` 与 `名字`)时共享一首就够。被包含的不在开头、前面那段又以另一块
+///       里的写法开头(没拆开的合唱串 `A×B` 里的 B)时不连它;剩下的分属几块时一个都不连。
 ///
 /// 把这些边丢进并查集,每个连通块选一个代表:优先含汉字/假名的写法,同样含的取本机曲目数最多的
 /// (那才是用户自己历史里的主流写法),再同样取字典序最小 —— 结果确定、不依赖字典遍历顺序。
@@ -36,7 +39,7 @@ public enum LocalArtistAliases {
         }
     }
 
-    public static let minSharedSongIDs = 2
+    public static let minSharedSongs = 2
     public static let minAliasLength = 3
 
     /// 歌手写法的归一键 —— 跟 PlayCountFold.canonicalArtistKey 去掉别名那一步之后完全一致。
@@ -94,27 +97,65 @@ public enum LocalArtistAliases {
             }
         }
 
-        // 2. enrich 缓存:本机曲目数(选代表用)+ 共享歌曲 id
+        // 2. enrich 缓存:本机曲目数(选代表用)+ 共享的歌
+        var songOf = UnionFind() // 平台 id → 所在那一首:同一条目上的几个 id 连在一起
         var artistsByID: [String: Set<String>] = [:]
-        for e in entries {
+        var entriesByID: [String: [Int]] = [:]
+        var keyOf: [Int: String] = [:]
+        for (i, e) in entries.enumerated() {
             guard let key = note(e.artist, weight: 1) else { continue }
-            for id in EnrichTitleAliases.songIDs(neteaseURL: e.neteaseURL, qqMusicURL: e.qqMusicURL) {
+            keyOf[i] = key
+            let ids = EnrichTitleAliases.songIDs(neteaseURL: e.neteaseURL, qqMusicURL: e.qqMusicURL)
+            for id in ids {
                 artistsByID[id, default: []].insert(key)
+                entriesByID[id, default: []].append(i)
+                songOf.union(ids[0], id)
             }
         }
-        var shared: [String: Set<String>] = [:] // "a\u{1F}b"(a<b) → ids
+        var shared: [String: Set<String>] = [:] // "a\u{1F}b"(a<b) → 共享的歌(songOf 的根)
         for (id, keys) in artistsByID where keys.count > 1 {
+            let song = songOf.find(id)
             let sorted = keys.sorted()
             for i in 0..<sorted.count {
                 for j in (i + 1)..<sorted.count {
-                    shared[sorted[i] + "\u{1F}" + sorted[j], default: []].insert(id)
+                    shared[sorted[i] + "\u{1F}" + sorted[j], default: []].insert(song)
                 }
             }
         }
-        for (pair, ids) in shared where ids.count >= minSharedSongIDs {
+        var creditsOn: [String: [Credit]] = [:] // 共享的歌 → 落在上面的条目各署了谁
+        let sharedSongs = shared.values.reduce(into: Set<String>()) { $0.formUnion($1) }
+        for (id, indices) in entriesByID {
+            let song = songOf.find(id)
+            guard sharedSongs.contains(song) else { continue }
+            for i in indices {
+                guard let key = keyOf[i] else { continue }
+                let e = entries[i]
+                creditsOn[song, default: []].append(Credit(key: key, duet: ArtistCredit.primary(e.artist).map { _ in fold(e.artist) },
+                                                           title: fold(e.title)))
+            }
+        }
+        var containing: [String: Set<String>] = [:] // 包含着别的写法的键 → 被它包含、跟它共享过歌的键
+        for (pair, songs) in shared {
             let parts = pair.split(separator: "\u{1F}", maxSplits: 1).map(String.init)
             guard parts.count == 2 else { continue }
-            uf.union(parts[0], parts[1])
+            let (a, b) = (parts[0], parts[1])
+            if let (outer, inner) = containment(a, b) {
+                containing[outer, default: []].insert(inner)
+                continue
+            }
+            let solo = songs.filter { song in !(creditsOn[song] ?? []).contains { $0.names(a) && $0.names(b) } }
+            if solo.count >= minSharedSongs { uf.union(a, b) }
+        }
+        let known = Array(spellings.keys)
+        for (outer, inners) in containing.sorted(by: { $0.key < $1.key }) {
+            let kept = inners.filter { inner in
+                guard let r = outer.range(of: inner), r.lowerBound > outer.startIndex else { return true }
+                let head = outer[..<r.lowerBound]
+                let block = uf.find(inner)
+                return !known.contains { $0 != inner && containable($0) && head.hasPrefix($0) && uf.find($0) != block }
+            }
+            guard let inner = kept.first, Set(kept.map { uf.find($0) }).count == 1 else { continue }
+            uf.union(outer, inner)
         }
 
         // 3. 每个连通块选代表
@@ -137,6 +178,32 @@ public enum LocalArtistAliases {
             for key in keys where key != repKey { out[key] = rep.name }
         }
         return out
+    }
+
+    /// 共享的歌上一个条目署了谁(折法同 artistKey):`key` 是它自己的键,`duet` 是合唱串整串(单人为 nil),`title` 是歌名。
+    struct Credit {
+        let key: String
+        let duet: String?
+        let title: String
+        func names(_ k: String) -> Bool {
+            key == k || duet?.range(of: k) != nil || title.range(of: k) != nil
+        }
+    }
+
+    /// 两种写法里一种包含另一种时给 (包含的, 被包含的)。
+    static func containment(_ a: String, _ b: String) -> (String, String)? {
+        let (outer, inner) = a.count > b.count ? (a, b) : (b, a)
+        guard containable(inner), outer.range(of: inner) != nil else { return nil }
+        return (outer, inner)
+    }
+
+    /// 能不能当包含关系里被包含的那一方:不含汉字的至少 minAliasLength 个字符,含汉字的至少两个字。
+    static func containable(_ k: String) -> Bool {
+        k.count >= (PlayCountFold.hasNoHanLikeChars(k) ? minAliasLength : 2)
+    }
+
+    static func fold(_ s: String) -> String {
+        PlayCountFold.stripSpaces(PlayCountFold.normalized(s))
     }
 
     /// 最小并查集(路径压缩),字符串键。

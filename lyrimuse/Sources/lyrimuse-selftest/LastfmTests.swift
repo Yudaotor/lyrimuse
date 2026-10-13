@@ -2531,15 +2531,86 @@ func runLastfmTests() {
         expectEqual(t["卢广仲"], nil, "歌手别名: 代表自己不入表")
         expectEqual(t["michaeljackson"], nil, "歌手别名: 没有证据的歌手不入表")
 
-        // 共享歌曲 id:≥ 2 个不同 id 才算;单个不算(方大同 与 王诗安 那种合唱撞一首)
+        // 共享的歌:≥ 2 首才算,一首不算(合唱撞一首)
         let two = LA.derive(caches: .init(), entries: [
             e("David Tao", "Regular friends", netease: "150623"), e("陶喆", "普通朋友", netease: "150623"),
             e("David Tao", "Let's Fall in Love", netease: "150560"), e("陶喆", "讨厌红楼梦", netease: "150560"),
             e("方大同", "特别的人", netease: "9001"), e("王诗安", "特别的人 (合唱)", netease: "9001"),
         ])
-        expectEqual(two["davidtao"], "陶喆", "歌手别名: 两种写法共享 2 个 id → 同一人,代表取含汉字的")
-        expectEqual(two["王诗安"], nil, "歌手别名: 只共享 1 个 id 不算")
-        expectEqual(two["方大同"], nil, "歌手别名: 只共享 1 个 id 不算(另一侧)")
+        expectEqual(two["davidtao"], "陶喆", "歌手别名: 两种写法共享 2 首 → 同一人,代表取含汉字的")
+        expectEqual(two["王诗安"], nil, "歌手别名: 只共享 1 首不算")
+        expectEqual(two["方大同"], nil, "歌手别名: 只共享 1 首不算(另一侧)")
+        func both(_ artist: String, _ title: String, netease: String?, qq: String?) -> A.Entry {
+            .init(artist: artist, title: title, neteaseURL: netease.map { "https://music.163.com/song?id=" + $0 },
+                  qqMusicURL: qq.map { "https://y.qq.com/n/ryqq/songDetail/" + $0 }, durationSecs: nil)
+        }
+        // 按首数:同一条目上的网易云 id、QQ id 是同一首
+        expectEqual(LA.derive(caches: .init(), entries: [
+            both("方大同", "特别的人", netease: "9001", qq: "001AbCdEfGhIjK"),
+            both("王诗安", "特别的人 (合唱)", netease: "9001", qq: "001AbCdEfGhIjK"),
+        ]), [:], "歌手别名: 一首歌的网易云、QQ 两个 id 只算一首,不够线")
+        expectEqual(LA.derive(caches: .init(), entries: [
+            both("HUSH, 孙盛希", "一分之二", netease: "1500379461", qq: "002eQ1Mj162MWs"),
+            both("孙盛希 & HUSH", "一分之二", netease: "1500379461", qq: "002eQ1Mj162MWs"),
+        ]), [:], "歌手别名: 一首合唱两种署名顺序共用两个平台 id,不并")
+        let crossed = LA.derive(caches: .init(), entries: [
+            both("David Tao", "Regular friends", netease: "150623", qq: nil), both("陶喆", "普通朋友", netease: "150623", qq: nil),
+            both("David Tao", "Let's Fall in Love", netease: "150560", qq: "004Kd9xR0bH2Lm"),
+            both("陶喆", "讨厌红楼梦", netease: "150561", qq: "004Kd9xR0bH2Lm"),
+        ])
+        expectEqual(crossed["davidtao"], "陶喆", "歌手别名: 两首各在一个平台上共享也够线,另一个平台的 id 对不上不碍事")
+        // 两人合作的歌不算共享:合唱串里两个名字都有,或者歌名里写着另一位
+        expectEqual(LA.derive(caches: .init(), entries: [
+            both("方大同 & 王诗安", "All Night", netease: "431853949", qq: nil), both("王诗安", "All Night", netease: "431853949", qq: nil),
+            both("王诗安/方大同", "一步成诗", netease: "2013726584", qq: nil), both("方大同", "一步成诗", netease: "2013726584", qq: nil),
+        ]), [:], "歌手别名: 合唱串里两个名字都署了的歌不算共享,两首合唱不并")
+        expectEqual(LA.derive(caches: .init(), entries: [
+            both("方大同", "All Night (feat. 王诗安)", netease: "431853949", qq: nil), both("王诗安", "All Night", netease: "431853949", qq: nil),
+            both("方大同", "一步成诗 (方大同 Presents 王诗安)", netease: "2013726584", qq: nil),
+            both("王诗安", "一步成诗", netease: "2013726584", qq: nil),
+        ]), [:], "歌手别名: 歌名里写着另一位的歌也算合作,不算共享")
+        let bilingual = LA.derive(caches: .init(), entries: [
+            both("JJ Lin", "江南", netease: "11", qq: nil), both("林俊杰", "江南", netease: "11", qq: nil),
+            both("JJ Lin 林俊杰", "江南", netease: "11", qq: nil),
+            both("JJ Lin", "曹操", netease: "12", qq: nil), both("林俊杰", "曹操", netease: "12", qq: nil),
+        ])
+        expectEqual(bilingual["jjlin"], "林俊杰", "歌手别名: 单人写法里两个名字都有(英文名 + 中文名)不算合作")
+        // 一种写法包含另一种时共享一首就够
+        let aka = LA.derive(caches: .init(), entries: [
+            both("张韶涵 (Angela Chang)", "隐形的翅膀", netease: "21", qq: "002AbCdEfGhIjK"),
+            both("张韶涵", "隐形的翅膀", netease: "21", qq: "002AbCdEfGhIjK"), both("张韶涵", "欧若拉", netease: "22", qq: nil),
+            both("Gary 曹格", "背叛", netease: "23", qq: nil), both("曹格", "背叛", netease: "23", qq: nil),
+            both("曹格", "Superman", netease: "24", qq: nil), both("Ga", "Other", netease: "35", qq: nil),
+        ])
+        expectEqual(aka["张韶涵(angelachang)"], "张韶涵", "歌手别名: 一种写法包含另一种(名字后面跟英文名)时共享一首就够")
+        expectEqual(aka["gary曹格"], "曹格", "歌手别名: 被包含的在后面(英文名 + 中文名)也算,前面那段只跟够长的写法比")
+        let sameBlock = LA.derive(caches: .init(aliasCache: ["Jolin": "蔡依林"]), entries: [
+            both("Jolin 蔡依林", "日不落", netease: "33", qq: nil), both("蔡依林", "日不落", netease: "33", qq: nil),
+            both("蔡依林", "舞娘", netease: "34", qq: nil),
+        ])
+        expectEqual(sameBlock["jolin蔡依林"], "蔡依林", "歌手别名: 被包含的前面那段是同一块里的写法时照连")
+        expectEqual(LA.derive(caches: .init(), entries: [
+            both("张韶涵 (Angela Chang)", "隐形的翅膀", netease: "21", qq: nil), both("张韶涵", "欧若拉", netease: "22", qq: nil),
+        ]), [:], "歌手别名: 只是包含、一首都没共享的不并")
+        expectEqual(LA.derive(caches: .init(), entries: [
+            both("王", "歌", netease: "25", qq: nil), both("王力宏", "歌", netease: "25", qq: nil),
+            both("Ja", "Song", netease: "26", qq: nil), both("Ja Rule", "Song", netease: "26", qq: nil),
+        ]), [:], "歌手别名: 被包含的太短(一个汉字、不足三个字母)不算包含")
+        // 没拆开的合唱串:归到开头那位,不把后面那位连进来
+        expectEqual(LA.derive(caches: .init(), entries: [
+            both("DAOKO×米津玄師", "打上花火", netease: "27", qq: nil), both("米津玄師", "打上花火", netease: "27", qq: nil),
+            both("Daoko", "ShibuyaK", netease: "28", qq: nil),
+        ]), [:], "歌手别名: 被包含的不在开头、前面那段是另一位的写法时不连")
+        let unsplit = LA.derive(caches: .init(), entries: [
+            both("ROSÉ x Bruno Mars", "APT.", netease: "29", qq: nil), both("ROSÉ", "APT.", netease: "29", qq: nil),
+            both("Bruno Mars", "APT.", netease: "29", qq: nil), both("ROSÉ", "Gone", netease: "30", qq: nil),
+        ])
+        expectEqual(unsplit["roséxbrunomars"], "ROSÉ", "歌手别名: 没拆开的合唱串归到开头那位")
+        expectEqual(unsplit["brunomars"], nil, "歌手别名: 没拆开的合唱串不把两位歌手连成一块")
+        expectEqual(LA.derive(caches: .init(), entries: [
+            both("Abc", "One", netease: "31", qq: nil), both("Abcd Ef", "One", netease: "31", qq: nil),
+            both("Abcd", "Two", netease: "32", qq: nil), both("Abcd Ef", "Two", netease: "32", qq: nil),
+        ]), [:], "歌手别名: 包含着的两种写法分属两块时一个都不连")
         // 代表的选择:都含汉字时取本机曲目数最多的写法;繁简同键不需要别名
         let rep = LA.derive(caches: .init(aliasCache: ["Crowd Lu": "卢广仲"]), entries: [
             e("盧廣仲", "a", netease: "1"), e("盧廣仲", "b", netease: "2"), e("盧廣仲", "c", netease: "3"),
