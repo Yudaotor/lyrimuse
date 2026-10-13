@@ -30204,6 +30204,28 @@
         }
       }
     },
+    "此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These apps aren't specifically supported, so compatibility isn't guaranteed and some features may be unavailable."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此類 App 未經專門適配，無法保證相容性，部分功能可能無法使用。"
+          }
+        }
+      }
+    },
     "无法添加" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -43353,6 +43375,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下面的播放器都會識別；想只要其中幾個，關掉右上角的開關再勾選。"
+          }
+        }
+      }
+    },
+    "未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apps not listed here are suggested when detected. They aren't specifically supported, so compatibility isn't guaranteed and some features may be unavailable."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未列出的 App 會在偵測到時提示加入。此類 App 未經專門適配，無法保證相容性，部分功能可能無法使用。"
           }
         }
       }

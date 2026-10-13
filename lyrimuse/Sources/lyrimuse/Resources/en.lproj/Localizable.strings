@@ -1322,6 +1322,7 @@
 "服务器报错（5xx）：%@" = "Server error (5xx): %@";
 "服务器设置 → 整合（Integrations） → Webhook → 新建 Webhook，选择要发送到的频道后拷贝 Webhook URL" = "Server Settings → Integrations → Webhooks → New Webhook. Pick the channel to post to, then copy the Webhook URL";
 "服务器错误（HTTP 5xx），稍后重试通常可恢复" = "Server error (HTTP 5xx); retrying later usually works";
+"未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。" = "Apps not listed here are suggested when detected. They aren't specifically supported, so compatibility isn't guaranteed and some features may be unavailable.";
 "未发现无效记录" = "No Invalid Entries";
 "未启用" = "Not Enabled";
 "未唱颜色" = "Unsung Color";
@@ -1580,6 +1581,7 @@
 "此歌词无时间戳，无法随播放高亮或自动滚动" = "These lyrics have no timing, so they can't highlight or auto-scroll along with playback";
 "此浏览器未运行，或未打开任何标签页。请打开浏览器并载入任意网页后再次检测" = "This browser isn’t running, or has no open tab — open it with any page loaded, then check again";
 "此版本打包时未同步歌词引擎的版本号。功能不受影响，歌词引擎的代码与 App 为同一版本，无需任何操作" = "This build shipped with a stale version number for the lyrics engine. Nothing is broken — the lyrics engine runs the same code as the app, and there's nothing you need to do.";
+"此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。" = "These apps aren't specifically supported, so compatibility isn't guaranteed and some features may be unavailable.";
 "此设置仅在本次打开窗口期间有效，重新打开后恢复默认" = "Applies only while this window is open; reopening resets it";
 "步长" = "Step";
 "每周听歌小结" = "Weekly Listening Digest";

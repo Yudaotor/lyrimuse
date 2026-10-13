@@ -4765,10 +4765,14 @@ private struct PlayerSettingsTab: View {
         }
     }
 
+    /// 第二句讲列表以外的 App:它们靠「发现未知播放器」提示加进来,没有逐个适配过。
     private var autoDetectBanner: some View {
-        (Text(L10n.t("自动识别中")).fontWeight(.semibold).foregroundStyle(Color.accentColor)
-            + Text("  ")
-            + Text(L10n.t("下面的播放器都会识别；想只要其中几个，关掉右上角的开关再勾选。")))
+        VStack(alignment: .leading, spacing: 4) {
+            (Text(L10n.t("自动识别中")).fontWeight(.semibold).foregroundStyle(Color.accentColor)
+                + Text("  ")
+                + Text(L10n.t("下面的播放器都会识别；想只要其中几个，关掉右上角的开关再勾选。")))
+            Text(L10n.t("未列出的 App 会在检测到时提示添加。此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。"))
+        }
             .font(.system(size: 11.5))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -4907,6 +4911,11 @@ private struct PlayerSettingsTab: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    // 有没有信任项都留着:这里的 App 都没有逐个适配过。
+                    Text(L10n.t("此类 App 未经专门适配，兼容性无法保证，部分功能可能不可用。"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.top, -4)
