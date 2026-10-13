@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """docs/features 决策日志的编号:分配新号 + 核对代码里的决策指针。
 
-    python3 scripts/decision-number.py append <章> <正文文件|->   # 记一条新决策,打印分到的号
+    python3 scripts/decision-number.py append <章> <正文文件|-> [--fill <文件…>]   # 记一条新决策,打印分到的号
     python3 scripts/decision-number.py check [文件…]              # 核对指针(不带参数 = 全仓)
 
 # append
@@ -13,6 +13,13 @@
 几个会话同时往同一章记决策时,「写之前现查最大号」挡不住撞号:查完到写入之间别的会话已经
 落了同一个号。分号和写入必须在同一把锁里,所以新决策一律走这个脚本;代码里的「见 NN 章决策 MM」
 只照它打印出来的号填,别在文档写成之前先写代码指针。
+
+# 占位
+
+代码要在分号之前写指针时,号写成两个问号:「见 NN 章决策 ??」。`append` 带 `--fill <文件…>`
+在同一把锁里把这些文件里同一章的占位换成分到的号;列出的文件里有一个找不到这一章的占位就整条
+不写(文档也不动)。一次 `--fill` 只填一个号,同一章要记两条新决策时,先 append 第一条再写第二条
+的占位。`check` 见到占位一律拒收,忘了填号提交不了。
 
 # check
 
@@ -34,10 +41,12 @@
 import fcntl
 import os
 import re
+import shutil
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SELF = os.path.abspath(__file__)
+ROOT = os.path.dirname(os.path.dirname(SELF))
 DOCS = os.path.join(ROOT, 'docs', 'features')
 LOCK = os.path.join(DOCS, '.decision-number.lock')
 SECTION = re.compile(r'^## 设计决策与已知坑[ \t]*$', re.M)
@@ -46,6 +55,9 @@ ITEM = re.compile(r'^(\d{1,3})\. ', re.M)
 CODE_EXT = ('.swift', '.go', '.py', '.sh', '.js', '.mjs', '.ts')
 # 「09 章决策 69」「第 09 章决策 67」「02 章决策 #25」后面可跟「、49」「/82」继续列号。
 REF = re.compile(r'(?:第\s*)?(\d{2})\s*章(?:的)?决策\s*#?(\d{1,3})((?:\s*[、/,]\s*#?\d{1,3})*)')
+# 还没分到号的指针「15 章决策 ??」:group(1) 是问号前的部分,group(2) 是章号。
+PLACEHOLDER = re.compile(r'((?:第\s*)?(\d{2})\s*章(?:的)?决策\s*#?)\?\?')
+ANY_PLACEHOLDER = re.compile(r'决策\s*#?\?\?')
 
 
 def chapter_file(chapter):
@@ -95,13 +107,41 @@ def numbers(path):
     return None if b is None else decision_numbers(text, *b)
 
 
-def append(chapter, body_src):
+def write_atomic(path, text):
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(text)
+    shutil.copymode(path, tmp)
+    os.replace(tmp, path)
+
+
+def fill_placeholders(text, chapter, num):
+    """把 text 里第 chapter 章的占位换成 num,返回 (新文本, 换了几处)。"""
+    count = 0
+
+    def sub(m):
+        nonlocal count
+        if m.group(2) != chapter:
+            return m.group(0)
+        count += 1
+        return m.group(1) + str(num)
+
+    return PLACEHOLDER.sub(sub, text), count
+
+
+def append(chapter, body_src, fill=()):
     path = chapter_file(chapter)
     if not path:
         sys.exit(f'找不到第 {chapter} 章的文档')
+    chap = os.path.basename(path)[:2]
     body = (sys.stdin.read() if body_src == '-' else open(body_src, encoding='utf-8').read()).strip('\n')
     if not body.startswith('**'):
         sys.exit('正文要从 `**标题**` 开始写,不带编号')
+    for f in fill:
+        if not os.path.isfile(f):
+            sys.exit(f'--fill 的文件不存在:{f}')
+        if fill_placeholders(open(f, encoding='utf-8').read(), chap, 0)[1] == 0:
+            sys.exit(f'{f} 里没有「{chap} 章决策 ??」占位,整条没写')
     with open(LOCK, 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         text = open(path, encoding='utf-8').read()
@@ -110,12 +150,15 @@ def append(chapter, body_src):
             sys.exit(f'{os.path.basename(path)} 里没有「## 设计决策与已知坑」一节')
         num = max(decision_numbers(text, *b), default=0) + 1
         head, tail = text[:b[1]].rstrip('\n'), text[b[1]:]
-        new = head + '\n\n' + f'{num}. ' + body + '\n' + ('\n' + tail if tail else '')
-        tmp = path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            f.write(new)
-        os.replace(tmp, path)
-    print(f'{os.path.basename(path)[:2]} 章决策 {num}')
+        write_atomic(path, head + '\n\n' + f'{num}. ' + body + '\n' + ('\n' + tail if tail else ''))
+        filled = []
+        for f in fill:
+            new, count = fill_placeholders(open(f, encoding='utf-8').read(), chap, num)
+            write_atomic(f, new)
+            filled.append((f, count))
+    print(f'{chap} 章决策 {num}')
+    for f, count in filled:
+        print(f'  填号 {os.path.relpath(f, ROOT)}: {count} 处')
 
 
 def code_files(args):
@@ -135,7 +178,11 @@ def check(args):
             lines = open(path, encoding='utf-8').read().split('\n')
         except (UnicodeDecodeError, OSError):
             continue
+        rel = os.path.relpath(path, ROOT)
         for lineno, line in enumerate(lines, 1):
+            # 本脚本的说明里要写出占位的样子,不算
+            if os.path.abspath(path) != SELF and ANY_PLACEHOLDER.search(line):
+                bad.append(f'{rel}:{lineno}: 决策号还是占位 ??,用 append <章> <正文文件> --fill <文件…> 分号并填上')
             for m in REF.finditer(line):
                 chapter = m.group(1)
                 if chapter not in cache:
@@ -144,7 +191,6 @@ def check(args):
                 nums = cache[chapter]
                 for n in [m.group(2)] + re.findall(r'\d{1,3}', m.group(3)):
                     seen += 1
-                    rel = os.path.relpath(path, ROOT)
                     if nums is None:
                         bad.append(f'{rel}:{lineno}: 第 {chapter} 章不存在或没有「设计决策与已知坑」一节')
                     elif nums.count(int(n)) == 0:
@@ -164,6 +210,9 @@ def main():
         return check(sys.argv[2:])
     if len(sys.argv) == 4 and sys.argv[1] == 'append':
         append(sys.argv[2], sys.argv[3])
+        return 0
+    if len(sys.argv) >= 6 and sys.argv[1] == 'append' and sys.argv[4] == '--fill':
+        append(sys.argv[2], sys.argv[3], sys.argv[5:])
         return 0
     print(__doc__.split('\n\n')[1], file=sys.stderr)
     return 2
