@@ -233,6 +233,8 @@ extension PlaybackPlayer {
         case controlsPlayback
         /// 只为「喜欢」读、按界面上的项(酷狗 `KugouMenuControl`)。
         case pressesFavorite
+        /// 只为随机 / 循环读、按菜单项(reAMP `ReampMenuControl`)。
+        case pressesPlayMode
     }
 
     /// 不要这项权限的播放器为 nil(`needsAccessibilityPermission`,源头 shared/players.json)。
@@ -243,6 +245,7 @@ extension PlaybackPlayer {
         case .netease, .soda: return .controlsPlayback
         case .amazonMusic: return .calibratesProgress
         case .kugou: return .pressesFavorite
+        case .reamp: return .pressesPlayMode
         default: return nil
         }
     }

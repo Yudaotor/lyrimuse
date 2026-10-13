@@ -6,6 +6,12 @@ import Foundation
 // 完全一致),value 里已经有解析好的歌词——本地数据源靠这个拿歌词,不用在 Swift 里
 // 重新实现一遍网易云/QQ/酷狗/Musixmatch/LRCLIB 的匹配逻辑。
 /// 是类不是结构体:字典槽位里只放指针,不按每条近 800 字节给空槽占位(见 15 章决策 24)。
+/// 条目里 `lyrics_decision` 只解这一个字段,见 `EnrichCacheEntry.decisionSongDurationSecs`。
+private struct EnrichDecisionDuration: Decodable {
+    let songDurationSecs: Double?
+    enum CodingKeys: String, CodingKey { case songDurationSecs = "song_duration_secs" }
+}
+
 public final class EnrichCacheEntry: Decodable, Sendable {
     /// 主歌词。精简条目(带 `body_crc`)不解它,正文小文件里有同一份,用到时去读;不带 `body_crc` 的完整条目
     /// (老格式、正在播放快照)照旧解。见 15 章决策 24。
@@ -129,6 +135,9 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     // 所配歌词候选在来源上的时长(秒,引擎的 ResolvedDurationSecs)。同日起解码:跟 durationSecs
     // 差得远说明这条配到了别的歌的词,别名推断的 E2 路径据此判歌词可不可信。
     let resolvedDurationSecs: Double?
+    // 歌词判决记下的歌曲时长(引擎 lyrics_decision.song_duration_secs,胜出那份歌词在来源上对应的那首歌)。只给没有任何
+    // 时长的电台流当进度条分母的退路(trackDurationSecs 的 `allowsLyricsMatch`)。
+    let decisionSongDurationSecs: Double?
     // 这一轮解析里因为源级熔断被跳过的歌词源(引擎的 LyricsSourcesSkipped),以及
     // "一条歌词都没有"这条自愈路径已经补搜过几次(LyricsFillCount)。解码,
     // 只服务 EnrichCacheLyrics.searchIncomplete 一件事,见那个字段的头注。
@@ -195,6 +204,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         case plainLyrics = "plain_lyrics"
         case durationSecs = "duration_secs"
         case resolvedDurationSecs = "resolved_duration_secs"
+        case lyricsDecision = "lyrics_decision"
         case lyricsSourcesSkipped = "lyrics_sources_skipped"
         case lyricsFillCount = "lyrics_fill_count"
         case bodyCRC = "body_crc"
@@ -265,6 +275,7 @@ public final class EnrichCacheEntry: Decodable, Sendable {
         plainLyrics = try c.decodeIfPresent(String.self, forKey: .plainLyrics)
         durationSecs = try c.decodeIfPresent(Double.self, forKey: .durationSecs)
         resolvedDurationSecs = try c.decodeIfPresent(Double.self, forKey: .resolvedDurationSecs)
+        decisionSongDurationSecs = (try? c.decodeIfPresent(EnrichDecisionDuration.self, forKey: .lyricsDecision))?.songDurationSecs
         lyricsSourcesSkipped = try c.decodeIfPresent([String].self, forKey: .lyricsSourcesSkipped)
         lyricsFillCount = try c.decodeIfPresent(Int.self, forKey: .lyricsFillCount)
         manualLyrics = try c.decodeIfPresent(Bool.self, forKey: .manualLyrics)
@@ -643,15 +654,40 @@ public enum EnrichCacheReader {
     /// 226.283)并写进这份缓存,App 在电台下改读它。缓存里还没有这首歌时(刚换曲、歌词还在解析)
     /// 返回 nil,调用方退回快照自己那份 —— **绝不能因此让时长变成 0**:进度锚点按 durationMs
     /// 夹位置(ProgressClock),0 会把位置钉死在开头,表现成整档没有歌词(真踩过)。
-    public static func trackDurationSecs(artist: String, title: String, album: String) -> Double? {
+    /// `allowsLyricsMatch`:前面都没有时,退到歌词判决记下的歌曲时长(`decisionSongDurationSecs`)。只给 reAMP 的电台流:
+    /// 它什么时长都不报、引擎也不给它回填,不退到这里就建不起进度;Apple Music 电台照旧不用(理由同 entryDuration)。
+    public static func trackDurationSecs(artist: String, title: String, album: String,
+                                         allowsLyricsMatch: Bool = false) -> Double? {
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = currentEntry(key) else { return nil }
-        // durationSecs 在前:引擎的 radioduration.go 只把真实曲长写进它、刻意不碰 resolvedDurationSecs ——
-        // 后者是配到的那份歌词在来源上的时长,专辑预取时可能是网易云另一个版本的,拿它当分母进度会提前顶满。
+        let entry = currentEntry(key)
+        if let entry, let duration = entryDuration(entry) { return duration }
+        if album.isEmpty, let duration = albumlessDuration(albumlessKey: key) { return duration }
+        guard allowsLyricsMatch, let matched = entry?.decisionSongDurationSecs, matched > 0 else { return nil }
+        return matched
+    }
+
+    /// 见 albumlessDuration(durations:):`albumlessKey` 是空专辑的归一化 key(`歌手|歌名|`),按它开头扫整份缓存。
+    private static func albumlessDuration(albumlessKey: String) -> Double? {
+        guard let all = loadEntries() else { return nil }
+        return albumlessDuration(durations: all.compactMap { k, e in k.hasPrefix(albumlessKey) ? entryDuration(e) : nil })
+    }
+
+    /// durationSecs 在前:引擎的 radioduration.go 只把真实曲长写进它、刻意不碰 resolvedDurationSecs ——
+    /// 后者是配到的那份歌词在来源上的时长,专辑预取时可能是网易云另一个版本的,拿它当分母进度会提前顶满。
+    private static func entryDuration(_ entry: EnrichCacheEntry) -> Double? {
         for candidate in [entry.durationSecs, entry.resolvedDurationSecs] {
             if let candidate, candidate > 0 { return candidate }
         }
         return nil
+    }
+
+    /// 电台不报专辑、缓存里这一首没有带曲长的空专辑条目(引擎给电台建的那条常常没有曲长)时,看同歌手同歌名的条目
+    /// (key 以 `歌手|歌名|` 开头):这几条的曲长都在
+    /// 最长那条的 3% 以内才用(取最长那条),对不上(多半是不同录音)或一条都没有为 nil。纯函数,selftest 覆盖。
+    public static func albumlessDuration(durations: [Double]) -> Double? {
+        guard let longest = durations.max(), longest > 0,
+              durations.allSatisfy({ abs($0 - longest) <= longest * 0.03 }) else { return nil }
+        return longest
     }
 
     /// 当前曲目在缓存里的**实际条目 key**(歌词窗口「搜索歌词」写回用):

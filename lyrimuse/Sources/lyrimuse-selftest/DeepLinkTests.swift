@@ -152,6 +152,9 @@ func runDeepLinkTests() {
                     .debug(.simulate(title: "x", artist: "", album: "", duration: nil, position: 0, playing: false)),
                     "模拟播放: 位置、时长写坏了按没给")
         expectEqual(link("lyrimuse://debug/simulate?off=1"), .debug(.simulateOff), "模拟播放: 结束")
+        expectEqual(link("lyrimuse://action/play-mode?mode=Repeat-All"), .setPlayMode(.repeatAll), "播放模式: 取值不分大小写")
+        expectEqual(link("lyrimuse://action/play-mode?mode=loop") == nil && link("lyrimuse://action/play-mode") == nil, true,
+                    "播放模式: 认不出的取值、没带取值都认不出")
         expectEqual(link("lyrimuse://debug/simulate?artist=x"), nil, "模拟播放: 没给歌名认不出")
 
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -230,6 +233,7 @@ func runDeepLinkTests() {
             .debug(.state), .debug(.checkpoint), .debug(.restore), .debug(.snapshot(window: "panel")),
             .debug(.simulate(title: "Orange Moon", artist: "Khalil", album: "", duration: 280, position: 12.5, playing: false)),
             .debug(.simulate(title: "x", artist: "y", album: "z", duration: nil, position: 0, playing: true)), .debug(.simulateOff),
+            .setPlayMode(.list), .setPlayMode(.shuffle), .setPlayMode(.repeatAll), .setPlayMode(.repeatOne),
         ] + LyrimuseAction.allCases.map { .action($0, on: nil, stepSeconds: nil) }
         for value in all {
             let url = value.url(scheme: scheme)

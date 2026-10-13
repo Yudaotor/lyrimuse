@@ -639,6 +639,115 @@ func runPlayerIdentityTests() {
                     "拆标题: 带重音的西文不当乱码")
         expectEqual(split("Beyonc\u{E9} - D\u{E9}j\u{E0} Vu"), "Beyonc\u{E9}|D\u{E9}j\u{E0} Vu", "拆标题: 词尾的重音字母不当乱码")
         expectEqual(split("Sigur R\u{F3}s - Hopp\u{ED}polla"), "Sigur R\u{F3}s|Hopp\u{ED}polla", "拆标题: 冰岛语不当乱码")
+        // 网络电台流(没有时长):标题末尾那组「(台名和简介)」去掉再拆;本地文件(有时长)不动。
+        let somaFM = "Marc Minot - 6 Sec to the Moon (Groove Salad: a nicely chilled plate of ambient beats and grooves. [SomaFM])"
+        expectEqual(P.split(bundleID: reamp, title: somaFM, artist: nil, isStream: true).map { "\($0.artist)|\($0.title)" },
+                    "Marc Minot|6 Sec to the Moon", "拆标题: 电台流去掉末尾的台名")
+        expectEqual(P.split(bundleID: reamp, title: "A - B (Remix) (Station (HD))", artist: nil, isStream: true).map { "\($0.artist)|\($0.title)" },
+                    "A|B (Remix)", "拆标题: 电台流只去最后一组括号(里面可以再套括号)")
+        expectEqual(P.split(bundleID: reamp, title: "A - B (Remix)", artist: nil).map { "\($0.artist)|\($0.title)" },
+                    "A|B (Remix)", "拆标题: 本地文件的括号不动")
+        P.resetStreamDelayLine()
+        let streamed = P.applied(to: .forReplay(title: somaFM, artist: nil, duration: nil, elapsedTime: 0, playing: true,
+                                                bundleIdentifier: reamp, anchorElapsedTime: 0))
+        expectEqual(streamed.map { "\($0.artist ?? "")|\($0.title ?? "")" }, "Marc Minot|6 Sec to the Moon",
+                    "拆标题: 快照出口按没有时长认电台流")
+        expectEqual(P.identityParts(bundleID: reamp, title: somaFM, artist: nil).map { "\($0.artist)|\($0.title)" },
+                    "Marc Minot|6 Sec to the Moon", "拆标题: 封面那次独立取回(拿不到时长)换出同一份歌手和歌名")
+        let placeholder = { (title: String, duration: Double?, playing: Bool) in
+            P.streamPlaceholder(bundleID: reamp, title: title, artist: nil, duration: duration, playing: playing)
+        }
+        expectEqual(placeholder("[connecting to host] http://ice1.somafm.com/groovesalad-128-mp3", nil, false), true,
+                    "电台流: 连接那一拍不是歌")
+        expectEqual(placeholder("Groove Salad: a nicely chilled plate of ambient beats and grooves. [SomaFM]", nil, false), true,
+                    "电台流: 单报台名那一拍不是歌")
+        expectEqual(placeholder(somaFM, nil, false), false, "电台流: 拆得出歌手的暂停着照样是歌")
+        expectEqual(placeholder("Big Url: - This Is Groove Salad And As (Groove Salad: a nicely chilled plate of ambient beats and grooves. [SomaFM])",
+                                nil, true), true, "电台流: 前半截提到台名的是台标广告")
+        expectEqual(placeholder(somaFM, nil, true), false, "电台流: 没提台名的在放照样是歌")
+        expectEqual(P.mentionsStation("FIP Session - Song (FIP)"), false, "电台流: 台名不到 4 个字符不比")
+        expectEqual(P.mentionsStation("A - B (Remix)"), false, "电台流: 括号里不是台名时对不上")
+        expectEqual(placeholder("Groove Salad", nil, true), false, "电台流: 在放的不拦")
+        expectEqual(placeholder("[connecting to host] http://127.0.0.1:8765/stream", nil, true), true,
+                    "电台流: 没收到第一份标题、在放时也报「[connecting to host] 网址」,照样不是歌")
+        expectEqual(placeholder("track08", 60, false), false, "电台流: 有时长的本地文件不拦")
+        expectEqual(P.streamPlaceholder(bundleID: PlaybackPlayer.kkbox.bundleIdentifier, title: "x", artist: nil, duration: nil,
+                                        playing: false), false, "电台流: 只认 reAMP")
+        let clientSource = (try? String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("LyrimuseCore/Local/MediaControlClient.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(clientSource, contain: "|| PlayerTitleSplit.streamPlaceholder(bundleID: bundleID, title: snapshot.title"),
+                    true, "电台流 契约: 连接那两拍走「不是音乐」那道闸(playerContentNotMusic)")
+        expectEqual(P.strippingTrailingParenthetical("(Groove Salad)"), "(Groove Salad)", "拆标题: 整串都是括号时不去")
+        // 电台流延迟线:新标题晚 streamLeadSecs 才换上去,进度从推算的出声时刻起算;连上后的第一首不给进度。
+        do {
+            typealias Line = P.StreamDelayLine
+            let t0 = Date(timeIntervalSince1970: 5_000)
+            func step(_ line: Line, _ raw: String, titleAt: Double, now: Double, playing: Bool = true) -> Line {
+                P.advance(line, raw: raw, artist: "A", title: raw, titleAt: t0.addingTimeInterval(titleAt),
+                          playing: playing, now: t0.addingTimeInterval(now), lead: 4.6)
+            }
+            let first = step(Line(), "x", titleAt: 0, now: 1)
+            expectEqual(first.shown?.raw == "x" && first.shown?.start == nil && first.pending == nil, true,
+                        "电台延迟线: 连上后的第一首不知道起点")
+            let waiting = step(first, "y", titleAt: 100, now: 101)
+            expectEqual(waiting.shown?.raw == "x" && waiting.pending?.start == t0.addingTimeInterval(104.6), true,
+                        "电台延迟线: 新标题先挂着,屏上还是上一首")
+            let switched = step(waiting, "y", titleAt: 100, now: 104.7)
+            expectEqual(switched.shown?.raw == "y" && switched.shown?.start == t0.addingTimeInterval(104.6) && switched.pending == nil,
+                        true, "电台延迟线: 到点换上,起点是换标题加提前量")
+            expectEqual(step(waiting, "x", titleAt: 0, now: 102).pending, nil, "电台延迟线: 标题又变回去就撤掉挂着的")
+            expectEqual(step(switched, "y", titleAt: 100, now: 110, playing: false), Line(), "电台延迟线: 没在放就清空")
+        }
+        do {
+            P.resetStreamDelayLine()
+            let t0 = Date(timeIntervalSince1970: 6_000)
+            func feed(_ title: String, elapsed: Double, at t: Double) -> MediaControlSnapshot? {
+                P.applied(to: .forReplay(title: title, artist: nil, duration: nil, elapsedTime: elapsed, playing: true,
+                                         bundleIdentifier: reamp, anchorElapsedTime: 0), now: t0.addingTimeInterval(t))
+            }
+            let a = feed("A1 - One (Station: x [S])", elapsed: 30, at: 0)
+            expectEqual(a?.title == "One" && a?.elapsedTime == nil, true, "电台延迟线 出口: 第一首不给进度")
+            let held = feed("B2 - Two (Station: x [S])", elapsed: 0.5, at: 10)
+            expectEqual(held?.title == "One" && held?.artist == "A1" && held?.republishDueBy == t0.addingTimeInterval(13.9), true,
+                        "电台延迟线 出口: 换标题后先接着报上一首,到点补查")
+            let b = feed("B2 - Two (Station: x [S])", elapsed: 6.6, at: 16.1)
+            expectEqual(b?.title == "Two" && b?.artist == "B2" && abs((b?.elapsedTime ?? -1) - 2.2) < 0.001, true,
+                        "电台延迟线 出口: 换上之后进度从推算的出声时刻起算")
+            expectEqual(P.streamClockKnown(bundleID: reamp, duration: nil, elapsed: b?.elapsedTime), true,
+                        "电台延迟线: 起点推算过的才拿缓存曲长")
+            expectEqual(P.streamClockKnown(bundleID: reamp, duration: nil, elapsed: nil), false, "电台延迟线: 起点不知道的不拿")
+            P.resetStreamDelayLine()
+            expectEqual(EnrichCacheReader.albumlessDuration(durations: [193.0, 192.0]), 193,
+                        "电台曲长: 空专辑查不到时用同名带专辑的条目(曲长一致)")
+            expectEqual(EnrichCacheReader.albumlessDuration(durations: [193.0, 240.0]), nil,
+                        "电台曲长: 几条曲长对不上(不同录音)不用")
+            expectEqual(EnrichCacheReader.albumlessDuration(durations: []), nil, "电台曲长: 一条都没有为 nil")
+        }
+        expectEqual(P.strippingTrailingParenthetical("Song(Live)"), "Song(Live)", "拆标题: 括号前不是空格时不去")
+        expectEqual([nil, 0, -1, .infinity, 213].map { P.isStream(duration: $0) }, [true, true, true, true, false],
+                    "拆标题: 没有正数时长才算电台流")
+        // Big5 标签的乱码(繁体歌名),和按 GBK 存的日文(带 GBK 扩展区的「譲」)。
+        expectEqual(split("\u{A9}P\u{AA}N\u{AD}\u{DB} - \u{B4}\u{B8}\u{A4}\u{D1}"), "周杰倫|晴天", "拆标题: Big5 乱码先还原")
+        expectEqual(split("\u{B1}i\u{BE}\u{C7}\u{A4}\u{CD} - \u{A7}k\u{A7}O"), "張學友|吻別", "拆标题: 后一字节是 ASCII 的 Big5 字也认")
+        expectEqual(split("\u{A4}\u{FD}\u{B5}\u{E1} - \u{AC}\u{F5}\u{A8}\u{A7}"), "王菲|紅豆",
+                    "拆标题: 按 GBK 也解得开(解出假名)的 Big5,常用字多的那边赢")
+        expectEqual(split("\u{A4}\u{AD}\u{A4}\u{EB}\u{A4}\u{D1} - \u{AD}\u{CF}\u{B1}j"), "五月天|倔強",
+                    "拆标题: 歌手、歌名连在一起判:单看「五月天」按 GBK 是成串假名(くるぱ)、两边打平,连上歌名就是 Big5")
+        expectEqual(split("Jay Chou - \u{B4}\u{B8}\u{A4}\u{D1}"), "Jay Chou|晴天", "拆标题: 按 GBK 解出假名(锤ぱ)的 Big5,假名只记一半")
+        expectEqual(split("\u{C1}\u{D6}\u{BF}\u{A1}\u{BD}\u{DC} - \u{BD}\u{AD}\u{C4}\u{CF}"), "林俊杰|江南",
+                    "拆标题: 两边常用字一样多(按 Big5 是「輿縑豌 - 蔬鰍」)算 GBK")
+        expectEqual(split("\u{BE}\u{C3}\u{CA}\u{AF}\u{D7}j - \u{A4}\u{A2}\u{A4}\u{CE}\u{CF}\u{C4}\u{A4}\u{D8}"), "久石譲|あの夏へ",
+                    "拆标题: 按 GBK 存的日文(扩展区汉字 + 假名)不当 Big5")
+        expectEqual(split("\u{A5}\u{C9}\u{A5}\u{E9}\u{A4}\u{A8}\u{A4}\u{E2}\u{A4}\u{F3}"), "|ドラえもん",
+                    "拆标题: 按 GBK 存、全是假名的日文(成串假名记满分)")
+        expectEqual(split("BAD\u{A5}\u{E2}\u{A9}`\u{A5}\u{C9}"), "|BADモード", "拆标题: 长音符「ー」也算成串假名")
+        expectEqual(split("2000\u{A6}~"), "|2000年", "拆标题: 只有一个汉字的 Big5 也还原")
+        expectEqual(split("Sigur R\u{F3}s - \u{DE}\u{FA}"), "Sigur R\u{F3}s|\u{DE}\u{FA}", "拆标题: 整串里有西文词就整串当西文")
+        for latin in ["Bj\u{F6}rk - J\u{F3}ga", "Sigur R\u{F3}s - \u{C1}g\u{E6}tis byrjun", "M\u{E5}neskin - Zitti e buoni",
+                      "V\u{E4}h\u{E4}n", "S\u{E4}\u{E4}", "R\u{F6}yksopp - Eple"] {
+            expectEqual(split(latin), latin.contains(" - ") ? latin.replacingOccurrences(of: " - ", with: "|") : nil,
+                        "拆标题: 西文不当 GBK / Big5 乱码(\(latin))")
+        }
         expectEqual(split("方大同 - Orange Moon", bundle: PlaybackPlayer.kkbox.bundleIdentifier), nil,
                     "拆标题: 只对登记的播放器生效(决策 41)")
         let raw = MediaControlSnapshot.forReplay(title: "方大同 - Orange Moon", artist: nil, album: nil, duration: 335,
@@ -674,6 +783,16 @@ func runPlayerIdentityTests() {
         expectEqual(fileMatch("\u{D6}\u{DC}\u{BD}\u{DC}\u{C2}\u{D7} - \u{B5}\u{BE}\u{CF}\u{E3}", 223, mojibake), true,
                     "文件标签: 老 MP3 的乱码两边一样,照样对得上")
         expectEqual(P.identity(from: mojibake).map { "\($0.artist)|\($0.title)" }, "周杰伦|稻香", "文件标签: 换上去之前还原乱码")
+        let japanese = Tags(title: "\u{A5}\u{C9}\u{A5}\u{E9}\u{A4}\u{A8}\u{A4}\u{E2}\u{A4}\u{F3}",
+                            artist: "\u{CB}\u{AE}\u{CC}\u{EF}\u{A4}\u{EF}\u{A4}\u{B5}\u{A4}\u{D3}", album: "", duration: 200)
+        expectEqual(P.identity(from: japanese).map { "\($0.artist)|\($0.title)" }, "水田わさび|ドラえもん",
+                    "文件标签: 几个标签一起判编码")
+        let mayday = Tags(title: "\u{AD}\u{CF}\u{B1}j", artist: "\u{A4}\u{AD}\u{A4}\u{EB}\u{A4}\u{D1}", album: "", duration: 254)
+        expectEqual(P.identity(from: mayday).map { "\($0.artist)|\($0.title)" }, "五月天|倔強",
+                    "文件标签: 分开判的话「五月天」按 GBK 是成串假名,连上歌名一起判才是 Big5")
+        let mixed = Tags(title: "\u{B5}\u{BE}\u{CF}\u{E3}", artist: "周杰伦", album: "", duration: 223.5)
+        expectEqual(P.identity(from: mixed).map { "\($0.artist)|\($0.title)" }, "周杰伦|稻香",
+                    "文件标签: 本来就是中文的标签不参与判断、原样留着")
         let soldOutID = P.identity(from: soldOut)
         expectEqual(soldOutID?.album == "Diamonds" && soldOutID?.duration == 213.133 && soldOutID?.artist == "Hawk Nelson", true,
                     "文件标签: 专辑和精确时长一起换上")
@@ -689,6 +808,21 @@ func runPlayerIdentityTests() {
             expectEqual(true, false, "列进程打开的文件: 临时文件打不开")
         }
         try? FileManager.default.removeItem(at: probe)
+
+        // 随机 / 循环:菜单栏 Play 里两个独立开关,收成一个档位;按完勾要过一两秒才变,刚按过的以按下去的结果为准。
+        typealias R = ReampMenuControl
+        expectEqual([R.mode(.init(shuffle: false, repeating: false)), R.mode(.init(shuffle: false, repeating: true)),
+                     R.mode(.init(shuffle: true, repeating: false)), R.mode(.init(shuffle: true, repeating: true))],
+                    [.list, .repeatAll, .shuffle, .shuffle], "reAMP 随机循环: 两个开关 → 档位,都开算随机")
+        expectEqual(R.toggles(for: .repeatAll), .init(shuffle: false, repeating: true), "reAMP 随机循环: 开循环就关随机(两颗键互斥)")
+        expectEqual(R.toggles(for: .shuffle), .init(shuffle: true, repeating: false), "reAMP 随机循环: 开随机就关循环")
+        expectEqual(R.toggles(for: .repeatOne) == nil && !R.options.contains(.repeatOne), true, "reAMP 随机循环: 没有单曲循环")
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let stale = R.Toggles(shuffle: false, repeating: false), pressed = R.Toggles(shuffle: true, repeating: false)
+        expectEqual(R.effective(read: stale, pending: (pressed, t0), now: t0.addingTimeInterval(0.4)), pressed,
+                    "reAMP 随机循环: 刚按过,勾还是旧的 → 以按下去的结果为准")
+        expectEqual(R.effective(read: stale, pending: (pressed, t0), now: t0.addingTimeInterval(R.pendingWindow + 0.1)), stale,
+                    "reAMP 随机循环: 过了那一段就信勾")
 
         // 同目录的封面:跟歌曲同名的图片优先,其次 cover / folder / front / album / albumart,大小写不敏感。
         let entries = ["Sold Out.mp3", "folder.JPG", "Cover.png", "notes.txt", "Sold Out.jpg", "back.jpg"]
@@ -767,7 +901,7 @@ func runPlayerIdentityTests() {
             .kaset: (.youtubeMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                      .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
                                      .systemNeverHasArtwork, .catalogMenuRows]),
-            .reamp: (nil, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag]),
+            .reamp: (nil, [.extendedControls, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")
@@ -995,14 +1129,14 @@ func runPlayerIdentityTests() {
     // 出不出现。每家要不要来自生成字段(shared/players.json),含 auto 时按超集算。
     do {
         typealias P = Set<PlaybackPlayer>
-        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .netease, .kugou, .soda, .amazonMusic],
-                    "辅助功能判据: 读界面的 Amazon Music、按菜单控制的 QQ 音乐/网易云、按播放条控制的汽水、只为喜欢按界面的酷狗(改 shared/players.json 的 needsAccessibilityPermission)")
+        expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp],
+                    "辅助功能判据: 读界面的 Amazon Music、按菜单控制的 QQ 音乐/网易云/reAMP、按播放条控制的汽水、只为喜欢按界面的酷狗(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
-                    [.switchesPlayMode, .controlsPlayback, .pressesFavorite, .controlsPlayback, .calibratesProgress],
-                    "辅助功能判据: QQ 音乐是切模式、网易云/汽水是喜欢加失焦播放、酷狗只有喜欢、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
+                    [.switchesPlayMode, .controlsPlayback, .pressesFavorite, .controlsPlayback, .calibratesProgress, .pressesPlayMode],
+                    "辅助功能判据: QQ 音乐是切模式、网易云/汽水是喜欢加失焦播放、酷狗只有喜欢、Amazon Music 是读进度加随机循环、reAMP 只有随机循环,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse), [.refinesProgress, .refinesProgress, .readsTrack],
                     "自动化判据: Apple Music、Spotify 只让进度更准,Kaset 的曲目整份靠它,引导页和设置页的说明按这个分开写")
-        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic], "辅助功能判据: 纯 auto 按超集算")
+        expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic, .reamp], "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")

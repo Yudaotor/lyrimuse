@@ -121,6 +121,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
         case .kugou: return true
         case .soda: return true
         case .amazonMusic: return true
+        case .reamp: return true
         default: return false
         }
     }

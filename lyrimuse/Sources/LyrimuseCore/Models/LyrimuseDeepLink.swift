@@ -18,6 +18,7 @@ import Foundation
 ///     action/open-player            把 Lyrimuse 正在读的播放器带到前台
 ///     action/surfaces?overlay=1&notch=0&menubar=1   一次设好几个展示面(只带要改的那几个)
 ///     action/lyrics-offset?ms=-300  这首歌的歌词时间轴直接设成某个值(±10 秒以内)
+///     action/play-mode?mode=shuffle 播放模式设成 list / shuffle / repeat-all / repeat-one(同歌词窗口那两颗键;播放器够不到的档位落到 list)
 ///     x-callback-url/now-playing?x-success=…   把正在播放的信息作为参数打开 x-success(只回给本机 App)
 ///     lastfm-auth-callback          Last.fm 浏览器授权回跳(内部用)
 ///     debug/<命令>                  本机验证用(见 `DebugCommand`),只在本机偏好 `debug:deepLinks` 打开时才执行
@@ -47,6 +48,7 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     case setSurfaces(overlay: Bool?, notch: Bool?, menuBar: Bool?)
     /// 这首歌自己的那一份偏移(毫秒),在 ±`maxLyricsOffsetMs` 以内。
     case setLyricsOffset(ms: Int)
+    case setPlayMode(MusicPlaybackController.MusicPlaybackMode)
     /// x-callback-url:`success` 只收本机 App 的地址(`isCallbackTarget`),网页拿不到正在听什么。
     case nowPlayingCallback(success: URL?)
     case debug(DebugCommand)
@@ -69,7 +71,11 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
     }
 
     /// `action/` 下不对应快捷键的那几个名字(跟 `LyrimuseAction.linkName` 不能重名,selftest 核对)。
-    public static let extraActionNames = ["copy-lyric", "open-player", "surfaces", "lyrics-offset"]
+    public static let extraActionNames = ["copy-lyric", "open-player", "surfaces", "lyrics-offset", "play-mode"]
+    /// `action/play-mode?mode=` 的取值。
+    public static let playModeNames: [String: MusicPlaybackController.MusicPlaybackMode] = [
+        "list": .list, "shuffle": .shuffle, "repeat-all": .repeatAll, "repeat-one": .repeatOne,
+    ]
     /// 歌词时间轴绝对值的上限(毫秒)。再大就不是校准了,链接里写错一位数会把整首歌词错开很远。
     public static let maxLyricsOffsetMs = 10_000
 
@@ -111,6 +117,9 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
         case ("action", "/lyrics-offset"):
             guard let ms = value("ms").flatMap(Int.init), abs(ms) <= Self.maxLyricsOffsetMs else { return nil }
             self = .setLyricsOffset(ms: ms)
+        case ("action", "/play-mode"):
+            guard let mode = value("mode").flatMap({ Self.playModeNames[$0.lowercased()] }) else { return nil }
+            self = .setPlayMode(mode)
         case ("x-callback-url", "/now-playing"):
             self = .nowPlayingCallback(success: value("x-success").flatMap(URL.init(string:)).flatMap {
                 Self.isCallbackTarget($0) ? $0 : nil
@@ -206,6 +215,10 @@ public enum LyrimuseDeepLink: Equatable, Sendable {
             components.host = "action"
             components.path = "/lyrics-offset"
             components.queryItems = [URLQueryItem(name: "ms", value: String(ms))]
+        case let .setPlayMode(mode):
+            components.host = "action"
+            components.path = "/play-mode"
+            components.queryItems = [URLQueryItem(name: "mode", value: Self.playModeNames.first { $0.value == mode }?.key)]
         case let .nowPlayingCallback(success):
             components.host = "x-callback-url"
             components.path = "/now-playing"

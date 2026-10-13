@@ -379,10 +379,12 @@ public enum MusicPlaybackController {
     ///
     /// Apple Music 和 Spotify 有可写的 AppleScript 属性,Kaset 有切换随机 / 循环、设音量的命令;QQ 音乐只有模式,走它菜单栏
     /// 「播放模式」那三项(`QQMusicMenuControl`,要辅助功能权限),没有音量;Amazon Music 只有模式,按它播放条上的键、读它的日志
-    /// (`AmazonMusicModeControl`)。网易云、酷狗等没有 .sdef(不可脚本化),而
+    /// (`AmazonMusicModeControl`);reAMP 只有随机和列表循环,按它菜单栏 Play 里的两个开关(`ReampMenuControl`)。网易云、酷狗等没有
+    /// .sdef(不可脚本化),而
     /// media-control 走的系统级 MediaRemote 只有播放控制 —— 对它们只能不显示这些控件(各家实测见 07 章决策 130)。
     public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
         player == .appleMusic || player == .spotify || player == .kaset || player == .qqMusic || player == .amazonMusic
+            || player == .reamp
     }
 
     /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.nextRepeat。
@@ -642,6 +644,11 @@ public enum MusicPlaybackController {
                                          mode: AmazonMusicModeControl.readMode()
                                              .map { PlaybackModeState(mode: $0, options: AmazonMusicModeControl.options) },
                                          volume: nil)
+        case .reamp:
+            return ExtendedControlsState(favorited: nil,
+                                         mode: ReampMenuControl.readMode()
+                                             .map { PlaybackModeState(mode: $0, options: ReampMenuControl.options) },
+                                         volume: nil)
         // 其余播放器一律没有这些控件 —— 它们的 .app 里根本没有 .sdef(不可脚本化),
         // 而 media-control 走的系统级 MediaRemote 只有播放控制、没有音量和模式的概念。
         // 写成 default 而不是逐个列举,是为了让「接一个新播放器」只需要改
@@ -750,6 +757,8 @@ public enum MusicPlaybackController {
             return QQMusicMenuControl.readMode().map { PlaybackModeState(mode: $0, options: QQMusicMenuControl.options) }
         case .amazonMusic:
             return AmazonMusicModeControl.readMode().map { PlaybackModeState(mode: $0, options: AmazonMusicModeControl.options) }
+        case .reamp:
+            return ReampMenuControl.readMode().map { PlaybackModeState(mode: $0, options: ReampMenuControl.options) }
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
         }
@@ -825,6 +834,8 @@ public enum MusicPlaybackController {
             return QQMusicMenuControl.setMode(mode)
         case .amazonMusic:
             return AmazonMusicModeControl.setMode(mode)
+        case .reamp:
+            return ReampMenuControl.setMode(mode)
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false
         }
@@ -851,7 +862,7 @@ public enum MusicPlaybackController {
         case .qqMusic:
             // QQ 菜单栏只有一档一档的「音量加 / 音量减」,当前值要另读它的偏好,不接:那颗胶囊对 QQ 不出现。
             return nil
-        case .amazonMusic: // Amazon 只接了随机 / 循环,音量不接。
+        case .amazonMusic, .reamp: // 这两家只接了随机 / 循环,音量不接。
             return nil
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return nil
@@ -874,7 +885,7 @@ public enum MusicPlaybackController {
                 spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
         case .kaset:
             return runKasetJXACapturing("        K.setVolume(\(v));\n        return \"ok\";") == "ok"
-        case .qqMusic, .amazonMusic: // 同 soundVolume(for:):这两家不接音量。
+        case .qqMusic, .amazonMusic, .reamp: // 同 soundVolume(for:):这几家不接音量。
             return false
         default: // 同上:没有可写 AppleScript 属性的播放器一律落这里。
             return false

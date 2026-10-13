@@ -46092,6 +46092,23 @@
         }
       }
     },
+    "授权后 Lyrimuse 会读取%@的随机、循环状态，并在你点这两颗键时替你按下它菜单里对应的那一项。不授权也能用，只是没有这两颗键。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With permission, Lyrimuse reads whether shuffle and repeat are on in %@ and presses the matching menu item when you click one of those buttons. Everything else works without it; there are just no shuffle and repeat buttons."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授權後 Lyrimuse 會讀取%@的隨機、循環狀態，並在你點這兩顆鍵時替你按下它選單裡對應的那一項。不授權也能用，只是沒有這兩顆鍵。"
+          }
+        }
+      }
+    },
     "辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时控制暂停、恢复和上下首" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -46122,6 +46139,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "輔助使用權限可顯示%@的喜歡鍵"
+          }
+        }
+      }
+    },
+    "辅助功能权限可显示%@的随机、循环键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission enables shuffle and repeat for %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輔助使用權限可顯示%@的隨機、循環鍵"
           }
         }
       }
@@ -46160,6 +46194,23 @@
         }
       }
     },
+    "请开启此权限，以显示%@的随机、循环键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable this permission to show the shuffle and repeat buttons for %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請開啟此權限，以顯示%@的隨機、循環鍵"
+          }
+        }
+      }
+    },
     "未获得辅助功能权限，%@ 不显示喜欢键，失去系统媒体焦点时也无法控制暂停、恢复和上下首" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -46190,6 +46241,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未取得輔助使用權限，%@ 不顯示喜歡鍵"
+          }
+        }
+      }
+    },
+    "未获得辅助功能权限，%@ 不显示随机、循环键" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility permission is missing: %@ has no shuffle or repeat buttons"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得輔助使用權限，%@ 不顯示隨機、循環鍵"
           }
         }
       }

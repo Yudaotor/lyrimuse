@@ -106,6 +106,8 @@ func runPositionReplayTests() {
     replayQQSameStartAnchorNotEarly()
     replayQQFlooredSeek()
     replayQQResumeAudioLag()
+    replayReampResumeAnchorDistrusted()
+    replayReampRestartFromTop()
     replayQQStartFromPaused()
     replayQQResumeToOtherTrack()
     replayQQLateZeroAnchor()
@@ -372,6 +374,104 @@ private func replayQQResumeAudioLag() {
         expectEqual(near(rig.shown(at: at(10.3)), 33.3 - lag, 0.02), true,
                     "回放·\(lag > 0 ? "QQ" : "酷狗") 恢复: 起点扣 \(lag) 秒出声延迟(\(rig.shown(at: at(10.3)).map { String(format: "%.3f", $0) } ?? "nil"))")
     }
+}
+
+/// reAMP 恢复:先报进度 0,约 0.6 秒后补报一份比真声慢 0.5 秒的锚点。屏上按暂停位置接着走,不被伺服拽到那份锚点上
+/// (伺服 1 秒一拍时第 5 拍就会跟过去);之后拖动换了锚点照常采信。见 02 章决策 126。
+@MainActor
+private func replayReampResumeAnchorDistrusted() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let reamp = PlaybackPlayer.reamp.bundleIdentifier
+    let rig = ReplayRig("reamp-resume-anchor")
+    defer { rig.tearDown() }
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 20, elapsed: 20, duration: 150), at: at(0))
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 20, elapsed: 28, duration: 150), at: at(8))
+    rig.source.replayPlayerStateEvent(at: at(8.9), freeze: true)
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 28.9, elapsed: 28.9, duration: 150, playing: false), at: at(9))
+    rig.source.replayResumeSignal(at: at(10))
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 0, elapsed: 0.27, duration: 150), at: at(10.27))
+    guard let seeded = rig.shown(at: at(10.27)) else {
+        expectEqual(false, true, "回放·reAMP 恢复: 恢复那一拍屏上没有位置")
+        return
+    }
+    expectEqual(seeded > 28.9 && seeded < 29.2, true, "回放·reAMP 恢复: 先报 0 时按暂停位置接着走(\(fmt(seeded)))")
+    for t in stride(from: 10.6, through: 20.6, by: 1) {
+        rig.tick(mediaControl(reamp, "Click C.wav", anchor: 29.0, elapsed: 29.0 + (t - 10.6), duration: 150), at: at(t))
+    }
+    expectEqual(near(rig.shown(at: at(20.6)), seeded + 10.33, 0.02), true,
+                "回放·reAMP 恢复: 补报的那份慢 0.5 秒的锚点 10 秒内不拿来伺服(\(fmt(rig.shown(at: at(20.6)))),想要 \(fmt(seeded + 10.33)))")
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 60, elapsed: 60, duration: 150), at: at(21))
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 60, elapsed: 61, duration: 150), at: at(22))
+    expectEqual(near(rig.shown(at: at(22)), 61, 0.02), true, "回放·reAMP 恢复后拖动: 新锚点照常采信(\(fmt(rig.shown(at: at(22)))))")
+}
+
+/// reAMP 暂停在 20 秒时重新打开同一个文件(从头放):先报 0,之后不再补。按住 1.2 秒就放开,屏上回到开头;
+/// 按 QQ 那 1.5 秒的话 1.3 秒那拍还停在 21 秒附近。见 02 章决策 126。
+@MainActor
+private func replayReampRestartFromTop() {
+    func fmt(_ v: Double?) -> String { v.map { String(format: "%.3f", $0) } ?? "nil" }
+    let reamp = PlaybackPlayer.reamp.bundleIdentifier
+    let rig = ReplayRig("reamp-restart-top")
+    defer { rig.tearDown() }
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 10, elapsed: 10, duration: 150), at: at(0))
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 10, elapsed: 18, duration: 150), at: at(8))
+    rig.source.replayPlayerStateEvent(at: at(10), freeze: true)
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 20, elapsed: 20, duration: 150, playing: false), at: at(10.1))
+    rig.source.replayResumeSignal(at: at(12))
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 0, elapsed: 0.1, duration: 150), at: at(12.1))
+    expectEqual((rig.shown(at: at(12.1)) ?? 0) > 19, true, "回放·reAMP 从头重开: 先报 0 那一拍照旧按住(\(fmt(rig.shown(at: at(12.1)))))")
+    rig.tick(mediaControl(reamp, "Click C.wav", anchor: 0, elapsed: 1.4, duration: 150), at: at(13.4))
+    expectEqual(near(rig.shown(at: at(13.4)), 1.4, 0.05), true,
+                "回放·reAMP 从头重开: 1.3 秒后没补锚点就回到开头(\(fmt(rig.shown(at: at(13.4)))))")
+
+    // 读得到进度条时:按住那一拍读到它归 0,下一拍就回到开头,不等到点。
+    let bar = ReplayRig("reamp-restart-bar")
+    defer { bar.tearDown() }
+    bar.tick(mediaControl(reamp, "Click C.wav", anchor: 10, elapsed: 10, duration: 150), at: at(0))
+    bar.tick(mediaControl(reamp, "Click C.wav", anchor: 10, elapsed: 18, duration: 150), at: at(8))
+    bar.source.replayPlayerStateEvent(at: at(10), freeze: true)
+    bar.tick(mediaControl(reamp, "Click C.wav", anchor: 20, elapsed: 20, duration: 150, playing: false), at: at(10.1))
+    bar.source.replayResumeSignal(at: at(12))
+    bar.tick(mediaControl(reamp, "Click C.wav", anchor: 0, elapsed: 0.1, duration: 150), at: at(12.1))
+    bar.source.replayRestartBar(0)
+    bar.tick(mediaControl(reamp, "Click C.wav", anchor: 0, elapsed: 0.25, duration: 150), at: at(12.25))
+    expectEqual(near(bar.shown(at: at(12.25)), 0.25, 0.05), true,
+                "回放·reAMP 从头重开: 进度条归 0 就当场放开(\(fmt(bar.shown(at: at(12.25)))))")
+
+    // 先补一份暂停时的锚点「在放」(当成恢复),0.5 秒后才报晚了 0.49 秒的开头锚点:按恢复信号至今算,不跟那份晚的。
+    let late = ReplayRig("reamp-restart-late-zero")
+    defer { late.tearDown() }
+    late.tick(mediaControl(reamp, "Click C.wav", anchor: 10, elapsed: 10, duration: 150), at: at(0))
+    late.tick(mediaControl(reamp, "Click C.wav", anchor: 10, elapsed: 12, duration: 150), at: at(2))
+    late.source.replayPlayerStateEvent(at: at(2), freeze: true)
+    late.tick(mediaControl(reamp, "Click C.wav", anchor: 12, elapsed: 12, duration: 150, playing: false), at: at(2.1))
+    late.source.replayResumeSignal(at: at(14.67))
+    late.tick(mediaControl(reamp, "Click C.wav", anchor: 12, elapsed: 12.2, duration: 150), at: at(14.88))
+    late.tick(mediaControl(reamp, "Click C.wav", anchor: 0, elapsed: 0.268, duration: 150), at: at(15.377))
+    expectEqual(near(late.shown(at: at(15.377)), 0.707, 0.02), true,
+                "回放·reAMP 从头重开: 晚到的开头锚点按恢复信号至今算(\(fmt(late.shown(at: at(15.377)))))")
+    // 同一种重开,读得到进度条:恢复那一拍之后就按恢复信号至今走,不等那份晚到的开头锚点。
+    let early = ReplayRig("reamp-restart-bar-early")
+    defer { early.tearDown() }
+    early.tick(mediaControl(reamp, "Click C.wav", anchor: 10, elapsed: 10, duration: 150), at: at(0))
+    early.tick(mediaControl(reamp, "Click C.wav", anchor: 10, elapsed: 12, duration: 150), at: at(2))
+    early.source.replayPlayerStateEvent(at: at(2), freeze: true)
+    early.tick(mediaControl(reamp, "Click C.wav", anchor: 12, elapsed: 12, duration: 150, playing: false), at: at(2.1))
+    early.source.replayResumeSignal(at: at(14.67))
+    early.tick(mediaControl(reamp, "Click C.wav", anchor: 12, elapsed: 12.2, duration: 150), at: at(14.88))
+    early.source.replayRestartBar(0)
+    early.tick(mediaControl(reamp, "Click C.wav", anchor: 12, elapsed: 12.3, duration: 150), at: at(14.95))
+    expectEqual(near(early.shown(at: at(14.95)), 0.28, 0.02), true,
+                "回放·reAMP 从头重开: 进度条归 0,旧锚点还在时按恢复信号至今走(\(fmt(early.shown(at: at(14.95)))))")
+    early.tick(mediaControl(reamp, "Click C.wav", anchor: 0, elapsed: 0.268, duration: 150), at: at(15.377))
+    expectEqual(near(early.shown(at: at(15.377)), 0.707, 0.02), true,
+                "回放·reAMP 从头重开: 之后晚到的开头锚点不拽它(\(fmt(early.shown(at: at(15.377)))))")
+
+    for t in stride(from: 16.4, through: 26.4, by: 1) {
+        late.tick(mediaControl(reamp, "Click C.wav", anchor: 0, elapsed: 0.268 + (t - 15.377), duration: 150), at: at(t))
+    }
+    expectEqual(near(late.shown(at: at(26.4)), 0.707 + 11.023, 0.02), true,
+                "回放·reAMP 从头重开: 之后不被那份晚的锚点拽回去(\(fmt(late.shown(at: at(26.4)))))")
 }
 
 /// QQ 在暂停态开播一首:暂停态发 `0`、开播后 1.2 秒补 `1.000`(真起点比开播信号晚 0.22 秒)。补的锚点一到就按决策 115 对齐,

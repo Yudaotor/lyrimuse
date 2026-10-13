@@ -751,11 +751,6 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 见 qqLateZeroAnchorLead。
     public nonisolated static let qqLateZeroAnchorLeadSecs: Double = 0.12
 
-    /// QQ 暂停着开播另一首时先报这一首在放、读数掉回开头,0.3~0.6 秒后才换歌名。恢复那一拍读数回到开头、暂停位置却在后面:
-    /// 按暂停位置接着走,最多 `trackEndZeroHoldSecs`;这期间换了歌名就是换歌,到点还是这一首(暂停中拖回开头)再采信读数。
-    /// 不按住的话界面会先跳回这一首开头再换歌。见 02 章决策 120。
-    /// reAMP 恢复播放那一拍同样先报一份进度 0 的锚点,约 0.7 秒后才补准确的,按同一条按住。见 02 章决策 126。
-    /// 只认这两家。纯函数,selftest 直接覆盖。
     /// `resumeDropsToTrackStart` 按住时从哪里接着走。reAMP 是真的从暂停处接着放,恢复信号到这一拍处理之间已经走了一截
     /// (实测约 0.26 秒),按信号之后的时间补上 —— 停在暂停位置的话整段落后这一截,而它补来的准锚点差得不够多,伺服不纠。
     /// QQ 那种多半是暂停着换了歌,停在暂停位置。纯函数,selftest 直接覆盖。
@@ -764,11 +759,94 @@ public final class LocalPlaybackSource: ObservableObject {
         return frozen + max(0, sinceSignal - resumeAudioLagSecs(bundleID: bundleID))
     }
 
+    /// QQ 暂停着开播另一首时先报这一首在放、读数掉回开头,0.3~0.6 秒后才换歌名。恢复那一拍读数回到开头、暂停位置却在后面:
+    /// 按暂停位置接着走,最多 `resumeZeroHoldSecs`;这期间换了歌名就是换歌,到点还是这一首(暂停中拖回开头)再采信读数。
+    /// 不按住的话界面会先跳回这一首开头再换歌。见 02 章决策 120。
+    /// reAMP 恢复播放那一拍同样先报一份进度 0 的锚点,约 0.6~0.9 秒后才补准确的,按同一条按住。见 02 章决策 126。
+    /// 只认这两家。纯函数,selftest 直接覆盖。
     public nonisolated static func resumeDropsToTrackStart(bundleID: String?, frozen: Double?, reported: Double) -> Bool {
         guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier || bundleID == PlaybackPlayer.reamp.bundleIdentifier,
               let frozen else { return false }
         return reported <= anchorLagFreshStartMaxSecs && frozen - reported > seekJumpToleranceSecs
     }
+
+    /// `resumeDropsToTrackStart` 最多按住多久。reAMP 暂停着重新打开同一个文件(从头放)也是先报 0,之后不再补:按得越久,
+    /// 屏上停在旧位置越久,所以按它补准锚点的最晚时刻(实测 0.88 秒)留点余量;到点那一刻补查一次(`resumeZeroHoldDueBy`),
+    /// 不等下一次轮询。QQ 照旧 `trackEndZeroHoldSecs`。纯函数,selftest 直接覆盖。
+    public nonisolated static func resumeZeroHoldSecs(bundleID: String?) -> TimeInterval {
+        bundleID == PlaybackPlayer.reamp.bundleIdentifier ? 1.2 : trackEndZeroHoldSecs
+    }
+
+    /// 按住那一段读到的进度条(`ReampProgressBar`)说明是重新打开从头放:进度条 ≤ 1 秒、屏上(按住的位置)比它靠后
+    /// `seekJumpToleranceSecs` 以上。恢复播放时进度条停在暂停位置的整秒,不算。纯函数,selftest 直接覆盖。
+    public nonisolated static func resumeZeroIsRestart(barSeconds: Double?, shown: Double) -> Bool {
+        guard let barSeconds else { return false }
+        return barSeconds <= 1 && shown - barSeconds > seekJumpToleranceSecs
+    }
+
+    /// reAMP 恢复后 `resumeAnchorWindowSecs` 内读数跳回开头(暂停着重新打开同一个文件):它报的那份开头锚点有时比真实出声
+    /// 晚约 0.5 秒(也有准的),恢复信号的时刻反而准。位置按「恢复信号至今」算,夹在读数和读数 + `restartAnchorLateMaxSecs`
+    /// 之间;读数不在开头(> 3 秒)、不在窗口里、不是 reAMP 为 nil。见 02 章决策 126。纯函数,selftest 直接覆盖。
+    public nonisolated static func restartFromTopPosition(bundleID: String?, reported: Double, sinceResume: Double?,
+                                                          sinceWatchStart: Double?) -> Double? {
+        guard bundleID == PlaybackPlayer.reamp.bundleIdentifier, let sinceResume, let sinceWatchStart,
+              sinceWatchStart <= resumeAnchorWindowSecs, reported <= trackEndZeroMaxReportedSecs + 1 else { return nil }
+        let fromSignal = sinceResume - resumeAudioLagSecs(bundleID: bundleID)
+        return min(max(fromSignal, reported), reported + restartAnchorLateMaxSecs)
+    }
+
+    /// 见 restartFromTopPosition:实测开头锚点最多晚 0.49 秒。
+    public nonisolated static let restartAnchorLateMaxSecs: Double = 0.6
+
+    /// 进度条说明是重新打开从头放之后从哪里走:读数已经在开头(≤ 3 秒)的按 `restartFromTopPosition` 那样夹住;
+    /// 读数还是暂停时那份旧锚点外推出来的(补发旧锚点「在放」那种,0.5 秒后才报开头锚点),直接取恢复信号至今。纯函数,selftest 覆盖。
+    public nonisolated static func restartFromBarPosition(bundleID: String?, reported: Double, sinceResume: Double) -> Double {
+        let fromSignal = max(0, sinceResume - resumeAudioLagSecs(bundleID: bundleID))
+        guard reported <= trackEndZeroMaxReportedSecs + 1 else { return fromSignal }
+        return min(max(fromSignal, reported), reported + restartAnchorLateMaxSecs)
+    }
+
+    /// 正按住的那一段什么时候到点;不在按住、或不是 reAMP 时为 nil(QQ 按住期间会换歌名,不用补查)。纯函数,selftest 直接覆盖。
+    public nonisolated static func resumeZeroHoldDueBy(bundleID: String?, since: Date?) -> Date? {
+        guard bundleID == PlaybackPlayer.reamp.bundleIdentifier, let since else { return nil }
+        return since.addingTimeInterval(resumeZeroHoldSecs(bundleID: bundleID))
+    }
+
+    /// reAMP 恢复播放后盯着的那份锚点,见 `resumeAnchorStep`。
+    public struct ResumeAnchorWatch: Equatable, Sendable {
+        /// 恢复那一拍。
+        public var resumedAt: Date
+        /// 恢复那一拍起 `resumeAnchorWindowSecs` 内见到的最后一份锚点(elapsed):不拿它伺服。
+        public var distrustedAnchorElapsed: Double?
+
+        public init(resumedAt: Date, distrustedAnchorElapsed: Double?) {
+            self.resumedAt = resumedAt
+            self.distrustedAnchorElapsed = distrustedAnchorElapsed
+        }
+    }
+
+    /// reAMP 恢复播放后补报的锚点常常不准(偏零点几秒、方向不定),按住时接着走的位置(`resumeHoldSeed` / `resumeSeedSeconds`)
+    /// 反而准:恢复后 `resumeAnchorWindowSecs` 内见到的锚点记下来,之后读数还是它时不拿它伺服(`skipServo`),照外推走;
+    /// 换了锚点(拖动、换歌)就不再盯,照常伺服。窗口里一律不伺服。只认 reAMP。见 02 章决策 126。纯函数,selftest 直接覆盖。
+    public nonisolated static func resumeAnchorStep(bundleID: String?, watch: ResumeAnchorWatch?, anchorElapsed: Double?,
+                                                    now: Date) -> (watch: ResumeAnchorWatch?, skipServo: Bool) {
+        guard bundleID == PlaybackPlayer.reamp.bundleIdentifier, var watch else { return (nil, false) }
+        if now.timeIntervalSince(watch.resumedAt) <= resumeAnchorWindowSecs {
+            if let anchorElapsed { watch.distrustedAnchorElapsed = anchorElapsed }
+            return (watch, true)
+        }
+        guard let distrusted = watch.distrustedAnchorElapsed, anchorElapsed == distrusted else { return (nil, false) }
+        return (watch, true)
+    }
+
+    /// 恢复播放那一拍开始盯;不是 reAMP 为 nil。见 `resumeAnchorStep`。
+    public nonisolated static func resumeAnchorWatchStart(bundleID: String?, anchorElapsed: Double?, now: Date) -> ResumeAnchorWatch? {
+        guard bundleID == PlaybackPlayer.reamp.bundleIdentifier else { return nil }
+        return ResumeAnchorWatch(resumedAt: now, distrustedAnchorElapsed: anchorElapsed)
+    }
+
+    /// 见 resumeAnchorStep。reAMP 恢复后约 0.6~0.8 秒补报锚点(先报 0 的那种也在这之内)。
+    public nonisolated static let resumeAnchorWindowSecs: TimeInterval = 3
 
     /// QQ 暂停时多数不重发锚点;补发的是整秒下取整的值,或者暂停前刚重发过的、时间戳新而值少一秒的旧值,都比暂停那一刻早。
     /// 所以暂停事件冻住了外推时,暂停那一拍按屏上位置停住(见 posHeldPause),之后它再报的值按 `pausedReadingReplacesShown`
@@ -1438,6 +1516,12 @@ public final class LocalPlaybackSource: ObservableObject {
     private var posTrackEndZeroSince: Date?
     /// QQ 恢复播放时读数掉回开头、按住暂停位置的那一段从什么时候开始的(见 resumeDropsToTrackStart);不在那一段里为 nil。
     private var posResumeZeroSince: Date?
+    /// reAMP 读过进度条的是哪一次恢复(`ResumeAnchorWatch.resumedAt`),一次只派一回。
+    private var posRestartBarCheckedFor: Date?
+    /// 进度条已经说明这次恢复其实是重新打开从头放(`resumeZeroIsRestart`):下一拍按恢复信号至今重锚(`restartFromBarPosition`)。
+    private var posRestartFromBar = false
+    /// reAMP 恢复播放后盯着的那份锚点(见 resumeAnchorStep);不在恢复后那一段里为 nil。
+    private var posResumeAnchorWatch: ResumeAnchorWatch?
     /// 按 tickAnchorError 看过的那个锚点(elapsed),一个锚点只看一次;换歌 / 恢复 / 拖动时记成那一刻的锚点。
     private var posTickCheckedAnchorElapsed: Double?
     /// 最近一次换歌 / 恢复 / 拖动的时刻,见 tickAnchorSettleSecs。
@@ -1981,6 +2065,7 @@ public final class LocalPlaybackSource: ObservableObject {
         posAnchorLagSampleValid = false
         guard key == posTrackingKey, posWasPlaying, let prevWall = posPrevWall else {
             var resumeZeroAt: Date?
+            var resumeAnchorWatch: ResumeAnchorWatch?
             if key != posTrackingKey {
                 // 换歌:先判是不是 gapless 自然切歌——上一首(还在播)按墙钟连续外推已经
                 // 走到结尾附近。是的话按连续性播种 + 量出锚点超前量;否则(手动点播/首次
@@ -2097,6 +2182,10 @@ public final class LocalPlaybackSource: ObservableObject {
                                                           sinceSignal: sinceSignal)
                     resumeZeroAt = now
                 }
+                if pausedPositionMs != nil {
+                    resumeAnchorWatch = Self.resumeAnchorWatchStart(bundleID: lastSnapshot?.bundleIdentifier,
+                                                                    anchorElapsed: anchorElapsedTime, now: now)
+                }
                 // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):播种值就是真声,差值折进偏置。
                 if gaplessLeadBundleID != nil, anchorElapsedTime == nil, resumeSignalAge != nil || freshSignalAge != nil,
                    pausedPositionMs != nil,
@@ -2110,6 +2199,7 @@ public final class LocalPlaybackSource: ObservableObject {
             posLateAnchorProbedElapsed = nil
             posTrackEndZeroSince = nil
             posResumeZeroSince = resumeZeroAt
+            posResumeAnchorWatch = resumeAnchorWatch
             noteTickAnchorSettle(anchorElapsed: anchorElapsedTime, now: now)
             return (trackPosSeconds, true)
         }
@@ -2253,12 +2343,40 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         posTrackEndZeroSince = nil
         // QQ 恢复播放时读数掉回开头的那一段:接着按暂停位置走,见 resumeDropsToTrackStart。
+        // reAMP 进度条说明这次恢复其实是重新打开从头放:按恢复信号至今重锚,不等它报开头锚点、也不等按住到点。
+        if posRestartFromBar {
+            posRestartFromBar = false
+            posResumeZeroSince = nil
+            if let sinceResume = posResumeEpisodeAt.map({ now.timeIntervalSince($0) }) {
+                let restart = Self.restartFromBarPosition(bundleID: lastSnapshot?.bundleIdentifier,
+                                                          reported: rawReported, sinceResume: sinceResume)
+                logger.notice("restart from top: progress bar at the top, reported=\(rawReported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)), starting at \(restart, format: .fixed(precision: 3))")
+                setReportedBias(0, anchorElapsed: nil)
+                trackPosSeconds = restart
+                posErrEMA = 0
+                noteTickAnchorSettle(anchorElapsed: anchorElapsedTime, now: now)
+                return (trackPosSeconds, true)
+            }
+        }
         if let since = posResumeZeroSince {
-            if now.timeIntervalSince(since) < Self.trackEndZeroHoldSecs, reported <= Self.trackEndZeroMaxReportedSecs + 1 {
+            if now.timeIntervalSince(since) < Self.resumeZeroHoldSecs(bundleID: lastSnapshot?.bundleIdentifier),
+               reported <= Self.trackEndZeroMaxReportedSecs + 1 {
                 trackPosSeconds = predicted
                 return (trackPosSeconds, false)
             }
             posResumeZeroSince = nil
+        }
+        if abs(reported - predicted) > Self.seekJumpToleranceSecs,
+           let restart = Self.restartFromTopPosition(
+               bundleID: lastSnapshot?.bundleIdentifier, reported: rawReported,
+               sinceResume: posResumeEpisodeAt.map { now.timeIntervalSince($0) },
+               sinceWatchStart: posResumeAnchorWatch.map { now.timeIntervalSince($0.resumedAt) }) {
+            logger.notice("restart from top: reported=\(rawReported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)), starting from the resume signal at \(restart, format: .fixed(precision: 3))")
+            setReportedBias(0, anchorElapsed: nil)
+            trackPosSeconds = restart
+            posErrEMA = 0
+            noteTickAnchorSettle(anchorElapsed: anchorElapsedTime, now: now)
+            return (trackPosSeconds, true)
         }
         if abs(reported - predicted) > Self.seekJumpToleranceSecs {
             // 真实 seek/跳变:直接重锚到这次读数。seek 时 Spotify 会重打锚点,重打后的
@@ -2353,7 +2471,21 @@ public final class LocalPlaybackSource: ObservableObject {
                 return (trackPosSeconds, true)
             }
         }
+        // reAMP 恢复后补报的锚点不拿来伺服,见 resumeAnchorStep。
+        let resumeAnchor = Self.resumeAnchorStep(bundleID: lastSnapshot?.bundleIdentifier, watch: posResumeAnchorWatch,
+                                                 anchorElapsed: anchorElapsedTime, now: now)
+        if let watch = posResumeAnchorWatch, resumeAnchor.watch == nil {
+            logger.notice("resume anchor: new anchor \(anchorElapsedTime ?? -1, format: .fixed(precision: 3)) after the distrusted \(watch.distrustedAnchorElapsed ?? -1, format: .fixed(precision: 3)), servo back on (reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)))")
+        } else if let distrusted = resumeAnchor.watch?.distrustedAnchorElapsed,
+                  distrusted != posResumeAnchorWatch?.distrustedAnchorElapsed {
+            logger.notice("resume anchor: not following anchor \(distrusted, format: .fixed(precision: 3)), reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) off=\(reported - predicted, format: .fixed(precision: 3))")
+        }
+        posResumeAnchorWatch = resumeAnchor.watch
         posAnchorLagSampleValid = anchorLagSampleWasValid
+        if resumeAnchor.skipServo {
+            trackPosSeconds = predicted
+            return (trackPosSeconds, false)
+        }
         return resolveSteadyState(reported: reported, predicted: predicted, key: key, tier: tier)
     }
 
@@ -2413,6 +2545,36 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 补查排在到点之后这么久(判据是严格超过)。
     private static let republishCheckMarginSecs: TimeInterval = 0.05
 
+    /// reAMP 每次恢复播放:在后台读进度条(当场一次,没归 0 隔 `resumeZeroBarRecheckSecs` 再读一次),说明其实是重新打开从头放
+    /// 就马上再轮询一次、按恢复信号至今重锚(`posRestartFromBar`),不等它报开头锚点、也不等按住到点。见 resumeZeroIsRestart。
+    private func checkRestartBar() {
+        guard let resumedAt = posResumeAnchorWatch?.resumedAt, posRestartBarCheckedFor != resumedAt else { return }
+        posRestartBarCheckedFor = resumedAt
+        let recheck = Self.resumeZeroBarRecheckSecs
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var bar = ReampProgressBar.seconds()
+            if let first = bar, first > 1 {
+                try? await Task.sleep(for: .seconds(recheck))
+                bar = ReampProgressBar.seconds()
+            }
+            await self?.noteRestartBar(bar, resumedAt: resumedAt)
+        }
+    }
+
+    private func noteRestartBar(_ bar: Double?, resumedAt: Date) {
+        guard posResumeAnchorWatch?.resumedAt == resumedAt else { return }
+        guard Self.resumeZeroIsRestart(barSeconds: bar, shown: trackPosSeconds) else {
+            logger.notice("resume: progress bar \(bar ?? -1, format: .fixed(precision: 0)) with shown \(self.trackPosSeconds, format: .fixed(precision: 3)), a real resume")
+            return
+        }
+        logger.notice("resume: progress bar \(bar ?? -1, format: .fixed(precision: 0)) with shown \(self.trackPosSeconds, format: .fixed(precision: 3)), reopened from the top")
+        posRestartFromBar = true
+        poll()
+    }
+
+    /// 见 checkRestartBar。重新打开后进度条 0.11~0.14 秒归 0。
+    nonisolated static let resumeZeroBarRecheckSecs: TimeInterval = 0.4
+
     private func scheduleRepublishCheck(dueBy: Date?) {
         pendingRepublishCheck?.cancel()
         pendingRepublishCheck = nil
@@ -2465,6 +2627,12 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 回放:Spotify「Playing、位置 ≈0」通知到达的时刻(线上由通知观察者记,见 spotifyJumpKind)。
     public func replaySpotifyPlayingFromStartNotice(at date: Date) { spotifyPlayingFromStartNoticeAt = date }
+
+    /// 回放:恢复之后读到了进度条(线上由 checkRestartBar 在后台读)。
+    public func replayRestartBar(_ bar: Double?) {
+        guard posResumeAnchorWatch != nil, Self.resumeZeroIsRestart(barSeconds: bar, shown: trackPosSeconds) else { return }
+        posRestartFromBar = true
+    }
 
     /// 回放:一条「恢复播放」信号到达(线上是 handlePlayerInfoChanged 的 resumeSignal)。
     public func replayResumeSignal(at date: Date) {
@@ -3492,9 +3660,14 @@ public final class LocalPlaybackSource: ObservableObject {
             secs: Self.lyricsLookupDuration(isRadio: rawSnapshot.isRadio == true, isMusicVideo: playingMusicVideo,
                                             duration: rawSnapshot.duration))
         var snapshot = rawSnapshot
-        if rawSnapshot.isRadio == true,
+        // reAMP 的电台流同样没有曲长,起点推算过(`PlayerTitleSplit.streamClockKnown`)的才拿缓存里的曲长建锚点;
+        // 缓存里没有曲长时退到歌词判决记下的那首的时长(引擎不给它回填)。
+        let reampStreamClock = PlayerTitleSplit.streamClockKnown(
+            bundleID: rawSnapshot.bundleIdentifier, duration: rawSnapshot.duration, elapsed: rawSnapshot.elapsedTime)
+        if rawSnapshot.isRadio == true || reampStreamClock,
            let cached = EnrichCacheReader.trackDurationSecs(
-               artist: rawSnapshot.artist ?? "", title: rawSnapshot.title ?? "", album: rawSnapshot.album ?? ""),
+               artist: rawSnapshot.artist ?? "", title: rawSnapshot.title ?? "", album: rawSnapshot.album ?? "",
+               allowsLyricsMatch: reampStreamClock),
            cached > 0, cached != rawSnapshot.duration {
             snapshot = rawSnapshot.withDuration(cached)
         }
@@ -3832,6 +4005,11 @@ public final class LocalPlaybackSource: ObservableObject {
         // 过再用(见该函数注释)。
         applyPosition(snapshot: snapshot, key: key, trackChanged: trackChanged, previousKey: previousKey,
                       isSpotifyNative: isSpotifyNative, isAdBreak: isCurrentTrackAdBreak, now: Date())
+        // reAMP 恢复按住到点时补查一次,跟重发锚点的补查共用一个定时器、取早的那个。要排在位置解算之后:按住是这一拍才设上的。
+        if let holdDue = Self.resumeZeroHoldDueBy(bundleID: snapshot.bundleIdentifier, since: posResumeZeroSince) {
+            scheduleRepublishCheck(dueBy: [snapshot.republishDueBy, holdDue].compactMap { $0 }.min())
+        }
+        checkRestartBar()
         if anchor == nil {
             // 暂停(anchor == nil 但曲目还在、位置已冻结)时**不能**把当前歌词行清掉。
             //

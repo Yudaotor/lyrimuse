@@ -77,6 +77,7 @@ enum DebugDeepLinks {
                 "lineIndex": p.currentLineIndex.map { $0 as Any } ?? NSNull(),
                 "line": p.currentLine?.plainText ?? "",
                 "trackLyricsOffsetMs": p.trackLyricsOffsetMs,
+                "playMode": p.playbackMode.map { $0.rawValue as Any } ?? NSNull(),
             ],
             "settings": [
                 "overlay": s.classicOverlayEnabled, "notch": s.notchOverlayEnabled, "menuBar": s.showLyricsInMenuBar,

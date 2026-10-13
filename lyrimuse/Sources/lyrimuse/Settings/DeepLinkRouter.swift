@@ -56,6 +56,8 @@ enum DeepLinkRouter {
             if let menuBar { LyrimuseActionRunner.perform(.toggleMenuBarLyricsHotkey, on: menuBar) }
         case let .setLyricsOffset(ms):
             LyrimuseActionRunner.setLyricsOffset(ms: ms)
+        case let .setPlayMode(mode):
+            PlaybackCoordinator.shared.setPlaybackMode(mode)
         case let .nowPlayingCallback(success):
             replyNowPlaying(to: success)
         case let .debug(command):

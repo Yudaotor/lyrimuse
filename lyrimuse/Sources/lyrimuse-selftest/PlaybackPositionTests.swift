@@ -1734,6 +1734,58 @@ func runPlaybackPositionTests() {
                     75.75, "reAMP 恢复先报进度 0: 按住时从暂停位置加上恢复信号之后走过的时间接着走")
         expectEqual(LocalPlaybackSource.resumeHoldSeed(bundleID: qq, frozen: 7.27, sinceSignal: 0.4), 7.27,
                     "QQ 恢复掉回开头: 照旧停在暂停位置")
+        expectEqual(LocalPlaybackSource.resumeZeroHoldSecs(bundleID: PlaybackPlayer.reamp.bundleIdentifier), 1.2,
+                    "reAMP 恢复先报进度 0: 按住 1.2 秒(补准锚点最晚 0.88 秒;从头重开不再补,按久了屏上停在旧位置)")
+        expectEqual(LocalPlaybackSource.resumeZeroHoldSecs(bundleID: qq), LocalPlaybackSource.trackEndZeroHoldSecs,
+                    "QQ 恢复掉回开头: 按住时长照旧")
+        expectEqual(LocalPlaybackSource.resumeZeroHoldDueBy(bundleID: PlaybackPlayer.reamp.bundleIdentifier,
+                                                           since: Date(timeIntervalSince1970: 100)),
+                    Date(timeIntervalSince1970: 101.2), "reAMP 恢复按住: 到点补查")
+        expectEqual(LocalPlaybackSource.resumeZeroHoldDueBy(bundleID: qq, since: Date(timeIntervalSince1970: 100)), nil,
+                    "QQ 恢复按住: 不补查(按住期间会换歌名)")
+        expectEqual(LocalPlaybackSource.resumeZeroIsRestart(barSeconds: 0, shown: 12.3), true, "reAMP 按住: 进度条归 0 是重新打开从头放")
+        expectEqual(LocalPlaybackSource.resumeZeroIsRestart(barSeconds: 1, shown: 12.3), true, "reAMP 按住: 进度条已走到 1 秒也算")
+        expectEqual(LocalPlaybackSource.resumeZeroIsRestart(barSeconds: 12, shown: 12.3), false, "reAMP 按住: 进度条停在暂停位置是恢复")
+        expectEqual(LocalPlaybackSource.resumeZeroIsRestart(barSeconds: nil, shown: 12.3), false, "reAMP 按住: 读不到进度条照旧按住")
+        expectEqual(LocalPlaybackSource.resumeZeroIsRestart(barSeconds: 0, shown: 1.5), false, "reAMP 按住: 暂停位置本来就在开头不算")
+        let restart = { (reported: Double, sinceResume: Double?, sinceWatch: Double?) in
+            LocalPlaybackSource.restartFromTopPosition(bundleID: PlaybackPlayer.reamp.bundleIdentifier, reported: reported,
+                                                       sinceResume: sinceResume, sinceWatchStart: sinceWatch)
+        }
+        expectEqual(restart(0.268, 0.707, 0.5), 0.707, "reAMP 从头重开: 开头锚点晚了,按恢复信号至今算")
+        expectEqual(restart(0.42, 0.41, 0.4), 0.42, "reAMP 从头重开: 信号比读数还早时不往回拉")
+        expectEqual(restart(0.2, 2.0, 0.5), 0.8, "reAMP 从头重开: 最多比读数多 0.6 秒")
+        expectEqual(restart(0.3, 0.7, 4), nil, "reAMP 从头重开: 恢复后的窗口过了(用户自己拖回开头)照常采信读数")
+        expectEqual(restart(10, 0.7, 0.5), nil, "reAMP 从头重开: 读数不在开头不算")
+        expectEqual(LocalPlaybackSource.restartFromTopPosition(bundleID: qq, reported: 0.3, sinceResume: 0.7, sinceWatchStart: 0.5), nil,
+                    "reAMP 从头重开: 只认 reAMP")
+        expectEqual(LocalPlaybackSource.restartFromBarPosition(bundleID: PlaybackPlayer.reamp.bundleIdentifier, reported: 12.3,
+                                                              sinceResume: 0.28), 0.28,
+                    "reAMP 进度条说是重开: 读数还是旧锚点时按恢复信号至今")
+        expectEqual(LocalPlaybackSource.restartFromBarPosition(bundleID: PlaybackPlayer.reamp.bundleIdentifier, reported: 0.25,
+                                                              sinceResume: 0.25), 0.25,
+                    "reAMP 进度条说是重开: 读数已在开头时按它夹住")
+        do {
+            let reamp = PlaybackPlayer.reamp.bundleIdentifier
+            let t0 = Date(timeIntervalSince1970: 1_000)
+            let step = { (watch: LocalPlaybackSource.ResumeAnchorWatch?, anchor: Double?, after: TimeInterval) in
+                LocalPlaybackSource.resumeAnchorStep(bundleID: reamp, watch: watch, anchorElapsed: anchor, now: t0.addingTimeInterval(after))
+            }
+            let start = LocalPlaybackSource.resumeAnchorWatchStart(bundleID: reamp, anchorElapsed: 0, now: t0)
+            expectEqual(start, .init(resumedAt: t0, distrustedAnchorElapsed: 0), "reAMP 恢复后的锚点: 恢复那一拍开始盯")
+            expectEqual(LocalPlaybackSource.resumeAnchorWatchStart(bundleID: qq, anchorElapsed: 0, now: t0), nil,
+                        "reAMP 恢复后的锚点: 别的播放器不盯(决策 41)")
+            let zeroThenReal = step(start, 28.905, 0.6)
+            expectEqual(zeroThenReal.skipServo, true, "reAMP 恢复后的锚点: 窗口里不伺服")
+            expectEqual(zeroThenReal.watch?.distrustedAnchorElapsed, 28.905, "reAMP 恢复后的锚点: 先报 0、再补报的那份才是要躲的")
+            let later = step(zeroThenReal.watch, 28.905, 8)
+            expectEqual(later.skipServo, true, "reAMP 恢复后的锚点: 8 秒后读数还是那份,仍不拿它伺服(实测偏 0.5 秒时伺服 8 秒后跟了过去)")
+            expectEqual(step(later.watch, 40.2, 9).skipServo, false, "reAMP 恢复后的锚点: 换了锚点(拖动)照常伺服")
+            expectEqual(step(later.watch, 40.2, 9).watch, nil, "reAMP 恢复后的锚点: 换了锚点就不再盯")
+            expectEqual(step(start, nil, 4).watch, nil, "reAMP 恢复后的锚点: 窗口里没补报、过了窗口读数又不是那份,不再盯")
+            expectEqual(LocalPlaybackSource.resumeAnchorStep(bundleID: qq, watch: later.watch, anchorElapsed: 28.905, now: t0).skipServo,
+                        false, "reAMP 恢复后的锚点: 换成别的播放器不躲")
+        }
         expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: kugouID, frozen: 7.27, reported: 0.224), false, "QQ 恢复掉回开头: 酷狗不动")
         let lateZero = { LocalPlaybackSource.qqLateZeroAnchorLead(bundleID: $0, anchorElapsed: $1, rawReported: $2, resumeSignalAge: $3) }
         expectEqual(lateZero(qq, 0, 0.05, 0.4), 0.12, "QQ 晚到的 0 锚点: 比在放信号晚 0.35 秒,往前补 0.12")

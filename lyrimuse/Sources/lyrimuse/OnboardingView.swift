@@ -829,6 +829,11 @@ struct OnboardingView: View {
             lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢键"),
                                 accessibility.playerNames(favoriteTargets)))
         }
+        let modeOnlyTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesPlayMode }
+        if !modeOnlyTargets.isEmpty {
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的随机、循环键"),
+                                accessibility.playerNames(modeOnlyTargets)))
+        }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
@@ -1475,6 +1480,7 @@ struct OnboardingView: View {
             let playMode = targets.filter { $0.accessibilityUse == .switchesPlayMode }
             let playback = targets.filter { $0.accessibilityUse == .controlsPlayback }
             let favorite = targets.filter { $0.accessibilityUse == .pressesFavorite }
+            let modeOnly = targets.filter { $0.accessibilityUse == .pressesPlayMode }
             var lines: [String] = []
             if !progress.isEmpty && !playMode.isEmpty {
                 lines.append(String(format: L10n.t("请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制"),
@@ -1493,6 +1499,10 @@ struct OnboardingView: View {
             if !favorite.isEmpty {
                 lines.append(String(format: L10n.t("请开启此权限，以显示%@的喜欢键"),
                                     accessibility.playerNames(favorite)))
+            }
+            if !modeOnly.isEmpty {
+                lines.append(String(format: L10n.t("请开启此权限，以显示%@的随机、循环键"),
+                                    accessibility.playerNames(modeOnly)))
             }
             return lines.joined(separator: "\n")
         case .automation(let player) where player.automationUse == .readsTrack:

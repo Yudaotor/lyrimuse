@@ -266,7 +266,7 @@
       "ignoresSeekCommand": false,
       "needsAutomationPermission": false,
       "needsFullDiskAccess": false,
-      "needsAccessibilityPermission": false,
+      "needsAccessibilityPermission": true,
       "tint": {"rgb": [1.0, 0.58, 0.0]},
       "fallbackSymbol": "music.note",
       "bundledIcon": "ReampIcon",

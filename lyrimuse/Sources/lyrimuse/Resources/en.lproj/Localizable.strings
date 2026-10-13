@@ -1090,6 +1090,7 @@
 "换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。" = "Wrap (default): long lines fold onto the next line and the window grows taller.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复。" = "The authorization may have been revoked on the Last.fm website. Reconnect to resume.";
 "授权后 Lyrimuse 会读取%@的喜欢状态，并在你点喜欢键时替你按下它界面上对应的那一项。不授权也能用，只是没有喜欢键。" = "With permission, Lyrimuse reads whether %@ has liked the current song and presses the matching control in its window when you click Like. Everything else works without it; there is just no Like button.";
+"授权后 Lyrimuse 会读取%@的随机、循环状态，并在你点这两颗键时替你按下它菜单里对应的那一项。不授权也能用，只是没有这两颗键。" = "With permission, Lyrimuse reads whether shuffle and repeat are on in %@ and presses the matching menu item when you click one of those buttons. Everything else works without it; there are just no shuffle and repeat buttons.";
 "授权后 Lyrimuse 会读取并点按%@的界面，以显示和切换喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能显示歌词，但没有喜欢键，失焦时也无法控制播放；失焦时的进度跳转暂不支持。" = "With permission, Lyrimuse reads and presses controls in %@ to show and toggle Like, and can pause, resume and skip tracks when another app holds system media focus. Lyrics still work without permission, but there is no Like button and playback can’t be controlled without media focus; seeking without media focus is not supported.";
 "授权已失效" = "Authorization expired";
 "授权已失效。请在「系统设置 → 隐私与安全性 → %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse。" = "Permission is no longer valid. In System Settings → Privacy & Security → %@, remove the old entry, add the Lyrimuse.app you are currently running, then restart Lyrimuse.";
@@ -1364,6 +1365,7 @@
 "未获得辅助功能权限，%@ 不显示喜欢键，失去系统媒体焦点时也无法控制暂停、恢复和上下首" = "Accessibility permission is missing: %@ has no Like button, and can’t pause, resume or skip tracks without system media focus";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键" = "No Accessibility permission; %@’s shuffle, repeat and Like buttons are hidden";
 "未获得辅助功能权限，%@ 不显示随机、循环与喜欢键，失焦时也无法控制播放" = "Accessibility permission is missing: %@ has no shuffle, repeat or like buttons, and cannot be controlled when system media focus is elsewhere";
+"未获得辅助功能权限，%@ 不显示随机、循环键" = "Accessibility permission is missing: %@ has no shuffle or repeat buttons";
 "未获得辅助功能权限，无法校准 %@ 的播放进度" = "No Accessibility permission; %@’s progress cannot be calibrated";
 "未获授权" = "Not granted";
 "未记录" = "Not recorded";
@@ -1956,6 +1958,7 @@
 "请开启此权限，以显示%@的喜欢键，并在失去系统媒体焦点时控制暂停、恢复和上下首" = "Enable this permission to show the Like button for %@ and to pause, resume and skip tracks when it loses system media focus";
 "请开启此权限，以显示%@的随机、循环与喜欢键" = "Turn this on to show shuffle, repeat and Like buttons for %@";
 "请开启此权限，以显示%@的随机、循环与喜欢键，并在失去系统媒体焦点时控制播放" = "Enable this permission for shuffle, repeat and liking songs in %@, and to control playback when it loses system media focus";
+"请开启此权限，以显示%@的随机、循环键" = "Enable this permission to show the shuffle and repeat buttons for %@";
 "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键" = "Turn this on to keep %@'s playback position accurate during autoplay and show shuffle, repeat and Like buttons for %@";
 "请开启此权限，让%@自动连播时的播放进度更准确，并显示%@的随机、循环与喜欢键及失焦播放控制" = "Enable this permission to improve progress accuracy during autoplay in %@, and enable shuffle, repeat, liking songs and playback controls without system media focus in %@";
 "请开启此权限，让%@自动连播时的播放进度更准确，并显示随机、循环键" = "Turn this on to keep %@'s playback position accurate during autoplay and show its shuffle and repeat buttons";
@@ -2004,6 +2007,7 @@
 "辅助功能权限可显示%@的喜欢键" = "Accessibility permission enables liking songs for %@";
 "辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时控制暂停、恢复和上下首" = "Accessibility permission enables liking songs for %@, and lets Lyrimuse pause, resume and skip tracks when another app holds system media focus";
 "辅助功能权限可显示%@的随机、循环与喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" = "Accessibility permission enables shuffle, repeat and liking songs for %@, and lets its menus pause, resume and skip tracks when another app holds system media focus";
+"辅助功能权限可显示%@的随机、循环键" = "Accessibility permission enables shuffle and repeat for %@";
 "辅助功能权限可让%@的播放进度更准确，并显示随机、循环键" = "Accessibility keeps %@'s playback position accurate and shows its shuffle and repeat buttons";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";
 "运行中" = "Running";

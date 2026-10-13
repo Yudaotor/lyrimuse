@@ -131,6 +131,11 @@ struct AccessibilityPermissionGuide: View {
             lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取%@的喜欢状态，并在你点喜欢键时替你按下它界面上对应的那一项。不授权也能用，只是没有喜欢键。"),
                                 model.playerNames(favorite)))
         }
+        let modeOnly = players.filter { $0.accessibilityUse == .pressesPlayMode }
+        if !modeOnly.isEmpty {
+            lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取%@的随机、循环状态，并在你点这两颗键时替你按下它菜单里对应的那一项。不授权也能用，只是没有这两颗键。"),
+                                model.playerNames(modeOnly)))
+        }
         return lines.joined(separator: "\n")
     }
 }
