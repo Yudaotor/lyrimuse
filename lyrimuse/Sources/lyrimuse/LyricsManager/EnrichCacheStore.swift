@@ -263,9 +263,9 @@ public final class EnrichCacheStore: ObservableObject {
     /// 数组本身没做 Equatable,靠这个代数判断"列表内容换过了没有"。
     private(set) var summariesGeneration = 0
     /// 设置页「歌词库」卡要的几个数(各成色桶、译文 / 读音、待补搜),每次读盘在后台跟摘要一起算好。快照放掉也留着
-    /// (几十个字节):再进那一页先摆这份,不用为几个数字重新解析整份歌词库;缓存文件没变就连读盘都省掉
-    /// (`refreshLibraryDigest`)。读盘失败清掉,跟列表一起回到「没有数」。
-    struct LibraryDigest: Equatable {
+    /// (几十个字节),也存盘(`digestURL`),启动时读回:进那一页先摆这份,不用为几个数字重新解析整份歌词库;
+    /// 缓存没变就连读盘都省掉(`refreshLibraryDigest`)。读盘失败清掉,跟列表一起回到「没有数」。
+    struct LibraryDigest: Equatable, Codable {
         var counts: LyricsLibraryStats.Counts
         var retryable: Int
         var fingerprint: FileFingerprint?
@@ -343,7 +343,28 @@ public final class EnrichCacheStore: ObservableObject {
     // 交给引擎、还没回结果的改动数(见 commit)。不为 0 时不清快照:改完要 reload 刷新列表。
     private var editsInFlight = 0
 
-    private init() {}
+    private init() {
+        libraryDigest = Self.loadDigest()
+    }
+
+    private static let digestURL = LyrimusePaths.configFile("lyrimuse-library-digest.json")
+
+    private static func loadDigest() -> LibraryDigest? {
+        FileIO.decodeJSON(LibraryDigest.self, from: digestURL)
+    }
+
+    private func setLibraryDigest(_ digest: LibraryDigest?) {
+        guard libraryDigest != digest else { return }
+        libraryDigest = digest
+        let url = Self.digestURL
+        Task.detached(priority: .utility) {
+            if let digest, let data = try? JSONEncoder().encode(digest) {
+                FileIO.write(data, to: url)
+            } else {
+                FileIO.remove(url)
+            }
+        }
+    }
 
     // 缓存文件设计上永久不清理("解析一次永久保留"),攒到几百条、几 MB 后
     // JSONSerialization 解析整份文件要 30ms 以上——若直接在 MainActor 上同步做,开窗/点
@@ -358,7 +379,7 @@ public final class EnrichCacheStore: ObservableObject {
     private var lastSeenSnapshotFingerprint: FileFingerprint?
     private var lastSeenPendingFingerprint: FileFingerprint?
 
-    struct FileFingerprint: Equatable {
+    struct FileFingerprint: Equatable, Codable {
         var mtime: Date
         var size: Int64
     }
@@ -494,7 +515,7 @@ public final class EnrichCacheStore: ObservableObject {
             isReleased = false
             if loadError != nil { loadError = nil }
             applySummaries(bundle)
-            if libraryDigest != box.digest { libraryDigest = box.digest }
+            setLibraryDigest(box.digest)
             scheduleReleaseIfUnheld()
             LyricsManagerBaseline.logReload(
                 bytes: box.bytes, count: snapshot.count,
@@ -508,7 +529,7 @@ public final class EnrichCacheStore: ObservableObject {
             loadError = box.parseFailed ? L10n.t("解析本地记录文件失败") : L10n.t("读取本地记录文件失败")
             // raw 是空的,不用为了建一份空列表去列举整个歌词目录。
             applySummaries(SummariesBundle(summaries: [], albumDisplayMap: [:], distinctArtists: [], distinctAlbums: []))
-            if libraryDigest != nil { libraryDigest = nil }
+            setLibraryDigest(nil)
         }
     }
 
@@ -529,6 +550,8 @@ public final class EnrichCacheStore: ObservableObject {
     }
 
     /// 设置页「歌词库」卡进页面、轮询时调:缓存文件跟上次算统计时一样就什么都不做(不读盘),变了才 reload。
+    /// 只比整份缓存:正在播放、待落盘那几份叠加文件播放时一直在改写,算进来几乎每次都要重新解析整份缓存,
+    /// 它们只差几首歌,等引擎整份落盘时跟着更新(14 章决策 96)。
     func refreshLibraryDigest() async {
         if let digest = libraryDigest, let fingerprint = digest.fingerprint,
            fingerprint == Self.fileFingerprint(Self.cacheURL) {

@@ -21,7 +21,7 @@ enum LyricsLibraryStats {
             hasPlainTextFallback: hasPlainTextFallback, isInstrumental: isInstrumental)
     }
 
-    struct Counts: Equatable {
+    struct Counts: Equatable, Codable {
         var total = 0
         var byKind: [String: Int] = [:]
         /// 歌词源自带的社区译文(网易云 / Musixmatch)。
