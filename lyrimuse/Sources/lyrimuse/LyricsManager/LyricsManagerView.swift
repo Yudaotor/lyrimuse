@@ -460,6 +460,9 @@ private final class LyricsManagerWindowFramePersistence: ObservableObject {
         window.makeFirstResponder(table)
     }
 
+    /// 窗口上挂着面板(同曲条目、解析决策、确认框之类)。
+    var hasAttachedSheet: Bool { window?.attachedSheet != nil }
+
     /// 窗口里那张列表的表格。
     var listTable: NSTableView? {
         guard let window else { return nil }
@@ -691,6 +694,8 @@ struct LyricsManagerView: View {
     }
     @State private var showDecisionSheet = false
     @State private var showSongVersions = false
+    /// 链接带了 `evidence=1`:这一次打开「同曲条目」就展开「匹配依据」;面板关掉就放下。
+    @State private var songVersionsShowEvidence = false
     // 这首歌内容不同的几份手改原件(两份以上才有提示,见 manualConflictRow);载入详情时算。
     @State private var manualConflictKeys: [String] = []
     @State private var confirmManualConflict = false
@@ -1719,6 +1724,9 @@ struct LyricsManagerView: View {
         .onChange(of: groupByAlbum) { _, _ in revealSelection(scrollProxy: scrollProxy) }
         .onChange(of: sortOption) { _, _ in revealSelection(scrollProxy: scrollProxy) }
         .onReceive(listSelection.$keys) { keys in listSelectionChanged(keys) }
+        // lyrimuse://lyrics-manager/song-versions:窗口已经开着时收 subject;开窗那一轮(pendingAutoFocus 还没放下)缓存可能还是空的,
+        // 留给下面 onAppear 读完缓存、自动定位之后取信箱。
+        .onReceive(AppActions.shared.songVersionsRequests) { if !pendingAutoFocus { consumeSongVersionsRequest() } }
         .onChange(of: selectedKeys) { _, keys in
             if listSelection.keys != keys {
                 listSelection.keys = keys
@@ -1766,13 +1774,18 @@ struct LyricsManagerView: View {
                 // 该顶替成真实条目了,也可能换了首新歌还在搜。
                 refreshPlaceholder()
                 refreshNowPlayingKey()
-                guard pendingAutoFocus else { return }
+                guard pendingAutoFocus else {
+                    consumeSongVersionsRequest()
+                    return
+                }
                 pendingAutoFocus = false
                 await windowFrame.waitUntilListReady(minRows: sortedFiltered.count)
                 // 只把详情换成正在放的这首,列表停在顶上:滚到它那一行要点「正在播放」那一行的「定位」(见 11 章决策 64)。
                 focusCurrentlyPlaying(scrollProxy: scrollProxy, scroll: false)
                 // 开窗时 AppKit 把键盘焦点给第一个输入框(搜索框),交给列表:方向键直接换歌,⌘F 再去搜索。
                 DispatchQueue.main.async { windowFrame.focusList() }
+                // 链接带的条目排在自动定位之后,不被正在放的那首顶掉。
+                consumeSongVersionsRequest()
             }
         }
         // 自动匹配的进度卡、写入失败的红字挂在列表底下,列表的最后几行能滚到它们上面。
@@ -3137,8 +3150,8 @@ struct LyricsManagerView: View {
                     LyricsDecisionSheet(summary: summary, latest: latest, applied: applied)
                 }
             }
-            .sheet(isPresented: $showSongVersions) {
-                SongVersionsSheet(summary: summary, onOpen: { other in _ = select(other) })
+            .sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false }) {
+                SongVersionsSheet(summary: summary, onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence)
             }
             .sheet(item: $searchTarget) { target in
                 // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
@@ -3506,6 +3519,19 @@ struct LyricsManagerView: View {
                 }
             }
         }
+    }
+
+    /// 链接要的「同曲条目」面板:带了写法键先选中那一条,没带就是详情页正显示的那条;条件跟「⋯」里那一项一样(这条有实体 id)。
+    /// 取了就清,开没开成都一样;信箱只认 60 秒内的请求。有没保存的修改时 select 先问一句,这一下不开面板。开着别的面板时不动,
+    /// 免得换掉它底下那一条;开着的就是同曲条目时换成链接要的那一首。
+    private func consumeSongVersionsRequest() {
+        guard let request = AppActions.shared.pendingSongVersions else { return }
+        AppActions.shared.pendingSongVersions = nil
+        guard showSongVersions || !windowFrame.hasAttachedSheet,
+              Date().timeIntervalSince(request.at) < 60, let key = request.key ?? singleSelectedKey,
+              store.summary(forKey: key) != nil, store.songMembership(forKey: key) != nil, select(key) else { return }
+        songVersionsShowEvidence = request.showEvidence
+        showSongVersions = true
     }
 
     /// 头部下面那行概况:同一首歌有几种写法(点开「同一首歌的其他写法」)、时长、歌词更新时间(没词的写解析时间)、当初几个源

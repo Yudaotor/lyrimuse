@@ -245,6 +245,12 @@ func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
 		}
 		winner.Reported = reported
 	}
+	// 落选那条记下的播放器报的歌曲 id,胜者没有的那几个播放器连同成对的专辑 id 带过来;同一首、胜者没记专辑的补上专辑。
+	for _, b := range songSortedKeys(loser.PlayerSongIDs) {
+		if s := winner.PlayerSongIDs[b]; s == "" || (s == loser.PlayerSongIDs[b] && winner.PlayerAlbumIDs[b] == "") {
+			notePlayerSongLocked(&winner, b, loser.PlayerSongIDs[b], loser.PlayerAlbumIDs[b])
+		}
+	}
 	// 两条都放过的播放器合在一起,上面补过来的 id 对应的播放器也记上。
 	winner.Players = slices.Clone(winner.Players)
 	for _, p := range loser.Players {

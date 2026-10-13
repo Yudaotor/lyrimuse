@@ -10,16 +10,21 @@ import (
 	"time"
 )
 
-// 播放器自己给这首记下的专辑 id、第一位歌手的 id(汽水还有曲目 id):哪个播放器在放,就从它本机的数据里取,不联网。
+// 播放器自己给这首记下的专辑 id、第一位歌手的 id(汽水还有曲目 id):哪个播放器在放,就从它本机的数据里取;只有汽水 2.9 起
+// 的音频缓存库要按曲目 id 联网问曲目信息(sodatrackmeta.go,09 章决策 239)。
 // 记进缓存条目,App 拼成那家的专辑页、歌手页放进歌词窗口「⋯」菜单;汽水的曲目 id 拼成歌曲页 soda_url,跟别家的歌曲页
 // 一样进 fields()、ListenBrainz 和中继。
 //
 // 各家来源,都是引擎本来就在读的本机数据:
 //   - 汽水音乐:播放队列缓存(sodalocal.go)里这首的 id / album.id / 第一位歌手的 id;从歌单、专辑点播的不在队列缓存里,
-//     看音频缓存库(sodapreload.go),正在播的这首一定在里面;
+//     看音频缓存库(sodapreload.go),正在播的这首一定在里面(曲目信息还没问到时这一拍没有,问到之后由
+//     backfillSodaPagesFromClientCache 补记);
 //   - KKBOX:客户端缓存的单曲详情里的 album.id / artist.id(artist_roles 里的歌手没有 id);
 //   - Amazon Music:目录缓存里这首(App 报的 ASIN)的 album.asin / artist.asin;
-//   - Spotify:客户端元数据缓存(primary.ldb)里这首(换曲那一拍记下的曲目 id)的所属专辑与第一位歌手。
+//   - Spotify:客户端元数据缓存(primary.ldb)里这首(换曲那一拍记下的曲目 id)的所属专辑与第一位歌手;
+//   - QQ 音乐、网易云:播放列表(QQ 的 PlayingList.archive、网易云的 playingList)里当前这首的歌曲 id 与所在专辑的 id,
+//     成对记进 PlayerSongIDs / PlayerAlbumIDs(18 章决策 65、67);
+//   - 酷狗:「此刻在播」plist 里当前这首的 strFileHash 在客户端曲库里的 mixId 与 albumId,同样成对记(18 章决策 69)。
 // YouTube Music(Kaset)的专辑页、歌手页 id 跟专辑判定一起记(kasetalbum.go)。
 //
 // 专辑、歌手只存 id,不存拼好的地址:带 _url 的字段都按歌曲页对待,要进 fields()、ListenBrainz 白名单和中继 links;
@@ -32,9 +37,10 @@ const (
 	playerCatalogMissTTL = 20 * time.Second
 )
 
-// playerCatalogIDs:song 是歌曲页(只有汽水走这里),album / artist 是那家自己的 id。
+// playerCatalogIDs:song 是歌曲页(只有汽水走这里),album / artist 是那家自己的 id,songID 是播放器报的这一首的歌曲 id、
+// songAlbum 是它所在的专辑 id(QQ 音乐、网易云走这里,成对记进 PlayerSongIDs / PlayerAlbumIDs)。
 type playerCatalogIDs struct {
-	song, album, artist string
+	song, album, artist, songID, songAlbum string
 }
 
 var (
@@ -54,11 +60,11 @@ func (m playerCatalogAt) ttl() time.Duration {
 	return playerCatalogHitTTL
 }
 
-// playerCatalogIDsFor:当前播放器给这首记下的 id;不是上面四家、本机数据里没有都返回空。要读别的 App 的本机文件,
+// playerCatalogIDsFor:当前播放器给这首记下的 id;不是上面那几家、本机数据里没有都返回空。要读别的 App 的本机文件,
 // 调用方不能持着 enrichMu(Amazon 那条经 amazonASINFor 会取它的锁)。
 func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs float64) playerCatalogIDs {
 	switch bundleID {
-	case sodaMusicBundleID, kkboxBundleID, amazonMusicBundleID, spotifyBundleID:
+	case sodaMusicBundleID, kkboxBundleID, amazonMusicBundleID, spotifyBundleID, qqMusicBundleID, neteaseMusicBundleID, kugouMusicBundleID:
 	default:
 		return playerCatalogIDs{}
 	}
@@ -81,6 +87,18 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 		ids = amazonPlayingCatalogIDs(artist, title, album)
 	case spotifyBundleID:
 		ids = spotifyPlayingCatalogIDs(artist, title)
+	case qqMusicBundleID:
+		ids.songID, ids.songAlbum = qqPlayingSong(artist, title, durationSecs)
+	case neteaseMusicBundleID:
+		ids.songID, ids.songAlbum = neteasePlayingSong(artist, title, durationSecs)
+	case kugouMusicBundleID:
+		ids.songID, ids.songAlbum = kugouPlayingSong(artist, title, durationSecs)
+	}
+	if !playerSongIDOK(bundleID, ids.songID) {
+		ids.songID = ""
+	}
+	if ids.songID == "" || !playerSongIDOK(bundleID, ids.songAlbum) {
+		ids.songAlbum = ""
 	}
 	if !playerCatalogIDOK(bundleID, ids.album) {
 		ids.album = ""
@@ -102,6 +120,9 @@ func playerCatalogIDsFor(bundleID, artist, title, album string, durationSecs flo
 // applyPlayerCatalogIDsLocked 把这一拍读到的 id 记进条目,变了返回 true(调用方据此落盘)。读不到的不删已记下的:
 // 客户端会自己清理本机数据,记下过的仍然是它给这首的。调用方持有 enrichMu。
 func applyPlayerCatalogIDsLocked(e *enrichEntry, bundleID string, ids playerCatalogIDs) bool {
+	if bundleID == qqMusicBundleID || bundleID == neteaseMusicBundleID || bundleID == kugouMusicBundleID {
+		return notePlayerSongLocked(e, bundleID, ids.songID, ids.songAlbum)
+	}
 	var fields []*string
 	var values []string
 	switch bundleID {
@@ -121,6 +142,27 @@ func applyPlayerCatalogIDsLocked(e *enrichEntry, bundleID string, ids playerCata
 		}
 	}
 	return changed
+}
+
+// playerSongIDOK:QQ 的 songmid 是十几位字母数字,网易云的歌曲 id、酷狗的 mixId 是一串数字(实测);各家的专辑 id(QQ 的
+// albumMid、网易云和酷狗的专辑 id)同一个形状,也过这一道。形状不对的不记。
+func playerSongIDOK(bundleID, id string) bool {
+	switch bundleID {
+	case qqMusicBundleID:
+		return catalogIDChars(id, 8, 32, isASCIIAlnumRune)
+	case neteaseMusicBundleID, kugouMusicBundleID:
+		return catalogIDChars(id, 1, 20, isASCIIDigitRune)
+	}
+	return false
+}
+
+// rawDigitsID:JSON 里写成字符串或数字的 id,取出那串数字;别的形状、空的、0 都返回空串。
+func rawDigitsID(raw json.RawMessage) string {
+	s := strings.Trim(strings.TrimSpace(string(raw)), `"`)
+	if s == "" || strings.Trim(s, "0123456789") != "" || strings.TrimLeft(s, "0") == "" {
+		return ""
+	}
+	return s
 }
 
 // playerCatalogIDOK:各家 id 的形状(实测):汽水是一串数字,KKBOX 是字母数字加 - _,Amazon 的 ASIN 是 10 位大写字母

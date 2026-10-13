@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 )
@@ -22,9 +21,9 @@ import (
 //
 // 缓存在 `LunaCacheV2/entries.db`:lmdb-js 的库,值是 msgpackr 编码(带「记录结构」扩展)。
 // 每条记录是一段音频缓存,形如 {resourceId, info, headers, chunkId, previousAccessTime, size},
-// info.trackId 是曲目 id,info.mediaDetail.playable 是完整的曲目对象(歌名 / 歌手 / 专辑 / 时长,
-// 跟 QueueCache 里的 playable 同一个结构)。previousAccessTime 是这段缓存建立的时刻(秒),
-// 之后真播到它、再次预载它都不会改。
+// info.trackId 是曲目 id。2.9 之前的版本 info.mediaDetail.playable 是完整的曲目对象(歌名 / 歌手 / 专辑 / 时长,
+// 跟 QueueCache 里的 playable 同一个结构);2.9 起没有这一项,曲目信息按 id 联网问(sodatrackmeta.go,
+// 09 章决策 239),两种记录都要认。previousAccessTime 是这段缓存建立的时刻(秒),之后真播到它、再次预载它都不会改。
 //
 // 所以「最近建立的几段缓存」就是接下来要播的那几首。两个缺口:以前就缓存过的歌不会重新建立,
 // 预载时不留痕迹(那样的歌多半以前播过、歌词早解析好了);最近几段里也可能混着刚播过的歌。
@@ -79,7 +78,7 @@ func sodaUpcomingFromPreload(artist, title string, n int, now time.Time) ([]upco
 		noteFileErr("read", path, err)
 		return nil, false
 	}
-	res, ok := pickSodaPreloaded(parseSodaPreloads(raw), artist, title, n, now)
+	res, ok := pickSodaPreloaded(sodaPreloadsWithMeta(raw), artist, title, n, now)
 	if ok {
 		sodaPreloadLogOnce.Do(func() {
 			log.Printf("soda upcoming: the queue is not in QueueCache, reading what the client preloaded instead")
@@ -127,7 +126,8 @@ func pickSodaPreloaded(all []sodaPreloadedTrack, artist, title string, n int, no
 	return out, len(out) > 0
 }
 
-// parseSodaPreloads 从库文件里解出全部音频缓存记录。认不出的记录直接跳过。
+// parseSodaPreloads 从库文件里解出全部音频缓存记录。认不出的记录直接跳过;只有曲目 id 的(2.9 起)歌名、歌手等都是空的,
+// 要曲目信息的用 sodaPreloadsWithMeta。
 func parseSodaPreloads(raw []byte) []sodaPreloadedTrack {
 	start := []byte{0xd4, 0x72, 0x40}
 	var out []sodaPreloadedTrack
@@ -151,52 +151,24 @@ func parseSodaPreloads(raw []byte) []sodaPreloadedTrack {
 }
 
 // sodaPreloadFromRecord 从一条缓存记录里取曲目。曲目对象的 id 必须等于 info.trackId,
-// 否则不认(防着结构变了、拿到别的对象)。
+// 否则不认(防着结构变了、拿到别的对象)。没有曲目对象的(2.9 起)只取曲目 id 与建立时刻。
 func sodaPreloadFromRecord(v any) (sodaPreloadedTrack, bool) {
 	rec, _ := v.(map[string]any)
 	info, _ := rec["info"].(map[string]any)
-	detail, _ := info["mediaDetail"].(map[string]any)
-	p, _ := detail["playable"].(map[string]any)
 	id, _ := info["trackId"].(string)
 	at, okAt := msgpackrInt(rec["previousAccessTime"])
-	if id == "" || !okAt || p == nil {
+	if id == "" || !okAt {
 		return sodaPreloadedTrack{}, false
+	}
+	detail, _ := info["mediaDetail"].(map[string]any)
+	p, _ := detail["playable"].(map[string]any)
+	if p == nil {
+		return sodaPreloadedTrack{id: id, at: at}, true
 	}
 	if pid, _ := p["id"].(string); pid != id {
 		return sodaPreloadedTrack{}, false
 	}
-	name, _ := p["name"].(string)
-	name = strings.TrimSpace(name)
-	var artists []string
-	artistID := ""
-	arr, _ := p["artists"].([]any)
-	for _, a := range arr {
-		m, _ := a.(map[string]any)
-		if s, _ := m["name"].(string); strings.TrimSpace(s) != "" {
-			if len(artists) == 0 {
-				artistID, _ = m["id"].(string)
-			}
-			artists = append(artists, strings.TrimSpace(s))
-		}
-	}
-	if name == "" || len(artists) == 0 {
-		return sodaPreloadedTrack{}, false
-	}
-	album, albumID := "", ""
-	if m, ok := p["album"].(map[string]any); ok {
-		album, _ = m["name"].(string)
-		albumID, _ = m["id"].(string)
-	}
-	ms, _ := msgpackrInt(p["duration"])
-	var pvStart, pvDur int64
-	if pv, ok := p["preview"].(map[string]any); ok {
-		pvStart, _ = msgpackrInt(pv["start"])
-		pvDur, _ = msgpackrInt(pv["duration"])
-	}
-	// 歌手用 "/" 连起来,跟 sodaUpcomingArtist 同一个理由:要跟播放器报的完整串对得上。
-	return sodaPreloadedTrack{id: id, at: at, albumID: albumID, artistID: artistID, previewStartMs: pvStart, previewDurMs: pvDur, fullMs: ms, upcoming: upcomingTrack{
-		artist: strings.Join(artists, "/"), title: name, album: strings.TrimSpace(album), duration: float64(ms) / 1000,
-	}}, true
+	return sodaTrackMetaFromPlayable(p).preloaded(id, at)
 }
 
 func msgpackrInt(v any) (int64, bool) {
@@ -220,13 +192,15 @@ var (
 	sodaPreloadIndexMu    sync.Mutex
 	sodaPreloadIndexMod   time.Time
 	sodaPreloadIndexSize  int64
+	sodaPreloadIndexGen   int64
 	sodaPreloadIndexTrack []sodaPreloadedTrack
 )
 
 // sodaPreloadPreview 在音频缓存库里找这首的试听段(sodapreview.go 的 sodaPreviewFor 在本地队列没命中、
-// 发起搜索之前调它)。正在播的歌一定已经缓存(开播那一刻、或更早被预载时建立),所以换歌那一拍就能
-// 同步拿到,不用等搜索。只收 preview 与播放器报的时长对得上的那条(sodaPreviewMatches)。
-// 按库文件的修改时间与大小缓存解析结果:库只在换歌时变,每拍都来问也只是一次 stat。
+// 发起搜索之前调它)。正在播的歌一定已经缓存(开播那一刻、或更早被预载时建立);2.9 起还要它的曲目信息已经问到
+// (sodatrackmeta.go),预载过的歌早就问好了,换歌那一拍同步拿得到,没问到的照常走搜索。只收 preview 与播放器报的
+// 时长对得上的那条(sodaPreviewMatches)。
+// 按库文件的修改时间与大小、曲目信息的代号缓存解析结果:库只在换歌时变,每拍都来问也只是一次 stat。
 func sodaPreloadPreview(artist, title string, mrDuration float64) (sodaPreview, bool) {
 	want := loosenEnrichKey(artist + "|" + title)
 	if want == "|" {
@@ -252,9 +226,10 @@ func sodaPreloadIndex() []sodaPreloadedTrack {
 	if err != nil || st.Size() > sodaPreloadMaxBytes {
 		return nil
 	}
+	gen := sodaTrackMetaGen.Load()
 	sodaPreloadIndexMu.Lock()
 	defer sodaPreloadIndexMu.Unlock()
-	if st.ModTime().Equal(sodaPreloadIndexMod) && st.Size() == sodaPreloadIndexSize {
+	if st.ModTime().Equal(sodaPreloadIndexMod) && st.Size() == sodaPreloadIndexSize && gen == sodaPreloadIndexGen {
 		return sodaPreloadIndexTrack
 	}
 	raw, err := os.ReadFile(path)
@@ -262,8 +237,8 @@ func sodaPreloadIndex() []sodaPreloadedTrack {
 		noteFileErr("read", path, err)
 		return nil
 	}
-	sodaPreloadIndexMod, sodaPreloadIndexSize = st.ModTime(), st.Size()
-	sodaPreloadIndexTrack = parseSodaPreloads(raw)
+	sodaPreloadIndexMod, sodaPreloadIndexSize, sodaPreloadIndexGen = st.ModTime(), st.Size(), gen
+	sodaPreloadIndexTrack = sodaPreloadsWithMeta(raw)
 	return sodaPreloadIndexTrack
 }
 

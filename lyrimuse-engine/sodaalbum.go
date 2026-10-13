@@ -96,7 +96,7 @@ func sodaCurrentAlbumID(artist, title, album string) string {
 		return ""
 	}
 	want := loosenEnrichKey(artist + "|" + title)
-	for _, t := range parseSodaPreloads(raw) {
+	for _, t := range sodaPreloadsWithMeta(raw) {
 		if t.albumID != "" && loosenEnrichKey(t.upcoming.artist+"|"+t.upcoming.title) == want && sodaAlbumNameFits(t.upcoming.album, album) {
 			return t.albumID
 		}

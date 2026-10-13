@@ -107,7 +107,8 @@ func kugouNowPlayingTrack(root any) (kugouLocalTrack, bool) {
 		if s, _ := d["singerName"].(string); s != "" {
 			artist = s
 		}
-		return kugouLocalTrack{artist: artist, credit: credit, title: t}, true
+		hash, _ := d["strFileHash"].(string)
+		return kugouLocalTrack{artist: artist, credit: credit, title: t, hash: hash}, true
 	}
 	return kugouLocalTrack{}, false
 }
@@ -121,6 +122,8 @@ type kugouLocalTrack struct {
 	// **只用来比对**,不拿它换上去 —— 那会凭空造出一个与历史缓存 key 对不上的写法。
 	credit string
 	title  string
+	// hash:当前这首的音频文件 hash(strFileHash),按它到客户端曲库查酷狗的歌曲 id(kugouPlayingSong)。
+	hash string
 }
 
 // kugouReadNowPlaying 读那份 plist 并取出当前曲目。零外部依赖:用系统自带的 plutil

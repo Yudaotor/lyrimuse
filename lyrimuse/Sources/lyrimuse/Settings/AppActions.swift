@@ -46,6 +46,17 @@ final class AppActions {
         lyricsWindowSearchRequests.send()
     }
 
+    /// 歌词管理里弹「同曲条目」面板(`lyrimuse://lyrics-manager/song-versions[?key=…][&evidence=1]`)。同上两条路:信箱管窗口刚建出来
+    /// (LyricsManagerView 读完缓存、自动定位过正在放的那首之后取),subject 管已经开着。信箱记着请求时刻,只认 60 秒以内的:
+    /// 窗口没开出来时请求一直留着,下次开窗会冒出这个面板。都走 `requestSongVersions(key:showEvidence:)`。
+    var pendingSongVersions: (key: String?, showEvidence: Bool, at: Date)?
+    let songVersionsRequests = PassthroughSubject<Void, Never>()
+
+    func requestSongVersions(key: String?, showEvidence: Bool) {
+        pendingSongVersions = (key, showEvidence, Date())
+        songVersionsRequests.send()
+    }
+
     // 新增:Onboarding 的 Last.fm 介绍步骤想直接跳到设置窗口的 Last.fm
     // 详情页,而不是打开设置后还要用户自己再点一次侧边栏。SettingsView 自己管理
     // `selection` 这份 @State,外部没有别的办法在它已经存在的情况下改写这份状态——

@@ -469,7 +469,7 @@ func songIndependentLyricsMatch(x, y *songVariant, dir string) bool {
 //   - version:版本词集合不同(recordingVersionTags,即 versionTagsMismatch 去掉删减版那一项、不忽略语种)。例外:
 //     两边播放器给的 ISRC 相同且时长差不超过 songEntityVersionExceptionSecs,或 sameRecordingDespiteVersionTags 成立,
 //     或只差专辑名带来的版次词且时长几乎相等(songOnlyAlbumEditionDiffers);伴奏、纯音乐这类无人声版本词不吃例外;
-//   - explicit:删减版与不删减版都标明,没有例外(两条的分工见 18 章决策 4);
+//   - explicit:删减版与不删减版都标明,没有例外(两条的分工见 18 章决策 4);歌名、专辑名没标明的用播放器给的(explicitness);
 //   - vocals:一边明确没有人声、一边明确有;
 //   - overshoot:没有时长的写法,歌词末句比对方时长晚 lyricOvershootToleranceSecs 以上;
 //   - lyrics_words / lyrics_timeline(只对中证据):两份正文用词重合低于 songLyricsDifferentWordsMax;或用词重合
@@ -485,7 +485,7 @@ func songPairVeto(x, y *songVariant, strong bool, splits map[string]bool) string
 	if songVersionVeto(x, y) {
 		return "version"
 	}
-	if explicitnessConflict(x.title, x.album, y.title, y.album) {
+	if ex, ey := x.explicitness(), y.explicitness(); ex != "" && ey != "" && ex != ey {
 		return "explicit"
 	}
 	// 「明确没有人声」只看两个现成字段,先判它;两边都不是时这条否决不可能成立,不用去剥正文判「有」。
@@ -542,6 +542,15 @@ func songSameAlbumDifferentTrack(x, y *songVariant, playerOnly bool) string {
 		}
 	}
 	return ""
+}
+
+// explicitness:这条写法是不删减版(explicit)还是删减版(clean):歌名、专辑名标明的为准,没标明时用播放器给的
+// (playerExplicitness);都没有是空串。
+func (v *songVariant) explicitness() string {
+	if e := explicitnessOf(v.title, v.album); e != "" {
+		return e
+	}
+	return v.playerExplicitness
 }
 
 func songVersionVeto(x, y *songVariant) bool {

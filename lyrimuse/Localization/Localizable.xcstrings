@@ -44471,19 +44471,438 @@
         }
       }
     },
-    "%1$d 个条目 · %2$d 个歌词一致 · %3$d 个与当前条目歌词同步" : {
+    "%d 个条目已识别为同一首歌，播放次数合并统计" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$d entries · %2$d with identical lyrics · %3$d syncing lyrics with the current entry"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d entry is identified as this song and its plays are combined"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d entries are identified as the same song and their plays are combined"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$d 個條目 · %2$d 個歌詞一致 · %3$d 個與目前條目歌詞同步"
+            "value" : "%d 個條目已識別為同一首歌，播放次數合併統計"
+          }
+        }
+      }
+    },
+    "全部一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Identical"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部一致"
+          }
+        }
+      }
+    },
+    "其他 %d 个条目的歌词与当前条目完全一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d other entry has lyrics identical to the current entry"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d other entries have lyrics identical to the current entry"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他 %d 個條目的歌詞與目前條目完全一致"
+          }
+        }
+      }
+    },
+    "%d 个条目存在差异" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d Entry Differs"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d Entries Differ"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個條目存在差異"
+          }
+        }
+      }
+    },
+    "其他 %d 个条目的歌词与当前条目不同，选择后可逐行对比" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d other entry has different lyrics; select it to compare line by line"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d other entries have different lyrics; select one to compare line by line"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他 %d 個條目的歌詞與目前條目不同，選擇後可逐行對比"
+          }
+        }
+      }
+    },
+    "%d 个条目无法比较" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d Entry Not Compared"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d Entries Not Compared"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個條目無法比較"
+          }
+        }
+      }
+    },
+    "%d 个完全一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d identical"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個完全一致"
+          }
+        }
+      }
+    },
+    "%d 个存在差异" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d different"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個存在差異"
+          }
+        }
+      }
+    },
+    "%d 个无歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d without lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個無歌詞"
+          }
+        }
+      }
+    },
+    "%d 个无法读取" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d unreadable"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個無法讀取"
+          }
+        }
+      }
+    },
+    "全部同步" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Synced"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部同步"
+          }
+        }
+      }
+    },
+    "均为独立匹配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Matched Separately"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "均為獨立匹配"
+          }
+        }
+      }
+    },
+    "%d 个条目独立匹配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d Entry Matched Separately"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d Entries Matched Separately"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個條目獨立匹配"
+          }
+        }
+      }
+    },
+    "同步已关闭" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync Off"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步已關閉"
+          }
+        }
+      }
+    },
+    "已在设置中关闭「同曲条目共用歌词」，各条目分别匹配歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Share Lyrics Across Entries of a Song” is off in Settings, so each entry is matched on its own"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在設定中關閉「同曲條目共用歌詞」，各條目分別比對歌詞"
+          }
+        }
+      }
+    },
+    "更换或手动修改歌词时，其他 %d 个条目一并更新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Replacements and manual edits also apply to the %d other entry"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Replacements and manual edits also apply to the %d other entries"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更換或手動修改歌詞時，其他 %d 個條目一併更新"
+          }
+        }
+      }
+    },
+    "其他 %d 个条目各自匹配歌词，不随当前条目更新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d other entry is matched on its own and won't change with the current entry"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%d other entries are matched on their own and won't change with the current entry"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他 %d 個條目各自比對歌詞，不隨目前條目更新"
+          }
+        }
+      }
+    },
+    "%d 个歌词同步" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d synced"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個歌詞同步"
+          }
+        }
+      }
+    },
+    "%d 个独立匹配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d matched separately"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個獨立匹配"
+          }
+        }
+      }
+    },
+    "%d 个已拆分" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d split"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個已拆分"
           }
         }
       }
@@ -44522,23 +44941,6 @@
         }
       }
     },
-    "歌曲概况" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Song Overview"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌曲概況"
-          }
-        }
-      }
-    },
     "仅当前条目" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -44556,23 +44958,6 @@
         }
       }
     },
-    "%d 个条目" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d Entries"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d 個條目"
-          }
-        }
-      }
-    },
     "选择左侧或表格中的其他条目，可与当前条目逐项对比。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -44586,57 +44971,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇左側或表格中的其他條目，可與目前條目逐項對比。"
-          }
-        }
-      }
-    },
-    "歌词同步 %d" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Synced lyrics: %d"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌詞同步 %d"
-          }
-        }
-      }
-    },
-    "独立匹配 %d" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Matched separately: %d"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "獨立匹配 %d"
-          }
-        }
-      }
-    },
-    "已拆分 %d" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Split: %d"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已拆分 %d"
           }
         }
       }
@@ -44675,23 +45009,6 @@
         }
       }
     },
-    "无法读取其他条目的歌词" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The other entries' lyrics are unavailable"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法讀取其他條目的歌詞"
-          }
-        }
-      }
-    },
     "歌词一致性" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -44705,40 +45022,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "歌詞一致性"
-          }
-        }
-      }
-    },
-    "完全一致 %d" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identical: %d"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完全一致 %d"
-          }
-        }
-      }
-    },
-    "存在差异 %d" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Different: %d"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "存在差異 %d"
           }
         }
       }
@@ -44981,19 +45264,19 @@
         }
       }
     },
-    "%d 项存在差异（以橙色标示）" : {
+    "%d 项存在差异（以红色标示）" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%d differences (highlighted in orange)"
+            "value" : "%d differences (highlighted in red)"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%d 項存在差異（以橙色標示）"
+            "value" : "%d 項存在差異（以紅色標示）"
           }
         }
       }
@@ -45425,6 +45708,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "YouTube Music 影片 ID 一致"
+          }
+        }
+      }
+    },
+    "Apple Music 播放的曲目 ID 一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same Apple Music track ID from playback"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Music 播放的曲目 ID 一致"
+          }
+        }
+      }
+    },
+    "网易云音乐播放的歌曲 ID 一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same NetEase Cloud Music song ID from playback"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網易雲音樂播放的歌曲 ID 一致"
+          }
+        }
+      }
+    },
+    "QQ 音乐播放的歌曲 ID 一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same QQ Music song ID from playback"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QQ 音樂播放的歌曲 ID 一致"
+          }
+        }
+      }
+    },
+    "酷狗音乐播放的歌曲 ID 一致" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same Kugou Music song ID from playback"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "酷狗音樂播放的歌曲 ID 一致"
           }
         }
       }

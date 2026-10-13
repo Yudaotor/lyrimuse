@@ -63,6 +63,9 @@ type appleCatalogNames struct {
 	AudioLocale  string                      `json:"audio_locale,omitempty"`
 	DurationSecs float64                     `json:"duration_secs,omitempty"`
 	Checked      int64                       `json:"checked"`
+	// ContentRating:曲库给这一首的删减标记(explicit / clean / 空)。Rated:问的时候已经带着这一项,没有的老记录要重问。
+	ContentRating string `json:"content_rating,omitempty"`
+	Rated         bool   `json:"rated,omitempty"`
 }
 
 type appleNamesFile struct {
@@ -99,20 +102,22 @@ func writeAppleNames(path string, songs map[string]appleCatalogNames) error {
 	return writeFileAtomic(path, data)
 }
 
-// appleNamesDue:缓存条目上的 Apple 歌曲 id 里没问过、或问过超过 appleNamesRecheck 的,排好序。
+// appleNamesDue:缓存条目上的 Apple 歌曲 id(链接里的、Apple Music 播放器报的)里没问过、问的时候还没带删减标记、或问过超过
+// appleNamesRecheck 的,排好序。
 func appleNamesDue(entries map[string]enrichEntry, have map[string]appleCatalogNames, now time.Time) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, e := range entries {
-		id := appleCatalogIDFromURL(e.AppleURL)
-		if id == "" || seen[id] {
-			continue
+		for _, id := range []string{appleCatalogIDFromURL(e.AppleURL), e.PlayerSongIDs[appleMusicBundleID]} {
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			if rec, ok := have[id]; ok && rec.Rated && now.Sub(time.Unix(rec.Checked, 0)) < appleNamesRecheck {
+				continue
+			}
+			out = append(out, id)
 		}
-		seen[id] = true
-		if rec, ok := have[id]; ok && now.Sub(time.Unix(rec.Checked, 0)) < appleNamesRecheck {
-			continue
-		}
-		out = append(out, id)
 	}
 	sort.Strings(out)
 	return out
@@ -152,7 +157,7 @@ func fetchAppleNames(ctx context.Context, ids []string, have map[string]appleCat
 		failures = 0
 		start += len(batch)
 		for _, id := range batch {
-			rec := appleCatalogNames{Checked: now.Unix()}
+			rec := appleCatalogNames{Checked: now.Unix(), Rated: true}
 			for _, sf := range appleNamesStorefronts {
 				s, ok := got[sf][id]
 				if !ok {
@@ -164,6 +169,9 @@ func fetchAppleNames(ctx context.Context, ids []string, have map[string]appleCat
 				rec.Names[sf] = appleCatalogName{Name: s.title, Artist: s.artist}
 				if rec.AudioLocale == "" {
 					rec.AudioLocale = s.audioLocale
+				}
+				if rec.ContentRating == "" {
+					rec.ContentRating = s.contentRating
 				}
 				if rec.DurationSecs == 0 {
 					rec.DurationSecs = s.durationSecs
@@ -253,10 +261,14 @@ func sweepAppleNames(ctx context.Context, path string, now time.Time) (int, bool
 
 // attachAppleNames 把补扫到的名字挂到写法上。先核对这条写法的 Apple 链接没配错:目录里那一轨的时长跟写法差不超过
 // isrcDurationFits 的容差,而且至少一个区的歌名跟写法的写法族键相同(带版本尾巴的那一版不算)、歌手也对得上;过了才带上
-// 各区的名字和 audioLocale。
+// 各区的名字和 audioLocale。删减标记只认 Apple Music 播放器报的那一首(检索配的链接分不清同名同长的干净版和删减版,
+// 18 章决策 68),不看链接核对。
 func attachAppleNames(vs []songVariant, names map[string]appleCatalogNames) {
 	for i := range vs {
 		v := &vs[i]
+		if rec, ok := names[v.id(songIDAppleSongPlayer)]; ok && (rec.ContentRating == "explicit" || rec.ContentRating == "clean") {
+			v.playerExplicitness = rec.ContentRating
+		}
 		rec, ok := names[v.id(songIDAppleSong)]
 		if !ok || len(rec.Names) == 0 || !isrcDurationFits(v.durationSecs, rec.DurationSecs) {
 			continue
@@ -309,6 +321,27 @@ func spotifyLanguagesForVariants(vs []songVariant) func(trackID string) []string
 	}
 	metas := spotifyLocalTrackMetas(ids, func(v []byte) bool { return len(spotifyTrackLanguages(v)) > 0 })
 	return func(trackID string) []string { return spotifyTrackLanguages(metas[trackID]) }
+}
+
+// attachSpotifyExplicit:带 Spotify 曲目 id 的写法,本机元数据缓存里标了 explicit 的记成不删减版(18 章决策 68)。没标的说明不了
+// 是删减版,不记。
+func attachSpotifyExplicit(vs []songVariant, explicit func(trackID string) bool) {
+	for i := range vs {
+		if id := vs[i].id(songIDSpotifyTrack); id != "" && explicit(id) {
+			vs[i].playerExplicitness = "explicit"
+		}
+	}
+}
+
+func spotifyExplicitForVariants(vs []songVariant) func(trackID string) bool {
+	var ids []string
+	for i := range vs {
+		if id := vs[i].id(songIDSpotifyTrack); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	metas := spotifyLocalTrackMetas(ids, spotifyTrackExplicit)
+	return func(trackID string) bool { return metas[trackID] != nil }
 }
 
 // songRegisteredViaCatalogNames:平台登记的歌名跟写法歌名一中一外时,写法挂着的(核对过的)目录名字里有一个跟登记歌名

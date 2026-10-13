@@ -517,6 +517,22 @@ func qqAlbumTracks(artist, title, album string) ([]albumTrack, bool) {
 	return tracks, true
 }
 
+// qqPlayingSong:QQ 音乐播放列表归档里此刻在放的这首的 songmid 与所在专辑的 albumMid(播放器自己报的这一首,18 章决策 65、67)。
+// 按歌名歌手认当前这首(qqLoadPlayingList),两边时长都知道时要对得上;认不出返回空串。要起 plutil 子进程,调用方不能持着 enrichMu。
+func qqPlayingSong(artist, title string, durationSecs float64) (mid, albumMid string) {
+	pl, ok := qqLoadPlayingList(artist, title)
+	if !ok {
+		return "", ""
+	}
+	song := qqDeref(pl.objs, pl.items[pl.pos])
+	if dur, _ := qqPlistField(pl.objs, song, "song_Duration").(float64); dur > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, dur) {
+		return "", ""
+	}
+	mid, _ = qqPlistField(pl.objs, song, "song_Mid").(string)
+	albumMid, _ = qqPlistField(pl.objs, qqPlistField(pl.objs, song, "albumInfo"), "albumMid").(string)
+	return strings.TrimSpace(mid), strings.TrimSpace(albumMid)
+}
+
 // qqTrackAt 取列表第 i 首;没有歌名的条目返回 ok=false。
 func qqTrackAt(objs []any, items []any, i int) (upcomingTrack, bool) {
 	song := qqDeref(objs, items[i])

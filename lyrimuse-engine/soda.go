@@ -385,6 +385,20 @@ func sodaParseSharePage(page []byte, trackID string) (sodaSeoTrackResponse, bool
 
 // sodaFetchSeoTrackAt 打一个主机上的 seo_track;两个主机同一个路径、同一个响应结构(实测)。
 func sodaFetchSeoTrackAt(ctx context.Context, host, trackID string) (res sodaResult, trackFoundNoLyrics, broken bool, err error) {
+	raw, err := sodaGetSeoTrackAt(ctx, host, trackID)
+	if err != nil {
+		return sodaResult{}, false, false, err
+	}
+	var body sodaSeoTrackResponse
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&body); err != nil {
+		return sodaResult{}, false, false, err
+	}
+	r, noLyrics, broken := sodaParseSeoTrack(body)
+	return r, noLyrics, broken, nil
+}
+
+// sodaGetSeoTrackAt 取一个主机上 seo_track 的应答体;取歌词(sodaFetchSeoTrackAt)和问曲目信息(sodatrackmeta.go)共用。
+func sodaGetSeoTrackAt(ctx context.Context, host, trackID string) ([]byte, error) {
 	params := neturl.Values{}
 	params.Set("track_id", trackID)
 	params.Set("device_platform", "web")
@@ -392,23 +406,18 @@ func sodaFetchSeoTrackAt(ctx context.Context, host, trackID string) (res sodaRes
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return sodaResult{}, false, false, err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", sodaUserAgent)
 	resp, err := doHTTPTracked(lyricHTTPClient(sodaLyricTimeout), req)
 	if err != nil {
-		return sodaResult{}, false, false, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return sodaResult{}, false, false, fmt.Errorf("status %d", resp.StatusCode)
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	var body sodaSeoTrackResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes)).Decode(&body); err != nil {
-		return sodaResult{}, false, false, err
-	}
-	r, noLyrics, broken := sodaParseSeoTrack(body)
-	return r, noLyrics, broken, nil
+	return io.ReadAll(io.LimitReader(resp.Body, lyricSourceResponseMaxBytes))
 }
 
 // sodaParseSeoTrack 把响应归一化成候选,并分出这一路的**三种结局**。纯函数,单测直接喂结构体。

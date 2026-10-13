@@ -381,6 +381,8 @@ type neteaseUpcomingFile struct {
 			} `json:"artists"`
 			Album struct {
 				Name string `json:"name"`
+				// ID 原样收下再取数字(rawDigitsID):实测是字符串,形状变了也不能让整份队列解不开。
+				ID json.RawMessage `json:"id"`
 			} `json:"album"`
 			Duration int64 `json:"duration"` // 毫秒
 		} `json:"track"`
@@ -539,43 +541,70 @@ func neteaseNextInShuffle(ids []string, inserted map[string]bool, rank []int, fr
 // 这份文件**没有"当前播到第几首"的指针**(顶层只有 list 一个键),而且只在开始播一个列表时写一次,
 // 位置只能靠正在播的那首歌反查,查不到就退回同专辑预取。往后按哪种顺序数见 neteasePlayOrder;
 // 还判断不出来时两种顺序各取 n 首(去重),多解析几首换两种情况都命中。
-func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
-	path := neteaseUpcomingPath()
+// neteaseQueueAt:读网易云的播放队列文件,按歌名歌手找到此刻在放的这首(queueCurrentIndex)。读不了、解不开时 f 是空的;
+// 队列里没有这首时 pos 为 -1。neteaseUpcoming、neteasePlayingSong 共用。
+func neteaseQueueAt(artist, title string) (f neteaseUpcomingFile, path string, st os.FileInfo, pos int) {
+	pos = -1
+	path = neteaseUpcomingPath()
 	if path == "" {
-		return nil, false
+		return
 	}
 	st, err := os.Stat(path)
 	if err != nil {
 		// 没装网易云 / 没播过是常态,静默;被 TCC 拒了不是,那一种要留痕(见 localcachefs.go)。
 		noteLocalCacheDenied("netease", path, err)
-		return nil, false
+		return
 	}
 	if st.Size() > neteaseUpcomingMaxBytes {
-		return nil, false
+		return
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		noteLocalCacheDenied("netease", path, err)
-		return nil, false
+		return
 	}
 	noteLocalCacheReadable("netease")
-	var f neteaseUpcomingFile
 	if err := json.Unmarshal(raw, &f); err != nil {
-		return nil, false
-	}
-	joinArtists := func(i int) string {
-		names := make([]string, 0, len(f.List[i].Track.Artists))
-		for _, a := range f.List[i].Track.Artists {
-			if a.Name != "" {
-				names = append(names, a.Name)
-			}
-		}
-		return strings.Join(names, "/")
+		return neteaseUpcomingFile{}, path, st, -1
 	}
 	m := newQueueCurrentMatcher(artist, title)
-	pos := queueCurrentIndex(len(f.List), -1, func(i int) queueMatch {
-		return m.match(joinArtists(i), f.List[i].Track.Name)
+	pos = queueCurrentIndex(len(f.List), -1, func(i int) queueMatch {
+		return m.match(neteaseQueueArtists(f, i), f.List[i].Track.Name)
 	})
+	return f, path, st, pos
+}
+
+// neteaseQueueArtists:队列第 i 首的署名,多位歌手用 "/" 连起来。
+func neteaseQueueArtists(f neteaseUpcomingFile, i int) string {
+	names := make([]string, 0, len(f.List[i].Track.Artists))
+	for _, a := range f.List[i].Track.Artists {
+		if a.Name != "" {
+			names = append(names, a.Name)
+		}
+	}
+	return strings.Join(names, "/")
+}
+
+// neteasePlayingSong:网易云播放队列里此刻在放的这首的歌曲 id 与所在专辑的 id(播放器自己报的这一首,18 章决策 65、67)。
+// 两边时长都知道时要对得上;认不出返回空串。
+func neteasePlayingSong(artist, title string, durationSecs float64) (id, albumID string) {
+	f, _, _, pos := neteaseQueueAt(artist, title)
+	if pos < 0 {
+		return "", ""
+	}
+	tr := f.List[pos].Track
+	if dur := float64(tr.Duration) / 1000; dur > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, dur) {
+		return "", ""
+	}
+	return strings.TrimSpace(tr.ID), rawDigitsID(tr.Album.ID)
+}
+
+func neteaseUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
+	f, path, st, pos := neteaseQueueAt(artist, title)
+	if len(f.List) == 0 {
+		return nil, false
+	}
+	joinArtists := func(i int) string { return neteaseQueueArtists(f, i) }
 	if pos < 0 {
 		log.Printf("netease upcoming: %q - %q is not in the client's queue (%d tracks)", artist, title, len(f.List))
 		return nil, false

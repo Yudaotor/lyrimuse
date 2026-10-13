@@ -260,6 +260,8 @@ func main() {
 	loadAppleAlbumHintCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-album-hint-cache.json"))
 	// 按歌手缓存的 QQ 音乐歌手搜索建议结果,见 qq.go 的 qqArtistCanonicalName。
 	loadQQArtistNameCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-qq-artist-name-cache.json"))
+	// 汽水音频缓存库里的曲目 id → 按 id 问来的曲目信息,见 sodatrackmeta.go。
+	loadSodaTrackMeta(filepath.Join(filepath.Dir(*cfgPath), clientName+"-soda-track-cache.json"))
 	// 歌手身份缓存(mbid+中文名),给 Top 歌手榜归并当第三合并信号——见 musicbrainz.go
 	// mbArtistIdentity 注释。与 top-artists CLI 共用同一份文件。
 	loadArtistIdentityCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-identity-cache.json"))
@@ -390,6 +392,8 @@ func main() {
 	// 存量条目按播放器给的 id、播放器记的封面补记放过的播放器(见 enrich.go migratePlayersFromRecords)。排在 migrateEnrichKeys 之后
 	// (合并过的条目一起补)、refreshEnrichIndex 之前。
 	startupStep("migratePlayersFromRecords", migratePlayersFromRecords)
+	// 存量条目按 Apple 目录锚点补记 Apple Music 放过(见 enrich.go migratePlayersFromAppleAnchors),锚点缓存上面已经读好。
+	startupStep("migratePlayersFromAppleAnchors", migratePlayersFromAppleAnchors)
 	// 存量没有时长的条目从收听记录补(见 enrich.go migrateListenDurations),同样排在 refreshEnrichIndex 之前。
 	startupStep("migrateListenDurations", func() {
 		migrateListenDurations(readListenLogAt(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl")))

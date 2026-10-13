@@ -95,6 +95,24 @@ func spotifyISRCLedgerDirs(root string) []string {
 	return dirs
 }
 
+// spotifyTrackExplicit:spotify.metadata.Track 的 explicit(第 9 个字段)是不是 1。没有这个字段说明不了是删减版,当不知道。
+func spotifyTrackExplicit(v []byte) bool {
+	val := spotifyFindAny(v, "spotify.metadata.Track", 0)
+	if val == nil {
+		return false
+	}
+	fields, err := pbParse(val)
+	if err != nil {
+		return false
+	}
+	for _, f := range fields {
+		if f.num == 9 && f.wire == 0 {
+			return f.v == 1
+		}
+	}
+	return false
+}
+
 // spotifyParseISRC 从 spotify.metadata.Track 的值里取 ISRC(external_id,第 10 个字段)。
 func spotifyParseISRC(v []byte) string {
 	val := spotifyFindAny(v, "spotify.metadata.Track", 0)

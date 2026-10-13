@@ -174,6 +174,65 @@ func TestSongEntitySearchedIDGates(t *testing.T) {
 	}
 }
 
+// 在 QQ、网易云、Apple Music 里放的那一首,播放器报的歌曲 id 两边都有时是强证据:不过检索 id 的闸(一个 id 多种歌名),
+// 只过时长闸;一边是播放器报的、一边是检索配的,照旧过检索 id 的闸(18 章决策 65)。
+func TestPlayerSongIDEdges(t *testing.T) {
+	for _, c := range []struct{ bundleID, id, searched, player string }{
+		{appleMusicBundleID, "1015771708", songIDAppleSong, songIDAppleSongPlayer},
+		{neteaseMusicBundleID, "102", songIDNeteaseSong, songIDNeteaseSongPlayer},
+		{qqMusicBundleID, "003abcDEF12345", songIDQQSong, songIDQQSongPlayer},
+		{kugouMusicBundleID, "586000001", "", songIDKugouSongPlayer},
+	} {
+		played := func(dur float64) enrichEntry {
+			return enrichEntry{DurationSecs: dur, PlayerSongIDs: map[string]string{c.bundleID: c.id}}
+		}
+		got := songVariantIDs(played(200), true)
+		if (c.searched != "" && !slices.Contains(got, songGradedID{c.searched, c.id, songIDPlayer})) ||
+			!slices.Contains(got, songGradedID{c.player, c.id, songIDPlayer}) || slices.ContainsFunc(got, func(g songGradedID) bool { return g.ns == "" }) {
+			t.Errorf("%s: 同一个 id 两种都放(没有检索那一种的只放播放器那一种): %v", c.player, got)
+		}
+		vs := []songVariant{
+			songTestVariant("Singer|Song A|X", played(200), nil),
+			songTestVariant("Singer|Song B|Y", played(200.3), nil),
+		}
+		b, of := songTestBuild(t, vs, nil)
+		strong := false
+		for _, e := range b.edges {
+			if e.kind == c.player && e.strong() && !e.countOnly {
+				strong = true
+			}
+		}
+		if !strong || !songTestSame(of, "Singer|Song A|X", "Singer|Song B|Y") {
+			t.Errorf("%s: 两边都是播放器报的同一个 id,歌名不同也连上: edges=%+v", c.player, b.edges)
+		}
+	}
+	const mid = "003abcDEF12345"
+	played := func(dur float64) enrichEntry {
+		return enrichEntry{DurationSecs: dur, PlayerSongIDs: map[string]string{qqMusicBundleID: mid}}
+	}
+	vs := []songVariant{
+		songTestVariant("Singer|Song A|X", played(200), nil),
+		songTestVariant("Singer|Song B|Y", played(260), nil),
+	}
+	b, of := songTestBuild(t, vs, nil)
+	if songTestSame(of, "Singer|Song A|X", "Singer|Song B|Y") || b.gateDrops["qq_song_player/duration"] == 0 {
+		t.Errorf("时长差过闸不连: drops=%v", b.gateDrops)
+	}
+	vs = []songVariant{
+		songTestVariant("Singer|Song A|X", played(200), nil),
+		songTestVariant("Singer|Song B|Y", enrichEntry{DurationSecs: 200.3, QQURL: "https://y.qq.com/n/ryqq/songDetail/" + mid}, nil),
+	}
+	b, of = songTestBuild(t, vs, nil)
+	for _, e := range b.edges {
+		if e.kind == songIDQQSongPlayer {
+			t.Errorf("只有一边是播放器报的,不出强证据边: %+v", e)
+		}
+	}
+	if songTestSame(of, "Singer|Song A|X", "Singer|Song B|Y") {
+		t.Error("一边是检索配的:照旧过检索 id 的闸(两种歌名,不连)")
+	}
+}
+
 // 否决:Apple 同一张专辑里曲目 id 不同的不并;QQ 的专辑 mid 不算;一边没有人声、一边有的不并。
 func TestSongEntityVetoes(t *testing.T) {
 	apple := func(track string) string { return "https://music.apple.com/us/album/x/1000?i=" + track }

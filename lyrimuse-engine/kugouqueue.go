@@ -87,12 +87,21 @@ func kugouConfigPlistPath() string {
 	return kugouContainerPath("Library/Preferences/KugouConfigPlist.plist")
 }
 
-// kugouLibraryDBPath 是客户端曲库(Allmusic 表按 musichash 存着专辑名)。
+// kugouLibraryDBPath 是客户端曲库(Allmusic 表按 musichash 存着专辑名、mixId)。现在的客户端放在
+// `Library/Application Support/com.kugou.mac.Music/`,较早的版本放在 `Documents/`(18 章决策 69):两处都看,只有一份在就用它,
+// 两份都在用改得晚的那份;都不在(或读不了)时返回新位置,让读的那一步把不存在 / 被拒报出来。
 func kugouLibraryDBPath() string {
 	if kugouLibraryDBOverride != "" {
 		return kugouLibraryDBOverride
 	}
-	return kugouContainerPath("Documents/kugou3.sqlite")
+	current := kugouContainerPath("Library/Application Support/com.kugou.mac.Music/kugou3.sqlite")
+	legacy := kugouContainerPath("Documents/kugou3.sqlite")
+	cst, cerr := os.Stat(current)
+	lst, lerr := os.Stat(legacy)
+	if lerr == nil && (cerr != nil || lst.ModTime().After(cst.ModTime())) {
+		return legacy
+	}
+	return current
 }
 
 // kugouQueueSong 是队列里一首歌用得上的那几个字段。
@@ -323,14 +332,6 @@ func kugouPlayMode() (mode int64, known bool) {
 // 查得到但专辑列是 NULL 的,映射成空串 —— 那是"这首歌确实没有专辑",跟"曲库里没这首"(不在
 // 返回值里)是两回事,前者照样预解析。库读不到就返回空表,调用方会把这几首全部跳过。
 func kugouAlbumsByHash(songs []kugouQueueSong) map[string]string {
-	path := kugouLibraryDBPath()
-	if path == "" {
-		return nil
-	}
-	if _, err := os.Stat(path); err != nil {
-		noteLocalCacheDenied("kugou", path, err)
-		return nil
-	}
 	quoted := make([]string, 0, len(songs))
 	for _, s := range songs {
 		h := strings.ToUpper(s.hash)
@@ -342,27 +343,12 @@ func kugouAlbumsByHash(songs []kugouQueueSong) map[string]string {
 	if len(quoted) == 0 {
 		return nil
 	}
-	query := "SELECT upper(musichash) AS h, ifnull(albumname, '') AS a FROM Allmusic WHERE upper(musichash) IN (" +
-		strings.Join(quoted, ",") + ")"
-	ctx, cancel := context.WithTimeout(context.Background(), kugouUpcomingQueryTimeout)
-	defer cancel()
-	// mode=ro 的理由同 kugouUpcomingFromSQLite:只读快照撞上客户端写锁就直接失败、fail-soft。
-	uri := (&neturl.URL{Scheme: "file", Path: path, RawQuery: "mode=ro"}).String()
-	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
-	if err != nil {
-		noteLocalCacheReadFailure("kugou", path)
-		return nil
-	}
-	noteLocalCacheReadable("kugou")
-	trimmed := bytes.TrimSpace(out)
-	if len(trimmed) == 0 {
-		return nil // 零行时 sqlite3 -json 输出空串,不是 "[]"
-	}
 	var rows []struct {
 		Hash  string `json:"h"`
 		Album string `json:"a"`
 	}
-	if err := json.Unmarshal(trimmed, &rows); err != nil {
+	if !kugouLibraryQuery("SELECT upper(musichash) AS h, ifnull(albumname, '') AS a FROM Allmusic WHERE upper(musichash) IN ("+
+		strings.Join(quoted, ",")+")", &rows) {
 		return nil
 	}
 	albums := make(map[string]string, len(rows))
@@ -370,6 +356,69 @@ func kugouAlbumsByHash(songs []kugouQueueSong) map[string]string {
 		albums[r.Hash] = r.Album
 	}
 	return albums
+}
+
+// kugouLibraryQuery 只读跑一条查客户端曲库(kugou3.sqlite)的 SQL,把 sqlite3 -json 的结果解进 dst;读不了、一行都没有、解不开
+// 都返回 false。mode=ro 的理由同 kugouUpcomingFromSQLite:只读快照撞上客户端写锁就直接失败、fail-soft。
+func kugouLibraryQuery(query string, dst any) bool {
+	path := kugouLibraryDBPath()
+	if path == "" {
+		return false
+	}
+	if _, err := os.Stat(path); err != nil {
+		noteLocalCacheDenied("kugou", path, err)
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), kugouUpcomingQueryTimeout)
+	defer cancel()
+	uri := (&neturl.URL{Scheme: "file", Path: path, RawQuery: "mode=ro"}).String()
+	out, err := exec.CommandContext(ctx, "/usr/bin/sqlite3", "-json", uri, query).Output()
+	if err != nil {
+		noteLocalCacheReadFailure("kugou", path)
+		return false
+	}
+	noteLocalCacheReadable("kugou")
+	trimmed := bytes.TrimSpace(out)
+	if len(trimmed) == 0 {
+		return false // 零行时 sqlite3 -json 输出空串,不是 "[]"
+	}
+	return json.Unmarshal(trimmed, dst) == nil
+}
+
+// kugouLibraryRow:客户端曲库里一首歌的歌曲 id(mixId,文本)、专辑 id(albumId,整数)与时长(秒),id 原样收下再取数字。
+type kugouLibraryRow struct {
+	Name   string          `json:"n"`
+	Singer string          `json:"s"`
+	Time   float64         `json:"t"`
+	Mix    json.RawMessage `json:"m"`
+	Album  json.RawMessage `json:"a"`
+}
+
+// kugouPlayingSong:酷狗此刻在放的这首(「此刻在播」那份 plist 里当前曲目的 strFileHash)在客户端曲库里的歌曲 id(mixId)与
+// 专辑 id(18 章决策 69)。plist 记的要跟播放器报的是同一首(歌名一致、署名对得上),两边时长都知道时要对得上;认不出、曲库里
+// 没有这个 hash 返回空串。要起 plutil、sqlite3 子进程,调用方不能持着 enrichMu。
+func kugouPlayingSong(artist, title string, durationSecs float64) (mixID, albumID string) {
+	path := kugouNowPlayingPath()
+	if path == "" {
+		return "", ""
+	}
+	t, ok := kugouReadNowPlaying(path)
+	h := strings.ToUpper(strings.TrimSpace(t.hash))
+	if !ok || !isHexString(h) || normLoose(t.title) != normLoose(title) || !kugouCreditMatches(t.credit, t.artist, artist) {
+		return "", ""
+	}
+	var rows []kugouLibraryRow
+	if !kugouLibraryQuery("SELECT ifnull(musictime, 0) AS t, mixId AS m, albumId AS a FROM Allmusic WHERE upper(musichash) = '"+h+"' LIMIT 1", &rows) ||
+		len(rows) == 0 || (rows[0].Time > 0 && durationSecs > 0 && !sourceDurationFits(durationSecs, rows[0].Time)) {
+		return "", ""
+	}
+	return rawDigitsID(rows[0].Mix), rawDigitsID(rows[0].Album)
+}
+
+// kugouCreditMatches:播放器报的署名是不是酷狗记的这首的歌手(singerName),或者在它的全署名(musicName 的「歌手 - 」那一半)里。
+func kugouCreditMatches(credit, singer, artist string) bool {
+	a := normLoose(artist)
+	return a != "" && (a == normLoose(singer) || a == normLoose(credit) || strings.Contains(normLoose(credit), a))
 }
 
 func isHexString(s string) bool {

@@ -15,6 +15,8 @@ type testNeteaseSong struct {
 	durationMS   int64
 	randomOrder  float64 // 0 = 跟数组顺序一致(两种顺序一样,只有随机相关的用例才另给)
 	resourceType string  // 空 = 不写这个字段
+	id           string  // 空 = 拿歌名当 id
+	albumID      any     // nil = 不写专辑 id(真实队列里是字符串)
 }
 
 // writeTestNeteaseQueue 造一份跟真实 playingList 同构的队列文件(明文 JSON,无加密)。
@@ -63,13 +65,20 @@ func testNeteaseQueueBody(t *testing.T, songs []testNeteaseSong) []byte {
 		for _, a := range s.artists {
 			artists = append(artists, map[string]any{"id": "1", "name": a})
 		}
+		id := s.id
+		if id == "" {
+			id = s.title
+		}
 		item := map[string]any{
 			"displayOrder": i,
 			"randomOrder":  map[bool]float64{true: float64(i + 1), false: s.randomOrder}[s.randomOrder == 0],
 			"track": map[string]any{
-				"id": s.title, "name": s.title, "artists": artists,
+				"id": id, "name": s.title, "artists": artists,
 				"album": map[string]any{"name": s.album}, "duration": s.durationMS,
 			},
+		}
+		if s.albumID != nil {
+			item["track"].(map[string]any)["album"].(map[string]any)["id"] = s.albumID
 		}
 		if s.resourceType != "" {
 			item["resourceType"] = s.resourceType

@@ -12,13 +12,15 @@ func TestAppleNamesDue(t *testing.T) {
 	link := func(id string) enrichEntry {
 		return enrichEntry{AppleURL: "https://music.apple.com/cn/album/x/1?i=" + id}
 	}
-	entries := map[string]enrichEntry{"a": link("30"), "b": link("10"), "c": link("10"), "d": link("20"), "e": {}}
+	entries := map[string]enrichEntry{"a": link("30"), "b": link("10"), "c": link("10"), "d": link("20"), "e": {}, "f": link("50"),
+		"g": {PlayerSongIDs: map[string]string{appleMusicBundleID: "40"}}}
 	have := map[string]appleCatalogNames{
-		"20": {Checked: now.Add(-time.Hour).Unix()},
-		"30": {Checked: now.Add(-appleNamesRecheck - time.Hour).Unix()},
+		"20": {Checked: now.Add(-time.Hour).Unix(), Rated: true},
+		"30": {Checked: now.Add(-appleNamesRecheck - time.Hour).Unix(), Rated: true},
+		"50": {Checked: now.Add(-time.Hour).Unix()},
 	}
-	if got := appleNamesDue(entries, have, now); !slices.Equal(got, []string{"10", "30"}) {
-		t.Errorf("没问过的、过期的要问,刚问过的不问,同一个 id 只问一次: %v", got)
+	if got := appleNamesDue(entries, have, now); !slices.Equal(got, []string{"10", "30", "40", "50"}) {
+		t.Errorf("没问过的、过期的、问的时候还没带删减标记的要问,Apple Music 报的 id 也问,刚问过的不问,同一个 id 只问一次: %v", got)
 	}
 }
 
@@ -41,6 +43,9 @@ func TestFetchAppleNames(t *testing.T) {
 		out := map[string]appleCatalogSong{}
 		for _, id := range batch[:len(batch)-1] {
 			out[id] = appleCatalogSong{title: sf + "-" + id, artist: "A", audioLocale: "zxx", durationSecs: 100}
+			if sf != "us" {
+				out[id] = appleCatalogSong{title: sf + "-" + id, artist: "A", audioLocale: "zxx", durationSecs: 100, contentRating: "explicit-" + sf}
+			}
 		}
 		return out, true
 	}
@@ -63,8 +68,9 @@ func TestFetchAppleNames(t *testing.T) {
 		t.Errorf("不满 %d 批不落盘(收尾那次由调用方写): %d", catalogSweepSaveEvery, saves)
 	}
 	rec, ok := have[ids[0]]
-	if !ok || rec.Names["tw"].Name != "tw-"+ids[0] || rec.AudioLocale != "zxx" || rec.DurationSecs != 100 || rec.Checked != now.Unix() {
-		t.Errorf("三个区的名字、audioLocale、时长、问的时刻都记下: %+v", rec)
+	if !ok || rec.Names["tw"].Name != "tw-"+ids[0] || rec.AudioLocale != "zxx" || rec.DurationSecs != 100 || rec.Checked != now.Unix() ||
+		rec.ContentRating != "explicit-cn" || !rec.Rated {
+		t.Errorf("三个区的名字、audioLocale、时长、问的时刻、头一个有的删减标记都记下: %+v", rec)
 	}
 	if rec, ok := have[ids[299]]; !ok || len(rec.Names) != 0 {
 		t.Errorf("哪个区都没有的也记成问过,名字为空: %+v %v", rec, ok)

@@ -19,6 +19,16 @@ func runDeepLinkTests() {
         expectEqual(link("lyrimuse://settings/software-update?check=false"), .settings(path: "/software-update", checkForUpdates: false),
                     "深链: check 跟 on 同一套写法,false 不检查")
         expectEqual(link("lyrimuse://lyrics-manager"), .lyricsManager, "深链: 歌词管理")
+        expectEqual(link("lyrimuse://lyrics-manager/song-versions"), .lyricsManagerSongVersions(key: nil, showEvidence: false),
+                    "深链: 歌词管理的同曲条目面板")
+        expectEqual(link("lyrimuse://lyrics-manager/song-versions?key=a%20%26%20b%7Cx%7C"), .lyricsManagerSongVersions(key: "a & b|x|", showEvidence: false),
+                    "深链: 同曲条目面板带写法键,值不转小写")
+        expectEqual(link("lyrimuse://lyrics-manager/song-versions?key="), .lyricsManagerSongVersions(key: nil, showEvidence: false),
+                    "深链: 空的 key 当没带")
+        expectEqual(link("lyrimuse://lyrics-manager/song-versions?key=a%7Cb%7C&evidence=1"), .lyricsManagerSongVersions(key: "a|b|", showEvidence: true),
+                    "深链: 同曲条目面板带 evidence=1 展开匹配依据")
+        expectEqual(link("lyrimuse://lyrics-manager/song-versions?evidence=0"), .lyricsManagerSongVersions(key: nil, showEvidence: false),
+                    "深链: evidence=0 不展开")
         expectEqual(link("lyrimuse://lyrics-search"), .lyricsSearch, "深链: 搜索歌词小窗")
         expectEqual(link("lyrimuse://lyrics-window/search"), .lyricsWindowSearch, "深链: 歌词窗口搜索面板")
         expectEqual(link("lyrimuse://menubar-panel"), .menuBarPanel(quick: nil), "深链: 菜单栏面板")
@@ -199,7 +209,11 @@ func runDeepLinkTests() {
     do {
         let all: [LyrimuseDeepLink] = [
             .settings(path: "/lyrics/manage", checkForUpdates: false), .settings(path: "/software-update", checkForUpdates: true),
-            .lyricsManager, .lyricsWindow, .lyricsWindowSearch, .lyricsSearch,
+            .lyricsManager, .lyricsManagerSongVersions(key: nil, showEvidence: false),
+            .lyricsManagerSongVersions(key: "方大同|为妳写的歌|橙月", showEvidence: false),
+            .lyricsManagerSongVersions(key: "daniel caesar & mustafa|never enough|toronto 2014", showEvidence: false),
+            .lyricsManagerSongVersions(key: "方大同|为妳写的歌|橙月", showEvidence: true), .lyricsManagerSongVersions(key: nil, showEvidence: true),
+            .lyricsWindow, .lyricsWindowSearch, .lyricsSearch,
             .menuBarPanel(quick: nil), .menuBarPanel(quick: "overlay"), .onboarding, .lastfmAuthCallback,
             .action(.toggleOverlay, on: true, stepSeconds: nil), .action(.lyricsAdvanceHotkey, on: nil, stepSeconds: 0.5),
             .copyLyric(includeTranslation: true), .copyLyric(includeTranslation: false), .openPlayer,
@@ -261,6 +275,21 @@ func runDeepLinkTests() {
         let delegate = source("lyrimuse/AppDelegate.swift")
         let router = source("lyrimuse/Settings/DeepLinkRouter.swift")
         let statusItem = source("lyrimuse/MenuBar/MenuBarStatusItem.swift")
+        let manager = source("lyrimuse/LyricsManager/LyricsManagerView.swift")
+        expectEqual(router.contains("case let .lyricsManagerSongVersions(key, showEvidence):\n            AppActions.shared.openLyricsManager?()\n            AppActions.shared.requestSongVersions(key: key, showEvidence: showEvidence)")
+                    && manager.contains(".onReceive(AppActions.shared.songVersionsRequests) { if !pendingAutoFocus { consumeSongVersionsRequest() } }")
+                    && manager.contains("guard pendingAutoFocus else {\n                    consumeSongVersionsRequest()")
+                    && manager.contains("DispatchQueue.main.async { windowFrame.focusList() }\n                // 链接带的条目排在自动定位之后")
+                    && manager.contains("guard showSongVersions || !windowFrame.hasAttachedSheet,")
+                    && manager.contains("Date().timeIntervalSince(request.at) < 60, let key = request.key ?? singleSelectedKey,")
+                    && manager.contains("store.songMembership(forKey: key) != nil, select(key) else { return }"), true,
+                    "深链接线: 同曲条目面板在开窗那一轮读完缓存、自动定位之后才取,条件同「⋯」里那一项,有没保存的修改先问,开着别的面板不动,信箱只认 60 秒内的请求")
+        let sheet = source("lyrimuse/LyricsManager/SongVersionsSheet.swift")
+        expectEqual(manager.contains("songVersionsShowEvidence = request.showEvidence\n        showSongVersions = true")
+                    && manager.contains(".sheet(isPresented: $showSongVersions, onDismiss: { songVersionsShowEvidence = false }) {")
+                    && manager.contains("onOpen: { other in _ = select(other) }, showEvidence: songVersionsShowEvidence)")
+                    && sheet.contains(".onChange(of: \"\\(summary.key)#\\(showEvidence)\", initial: true) { _, _ in if showEvidence { evidenceExpanded = true } }"), true,
+                    "深链接线: evidence=1 打开同曲条目就展开匹配依据,开着时换一首也展开;面板关掉后手点打开照旧收着")
         expectEqual(statusItem.contains("if quick != nil, panelIsOpen { panelController.close() }"), true,
                     "深链接线: 面板带 quick 时开着也不关,翻到那一格")
         expectEqual(router.contains("guard let success else {") && router.contains("NSWorkspace.shared.open(url)"), true,

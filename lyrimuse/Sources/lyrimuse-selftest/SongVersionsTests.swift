@@ -201,14 +201,19 @@ func runSongVersionsTests() {
         for file in ["songentity.go", "songentityvariant.go", "songentitymb.go", "songentitynames.go", "songentityneteasenames.go"] {
             engineSources += read(engine, file)
         }
-        let kinds = names.compactMap { name -> String? in
+        func kindValue(_ name: String) -> String? {
             guard let r = engineSources.range(of: "\t\(name) = \"") ?? engineSources.range(of: "\t\(name)  *= \"", options: .regularExpression)
             else { return nil }
             return engineSources[r.upperBound...].split(separator: "\"").first.map(String.init)
         }
+        let kinds = names.compactMap(kindValue)
         expectEqual(names.isEmpty, false, "其他写法(契约): 读到引擎的证据种类")
         expectEqual(kinds.count, names.count, "其他写法(契约): 引擎每种证据都找得到取值")
         expectEqual(Set(kinds), Set(V.evidenceOrder), "其他写法(契约): 证据种类跟引擎 songEvidenceKinds 一一对应")
+        let strongNames = kindsBlock.split(separator: "\n").filter { $0.contains("strong: true") }.compactMap { line in
+            line.trimmingCharacters(in: .whitespaces).split(separator: ":").first.map(String.init)
+        }
+        expectEqual(Set(strongNames.compactMap(kindValue)), V.strongKinds, "其他写法(契约): 强证据跟引擎 strong: true 的那几种一致")
         let sheet = read(sources, "lyrimuse/LyricsManager/SongVersionsSheet.swift")
         expectEqual(V.evidenceOrder.allSatisfy { sourceBytes(sheet, contain: "case \"\($0)\": return L10n.t(") }, true,
                     "其他写法(契约): 每种证据都有文案")
@@ -281,5 +286,20 @@ func runSongVersionsTests() {
                     && sourceBytes(sheet, contain: "allVersionsTable(c)")
                     && sourceBytes(sheet, contain: "if !edges.isEmpty { evidenceSummary }"), true,
                     "其他写法(契约): 选中当前这条时右边是这首歌的概况(总览卡、当前这条的信息、全部写法一览、依据汇总)")
+        expectEqual(sourceBytes(sheet, contain: "overviewCard(L10n.t(\"歌词一致性\"), lyricsOverview(c, others.filter { $0.relation != .split }))")
+                    && sourceBytes(sheet, contain: "overviewCard(L10n.t(\"同步策略\"), syncOverview(others))")
+                    && sourceBytes(sheet, contain: "if !EnrichCacheReader.sharesEntityLyrics {"), true,
+                    "其他写法(契约): 概况两张卡跟对照页同名、说的是其他全部条目,关了歌词同步时同步策略写已关闭")
+        expectEqual(sourceBytes(sheet, contain: "return v.sameLyrics ? .green : .red")
+                    && sourceBytes(sheet, contain: "case .shared: return .green\n        case .own: return .red\n        case .split: return .secondary")
+                    && sourceBytes(sheet, contain: "let relation: Relation = own == 0 ? .shared : .own")
+                    && !sourceBytes(sheet, contain: "Color.orange.opacity(0.12)") && !sourceBytes(sheet, contain: ".purple"), true,
+                    "其他写法(契约): 状态色一套(绿一样 / 同步、红不一样 / 不同步、灰比不了 / 已拆分),有独立匹配时同步策略数不跟的那几条")
+        expectEqual(sourceBytes(sheet, contain: "return v.sameLyrics ? \"checkmark.circle.fill\" : \"xmark.circle.fill\"")
+                    && sourceBytes(sheet, contain: "case .shared: return \"checkmark.circle.fill\"\n        case .own: return \"xmark.circle.fill\"")
+                    && sourceBytes(sheet, contain: "statusDot(lyricsSymbol(v), lyricsColor(v), size: 11, label: lyricsVerdict(v))")
+                    && sourceBytes(sheet, contain: "statusDot(lyricsSymbol(v), lyricsColor(v), size: 10, label: nil)")
+                    && !sourceBytes(sheet, contain: "Circle().fill("), true,
+                    "其他写法(契约): 列表、一览表的状态点带形状(勾 / 叉 / 横杠),不只靠颜色")
     }
 }

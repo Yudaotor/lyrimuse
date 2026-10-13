@@ -33,6 +33,7 @@ public enum SongVersions {
     /// 强证据的种类(播放器或目录直接给的 id):跟引擎 songEvidenceKinds 里 `strong: true` 的那几种一致。
     public static let strongKinds: Set<String> = [
         "isrc", "mb_recording", "spotify_track", "amazon_asin", "kkbox_song", "soda_track", "youtube_video",
+        "apple_song_player", "netease_song_player", "qq_song_player", "kugou_song_player",
     ]
 
     public struct Row: Equatable, Sendable {
@@ -95,6 +96,7 @@ public enum SongVersions {
     /// 引擎加了种类这里跟着加(SongVersionsTests 拿引擎源码核对)。
     public static let evidenceOrder = [
         "isrc", "mb_recording", "spotify_track", "amazon_asin", "kkbox_song", "soda_track", "youtube_video",
+        "apple_song_player", "netease_song_player", "qq_song_player", "kugou_song_player",
         "apple_song", "netease_song", "qq_song", "family", "lyrics", "apple_name", "netease_name",
     ]
 

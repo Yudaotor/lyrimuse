@@ -670,7 +670,9 @@ type applemusicSong struct {
 		// Isrc:这条录音的 ISRC。按 ISRC 补取未应答的 deezer / musixmatch 用,见 isrcretry.go。
 		Isrc string `json:"isrc"`
 		// AudioLocale:演唱语种,zxx 是没有人声。歌曲实体的名字补扫记下它(songentitynames.go)。
-		AudioLocale   string `json:"audioLocale"`
+		AudioLocale string `json:"audioLocale"`
+		// ContentRating:explicit / clean(删减版)/ 空。歌曲实体的名字补扫记下它(songentitynames.go,18 章决策 68)。
+		ContentRating string `json:"contentRating"`
 		HasLyrics     bool   `json:"hasLyrics"`
 		HasTimeSynced bool   `json:"hasTimeSyncedLyrics"`
 		Artwork       struct {

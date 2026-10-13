@@ -144,7 +144,7 @@ func sodaPreviewFor(artist, title, album string, mrDuration float64, onSearchFou
 	if mrDuration > sodaPreviewMaxSearchSecs {
 		return sodaPreview{}, false
 	}
-	// 点播的歌不在队列缓存里,但一定在客户端的音频缓存库里,同步查得到,不用等搜索(见 sodapreload.go)。
+	// 点播的歌不在队列缓存里,但一定在客户端的音频缓存库里;曲目信息已经问到时同步查得到,不用等搜索(见 sodapreload.go)。
 	if p, ok := sodaPreloadPreview(artist, title, mrDuration); ok {
 		return p, true
 	}

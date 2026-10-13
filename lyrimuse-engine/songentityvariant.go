@@ -40,7 +40,21 @@ const (
 	songIDAppleSong    = "apple_song"
 	songIDNeteaseSong  = "netease_song"
 	songIDQQSong       = "qq_song"
+	// 在 Apple Music、QQ 音乐、网易云、酷狗里放的那一首,播放器自己报的歌曲 id(条目的 PlayerSongIDs,18 章决策 65、69)。前三家的
+	// 同一个 id 另外照旧放进上面检索那三种,跟只有检索 id 的写法之间照旧过检索 id 的闸;酷狗没有检索配的 id。
+	songIDAppleSongPlayer   = "apple_song_player"
+	songIDNeteaseSongPlayer = "netease_song_player"
+	songIDQQSongPlayer      = "qq_song_player"
+	songIDKugouSongPlayer   = "kugou_song_player"
 )
+
+// songPlayerSongIDNamespaces:PlayerSongIDs 的播放器 → 检索那一种命名空间(没有的是空串)、播放器报的那一种命名空间。
+var songPlayerSongIDNamespaces = []struct{ bundleID, searched, player string }{
+	{appleMusicBundleID, songIDAppleSong, songIDAppleSongPlayer},
+	{neteaseMusicBundleID, songIDNeteaseSong, songIDNeteaseSongPlayer},
+	{qqMusicBundleID, songIDQQSong, songIDQQSongPlayer},
+	{kugouMusicBundleID, "", songIDKugouSongPlayer},
+}
 
 type songGradedID struct {
 	ns, id string
@@ -103,6 +117,10 @@ type songVariant struct {
 	// 演唱语言(attachSpotifyLanguages)。
 	catalogNames []songCatalogName
 	audioLocale  string
+	// playerExplicitness:播放器给的删减标记(explicit / clean),歌名、专辑名没标明时删减版否决用它(explicitness,
+	// 18 章决策 68):Apple Music 播放器报的那一首的 contentRating(attachAppleNames)、Spotify 元数据的 explicit
+	// (attachSpotifyExplicit)。
+	playerExplicitness string
 	// vocalsByLocale:vocalsKind 的结论是按 audioLocale 下的(不是纯音乐标记、版本词或歌词)。
 	vocalsByLocale bool
 }
@@ -150,6 +168,12 @@ func songVariantOf(key string, e enrichEntry, pinned bool) songVariant {
 			v.albums[ns] = album
 		}
 	}
+	// 播放器报的那一首所在的专辑挂在播放器那一种命名空间上,跟歌曲 id 成对的才算(18 章决策 67)。
+	for _, ns := range songPlayerSongIDNamespaces {
+		if album := e.PlayerAlbumIDs[ns.bundleID]; album != "" && e.PlayerSongIDs[ns.bundleID] != "" {
+			v.albums[ns.player] = album
+		}
+	}
 	return v
 }
 
@@ -193,6 +217,14 @@ func songVariantIDs(e enrichEntry, plainVersion bool) []songGradedID {
 	add(songIDAppleSong, appleCatalogIDFromURL(e.AppleURL), songIDSearched)
 	add(songIDNeteaseSong, neteaseSongIDFromURL(e.NeteaseURL), songIDSearched)
 	add(songIDQQSong, qqMidFromURL(e.QQURL), songIDSearched)
+	for _, ns := range songPlayerSongIDNamespaces {
+		if id := e.PlayerSongIDs[ns.bundleID]; id != "" {
+			if ns.searched != "" {
+				add(ns.searched, id, songIDPlayer)
+			}
+			add(ns.player, id, songIDPlayer)
+		}
+	}
 	return out
 }
 

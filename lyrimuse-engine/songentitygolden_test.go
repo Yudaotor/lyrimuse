@@ -70,7 +70,7 @@ var songGoldenEntryKeys = []string{
 	"duration_secs", "resolved_duration_secs", "instrumental", "lyrics", "lyrics_yrc", "lyrics_source", "manual_lyrics",
 	"isrcs", "isrc_levels", "spotify_track_id", "spotify_album_id", "amazon_url", "amazon_album_asin", "kkbox_url",
 	"kkbox_album_id", "soda_url", "soda_album_id", "youtube_music_url", "youtube_music_mv", "apple_music_url",
-	"netease_url", "qq_music_url", "qq_album_mid",
+	"netease_url", "qq_music_url", "qq_album_mid", "player_song_ids", "player_album_ids",
 }
 
 // songGoldenEntryFieldsReplaced:建表读、但案例里换成摘好的结果存的条目字段(登记歌名、当前歌词候选的歌名;同步写进来的

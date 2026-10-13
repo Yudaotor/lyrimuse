@@ -34,6 +34,7 @@ type testQQSong struct {
 	singerInfo   string
 	duration     float64
 	albumMid     string
+	mid          string // 空 = 不写 song_Mid
 }
 
 func writeTestQQArchive(t *testing.T, lastIndex int, songs []testQQSong) string {
@@ -47,6 +48,9 @@ func writeTestQQArchive(t *testing.T, lastIndex int, songs []testQQSong) string 
 		b.WriteString("<dict>")
 		fmt.Fprintf(&b, "<key>songName</key>%s", qqUID(a.str(s.title)))
 		fmt.Fprintf(&b, "<key>song_Duration</key><real>%v</real>", s.duration)
+		if s.mid != "" {
+			fmt.Fprintf(&b, "<key>song_Mid</key>%s", qqUID(a.str(s.mid)))
+		}
 		// albumInfo 是个被引用的对象,跟真实归档一样。
 		albumFields := fmt.Sprintf("<key>name</key>%s", qqUID(a.str(s.album)))
 		if s.albumMid != "" {

@@ -351,6 +351,7 @@ type appleCatalogSong struct {
 	durationSecs         float64
 	artist, title, album string
 	audioLocale          string
+	contentRating        string
 }
 
 // isrcFromAppleSong:这首报的 ISRC 时长跟播放器报的对得上才认,不认返回空串。没取到这首(这个商店没有)也是空串。
@@ -406,6 +407,11 @@ func appleCatalogSongsByID(ctx context.Context, storefront string, ids []string)
 	if err != nil || status != http.StatusOK {
 		return nil, false
 	}
+	return appleCatalogSongsFrom(raw)
+}
+
+// appleCatalogSongsFrom:曲库 songs 应答体 → id → 这首;解不开返回 ok=false。
+func appleCatalogSongsFrom(raw []byte) (map[string]appleCatalogSong, bool) {
 	var resp struct {
 		Data []applemusicSong `json:"data"`
 	}
@@ -415,7 +421,8 @@ func appleCatalogSongsByID(ctx context.Context, storefront string, ids []string)
 	out := make(map[string]appleCatalogSong, len(resp.Data))
 	for _, s := range resp.Data {
 		out[s.ID] = appleCatalogSong{isrc: s.Attributes.Isrc, durationSecs: float64(s.Attributes.DurationInMillis) / 1000,
-			artist: s.Attributes.ArtistName, title: s.Attributes.Name, album: s.Attributes.AlbumName, audioLocale: s.Attributes.AudioLocale}
+			artist: s.Attributes.ArtistName, title: s.Attributes.Name, album: s.Attributes.AlbumName, audioLocale: s.Attributes.AudioLocale,
+			contentRating: s.Attributes.ContentRating}
 	}
 	return out, true
 }

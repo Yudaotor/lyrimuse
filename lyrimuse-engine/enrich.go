@@ -513,6 +513,13 @@ type enrichEntry struct {
 	// playerIDFields 那几样 id、PlayerCovers 的键对应的播放器也记在这里(notePlayersFromRecords)。歌词管理「同一首歌的其他写法」
 	// 拿它显示每条写法是哪个播放器收录的(18 章决策 38、39、42)。
 	Players []string `json:"players,omitempty"`
+	// PlayerSongIDs:在 Apple Music、QQ 音乐、网易云、酷狗里放这首时,播放器自己报的这一首的歌曲 id,键是 bundle id(Apple Music 是
+	// 目录曲目 id,QQ 是 songmid,网易云是歌曲 id,酷狗是曲库里的 mixId;notePlayerSongLocked 记,换成最近一次的)。歌曲实体当播放器给的 id 用
+	// (18 章决策 65)。按歌名检索配的单曲链接(AppleURL、QQURL、NeteaseURL)说明不了是哪一首,别往这里写。
+	PlayerSongIDs map[string]string `json:"player_song_ids,omitempty"`
+	// PlayerAlbumIDs:PlayerSongIDs 里那一首所在的专辑 id,键同样是 bundle id,跟歌曲 id 成对记(notePlayerSongLocked;QQ 是
+	// albumMid,网易云是专辑 id)。歌曲实体拿它认「同一张专辑里的另一首」(18 章决策 67)。检索配的专辑(QQAlbumMid)别往这里写。
+	PlayerAlbumIDs map[string]string `json:"player_album_ids,omitempty"`
 
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
 	// (enrichjson.go)。
@@ -882,6 +889,11 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 		// 目录锚点跟电台真曲长一样是异步到位的,条目常常先带着按歌名搜出来的链接写下,锚点到了换成它的页面。
 		if applyAppleCatalogLinkLocked(&e, anchorLink) {
+			spotifyHintDirty = true
+		}
+		// Apple Music 在放时,锚点就是它这一拍报的目录曲目 id(播放路径的索引先查),记成它报的这一首(18 章决策 65)。
+		if bundleID == appleMusicBundleID && anchorLink != "" &&
+			notePlayerSongIDLocked(&e, appleMusicBundleID, appleCatalogIDFromURL(anchorLink)) {
 			spotifyHintDirty = true
 		}
 		if applyPlayerCatalogIDsLocked(&e, bundleID, catalogIDs) {
@@ -5925,6 +5937,51 @@ func notePlayerLocked(e *enrichEntry, bundleID string) bool {
 	return true
 }
 
+// notePlayerSongIDLocked:把 bundleID 这个播放器自己报的这一首的歌曲 id 记进 e.PlayerSongIDs(换成最近一次的;空串不记),
+// 返回改没改。没有专辑 id 可记时用它,同 notePlayerSongLocked(e, bundleID, id, "")。调用方持 enrichMu。
+func notePlayerSongIDLocked(e *enrichEntry, bundleID, id string) bool {
+	return notePlayerSongLocked(e, bundleID, id, "")
+}
+
+// notePlayerSongLocked:bundleID 这个播放器报的这一首,歌曲 id 记进 PlayerSongIDs,同一拍读到的专辑 id 记进 PlayerAlbumIDs。
+// 两张表成对:歌曲 id 换了、没给新的专辑 id 时,旧的专辑 id 跟着删;同一首这一拍没读到专辑的,记下的留着。空的歌曲 id 不记。
+// 返回改没改。换整张表、不原地改:条目是值拷贝,表跟落盘那份快照共用。调用方持 enrichMu。
+func notePlayerSongLocked(e *enrichEntry, bundleID, songID, albumID string) bool {
+	if bundleID == "" || songID == "" {
+		return false
+	}
+	changed := false
+	if e.PlayerSongIDs[bundleID] != songID {
+		e.PlayerSongIDs = withBundleValue(e.PlayerSongIDs, bundleID, songID)
+		if albumID == "" && e.PlayerAlbumIDs[bundleID] != "" {
+			e.PlayerAlbumIDs = withBundleValue(e.PlayerAlbumIDs, bundleID, "")
+		}
+		changed = true
+	}
+	if albumID != "" && e.PlayerAlbumIDs[bundleID] != albumID {
+		e.PlayerAlbumIDs = withBundleValue(e.PlayerAlbumIDs, bundleID, albumID)
+		changed = true
+	}
+	return changed
+}
+
+// withBundleValue:m 的副本,bundleID 那一项换成 v(空串删掉;删空了返回 nil)。
+func withBundleValue(m map[string]string, bundleID, v string) map[string]string {
+	out := make(map[string]string, len(m)+1)
+	for k, x := range m {
+		out[k] = x
+	}
+	if v == "" {
+		delete(out, bundleID)
+	} else {
+		out[bundleID] = v
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // reportedName:播放器原样报的歌名、歌手、专辑(App 送来的那一份,没经 enrichKey 归一化)。
 type reportedName struct {
 	Title  string `json:"title,omitempty"`
@@ -5976,8 +6033,8 @@ var playerIDFields = []struct {
 	{kasetBundleID, func(e *enrichEntry) string { return e.YouTubeMusicURL }},
 }
 
-// notePlayersFromRecords:把条目里 playerIDFields 那几样 id 对应的播放器,和 PlayerCovers 的键(播放器自己给这首记的封面,
-// 只在用它放时写)记进 e.Players(规则同 notePlayerLocked),返回记没记。
+// notePlayersFromRecords:把条目里 playerIDFields 那几样 id 对应的播放器,和 PlayerCovers、PlayerSongIDs 的键(播放器自己给
+// 这首记的封面、报的歌曲 id,只在用它放时写)记进 e.Players(规则同 notePlayerLocked),返回记没记。
 func notePlayersFromRecords(e *enrichEntry) bool {
 	changed := false
 	for _, f := range playerIDFields {
@@ -5985,9 +6042,11 @@ func notePlayersFromRecords(e *enrichEntry) bool {
 			changed = true
 		}
 	}
-	for _, b := range songSortedKeys(e.PlayerCovers) {
-		if notePlayerLocked(e, b) {
-			changed = true
+	for _, m := range [...]map[string]string{e.PlayerCovers, e.PlayerSongIDs} {
+		for _, b := range songSortedKeys(m) {
+			if notePlayerLocked(e, b) {
+				changed = true
+			}
 		}
 	}
 	return changed
@@ -6011,6 +6070,48 @@ func migratePlayersFromRecords() {
 	enrichMu.Unlock()
 	if n > 0 {
 		log.Printf("enrich: noted players from player-provided ids and covers on %d entries", n)
+		saveEnrichCache()
+	}
+}
+
+// migratePlayersFromAppleAnchors:Apple 链接就是 Apple Music 播放时报的目录锚点(appleCatalogCache 里有这个曲目 id)、写法键跟
+// 锚点的歌手、歌名、专辑按 enrichKey 算出来的完全相同(歌名去掉时长变体位)的存量条目,补记 Apple Music 放过(18 章决策 64),
+// 没记过它报的歌曲 id 的把锚点 id 记上(决策 65)。Apple Music 报的就是曲库自己的名字,逐字相同才认:别的播放器的写法借了
+// 锚点链接的,名字对不上。不挂水位,每次启动扫一遍,没改动不落盘。锚点在 appleCatalogMu 后面,先抄出来再取 enrichMu。
+func migratePlayersFromAppleAnchors() {
+	appleCatalogMu.Lock()
+	anchorKeys := make(map[string]string, len(appleCatalogCache))
+	for id, t := range appleCatalogCache {
+		anchorKeys[id] = enrichKey(t.ArtistName, t.TrackName, t.AlbumName)
+	}
+	appleCatalogMu.Unlock()
+	enrichMu.Lock()
+	n := 0
+	for k, e := range enrichCache {
+		id := appleCatalogIDFromURL(e.AppleURL)
+		want, ok := anchorKeys[id]
+		if !ok || (slices.Contains(e.Players, appleMusicBundleID) && e.PlayerSongIDs[appleMusicBundleID] != "") {
+			continue
+		}
+		artist, title, album := splitEnrichKey(k)
+		if enrichKey(artist, enrichKeyDurationVariantRe.ReplaceAllString(title, ""), album) != want {
+			continue
+		}
+		changed := notePlayerLocked(&e, appleMusicBundleID)
+		if e.PlayerSongIDs[appleMusicBundleID] == "" && notePlayerSongIDLocked(&e, appleMusicBundleID, id) {
+			changed = true
+		}
+		if changed {
+			enrichCache[k] = e
+			n++
+		}
+	}
+	if n > 0 {
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if n > 0 {
+		log.Printf("enrich: noted Apple Music on %d entries whose link is the catalog anchor it reported", n)
 		saveEnrichCache()
 	}
 }

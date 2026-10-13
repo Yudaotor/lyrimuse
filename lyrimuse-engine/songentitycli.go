@@ -121,6 +121,7 @@ func runSongEntitiesCLI(args []string) {
 		}
 		attachMBRecordings(variants, readMBRecordings(mbPath))
 		attachSpotifyLanguages(variants, spotifyLanguagesForVariants(variants))
+		attachSpotifyExplicit(variants, spotifyExplicitForVariants(variants))
 	}
 	read := time.Since(start)
 	var before runtime.MemStats

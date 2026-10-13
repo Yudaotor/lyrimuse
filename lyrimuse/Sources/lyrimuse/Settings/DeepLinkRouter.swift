@@ -28,6 +28,9 @@ enum DeepLinkRouter {
             openSettings(path: path, checkForUpdates: checkForUpdates)
         case .lyricsManager:
             AppActions.shared.openLyricsManager?()
+        case let .lyricsManagerSongVersions(key, showEvidence):
+            AppActions.shared.openLyricsManager?()
+            AppActions.shared.requestSongVersions(key: key, showEvidence: showEvidence)
         case .lyricsWindow:
             AppActions.shared.openLyricsWindow?()
         case .lyricsWindowSearch:
@@ -66,7 +69,7 @@ enum DeepLinkRouter {
     private static func sceneID(for link: LyrimuseDeepLink) -> String? {
         switch link {
         case .settings: return "settings"
-        case .lyricsManager, .action(.openLyricsManagerHotkey, _, _): return "lyrics-manager"
+        case .lyricsManager, .lyricsManagerSongVersions, .action(.openLyricsManagerHotkey, _, _): return "lyrics-manager"
         case .lyricsWindow, .lyricsWindowSearch, .action(.openLyricsWindowHotkey, _, _),
              .action(.toggleLyricsWindowMiniHotkey, _, _): return "lyrics-window"
         case .lyricsSearch, .action(.lyricsQuickSearchHotkey, _, _): return "lyrics-quick-search"

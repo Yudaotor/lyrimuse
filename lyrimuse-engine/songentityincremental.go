@@ -101,6 +101,16 @@ func songEntityPrintOf(e enrichEntry, pinned bool) songEntityPrint {
 		str(e.ISRCLevels[c])
 	}
 	h.WriteByte(0xff)
+	for _, b := range songSortedKeys(e.PlayerSongIDs) {
+		str(b)
+		str(e.PlayerSongIDs[b])
+	}
+	h.WriteByte(0xff)
+	for _, b := range songSortedKeys(e.PlayerAlbumIDs) {
+		str(b)
+		str(e.PlayerAlbumIDs[b])
+	}
+	h.WriteByte(0xff)
 	for _, s := range [...]string{e.SpotifyTrackID, e.AmazonURL, e.KKBOXURL, e.SodaURL, e.YouTubeMusicURL, e.AppleURL,
 		e.NeteaseURL, e.QQURL, e.SpotifyAlbumID, e.QQAlbumMid, e.AmazonAlbumASIN, e.KKBOXAlbumID, e.SodaAlbumID} {
 		str(s)
@@ -644,6 +654,7 @@ func songEntityPrepare() func(vs []songVariant) {
 		attachNeteaseNames(vs, netease)
 		attachMBRecordings(vs, mb)
 		attachSpotifyLanguages(vs, spotifyLanguagesForVariants(vs))
+		attachSpotifyExplicit(vs, spotifyExplicitForVariants(vs))
 	}
 }
 

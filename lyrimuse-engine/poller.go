@@ -1828,6 +1828,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startAppleNamesSweep(ctx)                      // 歌曲实体阶段 2:Apple 歌曲 id 按三个区补名字,见 songentitynames.go
 	go startMBRecordingsSweep(ctx)                    // 歌曲实体阶段 2:ISRC 按 MusicBrainz 补录音,见 songentitymb.go
 	go startNeteaseNamesSweep(ctx)                    // 歌曲实体阶段 2:网易云歌曲 id 补登记名与别名,见 songentityneteasenames.go
+	go startPlayerCatalogSweep(ctx)                   // 在汽水、Spotify、Amazon、网易云上放过的条目按客户端本机缓存补一次歌曲页、专辑 id,见 playercatalogbackfill.go
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
