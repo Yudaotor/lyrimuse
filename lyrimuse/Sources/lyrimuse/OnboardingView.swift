@@ -821,7 +821,7 @@ struct OnboardingView: View {
         }
         let playbackTargets = pendingAccessibility.filter { $0.accessibilityUse == .controlsPlayback }
         if !playbackTargets.isEmpty {
-            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首"),
+            lines.append(String(format: L10n.t("辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时控制暂停、恢复和上下首"),
                                 accessibility.playerNames(playbackTargets)))
         }
         let favoriteTargets = pendingAccessibility.filter { $0.accessibilityUse == .pressesFavorite }

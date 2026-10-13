@@ -200,7 +200,20 @@ func runPlayerIdentityTests() {
             expectEqual(shown(menuRoute, true, false, false), false, "播放键反馈: 菜单连按第二下按显示的翻回去")
             expectEqual(shown(menuRoute, true, false, true), true, "播放键反馈: 菜单回报前回读已到 → 跟真值,不再翻")
             expectEqual(shown(menuRoute, false, true, false), false, "播放键反馈: 回读先到的是暂停 → 跟真值")
-            for player in PlaybackPlayer.allCases where player != .qqMusic && player != .netease {
+            expectEqual(PlaybackMenuControl.players, [.qqMusic, .netease, .soda], "失焦按界面控制: QQ 音乐、网易云按菜单,汽水按播放条")
+            for command in [Command.playPause, .nextTrack, .previousTrack] {
+                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                    focusHeldElsewhere: true, directQueryFallback: .soda, mediaControlCommand: command.rawValue),
+                    Route.menuAccessibility(.soda, command), "汽水失焦: \(command.rawValue) 按它播放条上的键")
+                expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                    directQueryFallback: .soda, mediaControlCommand: command.rawValue),
+                    Route.mediaControl, "汽水焦点正常: 不额外依赖辅助功能")
+            }
+            expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
+                focusHeldElsewhere: true, directQueryFallback: .soda, mediaControlCommand: "seek"),
+                Route.withheld, "汽水失焦: 跳转没有通路")
+            expectEqual(PlaybackMenuControl.command(forMenuTitle: "播放", player: .soda), nil, "汽水没有菜单标题表(按播放条)")
+            for player in PlaybackPlayer.allCases where !PlaybackMenuControl.players.contains(player) {
                 for command in [Command.playPause, .nextTrack, .previousTrack] {
                     expectEqual(MusicPlaybackController.controlRoute(exclusivelyAppleMusic: false, focusFallback: nil,
                         focusHeldElsewhere: true, directQueryFallback: player, mediaControlCommand: command.rawValue),
@@ -983,17 +996,17 @@ func runPlayerIdentityTests() {
     do {
         typealias P = Set<PlaybackPlayer>
         expectEqual(PlaybackPlayer.allCases.filter(\.needsAccessibilityPermission), [.qqMusic, .netease, .kugou, .soda, .amazonMusic],
-                    "辅助功能判据: 读界面的 Amazon Music、按菜单控制的 QQ 音乐/网易云、只为喜欢按界面的酷狗/汽水(改 shared/players.json 的 needsAccessibilityPermission)")
+                    "辅助功能判据: 读界面的 Amazon Music、按菜单控制的 QQ 音乐/网易云、按播放条控制的汽水、只为喜欢按界面的酷狗(改 shared/players.json 的 needsAccessibilityPermission)")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.accessibilityUse),
-                    [.switchesPlayMode, .controlsPlayback, .pressesFavorite, .pressesFavorite, .calibratesProgress],
-                    "辅助功能判据: QQ 音乐是切模式、网易云是喜欢加失焦播放、酷狗/汽水只有喜欢、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
+                    [.switchesPlayMode, .controlsPlayback, .pressesFavorite, .controlsPlayback, .calibratesProgress],
+                    "辅助功能判据: QQ 音乐是切模式、网易云/汽水是喜欢加失焦播放、酷狗只有喜欢、Amazon Music 是读进度,授权说明和体检提示按这个分开写")
         expectEqual(PlaybackPlayer.allCases.compactMap(\.automationUse), [.refinesProgress, .refinesProgress, .readsTrack],
                     "自动化判据: Apple Music、Spotify 只让进度更准,Kaset 的曲目整份靠它,引导页和设置页的说明按这个分开写")
         expectEqual(P([.auto]).playersNeedingAccessibility, [.qqMusic, .netease, .kugou, .soda, .amazonMusic], "辅助功能判据: 纯 auto 按超集算")
         expectEqual(P([.kugou]).playersNeedingAccessibility, [.kugou], "酷狗单选也显示 AX 授权入口(喜欢键要它)")
         expectEqual(P([.netease]).playersNeedingAccessibility, [.netease], "网易云单选也显示 AX 授权入口")
         expectEqual(PlaybackPlayer.netease.accessibilityUse, .controlsPlayback, "网易云授权用途不承诺模式或进度")
-        expectEqual(PlaybackPlayer.soda.accessibilityUse, .pressesFavorite, "汽水授权用途只有喜欢")
+        expectEqual(PlaybackPlayer.soda.accessibilityUse, .controlsPlayback, "汽水授权用途: 喜欢加失焦时按播放条控制播放")
         expectEqual(P([.amazonMusic, .spotify]).playersNeedingAccessibility, [.amazonMusic],
                     "辅助功能判据: 多选里只挑出要授权的那一家")
         expectEqual(P([.appleMusic, .spotify, .kkbox]).playersNeedingAccessibility, [],
@@ -1058,10 +1071,20 @@ func runPlayerIdentityTests() {
                     [.qqMusic, .netease, .kugou, .soda, .amazonMusic].filter { PlaybackPlayer.allCases.contains($0) },
                     "读别处状态的喜欢: QQ 音乐、网易云、酷狗、汽水和 Amazon")
         // 汽水底部那颗心两张图标,带 show 的是正在显示的那张:第一张 = 喜欢了(07 章决策 151)。
-        typealias Soda = SodaMusicFavoriteControl
+        typealias Soda = SodaMusicControl
         expectEqual([Soda.favorited(iconClasses: [["icon", "show"], ["icon"]]), Soda.favorited(iconClasses: [["icon"], ["icon", "show"]]),
                      Soda.favorited(iconClasses: [["icon", "show"], ["icon", "show"]]), Soda.favorited(iconClasses: [["icon"]])],
                     [true, false, nil, nil], "汽水喜欢: 第一张显示 = 喜欢了,认不出的不猜")
+        // 汽水播放条中间那组键没有文字,按位置认:正好三颗、带 large 的只在中间(02 章决策 125)。
+        let sodaKeys: [[String]] = [["button"], ["button", "large"], ["button"]]
+        expectEqual([PlaybackMenuControl.Command.previousTrack, .playPause, .nextTrack].map { Soda.transportIndex($0, buttonClasses: sodaKeys) },
+                    [0, 1, 2], "汽水播放键: 上一首、播放 / 暂停(large)、下一首")
+        expectEqual([Soda.transportIndex(.playPause, buttonClasses: [["button"], ["button", "large"]]),
+                     Soda.transportIndex(.playPause, buttonClasses: [["button", "large"], ["button"], ["button"]]),
+                     Soda.transportIndex(.nextTrack, buttonClasses: [["button"], ["button", "large"], ["button"], ["button"]]),
+                     Soda.transportIndex(.nextTrack, buttonClasses: [["button"], ["button", "large"], ["other"]]),
+                     Soda.transportIndex(.playPause, buttonClasses: [["button"], ["button"], ["button"]])],
+                    [nil, nil, nil, nil, nil], "汽水播放键: 数目、large 位置或类名对不上就不按")
         // 酷狗那一项标题不变,状态读播放条那颗心;按总时长文字认播放条,歌单列表各行的心不算(07 章决策 148)。
         typealias K = KugouMenuControl
         expectEqual([K.favorited(forHeartDescription: "取消收藏"), K.favorited(forHeartDescription: "收藏"),
@@ -2496,7 +2519,7 @@ private func menuControlDispatchTests() {
     typealias Controller = MusicPlaybackController
     typealias Command = PlaybackMenuControl.Command
     typealias Outcome = PlaybackMenuControl.Outcome
-    for player in [PlaybackPlayer.qqMusic, .netease] {
+    for player in [PlaybackPlayer.qqMusic, .netease, .soda] {
         let original = Controller.onControlWithheld
         var reasons: [Controller.WithheldReason] = []
         Controller.onControlWithheld = { reasons.append($0) }

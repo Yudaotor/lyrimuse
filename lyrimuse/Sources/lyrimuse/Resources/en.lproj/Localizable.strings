@@ -1090,7 +1090,7 @@
 "换行（默认）：一行显示不下时折行显示，窗口随之增高。\n滚动：每句只占一行，超出部分横向滚动；有逐字时间轴时随演唱进度滚动。" = "Wrap (default): long lines fold onto the next line and the window grows taller.\nScroll: every line stays one line tall and the overflow scrolls sideways — following the singing when the line has word-level timings.";
 "授权可能已在 Last.fm 网站上被撤销，重新连接即可恢复。" = "The authorization may have been revoked on the Last.fm website. Reconnect to resume.";
 "授权后 Lyrimuse 会读取%@的喜欢状态，并在你点喜欢键时替你按下它界面上对应的那一项。不授权也能用，只是没有喜欢键。" = "With permission, Lyrimuse reads whether %@ has liked the current song and presses the matching control in its window when you click Like. Everything else works without it; there is just no Like button.";
-"授权后 Lyrimuse 会读取并点按%@的菜单，以显示和切换喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能显示歌词，但没有喜欢键，失焦时也无法控制播放；失焦时的进度跳转暂不支持。" = "With permission, Lyrimuse reads and presses %@’s menus to show and toggle Like, and can pause, resume and skip tracks when another app holds system media focus. Lyrics still work without permission, but there is no Like button and playback can’t be controlled without media focus; seeking without media focus is not supported.";
+"授权后 Lyrimuse 会读取并点按%@的界面，以显示和切换喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能显示歌词，但没有喜欢键，失焦时也无法控制播放；失焦时的进度跳转暂不支持。" = "With permission, Lyrimuse reads and presses controls in %@ to show and toggle Like, and can pause, resume and skip tracks when another app holds system media focus. Lyrics still work without permission, but there is no Like button and playback can’t be controlled without media focus; seeking without media focus is not supported.";
 "授权已失效" = "Authorization expired";
 "授权已失效。请在「系统设置 → 隐私与安全性 → %@」中移除旧条目，重新添加当前运行的 Lyrimuse.app，然后重启 Lyrimuse。" = "Permission is no longer valid. In System Settings → Privacy & Security → %@, remove the old entry, add the Lyrimuse.app you are currently running, then restart Lyrimuse.";
 "授权已失效，Scrobble 已暂停" = "Authorization revoked — scrobbling paused";
@@ -2002,7 +2002,7 @@
 "辅助功能" = "Accessibility";
 "辅助功能权限" = "Accessibility";
 "辅助功能权限可显示%@的喜欢键" = "Accessibility permission enables liking songs for %@";
-"辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" = "Accessibility permission enables liking songs for %@, and lets its menus pause, resume and skip tracks when another app holds system media focus";
+"辅助功能权限可显示%@的喜欢键，也能在系统媒体焦点被其它 App 占用时控制暂停、恢复和上下首" = "Accessibility permission enables liking songs for %@, and lets Lyrimuse pause, resume and skip tracks when another app holds system media focus";
 "辅助功能权限可显示%@的随机、循环与喜欢键，也能在系统媒体焦点被其它 App 占用时，通过菜单控制暂停、恢复和上下首" = "Accessibility permission enables shuffle, repeat and liking songs for %@, and lets its menus pause, resume and skip tracks when another app holds system media focus";
 "辅助功能权限可让%@的播放进度更准确，并显示随机、循环键" = "Accessibility keeps %@'s playback position accurate and shows its shuffle and repeat buttons";
 "过去三年的今天及前后一周均无收听记录" = "No listening on this day, or the week around it, in the past three years";

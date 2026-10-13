@@ -2,9 +2,12 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// QQ / 网易云失去系统媒体焦点时,只按目标进程菜单栏里的播放 / 暂停、上一首、下一首。不激活 App、不模拟按键,
-/// 不回落到全局媒体控制,没有跳转。
+/// QQ / 网易云失去系统媒体焦点时,只按目标进程菜单栏里的播放 / 暂停、上一首、下一首;汽水的菜单栏里没有这几项,
+/// 按它底部播放条上的键(`SodaMusicControl.press`)。不激活 App、不模拟按键,不回落到全局媒体控制,没有跳转。
 public enum PlaybackMenuControl {
+    /// 失焦时能这样控制的播放器。路由(`MusicPlaybackController.controlRoute`)和 `press` 都按它,selftest 覆盖。
+    public static let players: Set<PlaybackPlayer> = [.qqMusic, .netease, .soda]
+
     public enum Command: String, Equatable, Sendable {
         case playPause = "toggle-play-pause"
         case nextTrack = "next-track"
@@ -52,6 +55,7 @@ public enum PlaybackMenuControl {
     /// 只读菜单三层,最多 20 个顶层菜单 / 每层 32 项。总读取预算 0.5s,
     /// 单次 AX 消息 0.1s(含按下动作);最多再等一条已经发出的消息,不重试动作。
     public static func press(_ command: Command, for player: PlaybackPlayer) -> Outcome {
+        if player == .soda { return SodaMusicControl.press(command) }
         guard player == .qqMusic || player == .netease else { return .menuUnavailable }
         guard AXIsProcessTrusted() else { return .notTrusted }
         guard let running = NSRunningApplication.runningApplications(

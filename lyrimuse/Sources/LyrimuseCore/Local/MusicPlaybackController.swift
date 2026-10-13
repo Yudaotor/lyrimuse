@@ -423,7 +423,7 @@ public enum MusicPlaybackController {
         case .netease: return NetEaseMenuControl.readFavorited()
         case .kugou: return KugouMenuControl.readFavorited()
         case .amazonMusic: return AmazonMusicFavoriteControl.readFavorited()
-        case .soda: return SodaMusicFavoriteControl.readFavorited()
+        case .soda: return SodaMusicControl.readFavorited()
         default: return nil
         }
     }
@@ -451,7 +451,7 @@ public enum MusicPlaybackController {
         case .amazonMusic:
             return AmazonMusicFavoriteControl.setFavorited(value)
         case .soda:
-            return SodaMusicFavoriteControl.setFavorited(value)
+            return SodaMusicControl.setFavorited(value)
         default:
             return false
         }
@@ -968,7 +968,7 @@ public enum MusicPlaybackController {
         case spotifyScript
         case kasetScript
         case mediaControl
-        /// QQ / 网易云失焦时只按目标进程的播放菜单;跳转不走这条。
+        /// QQ / 网易云失焦时只按目标进程的播放菜单,汽水按它播放条上的键;跳转不走这条。
         case menuAccessibility(PlaybackPlayer, PlaybackMenuControl.Command)
         /// 跳转定向发给 Kaset 本体那份会话(`NowPlayingClientsProbe.sendSeek`),不发给系统当前会话。只有跳转走这条,见 `seekRoute`。
         case kasetDirect
@@ -978,7 +978,7 @@ public enum MusicPlaybackController {
         case withheld
     }
 
-    /// 按实际回退目标决定控制通路。QQ / 网易云直查回退只允许三个已验证的 AX 菜单动作;
+    /// 按实际回退目标决定控制通路。QQ / 网易云 / 汽水直查回退只允许三个已验证的 AX 动作;
     /// 其它无定向通路的命令仍不发。选择列表和前台窗口不能充当回退目标。
     public static func controlRoute(exclusivelyAppleMusic: Bool, focusFallback: PlaybackPlayer?,
                                     focusHeldElsewhere: Bool = false, directQueryFallback: PlaybackPlayer? = nil,
@@ -990,7 +990,7 @@ public enum MusicPlaybackController {
         case .kaset: return .kasetScript
         default:
             guard focusHeldElsewhere else { return .mediaControl }
-            if let player = directQueryFallback, player == .qqMusic || player == .netease,
+            if let player = directQueryFallback, PlaybackMenuControl.players.contains(player),
                let command = PlaybackMenuControl.Command(rawValue: mediaControlCommand) {
                 return .menuAccessibility(player, command)
             }
@@ -1067,7 +1067,7 @@ public enum MusicPlaybackController {
         return route
     }
 
-    /// QQ / 网易云的三个动作与已有控制共用串行队列。press 是 AX 边界,selftest 用阻塞桩验证主线程仍可服务和失败回报。
+    /// QQ / 网易云 / 汽水的三个动作与已有控制共用串行队列。press 是 AX 边界,selftest 用阻塞桩验证主线程仍可服务和失败回报。
     public static func dispatchMenuAccessibility(
         _ command: PlaybackMenuControl.Command, for player: PlaybackPlayer,
         press: @escaping @Sendable (PlaybackMenuControl.Command, PlaybackPlayer) -> PlaybackMenuControl.Outcome = { PlaybackMenuControl.press($0, for: $1) },

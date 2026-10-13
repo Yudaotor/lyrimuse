@@ -123,7 +123,7 @@ struct AccessibilityPermissionGuide: View {
         }
         let playback = players.filter { $0.accessibilityUse == .controlsPlayback }
         if !playback.isEmpty {
-            lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取并点按%@的菜单，以显示和切换喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能显示歌词，但没有喜欢键，失焦时也无法控制播放；失焦时的进度跳转暂不支持。"),
+            lines.append(String(format: L10n.t("授权后 Lyrimuse 会读取并点按%@的界面，以显示和切换喜欢；系统媒体焦点被其它 App 占用时，也能暂停、恢复和切换上下首。不授权也能显示歌词，但没有喜欢键，失焦时也无法控制播放；失焦时的进度跳转暂不支持。"),
                                 model.playerNames(playback)))
         }
         let favorite = players.filter { $0.accessibilityUse == .pressesFavorite }
