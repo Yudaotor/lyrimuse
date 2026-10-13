@@ -4804,6 +4804,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// 第一步先把各源正文里的 HTML / XML 字符实体还原(酷狗 `they&apos;re`,见 lyricentities.go)。
 	// 返回的是新 map,调用方那份原始应答不动——它每来一个源就全量重跑一次这里。
 	raw = decodeLyricSourceEntities(raw)
+	raw = dropOtherVersionInstrumentalClaims(title, album, raw)
 	ne := raw["netease"].ne
 	qq, kugou, lrclib, mx, lf, kuwo := raw["qq"], raw["kugou"], raw["lrclib"], raw["musixmatch"], raw["lyricfind"], raw["kuwo"]
 	qqLyr, qqYRC, qqTr, qqRoma, qqTitle, qqArtist, qqAlbum, qqCover, qqDur, qqLang := qq.lyr, qq.yrc, qq.tr, qq.roma, qq.matchTitle, qq.matchArtist, qq.matchAlbum, qq.matchCover, qq.srcDur, qq.language
