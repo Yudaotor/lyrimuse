@@ -93,6 +93,25 @@ func scheduleEnrichPendingWrite() {
 	})
 }
 
+// saveEnrichPendingBatch:后台一批改动之后落盘,keys 是这批改过的条目,调用方已在锁里逐条记了 noteEnrichPendingLocked。正在播的
+// 那首在里面就重写它的单条快照:App 读正在播的这首先看快照,快照比主缓存新时不看小文件。小文件里没攒满 enrichPendingMaxKeys 条
+// 就写小文件、排一次延后整份落盘,攒满了才当场整份写(小文件里是完整条目,太多就不小了)。改的是已有条目时不提醒歌曲实体增量
+// 重算,补上的 id 等下一次整份落盘再进实体表。调用方不持 enrichMu。见 15 章决策 39。
+func saveEnrichPendingBatch(keys []string) {
+	for _, k := range keys {
+		notePlayingEntryChanged(k)
+	}
+	enrichMu.Lock()
+	full := len(enrichPendingKeys) >= enrichPendingMaxKeys
+	enrichMu.Unlock()
+	if full {
+		saveEnrichCache()
+		return
+	}
+	scheduleEnrichPendingWrite()
+	requestEnrichBackgroundSave()
+}
+
 // writeEnrichPending 把还没整份落盘的条目写成小文件;一条都没有就删掉文件。
 func writeEnrichPending() {
 	path := enrichPendingPath()

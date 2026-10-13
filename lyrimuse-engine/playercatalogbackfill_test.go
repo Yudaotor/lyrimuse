@@ -2,14 +2,119 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
+
+// withDeferredEnrichSaves:按真机的节奏落盘(整份落盘延后一小时、小文件攒一小时、写小文件这一步不真写),主缓存指到临时文件
+// (单条快照跟着写到它旁边),待落盘记账换一份空的;返回主缓存路径。测试结束还原。
+func withDeferredEnrichSaves(t *testing.T) string {
+	t.Helper()
+	restoreEnrichSaveStateOnCleanup(t)
+	path := filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
+	enrichMu.Lock()
+	savedKeys, savedSeq, savedPath, savedDirty := enrichPendingKeys, enrichPendingSeq, enrichPath, enrichDirty
+	enrichPendingKeys, enrichPath = map[string]uint64{}, path
+	enrichMu.Unlock()
+	savedNow, savedDelay := enrichPendingNow, enrichPendingWriteDelay
+	enrichPendingNow, enrichPendingWriteDelay = func() {}, time.Hour
+	enrichBackgroundSaveDelay = time.Hour
+	enrichSaveThrottleMu.Lock()
+	enrichSaveThrottled = true
+	cancelEnrichDeferredSaveLocked()
+	enrichSaveThrottleMu.Unlock()
+	stopEnrichPendingTimer()
+	t.Cleanup(func() {
+		stopEnrichPendingTimer()
+		enrichPendingNow, enrichPendingWriteDelay = savedNow, savedDelay
+		enrichMu.Lock()
+		enrichPendingKeys, enrichPendingSeq, enrichPath, enrichDirty = savedKeys, savedSeq, savedPath, savedDirty
+		enrichMu.Unlock()
+	})
+	return path
+}
+
+func stopEnrichPendingTimer() {
+	enrichPendingTimerMu.Lock()
+	if enrichPendingTimer != nil {
+		enrichPendingTimer.Stop()
+		enrichPendingTimer = nil
+	}
+	enrichPendingTimerMu.Unlock()
+}
+
+// enrichSavesDeferred:这批改动没有当场整份写主缓存,写小文件、延后整份落盘都排上了。
+func enrichSavesDeferred(path string) error {
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		return fmt.Errorf("当场整份写了主缓存(%v)", err)
+	}
+	enrichSaveThrottleMu.Lock()
+	deferred := enrichDeferredSaveTimer != nil
+	enrichSaveThrottleMu.Unlock()
+	enrichPendingTimerMu.Lock()
+	pending := enrichPendingTimer != nil
+	enrichPendingTimerMu.Unlock()
+	if !deferred || !pending {
+		return fmt.Errorf("写小文件排上了 %v、延后整份落盘排上了 %v", pending, deferred)
+	}
+	return nil
+}
+
+// readPlayingSnapshot:单条快照里记的 key 和条目;还没有快照返回空。
+func readPlayingSnapshot(t *testing.T) (string, enrichEntry) {
+	t.Helper()
+	b, err := os.ReadFile(playingEntryPath())
+	if err != nil {
+		return "", enrichEntry{}
+	}
+	var f playingEntryFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		t.Fatalf("单条快照解不开: %v", err)
+	}
+	return f.Key, f.Entry
+}
+
+// 一批改动之后:小文件里攒得下就不当场整份写(排一次写小文件、一次延后整份落盘),这批里有正在播的那首就重写它的单条快照;
+// 攒满了才当场整份写。
+func TestSaveEnrichPendingBatchDefersUnlessPendingFull(t *testing.T) {
+	path := withDeferredEnrichSaves(t)
+	playing, other := "甲|歌1|专辑1", "乙|歌2|专辑2"
+	enrichPlayingKey.Store(&playing)
+	withEnrichCache(t, map[string]enrichEntry{playing: {SpotifyAlbumID: "x"}, other: {SpotifyAlbumID: "y"}})
+	enrichMu.Lock()
+	enrichPendingKeys[playing], enrichPendingKeys[other] = 1, 2
+	enrichDirty = true
+	enrichMu.Unlock()
+
+	saveEnrichPendingBatch([]string{other})
+	if k, _ := readPlayingSnapshot(t); k != "" {
+		t.Errorf("这批里没有正在播的那首,不写单条快照: %q", k)
+	}
+	saveEnrichPendingBatch([]string{other, playing})
+	if err := enrichSavesDeferred(path); err != nil {
+		t.Fatal(err)
+	}
+	if k, e := readPlayingSnapshot(t); k != playing || e.SpotifyAlbumID != "x" {
+		t.Errorf("这批里有正在播的那首,重写它的单条快照: %q %+v", k, e)
+	}
+
+	enrichMu.Lock()
+	for i := range enrichPendingMaxKeys - 2 {
+		enrichPendingKeys[strings.Repeat("k", i+1)] = uint64(i + 3)
+	}
+	enrichMu.Unlock()
+	saveEnrichPendingBatch(nil)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("小文件攒满了,应当当场整份写: %v", err)
+	}
+}
 
 // 播放器报的这一首成对记:歌曲 id 换了、没给新专辑时旧专辑跟着删;同一首没读到专辑的留着;换整张表、不原地改。
 func TestNotePlayerSongLocked(t *testing.T) {
@@ -60,6 +165,9 @@ func TestPlayerAlbumIDsVeto(t *testing.T) {
 
 // Spotify、Amazon 存量按记下的曲目 id 读本机缓存补专辑、歌手 id:只补没有的;Amazon 的专辑名要对得上;缓存里没有的不动。
 func TestBackfillPlayerAlbumIDsFromClientCache(t *testing.T) {
+	cachePath := withDeferredEnrichSaves(t)
+	playing := "甲|歌1|专辑1"
+	enrichPlayingKey.Store(&playing)
 	newTestSpotifyAlbumEnv(t, false, true)
 	localStorage, _ := useTempAmazonData(t)
 	bad := strings.ReplaceAll(strings.ReplaceAll(amazonTestCatalogValue, "B0TESTAAA2", "B0TESTBAD1"), "B0TESTALB1", "bad-album")
@@ -109,6 +217,17 @@ func TestBackfillPlayerAlbumIDsFromClientCache(t *testing.T) {
 	if e := enrichCache["Ella Langley & Morgan Wallen|I Can't Love You Anymore (Bad)|I Can't Love You Anymore"]; e.AmazonAlbumASIN != "" {
 		t.Errorf("专辑 ASIN 形状不对的不补: %+v", e)
 	}
+	if got := songSortedKeys(enrichPendingKeys); !slices.Equal(got, []string{
+		"Ella Langley & Morgan Wallen|I Can't Love You Anymore [Explicit]|I Can't Love You Anymore",
+		"ella langley|i cant love you anymore|x", "甲|歌1|专辑1"}) {
+		t.Errorf("补上的条目记进待落盘: %q", got)
+	}
+	if err := enrichSavesDeferred(cachePath); err != nil {
+		t.Error(err)
+	}
+	if k, e := readPlayingSnapshot(t); k != playing || e.SpotifyAlbumID != album1 {
+		t.Errorf("补到正在播的那首,重写它的单条快照: %q %+v", k, e)
+	}
 }
 
 // 网易云存量按客户端播放历史认放的是哪一首:歌名歌手(报过原样写法的按它)与时长对得上且只有一首时记歌曲 id 与专辑;有歌曲 id 的
@@ -126,6 +245,9 @@ func TestBackfillNeteasePlayerSongsFromHistory(t *testing.T) {
 	old := neteaseLocalDBOverride
 	neteaseLocalDBOverride = path
 	t.Cleanup(func() { neteaseLocalDBOverride = old })
+	cachePath := withDeferredEnrichSaves(t)
+	playing := "甲|第一首|专辑A"
+	enrichPlayingKey.Store(&playing)
 	ne := []string{neteaseMusicBundleID}
 	withEnrichCache(t, map[string]enrichEntry{
 		"甲|第一首|专辑A":               {Players: ne, DurationSecs: 200},
@@ -161,6 +283,15 @@ func TestBackfillNeteasePlayerSongsFromHistory(t *testing.T) {
 		if e := enrichCache[k]; e.PlayerSongIDs != nil || e.PlayerAlbumIDs != nil {
 			t.Errorf("%s 不该补: %v %v", k, e.PlayerSongIDs, e.PlayerAlbumIDs)
 		}
+	}
+	if got := songSortedKeys(enrichPendingKeys); !slices.Equal(got, []string{"Jia & Wu|First Song|专辑A", "丙|别的写法|专辑D", "己|无专辑|", "甲|第一首|专辑A"}) {
+		t.Errorf("补上的条目记进待落盘: %q", got)
+	}
+	if err := enrichSavesDeferred(cachePath); err != nil {
+		t.Error(err)
+	}
+	if k, e := readPlayingSnapshot(t); k != playing || e.PlayerSongIDs[neteaseMusicBundleID] != "101" {
+		t.Errorf("补到正在播的那首,重写它的单条快照: %q %+v", k, e.PlayerSongIDs)
 	}
 }
 
@@ -256,6 +387,9 @@ func TestBackfillKugouPlayerSongsFromLibrary(t *testing.T) {
 		{"丙 - 没放过", "丙", "AAAA04", 150, "586000004", 70004, 0},
 		{"丁、戊 - 合唱", "丁", "AAAA05", 210, "586000005", 0, 4},
 	})
+	cachePath := withDeferredEnrichSaves(t)
+	playing := "甲|第一首|专辑"
+	enrichPlayingKey.Store(&playing)
 	kg := []string{kugouMusicBundleID}
 	withEnrichCache(t, map[string]enrichEntry{
 		"甲|第一首|专辑":      {Players: kg, DurationSecs: 200},
@@ -287,6 +421,15 @@ func TestBackfillKugouPlayerSongsFromLibrary(t *testing.T) {
 	}
 	if e := enrichCache["甲|第一首|专辑 ~ 已有"]; e.PlayerSongIDs[kugouMusicBundleID] != "9" {
 		t.Errorf("已有的不动: %v", e.PlayerSongIDs)
+	}
+	if got := songSortedKeys(enrichPendingKeys); !slices.Equal(got, []string{"Jia|First|专辑", "戊|合唱|专辑", "甲|第一首|专辑"}) {
+		t.Errorf("补上的条目记进待落盘: %q", got)
+	}
+	if err := enrichSavesDeferred(cachePath); err != nil {
+		t.Error(err)
+	}
+	if k, e := readPlayingSnapshot(t); k != playing || e.PlayerSongIDs[kugouMusicBundleID] != "586000001" {
+		t.Errorf("补到正在播的那首,重写它的单条快照: %q %+v", k, e.PlayerSongIDs)
 	}
 }
 

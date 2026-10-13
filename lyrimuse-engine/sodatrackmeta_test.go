@@ -119,6 +119,7 @@ func TestSodaPreloadsWithMeta(t *testing.T) {
 // 后台一个一个问:问到的进表、落盘、代号加一;正在问的 id 再来不重复排;连着失败三次停手,剩下的退回去,停手期间不再开问;
 // 没问到的 id 一段时间内不再排;问到之后给存量条目补一次歌曲页。
 func TestSodaTrackMetaWorker(t *testing.T) {
+	withDeferredEnrichSaves(t)
 	calls := []string{}
 	withSodaTrackMeta(t, nil, func(_ context.Context, id string) (sodaTrackMeta, error) {
 		calls = append(calls, id)
@@ -247,6 +248,9 @@ func TestBackfillSodaPagesFromClientCache(t *testing.T) {
 	at := uint32(time.Now().Unix() - 60)
 	withSodaPreloadFile(t, append(testSodaBareRecord("7065822749403154433", at), testSodaBareRecord("7168858636298258444", at)...))
 	soda := []string{sodaMusicBundleID}
+	cachePath := withDeferredEnrichSaves(t)
+	playing := "泳儿|惯坏|私人珍藏"
+	enrichPlayingKey.Store(&playing)
 	withEnrichCache(t, map[string]enrichEntry{
 		"泳儿|惯坏|私人珍藏":      {Players: soda, DurationSecs: 247},
 		"孙盛希|一分之二|出没地带":   {Players: soda, DurationSecs: 282.8, Reported: map[string]reportedName{sodaMusicBundleID: {Title: "一分之二", Artist: "HUSH, 孙盛希", Album: "出没地带"}}},
@@ -268,6 +272,15 @@ func TestBackfillSodaPagesFromClientCache(t *testing.T) {
 	if enrichCache["泳儿|惯坏|私人珍藏 ~ 已有"].SodaURL != sodaTrackPageURL("1") || enrichCache["泳儿|惯坏|私人珍藏 ~ 别家"].SodaURL != "" ||
 		enrichCache["泳儿|惯坏|私人珍藏 ~ 长"].SodaURL != "" {
 		t.Error("已有的、没在汽水上放过的、时长对不上的不动")
+	}
+	if got := songSortedKeys(enrichPendingKeys); !slices.Equal(got, []string{"孙盛希|一分之二|出没地带", "泳儿|惯坏|私人珍藏"}) {
+		t.Errorf("补上的条目记进待落盘: %q", got)
+	}
+	if err := enrichSavesDeferred(cachePath); err != nil {
+		t.Error(err)
+	}
+	if k, e := readPlayingSnapshot(t); k != playing || e.SodaURL != sodaTrackPageURL("7065822749403154433") {
+		t.Errorf("补到正在播的那首,重写它的单条快照: %q %+v", k, e.SodaURL)
 	}
 }
 

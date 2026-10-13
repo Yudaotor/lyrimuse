@@ -97,7 +97,7 @@ func backfillPlayerAlbumIDsFromClientCache() int {
 		}
 		fills = append(fills, fill{w.key, w.bundleID, ids})
 	}
-	n := 0
+	var changed []string
 	enrichMu.Lock()
 	for _, f := range fills {
 		e, ok := enrichCache[f.key]
@@ -106,18 +106,19 @@ func backfillPlayerAlbumIDsFromClientCache() int {
 		}
 		if applyPlayerCatalogIDsLocked(&e, f.bundleID, f.ids) {
 			enrichCache[f.key] = e
-			n++
+			noteEnrichPendingLocked(f.key)
+			changed = append(changed, f.key)
 		}
 	}
-	if n > 0 {
+	if len(changed) > 0 {
 		enrichDirty = true
 	}
 	enrichMu.Unlock()
-	if n > 0 {
-		log.Printf("player catalog: noted album ids on %d Spotify / Amazon Music entries from the clients' local caches", n)
-		saveEnrichCache()
+	if len(changed) > 0 {
+		log.Printf("player catalog: noted album ids on %d Spotify / Amazon Music entries from the clients' local caches", len(changed))
+		saveEnrichPendingBatch(changed)
 	}
-	return n
+	return len(changed)
 }
 
 // backfillNeteasePlayerSongsFromHistory:在网易云上放过的条目,按客户端的播放历史(historyTracks,客户端自己放过的歌)认出放的
@@ -185,7 +186,7 @@ func backfillNeteasePlayerSongsFromHistory(ctx context.Context) int {
 		}
 		fills = append(fills, fill{w.key, songID, albumID})
 	}
-	n := 0
+	var changed []string
 	enrichMu.Lock()
 	for _, f := range fills {
 		e, ok := enrichCache[f.key]
@@ -197,18 +198,19 @@ func backfillNeteasePlayerSongsFromHistory(ctx context.Context) int {
 		}
 		if notePlayerSongLocked(&e, neteaseMusicBundleID, f.songID, f.albumID) {
 			enrichCache[f.key] = e
-			n++
+			noteEnrichPendingLocked(f.key)
+			changed = append(changed, f.key)
 		}
 	}
-	if n > 0 {
+	if len(changed) > 0 {
 		enrichDirty = true
 	}
 	enrichMu.Unlock()
-	if n > 0 {
-		log.Printf("netease: noted the song the client played on %d entries, from its play history", n)
-		saveEnrichCache()
+	if len(changed) > 0 {
+		log.Printf("netease: noted the song the client played on %d entries, from its play history", len(changed))
+		saveEnrichPendingBatch(changed)
 	}
-	return n
+	return len(changed)
 }
 
 // backfillKugouPlayerSongsFromLibrary:在酷狗上放过、还没有酷狗歌曲 id 的条目,按客户端曲库里放过的歌(Allmusic 里 totalPlayCount
@@ -272,7 +274,7 @@ func backfillKugouPlayerSongsFromLibrary() int {
 		}
 		fills = append(fills, fill{w.key, songID, albumID})
 	}
-	n := 0
+	var changed []string
 	enrichMu.Lock()
 	for _, f := range fills {
 		e, ok := enrichCache[f.key]
@@ -281,18 +283,19 @@ func backfillKugouPlayerSongsFromLibrary() int {
 		}
 		if notePlayerSongLocked(&e, kugouMusicBundleID, f.songID, f.albumID) {
 			enrichCache[f.key] = e
-			n++
+			noteEnrichPendingLocked(f.key)
+			changed = append(changed, f.key)
 		}
 	}
-	if n > 0 {
+	if len(changed) > 0 {
 		enrichDirty = true
 	}
 	enrichMu.Unlock()
-	if n > 0 {
-		log.Printf("kugou: noted the song the client played on %d entries, from its library", n)
-		saveEnrichCache()
+	if len(changed) > 0 {
+		log.Printf("kugou: noted the song the client played on %d entries, from its library", len(changed))
+		saveEnrichPendingBatch(changed)
 	}
-	return n
+	return len(changed)
 }
 
 // neteaseHistoryPick:播放历史里歌名、歌手(署名拆开逐个查)对得上,两边都知道时长时时长也对得上的那一首;对上的不止一首

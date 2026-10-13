@@ -365,7 +365,7 @@ func backfillSodaPagesFromClientCache() int {
 	if len(found) == 0 {
 		return 0
 	}
-	n := 0
+	var changed []string
 	enrichMu.Lock()
 	for k, ids := range found {
 		e, ok := enrichCache[k]
@@ -374,16 +374,17 @@ func backfillSodaPagesFromClientCache() int {
 		}
 		if applyPlayerCatalogIDsLocked(&e, sodaMusicBundleID, ids) {
 			enrichCache[k] = e
-			n++
+			noteEnrichPendingLocked(k)
+			changed = append(changed, k)
 		}
 	}
-	if n > 0 {
+	if len(changed) > 0 {
 		enrichDirty = true
 	}
 	enrichMu.Unlock()
-	if n > 0 {
-		log.Printf("soda: noted the song page on %d entries played in the client, from its local caches", n)
-		saveEnrichCache()
+	if len(changed) > 0 {
+		log.Printf("soda: noted the song page on %d entries played in the client, from its local caches", len(changed))
+		saveEnrichPendingBatch(changed)
 	}
-	return n
+	return len(changed)
 }
