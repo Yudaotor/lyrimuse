@@ -858,11 +858,12 @@ public enum MediaControlClient {
     /// 换歌才多一次 fork(实测电台上 230~310 秒一次),而不是 2 秒一次。
     private static func radioAwareAppleMusicSnapshot() -> MediaControlSnapshot? {
         guard let snapshot = settledAppleMusicSnapshot() else { return nil }
+        let hash = probedRadioStationHash(forTrack: snapshot.trackKey)
         // 设置里只选了 Apple Music 时,平时不读 media-control,这里只有 AppleScript 读到的歌名和进度。
-        // 时长是空的话,向 media-control 问一次这首歌有多长,问到就记住,同一首不再问。
+        // 时长是空的话用 media-control 报的补上;这一拍刚为电台判据问过 media-control 的,就用那一份应答,不再另问。
         // 选了「自动识别」不会进这个函数,那条路已经拿着 media-control 的时长。
-        let playable = supplementingMissingAppleDuration(snapshot)
-        guard let hash = probedRadioStationHash(forTrack: playable.trackKey) else {
+        let playable = supplementingMissingAppleDuration(snapshot, radioProbe: takeRadioProbeReply())
+        guard let hash else {
             setRadioStationHash(nil)
             return playable
         }
@@ -945,34 +946,79 @@ public enum MediaControlClient {
     private static var appleMusicRadioProbedKey: String?
     private static var appleMusicRadioProbedHash: String?
 
-    /// 只选了 Apple Music 时,给「AppleScript 没读到时长」的歌补上的时长。
-    /// 同一首只问 media-control 一次。问到了就记住。问失败,或系统正在显示的不是这首歌,也记成「没有」,
-    /// 免得每 2 秒再启动一次 media-control。歌名还对不上(多半还停在上一首)先不记,下一拍再问。
+    /// 只选了 Apple Music 时,给「AppleScript 没读到时长」的歌补上 media-control 报的时长,按曲目记一份。
+    /// 问失败(media-control 不在 / 超时 / 系统在报的不是 Apple Music)、或问到的就是这首,都记下,同一首不再问,
+    /// 免得每 2 秒再启动一次 media-control。问到的是别的曲目(换歌那一拍系统多半还停在上一首)先不记、下一拍再问,
+    /// 同一首最多问 `appleDurationProbeMaxTries` 次(`appleDurationProbeSettles`)。见 02 章决策 124。
     private static let appleDurationProbeLock = NSLock()
     private static var appleDurationProbeKey: String?
     private static var appleDurationProbeSecs: Double?
+    private static var appleDurationProbeSettled = false
+    private static var appleDurationProbeTries = 0
+    /// 这一拍为电台判据问过 media-control(`probedRadioStationHash` 真的起了一次子进程)时,那份应答里的这一首
+    /// (nil = 问失败、或系统在报的不是 Apple Music)。由 `takeRadioProbeReply` 取走。
+    private static var appleMusicRadioProbeRan = false
+    private static var appleMusicRadioProbeReply: MediaControlSnapshot?
 
-    private static func supplementingMissingAppleDuration(_ apple: MediaControlSnapshot) -> MediaControlSnapshot {
+    /// 同一首歌最多为补时长问几次 media-control。
+    public static let appleDurationProbeMaxTries = 3
+
+    /// 补时长这一次问到的结论记不记住(记住之后同一首不再问)。问失败(`probedKey` 为 nil)或问到的就是这首:记。
+    /// 问到的是别的曲目先不记,但同一首问满 `appleDurationProbeMaxTries` 次也记:两边的写法一直对不上时,不会每 2 秒
+    /// 起一次 media-control。纯函数,selftest 覆盖。
+    public static func appleDurationProbeSettles(probedKey: String?, trackKey: String, tries: Int) -> Bool {
+        probedKey == nil || probedKey == trackKey || tries >= appleDurationProbeMaxTries
+    }
+
+    /// `radioProbe`:这一拍为电台判据问 media-control 的结果(`takeRadioProbeReply`)。问过就用它,没问才另问一次。
+    private static func supplementingMissingAppleDuration(
+        _ apple: MediaControlSnapshot, radioProbe: (ran: Bool, reply: MediaControlSnapshot?)
+    ) -> MediaControlSnapshot {
         if let duration = apple.duration, duration > 0 { return apple }
         let key = apple.trackKey
         appleDurationProbeLock.lock()
-        if appleDurationProbeKey == key {
+        if appleDurationProbeKey != key {
+            appleDurationProbeKey = key
+            appleDurationProbeSecs = nil
+            appleDurationProbeSettled = false
+            appleDurationProbeTries = 0
+        }
+        if appleDurationProbeSettled {
             let cached = appleDurationProbeSecs
             appleDurationProbeLock.unlock()
-            if let cached, cached > 0 { return apple.withDuration(cached) }
-            return apple
+            return cached.map { apple.withDuration($0) } ?? apple
         }
+        appleDurationProbeTries += 1
+        let tries = appleDurationProbeTries
         appleDurationProbeLock.unlock()
-        let probed = probeAppleMusicSystemSnapshot()
+        let probed = radioProbe.ran ? radioProbe.reply : probeAppleMusicSystemSnapshot()
         let filled = fillingMissingAppleDuration(apple, from: probed)
-        let store = probed == nil || probed?.trackKey == key
         appleDurationProbeLock.lock()
-        if store {
-            appleDurationProbeKey = key
+        if appleDurationProbeKey == key,
+           appleDurationProbeSettles(probedKey: probed?.trackKey, trackKey: key, tries: tries) {
+            appleDurationProbeSettled = true
             appleDurationProbeSecs = (filled.duration ?? 0) > 0 ? filled.duration : nil
         }
         appleDurationProbeLock.unlock()
         return filled
+    }
+
+    /// 取走这一拍电台判据那次探测的应答,取完清空(下一拍没有新的探测就是「没问」)。
+    private static func takeRadioProbeReply() -> (ran: Bool, reply: MediaControlSnapshot?) {
+        appleDurationProbeLock.lock()
+        defer {
+            appleMusicRadioProbeRan = false
+            appleMusicRadioProbeReply = nil
+            appleDurationProbeLock.unlock()
+        }
+        return (appleMusicRadioProbeRan, appleMusicRadioProbeReply)
+    }
+
+    private static func noteRadioProbeReply(ran: Bool, reply: MediaControlSnapshot?) {
+        appleDurationProbeLock.lock()
+        appleMusicRadioProbeRan = ran
+        appleMusicRadioProbeReply = reply
+        appleDurationProbeLock.unlock()
     }
 
     /// 向 media-control 要当前这首歌的时长。不走 `fetchRawMediaControlSnapshot`,那个还会改进度记录。
@@ -983,7 +1029,12 @@ public enum MediaControlClient {
               let raw = try? JSONDecoder().decode(RawPayload.self, from: result.stdout),
               raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
         else { return nil }
-        return MediaControlSnapshot.forReplay(
+        return appleMusicSystemSnapshot(raw)
+    }
+
+    /// media-control 应答里 Apple Music 的这一首(只用来补时长,位置不取)。
+    private static func appleMusicSystemSnapshot(_ raw: RawPayload) -> MediaControlSnapshot {
+        MediaControlSnapshot.forReplay(
             title: raw.title, artist: raw.artist, album: raw.album, duration: raw.duration,
             elapsedTime: raw.elapsedTime, playing: raw.playing, bundleIdentifier: raw.bundleIdentifier,
             anchorElapsedTime: raw.elapsedTime)
@@ -1002,6 +1053,7 @@ public enum MediaControlClient {
             return appleMusicRadioProbedHash
         }
         appleMusicRadioProbeLock.unlock()
+        noteRadioProbeReply(ran: true, reply: nil)
         let hash = probeRadioStationHash()
         appleMusicRadioProbeLock.lock()
         appleMusicRadioProbedKey = trackKey
@@ -1024,6 +1076,8 @@ public enum MediaControlClient {
         // 系统 Now Playing 焦点不是 Apple Music 时,这个 hash 属于**别人**(网页视频/另一个
         // 播放器),不能扣到 Music.app 头上 —— 跟 matchMediaControlState 那道核对同一条理由。
         guard raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }
+        // 同一份应答里有这首的时长:AppleScript 没给时长的那几首拿它补(supplementingMissingAppleDuration),不再另问一次。
+        noteRadioProbeReply(ran: true, reply: appleMusicSystemSnapshot(raw))
         setNowPlayingIdentifiers(bundleID: PlaybackPlayer.appleMusic.bundleIdentifier, title: raw.title, artist: raw.artist,
                                  uniqueIdentifier: raw.uniqueIdentifier, trackNumber: raw.trackNumber,
                                  mediaType: raw.mediaType)

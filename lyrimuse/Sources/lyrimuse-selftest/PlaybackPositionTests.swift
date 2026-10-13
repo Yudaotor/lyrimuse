@@ -2621,5 +2621,20 @@ func runPlaybackPositionTests() {
                     "缺时长: 报 0 跟报空一样,视为没有")
         expectEqual(MediaControlClient.fillingMissingAppleDuration(apple, from: nil).duration == nil, true,
                     "缺时长: 没有系统快照就保持原样")
+
+        // 补时长那次问到的结论记不记住:问失败 / 问到这首都记;问到别的曲目先不记,问满上限也记,不每拍都起 media-control。
+        let key = apple.trackKey
+        let maxTries = MediaControlClient.appleDurationProbeMaxTries
+        expectEqual(MediaControlClient.appleDurationProbeSettles(probedKey: nil, trackKey: key, tries: 1), true,
+                    "缺时长: 问失败就记成没有,同一首不再问")
+        expectEqual(MediaControlClient.appleDurationProbeSettles(probedKey: key, trackKey: key, tries: 1), true,
+                    "缺时长: 问到的就是这首,记下")
+        expectEqual(MediaControlClient.appleDurationProbeSettles(probedKey: donor.trackKey + "x", trackKey: key, tries: 1), false,
+                    "缺时长: 问到的是别的曲目(系统还停在上一首),下一拍再问")
+        expectEqual(MediaControlClient.appleDurationProbeSettles(probedKey: "夜曲|周杰伦", trackKey: key, tries: maxTries - 1), false,
+                    "缺时长: 还没问满上限,接着问")
+        expectEqual(MediaControlClient.appleDurationProbeSettles(probedKey: "夜曲|周杰伦", trackKey: key, tries: maxTries), true,
+                    "缺时长: 两边一直对不上,问满上限就记成没有")
+        expectEqual(maxTries >= 2 && maxTries <= 5, true, "缺时长: 上限要给换歌那一两拍留余地,又不能多到每首都白问一串")
     }
 }

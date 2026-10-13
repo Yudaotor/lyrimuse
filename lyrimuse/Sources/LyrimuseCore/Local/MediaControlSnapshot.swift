@@ -178,10 +178,12 @@ public struct MediaControlSnapshot: Decodable {
             anchorElapsedTime: anchorElapsedTime, isRadio: isRadio, capturedAt: capturedAt)
     }
 
-    /// 换掉时长的副本。唯一的用处是电台:系统报的 `duration` 是**整档节目**的
-    /// (实测 3390.122s),而位置已经换成单曲口径,分母不跟着换就会显示成「2:29 / 56:30」。
-    /// 真曲长由引擎从 Apple 目录查到、写进歌词缓存,App 在 `LocalPlaybackSource.apply`
-    /// 里读出来替换。写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
+    /// 换掉时长的副本。两处用:
+    /// - 电台:系统报的 `duration` 是**整档节目**的(实测 3390.122s),而位置已经换成单曲口径,分母不跟着换就会
+    ///   显示成「2:29 / 56:30」。真曲长由引擎从 Apple 目录查到、写进歌词缓存,App 在 `LocalPlaybackSource.apply`
+    ///   里读出来替换。
+    /// - Apple Music 的 AppleScript 快照没有时长时,补上 media-control 报的同一首的时长(`MediaControlClient.fillingMissingAppleDuration`)。
+    /// 写成显式方法而不是就地用合成的 memberwise init,理由同 `withAlbum`。
     public func withDuration(_ newDuration: Double) -> MediaControlSnapshot {
         MediaControlSnapshot(
             title: title, artist: artist, album: album, duration: newDuration,
