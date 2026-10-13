@@ -319,3 +319,36 @@ func TestCoverSweeperStartedByRun(t *testing.T) {
 		t.Error("run() 里要起 startCoverSweeper")
 	}
 }
+
+// 后台补封面开头那一步:没封面的补上,封面明确是另一张专辑的换成歌词胜出那个源自带、专辑对得上的(主色一起清掉);
+// 专辑对得上的、判不出专辑的、候选专辑也对不上的不动。
+func TestCoverSweepFillFromDecisionsReplacesAnotherAlbumCover(t *testing.T) {
+	decision := func(album string) *lyricsDecision {
+		return &lyricsDecision{Winner: "soda", Candidates: []lyricsDecisionCandidate{
+			{Source: "soda", Score: 1310, Album: album, CoverURL: "https://s/1.jpg"}}}
+	}
+	other := enrichEntry{CoverURL: "https://n/1.jpg", CoverSource: "netease", CoverAlbum: "最新热歌慢摇69", AccentColor: "#ad976f"}
+	withEnrichCache(t, map[string]enrichEntry{
+		"A|empty|Alb":  {LyricsDecision: decision("Alb")},
+		"A|other|Alb":  func() enrichEntry { e := other; e.LyricsDecision = decision("Alb"); return e }(),
+		"A|fits|Alb":   {CoverURL: "https://n/2.jpg", CoverSource: "netease", CoverAlbum: "Alb", LyricsDecision: decision("Alb")},
+		"A|qq|Alb":     {CoverURL: "https://q/1.jpg", CoverSource: "qq", LyricsDecision: decision("Alb")},
+		"A|nocand|Alb": func() enrichEntry { e := other; e.LyricsDecision = decision("Else"); return e }(),
+	})
+	if n := coverSweepFillFromDecisions(); n != 2 {
+		t.Fatalf("补上 / 换上 %d 条, 要 2", n)
+	}
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	if e := enrichCache["A|empty|Alb"]; e.CoverURL != "https://s/1.jpg" || e.CoverSource != "soda" || e.CoverAlbum != "Alb" {
+		t.Errorf("没封面的要补上: %+v", e)
+	}
+	if e := enrichCache["A|other|Alb"]; e.CoverURL != "https://s/1.jpg" || e.CoverSource != "soda" || e.CoverAlbum != "Alb" || e.AccentColor != "" {
+		t.Errorf("另一张专辑的封面要换掉、主色清空: %+v", e)
+	}
+	for key, want := range map[string]string{"A|fits|Alb": "https://n/2.jpg", "A|qq|Alb": "https://q/1.jpg", "A|nocand|Alb": "https://n/1.jpg"} {
+		if got := enrichCache[key].CoverURL; got != want {
+			t.Errorf("%s 不该动: 得到 %q", key, got)
+		}
+	}
+}

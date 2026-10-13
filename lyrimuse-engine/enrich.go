@@ -2660,6 +2660,8 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 	} else if isNewTrack {
 		// 没有设备封面时 App 可能交来的是视频帧:条目落盘之后记下(见 settleVideoFrame)。
 		go settleVideoFrame(context.WithoutCancel(ctx), key, bundleID, artist, title)
+		// 封面可能只是还没到:收尾挑封面时再取一次(见 withLateDeviceCover)。
+		ctx = withLateDeviceCover(ctx, bundleID, artist, title)
 	}
 	// 歌词先上屏:resolveTrackEnrichment 选定歌词后、补外围信息之前回调一次,先提交一份只带
 	// 歌词与网易云封面的条目;下面拿到完整结果后再提交一次,整条覆盖它。
@@ -2690,6 +2692,10 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		log.Printf("lyrics: showing Amazon Music's cached lyrics for %q while the sources resolve", key)
 	}
 	e := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, deviceCoverURL, early, lyricsDecisionPathFirstResolve)
+	if deviceCoverURL == "" && isNewTrack && e.CoverSource == "device" {
+		// 收尾那次才取到的设备封面同样可能是占位图,照开头取到时一样再核几档。
+		go settleDeviceCover(context.WithoutCancel(ctx), key, artist, title, album, bundleID)
+	}
 	e.LyricsSearchTitle = lyricSearchTitleToStore(ctx, title)
 	// 首次解析:换曲那一拍 poller 留下的 Spotify 曲目 ID 一并写进条目(见 spotifytrack.go)。首次解析的 key
 	// 就是原始 key(canonical 命中的话走的是上面缓存命中那条路),直接按它查。
@@ -3102,7 +3108,11 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
 			fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
 	}
-	if e.CoverURL == "" && winnerCover != "" {
+	// 没封面,或留下的那张明确是另一张专辑的(coverOfAnotherAlbum):换成歌词胜出那个源自带、专辑对得上的;换掉旧封面时主色清空。
+	if winnerCover != "" && winnerCover != e.CoverURL && (e.CoverURL == "" || coverOfAnotherAlbum(e, album)) {
+		if e.CoverURL != "" {
+			e.AccentColor = ""
+		}
 		e.CoverURL, e.CoverSource, e.CoverAlbum = winnerCover, winnerSource, winnerAlbum
 	}
 	// 只在封面还是核对的那张设备封面时记(这期间换了封面,这份核对就不算数)。
@@ -3509,9 +3519,13 @@ func finishTrackEnrichment(ctx context.Context, e enrichEntry, scored []scoredLy
 	}
 	// 三源和同专辑邻居都没给出封面:按双语曲名拆出的那段、歌词判决里认下的歌手写法、ISRC 在 Deezer 上的那条补查(coverretry.go)。
 	fillMissingCover(ctx, &e, scored, artist, title, album, durationSecs, coverArtist, coverTitle, coverAlbum, coverDuration)
+	if deviceCoverURL == "" {
+		deviceCoverURL = lateDeviceCover(ctx, artist, title)
+	}
 	applyDeviceOrPlayerCover(ctx, &e, deviceCoverURL, album)
-	// 上面都没给出封面:歌词胜出的那个源自带的、专辑逐字对上的那张兜底(见 winnerCandidateCover)。
-	if e.CoverURL == "" {
+	// 上面都没给出封面,或给出的那张明确是另一张专辑的:歌词胜出的那个源自带的、专辑对得上的那张(见 winnerCandidateCover、
+	// coverOfAnotherAlbum)。
+	if e.CoverURL == "" || coverOfAnotherAlbum(e, album) {
 		if cover, source, coverAlbum := winnerCandidateCover(e.LyricsDecision, album); cover != "" {
 			e.CoverURL, e.CoverSource, e.CoverAlbum = cover, source, coverAlbum
 		}

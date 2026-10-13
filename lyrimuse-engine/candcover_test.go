@@ -184,3 +184,30 @@ func TestCoverSweepFillsFromLyricsWinner(t *testing.T) {
 		t.Errorf("已有封面的不动: %+v", e)
 	}
 }
+
+// 封面自己报的专辑明确不是本地这张才算「另一张专辑的」:合辑、别的发行算;逐字对上、简繁 / 大小写差异、本地或封面没报专辑、
+// 没有封面都不算。
+func TestCoverOfAnotherAlbum(t *testing.T) {
+	entry := func(coverAlbum string) enrichEntry {
+		return enrichEntry{CoverURL: "https://n/1.jpg", CoverSource: "netease", CoverAlbum: coverAlbum}
+	}
+	for _, c := range []struct {
+		name  string
+		e     enrichEntry
+		album string
+		want  bool
+	}{
+		{"合辑", entry("最新热歌慢摇69"), "Make-believe", true},
+		{"别的发行", entry("Queen Forever (Deluxe Edition)"), "Make-believe", true},
+		{"多了版本限定词", entry("半生雪 (DJ版)"), "半生雪", true},
+		{"逐字对上", entry("Make-believe"), "Make-believe", false},
+		{"只差简繁", entry("太美丽"), "太美麗", false},
+		{"本地没报专辑", entry("最新热歌慢摇69"), "", false},
+		{"封面没报专辑", entry(""), "Make-believe", false},
+		{"没有封面", enrichEntry{CoverAlbum: "最新热歌慢摇69"}, "Make-believe", false},
+	} {
+		if got := coverOfAnotherAlbum(c.e, c.album); got != c.want {
+			t.Errorf("%s: 得到 %v, 要 %v", c.name, got, c.want)
+		}
+	}
+}

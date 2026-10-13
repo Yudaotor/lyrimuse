@@ -180,6 +180,16 @@ func winnerCandidateCover(d *lyricsDecision, album string) (cover, source, cover
 	return "", "", ""
 }
 
+// coverOfAnotherAlbum:条目这张封面自己报的专辑明确不是本地这张(candidateCoverAlbumFits 判不过)—— 按文字匹配挑出来的
+// 网易云 / Apple 那张落在了合辑、精选集或别的发行上。本地没报专辑、这张封面没报专辑(QQ 那档恒空)时判不出来,返回 false。
+// 设备封面、播放器自带的记的就是本地专辑,恒为 false。纯函数。见 03 章决策 44。
+func coverOfAnotherAlbum(e enrichEntry, album string) bool {
+	if e.CoverURL == "" || strings.TrimSpace(album) == "" || strings.TrimSpace(e.CoverAlbum) == "" {
+		return false
+	}
+	return !candidateCoverAlbumFits(e.CoverAlbum, album)
+}
+
 // candidateCoverAlbumFits:候选报的专辑能不能当本地这首的专辑:本地没报专辑;逐字对上(albumScore 200);一个包含另一个
 // (100)且两边的版本限定词一样(「半生雪」对「半生雪 (DJ版)」不算)。纯函数。
 func candidateCoverAlbumFits(candidateAlbum, album string) bool {

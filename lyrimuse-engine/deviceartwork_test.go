@@ -175,3 +175,37 @@ func mustGlob(t *testing.T, dir string) []string {
 	}
 	return names
 }
+
+// 首次解析开头没取到设备封面时,收尾按挂在 ctx 上的这一首再取一次:没挂不取,挂的不是这一首不取,App 这会儿报的是这一首就取到。
+func TestLateDeviceCoverTakesTheArtworkThatArrivedLater(t *testing.T) {
+	savedDir := deviceArtworkDir
+	t.Cleanup(func() { deviceArtworkDir = savedDir })
+	deviceArtworkDir = t.TempDir()
+	dir := t.TempDir()
+	statePath, artPath := filepath.Join(dir, "state.json"), filepath.Join(dir, "artwork")
+	setAppPlaybackArtworkSource(newAppStateReader(statePath), artPath)
+	t.Cleanup(func() { setAppPlaybackArtworkSource(nil, "") })
+	rec := appSourceRec(os.Getpid(), 4, 1, "Song", time.Now())
+	writeAppStateFile(t, statePath, rec)
+	late := withLateDeviceCover(context.Background(), "com.apple.Music", "Singer", "Song")
+	if url := lateDeviceCover(late, "Singer", "Song"); url != "" {
+		t.Fatalf("封面还没到:取不到, 得到 %q", url)
+	}
+	art := makeTestJPEG(t, 150, 150)
+	if err := os.WriteFile(artPath, art, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(art)
+	rec.Seq = 2
+	rec.Artwork = &appStateArtwork{SHA256: hex.EncodeToString(sum[:]), Mime: "image/jpeg", Bytes: len(art), PlaySeq: 4}
+	writeAppStateFile(t, statePath, rec)
+	if url := lateDeviceCover(context.Background(), "Singer", "Song"); url != "" {
+		t.Fatalf("ctx 上没挂这一首:不取, 得到 %q", url)
+	}
+	if url := lateDeviceCover(late, "Singer", "Other"); url != "" {
+		t.Fatalf("解析的是别的写法:不取, 得到 %q", url)
+	}
+	if url := lateDeviceCover(late, "Singer", "Song"); !strings.HasPrefix(url, "file://") {
+		t.Fatalf("封面到了:收尾取到, 得到 %q", url)
+	}
+}

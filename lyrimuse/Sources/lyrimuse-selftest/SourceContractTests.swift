@@ -954,8 +954,8 @@ func runSourceContractTests() {
                 expectEqual(true, false, "缓存直读: 读不到 EnrichCacheReader / LocalPlaybackSource(路径挪了?)")
             }
             if let enrich = text("lyrimuse-engine/enrich.go") {
-                expectEqual(enrich.components(separatedBy: "go settleDeviceCover(").count - 1, 2,
-                            "封面沉降: 首次解析和已有条目升级是两条路都要盯后面那几秒,少挂一条那条路上的占位图就永久留下")
+                expectEqual(enrich.components(separatedBy: "go settleDeviceCover(").count - 1, 3,
+                            "封面沉降: 首次解析(开头取到、收尾才取到)和已有条目升级三处都要盯后面那几秒,少挂一处那条路上的占位图就永久留下")
             } else {
                 expectEqual(true, false, "封面沉降: 读不到 lyrimuse-engine/enrich.go(路径挪了?)")
             }

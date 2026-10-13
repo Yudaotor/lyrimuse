@@ -237,9 +237,10 @@ func TestPlayerCoverIsWired(t *testing.T) {
 		"deviceCoverUpgradeTried[key] = true\n\t\t\tenrichInflight[key] = true\n\t\t\tgo upgradeSmallDeviceCover(withPlayerCover(context.Background(), playerCover), key, e.CoverURL,\n\t\t\t\tartist, title, album, durationSecs)",
 		"coverCanUpgradeToVerifiedSiblingLocked(e, artist, album) ||\n\t\t(e.CoverSource == \"device\" && deviceCoverSmall(e.CoverURL))",
 		"go backfillPeripheralFields(withPlayerCover(withLyricSearchTitle(context.Background(), searchTitle), playerCover), key,",
-		"applyDeviceOrPlayerCover(ctx, &e, deviceCoverURL, album)\n\t// 上面都没给出封面:歌词胜出的那个源自带的、专辑逐字对上的那张兜底(见 winnerCandidateCover)。\n\tif e.CoverURL == \"\" {\n\t\tif cover, source, coverAlbum := winnerCandidateCover(e.LyricsDecision, album); cover != \"\" {",
+		"deviceCoverURL = lateDeviceCover(ctx, artist, title)\n\t}\n\tapplyDeviceOrPlayerCover(ctx, &e, deviceCoverURL, album)",
+		"if e.CoverURL == \"\" || coverOfAnotherAlbum(e, album) {\n\t\tif cover, source, coverAlbum := winnerCandidateCover(e.LyricsDecision, album); cover != \"\" {",
 		"winnerCover, winnerSource, winnerAlbum = winnerCandidateCover(withDecisionDetails(key, pre.LyricsDecision), album)",
-		"if e.CoverURL == \"\" && winnerCover != \"\" {\n\t\te.CoverURL, e.CoverSource, e.CoverAlbum = winnerCover, winnerSource, winnerAlbum",
+		"if winnerCover != \"\" && winnerCover != e.CoverURL && (e.CoverURL == \"\" || coverOfAnotherAlbum(e, album)) {",
 		"if pc := playerCoverOverDevice(ctx, deviceCoverURL, existing.CoverURL); pc != \"\" {\n\t\tcover, source = pc, \"player\"",
 	} {
 		if !strings.Contains(enrich, n) {

@@ -246,18 +246,22 @@ func coverSweepUpgradeCandidates(now time.Time) []string {
 	return keys
 }
 
-// coverSweepFillFromDecisions:没封面的条目里,存着的歌词判决胜出的那个源自带封面、专辑逐字对上的,直接补上
-// (winnerCandidateCover;判决明细在旁路文件里,在锁外读)。返回补上几条。
+// coverSweepFillFromDecisions:没封面、或封面明确是另一张专辑的(coverOfAnotherAlbum)条目里,存着的歌词判决胜出的那个源
+// 自带封面、专辑对得上的,直接补上 / 换上(winnerCandidateCover;判决明细在旁路文件里,在锁外读)。换掉旧封面时主色一起清空,
+// 不留新封面配旧主色,配了中继的下次外围补全会重算。返回补上 / 换上几条。
 func coverSweepFillFromDecisions() int {
 	type pending struct {
-		key      string
-		decision *lyricsDecision
+		key, cover string
+		decision   *lyricsDecision
 	}
 	var list []pending
 	enrichMu.Lock()
 	for key, e := range enrichCache {
-		if e.CoverURL == "" && e.LyricsDecision != nil && !enrichInflight[key] && !enrichProvisional[key] {
-			list = append(list, pending{key, e.LyricsDecision})
+		if e.LyricsDecision == nil || enrichInflight[key] || enrichProvisional[key] {
+			continue
+		}
+		if _, _, album := splitEnrichKey(key); e.CoverURL == "" || coverOfAnotherAlbum(e, album) {
+			list = append(list, pending{key, e.CoverURL, e.LyricsDecision})
 		}
 	}
 	enrichMu.Unlock()
@@ -265,11 +269,14 @@ func coverSweepFillFromDecisions() int {
 	for _, p := range list {
 		_, _, album := splitEnrichKey(p.key)
 		cover, source, coverAlbum := winnerCandidateCover(withDecisionDetails(p.key, p.decision), album)
-		if cover == "" {
+		if cover == "" || cover == p.cover {
 			continue
 		}
 		enrichMu.Lock()
-		if e, ok := enrichCache[p.key]; ok && e.CoverURL == "" && !enrichInflight[p.key] {
+		if e, ok := enrichCache[p.key]; ok && e.CoverURL == p.cover && !enrichInflight[p.key] {
+			if e.CoverURL != "" {
+				e.AccentColor = ""
+			}
 			e.CoverURL, e.CoverSource, e.CoverAlbum = cover, source, coverAlbum
 			enrichCache[p.key] = e
 			enrichDirty = true

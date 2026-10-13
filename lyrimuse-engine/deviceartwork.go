@@ -57,6 +57,27 @@ func deviceCoverURLIfFresh(ctx context.Context, isNewTrack bool, bundleID, artis
 	return url
 }
 
+// lateDeviceCoverKey:首次解析开头没取到设备封面时挂在 ctx 上的这一首(见 withLateDeviceCover)。
+type lateDeviceCoverKey struct{}
+
+type lateDeviceCoverTrack struct{ bundleID, artist, title string }
+
+// withLateDeviceCover:首次解析开头没取到设备封面时挂上这一首,收尾挑封面那一步(finishTrackEnrichment)再取一次。
+// 播放器常常先报曲目、几百毫秒后才报封面,开头那一次取早了;收尾时离换歌已经几秒到二十几秒。见 03 章决策 44。
+func withLateDeviceCover(ctx context.Context, bundleID, artist, title string) context.Context {
+	return context.WithValue(ctx, lateDeviceCoverKey{}, lateDeviceCoverTrack{bundleID, artist, title})
+}
+
+// lateDeviceCover:ctx 上挂着的就是 artist / title 这一首时,再取一次它的设备封面;没挂、挂的是别的歌、或 App 现在报的
+// 已经不是这一首,返回空。比对 artist / title 是因为同一个 ctx 可能被拿去解析别的写法。
+func lateDeviceCover(ctx context.Context, artist, title string) string {
+	t, ok := ctx.Value(lateDeviceCoverKey{}).(lateDeviceCoverTrack)
+	if !ok || t.artist != artist || t.title != title {
+		return ""
+	}
+	return deviceCoverURLIfFresh(ctx, true, t.bundleID, t.artist, t.title)
+}
+
 // videoFrameURLIfFresh:App 交来的这一首的视频帧落盘,返回 file:// 地址;没有、或者落不了盘返回空串。见 03 章决策 39。
 func videoFrameURLIfFresh(bundleID, artist, title string) string {
 	data, mimeType, ok := appPlaybackVideoFrame(bundleID, artist, title)
