@@ -233,9 +233,9 @@ func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 		prev = nil
 	}
 	songEntityLive = nil
-	if n := writeBackSongEntityIDs(table); n > 0 {
-		saveSongEntityIDs()
-		slog.Info("song entities: wrote song ids", "variants", n)
+	if keys := writeBackSongEntityIDs(table); len(keys) > 0 {
+		saveSongEntityIDs(keys)
+		slog.Info("song entities: wrote song ids", "variants", len(keys))
 	}
 	data, err := json.Marshal(table)
 	if err != nil {
@@ -306,8 +306,8 @@ func updateSongEntityTable(now time.Time) (b *songEntityBuild, full bool) {
 	if up == nil {
 		return nil, false
 	}
-	if n := writeBackSongEntityIDs(up.table); n > 0 {
-		saveSongEntityIDs()
+	if keys := writeBackSongEntityIDs(up.table); len(keys) > 0 {
+		saveSongEntityIDs(keys)
 	}
 	songEntityTableUnsaved = up.table
 	slog.Info("song entities: updated", "changed", up.changed, "removed", up.removed, "block", len(up.build.variants),
@@ -342,8 +342,12 @@ func flushSongEntityTable() {
 // saveSongEntityIDs:写回了实体 id 之后落盘,在写实体表之前(18 章决策 8 的顺序)。写回的条目当场写进待落盘小文件(App 叠上去
 // 就看得到,下次启动叠回内存),整份落盘跟别的改动一起攒(enrichpending.go):新歌一进缓存、补扫补到一个名字都会走到这里,
 // 当场整份写的话预取一张专辑就是一首一次。小文件里是完整条目,攒到 enrichPendingMaxKeys 条(规则一改整批写回)就当场整份写。
-// 见 15 章决策 38。
-func saveSongEntityIDs() {
+// keys 里有正在播的那首就当场重写它的单条快照:App 查当前这首先看快照,快照比主缓存新时不看小文件,不重写的话这首的
+// `song` 要等下一次写快照或整份落盘才看得到。见 15 章决策 38。
+func saveSongEntityIDs(keys []string) {
+	for _, k := range keys {
+		notePlayingEntryChanged(k)
+	}
 	enrichMu.Lock()
 	full := len(enrichPendingKeys) >= enrichPendingMaxKeys
 	enrichMu.Unlock()
@@ -407,12 +411,12 @@ func readSongEntityUserSplits(path string) map[string]bool {
 	return out
 }
 
-// writeBackSongEntityIDs 把实体表里每条写法的实体 id 写进条目的 `song`、共享组编号写进 `song_share`,返回改了几条。
+// writeBackSongEntityIDs 把实体表里每条写法的实体 id 写进条目的 `song`、共享组编号写进 `song_share`,返回改了的写法。
 // 缓存里已经没有的写法跳过。
-func writeBackSongEntityIDs(t *songEntityTableFile) int {
+func writeBackSongEntityIDs(t *songEntityTableFile) []string {
 	enrichMu.Lock()
 	defer enrichMu.Unlock()
-	n := 0
+	var changed []string
 	for id, rec := range t.Songs {
 		for i, k := range rec.Variants {
 			share := 0
@@ -426,13 +430,13 @@ func writeBackSongEntityIDs(t *songEntityTableFile) int {
 			e.Song, e.SongShare = id, share
 			enrichCache[k] = e
 			noteEnrichPendingLocked(k)
-			n++
+			changed = append(changed, k)
 		}
 	}
-	if n > 0 {
+	if len(changed) > 0 {
 		enrichDirty = true
 	}
-	return n
+	return changed
 }
 
 // songEntitySeed:条目上记着的实体 id(`song`)和共享组编号(`song_share`),建表时给 id、组号延续当种子。

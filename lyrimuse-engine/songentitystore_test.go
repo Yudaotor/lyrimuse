@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -190,9 +191,9 @@ func TestWriteBackSongEntityIDs(t *testing.T) {
 		"A|Song|One": {Song: "s_000000000001"},
 		"A|Song|Two": {},
 	})
-	n := writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
+	n := len(writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
 		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two", "A|Song|Gone"}},
-	}})
+	}}))
 	if n != 1 || enrichCache["A|Song|Two"].Song != "s_000000000001" || !enrichDirty {
 		t.Errorf("n=%d song=%q dirty=%v", n, enrichCache["A|Song|Two"].Song, enrichDirty)
 	}
@@ -200,14 +201,14 @@ func TestWriteBackSongEntityIDs(t *testing.T) {
 		t.Error("缓存里没有的写法不该被建出来")
 	}
 	enrichDirty = false
-	if n := writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
+	if n := len(writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
 		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two"}},
-	}}); n != 0 || enrichDirty {
+	}})); n != 0 || enrichDirty {
 		t.Errorf("没变的不改、不标脏: n=%d dirty=%v", n, enrichDirty)
 	}
-	n = writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
+	n = len(writeBackSongEntityIDs(&songEntityTableFile{Songs: map[string]songEntityRecord{
 		"s_000000000001": {Variants: []string{"A|Song|One", "A|Song|Two"}, Share: []int{0, 1}},
-	}})
+	}}))
 	if n != 1 || enrichCache["A|Song|One"].SongShare != 0 || enrichCache["A|Song|Two"].SongShare != 1 {
 		t.Errorf("共享组编号要跟实体表 share 一致: n=%d one=%d two=%d", n, enrichCache["A|Song|One"].SongShare, enrichCache["A|Song|Two"].SongShare)
 	}
@@ -292,9 +293,17 @@ func TestSaveSongEntityIDsDefersUnlessPendingFull(t *testing.T) {
 	enrichDirty = true
 	enrichMu.Unlock()
 
-	saveSongEntityIDs()
+	savedPlaying := enrichPlayingKey.Load()
+	t.Cleanup(func() { enrichPlayingKey.Store(savedPlaying) })
+	playing := "A|Song|One"
+	enrichPlayingKey.Store(&playing)
+	saveSongEntityIDs([]string{"A|Song|One"})
 	if _, err := os.Stat(enrichPath); !os.IsNotExist(err) {
 		t.Fatalf("小文件攒得下,不该当场整份写: %v", err)
+	}
+	var snap playingEntryFile
+	if data, err := os.ReadFile(playingEntryPath()); err != nil || json.Unmarshal(data, &snap) != nil || snap.Entry.Song != "s_000000000001" {
+		t.Fatalf("写回了正在播的那首,要当场重写它的单条快照: err=%v %+v", err, snap)
 	}
 	if pendingWrites != 1 {
 		t.Fatalf("小文件要在返回之前写好(之后才写实体表): writes = %d", pendingWrites)
@@ -311,7 +320,7 @@ func TestSaveSongEntityIDsDefersUnlessPendingFull(t *testing.T) {
 		enrichPendingKeys[strings.Repeat("k", i+2)] = uint64(i + 2)
 	}
 	enrichMu.Unlock()
-	saveSongEntityIDs()
+	saveSongEntityIDs(nil)
 	if _, err := os.Stat(enrichPath); err != nil {
 		t.Fatalf("小文件攒满了,应当当场整份写: %v", err)
 	}
