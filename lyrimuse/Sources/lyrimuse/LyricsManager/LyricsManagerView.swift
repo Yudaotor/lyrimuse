@@ -289,6 +289,9 @@ func sourceColor(_ source: String) -> Color {
     // Amazon Music 本地歌词(不是歌词源:用它放歌时读它自己缓存里的那份,见 lyrimuse-engine/amazonlibrary.go)。
     // 品牌青色跟酷狗的 .cyan 分不开,系统色也没有空位,取偏蓝的浅天蓝。
     case "amazon": return Color(hue: 0.56, saturation: 0.55, brightness: 0.95)
+    // 本地歌词文件(不是歌词源:reAMP 正在放的文件同目录同名的 .lrc,见 lyrimuse-engine/localfilelyrics.go)。系统色都被占了,
+    // 取偏紫的灰,跟「无来源」的 .secondary 分得开。
+    case "localfile": return Color(hue: 0.75, saturation: 0.25, brightness: 0.7)
     default: return .secondary
     }
 }
@@ -331,6 +334,8 @@ func sourceDisplayName(_ source: String) -> String {
     case "spotify": return "Spotify"
     // Amazon Music 本地歌词——品牌名,保留原名。同 KKBOX,不在 LyricsSource 里,只在这份词确实来自它时显示。
     case "amazon": return "Amazon Music"
+    // 本地歌词文件——同 KKBOX,不在 LyricsSource 里,只在这份词确实来自正在放的文件同名的 .lrc 时显示。
+    case "localfile": return L10n.t("本地歌词文件")
     case "": return L10n.t("无来源")
     default: return source
     }

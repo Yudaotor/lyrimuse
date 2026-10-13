@@ -793,6 +793,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// Amazon Music 曲目页:它的时钟那一拍记下的 ASIN,另一把锁,同样放在锁外取。
 	amazonURL := amazonTrackURLFor(bundleID, artist, title)
 	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title)
+	localFileLyricsAvail := localFileLyricsAvailable(bundleID, artist, title)
 	youtubeMusicURL := youtubeMusicWatchURL(kasetVideoID)
 	// 播放器自己给这首记下的封面地址:读它本机的数据,同样放在锁外(见 playercover.go)。
 	playerCover := playerCoverURLFor(bundleID, artist, title, album, durationSecs, kkboxInfo)
@@ -933,6 +934,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		recheck := lyricsRecheckForLocked(key, e, lyricsRecheckScene{
 			album: album, bundleID: bundleID, kasetVideoID: kasetVideoID, pinned: pinned, wrongDuration: wrongDuration,
 			kkboxLyrics: kkboxInfo.lyrics, amazonLyrics: amazonLyricsAvail, spotifyLyrics: spotifyLyricsAvail,
+			localFileLyrics: localFileLyricsAvail,
 		})
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
 		// 设备直送封面排最前面:只在"新曲目开始播放" + 现有封面还不是设备直送 / 播放器自带这两档时才
@@ -1735,6 +1737,7 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned, autoUpgrade bool) bo
 	nativeMissedOut := hasNativeLyricSource() && !isNativeLyricSource(e.LyricsSource) &&
 		slices.ContainsFunc(e.LyricsSourcesSeen, func(s string) bool {
 			return isNativeLyricSource(s) && s != kkboxLocalLyricsSource && s != amazonLocalLyricsSource &&
+				s != localFileLyricsSource &&
 				(s != lyricSourceLyricFind || e.LyricsNativeVideoID == "")
 		})
 	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
@@ -3713,7 +3716,7 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 			}
 		}
 		// KKBOX / Spotify / Amazon Music 本地歌词不在用户排的顺序里(它们不是歌词源):顺序里的源都没给出可用的,才轮到它们。
-		for _, local := range []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource} {
+		for _, local := range []string{kkboxLocalLyricsSource, spotifyLocalLyricsSource, amazonLocalLyricsSource, localFileLyricsSource} {
 			for i := range scored {
 				if scored[i].Source == local && usable(scored[i]) {
 					return &scored[i]
@@ -4854,6 +4857,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	kk := raw[kkboxLocalLyricsSource]
 	spl := raw[spotifyLocalLyricsSource]
 	amz := raw[amazonLocalLyricsSource]
+	localLRC := raw[localFileLyricsSource]
 	sodaLyr, sodaYRC, sodaTr, sodaTitle, sodaArtist, sodaAlbum, sodaCover, sodaDur := soda.lyr, soda.yrc, soda.tr, soda.matchTitle, soda.matchArtist, soda.matchAlbum, soda.matchCover, soda.srcDur
 	amll := raw["amll"].amll
 	// 候选的封面只用它自己那个源给的,没有就空着(「搜索候选歌词」弹窗显示占位图,「解析决策」全空时整列不出现);
@@ -4994,6 +4998,15 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			title:                      amz.matchTitle, artist: amz.matchArtist, album: amz.matchAlbum,
 			cover:                   amz.matchCover,
 			identityFromLocalClient: amz.identityFromLocalClient,
+		})
+	}
+	if localLRC.lyr != "" {
+		// reAMP 正在放的文件同名的 .lrc(用户自己配的,按文件认身份,见 localfilelyrics.go)。
+		candidates = append(candidates, lyricCandidate{
+			source: localFileLyricsSource, lyrics: localLRC.lyr,
+			sourceReportedDurationSecs: localLRC.srcDur,
+			title:                      localLRC.matchTitle, artist: localLRC.matchArtist,
+			identityFromLocalClient: localLRC.identityFromLocalClient,
 		})
 	}
 	if spl.lyr != "" {
@@ -5666,6 +5679,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// Amazon Music 本地歌词同 KKBOX:正用它放歌时读,按 ASIN 认这首(见 amazonlibrary.go)。
 		if r, ok := amazonLocalLyricsFor(idArtist, idTitle); ok {
 			raw[amazonLocalLyricsSource] = r
+		}
+		// reAMP 正在放的文件同目录同名的 .lrc 同 KKBOX:正用它放这首时读(见 localfilelyrics.go)。
+		if r, ok := localFileLyricsFor(idArtist, idTitle, durationSecs); ok {
+			raw[localFileLyricsSource] = r
 		}
 	}
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、

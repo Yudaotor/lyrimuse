@@ -87,6 +87,9 @@ func upcomingFromQueue(artist, title, album, bundleID string, durationSecs float
 		return amazonUpcoming(artist, title, n)
 	case kasetBundleID:
 		return kasetUpcoming(artist, title, n)
+	case reampBundleID:
+		// 没有脚本接口,本地数据里也没有播放列表,读不到接下来放什么(02 章决策 126)。
+		return nil, false
 	}
 	return browserUpcoming(artist, title, bundleID, durationSecs, n)
 }

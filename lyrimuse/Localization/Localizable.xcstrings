@@ -46434,6 +46434,29 @@
           }
         }
       }
+    },
+    "本地歌词文件" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local lyrics file"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地歌词文件"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本機歌詞檔案"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

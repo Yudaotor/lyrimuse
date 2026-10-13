@@ -179,6 +179,10 @@ public enum PlayerArtistFix {
     public static func correctedTrackKey(
         bundle: String?, artist rawArtist: String?, title: String?, state: State? = current
     ) -> String {
+        // 标题里拼着歌手的播放器:独立取回的载荷还没换,先换成跟快照一样的歌手和歌名(见 PlayerTitleSplit)。
+        if let parts = PlayerTitleSplit.identityParts(bundleID: bundle, title: title, artist: rawArtist) {
+            return MediaControlSnapshot.trackKey(artist: parts.artist.isEmpty ? rawArtist : parts.artist, title: parts.title)
+        }
         // 署名不可信的播放器：整个把署名剔出身份。理由见 MediaControlSnapshot.identityKey。
         // 曲名一律折回播放器原样报的那个：换过曲名的快照(`applied` 之后)与没换过的(纠正还没
         // 落地 / 封面那次独立取回)得算出同一个身份，否则纠正落地那一刻身份变一次、封面被丢一次。

@@ -108,8 +108,10 @@ public enum MediaControlClient {
         // 套在这个唯一的公开出口上,下游(trackKey、缓存查询、界面)一处都不用改。
         // 见 PlayerArtistFix。
         // 汽水非会员试听换回原曲口径(见 PlayerPreviewFix);排在署名纠正之后,比对用的署名与引擎发布时一致。
+        // 把「歌手 - 歌名」拼在标题里的播放器先拆回来(见 PlayerTitleSplit),排在最前。
         let fixState = PlayerArtistFix.current
-        let snapshot = PlayerPreviewFix.applied(to: PlayerArtistFix.applied(to: raw, state: fixState))
+        let snapshot = PlayerPreviewFix.applied(
+            to: PlayerArtistFix.applied(to: PlayerTitleSplit.applied(to: raw), state: fixState))
         guard let raw else { return (snapshot, nil) }
         let bundleID = raw.bundleIdentifier ?? ""
         let rawTitle = raw.title ?? "", rawArtist = raw.artist ?? ""
@@ -2033,6 +2035,12 @@ public enum MediaControlClient {
             return (nil, prefix + "the system reports \(raw.bundleIdentifier ?? "no player"), which is not accepted")
         }
         guard let base64 = raw.artworkData, let imageData = Data(base64Encoded: base64) else {
+            // 放本地文件的播放器(reAMP)只报文件里嵌着的封面:没嵌的改用正在放的文件同目录里的那张(见 PlayerTitleSplit)。
+            if let path = PlayerTitleSplit.currentFilePath(bundleID: bundleID, title: raw.title),
+               let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
+                return ((cover.data, cover.mimeType,
+                         PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: raw.artist, title: raw.title)), nil)
+            }
             return (nil, prefix + "\(bundleID) reports \(raw.title ?? "") without artwork")
         }
         return ((imageData, raw.artworkMimeType ?? "image/jpeg",
@@ -3141,6 +3149,7 @@ public enum MediaControlClient {
         if Self.stampsCaptureTime(bundleID: bundleID) || amazonPosition != nil { snapshot.capturedAt = sampledAt }
         if republish.hold != nil { snapshot.isWaitingToPlay = true }
         snapshot.republishDueBy = republish.dueBy
+        snapshot.processIdentifier = raw.processIdentifier
         return (snapshot, bundleID)
     }
 

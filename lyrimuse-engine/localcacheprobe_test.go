@@ -40,6 +40,7 @@ func TestPlayersNeedFullDiskAccessMatchesClientPaths(t *testing.T) {
 		playerKKBOX:       "kkbox",
 		playerAmazonMusic: "amazon",
 		playerKaset:       "",
+		playerReamp:       "",
 	}
 	paths := localCacheClientPaths()
 	for _, player := range allPlayerIDs {

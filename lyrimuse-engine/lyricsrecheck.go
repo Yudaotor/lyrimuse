@@ -17,6 +17,8 @@ type lyricsRecheck struct {
 	spotify bool
 	// kaset:这份词最近一轮没按这一版的 videoId 问过 Kaset 自家那个源(见 kasetLyricsWorthRecheck)。
 	kaset bool
+	// localFile:这首当初没见过 reAMP 正在放的文件同名的 .lrc,现在有(见 localFileLyricsWorthRecheck)。
+	localFile bool
 	// retry:升级重试 —— 有源缺席、同源落选、时长对不上(见 needsLyricsRetry)。它没有「只来一次」的记录,
 	// 靠条目上的重试时间节流。
 	retry bool
@@ -27,6 +29,7 @@ type lyricsRecheckScene struct {
 	album, bundleID, kasetVideoID            string
 	pinned, wrongDuration                    bool
 	kkboxLyrics, amazonLyrics, spotifyLyrics bool
+	localFileLyrics                          bool
 }
 
 // lyricsRecheckForLocked:这一拍成立的理由。「只来一次」的那几个这次进程里用过了就不算。调用方持有 enrichMu。
@@ -39,12 +42,13 @@ func lyricsRecheckForLocked(key string, e enrichEntry, s lyricsRecheckScene) lyr
 		spotify:     spotifyLyricsWorthRecheck(e, s.bundleID, s.pinned, auto, s.spotifyLyrics) && !spotifyLyricsRechecked[key],
 		kaset: kasetLyricsWorthRecheck(e, s.bundleID, s.kasetVideoID, kasetAudioVideoIDFor(s.kasetVideoID), s.pinned, auto,
 			lyricSourceEnabled("lyricfind")) && !kasetLyricsRechecked[key],
-		retry: needsLyricsRetry(e, s.wrongDuration, s.pinned, auto),
+		localFile: localFileLyricsWorthRecheck(e, s.bundleID, s.pinned, auto, s.localFileLyrics) && !localFileLyricsRechecked[key],
+		retry:     needsLyricsRetry(e, s.wrongDuration, s.pinned, auto),
 	}
 }
 
 func (r lyricsRecheck) due() bool {
-	return r.listedAlbum || r.kkbox || r.amazon || r.spotify || r.kaset || r.retry
+	return r.listedAlbum || r.kkbox || r.amazon || r.spotify || r.kaset || r.localFile || r.retry
 }
 
 // consumeLocked:为这一刻成立的理由起了一轮,把其中「只来一次」的都记成这次进程里用过了。只记成立的那几个:
@@ -65,6 +69,9 @@ func (r lyricsRecheck) consumeLocked(key string) {
 	if r.kaset {
 		kasetLyricsRecheckOnce(key)
 	}
+	if r.localFile {
+		localFileLyricsRecheckOnce(key)
+	}
 }
 
 // String:成立的理由,逗号分隔,记进这一轮决策日志那一行(reasons=)。
@@ -75,7 +82,7 @@ func (r lyricsRecheck) String() string {
 		name string
 	}{
 		{r.listedAlbum, "listed-album"}, {r.kkbox, "kkbox"}, {r.amazon, "amazon"},
-		{r.spotify, "spotify"}, {r.kaset, "kaset"}, {r.retry, "retry"},
+		{r.spotify, "spotify"}, {r.kaset, "kaset"}, {r.localFile, "localfile"}, {r.retry, "retry"},
 	} {
 		if x.on {
 			out = append(out, x.name)

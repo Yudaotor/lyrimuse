@@ -1753,6 +1753,7 @@ func (p *poller) applyAppPlaybackTick(now time.Time, t appPlaybackTick) (reancho
 	noteAppReportedAd(p.cur, t.ad)
 	noteAmazonCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, t.amazonTrackID)
 	noteKasetCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, t.youtubeMusicVideoID)
+	noteLocalFileCurrentTrack(p.cur.Bundle, p.cur.Artist, p.cur.Title, t.localFile)
 	if p.cur.Radio {
 		noteRadioDuration(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)
 	}

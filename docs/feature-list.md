@@ -432,7 +432,7 @@ When a song reaches its 100th, 1,000th or 10,000th play, or your Last.fm total p
 
 <a id="feature-players"></a>
 
-### Nine players, pick several or detect automatically
+### Ten players, pick several or detect automatically
 
 Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou, Soda Music, KKBOX, Amazon Music and the YouTube Music app Kaset. Choose several at once, or leave it on automatic to follow whatever macOS shows as Now Playing. Apple Music radio works too, showing the station name and logo while the host talks.
 

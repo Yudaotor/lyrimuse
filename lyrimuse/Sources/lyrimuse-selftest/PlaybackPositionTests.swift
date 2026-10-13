@@ -1707,6 +1707,11 @@ func runPlaybackPositionTests() {
         expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: qq, frozenByEvent: false), false,
                     "QQ 暂停: 外推没被暂停事件冻住(屏上比暂停晚)不停住")
         expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: kugouID, frozenByEvent: true), false, "QQ 暂停: 酷狗照旧")
+        let reampID = PlaybackPlayer.reamp.bundleIdentifier
+        expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: reampID, frozenByEvent: true), true,
+                    "reAMP 暂停: 暂停那一拍报的是上一份锚点,按屏上位置停住(02 章决策 126)")
+        expectEqual(LocalPlaybackSource.holdsShownPositionAtPause(bundleID: reampID, frozenByEvent: false), false,
+                    "reAMP 暂停: 外推没被暂停事件冻住时不停住")
         let replaces = LocalPlaybackSource.pausedReadingReplacesShown
         expectEqual(replaces(110, 110.605), false, "QQ 暂停: 补发的下取整值比屏上早,不换")
         expectEqual(replaces(109, 110.295), false, "QQ 暂停: 少报一秒的旧值不换")

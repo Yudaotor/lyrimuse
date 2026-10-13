@@ -67,6 +67,9 @@ public struct MediaControlSnapshot: Decodable {
     /// 这一拍的位置来自精确的播放时钟:`LocalPlaybackSource` 把它跟网页探针的精确读数一样当真值,差过门槛就重锚。只有
     /// Kaset 的快照在用内嵌网页那份会话的时钟时填(`KasetPlayerInfo.snapshot`)。`with…` 系列副本不带它,理由同 `isWaitingToPlay`。
     public var positionIsPrecise: Bool? = nil
+    /// 发布这份会话的进程号(media-control 的 `processIdentifier`)。只有 media-control 那条路在构造时填;`with…` 系列副本
+    /// 不带它。reAMP 按它找正在放的文件读标签(`PlayerTitleSplit`),别的地方不用。
+    public var processIdentifier: Int? = nil
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 

@@ -20,7 +20,7 @@
 
 https://github.com/user-attachments/assets/56317c1c-3a60-4091-bea7-8f933832334c
 
-Lyrimuse 是一款开源的 Mac 桌面歌词软件。它待在菜单栏里，跟随播放逐字高亮歌词，可以常驻置顶、悬浮在所有窗口之上，也可以放进菜单栏、刘海下的灵动岛胶囊、触控栏或完整的歌词窗口。支持 Apple Music、Spotify、QQ 音乐、网易云音乐、YouTube Music 客户端 Kaset 等九款播放器和浏览器里的网页播放器，并从十二个歌词源中打分挑选最合适的版本，还能显示翻译和读音。另外还内置 Last.fm 听歌档案和打卡。
+Lyrimuse 是一款开源的 Mac 桌面歌词软件。它待在菜单栏里，跟随播放逐字高亮歌词，可以常驻置顶、悬浮在所有窗口之上，也可以放进菜单栏、刘海下的灵动岛胶囊、触控栏或完整的歌词窗口。支持 Apple Music、Spotify、QQ 音乐、网易云音乐、YouTube Music 客户端 Kaset 等十款播放器和浏览器里的网页播放器，并从十二个歌词源中打分挑选最合适的版本，还能显示翻译和读音。另外还内置 Last.fm 听歌档案和打卡。
 
 **从 LyricsX 过来？** LyricsX 自 2022 年 4 月后就没有再发布新版本。Lyrimuse 覆盖了它的核心功能并持续更新，还补上了国内播放器、KKBOX、Amazon Music、Kaset 和网页播放器的支持。详细差异见这份逐项核实过的[与 LyricsX、Lyric Fever 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
 
@@ -208,7 +208,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/Spotify/K
 
 ### 不管选哪种方案
 
-从 `/Applications` 打开 Lyrimuse，首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、Spotify、Kaset，或者自动识别），选了 Apple Music、Spotify 或 Kaset 的话再授予对它的「自动化」权限（其它几个读取基本曲目信息不需要权限），以及启用它的歌词引擎（在后台常驻，这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
+从 `/Applications` 打开 Lyrimuse，首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music、Spotify、Kaset、reAMP，或者自动识别），选了 Apple Music、Spotify 或 Kaset 的话再授予对它的「自动化」权限（其它几个读取基本曲目信息不需要权限），以及启用它的歌词引擎（在后台常驻，这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 看歌词只需要这些。上面那些附加功能，以后想用了再去设置里打开就行。
 
@@ -236,7 +236,7 @@ QQ 音乐/网易云音乐/酷狗音乐/汽水音乐/KKBOX/Amazon Music/Spotify/K
 能。浏览器里的视频这类 App 占着系统的「正在播放」时，系统的播放键会落到它身上；这时 Lyrimuse 改按 QQ 音乐或网易云音乐自己菜单栏里的播放 / 暂停、上一首、下一首，播放器留在后台。这要「辅助功能」权限（设置 → 播放器），没授权时按这几颗键会打开那一页；这时拖进度条跳转不了。macOS 27 上这项权限在 **系统设置 → 隐私与安全性 → 设备控制和数据访问**，更早的版本叫 **辅助功能**。
 
 ### 只支持 Apple Music 吗，Spotify、QQ 音乐、网易云音乐能用吗？
-都能用，另外还有酷狗音乐、汽水音乐、KKBOX、Amazon Music 和 YouTube Music 客户端 Kaset，一共九个播放器；也可以交给自动识别，macOS 显示哪个在「正在播放」就跟哪个。Apple Music、Spotify 和 Kaset 需要「自动化」权限（Spotify 和 Kaset 用它拿精确进度、控制播放），其它六个通过 macOS 的 MediaRemote 读取基本曲目信息，不需要权限；QQ 音乐、网易云音乐、酷狗音乐、汽水音乐和 Amazon Music 的随机、循环、喜欢这类按键要「辅助功能」权限。用 KKBOX 或 Amazon Music 放歌时，它们自己存下的这首歌词也会拿来比较，Lyrimuse 不会向这两家发任何请求。
+都能用，另外还有酷狗音乐、汽水音乐、KKBOX、Amazon Music、YouTube Music 客户端 Kaset 和仿 Winamp 的 reAMP，一共十个播放器；也可以交给自动识别，macOS 显示哪个在「正在播放」就跟哪个。Apple Music、Spotify 和 Kaset 需要「自动化」权限（Spotify 和 Kaset 用它拿精确进度、控制播放），其它七个通过 macOS 的 MediaRemote 读取基本曲目信息，不需要权限；QQ 音乐、网易云音乐、酷狗音乐、汽水音乐和 Amazon Music 的随机、循环、喜欢这类按键要「辅助功能」权限。用 KKBOX 或 Amazon Music 放歌时，它们自己存下的这首歌词也会拿来比较，Lyrimuse 不会向这两家发任何请求。
 
 ### KKBOX、Amazon Music 在 Mac 上能显示桌面歌词吗？
 能。这两家都通过 macOS 的 MediaRemote 读取，不用给权限，歌词和其它播放器一样能显示在桌面悬浮窗、菜单栏、灵动岛胶囊和歌词窗口里。如果 KKBOX 或 Amazon Music 自己已经存了这首歌的歌词，也会拿来一起比较，并且额外加分。Lyrimuse 不登录这两家的账号，也不向它们发请求。其它歌词源照样会查，哪家的版本更好（比如带逐字时间轴），就用哪家的。

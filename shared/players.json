@@ -247,6 +247,32 @@
       "note": "YouTube Music 的原生客户端:Swift 外壳加一个隐藏的 WKWebView 跑 YouTube Music 网页版放歌,有 AppleScript 字典(`get player info` 回一段 JSON:曲目、时长、位置、播放状态、videoId),没有沙盒。系统 Now Playing 里它那份靠不住:播放中把会话交给 WebKit(那份只有时长和进度、歌名歌手是空的,bundle id 报成 com.apple.WebKit.GPU),自己只在暂停、加载的空档发一份只有歌名歌手的,所以连播换歌后常停在上一首,换歌加载时整个撤掉、放起来也不一定补回。曲目与位置因此整份换成 AppleScript 那份(KasetPlayerInfo),系统那边只用来认是不是它在放,一拍都没有它时它开着就直接问。位置是网页 video.currentTime 每 0.5 秒推一次的值,读到的只会比真值晚 0~0.5 秒、不会早,跟 QQ 音乐、网易云的整秒下取整同一类,归 noisyFloored。广告与开播缓冲时报在放、位置停在 0,曲尾偶尔卡住(报在放、位置不动),都按没在走算。署名是逐个艺人用 `, ` 连起来的,界面语言是中文时会把「、」「和」这类连接词也当成艺人;专辑一栏放歌单时填的是歌单名,不用。media-control 的播放、暂停、切歌、跳转它都响应,快进 15 秒不响应。nativeLyricSource 填 lyricfind:它放的是 YouTube Music 曲库,显示的是 YouTube Music 自己的歌词(这一源只收 LyricFind 那部分)。processName 5 字节。"
     },
     {
+      "id": "reamp",
+      "swiftCase": "reamp",
+      "goConst": "playerReamp",
+      "bundleID": "ru.alexfreud.ReAmp",
+      "goBundleConst": "reampBundleID",
+      "processName": "Reamp",
+      "displayName": {"literal": "reAMP"},
+      "scrobbleLabel": "reAMP (macOS)",
+      "nativeLyricSource": "localfile",
+      "positionTier": "cleanExtrapolated",
+      "republishesZeroAnchor": false,
+      "playingFromRate": false,
+      "artistArrivesLate": false,
+      "artistlessNotMusic": false,
+      "dropsSessionBetweenTracks": false,
+      "dropsSessionWhilePlaying": false,
+      "ignoresSeekCommand": false,
+      "needsAutomationPermission": false,
+      "needsFullDiskAccess": false,
+      "needsAccessibilityPermission": false,
+      "tint": {"rgb": [1.0, 0.58, 0.0]},
+      "fallbackSymbol": "music.note",
+      "bundledIcon": "ReampIcon",
+      "note": "仿 Winamp 的本地文件播放器,走 media-control,没有 AppleScript 字典、没有 URL scheme。系统会话里不报歌手和专辑:有歌手标签时标题是「歌手 - 歌名」,只有歌名时是歌名,没有标签时是带扩展名的文件名;App 侧按进程号找到它开着的当前文件读标签,读不到再按第一个「 - 」拆(PlayerTitleSplit)。nativeLyricSource 填 localfile:不是歌词源,是正在放的文件同目录同名的 .lrc(localfilelyrics.go)。时长只报整数秒。开播、自动连播、跳转的锚点对真实出声在 0.01 秒以内,归 cleanExtrapolated。暂停那一拍先报旧锚点、约 1 秒后才补上停住的位置,恢复那一拍先报进度 0 的锚点,暂停时 playbackRate 仍是 1。processName 5 字节。"
+    },
+    {
       "id": "auto",
       "swiftCase": "auto",
       "goConst": "playerAuto",
@@ -275,8 +301,8 @@
   ],
   "displayOrder": {
     "$comment": "图标网格(引导页 + 设置页)的摆放顺序。Apple Music 恒第一、auto 恒垫底;中间按语境排。",
-    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "kkbox", "spotify", "amazon_music", "kaset", "auto"],
-    "default": ["apple_music", "spotify", "amazon_music", "kaset", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "auto"]
+    "simplifiedChinese": ["apple_music", "qq_music", "netease_music", "kugou_music", "soda_music", "kkbox", "spotify", "amazon_music", "kaset", "reamp", "auto"],
+    "default": ["apple_music", "spotify", "amazon_music", "kaset", "kkbox", "qq_music", "netease_music", "kugou_music", "soda_music", "reamp", "auto"]
   },
   "mediaProxyOwners": {
     "$comment": "媒体进程 bundle id → 宿主 App bundle id。MediaRemote 报「现在谁在放」时,Safari 报的是替它解码播放的 WebKit GPU 进程,信任列表、Last.fm 排除名单、网页播放器配对里存的却是宿主,查这些表之前先按这张表换回宿主。Chromium 系(Arc/Chrome/Edge)报浏览器自己的 bundle id,不用登记。只登记实测见过的;为什么用别名而不是把媒体进程写进信任列表,见 LyrimuseCore/Local/TrustedPlayers.swift。",

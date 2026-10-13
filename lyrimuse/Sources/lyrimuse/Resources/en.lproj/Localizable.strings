@@ -1375,6 +1375,7 @@
 "未配置（可选）" = "Not configured (optional)";
 "本地暂无待补交的收听记录" = "No scrobbles are waiting locally";
 "本地歌名无检索结果，经「%@」查得正式曲名。" = "The local title returned nothing; the official title was found via “%@”.";
+"本地歌词文件" = "Local lyrics file";
 "本机学到的署名" = "Credit learned on this Mac";
 "本机已记下 %@ 首" = "%@ plays saved on this Mac";
 "本机已记下 %@ 首#one" = "%@ play saved on this Mac";

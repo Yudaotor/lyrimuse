@@ -761,9 +761,12 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// QQ 暂停时多数不重发锚点;补发的是整秒下取整的值,或者暂停前刚重发过的、时间戳新而值少一秒的旧值,都比暂停那一刻早。
     /// 所以暂停事件冻住了外推时,暂停那一拍按屏上位置停住(见 posHeldPause),之后它再报的值按 `pausedReadingReplacesShown`
-    /// 决定换不换。只认 QQ。见 02 章决策 118。纯函数,selftest 直接覆盖。
+    /// 决定换不换。见 02 章决策 118。
+    /// reAMP 暂停那一拍报的是上一份锚点(恢复播放后那份常没被更正,偏零点几秒),约 1 秒后才补准确的停住位置,
+    /// 同样按屏上位置停住。见 02 章决策 126。只认这两家。纯函数,selftest 直接覆盖。
     public nonisolated static func holdsShownPositionAtPause(bundleID: String?, frozenByEvent: Bool) -> Bool {
-        bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && frozenByEvent
+        guard frozenByEvent else { return false }
+        return bundleID == PlaybackPlayer.qqMusic.bundleIdentifier || bundleID == PlaybackPlayer.reamp.bundleIdentifier
     }
 
     /// 按屏上位置停住的暂停,播放器再报的值什么时候换上:比屏上还靠前(下取整的值都比真位置早,还靠前说明屏上落后),
@@ -3115,6 +3118,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 : nil,
             youtubeMusicVideoID: bundleID == PlaybackPlayer.kaset.bundleIdentifier
                 ? MediaControlClient.kasetVideoID(forTrackKey: snapshot.trackKey) : nil,
+            localFile: PlayerTitleSplit.currentFilePath(bundleID: bundleID, artist: snapshot.artist ?? "",
+                                                        title: snapshot.title ?? ""),
             spoken: bundleID == PlaybackPlayer.qqMusic.bundleIdentifier && spokenAudioKey == snapshot.identityKey
                 ? spokenAudioVerdict : nil)
         PlaybackStatePublisher.shared.publish(input, now: now)

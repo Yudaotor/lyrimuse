@@ -253,8 +253,8 @@ private func checkDiscordActivity() {
     typealias A = DiscordPresence.Application
     func app(_ player: PlaybackPlayer) -> A { DiscordPresence.application(forBundleID: player.bundleIdentifier, webPlatformID: nil) }
     expectEqual([app(.appleMusic), app(.kaset), app(.spotify), app(.qqMusic), app(.netease), app(.kugou), app(.soda),
-                 app(.kkbox), app(.amazonMusic)],
-                [.appleMusic, .youtubeMusic, .spotify, .qqMusic, .netease, .kugou, .soda, .kkbox, .amazonMusic],
+                 app(.kkbox), app(.amazonMusic), app(.reamp)],
+                [.appleMusic, .youtubeMusic, .spotify, .qqMusic, .netease, .kugou, .soda, .kkbox, .amazonMusic, .reamp],
                 "Discord 应用: 内置播放器各归各的应用,Kaset 归 YouTube Music")
     expectEqual(DiscordPresence.application(forBundleID: "com.apple.WebKit.GPU", webPlatformID: "youtubeMusic"), .youtubeMusic,
                 "Discord 应用: 浏览器里的 YouTube Music 归 YouTube Music")

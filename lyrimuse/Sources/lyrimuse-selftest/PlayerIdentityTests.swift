@@ -427,6 +427,7 @@ func runPlayerIdentityTests() {
             .spotify: ("spotify", "com.spotify.client"),
             .amazonMusic: ("amazon_music", "com.amazon.music"),
             .kaset: ("kaset", "com.sertacozercan.Kaset"),
+            .reamp: ("reamp", "ru.alexfreud.ReAmp"),
         ]
         for (player, want) in expected {
             expectEqual(player.rawValue, want.raw, "播放器契约: \(player) 的 rawValue")
@@ -600,6 +601,108 @@ func runPlayerIdentityTests() {
         }
     }
 
+    // ---- 标题里拼着歌手的播放器(PlayerTitleSplit,02 章决策 126) ----
+    // reAMP 不报歌手和专辑:有歌手标签时标题是「歌手 - 歌名」,没有标签时是带扩展名的文件名。
+    do {
+        typealias P = PlayerTitleSplit
+        let reamp = PlaybackPlayer.reamp.bundleIdentifier
+        func split(_ title: String?, artist: String? = nil, bundle: String? = PlaybackPlayer.reamp.bundleIdentifier) -> String? {
+            P.split(bundleID: bundle, title: title, artist: artist).map { "\($0.artist)|\($0.title)" }
+        }
+        expectEqual(split("方大同 - Orange Moon"), "方大同|Orange Moon", "拆标题: 歌手 - 歌名")
+        expectEqual(split("AiNA THE END - 革命道中 - On The Way"), "AiNA THE END|革命道中 - On The Way",
+                    "拆标题: 按第一个 ` - ` 拆,歌名里的留着")
+        expectEqual(split("A-Lin - 删了一百遍"), "A-Lin|删了一百遍", "拆标题: 歌手名里不带空格的 - 不受影响")
+        expectEqual(split("AJR - Karma.mp3"), "AJR|Karma", "拆标题: 没有标签时报的文件名先去掉扩展名")
+        expectEqual(split("track08.MP3"), "|track08", "拆标题: 拆不出歌手时只去掉扩展名")
+        expectEqual(split("Maybe Man"), nil, "拆标题: 只有歌名、没什么可改")
+        expectEqual(split("Mr. Brightside"), nil, "拆标题: 点号后面不是音频扩展名就不去")
+        expectEqual(split(" - Intro"), nil, "拆标题: 拆出来一边是空的就不拆")
+        expectEqual(split("方大同 - Orange Moon", artist: "方大同"), nil, "拆标题: 已经报了歌手的不动")
+        // GBK 标签被当成 Latin-1 读出来的乱码(「周杰伦 - 稻香」),先还原再拆;带重音的西文不能被误还原。
+        expectEqual(split("\u{D6}\u{DC}\u{BD}\u{DC}\u{C2}\u{D7} - \u{B5}\u{BE}\u{CF}\u{E3}"), "周杰伦|稻香", "拆标题: GBK 乱码先还原")
+        expectEqual(split("\u{B5}\u{BE}\u{CF}\u{E3}"), "|稻香", "拆标题: 只有歌名的乱码也还原")
+        expectEqual(split("M\u{F6}tley Cr\u{FC}e - Kickstart My Heart"), "M\u{F6}tley Cr\u{FC}e|Kickstart My Heart",
+                    "拆标题: 带重音的西文不当乱码")
+        expectEqual(split("Beyonc\u{E9} - D\u{E9}j\u{E0} Vu"), "Beyonc\u{E9}|D\u{E9}j\u{E0} Vu", "拆标题: 词尾的重音字母不当乱码")
+        expectEqual(split("Sigur R\u{F3}s - Hopp\u{ED}polla"), "Sigur R\u{F3}s|Hopp\u{ED}polla", "拆标题: 冰岛语不当乱码")
+        expectEqual(split("方大同 - Orange Moon", bundle: PlaybackPlayer.kkbox.bundleIdentifier), nil,
+                    "拆标题: 只对登记的播放器生效(决策 41)")
+        let raw = MediaControlSnapshot.forReplay(title: "方大同 - Orange Moon", artist: nil, album: nil, duration: 335,
+                                                 elapsedTime: 0, playing: true, bundleIdentifier: reamp, anchorElapsedTime: 0)
+        let fixed = P.applied(to: raw)
+        expectEqual(fixed?.artist == "方大同" && fixed?.title == "Orange Moon" && fixed?.duration == 335, true,
+                    "拆标题: 应用到快照上,别的字段不变")
+        // 独立取回的封面载荷没拆,算出来的身份要跟拆过的快照一致,不然封面被当成别的歌丢掉。
+        expectEqual(PlayerArtistFix.correctedTrackKey(bundle: reamp, artist: nil, title: "方大同 - Orange Moon", state: nil),
+                    fixed?.identityKey, "拆标题: 封面载荷的身份跟拆过的快照一致")
+        let bare = P.applied(to: MediaControlSnapshot.forReplay(
+            title: "track08.mp3", artist: nil, duration: 60, elapsedTime: 0, playing: true, bundleIdentifier: reamp,
+            anchorElapsedTime: 0))
+        expectEqual(PlayerArtistFix.correctedTrackKey(bundle: reamp, artist: nil, title: "track08.mp3", state: nil),
+                    bare?.identityKey, "拆标题: 只去掉扩展名的也一致")
+
+        // 正在放的文件:照 reAMP 拼标题的规则核对是不是这一首,对上了用文件里的歌手、歌名、专辑、精确时长。
+        typealias Tags = LocalAudioFileTags
+        let soldOut = Tags(title: "Sold Out", artist: "Hawk Nelson", album: "Diamonds", duration: 213.133)
+        func fileMatch(_ reported: String, _ duration: Double?, _ tags: Tags, file: String = "x.mp3") -> Bool {
+            P.fileMatches(reportedTitle: reported, reportedDuration: duration, tags: tags, fileName: file)
+        }
+        expectEqual(fileMatch("Hawk Nelson - Sold Out", 213, soldOut), true, "文件标签: 歌手 - 歌名对上")
+        expectEqual(fileMatch("Hawk Nelson - Sold Out", 180, soldOut), false, "文件标签: 时长差太多不是这首(同名的另一个文件)")
+        expectEqual(fileMatch("Hawk Nelson - Diamonds", 213, soldOut), false, "文件标签: 标题对不上(播放器预读的下一首)")
+        let titleOnly = Tags(title: "Maybe Man", artist: "", album: "", duration: 220.1)
+        expectEqual(fileMatch("Maybe Man", 220, titleOnly), true, "文件标签: 只有歌名")
+        let untagged = Tags(title: "", artist: "", album: "", duration: 245.3)
+        expectEqual(fileMatch("AJR - Karma.mp3", 245, untagged, file: "AJR - Karma.mp3"), true, "文件标签: 没写标签按文件名对")
+        expectEqual(P.identity(from: untagged) == nil, true, "文件标签: 没写歌名的交回拆标题")
+        let mojibake = Tags(title: "\u{B5}\u{BE}\u{CF}\u{E3}", artist: "\u{D6}\u{DC}\u{BD}\u{DC}\u{C2}\u{D7}", album: "",
+                            duration: 223.5)
+        expectEqual(fileMatch("\u{D6}\u{DC}\u{BD}\u{DC}\u{C2}\u{D7} - \u{B5}\u{BE}\u{CF}\u{E3}", 223, mojibake), true,
+                    "文件标签: 老 MP3 的乱码两边一样,照样对得上")
+        expectEqual(P.identity(from: mojibake).map { "\($0.artist)|\($0.title)" }, "周杰伦|稻香", "文件标签: 换上去之前还原乱码")
+        let soldOutID = P.identity(from: soldOut)
+        expectEqual(soldOutID?.album == "Diamonds" && soldOutID?.duration == 213.133 && soldOutID?.artist == "Hawk Nelson", true,
+                    "文件标签: 专辑和精确时长一起换上")
+        // 列进程打开的文件:自己打开一个临时文件,在自己的进程里列得出来。
+        let probe = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lyrimuse-openfiles-\(ProcessInfo.processInfo.processIdentifier).mp3")
+        FileManager.default.createFile(atPath: probe.path, contents: Data([0]))
+        if let handle = try? FileHandle(forReadingFrom: probe) {
+            expectEqual(ProcessOpenFiles.paths(pid: getpid()).contains { $0.hasSuffix(probe.lastPathComponent) }, true,
+                        "列进程打开的文件: 自己开着的临时文件列得出来")
+            try? handle.close()
+        } else {
+            expectEqual(true, false, "列进程打开的文件: 临时文件打不开")
+        }
+        try? FileManager.default.removeItem(at: probe)
+
+        // 同目录的封面:跟歌曲同名的图片优先,其次 cover / folder / front / album / albumart,大小写不敏感。
+        let entries = ["Sold Out.mp3", "folder.JPG", "Cover.png", "notes.txt", "Sold Out.jpg", "back.jpg"]
+        expectEqual(P.folderCoverName(audioFileName: "Sold Out.mp3", directoryEntries: entries), "Sold Out.jpg",
+                    "同目录封面: 跟歌曲同名的图片优先")
+        expectEqual(P.folderCoverName(audioFileName: "Other.mp3", directoryEntries: entries), "Cover.png",
+                    "同目录封面: 没有同名的按 cover、folder… 的顺序")
+        expectEqual(P.folderCoverName(audioFileName: "Other.mp3", directoryEntries: ["back.jpg", "scan01.jpg", "a.mp3"]), nil,
+                    "同目录封面: 认不出是封面的图片不拿")
+
+        // 文件里没嵌封面时系统那份是空的:改用引擎按歌手 + 歌名匹配到的那张,不整首显示占位音符。
+        typealias G = CoverArtReplacementGate
+        expectEqual(G.missingArtworkUsesMatchedCover(bundleID: reamp), true, "reAMP 封面: 没封面时用匹配到的那张")
+        expectEqual(G.missingArtworkUsesMatchedCover(bundleID: PlaybackPlayer.kaset.bundleIdentifier), true,
+                    "reAMP 封面: 从不报封面的 Kaset 照旧")
+        expectEqual(G.missingArtworkUsesMatchedCover(bundleID: PlaybackPlayer.appleMusic.bundleIdentifier), false,
+                    "reAMP 封面: 别的播放器没封面照旧显示占位音符(决策 41)")
+        expectEqual(G.systemNeverHasArtwork(bundleID: reamp), false, "reAMP 封面: 文件里嵌了封面就用系统那份")
+        expectEqual(G.reason(width: 0, height: 0, lowResThreshold: 300,
+                             systemNeverHasArtwork: G.missingArtworkUsesMatchedCover(bundleID: reamp)), .playerHasNoArtwork,
+                    "reAMP 封面: 系统那份是空的 → 按「播放器没有封面」找替代")
+        let coordinator = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lyrimuse/PlaybackCoordinator.swift"), encoding: .utf8)) ?? ""
+        expectEqual(coordinator.contains("systemNeverHasArtwork: CoverArtReplacementGate.missingArtworkUsesMatchedCover(bundleID: bundleID)"),
+                    true, "reAMP 封面: 高清替代的判据接的是 missingArtworkUsesMatchedCover")
+    }
+
     // ---- 每个播放器一张决定表 ----
     //
     // 按播放器分派的代码大多写成"点名几家、其余走 default"(特殊行为只对实测过的播放器开,02 章决策 41),
@@ -651,6 +754,7 @@ func runPlayerIdentityTests() {
             .kaset: (.youtubeMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                      .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
                                      .systemNeverHasArtwork, .catalogMenuRows]),
+            .reamp: (nil, [.gaplessLead, .lateAnchorProbe, .learnsAnchorLag]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")

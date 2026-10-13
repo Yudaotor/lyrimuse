@@ -432,7 +432,7 @@ Apple Music 上有动态封面的专辑，完整尺寸的歌词窗口里封面�
 
 <a id="feature-players"></a>
 
-### 九个播放器，可多选或自动识别
+### 十个播放器，可多选或自动识别
 
 Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗音乐、汽水音乐、KKBOX、Amazon Music，以及 YouTube Music 客户端 Kaset。可以同时选几个，也可以留在自动识别，跟着 macOS「正在播放」里的那个走。Apple Music 电台也能用，主播说话时显示电台名和台标。
 
