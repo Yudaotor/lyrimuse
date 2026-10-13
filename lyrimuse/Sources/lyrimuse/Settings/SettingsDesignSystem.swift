@@ -2005,12 +2005,32 @@ extension View {
 @MainActor
 func menuBarPanelGlassBackdrop(content: NSView, cornerRadius: CGFloat) -> NSView? {
     guard #available(macOS 26.0, *) else { return nil }
-    let glass = NSGlassEffectView()
+    let glass = ShadowRefreshingGlassView()
     glass.style = .regular
     glass.cornerRadius = cornerRadius
     content.autoresizingMask = [.width, .height]
     glass.contentView = content
     return glass
+}
+
+/// 无边框窗口的阴影算一次就留着。玻璃底进窗口、窗口跟着内容改尺寸之后都要让它重算,阴影才跟得上新尺寸。阴影的圆角
+/// 形状不是这里给的,是窗口的 `_cornerMask`(见 `MenuBarPanelWindow`)。
+@available(macOS 26.0, *)
+private final class ShadowRefreshingGlassView: NSGlassEffectView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        refreshWindowShadow()
+    }
+
+    override func layout() {
+        super.layout()
+        refreshWindowShadow()
+    }
+
+    /// 推到下一拍:这一拍里玻璃还没按新尺寸画好。
+    private func refreshWindowShadow() {
+        DispatchQueue.main.async { [weak self] in self?.window?.invalidateShadow() }
+    }
 }
 
 extension View {

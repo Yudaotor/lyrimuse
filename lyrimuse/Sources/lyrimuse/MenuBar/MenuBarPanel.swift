@@ -311,6 +311,14 @@ private final class MenuBarPanelWindow: NSPanel {
         onCancel?()
     }
 
+    /// 窗口阴影的形状。无边框窗口的阴影 AppKit 只认两处给的圆角:内容视图是带 `maskImage` 的 `NSVisualEffectView`
+    /// (旧系统那档),或者窗口自己的 `_cornerMask`(私有方法,Chromium / Electron 的无边框圆角窗口同样靠它)。玻璃底
+    /// 两样都没有,不给的话阴影是方的,下面两个圆角外各露出一块方角深色。只是覆盖一个返回图片的方法:系统不再调它时
+    /// 退回方形阴影,不会出错。见 06 章决策 47。
+    @objc(_cornerMask) func shadowCornerMask() -> NSImage {
+        Self.roundedMask(radius: Self.cornerRadius)
+    }
+
     /// 底 + 圆角,内容铺满。macOS 26 起是 `NSGlassEffectView` 常规那一档,圆角和边上的亮边由它自己画;窗口本来就透明,
     /// 玻璃折射的是背后的桌面。更早的系统是 popover 材质 + 圆角遮罩。见 06 章决策 47。
     func setContent(_ content: NSView) {
