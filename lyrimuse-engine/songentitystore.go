@@ -252,10 +252,11 @@ func updateSongEntityTable(now time.Time) (b *songEntityBuild, full bool) {
 	if up == nil {
 		return nil, false
 	}
+	// 写回的 id 先进小文件(App 叠上去就看得到),整份落盘跟别的改动一起攒(enrichpending.go):新歌一进缓存就会走到这里,
+	// 当场整份写的话预取一张专辑就是一首一次。
 	if n := writeBackSongEntityIDs(up.table); n > 0 {
-		if err := saveEnrichCacheChecked(); err != nil {
-			slog.Error("song entities: save song ids", "err", err)
-		}
+		scheduleEnrichPendingWrite()
+		requestEnrichBackgroundSave()
 	}
 	data, err := json.Marshal(up.table)
 	if err == nil {
@@ -339,6 +340,7 @@ func writeBackSongEntityIDs(t *songEntityTableFile) int {
 			}
 			e.Song, e.SongShare = id, share
 			enrichCache[k] = e
+			noteEnrichPendingLocked(k)
 			n++
 		}
 	}

@@ -52,7 +52,7 @@ import (
 var enrichSaveMinInterval = 2 * time.Second
 
 // enrichBackgroundSaveDelay 改动最多攒多久才整份落盘(正在播的那首另有单条快照,见文件头注)。
-var enrichBackgroundSaveDelay = 30 * time.Second
+var enrichBackgroundSaveDelay = 10 * time.Minute
 
 var (
 	enrichSaveThrottleMu sync.Mutex
@@ -117,19 +117,14 @@ func isEnrichPlayingKey(key string) bool {
 }
 
 // noteEnrichPlayingKey 换歌那一拍记下正在播的那首。内存里已经有这首的条目(预取过)就当场写它的单条快照:
-// 它的整份落盘可能还攒着,App 先读快照出词。排着的延后存盘提前到现在,另起 goroutine 写,不让 poller 等一次整份写。
+// 它的整份落盘可能还攒着,App 先读快照出词。不再借换歌把排着的整份落盘提前:上一首和预取的那些改动在小文件里
+// (enrichpending.go),App 叠得上。
 func noteEnrichPlayingKey(key string) {
 	if isEnrichPlayingKey(key) {
 		return
 	}
 	enrichPlayingKey.Store(&key)
 	writePlayingEntry(key)
-	enrichSaveThrottleMu.Lock()
-	pending := cancelEnrichDeferredSaveLocked()
-	enrichSaveThrottleMu.Unlock()
-	if pending {
-		go requestEnrichSave()
-	}
 }
 
 // commitEnrichSave 是 `commitEnrichEntry` 的落盘入口。**正在播的这首**当场写单条快照(playingentry.go):
@@ -144,6 +139,7 @@ func commitEnrichSaveTimed(key string, timer *stepTimer) {
 	if notePlayingEntryChanged(key) {
 		timer.mark("playing_entry")
 	}
+	noteEnrichPending(key, false)
 	requestEnrichDeferredSave(enrichBackgroundSaveDelay)
 	timer.mark("save")
 }
@@ -152,6 +148,7 @@ func commitEnrichSaveTimed(key string, timer *stepTimer) {
 // 调用方同 requestEnrichSave。
 func requestEnrichSaveFor(key string) {
 	notePlayingEntryChanged(key)
+	noteEnrichPending(key, false)
 	requestEnrichDeferredSave(enrichBackgroundSaveDelay)
 }
 
@@ -187,7 +184,7 @@ func requestEnrichBackgroundSave() {
 }
 
 // enrichBookkeepingSaveDelay 只推进了记账字段(重试计数 / 时间戳)的改动最多攒多久才落盘。
-var enrichBookkeepingSaveDelay = 60 * time.Second
+var enrichBookkeepingSaveDelay = 10 * time.Minute
 
 // requestEnrichBookkeepingSave 是「这一趟一个歌词字段都没换,只推进了重试计数 / 时间戳」时的保存入口
 // (升级重试、重评)。全量扫库、补空扫描每首都走这两条路,大多数一个字都没改:每首都整份写一次主缓存
@@ -196,6 +193,7 @@ var enrichBookkeepingSaveDelay = 60 * time.Second
 // enrichBookkeepingSaveDelay 之后补写一次。正在播的这首当场写单条快照,整份同样攒着;退出前 flushEnrichSave 一并写掉。
 func requestEnrichBookkeepingSave(key string) {
 	notePlayingEntryChanged(key)
+	noteEnrichPending(key, false)
 	requestEnrichDeferredSave(enrichBookkeepingSaveDelay)
 }
 

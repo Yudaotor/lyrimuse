@@ -2804,6 +2804,9 @@ func commitEnrichEntrySince(key string, e enrichEntry, stamp uint64) {
 	// 升级重试、重评在各自的写回处调同一个函数(见 retryLyricsUpgrade / rescoreLyrics 末尾)。
 	// 写歌词的路径少挂一处就会又长出一条分歧。
 	adoptCrossAlbumSiblingLyrics(key, &e)
+	if _, existed := enrichCache[key]; !existed {
+		enrichPendingHasNew = true
+	}
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()
@@ -5771,6 +5774,7 @@ func loadEnrichCache(path string) {
 	enrichMu.Lock()
 	enrichCache = m
 	enrichMu.Unlock()
+	applyEnrichPendingAtLoad(path)
 	log.Printf("cache: loaded %d track enrichments from %s (%d identical decision pairs shared)", len(m), path, shared)
 	bodies.log()
 	warnEnrichUnknownKeys(m) // 见 enrichjson.go:非零 = 这个构建比缓存文件老
@@ -5840,6 +5844,7 @@ func saveEnrichCacheChecked() error {
 		return nil
 	}
 	snapshot := make(map[string]enrichEntry, len(enrichCache))
+	pendingSeq := enrichPendingSeqLocked()
 	// 判决记录的候选明细不进主缓存:还带着明细的条目在这里拆开,明细先写旁路文件、内存里换成去掉
 	// 明细的那一份(见 decisionstore.go)。整条替换,不原地改 —— 下面锁外 marshal 的前提不变。
 	var sidecars []decisionSidecarJob
@@ -5885,6 +5890,7 @@ func saveEnrichCacheChecked() error {
 		return enrichSaveFailed(err)
 	}
 	linkEnrichIndex(snapshot, bodyCRCs)
+	enrichPendingSavedThrough(pendingSeq)
 	noteSongEntityCacheSaved()
 	return nil
 }

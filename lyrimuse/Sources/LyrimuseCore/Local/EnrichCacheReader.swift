@@ -389,6 +389,11 @@ public enum EnrichCacheReader {
     }
     /// 按 mtime 缓存解出来的那一份(轮询每拍都会问)。
     private static var cachedPlayingEntry: (mtime: Date, key: String, entry: EnrichCacheEntry)?
+    /// 引擎整份落盘攒着时改过的条目(`EnrichPendingEntries`),按 mtime 缓存解出来的那一份。
+    private struct PendingEntriesFile: Decodable {
+        let entries: [String: EnrichCacheEntry]
+    }
+    private static var cachedPendingEntries: (mtime: Date, entries: [String: EnrichCacheEntry])?
 
     // 缓存文件设计上永久不清理,会攒到几百条、几 MB——如果每次 lookup() 都全量读+解析,
     // 而当前播放的歌还没解析出歌词(新歌/纯音乐/查无此歌)时每 2 秒轮询都会触发一次,
@@ -1689,11 +1694,25 @@ public enum EnrichCacheReader {
 
     /// 比已解码内容新、而且就是 key 这一首的单条快照(判据同 lookup:去掉 `~durN` 之后按 looseKey 认)。
     /// 查封面的几个函数用它,主缓存还没解码完时封面跟歌词一样拿得到。
+    /// 单条快照对不上时再看待落盘条目(上一首、预取过的歌,整份最多攒 10 分钟才落盘),按 key 原样查。
     private static func freshPlayingEntry(forKey key: String) -> EnrichCacheEntry? {
-        guard let p = freshPlayingEntry(),
-              EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key)
-        else { return nil }
-        return p.entry
+        if let p = freshPlayingEntry(),
+           EnrichCacheKeys.looseKey(EnrichCacheKeys.strippingDurationVariant(p.key)) == EnrichCacheKeys.looseKey(key) {
+            return p.entry
+        }
+        return freshPendingEntries()?[key]
+    }
+
+    /// 比已解码内容新的待落盘条目;没有、比缓存旧、或解不开都是 nil。
+    private static func freshPendingEntries() -> [String: EnrichCacheEntry]? {
+        let url = EnrichPendingEntries.url
+        guard let mtime = mtime(of: url) else { return nil }
+        if let decoded = cachedMTime, mtime <= decoded { return nil }
+        if let c = cachedPendingEntries, c.mtime == mtime { return c.entries }
+        guard let data = FileIO.read(url),
+              let file = FileIO.decodeJSON(PendingEntriesFile.self, from: data, source: url) else { return nil }
+        cachedPendingEntries = (mtime, file.entries)
+        return file.entries
     }
 
     /// 正在播放快照里 key 正好是这一条的那份,不管比已解码的内容新还是旧。只给正文小文件读不到时兜底:快照是完整

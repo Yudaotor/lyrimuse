@@ -91,6 +91,14 @@ func runCacheKeyTests() {
         expectEqual(playing?.entry["lyrics_source"] as? String, "kugou", "单条快照: 条目原样交出")
         try? Data(#"{"key":"","entry":{}}"#.utf8).write(to: snapURL)
         expectEqual(PlayingEntrySnapshot.read(at: snapURL) == nil, true, "单条快照: 没有 key 不算")
+        let pendingURL = FileManager.default.temporaryDirectory.appendingPathComponent("lyrimuse-enrich-pending-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: pendingURL) }
+        try? Data(#"{"entries":{"a|1|x":{"lyrics_source":"qq","ts":1},"b|2|y":{"song":"s_1","ts":2}}}"#.utf8).write(to: pendingURL)
+        let pendingEntries = EnrichPendingEntries.read(at: pendingURL)
+        expectEqual(pendingEntries?.keys.sorted(), ["a|1|x", "b|2|y"], "待落盘条目: 读出全部 key")
+        expectEqual(pendingEntries?["b|2|y"]?["song"] as? String, "s_1", "待落盘条目: 条目原样交出")
+        try? Data(#"{"entries":{}}"#.utf8).write(to: pendingURL)
+        expectEqual(EnrichPendingEntries.read(at: pendingURL) == nil, true, "待落盘条目: 空的不算")
 
         // 列表摘要建好之后主歌词也拿掉,只留标记;点开时连主歌词一起从小文件补回(见 11 章决策 93)。
         var snap: [String: [String: Any]] = ["slim": slim, "picked": slim.merging(["manual_pick_sha": "abc"]) { $1 },

@@ -319,8 +319,8 @@ func TestSaveKeepsPlayingEntryFresh(t *testing.T) {
 	}
 }
 
-// 换歌那一拍:新这首已经有条目就当场写单条快照,排着的延后存盘提前到现在;没有条目的歌不写快照。
-func TestNotePlayingKeyWritesSnapshotAndPromotesDeferredSave(t *testing.T) {
+// 换歌那一拍:新这首已经有条目就当场写单条快照,没有条目的歌不写快照;排着的整份落盘不提前,预取那首的改动在小文件里。
+func TestNotePlayingKeyWritesSnapshotWithoutPromotingSave(t *testing.T) {
 	var saves atomic.Int32
 	restoreEnrichSaveStateOnCleanup(t)
 	savedPath, savedCache := enrichPath, enrichCache
@@ -332,6 +332,8 @@ func TestNotePlayingKeyWritesSnapshotAndPromotesDeferredSave(t *testing.T) {
 	enrichSaveNow = func() { saves.Add(1) }
 	enrichSaveMinInterval = 5 * time.Millisecond
 	enrichBackgroundSaveDelay = time.Hour
+	restoreEnrichPendingOnCleanup(t)
+	enrichPendingWriteDelay = 5 * time.Millisecond
 	enrichSaveThrottleMu.Lock()
 	enrichSaveThrottled, enrichLastSaveAt = true, time.Time{}
 	enrichSaveThrottleMu.Unlock()
@@ -353,11 +355,17 @@ func TestNotePlayingKeyWritesSnapshotAndPromotesDeferredSave(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil || got.Key != "n|next|y" || got.Entry.Lyrics != "[00:01.00]next" {
 		t.Fatalf("单条快照内容不对: %+v err=%v", got, err)
 	}
-	waitEnrichSaves(t, &saves, 1, 2*time.Second)
+	pending := readEnrichPendingFile(t, 2*time.Second)
+	if pending.Entries["n|next|y"].Lyrics != "[00:01.00]next" {
+		t.Fatalf("预取那首的改动该在小文件里: %+v", pending.Entries)
+	}
+	if n := saves.Load(); n != 0 {
+		t.Fatalf("换歌不该把整份落盘提前: saves = %d", n)
+	}
 	enrichSaveThrottleMu.Lock()
-	pending := enrichDeferredSaveTimer != nil
+	deferred := enrichDeferredSaveTimer != nil
 	enrichSaveThrottleMu.Unlock()
-	if pending {
-		t.Fatal("提前写过之后不该还排着延后存盘")
+	if !deferred {
+		t.Fatal("整份落盘应当照旧排着")
 	}
 }

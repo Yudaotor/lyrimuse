@@ -354,8 +354,9 @@ public final class EnrichCacheStore: ObservableObject {
     // 并发写。
     /// 上一次成功读盘时缓存文件的 (mtime, size) 指纹 —— onlyIfChanged 的门控依据。
     private var lastLoadedFingerprint: FileFingerprint?
-    /// 门控里看过的那一版单条快照(`newSongInPlayingSnapshot`),同一版只看一次。
+    /// 门控里看过的那一版单条快照 / 待落盘条目(`overlayChanged`),同一版只看一次。
     private var lastSeenSnapshotFingerprint: FileFingerprint?
+    private var lastSeenPendingFingerprint: FileFingerprint?
 
     struct FileFingerprint: Equatable {
         var mtime: Date
@@ -418,7 +419,7 @@ public final class EnrichCacheStore: ObservableObject {
         if onlyIfChanged,
            let fp = Self.fileFingerprint(cacheURL),
            fp == lastLoadedFingerprint,
-           !newSongInPlayingSnapshot(cacheFingerprint: fp) {
+           !overlayChanged(cacheFingerprint: fp) {
             return
         }
         // "缓存占用"这个数字只是侧栏「⋯」里一个菜单段头,不是 List 要渲染的内容——原来跟
@@ -460,12 +461,19 @@ public final class EnrichCacheStore: ObservableObject {
             }
             // 只留 obj 这一个引用,下面 dropMainLyrics 才是就地改、不复制整份。
             snapshot.obj = nil
-            // 单条快照比整份新:正在播的那首首次解析出的条目整份还没落盘,并进来(见 PlayingEntrySnapshot)。
-            if let playing = PlayingEntrySnapshot.read(),
-               PlayingEntrySnapshot.supersedes(snapshotMTime: Self.fileFingerprint(PlayingEntrySnapshot.url)?.mtime,
-                                               cacheMTime: box.fingerprint?.mtime) {
-                obj[playing.key] = playing.entry
-            }
+            // 比整份新的待落盘条目、单条快照叠上去(见 EnrichPendingEntries / PlayingEntrySnapshot):整份最多攒 10 分钟才落盘。
+            // 两份都新时先叠旧的那份,同一条以后写的为准。
+            let cacheMTime = box.fingerprint?.mtime
+            let pendingMTime = Self.fileFingerprint(EnrichPendingEntries.url)?.mtime
+            let playingMTime = Self.fileFingerprint(PlayingEntrySnapshot.url)?.mtime
+            let pending = PlayingEntrySnapshot.supersedes(snapshotMTime: pendingMTime, cacheMTime: cacheMTime)
+                ? EnrichPendingEntries.read() : nil
+            let playing = PlayingEntrySnapshot.supersedes(snapshotMTime: playingMTime, cacheMTime: cacheMTime)
+                ? PlayingEntrySnapshot.read() : nil
+            let playingLast = (playingMTime ?? .distantPast) >= (pendingMTime ?? .distantPast)
+            if !playingLast, let playing { obj[playing.key] = playing.entry }
+            for (k, v) in pending ?? [:] { obj[k] = v }
+            if playingLast, let playing { obj[playing.key] = playing.entry }
             let tBuild = CFAbsoluteTimeGetCurrent()
             // summaries 的构建+排序也在后台做掉(原来回 MainActor 同步跑,
             // 每次开窗/激活吃几十到一二百 ms 主线程),主线程只收结果赋值。
@@ -504,9 +512,15 @@ public final class EnrichCacheStore: ObservableObject {
         }
     }
 
-    /// 整份缓存没变时还要重读的唯一情况:单条快照比整份新,里面那首还不在列表里(新歌首次解析,整份最多攒 30 秒才落盘)。
-    /// 同一版快照只看一次;已经在列表里的那首不为它整份重读(一首歌里快照要写好几次,整份重读一次近 1 秒)。
-    private func newSongInPlayingSnapshot(cacheFingerprint: FileFingerprint) -> Bool {
+    /// 整份缓存没变时还要重读的两种情况:待落盘条目比整份新、又换了一版(预取、补空扫描刚改过,整份最多攒 10 分钟);
+    /// 单条快照比整份新、里面那首还不在列表里(新歌首次解析)。同一版只看一次;单条快照里已经在列表里的那首不为它整份重读
+    /// (一首歌里快照要写好几次,整份重读一次近 1 秒)。轮询多久问一次由调用方定(LyricsManagerRefresh)。
+    private func overlayChanged(cacheFingerprint: FileFingerprint) -> Bool {
+        if let pending = Self.fileFingerprint(EnrichPendingEntries.url), pending != lastSeenPendingFingerprint,
+           PlayingEntrySnapshot.supersedes(snapshotMTime: pending.mtime, cacheMTime: cacheFingerprint.mtime) {
+            lastSeenPendingFingerprint = pending
+            return true
+        }
         guard let snap = Self.fileFingerprint(PlayingEntrySnapshot.url), snap != lastSeenSnapshotFingerprint,
               PlayingEntrySnapshot.supersedes(snapshotMTime: snap.mtime, cacheMTime: cacheFingerprint.mtime) else { return false }
         lastSeenSnapshotFingerprint = snap
