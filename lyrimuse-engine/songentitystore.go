@@ -22,10 +22,13 @@ import (
 // 同步歌词或者把同步过的恢复回去;第一次建完之后,那个开关一翻面也立刻这样做一次(songentityshare.go)。
 //
 // 实体 id 延续(songEntityIDs):种子先取各写法条目上的 `song`,没有的再取上一份实体表;每个实体取跟种子共有写法最多的
-// id。建完把变了的 `song` 写回条目、同步落盘,之后才写实体表:哪一步之间被杀,下次都接得上(18 章决策 8)。
+// id。建完把变了的 `song` 写回条目、同步落盘(待落盘小文件,攒满了整份落盘,见 saveSongEntityIDs),之后才写实体表:哪一步之间
+// 被杀,下次都接得上(18 章决策 8)。
 // 用户拆开过的写法对记在 `lyrimuse-song-entity-user.json`(user_splits),写在 songentityuser.go;实体表重建、删除都不碰它。
-// 拆开、恢复合并之后马上重建一次(songEntityRebuildNow)。两次全量建表之间,缓存落盘几秒后增量重算变了的写法所在的那一块
-// (songEntityCacheSaved,见 songentityincremental.go)。
+// 拆开、恢复合并之后马上重建一次(songEntityRebuildNow);名字 / 录音补扫补到证据之后攒 songEntityEvidenceDelay 重建一次
+// (songEntityEvidence)。两次全量建表之间,缓存落盘几秒后增量重算变了的写法所在的那一块(songEntityCacheSaved,见
+// songentityincremental.go),实体表攒 songEntityTableWriteDelay 才写盘。实体表 4.8 MB 整份重写,预取一张专辑时增量重算
+// 几秒一次、补扫每补到一条就全量建一次,当场写的话半小时重写二三十次(15 章决策 40)。
 
 const (
 	songEntityTableVersion = 1
@@ -33,6 +36,26 @@ const (
 	songEntityBuildDelay      = 4 * time.Minute
 	songEntityRebuildInterval = 24 * time.Hour
 )
+
+var (
+	// songEntityTableWriteDelay:增量重算之后实体表最多攒多久才写盘。内存里的状态(songEntityLive)当场就是新的,同步歌词照常
+	// 接着跑;盘上这份只有 App「其它写法」面板读证据边、全量建表读它当种子(先用还没写盘的那份)。退出前当场写掉。
+	songEntityTableWriteDelay = time.Minute
+	// songEntityEvidenceDelay:补扫补到证据之后最多攒多久才全量建表,几个补扫前后脚补到的并成一次。
+	songEntityEvidenceDelay = 2 * time.Minute
+	// songEntityTableUnsaved:增量重算改过、还没写盘的实体表。持 songEntityRebuildMu 读写。
+	songEntityTableUnsaved *songEntityTableFile
+	// songEntityEvidence:补扫补到了证据,请常驻循环攒一会儿再全量建表(requestSongEntityEvidenceRebuild 发)。只缓冲一个。
+	songEntityEvidence = make(chan struct{}, 1)
+)
+
+// requestSongEntityEvidenceRebuild:名字 / 录音补扫补到证据之后调。
+func requestSongEntityEvidenceRebuild() {
+	select {
+	case songEntityEvidence <- struct{}{}:
+	default:
+	}
+}
 
 // songEntityTableFile 是实体表文件的形状。
 type songEntityTableFile struct {
@@ -93,12 +116,30 @@ func startSongEntityShadow(ctx context.Context) {
 	check := time.NewTicker(songShareCheckInterval)
 	defer check.Stop()
 	started, sharing := false, false
-	var update <-chan time.Time // 缓存落盘之后攒几秒,到点增量重算一次
+	var update <-chan time.Time     // 缓存落盘之后攒几秒,到点增量重算一次
+	var tableWrite <-chan time.Time // 增量重算之后攒着,到点写实体表
+	var evidenceAt <-chan time.Time // 补扫补到证据之后攒着,到点全量建表
 	for {
 		rebuild, evidence := false, false
 		select {
 		case <-ctx.Done():
+			flushSongEntityTable()
 			return
+		case <-tableWrite:
+			tableWrite = nil
+			flushSongEntityTable()
+			continue
+		case <-songEntityEvidence:
+			if evidenceAt == nil {
+				evidenceAt = time.After(songEntityEvidenceDelay)
+			}
+			continue
+		case <-evidenceAt:
+			evidenceAt = nil
+			if features().SongEntityShadow {
+				rebuildSongEntityTableForEvidence(time.Now())
+			}
+			continue
 		case <-songEntityCacheSaved:
 			if update == nil {
 				update = time.After(songEntityUpdateDelay)
@@ -110,8 +151,12 @@ func startSongEntityShadow(ctx context.Context) {
 				continue
 			}
 			b, full := updateSongEntityTable(time.Now())
+			if b != nil && tableWrite == nil {
+				tableWrite = time.After(songEntityTableWriteDelay)
+			}
 			if full {
-				b = rebuildSongEntityTable(time.Now())
+				b = rebuildSongEntityTableWith(time.Now(), evidenceAt == nil)
+				evidenceAt = nil
 			}
 			if b != nil && songEntitySharing() {
 				sharing = songEntityShareStep(ctx, b)
@@ -127,6 +172,10 @@ func startSongEntityShadow(ctx context.Context) {
 			rebuild = songEntitySharing()
 		case <-songEntityRebuildNow:
 			rebuild, evidence = true, true
+		}
+		if rebuild && evidenceAt != nil {
+			// 补扫补到的证据已经写好,这一次建表读得到:攒着的那次并进来(跟它一样不对比),不再另建一次。
+			evidence, evidenceAt = true, nil
 		}
 		var b *songEntityBuild
 		if rebuild {
@@ -172,16 +221,19 @@ func rebuildSongEntityTableWith(now time.Time, compare bool) *songEntityBuild {
 	defer songEntityRebuildMu.Unlock()
 	start := time.Now()
 	src := songEntityLiveSource(songEntityPrepare())
-	b, table, st := buildSongEntityState(src, readSongEntityTable(songEntityTablePath()), now)
+	seed := songEntityTableUnsaved
+	songEntityTableUnsaved = nil
+	if seed == nil {
+		seed = readSongEntityTable(songEntityTablePath())
+	}
+	b, table, st := buildSongEntityState(src, seed, now)
 	prev := songEntityLive
 	if songEntityLivePath != songEntityTablePath() {
 		prev = nil
 	}
 	songEntityLive = nil
 	if n := writeBackSongEntityIDs(table); n > 0 {
-		if err := saveEnrichCacheChecked(); err != nil {
-			slog.Error("song entities: save song ids", "err", err)
-		}
+		saveSongEntityIDs()
 		slog.Info("song entities: wrote song ids", "variants", n)
 	}
 	data, err := json.Marshal(table)
@@ -234,8 +286,9 @@ func songEntityCompareLive(prev, t *songEntityTableFile) {
 	}
 }
 
-// updateSongEntityTable 增量重算一次(见 songentityincremental.go),写实体表,返回重算的那一块(没有改动时为 nil)。第一次全量
-// 建表之前什么都不做。full 为 true 时要全量建表。报告只在全量建表时写。
+// updateSongEntityTable 增量重算一次(见 songentityincremental.go),返回重算的那一块(没有改动时为 nil)。实体表留在
+// songEntityTableUnsaved,由常驻循环攒一会儿写(flushSongEntityTable)。第一次全量建表之前什么都不做。full 为 true 时要全量
+// 建表。报告只在全量建表时写。
 func updateSongEntityTable(now time.Time) (b *songEntityBuild, full bool) {
 	songEntityRebuildMu.Lock()
 	defer songEntityRebuildMu.Unlock()
@@ -252,24 +305,50 @@ func updateSongEntityTable(now time.Time) (b *songEntityBuild, full bool) {
 	if up == nil {
 		return nil, false
 	}
-	// 写回的 id 先进小文件(App 叠上去就看得到),整份落盘跟别的改动一起攒(enrichpending.go):新歌一进缓存就会走到这里,
-	// 当场整份写的话预取一张专辑就是一首一次。
 	if n := writeBackSongEntityIDs(up.table); n > 0 {
-		scheduleEnrichPendingWrite()
-		requestEnrichBackgroundSave()
+		saveSongEntityIDs()
 	}
-	data, err := json.Marshal(up.table)
+	songEntityTableUnsaved = up.table
+	slog.Info("song entities: updated", "changed", up.changed, "removed", up.removed, "block", len(up.build.variants),
+		"songs", len(up.table.Songs), "took", time.Since(start).Round(time.Millisecond))
+	return up.build, false
+}
+
+// flushSongEntityTable:增量重算攒着的实体表写盘。写失败留着,下一次到点再写(全量建表会先拿它当种子、再整份写)。
+func flushSongEntityTable() {
+	songEntityRebuildMu.Lock()
+	defer songEntityRebuildMu.Unlock()
+	t := songEntityTableUnsaved
+	if t == nil {
+		return
+	}
+	data, err := json.Marshal(t)
 	if err == nil {
 		err = writeFileAtomic(songEntityTablePath(), data)
 	}
 	if err != nil {
 		slog.Error("song entities: write table", "err", err)
-		songEntityLive = nil
-		return nil, true
+		return
 	}
-	slog.Info("song entities: updated", "changed", up.changed, "removed", up.removed, "block", len(up.build.variants),
-		"songs", len(up.table.Songs), "took", time.Since(start).Round(time.Millisecond))
-	return up.build, false
+	songEntityTableUnsaved = nil
+}
+
+// saveSongEntityIDs:写回了实体 id 之后落盘,在写实体表之前(18 章决策 8 的顺序)。写回的条目当场写进待落盘小文件(App 叠上去
+// 就看得到,下次启动叠回内存),整份落盘跟别的改动一起攒(enrichpending.go):新歌一进缓存、补扫补到一个名字都会走到这里,
+// 当场整份写的话预取一张专辑就是一首一次。小文件里是完整条目,攒到 enrichPendingMaxKeys 条(规则一改整批写回)就当场整份写。
+// 见 15 章决策 38。
+func saveSongEntityIDs() {
+	enrichMu.Lock()
+	full := len(enrichPendingKeys) >= enrichPendingMaxKeys
+	enrichMu.Unlock()
+	if !full {
+		enrichPendingNow()
+		requestEnrichBackgroundSave()
+		return
+	}
+	if err := saveEnrichCacheChecked(); err != nil {
+		slog.Error("song entities: save song ids", "err", err)
+	}
 }
 
 // removeSongEntityFiles:开关关着时删掉两个派生文件(用户判断文件不动)。

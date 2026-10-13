@@ -96,8 +96,8 @@ func enrichSaveCaller() string {
 		switch name {
 		case "saveEnrichCache", "saveEnrichCacheChecked", "saveKeepingPlayingEntryFresh", "logEnrichSave":
 		default:
-			// 包级函数变量(enrichSaveNow)是匿名函数,名字是 glob..funcN,往上再找一层才是谁要的。
-			if name != "" && !strings.HasPrefix(name, "glob.") {
+			// 包级函数变量(enrichSaveNow)是匿名函数,名字是 glob..funcN(单测)或 init.funcN(正式构建),往上再找一层才是谁要的。
+			if name != "" && !strings.HasPrefix(name, "glob.") && !strings.HasPrefix(name, "init.") {
 				return name
 			}
 		}

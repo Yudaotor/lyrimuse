@@ -220,8 +220,8 @@ func TestSongEntityEvidenceRebuildsSkipCompare(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(src), "rebuildSongEntityTableForEvidence(time.Now())") || strings.Contains(string(src), "rebuildSongEntityTable(time.Now())") {
-			t.Errorf("%s: 补扫之后的建表要跳过对比", f)
+		if !strings.Contains(string(src), "requestSongEntityEvidenceRebuild()") || strings.Contains(string(src), "rebuildSongEntityTable(time.Now())") {
+			t.Errorf("%s: 补扫之后请常驻循环攒着建表(跳过对比)", f)
 		}
 	}
 	src, err := os.ReadFile("songentitystore.go")
@@ -229,7 +229,8 @@ func TestSongEntityEvidenceRebuildsSkipCompare(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"case <-songEntityRebuildNow:\n\t\t\trebuild, evidence = true, true", "b = rebuildSongEntityTableWith(time.Now(), !evidence)",
-		"if compare && prev != nil {"} {
+		"if compare && prev != nil {", "if rebuild && evidenceAt != nil {\n\t\t\t// 补扫补到的证据已经写好,这一次建表读得到:攒着的那次并进来(跟它一样不对比),不再另建一次。\n\t\t\tevidence, evidenceAt = true, nil",
+		"b = rebuildSongEntityTableWith(time.Now(), evidenceAt == nil)\n\t\t\t\tevidenceAt = nil", "case <-evidenceAt:\n\t\t\tevidenceAt = nil\n\t\t\tif features().SongEntityShadow {\n\t\t\t\trebuildSongEntityTableForEvidence(time.Now())"} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("songentitystore.go 少了 %q", want)
 		}
@@ -268,5 +269,89 @@ func TestSongShareNumbersContinue(t *testing.T) {
 	rec, ok := tbl.Songs["s_000000000001"]
 	if !ok || !slices.Equal(rec.Share, []int{1, 0, 0}) {
 		t.Errorf("条目上记的组号接着用、从别的实体来的取空号: %+v", tbl.Songs)
+	}
+}
+
+// 写回实体 id 之后:小文件里攒得下就不当场整份写(排一次延后存盘);攒满了才当场整份写。
+func TestSaveSongEntityIDsDefersUnlessPendingFull(t *testing.T) {
+	restoreEnrichSaveStateOnCleanup(t)
+	savedPath, savedKeys, savedDirty, savedPendingNow := enrichPath, enrichPendingKeys, enrichDirty, enrichPendingNow
+	t.Cleanup(func() {
+		enrichPath, enrichPendingKeys, enrichDirty, enrichPendingNow = savedPath, savedKeys, savedDirty, savedPendingNow
+	})
+	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
+	pendingWrites := 0
+	enrichPendingNow = func() { pendingWrites++ }
+	enrichBackgroundSaveDelay = time.Hour
+	enrichSaveThrottleMu.Lock()
+	enrichSaveThrottled = true
+	enrichSaveThrottleMu.Unlock()
+	withEnrichCache(t, map[string]enrichEntry{"A|Song|One": {Song: "s_000000000001"}})
+	enrichMu.Lock()
+	enrichPendingKeys = map[string]uint64{"A|Song|One": 1}
+	enrichDirty = true
+	enrichMu.Unlock()
+
+	saveSongEntityIDs()
+	if _, err := os.Stat(enrichPath); !os.IsNotExist(err) {
+		t.Fatalf("小文件攒得下,不该当场整份写: %v", err)
+	}
+	if pendingWrites != 1 {
+		t.Fatalf("小文件要在返回之前写好(之后才写实体表): writes = %d", pendingWrites)
+	}
+	enrichSaveThrottleMu.Lock()
+	deferred := enrichDeferredSaveTimer != nil
+	enrichSaveThrottleMu.Unlock()
+	if !deferred {
+		t.Fatal("应当排一次延后存盘")
+	}
+
+	enrichMu.Lock()
+	for i := range enrichPendingMaxKeys {
+		enrichPendingKeys[strings.Repeat("k", i+2)] = uint64(i + 2)
+	}
+	enrichMu.Unlock()
+	saveSongEntityIDs()
+	if _, err := os.Stat(enrichPath); err != nil {
+		t.Fatalf("小文件攒满了,应当当场整份写: %v", err)
+	}
+}
+
+// 增量重算不当场写实体表,攒着的那份 flush 时才写;全量建表先拿还没写盘的那份当种子。
+func TestSongEntityIncrementalTableWriteDeferred(t *testing.T) {
+	dir := setUpSongShareTest(t, map[string]enrichEntry{
+		"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}},
+	}, false)
+	enrichPath = filepath.Join(dir, clientName+"-enrich-cache.json")
+	t.Cleanup(func() { songEntityTableUnsaved = nil })
+	if rebuildSongEntityTable(time.Now()) == nil {
+		t.Fatal("建表失败")
+	}
+	commitEnrichEntrySince("A|Song|Two", enrichEntry{DurationSecs: 200.1, ISRCs: []string{"USAAA1100001"}}, enrichEditNoStamp)
+	if b, full := updateSongEntityTable(time.Now()); b == nil || full {
+		t.Fatalf("应当增量重算出一块: b=%v full=%v", b != nil, full)
+	}
+	one, _ := cacheEntry(t, "A|Song|One")
+	if tbl := readSongEntityTable(songEntityTablePath()); tbl == nil || len(tbl.Songs[one.Song].Variants) != 1 {
+		t.Fatal("增量重算之后实体表不该当场写")
+	}
+	if songEntityTableUnsaved == nil || len(songEntityTableUnsaved.Songs[one.Song].Variants) != 2 {
+		t.Fatal("还没写盘的那份要留着")
+	}
+	// 全量建表拿它当种子、整份写掉,攒着的那份清空。
+	if rebuildSongEntityTable(time.Now()) == nil || songEntityTableUnsaved != nil {
+		t.Fatal("全量建表之后不该再留着没写盘的那份")
+	}
+	if tbl := readSongEntityTable(songEntityTablePath()); tbl == nil || len(tbl.Songs[one.Song].Variants) != 2 {
+		t.Fatal("全量建表要写出新表")
+	}
+
+	commitEnrichEntrySince("A|Song|Three", enrichEntry{DurationSecs: 199.9, ISRCs: []string{"USAAA1100001"}}, enrichEditNoStamp)
+	if b, _ := updateSongEntityTable(time.Now()); b == nil {
+		t.Fatal("应当增量重算出一块")
+	}
+	flushSongEntityTable()
+	if tbl := readSongEntityTable(songEntityTablePath()); tbl == nil || len(tbl.Songs[one.Song].Variants) != 3 || songEntityTableUnsaved != nil {
+		t.Fatal("flush 之后实体表要写进盘")
 	}
 }

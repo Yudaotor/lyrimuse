@@ -264,9 +264,9 @@ func TestSongEntityUpdatesAfterCacheSave(t *testing.T) {
 		"A|Song|One": {DurationSecs: 200, ISRCs: []string{"USAAA1100001"}},
 	}, false)
 	enrichPath = filepath.Join(dir, clientName+"-enrich-cache.json")
-	saved := songEntityUpdateDelay
-	t.Cleanup(func() { songEntityUpdateDelay = saved })
-	songEntityUpdateDelay = 10 * time.Millisecond
+	saved, savedWrite := songEntityUpdateDelay, songEntityTableWriteDelay
+	t.Cleanup(func() { songEntityUpdateDelay, songEntityTableWriteDelay = saved, savedWrite })
+	songEntityUpdateDelay, songEntityTableWriteDelay = 10*time.Millisecond, 10*time.Millisecond
 	if rebuildSongEntityTable(time.Now()) == nil {
 		t.Fatal("建表失败")
 	}

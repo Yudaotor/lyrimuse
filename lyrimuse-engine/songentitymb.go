@@ -173,7 +173,7 @@ func startMBRecordingsSweep(ctx context.Context) {
 		if features().SongEntityPhase2 {
 			settled, done := sweepMBRecordings(ctx, mbRecordingsPath(), time.Now())
 			if settled > 0 && features().SongEntityShadow {
-				rebuildSongEntityTableForEvidence(time.Now())
+				requestSongEntityEvidenceRebuild()
 			}
 			if !done {
 				next = mbRecordingsRetry
