@@ -180,7 +180,7 @@ func recheckAppleCreditLinks(ctx context.Context, scope migrationScope, deps app
 		if !ok || e.AppleURL != c.item.url {
 			continue
 		}
-		lookedUp := e.ISRCLookup == isrcLookupKey(e)
+		lookedUp := isrcLookupDone(e)[isrcApplePart(e)]
 		e.AppleURL = c.newURL
 		if c.dropISRC != "" {
 			removeISRCs(&e, func(code string) bool { return code == c.dropISRC })
@@ -188,9 +188,9 @@ func recheckAppleCreditLinks(ctx context.Context, scope migrationScope, deps app
 		if c.addISRC != "" {
 			recordISRCs(&e, []recordedISRC{{c.addISRC, isrcLevelVerified}})
 		}
-		// 原来按这几个 id 补齐过、新那一轨这一轮又问到了,才记成补过;否则留给补扫按新的 id 再取。
+		// 原来那条链接补过、新那一轨这一轮又问到了,才把新的那支记成补过;否则留给补扫按新的 id 再取。
 		if lookedUp && c.newAsked {
-			e.ISRCLookup = isrcLookupKey(e)
+			e.ISRCLookup = isrcLookupWith(e, isrcApplePart(e))
 		}
 		enrichCache[c.item.key] = e
 		changed++

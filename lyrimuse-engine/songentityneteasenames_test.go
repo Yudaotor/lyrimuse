@@ -128,7 +128,7 @@ func TestCatalogSweepsUseBackgroundOutbound(t *testing.T) {
 		"songentityneteasenames.go": "fetchNeteaseNames(withBackgroundOutbound(ctx),",
 		"songentitymb.go":           "fetchMBRecordings(withBackgroundOutbound(ctx),",
 		"applecreditlinks.go":       "recheckAppleCreditLinks(withBackgroundOutbound(ctx),",
-		"recordingisrc.go":          "appleCatalogSongsByID(withBackgroundOutbound(ctx), sf, ids)",
+		"recordingisrc.go":          "songs, ok := deps.apple(withBackgroundOutbound(ctx), sf, ids)",
 	} {
 		src, err := os.ReadFile(file)
 		if err != nil {

@@ -17,14 +17,15 @@ import (
 // 这条录音的 ISRC(国际标准录音编码)。一份录音一个,不随商店语言、上架的专辑变;同一份录音也可能被不同发行商各登记
 // 过一个。记进条目的 isrcs,App 合并收听写法时按它认「是不是同一首」(EnrichTitleAliases),见 12 章决策 61。
 //
-// 来路:Spotify 原生客户端在播时报的(playbackISRC,就是这一条录音);这一轮已被认可(分数 >= 0)、自报时长跟播放器报的
-// 对得上(isrcDurationFits)的 applemusic / deezer 候选报的;存量条目由 startRecordingISRCSweep 按已存的 Apple 歌曲 id、
-// Spotify 曲目 id 补。ISRC 有脏数据(占位符样式的编号被注册给了不相干的歌),候选报的都要过时长闸,占位符样式的直接丢掉。
+// 来路:Spotify 原生客户端、Amazon Music 在播时报的(playbackISRC,就是这一条录音);这一轮已被认可(分数 >= 0)、自报时长跟
+// 播放器报的对得上(isrcDurationFits)的 applemusic / deezer 候选报的;存量条目由 startRecordingISRCSweep 按已存的 Apple 歌曲 id、
+// Spotify 曲目 id、Amazon 曲目 ASIN 补,正在放的那首由 playbackISRCJobLocked 当场补(18 章决策 63)。ISRC 有脏数据(占位符样式的
+// 编号被注册给了不相干的歌),候选报的都要过时长闸,占位符样式的直接丢掉。
 //
-// 每个号写进来时在 isrc_levels 记来路级别(歌曲实体按它定这个号能不能当强证据,见 18 章决策 5):播放器报的是 player;
-// 候选、补扫取回的,配上的那一轨版本词跟这一条对得上是 verified(补扫按的是检索配上的 Apple 链接,另要那一轨的署名
-// 写全了合作者或时长几乎相等),对不上是 searched。同一个号取更高的级别;没记级别的号(这一机制之前写进来的)由歌曲实体
-// 按写法有没有版本词推断。
+// 每个号写进来时在 isrc_levels 记来路级别(歌曲实体按它定这个号能不能当强证据,见 18 章决策 5):播放器报的是 player,按曲目
+// id 从本机 Spotify、Amazon 缓存读到的,在 Apple Music 上放过的条目按它报的目录锚点问到的也是;候选、补扫按检索配上的 Apple
+// 链接取回的,配上的那一轨版本词跟这一条对得上是 verified(补扫另要那一轨的署名写全了合作者或时长几乎相等),对不上是
+// searched。同一个号取更高的级别;没记级别的号(这一机制之前写进来的)由歌曲实体按写法有没有版本词推断。
 
 // recordingISRCMax:一条最多记几个。
 const recordingISRCMax = 4
@@ -200,44 +201,148 @@ func appleStorefrontFromURL(u string) string {
 	return ""
 }
 
-// isrcLookupKey:这条按哪几个 id 补 ISRC,形如 `apple:us:1587171823 spotify:7HuBDWi18s4aJM8UFnNheH`。两个都没有返回空串。
-// 记在 enrichEntry.ISRCLookup:id 没变就不再问,链接换了(重新匹配)会再补一次。
-func isrcLookupKey(e enrichEntry) string {
+// isrc_lookup 记补过哪几支,一支一个记号、空格隔开:
+//   - `apple:<商店>:<id>`:按条目上的 Apple 链接问过曲库(链接多是按歌名检索配的,号的级别按 appleSweepISRCLevel 定);
+//   - `apple-anchor:<商店>:<id>`:这条链接就是 Apple Music 播放时报的目录锚点,按它问过,取回的号记 player;
+//   - `spotify-local:<曲目 id>`:从本机 Spotify 缓存读到过这首的号(player);
+//   - `amazon-local:<ASIN>`:从本机 Amazon Music 目录缓存读到过这首的号(player)。
+//
+// 本机缓存那两支读到了号才记:客户端开播之后才把这首写进缓存,没读到的下次再读。id 换了记号跟着换,按新的再补一次。
+// 更早写下的 `spotify:<id>` 那时不记级别,不算 spotify-local 补过,存量按本机缓存重读一遍(18 章决策 63)。
+const (
+	isrcPartApple       = "apple:"
+	isrcPartAppleAnchor = "apple-anchor:"
+	isrcPartSpotify     = "spotify-local:"
+	isrcPartAmazon      = "amazon-local:"
+)
+
+// isrcLookupParts:这条现在该补的几支,按 apple、spotify-local、amazon-local 的顺序;一个 id 都没有时为空。锚点那一支要不要补
+// 得在 enrichMu 外核对(isrcResolveAnchors),不在这里。
+func isrcLookupParts(e enrichEntry) []string {
 	var parts []string
-	if id, sf := appleCatalogIDFromURL(e.AppleURL), appleStorefrontFromURL(e.AppleURL); id != "" && sf != "" {
-		parts = append(parts, "apple:"+sf+":"+id)
+	if p := isrcApplePart(e); p != "" {
+		parts = append(parts, p)
 	}
 	if len(e.SpotifyTrackID) == 22 {
-		parts = append(parts, "spotify:"+e.SpotifyTrackID)
+		parts = append(parts, isrcPartSpotify+e.SpotifyTrackID)
 	}
-	return strings.Join(parts, " ")
+	if asin := amazonASINFromTrackURL(e.AmazonURL); asin != "" {
+		parts = append(parts, isrcPartAmazon+asin)
+	}
+	return parts
 }
 
-// isrcSweepJob:一条要补的条目,lookup 是拿出来那一刻的 isrcLookupKey。
+// isrcApplePart / isrcAnchorPart:按这条的 Apple 链接问曲库那一支的记号;链接里没有 id 或商店时为空串。
+func isrcApplePart(e enrichEntry) string  { return isrcAppleToken(isrcPartApple, e.AppleURL) }
+func isrcAnchorPart(e enrichEntry) string { return isrcAppleToken(isrcPartAppleAnchor, e.AppleURL) }
+
+func isrcAppleToken(prefix, appleURL string) string {
+	id, sf := appleCatalogIDFromURL(appleURL), appleStorefrontFromURL(appleURL)
+	if id == "" || sf == "" {
+		return ""
+	}
+	return prefix + sf + ":" + id
+}
+
+// isrcLookupDone:isrc_lookup 里记着补过的几支。
+func isrcLookupDone(e enrichEntry) map[string]bool {
+	done := map[string]bool{}
+	for _, p := range strings.Fields(e.ISRCLookup) {
+		done[p] = true
+	}
+	return done
+}
+
+// isrcLookupWith:原来记着的加上 add,只留跟现在的 id 对得上的几支(isrcLookupParts 的几支,锚点那一支排在 apple 后面),
+// 写成 isrc_lookup。
+func isrcLookupWith(e enrichEntry, add ...string) string {
+	done := isrcLookupDone(e)
+	for _, p := range add {
+		done[p] = true
+	}
+	parts := isrcLookupParts(e)
+	if a := isrcAnchorPart(e); a != "" {
+		parts = slices.Insert(parts, 1, a)
+	}
+	var out []string
+	for _, p := range parts {
+		if done[p] {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+// isrcSweepJob:一条要补的条目。parts 是拿出来那一刻的 isrcLookupParts,写回前核对 id 没变。askApple / readSpotify / readAmazon
+// 是这一轮要做的几支;applePlayer:Apple 那一支的 id 就是 Apple Music 播放时报的目录锚点,取回的号记 player、做完记上锚点
+// 那一支;anchorCheck:条目在 Apple Music 上放过、锚点那一支还没做过,要在锁外核对链接是不是锚点(isrcResolveAnchors)。
 type isrcSweepJob struct {
-	key, lookup, appleID, storefront, spotifyID string
-	durationSecs                                float64
+	key                                        string
+	parts                                      []string
+	appleID, storefront, spotifyID, amazonASIN string
+	durationSecs                               float64
+	askApple, readSpotify, readAmazon          bool
+	applePlayer, anchorCheck                   bool
 }
 
-// isrcSweepJobsLocked:有 Apple 歌曲 id 或 Spotify 曲目 id、按现在这几个 id 还没补过的条目,按 key 排序。调用方持有 enrichMu。
+// isrcSweepJobFor:key 这条这一轮要补哪几支;都补过、也不用核对锚点时 ok 为 false。
+func isrcSweepJobFor(key string, e enrichEntry) (isrcSweepJob, bool) {
+	parts := isrcLookupParts(e)
+	if len(parts) == 0 {
+		return isrcSweepJob{}, false
+	}
+	done := isrcLookupDone(e)
+	job := isrcSweepJob{key: key, parts: parts, durationSecs: e.DurationSecs}
+	if p := isrcApplePart(e); p != "" {
+		job.appleID, job.storefront = appleCatalogIDFromURL(e.AppleURL), appleStorefrontFromURL(e.AppleURL)
+		job.askApple = !done[p]
+		job.anchorCheck = slices.Contains(e.Players, appleMusicBundleID) && !done[isrcAnchorPart(e)]
+	}
+	if len(e.SpotifyTrackID) == 22 {
+		job.spotifyID = e.SpotifyTrackID
+		job.readSpotify = !done[isrcPartSpotify+job.spotifyID]
+	}
+	if asin := amazonASINFromTrackURL(e.AmazonURL); asin != "" {
+		job.amazonASIN = asin
+		job.readAmazon = !done[isrcPartAmazon+asin]
+	}
+	if !job.askApple && !job.readSpotify && !job.readAmazon && !job.anchorCheck {
+		return isrcSweepJob{}, false
+	}
+	return job, true
+}
+
+// isrcSweepJobsLocked:有没补过的几支、或者要核对锚点的条目,按 key 排序。调用方持有 enrichMu。
 func isrcSweepJobsLocked() []isrcSweepJob {
 	var jobs []isrcSweepJob
 	for k, e := range enrichCache {
-		lookup := isrcLookupKey(e)
-		if lookup == "" || lookup == e.ISRCLookup {
-			continue
+		if job, ok := isrcSweepJobFor(k, e); ok {
+			jobs = append(jobs, job)
 		}
-		job := isrcSweepJob{key: k, lookup: lookup, durationSecs: e.DurationSecs}
-		if id, sf := appleCatalogIDFromURL(e.AppleURL), appleStorefrontFromURL(e.AppleURL); id != "" && sf != "" {
-			job.appleID, job.storefront = id, sf
-		}
-		if len(e.SpotifyTrackID) == 22 {
-			job.spotifyID = e.SpotifyTrackID
-		}
-		jobs = append(jobs, job)
 	}
 	sort.Slice(jobs, func(i, j int) bool { return jobs[i].key < jobs[j].key })
 	return jobs
+}
+
+// isrcResolveAnchors:要核对锚点的几条,链接就是锚点时(anchor 按写法键的歌手、歌名、专辑和时长查,同 appleCatalogLinkFor)
+// 改成按锚点问、号记 player;不是锚点、别的几支也都补过的那几条去掉。anchor 要拿 appleCatalogMu,不能持着 enrichMu 调。
+func isrcResolveAnchors(jobs []isrcSweepJob, anchor func(artist, title, album string, durationSecs float64) string) []isrcSweepJob {
+	var out []isrcSweepJob
+	for _, job := range jobs {
+		if job.anchorCheck {
+			artist, title, album := splitEnrichKey(job.key)
+			title = enrichKeyDurationVariantRe.ReplaceAllString(title, "")
+			if link := anchor(artist, title, album, job.durationSecs); link != "" &&
+				appleCatalogIDFromURL(link) == job.appleID && appleStorefrontFromURL(link) == job.storefront {
+				job.askApple, job.applePlayer = true, true
+			}
+			job.anchorCheck = false
+		}
+		if job.askApple || job.readSpotify || job.readAmazon {
+			out = append(out, job)
+		}
+	}
+	return out
 }
 
 // appleCatalogSong:按 id 取回来的一首。补 ISRC 用 isrc、durationSecs;按合作署名重核链接(applecreditlinks.go)另用 artist、title。
@@ -269,15 +374,15 @@ func appleSweepISRCLevel(key string, song appleCatalogSong, durationSecs float64
 	return isrcLevelVerified
 }
 
-// applyISRCSweepResultLocked:把一条的结果写回。条目还在、id 没变才写;isrcs 合进已有的,ISRCLookup 记成这次的 id。
-// 返回有没有改动。调用方持有 enrichMu。
-func applyISRCSweepResultLocked(job isrcSweepJob, isrcs []recordedISRC) bool {
+// applyISRCSweepResultLocked:把一条的结果写回。条目还在、几支的 id 没变、这一轮做成了(o.settled)、又真有东西要记才写;
+// 号合进已有的,isrc_lookup 记上这一轮做完的几支。返回写没写。调用方持有 enrichMu。
+func applyISRCSweepResultLocked(job isrcSweepJob, o isrcSweepOutcome) bool {
 	cur, ok := enrichCache[job.key]
-	if !ok || isrcLookupKey(cur) != job.lookup {
+	if !ok || !o.settled || (len(o.isrcs) == 0 && len(o.done) == 0) || !slices.Equal(isrcLookupParts(cur), job.parts) {
 		return false
 	}
-	recordISRCs(&cur, isrcs)
-	cur.ISRCLookup = job.lookup
+	recordISRCs(&cur, o.isrcs)
+	cur.ISRCLookup = isrcLookupWith(cur, o.done...)
 	enrichCache[job.key] = cur
 	return true
 }
@@ -315,39 +420,57 @@ func appleCatalogSongsByID(ctx context.Context, storefront string, ids []string)
 	return out, true
 }
 
-// startRecordingISRCSweep:引擎起来后给存量条目补一次 ISRC。存过 Spotify 曲目 id 的从本机 Spotify 缓存读(不联网);存过
-// Apple 歌曲 id 的按商店分批问 Apple Music 曲库,时长跟播放器报的对得上才记(没有播放器时长的不记,只标成补过)。
-// 没问成、没轮到(引擎在退出)的那几批不标,下次起来再补。
-func startRecordingISRCSweep(ctx context.Context) {
-	select {
-	case <-ctx.Done():
-		return
-	case <-time.After(isrcSweepDelay):
-	}
-	enrichMu.Lock()
-	jobs := isrcSweepJobsLocked()
-	enrichMu.Unlock()
-	if len(jobs) == 0 {
-		return
-	}
-	found := map[string][]recordedISRC{}
-	settled := map[string]bool{}
-	byStorefront := map[string][]isrcSweepJob{}
-	// Spotify 那几条一次查完:本机库每个账号只扫一遍(见 spotifyLocalISRCs)。
+// isrcSweepDeps:补号的几处来路和两批 Apple 请求之间的间隔,单测换成假的。
+type isrcSweepDeps struct {
+	spotify func(trackIDs []string) map[string]string
+	amazon  func(asin string) string
+	apple   func(ctx context.Context, storefront string, ids []string) (map[string]appleCatalogSong, bool)
+	pace    time.Duration
+}
+
+var isrcSweepLiveDeps = isrcSweepDeps{spotify: spotifyLocalISRCs, amazon: amazonISRCForASIN, apple: appleCatalogSongsByID, pace: isrcSweepPace}
+
+// isrcSweepOutcome:一条做完的样子。isrcs 是取回的号(带级别),done 是做完的几支记号。settled 为 false:要问 Apple 的那一批
+// 没问成(网络、令牌)或没轮到,整条不写回、下次再来。
+type isrcSweepOutcome struct {
+	isrcs   []recordedISRC
+	done    []string
+	settled bool
+}
+
+// runISRCSweepJobs:把几条要补的做完。本机缓存那两支直接读;Apple 那一支按商店分批问(后台请求:只用主机限速里富余的额度,不跟
+// 正在播的那首排队,见 hostguard.go 第 3 道),两批之间隔 deps.pace,ctx 取消就停。返回每条的结果(按 key)和问了 Apple 几次。
+// 要读别的 App 的本机缓存、要联网,不能持着 enrichMu 调。
+func runISRCSweepJobs(ctx context.Context, jobs []isrcSweepJob, deps isrcSweepDeps) (map[string]*isrcSweepOutcome, int) {
+	out := make(map[string]*isrcSweepOutcome, len(jobs))
 	var spotifyIDs []string
 	for _, job := range jobs {
-		if job.spotifyID != "" {
+		out[job.key] = &isrcSweepOutcome{settled: !job.askApple}
+		if job.readSpotify {
 			spotifyIDs = append(spotifyIDs, job.spotifyID)
 		}
 	}
-	spotifyCodes := spotifyLocalISRCs(spotifyIDs)
+	// Spotify 那几条一次查完:本机库每个账号只扫一遍(见 spotifyLocalISRCs)。
+	var spotifyCodes map[string]string
+	if len(spotifyIDs) > 0 {
+		spotifyCodes = deps.spotify(spotifyIDs)
+	}
+	byStorefront := map[string][]isrcSweepJob{}
 	for _, job := range jobs {
-		if code := spotifyCodes[job.spotifyID]; job.spotifyID != "" && code != "" {
-			found[job.key] = append(found[job.key], recordedISRC{code, isrcLevelPlayer})
+		o := out[job.key]
+		if job.readSpotify {
+			if code := normalizeISRC(spotifyCodes[job.spotifyID]); code != "" {
+				o.isrcs = append(o.isrcs, recordedISRC{code, isrcLevelPlayer})
+				o.done = append(o.done, isrcPartSpotify+job.spotifyID)
+			}
 		}
-		if job.appleID == "" {
-			settled[job.key] = true
-		} else {
+		if job.readAmazon {
+			if code := normalizeISRC(deps.amazon(job.amazonASIN)); code != "" {
+				o.isrcs = append(o.isrcs, recordedISRC{code, isrcLevelPlayer})
+				o.done = append(o.done, isrcPartAmazon+job.amazonASIN)
+			}
+		}
+		if job.askApple {
 			byStorefront[job.storefront] = append(byStorefront[job.storefront], job)
 		}
 	}
@@ -357,45 +480,80 @@ func startRecordingISRCSweep(ctx context.Context) {
 	}
 	sort.Strings(storefronts)
 	requests := 0
-sweep:
 	for _, sf := range storefronts {
 		group := byStorefront[sf]
 		for start := 0; start < len(group); start += isrcSweepBatch {
+			if requests > 0 {
+				select {
+				case <-ctx.Done():
+				case <-time.After(deps.pace):
+				}
+			}
 			if ctx.Err() != nil {
-				break sweep
+				return out, requests
 			}
 			batch := group[start:min(start+isrcSweepBatch, len(group))]
 			ids := make([]string, len(batch))
 			for i, job := range batch {
 				ids[i] = job.appleID
 			}
-			// 后台请求:只用主机限速里富余的额度,不跟正在播的那首排队(见 hostguard.go 第 3 道)。
-			songs, ok := appleCatalogSongsByID(withBackgroundOutbound(ctx), sf, ids)
+			songs, ok := deps.apple(withBackgroundOutbound(ctx), sf, ids)
 			requests++
-			if ok {
-				for _, job := range batch {
-					song, has := songs[job.appleID]
-					if code := isrcFromAppleSong(song, has, job.durationSecs); code != "" {
-						found[job.key] = append(found[job.key], recordedISRC{code, appleSweepISRCLevel(job.key, song, job.durationSecs)})
-					}
-					settled[job.key] = true
-				}
+			if !ok {
+				continue
 			}
-			select {
-			case <-ctx.Done():
-				break sweep
-			case <-time.After(isrcSweepPace):
+			for _, job := range batch {
+				o := out[job.key]
+				song, has := songs[job.appleID]
+				if code := isrcFromAppleSong(song, has, job.durationSecs); code != "" {
+					level := isrcLevelPlayer
+					if !job.applePlayer {
+						level = appleSweepISRCLevel(job.key, song, job.durationSecs)
+					}
+					o.isrcs = append(o.isrcs, recordedISRC{code, level})
+				}
+				o.done = append(o.done, isrcPartApple+job.storefront+":"+job.appleID)
+				if job.applePlayer {
+					o.done = append(o.done, isrcPartAppleAnchor+job.storefront+":"+job.appleID)
+				}
+				o.settled = true
 			}
 		}
 	}
-	updated, withISRC := 0, 0
+	return out, requests
+}
+
+// startRecordingISRCSweep:引擎起来后给存量条目补一次 ISRC。本机 Spotify、Amazon 缓存按曲目 id 读(不联网);Apple 链接按商店
+// 分批问曲库,时长跟播放器报的对得上才记(没有播放器时长的不记,只标成补过);在 Apple Music 上放过、链接就是它报的目录锚点的,
+// 号记 player。没问成、没轮到(引擎在退出)的那几条不写,下次起来再补。
+func startRecordingISRCSweep(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(isrcSweepDelay):
+	}
+	enrichMu.Lock()
+	jobs := isrcSweepJobsLocked()
+	enrichMu.Unlock()
+	// 锚点在 appleCatalogMu 后面,放开 enrichMu 再核对。
+	jobs = isrcResolveAnchors(jobs, appleCatalogLinkFor)
+	if len(jobs) == 0 {
+		return
+	}
+	outcomes, requests := runISRCSweepJobs(ctx, jobs, isrcSweepLiveDeps)
+	updated, withISRC, left := 0, 0, 0
 	enrichMu.Lock()
 	for _, job := range jobs {
-		if !settled[job.key] || !applyISRCSweepResultLocked(job, found[job.key]) {
+		o := outcomes[job.key]
+		if !o.settled {
+			left++
+			continue
+		}
+		if !applyISRCSweepResultLocked(job, *o) {
 			continue
 		}
 		updated++
-		if len(found[job.key]) > 0 {
+		if len(o.isrcs) > 0 {
 			withISRC++
 		}
 	}
@@ -406,6 +564,66 @@ sweep:
 	if updated > 0 {
 		requestEnrichBackgroundSave()
 	}
-	log.Printf("isrc sweep: %d of %d entries checked, %d with isrc, %d apple requests, %d left for the next run",
-		updated, len(jobs), withISRC, requests, len(jobs)-len(settled))
+	log.Printf("isrc sweep: %d of %d entries updated, %d with isrc, %d apple requests, %d left for the next run",
+		updated, len(jobs), withISRC, requests, left)
+}
+
+// 正在放的那首当场补播放器给的号,不等下次启动的补扫:本机缓存那两支,还有 Apple Music 正在放、条目链接就是它报的目录锚点时
+// 问一次曲库。按歌名配的 Apple 链接照旧留给补扫,联网请求量不变(18 章决策 63)。isrcPlaybackInflight:正在做的;
+// isrcPlaybackTried:同一条、同一组 id 上次起的时刻,没做成的隔 isrcPlaybackRetry 再试。都受 enrichMu 保护。
+var (
+	isrcPlaybackInflight = map[string]bool{}
+	isrcPlaybackTried    = map[string]time.Time{}
+)
+
+const (
+	isrcPlaybackRetry    = 10 * time.Minute
+	isrcPlaybackTriedCap = 512
+)
+
+// playbackISRCJobLocked:正在放的 key 这一拍要不要起一轮补号、补哪几支。e 是这一拍写好的条目,bundleID 是在放的播放器,
+// anchorLink 是这首的目录锚点(appleCatalogLinkFor,锁外取好)。返回 ok 时已记成在做,做完由 runPlaybackISRCJob 清掉。
+// 调用方持有 enrichMu。
+func playbackISRCJobLocked(key string, e enrichEntry, bundleID, anchorLink string, now time.Time) (isrcSweepJob, bool) {
+	job, ok := isrcSweepJobFor(key, e)
+	if !ok || isrcPlaybackInflight[key] {
+		return isrcSweepJob{}, false
+	}
+	job.askApple, job.anchorCheck = false, false
+	if bundleID == appleMusicBundleID && anchorLink != "" && e.AppleURL == anchorLink && job.appleID != "" &&
+		!isrcLookupDone(e)[isrcAnchorPart(e)] {
+		job.askApple, job.applePlayer = true, true
+	}
+	if !job.askApple && !job.readSpotify && !job.readAmazon {
+		return isrcSweepJob{}, false
+	}
+	sig := key + "\x1f" + strings.Join(job.parts, " ")
+	if at, tried := isrcPlaybackTried[sig]; tried && now.Sub(at) < isrcPlaybackRetry {
+		return isrcSweepJob{}, false
+	}
+	if len(isrcPlaybackTried) >= isrcPlaybackTriedCap {
+		clear(isrcPlaybackTried)
+	}
+	isrcPlaybackTried[sig] = now
+	isrcPlaybackInflight[key] = true
+	return job, true
+}
+
+// runPlaybackISRCJob:在后台把 playbackISRCJobLocked 起的那一轮做完、写回。
+func runPlaybackISRCJob(job isrcSweepJob) {
+	outcomes, _ := runISRCSweepJobs(context.Background(), []isrcSweepJob{job}, isrcSweepLiveDeps)
+	o := outcomes[job.key]
+	enrichMu.Lock()
+	delete(isrcPlaybackInflight, job.key)
+	changed := applyISRCSweepResultLocked(job, *o)
+	if changed {
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if changed {
+		requestEnrichBackgroundSave()
+		if len(o.isrcs) > 0 {
+			log.Printf("isrc: %q recorded %d code(s) while playing (%s)", job.key, len(o.isrcs), strings.Join(o.done, " "))
+		}
+	}
 }

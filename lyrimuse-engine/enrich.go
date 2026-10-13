@@ -437,7 +437,7 @@ type enrichEntry struct {
 
 	// ISRCs:这条录音的 ISRC(一份录音可能被不同发行商各登记一个),App 合并收听写法时按它认同一首,来路和时长闸见
 	// recordingisrc.go。ISRCLevels:号 → 来路级别(player / verified / searched,recordISRCs 写),没记的号不知道来路。
-	// ISRCLookup:存量补 ISRC 时按哪几个 id 补过(isrcLookupKey),id 没变就不再补。都不进 fields()。
+	// ISRCLookup:补 ISRC 时补过哪几支,一支一个记号(isrcLookupParts),id 没变就不再补。都不进 fields()。
 	ISRCs      []string          `json:"isrcs,omitempty"`
 	ISRCLevels map[string]string `json:"isrc_levels,omitempty"`
 	ISRCLookup string            `json:"isrc_lookup,omitempty"`
@@ -894,6 +894,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		if spotifyHintDirty {
 			enrichCache[key] = e
 			enrichDirty = true
+		}
+		// 播放器给的 ISRC 当场补:本机缓存那两支、Apple Music 播放时报的目录锚点(见 playbackISRCJobLocked)。
+		if job, ok := playbackISRCJobLocked(key, e, bundleID, anchorLink, time.Now()); ok {
+			go runPlaybackISRCJob(job)
 		}
 		// 用户校准过这首歌的歌词时间轴吗(自己钉着,或者在读穿同一首歌的一份校准,见 lyricsCalibratedLocked)—— 两条
 		// "自动重选歌词源"的路径共用这一次判定(见 lyricspins.go)。放在这里而不是各自函数里面:那两个判定要保持纯函数,
