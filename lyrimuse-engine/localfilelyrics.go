@@ -150,9 +150,11 @@ func localFileLyricsFor(artist, title string, durationSecs float64) (lyricSource
 	if !ok {
 		return lyricSourceResult{}, false
 	}
+	// 文件标签里只有不带时间的歌词:交成纯文本,打分恒 −1、不顶掉任何一份带时间的;各源都没有带时间的版本时由纯文本兜底
+	// 采用(plainTextFallbackFromScored 排在网上的纯文本前面)。
 	return lyricSourceResult{
 		source: localFileLyricsSource, lyr: lrc, matchTitle: title, matchArtist: artist, srcDur: durationSecs,
-		identityFromLocalClient: true,
+		identityFromLocalClient: true, plainOnly: !localFileLRCTimestamp.MatchString(lrc),
 	}, true
 }
 
@@ -183,7 +185,9 @@ func localFileLyricsAvailable(bundleID, artist, title string) bool {
 		return m.ok
 	}
 	localFileLyricsAvailMu.Unlock()
-	_, ok := localFileLyrics(artist, title)
+	// 只认带时间的:只有纯文本的不值得为它重来一轮(纯文本兜底在补歌词那条路上照样会采用)。
+	text, ok := localFileLyrics(artist, title)
+	ok = ok && localFileLRCTimestamp.MatchString(text)
 	localFileLyricsAvailMu.Lock()
 	for k, m := range localFileLyricsAvailMemo {
 		if now.Sub(m.at) >= localFileLyricsAvailableTTL {

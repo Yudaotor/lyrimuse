@@ -50,8 +50,18 @@ func TestEmbeddedLyricsUSLT(t *testing.T) {
 		t.Errorf("GBK 写在 Latin-1 档里的 USLT:得到 %q, ok=%v", got, ok)
 	}
 	plain := id3Tag(3, id3Frame(3, "USLT", usltBody(3, []byte("稻香\n对这个世界\n"))))
-	if _, ok := embeddedLyricsFromID3(plain[:10], plain[10:]); ok {
-		t.Error("没有时间标签的 USLT 不该收")
+	if got, ok := embeddedLyricsFromID3(plain[:10], plain[10:]); !ok || got != "稻香\n对这个世界\n" {
+		t.Errorf("只有不带时间的 USLT 时交它(当纯文本):得到 %q, ok=%v", got, ok)
+	}
+	for _, order := range [][2]string{{"纯文字", lrc}, {lrc, "纯文字"}} {
+		both := id3Tag(3, id3Frame(3, "USLT", usltBody(3, []byte(order[0]))), id3Frame(3, "USLT", usltBody(3, []byte(order[1]))))
+		if got, ok := embeddedLyricsFromID3(both[:10], both[10:]); !ok || got != lrc {
+			t.Errorf("带时间的排在不带时间的前面(帧顺序 %q 在先):得到 %q, ok=%v", order[0], got, ok)
+		}
+	}
+	blank := id3Tag(3, id3Frame(3, "USLT", usltBody(3, []byte(" \n"))))
+	if _, ok := embeddedLyricsFromID3(blank[:10], blank[10:]); ok {
+		t.Error("只有空白的 USLT 不算")
 	}
 }
 
@@ -102,6 +112,26 @@ func TestLocalFileLyricsFallsBackToEmbedded(t *testing.T) {
 	}
 }
 
+func TestLocalFileLyricsPlainTextOnly(t *testing.T) {
+	dir := t.TempDir()
+	audio := filepath.Join(dir, "Plain.mp3")
+	tag := id3Tag(3, id3Frame(3, "USLT", usltBody(3, []byte("first line\r\nsecond line"))))
+	if err := os.WriteFile(audio, append(tag, 0xFF, 0xFB), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { noteLocalFileCurrentTrack("", "", "", "") })
+	noteLocalFileCurrentTrack(reampBundleID, "A", "Plain", audio)
+	setNativeLyricSourcesForPlayer(reampBundleID)
+	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
+	r, ok := localFileLyricsFor("A", "Plain", 200)
+	if !ok || !r.plainOnly || r.lyr != "first line\nsecond line" {
+		t.Fatalf("文件里只有不带时间的歌词:交成纯文本,得到 %+v ok=%v", r, ok)
+	}
+	if localFileLyricsAvailable(reampBundleID, "A", "Plain") {
+		t.Error("只有纯文本时不算「有本地歌词」(不为它重来一轮)")
+	}
+}
+
 func vorbisComment(fields ...string) []byte {
 	le := func(n int) []byte { return binary.LittleEndian.AppendUint32(nil, uint32(n)) }
 	out := append(le(6), "vendor"...)
@@ -137,8 +167,12 @@ func TestEmbeddedLyricsFLAC(t *testing.T) {
 		t.Fatalf("FLAC 的 VORBIS_COMMENT(图片块跳过、键不分大小写):得到 %q, ok=%v", got, ok)
 	}
 	plain := append([]byte("fLaC"), block(4, true, vorbisComment("LYRICS=只有文字"))...)
-	if _, ok := localFileEmbeddedLyrics(writeTemp(t, "b.flac", plain)); ok {
-		t.Error("FLAC 里没有时间标签的歌词不该收")
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "b.flac", plain)); !ok || got != "只有文字" {
+		t.Errorf("FLAC 里只有不带时间的歌词时交它(当纯文本):得到 %q, ok=%v", got, ok)
+	}
+	both := append([]byte("fLaC"), block(4, true, vorbisComment("UNSYNCEDLYRICS=只有文字", "LYRICS="+embeddedLRC))...)
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "c.flac", both)); !ok || got != embeddedLRC {
+		t.Errorf("FLAC 里带时间的排在不带时间的前面:得到 %q, ok=%v", got, ok)
 	}
 }
 
@@ -188,6 +222,11 @@ func TestEmbeddedLyricsMP4(t *testing.T) {
 	data := append(append(atom("ftyp", []byte("M4A \x00\x00\x00\x00")), atom("mdat", make([]byte, 4096))...), moov...)
 	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "a.m4a", data)); !ok || got != embeddedLRC {
 		t.Fatalf("M4A 的 ©lyr(moov 在 mdat 后面):得到 %q, ok=%v", got, ok)
+	}
+	plain := atom("moov", atom("udta", atom("meta", []byte{0, 0, 0, 0},
+		atom("ilst", atom("\xa9lyr", atom("data", []byte{0, 0, 0, 1, 0, 0, 0, 0}, []byte("喜歡那深夜的安靜\r和我約定")))))))
+	if got, ok := localFileEmbeddedLyrics(writeTemp(t, "b.m4a", plain)); !ok || got != "喜歡那深夜的安靜\r和我約定" {
+		t.Errorf("M4A 的 ©lyr 只有不带时间的歌词时交它(当纯文本):得到 %q, ok=%v", got, ok)
 	}
 }
 

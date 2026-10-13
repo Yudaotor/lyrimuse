@@ -2065,9 +2065,15 @@ func retryLyricsUpgradeWith(ctx context.Context, key, artist, title, album strin
 // 候选——纯函数,拆出来给 rescoreLyrics/resolveEnrichAsync 两个写入点共用+单测。调用方
 // 已经确认了 picked==nil(没有分数>=0 的候选)、!e.Instrumental、e.PlainLyrics==""
 // 这三个前提,这里只负责"scored 里有没有能用的 PlainTextOnly 候选、选哪一条"——按
-// scored 原有顺序(打分环节已按固定源序排过)取第一条。网易云 / QQ 的纯文本排在别家后面,只在别家都没有纯文本时
-// 才用(QQ 的正文常带「歌名 - 歌手」那一行标题),有别家的时候取到的跟它们不交纯文本时一样。
+// scored 原有顺序(打分环节已按固定源序排过)取第一条。正在放的文件标签里自带的(localfile)排在最前:它就是这个文件的歌词。
+// 网易云 / QQ 的纯文本排在别家后面,只在别家都没有纯文本时才用(QQ 的正文常带「歌名 - 歌手」那一行标题),
+// 有别家的时候取到的跟它们不交纯文本时一样。
 func plainTextFallbackFromScored(scored []scoredLyricCandidateResult) (lyrics, source string) {
+	for _, c := range scored {
+		if c.PlainTextOnly && c.Lyrics != "" && c.Source == localFileLyricsSource {
+			return c.Lyrics, c.Source
+		}
+	}
 	var last scoredLyricCandidateResult
 	for _, c := range scored {
 		if !c.PlainTextOnly || c.Lyrics == "" {
@@ -2759,15 +2765,8 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		clearEngineNetworkDown()
 	}
 
-	// 只保留"解析到东西"的结果;全空(可能网络抽风)不写入,下次再试,别把偶发失败钉死。
-	//
-	// QQURL 必须排除掉"搜索链接兜底"这一档。qqMusicURL 在 smartbox 查不到时会拼一个
-	// 纯本地的搜索页 URL(见 qq.go,它自己也不缓存这个兜底值)——**它不需要网络就能得到**,
-	// 拿它当"解析到东西"的证据是假的:断网时这条守卫会因此永不成立,于是每首歌都会往永久
-	// 缓存里写一条只有搜索链接、没有任何内容的条目。
-	// SpotifyURL 同样是本地拼的,所以它本来就不在这个判据里。
-	hasRealQQURL := e.QQURL != "" && !isQQSearchFallbackURL(e.QQURL)
-	if e.CoverURL == "" && e.Lyrics == "" && e.AppleURL == "" && !hasRealQQURL && e.NeteaseURL == "" {
+	// 只保留"解析到东西"的结果;全空(可能网络抽风)不写入,下次再试,别把偶发失败钉死。判据见 enrichRoundFoundNothing。
+	if enrichRoundFoundNothing(e) {
 		// 全空分两种,结论完全不同,不能压成同一个"不写":
 		//
 		//  · **根本没查成**(断网/整轮一个请求都没发出去)——不写是对的,下次再试,别把一次
@@ -2794,6 +2793,19 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		return
 	}
 	commitEnrichEntrySince(key, e, stamp)
+}
+
+// enrichRoundFoundNothing:一轮解析什么都没拿到(resolveEnrichAsync 的「全空不写入」)。纯文本歌词算拿到了:
+// 正在放的文件标签里只有不带时间的歌词、网上又一样都没搜到时,这一轮的结果就只有它。
+//
+// QQURL 必须排除掉"搜索链接兜底"这一档。qqMusicURL 在 smartbox 查不到时会拼一个
+// 纯本地的搜索页 URL(见 qq.go,它自己也不缓存这个兜底值)——**它不需要网络就能得到**,
+// 拿它当"解析到东西"的证据是假的:断网时这条守卫会因此永不成立,于是每首歌都会往永久
+// 缓存里写一条只有搜索链接、没有任何内容的条目。
+// SpotifyURL 同样是本地拼的,所以它本来就不在这个判据里。
+func enrichRoundFoundNothing(e enrichEntry) bool {
+	hasRealQQURL := e.QQURL != "" && !isQQSearchFallbackURL(e.QQURL)
+	return e.CoverURL == "" && e.Lyrics == "" && e.PlainLyrics == "" && e.AppleURL == "" && !hasRealQQURL && e.NeteaseURL == ""
 }
 
 // commitEnrichEntry 是 resolveEnrichAsync 两条落盘路径(正常查完/被用户取消)共用的
@@ -5006,7 +5018,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			source: localFileLyricsSource, lyrics: localLRC.lyr,
 			sourceReportedDurationSecs: localLRC.srcDur,
 			title:                      localLRC.matchTitle, artist: localLRC.matchArtist,
-			identityFromLocalClient: localLRC.identityFromLocalClient,
+			identityFromLocalClient: localLRC.identityFromLocalClient, plainTextOnly: localLRC.plainOnly,
 		})
 	}
 	if spl.lyr != "" {

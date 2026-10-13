@@ -1477,8 +1477,11 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// 酷狗不走:它的晚打时有时无(同一个歌单连着三首,0.5s / 0 / 0.5s),平均值必然有的歌补过头、有的补不够;
     /// 它晚打的那种由 `MediaControlClient.resetAnchorStartCorrection` 逐首补。
+    ///
+    /// reAMP 不走:开播锚点对出声在 0.01 秒以内,它第一次重发是暂停后补报的停住位置,量到的是那份冻结值自己的误差
+    /// (±0.1 秒),学进去会给下一首开头白加一截。见 02 章决策 126。
     public nonisolated static func learnsAnchorLag(bundleID: String?) -> Bool {
-        bundleID != PlaybackPlayer.kugou.bundleIdentifier
+        bundleID != PlaybackPlayer.kugou.bundleIdentifier && bundleID != PlaybackPlayer.reamp.bundleIdentifier
     }
 
     /// 这个播放器播放中会持续重发准的锚点,外推只是两次重发之间的补间:KKBOX 约每 1.06s 一次、逐次一致,

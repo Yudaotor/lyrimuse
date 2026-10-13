@@ -6,6 +6,18 @@ import "testing"
 // 所有源、真的找不到任何带时间戳版本时,才把纯文本兜底自动采纳进去"——在此之前这类候选
 // 只能靠用户在"搜索候选歌词"弹窗里手动点"采纳为静态文本",见 PlainLyrics 字段定义处的
 // 完整说明)。
+func TestEnrichRoundFoundNothing(t *testing.T) {
+	if !enrichRoundFoundNothing(enrichEntry{}) {
+		t.Error("什么都没有:全空")
+	}
+	if enrichRoundFoundNothing(enrichEntry{PlainLyrics: "只有文字", PlainLyricsSource: localFileLyricsSource}) {
+		t.Error("只拿到纯文本歌词也算拿到了东西,要落盘")
+	}
+	if !enrichRoundFoundNothing(enrichEntry{QQURL: qqSearchFallbackPrefix + "x"}) {
+		t.Error("QQ 的搜索页兜底链接不算")
+	}
+}
+
 func TestPlainTextFallbackFromScored(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -47,6 +59,14 @@ func TestPlainTextFallbackFromScored(t *testing.T) {
 		{
 			name: "空列表:不算数",
 			in:   nil, wantLyrics: "", wantSource: "",
+		},
+		{
+			name: "正在放的文件自带的纯文本排在网上的前面",
+			in: []scoredLyricCandidateResult{
+				{Source: "lrclib", Score: -1, PlainTextOnly: true, Lyrics: "LRCLIB 正文"},
+				{Source: localFileLyricsSource, Score: -1, PlainTextOnly: true, Lyrics: "文件自带"},
+			},
+			wantLyrics: "文件自带", wantSource: localFileLyricsSource,
 		},
 		{
 			name: "网易云的纯文本排在别家后面",

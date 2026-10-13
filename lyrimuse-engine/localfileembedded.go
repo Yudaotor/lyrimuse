@@ -10,8 +10,8 @@ import (
 	"unicode/utf16"
 )
 
-// 正在放的文件自己标签里的歌词:同目录没有同名 .lrc 时的退路(见 localFileLyrics)。只收写成 LRC(带时间标签)的那种 ——
-// 不少中文歌曲文件把整份 LRC 塞在歌词字段里;纯文本对不上时间,不要。按扩展名认格式:
+// 正在放的文件自己标签里的歌词:同目录没有同名 .lrc 时的退路(见 localFileLyrics)。写成 LRC(带时间标签)的优先 ——
+// 不少中文歌曲文件把整份 LRC 塞在歌词字段里;没有才交不带时间的那份,由调用方当纯文本兜底(localFileLyricsFor)。按扩展名认格式:
 //   - MP3:开头的 ID3v2(v2.3 / v2.4;v2.2 三字母帧名不认)。SYLT 逐行带时间,换成 LRC;USLT;TXXX 里描述叫 LYRICS /
 //     UNSYNCEDLYRICS / USLT 的(有的工具把歌词写成这种自定义帧)。
 //   - AIFF / WAV:块里嵌着的那份 ID3v2(`ID3 ` / `id3 ` 块),同 MP3。
@@ -21,7 +21,7 @@ import (
 // localFileEmbeddedMaxTagBytes:标签区大过这个就不读(多半塞了大图,歌词帧不会这么大)。
 const localFileEmbeddedMaxTagBytes = 16 << 20
 
-// localFileEmbeddedLyrics 按扩展名读文件标签里的歌词;认不出的格式、没有能用的为 false。
+// localFileEmbeddedLyrics 按扩展名读文件标签里的歌词(带时间的优先);认不出的格式、没有能用的为 false。
 func localFileEmbeddedLyrics(path string) (string, bool) {
 	ext := strings.ToLower(strings.TrimPrefix(fileExt(path), "."))
 	switch ext {
@@ -198,20 +198,28 @@ func lyricsFromVorbisComment(b []byte) (string, bool) {
 	}
 	count := int(binary.LittleEndian.Uint32(b[:4]))
 	b = b[4:]
+	var plain string
 	for i := 0; i < count; i++ {
 		c, ok := next()
 		if !ok {
-			return "", false
+			break
 		}
 		key, value, found := bytes.Cut(c, []byte("="))
 		if !found || !isLyricsTagKey(string(key)) {
 			continue
 		}
-		if text, ok := decodeLyricBytes(value); ok && localFileLRCTimestamp.MatchString(text) {
+		text, ok := decodeLyricBytes(value)
+		if !ok {
+			continue
+		}
+		if localFileLRCTimestamp.MatchString(text) {
 			return text, true
 		}
+		if plain == "" && strings.TrimSpace(text) != "" {
+			plain = text
+		}
 	}
-	return "", false
+	return plain, plain != ""
 }
 
 func isLyricsTagKey(key string) bool {
@@ -288,7 +296,7 @@ func lyricsFromMP4Moov(moov []byte) (string, bool) {
 		b = body[step.skip:]
 	}
 	text, ok := decodeLyricBytes(b)
-	if !ok || !localFileLRCTimestamp.MatchString(text) {
+	if !ok || strings.TrimSpace(text) == "" {
 		return "", false
 	}
 	return text, true
@@ -335,7 +343,17 @@ func embeddedLyricsFromID3(header, tag []byte) (string, bool) {
 			pos = int(binary.BigEndian.Uint32(tag[:4])) + 4
 		}
 	}
-	var unsynced string
+	var timed, plain string
+	keep := func(text string) {
+		switch {
+		case localFileLRCTimestamp.MatchString(text):
+			if timed == "" {
+				timed = text
+			}
+		case plain == "" && strings.TrimSpace(text) != "":
+			plain = text
+		}
+	}
 	for pos+10 <= len(tag) {
 		id := string(tag[pos : pos+4])
 		if tag[pos] == 0 {
@@ -358,21 +376,20 @@ func embeddedLyricsFromID3(header, tag []byte) (string, bool) {
 				return lrc, true
 			}
 		case "USLT":
-			if unsynced == "" {
-				if text, ok := textFromUSLT(body); ok && localFileLRCTimestamp.MatchString(text) {
-					unsynced = text
-				}
+			if text, ok := textFromUSLT(body); ok {
+				keep(text)
 			}
 		case "TXXX":
-			if unsynced == "" {
-				if text, ok := textFromLyricsTXXX(body); ok && localFileLRCTimestamp.MatchString(text) {
-					unsynced = text
-				}
+			if text, ok := textFromLyricsTXXX(body); ok {
+				keep(text)
 			}
 		}
 		pos += 10 + size
 	}
-	return unsynced, unsynced != ""
+	if timed != "" {
+		return timed, true
+	}
+	return plain, plain != ""
 }
 
 func syncsafeInt(b []byte) int {

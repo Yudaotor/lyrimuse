@@ -239,7 +239,8 @@ public enum PlayerTitleSplit {
     }
 
     /// 播放器报的这串标题(连同它报的时长)是不是这个文件:照 reAMP 拼标题的规则(有歌手「歌手 - 歌名」、只有歌名是歌名、
-    /// 没写标签是带扩展名的文件名)拿文件标签原样算一遍,跟报的逐字比;它只报整数秒,时长差 1.5 秒以内。
+    /// 没写标签是带扩展名的文件名)拿文件标签原样算一遍,两边连续的空白(含换行)都压成一个空格后逐字比:reAMP 报的是标签原样,
+    /// 读标签这边去过首尾空白,标签里带换行的(电台节目把主持、嘉宾分行写)只差在这儿。它只报整数秒,时长差 1.5 秒以内。
     /// 标签不还原乱码:reAMP 跟 AudioToolbox 读老 MP3 得到的是同一串乱码。纯函数,selftest 覆盖。
     public static func fileMatches(reportedTitle: String, reportedDuration: Double?, tags: LocalAudioFileTags,
                             fileName: String) -> Bool {
@@ -251,9 +252,13 @@ public enum PlayerTitleSplit {
         } else {
             expected = fileName
         }
-        guard expected == reportedTitle.trimmingCharacters(in: .whitespaces) else { return false }
+        guard collapsedWhitespace(expected) == collapsedWhitespace(reportedTitle) else { return false }
         if let reportedDuration, let duration = tags.duration, abs(duration - reportedDuration) > 1.5 { return false }
         return true
+    }
+
+    static func collapsedWhitespace(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
     /// 文件标签换成快照用的身份:还原乱码(几个标签一起判);没写歌名的不用(交回拆标题,那边会去掉文件名的扩展名)。纯函数,selftest 覆盖。
@@ -286,6 +291,12 @@ public enum PlayerTitleSplit {
         return sinceChecked >= (attempts >= maxAttempts ? giveUpRetryInterval : retryInterval)
     }
 
+    /// 按标题记下的那个文件已经不是它在放的:它此刻开着别的音频文件、记下的不在其中(同一串标题换成了另一个文件,
+    /// 比如同一首的另一种格式)。一个都没开着时照旧用记下的。纯函数,selftest 覆盖。
+    public static func cachedFileReplaced(cachedPath: String, openAudioPaths: [String]) -> Bool {
+        !openAudioPaths.isEmpty && !openAudioPaths.contains(cachedPath)
+    }
+
     /// 正在放的那个文件换来的身份;不归这里管、没进程号、找不到对得上的文件时为 nil。
     static func fileIdentity(bundleID: String?, title: String?, duration: Double?, pid: Int?,
                              now: Date = Date()) -> FileIdentity? {
@@ -293,7 +304,10 @@ public enum PlayerTitleSplit {
         let hit = cache.withLock { $0[title] }
         if let hit, !shouldLookUpFile(found: hit.path != nil, attempts: hit.attempts,
                                       sinceChecked: now.timeIntervalSince(hit.checkedAt)) {
-            return hit.identity
+            guard let path = hit.path, let pid, pid > 0,
+                  cachedFileReplaced(cachedPath: path, openAudioPaths: openAudioPaths(pid: pid_t(pid))) else {
+                return hit.identity
+            }
         }
         guard let pid, pid > 0 else { return nil }
         let found = lookUp(title: title, duration: duration, pid: pid_t(pid))
@@ -325,9 +339,12 @@ public enum PlayerTitleSplit {
         }
     }
 
+    private static func openAudioPaths(pid: pid_t) -> [String] {
+        ProcessOpenFiles.paths(pid: pid).filter { audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
+    }
+
     private static func lookUp(title: String, duration: Double?, pid: pid_t) -> (identity: FileIdentity?, path: String)? {
-        let candidates = ProcessOpenFiles.paths(pid: pid)
-            .filter { audioExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }
+        let candidates = openAudioPaths(pid: pid)
         for path in candidates {
             let fileName = URL(fileURLWithPath: path).lastPathComponent
             guard let tags = LocalAudioFileTags.read(path: path),

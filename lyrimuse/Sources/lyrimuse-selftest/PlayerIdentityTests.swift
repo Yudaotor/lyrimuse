@@ -783,6 +783,13 @@ func runPlayerIdentityTests() {
         expectEqual(fileMatch("Hawk Nelson - Diamonds", 213, soldOut), false, "文件标签: 标题对不上(播放器预读的下一首)")
         let titleOnly = Tags(title: "Maybe Man", artist: "", album: "", duration: 220.1)
         expectEqual(fileMatch("Maybe Man", 220, titleOnly), true, "文件标签: 只有歌名")
+        let show = Tags(title: "第三十一集", artist: "主持：伍諾韻\n \n 嘉賓：朱佩君", album: "", duration: 2207.7)
+        expectEqual(fileMatch("主持：伍諾韻\n \n 嘉賓：朱佩君 - 第三十一集\n", 2207, show), true,
+                    "文件标签: 标签带换行,播放器报的原样带着末尾的换行")
+        expectEqual([P.cachedFileReplaced(cachedPath: "/m/a.mp3", openAudioPaths: ["/m/a.ogg"]),
+                     P.cachedFileReplaced(cachedPath: "/m/a.mp3", openAudioPaths: ["/m/a.mp3"]),
+                     P.cachedFileReplaced(cachedPath: "/m/a.mp3", openAudioPaths: [])],
+                    [true, false, false], "文件标签: 同一串标题换了文件才重找,一个都没开着时照旧")
         let untagged = Tags(title: "", artist: "", album: "", duration: 245.3)
         expectEqual(fileMatch("AJR - Karma.mp3", 245, untagged, file: "AJR - Karma.mp3"), true, "文件标签: 没写标签按文件名对")
         expectEqual(P.identity(from: untagged) == nil, true, "文件标签: 没写歌名的交回拆标题")
@@ -909,7 +916,7 @@ func runPlayerIdentityTests() {
             .kaset: (.youtubeMusic, [.controlScript, .appleScriptSnapshot, .channelFallback, .extendedControls, .repeatOne,
                                      .favorite, .learnsAnchorLag, .arrivesWhole, .adSharesTrackIdentity,
                                      .systemNeverHasArtwork, .catalogMenuRows]),
-            .reamp: (nil, [.extendedControls, .gaplessLead, .lateAnchorProbe, .learnsAnchorLag, .arrivesWhole]),
+            .reamp: (nil, [.extendedControls, .gaplessLead, .lateAnchorProbe, .arrivesWhole]),
         ]
         expectEqual(PlaybackPlayer.allCases.count, table.count + 1,
                     "决定表: 新增播放器要在这里补一行,逐项决定它走哪条路(+1 是 .auto)")
