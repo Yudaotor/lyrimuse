@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -368,4 +369,41 @@ func TestNotePlayingKeyWritesSnapshotWithoutPromotingSave(t *testing.T) {
 	if !deferred {
 		t.Fatal("整份落盘应当照旧排着")
 	}
+}
+
+// 整份落盘那行日志的 by 是真正要存的那个函数:跳过落盘包装函数和 enrichSaveNow 那个包级匿名函数。
+func TestLogEnrichSaveNamesCaller(t *testing.T) {
+	restoreEnrichSaveStateOnCleanup(t)
+	savedPath, savedCache, savedLogger := enrichPath, enrichCache, slog.Default()
+	t.Cleanup(func() {
+		enrichPath, enrichCache = savedPath, savedCache
+		slog.SetDefault(savedLogger)
+	})
+	enrichPath = filepath.Join(t.TempDir(), "lyrimuse-enrich-cache.json")
+	var buf bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	for _, c := range []struct {
+		save func()
+		want string
+	}{
+		{saveFromFakeMigration, "by=saveFromFakeMigration"},
+		{saveViaEnrichSaveNow, "by=saveViaEnrichSaveNow"},
+	} {
+		buf.Reset()
+		enrichMu.Lock()
+		enrichCache = map[string]enrichEntry{"a|b|c": {TS: 1}}
+		enrichDirty = true
+		enrichMu.Unlock()
+		c.save()
+		if !bytes.Contains(buf.Bytes(), []byte(`msg="cache: saved"`)) || !bytes.Contains(buf.Bytes(), []byte(c.want)) {
+			t.Errorf("want %s in:\n%s", c.want, buf.String())
+		}
+	}
+}
+
+func saveFromFakeMigration() { saveEnrichCache() }
+
+func saveViaEnrichSaveNow() {
+	enrichSaveNow = func() { saveKeepingPlayingEntryFresh(saveEnrichCache) }
+	enrichSaveNow()
 }

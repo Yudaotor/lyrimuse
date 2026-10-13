@@ -32,6 +32,13 @@ public enum DecisionSidecar {
         return obj
     }
 
+    /// 条目里「当前歌词的出处」那一槽(`lyrics_decision_applied`)。两槽相同时引擎只写 `lyrics_decision`、
+    /// 这一槽换成 `"lyrics_decision_applied_same": true`(引擎 enrichjson.go);这一槽在就以它为准、不看标记。
+    public static func appliedSlot(of entry: [String: Any]) -> Any? {
+        if let applied = entry["lyrics_decision_applied"] { return applied }
+        return (entry["lyrics_decision_applied_same"] as? Bool) == true ? entry["lyrics_decision"] : nil
+    }
+
     /// 给主缓存里某一槽的判决字典补上明细。已经带着 candidates(老条目 / 还没被引擎拆过)、
     /// 没有旁路记录、或指纹对不上时原样返回。
     public static func hydrate(_ decision: [String: Any], record: [String: Any]?) -> [String: Any] {

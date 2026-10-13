@@ -128,3 +128,60 @@ func TestEnrichEntryEveryFieldHasJSONTag(t *testing.T) {
 		t.Error(`"-" must not be treated as a key`)
 	}
 }
+
+// 两槽相同只写 lyrics_decision + 标记,解码还原成共用一个对象;不同就两槽照写;盘上 applied 那一槽在就以它为准。
+func TestEnrichEntryJSONSharedDecisionSlots(t *testing.T) {
+	d := &lyricsDecision{Path: "first-resolve", DecidedAt: 7, Winner: "netease", Applied: true}
+	twin := *d
+	other := &lyricsDecision{Path: "upgrade", DecidedAt: 9, Winner: "qq"}
+	cases := map[string]struct {
+		e        enrichEntry
+		compact  bool
+		wantSame bool
+	}{
+		"same pointer":   {enrichEntry{LyricsDecision: d, LyricsDecisionApplied: d}, true, true},
+		"equal content":  {enrichEntry{LyricsDecision: d, LyricsDecisionApplied: &twin}, true, true},
+		"different":      {enrichEntry{LyricsDecision: other, LyricsDecisionApplied: d}, false, false},
+		"only latest":    {enrichEntry{LyricsDecision: other}, false, false},
+		"only applied":   {enrichEntry{LyricsDecisionApplied: d}, false, false},
+		"no decision at": {enrichEntry{TS: 1}, false, false},
+	}
+	for name, c := range cases {
+		b, err := json.Marshal(c.e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var raw map[string]json.RawMessage
+		_ = json.Unmarshal(b, &raw)
+		_, hasApplied := raw["lyrics_decision_applied"]
+		_, hasFlag := raw["lyrics_decision_applied_same"]
+		if hasFlag != c.compact || (c.compact && hasApplied) {
+			t.Errorf("%s: wrote %s", name, b)
+		}
+		var back enrichEntry
+		if err := json.Unmarshal(b, &back); err != nil {
+			t.Fatal(err)
+		}
+		if back.LyricsDecisionAppliedSame || back.Unknown != nil {
+			t.Errorf("%s: flag or unknown keys leaked into memory: %+v", name, back)
+		}
+		if c.wantSame && back.LyricsDecision != back.LyricsDecisionApplied {
+			t.Errorf("%s: slots should share one object after decoding", name)
+		}
+		if !reflect.DeepEqual(back.LyricsDecision, c.e.LyricsDecision) || !reflect.DeepEqual(back.LyricsDecisionApplied, c.e.LyricsDecisionApplied) {
+			t.Errorf("%s: round trip changed the slots: %s", name, b)
+		}
+	}
+
+	// 不认识标记的老构建写回:标记作为未知键留着,applied 那一槽另写了一份 —— 以那一槽为准。
+	var back enrichEntry
+	in := `{"lyrics_decision":{"path":"upgrade","decided_at":9,"scoring_version":0,"winner":"qq","applied":false},` +
+		`"lyrics_decision_applied":{"path":"first-resolve","decided_at":7,"scoring_version":0,"winner":"netease","applied":true},` +
+		`"lyrics_decision_applied_same":true}`
+	if err := json.Unmarshal([]byte(in), &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.LyricsDecisionApplied == nil || back.LyricsDecisionApplied.Winner != "netease" || back.LyricsDecisionApplied == back.LyricsDecision {
+		t.Fatalf("explicit applied slot should win over the flag: %+v", back.LyricsDecisionApplied)
+	}
+}

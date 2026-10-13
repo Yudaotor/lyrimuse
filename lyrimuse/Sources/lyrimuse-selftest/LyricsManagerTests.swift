@@ -571,6 +571,17 @@ func runLyricsManagerTests() {
         var revised = details
         revised["scoring_revision"] = NSNumber(value: 1)
         expectEqual(DecisionSidecar.sameFingerprint(slot, revised), false, "判决旁路: 打分修订号不同算另一轮")
+
+        // 两槽相同时盘上只有 lyrics_decision + 标记;applied 那一槽在就以它为准。
+        let compact: [String: Any] = ["lyrics_decision": slot, "lyrics_decision_applied_same": true]
+        expectEqual((DecisionSidecar.appliedSlot(of: compact) as? [String: Any])?["winner"] as? String, "kugou",
+                    "判决两槽: 标记在、applied 不在时取 lyrics_decision")
+        let explicit: [String: Any] = ["lyrics_decision": upgrade, "lyrics_decision_applied": slot,
+                                       "lyrics_decision_applied_same": true]
+        expectEqual((DecisionSidecar.appliedSlot(of: explicit) as? [String: Any])?["path"] as? String, "first-resolve",
+                    "判决两槽: applied 那一槽在就以它为准")
+        expectEqual(DecisionSidecar.appliedSlot(of: ["lyrics_decision": slot]) == nil, true,
+                    "判决两槽: 没有标记也没有 applied 就是没有")
     }
 
     // ---- 「重新自动匹配」的通道与结论(LyricsRematch)----

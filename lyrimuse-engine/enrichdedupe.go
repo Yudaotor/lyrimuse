@@ -6,8 +6,8 @@ import "reflect"
 // 指向同一个对象,返回合并了多少条。
 //
 // 引擎写入时本来就是 `e.LyricsDecisionApplied = e.LyricsDecision`(同一个指针),App 手动选词 /
-// 标纯音乐时两槽也写成同一份 —— 可从磁盘读回来,JSON 会把它们解成两个独立对象。实测(
-// 7928 条、97% 两槽相同)加载后常驻 200 MB,合并后 156 MB。落盘照旧两槽各写一份,文件内容逐字节不变。
+// 标纯音乐时两槽也写成同一份。落盘时两槽相同只写一份(enrichjson.go),解码就还原成共用;这里管的是
+// 那之前写的、两槽各写一份的老文件。实测(7928 条、97% 两槽相同)加载后常驻 200 MB,合并后 156 MB。
 //
 // 共用对象成立的前提跟 saveEnrichCache 锁外 marshal 那条一样:判决记录存进缓存之后不再原地改。
 // 现有的原地写(`e.LyricsDecision.SourcesSkipped = ...` 那三处)都发生在 buildLyricsDecision 刚造出

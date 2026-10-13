@@ -304,15 +304,18 @@ func loadArtistSourceAliases(path string) {
 		noteFileErr("read", path, err)
 		return
 	}
+	type slot struct {
+		Winner       string `json:"winner"`
+		WinnerArtist string `json:"winner_artist"`
+		Candidates   []struct {
+			Source string `json:"source"`
+			Artist string `json:"artist"`
+		} `json:"candidates"`
+	}
 	var m map[string]struct {
-		Decision *struct {
-			Winner       string `json:"winner"`
-			WinnerArtist string `json:"winner_artist"`
-			Candidates   []struct {
-				Source string `json:"source"`
-				Artist string `json:"artist"`
-			} `json:"candidates"`
-		} `json:"lyrics_decision_applied"`
+		Latest  *slot `json:"lyrics_decision"`
+		Applied *slot `json:"lyrics_decision_applied"`
+		Same    bool  `json:"lyrics_decision_applied_same"`
 	}
 	if json.Unmarshal(data, &m) != nil {
 		return
@@ -321,7 +324,11 @@ func loadArtistSourceAliases(path string) {
 	for k, e := range m {
 		artist, title, _ := splitEnrichKey(k)
 		s := sourceCreditSample{artist: artist, title: title}
-		if d := e.Decision; d != nil {
+		d := e.Applied
+		if d == nil && e.Same {
+			d = e.Latest // 两槽相同时盘上只写 lyrics_decision,见 enrichjson.go
+		}
+		if d != nil {
 			full := lyricsDecision{Winner: d.Winner, WinnerArtist: d.WinnerArtist}
 			for _, c := range d.Candidates {
 				full.Candidates = append(full.Candidates, lyricsDecisionCandidate{Source: c.Source, Artist: c.Artist})

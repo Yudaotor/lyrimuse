@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"log/slog"
+	"os"
+	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -67,6 +71,41 @@ var (
 	// enrichSaveNow 可换(单测用),默认当场执行一次保存。
 	enrichSaveNow = func() { saveKeepingPlayingEntryFresh(saveEnrichCache) }
 )
+
+// logEnrichSave 每次整份落盘记一行:多大、花了多久、谁要的(第一个不是落盘包装函数的调用方;延后存盘到点的那次是定时器回调)。
+// 整份落盘应该很少(见文件头注),这行用来查还有哪条路在当场整份写。调用方持 enrichSaveMu。
+func logEnrichSave(entries int, start time.Time) {
+	var size int64
+	if st, err := os.Stat(enrichPath); err == nil {
+		size = st.Size()
+	}
+	slog.Info("cache: saved", "entries", entries, "bytes", size, "took", time.Since(start).Round(time.Millisecond), "by", enrichSaveCaller())
+}
+
+// enrichSaveCaller:调用栈上第一个不是落盘包装函数的函数名(去掉包名)。
+func enrichSaveCaller() string {
+	pcs := make([]uintptr, 16)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(3, pcs)])
+	for {
+		f, more := frames.Next()
+		// main.foo / 单测里是 <模块路径>.foo:去掉最后一个 / 之前的部分和包名。
+		name := f.Function[strings.LastIndex(f.Function, "/")+1:]
+		if _, rest, ok := strings.Cut(name, "."); ok {
+			name = rest
+		}
+		switch name {
+		case "saveEnrichCache", "saveEnrichCacheChecked", "saveKeepingPlayingEntryFresh", "logEnrichSave":
+		default:
+			// 包级函数变量(enrichSaveNow)是匿名函数,名字是 glob..funcN,往上再找一层才是谁要的。
+			if name != "" && !strings.HasPrefix(name, "glob.") {
+				return name
+			}
+		}
+		if !more {
+			return "?"
+		}
+	}
+}
 
 // enableEnrichSaveThrottle 打开常驻进程的保存节流。只在 main 进 run 之前调一次。
 func enableEnrichSaveThrottle() {

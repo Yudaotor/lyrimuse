@@ -284,6 +284,9 @@ type enrichEntry struct {
 	// 里看到的记录跟生效歌词完全对不上号。
 	// 同样只写不读。
 	LyricsDecisionApplied *lyricsDecision `json:"lyrics_decision_applied,omitempty"`
+	// LyricsDecisionAppliedSame 只在盘上出现:两槽相同时 applied 那一槽不写、写这个标记,解码时还原成跟
+	// LyricsDecision 共用一个对象,内存里恒为 false(见 enrichjson.go)。
+	LyricsDecisionAppliedSame bool `json:"lyrics_decision_applied_same,omitempty"`
 	// 升级重试的节流与上限,见 needsLyricsRetry。
 	LyricsRetryTS    int64 `json:"lyrics_retry_ts,omitempty"`
 	LyricsRetryCount int   `json:"lyrics_retry_count,omitempty"`
@@ -5834,6 +5837,7 @@ var errEnrichCacheNotLoaded = errors.New("enrich cache could not be loaded this 
 func saveEnrichCacheChecked() error {
 	enrichSaveMu.Lock()
 	defer enrichSaveMu.Unlock()
+	start := time.Now()
 	enrichMu.Lock()
 	if !enrichDirty || enrichPath == "" {
 		failed := enrichDirty && enrichLoadFailed
@@ -5892,6 +5896,7 @@ func saveEnrichCacheChecked() error {
 	linkEnrichIndex(snapshot, bodyCRCs)
 	enrichPendingSavedThrough(pendingSeq)
 	noteSongEntityCacheSaved()
+	logEnrichSave(len(disk), start)
 	return nil
 }
 

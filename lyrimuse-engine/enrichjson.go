@@ -35,6 +35,10 @@ import (
 // 的未知键仍按标准库语义丢弃——严格档对嵌套字段同样生效,所以它们也会触发宽松档,只是
 // 宽松档不往下钻。决策存档是复盘元数据,丢一个新分项不构成数据丢失;真要保就得把整份
 // 存档按 RawMessage 原样搬,不值得为它给热路径加复杂度。
+//
+// 两槽判决相同(九成的条目)时只写 lyrics_decision,applied 那一槽换成 `"lyrics_decision_applied_same": true`,
+// 解码时还原成共用同一个对象(跟 shareIdenticalDecisions 一样)。盘上 applied 那一槽在就以它为准、不看标记:
+// 不认识这个标记的老构建写回时会把标记当未知键原样带着,同时可能写进一槽新的 applied。见 15 章决策 37。
 
 // enrichEntryPlain 是去掉方法集的同构类型:靠它调用标准库的默认编解码,避免在
 // MarshalJSON/UnmarshalJSON 里递归到自己。
@@ -70,6 +74,7 @@ func (e *enrichEntry) UnmarshalJSON(b []byte) error {
 	strict.DisallowUnknownFields()
 	err := strict.Decode(&p)
 	if err == nil {
+		p.restoreSharedDecision()
 		*e = enrichEntry(p)
 		return nil
 	}
@@ -95,11 +100,32 @@ func (e *enrichEntry) UnmarshalJSON(b []byte) error {
 		}
 		p.Unknown[k] = v
 	}
+	p.restoreSharedDecision()
 	*e = enrichEntry(p)
 	return nil
 }
 
+// restoreSharedDecision:盘上写的是「applied 同 latest」的标记,还原成两槽共用一个对象。
+func (p *enrichEntryPlain) restoreSharedDecision() {
+	if !p.LyricsDecisionAppliedSame {
+		return
+	}
+	p.LyricsDecisionAppliedSame = false
+	if p.LyricsDecisionApplied == nil {
+		p.LyricsDecisionApplied = p.LyricsDecision
+	}
+}
+
+// sameDecisionSlots:两槽都在、内容一样(引擎写入时多半就是同一个指针,先比指针)。
+func sameDecisionSlots(d, a *lyricsDecision) bool {
+	return d != nil && a != nil && (d == a || reflect.DeepEqual(d, a))
+}
+
 func (e enrichEntry) MarshalJSON() ([]byte, error) {
+	if sameDecisionSlots(e.LyricsDecision, e.LyricsDecisionApplied) {
+		e.LyricsDecisionApplied = nil
+		e.LyricsDecisionAppliedSame = true
+	}
 	b, err := json.Marshal(enrichEntryPlain(e))
 	if err != nil || len(e.Unknown) == 0 {
 		return b, err

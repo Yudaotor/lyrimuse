@@ -994,7 +994,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// 永远解释"现在这份词是谁、凭什么选的"。老条目(分槽前写入)没有这一槽,弹窗侧有
     /// "最近评估恰好 applied 就当出处"的退路(见 LyricsDecisionSheet.init)。
     func decodedAppliedDecision(for key: String) -> LyricsResolutionDecision? {
-        Self.decodeDecision(Self.hydratedDecision(raw[key]?["lyrics_decision_applied"], key: key))
+        Self.decodeDecision(Self.hydratedDecision(raw[key].flatMap(DecisionSidecar.appliedSlot(of:)), key: key))
     }
 
     // 返回值含 yrc:「歌词管理」的单曲歌词时间轴偏移输入框需要跟 LocalPlaybackSource
