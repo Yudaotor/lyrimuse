@@ -181,7 +181,8 @@ private struct ChoiceCardsOnGlassKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// 选项格子摆在引导页的整窗玻璃上,换成 `ChoiceHighlight.glassFill` 那一套。设置页不设。
+    /// 选项格子摆在引导页的整窗玻璃上,换成 `ChoiceHighlight.glassFill` 那一套。设置页不设。只在 macOS 26 起生效:
+    /// 更早的系统引导页底是磨砂材质(`onboardingWindowBackground`),浅色下那层淡白和白描边看不出格子边界,照设置页那套画。
     var choiceCardsOnGlass: Bool {
         get { self[ChoiceCardsOnGlassKey.self] }
         set { self[ChoiceCardsOnGlassKey.self] = newValue }
@@ -201,10 +202,15 @@ private struct ChoiceCardChrome: ViewModifier {
     var highlightsOnHover: Bool = true
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.choiceCardsOnGlass) private var onGlass
+    @Environment(\.choiceCardsOnGlass) private var onGlassRequested
     @State private var isHovering = false
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 11, style: .continuous) }
+
+    private var onGlass: Bool {
+        guard #available(macOS 26.0, *) else { return false }
+        return onGlassRequested
+    }
 
     private var fill: Color {
         onGlass ? ChoiceHighlight.glassFill(isSelected: isSelected, isHovering: isHovering)
