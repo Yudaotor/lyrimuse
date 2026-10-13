@@ -6977,7 +6977,8 @@ private struct ShortcutsSettingsTab: View {
     private var displayNames: [KeyboardShortcuts.Name] {
         [.toggleOverlay, .toggleNotchOverlayHotkey, .toggleMenuBarLyricsHotkey]
             + (touchBar.isPresent ? [.toggleTouchBarLyricsHotkey] : [])
-            + [.toggleLockPosition, .toggleTranslationHotkey, .toggleRomanizationHotkey]
+            + [.toggleLockPosition, .toggleTranslationHotkey, .toggleRomanizationHotkey,
+               .overlayFontLargerHotkey, .overlayFontSmallerHotkey]
     }
 
     private var displayCells: [AnyView] {
@@ -7009,6 +7010,12 @@ private struct ShortcutsSettingsTab: View {
             // 解释性文案在这一页是被明确否掉的,同「步长」以外的每一格。
             AnyView(HotkeyCell(icon: "textformat.abc", title: L10n.t("显示/隐藏读音"), action: .toggleRomanizationHotkey) {
                 ShortcutRecorderControl(name: .toggleRomanizationHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "textformat.size.larger", title: L10n.t("放大悬浮歌词字号"), action: .overlayFontLargerHotkey) {
+                ShortcutRecorderControl(name: .overlayFontLargerHotkey)
+            }),
+            AnyView(HotkeyCell(icon: "textformat.size.smaller", title: L10n.t("缩小悬浮歌词字号"), action: .overlayFontSmallerHotkey) {
+                ShortcutRecorderControl(name: .overlayFontSmallerHotkey)
             }),
         ]
         return cells

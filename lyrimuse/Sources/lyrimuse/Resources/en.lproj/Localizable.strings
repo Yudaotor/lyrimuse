@@ -717,6 +717,7 @@
 "好" = "OK";
 "字体" = "Font";
 "字号" = "Font Size";
+"字号 %@pt" = "Font size %@pt";
 "字形" = "Type";
 "存在差异" = "Different";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
@@ -1147,6 +1148,7 @@
 "改位置后，已有文件不会跟着搬" = "Existing files stay where they are when you change the location";
 "改过歌词或调过时间轴偏移的歌曲" = "Songs whose lyrics you edited or whose timing offset you adjusted";
 "放大字号" = "Increase Font Size";
+"放大悬浮歌词字号" = "Increase Floating Lyrics Font Size";
 "放弃修改" = "Discard Changes";
 "整体延后 %@ 秒" = "%@ s later overall";
 "整体提前 %@ 秒" = "%@ s earlier overall";
@@ -1787,6 +1789,7 @@
 "编辑期间这首歌曲的歌词已发生变化，本次未应用；再次编辑将打开最新版本" = "This song's lyrics changed while you were editing, so this save wasn't applied. Click Edit again to open the latest version.";
 "编辑歌词" = "Edit Lyrics";
 "缩小字号" = "Decrease Font Size";
+"缩小悬浮歌词字号" = "Decrease Floating Lyrics Font Size";
 "缺少用户名" = "Username missing";
 "缺少用户名，无法生成听歌报告" = "Username missing — listening digests can't run";
 "网易云音乐" = "NetEase Cloud Music";
@@ -1970,6 +1973,7 @@
 "读取本地记录文件失败" = "Couldn't read the local records file";
 "读音" = "Romanization";
 "读音间距" = "Romanization Spacing";
+"调字号仅对桌面悬浮歌词有效" = "Font size shortcuts only apply to Floating Lyrics";
 "调整" = "Adjust";
 "调整宽度" = "Adjust Width";
 "调整颜色后，此处将出现「自定义」，点按即可保存为主题" = "After you change any colors, a Custom card appears here. Click it to save them as a theme.";

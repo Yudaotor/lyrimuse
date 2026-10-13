@@ -4874,8 +4874,10 @@ func runSourceContractTests() {
                         && quickCode.contains("@objc private func stepDown() { onStep(-1) }")
                         && quickCode.contains("@objc private func stepUp() { onStep(1) }"), true,
                     "⚙ 菜单: 偏移 − 延后、+ 提前,按设置里的步长,显示这首歌那一部分(同灵动岛)")
-        expectEqual(quickCode.contains("min(max(settings.fontSize.rounded() + Double(direction * 2), range.lowerBound), range.upperBound)")
-                        && quickCode.contains("let range = AppSettings.overlayFontSizeRange"), true,
+        expectEqual(quickCode.contains("AppSettings.steppedOverlayFontSize(from: settings.fontSize, direction: direction)")
+                        && quickCode.contains("let range = AppSettings.overlayFontSizeRange")
+                        && code("Settings/AppSettings.swift").contains(
+                            "min(max(size.rounded() + Double(direction * 2), overlayFontSizeRange.lowerBound), overlayFontSizeRange.upperBound)"), true,
                     "⚙ 菜单: 字号每下 ±2,夹在设置页滑杆同一个范围里")
         expectEqual(quickCode.contains("minusButton.action = #selector(stepDown)")
                         && quickCode.contains("plusButton.action = #selector(stepUp)")

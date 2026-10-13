@@ -89,6 +89,14 @@ func runDeepLinkTests() {
         expectEqual(hotkeys.contains("KeyboardShortcuts.onKeyUp(for: KeyboardShortcuts.Name(action.rawValue)) {\n                LyrimuseActionRunner.perform(action)")
                     && hotkeys.components(separatedBy: "KeyboardShortcuts.onKeyUp(for:").count - 1 == 1, true,
                     "动作: 快捷键只经 LyrimuseActionRunner 执行,跟深链同一份逻辑")
+        expectEqual(link("lyrimuse://action/overlay-font-larger") == .action(.overlayFontLargerHotkey, on: nil, stepSeconds: nil)
+                    && link("lyrimuse://action/overlay-font-smaller") == .action(.overlayFontSmallerHotkey, on: nil, stepSeconds: nil),
+                    true, "动作: 悬浮歌词字号放大 / 缩小")
+        let runner = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/Settings/LyrimuseActionRunner.swift"), encoding: .utf8)) ?? ""
+        let gearMenu = (try? String(contentsOf: root.appendingPathComponent("lyrimuse/UI/OverlayQuickSettingsMenu.swift"), encoding: .utf8)) ?? ""
+        expectEqual(sourceBytes(runner, contain: "AppSettings.steppedOverlayFontSize(from: settings.fontSize, direction: larger ? 1 : -1)")
+                    && sourceBytes(gearMenu, contain: "AppSettings.steppedOverlayFontSize(from: settings.fontSize, direction: direction)"),
+                    true, "动作: 字号快捷键跟 ⚙ 菜单「字号」同一个步长和范围")
     }
 
     // ---- action/ 下不对应快捷键的几个,x-callback 回传 ----

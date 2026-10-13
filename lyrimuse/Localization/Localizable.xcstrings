@@ -14737,6 +14737,70 @@
         }
       }
     },
+    "放大悬浮歌词字号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Increase Floating Lyrics Font Size"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放大浮動歌詞字級"
+          }
+        }
+      }
+    },
+    "缩小悬浮歌词字号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decrease Floating Lyrics Font Size"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "縮小浮動歌詞字級"
+          }
+        }
+      }
+    },
+    "调字号仅对桌面悬浮歌词有效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Font size shortcuts only apply to Floating Lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "調整字級僅對桌面浮動歌詞有效"
+          }
+        }
+      }
+    },
+    "字号 %@pt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Font size %@pt"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字級 %@pt"
+          }
+        }
+      }
+    },
     "歌词内容与其他歌词源高度一致（2 家及以上 250 · 1 家 150），版本不符的候选不计" : {
       "extractionState" : "manual",
       "localizations" : {

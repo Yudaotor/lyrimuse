@@ -466,6 +466,8 @@ public enum SettingsSearchCatalog {
         shortcut("锁定/解锁位置", kw: ["锁定", "位置"]),
         shortcut("显示/隐藏译文", kw: ["译文", "翻译"]),
         shortcut("显示/隐藏读音", kw: ["罗马音", "发音", "拼音", "粤拼"]),
+        shortcut("放大悬浮歌词字号", kw: ["字号", "字体大小", "放大", "font size"]),
+        shortcut("缩小悬浮歌词字号", kw: ["字号", "字体大小", "缩小", "font size"]),
         shortcut("打开歌词管理", kw: ["歌词管理", "窗口"]),
         shortcut("打开歌词窗口", kw: ["歌词窗口", "窗口"]),
         shortcut("切换迷你 / 完整尺寸", kw: ["歌词窗口", "迷你", "完整尺寸"]),

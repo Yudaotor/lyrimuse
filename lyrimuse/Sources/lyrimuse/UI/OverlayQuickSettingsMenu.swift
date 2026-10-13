@@ -200,7 +200,7 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
                 .eraseToAnyPublisher(),
             onStep: { direction in
                 let settings = AppSettings.shared
-                let next = min(max(settings.fontSize.rounded() + Double(direction * 2), range.lowerBound), range.upperBound)
+                let next = AppSettings.steppedOverlayFontSize(from: settings.fontSize, direction: direction)
                 guard next != settings.fontSize else { return }
                 settings.fontSize = next
             },

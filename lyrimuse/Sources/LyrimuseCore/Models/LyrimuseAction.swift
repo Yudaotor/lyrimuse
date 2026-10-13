@@ -4,7 +4,7 @@ import Foundation
 /// (`KeyboardShortcuts.Name`,存在用户偏好里,不能改);链接里用 `linkName`(小写加连字符)。两边执行同一份逻辑
 /// (App 侧 `LyrimuseActionRunner.perform`),行为和回声一致。见 14 章「深链」。
 ///
-/// 只收打开窗口、可随时撤回的开关、播放控制、歌词时间轴微调;会改歌词缓存或设置的不在这里(任何网页都能拉起
+/// 只收打开窗口、可随时撤回的开关、播放控制、歌词时间轴和悬浮歌词字号的一档档微调;会改歌词缓存或别的设置的不在这里(任何网页都能拉起
 /// `lyrimuse://`,见 docs/proposals/deep-links.md 第 6 节)。
 public enum LyrimuseAction: String, CaseIterable, Sendable {
     case toggleOverlay
@@ -25,6 +25,8 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
     case toggleMenuBarLyricsHotkey
     case toggleTouchBarLyricsHotkey
     case lyricsOffsetResetHotkey
+    case overlayFontLargerHotkey
+    case overlayFontSmallerHotkey
 
     /// `lyrimuse://action/<linkName>` 里那一段。对外契约,改名前先看对外说过没有。
     public var linkName: String {
@@ -47,6 +49,8 @@ public enum LyrimuseAction: String, CaseIterable, Sendable {
         case .toggleMenuBarLyricsHotkey: return "toggle-menubar-lyrics"
         case .toggleTouchBarLyricsHotkey: return "toggle-touchbar"
         case .lyricsOffsetResetHotkey: return "lyrics-offset-reset"
+        case .overlayFontLargerHotkey: return "overlay-font-larger"
+        case .overlayFontSmallerHotkey: return "overlay-font-smaller"
         }
     }
 

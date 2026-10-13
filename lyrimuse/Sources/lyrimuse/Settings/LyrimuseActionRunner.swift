@@ -129,6 +129,19 @@ enum LyrimuseActionRunner {
             case .collapse: text = L10n.t("已收起触控栏歌词")
             }
             GlobalHotkeys.flashHint(icon: SurfaceGlyph.touchBar.rawValue, text: text)
+        // 悬浮歌词主字号一档档调,跟 ⚙ 菜单「字号」同一个步长和范围;悬浮歌词关着时不改,只说一句(同「锁定位置」)。
+        // 到了上下限照样回声当前字号,不然分不清是没按中还是调不动了。
+        case .overlayFontLargerHotkey, .overlayFontSmallerHotkey:
+            let settings = AppSettings.shared
+            guard settings.classicOverlayEnabled else {
+                GlobalHotkeys.flashHint(icon: "textformat.size", text: L10n.t("调字号仅对桌面悬浮歌词有效"))
+                return
+            }
+            let larger = action == .overlayFontLargerHotkey
+            let next = AppSettings.steppedOverlayFontSize(from: settings.fontSize, direction: larger ? 1 : -1)
+            if next != settings.fontSize { settings.fontSize = next }
+            GlobalHotkeys.flashHint(icon: larger ? "textformat.size.larger" : "textformat.size.smaller",
+                                    text: String(format: L10n.t("字号 %@pt"), "\(Int(next))"))
         }
     }
 

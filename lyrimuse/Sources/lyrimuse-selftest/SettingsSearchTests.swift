@@ -337,10 +337,12 @@ func runSettingsSearchTests() {
     expectEqual(SettingsSearchMatcher.ranked([("a", [String]())], query: "", title: { $0.0 }, secondary: { $0.1 }).count, 0,
                 "匹配: 空查询零结果")
 
-    // 目录层面的抽查:五个面的「字号」都能被同一个词搜到,且顺序跟目录一致。
+    // 目录层面的抽查:五个面的「字号」都能被同一个词搜到,且顺序跟目录一致;快捷键页那两格也搜得到。
     let fontSizeHits = SettingsSearchMatcher.ranked(entries, query: "字号", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
-    expectEqual(fontSizeHits.map(\.sectionValue), ["overlay", "notch", "menuBar", "touchBar", "lyricsWindow"],
+    expectEqual(fontSizeHits.filter { $0.pathKeys != ["快捷键"] }.map(\.sectionValue), ["overlay", "notch", "menuBar", "touchBar", "lyricsWindow"],
                 "目录: 「字号」命中悬浮歌词、灵动岛、菜单栏、触控栏、歌词窗口迷你尺寸五条,按目录顺序")
+    expectEqual(fontSizeHits.filter { $0.pathKeys == ["快捷键"] }.map(\.titleKey), ["放大悬浮歌词字号", "缩小悬浮歌词字号"],
+                "目录: 「字号」也命中快捷键页的放大 / 缩小悬浮歌词字号")
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
     expectEqual(qqHits.map(\.titleKey).contains("音乐 App"), true, "目录: 搜「QQ」也能落到「音乐 App」卡")

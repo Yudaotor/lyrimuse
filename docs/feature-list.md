@@ -317,12 +317,14 @@ When nothing is playing, the lyrics window shows the last song with a line from 
 
 ### Your look
 
-Font (the system's, or your own .ttf / .otf), size, weight, text and background colours, outline and frosted glass. Floating lyrics come with colour themes and can save your own; text colour can follow the album artwork.
+Font (the system's, or your own .ttf / .otf), size, weight, text and background colours, outline and frosted glass. Floating lyrics come with colour themes and can save your own; text colour can follow the album artwork. Shortcuts can also make floating lyrics bigger or smaller on the fly.
 
 - Settings: Lyrics Display › Floating Lyrics › Theme › Color Theme
 - Settings: Lyrics Display › Floating Lyrics › Theme › My Themes
 - Settings: Lyrics Display › Floating Lyrics › Type › Font
 - Settings: Lyrics Display › Floating Lyrics › Color › Frosted Glass Background
+- Settings: Keyboard Shortcuts › Increase Floating Lyrics Font Size
+- Settings: Keyboard Shortcuts › Decrease Floating Lyrics Font Size
 
 <a id="feature-karaoke"></a>
 
@@ -693,7 +695,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 238 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 240 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -986,6 +988,8 @@ Every setting in the Settings window, by where it lives: 238 in all. Type a name
 - **Lock/Unlock Position**
 - **Show/Hide Translation**
 - **Show/Hide Romanization**
+- **Increase Floating Lyrics Font Size**
+- **Decrease Floating Lyrics Font Size**
 - **Open Lyrics Manager**
 - **Open Lyrics Window**
 - **Switch Mini / Full Size**

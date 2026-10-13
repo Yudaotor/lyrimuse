@@ -427,6 +427,11 @@ final class AppSettings: ObservableObject {
     static let defaultFontSize = 31.0
     /// 悬浮歌词主字号的可调范围。设置页「文字」浮层和菜单栏面板快捷设置两根滑杆都读这一份。
     static let overlayFontSizeRange: ClosedRange<Double> = 14...64
+    /// 悬浮歌词字号往大(`direction` = 1)或往小(-1)走一档(2pt)后的值,夹在 `overlayFontSizeRange` 里。
+    /// ⚙ 菜单「字号」那一行和放大 / 缩小字号快捷键共用。
+    static func steppedOverlayFontSize(from size: Double, direction: Int) -> Double {
+        min(max(size.rounded() + Double(direction * 2), overlayFontSizeRange.lowerBound), overlayFontSizeRange.upperBound)
+    }
     /// 悬浮歌词主歌词行的字重档位。从 `.bold` 改成 `.semibold`(「较粗」)—— 用户把
     /// 自己在用的这一版悬浮歌词配置定为默认("帮我把我目前悬浮歌词的配置也设为默认的")。
     ///

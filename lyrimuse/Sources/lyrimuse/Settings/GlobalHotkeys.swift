@@ -7,7 +7,7 @@ import LyrimuseCore
 // 发 AppleScript 指令,复用已经拿到的自动化权限(见 MusicAutomationPermission)。
 //
 // 默认不预置任何按键组合——KeyboardShortcuts.Recorder 不预注册默认值时本来就是空的
-// "点按录制"状态,下面这 18 个快捷键全部必须用户自己在设置里主动录制才会生效,不会有
+// "点按录制"状态,下面这 20 个快捷键全部必须用户自己在设置里主动录制才会生效,不会有
 // 按键在用户不知情下被这个 App 抢占。
 extension KeyboardShortcuts.Name {
     static let toggleOverlay = Self("toggleOverlay")
@@ -29,6 +29,8 @@ extension KeyboardShortcuts.Name {
     static let toggleNotchOverlayHotkey = Self("toggleNotchOverlayHotkey")
     static let toggleMenuBarLyricsHotkey = Self("toggleMenuBarLyricsHotkey")
     static let lyricsOffsetResetHotkey = Self("lyricsOffsetResetHotkey")
+    static let overlayFontLargerHotkey = Self("overlayFontLargerHotkey")
+    static let overlayFontSmallerHotkey = Self("overlayFontSmallerHotkey")
     // 设置页那一行只在这台 Mac 此刻有触控栏时出现(17 章决策 40)。
     static let toggleTouchBarLyricsHotkey = Self("toggleTouchBarLyricsHotkey")
 
@@ -49,6 +51,7 @@ extension KeyboardShortcuts.Name {
         .nextTrackHotkey, .previousTrackHotkey, .lyricsAdvanceHotkey, .lyricsDelayHotkey,
         .lyricsQuickSearchHotkey, .toggleTranslationHotkey, .toggleRomanizationHotkey,
         .toggleNotchOverlayHotkey, .toggleMenuBarLyricsHotkey, .toggleTouchBarLyricsHotkey, .lyricsOffsetResetHotkey,
+        .overlayFontLargerHotkey, .overlayFontSmallerHotkey,
     ]
 
     /// 给用户看的动作名。撞键提示要说"这个组合已经给了『歌词提前』",光报
@@ -78,6 +81,8 @@ extension KeyboardShortcuts.Name {
         case .toggleMenuBarLyricsHotkey: return L10n.t("显示/隐藏菜单栏歌词")
         case .toggleTouchBarLyricsHotkey: return L10n.t("展开/收起触控栏歌词")
         case .lyricsOffsetResetHotkey: return L10n.t("歌词偏移归零")
+        case .overlayFontLargerHotkey: return L10n.t("放大悬浮歌词字号")
+        case .overlayFontSmallerHotkey: return L10n.t("缩小悬浮歌词字号")
         default: return name.rawValue
         }
     }
