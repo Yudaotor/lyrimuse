@@ -1,17 +1,14 @@
 import AppKit
 
-/// 悬浮歌词上按住 ⌘ 滚动滚轮 / 双指捏合调字号(见 04 章决策 62)的纯计算部分:把滚动量、捏合量折成档数,一档就是
+/// 悬浮歌词上按住 ⌘ 滚动滚轮 / 触控板双指上下滑调字号(见 04 章决策 62)的纯计算部分:把滚动量折成档数,一档就是
 /// ⚙ 菜单「字号」按一下(`AppSettings.steppedOverlayFontSize`)。正数放大、负数缩小。
 public struct OverlayFontZoom: Sendable {
     /// 按住它才调字号;没按着的滚动照旧让给下层窗口。
     public static let modifier: NSEvent.ModifierFlags = .command
     /// 触控板滚动攒够这么多点算一档。鼠标滚轮不攒,一格一档。
     public static let pointsPerStep: CGFloat = 24
-    /// 捏合攒够这么多倍率算一档。
-    public static let magnificationPerStep: CGFloat = 0.08
 
     private var scrollCarry: CGFloat = 0
-    private var magnifyCarry: CGFloat = 0
 
     public init() {}
 
@@ -28,16 +25,9 @@ public struct OverlayFontZoom: Sendable {
         return Self.take(&scrollCarry, adding: scrollDeltaY, per: Self.pointsPerStep)
     }
 
-    /// 一次捏合折成几档,张开为正。
-    public mutating func steps(magnification: CGFloat) -> Int {
-        guard magnification != 0 else { return 0 }
-        return Self.take(&magnifyCarry, adding: magnification, per: Self.magnificationPerStep)
-    }
-
     /// 新的一段手势从零攒起。
     public mutating func reset() {
         scrollCarry = 0
-        magnifyCarry = 0
     }
 
     private static func take(_ carry: inout CGFloat, adding delta: CGFloat, per unit: CGFloat) -> Int {

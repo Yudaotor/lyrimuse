@@ -33,16 +33,16 @@ final class LyricsOverlayWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// 窗口收回了点击穿透时,滚轮和触控板捏合会落到这里,交给控制器:按着 ⌘ 在歌词上就调字号,不然还原穿透、
+    /// 窗口收回了点击穿透时,滚轮会落到这里,交给控制器:按着 ⌘ 在歌词上就调字号,不然还原穿透、
     /// 这一格丢掉,同一手势后面的滚动直接到下层(见 `LyricsOverlayWindowController.handleScrollWheel`)。
+    /// 在 `sendEvent` 就截下,不交给内容视图。触控板捏合系统不发给这扇窗(见 04 章决策 62),不用接。
     var onScrollWheel: (@MainActor (NSEvent) -> Void)?
-    var onMagnify: (@MainActor (NSEvent) -> Void)?
 
-    override func scrollWheel(with event: NSEvent) {
-        onScrollWheel?(event)
-    }
-
-    override func magnify(with event: NSEvent) {
-        onMagnify?(event)
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .scrollWheel {
+            onScrollWheel?(event)
+            return
+        }
+        super.sendEvent(event)
     }
 }

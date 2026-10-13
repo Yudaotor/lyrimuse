@@ -1795,14 +1795,11 @@ func runOverlayTests() {
                     "悬浮接线: 锁定时一并放掉歌词文字的接管")
         expectEqual(controller.components(separatedBy: "setControlCapture(false)\n        setLyricsCapture(false)\n    }").count - 1, 2,
                     "悬浮接线: 悬停态清零、滚轮让开时按钮和歌词文字两处接管一起还原")
-        expectEqual(overlayWindow.contains("override func scrollWheel(with event: NSEvent) {\n        onScrollWheel?(event)")
+        expectEqual(overlayWindow.contains("if event.type == .scrollWheel {\n            onScrollWheel?(event)\n            return\n        }")
                     && controller.contains("panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }")
                     && controller.contains("guard event.modifierFlags.contains(OverlayFontZoom.modifier), fontZoomCaptured || isPointerOnLyricsText() else {\n            yieldPointerCaptureToScroll()\n            return"),
                     true, "悬浮接线: 接管期间收到没按 ⌘ 的滚轮就让开,同一手势后面的滚动到下层")
-        // 按住 ⌘ 在歌词上滚动 / 捏合调字号(04 章决策 62)。
-        expectEqual(overlayWindow.contains("override func magnify(with event: NSEvent) {\n        onMagnify?(event)")
-                    && controller.contains("panel.onMagnify = { [weak self] event in self?.handleMagnify(event) }"),
-                    true, "调字号: 触控板捏合交给控制器")
+        // 按住 ⌘ 在歌词上滚动调字号(04 章决策 62)。
         expectEqual(controller.contains("// 锁定、长按模式也接(见 fontZoomCaptured)。\n            refreshFontZoomCapture()"), true,
                     "调字号: 每次指针移动都判一次,锁定、长按模式也接")
         expectEqual(controller.contains("setFontZoomCapture(commandHeld && (fontZoomCaptured ? window.frame.contains(loc) : onLyrics))"), true,

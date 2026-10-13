@@ -1,7 +1,7 @@
 import AppKit
 import LyrimuseCore
 
-/// 悬浮歌词上按住 ⌘ 滚动 / 捏合调字号(`OverlayFontZoom`,04 章决策 62)的纯计算部分。在 `runOverlayTests` 里调用。
+/// 悬浮歌词上按住 ⌘ 滚动调字号(`OverlayFontZoom`,04 章决策 62)的纯计算部分。在 `runOverlayTests` 里调用。
 @MainActor
 func overlayFontZoomChecks() {
     typealias Z = OverlayFontZoom
@@ -28,10 +28,4 @@ func overlayFontZoomChecks() {
     expectEqual(pad.steps(scrollDeltaY: -10, precise: true, momentum: false), -1, "调字号: 往回攒够一档缩小")
     pad.reset()
     expectEqual(pad.steps(scrollDeltaY: 20, precise: true, momentum: false), 0, "调字号: 重置后从零攒起")
-
-    // 捏合:张开放大、捏拢缩小,攒够 magnificationPerStep 一档。
-    var pinch = Z()
-    expectEqual(pinch.steps(magnification: 0.05), 0, "调字号: 捏合 0.05 不到一档")
-    expectEqual(pinch.steps(magnification: 0.05), 1, "调字号: 攒到 0.1 张开一档")
-    expectEqual(pinch.steps(magnification: -0.2), -2, "调字号: 捏拢 0.2 缩小两档")
 }

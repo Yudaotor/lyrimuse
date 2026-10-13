@@ -284,7 +284,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         setLyricsCapture(false)
     }
 
-    /// 指针停在歌词文字上、按着 ⌘ 时这扇窗收回点击穿透,⌘ + 滚轮 / 触控板捏合调字号(04 章决策 62)。锁定、
+    /// 指针停在歌词文字上、按着 ⌘ 时这扇窗收回点击穿透,⌘ + 滚轮 / 触控板双指上下滑调字号(04 章决策 62)。锁定、
     /// 「拖动前先长按」开着时照样接:穿透着的话滚轮直接派给下层 App,这边只看得到、拦不住,下层会跟着滚。
     /// 接住之后只要 ⌘ 没松、指针没出窗口就一直接着:字号一变文字矩形跟着变,指针可能落到字外,下一格不能漏下去。
     /// 代价:按着 ⌘ 时点在歌词文字上的那一下到不了下层。
@@ -345,13 +345,6 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         let deltaY = OverlayFontZoom.deviceDeltaY(event.scrollingDeltaY, invertedFromDevice: event.isDirectionInvertedFromDevice)
         stepFontSize(fontZoom.steps(scrollDeltaY: deltaY, precise: event.hasPreciseScrollingDeltas,
                                     momentum: event.momentumPhase != []))
-    }
-
-    /// 落到这扇窗的触控板捏合:指针在歌词文字上(或正接着调字号)时调字号,不用按 ⌘。停在按钮上捏合不算。
-    private func handleMagnify(_ event: NSEvent) {
-        guard fontZoomCaptured || isPointerOnLyricsText() else { return }
-        if event.phase == .began { fontZoom.reset() }
-        stepFontSize(fontZoom.steps(magnification: event.magnification))
     }
 
     private func isPointerOnLyricsText() -> Bool {
@@ -498,7 +491,6 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         panel.isMovableByWindowBackground = false
         panel.ignoresMouseEvents = true
         panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }
-        panel.onMagnify = { [weak self] event in self?.handleMagnify(event) }
 
         let hosting = NSHostingView(rootView: LyricsOverlayView(
             overlayController: self,

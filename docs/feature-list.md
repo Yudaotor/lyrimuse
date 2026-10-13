@@ -317,7 +317,7 @@ When nothing is playing, the lyrics window shows the last song with a line from 
 
 ### Your look
 
-Font (the system's, or your own .ttf / .otf), size, weight, text and background colours, outline and frosted glass. Floating lyrics come with colour themes and can save your own; text colour can follow the album artwork. Shortcuts, or scrolling with ⌘ held and pinching over the lyrics, can also make floating lyrics bigger or smaller on the fly.
+Font (the system's, or your own .ttf / .otf), size, weight, text and background colours, outline and frosted glass. Floating lyrics come with colour themes and can save your own; text colour can follow the album artwork. Shortcuts, or scrolling over the lyrics with ⌘ held (mouse wheel or two-finger swipe), can also make floating lyrics bigger or smaller on the fly.
 
 - Settings: Lyrics Display › Floating Lyrics › Theme › Color Theme
 - Settings: Lyrics Display › Floating Lyrics › Theme › My Themes
