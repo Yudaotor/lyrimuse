@@ -516,8 +516,8 @@ func runSourceContractTests() {
         }
         func count(_ text: String, _ needle: String) -> Int { text.components(separatedBy: needle).count - 1 }
         if let lps = code(core.appendingPathComponent("LocalPlaybackSource.swift")) {
-            expectEqual(count(lps, "verifySpotifyAdViaAppleScript(forKey:"), 1,
-                        "Spotify 通知分类: AppleScript 复核只剩 spotifyNativeAdCheckForNewTrack 里那一次退路调用(现 \(count(lps, "verifySpotifyAdViaAppleScript(forKey:")) 处)")
+            expectEqual(count(lps, "classifySpotifyViaAppleScript(forKey:"), 2,
+                        "Spotify 通知分类: AppleScript 复核只在两处退路调用:spotifyNativeAdCheckForNewTrack 对不上通知时、字段启发式判中又没有这一条的通知时(现 \(count(lps, "classifySpotifyViaAppleScript(forKey:")) 处)")
             expectEqual(count(lps, "spotifyNativeAdCheckForNewTrack(snapshot: snapshot)") >= 1, true,
                         "Spotify 通知分类: 换曲那一拍要走 spotifyNativeAdCheckForNewTrack")
             expectEqual(lps.contains("SpotifyNotificationHint(userInfo: note.userInfo)"), true,

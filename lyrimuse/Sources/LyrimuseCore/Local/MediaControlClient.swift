@@ -138,12 +138,13 @@ public enum MediaControlClient {
     // MARK: - 切歌间隙保持(见 PlayerGapHold)
 
     /// 这一拍是「播放器在放、但不是音乐」(KKBOX / Amazon 的播客单集,见 `TrustedPlayers.artistlessContent`;网易云的
-    /// 播客单集,见 `NeteasePodcastQueue`)就当没在放:切歌间隙保持当场放手(不然会把上一首撑满整个窗口),调用方直接
-    /// 交回 nil、不退回去问别家的暂停会话。
+    /// 播客单集,见 `NeteasePodcastQueue`;Spotify 的播客单集与 DJ 口播,见 `spotifyNoticeSaysNotMusic`)就当没在放:
+    /// 切歌间隙保持当场放手(不然会把上一首撑满整个窗口),调用方直接交回 nil、不退回去问别家的暂停会话。
     private static func playerContentNotMusic(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
         let artistless = TrustedPlayers.artistlessContent(bundleID: bundleID, artist: snapshot.artist,
                                                           duration: snapshot.duration, playing: snapshot.playing)
-        guard artistless || neteasePodcastEpisode(bundleID: bundleID, snapshot: snapshot) else { return false }
+        guard artistless || neteasePodcastEpisode(bundleID: bundleID, snapshot: snapshot)
+                || spotifyContentNotMusic(bundleID: bundleID, snapshot: snapshot) else { return false }
         setSnapshotFailure(.targetNotPlayingMusic)
         gapHoldLock.lock()
         defer { gapHoldLock.unlock() }
@@ -173,6 +174,32 @@ public enum MediaControlClient {
             logger.notice("netease: podcast episode, not reported as a song track=\(snapshot.title ?? "", privacy: .public)")
         }
         return true
+    }
+
+    /// 认成 Spotify 非音乐内容时打过日志的那一条(歌名),同一条只打一条。
+    private static var spotifyNotMusicLoggedTitle: String?
+
+    private static func spotifyContentNotMusic(bundleID: String, snapshot: MediaControlSnapshot) -> Bool {
+        let notice = currentSpotifyNotice()
+        guard spotifyNoticeSaysNotMusic(bundleID: bundleID, snapshot: snapshot, notice: notice) else { return false }
+        neteasePodcastLogLock.lock()
+        let log = spotifyNotMusicLoggedTitle != snapshot.title
+        if log { spotifyNotMusicLoggedTitle = snapshot.title }
+        neteasePodcastLogLock.unlock()
+        if log {
+            logger.notice("spotify: not music (\(notice?.trackID.split(separator: ":").dropFirst().first.map(String.init) ?? "-", privacy: .public)), not reported as a song track=\(snapshot.title ?? "", privacy: .public)")
+        }
+        return true
+    }
+
+    /// Spotify 原生客户端这一拍放的是不是播客单集、DJ 口播这类不是音乐的内容:最近一条通知(或 AppleScript 补记的同形记录,
+    /// 见 `LocalPlaybackSource.classifySpotifyViaAppleScript`)的 URI 类型说不是音乐,而且说的就是这一条(歌名对得上)。
+    /// 不看在不在放:暂停着的单集同样不报。见 02 章决策 117。纯函数,selftest 覆盖。
+    public nonisolated static func spotifyNoticeSaysNotMusic(bundleID: String, snapshot: MediaControlSnapshot,
+                                                             notice: SpotifyNotificationHint?) -> Bool {
+        guard bundleID == PlaybackPlayer.spotify.bundleIdentifier, let notice,
+              notice.contentKind == .notMusic else { return false }
+        return notice.matches(title: snapshot.title, artist: snapshot.artist)
     }
 
     /// `artistArrivesLate` 的播放器(KKBOX)开播先发一帧没有歌手的(约半秒后补齐):它在加载这一首,焦点没被别人占着。按

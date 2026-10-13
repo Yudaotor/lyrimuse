@@ -5,10 +5,11 @@ import Foundation
 /// Artist / Album / Album Artist / Duration / Playback Position / Has Artwork / Popularity / Play Count /
 /// Track Number / Disc Number;**没有** Artwork URL。
 ///
-/// 用途只有一件:`Track ID` 以 `spotify:ad:` 开头就是广告 —— 跟 AppleScript `spotify url` 是同一个值,
-/// 但通知在换曲那一刻就到(实测比 MediaRemote 那份 now-playing 早,广告后开播那首早了约 2.4s),而且
-/// 不用 fork 子进程。标题不从这里喂状态(02 章决策 1;这是它的第二个窄例外),分类结果也只在
-/// `LocalPlaybackSource.apply()` 里、按快照的歌名/歌手核对过之后才生效。
+/// 用途是按 `Track ID` 的类型前缀给这一条分类(`contentKind(ofURI:)`):广告、歌、不是音乐(播客单集、DJ 口播等)。
+/// 它跟 AppleScript `spotify url` 是同一个值,但通知在换曲那一刻就到(实测比 MediaRemote 那份 now-playing 早,
+/// 广告后开播那首早了约 2.4s),而且不用 fork 子进程。标题不从这里喂状态(02 章决策 1;这是它的第二个窄例外),
+/// 分类结果只在按快照的歌名/歌手核对过之后才生效:广告在 `LocalPlaybackSource.apply()`,不是音乐在
+/// `MediaControlClient.spotifyNoticeSaysNotMusic`。
 ///
 /// 第三个窄例外:问不到 Spotify 的 AppleScript(没授权 / 弹窗挂着)时,`Playback Position` + 收到的时刻当
 /// Spotify 自己的钟用,替掉开播时晚一截的 MediaRemote 锚点(见 `MediaControlClient.spotifyNoticeReading`、02 章决策 63)。
@@ -48,6 +49,24 @@ public struct SpotifyNotificationHint: Equatable, Sendable {
 
     /// `spotify:ad:…` 是广告;其它一律不是(曲目 / 播客节目 / 本地文件)。
     public var isAd: Bool { trackID.hasPrefix("spotify:ad") }
+
+    public enum ContentKind: Equatable, Sendable {
+        case music
+        case ad
+        case notMusic
+    }
+
+    /// 按 Spotify URI 的类型段分类:`spotify:track:` / `spotify:local:` 是歌,`spotify:ad:` 是广告,其余 `spotify:` 开头的
+    /// (`spotify:episode:` 播客单集、`spotify:media:` DJ 口播,以及有声书等别的类型)都不是音乐。不是 `spotify:` 开头的
+    /// 认不出类型,按歌算,不拦。通知里的 `Track ID` 和 AppleScript 的 `spotify url` 都用这一条。
+    public static func contentKind(ofURI uri: String) -> ContentKind {
+        let uri = uri.trimmingCharacters(in: .whitespacesAndNewlines)
+        if uri.hasPrefix("spotify:ad") { return .ad }
+        if uri.hasPrefix("spotify:track:") || uri.hasPrefix("spotify:local:") { return .music }
+        return uri.hasPrefix("spotify:") ? .notMusic : .music
+    }
+
+    public var contentKind: ContentKind { Self.contentKind(ofURI: trackID) }
 
     /// 这条提示说的是不是 media-control 快照里的这首歌。歌名逐字相等(忽略大小写与首尾空白);歌手允许一边是
     /// 另一边的前缀 —— 多歌手曲目两边的拼接写法未必一致,而歌名已经足够定身份,歌手只是防同名不同人。

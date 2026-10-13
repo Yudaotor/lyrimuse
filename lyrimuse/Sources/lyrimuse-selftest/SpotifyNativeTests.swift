@@ -69,6 +69,45 @@ func runSpotifyNativeTests() {
         expectEqual(SpotifyNotificationHint(trackID: "spotify:episode:x", name: "n", artist: "a").isAd, false, "通知提示: 播客节目不是广告")
     }
 
+    // ---- SpotifyNotificationHint.contentKind:按 URI 类型段分类 ----
+    do {
+        typealias H = SpotifyNotificationHint
+        expectEqual(H.contentKind(ofURI: "spotify:track:5jQI2r1RdgtuT8S3iG8zFC"), .music, "URI 分类: 曲目是歌")
+        expectEqual(H.contentKind(ofURI: "spotify:local:Artist:Album:Title:215"), .music, "URI 分类: 本地文件是歌")
+        expectEqual(H.contentKind(ofURI: "spotify:ad:1234"), .ad, "URI 分类: 广告")
+        expectEqual(H.contentKind(ofURI: "spotify:episode:3Qa2KSZIsGqP5rQ7oMTrEL"), .notMusic, "URI 分类: 播客单集不是音乐")
+        expectEqual(H.contentKind(ofURI: "spotify:media:abc"), .notMusic, "URI 分类: DJ 口播(media)不是音乐")
+        expectEqual(H.contentKind(ofURI: "spotify:chapter:abc"), .notMusic, "URI 分类: 别的类型段一律不是音乐")
+        expectEqual(H.contentKind(ofURI: " spotify:episode:x\n"), .notMusic, "URI 分类: 首尾空白与换行剔掉")
+        expectEqual(H.contentKind(ofURI: ""), .music, "URI 分类: 空串认不出类型,不拦")
+        expectEqual(H.contentKind(ofURI: "missing value"), .music, "URI 分类: 不是 spotify: 开头的不拦")
+        expectEqual(H(trackID: "spotify:episode:x", name: "n", artist: "").contentKind, .notMusic, "URI 分类: 通知提示按 Track ID 分")
+    }
+
+    // ---- MediaControlClient.spotifyNoticeSaysNotMusic ----
+    do {
+        let spotify = PlaybackPlayer.spotify.bundleIdentifier
+        func snap(_ title: String, artist: String, bundle: String) -> MediaControlSnapshot {
+            .forReplay(title: title, artist: artist, album: "The Vic Mensa Show", duration: 2653, elapsedTime: 36,
+                       playing: true, playbackRate: 1, bundleIdentifier: bundle, anchorElapsedTime: 0)
+        }
+        let title = "Durand Bernarr: Never Straight, Always Forward"
+        let episode = SpotifyNotificationHint(trackID: "spotify:episode:3Qa2KSZIsGqP5rQ7oMTrEL", name: title, artist: "Vic Mensa")
+        func says(_ s: MediaControlSnapshot, _ n: SpotifyNotificationHint?) -> Bool {
+            MediaControlClient.spotifyNoticeSaysNotMusic(bundleID: s.bundleIdentifier ?? "", snapshot: s, notice: n)
+        }
+        expectEqual(says(snap(title, artist: "", bundle: spotify), episode), true, "Spotify 非音乐: 播客单集(快照歌手空)当没在放")
+        let dj = SpotifyNotificationHint(trackID: "spotify:media:abc", name: "Up next", artist: "DJ X")
+        expectEqual(says(snap("Up next", artist: "DJ X", bundle: spotify), dj), true, "Spotify 非音乐: DJ 口播当没在放")
+        expectEqual(says(snap("Another Episode", artist: "", bundle: spotify), episode), false, "Spotify 非音乐: 通知说的不是这一条不算")
+        expectEqual(says(snap(title, artist: "", bundle: spotify), nil), false, "Spotify 非音乐: 没有通知不拦")
+        let song = SpotifyNotificationHint(trackID: "spotify:track:x", name: "Soulboy", artist: "方大同")
+        expectEqual(says(snap("Soulboy", artist: "方大同", bundle: spotify), song), false, "Spotify 非音乐: 歌照常报")
+        let ad = SpotifyNotificationHint(trackID: "spotify:ad:1", name: "Spotify", artist: "")
+        expectEqual(says(snap("Spotify", artist: "", bundle: spotify), ad), false, "Spotify 非音乐: 广告不归这道闸,仍显示「广告中」")
+        expectEqual(says(snap(title, artist: "", bundle: "com.kkbox.desktop"), episode), false, "Spotify 非音乐: 别的播放器不看 Spotify 的通知")
+    }
+
     // ---- SpotifyPositionProbe.parseProbeOutput ----
     do {
         typealias P = SpotifyPositionProbe

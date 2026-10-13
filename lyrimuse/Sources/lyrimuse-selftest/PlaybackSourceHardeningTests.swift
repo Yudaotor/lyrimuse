@@ -333,7 +333,7 @@ private func wiringContracts() {
     let mainAssemble = client.components(separatedBy: "Self.amazonMusicReading(").count - 1
     expectEqual(mainAssemble, 1, "Amazon 位置: 主路径走同一个 amazonMusicReading,不另写一份")
 
-    let verifyAd = body("private func verifySpotifyAdViaAppleScript(forKey key: String) {", in: source)
+    let verifyAd = body("private func classifySpotifyViaAppleScript(forKey key: String, title: String?, artist: String?) {", in: source)
     expectEqual(verifyAd.contains("self.revertLastTrackAfterAd(key: key)"), true, "广告撤回: AppleScript 晚到确认是广告 → 撤回「上次在听」")
     let revert = body("private func revertLastTrackAfterAd(key: String) {", in: source)
     expectEqual(revert.contains("prev.key == key"), true, "广告撤回: 只撤回同一首写进去的那一次")

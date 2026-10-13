@@ -1665,17 +1665,17 @@ public final class LocalPlaybackSource: ObservableObject {
     /// (`SpotifyNotificationHint`,Track ID 前缀是权威分类、且比 MediaRemote 早到),按快照的歌名/歌手核对是
     /// 同一首才采信 —— 说是广告就当场置位,说是曲目就到此为止,**不再 fork osascript**。通知没到 / 对不上这首
     /// (App 刚启动、Spotify 没广播)才退回下面那次 AppleScript 复核,行为不劣于旧状。
-    /// 调用方约定同 verifySpotifyAdViaAppleScript:只在 换曲 + 原生 Spotify + 字段启发式没判中 时调。
+    /// 只在 换曲 + 原生 Spotify + 字段启发式没判中 时调。
     private func spotifyNativeAdCheckForNewTrack(snapshot: MediaControlSnapshot) {
         if let hint = spotifyNotificationHint, hint.matches(title: snapshot.title, artist: snapshot.artist) {
             if hint.isAd, !isCurrentTrackAdBreak { isCurrentTrackAdBreak = true }
             logger.debug("spotify ad check: notification says \(hint.isAd ? "ad" : "track", privacy: .public) for key=\(snapshot.trackKey, privacy: .public)")
             return
         }
-        verifySpotifyAdViaAppleScript(forKey: snapshot.trackKey)
+        classifySpotifyViaAppleScript(forKey: snapshot.trackKey, title: snapshot.title, artist: snapshot.artist)
     }
 
-    /// 位置探针带回这首歌的图床地址;还是这首才收(晚到的地址不能挂到下一首头上,同 verifySpotifyAdViaAppleScript
+    /// 位置探针带回这首歌的图床地址;还是这首才收(晚到的地址不能挂到下一首头上,同 classifySpotifyViaAppleScript
     /// 回来时那道核对)。
     public func noteSpotifyArtwork(url: URL, forKey key: String) {
         guard lastSnapshot?.trackKey == key else {
@@ -1889,18 +1889,28 @@ public final class LocalPlaybackSource: ObservableObject {
         logger.notice("spotify ad confirmed late; last-played track reverted")
     }
 
-    private func verifySpotifyAdViaAppleScript(forKey key: String) {
+    /// 问一次 `spotify url`,按 URI 类型处置这一条:广告 → 置「广告中」并撤回「上次在听」;不是音乐(播客单集、DJ 口播)→
+    /// 按通知的格式补记一条给 `MediaControlClient`(它只认通知),再补查一次,这一条就当没在放。歌不动。
+    private func classifySpotifyViaAppleScript(forKey key: String, title: String?, artist: String?) {
         Task.detached(priority: .utility) {
             guard let r = ProcessRunner.run(
                 "/usr/bin/osascript", ["-e", "tell application \"Spotify\" to spotify url of current track"],
                 timeout: MusicPlaybackController.appleScriptTimeout),
-                r.succeeded,
-                r.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("spotify:ad")
+                r.succeeded
             else { return }
+            let uri = r.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let kind = SpotifyNotificationHint.contentKind(ofURI: uri)
+            guard kind != .music else { return }
             await MainActor.run { [weak self] in
                 guard let self, self.lastSnapshot?.trackKey == key else { return }
-                if !self.isCurrentTrackAdBreak { self.isCurrentTrackAdBreak = true }
-                self.revertLastTrackAfterAd(key: key)
+                if kind == .ad {
+                    if !self.isCurrentTrackAdBreak { self.isCurrentTrackAdBreak = true }
+                    self.revertLastTrackAfterAd(key: key)
+                    return
+                }
+                MediaControlClient.noteSpotifyNotice(
+                    SpotifyNotificationHint(trackID: uri, name: title ?? "", artist: artist ?? ""))
+                self.handlePlayerInfoChanged(freezeExtrapolation: false, stateSignal: false)
             }
         }
     }
@@ -3692,8 +3702,14 @@ public final class LocalPlaybackSource: ObservableObject {
         // 权威复核只对原生客户端有意义(`spotify url` 与通知里的 Track ID 都是原生 App 才有,网页版没有这
         // 两个接口)——网页版只吃字段启发式本身的结果。先问 Spotify 自己刚广播的通知、对不上
         // 才退回 osascript,见 spotifyNativeAdCheckForNewTrack。
-        if snapshot.identityKey != lastKey, isSpotifyNative, !adByFields {
-            spotifyNativeAdCheckForNewTrack(snapshot: snapshot)
+        if snapshot.identityKey != lastKey, isSpotifyNative {
+            if !adByFields {
+                spotifyNativeAdCheckForNewTrack(snapshot: snapshot)
+            } else if !(spotifyNotificationHint?.matches(title: snapshot.title, artist: snapshot.artist) ?? false) {
+                // 字段启发式判中、又没有这一条的通知(App 启动时它已经在放):播客单集 / DJ 口播也长这样(歌手空),
+                // 问一次 URI 才分得清,见 classifySpotifyViaAppleScript。
+                classifySpotifyViaAppleScript(forKey: snapshot.trackKey, title: snapshot.title, artist: snapshot.artist)
+            }
         }
 
         // identityKey 而不是 trackKey:署名不可信的播放器要把署名剔出身份,否则换歌头几秒
