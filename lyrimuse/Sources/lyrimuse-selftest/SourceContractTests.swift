@@ -739,7 +739,7 @@ func runSourceContractTests() {
                 // 不会编译失败,只会让电台在那种配置下再次"安静地没有"。
                 expectEqual(mcc.contains("if players == [.appleMusic] { return radioAwareAppleMusicSnapshot() }"), true,
                             "电台: 只勾 Apple Music 那条路要过 radioAwareAppleMusicSnapshot,不能直接调 fetchAppleMusicSnapshot")
-                expectEqual(mcc.contains("radio.perTrack ? snapshot.markedRadio() : snapshot.withRadio(position: radio.position)"), true,
+                expectEqual(mcc.contains("radio.perTrack ? playable.markedRadio() : playable.withRadio(position: radio.position)"), true,
                             "电台: 纯 JXA 那条路同样要把位置换成单曲表(否则判据补上了、位置还是整档节目的);单曲位置的台保留 AppleScript 读数")
                 expectEqual(mcc.contains("guard raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier else { return nil }"), true,
                             "电台: 探针必须核对 Now Playing 焦点是 Apple Music —— 别人的台标哈希不能扣到 Music.app 头上")
@@ -1092,6 +1092,10 @@ func runSourceContractTests() {
                 // 而那道闸恰好会在锚点偏得最狠的时候把真值挡在门外。
                 expectEqual(mcc.contains("guard let apple = settledAppleMusicSnapshot() else { return mediaControl }"), true,
                             "适配优先: Apple Music 那档要整份用 AppleScript 快照(切歌那一下先过重读),拿不到才退回 media-control")
+                expectEqual(mcc.contains("let timed = fillingMissingAppleDuration(apple, from: mediaControl)"), true,
+                            "适配优先: AppleScript 时长为空时只补 media-control 的 duration,不借位置")
+                expectEqual(mcc.contains("let playable = supplementingMissingAppleDuration(snapshot)"), true,
+                            "只勾 Apple Music: 时长为空时按曲目向系统探一次,否则建不起锚点")
                 // 必须留的例外(电台那条钉在上面「电台」那一段里,不重复)。
                 expectEqual(mcc.contains("guard mediaControl.playing == true else { return mediaControl }"), true,
                             "适配优先: 暂停态不问 AppleScript(冻结的 elapsedTime 本来就是精确值)")

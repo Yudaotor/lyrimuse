@@ -2589,4 +2589,37 @@ func runPlaybackPositionTests() {
         expectEqual(M.focusHeldGraceSeconds >= 60, true,
                     "焦点档: 宽限要够长,至少覆盖一段短视频")
     }
+
+    // ---- Apple Music shared track:脚本时长为空时只补 media-control 的 duration ----
+    //
+    // 一部分 shared track 的 `track.duration()` 是空的,`player position` 仍有数。
+    // 整份顶替后时长变空,建不起进度锚点,悬浮歌词整首停在 ♪。
+    // media-control 同一首有时长。只补这一字段,位置仍以 AppleScript 为准。
+    do {
+        func snap(_ title: String, _ artist: String, duration: Double?, elapsed: Double?,
+                  bundle: String = "com.apple.Music") -> MediaControlSnapshot {
+            MediaControlSnapshot.forReplay(
+                title: title, artist: artist, duration: duration, elapsedTime: elapsed,
+                playing: true, bundleIdentifier: bundle, anchorElapsedTime: elapsed)
+        }
+        let apple = snap("晴天", "周杰伦", duration: nil, elapsed: 40)
+        let donor = snap("晴天", "周杰伦", duration: 269, elapsed: 8)
+        let filled = MediaControlClient.fillingMissingAppleDuration(apple, from: donor)
+        expectEqual(filled.duration, 269, "缺时长: 补上同一首的系统时长")
+        expectEqual(filled.elapsedTime, 40, "缺时长: 位置仍用 AppleScript,不借 media-control 的锚点")
+        expectEqual(MediaControlClient.fillingMissingAppleDuration(
+            snap("七里香", "周杰伦", duration: 240, elapsed: 10), from: donor).duration, 240,
+                    "缺时长: 脚本自己有时长就不动,哪怕系统报的是另一首")
+        expectEqual(MediaControlClient.fillingMissingAppleDuration(
+            apple, from: snap("夜曲", "周杰伦", duration: 230, elapsed: 3)).duration == nil, true,
+                    "缺时长: 曲目对不上不借(换歌那一拍系统可能还停在上一首)")
+        expectEqual(MediaControlClient.fillingMissingAppleDuration(
+            apple, from: snap("晴天", "周杰伦", duration: 269, elapsed: 8, bundle: "com.spotify.client")).duration == nil, true,
+                    "缺时长: 别的播放器同名曲的时长不借")
+        expectEqual(MediaControlClient.fillingMissingAppleDuration(
+            snap("晴天", "周杰伦", duration: 0, elapsed: 12), from: donor).duration, 269,
+                    "缺时长: 报 0 跟报空一样,视为没有")
+        expectEqual(MediaControlClient.fillingMissingAppleDuration(apple, from: nil).duration == nil, true,
+                    "缺时长: 没有系统快照就保持原样")
+    }
 }

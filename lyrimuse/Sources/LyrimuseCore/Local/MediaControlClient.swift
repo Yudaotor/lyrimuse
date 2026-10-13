@@ -858,9 +858,13 @@ public enum MediaControlClient {
     /// 换歌才多一次 fork(实测电台上 230~310 秒一次),而不是 2 秒一次。
     private static func radioAwareAppleMusicSnapshot() -> MediaControlSnapshot? {
         guard let snapshot = settledAppleMusicSnapshot() else { return nil }
-        guard let hash = probedRadioStationHash(forTrack: snapshot.trackKey) else {
+        // 设置里只选了 Apple Music 时,平时不读 media-control,这里只有 AppleScript 读到的歌名和进度。
+        // 时长是空的话,向 media-control 问一次这首歌有多长,问到就记住,同一首不再问。
+        // 选了「自动识别」不会进这个函数,那条路已经拿着 media-control 的时长。
+        let playable = supplementingMissingAppleDuration(snapshot)
+        guard let hash = probedRadioStationHash(forTrack: playable.trackKey) else {
             setRadioStationHash(nil)
-            return snapshot
+            return playable
         }
         setRadioStationHash(hash)
         // 位置换成按曲目边界自己起的表 —— 跟 fetchRawMediaControlSnapshot 里那一段同一套口径,
@@ -870,11 +874,11 @@ public enum MediaControlClient {
         // 路上照样查得到,那 0.4~1.8 秒的恒定滞后不会因为换了条路又回来。
         // AppleScript 的 player position 是这一刻现读的,没有锚点新旧问题,锚点年龄按 0 传。
         let radio = advanceRadioClock(
-            trackKey: snapshot.trackKey, playing: snapshot.playing == true, now: Date(),
-            startedAt: lastTrackChangeObserved(forKey: snapshot.trackKey),
-            systemPosition: snapshot.elapsedTime, reportedDuration: snapshot.duration, anchorAge: 0)
+            trackKey: playable.trackKey, playing: playable.playing == true, now: Date(),
+            startedAt: lastTrackChangeObserved(forKey: playable.trackKey),
+            systemPosition: playable.elapsedTime, reportedDuration: playable.duration, anchorAge: 0)
         // 报单曲位置的台:AppleScript 那份位置就是真值,只标电台、不换成单曲表(见 RadioTrackClock.State.perTrack)。
-        return radio.perTrack ? snapshot.markedRadio() : snapshot.withRadio(position: radio.position)
+        return radio.perTrack ? playable.markedRadio() : playable.withRadio(position: radio.position)
     }
 
     /// 连续几次拿不到快照,才真的把播放状态清空。纯函数,selftest 覆盖。
@@ -940,6 +944,50 @@ public enum MediaControlClient {
     private static let appleMusicRadioProbeLock = NSLock()
     private static var appleMusicRadioProbedKey: String?
     private static var appleMusicRadioProbedHash: String?
+
+    /// 只选了 Apple Music 时,给「AppleScript 没读到时长」的歌补上的时长。
+    /// 同一首只问 media-control 一次。问到了就记住。问失败,或系统正在显示的不是这首歌,也记成「没有」,
+    /// 免得每 2 秒再启动一次 media-control。歌名还对不上(多半还停在上一首)先不记,下一拍再问。
+    private static let appleDurationProbeLock = NSLock()
+    private static var appleDurationProbeKey: String?
+    private static var appleDurationProbeSecs: Double?
+
+    private static func supplementingMissingAppleDuration(_ apple: MediaControlSnapshot) -> MediaControlSnapshot {
+        if let duration = apple.duration, duration > 0 { return apple }
+        let key = apple.trackKey
+        appleDurationProbeLock.lock()
+        if appleDurationProbeKey == key {
+            let cached = appleDurationProbeSecs
+            appleDurationProbeLock.unlock()
+            if let cached, cached > 0 { return apple.withDuration(cached) }
+            return apple
+        }
+        appleDurationProbeLock.unlock()
+        let probed = probeAppleMusicSystemSnapshot()
+        let filled = fillingMissingAppleDuration(apple, from: probed)
+        let store = probed == nil || probed?.trackKey == key
+        appleDurationProbeLock.lock()
+        if store {
+            appleDurationProbeKey = key
+            appleDurationProbeSecs = (filled.duration ?? 0) > 0 ? filled.duration : nil
+        }
+        appleDurationProbeLock.unlock()
+        return filled
+    }
+
+    /// 向 media-control 要当前这首歌的时长。不走 `fetchRawMediaControlSnapshot`,那个还会改进度记录。
+    private static func probeAppleMusicSystemSnapshot() -> MediaControlSnapshot? {
+        guard let binaryPath = binaryPath(),
+              let result = runGet(["--now", "--no-artwork"], binaryPath: binaryPath, timeout: snapshotTimeout),
+              result.succeeded,
+              let raw = try? JSONDecoder().decode(RawPayload.self, from: result.stdout),
+              raw.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
+        else { return nil }
+        return MediaControlSnapshot.forReplay(
+            title: raw.title, artist: raw.artist, album: raw.album, duration: raw.duration,
+            elapsedTime: raw.elapsedTime, playing: raw.playing, bundleIdentifier: raw.bundleIdentifier,
+            anchorElapsedTime: raw.elapsedTime)
+    }
 
     /// 这一首的电台标识(nil = 不是电台 / 问不出来)。结果按曲目 key 记一份,同一首歌只探一次。
     ///
@@ -1824,6 +1872,24 @@ public enum MediaControlClient {
     ///
     /// 权限触发面:这条 osascript 只在**已经确认在播的就是它本人之后**才发 Apple Event,
     /// 不用这个播放器的人一次都碰不到,不会凭空多弹「自动化」权限框。
+    ///
+    /// 有些没有本地文件的 Apple Music 曲目,脚本读得到播到哪了,读不到这首歌有多长。
+    /// 拿不到时长就不会开始计时,悬浮歌词会一直停在 ♪。
+    /// 时长缺了、并且两边是同一首歌时,用 media-control 报的时长补上。
+    /// 播到哪了仍用脚本读到的。上面说的「不要改用 media-control 的进度」仍然成立,这里补的只是时长。
+    public static func fillingMissingAppleDuration(
+        _ apple: MediaControlSnapshot, from donor: MediaControlSnapshot?
+    ) -> MediaControlSnapshot {
+        if let duration = apple.duration, duration > 0 { return apple }
+        guard let donor,
+              donor.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier,
+              let duration = donor.duration, duration > 0,
+              let title = apple.title, !title.isEmpty,
+              apple.trackKey == donor.trackKey
+        else { return apple }
+        return apple.withDuration(duration)
+    }
+
     private static func adaptedSnapshot(
         bundleID: String, mediaControl: MediaControlSnapshot
     ) -> MediaControlSnapshot? {
@@ -1841,7 +1907,8 @@ public enum MediaControlClient {
             // (见 livePositionSeconds 里的同一条),多 fork 一个 osascript 换不到任何精度。
             guard mediaControl.playing == true else { return mediaControl }
             guard let apple = settledAppleMusicSnapshot() else { return mediaControl }
-            return perTrackRadio ? apple.markedRadio() : apple
+            let timed = fillingMissingAppleDuration(apple, from: mediaControl)
+            return perTrackRadio ? timed.markedRadio() : timed
         case PlaybackPlayer.spotify.bundleIdentifier:
             // 这里跟 Apple Music **不一样**:暂停态也问。Spotify 的两个钟不重合 ——
             // MediaRemote 那个冻结值是音频位置,`player position` 是它自己的钟,两者差一段输出
