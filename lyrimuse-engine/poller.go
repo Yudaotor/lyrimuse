@@ -272,6 +272,8 @@ type poller struct {
 	lfm         *lastfmScrobbler
 	lfmKey      lastfmScrobblerKey // 建 lfm 时用的那组输入,见 syncLiveConfig
 	lfmMirrored map[int64]bool
+	// lfmNPSess:announce 上一次见到的会话。换了会话就作废还在匹配的正在播放(lastfmScrobbler.nextNowPlaying)。
+	lfmNPSess *playSession
 
 	cur  snapshot
 	sess *playSession
@@ -1077,6 +1079,11 @@ func (p *poller) announce(now time.Time, why string) {
 	if p.sess.announcing {
 		return
 	}
+	// 换了会话:上一首还在匹配的正在播放作废。放在下面几道闸之前,这一首是广告、口播、被排除不发的也作废。
+	if p.sess != p.lfmNPSess {
+		p.lfmNPSess = p.sess
+		p.lfm.nextNowPlaying()
+	}
 	// 广告同样不宣布"正在播放"。playing_now 也是往 ListenBrainz / Last.fm 上送,而且它直接
 	// 决定网页顶部那张卡显示什么 —— 一个公开页面上写着"正在播放 BLIZZARD® Double Flip Deal
 	// BOGO for 99¢"是纯粹的噪声。挡掉之后广告这几十秒里网页停在上一首,跟"没在放"时的表现
@@ -1119,8 +1126,10 @@ func (p *poller) announce(now time.Time, why string) {
 	// Last.fm now-playing 自己节流(见 lastfmNPAt):播放 / 暂停切换当场发,其余最多每 playingNowRefresh 一次。
 	lastfmDue := playing && !lastfmSkip &&
 		(sess.lastfmNPAt.IsZero() || why == "state change" || now.Sub(sess.lastfmNPAt) >= playingNowRefresh)
+	var npSeq uint64
 	if lastfmDue {
 		sess.lastfmNPAt = now
+		npSeq = lfm.nextNowPlaying()
 	}
 	go func() {
 		// now-playing 镜像与 LB 解耦(批4):"正在播放"反映的是本机播放器
@@ -1134,6 +1143,7 @@ func (p *poller) announce(now time.Time, why string) {
 		// LB 不受影响 —— 它要靠 rate=0 表达暂停、自己会丢弃,所以下面的 submit 照旧发。
 		if lastfmDue {
 			mirrorAsync(lfm, "now-playing", func(ctx context.Context) error {
+				ctx = withNowPlayingSeq(ctx, npSeq)
 				return lfm.updateNowPlaying(withCatalogDurationUnknown(ctx, notAudio), artist, title, album, durationSecs)
 			}, nil) // now-playing 失败无需留痕:它是瞬时状态,下一拍自然覆盖(跟 scrobble 相反)
 		}

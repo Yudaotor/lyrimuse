@@ -59,6 +59,8 @@ type lastfmScrobbler struct {
 	// bridge 判「Last.fm 上的正在播放是不是我们自己的回声」要拿它比:改写过的写法(`鶴` 发成 `The Crane`)
 	// 跟本地标签比永远对不上,自己的回声会被当成 iPhone 在播。
 	lastSentNP atomic.Pointer[sentNowPlaying]
+	// npSeq:正在播放的代次,见 nextNowPlaying。
+	npSeq atomic.Uint64
 }
 
 type sentNowPlaying struct {
@@ -420,8 +422,32 @@ func mirrorTimeout() time.Duration {
 	return write
 }
 
+// errNowPlayingSuperseded:这次正在播放匹配完时已经不是最新的一次,没发。mirrorAsync 既不当失败也不当成功。
+var errNowPlayingSuperseded = errors.New("now-playing superseded")
+
+// nextNowPlaying 作废之前取的所有正在播放代次,返回新的一个。主循环换了会话、或要发一次正在播放时调(announce)。
+// updateNowPlaying 编目匹配要联网(最长 lastfmCatalogBudget),先开始的那次匹配得慢,就会晚于下一首的正在播放落到
+// Last.fm、把它盖掉;带着代次的那次匹配完先核对,已经作废就不发。见 12 章决策 72。nil 接收者安全。
+func (s *lastfmScrobbler) nextNowPlaying() uint64 {
+	if s == nil {
+		return 0
+	}
+	return s.npSeq.Add(1)
+}
+
+type nowPlayingSeqKey struct{}
+
+// withNowPlayingSeq 让 updateNowPlaying 发之前核对代次(nextNowPlaying 取的号)。不带的照发(测试、别的调用方)。
+func withNowPlayingSeq(ctx context.Context, seq uint64) context.Context {
+	return context.WithValue(ctx, nowPlayingSeqKey{}, seq)
+}
+
 func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, album string, durationSecs float64) error {
 	artist, track = resolveScrobbleTags(ctx, s.catalog, artist, track, durationSecs)
+	if seq, ok := ctx.Value(nowPlayingSeqKey{}).(uint64); ok && seq != s.npSeq.Load() {
+		slog.Info("lastfm now-playing: superseded while matching, not sent", "artist", artist, "track", track)
+		return errNowPlayingSuperseded
+	}
 	p := map[string]string{"artist": artist, "track": track}
 	if album = lastfmAlbumTag(album); album != "" {
 		p["album"] = album
@@ -513,6 +539,9 @@ func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context)
 		ctx, cancel := context.WithTimeout(context.Background(), mirrorTimeout())
 		defer cancel()
 		err := call(ctx)
+		if errors.Is(err, errNowPlayingSuperseded) {
+			return
+		}
 		if err == nil {
 			// 成功即洗清 error 4 的嫌疑(见 suspect4 注释)——能写进去就说明凭据活着。
 			s.suspect4.Store(0)
