@@ -1726,6 +1726,14 @@ func runPlaybackPositionTests() {
         expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: qq, frozen: 7.27, reported: 0.224), true, "QQ 恢复掉回开头: 按住暂停位置")
         expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: qq, frozen: 1.5, reported: 0.2), false, "QQ 恢复掉回开头: 暂停位置本来就在开头不算")
         expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: qq, frozen: 30, reported: 30.2), false, "QQ 恢复掉回开头: 正常恢复不算")
+        expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: PlaybackPlayer.reamp.bundleIdentifier, frozen: 75.563, reported: 0.266),
+                    true, "reAMP 恢复先报进度 0: 按住暂停位置(02 章决策 126)")
+        expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: PlaybackPlayer.kugou.bundleIdentifier, frozen: 75, reported: 0.2),
+                    false, "恢复掉回开头: 别的播放器照旧(决策 41)")
+        expectEqual(LocalPlaybackSource.resumeHoldSeed(bundleID: PlaybackPlayer.reamp.bundleIdentifier, frozen: 75.5, sinceSignal: 0.25),
+                    75.75, "reAMP 恢复先报进度 0: 按住时从暂停位置加上恢复信号之后走过的时间接着走")
+        expectEqual(LocalPlaybackSource.resumeHoldSeed(bundleID: qq, frozen: 7.27, sinceSignal: 0.4), 7.27,
+                    "QQ 恢复掉回开头: 照旧停在暂停位置")
         expectEqual(LocalPlaybackSource.resumeDropsToTrackStart(bundleID: kugouID, frozen: 7.27, reported: 0.224), false, "QQ 恢复掉回开头: 酷狗不动")
         let lateZero = { LocalPlaybackSource.qqLateZeroAnchorLead(bundleID: $0, anchorElapsed: $1, rawReported: $2, resumeSignalAge: $3) }
         expectEqual(lateZero(qq, 0, 0.05, 0.4), 0.12, "QQ 晚到的 0 锚点: 比在放信号晚 0.35 秒,往前补 0.12")

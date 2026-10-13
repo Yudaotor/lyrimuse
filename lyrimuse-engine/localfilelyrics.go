@@ -98,7 +98,8 @@ func decodeLocalLyricsFile(data []byte) (string, bool) {
 	return text, true
 }
 
-// localFileLyrics:正在放的这首同目录同名的 .lrc 的正文;读不到为 false。
+// localFileLyrics:正在放的这首同目录同名的 .lrc 的正文,没有(或读不出)时退到文件自己标签里的歌词
+// (localFileEmbeddedLyrics);都没有为 false。
 func localFileLyrics(artist, title string) (string, bool) {
 	audio := localFileCurrentPath(artist, title)
 	if audio == "" {
@@ -115,11 +116,19 @@ func localFileLyrics(artist, title string) (string, bool) {
 			names = append(names, e.Name())
 		}
 	}
-	name := localFileLyricsName(filepath.Base(audio), names)
-	if name == "" {
+	if name := localFileLyricsName(filepath.Base(audio), names); name != "" {
+		if lrc, ok := readLocalLyricsFile(filepath.Join(dir, name)); ok {
+			return lrc, true
+		}
+	}
+	text, ok := localFileEmbeddedLyrics(audio)
+	if !ok {
 		return "", false
 	}
-	path := filepath.Join(dir, name)
+	return strings.ReplaceAll(text, "\r\n", "\n"), true
+}
+
+func readLocalLyricsFile(path string) (string, bool) {
 	if info, err := os.Stat(path); err != nil || info.Size() == 0 || info.Size() > localFileLyricsMaxBytes {
 		return "", false
 	}

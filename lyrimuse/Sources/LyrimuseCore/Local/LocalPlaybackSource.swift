@@ -753,9 +753,20 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// QQ 暂停着开播另一首时先报这一首在放、读数掉回开头,0.3~0.6 秒后才换歌名。恢复那一拍读数回到开头、暂停位置却在后面:
     /// 按暂停位置接着走,最多 `trackEndZeroHoldSecs`;这期间换了歌名就是换歌,到点还是这一首(暂停中拖回开头)再采信读数。
-    /// 不按住的话界面会先跳回这一首开头再换歌。只认 QQ。见 02 章决策 120。纯函数,selftest 直接覆盖。
+    /// 不按住的话界面会先跳回这一首开头再换歌。见 02 章决策 120。
+    /// reAMP 恢复播放那一拍同样先报一份进度 0 的锚点,约 0.7 秒后才补准确的,按同一条按住。见 02 章决策 126。
+    /// 只认这两家。纯函数,selftest 直接覆盖。
+    /// `resumeDropsToTrackStart` 按住时从哪里接着走。reAMP 是真的从暂停处接着放,恢复信号到这一拍处理之间已经走了一截
+    /// (实测约 0.26 秒),按信号之后的时间补上 —— 停在暂停位置的话整段落后这一截,而它补来的准锚点差得不够多,伺服不纠。
+    /// QQ 那种多半是暂停着换了歌,停在暂停位置。纯函数,selftest 直接覆盖。
+    public nonisolated static func resumeHoldSeed(bundleID: String?, frozen: Double, sinceSignal: Double) -> Double {
+        guard bundleID == PlaybackPlayer.reamp.bundleIdentifier else { return frozen }
+        return frozen + max(0, sinceSignal - resumeAudioLagSecs(bundleID: bundleID))
+    }
+
     public nonisolated static func resumeDropsToTrackStart(bundleID: String?, frozen: Double?, reported: Double) -> Bool {
-        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier, let frozen else { return false }
+        guard bundleID == PlaybackPlayer.qqMusic.bundleIdentifier || bundleID == PlaybackPlayer.reamp.bundleIdentifier,
+              let frozen else { return false }
         return reported <= anchorLagFreshStartMaxSecs && frozen - reported > seekJumpToleranceSecs
     }
 
@@ -2082,7 +2093,8 @@ public final class LocalPlaybackSource: ObservableObject {
                 posAnchorLagSampleValid = Self.resumeContinuesStartAnchor(bundleID: lastSnapshot?.bundleIdentifier, frozen: frozen)
                 if let frozen, Self.resumeDropsToTrackStart(bundleID: lastSnapshot?.bundleIdentifier, frozen: frozen, reported: reported) {
                     logger.notice("resume to track start: frozen=\(frozen, format: .fixed(precision: 3)) reported=\(reported, format: .fixed(precision: 3)), keeping the paused position until the title changes")
-                    trackPosSeconds = frozen
+                    trackPosSeconds = Self.resumeHoldSeed(bundleID: lastSnapshot?.bundleIdentifier, frozen: frozen,
+                                                          sinceSignal: sinceSignal)
                     resumeZeroAt = now
                 }
                 // Spotify 自己的钟恢复播放后重新领先(见 resumeLead):播种值就是真声,差值折进偏置。
