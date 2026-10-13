@@ -491,6 +491,9 @@ func main() {
 	enableEnrichSaveThrottle()
 	err = run(ctx, cfg, lb)
 	flushEnrichSave()
+	// 增量重算攒着的实体表(songentitystore.go)。后台循环收到取消也会写,但 main 不等它,在这里同步再写一次;
+	// 放在缓存落盘之后(18 章决策 8 的顺序)。
+	flushSongEntityTable()
 	if err != nil && ctx.Err() == nil {
 		fatalExit(exitReasonRunError, "err=%v", err)
 	}

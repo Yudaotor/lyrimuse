@@ -355,3 +355,20 @@ func TestSongEntityIncrementalTableWriteDeferred(t *testing.T) {
 		t.Fatal("flush 之后实体表要写进盘")
 	}
 }
+
+// 开关关着时攒着的实体表丢掉不写,不把删掉的派生文件写回来。
+func TestSongEntityFlushSkippedWhenSwitchedOff(t *testing.T) {
+	setUpSongShareTest(t, map[string]enrichEntry{"A|Song|One": {DurationSecs: 200}}, false)
+	t.Cleanup(func() { songEntityTableUnsaved = nil })
+	songEntityTableUnsaved = &songEntityTableFile{Version: songEntityTableVersion}
+	on := features()
+	t.Cleanup(func() { setFeatures(on) })
+	setFeatures(featureFlags{})
+	flushSongEntityTable()
+	if _, err := os.Stat(songEntityTablePath()); !os.IsNotExist(err) {
+		t.Fatalf("开关关着不该写实体表: %v", err)
+	}
+	if songEntityTableUnsaved != nil {
+		t.Fatal("开关关着时攒着的那份要丢掉")
+	}
+}

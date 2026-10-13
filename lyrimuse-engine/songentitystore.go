@@ -39,7 +39,8 @@ const (
 
 var (
 	// songEntityTableWriteDelay:增量重算之后实体表最多攒多久才写盘。内存里的状态(songEntityLive)当场就是新的,同步歌词照常
-	// 接着跑;盘上这份只有 App「其它写法」面板读证据边、全量建表读它当种子(先用还没写盘的那份)。退出前当场写掉。
+	// 接着跑;盘上这份只有 App「其它写法」面板读证据边、全量建表读它当种子(先用还没写盘的那份)。退出前写掉
+	// (flushSongEntityTable)。
 	songEntityTableWriteDelay = time.Minute
 	// songEntityEvidenceDelay:补扫补到证据之后最多攒多久才全量建表,几个补扫前后脚补到的并成一次。
 	songEntityEvidenceDelay = 2 * time.Minute
@@ -315,11 +316,16 @@ func updateSongEntityTable(now time.Time) (b *songEntityBuild, full bool) {
 }
 
 // flushSongEntityTable:增量重算攒着的实体表写盘。写失败留着,下一次到点再写(全量建表会先拿它当种子、再整份写)。
+// 开关关着时丢掉不写,别把 removeSongEntityFiles 删掉的派生文件写回来。常驻循环到点调,引擎退出前 main 再调一次。
 func flushSongEntityTable() {
 	songEntityRebuildMu.Lock()
 	defer songEntityRebuildMu.Unlock()
 	t := songEntityTableUnsaved
 	if t == nil {
+		return
+	}
+	if !features().SongEntityShadow {
+		songEntityTableUnsaved = nil
 		return
 	}
 	data, err := json.Marshal(t)
