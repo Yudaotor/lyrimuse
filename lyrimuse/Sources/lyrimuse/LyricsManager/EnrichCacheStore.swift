@@ -32,6 +32,7 @@ public final class EnrichCacheStore: ObservableObject {
         // 界面上来 —— 值早就算好、存进缓存了,列表却仍在显示原始写法。
         //
         // 合唱曲目上它是空的(引擎只在单一歌手时才给值),所以消费方要回退到 artist。
+        // 这条自己没有时,借同一张专辑、同一个原始写法下别的条目认出来的(CanonicalArtistBorrow)。
         public let canonicalArtist: String
         /// 键里没有歌手时(网易云云盘里没匹配到曲库的歌,播放器只报歌名和时长),引擎按「歌名 + 时长」认出来的歌手
         /// (`inferred_artist`,见 03 章决策 32);键里有歌手时为空。只给显示、排序归并、搜索用,查缓存、写回、偏移仍用 `artist`。
@@ -846,12 +847,19 @@ public final class EnrichCacheStore: ObservableObject {
         from raw: [String: [String: Any]], lyricsDir: URL
     ) -> SummariesBundle {
         let lyricsFileDates = Self.lyricsFileModificationDates(in: lyricsDir)
+        let artistKey: (String) -> String = { toSimplified($0).lowercased() }
+        let borrowedCanonicals = CanonicalArtistBorrow.table(raw.compactMap { key, entry in
+            guard let parts = Self.splitKey(key) else { return nil }
+            return (parts.artist, parts.album, entry["canonical_artist"] as? String ?? "")
+        }, key: artistKey)
         var items = raw.keys.compactMap { key -> Summary? in
             guard let parts = Self.splitKey(key) else { return nil }
             let entry = raw[key] ?? [:]
             // 四块正文有没有:精简条目看位图(EnrichCacheSlim),不去读正文。
             let bodyFields = EnrichCacheSlim.presentFields(entry)
-            let canonical = entry["canonical_artist"] as? String ?? ""
+            let canonical = CanonicalArtistBorrow.resolve(
+                artist: parts.artist, album: parts.album, own: entry["canonical_artist"] as? String ?? "",
+                table: borrowedCanonicals, key: artistKey)
             // 键里没有歌手时才用引擎认出来的歌手 / 专辑,规则同 InferredTrackIdentity(歌词窗口、悬浮歌词那几处显示位)。
             let inferredArtist = parts.artist.isEmpty
                 ? (entry["inferred_artist"] as? String)?.trimmingCharacters(in: .whitespaces) ?? "" : ""

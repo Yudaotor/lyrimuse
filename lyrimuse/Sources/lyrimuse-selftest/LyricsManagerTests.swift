@@ -7,6 +7,26 @@ import Foundation
 
 @MainActor
 func runLyricsManagerTests() {
+    // ---- 列表:没有 canonical_artist 的条目借同一张专辑、同一原始写法下认出来的名字(CanonicalArtistBorrow) ----
+    do {
+        typealias B = CanonicalArtistBorrow
+        let key: (String) -> String = { $0.lowercased() }
+        let table = B.table([("Leehom Wang", "Open Fire", "王力宏"), ("Leehom Wang", "Open Fire", ""),
+                             ("leehom wang ", "open fire", "王力宏"),
+                             ("Jay", "Mix", "周杰伦"), ("Jay", "Mix", "Jay Park"),
+                             ("A & B", "Duet", ""), ("", "Open Fire", "孤儿"), ("Solo", "", "某人")], key: key)
+        expectEqual(table, ["leehom wang\u{1F}open fire": "王力宏"],
+                    "借名表: 同专辑同写法认出同一个名字才收,认出两个的不收,没写法或没专辑的跳过")
+        expectEqual(B.resolve(artist: "Leehom Wang", album: "Open Fire", own: "", table: table, key: key), "王力宏",
+                    "借名: 自己没有时借同专辑同写法的")
+        expectEqual(B.resolve(artist: "Leehom Wang", album: "Revolution", own: "", table: table, key: key), "",
+                    "借名: 别的专辑不借")
+        expectEqual(B.resolve(artist: "Leehom Wang", album: "Open Fire", own: "Wang Leehom", table: table, key: key),
+                    "Wang Leehom", "借名: 自己有的不换")
+        expectEqual(B.resolve(artist: "Jay", album: "Mix", own: "", table: table, key: key), "",
+                    "借名: 同专辑同写法认出过两个名字的不借")
+    }
+
     // ---- 侧栏:状态胶囊(LyricsManagerStatus)、宽度(LyricsManagerSidebarWidth)、搜索相关度与高亮 ----
     do {
         typealias S = LyricsManagerStatus
