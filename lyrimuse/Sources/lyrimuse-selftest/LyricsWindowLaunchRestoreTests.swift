@@ -132,4 +132,10 @@ func checkLyricsWindowLaunchRestore() {
                  "launch restore: lyrics window still not on screen, giving up attempts=", "launch restore: stopped, window closed"] {
         expectEqual(sourceBytes(restorer, contain: line), true, "启动重开: 日志里有「\(line)」")
     }
+    // reopen 日志记发送方:读 keySenderPIDAttr 再查进程路径;keyAddressAttr 是目标地址,取不出发送方(07 章决策 157)。
+    expectEqual(sourceBytes(delegate, contain: "event.attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?.int32Value")
+                    && sourceBytes(delegate, contain: "proc_pidpath(pid, &buffer, UInt32(buffer.count))")
+                    && sourceBytes(delegate, contain: "from=\\(Self.reopenSender(), privacy: .public)"), true,
+                "reopen 日志: 发送方按 pid 读、再查进程路径")
+    expectEqual(sourceBytes(delegate, contain: "AEKeyword(keyAddressAttr)"), false, "reopen 日志: 不拿目标地址当发送方")
 }

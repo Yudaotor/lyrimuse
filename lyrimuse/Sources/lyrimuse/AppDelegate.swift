@@ -486,6 +486,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isActiveForReopen && Date().timeIntervalSince(becameActiveAt) > 1.0
     }
 
+    /// 这次 reopen 的发送方,进日志:`<pid> <进程路径>`;发送方已经退出、查不到路径时是 `<pid> (exited)`,不是 Apple Event
+    /// 送来的是 `(no apple event)`。发送方读 `keySenderPIDAttr`,别读 `keyAddressAttr`:那是目标地址,LaunchServices 送来的
+    /// reopen 里是 psn,取不出字符串。见 07 章决策 157。
+    private static func reopenSender() -> String {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent else { return "(no apple event)" }
+        let pid = event.attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?.int32Value ?? 0
+        guard pid > 0 else { return "(no sender pid)" }
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return "\(pid) (exited)" }
+        return "\(pid) \(String(cString: buffer))"
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // **点系统通知也会走到这里** —— 系统激活 App 时就会触发 reopen,而那时用户要的是
         // 设置页,不是歌词窗口。
@@ -503,13 +515,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 查两次** —— 进来时查一次、延后任务真要开窗前再查一次。一个机制盖住两种顺序,
         // 通知那边只管设标记、不需要反过来调我们。
         //
-        // 顺手记这次 reopen 的发起方:哪天想换成"按发起方精确区分"就有依据。
-        // 实测 `open -b`(Dock 点击发的同一个事件)拿到的是 `(no AE)`,取不到发起方,
-        // 所以**别**指望靠它区分 —— 这条路试过,走不通。
-        let aeSender = NSAppleEventManager.shared().currentAppleEvent?
-            .attributeDescriptor(forKeyword: AEKeyword(keyAddressAttr))?
-            .stringValue ?? "(no AE)"
-        reopenLogger.notice("reopen: hasVisibleWindows=\(flag, privacy: .public) from=\(aeSender, privacy: .public)")
+        // 顺手记这次 reopen 的发送方(`reopenSender`),查「谁让窗口弹出来」靠它。
+        reopenLogger.notice("reopen: hasVisibleWindows=\(flag, privacy: .public) from=\(Self.reopenSender(), privacy: .public)")
         if isLyricsOnReopenSuppressed() {
             reopenLogger.notice("reopen: lyrics window suppressed (immediate)")
             return false
