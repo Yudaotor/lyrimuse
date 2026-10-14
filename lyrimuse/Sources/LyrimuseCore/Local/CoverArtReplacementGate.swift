@@ -85,6 +85,12 @@ public enum CoverArtReplacementGate {
         return (w, h)
     }
 
+    /// 读得出图头(`pixelSize(of:)`,不解码整图;读不出来时宽高一起是 0)。系统封面的几个入口(media-control 载荷、
+    /// nowplaying-clients、Kaset 下载、同目录封面)只收这样的数据,见 03 章决策 46。
+    public static func isImage(_ data: Data) -> Bool {
+        pixelSize(of: data).width > 0
+    }
+
     /// 系统那份封面要不要找替代。nil = 不找:没有图(该显示占位音符,不该悄悄换成缓存匹配出来
     /// 的另一张;从不报封面的播放器除外,见 `systemNeverHasArtwork`),或者系统那份本来就是一张够大的
     /// 方形封面(Apple Music 之类,权威图不动)。形状先于尺寸判:一张 1280×720 的视频帧再大也不是封面。

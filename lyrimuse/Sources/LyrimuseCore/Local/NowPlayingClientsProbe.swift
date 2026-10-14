@@ -54,8 +54,7 @@ public enum NowPlayingClientsProbe {
             "/usr/bin/perl", [paths.script, paths.library, bundleID, "artwork"], timeout: artworkTimeout),
             r.succeeded,
             let decoded = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
-            let base64 = decoded.artworkData,
-            let data = Data(base64Encoded: base64), !data.isEmpty
+            let data = MediaControlClient.artworkImageData(base64: decoded.artworkData)
         else { return nil }
         return (data, decoded.artworkMimeType ?? "image/jpeg",
                 PlayerArtistFix.correctedTrackKey(

@@ -377,7 +377,7 @@ public enum PlayerTitleSplit {
         return nil
     }
 
-    /// 正在放的文件同目录里的封面(图片数据与类型);没有为 nil。会读盘。
+    /// 正在放的文件同目录里的封面(图片数据与类型);没有、或者读不出图头(`CoverArtReplacementGate.isImage`)为 nil。会读盘。
     public static func folderCover(forAudioFile path: String) -> (data: Data, mimeType: String)? {
         let file = URL(fileURLWithPath: path)
         let dir = file.deletingLastPathComponent()
@@ -385,7 +385,8 @@ public enum PlayerTitleSplit {
               let name = folderCoverName(audioFileName: file.lastPathComponent, directoryEntries: entries) else { return nil }
         let url = dir.appendingPathComponent(name)
         guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int,
-              size > 0, size <= folderCoverMaxBytes, let data = FileIO.read(url) else { return nil }
+              size > 0, size <= folderCoverMaxBytes, let data = FileIO.read(url), CoverArtReplacementGate.isImage(data)
+        else { return nil }
         return (data, url.pathExtension.lowercased() == "png" ? "image/png" : "image/jpeg")
     }
 

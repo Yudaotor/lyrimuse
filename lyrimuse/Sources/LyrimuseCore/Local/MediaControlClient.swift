@@ -665,7 +665,7 @@ public enum MediaControlClient {
         let got = result.get()
         NetworkAuditLog.record(service: "image", operation: "kaset.artwork", host: url.host ?? "googleusercontent.com",
                                statusCode: got.status, durationMs: Date().timeIntervalSince(started) * 1000, error: got.error)
-        guard got.status == 200, let data = got.data, !data.isEmpty else { return nil }
+        guard got.status == 200, let data = got.data, CoverArtReplacementGate.isImage(data) else { return nil }
         return data
     }
 
@@ -2038,17 +2038,26 @@ public enum MediaControlClient {
         guard let bundleID = raw.bundleIdentifier, artworkBundleIDMatches(bundleID, players: players) else {
             return (nil, prefix + "the system reports \(raw.bundleIdentifier ?? "no player"), which is not accepted")
         }
-        guard let base64 = raw.artworkData, let imageData = Data(base64Encoded: base64) else {
+        guard let imageData = artworkImageData(base64: raw.artworkData) else {
             // 放本地文件的播放器(reAMP)只报文件里嵌着的封面:没嵌的改用正在放的文件同目录里的那张(见 PlayerTitleSplit)。
             if let path = PlayerTitleSplit.currentFilePath(bundleID: bundleID, title: raw.title),
                let cover = PlayerTitleSplit.folderCover(forAudioFile: path) {
                 return ((cover.data, cover.mimeType,
                          PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: raw.artist, title: raw.title)), nil)
             }
-            return (nil, prefix + "\(bundleID) reports \(raw.title ?? "") without artwork")
+            let artwork = raw.artworkData.map { "with artwork that is not an image (\(Data(base64Encoded: $0)?.count ?? 0) bytes)" }
+                ?? "without artwork"
+            return (nil, prefix + "\(bundleID) reports \(raw.title ?? "") \(artwork)")
         }
         return ((imageData, raw.artworkMimeType ?? "image/jpeg",
                  PlayerArtistFix.correctedTrackKey(bundle: bundleID, artist: raw.artist, title: raw.title)), nil)
+    }
+
+    /// 载荷里的 `artworkData`(base64)解出来的图;没带、解不开、读不出图头(`CoverArtReplacementGate.isImage`)都是 nil。
+    /// 空字符串解出来是 0 字节而不是 nil,只判 nil 会把这首当成有封面定案,见 03 章决策 46。nowplaying-clients 那条同用。
+    public static func artworkImageData(base64: String?) -> Data? {
+        guard let base64, let data = Data(base64Encoded: base64), CoverArtReplacementGate.isImage(data) else { return nil }
+        return data
     }
 
     // 只取封面相关的这几个字段——跟 RawPayload 是两份独立的 Decodable(理由跟文件顶部

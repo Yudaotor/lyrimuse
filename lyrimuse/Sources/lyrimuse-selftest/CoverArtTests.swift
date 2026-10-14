@@ -893,6 +893,18 @@ func runCoverArtTests() {
         expectEqual(G.pixelSize(of: frame).width, 320, "设备封面: 图头读宽")
         expectEqual(G.pixelSize(of: frame).height, 180, "设备封面: 图头读高")
         expectEqual(G.pixelSize(of: Data("not an image".utf8)).width, 0, "设备封面: 读不出来是 0")
+        // 系统封面各入口只收读得出图头的数据;空字符串解出来是 0 字节、不是 nil(03 章决策 46)。
+        expectEqual(G.isImage(square ?? Data()), true, "系统封面: 读得出图头的算图")
+        expectEqual(G.isImage(small ?? Data()), true, "系统封面: 小图也算图(像不像封面另判)")
+        expectEqual(G.isImage(Data()), false, "系统封面: 0 字节不算图")
+        expectEqual(G.isImage(Data("not an image".utf8)), false, "系统封面: 读不出图头不算图")
+        typealias M = MediaControlClient
+        expectEqual(M.artworkImageData(base64: square?.base64EncodedString()), square, "系统封面: 载荷里的图原样交回")
+        expectEqual(M.artworkImageData(base64: nil), nil, "系统封面: 没带图")
+        expectEqual(M.artworkImageData(base64: ""), nil, "系统封面: 空字符串不算带了图")
+        expectEqual(M.artworkImageData(base64: "not base64!"), nil, "系统封面: 坏的 base64 不算带了图")
+        expectEqual(M.artworkImageData(base64: Data("not an image".utf8).base64EncodedString()), nil,
+                    "系统封面: 解得开但不是图,不算带了图")
         expectEqual(PlaybackStatePublisher.artworkForEngine(square), square, "设备封面: 方形 120 原样交")
         expectEqual(PlaybackStatePublisher.artworkForEngine(small), nil, "设备封面: 16×16 按没有封面发")
         expectEqual(PlaybackStatePublisher.artworkForEngine(frame), nil, "设备封面: 视频缩略图按没有封面发")
@@ -2026,5 +2038,13 @@ func runCoverArtTests() {
                         && coordinator.contains("playerHasOwnCover: playerOwn != nil")
                         && coordinator.contains("playerHasOwnCover: Self.currentPlayerOwnCover() != nil"), true,
                     "播放器自带封面(契约): 高清替代按顺序试,系统那份没有时认播放器自带的那张")
+        let mediaControl = src("LyrimuseCore/Local/MediaControlClient.swift")
+        expectEqual(mediaControl.contains("guard let imageData = artworkImageData(base64: raw.artworkData) else {")
+                        && mediaControl.contains("guard got.status == 200, let data = got.data, CoverArtReplacementGate.isImage(data) else { return nil }")
+                        && src("LyrimuseCore/Local/NowPlayingClientsProbe.swift")
+                            .contains("let data = MediaControlClient.artworkImageData(base64: decoded.artworkData)")
+                        && src("LyrimuseCore/Local/PlayerTitleSplit.swift")
+                            .contains("let data = FileIO.read(url), CoverArtReplacementGate.isImage(data)"), true,
+                    "系统封面(契约): media-control 载荷、nowplaying-clients、Kaset 下载、同目录封面都只收读得出图头的数据")
     }
 }
