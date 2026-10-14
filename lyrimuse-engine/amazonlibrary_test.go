@@ -142,6 +142,12 @@ func TestAmazonUpcomingAndLocalLyrics(t *testing.T) {
 	if !ok || len(got) != 1 || got[0].title != "I Can't Love You Anymore [Explicit]" || got[0].artist != "Ella Langley & Morgan Wallen" || got[0].duration != 229 {
 		t.Fatalf("交出后面那首(目录里查不到的不交): %+v ok=%v", got, ok)
 	}
+	amazonQueueMu.Lock()
+	queuedAlbum := amazonQueueAlbums[amazonTrackIdentity(got[0].artist, got[0].title)]
+	amazonQueueMu.Unlock()
+	if queuedAlbum == "" || queuedAlbum != got[0].album {
+		t.Errorf("队列里记下这首的专辑: %q, want %q", queuedAlbum, got[0].album)
+	}
 	if _, ok := amazonUpcoming("Someone Else", "Other", 5); ok {
 		t.Error("播放器报的不是 App 认出的那首,退回同专辑预取")
 	}
@@ -168,24 +174,24 @@ func TestAmazonUpcomingAndLocalLyrics(t *testing.T) {
 	// 队列里那首解析歌词时按记下的 ASIN 认身份(歌名是剥过 [Explicit] 的);只在正用 Amazon Music 放时读。
 	setNativeLyricSourcesForPlayer(amazonMusicBundleID)
 	t.Cleanup(func() { setNativeLyricSourcesForPlayer("") })
-	r, ok := amazonLocalLyricsFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore")
+	r, ok := amazonLocalLyricsFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore", "")
 	if !ok || r.source != amazonLocalLyricsSource || !r.identityFromLocalClient || r.srcDur != 229 || r.matchAlbum == "" ||
 		r.matchCover != "https://m.media-amazon.com/images/I/5194nbHWBoL._SX500_.jpg" {
 		t.Fatalf("本地歌词: %+v ok=%v", r, ok)
 	}
 	// 开播先上屏的那份:只给正在放的这首,预取的(isNewTrack=false)不垫。
-	if p, ok := amazonProvisionalLyrics(true, amazonMusicBundleID, "Ella Langley & Morgan Wallen", "I Can't Love You Anymore"); !ok ||
+	if p, ok := amazonProvisionalLyrics(true, amazonMusicBundleID, "Ella Langley & Morgan Wallen", "I Can't Love You Anymore", ""); !ok ||
 		p.LyricsSource != amazonLocalLyricsSource || !strings.Contains(p.Lyrics, "nightstand") {
 		t.Errorf("开播先上屏 Amazon 缓存里的那份: %+v ok=%v", p, ok)
 	}
-	if _, ok := amazonProvisionalLyrics(false, amazonMusicBundleID, "Ella Langley & Morgan Wallen", "I Can't Love You Anymore"); ok {
+	if _, ok := amazonProvisionalLyrics(false, amazonMusicBundleID, "Ella Langley & Morgan Wallen", "I Can't Love You Anymore", ""); ok {
 		t.Error("预取的不是在放的歌,不垫")
 	}
 	setNativeLyricSourcesForPlayer(spotifyBundleID)
-	if _, ok := amazonLocalLyricsFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore"); ok {
+	if _, ok := amazonLocalLyricsFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore", ""); ok {
 		t.Error("没在用 Amazon Music 放时不读")
 	}
-	if _, ok := amazonProvisionalLyrics(true, spotifyBundleID, "Ella Langley & Morgan Wallen", "I Can't Love You Anymore"); ok {
+	if _, ok := amazonProvisionalLyrics(true, spotifyBundleID, "Ella Langley & Morgan Wallen", "I Can't Love You Anymore", ""); ok {
 		t.Error("别的播放器不垫")
 	}
 }
@@ -291,14 +297,14 @@ func TestAmazonCachedASIN(t *testing.T) {
 		setNativeLyricSourcesForPlayer("")
 	})
 
-	if got := amazonASINFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore [Explicit]"); got != "B0TESTAAA2" {
+	if got := amazonASINFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore [Explicit]", ""); got != "B0TESTAAA2" {
 		t.Errorf("缓存里记着曲目页的那首认得出(歌名尾巴照常剥): %q", got)
 	}
-	if got := amazonASINFor("Someone", "Broken Link"); got != "" {
+	if got := amazonASINFor("Someone", "Broken Link", ""); got != "" {
 		t.Errorf("不是曲目页形状的链接不认: %q", got)
 	}
 	setNativeLyricSourcesForPlayer(amazonMusicBundleID)
-	if r, ok := amazonLocalLyricsFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore"); !ok || r.source != amazonLocalLyricsSource {
+	if r, ok := amazonLocalLyricsFor("Ella Langley & Morgan Wallen", "I Can't Love You Anymore", ""); !ok || r.source != amazonLocalLyricsSource {
 		t.Errorf("不在放的那首也读得到本地歌词: %+v ok=%v", r, ok)
 	}
 	for _, u := range []string{"", "https://music.amazon.com/tracks/", "https://music.amazon.com/tracks/b0lower0000", "https://music.amazon.com/tracks/B0TESTAAA2x"} {
@@ -419,11 +425,91 @@ func TestAmazonLyricsBorrowedFromAnotherSong(t *testing.T) {
 	})
 	noteAmazonCurrentTrack(amazonMusicBundleID, "Khalil Fong", "Ai!", "asin://B0TESTAI01")
 	setNativeLyricSourcesForPlayer(amazonMusicBundleID)
-	r, ok := amazonLocalLyricsFor("Khalil Fong", "Ai!")
+	r, ok := amazonLocalLyricsFor("Khalil Fong", "Ai!", "")
 	if !ok || r.identityFromLocalClient || r.lyr == "" {
 		t.Fatalf("借来的正文照样给候选,但不置 identityFromLocalClient: %+v ok=%v", r, ok)
 	}
-	if _, ok := amazonProvisionalLyrics(true, amazonMusicBundleID, "Khalil Fong", "Ai!"); ok {
+	if _, ok := amazonProvisionalLyrics(true, amazonMusicBundleID, "Khalil Fong", "Ai!", ""); ok {
 		t.Error("借来的正文不先上屏")
+	}
+}
+
+// 同一个歌手 + 歌名在缓存里记着好几版(单曲与专辑版、精选集、删减与不删减)、各是各的 ASIN 时按专辑认;专辑对不上、没有专辑名、
+// 同一张专辑记着两个 ASIN 都认不出;只有一个 ASIN 时不看专辑。重建几次索引结果都一样(不看遍历缓存的顺序)。队列记着的专辑跟
+// 这一首的对不上时改用缓存那份,队列没记专辑、这一首没给专辑时照用队列的。
+func TestAmazonCachedASINPicksTheVersionByAlbum(t *testing.T) {
+	amazonCurrentMu.Lock()
+	savedCur := amazonCurrentTrack
+	amazonCurrentTrack.artist, amazonCurrentTrack.title, amazonCurrentTrack.trackID = "", "", ""
+	amazonCurrentMu.Unlock()
+	amazonQueueMu.Lock()
+	savedQueue, savedAlbums := amazonQueueASINs, amazonQueueAlbums
+	amazonQueueASINs, amazonQueueAlbums = map[string]string{}, map[string]string{}
+	amazonQueueMu.Unlock()
+	resetIndex := func() {
+		amazonCachedASINsMu.Lock()
+		amazonCachedASINs = nil
+		amazonCachedASINsMu.Unlock()
+	}
+	t.Cleanup(func() {
+		amazonCurrentMu.Lock()
+		amazonCurrentTrack = savedCur
+		amazonCurrentMu.Unlock()
+		amazonQueueMu.Lock()
+		amazonQueueASINs, amazonQueueAlbums = savedQueue, savedAlbums
+		amazonQueueMu.Unlock()
+		resetIndex()
+	})
+	track := func(asin string) enrichEntry {
+		return enrichEntry{AmazonURL: "https://music.amazon.com/tracks/" + asin}
+	}
+	withEnrichCache(t, map[string]enrichEntry{
+		"Leehom Wang|Gong Zhuan Zi Zhuan|Revolution":                  track("B00FAEYA98"),
+		"Leehom Wang|Gong Zhuan Zi Zhuan|The Only One [Clean]":        track("B073MW9HHQ"),
+		"Leehom Wang|Gong Zhuan Zi Zhuan|Open Fire [Clean]":           track("B0060BJAQI"),
+		"Ariana Grande|hate that i made you love me|petal [Clean]":    track("B0CLEAN001"),
+		"Ariana Grande|hate that i made you love me|petal [Explicit]": track("B0EXPL0001"),
+		"Someone|Dup|Same Album":                                      track("B0DUP00001"),
+		"Some One|Dup|Same Album":                                     track("B0DUP00002"),
+		"Jay Chou|Mojito|Mojito":                                      track("B0MOJITO01"),
+		"Jay Chou|Mojito|Greatest Works Of Art":                       track("B0MOJITO01"),
+	})
+	resetIndex()
+	for _, c := range []struct{ artist, title, album, want string }{
+		{"Leehom Wang", "Gong Zhuan Zi Zhuan", "Revolution", "B00FAEYA98"},
+		{"Leehom Wang", "Gong Zhuan Zi Zhuan", "The Only One [Clean]", "B073MW9HHQ"},
+		{"Leehom Wang", "Gong Zhuan Zi Zhuan", " the only one  [clean]", "B073MW9HHQ"},
+		{"Leehom Wang", "Gong Zhuan Zi Zhuan", "The Only One\u00a0[Clean]", "B073MW9HHQ"}, // 不换行空格
+		{"Leehom Wang", "Gong Zhuan Zi Zhuan", "Greatest Hits", ""},
+		{"Leehom Wang", "Gong Zhuan Zi Zhuan", "", ""},
+		{"Ariana Grande", "hate that i made you love me", "petal [Explicit]", "B0EXPL0001"},
+		{"Ariana Grande", "hate that i made you love me", "petal [Clean]", "B0CLEAN001"},
+		{"Someone", "Dup", "Same Album", ""},
+		{"Jay Chou", "Mojito", "Anything", "B0MOJITO01"},
+		{"Jay Chou", "Mojito", "", "B0MOJITO01"},
+	} {
+		for i := 0; i < 5; i++ {
+			resetIndex()
+			if got := amazonASINFor(c.artist, c.title, c.album); got != c.want {
+				t.Errorf("amazonASINFor(%q, %q, %q) = %q, want %q", c.artist, c.title, c.album, got, c.want)
+				break
+			}
+		}
+	}
+
+	id := amazonTrackIdentity("Leehom Wang", "Gong Zhuan Zi Zhuan")
+	amazonQueueMu.Lock()
+	amazonQueueASINs[id], amazonQueueAlbums[id] = "B0QUEUE001", "Revolution"
+	amazonQueueMu.Unlock()
+	for album, want := range map[string]string{"Revolution": "B0QUEUE001", "The Only One [Clean]": "B073MW9HHQ", "": "B0QUEUE001"} {
+		if got := amazonASINFor("Leehom Wang", "Gong Zhuan Zi Zhuan", album); got != want {
+			t.Errorf("队列记着 Revolution,这一首的专辑 %q: got %q, want %q", album, got, want)
+		}
+	}
+	amazonQueueMu.Lock()
+	delete(amazonQueueAlbums, id)
+	amazonQueueMu.Unlock()
+	if got := amazonASINFor("Leehom Wang", "Gong Zhuan Zi Zhuan", "The Only One [Clean]"); got != "B0QUEUE001" {
+		t.Errorf("队列没记专辑时照用队列的: %q", got)
 	}
 }

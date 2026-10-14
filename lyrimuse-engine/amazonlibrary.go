@@ -265,10 +265,12 @@ func amazonLyricsForASIN(asin string) (lrc string, coarse, ok bool) {
 	return amazonLyricsLRC(newest.value)
 }
 
-// amazonQueueASINs:amazonUpcoming 交出去的那几首,歌名 + 歌手 → ASIN。队列预解析的那几首解析歌词时靠它认身份。
+// amazonQueueASINs:amazonUpcoming 交出去的那几首,歌名 + 歌手 → ASIN;amazonQueueAlbums 是同一个键下目录缓存里那一首的专辑名。
+// 队列预解析的那几首解析歌词时靠它认身份。
 var (
-	amazonQueueMu    sync.Mutex
-	amazonQueueASINs = map[string]string{}
+	amazonQueueMu     sync.Mutex
+	amazonQueueASINs  = map[string]string{}
+	amazonQueueAlbums = map[string]string{}
 )
 
 // amazonTrackIdentity:比对用的歌手 + 歌名,跟歌词缓存键同一套归一化(normEnrichTitle 剥掉 ` [Explicit]` 这类尾巴)——
@@ -277,20 +279,26 @@ func amazonTrackIdentity(artist, title string) string {
 	return loosenEnrichKey(artist) + "\x00" + loosenEnrichKey(normEnrichTitle(title))
 }
 
-// amazonASINFor:这首(系统报的歌手 / 歌名)在 Amazon Music 里的 ASIN。当前这首取 App 报的(noteAmazonCurrentTrack),
-// 队列里的取 amazonUpcoming 记下的,都不是就取歌词缓存里记着的曲目页(amazonCachedASIN)。认不出返回 ""。
-// 会取 enrichMu(经 amazonCachedASIN):调用方不能持着它。
-func amazonASINFor(artist, title string) string {
+// amazonASINFor:这首(系统报的歌手 / 歌名 / 专辑)在 Amazon Music 里的 ASIN。当前这首取 App 报的(noteAmazonCurrentTrack),
+// 队列里的取 amazonUpcoming 记下的(两边都知道专辑时要对得上),都不是就取歌词缓存里记着的曲目页(amazonCachedASIN)。
+// 认不出返回 ""。会取 enrichMu(经 amazonCachedASIN):调用方不能持着它。
+func amazonASINFor(artist, title, album string) string {
 	if asin := amazonCurrentASIN(artist, title); asin != "" {
 		return asin
 	}
+	id := amazonTrackIdentity(artist, title)
 	amazonQueueMu.Lock()
-	asin := amazonQueueASINs[amazonTrackIdentity(artist, title)]
+	asin, queued := amazonQueueASINs[id], amazonQueueAlbums[id]
 	amazonQueueMu.Unlock()
-	if asin != "" {
+	if asin != "" && (album == "" || queued == "" || amazonAlbumKey(album) == amazonAlbumKey(queued)) {
 		return asin
 	}
-	return amazonCachedASIN(artist, title)
+	return amazonCachedASIN(artist, title, album)
+}
+
+// amazonAlbumKey:比对专辑名用的写法,跟歌词缓存键里那一段同一套(cleanMediaTag,再按宽松键折平)。
+func amazonAlbumKey(album string) string {
+	return loosenEnrichKey(cleanMediaTag(album))
 }
 
 // amazonCurrentASIN:App 此刻报的当前曲目就是这首(按 amazonTrackIdentity 比)时它的 ASIN,否则 ""。
@@ -307,34 +315,64 @@ func amazonCurrentASIN(artist, title string) string {
 	return ""
 }
 
-// amazonCachedASINs:用 Amazon Music 放过的歌,歌词缓存里记着它的曲目页(AmazonURL),从中认出的 ASIN,按
-// amazonTrackIdentity 索引。手动搜索(另起的进程,没有常驻进程的时钟和队列)和补空 / 全量扫库(扫到的多半不是
-// 在放的那首)只能靠它认出这首。最多每 amazonCachedASINsTTL 从缓存重建一次。
+// amazonCachedASINs:用 Amazon Music 放过的歌,歌词缓存里记着它的曲目页(AmazonURL),按 amazonTrackIdentity 索引,同一个
+// 歌手 + 歌名下记着每一条写法的专辑和 ASIN。手动搜索(另起的进程,没有常驻进程的时钟和队列)和补空 / 全量扫库
+// (扫到的多半不是在放的那首)只能靠它认出这首。最多每 amazonCachedASINsTTL 从缓存重建一次。
 var (
 	amazonCachedASINsMu    sync.Mutex
-	amazonCachedASINs      map[string]string
+	amazonCachedASINs      map[string][]amazonCachedTrack
 	amazonCachedASINsBuilt time.Time
 )
 
 const amazonCachedASINsTTL = 30 * time.Second
 
-func amazonCachedASIN(artist, title string) string {
+// amazonCachedTrack:歌词缓存里一条记着 Amazon 曲目页的写法(键里的专辑段、曲目页里的 ASIN)。
+type amazonCachedTrack struct {
+	album, asin string
+}
+
+func amazonCachedASIN(artist, title, album string) string {
 	now := time.Now()
 	amazonCachedASINsMu.Lock()
 	defer amazonCachedASINsMu.Unlock()
 	if amazonCachedASINs == nil || now.Sub(amazonCachedASINsBuilt) >= amazonCachedASINsTTL {
-		index := map[string]string{}
+		index := map[string][]amazonCachedTrack{}
 		enrichMu.Lock()
 		for key, e := range enrichCache {
 			if asin := amazonASINFromTrackURL(e.AmazonURL); asin != "" {
-				a, t, _ := splitEnrichKey(key)
-				index[amazonTrackIdentity(a, t)] = asin
+				a, t, al := splitEnrichKey(key)
+				id := amazonTrackIdentity(a, t)
+				index[id] = append(index[id], amazonCachedTrack{album: al, asin: asin})
 			}
 		}
 		enrichMu.Unlock()
 		amazonCachedASINs, amazonCachedASINsBuilt = index, now
 	}
-	return amazonCachedASINs[amazonTrackIdentity(artist, title)]
+	return pickAmazonCachedASIN(amazonCachedASINs[amazonTrackIdentity(artist, title)], album)
+}
+
+// pickAmazonCachedASIN:同一个歌手 + 歌名的几条写法里挑这一首的 ASIN。都是同一个 ASIN 就是它;不止一个(单曲与专辑版、
+// 精选集、删减与不删减各是各的曲目)时只认专辑对得上的(amazonAlbumKey),对不上、或者对得上的几条也不是同一个就认不出:
+// 同名的另一版时长、剪辑可能不同,拿它的本地歌词和目录信息,时间轴、专辑、时长都配错。结果跟几条的先后无关。见 09 章决策 255。
+func pickAmazonCachedASIN(tracks []amazonCachedTrack, album string) string {
+	if len(tracks) == 0 {
+		return ""
+	}
+	if !slices.ContainsFunc(tracks, func(t amazonCachedTrack) bool { return t.asin != tracks[0].asin }) {
+		return tracks[0].asin
+	}
+	want := amazonAlbumKey(album)
+	found := ""
+	for _, t := range tracks {
+		if want == "" || amazonAlbumKey(t.album) != want {
+			continue
+		}
+		if found != "" && found != t.asin {
+			return ""
+		}
+		found = t.asin
+	}
+	return found
 }
 
 // amazonASINFromTrackURL:amazonTrackURL 的反向,不是那个形状返回 ""。
@@ -347,18 +385,18 @@ func amazonASINFromTrackURL(u string) string {
 }
 
 // amazonLocalLyricsFor 给歌词检索用:正在用 Amazon Music 放歌时才读,换成一份跟各歌词源同形的原始应答。
-func amazonLocalLyricsFor(artist, title string) (lyricSourceResult, bool) {
-	r, _, ok := amazonLocalLyrics(artist, title)
+func amazonLocalLyricsFor(artist, title, album string) (lyricSourceResult, bool) {
+	r, _, ok := amazonLocalLyrics(artist, title, album)
 	return r, ok
 }
 
 // amazonLocalLyrics 同 amazonLocalLyricsFor,另带回这份正文是不是借来的(amazonLyricsBorrowedBy 非空):借来的
 // 不置 identityFromLocalClient,不享受同源加权,跟各源按内容公平打分。
-func amazonLocalLyrics(artist, title string) (r lyricSourceResult, borrowed, ok bool) {
+func amazonLocalLyrics(artist, title, album string) (r lyricSourceResult, borrowed, ok bool) {
 	if !isNativeLyricSource(amazonLocalLyricsSource) {
 		return lyricSourceResult{}, false, false
 	}
-	asin := amazonASINFor(artist, title)
+	asin := amazonASINFor(artist, title, album)
 	lrc, coarse, ok := amazonLyricsForASIN(asin)
 	if !ok {
 		return lyricSourceResult{}, false, false
@@ -418,11 +456,11 @@ func amazonLyricsBorrowedBy(asin string, meta amazonCatalogTrack, lrc string) st
 
 // amazonProvisionalLyrics:首次解析开跑时先上屏的那份(见 resolveEnrichAsync)。只给正用 Amazon Music 放着的这首
 // (isNewTrack),而且它本机缓存里有这首的歌词;正文是借来的(amazonLyricsBorrowedBy)不先上屏。别的情况返回 false。
-func amazonProvisionalLyrics(isNewTrack bool, bundleID, artist, title string) (enrichEntry, bool) {
+func amazonProvisionalLyrics(isNewTrack bool, bundleID, artist, title, album string) (enrichEntry, bool) {
 	if !isNewTrack || bundleID != amazonMusicBundleID {
 		return enrichEntry{}, false
 	}
-	r, borrowed, ok := amazonLocalLyrics(artist, title)
+	r, borrowed, ok := amazonLocalLyrics(artist, title, album)
 	if !ok || borrowed {
 		return enrichEntry{}, false
 	}
@@ -442,11 +480,11 @@ var (
 )
 
 // amazonLocalLyricsAvailable:正用 Amazon Music 放的这首,本地现在有没有它的词(见 amazonLyricsWorthRecheck)。
-func amazonLocalLyricsAvailable(bundleID, artist, title string) bool {
+func amazonLocalLyricsAvailable(bundleID, artist, title, album string) bool {
 	if bundleID != amazonMusicBundleID {
 		return false
 	}
-	asin := amazonASINFor(artist, title)
+	asin := amazonASINFor(artist, title, album)
 	if asin == "" {
 		return false
 	}
@@ -562,14 +600,16 @@ func amazonUpcoming(artist, title string, n int) ([]upcomingTrack, bool) {
 			continue
 		}
 		out = append(out, upcomingTrack{artist: t.Artist.Name, title: t.Title, album: t.albumName(), duration: t.durationSecs()})
-		amazonQueueASINs[amazonTrackIdentity(t.Artist.Name, t.Title)] = a
+		id := amazonTrackIdentity(t.Artist.Name, t.Title)
+		amazonQueueASINs[id], amazonQueueAlbums[id] = a, t.albumName()
 	}
 	// 只留最近这一批:队列窗口只有两三首,旧的对照留着没有用。
 	if len(amazonQueueASINs) > 32 {
-		amazonQueueASINs = map[string]string{}
+		amazonQueueASINs, amazonQueueAlbums = map[string]string{}, map[string]string{}
 		for _, a := range asins {
 			if t, ok := meta[a]; ok {
-				amazonQueueASINs[amazonTrackIdentity(t.Artist.Name, t.Title)] = a
+				id := amazonTrackIdentity(t.Artist.Name, t.Title)
+				amazonQueueASINs[id], amazonQueueAlbums[id] = a, t.albumName()
 			}
 		}
 	}

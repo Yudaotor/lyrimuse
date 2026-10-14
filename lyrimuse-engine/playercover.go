@@ -70,7 +70,7 @@ func playerCoverURLFor(bundleID, artist, title, album string, durationSecs float
 	case qqMusicBundleID:
 		cover = qqPlayingCoverURL(artist, title)
 	case amazonMusicBundleID:
-		cover = amazonPlayingCoverURL(artist, title)
+		cover = amazonPlayingCoverURL(artist, title, album)
 	}
 	playerCoverMu.Lock()
 	for k, m := range playerCoverMemo {
@@ -156,8 +156,8 @@ func qqMidShape(mid string) bool {
 }
 
 // amazonPlayingCoverURL:Amazon Music 目录缓存里这首(App 报的 ASIN)的专辑图。
-func amazonPlayingCoverURL(artist, title string) string {
-	asin := amazonASINFor(artist, title)
+func amazonPlayingCoverURL(artist, title, album string) string {
+	asin := amazonASINFor(artist, title, album)
 	if asin == "" {
 		return ""
 	}

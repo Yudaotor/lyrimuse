@@ -797,7 +797,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	catalogIDs := playerCatalogIDsFor(bundleID, artist, title, album, durationSecs)
 	// Amazon Music 曲目页:它的时钟那一拍记下的 ASIN,另一把锁,同样放在锁外取。
 	amazonURL := amazonTrackURLFor(bundleID, artist, title)
-	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title)
+	amazonLyricsAvail := amazonLocalLyricsAvailable(bundleID, artist, title, album)
 	localFileLyricsAvail := localFileLyricsAvailable(bundleID, artist, title)
 	youtubeMusicURL := youtubeMusicWatchURL(kasetVideoID)
 	// 播放器自己给这首记下的封面地址:读它本机的数据,同样放在锁外(见 playercover.go)。
@@ -2743,7 +2743,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 	// 待播曲目常常认不出歌名、预取不到(见 amazonUpcoming),不垫这一份,开头要空到网络那份回来。选定的那份照常经
 	// early / 最终提交整条覆盖它。只管正在放的这首(isNewTrack),预取的那些不是在放的歌。伴奏版不垫,它直接标纯音乐
 	// (instrumentalVersionEnrichment)。
-	if p, ok := amazonProvisionalLyrics(isNewTrack, bundleID, artist, title); ok && ctx.Err() == nil && !localIsInstrumentalVersion(title, album) {
+	if p, ok := amazonProvisionalLyrics(isNewTrack, bundleID, artist, title, album); ok && ctx.Err() == nil && !localIsInstrumentalVersion(title, album) {
 		enrichMu.Lock()
 		enrichProvisional[key] = true
 		enrichMu.Unlock()
@@ -5729,7 +5729,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			raw[spotifyLocalLyricsSource] = r
 		}
 		// Amazon Music 本地歌词同 KKBOX:正用它放歌时读,按 ASIN 认这首(见 amazonlibrary.go)。
-		if r, ok := amazonLocalLyricsFor(idArtist, idTitle); ok {
+		if r, ok := amazonLocalLyricsFor(idArtist, idTitle, idAlbum); ok {
 			raw[amazonLocalLyricsSource] = r
 		}
 		// reAMP 正在放的文件同目录同名的 .lrc 同 KKBOX:正用它放这首时读(见 localfilelyrics.go)。

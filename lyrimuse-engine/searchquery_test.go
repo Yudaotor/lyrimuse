@@ -117,7 +117,7 @@ func TestLyricIdentityFieldsIsWired(t *testing.T) {
 			"appleID, _ := playbackTrackIDsFor(idArtist, idTitle, idAlbum)",
 			"kkboxLocalLyricsFor(idArtist, idTitle, durationSecs)",
 			"spotifyLocalLyricsFor(idArtist, idTitle, idAlbum)",
-			"amazonLocalLyricsFor(idArtist, idTitle)",
+			"amazonLocalLyricsFor(idArtist, idTitle, idAlbum)",
 		},
 		"isrcretry.go":  {"playbackISRC(lyricIdentityFields(ctx, artist, title, album))"},
 		"applemusic.go": {"applemusicLocalLyric(catalogID, idArtist, idTitle, idAlbum, durationSecs)"},
