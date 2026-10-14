@@ -127,6 +127,12 @@ private struct IconBadge: View {
         "gear": 1.08, "quote.opening": 0.95, "flask.fill": 0.95, "pip.fill": 0.9, "command": 0.9,
         "dot.radiowaves.left.and.right": 0.75,
     ]
+    /// 按字号排之后笔画外框没落在方块正中的符号,往回挪(占边长的比例,右、下为正)。量法:按上面的参数画大图,
+    /// 量笔画外框中心离方块中心多远。「下面重」的符号(音符、烧瓶、i 的底座)外框本来就居中,看着偏下是形状本身,
+    /// 系统设置的图标也这么摆,不挪。
+    private static let opticalOffset: [String: CGSize] = [
+        "pip.fill": CGSize(width: 0.02, height: 0.02), "info": CGSize(width: -0.01, height: 0),
+    ]
 
     var body: some View {
         // 按字号排,SF Symbol 自己按光学大小对齐、线重统一。别改回 resizable + scaledToFit 按外接框塞进同一个
@@ -138,6 +144,8 @@ private struct IconBadge: View {
             .imageScale(.medium)
             .foregroundStyle(LinearGradient(colors: [.white, Color(white: 0.90)], startPoint: .top, endPoint: .bottom))
             .shadow(color: .black.opacity(0.22), radius: size * 0.02, y: size * 0.02)
+            .offset(x: size * (Self.opticalOffset[systemName]?.width ?? 0),
+                    y: size * (Self.opticalOffset[systemName]?.height ?? 0))
             .frame(width: size, height: size)
             .background {
                 shape.fill(LinearGradient(colors: [top ?? SettingsIconTint.lightened(tint), tint],

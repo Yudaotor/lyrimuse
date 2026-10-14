@@ -785,6 +785,7 @@
 "尚无备份；保存到 iCloud 后，可在新 Mac 上直接恢复" = "No backup yet. Save to iCloud to restore it on a new Mac";
 "尚未修改" = "No changes yet";
 "尚未填写 Webhook 地址" = "Webhook URL not set yet";
+"尚未成熟、可能不够完善的功能，之后可能调整、重构或移除" = "Features that aren't mature yet and may be incomplete. They could be changed, reworked or removed later.";
 "尚未手动选定过歌词；此后选定的歌词将直接锁定" = "You haven't picked any lyrics manually yet; from now on, your picks will be locked right away";
 "尚未检查更新" = "No update check yet";
 "尚未生效：浏览器拒绝了执行 JavaScript 的请求，请按上述路径确认该选项已勾选" = "Not working yet: the browser refused to run JavaScript. Follow the path above and make sure the switch is ticked";
@@ -2042,7 +2043,6 @@
 "返回" = "Back";
 "还剩 %@" = "%@ left";
 "还原" = "Revert";
-"还在试验中的功能，之后的版本可能会调整" = "Features still being tried out. They may change in later versions.";
 "还差最后几步：请完成下方标为橙色的项目" = "Almost there: complete the items marked in orange below";
 "还有 %@ 条" = "and %@ more";
 "还有未完成的项目" = "Some Items Need Attention";

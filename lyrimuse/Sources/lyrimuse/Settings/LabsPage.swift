@@ -62,7 +62,7 @@ struct LabsPage: View {
     @ObservedObject private var relayStatus = RelayPushStatusWatcher.shared
 
     var body: some View {
-        SettingsPage(title: L10n.t("实验室"), subtitle: L10n.t("还在试验中的功能，之后的版本可能会调整")) {
+        SettingsPage(title: L10n.t("实验室"), subtitle: L10n.t("尚未成熟、可能不够完善的功能，之后可能调整、重构或移除")) {
             VStack(spacing: 14) {
                 SettingsCard {
                     let destinations = AccountDestination.allCases.filter(\.livesInLabs)

@@ -8653,25 +8653,25 @@
         }
       }
     },
-    "还在试验中的功能，之后的版本可能会调整" : {
+    "尚未成熟、可能不够完善的功能，之后可能调整、重构或移除" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Features still being tried out. They may change in later versions."
+            "value" : "Features that aren't mature yet and may be incomplete. They could be changed, reworked or removed later."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "还在试验中的功能，之后的版本可能会调整"
+            "value" : "尚未成熟、可能不够完善的功能，之后可能调整、重构或移除"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仍在試驗中的功能，之後的版本可能會調整"
+            "value" : "尚未成熟、可能不夠完善的功能，之後可能調整、重構或移除"
           }
         }
       }
