@@ -989,11 +989,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 切歌"(手动跳歌/外推基准已陈旧),不做校正。取值覆盖实测 ~0.84s 的元数据提前量 +
     /// 通知触发轮询的 ~0.3-0.6s 延迟,再留余量。
     public nonisolated static let naturalAdvanceWindowSecs = 4.0
-    /// 锚点超前量的可信区间。下限滤掉测量噪声(Apple Music 级精度的源天然落在这之下);
-    /// 上限之外视为陈旧读数(08-18 实测换歌瞬间 elapsedTimeNow 可能还挂着上一首的值,
-    /// 如 30.3 vs 0.02)或模型失效,放弃校正退回原样采信(=改动前行为,seek 分支会兜住
-    /// 陈旧值)。实测真实偏置 0.69~1.32s,2.5s 的上限同时把"手动跳歌恰好发生在结尾窗口
-    /// 内"这种误判的伤害钉死在 ≤2.5s(且仅那一首、且是偏慢——比整首偏快的现状轻)。
+    /// 锚点超前量的可信区间。下限滤掉测量噪声(Apple Music 级精度的源天然落在这之下);上限之外视为陈旧读数(换歌瞬间
+    /// elapsedTimeNow 可能还挂着上一首的值,如 30.3 vs 0.02)或模型失效,放弃校正、照常采信(seek 分支会兜住陈旧值)。
+    /// 真实偏置 0.69~1.32s;2.5s 的上限同时把"手动跳歌恰好发生在结尾窗口内"这种误判的伤害钉死在 ≤2.5s(且仅那一首、且是偏慢)。
     public nonisolated static let naturalAdvanceMaxBiasSecs = 2.5
     public nonisolated static let naturalAdvanceMinBiasSecs = 0.05
 
@@ -2249,8 +2247,8 @@ public final class LocalPlaybackSource: ObservableObject {
             let tolerance = groundTruthFromBrowser
                 ? BrowserPositionProbe.preciseSnapToleranceSecs : Self.groundTruthSnapToleranceSecs
             guard abs(delta) > tolerance else {
-                // 差在门槛内:探针与流一致,这一笔什么都不改。noisyFloored 保持 09-02 以来的
-                // 行为继续往下走(棘轮 / EMA 照常吃这一笔);cleanExtrapolated 直接沿用外推。
+                // 差在门槛内:探针与流一致,这一笔什么都不改。noisyFloored 继续往下走(棘轮 / EMA 照常吃这一笔);
+                // cleanExtrapolated 直接沿用外推。
                 if tier == .cleanExtrapolated {
                     trackPosSeconds = predicted
                     return (trackPosSeconds, false)
@@ -2485,8 +2483,7 @@ public final class LocalPlaybackSource: ObservableObject {
         return resolveSteadyState(reported: reported, predicted: predicted, key: key, tier: tier)
     }
 
-    /// resolvePositionSeconds 的尾段:前向棘轮 + 偏差 EMA 伺服。拆出来是因为探针那一笔差在门槛内时
-    /// (noisyFloored)也要走到这里,与 09-02 以来的行为一致。
+    /// resolvePositionSeconds 的尾段:前向棘轮 + 偏差 EMA 伺服。拆出来是因为探针那一笔差在门槛内时(noisyFloored)也要走到这里。
     private func resolveSteadyState(reported: Double, predicted: Double, key: String, tier: PositionSourceTier) -> (seconds: Double, didReanchor: Bool) {
         if Self.shouldRatchetForward(reported: reported, predicted: predicted, tier: tier) {
             // 地板量化源(QQ 音乐/网易云)的前向棘轮:reported 恒 ≤ 真实位置,它比外推值
@@ -4609,8 +4606,7 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 就是它**时才需要立刻重算 —— 改别的播放器的档位对眼下这首歌没有任何影响,白跑一次
     /// applyOffsets 会顺带把两个 @Published 推一遍。
     ///
-    /// 那个同名入口是内部为 Spotify 写死的补偿,08-20 随根修一起删了;这次是
-    /// 用户显式配置的那一层,语义不同(见 LyricsOffsetStore.playerOffsets)。
+    /// 这一档是用户显式配置的(见 LyricsOffsetStore.playerOffsets)。
     public func setPlayerLyricsOffset(_ ms: Int, forBundleID bundleID: String) {
         LyricsOffsetStore.shared.setPlayerOffset(ms, forBundleID: bundleID)
         guard lastSnapshot?.bundleIdentifier == bundleID else { return }
