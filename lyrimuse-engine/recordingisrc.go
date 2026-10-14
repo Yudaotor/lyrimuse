@@ -68,7 +68,8 @@ func isrcDurationFits(localSecs, sourceSecs float64) bool {
 }
 
 // recordingISRCsFromScored:这一轮认出来的这条录音的 ISRC,带级别。playback 是播放器报的(没有传空串),排在前面;候选报的
-// 按候选顺序接在后面。title / album 是本地这一条的,候选配上的那一轨跟它比版本词。
+// 按候选顺序接在后面。title / album 是本地这一条的,候选配上的那一轨跟它比版本词;候选的曲名证明不了它就是这一条时
+// (isrcCandidateTitleUnproven)也只记 searched。
 func recordingISRCsFromScored(playback string, scored []scoredLyricCandidateResult, durationSecs float64, title, album string) []recordedISRC {
 	var out []recordedISRC
 	if c := normalizeISRC(playback); c != "" {
@@ -81,12 +82,20 @@ func recordingISRCsFromScored(playback string, scored []scoredLyricCandidateResu
 			continue
 		}
 		level := isrcLevelVerified
-		if versionTagsMismatch(title, album, r.Title, r.Album) {
+		if versionTagsMismatch(title, album, r.Title, r.Album) || isrcCandidateTitleUnproven(title, album, r) {
 			level = isrcLevelSearched
 		}
 		out = append(out, recordedISRC{c, level})
 	}
 	return out
+}
+
+// isrcCandidateTitleUnproven:候选 r 的曲名证明不了它就是本地这一条 —— 它是标题反查里歌手泛搜只凭时长改写曲名之后那一轮搜到的
+// (RetryMethod 是 title-from-artist-search:改写对不对全看时长凑不凑巧),或者两边都是拉丁字母、明摆着是两首歌
+// (titleSearchContradicts)。这种号不能当核对过的用:confidentISRC、trustedRecordingISRC 的缓存退路拿它去原产地商店查原名,
+// 配错的那首就被钉住了。同专辑曲目表那一路有专辑钉着,照旧算。调用方可能持 enrichMu,这里只做纯文本判断。见 18 章决策 70。
+func isrcCandidateTitleUnproven(title, album string, r scoredLyricCandidateResult) bool {
+	return r.RetryMethod == lyricQueryReasonTitleSearch || titleSearchContradicts(title, album, r.Title)
 }
 
 // confidentISRC:写入时记了级别、能拿去给别人认录音的号:播放器报的优先,其次核对过的;没有返回空串。检索配的、

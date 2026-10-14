@@ -53,6 +53,30 @@ func TestRecordingISRCsFromScored(t *testing.T) {
 	}
 }
 
+// 候选的曲名证明不了是这一条:歌手泛搜凭时长改写曲名之后那一轮搜到的、两边都是拉丁字母又明摆着是两首歌的,只记 searched;
+// 别的改写轮(原产地商店、专辑曲目表)和跨文字的照旧记 verified。
+func TestRecordingISRCsFromScoredTitleProof(t *testing.T) {
+	cand := func(isrc, title, method string) scoredLyricCandidateResult {
+		return scoredLyricCandidateResult{Source: "applemusic", Score: 500, SourceReportedDurationSecs: 243, ISRC: isrc, Title: title, RetryMethod: method}
+	}
+	scored := []scoredLyricCandidateResult{
+		cand("TWA479820005", "我的情歌", lyricQueryReasonTitleStorefront),
+		cand("TWA479820009", "你伤了我的心", lyricQueryReasonTitleSearch),
+		cand("TWA479820010", "我的情歌", "title-from-album"),
+		cand("USUM70000001", "Sabana de luz", ""),
+		cand("TWA479820011", "Wo De Qing Ge", ""),
+		cand("TWA479820012", "我的情歌", ""),
+	}
+	got := recordingISRCsFromScored("", scored, 243, "Wo De Qing Ge", "Revolution")
+	want := []recordedISRC{
+		{"TWA479820005", isrcLevelVerified}, {"TWA479820009", isrcLevelSearched}, {"TWA479820010", isrcLevelVerified},
+		{"USUM70000001", isrcLevelSearched}, {"TWA479820011", isrcLevelVerified}, {"TWA479820012", isrcLevelVerified},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("recordingISRCsFromScored = %v, want %v", got, want)
+	}
+}
+
 // 级别:同一个号取更高的;封顶挤掉的号不记;不改原来那份 isrc_levels;拿掉号时级别一起拿掉。
 func TestRecordISRCLevels(t *testing.T) {
 	shared := map[string]string{"HKA351501001": isrcLevelSearched}
