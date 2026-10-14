@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"regexp"
 	"time"
 )
 
@@ -66,3 +67,48 @@ func enrichCreatedThisPlayLocked(key string) bool {
 	return enrichCreatedThisPlay.key == key && enrichCreatedThisPlay.play != nil &&
 		enrichPlayingKey.Load() == enrichCreatedThisPlay.play
 }
+
+// playingSongIDFor:这个播放器这一拍报的这首歌的曲目 id,跟条目里 PlayerSongIDs 记的是同一种(Apple Music 是目录锚点里的
+// 曲目 id,QQ 音乐、网易云、酷狗是它们本机记的歌曲 id)。别的播放器不报,返回空串。
+func playingSongIDFor(bundleID, anchorLink string, ids playerCatalogIDs) string {
+	switch bundleID {
+	case appleMusicBundleID:
+		return appleCatalogIDFromURL(anchorLink)
+	case qqMusicBundleID, neteaseMusicBundleID, kugouMusicBundleID:
+		return ids.songID
+	}
+	return ""
+}
+
+// sameRecordingAsPlaying:条目记下的这个播放器的曲目 id 就是这一拍报的那个 —— 同一段录音。时长对不上时,错的是这一拍的
+// 时长(撕裂快照、预载窗口、开播头一拍),不是另一段录音:不另开「~durN」(trackEnrichment 时长那段)。id 为空判不了,
+// 返回 false,照旧按时长分。见 09 章决策 251。
+func sameRecordingAsPlaying(e enrichEntry, bundleID, songID string) bool {
+	return songID != "" && e.PlayerSongIDs[bundleID] == songID
+}
+
+// sameRecordingEntries:两条记着同一个播放器的同一个曲目 id。启动迁移拿它把多余的「~durN」并回基条目
+// (planEnrichKeyMigration);只认播放器自己报的 id,不认 ISRC:ISRC 有一部分是按歌名搜目录补的,不同版本之间会串。
+func sameRecordingEntries(a, b enrichEntry) bool {
+	for bundle, id := range a.PlayerSongIDs {
+		if id != "" && b.PlayerSongIDs[bundle] == id {
+			return true
+		}
+	}
+	return false
+}
+
+var durationVariantSuffix = regexp.MustCompile(`~dur[0-9]+$`)
+
+// durationVariantBaseKey:「歌手|歌名~durN|专辑」→「歌手|歌名|专辑」(enrichKeyDurationVariant 的反向)。不是变体返回 false。
+func durationVariantBaseKey(key string) (string, bool) {
+	artist, title, album := splitEnrichKey(key)
+	loc := durationVariantSuffix.FindStringIndex(title)
+	if loc == nil || loc[0] == 0 {
+		return "", false
+	}
+	return artist + "|" + title[:loc[0]] + "|" + album, true
+}
+
+// durationSameRecordingLogged:「同一段录音,留在这条上」那一行只记一次(同一首每几秒进来一次)。满了整个清掉。
+var durationSameRecordingLogged = map[string]bool{}

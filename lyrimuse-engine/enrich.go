@@ -803,6 +803,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// 播放器自己给这首记下的封面地址:读它本机的数据,同样放在锁外(见 playercover.go)。
 	playerCover := playerCoverURLFor(bundleID, artist, title, album, durationSecs, kkboxInfo)
 	ytmVerdict, ytmSettled := kasetAlbumVerdictFor(kasetVideoID, durationSecs, artist, title)
+	playingSongID := playingSongIDFor(bundleID, anchorLink, catalogIDs)
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if !ok {
@@ -819,16 +820,24 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 	}
 	correctDuration := false
+	// 播放器自己说是同一段录音(sameRecordingAsPlaying),时长对不上不算换了版本:不另开「~durN」,也不按时长重搜歌词。
+	sameRecordingStay := false
 	if ok && durationSecs > 0 {
 		// 命中的条目时长跟这次播放差太多——key 撞车,其实是两首不同录音,见
 		// resolveEnrichKeyForDuration 的注释。换成消歧变体 key,不覆盖已有数据。
 		if rk, re, rok := resolveEnrichKeyForDuration(enrichCache, key, durationSecs); rk != key {
-			// 要另开的那一位还空着:时长连续稳定之前先不建,这一拍返回空(见 durationVariantSteadyLocked)。
-			if !rok && !durationVariantSteadyLocked(key, durationSecs, time.Now()) {
+			// 播放器这一拍报的曲目 id 跟这条记下的一样:同一段录音,对不上的是这一拍的时长(见 sameRecordingAsPlaying)。
+			sameRecording := sameRecordingAsPlaying(e, bundleID, playingSongID)
+			// 要另开的那一位还空着:时长连续稳定之前先不建,这一拍返回空(见 durationVariantSteadyLocked)。同一段录音不挂起,
+			// 先留在这条上。
+			steady := rok || durationVariantSteadyLocked(key, durationSecs, time.Now())
+			if !steady && !sameRecording {
 				enrichMu.Unlock()
 				return nil
 			}
 			switch {
+			case !steady:
+				sameRecordingStay = true
 			case !rok && enrichCreatedThisPlayLocked(key) && enrichInflight[key]:
 				// 这次播放刚建的、首次解析还在跑:它后面的提交会把建条目时那个时长写回去,等它跑完下一拍再改。
 			case !rok && enrichCreatedThisPlayLocked(key):
@@ -836,6 +845,19 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 				log.Printf("enrich: %q duration corrected in place (recorded %.1fs, %.1fs in the same play)",
 					key, e.DurationSecs, durationSecs)
 				correctDuration = true
+			case sameRecording:
+				// 时长稳定成另一个值,是这条记下的时长不对:原地改,不另开、也不用已有的「~durN」(那一条是同一段录音按错的
+				// 时长分出去的,启动迁移会把它并回来)。时长必须跟着改:App 按时长挑变体(EnrichCacheKeys.durationVariant),
+				// 不改的话它去找一个不会建的「~durN」,整首没词。歌词不重搜(sameRecordingStay),报来的是试听段长度时也不换掉。
+				correctDuration, sameRecordingStay = true, true
+				if !durationSameRecordingLogged[key] {
+					if len(durationSameRecordingLogged) >= durationVariantSeenCap {
+						durationSameRecordingLogged = map[string]bool{}
+					}
+					durationSameRecordingLogged[key] = true
+					log.Printf("enrich: %q duration corrected in place (recorded %.1fs, %.1fs; %s reports the same song id)",
+						key, e.DurationSecs, durationSecs, bundleID)
+				}
 			default:
 				log.Printf("enrich: %q duration mismatch (cached %.1fs vs actual %.1fs), using variant %q",
 					key, e.DurationSecs, durationSecs, rk)
@@ -885,7 +907,8 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			e.DurationSecs = durationSecs
 			spotifyHintDirty = true
 		}
-		// 解析时用的时长(ResolvedDurationSecs)不动:跟这一拍对不上,下面 wrongDuration 按改好的时长重搜歌词。
+		// 解析时用的时长(ResolvedDurationSecs)不动:跟这一拍对不上,下面 wrongDuration 按改好的时长重搜歌词(播放器报同一个曲目 id 时
+		// 不重搜,见 sameRecordingStay)。
 		if correctDuration {
 			e.DurationSecs = durationSecs
 			spotifyHintDirty = true
@@ -926,7 +949,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// 还把决策记录盖掉,见 observeWrongDuration。每次进来都要喂一口(包括时长又对上
 		// 的观察,它负责清零),所以放在分支链外面。
 		wrongDuration := observeWrongDuration(key,
-			durationMismatch(e.ResolvedDurationSecs, durationSecs), durationSecs, time.Now().Unix())
+			durationMismatch(e.ResolvedDurationSecs, durationSecs) && !sameRecordingStay, durationSecs, time.Now().Unix())
 		// 正在播的是 MV、而这份歌词当初是按视频时长选的:跟 wrongDuration 同一个理由重来一次(见 musicvideolyrics.go)。
 		// 这一拍放的不是 MV(MV 交给歌词解析的时长是 0):之前记下的视频时长提示不再适用,清掉 —— 留着的话放音频版时
 		// 仍会越过 observeWrongDuration 的去抖直接判时长不符,MV 跟歌曲只差一两秒时本来选对的词也要白重来一次。

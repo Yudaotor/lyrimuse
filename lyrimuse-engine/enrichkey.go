@@ -298,6 +298,32 @@ func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
 		nk := enrichKey(artist, title, album)
 		buckets[nk] = append(buckets[nk], k)
 	}
+	// 跟基条目是同一段录音的「~durN」(播放器记下的曲目 id 一样)并回基条目那一组:它是某一拍时长报错分出去的。
+	// 合不合仍由下面的 splitByDuration 按时长把关,留哪一份按 betterEnrichEntry。见 09 章决策 251。
+	bucketKeys := make([]string, 0, len(buckets))
+	for nk := range buckets {
+		bucketKeys = append(bucketKeys, nk)
+	}
+	sort.Strings(bucketKeys)
+	for _, vnk := range bucketKeys {
+		base, isVariant := durationVariantBaseKey(vnk)
+		if !isVariant || len(buckets[base]) == 0 {
+			continue
+		}
+		var keep []string
+		for _, k := range buckets[vnk] {
+			if slices.ContainsFunc(buckets[base], func(b string) bool { return sameRecordingEntries(cache[k], cache[b]) }) {
+				buckets[base] = append(buckets[base], k)
+			} else {
+				keep = append(keep, k)
+			}
+		}
+		if len(keep) == 0 {
+			delete(buckets, vnk)
+		} else {
+			buckets[vnk] = keep
+		}
+	}
 
 	groups := map[string][]string{}
 	for nk, ks := range buckets {
