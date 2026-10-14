@@ -2784,17 +2784,9 @@ private struct AppearanceSettingsTab: View {
                     lyricsWindowToolbarGhost(.content)
                 }
                 Spacer(minLength: 8)
-                Menu {
-                    Button(L10n.t("恢复默认")) {
-                        LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)
-                    }
-                    // 作用范围写成一条不可点的说明项,写法与理由同悬浮歌词那颗(OverlayEditorStage)。
-                    Text(lyricsWindowResetScope)
-                } label: {
-                    Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
+                EditorToolbarResetMenu(scope: lyricsWindowResetScope) {
+                    LyricsWindowStyleDefaults.restoreDefaults(mini: lyricsWindowPreviewShowsMini)
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
             }
             .overlay(alignment: .top) { lyricsWindowProbeAnchor(lyricsWindowRow1Probe) }
             HStack(spacing: 8) {
@@ -3182,13 +3174,13 @@ private struct AppearanceSettingsTab: View {
                     SettingsTileGrid {
                         if mode.wrappedValue == .gradient {
                             SettingsControlCell(icon: "arrow.up.and.down.righttriangle.up.righttriangle.down", title: L10n.t("方向")) {
-                                Picker("", selection: direction) {
-                                    Text(L10n.t("从上到下")).tag(LyricsWindowGradientDirection.vertical)
-                                    Text(L10n.t("从左到右")).tag(LyricsWindowGradientDirection.horizontal)
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .fixedSize()
+                                // 玻璃下拉不用分段:两档放进这个小格子就挤满了,英文更放不下。
+                                SettingsGlassMenuPicker(
+                                    selection: direction,
+                                    options: [LyricsWindowGradientDirection.vertical, .horizontal],
+                                    label: { $0 == .vertical ? L10n.t("从上到下") : L10n.t("从左到右") },
+                                    compact: true
+                                )
                             }
                         }
                         if mode.wrappedValue.usesCustomColor {
@@ -3219,14 +3211,12 @@ private struct AppearanceSettingsTab: View {
                                 title: L10n.t("玻璃浓淡"),
                                 help: L10n.t("毛玻璃效果折射窗口后方的桌面，因此在此模式下窗口本身为透明")
                             ) {
-                                Picker("", selection: glass) {
-                                    ForEach(OverlayGlassIntensity.allCases, id: \.self) { level in
-                                        Text(level.displayName).tag(level)
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .fixedSize()
+                                SettingsGlassMenuPicker(
+                                    selection: glass,
+                                    options: OverlayGlassIntensity.allCases,
+                                    label: \.displayName,
+                                    compact: true
+                                )
                             }
                         }
                     }
@@ -3254,14 +3244,12 @@ private struct AppearanceSettingsTab: View {
                 // 排在字体和字号之间,同悬浮歌词:粗细是「这个字体族的哪一个粗细」。选的是正文那一档,读音 / 译文跟着细。
                 if let fontWeight {
                     SettingsControlCell(icon: "bold", title: L10n.t("粗细")) {
-                        Picker("", selection: fontWeight) {
-                            ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
-                                Text(weight.displayName).tag(weight)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
+                        SettingsGlassMenuPicker(
+                            selection: fontWeight,
+                            options: OverlayFontWeight.allCases,
+                            label: \.displayName,
+                            compact: true
+                        )
                     }
                 }
                 if let fontSize {
@@ -3307,15 +3295,19 @@ private struct AppearanceSettingsTab: View {
                         : L10n.t("仅作用于歌词；「自动」根据背景亮度在浅色与深色之间切换")
                 ) {
                     HStack(spacing: 6) {
-                        Picker("", selection: textColorMode) {
-                            Text(L10n.t("自动")).tag(LyricsWindowTextColorMode.auto)
-                            Text(L10n.t("浅色")).tag(LyricsWindowTextColorMode.light)
-                            Text(L10n.t("深色")).tag(LyricsWindowTextColorMode.dark)
-                            Text(L10n.t("自定义")).tag(LyricsWindowTextColorMode.custom)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
+                        SettingsGlassMenuPicker(
+                            selection: textColorMode,
+                            options: [LyricsWindowTextColorMode.auto, .light, .dark, .custom],
+                            label: { mode in
+                                switch mode {
+                                case .auto: return L10n.t("自动")
+                                case .light: return L10n.t("浅色")
+                                case .dark: return L10n.t("深色")
+                                case .custom: return L10n.t("自定义")
+                                }
+                            },
+                            compact: true
+                        )
                         if textColorMode.wrappedValue.usesCustomColor {
                             AppColorPicker(selection: textColor)
                                 .help(L10n.t("指定颜色"))
@@ -3331,12 +3323,12 @@ private struct AppearanceSettingsTab: View {
                         help: L10n.t("逐字填色时已唱部分使用此颜色；未唱部分和其他行仍使用文字颜色。关闭「卡拉OK效果」时无效")
                     ) {
                         HStack(spacing: 6) {
-                            Menu(LyricsWindowKaraokeFillLabel.text(for: karaokeFill.wrappedValue)) {
-                                ForEach(LyricsWindowKaraokeFill.allCases, id: \.self) { mode in
-                                    Button(LyricsWindowKaraokeFillLabel.text(for: mode)) { karaokeFill.wrappedValue = mode }
-                                }
-                            }
-                            .fixedSize()
+                            SettingsGlassMenuPicker(
+                                selection: karaokeFill,
+                                options: LyricsWindowKaraokeFill.allCases,
+                                label: LyricsWindowKaraokeFillLabel.text(for:),
+                                compact: true
+                            )
                             if karaokeFill.wrappedValue == .custom {
                                 AppColorPicker(selection: karaokeFillColor)
                             }
@@ -3723,11 +3715,10 @@ private struct NotchLyricsAlignmentRow: View {
 /// 默认高度就停在这个下限上;关掉又矮回一行的高度。跟「对齐方式」一样是歌词行自己的**顶层**
 /// 设置项(`SettingsRow`,不是从属的 `SettingsSubRow`),顺序紧跟「对齐方式」。
 ///
-/// 控件用下拉(`.pickerStyle(.menu)`)而不是分段控件:四个英文标签(Nothing / Next Line /
+/// 控件用玻璃下拉(`SettingsGlassMenuPicker`)而不是分段控件:四个英文标签(Nothing / Next Line /
 /// Translation / Romanization)在 420pt 的浮层里放不下(同悬浮歌词「粗细」那一行选下拉的理由);
 /// 也不用「风格」浮层那种单选列表 —— 这个浮层已经有五行,再加一头四行会撑到要滚。
-/// `.fixedSize()` 不能省,理由见 `OverlayStyleSettingsRows` 同款那条提醒。
-/// 这是 `Picker`,不是 `Menu` + `Toggle` 条目。
+/// 选的是值(带勾),不是 `Menu` + `Toggle` 条目。
 @MainActor
 private struct LyricSecondaryLineRow: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -3738,14 +3729,12 @@ private struct LyricSecondaryLineRow: View {
             title: L10n.t("副行"),
             help: L10n.t("在主歌词下方增加一行。译文和读音对应当前句，「下一句」显示即将演唱的歌词；选择「下一句」时，展开区不再重复显示下一句预览。放不下两行时歌词行会自动加高")
         ) {
-            Picker("", selection: $settings.notchSecondaryLine) {
-                ForEach(LyricSecondaryLine.allCases, id: \.self) { option in
-                    Text(option.displayName).tag(option)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
+            SettingsGlassMenuPicker(
+                selection: $settings.notchSecondaryLine,
+                options: LyricSecondaryLine.allCases,
+                label: \.displayName,
+                compact: true
+            )
         }
     }
 }
@@ -3870,14 +3859,12 @@ struct NotchFontSettingsRows: View {
                     title: L10n.t("粗细"),
                     help: L10n.t("主行的字重；副行和展开时的下一句预览比主行细一档")
                 ) {
-                    Picker("", selection: $settings.notchFontWeight) {
-                        ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
-                            Text(weight.displayName).tag(weight)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    SettingsGlassMenuPicker(
+                        selection: $settings.notchFontWeight,
+                        options: OverlayFontWeight.allCases,
+                        label: \.displayName,
+                        compact: true
+                    )
                 }
                 CardDivider()
                 SettingsRow(icon: "textformat.size", title: L10n.t("字号"), help: sizeHelp) {
@@ -5430,21 +5417,15 @@ private struct PlayerSettingsTab: View {
                 }
                 // 「+」恒在,不要写成 `!addable.isEmpty` 才显示:内置候选全配完之后菜单里还有
                 // 「从应用程序中选择…」这条路 —— 装的浏览器不在内置那四个里时恰恰最需要它。
-                Menu {
-                    ForEach(addable, id: \.self) { bundleID in
-                        Button(addBrowserMenuLabel(bundleID)) { trustAndPairBrowser(bundleID, platformID: platform.id) }
-                    }
-                    Divider()
-                    Button(L10n.t("从应用程序中选择…")) { chooseBrowserFromApplications(platformID: platform.id) }
-                } label: {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 14))
-                }
-                .menuStyle(.borderlessButton)
-                // 「+」自己就长得像"点开有东西",再挂下拉小箭头会被当成旁边某个头像的角标。
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help(L10n.t("配对浏览器"))
+                // 跟浏览器头像同为 22pt 的玻璃圆钮,不带下拉小箭头(会被当成旁边某个头像的角标)。
+                SettingsGlassActionMenu(
+                    systemImage: "plus",
+                    height: 22,
+                    help: L10n.t("配对浏览器"),
+                    entries: addable.map { bundleID in
+                        .action(addBrowserMenuLabel(bundleID)) { trustAndPairBrowser(bundleID, platformID: platform.id) }
+                    } + [.divider, .action(L10n.t("从应用程序中选择…")) { chooseBrowserFromApplications(platformID: platform.id) }]
+                )
             }
         }
         .compactTileChrome(isSelected: !pairedBundleIDs.isEmpty, highlightsOnHover: false)
@@ -6416,6 +6397,28 @@ private struct GeneralSettingsTab: View {
         }
     }
 
+    /// 「备份与迁移」卡头那颗菜单(卡级动作上提到卡头,同「歌词来源」卡头那颗「测试」)。
+    ///
+    /// 别加回「只保留最近 N 份」这类手动清理项:它是给"每存一次就新增一对文件、永不删旧"这个缺陷贴的创可贴,
+    /// 正确的修法是写入时自动只留最近几份(见「存到 iCloud」那个 alert 里的说明)。
+    ///
+    /// 「打开备份文件夹」必须写清是**哪个**文件夹:「关于」里「配置文件夹」那行也是在访达中显示,
+    /// 两处都没有二次确认,用户把打开的活配置目录当成备份去拷 / 删,丢的是正在用的配置。
+    private var backupFolderMenuEntries: [SettingsGlassMenuEntry] {
+        var entries: [SettingsGlassMenuEntry] = [.action(L10n.t("更换备份文件夹…")) { chooseBackupFolder() }]
+        if ICloudConfigStore.usingCustomFolder {
+            entries.append(.action(L10n.t("切换回 iCloud")) {
+                ICloudConfigStore.setCustomFolder(nil)
+                iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+            })
+        }
+        entries.append(.divider)
+        entries.append(.action(L10n.t("打开备份文件夹")) {
+            NSWorkspace.shared.activateFileViewerSelecting([ICloudConfigStore.preparedFolderURL()])
+        })
+        return entries
+    }
+
     // 导入/导出打包引擎的 config.json(账号 token 原文都在里面)+ features.json +
     // App 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断信息"反着来:那个绝不能带任何
     // token(设计给贴进公开 issue),这个就是要把 token 原样带走(设计给换新机器用)——
@@ -6438,33 +6441,8 @@ private struct GeneralSettingsTab: View {
             SettingsCardHeader(title: L10n.t("备份与迁移")) {
                 // 卡级动作(换绑目录)上提到卡头 —— 这是本仓库既有的位置(见「歌词来源」卡头那颗
                 // 「测试」按钮)。别把它们藏回行尾的 ellipsis.circle 菜单:那个 ⋯ 会是整个设置页
-                // **唯一**的一个,别处的无边框 Menu 都带文字标签。
-                Menu {
-                    Button(L10n.t("更换备份文件夹…")) { chooseBackupFolder() }
-                    if ICloudConfigStore.usingCustomFolder {
-                        Button(L10n.t("切换回 iCloud")) {
-                            ICloudConfigStore.setCustomFolder(nil)
-                            iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-                        }
-                    }
-                    // 别加回「只保留最近 N 份」这类手动清理项:它是给"每存一次就新增一对文件、
-                    // 永不删旧"这个缺陷贴的创可贴,正确的修法是写入时自动只留最近几份(见「存到
-                    // iCloud」那个 alert 里的说明)。手动项等于要求用户记得定期来打扫自己的备份,
-                    // 而这个菜单本来就藏在卡头,不点开根本不知道有多少份在堆。
-                    Divider()
-                    // 必须写清是**哪个**文件夹。这里和下面「配置文件夹」那行都叫「在访达中
-                    // 显示」的话,一字不差却开两个不同目录(备份目录 vs ~/.config/lyrimuse 这个
-                    // **活配置**目录),两个都没有二次确认 —— 用户把打开的活配置目录当成备份去
-                    // 拷/删,丢的是正在用的配置。
-                    Button(L10n.t("打开备份文件夹")) {
-                        NSWorkspace.shared.activateFileViewerSelecting(
-                            [ICloudConfigStore.preparedFolderURL()])
-                    }
-                } label: {
-                    Text(L10n.t("备份文件夹…"))
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                // **唯一**的一个,别处卡头的菜单都带文字标签。
+                SettingsGlassActionMenu(title: L10n.t("备份文件夹…"), entries: backupFolderMenuEntries)
             }
             // 第一行:有状态的目的地。
             //

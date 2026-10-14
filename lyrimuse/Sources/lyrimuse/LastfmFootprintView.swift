@@ -268,18 +268,14 @@ struct LastfmFootprintView: View {
         )
     }
 
-    /// 年数少时用分段控件,多了换下拉菜单:分段的宽度随段数长,听了十几年的账号会把方块头撑出去。
+    /// 年数少时用玻璃分段,多了换玻璃下拉:分段的宽度随段数长,听了十几年的账号会把方块头撑出去。
     @ViewBuilder
     private var heatmapYearPicker: some View {
         let years = LastfmHeatmapView.availableYears(in: stats.dailyCounts)
         if years.count <= 8 {
-            SettingsPillSegmentedControl(selection: heatmapYearBinding, options: years, label: { "\($0)" }, minWidth: 36)
+            SettingsGlassTabPicker(selection: heatmapYearBinding, options: years, label: { "\($0)" }, compact: true)
         } else {
-            Picker("", selection: heatmapYearBinding) {
-                ForEach(years, id: \.self) { y in Text(verbatim: "\(y)").tag(y) }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
+            SettingsGlassMenuPicker(selection: heatmapYearBinding, options: years, label: { "\($0)" }, compact: true)
         }
     }
 

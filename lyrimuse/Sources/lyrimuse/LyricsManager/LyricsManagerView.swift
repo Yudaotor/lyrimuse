@@ -1252,22 +1252,21 @@ struct LyricsManagerView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
+            // 两颗都是玻璃,同详情顶栏那一排(「⋯」同 moreMenuButton)。
             Button(action: refreshWithFeedback) {
-                Image(systemName: showRefreshedFeedback ? "checkmark" : "arrow.clockwise")
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
+                Text(Image(systemName: showRefreshedFeedback ? "checkmark" : "arrow.clockwise"))
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
+            .settingsGlassButtons()
+            .buttonBorderShape(.capsule)
             .help(showRefreshedFeedback ? L10n.t("已刷新") : L10n.t("刷新"))
             Menu {
                 libraryMenu
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Text(Image(systemName: "ellipsis"))
             }
-            .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .fixedSize()
+            .settingsGlassMenu()
+            .accessibilityLabel(L10n.t("更多"))
             .help(L10n.t("更多"))
         }
         .font(.system(size: 14, weight: .medium))
@@ -1626,11 +1625,14 @@ struct LyricsManagerView: View {
                     .font(.system(size: 9, weight: .semibold))
             }
         }
+        // 菜单里是两组内嵌的单选(分组、排序),要系统菜单;外面套玻璃胶囊,同菜单栏面板的 PanelGlassMenuPicker。
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
         .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
+        .frame(height: 24)
+        .settingsGlassMenuCapsule()
         .help(sortsByRelevance ? L10n.t("搜索时默认按相关度排序：歌名开头匹配的优先，其次是歌名、歌手、专辑中匹配的") : "")
     }
 

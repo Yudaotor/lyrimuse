@@ -66,13 +66,12 @@ struct TouchBarLyricsRows: View {
                 // 四选一同灵动岛 / 菜单栏的「副行」(同一个枚举、同一套显示名),各存各的键,默认不显示。
                 SettingsRow(icon: "text.append", title: L10n.t("副行"),
                             help: L10n.t("在主行下方再显示一行：译文和读音对应当前句，「下一句」为即将演唱的歌词。开启后两行字号固定为 14pt / 11pt，「字号」不生效，主行也不再提前切到下一句；副行显示不下时，按该句时长横向滚动")) {
-                    Picker("", selection: $settings.touchBarSecondaryLine) {
-                        ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
-                            Text(kind.displayName).tag(kind)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                    SettingsGlassMenuPicker(
+                        selection: $settings.touchBarSecondaryLine,
+                        options: LyricSecondaryLine.allCases,
+                        label: \.displayName,
+                        compact: true
+                    )
                     .fixedSize()
                 }
                 CardDivider()
@@ -218,13 +217,13 @@ struct TouchBarSidePicker: View {
     @Binding var selection: TouchBarSide
 
     var body: some View {
-        Picker("", selection: $selection) {
-            ForEach(TouchBarSide.allCases, id: \.self) { side in
-                Text(side.displayName).tag(side)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.menu)
+        // 只有左右两档,玻璃分段一眼看全。
+        SettingsGlassTabPicker(
+            selection: $selection,
+            options: TouchBarSide.allCases,
+            label: \.displayName,
+            compact: true
+        )
         .fixedSize()
     }
 }
@@ -316,15 +315,7 @@ struct TouchBarEditorToolbar: View {
                 toolbarButton(group)
             }
             Spacer(minLength: 8)
-            Menu {
-                Button(L10n.t("恢复默认")) { TouchBarStyleDefaults.restoreDefaults() }
-                // 作用范围写成一条不可点的说明项,同另外几段那颗「重置 ▾」。
-                Text(TouchBarStyleDefaults.scope)
-            } label: {
-                Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+            EditorToolbarResetMenu(scope: TouchBarStyleDefaults.scope) { TouchBarStyleDefaults.restoreDefaults() }
         }
     }
 

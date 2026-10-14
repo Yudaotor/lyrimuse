@@ -2101,14 +2101,12 @@ struct AccountLinkingTab: View {
                             docURL: config.notificationPlatform.setupDocURL
                         )
                         Spacer(minLength: 12)
-                        Picker("", selection: $config.notificationPlatform) {
-                            ForEach(NotificationPlatform.displayOrder) { platform in
-                                Text(platform.displayName).tag(platform)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
+                        SettingsGlassMenuPicker(
+                            selection: $config.notificationPlatform,
+                            options: NotificationPlatform.displayOrder,
+                            label: \.displayName,
+                            compact: true
+                        )
                     }
                 }
                 CardDivider()

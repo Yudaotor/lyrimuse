@@ -1124,8 +1124,8 @@ func runNotchTests() {
                                          encoding: .utf8)) ?? ""
             expectEqual(designSrc.contains("), in: range, onEditingChanged: onEditingChanged)"), true,
                         "圆角契约: SteppedSlider 把按下 / 松手转出来")
-            expectEqual(stageSrc.contains("settings[keyPath: stored] = NotchOutline.notchRadiusSetting")
-                        && stageSrc.contains("settings[keyPath: stored] = NotchOutline.defaultRadiusSetting"), true,
+            expectEqual(stageSrc.contains("NotchOutline.defaultRadiusSetting : NotchOutline.notchRadiusSetting")
+                        && stageSrc.contains("settings[keyPath: stored] = value"), true,
                         "圆角契约: 菜单里能选回「默认」和「跟随刘海」")
             expectEqual(stageSrc.contains("settings.notchCornerRadius = AppSettings.defaultNotchCornerRadius")
                         && stageSrc.contains("settings.notchExpandedCornerRadius = AppSettings.defaultNotchExpandedCornerRadius"), true,

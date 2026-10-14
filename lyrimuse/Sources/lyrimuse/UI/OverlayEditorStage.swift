@@ -452,20 +452,10 @@ struct OverlayEditorStage: View {
                 target: .color
             )
             Spacer(minLength: 8)
-            Menu {
-                Button(L10n.t("恢复默认")) { OverlayStyleDefaults.restoreTextAndColors() }
-                // 作用范围写成菜单里一条**不可点**的说明项(SwiftUI 里裸 Text 在 Menu 中
-                // 就是一条禁用菜单项)。不用 Button 的"标题 + 副标题"两段式 label:那个
-                // 桥接到 NSMenuItem.subtitle 的行为在这台机器的系统版本上没实测过,而这句
-                // 是作用范围声明、不能"可能没显示出来"。
-                // 两句都改过(老那两句合起来在说谎),理由见抽屉里那份
-                // `OverlayAllSettingsDrawer.resetRow` 的头注 —— **两个入口必须一字不差**。
-                Text(L10n.t("不含内容、排版、行为、位置和宽度"))
-            } label: {
-                Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
+            // 作用范围那句跟抽屉里那份(`OverlayAllSettingsDrawer.resetRow` 头注)**两个入口必须一字不差**。
+            EditorToolbarResetMenu(scope: L10n.t("不含内容、排版、行为、位置和宽度")) {
+                OverlayStyleDefaults.restoreTextAndColors()
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)

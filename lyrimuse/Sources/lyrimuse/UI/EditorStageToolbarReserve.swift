@@ -1,5 +1,32 @@
 import SwiftUI
 
+/// 编辑台工具栏第一行右端那颗「重置 ▾」,五段编辑台(悬浮歌词 / 灵动岛 / 菜单栏 / 触控栏 / 歌词窗口)共用:
+/// 跟左边入口同一种玻璃按钮(`editorToolbarButtonStyle`)、同高,点开是一条「恢复默认」加一条不可点的作用范围说明。
+/// 范围说明必须在界面上写出来(各编辑台排除的东西不一样,不能只写在动作本体的注释里)。
+struct EditorToolbarResetMenu: View {
+    let scope: String
+    let restore: () -> Void
+    @State private var shown = false
+
+    var body: some View {
+        Button { shown.toggle() } label: {
+            HStack(spacing: 4) {
+                Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .editorToolbarButtonStyle()
+        .fixedSize()
+        .popover(isPresented: $shown, arrowEdge: .bottom) {
+            SettingsGlassMenuEntries(entries: [.action(L10n.t("恢复默认"), restore), .divider, .note(scope)]) {
+                shown = false
+            }
+        }
+    }
+}
+
 /// 三段编辑台(悬浮歌词 / 灵动岛 / 菜单栏)工具栏**第二行末尾的隐藏占位**,宽度跟第一行右端
 /// 那颗「重置 ▾」逐像素相同,作用是让两行的按钮逐列对齐。
 ///
@@ -22,17 +49,10 @@ import SwiftUI
 /// 加入口或把标题改长之前,按各自 `toolbar` 头注那笔账重新离屏量一遍。
 struct EditorToolbarResetReserve: View {
     var body: some View {
-        // 占位必须是**同一种控件**:borderless 的 `Menu` 除了 Label 还有自己的内边距和下拉指示,
-        // 拿一个 Label 或定宽矩形来凑都会差几点。菜单内容不影响标签宽度(离屏量过:空菜单与
-        // 带两条项目的菜单同宽),所以这里不放任何一条,免得跟真那颗的项目文案各说各的。
-        Menu {
-            EmptyView()
-        } label: {
-            Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .hidden()
-        .accessibilityHidden(true)
+        // 占位必须是**同一个控件**(`EditorToolbarResetMenu`):拿一个 Label 或定宽矩形来凑会差掉玻璃按钮的内边距。
+        // 浮层内容不影响按钮宽度,范围说明传空串。
+        EditorToolbarResetMenu(scope: "", restore: {})
+            .hidden()
+            .accessibilityHidden(true)
     }
 }

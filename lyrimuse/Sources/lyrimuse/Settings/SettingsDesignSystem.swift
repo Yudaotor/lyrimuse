@@ -1734,8 +1734,8 @@ struct SettingsChipToggle: View {
 // MARK: - 玻璃胶囊 tab
 
 /// 页内分段 tab 的液态玻璃版:一圈玻璃胶囊底,选中项是一颗强调色胶囊,切换时滑过去。
-/// 用在页头下面单独成行的页内 tab(「歌词」「歌词显示」「Last.fm」「Discord」),这几处要长得一样;卡片行里用 `compact`
-/// 那一档(Last.fm 规则卡、Discord 页),别的页卡片里的选项用 `SettingsPillSegmentedControl`。
+/// 用在页头下面单独成行的页内 tab(「歌词」「歌词显示」「Last.fm」「Discord」),这几处要长得一样;设置页卡片行里的几选一
+/// 用 `compact` 那一档(Last.fm 规则卡、Discord 页、通用 › 外观)。`SettingsPillSegmentedControl` 只留给 sheet 和编辑台浮层里。
 ///
 /// 每一项的字重固定,选中与否不改字重:改了宽度会跟着变,切换时整排 tab 左右晃。
 /// 窗口不在前台时选中胶囊退成灰色,跟系统分段控件一致。
@@ -1885,19 +1885,102 @@ struct SettingsGlassPopoverMenu<Item: Hashable>: View {
     }
 }
 
-/// `SettingsGlassPopoverMenu` 浮层里的一行:左边勾、悬停时整行强调色,跟系统菜单的手感一致。
+/// 玻璃浮层菜单里的一条:动作、分隔线,或一条不可点的说明(作用范围这类)。
+enum SettingsGlassMenuEntry {
+    case action(String, () -> Void)
+    case divider
+    case note(String)
+}
+
+/// 玻璃浮层菜单的内容,`SettingsGlassActionMenu` 和编辑台工具栏的「重置」共用。动作在浮层收起之后的下一拍才执行:
+/// 有的动作会弹系统的选文件面板,跟浮层的收起动画撞在同一拍会被一起带走。
+struct SettingsGlassMenuEntries: View {
+    let entries: [SettingsGlassMenuEntry]
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(entries.indices, id: \.self) { index in
+                switch entries[index] {
+                case let .action(title, action):
+                    GlassPopoverMenuRow(title: title, checked: false, showsCheck: false) {
+                        dismiss()
+                        DispatchQueue.main.async(execute: action)
+                    }
+                case .divider:
+                    Divider().padding(.vertical, 4)
+                case let .note(text):
+                    Text(text)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                }
+            }
+        }
+        .padding(5)
+        .frame(minWidth: 140, maxWidth: 280, alignment: .leading)
+    }
+}
+
+/// 玻璃胶囊(只给图标时是玻璃圆钮)点开一列动作,外观同 `SettingsGlassPopoverMenu`:那颗选的是值,这颗做的是事。
+/// 卡头的卡级动作(「备份文件夹…」)、格子里的「+」用它。别换成 SwiftUI `Menu` 外面套玻璃,理由同 `SettingsGlassPopoverMenu`。
+struct SettingsGlassActionMenu: View {
+    var title: String?
+    var systemImage: String?
+    var height: CGFloat = 28
+    var help: String?
+    let entries: [SettingsGlassMenuEntry]
+    @State private var shown = false
+
+    var body: some View {
+        Button { shown.toggle() } label: {
+            Group {
+                if let title {
+                    HStack(spacing: 4) {
+                        if let systemImage { Image(systemName: systemImage).font(.system(size: 11)) }
+                        Text(title).font(.system(size: 12))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: height)
+                } else if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: height * 0.5, weight: .medium))
+                        .frame(width: height, height: height)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .settingsCardBackground(cornerRadius: height / 2)
+        .fixedSize()
+        .modifier(OptionalHelp(text: help))
+        .popover(isPresented: $shown, arrowEdge: .bottom) {
+            SettingsGlassMenuEntries(entries: entries) { shown = false }
+        }
+    }
+}
+
+/// `SettingsGlassPopoverMenu` 浮层里的一行:左边勾、悬停时整行强调色,跟系统菜单的手感一致。动作菜单那一列不留勾的位置。
 private struct GlassPopoverMenuRow: View {
     let title: String
     let checked: Bool
+    var showsCheck = true
     let action: () -> Void
     @State private var hovered = false
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .opacity(checked ? 1 : 0)
+                if showsCheck {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .opacity(checked ? 1 : 0)
+                }
                 Text(title).font(.system(size: 13))
                 Spacer(minLength: 0)
             }

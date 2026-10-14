@@ -98,14 +98,7 @@ struct MenuBarEditorStage: View {
             // 此前这里念的是工具栏四个入口的名字(「恢复默认布局、配色、字体与行为」),
             // 更早叫「恢复默认宽度模式与配色」—— 两版都在标题里列举范围,越列越长,而排除项那一行
             // 本来就在菜单里,标题再列一遍是重复。范围本身(这个编辑台除宽度和总开关外的全部)不变。
-            Menu {
-                Button(L10n.t("恢复默认")) { MenuBarStyleDefaults.restoreDefaults() }
-                Text(L10n.t("不含宽度和总开关"))
-            } label: {
-                Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+            EditorToolbarResetMenu(scope: L10n.t("不含宽度和总开关")) { MenuBarStyleDefaults.restoreDefaults() }
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
@@ -694,13 +687,12 @@ struct MenuBarSecondaryLineRow: View {
             title: L10n.t("副行"),
             help: L10n.t("在主歌词下方增加一行，高度不变（两行分别为 10pt / 9pt，「字号」不生效）。译文和读音对应当前句，「下一句」显示即将演唱的歌词；开启副行时，主行不再提前切换到下一句。副行不滚动，显示不下时末尾渐隐。")
         ) {
-            Picker("", selection: $settings.menuBarSecondaryLine) {
-                ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
-                    Text(kind.displayName).tag(kind)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
+            SettingsGlassMenuPicker(
+                selection: $settings.menuBarSecondaryLine,
+                options: LyricSecondaryLine.allCases,
+                label: \.displayName,
+                compact: true
+            )
             .fixedSize()
         }
     }
@@ -770,13 +762,12 @@ struct MenuBarFontWeightRow: View {
             title: L10n.t("粗细"),
             help: L10n.t("菜单栏歌词的字重。「常规」即系统菜单栏的默认字重；中文只加粗不加宽，英文字重越大宽度略增")
         ) {
-            Picker("", selection: $settings.menuBarLyricsFontWeight) {
-                ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
-                    Text(weight.displayName).tag(weight)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
+            SettingsGlassMenuPicker(
+                selection: $settings.menuBarLyricsFontWeight,
+                options: OverlayFontWeight.allCases,
+                label: \.displayName,
+                compact: true
+            )
             .fixedSize()
         }
     }

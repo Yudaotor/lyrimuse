@@ -53,20 +53,14 @@ struct OverlayTypeSettingsRows: View {
                 // (见 `OverlayFontWeight`)。刻意不做成四行各自可调:那是四个滑杆的复杂度,换来的是
                 // 用户可以把译文调得比主歌词还粗——一个没人想要、却要用界面去防的状态。
                 //
-                // `.fixedSize` 不能省(已知坑第 15 条):`SettingsRow` 的 HStack 有三个
-                // 可伸缩成员,SwiftUI **均分**剩余宽度而不是"先按理想宽度发",不加这一句时下拉会在
-                // 行里还空着一大截的情况下被压到自己的下限、把最长的那个选项截掉。
+                // 六个档位:分段放不下(英文更放不下),用玻璃下拉,同 `FontFamilyPicker` 那一行的形态。
                 SettingsRow(icon: "bold", title: L10n.t("粗细")) {
-                    Picker("", selection: $settings.overlayFontWeight) {
-                        ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
-                            Text(weight.displayName).tag(weight)
-                        }
-                    }
-                    .labelsHidden()
-                    // 六个档位:分段控件在 380pt 的浮层里放不下六个中文标签(而且这一栏本来就不是
-                    // 高频项),下拉更合适。同 `FontFamilyPicker` 那一行的形态。
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    SettingsGlassMenuPicker(
+                        selection: $settings.overlayFontWeight,
+                        options: OverlayFontWeight.allCases,
+                        label: \.displayName,
+                        compact: true
+                    )
                 }
                 CardDivider()
                 SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
@@ -123,14 +117,12 @@ struct OverlayColorSettingsRows: View {
                 SettingsToggleTile(icon: "pencil.and.outline", title: L10n.t("文字描边"), isOn: $settings.textStrokeEnabled)
                 SettingsToggleTile(icon: "square.on.square", title: L10n.t("毛玻璃背景"), isOn: $settings.overlayBackgroundGlass) {
                     if settings.overlayBackgroundGlass {
-                        Picker("", selection: $settings.overlayGlassIntensity) {
-                            ForEach(OverlayGlassIntensity.allCases, id: \.self) { intensity in
-                                Text(intensity.displayName).tag(intensity)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
+                        SettingsGlassMenuPicker(
+                            selection: $settings.overlayGlassIntensity,
+                            options: OverlayGlassIntensity.allCases,
+                            label: \.displayName,
+                            compact: true
+                        )
                         .help(L10n.t("玻璃浓淡"))
                         .settingsSearchHighlight(title: L10n.t("玻璃浓淡"))
                     }
@@ -187,21 +179,20 @@ struct OverlayColorSettingsRows: View {
         .animation(.default, value: settings.overlayBackgroundGlass)
     }
 
-    /// 「文字颜色」「未唱颜色」共用的取色控件:下拉菜单选"跟随封面"还是"自定义颜色",
-    /// 选了自定义才在旁边露出取色器。下拉用 `Menu(标题) { Button(...) }`(纯文字条目、不带图标/勾选)
-    /// ——这是本仓验证过好用的下拉形态,`Menu` 条目里塞 `Toggle`/`Image` 会整个菜单画成空白
-    /// (04 章决策 21)。
+    /// 「文字颜色」「未唱颜色」共用的取色控件:玻璃下拉选"跟随封面"还是"自定义颜色",
+    /// 选了自定义才在旁边露出取色器。
     ///
     /// 这里**不用** `Toggle(带文字标签, isOn:)`:macOS 上这个标签
     /// 实测不渲染,行里只剩一颗光秃秃看不出含义的开关。
     @ViewBuilder
     private func colorModeMenu(follows: Binding<Bool>, color: Binding<Color>, supportsOpacity: Bool) -> some View {
         HStack(spacing: 8) {
-            Menu(follows.wrappedValue ? L10n.t("跟随封面") : L10n.t("自定义颜色")) {
-                Button(L10n.t("跟随封面")) { follows.wrappedValue = true }
-                Button(L10n.t("自定义颜色")) { follows.wrappedValue = false }
-            }
-            .fixedSize()
+            SettingsGlassMenuPicker(
+                selection: follows,
+                options: [true, false],
+                label: { $0 ? L10n.t("跟随封面") : L10n.t("自定义颜色") },
+                compact: true
+            )
             if !follows.wrappedValue {
                 AppColorPicker(selection: color, supportsOpacity: supportsOpacity)
             }

@@ -96,13 +96,19 @@ struct FontFamilyPicker: View {
                 Text(currentLabel)
                     .font(selection.isEmpty || selectionMissing ? .system(size: 13) : .custom(selection, size: 13))
                     .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: 190, alignment: .trailing)
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .contentShape(Capsule())
         }
-        .buttonStyle(.bordered)
+        // 外观同玻璃下拉(`SettingsGlassMenuPicker` 的 compact 档):同一浮层里下面那行「粗细」就是它。
+        .buttonStyle(.plain)
+        .settingsCardBackground(cornerRadius: 14)
+        .fixedSize()
         .popover(isPresented: $showingList, arrowEdge: .bottom) { picker }
     }
 

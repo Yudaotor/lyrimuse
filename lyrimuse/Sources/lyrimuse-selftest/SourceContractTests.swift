@@ -2498,7 +2498,7 @@ func runSourceContractTests() {
                         "歌词窗口设置: 工具栏「重置 ▾」只恢复当前预览的那个尺寸")
             // 作用范围那句:工具栏那颗和抽屉那一行同一份,点名迷你 / 完整,别回到「当前预览的尺寸」
             // (读起来像"把窗口大小恢复默认")。
-            expectEqual(settings.contains("Text(lyricsWindowResetScope)")
+            expectEqual(settings.contains("EditorToolbarResetMenu(scope: lyricsWindowResetScope)")
                         && settings.contains("subtitle: lyricsWindowResetScope"), true,
                         "歌词窗口设置: 「重置」的作用范围工具栏和抽屉共用 lyricsWindowResetScope")
             expectEqual(settings.contains("只恢复当前预览的尺寸"), false,
@@ -3621,6 +3621,45 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "开关不起进程: 读不到 LoginItemManager.swift(路径挪了?)")
         }
+    }
+
+    // ---- 原生控件闸(AGENTS.md「设置及相关界面的改动优先用液态玻璃」那条)----
+    //
+    // 设置、歌词管理、引导、菜单栏面板里的下拉 / 分段 / 菜单都已换成设计系统的玻璃件,这里拦新写的原生控件:
+    // App target 的非注释行里不许有 `.pickerStyle(.menu)` / `.pickerStyle(.segmented)` / `.buttonStyle(.bordered)`
+    // (旧系统的回退只在 SettingsDesignSystem 里);`.menuStyle(.borderlessButton)` 必须在随后几行里套上
+    // `settingsGlassMenu()` / `settingsGlassMenuCapsule()`。确要原生控件时先在设计系统里加一个玻璃件。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        let banned = [".pickerStyle(.menu)", ".pickerStyle(.segmented)", ".buttonStyle(.bordered)"]
+        let menuStyle = ".menuStyle(.borderlessButton)"
+        var offenders: [String] = []
+        var scanned = 0
+        if let files = FileManager.default.enumerator(at: appSources, includingPropertiesForKeys: nil) {
+            for case let url as URL in files where url.pathExtension == "swift" {
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                scanned += 1
+                let rel = url.path.replacingOccurrences(of: appSources.path + "/", with: "")
+                if rel == "Settings/SettingsDesignSystem.swift" { continue }
+                guard (banned + [menuStyle]).contains(where: { sourceBytes(text, contain: $0) }) else { continue }
+                let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                    .map { String($0).trimmingCharacters(in: .whitespaces) }
+                for (index, line) in lines.enumerated() where !line.hasPrefix("//") {
+                    if banned.contains(where: { line.contains($0) }) { offenders.append("\(rel):\(index + 1)") }
+                    if line.contains(menuStyle) {
+                        let following = lines[(index + 1)..<min(index + 9, lines.count)]
+                        if !following.contains(where: { $0.contains("settingsGlassMenu") }) {
+                            offenders.append("\(rel):\(index + 1)")
+                        }
+                    }
+                }
+            }
+        }
+        expectEqual(scanned > 50, true, "原生控件闸: 扫到了 App target 的源文件(守卫自身没跑空)")
+        expectEqual(offenders.sorted(), [],
+                    "原生控件闸: 下拉用 SettingsGlassMenuPicker、几选一用 SettingsGlassTabPicker、按钮用 settingsGlassButtons,菜单套 settingsGlassMenu / settingsGlassMenuCapsule(AGENTS.md「设置及相关界面的改动优先用液态玻璃」)")
     }
 
     // ---- 退出原因日志(AGENTS.md「容易踩的具体坑 → 退出路径」)----

@@ -616,18 +616,8 @@ struct NotchEditorStage: View {
                 target: .rightEar
             )
             Spacer(minLength: 8)
-            // 「重置 ▾」——逐字复刻悬浮歌词工具栏那颗(见 OverlayEditorStage.toolbar):
-            // Menu 里一条恢复动作 + 一条不可点的作用范围说明,范围声明必须写在这里,理由
-            // 同悬浮歌词那边——"不含宽度和总开关"是安全边界,不能只在动作本体的注释里
-            // 交代、界面上却什么都不提示。
-            Menu {
-                Button(L10n.t("恢复默认")) { NotchStyleDefaults.restoreDefaults() }
-                Text(L10n.t("不含宽度和总开关"))
-            } label: {
-                Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+            // "不含宽度和总开关"是安全边界,必须写在界面上(见 EditorToolbarResetMenu)。
+            EditorToolbarResetMenu(scope: L10n.t("不含宽度和总开关")) { NotchStyleDefaults.restoreDefaults() }
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
@@ -1602,22 +1592,22 @@ struct NotchStyleSettingsRows: View {
         SettingsRowGroup {
             VStack(spacing: 0) {
                 SettingsRow(icon: "paintbrush", title: L10n.t("背景")) {
-                    Picker("", selection: Binding(
-                        get: { settings.notchCardStyle },
-                        set: { style in
-                            // 相等守卫:@Published 是 willSet 语义,等值赋值照样广播 objectWillChange 打醒
-                            // 所有观察 AppSettings 的界面,didSet 还会白写一次 UserDefaults。
-                            guard settings.notchCardStyle != style else { return }
-                            settings.notchCardStyle = style
-                        })) {
-                        // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一种
-                        // 风格,这里不加就是"设置里选不到的合法值"。
-                        ForEach(NotchCardStyle.allCases, id: \.self) { style in
-                            Text(style.displayName).tag(style)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    // 玻璃下拉不用分段:英文四档(Solid Black / Frosted Glass / …)在这个浮层里放不下。
+                    // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一种
+                    // 风格,这里不加就是"设置里选不到的合法值"。
+                    SettingsGlassMenuPicker(
+                        selection: Binding(
+                            get: { settings.notchCardStyle },
+                            set: { style in
+                                // 相等守卫:@Published 是 willSet 语义,等值赋值照样广播 objectWillChange 打醒
+                                // 所有观察 AppSettings 的界面,didSet 还会白写一次 UserDefaults。
+                                guard settings.notchCardStyle != style else { return }
+                                settings.notchCardStyle = style
+                            }),
+                        options: NotchCardStyle.allCases,
+                        label: \.displayName,
+                        compact: true
+                    )
                 }
                 CardDivider()
                 cornerRadiusRow(icon: "square.bottomhalf.filled", title: L10n.t("圆角"), slot: .collapsed,
@@ -1670,34 +1660,34 @@ struct NotchStyleSettingsRows: View {
                     if editing { corners.beginDrag(slot) } else { corners.endDrag() }
                 })
                 .frame(width: 100)
-                Menu {
-                    cornerModeButton(L10n.t("默认"), selected: rule == .proportional) {
-                        settings[keyPath: stored] = NotchOutline.defaultRadiusSetting
-                    }
-                    cornerModeButton(L10n.t("跟随刘海"), selected: rule == .notch) {
-                        settings[keyPath: stored] = NotchOutline.notchRadiusSetting
-                    }
-                } label: {
-                    Text(label)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .frame(width: 92, alignment: .trailing)
+                cornerModeMenu(label: label, rule: rule, stored: stored)
+                    .frame(width: 92, alignment: .trailing)
             }
         }
         .onHover { inside in corners.hover(slot, inside: inside) }
     }
 
-    private func cornerModeButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            if selected {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
+    /// 圆角那颗菜单里的两种模式;固定值靠滑杆,不在菜单里。
+    private enum NotchCornerMenuMode { case proportional, notch }
+
+    /// 胶囊上写读数(固定值时是 pt 数),浮层里只有两种模式,所以不是 SettingsGlassMenuPicker。
+    private func cornerModeMenu(
+        label: String, rule: NotchCornerRule, stored: ReferenceWritableKeyPath<AppSettings, Double>
+    ) -> some View {
+        let modes: [NotchCornerMenuMode] = [.proportional, .notch]
+        return SettingsGlassPopoverMenu(
+            title: label,
+            items: modes,
+            itemLabel: { (mode: NotchCornerMenuMode) -> String in
+                mode == .proportional ? L10n.t("默认") : L10n.t("跟随刘海")
+            },
+            isChecked: { (mode: NotchCornerMenuMode) -> Bool in
+                mode == .proportional ? rule == .proportional : rule == .notch
+            },
+            height: 28
+        ) { (mode: NotchCornerMenuMode) in
+            let value: Double = mode == .proportional ? NotchOutline.defaultRadiusSetting : NotchOutline.notchRadiusSetting
+            settings[keyPath: stored] = value
         }
     }
 }
@@ -1858,15 +1848,14 @@ struct NotchEarSettingsRows: View {
                 equalizerRow
                 CardDivider()
                 SettingsRow(icon: "rectangle.lefthalf.inset.filled", title: L10n.t("显示内容")) {
-                    Picker("", selection: Binding(get: { current }, set: { select($0) })) {
-                        // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一个
-                        // 模块,这里不加就是"设置里选不到的合法值"。
-                        ForEach(NotchEarModule.allCases, id: \.self) { module in
-                            Text(module.displayName).tag(module)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    // 顺序直接用 allCases(声明序),不另抄一份数组 —— 抄一份的话以后往枚举里加一个
+                    // 模块,这里不加就是"设置里选不到的合法值"。
+                    SettingsGlassMenuPicker(
+                        selection: Binding(get: { current }, set: { select($0) }),
+                        options: NotchEarModule.allCases,
+                        label: \.displayName,
+                        compact: true
+                    )
                 }
             }
         }
@@ -1923,6 +1912,20 @@ struct NotchScreenSettingsRows: View {
     /// 不可能撞上这个值;空串已经被「自动」占了。
     private static let allScreensTag = "__all_screens__"
 
+    /// 下拉里的各项:自动、全部屏幕、接着的每块屏。存着的那块屏现在没接着时补一项「已断开的屏幕」 ——
+    /// 少了它,没有任何一项是选中的,看起来像设置丢了,而实际上偏好还在、屏幕插回来就会恢复。
+    private var screenOptions: [(tag: String, name: String)] {
+        var options: [(tag: String, name: String)] = [("", L10n.t("自动")), (Self.allScreensTag, L10n.t("全部屏幕"))]
+        for screen in availableScreens {
+            if let id = ScreenIdentity.id(of: screen) { options.append((id, screen.localizedName)) }
+        }
+        if !settings.notchAllScreens, !settings.notchScreenID.isEmpty,
+           ScreenIdentity.screen(withID: settings.notchScreenID) == nil {
+            options.append((settings.notchScreenID, L10n.t("已断开的屏幕")))
+        }
+        return options
+    }
+
     /// 当前选中的是哪一项。两个设置项还是各存各的(notchAllScreens 有自己的订阅方
     /// NotchMirrorManager),这里只是把它们合成一个选择呈现出来。
     private var selection: String {
@@ -1938,23 +1941,13 @@ struct NotchScreenSettingsRows: View {
                 title: L10n.t("显示在"),
                 help: L10n.t("「自动」选择带刘海的屏幕；「全部屏幕」在每块屏幕上各显示一个；指定的屏幕断开后自动恢复为「自动」")
             ) {
-                Picker("", selection: Binding(get: { selection }, set: { apply($0) })) {
-                    Text(L10n.t("自动")).tag("")
-                    Text(L10n.t("全部屏幕")).tag(Self.allScreensTag)
-                    ForEach(availableScreens, id: \.self) { screen in
-                        if let id = ScreenIdentity.id(of: screen) {
-                            Text(screen.localizedName).tag(id)
-                        }
-                    }
-                    // 存着的那块屏现在没接着时补一项。少了它,菜单里没有任何一项是选中的 ——
-                    // 那看起来像设置丢了,而实际上偏好还在、屏幕插回来就会恢复。
-                    if !settings.notchAllScreens, !settings.notchScreenID.isEmpty,
-                       ScreenIdentity.screen(withID: settings.notchScreenID) == nil {
-                        Text(L10n.t("已断开的屏幕")).tag(settings.notchScreenID)
-                    }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
+                let options = screenOptions
+                SettingsGlassMenuPicker(
+                    selection: Binding(get: { selection }, set: { apply($0) }),
+                    options: options.map(\.tag),
+                    label: { tag in options.first { $0.tag == tag }?.name ?? "" },
+                    compact: true
+                )
             }
             // 搜索目录里这一项按「屏幕」登记。
             .settingsSearchHighlight(title: L10n.t("屏幕"))

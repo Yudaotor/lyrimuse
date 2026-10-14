@@ -435,15 +435,21 @@ struct OnboardingView: View {
             // 两个跟「这台 Mac 上怎么用它」有关的偏好:界面语言、开机启动。
             VStack(alignment: .leading, spacing: 0) {
                 setupRow(icon: "globe", tint: .secondary, title: L10n.t("界面语言"), subtitle: nil) {
-                    Picker(L10n.t("界面语言"), selection: $settings.appLanguage) {
-                        Text(L10n.t("跟随系统")).tag("system")
-                        Text(L10n.t("简体中文")).tag("zh-hans")
-                        Text(L10n.t("繁體中文")).tag("zh-hant")
-                        Text("English").tag("en")
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .fixedSize()
+                    // 选项和写法同 设置 › 通用 › 语言(语言名一律用该语言自己的写法)。
+                    SettingsGlassMenuPicker(
+                        selection: $settings.appLanguage,
+                        options: ["system", "zh-hans", "zh-hant", "en"],
+                        label: { code in
+                            switch code {
+                            case "zh-hans": return L10n.t("简体中文")
+                            case "zh-hant": return L10n.t("繁體中文")
+                            case "en": return "English"
+                            default: return L10n.t("跟随系统")
+                            }
+                        },
+                        compact: true
+                    )
+                    .accessibilityLabel(L10n.t("界面语言"))
                 }
                 setupDivider
                 setupRow(icon: "power", tint: .secondary, title: L10n.t("开机时自动启动 Lyrimuse"), subtitle: nil) {

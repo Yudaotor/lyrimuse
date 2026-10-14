@@ -870,8 +870,8 @@ func runLyricsWindowTests() {
                     true, "已唱颜色接线: 中性封面退回的是系统强调色")
         expectEqual(sourceBytes(window, contain: "case .systemPrimary: return colorScheme == .dark"), true,
                     "已唱颜色接线: 文字色跟随系统时按此刻的深浅外观判断底色")
-        expectEqual(sourceBytes(settingsView, contain: "Picker(\"\", selection: fontWeight) {")
-                    && sourceBytes(settingsView, contain: "Menu(LyricsWindowKaraokeFillLabel.text(for: karaokeFill.wrappedValue)) {"),
+        expectEqual(sourceBytes(settingsView, contain: "selection: fontWeight,")
+                    && sourceBytes(settingsView, contain: "selection: karaokeFill,"),
                     true, "迷你粗细 / 已唱颜色: 「字体」「文字颜色」浮层里摆这两行")
         expectEqual(sourceBytes(appSettings, contain: ".flatMap(OverlayFontWeight.init(rawValue:)) ?? .bold\n        lyricsWindowMiniKaraokeFill"),
                     true, "迷你粗细: 没存过时默认加粗")
