@@ -414,6 +414,9 @@ type enrichEntry struct {
 	// 老条目没有这个字段(读成 0),此时回退到 TS —— 那正是拆分之前的语义,不会让存量条目
 	// 在升级后一股脑全部立刻重试一遍。
 	PeripheralTS int64 `json:"peripheral_ts,omitempty"`
+	// PeripheralPending:歌词已经落盘、这一轮的外围字段(封面、链接、canonical_artist)还没补完——提前提交上屏的那份,
+	// 或者拿到歌词后这一轮被取消。外围补全不等节流(peripheralBackfillThrottleElapsed),补过一次就清掉。见 09 章决策 249。
+	PeripheralPending bool `json:"peripheral_pending,omitempty"`
 	// CoverUpgradeCheckTS:后台补封面上一次核对这张小设备封面能不能换成同一张图的清晰版的时刻(coversweep.go),
 	// 隔 coverUpgradeRecheckInterval 再核。
 	CoverUpgradeCheckTS int64 `json:"cover_upgrade_check_ts,omitempty"`
@@ -1102,6 +1105,9 @@ func peripheralBackfillWindowOpen(e enrichEntry) bool {
 
 // peripheralBackfillThrottleElapsed:离上一次外围补全过了 enrichPeripheralRetryInterval,不看次数上限。
 func peripheralBackfillThrottleElapsed(e enrichEntry) bool {
+	if e.PeripheralPending {
+		return true
+	}
 	base := e.PeripheralTS
 	if base == 0 {
 		base = e.TS // 老条目:拆分之前两者是同一个值
@@ -2704,6 +2710,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		enrichProvisional[key] = true
 		enrichMu.Unlock()
 		p.TS = time.Now().Unix()
+		p.PeripheralPending = true
 		commitEnrichEntrySince(key, p, stamp)
 		earlyLog.note(key, p.LyricsSource)
 	}
@@ -2716,6 +2723,7 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		enrichProvisional[key] = true
 		enrichMu.Unlock()
 		p.TS = time.Now().Unix()
+		p.PeripheralPending = true
 		commitEnrichEntrySince(key, p, stamp)
 		log.Printf("lyrics: showing Amazon Music's cached lyrics for %q while the sources resolve", key)
 	}
@@ -2745,6 +2753,9 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 		// 不走下面的网络健康度分类:那一段统计的是"这一轮请求失败得多不多",用户
 		// 主动取消会让全部还在飞的请求同时失败,拿这个去判"网络是不是不通"是一次
 		// 必然的误报,而不是巧合。
+		//
+		// 拿到了歌词的才记外围待补:没词的照旧按 needsLyricsFirstFill 的退避重搜,别让取消变成立刻重来。
+		e.PeripheralPending = e.Lyrics != "" || e.PlainLyrics != ""
 		commitEnrichEntrySince(key, e, stamp)
 		return
 	}
@@ -3230,6 +3241,7 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	// 只推自己那个节流时间戳。**不要**去动 e.TS —— 那是这条记录的解析时刻,歌词重搜拿它
 	// 当起算点,推它等于每补一次外围字段就把歌词重搜往后拖 10 分钟(见 TS 字段的注释)。
 	e.PeripheralTS = time.Now().Unix()
+	e.PeripheralPending = false
 	// 补没补上都记一次,上限靠它生效(见 peripheralBackfillMaxAttempts);这一轮自己的请求一个都没成功
 	// (断网、全被熔断跳过或被本地出站闸挡下)不记。见 09 章决策 195。
 	if attempts, failures := networkRound(); lyricsRoundConfirmsNoResult(attempts, failures) {
