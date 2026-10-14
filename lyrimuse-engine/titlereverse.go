@@ -53,9 +53,13 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 			searchTitle, searchDiff, searchOK, searchWinArtist = t, d, true, ta
 		}
 	}
-	// 泛搜只凭时长挑:挑出来的曲名跟本地曲名明摆着是两首歌时不用它(见 titleSearchContradicts)。
+	// 泛搜只凭时长挑:挑出来的曲名跟本地曲名明摆着是两首歌时不用它(见 titleSearchContradicts、pinyinTitleContradicts)。
 	if searchOK && titleSearchContradicts(title, album, searchTitle) {
 		log.Printf("lyrics: title-reverse-lookup: artist search picked %q for %q by duration only, but the titles share no word; not using it", searchTitle, title)
+		searchOK = false
+	}
+	if searchOK && pinyinTitleContradicts(title, album, searchTitle) {
+		log.Printf("lyrics: title-reverse-lookup: artist search picked %q for pinyin title %q by duration only, but it does not read that way; not using it", searchTitle, title)
 		searchOK = false
 	}
 	// 第三条路:Apple 原产地商店的规范曲名。上面两条**都拿本地标题当输入**
