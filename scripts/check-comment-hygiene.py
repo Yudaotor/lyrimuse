@@ -31,9 +31,10 @@
 
 # 范围
 
-只看**注释行**(整行以 // /// # * /* 开头);行尾注释和字符串字面量不扫 —— 误报的代价比
-漏报大,规则宁可窄。不可见字符那一条例外:扫整行,字符串和 rune 字面量里的同样算(这类字符
-最常藏在那里);允许的空白只有普通空格、tab、回车。命中任何一条即非零退出并打印 `file:line`。
+只看**注释行**(整行以 // /// # * /* 开头)和 Python 的文档字符串(模块 / 类 / 函数开头那一段,
+按语法树认);行尾注释和别的字符串字面量不扫 —— 误报的代价比漏报大,规则宁可窄。不可见字符那一条
+例外:扫整行,字符串和 rune 字面量里的同样算(这类字符最常藏在那里);允许的空白只有普通空格、tab、
+回车。命中任何一条即非零退出并打印 `file:line`。
 
 易误伤:注释里的「用户」多数指 **App 的最终用户**(正当语义),「这一轮 / 上一轮」在本仓
 多指**一轮歌词源查询**(领域词) —— 所以人物归因那条只匹配「用户+要求/反馈/拍板…」这类
@@ -41,6 +42,7 @@
 下划线时是标识符的一部分(ID3 的 `TXXX` 帧名),不算。
 """
 
+import ast
 import os
 import re
 import sys
@@ -48,7 +50,10 @@ import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-SCAN_DIRS = ['lyrimuse/Sources', 'lyrimuse/scripts', 'lyrimuse-engine', 'web', 'scripts', 'feishu-bot', '.githooks']
+SCAN_DIRS = ['lyrimuse/Sources', 'lyrimuse/scripts', 'lyrimuse/Localization', 'lyrimuse-engine', 'web', 'scripts',
+             'feishu-bot', '.githooks', '.github/scripts']
+# 不在上面这些目录里、但同样有注释的单个文件。
+SCAN_FILES = ['lyrimuse/Package.swift', 'lyrimuse/build.sh']
 SKIP_DIRS = {'.build', '.git', 'node_modules', '__pycache__', 'vendor', 'DerivedData'}
 # 本脚本自己必然写着每一类的**样例**,扫自己就是稳定误报(.githooks/commit-msg 同理,
 # 它的说明里写着 `#123` 样例 —— selftest 里那条守卫也为此先剥注释再判)。
@@ -130,6 +135,29 @@ def iter_files(argv):
                 fp = os.path.join(dp, fn)
                 if wanted(fp):
                     yield fp
+    for rel in SCAN_FILES:
+        fp = os.path.join(ROOT, rel)
+        if os.path.isfile(fp) and wanted(fp):
+            yield fp
+
+
+def docstring_lines(fp, text):
+    """Python 文件里模块 / 类 / 函数文档字符串占的行号;别的文件、解析不了的文件都是空集。"""
+    if not fp.endswith('.py'):
+        return set()
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return set()
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) or not node.body:
+            continue
+        first = node.body[0]
+        if isinstance(first, ast.Expr) and isinstance(getattr(first, 'value', None), ast.Constant) \
+                and isinstance(first.value.value, str):
+            out.update(range(first.lineno, first.end_lineno + 1))
+    return out
 
 
 def main(argv):
@@ -137,15 +165,17 @@ def main(argv):
     for fp in iter_files(argv):
         try:
             with open(fp, encoding='utf-8') as f:
-                lines = f.read().split('\n')
+                text = f.read()
         except (UnicodeDecodeError, OSError):
             continue
+        lines = text.split('\n')
+        docs = docstring_lines(fp, text)
         for i, line in enumerate(lines, 1):
             ch = invisible_char(line)
             if ch is not None:
                 frag = u'U+%04X %s' % (ord(ch), unicodedata.name(ch, ''))
                 hits.append((os.path.relpath(fp, ROOT), i, u'不可见字符', frag, INVISIBLE_HINT, line.strip()))
-            if not COMMENT_LINE.match(line):
+            if not COMMENT_LINE.match(line) and i not in docs:
                 continue
             for name, pat, hint in RULES:
                 m = pat.search(line)

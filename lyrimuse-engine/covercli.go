@@ -11,27 +11,24 @@ import (
 	"path/filepath"
 )
 
-// `lyrimuse-engine recheck-cover` —— 对指定的几条 enrich 缓存记录重新解析一次**封面**。
+// `lyrimuse-engine recheck-cover` —— 对指定的几条 enrich 缓存记录重新解析一次封面。
 //
-// 为什么需要它:封面一旦解析出来就永久保留,自动路径里只有"这首歌又被播到"时才会经
-// backfillPeripheralFields 复查一次(见 coverNeedsAlbumCheck)。发现某首歌封面选错时,
-// 除了等它下次被播放没有别的办法 —— 而"等它自己好"对一次已经看见的错误不是个交代。
+// 封面一旦解析出来就永久保留,自动路径里只有"这首歌又被播到"时才会经 backfillPeripheralFields 复查一次
+// (见 coverNeedsAlbumCheck);发现某首歌封面选错时用这条命令当场重查。
 //
 // 三条约束(另外几个改缓存的维护命令同样守着):
 //
-//  1. **dry-run 跑同一条代码路径**,只在落盘前停手:重新解析、按 coverSwapAllowed 判断,
-//     然后打印计划。不另写一份"预演版",省掉"验收 A 实现、真跑 B 实现"这种分叉。
-//  2. **-apply 必须独占**(fail-closed):常驻引擎内存里持有一整份 enrichCache 并
-//     按自己的节奏整份写回,它跑着的时候我们改磁盘,它下一次保存就原样盖回来。
-//     把缓存从 204 条磨到 10 条,机制正是"两个实例各写各的"。
-//  3. **只动封面四件套**(cover_url / cover_source / cover_album / accent_color),
-//     歌词、译文、人工修正标记一个字都不碰 —— 那些删了就找不回来。
+//  1. dry-run 跑同一条代码路径,只在落盘前停手:重新解析、按 coverSwapAllowed 判断,然后打印计划。
+//     不另写一份"预演版",免得预演的和真跑的不是同一份实现。
+//  2. -apply 必须独占(fail-closed):常驻引擎内存里持有一整份 enrichCache 并按自己的节奏整份写回,
+//     它跑着的时候改磁盘,它下一次保存就原样盖回来。
+//  3. 只动封面四件套(cover_url / cover_source / cover_album / accent_color),歌词、译文、人工修正标记
+//     一个字都不碰 —— 那些删了就找不回来。
 //
-// 提醒:cover_source=="device" 的条目走 coverSwapAllowed 的 device 分支,只在
-// deviceCoverDecision 判定"设备图该让位"时才会被换掉(同一张图的高清远程版、或设备图是补边
-// 补出来的长方形图,见 coverquality.go 头注)。其余情况这条 CLI 也换不掉;设备封面本身就是错的
-// 那种,只能直接手改 enrich-cache.json(先 launchctl bootout 停引擎,改完再 bootstrap
-// 拉起来,这仓库其它几处手工缓存修复都是这个流程)。
+// cover_source=="device" 的条目走 coverSwapAllowed 的 device 分支,只在 deviceCoverDecision 判定"设备图该让位"时
+// 才会被换掉(同一张图的高清远程版、或设备图是补边补出来的长方形图,见 coverquality.go 头注)。其余情况这条 CLI
+// 也换不掉;设备封面本身就是错的那种,只能直接手改 enrich-cache.json(先 launchctl bootout 停引擎,改完再
+// bootstrap 拉起来)。
 func runRecheckCoverCLI(args []string) {
 	fs := flag.NewFlagSet("recheck-cover", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "真正写回缓存;不加就是预演,只打印计划")

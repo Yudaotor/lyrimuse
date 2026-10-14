@@ -2,10 +2,8 @@ package main
 
 import "testing"
 
-// 实测回归:刚把 14 组重复合并干净,当晚 19:57/19:58 又新长出一对
-// `方大同|春風吹之吹吹風mix|愛愛愛` / `方大同|春风吹之吹吹风mix|愛愛愛`。
-// canonicalEnrichKey 查的是 enrichCache,而那一刻第一条只在 enrichInflight 里、
-// 还没写进缓存,于是宽松匹配查不到,两条各自起了一路解析。
+// 同一首歌的繁简两种写法几乎同时开解析:canonicalEnrichKey 查的是 enrichCache,而第一条那一刻只在
+// enrichInflight 里、还没写进缓存,宽松匹配查不到,两条会各自起一路解析、存成两条重复条目。
 func TestLooseInflightKeyCatchesEquivalentInFlight(t *testing.T) {
 	old := enrichInflight
 	enrichInflight = map[string]bool{}

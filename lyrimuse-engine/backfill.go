@@ -261,21 +261,10 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 
 	p := map[string]string{}
 	for i, it := range items {
-		// 歌手名**原样用日志里存的播放器原始标签**(见 listenLogLine.AR 注释——那正是
-		// 为此存的原始输入)。
-		//
-		// 改。这里曾补过一层 canonical_artist 替换,目的是
-		// "跟活路径口径一致"。现在活路径(lbMeta)已经撤销了那层替换,这里必须**同步
-		// 撤销** —— 否则就会反过来出现"当场提交发原串、事后回填发改写名"的新分裂,
-		// 正是当初补它想消灭的那个问题。撤销的完整依据见 lb.go 里 lbMeta 那段注释
-		// (Last.fm 官方明确反对自动套用纠正 / 业界 9 个 scrobbler 无一默认这么做 /
-		// 本机审计实测有真错)。
-		//
-		// 顺带:少了那次 trackEnrichment 调用,回填批次不再为每一条去查一遍富化缓存,
-		// 也少了一层"回填时才第一次解析这首歌"的意外联网。
-		// 写法处理跟活路径走**同一个**函数(resolveScrobbleTags),否则同一首歌两条路
-		// 提交出去的歌手/曲名会不一致。智能档下这里可能联网判定(每首歌一次、结论永久缓存,
-		// 活路径已判过的直接命中缓存),所以要带 ctx 和匹配器。
+		// 歌手名原样用日志里存的播放器原始标签(见 listenLogLine.AR 注释),不套 canonical_artist:必须跟活路径
+		// (lbMeta)一致,否则当场提交和事后回填会发出两种写法。理由见 12 章「Last.fm 镜像」一节。
+		// 写法处理跟活路径走同一个函数(resolveScrobbleTags),否则同一首歌两条路提交出去的歌手/曲名会不一致。
+		// 智能档下这里可能联网判定(每首歌一次、结论永久缓存,活路径已判过的直接命中缓存),所以要带 ctx 和匹配器。
 		artist, track := resolveScrobbleTags(ctx, s.catalog, it.AR, it.TI, it.DUR)
 		idx := strconv.Itoa(i)
 		p["artist["+idx+"]"] = artist

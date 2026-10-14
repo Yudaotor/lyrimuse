@@ -951,8 +951,8 @@ struct OnboardingView: View {
     // 三条必须守住的写法约束:
     // 1) 关着的那个形态,渲染路径上连 `.shared` 都不能碰 —— 两个窗口控制器都是
     //    `static let shared`,init() 里订阅 PlaybackCoordinator.$isPlayingNow 的那个
-    //    Combine sink 在订阅的一瞬间就会把窗口建出来并显示(NotchLyricsWindowController
-    //    顶部 :31-39 那段注释记的就是这个)。所以两个 `.shared` 只允许出现在 Binding 的
+    //    Combine sink 在订阅的一瞬间就会把窗口建出来并显示(见 NotchLyricsWindowController
+    //    类型头注里的不变量)。所以两个 `.shared` 只允许出现在 Binding 的
     //    set 闭包里(只在用户真的拨动开关时执行),get 一律读 settings 上的持久化布尔值。
     //    落地自查:本文件里 `WindowController.shared` 必须恰好两处,且都在 set: 里。
     // 2) 开/关必须走 setVisible(_:) —— classicOverlayEnabled/notchOverlayEnabled 的
@@ -966,14 +966,9 @@ struct OnboardingView: View {
     //    选择(而且绕过 setVisible,改完窗口还不动)。这一步只读不写,唯一的写入路径是
     //    实测拨动开关。
     //
-    // 还有一条口味上的约束(**不再是安全前提**):`steps` 的长度由 `features.players`
-    // 和 `wantsBrowserYouTubeMusic` 两个值决定,所以能改它们的控件最好只留在 index 1
-    // (playerChoiceStep),否则用户会看到进度点在脚下变长变短。
-    //
-    // 这条原来写的是"必须永不出现,因为 steps[step] 没有越界守卫" —— 那个论证
-    // 被推翻了:它默认"引导页是唯一宿主",而设置窗口能同时开着改 `features.players`
-    // (`@Published`),引导页自己的 .lastfm 那一步还有个按钮专门去开设置窗。真正的守卫现在
-    // 是 `currentStep` + `.onChange(of: steps.count)` 那一对,详见 `currentStep` 头注。
+    // 还有一条口味上的约束:`steps` 的长度由 `features.players` 和 `wantsBrowserYouTubeMusic` 两个值决定,所以能改它们
+    // 的控件最好只留在 index 1(playerChoiceStep),否则用户会看到进度点在脚下变长变短。越界由 `currentStep` +
+    // `.onChange(of: steps.count)` 那一对守着(设置窗口能同时开着改 `features.players`),详见 `currentStep` 头注。
     private var displayModeStep: some View {
         // 段间距比别的步骤紧(10 不是 16):这一步装着两张卡,有触控栏时还多一行显示方式。
         VStack(alignment: .leading, spacing: 10) {

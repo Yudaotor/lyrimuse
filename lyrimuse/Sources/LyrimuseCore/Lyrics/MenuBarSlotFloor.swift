@@ -43,7 +43,7 @@ public struct MenuBarSlotFloor: Sendable, Equatable {
     ///
     /// `trackKey` 变了就把地板重置成 `target`(新歌按它自己的第一句定宽,不继承上一首的);
     /// 没变就取 `max(地板, target)`。
-    /// 比这个数还小的回缩才吸收;超过它说明内容是真的短了,照缩。理由见类型头注的 提醒。
+    /// 比这个数还小的回缩才吸收;超过它说明内容是真的短了,照缩。理由见类型头注。
     public static let shrinkTolerance: CGFloat = 30
 
     public mutating func width(target: CGFloat, trackKey: String) -> CGFloat {

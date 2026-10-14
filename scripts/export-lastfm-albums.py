@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """导出 Last.fm 全部听过的专辑成 markdown,带同专辑变体归并。
 
-归并规则(2026-08-18 与用户逐对核定):
+归并规则:
   基础: 简繁折叠(需外部 t2s 映射)/NFKC/大小写/标点、Deluxe/Explicit/Remastered 等
         同内容再版标签剥除、歌手别名统一(与引擎 artistAliasTable 同步)。
   R1 双语拼接名: 标题恰由一段CJK+一段拉丁拼成时,两段各自都算这张专辑的名字

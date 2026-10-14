@@ -15,32 +15,27 @@ import (
 
 // ---- 歌词源的拨号:系统 DNS 优先,不答 / 查不到才退到 DoH ----
 //
-// 加,接着「六个源死在 DNS」那条(sourcebreaker.go 最后一节、docs/09)往下修:
-// 用户连着公司 OpenVPN,它下发的 DNS 对 music.163.com / c.y.qq.com / mobilecdn.kugou.com /
-// lrclib.net / search.kuwo.cn / pd.musicapp.migu.cn 一律不答,而隧道里**按 IP 直连是通的**
-// (`curl --resolve` 实测 200)。所以只要绕开系统 DNS 拿到 IP,歌词就能搜到。
+// 治的是系统 DNS 对歌词源域名不答、按 IP 直连却是通的这种网络(公司 VPN 下发的 DNS 就是这样),
+// 见 09 章「六个源死在 DNS 这一步」。
 //
-// 顺序:**先正常走系统 DNS,它失败了才问 DoH**。这跟 musixmatch 那套(doh.go
-// dohDialContext:DoH 优先、退回系统解析)正好相反,因为两次的病不同 —— 那次系统
-// DNS 是**答错**(把 musixmatch 解析到 Facebook 的地址段),先问它没有意义;这次是**不答**,
-// 系统 DNS 正常时就不该多打一次 1.1.1.1。于是:系统 DNS 正常 → 一个包都不多发、行为跟以前
-// 逐位一致;系统 DNS 报错(NXDOMAIN / SERVFAIL / 超时)→ dohLookup 拿 IP → 并发拨号
-// (dohDialRace);DoH 也没辄 → 把系统解析那条错误原样交回去,传输层分类照旧认成 dns_failed。
+// 顺序:先正常走系统 DNS,它失败了才问 DoH。跟 musixmatch 那套(doh.go dohDialContext:DoH 优先、退回系统解析)
+// 相反,两边治的病不同:那边系统 DNS 会答错(把 musixmatch 解析到别家的地址段),先问它没有意义;这边是不答,
+// 系统 DNS 正常时就不该多打一次 1.1.1.1。所以:系统 DNS 正常 → 一个包都不多发;系统 DNS 报错(NXDOMAIN /
+// SERVFAIL / 超时)→ dohLookup 拿 IP → 并发拨号(dohDialRace);DoH 也没辄 → 把系统解析那条错误原样交回去,
+// 传输层分类照旧认成 dns_failed。
 //
 // 三个细节:
-//   - 系统解析给一个**独立预算**(lyricSourceSystemDNSBudget,2s):DNS 挂住不答时不能让它把
+//   - 系统解析给一个独立预算(lyricSourceSystemDNSBudget,2s):DNS 挂住不答时不能让它把
 //     整个 http.Client.Timeout(4–8s)吃光,否则 DoH 永远轮不到。秒答的 NXDOMAIN 不受影响。
-//   - 系统解析失败后记一个**短期负缓存**(lyricSourceSystemDNSFailTTL,60s):同一首歌一轮里
-//     网易云要打 4 个变体、酷狗搜完还要取词,每次都白等 2s 就是十几秒;60 秒内直接走 DoH,
-//     期满再试系统 DNS,VPN 一断开就自动回到正常路径。
-//   - **DNS 轨迹要自己补**:sourcebreaker.go 的传输层分类靠 httptrace 的 DNSStart / DNSDone 判
-//     "是不是死在解析"。系统解析那一步是标准库自己触发钩子的;走到 DoH 之后标准库不知道,
-//     这里手动调 trace.DNSDone —— DoH 解析成功就报"成功"(此后连不上算 connect_failed,不是
-//     dns_failed,评审提过这条),DoH 也失败就报"失败"。负缓存跳过系统解析时连 DNSStart 也补上。
+//   - 系统解析失败后记一个短期负缓存(lyricSourceSystemDNSFailTTL,60s):同一首歌一轮里网易云要打 4 个变体、
+//     酷狗搜完还要取词,每次都白等 2s 就是十几秒;60 秒内直接走 DoH,期满再试系统 DNS,网络恢复就自动回到正常路径。
+//   - DNS 轨迹要自己补:sourcebreaker.go 的传输层分类靠 httptrace 的 DNSStart / DNSDone 判"是不是死在解析"。
+//     系统解析那一步是标准库自己触发钩子的;走到 DoH 之后标准库不知道,这里手动调 trace.DNSDone:DoH 解析成功
+//     就报成功(此后连不上算 connect_failed,不是 dns_failed),DoH 也失败就报失败。负缓存跳过系统解析时连
+//     DNSStart 也补上。
 //
-// 只改拨号的目标地址,**不碰 TLS**:crypto/tls 的 ServerName 来自 URL 里的域名,证书照常按域名
-// 严格校验(跟 dohDialContext 同一段话)。musixmatch 不走这里 —— 它有自己的 DoH 优先 + 代理兜底
-// 那套(dohHTTPClient),两套并存、各管各的病。
+// 只改拨号的目标地址,不碰 TLS:crypto/tls 的 ServerName 来自 URL 里的域名,证书照常按域名严格校验
+// (跟 dohDialContext 同一段话)。musixmatch 不走这里,它有自己的 DoH 优先 + 代理兜底那套(dohHTTPClient)。
 
 const (
 	lyricSourceSystemDNSBudget  = 2 * time.Second

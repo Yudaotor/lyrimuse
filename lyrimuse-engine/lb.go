@@ -174,38 +174,15 @@ func lbMeta(s snapshot) lbTrackMeta {
 			budget -= len(v)
 		}
 	}
-	// 歌手/歌名/专辑一律**原样上送播放器报的标签**,不做任何替换。
+	// 歌手/歌名/专辑一律原样上送播放器报的标签,不用 canonical_artist(网易云/QQ/MusicBrainz 查到的写法)替换:
+	// Last.fm 的 scrobbling 指南明确要求不自动套用纠正,写进公共 artist 页的东西也基本收不回来。依据与审计数据见
+	// 12 章「Last.fm 镜像」一节。同一个人中英文写法的合并在显示/统计层做(App 侧 PlayCountFold.canonicalArtist /
+	// artistMergeNameKey),上送层只如实记录播放器当时报的是什么。
 	//
-	// 改。这里原来会用 canonical_artist(网易云/QQ/MusicBrainz 查到的
-	// "官方写法")**替换掉**播放器的标签,理由是"避免同一个人时而中文时而英文"。撤销
-	// 它的依据有三条:
+	// canonical_artist 字段本身保留,给「歌词管理」窗口当展示名(EnrichCacheStore.swift),不参与上送。
 	//
-	//  1. **Last.fm 官方明确反对**。scrobbling 指南里这句话出现了两次(逐字):
-	//     "Do not use the corrections returned by the now playing service as input
-	//      for the scrobble request, unless they have been explicitly approved by
-	//      the user."
-	//     连 Last.fm **自己**权威纠正库返回的结果都不许自动套用,而我们套的是网易云/QQ。
-	//     它自家的 autocorrect 开关也已被标为 legacy、官方推荐值是"不要应用纠正"。
-	//  2. **业界惯例一致**。调研 9 个开源 scrobbler(Web Scrobbler / Pano / Navidrome /
-	//     Maloja / rescrobbled / mpdscribble / mpdas / Koito / multi-scrobbler),
-	//     默认做"外部查询改名"的是 **0 个**;唯一有这能力的 multi-scrobbler 是 opt-in、
-	//     要填联系邮箱、文档还警告 free text search 是 "unconstrained"。
-	//     (Pano 反而拿 MusicBrainz 名单当 allowlist **保护**合唱串不被切,方向相反。)
-	//  3. **实测有真错**。本机 2514 条缓存审计:194 条被改写,其中
-	//     `USA for Africa`→`Xtc Planet`、`LBI利比`→`Safehse` 明确错误。而写进 Last.fm
-	//     公共 artist 页的东西基本收不回来(纠错库已冻结)。
-	//
-	// 归一没有被放弃,只是挪了位置:**显示/统计层**照旧合并(App 侧 PlayCountFold.
-	// canonicalArtist / artistMergeNameKey 那套本来就在做,且是独立实现),上送层只负责
-	// 如实记录"播放器当时报的是什么"。
-	//
-	// canonical_artist 字段本身**保留**——它还在给「歌词管理」窗口当展示名
-	// (EnrichCacheStore.swift),只是不再参与上送。
-	//
-	// ListenBrainz 支持 additional_info.artist_mbids(数组)来表达"这是谁"而不改
-	// 显示串,那是这条路的正解;暂未接,因为现有缓存对**原始串**的 mbid 覆盖率只有 16%
-	// (那份缓存的键是归一后的名字,给榜单用的)。Last.fm 侧则根本没有艺人 mbid 字段
-	// (它的 mbid 参数是 **Track** ID),所以对 Last.fm 而言"原样上送"就是唯一正解。
+	// 这里不传 ListenBrainz 的 additional_info.artist_mbids:现有缓存对原始串的 mbid 覆盖率只有 16%(那份缓存的
+	// 键是归一后的名字,给榜单用的)。Last.fm 没有艺人 mbid 字段(它的 mbid 参数是 Track ID)。
 	return lbTrackMeta{
 		ArtistName: s.Artist,
 		TrackName:  s.Title,

@@ -4,19 +4,14 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-search")
 
-/// `search-lyrics` 子进程 stderr 里那几类**源健康信号**的匹配标记。
-///
-/// 此前 stderr 只在**退出码非 0** 时才被打进日志(见 terminationHandler
-/// 里那句 `logger.error`),正常退出时整段丢掉 —— 而手动搜索这条路径上所有的"网易云被限流
-/// 了/某个源在退避"都只写在那段 stderr 里,于是 `~/Library/Logs/lyrimuse.log`(常驻
-/// 引擎那半边)里**一条都查不到**:实测 `grep -c "code 405"` = 0,而同一时刻界面上
-/// 正显示着「网易云接口限流」。事后复盘"到底有没有被限流过"这件事,在这条路径上做不到。
+/// `search-lyrics` 子进程 stderr 里那几类源健康信号的匹配标记。stderr 只在退出码非 0 时整段进日志(terminationHandler),
+/// 而手动搜索这条路径上"网易云被限流了 / 某个源在退避"只写在 stderr 里,所以正常退出时也把这几行捞出来记进 os_log,
+/// 事后才查得到。
 ///
 /// 只捞这几行、不整段转录:一次搜索的 stderr 有几十行(每个源每一轮的 `api call:`),整段
 /// 打进 os_log 会把日志刷成噪声,而真正需要事后复盘的就是"谁被拒了、谁在退避"。
-/// 标记选的是 Go 侧**英文格式串里的固定片段**(`netease.go` 的 `rejected (code %d)`、
-/// `sourcebreaker.go` 的 `cooling down`),不是中文文案 —— 那几处日志将来要是本地化了、
-/// 或者措辞改了,这里跟着改;别用会随语言变的词做判据。
+/// 标记选的是 Go 侧英文格式串里的固定片段(`netease.go` 的 `rejected (code %d)`、
+/// `sourcebreaker.go` 的 `cooling down`),不是中文文案 —— 那几处日志措辞改了,这里跟着改;别用会随语言变的词做判据。
 private let searchLyricsHealthMarkers = ["rejected (code", "backing off", "cooling down"]
 
 // "联网搜索候选歌词"——形态是这类工具常见的双栏候选面板,但**不**在 Swift 这边
@@ -147,7 +142,7 @@ final class LyricsSearchService {
             // 那个是"疑似解析失败",这个是"这个源明确说了只有纯文本,压根没有带时间戳的版本"
             // (见引擎 match.go 的 scoreRejectPlainTextOnly 头注)。
             case "rejectPlainTextOnly": return L10n.t("仅有纯文本，无时间戳")
-            // 加,见引擎 match.go 的 scoreRejectContinuousMix 头注。
+            // 见引擎 match.go 的 scoreRejectContinuousMix 头注。
             case "rejectContinuousMix": return L10n.t("连续混音版，与原版编排不同")
             // 见引擎 match.go 的 scoreRejectInstrumentalTrack 头注。
             case "rejectInstrumentalTrack": return L10n.t("伴奏版，不用人声歌词")

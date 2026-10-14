@@ -4733,9 +4733,8 @@ public final class LocalPlaybackSource: ObservableObject {
         let romanizationScripts: RomanizationScripts
         let isCantonese: Bool
         let isHokkien: Bool
-        // 加,见 currentTrackPlainLyrics 头注——没有时间戳的纯文本兜底,跟
-        // lyrics 一样得参与这道内容等值闸,不然采纳/更换一条纯文本候选之后,闸会因为
-        // 其它字段(lyrics 本来就是空的,没变)误判"内容没变"而跳过重算,新内容显示不出来。
+        // 没有时间戳的纯文本兜底(见 currentTrackPlainLyrics 头注)跟 lyrics 一样参与这道内容等值闸:不然采纳/更换
+        // 一条纯文本候选之后,闸会因为其它字段没变误判"内容没变"而跳过重算,新内容显示不出来。
         let plainLyrics: String
         // Apple 名单可能比正文晚到(存量条目播放时才补),只变它也得重算。
         let songwriters: [String]

@@ -276,7 +276,7 @@ type apiCallWindow struct {
 	first, last time.Time
 	count       int
 	failed      int
-	// notfound:窗口里应答 404 的次数。跟 failed 分开记,理由见 doHTTPTracked 里那段 提醒。
+	// notfound:窗口里应答 404 的次数。跟 failed 分开记,理由见 doHTTPTracked。
 	notfound int
 	// canceled:调用方主动取消的次数,不进 failed、不进耗时分位(没等到应答)。
 	canceled  int

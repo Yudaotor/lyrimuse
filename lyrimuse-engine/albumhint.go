@@ -167,11 +167,10 @@ func appleAlbumHint(ctx context.Context, artist, title string, durationSecs floa
 // 超时就自己查一次。
 const appleAlbumHintSyncWait = 8 * time.Second
 
-// appleAlbumHintSync 给**后台**解析路径用(resolveTrackEnrichment / backfillPeripheralFields / recheck-cover CLI,
-// 加,给封面解析当专辑名,见 03 章决策 16):候选没缓存就当场查、查完再挑,不像 appleAlbumHint 那样
-// 丢给后台"本轮先按现状走" —— 这些调用方本来就在 goroutine 里等九个歌词源,多等 Apple 一两秒没人看见;而封面
-// 选源这一步一旦过去就不会再来(王子那首 MV 首次解析时没有专辑名可用,Apple 第一条合集封面就此冻结了一天)。
-// 后台那次还在飞就等它,不重复发同一份请求。
+// appleAlbumHintSync 给后台解析路径用(resolveTrackEnrichment / backfillPeripheralFields / recheck-cover CLI),
+// 给封面解析当专辑名:候选没缓存就当场查、查完再挑,不像 appleAlbumHint 那样丢给后台"本轮先按现状走"。
+// 这些调用方本来就在 goroutine 里等歌词源,多等 Apple 一两秒没人看见;封面选源这一步过去就不会再来。
+// 后台那次还在飞就等它,不重复发同一份请求。见 03 章决策 16。
 //
 // 会阻塞、且内部取 appleAlbumHintMu:绝不能在 poll 主循环里调,也不能在持有 enrichMu 时调。
 func appleAlbumHintSync(ctx context.Context, artist, title string, durationSecs float64, resolvedArtists []string) string {
@@ -251,13 +250,12 @@ func pickAppleAlbumHintLogged(key string, cands []albumHintCandidate, artist, ti
 	return album
 }
 
-// coverAlbumForTrack:封面复查 / 换封面判定用的专辑名(现象是王子那首 MV「用的是合集封面,不应该是
-// 另外一个吗」,见 03 章决策 16)—— 播放器报了专辑就是它;没报时,ctx 上挂着 Kaset 这首的 videoId 就用 YouTube Music
-// 给它登记的专辑(kasetListedAlbumFor),再没有就用 Apple 目录回填的那个(都只读缓存、不等网络,没命中就后台补一次、
-// 这一轮按空处理)。回填名只进**挑选过程**(Apple 匹配打分 / 网易云 vs Apple 对版 / QQ、同专辑邻居两道
-// guard / coverSwapAllowed / coverNeedsHintCheck),**绝不落盘成 cover_album**:那个字段是"归属已核实"的凭据(App 侧
-// 越过 Last.fm 自带图、引擎侧不再复查都靠它,见 03 章决策 13 的 提醒),而回填是按曲名 + 时长猜的,合集 / 重录版
-// 撞车不是小概率,猜错一次就两边一起骗过、且永不自愈。
+// coverAlbumForTrack:封面复查 / 换封面判定用的专辑名(03 章决策 16)。播放器报了专辑就是它;没报时,ctx 上挂着
+// Kaset 这首的 videoId 就用 YouTube Music 给它登记的专辑(kasetListedAlbumFor),再没有就用 Apple 目录回填的那个
+// (都只读缓存、不等网络,没命中就后台补一次、这一轮按空处理)。回填名只进挑选过程(Apple 匹配打分 / 网易云 vs Apple
+// 对版 / QQ、同专辑邻居两道 guard / coverSwapAllowed / coverNeedsHintCheck),绝不落盘成 cover_album:那个字段是
+// "归属已核实"的凭据(App 侧越过 Last.fm 自带图、引擎侧不再复查都靠它,见 03 章决策 13),而回填是按曲名 + 时长猜的,
+// 合集 / 重录版撞车不是小概率,猜错一次就两边一起骗过、且永不自愈。
 //
 // 内部经 lyricResolvedArtists 取 enrichMu:持有 enrichMu 时不能调(trackEnrichment 要在取锁之前算好)。
 func coverAlbumForTrack(ctx context.Context, artist, title, album string, durationSecs float64) string {

@@ -22,17 +22,10 @@ fi
 LABEL="com.lyrimuse.collector"
 TOOLCHAIN=go1.24.4 # 原生发 LC_UUID + 有效签名的工具链
 
-# 注入版本号,让这份引擎自报的版本跟它将要替换掉的那份保持一致。
+# 注入版本号,让这份引擎自报的版本跟它将要替换掉的那份保持一致。两个构建脚本都用 -ldflags 注入,见 15 章决策 9。
 #
-# 加(同 lyrimuse/build.sh 那处,理由见 main.go 的 clientVersion 注释):
-# 引擎版本号不再是 main.go 里的手写字面量(手动同步容易发版时忘记更新)。
-# 现在两个构建脚本统一用 -ldflags 注入。
-#
-# 取值优先级刻意跟 lyrimuse/build.sh **不完全相同**,因为这个脚本的用途不一样:它把
-# 产物直接拷进**已经装好的** /Applications/Lyrimuse.app(见下面那段注释),所以第一
-# 顺位应该是"那个 App 自己是什么版本",而不是 git tag——本地 tag 完全可能落后于已装
-# 的 App(比如装的是 CI 发的 1.5.0,而本地仓库最新 tag 还是 v1.4.0),那时用 git tag
-# 反而会亲手制造出这次要修的那种不一致。
+# 取值优先级跟 lyrimuse/build.sh 不完全相同:这个脚本把产物直接拷进已经装好的 /Applications/Lyrimuse.app
+# (见下面那段注释),所以第一顺位是那个 App 自己的版本,而不是 git tag(本地 tag 可能落后于已装的 App)。
 #   ① LYRIMUSE_VERSION 环境变量(显式指定,最高优先)
 #   ② 已安装 App 的 CFBundleShortVersionString(产物要拷进去,必须跟它对齐)
 #   ③ 最近一个 git tag(App 还没装时的兜底)

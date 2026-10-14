@@ -397,40 +397,10 @@ enum ConfigPortability {
         return true
     }
 
-    // "清除所有配置"——回到刚装完时的样子。跟上面 import/export 用同一套
-    // 文件+UserDefaults 盘点逻辑,但故意不复用 excludedDefaultsKeys:那个集合是"换机器
-    // 场景下不该带走"的字段(引导状态/废弃字段),这里恰恰要连这几个也一起清掉——
-    // hasCompletedOnboarding 被清空后,下次启动会重新走一遍引导向导,这正是"最原始配置"
-    // 应有的样子,不是遗漏。
-    //
-    // App 自己的状态清完交给调用方紧接着的 restartApp() 复位,原因跟 importData 那条
-    // 注释一样。但**常驻服务必须在这里显式停掉**。
-    //
-    // 这里原本写着一段推理:"engineServiceEnabled 清空后读回来是 false,它的 didSet
-    // 会调 setEnabled(false)→uninstall(),而 Swift 对 init() 内部显式赋值一样会触发
-    // didSet,于是清除配置+重启 App 顺带就把 LaunchAgent 卸载了"。用 swiftc
-    // 实测,这段推理的前提是**错的**:
-    //
-    //     声明时无默认值 + init 里首次赋值 → didSet 不触发
-    //     声明时有默认值 + init 里重新赋值 → didSet 触发
-    //
-    // 而 AppSettings.engineServiceEnabled / launchAtLoginEnabled 都是**无默认值**声明
-    // (`@Published var x: Bool {` 直接跟 didSet),走的是不触发那一档。本文件 :60-64 解释
-    // 排除 launchAtLoginEnabled 时给出的正是正确结论 —— 同一个文件里两条注释互相矛盾,
-    // 而这一条是错的那条。
-    //
-    // 后果不是"少卸了个 LaunchAgent"这么轻:引擎是 KeepAlive=true 的 launchd 进程,
-    // 配置在启动时读进内存(无文件监听)。删掉 config.json 并不会让它闭嘴 —— 用户点了
-    // "清除所有设置"、界面告诉他"恢复到刚装完时的样子",后台却**继续拿着刚被清除的
-    // Last.fm session key 往那个账号 scrobble**,直到机器重启。承诺没兑现,而且是隐私性质的。
-    //
-    // 用 setEnabledAndWait 而不是 setEnabled:后者是 operationQueue.async 的
-    // fire-and-forget,而调用方下一句就是 restartApp() → NSApp.terminate,卸载多半来不及跑完。
     /// 导入前对 `config` 段做的最小净化,规则和理由见 `ImportPolicy`。
     ///
-    /// 只在这一处做,不在 ConfigStore 里做:那边处理的是**用户自己在界面上敲进去的值**,
-    /// 拦下来只会让人莫名其妙"我填的地址怎么没保存上";这里处理的是**外来文件**,
-    /// 尤其在备份文件夹可以指向共享目录之后。两者信任级别不同。
+    /// 只在这一处做,不在 ConfigStore 里做:那边处理的是用户自己在界面上敲进去的值,拦下来只会让人莫名其妙
+    /// "我填的地址怎么没保存上";这里处理的是外来文件,尤其在备份文件夹可以指向共享目录之后。两者信任级别不同。
     private static func sanitizeImportedConfig(_ configObj: Any) -> Any {
         let (config, droppedRelay) = ImportPolicy.sanitizedConfig(configObj)
         if droppedRelay {
@@ -439,6 +409,15 @@ enum ConfigPortability {
         return config
     }
 
+    /// "清除所有配置":回到刚装完时的样子。跟上面 import/export 用同一套文件 + UserDefaults 盘点逻辑,但不复用
+    /// excludedDefaultsKeys:那个集合是"换机器场景下不该带走"的字段(引导状态/废弃字段),这里要连它们一起清掉 ——
+    /// hasCompletedOnboarding 清空后下次启动会重新走一遍引导,这正是"最原始配置"该有的样子。
+    ///
+    /// App 自己的状态清完交给调用方紧接着的 restartApp() 复位,原因同 importData。常驻服务必须在这里显式停掉:
+    /// 清空 engineServiceEnabled 不会触发它的 didSet(无默认值的声明在 init 里首次赋值不触发 didSet),LaunchAgent
+    /// 不会顺带卸载;而引擎是 KeepAlive=true 的 launchd 进程,配置在启动时读进内存,删掉 config.json 它照样拿着刚被
+    /// 清除的 Last.fm session key 继续 scrobble,直到机器重启。用 setEnabledAndWait 而不是 setEnabled:后者是
+    /// operationQueue.async 的 fire-and-forget,调用方下一句就是 restartApp() → NSApp.terminate,卸载多半来不及跑完。
     @discardableResult
     static func clearAllConfig() async -> Bool {
         var ok = true

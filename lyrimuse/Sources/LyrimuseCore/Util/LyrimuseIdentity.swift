@@ -4,10 +4,7 @@ import Foundation
 /// label 与可执行文件名、两份日志文件名、默认安装位置、URL scheme。所有随之变化的路径都从这里派生,别处不许再写字面量(selftest
 /// contracts 组「身份与路径收口」守着;Go 侧的对应口径是 paths.go,经环境变量拿到同一套值)。
 ///
-/// 加(纯重构,行为一个字节不变)。同日第二步曾按 Info.plist 的 `LyrimuseVariant` 派生出
-/// 一套并排安装的「Lyrimuse Dev」;**整体回退**——没有收益,反而带来问题:在 Dev 里恢复一份配置备份就把
-/// 账号带了进去,两个引擎各 scrobble 一次;同事会话仍在装正式版;用户分不清手里是哪个二进制。现在只剩这一套固定
-/// 名字,`Resolved` 保留是为了让 selftest 能整体断言、别处按字段取。整个来回见 15 章决策 12。
+/// 只有这一套固定名字,不做并排安装的 Dev 变体(见 15 章决策 12);`Resolved` 保留是为了让 selftest 能整体断言、别处按字段取。
 public enum LyrimuseIdentity {
     public struct Resolved: Equatable {
         /// 给人看的名字,也是 .app 的文件名主体。

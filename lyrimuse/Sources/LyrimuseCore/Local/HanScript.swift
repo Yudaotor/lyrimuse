@@ -326,23 +326,17 @@ public enum PlayCountVariants {
 /// 折叠规则演进后旧索引文件不用重建:loadTitleForms 加载时按当前规则从真实写法
 /// 重算全部键(键不入信盘上存的),自动就地迁移。
 public enum PlayCountFold {
-    /// 折叠规则版本。**凡改动 key/foldTitle 的语义必须 +1**:写法索引文件把这个数
-    /// 存在身上,加载时版本一致就直接采用盘上的键(零计算),不一致才做一次性重折迁移
-    /// (见 LastfmStatsService.loadTitleForms)。1=最初口径;2=remaster 噪音折叠;3=feat 噪音;
-    /// 4=补齐到参考实现口径(with 客串 + bonus track + explicit)+ 派生串 R1 版本标记
-    /// 守卫;5=同日第二批:破折号版本尾缀(`Bad - 2012 Remaster`)+ with
-    /// 头词黑名单;6=同日第三批(****):R1 守卫套到原串(中文歌名的 Live 版不再
-    /// 并进录音室版)+ 版本尾缀分隔符归一;7=第三批的修正(并行核实推翻了归一的一半):
-    /// 裸场次标记不归一 + dashSuffixSplit 真取最后一个分隔符 + 归一后补剥一次目录学噪音 +
-    /// 别名表剔掉 jasonchan/kun;8=归一前先去掉看不见的格式字符(stripInvisible)。 前几版都装过机、盘上可能已被盖成那个号,
-    /// 所以每一批都必须再 +1,否则「版本相等直接采用盘上旧键、永不迁移」。
+    /// 折叠规则版本。凡改动 key/foldTitle 的语义必须 +1:写法索引文件把这个数存在身上,加载时版本一致就直接采用
+    /// 盘上的键(零计算),不一致才做一次性重折迁移(见 LastfmStatsService.loadTitleForms)。装过机的每个版本号都可能
+    /// 已经落在用户盘上,所以每次改都要再 +1、不能复用,否则「版本相等直接采用盘上旧键、永不迁移」。
+    /// 各版本:1=最初口径;2=remaster 噪音折叠;3=feat 噪音;4=with 客串 + bonus track + explicit,派生串 R1 版本标记守卫;
+    /// 5=破折号版本尾缀(`Bad - 2012 Remaster`)+ with 头词黑名单;6=R1 守卫套到原串(中文歌名的 Live 版不再并进录音室版)
+    /// + 版本尾缀分隔符归一;7=裸场次标记不归一 + dashSuffixSplit 取最后一个分隔符 + 归一后补剥一次目录学噪音 + 别名表
+    /// 剔掉 jasonchan/kun;8=归一前先去掉看不见的格式字符(stripInvisible)。
     ///
-    /// **`familyKey`/`canonicalArtist`/歌名别名表的改动不算在内,不用 +1**:
-    /// 这个版本号只管 `key()`/`foldTitle()` 落进 `titleForms` 索引的键要不要重折——
-    /// `familyKey` 是**派生**索引 `primaryCreditFamilies` 的键,`loadTitleForms` 两条分支
-    /// (版本相等/不等)**都无条件**调用 `rebuildPrimaryCreditFamilies`(读代码
-    /// 确认),也就是每次启动都会用当前 `familyKey` 重新分组,不需要靠这个版本号触发迁移。
-    /// 新增歌名别名表时特意验证过这一点,没有 +1。
+    /// `familyKey`/`canonicalArtist`/歌名别名表的改动不算在内,不用 +1:这个版本号只管 `key()`/`foldTitle()` 落进
+    /// `titleForms` 索引的键要不要重折;`familyKey` 是派生索引 `primaryCreditFamilies` 的键,`loadTitleForms` 两条分支
+    /// (版本相等/不等)都无条件调用 `rebuildPrimaryCreditFamilies`,每次启动都用当前 `familyKey` 重新分组。
     public static let foldVersion = 8
 
     /// key 的 memo:单次 key 要走 2 次 NFKC + 2 次 ICU 繁简

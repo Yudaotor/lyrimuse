@@ -9,8 +9,7 @@ import SwiftUI
 // 下面那几张卡是**同一份**实现,两个宿主只负责外壳,别在这里就地写一遍行(渲染和设置行走
 // 两条路径就会漂,而且漏改不会编译报错)。
 //
-// 迭代过程(逐步做对宽度调整交互、去掉简化渲染、修正舞台/窗口边界与高度)全部记在
-// docs/features/04-desktop-overlay.md「编辑台改造」。
+// 设计取舍见 docs/features/04-desktop-overlay.md「编辑台改造」。
 //
 // 当前几何:卡片高度由真视图上报的内容高度决定(`onContentHeightChange`,跟真窗口
 // `updateHeight` 同一条 `max(120, ceil(h))` 口径),舞台高度按卡片高度加宽度调整条通道
@@ -377,10 +376,8 @@ struct OverlayEditorStage: View {
 
     var body: some View {
         GeometryReader { geo in
-            // 舞台宽度 = 容器给多少吃多少(卡片列上限 600pt)。两侧**不**给任何控件预留位置,
+            // 舞台宽度 = 容器给多少吃多少(卡片列上限 600pt)。两侧不给任何控件预留位置,
             // 1:1 放得下的宽度上限因此就是这一列的硬顶 600pt,常用宽度段都能按原尺寸摆下。
-            // (第一步这里曾在两侧各留一份拖拽握柄的位置,上限只有 544pt;第四步握柄挪进窗口、
-            // 第六步整个删掉,那份预留跟着没了。)
             let stageWidth = geo.size.width
             VStack(spacing: Self.toolbarSpacing) {
                 toolbar

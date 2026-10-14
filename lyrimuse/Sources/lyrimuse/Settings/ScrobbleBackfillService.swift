@@ -176,20 +176,14 @@ final class ScrobbleBackfillService: ObservableObject {
                 // 补进去的是过去的时间戳,插在最近记录中间:深页缓存的绝对位置全推错了(见 LastfmPageComposer.lateInsertDetected)。
                 LastfmStatsService.shared.dropDeepRecentPageCache(reason: "backfill accepted \(out.accepted)")
                 LastfmStatsService.shared.refreshBaseline(force: true)
-                // 补,更正。Last.fm 把刚收到的 scrobble 并进 recenttracks 要
-                // 一两秒,紧接着上面那一发强刷多半还看不到刚补的记录;而 feed 时代最近记录的主来源
-                // 是引擎落盘的 feed(每 15 s/60 s 一拉)—— 现象是「补提交之后最近记录没刷新」。
+                // Last.fm 把刚收到的 scrobble 并进 recenttracks 要一两秒,紧接着上面那一发强刷多半还看不到刚补的记录;
+                // 最近记录的主来源是引擎落盘的 feed。主路径在引擎那边:回填子命令 touch 一个信号文件(lastfmFeedNudgePath),
+                // 常驻进程消费掉它并排一个 backfillFeedNudgeDelay(5 s)之后的拉取(必须带这个延迟,当场拉回来的是旧内容),
+                // App 靠 5 s 一次的 mtime 轮询几秒内拿到。
                 //
-                // 主路径在引擎那边:回填子命令 touch 一个信号文件(lastfmFeedNudgePath),
-                // 常驻进程消费掉它并排一个 backfillFeedNudgeDelay(5 s)之后的拉取 —— **必须带这个
-                // 延迟**,当场拉回来的是旧内容。App 靠 5 s 一次的 mtime 轮询几秒内拿到。
-                //
-                // 下面这发延迟强刷**只兜引擎不在的情况**,别把它当成主路径:判据
-                // `feedIsFresh` 看的是 feed 里的 fetchedAt 落没落在 180 s 窗口内,而引擎只要
-                // 活着就每 feedHeartbeat(60 s)重写一次 feed —— 跟内容有没有变、有没有包含刚补
-                // 的那几条毫无关系。也就是说引擎在跑时这一发**永远不会触发**。
-                // 之前它被当成"兜底 8 秒后会补刷"来依赖,而那时引擎侧又是当场拉(拉到旧内容
-                // 却把 fetchedAt 刷新了),两头一叠就是同一个问题反复出现的成因。
+                // 下面这发延迟强刷只兜引擎不在的情况,别把它当成主路径:feedIsFresh 看的是 feed 的 fetchedAt 在不在 180 s
+                // 窗口内,而引擎只要活着就每 feedHeartbeat(60 s)重写一次 feed,跟有没有包含刚补的那几条无关,所以引擎在跑时
+                // 这一发不会触发。
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 8_000_000_000)
                     if !LastfmStatsService.shared.feedIsFresh {

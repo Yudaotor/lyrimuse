@@ -1446,15 +1446,9 @@ private struct LiveScrobbleRow: View {
         // 该标记,异步确认晚到几百毫秒也会即时把行收掉。
         if features.lastfmMirrorScrobble, playback.isPlayingNow, !playback.title.isEmpty,
            !playback.isAdBreak {
-            // 封面优先跟列表里这首歌/这张专辑的历史行**用同一张**,本机位图只在列表给不出
-            // 时兜底(第一次听这首歌 / 这张专辑的第一首)。
-            //
-            // 改。原来这里无条件用 poller.artworkImage —— 那是 media-control 从
-            // Apple Music 的 Now Playing 会话读到的 600×600 图,跟下面历史行走的
-            // coverURL(for:)(第一级是 Last.fm scrobble 自带的 174px 图)是两条毫不相干的
-            // 链路。同一首歌因此在同一张卡里显示两张不同的图,等它被 scrobble 成历史行才
-            // "变回来"。实测这两张不是同一个文件:Prince《1999》,Apple 那版
-            // 偏暗紫、Last.fm 那版偏亮蓝,缩到 26pt 一眼能看出色调不同,不是清晰度差别。
+            // 封面优先跟列表里这首歌/这张专辑的历史行用同一张,本机位图只在列表给不出时兜底(第一次听这首歌 /
+            // 这张专辑的第一首)。别直接用 poller.artworkImage:那是 Now Playing 会话里的图,跟历史行走的
+            // coverURL(for:)(第一级是 Last.fm scrobble 自带的图)常常不是同一张,同一首歌会在同一张卡里显示两张不同的图。
             let listCover = stats.liveCoverURL(artist: playback.artist, title: playback.title,
                                                album: LocalPlaybackSource.albumOrListed(
                                                    album: playback.album, youtubeMusicAlbum: playback.youtubeMusicAlbum))

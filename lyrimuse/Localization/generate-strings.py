@@ -104,34 +104,22 @@ def canonical_text(catalog) -> str:
 
 
 def check_canonical_form(raw: str, catalog, normalize: bool) -> int:
-    """catalog 的序列化风格必须跟 Xcode 一致 —— 这不是洁癖,是防一颗静默的 diff 炸弹。
-
-    2026-09-12 实测:用 Python 的**默认**写法回写这个文件 ——
+    """catalog 的序列化风格必须跟 Xcode 一致。用 Python 的默认写法回写这个文件 ——
 
         d["strings"] = dict(sorted(d["strings"].items()))
         json.dump(d, f, ensure_ascii=False, indent=2)      # 少了 separators
 
-    —— 会把冒号前的空格去掉、并把一千多个键全部重排。**内容一个字没变**,
-    `git diff` 却是 **4 万行**,当天真实新增的那几十条彻底淹没在里面。
-
-    最要命的是它**全程静默**:三语齐、check_strings_parity.py 绿、selftest 全过,
-    只有 review 的人看到 4 万行才会发现。那次是两个会话各自用了同一个默认写法,
-    其中一个自己都没察觉 —— 文件当时已经是错格式,他写回去恰好一致、零额外 diff。
-    这正是口头约定拦不住的形状:默认写法就是"看起来最正常"的那个,写的人不觉得
-    自己在做特殊的事;后果要等到 git diff 才显现,而多数人加完键只跑生成脚本和 parity。
-    所以闸门放在**人人必跑的这一步**,而不是文档里的一行提醒。
+    —— 会把冒号前的空格去掉、并把一千多个键全部重排:内容一个字没变,git diff 却是几万行,真正新增的词条淹没在里面;
+    而且全程静默(三语齐、check_strings_parity.py 绿、selftest 全过)。默认写法就是"看起来最正常"的那个,口头约定
+    拦不住,所以闸门放在人人必跑的这一步。
 
     两道判据,都不做字符串启发式:
-      ① 排版:按 Xcode 的分隔符重新吐一遍、跟盘上**逐字节**比;
-      ② 键序:跟 `git show HEAD:` 那份比两边共有键的**相对次序**。
-    缺一不可 —— 只带 separators 却把键重排的写法能过①(它的往返结果跟自己一致),
-    得靠②抓;而②在拿不到 HEAD 时会失效,那时只剩①。
+      ① 排版:按 Xcode 的分隔符重新吐一遍、跟盘上逐字节比;
+      ② 键序:跟 `git show HEAD:` 那份比两边共有键的相对次序。
+    缺一不可 —— 只带 separators 却把键重排的写法能过①(它的往返结果跟自己一致),得靠②抓。
 
-    真正的盲区只有一个:**拿不到 HEAD 时②整个跳过**(新仓 / 文件没入库 / 不在 git 里,
-    `head_key_order` 返回 None → `not None` 为真 → 直接放行),此时重排查不出来。
-    这是有意的取舍:键序不影响任何行为、只影响 diff 可读性,不该让脚本在新仓里失败。
-    (2026-09-12 这段注释一度写反,说①的盲区是"重排查不出来" —— 那条盲区其实早被②堵上了,
-    是先有①、后加②时注释没跟着更新。ls-911 读代码时指出来的,已实测确认②确实会红。)
+    拿不到 HEAD 时②整个跳过(新仓 / 文件没入库 / 不在 git 里,`head_key_order` 返回 None → 直接放行),
+    此时重排查不出来。这是有意的取舍:键序不影响任何行为、只影响 diff 可读性,不该让脚本在新仓里失败。
     """
     reordered = reordered_against_head(catalog)
     want = canonical_text(catalog)

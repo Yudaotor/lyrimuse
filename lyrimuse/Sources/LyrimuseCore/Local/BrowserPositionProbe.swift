@@ -573,14 +573,11 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 下面那条配对推断(结论多半还是对的),后者正是该退回浏览器图标的场景。
     public static let matchedPlatformMaxAge: TimeInterval = 15 * 60
 
-    /// 这个浏览器此刻在放哪个网页音乐平台(nil = 不知道 / 不是网页播放器)。
+    /// 这个浏览器此刻在放哪个网页音乐平台(nil = 不知道 / 不是网页播放器)。给菜单栏面板右上角的来源角标用:
+    /// 确实是 YouTube Music / Spotify 就显示平台,其余照旧显示浏览器。
     ///
-    /// 加,给菜单栏面板右上角那枚**来源角标**用:"确实是 YouTube Music
-    /// 就别再显示浏览器图标了,浏览器里放 Spotify 就显示 Spotify,其余照旧显示浏览器"。
-    ///
-    /// 调用方传 media-control 报的原始 bundle id 就行,这里自己做代理别名解析
-    /// (Safari 报 `com.apple.WebKit.GPU`,配对表里存的是 `com.apple.Safari` —— 这一步
-    /// 漏掉的后果在 02 章记过一次:"配对了却永远不同步",而且一条日志都没有)。
+    /// 调用方传 media-control 报的原始 bundle id 就行,这里自己做代理别名解析(Safari 报 `com.apple.WebKit.GPU`,
+    /// 配对表里存的是 `com.apple.Safari`;漏掉这一步就会配对了却永远不同步,而且一条日志都没有)。
     public func playingPlatformID(forBundleID bundleID: String?, now: Date = Date()) -> String? {
         guard let host = Self.probeTargetBundleID(forReported: bundleID), !host.isEmpty else {
             return nil

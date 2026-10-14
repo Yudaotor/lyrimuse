@@ -66,7 +66,7 @@ func runTestLyricSourcesCLI(args []string) {
 	reported := make(map[string]bool, len(targets))
 
 	// 取消闸:targets 里每个源都已经有结论之后,这一轮探测剩下的部分再跑也不会改变
-	// 任何输出——取消掉让 runProbe 立刻收工,理由见函数头注那段 提醒。
+	// 任何输出——取消掉让 runProbe 立刻收工,理由见函数头注。
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	allReported := func() bool {

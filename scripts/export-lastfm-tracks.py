@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """导出 Last.fm 全部听过的歌曲成 markdown,带同曲变体归并。
 
-归并规则(2026-08-18 与用户逐对核定,口径与 export-lastfm-albums.py 一致):
+归并规则(口径与 export-lastfm-albums.py 一致):
   基础: 简繁折叠(外部 t2s 映射)+字形变体折叠表(日文兼容字,如 晩→晚)/NFKC/大小写/标点、
         歌手别名统一(与引擎 artistAliasTable 同步)。
   T1 (feat. …)/(with …) 客串标记剥除——客串不改变是哪首歌。
@@ -12,7 +12,7 @@
   手工对: 陈奕迅 愛情轉移(國) = 爱情转移(《爱情转移》本身就是国语版,(國) 是冗余标记)。
   刻意不做: Live/演唱会版、钢琴版/獨唱版/伴奏/Karaoke、Remix/Club Mix/Sped Up、
       英日双语版本、(Alternate)、(original version)(Xscape 原始版是另一套制作)、
-      (single version)/(7" Single Edit)(用户未拍板,保留独立)、Medley: 前缀、前缀/子集归并。
+      (single version)/(7" Single Edit)(保留独立)、Medley: 前缀、前缀/子集归并。
 
 用法: python3 export-lastfm-tracks.py <t2s合并映射.tsv> <tracks-raw.json> <输出.md>
   t2s 映射 TSV: 每行 "原文\t简体",由 ICU CFStringTransform 生成。

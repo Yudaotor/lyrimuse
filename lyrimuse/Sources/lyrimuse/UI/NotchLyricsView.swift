@@ -1940,7 +1940,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 位置口径同 `clockText`(锚点外推 ?? 暂停冻结位置);Kaset 的广告跟接下来那首歌共用身份,曲目时长是那首歌的,按广告
     /// 自己的那只表(`AdBreakClock`,内嵌网页报的时长与进度)算;拿不到时长就整个不画(不为拿不到的数据编占位)。
     /// TimelineView 只在这一层可见(层内读的 `notchCardLayerActive`)时才排表 —— 收起态 / 编辑台预览都不该有一张每秒空转的表
-    /// (理由同 `earContent` 时间模块那条 提醒)。采样用 `Date()` 而不是 `context.date`,理由见 `earContent` 头注第 ③ 条。
+    /// (理由同 `earContent` 时间模块那条)。采样用 `Date()` 而不是 `context.date`,理由见 `earContent` 头注第 ③ 条。
     private var adCountdown: some View {
         NotchLayerActiveReader { active in
             switch playback.adCountdown {
@@ -3345,7 +3345,7 @@ private struct NotchScrubber: View {
     /// 这首歌的词已经完全对不上了,不值得为这个量级常驻一份空隙。真超过就由
     /// `minimumScaleFactor(0.7)` 把字缩一点(`+10.2s` 需要 50pt/46pt ≈ 0.92,远在 0.7 之内,
     /// 缩了也看不出来),**宽度仍然恒定** —— 位置稳定是硬要求,字号不是。
-    /// 这个"缩而不是推"只有在 `offsetReadout` 用 overlay(而不是 ZStack)时才成立,见那边的 提醒。
+    /// 这个"缩而不是推"只有在 `offsetReadout` 用 overlay(而不是 ZStack)时才成立,见那边的注释。
     private var offsetWidthTemplate: String {
         "\(L10n.t("歌词")) +2.2s"
     }

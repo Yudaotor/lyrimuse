@@ -139,14 +139,12 @@ func TestLyricRecordingTriangleAlbumWidthBoundary(t *testing.T) {
 	}
 }
 
-// TestLyricRecordingTriangleNotUsedForIdentity 锁住这条档位的适用范围:它**只能**出现在
-// 歌词候选的采纳闸上,绝不能被用到判**身份**的地方(netease 的 pick()/nameOnlyMatch 决定
-// 封面和 canonical_artist、qq.go 的 qqCoverFallback 决定封面)。在那三处放宽等于直接采信
-// 仿冒号的署名 —— 正是 netease.go 里当年删掉 byAlbum 兜底要防的东西。
+// TestLyricRecordingTriangleNotUsedForIdentity 锁住这条档位的适用范围:它只能出现在歌词候选的采纳闸上,
+// 绝不能被用到判身份的地方(netease 的 pick()/nameOnlyMatch 决定封面和 canonical_artist、qq.go 的
+// qqCoverFallback 决定封面)。在那三处放宽等于直接采信仿冒号的署名。
 //
-// 这个测试用扫源码的方式守它:比起注释里的一句 提醒,它能真的在 CI 里拦住。netease.go 里唯一允许的是
-// 只给歌词的 neteaseLyricOnlyPick(那条路不给封面、链接、歌手名、专辑 id,行为由
-// TestResolveNeteaseInfoLyricOnlyWhenIdentityAmbiguous 钉住),扫之前先把它连同文档注释一起去掉。
+// 扫源码守它。netease.go 里唯一允许的是只给歌词的 neteaseLyricOnlyPick(那条路不给封面、链接、歌手名、专辑 id,
+// 行为由 TestResolveNeteaseInfoLyricOnlyWhenIdentityAmbiguous 钉住),扫之前先把它连同文档注释一起去掉。
 func TestLyricRecordingTriangleNotUsedForIdentity(t *testing.T) {
 	for _, f := range []string{"netease.go", "qq.go"} {
 		b, err := os.ReadFile(f)

@@ -1,17 +1,15 @@
 import Foundation
 
-// 读引擎自己维护的那份磁盘缓存(lyrimuse-engine/enrich.go 的 enrichEntry,持久化路径
-// 由 lyrimuse-engine/main.go:68 拼出来,这台机器上固定是这个路径)。key 是
-// "歌手|歌名|专辑"(跟 lyrimuse-engine/enrich.go:93 的 `artist + "|" + title + "|" + album`
-// 完全一致),value 里已经有解析好的歌词——本地数据源靠这个拿歌词,不用在 Swift 里
-// 重新实现一遍网易云/QQ/酷狗/Musixmatch/LRCLIB 的匹配逻辑。
-/// 是类不是结构体:字典槽位里只放指针,不按每条近 800 字节给空槽占位(见 15 章决策 24)。
+// 读引擎自己维护的那份磁盘缓存(lyrimuse-engine/enrich.go 的 enrichEntry,路径由 lyrimuse-engine/main.go 拼出来)。
+// key 是"歌手|歌名|专辑"(跟引擎 enrichKey 的拼法一致),value 里已经有解析好的歌词 —— 本地数据源靠这个拿歌词,
+// 不用在 Swift 里重新实现一遍各歌词源的匹配逻辑。
 /// 条目里 `lyrics_decision` 只解这一个字段,见 `EnrichCacheEntry.decisionSongDurationSecs`。
 private struct EnrichDecisionDuration: Decodable {
     let songDurationSecs: Double?
     enum CodingKeys: String, CodingKey { case songDurationSecs = "song_duration_secs" }
 }
 
+/// 是类不是结构体:字典槽位里只放指针,不按每条近 800 字节给空槽占位(见 15 章决策 24)。
 public final class EnrichCacheEntry: Decodable, Sendable {
     /// 主歌词。精简条目(带 `body_crc`)不解它,正文小文件里有同一份,用到时去读;不带 `body_crc` 的完整条目
     /// (老格式、正在播放快照)照旧解。见 15 章决策 24。
@@ -132,8 +130,8 @@ public final class EnrichCacheEntry: Decodable, Sendable {
     // (radioduration.go,电台进度条的分母读它,见 trackDurationSecs)。也给「英文歌名 → 中文歌名」的本机别名推断当
     // 第二道闸(见 EnrichTitleAliases)。
     let durationSecs: Double?
-    // 所配歌词候选在来源上的时长(秒,引擎的 ResolvedDurationSecs)。同日起解码:跟 durationSecs
-    // 差得远说明这条配到了别的歌的词,别名推断的 E2 路径据此判歌词可不可信。
+    // 所配歌词候选在来源上的时长(秒,引擎的 ResolvedDurationSecs)。跟 durationSecs 差得远说明这条配到了别的歌的词,
+    // 别名推断的 E2 路径据此判歌词可不可信。
     let resolvedDurationSecs: Double?
     // 歌词判决记下的歌曲时长(引擎 lyrics_decision.song_duration_secs,胜出那份歌词在来源上对应的那首歌)。只给没有任何
     // 时长的电台流当进度条分母的退路(trackDurationSecs 的 `allowsLyricsMatch`)。

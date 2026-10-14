@@ -403,13 +403,11 @@ struct LyricsDecisionSheet: View {
             .joined(separator: "  ")
     }
 
-    /// 同一行的**富文本**版(界面用;上面那个纯文本版留给「拷贝」)。
+    /// 同一行的富文本版(界面用;上面那个纯文本版留给「拷贝」)。
     ///
-    /// 内容逐字一致,只多了一层明暗:标签(「歌手」/「歌名」)压暗退到背景,名字用正常字色。
-    /// 标签和值同色正是这块被说"乱"的病根之一 —— 一行里哪几个字是结构、哪几个字是数据,
-    /// 全靠读的人自己分。「」仍然留着:它回答"到哪儿为止"(歌手名里本来就有顿号),
-    /// 跟明暗回答的"谁是谁"是两件事,那轮的结论没被推翻。
-    /// 逐段上色同样走 `AttributedString`,理由见 `sourceNamesText` 头注的 提醒。
+    /// 内容逐字一致,只多了一层明暗:标签(「歌手」/「歌名」)压暗退到背景,名字用正常字色,一行里哪几个字是结构、
+    /// 哪几个字是数据一眼分得开。「」仍然留着:它回答"到哪儿为止"(歌手名里本来就有顿号),跟明暗回答的"谁是谁"是两件事。
+    /// 逐段上色同样走 `AttributedString`,理由见 `sourceNamesText` 头注。
     private func groupQueriesLine(_ g: LyricQueryGroup) -> Text {
         func dimmed(_ text: String) -> AttributedString {
             var out = AttributedString(text)

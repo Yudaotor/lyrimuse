@@ -2,25 +2,17 @@ import AppKit
 import Carbon.HIToolbox
 import KeyboardShortcuts
 
-// 录制全局快捷键时的冲突检查。
+// 录制全局快捷键时的冲突检查。不查的话有两个静默失败:
 //
-// 加。在这之前 `ShortcutRecorderButton.handle(_)` 只校验了"必须含
-// ⌘/⌥/⌃ 之一",校验完直接 `setShortcut` 写入,于是有两个静默失败:
+//  1. 录一个被 macOS 占用的组合(⌘Space、⌃↑ 这类)会"成功",按钮上正常显示出那个组合,但底层
+//     `RegisterEventHotKey` 注册失败后静默返回,这个键永远不会触发,用户没有办法自己发现。
+//  2. 两个动作绑同一个组合:库的派发是遍历全部 name、凡匹配就逐个执行(`KeyboardShortcuts.handleOnKeyUp`,
+//     没有 break),按一次两个动作都会发生;`CarbonKeyboardShortcuts.unregister(_:)` 按 shortcut 删所有匹配项,
+//     事后清掉其中一个会连带把另一个的注册也拆了。
 //
-//  1. **录一个被 macOS 占用的组合(⌘Space、⌃↑ 这类)会"成功"**,按钮上正常显示出那个
-//     组合 —— 但底层 `RegisterEventHotKey` 注册失败后是 `guard ... else { return }`
-//     静默返回,这个键**永远不会触发**。用户没有任何办法自己发现,只会觉得"这软件的
-//     快捷键坏了"。
-//  2. **两个动作绑同一个组合不会被拦**,而库的派发是遍历全部 name、凡匹配就逐个执行
-//     (`KeyboardShortcuts.handleOnKeyUp`,没有 break):按一次两个动作都会发生。更糟的是
-//     `CarbonKeyboardShortcuts.unregister(_:)` 按 shortcut 删**所有**匹配项,事后清掉
-//     其中一个会连带把另一个的注册也拆了。
-//
-// 库自己的 Recorder(`RecorderCocoa`)本来做了前两类检查(`shortcut.isTakenBySystem` /
-// `shortcut.takenByMainMenu`),但这个项目因为输入法问题换成了自己的 NSButton 实现
-// (理由见 ShortcutRecorder.swift 顶部),换的时候只抄了 modifier 那一条。**那两个 API 是
-// 库的 internal 成员,跨模块调不到**,所以这里不是"把它们接回来",而是照同样的口径自己
-// 实现一遍(系统占用表同样走 `CopySymbolicHotKeys`)。
+// 库自己的 Recorder(`RecorderCocoa`)做了这两类检查(`shortcut.isTakenBySystem` / `shortcut.takenByMainMenu`),
+// 但这个项目用的是自己的 NSButton 实现(理由见 ShortcutRecorder.swift 顶部),而那两个 API 是库的 internal 成员、
+// 跨模块调不到,所以照同样的口径自己实现一遍(系统占用表同样走 `CopySymbolicHotKeys`)。
 enum ShortcutConflict {
     enum Kind {
         /// 撞了 Lyrimuse 自己另一个全局快捷键;带上那个动作给用户看的名字。
