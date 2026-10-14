@@ -171,15 +171,20 @@ func betterEnrichEntry(a, b enrichEntry, aKey, bKey string) bool {
 // 漏掉某个外围字段的代价也有限:needsPeripheralBackfill 本来就在盯着这些字段,缺了会自动
 // 重新补一次。这是这里敢用"逐个字段显式写"而不是反射的底气。
 func mergePeripheralInto(winner, loser enrichEntry) enrichEntry {
-	if winner.CoverURL == "" {
+	// loser 的网易云封面出自 winner 判错过的那首时不收,主色跟着它(见 neteaselinkcheck.go)。
+	rejectedNeteaseCover := loser.CoverSource == "netease" && neteaseResultRejected(winner, loser)
+	if winner.CoverURL == "" && !rejectedNeteaseCover {
 		winner.CoverURL, winner.CoverSource = loser.CoverURL, loser.CoverSource
 		// 设备封面在网上的同一张图跟着这张封面走(它只对记下时那张封面作数,见 enrichEntry.PublicCoverFor)。
 		winner.PublicCoverURL, winner.PublicCoverFor = loser.PublicCoverURL, loser.PublicCoverFor
 	}
-	if winner.AccentColor == "" {
+	if winner.AccentColor == "" && !rejectedNeteaseCover {
 		winner.AccentColor = loser.AccentColor
 	}
-	if winner.NeteaseURL == "" {
+	if winner.NeteaseRejected == "" {
+		winner.NeteaseRejected = loser.NeteaseRejected
+	}
+	if winner.NeteaseURL == "" && !neteaseResultRejected(winner, loser) {
 		winner.NeteaseURL = loser.NeteaseURL
 	}
 	if winner.AppleURL == "" {

@@ -158,6 +158,8 @@ type enrichEntry struct {
 	NeteaseURL                  string `json:"netease_url,omitempty"`
 	AppleURL                    string `json:"apple_music_url,omitempty"`
 	QQURL                       string `json:"qq_music_url,omitempty"`
+	// NeteaseRejected:重核判错、清掉的那个网易云歌曲 id(neteaselinkcheck.go)。外围补全再配到这一首时链接、封面都不收。
+	NeteaseRejected string `json:"netease_rejected,omitempty"`
 	// QQ 音乐的 专辑 mid / 首位歌手 mid(歌词窗口「前往专辑/前往艺人」在播放器是 QQ 音乐
 	// 时那一档;页面路由见 qqSongCatalogMids)。
 	// 刻意**不进** fields() —— 那张 map 是发给 relay/LB 的载荷、有字节预算,而桌面端
@@ -3150,7 +3152,8 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	// 封面四件套一起判(主色是从这张封面算出来的,不能出现"新封面配旧主色"的错配;
 	// cover_album 记的是这张封面属于哪张专辑,换封面就得跟着换)。
 	// "这一轮拿到了新封面"之外还要过 coverSwapAllowed —— 见那个函数的注释。
-	if coverSwapAllowedWith(e, fresh, coverAlbum, func(deviceURL, candidateURL string) bool {
+	rejectedNeteaseCover := fresh.CoverSource == "netease" && neteaseResultRejected(e, fresh)
+	if !rejectedNeteaseCover && coverSwapAllowedWith(e, fresh, coverAlbum, func(deviceURL, candidateURL string) bool {
 		return preDeviceURL != "" && deviceURL == preDeviceURL && candidateURL == fresh.CoverURL && preUpgradable
 	}) {
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
@@ -3219,7 +3222,7 @@ func backfillPeripheralFields(ctx context.Context, key, artist, title, album str
 	// motionCoverNeedsRecheckAgainstOwnCover。真正的重算放在锁外(见函数末尾),这里只
 	// 记一个待办位 —— 网络 I/O 不进 enrichMu。
 	needsMotionRecheck := motionCoverNeedsRecheckAgainstOwnCover(motionCheckMatchesRetainedCover, e)
-	if fresh.NeteaseURL != "" {
+	if fresh.NeteaseURL != "" && !neteaseResultRejected(e, fresh) {
 		e.NeteaseURL = fresh.NeteaseURL
 	}
 	if e.CanonicalArtist == "" {

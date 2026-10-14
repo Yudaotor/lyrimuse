@@ -14,7 +14,7 @@ import (
 
 // 网易云登记名与别名补扫(歌曲实体阶段 2,18 章决策 18):缓存条目上网易云链接里的歌曲 id 按批问歌曲详情,登记歌名、歌手、
 // 别名与译名(alias、transNames)、时长按 id 存进 `lyrimuse-netease-names.json`(派生数据,丢了重取)。建实体表时先核对链接
-// (attachNeteaseNames),再跟 Apple 名字一样当名字证据。
+// (attachNeteaseNames),再跟 Apple 名字一样当名字证据。每一轮补完都拿登记信息重核一遍全部网易云链接,配错的清掉(neteaselinkcheck.go)。
 
 const (
 	neteaseNamesFileVersion = 1
@@ -178,6 +178,7 @@ func startNeteaseNamesSweep(ctx context.Context) {
 		next := neteaseNamesInterval
 		if features().SongEntityPhase2 {
 			settled, complete := sweepNeteaseNames(ctx, neteaseNamesPath(), time.Now())
+			recheckNeteaseLinks(readNeteaseNames(neteaseNamesPath()), readAppleNames(appleNamesPath()))
 			if settled > 0 && features().SongEntityShadow {
 				requestSongEntityEvidenceRebuild()
 			}
