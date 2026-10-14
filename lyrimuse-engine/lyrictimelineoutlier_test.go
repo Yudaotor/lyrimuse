@@ -115,6 +115,26 @@ func TestApplyTimelineOffsetPenaltyAnchorOutlierGuards(t *testing.T) {
 	}
 }
 
+// 落单的是播放器本机缓存里的那份(Amazon 本地歌词,同源):歌词商挂错了版本,跟着它那一版走的非锚点候选一起罚,
+// 冠军交给时长对得上、彼此对齐的那三家。另一版整首早 7.8 秒(多一段前奏的那版才对得上本地曲长)。见 09 章决策 250。
+func TestApplyTimelineOffsetPenaltyPlayerLocalOutlier(t *testing.T) {
+	results := []scoredLyricCandidateResult{
+		tlResult("qq", 1250, 289, tlLRC(20, tlConst(-7800)), tlYRC(20, tlConst(-7800))),
+		tlResult(amazonLocalLyricsSource, 1064, 294, tlLRC(20, tlConst(-7800)), ""),
+		tlResult("applemusic", 1258, 294, tlLRC(20, tlConst(0)), tlYRC(20, tlConst(0))),
+		tlResult("kuwo", 1234, 294, tlLRC(20, tlConst(100)), ""),
+		tlResult("netease", 1149, 295, tlLRC(20, tlConst(-200)), ""),
+	}
+	results[1].ScoreTerms = []scoreTerm{{Kind: scoreTermNativeSource, Points: 250}}
+	applyTimelineOffsetPenalty(results, 294)
+	if p := tlPenalized(results); !p["qq"] || !p[amazonLocalLyricsSource] || len(p) != 2 {
+		t.Fatalf("QQ 和 Amazon 本地歌词都该吃 timelineOffset,实际 %v", p)
+	}
+	if top := pickTop(results); top != "applemusic" {
+		t.Fatalf("扣完之后冠军应是对得上的 Apple Music,实际 %s", top)
+	}
+}
+
 // 基准组外有两家各自错开(彼此也对不上):两家都罚,冠军交给基准组。
 func TestApplyTimelineOffsetPenaltyJudgesEachOutlier(t *testing.T) {
 	results := append(tlOutlierBatch(), tlResult("netease", 1100, 297, tlLRC(20, tlConst(-2200)), ""))

@@ -353,7 +353,8 @@ func timelineAnchorBaseline(results []scoredLyricCandidateResult, lines [][]time
 //     跟基准组哪家都判不了、只跟一家平移、两个方向都有的,这一家判不了,留着不动。错开的有几家都照判:
 //     它们彼此也对不上,动摇不了基准组。
 //   - 判错开的里有跟当前播放器同源的那份时整批不判(同源歌词是对着这个播放器的音频做的,
-//     它错开说明这一版母带跟别家不同)。
+//     它错开说明这一版母带跟别家不同)。播放器本机缓存 / 本地文件里的那份(isPlayerLocalLyricSource)不算:
+//     那是歌词商按曲目编号挂上去的,挂错版本时它自己就是错开的那家。见 09 章决策 250。
 //
 // 见 09 章决策 213、218。
 func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]timelineLine, anchors []int, rel map[[2]int]timelineRelation) (baseline map[int]bool, outliers []int, ok bool) {
@@ -438,7 +439,7 @@ func timelineAnchorOutliers(results []scoredLyricCandidateResult, lines [][]time
 		if len(later) > 0 && len(earlier) > 0 || len(later)+len(earlier) < timelineAnchorOutlierMinShifted {
 			continue
 		}
-		if scoreTermPoints(results[a].ScoreTerms, scoreTermNativeSource) > 0 {
+		if scoreTermPoints(results[a].ScoreTerms, scoreTermNativeSource) > 0 && !isPlayerLocalLyricSource(results[a].Source) {
 			return nil, nil, false
 		}
 		outliers = append(outliers, a)
