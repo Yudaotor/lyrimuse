@@ -238,12 +238,22 @@ func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 20, cor
 }
 
 // Discord 品牌图(蓝紫底 + 白色标志),标志矢量取自 Simple Icons(CC0)。整张不透明,圆角由调用方裁。
-// 这里的三张品牌图都预先画成一组位图(`AppIconResolver.prerendered`),整张 512 直接缩到二三十像素满是锯齿。
+// 这里的品牌图都预先画成一组位图(`AppIconResolver.prerendered`),整张 512 直接缩到二三十像素满是锯齿。
 private let discordBadgeImage: NSImage = {
     guard let path = Bundle.main.path(forResource: "DiscordIcon", ofType: "png"),
           let image = NSImage(contentsOfFile: path) else {
         // 没走 build.sh 打包(直接 swift build 跑)时找不到资源,退回 SF Symbol。
         return NSImage(systemSymbolName: "bubble.left.and.bubble.right.fill", accessibilityDescription: nil) ?? NSImage()
+    }
+    return AppIconResolver.prerendered(image)
+}()
+
+// Telegram 品牌图(蓝底 + 白色纸飞机),标志矢量取自 Simple Icons(CC0)。整张不透明,圆角由调用方裁。
+// 只给「关于」页头的社群按钮用,不是账号页。
+let telegramBadgeImage: NSImage = {
+    guard let path = Bundle.main.path(forResource: "TelegramIcon", ofType: "png"),
+          let image = NSImage(contentsOfFile: path) else {
+        return NSImage(systemSymbolName: "paperplane.fill", accessibilityDescription: nil) ?? NSImage()
     }
     return AppIconResolver.prerendered(image)
 }()

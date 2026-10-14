@@ -6846,6 +6846,29 @@
         }
       }
     },
+    "Telegram 群组" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Telegram Group"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Telegram 群组"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Telegram 群組"
+          }
+        }
+      }
+    },
     "与其他用户交流，也可在此提问或提出建议" : {
       "extractionState" : "manual",
       "localizations" : {

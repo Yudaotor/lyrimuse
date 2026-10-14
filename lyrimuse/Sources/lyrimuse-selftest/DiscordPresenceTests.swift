@@ -1365,8 +1365,8 @@ private func checkDiscordWiring() {
     expectEqual(sourceBytes(webIcons, contain: "return AppIconResolver.prerendered(image)")
                     && sourceBytes(webIcons, contain: "return AppIconResolver.prerendered(size: size) {"), true,
                 "Discord(接线): YouTube Music、Spotify 网页版的图标预先画成位图")
-    expectEqual(accounts.components(separatedBy: "return AppIconResolver.prerendered(image)").count - 1, 3,
-                "Discord(接线): Discord、Last.fm、ListenBrainz 的品牌图预先画成位图")
+    expectEqual(accounts.components(separatedBy: "return AppIconResolver.prerendered(image)").count - 1, 4,
+                "Discord(接线): Discord、Telegram、Last.fm、ListenBrainz 的品牌图预先画成位图")
     for (path, source) in [("AppIconResolver", resolver), ("WebPlatformIcon", webIcons)] {
         expectEqual(sourceBytes(source, contain: "flipped: false) {"), false, "Discord(接线): \(path) 不用按需绘制的图")
     }

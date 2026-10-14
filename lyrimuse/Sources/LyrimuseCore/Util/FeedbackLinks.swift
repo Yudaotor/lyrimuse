@@ -46,6 +46,8 @@ public enum FeedbackLinks {
     public static let helpURL = URL(string: LegalNoticeLinks.repo + "/discussions/categories/q-a")!
     /// 「Discord 社区」:服务器的永久邀请链接(不过期、不限次数)。三语 README「反馈」一节和徽章用的是同一条,换链接时一起改。
     public static let discordInviteURL = URL(string: "https://discord.gg/N7gVy66Gp3")!
+    /// 「Telegram 群组」:群的邀请链接(群是私密群,靠这条进)。三语 README 的徽章和「反馈」一节用的是同一条,换链接时一起改。
+    public static let telegramInviteURL = URL(string: "https://t.me/+l_H_ZpiP62QwZTZl")!
 
     /// 「功能清单」:落地页的 features/ 页,按界面语言(`L10n.current` 的取值)开对应的那一份,认不出的值当英文。
     /// 页面由 `scripts/gen-feature-list.py` 的数据生成,跟 GitHub 上的 docs/feature-list*.md 是同一份,见 14 章决策 68。

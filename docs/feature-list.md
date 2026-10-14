@@ -714,7 +714,7 @@ Bundles logs, crash reports and app state into one file with credentials and you
 
 ## Every setting
 
-Every setting in the Settings window, by where it lives: 248 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
+Every setting in the Settings window, by where it lives: 249 in all. Type a name into the search field at the top of the Settings sidebar to jump straight to it.
 
 ### Lyrics › Sources
 
@@ -1074,6 +1074,7 @@ Every setting in the Settings window, by where it lives: 248 in all. Type a name
 ### About
 
 - **Discord Community**: Chat with other users, ask questions or suggest features
+- **Telegram Group**: Chat with other users, ask questions or suggest features
 - **Copyright Notice**
 - **Third-Party Licenses**: Open-source components and dictionaries
 - **Open-Source License**: GPL-3.0

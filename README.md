@@ -15,6 +15,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Yudaotor)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/N7gVy66Gp3)
+[![Telegram](https://img.shields.io/badge/Telegram-Join-26A5E4?logo=telegram&logoColor=white)](https://t.me/+l_H_ZpiP62QwZTZl)
 
 </div>
 
@@ -312,7 +313,7 @@ The same check, run from Terminal:
 - **Problems and ideas**: in the app, open Settings › About › **Report an Issue**, or right-click the menu bar icon and choose **Report an Issue…**. It opens a new GitHub issue with your version, macOS and current player already filled in; pick the kind of report: bug, lyrics missing or wrong, player request, or feature request.
 - **Wrong lyrics for one song**: open **Search for Lyrics** for that song in the **Lyrics Manager** and click **Can't find the right lyrics? Report it on GitHub** at the bottom left. The song details, the lyrics source in use and the sources that returned results come along.
 - **Questions**: ask in the [Q&A category](https://github.com/Yudaotor/lyrimuse/discussions/categories/q-a) of Discussions.
-- **Chat with other users**: join the [Discord server](https://discord.gg/N7gVy66Gp3). Ask questions, report problems or suggest features there too; Chinese has its own chat channel and feedback forum.
+- **Chat with other users**: join the [Discord server](https://discord.gg/N7gVy66Gp3) or the [Telegram group](https://t.me/+l_H_ZpiP62QwZTZl). Ask questions, report problems or suggest features there too; Chinese has its own chat channel and feedback forum on Discord, and its own topic on Telegram.
 - **No GitHub account**: email yudaotor@qq.com. The envelope button on the **Report an Issue** row in Settings › About fills in your version and macOS; right-click it to copy the address.
 - **Security issues**: report them privately as described in [SECURITY.md](SECURITY.md), not in a public issue.
 

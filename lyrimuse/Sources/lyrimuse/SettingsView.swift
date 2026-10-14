@@ -7361,6 +7361,21 @@ private struct AboutSettingsTab: View {
                 .accessibilityLabel(L10n.t("Discord 社区"))
                 .accessibilityHint(L10n.t("与其他用户交流，也可在此提问或提出建议"))
                 .settingsSearchHighlight(title: L10n.t("Discord 社区"))
+                // 同 Discord:只放标志,去向写在悬停提示和读屏标签里。见 14 章决策 110。
+                Button {
+                    NSWorkspace.shared.open(FeedbackLinks.telegramInviteURL)
+                } label: {
+                    Image(nsImage: telegramBadgeImage)
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+                .settingsGlassButtons()
+                .buttonBorderShape(.circle)
+                .help(L10n.t("Telegram 群组"))
+                .accessibilityLabel(L10n.t("Telegram 群组"))
+                .accessibilityHint(L10n.t("与其他用户交流，也可在此提问或提出建议"))
+                .settingsSearchHighlight(title: L10n.t("Telegram 群组"))
             }
             .padding(.top, 8)
             // 这一行是唯一一处"求 star"的地方,所以常显而不是收进 help 气泡 —— 藏进悬停提示就没人
