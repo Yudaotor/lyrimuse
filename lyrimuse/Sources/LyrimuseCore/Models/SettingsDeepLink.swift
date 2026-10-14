@@ -8,6 +8,9 @@ import Foundation
 ///     /software-update       软件更新页(App 侧另认 ?check=1)
 ///     /lastfm-suggestions    Last.fm 账号建议页
 ///     /labs                  「实验室」总览页
+///     /<页>/<分段>           翻到页里的某个分段(/appearance/overlay、/lyrics/manage、/account/discord/privacy …):
+///                            哪一页有哪些分段见 LyrimuseDeepLink.swift 里的 `sectionTable`;本类型的 init 不认分段,
+///                            路由先用 `pagePath(of:)` 去掉分段再交给它
 ///
 /// 认不出的路径返回 nil,App 只把设置窗口叫出来、停在上次的分类。大小写不敏感。
 public enum SettingsDeepLink: Equatable {
