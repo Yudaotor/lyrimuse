@@ -883,7 +883,10 @@ struct LyricsManagerView: View {
         let af = artistFilter.map { toSimplified($0).lowercased() }
         let bf = albumFilter.map { toSimplified($0).lowercased() }
         // 「正在搜索」占位行(见 refreshPlaceholder)并进同一份基础列表,跟真实条目过同一套筛选谓词。
-        let base = placeholderSummary.map { store.summaries + [$0] } ?? store.summaries
+        // 缓存里已经有这一首就不并:占位行要等 refreshPlaceholder 才撤,这期间并进去列表里就有两行同一个键,表格把两行
+        // 都标成选中,撤掉占位行后多出来的那个选中落到下一行(常是下一组的组头),见 11 章决策 118。
+        let placeholder = placeholderSummary.flatMap { store.hasEntry(forKey: $0.key) ? nil : $0 }
+        let base = placeholder.map { store.summaries + [$0] } ?? store.summaries
         // 正在编辑的那一首始终留在列表里:筛掉的话选中跟着收掉,详情页和保存条一起不见(见 11 章决策 92)。
         let kept = editMode == .preview ? nil : editingKey
         let result = base.filter { s in

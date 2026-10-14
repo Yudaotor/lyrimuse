@@ -4222,6 +4222,9 @@ func runSourceContractTests() {
                     && manager.contains("guard table.numberOfRows == keys.count else { return }")
                     && manager.contains("selectedKeys.contains(keys[$0]) }), byExtendingSelection: false)"), true,
                     "歌词管理: 代码里改了选中,表格上留着的旧选中按数据清掉")
+        // 缓存里已经有正在放的那首时占位行不并进列表:同一个键两行,表格的选中会多出一行、落到下一组的组头上(11 章决策 118)。
+        expectEqual(manager.contains("let placeholder = placeholderSummary.flatMap { store.hasEntry(forKey: $0.key) ? nil : $0 }\n        let base = placeholder.map { store.summaries + [$0] } ?? store.summaries"), true,
+                    "歌词管理: 真条目到了之后占位行不再并进列表")
         // 换歌时预览不拿上一首的行去建,编辑框的正文在 loadDetail 里当场拆好(11 章决策 96)。
         expectEqual(manager.contains("guard previewInputs.first == summary.key else { return [] }")
                     && manager.contains("            resetBodyEdits(title: summary.title, artist: summary.artist)\n            refreshOffsetState("), true,
