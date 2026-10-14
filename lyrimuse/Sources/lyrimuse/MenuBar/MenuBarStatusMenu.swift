@@ -172,8 +172,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         // 查到还没装的新版本时换成跟面板底栏同一句提示,点了同样翻到设置的「软件更新」页(06 章决策 46)。
         #if canImport(Sparkle)
         if let update = SparkleUpdaterManager.shared.availableUpdate {
-            menu.addItem(action(String(format: update.downloaded ? L10n.t("%@ 已下载，点按安装") : L10n.t("有新版本 %@"),
-                                       update.version),
+            menu.addItem(action(AppMenuActions.updateTitle(update),
                                 symbol: "arrow.down.circle.fill", selector: #selector(openSoftwareUpdate)))
         } else {
             menu.addItem(action(L10n.t("检查更新…"), symbol: "arrow.triangle.2.circlepath",
@@ -184,8 +183,6 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
                             selector: #selector(openAbout)))
         let help = NSMenu()
         help.autoenablesItems = false
-        // 引导可以重来:走完的人后来想重新配一遍(换了播放器、服务被自己关掉了、想重新
-        // 给权限)也得有入口。
         help.addItem(action(L10n.t("重新运行引导…"), symbol: "sparkles",
                             selector: #selector(rerunOnboarding)))
         // 跟设置「关于」页的「反馈问题」同一个入口,见 FeedbackReporter。引导收尾页那句提示写的是这条路径。
@@ -281,31 +278,16 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     @objc private func openSettings() { AppActions.shared.openSettings?() }
     @objc private func openLyricsManager() { AppActions.shared.openLyricsManager?() }
     @objc private func openLyricsWindow() { AppActions.shared.openLyricsWindow?() }
-    @objc private func rerunOnboarding() { AppActions.shared.openOnboarding?() }
+    @objc private func rerunOnboarding() { AppMenuActions.rerunOnboarding() }
     @objc private func resolveAutomationAlert() { AutomationAlertMonitor.shared.resolve() }
-    @objc private func reportIssue() { FeedbackReporter.openNewIssue() }
+    @objc private func reportIssue() { AppMenuActions.reportIssue() }
     @objc private func searchLyrics() { AppActions.shared.openLyricsQuickSearch?() }
 
-    @objc private func openAbout() {
-        // 直接跳到设置窗口的"关于"分类,复用 Onboarding 的 Last.fm 步骤已经在用的同一套
-        // 一次性信箱(AppActions.pendingSettingsSelection),不用再点一次侧边栏。
-        AppActions.shared.requestSettings(.tab(.about))
-        AppActions.shared.openSettings?()
-    }
+    @objc private func openAbout() { AppMenuActions.openAbout() }
 
     #if canImport(Sparkle)
-    @objc private func checkForUpdates() {
-        // 跟"设置…"同一个坑:.accessory 策略下 Sparkle 弹出的检查更新 UI 也得先手动激活
-        // App,不然点了没反应(这里没有活跃窗口打底,不像"关于"页那个按钮 —— 那边是在
-        // 已经打开的设置窗口里点,App 早就是激活状态)。
-        NSApp.activate(ignoringOtherApps: true)
-        SparkleUpdaterManager.shared.checkForUpdates()
-    }
-
-    @objc private func openSoftwareUpdate() {
-        AppActions.shared.requestSettings(.softwareUpdate)
-        AppActions.shared.openSettings?()
-    }
+    @objc private func checkForUpdates() { AppMenuActions.checkForUpdates() }
+    @objc private func openSoftwareUpdate() { AppMenuActions.openSoftwareUpdate() }
     #endif
 
     @objc private func quit() {

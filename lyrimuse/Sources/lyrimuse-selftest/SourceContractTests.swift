@@ -2940,10 +2940,34 @@ func runSourceContractTests() {
         let settingsSrc = read("SettingsView.swift")
         expectEqual(sourceBytes(settingsSrc, contain: "FeedbackReporter.openNewIssue()")
                     && sourceBytes(settingsSrc, contain: "FeedbackReporter.openEmail()")
-                    && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "FeedbackReporter.openNewIssue()")
+                    && sourceBytes(read("MenuBar/AppMainMenu.swift"), contain: "static func reportIssue() { FeedbackReporter.openNewIssue() }")
+                    && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "AppMenuActions.reportIssue()")
                     && sourceBytes(read("LyricsManager/LyricsSearchSheet.swift"), contain: "FeedbackReporter.openLyricsIssue(")
                     && sourceBytes(read("Settings/PlayerPicker.swift"), contain: "FeedbackLinks.playerRequestURL(appVersion: FeedbackReporter.appVersion())"),
                     true, "反馈链接: 「关于」页、菜单栏右键菜单、歌词搜索面板、选播放器弹层都走 FeedbackReporter")
+        // App 主菜单(显示 Dock 图标时)跟状态栏菜单对齐:「关于」翻到设置关于页、帮助换成反馈问题 / 重新运行引导,系统插的
+        // 「发送反馈给 Apple」按 action 移掉,引导和搜索小窗不进「窗口」菜单。这几样退回去都不会编译报错。
+        let mainMenuSrc = read("MenuBar/AppMainMenu.swift")
+        let appScenes = read("App.swift")
+        func sceneBlock(_ id: String) -> String {
+            appScenes.components(separatedBy: "id: \"\(id)\")").dropFirst().first?.components(separatedBy: "\n        Window(").first ?? ""
+        }
+        expectEqual(sourceBytes(mainMenuSrc, contain: "CommandGroup(replacing: .appInfo)")
+                    && sourceBytes(mainMenuSrc, contain: "Button(L10n.t(\"关于 Lyrimuse\")) { AppMenuActions.openAbout() }")
+                    && sourceBytes(mainMenuSrc, contain: "CommandGroup(replacing: .help)")
+                    && sourceBytes(mainMenuSrc, contain: "Button(L10n.t(\"反馈问题…\")) { AppMenuActions.reportIssue() }")
+                    && sourceBytes(appScenes, contain: ".commands { AppMainMenuCommands() }")
+                    && sourceBytes(read("MenuBar/MenuBarStatusMenu.swift"), contain: "@objc private func openAbout() { AppMenuActions.openAbout() }"),
+                    true, "主菜单: 「关于」和帮助菜单跟状态栏菜单走同一组动作")
+        expectEqual(sourceBytes(mainMenuSrc, contain: "Selector((\"_openFeedbackAssistant:\"))")
+                    && sourceBytes(mainMenuSrc, contain: "menu.items[index].action == action")
+                    && sourceBytes(appScenes, contain: "HelpMenuFeedbackItem.installRemoval()"),
+                    true, "主菜单: 系统插的发送反馈给 Apple 那一项按 action 移掉")
+        expectEqual(sceneBlock("onboarding").contains(".commandsRemoved()")
+                    && sceneBlock("lyrics-quick-search").contains(".commandsRemoved()")
+                    && !sceneBlock("lyrics-manager").contains(".commandsRemoved()")
+                    && !sceneBlock("lyrics-window").contains(".commandsRemoved()"),
+                    true, "主菜单: 引导和搜索小窗不进「窗口」菜单,歌词管理、歌词窗口照常列")
         expectEqual(sourceBytes(settingsSrc, contain: "lyrimuse/issues\")!")
                     || sourceBytes(settingsSrc, contain: "discussions/categories/ideas"), false,
                     "反馈链接: 设置页不再自己拼 issue 列表 / 想法分类的链接")
@@ -4951,7 +4975,8 @@ func runSourceContractTests() {
                     "右键菜单: 显示用户录的快捷键;触控栏那一项翻的是总开关,不挂展开 / 收起的快捷键")
         expectEqual(statusMenu.contains("if let update = SparkleUpdaterManager.shared.availableUpdate {")
                         && statusMenu.contains("selector: #selector(openSoftwareUpdate)")
-                        && statusMenu.contains("AppActions.shared.requestSettings(.softwareUpdate)"), true,
+                        && statusMenu.contains("AppMenuActions.openSoftwareUpdate()")
+                        && stripComments(code("MenuBar/AppMainMenu.swift")).contains("AppActions.shared.requestSettings(.softwareUpdate)"), true,
                     "右键菜单: 有未装的新版本时「检查更新…」换成新版本提示,点了翻到「软件更新」页(同面板底栏)")
 
         // 悬浮歌词「跟随当前窗口」认焦点屏(04 章决策 64):Lyrimuse 不在前台时 NSScreen.main 不跟别的 App 的焦点走。

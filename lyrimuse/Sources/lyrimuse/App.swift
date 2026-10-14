@@ -13,6 +13,7 @@ struct LyrimuseApp: App {
         // 落回系统字体、直到下次改字体设置才纠正(见 CustomFontStore 头注)。属性初值会在 init 体之前求值,
         // 所以不能写成 `= AppSettings.shared`。
         _ = CustomFontStore.shared
+        HelpMenuFeedbackItem.installRemoval()
         _languageSettings = ObservedObject(wrappedValue: AppSettings.shared)
     }
 
@@ -29,6 +30,8 @@ struct LyrimuseApp: App {
         Settings {
             SettingsView()
         }
+        // 主菜单的「关于」「检查更新…」「帮助」跟状态栏菜单对齐,见 AppMainMenuCommands。
+        .commands { AppMainMenuCommands() }
         // 工具栏样式**不在这里改**:`Settings` 场景把 NSWindow 的 toolbarStyle 钉成了
         // `.preference`(标题独占一行、整体居中),SwiftUI 的 `.windowToolbarStyle(.unified)`
         // 盖不住它(实测加了没有任何变化)。真正生效的那一处在 SettingsWindowConfigurator,
@@ -44,6 +47,8 @@ struct LyrimuseApp: App {
         Window(L10n.t("搜索歌词…"), id: "lyrics-quick-search") {
             LyricsQuickSearchWindow()
         }
+        // 「窗口」菜单里不列这扇一次性小窗(开着时照样在底下的已打开窗口清单里)。
+        .commandsRemoved()
         // 标题栏透明、内容铺到顶:红绿灯落在搜索面板的浮动侧栏里(LyricsSearchSheet.standaloneWindow)。
         // 别改成在 NSWindow 上手设,理由见 SheetWindowAffordances.swift 的 EmptyUnifiedToolbar。
         .windowStyle(.hiddenTitleBar)
@@ -82,6 +87,8 @@ struct LyrimuseApp: App {
         Window(L10n.t("欢迎使用 Lyrimuse"), id: "onboarding") {
             OnboardingView()
         }
+        // 引导不常驻「窗口」菜单,重来走「帮助 › 重新运行引导…」。
+        .commandsRemoved()
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
     }
