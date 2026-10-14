@@ -11,12 +11,13 @@ import (
 // titleReverseLookup:标题反查轮的「查出更正后的曲名」这一步 —— 同专辑曲目表、歌手泛搜、Apple 原产地商店三路反查,
 // 挑出更正后的曲名、来路(retryMethod,同时是查询原因)和用哪个署名去查。都没查到返回空。samples 是
 // lyricSamplesForStorefront(results),原产地商店那一路拿它核对是不是同一首;isrc 是这条录音的 ISRC
-// (trustedRecordingISRC),区服遍历给不出原产地曲名时拿它查。
+// (trustedRecordingISRC),区服遍历给不出原产地曲名时拿它查;chinese 是「这首是中文歌」的线索(titleReverseSungInChinese),
+// 判拼音曲名的读音时用(pinyinTitleContradicts)。
 //
 // 曲名里自带正式写法的两种形状直接改写、不联网反查,也不再走后面三路:「歌手『歌名』」取引号里的歌名
 // (quotedSongAfterArtist),「English Name 中文名」这种英文在前的双语曲名取中文那段(bilingualTitleHanPart)。
 // 见 09 章决策 189。
-func titleReverseLookup(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) (correctedTitle, retryMethod, titleArtist string) {
+func titleReverseLookup(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string, chinese bool) (correctedTitle, retryMethod, titleArtist string) {
 	if song := quotedSongAfterArtist(artist, title); song != "" {
 		log.Printf("lyrics: title-reverse-lookup: quoted song %q in title %q -> corrected=%q", song, title, song)
 		return song, lyricQueryReasonTitleSplit, artist
@@ -45,7 +46,7 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 	var albumOK, albumTitleBacked, searchOK bool
 	for _, ta := range titleArtists {
 		// 近似标题命中(titleBacked)压过纯时长命中,同档再比 diff。
-		if t, d, backed, ok := retryTitleFromAlbumDetailed(ctx, ta, album, title, durationSecs); ok &&
+		if t, d, backed, ok := titleReverseAlbumSearch(ctx, ta, album, title, durationSecs); ok &&
 			(!albumOK || (backed && !albumTitleBacked) || (backed == albumTitleBacked && d < albumDiff)) {
 			albumTitle, albumDiff, albumOK, albumTitleBacked, albumWinArtist = t, d, true, backed, ta
 		}
@@ -58,9 +59,14 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 		log.Printf("lyrics: title-reverse-lookup: artist search picked %q for %q by duration only, but the titles share no word; not using it", searchTitle, title)
 		searchOK = false
 	}
-	if searchOK && pinyinTitleContradicts(title, album, searchTitle) {
+	if searchOK && pinyinTitleContradicts(title, album, searchTitle, chinese) {
 		log.Printf("lyrics: title-reverse-lookup: artist search picked %q for pinyin title %q by duration only, but it does not read that way; not using it", searchTitle, title)
 		searchOK = false
+	}
+	// 专辑曲目表那一路没有近似标题佐证、只凭时长挑的,同样过读音这一关。
+	if albumOK && !albumTitleBacked && pinyinTitleContradicts(title, album, albumTitle, chinese) {
+		log.Printf("lyrics: title-reverse-lookup: album track %q picked for pinyin title %q by duration only, but it does not read that way; not using it", albumTitle, title)
+		albumOK = false
 	}
 	// 第三条路:Apple 原产地商店的规范曲名。上面两条**都拿本地标题当输入**
 	// (retryTitleFromAlbum 拿它核对时长、retryTitleFromArtistSearch 直接把它拼进搜索词),
@@ -101,6 +107,30 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 	return correctedTitle, retryMethod, titleArtist
 }
 
+// titleReverseSungInChinese:标题反查判拼音曲名读音时「这首是中文歌」的线索 —— 这一轮已被认可(分数 >= 0)的候选里前三份正文
+// 以汉字为主、没有假名(dominantScript),或者这条录音的 ISRC 登记在中国大陆、台湾、香港。被判负分的候选常是别的歌,不算。
+func titleReverseSungInChinese(results []scoredLyricCandidateResult, isrc string) bool {
+	if c := normalizeISRC(isrc); c != "" {
+		switch c[:2] {
+		case "CN", "TW", "HK":
+			return true
+		}
+	}
+	var b strings.Builder
+	n := 0
+	for _, r := range results {
+		if r.Score < 0 || r.Lyrics == "" {
+			continue
+		}
+		b.WriteString(r.Lyrics)
+		b.WriteByte('\n')
+		if n++; n >= 3 {
+			break
+		}
+	}
+	return dominantScript(b.String()) == scriptHan
+}
+
 // titleReverseSpec:救急时提前跑的标题反查(反查 + 用更正后的曲名查一轮),跟救急别名轮同时进行。
 // 首轮全空、别名也救不回来的歌,最后都要走到标题反查,原来它排在别名轮之后串行,查不到歌词的歌要多等这一整段。
 //
@@ -110,6 +140,7 @@ func titleReverseLookup(ctx context.Context, artist, title, album string, durati
 // 见 09 章决策 102 第七批。
 type titleReverseSpec struct {
 	samples []string
+	chinese bool
 	done    chan struct{}
 	cancel  context.CancelFunc
 
@@ -124,6 +155,9 @@ var titleReverseAliases = retryArtistIdentities
 
 // titleReverseArtistSearch:歌手泛搜那一路(retryTitleFromArtistSearchDetailed)。单测换成假的。
 var titleReverseArtistSearch = retryTitleFromArtistSearchDetailed
+
+// titleReverseAlbumSearch:同专辑曲目表那一路(retryTitleFromAlbumDetailed)。单测换成假的。
+var titleReverseAlbumSearch = retryTitleFromAlbumDetailed
 
 // titleSearchContradicts:歌手泛搜只凭时长挑出来的曲名 found 跟本地曲名 title 是不是明摆着两首歌 —— 两边去掉括号段后
 // 都只有拉丁字母,却一个词都不共享(titleSearchWords;一个词是另一个的前缀、且不短于 4 个字母也算共享;去掉空格标点后
@@ -322,12 +356,12 @@ func countRunes(s string, f func(rune) bool) int {
 	return n
 }
 
-func startTitleReverseSpec(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string) *titleReverseSpec {
+func startTitleReverseSpec(ctx context.Context, artist, title, album string, durationSecs float64, samples []string, isrc string, chinese bool) *titleReverseSpec {
 	c, cancel := context.WithCancel(ctx)
-	s := &titleReverseSpec{samples: samples, done: make(chan struct{}), cancel: cancel}
+	s := &titleReverseSpec{samples: samples, chinese: chinese, done: make(chan struct{}), cancel: cancel}
 	go func() {
 		defer close(s.done)
-		s.corrected, s.method, s.artist = titleReverseLookup(c, artist, title, album, durationSecs, samples, isrc)
+		s.corrected, s.method, s.artist = titleReverseLookup(c, artist, title, album, durationSecs, samples, isrc, chinese)
 		if s.corrected != "" && normLoose(s.corrected) != normLoose(title) {
 			s.ne, s.results = fetchScoredLyricCandidatesStreaming(withLyricQueryReason(c, s.method), s.artist, s.corrected, album, durationSecs, nil)
 			s.fetched = c.Err() == nil
@@ -336,12 +370,12 @@ func startTitleReverseSpec(ctx context.Context, artist, title, album string, dur
 	return s
 }
 
-// take:样本跟提前跑时一样就等它跑完、返回它;不一样(或根本没提前跑)返回 nil,并取消它。
-func (s *titleReverseSpec) take(samples []string) *titleReverseSpec {
+// take:样本、中文歌线索都跟提前跑时一样就等它跑完、返回它;不一样(或根本没提前跑)返回 nil,并取消它。
+func (s *titleReverseSpec) take(samples []string, chinese bool) *titleReverseSpec {
 	if s == nil {
 		return nil
 	}
-	if !slices.Equal(s.samples, samples) {
+	if !slices.Equal(s.samples, samples) || s.chinese != chinese {
 		s.cancel()
 		return nil
 	}

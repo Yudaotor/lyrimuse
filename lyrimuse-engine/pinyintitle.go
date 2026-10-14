@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -47,23 +48,74 @@ func pinyinTitleBase(s string) string {
 	return s
 }
 
-// pinyinTitleSyllables:曲名是一字一词写的普通话拼音时交回各个音节(小写、去声调),否则 nil。至少两个词、每个词都恰好是
-// 一个音节才算:一个英文词也可能切得成几个拼音音节,日文罗马字的假名大多也是合法音节,它们都不是一字一词;连写成一个词
-// 的拼音同样不算,判不了就不判。带数字的不算(数字跟汉字对不齐)。
-func pinyinTitleSyllables(title string) []string {
-	var out []string
-	for _, w := range strings.FieldsFunc(foldDiacritics(strings.ToLower(pinyinTitleBase(title))), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	}) {
-		if !mandarinSyllables[w] {
-			return nil
+// pinyinMaxSegmentations / pinyinMaxReadings:一个词最多交回几种切法、一个曲名最多交回几种读法。按「词中间不以 a/o/e 开头」切,
+// 实际几乎只有一种。
+const (
+	pinyinMaxSegmentations = 4
+	pinyinMaxReadings      = 8
+)
+
+// pinyinSegmentations:一个词(小写、去声调)切成普通话音节的各种切法,切不出来是 nil。词中间的音节不以 a/o/e 开头:拼音里那个
+// 位置要加隔音符号(xi'an),英文词就切不出 re-a-li-ze 这种形状。
+func pinyinSegmentations(w string) [][]string {
+	var out [][]string
+	var walk func(rest string, acc []string)
+	walk = func(rest string, acc []string) {
+		if len(out) >= pinyinMaxSegmentations {
+			return
 		}
-		out = append(out, w)
+		if rest == "" {
+			out = append(out, slices.Clone(acc))
+			return
+		}
+		for n := min(len(rest), 6); n >= 1; n-- {
+			s := rest[:n]
+			if !mandarinSyllables[s] || (len(acc) > 0 && strings.IndexByte("aoe", s[0]) >= 0) {
+				continue
+			}
+			walk(rest[n:], append(acc, s))
+		}
 	}
-	if len(out) < 2 {
-		return nil
-	}
+	walk(w, nil)
 	return out
+}
+
+// pinyinTitleReadings:曲名按普通话拼音切成音节的几种读法(小写、去声调);有词切不出来、带数字(数字跟汉字对不齐)是 nil。
+// spaced:至少两个词、每个词恰好是一个音节(一字一词)。别的形状 —— 连写成一个词的、整个曲名只有一个音节的 —— 英文词、日文
+// 罗马字也常切得出来,要另有「是中文歌」的线索才拿来判(pinyinTitleContradicts)。
+func pinyinTitleReadings(title string) (readings [][]string, spaced bool) {
+	words := strings.FieldsFunc(foldDiacritics(strings.ToLower(pinyinTitleBase(title))), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	if len(words) == 0 {
+		return nil, false
+	}
+	spaced = len(words) >= 2
+	for _, w := range words {
+		if !mandarinSyllables[w] {
+			spaced = false
+		}
+	}
+	if spaced {
+		return [][]string{words}, true
+	}
+	readings = [][]string{nil}
+	for _, w := range words {
+		segs := pinyinSegmentations(w)
+		if len(segs) == 0 {
+			return nil, false
+		}
+		var next [][]string
+		for _, r := range readings {
+			for _, sg := range segs {
+				if len(next) < pinyinMaxReadings {
+					next = append(next, append(slices.Clone(r), sg...))
+				}
+			}
+		}
+		readings = next
+	}
+	return readings, false
 }
 
 // pinyinTitleHan:曲名去掉括号段和后缀之后的汉字;带假名、谚文、拉丁字母或数字时为空(读音对不齐)。
@@ -80,9 +132,12 @@ func pinyinTitleHan(found string) string {
 	return b.String()
 }
 
-// hanTitleReading:汉字的普通话读音,一个字一个音节(小写、去声调)。交给 lyrics-romanize 算,它要带时间戳的歌词行;helper 不在、
-// 没算出来时为 nil。单测换成假的。
-var hanTitleReading = func(han string) []string {
+// hanTitleReading:汉字的普通话读音(romanizedHanReading)。单测换成假的。
+var hanTitleReading = romanizedHanReading
+
+// romanizedHanReading:汉字的普通话读音,一个字一个音节(小写、去声调)。交给 lyrics-romanize 算,它只认带时间戳的歌词行;
+// helper 不在、没算出来时为 nil。
+func romanizedHanReading(han string) []string {
 	reply, err := runLyricsRomanize(romanizeRequest{Lyrics: "[00:00.00]" + han})
 	if err != nil || !reply.OK {
 		return nil
@@ -90,13 +145,13 @@ var hanTitleReading = func(han string) []string {
 	return strings.Fields(foldDiacritics(strings.ToLower(lrcTimestampRe.ReplaceAllString(reply.Roma, ""))))
 }
 
-// pinyinTitleContradicts:歌手泛搜只凭时长挑出来的汉字曲名 found,读音跟一字一词的拼音曲名 title 明摆着对不上 —— 字数跟音节数
-// 不同,或者首字母相同的音节不到一半(比首字母:zh/ch/sh 跟 z/c/s 算一个,非标准拼写常把 sh 写成 s;多音字读错一两个也不至于判错)。
-// 本地专辑名里就有 found 时不算,理由同 titleSearchContradicts。title 不是这种拼音、found 不是纯汉字、读不出读音的都不算。
-// 见 09 章决策 246。
-func pinyinTitleContradicts(title, album, found string) bool {
-	syllables := pinyinTitleSyllables(title)
-	if syllables == nil {
+// pinyinTitleContradicts:标题反查凭时长挑出来的汉字曲名 found,读音跟拼音曲名 title 明摆着对不上 —— title 的每种读法都对不上
+// (pinyinReadingContradicts)。一字一词的拼音直接判;连写的、只有一个音节的要 chinese(这首是中文歌的线索,titleReverseSungInChinese)
+// 才判。本地专辑名里就有 found 时不算,理由同 titleSearchContradicts。title 切不出拼音、found 不是纯汉字、读不出读音的都不算。
+// 见 09 章决策 246;连写、单音节、专辑曲目表那一路见 09 章决策 253。
+func pinyinTitleContradicts(title, album, found string, chinese bool) bool {
+	readings, spaced := pinyinTitleReadings(title)
+	if readings == nil || (!spaced && !chinese) {
 		return false
 	}
 	han := pinyinTitleHan(found)
@@ -110,6 +165,22 @@ func pinyinTitleContradicts(title, album, found string) bool {
 	if len(reading) == 0 || len(reading) != len([]rune(han)) {
 		return false
 	}
+	return pinyinReadingsContradict(readings, reading)
+}
+
+// pinyinReadingsContradict:本地拼音的每种读法都跟汉字读音 reading 对不上(pinyinReadingContradicts);有一种对得上就不算。
+func pinyinReadingsContradict(readings [][]string, reading []string) bool {
+	for _, syllables := range readings {
+		if !pinyinReadingContradicts(syllables, reading) {
+			return false
+		}
+	}
+	return len(readings) > 0
+}
+
+// pinyinReadingContradicts:本地拼音的一种读法 syllables 跟汉字读音 reading 对不上 —— 音节数不同,或者首字母相同的音节不到一半
+// (比首字母:zh/ch/sh 跟 z/c/s 算一个,非标准拼写常把 sh 写成 s;多音字读错一两个也不至于判错)。
+func pinyinReadingContradicts(syllables, reading []string) bool {
 	if len(reading) != len(syllables) {
 		return true
 	}

@@ -483,7 +483,7 @@ func TestOriginTitleRoundIsWired(t *testing.T) {
 	src := string(b)
 	for _, n := range []string{
 		"\t} else {\n\t\t// 可用源已经够数、走不到上面的标题反查时,缺着的源可能只是拿罗马字的本地曲名搜不到原文登记的这首歌,见 originTitleRound。\n\t\tne, results = originTitleRound(ctx, artist, title, album, durationSecs, ne, results, onUpdate)\n\t}\n\t// 还缺着的源换一种曲名写法再问一次",
-		"titleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\ttrustedRecordingISRC(artist, title, album, durationSecs, results))",
+		"isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\tisrc, titleReverseSungInChinese(results, isrc))",
 	} {
 		if !strings.Contains(src, n) {
 			t.Errorf("enrich.go 缺 %q", n)
@@ -496,7 +496,7 @@ func TestOriginTitleRoundIsWired(t *testing.T) {
 	for _, n := range []string{
 		"storefrontTitle := titleReverseOriginTitle(ctx, artist, title, album, durationSecs, samples, isrc)\n\tstorefrontOK := storefrontTitle != \"\"",
 		"case storefrontOK:\n\t\tcorrectedTitle, retryMethod, titleArtist = storefrontTitle, lyricQueryReasonTitleStorefront, artist",
-		"s.corrected, s.method, s.artist = titleReverseLookup(c, artist, title, album, durationSecs, samples, isrc)",
+		"s.corrected, s.method, s.artist = titleReverseLookup(c, artist, title, album, durationSecs, samples, isrc, chinese)",
 	} {
 		if !strings.Contains(string(tr), n) {
 			t.Errorf("titlereverse.go 缺 %q", n)

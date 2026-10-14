@@ -45,7 +45,7 @@ func TestTitleReverseLookupDropsContradictingArtistSearch(t *testing.T) {
 	} {
 		found := c.found
 		titleReverseArtistSearch = func(context.Context, string, string, float64) (string, float64, bool) { return found, 0.6, true }
-		got, method, _ := titleReverseLookup(ctx, "Helado Negro", c.title, c.album, 197.6, nil, "")
+		got, method, _ := titleReverseLookup(ctx, "Helado Negro", c.title, c.album, 197.6, nil, "", false)
 		if got != c.want {
 			t.Errorf("%q 泛搜挑出 %q:corrected = %q (%s),want %q", c.title, c.found, got, method, c.want)
 		}

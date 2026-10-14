@@ -144,7 +144,8 @@ func neteaseLinkMismatch(title, album string, durationSecs float64, isrcs, names
 	if comparable {
 		return "unrelated title"
 	}
-	if pinyinTitleContradicts(title, album, rec.Name) {
+	// 这里没有「是中文歌」的线索,只判一字一词的拼音(pinyinTitleContradicts)。
+	if pinyinTitleContradicts(title, album, rec.Name, false) {
 		return "pinyin reads differently"
 	}
 	return ""

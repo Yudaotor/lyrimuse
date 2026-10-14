@@ -20,13 +20,13 @@ func TestTitleReverseSpecTake(t *testing.T) {
 		s.corrected, s.method, s.artist, s.fetched = "正确曲名", "title-from-album", "歌手", true
 		close(s.done)
 	}()
-	got := s.take([]string{"a", "b"})
+	got := s.take([]string{"a", "b"}, false)
 	if got == nil || got.corrected != "正确曲名" || !got.fetched {
 		t.Fatalf("样本一样:应等它跑完并用它的结果, got %+v", got)
 	}
 
 	s2, ctx2 := newTestTitleSpec([]string{"a"})
-	if s2.take([]string{"a", "changed"}) != nil {
+	if s2.take([]string{"a", "changed"}, false) != nil {
 		t.Fatal("样本变了不该用提前跑的结果")
 	}
 	select {
@@ -35,8 +35,19 @@ func TestTitleReverseSpecTake(t *testing.T) {
 		t.Fatal("样本变了应当取消提前跑的那一轮")
 	}
 
+	s3, ctx3 := newTestTitleSpec([]string{"a"})
+	s3.chinese = true
+	if s3.take([]string{"a"}, false) != nil {
+		t.Fatal("中文歌线索变了不该用提前跑的结果")
+	}
+	select {
+	case <-ctx3.Done():
+	case <-time.After(time.Second):
+		t.Fatal("中文歌线索变了应当取消提前跑的那一轮")
+	}
+
 	var none *titleReverseSpec
-	if none.take(nil) != nil {
+	if none.take(nil, false) != nil {
 		t.Fatal("没提前跑时返回 nil")
 	}
 	none.stop() // nil 上调用是空操作
@@ -51,9 +62,10 @@ func TestTitleReverseSpecIsWired(t *testing.T) {
 	src := string(data)
 	for _, n := range []string{
 		"defer func() { titleSpec.stop() }()",
-		"if rescue {\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\ttrustedRecordingISRC(artist, title, album, durationSecs, results))",
-		"spec := titleSpec.take(samples)",
-		"correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples,\n\t\t\t\ttrustedRecordingISRC(artist, title, album, durationSecs, results))",
+		"if rescue {\n\t\t\tisrc := trustedRecordingISRC(artist, title, album, durationSecs, results)\n\t\t\ttitleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),\n\t\t\t\tisrc, titleReverseSungInChinese(results, isrc))",
+		"isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)\n\t\tchinese := titleReverseSungInChinese(results, isrc)",
+		"spec := titleSpec.take(samples, chinese)",
+		"correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples, isrc, chinese)",
 		"if spec != nil && spec.fetched {",
 	} {
 		if !strings.Contains(src, n) {
@@ -103,7 +115,7 @@ func TestTitleReverseLookupRewritesWithoutNetwork(t *testing.T) {
 		{"BUMP OF CHICKEN", "BUMP OF CHICKEN『天体観測』", "天体観測", lyricQueryReasonTitleSplit},
 		{"周杰伦", "Children of the Sun 太陽之子", "太陽之子", lyricQueryReasonTitleBilingual},
 	} {
-		got, method, titleArtist := titleReverseLookup(ctx, c.artist, c.title, "", 272, nil, "")
+		got, method, titleArtist := titleReverseLookup(ctx, c.artist, c.title, "", 272, nil, "", false)
 		if got != c.want || method != c.method || titleArtist != c.artist {
 			t.Errorf("titleReverseLookup(%q, %q) = %q %q %q, want %q %q %q", c.artist, c.title, got, method, titleArtist, c.want, c.method, c.artist)
 		}

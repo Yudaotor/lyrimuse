@@ -74,13 +74,21 @@ func onDeviceRomanize(lyrics string) (string, error) {
 	return reply.Roma, nil
 }
 
+// lyricsRomanizeBin:lyrics-romanize 的路径,跟引擎在同一个目录。单测换成假的 helper。
+var lyricsRomanizeBin = func() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(exe), "lyrics-romanize"), nil
+}
+
 // runLyricsRomanize 起一次 lyrics-romanize,交回解出来的回包。
 func runLyricsRomanize(req romanizeRequest) (romanizeReply, error) {
-	exe, err := os.Executable()
+	bin, err := lyricsRomanizeBin()
 	if err != nil {
 		return romanizeReply{}, err
 	}
-	bin := filepath.Join(filepath.Dir(exe), "lyrics-romanize")
 	if _, err := os.Stat(bin); err != nil {
 		return romanizeReply{}, errRomanizeHelperMissing
 	}

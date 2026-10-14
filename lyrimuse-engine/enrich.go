@@ -4134,8 +4134,9 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			identitiesFrom(titleSearchIdentities, lyricQueryOriginAppleTitle),
 			retryIdentities)
 		if rescue {
+			isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)
 			titleSpec = startTitleReverseSpec(ctx, artist, title, album, durationSecs, lyricSamplesForStorefront(results),
-				trustedRecordingISRC(artist, title, album, durationSecs, results))
+				isrc, titleReverseSungInChinese(results, isrc))
 		}
 		if len(altIdentities) > 0 {
 			switch {
@@ -4357,13 +4358,14 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 		// 那个。
 		// 反查那一步见 titleReverseLookup;救急时它已经跟别名轮同时提前跑过(titleSpec),样本没变就直接用。
 		samples := lyricSamplesForStorefront(results)
+		isrc := trustedRecordingISRC(artist, title, album, durationSecs, results)
+		chinese := titleReverseSungInChinese(results, isrc)
 		var correctedTitle, retryMethod, titleArtist string
-		spec := titleSpec.take(samples)
+		spec := titleSpec.take(samples, chinese)
 		if spec != nil {
 			correctedTitle, retryMethod, titleArtist = spec.corrected, spec.method, spec.artist
 		} else {
-			correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples,
-				trustedRecordingISRC(artist, title, album, durationSecs, results))
+			correctedTitle, retryMethod, titleArtist = titleReverseLookup(ctx, artist, title, album, durationSecs, samples, isrc, chinese)
 		}
 		if correctedTitle != "" && normLoose(correctedTitle) != normLoose(title) {
 			titleUpdate := mergedRoundUpdate(onUpdate, artist, title, album, durationSecs, results)
