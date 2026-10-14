@@ -158,16 +158,23 @@ func TestDurationVariantBaseKey(t *testing.T) {
 	}
 }
 
-// 启动迁移:跟基条目是同一段录音的「~durN」并回去(留分高的那份),id 不同或时长差太多的照旧单独留着。
+// 启动迁移:跟基条目记着同一个曲目 id 的「~durN」并回去(时长差多少都并,留分高的那份);基条目没放过、变体放过的也并;
+// 别的照旧单独留着。
 func TestPlanEnrichKeyMigrationFoldsSameRecordingVariant(t *testing.T) {
 	am := func(id string) map[string]string { return map[string]string{appleMusicBundleID: id} }
 	cache := map[string]enrichEntry{
-		"王力宏|唯一|The Only One":      {LyricsSource: "qq", LyricsScore: 1100, DurationSecs: 262.013, PlayerSongIDs: am("312654337")},
-		"王力宏|唯一~dur2|The Only One": {LyricsSource: "applemusic", LyricsScore: 1444, DurationSecs: 262.013, PlayerSongIDs: am("312654337")},
-		"周杰伦|太陽之子|":                {LyricsSource: "qq", DurationSecs: 298, PlayerSongIDs: am("1000")},
-		"周杰伦|太陽之子~dur2|":           {LyricsSource: "qq", DurationSecs: 418.141, PlayerSongIDs: am("1000")},
-		"某人|歌|专辑":                  {LyricsSource: "kugou", DurationSecs: 200, PlayerSongIDs: am("1")},
-		"某人|歌~dur2|专辑":             {LyricsSource: "kugou", DurationSecs: 202, PlayerSongIDs: am("2")},
+		"王力宏|唯一|The Only One":                    {LyricsSource: "qq", LyricsScore: 1100, DurationSecs: 262.013, PlayerSongIDs: am("312654337")},
+		"王力宏|唯一~dur2|The Only One":               {LyricsSource: "applemusic", LyricsScore: 1444, DurationSecs: 262.013, PlayerSongIDs: am("312654337")},
+		"Dolly Parton|Light|Light - Single":      {LyricsSource: "netease", LyricsScore: 1, DurationSecs: 140.413, Players: []string{appleMusicBundleID}, PlayerSongIDs: am("1867899463")},
+		"Dolly Parton|Light~dur2|Light - Single": {LyricsSource: "applemusic", LyricsScore: 1110, DurationSecs: 227.692, Players: []string{appleMusicBundleID}, PlayerSongIDs: am("1867899463")},
+		"周杰伦|太陽之子|":                              {LyricsSource: "qq", DurationSecs: 298, Players: []string{appleMusicBundleID}, PlayerSongIDs: am("1000")},
+		"周杰伦|太陽之子~dur2|":                         {LyricsSource: "qq", DurationSecs: 418.141, Players: []string{"com.github.dimitribouniol.kaset"}},
+		"ADÉLA|Nicole Kidman|PRIMA":              {LyricsSource: "kugou", LyricsScore: 751, DurationSecs: 3629.5},
+		"ADÉLA|Nicole Kidman~dur2|PRIMA":         {LyricsSource: "applemusic", LyricsScore: 1521, DurationSecs: 181.3, Players: []string{appleMusicBundleID}, PlayerSongIDs: am("6792884088")},
+		"某人|没放过|专辑":                              {LyricsSource: "kugou", DurationSecs: 200},
+		"某人|没放过~dur2|专辑":                         {LyricsSource: "kugou", DurationSecs: 300},
+		"某人|歌|专辑":                                {LyricsSource: "kugou", DurationSecs: 200, PlayerSongIDs: am("1")},
+		"某人|歌~dur2|专辑":                           {LyricsSource: "kugou", DurationSecs: 202, PlayerSongIDs: am("2")},
 	}
 	got := planEnrichKeyMigration(cache)
 	if g := got["王力宏|唯一|The Only One"]; !reflect.DeepEqual(g, []string{"王力宏|唯一|The Only One", "王力宏|唯一~dur2|The Only One"}) {
@@ -176,8 +183,17 @@ func TestPlanEnrichKeyMigrationFoldsSameRecordingVariant(t *testing.T) {
 	if _, ok := got["王力宏|唯一~dur2|The Only One"]; ok {
 		t.Error("并掉的变体不该再单独成组")
 	}
+	if g := got["Dolly Parton|Light|Light - Single"]; !reflect.DeepEqual(g, []string{"Dolly Parton|Light|Light - Single", "Dolly Parton|Light~dur2|Light - Single"}) {
+		t.Errorf("同一个 id、时长差很多:其中一边记错了,也要并,得到 %#v", g)
+	}
 	if g := got["周杰伦|太陽之子~dur2|"]; !reflect.DeepEqual(g, []string{"周杰伦|太陽之子~dur2|"}) {
-		t.Errorf("同一个 id 但时长差太多(MV 跟音轨)不并,得到 %#v", g)
+		t.Errorf("MV 跟音轨不是同一个 id、两边都放过,不并,得到 %#v", g)
+	}
+	if g := got["ADÉLA|Nicole Kidman|PRIMA"]; !reflect.DeepEqual(g, []string{"ADÉLA|Nicole Kidman|PRIMA", "ADÉLA|Nicole Kidman~dur2|PRIMA"}) {
+		t.Errorf("基条目没放过、变体放过,要并,得到 %#v", g)
+	}
+	if g := got["某人|没放过~dur2|专辑"]; !reflect.DeepEqual(g, []string{"某人|没放过~dur2|专辑"}) {
+		t.Errorf("两边都没放过,不并,得到 %#v", g)
 	}
 	if g := got["某人|歌~dur2|专辑"]; !reflect.DeepEqual(g, []string{"某人|歌~dur2|专辑"}) {
 		t.Errorf("曲目 id 不同不并,得到 %#v", g)

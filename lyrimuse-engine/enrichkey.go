@@ -298,8 +298,9 @@ func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
 		nk := enrichKey(artist, title, album)
 		buckets[nk] = append(buckets[nk], k)
 	}
-	// 跟基条目是同一段录音的「~durN」(播放器记下的曲目 id 一样)并回基条目那一组:它是某一拍时长报错分出去的。
-	// 合不合仍由下面的 splitByDuration 按时长把关,留哪一份按 betterEnrichEntry。见 09 章决策 251。
+	// 时长报错 / 基条目猜错分出去的「~durN」并回基条目那一组(variantFoldsIntoBase),不过下面 splitByDuration 那道时长关,
+	// 留哪一份按 betterEnrichEntry。见 09 章决策 251。
+	folded := map[string]bool{}
 	bucketKeys := make([]string, 0, len(buckets))
 	for nk := range buckets {
 		bucketKeys = append(bucketKeys, nk)
@@ -312,8 +313,9 @@ func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
 		}
 		var keep []string
 		for _, k := range buckets[vnk] {
-			if slices.ContainsFunc(buckets[base], func(b string) bool { return sameRecordingEntries(cache[k], cache[b]) }) {
+			if slices.ContainsFunc(buckets[base], func(b string) bool { return variantFoldsIntoBase(cache[k], cache[b]) }) {
 				buckets[base] = append(buckets[base], k)
+				folded[k] = true
 			} else {
 				keep = append(keep, k)
 			}
@@ -326,8 +328,21 @@ func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
 	}
 
 	groups := map[string][]string{}
-	for nk, ks := range buckets {
+	for nk, all := range buckets {
+		var ks, foldedKs []string
+		for _, k := range all {
+			if folded[k] {
+				foldedKs = append(foldedKs, k)
+			} else {
+				ks = append(ks, k)
+			}
+		}
 		merge, standalone := splitByDuration(cache, nk, ks)
+		if len(merge) > 0 {
+			merge = append(merge, foldedKs...)
+		} else {
+			standalone = append(standalone, foldedKs...)
+		}
 		if len(merge) > 0 {
 			groups[nk] = append(groups[nk], merge...)
 		}

@@ -87,8 +87,8 @@ func sameRecordingAsPlaying(e enrichEntry, bundleID, songID string) bool {
 	return songID != "" && e.PlayerSongIDs[bundleID] == songID
 }
 
-// sameRecordingEntries:两条记着同一个播放器的同一个曲目 id。启动迁移拿它把多余的「~durN」并回基条目
-// (planEnrichKeyMigration);只认播放器自己报的 id,不认 ISRC:ISRC 有一部分是按歌名搜目录补的,不同版本之间会串。
+// sameRecordingEntries:两条记着同一个播放器的同一个曲目 id。只认播放器自己报的 id,不认 ISRC:ISRC 有一部分是按歌名搜
+// 目录补的,不同版本之间会串。
 func sameRecordingEntries(a, b enrichEntry) bool {
 	for bundle, id := range a.PlayerSongIDs {
 		if id != "" && b.PlayerSongIDs[bundle] == id {
@@ -96,6 +96,19 @@ func sameRecordingEntries(a, b enrichEntry) bool {
 		}
 	}
 	return false
+}
+
+// variantFoldsIntoBase:启动迁移把这条「~durN」并回基条目(planEnrichKeyMigration),不看时长,留哪一份按 betterEnrichEntry。
+//   - 记着同一个播放器的同一个曲目 id:同一段音频,两边时长不一样只能是其中一边记错了(MV 跟音轨在播放器里是两个 id)。
+//   - 基条目从没被哪个播放器放过、变体放过:基条目是预取 / 导入时按歌名猜的,不一定是放的那一首(猜成一小时的混音版这种)。
+//     放过的那条更差(试听段按片段长度搜到的词)时留的是基条目。
+//
+// 见 09 章决策 251。
+func variantFoldsIntoBase(variant, base enrichEntry) bool {
+	if sameRecordingEntries(variant, base) {
+		return true
+	}
+	return len(base.Players) == 0 && len(base.PlayerSongIDs) == 0 && len(variant.Players) > 0
 }
 
 var durationVariantSuffix = regexp.MustCompile(`~dur[0-9]+$`)
