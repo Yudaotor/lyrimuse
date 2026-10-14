@@ -36304,6 +36304,159 @@
         }
       }
     },
+    "macOS 自带的音乐 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The music app built into macOS"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 內建的音樂 App"
+          }
+        }
+      }
+    },
+    "腾讯旗下的音乐 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tencent's music app"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "騰訊旗下的音樂 App"
+          }
+        }
+      }
+    },
+    "网易旗下的音乐 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NetEase's music app"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網易旗下的音樂 App"
+          }
+        }
+      }
+    },
+    "腾讯音乐旗下的音乐 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A music app from Tencent Music"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "騰訊音樂旗下的音樂 App"
+          }
+        }
+      }
+    },
+    "字节跳动旗下的音乐 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ByteDance's music app"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字節跳動旗下的音樂 App"
+          }
+        }
+      }
+    },
+    "源自台湾的流媒体音乐 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A music streaming app from Taiwan"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源自台灣的串流音樂 App"
+          }
+        }
+      }
+    },
+    "源自瑞典的流媒体音乐 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A music streaming app from Sweden"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源自瑞典的串流音樂 App"
+          }
+        }
+      }
+    },
+    "亚马逊的流媒体音乐 App" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amazon's music streaming app"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "亞馬遜的串流音樂 App"
+          }
+        }
+      }
+    },
+    "仿 Winamp 的本地音乐播放器" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Winamp-style local music player"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仿 Winamp 的本機音樂播放器"
+          }
+        }
+      }
+    },
     "触控栏歌词" : {
       "extractionState" : "manual",
       "localizations" : {

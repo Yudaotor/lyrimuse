@@ -71,11 +71,20 @@ struct PlayerChoiceCard: View {
         return nil
     }
 
-    /// 光看名字认不出是什么的播放器,悬停时先说一句它是什么。
+    /// 悬停时先说一句它是什么,每个具体播放器都有一句;不写 `default`,新加的播放器漏了这句编译不过。
     static func about(_ player: PlaybackPlayer) -> String? {
         switch player {
+        case .appleMusic: return L10n.t("macOS 自带的音乐 App")
+        case .qqMusic: return L10n.t("腾讯旗下的音乐 App")
+        case .netease: return L10n.t("网易旗下的音乐 App")
+        case .kugou: return L10n.t("腾讯音乐旗下的音乐 App")
+        case .soda: return L10n.t("字节跳动旗下的音乐 App")
+        case .kkbox: return L10n.t("源自台湾的流媒体音乐 App")
+        case .spotify: return L10n.t("源自瑞典的流媒体音乐 App")
+        case .amazonMusic: return L10n.t("亚马逊的流媒体音乐 App")
         case .kaset: return L10n.t("YouTube Music 的第三方 Mac 客户端")
-        default: return nil
+        case .reamp: return L10n.t("仿 Winamp 的本地音乐播放器")
+        case .auto: return nil
         }
     }
 }

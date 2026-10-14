@@ -201,6 +201,7 @@
 "https://api.day.app/你的Key" = "https://api.day.app/YourKey";
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/YourSendKey.send";
 "iCloud 备份" = "iCloud Backup";
+"macOS 自带的音乐 App" = "The music app built into macOS";
 "—《%1$@》%2$@" = "— “%1$@” %2$@";
 "⌘S 保存 · Esc 放弃" = "⌘S Save · Esc Discard";
 "⌘S 保存 · Esc 放弃 · ↑↓ 换句" = "⌘S Save · Esc Discard · ↑↓ Next line";
@@ -312,6 +313,7 @@
 "之前的自动决策" = "Earlier Automatic Decision";
 "之前的自定义" = "Previous custom";
 "五" = "F";
+"亚马逊的流媒体音乐 App" = "Amazon's music streaming app";
 "人工修正" = "Manually Edited";
 "人工修正 %@ 首" = "%@ manually edited";
 "人工修正过的歌词删除后无法恢复" = "Manually edited lyrics can't be recovered once deleted";
@@ -368,6 +370,7 @@
 "以下条目已识别为同一首歌，播放次数合并统计；如有误识别，可将其拆分。" = "These entries are identified as the same song and their plays are combined. Split any that were misidentified.";
 "以文本方式编辑" = "Edit as Text";
 "以系统通知显示封面、歌名、歌手与专辑" = "Shows the artwork, title, artist and album in a system notification";
+"仿 Winamp 的本地音乐播放器" = "A Winamp-style local music player";
 "企业微信" = "WeCom";
 "优先在本机翻译，翻不了再联网" = "Translates on this Mac first, then online if that fails";
 "会打开 Last.fm 授权页，点「Yes, allow access」后自动回到这里。" = "Opens the Last.fm authorization page. Click “Yes, allow access” and you'll come straight back here.";
@@ -723,6 +726,7 @@
 "字号" = "Font Size";
 "字号 %@pt" = "Font size %@pt";
 "字形" = "Type";
+"字节跳动旗下的音乐 App" = "ByteDance's music app";
 "存在差异" = "Different";
 "存在标题更吻合的候选，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
 "安装并登录后将自动连接；网页版和手机版不支持连接" = "Connects automatically once it's installed and you're signed in. The web and mobile apps can't connect.";
@@ -1657,7 +1661,9 @@
 "清除搜索" = "Clear Search";
 "清除筛选" = "Clear Filters";
 "渐变" = "Gradient";
+"源自台湾的流媒体音乐 App" = "A music streaming app from Taiwan";
 "源自报曲长不符" = "Source duration mismatch";
+"源自瑞典的流媒体音乐 App" = "A music streaming app from Sweden";
 "滚动" = "Scroll";
 "演唱：%@" = "by %@";
 "灵动岛" = "Notch";
@@ -1809,6 +1815,7 @@
 "网易云音乐播放的歌曲 ID 一致" = "Same NetEase Cloud Music song ID from playback";
 "网易云音乐检索结果为同一曲目" = "Same track found by NetEase Cloud Music search";
 "网易云音乐歌曲页" = "NetEase Cloud Music song page";
+"网易旗下的音乐 App" = "NetEase's music app";
 "网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止" = "No connection: stopped after %1$@ songs, %2$@ found";
 "网络不可用，已搜索 %1$@ 首、找到 %2$@ 首后停止#one" = "No connection: stopped after %1$@ song, %2$@ found";
 "网络不可用，已暂停，稍后将自动继续" = "Paused: no connection; it resumes automatically";
@@ -1834,6 +1841,8 @@
 "背景颜色" = "Background Color";
 "胜者" = "Winner";
 "能跳过的广告一出现就自动跳过" = "Skippable ads are skipped as soon as they appear";
+"腾讯旗下的音乐 App" = "Tencent's music app";
+"腾讯音乐旗下的音乐 App" = "A music app from Tencent Music";
 "自 %@ 起" = "Since %@";
 "自动" = "Automatic";
 "自动 Scrobble" = "Automatic Scrobbling";
