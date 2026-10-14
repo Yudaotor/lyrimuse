@@ -7,7 +7,7 @@ import os
 ///   中途重启也接得上),之后挂文件事件,有新行就读。
 /// - 实时读到的行按「读到的那一刻」计时,但不晚于行首那一秒的末尾:读晚了(文件事件漏了、下一拍轮询才补读)
 ///   误差也不超过一秒。
-/// - 暂停 / 恢复 / 拖动 / 开播 / 卡顿都会调 `onPlaybackEvent`,调用方借它立刻补一次轮询:拖动在系统 Now Playing
+/// - 暂停 / 恢复 / 拖动 / 开播 / 卡顿 / 换输出设备都会调 `onPlaybackEvent`,调用方借它立刻补一次轮询:拖动在系统 Now Playing
 ///   里没有任何通知,不靠这里就要等下一拍。
 /// - 文件变短(Amazon Music 重启后重写)或被换掉就从头读。
 /// - 自动连播开头的那首(`AmazonMusicPlayhead.needsLeadCalibration`)开播 `calibrationDelay` 之后,在后台读一次 Amazon 界面上的

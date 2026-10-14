@@ -31,6 +31,10 @@ func runAmazonMusicTests() {
                     true, "Amazon 日志: 引擎那行 seek 不认,只认一行")
         expectEqual(P.parse(line: "260928:025131      Browser INFO in PlaybackListener line 255, function playbackStalled : Received callback with stalled state: 1 track_id: 13")?.event,
                     .stall(true), "Amazon 日志: 卡顿开始")
+        expectEqual(P.parse(line: "261014:121747      Browser INFO in Harley : 0x307b9a000 [FrameQueue.cpp:198] Skipped frames with mismatching audio format, count=82")?.event,
+                    .outputReset, "Amazon 日志: 换输出设备丢掉格式对不上的帧")
+        expectEqual(P.parse(line: "261014:121747      Browser INFO in Harley : 0x307a94000 [AudioDriverImpl.mm:383] Default output device changed") == nil,
+                    true, "Amazon 日志: 只换设备、没丢帧的不认(缓冲还在)")
         expectEqual(P.parse(line: "[SystemInfo]") == nil, true, "Amazon 日志: 没有行首时刻的不认")
         expectEqual(P.parse(line: "260928:025132      Browser INFO in Harley : DT:M [DASHRangeFragmentLoader.cpp:100] Fetching fragment: <Track: asin://B0TESTAAA1:13:87015, FragmentIndex: 0>") == nil,
                     true, "Amazon 日志: 预读分片不是播放事件")
@@ -204,6 +208,17 @@ func runAmazonMusicTests() {
         expectEqual(P.mayStartCalibration(recovered, now: at("072421"), settle: 0.5), true,
                     "Amazon 卡顿: 结束过了 settle 就读")
         expectEqual(P.mayStartCalibration(clicked, now: at("025140"), settle: 0.5), true, "Amazon 卡顿: 没卡过随时能读")
+        // 换输出设备丢了一截缓冲(日志里没有卡顿行):表照走,但要重新对界面,声音往前跳了,提前量变小。
+        let reset = P.apply(.outputReset, at: at("025700"), to: cal!)
+        expectEqual(near(P.position(reset, at: at("025710")), P.position(cal!, at: at("025710")) ?? -1), true,
+                    "Amazon 换输出: 表照走,位置不跳")
+        expectEqual(P.needsLeadCalibration(reset), true, "Amazon 换输出: 丢过缓冲就要重新校准")
+        expectEqual(P.mayStartCalibration(reset, now: at("025700", 0.2), settle: 0.5), false, "Amazon 换输出: 刚丢完、没过 settle 不读")
+        // 02:57:10 日志时钟 51.5,界面跳到 50 秒 → 提前量从 2.8 变成 1.5。
+        let afterReset = calibrating(reset, edge: at("025710"), secs: 50)
+        expectEqual(afterReset.map { abs($0.audibleLead - 1.5) < 0.001 }, true, "Amazon 换输出: 重新校准出变小的提前量")
+        expectEqual(P.needsLeadCalibration(P.apply(.outputReset, at: at("025100"), to: P.State())), false,
+                    "Amazon 换输出: 还没认出曲目时不校准")
 
         // 一次校准只收到 0.45 秒宽的区间,隔 leadRefineDelay 再对一次、两次区间取交集。
         // 自然连播 02:56:18.5 开播,02:56:30.3 那一刻日志时钟 11.8;真实起点区间 [..., ...] 换成提前量区间 [2.5, 2.9]。

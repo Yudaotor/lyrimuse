@@ -24,6 +24,9 @@ import Foundation
 /// **缓冲卡顿之后也要重新校准**:日志里卡顿常是同一秒里起止,真正断音却有一截(实测一次卡顿后真实出声又晚了约 1.5 秒),
 /// 所以卡过的曲目(不论怎么开的头)在卡顿平息后再对一次界面(`needsLeadCalibration`),校准出的量可正可负。
 ///
+/// **换了输出设备也要重新校准**:Amazon 跟着默认输出切过去时把输出缓冲里格式对不上的那截丢掉(`outputReset`),
+/// 声音往前跳、提前量变小,日志里常常没有卡顿行。按卡顿同一套处理(见 02 章决策 127)。
+///
 /// **一次校准不够准**:界面时间只到整秒,一次校准只能把起点圈进 0.45 秒宽的区间、取中点。校准过的一段隔 `leadRefineDelay`
 /// 再对一次界面,两次的区间取交集(`needsLeadRefinement` / `calibratingLead`)。
 public enum AmazonMusicPlayhead {
@@ -41,6 +44,9 @@ public enum AmazonMusicPlayhead {
         case starting
         /// 解码器读完这一首(`End of stream reached`)。紧跟着的开播是自然连播。
         case endOfStream
+        /// 换了输出设备,输出缓冲里格式对不上的那截被丢掉(`Skipped frames with mismatching audio format`)。表照走,
+        /// 真正出声往前跳了一截,要重新校准。
+        case outputReset
     }
 
     /// 解析一行日志。认不出的行返回 nil。`lineTime` 是行首的时刻,日志只精确到秒(UTC,`YYMMDD:HHMMSS`)。
@@ -57,6 +63,7 @@ public enum AmazonMusicPlayhead {
         if line.contains("setPaused(1)") || line.contains("Received callback with paused state: 1") { return (lineTime, .paused) }
         if line.contains("Entering kStarting state") { return (lineTime, .starting) }
         if line.contains("End of stream reached") { return (lineTime, .endOfStream) }
+        if line.contains("Skipped frames with mismatching audio format") { return (lineTime, .outputReset) }
         if line.contains("setPaused(0)") { return (lineTime, .resumed) }
         if let r = line.range(of: "function seek : Seeking to: ") {
             let digits = line[r.upperBound...].prefix { $0.isNumber }
@@ -154,9 +161,9 @@ public enum AmazonMusicPlayhead {
         /// 最近一次校准的时刻,以及这一段在首次校准之后又叠过几次(见 `needsLeadRefinement`)。
         public var leadCalibratedAt: Date?
         public var leadRefinements = 0
-        /// 这首卡顿过,要重新对一次界面。
+        /// 这首卡顿过(或丢过一截输出缓冲,`outputReset`),要重新对一次界面。
         public var stalledSinceCalibration = false
-        /// 最近一次卡顿事件的时刻(调用方等它平息再校准)。
+        /// 最近一次卡顿 / `outputReset` 事件的时刻(调用方等它平息再校准)。
         public var lastStallAt: Date?
 
         public init() {}
@@ -182,6 +189,10 @@ public enum AmazonMusicPlayhead {
             s.since = s.stalled ? nil : t
         case .endOfStream:
             s.lastEndOfStreamAt = t
+        case .outputReset:
+            // 位置不动,只要求重新校准;没卡的话表照走。
+            s.lastStallAt = t
+            if s.trackID != nil { s.stalledSinceCalibration = true }
         case .paused:
             s.base = engineTimelinePosition(s, at: t) ?? 0
             s.paused = true
@@ -250,7 +261,7 @@ public enum AmazonMusicPlayhead {
     /// 校准出的提前量超出这个范围就不采信(界面读错、读到别的曲目)。自动连播实测 1.2~3.5 秒;卡顿之后可能反过来慢,留负值。
     public static let audibleLeadRange: ClosedRange<Double> = -4...8
 
-    /// 这首还要不要按界面校准:自然连播开的头还没校准过,或者校准之后又卡顿过。
+    /// 这首还要不要按界面校准:自然连播开的头还没校准过,或者校准之后又卡顿过、丢过一截输出缓冲。
     public static func needsLeadCalibration(_ s: State) -> Bool {
         s.trackID != nil && ((s.startedNaturally && !s.leadCalibrated) || s.stalledSinceCalibration)
     }
