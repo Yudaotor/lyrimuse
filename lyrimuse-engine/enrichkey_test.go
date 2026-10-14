@@ -31,6 +31,13 @@ func TestNormEnrichTitle(t *testing.T) {
 		// 剥掉会跟正式版撞成同一个 key。
 		{"慢板保留", "Secret (慢板)", "Secret (慢板)"},
 		{"快板保留", "第二圆舞曲 (快板)", "第二圆舞曲 (快板)"},
+		{"角色版不带点的 ver 保留", "Song (花柳香子 ver)", "Song (花柳香子 ver)"},
+		{"ソロ保留", "Song (花柳香子ソロ)", "Song (花柳香子ソロ)"},
+		{"ソロ・バージョン保留", "Song (ソロ・バージョン)", "Song (ソロ・バージョン)"},
+		{"Solo 保留", "Song (Solo)", "Song (Solo)"},
+		{"Forever 里的 ver 不算", "Song (Forever Young)", "Song"},
+		{"Never 里的 ver 不算", "歌名（Never Again）", "歌名"},
+		{"Solomon 里的 solo 不算", "Song (Solomon)", "Song"},
 
 		// 边界
 		{"括号就是整个歌名", "(Interlude)", "(Interlude)"},

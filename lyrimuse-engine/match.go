@@ -3498,7 +3498,7 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 	if nc == nl {
 		return true
 	}
-	if titleIdentifiersConflict(localTitle, candidateTitle) {
+	if titleIdentifiersConflict(localTitle, candidateTitle) || versionLabelsConflict(localTitle, candidateTitle) {
 		return false
 	}
 	sc, sl := normLoose(stripParens(candidateTitle)), normLoose(stripParens(localTitle))

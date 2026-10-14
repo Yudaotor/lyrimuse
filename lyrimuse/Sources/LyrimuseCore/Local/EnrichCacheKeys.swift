@@ -35,7 +35,24 @@ public enum EnrichCacheKeys {
         // enrichKeyVersionWords 头注。
         "慢板", "快板",
         "现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
+        // 角色歌、偶像企划标的演唱版本,见 enrichkey.go 同一处。
+        "バージョン", "ヴァージョン", "ソロ",
     ]
+
+    /// 前后都不是 ASCII 字母、数字、下划线时才算版本标记的词。跟 enrichkey.go 的 enrichKeyVersionWordTokens 同一张表。
+    static let versionWordTokens = ["ver", "solo"]
+
+    /// 引擎 containsASCIIWord 的 Swift 版:按 UTF-8 字节找,紧挨着的前后一个字节都不是 ASCII 字母、数字或下划线才算。
+    static func containsASCIIWord(_ s: String, _ w: String) -> Bool {
+        let b = Array(s.utf8), p = Array(w.utf8)
+        guard !p.isEmpty, b.count >= p.count else { return false }
+        func isWord(_ c: UInt8) -> Bool { c == 95 || (48...57).contains(c) || (65...90).contains(c) || (97...122).contains(c) }
+        for start in 0...(b.count - p.count) where b[start..<(start + p.count)].elementsEqual(p) {
+            let end = start + p.count
+            if (start == 0 || !isWord(b[start - 1])) && (end == b.count || !isWord(b[end])) { return true }
+        }
+        return false
+    }
 
     private static let openBrackets: Set<Unicode.Scalar> = ["（", "(", "[", "【"]
     private static let closeBrackets: Set<Unicode.Scalar> = ["）", ")", "]", "】"]
@@ -87,7 +104,8 @@ public enum EnrichCacheKeys {
             }
             guard let openIdx else { return string(t[...]) }
             let inner = GoStringSemantics.toLower(string(t[(openIdx + 1)..<(t.count - 1)]))
-            if versionWords.contains(where: { GoStringSemantics.contains(inner, $0) }) { return string(t[...]) }
+            if versionWords.contains(where: { GoStringSemantics.contains(inner, $0) })
+                || versionWordTokens.contains(where: { containsASCIIWord(inner, $0) }) { return string(t[...]) }
             let head = GoStringSemantics.trimSpace(string(t[..<openIdx]))
             if head.isEmpty { return string(t[...]) }
             t = Array(head.unicodeScalars)

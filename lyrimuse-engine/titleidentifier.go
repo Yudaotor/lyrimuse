@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -186,6 +187,94 @@ func titleIdentifiersConflict(a, b string) bool {
 		}
 	}
 	return false
+}
+
+// 版本标注:括号里写明这是哪一版的那一段 —— 「(高海千歌 Solo Ver.)」「(唯Ver.)」「(香子×真矢ver.)」「(Japanese ver.)」
+// 「(Long Ver.)」。去掉 ver / version / バージョン / ヴァージョン / ソロ / solo 这几个词,剩下的就是哪一版。同一首歌
+// 各角色的独唱版、合唱版、长短版、各语言版,歌词正文常常一样,分行、时间轴、谁唱哪句不一样,时长又接近,只能靠这一段分开。
+// 见 09 章决策 257。
+var (
+	versionLabelWordRe      = regexp.MustCompile(`\bver\b\.?|\bversion\b|バージョン|ヴァージョン|ソロ|\bsolo\b`)
+	versionLabelSeparatorRe = regexp.MustCompile(`[×&＆・、,/+＋]`)
+)
+
+// versionLabel:一段括号(inner 不带括号本身)里的版本标注。去掉标注词之后按分隔符拆开(多人合唱的写法顺序不定)、
+// 每段只留字母和数字、排好序连起来;不是版本标注、或者只剩没说是哪一版的「Solo Ver.」「ソロ・バージョン」时 ok 为假。
+func versionLabel(inner string) (label string, ok bool) {
+	s := strings.ToLower(foldDiacritics(narrowASCII(inner)))
+	if !versionLabelWordRe.MatchString(s) {
+		return "", false
+	}
+	var parts []string
+	for _, seg := range versionLabelSeparatorRe.Split(versionLabelWordRe.ReplaceAllString(s, " "), -1) {
+		var b strings.Builder
+		for _, r := range seg {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) {
+				b.WriteRune(r)
+			}
+		}
+		if b.Len() > 0 {
+			parts = append(parts, b.String())
+		}
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ""), true
+}
+
+// versionLabelsConflict:两个歌名的括号里都有同一类文字写的版本标注,而且这些里没有哪一对说得上是同一版(「唯」对「律」、
+// 「japanese」对「english」)。一个包含另一个算同一版(「tv」对「tvsize」、「765pro」对「765proallstars」,写法详略不同)。
+// 一边只有拉丁字母、另一边有汉字假名的那一对不比(「Mari Ohara Solo Version」对「小原鞠莉 Solo Ver.」:Apple Music、
+// Musixmatch、Deezer 常按地区给罗马字的歌名,认不出是不是同一个人);同一个歌名常两种都带(「(優木せつ菜 Ver.) (Setsuna Yuki
+// Version)」),那就拿同类的那一对比。只有一边带标注、没有同一类文字的那一对,都不算:各家常把标注只写在专辑名里,或者只收了
+// 合唱版。纯函数。
+func versionLabelsConflict(a, b string) bool {
+	compared := false
+	for _, x := range versionLabels(a) {
+		for _, y := range versionLabels(b) {
+			if !versionLabelSameScript(x, y) {
+				continue
+			}
+			if strings.Contains(x, y) || strings.Contains(y, x) {
+				return false
+			}
+			compared = true
+		}
+	}
+	return compared
+}
+
+// versionLabelSameScript:两个标注写的是同一类文字:都只有拉丁字母,或者都有拉丁字母以外的字母(汉字、假名、谚文……);
+// 有一边一个字母都没有(「2023」)也算。
+func versionLabelSameScript(a, b string) bool {
+	ca, cb := versionLabelScript(a), versionLabelScript(b)
+	return ca == "" || cb == "" || ca == cb
+}
+
+func versionLabelScript(label string) string {
+	script := ""
+	for _, r := range label {
+		if !unicode.IsLetter(r) {
+			continue
+		}
+		if !unicode.Is(unicode.Latin, r) {
+			return "other"
+		}
+		script = "latin"
+	}
+	return script
+}
+
+func versionLabels(title string) []string {
+	var out []string
+	for _, seg := range parentheticalSegments(title) {
+		if l, ok := versionLabel(seg); ok {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // lyricSearchTitle 是交给各歌词源去搜、去挑候选的歌名:跟 normEnrichTitle 一样从结尾一层层剥括号,碰到版本标记或明说

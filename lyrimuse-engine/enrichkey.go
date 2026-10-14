@@ -61,7 +61,13 @@ var enrichKeyVersionWords = []string{
 	// **两个不同的录音**;理由跟"版"字那条一致:剥掉会把两首不同的音频当成同一首)。
 	"慢板", "快板",
 	"现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
+	// 角色歌、偶像企划标的演唱版本(「ソロ・バージョン」「花柳香子ソロ」):各角色的独唱版、合唱版是不同的录音。
+	"バージョン", "ヴァージョン", "ソロ",
 }
+
+// enrichKeyVersionWordTokens:前后都不是 ASCII 字母、数字、下划线时才算版本标记的词(「花柳香子 ver」「Solo」)。
+// 当子串认会把 forever、never 里的 ver 也算上。Swift 侧 EnrichCacheKeys.versionWordTokens 同一张表、同一种认法。
+var enrichKeyVersionWordTokens = []string{"ver", "solo"}
 
 // 只匹配**结尾**的一组括号。中间出现的括号不动:那种位置的括号更可能是歌名本身的一部分,
 // 而结尾括号在各家曲库里几乎专门用来挂译名/版本标注。半角全角、圆括号方括号方头括号都收。
@@ -86,7 +92,33 @@ func enrichKeyKeepsBracket(inner string) bool {
 			return true
 		}
 	}
+	for _, w := range enrichKeyVersionWordTokens {
+		if containsASCIIWord(inner, w) {
+			return true
+		}
+	}
 	return false
+}
+
+// containsASCIIWord:s 里有 w,而且紧挨着的前后一个字节都不是 ASCII 字母、数字或下划线(跟正则 \b 同一口径;汉字、
+// 假名的 UTF-8 字节都在 0x80 以上,算边界)。
+func containsASCIIWord(s, w string) bool {
+	for i := 0; i <= len(s)-len(w); {
+		j := strings.Index(s[i:], w)
+		if j < 0 {
+			return false
+		}
+		start, end := i+j, i+j+len(w)
+		if (start == 0 || !isASCIIWordByte(s[start-1])) && (end == len(s) || !isASCIIWordByte(s[end])) {
+			return true
+		}
+		i = start + 1
+	}
+	return false
+}
+
+func isASCIIWordByte(b byte) bool {
+	return b == '_' || (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
 // trimTrailingBrackets 从结尾一层层剥括号,keep 说这一层要留就停。

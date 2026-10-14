@@ -128,6 +128,67 @@ func TestTitleIdentifiersConflict(t *testing.T) {
 	}
 }
 
+func TestVersionLabel(t *testing.T) {
+	cases := []struct {
+		in, want string
+		ok       bool
+	}{
+		{"高海千歌 Solo Ver.", "高海千歌", true},
+		{"珠洲島有栖ソロver.", "珠洲島有栖", true},
+		{"唯Ver.", "唯", true},
+		{"花柳香子 ver", "花柳香子", true},
+		{"Japanese ver.", "japanese", true},
+		{"ＬＯＮＧ\u3000Ｖｅｒ．", "long", true},
+		{"香子×真矢ver.", "真矢香子", true},
+		{"真矢×香子 ver.", "真矢香子", true},
+		{"葛城リーリヤ・倉本千奈・姫崎莉波 ver.", "倉本千奈姫崎莉波葛城リーリヤ", true},
+		{"M@STER VERSION", "mster", true},
+		{"ソロ・バージョン", "", false},
+		{"Solo Ver.", "", false},
+		{"Forever Young", "", false},
+		{"Live", "", false},
+		{"feat. 方大同", "", false},
+	}
+	for _, c := range cases {
+		got, ok := versionLabel(c.in)
+		if got != c.want || ok != c.ok {
+			t.Errorf("versionLabel(%q) = %q, %v; want %q, %v", c.in, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+func TestVersionLabelsConflict(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"ふわふわ時間 (唯Ver.)", "ふわふわ時間 (律Ver.)", true},
+		{"Song (花柳香子 Ver.)", "Song (石動双葉 Ver.)", true},
+		{"Song (Japanese ver.)", "Song (English ver.)", true},
+		{"Song (Long Ver.)", "Song (short ver.)", true},
+		{"Song (高海千歌 Solo Ver.)", "Song (高海千歌ソロver.)", false},
+		{"Song (香子×真矢ver.)", "Song (真矢×香子 ver.)", false},
+		{"Song (TV Ver.)", "Song (TV Size Ver.)", false},
+		{"Song (765PRO ver.)", "Song (765PRO ALLSTARS ver.)", false},
+		{"Song (高海千歌 Solo Ver.)", "Song (Solo Ver.)", false},
+		{"Song (高海千歌 Solo Ver.)", "Song", false},
+		{"Song", "Song (石動双葉 Ver.)", false},
+		{"Song (唯Ver.)", "Song (Live)", false},
+		{"Song (唯Ver.) (Live)", "Song [律Ver.]", true},
+		{"HAPPY PARTY TRAIN (小原鞠莉 Solo Ver.)", "HAPPY PARTY TRAIN (Mari Ohara Solo Version)", false},
+		{"FG ROADSTER (水宮枢 SOLO ver.)", "FG ROADSTER (Mizumiya Su SOLO ver.)", false},
+		{"Song (Mia Taylor Version)", "Song (Emma Verde Version)", true},
+		{"Song (2023 Ver.)", "Song (唯Ver.)", true},
+		{"約束になれ僕らの歌 (ミア・テイラー Ver.)", "約束になれ僕らの歌 (優木せつ菜 Ver.) (Setsuna Yuki Version)", true},
+		{"約束になれ僕らの歌 (ミア・テイラー Ver.)", "約束になれ僕らの歌 (ミア・テイラー Ver.) (Mia Taylor Version)", false},
+	}
+	for _, c := range cases {
+		if got := versionLabelsConflict(c.a, c.b); got != c.want {
+			t.Errorf("versionLabelsConflict(%q, %q) = %v, want %v", c.a, c.b, got, c.want)
+		}
+	}
+}
+
 func TestLyricSearchTitle(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Song (#6)", "Song (#6)"},
@@ -208,6 +269,9 @@ func TestLyricTitleAcceptedIdentifiers(t *testing.T) {
 		{"Song (2020 ver.)", "Song (2026 ver.)", false},
 		{"Song (#6)", "Song", true},
 		{"Song (#11)", "Song", true},
+		{"Song (石動双葉 Ver.)", "Song (花柳香子 Ver.)", false},
+		{"Song (花柳香子ver.)", "Song (花柳香子 Ver.)", true},
+		{"Song", "Song (花柳香子 Ver.)", true},
 	}
 	for _, c := range cases {
 		if got := lyricTitleAccepted(c.candidate, c.local); got != c.want {
